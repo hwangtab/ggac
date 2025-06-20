@@ -116,26 +116,26 @@ const Navigation = () => {
         </div>
 
         {/* Mobile Menu */}
-        <div className={`md:hidden transition-all duration-300 overflow-hidden ${
-          isMenuOpen ? 'max-h-64 pb-4' : 'max-h-0'
-        }`}>
-          <div className="bg-white/95 backdrop-blur-md rounded-lg shadow-lg mt-2 p-4">
-            {menuItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setIsMenuOpen(false)}
-                className={`block py-3 px-4 rounded-md transition-colors duration-200 ${
-                  pathname === item.href
-                    ? 'text-primary-600 bg-primary-50'
-                    : 'text-gray-700 hover:text-primary-600 hover:bg-gray-50'
-                }`}
-              >
-                {item.label}
-              </Link>
-            ))}
+        {isMenuOpen && (
+          <div className="md:hidden absolute left-4 right-4 top-full mt-2 z-50">
+            <div className="bg-white/95 backdrop-blur-md rounded-lg shadow-lg p-2 border border-gray-200/20">
+              {menuItems.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setIsMenuOpen(false)}
+                  className={`block py-3 px-4 rounded-md transition-colors duration-200 ${
+                    pathname === item.href
+                      ? 'text-primary-600 bg-primary-50'
+                      : 'text-gray-700 hover:text-primary-600 hover:bg-gray-50'
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </nav>
   )
