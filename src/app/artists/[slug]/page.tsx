@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 import ImageWithFallback from '@/components/ImageWithFallback'
+import YouTubeEmbed from '@/components/YouTubeEmbed'
 import type { Metadata } from 'next'
 
 interface Artist {
@@ -16,6 +17,7 @@ interface Artist {
   bio: string
   templateType: string
   portfolioLinks: Array<{ title: string; url: string }>
+  youtubeVideos?: Array<{ title: string; url: string }>
   contact: string
 }
 
@@ -82,7 +84,7 @@ const ArtistDetailPage = ({ params }: ArtistPageProps) => {
               </Link>
             </div>
             
-            <div className={`${isMinimal ? 'text-center' : 'grid md:grid-cols-2 gap-12 items-center'}`}>
+            <div className={`${isMinimal ? 'text-center' : 'grid lg:grid-cols-2 gap-8 items-center'}`}>
               {/* Profile Image */}
               <div className={`${isMinimal ? 'mb-8' : ''}`}>
                 <div className={`${isMinimal ? 'w-96 h-96 mx-auto' : 'w-96 h-96'} overflow-hidden rounded-full`}>
@@ -164,7 +166,7 @@ const ArtistDetailPage = ({ params }: ArtistPageProps) => {
       <section className={`py-16 ${isMinimal ? 'bg-gray-50' : 'bg-white'}`}>
         <div className="container-custom">
           <div className="max-w-4xl mx-auto">
-            <div className={`${isMinimal ? 'max-w-2xl mx-auto text-center' : 'grid md:grid-cols-3 gap-12'}`}>
+            <div className={`${isMinimal ? 'max-w-2xl mx-auto text-center' : 'grid lg:grid-cols-3 gap-8'}`}>
               {!isMinimal && (
                 <div>
                   <h2 className="text-xl font-serif font-semibold mb-6">작업 소개</h2>
@@ -203,10 +205,30 @@ const ArtistDetailPage = ({ params }: ArtistPageProps) => {
             </div>
           </div>
         </section>
-      )}
-
-      {/* Navigation */}
-      <section className="py-16 bg-gray-900 text-white">
+         )}
+  
+        {/* YouTube Videos */}
+        {artist.youtubeVideos && artist.youtubeVideos.length > 0 && (
+          <section className={`py-16 ${isMinimal ? 'bg-white' : 'bg-gray-50'}`}>
+            <div className="container-custom">
+              <div className="max-w-4xl mx-auto">
+                <h2 className="text-xl font-serif font-semibold mb-8 text-center">유튜브 영상</h2>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-2">
+                  {artist.youtubeVideos.map((video, index) => (
+                    <YouTubeEmbed
+                      key={index}
+                      videoUrl={video.url}
+                      title={video.title}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+  
+        {/* Navigation */}
+        <section className="py-16 bg-gray-900 text-white">
         <div className="container-custom">
           <div className="text-center">
             <Link 
