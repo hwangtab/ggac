@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>이미지 테스트</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        .image-container {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+        }
+        img {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+    </style>
+</head>
+<body>
+    <h1>경기아트콜렉티브 이미지 테스트</h1>
+    
+    <div class="image-container">
+        <h2>Simon DM 이미지 (직접 접근)</h2>
+        <img src="http://localhost:3004/images/artists/simon-dm.png" alt="Simon DM" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+        <div style="display:none; color: red;">이미지 로딩 실패</div>
+    </div>
+    
+    <div class="image-container">
+        <h2>최희철 이미지 (JSON에서 수정됨)</h2>
+        <img src="http://localhost:3004/images/artists/simon-dm.png" alt="최희철" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+        <div style="display:none; color: red;">이미지 로딩 실패</div>
+    </div>
+    
+    <div class="image-container">
+        <h2>로고 이미지</h2>
+        <img src="http://localhost:3004/images/logo/gac_logo.png" alt="GAC 로고" style="width: 100px; height: 100px;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+        <div style="display:none; color: red;">이미지 로딩 실패</div>
+    </div>
+
+    <script>
+        console.log('이미지 테스트 페이지 로드됨');
+        
+        // 네트워크 상태 확인
+        fetch('http://localhost:3004/images/artists/simon-dm.png')
+            .then(response => {
+                console.log('Simon DM 이미지 상태:', response.status, response.statusText);
+                return response.blob();
+            })
+            .then(blob => {
+                console.log('Simon DM 이미지 크기:', blob.size, 'bytes');
+            })
+            .catch(error => {
+                console.error('Simon DM 이미지 에러:', error);
+            });
+    </script>
+</body>
+</html>

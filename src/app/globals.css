@@ -1,0 +1,196 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap');
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  body {
+    @apply font-sans text-gray-900 bg-white;
+    overflow-x: hidden;
+    word-break: keep-all;
+    overflow-wrap: break-word;
+    hyphens: none;
+  }
+  
+  /* 모든 텍스트 요소에 한글 친화적 줄바꿈 적용 */
+  h1, h2, h3, h4, h5, h6, p, span, div, li, td, th, a, button, label {
+    word-break: keep-all;
+    overflow-wrap: break-word;
+    hyphens: none;
+  }
+}
+
+@layer components {
+  .container-custom {
+    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+  
+  .heading-primary {
+    @apply font-serif text-3xl md:text-4xl lg:text-5xl font-bold leading-tight;
+    word-break: keep-all;
+    overflow-wrap: break-word;
+    hyphens: none;
+  }
+  
+  .heading-secondary {
+    @apply font-serif text-2xl md:text-3xl lg:text-4xl font-semibold leading-tight;
+    word-break: keep-all;
+    overflow-wrap: break-word;
+    hyphens: none;
+  }
+  
+  .text-body {
+    @apply text-base md:text-lg leading-relaxed;
+    word-break: keep-all;
+    overflow-wrap: break-word;
+    hyphens: none;
+  }
+  
+  .btn-primary {
+    @apply bg-primary-600 hover:bg-primary-700 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200;
+  }
+  
+  .btn-secondary {
+    @apply bg-transparent hover:bg-gray-100 text-gray-900 border border-gray-300 px-6 py-3 rounded-lg font-medium transition-colors duration-200;
+  }
+  
+  .project-image {
+    @apply w-full h-full object-cover;
+  }
+  
+  .project-image-fallback {
+    @apply w-full h-full bg-gradient-to-br from-primary-100 to-accent-100 flex items-center justify-center;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Selection color */
+::selection {
+  background-color: #0ea5e9;
+  color: white;
+}
+
+/* Prose styling for project descriptions */
+.prose h3 {
+  @apply text-xl font-serif font-semibold text-primary-700 mt-8 mb-4 pb-2 border-b border-primary-200;
+}
+
+.prose h3:first-child {
+  @apply mt-0;
+}
+
+.prose p {
+  @apply text-gray-700 leading-relaxed mb-4;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  hyphens: none;
+}
+
+.prose ul {
+  @apply text-gray-700 space-y-2 ml-4 text-left;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  hyphens: none;
+}
+
+.text-center .prose ul {
+  @apply ml-0 list-none;
+  text-align: center;
+}
+
+.text-center .prose li {
+  @apply pl-0;
+  text-align: center;
+}
+
+.text-center .prose li::before {
+  display: none;
+}
+
+.prose li {
+  @apply relative pl-4 mb-2 text-left;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  hyphens: none;
+}
+
+.prose li::before {
+  content: "•";
+  @apply absolute left-0 text-primary-600 font-semibold;
+}
+
+.prose li strong {
+  @apply text-primary-800 font-semibold inline mt-0 mb-0;
+}
+
+.prose strong {
+  @apply text-primary-800 font-semibold;
+  word-break: break-all;
+  overflow-wrap: break-word;
+  white-space: normal;
+}
+
+.prose > p > strong:only-child {
+  @apply block mt-8 mb-3;
+}
+
+.prose > p:first-child > strong:only-child {
+  @apply mt-0;
+}
+
+.prose li strong {
+  @apply inline mt-0 mb-0;
+}
+
+.prose ul + p > strong:only-child,
+.prose ol + p > strong:only-child {
+  @apply block mt-8 mb-3 !important;
+}
+
+.prose em {
+  @apply text-accent-700 italic;
+}
+
+/* Force left alignment for category tags */
+.category-tags-left {
+  text-align: left !important;
+  display: flex !important;
+  justify-content: flex-start !important;
+}
+
+/* 한글 친화적 줄바꿈 유틸리티 클래스 */
+@layer utilities {
+  .text-break-keep {
+    word-break: keep-all;
+    overflow-wrap: break-word;
+    hyphens: none;
+  }
+  
+  .text-break-auto {
+    word-break: auto;
+    overflow-wrap: normal;
+    hyphens: auto;
+  }
+}

@@ -1,0 +1,37 @@
+name: Build and Test
+
+# main 브랜치에 push될 때마다 빌드 테스트만 실행
+# Vercel은 자체 Git 연동으로 자동 배포
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      # 코드 체크아웃
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Node.js 설정
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      # 의존성 설치
+      - name: Install dependencies
+        run: npm ci
+
+      # 빌드 테스트 (배포는 Vercel이 자동으로 처리)
+      - name: Build project
+        run: npm run build
+
+      # 린트 체크
+      - name: Run lint
+        run: npm run lint

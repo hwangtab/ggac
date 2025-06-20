@@ -1,0 +1,27 @@
+User-agent: *
+Allow: /
+
+# 주요 페이지
+Allow: /about/
+Allow: /archive/
+Allow: /artists/
+Allow: /connect/
+
+# 사이트맵
+Sitemap: https://ggac.kr/sitemap.xml
+
+# 크롤링 속도 조절
+Crawl-delay: 1
+
+# 특정 봇 허용
+User-agent: Googlebot
+Allow: /
+
+User-agent: Naverbot
+Allow: /
+
+User-agent: Yeti
+Allow: /
+
+# 검색엔진 최적화
+Host: https://ggac.kr
