@@ -80,9 +80,9 @@ const ProjectDetailPage = ({ params }: ProjectPageProps) => {
     .filter(Boolean) as Artist[]
 
   return (
-    <div className="pt-20">
+    <div className="pt-20 bg-gradient-to-b from-primary-50 via-accent-50 to-gray-200 min-h-screen">
       {/* Header */}
-      <section className="py-16 md:py-24 bg-gradient-to-br from-primary-50 to-accent-50">
+      <section className="py-16 md:py-24">
         <div className="container-custom">
           <div className="max-w-4xl mx-auto text-center">
             <div className="mb-6">
@@ -184,9 +184,17 @@ const ProjectDetailPage = ({ params }: ProjectPageProps) => {
       </section>
 
       {/* Navigation */}
-      <section className="py-16 bg-gray-50">
+      <section className="pt-8 pb-20 mt-4">
         <div className="container-custom">
           <div className="text-center">
+            <div className="max-w-2xl mx-auto mb-8">
+              <h3 className="text-xl font-serif font-semibold text-gray-900 mb-3">
+                다른 프로젝트들도 만나보세요
+              </h3>
+              <p className="text-gray-600">
+                경기아트콜렉티브가 함께 만들어가는 더 많은 프로젝트들을 탐험해보세요.
+              </p>
+            </div>
             <Link 
               href="/archive"
               className="btn-primary"
