@@ -34,7 +34,7 @@ module.exports = {
         }
       },
       fontFamily: {
-        sans: ['var(--font-pretendard)', 'var(--font-noto-sans-kr)', 'system-ui', 'sans-serif'],
+        sans: ['var(--font-pretendard)', 'system-ui', 'sans-serif'],
         serif: ['var(--font-noto-serif-kr)', 'serif'],
       },
       animation: {

@@ -60,7 +60,7 @@ const Footer = ({ globalData }: FooterProps) => {
                   className="object-contain"
                 />
               </div>
-              <span className="font-sans font-bold text-xl">
+              <span className="font-serif font-bold text-xl">
                 경기아트콜렉티브
               </span>
             </div>

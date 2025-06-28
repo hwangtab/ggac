@@ -4,7 +4,7 @@ import path from 'path'
 import './globals.css'
 import Navigation from '@/components/Navigation'
 import Footer from '@/components/Footer'
-import { Noto_Sans_KR } from 'next/font/google'
+import { Noto_Serif_KR } from 'next/font/google'
 import localFont from 'next/font/local'
 
 const pretendard = localFont({
@@ -14,10 +14,10 @@ const pretendard = localFont({
   variable: '--font-pretendard',
 })
 
-const notoSansKr = Noto_Sans_KR({
+const notoSerifKr = Noto_Serif_KR({
   subsets: ['latin'],
-  weight: ['300', '400', '500', '700'],
-  variable: '--font-noto-sans-kr',
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-noto-serif-kr',
 })
 
 export const metadata: Metadata = {
@@ -79,7 +79,7 @@ export default function RootLayout({
   )
 
   return (
-    <html lang="ko" className={`${pretendard.variable} ${notoSansKr.variable}`}>
+    <html lang="ko" className={`${pretendard.variable} ${notoSerifKr.variable}`}>
       <body>
         <Navigation />
         <main>{children}</main>
