@@ -24,16 +24,16 @@
     "coverImage": "/images/projects/opening-party.webp",
   "description": "경기아트콜렉티브 오프닝 파티에 여러분을 초대합니다!\n\n경기도 예술가들을 지원하고 문화예술 생태계 활성화를 목표로 하는 생산자 협동조합, 경기아트콜렉티브 협동조합이 드디어 그 문을 엽니다.\n\n### 조합 소개\n\n경기아트콜렉티브는 자주적·자립적·자치적인 협동조합 활동을 통해 예술 창작 활동의 지속가능성을 도모하며, 지역사회 문화예술 발전에 기여하고자 합니다.\n\n### 초대의 말\n\n저희 조합의 시작을 함께 축하하고, 앞으로의 활동에 많은 관심과 기대를 부탁드립니다. 예술가와 지역 주민, 그리고 문화예술에 관심 있는 모든 분들의 많은 참여 바랍니다.\n\n### 출연정보\n\n- 더 밀리웨이스\n- 유동혁\n- 로잘린송\n- 판저콥스\n- 사바하",
     "gallery": [
-      "public\images\projects\opening-party-01.jpg",
-      "public\images\projects\opening-party-02.jpg",
-      "public\images\projects\opening-party-03.jpg",
-      "public\images\projects\opening-party-04.jpg",
-      "public\images\projects\opening-party-05.jpg",
-      "public\images\projects\opening-party-06.jpg",
-      "public\images\projects\opening-party-07.jpg",
-      "public\images\projects\opening-party-08.jpg",
-      "public\images\projects\opening-party-09.jpg"
-      l,
+      "/images/projects/opening-party-01.jpg",
+      "/images/projects/opening-party-02.jpg",
+      "/images/projects/opening-party-03.jpg",
+      "/images/projects/opening-party-04.jpg",
+      "/images/projects/opening-party-05.jpg",
+      "/images/projects/opening-party-06.jpg",
+      "/images/projects/opening-party-07.jpg",
+      "/images/projects/opening-party-08.jpg",
+      "/images/projects/opening-party-09.jpg"
+    ],
     "videoUrl": null,
     "artistIds": ["artist-001", "artist-003", "artist-004", "artist-005", "artist-009"],
     "ticketing": null
@@ -69,7 +69,7 @@
     "gallery": null,
     "videoUrl": null,
     "artistIds": ["artist-001", "artist-009"],
-"ticketing": [
+    "ticketing": [
       {
         "platform": "네이버 예약",
         "url": "https://docs.google.com/forms/d/e/1FAIpQLSfH4bq9x4fofG1oN4tRkwawV6ah9iar28QEb2JTMwTEvRct1A/viewform?fbclid=PAZXh0bgNhZW0CMTEAAafOPq8yR-YP8jqsRRx8Ald66awnnjhNateQ1In-JPB1h2cK5BlOWelYCMcKoQ_aem_MeeBGx_plCR1mpCzdEyi5g",
