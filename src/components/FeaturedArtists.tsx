@@ -41,7 +41,7 @@ const FeaturedArtists = ({ artists }: FeaturedArtistsProps) => {
                       width={400}
                       height={400}
                       className="rounded-full object-cover w-full h-full"
-                      sizes="(max-width: 768px) 100vw, 400px"
+                      fallbackText={artist.name.slice(0, 3)}
                     />
                   </div>
 

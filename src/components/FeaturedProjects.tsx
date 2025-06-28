@@ -44,8 +44,8 @@ const FeaturedProjects = ({ projects }: FeaturedProjectsProps) => {
                       width={800}
                       height={600}
                       className="object-cover w-full h-full"
-                      priority={index === 0}
-                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                      priority={index === 0} // 첫 번째 이미지만 우선 로딩
+                      fallbackText={project.title.slice(0, 3)}
                     />
                     <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors duration-300" />
                   </div>
