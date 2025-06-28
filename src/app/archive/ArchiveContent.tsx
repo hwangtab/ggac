@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import SimpleImage from '@/components/SimpleImage'
+import OptimizedImage from '@/components/OptimizedImage'
 
 interface Project {
   id: string
@@ -99,11 +99,13 @@ const ArchiveContent = ({ projects, artists }: ArchiveContentProps) => {
                   <div className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2 overflow-hidden h-full flex flex-col">
                     {/* Project Image */}
                     <div className="relative h-48 overflow-hidden flex-shrink-0">
-                      <SimpleImage 
+                      <OptimizedImage 
                         src={project.coverImage}
                         alt={project.title}
                         width={600}
                         height={400}
+                        className="object-cover w-full h-full"
+                        sizes="(max-width: 768px) 100vw, 600px"
                       />
                       <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors duration-300" />
                     </div>

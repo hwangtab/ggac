@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import ImageWithFallback from './ImageWithFallback'
+import OptimizedImage from './OptimizedImage'
 
 interface Artist {
   id: string
@@ -35,14 +35,13 @@ const FeaturedArtists = ({ artists }: FeaturedArtistsProps) => {
                 <div className="text-center">
                   {/* Artist Image */}
                   <div className="relative w-48 h-48 mx-auto mb-6 overflow-hidden rounded-full group-hover:scale-110 transition-transform duration-300">
-                    <ImageWithFallback
+                    <OptimizedImage
                       src={artist.profileImage}
                       alt={artist.name}
                       width={400}
                       height={400}
-                      fallbackText={artist.name.slice(0, 3)}
-                      className="rounded-full"
-                      preferWebp={true}
+                      className="rounded-full object-cover w-full h-full"
+                      sizes="(max-width: 768px) 100vw, 400px"
                     />
                   </div>
 

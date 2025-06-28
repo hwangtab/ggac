@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import ImageWithFallback from '@/components/ImageWithFallback'
+import OptimizedImage from '@/components/OptimizedImage'
 
 interface Artist {
   id: string
@@ -82,14 +82,13 @@ const ArtistsContent = ({ artists }: ArtistsContentProps) => {
                   <div className="text-center transform hover:scale-105 transition-transform duration-300">
                     {/* Artist Image */}
                     <div className="relative w-64 h-64 mx-auto mb-4 overflow-hidden rounded-full group-hover:scale-110 transition-transform duration-300">
-                      <ImageWithFallback
+                      <OptimizedImage
                         src={artist.profileImage}
                         alt={artist.name}
                         width={400}
                         height={400}
-                        fallbackText={artist.name.slice(0, 3)}
-                        className="rounded-full"
-                        preferWebp={true}
+                        className="rounded-full object-cover w-full h-full"
+                        sizes="(max-width: 768px) 100vw, 400px"
                       />
                     </div>
 

@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 import { FiPlay, FiExternalLink, FiUser, FiLink } from 'react-icons/fi'
-import ImageWithFallback from '@/components/ImageWithFallback'
+import OptimizedImage from '@/components/OptimizedImage'
 import YouTubeEmbed from '@/components/YouTubeEmbed'
 import { convertUrlsToMarkdownLinks } from '@/utils/markdown'
 import type { Metadata } from 'next'
@@ -232,14 +232,14 @@ const ArtistDetailPage = ({ params }: ArtistPageProps) => {
               {/* Profile Image */}
               <div className={`${isMinimal ? 'mb-8' : ''}`}>
                 <div className={`${isMinimal ? 'w-96 h-96 mx-auto' : 'w-96 h-96'} overflow-hidden rounded-full`}>
-                  <ImageWithFallback
+                  <OptimizedImage
                     src={artist.profileImage}
                     alt={artist.name}
                     width={800}
                     height={800}
-                    fallbackText={artist.name.slice(0, 3)}
-                    className="rounded-full"
-                    preferWebp={true}
+                    className="rounded-full object-cover w-full h-full"
+                    priority={true}
+                    sizes="(max-width: 768px) 100vw, 800px"
                   />
                 </div>
               </div>

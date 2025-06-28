@@ -1,6 +1,5 @@
 import Link from 'next/link'
-import Image from 'next/image'
-import ImageWithFallback from '@/components/ImageWithFallback'
+import OptimizedImage from '@/components/OptimizedImage'
 
 interface Project {
   id: string
@@ -39,13 +38,14 @@ const FeaturedProjects = ({ projects }: FeaturedProjectsProps) => {
                 <div className={`relative overflow-hidden rounded-2xl bg-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2 ${index === 0 ? '' : 'h-full'}`}>
                   {/* Project Image */}
                   <div className={`relative ${index === 0 ? 'h-64 md:h-80' : 'h-64'} overflow-hidden`}>
-                    <ImageWithFallback 
+                    <OptimizedImage 
                       src={project.coverImage}
                       alt={project.title}
                       width={800}
                       height={600}
-                      fallbackText={project.title}
-                      preferWebp={true}
+                      className="object-cover w-full h-full"
+                      priority={index === 0}
+                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                     />
                     <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors duration-300" />
                   </div>
