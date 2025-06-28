@@ -3,7 +3,7 @@ import path from 'path'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
-import ProjectImage from '@/components/ProjectImage'
+import OptimizedImage from '@/components/OptimizedImage'
 import TicketingCard from '@/components/TicketingCard'
 import { convertUrlsToMarkdownLinks } from '@/utils/markdown'
 import { TicketingInfo } from '@/utils/linkPreview'
@@ -174,10 +174,14 @@ const ProjectDetailPage = ({ params }: ProjectPageProps) => {
         <div className="container-custom">
           <div className="max-w-4xl mx-auto">
             <div className="rounded-2xl overflow-hidden shadow-lg">
-              <ProjectImage 
+              <OptimizedImage 
                 src={project.coverImage}
                 alt={project.title}
-                preserveAspectRatio={true}
+                width={800}
+                height={600}
+                className="w-full h-auto object-cover"
+                priority={true}
+                fallbackText={project.title.slice(0, 3)}
               />
             </div>
           </div>
@@ -253,10 +257,13 @@ const ProjectDetailPage = ({ params }: ProjectPageProps) => {
                       key={index}
                       className="aspect-square rounded-2xl overflow-hidden shadow-lg"
                     >
-                      <ProjectImage 
+                      <OptimizedImage 
                         src={image}
                         alt={`${project.title} - 이미지 ${index + 1}`}
-                        className="hover:scale-105 transition-transform duration-300"
+                        width={600}
+                        height={600}
+                        className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                        fallbackText={(index + 1).toString()}
                       />
                     </div>
                   ))}

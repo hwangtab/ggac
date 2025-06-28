@@ -37,7 +37,7 @@ export default function OptimizedImage({
   if (hasError) {
     return (
       <div className={`bg-gradient-to-br from-primary-100 to-accent-100 flex items-center justify-center ${className}`}>
-        <span className="text-primary-600 font-medium text-center px-4 text-2xl font-serif">
+        <span className="text-primary-600 font-medium text-center px-4 text-2xl font-sans">
           {fallbackText || alt.slice(0, 3)}
         </span>
       </div>
