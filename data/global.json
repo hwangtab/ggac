@@ -1,0 +1,20 @@
+{
+  "siteName": "경기아트콜렉티브 협동조합",
+  "siteDescription": "경계 없는 상상, 함께 만드는 울림",
+  "joinFormUrl": "https://docs.google.com/forms/d/e/1FAIpQLScicp159Y6DgYJv2N-x4DGigsLWiOCLf6jl-meRSfXfuMahAQ/viewform?usp=header",
+  "supportFormUrl": "https://docs.google.com/forms/d/e/1FAIpQLSfshZYVRZKmXlM0KppuLZg-GncIZIXNOVSdGQacPyYUEZUhRQ/viewform?usp=header",
+  "contact": {
+    "email": "contact@ggac.kr",
+    "phone": "0507-1384-3144",
+    "address": "경기도 고양시 덕양구 성사동 719"
+  },
+  "social": {
+    "instagram": "https://www.instagram.com/ggartcollective",
+    "youtube": "https://www.youtube.com/@경기아트콜렉티브"
+  },
+  "businessInfo": {
+    "establishedDate": "2025-05-01",
+    "registrationDate": "2025-05-14",
+    "registrationNumber": "513-86-03832"
+  }
+}
