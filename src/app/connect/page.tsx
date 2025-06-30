@@ -1,6 +1,5 @@
-import fs from 'fs'
-import path from 'path'
 import { FaInstagram, FaYoutube } from 'react-icons/fa'
+import { getGlobalData } from '@/lib/data'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -8,26 +7,9 @@ export const metadata: Metadata = {
   description: '당신의 참여로 새로운 물결이 시작됩니다.',
 }
 
-interface GlobalData {
-  siteName: string
-  siteDescription: string
-  joinFormUrl: string
-  supportFormUrl: string
-  contact: {
-    email: string
-    phone: string
-    address: string
-  }
-  social: {
-    instagram: string
-    youtube: string
-  }
-}
-
-const ConnectPage = () => {
-  const globalData = JSON.parse(
-    fs.readFileSync(path.join(process.cwd(), 'data/global.json'), 'utf8')
-  ) as GlobalData
+const ConnectPage = async () => {
+  // 개선된 데이터 로딩 - 캐싱된 함수 사용 (기존 디자인 유지)
+  const globalData = await getGlobalData()
 
   return (
     <div className="pt-20">

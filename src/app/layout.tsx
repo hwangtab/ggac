@@ -1,11 +1,10 @@
 import type { Metadata } from 'next'
-import fs from 'fs'
-import path from 'path'
 import './globals.css'
 import Navigation from '@/components/Navigation'
 import Footer from '@/components/Footer'
 import { Noto_Serif_KR } from 'next/font/google'
 import localFont from 'next/font/local'
+import { getGlobalData } from '@/lib/data'
 
 const pretendard = localFont({
   src: '../../public/fonts/PretendardVariable.woff2',
@@ -68,15 +67,13 @@ export const metadata: Metadata = {
   },
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  // global.json 데이터 로드
-  const globalData = JSON.parse(
-    fs.readFileSync(path.join(process.cwd(), 'data/global.json'), 'utf8')
-  )
+  // 개선된 데이터 로딩 - 캐싱된 함수 사용
+  const globalData = await getGlobalData()
 
   return (
     <html lang="ko" className={`${pretendard.variable} ${notoSerifKr.variable}`}>

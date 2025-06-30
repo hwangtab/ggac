@@ -1,6 +1,5 @@
-import fs from 'fs'
-import path from 'path'
 import ArtistsContent from './ArtistsContent'
+import { getArtists } from '@/lib/data'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -8,26 +7,11 @@ export const metadata: Metadata = {
   description: '서로의 우주가 되어',
 }
 
-interface Artist {
-  id: string
-  slug: string
-  name: string
-  category: string | string[]
-  profileImage: string
-  oneLiner: string
-  bio: string
-  templateType: string
-  portfolioLinks: Array<{ title: string; url: string }>
-  contact: string
-}
-
 const ArtistsPage = async () => {
-  // 정적 데이터 로딩
-  const artistsData = JSON.parse(
-    fs.readFileSync(path.join(process.cwd(), 'data/artists.json'), 'utf8')
-  ) as Artist[]
+  // 개선된 데이터 로딩 - 타입까지 포함된 캐싱 함수 사용
+  const artists = await getArtists()
 
-  return <ArtistsContent artists={artistsData} />
+  return <ArtistsContent artists={artists} />
 }
 
 export default ArtistsPage

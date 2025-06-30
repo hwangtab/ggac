@@ -1,7 +1,6 @@
 import Image from 'next/image'
-import fs from 'fs'
-import path from 'path'
 import Link from 'next/link'
+import { getProjects } from '@/lib/data'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -9,24 +8,12 @@ export const metadata: Metadata = {
   description: '우리는 예술로 숨 쉬고, 협동으로 길을 냅니다.',
 }
 
-interface Project {
-  id: string
-  slug: string
-  title: string
-  category: string
-  publishedDate: string
-  coverImage: string
-  description: string
-}
-
-const AboutPage = () => {
-  // 프로젝트 데이터에서 연혁 생성
-  const projectsData = JSON.parse(
-    fs.readFileSync(path.join(process.cwd(), 'data/projects.json'), 'utf8')
-  ) as Project[]
+const AboutPage = async () => {
+  // 개선된 데이터 로딩 - 캐싱된 함수 사용
+  const projects = await getProjects()
 
   // 날짜순으로 정렬 (오래된 것부터)
-  const sortedProjects = projectsData.sort(
+  const sortedProjects = projects.sort(
     (a, b) => new Date(a.publishedDate).getTime() - new Date(b.publishedDate).getTime()
   )
 

@@ -1,51 +1,18 @@
 import Hero from '@/components/Hero'
 import FeaturedProjects from '@/components/FeaturedProjects'
 import FeaturedArtists from '@/components/FeaturedArtists'
-import { TicketingInfo } from '@/utils/linkPreview'
-import fs from 'fs'
-import path from 'path'
+import { getFeaturedProjects, getArtists } from '@/lib/data'
 
-interface Project {
-  id: string
-  slug: string
-  title: string
-  category: string
-  publishedDate: string
-  coverImage: string
-  description: string
-  artistIds: string[]
-  ticketing?: TicketingInfo[]
-}
-
-interface Artist {
-  id: string
-  slug: string
-  name: string
-  category: string | string[]
-  profileImage: string
-  oneLiner: string
-}
-
-export default function Home() {
-  // 정적 데이터 로딩 (서버 컴포넌트에서)
-  const projectsData = JSON.parse(
-    fs.readFileSync(path.join(process.cwd(), 'data/projects.json'), 'utf8')
-  ) as Project[]
-  
-  const artistsData = JSON.parse(
-    fs.readFileSync(path.join(process.cwd(), 'data/artists.json'), 'utf8')
-  ) as Artist[]
-
-  // 최신 프로젝트 3개 (모든 프로젝트 표시)
-  const featuredProjects = projectsData
-    .sort((a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime())
-    .slice(0, 3)
+export default async function Home() {
+  // 개선된 데이터 로딩 - 캐싱된 함수 사용
+  const featuredProjects = await getFeaturedProjects(3) // 최신 3개 프로젝트
+  const artists = await getArtists()
 
   return (
     <div>
       <Hero />
       <FeaturedProjects projects={featuredProjects} />
-      <FeaturedArtists artists={artistsData} />
+      <FeaturedArtists artists={artists} />
     </div>
   )
 }

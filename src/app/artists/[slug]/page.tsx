@@ -1,5 +1,3 @@
-import fs from 'fs'
-import path from 'path'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
@@ -7,21 +5,8 @@ import { FiPlay, FiExternalLink, FiUser, FiLink } from 'react-icons/fi'
 import OptimizedImage from '@/components/OptimizedImage'
 import YouTubeEmbed from '@/components/YouTubeEmbed'
 import { convertUrlsToMarkdownLinks } from '@/utils/markdown'
+import { getArtistSlugs, getArtistBySlug, type Artist } from '@/lib/data'
 import type { Metadata } from 'next'
-
-interface Artist {
-  id: string
-  slug: string
-  name: string
-  category: string | string[]
-  profileImage: string
-  oneLiner: string
-  bio: string
-  templateType: string
-  portfolioLinks: Array<{ title: string; url: string }>
-  youtubeVideos?: Array<{ title: string; url: string }>
-  contact: string
-}
 
 interface ArtistPageProps {
   params: {
@@ -29,32 +14,23 @@ interface ArtistPageProps {
   }
 }
 
+// generateStaticParams 개선 - 캐싱된 함수 사용
 export async function generateStaticParams() {
-  const artistsData = JSON.parse(
-    fs.readFileSync(path.join(process.cwd(), 'data/artists.json'), 'utf8')
-  ) as Artist[]
-
-  return artistsData.map((artist) => ({
-    slug: artist.slug,
-  }))
+  const slugs = await getArtistSlugs()
+  return slugs.map((slug) => ({ slug }))
 }
 
 // 안정적인 베이스 URL 생성
 function getBaseUrl(): string {
-  // 프로덕션 환경에서는 항상 실제 도메인 사용
   if (process.env.NODE_ENV === 'production') {
     return 'https://ggac.kr'
   }
-  // 개발 환경
   return 'http://localhost:3000'
 }
 
+// generateMetadata 개선 - 캐싱된 함수 사용
 export async function generateMetadata({ params }: ArtistPageProps): Promise<Metadata> {
-  const artistsData = JSON.parse(
-    fs.readFileSync(path.join(process.cwd(), 'data/artists.json'), 'utf8')
-  ) as Artist[]
-
-  const artist = artistsData.find(a => a.slug === params.slug)
+  const artist = await getArtistBySlug(params.slug)
 
   if (!artist) {
     return {
@@ -153,12 +129,9 @@ export async function generateMetadata({ params }: ArtistPageProps): Promise<Met
   }
 }
 
-const ArtistDetailPage = ({ params }: ArtistPageProps) => {
-  const artistsData = JSON.parse(
-    fs.readFileSync(path.join(process.cwd(), 'data/artists.json'), 'utf8')
-  ) as Artist[]
-
-  const artist = artistsData.find(a => a.slug === params.slug)
+const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
+  // 개선된 데이터 로딩 - 단일 함수로 아티스트 조회
+  const artist = await getArtistBySlug(params.slug)
 
   if (!artist) {
     notFound()
