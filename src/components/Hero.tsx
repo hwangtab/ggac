@@ -38,14 +38,12 @@ const Hero = () => {
         animationFrameId.current = null
       }
 
+      // 모바일에서는 애니메이션 비활성화
       if (window.innerWidth < 768) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height)
-        canvas.style.display = 'none'
         window.removeEventListener('mousemove', handleMouseMove)
         return
       }
 
-      canvas.style.display = 'block'
       canvas.width = window.innerWidth
       canvas.height = window.innerHeight
       window.addEventListener('mousemove', handleMouseMove)
@@ -151,11 +149,13 @@ const Hero = () => {
   }, [])
 
   return (
-    <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
+    <section 
+      className="relative min-h-screen flex items-center justify-center overflow-hidden"
+      style={{ background: 'linear-gradient(135deg, #020617 0%, #0f172a 50%, #1e293b 100%)' }}
+    >
       <canvas
         ref={canvasRef}
-        className="absolute inset-0 w-full h-full"
-        style={{ background: 'linear-gradient(135deg, #020617 0%, #0f172a 50%, #1e293b 100%)' }}
+        className="absolute inset-0 w-full h-full hidden md:block"
       />
       <div className="absolute inset-0 bg-gradient-to-br from-primary-900/30 to-accent-900/30 mix-blend-soft-light" />
 
