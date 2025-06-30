@@ -1,8 +1,12 @@
+'use client'
+
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import OptimizedImage from '@/components/OptimizedImage'
 import TicketingCard from '@/components/TicketingCard'
+import Lightbox from '@/components/Lightbox'
 import { convertUrlsToMarkdownLinks } from '@/utils/markdown'
 import { TicketingInfo } from '@/utils/linkPreview'
 import { 
@@ -91,6 +95,46 @@ const ProjectDetailPage = async ({ params }: ProjectPageProps) => {
 
   // 참여 아티스트 정보 가져오기
   const participatingArtists = await getProjectArtists(project.artistIds)
+
+  return <ProjectDetailContent project={project} participatingArtists={participatingArtists} />
+}
+
+// 클라이언트 컴포넌트 분리
+function ProjectDetailContent({ 
+  project, 
+  participatingArtists 
+}: { 
+  project: ProjectType
+  participatingArtists: any[]
+}) {
+  // 라이트박스 상태 관리
+  const [lightboxOpen, setLightboxOpen] = useState(false)
+  const [currentImageIndex, setCurrentImageIndex] = useState(0)
+
+  const openLightbox = (index: number) => {
+    setCurrentImageIndex(index)
+    setLightboxOpen(true)
+  }
+
+  const closeLightbox = () => {
+    setLightboxOpen(false)
+  }
+
+  const nextImage = () => {
+    if (project.gallery) {
+      setCurrentImageIndex((prev) => 
+        prev === project.gallery!.length - 1 ? 0 : prev + 1
+      )
+    }
+  }
+
+  const prevImage = () => {
+    if (project.gallery) {
+      setCurrentImageIndex((prev) => 
+        prev === 0 ? project.gallery!.length - 1 : prev - 1
+      )
+    }
+  }
 
   return (
     <div className="pt-20 bg-gradient-to-b from-primary-50 via-accent-50 to-gray-200 min-h-screen">
@@ -224,20 +268,38 @@ const ProjectDetailPage = async ({ params }: ProjectPageProps) => {
                   {project.gallery.map((image, index) => (
                     <div 
                       key={index}
-                      className="aspect-square rounded-2xl overflow-hidden shadow-lg"
+                      className="aspect-square rounded-2xl overflow-hidden shadow-lg cursor-pointer group relative"
+                      onClick={() => openLightbox(index)}
                     >
                       <OptimizedImage 
                         src={image}
                         alt={`${project.title} - 이미지 ${index + 1}`}
                         width={600}
                         height={600}
-                        className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         fallbackText={(index + 1).toString()}
                       />
+                      {/* 호버 오버레이 */}
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300 flex items-center justify-center">
+                        <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 text-white text-sm bg-black/50 px-3 py-1 rounded-full">
+                          클릭하여 확대
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
+            )}
+
+            {/* Lightbox */}
+            {lightboxOpen && project.gallery && (
+              <Lightbox
+                images={project.gallery}
+                currentIndex={currentImageIndex}
+                onClose={closeLightbox}
+                onNext={nextImage}
+                onPrev={prevImage}
+              />
             )}
           </div>
         </div>
