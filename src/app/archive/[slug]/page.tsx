@@ -9,7 +9,7 @@ import {
   getProjectSlugs, 
   getProjectBySlug, 
   getProjectArtists,
-  type Project 
+  type Project as ProjectType
 } from '@/lib/data'
 import type { Metadata } from 'next'
 
@@ -210,7 +210,7 @@ const ProjectDetailPage = async ({ params }: ProjectPageProps) => {
                 </ReactMarkdown>
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {project.ticketing.map((ticket, index) => (
-                    <TicketingCard key={index} ticketing={ticket} />
+                    <TicketingCard key={index} ticketing={ticket as TicketingInfo} />
                   ))}
                 </div>
               </div>

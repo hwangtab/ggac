@@ -31,7 +31,11 @@ export interface Project {
   ticketing?: Array<{
     platform: string
     url: string
+    available: boolean
     price?: string
+    startDate?: string
+    endDate?: string
+    soldOutDate?: string
   }>
 }
 
