@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { TicketingInfo, LinkPreview } from '@/utils/linkPreview'
 
 interface TicketingCardProps {
@@ -12,14 +12,7 @@ const TicketingCard = ({ ticketing }: TicketingCardProps) => {
   const [isLoading, setIsLoading] = useState(!ticketing.preview)
   const [hasError, setHasError] = useState(false)
 
-  useEffect(() => {
-    if (!ticketing.preview && ticketing.url) {
-      // 클라이언트에서 프리뷰 데이터 가져오기
-      fetchPreview()
-    }
-  }, [ticketing.url, ticketing.preview])
-
-  const fetchPreview = async () => {
+  const fetchPreview = useCallback(async () => {
     try {
       setIsLoading(true)
       const response = await fetch(`/api/link-preview?url=${encodeURIComponent(ticketing.url)}`)
@@ -37,7 +30,14 @@ const TicketingCard = ({ ticketing }: TicketingCardProps) => {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [ticketing.url])
+
+  useEffect(() => {
+    if (!ticketing.preview && ticketing.url) {
+      // 클라이언트에서 프리뷰 데이터 가져오기
+      fetchPreview()
+    }
+  }, [ticketing.url, ticketing.preview, fetchPreview])
 
   const getStatusColor = () => {
     if (!ticketing.available) return 'bg-red-100 text-red-800'

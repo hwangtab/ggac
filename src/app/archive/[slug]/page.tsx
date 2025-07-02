@@ -1,11 +1,7 @@
 import { notFound } from 'next/navigation'
 import ProjectDetailContent from './ProjectDetailContent'
-import { 
-  getProjectSlugs, 
-  getProjectBySlug, 
-  getProjectArtists,
-  type Project as ProjectType
-} from '@/lib/data'
+import { getProjectSlugs, getProjectBySlug, getProjectArtists, type Project as ProjectType } from '@/lib/data'
+import { fetchLinkPreview } from '@/utils/linkPreview'
 import type { Metadata } from 'next'
 
 interface ProjectPageProps {

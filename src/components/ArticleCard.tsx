@@ -1,7 +1,7 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { LinkPreview } from '@/utils/linkPreview'
 
 interface ArticleInfo {
@@ -19,13 +19,7 @@ const ArticleCard = ({ article }: ArticleCardProps) => {
   const [isLoading, setIsLoading] = useState(!article.preview)
   const [hasError, setHasError] = useState(false)
 
-  useEffect(() => {
-    if (!article.preview && article.url) {
-      fetchPreview()
-    }
-  }, [article.url, article.preview])
-
-  const fetchPreview = async () => {
+  const fetchPreview = useCallback(async () => {
     try {
       setIsLoading(true)
       const response = await fetch(`/api/link-preview?url=${encodeURIComponent(article.url)}`)
@@ -43,7 +37,13 @@ const ArticleCard = ({ article }: ArticleCardProps) => {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [article.url])
+
+  useEffect(() => {
+    if (!article.preview && article.url) {
+      fetchPreview()
+    }
+  }, [article.url, article.preview, fetchPreview])
 
   if (isLoading) {
     return (
