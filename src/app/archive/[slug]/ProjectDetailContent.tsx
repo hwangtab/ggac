@@ -5,6 +5,7 @@ import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
 import OptimizedImage from '@/components/OptimizedImage'
 import TicketingCard from '@/components/TicketingCard'
+import ArticleCard from '@/components/ArticleCard'
 import Lightbox from '@/components/Lightbox'
 import { convertUrlsToMarkdownLinks } from '@/utils/markdown'
 import { TicketingInfo } from '@/utils/linkPreview'
@@ -173,6 +174,18 @@ export default function ProjectDetailContent({
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {project.ticketing.map((ticket, index) => (
                     <TicketingCard key={index} ticketing={ticket as TicketingInfo} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Related Articles */}
+            {project.relatedArticles && project.relatedArticles.length > 0 && (
+              <div className="mt-12">
+                <h3 className="text-xl font-serif font-semibold mb-6">관련 기사</h3>
+                <div className="grid md:grid-cols-2 gap-6">
+                  {project.relatedArticles.map((article, index) => (
+                    <ArticleCard key={index} article={article} />
                   ))}
                 </div>
               </div>

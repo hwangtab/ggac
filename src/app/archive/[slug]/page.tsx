@@ -87,10 +87,24 @@ const ProjectDetailPage = async ({ params }: ProjectPageProps) => {
   // 참여 아티스트 정보 가져오기
   const participatingArtists = await getProjectArtists(project.artistIds)
 
+  const articlesWithPreview = project.relatedArticles
+    ? await Promise.all(
+        project.relatedArticles.map(async article => {
+          try {
+            const preview = await fetchLinkPreview(article.url)
+            return { ...article, preview }
+          } catch (error) {
+            console.error(`Failed to fetch preview for ${article.url}:`, error)
+            return { ...article, preview: null }
+          }
+        })
+      )
+    : []
+
   return (
-    <ProjectDetailContent 
-      project={project} 
-      participatingArtists={participatingArtists} 
+    <ProjectDetailContent
+      project={{ ...project, relatedArticles: articlesWithPreview }}
+      participatingArtists={participatingArtists}
     />
   )
 }

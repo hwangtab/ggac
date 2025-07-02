@@ -37,6 +37,10 @@ export interface Project {
     endDate?: string
     soldOutDate?: string
   }>
+  relatedArticles?: Array<{
+    title: string
+    url: string
+  }>
 }
 
 export interface GlobalData {
