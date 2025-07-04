@@ -80,10 +80,10 @@
     "artistIds": ["artist-001", "artist-009"],
     "ticketing": [
       {
-        "platform": "구글 폼",
-        "url": "https://docs.google.com/forms/d/e/1FAIpQLSfH4bq9x4fofG1oN4tRkwawV6ah9iar28QEb2JTMwTEvRct1A/viewform?fbclid=PAZXh0bgNhZW0CMTEAAafOPq8yR-YP8jqsRRx8Ald66awnnjhNateQ1In-JPB1h2cK5BlOWelYCMcKoQ_aem_MeeBGx_plCR1mpCzdEyi5g",
+        "platform": "네이버 예약",
+        "url": "https://booking.naver.com/booking/5/bizes/1442738/items/6864645/?preview=1&startDateTime=2025-07-13T00%3A00%3A00%2B09%3A00",
         "available": true,
-        "startDate": "2025-06-01",
+        "startDate": "2025-07-01",
         "endDate": "2025-07-12"
       }
     ],

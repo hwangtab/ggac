@@ -40,3 +40,4 @@ certificates/
 *.tsbuildinfo
 next-env.d.ts
 test-github-mcp.js
+test-slack-mcp.js
