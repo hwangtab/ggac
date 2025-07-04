@@ -20,7 +20,7 @@ jobs:
           -H "Authorization: Bearer ${{ secrets.SLACK_BOT_TOKEN }}" \
           -H "Content-Type: application/json" \
           -d '{
-            "channel": "C093MGMC02E",
+            "channel": "C094ELD4D4L",
             "text": "🚀 **GGAC 웹사이트** 배포 시작\n\n📋 **배포 정보:**\n• 브랜치: `${{ github.ref_name }}`\n• 커밋: `${{ github.sha }}`\n• 작성자: ${{ github.actor }}\n• 시간: $(date)\n\n⏳ Vercel에서 자동 배포 중...",
             "username": "GitHub Deploy Bot",
             "icon_emoji": ":github:"
@@ -39,7 +39,7 @@ jobs:
             -H "Authorization: Bearer ${{ secrets.SLACK_BOT_TOKEN }}" \
             -H "Content-Type: application/json" \
             -d '{
-              "channel": "C093MGMC02E",
+              "channel": "C094ELD4D4L",
               "text": "✅ **GGAC 웹사이트** 배포 완료!\n\n🎉 **배포 성공:**\n• 브랜치: `${{ github.ref_name }}`\n• 커밋: `${{ github.sha }}`\n• URL: https://ggac.kr\n• 완료 시간: $(date)\n\n🔗 사이트 확인: https://ggac.kr",
               "username": "GitHub Deploy Bot",
               "icon_emoji": ":white_check_mark:"
@@ -49,7 +49,7 @@ jobs:
             -H "Authorization: Bearer ${{ secrets.SLACK_BOT_TOKEN }}" \
             -H "Content-Type: application/json" \
             -d '{
-              "channel": "C093MGMC02E",
+              "channel": "C094ELD4D4L",
               "text": "❌ **GGAC 웹사이트** 배포 실패\n\n💥 **배포 실패:**\n• 브랜치: `${{ github.ref_name }}`\n• 커밋: `${{ github.sha }}`\n• 실패 시간: $(date)\n\n⚠️ Vercel 대시보드에서 로그를 확인해주세요.",
               "username": "GitHub Deploy Bot",
               "icon_emoji": ":x:"

@@ -5,7 +5,7 @@ const { exec } = require('child_process');
 class DeployNotifier {
   constructor() {
     this.slackBotToken = process.env.SLACK_BOT_TOKEN;
-    this.slackChannelId = process.env.SLACK_CHANNEL_ID || 'C093MGMC02E';
+    this.slackChannelId = process.env.SLACK_CHANNEL_ID || 'C094ELD4D4L';
     this.projectName = 'GGAC 웹사이트';
     this.deployUrl = 'https://ggac.kr';
   }

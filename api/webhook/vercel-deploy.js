@@ -95,7 +95,7 @@ function createCanceledMessage(commit, branch) {
 
 async function sendSlackNotification(message) {
   const slackBotToken = process.env.SLACK_BOT_TOKEN;
-  const slackChannelId = process.env.SLACK_CHANNEL_ID || 'C093MGMC02E'; // #slack-전체
+  const slackChannelId = process.env.SLACK_CHANNEL_ID || 'C094ELD4D4L'; // #웹사이트
 
   if (!slackBotToken) {
     console.error('SLACK_BOT_TOKEN이 설정되지 않았습니다.');
