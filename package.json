@@ -10,7 +10,9 @@
     "vercel:build": "next build",
     "vercel:dev": "vercel dev",
     "vercel:deploy": "vercel --prod",
-    "vercel:preview": "vercel"
+    "vercel:preview": "vercel",
+    "deploy": "curl -X POST https://ggac.kr/api/webhook/deploy-hook",
+    "deploy:notify": "node scripts/deploy-notify.js"
   },
   "dependencies": {
     "@playwright/test": "^1.53.1",
