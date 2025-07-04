@@ -39,3 +39,4 @@ certificates/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+test-github-mcp.js
