@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabase/client';
 import CommentSection from './CommentSection';
+import PaginationControls from './PaginationControls';
 
 interface Post {
   id: string;
@@ -16,6 +17,14 @@ interface PostListProps {
   posts: Post[];
   currentUserId?: string;
   isMember: boolean;
+  // 페이지네이션 props
+  currentPage?: number;
+  totalPages?: number;
+  totalCount?: number;
+  pageSize?: number;
+  loading?: boolean;
+  onPageChange?: (page: number) => void;
+  onCategoryChange?: (category: string) => void;
 }
 
 interface Profile {
@@ -23,7 +32,18 @@ interface Profile {
   display_name: string;
 }
 
-const PostList: React.FC<PostListProps> = ({ posts, currentUserId, isMember }) => {
+const PostList: React.FC<PostListProps> = ({ 
+  posts, 
+  currentUserId, 
+  isMember,
+  currentPage = 1,
+  totalPages = 1,
+  totalCount = 0,
+  pageSize = 10,
+  loading = false,
+  onPageChange,
+  onCategoryChange
+}) => {
   const [profiles, setProfiles] = useState<Record<string, string>>({});
   const [selectedCategory, setSelectedCategory] = useState<string>('전체');
   const [expandedPosts, setExpandedPosts] = useState<Set<string>>(new Set());
@@ -53,9 +73,15 @@ const PostList: React.FC<PostListProps> = ({ posts, currentUserId, isMember }) =
     fetchProfiles();
   }, [posts]);
 
-  const filteredPosts = selectedCategory === '전체' 
-    ? posts 
-    : posts.filter(post => post.category === selectedCategory);
+  // 페이지네이션 사용시 카테고리 필터링은 서버에서 처리되므로 posts를 그대로 사용
+  const displayPosts = posts;
+
+  const handleCategoryChange = (category: string) => {
+    setSelectedCategory(category);
+    if (onCategoryChange) {
+      onCategoryChange(category);
+    }
+  };
 
   const getCategoryBadgeColor = (category: string) => {
     switch (category) {
@@ -66,13 +92,6 @@ const PostList: React.FC<PostListProps> = ({ posts, currentUserId, isMember }) =
       default: return 'bg-gray-100 text-gray-800';
     }
   };
-
-  // 공지사항을 상단에 고정
-  const sortedPosts = filteredPosts.sort((a, b) => {
-    if (a.category === '공지' && b.category !== '공지') return -1;
-    if (a.category !== '공지' && b.category === '공지') return 1;
-    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-  });
 
   const toggleComments = (postId: string) => {
     setExpandedPosts(prev => {
@@ -94,12 +113,13 @@ const PostList: React.FC<PostListProps> = ({ posts, currentUserId, isMember }) =
           {categories.map((category) => (
             <button
               key={category}
-              onClick={() => setSelectedCategory(category)}
+              onClick={() => handleCategoryChange(category)}
+              disabled={loading}
               className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
                 selectedCategory === category
                   ? 'bg-primary-600 text-white'
                   : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
+              } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               {category}
             </button>
@@ -107,17 +127,33 @@ const PostList: React.FC<PostListProps> = ({ posts, currentUserId, isMember }) =
         </div>
       </div>
       
-      {
-        sortedPosts.length === 0 ? (
-          <div className="text-center py-8">
-            <p className="text-gray-500">
-              {selectedCategory === '전체' ? '게시글이 없습니다.' : `${selectedCategory} 게시글이 없습니다.`}
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {sortedPosts.map((post) => (
-              <div key={post.id} className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow">
+      {loading ? (
+        <div className="space-y-4">
+          {/* 로딩 스켈레톤 */}
+          {[...Array(pageSize)].map((_, index) => (
+            <div key={index} className="bg-white p-6 rounded-lg shadow-md animate-pulse">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-12 h-5 bg-gray-200 rounded-full"></div>
+              </div>
+              <div className="w-3/4 h-6 bg-gray-200 rounded mb-2"></div>
+              <div className="w-full h-20 bg-gray-200 rounded mb-4"></div>
+              <div className="flex items-center justify-between">
+                <div className="w-24 h-4 bg-gray-200 rounded"></div>
+                <div className="w-32 h-4 bg-gray-200 rounded"></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : displayPosts.length === 0 ? (
+        <div className="text-center py-8">
+          <p className="text-gray-500">
+            {selectedCategory === '전체' ? '게시글이 없습니다.' : `${selectedCategory} 게시글이 없습니다.`}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {displayPosts.map((post) => (
+            <div key={post.id} className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow">
                 <div className="flex items-center gap-2 mb-2">
                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${getCategoryBadgeColor(post.category)}`}>
                     {post.category}
@@ -188,6 +224,19 @@ const PostList: React.FC<PostListProps> = ({ posts, currentUserId, isMember }) =
           </div>
         )
       }
+      
+      {/* 페이지네이션 컨트롤 */}
+      {onPageChange && totalPages > 1 && (
+        <PaginationControls
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalCount={totalCount}
+          pageSize={pageSize}
+          onPageChange={onPageChange}
+          loading={loading}
+          className="mt-8"
+        />
+      )}
     </div>
   );
 };
