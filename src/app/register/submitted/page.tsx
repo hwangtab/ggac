@@ -11,7 +11,7 @@ export default function SubmittedPage() {
 
   const handleContactAdmin = () => {
     // 관리자 연락처로 이동 (이메일 또는 연락 페이지)
-    window.location.href = 'mailto:hwangtab@gmail.com?subject=조합원 가입 문의';
+    window.location.href = 'mailto:contact@ggac.kr?subject=조합원 가입 문의';
   };
 
   return (
