@@ -1,0 +1,218 @@
+'use client';
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { supabase } from '../../lib/supabase/client';
+
+export default function LoginPage() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
+  const router = useRouter();
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setMessage('');
+
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      console.log('Supabase signInWithPassword result:', data, error);
+
+      if (error) {
+        // Rate limit 에러 처리
+        if (error.message.includes('rate limit') || error.message.includes('429')) {
+          setMessage('요청이 너무 많습니다. 잠시 후 다시 시도해주세요. (약 5-10분 후)');
+          console.error('Rate limit reached. Please wait 5-10 minutes.');
+        } else {
+          setMessage(error.message);
+        }
+        console.error('Login error:', error);
+      } else if (data.user) {
+        // 이메일이 확인되지 않은 경우
+        if (!data.user.email_confirmed_at) {
+          setMessage('이메일 인증이 필요합니다. 이메일을 확인해주세요.');
+          await supabase.auth.signOut(); // 로그아웃
+          return;
+        }
+
+        // 프로필 존재 여부 확인 (미들웨어에서 처리하므로 간소화)
+        const { data: profile, error: profileError } = await supabase
+          .from('member_profiles')
+          .select('registration_status, is_active')
+          .eq('id', data.user.id)
+          .single();
+
+        if (profileError && profileError.code === 'PGRST116') {
+          // 프로필이 없는 경우 - 드문 경우지만 대응
+          console.log('Profile not found during login, this should be handled by middleware');
+          setMessage('회원 정보를 확인할 수 없습니다. 잠시 후 다시 시도하거나 관리자에게 문의해주세요.');
+          return;
+        }
+
+        // 프로필이 있는 경우 상태 확인
+        if (profile) {
+          if (profile.registration_status === 'pending') {
+            setMessage('조합원 가입 승인 대기 중입니다. 승인 대기 페이지로 이동합니다.');
+            setTimeout(() => router.push('/register/pending'), 2000);
+            return;
+          } else if (profile.registration_status === 'rejected') {
+            setMessage('가입 신청이 거절되었습니다. 자세한 사항은 관리자에게 문의해주세요.');
+            return;
+          } else if (profile.registration_status === 'approved' && !profile.is_active) {
+            setMessage('계정이 비활성화되었습니다. 관리자에게 문의해주세요.');
+            return;
+          }
+        }
+
+        // 로그인 성공 후 세션 확인
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        console.log('Supabase getSession result:', session, sessionError);
+
+        if (session && !sessionError) {
+          console.log('Session found, redirecting to /board');
+          router.push('/board');
+        } else {
+          console.warn('Session not found after login, attempting refresh and redirect.');
+          router.refresh();
+          router.push('/board');
+        }
+      }
+    } catch (error) {
+      setMessage('로그인 중 오류가 발생했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 pt-24 md:pt-28 pb-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md mx-auto">
+        {/* 헤더 섹션 */}
+        <div className="text-center mb-12">
+          <div className="mx-auto h-16 w-16 flex items-center justify-center rounded-full bg-primary-100 mb-6">
+            <svg className="h-8 w-8 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+            </svg>
+          </div>
+          <h1 className="heading-secondary text-gray-900 mb-4">
+            로그인
+          </h1>
+          <p className="text-body text-gray-600">
+            경기아트콜렉티브 조합원 게시판에<br />
+            오신 것을 환영합니다.
+          </p>
+        </div>
+        
+        {/* 메시지 표시 */}
+        {message && (
+          <div className={`mb-8 p-6 rounded-xl shadow-sm ${
+            message.includes('rate limit') || message.includes('너무 많습니다')
+              ? 'bg-amber-50 text-amber-800 border border-amber-200'
+              : message.includes('승인') && message.includes('완료')
+              ? 'bg-green-50 text-green-800 border border-green-200'
+              : 'bg-red-50 text-red-800 border border-red-200'
+          }`}>
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                {message.includes('rate limit') || message.includes('너무 많습니다') ? (
+                  <svg className="h-5 w-5 text-amber-400 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                ) : message.includes('승인') && message.includes('완료') ? (
+                  <svg className="h-5 w-5 text-green-400 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                ) : (
+                  <svg className="h-5 w-5 text-red-400 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                )}
+              </div>
+              <div className="ml-3">
+                <div className="text-sm leading-relaxed">
+                  {message}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* 폼 섹션 */}
+        <div className="bg-white shadow-xl rounded-2xl overflow-hidden">
+          <form onSubmit={handleLogin} className="p-8 space-y-6">
+            <div className="space-y-6">
+              <div>
+                <label htmlFor="email-address" className="block text-sm font-medium text-gray-700 mb-2">
+                  이메일 주소
+                </label>
+                <input
+                  id="email-address"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors disabled:bg-gray-50 disabled:text-gray-500"
+                  placeholder="이메일 주소를 입력하세요"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={loading}
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+                  비밀번호
+                </label>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors disabled:bg-gray-50 disabled:text-gray-500"
+                  placeholder="비밀번호를 입력하세요"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={loading}
+                />
+              </div>
+            </div>
+
+            <div className="pt-4">
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-primary-600 hover:bg-primary-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-semibold py-4 px-6 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+              >
+                {loading ? (
+                  <span className="flex items-center justify-center">
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    로그인 중...
+                  </span>
+                ) : (
+                  '로그인'
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+        
+        {/* 하단 링크 */}
+        <div className="text-center mt-8">
+          <p className="text-gray-600">
+            계정이 없으신가요?{' '}
+            <Link href="/signup" className="font-medium text-primary-600 hover:text-primary-500 transition-colors">
+              조합원 가입하기
+            </Link>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
