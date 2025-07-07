@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase/client';
 interface CreatePostFormProps {
   authorId: string;
   onNewPost: (post: Post) => void;
+  showSuccessRedirect?: boolean;
 }
 
 interface Post {
@@ -15,7 +16,7 @@ interface Post {
   created_at: string;
 }
 
-const CreatePostForm: React.FC<CreatePostFormProps> = ({ authorId, onNewPost }) => {
+const CreatePostForm: React.FC<CreatePostFormProps> = ({ authorId, onNewPost, showSuccessRedirect = false }) => {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [category, setCategory] = useState('잡담');
@@ -38,6 +39,9 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ authorId, onNewPost }) 
     if (error) {
       alert(error.message);
     } else if (data) {
+      if (showSuccessRedirect) {
+        alert('게시글이 성공적으로 작성되었습니다!');
+      }
       onNewPost(data);
       setTitle('');
       setContent('');
