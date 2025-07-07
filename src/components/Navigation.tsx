@@ -50,24 +50,25 @@ const Navigation = () => {
         const { data: { user } } = await supabase.auth.getUser()
         if (mounted) {
           setUser(user)
-          setLoading(false)
         }
       } catch (error) {
         console.error('Error getting user:', error)
         if (mounted) {
           setUser(null)
+        }
+      } finally {
+        if (mounted) {
           setLoading(false)
         }
       }
     }
 
-    // Set initial loading to false immediately to show auth buttons
-    setLoading(false)
     getUser()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (mounted) {
         setUser(session?.user || null)
+        setLoading(false)
       }
     })
 

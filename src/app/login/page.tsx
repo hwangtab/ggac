@@ -19,69 +19,38 @@ export default function LoginPage() {
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      console.log('Supabase signInWithPassword result:', data, error);
 
       if (error) {
-        // Rate limit 에러 처리
         if (error.message.includes('rate limit') || error.message.includes('429')) {
           setMessage('요청이 너무 많습니다. 잠시 후 다시 시도해주세요. (약 5-10분 후)');
-          console.error('Rate limit reached. Please wait 5-10 minutes.');
+        } else if (error.message.includes('Invalid login credentials')) {
+          setMessage('이메일 또는 비밀번호가 올바르지 않습니다.');
         } else {
-          setMessage(error.message);
+          setMessage('로그인 중 오류가 발생했습니다. 다시 시도해주세요.');
         }
         console.error('Login error:', error);
-      } else if (data.user) {
-        // 이메일이 확인되지 않은 경우
+        return;
+      }
+
+      if (data.user) {
+        // 이메일 인증 확인
         if (!data.user.email_confirmed_at) {
           setMessage('이메일 인증이 필요합니다. 이메일을 확인해주세요.');
-          await supabase.auth.signOut(); // 로그아웃
+          await supabase.auth.signOut();
           return;
         }
 
-        // 프로필 존재 여부 확인 (미들웨어에서 처리하므로 간소화)
-        const { data: profile, error: profileError } = await supabase
-          .from('member_profiles')
-          .select('registration_status, is_active')
-          .eq('id', data.user.id)
-          .single();
-
-        if (profileError && profileError.code === 'PGRST116') {
-          // 프로필이 없는 경우 - 드문 경우지만 대응
-          console.log('Profile not found during login, this should be handled by middleware');
-          setMessage('회원 정보를 확인할 수 없습니다. 잠시 후 다시 시도하거나 관리자에게 문의해주세요.');
-          return;
-        }
-
-        // 프로필이 있는 경우 상태 확인
-        if (profile) {
-          if (profile.registration_status === 'pending') {
-            setMessage('조합원 가입 승인 대기 중입니다. 승인 대기 페이지로 이동합니다.');
-            setTimeout(() => router.push('/register/pending'), 2000);
-            return;
-          } else if (profile.registration_status === 'rejected') {
-            setMessage('가입 신청이 거절되었습니다. 자세한 사항은 관리자에게 문의해주세요.');
-            return;
-          } else if (profile.registration_status === 'approved' && !profile.is_active) {
-            setMessage('계정이 비활성화되었습니다. 관리자에게 문의해주세요.');
-            return;
-          }
-        }
-
-        // 로그인 성공 후 세션 확인
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        console.log('Supabase getSession result:', session, sessionError);
-
-        if (session && !sessionError) {
-          console.log('Session found, redirecting to /board');
+        // 미들웨어가 처리하도록 간단한 리다이렉트
+        setMessage('로그인 성공! 잠시만 기다려주세요...');
+        
+        // 짧은 지연 후 리다이렉트하여 인증 상태가 제대로 설정되도록 함
+        setTimeout(() => {
           router.push('/board');
-        } else {
-          console.warn('Session not found after login, attempting refresh and redirect.');
-          router.refresh();
-          router.push('/board');
-        }
+        }, 1000);
       }
     } catch (error) {
-      setMessage('로그인 중 오류가 발생했습니다.');
+      console.error('Unexpected error during login:', error);
+      setMessage('예상치 못한 오류가 발생했습니다. 다시 시도해주세요.');
     } finally {
       setLoading(false);
     }
