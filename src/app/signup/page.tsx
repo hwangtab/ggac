@@ -126,18 +126,8 @@ export default function SignupPage() {
         }
         console.error('Signup error details:', error);
       } else if (data.user) {
-        setMessage(
-          `🎉 조합원 가입 신청이 완료되었습니다!\n\n` +
-          `✅ 단계 1: ${formData.email}로 전송된 이메일을 확인해주세요.\n` +
-          `✅ 단계 2: 이메일 인증 완료 후 관리자 승인을 거쳐 최종 완료됩니다.\n` +
-          `✅ 단계 3: 승인이 완료되면 조합원 게시판을 이용하실 수 있습니다.\n\n` +
-          `💡 5초 후 로그인 페이지로 이동합니다.`
-        );
-        
-        // 5초 후 로그인 페이지로 자동 이동
-        setTimeout(() => {
-          router.push('/login');
-        }, 5000);
+        // 성공 시 바로 안내 페이지로 리다이렉트
+        router.push('/register/submitted');
       }
     } catch (error) {
       setMessage('조합원 가입 중 예상치 못한 오류가 발생했습니다.');
