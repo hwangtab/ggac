@@ -6,9 +6,21 @@ export async function middleware(request: NextRequest) {
   const res = NextResponse.next();
   const supabase = createMiddlewareClient({ req: request, res });
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Skip middleware for static files and API routes to reduce API calls
+  if (request.nextUrl.pathname.startsWith('/_next') || 
+      request.nextUrl.pathname.startsWith('/api/') ||
+      request.nextUrl.pathname.includes('.')) {
+    return res;
+  }
+
+  let user = null;
+  try {
+    const { data } = await supabase.auth.getUser();
+    user = data.user;
+  } catch (error) {
+    console.log('Auth error in middleware:', error);
+    // Continue without user on auth errors to prevent loops
+  }
 
   const { pathname } = request.nextUrl;
 
@@ -32,12 +44,28 @@ export async function middleware(request: NextRequest) {
   }
 
   // 2. 인증된 사용자 처리
-  // member_profiles 정보 가져오기
-  const { data: profile, error: profileError } = await supabase
-    .from('member_profiles')
-    .select('registration_status, is_active, is_admin')
-    .eq('id', user.id)
-    .single();
+  // member_profiles 정보 가져오기 (에러 처리 개선)
+  let profile = null;
+  let profileError = null;
+  
+  try {
+    const { data, error } = await supabase
+      .from('member_profiles')
+      .select('registration_status, is_active, is_admin')
+      .eq('id', user.id)
+      .single();
+    
+    profile = data;
+    profileError = error;
+  } catch (error) {
+    console.log('Database error in middleware:', error);
+    // 데이터베이스 에러 시 기본적으로 공개 페이지는 허용
+    if (!isProtectedPage) {
+      return res;
+    }
+    // 보호된 페이지는 로그인으로 리다이렉트
+    return NextResponse.redirect(new URL('/login', request.nextUrl.origin));
+  }
 
   // 프로필이 없거나 에러 발생 시 (조합원 가입 플로우 문제일 수 있음)
   if (!profile || profileError) {
@@ -111,13 +139,12 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // 미들웨어를 적용할 경로를 명시적으로 나열
+    // 미들웨어를 적용할 경로를 명시적으로 나열하고 static 파일들 제외
     '/login',
     '/signup',
     '/board/:path*', // /board와 그 하위 경로 모두 포함
     '/admin/:path*', // /admin과 그 하위 경로 모두 포함
     '/register/pending',
     '/register/rejected',
-    // 필요한 경우 다른 경로 추가
   ],
 };
