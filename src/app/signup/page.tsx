@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabase/client';
+import FormField from '../../components/FormField';
 
 export default function SignupPage() {
   const [formData, setFormData] = useState({
@@ -18,16 +19,153 @@ export default function SignupPage() {
     accountNumber: '',
     accountHolder: '',
   });
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [fieldStates, setFieldStates] = useState<Record<string, 'default' | 'error' | 'success'>>({});
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const router = useRouter();
 
+  // 각 입력창에 대한 ref
+  const fieldRefs = {
+    email: useRef<HTMLInputElement>(null),
+    password: useRef<HTMLInputElement>(null),
+    displayName: useRef<HTMLInputElement>(null),
+    realName: useRef<HTMLInputElement>(null),
+    phoneNumber: useRef<HTMLInputElement>(null),
+    birthDate: useRef<HTMLInputElement>(null),
+    bankName: useRef<HTMLInputElement>(null),
+    accountNumber: useRef<HTMLInputElement>(null),
+    accountHolder: useRef<HTMLInputElement>(null),
+  };
+
+  // 실시간 유효성 검사 함수
+  const validateField = (name: string, value: string) => {
+    let error = '';
+    let state: 'default' | 'error' | 'success' = 'default';
+
+    switch (name) {
+      case 'email':
+        if (value.trim() === '') {
+          error = '';
+          state = 'default';
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+          error = '올바른 이메일 형식을 입력해주세요. (예: example@email.com)';
+          state = 'error';
+        } else {
+          state = 'success';
+        }
+        break;
+      
+      case 'password':
+        if (value.trim() === '') {
+          error = '';
+          state = 'default';
+        } else if (value.length < 6) {
+          error = '비밀번호는 최소 6자 이상이어야 합니다.';
+          state = 'error';
+        } else {
+          state = 'success';
+        }
+        break;
+      
+      case 'phoneNumber':
+        if (value.trim() === '') {
+          error = '';
+          state = 'default';
+        } else if (!/^01[0-9]-?[0-9]{4}-?[0-9]{4}$/.test(value.replace(/[^0-9]/g, ''))) {
+          error = '올바른 휴대폰 번호를 입력해주세요. (예: 010-1234-5678)';
+          state = 'error';
+        } else {
+          state = 'success';
+        }
+        break;
+      
+      case 'birthDate':
+        if (value.trim() === '') {
+          error = '';
+          state = 'default';
+        } else {
+          const birthDate = new Date(value);
+          const today = new Date();
+          const age = today.getFullYear() - birthDate.getFullYear();
+          if (age < 14 || age > 100) {
+            error = '14세 이상 100세 이하만 가입 가능합니다.';
+            state = 'error';
+          } else {
+            state = 'success';
+          }
+        }
+        break;
+      
+      case 'displayName':
+      case 'realName':
+      case 'bankName':
+      case 'accountNumber':
+      case 'accountHolder':
+        if (value.trim() === '') {
+          error = '';
+          state = 'default';
+        } else if (value.trim().length < 2) {
+          error = '최소 2자 이상 입력해주세요.';
+          state = 'error';
+        } else {
+          state = 'success';
+        }
+        break;
+    }
+
+    return { error, state };
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
+    
     setFormData((prev) => ({
       ...prev,
       [name]: value,
     }));
+
+    // 실시간 유효성 검사
+    const { error, state } = validateField(name, value);
+    
+    setFieldErrors(prev => ({
+      ...prev,
+      [name]: error,
+    }));
+    
+    setFieldStates(prev => ({
+      ...prev,
+      [name]: state,
+    }));
+  };
+
+  // 에러가 있는 첫 번째 필드로 스크롤하는 함수
+  const scrollToFirstError = (errors: Record<string, string>) => {
+    const fieldOrder = ['email', 'password', 'displayName', 'realName', 'phoneNumber', 'birthDate', 'bankName', 'accountNumber', 'accountHolder'];
+    
+    for (const field of fieldOrder) {
+      if (errors[field]) {
+        const fieldRef = fieldRefs[field as keyof typeof fieldRefs];
+        if (fieldRef.current) {
+          fieldRef.current.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center',
+            inline: 'nearest'
+          });
+          
+          // 포커스 및 흔들림 애니메이션
+          setTimeout(() => {
+            fieldRef.current?.focus();
+            fieldRef.current?.classList.add('animate-shake');
+            setTimeout(() => {
+              fieldRef.current?.classList.remove('animate-shake');
+            }, 600);
+          }, 500);
+          
+          break;
+        }
+      }
+    }
   };
 
   const handleSignup = async (e: React.FormEvent) => {
@@ -35,58 +173,45 @@ export default function SignupPage() {
     setLoading(true);
     setMessage('');
 
-    // 개선된 필드별 유효성 검사
-    const fieldLabels = {
-      email: '이메일',
-      password: '비밀번호',
-      displayName: '표시 이름',
-      realName: '실명',
-      phoneNumber: '전화번호',
-      birthDate: '생년월일',
-      monthlyFee: '월 조합비',
-      bankName: '은행명',
-      accountNumber: '계좌번호',
-      accountHolder: '예금주'
-    };
-
-    // 필수 필드 확인
-    for (const [field, label] of Object.entries(fieldLabels)) {
-      if (!formData[field as keyof typeof formData] || formData[field as keyof typeof formData].toString().trim() === '') {
-        setMessage(`${label}을(를) 입력해주세요.`);
-        setLoading(false);
-        return;
+    // 전체 필드 유효성 검사
+    const validationErrors: Record<string, string> = {};
+    const fieldOrder = ['email', 'password', 'displayName', 'realName', 'phoneNumber', 'birthDate', 'bankName', 'accountNumber', 'accountHolder'];
+    
+    for (const field of fieldOrder) {
+      const value = formData[field as keyof typeof formData]?.toString() || '';
+      const { error } = validateField(field, value);
+      
+      if (value.trim() === '') {
+        const fieldLabels: Record<string, string> = {
+          email: '이메일',
+          password: '비밀번호',
+          displayName: '표시 이름',
+          realName: '실명',
+          phoneNumber: '전화번호',
+          birthDate: '생년월일',
+          bankName: '은행명',
+          accountNumber: '계좌번호',
+          accountHolder: '예금주'
+        };
+        validationErrors[field] = `${fieldLabels[field]}을(를) 입력해주세요.`;
+      } else if (error) {
+        validationErrors[field] = error;
       }
     }
 
-    // 이메일 형식 검사
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(formData.email)) {
-      setMessage('올바른 이메일 형식을 입력해주세요.');
-      setLoading(false);
-      return;
-    }
-
-    // 비밀번호 길이 검사
-    if (formData.password.length < 6) {
-      setMessage('비밀번호는 최소 6자 이상이어야 합니다.');
-      setLoading(false);
-      return;
-    }
-
-    // 전화번호 형식 검사 (한국 휴대폰)
-    const phoneRegex = /^01[0-9]-?[0-9]{4}-?[0-9]{4}$/;
-    if (!phoneRegex.test(formData.phoneNumber.replace(/[^0-9]/g, ''))) {
-      setMessage('올바른 휴대폰 번호를 입력해주세요. (예: 010-1234-5678)');
-      setLoading(false);
-      return;
-    }
-
-    // 생년월일 유효성 검사
-    const birthDate = new Date(formData.birthDate);
-    const today = new Date();
-    const age = today.getFullYear() - birthDate.getFullYear();
-    if (age < 14 || age > 100) {
-      setMessage('올바른 생년월일을 입력해주세요.');
+    // 에러가 있으면 첫 번째 에러 필드로 스크롤하고 중단
+    if (Object.keys(validationErrors).length > 0) {
+      setFieldErrors(validationErrors);
+      
+      // 에러 상태 업데이트
+      const newFieldStates: Record<string, 'default' | 'error' | 'success'> = {};
+      Object.keys(validationErrors).forEach(field => {
+        newFieldStates[field] = 'error';
+      });
+      setFieldStates(prev => ({ ...prev, ...newFieldStates }));
+      
+      // 첫 번째 에러 필드로 스크롤
+      scrollToFirstError(validationErrors);
       setLoading(false);
       return;
     }
@@ -205,38 +330,32 @@ export default function SignupPage() {
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label htmlFor="email-address" className="block text-sm font-medium text-gray-700 mb-2">
-                    이메일 주소 *
-                  </label>
-                  <input
-                    id="email-address"
-                    name="email"
-                    type="email"
-                    autoComplete="email"
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
-                    placeholder="example@email.com"
-                    onChange={handleChange}
-                    value={formData.email}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-                    비밀번호 *
-                  </label>
-                  <input
-                    id="password"
-                    name="password"
-                    type="password"
-                    autoComplete="new-password"
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
-                    placeholder="최소 6자 이상"
-                    onChange={handleChange}
-                    value={formData.password}
-                  />
-                </div>
+                <FormField
+                  label="이메일 주소"
+                  name="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  placeholder="example@email.com"
+                  required={true}
+                  error={fieldErrors.email}
+                  state={fieldStates.email}
+                  disabled={loading}
+                  fieldRef={fieldRefs.email}
+                />
+                <FormField
+                  label="비밀번호"
+                  name="password"
+                  type="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  placeholder="최소 6자 이상"
+                  required={true}
+                  error={fieldErrors.password}
+                  state={fieldStates.password}
+                  disabled={loading}
+                  fieldRef={fieldRefs.password}
+                />
               </div>
             </div>
 
@@ -253,65 +372,55 @@ export default function SignupPage() {
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label htmlFor="displayName" className="block text-sm font-medium text-gray-700 mb-2">
-                    표시 이름 *
-                  </label>
-                  <input
-                    id="displayName"
-                    name="displayName"
-                    type="text"
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
-                    placeholder="게시판에서 사용할 이름"
-                    onChange={handleChange}
-                    value={formData.displayName}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="realName" className="block text-sm font-medium text-gray-700 mb-2">
-                    실명 *
-                  </label>
-                  <input
-                    id="realName"
-                    name="realName"
-                    type="text"
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
-                    placeholder="본명"
-                    onChange={handleChange}
-                    value={formData.realName}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700 mb-2">
-                    전화번호 *
-                  </label>
-                  <input
-                    id="phoneNumber"
-                    name="phoneNumber"
-                    type="tel"
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
-                    placeholder="010-0000-0000"
-                    onChange={handleChange}
-                    value={formData.phoneNumber}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="birthDate" className="block text-sm font-medium text-gray-700 mb-2">
-                    생년월일 *
-                  </label>
-                  <input
-                    id="birthDate"
-                    name="birthDate"
-                    type="date"
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
-                    onChange={handleChange}
-                    value={formData.birthDate}
-                  />
-                </div>
+                <FormField
+                  label="표시 이름"
+                  name="displayName"
+                  value={formData.displayName}
+                  onChange={handleChange}
+                  placeholder="게시판에서 사용할 이름"
+                  required={true}
+                  error={fieldErrors.displayName}
+                  state={fieldStates.displayName}
+                  disabled={loading}
+                  fieldRef={fieldRefs.displayName}
+                />
+                <FormField
+                  label="실명"
+                  name="realName"
+                  value={formData.realName}
+                  onChange={handleChange}
+                  placeholder="본명"
+                  required={true}
+                  error={fieldErrors.realName}
+                  state={fieldStates.realName}
+                  disabled={loading}
+                  fieldRef={fieldRefs.realName}
+                />
+                <FormField
+                  label="전화번호"
+                  name="phoneNumber"
+                  type="tel"
+                  value={formData.phoneNumber}
+                  onChange={handleChange}
+                  placeholder="010-0000-0000"
+                  required={true}
+                  error={fieldErrors.phoneNumber}
+                  state={fieldStates.phoneNumber}
+                  disabled={loading}
+                  fieldRef={fieldRefs.phoneNumber}
+                />
+                <FormField
+                  label="생년월일"
+                  name="birthDate"
+                  type="date"
+                  value={formData.birthDate}
+                  onChange={handleChange}
+                  required={true}
+                  error={fieldErrors.birthDate}
+                  state={fieldStates.birthDate}
+                  disabled={loading}
+                  fieldRef={fieldRefs.birthDate}
+                />
               </div>
             </div>
 
@@ -330,15 +439,16 @@ export default function SignupPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="md:col-span-2">
                   <label htmlFor="monthlyFee" className="block text-sm font-medium text-gray-700 mb-2">
-                    월 조합비 *
+                    월 조합비 <span className="text-red-500">*</span>
                   </label>
                   <select
                     id="monthlyFee"
                     name="monthlyFee"
                     required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors bg-white"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors bg-white disabled:bg-gray-50 disabled:text-gray-500"
                     onChange={handleChange}
                     value={formData.monthlyFee}
+                    disabled={loading}
                   >
                     <option value="10000">월 10,000원</option>
                     <option value="20000">월 20,000원</option>
@@ -347,49 +457,42 @@ export default function SignupPage() {
                     <option value="50000">월 50,000원</option>
                   </select>
                 </div>
-                <div>
-                  <label htmlFor="bankName" className="block text-sm font-medium text-gray-700 mb-2">
-                    은행명 *
-                  </label>
-                  <input
-                    id="bankName"
-                    name="bankName"
-                    type="text"
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
-                    placeholder="예: 국민은행"
-                    onChange={handleChange}
-                    value={formData.bankName}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="accountNumber" className="block text-sm font-medium text-gray-700 mb-2">
-                    계좌번호 *
-                  </label>
-                  <input
-                    id="accountNumber"
-                    name="accountNumber"
-                    type="text"
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
-                    placeholder="계좌번호를 입력하세요"
-                    onChange={handleChange}
-                    value={formData.accountNumber}
-                  />
-                </div>
+                <FormField
+                  label="은행명"
+                  name="bankName"
+                  value={formData.bankName}
+                  onChange={handleChange}
+                  placeholder="예: 국민은행"
+                  required={true}
+                  error={fieldErrors.bankName}
+                  state={fieldStates.bankName}
+                  disabled={loading}
+                  fieldRef={fieldRefs.bankName}
+                />
+                <FormField
+                  label="계좌번호"
+                  name="accountNumber"
+                  value={formData.accountNumber}
+                  onChange={handleChange}
+                  placeholder="계좌번호를 입력하세요"
+                  required={true}
+                  error={fieldErrors.accountNumber}
+                  state={fieldStates.accountNumber}
+                  disabled={loading}
+                  fieldRef={fieldRefs.accountNumber}
+                />
                 <div className="md:col-span-2">
-                  <label htmlFor="accountHolder" className="block text-sm font-medium text-gray-700 mb-2">
-                    예금주 *
-                  </label>
-                  <input
-                    id="accountHolder"
+                  <FormField
+                    label="예금주"
                     name="accountHolder"
-                    type="text"
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
-                    placeholder="계좌 명의자"
-                    onChange={handleChange}
                     value={formData.accountHolder}
+                    onChange={handleChange}
+                    placeholder="계좌 명의자"
+                    required={true}
+                    error={fieldErrors.accountHolder}
+                    state={fieldStates.accountHolder}
+                    disabled={loading}
+                    fieldRef={fieldRefs.accountHolder}
                   />
                 </div>
               </div>
