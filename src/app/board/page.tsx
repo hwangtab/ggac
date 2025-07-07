@@ -1,38 +1,51 @@
 'use client';
 
 import { supabase } from '../../lib/supabase/client';
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import PostList from '../../components/PostList';
 import CreatePostForm from '../../components/CreatePostForm';
+import { usePagination } from '../../hooks/usePagination';
+import { usePostsWithPagination } from '../../hooks/usePostsWithPagination';
 
-interface Post {
-  id: string;
-  title: string;
-  content: string;
-  category: string;
-  author_id: string;
-  created_at: string;
-}
-
-export default function BoardPage() {
+function BoardContent() {
   const [user, setUser] = useState<any>(null);
   const [isMember, setIsMember] = useState<boolean>(false);
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [loading, setLoading] = useState(true); // Add a loading state
+  const [userLoading, setUserLoading] = useState(true);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  
+  // 페이지네이션 상태 관리
+  const category = searchParams.get('category') || '전체';
+  const [paginationState, paginationActions] = usePagination({
+    initialPage: 1,
+    pageSize: 10,
+    totalCount: 0,
+  });
+  
+  // 페이지네이션된 게시글 데이터
+  const { posts, totalCount, loading: postsLoading, error } = usePostsWithPagination({
+    page: paginationState.currentPage,
+    pageSize: paginationState.pageSize,
+    category: category,
+  });
+  
+  // 총 개수가 변경될 때마다 페이지네이션 상태 업데이트
+  useEffect(() => {
+    paginationActions.setTotalCount(totalCount);
+  }, [totalCount, paginationActions]);
 
   useEffect(() => {
     let mounted = true;
 
-    const fetchUserAndPosts = async () => {
+    const fetchUserAndProfile = async () => {
       try {
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
         if (sessionError) {
           console.error('Error getting session:', sessionError);
           if (mounted) {
-            setLoading(false);
+            setUserLoading(false);
             router.replace('/login');
           }
           return;
@@ -42,7 +55,7 @@ export default function BoardPage() {
         
         if (!currentUser) {
           if (mounted) {
-            setLoading(false);
+            setUserLoading(false);
             router.replace('/login');
           }
           return;
@@ -68,30 +81,18 @@ export default function BoardPage() {
           setIsMember(profile.registration_status === 'approved' && profile.is_active);
         }
 
-        // 게시글 데이터 가져오기
-        const { data: postsData, error: postsError } = await supabase
-          .from('posts')
-          .select('*')
-          .order('created_at', { ascending: false });
-
-        if (postsError) {
-          console.error('Error fetching posts:', postsError);
-        } else if (postsData && mounted) {
-          setPosts(postsData);
-        }
-
         if (mounted) {
-          setLoading(false);
+          setUserLoading(false);
         }
       } catch (e) {
-        console.error('Error in fetchUserAndPosts:', e);
+        console.error('Error in fetchUserAndProfile:', e);
         if (mounted) {
-          setLoading(false);
+          setUserLoading(false);
         }
       }
     };
 
-    fetchUserAndPosts();
+    fetchUserAndProfile();
 
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (mounted) {
@@ -110,11 +111,17 @@ export default function BoardPage() {
     };
   }, [router]);
 
-  const handleNewPost = (newPost: Post) => {
-    setPosts((prevPosts) => [newPost, ...prevPosts]);
+  const handleCategoryChange = (newCategory: string) => {
+    // 카테고리 변경시 페이지를 1로 리셋
+    paginationActions.goToPage(1);
+    paginationActions.updateUrlParams(1, newCategory);
   };
 
-  if (loading) {
+  const handlePageChange = (page: number) => {
+    paginationActions.goToPage(page);
+  };
+
+  if (userLoading) {
     return <div className="min-h-screen pt-24 md:pt-28 flex items-center justify-center">Loading...</div>;
   }
 
@@ -150,8 +157,37 @@ export default function BoardPage() {
             </button>
           </div>
         )}
-        <PostList posts={posts} currentUserId={user?.id} isMember={isMember} />
+        <PostList 
+          posts={posts} 
+          currentUserId={user?.id} 
+          isMember={isMember}
+          currentPage={paginationState.currentPage}
+          totalPages={paginationState.totalPages}
+          totalCount={paginationState.totalCount}
+          pageSize={paginationState.pageSize}
+          loading={postsLoading}
+          onPageChange={handlePageChange}
+          onCategoryChange={handleCategoryChange}
+        />
       </div>
     </div>
+  );
+}
+
+
+interface Post {
+  id: string;
+  title: string;
+  content: string;
+  category: string;
+  author_id: string;
+  created_at: string;
+}
+
+export default function BoardPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen pt-24 md:pt-28 flex items-center justify-center">Loading...</div>}>
+      <BoardContent />
+    </Suspense>
   );
 }
