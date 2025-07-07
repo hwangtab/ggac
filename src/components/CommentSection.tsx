@@ -53,7 +53,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({ postId, currentUserId, 
     const authorIds = Array.from(new Set(comments.map(comment => comment.author_id)));
     
     const { data, error } = await supabase
-      .from('profiles')
+      .from('member_profiles')
       .select('id, display_name')
       .in('id', authorIds);
 
