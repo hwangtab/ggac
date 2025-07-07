@@ -23,83 +23,92 @@ export default function BoardPage() {
   const router = useRouter();
 
   useEffect(() => {
-    console.log('useEffect started');
+    let mounted = true;
+
     const fetchUserAndPosts = async () => {
-      console.log('fetchUserAndPosts started');
       try {
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        console.log('supabase.auth.getSession() result:', session, sessionError);
 
         if (sessionError) {
           console.error('Error getting session:', sessionError);
-          setLoading(false); // Ensure loading is set to false on error
-          router.replace('/login'); // Redirect if session fetch fails
+          if (mounted) {
+            setLoading(false);
+            router.replace('/login');
+          }
           return;
         }
 
-        const currentUser = session?.user || null; // Use a local variable for the current user
-        setUser(currentUser); // Update state
-
-        if (!currentUser) { // Check the local variable
-          console.log('No user found in session, redirecting to /login');
-          router.replace('/login');
-          setLoading(false);
+        const currentUser = session?.user || null;
+        
+        if (!currentUser) {
+          if (mounted) {
+            setLoading(false);
+            router.replace('/login');
+          }
           return;
         }
 
-        console.log('User found:', currentUser.id); // Use currentUser.id
+        if (mounted) {
+          setUser(currentUser);
+        }
 
+        // 프로필 정보 가져오기
         const { data: profile, error: profileError } = await supabase
-          .from('member_profiles') // Changed from 'profiles' to 'member_profiles'
-          .select('registration_status, is_active') // Changed from 'is_member'
+          .from('member_profiles')
+          .select('registration_status, is_active')
           .eq('id', currentUser.id)
           .single();
 
-        console.log('Profile fetch result:', profile, profileError);
-
         if (profileError) {
           console.error('Error fetching profile:', profileError);
-        } else if (profile) {
-          // is_member 대신 registration_status와 is_active 사용
+          if (mounted) {
+            setIsMember(false);
+          }
+        } else if (profile && mounted) {
           setIsMember(profile.registration_status === 'approved' && profile.is_active);
         }
 
+        // 게시글 데이터 가져오기
         const { data: postsData, error: postsError } = await supabase
           .from('posts')
           .select('*')
           .order('created_at', { ascending: false });
 
-        console.log('Posts fetch result:', postsData, postsError);
-
         if (postsError) {
           console.error('Error fetching posts:', postsError);
-        } else if (postsData) {
+        } else if (postsData && mounted) {
           setPosts(postsData);
         }
-        setLoading(false);
-        console.log('Loading set to false');
+
+        if (mounted) {
+          setLoading(false);
+        }
       } catch (e) {
-        console.error('Caught error in fetchUserAndPosts:', e);
-        setLoading(false);
+        console.error('Error in fetchUserAndPosts:', e);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
     fetchUserAndPosts();
 
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-      console.log('Auth state changed:', _event, session);
-      setUser(session?.user || null);
-      if (!session?.user) {
-        console.log('Auth state changed to no user, redirecting to /login');
-        router.replace('/login');
+      if (mounted) {
+        const newUser = session?.user || null;
+        setUser(newUser);
+        
+        if (!newUser) {
+          router.replace('/login');
+        }
       }
     });
 
     return () => {
-      console.log('Auth listener unsubscribed');
+      mounted = false;
       authListener?.subscription.unsubscribe();
     };
-  }, [router]); // Depend on router to ensure effect re-runs if router changes (unlikely but good practice)
+  }, [router]);
 
   const handleNewPost = (newPost: Post) => {
     setPosts((prevPosts) => [newPost, ...prevPosts]);

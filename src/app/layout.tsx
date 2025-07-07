@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 import Navigation from '@/components/Navigation'
 import Footer from '@/components/Footer'
+import ErrorBoundary from '@/components/ErrorBoundary'
 import { Noto_Serif_KR } from 'next/font/google'
 import localFont from 'next/font/local'
 import { getGlobalData } from '@/lib/data'
@@ -78,9 +79,11 @@ export default async function RootLayout({
   return (
     <html lang="ko" className={`${pretendard.variable} ${notoSerifKr.variable}`}>
       <body>
-        <Navigation />
-        <main>{children}</main>
-        <Footer globalData={globalData} />
+        <ErrorBoundary>
+          <Navigation />
+          <main>{children}</main>
+          <Footer globalData={globalData} />
+        </ErrorBoundary>
       </body>
     </html>
   )
