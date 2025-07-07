@@ -12,6 +12,69 @@ export default function LoginPage() {
   const [message, setMessage] = useState('');
   const router = useRouter();
 
+  // 인증 상태 확인 후 안전하게 리다이렉트하는 함수
+  const waitForAuthStateAndRedirect = async () => {
+    try {
+      // 최대 10초까지 기다림 (200ms 간격으로 50회 확인)
+      const maxAttempts = 50;
+      let attempts = 0;
+      
+      while (attempts < maxAttempts) {
+        attempts++;
+        
+        // 진행 상황 표시 (매 5번마다 업데이트)
+        if (attempts % 5 === 0) {
+          const progress = Math.min(Math.round((attempts / maxAttempts) * 100), 90);
+          setMessage(`로그인 중... (${progress}%)`);
+        }
+        
+        try {
+          // 1. 세션 확인 (더 정확한 방법)
+          const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+          
+          if (session && !sessionError) {
+            // 2. 프로필 확인 (RLS 정책 통과 여부 확인)
+            const { data: profile, error: profileError } = await supabase
+              .from('member_profiles')
+              .select('registration_status, is_active')
+              .eq('id', session.user.id)
+              .single();
+            
+            if (profile && !profileError) {
+              // 인증 상태와 프로필이 모두 확인되면 리다이렉트
+              setMessage('인증 완료! 게시판으로 이동합니다...');
+              
+              setTimeout(() => {
+                router.push('/board');
+              }, 300);
+              return;
+            }
+          }
+        } catch (checkError) {
+          console.log(`Auth check attempt ${attempts} failed:`, checkError);
+        }
+        
+        // 200ms 후 재시도
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+      
+      // 타임아웃 시 fallback으로 window.location 사용
+      console.warn('Auth state confirmation timed out, using fallback redirect');
+      setMessage('페이지를 새로고침하여 이동합니다...');
+      
+      setTimeout(() => {
+        window.location.href = '/board';
+      }, 800);
+      
+    } catch (error) {
+      console.error('Error during auth state confirmation:', error);
+      setMessage('페이지를 새로고침하여 이동합니다...');
+      setTimeout(() => {
+        window.location.href = '/board';
+      }, 1000);
+    }
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -40,13 +103,11 @@ export default function LoginPage() {
           return;
         }
 
-        // 미들웨어가 처리하도록 간단한 리다이렉트
-        setMessage('로그인 성공! 잠시만 기다려주세요...');
+        // 인증 상태 확인 후 안전한 리다이렉트
+        setMessage('로그인 성공! 인증 상태를 확인하는 중...');
         
-        // 짧은 지연 후 리다이렉트하여 인증 상태가 제대로 설정되도록 함
-        setTimeout(() => {
-          router.push('/board');
-        }, 1000);
+        // 인증 상태가 완전히 설정될 때까지 기다린 후 리다이렉트
+        await waitForAuthStateAndRedirect();
       }
     } catch (error) {
       console.error('Unexpected error during login:', error);
