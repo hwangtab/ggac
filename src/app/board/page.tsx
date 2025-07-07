@@ -131,7 +131,16 @@ export default function BoardPage() {
           </div>
         )}
         
-        {isMember && user && <CreatePostForm authorId={user.id} onNewPost={handleNewPost} />}
+        {isMember && user && (
+          <div className="mb-6">
+            <button
+              onClick={() => router.push('/board/write')}
+              className="bg-primary-600 text-white px-6 py-3 rounded-lg hover:bg-primary-700 transition-colors font-medium"
+            >
+              새 게시글 작성
+            </button>
+          </div>
+        )}
         <PostList posts={posts} currentUserId={user?.id} isMember={isMember} />
       </div>
     </div>

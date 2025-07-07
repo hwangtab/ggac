@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabase/client';
 import CommentSection from './CommentSection';
 
@@ -26,6 +27,7 @@ const PostList: React.FC<PostListProps> = ({ posts, currentUserId, isMember }) =
   const [profiles, setProfiles] = useState<Record<string, string>>({});
   const [selectedCategory, setSelectedCategory] = useState<string>('전체');
   const [expandedPosts, setExpandedPosts] = useState<Set<string>>(new Set());
+  const router = useRouter();
 
   const categories = ['전체', '공지', '잡담', '홍보', '건의'];
 
@@ -124,9 +126,24 @@ const PostList: React.FC<PostListProps> = ({ posts, currentUserId, isMember }) =
                     <span className="text-red-600 text-xs font-bold">📌</span>
                   )}
                 </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-2">{post.title}</h3>
+                <h3 
+                  className="text-xl font-bold text-gray-900 mb-2 cursor-pointer hover:text-primary-600 transition-colors"
+                  onClick={() => router.push(`/board/${post.id}`)}
+                >
+                  {post.title}
+                </h3>
                 {isMember ? (
-                  <p className="text-gray-700 mt-2 leading-relaxed">{post.content}</p>
+                  <div 
+                    className="text-gray-700 mt-2 leading-relaxed cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors"
+                    onClick={() => router.push(`/board/${post.id}`)}
+                  >
+                    <p className="line-clamp-3">
+                      {post.content.length > 150 ? `${post.content.substring(0, 150)}...` : post.content}
+                    </p>
+                    {post.content.length > 150 && (
+                      <span className="text-primary-600 text-sm mt-1 inline-block">더 보기</span>
+                    )}
+                  </div>
                 ) : (
                   <div className="mt-2 p-4 bg-gray-100 rounded-md text-center">
                     <p className="text-gray-600 text-sm">
