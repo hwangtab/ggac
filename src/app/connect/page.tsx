@@ -1,5 +1,6 @@
 import { FaInstagram, FaYoutube } from 'react-icons/fa'
 import { getGlobalData } from '@/lib/data'
+import Link from 'next/link'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -112,14 +113,12 @@ const ConnectPage = async () => {
             </div>
 
             <div className="text-center">
-              <a 
-                href={globalData.joinFormUrl}
-                target="_blank"
-                rel="noopener noreferrer"
+              <Link 
+                href="/signup"
                 className="btn-primary text-lg px-8 py-4"
               >
-                동료 되기 (신청서 작성하기)
-              </a>
+                동료 되기 (조합원 가입하기)
+              </Link>
             </div>
           </div>
         </div>
