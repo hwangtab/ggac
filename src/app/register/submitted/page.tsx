@@ -1,26 +1,9 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
 
 export default function SubmittedPage() {
   const router = useRouter();
-  const [countdown, setCountdown] = useState(10);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          router.push('/login');
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [router]);
 
   const handleLoginNow = () => {
     router.push('/login');
@@ -72,7 +55,7 @@ export default function SubmittedPage() {
                 </h2>
                 <div className="text-yellow-800 space-y-2">
                   <p>• 이메일 인증 완료 후, 관리자가 가입 신청을 검토합니다</p>
-                  <p>• 승인까지 <strong>1-3일</strong> 정도 소요될 수 있습니다</p>
+                  <p>• 승인까지 <strong>0-3일</strong> 정도 소요될 수 있습니다</p>
                   <p>• 승인 결과는 별도로 안내드리겠습니다</p>
                 </div>
               </div>
@@ -120,18 +103,6 @@ export default function SubmittedPage() {
               </button>
             </div>
 
-            {/* 자동 리다이렉트 안내 */}
-            <div className="text-center mt-6">
-              <p className="text-sm text-gray-500">
-                {countdown > 0 ? (
-                  <>
-                    <span className="font-mono font-bold text-primary-600">{countdown}</span>초 후 자동으로 로그인 페이지로 이동합니다
-                  </>
-                ) : (
-                  '로그인 페이지로 이동 중...'
-                )}
-              </p>
-            </div>
           </div>
         </div>
       </div>
