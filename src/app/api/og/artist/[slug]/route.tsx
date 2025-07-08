@@ -1,22 +1,9 @@
 import { ImageResponse } from 'next/og'
 import fs from 'fs'
 import path from 'path'
+import type { Artist } from '@/types'
 
 export const dynamic = 'force-dynamic'
-
-interface Artist {
-  id: string
-  slug: string
-  name: string
-  category: string | string[]
-  profileImage: string
-  oneLiner: string
-  bio: string
-  templateType: string
-  portfolioLinks: Array<{ title: string; url: string }>
-  youtubeVideos?: Array<{ title: string; url: string }>
-  contact: string
-}
 
 // 이미지를 base64로 변환하는 함수
 async function getImageAsBase64(imagePath: string): Promise<string | null> {

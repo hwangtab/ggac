@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase/client';
 
 interface Comment {
@@ -27,17 +27,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({ postId, currentUserId, 
   const [loading, setLoading] = useState(false);
   const [profiles, setProfiles] = useState<Record<string, string>>({});
 
-  useEffect(() => {
-    fetchComments();
-  }, [postId]);
-
-  useEffect(() => {
-    if (comments.length > 0) {
-      fetchProfiles();
-    }
-  }, [comments]);
-
-  const fetchComments = async () => {
+  const fetchComments = useCallback(async () => {
     const { data, error } = await supabase
       .from('comments')
       .select('*')
@@ -47,9 +37,9 @@ const CommentSection: React.FC<CommentSectionProps> = ({ postId, currentUserId, 
     if (data && !error) {
       setComments(data);
     }
-  };
+  }, [postId]);
 
-  const fetchProfiles = async () => {
+  const fetchProfiles = useCallback(async () => {
     const authorIds = Array.from(new Set(comments.map(comment => comment.author_id)));
     
     const { data, error } = await supabase
@@ -64,7 +54,17 @@ const CommentSection: React.FC<CommentSectionProps> = ({ postId, currentUserId, 
       });
       setProfiles(profileMap);
     }
-  };
+  }, [comments]);
+
+  useEffect(() => {
+    fetchComments();
+  }, [postId, fetchComments]);
+
+  useEffect(() => {
+    if (comments.length > 0) {
+      fetchProfiles();
+    }
+  }, [comments, fetchProfiles]);
 
   const handleSubmitComment = async (e: React.FormEvent) => {
     e.preventDefault();

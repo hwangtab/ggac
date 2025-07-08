@@ -12,12 +12,13 @@ const Hero = () => {
   const lastFrameTime = useRef(0)
 
   // 성능 최적화: throttle된 마우스 이벤트 핸들러
-  const throttledMouseMove = useCallback(
-    throttle((event: MouseEvent) => {
+  const throttledMouseMove = useCallback((event: MouseEvent) => {
+    const now = Date.now()
+    if (!lastFrameTime.current || now - lastFrameTime.current >= 16) {
       mousePosition.current = { x: event.clientX, y: event.clientY }
-    }, 16), // 60fps에 맞춰 16ms
-    []
-  )
+      lastFrameTime.current = now
+    }
+  }, [])
 
   interface Particle {
     x: number; y: number; z: number; vx: number; vy: number;

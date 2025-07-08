@@ -9,13 +9,7 @@ import ArticleCard from '@/components/ArticleCard'
 import Lightbox from '@/components/Lightbox'
 import { convertUrlsToMarkdownLinks } from '@/utils/markdown'
 import { TicketingInfo } from '@/utils/linkPreview'
-import type { Project } from '@/lib/data'
-
-interface Artist {
-  id: string
-  name: string
-  slug: string
-}
+import type { Project, Artist } from '@/types'
 
 interface ProjectDetailContentProps {
   project: Project

@@ -1,15 +1,4 @@
-interface Project {
-  id: string
-  slug: string
-  title: string
-  category: string
-  publishedDate: string
-  coverImage: string
-  description: string
-  gallery: string[] | null
-  videoUrl: string | null
-  artistIds: string[]
-}
+import type { Project } from '@/types'
 
 export const dynamic = 'force-dynamic'
 

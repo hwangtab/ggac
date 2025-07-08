@@ -3,19 +3,7 @@
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import OptimizedImage from '@/components/OptimizedImage'
-
-interface Artist {
-  id: string
-  slug: string
-  name: string
-  category: string | string[]
-  profileImage: string
-  oneLiner: string
-  bio: string
-  templateType: string
-  portfolioLinks: Array<{ title: string; url: string }>
-  contact: string
-}
+import type { Artist } from '@/types'
 
 interface ArtistsContentProps {
   artists: Artist[]

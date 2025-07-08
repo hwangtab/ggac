@@ -16,6 +16,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - `node test-board.js` - Test board functionality with Playwright (requires browser)
   - `node test-signup-flow.js` - Test member registration and authentication flow
   - `node test-image-loading.js` - Test image optimization and loading
+  - `node test-security-fixes.js` - Test security vulnerability fixes
   - `node check-supabase-status.js` - Verify Supabase connection and database status
 
 ### Vercel Commands
@@ -57,7 +58,8 @@ Data is accessed through cached functions in `src/lib/data.ts` which provide bot
 - Async functions (preferred): `getArtists()`, `getProjects()`, `getGlobalData()`
 - Sync functions (legacy compatibility): `getArtistsSync()`, `getProjectsSync()`, `getGlobalDataSync()`
 - Specialized functions: `getArtistBySlug()`, `getProjectBySlug()`, `getFeaturedProjects()`
-- Type-safe interfaces: `Artist`, `Project`, `GlobalData`
+- Type-safe interfaces defined in `src/types/index.ts`: `Artist`, `Project`, `GlobalData`
+- Centralized type system with comprehensive interfaces for all data structures
 
 #### Member Board System
 Database-driven content using Supabase:
@@ -76,10 +78,10 @@ Database-driven content using Supabase:
 
 #### Authentication Routes
 - `/login` - Member login
-- `/signup` - Initial user registration
-- `/register/member-info` - Complete member profile information
+- `/signup` - Initial user registration  
 - `/register/pending` - Approval waiting page
 - `/register/rejected` - Rejection notification page
+- `/auth/callback` - Supabase auth callback handler
 
 #### Protected Routes
 - `/board` - Member-only board (requires approval)
@@ -129,8 +131,8 @@ Components are organized by purpose:
 
 ### Member Registration Flow
 1. User signs up via `/signup` - creates basic auth user
-2. Redirected to `/register/member-info` - completes profile details
-3. Profile created with `registration_status: 'pending'`
+2. Profile automatically created via trigger with `registration_status: 'pending'`
+3. User redirected to `/register/pending` to wait for approval
 4. Admin approves via Supabase dashboard by updating `registration_status` to 'approved'
 5. Approved members can access `/board`
 
@@ -190,3 +192,34 @@ Apply migrations to Supabase:
 - `npm run deploy:notify` - Sends deployment notifications to Slack
 - Manual testing scripts available for endpoint verification
 - Slack notifications configured for deployment updates (channel: #웹사이트)
+
+## Security Configuration
+
+### Content Security Policy
+- Comprehensive CSP headers configured in `next.config.js`
+- Allows YouTube embeds and Supabase connections
+- Prevents XSS and other security vulnerabilities
+- Enhanced security headers including X-Frame-Options, X-Content-Type-Options
+
+### Input Sanitization
+- Security utilities in `src/utils/security.ts`
+- XSS prevention for user-generated content
+- Safe HTML rendering for board posts and comments
+
+## Important Development Notes
+
+### Code Quality Requirements
+- **ALWAYS** run `npm run lint` before committing changes
+- TypeScript strict mode must pass without errors
+- Use the centralized type system in `src/types/index.ts`
+- Follow existing patterns for data loading (prefer async functions with React cache)
+
+### Authentication Flow Testing
+- Use `node test-signup-flow.js` to verify registration works end-to-end
+- Test different user states: pending, approved, rejected
+- Verify middleware redirects work correctly for all route combinations
+
+### Database Operations
+- All database schema changes must be versioned in `supabase/migrations/`
+- Test RLS policies thoroughly before deployment
+- Use the provided test scripts to verify Supabase connectivity

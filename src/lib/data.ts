@@ -2,67 +2,11 @@ import fs from 'fs'
 import path from 'path'
 import { cache } from 'react'
 
-// 타입 정의를 별도 파일로 분리할 수도 있지만, 여기서는 한 곳에 모아둠
-export interface Artist {
-  id: string
-  slug: string
-  name: string
-  category: string | string[]
-  profileImage: string
-  oneLiner: string
-  bio: string
-  templateType: string
-  portfolioLinks: Array<{ title: string; url: string }>
-  youtubeVideos?: Array<{ title: string; url: string }>
-  contact: string
-}
+// 중앙화된 타입 시스템에서 임포트
+import type { Artist, Project, GlobalData } from '@/types'
 
-export interface Project {
-  id: string
-  slug: string
-  title: string
-  category: string
-  publishedDate: string
-  coverImage: string
-  description: string
-  gallery?: string[]
-  videoUrl?: string | null
-  artistIds: string[]
-  ticketing?: Array<{
-    platform: string
-    url: string
-    available: boolean
-    price?: string
-    startDate?: string
-    endDate?: string
-    soldOutDate?: string
-  }>
-  relatedArticles?: Array<{
-    title: string
-    url: string
-  }>
-}
-
-export interface GlobalData {
-  siteName: string
-  siteDescription: string
-  joinFormUrl: string
-  supportFormUrl: string
-  contact: {
-    email: string
-    phone: string
-    address: string
-  }
-  social: {
-    instagram: string
-    youtube: string
-  }
-  businessInfo: {
-    establishedDate: string
-    registrationDate: string
-    registrationNumber: string
-  }
-}
+// 타입을 re-export하여 다른 파일에서 사용 가능하게 함
+export type { Artist, Project, GlobalData } from '@/types'
 
 // 에러 처리를 위한 기본값들
 const DEFAULT_GLOBAL_DATA: GlobalData = {

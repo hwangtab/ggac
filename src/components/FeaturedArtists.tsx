@@ -1,14 +1,7 @@
+import { memo } from 'react'
 import Link from 'next/link'
 import OptimizedImage from './OptimizedImage'
-
-interface Artist {
-  id: string
-  slug: string
-  name: string
-  category: string | string[]
-  profileImage: string
-  oneLiner: string
-}
+import type { Artist } from '@/types'
 
 interface FeaturedArtistsProps {
   artists: Artist[]
@@ -91,4 +84,4 @@ const FeaturedArtists = ({ artists }: FeaturedArtistsProps) => {
   )
 }
 
-export default FeaturedArtists
+export default memo(FeaturedArtists)

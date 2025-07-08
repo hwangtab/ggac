@@ -3,22 +3,7 @@
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import OptimizedImage from '@/components/OptimizedImage'
-
-interface Project {
-  id: string
-  slug: string
-  title: string
-  category: string
-  publishedDate: string
-  coverImage: string
-  description: string
-  artistIds: string[]
-}
-
-interface Artist {
-  id: string
-  name: string
-}
+import type { Project, Artist } from '@/types'
 
 interface ArchiveContentProps {
   projects: Project[]

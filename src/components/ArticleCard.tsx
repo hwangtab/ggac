@@ -1,7 +1,7 @@
 
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, memo } from 'react'
 import { LinkPreview } from '@/utils/linkPreview'
 
 interface ArticleInfo {
@@ -178,4 +178,4 @@ const ArticleCard = ({ article }: ArticleCardProps) => {
   )
 }
 
-export default ArticleCard
+export default memo(ArticleCard)
