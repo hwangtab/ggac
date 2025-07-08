@@ -14,6 +14,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - No formal test framework is set up, but manual testing scripts exist:
   - `node test-website.js` - Test local development server endpoints
   - `node test-board.js` - Test board functionality with Playwright (requires browser)
+  - `node test-signup-flow.js` - Test member registration and authentication flow
+  - `node test-image-loading.js` - Test image optimization and loading
+  - `node check-supabase-status.js` - Verify Supabase connection and database status
 
 ### Vercel Commands
 - `npm run vercel:build` - Build for Vercel deployment

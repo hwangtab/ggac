@@ -15,17 +15,50 @@ export async function middleware(request: NextRequest) {
 
   let user = null;
   let authError = false;
+  
+  // 크리티컬 경로 판단 (게시판 관련 경로)
+  const isCriticalPath = request.nextUrl.pathname.startsWith('/board') || 
+                        request.nextUrl.pathname.startsWith('/admin');
+  
   try {
-    // 세션 기반 인증 상태 확인 (더 안정적)
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    // 크리티컬 경로에서는 세션 재시도 로직 적용
+    let session = null;
+    let sessionError = null;
+    let retries = 0;
+    const maxRetries = isCriticalPath ? 3 : 1;
+    
+    while (retries < maxRetries) {
+      console.log(`🔄 [MIDDLEWARE DEBUG] Session attempt ${retries + 1}/${maxRetries} for ${request.nextUrl.pathname}`);
+      
+      const { data: { session: currentSession }, error: currentError } = await supabase.auth.getSession();
+      
+      if (currentSession && !currentError) {
+        session = currentSession;
+        sessionError = null;
+        console.log('✅ [MIDDLEWARE DEBUG] Session found on attempt:', retries + 1);
+        break;
+      }
+      
+      sessionError = currentError;
+      retries++;
+      
+      // 재시도 전 짧은 대기 (크리티컬 경로에서만)
+      if (retries < maxRetries && isCriticalPath) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+    }
+    
     if (sessionError) {
-      console.log('Session error in middleware:', sessionError);
+      console.log('❌ [MIDDLEWARE DEBUG] Session error after retries:', sessionError);
       authError = true;
     } else {
       user = session?.user || null;
+      if (isCriticalPath) {
+        console.log('📋 [MIDDLEWARE DEBUG] Final session state for critical path:', user ? 'Authenticated' : 'Not authenticated');
+      }
     }
   } catch (error) {
-    console.log('Auth error in middleware:', error);
+    console.log('💥 [MIDDLEWARE DEBUG] Auth error in middleware:', error);
     authError = true;
   }
 
@@ -69,16 +102,40 @@ export async function middleware(request: NextRequest) {
   let profileError = null;
   
   try {
-    const { data, error } = await supabase
-      .from('member_profiles')
-      .select('registration_status, is_active, is_admin')
-      .eq('id', user.id)
-      .single();
+    // 크리티컬 경로에서는 프로필 조회도 재시도
+    let retries = 0;
+    const maxProfileRetries = isCriticalPath ? 2 : 1;
     
-    profile = data;
-    profileError = error;
+    while (retries < maxProfileRetries) {
+      console.log(`🔍 [MIDDLEWARE DEBUG] Profile attempt ${retries + 1}/${maxProfileRetries} for user ${user.id}`);
+      
+      const { data, error } = await supabase
+        .from('member_profiles')
+        .select('registration_status, is_active, is_admin, display_name')
+        .eq('id', user.id)
+        .single();
+      
+      if (data && !error) {
+        profile = data;
+        profileError = null;
+        console.log('✅ [MIDDLEWARE DEBUG] Profile found:', { 
+          status: profile.registration_status, 
+          active: profile.is_active 
+        });
+        break;
+      }
+      
+      profileError = error;
+      retries++;
+      
+      if (retries < maxProfileRetries && isCriticalPath) {
+        await new Promise(resolve => setTimeout(resolve, 30));
+      }
+    }
+    
   } catch (error) {
-    console.log('Database error in middleware:', error);
+    console.log('💥 [MIDDLEWARE DEBUG] Database error in middleware:', error);
+    profileError = error;
     // 데이터베이스 에러 시 기본적으로 공개 페이지는 허용
     if (!isProtectedPage) {
       return res;

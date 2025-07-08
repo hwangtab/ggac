@@ -14,56 +14,133 @@ export default function LoginPage() {
   const router = useRouter();
   const { isLoading: pageLoading, isReady } = useStablePageLoad('/login');
 
-  // 인증 상태 확인 후 안전하게 리다이렉트하는 함수 (개선된 버전)
+  // 서버 사이드 세션 검증 함수
+  const verifyServerSideSession = async (): Promise<boolean> => {
+    try {
+      const response = await fetch('/api/auth/verify-session', {
+        method: 'GET',
+        credentials: 'include',
+        cache: 'no-cache'
+      });
+      
+      const data = await response.json();
+      console.log('🔍 [LOGIN DEBUG] Server session verification:', data);
+      
+      return response.ok && data.authenticated;
+    } catch (error) {
+      console.error('❌ [LOGIN DEBUG] Server session verification failed:', error);
+      return false;
+    }
+  };
+
+  // 안전한 리다이렉트 함수 (개선된 버전)
   const waitForAuthStateAndRedirect = async () => {
     try {
-      setMessage('로그인 성공! 잠시만 기다려주세요...');
+      console.log('🔄 [LOGIN DEBUG] Starting auth state confirmation...');
+      setMessage('로그인 성공! 인증 상태를 확인하는 중...');
       
-      // 짧은 대기 후 미들웨어가 처리하도록 함
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // 1단계: 클라이언트 세션 확인 및 재시도
+      let session = null;
+      let profile = null;
+      let sessionConfirmed = false;
+      let retries = 0;
+      const maxRetries = 10;
       
-      // 세션 확인
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      
-      if (session && !sessionError) {
-        // 프로필 확인
-        const { data: profile, error: profileError } = await supabase
-          .from('member_profiles')
-          .select('registration_status, is_active')
-          .eq('id', session.user.id)
-          .single();
+      while (!sessionConfirmed && retries < maxRetries) {
+        console.log(`🔄 [LOGIN DEBUG] Session check attempt ${retries + 1}/${maxRetries}`);
         
-        if (profile && !profileError) {
-          // 승인된 사용자는 게시판으로, 미승인 사용자는 대기 페이지로
-          if (profile.registration_status === 'approved' && profile.is_active) {
-            setMessage('인증 완료! 게시판으로 이동합니다...');
-            // 미들웨어가 처리하도록 추가 대기
-            await new Promise(resolve => setTimeout(resolve, 200));
-            router.push('/board');
-          } else if (profile.registration_status === 'pending') {
-            setMessage('승인 대기 중입니다. 대기 페이지로 이동합니다...');
-            await new Promise(resolve => setTimeout(resolve, 200));
-            router.push('/register/pending');
-          } else if (profile.registration_status === 'rejected') {
-            setMessage('승인이 거부되었습니다. 관련 페이지로 이동합니다...');
-            await new Promise(resolve => setTimeout(resolve, 200));
-            router.push('/register/rejected');
+        const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (currentSession && !sessionError) {
+          // 프로필 확인
+          const { data: currentProfile, error: profileError } = await supabase
+            .from('member_profiles')
+            .select('registration_status, is_active, display_name')
+            .eq('id', currentSession.user.id)
+            .single();
+          
+          if (currentProfile && !profileError) {
+            session = currentSession;
+            profile = currentProfile;
+            sessionConfirmed = true;
+            console.log('✅ [LOGIN DEBUG] Client session confirmed:', { 
+              userId: session.user.id,
+              status: profile.registration_status,
+              active: profile.is_active 
+            });
+            break;
           }
-          return;
+        }
+        
+        retries++;
+        if (retries < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 100));
         }
       }
       
-      // 프로필이 없거나 에러 발생 시 홈으로 이동
-      console.warn('No profile found or error occurred, redirecting to home');
-      setMessage('홈페이지로 이동합니다...');
-      await new Promise(resolve => setTimeout(resolve, 200));
-      router.push('/');
+      if (!sessionConfirmed) {
+        console.error('❌ [LOGIN DEBUG] Client session confirmation failed after retries');
+        setMessage('인증 확인에 실패했습니다. 다시 시도해주세요.');
+        return;
+      }
+      
+      // 2단계: 서버 사이드 세션 검증
+      setMessage('서버 인증 상태를 확인하는 중...');
+      let serverSessionConfirmed = false;
+      retries = 0;
+      const maxServerRetries = 8;
+      
+      while (!serverSessionConfirmed && retries < maxServerRetries) {
+        console.log(`🔍 [LOGIN DEBUG] Server session check attempt ${retries + 1}/${maxServerRetries}`);
+        
+        serverSessionConfirmed = await verifyServerSideSession();
+        
+        if (serverSessionConfirmed) {
+          console.log('✅ [LOGIN DEBUG] Server session confirmed');
+          break;
+        }
+        
+        retries++;
+        if (retries < maxServerRetries) {
+          await new Promise(resolve => setTimeout(resolve, 150));
+        }
+      }
+      
+      // 3단계: 리다이렉트 실행
+      if (profile && profile.registration_status === 'approved' && profile.is_active) {
+        console.log('🎯 [LOGIN DEBUG] Approved user, redirecting to board...');
+        setMessage('인증 완료! 게시판으로 이동합니다...');
+        
+        // 서버 세션이 확인된 경우 router.push 사용, 아니면 새로고침
+        if (serverSessionConfirmed) {
+          console.log('🚀 [LOGIN DEBUG] Using router.push with confirmed server session');
+          router.push('/board');
+        } else {
+          console.log('🔄 [LOGIN DEBUG] Fallback to window.location.href due to server session timing');
+          window.location.href = '/board';
+        }
+        
+      } else if (profile && profile.registration_status === 'pending') {
+        console.log('⏳ [LOGIN DEBUG] Pending user, redirecting to pending page...');
+        setMessage('승인 대기 중입니다. 대기 페이지로 이동합니다...');
+        router.push('/register/pending');
+      } else if (profile && profile.registration_status === 'rejected') {
+        console.log('❌ [LOGIN DEBUG] Rejected user, redirecting to rejected page...');
+        setMessage('승인이 거부되었습니다. 관련 페이지로 이동합니다...');
+        router.push('/register/rejected');
+      } else {
+        console.log('❓ [LOGIN DEBUG] Unknown user status, redirecting to home');
+        setMessage('홈페이지로 이동합니다...');
+        router.push('/');
+      }
       
     } catch (error) {
-      console.error('Error during auth state confirmation:', error);
-      setMessage('홈페이지로 이동합니다...');
-      await new Promise(resolve => setTimeout(resolve, 200));
-      router.push('/');
+      console.error('💥 [LOGIN DEBUG] Error during auth state confirmation:', error);
+      setMessage('인증 확인 중 오류가 발생했습니다. 새로고침하여 다시 시도해주세요.');
+      // 에러 발생 시 3초 후 홈으로 이동
+      setTimeout(() => {
+        router.push('/');
+      }, 3000);
     }
   };
 
