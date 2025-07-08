@@ -46,7 +46,10 @@ function BoardContent() {
           console.error('Error getting session:', sessionError);
           if (mounted) {
             setUserLoading(false);
-            router.replace('/login');
+            // 미들웨어가 처리하도록 짧은 대기
+            setTimeout(() => {
+              router.replace('/login');
+            }, 100);
           }
           return;
         }
@@ -56,7 +59,10 @@ function BoardContent() {
         if (!currentUser) {
           if (mounted) {
             setUserLoading(false);
-            router.replace('/login');
+            // 미들웨어가 처리하도록 짧은 대기
+            setTimeout(() => {
+              router.replace('/login');
+            }, 100);
           }
           return;
         }
@@ -100,7 +106,10 @@ function BoardContent() {
         setUser(newUser);
         
         if (!newUser) {
-          router.replace('/login');
+          // 미들웨어가 처리하도록 짧은 대기
+          setTimeout(() => {
+            router.replace('/login');
+          }, 100);
         }
       }
     });

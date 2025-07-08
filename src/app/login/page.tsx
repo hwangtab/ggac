@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabase/client';
+import { useStablePageLoad } from '../../utils/routeProtection';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -11,67 +12,58 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const router = useRouter();
+  const { isLoading: pageLoading, isReady } = useStablePageLoad('/login');
 
-  // 인증 상태 확인 후 안전하게 리다이렉트하는 함수
+  // 인증 상태 확인 후 안전하게 리다이렉트하는 함수 (개선된 버전)
   const waitForAuthStateAndRedirect = async () => {
     try {
-      // 최대 10초까지 기다림 (200ms 간격으로 50회 확인)
-      const maxAttempts = 50;
-      let attempts = 0;
+      setMessage('로그인 성공! 잠시만 기다려주세요...');
       
-      while (attempts < maxAttempts) {
-        attempts++;
+      // 짧은 대기 후 미들웨어가 처리하도록 함
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // 세션 확인
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (session && !sessionError) {
+        // 프로필 확인
+        const { data: profile, error: profileError } = await supabase
+          .from('member_profiles')
+          .select('registration_status, is_active')
+          .eq('id', session.user.id)
+          .single();
         
-        // 진행 상황 표시 (매 5번마다 업데이트)
-        if (attempts % 5 === 0) {
-          const progress = Math.min(Math.round((attempts / maxAttempts) * 100), 90);
-          setMessage(`로그인 중... (${progress}%)`);
-        }
-        
-        try {
-          // 1. 세션 확인 (더 정확한 방법)
-          const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-          
-          if (session && !sessionError) {
-            // 2. 프로필 확인 (RLS 정책 통과 여부 확인)
-            const { data: profile, error: profileError } = await supabase
-              .from('member_profiles')
-              .select('registration_status, is_active')
-              .eq('id', session.user.id)
-              .single();
-            
-            if (profile && !profileError) {
-              // 인증 상태와 프로필이 모두 확인되면 리다이렉트
-              setMessage('인증 완료! 게시판으로 이동합니다...');
-              
-              setTimeout(() => {
-                router.push('/board');
-              }, 300);
-              return;
-            }
+        if (profile && !profileError) {
+          // 승인된 사용자는 게시판으로, 미승인 사용자는 대기 페이지로
+          if (profile.registration_status === 'approved' && profile.is_active) {
+            setMessage('인증 완료! 게시판으로 이동합니다...');
+            // 미들웨어가 처리하도록 추가 대기
+            await new Promise(resolve => setTimeout(resolve, 200));
+            router.push('/board');
+          } else if (profile.registration_status === 'pending') {
+            setMessage('승인 대기 중입니다. 대기 페이지로 이동합니다...');
+            await new Promise(resolve => setTimeout(resolve, 200));
+            router.push('/register/pending');
+          } else if (profile.registration_status === 'rejected') {
+            setMessage('승인이 거부되었습니다. 관련 페이지로 이동합니다...');
+            await new Promise(resolve => setTimeout(resolve, 200));
+            router.push('/register/rejected');
           }
-        } catch (checkError) {
-          console.log(`Auth check attempt ${attempts} failed:`, checkError);
+          return;
         }
-        
-        // 200ms 후 재시도
-        await new Promise(resolve => setTimeout(resolve, 200));
       }
       
-      // 타임아웃 시 fallback으로 window.location 사용
-      console.warn('Auth state confirmation timed out, using fallback redirect');
-      setMessage('페이지를 새로고침하여 이동합니다...');
-      
-      setTimeout(() => {
-        window.location.href = '/board';
-      }, 800);
+      // 프로필이 없거나 에러 발생 시 홈으로 이동
+      console.warn('No profile found or error occurred, redirecting to home');
+      setMessage('홈페이지로 이동합니다...');
+      await new Promise(resolve => setTimeout(resolve, 200));
+      router.push('/');
       
     } catch (error) {
       console.error('Error during auth state confirmation:', error);
-      setMessage('페이지를 새로고침하여 이동합니다...');
-      setTimeout(() => {
-        window.location.href = '/board';
-      }, 1000);
+      setMessage('홈페이지로 이동합니다...');
+      await new Promise(resolve => setTimeout(resolve, 200));
+      router.push('/');
     }
   };
 
@@ -116,6 +108,18 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  // 페이지 안정화 중이면 로딩 표시
+  if (pageLoading || !isReady) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 pt-24 md:pt-28 pb-12 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">페이지를 불러오는 중...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 pt-24 md:pt-28 pb-12 px-4 sm:px-6 lg:px-8">

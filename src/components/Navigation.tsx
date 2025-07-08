@@ -41,23 +41,31 @@ const Navigation = () => {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
-  // 사용자 인증 상태 관리
+  // 사용자 인증 상태 관리 (개선된 버전)
   useEffect(() => {
     let mounted = true
 
     const getUser = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser()
+        // 세션 기반 인증 상태 확인 (미들웨어와 일치)
+        const { data: { session }, error } = await supabase.auth.getSession()
+        if (error) {
+          console.error('Session error in Navigation:', error)
+          if (mounted) {
+            setUser(null)
+            setLoading(false)
+          }
+          return
+        }
+        
         if (mounted) {
-          setUser(user)
+          setUser(session?.user || null)
+          setLoading(false)
         }
       } catch (error) {
-        console.error('Error getting user:', error)
+        console.error('Error getting session:', error)
         if (mounted) {
           setUser(null)
-        }
-      } finally {
-        if (mounted) {
           setLoading(false)
         }
       }
@@ -68,6 +76,7 @@ const Navigation = () => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (mounted) {
         setUser(session?.user || null)
+        // 인증 상태 변경 시 즉시 로딩 상태 해제
         setLoading(false)
       }
     })
