@@ -3,6 +3,8 @@
  * 모든 타입스크립트 인터페이스와 타입 정의를 중앙에서 관리
  */
 
+import type { BoardCategory } from '@/constants/categories'
+
 // === 핵심 데이터 타입 정의 ===
 
 /**
@@ -174,23 +176,6 @@ export interface BusinessInfo {
   registrationNumber: string
 }
 
-/**
- * 링크 프리뷰 정보
- */
-export interface LinkPreview {
-  /** 페이지 제목 */
-  title: string
-  /** 페이지 설명 */
-  description: string
-  /** 대표 이미지 URL */
-  image: string
-  /** 사이트명 */
-  siteName: string
-  /** 페이지 URL */
-  url: string
-  /** 파비콘 URL */
-  favicon?: string
-}
 
 // === API 응답 타입 정의 ===
 
@@ -397,4 +382,194 @@ export function isLinkPreview(obj: any): obj is LinkPreview {
   return typeof obj === 'object' &&
     typeof obj.title === 'string' &&
     typeof obj.url === 'string'
+}
+
+// === 게시판 시스템 타입 정의 ===
+
+/**
+ * 게시글 인터페이스
+ * Supabase posts 테이블과 연동되는 표준 인터페이스
+ */
+export interface Post {
+  /** 고유 식별자 */
+  id: string
+  /** 게시글 제목 */
+  title: string
+  /** 게시글 내용 (마크다운 지원) */
+  content: string
+  /** 게시글 카테고리 */
+  category: BoardCategory
+  /** 작성자 ID */
+  author_id: string
+  /** 생성일시 (ISO 8601 형식) */
+  created_at: string
+  /** 수정일시 (ISO 8601 형식) */
+  updated_at?: string
+  /** 삭제 여부 (소프트 삭제) */
+  is_deleted?: boolean
+  /** 작성자 정보 (조인된 데이터) */
+  author?: {
+    name: string
+    email: string
+  }
+}
+
+/**
+ * 댓글 인터페이스
+ * Supabase comments 테이블과 연동되는 표준 인터페이스
+ */
+export interface Comment {
+  /** 고유 식별자 */
+  id: string
+  /** 게시글 ID */
+  post_id: string
+  /** 댓글 내용 */
+  content: string
+  /** 작성자 ID */
+  author_id: string
+  /** 생성일시 (ISO 8601 형식) */
+  created_at: string
+  /** 작성자 정보 (조인된 데이터) */
+  author?: {
+    name: string
+    email: string
+  }
+}
+
+/**
+ * Post 타입 검증
+ */
+export function isPost(obj: any): obj is Post {
+  return typeof obj === 'object' &&
+    typeof obj.id === 'string' &&
+    typeof obj.title === 'string' &&
+    typeof obj.content === 'string' &&
+    typeof obj.category === 'string' &&
+    typeof obj.author_id === 'string' &&
+    typeof obj.created_at === 'string'
+}
+
+// === 컴포넌트 Props 타입 정의 ===
+
+/**
+ * 최적화된 이미지 컴포넌트 Props
+ * WebP 지원, 폴백 처리, 반응형 지원
+ */
+export interface OptimizedImageProps {
+  /** 이미지 소스 URL */
+  src: string
+  /** 대체 텍스트 */
+  alt: string
+  /** 이미지 너비 */
+  width?: number
+  /** 이미지 높이 */
+  height?: number
+  /** CSS 클래스명 */
+  className?: string
+  /** 로딩 우선순위 */
+  priority?: boolean
+  /** fill 모드 사용 여부 */
+  fill?: boolean
+  /** 반응형 크기 설정 */
+  sizes?: string
+  /** 이미지 품질 (1-100) */
+  quality?: number
+  /** 이미지 로드 실패 시 표시할 텍스트 */
+  fallbackText?: string
+  /** WEBP 우선 사용 여부 */
+  preferWebp?: boolean
+  /** 원본 비율 유지 여부 */
+  preserveAspectRatio?: boolean
+}
+
+/**
+ * 링크 미리보기 정보
+ * 외부 링크의 메타데이터를 담는 인터페이스
+ */
+export interface LinkPreview {
+  /** 페이지 제목 */
+  title: string
+  /** 페이지 설명 */
+  description: string
+  /** 대표 이미지 URL */
+  image: string
+  /** 사이트명 */
+  siteName: string
+  /** 원본 URL */
+  url: string
+  /** 파비콘 URL */
+  favicon: string
+}
+
+/**
+ * 티켓팅 정보
+ * 공연/이벤트 예매 관련 정보
+ */
+export interface TicketingInfo {
+  /** 플랫폼명 */
+  platform: string
+  /** 예매 URL */
+  url: string
+  /** 예매 가능 여부 */
+  available: boolean
+  /** 예매 시작일 */
+  startDate?: string
+  /** 예매 종료일 */
+  endDate?: string
+  /** 매진일 */
+  soldOutDate?: string
+  /** 링크 미리보기 (캐시된 데이터) */
+  preview?: LinkPreview
+}
+
+/**
+ * 기사/아티클 정보
+ * 외부 링크 기사의 메타데이터
+ */
+export interface ArticleInfo {
+  /** 기사 제목 */
+  title: string
+  /** 기사 URL */
+  url: string
+  /** 링크 미리보기 (캐시된 데이터) */
+  preview?: LinkPreview
+}
+
+// === 컴포넌트 Props 타입들 ===
+
+export interface ArticleCardProps {
+  article: ArticleInfo
+}
+
+export interface TicketingCardProps {
+  ticketing: TicketingInfo
+}
+
+export interface FeaturedArtistsProps {
+  artists: Artist[]
+}
+
+export interface FeaturedProjectsProps {
+  projects: Project[]
+}
+
+export interface BaseCardProps {
+  title: string
+  description: string
+  category?: string
+  image?: {
+    src: string
+    alt: string
+    width?: number
+    height?: number
+  }
+  href?: string
+  date?: string
+  author?: string
+  className?: string
+  variant?: 'default' | 'compact' | 'featured'
+  hoverable?: boolean
+  imagePosition?: 'top' | 'left' | 'right'
+  footer?: React.ReactNode
+  onClick?: () => void
 }

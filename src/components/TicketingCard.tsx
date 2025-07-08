@@ -1,11 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, memo } from 'react'
-import { TicketingInfo, LinkPreview } from '@/utils/linkPreview'
-
-interface TicketingCardProps {
-  ticketing: TicketingInfo
-}
+import type { TicketingInfo, LinkPreview, TicketingCardProps } from '@/types'
 
 const TicketingCard = ({ ticketing }: TicketingCardProps) => {
   const [preview, setPreview] = useState<LinkPreview | null>(ticketing.preview || null)

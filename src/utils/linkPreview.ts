@@ -1,13 +1,8 @@
 import { load } from 'cheerio'
+import type { LinkPreview, TicketingInfo } from '@/types'
 
-export interface LinkPreview {
-  title: string
-  description: string
-  image: string
-  siteName: string
-  url: string
-  favicon: string
-}
+// 기존에 별도로 정의되어 있던 TicketingInfo를 export로 유지 (하위 호환성)
+export type { LinkPreview, TicketingInfo } from '@/types'
 
 export async function fetchLinkPreview(url: string): Promise<LinkPreview | null> {
   try {
@@ -147,13 +142,3 @@ export async function fetchMultipleLinkPreviews(urls: string[]): Promise<(LinkPr
   return Promise.all(promises)
 }
 
-// 예매처 정보 타입
-export interface TicketingInfo {
-  platform: string
-  url: string
-  available: boolean
-  startDate?: string
-  endDate?: string
-  soldOutDate?: string
-  preview?: LinkPreview | null
-}

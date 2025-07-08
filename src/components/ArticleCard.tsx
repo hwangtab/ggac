@@ -2,17 +2,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, memo } from 'react'
-import { LinkPreview } from '@/utils/linkPreview'
-
-interface ArticleInfo {
-  title: string
-  url: string
-  preview?: LinkPreview | null
-}
-
-interface ArticleCardProps {
-  article: ArticleInfo
-}
+import type { LinkPreview, ArticleInfo, ArticleCardProps } from '@/types'
 
 const ArticleCard = ({ article }: ArticleCardProps) => {
   const [preview, setPreview] = useState<LinkPreview | null>(article.preview || null)

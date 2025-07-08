@@ -29,15 +29,15 @@ export default function SignupPage() {
 
   // 각 입력창에 대한 ref
   const fieldRefs = {
-    email: useRef<HTMLInputElement>(null),
-    password: useRef<HTMLInputElement>(null),
-    displayName: useRef<HTMLInputElement>(null),
-    realName: useRef<HTMLInputElement>(null),
-    phoneNumber: useRef<HTMLInputElement>(null),
-    birthDate: useRef<HTMLInputElement>(null),
-    bankName: useRef<HTMLInputElement>(null),
-    accountNumber: useRef<HTMLInputElement>(null),
-    accountHolder: useRef<HTMLInputElement>(null),
+    email: useRef<HTMLInputElement | null>(null),
+    password: useRef<HTMLInputElement | null>(null),
+    displayName: useRef<HTMLInputElement | null>(null),
+    realName: useRef<HTMLInputElement | null>(null),
+    phoneNumber: useRef<HTMLInputElement | null>(null),
+    birthDate: useRef<HTMLInputElement | null>(null),
+    bankName: useRef<HTMLInputElement | null>(null),
+    accountNumber: useRef<HTMLInputElement | null>(null),
+    accountHolder: useRef<HTMLInputElement | null>(null),
   };
 
   // 실시간 유효성 검사 함수
