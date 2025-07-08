@@ -1,16 +1,7 @@
+import { memo } from 'react'
 import Link from 'next/link'
 import OptimizedImage from '@/components/OptimizedImage'
-
-interface Project {
-  id: string
-  slug: string
-  title: string
-  category: string
-  publishedDate: string
-  coverImage: string
-  description: string
-  artistIds: string[]
-}
+import type { Project } from '@/types'
 
 interface FeaturedProjectsProps {
   projects: Project[]
@@ -88,4 +79,4 @@ const FeaturedProjects = ({ projects }: FeaturedProjectsProps) => {
   )
 }
 
-export default FeaturedProjects
+export default memo(FeaturedProjects)

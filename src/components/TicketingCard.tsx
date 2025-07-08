@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, memo } from 'react'
 import { TicketingInfo, LinkPreview } from '@/utils/linkPreview'
 
 interface TicketingCardProps {
@@ -214,4 +214,4 @@ const TicketingCard = ({ ticketing }: TicketingCardProps) => {
   )
 }
 
-export default TicketingCard
+export default memo(TicketingCard)

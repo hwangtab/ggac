@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabase/client';
 import CommentSection from './CommentSection';
@@ -241,4 +241,4 @@ const PostList: React.FC<PostListProps> = ({
   );
 };
 
-export default PostList;
+export default memo(PostList);

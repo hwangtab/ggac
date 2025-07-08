@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Image from 'next/image'
 
 interface ImageWithFallbackProps {
@@ -32,7 +32,7 @@ const ImageWithFallback = ({
   const [hasTriedDynamicWebp, setHasTriedDynamicWebp] = useState(false)
 
   // 이미지 소스 최적화 함수
-  const getOptimizedSrc = (originalSrc: string): string => {
+  const getOptimizedSrc = useCallback((originalSrc: string): string => {
     if (!preferWebp || !originalSrc.startsWith('/')) {
       return originalSrc
     }
@@ -44,7 +44,7 @@ const ImageWithFallback = ({
     }
 
     return originalSrc
-  }
+  }, [preferWebp]);
 
   // 동적 변환 API를 사용하는 함수 (JPG만 있을 때)
   const getDynamicWebpSrc = (originalSrc: string): string => {
@@ -66,7 +66,7 @@ const ImageWithFallback = ({
       const webpSrc = getOptimizedSrc(src)
       setCurrentSrc(webpSrc)
     }
-  }, [src, preferWebp])
+  }, [src, preferWebp, getOptimizedSrc])
 
   const handleLoad = () => {
     const isWebpOptimized = currentSrc !== src && currentSrc.endsWith('.webp')
