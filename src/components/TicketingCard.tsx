@@ -134,19 +134,33 @@ const TicketingCard = ({ ticketing }: TicketingCardProps) => {
               alt={preview.title}
               className="w-full h-full object-cover"
               onError={(e) => {
-                // 이미지 로드 실패 시 fallback
+                // 이미지 로드 실패 시 fallback - XSS 방지를 위한 안전한 DOM 조작
                 const target = e.target as HTMLImageElement
                 target.style.display = 'none'
                 const parent = target.parentElement
                 if (parent) {
-                  parent.innerHTML = `
-                    <div class="w-full h-full bg-gradient-to-br from-primary-100 to-accent-100 flex items-center justify-center">
-                      <div class="text-center">
-                        <div class="text-2xl mb-2">🎫</div>
-                        <div class="text-primary-600 font-medium">${ticketing.platform}</div>
-                      </div>
-                    </div>
-                  `
+                  // innerHTML 대신 안전한 DOM 조작 사용
+                  parent.innerHTML = '' // 기존 내용 제거
+                  
+                  const fallbackDiv = document.createElement('div')
+                  fallbackDiv.className = 'w-full h-full bg-gradient-to-br from-primary-100 to-accent-100 flex items-center justify-center'
+                  
+                  const centerDiv = document.createElement('div')
+                  centerDiv.className = 'text-center'
+                  
+                  const iconDiv = document.createElement('div')
+                  iconDiv.className = 'text-2xl mb-2'
+                  iconDiv.textContent = '🎫'
+                  
+                  const textDiv = document.createElement('div')
+                  textDiv.className = 'text-primary-600 font-medium'
+                  // XSS 방지를 위해 textContent 사용 (HTML 이스케이프 자동 적용)
+                  textDiv.textContent = ticketing.platform || '예매처'
+                  
+                  centerDiv.appendChild(iconDiv)
+                  centerDiv.appendChild(textDiv)
+                  fallbackDiv.appendChild(centerDiv)
+                  parent.appendChild(fallbackDiv)
                 }
               }}
             />
