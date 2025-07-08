@@ -6,6 +6,7 @@ import ErrorBoundary from '@/components/ErrorBoundary'
 import { Noto_Serif_KR } from 'next/font/google'
 import localFont from 'next/font/local'
 import { getGlobalData } from '@/lib/data'
+import { Suspense } from 'react'
 
 const pretendard = localFont({
   src: '../../public/fonts/PretendardVariable.woff2',
@@ -80,9 +81,20 @@ export default async function RootLayout({
     <html lang="ko" className={`${pretendard.variable} ${notoSerifKr.variable}`}>
       <body>
         <ErrorBoundary>
-          <Navigation />
-          <main>{children}</main>
-          <Footer globalData={globalData} />
+          <div className="min-h-screen flex flex-col">
+            <Navigation />
+            <Suspense fallback={
+              <div className="flex-1 pt-20 md:pt-24 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-4"></div>
+                  <p className="text-gray-600">페이지를 불러오는 중...</p>
+                </div>
+              </div>
+            }>
+              <main className="flex-1">{children}</main>
+            </Suspense>
+            <Footer globalData={globalData} />
+          </div>
         </ErrorBoundary>
       </body>
     </html>

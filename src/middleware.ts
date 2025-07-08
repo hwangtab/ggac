@@ -14,12 +14,32 @@ export async function middleware(request: NextRequest) {
   }
 
   let user = null;
+  let authError = false;
   try {
-    const { data } = await supabase.auth.getUser();
-    user = data.user;
+    // 세션 기반 인증 상태 확인 (더 안정적)
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) {
+      console.log('Session error in middleware:', sessionError);
+      authError = true;
+    } else {
+      user = session?.user || null;
+    }
   } catch (error) {
     console.log('Auth error in middleware:', error);
-    // Continue without user on auth errors to prevent loops
+    authError = true;
+  }
+
+  // 인증 에러 발생 시 공개 페이지는 허용하고 보호된 페이지만 리다이렉트
+  if (authError) {
+    const { pathname } = request.nextUrl;
+    const PROTECTED_PAGES = ['/board', '/admin'];
+    const isProtectedPage = PROTECTED_PAGES.some(path => pathname.startsWith(path));
+    
+    if (isProtectedPage) {
+      return NextResponse.redirect(new URL('/login', request.nextUrl.origin));
+    }
+    // 공개 페이지는 그대로 진행
+    return res;
   }
 
   const { pathname } = request.nextUrl;

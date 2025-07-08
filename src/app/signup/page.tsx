@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabase/client';
 import FormField from '../../components/FormField';
+import { useStablePageLoad } from '../../utils/routeProtection';
 
 export default function SignupPage() {
   const [formData, setFormData] = useState({
@@ -24,6 +25,7 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const router = useRouter();
+  const { isLoading: pageLoading, isReady } = useStablePageLoad('/signup');
 
   // 각 입력창에 대한 ref
   const fieldRefs = {
@@ -252,6 +254,9 @@ export default function SignupPage() {
         console.error('Signup error details:', error);
       } else if (data.user) {
         // 성공 시 바로 안내 페이지로 리다이렉트
+        setMessage('가입 신청이 완료되었습니다! 안내 페이지로 이동합니다...');
+        // 미들웨어 처리 시간 확보
+        await new Promise(resolve => setTimeout(resolve, 200));
         router.push('/register/submitted');
       }
     } catch (error) {
@@ -260,6 +265,18 @@ export default function SignupPage() {
       setLoading(false);
     }
   };
+
+  // 페이지 안정화 중이면 로딩 표시
+  if (pageLoading || !isReady) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 pt-24 md:pt-28 pb-12 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">페이지를 불러오는 중...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 pt-24 md:pt-28 pb-12 px-4 sm:px-6 lg:px-8">
