@@ -105,11 +105,29 @@ export async function fetchLinkPreview(url: string): Promise<LinkPreview | null>
     
     const favicon = getFaviconUrl()
     
+    // XSS 방지를 위한 데이터 정제
+    const sanitizeText = (text: string): string => {
+      if (typeof text !== 'string') return ''
+      return text
+        .replace(/[<>"'&]/g, (char) => {
+          const map: { [key: string]: string } = {
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#x27;',
+            '&': '&amp;'
+          }
+          return map[char] || char
+        })
+        .replace(/\s+/g, ' ')
+        .trim()
+    }
+
     const preview: LinkPreview = {
-      title: title.slice(0, 100), // 제목 길이 제한
-      description: description.slice(0, 200), // 설명 길이 제한
+      title: sanitizeText(title).slice(0, 100), // 제목 길이 제한 및 XSS 방지
+      description: sanitizeText(description).slice(0, 200), // 설명 길이 제한 및 XSS 방지
       image,
-      siteName,
+      siteName: sanitizeText(siteName).slice(0, 50), // 사이트명 XSS 방지
       url,
       favicon
     }

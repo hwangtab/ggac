@@ -108,14 +108,28 @@ const ArticleCard = ({ article }: ArticleCardProps) => {
                 target.style.display = 'none'
                 const parent = target.parentElement
                 if (parent) {
-                  parent.innerHTML = `
-                    <div class="w-full h-full bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center">
-                      <div class="text-center">
-                        <div class="text-2xl mb-2">📰</div>
-                        <div class="text-blue-600 font-medium">${preview.siteName || article.title}</div>
-                      </div>
-                    </div>
-                  `
+                  // innerHTML 대신 안전한 DOM 조작 사용
+                  parent.innerHTML = '' // 기존 내용 제거
+                  
+                  const fallbackDiv = document.createElement('div')
+                  fallbackDiv.className = 'w-full h-full bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center'
+                  
+                  const centerDiv = document.createElement('div')
+                  centerDiv.className = 'text-center'
+                  
+                  const iconDiv = document.createElement('div')
+                  iconDiv.className = 'text-2xl mb-2'
+                  iconDiv.textContent = '📰'
+                  
+                  const textDiv = document.createElement('div')
+                  textDiv.className = 'text-blue-600 font-medium'
+                  // XSS 방지를 위해 textContent 사용 (HTML 이스케이프 자동 적용)
+                  textDiv.textContent = (preview.siteName || article.title) || '기사 제목'
+                  
+                  centerDiv.appendChild(iconDiv)
+                  centerDiv.appendChild(textDiv)
+                  fallbackDiv.appendChild(centerDiv)
+                  parent.appendChild(fallbackDiv)
                 }
               }}
             />

@@ -150,13 +150,33 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
   
   const imageUrl = `${baseUrl}${getProfileImageUrl()}`
 
-  // JSON-LD 구조화 데이터
+  // JSON-LD 구조화 데이터 - XSS 방지를 위한 데이터 정제
+  const sanitizeJsonLdValue = (value: any): any => {
+    if (typeof value === 'string') {
+      // HTML 태그와 스크립트 제거, 특수 문자 이스케이프
+      return value
+        .replace(/<[^>]*>/g, '') // HTML 태그 제거
+        .replace(/[<>"'&]/g, (char) => { // 특수 문자 HTML 엔티티로 변환
+          const map: { [key: string]: string } = {
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#x27;',
+            '&': '&amp;'
+          }
+          return map[char] || char
+        })
+        .slice(0, 500) // 길이 제한
+    }
+    return value
+  }
+
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Person',
     '@id': `${baseUrl}/artists/${artist.slug}#person`,
-    name: artist.name,
-    description: artist.oneLiner,
+    name: sanitizeJsonLdValue(artist.name),
+    description: sanitizeJsonLdValue(artist.oneLiner),
     image: {
       '@type': 'ImageObject',
       url: imageUrl,
@@ -164,15 +184,17 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
       height: 800,
     },
     url: `${baseUrl}/artists/${artist.slug}`,
-    sameAs: artist.portfolioLinks?.map(link => link.url) || [],
-    jobTitle: Array.isArray(artist.category) ? artist.category.join(', ') : artist.category,
+    sameAs: artist.portfolioLinks?.map(link => sanitizeJsonLdValue(link.url)) || [],
+    jobTitle: Array.isArray(artist.category) 
+      ? artist.category.map(cat => sanitizeJsonLdValue(cat)).join(', ')
+      : sanitizeJsonLdValue(artist.category),
     memberOf: {
       '@type': 'Organization',
       '@id': `${baseUrl}#organization`,
       name: '경기아트콜렉티브 협동조합',
       url: baseUrl,
     },
-    email: artist.contact?.includes('@') ? artist.contact : undefined,
+    email: artist.contact?.includes('@') ? sanitizeJsonLdValue(artist.contact) : undefined,
     workLocation: {
       '@type': 'Place',
       name: '경기도',
