@@ -121,37 +121,3 @@ export const getProjectArtists = cache(async (artistIds: string[]): Promise<Arti
   return artists.filter(artist => artistIds.includes(artist.id))
 })
 
-// 동기 버전 (기존 코드와의 호환성을 위해 유지, 하지만 사용 지양)
-// 주로 API Route나 특별한 경우에만 사용
-export const getArtistsSync = (): Artist[] => {
-  try {
-    const filePath = path.join(process.cwd(), 'data/artists.json')
-    const fileContents = fs.readFileSync(filePath, 'utf8')
-    return JSON.parse(fileContents)
-  } catch (error) {
-    console.error('Error loading artists data (sync):', error)
-    return []
-  }
-}
-
-export const getProjectsSync = (): Project[] => {
-  try {
-    const filePath = path.join(process.cwd(), 'data/projects.json')
-    const fileContents = fs.readFileSync(filePath, 'utf8')
-    return JSON.parse(fileContents)
-  } catch (error) {
-    console.error('Error loading projects data (sync):', error)
-    return []
-  }
-}
-
-export const getGlobalDataSync = (): GlobalData => {
-  try {
-    const filePath = path.join(process.cwd(), 'data/global.json')
-    const fileContents = fs.readFileSync(filePath, 'utf8')
-    return JSON.parse(fileContents)
-  } catch (error) {
-    console.error('Error loading global data (sync):', error)
-    return DEFAULT_GLOBAL_DATA
-  }
-}
