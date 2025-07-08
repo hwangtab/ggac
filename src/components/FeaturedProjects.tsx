@@ -1,11 +1,7 @@
 import { memo } from 'react'
 import Link from 'next/link'
 import OptimizedImage from '@/components/OptimizedImage'
-import type { Project } from '@/types'
-
-interface FeaturedProjectsProps {
-  projects: Project[]
-}
+import type { Project, FeaturedProjectsProps } from '@/types'
 
 const FeaturedProjects = ({ projects }: FeaturedProjectsProps) => {
   return (

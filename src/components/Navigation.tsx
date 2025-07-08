@@ -1,10 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
-import { supabase } from '../lib/supabase/client'
+
+import { supabase } from '@/lib/supabase/client'
 
 const Navigation = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false)

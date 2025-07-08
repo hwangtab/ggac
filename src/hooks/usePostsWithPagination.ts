@@ -2,15 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase/client';
-
-interface Post {
-  id: string;
-  title: string;
-  content: string;
-  category: string;
-  author_id: string;
-  created_at: string;
-}
+import type { Post } from '@/types';
 
 interface UsePostsWithPaginationProps {
   page: number;

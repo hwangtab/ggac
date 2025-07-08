@@ -1,8 +1,10 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import OptimizedImage from '@/components/OptimizedImage'
+import { useFilter } from '@/hooks/useFilter'
+import { ARCHIVE_CATEGORIES } from '@/constants/categories'
 import type { Project, Artist } from '@/types'
 
 interface ArchiveContentProps {
@@ -10,22 +12,10 @@ interface ArchiveContentProps {
   artists: Artist[]
 }
 
-const categories = [
-  'All',
-  '음반·음원',
-  '공연·전시',
-  '예술교육',
-  '지원·용역사업',
-  '행사'
-]
-
 const ArchiveContent = ({ projects, artists }: ArchiveContentProps) => {
   const [selectedCategory, setSelectedCategory] = useState('All')
 
-  const filteredProjects = useMemo(() => {
-    if (selectedCategory === 'All') return projects
-    return projects.filter(project => project.category === selectedCategory)
-  }, [projects, selectedCategory])
+  const filteredProjects = useFilter(projects, selectedCategory, { allLabel: 'All' })
 
   const getArtistNames = (artistIds: string[]) => {
     return artistIds
@@ -54,7 +44,7 @@ const ArchiveContent = ({ projects, artists }: ArchiveContentProps) => {
       <section className="py-8 bg-white sticky top-16 z-40 border-b">
         <div className="container-custom">
           <div className="flex flex-wrap justify-center gap-2">
-            {categories.map((category) => (
+            {ARCHIVE_CATEGORIES.map((category) => (
               <button
                 key={category}
                 onClick={() => setSelectedCategory(category)}

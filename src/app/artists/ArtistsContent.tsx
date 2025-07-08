@@ -1,28 +1,20 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import OptimizedImage from '@/components/OptimizedImage'
+import { useFilter } from '@/hooks/useFilter'
+import { ARTIST_CATEGORIES } from '@/constants/categories'
 import type { Artist } from '@/types'
 
 interface ArtistsContentProps {
   artists: Artist[]
 }
 
-const categories = ['All', '창작자', '기획자']
-
 const ArtistsContent = ({ artists }: ArtistsContentProps) => {
   const [selectedCategory, setSelectedCategory] = useState('All')
 
-  const filteredArtists = useMemo(() => {
-    if (selectedCategory === 'All') return artists
-    return artists.filter(artist => {
-      if (Array.isArray(artist.category)) {
-        return artist.category.includes(selectedCategory)
-      }
-      return artist.category === selectedCategory
-    })
-  }, [artists, selectedCategory])
+  const filteredArtists = useFilter(artists, selectedCategory, { allLabel: 'All' })
 
   return (
     <div className="pt-20">
@@ -43,7 +35,7 @@ const ArtistsContent = ({ artists }: ArtistsContentProps) => {
       <section className="py-8 bg-white sticky top-16 z-40 border-b">
         <div className="container-custom">
           <div className="flex justify-center gap-2">
-            {categories.map((category) => (
+            {ARTIST_CATEGORIES.map((category) => (
               <button
                 key={category}
                 onClick={() => setSelectedCategory(category)}

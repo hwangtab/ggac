@@ -1,11 +1,7 @@
 import { memo } from 'react'
 import Link from 'next/link'
 import OptimizedImage from './OptimizedImage'
-import type { Artist } from '@/types'
-
-interface FeaturedArtistsProps {
-  artists: Artist[]
-}
+import type { Artist, FeaturedArtistsProps } from '@/types'
 
 const FeaturedArtists = ({ artists }: FeaturedArtistsProps) => {
   console.log('FeaturedArtists artists:', artists)

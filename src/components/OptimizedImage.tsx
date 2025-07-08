@@ -2,21 +2,7 @@
 
 import Image from 'next/image'
 import { useState, useEffect, useCallback, memo } from 'react'
-
-interface OptimizedImageProps {
-  src: string
-  alt: string
-  width?: number
-  height?: number
-  className?: string
-  priority?: boolean
-  fill?: boolean
-  sizes?: string
-  quality?: number
-  fallbackText?: string
-  preferWebp?: boolean // WEBP 우선 사용 여부
-  preserveAspectRatio?: boolean // 원본 비율 유지 여부
-}
+import type { OptimizedImageProps } from '@/types'
 
 const OptimizedImage = memo(function OptimizedImage({
   src,

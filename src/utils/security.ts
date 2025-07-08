@@ -164,13 +164,75 @@ export const detectXssPatterns = (input: string): boolean => {
     /onerror\s*=/gi,
     /onclick\s*=/gi,
     /onmouseover\s*=/gi,
+    /onmouseout\s*=/gi,
+    /onfocus\s*=/gi,
+    /onblur\s*=/gi,
+    /onchange\s*=/gi,
+    /onsubmit\s*=/gi,
     /<iframe\b/gi,
     /<object\b/gi,
     /<embed\b/gi,
-    /<form\b/gi
+    /<form\b/gi,
+    /<svg\b[^>]*onload/gi,
+    /<img\b[^>]*onerror/gi,
+    /expression\s*\(/gi,
+    /url\s*\(\s*javascript:/gi,
+    /@import\s+["']javascript:/gi
   ];
 
   return dangerousPatterns.some(pattern => pattern.test(input));
+};
+
+/**
+ * HTML 태그 화이트리스트 기반 정제
+ * 안전한 HTML 태그만 허용하고 나머지는 제거
+ */
+export const sanitizeHtmlWithWhitelist = (input: string): string => {
+  if (typeof input !== 'string') {
+    return String(input);
+  }
+
+  // 허용된 태그와 속성 정의
+  const allowedTags = ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 'a', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'];
+  const allowedAttributes = {
+    'a': ['href', 'title', 'target'],
+    '*': ['class'] // 모든 태그에 class 속성 허용
+  };
+
+  // 모든 HTML 태그를 찾아서 검증
+  return input.replace(/<\/?([a-zA-Z][a-zA-Z0-9]*)\b[^>]*>/gi, (match, tagName) => {
+    const tag = tagName.toLowerCase();
+    
+    // 허용되지 않은 태그는 제거
+    if (!allowedTags.includes(tag)) {
+      return '';
+    }
+
+    // 속성 검증 (간단한 구현)
+    const cleanMatch = match.replace(/on\w+\s*=\s*["'][^"']*["']/gi, ''); // 이벤트 핸들러 제거
+    return cleanMatch;
+  });
+};
+
+/**
+ * 마크다운을 안전한 HTML로 변환
+ * XSS 방지를 위한 마크다운 전용 정제 함수
+ */
+export const sanitizeMarkdown = (markdown: string): string => {
+  if (typeof markdown !== 'string') {
+    return '';
+  }
+
+  // 위험한 마크다운 패턴 제거
+  let cleaned = markdown
+    // 인라인 HTML 제거
+    .replace(/<[^>]*>/g, '')
+    // 위험한 링크 프로토콜 제거
+    .replace(/\[([^\]]*)\]\(javascript:[^)]*\)/gi, '[$1](#)')
+    .replace(/\[([^\]]*)\]\(vbscript:[^)]*\)/gi, '[$1](#)')
+    .replace(/\[([^\]]*)\]\(data:[^)]*\)/gi, '[$1](#)');
+
+  return cleaned;
 };
 
 /**

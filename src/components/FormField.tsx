@@ -13,7 +13,7 @@ interface FormFieldProps {
   error?: string;
   state?: 'default' | 'error' | 'success';
   disabled?: boolean;
-  fieldRef?: React.RefObject<HTMLInputElement>;
+  fieldRef?: React.RefObject<HTMLInputElement | null>;
 }
 
 const FormField: React.FC<FormFieldProps> = ({

@@ -1,35 +1,32 @@
-import React, { useState, useEffect, memo } from 'react';
-import { useRouter } from 'next/navigation';
-import { supabase } from '../lib/supabase/client';
-import CommentSection from './CommentSection';
-import PaginationControls from './PaginationControls';
+import React, { useState, useEffect, memo } from 'react'
 
-interface Post {
-  id: string;
-  title: string;
-  content: string;
-  category: string;
-  author_id: string;
-  created_at: string;
-}
+import { useRouter } from 'next/navigation'
+
+import { supabase } from '@/lib/supabase/client'
+import { BOARD_CATEGORIES, BOARD_CATEGORY_STYLES } from '@/constants/categories'
+
+import CommentSection from './CommentSection'
+import PaginationControls from './PaginationControls'
+
+import type { Post } from '@/types'
 
 interface PostListProps {
-  posts: Post[];
-  currentUserId?: string;
-  isMember: boolean;
+  posts: Post[]
+  currentUserId?: string
+  isMember: boolean
   // 페이지네이션 props
-  currentPage?: number;
-  totalPages?: number;
-  totalCount?: number;
-  pageSize?: number;
-  loading?: boolean;
-  onPageChange?: (page: number) => void;
-  onCategoryChange?: (category: string) => void;
+  currentPage?: number
+  totalPages?: number
+  totalCount?: number
+  pageSize?: number
+  loading?: boolean
+  onPageChange?: (page: number) => void
+  onCategoryChange?: (category: string) => void
 }
 
 interface Profile {
-  id: string;
-  display_name: string;
+  id: string
+  display_name: string
 }
 
 const PostList: React.FC<PostListProps> = ({ 
@@ -44,73 +41,66 @@ const PostList: React.FC<PostListProps> = ({
   onPageChange,
   onCategoryChange
 }) => {
-  const [profiles, setProfiles] = useState<Record<string, string>>({});
-  const [selectedCategory, setSelectedCategory] = useState<string>('전체');
-  const [expandedPosts, setExpandedPosts] = useState<Set<string>>(new Set());
-  const router = useRouter();
+  const [profiles, setProfiles] = useState<Record<string, string>>({})
+  const [selectedCategory, setSelectedCategory] = useState<string>('전체')
+  const [expandedPosts, setExpandedPosts] = useState<Set<string>>(new Set())
+  const router = useRouter()
 
-  const categories = ['전체', '공지', '잡담', '홍보', '건의'];
 
   useEffect(() => {
     const fetchProfiles = async () => {
-      const authorIds = Array.from(new Set(posts.map(post => post.author_id)));
-      if (authorIds.length === 0) return;
+      const authorIds = Array.from(new Set(posts.map(post => post.author_id)))
+      if (authorIds.length === 0) return
 
       const { data, error } = await supabase
         .from('member_profiles')
         .select('id, display_name')
-        .in('id', authorIds);
+        .in('id', authorIds)
 
       if (data && !error) {
-        const profileMap: Record<string, string> = {};
+        const profileMap: Record<string, string> = {}
         data.forEach((profile: Profile) => {
-          profileMap[profile.id] = profile.display_name || 'Unknown';
-        });
-        setProfiles(profileMap);
+          profileMap[profile.id] = profile.display_name || 'Unknown'
+        })
+        setProfiles(profileMap)
       }
-    };
+    }
 
-    fetchProfiles();
-  }, [posts]);
+    fetchProfiles()
+  }, [posts])
 
   // 페이지네이션 사용시 카테고리 필터링은 서버에서 처리되므로 posts를 그대로 사용
-  const displayPosts = posts;
+  const displayPosts = posts
 
   const handleCategoryChange = (category: string) => {
-    setSelectedCategory(category);
+    setSelectedCategory(category)
     if (onCategoryChange) {
-      onCategoryChange(category);
+      onCategoryChange(category)
     }
-  };
+  }
 
   const getCategoryBadgeColor = (category: string) => {
-    switch (category) {
-      case '공지': return 'bg-red-100 text-red-800';
-      case '잡담': return 'bg-blue-100 text-blue-800';
-      case '홍보': return 'bg-green-100 text-green-800';
-      case '건의': return 'bg-yellow-100 text-yellow-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
+    return BOARD_CATEGORY_STYLES[category as keyof typeof BOARD_CATEGORY_STYLES] || 'bg-gray-100 text-gray-800'
+  }
 
   const toggleComments = (postId: string) => {
     setExpandedPosts(prev => {
-      const newSet = new Set(prev);
+      const newSet = new Set(prev)
       if (newSet.has(postId)) {
-        newSet.delete(postId);
+        newSet.delete(postId)
       } else {
-        newSet.add(postId);
+        newSet.add(postId)
       }
-      return newSet;
-    });
-  };
+      return newSet
+    })
+  }
 
   return (
     <div className="mt-8">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
         <h2 className="text-2xl font-semibold mb-4 sm:mb-0">게시글 목록</h2>
         <div className="flex flex-wrap gap-2">
-          {categories.map((category) => (
+          {BOARD_CATEGORIES.map((category) => (
             <button
               key={category}
               onClick={() => handleCategoryChange(category)}
@@ -238,7 +228,7 @@ const PostList: React.FC<PostListProps> = ({
         />
       )}
     </div>
-  );
-};
+  )
+}
 
-export default memo(PostList);
+export default memo(PostList)

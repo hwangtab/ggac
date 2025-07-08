@@ -1,19 +1,12 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase/client';
+import { BOARD_CATEGORIES } from '@/constants/categories';
+import type { Post } from '@/types';
 
 interface CreatePostFormProps {
   authorId: string;
   onNewPost: (post: Post) => void;
   showSuccessRedirect?: boolean;
-}
-
-interface Post {
-  id: string;
-  title: string;
-  content: string;
-  category: string;
-  author_id: string;
-  created_at: string;
 }
 
 const CreatePostForm: React.FC<CreatePostFormProps> = ({ authorId, onNewPost, showSuccessRedirect = false }) => {
@@ -22,7 +15,8 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ authorId, onNewPost, sh
   const [category, setCategory] = useState('잡담');
   const [loading, setLoading] = useState(false);
 
-  const categories = ['공지', '잡담', '홍보', '건의'];
+  // '전체'는 필터링용이므로 제외하고 실제 게시글 카테고리만 사용
+  const postCategories = BOARD_CATEGORIES.slice(1);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,7 +56,7 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ authorId, onNewPost, sh
             onChange={(e) => setCategory(e.target.value)}
             disabled={loading}
           >
-            {categories.map((cat) => (
+            {postCategories.map((cat) => (
               <option key={cat} value={cat}>{cat}</option>
             ))}
           </select>
