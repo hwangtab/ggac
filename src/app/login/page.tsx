@@ -14,39 +14,19 @@ export default function LoginPage() {
   const router = useRouter();
   const { isLoading: pageLoading, isReady } = useStablePageLoad('/login');
 
-  // 서버 사이드 세션 검증 함수
-  const verifyServerSideSession = async (): Promise<boolean> => {
-    try {
-      const response = await fetch('/api/auth/verify-session', {
-        method: 'GET',
-        credentials: 'include',
-        cache: 'no-cache'
-      });
-      
-      const data = await response.json();
-      console.log('🔍 [LOGIN DEBUG] Server session verification:', data);
-      
-      return response.ok && data.authenticated;
-    } catch (error) {
-      console.error('❌ [LOGIN DEBUG] Server session verification failed:', error);
-      return false;
-    }
-  };
-
   // 안전한 리다이렉트 함수 (개선된 버전)
   const waitForAuthStateAndRedirect = async () => {
     try {
       console.log('🔄 [LOGIN DEBUG] Starting auth state confirmation...');
       setMessage('로그인 성공! 인증 상태를 확인하는 중...');
       
-      // 1단계: 클라이언트 세션 확인 및 재시도
+      // 간단한 세션 확인 (최대 3회 재시도)
       let session = null;
       let profile = null;
-      let sessionConfirmed = false;
       let retries = 0;
-      const maxRetries = 10;
+      const maxRetries = 3;
       
-      while (!sessionConfirmed && retries < maxRetries) {
+      while (!session && retries < maxRetries) {
         console.log(`🔄 [LOGIN DEBUG] Session check attempt ${retries + 1}/${maxRetries}`);
         
         const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
@@ -62,63 +42,33 @@ export default function LoginPage() {
           if (currentProfile && !profileError) {
             session = currentSession;
             profile = currentProfile;
-            sessionConfirmed = true;
-            console.log('✅ [LOGIN DEBUG] Client session confirmed:', { 
-              userId: session.user.id,
-              status: profile.registration_status,
-              active: profile.is_active 
-            });
+            console.log('✅ [LOGIN DEBUG] Session and profile confirmed');
             break;
           }
         }
         
         retries++;
         if (retries < maxRetries) {
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise(resolve => setTimeout(resolve, 200));
         }
       }
       
-      if (!sessionConfirmed) {
-        console.error('❌ [LOGIN DEBUG] Client session confirmation failed after retries');
+      if (!session || !profile) {
+        console.error('❌ [LOGIN DEBUG] Session confirmation failed');
         setMessage('인증 확인에 실패했습니다. 다시 시도해주세요.');
         return;
       }
       
-      // 2단계: 서버 사이드 세션 검증
-      setMessage('서버 인증 상태를 확인하는 중...');
-      let serverSessionConfirmed = false;
-      retries = 0;
-      const maxServerRetries = 8;
-      
-      while (!serverSessionConfirmed && retries < maxServerRetries) {
-        console.log(`🔍 [LOGIN DEBUG] Server session check attempt ${retries + 1}/${maxServerRetries}`);
-        
-        serverSessionConfirmed = await verifyServerSideSession();
-        
-        if (serverSessionConfirmed) {
-          console.log('✅ [LOGIN DEBUG] Server session confirmed');
-          break;
-        }
-        
-        retries++;
-        if (retries < maxServerRetries) {
-          await new Promise(resolve => setTimeout(resolve, 150));
-        }
-      }
-      
-      // 3단계: 리다이렉트 실행
-      if (profile && profile.registration_status === 'approved' && profile.is_active) {
+      // 리다이렉트 실행 (프로덕션 환경을 위한 딜레이 추가)
+      if (profile.registration_status === 'approved' && profile.is_active) {
         console.log('🎯 [LOGIN DEBUG] Approved user, redirecting to board...');
         setMessage('인증 완료! 게시판으로 이동합니다...');
         
-        // 서버 세션이 확인된 경우 router.push 사용, 아니면 새로고침
-        if (serverSessionConfirmed) {
-          console.log('🚀 [LOGIN DEBUG] Using router.push with confirmed server session');
-          router.push('/board');
-        } else {
-          console.log('🔄 [LOGIN DEBUG] Fallback to window.location.href due to server session timing');
+        // 프로덕션 환경에서 쿠키 동기화를 위한 딜레이
+        setTimeout(() => {
+          console.log('🚀 [LOGIN DEBUG] Redirecting to board...');
           window.location.href = '/board';
-        }
+        }, 300);
         
       } else if (profile && profile.registration_status === 'pending') {
         console.log('⏳ [LOGIN DEBUG] Pending user, redirecting to pending page...');
