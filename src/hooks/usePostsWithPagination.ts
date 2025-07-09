@@ -102,34 +102,51 @@ export const usePostsWithPagination = ({
     }
   }, [page, pageSize, category]);
 
-  // 실시간 업데이트 구독 (선택적)
+  // 실시간 업데이트 구독 (모바일에서 비활성화)
   const subscribeToChanges = useCallback(() => {
-    const subscription = supabase
-      .channel('posts_changes')
-      .on('postgres_changes', 
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'posts' 
-        }, 
-        (payload) => {
-          console.log('Posts changed:', payload);
-          // 현재 페이지를 다시 로드
-          fetchPosts();
-        }
-      )
-      .subscribe();
+    // 모바일 디바이스나 iOS Safari에서는 WebSocket 연결을 비활성화
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    
+    if (isMobile || isIOS) {
+      console.log('📱 [REALTIME] Skipping realtime subscription on mobile device');
+      return () => {}; // 빈 함수 반환
+    }
 
-    return () => {
-      subscription.unsubscribe();
-    };
+    try {
+      const subscription = supabase
+        .channel('posts_changes')
+        .on('postgres_changes', 
+          { 
+            event: '*', 
+            schema: 'public', 
+            table: 'posts' 
+          }, 
+          (payload) => {
+            console.log('Posts changed:', payload);
+            // 현재 페이지를 다시 로드
+            fetchPosts();
+          }
+        )
+        .subscribe();
+
+      console.log('🔄 [REALTIME] Subscription activated for desktop');
+      
+      return () => {
+        console.log('🔄 [REALTIME] Unsubscribing from posts changes');
+        subscription.unsubscribe();
+      };
+    } catch (error) {
+      console.error('❌ [REALTIME] Failed to create subscription:', error);
+      return () => {};
+    }
   }, [fetchPosts]);
 
   useEffect(() => {
     fetchPosts();
   }, [fetchPosts]);
 
-  // 실시간 업데이트 구독 (옵션)
+  // 실시간 업데이트 구독 (데스크탑에서만)
   useEffect(() => {
     const unsubscribe = subscribeToChanges();
     return unsubscribe;
