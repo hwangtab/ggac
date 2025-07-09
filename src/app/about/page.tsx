@@ -110,7 +110,7 @@ const AboutPage = async () => {
               <h2 className="heading-secondary mb-4">이사장 메시지</h2>
               <div className="w-64 h-64 rounded-full mx-auto mb-8 overflow-hidden border-6 border-white shadow-xl">
                 <Image
-                  src="/images/artists/choi-hee-chul.webp"
+                  src="/images/artists/boss.png"
                   alt="이사장 최희철"
                   width={256}
                   height={256}
