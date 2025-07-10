@@ -99,7 +99,9 @@ const ArticleCard = ({ article }: ArticleCardProps) => {
                 const parent = target.parentElement
                 if (parent) {
                   // innerHTML 대신 안전한 DOM 조작 사용
-                  parent.innerHTML = '' // 기존 내용 제거
+                  while (parent.firstChild) {
+                    parent.removeChild(parent.firstChild);
+                  }
                   
                   const fallbackDiv = document.createElement('div')
                   fallbackDiv.className = 'w-full h-full bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center'
@@ -113,7 +115,6 @@ const ArticleCard = ({ article }: ArticleCardProps) => {
                   
                   const textDiv = document.createElement('div')
                   textDiv.className = 'text-blue-600 font-medium'
-                  // XSS 방지를 위해 textContent 사용 (HTML 이스케이프 자동 적용)
                   textDiv.textContent = (preview.siteName || article.title) || '기사 제목'
                   
                   centerDiv.appendChild(iconDiv)

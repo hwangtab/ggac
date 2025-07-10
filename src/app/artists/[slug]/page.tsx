@@ -7,6 +7,7 @@ import YouTubeEmbed from '@/components/YouTubeEmbed'
 import { convertUrlsToMarkdownLinks } from '@/utils/markdown'
 import { getArtistSlugs, getArtistBySlug, type Artist } from '@/lib/data'
 import type { Metadata } from 'next'
+import { sanitizeJsonLd } from '@/utils/sanitize'
 
 interface ArtistPageProps {
   params: {
@@ -175,8 +176,8 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
     '@context': 'https://schema.org',
     '@type': 'Person',
     '@id': `${baseUrl}/artists/${artist.slug}#person`,
-    name: sanitizeJsonLdValue(artist.name),
-    description: sanitizeJsonLdValue(artist.oneLiner),
+    name: sanitizeJsonLd(artist.name),
+    description: sanitizeJsonLd(artist.oneLiner),
     image: {
       '@type': 'ImageObject',
       url: imageUrl,
@@ -184,17 +185,17 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
       height: 800,
     },
     url: `${baseUrl}/artists/${artist.slug}`,
-    sameAs: artist.portfolioLinks?.map(link => sanitizeJsonLdValue(link.url)) || [],
-    jobTitle: Array.isArray(artist.category) 
-      ? artist.category.map(cat => sanitizeJsonLdValue(cat)).join(', ')
-      : sanitizeJsonLdValue(artist.category),
+    sameAs: artist.portfolioLinks?.map(link => sanitizeJsonLd(link.url)) || [],
+    jobTitle: Array.isArray(artist.category)
+      ? artist.category.map(cat => sanitizeJsonLd(cat)).join(', ')
+      : sanitizeJsonLd(artist.category),
     memberOf: {
       '@type': 'Organization',
       '@id': `${baseUrl}#organization`,
       name: '경기아트콜렉티브 협동조합',
       url: baseUrl,
     },
-    email: artist.contact?.includes('@') ? sanitizeJsonLdValue(artist.contact) : undefined,
+    email: artist.contact?.includes('@') ? sanitizeJsonLd(artist.contact) : undefined,
     workLocation: {
       '@type': 'Place',
       name: '경기도',

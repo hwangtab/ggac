@@ -136,7 +136,9 @@ const TicketingCard = ({ ticketing }: TicketingCardProps) => {
                 const parent = target.parentElement
                 if (parent) {
                   // innerHTML 대신 안전한 DOM 조작 사용
-                  parent.innerHTML = '' // 기존 내용 제거
+                  while (parent.firstChild) {
+                    parent.removeChild(parent.firstChild);
+                  }
                   
                   const fallbackDiv = document.createElement('div')
                   fallbackDiv.className = 'w-full h-full bg-gradient-to-br from-primary-100 to-accent-100 flex items-center justify-center'
@@ -150,7 +152,6 @@ const TicketingCard = ({ ticketing }: TicketingCardProps) => {
                   
                   const textDiv = document.createElement('div')
                   textDiv.className = 'text-primary-600 font-medium'
-                  // XSS 방지를 위해 textContent 사용 (HTML 이스케이프 자동 적용)
                   textDiv.textContent = ticketing.platform || '예매처'
                   
                   centerDiv.appendChild(iconDiv)
