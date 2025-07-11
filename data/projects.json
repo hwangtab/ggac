@@ -91,5 +91,27 @@
         "title": "뉴스아트",
         "url": "https://www.news-art.co.kr/news/article.html?no=32801"
       }]
+  },
+  {
+    "id": "project-005",
+    "slug": "PantyPort-Rock-Festival",
+    "title": "PantyPort Rock Festival",
+    "category": "공연·전시",
+    "publishedDate": "2025-08-02",
+    "coverImage": "/images/projects/msn.png",
+    "description": "펜타포트 락페스티벌이 열리는 그날, 펜타에 초대받지 못한 뮤지션들과 펜타에 갈 수 없는 관객들을 위한 지하 언더그라운드 락페스티벌, 팬티포트가 열린다.",
+    "gallery": null,
+    "videoUrl": null,
+    "artistIds": ["artist-001"],
+    "ticketing": [
+      {
+        "platform": "네이버 예약",
+        "url": "https://booking.naver.com/booking/5/bizes/1442738/items/6896949/?preview=1&startDateTime=2025-08-02T00%3A00%3A00%2B09%3A00",
+        "available": true,
+        "startDate": "2025-08-02",
+        "endDate": "2025-08-02"
+      }
+    ],
+    "relatedArticles": null
   }
 ]
