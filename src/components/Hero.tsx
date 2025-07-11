@@ -1,270 +1,254 @@
 'use client'
 
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
+import OptimizedHeroImage from './OptimizedHeroImage'
+import LiquidMetalParticles from './LiquidMetalParticles'
 
 const Hero = () => {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const mousePosition = useRef({ x: 0, y: 0 })
-  const animationFrameId = useRef<number | null>(null)
-  const particlesRef = useRef<Particle[]>([])
-  const shootingStarsRef = useRef<ShootingStar[]>([])
-  const lastFrameTime = useRef(0)
-
-  // 성능 최적화: throttle된 마우스 이벤트 핸들러
-  const throttledMouseMove = useCallback((event: MouseEvent) => {
-    const now = Date.now()
-    if (!lastFrameTime.current || now - lastFrameTime.current >= 16) {
-      mousePosition.current = { x: event.clientX, y: event.clientY }
-      lastFrameTime.current = now
+  const [isLoaded, setIsLoaded] = useState(false)
+  const [showText, setShowText] = useState(false)
+  const [cssProperties, setCssProperties] = useState<{[key: string]: string}>({})
+  const [dimensions, setDimensions] = useState({ width: 0, height: 0 })
+  
+  // CSS 커스텀 프로퍼티 업데이트
+  const updateCSSProperties = useCallback((width: number, height: number) => {
+    const properties: {[key: string]: string} = {}
+    
+    // 반응형 그라데이션 크기
+    if (width > 1200) {
+      properties['--gradient-size'] = '1200px 750px'
+      properties['--gradient-alpha-start'] = '0.85'
+      properties['--gradient-alpha-mid'] = '0.65'
+    } else if (width > 768) {
+      properties['--gradient-size'] = '900px 600px'
+      properties['--gradient-alpha-start'] = '0.85'
+      properties['--gradient-alpha-mid'] = '0.65'
+    } else {
+      properties['--gradient-size'] = '500px 400px'
+      properties['--gradient-alpha-start'] = '0.90'
+      properties['--gradient-alpha-mid'] = '0.70'
     }
+    
+    // 글래스모피즘 블러 강도
+    properties['--glassmorphism-blur'] = width > 768 ? '12px' : '8px'
+    properties['--glassmorphism-saturation'] = width > 768 ? '180%' : '160%'
+    properties['--glassmorphism-bg-alpha'] = width > 768 ? '0.12' : '0.15'
+    
+    setCssProperties(properties)
   }, [])
 
-  interface Particle {
-    x: number; y: number; z: number; vx: number; vy: number;
-    size: number; alpha: number; twinkleSpeed: number; twinklePhase: number;
-  }
+  // 파티클 수 계산
+  const getOptimalParticleCount = useCallback((width: number, height: number) => {
+    const area = width * height
+    const density = area / 15000 // Phase 2: 밀도 증가로 더 많은 파티클
+    let baseCount = Math.min(Math.max(Math.floor(density), 150), 500) // 80-300 → 150-500
+    
+    // 성능이 좋지 않은 기기 감지
+    if (navigator.hardwareConcurrency && navigator.hardwareConcurrency < 4) {
+      baseCount = Math.floor(baseCount * 0.6)
+    }
+    
+    return Math.min(baseCount, 250) // WebGL 최대 250개
+  }, [])
 
-  interface ShootingStar {
-    x: number; y: number; vx: number; vy: number; size: number;
-    alpha: number; length: number; life: number;
-  }
+  // 화면 크기 업데이트
+  const updateDimensions = useCallback(() => {
+    const width = window.innerWidth
+    const height = window.innerHeight
+    setDimensions({ width, height })
+    updateCSSProperties(width, height)
+  }, [updateCSSProperties])
 
   useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
-    let particles: Particle[] = []
-    let shootingStars: ShootingStar[] = []
-
-    // 성능 최적화: 디바이스별 파티클 수 동적 조정
-    const getOptimalParticleCount = (width: number, height: number) => {
-      const area = width * height
-      const density = area / 15000 // 밀도 조정
-      const devicePixelRatio = Math.min(window.devicePixelRatio || 1, 2)
-      
-      // 화면 크기와 기기 성능에 따라 파티클 수 조정
-      let baseCount = Math.min(Math.max(Math.floor(density), 50), 200)
-      
-      // 고해상도 디스플레이에서는 파티클 수 약간 증가
-      if (devicePixelRatio > 1) {
-        baseCount = Math.floor(baseCount * 1.2)
-      }
-      
-      // 성능이 좋지 않은 기기 감지 (대략적)
-      if (navigator.hardwareConcurrency && navigator.hardwareConcurrency < 4) {
-        baseCount = Math.floor(baseCount * 0.7)
-      }
-      
-      return Math.min(baseCount, 150) // 최대 150개로 제한
-    }
-
-    const setupAnimation = () => {
-      if (animationFrameId.current) {
-        cancelAnimationFrame(animationFrameId.current)
-        animationFrameId.current = null
-      }
-
-      // 모바일에서는 애니메이션 비활성화
-      if (window.innerWidth < 768) {
-        window.removeEventListener('mousemove', throttledMouseMove)
-        return
-      }
-
-      // 성능 최적화: 고해상도 디스플레이 대응
-      const pixelRatio = Math.min(window.devicePixelRatio || 1, 2)
-      const width = window.innerWidth
-      const height = window.innerHeight
-      
-      canvas.width = width * pixelRatio
-      canvas.height = height * pixelRatio
-      canvas.style.width = width + 'px'
-      canvas.style.height = height + 'px'
-      
-      ctx.scale(pixelRatio, pixelRatio)
-      
-      window.addEventListener('mousemove', throttledMouseMove, { passive: true })
-
-      // 성능 최적화: 파티클 수 동적 조정
-      const numParticles = getOptimalParticleCount(width, height)
-      
-      particles = []
-      shootingStars = []
-
-      for (let i = 0; i < numParticles; i++) {
-        particles.push({
-          x: Math.random() * width,
-          y: Math.random() * height,
-          z: Math.random() * width,
-          vx: (Math.random() - 0.5) * 0.1,
-          vy: (Math.random() - 0.5) * 0.1,
-          size: Math.random() * 1.5 + 0.5,
-          alpha: 0,
-          twinkleSpeed: Math.random() * 0.03 + 0.01,
-          twinklePhase: Math.random() * Math.PI * 2,
-        })
-      }
-
-      // 성능 최적화: 유성 생성 빈도 조정
-      const createShootingStar = () => {
-        const maxStars = width > 1200 ? 3 : 2 // 화면 크기에 따라 최대 유성 수 조정
-        if (Math.random() < 0.003 && shootingStars.length < maxStars) {
-          const fromLeft = Math.random() > 0.5
-          shootingStars.push({
-            x: fromLeft ? 0 : width,
-            y: Math.random() * height * 0.6,
-            vx: (fromLeft ? 1 : -1) * (Math.random() * 8 + 8),
-            vy: Math.random() * 4 + 2,
-            size: Math.random() * 1.5 + 1,
-            alpha: 1,
-            length: Math.random() * 120 + 80,
-            life: 80,
-          })
-        }
-      }
-
-      // 성능 최적화: RAF 최적화 및 60fps 타겟팅
-      const targetFPS = 60
-      const targetFrameTime = 1000 / targetFPS
-
-      const animate = (currentTime: number) => {
-        // 프레임 레이트 제한
-        if (currentTime - lastFrameTime.current < targetFrameTime) {
-          animationFrameId.current = requestAnimationFrame(animate)
-          return
-        }
-        lastFrameTime.current = currentTime
-
-        ctx.clearRect(0, 0, width, height)
-        
-        // 성능 최적화: parallax 계산 최적화
-        const parallaxX = (mousePosition.current.x - width * 0.5) * 0.025
-        const parallaxY = (mousePosition.current.y - height * 0.5) * 0.025
-
-        // 성능 최적화: 파티클 렌더링 최적화
-        ctx.fillStyle = 'rgba(147, 197, 253, 0.8)'
-        
-        particles.forEach(p => {
-          p.z -= 0.3 // 속도 약간 감소
-          if (p.z <= 0) {
-            p.x = Math.random() * width
-            p.y = Math.random() * height
-            p.z = width
-          }
-          
-          const scale = width / (width + p.z)
-          const x2d = p.x * scale + (width * 0.5) * (1 - scale) + parallaxX * scale
-          const y2d = p.y * scale + (height * 0.5) * (1 - scale) + parallaxY * scale
-          const size = p.size * scale
-          
-          p.twinklePhase += p.twinkleSpeed
-          const twinkle = Math.abs(Math.sin(p.twinklePhase))
-          p.alpha = Math.max(0, Math.min(1, p.alpha + 0.05 * (twinkle > 0.5 ? 1 : -1)))
-          
-          // 성능 최적화: globalAlpha를 사용하여 fillStyle 설정 최소화
-          ctx.globalAlpha = p.alpha * 0.8
-          ctx.beginPath()
-          ctx.arc(x2d, y2d, size, 0, Math.PI * 2)
-          ctx.fill()
-          
-          p.x += p.vx
-          p.y += p.vy
-          if (p.x < 0 || p.x > width) p.vx *= -1
-          if (p.y < 0 || p.y > height) p.vy *= -1
-        })
-
-        ctx.globalAlpha = 1
-
-        createShootingStar()
-        
-        // 성능 최적화: 유성 렌더링 개선
-        shootingStars.forEach((s, index) => {
-          s.x += s.vx
-          s.y += s.vy
-          s.life -= 1
-          s.alpha = s.life / 80
-          
-          if (s.life <= 0) {
-            shootingStars.splice(index, 1)
-            return
-          }
-          
-          const gradient = ctx.createLinearGradient(
-            s.x, s.y, 
-            s.x - s.vx * (s.length / s.vx), 
-            s.y - s.vy * (s.length / s.vx)
-          )
-          gradient.addColorStop(0, `rgba(255, 255, 255, ${s.alpha})`)
-          gradient.addColorStop(1, 'rgba(255, 255, 255, 0)')
-          
-          ctx.strokeStyle = gradient
-          ctx.lineWidth = s.size
-          ctx.beginPath()
-          ctx.moveTo(s.x, s.y)
-          ctx.lineTo(s.x - s.vx * (s.length / s.vx), s.y - s.vy * (s.length / s.vx))
-          ctx.stroke()
-        })
-
-        animationFrameId.current = requestAnimationFrame(animate)
-      }
-      
-      animate(0)
-    }
-
-    // 성능 최적화: 리사이즈 이벤트 debounce
-    const debouncedResize = debounce(setupAnimation, 250)
+    // 진입 애니메이션 시퀀스
+    const timer1 = setTimeout(() => setIsLoaded(true), 100)
+    const timer2 = setTimeout(() => setShowText(true), 600)
+    
+    // 초기 화면 크기 설정
+    updateDimensions()
+    
+    // 리사이즈 이벤트 리스너
+    const debouncedResize = debounce(updateDimensions, 250)
     window.addEventListener('resize', debouncedResize, { passive: true })
-    setupAnimation()
 
     return () => {
+      clearTimeout(timer1)
+      clearTimeout(timer2)
       window.removeEventListener('resize', debouncedResize)
-      window.removeEventListener('mousemove', throttledMouseMove)
-      if (animationFrameId.current) {
-        cancelAnimationFrame(animationFrameId.current)
-      }
     }
-  }, [throttledMouseMove])
+  }, [updateDimensions])
 
   return (
     <section 
       className="relative min-h-screen flex items-center justify-center overflow-hidden"
-      style={{ background: 'linear-gradient(135deg, #020617 0%, #0f172a 50%, #1e293b 100%)' }}
+      style={cssProperties}
     >
-      <canvas
-        ref={canvasRef}
-        className="absolute inset-0 w-full h-full hidden md:block"
+      {/* Layer 1: 배경 이미지 - 최적화된 이미지 컴포넌트 */}
+      <div className="absolute inset-0" style={{ zIndex: 1 }}>
+        <OptimizedHeroImage
+          alt="경기아트콜렉티브 협동조합 창립총회"
+          priority
+          style={{ 
+            filter: 'contrast(1.1) brightness(1.05)',
+            willChange: 'transform',
+            backfaceVisibility: 'hidden'
+          }}
+        />
+      </div>
+      
+      {/* Layer 2: 전체 다크 오버레이 */}
+      <div 
+        className="absolute inset-0"
         style={{ 
-          willChange: 'transform', // GPU 가속 힌트
-          transform: 'translate3d(0, 0, 0)' // GPU 레이어 강제 생성
+          zIndex: 10,
+          background: 'linear-gradient(135deg, rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0.3) 50%, rgba(0, 0, 0, 0.4) 100%)',
+          willChange: 'transform',
+          backfaceVisibility: 'hidden'
         }}
       />
-      <div className="absolute inset-0 bg-gradient-to-br from-primary-900/30 to-accent-900/30 mix-blend-soft-light" />
+      
+      {/* Layer 3: 중앙 집중형 그라데이션 오버레이 - CSS 커스텀 프로퍼티 활용 */}
+      <div 
+        className="absolute inset-0"
+        style={{ 
+          zIndex: 15,
+          background: `radial-gradient(
+            ellipse var(--gradient-size, 900px 600px) at center,
+            rgba(0, 0, 0, var(--gradient-alpha-start, 0.85)) 0%,
+            rgba(0, 0, 0, var(--gradient-alpha-mid, 0.65)) 30%,
+            rgba(0, 0, 0, 0.4) 60%,
+            rgba(0, 0, 0, 0.2) 80%,
+            transparent 100%
+          )`,
+          willChange: 'transform',
+          backfaceVisibility: 'hidden'
+        }}
+      />
+      
+      {/* Layer 5: 액체 금속 파티클 애니메이션 - 중력과 자력의 물리 시뮬레이션 */}
+      {dimensions.width > 0 && dimensions.height > 0 && (
+        <div className="absolute inset-0" style={{ zIndex: 30, pointerEvents: 'none' }}>
+          <LiquidMetalParticles
+            particleCount={Math.min(getOptimalParticleCount(dimensions.width, dimensions.height), 120)}
+            width={dimensions.width}
+            height={dimensions.height}
+          />
+        </div>
+      )}
 
-      <div className="relative z-10 text-center text-white px-4">
-        <h1 className="heading-primary mb-6 animate-fade-in">
-          경계 없는 상상,<br />
-          함께 만드는 울림
-        </h1>
-        <p className="text-xl md:text-2xl mb-8 max-w-2xl mx-auto leading-relaxed animate-slide-up">
-          예술로 숨 쉬고, 협동으로 길을 내는<br />
-          경기아트콜렉티브 협동조합
-        </p>
-        <div className="flex flex-col sm:flex-row gap-4 justify-center items-center animate-slide-up">
-          <Link 
-            href="/about"
-            className="btn-primary bg-white text-gray-900 hover:bg-gray-100"
+      {/* Layer 4: 글래스모피즘 텍스트 컨테이너 */}
+      <div className="relative text-center text-white px-4" style={{ zIndex: 20 }}>
+        <div 
+          className={`glass-hero-container max-w-6xl mx-auto rounded-3xl transition-all duration-1200 ease-out
+            px-6 py-6 sm:px-10 sm:py-8 md:px-12 md:py-9 lg:px-16 lg:py-11
+            mx-2 sm:mx-4 md:mx-auto
+            rounded-2xl sm:rounded-3xl
+            ${
+            isLoaded 
+              ? 'opacity-100 translate-y-0 scale-100' 
+              : 'opacity-0 translate-y-5 scale-95'
+          }`}
+          style={{
+            backdropFilter: isLoaded ? `blur(var(--glassmorphism-blur, 12px)) saturate(var(--glassmorphism-saturation, 180%))` : 'blur(0px)',
+            background: isLoaded ? `linear-gradient(
+              135deg,
+              rgba(255, 255, 255, var(--glassmorphism-bg-alpha, 0.12)) 0%,
+              rgba(255, 255, 255, calc(var(--glassmorphism-bg-alpha, 0.12) * 0.67)) 50%,
+              rgba(255, 255, 255, calc(var(--glassmorphism-bg-alpha, 0.12) * 0.42)) 100%
+            )` : 'transparent',
+            border: isLoaded ? '1px solid rgba(255, 255, 255, 0.2)' : '1px solid transparent',
+            boxShadow: isLoaded ? `
+              0 8px 32px rgba(0, 0, 0, 0.3),
+              0 2px 16px rgba(0, 0, 0, 0.2),
+              inset 0 1px 0 rgba(255, 255, 255, 0.1)
+            ` : 'none',
+            willChange: 'transform',
+            transform: 'translateZ(0)'
+          }}
+        >
+          <h1 
+            className={`heading-primary mb-4 sm:mb-6 transition-all duration-1000 ease-out delay-300 ${
+              showText 
+                ? 'opacity-100 translate-y-0' 
+                : 'opacity-0 translate-y-4'
+            }`}
+            style={{
+              color: 'rgba(255, 255, 255, 0.95)',
+              textShadow: `
+                0 2px 4px rgba(0, 0, 0, 0.8),
+                0 1px 2px rgba(0, 0, 0, 0.6)
+              `,
+              fontWeight: 700,
+              letterSpacing: '-0.02em',
+              lineHeight: 1.2
+            }}
           >
-            우리의 이야기
-          </Link>
-          <Link 
-            href="/connect"
-            className="btn-secondary border-white text-white hover:bg-white/10"
+            경계 없는 상상,<br />
+            함께 만드는 울림
+          </h1>
+          <p 
+            className={`text-lg sm:text-xl md:text-2xl mb-6 sm:mb-8 max-w-2xl mx-auto leading-relaxed transition-all duration-1000 ease-out delay-500 ${
+              showText 
+                ? 'opacity-100 translate-y-0' 
+                : 'opacity-0 translate-y-4'
+            }`}
+            style={{
+              color: 'rgba(255, 255, 255, 0.85)',
+              textShadow: `
+                0 1px 3px rgba(0, 0, 0, 0.7),
+                0 1px 2px rgba(0, 0, 0, 0.5)
+              `,
+              fontWeight: 400,
+              letterSpacing: '-0.01em',
+              lineHeight: 1.4
+            }}
           >
-            조합 가입하기
-          </Link>
+            예술로 숨 쉬고, 협동으로 길을 내는<br />
+            경기아트콜렉티브 협동조합
+          </p>
+          <div className={`flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center transition-all duration-1000 ease-out delay-700 ${
+              showText 
+                ? 'opacity-100 translate-y-0' 
+                : 'opacity-0 translate-y-4'
+            }`}>
+            <Link 
+              href="/about"
+              className="btn-glass-primary px-6 py-2.5 sm:px-8 sm:py-3 rounded-xl font-medium transition-all duration-300 hover:-translate-y-0.5 hover:shadow-2xl text-sm sm:text-base w-full sm:w-auto text-center hover:brightness-110"
+              style={{
+                background: `linear-gradient(
+                  135deg,
+                  rgba(255, 255, 255, 0.25) 0%,
+                  rgba(255, 255, 255, 0.15) 100%
+                )`,
+                backdropFilter: 'blur(8px)',
+                border: '1px solid rgba(255, 255, 255, 0.3)',
+                color: 'white',
+                boxShadow: `
+                  0 4px 16px rgba(0, 0, 0, 0.2),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.2)
+                `
+              }}
+            >
+              우리의 이야기
+            </Link>
+            <Link 
+              href="/connect"
+              className="btn-glass-secondary px-6 py-2.5 sm:px-8 sm:py-3 rounded-xl font-medium transition-all duration-300 hover:-translate-y-0.5 text-sm sm:text-base w-full sm:w-auto text-center hover:bg-white/10 hover:border-white/60"
+              style={{
+                background: 'transparent',
+                backdropFilter: 'blur(4px)',
+                border: '2px solid rgba(255, 255, 255, 0.4)',
+                color: 'rgba(255, 255, 255, 0.9)',
+                boxShadow: `
+                  0 4px 16px rgba(0, 0, 0, 0.15),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.1)
+                `
+              }}
+            >
+              조합 가입하기
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -277,18 +261,7 @@ const Hero = () => {
   )
 }
 
-// 성능 최적화: 유틸리티 함수들
-function throttle<T extends (...args: any[]) => any>(func: T, limit: number): T {
-  let inThrottle: boolean
-  return ((...args: any[]) => {
-    if (!inThrottle) {
-      func(...args)
-      inThrottle = true
-      setTimeout(() => inThrottle = false, limit)
-    }
-  }) as T
-}
-
+// 유틸리티 함수
 function debounce<T extends (...args: any[]) => any>(func: T, delay: number): T {
   let timeoutId: NodeJS.Timeout
   return ((...args: any[]) => {
