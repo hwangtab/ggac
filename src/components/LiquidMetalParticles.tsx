@@ -10,11 +10,11 @@ interface LiquidMetalParticlesProps {
 
 const LiquidMetalParticles = ({ particleCount, width, height }: LiquidMetalParticlesProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const glRef = useRef<WebGLRenderingContext | null>(null)
+  const glRef = useRef<WebGL2RenderingContext | null>(null)
   const programRef = useRef<WebGLProgram | null>(null)
   
-  // Phase 3: WebGL 2.0 Transform Feedback 지원
-  const isWebGL2Ref = useRef<boolean>(false)
+  // WebGL 2.0 Transform Feedback 지원
+  const isWebGL2Ref = useRef<boolean>(true)
   const transformFeedbackRef = useRef<WebGLTransformFeedback | null>(null)
   const updateProgramRef = useRef<WebGLProgram | null>(null)
   const renderProgramRef = useRef<WebGLProgram | null>(null)
@@ -352,25 +352,25 @@ const LiquidMetalParticles = ({ particleCount, width, height }: LiquidMetalParti
     }
   `
 
-  // Stage 2: 고도화된 액체 금속 물리 시뮬레이션 Vertex Shader (WebGL 1.0용)
-  const vertexShaderSource = `
+  // WebGL 2.0 전용 Vertex Shader
+  const vertexShaderSource = `#version 300 es
     precision mediump float;
-    attribute vec2 a_position;
-    attribute vec2 a_velocity;
-    attribute float a_mass;
-    attribute float a_metallic;
-    attribute float a_density;      // Stage 3: 밀도
-    attribute float a_temperature;  // Stage 3: 온도
-    uniform mediump vec2 u_resolution;
-    uniform mediump vec2 u_mouse;
-    uniform mediump float u_time;
-    uniform mediump float u_gravity;
-    uniform mediump float u_magneticForce;
-    varying float v_metallic;
-    varying vec2 v_velocity;
-    varying float v_distanceToMouse;
-    varying float v_density;        // Stage 3: 밀도 전달
-    varying float v_temperature;    // Stage 3: 온도 전달
+    in vec2 a_position;
+    in vec2 a_velocity;
+    in float a_mass;
+    in float a_metallic;
+    in float a_density;
+    in float a_temperature;
+    uniform vec2 u_resolution;
+    uniform vec2 u_mouse;
+    uniform float u_time;
+    uniform float u_gravity;
+    uniform float u_magneticForce;
+    out float v_metallic;
+    out vec2 v_velocity;
+    out float v_distanceToMouse;
+    out float v_density;
+    out float v_temperature;
     
     // 고급 노이즈 함수 (자연스러운 액체 흐름용)
     float noise(vec2 p) {
@@ -1090,95 +1090,68 @@ const LiquidMetalParticles = ({ particleCount, width, height }: LiquidMetalParti
       return false
     }
 
-    console.log('🔄 Attempting WebGL initialization...')
+    console.log('🔄 Creating WebGL 2.0 context...')
     
-    // Phase 3: WebGL 2.0 우선 시도, 실패 시 WebGL 1.0으로 폴백
-    let gl = canvas.getContext('webgl2') as WebGL2RenderingContext | null
-    let isWebGL2 = false
+    const gl = canvas.getContext('webgl2')
+    if (!gl) {
+      console.error('❌ WebGL 2.0 not supported')
+      return false
+    }
     
-    if (gl && 'createTransformFeedback' in gl) {
-      console.log('✅ WebGL 2.0 context created - Transform Feedback available!')
-      isWebGL2 = true
-    } else {
-      console.log('⚠️ WebGL 2.0 not available, falling back to WebGL 1.0')
-      gl = (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')) as WebGLRenderingContext
-      
-      if (!gl || !('useProgram' in gl)) {
-        console.error('❌ WebGL not supported or not available')
-        console.log('Browser WebGL info:', {
-          webgl: !!canvas.getContext('webgl'),
-          experimental: !!canvas.getContext('experimental-webgl'),
-          webgl2: !!canvas.getContext('webgl2'),
-          userAgent: navigator.userAgent
-        })
-        return false
-      }
+    if (!('createTransformFeedback' in gl)) {
+      console.error('❌ Transform Feedback not available in WebGL 2.0 context')
+      return false
     }
 
-    console.log(`✅ WebGL ${isWebGL2 ? '2.0' : '1.0'} context created successfully`)
-    const webglContext = gl as WebGLRenderingContext
-    glRef.current = webglContext
-    isWebGL2Ref.current = isWebGL2
+    console.log('✅ WebGL 2.0 context created with Transform Feedback support')
+    glRef.current = gl
+    isWebGL2Ref.current = true
     
-    if (isWebGL2) {
-      // Phase 3: WebGL 2.0 Transform Feedback 프로그램 생성
-      console.log('🔄 Creating WebGL 2.0 Transform Feedback programs...')
-      const gl2 = gl as WebGL2RenderingContext
+    // WebGL 2.0 Transform Feedback 프로그램 생성
+    console.log('🔄 Creating WebGL 2.0 Transform Feedback programs...')
       
-      // 업데이트 프로그램 (Transform Feedback용)
-      const updateProgram = createUpdateProgram(gl2)
-      if (!updateProgram) {
-        console.error('❌ Failed to create update program')
-        return false
-      }
-      updateProgramRef.current = updateProgram
-      
-      // 렌더링 프로그램
-      const renderProgram = createRenderProgram(gl2)
-      if (!renderProgram) {
-        console.error('❌ Failed to create render program')
-        return false
-      }
-      renderProgramRef.current = renderProgram
-      
-      // Transform Feedback 객체 생성
-      const transformFeedback = gl2.createTransformFeedback()
-      if (!transformFeedback) {
-        console.error('❌ Failed to create transform feedback')
-        return false
-      }
-      transformFeedbackRef.current = transformFeedback
-      
-      // Transform Feedback 버퍼 초기화
-      const success = initTransformFeedbackBuffers(gl2)
-      if (!success) {
-        console.error('❌ Failed to initialize Transform Feedback buffers')
-        return false
-      }
-      
-      console.log('✅ WebGL 2.0 Transform Feedback system initialized successfully')
-    } else {
-      // WebGL 1.0 폴백
-      console.log('🔄 Creating WebGL 1.0 fallback program...')
-      const program = createProgram(webglContext)
-      if (!program) {
-        console.error('❌ Failed to create shader program')
-        return false
-      }
-      programRef.current = program
-      webglContext.useProgram(program)
-      console.log('✅ WebGL 1.0 fallback program created successfully')
+    // 업데이트 프로그램 (Transform Feedback용)
+    const updateProgram = createUpdateProgram(gl)
+    if (!updateProgram) {
+      console.error('❌ Failed to create update program')
+      return false
     }
+    updateProgramRef.current = updateProgram
+      
+    // 렌더링 프로그램
+    const renderProgram = createRenderProgram(gl)
+    if (!renderProgram) {
+      console.error('❌ Failed to create render program')
+      return false
+    }
+    renderProgramRef.current = renderProgram
+      
+    // Transform Feedback 객체 생성
+    const transformFeedback = gl.createTransformFeedback()
+    if (!transformFeedback) {
+      console.error('❌ Failed to create transform feedback')
+      return false
+    }
+    transformFeedbackRef.current = transformFeedback
+      
+    // Transform Feedback 버퍼 초기화
+    const success = initTransformFeedbackBuffers(gl)
+    if (!success) {
+      console.error('❌ Failed to initialize Transform Feedback buffers')
+      return false
+    }
+      
+    console.log('✅ WebGL 2.0 Transform Feedback system initialized successfully')
 
     canvas.width = width
     canvas.height = height
-    webglContext.viewport(0, 0, width, height)
+    gl.viewport(0, 0, width, height)
 
     // Stage 4: 고급 블렌딩 설정 (아트 효과용)
-    webglContext.enable(webglContext.BLEND)
+    gl.enable(gl.BLEND)
     // 가산 블렌딩으로 글로우 효과 강화
-    webglContext.blendFunc(webglContext.SRC_ALPHA, webglContext.ONE_MINUS_SRC_ALPHA)
-    webglContext.blendEquation(webglContext.FUNC_ADD)
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+    gl.blendEquation(gl.FUNC_ADD)
 
     console.log('✅ WebGL initialization completed successfully')
     return true
@@ -1693,16 +1666,16 @@ const LiquidMetalParticles = ({ particleCount, width, height }: LiquidMetalParti
   useEffect(() => {
     console.log('🌊 LiquidMetalParticles 초기화 시작', { width, height, particleCount })
     if (width < 768) {
-      console.log('📱 모바일에서 LiquidMetal 비활성화')
+      console.log('📱 모바일 화면에서 LiquidMetalParticles 비활성화')
       return
     }
 
     if (!initWebGL()) {
-      console.warn('❌ LiquidMetal WebGL 초기화 실패')
+      console.warn('❌ LiquidMetalParticles WebGL 2.0 초기화 실패')
       return
     }
     
-    console.log('✅ LiquidMetal WebGL 초기화 성공')
+    console.log('✅ LiquidMetalParticles WebGL 2.0 초기화 성공')
 
     initParticles()
     animate()
@@ -1715,7 +1688,7 @@ const LiquidMetalParticles = ({ particleCount, width, height }: LiquidMetalParti
       }
       window.removeEventListener('mousemove', handleMouseMove)
     }
-  }, [initWebGL, initParticles, animate, handleMouseMove, width, height, particleCount])
+  }, [width, height, particleCount, initWebGL, initParticles, animate, handleMouseMove])
 
   return (
     <canvas

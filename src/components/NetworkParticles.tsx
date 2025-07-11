@@ -347,7 +347,7 @@ const NetworkParticles = ({ particleCount, width, height }: NetworkParticlesProp
       }
       window.removeEventListener('mousemove', handleMouseMove)
     }
-  }, [initWebGL, initParticles, animate, handleMouseMove, width])
+  }, [width, height, particleCount, initWebGL, initParticles, animate, handleMouseMove, drawConnections, render])
 
   return (
     <canvas
