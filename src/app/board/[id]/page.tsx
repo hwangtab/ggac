@@ -74,17 +74,32 @@ export default function PostDetailPage() {
         setPost(postData);
 
         // 작성자 프로필 가져오기
+        console.debug(`[PostDetail] Fetching author profile for user ID: ${postData.author_id}`);
         const { data: authorData, error: authorError } = await supabase
-          .from('member_profiles')
-          .select('id, display_name, profile_image_url')
+          .from('public_profiles')
+          .select('id, display_name')
           .eq('id', postData.author_id)
           .single();
 
-        if (!authorError && authorData) {
-          setAuthorProfile(authorData);
+        if (authorError) {
+          console.warn(`[PostDetail] Failed to fetch author profile: ${authorError.message}`);
+          // 기본 프로필 설정
+          setAuthorProfile({
+            id: postData.author_id,
+            display_name: '알 수 없는 사용자',
+            profile_image_url: undefined
+          });
+        } else {
+          console.debug('[PostDetail] Author profile loaded successfully');
+          setAuthorProfile(authorData || {
+            id: postData.author_id,
+            display_name: '알 수 없는 사용자',
+            profile_image_url: undefined
+          });
         }
 
         setLoading(false);
+        console.debug('[PostDetail] Data loading completed');
       } catch (e) {
         console.error('Error fetching data:', e);
         setError('데이터를 불러오는 중 오류가 발생했습니다.');
