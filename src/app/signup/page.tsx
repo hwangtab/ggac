@@ -257,7 +257,7 @@ export default function SignupPage() {
         setMessage('가입 신청이 완료되었습니다! 안내 페이지로 이동합니다...');
         // 미들웨어 처리 시간 확보
         await new Promise(resolve => setTimeout(resolve, 200));
-        router.push('/register/submitted');
+        router.push('/register/pending');
       }
     } catch (error) {
       setMessage('조합원 가입 중 예상치 못한 오류가 발생했습니다.');
