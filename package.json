@@ -17,6 +17,7 @@
   "dependencies": {
     "@supabase/auth-helpers-nextjs": "^0.10.0",
     "@supabase/supabase-js": "^2.50.3",
+    "@types/webgl2": "^0.0.11",
     "cheerio": "^1.1.0",
     "next": "^14.2.30",
     "react": "^18",
