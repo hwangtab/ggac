@@ -12,6 +12,29 @@
   animation: shake 0.6s ease-in-out;
 }
 
+@keyframes cssParticleFloat {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.7;
+  }
+  25% {
+    transform: translate3d(15px, -20px, 0) scale(1.2);
+    opacity: 1;
+  }
+  50% {
+    transform: translate3d(-8px, -35px, 0) scale(0.9);
+    opacity: 0.8;
+  }
+  75% {
+    transform: translate3d(-18px, -20px, 0) scale(1.1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.7;
+  }
+}
+
 @layer base {
   html {
     scroll-behavior: smooth;

@@ -3,7 +3,9 @@
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import OptimizedHeroImage from './OptimizedHeroImage'
-import LiquidMetalParticles from './LiquidMetalParticles'
+import AdaptiveParticles from './AdaptiveParticles'
+import ErrorBoundary from './ErrorBoundary'
+import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 
 const Hero = () => {
   const [isLoaded, setIsLoaded] = useState(false)
@@ -11,9 +13,20 @@ const Hero = () => {
   const [cssProperties, setCssProperties] = useState<{[key: string]: string}>({})
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 })
   
-  // CSS 커스텀 프로퍼티 업데이트
+  // 접근성: 사용자의 동작 줄이기 설정 확인
+  const prefersReducedMotion = usePrefersReducedMotion()
+  
+  // 모바일 디바이스 감지
+  const isMobileDevice = useCallback(() => {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+           (window.innerWidth <= 768) ||
+           ('ontouchstart' in window)
+  }, [])
+
+  // CSS 커스텀 프로퍼티 업데이트 - 모바일 최적화 강화
   const updateCSSProperties = useCallback((width: number, height: number) => {
     const properties: {[key: string]: string} = {}
+    const isMobile = isMobileDevice()
     
     // 반응형 그라데이션 크기
     if (width > 1200) {
@@ -30,27 +43,49 @@ const Hero = () => {
       properties['--gradient-alpha-mid'] = '0.70'
     }
     
-    // 글래스모피즘 블러 강도
-    properties['--glassmorphism-blur'] = width > 768 ? '12px' : '8px'
-    properties['--glassmorphism-saturation'] = width > 768 ? '180%' : '160%'
-    properties['--glassmorphism-bg-alpha'] = width > 768 ? '0.12' : '0.15'
+    // 모바일에서 블러 효과 최적화 (GPU 부하 감소)
+    if (isMobile) {
+      properties['--glassmorphism-blur'] = width > 768 ? '8px' : '4px' // 모바일에서 블러 감소
+      properties['--glassmorphism-saturation'] = '150%' // 채도 감소로 성능 개선
+      properties['--glassmorphism-bg-alpha'] = width > 768 ? '0.18' : '0.22' // 투명도 증가로 블러 의존도 감소
+    } else {
+      properties['--glassmorphism-blur'] = width > 768 ? '12px' : '8px'
+      properties['--glassmorphism-saturation'] = width > 768 ? '180%' : '160%'
+      properties['--glassmorphism-bg-alpha'] = width > 768 ? '0.12' : '0.15'
+    }
     
     setCssProperties(properties)
-  }, [])
+  }, [isMobileDevice])
 
-  // 파티클 수 계산
+  // 파티클 수 계산 - 모바일 최적화 강화
   const getOptimalParticleCount = useCallback((width: number, height: number) => {
     const area = width * height
-    const density = area / 15000 // Phase 2: 밀도 증가로 더 많은 파티클
-    let baseCount = Math.min(Math.max(Math.floor(density), 150), 500) // 80-300 → 150-500
+    const isMobile = isMobileDevice()
+    
+    // 모바일에서 파티클 수 대폭 감소
+    if (isMobile) {
+      const mobileDensity = area / 40000 // 모바일: 밀도 대폭 감소
+      let mobileCount = Math.min(Math.max(Math.floor(mobileDensity), 20), 60) // 20-60개로 제한
+      
+      // 작은 화면에서 더 감소
+      if (width < 480) {
+        mobileCount = Math.floor(mobileCount * 0.5)
+      }
+      
+      return Math.min(mobileCount, 40) // 모바일 최대 40개
+    }
+    
+    // 데스크톱
+    const density = area / 15000
+    let baseCount = Math.min(Math.max(Math.floor(density), 150), 500)
     
     // 성능이 좋지 않은 기기 감지
     if (navigator.hardwareConcurrency && navigator.hardwareConcurrency < 4) {
       baseCount = Math.floor(baseCount * 0.6)
     }
     
-    return Math.min(baseCount, 250) // WebGL 최대 250개
-  }, [])
+    return Math.min(baseCount, 250)
+  }, [isMobileDevice])
 
   // 화면 크기 업데이트
   const updateDimensions = useCallback(() => {
@@ -61,9 +96,9 @@ const Hero = () => {
   }, [updateCSSProperties])
 
   useEffect(() => {
-    // 진입 애니메이션 시퀀스
-    const timer1 = setTimeout(() => setIsLoaded(true), 100)
-    const timer2 = setTimeout(() => setShowText(true), 600)
+    // 진입 애니메이션 시퀀스 - 타이밍 최적화
+    const timer1 = setTimeout(() => setIsLoaded(true), 50)
+    const timer2 = setTimeout(() => setShowText(true), 300)
     
     // 초기 화면 크기 설정
     updateDimensions()
@@ -97,12 +132,12 @@ const Hero = () => {
         />
       </div>
       
-      {/* Layer 2: 전체 다크 오버레이 */}
+      {/* Layer 2: 전체 다크 오버레이 - 명도 대비 강화 */}
       <div 
         className="absolute inset-0"
         style={{ 
           zIndex: 10,
-          background: 'linear-gradient(135deg, rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0.3) 50%, rgba(0, 0, 0, 0.4) 100%)',
+          background: 'linear-gradient(135deg, rgba(0, 0, 0, 0.6) 0%, rgba(0, 0, 0, 0.5) 50%, rgba(0, 0, 0, 0.6) 100%)',
           willChange: 'transform',
           backfaceVisibility: 'hidden'
         }}
@@ -126,29 +161,34 @@ const Hero = () => {
         }}
       />
       
-      {/* Layer 5: 액체 금속 파티클 애니메이션 - 중력과 자력의 물리 시뮬레이션 */}
-      {dimensions.width > 0 && dimensions.height > 0 && (
-        <div className="absolute inset-0" style={{ zIndex: 30, pointerEvents: 'none' }}>
-          <LiquidMetalParticles
-            particleCount={Math.min(getOptimalParticleCount(dimensions.width, dimensions.height), 120)}
-            width={dimensions.width}
-            height={dimensions.height}
-          />
-        </div>
+      {/* Layer 5: 액체 금속 파티클 애니메이션 - 접근성을 고려한 조건부 렌더링 */}
+      {!prefersReducedMotion && dimensions.width > 0 && dimensions.height > 0 && (
+        <ErrorBoundary fallback={() => null}>
+          <div className="absolute inset-0" style={{ zIndex: 30, pointerEvents: 'none' }}>
+            <AdaptiveParticles
+              particleCount={getOptimalParticleCount(dimensions.width, dimensions.height)}
+              width={dimensions.width}
+              height={dimensions.height}
+            />
+          </div>
+        </ErrorBoundary>
       )}
 
       {/* Layer 4: 글래스모피즘 텍스트 컨테이너 */}
       <div className="relative text-center text-white px-4" style={{ zIndex: 20 }}>
         <div 
-          className={`glass-hero-container max-w-6xl mx-auto rounded-3xl transition-all duration-1200 ease-out
+          className={`glass-hero-container max-w-6xl mx-auto rounded-3xl 
             px-6 py-6 sm:px-10 sm:py-8 md:px-12 md:py-9 lg:px-16 lg:py-11
             mx-2 sm:mx-4 md:mx-auto
             rounded-2xl sm:rounded-3xl
-            ${
-            isLoaded 
-              ? 'opacity-100 translate-y-0 scale-100' 
-              : 'opacity-0 translate-y-5 scale-95'
-          }`}
+            ${prefersReducedMotion 
+              ? 'opacity-100' 
+              : `transition-all duration-800 ease-out ${
+                  isLoaded 
+                    ? 'opacity-100 translate-y-0 scale-100' 
+                    : 'opacity-0 translate-y-3 scale-98'
+                }`
+            }`}
           style={{
             backdropFilter: isLoaded ? `blur(var(--glassmorphism-blur, 12px)) saturate(var(--glassmorphism-saturation, 180%))` : 'blur(0px)',
             background: isLoaded ? `linear-gradient(
@@ -168,16 +208,20 @@ const Hero = () => {
           }}
         >
           <h1 
-            className={`heading-primary mb-4 sm:mb-6 transition-all duration-1000 ease-out delay-300 ${
-              showText 
-                ? 'opacity-100 translate-y-0' 
-                : 'opacity-0 translate-y-4'
+            className={`heading-primary mb-4 sm:mb-6 ${
+              prefersReducedMotion 
+                ? 'opacity-100' 
+                : `transition-all duration-600 ease-out delay-200 ${
+                    showText 
+                      ? 'opacity-100 translate-y-0' 
+                      : 'opacity-0 translate-y-2'
+                  }`
             }`}
             style={{
-              color: 'rgba(255, 255, 255, 0.95)',
+              color: '#FFFFFF',
               textShadow: `
-                0 2px 4px rgba(0, 0, 0, 0.8),
-                0 1px 2px rgba(0, 0, 0, 0.6)
+                0 3px 6px rgba(0, 0, 0, 0.8),
+                0 1px 3px rgba(0, 0, 0, 0.7)
               `,
               fontWeight: 700,
               letterSpacing: '-0.02em',
@@ -188,16 +232,20 @@ const Hero = () => {
             함께 만드는 울림
           </h1>
           <p 
-            className={`text-lg sm:text-xl md:text-2xl mb-6 sm:mb-8 max-w-2xl mx-auto leading-relaxed transition-all duration-1000 ease-out delay-500 ${
-              showText 
-                ? 'opacity-100 translate-y-0' 
-                : 'opacity-0 translate-y-4'
+            className={`text-lg sm:text-xl md:text-2xl mb-6 sm:mb-8 max-w-2xl mx-auto leading-relaxed ${
+              prefersReducedMotion 
+                ? 'opacity-100' 
+                : `transition-all duration-600 ease-out delay-300 ${
+                    showText 
+                      ? 'opacity-100 translate-y-0' 
+                      : 'opacity-0 translate-y-2'
+                  }`
             }`}
             style={{
-              color: 'rgba(255, 255, 255, 0.85)',
+              color: 'rgba(255, 255, 255, 0.92)',
               textShadow: `
-                0 1px 3px rgba(0, 0, 0, 0.7),
-                0 1px 2px rgba(0, 0, 0, 0.5)
+                0 2px 4px rgba(0, 0, 0, 0.7),
+                0 1px 3px rgba(0, 0, 0, 0.6)
               `,
               fontWeight: 400,
               letterSpacing: '-0.01em',
@@ -207,14 +255,22 @@ const Hero = () => {
             예술로 숨 쉬고, 협동으로 길을 내는<br />
             경기아트콜렉티브 협동조합
           </p>
-          <div className={`flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center transition-all duration-1000 ease-out delay-700 ${
-              showText 
-                ? 'opacity-100 translate-y-0' 
-                : 'opacity-0 translate-y-4'
+          <div className={`flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center ${
+              prefersReducedMotion 
+                ? 'opacity-100' 
+                : `transition-all duration-600 ease-out delay-400 ${
+                    showText 
+                      ? 'opacity-100 translate-y-0' 
+                      : 'opacity-0 translate-y-2'
+                  }`
             }`}>
             <Link 
               href="/about"
-              className="btn-glass-primary px-6 py-2.5 sm:px-8 sm:py-3 rounded-xl font-medium transition-all duration-300 hover:-translate-y-0.5 hover:shadow-2xl text-sm sm:text-base w-full sm:w-auto text-center hover:brightness-110"
+              className={`btn-glass-primary px-8 py-4 sm:px-8 sm:py-3 rounded-xl font-medium text-base sm:text-base w-full sm:w-auto text-center min-h-[44px] flex items-center justify-center ${
+                prefersReducedMotion 
+                  ? 'hover:brightness-110' 
+                  : 'transition-all duration-300 hover:-translate-y-0.5 hover:shadow-2xl hover:brightness-110'
+              }`}
               style={{
                 background: `linear-gradient(
                   135deg,
@@ -234,7 +290,11 @@ const Hero = () => {
             </Link>
             <Link 
               href="/connect"
-              className="btn-glass-secondary px-6 py-2.5 sm:px-8 sm:py-3 rounded-xl font-medium transition-all duration-300 hover:-translate-y-0.5 text-sm sm:text-base w-full sm:w-auto text-center hover:bg-white/10 hover:border-white/60"
+              className={`btn-glass-secondary px-8 py-4 sm:px-8 sm:py-3 rounded-xl font-medium text-base sm:text-base w-full sm:w-auto text-center min-h-[44px] flex items-center justify-center ${
+                prefersReducedMotion 
+                  ? 'hover:bg-white/10 hover:border-white/60' 
+                  : 'transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/10 hover:border-white/60'
+              }`}
               style={{
                 background: 'transparent',
                 backdropFilter: 'blur(4px)',
@@ -252,9 +312,13 @@ const Hero = () => {
         </div>
       </div>
 
-      <div className="absolute bottom-8 left-0 right-0 flex justify-center text-white animate-bounce">
+      <div className={`absolute bottom-8 left-0 right-0 flex justify-center text-white ${
+        prefersReducedMotion ? '' : 'animate-bounce'
+      }`}>
         <div className="w-6 h-10 border-2 border-white rounded-full flex justify-center">
-          <div className="w-1 h-3 bg-white rounded-full mt-2 animate-pulse" />
+          <div className={`w-1 h-3 bg-white rounded-full mt-2 ${
+            prefersReducedMotion ? '' : 'animate-pulse'
+          }`} />
         </div>
       </div>
     </section>
