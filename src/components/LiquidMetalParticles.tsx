@@ -2,6 +2,11 @@
 
 import { useEffect, useRef, useCallback } from 'react'
 
+// 개발 환경에서만 로그 출력하는 유틸리티
+const isDev = process.env.NODE_ENV === 'development'
+const devLog = (...args: any[]): void => { isDev && console.log(...args) }
+const devError = (...args: any[]): void => { isDev && console.error(...args) }
+
 interface LiquidMetalParticlesProps {
   particleCount: number
   width: number
@@ -13,8 +18,9 @@ const LiquidMetalParticles = ({ particleCount, width, height }: LiquidMetalParti
   const glRef = useRef<WebGL2RenderingContext | null>(null)
   const programRef = useRef<WebGLProgram | null>(null)
   
-  // WebGL 2.0 Transform Feedback 지원
+  // WebGL 2.0 지원 확인 및 안전성 강화
   const isWebGL2Ref = useRef<boolean>(true)
+  const webglSupportedRef = useRef<boolean>(true)
   const transformFeedbackRef = useRef<WebGLTransformFeedback | null>(null)
   const updateProgramRef = useRef<WebGLProgram | null>(null)
   const renderProgramRef = useRef<WebGLProgram | null>(null)
@@ -717,7 +723,7 @@ const LiquidMetalParticles = ({ particleCount, width, height }: LiquidMetalParti
   const createShader = useCallback((gl: WebGLRenderingContext, type: number, source: string) => {
     const shader = gl.createShader(type)
     if (!shader) {
-      console.error('🔴 Failed to create shader')
+      devError('🔴 Failed to create shader')
       return null
     }
     
@@ -726,9 +732,9 @@ const LiquidMetalParticles = ({ particleCount, width, height }: LiquidMetalParti
     
     if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
       const error = gl.getShaderInfoLog(shader)
-      console.error('🔴 Liquid Metal Shader Compile Error:', error)
-      console.error('🔴 Shader Type:', type === gl.VERTEX_SHADER ? 'VERTEX' : 'FRAGMENT')
-      console.error('🔴 Shader Source:', source)
+      devError('🔴 Liquid Metal Shader Compile Error:', error)
+      devError('🔴 Shader Type:', type === gl.VERTEX_SHADER ? 'VERTEX' : 'FRAGMENT')
+      devError('🔴 Shader Source:', source)
       gl.deleteShader(shader)
       return null
     }
@@ -750,7 +756,7 @@ const LiquidMetalParticles = ({ particleCount, width, height }: LiquidMetalParti
     gl.linkProgram(program)
     
     if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-      console.error('🔴 Liquid Metal Program Error:', gl.getProgramInfoLog(program))
+      devError('🔴 Liquid Metal Program Error:', gl.getProgramInfoLog(program))
       return null
     }
     
@@ -769,25 +775,25 @@ const LiquidMetalParticles = ({ particleCount, width, height }: LiquidMetalParti
 
   // Phase 3: WebGL 2.0 업데이트 프로그램 생성 (Transform Feedback용)
   const createUpdateProgram = useCallback((gl: WebGL2RenderingContext) => {
-    console.log('🔄 Creating update vertex shader...')
+    devLog('🔄 Creating update vertex shader...')
     const vertexShader = createShader(gl, gl.VERTEX_SHADER, updateVertexShaderSource)
     if (!vertexShader) {
-      console.error('❌ Failed to create update vertex shader')
+      devError('❌ Failed to create update vertex shader')
       return null
     }
 
-    console.log('🔄 Creating update fragment shader (dummy)...')
+    devLog('🔄 Creating update fragment shader (dummy)...')
     const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, updateFragmentShaderSource)
     if (!fragmentShader) {
-      console.error('❌ Failed to create update fragment shader')
+      devError('❌ Failed to create update fragment shader')
       return null
     }
 
-    console.log('✅ Update shaders created')
-    console.log('🔄 Creating update program...')
+    devLog('✅ Update shaders created')
+    devLog('🔄 Creating update program...')
     const program = gl.createProgram()
     if (!program) {
-      console.error('❌ Failed to create update program')
+      devError('❌ Failed to create update program')
       return null
     }
 
@@ -808,35 +814,35 @@ const LiquidMetalParticles = ({ particleCount, width, height }: LiquidMetalParti
     gl.linkProgram(program)
     if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
       const error = gl.getProgramInfoLog(program)
-      console.error('❌ Update program linking failed:', error)
+      devError('❌ Update program linking failed:', error)
       gl.deleteProgram(program)
       return null
     }
 
-    console.log('✅ Update program created and linked successfully')
+    devLog('✅ Update program created and linked successfully')
     return program
   }, [createShader])
 
   // Phase 3: WebGL 2.0 렌더링 프로그램 생성
   const createRenderProgram = useCallback((gl: WebGL2RenderingContext) => {
-    console.log('🔄 Creating render vertex shader...')
+    devLog('🔄 Creating render vertex shader...')
     const vertexShader = createShader(gl, gl.VERTEX_SHADER, renderVertexShaderSource)
     if (!vertexShader) {
-      console.error('❌ Failed to create render vertex shader')
+      devError('❌ Failed to create render vertex shader')
       return null
     }
 
-    console.log('🔄 Creating render fragment shader...')
+    devLog('🔄 Creating render fragment shader...')
     const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, renderFragmentShaderSource)
     if (!fragmentShader) {
-      console.error('❌ Failed to create render fragment shader')
+      devError('❌ Failed to create render fragment shader')
       return null
     }
 
-    console.log('✅ Render shaders created, linking program...')
+    devLog('✅ Render shaders created, linking program...')
     const program = gl.createProgram()
     if (!program) {
-      console.error('❌ Failed to create render program')
+      devError('❌ Failed to create render program')
       return null
     }
 
@@ -846,30 +852,30 @@ const LiquidMetalParticles = ({ particleCount, width, height }: LiquidMetalParti
 
     if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
       const error = gl.getProgramInfoLog(program)
-      console.error('❌ Render program linking failed:', error)
+      devError('❌ Render program linking failed:', error)
       gl.deleteProgram(program)
       return null
     }
 
-    console.log('✅ Render program created and linked successfully')
+    devLog('✅ Render program created and linked successfully')
     return program
   }, [createShader])
 
   // Phase 3: Transform Feedback 버퍼 초기화 함수
-  const initTransformFeedbackBuffers = useCallback((gl: WebGL2RenderingContext) => {
-    if (!particleCount) return false
+  const initTransformFeedbackBuffers = useCallback((gl: WebGL2RenderingContext, currentParticleCount: number) => {
+    if (!currentParticleCount) return false
 
-    console.log('🔄 Initializing Transform Feedback buffers...')
+    devLog('🔄 Initializing Transform Feedback buffers...')
     
     // 파티클 데이터 크기 계산 (interleaved)
     // position(2) + velocity(2) + mass(1) + metallic(1) + density(1) + temperature(1) = 8 floats per particle
     const floatsPerParticle = 8
-    const totalFloats = particleCount * floatsPerParticle
+    const totalFloats = currentParticleCount * floatsPerParticle
     
     // 초기 파티클 데이터 생성
     const initialData = new Float32Array(totalFloats)
     
-    for (let i = 0; i < particleCount; i++) {
+    for (let i = 0; i < currentParticleCount; i++) {
       const offset = i * floatsPerParticle
       const i2 = i * 2
       
@@ -1007,7 +1013,7 @@ const LiquidMetalParticles = ({ particleCount, width, height }: LiquidMetalParti
     const bufferA = gl.createBuffer()
     const bufferB = gl.createBuffer()
     if (!bufferA || !bufferB) {
-      console.error('❌ Failed to create Transform Feedback buffers')
+      devError('❌ Failed to create Transform Feedback buffers')
       return false
     }
     
@@ -1022,7 +1028,7 @@ const LiquidMetalParticles = ({ particleCount, width, height }: LiquidMetalParti
     const vaoA = gl.createVertexArray()
     const vaoB = gl.createVertexArray()
     if (!vaoA || !vaoB) {
-      console.error('❌ Failed to create VAOs')
+      devError('❌ Failed to create VAOs')
       return false
     }
     
@@ -1049,9 +1055,9 @@ const LiquidMetalParticles = ({ particleCount, width, height }: LiquidMetalParti
       vaoB
     }
     
-    console.log(`✅ Transform Feedback buffers initialized (${particleCount} particles, ${totalFloats} floats)`)
+    devLog(`✅ Transform Feedback buffers initialized (${currentParticleCount} particles, ${totalFloats} floats)`)
     return true
-  }, [particleCount, width, height])
+  }, [])
 
   // Phase 3: Vertex Attributes 설정 헬퍼 함수
   const setupVertexAttributes = useCallback((gl: WebGL2RenderingContext) => {
@@ -1083,37 +1089,100 @@ const LiquidMetalParticles = ({ particleCount, width, height }: LiquidMetalParti
     gl.vertexAttribPointer(5, 1, gl.FLOAT, false, stride, 7 * 4)
   }, [])
 
+  // WebGL 리소스 정리 함수
+  const cleanupWebGL = useCallback(() => {
+    const gl = glRef.current
+    if (!gl) return
+
+    devLog('🧹 Cleaning up WebGL resources...')
+
+    // Transform Feedback 정리
+    if (transformFeedbackRef.current) {
+      gl.deleteTransformFeedback(transformFeedbackRef.current)
+      transformFeedbackRef.current = null
+    }
+
+    // 버퍼 정리
+    const tfBuffers = transformFeedbackBuffersRef.current
+    if (tfBuffers) {
+      if (tfBuffers.bufferA) gl.deleteBuffer(tfBuffers.bufferA)
+      if (tfBuffers.bufferB) gl.deleteBuffer(tfBuffers.bufferB)
+      if (tfBuffers.vaoA) gl.deleteVertexArray(tfBuffers.vaoA)
+      if (tfBuffers.vaoB) gl.deleteVertexArray(tfBuffers.vaoB)
+      transformFeedbackBuffersRef.current = null
+    }
+
+    // 프로그램 정리
+    if (updateProgramRef.current) {
+      gl.deleteProgram(updateProgramRef.current)
+      updateProgramRef.current = null
+    }
+    if (renderProgramRef.current) {
+      gl.deleteProgram(renderProgramRef.current)
+      renderProgramRef.current = null
+    }
+
+    devLog('✅ WebGL resources cleaned up')
+  }, [])
+
   const initWebGL = useCallback(() => {
     const canvas = canvasRef.current
     if (!canvas) {
-      console.error('🔴 Canvas element not found')
+      devError('🔴 Canvas element not found')
       return false
     }
 
-    console.log('🔄 Creating WebGL 2.0 context...')
-    
-    const gl = canvas.getContext('webgl2')
-    if (!gl) {
-      console.error('❌ WebGL 2.0 not supported')
-      return false
-    }
-    
-    if (!('createTransformFeedback' in gl)) {
-      console.error('❌ Transform Feedback not available in WebGL 2.0 context')
-      return false
-    }
+    // 기존 리소스 정리
+    cleanupWebGL()
 
-    console.log('✅ WebGL 2.0 context created with Transform Feedback support')
-    glRef.current = gl
-    isWebGL2Ref.current = true
+    // 캔버스 크기 설정
+    canvas.width = width
+    canvas.height = height
+
+    devLog('🔄 Creating WebGL 2.0 context...')
+    
+    try {
+      const gl = canvas.getContext('webgl2', {
+        antialias: false, // 성능을 위해 비활성화
+        alpha: true,
+        preserveDrawingBuffer: false,
+        powerPreference: 'high-performance'
+      })
+      if (!gl) {
+        devError('❌ WebGL 2.0 not supported')
+        webglSupportedRef.current = false
+        return false
+      }
+      
+      if (!('createTransformFeedback' in gl)) {
+        devError('❌ Transform Feedback not available in WebGL 2.0 context')
+        webglSupportedRef.current = false
+        return false
+      }
+
+      devLog('✅ WebGL 2.0 context created with Transform Feedback support')
+      glRef.current = gl
+      isWebGL2Ref.current = true
+      webglSupportedRef.current = true
+    } catch (error) {
+      devError('❌ WebGL 2.0 context creation failed:', error)
+      webglSupportedRef.current = false
+      return false
+    }
     
     // WebGL 2.0 Transform Feedback 프로그램 생성
-    console.log('🔄 Creating WebGL 2.0 Transform Feedback programs...')
+    devLog('🔄 Creating WebGL 2.0 Transform Feedback programs...')
       
     // 업데이트 프로그램 (Transform Feedback용)
+    const gl = glRef.current
+    if (!gl) {
+      devError('❌ WebGL context not available')
+      return false
+    }
+    
     const updateProgram = createUpdateProgram(gl)
     if (!updateProgram) {
-      console.error('❌ Failed to create update program')
+      devError('❌ Failed to create update program')
       return false
     }
     updateProgramRef.current = updateProgram
@@ -1121,7 +1190,7 @@ const LiquidMetalParticles = ({ particleCount, width, height }: LiquidMetalParti
     // 렌더링 프로그램
     const renderProgram = createRenderProgram(gl)
     if (!renderProgram) {
-      console.error('❌ Failed to create render program')
+      devError('❌ Failed to create render program')
       return false
     }
     renderProgramRef.current = renderProgram
@@ -1129,19 +1198,19 @@ const LiquidMetalParticles = ({ particleCount, width, height }: LiquidMetalParti
     // Transform Feedback 객체 생성
     const transformFeedback = gl.createTransformFeedback()
     if (!transformFeedback) {
-      console.error('❌ Failed to create transform feedback')
+      devError('❌ Failed to create transform feedback')
       return false
     }
     transformFeedbackRef.current = transformFeedback
       
     // Transform Feedback 버퍼 초기화
-    const success = initTransformFeedbackBuffers(gl)
+    const success = initTransformFeedbackBuffers(gl, particleCount)
     if (!success) {
-      console.error('❌ Failed to initialize Transform Feedback buffers')
+      devError('❌ Failed to initialize Transform Feedback buffers')
       return false
     }
       
-    console.log('✅ WebGL 2.0 Transform Feedback system initialized successfully')
+    devLog('✅ WebGL 2.0 Transform Feedback system initialized successfully')
 
     canvas.width = width
     canvas.height = height
@@ -1153,9 +1222,9 @@ const LiquidMetalParticles = ({ particleCount, width, height }: LiquidMetalParti
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
     gl.blendEquation(gl.FUNC_ADD)
 
-    console.log('✅ WebGL initialization completed successfully')
+    devLog('✅ WebGL initialization completed successfully')
     return true
-  }, [createProgram, width, height])
+  }, [cleanupWebGL, createProgram, width, height, particleCount])
 
   const initParticles = useCallback(() => {
     if (!particleCount) return
@@ -1454,11 +1523,15 @@ const LiquidMetalParticles = ({ particleCount, width, height }: LiquidMetalParti
     const tfBuffers = transformFeedbackBuffersRef.current
     
     if (!updateProgram || !renderProgram || !transformFeedback || !tfBuffers) {
-      console.error('❌ WebGL 2.0 resources not available')
+      devError('❌ WebGL 2.0 resources not available')
       return
     }
 
-    timeRef.current += 0.016
+    // 파티클 개수가 0이면 렌더링하지 않음
+    if (particleCount <= 0) return
+
+    try {
+      timeRef.current += 0.016
 
     // 1단계: Transform Feedback를 사용하여 파티클 업데이트
     gl.useProgram(updateProgram)
@@ -1527,6 +1600,14 @@ const LiquidMetalParticles = ({ particleCount, width, height }: LiquidMetalParti
     
     // 버퍼 스와핑
     tfBuffers.currentBuffer = currentIsA ? 'B' : 'A'
+    } catch (error) {
+      devError('❌ WebGL2 animation error:', error)
+      // 컨텍스트 복구 시도
+      if (gl.isContextLost()) {
+        devLog('🔄 WebGL context lost, attempting recovery...')
+        return
+      }
+    }
   }, [particleCount, width, height])
 
   // Phase 3: WebGL 1.0 폴백 애니메이션 함수
@@ -1574,7 +1655,7 @@ const LiquidMetalParticles = ({ particleCount, width, height }: LiquidMetalParti
     // 속성 위치 확인
     if (positionAttribute === -1 || velocityAttribute === -1 || massAttribute === -1 || 
         metallicAttribute === -1 || densityAttribute === -1 || temperatureAttribute === -1) {
-      console.error('🔴 Failed to get attribute locations:', {
+      devError('🔴 Failed to get attribute locations:', {
         position: positionAttribute,
         velocity: velocityAttribute,
         mass: massAttribute,
@@ -1664,9 +1745,9 @@ const LiquidMetalParticles = ({ particleCount, width, height }: LiquidMetalParti
   }, [])
 
   useEffect(() => {
-    console.log('🌊 LiquidMetalParticles 초기화 시작', { width, height, particleCount })
+    devLog('🌊 LiquidMetalParticles 초기화 시작', { width, height, particleCount })
     if (width < 768) {
-      console.log('📱 모바일 화면에서 LiquidMetalParticles 비활성화')
+      devLog('📱 모바일 화면에서 LiquidMetalParticles 비활성화')
       return
     }
 
@@ -1675,20 +1756,54 @@ const LiquidMetalParticles = ({ particleCount, width, height }: LiquidMetalParti
       return
     }
     
-    console.log('✅ LiquidMetalParticles WebGL 2.0 초기화 성공')
+    devLog('✅ LiquidMetalParticles WebGL 2.0 초기화 성공')
 
     initParticles()
     animate()
 
     window.addEventListener('mousemove', handleMouseMove, { passive: true })
 
+    // WebGL 컨텍스트 손실/복구 이벤트 리스너
+    const canvas = canvasRef.current
+    const handleContextLost = (event: Event) => {
+      devLog('⚠️ WebGL context lost')
+      event.preventDefault()
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current)
+        animationFrameRef.current = null
+      }
+    }
+
+    const handleContextRestored = () => {
+      devLog('🔄 WebGL context restored, reinitializing...')
+      if (initWebGL()) {
+        initParticles()
+        animate()
+      }
+    }
+
+    if (canvas) {
+      canvas.addEventListener('webglcontextlost', handleContextLost)
+      canvas.addEventListener('webglcontextrestored', handleContextRestored)
+    }
+
     return () => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current)
       }
       window.removeEventListener('mousemove', handleMouseMove)
+      if (canvas) {
+        canvas.removeEventListener('webglcontextlost', handleContextLost)
+        canvas.removeEventListener('webglcontextrestored', handleContextRestored)
+      }
+      cleanupWebGL()
     }
-  }, [width, height, particleCount, initWebGL, initParticles, animate, handleMouseMove])
+  }, [width, height, particleCount, initWebGL, initParticles, animate, handleMouseMove, cleanupWebGL])
+
+  // WebGL이 지원되지 않는 경우 아무것도 렌더링하지 않음
+  if (!webglSupportedRef.current && glRef.current === null) {
+    return null
+  }
 
   return (
     <canvas

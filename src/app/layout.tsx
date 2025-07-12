@@ -10,15 +10,18 @@ import { Suspense } from 'react'
 
 const pretendard = localFont({
   src: '../../public/fonts/PretendardVariable.woff2',
-  display: 'swap',
+  display: 'optional',
   weight: '45 920',
   variable: '--font-pretendard',
+  preload: true,
 })
 
 const notoSerifKr = Noto_Serif_KR({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700'],
   variable: '--font-noto-serif-kr',
+  display: 'optional',
+  preload: true,
 })
 
 export const metadata: Metadata = {
@@ -79,7 +82,16 @@ export default async function RootLayout({
 
   return (
     <html lang="ko" className={`${pretendard.variable} ${notoSerifKr.variable}`}>
-      <body>
+      <head>
+        <link
+          rel="preload"
+          href="/fonts/PretendardVariable.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+        />
+      </head>
+      <body suppressHydrationWarning>
         <ErrorBoundary>
           <div className="min-h-screen flex flex-col">
             <Navigation />
