@@ -9,7 +9,7 @@ import { getGlobalData } from '@/lib/data'
 import { Suspense } from 'react'
 
 const pretendard = localFont({
-  src: '/fonts/PretendardVariable.woff2',
+  src: '../../public/fonts/PretendardVariable.woff2',
   display: 'optional',
   weight: '45 920',
   variable: '--font-pretendard',
