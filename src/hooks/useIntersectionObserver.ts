@@ -11,7 +11,7 @@ interface UseIntersectionObserverOptions extends IntersectionObserverInit {
 
 interface UseIntersectionObserverReturn {
   // 관찰할 요소에 연결할 ref
-  targetRef: React.RefObject<HTMLElement>
+  targetRef: React.RefObject<HTMLDivElement | null>
   // 현재 뷰포트와 교차 중인지
   isIntersecting: boolean
   // 한번이라도 교차했는지 (triggerOnce용)
@@ -41,7 +41,7 @@ export const useIntersectionObserver = (
   const [hasIntersected, setHasIntersected] = useState(false)
   const [intersectionRatio, setIntersectionRatio] = useState(0)
   
-  const targetRef = useRef<HTMLElement>(null)
+  const targetRef = useRef<HTMLDivElement | null>(null)
   const observerRef = useRef<IntersectionObserver | null>(null)
 
   // 상태 초기화 함수
