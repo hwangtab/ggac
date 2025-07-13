@@ -183,7 +183,7 @@ const LazyParticles = ({
       
       {/* 로딩 완료 */}
       {ParticleComponent && !isLoading && !loadError && (
-        <ErrorBoundary fallback={<FallbackComponent />}>
+        <ErrorBoundary fallback={() => <FallbackComponent />}>
           <Suspense fallback={<LoadingComponent />}>
             <ParticleComponent
               particleCount={particleCount}
