@@ -1,8 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { useState, useEffect, useCallback, memo } from 'react'
-import { getCachedBrowserInfo, getOptimizedImageSrc } from '@/utils/browserOptimization'
+import { useState, useEffect, memo } from 'react'
 import type { OptimizedImageProps } from '@/types'
 
 const OptimizedImage = memo(function OptimizedImage({
@@ -21,48 +20,22 @@ const OptimizedImage = memo(function OptimizedImage({
 }: OptimizedImageProps) {
   const [hasError, setHasError] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
-  const [currentSrc, setCurrentSrc] = useState(src)
-  const [hasTriedWebp, setHasTriedWebp] = useState(false)
 
-  // 브라우저별 최적화된 이미지 소스 생성
-  const getBrowserOptimizedSrc = useCallback((originalSrc: string): string => {
-    if (!preferWebp || !originalSrc.startsWith('/')) {
-      return originalSrc
-    }
-
-    // 브라우저 정보를 이용한 최적화
-    const browserInfo = getCachedBrowserInfo()
-    return getOptimizedImageSrc(originalSrc, browserInfo)
-  }, [preferWebp])
-
-  // 브라우저별 최적화된 이미지 로드 시도
+  // 이미지 상태 초기화
   useEffect(() => {
-    if (preferWebp && src.startsWith('/') && src.match(/\.(jpe?g|png)$/i)) {
-      const optimizedSrc = getBrowserOptimizedSrc(src)
-      setCurrentSrc(optimizedSrc)
-    } else {
-      setCurrentSrc(src)
-    }
+    // Next.js Image 컴포넌트의 자동 최적화에 의존
     setHasError(false)
     setIsLoading(true)
-    setHasTriedWebp(false)
-  }, [src, preferWebp, getBrowserOptimizedSrc])
+  }, [src])
 
   const handleError = () => {
-    if (!hasTriedWebp && currentSrc !== src) {
-      // WebP 실패시 원본으로 fallback
-      setHasTriedWebp(true)
-      setCurrentSrc(src)
-      console.log(`WebP failed, fallback to original: ${src}`)
-    } else {
-      setHasError(true)
-    }
+    setHasError(true)
+    console.log(`Image failed to load: ${src}`)
   }
 
   const handleLoad = () => {
     setIsLoading(false)
-    const isWebpOptimized = currentSrc !== src && currentSrc.endsWith('.webp')
-    console.log(`Image loaded: ${currentSrc}${isWebpOptimized ? ' (WebP optimized)' : ''}`)
+    console.log(`Image loaded: ${src}`)
   }
 
   if (hasError) {
@@ -76,7 +49,7 @@ const OptimizedImage = memo(function OptimizedImage({
   }
 
   const imageProps = {
-    src: currentSrc,
+    src,
     alt,
     quality,
     priority,
