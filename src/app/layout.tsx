@@ -10,16 +10,18 @@ import { Suspense } from 'react'
 
 const pretendard = localFont({
   src: '../../public/fonts/PretendardVariable.woff2',
-  display: 'optional',
+  display: 'swap', // 폰트 로딩 최적화: CLS 방지
   weight: '45 920',
   variable: '--font-pretendard',
+  preload: true,
 })
 
 const notoSerifKr = Noto_Serif_KR({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700'],
   variable: '--font-noto-serif-kr',
-  display: 'optional',
+  display: 'swap', // 폰트 로딩 최적화: CLS 방지
+  preload: true,
 })
 
 export const metadata: Metadata = {
