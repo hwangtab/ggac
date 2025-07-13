@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import OptimizedHeroImage from './OptimizedHeroImage'
-import AdaptiveParticles from './AdaptiveParticles'
+import LazyParticles from './LazyParticles'
 import ErrorBoundary from './ErrorBoundary'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 
@@ -163,17 +163,16 @@ const Hero = () => {
         }}
       />
       
-      {/* Layer 5: 액체 금속 파티클 애니메이션 - 접근성을 고려한 조건부 렌더링 */}
+      {/* Layer 5: 지연 로딩 파티클 애니메이션 - 접근성 및 성능 최적화 */}
       {!prefersReducedMotion && dimensions.width > 0 && dimensions.height > 0 && (
-        <ErrorBoundary fallback={() => null}>
-          <div className="absolute inset-0" style={{ zIndex: 30, pointerEvents: 'none' }}>
-            <AdaptiveParticles
-              particleCount={getOptimalParticleCount(dimensions.width, dimensions.height)}
-              width={dimensions.width}
-              height={dimensions.height}
-            />
-          </div>
-        </ErrorBoundary>
+        <LazyParticles
+          particleCount={getOptimalParticleCount(dimensions.width, dimensions.height)}
+          width={dimensions.width}
+          height={dimensions.height}
+          preloadDistance="300px"
+          enablePreloading={true}
+          priority="high"
+        />
       )}
 
       {/* Layer 4: 글래스모피즘 텍스트 컨테이너 */}
