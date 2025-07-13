@@ -153,19 +153,13 @@ const LazyParticles = ({
       })
   }, [shouldLoad, ParticleComponent, isLoading])
 
-  // 프리로딩 힌트 (high priority인 경우)
+  // 프리로딩 힌트 (high priority인 경우) - 더 안전한 방식
   useEffect(() => {
     if (priority === 'high' && shouldLoad && !ParticleComponent) {
-      // 리소스 힌트로 브라우저에게 우선순위 알림
-      const link = document.createElement('link')
-      link.rel = 'preload'
-      link.as = 'script'
-      link.href = '/_next/static/chunks/components_AdaptiveParticles_tsx.js' // 실제 청크 이름으로 수정 필요
-      document.head.appendChild(link)
-
-      return () => {
-        document.head.removeChild(link)
-      }
+      // 컴포넌트 프리로딩 (브라우저가 자동으로 청크 경로 해결)
+      import('./AdaptiveParticles').catch(() => {
+        // 프리로딩 실패는 무시 (실제 로딩 시에 다시 시도)
+      })
     }
   }, [priority, shouldLoad, ParticleComponent])
 

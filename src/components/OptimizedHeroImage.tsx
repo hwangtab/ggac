@@ -67,9 +67,8 @@ const OptimizedHeroImage = ({
         />
       )}
       
-      {/* 메인 이미지 - 다중 포맷 지원 */}
+      {/* 메인 이미지 - WebP 최적화 */}
       <picture>
-        <source srcSet="/images/hero.avif" type="image/avif" />
         <source srcSet="/images/hero.webp" type="image/webp" />
         <Image
           src="/images/hero.webp"
