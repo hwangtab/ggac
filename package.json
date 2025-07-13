@@ -26,6 +26,7 @@
     "react-markdown": "^9.0.0"
   },
   "devDependencies": {
+    "@next/bundle-analyzer": "^15.3.5",
     "@playwright/test": "^1.53.2",
     "@types/node": "^24.0.10",
     "@types/react": "^19.1.8",

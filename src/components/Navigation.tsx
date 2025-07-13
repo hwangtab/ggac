@@ -99,13 +99,17 @@ const Navigation = () => {
   }
 
   return (
-    <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-      isScrolled 
-        ? 'bg-white/90 backdrop-blur-md shadow-sm' 
-        : isHomePage 
-          ? 'bg-transparent' 
-          : 'bg-white/90 backdrop-blur-md shadow-sm'
-    }`}>
+    <nav 
+      id="navigation"
+      role="navigation" 
+      aria-label="주요 내비게이션"
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+        isScrolled 
+          ? 'bg-white/90 backdrop-blur-md shadow-sm' 
+          : isHomePage 
+            ? 'bg-transparent' 
+            : 'bg-white/90 backdrop-blur-md shadow-sm'
+      }`}>
       <div className="container-custom">
         <div className="flex items-center justify-between h-16 md:h-20">
           {/* Logo */}
@@ -185,8 +189,12 @@ const Navigation = () => {
           {/* Mobile Menu Button */}
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className={`md:hidden p-2 rounded-md transition-colors duration-300 ${textColor} ${hoverColor}`}
+            className={`md:hidden p-2 rounded-md transition-colors duration-300 ${textColor} ${hoverColor} focus:outline-none focus:ring-2 focus:ring-primary-500`}
+            aria-expanded={isMenuOpen}
+            aria-controls="mobile-menu"
+            aria-label={isMenuOpen ? '메뉴 닫기' : '메뉴 열기'}
           >
+            <span className="sr-only">{isMenuOpen ? '메뉴 닫기' : '메뉴 열기'}</span>
             <div className="w-6 h-6 flex flex-col justify-center items-center">
               <span className={`bg-current h-0.5 w-6 transition-all duration-300 ${
                 isMenuOpen ? 'rotate-45 translate-y-0.5' : ''
@@ -203,7 +211,12 @@ const Navigation = () => {
 
         {/* Mobile Menu */}
         {isMenuOpen && (
-          <div className="md:hidden absolute left-4 right-4 top-full mt-2 z-50">
+          <div 
+            id="mobile-menu"
+            className="md:hidden absolute left-4 right-4 top-full mt-2 z-50"
+            role="menu"
+            aria-labelledby="mobile-menu-button"
+          >
             <div className="bg-white/95 backdrop-blur-md rounded-lg shadow-lg p-2 border border-gray-200/20">
               {/* Main Menu Items */}
               {menuItems.map((item) => (

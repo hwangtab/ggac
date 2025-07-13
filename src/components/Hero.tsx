@@ -8,6 +8,7 @@ import ErrorBoundary from './ErrorBoundary'
 import PerformanceMonitor from './PerformanceMonitor'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 import { useRenderPerformance } from '@/hooks/usePerformanceMonitor'
+import { getErrorTracker } from '@/utils/errorTracking'
 
 const Hero = () => {
   const [isLoaded, setIsLoaded] = useState(false)
@@ -101,6 +102,11 @@ const Hero = () => {
   }, [updateCSSProperties])
 
   useEffect(() => {
+    // 에러 추적 시스템 초기화
+    if (typeof window !== 'undefined') {
+      getErrorTracker()
+    }
+
     // 진입 애니메이션 시퀀스 - 타이밍 최적화
     const timer1 = setTimeout(() => setIsLoaded(true), 50)
     const timer2 = setTimeout(() => setShowText(true), 300)
@@ -121,6 +127,8 @@ const Hero = () => {
 
   return (
     <section 
+      role="banner"
+      aria-label="메인 영역"
       className="relative min-h-screen flex items-center justify-center overflow-hidden"
       style={{
         // CSS 컨테인먼트로 렌더링 최적화
@@ -170,14 +178,16 @@ const Hero = () => {
       
       {/* Layer 5: 지연 로딩 파티클 애니메이션 - 접근성 및 성능 최적화 */}
       {!prefersReducedMotion && dimensions.width > 0 && dimensions.height > 0 && (
-        <LazyParticles
-          particleCount={getOptimalParticleCount(dimensions.width, dimensions.height)}
-          width={dimensions.width}
-          height={dimensions.height}
-          preloadDistance="300px"
-          enablePreloading={true}
-          priority="high"
-        />
+        <div aria-hidden="true">
+          <LazyParticles
+            particleCount={getOptimalParticleCount(dimensions.width, dimensions.height)}
+            width={dimensions.width}
+            height={dimensions.height}
+            preloadDistance="300px"
+            enablePreloading={true}
+            priority="high"
+          />
+        </div>
       )}
 
       {/* Layer 4: 글래스모피즘 텍스트 컨테이너 */}
@@ -234,8 +244,8 @@ const Hero = () => {
               lineHeight: 1.2
             }}
           >
-            경계 없는 상상,<br />
-            함께 만드는 울림
+            <span className="block">경계 없는 상상,</span>
+            <span className="block">함께 만드는 울림</span>
           </h1>
           <p 
             className={`text-lg sm:text-xl md:text-2xl mb-6 sm:mb-8 max-w-2xl mx-auto leading-relaxed ${
