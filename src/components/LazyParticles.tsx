@@ -1,0 +1,215 @@
+'use client'
+
+import { useState, useEffect, ComponentType, Suspense } from 'react'
+import dynamic from 'next/dynamic'
+import { useLazyLoading } from '@/hooks/useIntersectionObserver'
+import ErrorBoundary from './ErrorBoundary'
+
+// 타입 정의
+interface ParticleProps {
+  particleCount: number
+  width: number
+  height: number
+  forceCSS?: boolean
+}
+
+interface LazyParticlesProps extends ParticleProps {
+  // 지연 로딩 옵션
+  preloadDistance?: string
+  loadingComponent?: React.ComponentType
+  fallbackComponent?: React.ComponentType
+  // 성능 옵션
+  enablePreloading?: boolean
+  priority?: 'high' | 'low'
+}
+
+// 동적 임포트 - 실제 필요할 때만 로딩
+const AdaptiveParticles = dynamic(() => import('./AdaptiveParticles'), {
+  ssr: false,
+  loading: () => <ParticlesLoadingSkeleton />,
+})
+
+/**
+ * 로딩 스켈레톤 컴포넌트
+ * 파티클이 로딩되는 동안 표시할 플레이스홀더
+ */
+const ParticlesLoadingSkeleton = () => (
+  <div className="absolute inset-0 pointer-events-none overflow-hidden">
+    <div className="animate-pulse duration-2000">
+      {/* 미묘한 점들로 로딩 상태 표시 */}
+      {Array.from({ length: 12 }, (_, i) => (
+        <div
+          key={i}
+          className="absolute w-1 h-1 bg-white/10 rounded-full animate-pulse"
+          style={{
+            left: `${15 + (i * 7) % 70}%`,
+            top: `${25 + (i * 11) % 50}%`,
+            animationDelay: `${i * 0.15}s`,
+            animationDuration: `${2 + (i % 3) * 0.5}s`,
+          }}
+        />
+      ))}
+    </div>
+  </div>
+)
+
+/**
+ * 파티클 로딩 실패 시 표시할 fallback 컴포넌트
+ */
+const ParticlesFallback = () => {
+  const [showFallback, setShowFallback] = useState(false)
+
+  useEffect(() => {
+    // 3초 후에 간단한 CSS 애니메이션 표시
+    const timer = setTimeout(() => setShowFallback(true), 3000)
+    return () => clearTimeout(timer)
+  }, [])
+
+  if (!showFallback) return null
+
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+      {/* 초경량 CSS 기반 파티클 */}
+      <div className="floating-dots">
+        {Array.from({ length: 8 }, (_, i) => (
+          <div
+            key={i}
+            className="absolute w-2 h-2 bg-white/30 rounded-full"
+            style={{
+              left: `${20 + i * 8}%`,
+              top: `${30 + (i % 3) * 15}%`,
+              animation: `cssParticleFloat ${4 + i}s ease-in-out infinite`,
+              animationDelay: `${i * 0.5}s`,
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * 지연 로딩되는 파티클 시스템
+ * Intersection Observer를 사용하여 뷰포트에 진입할 때만 파티클 코드를 로딩
+ */
+const LazyParticles = ({
+  particleCount,
+  width,
+  height,
+  forceCSS = false,
+  preloadDistance = '200px',
+  loadingComponent: LoadingComponent = ParticlesLoadingSkeleton,
+  fallbackComponent: FallbackComponent = ParticlesFallback,
+  enablePreloading = true,
+  priority = 'low',
+}: LazyParticlesProps) => {
+  // Intersection Observer로 지연 로딩 관리
+  const { shouldLoad, targetRef } = useLazyLoading({
+    rootMargin: enablePreloading ? preloadDistance : '0px',
+    threshold: 0.1,
+  })
+
+  const [isLoading, setIsLoading] = useState(false)
+  const [loadError, setLoadError] = useState<Error | null>(null)
+  const [ParticleComponent, setParticleComponent] = useState<ComponentType<ParticleProps> | null>(null)
+
+  // 파티클 컴포넌트 동적 로딩
+  useEffect(() => {
+    if (!shouldLoad || ParticleComponent || isLoading) return
+
+    // 이미 AdaptiveParticles가 로드되어 있다면 바로 사용
+    if (typeof window !== 'undefined' && (window as any).__ADAPTIVE_PARTICLES_LOADED__) {
+      setParticleComponent(() => AdaptiveParticles)
+      return
+    }
+
+    setIsLoading(true)
+    setLoadError(null)
+
+    const loadStartTime = performance.now()
+
+    // 동적 임포트 시도
+    import('./AdaptiveParticles')
+      .then((module) => {
+        const loadTime = performance.now() - loadStartTime
+        
+        // 개발 환경에서 로딩 시간 로그
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`🎉 AdaptiveParticles loaded in ${loadTime.toFixed(2)}ms`)
+        }
+
+        // 글로벌 플래그 설정 (중복 로딩 방지)
+        if (typeof window !== 'undefined') {
+          (window as any).__ADAPTIVE_PARTICLES_LOADED__ = true
+        }
+
+        setParticleComponent(() => module.default)
+        setIsLoading(false)
+      })
+      .catch((error) => {
+        console.error('Failed to load AdaptiveParticles:', error)
+        setLoadError(error)
+        setIsLoading(false)
+      })
+  }, [shouldLoad, ParticleComponent, isLoading])
+
+  // 프리로딩 힌트 (high priority인 경우)
+  useEffect(() => {
+    if (priority === 'high' && shouldLoad && !ParticleComponent) {
+      // 리소스 힌트로 브라우저에게 우선순위 알림
+      const link = document.createElement('link')
+      link.rel = 'preload'
+      link.as = 'script'
+      link.href = '/_next/static/chunks/components_AdaptiveParticles_tsx.js' // 실제 청크 이름으로 수정 필요
+      document.head.appendChild(link)
+
+      return () => {
+        document.head.removeChild(link)
+      }
+    }
+  }, [priority, shouldLoad, ParticleComponent])
+
+  return (
+    <div 
+      ref={targetRef} 
+      className="absolute inset-0 pointer-events-none"
+      style={{ zIndex: 30 }}
+    >
+      {/* 로딩 상태 */}
+      {isLoading && <LoadingComponent />}
+      
+      {/* 에러 상태 */}
+      {loadError && <FallbackComponent />}
+      
+      {/* 로딩 완료 */}
+      {ParticleComponent && !isLoading && !loadError && (
+        <ErrorBoundary fallback={<FallbackComponent />}>
+          <Suspense fallback={<LoadingComponent />}>
+            <ParticleComponent
+              particleCount={particleCount}
+              width={width}
+              height={height}
+              forceCSS={forceCSS}
+            />
+          </Suspense>
+        </ErrorBoundary>
+      )}
+      
+      {/* 개발 환경 디버깅 정보 */}
+      {process.env.NODE_ENV === 'development' && (
+        <div 
+          className="absolute top-2 left-2 text-xs text-white/50 font-mono pointer-events-none"
+          style={{ zIndex: 100 }}
+        >
+          <div>Lazy: {shouldLoad ? '✅' : '⏳'}</div>
+          <div>Loading: {isLoading ? '🔄' : '✅'}</div>
+          <div>Component: {ParticleComponent ? '✅' : '❌'}</div>
+          {loadError && <div className="text-red-400">Error: {loadError.message}</div>}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default LazyParticles
+export { ParticlesLoadingSkeleton, ParticlesFallback }
