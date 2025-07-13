@@ -5,7 +5,9 @@ import Link from 'next/link'
 import OptimizedHeroImage from './OptimizedHeroImage'
 import LazyParticles from './LazyParticles'
 import ErrorBoundary from './ErrorBoundary'
+import PerformanceMonitor from './PerformanceMonitor'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
+import { useRenderPerformance } from '@/hooks/usePerformanceMonitor'
 
 const Hero = () => {
   const [isLoaded, setIsLoaded] = useState(false)
@@ -14,6 +16,9 @@ const Hero = () => {
   
   // 접근성: 사용자의 동작 줄이기 설정 확인
   const prefersReducedMotion = usePrefersReducedMotion()
+  
+  // 렌더링 성능 추적
+  const renderPerf = useRenderPerformance('Hero')
   
   // 모바일 디바이스 감지
   const isMobileDevice = useCallback(() => {
@@ -322,6 +327,14 @@ const Hero = () => {
           }`} />
         </div>
       </div>
+
+      {/* 성능 모니터 - 개발 환경에서만 표시 */}
+      <PerformanceMonitor
+        position="top-right"
+        mode="compact"
+        devOnly={true}
+        showOnlyWhenLowPerf={false}
+      />
     </section>
   )
 }

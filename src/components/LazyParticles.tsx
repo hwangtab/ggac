@@ -3,6 +3,7 @@
 import { useState, useEffect, ComponentType, Suspense } from 'react'
 import dynamic from 'next/dynamic'
 import { useLazyLoading } from '@/hooks/useIntersectionObserver'
+import { useRenderPerformance } from '@/hooks/usePerformanceMonitor'
 import ErrorBoundary from './ErrorBoundary'
 
 // 타입 정의
@@ -112,6 +113,9 @@ const LazyParticles = ({
   const [isLoading, setIsLoading] = useState(false)
   const [loadError, setLoadError] = useState<Error | null>(null)
   const [ParticleComponent, setParticleComponent] = useState<ComponentType<ParticleProps> | null>(null)
+  
+  // 렌더링 성능 추적
+  const renderPerf = useRenderPerformance('LazyParticles')
 
   // 파티클 컴포넌트 동적 로딩
   useEffect(() => {
@@ -198,6 +202,8 @@ const LazyParticles = ({
           <div>Lazy: {shouldLoad ? '✅' : '⏳'}</div>
           <div>Loading: {isLoading ? '🔄' : '✅'}</div>
           <div>Component: {ParticleComponent ? '✅' : '❌'}</div>
+          <div>Renders: {renderPerf.renderCount}</div>
+          <div>Avg Render: {renderPerf.avgRenderTime.toFixed(1)}ms</div>
           {loadError && <div className="text-red-400">Error: {loadError.message}</div>}
         </div>
       )}

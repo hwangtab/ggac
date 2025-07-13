@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { useDevicePerformance } from '@/hooks/useDevicePerformance'
+import { useRenderPerformance } from '@/hooks/usePerformanceMonitor'
 import CSSParticles from './CSSParticles'
 
 // WebGL 컴포넌트를 동적으로 로드 (code splitting)
@@ -25,6 +26,9 @@ const AdaptiveParticles = ({ particleCount, width, height, forceCSS = false }: A
   const { performanceLevel, isMobile, isLowPowerMode } = useDevicePerformance()
   const [useWebGL, setUseWebGL] = useState(false)
   const [webglSupported, setWebglSupported] = useState(true)
+  
+  // 렌더링 성능 추적
+  const renderPerf = useRenderPerformance('AdaptiveParticles')
 
   // WebGL 지원 확인 - 메모이제이션으로 최적화
   const checkWebGLSupport = useCallback(() => {
