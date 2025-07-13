@@ -10,7 +10,6 @@ import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 const Hero = () => {
   const [isLoaded, setIsLoaded] = useState(false)
   const [showText, setShowText] = useState(false)
-  const [cssProperties, setCssProperties] = useState<{[key: string]: string}>({})
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 })
   
   // 접근성: 사용자의 동작 줄이기 설정 확인
@@ -23,38 +22,39 @@ const Hero = () => {
            ('ontouchstart' in window)
   }, [])
 
-  // CSS 커스텀 프로퍼티 업데이트 - 모바일 최적화 강화
+  // 렌더링 최적화: CSS 변수를 직접 DOM에 설정하여 리플로우 최소화
   const updateCSSProperties = useCallback((width: number, height: number) => {
-    const properties: {[key: string]: string} = {}
+    const root = document.documentElement
     const isMobile = isMobileDevice()
     
-    // 반응형 그라데이션 크기
-    if (width > 1200) {
-      properties['--gradient-size'] = '1200px 750px'
-      properties['--gradient-alpha-start'] = '0.85'
-      properties['--gradient-alpha-mid'] = '0.65'
-    } else if (width > 768) {
-      properties['--gradient-size'] = '900px 600px'
-      properties['--gradient-alpha-start'] = '0.85'
-      properties['--gradient-alpha-mid'] = '0.65'
-    } else {
-      properties['--gradient-size'] = '500px 400px'
-      properties['--gradient-alpha-start'] = '0.90'
-      properties['--gradient-alpha-mid'] = '0.70'
-    }
-    
-    // 모바일에서 블러 효과 최적화 (GPU 부하 감소)
-    if (isMobile) {
-      properties['--glassmorphism-blur'] = width > 768 ? '8px' : '4px' // 모바일에서 블러 감소
-      properties['--glassmorphism-saturation'] = '150%' // 채도 감소로 성능 개선
-      properties['--glassmorphism-bg-alpha'] = width > 768 ? '0.18' : '0.22' // 투명도 증가로 블러 의존도 감소
-    } else {
-      properties['--glassmorphism-blur'] = width > 768 ? '12px' : '8px'
-      properties['--glassmorphism-saturation'] = width > 768 ? '180%' : '160%'
-      properties['--glassmorphism-bg-alpha'] = width > 768 ? '0.12' : '0.15'
-    }
-    
-    setCssProperties(properties)
+    // requestAnimationFrame으로 배치 처리하여 리플로우 최소화
+    requestAnimationFrame(() => {
+      // 반응형 그라데이션 크기
+      if (width > 1200) {
+        root.style.setProperty('--gradient-size', '1200px 750px')
+        root.style.setProperty('--gradient-alpha-start', '0.85')
+        root.style.setProperty('--gradient-alpha-mid', '0.65')
+      } else if (width > 768) {
+        root.style.setProperty('--gradient-size', '900px 600px')
+        root.style.setProperty('--gradient-alpha-start', '0.85')
+        root.style.setProperty('--gradient-alpha-mid', '0.65')
+      } else {
+        root.style.setProperty('--gradient-size', '500px 400px')
+        root.style.setProperty('--gradient-alpha-start', '0.90')
+        root.style.setProperty('--gradient-alpha-mid', '0.70')
+      }
+      
+      // 모바일에서 블러 효과 최적화 (GPU 부하 감소)
+      if (isMobile) {
+        root.style.setProperty('--glassmorphism-blur', width > 768 ? '8px' : '4px')
+        root.style.setProperty('--glassmorphism-saturation', '150%')
+        root.style.setProperty('--glassmorphism-bg-alpha', width > 768 ? '0.18' : '0.22')
+      } else {
+        root.style.setProperty('--glassmorphism-blur', width > 768 ? '12px' : '8px')
+        root.style.setProperty('--glassmorphism-saturation', width > 768 ? '180%' : '160%')
+        root.style.setProperty('--glassmorphism-bg-alpha', width > 768 ? '0.12' : '0.15')
+      }
+    })
   }, [isMobileDevice])
 
   // 파티클 수 계산 - 모바일 최적화 강화
@@ -117,7 +117,12 @@ const Hero = () => {
   return (
     <section 
       className="relative min-h-screen flex items-center justify-center overflow-hidden"
-      style={cssProperties}
+      style={{
+        // CSS 컨테인먼트로 렌더링 최적화
+        contain: 'layout style paint',
+        // 불필요한 willChange 제거
+        willChange: 'auto'
+      }}
     >
       {/* Layer 1: 배경 이미지 - 최적화된 이미지 컴포넌트 */}
       <div className="absolute inset-0" style={{ zIndex: 1 }}>
@@ -126,8 +131,7 @@ const Hero = () => {
           priority
           style={{ 
             filter: 'contrast(1.1) brightness(1.05)',
-            willChange: 'transform',
-            backfaceVisibility: 'hidden'
+            // willChange 제거 - OptimizedHeroImage에서 관리
           }}
         />
       </div>
@@ -138,8 +142,7 @@ const Hero = () => {
         style={{ 
           zIndex: 10,
           background: 'linear-gradient(135deg, rgba(0, 0, 0, 0.6) 0%, rgba(0, 0, 0, 0.5) 50%, rgba(0, 0, 0, 0.6) 100%)',
-          willChange: 'transform',
-          backfaceVisibility: 'hidden'
+          // 정적 오버레이이므로 GPU 최적화 불필요
         }}
       />
       
@@ -156,8 +159,7 @@ const Hero = () => {
             rgba(0, 0, 0, 0.2) 80%,
             transparent 100%
           )`,
-          willChange: 'transform',
-          backfaceVisibility: 'hidden'
+          // 정적 그라데이션이므로 GPU 최적화 불필요
         }}
       />
       
