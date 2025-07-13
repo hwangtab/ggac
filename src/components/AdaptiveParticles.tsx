@@ -30,7 +30,7 @@ const AdaptiveParticles = ({ particleCount, width, height, forceCSS = false }: A
   // 렌더링 성능 추적
   const renderPerf = useRenderPerformance('AdaptiveParticles')
 
-  // WebGL 지원 확인 - 메모이제이션으로 최적화
+  // WebGL 지원 확인 - 브라우저 호환성 개선
   const checkWebGLSupport = useCallback(() => {
     // 이미 WebGL 지원 여부를 확인했다면 캐시된 결과 사용
     const cachedSupport = sessionStorage.getItem('webgl-support')
@@ -39,8 +39,40 @@ const AdaptiveParticles = ({ particleCount, width, height, forceCSS = false }: A
     }
 
     const canvas = document.createElement('canvas')
-    const gl = canvas.getContext('webgl2') || canvas.getContext('webgl')
+    let gl: WebGLRenderingContext | WebGL2RenderingContext | null = null
+    
+    try {
+      // Safari와 Firefox에 최적화된 WebGL 컨텍스트 생성
+      const contextOptions: WebGLContextAttributes = {
+        alpha: false,
+        premultipliedAlpha: false,
+        preserveDrawingBuffer: false,
+        powerPreference: 'high-performance',
+        failIfMajorPerformanceCaveat: true // 성능이 떨어지면 실패
+      }
+      
+      // WebGL2 먼저 시도, 실패시 WebGL1
+      gl = canvas.getContext('webgl2', contextOptions) || 
+           canvas.getContext('webgl', contextOptions)
+    } catch (e) {
+      console.warn('WebGL context creation failed:', e)
+    }
+    
     const supported = !!gl
+    
+    // Safari 전용 WebGL 컨텍스트 손실 감지
+    if (supported && gl) {
+      const loseContext = gl.getExtension('WEBGL_lose_context')
+      const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent)
+      
+      if (loseContext && isSafari) {
+        // Safari는 WebGL 컨텍스트 관리가 더 엄격함
+        canvas.addEventListener('webglcontextlost', (e) => {
+          console.warn('Safari WebGL context lost, disabling WebGL')
+          sessionStorage.setItem('webgl-support', 'false')
+        })
+      }
+    }
     
     // 결과 캐싱 (세션 동안 유지)
     sessionStorage.setItem('webgl-support', supported.toString())

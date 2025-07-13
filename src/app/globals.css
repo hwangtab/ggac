@@ -72,6 +72,82 @@ textarea:focus-visible {
   }
 }
 
+/* Browser-Specific Compatibility Fixes */
+
+/* Backdrop Filter Support Detection and Fallbacks */
+@supports (backdrop-filter: blur(1px)) {
+  .glass-hero-container {
+    backdrop-filter: blur(var(--glassmorphism-blur, 12px)) saturate(var(--glassmorphism-saturation, 180%));
+  }
+  
+  .bg-white\/90 {
+    backdrop-filter: blur(12px);
+  }
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .glass-hero-container {
+    background: rgba(255, 255, 255, 0.25) !important;
+    border: 2px solid rgba(255, 255, 255, 0.3) !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+  }
+  
+  .bg-white\/90 {
+    background: rgba(255, 255, 255, 0.9) !important;
+  }
+}
+
+/* Safari-Specific Optimizations */
+@media not all and (min-resolution:.001dpcm) {
+  @supports (-webkit-appearance:none) {
+    /* Safari backdrop-filter 성능 최적화 */
+    .glass-hero-container {
+      backdrop-filter: blur(8px) !important; /* Safari에서 블러 강도 줄임 */
+    }
+    
+    /* Safari 애니메이션 최적화 */
+    .floating-dots .dot {
+      animation-duration: calc(var(--duration, 4s) * 1.2); /* 더 느린 애니메이션 */
+      will-change: transform, opacity;
+    }
+    
+    /* Safari iOS viewport 문제 해결 */
+    .min-h-screen {
+      min-height: 100vh;
+      min-height: -webkit-fill-available;
+    }
+  }
+}
+
+/* Firefox-Specific Optimizations */
+@-moz-document url-prefix() {
+  /* Firefox 애니메이션 성능 향상 */
+  .loading-particle,
+  .floating-dots .dot,
+  .animate-pulse {
+    will-change: transform, opacity;
+    transform: translateZ(0); /* 하드웨어 가속 강제 */
+  }
+  
+  /* Firefox에서 복잡한 파티클 시각적 부하 감소 */
+  .css-particles-container {
+    opacity: 0.8;
+  }
+  
+  /* Firefox backdrop-filter 대안 */
+  .glass-hero-container {
+    background: rgba(255, 255, 255, 0.2) !important;
+  }
+}
+
+/* Edge Legacy 지원 */
+@supports (-ms-ime-align: auto) {
+  .glass-hero-container {
+    background: rgba(255, 255, 255, 0.25) !important;
+    filter: blur(2px); /* backdrop-filter 대안 */
+  }
+}
+
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
   10%, 30%, 50%, 70%, 90% { transform: translateX(-2px); }

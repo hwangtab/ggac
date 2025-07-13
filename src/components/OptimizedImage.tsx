@@ -2,6 +2,7 @@
 
 import Image from 'next/image'
 import { useState, useEffect, useCallback, memo } from 'react'
+import { getCachedBrowserInfo, getOptimizedImageSrc } from '@/utils/browserOptimization'
 import type { OptimizedImageProps } from '@/types'
 
 const OptimizedImage = memo(function OptimizedImage({
@@ -23,27 +24,29 @@ const OptimizedImage = memo(function OptimizedImage({
   const [currentSrc, setCurrentSrc] = useState(src)
   const [hasTriedWebp, setHasTriedWebp] = useState(false)
 
-  // WebP 최적화 함수
-  const getOptimizedSrc = useCallback((originalSrc: string): string => {
+  // 브라우저별 최적화된 이미지 소스 생성
+  const getBrowserOptimizedSrc = useCallback((originalSrc: string): string => {
     if (!preferWebp || !originalSrc.startsWith('/')) {
       return originalSrc
     }
 
-    // JPG/JPEG/PNG를 WEBP로 변환 시도
-    if (originalSrc.match(/\.(jpe?g|png)$/i)) {
-      return originalSrc.replace(/\.(jpe?g|png)$/i, '.webp')
-    }
-
-    return originalSrc
+    // 브라우저 정보를 이용한 최적화
+    const browserInfo = getCachedBrowserInfo()
+    return getOptimizedImageSrc(originalSrc, browserInfo)
   }, [preferWebp])
 
-  // WebP 로드 시도
+  // 브라우저별 최적화된 이미지 로드 시도
   useEffect(() => {
     if (preferWebp && src.startsWith('/') && src.match(/\.(jpe?g|png)$/i)) {
-      const webpSrc = getOptimizedSrc(src)
-      setCurrentSrc(webpSrc)
+      const optimizedSrc = getBrowserOptimizedSrc(src)
+      setCurrentSrc(optimizedSrc)
+    } else {
+      setCurrentSrc(src)
     }
-  }, [src, preferWebp, getOptimizedSrc])
+    setHasError(false)
+    setIsLoading(true)
+    setHasTriedWebp(false)
+  }, [src, preferWebp, getBrowserOptimizedSrc])
 
   const handleError = () => {
     if (!hasTriedWebp && currentSrc !== src) {

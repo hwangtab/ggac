@@ -93,13 +93,29 @@ const Hero = () => {
     return Math.min(baseCount, 250)
   }, [isMobileDevice])
 
+  // Safari 모바일 뷰포트 호환성을 위한 안전한 차원 측정
+  const getSafeViewportDimensions = useCallback(() => {
+    const isSafariMobile = /iPad|iPhone|iPod/.test(navigator.userAgent)
+    
+    if (isSafariMobile && window.visualViewport) {
+      return {
+        width: window.visualViewport.width,
+        height: window.visualViewport.height
+      }
+    }
+    
+    return {
+      width: window.innerWidth,
+      height: window.innerHeight
+    }
+  }, [])
+
   // 화면 크기 업데이트
   const updateDimensions = useCallback(() => {
-    const width = window.innerWidth
-    const height = window.innerHeight
+    const { width, height } = getSafeViewportDimensions()
     setDimensions({ width, height })
     updateCSSProperties(width, height)
-  }, [updateCSSProperties])
+  }, [getSafeViewportDimensions, updateCSSProperties])
 
   useEffect(() => {
     // 에러 추적 시스템 초기화
