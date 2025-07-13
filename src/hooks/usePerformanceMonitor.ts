@@ -239,8 +239,15 @@ export const usePerformanceMonitor = (options: PerformanceMonitorOptions = {}) =
     }
   }, [shouldMonitor, startMonitoring, stopMonitoring])
 
-  // 성능 보고서 생성
+  // 성능 보고서 생성 (에러 추적과 연동)
   const generateReport = useCallback(() => {
+    // 에러 추적 시스템에서 에러 데이터 가져오기
+    let errorData = null
+    if (typeof window !== 'undefined' && (window as any).__ERROR_TRACKER__) {
+      const errorTracker = (window as any).__ERROR_TRACKER__
+      errorData = errorTracker.getMetrics()
+    }
+
     const report = {
       summary: {
         averageFps: metrics.avgFps,
@@ -249,9 +256,12 @@ export const usePerformanceMonitor = (options: PerformanceMonitorOptions = {}) =
         averageFrameTime: metrics.frameTime,
         totalJanks: metrics.jankCount,
         memoryUsage: metrics.memoryUsage,
-        isLowPerformance: metrics.isLowPerformance
+        isLowPerformance: metrics.isLowPerformance,
+        errorCount: errorData?.totalErrors || 0,
+        criticalErrors: errorData?.criticalErrors || 0
       },
       history: history.slice(),
+      errors: errorData,
       recommendations: [] as string[]
     }
 
@@ -266,6 +276,14 @@ export const usePerformanceMonitor = (options: PerformanceMonitorOptions = {}) =
     
     if (report.summary.memoryUsage > 100) {
       report.recommendations.push('메모리 사용량이 높습니다. 메모리 누수를 확인하세요.')
+    }
+
+    if (report.summary.errorCount > 5) {
+      report.recommendations.push(`${report.summary.errorCount}개의 에러가 발생했습니다. 안정성 개선이 필요합니다.`)
+    }
+
+    if (report.summary.criticalErrors > 0) {
+      report.recommendations.push(`${report.summary.criticalErrors}개의 치명적 에러가 감지되었습니다. 즉시 수정이 필요합니다.`)
     }
 
     return report

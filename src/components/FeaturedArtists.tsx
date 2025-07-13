@@ -4,8 +4,6 @@ import OptimizedImage from './OptimizedImage'
 import type { Artist, FeaturedArtistsProps } from '@/types'
 
 const FeaturedArtists = ({ artists }: FeaturedArtistsProps) => {
-  console.log('FeaturedArtists artists:', artists)
-  
   return (
     <section className="py-16 md:py-24">
       <div className="container-custom">

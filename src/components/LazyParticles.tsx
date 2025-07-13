@@ -181,7 +181,37 @@ const LazyParticles = ({
       
       {/* 로딩 완료 */}
       {ParticleComponent && !isLoading && !loadError && (
-        <ErrorBoundary fallback={() => <FallbackComponent />}>
+        <ErrorBoundary 
+          componentName="LazyParticles"
+          maxRetries={2}
+          autoRecoveryTime={3000}
+          fallback={({ error, reset, retryCount, componentName }) => (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/5 backdrop-blur-sm rounded-lg">
+              <div className="text-center text-white/50 p-4">
+                <div className="w-6 h-6 mx-auto mb-2 opacity-50">
+                  <svg fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <p className="text-xs mb-2">파티클 렌더링 오류</p>
+                {retryCount < 2 && (
+                  <button
+                    onClick={reset}
+                    className="text-xs bg-white/10 hover:bg-white/20 px-2 py-1 rounded transition-colors"
+                  >
+                    다시 시도 ({retryCount + 1}/2)
+                  </button>
+                )}
+                {retryCount >= 2 && (
+                  <p className="text-xs opacity-75">자동 복구 실패</p>
+                )}
+              </div>
+            </div>
+          )}
+          onError={(error, errorInfo, errorId) => {
+            console.warn(`LazyParticles error (${errorId}):`, error.message)
+          }}
+        >
           <Suspense fallback={<LoadingComponent />}>
             <ParticleComponent
               particleCount={particleCount}

@@ -2,14 +2,22 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import ReactMarkdown from 'react-markdown'
+import dynamic from 'next/dynamic'
 import OptimizedImage from '@/components/OptimizedImage'
 import TicketingCard from '@/components/TicketingCard'
 import ArticleCard from '@/components/ArticleCard'
-import Lightbox from '@/components/Lightbox'
 import { convertUrlsToMarkdownLinks } from '@/utils/markdown'
 import { TicketingInfo } from '@/utils/linkPreview'
 import type { Project, Artist } from '@/types'
+
+// Lazy load heavy components
+const ReactMarkdown = dynamic(() => import('react-markdown'), {
+  loading: () => <div className="animate-pulse bg-gray-100 h-24 rounded-lg"></div>
+})
+
+const Lightbox = dynamic(() => import('@/components/Lightbox'), {
+  ssr: false
+})
 
 interface ProjectDetailContentProps {
   project: Project

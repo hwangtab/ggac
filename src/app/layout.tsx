@@ -82,17 +82,27 @@ export default async function RootLayout({
     <html lang="ko" className={`${pretendard.variable} ${notoSerifKr.variable}`}>
       <body suppressHydrationWarning>
         <ErrorBoundary>
+          {/* Skip Links for Keyboard Navigation */}
+          <div className="skip-links">
+            <a href="#main-content" className="skip-link">
+              메인 콘텐츠로 건너뛰기
+            </a>
+            <a href="#navigation" className="skip-link">
+              내비게이션으로 건너뛰기
+            </a>
+          </div>
+          
           <div className="min-h-screen flex flex-col">
             <Navigation />
             <Suspense fallback={
-              <div className="flex-1 pt-20 md:pt-24 flex items-center justify-center">
+              <div className="flex-1 pt-20 md:pt-24 flex items-center justify-center" role="status" aria-live="polite">
                 <div className="text-center">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-4"></div>
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-4" aria-hidden="true"></div>
                   <p className="text-gray-600">페이지를 불러오는 중...</p>
                 </div>
               </div>
             }>
-              <main className="flex-1">{children}</main>
+              <main id="main-content" className="flex-1">{children}</main>
             </Suspense>
             <Footer globalData={globalData} />
           </div>

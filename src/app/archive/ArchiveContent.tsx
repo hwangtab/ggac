@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import Link from 'next/link'
 import OptimizedImage from '@/components/OptimizedImage'
 import { useFilter } from '@/hooks/useFilter'
@@ -17,12 +17,13 @@ const ArchiveContent = ({ projects, artists }: ArchiveContentProps) => {
 
   const filteredProjects = useFilter(projects, selectedCategory, { allLabel: 'All' })
 
-  const getArtistNames = (artistIds: string[]) => {
+  // Memoize artist name lookup to prevent O(n²) operations on every render
+  const getArtistNames = useCallback((artistIds: string[]) => {
     return artistIds
       .map(id => artists.find(artist => artist.id === id)?.name)
       .filter(Boolean)
       .join(', ')
-  }
+  }, [artists])
 
   return (
     <div className="pt-20">
