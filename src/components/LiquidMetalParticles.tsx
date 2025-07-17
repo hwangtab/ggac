@@ -13,7 +13,7 @@ interface LiquidMetalParticlesProps {
   height: number
 }
 
-const LiquidMetalParticles = memo(({ particleCount, width, height }: LiquidMetalParticlesProps) => {
+const LiquidMetalParticles = ({ particleCount, width, height }: LiquidMetalParticlesProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const glRef = useRef<WebGL2RenderingContext | null>(null)
   const programRef = useRef<WebGLProgram | null>(null)
@@ -1831,7 +1831,7 @@ const LiquidMetalParticles = memo(({ particleCount, width, height }: LiquidMetal
       initializedRef.current = false
       initParamsRef.current = null
     }
-  }, [width, height, particleCount, initWebGL, initParticles, animate, handleMouseMove, cleanupWebGL])
+  }, [width, height, particleCount]) // 함수들을 deps에서 제거하여 안정화
 
   // WebGL이 지원되지 않는 경우 아무것도 렌더링하지 않음
   if (!webglSupportedRef.current && glRef.current === null) {
@@ -1855,4 +1855,16 @@ const LiquidMetalParticles = memo(({ particleCount, width, height }: LiquidMetal
 
 LiquidMetalParticles.displayName = 'LiquidMetalParticles'
 
-export default LiquidMetalParticles
+export default memo(LiquidMetalParticles, (prevProps, nextProps) => {
+  // 모바일에서는 항상 같은 것으로 간주하여 리렌더링 방지
+  if (nextProps.width < 768) {
+    return true
+  }
+  
+  // props 변경사항이 의미있는지 확인
+  return (
+    prevProps.particleCount === nextProps.particleCount &&
+    prevProps.width === nextProps.width &&
+    prevProps.height === nextProps.height
+  )
+})

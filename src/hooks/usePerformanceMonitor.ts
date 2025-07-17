@@ -352,13 +352,21 @@ export const useRenderPerformance = (componentName: string) => {
         renderTimes.shift()
       }
 
-      // 렌더 시간 임계값을 200ms로 증가하여 노이즈 대폭 감소
-      if (process.env.NODE_ENV === 'development' && renderTime > 200) {
-        console.warn(`🐌 Slow render detected in ${componentName}:`, {
-          renderTime: `${renderTime.toFixed(2)}ms`,
-          renderCount: currentRenderCount,
-          avgRenderTime: `${(renderTimes.reduce((sum, t) => sum + t, 0) / renderTimes.length).toFixed(2)}ms`
-        })
+      // 렌더 시간 임계값을 500ms로 증가하여 노이즈 대폭 감소 (개발 중에만)
+      if (process.env.NODE_ENV === 'development' && renderTime > 500) {
+        // debounce 로직 추가 - 1초 내 중복 경고 방지
+        const now = Date.now()
+        const lastWarningKey = `slow-render-${componentName}`
+        const lastWarning = (globalThis as any)[lastWarningKey] || 0
+        
+        if (now - lastWarning > 1000) {
+          console.warn(`🐌 Slow render detected in ${componentName}:`, {
+            renderTime: `${renderTime.toFixed(2)}ms`,
+            renderCount: currentRenderCount,
+            avgRenderTime: `${(renderTimes.reduce((sum, t) => sum + t, 0) / renderTimes.length).toFixed(2)}ms`
+          });
+          (globalThis as any)[lastWarningKey] = now
+        }
       }
 
       lastRenderTimeRef.current = renderTime

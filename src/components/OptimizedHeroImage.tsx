@@ -31,7 +31,7 @@ const OptimizedHeroImage = ({
   }
 
   return (
-    <div className="relative w-full h-full" style={{ position: 'relative' }}>
+    <div className="relative w-full h-full">
       {/* 최적화된 블러 플레이스홀더 - 레이아웃 시프트 방지 */}
       {!imageLoaded && (
         <div 

@@ -22,7 +22,7 @@ interface AdaptiveParticlesProps {
 /**
  * 디바이스 성능에 따라 WebGL 또는 CSS 파티클을 선택하는 적응형 컴포넌트
  */
-const AdaptiveParticles = memo(({ particleCount, width, height, forceCSS = false }: AdaptiveParticlesProps) => {
+const AdaptiveParticles = ({ particleCount, width, height, forceCSS = false }: AdaptiveParticlesProps) => {
   const { performanceLevel, isMobile, isLowPowerMode } = useDevicePerformance()
   const [useWebGL, setUseWebGL] = useState(false)
   const [webglSupported, setWebglSupported] = useState(true)
@@ -179,4 +179,12 @@ const AdaptiveParticles = memo(({ particleCount, width, height, forceCSS = false
 
 AdaptiveParticles.displayName = 'AdaptiveParticles'
 
-export default AdaptiveParticles
+export default memo(AdaptiveParticles, (prevProps, nextProps) => {
+  // shallow compare for props to prevent unnecessary re-renders
+  return (
+    prevProps.particleCount === nextProps.particleCount &&
+    prevProps.width === nextProps.width &&
+    prevProps.height === nextProps.height &&
+    prevProps.forceCSS === nextProps.forceCSS
+  )
+})

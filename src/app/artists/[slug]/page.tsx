@@ -218,7 +218,7 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
       {/* Header */}
       <section className="py-16 md:py-24">
         <div className="container-custom">
-          <div className="max-w-4xl mx-auto">
+          <div className="max-w-4xl mx-auto px-4">
             <div className="mb-6">
               <Link 
                 href="/artists" 
@@ -231,7 +231,7 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
             <div className={`${isMinimal ? 'text-center' : 'grid lg:grid-cols-2 gap-8 items-center'}`}>
               {/* Profile Image */}
               <div className={`${isMinimal ? 'mb-8' : ''}`}>
-                <div className={`${isMinimal ? 'w-96 h-96 mx-auto' : 'w-96 h-96'} overflow-hidden rounded-full`}>
+                <div className={`${isMinimal ? 'w-64 h-64 sm:w-80 sm:h-80 md:w-96 md:h-96 mx-auto' : 'w-64 h-64 sm:w-80 sm:h-80 md:w-96 md:h-96'} overflow-hidden rounded-full`}>
                   <OptimizedImage
                     src={artist.profileImage}
                     alt={artist.name}
@@ -308,9 +308,9 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
       </section>
 
       {/* Bio Section */}
-      <section className="py-20">
+      <section className="py-12 sm:py-20">
         <div className="container-custom">
-          <div className="max-w-6xl mx-auto">
+          <div className="max-w-6xl mx-auto px-4">
             {/* 섹션 헤더 */}
             <div className="text-center mb-12">
               <div className="inline-flex items-center gap-3 mb-4">
@@ -327,7 +327,7 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
             </div>
 
             {/* Bio 컨텐츠 */}
-            <div className={`${isMinimal ? 'max-w-4xl mx-auto' : 'grid lg:grid-cols-3 gap-12'}`}>
+            <div className={`${isMinimal ? 'max-w-4xl mx-auto px-4' : 'grid lg:grid-cols-3 gap-8 lg:gap-12'}`}>
               {!isMinimal && (
                 <div className="lg:col-span-1">
                   <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-white/20">
@@ -345,8 +345,8 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
               )}
               
               <div className={`${isMinimal ? '' : 'lg:col-span-2'}`}>
-                <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-8 shadow-lg border border-white/20">
-                  <div className="prose prose-lg max-w-none">
+                <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-4 sm:p-6 lg:p-8 shadow-lg border border-white/20">
+                  <div className="prose prose-sm sm:prose-base lg:prose-lg max-w-none">
                     <ReactMarkdown
                       components={{
                         a: ({node, ...props}) => (
@@ -369,9 +369,9 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
 
       {/* Portfolio Links */}
       {artist.portfolioLinks && artist.portfolioLinks.length > 0 && (
-        <section className="py-20">
+        <section className="py-12 sm:py-20">
           <div className="container-custom">
-            <div className="max-w-6xl mx-auto">
+            <div className="max-w-6xl mx-auto px-4">
               {/* 섹션 헤더 */}
               <div className="text-center mb-12">
                 <div className="inline-flex items-center gap-3 mb-4">
@@ -388,26 +388,26 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
               </div>
 
               {/* 포트폴리오 링크들 */}
-              <div className="flex flex-wrap justify-center gap-6 max-w-4xl mx-auto">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 max-w-6xl mx-auto px-4">
                 {artist.portfolioLinks.map((link, index) => (
                   <a
                     key={index}
                     href={link.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="group relative overflow-hidden bg-white/70 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-white/20 hover:shadow-2xl hover:scale-105 transition-all duration-300 w-full max-w-sm md:w-80"
+                    className="group relative overflow-hidden bg-white/70 backdrop-blur-sm rounded-2xl p-4 sm:p-6 shadow-lg border border-white/20 hover:shadow-2xl hover:scale-105 transition-all duration-300 min-w-0"
                   >
                     <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <h3 className="font-medium text-gray-900 mb-2 group-hover:text-accent-600 transition-colors duration-200">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium text-gray-900 mb-2 group-hover:text-accent-600 transition-colors duration-200 truncate">
                           {link.title}
                         </h3>
                         <p className="text-sm text-gray-600">
                           외부 플랫폼으로 이동
                         </p>
                       </div>
-                      <div className="w-12 h-12 bg-gradient-to-br from-accent-100 to-primary-100 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
-                        <FiExternalLink className="w-5 h-5 text-accent-600" />
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-accent-100 to-primary-100 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-200 flex-shrink-0">
+                        <FiExternalLink className="w-4 h-4 sm:w-5 sm:h-5 text-accent-600" />
                       </div>
                     </div>
                     
@@ -423,9 +423,9 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
   
         {/* YouTube Videos */}
         {artist.youtubeVideos && artist.youtubeVideos.length > 0 && (
-          <section className="py-20">
+          <section className="py-12 sm:py-20">
             <div className="container-custom">
-              <div className="max-w-6xl mx-auto">
+              <div className="max-w-6xl mx-auto px-4">
                 {/* 섹션 헤더 */}
                 <div className="text-center mb-12">
                   <div className="inline-flex items-center gap-3 mb-4">
@@ -444,12 +444,12 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
 
                 {/* 비디오 그리드 */}
                 <div className={`
-                  grid gap-8 
+                  grid gap-6 sm:gap-8 px-4
                   ${artist.youtubeVideos.length === 1 
                     ? 'grid-cols-1 max-w-3xl mx-auto' 
                     : artist.youtubeVideos.length === 2 
                     ? 'grid-cols-1 lg:grid-cols-2' 
-                    : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3'
+                    : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
                   }
                 `}>
                   {artist.youtubeVideos.map((video, index) => (
@@ -501,9 +501,9 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
 
         {/* 참여 프로젝트 섹션 */}
         {artistProjects.length > 0 && (
-          <section className="py-20">
+          <section className="py-12 sm:py-20">
             <div className="container-custom">
-              <div className="max-w-6xl mx-auto">
+              <div className="max-w-6xl mx-auto px-4">
                 {/* 섹션 헤더 */}
                 <div className="text-center mb-12">
                   <div className="inline-flex items-center gap-3 mb-4">
@@ -530,9 +530,9 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
         )}
   
         {/* Navigation */}
-        <section className="pt-8 pb-20 mt-4">
+        <section className="pt-8 pb-12 sm:pb-20 mt-4">
           <div className="container-custom">
-            <div className="text-center">
+            <div className="text-center px-4">
               <div className="max-w-2xl mx-auto mb-8">
                 <h3 className="text-xl font-serif font-semibold text-gray-900 mb-3">
                   다른 아티스트들도 만나보세요
