@@ -29,74 +29,116 @@ export function useDevicePerformance(): DevicePerformanceInfo {
     isMobile: false,
   })
 
-  // GPU 성능 측정
+  // GPU 성능 측정 - 개선된 cleanup과 timeout 처리
   const measureGPUPerformance = useCallback((): Promise<'high' | 'medium' | 'low'> => {
     return new Promise((resolve) => {
+      // 5초 timeout으로 무한 대기 방지
+      const timeout = setTimeout(() => {
+        resolve('low')
+      }, 5000)
+
       const canvas = document.createElement('canvas')
-      const gl = canvas.getContext('webgl2') || canvas.getContext('webgl')
+      let gl: WebGLRenderingContext | WebGL2RenderingContext | null = null
+      let buffer: WebGLBuffer | null = null
       
-      if (!gl) {
+      try {
+        gl = canvas.getContext('webgl2') || canvas.getContext('webgl')
+        
+        if (!gl) {
+          clearTimeout(timeout)
+          resolve('low')
+          return
+        }
+
+        // GPU 정보 수집
+        const debugInfo = gl.getExtension('WEBGL_debug_renderer_info')
+        let renderer = 'unknown'
+        
+        if (debugInfo) {
+          try {
+            renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL).toLowerCase()
+          } catch (e) {
+            // Some browsers might restrict this
+            renderer = 'unknown'
+          }
+        }
+
+        // GPU 성능 테스트
+        const startTime = performance.now()
+        const vertices = new Float32Array(10000 * 3) // 10k vertices
+        
+        for (let i = 0; i < vertices.length; i++) {
+          vertices[i] = Math.random() * 2 - 1
+        }
+
+        buffer = gl.createBuffer()
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer)
+        gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW)
+        
+        const endTime = performance.now()
+        const processingTime = endTime - startTime
+
+        // GPU 등급 결정
+        let gpuTier: 'high' | 'medium' | 'low' = 'medium'
+        
+        if (renderer.includes('intel') && renderer.includes('hd')) {
+          gpuTier = 'low'
+        } else if (processingTime < 5) {
+          gpuTier = 'high'
+        } else if (processingTime < 15) {
+          gpuTier = 'medium'
+        } else {
+          gpuTier = 'low'
+        }
+
+        clearTimeout(timeout)
+        resolve(gpuTier)
+      } catch (error) {
+        console.warn('GPU performance measurement failed:', error)
+        clearTimeout(timeout)
         resolve('low')
-        return
+      } finally {
+        // 안전한 정리
+        try {
+          if (gl && buffer) {
+            gl.deleteBuffer(buffer)
+          }
+          canvas.remove()
+        } catch (e) {
+          // ignore cleanup errors
+        }
       }
-
-      // GPU 정보 수집
-      const debugInfo = gl.getExtension('WEBGL_debug_renderer_info')
-      let renderer = 'unknown'
-      
-      if (debugInfo) {
-        renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL).toLowerCase()
-      }
-
-      // GPU 성능 테스트
-      const startTime = performance.now()
-      const vertices = new Float32Array(10000 * 3) // 10k vertices
-      
-      for (let i = 0; i < vertices.length; i++) {
-        vertices[i] = Math.random() * 2 - 1
-      }
-
-      const buffer = gl.createBuffer()
-      gl.bindBuffer(gl.ARRAY_BUFFER, buffer)
-      gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW)
-      
-      const endTime = performance.now()
-      const processingTime = endTime - startTime
-
-      // GPU 등급 결정
-      if (renderer.includes('intel') && renderer.includes('hd')) {
-        resolve('low')
-      } else if (processingTime < 5) {
-        resolve('high')
-      } else if (processingTime < 15) {
-        resolve('medium')
-      } else {
-        resolve('low')
-      }
-
-      // 정리
-      canvas.remove()
     })
   }, [])
 
-  // 프레임레이트 측정
+  // 프레임레이트 측정 - 개선된 timeout 처리
   const measureFrameRate = useCallback((): Promise<number> => {
     return new Promise((resolve) => {
       let frames = 0
       let startTime = performance.now()
+      let animationFrameId: number | null = null
+      
+      // 2초 timeout으로 무한 루프 방지
+      const timeout = setTimeout(() => {
+        if (animationFrameId) {
+          cancelAnimationFrame(animationFrameId)
+        }
+        resolve(Math.max(frames, 30)) // 최소 30fps로 fallback
+      }, 2000)
       
       const measureFrame = () => {
         frames++
         const currentTime = performance.now()
         
         if (currentTime - startTime >= 1000) {
+          clearTimeout(timeout)
           resolve(frames)
         } else {
-          requestAnimationFrame(measureFrame)
+          animationFrameId = requestAnimationFrame(measureFrame)
         }
       }
       
-      requestAnimationFrame(measureFrame)
+      animationFrameId = requestAnimationFrame(measureFrame)
     })
   }, [])
 
