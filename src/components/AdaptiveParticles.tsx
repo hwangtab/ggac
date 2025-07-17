@@ -175,7 +175,7 @@ const AdaptiveParticles = ({ particleCount, width, height, forceCSS = false }: A
       height={height}
     />
   )
-})
+}
 
 AdaptiveParticles.displayName = 'AdaptiveParticles'
 
