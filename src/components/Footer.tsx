@@ -52,7 +52,7 @@ const Footer = ({ globalData }: FooterProps) => {
           {/* Logo & Description */}
           <div>
             <div className="flex items-center space-x-3 mb-4">
-              <div className="relative w-8 h-8 brightness-0 invert">
+              <div className="relative w-8 h-8 brightness-0 invert pointer-events-none">
                 <Image
                   src="/images/logo/gac_logo.webp"
                   alt="경기아트콜렉티브 협동조합"

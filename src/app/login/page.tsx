@@ -14,20 +14,36 @@ export default function LoginPage() {
   const router = useRouter();
   const { isLoading: pageLoading, isReady } = useStablePageLoad('/login');
 
-  // 안전한 리다이렉트 함수 (개선된 버전)
+  // 모바일 디바이스 감지 함수
+  const isMobileDevice = () => {
+    if (typeof window === 'undefined') return false;
+    
+    const userAgent = window.navigator.userAgent.toLowerCase();
+    const mobileKeywords = ['android', 'iphone', 'ipod', 'ipad', 'blackberry', 'windows phone', 'mobile'];
+    
+    return mobileKeywords.some(keyword => userAgent.includes(keyword)) || 
+           window.innerWidth <= 768 || 
+           ('ontouchstart' in window);
+  };
+
+  // 안전한 리다이렉트 함수 (모바일 최적화 버전)
   const waitForAuthStateAndRedirect = async () => {
     try {
       console.log('🔄 [LOGIN DEBUG] Starting auth state confirmation...');
       setMessage('로그인 성공! 인증 상태를 확인하는 중...');
       
-      // 간단한 세션 확인 (최대 3회 재시도)
+      const isMobile = isMobileDevice();
+      console.log(`📱 [LOGIN DEBUG] Mobile device detected: ${isMobile}`);
+      
+      // 모바일에서는 더 긴 재시도 로직 (네트워크 불안정성 고려)
       let session = null;
       let profile = null;
       let retries = 0;
-      const maxRetries = 3;
+      const maxRetries = isMobile ? 5 : 3;
+      const retryDelay = isMobile ? 500 : 200;
       
       while (!session && retries < maxRetries) {
-        console.log(`🔄 [LOGIN DEBUG] Session check attempt ${retries + 1}/${maxRetries}`);
+        console.log(`🔄 [LOGIN DEBUG] Session check attempt ${retries + 1}/${maxRetries} (Mobile: ${isMobile})`);
         
         const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
         
@@ -49,7 +65,7 @@ export default function LoginPage() {
         
         retries++;
         if (retries < maxRetries) {
-          await new Promise(resolve => setTimeout(resolve, 200));
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
         }
       }
       
@@ -59,16 +75,30 @@ export default function LoginPage() {
         return;
       }
       
-      // 리다이렉트 실행 (프로덕션 환경을 위한 딜레이 추가)
+      // 리다이렉트 실행 (모바일 환경 최적화)
       if (profile.registration_status === 'approved' && profile.is_active) {
         console.log('🎯 [LOGIN DEBUG] Approved user, redirecting to board...');
         setMessage('인증 완료! 게시판으로 이동합니다...');
         
-        // 프로덕션 환경에서 쿠키 동기화를 위한 딜레이
+        // 모바일에서는 더 긴 딜레이와 router.push 사용
+        const redirectDelay = isMobile ? 800 : 300;
+        
         setTimeout(() => {
           console.log('🚀 [LOGIN DEBUG] Redirecting to board...');
-          window.location.href = '/board';
-        }, 300);
+          
+          // 모바일에서는 router.push 우선 시도, 실패 시 window.location.href 사용
+          if (isMobile) {
+            try {
+              router.push('/board');
+              console.log('📱 [LOGIN DEBUG] Mobile redirect via router.push');
+            } catch (routerError) {
+              console.warn('⚠️ [LOGIN DEBUG] Router.push failed, falling back to window.location');
+              window.location.href = '/board';
+            }
+          } else {
+            window.location.href = '/board';
+          }
+        }, redirectDelay);
         
       } else if (profile && profile.registration_status === 'pending') {
         console.log('⏳ [LOGIN DEBUG] Pending user, redirecting to pending page...');
@@ -169,11 +199,13 @@ export default function LoginPage() {
         
         {/* 메시지 표시 */}
         {message && (
-          <div className={`mb-8 p-6 rounded-xl shadow-sm ${
+          <div className={`mb-8 p-4 sm:p-6 rounded-xl shadow-sm ${
             message.includes('rate limit') || message.includes('너무 많습니다')
               ? 'bg-amber-50 text-amber-800 border border-amber-200'
               : message.includes('승인') && message.includes('완료')
               ? 'bg-green-50 text-green-800 border border-green-200'
+              : message.includes('이동합니다') || message.includes('확인하는 중')
+              ? 'bg-blue-50 text-blue-800 border border-blue-200'
               : 'bg-red-50 text-red-800 border border-red-200'
           }`}>
             <div className="flex items-start">
@@ -185,6 +217,11 @@ export default function LoginPage() {
                 ) : message.includes('승인') && message.includes('완료') ? (
                   <svg className="h-5 w-5 text-green-400 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                ) : message.includes('이동합니다') || message.includes('확인하는 중') ? (
+                  <svg className="h-5 w-5 text-blue-400 mt-0.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
                 ) : (
                   <svg className="h-5 w-5 text-red-400 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
