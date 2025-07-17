@@ -132,9 +132,9 @@ const Navigation = () => {
           </Link>
 
           {/* Desktop Menu */}
-          <div className="hidden md:flex items-center space-x-6">
+          <div className="hidden lg:flex items-center space-x-6">
             {/* Main Navigation */}
-            <div className="flex items-center space-x-6">
+            <div className="flex items-center space-x-4 lg:space-x-6">
               {menuItems.map((item) => (
                 <Link
                   key={item.href}
@@ -169,11 +169,11 @@ const Navigation = () => {
             </div>
             
             {/* Auth Section */}
-            <div className="flex items-center space-x-4 ml-4 pl-4 border-l border-gray-300/20">
+            <div className="flex items-center space-x-2 lg:space-x-4 ml-2 lg:ml-4 pl-2 lg:pl-4 border-l border-gray-300/20">
               {user ? (
                 <button
                   onClick={handleLogout}
-                  className={`font-medium transition-colors duration-300 text-sm ${textColor} ${hoverColor}`}
+                  className={`font-medium transition-colors duration-300 text-xs lg:text-sm ${textColor} ${hoverColor}`}
                 >
                   로그아웃
                 </button>
@@ -181,7 +181,7 @@ const Navigation = () => {
                 <>
                   <Link
                     href="/login"
-                    className={`font-medium transition-colors duration-300 text-sm ${
+                    className={`font-medium transition-colors duration-300 text-xs lg:text-sm ${
                       pathname === '/login' ? activeColor : `${textColor} ${hoverColor}`
                     }`}
                   >
@@ -189,7 +189,7 @@ const Navigation = () => {
                   </Link>
                   <Link
                     href="/signup"
-                    className={`font-medium transition-colors duration-300 text-sm px-3 py-1 rounded-md ${
+                    className={`font-medium transition-colors duration-300 text-xs lg:text-sm px-2 lg:px-3 py-1 rounded-md ${
                       pathname === '/signup' 
                         ? 'bg-primary-600 text-white' 
                         : isDark 
@@ -198,6 +198,101 @@ const Navigation = () => {
                     }`}
                   >
                     조합원 가입
+                  </Link>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Tablet Menu */}
+          <div className="hidden md:flex lg:hidden items-center space-x-3">
+            {/* Simplified tablet menu with key items */}
+            <Link
+              href="/"
+              className={`font-medium transition-colors duration-300 text-sm ${
+                pathname === '/' ? activeColor : `${textColor} ${hoverColor}`
+              }`}
+            >
+              HOME
+            </Link>
+            <Link
+              href="/about"
+              className={`font-medium transition-colors duration-300 text-sm ${
+                pathname === '/about' ? activeColor : `${textColor} ${hoverColor}`
+              }`}
+            >
+              ABOUT
+            </Link>
+            <Link
+              href="/archive"
+              className={`font-medium transition-colors duration-300 text-sm ${
+                pathname === '/archive' ? activeColor : `${textColor} ${hoverColor}`
+              }`}
+            >
+              PROJECTS
+            </Link>
+            <Link
+              href="/artists"
+              className={`font-medium transition-colors duration-300 text-sm ${
+                pathname === '/artists' ? activeColor : `${textColor} ${hoverColor}`
+              }`}
+            >
+              ARTISTS
+            </Link>
+            <Link
+              href="/board"
+              className={`font-medium transition-colors duration-300 text-sm ${
+                pathname === '/board' ? activeColor : `${textColor} ${hoverColor}`
+              }`}
+              onClick={(e) => {
+                if (!user) {
+                  e.preventDefault()
+                  router.push('/login')
+                  return
+                }
+              }}
+            >
+              BOARD
+            </Link>
+            <Link
+              href="/connect"
+              className={`font-medium transition-colors duration-300 text-sm ${
+                pathname === '/connect' ? activeColor : `${textColor} ${hoverColor}`
+              }`}
+            >
+              CONNECT
+            </Link>
+            
+            {/* Tablet Auth Section */}
+            <div className="flex items-center space-x-2 ml-2 pl-2 border-l border-gray-300/20">
+              {user ? (
+                <button
+                  onClick={handleLogout}
+                  className={`font-medium transition-colors duration-300 text-xs ${textColor} ${hoverColor}`}
+                >
+                  로그아웃
+                </button>
+              ) : (
+                <>
+                  <Link
+                    href="/login"
+                    className={`font-medium transition-colors duration-300 text-xs ${
+                      pathname === '/login' ? activeColor : `${textColor} ${hoverColor}`
+                    }`}
+                  >
+                    로그인
+                  </Link>
+                  <Link
+                    href="/signup"
+                    className={`font-medium transition-colors duration-300 text-xs px-2 py-1 rounded-md ${
+                      pathname === '/signup' 
+                        ? 'bg-primary-600 text-white' 
+                        : isDark 
+                          ? 'bg-accent-300 text-gray-900 hover:bg-accent-400' 
+                          : 'bg-primary-600 text-white hover:bg-primary-700'
+                    }`}
+                  >
+                    가입
                   </Link>
                 </>
               )}
