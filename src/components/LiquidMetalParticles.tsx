@@ -1851,7 +1851,7 @@ const LiquidMetalParticles = ({ particleCount, width, height }: LiquidMetalParti
       }}
     />
   )
-})
+}
 
 LiquidMetalParticles.displayName = 'LiquidMetalParticles'
 
