@@ -1,110 +1,160 @@
+import type { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  title: '개인정보처리방침 - 경기아트콜렉티브 협동조합',
+  description: '경기아트콜렉티브 협동조합의 개인정보처리방침을 확인하세요. 개인정보 수집, 이용, 보관, 파기에 관한 정책을 안내합니다.',
+  keywords: ['개인정보처리방침', '개인정보보호', '경기아트콜렉티브', '협동조합', '개인정보 정책'],
+  openGraph: {
+    title: '개인정보처리방침 - 경기아트콜렉티브 협동조합',
+    description: '경기아트콜렉티브 협동조합의 개인정보처리방침을 확인하세요.',
+    type: 'website'
+  },
+  robots: {
+    index: true,
+    follow: true
+  }
+}
+
 export default function PrivacyPage() {
   return (
-    <div className="min-h-screen bg-white py-20 pt-32">
-      <div className="container mx-auto px-4 max-w-4xl">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">개인정보처리방침</h1>
-        
-        <div className="max-w-none">
-          <section className="mb-8">
-            <h2 className="text-2xl font-semibold text-gray-800 mb-4">1. 개인정보의 수집 및 이용목적</h2>
-            <p className="text-gray-700 mb-4">
-              경기아트콜렉티브 협동조합(이하 "조합")은 다음의 목적을 위하여 개인정보를 처리합니다.
-            </p>
-            <ul className="list-disc list-inside text-gray-700 space-y-2">
-              <li>조합원 가입의사 확인, 조합원 자격 유지·관리</li>
-              <li>서비스 제공에 관한 계약 이행 및 서비스 제공에 따른 요금정산</li>
-              <li>고충처리를 위한 의사소통 경로의 확보</li>
-              <li>새로운 서비스·상품이나 새로운 기능의 개발 및 제공</li>
-              <li>전시, 행사, 교육 프로그램 안내 및 참여 관리</li>
-            </ul>
-          </section>
-
-          <section className="mb-8">
-            <h2 className="text-2xl font-semibold text-gray-800 mb-4">2. 수집하는 개인정보의 항목</h2>
-            <div className="mb-4">
-              <h3 className="text-lg font-medium text-gray-800 mb-2">필수항목</h3>
-              <ul className="list-disc list-inside text-gray-700 space-y-1">
-                <li>이메일 주소</li>
-                <li>비밀번호(소셜 로그인 제외)</li>
-                <li>표시 이름</li>
+    <div className="min-h-screen bg-white pt-24 md:pt-28 pb-12">
+      <div className="container-custom">
+        <div className="max-w-4xl mx-auto">
+          <h1 className="heading-primary text-gray-900 mb-8">개인정보처리방침</h1>
+          
+          <div className="prose prose-lg max-w-none">
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold text-gray-900 mb-4">1. 개인정보의 처리 목적</h2>
+              <p className="text-gray-700 leading-relaxed mb-4">
+                경기아트콜렉티브 협동조합(이하 "조합")은 다음의 목적을 위하여 개인정보를 처리합니다:
+              </p>
+              <ul className="list-disc pl-6 text-gray-700 space-y-2">
+                <li>조합원 가입 및 관리</li>
+                <li>서비스 제공 및 계약 이행</li>
+                <li>조합 활동 관련 정보 제공</li>
+                <li>문의사항 및 민원 처리</li>
+                <li>법령 및 조합 정관에 따른 의무 이행</li>
               </ul>
-            </div>
-            <div className="mb-4">
-              <h3 className="text-lg font-medium text-gray-800 mb-2">소셜 로그인 시 추가 수집 항목</h3>
-              <ul className="list-disc list-inside text-gray-700 space-y-1">
-                <li>소셜 계정 식별자</li>
-                <li>프로필 이미지</li>
-                <li>소셜 계정에서 제공하는 공개 프로필 정보</li>
+            </section>
+
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold text-gray-900 mb-4">2. 개인정보의 처리 및 보유기간</h2>
+              <p className="text-gray-700 leading-relaxed mb-4">
+                조합은 법령에 따른 개인정보 보유・이용기간 또는 정보주체로부터 개인정보를 수집시에 
+                동의받은 개인정보 보유・이용기간 내에서 개인정보를 처리・보유합니다.
+              </p>
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h3 className="font-semibold text-gray-900 mb-2">구체적인 개인정보 처리 및 보유기간:</h3>
+                <ul className="list-disc pl-6 text-gray-700 space-y-1">
+                  <li>조합원 정보: 조합원 탈퇴 시까지</li>
+                  <li>서비스 이용 기록: 3년</li>
+                  <li>법령에 의한 보관 의무가 있는 정보: 해당 법령에서 정한 기간</li>
+                </ul>
+              </div>
+            </section>
+
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold text-gray-900 mb-4">3. 처리하는 개인정보의 항목</h2>
+              <p className="text-gray-700 leading-relaxed mb-4">조합이 처리하는 개인정보의 항목은 다음과 같습니다:</p>
+              
+              <div className="space-y-4">
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <h4 className="font-semibold text-gray-900 mb-2">필수항목</h4>
+                  <ul className="list-disc pl-6 text-gray-700 space-y-1">
+                    <li>이메일 주소, 비밀번호</li>
+                    <li>실명, 표시명</li>
+                    <li>전화번호, 생년월일</li>
+                    <li>계좌정보(은행명, 계좌번호, 예금주)</li>
+                  </ul>
+                </div>
+                
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <h4 className="font-semibold text-gray-900 mb-2">자동 수집 항목</h4>
+                  <ul className="list-disc pl-6 text-gray-700 space-y-1">
+                    <li>접속 IP 정보, 쿠키, 접속 기록</li>
+                    <li>서비스 이용 기록, 불량 이용 기록</li>
+                  </ul>
+                </div>
+              </div>
+            </section>
+
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold text-gray-900 mb-4">4. 개인정보의 제3자 제공</h2>
+              <p className="text-gray-700 leading-relaxed">
+                조합은 개인정보를 제1조(개인정보의 처리 목적)에서 명시한 범위 내에서만 처리하며, 
+                정보주체의 동의, 법률의 특별한 규정 등 개인정보 보호법 제17조 및 제18조에 해당하는 경우에만 제3자에게 제공합니다.
+              </p>
+            </section>
+
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold text-gray-900 mb-4">5. 개인정보처리의 위탁</h2>
+              <p className="text-gray-700 leading-relaxed mb-4">
+                조합은 원활한 개인정보 업무처리를 위하여 다음과 같이 개인정보 처리업무를 위탁하고 있습니다:
+              </p>
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <ul className="list-disc pl-6 text-gray-700 space-y-2">
+                  <li><strong>Supabase Inc.</strong>: 데이터베이스 관리 및 사용자 인증 서비스</li>
+                  <li><strong>Vercel Inc.</strong>: 웹사이트 호스팅 및 배포 서비스</li>
+                </ul>
+              </div>
+            </section>
+
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold text-gray-900 mb-4">6. 정보주체의 권리・의무</h2>
+              <p className="text-gray-700 leading-relaxed mb-4">
+                정보주체는 조합에 대해 언제든지 다음 각 호의 개인정보 보호 관련 권리를 행사할 수 있습니다:
+              </p>
+              <ul className="list-disc pl-6 text-gray-700 space-y-2">
+                <li>개인정보 처리현황 통지요구</li>
+                <li>개인정보 처리정지 요구</li>
+                <li>개인정보의 정정・삭제 요구</li>
+                <li>손해배상 청구</li>
               </ul>
-            </div>
-          </section>
+            </section>
 
-          <section className="mb-8">
-            <h2 className="text-2xl font-semibold text-gray-800 mb-4">3. 개인정보의 처리 및 보유 기간</h2>
-            <p className="text-gray-700 mb-4">
-              조합은 법령에 따른 개인정보 보유·이용기간 또는 정보주체로부터 개인정보를 수집 시에 
-              동의받은 개인정보 보유·이용기간 내에서 개인정보를 처리·보유합니다.
-            </p>
-            <ul className="list-disc list-inside text-gray-700 space-y-2">
-              <li>조합원 관리: 조합원 탈퇴 시까지 (단, 관계 법령에 따라 보존이 필요한 경우 해당 기간)</li>
-              <li>서비스 이용 기록: 3년</li>
-              <li>불만 또는 분쟁 처리에 관한 기록: 3년</li>
-            </ul>
-          </section>
-
-          <section className="mb-8">
-            <h2 className="text-2xl font-semibold text-gray-800 mb-4">4. 개인정보의 제3자 제공</h2>
-            <p className="text-gray-700">
-              조합은 원칙적으로 정보주체의 개인정보를 제3자에게 제공하지 않습니다. 
-              다만, 다음의 경우에는 예외로 합니다.
-            </p>
-            <ul className="list-disc list-inside text-gray-700 space-y-2 mt-4">
-              <li>정보주체가 사전에 동의한 경우</li>
-              <li>법령의 규정에 의거하거나, 수사 목적으로 법령에 정해진 절차와 방법에 따라 수사기관의 요구가 있는 경우</li>
-            </ul>
-          </section>
-
-          <section className="mb-8">
-            <h2 className="text-2xl font-semibold text-gray-800 mb-4">5. 정보주체의 권리·의무 및 행사방법</h2>
-            <p className="text-gray-700 mb-4">
-              정보주체는 조합에 대해 언제든지 다음 각 호의 개인정보 보호 관련 권리를 행사할 수 있습니다.
-            </p>
-            <ul className="list-disc list-inside text-gray-700 space-y-2">
-              <li>개인정보 처리현황 통지요구</li>
-              <li>개인정보 처리정지 요구</li>
-              <li>개인정보의 수정·삭제 요구</li>
-              <li>손해배상 청구</li>
-            </ul>
-          </section>
-
-          <section className="mb-8">
-            <h2 className="text-2xl font-semibold text-gray-800 mb-4">6. 개인정보보호책임자</h2>
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <p className="text-gray-700 mb-2">
-                <strong>개인정보보호책임자:</strong> 최희철
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold text-gray-900 mb-4">7. 개인정보의 안전성 확보조치</h2>
+              <p className="text-gray-700 leading-relaxed mb-4">
+                조합은 개인정보의 안전성 확보를 위해 다음과 같은 조치를 취하고 있습니다:
               </p>
-              <p className="text-gray-700 mb-2">
-                <strong>연락처:</strong> contact@ggac.kr
+              <ul className="list-disc pl-6 text-gray-700 space-y-2">
+                <li>개인정보 취급 직원의 최소화 및 교육</li>
+                <li>개인정보에 대한 접근 제한</li>
+                <li>암호화를 통한 개인정보 보호</li>
+                <li>해킹 등에 대비한 기술적 대책</li>
+                <li>개인정보처리시스템 접근권한의 관리</li>
+              </ul>
+            </section>
+
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold text-gray-900 mb-4">8. 개인정보보호책임자</h2>
+              <div className="bg-blue-50 p-6 rounded-lg">
+                <p className="text-gray-700 leading-relaxed mb-4">
+                  조합은 개인정보 처리에 관한 업무를 총괄해서 책임지고, 개인정보 처리와 관련한 
+                  정보주체의 불만처리 및 피해구제 등을 위하여 아래와 같이 개인정보보호책임자를 지정하고 있습니다:
+                </p>
+                <div className="space-y-2">
+                  <p><strong>개인정보보호책임자</strong></p>
+                  <p>이메일: privacy@gac.coop</p>
+                  <p>전화번호: 0507-1384-3144</p>
+                </div>
+              </div>
+            </section>
+
+            <section className="mb-8">
+              <h2 className="text-2xl font-semibold text-gray-900 mb-4">9. 개인정보 처리방침 변경</h2>
+              <p className="text-gray-700 leading-relaxed">
+                이 개인정보처리방침은 시행일로부터 적용되며, 법령 및 방침에 따른 변경내용의 추가, 
+                삭제 및 정정이 있는 경우에는 변경사항의 시행 7일 전부터 공지사항을 통하여 고지할 것입니다.
               </p>
-              <p className="text-gray-700">
-                개인정보와 관련한 고충사항이 있으시면 언제든지 연락해 주시기 바랍니다.
+            </section>
+
+            <div className="mt-12 pt-8 border-t border-gray-200">
+              <p className="text-sm text-gray-500">
+                시행일자: 2025년 5월 1일<br />
+                본 개인정보처리방침에 대한 문의사항이 있으시면 privacy@gac.coop로 연락주시기 바랍니다.
               </p>
             </div>
-          </section>
-
-          <section className="mb-8">
-            <h2 className="text-2xl font-semibold text-gray-800 mb-4">7. 개인정보 처리방침 변경</h2>
-            <p className="text-gray-700">
-              이 개인정보처리방침은 시행일로부터 적용되며, 법령 및 방침에 따른 변경내용의 추가, 
-              삭제 및 정정이 있는 경우에는 변경사항의 시행 7일 전부터 공지사항을 통하여 고지할 것입니다.
-            </p>
-          </section>
-
-          <div className="border-t pt-6 mt-8">
-            <p className="text-sm text-gray-600">
-              <strong>시행일자:</strong> 2025년 7월 7일<br/>
-              <strong>최근 수정일:</strong> 2025년 7월 7일
-            </p>
           </div>
         </div>
       </div>
