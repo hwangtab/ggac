@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, memo } from 'react'
 
 interface CSSParticlesProps {
   particleCount: number
@@ -22,7 +22,7 @@ interface Particle {
  * WebGL 대신 CSS 애니메이션을 사용하는 경량화된 파티클 시스템
  * 저성능 디바이스나 WebGL을 지원하지 않는 환경에서 사용
  */
-const CSSParticles = ({ particleCount, width, height }: CSSParticlesProps) => {
+const CSSParticles = memo(({ particleCount, width, height }: CSSParticlesProps) => {
   // 파티클 데이터 생성 (성능상 최대 120개로 확장) - 메모리 최적화
   const particles = useMemo(() => {
     const maxParticles = Math.min(particleCount, 120)
@@ -89,6 +89,8 @@ const CSSParticles = ({ particleCount, width, height }: CSSParticlesProps) => {
       ))}
     </div>
   )
-}
+})
+
+CSSParticles.displayName = 'CSSParticles'
 
 export default CSSParticles

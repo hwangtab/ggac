@@ -14,15 +14,15 @@ interface PerformanceMetrics {
 interface PerformanceMonitorOptions {
   // 모니터링 활성화 여부
   enabled?: boolean
-  // FPS 측정 간격 (밀리초)
+  // FPS 측정 간격 (밀리초) - 기본값 증가로 오버헤드 감소
   fpsUpdateInterval?: number
-  // 메모리 측정 간격 (밀리초)
+  // 메모리 측정 간격 (밀리초) - 기본값 증가로 오버헤드 감소
   memoryUpdateInterval?: number
   // 저성능 기준 FPS
   lowPerformanceThreshold?: number
   // Jank 감지 기준 프레임 시간 (밀리초)
   jankThreshold?: number
-  // 성능 히스토리 유지 개수
+  // 성능 히스토리 유지 개수 - 메모리 사용량 감소
   historySize?: number
   // 개발 환경에서만 실행
   devOnly?: boolean
@@ -42,11 +42,11 @@ interface PerformanceHistory {
 export const usePerformanceMonitor = (options: PerformanceMonitorOptions = {}) => {
   const {
     enabled = true,
-    fpsUpdateInterval = 1000,
-    memoryUpdateInterval = 2000,
+    fpsUpdateInterval = 5000, // 5초로 증가하여 오버헤드 대폭 감소
+    memoryUpdateInterval = 10000, // 10초로 증가하여 오버헤드 대폭 감소
     lowPerformanceThreshold = 30,
     jankThreshold = 16.67, // 60fps 기준
-    historySize = 60,
+    historySize = 20, // 20개로 감소하여 메모리 절약
     devOnly = true
   } = options
 
@@ -61,6 +61,7 @@ export const usePerformanceMonitor = (options: PerformanceMonitorOptions = {}) =
 
   const [history, setHistory] = useState<PerformanceHistory[]>([])
   const [isActive, setIsActive] = useState(false)
+  const isActiveRef = useRef(false)
 
   // FPS 계산용 ref들
   const frameCountRef = useRef(0)
@@ -76,7 +77,8 @@ export const usePerformanceMonitor = (options: PerformanceMonitorOptions = {}) =
 
   // FPS 측정 함수
   const measureFrame = useCallback((currentTime: number) => {
-    if (!shouldMonitor || !isActive) return
+    // 활성화 상태를 런타임에 체크
+    if (!enabled || (devOnly && process.env.NODE_ENV !== 'development') || !isActiveRef.current) return
 
     frameCountRef.current++
     
@@ -91,11 +93,12 @@ export const usePerformanceMonitor = (options: PerformanceMonitorOptions = {}) =
     
     lastTimeRef.current = currentTime
     animationFrameRef.current = requestAnimationFrame(measureFrame)
-  }, [shouldMonitor, isActive, jankThreshold])
+  }, [enabled, devOnly, jankThreshold])
 
   // FPS 계산 및 업데이트
   const updateFPS = useCallback(() => {
-    if (!shouldMonitor || !isActive) return
+    // 활성화 상태를 런타임에 체크
+    if (!enabled || (devOnly && process.env.NODE_ENV !== 'development') || !isActiveRef.current) return
 
     const now = performance.now()
     const deltaTime = now - (lastTimeRef.current || now)
@@ -122,7 +125,7 @@ export const usePerformanceMonitor = (options: PerformanceMonitorOptions = {}) =
       isLowPerformance: fps < lowPerformanceThreshold
     }))
 
-    // 히스토리 업데이트
+    // 히스토리 업데이트 - 함수형 업데이트로 의존성 제거
     setHistory(prev => {
       const newHistory = [...prev, {
         timestamp: now,
@@ -137,11 +140,12 @@ export const usePerformanceMonitor = (options: PerformanceMonitorOptions = {}) =
     // 카운터 리셋
     frameCountRef.current = 0
     jankCountRef.current = 0
-  }, [shouldMonitor, isActive, fpsUpdateInterval, historySize, lowPerformanceThreshold])
+  }, [enabled, devOnly, fpsUpdateInterval, historySize, lowPerformanceThreshold])
 
   // 메모리 사용량 측정 (브라우저 호환성 개선)
   const updateMemory = useCallback(() => {
-    if (!shouldMonitor || !isActive) return
+    // 활성화 상태를 런타임에 체크
+    if (!enabled || (devOnly && process.env.NODE_ENV !== 'development') || !isActiveRef.current) return
 
     let memoryUsage = 0
     
@@ -173,7 +177,7 @@ export const usePerformanceMonitor = (options: PerformanceMonitorOptions = {}) =
       // 복잡한 계산을 통한 메모리 사용량 추정 (매우 근사치)
       const baseEstimate = (perfEntries.length + resourceEntries.length) * 0.1
       const frameEstimate = frameCount * 0.05
-      const complexityEstimate = history.length * 0.02
+      const complexityEstimate = fpsHistoryRef.current.length * 0.02
       
       memoryUsage = Math.round((baseEstimate + frameEstimate + complexityEstimate) * 100) / 100
       
@@ -186,13 +190,15 @@ export const usePerformanceMonitor = (options: PerformanceMonitorOptions = {}) =
       ...prev,
       memoryUsage
     }))
-  }, [shouldMonitor, isActive, history.length])
+  }, [enabled, devOnly])
 
   // 모니터링 시작
   const startMonitoring = useCallback(() => {
-    if (!shouldMonitor || isActive) return
+    // 활성화 상태를 런타임에 체크
+    if (!enabled || (devOnly && process.env.NODE_ENV !== 'development') || isActiveRef.current) return
 
     setIsActive(true)
+    isActiveRef.current = true
     lastTimeRef.current = performance.now()
     frameCountRef.current = 0
     jankCountRef.current = 0
@@ -209,22 +215,26 @@ export const usePerformanceMonitor = (options: PerformanceMonitorOptions = {}) =
     if (process.env.NODE_ENV === 'development') {
       console.log('🔍 Performance monitoring started')
     }
-  }, [shouldMonitor, isActive, measureFrame, updateFPS, updateMemory, fpsUpdateInterval, memoryUpdateInterval])
+  }, [enabled, devOnly, measureFrame, updateFPS, updateMemory, fpsUpdateInterval, memoryUpdateInterval])
 
   // 모니터링 중지
   const stopMonitoring = useCallback(() => {
     setIsActive(false)
+    isActiveRef.current = false
 
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current)
+      animationFrameRef.current = undefined
     }
     
     if (fpsIntervalRef.current) {
       clearInterval(fpsIntervalRef.current)
+      fpsIntervalRef.current = undefined
     }
     
     if (memoryIntervalRef.current) {
       clearInterval(memoryIntervalRef.current)
+      memoryIntervalRef.current = undefined
     }
 
     if (process.env.NODE_ENV === 'development') {
@@ -250,14 +260,14 @@ export const usePerformanceMonitor = (options: PerformanceMonitorOptions = {}) =
 
   // 컴포넌트 마운트 시 자동 시작
   useEffect(() => {
-    if (shouldMonitor) {
+    if (enabled && (!devOnly || process.env.NODE_ENV === 'development')) {
       startMonitoring()
     }
 
     return () => {
       stopMonitoring()
     }
-  }, [shouldMonitor, startMonitoring, stopMonitoring])
+  }, [enabled, devOnly, startMonitoring, stopMonitoring])
 
   // 성능 보고서 생성 (에러 추적과 연동)
   const generateReport = useCallback(() => {
@@ -342,7 +352,8 @@ export const useRenderPerformance = (componentName: string) => {
         renderTimes.shift()
       }
 
-      if (process.env.NODE_ENV === 'development' && renderTime > 16) {
+      // 렌더 시간 임계값을 200ms로 증가하여 노이즈 대폭 감소
+      if (process.env.NODE_ENV === 'development' && renderTime > 200) {
         console.warn(`🐌 Slow render detected in ${componentName}:`, {
           renderTime: `${renderTime.toFixed(2)}ms`,
           renderCount: currentRenderCount,

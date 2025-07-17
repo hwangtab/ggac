@@ -1,11 +1,12 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
-import { FiPlay, FiExternalLink, FiUser, FiLink } from 'react-icons/fi'
+import { FiPlay, FiExternalLink, FiUser, FiLink, FiFolder } from 'react-icons/fi'
 import OptimizedImage from '@/components/OptimizedImage'
 import YouTubeEmbed from '@/components/YouTubeEmbed'
+import ArtistProjects from '@/components/ArtistProjects'
 import { convertUrlsToMarkdownLinks } from '@/utils/markdown'
-import { getArtistSlugs, getArtistBySlug, type Artist } from '@/lib/data'
+import { getArtistSlugs, getArtistBySlug, getArtistProjects, type Artist } from '@/lib/data'
 import type { Metadata } from 'next'
 import { sanitizeJsonLd } from '@/utils/sanitize'
 
@@ -137,6 +138,9 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
   if (!artist) {
     notFound()
   }
+
+  // 아티스트가 참여한 프로젝트들 조회
+  const artistProjects = await getArtistProjects(artist.id)
 
   const isMinimal = artist.templateType === '미니멀형'
   const baseUrl = getBaseUrl()
@@ -490,6 +494,36 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
                     )}
                   </div>
                 )}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* 참여 프로젝트 섹션 */}
+        {artistProjects.length > 0 && (
+          <section className="py-20">
+            <div className="container-custom">
+              <div className="max-w-6xl mx-auto">
+                {/* 섹션 헤더 */}
+                <div className="text-center mb-12">
+                  <div className="inline-flex items-center gap-3 mb-4">
+                    <div className="w-8 h-0.5 bg-gradient-to-r from-transparent to-primary-500"></div>
+                    <FiFolder className="w-6 h-6 text-primary-600" />
+                    <div className="w-8 h-0.5 bg-gradient-to-l from-transparent to-primary-500"></div>
+                  </div>
+                  <h2 className="text-2xl md:text-3xl font-serif font-semibold text-gray-900 mb-3">
+                    참여 프로젝트
+                  </h2>
+                  <p className="text-gray-600 max-w-2xl mx-auto">
+                    {artist.name}이(가) 참여한 경기아트콜렉티브의 다양한 프로젝트들을 만나보세요.
+                  </p>
+                </div>
+
+                {/* 프로젝트 목록 */}
+                <ArtistProjects 
+                  projects={artistProjects} 
+                  artistName={artist.name}
+                />
               </div>
             </div>
           </section>

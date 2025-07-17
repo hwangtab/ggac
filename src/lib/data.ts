@@ -121,3 +121,11 @@ export const getProjectArtists = cache(async (artistIds: string[]): Promise<Arti
   return artists.filter(artist => artistIds.includes(artist.id))
 })
 
+// 특정 아티스트가 참여한 프로젝트들 조회 (최신순 정렬)
+export const getArtistProjects = cache(async (artistId: string): Promise<Project[]> => {
+  const projects = await getProjects()
+  return projects
+    .filter(project => project.artistIds.includes(artistId))
+    .sort((a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime())
+})
+

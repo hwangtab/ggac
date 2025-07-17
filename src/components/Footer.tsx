@@ -57,6 +57,7 @@ const Footer = ({ globalData }: FooterProps) => {
                   src="/images/logo/gac_logo.webp"
                   alt="경기아트콜렉티브 협동조합"
                   fill
+                  sizes="32px"
                   className="object-contain"
                 />
               </div>

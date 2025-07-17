@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, ComponentType, Suspense } from 'react'
+import { useState, useEffect, ComponentType, Suspense, memo, useMemo, useRef, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { useLazyLoading } from '@/hooks/useIntersectionObserver'
 import { useRenderPerformance } from '@/hooks/usePerformanceMonitor'
@@ -93,7 +93,7 @@ const ParticlesFallback = () => {
  * 지연 로딩되는 파티클 시스템
  * Intersection Observer를 사용하여 뷰포트에 진입할 때만 파티클 코드를 로딩
  */
-const LazyParticles = ({
+const LazyParticles = memo(({
   particleCount,
   width,
   height,
@@ -104,22 +104,33 @@ const LazyParticles = ({
   enablePreloading = true,
   priority = 'low',
 }: LazyParticlesProps) => {
-  // Intersection Observer로 지연 로딩 관리
-  const { shouldLoad, targetRef } = useLazyLoading({
+  // 참조를 안정화하여 불필요한 리렌더링 방지
+  const stableOptionsRef = useRef({
     rootMargin: enablePreloading ? preloadDistance : '0px',
     threshold: 0.1,
   })
+
+  // Intersection Observer로 지연 로딩 관리
+  const { shouldLoad, targetRef } = useLazyLoading(stableOptionsRef.current)
 
   const [isLoading, setIsLoading] = useState(false)
   const [loadError, setLoadError] = useState<Error | null>(null)
   const [ParticleComponent, setParticleComponent] = useState<ComponentType<ParticleProps> | null>(null)
   
-  // 렌더링 성능 추적
+  // 렌더링 성능 추적 - 컴포넌트 이름 안정화
   const renderPerf = useRenderPerformance('LazyParticles')
 
-  // 파티클 컴포넌트 동적 로딩
-  useEffect(() => {
-    if (!shouldLoad || ParticleComponent || isLoading) return
+  // 파티클 props를 memoize하여 불필요한 리렌더링 방지
+  const stableParticleProps = useMemo(() => ({
+    particleCount,
+    width,
+    height,
+    forceCSS,
+  }), [particleCount, width, height, forceCSS])
+
+  // 파티클 컴포넌트 동적 로딩을 useCallback으로 최적화
+  const loadParticleComponent = useCallback(async () => {
+    if (ParticleComponent || isLoading) return
 
     // 이미 AdaptiveParticles가 로드되어 있다면 바로 사용
     if (typeof window !== 'undefined' && (window as any).__ADAPTIVE_PARTICLES_LOADED__) {
@@ -132,30 +143,35 @@ const LazyParticles = ({
 
     const loadStartTime = performance.now()
 
-    // 동적 임포트 시도
-    import('./AdaptiveParticles')
-      .then((module) => {
-        const loadTime = performance.now() - loadStartTime
-        
-        // 개발 환경에서 로딩 시간 로그
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`🎉 AdaptiveParticles loaded in ${loadTime.toFixed(2)}ms`)
-        }
+    try {
+      // 동적 임포트 시도
+      const dynamicModule = await import('./AdaptiveParticles')
+      const loadTime = performance.now() - loadStartTime
+      
+      // 개발 환경에서 로딩 시간 로그
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`🎉 AdaptiveParticles loaded in ${loadTime.toFixed(2)}ms`)
+      }
 
-        // 글로벌 플래그 설정 (중복 로딩 방지)
-        if (typeof window !== 'undefined') {
-          (window as any).__ADAPTIVE_PARTICLES_LOADED__ = true
-        }
+      // 글로벌 플래그 설정 (중복 로딩 방지)
+      if (typeof window !== 'undefined') {
+        (window as any).__ADAPTIVE_PARTICLES_LOADED__ = true
+      }
 
-        setParticleComponent(() => module.default)
-        setIsLoading(false)
-      })
-      .catch((error) => {
-        console.error('Failed to load AdaptiveParticles:', error)
-        setLoadError(error)
-        setIsLoading(false)
-      })
-  }, [shouldLoad, ParticleComponent, isLoading])
+      setParticleComponent(() => dynamicModule.default)
+      setIsLoading(false)
+    } catch (error) {
+      console.error('Failed to load AdaptiveParticles:', error)
+      setLoadError(error)
+      setIsLoading(false)
+    }
+  }, [ParticleComponent, isLoading])
+
+  useEffect(() => {
+    if (shouldLoad) {
+      loadParticleComponent()
+    }
+  }, [shouldLoad, loadParticleComponent])
 
   // 프리로딩 힌트 (high priority인 경우) - 더 안전한 방식
   useEffect(() => {
@@ -213,12 +229,7 @@ const LazyParticles = ({
           }}
         >
           <Suspense fallback={<LoadingComponent />}>
-            <ParticleComponent
-              particleCount={particleCount}
-              width={width}
-              height={height}
-              forceCSS={forceCSS}
-            />
+            <ParticleComponent {...stableParticleProps} />
           </Suspense>
         </ErrorBoundary>
       )}
@@ -239,7 +250,9 @@ const LazyParticles = ({
       )}
     </div>
   )
-}
+})
+
+LazyParticles.displayName = 'LazyParticles'
 
 export default LazyParticles
 export { ParticlesLoadingSkeleton, ParticlesFallback }

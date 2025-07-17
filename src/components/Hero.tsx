@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, memo } from 'react'
 import Link from 'next/link'
 import OptimizedHeroImage from './OptimizedHeroImage'
 import LazyParticles from './LazyParticles'
@@ -118,26 +118,38 @@ const Hero = () => {
   }, [getSafeViewportDimensions, updateCSSProperties])
 
   useEffect(() => {
+    let mounted = true
+    
     // 에러 추적 시스템 초기화
     if (typeof window !== 'undefined') {
       getErrorTracker()
     }
 
     // 진입 애니메이션 시퀀스 - 타이밍 최적화
-    const timer1 = setTimeout(() => setIsLoaded(true), 50)
-    const timer2 = setTimeout(() => setShowText(true), 300)
+    const timer1 = setTimeout(() => {
+      if (mounted) setIsLoaded(true)
+    }, 50)
+    const timer2 = setTimeout(() => {
+      if (mounted) setShowText(true)
+    }, 300)
     
     // 초기 화면 크기 설정
     updateDimensions()
     
-    // 리사이즈 이벤트 리스너
-    const debouncedResize = debounce(updateDimensions, 250)
+    // 리사이즈 이벤트 리스너 - debounce 함수 내부에서 mounted 체크
+    const debouncedResize = debounce(() => {
+      if (mounted) updateDimensions()
+    }, 250)
+    
     window.addEventListener('resize', debouncedResize, { passive: true })
 
     return () => {
+      mounted = false
       clearTimeout(timer1)
       clearTimeout(timer2)
       window.removeEventListener('resize', debouncedResize)
+      // debounce 타이머도 정리
+      debouncedResize.cancel()
     }
   }, [updateDimensions])
 
@@ -365,13 +377,26 @@ const Hero = () => {
   )
 }
 
-// 유틸리티 함수
-function debounce<T extends (...args: any[]) => any>(func: T, delay: number): T {
-  let timeoutId: NodeJS.Timeout
-  return ((...args: any[]) => {
-    clearTimeout(timeoutId)
-    timeoutId = setTimeout(() => func(...args), delay)
-  }) as T
+// 유틸리티 함수 - 취소 기능이 있는 debounce
+function debounce<T extends (...args: any[]) => any>(func: T, delay: number): T & { cancel: () => void } {
+  let timeoutId: NodeJS.Timeout | null = null
+  
+  const debounced = ((...args: any[]) => {
+    if (timeoutId) clearTimeout(timeoutId)
+    timeoutId = setTimeout(() => {
+      timeoutId = null
+      func(...args)
+    }, delay)
+  }) as T & { cancel: () => void }
+  
+  debounced.cancel = () => {
+    if (timeoutId) {
+      clearTimeout(timeoutId)
+      timeoutId = null
+    }
+  }
+  
+  return debounced
 }
 
-export default Hero
+export default memo(Hero)

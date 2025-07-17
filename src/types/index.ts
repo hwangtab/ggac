@@ -573,3 +573,9 @@ export interface BaseCardProps {
   footer?: React.ReactNode
   onClick?: () => void
 }
+
+export interface ArtistProjectsProps {
+  projects: Project[]
+  artistName?: string
+  className?: string
+}
