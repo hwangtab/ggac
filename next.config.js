@@ -6,6 +6,13 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
 const nextConfig = {
   reactStrictMode: true,
   
+  // Development configuration for HTTP/HTTPS handling
+  ...(process.env.NODE_ENV === 'development' && {
+    experimental: {
+      forceSwcTransforms: true,
+    }
+  }),
+  
   // Enhanced security headers
   async headers() {
     return [
@@ -42,12 +49,15 @@ const nextConfig = {
               "img-src 'self' data: https: blob:",
               "media-src 'self' https://www.youtube.com",
               "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com",
-              "connect-src 'self' https://api.supabase.io https://*.supabase.co",
+              process.env.NODE_ENV === 'development' 
+                ? "connect-src 'self' http://localhost:* https://api.supabase.io https://*.supabase.co ws://localhost:* wss://localhost:*"
+                : "connect-src 'self' https://api.supabase.io https://*.supabase.co",
               "object-src 'none'",
               "base-uri 'self'",
               "form-action 'self'",
               "frame-ancestors 'none'",
-              "upgrade-insecure-requests",
+              // Remove upgrade-insecure-requests in development to allow HTTP
+              ...(process.env.NODE_ENV === 'production' ? ["upgrade-insecure-requests"] : []),
             ].join('; '),
           },
         ],

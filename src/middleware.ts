@@ -21,40 +21,16 @@ export async function middleware(request: NextRequest) {
                         request.nextUrl.pathname.startsWith('/admin');
   
   try {
-    // 크리티컬 경로에서는 세션 재시도 로직 적용
-    let session = null;
-    let sessionError = null;
-    let retries = 0;
-    const maxRetries = isCriticalPath ? 3 : 1;
-    
-    while (retries < maxRetries) {
-      console.log(`🔄 [MIDDLEWARE DEBUG] Session attempt ${retries + 1}/${maxRetries} for ${request.nextUrl.pathname}`);
-      
-      const { data: { session: currentSession }, error: currentError } = await supabase.auth.getSession();
-      
-      if (currentSession && !currentError) {
-        session = currentSession;
-        sessionError = null;
-        console.log('✅ [MIDDLEWARE DEBUG] Session found on attempt:', retries + 1);
-        break;
-      }
-      
-      sessionError = currentError;
-      retries++;
-      
-      // 재시도 전 짧은 대기 (크리티컬 경로에서만)
-      if (retries < maxRetries && isCriticalPath) {
-        await new Promise(resolve => setTimeout(resolve, 50));
-      }
-    }
+    // 단순화된 세션 조회 - 복잡한 재시도 로직 제거
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
     if (sessionError) {
-      console.log('❌ [MIDDLEWARE DEBUG] Session error after retries:', sessionError);
+      console.log('❌ [MIDDLEWARE DEBUG] Session error:', sessionError.message);
       authError = true;
     } else {
       user = session?.user || null;
-      if (isCriticalPath) {
-        console.log('📋 [MIDDLEWARE DEBUG] Final session state for critical path:', user ? 'Authenticated' : 'Not authenticated');
+      if (process.env.NODE_ENV === 'development' && isCriticalPath) {
+        console.log('📋 [MIDDLEWARE DEBUG] Session state for', request.nextUrl.pathname, ':', user ? 'Authenticated' : 'Not authenticated');
       }
     }
   } catch (error) {
@@ -97,39 +73,29 @@ export async function middleware(request: NextRequest) {
   }
 
   // 2. 인증된 사용자 처리
-  // member_profiles 정보 가져오기 (에러 처리 개선)
+  // member_profiles 정보 가져오기 (단순화된 조회)
   let profile = null;
   let profileError = null;
   
   try {
-    // 크리티컬 경로에서는 프로필 조회도 재시도
-    let retries = 0;
-    const maxProfileRetries = isCriticalPath ? 2 : 1;
+    const { data, error } = await supabase
+      .from('member_profiles')
+      .select('registration_status, is_active, is_admin, display_name')
+      .eq('id', user.id)
+      .single();
     
-    while (retries < maxProfileRetries) {
-      console.log(`🔍 [MIDDLEWARE DEBUG] Profile attempt ${retries + 1}/${maxProfileRetries} for user ${user.id}`);
-      
-      const { data, error } = await supabase
-        .from('member_profiles')
-        .select('registration_status, is_active, is_admin, display_name')
-        .eq('id', user.id)
-        .single();
-      
-      if (data && !error) {
-        profile = data;
-        profileError = null;
+    if (data && !error) {
+      profile = data;
+      if (process.env.NODE_ENV === 'development' && isCriticalPath) {
         console.log('✅ [MIDDLEWARE DEBUG] Profile found:', { 
           status: profile.registration_status, 
           active: profile.is_active 
         });
-        break;
       }
-      
+    } else {
       profileError = error;
-      retries++;
-      
-      if (retries < maxProfileRetries && isCriticalPath) {
-        await new Promise(resolve => setTimeout(resolve, 30));
+      if (process.env.NODE_ENV === 'development') {
+        console.log('❌ [MIDDLEWARE DEBUG] Profile error:', error?.message);
       }
     }
     

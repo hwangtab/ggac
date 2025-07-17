@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, memo } from 'react'
 
 // 개발 환경에서만 로그 출력하는 유틸리티
 const isDev = process.env.NODE_ENV === 'development'
@@ -13,10 +13,15 @@ interface LiquidMetalParticlesProps {
   height: number
 }
 
-const LiquidMetalParticles = ({ particleCount, width, height }: LiquidMetalParticlesProps) => {
+const LiquidMetalParticles = memo(({ particleCount, width, height }: LiquidMetalParticlesProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const glRef = useRef<WebGL2RenderingContext | null>(null)
   const programRef = useRef<WebGLProgram | null>(null)
+  
+  // WebGL 컨텍스트 안정화를 위한 초기화 상태 추적
+  const initializedRef = useRef<boolean>(false)
+  const initParamsRef = useRef<{ particleCount: number, width: number, height: number } | null>(null)
+  const isMobileRef = useRef<boolean>(false)
   
   // WebGL 2.0 지원 확인 및 안전성 강화
   const isWebGL2Ref = useRef<boolean>(true)
@@ -1746,15 +1751,40 @@ const LiquidMetalParticles = ({ particleCount, width, height }: LiquidMetalParti
 
   useEffect(() => {
     devLog('🌊 LiquidMetalParticles 초기화 시작', { width, height, particleCount })
+    
+    // 모바일에서 비활성화
     if (width < 768) {
       devLog('📱 모바일 화면에서 LiquidMetalParticles 비활성화')
+      isMobileRef.current = true
+      return
+    } else {
+      isMobileRef.current = false
+    }
+
+    // 이미 초기화되었고 파라미터가 동일한지 확인
+    const currentParams = { particleCount, width, height }
+    const prevParams = initParamsRef.current
+    
+    if (initializedRef.current && 
+        prevParams && 
+        prevParams.particleCount === particleCount && 
+        prevParams.width === width && 
+        prevParams.height === height &&
+        glRef.current && 
+        !glRef.current.isContextLost()) {
+      devLog('✅ WebGL 이미 초기화됨, 재사용')
       return
     }
 
     if (!initWebGL()) {
       console.warn('❌ LiquidMetalParticles WebGL 2.0 초기화 실패')
+      initializedRef.current = false
       return
     }
+    
+    // 초기화 상태 업데이트
+    initializedRef.current = true
+    initParamsRef.current = currentParams
     
     devLog('✅ LiquidMetalParticles WebGL 2.0 초기화 성공')
 
@@ -1797,6 +1827,9 @@ const LiquidMetalParticles = ({ particleCount, width, height }: LiquidMetalParti
         canvas.removeEventListener('webglcontextrestored', handleContextRestored)
       }
       cleanupWebGL()
+      // 초기화 상태 리셋
+      initializedRef.current = false
+      initParamsRef.current = null
     }
   }, [width, height, particleCount, initWebGL, initParticles, animate, handleMouseMove, cleanupWebGL])
 
@@ -1818,6 +1851,8 @@ const LiquidMetalParticles = ({ particleCount, width, height }: LiquidMetalParti
       }}
     />
   )
-}
+})
+
+LiquidMetalParticles.displayName = 'LiquidMetalParticles'
 
 export default LiquidMetalParticles

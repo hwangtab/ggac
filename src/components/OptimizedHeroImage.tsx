@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { useState } from 'react'
+import { useState, memo } from 'react'
 
 interface OptimizedHeroImageProps {
   alt: string
@@ -31,7 +31,7 @@ const OptimizedHeroImage = ({
   }
 
   return (
-    <div className="relative w-full h-full">
+    <div className="relative w-full h-full" style={{ position: 'relative' }}>
       {/* 최적화된 블러 플레이스홀더 - 레이아웃 시프트 방지 */}
       {!imageLoaded && (
         <div 
@@ -110,4 +110,4 @@ const OptimizedHeroImage = ({
   )
 }
 
-export default OptimizedHeroImage
+export default memo(OptimizedHeroImage)

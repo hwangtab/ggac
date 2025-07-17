@@ -144,6 +144,24 @@ const Navigation = () => {
                       ? activeColor
                       : `${textColor} ${hoverColor}`
                   }`}
+                  onClick={(e) => {
+                    // Add error handling for board navigation
+                    if (item.href === '/board') {
+                      try {
+                        // Check if user is authenticated before navigating to board
+                        if (!user) {
+                          e.preventDefault()
+                          router.push('/login')
+                          return
+                        }
+                      } catch (error) {
+                        console.error('Navigation error:', error)
+                        e.preventDefault()
+                        // Fallback to browser navigation
+                        window.location.href = item.href
+                      }
+                    }
+                  }}
                 >
                   {item.label}
                 </Link>
@@ -223,7 +241,25 @@ const Navigation = () => {
                 <Link
                   key={item.href}
                   href={item.href}
-                  onClick={() => setIsMenuOpen(false)}
+                  onClick={(e) => {
+                    setIsMenuOpen(false)
+                    // Add error handling for board navigation
+                    if (item.href === '/board') {
+                      try {
+                        // Check if user is authenticated before navigating to board
+                        if (!user) {
+                          e.preventDefault()
+                          router.push('/login')
+                          return
+                        }
+                      } catch (error) {
+                        console.error('Mobile navigation error:', error)
+                        e.preventDefault()
+                        // Fallback to browser navigation
+                        window.location.href = item.href
+                      }
+                    }
+                  }}
                   className={`block py-3 px-4 rounded-md transition-colors duration-200 ${
                     pathname === item.href
                       ? 'text-primary-600 bg-primary-50'

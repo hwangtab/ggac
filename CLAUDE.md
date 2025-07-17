@@ -21,12 +21,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Vercel Commands
 - `npm run vercel:build` - Build for Vercel deployment
+- `npm run vercel:dev` - Start Vercel development server
 - `npm run vercel:deploy` - Deploy to production
 - `npm run vercel:preview` - Deploy preview version
 
 ### Additional Commands
 - `npm run deploy` - Trigger manual deployment via webhook
 - `npm run deploy:notify` - Send deployment notification to Slack
+
+### Bundle Analysis
+- `ANALYZE=true npm run build` - Generate bundle analysis report using @next/bundle-analyzer
+- View results at http://localhost:8888 after build completion
 
 ## Architecture Overview
 
@@ -42,6 +47,8 @@ This is a **Next.js 14 App Router** application for 경기아트콜렉티브 협
 - **Database**: Supabase PostgreSQL
 - **Content**: Markdown support via react-markdown
 - **Deployment**: Vercel with static site generation
+- **Performance**: WebGL particles, device-adaptive components, real-time monitoring
+- **Testing**: Playwright for board functionality, custom test scripts
 
 ### Data Architecture
 
@@ -94,6 +101,8 @@ Components are organized by purpose:
 - **Media**: OptimizedImage, YouTubeEmbed, Lightbox
 - **Interactive**: TicketingCard with external links
 - **Board System**: PostList, CreatePostForm, CommentSection
+- **Performance**: AdaptiveParticles, PerformanceMonitor, device detection hooks
+- **Particles**: WebGL, CSS, Network, LiquidMetal variants with fallback system
 
 ### Image Optimization
 - All images stored in `/public/images/` with organized subdirectories
@@ -106,6 +115,33 @@ Components are organized by purpose:
 - Korean typography support with Pretendard and Noto Serif KR fonts
 - Responsive design with mobile-first approach
 - Custom animations for floating elements and smooth transitions
+
+### Performance Optimization System
+
+#### Particle System Architecture
+- **AdaptiveParticles**: Main component that selects optimal particle type based on device capabilities
+- **Device Detection**: Automatic fallback from WebGL → CSS → Static based on performance
+- **Performance Monitoring**: Real-time FPS tracking with automatic degradation
+- **Reduced Motion**: Respects `prefers-reduced-motion` accessibility setting
+- **Memory Management**: Proper cleanup on component unmount
+
+#### Component Variants by Performance Level
+1. **High Performance**: WebGLParticles, LiquidMetalParticles with full effects
+2. **Medium Performance**: CSSParticles with transform animations
+3. **Low Performance**: Static background or minimal effects
+4. **Accessibility**: Respects reduced motion preferences
+
+#### Performance Hooks
+- `useDevicePerformance()`: Detects device capabilities (GPU, RAM, CPU)
+- `usePerformanceMonitor()`: Real-time FPS and resource monitoring
+- `usePrefersReducedMotion()`: Accessibility compliance
+- `useIntersectionObserver()`: Lazy loading and viewport optimization
+
+#### Browser Optimization
+- Bundle analysis via `ANALYZE=true npm run build`
+- Aggressive image optimization (WebP, AVIF)
+- Code splitting and dynamic imports
+- Service worker for caching (if implemented)
 
 ### Content Management
 
@@ -158,6 +194,15 @@ Key tables managed in `supabase/migrations/`:
 ### Path Aliases
 - `@/*` maps to `src/*` for cleaner imports
 
+### Key File Locations
+- **Core Data Loading**: `src/lib/data.ts` - cached data functions
+- **Type Definitions**: `src/types/index.ts` - centralized type system
+- **Authentication Middleware**: `src/middleware.ts` - route protection and user state management
+- **Security Utils**: `src/utils/security.ts` - XSS prevention and sanitization
+- **Performance Hooks**: `src/hooks/useDevicePerformance.ts`, `src/hooks/usePerformanceMonitor.ts`
+- **Database Migrations**: `supabase/migrations/` - versioned schema changes
+- **Test Scripts**: Root directory - `test-*.js` files for manual testing
+
 ### TypeScript Configuration
 - Strict mode enabled with comprehensive type checking
 - Path mapping configured for clean imports
@@ -167,6 +212,12 @@ Key tables managed in `supabase/migrations/`:
 - `NEXT_PUBLIC_SUPABASE_URL` - Supabase project URL
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Supabase public API key
 - `SUPABASE_SERVICE_ROLE_KEY` - For server-side operations (if needed)
+
+### ESLint Configuration
+Custom rules configured in `.eslintrc.json`:
+- Disables React unescaped entities warning
+- Allows standard img elements alongside Next.js Image
+- Warns on missing dependencies in React hooks
 
 ### Build Requirements
 - Node.js 18+ required
@@ -192,6 +243,12 @@ Apply migrations to Supabase:
 - `npm run deploy:notify` - Sends deployment notifications to Slack
 - Manual testing scripts available for endpoint verification
 - Slack notifications configured for deployment updates (channel: #웹사이트)
+
+### CI/CD Pipeline
+- **GitHub Actions**: Automated build and lint testing on every push to main
+- **Build Verification**: Ensures TypeScript compilation and ESLint compliance
+- **Deployment**: Automatic via Vercel Git integration (separate from build testing)
+- **Notifications**: Slack integration for deployment status updates
 
 ## Security Configuration
 
@@ -223,6 +280,33 @@ Apply migrations to Supabase:
 - All database schema changes must be versioned in `supabase/migrations/`
 - Test RLS policies thoroughly before deployment
 - Use the provided test scripts to verify Supabase connectivity
+
+### Critical Development Workflow
+
+#### Before Making Changes
+1. **Always run the relevant test script first** to understand current behavior
+2. **Check performance impact** for any particle/animation changes
+3. **Verify authentication flows** with `node test-signup-flow.js`
+4. **Test image optimization** with `node test-image-loading.js`
+
+#### Code Patterns to Follow
+- **Particle Components**: Always implement fallback strategy (WebGL → CSS → Static)
+- **Image Components**: Use OptimizedImage with WebP preference and fallbacks
+- **Authentication**: Follow the middleware pattern in `src/middleware.ts`
+- **Data Loading**: Use cached functions from `src/lib/data.ts`
+- **Types**: Import from centralized `src/types/index.ts`
+
+#### Performance-Critical Areas
+- **Particle Systems**: Test on various devices before committing
+- **Image Loading**: Always provide fallback text and optimize formats
+- **Database Queries**: Use RLS policies and test with different user states
+- **Bundle Size**: Run bundle analysis after significant changes
+
+#### Error Handling Patterns
+- **Authentication Errors**: Graceful degradation to public content
+- **Database Errors**: Fallback to cached data or static content
+- **Image Loading Errors**: Show fallback text or placeholder
+- **Performance Issues**: Automatic fallback to simpler components
 
 # Using Gemini CLI for Large Codebase Analysis
 
@@ -301,3 +385,9 @@ Use gemini -p when:
 - No need for --yolo flag for read-only analysis
 - Gemini's context window can handle entire codebases that would overflow Claude's context
 - When checking implementations, be specific about what you're looking for to get accurate results
+
+# important-instruction-reminders
+Do what has been asked; nothing more, nothing less.
+NEVER create files unless they're absolutely necessary for achieving your goal.
+ALWAYS prefer editing an existing file to creating a new one.
+NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
