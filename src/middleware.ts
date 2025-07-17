@@ -16,25 +16,30 @@ export async function middleware(request: NextRequest) {
   let user = null;
   let authError = false;
   
+  // 모바일 디바이스 감지
+  const userAgent = request.headers.get('user-agent')?.toLowerCase() || '';
+  const isMobile = /android|iphone|ipod|ipad|blackberry|windows phone|mobile/.test(userAgent) ||
+                   request.headers.get('sec-ch-ua-mobile') === '?1';
+  
   // 크리티컬 경로 판단 (게시판 관련 경로)
   const isCriticalPath = request.nextUrl.pathname.startsWith('/board') || 
                         request.nextUrl.pathname.startsWith('/admin');
   
   try {
-    // 단순화된 세션 조회 - 복잡한 재시도 로직 제거
+    // 모바일 환경에서는 더 관대한 세션 확인
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
     if (sessionError) {
-      console.log('❌ [MIDDLEWARE DEBUG] Session error:', sessionError.message);
+      console.log(`❌ [MIDDLEWARE DEBUG] Session error (Mobile: ${isMobile}):`, sessionError.message);
       authError = true;
     } else {
       user = session?.user || null;
       if (process.env.NODE_ENV === 'development' && isCriticalPath) {
-        console.log('📋 [MIDDLEWARE DEBUG] Session state for', request.nextUrl.pathname, ':', user ? 'Authenticated' : 'Not authenticated');
+        console.log(`📋 [MIDDLEWARE DEBUG] Session state for ${request.nextUrl.pathname} (Mobile: ${isMobile}):`, user ? 'Authenticated' : 'Not authenticated');
       }
     }
   } catch (error) {
-    console.log('💥 [MIDDLEWARE DEBUG] Auth error in middleware:', error);
+    console.log(`💥 [MIDDLEWARE DEBUG] Auth error in middleware (Mobile: ${isMobile}):`, error);
     authError = true;
   }
 
@@ -87,7 +92,7 @@ export async function middleware(request: NextRequest) {
     if (data && !error) {
       profile = data;
       if (process.env.NODE_ENV === 'development' && isCriticalPath) {
-        console.log('✅ [MIDDLEWARE DEBUG] Profile found:', { 
+        console.log(`✅ [MIDDLEWARE DEBUG] Profile found (Mobile: ${isMobile}):`, { 
           status: profile.registration_status, 
           active: profile.is_active 
         });
@@ -95,13 +100,20 @@ export async function middleware(request: NextRequest) {
     } else {
       profileError = error;
       if (process.env.NODE_ENV === 'development') {
-        console.log('❌ [MIDDLEWARE DEBUG] Profile error:', error?.message);
+        console.log(`❌ [MIDDLEWARE DEBUG] Profile error (Mobile: ${isMobile}):`, error?.message);
       }
     }
     
   } catch (error) {
-    console.log('💥 [MIDDLEWARE DEBUG] Database error in middleware:', error);
+    console.log(`💥 [MIDDLEWARE DEBUG] Database error in middleware (Mobile: ${isMobile}):`, error);
     profileError = error;
+    
+    // 모바일에서는 네트워크 오류 시 더 관대하게 처리
+    if (isMobile && !isProtectedPage) {
+      console.log('📱 [MIDDLEWARE DEBUG] Mobile device - allowing public page access despite DB error');
+      return res;
+    }
+    
     // 데이터베이스 에러 시 기본적으로 공개 페이지는 허용
     if (!isProtectedPage) {
       return res;
@@ -137,10 +149,13 @@ export async function middleware(request: NextRequest) {
   // 2.1. 인증 페이지에 접근 시 리다이렉트
   if (isAuthPage) {
     if (userStatus === 'approved' && isActive) {
+      console.log(`🎯 [MIDDLEWARE DEBUG] Redirecting approved user to board (Mobile: ${isMobile})`);
       return NextResponse.redirect(new URL('/board', request.nextUrl.origin)); // 승인된 사용자는 게시판으로
     } else if (userStatus === 'pending') {
+      console.log(`⏳ [MIDDLEWARE DEBUG] Redirecting pending user (Mobile: ${isMobile})`);
       return NextResponse.redirect(new URL('/register/pending', request.nextUrl.origin));
     } else if (userStatus === 'rejected') {
+      console.log(`❌ [MIDDLEWARE DEBUG] Redirecting rejected user (Mobile: ${isMobile})`);
       return NextResponse.redirect(new URL('/register/rejected', request.nextUrl.origin));
     }
     // 그 외의 경우 (예: 아직 이메일 인증만 완료된 상태)는 현재 페이지 유지 (signup/login)
