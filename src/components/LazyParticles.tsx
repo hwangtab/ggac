@@ -162,7 +162,7 @@ const LazyParticles = memo(({
       setIsLoading(false)
     } catch (error) {
       console.error('Failed to load AdaptiveParticles:', error)
-      setLoadError(error)
+      setLoadError(error instanceof Error ? error : new Error('Unknown error'))
       setIsLoading(false)
     }
   }, [ParticleComponent, isLoading])
