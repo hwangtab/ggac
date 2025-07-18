@@ -1,6 +1,7 @@
 'use client'
 
 import { FiUser } from 'react-icons/fi'
+import ImagePreview from './ImagePreview'
 
 interface BasicInfoProps {
   data: {
@@ -8,13 +9,16 @@ interface BasicInfoProps {
     category: string[]
     one_liner: string
     template_type: string
+    profile_image: string
   }
+  currentImage?: string
   errors: Record<string, string>
   onChange: (field: string, value: any) => void
 }
 
 const BasicInfo: React.FC<BasicInfoProps> = ({
   data,
+  currentImage,
   errors,
   onChange
 }) => {
@@ -53,6 +57,18 @@ const BasicInfo: React.FC<BasicInfoProps> = ({
       </div>
 
       <div className="space-y-6">
+        {/* 프로필 이미지 */}
+        <div>
+          <ImagePreview
+            currentImage={currentImage}
+            value={data.profile_image}
+            onImageChange={(imageUrl) => onChange('profile_image', imageUrl)}
+          />
+          {errors.profile_image && (
+            <p className="mt-2 text-sm text-red-600">{errors.profile_image}</p>
+          )}
+        </div>
+
         {/* 아티스트 이름 */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
