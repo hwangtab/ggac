@@ -171,12 +171,22 @@ const Navigation = () => {
             {/* Auth Section */}
             <div className="flex items-center space-x-2 lg:space-x-4 ml-2 lg:ml-4 pl-2 lg:pl-4 border-l border-gray-300/20">
               {user ? (
-                <button
-                  onClick={handleLogout}
-                  className={`font-medium transition-colors duration-300 text-xs lg:text-sm ${textColor} ${hoverColor}`}
-                >
-                  로그아웃
-                </button>
+                <>
+                  <Link
+                    href="/mypage"
+                    className={`font-medium transition-colors duration-300 text-xs lg:text-sm ${
+                      pathname.startsWith('/mypage') ? activeColor : `${textColor} ${hoverColor}`
+                    }`}
+                  >
+                    마이페이지
+                  </Link>
+                  <button
+                    onClick={handleLogout}
+                    className={`font-medium transition-colors duration-300 text-xs lg:text-sm ${textColor} ${hoverColor}`}
+                  >
+                    로그아웃
+                  </button>
+                </>
               ) : (
                 <>
                   <Link
@@ -266,12 +276,22 @@ const Navigation = () => {
             {/* Tablet Auth Section */}
             <div className="flex items-center space-x-2 ml-2 pl-2 border-l border-gray-300/20">
               {user ? (
-                <button
-                  onClick={handleLogout}
-                  className={`font-medium transition-colors duration-300 text-xs ${textColor} ${hoverColor}`}
-                >
-                  로그아웃
-                </button>
+                <>
+                  <Link
+                    href="/mypage"
+                    className={`font-medium transition-colors duration-300 text-xs ${
+                      pathname.startsWith('/mypage') ? activeColor : `${textColor} ${hoverColor}`
+                    }`}
+                  >
+                    마이페이지
+                  </Link>
+                  <button
+                    onClick={handleLogout}
+                    className={`font-medium transition-colors duration-300 text-xs ${textColor} ${hoverColor}`}
+                  >
+                    로그아웃
+                  </button>
+                </>
               ) : (
                 <>
                   <Link
@@ -368,15 +388,28 @@ const Navigation = () => {
               {/* Mobile Auth Section */}
               <div className="border-t border-gray-200/50 mt-2 pt-2">
                 {user ? (
-                  <button
-                    onClick={() => {
-                      handleLogout()
-                      setIsMenuOpen(false)
-                    }}
-                    className="block w-full text-left py-3 px-4 rounded-md transition-colors duration-200 text-gray-700 hover:text-primary-600 hover:bg-gray-50"
-                  >
-                    로그아웃
-                  </button>
+                  <>
+                    <Link
+                      href="/mypage"
+                      onClick={() => setIsMenuOpen(false)}
+                      className={`block py-3 px-4 rounded-md transition-colors duration-200 ${
+                        pathname.startsWith('/mypage')
+                          ? 'text-primary-600 bg-primary-50'
+                          : 'text-gray-700 hover:text-primary-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      마이페이지
+                    </Link>
+                    <button
+                      onClick={() => {
+                        handleLogout()
+                        setIsMenuOpen(false)
+                      }}
+                      className="block w-full text-left py-3 px-4 rounded-md transition-colors duration-200 text-gray-700 hover:text-primary-600 hover:bg-gray-50"
+                    >
+                      로그아웃
+                    </button>
+                  </>
                 ) : (
                   <>
                     <Link

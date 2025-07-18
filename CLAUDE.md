@@ -17,6 +17,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - `node test-signup-flow.js` - Test member registration and authentication flow
   - `node test-image-loading.js` - Test image optimization and loading
   - `node test-security-fixes.js` - Test security vulnerability fixes
+  - `node test-mobile-login.js` - Test mobile login flows across different devices with Playwright
+  - `node test-design-pages.js` - Test design and layout components
   - `node check-supabase-status.js` - Verify Supabase connection and database status
 
 ### Vercel Commands
@@ -70,9 +72,10 @@ Data is accessed through cached functions in `src/lib/data.ts` which provide bot
 
 #### Member Board System
 Database-driven content using Supabase:
-- `member_profiles` - User registration and approval status
+- `member_profiles` - User registration and approval status, extended with artist fields
 - `posts` - Member board posts with categories (공지, 잡담, 홍보, 건의)
 - `comments` - Nested comments on posts
+- `artists` - Artist profile data migrated from JSON to database (supports mypage system)
 
 ### Route Structure
 
@@ -93,6 +96,14 @@ Database-driven content using Supabase:
 #### Protected Routes
 - `/board` - Member-only board (requires approval)
 - `/admin` - Admin panel (requires admin privileges)
+- `/mypage` - Member dashboard and profile management (requires approval)
+
+#### Mypage System Routes
+- `/mypage` - Main dashboard with overview and navigation cards
+- `/mypage/profile` - Personal profile editing (member info, contact, cooperative details)
+- `/mypage/artist` - Artist profile management (requires artist permissions)
+- `/mypage/settings` - User preferences and settings (planned)
+- `/mypage/activity` - Activity log and history (planned)
 
 ### Component Architecture
 Components are organized by purpose:
@@ -101,6 +112,7 @@ Components are organized by purpose:
 - **Media**: OptimizedImage, YouTubeEmbed, Lightbox
 - **Interactive**: TicketingCard with external links
 - **Board System**: PostList, CreatePostForm, CommentSection
+- **Mypage System**: MypageLayout, MypageNavigation, PermissionCheck, DashboardCard
 - **Performance**: AdaptiveParticles, PerformanceMonitor, device detection hooks
 - **Particles**: WebGL, CSS, Network, LiquidMetal variants with fallback system
 
@@ -176,6 +188,9 @@ Components are organized by purpose:
 - `registration_status` values: 'pending', 'approved', 'rejected'
 - `is_active` flag controls member access even after approval
 - `is_admin` flag grants admin privileges for `/admin` routes
+- `is_artist` flag enables artist profile management in mypage system
+- `artist_id` links member to specific artist profile (assigned manually by admin)
+- `artist_role` defines permissions: 'owner', 'manager', 'collaborator'
 - Middleware automatically redirects users to appropriate pages based on their status
 
 ### Database Schema
