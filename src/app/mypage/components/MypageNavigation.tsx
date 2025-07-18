@@ -68,6 +68,14 @@ const MypageNavigation: React.FC<MypageNavigationProps> = ({ currentPath }) => {
       isActive: currentPath === '/mypage/artist'
     },
     {
+      id: 'activity',
+      label: '활동 내역',
+      href: '/mypage/activity',
+      icon: FiActivity,
+      requiredPermission: 'member',
+      isActive: currentPath === '/mypage/activity'
+    },
+    {
       id: 'settings',
       label: '설정',
       href: '/mypage/settings',
