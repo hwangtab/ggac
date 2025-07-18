@@ -13,55 +13,78 @@ interface Activity {
   metadata?: {
     category?: string
     postTitle?: string
+    profileSection?: string
   }
+}
+
+interface PaginationInfo {
+  currentPage: number
+  totalPages: number
+  totalCount: number
+  hasNext: boolean
+}
+
+interface ActivityResponse {
+  activities: Activity[]
+  pagination: PaginationInfo
 }
 
 export default function ActivityPage() {
   const [activities, setActivities] = useState<Activity[]>([])
+  const [pagination, setPagination] = useState<PaginationInfo | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | 'posts' | 'comments' | 'profile'>('all')
 
-  // 임시 데이터 (실제 구현 시 API 호출로 대체)
-  const mockActivities: Activity[] = [
-    {
-      id: '1',
-      type: 'post_created',
-      title: '새로운 프로젝트 공유',
-      entityId: 'post-123',
-      createdAt: '2024-01-18T10:30:00Z',
-      metadata: { category: '홍보' }
-    },
-    {
-      id: '2',
-      type: 'comment_created',
-      entityId: 'comment-456',
-      createdAt: '2024-01-17T15:45:00Z',
-      metadata: { postTitle: '협동조합 정기 모임 안내' }
-    },
-    {
-      id: '3',
-      type: 'profile_updated',
-      entityId: 'profile-789',
-      createdAt: '2024-01-16T09:20:00Z'
-    },
-    {
-      id: '4',
-      type: 'post_updated',
-      title: '공연 일정 변경 안내',
-      entityId: 'post-321',
-      createdAt: '2024-01-15T14:10:00Z',
-      metadata: { category: '공지' }
-    }
-  ]
+  // API 호출 함수
+  const fetchActivities = async (newFilter?: string) => {
+    try {
+      setLoading(true)
+      setError(null)
+      
+      const currentFilter = newFilter || filter
+      const params = new URLSearchParams({
+        filter: currentFilter,
+        page: '1',
+        limit: '20'
+      })
 
-  useEffect(() => {
-    // 임시로 목 데이터 로드
-    setTimeout(() => {
-      setActivities(mockActivities)
+      const response = await fetch(`/api/mypage/activity?${params}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || '활동 내역을 불러오는 중 오류가 발생했습니다.')
+      }
+
+      const data: ActivityResponse = await response.json()
+      setActivities(data.activities)
+      setPagination(data.pagination)
+    } catch (err) {
+      console.error('Activity fetch error:', err)
+      setError(err instanceof Error ? err.message : '활동 내역을 불러오는 중 오류가 발생했습니다.')
+      setActivities([])
+      setPagination(null)
+    } finally {
       setLoading(false)
-    }, 1000)
+    }
+  }
+
+  // 컴포넌트 마운트 시 데이터 로드
+  useEffect(() => {
+    fetchActivities()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // 필터 변경 핸들러
+  const handleFilterChange = (newFilter: 'all' | 'posts' | 'comments' | 'profile') => {
+    setFilter(newFilter)
+    fetchActivities(newFilter)
+  }
 
   const getActivityIcon = (type: Activity['type']) => {
     switch (type) {
@@ -125,13 +148,6 @@ export default function ActivityPage() {
     }
   }
 
-  const filteredActivities = activities.filter(activity => {
-    if (filter === 'all') return true
-    if (filter === 'posts') return activity.type.includes('post')
-    if (filter === 'comments') return activity.type === 'comment_created'
-    if (filter === 'profile') return activity.type === 'profile_updated'
-    return true
-  })
 
   return (
     <MypageLayout title="활동 내역" description="나의 활동 기록을 확인하세요.">
@@ -142,7 +158,7 @@ export default function ActivityPage() {
             <FiFilter className="w-5 h-5 text-gray-600" />
             <div className="flex gap-2">
               <button
-                onClick={() => setFilter('all')}
+                onClick={() => handleFilterChange('all')}
                 className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
                   filter === 'all'
                     ? 'bg-primary-100 text-primary-800'
@@ -152,7 +168,7 @@ export default function ActivityPage() {
                 전체
               </button>
               <button
-                onClick={() => setFilter('posts')}
+                onClick={() => handleFilterChange('posts')}
                 className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
                   filter === 'posts'
                     ? 'bg-primary-100 text-primary-800'
@@ -162,7 +178,7 @@ export default function ActivityPage() {
                 게시글
               </button>
               <button
-                onClick={() => setFilter('comments')}
+                onClick={() => handleFilterChange('comments')}
                 className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
                   filter === 'comments'
                     ? 'bg-primary-100 text-primary-800'
@@ -172,7 +188,7 @@ export default function ActivityPage() {
                 댓글
               </button>
               <button
-                onClick={() => setFilter('profile')}
+                onClick={() => handleFilterChange('profile')}
                 className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
                   filter === 'profile'
                     ? 'bg-primary-100 text-primary-800'
@@ -184,6 +200,25 @@ export default function ActivityPage() {
             </div>
           </div>
         </div>
+
+        {/* 에러 상태 */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6 mb-6">
+            <div className="flex items-center">
+              <FiActivity className="w-5 h-5 text-red-600 mr-3" />
+              <div>
+                <h3 className="text-red-800 font-semibold">오류가 발생했습니다</h3>
+                <p className="text-red-700 text-sm mt-1">{error}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => fetchActivities()}
+              className="mt-4 btn-secondary text-sm"
+            >
+              다시 시도
+            </button>
+          </div>
+        )}
 
         {/* 활동 목록 */}
         <div className="space-y-4">
@@ -202,7 +237,7 @@ export default function ActivityPage() {
                 </div>
               </div>
             ))
-          ) : filteredActivities.length === 0 ? (
+          ) : activities.length === 0 ? (
             // 빈 상태
             <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
               <FiActivity className="w-12 h-12 text-gray-400 mx-auto mb-4" />
@@ -232,7 +267,7 @@ export default function ActivityPage() {
             </div>
           ) : (
             // 활동 카드들
-            filteredActivities.map((activity) => (
+            activities.map((activity) => (
               <div
                 key={activity.id}
                 className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow"
@@ -277,12 +312,19 @@ export default function ActivityPage() {
           )}
         </div>
 
-        {/* 더 보기 버튼 (향후 페이지네이션용) */}
-        {!loading && filteredActivities.length > 0 && (
+        {/* 더 보기 버튼 */}
+        {!loading && !error && activities.length > 0 && pagination && pagination.hasNext && (
           <div className="mt-8 text-center">
             <button className="btn-secondary">
-              더 많은 활동 내역 보기
+              더 많은 활동 내역 보기 ({pagination.totalCount}개 중 {activities.length}개 표시)
             </button>
+          </div>
+        )}
+
+        {/* 페이지네이션 정보 */}
+        {!loading && !error && pagination && activities.length > 0 && (
+          <div className="mt-6 text-center text-sm text-gray-500">
+            총 {pagination.totalCount}개의 활동 내역이 있습니다.
           </div>
         )}
       </div>
