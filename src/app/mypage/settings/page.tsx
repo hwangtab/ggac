@@ -5,15 +5,8 @@ import { FiSettings, FiBell, FiUser, FiLock, FiMonitor } from 'react-icons/fi'
 
 export default function SettingsPage() {
   return (
-    <MypageLayout>
+    <MypageLayout title="설정" description="계정 및 시스템 설정을 관리하세요.">
       <div className="max-w-4xl mx-auto">
-        {/* 헤더 */}
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">설정</h1>
-          <p className="text-gray-600">
-            계정 및 시스템 설정을 관리하세요.
-          </p>
-        </div>
 
         {/* 준비중 메시지 */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8">
