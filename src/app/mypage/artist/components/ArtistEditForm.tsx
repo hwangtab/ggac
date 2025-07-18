@@ -94,6 +94,18 @@ const ArtistEditForm: React.FC<ArtistEditFormProps> = ({
       })
     }
 
+    // 프로필 이미지 URL 검증 (선택사항이지만 입력된 경우 URL 형식 확인)
+    if (formData.profile_image) {
+      try {
+        new URL(formData.profile_image);
+        if (!/\.(jpg|jpeg|png|gif|webp|svg)$/i.test(formData.profile_image)) {
+          newErrors.profile_image = '지원되는 이미지 형식이 아닙니다. (JPG, PNG, GIF, WebP, SVG)';
+        }
+      } catch {
+        newErrors.profile_image = '올바른 URL 형식을 입력해주세요.';
+      }
+    }
+
     // 연락처 검증 (선택사항이지만 입력된 경우 이메일 형식 확인)
     if (formData.contact && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.contact)) {
       newErrors.contact = '올바른 이메일 형식을 입력해주세요.'
@@ -139,6 +151,7 @@ const ArtistEditForm: React.FC<ArtistEditFormProps> = ({
       {/* 기본 정보 */}
       <BasicInfo 
         data={formData}
+        currentImage={artist.profile_image}
         errors={errors}
         onChange={handleChange}
       />
