@@ -13,6 +13,7 @@ interface Activity {
   metadata?: {
     category?: string
     postTitle?: string
+    postId?: string // 댓글의 경우 게시글 ID
     profileSection?: string
   }
 }
@@ -169,6 +170,7 @@ export async function GET(request: NextRequest) {
             createdAt: comment.created_at,
             metadata: {
               postTitle: post?.title || '알 수 없는 게시글',
+              postId: post?.id, // 게시글 ID 추가
               category: post?.category
             }
           })

@@ -13,6 +13,7 @@ interface Activity {
   metadata?: {
     category?: string
     postTitle?: string
+    postId?: string // 댓글의 경우 게시글 ID
     profileSection?: string
   }
 }
@@ -33,19 +34,26 @@ export default function ActivityPage() {
   const [activities, setActivities] = useState<Activity[]>([])
   const [pagination, setPagination] = useState<PaginationInfo | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | 'posts' | 'comments' | 'profile'>('all')
+  const [currentPage, setCurrentPage] = useState(1)
 
   // API 호출 함수
-  const fetchActivities = async (newFilter?: string) => {
+  const fetchActivities = async (newFilter?: string, pageNum: number = 1, append: boolean = false) => {
     try {
-      setLoading(true)
+      if (!append) {
+        setLoading(true)
+        setCurrentPage(1)
+      } else {
+        setLoadingMore(true)
+      }
       setError(null)
       
       const currentFilter = newFilter || filter
       const params = new URLSearchParams({
         filter: currentFilter,
-        page: '1',
+        page: pageNum.toString(),
         limit: '20'
       })
 
@@ -62,15 +70,35 @@ export default function ActivityPage() {
       }
 
       const data: ActivityResponse = await response.json()
-      setActivities(data.activities)
+      
+      if (append) {
+        setActivities(prev => [...prev, ...data.activities])
+        setCurrentPage(pageNum)
+      } else {
+        setActivities(data.activities)
+        setCurrentPage(1)
+      }
       setPagination(data.pagination)
     } catch (err) {
       console.error('Activity fetch error:', err)
       setError(err instanceof Error ? err.message : '활동 내역을 불러오는 중 오류가 발생했습니다.')
-      setActivities([])
-      setPagination(null)
+      if (!append) {
+        setActivities([])
+        setPagination(null)
+      }
     } finally {
-      setLoading(false)
+      if (!append) {
+        setLoading(false)
+      } else {
+        setLoadingMore(false)
+      }
+    }
+  }
+
+  // 더 많은 활동 내역 로드
+  const loadMoreActivities = () => {
+    if (pagination && pagination.hasNext && !loadingMore) {
+      fetchActivities(filter, currentPage + 1, true)
     }
   }
 
@@ -83,7 +111,29 @@ export default function ActivityPage() {
   // 필터 변경 핸들러
   const handleFilterChange = (newFilter: 'all' | 'posts' | 'comments' | 'profile') => {
     setFilter(newFilter)
-    fetchActivities(newFilter)
+    setCurrentPage(1)
+    fetchActivities(newFilter, 1, false)
+  }
+
+  // 활동 링크 생성
+  const getActivityLink = (activity: Activity): string | null => {
+    switch (activity.type) {
+      case 'post_created':
+      case 'post_updated':
+        return `/board/${activity.entityId}`
+      case 'comment_created':
+        return activity.metadata?.postId ? `/board/${activity.metadata.postId}` : null
+      default:
+        return null
+    }
+  }
+
+  // 활동 링크 클릭 핸들러
+  const handleActivityClick = (activity: Activity) => {
+    const link = getActivityLink(activity)
+    if (link) {
+      window.open(link, '_blank')
+    }
   }
 
   const getActivityIcon = (type: Activity['type']) => {
@@ -300,7 +350,11 @@ export default function ActivityPage() {
                       
                       {/* 링크 버튼 */}
                       {(activity.type.includes('post') || activity.type === 'comment_created') && (
-                        <button className="text-primary-600 hover:text-primary-700 text-sm font-medium">
+                        <button 
+                          onClick={() => handleActivityClick(activity)}
+                          className="text-primary-600 hover:text-primary-700 text-sm font-medium transition-colors"
+                          disabled={!getActivityLink(activity)}
+                        >
                           보기 →
                         </button>
                       )}
@@ -315,8 +369,19 @@ export default function ActivityPage() {
         {/* 더 보기 버튼 */}
         {!loading && !error && activities.length > 0 && pagination && pagination.hasNext && (
           <div className="mt-8 text-center">
-            <button className="btn-secondary">
-              더 많은 활동 내역 보기 ({pagination.totalCount}개 중 {activities.length}개 표시)
+            <button 
+              onClick={loadMoreActivities}
+              disabled={loadingMore}
+              className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loadingMore ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-gray-300 border-t-primary-600 rounded-full animate-spin"></div>
+                  로딩중...
+                </div>
+              ) : (
+                `더 많은 활동 내역 보기 (${pagination.totalCount}개 중 ${activities.length}개 표시)`
+              )}
             </button>
           </div>
         )}
