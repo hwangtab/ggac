@@ -1,0 +1,846 @@
+{
+  "timestamp": "2025-07-19T06:08:12.269Z",
+  "summary": {
+    "totalDevices": 6,
+    "averageScores": {
+      "Home Page": [
+        65,
+        65,
+        60,
+        65,
+        60,
+        65
+      ],
+      "About Page": [
+        65,
+        65,
+        60,
+        65,
+        60,
+        65
+      ],
+      "Artists Page": [
+        65,
+        65,
+        60,
+        65,
+        60,
+        65
+      ]
+    },
+    "recommendations": {},
+    "criticalIssues": []
+  },
+  "detailed": [
+    {
+      "device": "Desktop Chrome High-end",
+      "pages": {
+        "Home Page": {
+          "url": "http://localhost:3003",
+          "loadTime": 598.2000000476837,
+          "firstContentfulPaint": 149.20000004768372,
+          "memory": {
+            "used": 60300000,
+            "total": 72200000,
+            "limit": 2330000000
+          },
+          "webgl": {
+            "supported": true,
+            "vendor": "Google Inc. (Apple)",
+            "renderer": "ANGLE (Apple, Apple M1, OpenGL 4.1)",
+            "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+            "maxTextureSize": 16384,
+            "maxViewportDims": {
+              "0": 16384,
+              "1": 16384
+            }
+          },
+          "particleSystems": [],
+          "fps": {
+            "idle": 61,
+            "underLoad": {
+              "avgFPS": 0,
+              "minFPS": 0,
+              "maxFPS": 0,
+              "frameCount": 181,
+              "duration": 3011.2999999523163,
+              "samples": 3
+            }
+          },
+          "memoryLeak": {
+            "initial": 60300000,
+            "final": 60300000,
+            "difference": 0,
+            "leakPercentage": 0,
+            "hasLeak": false
+          },
+          "performance": {
+            "score": 65,
+            "recommendation": [
+              "정적 배경 이미지로 대체"
+            ]
+          }
+        },
+        "About Page": {
+          "url": "http://localhost:3003/about",
+          "loadTime": 423.9000000357628,
+          "firstContentfulPaint": 78,
+          "memory": {
+            "used": 60300000,
+            "total": 72200000,
+            "limit": 2330000000
+          },
+          "webgl": {
+            "supported": true,
+            "vendor": "Google Inc. (Apple)",
+            "renderer": "ANGLE (Apple, Apple M1, OpenGL 4.1)",
+            "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+            "maxTextureSize": 16384,
+            "maxViewportDims": {
+              "0": 16384,
+              "1": 16384
+            }
+          },
+          "particleSystems": [],
+          "fps": {
+            "idle": 62,
+            "underLoad": {
+              "avgFPS": 0,
+              "minFPS": 0,
+              "maxFPS": 0,
+              "frameCount": 181,
+              "duration": 3012.399999976158,
+              "samples": 3
+            }
+          },
+          "memoryLeak": {
+            "initial": 60300000,
+            "final": 60300000,
+            "difference": 0,
+            "leakPercentage": 0,
+            "hasLeak": false
+          },
+          "performance": {
+            "score": 65,
+            "recommendation": [
+              "정적 배경 이미지로 대체"
+            ]
+          }
+        },
+        "Artists Page": {
+          "url": "http://localhost:3003/artists",
+          "loadTime": 436.5999999642372,
+          "firstContentfulPaint": 110.09999996423721,
+          "memory": {
+            "used": 60300000,
+            "total": 72200000,
+            "limit": 2330000000
+          },
+          "webgl": {
+            "supported": true,
+            "vendor": "Google Inc. (Apple)",
+            "renderer": "ANGLE (Apple, Apple M1, OpenGL 4.1)",
+            "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+            "maxTextureSize": 16384,
+            "maxViewportDims": {
+              "0": 16384,
+              "1": 16384
+            }
+          },
+          "particleSystems": [],
+          "fps": {
+            "idle": 61,
+            "underLoad": {
+              "avgFPS": 0,
+              "minFPS": 0,
+              "maxFPS": 0,
+              "frameCount": 181,
+              "duration": 3011.5,
+              "samples": 3
+            }
+          },
+          "memoryLeak": {
+            "initial": 60300000,
+            "final": 60300000,
+            "difference": 0,
+            "leakPercentage": 0,
+            "hasLeak": false
+          },
+          "performance": {
+            "score": 65,
+            "recommendation": [
+              "정적 배경 이미지로 대체"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "device": "Desktop Chrome Mid-range",
+      "pages": {
+        "Home Page": {
+          "url": "http://localhost:3003",
+          "loadTime": 496.0999999642372,
+          "firstContentfulPaint": 89.29999995231628,
+          "memory": {
+            "used": 60300000,
+            "total": 72200000,
+            "limit": 2330000000
+          },
+          "webgl": {
+            "supported": true,
+            "vendor": "Google Inc. (Apple)",
+            "renderer": "ANGLE (Apple, Apple M1, OpenGL 4.1)",
+            "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+            "maxTextureSize": 16384,
+            "maxViewportDims": {
+              "0": 16384,
+              "1": 16384
+            }
+          },
+          "particleSystems": [],
+          "fps": {
+            "idle": 61,
+            "underLoad": {
+              "avgFPS": 0,
+              "minFPS": 0,
+              "maxFPS": 0,
+              "frameCount": 181,
+              "duration": 3012.400000035763,
+              "samples": 3
+            }
+          },
+          "memoryLeak": {
+            "initial": 60300000,
+            "final": 60300000,
+            "difference": 0,
+            "leakPercentage": 0,
+            "hasLeak": false
+          },
+          "performance": {
+            "score": 65,
+            "recommendation": [
+              "정적 배경 이미지로 대체"
+            ]
+          }
+        },
+        "About Page": {
+          "url": "http://localhost:3003/about",
+          "loadTime": 407.80000001192093,
+          "firstContentfulPaint": 83.80000001192093,
+          "memory": {
+            "used": 60300000,
+            "total": 72200000,
+            "limit": 2330000000
+          },
+          "webgl": {
+            "supported": true,
+            "vendor": "Google Inc. (Apple)",
+            "renderer": "ANGLE (Apple, Apple M1, OpenGL 4.1)",
+            "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+            "maxTextureSize": 16384,
+            "maxViewportDims": {
+              "0": 16384,
+              "1": 16384
+            }
+          },
+          "particleSystems": [],
+          "fps": {
+            "idle": 61,
+            "underLoad": {
+              "avgFPS": 0,
+              "minFPS": 0,
+              "maxFPS": 0,
+              "frameCount": 181,
+              "duration": 3013.2999999523163,
+              "samples": 3
+            }
+          },
+          "memoryLeak": {
+            "initial": 60300000,
+            "final": 60300000,
+            "difference": 0,
+            "leakPercentage": 0,
+            "hasLeak": false
+          },
+          "performance": {
+            "score": 65,
+            "recommendation": [
+              "정적 배경 이미지로 대체"
+            ]
+          }
+        },
+        "Artists Page": {
+          "url": "http://localhost:3003/artists",
+          "loadTime": 424.10000002384186,
+          "firstContentfulPaint": 103.30000001192093,
+          "memory": {
+            "used": 60300000,
+            "total": 72200000,
+            "limit": 2330000000
+          },
+          "webgl": {
+            "supported": true,
+            "vendor": "Google Inc. (Apple)",
+            "renderer": "ANGLE (Apple, Apple M1, OpenGL 4.1)",
+            "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+            "maxTextureSize": 16384,
+            "maxViewportDims": {
+              "0": 16384,
+              "1": 16384
+            }
+          },
+          "particleSystems": [],
+          "fps": {
+            "idle": 61,
+            "underLoad": {
+              "avgFPS": 0,
+              "minFPS": 0,
+              "maxFPS": 0,
+              "frameCount": 181,
+              "duration": 3016,
+              "samples": 3
+            }
+          },
+          "memoryLeak": {
+            "initial": 60300000,
+            "final": 60300000,
+            "difference": 0,
+            "leakPercentage": 0,
+            "hasLeak": false
+          },
+          "performance": {
+            "score": 65,
+            "recommendation": [
+              "정적 배경 이미지로 대체"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "device": "iPhone 12 Pro",
+      "pages": {
+        "Home Page": {
+          "url": "http://localhost:3003",
+          "loadTime": 566.0000000000001,
+          "firstContentfulPaint": 260,
+          "memory": null,
+          "webgl": {
+            "supported": true,
+            "vendor": "Apple Inc.",
+            "renderer": "Apple GPU",
+            "version": "WebGL 2.0",
+            "maxTextureSize": 16384,
+            "maxViewportDims": {
+              "0": 16384,
+              "1": 16384
+            }
+          },
+          "particleSystems": [],
+          "fps": {
+            "idle": 30,
+            "underLoad": {
+              "avgFPS": 0,
+              "minFPS": 0,
+              "maxFPS": 0,
+              "frameCount": 91,
+              "duration": 3030.999999999999,
+              "samples": 1
+            }
+          },
+          "memoryLeak": null,
+          "performance": {
+            "score": 60,
+            "recommendation": [
+              "파티클 수량 감소 또는 OptimizedLiquidMetalParticles 사용",
+              "정적 배경 이미지로 대체"
+            ]
+          }
+        },
+        "About Page": {
+          "url": "http://localhost:3003/about",
+          "loadTime": 366,
+          "firstContentfulPaint": 94,
+          "memory": null,
+          "webgl": {
+            "supported": true,
+            "vendor": "Apple Inc.",
+            "renderer": "Apple GPU",
+            "version": "WebGL 2.0",
+            "maxTextureSize": 16384,
+            "maxViewportDims": {
+              "0": 16384,
+              "1": 16384
+            }
+          },
+          "particleSystems": [],
+          "fps": {
+            "idle": 31,
+            "underLoad": {
+              "avgFPS": 0,
+              "minFPS": 0,
+              "maxFPS": 0,
+              "frameCount": 91,
+              "duration": 3028,
+              "samples": 1
+            }
+          },
+          "memoryLeak": null,
+          "performance": {
+            "score": 60,
+            "recommendation": [
+              "파티클 수량 감소 또는 OptimizedLiquidMetalParticles 사용",
+              "정적 배경 이미지로 대체"
+            ]
+          }
+        },
+        "Artists Page": {
+          "url": "http://localhost:3003/artists",
+          "loadTime": 376,
+          "firstContentfulPaint": 107,
+          "memory": null,
+          "webgl": {
+            "supported": true,
+            "vendor": "Apple Inc.",
+            "renderer": "Apple GPU",
+            "version": "WebGL 2.0",
+            "maxTextureSize": 16384,
+            "maxViewportDims": {
+              "0": 16384,
+              "1": 16384
+            }
+          },
+          "particleSystems": [],
+          "fps": {
+            "idle": 32,
+            "underLoad": {
+              "avgFPS": 0,
+              "minFPS": 0,
+              "maxFPS": 0,
+              "frameCount": 91,
+              "duration": 3031,
+              "samples": 1
+            }
+          },
+          "memoryLeak": null,
+          "performance": {
+            "score": 60,
+            "recommendation": [
+              "파티클 수량 감소 또는 OptimizedLiquidMetalParticles 사용",
+              "정적 배경 이미지로 대체"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "device": "Samsung Galaxy S21",
+      "pages": {
+        "Home Page": {
+          "url": "http://localhost:3003",
+          "loadTime": 594.5999999642372,
+          "firstContentfulPaint": 103.29999995231628,
+          "memory": {
+            "used": 60300000,
+            "total": 72200000,
+            "limit": 2330000000
+          },
+          "webgl": {
+            "supported": true,
+            "vendor": "Google Inc. (Apple)",
+            "renderer": "ANGLE (Apple, Apple M1, OpenGL 4.1)",
+            "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+            "maxTextureSize": 16384,
+            "maxViewportDims": {
+              "0": 16384,
+              "1": 16384
+            }
+          },
+          "particleSystems": [],
+          "fps": {
+            "idle": 60,
+            "underLoad": {
+              "avgFPS": 0,
+              "minFPS": 0,
+              "maxFPS": 0,
+              "frameCount": 181,
+              "duration": 3013.199999988079,
+              "samples": 3
+            }
+          },
+          "memoryLeak": {
+            "initial": 60300000,
+            "final": 60300000,
+            "difference": 0,
+            "leakPercentage": 0,
+            "hasLeak": false
+          },
+          "performance": {
+            "score": 65,
+            "recommendation": [
+              "정적 배경 이미지로 대체"
+            ]
+          }
+        },
+        "About Page": {
+          "url": "http://localhost:3003/about",
+          "loadTime": 403.60000002384186,
+          "firstContentfulPaint": 76.39999997615814,
+          "memory": {
+            "used": 60300000,
+            "total": 72200000,
+            "limit": 2330000000
+          },
+          "webgl": {
+            "supported": true,
+            "vendor": "Google Inc. (Apple)",
+            "renderer": "ANGLE (Apple, Apple M1, OpenGL 4.1)",
+            "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+            "maxTextureSize": 16384,
+            "maxViewportDims": {
+              "0": 16384,
+              "1": 16384
+            }
+          },
+          "particleSystems": [],
+          "fps": {
+            "idle": 62,
+            "underLoad": {
+              "avgFPS": 0,
+              "minFPS": 0,
+              "maxFPS": 0,
+              "frameCount": 181,
+              "duration": 3011.599999964237,
+              "samples": 3
+            }
+          },
+          "memoryLeak": {
+            "initial": 60300000,
+            "final": 60300000,
+            "difference": 0,
+            "leakPercentage": 0,
+            "hasLeak": false
+          },
+          "performance": {
+            "score": 65,
+            "recommendation": [
+              "정적 배경 이미지로 대체"
+            ]
+          }
+        },
+        "Artists Page": {
+          "url": "http://localhost:3003/artists",
+          "loadTime": 530.7999999523163,
+          "firstContentfulPaint": 103.19999998807907,
+          "memory": {
+            "used": 60300000,
+            "total": 72200000,
+            "limit": 2330000000
+          },
+          "webgl": {
+            "supported": true,
+            "vendor": "Google Inc. (Apple)",
+            "renderer": "ANGLE (Apple, Apple M1, OpenGL 4.1)",
+            "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+            "maxTextureSize": 16384,
+            "maxViewportDims": {
+              "0": 16384,
+              "1": 16384
+            }
+          },
+          "particleSystems": [],
+          "fps": {
+            "idle": 60,
+            "underLoad": {
+              "avgFPS": 0,
+              "minFPS": 0,
+              "maxFPS": 0,
+              "frameCount": 181,
+              "duration": 3012.800000011921,
+              "samples": 3
+            }
+          },
+          "memoryLeak": {
+            "initial": 60300000,
+            "final": 60300000,
+            "difference": 0,
+            "leakPercentage": 0,
+            "hasLeak": false
+          },
+          "performance": {
+            "score": 65,
+            "recommendation": [
+              "정적 배경 이미지로 대체"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "device": "iPad Pro",
+      "pages": {
+        "Home Page": {
+          "url": "http://localhost:3003",
+          "loadTime": 573.0000000000001,
+          "firstContentfulPaint": 213,
+          "memory": null,
+          "webgl": {
+            "supported": true,
+            "vendor": "Apple Inc.",
+            "renderer": "Apple GPU",
+            "version": "WebGL 2.0",
+            "maxTextureSize": 16384,
+            "maxViewportDims": {
+              "0": 16384,
+              "1": 16384
+            }
+          },
+          "particleSystems": [],
+          "fps": {
+            "idle": 31,
+            "underLoad": {
+              "avgFPS": 0,
+              "minFPS": 0,
+              "maxFPS": 0,
+              "frameCount": 91,
+              "duration": 3029.000000000002,
+              "samples": 1
+            }
+          },
+          "memoryLeak": null,
+          "performance": {
+            "score": 60,
+            "recommendation": [
+              "파티클 수량 감소 또는 OptimizedLiquidMetalParticles 사용",
+              "정적 배경 이미지로 대체"
+            ]
+          }
+        },
+        "About Page": {
+          "url": "http://localhost:3003/about",
+          "loadTime": 346.00000000000006,
+          "firstContentfulPaint": 93,
+          "memory": null,
+          "webgl": {
+            "supported": true,
+            "vendor": "Apple Inc.",
+            "renderer": "Apple GPU",
+            "version": "WebGL 2.0",
+            "maxTextureSize": 16384,
+            "maxViewportDims": {
+              "0": 16384,
+              "1": 16384
+            }
+          },
+          "particleSystems": [],
+          "fps": {
+            "idle": 31,
+            "underLoad": {
+              "avgFPS": 0,
+              "minFPS": 0,
+              "maxFPS": 0,
+              "frameCount": 91,
+              "duration": 3030,
+              "samples": 1
+            }
+          },
+          "memoryLeak": null,
+          "performance": {
+            "score": 60,
+            "recommendation": [
+              "파티클 수량 감소 또는 OptimizedLiquidMetalParticles 사용",
+              "정적 배경 이미지로 대체"
+            ]
+          }
+        },
+        "Artists Page": {
+          "url": "http://localhost:3003/artists",
+          "loadTime": 379,
+          "firstContentfulPaint": 94,
+          "memory": null,
+          "webgl": {
+            "supported": true,
+            "vendor": "Apple Inc.",
+            "renderer": "Apple GPU",
+            "version": "WebGL 2.0",
+            "maxTextureSize": 16384,
+            "maxViewportDims": {
+              "0": 16384,
+              "1": 16384
+            }
+          },
+          "particleSystems": [],
+          "fps": {
+            "idle": 31,
+            "underLoad": {
+              "avgFPS": 0,
+              "minFPS": 0,
+              "maxFPS": 0,
+              "frameCount": 91,
+              "duration": 3031,
+              "samples": 1
+            }
+          },
+          "memoryLeak": null,
+          "performance": {
+            "score": 60,
+            "recommendation": [
+              "파티클 수량 감소 또는 OptimizedLiquidMetalParticles 사용",
+              "정적 배경 이미지로 대체"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "device": "Low-end Android",
+      "pages": {
+        "Home Page": {
+          "url": "http://localhost:3003",
+          "loadTime": 527.9000000357628,
+          "firstContentfulPaint": 86.90000003576279,
+          "memory": {
+            "used": 76600000,
+            "total": 81400000,
+            "limit": 2330000000
+          },
+          "webgl": {
+            "supported": true,
+            "vendor": "Google Inc. (Apple)",
+            "renderer": "ANGLE (Apple, Apple M1, OpenGL 4.1)",
+            "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+            "maxTextureSize": 16384,
+            "maxViewportDims": {
+              "0": 16384,
+              "1": 16384
+            }
+          },
+          "particleSystems": [],
+          "fps": {
+            "idle": 61,
+            "underLoad": {
+              "avgFPS": 0,
+              "minFPS": 0,
+              "maxFPS": 0,
+              "frameCount": 181,
+              "duration": 3011.399999976158,
+              "samples": 3
+            }
+          },
+          "memoryLeak": {
+            "initial": 76600000,
+            "final": 76600000,
+            "difference": 0,
+            "leakPercentage": 0,
+            "hasLeak": false
+          },
+          "performance": {
+            "score": 65,
+            "recommendation": [
+              "정적 배경 이미지로 대체",
+              "저사양 디바이스 최적화 모드 적용",
+              "메모리 사용량 최적화 필요"
+            ]
+          }
+        },
+        "About Page": {
+          "url": "http://localhost:3003/about",
+          "loadTime": 405.2000000476837,
+          "firstContentfulPaint": 72.70000004768372,
+          "memory": {
+            "used": 76600000,
+            "total": 81400000,
+            "limit": 2330000000
+          },
+          "webgl": {
+            "supported": true,
+            "vendor": "Google Inc. (Apple)",
+            "renderer": "ANGLE (Apple, Apple M1, OpenGL 4.1)",
+            "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+            "maxTextureSize": 16384,
+            "maxViewportDims": {
+              "0": 16384,
+              "1": 16384
+            }
+          },
+          "particleSystems": [],
+          "fps": {
+            "idle": 61,
+            "underLoad": {
+              "avgFPS": 0,
+              "minFPS": 0,
+              "maxFPS": 0,
+              "frameCount": 181,
+              "duration": 3011.5,
+              "samples": 3
+            }
+          },
+          "memoryLeak": {
+            "initial": 76600000,
+            "final": 76600000,
+            "difference": 0,
+            "leakPercentage": 0,
+            "hasLeak": false
+          },
+          "performance": {
+            "score": 65,
+            "recommendation": [
+              "정적 배경 이미지로 대체",
+              "저사양 디바이스 최적화 모드 적용",
+              "메모리 사용량 최적화 필요"
+            ]
+          }
+        },
+        "Artists Page": {
+          "url": "http://localhost:3003/artists",
+          "loadTime": 416.80000001192093,
+          "firstContentfulPaint": 108,
+          "memory": {
+            "used": 76600000,
+            "total": 81400000,
+            "limit": 2330000000
+          },
+          "webgl": {
+            "supported": true,
+            "vendor": "Google Inc. (Apple)",
+            "renderer": "ANGLE (Apple, Apple M1, OpenGL 4.1)",
+            "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+            "maxTextureSize": 16384,
+            "maxViewportDims": {
+              "0": 16384,
+              "1": 16384
+            }
+          },
+          "particleSystems": [],
+          "fps": {
+            "idle": 61,
+            "underLoad": {
+              "avgFPS": 0,
+              "minFPS": 0,
+              "maxFPS": 0,
+              "frameCount": 181,
+              "duration": 3015.800000011921,
+              "samples": 3
+            }
+          },
+          "memoryLeak": {
+            "initial": 76600000,
+            "final": 76600000,
+            "difference": 0,
+            "leakPercentage": 0,
+            "hasLeak": false
+          },
+          "performance": {
+            "score": 65,
+            "recommendation": [
+              "정적 배경 이미지로 대체",
+              "저사양 디바이스 최적화 모드 적용",
+              "메모리 사용량 최적화 필요"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

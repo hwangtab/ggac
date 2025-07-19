@@ -1,0 +1,487 @@
+'use client'
+
+import { FiX, FiCheck, FiUser, FiMail, FiPhone, FiCalendar, FiDollarSign, FiCreditCard, FiShield, FiMusic, FiPause, FiPlay, FiAlertCircle } from 'react-icons/fi'
+import { useState } from 'react'
+
+interface Member {
+  id: string
+  display_name: string
+  email: string
+  phone_number?: string
+  real_name?: string
+  created_at: string
+  updated_at: string
+  registration_status: 'pending' | 'approved' | 'rejected'
+  is_active: boolean
+  is_admin: boolean
+  is_artist: boolean
+  artist_id?: string
+  monthly_fee?: number
+  bank_name?: string
+  account_number?: string
+  account_holder?: string
+  // 새로운 멤버 상태 관리 필드들
+  last_login_at?: string
+  is_suspended: boolean
+  suspension_reason?: string
+  suspension_until?: string
+  profile_completeness_score: number
+  verification_status: {
+    email: boolean
+    phone: boolean
+    identity: boolean
+  }
+  membership_type: 'regular' | 'premium' | 'lifetime'
+  engagement_score: number
+  approved_by?: string
+  rejected_by?: string
+}
+
+interface MemberDetailModalProps {
+  member: Member
+  isOpen: boolean
+  onClose: () => void
+  onAction: (memberId: string, action: 'approve' | 'reject' | 'deactivate' | 'activate' | 'suspend' | 'unsuspend', params?: any) => void
+  isLoading: boolean
+}
+
+export default function MemberDetailModal({ member, isOpen, onClose, onAction, isLoading }: MemberDetailModalProps) {
+  const [confirmAction, setConfirmAction] = useState<{ action: string; title: string } | null>(null)
+
+  if (!isOpen) return null
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800'
+      case 'approved':
+        return 'bg-green-100 text-green-800'
+      case 'rejected':
+        return 'bg-red-100 text-red-800'
+      default:
+        return 'bg-gray-100 text-gray-800'
+    }
+  }
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return '승인 대기'
+      case 'approved':
+        return '승인됨'
+      case 'rejected':
+        return '거부됨'
+      default:
+        return '알 수 없음'
+    }
+  }
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('ko-KR', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+
+  const formatCurrency = (amount?: number) => {
+    if (!amount) return '설정되지 않음'
+    return new Intl.NumberFormat('ko-KR', {
+      style: 'currency',
+      currency: 'KRW'
+    }).format(amount)
+  }
+
+  const handleAction = (action: 'approve' | 'reject' | 'deactivate' | 'activate' | 'suspend' | 'unsuspend') => {
+    const actionTitles = {
+      approve: '승인',
+      reject: '거부',
+      deactivate: '비활성화',
+      activate: '활성화',
+      suspend: '정지',
+      unsuspend: '정지해제'
+    }
+
+    setConfirmAction({ action, title: actionTitles[action] })
+  }
+
+  const confirmActionHandler = () => {
+    if (confirmAction) {
+      if (confirmAction.action === 'suspend') {
+        const reason = prompt('정지 사유를 입력하세요:', '이용규칙 위반')
+        if (!reason) return
+        
+        const until = prompt('정지 기간을 입력하세요 (YYYY-MM-DD 형식, 비우면 무기한):', '')
+        
+        const params: any = { suspension_reason: reason }
+        if (until) {
+          params.suspension_until = until
+        }
+        
+        onAction(member.id, confirmAction.action as any, params)
+      } else {
+        onAction(member.id, confirmAction.action as any)
+      }
+      setConfirmAction(null)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
+        {/* 헤더 */}
+        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+          <h2 className="text-xl font-semibold text-gray-900">회원 상세 정보</h2>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-md transition-colors"
+          >
+            <FiX className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* 콘텐츠 */}
+        <div className="p-6 overflow-y-auto">
+          <div className="space-y-6">
+            {/* 기본 정보 */}
+            <div className="bg-gray-50 rounded-lg p-4">
+              <div className="flex items-center mb-4">
+                <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center">
+                  <FiUser className="w-8 h-8 text-gray-500" />
+                </div>
+                <div className="ml-4">
+                  <h3 className="text-lg font-semibold text-gray-900">{member.display_name}</h3>
+                  <div className="flex items-center space-x-2 mt-1">
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(member.registration_status)}`}>
+                      {getStatusText(member.registration_status)}
+                    </span>
+                    {member.is_artist && (
+                      <span className="px-2 py-1 text-xs font-medium bg-purple-100 text-purple-800 rounded-full">
+                        아티스트
+                      </span>
+                    )}
+                    {member.is_admin && (
+                      <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
+                        관리자
+                      </span>
+                    )}
+                    {member.is_suspended && (
+                      <span className="px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded-full">
+                        정지됨
+                      </span>
+                    )}
+                    {!member.is_active && (
+                      <span className="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded-full">
+                        비활성화됨
+                      </span>
+                    )}
+                    {member.membership_type === 'premium' && (
+                      <span className="px-2 py-1 text-xs font-medium bg-indigo-100 text-indigo-800 rounded-full">
+                        프리미엄
+                      </span>
+                    )}
+                    {member.membership_type === 'lifetime' && (
+                      <span className="px-2 py-1 text-xs font-medium bg-gradient-to-r from-purple-100 to-pink-100 text-purple-800 rounded-full">
+                        평생
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex items-center">
+                  <FiMail className="w-4 h-4 text-gray-500 mr-2" />
+                  <span className="text-sm text-gray-600">{member.email}</span>
+                </div>
+                {member.phone_number && (
+                  <div className="flex items-center">
+                    <FiPhone className="w-4 h-4 text-gray-500 mr-2" />
+                    <span className="text-sm text-gray-600">{member.phone_number}</span>
+                  </div>
+                )}
+                {member.real_name && (
+                  <div className="flex items-center">
+                    <FiUser className="w-4 h-4 text-gray-500 mr-2" />
+                    <span className="text-sm text-gray-600">실명: {member.real_name}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 가입 정보 */}
+            <div>
+              <h4 className="text-sm font-medium text-gray-900 mb-3">가입 정보</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex items-center">
+                  <FiCalendar className="w-4 h-4 text-gray-500 mr-2" />
+                  <div>
+                    <p className="text-sm text-gray-600">가입일</p>
+                    <p className="text-sm font-medium text-gray-900">{formatDate(member.created_at)}</p>
+                  </div>
+                </div>
+                <div className="flex items-center">
+                  <FiCalendar className="w-4 h-4 text-gray-500 mr-2" />
+                  <div>
+                    <p className="text-sm text-gray-600">최종 업데이트</p>
+                    <p className="text-sm font-medium text-gray-900">{formatDate(member.updated_at)}</p>
+                  </div>
+                </div>
+                {member.last_login_at && (
+                  <div className="flex items-center">
+                    <FiCalendar className="w-4 h-4 text-gray-500 mr-2" />
+                    <div>
+                      <p className="text-sm text-gray-600">최근 로그인</p>
+                      <p className="text-sm font-medium text-gray-900">{formatDate(member.last_login_at)}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 새로운 맅버 상태 정보 */}
+            <div>
+              <h4 className="text-sm font-medium text-gray-900 mb-3">맅버 상태</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex items-center">
+                  <FiUser className="w-4 h-4 text-gray-500 mr-2" />
+                  <div>
+                    <p className="text-sm text-gray-600">프로필 완성도</p>
+                    <p className="text-sm font-medium text-gray-900">{member.profile_completeness_score}%</p>
+                  </div>
+                </div>
+                <div className="flex items-center">
+                  <FiUser className="w-4 h-4 text-gray-500 mr-2" />
+                  <div>
+                    <p className="text-sm text-gray-600">참여도 점수</p>
+                    <p className="text-sm font-medium text-gray-900">{member.engagement_score}점</p>
+                  </div>
+                </div>
+                <div className="flex items-center">
+                  <FiShield className="w-4 h-4 text-gray-500 mr-2" />
+                  <div>
+                    <p className="text-sm text-gray-600">맅버십 타입</p>
+                    <p className="text-sm font-medium text-gray-900">
+                      {member.membership_type === 'regular' && '일반'}
+                      {member.membership_type === 'premium' && '프리미엄'}
+                      {member.membership_type === 'lifetime' && '평생'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 인증 상태 */}
+            <div>
+              <h4 className="text-sm font-medium text-gray-900 mb-3">인증 상태</h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="flex items-center">
+                  <FiMail className="w-4 h-4 text-gray-500 mr-2" />
+                  <div>
+                    <p className="text-sm text-gray-600">이메일 인증</p>
+                    <p className={`text-sm font-medium ${
+                      member.verification_status.email ? 'text-green-600' : 'text-red-600'
+                    }`}>
+                      {member.verification_status.email ? '완료' : '미인증'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center">
+                  <FiPhone className="w-4 h-4 text-gray-500 mr-2" />
+                  <div>
+                    <p className="text-sm text-gray-600">전화번호 인증</p>
+                    <p className={`text-sm font-medium ${
+                      member.verification_status.phone ? 'text-green-600' : 'text-red-600'
+                    }`}>
+                      {member.verification_status.phone ? '완료' : '미인증'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center">
+                  <FiShield className="w-4 h-4 text-gray-500 mr-2" />
+                  <div>
+                    <p className="text-sm text-gray-600">신원 인증</p>
+                    <p className={`text-sm font-medium ${
+                      member.verification_status.identity ? 'text-green-600' : 'text-red-600'
+                    }`}>
+                      {member.verification_status.identity ? '완료' : '미인증'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 정지 상태 */}
+            {member.is_suspended && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                <h4 className="text-sm font-medium text-red-900 mb-2">정지 상태</h4>
+                <div className="space-y-2">
+                  <p className="text-sm text-red-700">
+                    정지 사유: {member.suspension_reason || '사유 없음'}
+                  </p>
+                  {member.suspension_until && (
+                    <p className="text-sm text-red-700">
+                      정지 기간: {formatDate(member.suspension_until)}까지
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* 결제 정보 */}
+            {(member.monthly_fee || member.bank_name || member.account_number) && (
+              <div>
+                <h4 className="text-sm font-medium text-gray-900 mb-3">결제 정보</h4>
+                <div className="grid grid-cols-1 gap-4">
+                  {member.monthly_fee && (
+                    <div className="flex items-center">
+                      <FiDollarSign className="w-4 h-4 text-gray-500 mr-2" />
+                      <div>
+                        <p className="text-sm text-gray-600">월 조합비</p>
+                        <p className="text-sm font-medium text-gray-900">{formatCurrency(member.monthly_fee)}</p>
+                      </div>
+                    </div>
+                  )}
+                  {member.bank_name && (
+                    <div className="flex items-center">
+                      <FiCreditCard className="w-4 h-4 text-gray-500 mr-2" />
+                      <div>
+                        <p className="text-sm text-gray-600">계좌 정보</p>
+                        <p className="text-sm font-medium text-gray-900">
+                          {member.bank_name} {member.account_number}
+                          {member.account_holder && ` (${member.account_holder})`}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* 권한 정보 */}
+            <div>
+              <h4 className="text-sm font-medium text-gray-900 mb-3">권한 정보</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex items-center">
+                  <FiShield className="w-4 h-4 text-gray-500 mr-2" />
+                  <span className="text-sm text-gray-600">
+                    관리자 권한: {member.is_admin ? '있음' : '없음'}
+                  </span>
+                </div>
+                <div className="flex items-center">
+                  <FiMusic className="w-4 h-4 text-gray-500 mr-2" />
+                  <span className="text-sm text-gray-600">
+                    아티스트 권한: {member.is_artist ? '있음' : '없음'}
+                  </span>
+                </div>
+                {member.artist_id && (
+                  <div className="flex items-center col-span-2">
+                    <FiMusic className="w-4 h-4 text-gray-500 mr-2" />
+                    <span className="text-sm text-gray-600">
+                      연결된 아티스트 ID: {member.artist_id}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 액션 버튼 */}
+        <div className="flex items-center justify-end space-x-3 p-6 border-t border-gray-200">
+          {member.registration_status === 'pending' && (
+            <>
+              <button
+                onClick={() => handleAction('approve')}
+                disabled={isLoading}
+                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 flex items-center"
+              >
+                <FiCheck className="w-4 h-4 mr-2" />
+                승인
+              </button>
+              <button
+                onClick={() => handleAction('reject')}
+                disabled={isLoading}
+                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 flex items-center"
+              >
+                <FiX className="w-4 h-4 mr-2" />
+                거부
+              </button>
+            </>
+          )}
+          
+          {member.registration_status === 'approved' && (
+            <>
+              <button
+                onClick={() => handleAction(member.is_active ? 'deactivate' : 'activate')}
+                disabled={isLoading}
+                className={`px-4 py-2 rounded-md disabled:opacity-50 flex items-center ${
+                  member.is_active
+                    ? 'bg-orange-600 text-white hover:bg-orange-700'
+                    : 'bg-green-600 text-white hover:bg-green-700'
+                }`}
+              >
+                {member.is_active ? <FiPause className="w-4 h-4 mr-2" /> : <FiPlay className="w-4 h-4 mr-2" />}
+                {member.is_active ? '비활성화' : '활성화'}
+              </button>
+              
+              <button
+                onClick={() => handleAction(member.is_suspended ? 'unsuspend' : 'suspend')}
+                disabled={isLoading}
+                className={`px-4 py-2 rounded-md disabled:opacity-50 flex items-center ${
+                  member.is_suspended
+                    ? 'bg-blue-600 text-white hover:bg-blue-700'
+                    : 'bg-red-600 text-white hover:bg-red-700'
+                }`}
+              >
+                <FiShield className="w-4 h-4 mr-2" />
+                {member.is_suspended ? '정지해제' : '정지'}
+              </button>
+            </>
+          )}
+          
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+          >
+            닫기
+          </button>
+        </div>
+      </div>
+
+      {/* 확인 모달 */}
+      {confirmAction && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-60">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div className="p-6">
+              <div className="flex items-center mb-4">
+                <FiAlertCircle className="w-6 h-6 text-yellow-500 mr-3" />
+                <h3 className="text-lg font-semibold text-gray-900">확인</h3>
+              </div>
+              <p className="text-gray-600 mb-6">
+                {member.display_name}님을 {confirmAction.title}하시겠습니까?
+              </p>
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => setConfirmAction(null)}
+                  className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={confirmActionHandler}
+                  disabled={isLoading}
+                  className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50"
+                >
+                  {isLoading ? '처리 중...' : '확인'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

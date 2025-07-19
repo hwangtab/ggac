@@ -1,0 +1,35 @@
+{
+  "timestamp": "2025-07-19T16:48:54.077Z",
+  "overallScore": 86,
+  "categories": {
+    "build": {
+      "passed": 1,
+      "failed": 0
+    },
+    "lint": {
+      "passed": 1,
+      "failed": 0
+    },
+    "types": {
+      "passed": 0,
+      "failed": 1
+    },
+    "architecture": {
+      "passed": 4,
+      "failed": 1
+    },
+    "performance": {
+      "passed": 3,
+      "failed": 0
+    },
+    "security": {
+      "passed": 3,
+      "failed": 0
+    }
+  },
+  "recommendations": [
+    "활동 추적 시스템 완성도 검증 완료",
+    "프로덕션 환경 배포 전 최종 점검 수행",
+    "사용자 피드백 기반 지속적 개선"
+  ]
+}

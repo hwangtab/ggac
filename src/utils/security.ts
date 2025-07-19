@@ -24,6 +24,12 @@ export const sanitizeHtml = (input: string): string => {
 };
 
 /**
+ * 일반적인 입력 문자열 정제
+ * sanitizeHtml의 별칭으로 더 간단한 이름 제공
+ */
+export const sanitizeInput = sanitizeHtml;
+
+/**
  * URL 유효성 검증 및 안전화
  * javascript:, data:, vbscript: 등 위험한 프로토콜 차단
  */
