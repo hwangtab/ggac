@@ -13,6 +13,80 @@ const nextConfig = {
     }
   }),
   
+  // 번들 최적화 설정
+  webpack: (config, { buildId, dev, isServer, defaultLoaders, webpack }) => {
+    // 프로덕션 환경에서만 최적화 적용
+    if (!dev && !isServer) {
+      // 번들 분할 최적화
+      config.optimization = {
+        ...config.optimization,
+        splitChunks: {
+          chunks: 'all',
+          cacheGroups: {
+            vendor: {
+              test: /[\\/]node_modules[\\/]/,
+              name: 'vendors',
+              priority: 10,
+              reuseExistingChunk: true,
+            },
+            // React 아이콘 별도 번들
+            reactIcons: {
+              test: /[\\/]node_modules[\\/]react-icons[\\/]/,
+              name: 'react-icons',
+              priority: 20,
+              reuseExistingChunk: true,
+            },
+            // Framer Motion 별도 번들
+            framerMotion: {
+              test: /[\\/]node_modules[\\/]framer-motion[\\/]/,
+              name: 'framer-motion',
+              priority: 20,
+              reuseExistingChunk: true,
+            },
+            // Supabase 관련 번들
+            supabase: {
+              test: /[\\/]node_modules[\\/]@supabase[\\/]/,
+              name: 'supabase',
+              priority: 20,
+              reuseExistingChunk: true,
+            },
+            // 공통 컴포넌트 번들
+            common: {
+              name: 'common',
+              minChunks: 2,
+              priority: 5,
+              reuseExistingChunk: true,
+            },
+          },
+        },
+      }
+      
+      // 트리 쉐이킹 최적화
+      config.optimization.usedExports = true
+      config.optimization.providedExports = true
+      config.optimization.sideEffects = false
+    }
+    
+    // 모든 환경에서 적용할 플러그인
+    config.plugins.push(
+      new webpack.DefinePlugin({
+        'process.env.NEXT_IS_SERVER': JSON.stringify(isServer.toString()),
+        'process.env.NEXT_IS_DEV': JSON.stringify(dev.toString()),
+      })
+    )
+    
+    return config
+  },
+  
+  // 실험적 기능 활성화
+  experimental: {
+    optimizeCss: true, // CSS 최적화
+    optimizePackageImports: ['react-icons', 'framer-motion', '@supabase/supabase-js'],
+    ...(process.env.NODE_ENV === 'development' && {
+      forceSwcTransforms: true,
+    })
+  },
+  
   // Enhanced security headers
   async headers() {
     return [

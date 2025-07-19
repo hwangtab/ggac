@@ -7,6 +7,7 @@ import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 
 import { supabase } from '@/lib/supabase/client'
+import NotificationDropdown from './NotificationDropdown'
 
 const Navigation = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -172,6 +173,9 @@ const Navigation = () => {
             <div className="flex items-center space-x-2 lg:space-x-4 ml-2 lg:ml-4 pl-2 lg:pl-4 border-l border-gray-300/20">
               {user ? (
                 <>
+                  {/* 알림 드롭다운 */}
+                  <NotificationDropdown />
+                  
                   <Link
                     href="/mypage"
                     className={`font-medium transition-colors duration-300 text-xs lg:text-sm ${

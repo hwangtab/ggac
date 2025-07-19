@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase/client';
+import { logCommentCreated } from '@/utils/activityLogger';
 
 interface Comment {
   id: string;
@@ -83,6 +84,16 @@ const CommentSection: React.FC<CommentSectionProps> = ({ postId, currentUserId, 
       .single();
 
     if (data && !error) {
+      // 활동 로깅
+      try {
+        await logCommentCreated(data.id, postId, {
+          character_count: newComment.trim().length
+        });
+      } catch (logError) {
+        console.error('활동 로깅 오류:', logError);
+        // 로깅 실패는 사용자 경험에 영향주지 않음
+      }
+
       setComments(prev => [...prev, data]);
       setNewComment('');
     } else {

@@ -16,7 +16,7 @@
     "artistIds": ["artist-001", "artist-002", "artist-003", "artist-004", "artist-005", "artist-006", "artist-007", "artist-008", "artist-009"],
     "relatedArticles": [{
         "title": "수원 뉴스",
-        "url": "https://news.suwon.go.kr/?p=41&viewMode=view&reqIdx=202504132058301024null"
+        "url": "https://news.suwon.go.kr/?p=41&viewMode=view&reqIdx=202504132058301024"
     }]
   },
   {

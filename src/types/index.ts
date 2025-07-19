@@ -7,6 +7,289 @@ import type { BoardCategory } from '@/constants/categories'
 
 // === 핵심 데이터 타입 정의 ===
 
+// === 알림 시스템 타입 정의 ===
+
+/**
+ * 알림 유형
+ */
+export type NotificationType = 
+  | 'post_new'          // 새 게시글 알림
+  | 'post_reply'        // 게시글 댓글 알림
+  | 'post_mention'      // 게시글 멘션 알림
+  | 'member_approved'   // 회원 승인 알림
+  | 'member_rejected'   // 회원 거부 알림
+  | 'artist_approved'   // 아티스트 권한 승인 알림
+  | 'artist_rejected'   // 아티스트 권한 거부 알림
+  | 'system_notice'     // 시스템 공지 알림
+  | 'maintenance'       // 점검 알림
+  | 'welcome'           // 환영 메시지
+
+/**
+ * 알림 인터페이스
+ */
+export interface Notification {
+  /** 고유 식별자 */
+  id: string
+  /** 사용자 ID */
+  user_id: string
+  /** 알림 유형 */
+  type: NotificationType
+  /** 알림 제목 */
+  title: string
+  /** 알림 메시지 */
+  message: string
+  /** 추가 데이터 (JSON) */
+  data: Record<string, any>
+  /** 읽은 시간 (null이면 미읽음) */
+  read_at: string | null
+  /** 생성 시간 */
+  created_at: string
+  /** 만료 시간 (null이면 영구) */
+  expires_at: string | null
+  /** 연관 게시글 ID */
+  related_post_id: string | null
+  /** 연관 사용자 ID */
+  related_user_id: string | null
+}
+
+/**
+ * 알림 생성 요청
+ */
+export interface CreateNotificationRequest {
+  /** 사용자 ID */
+  user_id: string
+  /** 알림 유형 */
+  type: NotificationType
+  /** 알림 제목 */
+  title: string
+  /** 알림 메시지 */
+  message: string
+  /** 추가 데이터 */
+  data?: Record<string, any>
+  /** 연관 게시글 ID */
+  related_post_id?: string
+  /** 연관 사용자 ID */
+  related_user_id?: string
+  /** 만료 시간 */
+  expires_at?: string
+}
+
+/**
+ * 대량 알림 생성 요청
+ */
+export interface CreateBulkNotificationRequest {
+  /** 사용자 ID 배열 */
+  user_ids: string[]
+  /** 알림 유형 */
+  type: NotificationType
+  /** 알림 제목 */
+  title: string
+  /** 알림 메시지 */
+  message: string
+  /** 추가 데이터 */
+  data?: Record<string, any>
+  /** 만료 시간 */
+  expires_at?: string
+}
+
+/**
+ * 알림 통계
+ */
+export interface NotificationStats {
+  /** 사용자 ID */
+  user_id: string
+  /** 전체 알림 수 */
+  total_notifications: number
+  /** 미읽은 알림 수 */
+  unread_count: number
+  /** 읽은 알림 수 */
+  read_count: number
+  /** 최근 알림 시간 */
+  latest_notification_at: string | null
+}
+
+/**
+ * 알림 목록 응답
+ */
+export interface NotificationListResponse {
+  /** 알림 목록 */
+  notifications: Notification[]
+  /** 전체 개수 */
+  total: number
+  /** 미읽은 개수 */
+  unread_count: number
+  /** 페이지네이션 정보 */
+  pagination: {
+    page: number
+    limit: number
+    total_pages: number
+    has_next: boolean
+    has_prev: boolean
+  }
+}
+
+// === 고급 필터링 시스템 타입 정의 ===
+
+/**
+ * 필터 연산자
+ */
+export type FilterOperator = 
+  | 'equals'           // 같음
+  | 'not_equals'       // 같지 않음
+  | 'contains'         // 포함
+  | 'not_contains'     // 포함하지 않음
+  | 'starts_with'      // 시작
+  | 'ends_with'        // 끝남
+  | 'greater_than'     // 초과
+  | 'greater_equal'    // 이상
+  | 'less_than'        // 미만
+  | 'less_equal'       // 이하
+  | 'between'          // 범위
+  | 'in'               // 목록에 포함
+  | 'not_in'           // 목록에 미포함
+  | 'is_null'          // null임
+  | 'is_not_null'      // null이 아님
+
+/**
+ * 필터 조건
+ */
+export interface FilterCondition {
+  /** 필드명 */
+  field: string
+  /** 연산자 */
+  operator: FilterOperator
+  /** 값 (배열 또는 단일 값) */
+  value: any
+  /** 값 타입 힌트 */
+  type?: 'string' | 'number' | 'date' | 'boolean' | 'array' | 'select' | 'multiselect'
+}
+
+/**
+ * 논리 연산자
+ */
+export type LogicalOperator = 'AND' | 'OR'
+
+/**
+ * 필터 그룹
+ */
+export interface FilterGroup {
+  /** 논리 연산자 */
+  operator: LogicalOperator
+  /** 조건들 */
+  conditions: FilterCondition[]
+  /** 중첩 그룹들 */
+  groups?: FilterGroup[]
+}
+
+/**
+ * 정렬 방향
+ */
+export type SortDirection = 'asc' | 'desc'
+
+/**
+ * 정렬 조건
+ */
+export interface SortCondition {
+  /** 필드명 */
+  field: string
+  /** 정렬 방향 */
+  direction: SortDirection
+  /** 우선순위 (낮을수록 우선) */
+  priority?: number
+}
+
+/**
+ * 고급 검색 쿼리
+ */
+export interface AdvancedSearchQuery {
+  /** 필터 그룹 */
+  filters?: FilterGroup
+  /** 정렬 조건들 */
+  sorts?: SortCondition[]
+  /** 페이지네이션 */
+  pagination?: {
+    page: number
+    limit: number
+  }
+  /** 포함할 관련 데이터 */
+  include?: string[]
+  /** 검색할 필드들 (전체 텍스트 검색용) */
+  search?: {
+    query: string
+    fields: string[]
+  }
+}
+
+/**
+ * 필터 프리셋
+ */
+export interface FilterPreset {
+  /** 프리셋 ID */
+  id: string
+  /** 프리셋 이름 */
+  name: string
+  /** 설명 */
+  description?: string
+  /** 적용 대상 (posts, members 등) */
+  target: string
+  /** 필터 설정 */
+  query: AdvancedSearchQuery
+  /** 생성자 */
+  created_by?: string
+  /** 공개 여부 */
+  is_public?: boolean
+  /** 생성일 */
+  created_at?: string
+}
+
+/**
+ * 필드 정의
+ */
+export interface FieldDefinition {
+  /** 필드명 */
+  name: string
+  /** 표시명 */
+  label: string
+  /** 필드 타입 */
+  type: 'string' | 'number' | 'date' | 'boolean' | 'select' | 'multiselect'
+  /** 필터링 가능 여부 */
+  filterable: boolean
+  /** 정렬 가능 여부 */
+  sortable: boolean
+  /** 검색 가능 여부 */
+  searchable: boolean
+  /** 선택 옵션들 (select, multiselect 타입용) */
+  options?: Array<{ value: any; label: string }>
+  /** 지원하는 연산자들 */
+  operators?: FilterOperator[]
+  /** 기본 연산자 */
+  defaultOperator?: FilterOperator
+}
+
+/**
+ * 필터링 결과
+ */
+export interface FilteredResult<T = any> {
+  /** 결과 데이터 */
+  data: T[]
+  /** 전체 개수 */
+  total: number
+  /** 필터된 개수 */
+  filtered: number
+  /** 페이지네이션 정보 */
+  pagination: {
+    page: number
+    limit: number
+    total_pages: number
+    has_next: boolean
+    has_prev: boolean
+  }
+  /** 적용된 필터 */
+  applied_filters: FilterGroup
+  /** 적용된 정렬 */
+  applied_sorts: SortCondition[]
+}
+
 /**
  * 아티스트 정보 인터페이스
  * 예술가의 프로필 및 작품 정보를 담는 표준 인터페이스
@@ -407,11 +690,364 @@ export interface Post {
   updated_at?: string
   /** 삭제 여부 (소프트 삭제) */
   is_deleted?: boolean
+  /** 고정 여부 (공지사항 전용) */
+  is_pinned?: boolean
+  /** 고정일시 (ISO 8601 형식) */
+  pinned_at?: string
   /** 작성자 정보 (조인된 데이터) */
   author?: {
     name: string
     email: string
+    display_name?: string
   }
+  /** 댓글 수 (조인된 데이터) */
+  comment_count?: number
+  /** 좋아요 수 */
+  like_count?: number
+  /** 현재 사용자의 좋아요 여부 */
+  is_liked?: boolean
+  /** 첨부파일 목록 (조인된 데이터) */
+  attachments?: PostAttachment[]
+}
+
+/**
+ * 게시글 첨부파일 인터페이스
+ * Supabase post_attachments 테이블과 연동되는 표준 인터페이스
+ */
+export interface PostAttachment {
+  /** 고유 식별자 */
+  id: string
+  /** 게시글 ID */
+  post_id: string
+  /** 원본 파일명 */
+  file_name: string
+  /** 파일 저장 URL */
+  file_url: string
+  /** 파일 종류 */
+  file_type: 'image' | 'document' | 'video' | 'audio'
+  /** 파일 크기 (바이트) */
+  file_size: number
+  /** MIME 타입 */
+  mime_type: string
+  /** 이미지 대체 텍스트 */
+  alt_text?: string
+  /** 대표 이미지 여부 */
+  is_primary: boolean
+  /** 정렬 순서 */
+  sort_order: number
+  /** 생성일시 */
+  created_at: string
+  /** 수정일시 */
+  updated_at?: string
+}
+
+/**
+ * 첨부파일 업로드 요청
+ */
+export interface PostAttachmentUpload {
+  /** 파일 객체 */
+  file: File
+  /** 이미지 대체 텍스트 */
+  alt_text?: string
+  /** 대표 이미지 여부 */
+  is_primary?: boolean
+}
+
+/**
+ * 첨부파일 통계
+ */
+export interface PostAttachmentStats {
+  /** 총 첨부파일 수 */
+  total_attachments: number
+  /** 총 파일 크기 */
+  total_size: number
+  /** 이미지 파일 수 */
+  image_count: number
+  /** 문서 파일 수 */
+  document_count: number
+  /** 비디오 파일 수 */
+  video_count: number
+  /** 오디오 파일 수 */
+  audio_count: number
+}
+
+// === 게시글 좋아요 시스템 타입 정의 ===
+
+/**
+ * 게시글 좋아요 정보
+ */
+export interface PostLike {
+  /** 고유 식별자 */
+  id: string
+  /** 게시글 ID */
+  post_id: string
+  /** 사용자 ID */
+  user_id: string
+  /** 좋아요한 시간 */
+  created_at: string
+}
+
+/**
+ * 게시글 좋아요 토글 응답
+ */
+export interface PostLikeToggleResponse {
+  /** 좋아요 상태 (true: 좋아요함, false: 좋아요 취소) */
+  liked: boolean
+  /** 현재 좋아요 수 */
+  like_count: number
+  /** 메시지 */
+  message: string
+}
+
+/**
+ * 사용자 좋아요 목록 항목
+ */
+export interface UserLikedPost {
+  /** 게시글 ID */
+  post_id: string
+  /** 게시글 제목 */
+  post_title: string
+  /** 게시글 카테고리 */
+  post_category: string
+  /** 게시글 작성자 이름 */
+  post_author_name: string
+  /** 좋아요한 시간 */
+  liked_at: string
+}
+
+/**
+ * 게시글 좋아요한 사용자 정보
+ */
+export interface PostLikedUser {
+  /** 사용자 ID */
+  user_id: string
+  /** 사용자 표시 이름 */
+  display_name: string
+  /** 사용자 이메일 */
+  email: string
+  /** 좋아요한 시간 */
+  liked_at: string
+}
+
+/**
+ * 좋아요 통계 정보
+ */
+export interface PostLikeStats {
+  /** 게시글 ID */
+  post_id: string
+  /** 총 좋아요 수 */
+  total_likes: number
+  /** 최근 좋아요한 사용자들 */
+  recent_users: PostLikedUser[]
+  /** 좋아요 증가 추세 (최근 7일 vs 이전 7일) */
+  trend_percentage?: number
+}
+
+// === 활동 추적 시스템 타입 정의 ===
+
+/**
+ * 활동 타입 열거형
+ */
+export type ActivityActionType = 
+  | 'login'
+  | 'logout'
+  | 'post_created'
+  | 'post_updated'
+  | 'post_deleted'
+  | 'comment_created'
+  | 'comment_deleted'
+  | 'like_added'
+  | 'like_removed'
+  | 'profile_updated'
+  | 'password_changed'
+  | 'email_changed'
+  | 'artist_profile_updated'
+  | 'member_approved'
+  | 'member_rejected'
+  | 'admin_action'
+  | 'file_uploaded'
+  | 'file_deleted'
+  | 'notification_read'
+  | 'search_performed'
+  | 'page_viewed'
+
+/**
+ * 대상 타입 열거형
+ */
+export type ActivityTargetType = 
+  | 'post'
+  | 'comment'
+  | 'user'
+  | 'profile'
+  | 'artist_profile'
+  | 'file'
+  | 'notification'
+  | 'system'
+
+/**
+ * 사용자 활동 기록
+ */
+export interface UserActivity {
+  /** 고유 식별자 */
+  id: string
+  /** 사용자 ID */
+  user_id: string
+  /** 활동 타입 */
+  action_type: ActivityActionType
+  /** 대상 타입 */
+  target_type?: ActivityTargetType
+  /** 대상 ID */
+  target_id?: string
+  /** 메타데이터 */
+  metadata: Record<string, any>
+  /** IP 주소 */
+  ip_address?: string
+  /** User Agent */
+  user_agent?: string
+  /** 세션 ID */
+  session_id?: string
+  /** 생성 시간 */
+  created_at: string
+}
+
+/**
+ * 사용자 세션 정보
+ */
+export interface UserSession {
+  /** 고유 식별자 */
+  id: string
+  /** 사용자 ID */
+  user_id: string
+  /** 세션 토큰 */
+  session_token: string
+  /** 마지막 활동 시간 */
+  last_activity: string
+  /** 활성 상태 */
+  is_active: boolean
+  /** IP 주소 */
+  ip_address?: string
+  /** User Agent */
+  user_agent?: string
+  /** 로그인 시간 */
+  login_at: string
+  /** 로그아웃 시간 */
+  logout_at?: string
+  /** 메타데이터 */
+  metadata: Record<string, any>
+}
+
+/**
+ * 활성 사용자 정보
+ */
+export interface ActiveUser {
+  /** 사용자 ID */
+  user_id: string
+  /** 표시 이름 */
+  display_name: string
+  /** 이메일 */
+  email: string
+  /** 마지막 활동 시간 */
+  last_activity: string
+  /** IP 주소 */
+  ip_address?: string
+  /** 오늘 활동 수 */
+  activity_count_today: number
+  /** 세션 토큰 */
+  session_token: string
+  /** 마지막 활동으로부터 경과 시간 (분) */
+  minutes_since_activity: number
+}
+
+/**
+ * 활동 통계
+ */
+export interface ActivityStats {
+  /** 활동 타입 */
+  action_type: ActivityActionType
+  /** 총 활동 수 */
+  total_count: number
+  /** 활동한 일수 */
+  unique_days: number
+  /** 일평균 활동 수 */
+  avg_per_day: number
+  /** 첫 번째 활동 시간 */
+  first_activity: string
+  /** 마지막 활동 시간 */
+  last_activity: string
+}
+
+/**
+ * 실시간 활동 피드 항목
+ */
+export interface ActivityFeedItem {
+  /** 고유 식별자 */
+  id: string
+  /** 사용자 ID */
+  user_id: string
+  /** 사용자 이름 */
+  user_name: string
+  /** 활동 타입 */
+  action_type: ActivityActionType
+  /** 대상 타입 */
+  target_type?: ActivityTargetType
+  /** 대상 ID */
+  target_id?: string
+  /** 메타데이터 */
+  metadata: Record<string, any>
+  /** 생성 시간 */
+  created_at: string
+  /** 상대적 시간 텍스트 */
+  time_ago_text: string
+}
+
+/**
+ * 주간 활동 통계
+ */
+export interface WeeklyActivityStats {
+  /** 주 시작일 */
+  week_start: string
+  /** 활동 타입 */
+  action_type: ActivityActionType
+  /** 총 활동 수 */
+  total_count: number
+  /** 유니크 사용자 수 */
+  unique_users: number
+  /** 활동 간 평균 시간 */
+  avg_time_between_actions?: number
+}
+
+/**
+ * 활동 로깅 요청
+ */
+export interface ActivityLogRequest {
+  /** 활동 타입 */
+  action_type: ActivityActionType
+  /** 대상 타입 */
+  target_type?: ActivityTargetType
+  /** 대상 ID */
+  target_id?: string
+  /** 메타데이터 */
+  metadata?: Record<string, any>
+}
+
+/**
+ * 활동 분석 요청
+ */
+export interface ActivityAnalyticsRequest {
+  /** 사용자 ID (null이면 전체) */
+  user_id?: string
+  /** 시작 날짜 */
+  start_date?: string
+  /** 종료 날짜 */
+  end_date?: string
+  /** 활동 타입 필터 */
+  action_types?: ActivityActionType[]
+  /** 그룹화 기준 */
+  group_by?: 'day' | 'week' | 'month' | 'action_type' | 'user'
+  /** 페이지네이션 */
+  page?: number
+  /** 페이지당 항목 수 */
+  limit?: number
 }
 
 /**
@@ -594,19 +1230,19 @@ export interface MemberProfile {
   /** 이메일 주소 */
   email: string
   /** 전화번호 */
-  phone_number: string
+  phone_number?: string
   /** 생년월일 */
-  birth_date: string
+  birth_date?: string
   /** 실명 */
-  real_name: string
+  real_name?: string
   /** 조합비 */
-  monthly_fee: number
+  monthly_fee?: number
   /** 은행명 */
-  bank_name: string
+  bank_name?: string
   /** 계좌번호 */
-  account_number: string
+  account_number?: string
   /** 예금주 */
-  account_holder: string
+  account_holder?: string
   /** 등록 상태 */
   registration_status: 'pending' | 'approved' | 'rejected'
   /** 활성 상태 */
@@ -623,6 +1259,8 @@ export interface MemberProfile {
   approved_at?: string
   /** 승인자 */
   approved_by?: string
+  /** 거부자 */
+  rejected_by?: string
   
   // 아티스트 관련 필드
   /** 연결된 아티스트 ID */
@@ -631,6 +1269,28 @@ export interface MemberProfile {
   is_artist: boolean
   /** 아티스트 역할 */
   artist_role: 'owner' | 'manager' | 'collaborator'
+  
+  // 새로운 상태 관리 필드
+  /** 마지막 로그인 시간 */
+  last_login_at?: string
+  /** 정지 여부 */
+  is_suspended: boolean
+  /** 정지 사유 */
+  suspension_reason?: string
+  /** 정지 해제 일시 */
+  suspension_until?: string
+  /** 프로필 완성도 점수 (0-100) */
+  profile_completeness_score: number
+  /** 인증 상태 */
+  verification_status: {
+    email: boolean
+    phone: boolean
+    identity: boolean
+  }
+  /** 멤버십 타입 */
+  membership_type: 'regular' | 'premium' | 'lifetime'
+  /** 참여도 점수 */
+  engagement_score: number
 }
 
 /**
@@ -899,6 +1559,188 @@ export type ArtistPermissionChecker = (
   memberProfile: MemberProfile,
   artistId: string
 ) => Promise<ArtistPermissionCheck>
+
+// === 멤버 상태 관리 시스템 타입 정의 ===
+
+/**
+ * 멤버 상태 변경 이력 인터페이스
+ */
+export interface MemberStatusHistory {
+  /** 고유 식별자 */
+  id: string
+  /** 대상 멤버 ID */
+  member_id: string
+  /** 변경 수행자 ID */
+  changed_by?: string
+  /** 수행된 액션 */
+  action: 'approve' | 'reject' | 'activate' | 'deactivate' | 'suspend' | 'unsuspend' | 'promote' | 'demote' | 'update'
+  /** 이전 상태 */
+  previous_status: any
+  /** 새로운 상태 */
+  new_status: any
+  /** 변경 사유 */
+  reason?: string
+  /** 추가 메타데이터 */
+  metadata: any
+  /** 생성일시 */
+  created_at: string
+  /** IP 주소 */
+  ip_address?: string
+  /** 사용자 에이전트 */
+  user_agent?: string
+  /** 변경 수행자 정보 (조인된 데이터) */
+  changed_by_member?: {
+    display_name: string
+    email: string
+  }
+}
+
+/**
+ * 멤버 로그인 이력 인터페이스
+ */
+export interface MemberLoginHistory {
+  /** 고유 식별자 */
+  id: string
+  /** 멤버 ID */
+  member_id: string
+  /** 로그인 일시 */
+  login_at: string
+  /** IP 주소 */
+  ip_address?: string
+  /** 사용자 에이전트 */
+  user_agent?: string
+  /** 로그인 성공 여부 */
+  success: boolean
+  /** 실패 사유 */
+  failure_reason?: string
+}
+
+/**
+ * 대량 작업 인터페이스
+ */
+export interface MemberBulkOperation {
+  /** 고유 식별자 */
+  id: string
+  /** 작업 타입 */
+  operation_type: 'bulk_approve' | 'bulk_reject' | 'bulk_activate' | 'bulk_deactivate' | 'bulk_suspend' | 'bulk_export'
+  /** 수행자 ID */
+  performed_by: string
+  /** 대상 멤버 ID 목록 */
+  member_ids: string[]
+  /** 작업 파라미터 */
+  parameters: any
+  /** 작업 결과 */
+  results: any
+  /** 작업 상태 */
+  status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled'
+  /** 생성일시 */
+  created_at: string
+  /** 시작일시 */
+  started_at?: string
+  /** 완료일시 */
+  completed_at?: string
+  /** 오류 메시지 */
+  error_message?: string
+  /** 수행자 정보 (조인된 데이터) */
+  performed_by_member?: {
+    display_name: string
+    email: string
+  }
+}
+
+/**
+ * 멤버 통계 인터페이스
+ */
+export interface MemberStatistics {
+  /** 전체 멤버 수 */
+  totalMembers: number
+  /** 활성 멤버 수 */
+  activeMembers: number
+  /** 승인 대기 멤버 수 */
+  pendingMembers: number
+  /** 승인된 멤버 수 */
+  approvedMembers: number
+  /** 거부된 멤버 수 */
+  rejectedMembers: number
+  /** 정지된 멤버 수 */
+  suspendedMembers: number
+  /** 아티스트 수 */
+  artistMembers: number
+  /** 관리자 수 */
+  adminMembers: number
+  /** 월별 가입 통계 */
+  monthlyRegistrations: {
+    month: string
+    count: number
+  }[]
+  /** 멤버십 타입별 분포 */
+  membershipTypeDistribution: {
+    regular: number
+    premium: number
+    lifetime: number
+  }
+  /** 평균 프로필 완성도 */
+  averageProfileCompleteness: number
+  /** 평균 참여도 점수 */
+  averageEngagementScore: number
+}
+
+/**
+ * 대량 작업 요청 인터페이스
+ */
+export interface BulkOperationRequest {
+  /** 작업 타입 */
+  operation_type: 'bulk_approve' | 'bulk_reject' | 'bulk_activate' | 'bulk_deactivate' | 'bulk_suspend'
+  /** 대상 멤버 ID 목록 */
+  member_ids: string[]
+  /** 작업 파라미터 */
+  parameters?: {
+    /** 정지 사유 (정지 작업 시) */
+    suspension_reason?: string
+    /** 정지 기간 (임시 정지 시) */
+    suspension_until?: string
+    /** 기타 메타데이터 */
+    metadata?: any
+  }
+}
+
+/**
+ * 멤버 액션 타입
+ */
+export type MemberAction = 'approve' | 'reject' | 'activate' | 'deactivate' | 'suspend' | 'unsuspend' | 'promote' | 'demote'
+
+/**
+ * 멤버 필터 옵션
+ */
+export interface MemberFilterOptions {
+  /** 등록 상태 필터 */
+  registration_status?: 'pending' | 'approved' | 'rejected' | 'all'
+  /** 활성 상태 필터 */
+  is_active?: boolean
+  /** 정지 상태 필터 */
+  is_suspended?: boolean
+  /** 아티스트 여부 필터 */
+  is_artist?: boolean
+  /** 관리자 여부 필터 */
+  is_admin?: boolean
+  /** 멤버십 타입 필터 */
+  membership_type?: 'regular' | 'premium' | 'lifetime'
+  /** 가입일 범위 필터 */
+  date_range?: {
+    start: string
+    end: string
+  }
+  /** 최소 프로필 완성도 */
+  min_profile_completeness?: number
+  /** 최소 참여도 점수 */
+  min_engagement_score?: number
+  /** 검색 키워드 */
+  search?: string
+  /** 정렬 기준 */
+  sort_by?: 'created_at' | 'updated_at' | 'last_login_at' | 'display_name' | 'engagement_score'
+  /** 정렬 순서 */
+  sort_order?: 'asc' | 'desc'
+}
 
 // === 상수 정의 ===
 

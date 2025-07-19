@@ -1,0 +1,46 @@
+{
+  "metrics": {
+    "api": {
+      "responseTime": {
+        "threshold": 1000,
+        "unit": "ms"
+      },
+      "errorRate": {
+        "threshold": 5,
+        "unit": "percent"
+      }
+    },
+    "database": {
+      "queryTime": {
+        "threshold": 500,
+        "unit": "ms"
+      },
+      "connectionPool": {
+        "threshold": 80,
+        "unit": "percent"
+      }
+    }
+  },
+  "alerts": {
+    "channels": [
+      "email",
+      "slack"
+    ],
+    "escalation": {
+      "immediate": [
+        "critical"
+      ],
+      "delayed": [
+        "warning"
+      ],
+      "schedule": [
+        "info"
+      ]
+    }
+  },
+  "retention": {
+    "metrics": "30d",
+    "logs": "7d",
+    "traces": "3d"
+  }
+}

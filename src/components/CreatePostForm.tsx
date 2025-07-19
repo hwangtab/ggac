@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase/client';
 import { BOARD_CATEGORIES } from '@/constants/categories';
-import type { Post } from '@/types';
+import type { Post, PostAttachment } from '@/types';
+import PostAttachmentUploader from './PostAttachmentUploader';
+import { logPostCreated } from '@/utils/activityLogger';
 
 interface CreatePostFormProps {
   authorId: string;
@@ -14,6 +16,8 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ authorId, onNewPost, sh
   const [content, setContent] = useState('');
   const [category, setCategory] = useState('잡담');
   const [loading, setLoading] = useState(false);
+  const [showAttachmentUploader, setShowAttachmentUploader] = useState(false);
+  const [createdPostId, setCreatedPostId] = useState<string | null>(null);
 
   // '전체'는 필터링용이므로 제외하고 실제 게시글 카테고리만 사용
   const postCategories = BOARD_CATEGORIES.slice(1);
@@ -33,9 +37,27 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ authorId, onNewPost, sh
     if (error) {
       alert(error.message);
     } else if (data) {
-      if (showSuccessRedirect) {
-        alert('게시글이 성공적으로 작성되었습니다!');
+      setCreatedPostId(data.id);
+      
+      // 활동 로깅
+      try {
+        await logPostCreated(data.id, {
+          category,
+          title: title.substring(0, 50), // 제목 앞부분만 저장
+          character_count: content.length
+        });
+      } catch (logError) {
+        console.error('활동 로깅 오류:', logError);
+        // 로깅 실패는 사용자 경험에 영향주지 않음
       }
+      
+      if (showSuccessRedirect) {
+        alert('게시글이 성공적으로 작성되었습니다! 첨부파일을 추가할 수 있습니다.');
+      }
+      
+      // 첨부파일 업로더 표시
+      setShowAttachmentUploader(true);
+      
       onNewPost(data);
       setTitle('');
       setContent('');
@@ -43,10 +65,28 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ authorId, onNewPost, sh
     }
   };
 
+  // 첨부파일 업로드 완료 핸들러
+  const handleAttachmentUploadComplete = (attachments: PostAttachment[]) => {
+    console.log('첨부파일 업로드 완료:', attachments);
+  };
+
+  // 첨부파일 업로드 오류 핸들러
+  const handleAttachmentUploadError = (error: string) => {
+    alert('첨부파일 업로드 오류: ' + error);
+  };
+
+  // 첨부파일 업로더 닫기
+  const closeAttachmentUploader = () => {
+    setShowAttachmentUploader(false);
+    setCreatedPostId(null);
+  };
+
   return (
     <div className="bg-white p-6 rounded-lg shadow-md mb-8">
       <h2 className="text-2xl font-semibold mb-4">새 게시글 작성</h2>
-      <form onSubmit={handleSubmit} className="space-y-4">
+      
+      {!showAttachmentUploader ? (
+        <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label htmlFor="category" className="block text-sm font-medium text-gray-700">카테고리</label>
           <select
@@ -94,7 +134,41 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ authorId, onNewPost, sh
             {loading ? '작성 중...' : '게시글 작성'}
           </button>
         </div>
-      </form>
+        </form>
+      ) : (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-medium text-gray-900">첨부파일 추가</h3>
+            <button
+              onClick={closeAttachmentUploader}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              나중에 추가하기
+            </button>
+          </div>
+          
+          <p className="text-sm text-gray-600">
+            게시글이 작성되었습니다. 이제 이미지나 문서 파일을 첨부할 수 있습니다.
+          </p>
+
+          {createdPostId && (
+            <PostAttachmentUploader
+              postId={createdPostId}
+              onUploadComplete={handleAttachmentUploadComplete}
+              onUploadError={handleAttachmentUploadError}
+            />
+          )}
+
+          <div className="flex justify-end">
+            <button
+              onClick={closeAttachmentUploader}
+              className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+            >
+              완료
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
