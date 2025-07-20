@@ -44,8 +44,8 @@ const PersonalInfo: React.FC<PersonalInfoProps> = ({
       </div>
 
       {/* 프로필 사진 섹션 */}
-      <div className="mb-6 flex justify-center">
-        <div className="text-center">
+      <div className="mb-6 w-full flex justify-center items-center">
+        <div className="flex flex-col items-center text-center">
           <ProfilePhotoUploader
             currentPhotoUrl={data.profile_photo_url}
             currentMetadata={data.profile_photo_metadata}
@@ -54,7 +54,7 @@ const PersonalInfo: React.FC<PersonalInfoProps> = ({
             onPhotoDelete={handlePhotoDelete}
             size="large"
           />
-          <p className="mt-2 text-sm text-gray-500">
+          <p className="mt-2 text-sm text-gray-500 text-center">
             프로필 사진 (최대 2MB, JPEG/PNG/WebP/GIF)
           </p>
         </div>
