@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { MemberProfile } from '@/types'
+import { useState, useEffect } from 'react'
+import { MemberProfile, DatabaseArtist, ProfilePhotoMetadata } from '@/types'
 import PersonalInfo from './PersonalInfo'
 import CooperativeInfo from './CooperativeInfo'
 import AccountInfo from './AccountInfo'
@@ -21,8 +21,6 @@ const ProfileEditForm: React.FC<ProfileEditFormProps> = ({
     display_name: profile.display_name || '',
     phone_number: profile.phone_number || '',
     birth_date: profile.birth_date || '',
-    profile_photo_url: profile.profile_photo_url || undefined,
-    profile_photo_metadata: profile.profile_photo_metadata || undefined,
     monthly_fee: profile.monthly_fee || 0,
     bank_name: profile.bank_name || '',
     account_number: profile.account_number || '',
@@ -31,6 +29,8 @@ const ProfileEditForm: React.FC<ProfileEditFormProps> = ({
 
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [isDirty, setIsDirty] = useState(false)
+  const [artistData, setArtistData] = useState<DatabaseArtist | null>(null)
+  const [artistLoading, setArtistLoading] = useState(false)
 
   const handleChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }))
@@ -90,13 +90,35 @@ const ProfileEditForm: React.FC<ProfileEditFormProps> = ({
     }
   }
 
+  // 아티스트 데이터 로드
+  useEffect(() => {
+    const fetchArtistData = async () => {
+      if (!profile.is_artist || !profile.artist_id) {
+        return
+      }
+
+      setArtistLoading(true)
+      try {
+        const response = await fetch('/api/mypage/artist')
+        if (response.ok) {
+          const data = await response.json()
+          setArtistData(data.artist)
+        }
+      } catch (error) {
+        console.error('Failed to fetch artist data:', error)
+      } finally {
+        setArtistLoading(false)
+      }
+    }
+
+    fetchArtistData()
+  }, [profile.is_artist, profile.artist_id])
+
   const handleReset = () => {
     setFormData({
       display_name: profile.display_name || '',
       phone_number: profile.phone_number || '',
       birth_date: profile.birth_date || '',
-      profile_photo_url: profile.profile_photo_url || undefined,
-      profile_photo_metadata: profile.profile_photo_metadata || undefined,
       monthly_fee: profile.monthly_fee || 0,
       bank_name: profile.bank_name || '',
       account_number: profile.account_number || '',
@@ -110,7 +132,14 @@ const ProfileEditForm: React.FC<ProfileEditFormProps> = ({
     <form onSubmit={handleSubmit} className="space-y-8">
       {/* 개인 정보 */}
       <PersonalInfo 
-        data={formData}
+        data={{
+          display_name: formData.display_name,
+          phone_number: formData.phone_number,
+          birth_date: formData.birth_date
+        }}
+        artistPhotoUrl={artistData?.profile_photo_url || null}
+        artistPhotoMetadata={artistData?.profile_photo_metadata}
+        hasArtistPermission={profile.is_artist && !!profile.artist_id}
         errors={errors}
         onChange={handleChange}
         readOnlyEmail={profile.email}

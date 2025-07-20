@@ -24,7 +24,8 @@ const ArtistEditForm: React.FC<ArtistEditFormProps> = ({
     one_liner: artist.one_liner || '',
     bio: artist.bio || '',
     template_type: artist.template_type || '콜라주형',
-    profile_image: artist.profile_image || '',
+    profile_photo_url: artist.profile_photo_url || null,
+    profile_photo_metadata: artist.profile_photo_metadata || undefined,
     portfolio_links: artist.portfolio_links || [],
     youtube_videos: artist.youtube_videos || [],
     contact: artist.contact || ''
@@ -94,17 +95,7 @@ const ArtistEditForm: React.FC<ArtistEditFormProps> = ({
       })
     }
 
-    // 프로필 이미지 URL 검증 (선택사항이지만 입력된 경우 URL 형식 확인)
-    if (formData.profile_image) {
-      try {
-        new URL(formData.profile_image);
-        if (!/\.(jpg|jpeg|png|gif|webp|svg)$/i.test(formData.profile_image)) {
-          newErrors.profile_image = '지원되는 이미지 형식이 아닙니다. (JPG, PNG, GIF, WebP, SVG)';
-        }
-      } catch {
-        newErrors.profile_image = '올바른 URL 형식을 입력해주세요.';
-      }
-    }
+    // 프로필 사진 검증은 ProfilePhotoUploader에서 처리됨
 
     // 연락처 검증 (선택사항이지만 입력된 경우 이메일 형식 확인)
     if (formData.contact && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.contact)) {
@@ -137,7 +128,8 @@ const ArtistEditForm: React.FC<ArtistEditFormProps> = ({
       one_liner: artist.one_liner || '',
       bio: artist.bio || '',
       template_type: artist.template_type || '콜라주형',
-      profile_image: artist.profile_image || '',
+      profile_photo_url: artist.profile_photo_url || null,
+      profile_photo_metadata: artist.profile_photo_metadata || undefined,
       portfolio_links: artist.portfolio_links || [],
       youtube_videos: artist.youtube_videos || [],
       contact: artist.contact || ''
@@ -151,7 +143,6 @@ const ArtistEditForm: React.FC<ArtistEditFormProps> = ({
       {/* 기본 정보 */}
       <BasicInfo 
         data={formData}
-        currentImage={artist.profile_image}
         errors={errors}
         onChange={handleChange}
       />

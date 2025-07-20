@@ -1544,8 +1544,12 @@ export interface DatabaseArtist {
   name: string
   /** 카테고리 배열 */
   category: string[]
-  /** 프로필 이미지 경로 */
-  profile_image: string
+  /** 프로필 사진 URL (Supabase Storage) */
+  profile_photo_url: string | null
+  /** 프로필 사진 메타데이터 */
+  profile_photo_metadata?: ProfilePhotoMetadata
+  /** 프로필 이미지 경로 (기존 방식, 마이그레이션 후 삭제 예정) */
+  profile_image?: string
   /** 한 줄 소개 */
   one_liner: string
   /** 상세 소개 (마크다운) */
@@ -1740,7 +1744,7 @@ export interface ArtistPermissionCheck {
 /**
  * 아티스트 요약 정보 타입 (목록 표시용)
  */
-export type ArtistSummaryDB = Pick<DatabaseArtist, 'id' | 'legacy_id' | 'slug' | 'name' | 'category' | 'profile_image' | 'one_liner' | 'template_type'>
+export type ArtistSummaryDB = Pick<DatabaseArtist, 'id' | 'legacy_id' | 'slug' | 'name' | 'category' | 'profile_photo_url' | 'profile_photo_metadata' | 'one_liner' | 'template_type'>
 
 /**
  * 멤버 프로필 요약 정보 타입
