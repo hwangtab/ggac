@@ -10,7 +10,27 @@ const ArtistUpdateSchema = z.object({
   one_liner: z.string().min(1, '한 줄 소개는 필수입니다.').max(100, '한 줄 소개는 100자 이내여야 합니다.'),
   bio: z.string().min(1, '아티스트 소개는 필수입니다.').max(5000, '아티스트 소개는 5000자 이내여야 합니다.'),
   template_type: z.enum(['미니멀형', '콜라주형']),
-  profile_image: z.string().optional(),
+  profile_photo_url: z.string().nullable().optional(),
+  profile_photo_metadata: z.object({
+    original_filename: z.string().optional(),
+    file_size: z.number().optional(),
+    content_type: z.string().optional(),
+    width: z.number().optional(),
+    height: z.number().optional(),
+    uploaded_at: z.string().optional(),
+    processed: z.boolean().optional(),
+    versions: z.object({
+      thumbnail: z.string().optional(),
+      medium: z.string().optional(),
+      large: z.string().optional()
+    }).optional(),
+    crop_info: z.object({
+      x: z.number(),
+      y: z.number(),
+      width: z.number(),
+      height: z.number()
+    }).optional()
+  }).optional(),
   portfolio_links: z.array(z.object({
     title: z.string(),
     url: z.string().url('올바른 URL 형식을 입력해주세요.')
@@ -194,7 +214,8 @@ export async function PATCH(request: NextRequest) {
         one_liner: updateData.one_liner,
         bio: updateData.bio,
         template_type: updateData.template_type,
-        profile_image: updateData.profile_image || null,
+        profile_photo_url: updateData.profile_photo_url,
+        profile_photo_metadata: updateData.profile_photo_metadata,
         portfolio_links: updateData.portfolio_links || [],
         youtube_videos: updateData.youtube_videos || [],
         contact: contactValue,

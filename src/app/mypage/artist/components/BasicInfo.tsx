@@ -1,7 +1,8 @@
 'use client'
 
 import { FiUser } from 'react-icons/fi'
-import ImagePreview from './ImagePreview'
+import ProfilePhotoUploader from '@/components/ProfilePhotoUploader'
+import type { ProfilePhotoUploadResponse, ProfilePhotoMetadata } from '@/types'
 
 interface BasicInfoProps {
   data: {
@@ -9,16 +10,15 @@ interface BasicInfoProps {
     category: string[]
     one_liner: string
     template_type: string
-    profile_image: string
+    profile_photo_url: string | null
+    profile_photo_metadata?: ProfilePhotoMetadata
   }
-  currentImage?: string
   errors: Record<string, string>
   onChange: (field: string, value: any) => void
 }
 
 const BasicInfo: React.FC<BasicInfoProps> = ({
   data,
-  currentImage,
   errors,
   onChange
 }) => {
@@ -49,6 +49,18 @@ const BasicInfo: React.FC<BasicInfoProps> = ({
     onChange('category', newCategories)
   }
 
+  // 프로필 사진 업로드 완료 핸들러
+  const handlePhotoUploadComplete = (response: ProfilePhotoUploadResponse) => {
+    onChange('profile_photo_url', response.photo_url)
+    onChange('profile_photo_metadata', response.metadata)
+  }
+
+  // 프로필 사진 삭제 핸들러
+  const handlePhotoDelete = () => {
+    onChange('profile_photo_url', null)
+    onChange('profile_photo_metadata', undefined)
+  }
+
   return (
     <div className="bg-gray-50 rounded-lg p-6">
       <div className="flex items-center mb-6">
@@ -57,15 +69,33 @@ const BasicInfo: React.FC<BasicInfoProps> = ({
       </div>
 
       <div className="space-y-6">
-        {/* 프로필 이미지 */}
+        {/* 아티스트 프로필 사진 */}
         <div>
-          <ImagePreview
-            currentImage={currentImage}
-            value={data.profile_image}
-            onImageChange={(imageUrl) => onChange('profile_image', imageUrl)}
-          />
-          {errors.profile_image && (
-            <p className="mt-2 text-sm text-red-600">{errors.profile_image}</p>
+          <div className="mb-4">
+            <h3 className="text-sm font-medium text-gray-700 mb-2">
+              아티스트 프로필 사진
+            </h3>
+            <p className="text-xs text-gray-500">
+              공개 아티스트 페이지에 표시될 대표 사진입니다. 개인 프로필에서도 이 사진이 표시됩니다.
+            </p>
+          </div>
+          <div className="w-full flex justify-center items-center mb-4">
+            <div className="flex flex-col items-center text-center">
+              <ProfilePhotoUploader
+                currentPhotoUrl={data.profile_photo_url}
+                currentMetadata={data.profile_photo_metadata}
+                userDisplayName={data.name || 'Artist'}
+                onUploadComplete={handlePhotoUploadComplete}
+                onPhotoDelete={handlePhotoDelete}
+                size="large"
+              />
+              <p className="mt-2 text-sm text-gray-500 text-center">
+                최대 2MB, JPEG/PNG/WebP/GIF
+              </p>
+            </div>
+          </div>
+          {errors.profile_photo_url && (
+            <p className="mt-2 text-sm text-red-600">{errors.profile_photo_url}</p>
           )}
         </div>
 

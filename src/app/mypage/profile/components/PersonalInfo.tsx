@@ -1,18 +1,19 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { FiUser } from 'react-icons/fi'
-import ProfilePhotoUploader from '@/components/ProfilePhotoUploader'
-import type { ProfilePhotoUploadResponse, ProfilePhotoMetadata } from '@/types'
+import { FiUser, FiEdit3 } from 'react-icons/fi'
+import Link from 'next/link'
+import type { ProfilePhotoMetadata } from '@/types'
 
 interface PersonalInfoProps {
   data: {
     display_name: string
     phone_number: string
     birth_date: string
-    profile_photo_url?: string | null
-    profile_photo_metadata?: ProfilePhotoMetadata
   }
+  artistPhotoUrl?: string | null
+  artistPhotoMetadata?: ProfilePhotoMetadata
+  hasArtistPermission: boolean
   errors: Record<string, string>
   onChange: (field: string, value: any) => void
   readOnlyEmail: string
@@ -20,21 +21,13 @@ interface PersonalInfoProps {
 
 const PersonalInfo: React.FC<PersonalInfoProps> = ({
   data,
+  artistPhotoUrl,
+  artistPhotoMetadata,
+  hasArtistPermission,
   errors,
   onChange,
   readOnlyEmail
 }) => {
-  // 프로필 사진 업로드 완료 핸들러
-  const handlePhotoUploadComplete = (response: ProfilePhotoUploadResponse) => {
-    onChange('profile_photo_url', response.photo_url)
-    onChange('profile_photo_metadata', response.metadata)
-  }
-
-  // 프로필 사진 삭제 핸들러
-  const handlePhotoDelete = () => {
-    onChange('profile_photo_url', undefined)
-    onChange('profile_photo_metadata', undefined)
-  }
 
   return (
     <div className="bg-gray-50 rounded-lg p-6">
@@ -46,17 +39,41 @@ const PersonalInfo: React.FC<PersonalInfoProps> = ({
       {/* 프로필 사진 섹션 */}
       <div className="mb-6 w-full flex justify-center items-center">
         <div className="flex flex-col items-center text-center">
-          <ProfilePhotoUploader
-            currentPhotoUrl={data.profile_photo_url}
-            currentMetadata={data.profile_photo_metadata}
-            userDisplayName={data.display_name}
-            onUploadComplete={handlePhotoUploadComplete}
-            onPhotoDelete={handlePhotoDelete}
-            size="large"
-          />
-          <p className="mt-2 text-sm text-gray-500 text-center">
-            프로필 사진 (최대 2MB, JPEG/PNG/WebP/GIF)
-          </p>
+          {/* 프로필 사진 표시 */}
+          <div className="relative w-32 h-32 rounded-full overflow-hidden border-2 border-gray-200 bg-gray-100">
+            {artistPhotoUrl ? (
+              <img
+                src={artistPhotoUrl}
+                alt={`${data.display_name}의 프로필 사진`}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <FiUser className="w-12 h-12 text-gray-400" />
+              </div>
+            )}
+          </div>
+
+          <div className="mt-3 text-center">
+            {hasArtistPermission ? (
+              <div>
+                <p className="text-sm text-gray-600 mb-2">
+                  아티스트 프로필 사진이 표시됩니다
+                </p>
+                <Link
+                  href="/mypage/artist"
+                  className="inline-flex items-center text-sm text-primary-600 hover:text-primary-700"
+                >
+                  <FiEdit3 className="w-4 h-4 mr-1" />
+                  아티스트 프로필에서 사진 관리
+                </Link>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">
+                아티스트 권한이 있으면 프로필 사진을 설정할 수 있습니다
+              </p>
+            )}
+          </div>
         </div>
       </div>
 
