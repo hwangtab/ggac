@@ -322,7 +322,15 @@ const nextConfig = {
   },
   
   images: {
-    // 로컬 이미지는 domains 불필요
+    // 외부 이미지 도메인 허용 (Supabase Storage)
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '*.supabase.co',
+        port: '',
+        pathname: '/storage/v1/object/public/**',
+      },
+    ],
     formats: ['image/webp', 'image/avif'],
     // 더 효율적인 디바이스 크기 설정
     deviceSizes: [640, 750, 828, 1080, 1200, 1920],
