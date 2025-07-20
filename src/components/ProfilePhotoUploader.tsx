@@ -6,7 +6,9 @@
 'use client'
 
 import React, { useState, useCallback, useRef } from 'react'
-import { FiCamera, FiUser, FiEdit3, FiTrash2, FiLoader, FiUpload } from 'react-icons/fi'
+import ReactCrop, { type Crop, type PixelCrop } from 'react-image-crop'
+import 'react-image-crop/dist/ReactCrop.css'
+import { FiCamera, FiUser, FiEdit3, FiTrash2, FiLoader, FiUpload, FiRotateCcw } from 'react-icons/fi'
 import type { 
   ProfilePhotoUploadRequest,
   ProfilePhotoUploadResponse,
@@ -61,7 +63,12 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
   const [isHovered, setIsHovered] = useState(false)
   const [showCropModal, setShowCropModal] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [crop, setCrop] = useState<Crop>()
+  const [completedCrop, setCompletedCrop] = useState<PixelCrop>()
+  const [croppedImageUrl, setCroppedImageUrl] = useState<string>()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const imageRef = useRef<HTMLImageElement>(null)
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null)
 
   // 크기별 스타일 설정
   const sizeClasses = {
@@ -120,6 +127,117 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
       reader.onerror = reject
       reader.readAsDataURL(file)
     })
+  }, [])
+
+  // Canvas를 사용하여 크롭된 이미지 생성
+  const getCroppedImg = useCallback((
+    image: HTMLImageElement,
+    crop: PixelCrop,
+    outputSize: { width: number; height: number } = { width: 400, height: 400 }
+  ): Promise<File> => {
+    return new Promise((resolve, reject) => {
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')
+
+      if (!ctx) {
+        reject(new Error('Canvas context not available'))
+        return
+      }
+
+      const scaleX = image.naturalWidth / image.width
+      const scaleY = image.naturalHeight / image.height
+
+      canvas.width = outputSize.width
+      canvas.height = outputSize.height
+
+      ctx.drawImage(
+        image,
+        crop.x * scaleX,
+        crop.y * scaleY,
+        crop.width * scaleX,
+        crop.height * scaleY,
+        0,
+        0,
+        outputSize.width,
+        outputSize.height
+      )
+
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            reject(new Error('Canvas is empty'))
+            return
+          }
+          const file = new File([blob], `cropped_${selectedFile?.name || 'image.jpg'}`, {
+            type: 'image/jpeg',
+            lastModified: Date.now()
+          })
+          resolve(file)
+        },
+        'image/jpeg',
+        0.95
+      )
+    })
+  }, [selectedFile])
+
+  // 크롭 미리보기 업데이트
+  const updateCropPreview = useCallback(async (crop: PixelCrop) => {
+    if (!imageRef.current || !previewCanvasRef.current || !crop.width || !crop.height) {
+      return
+    }
+
+    const canvas = previewCanvasRef.current
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const image = imageRef.current
+    const scaleX = image.naturalWidth / image.width
+    const scaleY = image.naturalHeight / image.height
+
+    const pixelRatio = window.devicePixelRatio
+    canvas.width = crop.width * pixelRatio
+    canvas.height = crop.height * pixelRatio
+
+    ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0)
+    ctx.imageSmoothingQuality = 'high'
+
+    ctx.drawImage(
+      image,
+      crop.x * scaleX,
+      crop.y * scaleY,
+      crop.width * scaleX,
+      crop.height * scaleY,
+      0,
+      0,
+      crop.width,
+      crop.height
+    )
+
+    // 미리보기 URL 생성
+    canvas.toBlob((blob) => {
+      if (blob) {
+        const url = URL.createObjectURL(blob)
+        setCroppedImageUrl(url)
+      }
+    })
+  }, [])
+
+  // 이미지 로드 완료 시 기본 크롭 영역 설정
+  const onImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
+    const { width, height } = e.currentTarget
+    const cropSize = Math.min(width, height) * 0.8 // 80% 크기로 설정
+    const x = (width - cropSize) / 2
+    const y = (height - cropSize) / 2
+
+    const newCrop: Crop = {
+      unit: 'px',
+      x,
+      y,
+      width: cropSize,
+      height: cropSize
+    }
+
+    setCrop(newCrop)
   }, [])
 
   // 아티스트 프로필 사진 업로드 (Supabase Storage)
@@ -417,54 +535,173 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
         </div>
       )}
 
-      {/* TODO: 크롭 모달 */}
-      {showCropModal && selectedFile && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-lg w-full mx-4">
-            <h3 className="text-lg font-medium mb-4">이미지 크롭</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              프로필 사진으로 사용할 영역을 선택해주세요.
-            </p>
-            
-            {/* TODO: 실제 크롭 컴포넌트 구현 */}
-            <div className="border-2 border-dashed border-gray-300 rounded p-8 text-center mb-4">
-              <p className="text-gray-500">크롭 기능이 곧 추가됩니다.</p>
-              {uploadState.preview && (
-                <img 
-                  src={uploadState.preview} 
-                  alt="Preview" 
-                  className="max-w-full max-h-40 mx-auto mt-2"
-                />
-              )}
-            </div>
-
-            <div className="flex justify-end space-x-3">
+      {/* 크롭 모달 */}
+      {showCropModal && selectedFile && uploadState.preview && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium">프로필 사진 크롭</h3>
               <button
                 onClick={() => {
                   setShowCropModal(false)
                   setSelectedFile(null)
-                  setUploadState({
-                    isUploading: false,
-                    progress: 0
-                  })
+                  setCrop(undefined)
+                  setCompletedCrop(undefined)
+                  setCroppedImageUrl(undefined)
+                  setUploadState({ isUploading: false, progress: 0 })
                 }}
-                className="px-4 py-2 text-gray-700 bg-gray-100 rounded hover:bg-gray-200"
+                className="text-gray-400 hover:text-gray-600"
                 disabled={uploadState.isUploading}
               >
-                취소
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
-              <button
-                onClick={() => {
-                  if (selectedFile) {
-                    startUpload(selectedFile, undefined, uploadState.imageMetadata)
+            </div>
+            
+            <p className="text-sm text-gray-600 mb-4">
+              드래그하여 프로필 사진으로 사용할 영역을 선택해주세요. 정사각형으로 크롭됩니다.
+            </p>
+
+            <div className="grid md:grid-cols-2 gap-6">
+              {/* 크롭 영역 */}
+              <div className="space-y-3">
+                <h4 className="text-sm font-medium text-gray-900">원본 이미지</h4>
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <ReactCrop
+                    crop={crop}
+                    onChange={(c) => setCrop(c)}
+                    onComplete={(c) => {
+                      setCompletedCrop(c)
+                      if (c.width > 0 && c.height > 0) {
+                        updateCropPreview(c)
+                      }
+                    }}
+                    aspect={1} // 정사각형 비율 고정
+                    minWidth={50}
+                    minHeight={50}
+                    maxWidth={600}
+                    maxHeight={600}
+                    keepSelection
+                  >
+                    <img
+                      ref={imageRef}
+                      src={uploadState.preview}
+                      alt="크롭할 이미지"
+                      onLoad={onImageLoad}
+                      className="max-w-full h-auto"
+                      style={{ maxHeight: '400px' }}
+                    />
+                  </ReactCrop>
+                </div>
+              </div>
+
+              {/* 미리보기 영역 */}
+              <div className="space-y-3">
+                <h4 className="text-sm font-medium text-gray-900">크롭 미리보기</h4>
+                <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                  {croppedImageUrl ? (
+                    <div className="text-center">
+                      <img
+                        src={croppedImageUrl}
+                        alt="크롭 미리보기"
+                        className="w-32 h-32 mx-auto rounded-full object-cover border-2 border-gray-300"
+                      />
+                      <p className="text-xs text-gray-500 mt-2">400 × 400px</p>
+                    </div>
+                  ) : (
+                    <div className="w-32 h-32 mx-auto bg-gray-200 rounded-full flex items-center justify-center">
+                      <FiUser className="w-12 h-12 text-gray-400" />
+                    </div>
+                  )}
+                </div>
+                
+                {/* 크롭 정보 */}
+                {completedCrop && (
+                  <div className="text-xs text-gray-500 space-y-1">
+                    <div>크기: {Math.round(completedCrop.width)} × {Math.round(completedCrop.height)}</div>
+                    <div>위치: ({Math.round(completedCrop.x)}, {Math.round(completedCrop.y)})</div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 숨겨진 캔버스 (미리보기용) */}
+            <canvas
+              ref={previewCanvasRef}
+              className="hidden"
+            />
+
+            {/* 하단 버튼들 */}
+            <div className="flex flex-col sm:flex-row justify-between items-center mt-6 pt-4 border-t border-gray-200 gap-3">
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={() => {
+                    if (imageRef.current) {
+                      onImageLoad({ currentTarget: imageRef.current } as React.SyntheticEvent<HTMLImageElement>)
+                    }
+                  }}
+                  className="flex items-center px-3 py-2 text-sm text-gray-600 bg-gray-100 rounded hover:bg-gray-200 transition-colors"
+                  disabled={uploadState.isUploading}
+                >
+                  <FiRotateCcw className="w-4 h-4 mr-1" />
+                  초기화
+                </button>
+              </div>
+
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => {
                     setShowCropModal(false)
-                  }
-                }}
-                className="px-4 py-2 bg-primary-600 text-white rounded hover:bg-primary-700"
-                disabled={uploadState.isUploading}
-              >
-                {uploadState.isUploading ? '업로드 중...' : '업로드'}
-              </button>
+                    setSelectedFile(null)
+                    setCrop(undefined)
+                    setCompletedCrop(undefined)
+                    setCroppedImageUrl(undefined)
+                    setUploadState({ isUploading: false, progress: 0 })
+                  }}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded hover:bg-gray-200 transition-colors"
+                  disabled={uploadState.isUploading}
+                >
+                  취소
+                </button>
+                <button
+                  onClick={async () => {
+                    if (selectedFile && completedCrop && imageRef.current) {
+                      try {
+                        // 크롭된 이미지 생성
+                        const croppedFile = await getCroppedImg(imageRef.current, completedCrop)
+                        
+                        // 크롭 설정 생성
+                        const cropSettings: ImageCropSettings = {
+                          x: completedCrop.x,
+                          y: completedCrop.y,
+                          width: completedCrop.width,
+                          height: completedCrop.height,
+                          output_size: { width: 400, height: 400 }
+                        }
+
+                        // 업로드 시작
+                        startUpload(croppedFile, cropSettings, { width: 400, height: 400 })
+                        setShowCropModal(false)
+                      } catch (error) {
+                        console.error('크롭 처리 오류:', error)
+                        onUploadError?.('이미지 크롭 처리 중 오류가 발생했습니다.')
+                      }
+                    }
+                  }}
+                  className="px-4 py-2 bg-primary-600 text-white rounded hover:bg-primary-700 transition-colors disabled:opacity-50"
+                  disabled={uploadState.isUploading || !completedCrop || !croppedImageUrl}
+                >
+                  {uploadState.isUploading ? (
+                    <span className="flex items-center">
+                      <FiLoader className="w-4 h-4 mr-2 animate-spin" />
+                      업로드 중...
+                    </span>
+                  ) : (
+                    '크롭 후 업로드'
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
