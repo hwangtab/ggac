@@ -7,6 +7,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import type { MediaFile } from '@/types'
+import { 
+  createSuccessResponse, 
+  createErrorResponse, 
+  createJsonResponse 
+} from '@/utils/apiResponse'
 
 // 기본 설정
 const DEFAULT_MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
@@ -135,10 +140,7 @@ export async function POST(request: NextRequest) {
     const { data: { session }, error: authError } = await supabase.auth.getSession()
     
     if (authError || !session?.user) {
-      return NextResponse.json(
-        { success: false, error: '로그인이 필요합니다.' },
-        { status: 401 }
-      )
+      return createErrorResponse('로그인이 필요합니다.', 401)
     }
 
     // 사용자 상태 확인 (승인된 멤버만)
@@ -149,17 +151,11 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (profileError || !profile) {
-      return NextResponse.json(
-        { success: false, error: '사용자 정보를 찾을 수 없습니다.' },
-        { status: 404 }
-      )
+      return createErrorResponse('사용자 정보를 찾을 수 없습니다.', 404)
     }
 
     if (profile.registration_status !== 'approved' || !profile.is_active) {
-      return NextResponse.json(
-        { success: false, error: '승인된 활성 멤버만 파일을 업로드할 수 있습니다.' },
-        { status: 403 }
-      )
+      return createErrorResponse('승인된 활성 멤버만 파일을 업로드할 수 있습니다.', 403)
     }
 
     // FormData 파싱
@@ -169,19 +165,13 @@ export async function POST(request: NextRequest) {
     const metadataStr = formData.get('metadata') as string
 
     if (!file) {
-      return NextResponse.json(
-        { success: false, error: '파일이 제공되지 않았습니다.' },
-        { status: 400 }
-      )
+      return createErrorResponse('파일이 제공되지 않았습니다.', 400)
     }
 
     // 파일 유효성 검사
     const validation = validateFile(file, bucket)
     if (!validation.valid) {
-      return NextResponse.json(
-        { success: false, error: validation.error },
-        { status: 400 }
-      )
+      return createErrorResponse(validation.error!, 400)
     }
 
     // 사용자 제공 메타데이터 파싱
@@ -207,10 +197,7 @@ export async function POST(request: NextRequest) {
 
     if (uploadError) {
       console.error('Storage upload error:', uploadError)
-      return NextResponse.json(
-        { success: false, error: '파일 업로드에 실패했습니다.' },
-        { status: 500 }
-      )
+      return createErrorResponse('파일 업로드에 실패했습니다.', 500)
     }
 
     // 공개 URL 생성
@@ -219,10 +206,7 @@ export async function POST(request: NextRequest) {
       .getPublicUrl(storagePath)
 
     if (!publicUrlData?.publicUrl) {
-      return NextResponse.json(
-        { success: false, error: '공개 URL 생성에 실패했습니다.' },
-        { status: 500 }
-      )
+      return createErrorResponse('공개 URL 생성에 실패했습니다.', 500)
     }
 
     // 파일 메타데이터 추출
@@ -242,8 +226,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 성공 응답
-    return NextResponse.json({
-      success: true,
+    return createSuccessResponse({
       file: mediaFile,
       // 호환성을 위한 추가 필드들
       id: mediaFile.id,
@@ -251,14 +234,11 @@ export async function POST(request: NextRequest) {
       path: mediaFile.path,
       public_url: mediaFile.public_url,
       metadata: finalMetadata
-    }, { status: 200 })
+    })
 
   } catch (error) {
     console.error('Media upload error:', error)
-    return NextResponse.json(
-      { success: false, error: '서버 오류가 발생했습니다.' },
-      { status: 500 }
-    )
+    return createErrorResponse('서버 오류가 발생했습니다.', 500)
   }
 }
 
@@ -273,10 +253,7 @@ export async function GET(request: NextRequest) {
     const { data: { session }, error: authError } = await supabase.auth.getSession()
     
     if (authError || !session?.user) {
-      return NextResponse.json(
-        { success: false, error: '로그인이 필요합니다.' },
-        { status: 401 }
-      )
+      return createErrorResponse('로그인이 필요합니다.', 401)
     }
 
     const { searchParams } = new URL(request.url)
@@ -295,10 +272,7 @@ export async function GET(request: NextRequest) {
 
     if (listError) {
       console.error('Storage list error:', listError)
-      return NextResponse.json(
-        { success: false, error: '파일 목록 조회에 실패했습니다.' },
-        { status: 500 }
-      )
+      return createErrorResponse('파일 목록 조회에 실패했습니다.', 500)
     }
 
     // MediaFile 형태로 변환
@@ -320,18 +294,14 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    return NextResponse.json({
-      success: true,
+    return createSuccessResponse({
       files: mediaFiles,
       total: mediaFiles.length,
       has_more: mediaFiles.length === limit
-    }, { status: 200 })
+    })
 
   } catch (error) {
     console.error('Media list error:', error)
-    return NextResponse.json(
-      { success: false, error: '서버 오류가 발생했습니다.' },
-      { status: 500 }
-    )
+    return createErrorResponse('서버 오류가 발생했습니다.', 500)
   }
 }

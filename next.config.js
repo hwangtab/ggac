@@ -87,7 +87,7 @@ const nextConfig = {
     })
   },
   
-  // Enhanced security headers
+  // Enhanced security headers and MIME type configuration
   async headers() {
     return [
       // CSS 파일에 대한 올바른 MIME 타입 헤더
@@ -101,6 +101,10 @@ const nextConfig = {
           {
             key: 'Cache-Control',
             value: 'public, max-age=31536000, immutable',
+          },
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
           },
         ],
       },
@@ -116,9 +120,148 @@ const nextConfig = {
             key: 'Cache-Control',
             value: 'public, max-age=31536000, immutable',
           },
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          },
         ],
       },
-      // 정적 이미지 파일에 대한 헤더
+      // WebP 이미지 파일
+      {
+        source: '/images/(.*\\.webp)',
+        headers: [
+          {
+            key: 'Content-Type',
+            value: 'image/webp',
+          },
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=86400',
+          },
+        ],
+      },
+      // AVIF 이미지 파일
+      {
+        source: '/images/(.*\\.avif)',
+        headers: [
+          {
+            key: 'Content-Type',
+            value: 'image/avif',
+          },
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=86400',
+          },
+        ],
+      },
+      // JPEG 이미지 파일
+      {
+        source: '/images/(.*\\.jpg)',
+        headers: [
+          {
+            key: 'Content-Type',
+            value: 'image/jpeg',
+          },
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=86400',
+          },
+        ],
+      },
+      {
+        source: '/images/(.*\\.jpeg)',
+        headers: [
+          {
+            key: 'Content-Type',
+            value: 'image/jpeg',
+          },
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=86400',
+          },
+        ],
+      },
+      // PNG 이미지 파일
+      {
+        source: '/images/(.*\\.png)',
+        headers: [
+          {
+            key: 'Content-Type',
+            value: 'image/png',
+          },
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=86400',
+          },
+        ],
+      },
+      // SVG 이미지 파일
+      {
+        source: '/images/(.*\\.svg)',
+        headers: [
+          {
+            key: 'Content-Type',
+            value: 'image/svg+xml',
+          },
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=86400',
+          },
+        ],
+      },
+      // 웹폰트 파일들
+      {
+        source: '/(.*\\.woff2)',
+        headers: [
+          {
+            key: 'Content-Type',
+            value: 'font/woff2',
+          },
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+          {
+            key: 'Access-Control-Allow-Origin',
+            value: '*',
+          },
+        ],
+      },
+      {
+        source: '/(.*\\.woff)',
+        headers: [
+          {
+            key: 'Content-Type',
+            value: 'font/woff',
+          },
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+          {
+            key: 'Access-Control-Allow-Origin',
+            value: '*',
+          },
+        ],
+      },
+      {
+        source: '/(.*\\.ttf)',
+        headers: [
+          {
+            key: 'Content-Type',
+            value: 'font/ttf',
+          },
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+          {
+            key: 'Access-Control-Allow-Origin',
+            value: '*',
+          },
+        ],
+      },
+      // 정적 이미지 파일에 대한 일반 캐시 헤더 (fallback)
       {
         source: '/images/(.*)',
         headers: [
