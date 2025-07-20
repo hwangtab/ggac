@@ -280,8 +280,7 @@ FROM artists_with_photo a
 LEFT JOIN storage.objects obj ON (
   obj.bucket_id = 'artists' AND
   a.profile_photo_url LIKE '%' || obj.name || '%'
-)
-WHERE a.is_active = true;
+);
 
 -- 뷰 권한 설정
 GRANT SELECT ON artist_photos_with_storage TO authenticated;
