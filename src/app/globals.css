@@ -2,6 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
+/* React Image Crop Styles */
+@import 'react-image-crop/dist/ReactCrop.css';
+
 /* Accessibility Improvements */
 
 /* Skip Links */
