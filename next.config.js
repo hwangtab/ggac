@@ -90,6 +90,44 @@ const nextConfig = {
   // Enhanced security headers
   async headers() {
     return [
+      // CSS 파일에 대한 올바른 MIME 타입 헤더
+      {
+        source: '/_next/static/css/(.*)',
+        headers: [
+          {
+            key: 'Content-Type',
+            value: 'text/css; charset=utf-8',
+          },
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+      // JavaScript 파일에 대한 헤더
+      {
+        source: '/_next/static/js/(.*)',
+        headers: [
+          {
+            key: 'Content-Type',
+            value: 'application/javascript; charset=utf-8',
+          },
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+      // 정적 이미지 파일에 대한 헤더
+      {
+        source: '/images/(.*)',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=86400',
+          },
+        ],
+      },
       {
         source: '/(.*)',
         headers: [
@@ -125,7 +163,7 @@ const nextConfig = {
               "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com",
               process.env.NODE_ENV === 'development' 
                 ? "connect-src 'self' http://localhost:* https://api.supabase.io https://*.supabase.co ws://localhost:* wss://localhost:*"
-                : "connect-src 'self' https://api.supabase.io https://*.supabase.co",
+                : "connect-src 'self' https://api.supabase.io https://*.supabase.co wss://*.supabase.co",
               "object-src 'none'",
               "base-uri 'self'",
               "form-action 'self'",
