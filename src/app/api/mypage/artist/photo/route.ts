@@ -33,7 +33,7 @@ function validateFileSize(file: File): boolean {
 // Storage 경로 생성 (아티스트용)
 function generateArtistStoragePath(artistId: string, fileExtension: string): string {
   const timestamp = Date.now()
-  return `artists/${artistId}/profile_${timestamp}.${fileExtension}`
+  return `${artistId}/profile_${timestamp}.${fileExtension}`
 }
 
 // 파일 확장자 추출
@@ -220,7 +220,7 @@ export async function PUT(request: NextRequest) {
         const url = new URL(currentArtist.profile_photo_url)
         const pathParts = url.pathname.split('/')
         const fileName = pathParts[pathParts.length - 1]
-        const oldPath = `artists/${profile.artist_id}/${fileName}`
+        const oldPath = `${profile.artist_id}/${fileName}`
 
         await supabase.storage
           .from('artists')
@@ -315,7 +315,7 @@ export async function DELETE(request: NextRequest) {
       const url = new URL(artist.profile_photo_url)
       const pathParts = url.pathname.split('/')
       const fileName = pathParts[pathParts.length - 1]
-      const filePath = `artists/${profile.artist_id}/${fileName}`
+      const filePath = `${profile.artist_id}/${fileName}`
 
       const { error: deleteError } = await supabase.storage
         .from('artists')
