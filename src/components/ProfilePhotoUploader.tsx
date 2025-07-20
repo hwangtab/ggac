@@ -276,11 +276,11 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
   const displayImageUrl = uploadState.preview || currentPhotoUrl
 
   return (
-    <div className={`profile-photo-uploader ${className}`}>
+    <div className={`profile-photo-uploader flex flex-col items-center ${className}`}>
       <div
         className={`
           relative ${sizeClasses[size]} rounded-full overflow-hidden 
-          border-2 border-gray-200 group cursor-pointer
+          border-2 border-gray-200 group cursor-pointer mx-auto
           ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
           ${isHovered ? 'border-primary-400' : ''}
         `}

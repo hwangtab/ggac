@@ -1,9 +1,35 @@
 // Supabase 상태 확인 도구
 const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config({ path: '.env.local' });
+const fs = require('fs');
+const path = require('path');
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+// .env.local 파일에서 환경변수 읽기
+let supabaseUrl, supabaseAnonKey;
+
+try {
+  const envPath = path.join(__dirname, '.env.local');
+  if (fs.existsSync(envPath)) {
+    const envFile = fs.readFileSync(envPath, 'utf8');
+    const envLines = envFile.split('\n');
+    
+    for (const line of envLines) {
+      const [key, ...valueParts] = line.split('=');
+      const value = valueParts.join('=').trim();
+      
+      if (key === 'NEXT_PUBLIC_SUPABASE_URL') {
+        supabaseUrl = value;
+      } else if (key === 'NEXT_PUBLIC_SUPABASE_ANON_KEY') {
+        supabaseAnonKey = value;
+      }
+    }
+  }
+} catch (error) {
+  console.log('⚠️ .env.local 파일을 읽을 수 없습니다:', error.message);
+}
+
+// 환경변수가 없으면 process.env에서 가져오기
+supabaseUrl = supabaseUrl || process.env.NEXT_PUBLIC_SUPABASE_URL;
+supabaseAnonKey = supabaseAnonKey || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 async function checkSupabaseStatus() {
   console.log('🔍 Supabase 연결 상태 확인 중...\n');
