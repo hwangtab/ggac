@@ -1,0 +1,82 @@
+{
+  "security": [
+    {
+      "name": "API 서버 상태 확인",
+      "passed": false,
+      "error": "개발 서버가 실행되지 않음",
+      "status": "⚠️"
+    }
+  ],
+  "validation": [
+    {
+      "name": "허용된 파일 타입 (JPEG)",
+      "passed": true,
+      "expectedResult": "PASS",
+      "actualResult": "PASS",
+      "fileSize": 1024,
+      "status": "✅"
+    },
+    {
+      "name": "허용된 파일 타입 (PNG)",
+      "passed": true,
+      "expectedResult": "PASS",
+      "actualResult": "PASS",
+      "fileSize": 1024,
+      "status": "✅"
+    },
+    {
+      "name": "허용되지 않은 파일 타입 (PDF)",
+      "passed": true,
+      "expectedResult": "FAIL",
+      "actualResult": "FAIL",
+      "fileSize": 1024,
+      "status": "✅"
+    },
+    {
+      "name": "허용되지 않은 파일 타입 (JS)",
+      "passed": true,
+      "expectedResult": "FAIL",
+      "actualResult": "FAIL",
+      "fileSize": 1024,
+      "status": "✅"
+    },
+    {
+      "name": "파일 크기 제한 (초과)",
+      "passed": true,
+      "expectedResult": "FAIL",
+      "actualResult": "FAIL",
+      "fileSize": 5243904,
+      "status": "✅"
+    },
+    {
+      "name": "빈 파일",
+      "passed": true,
+      "expectedResult": "FAIL",
+      "actualResult": "FAIL",
+      "fileSize": 0,
+      "status": "✅"
+    }
+  ],
+  "performance": [
+    {
+      "name": "성능 서버 상태 확인",
+      "passed": false,
+      "error": "개발 서버가 실행되지 않음",
+      "status": "⚠️"
+    }
+  ],
+  "resources": {
+    "initialMemoryMB": 7,
+    "peakMemoryMB": 7,
+    "finalMemoryMB": 7,
+    "memoryLeakDetected": false,
+    "passed": true
+  },
+  "startTime": "2025-07-20T11:11:37.179Z",
+  "summary": {
+    "totalTests": 8,
+    "passedTests": 6,
+    "failedTests": 2,
+    "duration": 25
+  }
+}
