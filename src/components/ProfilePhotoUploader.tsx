@@ -101,11 +101,12 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
     })
   }, [])
 
-  // 프로필 사진 업로드
+  // 아티스트 프로필 사진 업로드 (Supabase Storage)
   const uploadProfilePhoto = useCallback(async (
     file: File, 
     cropSettings?: ImageCropSettings
   ): Promise<ProfilePhotoUploadResponse> => {
+    // 아티스트 프로필 업데이트를 위한 FormData 생성
     const formData = new FormData()
     formData.append('file', file)
     
@@ -123,14 +124,15 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
     }
     formData.append('metadata', JSON.stringify(metadata))
 
-    const response = await fetch('/api/mypage/profile/photo', {
+    // 아티스트 프로필 사진 업로드 API 사용
+    const response = await fetch('/api/mypage/artist/photo', {
       method: 'PUT',
       body: formData
     })
 
     if (!response.ok) {
       const errorData = await response.json()
-      throw new Error(errorData.error || 'Upload failed')
+      throw new Error(errorData.error || '파일 업로드에 실패했습니다.')
     }
 
     return response.json()
@@ -250,14 +252,14 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
     }
   }, [disabled, handleFileSelect])
 
-  // 프로필 사진 삭제
+  // 아티스트 프로필 사진 삭제
   const handlePhotoDelete = useCallback(async () => {
     if (!currentPhotoUrl || disabled) return
 
     if (!confirm('프로필 사진을 삭제하시겠습니까?')) return
 
     try {
-      const response = await fetch('/api/mypage/profile/photo', {
+      const response = await fetch('/api/mypage/artist/photo', {
         method: 'DELETE'
       })
 
@@ -267,7 +269,7 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
 
       onPhotoDelete?.()
     } catch (error) {
-      console.error('Profile photo delete failed:', error)
+      console.error('Artist photo delete failed:', error)
       onUploadError?.('프로필 사진 삭제에 실패했습니다.')
     }
   }, [currentPhotoUrl, disabled, onPhotoDelete, onUploadError])
