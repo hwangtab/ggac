@@ -192,7 +192,7 @@ export default function LoginPage() {
             로그인
           </h1>
           <p className="text-body text-gray-600">
-            경기아트콜렉티브 조합원 게시판에<br />
+            경기아트콜렉티브 협동조합에<br />
             오신 것을 환영합니다.
           </p>
         </div>
