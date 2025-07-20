@@ -18,8 +18,15 @@ export type ArchiveCategory = typeof ARCHIVE_CATEGORIES[number]
 // 아티스트 카테고리 (공개, 국제적 - 영문 All 사용)
 export const ARTIST_CATEGORIES = [
   'All',
+  '기획자',
+  '사운드 디자이너',
+  '엔지니어',
+  '연주자',
+  '작곡가',
+  '작사가',
   '창작자',
-  '기획자'
+  '편곡가',
+  '프로듀서'
 ] as const
 
 export type ArtistCategory = typeof ARTIST_CATEGORIES[number]
