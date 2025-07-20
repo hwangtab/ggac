@@ -175,7 +175,7 @@ export async function PUT(request: NextRequest) {
       )
     }
 
-    // 최종 메타데이터 생성
+    // 최종 메타데이터 생성 (서버 사이드에서는 클라이언트 제공 메타데이터 사용)
     const finalMetadata: ProfilePhotoMetadata = {
       original_filename: file.name,
       file_size: file.size,
@@ -183,6 +183,9 @@ export async function PUT(request: NextRequest) {
       uploaded_at: new Date().toISOString(),
       processed: true,
       crop_info: cropSettings,
+      // 클라이언트에서 제공된 이미지 크기 정보 사용
+      width: providedMetadata.width,
+      height: providedMetadata.height,
       ...providedMetadata
     }
 

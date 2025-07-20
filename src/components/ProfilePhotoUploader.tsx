@@ -40,6 +40,7 @@ interface UploadState {
   progress: number
   preview?: string
   error?: string
+  imageMetadata?: { width?: number, height?: number }
 }
 
 const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
@@ -91,11 +92,31 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
     return null
   }, [])
 
-  // 파일 미리보기 생성
-  const generatePreview = useCallback((file: File): Promise<string> => {
+  // 파일 미리보기 생성 및 이미지 크기 추출
+  const generatePreview = useCallback((file: File): Promise<{preview: string, width?: number, height?: number}> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader()
-      reader.onload = (e) => resolve(e.target?.result as string)
+      reader.onload = (e) => {
+        const dataUrl = e.target?.result as string
+        
+        // 이미지 파일인 경우 크기 정보 추출
+        if (file.type.startsWith('image/')) {
+          const img = new Image()
+          img.onload = () => {
+            resolve({
+              preview: dataUrl,
+              width: img.width,
+              height: img.height
+            })
+          }
+          img.onerror = () => {
+            resolve({ preview: dataUrl })
+          }
+          img.src = dataUrl
+        } else {
+          resolve({ preview: dataUrl })
+        }
+      }
       reader.onerror = reject
       reader.readAsDataURL(file)
     })
@@ -104,7 +125,8 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
   // 아티스트 프로필 사진 업로드 (Supabase Storage)
   const uploadProfilePhoto = useCallback(async (
     file: File, 
-    cropSettings?: ImageCropSettings
+    cropSettings?: ImageCropSettings,
+    imageMetadata?: { width?: number, height?: number }
   ): Promise<ProfilePhotoUploadResponse> => {
     // 아티스트 프로필 업데이트를 위한 FormData 생성
     const formData = new FormData()
@@ -114,13 +136,15 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
       formData.append('crop_settings', JSON.stringify(cropSettings))
     }
 
-    // 메타데이터 추가
+    // 메타데이터 추가 (클라이언트에서 추출한 이미지 크기 포함)
     const metadata: Partial<ProfilePhotoMetadata> = {
       original_filename: file.name,
       file_size: file.size,
       content_type: file.type,
       uploaded_at: new Date().toISOString(),
-      crop_info: cropSettings
+      crop_info: cropSettings,
+      width: imageMetadata?.width,
+      height: imageMetadata?.height
     }
     formData.append('metadata', JSON.stringify(metadata))
 
@@ -150,13 +174,14 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
     }
 
     try {
-      // 미리보기 생성
-      const preview = await generatePreview(file)
+      // 미리보기 생성 및 이미지 크기 추출
+      const { preview, width, height } = await generatePreview(file)
       
       setUploadState({
         isUploading: false,
         progress: 0,
-        preview
+        preview,
+        imageMetadata: { width, height }
       })
 
       setSelectedFile(file)
@@ -166,7 +191,7 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
         setShowCropModal(true)
       } else {
         // 크롭이 필요 없는 경우 바로 업로드
-        await startUpload(file)
+        await startUpload(file, undefined, { width, height })
       }
     } catch (error) {
       console.error('File preview generation failed:', error)
@@ -177,7 +202,8 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
   // 업로드 시작
   const startUpload = useCallback(async (
     file: File, 
-    cropSettings?: ImageCropSettings
+    cropSettings?: ImageCropSettings,
+    imageMetadata?: { width?: number, height?: number }
   ) => {
     setUploadState(prev => ({
       ...prev,
@@ -195,8 +221,8 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
         }))
       }, 200)
 
-      // 실제 업로드
-      const response = await uploadProfilePhoto(file, cropSettings)
+      // 실제 업로드 (이미지 메타데이터 포함)
+      const response = await uploadProfilePhoto(file, cropSettings, imageMetadata)
 
       clearInterval(progressInterval)
 
@@ -430,7 +456,7 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
               <button
                 onClick={() => {
                   if (selectedFile) {
-                    startUpload(selectedFile)
+                    startUpload(selectedFile, undefined, uploadState.imageMetadata)
                     setShowCropModal(false)
                   }
                 }}
