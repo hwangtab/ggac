@@ -55,22 +55,18 @@ export default function MypagePage() {
           <DashboardCard
             title="활동 내역"
             description="최근 활동 및 변경 이력을 확인하세요."
-            icon={<FiActivity className="w-8 h-8 text-gray-600" />}
+            icon={<FiActivity className="w-8 h-8 text-green-600" />}
             href="/mypage/activity"
             buttonText="활동 보기"
-            disabled
-            badge="준비중"
           />
 
           {/* 설정 */}
           <DashboardCard
             title="설정"
             description="알림 및 기타 설정을 관리하세요."
-            icon={<FiSettings className="w-8 h-8 text-gray-600" />}
+            icon={<FiSettings className="w-8 h-8 text-blue-600" />}
             href="/mypage/settings"
             buttonText="설정"
-            disabled
-            badge="준비중"
           />
         </div>
 
