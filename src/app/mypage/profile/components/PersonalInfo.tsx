@@ -1,15 +1,20 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { FiUser } from 'react-icons/fi'
+import ProfilePhotoUploader from '@/components/ProfilePhotoUploader'
+import type { ProfilePhotoUploadResponse, ProfilePhotoMetadata } from '@/types'
 
 interface PersonalInfoProps {
   data: {
     display_name: string
     phone_number: string
     birth_date: string
+    profile_photo_url?: string | null
+    profile_photo_metadata?: ProfilePhotoMetadata
   }
   errors: Record<string, string>
-  onChange: (field: string, value: string) => void
+  onChange: (field: string, value: any) => void
   readOnlyEmail: string
 }
 
@@ -19,11 +24,40 @@ const PersonalInfo: React.FC<PersonalInfoProps> = ({
   onChange,
   readOnlyEmail
 }) => {
+  // 프로필 사진 업로드 완료 핸들러
+  const handlePhotoUploadComplete = (response: ProfilePhotoUploadResponse) => {
+    onChange('profile_photo_url', response.photo_url)
+    onChange('profile_photo_metadata', response.metadata)
+  }
+
+  // 프로필 사진 삭제 핸들러
+  const handlePhotoDelete = () => {
+    onChange('profile_photo_url', undefined)
+    onChange('profile_photo_metadata', undefined)
+  }
+
   return (
     <div className="bg-gray-50 rounded-lg p-6">
       <div className="flex items-center mb-6">
         <FiUser className="w-5 h-5 text-primary-600 mr-3" />
         <h2 className="text-lg font-semibold text-gray-900">개인 정보</h2>
+      </div>
+
+      {/* 프로필 사진 섹션 */}
+      <div className="mb-6 flex justify-center">
+        <div className="text-center">
+          <ProfilePhotoUploader
+            currentPhotoUrl={data.profile_photo_url}
+            currentMetadata={data.profile_photo_metadata}
+            userDisplayName={data.display_name}
+            onUploadComplete={handlePhotoUploadComplete}
+            onPhotoDelete={handlePhotoDelete}
+            size="large"
+          />
+          <p className="mt-2 text-sm text-gray-500">
+            프로필 사진 (최대 2MB, JPEG/PNG/WebP/GIF)
+          </p>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
