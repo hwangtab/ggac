@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import MypageLayout from '../components/MypageLayout'
+import PermissionCheck from '../components/PermissionCheck'
 import SettingsSection from './components/SettingsSection'
 import NotificationSettings from './components/NotificationSettings'
 import PrivacySettings from './components/PrivacySettings'
@@ -138,7 +139,11 @@ export default function MypageSettingsPage() {
   const ActiveComponent = tabs.find(tab => tab.id === activeTab)?.component
 
   return (
-    <MypageLayout title="설정" description="개인 설정을 관리합니다.">
+    <PermissionCheck 
+      requiredPermission="member"
+      redirectTo="/register/pending"
+    >
+      <MypageLayout title="설정" description="개인 설정을 관리합니다.">
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         {/* 탭 네비게이션 */}
         <div className="border-b border-gray-200">
@@ -200,6 +205,7 @@ export default function MypageSettingsPage() {
         )}
       </div>
     </MypageLayout>
+    </PermissionCheck>
   )
 }
 

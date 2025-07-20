@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import MypageLayout from '../components/MypageLayout'
+import PermissionCheck from '../components/PermissionCheck'
 import { FiActivity, FiMessageCircle, FiEdit3, FiUser, FiCalendar, FiFilter } from 'react-icons/fi'
 
 interface Activity {
@@ -200,7 +201,11 @@ export default function ActivityPage() {
 
 
   return (
-    <MypageLayout title="활동 내역" description="나의 활동 기록을 확인하세요.">
+    <PermissionCheck 
+      requiredPermission="member"
+      redirectTo="/register/pending"
+    >
+      <MypageLayout title="활동 내역" description="나의 활동 기록을 확인하세요.">
       <div className="max-w-4xl mx-auto">
         {/* 필터 */}
         <div className="mb-6 bg-white rounded-lg border border-gray-200 p-4">
@@ -394,5 +399,6 @@ export default function ActivityPage() {
         )}
       </div>
     </MypageLayout>
+    </PermissionCheck>
   )
 }
