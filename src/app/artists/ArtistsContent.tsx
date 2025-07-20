@@ -1,10 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import OptimizedImage from '@/components/OptimizedImage'
 import { useFilter } from '@/hooks/useFilter'
-import { ARTIST_CATEGORIES } from '@/constants/categories'
 import type { Artist } from '@/types'
 
 interface ArtistsContentProps {
@@ -13,6 +12,23 @@ interface ArtistsContentProps {
 
 const ArtistsContent = ({ artists }: ArtistsContentProps) => {
   const [selectedCategory, setSelectedCategory] = useState('All')
+
+  // 실제 아티스트 데이터에서 동적으로 카테고리 추출
+  const availableCategories = useMemo(() => {
+    const categories = new Set<string>()
+    
+    // 모든 아티스트의 카테고리를 수집
+    artists.forEach(artist => {
+      if (Array.isArray(artist.category)) {
+        artist.category.forEach(cat => categories.add(cat))
+      } else if (artist.category) {
+        categories.add(artist.category)
+      }
+    })
+    
+    // 'All'을 첫 번째로, 나머지는 알파벳 순으로 정렬
+    return ['All', ...Array.from(categories).sort()]
+  }, [artists])
 
   const filteredArtists = useFilter(artists, selectedCategory, { allLabel: 'All' })
 
@@ -34,8 +50,8 @@ const ArtistsContent = ({ artists }: ArtistsContentProps) => {
       {/* Filter Section */}
       <section className="py-8 bg-white sticky top-16 z-40 border-b">
         <div className="container-custom">
-          <div className="flex justify-center gap-2">
-            {ARTIST_CATEGORIES.map((category) => (
+          <div className="flex justify-center gap-2 flex-wrap">
+            {availableCategories.map((category) => (
               <button
                 key={category}
                 onClick={() => setSelectedCategory(category)}
