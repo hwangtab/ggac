@@ -15,7 +15,45 @@ export const metadata: Metadata = {
 
 export default function MypagePage() {
   return (
-    <PermissionCheck requiredPermission="member">
+    <PermissionCheck 
+      requiredPermission="member"
+      fallback={
+        <MypageLayout 
+          title="마이페이지" 
+          description="조합원 승인 상태를 확인해주세요."
+        >
+          <div className="text-center py-12">
+            <div className="mx-auto h-16 w-16 flex items-center justify-center rounded-full bg-amber-100 mb-6">
+              <svg className="h-8 w-8 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-semibold text-gray-900 mb-4">
+              승인 대기 중
+            </h2>
+            <p className="text-gray-600 mb-6 max-w-md mx-auto">
+              조합원 승인이 완료되면 마이페이지의 모든 기능을 이용하실 수 있습니다.
+            </p>
+            <div className="space-y-3">
+              <a
+                href="/register/pending"
+                className="inline-block bg-primary-600 hover:bg-primary-700 text-white font-medium py-3 px-6 rounded-lg transition-colors"
+              >
+                승인 상태 확인하기
+              </a>
+              <div>
+                <a
+                  href="/"
+                  className="text-gray-500 hover:text-gray-700 text-sm underline"
+                >
+                  홈으로 돌아가기
+                </a>
+              </div>
+            </div>
+          </div>
+        </MypageLayout>
+      }
+    >
       <MypageLayout 
         title="마이페이지" 
         description="개인 정보와 아티스트 프로필을 관리하세요."
