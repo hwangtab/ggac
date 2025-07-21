@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '유효하지 않은 필터입니다.' }, { status: 400 })
     }
 
-    // Build query based on filter
+    // Build query based on filter - STEP 3: Add attachments JOIN
     let query = supabase
       .from('posts')
       .select(`
@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
         is_pinned,
         pinned_at,
         like_count,
-        author:member_profiles!posts_author_id_fkey (
+        author:member_profiles (
           display_name,
           email
         ),
@@ -102,7 +102,7 @@ export async function GET(request: NextRequest) {
       `)
       .order('created_at', { ascending: false })
 
-    // Apply filter
+    // Apply filter - STEP 1: Restore full filtering
     if (filter === 'deleted') {
       query = query.eq('is_deleted', true)
     } else if (filter === 'pinned') {
@@ -156,7 +156,7 @@ export async function GET(request: NextRequest) {
     const totalCount = count || 0
     const totalPages = Math.ceil(totalCount / limit)
 
-    // Add comment count to posts (if needed)
+    // STEP 4: Restore comment count calculation
     const postsWithCommentCount = await Promise.all(
       posts.map(async (post) => {
         const { count: commentCount } = await supabase
