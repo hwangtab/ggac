@@ -295,9 +295,34 @@ export default function MembersPage() {
       console.log('📥 API response status:', response.status, response.statusText)
       
       if (!response.ok) {
-        const errorData = await response.json()
-        console.error('❌ API error response:', errorData)
-        throw new Error(errorData.error || '회원 상태 변경에 실패했습니다.')
+        let errorMessage = '회원 상태 변경에 실패했습니다.'
+        
+        try {
+          // 응답이 JSON인지 확인
+          const contentType = response.headers.get('content-type')
+          if (contentType && contentType.includes('application/json')) {
+            const errorData = await response.json()
+            console.error('❌ API error response:', errorData)
+            errorMessage = errorData.error || errorMessage
+          } else {
+            // HTML이나 다른 형태의 응답
+            const textResponse = await response.text()
+            console.error('❌ Non-JSON API error response:', textResponse.substring(0, 500))
+            
+            if (response.status === 405) {
+              errorMessage = 'API 메서드가 지원되지 않습니다. 시스템 관리자에게 문의하세요.'
+            } else if (response.status === 404) {
+              errorMessage = 'API 엔드포인트를 찾을 수 없습니다. 시스템 관리자에게 문의하세요.'
+            } else {
+              errorMessage = `서버 오류가 발생했습니다. (HTTP ${response.status})`
+            }
+          }
+        } catch (parseError) {
+          console.error('❌ Error parsing API response:', parseError)
+          errorMessage = `서버 응답을 처리할 수 없습니다. (HTTP ${response.status})`
+        }
+        
+        throw new Error(errorMessage)
       }
 
       const successData = await response.json()
