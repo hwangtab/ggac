@@ -49,15 +49,52 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    await checkAdminPermission(supabase, session.user.id)
+    console.log('[DEBUG] Backup API: Checking admin permission for user:', session.user.id)
+    try {
+      await checkAdminPermission(supabase, session.user.id)
+      console.log('[DEBUG] Backup API: Admin permission check passed')
+    } catch (permError) {
+      console.error('[DEBUG] Backup API: Admin permission check failed:', permError)
+      throw permError
+    }
 
     // 모든 시스템 설정 조회 (민감한 정보 포함)
-    const { data: settingsData, error: settingsError } = await supabase
+    console.log('[DEBUG] Backup API: Calling get_system_settings function')
+    const { data: initialSettingsData, error: settingsError } = await supabase
       .rpc('get_system_settings', { include_sensitive: true })
+
+    let settingsData = initialSettingsData
+
+    console.log('[DEBUG] Backup API: get_system_settings result:', { 
+      hasData: !!settingsData, 
+      dataLength: settingsData?.length || 0, 
+      error: settingsError 
+    })
 
     if (settingsError) {
       console.error('Settings backup error:', settingsError)
-      throw new Error('설정을 조회할 수 없습니다.')
+      console.error('Error details:', JSON.stringify(settingsError, null, 2))
+      
+      // 폴백: 직접 테이블 쿼리 시도
+      console.log('[DEBUG] Backup API: Attempting fallback with direct table query')
+      try {
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('system_settings')
+          .select('category, setting_key, setting_value, description, is_sensitive, updated_at')
+          .order('category')
+          .order('setting_key')
+        
+        if (fallbackError) {
+          console.error('[DEBUG] Backup API: Fallback query also failed:', fallbackError)
+          throw new Error(`백업을 위한 설정 테이블 조회 실패: ${fallbackError.message}`)
+        }
+        
+        console.log('[DEBUG] Backup API: Fallback query succeeded, data length:', fallbackData?.length || 0)
+        settingsData = fallbackData
+      } catch (fallbackErr) {
+        console.error('[DEBUG] Backup API: Fallback mechanism failed:', fallbackErr)
+        throw new Error(`백업을 위한 설정을 조회할 수 없습니다: ${settingsError.message || settingsError.code}`)
+      }
     }
 
     // 백업 파일 생성
