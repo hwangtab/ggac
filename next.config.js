@@ -87,6 +87,9 @@ const nextConfig = {
     })
   },
   
+  // 동적 라우트 강제 생성을 위한 설정
+  generateStaticParams: true,
+  
   // Enhanced security headers and MIME type configuration
   async headers() {
     return [
