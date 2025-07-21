@@ -129,61 +129,61 @@ export default function MemberDetailModal({ member, isOpen, onClose, onAction, i
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4 z-50 overflow-y-auto">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-xs sm:max-w-sm md:max-w-lg lg:max-w-2xl xl:max-w-4xl min-h-0 max-h-full my-4 sm:my-8 overflow-hidden flex flex-col">
         {/* 헤더 */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">회원 상세 정보</h2>
+        <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200 flex-shrink-0">
+          <h2 className="text-lg sm:text-xl font-semibold text-gray-900 truncate">회원 상세 정보</h2>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-md transition-colors"
+            className="p-2 hover:bg-gray-100 rounded-md transition-colors flex-shrink-0 ml-2"
           >
             <FiX className="w-5 h-5" />
           </button>
         </div>
 
         {/* 콘텐츠 */}
-        <div className="p-6 overflow-y-auto">
-          <div className="space-y-6">
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1">
+          <div className="space-y-4 sm:space-y-6">
             {/* 기본 정보 */}
-            <div className="bg-gray-50 rounded-lg p-4">
-              <div className="flex items-center mb-4">
-                <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center">
-                  <FiUser className="w-8 h-8 text-gray-500" />
+            <div className="bg-gray-50 rounded-lg p-3 sm:p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center mb-4 space-y-3 sm:space-y-0">
+                <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-200 rounded-full flex items-center justify-center flex-shrink-0">
+                  <FiUser className="w-6 h-6 sm:w-8 sm:h-8 text-gray-500" />
                 </div>
-                <div className="ml-4">
-                  <h3 className="text-lg font-semibold text-gray-900">{member.display_name}</h3>
-                  <div className="flex items-center space-x-2 mt-1">
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(member.registration_status)}`}>
+                <div className="sm:ml-4 min-w-0 flex-1">
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">{member.display_name}</h3>
+                  <div className="flex flex-wrap gap-1 sm:gap-2 mt-1">
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full whitespace-nowrap ${getStatusColor(member.registration_status)}`}>
                       {getStatusText(member.registration_status)}
                     </span>
                     {member.is_artist && (
-                      <span className="px-2 py-1 text-xs font-medium bg-purple-100 text-purple-800 rounded-full">
+                      <span className="px-2 py-1 text-xs font-medium bg-purple-100 text-purple-800 rounded-full whitespace-nowrap">
                         아티스트
                       </span>
                     )}
                     {member.is_admin && (
-                      <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
+                      <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full whitespace-nowrap">
                         관리자
                       </span>
                     )}
                     {member.is_suspended && (
-                      <span className="px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded-full">
+                      <span className="px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded-full whitespace-nowrap">
                         정지됨
                       </span>
                     )}
                     {!member.is_active && (
-                      <span className="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded-full">
+                      <span className="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded-full whitespace-nowrap">
                         비활성화됨
                       </span>
                     )}
                     {member.membership_type === 'premium' && (
-                      <span className="px-2 py-1 text-xs font-medium bg-indigo-100 text-indigo-800 rounded-full">
+                      <span className="px-2 py-1 text-xs font-medium bg-indigo-100 text-indigo-800 rounded-full whitespace-nowrap">
                         프리미엄
                       </span>
                     )}
                     {member.membership_type === 'lifetime' && (
-                      <span className="px-2 py-1 text-xs font-medium bg-gradient-to-r from-purple-100 to-pink-100 text-purple-800 rounded-full">
+                      <span className="px-2 py-1 text-xs font-medium bg-gradient-to-r from-purple-100 to-pink-100 text-purple-800 rounded-full whitespace-nowrap">
                         평생
                       </span>
                     )}
@@ -191,21 +191,21 @@ export default function MemberDetailModal({ member, isOpen, onClose, onAction, i
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex items-center">
-                  <FiMail className="w-4 h-4 text-gray-500 mr-2" />
-                  <span className="text-sm text-gray-600">{member.email}</span>
+              <div className="grid grid-cols-1 gap-3 sm:gap-4">
+                <div className="flex items-center min-w-0">
+                  <FiMail className="w-4 h-4 text-gray-500 mr-2 flex-shrink-0" />
+                  <span className="text-sm text-gray-600 truncate">{member.email}</span>
                 </div>
                 {member.phone_number && (
-                  <div className="flex items-center">
-                    <FiPhone className="w-4 h-4 text-gray-500 mr-2" />
-                    <span className="text-sm text-gray-600">{member.phone_number}</span>
+                  <div className="flex items-center min-w-0">
+                    <FiPhone className="w-4 h-4 text-gray-500 mr-2 flex-shrink-0" />
+                    <span className="text-sm text-gray-600 truncate">{member.phone_number}</span>
                   </div>
                 )}
                 {member.real_name && (
-                  <div className="flex items-center">
-                    <FiUser className="w-4 h-4 text-gray-500 mr-2" />
-                    <span className="text-sm text-gray-600">실명: {member.real_name}</span>
+                  <div className="flex items-center min-w-0">
+                    <FiUser className="w-4 h-4 text-gray-500 mr-2 flex-shrink-0" />
+                    <span className="text-sm text-gray-600 truncate">실명: {member.real_name}</span>
                   </div>
                 )}
               </div>
@@ -213,28 +213,28 @@ export default function MemberDetailModal({ member, isOpen, onClose, onAction, i
 
             {/* 가입 정보 */}
             <div>
-              <h4 className="text-sm font-medium text-gray-900 mb-3">가입 정보</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex items-center">
-                  <FiCalendar className="w-4 h-4 text-gray-500 mr-2" />
-                  <div>
-                    <p className="text-sm text-gray-600">가입일</p>
-                    <p className="text-sm font-medium text-gray-900">{formatDate(member.created_at)}</p>
+              <h4 className="text-sm font-medium text-gray-900 mb-2 sm:mb-3">가입 정보</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <div className="flex items-start min-w-0">
+                  <FiCalendar className="w-4 h-4 text-gray-500 mr-2 mt-0.5 flex-shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs sm:text-sm text-gray-600">가입일</p>
+                    <p className="text-sm font-medium text-gray-900 break-words">{formatDate(member.created_at)}</p>
                   </div>
                 </div>
-                <div className="flex items-center">
-                  <FiCalendar className="w-4 h-4 text-gray-500 mr-2" />
-                  <div>
-                    <p className="text-sm text-gray-600">최종 업데이트</p>
-                    <p className="text-sm font-medium text-gray-900">{formatDate(member.updated_at)}</p>
+                <div className="flex items-start min-w-0">
+                  <FiCalendar className="w-4 h-4 text-gray-500 mr-2 mt-0.5 flex-shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs sm:text-sm text-gray-600">최종 업데이트</p>
+                    <p className="text-sm font-medium text-gray-900 break-words">{formatDate(member.updated_at)}</p>
                   </div>
                 </div>
                 {member.last_login_at && (
-                  <div className="flex items-center">
-                    <FiCalendar className="w-4 h-4 text-gray-500 mr-2" />
-                    <div>
-                      <p className="text-sm text-gray-600">최근 로그인</p>
-                      <p className="text-sm font-medium text-gray-900">{formatDate(member.last_login_at)}</p>
+                  <div className="flex items-start min-w-0 sm:col-span-2">
+                    <FiCalendar className="w-4 h-4 text-gray-500 mr-2 mt-0.5 flex-shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs sm:text-sm text-gray-600">최근 로그인</p>
+                      <p className="text-sm font-medium text-gray-900 break-words">{formatDate(member.last_login_at)}</p>
                     </div>
                   </div>
                 )}
@@ -243,8 +243,8 @@ export default function MemberDetailModal({ member, isOpen, onClose, onAction, i
 
             {/* 새로운 맅버 상태 정보 */}
             <div>
-              <h4 className="text-sm font-medium text-gray-900 mb-3">맅버 상태</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <h4 className="text-sm font-medium text-gray-900 mb-2 sm:mb-3">맅버 상태</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div className="flex items-center">
                   <FiUser className="w-4 h-4 text-gray-500 mr-2" />
                   <div>
@@ -275,8 +275,8 @@ export default function MemberDetailModal({ member, isOpen, onClose, onAction, i
 
             {/* 인증 상태 */}
             <div>
-              <h4 className="text-sm font-medium text-gray-900 mb-3">인증 상태</h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <h4 className="text-sm font-medium text-gray-900 mb-2 sm:mb-3">인증 상태</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                 <div className="flex items-center">
                   <FiMail className="w-4 h-4 text-gray-500 mr-2" />
                   <div>
@@ -333,7 +333,7 @@ export default function MemberDetailModal({ member, isOpen, onClose, onAction, i
             {/* 결제 정보 */}
             {(member.monthly_fee || member.bank_name || member.account_number) && (
               <div>
-                <h4 className="text-sm font-medium text-gray-900 mb-3">결제 정보</h4>
+                <h4 className="text-sm font-medium text-gray-900 mb-2 sm:mb-3">결제 정보</h4>
                 <div className="grid grid-cols-1 gap-4">
                   {member.monthly_fee && (
                     <div className="flex items-center">
@@ -362,8 +362,8 @@ export default function MemberDetailModal({ member, isOpen, onClose, onAction, i
 
             {/* 권한 정보 */}
             <div>
-              <h4 className="text-sm font-medium text-gray-900 mb-3">권한 정보</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <h4 className="text-sm font-medium text-gray-900 mb-2 sm:mb-3">권한 정보</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div className="flex items-center">
                   <FiShield className="w-4 h-4 text-gray-500 mr-2" />
                   <span className="text-sm text-gray-600">
@@ -390,13 +390,13 @@ export default function MemberDetailModal({ member, isOpen, onClose, onAction, i
         </div>
 
         {/* 액션 버튼 */}
-        <div className="flex items-center justify-end space-x-3 p-6 border-t border-gray-200">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 p-4 sm:p-6 border-t border-gray-200 flex-shrink-0">
           {member.registration_status === 'pending' && (
             <>
               <button
                 onClick={() => handleAction('approve')}
                 disabled={isLoading}
-                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 flex items-center"
+                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 flex items-center justify-center text-sm sm:text-base"
               >
                 <FiCheck className="w-4 h-4 mr-2" />
                 승인
@@ -404,7 +404,7 @@ export default function MemberDetailModal({ member, isOpen, onClose, onAction, i
               <button
                 onClick={() => handleAction('reject')}
                 disabled={isLoading}
-                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 flex items-center"
+                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 flex items-center justify-center text-sm sm:text-base"
               >
                 <FiX className="w-4 h-4 mr-2" />
                 거부
@@ -417,7 +417,7 @@ export default function MemberDetailModal({ member, isOpen, onClose, onAction, i
               <button
                 onClick={() => handleAction(member.is_active ? 'deactivate' : 'activate')}
                 disabled={isLoading}
-                className={`px-4 py-2 rounded-md disabled:opacity-50 flex items-center ${
+                className={`px-4 py-2 rounded-md disabled:opacity-50 flex items-center justify-center text-sm sm:text-base ${
                   member.is_active
                     ? 'bg-orange-600 text-white hover:bg-orange-700'
                     : 'bg-green-600 text-white hover:bg-green-700'
@@ -430,7 +430,7 @@ export default function MemberDetailModal({ member, isOpen, onClose, onAction, i
               <button
                 onClick={() => handleAction(member.is_suspended ? 'unsuspend' : 'suspend')}
                 disabled={isLoading}
-                className={`px-4 py-2 rounded-md disabled:opacity-50 flex items-center ${
+                className={`px-4 py-2 rounded-md disabled:opacity-50 flex items-center justify-center text-sm sm:text-base ${
                   member.is_suspended
                     ? 'bg-blue-600 text-white hover:bg-blue-700'
                     : 'bg-red-600 text-white hover:bg-red-700'
@@ -444,7 +444,7 @@ export default function MemberDetailModal({ member, isOpen, onClose, onAction, i
           
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+            className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 text-sm sm:text-base"
           >
             닫기
           </button>
@@ -454,7 +454,7 @@ export default function MemberDetailModal({ member, isOpen, onClose, onAction, i
       {/* 확인 모달 */}
       {confirmAction && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-60">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+          <div className="bg-white rounded-lg shadow-xl max-w-xs sm:max-w-md w-full mx-4">
             <div className="p-6">
               <div className="flex items-center mb-4">
                 <FiAlertCircle className="w-6 h-6 text-yellow-500 mr-3" />
