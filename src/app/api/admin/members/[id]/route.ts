@@ -5,11 +5,8 @@ import { validateFormData } from '@/utils/validation'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator, addRateLimitHeaders } from '@/utils/rateLimiter'
 import { logSecurityEvent } from '@/utils/security'
 
-// 동적 라우트 세그먼트를 강제로 인식시키기 위한 함수
-export function generateStaticParams() {
-  // API 라우트에서는 실제로 사용되지 않지만, 빌드 시 라우트 인식을 돕습니다
-  return []
-}
+// generateStaticParams는 페이지 컴포넌트에서만 사용되며 API 라우트에서는 불필요합니다.
+// API 라우트는 동적으로 처리되므로 이 함수를 제거합니다.
 
 // PATCH: 회원 상태 변경
 export async function PATCH(
