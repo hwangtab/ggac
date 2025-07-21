@@ -233,7 +233,7 @@ export async function PUT(request: NextRequest) {
       const settingGroups: { [key: string]: any } = {}
 
       for (const [frontendKey, frontendValue] of Object.entries(categoryData)) {
-        const mapping = categoryMappings[frontendKey as keyof typeof categoryMappings]
+        const mapping = categoryMappings[frontendKey as keyof typeof categoryMappings] as { key: string; transform: (value: any) => any } | undefined
         if (!mapping) {
           continue
         }
