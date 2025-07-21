@@ -69,9 +69,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ title, description, children 
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-gray-50 flex admin-page">
       {/* 사이드바 */}
-      <div className="fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg">
+      <div className="fixed inset-y-0 left-0 z-40 w-64 bg-white shadow-lg flex flex-col">
         {/* 로고 */}
         <div className="flex items-center px-6 py-4 border-b border-gray-200">
           <div className="flex items-center">
@@ -86,7 +86,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ title, description, children 
         </div>
 
         {/* 메뉴 */}
-        <nav className="px-3 py-4">
+        <nav className="flex-1 px-3 py-4 overflow-y-auto">
           <ul className="space-y-1">
             {menuItems.map((item) => (
               <li key={item.id}>
@@ -112,7 +112,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ title, description, children 
         </nav>
 
         {/* 하단 메뉴 */}
-        <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-gray-200">
+        <div className="p-3 border-t border-gray-200">
           <Link
             href="/mypage"
             className="flex items-center px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
@@ -124,7 +124,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ title, description, children 
       </div>
 
       {/* 메인 콘텐츠 */}
-      <div className="flex-1 pl-64 flex flex-col min-h-screen">
+      <div className="flex-1 pl-64 flex flex-col">
         {/* 헤더 */}
         <header className="bg-white shadow-sm border-b border-gray-200">
           <div className="px-6 py-4">
@@ -136,12 +136,12 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ title, description, children 
         </header>
 
         {/* 콘텐츠 */}
-        <main className="flex-1 px-6 py-6 pb-16">
+        <main className="flex-1 px-6 py-6">
           {children}
         </main>
 
         {/* 간단한 푸터 */}
-        <footer className="bg-white border-t border-gray-200 px-6 py-4">
+        <footer className="bg-white border-t border-gray-200 px-6 py-4 mt-auto">
           <div className="text-center text-sm text-gray-500">
             © 2025 경기아트콜렉티브 관리시스템. All rights reserved.
           </div>

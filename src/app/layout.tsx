@@ -1,8 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
-import Navigation from '@/components/Navigation'
-import Footer from '@/components/Footer'
 import ErrorBoundary from '@/components/ErrorBoundary'
+import ConditionalLayout from '@/components/ConditionalLayout'
 import { Noto_Serif_KR } from 'next/font/google'
 import localFont from 'next/font/local'
 import { getGlobalData } from '@/lib/data'
@@ -94,20 +93,18 @@ export default async function RootLayout({
             </a>
           </div>
           
-          <div className="min-h-screen flex flex-col">
-            <Navigation />
-            <Suspense fallback={
-              <div className="flex-1 pt-20 md:pt-24 flex items-center justify-center" role="status" aria-live="polite">
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-4" aria-hidden="true"></div>
-                  <p className="text-gray-600">페이지를 불러오는 중...</p>
-                </div>
+          <Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center" role="status" aria-live="polite">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-4" aria-hidden="true"></div>
+                <p className="text-gray-600">페이지를 불러오는 중...</p>
               </div>
-            }>
-              <main id="main-content" className="flex-1">{children}</main>
-            </Suspense>
-            <Footer globalData={globalData} />
-          </div>
+            </div>
+          }>
+            <ConditionalLayout globalData={globalData}>
+              {children}
+            </ConditionalLayout>
+          </Suspense>
         </ErrorBoundary>
       </body>
     </html>

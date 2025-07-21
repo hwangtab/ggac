@@ -232,7 +232,7 @@ export default function MembersPage() {
     }
   }
 
-  const fetchMembers = async () => {
+  const fetchMembers = async (forceRefresh = false) => {
     try {
       setLoading(true)
       setError(null)
@@ -244,7 +244,21 @@ export default function MembersPage() {
         limit: '50'
       })
 
-      const response = await fetch(`/api/admin/members?${params}`)
+      // 강제 새로고침 시 캐시 무시
+      const fetchOptions: RequestInit = {
+        method: 'GET'
+      }
+      
+      if (forceRefresh) {
+        fetchOptions.cache = 'no-cache'
+        fetchOptions.headers = {
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        }
+        // 타임스탬프 추가하여 캐시 회피
+        params.append('_t', Date.now().toString())
+      }
+
+      const response = await fetch(`/api/admin/members?${params}`, fetchOptions)
       
       if (!response.ok) {
         const errorData = await response.json()
@@ -253,6 +267,7 @@ export default function MembersPage() {
 
       const data: MembersResponse = await response.json()
       setMembers(data.members)
+      console.log('🔄 Members refreshed, count:', data.members.length)
     } catch (err) {
       console.error('Members fetch error:', err)
       setError(err instanceof Error ? err.message : '회원 정보를 불러오는 중 오류가 발생했습니다.')
@@ -263,37 +278,74 @@ export default function MembersPage() {
 
   const handleMemberAction = async (memberId: string, action: 'approve' | 'reject' | 'deactivate' | 'activate' | 'suspend' | 'unsuspend', params?: any) => {
     try {
+      console.log('🚀 Member action started:', { memberId, action, params })
       setActionLoading(memberId)
+      
+      const requestBody = { action, ...params }
+      console.log('📤 API request:', requestBody)
       
       const response = await fetch(`/api/admin/members/${memberId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ action, ...params })
+        body: JSON.stringify(requestBody)
       })
 
+      console.log('📥 API response status:', response.status, response.statusText)
+      
       if (!response.ok) {
         const errorData = await response.json()
+        console.error('❌ API error response:', errorData)
         throw new Error(errorData.error || '회원 상태 변경에 실패했습니다.')
       }
 
-      // 성공 시 회원 목록 새로고침
+      const successData = await response.json()
+      console.log('✅ API success response:', successData)
+      console.log('📊 Updated member data:', successData.member)
+
+      // 성공 메시지 표시
+      if (successData.message) {
+        alert(successData.message)
+      } else {
+        alert(`회원 ${action} 처리가 완료되었습니다.`)
+      }
+
+      // 성공 시 로컬 상태 즉시 업데이트
+      console.log('🔄 Updating local state immediately...')
+      if (successData.member) {
+        console.log(`📝 Updating member ${memberId} in local state:`)
+        console.log('   Old status:', members.find(m => m.id === memberId)?.registration_status)
+        console.log('   New status:', successData.member.registration_status)
+        
+        setMembers(prevMembers => {
+          const updatedMembers = prevMembers.map(m => 
+            m.id === memberId ? { ...m, ...successData.member } : m
+          )
+          console.log('✅ Local state updated, member count:', updatedMembers.length)
+          return updatedMembers
+        })
+        
+        // 선택된 회원 정보도 즉시 업데이트
+        if (selectedMember && selectedMember.id === memberId) {
+          console.log('🔄 Updating selected member info immediately')
+          setSelectedMember({ ...selectedMember, ...successData.member })
+        }
+      } else {
+        console.warn('⚠️  No member data returned from API')
+      }
+
+      // 강제 새로고침으로 최신 데이터 확보
+      console.log('🔄 Force refreshing member list...')
       if (useAdvancedFilter && advancedQuery) {
         await executeAdvancedSearch(advancedQuery)
       } else {
-        await fetchMembers()
+        await fetchMembers(true) // 강제 새로고침
       }
       
-      // 선택된 회원 정보도 업데이트
-      if (selectedMember && selectedMember.id === memberId) {
-        const updatedMember = members.find(m => m.id === memberId)
-        if (updatedMember) {
-          setSelectedMember(updatedMember)
-        }
-      }
+      console.log('✅ Member action completed successfully')
     } catch (err) {
-      console.error('Member action error:', err)
+      console.error('❌ Member action error:', err)
       alert(err instanceof Error ? err.message : '회원 상태 변경에 실패했습니다.')
     } finally {
       setActionLoading(null)
@@ -485,7 +537,7 @@ export default function MembersPage() {
               </button>
               
               <button
-                onClick={useAdvancedFilter ? () => advancedQuery && executeAdvancedSearch(advancedQuery) : fetchMembers}
+                onClick={useAdvancedFilter ? () => advancedQuery && executeAdvancedSearch(advancedQuery) : () => fetchMembers(true)}
                 disabled={loading}
                 className="flex items-center px-3 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50"
               >
@@ -674,7 +726,7 @@ export default function MembersPage() {
               <div className="text-center py-8">
                 <p className="text-red-600 mb-4">{error}</p>
                 <button
-                  onClick={fetchMembers}
+                  onClick={() => fetchMembers(true)}
                   className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
                 >
                   다시 시도

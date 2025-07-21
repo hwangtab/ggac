@@ -5,6 +5,17 @@
 /* React Image Crop Styles */
 @import 'react-image-crop/dist/ReactCrop.css';
 
+/* Admin Layout Styles */
+.admin-page {
+  /* 관리자 페이지 전용 스타일 */
+  isolation: isolate;
+}
+
+/* 관리자 페이지에서 사이드바 z-index 조정 */
+.admin-page .fixed {
+  z-index: 40;
+}
+
 /* Accessibility Improvements */
 
 /* Skip Links */
