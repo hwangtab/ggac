@@ -2,6 +2,60 @@ import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+// 시스템 설정 캐시 (5분 캐시)
+let settingsCache: { 
+  maintenanceMode: boolean; 
+  maintenanceMessage?: string; 
+  registrationEnabled: boolean;
+  timestamp: number 
+} | null = null;
+
+const SETTINGS_CACHE_DURATION = 5 * 60 * 1000; // 5분
+
+async function getSystemSettings(supabase: any) {
+  // 캐시 확인
+  if (settingsCache && (Date.now() - settingsCache.timestamp) < SETTINGS_CACHE_DURATION) {
+    return settingsCache;
+  }
+
+  try {
+    const { data, error } = await supabase
+      .rpc('get_system_settings', { include_sensitive: false });
+
+    if (error) {
+      console.error('Failed to fetch system settings:', error);
+      return null;
+    }
+
+    let maintenanceMode = false;
+    let maintenanceMessage = '시스템 점검 중입니다. 잠시 후 다시 이용해 주세요.';
+    let registrationEnabled = true;
+
+    // 설정 파싱
+    for (const setting of data || []) {
+      if (setting.category === 'site' && setting.setting_key === 'maintenance_mode') {
+        maintenanceMode = setting.setting_value?.enabled || false;
+        maintenanceMessage = setting.setting_value?.message || maintenanceMessage;
+      } else if (setting.category === 'site' && setting.setting_key === 'registration_enabled') {
+        registrationEnabled = setting.setting_value?.enabled !== false;
+      }
+    }
+
+    // 캐시 업데이트
+    settingsCache = {
+      maintenanceMode,
+      maintenanceMessage,
+      registrationEnabled,
+      timestamp: Date.now()
+    };
+
+    return settingsCache;
+  } catch (error) {
+    console.error('System settings fetch error in middleware:', error);
+    return null;
+  }
+}
+
 export async function middleware(request: NextRequest) {
   const res = NextResponse.next();
   const supabase = createMiddlewareClient({ req: request, res });
@@ -11,6 +65,108 @@ export async function middleware(request: NextRequest) {
       request.nextUrl.pathname.startsWith('/api/') ||
       request.nextUrl.pathname.includes('.')) {
     return res;
+  }
+
+  // 시스템 설정 확인
+  const systemSettings = await getSystemSettings(supabase);
+  
+  // 유지보수 모드 확인
+  if (systemSettings?.maintenanceMode) {
+    // 관리자는 유지보수 모드에서도 접근 가능
+    let isAdmin = false;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const { data: profile } = await supabase
+          .from('member_profiles')
+          .select('is_admin')
+          .eq('id', session.user.id)
+          .single();
+        isAdmin = profile?.is_admin || false;
+      }
+    } catch (error) {
+      console.error('Admin check error:', error);
+    }
+
+    if (!isAdmin) {
+      // 유지보수 페이지 HTML 반환
+      const maintenanceHtml = `
+        <!DOCTYPE html>
+        <html lang="ko">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>시스템 점검 중 - 경기아트콜렉티브</title>
+          <style>
+            body {
+              font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+              margin: 0;
+              padding: 0;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              min-height: 100vh;
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              color: #333;
+            }
+            .container {
+              text-align: center;
+              background: white;
+              padding: 3rem;
+              border-radius: 20px;
+              box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+              max-width: 500px;
+              margin: 1rem;
+            }
+            h1 {
+              font-size: 2rem;
+              margin-bottom: 1rem;
+              color: #667eea;
+            }
+            p {
+              font-size: 1.1rem;
+              line-height: 1.6;
+              color: #666;
+              margin-bottom: 2rem;
+            }
+            .icon {
+              font-size: 4rem;
+              margin-bottom: 1rem;
+            }
+            .retry-btn {
+              background: #667eea;
+              color: white;
+              border: none;
+              padding: 1rem 2rem;
+              border-radius: 10px;
+              font-size: 1rem;
+              cursor: pointer;
+              transition: background 0.3s;
+            }
+            .retry-btn:hover {
+              background: #5a67d8;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="icon">🛠️</div>
+            <h1>시스템 점검 중</h1>
+            <p>${systemSettings.maintenanceMessage}</p>
+            <button class="retry-btn" onclick="window.location.reload()">새로고침</button>
+          </div>
+        </body>
+        </html>
+      `;
+      
+      return new Response(maintenanceHtml, {
+        status: 503,
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Retry-After': '3600' // 1시간 후 재시도 권장
+        }
+      });
+    }
   }
 
   let user = null;
@@ -148,6 +304,49 @@ export async function middleware(request: NextRequest) {
 
   // 2.1. 인증 페이지에 접근 시 리다이렉트
   if (isAuthPage) {
+    // 회원 가입 페이지에서 등록이 비활성화되어 있으면 차단
+    if (pathname === '/signup' && systemSettings && !systemSettings.registrationEnabled) {
+      const registrationDisabledHtml = `
+        <!DOCTYPE html>
+        <html lang="ko">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>회원 가입 일시 중단 - 경기아트콜렉티브</title>
+          <style>
+            body {
+              font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+              margin: 0; padding: 0; display: flex; justify-content: center; align-items: center;
+              min-height: 100vh; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: #333;
+            }
+            .container { text-align: center; background: white; padding: 3rem; border-radius: 20px;
+              box-shadow: 0 20px 40px rgba(0,0,0,0.1); max-width: 500px; margin: 1rem; }
+            h1 { font-size: 2rem; margin-bottom: 1rem; color: #f5576c; }
+            p { font-size: 1.1rem; line-height: 1.6; color: #666; margin-bottom: 2rem; }
+            .icon { font-size: 4rem; margin-bottom: 1rem; }
+            .home-btn { background: #f5576c; color: white; border: none; padding: 1rem 2rem;
+              border-radius: 10px; font-size: 1rem; cursor: pointer; transition: background 0.3s;
+              text-decoration: none; display: inline-block; }
+            .home-btn:hover { background: #e14856; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="icon">🚫</div>
+            <h1>회원 가입 일시 중단</h1>
+            <p>현재 회원 가입이 일시 중단되었습니다.<br>양해 부탁드립니다.</p>
+            <a href="/" class="home-btn">홈으로 돌아가기</a>
+          </div>
+        </body>
+        </html>
+      `;
+      
+      return new Response(registrationDisabledHtml, {
+        status: 403,
+        headers: { 'Content-Type': 'text/html; charset=utf-8' }
+      });
+    }
+
     if (userStatus === 'approved' && isActive) {
       console.log(`🎯 [MIDDLEWARE DEBUG] Redirecting approved user to board (Mobile: ${isMobile})`);
       return NextResponse.redirect(new URL('/board', request.nextUrl.origin)); // 승인된 사용자는 게시판으로
