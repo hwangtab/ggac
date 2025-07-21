@@ -28,8 +28,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run vercel:preview` - Deploy preview version
 
 ### Additional Commands
-- `npm run deploy` - Trigger manual deployment via webhook
+- `npm run deploy` - Trigger manual deployment via webhook  
 - `npm run deploy:notify` - Send deployment notification to Slack
+
+### Rate Limiting System
+The codebase includes a comprehensive rate limiting system in `src/utils/rateLimiter.ts`:
+- `GENERAL_API`: 60 requests per minute for standard API calls
+- `AUTH_API`: 10 requests per minute for authentication endpoints
+- `ADMIN_API`: 100 requests per minute for admin operations
+- `POST_CREATION`: 5 requests per minute for content creation
+- `SEARCH_API`: 30 requests per minute for search operations
+- `FILE_UPLOAD`: 10 requests per hour for file uploads
+- `BULK_OPERATIONS`: 5 requests per hour for bulk operations
 
 ### Bundle Analysis
 - `ANALYZE=true npm run build` - Generate bundle analysis report using @next/bundle-analyzer
@@ -96,6 +106,12 @@ Database-driven content using Supabase:
 #### Protected Routes
 - `/board` - Member-only board (requires approval)
 - `/admin` - Admin panel (requires admin privileges)
+  - `/admin/members` - Member management and approval system
+  - `/admin/artists` - Artist profile management
+  - `/admin/posts` - Board post moderation
+  - `/admin/notifications` - System notification management
+  - `/admin/reports` - Analytics and reporting
+  - `/admin/settings` - System configuration
 - `/mypage` - Member dashboard and profile management (requires approval)
 
 #### Mypage System Routes
@@ -123,10 +139,13 @@ Components are organized by purpose:
 - Custom OptimizedImage component handles fallbacks
 
 ### Styling System
-- Custom Tailwind theme with primary/accent color palettes
+- Custom Tailwind theme with primary/accent color palettes (blue and orange schemes)
 - Korean typography support with Pretendard and Noto Serif KR fonts
 - Responsive design with mobile-first approach
 - Custom animations for floating elements and smooth transitions
+- Utility-first CSS approach with custom component classes (`.card-base`, `.btn-primary`, `.badge-*`)
+- Comprehensive form styling utilities (`.form-input`, `.form-textarea`, `.form-select`)
+- Pre-built grid patterns (`.grid-cards`, `.grid-artists`) for consistent layouts
 
 ### Performance Optimization System
 
@@ -226,7 +245,7 @@ Key tables managed in `supabase/migrations/`:
 ### Environment Variables Required
 - `NEXT_PUBLIC_SUPABASE_URL` - Supabase project URL
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Supabase public API key
-- `SUPABASE_SERVICE_ROLE_KEY` - For server-side operations (if needed)
+- `SUPABASE_SERVICE_ROLE_KEY` - For admin operations and RLS policy bypass (critical for member management)
 
 ### ESLint Configuration
 Custom rules configured in `.eslintrc.json`:
@@ -401,8 +420,30 @@ Use gemini -p when:
 - Gemini's context window can handle entire codebases that would overflow Claude's context
 - When checking implementations, be specific about what you're looking for to get accurate results
 
-# important-instruction-reminders
+# Important Instruction Reminders
 Do what has been asked; nothing more, nothing less.
 NEVER create files unless they're absolutely necessary for achieving your goal.
 ALWAYS prefer editing an existing file to creating a new one.
 NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
+
+## Common Build Issues and Solutions
+
+### Rate Limiter Configuration Errors
+- **Problem**: `RATE_LIMIT_CONFIGS.API` does not exist error during build
+- **Solution**: Use the correct configuration name from the available options:
+  - `RATE_LIMIT_CONFIGS.GENERAL_API` - for standard API endpoints
+  - `RATE_LIMIT_CONFIGS.ADMIN_API` - for admin operations
+  - `RATE_LIMIT_CONFIGS.AUTH_API` - for authentication endpoints
+- **Root Cause**: The rate limiter system uses specific predefined configurations, not a generic `API` config
+
+### Supabase Client Method Usage
+- **Problem**: TypeScript errors with Supabase query methods
+- **Solution**: Use correct method signatures:
+  - `.select()` instead of `.select('*', { options })` for simple queries
+  - Use `.data.length` instead of `.count` for row count after updates
+  - Service role key is required for admin operations that bypass RLS
+
+### Admin Member Management Issues
+- **Problem**: Member approval returns success but doesn't update database
+- **Solution**: Ensure `SUPABASE_SERVICE_ROLE_KEY` is properly configured in both local `.env.local` and Vercel environment variables
+- **Debugging**: Check server logs for "NO_ROWS_UPDATED" errors which indicate RLS policy blocks
