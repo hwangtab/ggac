@@ -4,34 +4,64 @@ import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator, addRateLimitHeaders } from '@/utils/rateLimiter'
 import { logSecurityEvent } from '@/utils/security'
 
-// 기본 설정값
-const DEFAULT_SETTINGS = {
+interface SystemSettings {
   site: {
-    maintenance_mode: false,
-    registration_enabled: true,
-    site_title: '경기아트콜렉티브',
-    site_description: '경계 없는 상상, 함께 만드는 울림',
-    max_members: 1000
+    maintenance_mode: boolean
+    registration_enabled: boolean
+    site_title: string
+    site_description: string
+    max_members: number
+  }
+  email: {
+    smtp_host: string
+    smtp_port: number
+    smtp_user: string
+    smtp_password: string
+    from_email: string
+    from_name: string
+  }
+  security: {
+    session_timeout: number
+    max_login_attempts: number
+    password_min_length: number
+    require_email_verification: boolean
+  }
+  features: {
+    board_enabled: boolean
+    artist_registration_enabled: boolean
+    comments_enabled: boolean
+    file_uploads_enabled: boolean
+  }
+}
+
+// 설정 카테고리별 키 매핑
+const SETTING_MAPPINGS = {
+  site: {
+    maintenance_mode: { key: 'maintenance_mode', transform: (value: any) => value?.enabled || false },
+    registration_enabled: { key: 'registration_enabled', transform: (value: any) => value?.enabled || false },
+    site_title: { key: 'site_title', transform: (value: any) => value?.value || '경기아트콜렉티브' },
+    site_description: { key: 'site_description', transform: (value: any) => value?.value || '경계 없는 상상, 함께 만드는 울림' },
+    max_members: { key: 'max_members', transform: (value: any) => value?.value || 1000 }
   },
   email: {
-    smtp_host: '',
-    smtp_port: 587,
-    smtp_user: '',
-    smtp_password: '',
-    from_email: 'noreply@ggac.kr',
-    from_name: '경기아트콜렉티브'
+    smtp_host: { key: 'smtp_config', transform: (value: any) => value?.host || '' },
+    smtp_port: { key: 'smtp_config', transform: (value: any) => value?.port || 587 },
+    smtp_user: { key: 'smtp_config', transform: (value: any) => value?.user || '' },
+    smtp_password: { key: 'smtp_config', transform: (value: any) => value?.password || '' },
+    from_email: { key: 'smtp_config', transform: (value: any) => value?.from_email || 'noreply@ggac.kr' },
+    from_name: { key: 'smtp_config', transform: (value: any) => value?.from_name || '경기아트콜렉티브' }
   },
   security: {
-    session_timeout: 60,
-    max_login_attempts: 5,
-    password_min_length: 8,
-    require_email_verification: true
+    session_timeout: { key: 'session_config', transform: (value: any) => value?.timeout_minutes || 60 },
+    max_login_attempts: { key: 'login_policy', transform: (value: any) => value?.max_attempts || 5 },
+    password_min_length: { key: 'password_policy', transform: (value: any) => value?.min_length || 8 },
+    require_email_verification: { key: 'email_verification', transform: (value: any) => value?.required || true }
   },
   features: {
-    board_enabled: true,
-    artist_registration_enabled: true,
-    comments_enabled: true,
-    file_uploads_enabled: true
+    board_enabled: { key: 'board_features', transform: (value: any) => value?.enabled || true },
+    artist_registration_enabled: { key: 'artist_features', transform: (value: any) => value?.registration_enabled || true },
+    comments_enabled: { key: 'comment_features', transform: (value: any) => value?.enabled || true },
+    file_uploads_enabled: { key: 'file_upload', transform: (value: any) => value?.enabled || true }
   }
 }
 
@@ -83,8 +113,43 @@ export async function GET(request: NextRequest) {
     // 관리자 권한 확인
     await checkAdminPermission(supabase, session.user.id)
 
-    // 설정 조회 (현재는 기본값 반환, 실제로는 데이터베이스에서 조회)
-    const settings = DEFAULT_SETTINGS
+    // 데이터베이스에서 시스템 설정 조회
+    const { data: settingsData, error: settingsError } = await supabase
+      .rpc('get_system_settings', { include_sensitive: true })
+
+    if (settingsError) {
+      console.error('Settings query error:', settingsError)
+      throw new Error('설정을 조회할 수 없습니다.')
+    }
+
+    // 데이터베이스 결과를 프론트엔드 형식으로 변환
+    const settings: SystemSettings = {
+      site: {},
+      email: {},
+      security: {},
+      features: {}
+    } as SystemSettings
+
+    // 설정 데이터를 카테고리별로 구조화
+    for (const row of settingsData || []) {
+      const category = row.category
+      const settingKey = row.setting_key
+      const settingValue = row.setting_value
+
+      if (!settings[category as keyof SystemSettings]) {
+        continue
+      }
+
+      // 매핑을 통해 프론트엔드 키로 변환
+      const categoryMappings = SETTING_MAPPINGS[category as keyof typeof SETTING_MAPPINGS]
+      if (categoryMappings) {
+        for (const [frontendKey, mapping] of Object.entries(categoryMappings)) {
+          if (mapping.key === settingKey) {
+            (settings[category as keyof SystemSettings] as any)[frontendKey] = mapping.transform(settingValue)
+          }
+        }
+      }
+    }
 
     const response = NextResponse.json(settings)
     
@@ -140,7 +205,7 @@ export async function PUT(request: NextRequest) {
     await checkAdminPermission(supabase, session.user.id)
 
     // 요청 데이터 파싱
-    const requestData = await request.json()
+    const requestData: SystemSettings = await request.json()
     
     // 기본적인 유효성 검사
     if (!requestData || typeof requestData !== 'object') {
@@ -150,18 +215,158 @@ export async function PUT(request: NextRequest) {
       )
     }
 
-    // 설정 업데이트 (현재는 메모리에만 저장, 실제로는 데이터베이스에 저장)
-    // TODO: 실제 데이터베이스 저장 로직 구현
+    // 설정별로 데이터베이스 업데이트
+    const updateResults: string[] = []
+    const errorResults: string[] = []
+
+    for (const [category, categoryData] of Object.entries(requestData)) {
+      if (!categoryData || typeof categoryData !== 'object') {
+        continue
+      }
+
+      const categoryMappings = SETTING_MAPPINGS[category as keyof typeof SETTING_MAPPINGS]
+      if (!categoryMappings) {
+        continue
+      }
+
+      // 같은 설정 키를 사용하는 항목들을 그룹화
+      const settingGroups: { [key: string]: any } = {}
+
+      for (const [frontendKey, frontendValue] of Object.entries(categoryData)) {
+        const mapping = categoryMappings[frontendKey as keyof typeof categoryMappings]
+        if (!mapping) {
+          continue
+        }
+
+        if (!settingGroups[mapping.key]) {
+          settingGroups[mapping.key] = {}
+        }
+
+        // 역변환: 프론트엔드 값을 데이터베이스 형식으로 변환
+        switch (mapping.key) {
+          case 'maintenance_mode':
+            settingGroups[mapping.key] = { 
+              enabled: frontendValue,
+              message: settingGroups[mapping.key]?.message || "시스템 점검 중입니다. 잠시 후 다시 이용해 주세요."
+            }
+            break
+          case 'registration_enabled':
+            settingGroups[mapping.key] = { 
+              enabled: frontendValue,
+              require_approval: settingGroups[mapping.key]?.require_approval || true
+            }
+            break
+          case 'site_title':
+          case 'site_description':
+            settingGroups[mapping.key] = { value: frontendValue }
+            break
+          case 'max_members':
+            settingGroups[mapping.key] = { 
+              value: frontendValue,
+              current_count: settingGroups[mapping.key]?.current_count || 0
+            }
+            break
+          case 'smtp_config':
+            if (frontendKey === 'smtp_host') settingGroups[mapping.key].host = frontendValue
+            else if (frontendKey === 'smtp_port') settingGroups[mapping.key].port = frontendValue
+            else if (frontendKey === 'smtp_user') settingGroups[mapping.key].user = frontendValue
+            else if (frontendKey === 'smtp_password') settingGroups[mapping.key].password = frontendValue
+            else if (frontendKey === 'from_email') settingGroups[mapping.key].from_email = frontendValue
+            else if (frontendKey === 'from_name') settingGroups[mapping.key].from_name = frontendValue
+            break
+          case 'session_config':
+            if (frontendKey === 'session_timeout') {
+              settingGroups[mapping.key] = {
+                timeout_minutes: frontendValue,
+                max_concurrent_sessions: settingGroups[mapping.key]?.max_concurrent_sessions || 5,
+                require_reauth_for_sensitive: settingGroups[mapping.key]?.require_reauth_for_sensitive || true
+              }
+            }
+            break
+          case 'login_policy':
+            if (frontendKey === 'max_login_attempts') {
+              settingGroups[mapping.key] = {
+                max_attempts: frontendValue,
+                lockout_duration_minutes: settingGroups[mapping.key]?.lockout_duration_minutes || 30,
+                require_strong_password: settingGroups[mapping.key]?.require_strong_password || true
+              }
+            }
+            break
+          case 'password_policy':
+            if (frontendKey === 'password_min_length') {
+              settingGroups[mapping.key] = {
+                min_length: frontendValue,
+                require_uppercase: settingGroups[mapping.key]?.require_uppercase || true,
+                require_lowercase: settingGroups[mapping.key]?.require_lowercase || true,
+                require_numbers: settingGroups[mapping.key]?.require_numbers || true,
+                require_special: settingGroups[mapping.key]?.require_special || false,
+                history_count: settingGroups[mapping.key]?.history_count || 5
+              }
+            }
+            break
+          case 'email_verification':
+            if (frontendKey === 'require_email_verification') {
+              settingGroups[mapping.key] = {
+                required: frontendValue,
+                token_expiry_hours: settingGroups[mapping.key]?.token_expiry_hours || 24,
+                resend_limit: settingGroups[mapping.key]?.resend_limit || 3
+              }
+            }
+            break
+          case 'board_features':
+          case 'artist_features':
+          case 'comment_features':
+          case 'file_upload':
+            settingGroups[mapping.key] = { 
+              ...settingGroups[mapping.key],
+              enabled: frontendValue 
+            }
+            if (mapping.key === 'artist_features' && frontendKey === 'artist_registration_enabled') {
+              settingGroups[mapping.key].registration_enabled = frontendValue
+            }
+            break
+        }
+      }
+
+      // 그룹화된 설정들을 데이터베이스에 업데이트
+      for (const [settingKey, settingValue] of Object.entries(settingGroups)) {
+        try {
+          const { error: updateError } = await supabase
+            .rpc('update_system_setting', {
+              p_category: category,
+              p_setting_key: settingKey,
+              p_setting_value: settingValue
+            })
+
+          if (updateError) {
+            console.error(`Setting update error for ${category}.${settingKey}:`, updateError)
+            errorResults.push(`${category}.${settingKey}`)
+          } else {
+            updateResults.push(`${category}.${settingKey}`)
+          }
+        } catch (err) {
+          console.error(`Setting update exception for ${category}.${settingKey}:`, err)
+          errorResults.push(`${category}.${settingKey}`)
+        }
+      }
+    }
     
     // 보안 이벤트 로깅
     logSecurityEvent('ADMIN_SETTINGS_UPDATED', {
       adminId: session.user.id,
-      changes: Object.keys(requestData)
+      updated: updateResults,
+      errors: errorResults
     }, 'medium')
 
     const response = NextResponse.json({
-      success: true,
-      message: '설정이 성공적으로 업데이트되었습니다.'
+      success: errorResults.length === 0,
+      message: errorResults.length === 0 
+        ? '설정이 성공적으로 업데이트되었습니다.'
+        : `일부 설정 업데이트에 실패했습니다. 성공: ${updateResults.length}, 실패: ${errorResults.length}`,
+      details: {
+        updated: updateResults,
+        errors: errorResults
+      }
     })
     
     // Rate limit 헤더 추가

@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { FiSave, FiSettings, FiMail, FiShield, FiGlobe, FiDatabase, FiRefreshCw } from 'react-icons/fi'
+import { useState, useEffect, useRef } from 'react'
+import { FiSave, FiSettings, FiMail, FiShield, FiGlobe, FiDatabase, FiRefreshCw, FiDownload, FiUpload, FiRotateCcw, FiAlertTriangle } from 'react-icons/fi'
 import AdminLayout from '../components/AdminLayout'
 
 interface AdminSettings {
@@ -38,9 +38,12 @@ export default function AdminSettingsPage() {
   const [settings, setSettings] = useState<AdminSettings | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [activeTab, setActiveTab] = useState<'site' | 'email' | 'security' | 'features'>('site')
+  const [activeTab, setActiveTab] = useState<'site' | 'email' | 'security' | 'features' | 'backup'>('site')
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [backupLoading, setBackupLoading] = useState(false)
+  const [restoreLoading, setRestoreLoading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     fetchSettings()
@@ -107,11 +110,123 @@ export default function AdminSettingsPage() {
     })
   }
 
+  // 백업 다운로드 함수
+  const downloadBackup = async () => {
+    try {
+      setBackupLoading(true)
+      setError(null)
+
+      const response = await fetch('/api/admin/settings/backup', {
+        method: 'GET'
+      })
+
+      if (!response.ok) {
+        throw new Error('백업 파일 생성에 실패했습니다.')
+      }
+
+      // 파일 다운로드
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `ggac-settings-backup-${new Date().toISOString().split('T')[0]}.json`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+
+      setSuccess('백업 파일이 다운로드되었습니다.')
+      setTimeout(() => setSuccess(null), 3000)
+    } catch (err) {
+      console.error('Backup download error:', err)
+      setError(err instanceof Error ? err.message : '백업 다운로드 중 오류가 발생했습니다.')
+    } finally {
+      setBackupLoading(false)
+    }
+  }
+
+  // 백업 복원 함수
+  const restoreBackup = async (file: File) => {
+    try {
+      setRestoreLoading(true)
+      setError(null)
+
+      // 파일 읽기
+      const fileContent = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = (e) => resolve(e.target?.result as string)
+        reader.onerror = () => reject(new Error('파일 읽기에 실패했습니다.'))
+        reader.readAsText(file)
+      })
+
+      let backupData
+      try {
+        backupData = JSON.parse(fileContent)
+      } catch (err) {
+        throw new Error('유효하지 않은 JSON 파일입니다.')
+      }
+
+      // 백업 파일 복원 요청
+      const response = await fetch('/api/admin/settings/backup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(backupData)
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || '백업 복원에 실패했습니다.')
+      }
+
+      const result = await response.json()
+      
+      if (result.success) {
+        setSuccess(result.message)
+        // 설정 새로고침
+        await fetchSettings()
+      } else {
+        setError(result.message)
+      }
+
+      setTimeout(() => {
+        setSuccess(null)
+        setError(null)
+      }, 5000)
+    } catch (err) {
+      console.error('Backup restore error:', err)
+      setError(err instanceof Error ? err.message : '백업 복원 중 오류가 발생했습니다.')
+    } finally {
+      setRestoreLoading(false)
+    }
+  }
+
+  // 파일 선택 핸들러
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file) {
+      if (!file.name.endsWith('.json')) {
+        setError('JSON 파일만 업로드할 수 있습니다.')
+        return
+      }
+      
+      if (confirm('백업 파일을 복원하시겠습니까? 현재 설정이 덮어쓰여집니다.')) {
+        restoreBackup(file)
+      }
+    }
+    // 파일 입력 리셋
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
   const tabs = [
     { id: 'site', label: '사이트 설정', icon: FiGlobe },
     { id: 'email', label: '이메일 설정', icon: FiMail },
     { id: 'security', label: '보안 설정', icon: FiShield },
     { id: 'features', label: '기능 설정', icon: FiSettings },
+    { id: 'backup', label: '백업/복원', icon: FiDatabase },
   ] as const
 
   if (loading) {
@@ -408,6 +523,98 @@ export default function AdminSettingsPage() {
                         />
                         <span className="text-sm font-medium text-gray-700">파일 업로드 허용</span>
                       </label>
+                    </div>
+                  </div>
+                )}
+
+                {/* 백업/복원 설정 */}
+                {activeTab === 'backup' && (
+                  <div className="space-y-8">
+                    {/* 경고 메시지 */}
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                      <div className="flex items-start">
+                        <FiAlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 mr-2 flex-shrink-0" />
+                        <div>
+                          <h4 className="text-sm font-medium text-amber-800">주의사항</h4>
+                          <ul className="text-sm text-amber-700 mt-2 list-disc list-inside space-y-1">
+                            <li>백업 복원 시 현재 설정이 모두 덮어쓰여집니다.</li>
+                            <li>복원 전에 반드시 현재 설정을 백업하시기 바랍니다.</li>
+                            <li>민감한 정보(비밀번호 등)가 포함되므로 백업 파일 보안에 주의하세요.</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 백업 다운로드 */}
+                    <div className="bg-white border border-gray-200 rounded-lg p-6">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                        <FiDownload className="w-5 h-5 mr-2 text-blue-600" />
+                        설정 백업
+                      </h3>
+                      <p className="text-sm text-gray-600 mb-4">
+                        현재 시스템 설정을 JSON 파일로 다운로드합니다. 
+                        설정 변경 전이나 정기적으로 백업하시기 바랍니다.
+                      </p>
+                      <button
+                        onClick={downloadBackup}
+                        disabled={backupLoading}
+                        className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <FiDownload className={`w-4 h-4 mr-2 ${backupLoading ? 'animate-pulse' : ''}`} />
+                        {backupLoading ? '백업 생성 중...' : '백업 다운로드'}
+                      </button>
+                    </div>
+
+                    {/* 백업 복원 */}
+                    <div className="bg-white border border-gray-200 rounded-lg p-6">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                        <FiUpload className="w-5 h-5 mr-2 text-green-600" />
+                        설정 복원
+                      </h3>
+                      <p className="text-sm text-gray-600 mb-4">
+                        백업된 JSON 파일에서 설정을 복원합니다. 
+                        복원하면 현재 설정이 모두 바뀌니 주의하시기 바랍니다.
+                      </p>
+                      
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".json"
+                        onChange={handleFileSelect}
+                        className="hidden"
+                      />
+                      
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={restoreLoading}
+                        className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <FiUpload className={`w-4 h-4 mr-2 ${restoreLoading ? 'animate-pulse' : ''}`} />
+                        {restoreLoading ? '복원 중...' : '백업 파일 선택'}
+                      </button>
+                    </div>
+
+                    {/* 기본값 복원 */}
+                    <div className="bg-white border border-gray-200 rounded-lg p-6">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                        <FiRotateCcw className="w-5 h-5 mr-2 text-orange-600" />
+                        기본값 복원
+                      </h3>
+                      <p className="text-sm text-gray-600 mb-4">
+                        모든 설정을 시스템 기본값으로 되돌립니다. 
+                        이 작업은 되돌릴 수 없으니 신중히 결정하시기 바랍니다.
+                      </p>
+                      <button
+                        onClick={() => {
+                          if (confirm('정말로 모든 설정을 기본값으로 되돌리시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
+                            setError('기본값 복원 기능은 아직 구현되지 않았습니다.')
+                          }
+                        }}
+                        className="flex items-center px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700"
+                      >
+                        <FiRotateCcw className="w-4 h-4 mr-2" />
+                        기본값으로 복원
+                      </button>
                     </div>
                   </div>
                 )}
