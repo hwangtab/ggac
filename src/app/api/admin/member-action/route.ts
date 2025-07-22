@@ -18,6 +18,8 @@ export async function POST(request: NextRequest) {
     method: request.method
   })
   
+  let requestData: any = {} // catch 블록에서 접근 가능하도록 함수 최상단에 선언
+  
   try {
     // Rate limiting 적용
     const rateLimiter = applyRateLimit({
@@ -66,7 +68,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 요청 데이터 파싱 및 검증
-    const requestData = await request.json()
+    requestData = await request.json()
     const { memberId, action, suspension_reason, suspension_until } = requestData
     
     console.log('[POST] 받은 요청 데이터:', { memberId, action })
