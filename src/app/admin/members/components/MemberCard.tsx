@@ -44,12 +44,16 @@ interface MemberCardProps {
 }
 
 export default function MemberCard({ member, onView, onAction, isLoading }: MemberCardProps) {
-  const getStatusColor = (status: string) => {
-    switch (status) {
+  const getStatusColor = (member: Member) => {
+    if (member.is_suspended) {
+      return 'bg-red-100 text-red-800'
+    }
+    
+    switch (member.registration_status) {
       case 'pending':
         return 'bg-yellow-100 text-yellow-800'
       case 'approved':
-        return 'bg-green-100 text-green-800'
+        return member.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
       case 'rejected':
         return 'bg-red-100 text-red-800'
       default:
@@ -57,12 +61,16 @@ export default function MemberCard({ member, onView, onAction, isLoading }: Memb
     }
   }
 
-  const getStatusText = (status: string) => {
-    switch (status) {
+  const getStatusText = (member: Member) => {
+    if (member.is_suspended) {
+      return '정지됨'
+    }
+    
+    switch (member.registration_status) {
       case 'pending':
         return '승인 대기'
       case 'approved':
-        return '승인됨'
+        return member.is_active ? '승인됨' : '비활성화됨'
       case 'rejected':
         return '거부됨'
       default:
@@ -95,14 +103,9 @@ export default function MemberCard({ member, onView, onAction, isLoading }: Memb
               <h3 className="text-lg font-semibold text-gray-900 truncate">
                 {member.display_name}
               </h3>
-              <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(member.registration_status)}`}>
-                {getStatusText(member.registration_status)}
+              <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(member)}`}>
+                {getStatusText(member)}
               </span>
-              {member.is_suspended && (
-                <span className="px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded-full">
-                  정지됨
-                </span>
-              )}
               {member.is_artist && (
                 <span className="px-2 py-1 text-xs font-medium bg-purple-100 text-purple-800 rounded-full">
                   아티스트
