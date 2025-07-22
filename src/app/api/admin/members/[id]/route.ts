@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { validateFormData } from '@/utils/validation'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator, addRateLimitHeaders } from '@/utils/rateLimiter'
 import { logSecurityEvent } from '@/utils/security'
@@ -13,6 +13,14 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  // 함수 호출 확인용 로그
+  console.log('[PATCH] 회원 관리 API 호출됨:', {
+    memberId: params.id,
+    timestamp: new Date().toISOString(),
+    url: request.url,
+    method: request.method
+  })
+  
   try {
     // Rate limiting 적용
     const rateLimiter = applyRateLimit({
@@ -26,7 +34,7 @@ export async function PATCH(
     }
     
     const cookieStore = cookies()
-    const supabase = createServerComponentClient({ cookies: () => cookieStore })
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
 
     // 사용자 인증 확인
     const { data: { session }, error: authError } = await supabase.auth.getSession()
