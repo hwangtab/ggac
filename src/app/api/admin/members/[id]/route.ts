@@ -5,8 +5,9 @@ import { validateFormData } from '@/utils/validation'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator, addRateLimitHeaders } from '@/utils/rateLimiter'
 import { logSecurityEvent } from '@/utils/security'
 
-// generateStaticParams는 페이지 컴포넌트에서만 사용되며 API 라우트에서는 불필요합니다.
-// API 라우트는 동적으로 처리되므로 이 함수를 제거합니다.
+// API 라우트를 동적으로 렌더링하도록 강제 설정
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 // PATCH: 회원 상태 변경
 export async function PATCH(
