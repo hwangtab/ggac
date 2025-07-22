@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
+
+// API 라우트를 동적으로 렌더링하도록 강제 설정
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 import { validateSearchQuery } from '@/utils/validation'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator, addRateLimitHeaders } from '@/utils/rateLimiter'
 import { logSecurityEvent } from '@/utils/security'
