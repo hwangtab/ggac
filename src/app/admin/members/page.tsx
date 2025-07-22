@@ -281,11 +281,11 @@ export default function MembersPage() {
       console.log('🚀 Member action started:', { memberId, action, params })
       setActionLoading(memberId)
       
-      const requestBody = { action, ...params }
+      const requestBody = { memberId, action, ...params }
       console.log('📤 API request:', requestBody)
       
-      const response = await fetch(`/api/admin/members/${memberId}`, {
-        method: 'PATCH',
+      const response = await fetch('/api/admin/member-action', {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
