@@ -39,5 +39,8 @@ certificates/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# test files
+test-*.js
 test-github-mcp.js
 test-slack-mcp.js
