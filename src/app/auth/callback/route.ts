@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
           const ip = request.ip || request.headers.get('x-forwarded-for')?.split(',')[0] || '127.0.0.1'
           const userAgent = request.headers.get('user-agent') || 'Unknown'
           
-          // 세션 시작 및 로그인 활동 기록
+          // 1. 세션 시작 기록
           const sessionToken = `session_${user.id}_${Date.now()}`
           await supabase.rpc('manage_user_session', {
             p_user_id: user.id,
@@ -35,8 +35,27 @@ export async function GET(request: NextRequest) {
               timestamp: new Date().toISOString()
             }
           })
+
+          // 2. 로그인 활동 기록 (리포트용)
+          await supabase.rpc('log_user_activity', {
+            p_user_id: user.id,
+            p_action_type: 'login',
+            p_target_type: 'system',
+            p_target_id: null,
+            p_metadata: {
+              login_method: 'oauth',
+              callback_url: requestUrl.toString(),
+              session_token: sessionToken,
+              timestamp: new Date().toISOString()
+            },
+            p_ip_address: ip,
+            p_user_agent: userAgent,
+            p_session_id: sessionToken
+          })
+
+          console.log(`로그인 활동 기록됨: 사용자 ${user.id}`)
         } catch (activityError) {
-          console.debug('Login activity logging failed:', activityError)
+          console.error('Login activity logging failed:', activityError)
         }
 
         const { data: profile } = await supabase
