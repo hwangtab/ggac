@@ -16,6 +16,29 @@ export async function GET(request: NextRequest) {
       const { data: { user } } = await supabase.auth.getUser()
       
       if (user) {
+        // 로그인 활동 로깅
+        try {
+          const ip = request.ip || request.headers.get('x-forwarded-for')?.split(',')[0] || '127.0.0.1'
+          const userAgent = request.headers.get('user-agent') || 'Unknown'
+          
+          // 세션 시작 및 로그인 활동 기록
+          const sessionToken = `session_${user.id}_${Date.now()}`
+          await supabase.rpc('manage_user_session', {
+            p_user_id: user.id,
+            p_session_token: sessionToken,
+            p_action: 'start',
+            p_ip_address: ip,
+            p_user_agent: userAgent,
+            p_metadata: {
+              login_method: 'oauth',
+              callback_url: requestUrl.toString(),
+              timestamp: new Date().toISOString()
+            }
+          })
+        } catch (activityError) {
+          console.debug('Login activity logging failed:', activityError)
+        }
+
         const { data: profile } = await supabase
           .from('member_profiles')
           .select('registration_status, is_active')

@@ -6,6 +6,7 @@ import MypageLayout from '../components/MypageLayout'
 import PermissionCheck from '../components/PermissionCheck'
 import ProfileEditForm from './components/ProfileEditForm'
 import { supabase } from '@/lib/supabase/client'
+import activityLogger from '@/utils/activityLogger'
 import { MemberProfile } from '@/types'
 
 export default function ProfilePage() {
@@ -72,6 +73,15 @@ export default function ProfilePage() {
 
       if (error) {
         throw error
+      }
+
+      // 프로필 업데이트 활동 로깅
+      try {
+        await activityLogger.logProfileUpdated('member_profile', {
+          updatedFields: Object.keys(updates)
+        })
+      } catch (activityError) {
+        console.debug('Profile update activity logging failed:', activityError)
       }
 
       // 프로필 다시 가져오기
