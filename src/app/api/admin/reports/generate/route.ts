@@ -292,29 +292,71 @@ async function generatePostEngagementReport(supabase: any, startDate: Date, endD
 
 // 사용자 등록 리포트 생성
 async function generateUserRegistrationReport(supabase: any, startDate: Date, endDate: Date, filters: any) {
-  const { data: registrations } = await supabase
+  console.log('사용자 등록 리포트 생성 시작...')
+  
+  // 1. 기간 내 신규 등록자 (created_at 기준)
+  const { data: newRegistrations } = await supabase
     .from('member_profiles')
     .select('id, display_name, email, registration_status, is_artist, created_at')
     .gte('created_at', startDate.toISOString())
     .lte('created_at', endDate.toISOString())
 
-  const statusStats = registrations?.reduce((acc: any, user: any) => {
+  console.log(`기간 내 신규 등록: ${newRegistrations?.length || 0}명`)
+
+  // 2. 기간 내 상태가 변경된 회원들 (updated_at 기준)
+  const { data: statusChanges } = await supabase
+    .from('member_profiles')
+    .select('id, display_name, email, registration_status, is_artist, created_at, updated_at')
+    .gte('updated_at', startDate.toISOString())
+    .lte('updated_at', endDate.toISOString())
+
+  console.log(`기간 내 상태 변경: ${statusChanges?.length || 0}명`)
+
+  // 3. 신규 등록 통계
+  const newRegistrationStats = newRegistrations?.reduce((acc: any, user: any) => {
     acc[user.registration_status] = (acc[user.registration_status] || 0) + 1
     return acc
   }, {}) || {}
 
+  // 4. 상태 변경 통계 (승인/거부된 회원 추적)
+  const statusChangeStats = statusChanges?.reduce((acc: any, user: any) => {
+    acc[user.registration_status] = (acc[user.registration_status] || 0) + 1
+    return acc
+  }, {}) || {}
+
+  // 5. 최근 거부된 회원들 (created_at과 관계없이 최근에 거부된 모든 회원)
+  const { data: recentlyRejected } = await supabase
+    .from('member_profiles')
+    .select('id, display_name, email, created_at, updated_at')
+    .eq('registration_status', 'rejected')
+    .gte('updated_at', startDate.toISOString())
+    .lte('updated_at', endDate.toISOString())
+    .order('updated_at', { ascending: false })
+
+  console.log(`기간 내 거부된 회원: ${recentlyRejected?.length || 0}명`)
+
   return {
     summary: {
-      totalRegistrations: registrations?.length || 0,
-      approvedCount: statusStats.approved || 0,
-      pendingCount: statusStats.pending || 0,
-      rejectedCount: statusStats.rejected || 0,
-      artistCount: registrations?.filter((u: any) => u.is_artist).length || 0
+      // 신규 등록 기준 통계
+      totalRegistrations: newRegistrations?.length || 0,
+      newApprovedCount: newRegistrationStats.approved || 0,
+      newPendingCount: newRegistrationStats.pending || 0,
+      newRejectedCount: newRegistrationStats.rejected || 0,
+      
+      // 상태 변경 기준 통계 (더 정확한 승인/거부 추적)
+      approvedCount: statusChangeStats.approved || 0,
+      pendingCount: statusChangeStats.pending || 0,
+      rejectedCount: recentlyRejected?.length || 0, // 실제 거부된 회원 수
+      
+      artistCount: newRegistrations?.filter((u: any) => u.is_artist).length || 0
     },
     data: {
-      statusStats,
+      newRegistrationStats,
+      statusChangeStats,
       dailyRegistrations: await getDailyRegistrationBreakdown(supabase, startDate, endDate),
-      recentRegistrations: registrations?.slice(0, 20) || []
+      recentRegistrations: newRegistrations?.slice(0, 20) || [],
+      recentlyRejected: recentlyRejected || [],
+      recentStatusChanges: statusChanges?.slice(0, 20) || []
     }
   }
 }
