@@ -117,7 +117,19 @@ export async function POST(request: NextRequest) {
 async function generateMemberActivityReport(supabase: any, startDate: Date, endDate: Date, filters: any) {
   console.log('멤버 활동 리포트 생성 시작...')
   
-  // 기간별 활동 통계
+  // 1. 전체 회원 통계 (기본 데이터)
+  const { data: allMembers, error: membersError } = await supabase
+    .from('member_profiles')
+    .select('id, display_name, email, registration_status, created_at, is_active')
+    .order('created_at', { ascending: false })
+
+  if (membersError) {
+    console.error('회원 데이터 조회 오류:', membersError)
+  }
+
+  console.log(`전체 회원 수: ${allMembers?.length || 0}`)
+
+  // 2. 기간별 활동 통계 (left join으로 변경)
   const { data: activities, error: activitiesError } = await supabase
     .from('user_activities')
     .select(`
@@ -125,7 +137,7 @@ async function generateMemberActivityReport(supabase: any, startDate: Date, endD
       user_id,
       action_type,
       created_at,
-      member_profiles!inner(display_name, email, registration_status)
+      member_profiles(display_name, email, registration_status)
     `)
     .gte('created_at', startDate.toISOString())
     .lte('created_at', endDate.toISOString())
@@ -136,45 +148,64 @@ async function generateMemberActivityReport(supabase: any, startDate: Date, endD
 
   console.log(`조회된 활동 수: ${activities?.length || 0}`)
 
-  // 활동별 집계
+  // 3. 활동별 집계
   const activitySummary = activities?.reduce((acc: any, activity: any) => {
     const actionType = activity.action_type
     acc[actionType] = (acc[actionType] || 0) + 1
     return acc
   }, {}) || {}
 
-  // 사용자별 활동 집계
-  const userActivityMap = activities?.reduce((acc: any, activity: any) => {
-    const userId = activity.user_id
-    if (!acc[userId]) {
-      acc[userId] = {
-        userId,
-        displayName: activity.member_profiles.display_name,
-        email: activity.member_profiles.email,
-        totalActivities: 0,
-        activities: {}
-      }
+  // 4. 사용자별 활동 집계 (폴백: 모든 회원 포함)
+  const userActivityMap: any = {}
+  
+  // 모든 회원을 기본으로 추가
+  allMembers?.forEach((member: any) => {
+    userActivityMap[member.id] = {
+      userId: member.id,
+      displayName: member.display_name,
+      email: member.email,
+      totalActivities: 0,
+      activities: {},
+      registrationStatus: member.registration_status,
+      isActive: member.is_active
     }
-    acc[userId].totalActivities++
-    acc[userId].activities[activity.action_type] = (acc[userId].activities[activity.action_type] || 0) + 1
-    return acc
-  }, {}) || {}
+  })
+  
+  // 활동 데이터가 있으면 추가
+  activities?.forEach((activity: any) => {
+    const userId = activity.user_id
+    if (userActivityMap[userId]) {
+      userActivityMap[userId].totalActivities++
+      userActivityMap[userId].activities[activity.action_type] = 
+        (userActivityMap[userId].activities[activity.action_type] || 0) + 1
+    }
+  })
 
   const userActivities = Object.values(userActivityMap)
     .sort((a: any, b: any) => b.totalActivities - a.totalActivities)
 
+  // 5. 회원 통계 요약
+  const memberStats = {
+    totalMembers: allMembers?.length || 0,
+    approvedMembers: allMembers?.filter((m: any) => m.registration_status === 'approved').length || 0,
+    pendingMembers: allMembers?.filter((m: any) => m.registration_status === 'pending').length || 0,
+    activeMembers: allMembers?.filter((m: any) => m.is_active).length || 0
+  }
+
   return {
     summary: {
       totalActivities: activities?.length || 0,
-      uniqueUsers: Object.keys(userActivityMap).length,
+      uniqueUsers: activities?.length > 0 ? new Set(activities.map((a: any) => a.user_id)).size : 0,
       topActivity: Object.entries(activitySummary).sort(([,a]: any, [,b]: any) => b - a)[0]?.[0] || 'none',
-      averageActivitiesPerUser: userActivities.length > 0 ? 
-        Math.round((activities?.length || 0) / userActivities.length * 100) / 100 : 0
+      averageActivitiesPerUser: activities?.length > 0 && userActivities.length > 0 ? 
+        Math.round((activities.length) / new Set(activities.map((a: any) => a.user_id)).size * 100) / 100 : 0,
+      memberStats
     },
     data: {
       activitySummary,
       userActivities: userActivities.slice(0, 50), // 상위 50명만
-      dailyActivities: await getDailyActivityBreakdown(supabase, startDate, endDate)
+      dailyActivities: await getDailyActivityBreakdown(supabase, startDate, endDate),
+      memberBreakdown: memberStats
     }
   }
 }
