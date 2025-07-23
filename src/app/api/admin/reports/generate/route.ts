@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
-import { rateLimit } from '@/utils/rateLimit'
+import { applyRateLimit, RATE_LIMIT_CONFIGS } from '@/utils/rateLimiter'
 
 /**
  * 멤버 리포트 생성 API
@@ -10,12 +10,11 @@ import { rateLimit } from '@/utils/rateLimit'
 export async function POST(request: NextRequest) {
   try {
     // Rate limiting 적용
-    const rateLimitResult = await rateLimit(request)
+    const rateLimiter = applyRateLimit(RATE_LIMIT_CONFIGS.ADMIN_API)
+    const rateLimitResult = rateLimiter(request)
+    
     if (!rateLimitResult.success) {
-      return NextResponse.json(
-        { error: 'Too many requests' },
-        { status: 429 }
-      )
+      return rateLimitResult.response!
     }
 
     const supabase = createRouteHandlerClient({ cookies })
