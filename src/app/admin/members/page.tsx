@@ -418,17 +418,22 @@ export default function MembersPage() {
     return matchesSearch && member.registration_status === filter
   })
 
+  // 정확한 상태별 집계 (복합 상태 기반)
   const pendingCount = members.filter(m => m.registration_status === 'pending').length
-  const approvedCount = members.filter(m => m.registration_status === 'approved').length
+  const activeApprovedCount = members.filter(m => m.registration_status === 'approved' && m.is_active && !m.is_suspended).length
+  const inactiveApprovedCount = members.filter(m => m.registration_status === 'approved' && !m.is_active).length
   const rejectedCount = members.filter(m => m.registration_status === 'rejected').length
   const suspendedCount = members.filter(m => m.is_suspended).length
   const artistCount = members.filter(m => m.is_artist).length
   const adminCount = members.filter(m => m.is_admin).length
+  
+  // 전체 승인된 회원 (활성 + 비활성)
+  const totalApprovedCount = members.filter(m => m.registration_status === 'approved').length
 
   return (
     <AdminLayout title="회원 관리" description="회원 승인, 거부 및 상태 관리">
       <div className="space-y-6">
-        {/* 통계 카드 */}
+        {/* 주요 통계 카드 */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-white rounded-lg border border-gray-200 p-4">
             <div className="flex items-center justify-between">
@@ -451,10 +456,35 @@ export default function MembersPage() {
           <div className="bg-white rounded-lg border border-gray-200 p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">승인됨</p>
-                <p className="text-2xl font-bold text-green-600">{approvedCount}</p>
+                <p className="text-sm text-gray-600">활성 회원</p>
+                <p className="text-2xl font-bold text-green-600">{activeApprovedCount}</p>
+                <p className="text-xs text-gray-500 mt-1">승인 + 활성</p>
               </div>
               <FiCheck className="w-8 h-8 text-green-500" />
+            </div>
+          </div>
+          <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">비활성화된 회원</p>
+                <p className="text-2xl font-bold text-orange-600">{inactiveApprovedCount}</p>
+                <p className="text-xs text-gray-500 mt-1">승인 + 비활성</p>
+              </div>
+              <FiPause className="w-8 h-8 text-orange-500" />
+            </div>
+          </div>
+        </div>
+
+        {/* 세부 통계 카드 */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">전체 승인됨</p>
+                <p className="text-2xl font-bold text-blue-600">{totalApprovedCount}</p>
+                <p className="text-xs text-gray-500 mt-1">활성 + 비활성</p>
+              </div>
+              <FiShield className="w-8 h-8 text-blue-500" />
             </div>
           </div>
           <div className="bg-white rounded-lg border border-gray-200 p-4">
@@ -466,17 +496,14 @@ export default function MembersPage() {
               <FiX className="w-8 h-8 text-red-500" />
             </div>
           </div>
-        </div>
 
-        {/* 추가 통계 카드 */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-white rounded-lg border border-gray-200 p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">정지된 회원</p>
-                <p className="text-2xl font-bold text-orange-600">{suspendedCount}</p>
+                <p className="text-2xl font-bold text-red-600">{suspendedCount}</p>
               </div>
-              <FiPause className="w-8 h-8 text-orange-500" />
+              <FiAlertCircle className="w-8 h-8 text-red-500" />
             </div>
           </div>
           <div className="bg-white rounded-lg border border-gray-200 p-4">
@@ -492,9 +519,9 @@ export default function MembersPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">관리자</p>
-                <p className="text-2xl font-bold text-blue-600">{adminCount}</p>
+                <p className="text-2xl font-bold text-indigo-600">{adminCount}</p>
               </div>
-              <FiShield className="w-8 h-8 text-blue-500" />
+              <FiSettings className="w-8 h-8 text-indigo-500" />
             </div>
           </div>
           <div className="bg-white rounded-lg border border-gray-200 p-4">
