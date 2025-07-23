@@ -28,7 +28,7 @@ class ActivityLogger {
 
   constructor(config: ActivityLoggerConfig = {}) {
     this.config = {
-      enableConsoleLogging: process.env.NODE_ENV === 'development',
+      enableConsoleLogging: true, // 항상 활성화하여 디버깅 가능
       enableBatching: false,
       batchSize: 10,
       flushInterval: 5000, // 5초
@@ -47,15 +47,35 @@ class ActivityLogger {
    */
   private async initializeSession() {
     try {
-      const { data: { session } } = await this.supabase.auth.getSession()
+      if (this.config.enableConsoleLogging) {
+        console.log('ActivityLogger: 세션 초기화 시작')
+      }
+
+      const { data: { session }, error: sessionError } = await this.supabase.auth.getSession()
+      
+      if (sessionError) {
+        console.error('ActivityLogger: 세션 조회 오류:', sessionError)
+        return
+      }
       
       if (session?.user) {
         this.sessionToken = session.access_token
+        if (this.config.enableConsoleLogging) {
+          console.log('ActivityLogger: 사용자 세션 확인됨:', session.user.id)
+        }
         await this.startSession(session.user.id)
+      } else {
+        if (this.config.enableConsoleLogging) {
+          console.log('ActivityLogger: 인증되지 않은 사용자 - 활동 로깅 비활성화')
+        }
       }
 
       // 인증 상태 변경 리스너
       this.supabase.auth.onAuthStateChange(async (event, session) => {
+        if (this.config.enableConsoleLogging) {
+          console.log('ActivityLogger: 인증 상태 변경:', event)
+        }
+        
         if (event === 'SIGNED_IN' && session?.user) {
           this.sessionToken = session.access_token
           await this.startSession(session.user.id)
@@ -66,7 +86,7 @@ class ActivityLogger {
         }
       })
     } catch (error) {
-      console.error('세션 초기화 오류:', error)
+      console.error('ActivityLogger: 세션 초기화 오류:', error)
     }
   }
 
@@ -276,6 +296,10 @@ class ActivityLogger {
    * 단일 로그 전송
    */
   private async sendLog(request: ActivityLogRequest): Promise<void> {
+    if (this.config.enableConsoleLogging) {
+      console.log('ActivityLogger: 로그 전송 시도:', request)
+    }
+
     const response = await fetch('/api/activities/log', {
       method: 'POST',
       headers: {
@@ -286,7 +310,14 @@ class ActivityLogger {
     })
 
     if (!response.ok) {
-      throw new Error(`로그 전송 실패: ${response.status}`)
+      const errorText = await response.text()
+      console.error(`ActivityLogger: 로그 전송 실패 (${response.status}):`, errorText)
+      throw new Error(`로그 전송 실패: ${response.status} - ${errorText}`)
+    }
+
+    if (this.config.enableConsoleLogging) {
+      const result = await response.json()
+      console.log('ActivityLogger: 로그 전송 성공:', result)
     }
   }
 
