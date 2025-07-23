@@ -6,7 +6,7 @@ import AdminLayout from '../components/AdminLayout'
 import MemberCard from './components/MemberCard'
 import MemberDetailModal from './components/MemberDetailModal'
 import AdvancedFilterBuilder from '@/components/AdvancedFilterBuilder'
-import type { AdvancedSearchQuery, FilteredResult, FieldDefinition } from '@/types'
+import type { AdvancedSearchQuery, FilteredResult, FieldDefinition, MemberStatistics } from '@/types'
 
 interface Member {
   id: string
@@ -64,7 +64,8 @@ export default function MembersPage() {
   const [selectedMembers, setSelectedMembers] = useState<Set<string>>(new Set())
   const [bulkActionLoading, setBulkActionLoading] = useState(false)
   const [showBulkActions, setShowBulkActions] = useState(false)
-  const [memberStats, setMemberStats] = useState<any>(null)
+  const [memberStats, setMemberStats] = useState<MemberStatistics | null>(null)
+  const [statsLoading, setStatsLoading] = useState(true)
   const [showStatsModal, setShowStatsModal] = useState(false)
   const [suspensionData, setSuspensionData] = useState<{
     reason: string
@@ -83,6 +84,7 @@ export default function MembersPage() {
     } else {
       fetchMembers()
     }
+    fetchMemberStatsData() // 통계는 항상 별도로 로드
   }, [filter, searchTerm, useAdvancedFilter])
 
   // 고급 필터 상태가 변경될 때 쿼리 실행
@@ -142,6 +144,24 @@ export default function MembersPage() {
     }
   }
 
+  // 통계 데이터 조회 (메인 통계용)
+  const fetchMemberStatsData = async () => {
+    try {
+      setStatsLoading(true)
+      const response = await fetch('/api/admin/members/stats')
+      if (response.ok) {
+        const stats = await response.json()
+        setMemberStats(stats)
+        console.log('📊 통계 데이터 로드 완료:', stats)
+      }
+    } catch (error) {
+      console.error('📊 통계 데이터 로드 실패:', error)
+    } finally {
+      setStatsLoading(false)
+    }
+  }
+
+  // 상세 통계 모달용
   const fetchMemberStats = async () => {
     try {
       const response = await fetch('/api/admin/members/stats')
@@ -206,6 +226,9 @@ export default function MembersPage() {
       } else {
         await fetchMembers()
       }
+      
+      // 통계도 새로고침
+      await fetchMemberStatsData()
     } catch (error) {
       console.error('Bulk action error:', error)
       alert(error instanceof Error ? error.message : '대량 작업에 실패했습니다.')
@@ -368,6 +391,9 @@ export default function MembersPage() {
         await fetchMembers(true) // 강제 새로고침
       }
       
+      // 통계도 새로고침
+      await fetchMemberStatsData()
+      
       console.log('✅ Member action completed successfully')
     } catch (err) {
       console.error('❌ Member action error:', err)
@@ -418,17 +444,18 @@ export default function MembersPage() {
     return matchesSearch && member.registration_status === filter
   })
 
-  // 정확한 상태별 집계 (복합 상태 기반)
-  const pendingCount = members.filter(m => m.registration_status === 'pending').length
-  const activeApprovedCount = members.filter(m => m.registration_status === 'approved' && m.is_active && !m.is_suspended).length
-  const inactiveApprovedCount = members.filter(m => m.registration_status === 'approved' && !m.is_active).length
-  const rejectedCount = members.filter(m => m.registration_status === 'rejected').length
-  const suspendedCount = members.filter(m => m.is_suspended).length
-  const artistCount = members.filter(m => m.is_artist).length
-  const adminCount = members.filter(m => m.is_admin).length
-  
-  // 전체 승인된 회원 (활성 + 비활성)
-  const totalApprovedCount = members.filter(m => m.registration_status === 'approved').length
+  // 통계는 별도 API에서 가져오므로 로딩 중 기본값 사용
+  const statsData = memberStats || {
+    totalMembers: 0,
+    activeMembers: 0,
+    inactiveMembers: 0,
+    pendingMembers: 0,
+    approvedMembers: 0,
+    rejectedMembers: 0,
+    suspendedMembers: 0,
+    artistMembers: 0,
+    adminMembers: 0
+  }
 
   return (
     <AdminLayout title="회원 관리" description="회원 승인, 거부 및 상태 관리">
@@ -439,7 +466,7 @@ export default function MembersPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">전체 회원</p>
-                <p className="text-2xl font-bold text-gray-900">{members.length}</p>
+                <p className="text-2xl font-bold text-gray-900">{statsLoading ? '...' : statsData.totalMembers}</p>
               </div>
               <FiUsers className="w-8 h-8 text-blue-500" />
             </div>
@@ -448,7 +475,7 @@ export default function MembersPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">승인 대기</p>
-                <p className="text-2xl font-bold text-yellow-600">{pendingCount}</p>
+                <p className="text-2xl font-bold text-yellow-600">{statsLoading ? '...' : statsData.pendingMembers}</p>
               </div>
               <FiRefreshCw className="w-8 h-8 text-yellow-500" />
             </div>
@@ -457,7 +484,7 @@ export default function MembersPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">활성 회원</p>
-                <p className="text-2xl font-bold text-green-600">{activeApprovedCount}</p>
+                <p className="text-2xl font-bold text-green-600">{statsLoading ? '...' : statsData.activeMembers}</p>
                 <p className="text-xs text-gray-500 mt-1">승인 + 활성</p>
               </div>
               <FiCheck className="w-8 h-8 text-green-500" />
@@ -467,7 +494,7 @@ export default function MembersPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">비활성화된 회원</p>
-                <p className="text-2xl font-bold text-orange-600">{inactiveApprovedCount}</p>
+                <p className="text-2xl font-bold text-orange-600">{statsLoading ? '...' : statsData.inactiveMembers}</p>
                 <p className="text-xs text-gray-500 mt-1">승인 + 비활성</p>
               </div>
               <FiPause className="w-8 h-8 text-orange-500" />
@@ -481,7 +508,7 @@ export default function MembersPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">전체 승인됨</p>
-                <p className="text-2xl font-bold text-blue-600">{totalApprovedCount}</p>
+                <p className="text-2xl font-bold text-blue-600">{statsLoading ? '...' : statsData.approvedMembers}</p>
                 <p className="text-xs text-gray-500 mt-1">활성 + 비활성</p>
               </div>
               <FiShield className="w-8 h-8 text-blue-500" />
@@ -491,7 +518,7 @@ export default function MembersPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">거부됨</p>
-                <p className="text-2xl font-bold text-red-600">{rejectedCount}</p>
+                <p className="text-2xl font-bold text-red-600">{statsLoading ? '...' : statsData.rejectedMembers}</p>
               </div>
               <FiX className="w-8 h-8 text-red-500" />
             </div>
@@ -501,7 +528,7 @@ export default function MembersPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">정지된 회원</p>
-                <p className="text-2xl font-bold text-red-600">{suspendedCount}</p>
+                <p className="text-2xl font-bold text-red-600">{statsLoading ? '...' : statsData.suspendedMembers}</p>
               </div>
               <FiAlertCircle className="w-8 h-8 text-red-500" />
             </div>
@@ -510,7 +537,7 @@ export default function MembersPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">아티스트</p>
-                <p className="text-2xl font-bold text-purple-600">{artistCount}</p>
+                <p className="text-2xl font-bold text-purple-600">{statsLoading ? '...' : statsData.artistMembers}</p>
               </div>
               <FiShield className="w-8 h-8 text-purple-500" />
             </div>
@@ -519,7 +546,7 @@ export default function MembersPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">관리자</p>
-                <p className="text-2xl font-bold text-indigo-600">{adminCount}</p>
+                <p className="text-2xl font-bold text-indigo-600">{statsLoading ? '...' : statsData.adminMembers}</p>
               </div>
               <FiSettings className="w-8 h-8 text-indigo-500" />
             </div>

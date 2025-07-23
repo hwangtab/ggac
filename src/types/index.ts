@@ -1896,6 +1896,8 @@ export interface MemberStatistics {
   totalMembers: number
   /** 활성 멤버 수 */
   activeMembers: number
+  /** 비활성 멤버 수 */
+  inactiveMembers: number
   /** 승인 대기 멤버 수 */
   pendingMembers: number
   /** 승인된 멤버 수 */

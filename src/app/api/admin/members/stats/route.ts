@@ -32,74 +32,78 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // 기본 통계 수집
-    const { count: totalMembers } = await supabase
+    // 전체 회원 데이터 조회 (복합 상태 계산용)
+    const { data: allMembers, error: membersError } = await supabase
       .from('member_profiles')
-      .select('id', { count: 'exact', head: true })
+      .select(`
+        id,
+        registration_status,
+        is_active,
+        is_admin,
+        is_artist,
+        is_suspended,
+        membership_type,
+        profile_completeness_score,
+        engagement_score,
+        created_at
+      `)
 
-    const { count: activeMembers } = await supabase
-      .from('member_profiles')
-      .select('id', { count: 'exact', head: true })
-      .eq('is_active', true)
+    if (membersError) {
+      console.error('Members stats fetch error:', membersError)
+      return NextResponse.json(
+        { error: '회원 통계를 조회하는 중 오류가 발생했습니다.' },
+        { status: 500 }
+      )
+    }
 
-    const { count: pendingMembers } = await supabase
-      .from('member_profiles')
-      .select('id', { count: 'exact', head: true })
-      .eq('registration_status', 'pending')
+    // 복합 상태 기반 통계 계산
+    const totalMembers = allMembers.length
+    const pendingMembers = allMembers.filter(m => m.registration_status === 'pending').length
+    const activeApprovedMembers = allMembers.filter(m => 
+      m.registration_status === 'approved' && 
+      m.is_active && 
+      !m.is_suspended
+    ).length
+    const inactiveApprovedMembers = allMembers.filter(m => 
+      m.registration_status === 'approved' && 
+      !m.is_active
+    ).length
+    const totalApprovedMembers = allMembers.filter(m => m.registration_status === 'approved').length
+    const rejectedMembers = allMembers.filter(m => m.registration_status === 'rejected').length
+    const suspendedMembers = allMembers.filter(m => m.is_suspended).length
+    const artistMembers = allMembers.filter(m => m.is_artist).length
+    const adminMembers = allMembers.filter(m => m.is_admin).length
+    
+    console.log('📊 복합 통계 계산 완료:', {
+      totalMembers,
+      pendingMembers,
+      activeApprovedMembers,
+      inactiveApprovedMembers,
+      totalApprovedMembers,
+      rejectedMembers,
+      suspendedMembers
+    })
 
-    const { count: approvedMembers } = await supabase
-      .from('member_profiles')
-      .select('id', { count: 'exact', head: true })
-      .eq('registration_status', 'approved')
-
-    const { count: rejectedMembers } = await supabase
-      .from('member_profiles')
-      .select('id', { count: 'exact', head: true })
-      .eq('registration_status', 'rejected')
-
-    const { count: suspendedMembers } = await supabase
-      .from('member_profiles')
-      .select('id', { count: 'exact', head: true })
-      .eq('is_suspended', true)
-
-    const { count: artistMembers } = await supabase
-      .from('member_profiles')
-      .select('id', { count: 'exact', head: true })
-      .eq('is_artist', true)
-
-    const { count: adminMembers } = await supabase
-      .from('member_profiles')
-      .select('id', { count: 'exact', head: true })
-      .eq('is_admin', true)
-
-    // 멤버십 타입별 분포
-    const { data: membershipData } = await supabase
-      .from('member_profiles')
-      .select('membership_type')
-
+    // 멤버십 타입별 분포 (이미 로드된 데이터 사용)
     const membershipTypeDistribution = {
       regular: 0,
       premium: 0,
       lifetime: 0
     }
 
-    if (membershipData) {
-      membershipData.forEach(member => {
-        if (member.membership_type in membershipTypeDistribution) {
-          membershipTypeDistribution[member.membership_type as keyof typeof membershipTypeDistribution]++
-        }
-      })
-    }
+    allMembers.forEach(member => {
+      if (member.membership_type in membershipTypeDistribution) {
+        membershipTypeDistribution[member.membership_type as keyof typeof membershipTypeDistribution]++
+      }
+    })
 
-    // 월별 가입 통계 (12개월)
+    // 월별 가입 통계 (이미 로드된 데이터 사용)
     const oneYearAgo = new Date()
     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
-
-    const { data: monthlyData } = await supabase
-      .from('member_profiles')
-      .select('created_at')
-      .gte('created_at', oneYearAgo.toISOString())
-      .order('created_at', { ascending: true })
+    
+    const monthlyData = allMembers.filter(member => 
+      new Date(member.created_at) >= oneYearAgo
+    )
 
     const monthlyRegistrations: { month: string; count: number }[] = []
     const monthCounts: { [key: string]: number } = {}
@@ -113,53 +117,44 @@ export async function GET(request: NextRequest) {
     }
 
     // 실제 데이터 집계
-    if (monthlyData) {
-      monthlyData.forEach(member => {
-        const monthKey = member.created_at.slice(0, 7)
-        if (monthKey in monthCounts) {
-          monthCounts[monthKey]++
-        }
-      })
-    }
+    monthlyData.forEach(member => {
+      const monthKey = member.created_at.slice(0, 7)
+      if (monthKey in monthCounts) {
+        monthCounts[monthKey]++
+      }
+    })
 
     // 결과 배열로 변환
     Object.entries(monthCounts).forEach(([month, count]) => {
       monthlyRegistrations.push({ month, count })
     })
 
-    // 평균 프로필 완성도
-    const { data: completenessData } = await supabase
-      .from('member_profiles')
-      .select('profile_completeness_score')
-      .not('profile_completeness_score', 'is', null)
-
+    // 평균 프로필 완성도 (이미 로드된 데이터 사용)
+    const completenessData = allMembers.filter(m => m.profile_completeness_score != null)
     let averageProfileCompleteness = 0
-    if (completenessData && completenessData.length > 0) {
+    if (completenessData.length > 0) {
       const total = completenessData.reduce((sum, member) => sum + (member.profile_completeness_score || 0), 0)
       averageProfileCompleteness = Math.round(total / completenessData.length)
     }
 
-    // 평균 참여도 점수
-    const { data: engagementData } = await supabase
-      .from('member_profiles')
-      .select('engagement_score')
-      .not('engagement_score', 'is', null)
-
+    // 평균 참여도 점수 (이미 로드된 데이터 사용)
+    const engagementData = allMembers.filter(m => m.engagement_score != null)
     let averageEngagementScore = 0
-    if (engagementData && engagementData.length > 0) {
+    if (engagementData.length > 0) {
       const total = engagementData.reduce((sum, member) => sum + (member.engagement_score || 0), 0)
       averageEngagementScore = Math.round(total / engagementData.length)
     }
 
     const stats: MemberStatistics = {
-      totalMembers: totalMembers || 0,
-      activeMembers: activeMembers || 0,
-      pendingMembers: pendingMembers || 0,
-      approvedMembers: approvedMembers || 0,
-      rejectedMembers: rejectedMembers || 0,
-      suspendedMembers: suspendedMembers || 0,
-      artistMembers: artistMembers || 0,
-      adminMembers: adminMembers || 0,
+      totalMembers,
+      activeMembers: activeApprovedMembers, // 활성 승인 회원
+      inactiveMembers: inactiveApprovedMembers, // 비활성 승인 회원 (핵심 추가!)
+      pendingMembers,
+      approvedMembers: totalApprovedMembers, // 전체 승인 회원
+      rejectedMembers,
+      suspendedMembers,
+      artistMembers,
+      adminMembers,
       monthlyRegistrations,
       membershipTypeDistribution,
       averageProfileCompleteness,
