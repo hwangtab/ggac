@@ -206,7 +206,7 @@ async function generateMemberActivityReport(supabase: any, startDate: Date, endD
       topActivity: Object.entries(activitySummary).sort(([,a]: any, [,b]: any) => b - a)[0]?.[0] || 'none',
       averageActivitiesPerUser: activities?.length > 0 && userActivities.length > 0 ? 
         Math.round((activities.length) / new Set(activities.map((a: any) => a.user_id)).size * 100) / 100 : 0,
-      memberStats
+      ...memberStats
     },
     data: {
       activitySummary,
@@ -219,13 +219,13 @@ async function generateMemberActivityReport(supabase: any, startDate: Date, endD
 
 // 게시글 참여도 리포트 생성
 async function generatePostEngagementReport(supabase: any, startDate: Date, endDate: Date, filters: any) {
-  // 게시글 통계 (관계 문제 해결을 위해 단순화)
+  // 게시글 통계 (올바른 컬럼명 사용)
   const { data: posts } = await supabase
     .from('posts')
-    .select('id, title, category, created_at, views, likes, is_pinned, author_id')
+    .select('id, title, category, created_at, like_count, is_pinned, author_id')
     .gte('created_at', startDate.toISOString())
     .lte('created_at', endDate.toISOString())
-    .order('views', { ascending: false })
+    .order('created_at', { ascending: false })
 
   // 댓글 통계
   const { data: comments } = await supabase
@@ -240,15 +240,14 @@ async function generatePostEngagementReport(supabase: any, startDate: Date, endD
     return acc
   }, {}) || {}
 
-  // 카테고리별 분석
+  // 카테고리별 분석 (올바른 컬럼명 사용)
   const categoryStats = posts?.reduce((acc: any, post: any) => {
     const category = post.category
     if (!acc[category]) {
-      acc[category] = { count: 0, totalViews: 0, totalLikes: 0, totalComments: 0 }
+      acc[category] = { count: 0, totalLikes: 0, totalComments: 0 }
     }
     acc[category].count++
-    acc[category].totalViews += post.views || 0
-    acc[category].totalLikes += post.likes || 0
+    acc[category].totalLikes += post.like_count || 0
     acc[category].totalComments += commentsByPost[post.id] || 0
     return acc
   }, {}) || {}
@@ -257,10 +256,10 @@ async function generatePostEngagementReport(supabase: any, startDate: Date, endD
     summary: {
       totalPosts: posts?.length || 0,
       totalComments: comments?.length || 0,
-      totalViews: posts?.reduce((sum: number, post: any) => sum + (post.views || 0), 0) || 0,
-      totalLikes: posts?.reduce((sum: number, post: any) => sum + (post.likes || 0), 0) || 0,
+      totalViews: 0, // views 컬럼이 없으므로 0으로 설정
+      totalLikes: posts?.reduce((sum: number, post: any) => sum + (post.like_count || 0), 0) || 0,
       averageEngagement: posts?.length > 0 ? 
-        Math.round(((comments?.length || 0) + (posts?.reduce((sum: number, post: any) => sum + (post.likes || 0), 0) || 0)) / posts.length * 100) / 100 : 0
+        Math.round(((comments?.length || 0) + (posts?.reduce((sum: number, post: any) => sum + (post.like_count || 0), 0) || 0)) / posts.length * 100) / 100 : 0
     },
     data: {
       topPosts: posts?.slice(0, 10).map((post: any) => ({
