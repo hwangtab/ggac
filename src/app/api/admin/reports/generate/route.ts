@@ -63,6 +63,10 @@ export async function POST(request: NextRequest) {
     const startDate = dateRange?.start ? new Date(dateRange.start) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
     const endDate = dateRange?.end ? new Date(dateRange.end) : new Date()
 
+    // 날짜 범위 정확성 보장: 시작일은 00:00:00, 종료일은 23:59:59.999로 설정
+    startDate.setHours(0, 0, 0, 0)
+    endDate.setHours(23, 59, 59, 999)
+
     console.log(`리포트 생성 시작 - 타입: ${reportType}, 기간: ${startDate.toISOString()} ~ ${endDate.toISOString()}`)
 
     switch (reportType) {
@@ -227,12 +231,26 @@ async function generatePostEngagementReport(supabase: any, startDate: Date, endD
     .lte('created_at', endDate.toISOString())
     .order('created_at', { ascending: false })
 
-  // 댓글 통계
-  const { data: comments } = await supabase
+  // 댓글 통계 (개선된 날짜 범위 사용)
+  console.log(`댓글 조회 시작 - 기간: ${startDate.toISOString()} ~ ${endDate.toISOString()}`)
+  
+  const { data: comments, error: commentsError } = await supabase
     .from('comments')
     .select('id, post_id, created_at')
     .gte('created_at', startDate.toISOString())
     .lte('created_at', endDate.toISOString())
+
+  if (commentsError) {
+    console.error('댓글 조회 오류:', commentsError)
+  }
+  
+  console.log(`조회된 댓글 수: ${comments?.length || 0}개`)
+  if (comments && comments.length > 0) {
+    console.log('조회된 댓글들:')
+    comments.forEach(comment => {
+      console.log(`  - 댓글 ID: ${comment.id}, 게시글: ${comment.post_id}, 작성일: ${comment.created_at}`)
+    })
+  }
 
   // 게시글별 댓글 수 계산
   const commentsByPost = comments?.reduce((acc: any, comment: any) => {
