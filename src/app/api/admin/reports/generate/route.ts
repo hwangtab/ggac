@@ -247,7 +247,7 @@ async function generatePostEngagementReport(supabase: any, startDate: Date, endD
   console.log(`조회된 댓글 수: ${comments?.length || 0}개`)
   if (comments && comments.length > 0) {
     console.log('조회된 댓글들:')
-    comments.forEach(comment => {
+    comments.forEach((comment: any) => {
       console.log(`  - 댓글 ID: ${comment.id}, 게시글: ${comment.post_id}, 작성일: ${comment.created_at}`)
     })
   }
