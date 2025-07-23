@@ -129,16 +129,10 @@ async function generateMemberActivityReport(supabase: any, startDate: Date, endD
 
   console.log(`전체 회원 수: ${allMembers?.length || 0}`)
 
-  // 2. 기간별 활동 통계 (left join으로 변경)
+  // 2. 기간별 활동 통계 (수정된 쿼리 - 관계 문제 해결)
   const { data: activities, error: activitiesError } = await supabase
     .from('user_activities')
-    .select(`
-      id,
-      user_id,
-      action_type,
-      created_at,
-      member_profiles(display_name, email, registration_status)
-    `)
+    .select('id, user_id, action_type, created_at')
     .gte('created_at', startDate.toISOString())
     .lte('created_at', endDate.toISOString())
 
@@ -171,14 +165,27 @@ async function generateMemberActivityReport(supabase: any, startDate: Date, endD
     }
   })
   
-  // 활동 데이터가 있으면 추가
+  // 활동 데이터가 있으면 추가 (수동 조인)
   activities?.forEach((activity: any) => {
     const userId = activity.user_id
-    if (userActivityMap[userId]) {
-      userActivityMap[userId].totalActivities++
-      userActivityMap[userId].activities[activity.action_type] = 
-        (userActivityMap[userId].activities[activity.action_type] || 0) + 1
+    
+    // userActivityMap에 사용자가 없으면 (활동은 있지만 member_profiles에 없는 경우) 기본 정보로 추가
+    if (!userActivityMap[userId]) {
+      userActivityMap[userId] = {
+        userId: userId,
+        displayName: 'Unknown User',
+        email: 'unknown@example.com',
+        totalActivities: 0,
+        activities: {},
+        registrationStatus: 'unknown',
+        isActive: false
+      }
     }
+    
+    // 활동 수 증가
+    userActivityMap[userId].totalActivities++
+    userActivityMap[userId].activities[activity.action_type] = 
+      (userActivityMap[userId].activities[activity.action_type] || 0) + 1
   })
 
   const userActivities = Object.values(userActivityMap)
@@ -212,19 +219,10 @@ async function generateMemberActivityReport(supabase: any, startDate: Date, endD
 
 // 게시글 참여도 리포트 생성
 async function generatePostEngagementReport(supabase: any, startDate: Date, endDate: Date, filters: any) {
-  // 게시글 통계
+  // 게시글 통계 (관계 문제 해결을 위해 단순화)
   const { data: posts } = await supabase
     .from('posts')
-    .select(`
-      id,
-      title,
-      category,
-      created_at,
-      views,
-      likes,
-      is_pinned,
-      member_profiles!inner(display_name)
-    `)
+    .select('id, title, category, created_at, views, likes, is_pinned, author_id')
     .gte('created_at', startDate.toISOString())
     .lte('created_at', endDate.toISOString())
     .order('views', { ascending: false })
