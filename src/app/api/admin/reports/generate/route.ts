@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { applyRateLimit, RATE_LIMIT_CONFIGS } from '@/utils/rateLimiter'
 
@@ -39,23 +40,43 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { reportType, dateRange, filters } = body
 
-    // 리포트 유형별 데이터 생성
+    // Service Role 클라이언트 생성 (RLS 우회용)
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!serviceRoleKey) {
+      console.error('SUPABASE_SERVICE_ROLE_KEY가 설정되지 않았습니다.')
+      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
+    }
+
+    const serviceSupabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      serviceRoleKey,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      }
+    )
+
+    // 리포트 유형별 데이터 생성 (Service Role 클라이언트 사용)
     let reportData
     const startDate = dateRange?.start ? new Date(dateRange.start) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
     const endDate = dateRange?.end ? new Date(dateRange.end) : new Date()
 
+    console.log(`리포트 생성 시작 - 타입: ${reportType}, 기간: ${startDate.toISOString()} ~ ${endDate.toISOString()}`)
+
     switch (reportType) {
       case 'member_activity':
-        reportData = await generateMemberActivityReport(supabase, startDate, endDate, filters)
+        reportData = await generateMemberActivityReport(serviceSupabase, startDate, endDate, filters)
         break
       case 'post_engagement':
-        reportData = await generatePostEngagementReport(supabase, startDate, endDate, filters)
+        reportData = await generatePostEngagementReport(serviceSupabase, startDate, endDate, filters)
         break
       case 'user_registration':
-        reportData = await generateUserRegistrationReport(supabase, startDate, endDate, filters)
+        reportData = await generateUserRegistrationReport(serviceSupabase, startDate, endDate, filters)
         break
       case 'comprehensive':
-        reportData = await generateComprehensiveReport(supabase, startDate, endDate, filters)
+        reportData = await generateComprehensiveReport(serviceSupabase, startDate, endDate, filters)
         break
       default:
         return NextResponse.json({ error: 'Invalid report type' }, { status: 400 })
@@ -94,8 +115,10 @@ export async function POST(request: NextRequest) {
 
 // 멤버 활동 리포트 생성
 async function generateMemberActivityReport(supabase: any, startDate: Date, endDate: Date, filters: any) {
+  console.log('멤버 활동 리포트 생성 시작...')
+  
   // 기간별 활동 통계
-  const { data: activities } = await supabase
+  const { data: activities, error: activitiesError } = await supabase
     .from('user_activities')
     .select(`
       id,
@@ -106,6 +129,12 @@ async function generateMemberActivityReport(supabase: any, startDate: Date, endD
     `)
     .gte('created_at', startDate.toISOString())
     .lte('created_at', endDate.toISOString())
+
+  if (activitiesError) {
+    console.error('사용자 활동 데이터 조회 오류:', activitiesError)
+  }
+
+  console.log(`조회된 활동 수: ${activities?.length || 0}`)
 
   // 활동별 집계
   const activitySummary = activities?.reduce((acc: any, activity: any) => {
@@ -269,13 +298,20 @@ async function generateComprehensiveReport(supabase: any, startDate: Date, endDa
 
 // 일별 활동 분석
 async function getDailyActivityBreakdown(supabase: any, startDate: Date, endDate: Date) {
-  const { data } = await supabase
+  console.log('일별 활동 통계 조회 중...')
+  
+  const { data, error } = await supabase
     .from('daily_activity_stats')
     .select('activity_date, action_type, count')
     .gte('activity_date', startDate.toISOString().split('T')[0])
     .lte('activity_date', endDate.toISOString().split('T')[0])
     .order('activity_date', { ascending: true })
 
+  if (error) {
+    console.error('일별 활동 통계 조회 오류:', error)
+  }
+
+  console.log(`일별 활동 통계 수: ${data?.length || 0}`)
   return data || []
 }
 
