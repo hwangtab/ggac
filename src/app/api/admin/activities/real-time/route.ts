@@ -74,10 +74,10 @@ export async function GET(request: NextRequest) {
         activeUsers: activeUsers || [],
         recentActivity,
         statistics: {
-          activeUserCount: activeCount,
-          totalSessions,
-          sessionsByTime,
-          averageSessionTime: activeUsers?.reduce((sum: number, user: any) => {
+          활성사용자수: activeCount,
+          총세션수: totalSessions,
+          시간대별세션수: sessionsByTime,
+          평균세션시간: activeUsers?.reduce((sum: number, user: any) => {
             return sum + (user.minutes_since_activity || 0)
           }, 0) / Math.max(activeCount, 1)
         },

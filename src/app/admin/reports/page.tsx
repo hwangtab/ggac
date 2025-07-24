@@ -79,10 +79,10 @@ export default function AdminReportsPage() {
 
       // 이번 달과 지난 달 비교를 위한 더미 데이터 (실제로는 월별 통계 API에서 가져와야 함)
       const currentMonth = {
-        activities: trendsData?.summary?.totalActivities || 0,
-        newMembers: basicStats.totalMembers || 0,
-        posts: basicStats.totalPosts || 0,
-        activeUsers: memberStats.activeMembers || 0
+        activities: trendsData?.summary?.총활동수 || trendsData?.summary?.totalActivities || 0,
+        newMembers: basicStats.총회원수 || basicStats.totalMembers || 0,
+        posts: basicStats.총게시글수 || basicStats.totalPosts || 0,
+        activeUsers: memberStats.활성회원수 || memberStats.activeMembers || 0
       }
 
       const lastMonth = {

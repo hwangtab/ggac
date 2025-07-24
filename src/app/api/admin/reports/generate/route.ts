@@ -197,18 +197,18 @@ async function generateMemberActivityReport(supabase: any, startDate: Date, endD
 
   // 5. 회원 통계 요약
   const memberStats = {
-    totalMembers: allMembers?.length || 0,
-    approvedMembers: allMembers?.filter((m: any) => m.registration_status === 'approved').length || 0,
-    pendingMembers: allMembers?.filter((m: any) => m.registration_status === 'pending').length || 0,
-    activeMembers: allMembers?.filter((m: any) => m.is_active).length || 0
+    총회원수: allMembers?.length || 0,
+    승인회원수: allMembers?.filter((m: any) => m.registration_status === 'approved').length || 0,
+    대기회원수: allMembers?.filter((m: any) => m.registration_status === 'pending').length || 0,
+    활성회원수: allMembers?.filter((m: any) => m.is_active).length || 0
   }
 
   return {
     summary: {
-      totalActivities: activities?.length || 0,
-      uniqueUsers: activities?.length > 0 ? new Set(activities.map((a: any) => a.user_id)).size : 0,
-      topActivity: Object.entries(activitySummary).sort(([,a]: any, [,b]: any) => b - a)[0]?.[0] || 'none',
-      averageActivitiesPerUser: activities?.length > 0 && userActivities.length > 0 ? 
+      총활동수: activities?.length || 0,
+      순사용자수: activities?.length > 0 ? new Set(activities.map((a: any) => a.user_id)).size : 0,
+      주요활동: Object.entries(activitySummary).sort(([,a]: any, [,b]: any) => b - a)[0]?.[0] || 'none',
+      사용자당평균활동수: activities?.length > 0 && userActivities.length > 0 ? 
         Math.round((activities.length) / new Set(activities.map((a: any) => a.user_id)).size * 100) / 100 : 0,
       ...memberStats
     },
@@ -272,11 +272,11 @@ async function generatePostEngagementReport(supabase: any, startDate: Date, endD
 
   return {
     summary: {
-      totalPosts: posts?.length || 0,
-      totalComments: comments?.length || 0,
-      totalViews: posts?.reduce((sum: number, post: any) => sum + (post.view_count || 0), 0) || 0,
-      totalLikes: posts?.reduce((sum: number, post: any) => sum + (post.like_count || 0), 0) || 0,
-      averageEngagement: posts?.length > 0 ? 
+      총게시글수: posts?.length || 0,
+      총댓글수: comments?.length || 0,
+      총조회수: posts?.reduce((sum: number, post: any) => sum + (post.view_count || 0), 0) || 0,
+      총좋아요수: posts?.reduce((sum: number, post: any) => sum + (post.like_count || 0), 0) || 0,
+      평균참여도: posts?.length > 0 ? 
         Math.round(((comments?.length || 0) + (posts?.reduce((sum: number, post: any) => sum + (post.like_count || 0), 0) || 0) + (posts?.reduce((sum: number, post: any) => sum + (post.view_count || 0), 0) || 0)) / posts.length * 100) / 100 : 0
     },
     data: {
@@ -338,17 +338,17 @@ async function generateUserRegistrationReport(supabase: any, startDate: Date, en
   return {
     summary: {
       // 신규 등록 기준 통계
-      totalRegistrations: newRegistrations?.length || 0,
-      newApprovedCount: newRegistrationStats.approved || 0,
-      newPendingCount: newRegistrationStats.pending || 0,
-      newRejectedCount: newRegistrationStats.rejected || 0,
+      총신규등록수: newRegistrations?.length || 0,
+      신규승인수: newRegistrationStats.approved || 0,
+      신규대기수: newRegistrationStats.pending || 0,
+      신규거부수: newRegistrationStats.rejected || 0,
       
       // 상태 변경 기준 통계 (더 정확한 승인/거부 추적)
-      approvedCount: statusChangeStats.approved || 0,
-      pendingCount: statusChangeStats.pending || 0,
-      rejectedCount: recentlyRejected?.length || 0, // 실제 거부된 회원 수
+      승인수: statusChangeStats.approved || 0,
+      대기수: statusChangeStats.pending || 0,
+      거부수: recentlyRejected?.length || 0, // 실제 거부된 회원 수
       
-      artistCount: newRegistrations?.filter((u: any) => u.is_artist).length || 0
+      아티스트수: newRegistrations?.filter((u: any) => u.is_artist).length || 0
     },
     data: {
       newRegistrationStats,
