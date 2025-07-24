@@ -133,7 +133,7 @@ export function usePostLikes({
       })
 
       // JSON 파싱 오류 방지
-      let data: PostLikeToggleResponse
+      let data: PostLikeToggleResponse | { error: string }
       try {
         data = await response.json()
       } catch (parseError) {
@@ -142,12 +142,16 @@ export function usePostLikes({
       }
 
       if (!response.ok) {
-        throw new Error(data.message || '좋아요 처리에 실패했습니다.')
+        const errorMessage = 'error' in data ? data.error : ('message' in data ? data.message : '좋아요 처리에 실패했습니다.')
+        throw new Error(errorMessage)
       }
+
+      // 성공 응답을 PostLikeToggleResponse로 타입 단언
+      const successData = data as PostLikeToggleResponse
 
       // 활동 로깅
       try {
-        if (data.liked) {
+        if (successData.liked) {
           await logLikeAdded(postId);
         } else {
           await logLikeRemoved(postId);
@@ -160,13 +164,13 @@ export function usePostLikes({
       // 상태 업데이트
       setState(prev => ({
         ...prev,
-        likeCount: data.like_count,
-        isLiked: data.liked,
+        likeCount: successData.like_count,
+        isLiked: successData.liked,
         isLoading: false
       }))
 
       // 콜백 호출
-      onLikeChange?.(data.liked, data.like_count)
+      onLikeChange?.(successData.liked, successData.like_count)
 
       return true
 
@@ -264,7 +268,7 @@ export function usePostLikesMap({ posts, onLikeChange }: UsePostLikesMapProps) {
       })
 
       // JSON 파싱 오류 방지
-      let data: PostLikeToggleResponse
+      let data: PostLikeToggleResponse | { error: string }
       try {
         data = await response.json()
       } catch (parseError) {
@@ -273,22 +277,26 @@ export function usePostLikesMap({ posts, onLikeChange }: UsePostLikesMapProps) {
       }
 
       if (!response.ok) {
-        throw new Error(data.message || '좋아요 처리에 실패했습니다.')
+        const errorMessage = 'error' in data ? data.error : ('message' in data ? data.message : '좋아요 처리에 실패했습니다.')
+        throw new Error(errorMessage)
       }
+
+      // 성공 응답을 PostLikeToggleResponse로 타입 단언
+      const successData = data as PostLikeToggleResponse
 
       // 상태 업데이트
       setLikesMap(prev => ({
         ...prev,
         [postId]: {
-          likeCount: data.like_count,
-          isLiked: data.liked
+          likeCount: successData.like_count,
+          isLiked: successData.liked
         }
       }))
 
       setLoadingMap(prev => ({ ...prev, [postId]: false }))
       
       // 콜백 호출
-      onLikeChange?.(postId, data.liked, data.like_count)
+      onLikeChange?.(postId, successData.liked, successData.like_count)
 
       return true
 
