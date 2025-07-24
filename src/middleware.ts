@@ -395,13 +395,13 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    // 미들웨어를 적용할 경로를 명시적으로 나열하고 static 파일들 제외
-    '/login',
-    '/signup',
-    '/board/:path*', // /board와 그 하위 경로 모두 포함
-    '/admin/:path*', // /admin과 그 하위 경로 모두 포함
-    '/register/pending',
-    '/register/rejected',
-  ],
+  /*
+   * 모든 요청 경로에 대해 미들웨어를 실행하되, 아래 명시된 경로는 제외합니다:
+   * - api (API 라우트)
+   * - _next/static (정적 파일)
+   * - _next/image (이미지 최적화 파일)
+   * - favicon.ico (파비콘 파일)
+   * - 정규식에 포함된 모든 확장자 (svg, png, jpg, jpeg, gif, webp)
+   */
+  matcher: '/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
 };
