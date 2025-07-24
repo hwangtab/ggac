@@ -288,16 +288,45 @@ export default function ReportGenerator({ onReportGenerated }: ReportGeneratorPr
 
           {/* 주요 지표 요약 */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            {generatedReport.metadata.summary && Object.entries(generatedReport.metadata.summary).map(([key, value]: [string, any]) => (
-              <div key={key} className="bg-blue-50 rounded-lg p-4 text-center">
-                <div className="text-2xl font-bold text-blue-600">
-                  {typeof value === 'number' ? formatNumber(value) : String(value)}
+            {generatedReport.metadata.summary && Object.entries(generatedReport.metadata.summary).map(([key, value]: [string, any]) => {
+              // 한국어 키를 그대로 표시하고, 영어 키는 한국어로 변환
+              const getKoreanLabel = (key: string) => {
+                const keyMap: { [key: string]: string } = {
+                  // 기존 영어 키들 (하위 호환성을 위해)
+                  'totalActivities': '총활동수',
+                  'uniqueUsers': '순사용자수',
+                  'totalMembers': '총회원수',
+                  'approvedMembers': '승인회원수',
+                  'pendingMembers': '대기회원수',
+                  'activeMembers': '활성회원수',
+                  'totalPosts': '총게시글수',
+                  'totalComments': '총댓글수',
+                  'totalViews': '총조회수',
+                  'totalLikes': '총좋아요수',
+                  'averageEngagement': '평균참여도',
+                  'totalRegistrations': '총신규등록수',
+                  'approvedCount': '승인수',
+                  'pendingCount': '대기수',
+                  'rejectedCount': '거부수',
+                  'artistCount': '아티스트수',
+                  'topActivity': '주요활동',
+                  'averageActivitiesPerUser': '사용자당평균활동수'
+                }
+                // 이미 한국어면 그대로 반환, 영어면 변환
+                return keyMap[key] || key
+              }
+
+              return (
+                <div key={key} className="bg-blue-50 rounded-lg p-4 text-center">
+                  <div className="text-2xl font-bold text-blue-600">
+                    {typeof value === 'number' ? formatNumber(value) : String(value)}
+                  </div>
+                  <div className="text-sm text-blue-700">
+                    {getKoreanLabel(key)}
+                  </div>
                 </div>
-                <div className="text-sm text-blue-700 capitalize">
-                  {key.replace(/([A-Z])/g, ' $1').toLowerCase()}
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
 
           {/* 상세 데이터 표시는 별도 컴포넌트로 분리 예정 */}

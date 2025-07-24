@@ -27,10 +27,10 @@ interface RecentActivity {
 }
 
 interface ActivityStatistics {
-  activeUserCount: number
-  totalSessions: number
-  sessionsByTime: Record<string, number>
-  averageSessionTime: number
+  활성사용자수: number
+  총세션수: number
+  시간대별세션수: Record<string, number>
+  평균세션시간: number
 }
 
 interface RealTimeData {
@@ -244,7 +244,7 @@ const RealTimeActivityMonitor: React.FC<RealTimeActivityMonitorProps> = ({
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-500">활성 사용자</p>
-              <p className="text-2xl font-semibold text-gray-900">{data.statistics.activeUserCount}</p>
+              <p className="text-2xl font-semibold text-gray-900">{data.statistics.활성사용자수}</p>
             </div>
           </div>
         </div>
@@ -256,7 +256,7 @@ const RealTimeActivityMonitor: React.FC<RealTimeActivityMonitorProps> = ({
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-500">총 세션</p>
-              <p className="text-2xl font-semibold text-gray-900">{data.statistics.totalSessions}</p>
+              <p className="text-2xl font-semibold text-gray-900">{data.statistics.총세션수}</p>
             </div>
           </div>
         </div>
@@ -269,7 +269,7 @@ const RealTimeActivityMonitor: React.FC<RealTimeActivityMonitorProps> = ({
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-500">평균 세션</p>
               <p className="text-2xl font-semibold text-gray-900">
-                {Math.round(data.statistics.averageSessionTime)}분
+                {Math.round(data.statistics.평균세션시간)}분
               </p>
             </div>
           </div>
@@ -283,7 +283,7 @@ const RealTimeActivityMonitor: React.FC<RealTimeActivityMonitorProps> = ({
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-500">최고 동시 접속</p>
               <p className="text-2xl font-semibold text-gray-900">
-                {Math.max(...Object.values(data.statistics.sessionsByTime), 0)}
+                {Math.max(...Object.values(data.statistics.시간대별세션수), 0)}
               </p>
             </div>
           </div>
