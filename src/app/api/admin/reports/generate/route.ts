@@ -223,10 +223,10 @@ async function generateMemberActivityReport(supabase: any, startDate: Date, endD
 
 // 게시글 참여도 리포트 생성
 async function generatePostEngagementReport(supabase: any, startDate: Date, endDate: Date, filters: any) {
-  // 게시글 통계 (올바른 컬럼명 사용)
+  // 게시글 통계 (view_count 포함)
   const { data: posts } = await supabase
     .from('posts')
-    .select('id, title, category, created_at, like_count, is_pinned, author_id')
+    .select('id, title, category, created_at, like_count, view_count, is_pinned, author_id')
     .gte('created_at', startDate.toISOString())
     .lte('created_at', endDate.toISOString())
     .order('created_at', { ascending: false })
@@ -274,10 +274,10 @@ async function generatePostEngagementReport(supabase: any, startDate: Date, endD
     summary: {
       totalPosts: posts?.length || 0,
       totalComments: comments?.length || 0,
-      totalViews: 0, // views 컬럼이 없으므로 0으로 설정
+      totalViews: posts?.reduce((sum: number, post: any) => sum + (post.view_count || 0), 0) || 0,
       totalLikes: posts?.reduce((sum: number, post: any) => sum + (post.like_count || 0), 0) || 0,
       averageEngagement: posts?.length > 0 ? 
-        Math.round(((comments?.length || 0) + (posts?.reduce((sum: number, post: any) => sum + (post.like_count || 0), 0) || 0)) / posts.length * 100) / 100 : 0
+        Math.round(((comments?.length || 0) + (posts?.reduce((sum: number, post: any) => sum + (post.like_count || 0), 0) || 0) + (posts?.reduce((sum: number, post: any) => sum + (post.view_count || 0), 0) || 0)) / posts.length * 100) / 100 : 0
     },
     data: {
       topPosts: posts?.slice(0, 10).map((post: any) => ({

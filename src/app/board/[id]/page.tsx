@@ -12,6 +12,7 @@ interface Post {
   category: string;
   author_id: string;
   created_at: string;
+  view_count?: number;
 }
 
 interface Profile {
@@ -72,6 +73,37 @@ export default function PostDetailPage() {
         }
 
         setPost(postData);
+
+        // 게시글 조회수 증가 (작성자 본인이 아닌 경우)
+        try {
+          const lastViewTime = localStorage.getItem(`post_view_${postId}`)
+          const now = Date.now()
+          
+          // 최근 10분 내에 본 적이 없는 경우에만 조회수 증가
+          if (!lastViewTime || (now - parseInt(lastViewTime)) > 10 * 60 * 1000) {
+            const viewResponse = await fetch(`/api/posts/${postId}/view`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-last-view-time': lastViewTime || '0'
+              }
+            })
+            
+            if (viewResponse.ok) {
+              const viewData = await viewResponse.json()
+              console.debug(`[PostDetail] View count updated: ${viewData.view_count}`)
+              
+              // 게시글 데이터에 조회수 업데이트
+              setPost(prev => prev ? { ...prev, view_count: viewData.view_count } : prev)
+              
+              // 로컬 스토리지에 조회 시간 저장
+              localStorage.setItem(`post_view_${postId}`, now.toString())
+            }
+          }
+        } catch (viewError) {
+          console.warn('[PostDetail] Failed to update view count:', viewError)
+          // 조회수 업데이트 실패는 게시글 표시를 막지 않음
+        }
 
         // 작성자 프로필 가져오기
         console.debug(`[PostDetail] Fetching author profile for user ID: ${postData.author_id}`);
@@ -284,6 +316,14 @@ export default function PostDetailPage() {
                 </div>
                 <span>•</span>
                 <span>{formatDate(post.created_at)}</span>
+                <span>•</span>
+                <div className="flex items-center space-x-1">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                  <span>{post.view_count || 0}</span>
+                </div>
               </div>
             </div>
 
