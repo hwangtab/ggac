@@ -73,7 +73,15 @@ export function usePostLikes({
 
     try {
       const response = await fetch(`/api/posts/${postId}/likes`)
-      const data = await response.json()
+      
+      // JSON 파싱 오류 방지
+      let data
+      try {
+        data = await response.json()
+      } catch (parseError) {
+        console.error('JSON 파싱 오류:', parseError)
+        throw new Error('서버 응답 형식이 올바르지 않습니다.')
+      }
 
       if (!response.ok) {
         throw new Error(data.error || '좋아요 정보를 불러올 수 없습니다.')
@@ -124,7 +132,14 @@ export function usePostLikes({
         }
       })
 
-      const data: PostLikeToggleResponse = await response.json()
+      // JSON 파싱 오류 방지
+      let data: PostLikeToggleResponse
+      try {
+        data = await response.json()
+      } catch (parseError) {
+        console.error('JSON 파싱 오류:', parseError)
+        throw new Error('서버 응답 형식이 올바르지 않습니다.')
+      }
 
       if (!response.ok) {
         throw new Error(data.message || '좋아요 처리에 실패했습니다.')
@@ -248,7 +263,14 @@ export function usePostLikesMap({ posts, onLikeChange }: UsePostLikesMapProps) {
         }
       })
 
-      const data: PostLikeToggleResponse = await response.json()
+      // JSON 파싱 오류 방지
+      let data: PostLikeToggleResponse
+      try {
+        data = await response.json()
+      } catch (parseError) {
+        console.error('JSON 파싱 오류:', parseError)
+        throw new Error('서버 응답 형식이 올바르지 않습니다.')
+      }
 
       if (!response.ok) {
         throw new Error(data.message || '좋아요 처리에 실패했습니다.')
