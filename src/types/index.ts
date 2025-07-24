@@ -934,6 +934,8 @@ export interface Post {
   comment_count?: number
   /** 좋아요 수 */
   like_count?: number
+  /** 조회수 */
+  view_count?: number
   /** 현재 사용자의 좋아요 여부 */
   is_liked?: boolean
   /** 첨부파일 목록 (조인된 데이터) */
