@@ -7,6 +7,7 @@ import { BOARD_CATEGORIES, BOARD_CATEGORY_STYLES } from '@/constants/categories'
 
 import CommentSection from './CommentSection'
 import PaginationControls from './PaginationControls'
+import PostLikeButton from './PostLikeButton'
 
 import type { Post } from '@/types'
 
@@ -183,12 +184,23 @@ const PostList: React.FC<PostListProps> = ({
                   </span>
                   <div className="flex items-center gap-4">
                     {isMember && (
-                      <button
-                        onClick={() => toggleComments(post.id)}
-                        className="text-sm text-gray-500 hover:text-primary-600 transition-colors"
-                      >
-                        💬 댓글 {expandedPosts.has(post.id) ? '접기' : '보기'}
-                      </button>
+                      <>
+                        <PostLikeButton
+                          postId={post.id}
+                          initialLikeCount={post.like_count || 0}
+                          initialIsLiked={post.is_liked || false}
+                          size="sm"
+                          variant="minimal"
+                          showCount={true}
+                          showLabel={false}
+                        />
+                        <button
+                          onClick={() => toggleComments(post.id)}
+                          className="text-sm text-gray-500 hover:text-primary-600 transition-colors"
+                        >
+                          💬 댓글 {expandedPosts.has(post.id) ? '접기' : '보기'}
+                        </button>
+                      </>
                     )}
                     <span className="text-sm text-gray-500">
                       {new Date(post.created_at).toLocaleDateString('ko-KR', {

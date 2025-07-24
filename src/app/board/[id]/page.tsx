@@ -4,6 +4,7 @@ import { supabase } from '../../../lib/supabase/client';
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import CommentSection from '../../../components/CommentSection';
+import PostLikeButton from '../../../components/PostLikeButton';
 
 interface Post {
   id: string;
@@ -13,6 +14,8 @@ interface Post {
   author_id: string;
   created_at: string;
   view_count?: number;
+  like_count?: number;
+  is_liked?: boolean;
 }
 
 interface Profile {
@@ -72,7 +75,27 @@ export default function PostDetailPage() {
           return;
         }
 
-        setPost(postData);
+        // 좋아요 정보 가져오기
+        const { count: likeCount } = await supabase
+          .from('post_likes')
+          .select('*', { count: 'exact', head: true })
+          .eq('post_id', postId);
+
+        const { data: userLike } = await supabase
+          .from('post_likes')
+          .select('id')
+          .eq('post_id', postId)
+          .eq('user_id', currentUser.id)
+          .single();
+
+        // 게시글 데이터에 좋아요 정보 추가
+        const enrichedPostData = {
+          ...postData,
+          like_count: likeCount || 0,
+          is_liked: !!userLike
+        };
+
+        setPost(enrichedPostData);
 
         // 게시글 조회수 증가 (작성자 본인이 아닌 경우)
         try {
@@ -324,6 +347,16 @@ export default function PostDetailPage() {
                   </svg>
                   <span>{post.view_count || 0}</span>
                 </div>
+                <span>•</span>
+                <PostLikeButton
+                  postId={post.id}
+                  initialLikeCount={post.like_count || 0}
+                  initialIsLiked={post.is_liked || false}
+                  size="sm"
+                  variant="minimal"
+                  showCount={true}
+                  showLabel={false}
+                />
               </div>
             </div>
 

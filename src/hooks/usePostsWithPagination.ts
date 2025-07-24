@@ -32,6 +32,9 @@ export const usePostsWithPagination = ({
       setLoading(true);
       setError(null);
 
+      // 현재 로그인한 사용자 확인
+      const { data: { user } } = await supabase.auth.getUser();
+
       // 1. 총 개수 조회 (카테고리 필터 적용)
       let countQuery = supabase
         .from('posts')
@@ -78,8 +81,38 @@ export const usePostsWithPagination = ({
         throw postsError;
       }
 
+      // 3. 각 게시글의 좋아요 정보 가져오기
+      const postsWithLikes = await Promise.all(
+        (postsData || []).map(async (post) => {
+          // 좋아요 수 조회
+          const { count: likeCount } = await supabase
+            .from('post_likes')
+            .select('*', { count: 'exact', head: true })
+            .eq('post_id', post.id);
+
+          // 현재 사용자의 좋아요 여부 조회
+          let isLiked = false;
+          if (user) {
+            const { data: userLike } = await supabase
+              .from('post_likes')
+              .select('id')
+              .eq('post_id', post.id)
+              .eq('user_id', user.id)
+              .single();
+            
+            isLiked = !!userLike;
+          }
+
+          return {
+            ...post,
+            like_count: likeCount || 0,
+            is_liked: isLiked
+          };
+        })
+      );
+
       // 공지사항 상단 고정 정렬 (첫 페이지에만 적용)
-      let sortedPosts = postsData || [];
+      let sortedPosts = postsWithLikes;
       if (page === 1) {
         sortedPosts = sortedPosts.sort((a, b) => {
           // 공지사항을 최상단에 고정
