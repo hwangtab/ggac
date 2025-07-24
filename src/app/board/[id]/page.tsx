@@ -75,25 +75,23 @@ export default function PostDetailPage() {
           return;
         }
 
-        // 좋아요 정보 가져오기
-        const { count: likeCount } = await supabase
-          .from('post_likes')
-          .select('*', { count: 'exact', head: true })
-          .eq('post_id', postId);
-
-        const { data: userLike } = await supabase
-          .from('post_likes')
-          .select('id')
-          .eq('post_id', postId)
-          .eq('user_id', currentUser.id)
-          .single();
-
-        // 게시글 데이터에 좋아요 정보 추가
-        const enrichedPostData = {
-          ...postData,
-          like_count: likeCount || 0,
-          is_liked: !!userLike
-        };
+        // 좋아요 정보를 API를 통해 가져오기
+        let enrichedPostData = { ...postData, like_count: 0, is_liked: false };
+        
+        try {
+          const response = await fetch(`/api/posts/${postId}/likes`);
+          if (response.ok) {
+            const likeData = await response.json();
+            enrichedPostData = {
+              ...postData,
+              like_count: likeData.like_count || 0,
+              is_liked: likeData.is_liked || false
+            };
+          }
+        } catch (error) {
+          console.error('좋아요 정보 조회 실패:', error);
+          // 에러 발생 시 기본값 사용
+        }
 
         setPost(enrichedPostData);
 

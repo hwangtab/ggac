@@ -74,17 +74,35 @@ export function usePostLikes({
     try {
       const response = await fetch(`/api/posts/${postId}/likes`)
       
-      // JSON 파싱 오류 방지
-      let data
-      try {
-        data = await response.json()
-      } catch (parseError) {
-        console.error('JSON 파싱 오류:', parseError)
-        throw new Error('서버 응답 형식이 올바르지 않습니다.')
+      // 네트워크 응답 상태 확인
+      if (!response.ok) {
+        // 404, 405 등의 경우 HTML 응답이 올 수 있음
+        let errorMessage = '좋아요 정보를 불러올 수 없습니다.';
+        
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch (parseError) {
+          // JSON 파싱 실패 시 HTTP 상태 코드에 따른 메시지
+          if (response.status === 404) {
+            errorMessage = 'API 엔드포인트를 찾을 수 없습니다. 새로고침을 시도해주세요.';
+          } else if (response.status === 405) {
+            errorMessage = '허용되지 않은 요청 방식입니다.';
+          } else if (response.status >= 500) {
+            errorMessage = '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
+          }
+        }
+        
+        throw new Error(errorMessage);
       }
 
-      if (!response.ok) {
-        throw new Error(data.error || '좋아요 정보를 불러올 수 없습니다.')
+      // JSON 파싱 시도
+      let data;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        console.error('JSON 파싱 오류:', parseError);
+        throw new Error('서버 응답 형식이 올바르지 않습니다. 새로고침을 시도해주세요.');
       }
 
       setState(prev => ({
@@ -96,9 +114,17 @@ export function usePostLikes({
 
     } catch (error) {
       console.error('좋아요 상태 조회 오류:', error)
+      
+      let errorMessage = '알 수 없는 오류가 발생했습니다.';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (error instanceof TypeError && error.message.includes('fetch')) {
+        errorMessage = '네트워크 연결을 확인해주세요.';
+      }
+      
       setState(prev => ({
         ...prev,
-        error: error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.',
+        error: errorMessage,
         isLoading: false
       }))
     }
@@ -132,22 +158,39 @@ export function usePostLikes({
         }
       })
 
-      // JSON 파싱 오류 방지
-      let data: PostLikeToggleResponse | { error: string }
-      try {
-        data = await response.json()
-      } catch (parseError) {
-        console.error('JSON 파싱 오류:', parseError)
-        throw new Error('서버 응답 형식이 올바르지 않습니다.')
-      }
-
+      // 네트워크 응답 상태 확인
       if (!response.ok) {
-        const errorMessage = 'error' in data ? data.error : ('message' in data ? data.message : '좋아요 처리에 실패했습니다.')
-        throw new Error(errorMessage)
+        let errorMessage = '좋아요 처리에 실패했습니다.';
+        
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorData.message || errorMessage;
+        } catch (parseError) {
+          // JSON 파싱 실패 시 HTTP 상태 코드에 따른 메시지
+          if (response.status === 401) {
+            errorMessage = '로그인이 필요합니다.';
+          } else if (response.status === 403) {
+            errorMessage = '좋아요 권한이 없습니다.';
+          } else if (response.status === 404) {
+            errorMessage = 'API 엔드포인트를 찾을 수 없습니다. 새로고침을 시도해주세요.';
+          } else if (response.status === 405) {
+            errorMessage = '허용되지 않은 요청 방식입니다.';
+          } else if (response.status >= 500) {
+            errorMessage = '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
+          }
+        }
+        
+        throw new Error(errorMessage);
       }
 
-      // 성공 응답을 PostLikeToggleResponse로 타입 단언
-      const successData = data as PostLikeToggleResponse
+      // JSON 파싱 시도
+      let successData: PostLikeToggleResponse;
+      try {
+        successData = await response.json();
+      } catch (parseError) {
+        console.error('JSON 파싱 오류:', parseError);
+        throw new Error('서버 응답 형식이 올바르지 않습니다. 새로고침을 시도해주세요.');
+      }
 
       // 활동 로깅
       try {
@@ -176,9 +219,17 @@ export function usePostLikes({
 
     } catch (error) {
       console.error('좋아요 토글 오류:', error)
+      
+      let errorMessage = '좋아요 처리에 실패했습니다.';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (error instanceof TypeError && error.message.includes('fetch')) {
+        errorMessage = '네트워크 연결을 확인해주세요.';
+      }
+      
       setState(prev => ({
         ...prev,
-        error: error instanceof Error ? error.message : '좋아요 처리에 실패했습니다.',
+        error: errorMessage,
         isLoading: false
       }))
       return false
@@ -267,22 +318,39 @@ export function usePostLikesMap({ posts, onLikeChange }: UsePostLikesMapProps) {
         }
       })
 
-      // JSON 파싱 오류 방지
-      let data: PostLikeToggleResponse | { error: string }
-      try {
-        data = await response.json()
-      } catch (parseError) {
-        console.error('JSON 파싱 오류:', parseError)
-        throw new Error('서버 응답 형식이 올바르지 않습니다.')
-      }
-
+      // 네트워크 응답 상태 확인
       if (!response.ok) {
-        const errorMessage = 'error' in data ? data.error : ('message' in data ? data.message : '좋아요 처리에 실패했습니다.')
-        throw new Error(errorMessage)
+        let errorMessage = '좋아요 처리에 실패했습니다.';
+        
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorData.message || errorMessage;
+        } catch (parseError) {
+          // JSON 파싱 실패 시 HTTP 상태 코드에 따른 메시지
+          if (response.status === 401) {
+            errorMessage = '로그인이 필요합니다.';
+          } else if (response.status === 403) {
+            errorMessage = '좋아요 권한이 없습니다.';
+          } else if (response.status === 404) {
+            errorMessage = 'API 엔드포인트를 찾을 수 없습니다. 새로고침을 시도해주세요.';
+          } else if (response.status === 405) {
+            errorMessage = '허용되지 않은 요청 방식입니다.';
+          } else if (response.status >= 500) {
+            errorMessage = '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
+          }
+        }
+        
+        throw new Error(errorMessage);
       }
 
-      // 성공 응답을 PostLikeToggleResponse로 타입 단언
-      const successData = data as PostLikeToggleResponse
+      // JSON 파싱 시도
+      let successData: PostLikeToggleResponse;
+      try {
+        successData = await response.json();
+      } catch (parseError) {
+        console.error('JSON 파싱 오류:', parseError);
+        throw new Error('서버 응답 형식이 올바르지 않습니다. 새로고침을 시도해주세요.');
+      }
 
       // 상태 업데이트
       setLikesMap(prev => ({
