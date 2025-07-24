@@ -7,13 +7,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
-import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator } from '@/utils/rateLimiter'
+import rateLimiterUtils from '@/utils/rateLimiter'
 import type { PostLikeToggleResponse, PostLikedUser } from '@/types'
 
 // Rate limiting 설정
-const rateLimiter = applyRateLimit({
-  ...RATE_LIMIT_CONFIGS.GENERAL_API,
-  keyGenerator: createUserKeyGenerator('post_likes')
+const rateLimiter = rateLimiterUtils.applyRateLimit({
+  ...rateLimiterUtils.RATE_LIMIT_CONFIGS.GENERAL_API,
+  keyGenerator: rateLimiterUtils.createUserKeyGenerator('post_likes')
 })
 
 /**
@@ -100,10 +100,10 @@ export async function POST(
 ) {
   try {
     // Rate limiting 적용 (좀 더 엄격하게)
-    const strictRateLimiter = applyRateLimit({
+    const strictRateLimiter = rateLimiterUtils.applyRateLimit({
       maxRequests: 30, // 분당 30회로 제한
       windowMs: 60 * 1000, // 1분
-      keyGenerator: createUserKeyGenerator('post_like_toggle')
+      keyGenerator: rateLimiterUtils.createUserKeyGenerator('post_like_toggle')
     })
     
     const rateLimitResult = strictRateLimiter(request)
