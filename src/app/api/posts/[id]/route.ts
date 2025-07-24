@@ -3,6 +3,8 @@
  * 좋아요 정보를 포함한 게시글 상세 정보 제공
  */
 
+export const dynamic = 'force-dynamic'
+
 import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
