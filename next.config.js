@@ -90,6 +90,11 @@ const nextConfig = {
   // 동적 API 라우트 지원 강화 
   serverExternalPackages: [],
   
+  // Vercel에서 동적 라우트 인식 개선
+  trailingSlash: false,
+  skipTrailingSlashRedirect: true,
+  
+  
   
   // Enhanced security headers and MIME type configuration
   async headers() {

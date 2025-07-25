@@ -5,8 +5,9 @@ import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 // POST: 아티스트에 멤버 배정
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
+  const params = await context.params;
   try {
     const cookieStore = cookies()
     const supabase = createServerComponentClient({ cookies: () => cookieStore })

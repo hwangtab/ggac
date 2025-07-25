@@ -29,8 +29,9 @@ function simpleRateLimit(request: NextRequest, identifier: string) {
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
+  const params = await context.params;
   try {
     // Simple rate limiting for serverless compatibility
     const rateLimitResult = simpleRateLimit(request, 'post_likes_get')
@@ -103,8 +104,9 @@ export async function GET(
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
+  const params = await context.params;
   try {
     // Simple rate limiting for serverless compatibility
     const rateLimitResult = simpleRateLimit(request, 'post_like_toggle')
@@ -182,8 +184,9 @@ export async function POST(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
+  const params = await context.params;
   try {
     const supabase = createRouteHandlerClient({ cookies })
     const { data: { session } } = await supabase.auth.getSession()
