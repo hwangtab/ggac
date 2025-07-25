@@ -1,4 +1,5 @@
 import { Metadata } from 'next'
+import Link from 'next/link'
 import { FiUser, FiSettings, FiMusic, FiActivity } from 'react-icons/fi'
 import MypageLayout from './components/MypageLayout'
 import DashboardCard from './components/DashboardCard'
@@ -42,12 +43,12 @@ export default function MypagePage() {
                 승인 상태 확인하기
               </a>
               <div>
-                <a
+                <Link
                   href="/"
                   className="text-gray-500 hover:text-gray-700 text-sm underline"
                 >
                   홈으로 돌아가기
-                </a>
+                </Link>
               </div>
             </div>
           </div>
