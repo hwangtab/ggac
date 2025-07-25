@@ -78,7 +78,7 @@ const nextConfig = {
     return config
   },
   
-  // 실험적 기능 활성화
+  // 실험적 기능 활성화  
   experimental: {
     optimizeCss: true, // CSS 최적화
     optimizePackageImports: ['react-icons', 'framer-motion', '@supabase/supabase-js'],
@@ -86,6 +86,9 @@ const nextConfig = {
       forceSwcTransforms: true,
     })
   },
+
+  // 동적 API 라우트 지원 강화 
+  serverExternalPackages: [],
   
   
   // Enhanced security headers and MIME type configuration

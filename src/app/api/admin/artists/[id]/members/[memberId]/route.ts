@@ -5,8 +5,9 @@ import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 // DELETE: 아티스트 배정 해제
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string; memberId: string } }
+  context: { params: Promise<{ id: string; memberId: string }> }
 ) {
+  const params = await context.params;
   try {
     const cookieStore = cookies()
     const supabase = createServerComponentClient({ cookies: () => cookieStore })
