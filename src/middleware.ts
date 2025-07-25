@@ -403,5 +403,5 @@ export const config = {
    * - favicon.ico (파비콘 파일)
    * - 정규식에 포함된 모든 확장자 (svg, png, jpg, jpeg, gif, webp)
    */
-  matcher: '/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  matcher: '/((?!api/|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
 };

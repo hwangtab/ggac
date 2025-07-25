@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import MypageLayout from '../components/MypageLayout'
 import PermissionCheck from '../components/PermissionCheck'
 import { FiActivity, FiMessageCircle, FiEdit3, FiUser, FiCalendar, FiFilter } from 'react-icons/fi'
@@ -306,18 +307,18 @@ export default function ActivityPage() {
                 }
               </p>
               <div className="flex justify-center gap-3">
-                <a
+                <Link
                   href="/board/write"
                   className="btn-primary"
                 >
                   게시글 작성하기
-                </a>
-                <a
+                </Link>
+                <Link
                   href="/board"
                   className="btn-secondary"
                 >
                   게시판 둘러보기
-                </a>
+                </Link>
               </div>
             </div>
           ) : (
