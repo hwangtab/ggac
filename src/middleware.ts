@@ -60,9 +60,15 @@ export async function middleware(request: NextRequest) {
   const res = NextResponse.next();
   const supabase = createMiddlewareClient({ req: request, res });
 
-  // Skip middleware for static files and API routes to reduce API calls
+  // 🚨 CRITICAL: API 라우트는 절대 미들웨어에서 처리하지 않음
+  // 동적 API 라우트 문제 해결을 위한 명시적 체크
+  if (request.nextUrl.pathname.startsWith('/api/')) {
+    console.log('⚠️ [MIDDLEWARE] API route detected in middleware - bypassing:', request.nextUrl.pathname);
+    return res;
+  }
+
+  // Skip middleware for static files to reduce API calls
   if (request.nextUrl.pathname.startsWith('/_next') || 
-      request.nextUrl.pathname.startsWith('/api/') ||
       request.nextUrl.pathname.includes('.')) {
     return res;
   }
@@ -396,12 +402,15 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   /*
-   * 모든 요청 경로에 대해 미들웨어를 실행하되, 아래 명시된 경로는 제외합니다:
-   * - api (API 라우트)
-   * - _next/static (정적 파일)
-   * - _next/image (이미지 최적화 파일)
-   * - favicon.ico (파비콘 파일)
-   * - 정규식에 포함된 모든 확장자 (svg, png, jpg, jpeg, gif, webp)
+   * 미들웨어를 실행할 경로를 명시적으로 지정
+   * API 라우트는 완전히 제외하여 동적 라우팅 문제 해결
    */
-  matcher: '/((?!api/|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  matcher: [
+    /*
+     * 다음 경로들에 대해서만 미들웨어 실행:
+     * - 모든 페이지 라우트 (단, API 라우트 제외)
+     * - 정적 파일, 이미지, 폰트 등은 제외
+     */
+    '/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|woff|woff2|ttf|ico)$).*)',
+  ],
 };
