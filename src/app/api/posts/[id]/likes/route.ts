@@ -2,6 +2,7 @@
  * 게시글 좋아요 관리 API
  * GET: 게시글 좋아요 정보 조회
  * POST: 좋아요 추가/제거 (토글)
+ * Next.js App Router API Route
  */
 
 export const dynamic = 'force-dynamic'
