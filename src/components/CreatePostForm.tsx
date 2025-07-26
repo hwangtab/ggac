@@ -37,11 +37,11 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ authorId, onNewPost, sh
     if (error) {
       alert(error.message);
     } else if (data) {
-      setCreatedPostId(data.id);
+      setCreatedPostId((data as any).id);
       
       // 활동 로깅
       try {
-        await logPostCreated(data.id, {
+        await logPostCreated((data as any).id, {
           category,
           title: title.substring(0, 50), // 제목 앞부분만 저장
           character_count: content.length
@@ -58,7 +58,7 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ authorId, onNewPost, sh
       // 첨부파일 업로더 표시
       setShowAttachmentUploader(true);
       
-      onNewPost(data);
+      onNewPost(data as any);
       setTitle('');
       setContent('');
       setCategory('잡담');

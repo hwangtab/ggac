@@ -94,14 +94,14 @@ export const usePostsWithPagination = ({
                 ...post,
                 like_count: likeData.like_count || 0,
                 is_liked: likeData.is_liked || false
-              };
+              } as any;
             } else {
               // API 호출 실패 시 기본값 사용
               return {
                 ...post,
                 like_count: 0,
                 is_liked: false
-              };
+              } as any;
             }
           } catch (error) {
             console.error(`좋아요 정보 조회 실패 (Post ${post.id}):`, error);
@@ -110,7 +110,7 @@ export const usePostsWithPagination = ({
               ...post,
               like_count: 0,
               is_liked: false
-            };
+            } as any;
           }
         })
       );
@@ -213,7 +213,7 @@ export const useAnnouncementPosts = () => {
           .order('created_at', { ascending: false });
 
         if (error) throw error;
-        setAnnouncements(data || []);
+        setAnnouncements((data as any) || []);
       } catch (err) {
         console.error('Error fetching announcements:', err);
         setAnnouncements([]);

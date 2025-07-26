@@ -84,7 +84,7 @@ function BoardContent() {
             setIsMember(false);
           }
         } else if (profile && mounted) {
-          setIsMember(profile.registration_status === 'approved' && profile.is_active);
+          setIsMember((profile as any).registration_status === 'approved' && (profile as any).is_active);
         }
 
         if (mounted) {

@@ -4,6 +4,9 @@ import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator, addRateLimitHeaders } from '@/utils/rateLimiter'
 import { logSecurityEvent } from '@/utils/security'
 
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
 async function checkAdminPermission(supabase: any, userId: string) {
   const { data: profile, error } = await supabase
     .from('member_profiles')

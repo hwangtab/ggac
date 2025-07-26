@@ -5,6 +5,9 @@ import { validateSearchQuery } from '@/utils/validation'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator, addRateLimitHeaders } from '@/utils/rateLimiter'
 import { logSecurityEvent } from '@/utils/security'
 
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
 // GET: 회원 목록 조회
 export async function GET(request: NextRequest) {
   try {

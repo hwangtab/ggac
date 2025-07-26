@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
 // GET: 관리자 대시보드 통계 조회
 export async function GET(request: NextRequest) {
   try {

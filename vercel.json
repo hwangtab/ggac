@@ -179,7 +179,7 @@
       ]
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!api).*)", 
       "headers": [
         {
           "key": "X-Content-Type-Options",
@@ -200,69 +200,6 @@
       ]
     }
   ],
-  "functions": {
-    "src/app/api/**/*.ts": {
-      "runtime": "@vercel/node"
-    }
-  },
-  "routes": [
-    {
-      "src": "/api/posts/([^/]+)/likes",
-      "dest": "/api/posts/[id]/likes"
-    },
-    {
-      "src": "/api/posts/([^/]+)/attachments/([^/]+)",
-      "dest": "/api/posts/[id]/attachments/[attachmentId]"
-    },
-    {
-      "src": "/api/posts/([^/]+)/attachments",
-      "dest": "/api/posts/[id]/attachments"
-    },
-    {
-      "src": "/api/posts/([^/]+)/view",
-      "dest": "/api/posts/[id]/view"
-    },
-    {
-      "src": "/api/posts/([^/]+)",
-      "dest": "/api/posts/[id]"
-    },
-    {
-      "src": "/api/comments/([^/]+)/like",
-      "dest": "/api/comments/[id]/like"
-    },
-    {
-      "src": "/api/admin/members/([^/]+)",
-      "dest": "/api/admin/members/[id]"
-    },
-    {
-      "src": "/api/admin/posts/([^/]+)",
-      "dest": "/api/admin/posts/[id]"
-    },
-    {
-      "src": "/api/admin/artists/([^/]+)/members/([^/]+)",
-      "dest": "/api/admin/artists/[id]/members/[memberId]"
-    },
-    {
-      "src": "/api/admin/artists/([^/]+)/members",
-      "dest": "/api/admin/artists/[id]/members"
-    },
-    {
-      "src": "/api/admin/artists/([^/]+)",
-      "dest": "/api/admin/artists/[id]"
-    },
-    {
-      "src": "/api/notifications/([^/]+)",
-      "dest": "/api/notifications/[id]"
-    },
-    {
-      "src": "/api/users/([^/]+)/likes",
-      "dest": "/api/users/[id]/likes"
-    },
-    {
-      "src": "/api/test-patch/([^/]+)",
-      "dest": "/api/test-patch/[id]"
-    }
-  ],
   "redirects": [
     {
       "source": "/home",
@@ -270,7 +207,7 @@
       "permanent": true
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!api).*)",
       "has": [
         {
           "type": "host",

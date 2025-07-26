@@ -322,6 +322,7 @@ Apply migrations to Supabase:
 2. **Check performance impact** for any particle/animation changes
 3. **Verify authentication flows** with `node test-signup-flow.js`
 4. **Test image optimization** with `node test-image-loading.js`
+5. **Test API endpoints** locally before deploying to catch routing issues early
 
 #### Code Patterns to Follow
 - **Particle Components**: Always implement fallback strategy (WebGL → CSS → Static)
@@ -329,18 +330,29 @@ Apply migrations to Supabase:
 - **Authentication**: Follow the middleware pattern in `src/middleware.ts`
 - **Data Loading**: Use cached functions from `src/lib/data.ts`
 - **Types**: Import from centralized `src/types/index.ts`
+- **API Routes**: Always export runtime configuration: `export const runtime = 'nodejs'` and `export const dynamic = 'force-dynamic'`
 
 #### Performance-Critical Areas
 - **Particle Systems**: Test on various devices before committing
 - **Image Loading**: Always provide fallback text and optimize formats
 - **Database Queries**: Use RLS policies and test with different user states
 - **Bundle Size**: Run bundle analysis after significant changes
+- **API Routes**: Test both static and dynamic routes in production environment
 
 #### Error Handling Patterns
 - **Authentication Errors**: Graceful degradation to public content
 - **Database Errors**: Fallback to cached data or static content
 - **Image Loading Errors**: Show fallback text or placeholder
 - **Performance Issues**: Automatic fallback to simpler components
+- **API Route Failures**: Check if returning HTML 404 vs JSON error responses
+
+#### Deployment Verification Checklist
+1. **Local Build**: `npm run build` must succeed without TypeScript errors
+2. **API Route Testing**: Test all dynamic API routes locally with `npm run dev`
+3. **Vercel Deployment**: Use `vercel --prod` for production deployments
+4. **Function Verification**: Check `vercel inspect [url]` to ensure serverless functions are created
+5. **Endpoint Testing**: Test API endpoints with `curl` to verify JSON responses vs HTML 404s
+6. **Rollback Strategy**: Keep previous working commit hash for emergency rollbacks
 
 # Using Gemini CLI for Large Codebase Analysis
 
@@ -447,3 +459,27 @@ NEVER proactively create documentation files (*.md) or README files. Only create
 - **Problem**: Member approval returns success but doesn't update database
 - **Solution**: Ensure `SUPABASE_SERVICE_ROLE_KEY` is properly configured in both local `.env.local` and Vercel environment variables
 - **Debugging**: Check server logs for "NO_ROWS_UPDATED" errors which indicate RLS policy blocks
+
+### TypeScript Build Errors After Package Updates
+- **Problem**: Supabase client methods returning `unknown` types, causing build failures
+- **Solution**: Use type assertions `(data as any)` for Supabase query results when types are incorrectly inferred
+- **Temporary Fix**: Set `typescript: { ignoreBuildErrors: true }` in `next.config.js` for urgent deployments
+- **Root Cause**: Package version mismatches between @supabase packages and Next.js
+
+### Dynamic API Route 404 Issues in Production
+- **Problem**: Dynamic API routes like `/api/posts/[id]/likes` return HTML 404 pages instead of JSON responses in production
+- **Solution**: 
+  - Verify serverless functions are created during Vercel build: `vercel inspect [deployment-url]`
+  - Check function deployment logs: `vercel inspect [deployment-url] --logs`
+  - Test static vs dynamic routes: Static routes (`/api/posts`) should work, dynamic routes may fail
+- **Debugging Commands**:
+  - `vercel ls` - Check deployment status
+  - `curl -I [api-url]` - Check response headers (look for `x-matched-path: /404`)
+  - `vercel inspect [url]` - View function list and build output
+- **Root Cause**: Vercel serverless function deployment issues with Next.js App Router dynamic routes
+
+### Next.js Configuration Warnings
+- **Problem**: `serverExternalPackages` warning in Next.js 14
+- **Solution**: Remove deprecated `serverExternalPackages` configuration from `next.config.js`
+- **Problem**: Edge Runtime compatibility issues with Supabase
+- **Solution**: Ensure API routes use Node.js runtime: `export const runtime = 'nodejs'`

@@ -46,7 +46,7 @@ export default function PostEditPage() {
         if (profileError) {
           console.error('Error fetching profile:', profileError);
         } else if (profile) {
-          setIsMember(profile.registration_status === 'approved' && profile.is_active);
+          setIsMember((profile as any).registration_status === 'approved' && (profile as any).is_active);
         }
 
         // 게시글 가져오기
@@ -69,7 +69,7 @@ export default function PostEditPage() {
           return;
         }
 
-        setPost(postData);
+        setPost(postData as any);
         setLoading(false);
       } catch (e) {
         console.error('Error fetching data:', e);
