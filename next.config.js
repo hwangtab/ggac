@@ -91,6 +91,33 @@ const nextConfig = {
   trailingSlash: false,
   skipTrailingSlashRedirect: true,
   
+  // 동적 API 라우트 최적화
+  generateEtags: false,
+  poweredByHeader: false,
+  compress: true,
+  
+  // 서버리스 함수 최적화
+  serverRuntimeConfig: {
+    maxDuration: 30,
+  },
+  
+  // API 라우트 설정
+  async rewrites() {
+    return {
+      beforeFiles: [
+        // 동적 API 라우트 명시적 매핑
+        {
+          source: '/api/posts/:id/like',
+          destination: '/api/posts/:id/like',
+        },
+        {
+          source: '/api/posts/:id/likes',
+          destination: '/api/posts/:id/likes',
+        },
+      ],
+    }
+  },
+  
   
   
   

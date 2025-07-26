@@ -3,6 +3,11 @@
  * GET: 사용자가 좋아요한 게시글 목록 조회
  */
 
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+export const maxDuration = 30
+export const preferredRegion = 'icn1'
+
 import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
@@ -20,8 +25,9 @@ const rateLimiter = applyRateLimit({
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const resolvedParams = await params;
   try {
     // Rate limiting 적용
     const rateLimitResult = rateLimiter(request)
@@ -36,7 +42,7 @@ export async function GET(
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
-    const requestedUserId = params.id
+    const requestedUserId = resolvedParams.id
     const { searchParams } = new URL(request.url)
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'))
     const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 100)

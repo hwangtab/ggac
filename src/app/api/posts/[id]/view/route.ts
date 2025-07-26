@@ -1,11 +1,13 @@
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+export const maxDuration = 30
+export const preferredRegion = 'icn1'
+
 import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { applyRateLimit, RATE_LIMIT_CONFIGS } from '@/utils/rateLimiter'
-
-export const dynamic = 'force-dynamic'
-export const runtime = 'nodejs'
 
 /**
  * 게시글 조회수 증가 API
@@ -13,8 +15,9 @@ export const runtime = 'nodejs'
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const resolvedParams = await params;
   try {
     // Rate limiting 적용
     const rateLimiter = applyRateLimit(RATE_LIMIT_CONFIGS.GENERAL_API)
@@ -24,7 +27,7 @@ export async function POST(
       return rateLimitResult.response!
     }
 
-    const postId = params.id
+    const postId = resolvedParams.id
 
     if (!postId) {
       return NextResponse.json({ error: 'Post ID is required' }, { status: 400 })
@@ -149,10 +152,11 @@ export async function POST(
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const resolvedParams = await params;
   try {
-    const postId = params.id
+    const postId = resolvedParams.id
 
     if (!postId) {
       return NextResponse.json({ error: 'Post ID is required' }, { status: 400 })

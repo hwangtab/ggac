@@ -5,9 +5,9 @@ import { fetchLinkPreview } from '@/utils/linkPreview'
 import type { Metadata } from 'next'
 
 interface ProjectPageProps {
-  params: {
+  params: Promise<{
     slug: string
-  }
+  }>
 }
 
 // generateStaticParams 개선 - 캐싱된 함수 사용
@@ -18,7 +18,8 @@ export async function generateStaticParams() {
 
 // generateMetadata 개선 - 캐싱된 함수 사용
 export async function generateMetadata({ params }: ProjectPageProps): Promise<Metadata> {
-  const project = await getProjectBySlug(params.slug)
+  const resolvedParams = await params
+  const project = await getProjectBySlug(resolvedParams.slug)
 
   if (!project) {
     return {
@@ -74,7 +75,8 @@ export async function generateMetadata({ params }: ProjectPageProps): Promise<Me
 
 const ProjectDetailPage = async ({ params }: ProjectPageProps) => {
   // 개선된 데이터 로딩 - 단일 함수로 프로젝트 조회
-  const project = await getProjectBySlug(params.slug)
+  const resolvedParams = await params
+  const project = await getProjectBySlug(resolvedParams.slug)
 
   if (!project) {
     notFound()

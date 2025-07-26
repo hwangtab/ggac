@@ -4,8 +4,9 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(
   request: Request,
-  { params }: { params: { slug: string } }
+  { params }: { params: Promise<{ slug: string }> }
 ) {
+  const resolvedParams = await params;
   try {
     // 서버 사이드에서 파일 시스템 접근
     const fs = await import('fs')
@@ -16,7 +17,7 @@ export async function GET(
     ) as Project[]
     
     const project = projectsData.find(p => 
-      p.slug.toLowerCase() === params.slug.toLowerCase()
+      p.slug.toLowerCase() === resolvedParams.slug.toLowerCase()
     )
 
     if (!project) {

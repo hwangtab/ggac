@@ -91,7 +91,8 @@ const globalStore = new MemoryRateLimitStore();
 // 기본 키 생성 함수 (IP 주소 기반)
 const defaultKeyGenerator = (req: NextRequest): string => {
   const forwarded = req.headers.get('x-forwarded-for');
-  const ip = forwarded ? forwarded.split(',')[0] : req.ip || 'unknown';
+  const realIp = req.headers.get('x-real-ip');
+  const ip = forwarded ? forwarded.split(',')[0] : realIp || 'unknown';
   return ip;
 };
 

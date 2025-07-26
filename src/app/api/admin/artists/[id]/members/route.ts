@@ -1,3 +1,8 @@
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+export const maxDuration = 30
+export const preferredRegion = 'icn1'
+
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
@@ -5,9 +10,9 @@ import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 // POST: 아티스트에 멤버 배정
 export async function POST(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
-  const params = context.params;
+  const params = await context.params;
   try {
     const cookieStore = cookies()
     const supabase = createServerComponentClient({ cookies: () => cookieStore })

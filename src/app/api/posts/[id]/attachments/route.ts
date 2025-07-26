@@ -4,13 +4,15 @@
  * POST: 첨부파일 업로드
  */
 
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+export const maxDuration = 30
+export const preferredRegion = 'icn1'
+
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import type { PostAttachment, PostAttachmentStats } from '@/types'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-
-export const dynamic = 'force-dynamic'
-export const runtime = 'nodejs'
 import { cookies } from 'next/headers'
 
 // Service Role 클라이언트는 Storage 작업에만 사용
@@ -41,8 +43,9 @@ const MAX_FILES_PER_POST = 10
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const resolvedParams = await params;
   try {
     const supabase = createRouteHandlerClient({ cookies })
     const { data: { session } } = await supabase.auth.getSession()
@@ -51,7 +54,7 @@ export async function GET(
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
-    const postId = params.id
+    const postId = resolvedParams.id
 
     // 게시글 존재 확인
     const { data: post, error: postError } = await supabase
@@ -102,8 +105,9 @@ export async function GET(
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const resolvedParams = await params;
   try {
     const supabase = createRouteHandlerClient({ cookies })
     const { data: { session } } = await supabase.auth.getSession()
@@ -112,7 +116,7 @@ export async function POST(
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
-    const postId = params.id
+    const postId = resolvedParams.id
 
     // 게시글 존재 및 권한 확인
     const { data: post, error: postError } = await supabase
