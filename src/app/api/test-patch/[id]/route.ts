@@ -1,20 +1,26 @@
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+export const maxDuration = 30
+export const preferredRegion = 'icn1'
+
 import { NextRequest, NextResponse } from 'next/server'
 
 // 동적 라우트 PATCH 테스트용
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const resolvedParams = await params;
   try {
-    console.log('동적 PATCH 요청 수신됨, ID:', params.id)
+    console.log('동적 PATCH 요청 수신됨, ID:', resolvedParams.id)
     
     const body = await request.json()
     console.log('요청 데이터:', body)
     
     return NextResponse.json({
       success: true,
-      message: `ID ${params.id}에 대한 PATCH 요청 처리 완료`,
-      memberId: params.id,
+      message: `ID ${resolvedParams.id}에 대한 PATCH 요청 처리 완료`,
+      memberId: resolvedParams.id,
       received: body,
       timestamp: new Date().toISOString()
     })
@@ -29,11 +35,12 @@ export async function PATCH(
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const resolvedParams = await params;
   return NextResponse.json({
-    message: `ID ${params.id}에 대한 GET 요청 성공`,
-    memberId: params.id,
+    message: `ID ${resolvedParams.id}에 대한 GET 요청 성공`,
+    memberId: resolvedParams.id,
     supportedMethods: ['GET', 'PATCH'],
     timestamp: new Date().toISOString()
   })

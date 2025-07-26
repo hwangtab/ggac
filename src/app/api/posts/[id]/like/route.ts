@@ -7,6 +7,8 @@
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
+export const maxDuration = 30
+export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
@@ -30,9 +32,19 @@ function simpleRateLimit(request: NextRequest, identifier: string) {
  */
 export async function GET(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
-  const params = context.params;
+  let params: { id: string };
+  try {
+    params = await context.params;
+  } catch (error) {
+    console.error('[API] Parameter parsing error:', error);
+    return NextResponse.json({ 
+      error: 'Invalid request parameters',
+      debug: process.env.NODE_ENV === 'development' ? String(error) : undefined 
+    }, { status: 400 });
+  }
+  
   try {
     // Simple rate limiting for serverless compatibility
     const rateLimitResult = simpleRateLimit(request, 'post_like_get')
@@ -95,8 +107,21 @@ export async function GET(
 
     return NextResponse.json(result)
   } catch (error) {
-    console.error('GET /api/posts/[id]/like 오류:', error)
-    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
+    console.error('[API] GET /api/posts/[id]/like 오류:', {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      postId: params.id,
+      timestamp: new Date().toISOString(),
+      url: request.url
+    });
+    
+    return NextResponse.json({ 
+      error: '서버 오류가 발생했습니다.',
+      debug: process.env.NODE_ENV === 'development' ? {
+        message: error instanceof Error ? error.message : String(error),
+        postId: params.id
+      } : undefined
+    }, { status: 500 })
   }
 }
 
@@ -105,9 +130,19 @@ export async function GET(
  */
 export async function POST(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
-  const params = context.params;
+  let params: { id: string };
+  try {
+    params = await context.params;
+  } catch (error) {
+    console.error('[API] Parameter parsing error:', error);
+    return NextResponse.json({ 
+      error: 'Invalid request parameters',
+      debug: process.env.NODE_ENV === 'development' ? String(error) : undefined 
+    }, { status: 400 });
+  }
+  
   try {
     // Simple rate limiting for serverless compatibility
     const rateLimitResult = simpleRateLimit(request, 'post_like_toggle')
@@ -175,8 +210,21 @@ export async function POST(
 
     return NextResponse.json(response)
   } catch (error) {
-    console.error('POST /api/posts/[id]/like 오류:', error)
-    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
+    console.error('[API] POST /api/posts/[id]/like 오류:', {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      postId: params.id,
+      timestamp: new Date().toISOString(),
+      url: request.url
+    });
+    
+    return NextResponse.json({ 
+      error: '서버 오류가 발생했습니다.',
+      debug: process.env.NODE_ENV === 'development' ? {
+        message: error instanceof Error ? error.message : String(error),
+        postId: params.id
+      } : undefined
+    }, { status: 500 })
   }
 }
 
@@ -185,9 +233,9 @@ export async function POST(
  */
 export async function DELETE(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
-  const params = context.params;
+  const params = await context.params;
   try {
     const supabase = createRouteHandlerClient({ cookies })
     const { data: { session } } = await supabase.auth.getSession()

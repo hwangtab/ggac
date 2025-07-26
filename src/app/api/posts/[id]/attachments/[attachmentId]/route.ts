@@ -5,12 +5,14 @@
  * DELETE: 첨부파일 삭제
  */
 
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+export const maxDuration = 30
+export const preferredRegion = 'icn1'
+
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-
-export const dynamic = 'force-dynamic'
-export const runtime = 'nodejs'
 import { cookies } from 'next/headers'
 
 // Service Role 클라이언트는 Storage 작업에만 사용
@@ -29,8 +31,9 @@ function getSupabaseAdmin() {
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string; attachmentId: string } }
+  { params }: { params: Promise<{ id: string; attachmentId: string }> }
 ) {
+  const resolvedParams = await params;
   try {
     const supabase = createRouteHandlerClient({ cookies })
     const { data: { session } } = await supabase.auth.getSession()
@@ -39,7 +42,7 @@ export async function GET(
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
-    const { id: postId, attachmentId } = params
+    const { id: postId, attachmentId } = resolvedParams
 
     // 첨부파일 조회
     const { data: attachment, error } = await supabase
@@ -66,8 +69,9 @@ export async function GET(
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string; attachmentId: string } }
+  { params }: { params: Promise<{ id: string; attachmentId: string }> }
 ) {
+  const resolvedParams = await params;
   try {
     const supabase = createRouteHandlerClient({ cookies })
     const { data: { session } } = await supabase.auth.getSession()
@@ -76,7 +80,7 @@ export async function PUT(
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
-    const { id: postId, attachmentId } = params
+    const { id: postId, attachmentId } = resolvedParams
     const body = await request.json()
     const { alt_text, is_primary, sort_order } = body
 
@@ -143,8 +147,9 @@ export async function PUT(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string; attachmentId: string } }
+  { params }: { params: Promise<{ id: string; attachmentId: string }> }
 ) {
+  const resolvedParams = await params;
   try {
     const supabase = createRouteHandlerClient({ cookies })
     const { data: { session } } = await supabase.auth.getSession()
@@ -153,7 +158,7 @@ export async function DELETE(
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
-    const { id: postId, attachmentId } = params
+    const { id: postId, attachmentId } = resolvedParams
 
     // 첨부파일과 게시글 권한 확인
     const { data: attachment, error: attachmentError } = await supabase

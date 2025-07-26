@@ -1,14 +1,17 @@
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+export const maxDuration = 30
+export const preferredRegion = 'icn1'
+
 import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 
-export const dynamic = 'force-dynamic'
-export const runtime = 'nodejs'
-
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params;
   try {
     const supabase = createRouteHandlerClient({ cookies })
-    const { id } = params
+    const { id } = resolvedParams
     
     // Check authentication and admin status
     const { data: { user } } = await supabase.auth.getUser()

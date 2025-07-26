@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
       if (user) {
         // 로그인 활동 로깅
         try {
-          const ip = request.ip || request.headers.get('x-forwarded-for')?.split(',')[0] || '127.0.0.1'
+          const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || request.headers.get('x-real-ip') || '127.0.0.1'
           const userAgent = request.headers.get('user-agent') || 'Unknown'
           
           // 1. 세션 시작 기록

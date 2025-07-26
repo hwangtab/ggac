@@ -128,6 +128,41 @@
       ]
     },
     {
+      "source": "/api/posts/:id/(like|likes|view|attachments)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        },
+        {
+          "key": "Pragma",
+          "value": "no-cache"
+        },
+        {
+          "key": "Expires",
+          "value": "0"
+        }
+      ]
+    },
+    {
+      "source": "/api/comments/:id/like",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/api/notifications/:id",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    },
+    {
       "source": "/(.*\\.woff2)",
       "headers": [
         {
@@ -216,6 +251,54 @@
       ],
       "destination": "https://ggac.kr/$1",
       "permanent": true
+    }
+  ],
+  "functions": {
+    "src/app/api/**/route.ts": {
+      "memory": 1024,
+      "maxDuration": 30
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/posts/:id/like",
+      "destination": "/api/posts/:id/like"
+    },
+    {
+      "source": "/api/posts/:id/likes", 
+      "destination": "/api/posts/:id/likes"
+    },
+    {
+      "source": "/api/posts/:id/attachments/:attachmentId",
+      "destination": "/api/posts/:id/attachments/:attachmentId"
+    },
+    {
+      "source": "/api/comments/:id/like",
+      "destination": "/api/comments/:id/like"
+    },
+    {
+      "source": "/api/notifications/:id",
+      "destination": "/api/notifications/:id"
+    },
+    {
+      "source": "/api/users/:id/likes",
+      "destination": "/api/users/:id/likes"
+    },
+    {
+      "source": "/api/admin/members/:id",
+      "destination": "/api/admin/members/:id"
+    },
+    {
+      "source": "/api/admin/posts/:id",
+      "destination": "/api/admin/posts/:id"
+    },
+    {
+      "source": "/api/admin/artists/:id/members",
+      "destination": "/api/admin/artists/:id/members"
+    },
+    {
+      "source": "/api/admin/artists/:id/members/:memberId",
+      "destination": "/api/admin/artists/:id/members/:memberId"
     }
   ]
 }

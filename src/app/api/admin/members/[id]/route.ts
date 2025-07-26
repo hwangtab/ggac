@@ -1,3 +1,8 @@
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+export const maxDuration = 30
+export const preferredRegion = 'icn1'
+
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
@@ -5,18 +10,15 @@ import { validateFormData } from '@/utils/validation'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator, addRateLimitHeaders } from '@/utils/rateLimiter'
 import { logSecurityEvent } from '@/utils/security'
 
-// API 라우트를 동적으로 렌더링하도록 강제 설정
-export const runtime = 'nodejs'
-export const dynamic = 'force-dynamic'
-
 // PATCH: 회원 상태 변경
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const resolvedParams = await params;
   // 함수 호출 확인용 로그
   console.log('[PATCH] 회원 관리 API 호출됨:', {
-    memberId: params.id,
+    memberId: resolvedParams.id,
     timestamp: new Date().toISOString(),
     url: request.url,
     method: request.method
@@ -71,7 +73,7 @@ export async function PATCH(
 
     // 요청 데이터 파싱 및 검증
     const requestData = await request.json()
-    const memberId = params.id
+    const memberId = resolvedParams.id
     
     // 멤버 ID 검증 (UUID 형식)
     const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -280,7 +282,7 @@ export async function PATCH(
     console.error('Admin member action API error:', error)
     logSecurityEvent('ADMIN_MEMBER_ACTION_ERROR', { 
       error: error instanceof Error ? error.message : 'Unknown error',
-      memberId: params.id
+      memberId: resolvedParams.id
     }, 'high')
     return NextResponse.json(
       { error: '회원 상태 변경 중 오류가 발생했습니다.' },

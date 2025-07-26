@@ -7,6 +7,8 @@
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
+export const maxDuration = 30
+export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
@@ -30,9 +32,9 @@ function simpleRateLimit(request: NextRequest, identifier: string) {
  */
 export async function GET(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
-  const params = context.params;
+  const params = await context.params;
   try {
     // Simple rate limiting for serverless compatibility
     const rateLimitResult = simpleRateLimit(request, 'post_likes_get')
@@ -105,9 +107,9 @@ export async function GET(
  */
 export async function POST(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
-  const params = context.params;
+  const params = await context.params;
   try {
     // Simple rate limiting for serverless compatibility
     const rateLimitResult = simpleRateLimit(request, 'post_like_toggle')

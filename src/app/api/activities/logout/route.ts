@@ -29,8 +29,7 @@ export async function POST(request: NextRequest) {
     const { sessionToken, metadata = {} } = body
 
     // IP 주소 및 User-Agent 추출
-    const ip = request.ip || 
-               request.headers.get('x-forwarded-for')?.split(',')[0] || 
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || 
                request.headers.get('x-real-ip') || 
                '127.0.0.1'
     const userAgent = request.headers.get('user-agent') || 'Unknown'

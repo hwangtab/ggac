@@ -11,9 +11,9 @@ import type { Metadata } from 'next'
 import { sanitizeJsonLd } from '@/utils/sanitize'
 
 interface ArtistPageProps {
-  params: {
+  params: Promise<{
     slug: string
-  }
+  }>
 }
 
 // generateStaticParams 개선 - 캐싱된 함수 사용
@@ -32,7 +32,8 @@ function getBaseUrl(): string {
 
 // generateMetadata 개선 - 캐싱된 함수 사용
 export async function generateMetadata({ params }: ArtistPageProps): Promise<Metadata> {
-  const artist = await getArtistBySlug(params.slug)
+  const resolvedParams = await params
+  const artist = await getArtistBySlug(resolvedParams.slug)
 
   if (!artist) {
     return {
@@ -132,8 +133,9 @@ export async function generateMetadata({ params }: ArtistPageProps): Promise<Met
 }
 
 const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
+  const resolvedParams = await params
   // 개선된 데이터 로딩 - 단일 함수로 아티스트 조회
-  const artist = await getArtistBySlug(params.slug)
+  const artist = await getArtistBySlug(resolvedParams.slug)
 
   if (!artist) {
     notFound()
@@ -179,7 +181,7 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Person',
-    '@id': `${baseUrl}/artists/${artist.slug}#person`,
+    '@id': `${baseUrl}/artists/${resolvedParams.slug}#person`,
     name: sanitizeJsonLd(artist.name),
     description: sanitizeJsonLd(artist.oneLiner),
     image: {
@@ -188,7 +190,7 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
       width: 800,
       height: 800,
     },
-    url: `${baseUrl}/artists/${artist.slug}`,
+    url: `${baseUrl}/artists/${resolvedParams.slug}`,
     sameAs: artist.portfolioLinks?.map(link => sanitizeJsonLd(link.url)) || [],
     jobTitle: Array.isArray(artist.category)
       ? artist.category.map(cat => sanitizeJsonLd(cat)).join(', ')

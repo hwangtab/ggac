@@ -40,15 +40,16 @@ async function getImageAsBase64(imagePath: string): Promise<string | null> {
 
 export async function GET(
   request: Request,
-  { params }: { params: { slug: string } }
+  { params }: { params: Promise<{ slug: string }> }
 ) {
+  const resolvedParams = await params;
   try {
     // Node.js runtime에서 fs 사용 가능
     const artistsData = JSON.parse(
       fs.readFileSync(path.join(process.cwd(), 'data/artists.json'), 'utf8')
     ) as Artist[]
     
-    const artist = artistsData.find(a => a.slug === params.slug)
+    const artist = artistsData.find(a => a.slug === resolvedParams.slug)
 
     if (!artist) {
       return new Response('Artist not found', { status: 404 })

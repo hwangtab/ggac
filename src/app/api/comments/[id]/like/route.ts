@@ -1,9 +1,11 @@
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+export const maxDuration = 30
+export const preferredRegion = 'icn1'
+
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import rateLimiterUtils from '@/utils/rateLimiter';
-
-export const dynamic = 'force-dynamic'
-export const runtime = 'nodejs'
 
 function getSupabaseAdmin() {
   return createClient(
@@ -14,8 +16,9 @@ function getSupabaseAdmin() {
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const resolvedParams = await params;
   try {
     // Rate limiting
     const rateLimitConfig = rateLimiterUtils.RATE_LIMIT_CONFIGS.AUTH_API;
@@ -27,7 +30,7 @@ export async function POST(
       );
     }
 
-    const commentId = params.id;
+    const commentId = resolvedParams.id;
     
     // Authorization header에서 토큰 추출
     const authHeader = request.headers.get('authorization');
