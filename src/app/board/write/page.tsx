@@ -47,7 +47,7 @@ export default function WritePage() {
         if (profileError) {
           console.error('Error fetching profile:', profileError);
         } else if (profile) {
-          setIsMember(profile.registration_status === 'approved' && profile.is_active);
+          setIsMember((profile as any).registration_status === 'approved' && (profile as any).is_active);
         }
 
         setLoading(false);

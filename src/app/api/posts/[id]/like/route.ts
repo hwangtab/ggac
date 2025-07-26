@@ -1,8 +1,8 @@
 /**
- * 게시글 좋아요 관리 API
+ * 게시글 좋아요 관리 API (단수 경로)
  * GET: 게시글 좋아요 정보 조회
  * POST: 좋아요 추가/제거 (토글)
- * Next.js App Router API Route
+ * 프론트엔드 호환성을 위한 단수 경로
  */
 
 export const dynamic = 'force-dynamic'
@@ -35,7 +35,7 @@ export async function GET(
   const params = context.params;
   try {
     // Simple rate limiting for serverless compatibility
-    const rateLimitResult = simpleRateLimit(request, 'post_likes_get')
+    const rateLimitResult = simpleRateLimit(request, 'post_like_get')
     if (!rateLimitResult.success) {
       return NextResponse.json({ error: '요청이 너무 많습니다.' }, { status: 429 })
     }
@@ -95,7 +95,7 @@ export async function GET(
 
     return NextResponse.json(result)
   } catch (error) {
-    console.error('GET /api/posts/[id]/likes 오류:', error)
+    console.error('GET /api/posts/[id]/like 오류:', error)
     return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
   }
 }
@@ -175,7 +175,7 @@ export async function POST(
 
     return NextResponse.json(response)
   } catch (error) {
-    console.error('POST /api/posts/[id]/likes 오류:', error)
+    console.error('POST /api/posts/[id]/like 오류:', error)
     return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
   }
 }
@@ -185,9 +185,9 @@ export async function POST(
  */
 export async function DELETE(
   request: NextRequest,
-  context: { params: Promise<{ id: string }> }
+  context: { params: { id: string } }
 ) {
-  const params = await context.params;
+  const params = context.params;
   try {
     const supabase = createRouteHandlerClient({ cookies })
     const { data: { session } } = await supabase.auth.getSession()
@@ -229,7 +229,7 @@ export async function DELETE(
 
     return NextResponse.json({ message: '좋아요가 삭제되었습니다.' })
   } catch (error) {
-    console.error('DELETE /api/posts/[id]/likes 오류:', error)
+    console.error('DELETE /api/posts/[id]/like 오류:', error)
     return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
   }
 }

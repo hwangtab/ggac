@@ -3,6 +3,9 @@ import { cookies } from 'next/headers'
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 import { z } from 'zod'
 
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
 // 아티스트 업데이트 스키마 정의
 const ArtistUpdateSchema = z.object({
   name: z.string().min(1, '아티스트 이름은 필수입니다.').max(100, '아티스트 이름은 100자 이내여야 합니다.'),

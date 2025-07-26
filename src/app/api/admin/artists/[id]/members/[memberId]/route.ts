@@ -2,12 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
 // DELETE: 아티스트 배정 해제
 export async function DELETE(
   request: NextRequest,
-  context: { params: Promise<{ id: string; memberId: string }> }
+  context: { params: { id: string; memberId: string } }
 ) {
-  const params = await context.params;
+  const params = context.params;
   try {
     const cookieStore = cookies()
     const supabase = createServerComponentClient({ cookies: () => cookieStore })

@@ -4,6 +4,7 @@
  */
 
 export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
@@ -18,9 +19,9 @@ const rateLimiter = applyRateLimit({
 
 export async function GET(
   request: NextRequest,
-  context: { params: Promise<{ id: string }> }
+  context: { params: { id: string } }
 ) {
-  const params = await context.params;
+  const params = context.params;
   try {
     // Rate limiting 적용
     const rateLimitResult = rateLimiter(request)

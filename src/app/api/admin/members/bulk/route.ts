@@ -6,6 +6,9 @@ import { validateFormData } from '@/utils/validation'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator, addRateLimitHeaders } from '@/utils/rateLimiter'
 import { logSecurityEvent } from '@/utils/security'
 
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
 // POST: 대량 멤버 작업 수행
 export async function POST(request: NextRequest) {
   try {

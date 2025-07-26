@@ -41,7 +41,7 @@ export default function ProfilePage() {
         return
       }
 
-      setProfile(data)
+      setProfile(data as any)
     } catch (error) {
       console.error('Error fetching profile:', error)
       setError('프로필을 불러오는데 실패했습니다.')

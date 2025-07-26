@@ -59,7 +59,7 @@ export default function PostDetailPage() {
         if (profileError) {
           console.error('Error fetching profile:', profileError);
         } else if (profile) {
-          setIsMember(profile.registration_status === 'approved' && profile.is_active);
+          setIsMember((profile as any).registration_status === 'approved' && (profile as any).is_active);
         }
 
         // 게시글 가져오기
@@ -76,7 +76,11 @@ export default function PostDetailPage() {
         }
 
         // 좋아요 정보를 API를 통해 가져오기
-        let enrichedPostData = { ...postData, like_count: 0, is_liked: false };
+        let enrichedPostData: Post = { 
+          ...postData, 
+          like_count: 0, 
+          is_liked: false 
+        } as Post;
         
         try {
           const response = await fetch(`/api/posts/${postId}/likes`);
@@ -86,7 +90,7 @@ export default function PostDetailPage() {
               ...postData,
               like_count: likeData.like_count || 0,
               is_liked: likeData.is_liked || false
-            };
+            } as Post;
           }
         } catch (error) {
           console.error('좋아요 정보 조회 실패:', error);
@@ -127,25 +131,25 @@ export default function PostDetailPage() {
         }
 
         // 작성자 프로필 가져오기
-        console.debug(`[PostDetail] Fetching author profile for user ID: ${postData.author_id}`);
+        console.debug(`[PostDetail] Fetching author profile for user ID: ${(postData as any).author_id}`);
         const { data: authorData, error: authorError } = await supabase
           .from('public_profiles')
           .select('id, display_name')
-          .eq('id', postData.author_id)
+          .eq('id', (postData as any).author_id)
           .single();
 
         if (authorError) {
           console.warn(`[PostDetail] Failed to fetch author profile: ${authorError.message}`);
           // 기본 프로필 설정
           setAuthorProfile({
-            id: postData.author_id,
+            id: (postData as any).author_id,
             display_name: '알 수 없는 사용자',
             profile_image_url: undefined
           });
         } else {
           console.debug('[PostDetail] Author profile loaded successfully');
-          setAuthorProfile(authorData || {
-            id: postData.author_id,
+          setAuthorProfile((authorData as any) || {
+            id: (postData as any).author_id,
             display_name: '알 수 없는 사용자',
             profile_image_url: undefined
           });

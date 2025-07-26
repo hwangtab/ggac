@@ -9,6 +9,9 @@ import { cookies } from 'next/headers'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator } from '@/utils/rateLimiter'
 import type { NotificationStats } from '@/types'
 
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
 // Rate limiting 설정
 const rateLimiter = applyRateLimit({
   ...RATE_LIMIT_CONFIGS.GENERAL_API,

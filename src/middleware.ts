@@ -63,8 +63,10 @@ export async function middleware(request: NextRequest) {
   // 🚨 CRITICAL: API 라우트는 절대 미들웨어에서 처리하지 않음
   // 동적 API 라우트 문제 해결을 위한 명시적 체크
   if (request.nextUrl.pathname.startsWith('/api/')) {
-    console.log('⚠️ [MIDDLEWARE] API route detected in middleware - bypassing:', request.nextUrl.pathname);
-    return res;
+    if (process.env.NODE_ENV === 'development') {
+      console.log('⚠️ [MIDDLEWARE] API route bypassed:', request.nextUrl.pathname);
+    }
+    return NextResponse.next();
   }
 
   // Skip middleware for static files to reduce API calls

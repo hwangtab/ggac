@@ -43,7 +43,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({ postId, currentUserId, 
 
     // 인기 댓글을 제외한 나머지 댓글들 (원래 순서 유지)
     const regularComments = popularComment 
-      ? allComments.filter(comment => comment.id !== popularComment.id)
+      ? allComments.filter(comment => (comment as any).id !== (popularComment as any).id)
       : allComments;
 
     return { popularComment, regularComments };
@@ -73,7 +73,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({ postId, currentUserId, 
             const { count: likeCount } = await supabase
               .from('comment_likes')
               .select('*', { count: 'exact', head: true })
-              .eq('comment_id', comment.id);
+              .eq('comment_id', (comment as any).id);
 
             // 현재 사용자의 좋아요 여부 조회
             let isLiked = false;
@@ -81,7 +81,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({ postId, currentUserId, 
               const { data: userLike } = await supabase
                 .from('comment_likes')
                 .select('id')
-                .eq('comment_id', comment.id)
+                .eq('comment_id', (comment as any).id)
                 .eq('user_id', user.id)
                 .single();
               
@@ -96,7 +96,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({ postId, currentUserId, 
           })
         );
 
-        setComments(commentsWithLikes);
+        setComments(commentsWithLikes as any);
       }
     } catch (error) {
       console.error('Error fetching comments with likes:', error);
@@ -113,7 +113,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({ postId, currentUserId, 
 
     if (data && !error) {
       const profileMap: Record<string, string> = {};
-      data.forEach((profile: Profile) => {
+      data.forEach((profile: any) => {
         profileMap[profile.id] = profile.display_name || 'Unknown';
       });
       setProfiles(profileMap);
@@ -149,7 +149,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({ postId, currentUserId, 
     if (data && !error) {
       // 활동 로깅
       try {
-        await logCommentCreated(data.id, postId, {
+        await logCommentCreated((data as any).id, postId, {
           character_count: newComment.trim().length
         });
       } catch (logError) {
@@ -164,7 +164,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({ postId, currentUserId, 
         is_liked: false
       };
 
-      setComments(prev => [...prev, newCommentWithLikes]);
+      setComments(prev => [...prev, newCommentWithLikes] as any);
       setNewComment('');
     } else {
       alert('댓글 작성 중 오류가 발생했습니다.');
@@ -182,7 +182,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({ postId, currentUserId, 
       .eq('id', commentId);
 
     if (!error) {
-      setComments(prev => prev.filter(comment => comment.id !== commentId));
+      setComments(prev => prev.filter(comment => (comment as any).id !== commentId));
     } else {
       alert('댓글 삭제 중 오류가 발생했습니다.');
     }
@@ -262,7 +262,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({ postId, currentUserId, 
 
               {/* 일반 댓글들 */}
               {regularComments.map((comment) => (
-                <div key={comment.id} className="bg-gray-50 p-4 rounded-lg">
+                <div key={(comment as any).id} className="bg-gray-50 p-4 rounded-lg">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
@@ -283,13 +283,13 @@ const CommentSection: React.FC<CommentSectionProps> = ({ postId, currentUserId, 
                       </p>
                       <div className="flex items-center gap-2">
                         <CommentLikeButton
-                          commentId={comment.id}
+                          commentId={(comment as any).id}
                           initialLikeCount={comment.like_count}
                           initialIsLiked={comment.is_liked}
                           size="sm"
                           onLikeChange={(liked, count) => {
                             setComments(prev => prev.map(c => 
-                              c.id === comment.id 
+                              (c as any).id === (comment as any).id 
                                 ? { ...c, like_count: count, is_liked: liked }
                                 : c
                             ));
@@ -299,7 +299,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({ postId, currentUserId, 
                     </div>
                     {currentUserId === comment.author_id && (
                       <button
-                        onClick={() => handleDeleteComment(comment.id)}
+                        onClick={() => handleDeleteComment((comment as any).id)}
                         className="text-gray-400 hover:text-red-600 text-sm ml-2"
                       >
                         삭제

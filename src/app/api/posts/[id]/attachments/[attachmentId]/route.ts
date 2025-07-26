@@ -8,15 +8,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
 import { cookies } from 'next/headers'
 
 // Service Role 클라이언트는 Storage 작업에만 사용
-let supabaseAdmin: ReturnType<typeof createClient> | null = null
-if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
-  supabaseAdmin = createClient(
+function getSupabaseAdmin() {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured');
+  }
+  return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
+  );
 }
 
 /**
@@ -180,7 +185,8 @@ export async function DELETE(
     }
 
     // Storage에서 파일 삭제 (가능한 경우에만)
-    if (supabaseAdmin) {
+    try {
+      const supabaseAdmin = getSupabaseAdmin();
       const urlParts = attachment.file_url.split('/')
       const fileName = urlParts[urlParts.length - 1]
       if (fileName) {
@@ -195,6 +201,9 @@ export async function DELETE(
           // Storage 삭제 실패해도 DB 레코드는 삭제 진행
         }
       }
+    } catch (error) {
+      console.warn('Storage 삭제 시도 중 오류:', error)
+      // Storage 오류여도 DB 삭제는 계속 진행
     }
 
     // 데이터베이스에서 첨부파일 레코드 삭제

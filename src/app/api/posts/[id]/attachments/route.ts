@@ -8,15 +8,20 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import type { PostAttachment, PostAttachmentStats } from '@/types'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
 import { cookies } from 'next/headers'
 
 // Service Role 클라이언트는 Storage 작업에만 사용
-let supabaseAdmin: ReturnType<typeof createClient> | null = null
-if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
-  supabaseAdmin = createClient(
+function getSupabaseAdmin() {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured');
+  }
+  return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
+  );
 }
 
 // 허용된 파일 타입과 크기
@@ -174,8 +179,12 @@ export async function POST(
       }, { status: 400 })
     }
 
-    // Storage 클라이언트 확인
-    if (!supabaseAdmin) {
+    // Storage 클라이언트 생성 및 파일 업로드
+    let supabaseAdmin;
+    try {
+      supabaseAdmin = getSupabaseAdmin();
+    } catch (error) {
+      console.error('Supabase Admin 클라이언트 생성 오류:', error);
       return NextResponse.json({ 
         error: 'Storage 서비스를 사용할 수 없습니다. 관리자에게 문의하세요.' 
       }, { status: 503 })
@@ -238,10 +247,12 @@ export async function POST(
       console.error('첨부파일 메타데이터 저장 오류:', dbError)
       
       // 업로드된 파일 삭제 (롤백)
-      if (supabaseAdmin) {
+      try {
         await supabaseAdmin.storage
           .from('attachments')
           .remove([filePath])
+      } catch (rollbackError) {
+        console.warn('파일 롤백 중 오류:', rollbackError)
       }
 
       return NextResponse.json({ error: '첨부파일 정보 저장에 실패했습니다.' }, { status: 500 })

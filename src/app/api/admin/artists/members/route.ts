@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
 // GET: 아티스트 권한 관리 가능한 멤버 목록 조회
 export async function GET(request: NextRequest) {
   try {

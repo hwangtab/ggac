@@ -4,6 +4,9 @@ import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator, addRateLimitHeaders } from '@/utils/rateLimiter'
 import { logSecurityEvent } from '@/utils/security'
 
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
 // GET: 관리자 대시보드 최근 활동 조회 (성능 최적화)
 export async function GET(request: NextRequest) {
   try {

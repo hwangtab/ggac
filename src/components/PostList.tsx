@@ -60,7 +60,7 @@ const PostList: React.FC<PostListProps> = ({
 
       if (data && !error) {
         const profileMap: Record<string, string> = {}
-        data.forEach((profile: Profile) => {
+        data.forEach((profile: any) => {
           profileMap[profile.id] = profile.display_name || 'Unknown'
         })
         setProfiles(profileMap)
