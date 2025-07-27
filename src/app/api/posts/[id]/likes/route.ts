@@ -8,24 +8,11 @@
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 export const maxDuration = 30
-export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
-import type { PostLikeToggleResponse, PostLikedUser } from '@/types'
-
-// Simple serverless-compatible rate limiting
-const RATE_LIMIT_MAX = 30;
-const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
-
-function simpleRateLimit(request: NextRequest, identifier: string) {
-  // In serverless environment, we'll use a simpler approach
-  // For now, allow all requests and log for monitoring
-  // TODO: Implement Redis-based rate limiting for production
-  return { success: true };
-}
-
+import type { PostLikeToggleResponse } from '@/types'
 
 /**
  * 게시글 좋아요 정보 조회
@@ -34,25 +21,25 @@ export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  const params = await context.params;
+  console.log('🟢 [API] GET 라우트 진입');
+  
   try {
-    // Simple rate limiting for serverless compatibility
-    const rateLimitResult = simpleRateLimit(request, 'post_likes_get')
-    if (!rateLimitResult.success) {
-      return NextResponse.json({ error: '요청이 너무 많습니다.' }, { status: 429 })
-    }
+    const resolvedParams = await context.params;
+    const postId = resolvedParams.id;
+    
+    console.log('[API] GET /api/posts/[id]/likes 시작', {
+      postId,
+      timestamp: new Date().toISOString()
+    });
 
-    const supabase = createRouteHandlerClient({ cookies })
+    const cookieStore = await cookies()
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
     const { data: { session } } = await supabase.auth.getSession()
 
     if (!session?.user) {
+      console.log('[API] GET 인증 실패');
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
-
-    const postId = params.id
-    const { searchParams } = new URL(request.url)
-    const includeUsers = searchParams.get('include_users') === 'true'
-    const limit = Math.min(parseInt(searchParams.get('limit') || '10'), 50)
 
     // 게시글 존재 확인
     const { data: post, error: postError } = await supabase
@@ -62,6 +49,7 @@ export async function GET(
       .single()
 
     if (postError || !post) {
+      console.log('[API] GET 게시글 없음:', postError);
       return NextResponse.json({ error: '게시글을 찾을 수 없습니다.' }, { status: 404 })
     }
 
@@ -73,31 +61,17 @@ export async function GET(
       .eq('user_id', session.user.id)
       .single()
 
-    const result: any = {
+    const result = {
       post_id: postId,
       like_count: post.like_count || 0,
       is_liked: !!userLike
     }
 
-    // 좋아요한 사용자 목록 포함 (요청 시)
-    if (includeUsers) {
-      const { data: likedUsers, error: usersError } = await supabase
-        .rpc('get_post_likes', {
-          p_post_id: postId,
-          p_limit: limit,
-          p_offset: 0
-        })
-
-      if (usersError) {
-        console.error('좋아요 사용자 조회 오류:', usersError)
-      } else {
-        result.liked_users = likedUsers || []
-      }
-    }
-
+    console.log('[API] GET 성공:', result);
     return NextResponse.json(result)
+    
   } catch (error) {
-    console.error('GET /api/posts/[id]/likes 오류:', error)
+    console.error('[API] GET 오류:', error)
     return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
   }
 }
@@ -109,33 +83,44 @@ export async function POST(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  const params = await context.params;
+  console.log('🟢 [API] POST 라우트 진입');
+  
   try {
-    // Simple rate limiting for serverless compatibility
-    const rateLimitResult = simpleRateLimit(request, 'post_like_toggle')
-    if (!rateLimitResult.success) {
-      return NextResponse.json({ error: '요청이 너무 많습니다.' }, { status: 429 })
-    }
+    const resolvedParams = await context.params;
+    const postId = resolvedParams.id;
+    
+    console.log('[API] POST /api/posts/[id]/likes 시작', {
+      postId,
+      timestamp: new Date().toISOString()
+    });
 
-    const supabase = createRouteHandlerClient({ cookies })
+    const cookieStore = await cookies()
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
     const { data: { session } } = await supabase.auth.getSession()
 
     if (!session?.user) {
+      console.log('[API] POST 인증 실패');
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
+    console.log('[API] 인증 성공:', session.user.email);
+
     // 사용자 승인 상태 확인
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from('member_profiles')
       .select('registration_status, is_active')
       .eq('id', session.user.id)
       .single()
 
-    if (!profile || profile.registration_status !== 'approved' || !profile.is_active) {
-      return NextResponse.json({ error: '승인된 회원만 좋아요를 할 수 있습니다.' }, { status: 403 })
+    if (profileError) {
+      console.error('[API] 프로필 조회 오류:', profileError);
+      return NextResponse.json({ error: '회원 정보를 확인할 수 없습니다.' }, { status: 500 })
     }
 
-    const postId = params.id
+    if (!profile || profile.registration_status !== 'approved' || !profile.is_active) {
+      console.log('[API] 승인되지 않은 사용자:', profile);
+      return NextResponse.json({ error: '승인된 회원만 좋아요를 할 수 있습니다.' }, { status: 403 })
+    }
 
     // 게시글 존재 확인
     const { data: post, error: postError } = await supabase
@@ -145,14 +130,17 @@ export async function POST(
       .single()
 
     if (postError || !post) {
+      console.error('[API] 게시글 조회 오류:', postError);
       return NextResponse.json({ error: '게시글을 찾을 수 없습니다.' }, { status: 404 })
     }
 
     if (post.is_deleted) {
+      console.log('[API] 삭제된 게시글');
       return NextResponse.json({ error: '삭제된 게시글에는 좋아요를 할 수 없습니다.' }, { status: 400 })
     }
 
     // 좋아요 토글 실행
+    console.log('[API] toggle_post_like RPC 호출');
     const { data: toggleResult, error: toggleError } = await supabase
       .rpc('toggle_post_like', {
         p_post_id: postId,
@@ -160,12 +148,21 @@ export async function POST(
       })
 
     if (toggleError) {
-      console.error('좋아요 토글 오류:', toggleError)
-      return NextResponse.json({ error: '좋아요 처리에 실패했습니다.' }, { status: 500 })
+      console.error('[API] RPC 오류 상세:', {
+        message: toggleError.message,
+        details: toggleError.details,
+        hint: toggleError.hint,
+        code: toggleError.code
+      });
+      return NextResponse.json({ 
+        error: '좋아요 처리에 실패했습니다.',
+        details: toggleError.message 
+      }, { status: 500 })
     }
 
     const result = toggleResult?.[0]
     if (!result) {
+      console.error('[API] RPC 결과 없음');
       return NextResponse.json({ error: '좋아요 처리 결과를 확인할 수 없습니다.' }, { status: 500 })
     }
 
@@ -175,63 +172,33 @@ export async function POST(
       message: result.liked ? '좋아요를 추가했습니다.' : '좋아요를 취소했습니다.'
     }
 
+    console.log('[API] POST 성공:', response);
     return NextResponse.json(response)
+    
   } catch (error) {
-    console.error('POST /api/posts/[id]/likes 오류:', error)
+    console.error('[API] POST 오류:', error)
     return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
   }
 }
 
 /**
- * 게시글 좋아요한 사용자 목록 조회 (관리자용)
+ * 헬스 체크 (관리자용)
  */
 export async function DELETE(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  const params = await context.params;
+  console.log('🟢 [API] DELETE 라우트 진입 (헬스체크)');
+  
   try {
-    const supabase = createRouteHandlerClient({ cookies })
-    const { data: { session } } = await supabase.auth.getSession()
-
-    if (!session?.user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
-    }
-
-    // 관리자 권한 확인
-    const { data: profile } = await supabase
-      .from('member_profiles')
-      .select('is_admin')
-      .eq('id', session.user.id)
-      .single()
-
-    if (!profile?.is_admin) {
-      return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 })
-    }
-
-    const postId = params.id
-    const { searchParams } = new URL(request.url)
-    const userId = searchParams.get('user_id')
-
-    if (!userId) {
-      return NextResponse.json({ error: 'user_id 파라미터가 필요합니다.' }, { status: 400 })
-    }
-
-    // 특정 사용자의 좋아요 삭제
-    const { error: deleteError } = await supabase
-      .from('post_likes')
-      .delete()
-      .eq('post_id', postId)
-      .eq('user_id', userId)
-
-    if (deleteError) {
-      console.error('좋아요 삭제 오류:', deleteError)
-      return NextResponse.json({ error: '좋아요 삭제에 실패했습니다.' }, { status: 500 })
-    }
-
-    return NextResponse.json({ message: '좋아요가 삭제되었습니다.' })
+    const resolvedParams = await context.params;
+    return NextResponse.json({ 
+      status: 'healthy',
+      postId: resolvedParams.id,
+      timestamp: new Date().toISOString()
+    })
   } catch (error) {
-    console.error('DELETE /api/posts/[id]/likes 오류:', error)
+    console.error('[API] DELETE 오류:', error)
     return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
   }
 }

@@ -6,16 +6,33 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
 const nextConfig = {
   reactStrictMode: true,
   
-  // Development configuration for HTTP/HTTPS handling
-  ...(process.env.NODE_ENV === 'development' && {
-    experimental: {
-      forceSwcTransforms: true,
-    }
-  }),
+  // Transpile packages for client-side compatibility
+  transpilePackages: [
+    '@supabase/auth-helpers-nextjs',
+    'react-markdown'
+  ],
   
   // 번들 최적화 설정
   webpack: (config, { buildId, dev, isServer, defaultLoaders, webpack }) => {
-    // 프로덕션 환경에서만 최적화 적용
+    // 개발 환경 최적화
+    if (dev) {
+      // 개발 모드에서 빌드 속도 향상
+      config.cache = {
+        type: 'filesystem',
+        buildDependencies: {
+          config: [__filename],
+        },
+      };
+      
+      // HMR 성능 향상
+      config.watchOptions = {
+        poll: 1000,
+        aggregateTimeout: 300,
+        ignored: /node_modules/,
+      };
+    }
+    
+    // 프로덕션 환경에서만 고급 최적화 적용
     if (!dev && !isServer) {
       // 번들 분할 최적화
       config.optimization = {
@@ -65,6 +82,29 @@ const nextConfig = {
       config.optimization.usedExports = true
       config.optimization.providedExports = true
       config.optimization.sideEffects = false
+      
+      // 더 공격적인 압축 설정
+      if (config.optimization.minimizer) {
+        config.optimization.minimizer.forEach((minimizer) => {
+          if (minimizer.constructor.name === 'TerserPlugin') {
+            minimizer.options = {
+              ...minimizer.options,
+              terserOptions: {
+                ...minimizer.options.terserOptions,
+                compress: {
+                  ...minimizer.options.terserOptions?.compress,
+                  drop_console: true,
+                  drop_debugger: true,
+                  pure_funcs: ['console.log', 'console.debug'],
+                },
+                mangle: {
+                  safari10: true,
+                },
+              },
+            };
+          }
+        });
+      }
     }
     
     // 모든 환경에서 적용할 플러그인
@@ -72,20 +112,76 @@ const nextConfig = {
       new webpack.DefinePlugin({
         'process.env.NEXT_IS_SERVER': JSON.stringify(isServer.toString()),
         'process.env.NEXT_IS_DEV': JSON.stringify(dev.toString()),
+        'process.env.BUILD_ID': JSON.stringify(buildId),
       })
     )
+    
+    // 프로덕션에서 번들 크기 경고 제거
+    if (!dev) {
+      config.performance = {
+        hints: false,
+        maxEntrypointSize: 512000,
+        maxAssetSize: 512000
+      };
+    }
+    
+    // 해상도 별칭 추가로 번들 크기 최적화
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      // lodash 트리 쉐이킹
+      'lodash': 'lodash-es',
+      // moment.js 대신 date-fns 사용 권장
+      'moment': 'date-fns',
+    };
+    
+    // 불필요한 모듈 제외
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      fs: false,
+      path: false,
+      crypto: false,
+    };
     
     return config
   },
   
+  // Server external packages (moved from experimental)
+  serverExternalPackages: [
+    'canvas',
+    'sharp',
+    'puppeteer'
+  ],
+
   // 실험적 기능 활성화  
   experimental: {
     optimizeCss: true, // CSS 최적화
-    optimizePackageImports: ['react-icons', 'framer-motion', '@supabase/supabase-js'],
+    optimizePackageImports: [
+      'react-icons', 
+      'framer-motion', 
+      'date-fns',
+      'lodash-es'
+    ],
+    // 개발 환경 최적화
     ...(process.env.NODE_ENV === 'development' && {
       forceSwcTransforms: true,
+    }),
+    // 프로덕션 최적화
+    ...(process.env.NODE_ENV === 'production' && {
+      optimizeServerReact: true,
     })
   },
+
+  // Turbopack 설정 (개발 모드)
+  ...(process.env.NODE_ENV === 'development' && {
+    turbopack: {
+      rules: {
+        '*.svg': {
+          loaders: ['@svgr/webpack'],
+          as: '*.js',
+        },
+      },
+    },
+  }),
 
   // Vercel에서 동적 라우트 인식 개선
   trailingSlash: false,
@@ -101,18 +197,18 @@ const nextConfig = {
     maxDuration: 30,
   },
   
-  // API 라우트 설정
+  // SEO 및 메타데이터 라우트 설정
   async rewrites() {
     return {
       beforeFiles: [
-        // 동적 API 라우트 명시적 매핑
+        // SEO 파일들을 API로 리다이렉트
         {
-          source: '/api/posts/:id/like',
-          destination: '/api/posts/:id/like',
+          source: '/sitemap.xml',
+          destination: '/api/sitemap',
         },
         {
-          source: '/api/posts/:id/likes',
-          destination: '/api/posts/:id/likes',
+          source: '/robots.txt',
+          destination: '/api/robots',
         },
       ],
     }
@@ -340,7 +436,7 @@ const nextConfig = {
               "media-src 'self' https://www.youtube.com",
               "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com",
               process.env.NODE_ENV === 'development' 
-                ? "connect-src 'self' http://localhost:* https://api.supabase.io https://*.supabase.co ws://localhost:* wss://localhost:*"
+                ? "connect-src 'self' http://localhost:* https://api.supabase.io https://*.supabase.co ws://localhost:* wss://localhost:* wss://*.supabase.co"
                 : "connect-src 'self' https://api.supabase.io https://*.supabase.co wss://*.supabase.co",
               "object-src 'none'",
               "base-uri 'self'",

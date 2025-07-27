@@ -11,27 +11,26 @@ export const preferredRegion = 'icn1'
 import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
-import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator } from '@/utils/rateLimiter'
+import distributedRateLimiter, { DISTRIBUTED_RATE_LIMIT_CONFIGS, createDistributedUserKeyGenerator } from '@/utils/distributedRateLimiter'
 import type { UserLikedPost } from '@/types'
-
-// Rate limiting 설정
-const rateLimiter = applyRateLimit({
-  ...RATE_LIMIT_CONFIGS.GENERAL_API,
-  keyGenerator: createUserKeyGenerator('user_likes')
-})
 
 /**
  * 사용자 좋아요 목록 조회
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  context: { params: Promise<{ id: string }> }
 ) {
-  const resolvedParams = await params;
+  const resolvedParams = await context.params;
   try {
-    // Rate limiting 적용
-    const rateLimitResult = rateLimiter(request)
-    if (!rateLimitResult.success) {
+    // 분산 Rate limiting 적용
+    const rateLimiter = await distributedRateLimiter.applyRateLimit({
+      ...DISTRIBUTED_RATE_LIMIT_CONFIGS.GENERAL_API,
+      keyGenerator: createDistributedUserKeyGenerator('user_likes')
+    })
+    
+    const rateLimitResult = await rateLimiter(request)
+    if (!rateLimitResult.success && rateLimitResult.response) {
       return rateLimitResult.response
     }
 

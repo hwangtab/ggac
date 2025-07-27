@@ -11,11 +11,14 @@ import type {
   UserSession 
 } from '@/types'
 
+type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'none'
+
 interface ActivityLoggerConfig {
   enableConsoleLogging?: boolean
   enableBatching?: boolean
   batchSize?: number
   flushInterval?: number
+  logLevel?: LogLevel
 }
 
 class ActivityLogger {
@@ -26,12 +29,96 @@ class ActivityLogger {
   private pendingLogs: ActivityLogRequest[] = []
   private flushTimer: NodeJS.Timeout | null = null
 
+  /**
+   * 안전한 로깅 메소드 - 민감한 정보 필터링
+   */
+  private secureLog(level: LogLevel, message: string, data?: any) {
+    // 로그 레벨 확인
+    const levels: Record<LogLevel, number> = {
+      debug: 0,
+      info: 1,
+      warn: 2,
+      error: 3,
+      none: 4
+    }
+    
+    if (levels[level] < levels[this.config.logLevel || 'error']) {
+      return
+    }
+    
+    if (!this.config.enableConsoleLogging) {
+      return
+    }
+    
+    // 민감한 정보 필터링
+    const sanitizedData = this.sanitizeLogData(data)
+    
+    const logMethod = (console as any)[level] || console.log
+    if (sanitizedData) {
+      logMethod(`[ActivityLogger:${level.toUpperCase()}] ${message}`, sanitizedData)
+    } else {
+      logMethod(`[ActivityLogger:${level.toUpperCase()}] ${message}`)
+    }
+  }
+
+  /**
+   * 로그 데이터에서 민감한 정보 제거
+   */
+  private sanitizeLogData(data: any): any {
+    if (!data) return data
+    
+    const sensitiveKeys = [
+      'access_token', 'refresh_token', 'token', 'password', 'secret', 'key',
+      'authorization', 'bearer', 'session_token', 'apikey', 'api_key',
+      'supabase_anon_key', 'supabase_service_role_key'
+    ]
+    
+    if (typeof data === 'string') {
+      // JWT 토큰이나 API 키 패턴 검출 및 마스킹
+      return data.replace(/^(ey[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]*)/g, '[JWT_TOKEN_REDACTED]')
+                .replace(/^(sb-[a-zA-Z0-9]{20,})/g, '[SUPABASE_KEY_REDACTED]')
+                .replace(/^([A-Za-z0-9]{32,})/g, '[API_KEY_REDACTED]')
+    }
+    
+    if (typeof data !== 'object' || data === null) {
+      return data
+    }
+    
+    const sanitized = Array.isArray(data) ? [...data] : { ...data }
+    
+    const sanitizeRecursive = (obj: any): any => {
+      if (typeof obj !== 'object' || obj === null) {
+        return obj
+      }
+      
+      if (Array.isArray(obj)) {
+        return obj.map(sanitizeRecursive)
+      }
+      
+      const result: any = {}
+      for (const [key, value] of Object.entries(obj)) {
+        const lowerKey = key.toLowerCase()
+        if (sensitiveKeys.some(sensitive => lowerKey.includes(sensitive))) {
+          result[key] = '[REDACTED]'
+        } else if (typeof value === 'object' && value !== null) {
+          result[key] = sanitizeRecursive(value)
+        } else {
+          result[key] = value
+        }
+      }
+      return result
+    }
+    
+    return sanitizeRecursive(sanitized)
+  }
+
   constructor(config: ActivityLoggerConfig = {}) {
     this.config = {
-      enableConsoleLogging: true, // 항상 활성화하여 디버깅 가능
+      enableConsoleLogging: process.env.NODE_ENV === 'development',
       enableBatching: false,
       batchSize: 10,
       flushInterval: 5000, // 5초
+      logLevel: process.env.NODE_ENV === 'development' ? 'debug' : 'error',
       ...config
     }
 
@@ -47,34 +134,26 @@ class ActivityLogger {
    */
   private async initializeSession() {
     try {
-      if (this.config.enableConsoleLogging) {
-        console.log('ActivityLogger: 세션 초기화 시작')
-      }
+      this.secureLog('debug', '세션 초기화 시작')
 
       const { data: { session }, error: sessionError } = await this.supabase.auth.getSession()
       
       if (sessionError) {
-        console.error('ActivityLogger: 세션 조회 오류:', sessionError)
+        this.secureLog('error', '세션 조회 오류', sessionError)
         return
       }
       
       if (session?.user) {
         this.sessionToken = session.access_token
-        if (this.config.enableConsoleLogging) {
-          console.log('ActivityLogger: 사용자 세션 확인됨:', session.user.id)
-        }
+        this.secureLog('debug', '사용자 세션 확인됨', { userId: session.user.id })
         await this.startSession(session.user.id)
       } else {
-        if (this.config.enableConsoleLogging) {
-          console.log('ActivityLogger: 인증되지 않은 사용자 - 활동 로깅 비활성화')
-        }
+        this.secureLog('debug', '인증되지 않은 사용자 - 활동 로깅 비활성화')
       }
 
       // 인증 상태 변경 리스너
       this.supabase.auth.onAuthStateChange(async (event, session) => {
-        if (this.config.enableConsoleLogging) {
-          console.log('ActivityLogger: 인증 상태 변경:', event)
-        }
+        this.secureLog('debug', '인증 상태 변경', { event })
         
         if (event === 'SIGNED_IN' && session?.user) {
           this.sessionToken = session.access_token
@@ -86,7 +165,7 @@ class ActivityLogger {
         }
       })
     } catch (error) {
-      console.error('ActivityLogger: 세션 초기화 오류:', error)
+      this.secureLog('error', '세션 초기화 오류', error)
     }
   }
 
@@ -150,12 +229,10 @@ class ActivityLogger {
         const data = await response.json()
         this.sessionId = data.session_id
         
-        if (this.config.enableConsoleLogging) {
-          console.log('활동 추적 세션 시작:', this.sessionId)
-        }
+        this.secureLog('debug', '활동 추적 세션 시작', { sessionId: this.sessionId })
       }
     } catch (error) {
-      console.error('세션 시작 오류:', error)
+      this.secureLog('error', '세션 시작 오류', error)
     }
   }
 
@@ -178,11 +255,9 @@ class ActivityLogger {
         })
       })
 
-      if (this.config.enableConsoleLogging) {
-        console.log('활동 추적 세션 종료:', this.sessionId)
-      }
+      this.secureLog('debug', '활동 추적 세션 종료', { sessionId: this.sessionId })
     } catch (error) {
-      console.error('세션 종료 오류:', error)
+      this.secureLog('error', '세션 종료 오류', error)
     }
   }
 
@@ -209,7 +284,7 @@ class ActivityLogger {
         })
       })
     } catch (error) {
-      console.error('세션 활동 업데이트 오류:', error)
+      this.secureLog('error', '세션 활동 업데이트 오류', error)
     }
   }
 
@@ -217,13 +292,18 @@ class ActivityLogger {
    * 활동 로그 기록 (공개 메소드)
    */
   public async logActivity(request: ActivityLogRequest): Promise<boolean> {
+    // 브라우저 환경이 아니거나 window 객체가 없으면 조기 반환
+    if (typeof window === 'undefined') {
+      return false
+    }
+
     try {
       const enhancedRequest = {
         ...request,
         metadata: {
           ...request.metadata,
-          page: window.location.pathname,
-          referrer: document.referrer,
+          page: window.location?.pathname || '',
+          referrer: document?.referrer || '',
           timestamp: new Date().toISOString(),
           session_id: this.sessionId
         }
@@ -235,13 +315,11 @@ class ActivityLogger {
         await this.sendLog(enhancedRequest)
       }
 
-      if (this.config.enableConsoleLogging) {
-        console.log('활동 로그:', enhancedRequest)
-      }
+      this.secureLog('debug', '활동 로그', enhancedRequest)
 
       return true
     } catch (error) {
-      console.error('활동 로깅 오류:', error)
+      this.secureLog('error', '활동 로깅 오류', error)
       return false
     }
   }
@@ -278,7 +356,7 @@ class ActivityLogger {
     try {
       await this.sendBatchLogs(logsToSend)
     } catch (error) {
-      console.error('배치 로그 전송 오류:', error)
+      this.secureLog('error', '배치 로그 전송 오류', error)
       // 실패한 로그를 다시 대기열에 추가 (최대 3회 재시도)
       logsToSend.forEach(log => {
         const retryCount = (log.metadata?.retryCount || 0) + 1
@@ -296,9 +374,7 @@ class ActivityLogger {
    * 단일 로그 전송
    */
   private async sendLog(request: ActivityLogRequest): Promise<void> {
-    if (this.config.enableConsoleLogging) {
-      console.log('ActivityLogger: 로그 전송 시도:', request)
-    }
+    this.secureLog('debug', '로그 전송 시도', request)
 
     const response = await fetch('/api/activities/log', {
       method: 'POST',
@@ -311,14 +387,12 @@ class ActivityLogger {
 
     if (!response.ok) {
       const errorText = await response.text()
-      console.error(`ActivityLogger: 로그 전송 실패 (${response.status}):`, errorText)
+      this.secureLog('error', `로그 전송 실패 (${response.status})`, { errorText })
       throw new Error(`로그 전송 실패: ${response.status} - ${errorText}`)
     }
 
-    if (this.config.enableConsoleLogging) {
-      const result = await response.json()
-      console.log('ActivityLogger: 로그 전송 성공:', result)
-    }
+    const result = await response.json()
+    this.secureLog('debug', '로그 전송 성공', result)
   }
 
   /**
@@ -442,17 +516,58 @@ const activityLogger = new ActivityLogger()
 
 export default activityLogger
 
-// 편의 함수들을 개별적으로 내보내기
-export const {
-  logActivity,
-  logPageView,
-  logPostCreated,
-  logPostUpdated,
-  logCommentCreated,
-  logLikeAdded,
-  logLikeRemoved,
-  logProfileUpdated,
-  logFileUploaded,
-  logSearch,
-  logNotificationRead
-} = activityLogger
+// 안전한 함수 래퍼들 - this 바인딩 보존
+export const logActivity = (request: ActivityLogRequest) => {
+  if (typeof window === 'undefined') return Promise.resolve(false)
+  return activityLogger.logActivity(request)
+}
+
+export const logPageView = (path: string, metadata?: Record<string, any>) => {
+  if (typeof window === 'undefined') return Promise.resolve(false)
+  return activityLogger.logPageView(path, metadata)
+}
+
+export const logPostCreated = (postId: string, metadata?: Record<string, any>) => {
+  if (typeof window === 'undefined') return Promise.resolve(false)
+  return activityLogger.logPostCreated(postId, metadata)
+}
+
+export const logPostUpdated = (postId: string, metadata?: Record<string, any>) => {
+  if (typeof window === 'undefined') return Promise.resolve(false)
+  return activityLogger.logPostUpdated(postId, metadata)
+}
+
+export const logCommentCreated = (commentId: string, postId: string, metadata?: Record<string, any>) => {
+  if (typeof window === 'undefined') return Promise.resolve(false)
+  return activityLogger.logCommentCreated(commentId, postId, metadata)
+}
+
+export const logLikeAdded = (postId: string, metadata?: Record<string, any>) => {
+  if (typeof window === 'undefined') return Promise.resolve(false)
+  return activityLogger.logLikeAdded(postId, metadata)
+}
+
+export const logLikeRemoved = (postId: string, metadata?: Record<string, any>) => {
+  if (typeof window === 'undefined') return Promise.resolve(false)
+  return activityLogger.logLikeRemoved(postId, metadata)
+}
+
+export const logProfileUpdated = (section: string, metadata?: Record<string, any>) => {
+  if (typeof window === 'undefined') return Promise.resolve(false)
+  return activityLogger.logProfileUpdated(section, metadata)
+}
+
+export const logFileUploaded = (fileId: string, fileType: string, metadata?: Record<string, any>) => {
+  if (typeof window === 'undefined') return Promise.resolve(false)
+  return activityLogger.logFileUploaded(fileId, fileType, metadata)
+}
+
+export const logSearch = (query: string, results: number, metadata?: Record<string, any>) => {
+  if (typeof window === 'undefined') return Promise.resolve(false)
+  return activityLogger.logSearch(query, results, metadata)
+}
+
+export const logNotificationRead = (notificationId: string, metadata?: Record<string, any>) => {
+  if (typeof window === 'undefined') return Promise.resolve(false)
+  return activityLogger.logNotificationRead(notificationId, metadata)
+}

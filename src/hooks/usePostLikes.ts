@@ -5,10 +5,9 @@
 
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import type { PostLikeToggleResponse } from '@/types'
-import { logLikeAdded, logLikeRemoved } from '@/utils/activityLogger'
 
 interface PostLikeState {
   /** 좋아요 수 */
@@ -47,7 +46,10 @@ export function usePostLikes({
   })
 
   const supabase = createClientComponentClient()
-
+  
+  // 간단한 중복 방지
+  const isProcessingRef = useRef(false)
+  
   // 사용자 정보 가져오기
   useEffect(() => {
     const getUser = async () => {
@@ -72,59 +74,45 @@ export function usePostLikes({
     setState(prev => ({ ...prev, isLoading: true, error: null }))
 
     try {
+      console.log('[usePostLikes] GET 요청 시작:', `/api/posts/${postId}/likes`);
+      
       const response = await fetch(`/api/posts/${postId}/likes`)
       
-      // 네트워크 응답 상태 확인
+      console.log('[usePostLikes] GET 응답:', response.status, response.statusText);
+      
       if (!response.ok) {
-        // 404, 405 등의 경우 HTML 응답이 올 수 있음
         let errorMessage = '좋아요 정보를 불러올 수 없습니다.';
         
         try {
           const errorData = await response.json();
           errorMessage = errorData.error || errorMessage;
         } catch (parseError) {
-          // JSON 파싱 실패 시 HTTP 상태 코드에 따른 메시지
+          console.error('[usePostLikes] JSON 파싱 실패:', parseError);
           if (response.status === 404) {
-            errorMessage = 'API 엔드포인트를 찾을 수 없습니다. 새로고침을 시도해주세요.';
-          } else if (response.status === 405) {
-            errorMessage = '허용되지 않은 요청 방식입니다.';
+            errorMessage = 'API 엔드포인트를 찾을 수 없습니다.';
           } else if (response.status >= 500) {
-            errorMessage = '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
+            errorMessage = '서버 오류가 발생했습니다.';
           }
         }
         
         throw new Error(errorMessage);
       }
 
-      // JSON 파싱 시도
-      let data;
-      try {
-        data = await response.json();
-      } catch (parseError) {
-        console.error('JSON 파싱 오류:', parseError);
-        throw new Error('서버 응답 형식이 올바르지 않습니다. 새로고침을 시도해주세요.');
-      }
+      const data = await response.json();
+      console.log('[usePostLikes] GET 데이터:', data);
 
       setState(prev => ({
         ...prev,
-        likeCount: data.like_count,
-        isLiked: data.is_liked,
+        likeCount: data.like_count || 0,
+        isLiked: data.is_liked || false,
         isLoading: false
       }))
 
     } catch (error) {
-      console.error('좋아요 상태 조회 오류:', error)
-      
-      let errorMessage = '알 수 없는 오류가 발생했습니다.';
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      } else if (error instanceof TypeError && error.message.includes('fetch')) {
-        errorMessage = '네트워크 연결을 확인해주세요.';
-      }
-      
+      console.error('[usePostLikes] GET 오류:', error)
       setState(prev => ({
         ...prev,
-        error: errorMessage,
+        error: error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.',
         isLoading: false
       }))
     }
@@ -132,6 +120,13 @@ export function usePostLikes({
 
   // 좋아요 토글
   const toggleLike = useCallback(async () => {
+    console.log('[usePostLikes] toggleLike 시작', { 
+      postId, 
+      hasUser: !!user,
+      userEmail: user?.email,
+      isProcessing: isProcessingRef.current
+    })
+    
     if (!user) {
       setState(prev => ({ 
         ...prev, 
@@ -148,9 +143,18 @@ export function usePostLikes({
       return false
     }
 
+    // 중복 처리 방지
+    if (isProcessingRef.current) {
+      console.log('[usePostLikes] 이미 처리 중 - 요청 무시');
+      return false
+    }
+
+    isProcessingRef.current = true
     setState(prev => ({ ...prev, isLoading: true, error: null }))
 
     try {
+      console.log('[usePostLikes] POST 요청 시작:', `/api/posts/${postId}/likes`);
+
       const response = await fetch(`/api/posts/${postId}/likes`, {
         method: 'POST',
         headers: {
@@ -158,51 +162,40 @@ export function usePostLikes({
         }
       })
 
-      // 네트워크 응답 상태 확인
+      console.log('[usePostLikes] POST 응답:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        url: response.url
+      });
+
       if (!response.ok) {
+        console.error('[usePostLikes] POST 응답 오류:', response.status);
+        
         let errorMessage = '좋아요 처리에 실패했습니다.';
         
         try {
           const errorData = await response.json();
+          console.error('[usePostLikes] 서버 에러 응답:', errorData);
           errorMessage = errorData.error || errorData.message || errorMessage;
         } catch (parseError) {
-          // JSON 파싱 실패 시 HTTP 상태 코드에 따른 메시지
+          console.error('[usePostLikes] JSON 파싱 실패:', parseError);
           if (response.status === 401) {
             errorMessage = '로그인이 필요합니다.';
           } else if (response.status === 403) {
             errorMessage = '좋아요 권한이 없습니다.';
           } else if (response.status === 404) {
-            errorMessage = 'API 엔드포인트를 찾을 수 없습니다. 새로고침을 시도해주세요.';
-          } else if (response.status === 405) {
-            errorMessage = '허용되지 않은 요청 방식입니다.';
+            errorMessage = 'API 엔드포인트를 찾을 수 없습니다.';
           } else if (response.status >= 500) {
-            errorMessage = '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
+            errorMessage = '서버 오류가 발생했습니다.';
           }
         }
         
         throw new Error(errorMessage);
       }
 
-      // JSON 파싱 시도
-      let successData: PostLikeToggleResponse;
-      try {
-        successData = await response.json();
-      } catch (parseError) {
-        console.error('JSON 파싱 오류:', parseError);
-        throw new Error('서버 응답 형식이 올바르지 않습니다. 새로고침을 시도해주세요.');
-      }
-
-      // 활동 로깅
-      try {
-        if (successData.liked) {
-          await logLikeAdded(postId);
-        } else {
-          await logLikeRemoved(postId);
-        }
-      } catch (logError) {
-        console.error('활동 로깅 오류:', logError);
-        // 로깅 실패는 사용자 경험에 영향주지 않음
-      }
+      const successData: PostLikeToggleResponse = await response.json();
+      console.log('[usePostLikes] POST 성공 데이터:', successData);
 
       // 상태 업데이트
       setState(prev => ({
@@ -218,13 +211,11 @@ export function usePostLikes({
       return true
 
     } catch (error) {
-      console.error('좋아요 토글 오류:', error)
+      console.error('[usePostLikes] POST 오류:', error)
       
       let errorMessage = '좋아요 처리에 실패했습니다.';
       if (error instanceof Error) {
         errorMessage = error.message;
-      } else if (error instanceof TypeError && error.message.includes('fetch')) {
-        errorMessage = '네트워크 연결을 확인해주세요.';
       }
       
       setState(prev => ({
@@ -233,6 +224,8 @@ export function usePostLikes({
         isLoading: false
       }))
       return false
+    } finally {
+      isProcessingRef.current = false
     }
   }, [user, postId, onLikeChange])
 
@@ -262,142 +255,5 @@ export function usePostLikes({
     
     // 유틸
     canLike: !!user
-  }
-}
-
-/**
- * 여러 게시글의 좋아요 상태를 관리하는 훅
- */
-interface UsePostLikesMapProps {
-  /** 게시글 ID와 초기 상태 맵 */
-  posts: Record<string, { likeCount: number; isLiked: boolean }>
-  /** 상태 변경 콜백 */
-  onLikeChange?: (postId: string, liked: boolean, count: number) => void
-}
-
-export function usePostLikesMap({ posts, onLikeChange }: UsePostLikesMapProps) {
-  const [user, setUser] = useState<any>(null)
-  const [likesMap, setLikesMap] = useState(posts)
-  const [loadingMap, setLoadingMap] = useState<Record<string, boolean>>({})
-  const [errorMap, setErrorMap] = useState<Record<string, string>>({})
-
-  const supabase = createClientComponentClient()
-
-  // 사용자 정보 가져오기
-  useEffect(() => {
-    const getUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      setUser(session?.user || null)
-    }
-    
-    getUser()
-
-    // 인증 상태 변경 리스너
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      setUser(session?.user || null)
-    })
-
-    return () => subscription.unsubscribe()
-  }, [supabase])
-
-  // 특정 게시글 좋아요 토글
-  const toggleLike = useCallback(async (postId: string) => {
-    if (!user) {
-      setErrorMap(prev => ({ ...prev, [postId]: '로그인이 필요합니다.' }))
-      return false
-    }
-
-    setLoadingMap(prev => ({ ...prev, [postId]: true }))
-    setErrorMap(prev => ({ ...prev, [postId]: '' }))
-
-    try {
-      const response = await fetch(`/api/posts/${postId}/likes`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      })
-
-      // 네트워크 응답 상태 확인
-      if (!response.ok) {
-        let errorMessage = '좋아요 처리에 실패했습니다.';
-        
-        try {
-          const errorData = await response.json();
-          errorMessage = errorData.error || errorData.message || errorMessage;
-        } catch (parseError) {
-          // JSON 파싱 실패 시 HTTP 상태 코드에 따른 메시지
-          if (response.status === 401) {
-            errorMessage = '로그인이 필요합니다.';
-          } else if (response.status === 403) {
-            errorMessage = '좋아요 권한이 없습니다.';
-          } else if (response.status === 404) {
-            errorMessage = 'API 엔드포인트를 찾을 수 없습니다. 새로고침을 시도해주세요.';
-          } else if (response.status === 405) {
-            errorMessage = '허용되지 않은 요청 방식입니다.';
-          } else if (response.status >= 500) {
-            errorMessage = '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
-          }
-        }
-        
-        throw new Error(errorMessage);
-      }
-
-      // JSON 파싱 시도
-      let successData: PostLikeToggleResponse;
-      try {
-        successData = await response.json();
-      } catch (parseError) {
-        console.error('JSON 파싱 오류:', parseError);
-        throw new Error('서버 응답 형식이 올바르지 않습니다. 새로고침을 시도해주세요.');
-      }
-
-      // 상태 업데이트
-      setLikesMap(prev => ({
-        ...prev,
-        [postId]: {
-          likeCount: successData.like_count,
-          isLiked: successData.liked
-        }
-      }))
-
-      setLoadingMap(prev => ({ ...prev, [postId]: false }))
-      
-      // 콜백 호출
-      onLikeChange?.(postId, successData.liked, successData.like_count)
-
-      return true
-
-    } catch (error) {
-      console.error('좋아요 토글 오류:', error)
-      setErrorMap(prev => ({
-        ...prev,
-        [postId]: error instanceof Error ? error.message : '좋아요 처리에 실패했습니다.'
-      }))
-      setLoadingMap(prev => ({ ...prev, [postId]: false }))
-      return false
-    }
-  }, [user, onLikeChange])
-
-  // 에러 클리어
-  const clearError = useCallback((postId: string) => {
-    setErrorMap(prev => ({ ...prev, [postId]: '' }))
-  }, [])
-
-  return {
-    // 상태
-    likesMap,
-    loadingMap,
-    errorMap,
-    
-    // 액션
-    toggleLike,
-    clearError,
-    
-    // 유틸
-    canLike: !!user,
-    getLikeData: (postId: string) => likesMap[postId] || { likeCount: 0, isLiked: false },
-    isLoading: (postId: string) => loadingMap[postId] || false,
-    getError: (postId: string) => errorMap[postId] || null
   }
 }

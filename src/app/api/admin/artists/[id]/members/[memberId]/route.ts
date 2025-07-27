@@ -12,7 +12,7 @@ export async function DELETE(
   request: NextRequest,
   context: { params: Promise<{ id: string; memberId: string }> }
 ) {
-  const params = await context.params;
+  const resolvedParams = await context.params;
   try {
     const cookieStore = cookies()
     const supabase = createServerComponentClient({ cookies: () => cookieStore })
@@ -49,8 +49,8 @@ export async function DELETE(
       )
     }
 
-    const artistId = params.id
-    const memberId = params.memberId
+    const artistId = resolvedParams.id
+    const memberId = resolvedParams.memberId
 
     // 대상 멤버 확인
     const { data: targetMember, error: memberError } = await supabase

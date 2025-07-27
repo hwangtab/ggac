@@ -8,9 +8,9 @@ import { NextRequest, NextResponse } from 'next/server'
 // 동적 라우트 PATCH 테스트용
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  context: { params: Promise<{ id: string }> }
 ) {
-  const resolvedParams = await params;
+  const resolvedParams = await context.params;
   try {
     console.log('동적 PATCH 요청 수신됨, ID:', resolvedParams.id)
     
@@ -35,9 +35,9 @@ export async function PATCH(
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  context: { params: Promise<{ id: string }> }
 ) {
-  const resolvedParams = await params;
+  const resolvedParams = await context.params;
   return NextResponse.json({
     message: `ID ${resolvedParams.id}에 대한 GET 요청 성공`,
     memberId: resolvedParams.id,

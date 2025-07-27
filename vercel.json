@@ -128,7 +128,7 @@
       ]
     },
     {
-      "source": "/api/posts/:id/(like|likes|view|attachments)",
+      "source": "/api/posts/:id/(likes|view|attachments)",
       "headers": [
         {
           "key": "Cache-Control",
@@ -261,44 +261,12 @@
   },
   "rewrites": [
     {
-      "source": "/api/posts/:id/like",
-      "destination": "/api/posts/:id/like"
+      "source": "/sitemap.xml",
+      "destination": "/api/sitemap"
     },
     {
-      "source": "/api/posts/:id/likes", 
-      "destination": "/api/posts/:id/likes"
-    },
-    {
-      "source": "/api/posts/:id/attachments/:attachmentId",
-      "destination": "/api/posts/:id/attachments/:attachmentId"
-    },
-    {
-      "source": "/api/comments/:id/like",
-      "destination": "/api/comments/:id/like"
-    },
-    {
-      "source": "/api/notifications/:id",
-      "destination": "/api/notifications/:id"
-    },
-    {
-      "source": "/api/users/:id/likes",
-      "destination": "/api/users/:id/likes"
-    },
-    {
-      "source": "/api/admin/members/:id",
-      "destination": "/api/admin/members/:id"
-    },
-    {
-      "source": "/api/admin/posts/:id",
-      "destination": "/api/admin/posts/:id"
-    },
-    {
-      "source": "/api/admin/artists/:id/members",
-      "destination": "/api/admin/artists/:id/members"
-    },
-    {
-      "source": "/api/admin/artists/:id/members/:memberId",
-      "destination": "/api/admin/artists/:id/members/:memberId"
+      "source": "/robots.txt",
+      "destination": "/api/robots"
     }
   ]
 }

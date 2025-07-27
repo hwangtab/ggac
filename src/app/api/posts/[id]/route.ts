@@ -11,23 +11,22 @@ export const preferredRegion = 'icn1'
 import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
-import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator } from '@/utils/rateLimiter'
-
-// Rate limiting 설정
-const rateLimiter = applyRateLimit({
-  ...RATE_LIMIT_CONFIGS.GENERAL_API,
-  keyGenerator: createUserKeyGenerator('post_detail')
-})
+import distributedRateLimiter, { DISTRIBUTED_RATE_LIMIT_CONFIGS, createDistributedUserKeyGenerator } from '@/utils/distributedRateLimiter'
 
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  const params = await context.params;
+  const resolvedParams = await context.params;
   try {
-    // Rate limiting 적용
-    const rateLimitResult = rateLimiter(request)
-    if (!rateLimitResult.success) {
+    // 분산 Rate limiting 적용
+    const rateLimiter = await distributedRateLimiter.applyRateLimit({
+      ...DISTRIBUTED_RATE_LIMIT_CONFIGS.GENERAL_API,
+      keyGenerator: createDistributedUserKeyGenerator('post_detail')
+    })
+    
+    const rateLimitResult = await rateLimiter(request)
+    if (!rateLimitResult.success && rateLimitResult.response) {
       return rateLimitResult.response
     }
 
@@ -50,7 +49,7 @@ export async function GET(
       return NextResponse.json({ error: '승인된 회원만 접근할 수 있습니다.' }, { status: 403 })
     }
 
-    const postId = params.id
+    const postId = resolvedParams.id
     const { searchParams } = new URL(request.url)
     const includeComments = searchParams.get('include_comments') !== 'false' // 기본적으로 포함
     const includeAttachments = searchParams.get('include_attachments') !== 'false' // 기본적으로 포함

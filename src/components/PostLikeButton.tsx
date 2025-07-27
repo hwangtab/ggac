@@ -64,30 +64,50 @@ const PostLikeButton: React.FC<PostLikeButtonProps> = ({
 
   // 좋아요 버튼 클릭 처리
   const handleClick = useCallback(async () => {
+    console.log('[PostLikeButton] 클릭 이벤트 시작', {
+      canLike,
+      isLoading,
+      isAnimating,
+      postId
+    });
+
     if (!canLike) {
       alert('로그인이 필요합니다.')
       return
     }
 
-    if (isLoading) return
+    if (isLoading || isAnimating) {
+      console.log('[PostLikeButton] 요청 차단 - 처리 중');
+      return
+    }
 
-    // 애니메이션 효과
     setIsAnimating(true)
-    setTimeout(() => setIsAnimating(false), 300)
 
-    // 좋아요 토글
-    const success = await toggleLike()
-    
-    if (success) {
-      onClick?.()
+    try {
+      const success = await toggleLike()
+      
+      if (success) {
+        onClick?.()
+      } else {
+        // 실패 시 즉시 애니메이션 해제
+        setIsAnimating(false)
+      }
+
+      // 에러가 있으면 표시
+      if (error) {
+        alert(error)
+        clearError()
+      }
+    } catch (err) {
+      console.error('[PostLikeButton] 처리 중 오류:', err)
+      setIsAnimating(false)
     }
 
-    // 에러가 있으면 표시
-    if (error) {
-      alert(error)
-      clearError()
-    }
-  }, [canLike, isLoading, toggleLike, onClick, error, clearError])
+    // 애니메이션 유지 시간 (300ms)
+    setTimeout(() => {
+      setIsAnimating(false)
+    }, 300)
+  }, [canLike, isLoading, isAnimating, toggleLike, onClick, error, clearError])
 
   // 크기별 스타일
   const sizeClasses = {
@@ -157,7 +177,7 @@ const PostLikeButton: React.FC<PostLikeButtonProps> = ({
   return (
     <button
       onClick={handleClick}
-      disabled={isLoading || !canLike}
+      disabled={isLoading || !canLike || isAnimating}
       className={`${currentVariant.button} ${currentSize.button} ${className}`}
       title={
         !canLike 
@@ -166,7 +186,7 @@ const PostLikeButton: React.FC<PostLikeButtonProps> = ({
             ? '좋아요 취소' 
             : '좋아요'
       }
-      aria-label={`좋아요 ${likeCount}개${isLiked ? ' (좋아요 누름)' : ''}`}
+      aria-label={`좋아요 ${likeCount || 0}개${isLiked ? ' (좋아요 누름)' : ''}`}
     >
       {/* 하트 아이콘 */}
       <span className={`${currentVariant.icon} transition-all duration-200`}>
@@ -180,7 +200,7 @@ const PostLikeButton: React.FC<PostLikeButtonProps> = ({
       {/* 좋아요 수 */}
       {showCount && (
         <span className={`${currentVariant.count} ${currentSize.text} font-medium`}>
-          {likeCount.toLocaleString()}
+          {(likeCount || 0).toLocaleString()}
         </span>
       )}
 
