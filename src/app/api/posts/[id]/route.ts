@@ -12,13 +12,25 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import distributedRateLimiter, { DISTRIBUTED_RATE_LIMIT_CONFIGS, createDistributedUserKeyGenerator } from '@/utils/distributedRateLimiter'
+import { validateUUID } from '@/utils/validation'
 
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   const resolvedParams = await context.params;
+  const postId = resolvedParams.id;
+  
   try {
+    // UUID 형식 검증
+    const uuidValidation = validateUUID(postId, '게시글 ID');
+    if (!uuidValidation.isValid) {
+      console.log('[API] POST 상세 UUID 검증 실패:', uuidValidation.errors);
+      return NextResponse.json({ 
+        error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.' 
+      }, { status: 400 });
+    }
+    
     // 분산 Rate limiting 적용
     const rateLimiter = await distributedRateLimiter.applyRateLimit({
       ...DISTRIBUTED_RATE_LIMIT_CONFIGS.GENERAL_API,
@@ -49,7 +61,7 @@ export async function GET(
       return NextResponse.json({ error: '승인된 회원만 접근할 수 있습니다.' }, { status: 403 })
     }
 
-    const postId = resolvedParams.id
+    const validPostId = uuidValidation.sanitized
     const { searchParams } = new URL(request.url)
     const includeComments = searchParams.get('include_comments') !== 'false' // 기본적으로 포함
     const includeAttachments = searchParams.get('include_attachments') !== 'false' // 기본적으로 포함
@@ -73,7 +85,7 @@ export async function GET(
           email
         )
       `)
-      .eq('id', postId)
+      .eq('id', validPostId)
       .single()
 
     if (postError || !post) {
@@ -89,7 +101,7 @@ export async function GET(
     const { data: userLike } = await supabase
       .from('post_likes')
       .select('id')
-      .eq('post_id', postId)
+      .eq('post_id', validPostId)
       .eq('user_id', session.user.id)
       .single()
 
@@ -99,7 +111,7 @@ export async function GET(
     const { count: commentCount } = await supabase
       .from('comments')
       .select('id', { count: 'exact', head: true })
-      .eq('post_id', postId)
+      .eq('post_id', validPostId)
 
     // 댓글 목록 조회 (요청 시)
     let comments: any[] = []
@@ -116,7 +128,7 @@ export async function GET(
             email
           )
         `)
-        .eq('post_id', postId)
+        .eq('post_id', validPostId)
         .order('created_at', { ascending: true })
 
       if (commentsError) {
@@ -132,7 +144,7 @@ export async function GET(
       const { data: attachmentsData, error: attachmentsError } = await supabase
         .from('post_attachments')
         .select('*')
-        .eq('post_id', postId)
+        .eq('post_id', validPostId)
         .order('sort_order', { ascending: true })
 
       if (attachmentsError) {

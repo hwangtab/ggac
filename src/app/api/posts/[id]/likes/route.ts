@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import type { PostLikeToggleResponse } from '@/types'
+import { validateUUID } from '@/utils/validation'
 
 /**
  * 게시글 좋아요 정보 조회
@@ -27,8 +28,17 @@ export async function GET(
     const resolvedParams = await context.params;
     const postId = resolvedParams.id;
     
+    // UUID 형식 검증
+    const uuidValidation = validateUUID(postId, '게시글 ID');
+    if (!uuidValidation.isValid) {
+      console.log('[API] GET UUID 검증 실패:', uuidValidation.errors);
+      return NextResponse.json({ 
+        error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.' 
+      }, { status: 400 });
+    }
+    
     console.log('[API] GET /api/posts/[id]/likes 시작', {
-      postId,
+      postId: uuidValidation.sanitized,
       timestamp: new Date().toISOString()
     });
 
@@ -88,8 +98,17 @@ export async function POST(
     const resolvedParams = await context.params;
     const postId = resolvedParams.id;
     
+    // UUID 형식 검증
+    const uuidValidation = validateUUID(postId, '게시글 ID');
+    if (!uuidValidation.isValid) {
+      console.log('[API] POST UUID 검증 실패:', uuidValidation.errors);
+      return NextResponse.json({ 
+        error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.' 
+      }, { status: 400 });
+    }
+    
     console.log('[API] POST /api/posts/[id]/likes 시작', {
-      postId,
+      postId: uuidValidation.sanitized,
       timestamp: new Date().toISOString()
     });
 
@@ -124,7 +143,7 @@ export async function POST(
     const { data: post, error: postError } = await supabase
       .from('posts')
       .select('id, is_deleted')
-      .eq('id', postId)
+      .eq('id', uuidValidation.sanitized)
       .single()
 
     if (postError || !post) {
@@ -141,7 +160,7 @@ export async function POST(
     console.log('[API] toggle_post_like RPC 호출');
     const { data: toggleResult, error: toggleError } = await supabase
       .rpc('toggle_post_like', {
-        p_post_id: postId,
+        p_post_id: uuidValidation.sanitized,
         p_user_id: session.user.id
       })
 
@@ -190,9 +209,20 @@ export async function DELETE(
   
   try {
     const resolvedParams = await context.params;
+    const postId = resolvedParams.id;
+    
+    // UUID 형식 검증
+    const uuidValidation = validateUUID(postId, '게시글 ID');
+    if (!uuidValidation.isValid) {
+      console.log('[API] DELETE UUID 검증 실패:', uuidValidation.errors);
+      return NextResponse.json({ 
+        error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.' 
+      }, { status: 400 });
+    }
+    
     return NextResponse.json({ 
       status: 'healthy',
-      postId: resolvedParams.id,
+      postId: uuidValidation.sanitized,
       timestamp: new Date().toISOString()
     })
   } catch (error) {

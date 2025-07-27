@@ -5,6 +5,9 @@
 
 import { sanitizeHtml, detectXssPatterns, logSecurityEvent } from './security';
 
+// UUID v4 검증 정규식
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // 데이터베이스 검증 관련 타입
 interface DatabaseValidationResult {
   isValid: boolean;
@@ -52,6 +55,53 @@ export const detectSqlInjection = (input: string): boolean => {
   ];
 
   return sqlPatterns.some(pattern => pattern.test(input));
+};
+
+/**
+ * UUID 형식 검증
+ * @param value 검증할 문자열
+ * @returns UUID 형식이 올바른지 여부
+ */
+export const isValidUUID = (value: string): boolean => {
+  if (!value || typeof value !== 'string') {
+    return false;
+  }
+  return UUID_REGEX.test(value);
+};
+
+/**
+ * UUID 검증 (DatabaseValidationResult 형태로 반환)
+ */
+export const validateUUID = (uuid: string, paramName: string = 'ID'): DatabaseValidationResult => {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  if (typeof uuid !== 'string') {
+    errors.push(`${paramName}가 문자열이 아닙니다.`);
+    return { isValid: false, sanitized: '', errors, warnings };
+  }
+
+  const trimmed = uuid.trim();
+
+  if (!isValidUUID(trimmed)) {
+    errors.push(`잘못된 ${paramName} 형식입니다. UUID 형식이어야 합니다.`);
+    logSecurityEvent('INVALID_UUID_FORMAT', { uuid: trimmed, paramName }, 'medium');
+  }
+
+  // XSS 및 SQL 인젝션 검증 (UUID는 이미 제한적이지만 추가 보안)
+  if (detectXssPatterns(trimmed) || detectSqlInjection(trimmed)) {
+    errors.push(`${paramName}에 위험한 패턴이 감지되었습니다.`);
+    logSecurityEvent('MALICIOUS_UUID_ATTEMPT', { uuid: trimmed, paramName }, 'high');
+  }
+
+  const sanitized = trimmed.toLowerCase(); // UUID는 소문자로 정규화
+
+  return {
+    isValid: errors.length === 0,
+    sanitized,
+    errors,
+    warnings
+  };
 };
 
 /**

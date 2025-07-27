@@ -145,12 +145,7 @@ const nextConfig = {
     return config
   },
   
-  // External packages configuration for Next.js 14+
-  serverExternalPackages: [
-    'canvas',
-    'sharp',
-    'puppeteer'
-  ],
+  // External packages configuration for Next.js 14+ (deprecated serverExternalPackages removed)
 
   // 실험적 기능 활성화  
   experimental: {
@@ -422,7 +417,11 @@ const nextConfig = {
           },
           {
             key: 'Permissions-Policy',
-            value: 'camera=(), microphone=(), geolocation=()',
+            value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), accelerometer=(), gyroscope=(), magnetometer=(), ambient-light-sensor=()',
+          },
+          {
+            key: 'Strict-Transport-Security',
+            value: 'max-age=31536000; includeSubDomains; preload',
           },
           {
             key: 'Content-Security-Policy',
