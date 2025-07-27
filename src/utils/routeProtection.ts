@@ -22,7 +22,7 @@ const isOnline = () => {
   return window.navigator.onLine;
 };
 
-// 페이지 로딩 상태를 안정화하는 유틸리티 (단순화)
+// 페이지 로딩 상태를 안정화하는 유틸리티 (모바일 최적화)
 export const useStablePageLoad = (targetPath?: string) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isReady, setIsReady] = useState(false);
@@ -31,11 +31,25 @@ export const useStablePageLoad = (targetPath?: string) => {
   useEffect(() => {
     let mounted = true;
     let timer: NodeJS.Timeout;
+    let fallbackTimer: NodeJS.Timeout;
 
     const initializePage = async () => {
       try {
-        // 최소한의 초기화 지연
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // 모바일 환경 감지
+        const isMobile = isMobileDevice();
+        
+        // 모바일에서는 즉시 준비 완료로 설정하여 하얀 화면 문제 방지
+        if (isMobile) {
+          console.log('📱 [ROUTE PROTECTION] Mobile detected - immediate ready state');
+          if (mounted) {
+            setIsLoading(false);
+            setIsReady(true);
+          }
+          return;
+        }
+
+        // 데스크탑에서는 최소한의 초기화 지연
+        await new Promise(resolve => setTimeout(resolve, 50));
         
         if (!mounted) return;
         
@@ -46,7 +60,16 @@ export const useStablePageLoad = (targetPath?: string) => {
             setIsReady(true);
             console.log('✅ [ROUTE PROTECTION] Page ready');
           }
-        }, 50);
+        }, 30);
+
+        // 안전장치: 최대 3초 후 강제 준비 완료
+        fallbackTimer = setTimeout(() => {
+          if (mounted) {
+            console.warn('⚠️ [ROUTE PROTECTION] Fallback timeout - forcing ready state');
+            setIsLoading(false);
+            setIsReady(true);
+          }
+        }, 3000);
 
       } catch (error) {
         console.error('💥 [ROUTE PROTECTION] Error initializing page:', error);
@@ -62,6 +85,7 @@ export const useStablePageLoad = (targetPath?: string) => {
     return () => {
       mounted = false;
       if (timer) clearTimeout(timer);
+      if (fallbackTimer) clearTimeout(fallbackTimer);
     };
   }, [targetPath]);
 

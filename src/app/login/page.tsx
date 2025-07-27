@@ -14,8 +14,8 @@ export default function LoginPage() {
   const router = useRouter();
   const { isLoading: pageLoading, isReady } = useStablePageLoad('/login');
 
-  // 모바일 디바이스 감지 함수
-  const isMobileDevice = () => {
+  // 모바일 디바이스 감지 함수 (waitForAuthStateAndRedirect에서 사용)
+  const isMobileDeviceForAuth = () => {
     if (typeof window === 'undefined') return false;
     
     const userAgent = window.navigator.userAgent.toLowerCase();
@@ -32,7 +32,7 @@ export default function LoginPage() {
       console.log('🔄 [LOGIN DEBUG] Starting auth state confirmation...');
       setMessage('로그인 성공! 인증 상태를 확인하는 중...');
       
-      const isMobile = isMobileDevice();
+      const isMobile = isMobileDeviceForAuth();
       console.log(`📱 [LOGIN DEBUG] Mobile device detected: ${isMobile}`);
       
       // 모바일에서는 더 긴 재시도 로직 (네트워크 불안정성 고려)
@@ -166,8 +166,23 @@ export default function LoginPage() {
     }
   };
 
-  // 페이지 안정화 중이면 로딩 표시
-  if (pageLoading || !isReady) {
+  // 모바일 환경 감지
+  const isMobileDevice = () => {
+    if (typeof window === 'undefined') return false;
+    
+    const userAgent = window.navigator.userAgent.toLowerCase();
+    const mobileKeywords = ['android', 'iphone', 'ipod', 'ipad', 'blackberry', 'windows phone', 'mobile'];
+    
+    return mobileKeywords.some(keyword => userAgent.includes(keyword)) || 
+           window.innerWidth <= 768 || 
+           ('ontouchstart' in window);
+  };
+
+  // 모바일에서는 로딩 화면을 건너뛰고 바로 렌더링 (하얀 화면 문제 방지)
+  const isMobile = typeof window !== 'undefined' && isMobileDevice();
+  
+  // 페이지 안정화 중이면 로딩 표시 (모바일 제외)
+  if (!isMobile && (pageLoading || !isReady)) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 pt-24 md:pt-28 pb-12 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
         <div className="text-center">
