@@ -5,7 +5,7 @@
 
 'use client'
 
-import React, { useState, useCallback, useEffect } from 'react'
+import React, { useState, useCallback, useEffect, useRef } from 'react'
 import { FiHeart } from 'react-icons/fi'
 import { FaHeart } from 'react-icons/fa'
 import { usePostLikes } from '@/hooks/usePostLikes'
@@ -46,6 +46,7 @@ const PostLikeButton: React.FC<PostLikeButtonProps> = ({
   onClick
 }) => {
   const [isAnimating, setIsAnimating] = useState(false)
+  const animationTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   
   const {
     likeCount,
@@ -67,21 +68,12 @@ const PostLikeButton: React.FC<PostLikeButtonProps> = ({
     // 이벤트 기본 동작 방지 (form submit 등)
     event.preventDefault()
     event.stopPropagation()
-    
-    console.log('[PostLikeButton] 클릭 이벤트 시작', {
-      canLike,
-      isLoading,
-      isAnimating,
-      postId
-    });
 
     if (!canLike) {
-      console.log('[PostLikeButton] 로그인 필요');
       return
     }
 
     if (isLoading || isAnimating) {
-      console.log('[PostLikeButton] 요청 차단 - 처리 중');
       return
     }
 
@@ -93,11 +85,9 @@ const PostLikeButton: React.FC<PostLikeButtonProps> = ({
       if (success) {
         onClick?.()
       } else {
-        // 실패 시 즉시 애니메이션 해제
         setIsAnimating(false)
       }
 
-      // 에러가 있으면 콘솔에 로그만 남기고 UI 차단하지 않음
       if (error) {
         console.error('[PostLikeButton] 에러:', error)
         clearError()
@@ -105,12 +95,18 @@ const PostLikeButton: React.FC<PostLikeButtonProps> = ({
     } catch (err) {
       console.error('[PostLikeButton] 처리 중 오류:', err)
       setIsAnimating(false)
+    } finally {
+      // 기존 타이머가 있다면 취소
+      if (animationTimeoutRef.current) {
+        clearTimeout(animationTimeoutRef.current)
+      }
+      
+      // 애니메이션 유지 시간 (300ms)
+      animationTimeoutRef.current = setTimeout(() => {
+        setIsAnimating(false)
+        animationTimeoutRef.current = null
+      }, 300)
     }
-
-    // 애니메이션 유지 시간 (300ms)
-    setTimeout(() => {
-      setIsAnimating(false)
-    }, 300)
   }, [canLike, isLoading, isAnimating, toggleLike, onClick, error, clearError])
 
   // 크기별 스타일
@@ -188,6 +184,16 @@ const PostLikeButton: React.FC<PostLikeButtonProps> = ({
       return () => clearTimeout(timer)
     }
   }, [error, clearError])
+
+  // 컴포넌트 언마운트 시 타이머 정리
+  useEffect(() => {
+    return () => {
+      if (animationTimeoutRef.current) {
+        clearTimeout(animationTimeoutRef.current)
+        animationTimeoutRef.current = null
+      }
+    }
+  }, [])
 
   return (
     <button

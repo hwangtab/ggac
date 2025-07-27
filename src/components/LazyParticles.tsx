@@ -148,9 +148,9 @@ const LazyParticles = memo(({
       const dynamicModule = await import('./AdaptiveParticles')
       const loadTime = performance.now() - loadStartTime
       
-      // 개발 환경에서 로딩 시간 로그
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`🎉 AdaptiveParticles loaded in ${loadTime.toFixed(2)}ms`)
+      // 개발 환경에서 로딩 시간 로그 (성능이 나쁜 경우만)
+      if (process.env.NODE_ENV === 'development' && loadTime > 200) {
+        console.warn(`⚠️ AdaptiveParticles slow load: ${loadTime.toFixed(2)}ms`)
       }
 
       // 글로벌 플래그 설정 (중복 로딩 방지)
@@ -234,17 +234,15 @@ const LazyParticles = memo(({
         </ErrorBoundary>
       )}
       
-      {/* 개발 환경 디버깅 정보 */}
-      {process.env.NODE_ENV === 'development' && (
+      {/* 개발 환경 디버깅 정보 - 성능 문제가 있을 때만 표시 */}
+      {process.env.NODE_ENV === 'development' && (renderPerf.avgRenderTime > 16 || loadError) && (
         <div 
-          className="absolute top-2 left-2 text-xs text-white/50 font-mono pointer-events-none"
+          className="absolute top-2 left-2 text-xs text-white/50 font-mono pointer-events-none bg-black/30 p-1 rounded"
           style={{ zIndex: 100 }}
         >
-          <div>Lazy: {shouldLoad ? '✅' : '⏳'}</div>
-          <div>Loading: {isLoading ? '🔄' : '✅'}</div>
-          <div>Component: {ParticleComponent ? '✅' : '❌'}</div>
-          <div>Renders: {renderPerf.renderCount}</div>
-          <div>Avg Render: {renderPerf.avgRenderTime.toFixed(1)}ms</div>
+          {renderPerf.avgRenderTime > 16 && (
+            <div className="text-yellow-400">Slow Render: {renderPerf.avgRenderTime.toFixed(1)}ms</div>
+          )}
           {loadError && <div className="text-red-400">Error: {loadError.message}</div>}
         </div>
       )}
