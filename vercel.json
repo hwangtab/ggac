@@ -254,7 +254,23 @@
     }
   ],
   "functions": {
-    "src/app/api/**/route.ts": {
+    "src/app/api/**/*.ts": {
+      "memory": 1024,
+      "maxDuration": 30
+    },
+    "src/app/api/posts/[id]/likes/route.ts": {
+      "memory": 1024,
+      "maxDuration": 30
+    },
+    "src/app/api/posts/[id]/route.ts": {
+      "memory": 1024,
+      "maxDuration": 30
+    },
+    "src/app/api/posts/[id]/view/route.ts": {
+      "memory": 1024,
+      "maxDuration": 30
+    },
+    "src/app/api/posts/[id]/attachments/route.ts": {
       "memory": 1024,
       "maxDuration": 30
     }
@@ -267,6 +283,22 @@
     {
       "source": "/robots.txt",
       "destination": "/api/robots"
+    },
+    {
+      "source": "/api/posts/(\\d+)/likes",
+      "destination": "/api/posts/$1/likes"
+    },
+    {
+      "source": "/api/posts/(\\d+)/view",
+      "destination": "/api/posts/$1/view"
+    },
+    {
+      "source": "/api/posts/(\\d+)/attachments",
+      "destination": "/api/posts/$1/attachments"
+    },
+    {
+      "source": "/api/posts/(\\d+)",
+      "destination": "/api/posts/$1"
     }
   ]
 }
