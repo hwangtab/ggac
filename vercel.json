@@ -285,19 +285,19 @@
       "destination": "/api/robots"
     },
     {
-      "source": "/api/posts/(\\d+)/likes",
+      "source": "/api/posts/([^/]+)/likes",
       "destination": "/api/posts/$1/likes"
     },
     {
-      "source": "/api/posts/(\\d+)/view",
+      "source": "/api/posts/([^/]+)/view",
       "destination": "/api/posts/$1/view"
     },
     {
-      "source": "/api/posts/(\\d+)/attachments",
+      "source": "/api/posts/([^/]+)/attachments",
       "destination": "/api/posts/$1/attachments"
     },
     {
-      "source": "/api/posts/(\\d+)",
+      "source": "/api/posts/([^/]+)",
       "destination": "/api/posts/$1"
     }
   ]
