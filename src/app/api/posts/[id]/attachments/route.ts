@@ -14,6 +14,7 @@ import { createClient } from '@supabase/supabase-js'
 import type { PostAttachment, PostAttachmentStats } from '@/types'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
+import { validateUUID } from '@/utils/validation'
 
 // Service Role 클라이언트는 Storage 작업에만 사용
 function getSupabaseAdmin() {
@@ -47,6 +48,19 @@ export async function GET(
 ) {
   const resolvedParams = await context.params;
   try {
+    const postId = resolvedParams.id;
+    
+    // UUID 형식 검증
+    const uuidValidation = validateUUID(postId, '게시글 ID');
+    if (!uuidValidation.isValid) {
+      console.log('[API] ATTACHMENTS GET UUID 검증 실패:', uuidValidation.errors);
+      return NextResponse.json({ 
+        error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.' 
+      }, { status: 400 });
+    }
+    
+    const validPostId = uuidValidation.sanitized;
+    
     const supabase = createRouteHandlerClient({ cookies })
     const { data: { session } } = await supabase.auth.getSession()
 
@@ -54,13 +68,11 @@ export async function GET(
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
-    const postId = resolvedParams.id
-
     // 게시글 존재 확인
     const { data: post, error: postError } = await supabase
       .from('posts')
       .select('id, author_id')
-      .eq('id', postId)
+      .eq('id', validPostId)
       .single()
 
     if (postError || !post) {
@@ -71,7 +83,7 @@ export async function GET(
     const { data: attachments, error: attachmentsError } = await supabase
       .from('post_attachments')
       .select('*')
-      .eq('post_id', postId)
+      .eq('post_id', validPostId)
       .order('sort_order', { ascending: true })
 
     if (attachmentsError) {
@@ -109,6 +121,17 @@ export async function POST(
 ) {
   const resolvedParams = await context.params;
   try {
+    const postId = resolvedParams.id;
+    
+    // UUID 형식 검증
+    const uuidValidation = validateUUID(postId, '게시글 ID');
+    if (!uuidValidation.isValid) {
+      console.log('[API] ATTACHMENTS POST UUID 검증 실패:', uuidValidation.errors);
+      return NextResponse.json({ 
+        error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.' 
+      }, { status: 400 });
+    }
+    
     const supabase = createRouteHandlerClient({ cookies })
     const { data: { session } } = await supabase.auth.getSession()
 
@@ -116,13 +139,13 @@ export async function POST(
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
-    const postId = resolvedParams.id
+    const validPostId = uuidValidation.sanitized
 
     // 게시글 존재 및 권한 확인
     const { data: post, error: postError } = await supabase
       .from('posts')
       .select('id, author_id')
-      .eq('id', postId)
+      .eq('id', validPostId)
       .single()
 
     if (postError || !post) {
@@ -160,7 +183,7 @@ export async function POST(
     const { data: existingAttachments, error: existingError } = await supabase
       .from('post_attachments')
       .select('file_size')
-      .eq('post_id', postId)
+      .eq('post_id', validPostId)
 
     if (existingError) {
       console.error('기존 첨부파일 조회 오류:', existingError)
@@ -197,7 +220,7 @@ export async function POST(
     // 파일을 Supabase Storage에 업로드
     const fileBuffer = await file.arrayBuffer()
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}-${file.name}`
-    const filePath = `posts/${postId}/${fileName}`
+    const filePath = `posts/${validPostId}/${fileName}`
 
     const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
       .from('attachments')
@@ -227,7 +250,7 @@ export async function POST(
       await supabase
         .from('post_attachments')
         .update({ is_primary: false })
-        .eq('post_id', postId)
+        .eq('post_id', validPostId)
         .eq('is_primary', true)
     }
 
@@ -235,7 +258,7 @@ export async function POST(
     const { data: attachment, error: dbError } = await supabase
       .from('post_attachments')
       .insert({
-        post_id: postId,
+        post_id: validPostId,
         file_name: file.name,
         file_url: urlData.publicUrl,
         file_type: fileType,

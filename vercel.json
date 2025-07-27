@@ -285,19 +285,19 @@
       "destination": "/api/robots"
     },
     {
-      "source": "/api/posts/([^/]+)/likes",
+      "source": "/api/posts/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/likes",
       "destination": "/api/posts/$1/likes"
     },
     {
-      "source": "/api/posts/([^/]+)/view",
+      "source": "/api/posts/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/view",
       "destination": "/api/posts/$1/view"
     },
     {
-      "source": "/api/posts/([^/]+)/attachments",
+      "source": "/api/posts/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/attachments",
       "destination": "/api/posts/$1/attachments"
     },
     {
-      "source": "/api/posts/([^/]+)",
+      "source": "/api/posts/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})",
       "destination": "/api/posts/$1"
     }
   ]

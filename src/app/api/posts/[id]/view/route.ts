@@ -8,6 +8,7 @@ import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { applyRateLimit, RATE_LIMIT_CONFIGS } from '@/utils/rateLimiter'
+import { validateUUID } from '@/utils/validation'
 
 /**
  * 게시글 조회수 증가 API
@@ -19,6 +20,17 @@ export async function POST(
 ) {
   const resolvedParams = await context.params;
   try {
+    const postId = resolvedParams.id;
+    
+    // UUID 형식 검증
+    const uuidValidation = validateUUID(postId, '게시글 ID');
+    if (!uuidValidation.isValid) {
+      console.log('[API] VIEW UUID 검증 실패:', uuidValidation.errors);
+      return NextResponse.json({ 
+        error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.' 
+      }, { status: 400 });
+    }
+    
     // Rate limiting 적용
     const rateLimiter = applyRateLimit(RATE_LIMIT_CONFIGS.GENERAL_API)
     const rateLimitResult = rateLimiter(request)
@@ -27,11 +39,7 @@ export async function POST(
       return rateLimitResult.response!
     }
 
-    const postId = resolvedParams.id
-
-    if (!postId) {
-      return NextResponse.json({ error: 'Post ID is required' }, { status: 400 })
-    }
+    const validPostId = uuidValidation.sanitized;
 
     const supabase = createRouteHandlerClient({ cookies })
 
@@ -61,7 +69,7 @@ export async function POST(
     const { data: post, error: postError } = await serviceSupabase
       .from('posts')
       .select('id, title, author_id, view_count')
-      .eq('id', postId)
+      .eq('id', validPostId)
       .eq('is_deleted', false)
       .single()
 
@@ -79,7 +87,7 @@ export async function POST(
     }
 
     // 중복 조회 방지를 위한 세션 체크
-    const viewSessionKey = `post_view_${postId}`
+    const viewSessionKey = `post_view_${validPostId}`
     const lastViewTime = request.headers.get('x-last-view-time')
     
     // 최근 10분 내 같은 게시글을 본 경우 조회수 증가하지 않음
@@ -96,7 +104,7 @@ export async function POST(
 
     // 조회수 증가 (데이터베이스 함수 사용)
     const { data: result, error: incrementError } = await serviceSupabase
-      .rpc('increment_post_view_count', { post_uuid: postId })
+      .rpc('increment_post_view_count', { post_uuid: validPostId })
 
     if (incrementError) {
       console.error('조회수 증가 오류:', incrementError)
@@ -114,7 +122,7 @@ export async function POST(
             user_id: userId,
             action_type: 'page_viewed',
             target_type: 'post',
-            target_id: postId,
+            target_id: validPostId,
             details: {
               post_title: post.title,
               view_count: newViewCount
@@ -156,11 +164,18 @@ export async function GET(
 ) {
   const resolvedParams = await context.params;
   try {
-    const postId = resolvedParams.id
-
-    if (!postId) {
-      return NextResponse.json({ error: 'Post ID is required' }, { status: 400 })
+    const postId = resolvedParams.id;
+    
+    // UUID 형식 검증
+    const uuidValidation = validateUUID(postId, '게시글 ID');
+    if (!uuidValidation.isValid) {
+      console.log('[API] VIEW GET UUID 검증 실패:', uuidValidation.errors);
+      return NextResponse.json({ 
+        error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.' 
+      }, { status: 400 });
     }
+    
+    const validPostId = uuidValidation.sanitized;
 
     const supabase = createRouteHandlerClient({ cookies })
 
@@ -168,7 +183,7 @@ export async function GET(
     const { data: post, error } = await supabase
       .from('posts')
       .select('view_count')
-      .eq('id', postId)
+      .eq('id', validPostId)
       .eq('is_deleted', false)
       .single()
 
