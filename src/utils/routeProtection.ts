@@ -22,122 +22,46 @@ const isOnline = () => {
   return window.navigator.onLine;
 };
 
-// 페이지 로딩 상태를 안정화하는 유틸리티 (모바일 최적화)
+// 페이지 로딩 상태를 안정화하는 유틸리티 (단순화)
 export const useStablePageLoad = (targetPath?: string) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isReady, setIsReady] = useState(false);
   const [networkError, setNetworkError] = useState(false);
-  const router = useRouter();
 
   useEffect(() => {
     let mounted = true;
-    let stabilityTimer: NodeJS.Timeout;
-    let retryTimer: NodeJS.Timeout;
+    let timer: NodeJS.Timeout;
 
-    const stabilizePage = async (retryCount = 0) => {
+    const initializePage = async () => {
       try {
-        const isMobile = isMobileDevice();
-        const online = isOnline();
-        
-        console.log(`📱 [ROUTE PROTECTION] Stabilizing page (Mobile: ${isMobile}, Online: ${online}, Retry: ${retryCount})`);
-        
-        if (!online && retryCount < 3) {
-          console.log('🌐 [ROUTE PROTECTION] Offline detected, retrying...');
-          setNetworkError(true);
-          retryTimer = setTimeout(() => {
-            if (mounted) stabilizePage(retryCount + 1);
-          }, 2000);
-          return;
-        }
-        
-        setNetworkError(false);
-        
-        // 모바일에서는 더 긴 대기 시간
-        const initialDelay = isMobile ? 200 : 100;
-        await new Promise(resolve => setTimeout(resolve, initialDelay));
-        
-        // 세션 상태 확인 (모바일에서는 재시도 로직 추가)
-        let session = null;
-        let sessionError = null;
-        let attempts = 0;
-        const maxAttempts = isMobile ? 3 : 1;
-        
-        while (attempts < maxAttempts && !session) {
-          try {
-            const { data: { session: currentSession }, error } = await supabase.auth.getSession();
-            session = currentSession;
-            sessionError = error;
-            
-            if (session || !error) break;
-            
-            attempts++;
-            if (attempts < maxAttempts) {
-              await new Promise(resolve => setTimeout(resolve, 500));
-            }
-          } catch (err) {
-            sessionError = err;
-            attempts++;
-            if (attempts < maxAttempts) {
-              await new Promise(resolve => setTimeout(resolve, 500));
-            }
-          }
-        }
+        // 최소한의 초기화 지연
+        await new Promise(resolve => setTimeout(resolve, 100));
         
         if (!mounted) return;
-
-        // 모바일에서는 더 긴 안정성 대기 시간
-        const stabilityDelay = isMobile ? 150 : 50;
         
-        stabilityTimer = setTimeout(() => {
+        // 빠른 페이지 준비
+        timer = setTimeout(() => {
           if (mounted) {
             setIsLoading(false);
             setIsReady(true);
-            console.log(`✅ [ROUTE PROTECTION] Page stabilized (Mobile: ${isMobile})`);
+            console.log('✅ [ROUTE PROTECTION] Page ready');
           }
-        }, stabilityDelay);
+        }, 50);
 
       } catch (error) {
-        console.error('💥 [ROUTE PROTECTION] Error stabilizing page:', error);
-        
-        // 모바일에서는 에러 시 재시도
-        if (isMobileDevice() && retryCount < 2) {
-          console.log('🔄 [ROUTE PROTECTION] Retrying page stabilization...');
-          retryTimer = setTimeout(() => {
-            if (mounted) stabilizePage(retryCount + 1);
-          }, 1000);
-        } else {
-          if (mounted) {
-            setIsLoading(false);
-            setIsReady(true);
-          }
+        console.error('💥 [ROUTE PROTECTION] Error initializing page:', error);
+        if (mounted) {
+          setIsLoading(false);
+          setIsReady(true);
         }
       }
     };
 
-    stabilizePage();
-    
-    // 온라인 상태 변경 감지
-    const handleOnline = () => {
-      console.log('🌐 [ROUTE PROTECTION] Connection restored');
-      if (networkError && mounted) {
-        stabilizePage();
-      }
-    };
-    
-    const handleOffline = () => {
-      console.log('🌐 [ROUTE PROTECTION] Connection lost');
-      setNetworkError(true);
-    };
-    
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
+    initializePage();
 
     return () => {
       mounted = false;
-      if (stabilityTimer) clearTimeout(stabilityTimer);
-      if (retryTimer) clearTimeout(retryTimer);
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
+      if (timer) clearTimeout(timer);
     };
   }, [targetPath]);
 
