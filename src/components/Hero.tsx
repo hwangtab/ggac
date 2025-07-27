@@ -179,7 +179,7 @@ const Hero = () => {
       }}
     >
       {/* Layer 1: 배경 이미지 - 최적화된 이미지 컴포넌트 */}
-      <div className="absolute inset-0 relative" style={{ zIndex: 1 }}>
+      <div className="absolute inset-0" style={{ zIndex: 1 }}>
         <OptimizedHeroImage
           alt="경기아트콜렉티브 협동조합 창립총회"
           priority
