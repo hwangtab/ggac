@@ -149,7 +149,28 @@ export function usePostLikes({
     }
 
     isProcessingRef.current = true
-    setState(prev => ({ ...prev, isLoading: true, error: null }))
+    
+    // Optimistic update - UI 즉시 업데이트
+    const optimisticIsLiked = !state.isLiked
+    const optimisticCount = optimisticIsLiked ? state.likeCount + 1 : state.likeCount - 1
+    
+    setState(prev => ({ 
+      ...prev, 
+      isLiked: optimisticIsLiked, 
+      likeCount: optimisticCount,
+      isLoading: true, 
+      error: null 
+    }))
+    
+    // 부모 컴포넌트에 즉시 알림 (실시간 업데이트보다 빠른 UI 반영)
+    if (onLikeChange) {
+      console.log('[usePostLikes] Optimistic update - 부모에 즉시 알림:', {
+        postId,
+        liked: optimisticIsLiked,
+        count: optimisticCount
+      })
+      onLikeChange(postId, optimisticIsLiked, optimisticCount)
+    }
 
     try {
       const response = await fetch(`/api/posts/${postId}/likes`, {
@@ -209,6 +230,10 @@ export function usePostLikes({
     } catch (error) {
       console.error('[usePostLikes] POST 오류:', error)
       
+      // Optimistic update 롤백
+      const rollbackIsLiked = !optimisticIsLiked
+      const rollbackCount = rollbackIsLiked ? optimisticCount + 1 : optimisticCount - 1
+      
       let errorMessage = '좋아요 처리에 실패했습니다.';
       if (error instanceof Error) {
         errorMessage = error.message;
@@ -216,9 +241,21 @@ export function usePostLikes({
       
       setState(prev => ({
         ...prev,
+        isLiked: rollbackIsLiked,
+        likeCount: rollbackCount,
         error: errorMessage,
         isLoading: false
       }))
+      
+      // 부모 컴포넌트에 롤백 알림
+      if (onLikeChange) {
+        console.log('[usePostLikes] 에러 발생 - 롤백 알림:', {
+          postId,
+          liked: rollbackIsLiked,
+          count: rollbackCount
+        })
+        onLikeChange(postId, rollbackIsLiked, rollbackCount)
+      }
       
       return false
     } finally {

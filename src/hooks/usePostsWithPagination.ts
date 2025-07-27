@@ -169,36 +169,36 @@ export const usePostsWithPagination = ({
             const oldRecord = (payload as any).old || (payload as any).old_record;
             const newRecord = (payload as any).new || (payload as any).new_record;
             
+            console.log('[REALTIME] 실시간 업데이트 수신:', {
+              eventType,
+              oldRecord: oldRecord ? Object.keys(oldRecord) : null,
+              newRecord: newRecord ? Object.keys(newRecord) : null,
+              postId: newRecord?.id
+            });
+            
             if (eventType === 'UPDATE' && oldRecord && newRecord) {
-              // 좋아요 카운트나 조회수 변경만 감지하여 마이너 업데이트로 분류
-              const oldKeys = Object.keys(oldRecord);
-              const isLikeCountUpdate = 
-                oldKeys.length <= 3 && // id, like_count, updated_at 등 최소 필드만 변경
-                oldKeys.includes('id') &&
-                newRecord.like_count !== undefined &&
-                newRecord.title === oldRecord.title && // 제목이 변경되지 않음
-                newRecord.content === oldRecord.content && // 내용이 변경되지 않음
-                newRecord.category === oldRecord.category; // 카테고리가 변경되지 않음
+              // 좋아요나 조회수만 변경된 마이너 업데이트 감지
+              const hasOnlyMinorChanges = 
+                // like_count만 변경된 경우
+                (newRecord.like_count !== oldRecord.like_count && 
+                 newRecord.title === oldRecord.title && 
+                 newRecord.content === oldRecord.content) ||
+                // view_count만 변경된 경우  
+                (newRecord.view_count !== oldRecord.view_count && 
+                 newRecord.title === oldRecord.title && 
+                 newRecord.content === oldRecord.content);
               
-              const isViewCountUpdate = 
-                oldKeys.length <= 3 &&
-                oldKeys.includes('id') &&
-                newRecord.view_count !== undefined &&
-                newRecord.title === oldRecord.title &&
-                newRecord.content === oldRecord.content &&
-                newRecord.category === oldRecord.category;
-              
-              if (isLikeCountUpdate || isViewCountUpdate) {
-                console.log('[REALTIME] 마이너 업데이트 감지 - 새로고침 건너뜀', {
-                  isLikeCountUpdate,
-                  isViewCountUpdate,
-                  oldKeys,
+              if (hasOnlyMinorChanges) {
+                console.log('[REALTIME] 마이너 업데이트 감지 - 새로고침 건너뜀:', {
+                  likeChanged: newRecord.like_count !== oldRecord.like_count,
+                  viewChanged: newRecord.view_count !== oldRecord.view_count,
                   postId: newRecord.id
                 });
                 return;
               }
             }
             
+            console.log('[REALTIME] 메이저 업데이트 감지 - 게시글 목록 새로고침');
             fetchPosts();
           }
         )
