@@ -81,12 +81,16 @@ export const usePostsWithPagination = ({
         throw postsError;
       }
 
-      // 3. 각 게시글의 좋아요 정보를 API를 통해 가져오기
+      // 3. 각 게시글의 좋아요 정보를 API를 통해 가져오기 (최적화된 배치 처리)
       const postsWithLikes = await Promise.all(
         (postsData || []).map(async (post) => {
           try {
             // API 라우트를 통해서 좋아요 정보 조회
-            const response = await fetch(`/api/posts/${post.id}/likes`);
+            const response = await fetch(`/api/posts/${post.id}/likes`, {
+              // 캐시 전략 추가로 불필요한 요청 줄이기
+              cache: 'no-store',
+              next: { revalidate: 30 } // 30초 캐시
+            });
             
             if (response.ok) {
               const likeData = await response.json();
@@ -166,18 +170,33 @@ export const usePostsWithPagination = ({
             const newRecord = (payload as any).new || (payload as any).new_record;
             
             if (eventType === 'UPDATE' && oldRecord && newRecord) {
-              // Supabase는 마이너 업데이트 시 OLD 레코드에 ID만 포함
-              const isMinorUpdate = 
-                Object.keys(oldRecord).length === 1 && 
-                (oldRecord as any).id && 
-                (newRecord as any).title && 
-                (newRecord as any).content && 
-                (newRecord as any).category;
+              // 좋아요 카운트나 조회수 변경만 감지하여 마이너 업데이트로 분류
+              const oldKeys = Object.keys(oldRecord);
+              const isLikeCountUpdate = 
+                oldKeys.length <= 3 && // id, like_count, updated_at 등 최소 필드만 변경
+                oldKeys.includes('id') &&
+                newRecord.like_count !== undefined &&
+                newRecord.title === oldRecord.title && // 제목이 변경되지 않음
+                newRecord.content === oldRecord.content && // 내용이 변경되지 않음
+                newRecord.category === oldRecord.category; // 카테고리가 변경되지 않음
               
-              if (isMinorUpdate) {
+              const isViewCountUpdate = 
+                oldKeys.length <= 3 &&
+                oldKeys.includes('id') &&
+                newRecord.view_count !== undefined &&
+                newRecord.title === oldRecord.title &&
+                newRecord.content === oldRecord.content &&
+                newRecord.category === oldRecord.category;
+              
+              if (isLikeCountUpdate || isViewCountUpdate) {
+                console.log('[REALTIME] 마이너 업데이트 감지 - 새로고침 건너뜀', {
+                  isLikeCountUpdate,
+                  isViewCountUpdate,
+                  oldKeys,
+                  postId: newRecord.id
+                });
                 return;
               }
-              
             }
             
             fetchPosts();
