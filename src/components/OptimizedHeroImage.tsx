@@ -20,13 +20,20 @@ const OptimizedHeroImage = ({
 }: OptimizedHeroImageProps) => {
   const [imageLoaded, setImageLoaded] = useState(false)
   const [imageError, setImageError] = useState(false)
+  
+  // 디버깅: 컴포넌트 마운트 시 로그
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[OptimizedHeroImage] 컴포넌트 렌더링', { imageLoaded, imageError })
+  }
 
   const handleLoad = () => {
+    console.log('[OptimizedHeroImage] 이미지 로드 완료')
     setImageLoaded(true)
     onLoad?.()
   }
 
   const handleError = () => {
+    console.error('[OptimizedHeroImage] 이미지 로드 실패')
     setImageError(true)
   }
 
@@ -67,42 +74,57 @@ const OptimizedHeroImage = ({
         />
       )}
       
-      {/* 메인 이미지 - WebP 최적화 */}
+      {/* 메인 이미지 - AVIF/WebP/PNG 폴백 */}
       <picture>
+        <source srcSet="/images/hero.avif" type="image/avif" />
         <source srcSet="/images/hero.webp" type="image/webp" />
         <Image
-          src="/images/hero.webp"
+          src="/images/hero.png"
           alt={alt}
           fill
           className={`object-cover transition-opacity duration-700 ${
             imageLoaded ? 'opacity-100' : 'opacity-0'
           } ${className}`}
-          priority={priority}
-          sizes="100vw"
+          priority={true}
+          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 100vw, 100vw"
           style={{ 
             ...style,
-            willChange: imageLoaded ? 'auto' : 'opacity', // 로딩 후 GPU 레이어 해제
+            willChange: imageLoaded ? 'auto' : 'opacity',
             backfaceVisibility: 'hidden',
           }}
           onLoad={handleLoad}
           onError={handleError}
-          // 성능 최적화 속성
           decoding="async"
-          loading={priority ? "eager" : "lazy"}
-          placeholder="empty"
+          loading="eager"
+          placeholder="blur"
+          blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k="
         />
       </picture>
       
-      {/* 오류 상태 처리 */}
+      {/* 오류 상태 처리 - PNG 폴백 시도 */}
       {imageError && (
-        <div className="absolute inset-0 bg-gray-900 flex items-center justify-center">
-          <div className="text-white text-center">
-            <div className="w-12 h-12 mx-auto mb-2 opacity-50">
-              <svg fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
-              </svg>
+        <div className="absolute inset-0">
+          <img 
+            src="/images/hero.png"
+            alt={alt}
+            className="w-full h-full object-cover"
+            onError={() => console.error('[OptimizedHeroImage] PNG 폴백도 실패')}
+            onLoad={() => {
+              console.log('[OptimizedHeroImage] PNG 폴백 로드 성공')
+              setImageLoaded(true)
+              setImageError(false)
+            }}
+          />
+          {/* 최종 실패 시 UI */}
+          <div className="absolute inset-0 bg-gray-900 flex items-center justify-center">
+            <div className="text-white text-center">
+              <div className="w-12 h-12 mx-auto mb-2 opacity-50">
+                <svg fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <p className="text-sm opacity-70">이미지 로딩 실패</p>
             </div>
-            <p className="text-sm opacity-70">이미지 로딩 실패</p>
           </div>
         </div>
       )}
