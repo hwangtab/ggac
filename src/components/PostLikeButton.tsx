@@ -28,7 +28,7 @@ interface PostLikeButtonProps {
   /** 클래스명 */
   className?: string
   /** 상태 변경 콜백 */
-  onLikeChange?: (liked: boolean, count: number) => void
+  onLikeChange?: (postId: string, liked: boolean, count: number) => void
   /** 클릭 이벤트 콜백 */
   onClick?: () => void
 }

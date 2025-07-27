@@ -28,7 +28,7 @@ interface UsePostLikesProps {
   /** 초기 좋아요 상태 */
   initialIsLiked?: boolean
   /** 상태 변경 콜백 */
-  onLikeChange?: (liked: boolean, count: number) => void
+  onLikeChange?: (postId: string, liked: boolean, count: number) => void
 }
 
 export function usePostLikes({
@@ -201,8 +201,8 @@ export function usePostLikes({
         isLoading: false
       }))
 
-      // 콜백 호출
-      onLikeChange?.(successData.liked, successData.like_count)
+      // 콜백 호출 (postId 포함)
+      onLikeChange?.(postId, successData.liked, successData.like_count)
 
       return true
 

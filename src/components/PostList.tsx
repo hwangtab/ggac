@@ -45,12 +45,18 @@ const PostList: React.FC<PostListProps> = ({
   const [profiles, setProfiles] = useState<Record<string, string>>({})
   const [selectedCategory, setSelectedCategory] = useState<string>('전체')
   const [expandedPosts, setExpandedPosts] = useState<Set<string>>(new Set())
+  const [localPosts, setLocalPosts] = useState<Post[]>(posts)
   const router = useRouter()
 
 
+  // posts prop이 변경될 때 localPosts 동기화
+  useEffect(() => {
+    setLocalPosts(posts)
+  }, [posts])
+
   useEffect(() => {
     const fetchProfiles = async () => {
-      const authorIds = Array.from(new Set(posts.map(post => post.author_id)))
+      const authorIds = Array.from(new Set(localPosts.map(post => post.author_id)))
       if (authorIds.length === 0) return
 
       const { data, error } = await supabase
@@ -68,10 +74,21 @@ const PostList: React.FC<PostListProps> = ({
     }
 
     fetchProfiles()
-  }, [posts])
+  }, [localPosts])
 
-  // 페이지네이션 사용시 카테고리 필터링은 서버에서 처리되므로 posts를 그대로 사용
-  const displayPosts = posts
+  // 로컬 상태를 사용하여 즉시 UI 업데이트
+  const displayPosts = localPosts
+
+  // 개별 게시글의 좋아요 상태 업데이트 핸들러
+  const handleLikeChange = (postId: string, liked: boolean, count: number) => {
+    setLocalPosts(prevPosts => 
+      prevPosts.map(post => 
+        post.id === postId 
+          ? { ...post, like_count: count, is_liked: liked }
+          : post
+      )
+    )
+  }
 
   const handleCategoryChange = (category: string) => {
     setSelectedCategory(category)
@@ -193,6 +210,7 @@ const PostList: React.FC<PostListProps> = ({
                           variant="minimal"
                           showCount={true}
                           showLabel={false}
+                          onLikeChange={handleLikeChange}
                         />
                         <button
                           onClick={() => toggleComments(post.id)}
