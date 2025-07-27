@@ -15,9 +15,9 @@ import { applyRateLimit, RATE_LIMIT_CONFIGS } from '@/utils/rateLimiter'
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  context: { params: Promise<{ id: string }> }
 ) {
-  const resolvedParams = await params;
+  const resolvedParams = await context.params;
   try {
     // Rate limiting 적용
     const rateLimiter = applyRateLimit(RATE_LIMIT_CONFIGS.GENERAL_API)
@@ -152,9 +152,9 @@ export async function POST(
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  context: { params: Promise<{ id: string }> }
 ) {
-  const resolvedParams = await params;
+  const resolvedParams = await context.params;
   try {
     const postId = resolvedParams.id
 

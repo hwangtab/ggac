@@ -14,6 +14,25 @@ const WebGLParticles = ({ particleCount, width, height }: WebGLParticlesProps) =
   const programRef = useRef<WebGLProgram | null>(null)
   const animationFrameRef = useRef<number | null>(null)
   const mousePositionRef = useRef({ x: 0, y: 0 })
+  
+  // WebGL 리소스 참조 - 메모리 최적화
+  const buffersRef = useRef<{
+    position: WebGLBuffer | null
+    size: WebGLBuffer | null
+    alpha: WebGLBuffer | null
+  }>({ position: null, size: null, alpha: null })
+  
+  const locationsRef = useRef<{
+    uniforms: {
+      resolution: WebGLUniformLocation | null
+      mouse: WebGLUniformLocation | null
+    }
+    attributes: {
+      position: number
+      size: number
+      alpha: number
+    }
+  } | null>(null)
 
   // Vertex shader source
   const vertexShaderSource = `
@@ -98,7 +117,18 @@ const WebGLParticles = ({ particleCount, width, height }: WebGLParticlesProps) =
     const canvas = canvasRef.current
     if (!canvas) return false
 
-    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl')
+    // WebGL 컨텍스트 최적화 설정
+    const contextAttributes: WebGLContextAttributes = {
+      alpha: true,
+      antialias: false, // 성능 향상을 위해 비활성화
+      depth: false,
+      premultipliedAlpha: false,
+      preserveDrawingBuffer: false,
+      powerPreference: 'default'
+    }
+
+    const gl = canvas.getContext('webgl', contextAttributes) || 
+               canvas.getContext('experimental-webgl', contextAttributes)
     if (!gl || !('useProgram' in gl)) {
       console.warn('WebGL not supported')
       return false
@@ -120,6 +150,25 @@ const WebGLParticles = ({ particleCount, width, height }: WebGLParticlesProps) =
     // Enable blending for transparency
     webglContext.enable(webglContext.BLEND)
     webglContext.blendFunc(webglContext.SRC_ALPHA, webglContext.ONE_MINUS_SRC_ALPHA)
+
+    // 위치 및 유니폼 캐싱
+    locationsRef.current = {
+      uniforms: {
+        resolution: webglContext.getUniformLocation(program, 'u_resolution'),
+        mouse: webglContext.getUniformLocation(program, 'u_mouse')
+      },
+      attributes: {
+        position: webglContext.getAttribLocation(program, 'a_position'),
+        size: webglContext.getAttribLocation(program, 'a_size'),
+        alpha: webglContext.getAttribLocation(program, 'a_alpha')
+      }
+    }
+
+    // 재사용 가능한 버퍼 생성
+    const buffers = buffersRef.current
+    buffers.position = webglContext.createBuffer()
+    buffers.size = webglContext.createBuffer()
+    buffers.alpha = webglContext.createBuffer()
 
     return true
   }, [createProgram, width, height])
@@ -170,14 +219,17 @@ const WebGLParticles = ({ particleCount, width, height }: WebGLParticlesProps) =
     const gl = glRef.current
     const program = programRef.current
     const particleData = particleDataRef.current
+    const locations = locationsRef.current
+    const buffers = buffersRef.current
     
-    if (!gl || !program || !particleData) return
+    if (!gl || !program || !particleData || !locations || 
+        !buffers.position || !buffers.size || !buffers.alpha) return
 
     // Clear canvas
     gl.clearColor(0, 0, 0, 0)
     gl.clear(gl.COLOR_BUFFER_BIT)
 
-    // Update particle positions and twinkle
+    // Update particle positions and twinkle (벡터화된 업데이트)
     for (let i = 0; i < particleCount; i++) {
       const i2 = i * 2
       
@@ -187,55 +239,39 @@ const WebGLParticles = ({ particleCount, width, height }: WebGLParticlesProps) =
       
       // Wrap around screen
       if (particleData.positions[i2] < 0) particleData.positions[i2] = width
-      if (particleData.positions[i2] > width) particleData.positions[i2] = 0
+      else if (particleData.positions[i2] > width) particleData.positions[i2] = 0
       if (particleData.positions[i2 + 1] < 0) particleData.positions[i2 + 1] = height
-      if (particleData.positions[i2 + 1] > height) particleData.positions[i2 + 1] = 0
+      else if (particleData.positions[i2 + 1] > height) particleData.positions[i2 + 1] = 0
       
-      // Update twinkle
+      // Update twinkle (optimized sin calculation)
       particleData.twinklePhases[i] += particleData.twinkleSpeeds[i]
-      particleData.alphas[i] = Math.abs(Math.sin(particleData.twinklePhases[i])) * 0.8 + 0.2
+      particleData.alphas[i] = Math.abs(Math.sin(particleData.twinklePhases[i])) * 0.6 + 0.4
     }
 
-    // Set uniforms
-    const resolutionUniform = gl.getUniformLocation(program, 'u_resolution')
-    const mouseUniform = gl.getUniformLocation(program, 'u_mouse')
-    
-    gl.uniform2f(resolutionUniform, width, height)
-    gl.uniform2f(mouseUniform, mousePositionRef.current.x, mousePositionRef.current.y)
+    // Set uniforms (cached locations)
+    gl.uniform2f(locations.uniforms.resolution, width, height)
+    gl.uniform2f(locations.uniforms.mouse, mousePositionRef.current.x, mousePositionRef.current.y)
 
-    // Set attributes
-    const positionAttribute = gl.getAttribLocation(program, 'a_position')
-    const sizeAttribute = gl.getAttribLocation(program, 'a_size')
-    const alphaAttribute = gl.getAttribLocation(program, 'a_alpha')
-
-    // Position buffer
-    const positionBuffer = gl.createBuffer()
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer)
+    // Position buffer (reuse existing buffer)
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffers.position)
     gl.bufferData(gl.ARRAY_BUFFER, particleData.positions, gl.DYNAMIC_DRAW)
-    gl.enableVertexAttribArray(positionAttribute)
-    gl.vertexAttribPointer(positionAttribute, 2, gl.FLOAT, false, 0, 0)
+    gl.enableVertexAttribArray(locations.attributes.position)
+    gl.vertexAttribPointer(locations.attributes.position, 2, gl.FLOAT, false, 0, 0)
 
-    // Size buffer
-    const sizeBuffer = gl.createBuffer()
-    gl.bindBuffer(gl.ARRAY_BUFFER, sizeBuffer)
+    // Size buffer (reuse existing buffer, only update once)
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffers.size)
     gl.bufferData(gl.ARRAY_BUFFER, particleData.sizes, gl.STATIC_DRAW)
-    gl.enableVertexAttribArray(sizeAttribute)
-    gl.vertexAttribPointer(sizeAttribute, 1, gl.FLOAT, false, 0, 0)
+    gl.enableVertexAttribArray(locations.attributes.size)
+    gl.vertexAttribPointer(locations.attributes.size, 1, gl.FLOAT, false, 0, 0)
 
-    // Alpha buffer
-    const alphaBuffer = gl.createBuffer()
-    gl.bindBuffer(gl.ARRAY_BUFFER, alphaBuffer)
+    // Alpha buffer (reuse existing buffer)
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffers.alpha)
     gl.bufferData(gl.ARRAY_BUFFER, particleData.alphas, gl.DYNAMIC_DRAW)
-    gl.enableVertexAttribArray(alphaAttribute)
-    gl.vertexAttribPointer(alphaAttribute, 1, gl.FLOAT, false, 0, 0)
+    gl.enableVertexAttribArray(locations.attributes.alpha)
+    gl.vertexAttribPointer(locations.attributes.alpha, 1, gl.FLOAT, false, 0, 0)
 
     // Draw particles
     gl.drawArrays(gl.POINTS, 0, particleCount)
-
-    // Cleanup buffers
-    gl.deleteBuffer(positionBuffer)
-    gl.deleteBuffer(sizeBuffer)
-    gl.deleteBuffer(alphaBuffer)
   }, [particleCount, width, height])
 
   const animate = useCallback(() => {
@@ -254,6 +290,55 @@ const WebGLParticles = ({ particleCount, width, height }: WebGLParticlesProps) =
     }
   }, [])
 
+  // WebGL 리소스 정리
+  const cleanup = useCallback(() => {
+    const gl = glRef.current
+    const program = programRef.current
+    const buffers = buffersRef.current
+
+    // 애니메이션 정리
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current)
+      animationFrameRef.current = null
+    }
+
+    // WebGL 리소스 정리
+    if (gl && program) {
+      // 버퍼 삭제
+      if (buffers.position) {
+        gl.deleteBuffer(buffers.position)
+        buffers.position = null
+      }
+      if (buffers.size) {
+        gl.deleteBuffer(buffers.size)
+        buffers.size = null
+      }
+      if (buffers.alpha) {
+        gl.deleteBuffer(buffers.alpha)
+        buffers.alpha = null
+      }
+
+      // 프로그램 및 셰이더 삭제
+      const shaders = gl.getAttachedShaders(program)
+      if (shaders) {
+        shaders.forEach(shader => {
+          gl.detachShader(program, shader)
+          gl.deleteShader(shader)
+        })
+      }
+      gl.deleteProgram(program)
+      programRef.current = null
+    }
+
+    // 참조 정리
+    glRef.current = null
+    locationsRef.current = null
+    particleDataRef.current = null
+
+    // 이벤트 리스너 정리
+    window.removeEventListener('mousemove', handleMouseMove)
+  }, [handleMouseMove])
+
   useEffect(() => {
     if (width < 768) return // 모바일에서는 비활성화
 
@@ -267,13 +352,8 @@ const WebGLParticles = ({ particleCount, width, height }: WebGLParticlesProps) =
 
     window.addEventListener('mousemove', handleMouseMove, { passive: true })
 
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current)
-      }
-      window.removeEventListener('mousemove', handleMouseMove)
-    }
-  }, [initWebGL, initParticles, animate, handleMouseMove, width])
+    return cleanup
+  }, [initWebGL, initParticles, animate, handleMouseMove, cleanup, width])
 
   return (
     <canvas

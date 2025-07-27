@@ -12,7 +12,7 @@ export async function POST(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  const params = await context.params;
+  const resolvedParams = await context.params;
   try {
     const cookieStore = cookies()
     const supabase = createServerComponentClient({ cookies: () => cookieStore })
@@ -51,7 +51,7 @@ export async function POST(
 
     // 요청 데이터 파싱
     const { memberId, role } = await request.json()
-    const artistId = params.id
+    const artistId = resolvedParams.id
 
     if (!memberId || !role) {
       return NextResponse.json(

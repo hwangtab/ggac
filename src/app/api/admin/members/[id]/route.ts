@@ -7,15 +7,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { validateFormData } from '@/utils/validation'
-import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator, addRateLimitHeaders } from '@/utils/rateLimiter'
+import distributedRateLimiter, { DISTRIBUTED_RATE_LIMIT_CONFIGS, createDistributedUserKeyGenerator, addDistributedRateLimitHeaders } from '@/utils/distributedRateLimiter'
 import { logSecurityEvent } from '@/utils/security'
 
 // PATCH: 회원 상태 변경
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  context: { params: Promise<{ id: string }> }
 ) {
-  const resolvedParams = await params;
+  const resolvedParams = await context.params;
   // 함수 호출 확인용 로그
   console.log('[PATCH] 회원 관리 API 호출됨:', {
     memberId: resolvedParams.id,
@@ -25,13 +25,13 @@ export async function PATCH(
   })
   
   try {
-    // Rate limiting 적용
-    const rateLimiter = applyRateLimit({
-      ...RATE_LIMIT_CONFIGS.ADMIN_API,
-      keyGenerator: createUserKeyGenerator('admin_member_action')
+    // 분산 Rate limiting 적용
+    const rateLimiter = await distributedRateLimiter.applyRateLimit({
+      ...DISTRIBUTED_RATE_LIMIT_CONFIGS.ADMIN_API,
+      keyGenerator: createDistributedUserKeyGenerator('admin_member_action')
     })
     
-    const rateLimitResult = rateLimiter(request)
+    const rateLimitResult = await rateLimiter(request)
     if (!rateLimitResult.success && rateLimitResult.response) {
       return rateLimitResult.response
     }
@@ -270,10 +270,10 @@ export async function PATCH(
       member: updatedMember
     })
     
-    // Rate limit 헤더 추가
-    return addRateLimitHeaders(
+    // 분산 Rate limit 헤더 추가
+    return addDistributedRateLimitHeaders(
       response,
-      RATE_LIMIT_CONFIGS.ADMIN_API.maxRequests,
+      DISTRIBUTED_RATE_LIMIT_CONFIGS.ADMIN_API.maxRequests,
       rateLimitResult.remaining,
       rateLimitResult.resetTime
     )

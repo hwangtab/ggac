@@ -74,7 +74,7 @@ const OptimizedImage = memo(function OptimizedImage({
 
   // Progressive loading with loading indicator
   return (
-    <div className={`relative ${className}`}>
+    <div className={fill ? `relative ${className}` : className}>
       {isLoading && (
         <div className="absolute inset-0 bg-gradient-to-br from-gray-100 to-gray-200 animate-pulse flex items-center justify-center">
           <div className="w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin"></div>
@@ -83,7 +83,7 @@ const OptimizedImage = memo(function OptimizedImage({
       <Image 
         {...imageProps} 
         alt={alt || ''} 
-        className={`transition-opacity duration-300 ${isLoading ? 'opacity-0' : 'opacity-100'} ${className}`}
+        className={`transition-opacity duration-300 ${isLoading ? 'opacity-0' : 'opacity-100'} ${fill ? '' : className}`}
       />
     </div>
   )

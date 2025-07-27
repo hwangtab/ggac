@@ -16,9 +16,9 @@ function getSupabaseAdmin() {
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  context: { params: Promise<{ id: string }> }
 ) {
-  const resolvedParams = await params;
+  const resolvedParams = await context.params;
   try {
     // Rate limiting
     const rateLimitConfig = rateLimiterUtils.RATE_LIMIT_CONFIGS.AUTH_API;

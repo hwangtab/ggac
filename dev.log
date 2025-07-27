@@ -1,0 +1,1617 @@
+
+> gac-website@0.1.0 dev
+> next dev
+
+ ⚠ Warning: Found multiple lockfiles. Selecting /Users/hwang-gyeongha/package-lock.json.
+   Consider removing the lockfiles at:
+   * /Users/hwang-gyeongha/ggac/package-lock.json
+
+   ▲ Next.js 15.4.4
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.219.116:3000
+   - Environments: .env.local
+   - Experiments (use with caution):
+     ✓ optimizeCss
+     ✓ forceSwcTransforms
+     · optimizePackageImports
+
+ ✓ Starting...
+ ✓ Ready in 1586ms
+ ○ Compiling /api/posts/[id]/likes ...
+ ✓ Compiled /api/posts/[id]/likes in 644ms (472 modules)
+🟢 [API] GET 라우트 진입
+🟢 [API] GET 라우트 진입
+🟢 [API] GET 라우트 진입
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: '0e307867-f023-4598-a817-946f56724b67',
+  timestamp: '2025-07-27T05:01:06.087Z'
+}
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: 'e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e',
+  timestamp: '2025-07-27T05:01:06.091Z'
+}
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: '7922037f-168b-4c1a-ab0b-8668d462ee9b',
+  timestamp: '2025-07-27T05:01:06.091Z'
+}
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: 'f8a8cff5-28c4-42ff-a016-ff893425d7da',
+  timestamp: '2025-07-27T05:01:06.091Z'
+}
+[API] GET 성공: {
+  post_id: '0e307867-f023-4598-a817-946f56724b67',
+  like_count: 2,
+  is_liked: true
+}
+ GET /api/posts/0e307867-f023-4598-a817-946f56724b67/likes 200 in 1870ms
+[API] GET 성공: {
+  post_id: 'e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e',
+  like_count: 0,
+  is_liked: false
+}
+ GET /api/posts/e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e/likes 200 in 1873ms
+[API] GET 성공: {
+  post_id: '7922037f-168b-4c1a-ab0b-8668d462ee9b',
+  like_count: 0,
+  is_liked: false
+}
+ GET /api/posts/7922037f-168b-4c1a-ab0b-8668d462ee9b/likes 200 in 1872ms
+[API] GET 성공: {
+  post_id: 'f8a8cff5-28c4-42ff-a016-ff893425d7da',
+  like_count: 2,
+  is_liked: true
+}
+ GET /api/posts/f8a8cff5-28c4-42ff-a016-ff893425d7da/likes 200 in 1893ms
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: '0e307867-f023-4598-a817-946f56724b67',
+  timestamp: '2025-07-27T05:01:06.574Z'
+}
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: 'e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e',
+  timestamp: '2025-07-27T05:01:06.583Z'
+}
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: '7922037f-168b-4c1a-ab0b-8668d462ee9b',
+  timestamp: '2025-07-27T05:01:06.593Z'
+}
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: 'f8a8cff5-28c4-42ff-a016-ff893425d7da',
+  timestamp: '2025-07-27T05:01:06.599Z'
+}
+[API] GET 성공: {
+  post_id: '7922037f-168b-4c1a-ab0b-8668d462ee9b',
+  like_count: 0,
+  is_liked: false
+}
+ GET /api/posts/7922037f-168b-4c1a-ab0b-8668d462ee9b/likes 200 in 256ms
+[API] GET 성공: {
+  post_id: '0e307867-f023-4598-a817-946f56724b67',
+  like_count: 2,
+  is_liked: true
+}
+ GET /api/posts/0e307867-f023-4598-a817-946f56724b67/likes 200 in 284ms
+[API] GET 성공: {
+  post_id: 'e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e',
+  like_count: 0,
+  is_liked: false
+}
+ GET /api/posts/e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e/likes 200 in 277ms
+[API] GET 성공: {
+  post_id: 'f8a8cff5-28c4-42ff-a016-ff893425d7da',
+  like_count: 2,
+  is_liked: true
+}
+ GET /api/posts/f8a8cff5-28c4-42ff-a016-ff893425d7da/likes 200 in 263ms
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: 'f8a8cff5-28c4-42ff-a016-ff893425d7da',
+  timestamp: '2025-07-27T05:59:38.241Z'
+}
+🟢 [API] GET 라우트 진입
+🟢 [API] GET 라우트 진입
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: '0e307867-f023-4598-a817-946f56724b67',
+  timestamp: '2025-07-27T05:59:38.263Z'
+}
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: 'e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e',
+  timestamp: '2025-07-27T05:59:38.263Z'
+}
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: '7922037f-168b-4c1a-ab0b-8668d462ee9b',
+  timestamp: '2025-07-27T05:59:38.263Z'
+}
+[API] GET 성공: {
+  post_id: 'e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e',
+  like_count: 0,
+  is_liked: false
+}
+ GET /api/posts/e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e/likes 200 in 248ms
+[API] GET 성공: {
+  post_id: 'f8a8cff5-28c4-42ff-a016-ff893425d7da',
+  like_count: 2,
+  is_liked: true
+}
+ GET /api/posts/f8a8cff5-28c4-42ff-a016-ff893425d7da/likes 200 in 260ms
+[API] GET 성공: {
+  post_id: '7922037f-168b-4c1a-ab0b-8668d462ee9b',
+  like_count: 0,
+  is_liked: false
+}
+ GET /api/posts/7922037f-168b-4c1a-ab0b-8668d462ee9b/likes 200 in 265ms
+[API] GET 성공: {
+  post_id: '0e307867-f023-4598-a817-946f56724b67',
+  like_count: 2,
+  is_liked: true
+}
+ GET /api/posts/0e307867-f023-4598-a817-946f56724b67/likes 200 in 324ms
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: 'f8a8cff5-28c4-42ff-a016-ff893425d7da',
+  timestamp: '2025-07-27T05:59:38.745Z'
+}
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: 'e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e',
+  timestamp: '2025-07-27T05:59:38.765Z'
+}
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: '7922037f-168b-4c1a-ab0b-8668d462ee9b',
+  timestamp: '2025-07-27T05:59:38.772Z'
+}
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: '0e307867-f023-4598-a817-946f56724b67',
+  timestamp: '2025-07-27T05:59:38.779Z'
+}
+[API] GET 성공: {
+  post_id: 'e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e',
+  like_count: 0,
+  is_liked: false
+}
+ GET /api/posts/e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e/likes 200 in 98ms
+[API] GET 성공: {
+  post_id: '7922037f-168b-4c1a-ab0b-8668d462ee9b',
+  like_count: 0,
+  is_liked: false
+}
+ GET /api/posts/7922037f-168b-4c1a-ab0b-8668d462ee9b/likes 200 in 118ms
+[API] GET 성공: {
+  post_id: '0e307867-f023-4598-a817-946f56724b67',
+  like_count: 2,
+  is_liked: true
+}
+ GET /api/posts/0e307867-f023-4598-a817-946f56724b67/likes 200 in 136ms
+[API] GET 성공: {
+  post_id: 'f8a8cff5-28c4-42ff-a016-ff893425d7da',
+  like_count: 2,
+  is_liked: true
+}
+ GET /api/posts/f8a8cff5-28c4-42ff-a016-ff893425d7da/likes 200 in 172ms
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: 'f8a8cff5-28c4-42ff-a016-ff893425d7da',
+  timestamp: '2025-07-27T06:58:12.048Z'
+}
+🟢 [API] GET 라우트 진입
+🟢 [API] GET 라우트 진입
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: '0e307867-f023-4598-a817-946f56724b67',
+  timestamp: '2025-07-27T06:58:12.083Z'
+}
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: 'e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e',
+  timestamp: '2025-07-27T06:58:12.083Z'
+}
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: '7922037f-168b-4c1a-ab0b-8668d462ee9b',
+  timestamp: '2025-07-27T06:58:12.083Z'
+}
+[API] GET 성공: {
+  post_id: '0e307867-f023-4598-a817-946f56724b67',
+  like_count: 2,
+  is_liked: true
+}
+ GET /api/posts/0e307867-f023-4598-a817-946f56724b67/likes 200 in 347ms
+[API] GET 성공: {
+  post_id: 'e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e',
+  like_count: 0,
+  is_liked: false
+}
+ GET /api/posts/e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e/likes 200 in 356ms
+[API] GET 성공: {
+  post_id: '7922037f-168b-4c1a-ab0b-8668d462ee9b',
+  like_count: 0,
+  is_liked: false
+}
+ GET /api/posts/7922037f-168b-4c1a-ab0b-8668d462ee9b/likes 200 in 355ms
+[API] GET 성공: {
+  post_id: 'f8a8cff5-28c4-42ff-a016-ff893425d7da',
+  like_count: 2,
+  is_liked: true
+}
+ GET /api/posts/f8a8cff5-28c4-42ff-a016-ff893425d7da/likes 200 in 361ms
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: '0e307867-f023-4598-a817-946f56724b67',
+  timestamp: '2025-07-27T06:58:12.561Z'
+}
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: 'e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e',
+  timestamp: '2025-07-27T06:58:12.577Z'
+}
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: '7922037f-168b-4c1a-ab0b-8668d462ee9b',
+  timestamp: '2025-07-27T06:58:12.583Z'
+}
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: 'f8a8cff5-28c4-42ff-a016-ff893425d7da',
+  timestamp: '2025-07-27T06:58:12.591Z'
+}
+[API] GET 성공: {
+  post_id: 'e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e',
+  like_count: 0,
+  is_liked: false
+}
+ GET /api/posts/e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e/likes 200 in 111ms
+[API] GET 성공: {
+  post_id: '7922037f-168b-4c1a-ab0b-8668d462ee9b',
+  like_count: 0,
+  is_liked: false
+}
+ GET /api/posts/7922037f-168b-4c1a-ab0b-8668d462ee9b/likes 200 in 110ms
+[API] GET 성공: {
+  post_id: '0e307867-f023-4598-a817-946f56724b67',
+  like_count: 2,
+  is_liked: true
+}
+ GET /api/posts/0e307867-f023-4598-a817-946f56724b67/likes 200 in 140ms
+[API] GET 성공: {
+  post_id: 'f8a8cff5-28c4-42ff-a016-ff893425d7da',
+  like_count: 2,
+  is_liked: true
+}
+ GET /api/posts/f8a8cff5-28c4-42ff-a016-ff893425d7da/likes 200 in 170ms
+ ✓ Compiled /middleware in 306ms (248 modules)
+Failed to fetch system settings: {
+  code: '42702',
+  details: 'It could refer to either a PL/pgSQL variable or a table column.',
+  hint: null,
+  message: 'column reference "is_admin" is ambiguous'
+}
+ ○ Compiling / ...
+ ✓ Compiled / in 3.5s (2313 modules)
+Error: Route "/" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextServerComponentAuthStorageAdapter.getCookie (../src/serverComponentClient.ts:27:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+ GET / 200 in 5099ms
+ ✓ Compiled in 1232ms (989 modules)
+ ✓ Compiled /api/posts/[id]/likes in 485ms (1343 modules)
+🟢 [API] POST 라우트 진입
+[API] POST /api/posts/[id]/likes 시작 { postId: 'test-id', timestamp: '2025-07-27T07:15:18.740Z' }
+[API] POST 인증 실패
+ POST /api/posts/test-id/likes 401 in 861ms
+Failed to fetch system settings: {
+  code: '42702',
+  details: 'It could refer to either a PL/pgSQL variable or a table column.',
+  hint: null,
+  message: 'column reference "is_admin" is ambiguous'
+}
+📋 [MIDDLEWARE DEBUG] Session state for /board%EB%A1%9C (Mobile: false): Authenticated
+✅ [MIDDLEWARE DEBUG] Profile found (Mobile: false): { status: 'approved', active: true }
+ ✓ Compiled /_not-found in 444ms (2322 modules)
+ GET /board%EB%A1%9C 404 in 855ms
+ ○ Compiling /api/notifications/stats ...
+ ✓ Compiled /api/notifications/stats in 629ms (2335 modules)
+Error: Route "/api/activities/session" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/session" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/session" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/session" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/session" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/session" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/session" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/session" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/session" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/log" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/log" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/log" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+ GET /manifest.webmanifest 200 in 860ms
+Error: Route "/api/notifications/stats" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/notifications/stats" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: 'f8a8cff5-28c4-42ff-a016-ff893425d7da',
+  timestamp: '2025-07-27T07:15:59.358Z'
+}
+ POST /api/activities/session 200 in 1008ms
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: '0e307867-f023-4598-a817-946f56724b67',
+  timestamp: '2025-07-27T07:15:59.454Z'
+}
+Error: Route "/api/notifications/stats" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+ POST /api/activities/log 200 in 1029ms
+ POST /api/activities/session 200 in 997ms
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: 'e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e',
+  timestamp: '2025-07-27T07:15:59.484Z'
+}
+ POST /api/activities/session 200 in 1030ms
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: '7922037f-168b-4c1a-ab0b-8668d462ee9b',
+  timestamp: '2025-07-27T07:15:59.492Z'
+}
+[API] GET 성공: {
+  post_id: 'f8a8cff5-28c4-42ff-a016-ff893425d7da',
+  like_count: 2,
+  is_liked: true
+}
+ GET /api/posts/f8a8cff5-28c4-42ff-a016-ff893425d7da/likes 200 in 937ms
+ GET /api/notifications/stats 200 in 1051ms
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: 'f8a8cff5-28c4-42ff-a016-ff893425d7da',
+  timestamp: '2025-07-27T07:15:59.536Z'
+}
+Error: Route "/api/notifications/stats" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/notifications/stats" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+[API] GET 성공: {
+  post_id: '0e307867-f023-4598-a817-946f56724b67',
+  like_count: 2,
+  is_liked: true
+}
+ GET /api/posts/0e307867-f023-4598-a817-946f56724b67/likes 200 in 137ms
+Error: Route "/api/notifications/stats" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+[API] GET 성공: {
+  post_id: 'e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e',
+  like_count: 0,
+  is_liked: false
+}
+ GET /api/posts/e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e/likes 200 in 163ms
+ GET /api/notifications/stats 200 in 127ms
+[API] GET 성공: {
+  post_id: 'f8a8cff5-28c4-42ff-a016-ff893425d7da',
+  like_count: 2,
+  is_liked: true
+}
+ GET /api/posts/f8a8cff5-28c4-42ff-a016-ff893425d7da/likes 200 in 152ms
+[API] GET 성공: {
+  post_id: '7922037f-168b-4c1a-ab0b-8668d462ee9b',
+  like_count: 0,
+  is_liked: false
+}
+ GET /api/posts/7922037f-168b-4c1a-ab0b-8668d462ee9b/likes 200 in 175ms
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: '0e307867-f023-4598-a817-946f56724b67',
+  timestamp: '2025-07-27T07:16:00.087Z'
+}
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: 'e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e',
+  timestamp: '2025-07-27T07:16:00.101Z'
+}
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: '7922037f-168b-4c1a-ab0b-8668d462ee9b',
+  timestamp: '2025-07-27T07:16:00.123Z'
+}
+[API] GET 성공: {
+  post_id: '0e307867-f023-4598-a817-946f56724b67',
+  like_count: 2,
+  is_liked: true
+}
+ GET /api/posts/0e307867-f023-4598-a817-946f56724b67/likes 200 in 192ms
+[API] GET 성공: {
+  post_id: 'e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e',
+  like_count: 0,
+  is_liked: false
+}
+ GET /api/posts/e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e/likes 200 in 213ms
+[API] GET 성공: {
+  post_id: '7922037f-168b-4c1a-ab0b-8668d462ee9b',
+  like_count: 0,
+  is_liked: false
+}
+ GET /api/posts/7922037f-168b-4c1a-ab0b-8668d462ee9b/likes 200 in 170ms
+Failed to fetch system settings: {
+  code: '42702',
+  details: 'It could refer to either a PL/pgSQL variable or a table column.',
+  hint: null,
+  message: 'column reference "is_admin" is ambiguous'
+}
+📋 [MIDDLEWARE DEBUG] Session state for /board (Mobile: false): Authenticated
+✅ [MIDDLEWARE DEBUG] Profile found (Mobile: false): { status: 'approved', active: true }
+ ○ Compiling /board ...
+ ✓ Compiled /board in 841ms (2368 modules)
+Error: Route "/api/activities/logout" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/logout" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/logout" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Session management error: {
+  code: 'PGRST202',
+  details: 'Searched for the function public.manage_user_session with parameters p_action, p_ip_address, p_metadata, p_user_agent, p_user_id or with a single unnamed json/jsonb parameter, but no matches were found in the schema cache.',
+  hint: 'Perhaps you meant to call the function public.manage_user_session(p_action, p_ip_address, p_metadata, p_session_token, p_user_agent, p_user_id)',
+  message: 'Could not find the function public.manage_user_session(p_action, p_ip_address, p_metadata, p_user_agent, p_user_id) in the schema cache'
+}
+ POST /api/activities/logout 500 in 1478ms
+ GET /board 200 in 1411ms
+Error: Route "/api/activities/session" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/session" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/session" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/session" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/session" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/session" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/session" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/session" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/session" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/log" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/log" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/log" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/notifications/stats" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/notifications/stats" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: 'f8a8cff5-28c4-42ff-a016-ff893425d7da',
+  timestamp: '2025-07-27T07:16:05.646Z'
+}
+ GET /manifest.webmanifest 200 in 97ms
+Error: Route "/api/notifications/stats" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+ POST /api/activities/session 200 in 230ms
+ POST /api/activities/session 200 in 230ms
+ POST /api/activities/log 200 in 232ms
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: '0e307867-f023-4598-a817-946f56724b67',
+  timestamp: '2025-07-27T07:16:05.772Z'
+}
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: 'e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e',
+  timestamp: '2025-07-27T07:16:05.776Z'
+}
+ GET /api/notifications/stats 200 in 261ms
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: '7922037f-168b-4c1a-ab0b-8668d462ee9b',
+  timestamp: '2025-07-27T07:16:05.798Z'
+}
+[API] GET 성공: {
+  post_id: 'f8a8cff5-28c4-42ff-a016-ff893425d7da',
+  like_count: 2,
+  is_liked: true
+}
+ GET /api/posts/f8a8cff5-28c4-42ff-a016-ff893425d7da/likes 200 in 268ms
+[API] GET 성공: {
+  post_id: 'e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e',
+  like_count: 0,
+  is_liked: false
+}
+ GET /api/posts/e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e/likes 200 in 128ms
+[API] GET 성공: {
+  post_id: '0e307867-f023-4598-a817-946f56724b67',
+  like_count: 2,
+  is_liked: true
+}
+ GET /api/posts/0e307867-f023-4598-a817-946f56724b67/likes 200 in 146ms
+[API] GET 성공: {
+  post_id: '7922037f-168b-4c1a-ab0b-8668d462ee9b',
+  like_count: 0,
+  is_liked: false
+}
+ GET /api/posts/7922037f-168b-4c1a-ab0b-8668d462ee9b/likes 200 in 204ms
+ POST /api/activities/session 200 in 509ms
+Error: Route "/api/notifications/stats" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/notifications/stats" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: 'f8a8cff5-28c4-42ff-a016-ff893425d7da',
+  timestamp: '2025-07-27T07:16:06.108Z'
+}
+Error: Route "/api/notifications/stats" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+ GET /api/notifications/stats 200 in 122ms
+[API] GET 성공: {
+  post_id: 'f8a8cff5-28c4-42ff-a016-ff893425d7da',
+  like_count: 2,
+  is_liked: true
+}
+ GET /api/posts/f8a8cff5-28c4-42ff-a016-ff893425d7da/likes 200 in 107ms
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: '0e307867-f023-4598-a817-946f56724b67',
+  timestamp: '2025-07-27T07:16:06.337Z'
+}
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: 'e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e',
+  timestamp: '2025-07-27T07:16:06.340Z'
+}
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: '7922037f-168b-4c1a-ab0b-8668d462ee9b',
+  timestamp: '2025-07-27T07:16:06.371Z'
+}
+[API] GET 성공: {
+  post_id: 'e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e',
+  like_count: 0,
+  is_liked: false
+}
+ GET /api/posts/e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e/likes 200 in 98ms
+[API] GET 성공: {
+  post_id: '0e307867-f023-4598-a817-946f56724b67',
+  like_count: 2,
+  is_liked: true
+}
+ GET /api/posts/0e307867-f023-4598-a817-946f56724b67/likes 200 in 116ms
+[API] GET 성공: {
+  post_id: '7922037f-168b-4c1a-ab0b-8668d462ee9b',
+  like_count: 0,
+  is_liked: false
+}
+ GET /api/posts/7922037f-168b-4c1a-ab0b-8668d462ee9b/likes 200 in 100ms
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: 'f8a8cff5-28c4-42ff-a016-ff893425d7da',
+  timestamp: '2025-07-27T07:16:06.681Z'
+}
+[API] GET 성공: {
+  post_id: 'f8a8cff5-28c4-42ff-a016-ff893425d7da',
+  like_count: 2,
+  is_liked: true
+}
+ GET /api/posts/f8a8cff5-28c4-42ff-a016-ff893425d7da/likes 200 in 169ms
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: 'e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e',
+  timestamp: '2025-07-27T07:16:06.898Z'
+}
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: '0e307867-f023-4598-a817-946f56724b67',
+  timestamp: '2025-07-27T07:16:06.906Z'
+}
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: '7922037f-168b-4c1a-ab0b-8668d462ee9b',
+  timestamp: '2025-07-27T07:16:06.939Z'
+}
+[API] GET 성공: {
+  post_id: 'e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e',
+  like_count: 0,
+  is_liked: false
+}
+ GET /api/posts/e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e/likes 200 in 96ms
+[API] GET 성공: {
+  post_id: '0e307867-f023-4598-a817-946f56724b67',
+  like_count: 2,
+  is_liked: true
+}
+ GET /api/posts/0e307867-f023-4598-a817-946f56724b67/likes 200 in 113ms
+[API] GET 성공: {
+  post_id: '7922037f-168b-4c1a-ab0b-8668d462ee9b',
+  like_count: 0,
+  is_liked: false
+}
+ GET /api/posts/7922037f-168b-4c1a-ab0b-8668d462ee9b/likes 200 in 120ms
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: 'f8a8cff5-28c4-42ff-a016-ff893425d7da',
+  timestamp: '2025-07-27T07:16:07.155Z'
+}
+🟢 [API] GET 라우트 진입
+🟢 [API] GET 라우트 진입
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: '0e307867-f023-4598-a817-946f56724b67',
+  timestamp: '2025-07-27T07:16:07.161Z'
+}
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: 'e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e',
+  timestamp: '2025-07-27T07:16:07.161Z'
+}
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: '7922037f-168b-4c1a-ab0b-8668d462ee9b',
+  timestamp: '2025-07-27T07:16:07.161Z'
+}
+[API] GET 성공: {
+  post_id: 'f8a8cff5-28c4-42ff-a016-ff893425d7da',
+  like_count: 2,
+  is_liked: true
+}
+ GET /api/posts/f8a8cff5-28c4-42ff-a016-ff893425d7da/likes 200 in 113ms
+[API] GET 성공: {
+  post_id: '0e307867-f023-4598-a817-946f56724b67',
+  like_count: 2,
+  is_liked: true
+}
+ GET /api/posts/0e307867-f023-4598-a817-946f56724b67/likes 200 in 110ms
+[API] GET 성공: {
+  post_id: '7922037f-168b-4c1a-ab0b-8668d462ee9b',
+  like_count: 0,
+  is_liked: false
+}
+ GET /api/posts/7922037f-168b-4c1a-ab0b-8668d462ee9b/likes 200 in 108ms
+[API] GET 성공: {
+  post_id: 'e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e',
+  like_count: 0,
+  is_liked: false
+}
+ GET /api/posts/e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e/likes 200 in 117ms
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: 'f8a8cff5-28c4-42ff-a016-ff893425d7da',
+  timestamp: '2025-07-27T07:16:07.269Z'
+}
+🟢 [API] GET 라우트 진입
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: '0e307867-f023-4598-a817-946f56724b67',
+  timestamp: '2025-07-27T07:16:07.273Z'
+}
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: '7922037f-168b-4c1a-ab0b-8668d462ee9b',
+  timestamp: '2025-07-27T07:16:07.273Z'
+}
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: 'e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e',
+  timestamp: '2025-07-27T07:16:07.279Z'
+}
+[API] GET 성공: {
+  post_id: 'f8a8cff5-28c4-42ff-a016-ff893425d7da',
+  like_count: 2,
+  is_liked: true
+}
+ GET /api/posts/f8a8cff5-28c4-42ff-a016-ff893425d7da/likes 200 in 122ms
+[API] GET 성공: {
+  post_id: '7922037f-168b-4c1a-ab0b-8668d462ee9b',
+  like_count: 0,
+  is_liked: false
+}
+ GET /api/posts/7922037f-168b-4c1a-ab0b-8668d462ee9b/likes 200 in 118ms
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: '7922037f-168b-4c1a-ab0b-8668d462ee9b',
+  timestamp: '2025-07-27T07:16:07.387Z'
+}
+[API] GET 성공: {
+  post_id: 'e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e',
+  like_count: 0,
+  is_liked: false
+}
+ GET /api/posts/e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e/likes 200 in 121ms
+[API] GET 성공: {
+  post_id: '0e307867-f023-4598-a817-946f56724b67',
+  like_count: 2,
+  is_liked: true
+}
+ GET /api/posts/0e307867-f023-4598-a817-946f56724b67/likes 200 in 138ms
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: 'f8a8cff5-28c4-42ff-a016-ff893425d7da',
+  timestamp: '2025-07-27T07:16:07.397Z'
+}
+🟢 [API] GET 라우트 진입
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: 'e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e',
+  timestamp: '2025-07-27T07:16:07.403Z'
+}
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: '0e307867-f023-4598-a817-946f56724b67',
+  timestamp: '2025-07-27T07:16:07.403Z'
+}
+[API] GET 성공: {
+  post_id: '7922037f-168b-4c1a-ab0b-8668d462ee9b',
+  like_count: 0,
+  is_liked: false
+}
+ GET /api/posts/7922037f-168b-4c1a-ab0b-8668d462ee9b/likes 200 in 117ms
+[API] GET 성공: {
+  post_id: 'f8a8cff5-28c4-42ff-a016-ff893425d7da',
+  like_count: 2,
+  is_liked: true
+}
+ GET /api/posts/f8a8cff5-28c4-42ff-a016-ff893425d7da/likes 200 in 125ms
+[API] GET 성공: {
+  post_id: '0e307867-f023-4598-a817-946f56724b67',
+  like_count: 2,
+  is_liked: true
+}
+ GET /api/posts/0e307867-f023-4598-a817-946f56724b67/likes 200 in 120ms
+[API] GET 성공: {
+  post_id: 'e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e',
+  like_count: 0,
+  is_liked: false
+}
+ GET /api/posts/e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e/likes 200 in 130ms
+🟢 [API] POST 라우트 진입
+[API] POST /api/posts/[id]/likes 시작 {
+  postId: 'e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e',
+  timestamp: '2025-07-27T07:16:08.645Z'
+}
+[API] 인증 성공: hwangtab@gmail.com
+[API] toggle_post_like RPC 호출
+[API] RPC 오류 상세: {
+  message: 'column reference "like_count" is ambiguous',
+  details: 'It could refer to either a PL/pgSQL variable or a table column.',
+  hint: null,
+  code: '42702'
+}
+ POST /api/posts/e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e/likes 500 in 197ms
+ GET /manifest.webmanifest 200 in 59ms
+Error: Route "/api/activities/session" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/session" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+ POST /api/activities/session 400 in 171ms
+Error: Route "/api/activities/session" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/session" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/session" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/session" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/session" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/session" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/session" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/session" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/session" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+🟢 [API] GET 라우트 진입
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: 'f8a8cff5-28c4-42ff-a016-ff893425d7da',
+  timestamp: '2025-07-27T07:19:00.039Z'
+}
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: '0e307867-f023-4598-a817-946f56724b67',
+  timestamp: '2025-07-27T07:19:00.041Z'
+}
+ POST /api/activities/session 200 in 420ms
+ POST /api/activities/session 200 in 433ms
+ POST /api/activities/session 200 in 466ms
+[API] GET 성공: {
+  post_id: 'f8a8cff5-28c4-42ff-a016-ff893425d7da',
+  like_count: 2,
+  is_liked: true
+}
+ GET /api/posts/f8a8cff5-28c4-42ff-a016-ff893425d7da/likes 200 in 271ms
+[API] GET 성공: {
+  post_id: '0e307867-f023-4598-a817-946f56724b67',
+  like_count: 2,
+  is_liked: true
+}
+ GET /api/posts/0e307867-f023-4598-a817-946f56724b67/likes 200 in 273ms
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: 'e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e',
+  timestamp: '2025-07-27T07:19:00.353Z'
+}
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: '7922037f-168b-4c1a-ab0b-8668d462ee9b',
+  timestamp: '2025-07-27T07:19:00.359Z'
+}
+[API] GET 성공: {
+  post_id: 'e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e',
+  like_count: 0,
+  is_liked: false
+}
+ GET /api/posts/e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e/likes 200 in 120ms
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: 'f8a8cff5-28c4-42ff-a016-ff893425d7da',
+  timestamp: '2025-07-27T07:19:00.454Z'
+}
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: '0e307867-f023-4598-a817-946f56724b67',
+  timestamp: '2025-07-27T07:19:00.474Z'
+}
+[API] GET 성공: {
+  post_id: '7922037f-168b-4c1a-ab0b-8668d462ee9b',
+  like_count: 0,
+  is_liked: false
+}
+ GET /api/posts/7922037f-168b-4c1a-ab0b-8668d462ee9b/likes 200 in 158ms
+[API] GET 성공: {
+  post_id: 'f8a8cff5-28c4-42ff-a016-ff893425d7da',
+  like_count: 2,
+  is_liked: true
+}
+ GET /api/posts/f8a8cff5-28c4-42ff-a016-ff893425d7da/likes 200 in 124ms
+[API] GET 성공: {
+  post_id: '0e307867-f023-4598-a817-946f56724b67',
+  like_count: 2,
+  is_liked: true
+}
+ GET /api/posts/0e307867-f023-4598-a817-946f56724b67/likes 200 in 401ms
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: 'e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e',
+  timestamp: '2025-07-27T07:19:00.930Z'
+}
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: '7922037f-168b-4c1a-ab0b-8668d462ee9b',
+  timestamp: '2025-07-27T07:19:00.938Z'
+}
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: 'f8a8cff5-28c4-42ff-a016-ff893425d7da',
+  timestamp: '2025-07-27T07:19:01.002Z'
+}
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: '0e307867-f023-4598-a817-946f56724b67',
+  timestamp: '2025-07-27T07:19:01.008Z'
+}
+[API] GET 성공: {
+  post_id: 'e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e',
+  like_count: 0,
+  is_liked: false
+}
+ GET /api/posts/e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e/likes 200 in 132ms
+[API] GET 성공: {
+  post_id: '7922037f-168b-4c1a-ab0b-8668d462ee9b',
+  like_count: 0,
+  is_liked: false
+}
+ GET /api/posts/7922037f-168b-4c1a-ab0b-8668d462ee9b/likes 200 in 128ms
+[API] GET 성공: {
+  post_id: '0e307867-f023-4598-a817-946f56724b67',
+  like_count: 2,
+  is_liked: true
+}
+ GET /api/posts/0e307867-f023-4598-a817-946f56724b67/likes 200 in 102ms
+[API] GET 성공: {
+  post_id: 'f8a8cff5-28c4-42ff-a016-ff893425d7da',
+  like_count: 2,
+  is_liked: true
+}
+ GET /api/posts/f8a8cff5-28c4-42ff-a016-ff893425d7da/likes 200 in 115ms
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: 'e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e',
+  timestamp: '2025-07-27T07:19:01.474Z'
+}
+🟢 [API] GET 라우트 진입
+[API] GET /api/posts/[id]/likes 시작 {
+  postId: '7922037f-168b-4c1a-ab0b-8668d462ee9b',
+  timestamp: '2025-07-27T07:19:01.485Z'
+}
+[API] GET 성공: {
+  post_id: 'e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e',
+  like_count: 0,
+  is_liked: false
+}
+ GET /api/posts/e7fa6a8a-9569-48a2-b0d3-c29cd51a1e5e/likes 200 in 109ms
+[API] GET 성공: {
+  post_id: '7922037f-168b-4c1a-ab0b-8668d462ee9b',
+  like_count: 0,
+  is_liked: false
+}
+ GET /api/posts/7922037f-168b-4c1a-ab0b-8668d462ee9b/likes 200 in 100ms
+ ○ Compiling /_error ...
+ ✓ Compiled /_error in 2.6s (2667 modules)
+Error: Route "/api/activities/session" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/session" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+세션 API 오류: SyntaxError: Unexpected end of JSON input
+    at JSON.parse (<anonymous>)
+    at eval (src/app/api/activities/session/route.ts:21:33)
+  19 |       }
+  20 |
+> 21 |       const body = await request.json()
+     |                                 ^
+  22 |       const { action, session_token, metadata = {} } = body
+  23 |
+  24 |       if (!action || !['start', 'update', 'end'].includes(action)) {
+Error: Route "/api/activities/session" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/session" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+세션 API 오류: SyntaxError: Unexpected end of JSON input
+    at JSON.parse (<anonymous>)
+    at eval (src/app/api/activities/session/route.ts:21:33)
+  19 |       }
+  20 |
+> 21 |       const body = await request.json()
+     |                                 ^
+  22 |       const { action, session_token, metadata = {} } = body
+  23 |
+  24 |       if (!action || !['start', 'update', 'end'].includes(action)) {
+ POST /api/activities/logout 404 in 4849ms
+Error: Route "/api/activities/logout" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/logout" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/logout" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/logout" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/logout" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Error: Route "/api/activities/logout" used `cookies().get('sb-btugywkltavbogdnhwpu-auth-token')`. `cookies()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at createCookiesAccessError (../../../src/server/request/cookies.ts:485:9)
+    at syncIODev (../../../src/server/request/cookies.ts:473:2)
+    at Promise.get (../../../src/server/request/cookies.ts:300:8)
+    at NextRouteHandlerAuthStorageAdapter.getCookie (../src/routeHandlerClient.ts:25:21)
+  483 | ) {
+  484 |   const prefix = route ? `Route "${route}" ` : 'This route '
+> 485 |   return new Error(
+      |         ^
+  486 |     `${prefix}used ${expression}. ` +
+  487 |       `\`cookies()\` should be awaited before using its value. ` +
+  488 |       `Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis`
+Session management error: {
+  code: 'PGRST202',
+  details: 'Searched for the function public.manage_user_session with parameters p_action, p_ip_address, p_metadata, p_user_agent, p_user_id or with a single unnamed json/jsonb parameter, but no matches were found in the schema cache.',
+  hint: 'Perhaps you meant to call the function public.manage_user_session(p_action, p_ip_address, p_metadata, p_session_token, p_user_agent, p_user_id)',
+  message: 'Could not find the function public.manage_user_session(p_action, p_ip_address, p_metadata, p_user_agent, p_user_id) in the schema cache'
+}
+ POST /api/activities/logout 500 in 1074ms
+Session management error: {
+  code: 'PGRST202',
+  details: 'Searched for the function public.manage_user_session with parameters p_action, p_ip_address, p_metadata, p_user_agent, p_user_id or with a single unnamed json/jsonb parameter, but no matches were found in the schema cache.',
+  hint: 'Perhaps you meant to call the function public.manage_user_session(p_action, p_ip_address, p_metadata, p_session_token, p_user_agent, p_user_id)',
+  message: 'Could not find the function public.manage_user_session(p_action, p_ip_address, p_metadata, p_user_agent, p_user_id) in the schema cache'
+}
+ POST /api/activities/logout 500 in 1079ms

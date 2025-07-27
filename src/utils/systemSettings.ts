@@ -102,6 +102,110 @@ let cacheTimestamp: number = 0
 const CACHE_DURATION = 5 * 60 * 1000 // 5분
 
 /**
+ * 기본 시스템 설정을 반환합니다
+ */
+function getDefaultSettings(): SystemSettingsData {
+  return {
+    site: {
+      maintenance_mode: { enabled: false, message: '' },
+      registration_enabled: { enabled: true, require_approval: true },
+      site_title: { value: '경기아트콜렉티브' },
+      site_description: { value: '경계 없는 상상, 함께 만드는 울림' },
+      max_members: { value: 1000, current_count: 0 },
+      contact_info: { 
+        email: 'contact@ggac.kr', 
+        phone: '0507-1384-3144', 
+        address: '경기도 고양시 덕양구 성사동 719' 
+      }
+    },
+    email: {
+      smtp_config: {
+        host: '',
+        port: 587,
+        secure: false,
+        user: '',
+        password: '',
+        from_email: 'noreply@ggac.kr',
+        from_name: '경기아트콜렉티브'
+      },
+      email_templates: {
+        welcome: { subject: '환영합니다', enabled: true },
+        approval: { subject: '가입이 승인되었습니다', enabled: true },
+        rejection: { subject: '가입이 거부되었습니다', enabled: true }
+      },
+      notification_settings: {
+        admin_notifications: true,
+        member_notifications: true,
+        system_notifications: true
+      }
+    },
+    security: {
+      session_config: {
+        timeout_minutes: 480,
+        max_concurrent_sessions: 3,
+        require_reauth_for_sensitive: true
+      },
+      login_policy: {
+        max_attempts: 5,
+        lockout_duration_minutes: 15,
+        require_strong_password: true
+      },
+      password_policy: {
+        min_length: 8,
+        require_uppercase: true,
+        require_lowercase: true,
+        require_numbers: true,
+        require_special: true,
+        history_count: 5
+      },
+      email_verification: {
+        required: false,
+        token_expiry_hours: 24,
+        resend_limit: 3
+      },
+      rate_limiting: {
+        api_requests_per_minute: 60,
+        login_attempts_per_hour: 10,
+        registration_per_day: 50
+      }
+    },
+    features: {
+      board_features: {
+        enabled: true,
+        categories: ['공지', '잡담', '홍보', '건의'],
+        allow_anonymous: false,
+        moderation_enabled: true
+      },
+      artist_features: {
+        registration_enabled: true,
+        portfolio_upload: true,
+        public_profile: true,
+        collaboration_requests: true
+      },
+      comment_features: {
+        enabled: true,
+        nested_replies: true,
+        max_depth: 3,
+        moderation_enabled: true,
+        allow_editing: true
+      },
+      file_upload: {
+        enabled: true,
+        max_size_mb: 50,
+        allowed_types: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'docx'],
+        virus_scan: false
+      },
+      social_features: {
+        likes_enabled: true,
+        sharing_enabled: true,
+        follow_system: false,
+        activity_feed: true
+      }
+    }
+  }
+}
+
+/**
  * 시스템 설정을 조회합니다 (캐시 적용)
  * @param forceRefresh 강제 새로고침 여부
  * @returns 시스템 설정 데이터
@@ -120,8 +224,9 @@ export async function getSystemSettings(forceRefresh = false): Promise<SystemSet
       .rpc('get_system_settings', { include_sensitive: false })
 
     if (error) {
-      console.error('System settings fetch error:', error)
-      return null
+      console.error('Failed to fetch system settings:', error)
+      // 오류 발생 시 기본값 반환
+      return getDefaultSettings()
     }
 
     // 데이터를 구조화
