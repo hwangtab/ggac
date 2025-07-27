@@ -358,6 +358,14 @@ export default function PostDetailPage() {
                   variant="minimal"
                   showCount={true}
                   showLabel={false}
+                  onLikeChange={(liked, count) => {
+                    // 좋아요 상태 변경 시 post 상태 업데이트 (새로고침 방지)
+                    setPost(prev => prev ? {
+                      ...prev,
+                      like_count: count,
+                      is_liked: liked
+                    } : prev)
+                  }}
                 />
               </div>
             </div>
