@@ -145,7 +145,7 @@ const nextConfig = {
     return config
   },
   
-  // Server external packages (moved from experimental)
+  // External packages configuration for Next.js 14+
   serverExternalPackages: [
     'canvas',
     'sharp',
