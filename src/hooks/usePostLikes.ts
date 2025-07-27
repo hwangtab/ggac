@@ -123,7 +123,6 @@ export function usePostLikes({
     console.log('[usePostLikes] toggleLike 시작', { 
       postId, 
       hasUser: !!user,
-      userEmail: user?.email,
       isProcessing: isProcessingRef.current
     })
     
@@ -153,8 +152,6 @@ export function usePostLikes({
     setState(prev => ({ ...prev, isLoading: true, error: null }))
 
     try {
-      console.log('[usePostLikes] POST 요청 시작:', `/api/posts/${postId}/likes`);
-
       const response = await fetch(`/api/posts/${postId}/likes`, {
         method: 'POST',
         headers: {
@@ -165,8 +162,7 @@ export function usePostLikes({
       console.log('[usePostLikes] POST 응답:', {
         status: response.status,
         statusText: response.statusText,
-        ok: response.ok,
-        url: response.url
+        ok: response.ok
       });
 
       if (!response.ok) {
@@ -195,7 +191,7 @@ export function usePostLikes({
       }
 
       const successData: PostLikeToggleResponse = await response.json();
-      console.log('[usePostLikes] POST 성공 데이터:', successData);
+      console.log('[usePostLikes] POST 성공:', successData);
 
       // 상태 업데이트
       setState(prev => ({
@@ -223,6 +219,7 @@ export function usePostLikes({
         error: errorMessage,
         isLoading: false
       }))
+      
       return false
     } finally {
       isProcessingRef.current = false

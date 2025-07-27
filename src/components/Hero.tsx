@@ -33,33 +33,40 @@ const Hero = () => {
     const root = document.documentElement
     const isMobile = isMobileDevice()
     
+    // CSS 속성 값들을 미리 계산
+    const cssProperties = new Map<string, string>()
+    
+    // 반응형 그라데이션 크기
+    if (width > 1200) {
+      cssProperties.set('--gradient-size', '1200px 750px')
+      cssProperties.set('--gradient-alpha-start', '0.85')
+      cssProperties.set('--gradient-alpha-mid', '0.65')
+    } else if (width > 768) {
+      cssProperties.set('--gradient-size', '900px 600px')
+      cssProperties.set('--gradient-alpha-start', '0.85')
+      cssProperties.set('--gradient-alpha-mid', '0.65')
+    } else {
+      cssProperties.set('--gradient-size', '500px 400px')
+      cssProperties.set('--gradient-alpha-start', '0.90')
+      cssProperties.set('--gradient-alpha-mid', '0.70')
+    }
+    
+    // 모바일에서 블러 효과 최적화 (GPU 부하 감소)
+    if (isMobile) {
+      cssProperties.set('--glassmorphism-blur', width > 768 ? '8px' : '4px')
+      cssProperties.set('--glassmorphism-saturation', '150%')
+      cssProperties.set('--glassmorphism-bg-alpha', width > 768 ? '0.18' : '0.22')
+    } else {
+      cssProperties.set('--glassmorphism-blur', width > 768 ? '12px' : '8px')
+      cssProperties.set('--glassmorphism-saturation', width > 768 ? '180%' : '160%')
+      cssProperties.set('--glassmorphism-bg-alpha', width > 768 ? '0.12' : '0.15')
+    }
+    
     // requestAnimationFrame으로 배치 처리하여 리플로우 최소화
     requestAnimationFrame(() => {
-      // 반응형 그라데이션 크기
-      if (width > 1200) {
-        root.style.setProperty('--gradient-size', '1200px 750px')
-        root.style.setProperty('--gradient-alpha-start', '0.85')
-        root.style.setProperty('--gradient-alpha-mid', '0.65')
-      } else if (width > 768) {
-        root.style.setProperty('--gradient-size', '900px 600px')
-        root.style.setProperty('--gradient-alpha-start', '0.85')
-        root.style.setProperty('--gradient-alpha-mid', '0.65')
-      } else {
-        root.style.setProperty('--gradient-size', '500px 400px')
-        root.style.setProperty('--gradient-alpha-start', '0.90')
-        root.style.setProperty('--gradient-alpha-mid', '0.70')
-      }
-      
-      // 모바일에서 블러 효과 최적화 (GPU 부하 감소)
-      if (isMobile) {
-        root.style.setProperty('--glassmorphism-blur', width > 768 ? '8px' : '4px')
-        root.style.setProperty('--glassmorphism-saturation', '150%')
-        root.style.setProperty('--glassmorphism-bg-alpha', width > 768 ? '0.18' : '0.22')
-      } else {
-        root.style.setProperty('--glassmorphism-blur', width > 768 ? '12px' : '8px')
-        root.style.setProperty('--glassmorphism-saturation', width > 768 ? '180%' : '160%')
-        root.style.setProperty('--glassmorphism-bg-alpha', width > 768 ? '0.12' : '0.15')
-      }
+      cssProperties.forEach((value, property) => {
+        root.style.setProperty(property, value)
+      })
     })
   }, [isMobileDevice])
 
@@ -110,12 +117,18 @@ const Hero = () => {
     }
   }, [])
 
-  // 화면 크기 업데이트
+  // 화면 크기 업데이트 - debounce로 성능 최적화
   const updateDimensions = useCallback(() => {
     const { width, height } = getSafeViewportDimensions()
+    
+    // 동일한 크기라면 업데이트 스킵
+    if (dimensions.width === width && dimensions.height === height) {
+      return
+    }
+    
     setDimensions({ width, height })
     updateCSSProperties(width, height)
-  }, [getSafeViewportDimensions, updateCSSProperties])
+  }, [getSafeViewportDimensions, updateCSSProperties, dimensions.width, dimensions.height])
 
   useEffect(() => {
     let mounted = true
@@ -166,7 +179,7 @@ const Hero = () => {
       }}
     >
       {/* Layer 1: 배경 이미지 - 최적화된 이미지 컴포넌트 */}
-      <div className="absolute inset-0" style={{ zIndex: 1 }}>
+      <div className="absolute inset-0 relative" style={{ zIndex: 1 }}>
         <OptimizedHeroImage
           alt="경기아트콜렉티브 협동조합 창립총회"
           priority

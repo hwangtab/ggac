@@ -32,8 +32,7 @@ export async function GET(
       timestamp: new Date().toISOString()
     });
 
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+    const supabase = createRouteHandlerClient({ cookies })
     const { data: { session } } = await supabase.auth.getSession()
 
     if (!session?.user) {
@@ -94,8 +93,7 @@ export async function POST(
       timestamp: new Date().toISOString()
     });
 
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+    const supabase = createRouteHandlerClient({ cookies })
     const { data: { session } } = await supabase.auth.getSession()
 
     if (!session?.user) {

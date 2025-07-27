@@ -153,9 +153,11 @@ const AdaptiveParticles = ({ particleCount, width, height, forceCSS = false }: A
     return Math.floor(particleCount * multiplier)
   }, [particleCount, performanceLevel, useWebGL])
 
-  // 개발 환경에서 로그 출력
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`AdaptiveParticles: ${useWebGL ? 'WebGL' : 'CSS'} mode, ${optimizedParticleCount} particles, Performance: ${performanceLevel}`)
+  // 개발 환경에서 성능 경고만 출력 (초기 로딩 시에만)
+  if (process.env.NODE_ENV === 'development' && !webglInitializedRef.current) {
+    if (performanceLevel === 'low' || optimizedParticleCount < particleCount * 0.5) {
+      console.warn(`⚠️ AdaptiveParticles: Performance degraded - ${useWebGL ? 'WebGL' : 'CSS'} mode, ${optimizedParticleCount}/${particleCount} particles`)
+    }
   }
 
   if (useWebGL && webglSupported) {

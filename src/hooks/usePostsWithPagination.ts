@@ -146,7 +146,6 @@ export const usePostsWithPagination = ({
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     
     if (isMobile || isIOS) {
-      console.log('📱 [REALTIME] Skipping realtime subscription on mobile device');
       return () => {}; // 빈 함수 반환
     }
 
@@ -160,17 +159,34 @@ export const usePostsWithPagination = ({
             table: 'posts' 
           }, 
           (payload) => {
-            console.log('Posts changed:', payload);
-            // 현재 페이지를 다시 로드
+            
+            // 마이너 업데이트 필터링 (좋아요, 조회수 등)
+            const eventType = (payload as any).eventType || (payload as any).event_type;
+            const oldRecord = (payload as any).old || (payload as any).old_record;
+            const newRecord = (payload as any).new || (payload as any).new_record;
+            
+            if (eventType === 'UPDATE' && oldRecord && newRecord) {
+              // Supabase는 마이너 업데이트 시 OLD 레코드에 ID만 포함
+              const isMinorUpdate = 
+                Object.keys(oldRecord).length === 1 && 
+                (oldRecord as any).id && 
+                (newRecord as any).title && 
+                (newRecord as any).content && 
+                (newRecord as any).category;
+              
+              if (isMinorUpdate) {
+                return;
+              }
+              
+            }
+            
             fetchPosts();
           }
         )
         .subscribe();
 
-      console.log('🔄 [REALTIME] Subscription activated for desktop');
       
       return () => {
-        console.log('🔄 [REALTIME] Unsubscribing from posts changes');
         subscription.unsubscribe();
       };
     } catch (error) {
