@@ -5,7 +5,7 @@
 
 'use client'
 
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import { FiHeart } from 'react-icons/fi'
 import { FaHeart } from 'react-icons/fa'
 import { usePostLikes } from '@/hooks/usePostLikes'
@@ -63,7 +63,11 @@ const PostLikeButton: React.FC<PostLikeButtonProps> = ({
   })
 
   // 좋아요 버튼 클릭 처리
-  const handleClick = useCallback(async () => {
+  const handleClick = useCallback(async (event: React.MouseEvent) => {
+    // 이벤트 기본 동작 방지 (form submit 등)
+    event.preventDefault()
+    event.stopPropagation()
+    
     console.log('[PostLikeButton] 클릭 이벤트 시작', {
       canLike,
       isLoading,
@@ -72,7 +76,7 @@ const PostLikeButton: React.FC<PostLikeButtonProps> = ({
     });
 
     if (!canLike) {
-      alert('로그인이 필요합니다.')
+      console.log('[PostLikeButton] 로그인 필요');
       return
     }
 
@@ -93,9 +97,9 @@ const PostLikeButton: React.FC<PostLikeButtonProps> = ({
         setIsAnimating(false)
       }
 
-      // 에러가 있으면 표시
+      // 에러가 있으면 콘솔에 로그만 남기고 UI 차단하지 않음
       if (error) {
-        alert(error)
+        console.error('[PostLikeButton] 에러:', error)
         clearError()
       }
     } catch (err) {
@@ -174,11 +178,23 @@ const PostLikeButton: React.FC<PostLikeButtonProps> = ({
   const currentVariant = variantClasses[variant]
   const currentSize = sizeClasses[size]
 
+  // 에러 메시지 자동 사라짐 (3초 후)
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => {
+        clearError()
+      }, 3000)
+      
+      return () => clearTimeout(timer)
+    }
+  }, [error, clearError])
+
   return (
     <button
+      type="button"
       onClick={handleClick}
       disabled={isLoading || !canLike || isAnimating}
-      className={`${currentVariant.button} ${currentSize.button} ${className}`}
+      className={`relative ${currentVariant.button} ${currentSize.button} ${className}`}
       title={
         !canLike 
           ? '로그인이 필요합니다' 
@@ -218,6 +234,13 @@ const PostLikeButton: React.FC<PostLikeButtonProps> = ({
             size === 'sm' ? 'w-3 h-3' : size === 'md' ? 'w-4 h-4' : 'w-5 h-5'
           }`}></div>
         </span>
+      )}
+
+      {/* 에러 상태 표시 (토스트 형태로 간단히) */}
+      {error && (
+        <div className="absolute top-full left-0 mt-1 px-2 py-1 bg-red-100 border border-red-300 rounded text-xs text-red-700 whitespace-nowrap z-10 shadow-sm">
+          {error}
+        </div>
       )}
     </button>
   )
