@@ -149,7 +149,11 @@ export const usePostsWithPagination = ({
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     
-    if (isMobile || isIOS) {
+    // 🚨 임시: 좋아요 새로고침 문제 해결을 위해 실시간 업데이트 완전 비활성화
+    const disableRealtime = true;
+    
+    if (isMobile || isIOS || disableRealtime) {
+      console.log('[REALTIME] 실시간 업데이트 비활성화됨:', { isMobile, isIOS, disableRealtime });
       return () => {}; // 빈 함수 반환
     }
 
@@ -169,33 +173,52 @@ export const usePostsWithPagination = ({
             const oldRecord = (payload as any).old || (payload as any).old_record;
             const newRecord = (payload as any).new || (payload as any).new_record;
             
-            console.log('[REALTIME] 실시간 업데이트 수신:', {
+            console.log('[REALTIME] 실시간 업데이트 수신 - 전체 페이로드:', {
               eventType,
-              oldRecord: oldRecord ? Object.keys(oldRecord) : null,
-              newRecord: newRecord ? Object.keys(newRecord) : null,
+              payload: payload,
+              oldRecord: oldRecord,
+              newRecord: newRecord,
               postId: newRecord?.id
             });
             
             if (eventType === 'UPDATE' && oldRecord && newRecord) {
-              // 좋아요나 조회수만 변경된 마이너 업데이트 감지
-              const hasOnlyMinorChanges = 
-                // like_count만 변경된 경우
-                (newRecord.like_count !== oldRecord.like_count && 
-                 newRecord.title === oldRecord.title && 
-                 newRecord.content === oldRecord.content) ||
-                // view_count만 변경된 경우  
-                (newRecord.view_count !== oldRecord.view_count && 
-                 newRecord.title === oldRecord.title && 
-                 newRecord.content === oldRecord.content);
+              // 변경된 필드 분석
+              const changedFields = [];
+              for (const key in newRecord) {
+                if (oldRecord[key] !== newRecord[key]) {
+                  changedFields.push(key);
+                }
+              }
               
-              if (hasOnlyMinorChanges) {
+              console.log('[REALTIME] 변경된 필드들:', changedFields);
+              
+              // 좋아요나 조회수만 변경된 마이너 업데이트 감지 (더 안전한 방식)
+              const isLikeOnlyUpdate = changedFields.length <= 2 && 
+                (changedFields.includes('like_count') || changedFields.includes('updated_at'));
+              
+              const isViewOnlyUpdate = changedFields.length <= 2 && 
+                (changedFields.includes('view_count') || changedFields.includes('updated_at'));
+              
+              // 중요한 필드 변경 여부 확인 (제목, 내용, 카테고리 등)
+              const hasMajorFieldChanges = changedFields.some(field => 
+                ['title', 'content', 'category', 'is_deleted', 'author_id'].includes(field)
+              );
+              
+              if ((isLikeOnlyUpdate || isViewOnlyUpdate) && !hasMajorFieldChanges) {
                 console.log('[REALTIME] 마이너 업데이트 감지 - 새로고침 건너뜀:', {
-                  likeChanged: newRecord.like_count !== oldRecord.like_count,
-                  viewChanged: newRecord.view_count !== oldRecord.view_count,
+                  changedFields,
+                  isLikeOnlyUpdate,
+                  isViewOnlyUpdate,
                   postId: newRecord.id
                 });
                 return;
               }
+              
+              console.log('[REALTIME] 메이저 필드 변경 감지:', {
+                changedFields,
+                hasMajorFieldChanges,
+                postId: newRecord.id
+              });
             }
             
             console.log('[REALTIME] 메이저 업데이트 감지 - 게시글 목록 새로고침');
