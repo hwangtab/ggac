@@ -152,6 +152,24 @@ export default function LoginPage() {
           return;
         }
 
+        // 로그인 활동 로깅
+        try {
+          await fetch('/api/activities/log', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              actionType: 'login',
+              details: {
+                user_agent: navigator.userAgent,
+                timestamp: new Date().toISOString()
+              }
+            })
+          });
+        } catch (logError) {
+          console.error('Failed to log login activity:', logError);
+          // 로깅 실패는 로그인 과정을 방해하지 않음
+        }
+
         // 인증 상태 확인 후 안전한 리다이렉트
         setMessage('로그인 성공! 인증 상태를 확인하는 중...');
         
