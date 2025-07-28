@@ -72,7 +72,14 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ authorId, onNewPost, sh
 
       // 3. 첨부파일 업로드 (선택된 파일이 있는 경우)
       if (selectedFiles.length > 0) {
-        await uploadAttachments(postId);
+        try {
+          await uploadAttachments(postId);
+          console.log('[Submit] 첨부파일 업로드 완료');
+        } catch (uploadError) {
+          console.error('[Submit] 첨부파일 업로드 실패:', uploadError);
+          // 첨부파일 업로드 실패 시에도 게시글은 이미 생성됨을 알림
+          alert(`게시글은 성공적으로 작성되었지만, 첨부파일 업로드에 실패했습니다.\n게시글 수정을 통해 나중에 첨부파일을 추가할 수 있습니다.`);
+        }
       }
 
       // 4. 성공 처리
@@ -98,7 +105,11 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ authorId, onNewPost, sh
 
   // 첨부파일 업로드 함수
   const uploadAttachments = async (postId: string) => {
-    const uploadPromises = selectedFiles.map(async (file) => {
+    console.log(`[Upload] 시작: ${selectedFiles.length}개 파일 업로드`);
+    
+    const uploadPromises = selectedFiles.map(async (file, index) => {
+      console.log(`[Upload] ${index + 1}/${selectedFiles.length}: ${file.name} (${file.type}, ${file.size} bytes)`);
+      
       const formData = new FormData();
       formData.append('file', file);
 
@@ -107,19 +118,28 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ authorId, onNewPost, sh
         body: formData
       });
 
+      console.log(`[Upload] ${file.name} 응답: ${response.status} ${response.statusText}`);
+
       if (!response.ok) {
-        const result = await response.json();
-        throw new Error(result.error || `${file.name} 업로드에 실패했습니다.`);
+        const result = await response.json().catch(() => ({ error: '응답 파싱 실패' }));
+        const errorMsg = result.error || `${file.name} 업로드에 실패했습니다.`;
+        console.error(`[Upload] ${file.name} 실패:`, errorMsg);
+        throw new Error(errorMsg);
       }
 
-      return response.json();
+      const result = await response.json();
+      console.log(`[Upload] ${file.name} 성공:`, result);
+      return result;
     });
 
     try {
-      await Promise.all(uploadPromises);
+      const results = await Promise.all(uploadPromises);
+      console.log(`[Upload] 전체 완료: ${results.length}개 파일 성공`);
+      return results;
     } catch (error) {
-      console.warn('일부 첨부파일 업로드 실패:', error);
-      // 첨부파일 업로드 실패해도 게시글 생성은 성공으로 처리
+      console.error('[Upload] 첨부파일 업로드 실패:', error);
+      alert(`첨부파일 업로드 중 오류가 발생했습니다:\n${error instanceof Error ? error.message : '알 수 없는 오류'}`);
+      throw error; // 오류를 다시 던져서 상위에서 처리할 수 있도록
     }
   };
 
