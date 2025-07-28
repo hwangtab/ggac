@@ -3,6 +3,7 @@ import { cookies } from 'next/headers'
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator, addRateLimitHeaders } from '@/utils/rateLimiter'
 import { logSecurityEvent } from '@/utils/security'
+import { refreshSettingsCache } from '@/utils/systemSettings'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -391,6 +392,12 @@ export async function PUT(request: NextRequest) {
       }
     }
     
+    // 설정 업데이트 성공 시 캐시 무효화
+    if (updateResults.length > 0) {
+      console.log('[DEBUG] Settings updated, invalidating cache')
+      refreshSettingsCache()
+    }
+
     // 보안 이벤트 로깅
     logSecurityEvent('ADMIN_SETTINGS_UPDATED', {
       adminId: session.user.id,
