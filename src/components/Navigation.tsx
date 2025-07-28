@@ -149,12 +149,8 @@ const Navigation = () => {
                     // Add error handling for board navigation
                     if (item.href === '/board') {
                       try {
-                        // Check if user is authenticated before navigating to board
-                        if (!user) {
-                          e.preventDefault()
-                          router.push('/login')
-                          return
-                        }
+                        // Board is now publicly accessible - no auth check needed
+                        // Just handle potential navigation errors
                       } catch (error) {
                         console.error('Navigation error:', error)
                         e.preventDefault()
@@ -259,11 +255,7 @@ const Navigation = () => {
                 pathname === '/board' ? activeColor : `${textColor} ${hoverColor}`
               }`}
               onClick={(e) => {
-                if (!user) {
-                  e.preventDefault()
-                  router.push('/login')
-                  return
-                }
+                // Board is now publicly accessible - no auth check needed
               }}
             >
               BOARD
@@ -365,12 +357,8 @@ const Navigation = () => {
                     // Add error handling for board navigation
                     if (item.href === '/board') {
                       try {
-                        // Check if user is authenticated before navigating to board
-                        if (!user) {
-                          e.preventDefault()
-                          router.push('/login')
-                          return
-                        }
+                        // Board is now publicly accessible - no auth check needed
+                        // Just handle potential navigation errors
                       } catch (error) {
                         console.error('Mobile navigation error:', error)
                         e.preventDefault()
