@@ -7,7 +7,7 @@ const { chromium } = require('playwright')
 
 // 테스트 설정
 const TEST_CONFIG = {
-  baseUrl: 'http://localhost:3003',
+  baseUrl: 'http://localhost:3000',
   adminEmail: 'admin@ggac.kr',
   adminPassword: 'admin123!',
   testUserEmail: 'test@ggac.kr',
