@@ -23,9 +23,11 @@ export async function generateMetadata(
     const { post, author, thumbnail, description, categoryEmoji } = metadata;
     
     const title = `${categoryEmoji} [${post.category}] ${post.title} - 경기아트콜렉티브`;
+    
+    // 직접 이미지 URL 사용 (API 라우트 우회)
     const ogImageUrl = thumbnail 
-      ? `/api/og/post/${postId}`
-      : '/images/logo/gac_og.webp';
+      ? (thumbnail.startsWith('http') ? thumbnail : `https://ggac.kr${thumbnail}`)
+      : 'https://ggac.kr/images/logo/gac_og.webp';
 
     return {
       title,
