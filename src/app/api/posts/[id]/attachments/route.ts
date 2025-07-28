@@ -18,9 +18,21 @@ import { validateUUID } from '@/utils/validation'
 
 // Service Role 클라이언트는 Storage 작업에만 사용
 function getSupabaseAdmin() {
+  console.log('[SUPABASE ADMIN] 환경 변수 확인');
+  console.log('[SUPABASE ADMIN] SUPABASE_URL:', !!process.env.NEXT_PUBLIC_SUPABASE_URL);
+  console.log('[SUPABASE ADMIN] SERVICE_ROLE_KEY:', !!process.env.SUPABASE_SERVICE_ROLE_KEY);
+  
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.error('[SUPABASE ADMIN] SUPABASE_SERVICE_ROLE_KEY가 설정되지 않음');
     throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured');
   }
+  
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    console.error('[SUPABASE ADMIN] NEXT_PUBLIC_SUPABASE_URL이 설정되지 않음');
+    throw new Error('NEXT_PUBLIC_SUPABASE_URL is not configured');
+  }
+  
+  console.log('[SUPABASE ADMIN] 클라이언트 생성 중...');
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -121,27 +133,36 @@ export async function POST(
 ) {
   const resolvedParams = await context.params;
   try {
+    console.log('[UPLOAD API] 요청 시작');
     const postId = resolvedParams.id;
     
     // UUID 형식 검증
     const uuidValidation = validateUUID(postId, '게시글 ID');
     if (!uuidValidation.isValid) {
-      console.log('[API] ATTACHMENTS POST UUID 검증 실패:', uuidValidation.errors);
+      console.error('[UPLOAD API] UUID 검증 실패:', uuidValidation.errors);
       return NextResponse.json({ 
         error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.' 
       }, { status: 400 });
     }
     
+    console.log('[UPLOAD API] UUID 검증 성공:', postId);
+    
     const supabase = createRouteHandlerClient({ cookies })
+    console.log('[UPLOAD API] Supabase 클라이언트 생성 완료');
+    
     const { data: { session } } = await supabase.auth.getSession()
+    console.log('[UPLOAD API] 세션 조회 완료:', !!session?.user);
 
     if (!session?.user) {
+      console.error('[UPLOAD API] 인증 실패 - 세션 없음');
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
     const validPostId = uuidValidation.sanitized
+    console.log('[UPLOAD API] 인증 성공, 사용자 ID:', session.user.id);
 
     // 게시글 존재 및 권한 확인
+    console.log('[UPLOAD API] 게시글 조회 시작:', validPostId);
     const { data: post, error: postError } = await supabase
       .from('posts')
       .select('id, author_id')
@@ -149,20 +170,34 @@ export async function POST(
       .single()
 
     if (postError || !post) {
+      console.error('[UPLOAD API] 게시글 조회 실패:', postError);
       return NextResponse.json({ error: '게시글을 찾을 수 없습니다.' }, { status: 404 })
     }
 
+    console.log('[UPLOAD API] 게시글 조회 성공, 작성자:', post.author_id);
+
     if (post.author_id !== session.user.id) {
+      console.error('[UPLOAD API] 권한 없음 - 작성자가 아님');
       return NextResponse.json({ error: '게시글 작성자만 첨부파일을 업로드할 수 있습니다.' }, { status: 403 })
     }
 
     // 멀티파트 폼 데이터 파싱
+    console.log('[UPLOAD API] 폼 데이터 파싱 시작');
     const formData = await request.formData()
     const file = formData.get('file') as File
     const altText = formData.get('alt_text') as string || ''
     const isPrimary = formData.get('is_primary') === 'true'
 
+    console.log('[UPLOAD API] 파일 정보:', {
+      name: file?.name,
+      type: file?.type,
+      size: file?.size,
+      altText,
+      isPrimary
+    });
+
     if (!file || file.size === 0) {
+      console.error('[UPLOAD API] 파일이 없음');
       return NextResponse.json({ error: '파일이 선택되지 않았습니다.' }, { status: 400 })
     }
 
@@ -207,20 +242,26 @@ export async function POST(
     }
 
     // Storage 클라이언트 생성 및 파일 업로드
+    console.log('[UPLOAD API] Storage 클라이언트 생성 시작');
     let supabaseAdmin;
     try {
       supabaseAdmin = getSupabaseAdmin();
+      console.log('[UPLOAD API] Storage 클라이언트 생성 성공');
     } catch (error) {
-      console.error('Supabase Admin 클라이언트 생성 오류:', error);
+      console.error('[UPLOAD API] Supabase Admin 클라이언트 생성 오류:', error);
       return NextResponse.json({ 
         error: 'Storage 서비스를 사용할 수 없습니다. 관리자에게 문의하세요.' 
       }, { status: 503 })
     }
 
     // 파일을 Supabase Storage에 업로드
+    console.log('[UPLOAD API] 파일 버퍼 변환 시작');
     const fileBuffer = await file.arrayBuffer()
+    console.log('[UPLOAD API] 파일 버퍼 변환 완료, 크기:', fileBuffer.byteLength);
+    
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}-${file.name}`
     const filePath = `posts/${validPostId}/${fileName}`
+    console.log('[UPLOAD API] Storage 업로드 시작:', filePath);
 
     const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
       .from('attachments')
@@ -230,69 +271,108 @@ export async function POST(
       })
 
     if (uploadError) {
-      console.error('파일 업로드 오류:', uploadError)
+      console.error('[UPLOAD API] Storage 업로드 실패:', {
+        error: uploadError,
+        message: uploadError.message
+      });
+      
       // Storage bucket이 없는 경우 특별한 메시지
       if (uploadError.message?.includes('bucket') || uploadError.message?.includes('not found')) {
         return NextResponse.json({ 
           error: 'Storage가 설정되지 않았습니다. 관리자가 Supabase Storage bucket을 생성해야 합니다.' 
         }, { status: 503 })
       }
-      return NextResponse.json({ error: '파일 업로드에 실패했습니다.' }, { status: 500 })
+      return NextResponse.json({ 
+        error: `파일 업로드에 실패했습니다: ${uploadError.message}` 
+      }, { status: 500 })
     }
 
+    console.log('[UPLOAD API] Storage 업로드 성공:', uploadData);
+
     // 업로드된 파일의 공개 URL 생성
+    console.log('[UPLOAD API] 공개 URL 생성 시작');
     const { data: urlData } = supabaseAdmin.storage
       .from('attachments')
       .getPublicUrl(filePath)
+    console.log('[UPLOAD API] 공개 URL 생성 완료:', urlData.publicUrl);
 
     // 대표 이미지로 설정하는 경우 기존 대표 이미지 해제
     if (isPrimary && fileType === 'image') {
-      await supabase
+      console.log('[UPLOAD API] 기존 대표 이미지 해제 시작');
+      const { error: primaryError } = await supabase
         .from('post_attachments')
         .update({ is_primary: false })
         .eq('post_id', validPostId)
         .eq('is_primary', true)
+      
+      if (primaryError) {
+        console.warn('[UPLOAD API] 기존 대표 이미지 해제 실패:', primaryError);
+      } else {
+        console.log('[UPLOAD API] 기존 대표 이미지 해제 완료');
+      }
     }
 
     // 첨부파일 메타데이터를 데이터베이스에 저장
+    console.log('[UPLOAD API] 메타데이터 저장 시작');
+    const attachmentData = {
+      post_id: validPostId,
+      file_name: file.name,
+      file_url: urlData.publicUrl,
+      file_type: fileType,
+      file_size: file.size,
+      mime_type: file.type,
+      alt_text: altText || null,
+      is_primary: isPrimary && fileType === 'image'
+    };
+    console.log('[UPLOAD API] 저장할 데이터:', attachmentData);
+
     const { data: attachment, error: dbError } = await supabase
       .from('post_attachments')
-      .insert({
-        post_id: validPostId,
-        file_name: file.name,
-        file_url: urlData.publicUrl,
-        file_type: fileType,
-        file_size: file.size,
-        mime_type: file.type,
-        alt_text: altText || null,
-        is_primary: isPrimary && fileType === 'image'
-      })
+      .insert(attachmentData)
       .select()
       .single()
 
     if (dbError) {
-      console.error('첨부파일 메타데이터 저장 오류:', dbError)
+      console.error('[UPLOAD API] 메타데이터 저장 실패:', {
+        error: dbError,
+        message: dbError.message,
+        code: dbError.code,
+        details: dbError.details
+      });
       
       // 업로드된 파일 삭제 (롤백)
+      console.log('[UPLOAD API] 파일 롤백 시작');
       try {
         await supabaseAdmin.storage
           .from('attachments')
           .remove([filePath])
+        console.log('[UPLOAD API] 파일 롤백 완료');
       } catch (rollbackError) {
-        console.warn('파일 롤백 중 오류:', rollbackError)
+        console.error('[UPLOAD API] 파일 롤백 실패:', rollbackError);
       }
 
-      return NextResponse.json({ error: '첨부파일 정보 저장에 실패했습니다.' }, { status: 500 })
+      return NextResponse.json({ 
+        error: `첨부파일 정보 저장에 실패했습니다: ${dbError.message}` 
+      }, { status: 500 })
     }
 
+    console.log('[UPLOAD API] 메타데이터 저장 성공:', attachment);
+
+    console.log('[UPLOAD API] 업로드 프로세스 완료');
     return NextResponse.json({
       message: '첨부파일이 성공적으로 업로드되었습니다.',
       attachment
     })
 
   } catch (error) {
-    console.error('첨부파일 업로드 API 오류:', error)
-    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
+    console.error('[UPLOAD API] 예외 발생:', {
+      error,
+      message: error instanceof Error ? error.message : '알 수 없는 오류',
+      stack: error instanceof Error ? error.stack : undefined
+    });
+    return NextResponse.json({ 
+      error: `서버 오류가 발생했습니다: ${error instanceof Error ? error.message : '알 수 없는 오류'}` 
+    }, { status: 500 })
   }
 }
 
