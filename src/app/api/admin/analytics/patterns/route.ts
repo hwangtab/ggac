@@ -92,7 +92,7 @@ async function analyzeActivityPatterns(supabase: any, userId: string | null, sta
   // 시간대별 활동 분석
   let query = supabase
     .from('user_activities')
-    .select('created_at, action_type')
+    .select('created_at, action_type, metadata')
     .gte('created_at', startDate.toISOString())
 
   // userId가 있을 때만 user_id 필터 적용
@@ -121,13 +121,34 @@ async function analyzeActivityPatterns(supabase: any, userId: string | null, sta
     return acc
   }, {}) || {}
 
+  // 데이터 품질 분석 (실제 vs 테스트 데이터 구분)
+  let realDataCount = 0
+  let testDataCount = 0
+  
+  hourlyActivity?.forEach((activity: any) => {
+    // metadata가 있고 generated가 true인 경우 테스트 데이터
+    if (activity.metadata && activity.metadata.generated === true) {
+      testDataCount++
+    } else {
+      realDataCount++
+    }
+  })
+
+  const dataSource = testDataCount === 0 ? 'real' : 
+                    realDataCount === 0 ? 'test' : 'mixed'
+
   return {
     activityPatterns: {
       hourlyDistribution,
       dayOfWeekDistribution,
       actionTypeDistribution,
       peakHour: Object.entries(hourlyDistribution).reduce((a, b) => hourlyDistribution[a[0] as any] > hourlyDistribution[b[0] as any] ? a : b, ['0', 0])[0],
-      totalActivities: hourlyActivity?.length || 0
+      totalActivities: hourlyActivity?.length || 0,
+      dataQuality: {
+        realDataCount,
+        testDataCount,
+        dataSource
+      }
     }
   }
 }
