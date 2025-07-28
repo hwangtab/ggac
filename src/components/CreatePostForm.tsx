@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase/client';
 import { BOARD_CATEGORIES } from '@/constants/categories';
 import type { Post, PostAttachment } from '@/types';
-import PostAttachmentUploader from './PostAttachmentUploader';
 import { logPostCreated } from '@/utils/activityLogger';
+import { FiUpload, FiX, FiImage, FiFile, FiVideo, FiMusic, FiPaperclip } from 'react-icons/fi';
 
 interface CreatePostFormProps {
   authorId: string;
@@ -16,77 +16,212 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ authorId, onNewPost, sh
   const [content, setContent] = useState('');
   const [category, setCategory] = useState('잡담');
   const [loading, setLoading] = useState(false);
-  const [showAttachmentUploader, setShowAttachmentUploader] = useState(false);
-  const [createdPostId, setCreatedPostId] = useState<string | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // '전체'는 필터링용이므로 제외하고 실제 게시글 카테고리만 사용
   const postCategories = BOARD_CATEGORIES.slice(1);
+
+  // 허용된 파일 타입
+  const ALLOWED_TYPES = [
+    'image/jpeg',
+    'image/png', 
+    'image/gif',
+    'image/webp',
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'video/mp4',
+    'video/webm',
+    'audio/mpeg',
+    'audio/wav'
+  ];
+
+  const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB per file
+  const MAX_FILES = 10;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
-    const { data, error } = await supabase
-      .from('posts')
-      .insert([{ title, content, category, author_id: authorId }])
-      .select()
-      .single();
+    try {
+      // 1. 게시글 생성
+      const { data, error } = await supabase
+        .from('posts')
+        .insert([{ title, content, category, author_id: authorId }])
+        .select()
+        .single();
 
-    setLoading(false);
+      if (error) {
+        throw new Error(error.message);
+      }
 
-    if (error) {
-      alert(error.message);
-    } else if (data) {
-      setCreatedPostId((data as any).id);
-      
-      // 활동 로깅
+      const postId = (data as any).id;
+
+      // 2. 활동 로깅
       try {
-        await logPostCreated((data as any).id, {
+        await logPostCreated(postId, {
           category,
-          title: title.substring(0, 50), // 제목 앞부분만 저장
+          title: title.substring(0, 50),
           character_count: content.length
         });
       } catch (logError) {
         console.error('활동 로깅 오류:', logError);
-        // 로깅 실패는 사용자 경험에 영향주지 않음
       }
-      
+
+      // 3. 첨부파일 업로드 (선택된 파일이 있는 경우)
+      if (selectedFiles.length > 0) {
+        await uploadAttachments(postId);
+      }
+
+      // 4. 성공 처리
       if (showSuccessRedirect) {
-        alert('게시글이 성공적으로 작성되었습니다! 첨부파일을 추가할 수 있습니다.');
+        alert('게시글이 성공적으로 작성되었습니다!');
       }
-      
-      // 첨부파일 업로더 표시
-      setShowAttachmentUploader(true);
       
       onNewPost(data as any);
+      
+      // 폼 초기화
       setTitle('');
       setContent('');
       setCategory('잡담');
+      setSelectedFiles([]);
+
+    } catch (error) {
+      console.error('게시글 작성 오류:', error);
+      alert(error instanceof Error ? error.message : '게시글 작성에 실패했습니다.');
+    } finally {
+      setLoading(false);
     }
   };
 
-  // 첨부파일 업로드 완료 핸들러
-  const handleAttachmentUploadComplete = (attachments: PostAttachment[]) => {
-    console.log('첨부파일 업로드 완료:', attachments);
+  // 첨부파일 업로드 함수
+  const uploadAttachments = async (postId: string) => {
+    const uploadPromises = selectedFiles.map(async (file) => {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch(`/api/posts/${postId}/attachments`, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.error || `${file.name} 업로드에 실패했습니다.`);
+      }
+
+      return response.json();
+    });
+
+    try {
+      await Promise.all(uploadPromises);
+    } catch (error) {
+      console.warn('일부 첨부파일 업로드 실패:', error);
+      // 첨부파일 업로드 실패해도 게시글 생성은 성공으로 처리
+    }
   };
 
-  // 첨부파일 업로드 오류 핸들러
-  const handleAttachmentUploadError = (error: string) => {
-    alert('첨부파일 업로드 오류: ' + error);
+  // 파일 선택 핸들러
+  const handleFileSelect = useCallback((files: FileList) => {
+    const fileArray = Array.from(files);
+    const validFiles: File[] = [];
+    const errors: string[] = [];
+
+    // 파일 개수 체크
+    if (selectedFiles.length + fileArray.length > MAX_FILES) {
+      errors.push(`최대 ${MAX_FILES}개의 파일만 업로드할 수 있습니다.`);
+    }
+
+    // 파일 검증
+    fileArray.forEach(file => {
+      if (!ALLOWED_TYPES.includes(file.type)) {
+        errors.push(`${file.name}: 지원하지 않는 파일 형식입니다.`);
+        return;
+      }
+
+      if (file.size > MAX_FILE_SIZE) {
+        errors.push(`${file.name}: 파일 크기가 너무 큽니다. (최대 50MB)`);
+        return;
+      }
+
+      validFiles.push(file);
+    });
+
+    // 오류가 있으면 표시하고 중단
+    if (errors.length > 0) {
+      alert(errors.join('\\n'));
+      return;
+    }
+
+    // 중복 파일 제거
+    const newFiles = validFiles.filter(newFile => 
+      !selectedFiles.some(existingFile => 
+        existingFile.name === newFile.name && existingFile.size === newFile.size
+      )
+    );
+
+    setSelectedFiles(prev => [...prev, ...newFiles]);
+  }, [selectedFiles]);
+
+  // 드래그 앤 드롭 핸들러
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      handleFileSelect(files);
+    }
+  }, [handleFileSelect]);
+
+  // 파일 입력 클릭
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      handleFileSelect(files);
+    }
+    e.target.value = '';
+  }, [handleFileSelect]);
+
+  // 개별 파일 삭제
+  const removeFile = useCallback((index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
+  // 파일 아이콘 선택
+  const getFileIcon = (fileType: string) => {
+    if (fileType.startsWith('image/')) return FiImage;
+    if (fileType.startsWith('video/')) return FiVideo;
+    if (fileType.startsWith('audio/')) return FiMusic;
+    return FiFile;
   };
 
-  // 첨부파일 업로더 닫기
-  const closeAttachmentUploader = () => {
-    setShowAttachmentUploader(false);
-    setCreatedPostId(null);
+  // 파일 크기 포맷팅
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
 
   return (
     <div className="bg-white p-6 sm:p-8 rounded-xl shadow-lg mb-12">
       <h2 className="text-2xl font-semibold mb-6 text-gray-900">새 게시글 작성</h2>
       
-      {!showAttachmentUploader ? (
-        <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-6">
         <div>
           <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-2">카테고리</label>
           <select
@@ -127,6 +262,83 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ authorId, onNewPost, sh
             disabled={loading}
           ></textarea>
         </div>
+
+        {/* 첨부파일 섹션 */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-3">첨부파일 (선택사항)</label>
+          
+          {/* 드래그 앤 드롭 영역 */}
+          <div
+            className={`
+              border-2 border-dashed rounded-lg p-6 text-center transition-colors
+              ${isDragOver 
+                ? 'border-primary-400 bg-primary-50' 
+                : 'border-gray-300 hover:border-gray-400'
+              }
+            `}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
+            <FiPaperclip className="w-8 h-8 text-gray-400 mx-auto mb-3" />
+            <p className="text-sm font-medium text-gray-900 mb-1">
+              파일을 여기로 드래그하거나 클릭하여 선택하세요
+            </p>
+            <p className="text-xs text-gray-500 mb-3">
+              이미지, 문서, 비디오, 오디오 파일 지원 (최대 {MAX_FILES}개, 파일당 50MB)
+            </p>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={loading}
+              className="inline-flex items-center px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors disabled:opacity-50"
+            >
+              <FiUpload className="w-4 h-4 mr-2" />
+              파일 선택
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept={ALLOWED_TYPES.join(',')}
+              onChange={handleInputChange}
+              className="hidden"
+              disabled={loading}
+            />
+          </div>
+
+          {/* 선택된 파일 목록 */}
+          {selectedFiles.length > 0 && (
+            <div className="mt-4 space-y-2">
+              <p className="text-sm font-medium text-gray-700">선택된 파일 ({selectedFiles.length}개)</p>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {selectedFiles.map((file, index) => {
+                  const FileIcon = getFileIcon(file.type);
+                  return (
+                    <div key={`${file.name}-${index}`} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div className="flex items-center space-x-3 flex-1 min-w-0">
+                        <FileIcon className="w-5 h-5 text-gray-600 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{file.name}</p>
+                          <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeFile(index)}
+                        disabled={loading}
+                        className="text-gray-400 hover:text-red-600 transition-colors disabled:opacity-50"
+                      >
+                        <FiX className="w-4 h-4" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="pt-4">
           <button
             type="submit"
@@ -139,62 +351,12 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ authorId, onNewPost, sh
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                작성 중...
+                {selectedFiles.length > 0 ? '게시글 작성 및 파일 업로드 중...' : '작성 중...'}
               </>
-            ) : '게시글 작성'}
+            ) : selectedFiles.length > 0 ? `게시글 작성 (${selectedFiles.length}개 파일 포함)` : '게시글 작성'}
           </button>
         </div>
-        </form>
-      ) : (
-        <div className="space-y-6 animate-in slide-in-from-top-2 duration-300">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <div>
-              <h3 className="text-lg font-medium text-gray-900">첨부파일 추가</h3>
-              <p className="text-sm text-gray-600 mt-1">
-                게시글이 성공적으로 작성되었습니다!
-              </p>
-            </div>
-            <button
-              onClick={closeAttachmentUploader}
-              className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
-            >
-              나중에 추가하기
-            </button>
-          </div>
-          
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-            <div className="flex items-start">
-              <svg className="flex-shrink-0 h-5 w-5 text-green-400 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-              <div className="ml-3">
-                <p className="text-sm text-green-800">
-                  이제 이미지나 문서 파일을 첨부할 수 있습니다. 파일을 드래그하거나 업로드 버튼을 클릭하세요.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {createdPostId && (
-            <div className="border border-gray-200 rounded-lg p-4">
-              <PostAttachmentUploader
-                postId={createdPostId}
-                onUploadComplete={handleAttachmentUploadComplete}
-                onUploadError={handleAttachmentUploadError}
-              />
-            </div>
-          )}
-
-          <div className="flex flex-col sm:flex-row gap-3 sm:justify-end pt-4 border-t border-gray-200">
-            <button
-              onClick={closeAttachmentUploader}
-              className="w-full sm:w-auto px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors"
-            >
-              첨부파일 업로드 완료
-            </button>
-          </div>
-        </div>
-      )}
+      </form>
     </div>
   );
 };
