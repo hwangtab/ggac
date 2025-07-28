@@ -92,6 +92,24 @@ async function getActivityTrends(supabase: any, period: string, weeks: number) {
     action_type: week.action_type
   })) || []
 
+  // 데이터가 없을 경우 기본 데이터 생성
+  if (series.length === 0) {
+    const startDate = new Date()
+    startDate.setDate(startDate.getDate() - (weeks * 7))
+    
+    for (let i = 0; i < weeks; i++) {
+      const weekStart = new Date(startDate)
+      weekStart.setDate(weekStart.getDate() + (i * 7))
+      
+      series.push({
+        date: weekStart.toISOString().split('T')[0],
+        value: 0,
+        unique_users: 0,
+        action_type: 'no_data'
+      })
+    }
+  }
+
   // 액션 타입별 그룹화
   const actionTypeGroups = series.reduce((acc: Record<string, any[]>, item: any) => {
     if (!acc[item.action_type]) {

@@ -142,7 +142,7 @@ export async function POST(
     // 게시글 존재 확인
     const { data: post, error: postError } = await supabase
       .from('posts')
-      .select('id, is_deleted')
+      .select('id, is_deleted, title')
       .eq('id', uuidValidation.sanitized)
       .single()
 
@@ -181,6 +181,23 @@ export async function POST(
     if (!result) {
       console.error('[API] RPC 결과 없음');
       return NextResponse.json({ error: '좋아요 처리 결과를 확인할 수 없습니다.' }, { status: 500 })
+    }
+
+    // 활동 로깅
+    try {
+      await supabase.rpc('log_user_activity', {
+        p_user_id: session.user.id,
+        p_action_type: result.liked ? 'like_added' : 'like_removed',
+        p_target_type: 'post',
+        p_target_id: uuidValidation.sanitized,
+        p_details: JSON.stringify({
+          post_title: post.title,
+          action: result.liked ? 'add' : 'remove'
+        })
+      });
+    } catch (logError) {
+      console.error('좋아요 활동 로깅 실패:', logError);
+      // 로깅 실패가 좋아요 기능을 방해하지 않도록 함
     }
 
     const response: PostLikeToggleResponse = {

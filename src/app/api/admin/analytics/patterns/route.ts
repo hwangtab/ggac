@@ -89,12 +89,18 @@ export async function GET(request: NextRequest) {
  * 활동 패턴 분석
  */
 async function analyzeActivityPatterns(supabase: any, userId: string | null, startDate: Date) {
-  // 시간대별 활동 분칠
-  const { data: hourlyActivity } = await supabase
+  // 시간대별 활동 분석
+  let query = supabase
     .from('user_activities')
     .select('created_at, action_type')
     .gte('created_at', startDate.toISOString())
-    .eq(userId ? 'user_id' : 'id', userId || 'any')
+
+  // userId가 있을 때만 user_id 필터 적용
+  if (userId) {
+    query = query.eq('user_id', userId)
+  }
+
+  const { data: hourlyActivity } = await query
 
   const hourlyDistribution = hourlyActivity?.reduce((acc: Record<number, number>, activity: any) => {
     const hour = new Date(activity.created_at).getHours()
