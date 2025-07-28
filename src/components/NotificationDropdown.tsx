@@ -15,9 +15,11 @@ import type { Notification, NotificationStats } from '@/types'
 interface NotificationDropdownProps {
   /** 드롭다운 위치 조정을 위한 클래스 */
   className?: string
+  /** 다크 모드 여부 (히어로 섹션 등에서 사용) */
+  isDark?: boolean
 }
 
-const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ className = '' }) => {
+const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ className = '', isDark = false }) => {
   const [isOpen, setIsOpen] = useState(false)
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [stats, setStats] = useState<NotificationStats | null>(null)
@@ -187,7 +189,11 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ className =
       {/* 알림 버튼 */}
       <button
         onClick={handleToggle}
-        className="relative p-2 text-gray-600 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 rounded-lg transition-colors"
+        className={`relative p-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 rounded-lg transition-colors ${
+          isDark 
+            ? 'text-white hover:text-accent-300' 
+            : 'text-gray-600 hover:text-gray-900'
+        }`}
         aria-label="알림"
       >
         <FiBell className="w-6 h-6" />

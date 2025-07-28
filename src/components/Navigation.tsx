@@ -170,7 +170,7 @@ const Navigation = () => {
               {user ? (
                 <>
                   {/* 알림 드롭다운 */}
-                  <NotificationDropdown />
+                  <NotificationDropdown isDark={isDark} />
                   
                   <Link
                     href="/mypage"
