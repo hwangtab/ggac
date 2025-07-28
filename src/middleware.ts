@@ -210,7 +210,7 @@ export async function middleware(request: NextRequest) {
   // 인증 에러 발생 시 공개 페이지는 허용하고 보호된 페이지만 리다이렉트
   if (authError) {
     const { pathname } = request.nextUrl;
-    const PROTECTED_PAGES = ['/board', '/admin'];
+    const PROTECTED_PAGES = ['/admin'];
     const isProtectedPage = PROTECTED_PAGES.some(path => pathname.startsWith(path));
     
     if (isProtectedPage) {
@@ -225,7 +225,7 @@ export async function middleware(request: NextRequest) {
   // 정의된 경로들
   const AUTH_PAGES = ['/login', '/signup'];
   const REGISTRATION_PAGES = ['/register/pending', '/register/rejected'];
-  const PROTECTED_PAGES = ['/board', '/admin'];
+  const PROTECTED_PAGES = ['/admin'];
 
   const isAuthPage = AUTH_PAGES.includes(pathname);
   const isRegistrationPage = REGISTRATION_PAGES.includes(pathname);

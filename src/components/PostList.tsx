@@ -178,25 +178,18 @@ const PostList: React.FC<PostListProps> = ({
                 >
                   {post.title}
                 </h3>
-                {isMember ? (
-                  <div 
-                    className="text-gray-700 mt-2 leading-relaxed cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors"
-                    onClick={() => router.push(`/board/${post.id}`)}
-                  >
-                    <p className="line-clamp-3">
-                      {post.content.length > 150 ? `${post.content.substring(0, 150)}...` : post.content}
-                    </p>
-                    {post.content.length > 150 && (
-                      <span className="text-primary-600 text-sm mt-1 inline-block">더 보기</span>
-                    )}
-                  </div>
-                ) : (
-                  <div className="mt-2 p-4 bg-gray-100 rounded-md text-center">
-                    <p className="text-gray-600 text-sm">
-                      🔒 조합원 승인 후 내용을 볼 수 있습니다
-                    </p>
-                  </div>
-                )}
+                {/* 게시물 내용은 모든 사용자가 볼 수 있음 */}
+                <div 
+                  className="text-gray-700 mt-2 leading-relaxed cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors"
+                  onClick={() => router.push(`/board/${post.id}`)}
+                >
+                  <p className="line-clamp-3">
+                    {post.content.length > 150 ? `${post.content.substring(0, 150)}...` : post.content}
+                  </p>
+                  {post.content.length > 150 && (
+                    <span className="text-primary-600 text-sm mt-1 inline-block">더 보기</span>
+                  )}
+                </div>
                 <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
                   <div className="flex flex-col gap-2">
                     <span className="text-sm text-gray-600">
@@ -205,26 +198,26 @@ const PostList: React.FC<PostListProps> = ({
                     <PostAttachmentPreview postId={post.id} />
                   </div>
                   <div className="flex items-center gap-4">
+                    {/* 좋아요 버튼은 조합원만 */}
                     {isMember && (
-                      <>
-                        <PostLikeButton
-                          postId={post.id}
-                          initialLikeCount={post.like_count || 0}
-                          initialIsLiked={post.is_liked || false}
-                          size="sm"
-                          variant="minimal"
-                          showCount={true}
-                          showLabel={false}
-                          onLikeChange={handleLikeChange}
-                        />
-                        <button
-                          onClick={() => toggleComments(post.id)}
-                          className="text-sm text-gray-500 hover:text-primary-600 transition-colors"
-                        >
-                          💬 댓글 {expandedPosts.has(post.id) ? '접기' : '보기'}
-                        </button>
-                      </>
+                      <PostLikeButton
+                        postId={post.id}
+                        initialLikeCount={post.like_count || 0}
+                        initialIsLiked={post.is_liked || false}
+                        size="sm"
+                        variant="minimal"
+                        showCount={true}
+                        showLabel={false}
+                        onLikeChange={handleLikeChange}
+                      />
                     )}
+                    {/* 댓글 보기 버튼은 모든 사용자 */}
+                    <button
+                      onClick={() => toggleComments(post.id)}
+                      className="text-sm text-gray-500 hover:text-primary-600 transition-colors"
+                    >
+                      💬 댓글 {expandedPosts.has(post.id) ? '접기' : '보기'}
+                    </button>
                     <span className="text-sm text-gray-500">
                       {new Date(post.created_at).toLocaleDateString('ko-KR', {
                         year: 'numeric',
@@ -237,7 +230,7 @@ const PostList: React.FC<PostListProps> = ({
                   </div>
                 </div>
                 
-                {isMember && expandedPosts.has(post.id) && (
+                {expandedPosts.has(post.id) && (
                   <CommentSection 
                     postId={post.id} 
                     currentUserId={currentUserId}
