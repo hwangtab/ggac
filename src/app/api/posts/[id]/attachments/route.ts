@@ -15,6 +15,7 @@ import type { PostAttachment, PostAttachmentStats } from '@/types'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { validateUUID } from '@/utils/validation'
+import { generateUniqueFileName, sanitizeFileNameWithDetails } from '@/utils/fileNameSanitizer'
 
 // Service Role 클라이언트는 Storage 작업에만 사용
 function getSupabaseAdmin() {
@@ -254,13 +255,24 @@ export async function POST(
       }, { status: 503 })
     }
 
+    // 파일명 정제 및 고유 파일명 생성
+    console.log('[UPLOAD API] 파일명 정제 시작');
+    const fileNameResult = sanitizeFileNameWithDetails(file.name);
+    console.log('[UPLOAD API] 파일명 정제 결과:', {
+      original: fileNameResult.original,
+      sanitized: fileNameResult.sanitized,
+      hasChanges: fileNameResult.hasChanges
+    });
+    
+    const uniqueFileName = generateUniqueFileName(file.name);
+    console.log('[UPLOAD API] 고유 파일명 생성:', uniqueFileName);
+    
     // 파일을 Supabase Storage에 업로드
     console.log('[UPLOAD API] 파일 버퍼 변환 시작');
     const fileBuffer = await file.arrayBuffer()
     console.log('[UPLOAD API] 파일 버퍼 변환 완료, 크기:', fileBuffer.byteLength);
     
-    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}-${file.name}`
-    const filePath = `posts/${validPostId}/${fileName}`
+    const filePath = `posts/${validPostId}/${uniqueFileName}`
     console.log('[UPLOAD API] Storage 업로드 시작:', filePath);
 
     const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
