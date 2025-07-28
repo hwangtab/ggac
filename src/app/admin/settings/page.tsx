@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { FiSave, FiSettings, FiMail, FiShield, FiGlobe, FiDatabase, FiRefreshCw, FiDownload, FiUpload, FiRotateCcw, FiAlertTriangle } from 'react-icons/fi'
 import AdminLayout from '../components/AdminLayout'
+import { validateField, validateAllSettings, type ValidationError } from '@/utils/settingsValidation'
 
 interface AdminSettings {
   site: {
@@ -43,6 +44,7 @@ export default function AdminSettingsPage() {
   const [success, setSuccess] = useState<string | null>(null)
   const [backupLoading, setBackupLoading] = useState(false)
   const [restoreLoading, setRestoreLoading] = useState(false)
+  const [validationErrors, setValidationErrors] = useState<ValidationError[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -77,6 +79,13 @@ export default function AdminSettingsPage() {
       setError(null)
       setSuccess(null)
 
+      // 저장 전 전체 설정 유효성 검증
+      const validationResult = validateAllSettings(settings)
+      if (!validationResult.isValid) {
+        setValidationErrors(validationResult.errors)
+        throw new Error(`설정에 오류가 있습니다: ${validationResult.errors.map(e => e.message).join(', ')}`)
+      }
+
       const response = await fetch('/api/admin/settings', {
         method: 'PUT',
         headers: {
@@ -90,6 +99,23 @@ export default function AdminSettingsPage() {
       }
 
       setSuccess('설정이 성공적으로 저장되었습니다.')
+      setValidationErrors([]) // 저장 성공 시 유효성 오류 초기화
+      
+      // 설정 저장 후 캐시 무효화
+      try {
+        await fetch('/api/admin/settings/cache', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ cacheType: 'all' })
+        })
+        console.log('Settings cache invalidated successfully')
+      } catch (cacheError) {
+        console.warn('Failed to invalidate settings cache:', cacheError)
+        // 캐시 무효화 실패는 치명적이지 않으므로 사용자에게는 알리지 않음
+      }
+      
       setTimeout(() => setSuccess(null), 3000)
     } catch (err) {
       console.error('Settings save error:', err)
@@ -101,13 +127,29 @@ export default function AdminSettingsPage() {
 
   const updateSettings = (section: keyof AdminSettings, key: string, value: any) => {
     if (!settings) return
-    setSettings({
+    
+    // 설정 업데이트
+    const newSettings = {
       ...settings,
       [section]: {
         ...settings[section],
         [key]: value
       }
-    })
+    }
+    setSettings(newSettings)
+    
+    // 실시간 유효성 검증
+    const fieldError = validateField(section, key, value)
+    
+    // 기존 오류에서 해당 필드 오류 제거
+    const filteredErrors = validationErrors.filter(err => err.field !== key || err.category !== section)
+    
+    // 새로운 오류가 있으면 추가
+    if (fieldError) {
+      setValidationErrors([...filteredErrors, fieldError])
+    } else {
+      setValidationErrors(filteredErrors)
+    }
   }
 
   // 백업 다운로드 함수
@@ -221,6 +263,81 @@ export default function AdminSettingsPage() {
     }
   }
 
+  // 기본값 복원 함수
+  const resetToDefaults = async () => {
+    if (!confirm('정말로 모든 설정을 기본값으로 되돌리시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
+      return
+    }
+
+    try {
+      setRestoreLoading(true)
+      setError(null)
+
+      const response = await fetch('/api/admin/settings/reset', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          resetType: 'all'
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || '기본값 복원에 실패했습니다.')
+      }
+
+      const result = await response.json()
+      
+      if (result.success) {
+        setSuccess(result.message)
+        // 설정 새로고침
+        await fetchSettings()
+        
+        // 기본값 복원 후 캐시 무효화
+        try {
+          await fetch('/api/admin/settings/cache', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ cacheType: 'all' })
+          })
+          console.log('Settings cache invalidated after reset')
+        } catch (cacheError) {
+          console.warn('Failed to invalidate settings cache after reset:', cacheError)
+        }
+      } else {
+        setError(result.message)
+      }
+
+      setTimeout(() => {
+        setSuccess(null)
+        setError(null)
+      }, 5000)
+    } catch (err) {
+      console.error('Reset to defaults error:', err)
+      setError(err instanceof Error ? err.message : '기본값 복원 중 오류가 발생했습니다.')
+    } finally {
+      setRestoreLoading(false)
+    }
+  }
+
+  // 필드별 유효성 검증 오류 가져오기
+  const getFieldError = (category: string, field: string): string | null => {
+    const error = validationErrors.find(err => err.category === category && err.field === field)
+    return error ? error.message : null
+  }
+
+  // 필드 스타일 클래스 생성
+  const getFieldClassName = (category: string, field: string, baseClassName: string): string => {
+    const hasError = getFieldError(category, field)
+    return hasError 
+      ? `${baseClassName} border-red-300 focus:ring-red-500 focus:border-red-500`
+      : baseClassName
+  }
+
   const tabs = [
     { id: 'site', label: '사이트 설정', icon: FiGlobe },
     { id: 'email', label: '이메일 설정', icon: FiMail },
@@ -271,6 +388,26 @@ export default function AdminSettingsPage() {
         {success && (
           <div className="bg-green-50 border border-green-200 rounded-lg p-4">
             <p className="text-green-700">{success}</p>
+          </div>
+        )}
+
+        {/* 유효성 검증 오류 */}
+        {validationErrors.length > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <div className="flex items-start">
+              <FiAlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 mr-2 flex-shrink-0" />
+              <div>
+                <h4 className="text-sm font-medium text-amber-800 mb-2">설정 오류</h4>
+                <ul className="text-sm text-amber-700 space-y-1">
+                  {validationErrors.map((error, index) => (
+                    <li key={index} className="flex items-center">
+                      <span className="w-2 h-2 bg-amber-400 rounded-full mr-2 flex-shrink-0"></span>
+                      <span><strong>{error.category}</strong>: {error.message}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
           </div>
         )}
 
@@ -333,8 +470,11 @@ export default function AdminSettingsPage() {
                         type="text"
                         value={settings.site.site_title}
                         onChange={(e) => updateSettings('site', 'site_title', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        className={getFieldClassName('site', 'site_title', 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500')}
                       />
+                      {getFieldError('site', 'site_title') && (
+                        <p className="mt-1 text-sm text-red-600">{getFieldError('site', 'site_title')}</p>
+                      )}
                     </div>
 
                     <div>
@@ -352,9 +492,12 @@ export default function AdminSettingsPage() {
                       <input
                         type="number"
                         value={settings.site.max_members}
-                        onChange={(e) => updateSettings('site', 'max_members', parseInt(e.target.value))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        onChange={(e) => updateSettings('site', 'max_members', parseInt(e.target.value) || 0)}
+                        className={getFieldClassName('site', 'max_members', 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500')}
                       />
+                      {getFieldError('site', 'max_members') && (
+                        <p className="mt-1 text-sm text-red-600">{getFieldError('site', 'max_members')}</p>
+                      )}
                     </div>
                   </div>
                 )}
@@ -369,17 +512,23 @@ export default function AdminSettingsPage() {
                           type="text"
                           value={settings.email.smtp_host}
                           onChange={(e) => updateSettings('email', 'smtp_host', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          className={getFieldClassName('email', 'smtp_host', 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500')}
                         />
+                        {getFieldError('email', 'smtp_host') && (
+                          <p className="mt-1 text-sm text-red-600">{getFieldError('email', 'smtp_host')}</p>
+                        )}
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">SMTP 포트</label>
                         <input
                           type="number"
                           value={settings.email.smtp_port}
-                          onChange={(e) => updateSettings('email', 'smtp_port', parseInt(e.target.value))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          onChange={(e) => updateSettings('email', 'smtp_port', parseInt(e.target.value) || 0)}
+                          className={getFieldClassName('email', 'smtp_port', 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500')}
                         />
+                        {getFieldError('email', 'smtp_port') && (
+                          <p className="mt-1 text-sm text-red-600">{getFieldError('email', 'smtp_port')}</p>
+                        )}
                       </div>
                     </div>
 
@@ -411,8 +560,11 @@ export default function AdminSettingsPage() {
                           type="email"
                           value={settings.email.from_email}
                           onChange={(e) => updateSettings('email', 'from_email', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          className={getFieldClassName('email', 'from_email', 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500')}
                         />
+                        {getFieldError('email', 'from_email') && (
+                          <p className="mt-1 text-sm text-red-600">{getFieldError('email', 'from_email')}</p>
+                        )}
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">발신자 이름</label>
@@ -435,9 +587,12 @@ export default function AdminSettingsPage() {
                       <input
                         type="number"
                         value={settings.security.session_timeout}
-                        onChange={(e) => updateSettings('security', 'session_timeout', parseInt(e.target.value))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        onChange={(e) => updateSettings('security', 'session_timeout', parseInt(e.target.value) || 0)}
+                        className={getFieldClassName('security', 'session_timeout', 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500')}
                       />
+                      {getFieldError('security', 'session_timeout') && (
+                        <p className="mt-1 text-sm text-red-600">{getFieldError('security', 'session_timeout')}</p>
+                      )}
                     </div>
 
                     <div>
@@ -445,9 +600,12 @@ export default function AdminSettingsPage() {
                       <input
                         type="number"
                         value={settings.security.max_login_attempts}
-                        onChange={(e) => updateSettings('security', 'max_login_attempts', parseInt(e.target.value))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        onChange={(e) => updateSettings('security', 'max_login_attempts', parseInt(e.target.value) || 0)}
+                        className={getFieldClassName('security', 'max_login_attempts', 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500')}
                       />
+                      {getFieldError('security', 'max_login_attempts') && (
+                        <p className="mt-1 text-sm text-red-600">{getFieldError('security', 'max_login_attempts')}</p>
+                      )}
                     </div>
 
                     <div>
@@ -455,9 +613,12 @@ export default function AdminSettingsPage() {
                       <input
                         type="number"
                         value={settings.security.password_min_length}
-                        onChange={(e) => updateSettings('security', 'password_min_length', parseInt(e.target.value))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        onChange={(e) => updateSettings('security', 'password_min_length', parseInt(e.target.value) || 0)}
+                        className={getFieldClassName('security', 'password_min_length', 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500')}
                       />
+                      {getFieldError('security', 'password_min_length') && (
+                        <p className="mt-1 text-sm text-red-600">{getFieldError('security', 'password_min_length')}</p>
+                      )}
                     </div>
 
                     <div>
@@ -605,15 +766,12 @@ export default function AdminSettingsPage() {
                         이 작업은 되돌릴 수 없으니 신중히 결정하시기 바랍니다.
                       </p>
                       <button
-                        onClick={() => {
-                          if (confirm('정말로 모든 설정을 기본값으로 되돌리시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
-                            setError('기본값 복원 기능은 아직 구현되지 않았습니다.')
-                          }
-                        }}
-                        className="flex items-center px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700"
+                        onClick={resetToDefaults}
+                        disabled={restoreLoading}
+                        className="flex items-center px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        <FiRotateCcw className="w-4 h-4 mr-2" />
-                        기본값으로 복원
+                        <FiRotateCcw className={`w-4 h-4 mr-2 ${restoreLoading ? 'animate-spin' : ''}`} />
+                        {restoreLoading ? '복원 중...' : '기본값으로 복원'}
                       </button>
                     </div>
                   </div>
