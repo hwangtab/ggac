@@ -48,8 +48,8 @@ const ALLOWED_FILE_TYPES = {
   audio: ['audio/mpeg', 'audio/wav']
 }
 
-const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
-const MAX_TOTAL_SIZE = 100 * 1024 * 1024 // 100MB per post
+const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
+const MAX_TOTAL_SIZE = 10 * 1024 * 1024 // 10MB per post
 const MAX_FILES_PER_POST = 10
 
 /**

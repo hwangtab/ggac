@@ -30,7 +30,7 @@ interface UploadingFile {
 const PostAttachmentUploader: React.FC<PostAttachmentUploaderProps> = ({
   postId,
   maxFiles = 10,
-  maxTotalSize = 100 * 1024 * 1024, // 100MB
+  maxTotalSize = 10 * 1024 * 1024, // 10MB
   onUploadComplete,
   onUploadError,
   className = ''
@@ -55,7 +55,7 @@ const PostAttachmentUploader: React.FC<PostAttachmentUploaderProps> = ({
     'audio/wav'
   ]
 
-  const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB per file
+  const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB per file
 
   // 파일 선택 핸들러
   const handleFileSelect = useCallback((files: FileList) => {
