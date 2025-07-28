@@ -39,28 +39,28 @@ export default function PostDetailPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // 사용자 인증 확인
+        // 사용자 인증 확인 (선택적)
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
-        if (sessionError || !session?.user) {
-          router.replace('/login');
-          return;
-        }
-
-        const currentUser = session.user;
+        const currentUser = session?.user || null;
         setUser(currentUser);
 
-        // 사용자 권한 확인
-        const { data: profile, error: profileError } = await supabase
-          .from('member_profiles')
-          .select('registration_status, is_active')
-          .eq('id', currentUser.id)
-          .single();
+        // 사용자 권한 확인 (로그인한 사용자만)
+        if (currentUser) {
+          const { data: profile, error: profileError } = await supabase
+            .from('member_profiles')
+            .select('registration_status, is_active')
+            .eq('id', currentUser.id)
+            .single();
 
-        if (profileError) {
-          console.error('Error fetching profile:', profileError);
-        } else if (profile) {
-          setIsMember((profile as any).registration_status === 'approved' && (profile as any).is_active);
+          if (profileError) {
+            console.error('Error fetching profile:', profileError);
+            setIsMember(false);
+          } else if (profile) {
+            setIsMember((profile as any).registration_status === 'approved' && (profile as any).is_active);
+          }
+        } else {
+          setIsMember(false);
         }
 
         // 게시글 가져오기
@@ -170,9 +170,9 @@ export default function PostDetailPage() {
     }
 
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session?.user) {
-        router.replace('/login');
-      }
+      const newUser = session?.user || null;
+      setUser(newUser);
+      setIsMember(false); // 로그아웃 시 멤버 상태 초기화
     });
 
     return () => {
@@ -258,28 +258,6 @@ export default function PostDetailPage() {
     );
   }
 
-  if (!isMember) {
-    return (
-      <div className="min-h-screen bg-gray-50 pt-20 md:pt-24">
-        <div className="container mx-auto px-4 py-8">
-          <div className="max-w-4xl mx-auto">
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
-              <h1 className="text-2xl font-bold text-yellow-800 mb-4">접근 권한이 없습니다</h1>
-              <p className="text-yellow-700 mb-4">
-                게시글 열람은 승인된 조합원만 가능합니다.
-              </p>
-              <button
-                onClick={() => router.push('/board')}
-                className="bg-yellow-600 text-white px-4 py-2 rounded-lg hover:bg-yellow-700 transition-colors"
-              >
-                게시판으로 돌아가기
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gray-50 pt-20 md:pt-24">
@@ -294,6 +272,37 @@ export default function PostDetailPage() {
               ← 게시판으로 돌아가기
             </button>
           </div>
+
+          {/* 비로그인/비조합원 사용자 안내 */}
+          {!user && (
+            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-blue-800 mb-2">
+                <strong>안내:</strong> 게시물을 읽어볼 수 있지만, 댓글 작성과 좋아요는 조합원만 가능합니다.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => router.push('/login')}
+                  className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 transition-colors"
+                >
+                  로그인
+                </button>
+                <button
+                  onClick={() => router.push('/signup')}
+                  className="bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700 transition-colors"
+                >
+                  조합원 가입
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!isMember && user && (
+            <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <p className="text-yellow-800">
+                <strong>알림:</strong> 조합원 승인 대기 중입니다. 승인 후 댓글 작성과 좋아요가 가능합니다.
+              </p>
+            </div>
+          )}
 
           {/* 게시글 내용 */}
           <div className="bg-white rounded-lg shadow-md overflow-hidden">

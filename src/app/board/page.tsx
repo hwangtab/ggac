@@ -46,10 +46,7 @@ function BoardContent() {
           console.error('Error getting session:', sessionError);
           if (mounted) {
             setUserLoading(false);
-            // 미들웨어가 처리하도록 짧은 대기
-            setTimeout(() => {
-              router.replace('/login');
-            }, 100);
+            // 세션 오류가 있어도 비로그인 사용자로 게시판 이용 가능
           }
           return;
         }
@@ -58,11 +55,10 @@ function BoardContent() {
         
         if (!currentUser) {
           if (mounted) {
+            setUser(null);
+            setIsMember(false);
             setUserLoading(false);
-            // 미들웨어가 처리하도록 짧은 대기
-            setTimeout(() => {
-              router.replace('/login');
-            }, 100);
+            // 비로그인 사용자도 게시판 조회 가능
           }
           return;
         }
@@ -71,7 +67,7 @@ function BoardContent() {
           setUser(currentUser);
         }
 
-        // 프로필 정보 가져오기
+        // 프로필 정보 가져오기 (로그인한 사용자만)
         const { data: profile, error: profileError } = await supabase
           .from('member_profiles')
           .select('registration_status, is_active')
@@ -82,18 +78,19 @@ function BoardContent() {
           console.error('Error fetching profile:', profileError);
           if (mounted) {
             setIsMember(false);
+            setUserLoading(false);
           }
         } else if (profile && mounted) {
           setIsMember((profile as any).registration_status === 'approved' && (profile as any).is_active);
-        }
-
-        if (mounted) {
           setUserLoading(false);
         }
       } catch (e) {
         console.error('Error in fetchUserAndProfile:', e);
         if (mounted) {
+          setUser(null);
+          setIsMember(false);
           setUserLoading(false);
+          // 에러가 발생해도 비로그인 사용자로 게시판 이용 가능
         }
       }
     };
@@ -106,10 +103,11 @@ function BoardContent() {
         setUser(newUser);
         
         if (!newUser) {
-          // 미들웨어가 처리하도록 짧은 대기
-          setTimeout(() => {
-            router.replace('/login');
-          }, 100);
+          // 로그아웃 시에도 게시판은 계속 이용 가능
+          setIsMember(false);
+        } else {
+          // 로그인 시 멤버 상태 다시 확인
+          fetchUserAndProfile();
         }
       }
     });
@@ -134,12 +132,6 @@ function BoardContent() {
     return <div className="min-h-screen pt-24 md:pt-28 flex items-center justify-center">Loading...</div>;
   }
 
-  // If not loading and no user, it means redirect should have happened.
-  // This case should ideally not be reached if router.replace works.
-  if (!user) {
-    return null; // Or a more explicit message if redirect failed
-  }
-
   return (
     <div className="min-h-screen bg-gray-50 pt-20 md:pt-24">
       <div className="container mx-auto px-4 py-8">
@@ -148,6 +140,30 @@ function BoardContent() {
           <p className="text-gray-600">경기아트콜렉티브 협동조합 조합원들의 소통 공간입니다.</p>
         </div>
         
+        {/* 비로그인 사용자 안내 */}
+        {!user && (
+          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-blue-800 mb-2">
+              <strong>안내:</strong> 게시물을 읽어볼 수 있지만, 글 작성과 댓글, 좋아요는 조합원만 가능합니다.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => router.push('/login')}
+                className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 transition-colors"
+              >
+                로그인
+              </button>
+              <button
+                onClick={() => router.push('/signup')}
+                className="bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700 transition-colors"
+              >
+                조합원 가입
+              </button>
+            </div>
+          </div>
+        )}
+        
+        {/* 로그인했지만 승인 대기 중인 사용자 */}
         {!isMember && user && (
           <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
             <p className="text-yellow-800">
@@ -156,6 +172,7 @@ function BoardContent() {
           </div>
         )}
         
+        {/* 조합원만 글쓰기 버튼 표시 */}
         {isMember && user && (
           <div className="mb-6">
             <button
