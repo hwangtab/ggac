@@ -103,11 +103,11 @@ const ArtistsContent = ({ artists }: ArtistsContentProps) => {
                             ))}
                             {artist.category.length > 3 && (
                               <span 
-                                className="inline-block px-3 py-1 bg-gray-200 text-gray-600 text-sm font-medium rounded-full cursor-help relative group"
+                                className="inline-block px-3 py-1 bg-gray-200 text-gray-600 text-sm font-medium rounded-full cursor-help relative group/tooltip"
                                 title={artist.category.slice(3).join(', ')}
                               >
                                 +{artist.category.length - 3}개
-                                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-1 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
+                                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-1 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
                                   {artist.category.slice(3).join(', ')}
                                 </div>
                               </span>
