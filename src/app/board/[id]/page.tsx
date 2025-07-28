@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import CommentSection from '../../../components/CommentSection';
 import PostLikeButton from '../../../components/PostLikeButton';
+import PostAttachmentsDisplay from '../../../components/PostAttachmentsDisplay';
 
 interface Post {
   id: string;
@@ -377,6 +378,11 @@ export default function PostDetailPage() {
                   {post.content}
                 </div>
               </div>
+            </div>
+
+            {/* 첨부파일 */}
+            <div className="px-6 pb-6">
+              <PostAttachmentsDisplay postId={post.id} />
             </div>
           </div>
 

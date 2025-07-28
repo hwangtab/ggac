@@ -8,6 +8,8 @@ import { BOARD_CATEGORIES, BOARD_CATEGORY_STYLES } from '@/constants/categories'
 import CommentSection from './CommentSection'
 import PaginationControls from './PaginationControls'
 import PostLikeButton from './PostLikeButton'
+import PostAttachmentPreview from './PostAttachmentPreview'
+import { FiImage, FiFile, FiVideo, FiMusic } from 'react-icons/fi'
 
 import type { Post } from '@/types'
 
@@ -196,9 +198,12 @@ const PostList: React.FC<PostListProps> = ({
                   </div>
                 )}
                 <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
-                  <span className="text-sm text-gray-600">
-                    작성자: <span className="font-medium">{profiles[post.author_id] || 'Loading...'}</span>
-                  </span>
+                  <div className="flex flex-col gap-2">
+                    <span className="text-sm text-gray-600">
+                      작성자: <span className="font-medium">{profiles[post.author_id] || 'Loading...'}</span>
+                    </span>
+                    <PostAttachmentPreview postId={post.id} />
+                  </div>
                   <div className="flex items-center gap-4">
                     {isMember && (
                       <>
