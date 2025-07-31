@@ -7,14 +7,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createClient } from '@supabase/supabase-js'
 
-// GET: 아티스트의 배정된 멤버 목록 조회
-export async function GET(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
-  return NextResponse.json({ message: 'GET method available' })
-}
-
 // POST: 아티스트에 멤버 배정
 export async function POST(
   request: NextRequest,

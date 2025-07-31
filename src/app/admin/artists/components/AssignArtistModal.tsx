@@ -71,13 +71,12 @@ export default function AssignArtistModal({ artist, members, isOpen, onClose, on
     try {
       setIsSubmitting(true)
       
-      const response = await fetch(`/api/admin/artist-assignment`, {
+      const response = await fetch(`/api/admin/artists/${artist.id}/members`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          artistId: artist.id,
           memberId: selectedMember,
           role: selectedRole
         })
