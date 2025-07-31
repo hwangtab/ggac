@@ -273,6 +273,11 @@
     "src/app/api/posts/[id]/attachments/route.ts": {
       "memory": 1024,
       "maxDuration": 30
+    },
+    "src/app/api/admin/artists/[id]/members/route.ts": {
+      "memory": 1024,
+      "maxDuration": 30,
+      "runtime": "nodejs18.x"
     }
   },
   "rewrites": [
@@ -299,6 +304,14 @@
     {
       "source": "/api/posts/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})",
       "destination": "/api/posts/$1"
+    },
+    {
+      "source": "/api/admin/artists/([^/]+)/members",
+      "destination": "/api/admin/artists/$1/members"
+    },
+    {
+      "source": "/api/admin/artists/(.*)",
+      "destination": "/api/admin/artists/$1"
     }
   ]
 }

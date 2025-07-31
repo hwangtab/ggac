@@ -71,20 +71,54 @@ export default function AssignArtistModal({ artist, members, isOpen, onClose, on
     try {
       setIsSubmitting(true)
       
-      const response = await fetch(`/api/admin/artists/${artist.id}/members`, {
+      const response = await fetch(`/api/admin/artist-assignment`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          artistId: artist.id,
           memberId: selectedMember,
           role: selectedRole
         })
       })
 
+      console.log('Response status:', response.status)
+      console.log('Response headers:', response.headers)
+
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || '아티스트 배정에 실패했습니다.')
+        // 응답이 비어있는지 확인
+        const responseText = await response.text()
+        console.log('Response text:', responseText)
+        
+        if (!responseText.trim()) {
+          throw new Error(`서버 오류 (${response.status}): 빈 응답을 받았습니다.`)
+        }
+
+        try {
+          const errorData = JSON.parse(responseText)
+          throw new Error(errorData.error || `서버 오류 (${response.status})`)
+        } catch (parseError) {
+          console.error('JSON parse error:', parseError)
+          throw new Error(`서버 오류 (${response.status}): ${responseText.substring(0, 100)}`)
+        }
+      }
+
+      // 성공 응답도 동일하게 처리
+      const responseText = await response.text()
+      if (!responseText.trim()) {
+        throw new Error('서버에서 빈 응답을 받았습니다.')
+      }
+
+      try {
+        const result = JSON.parse(responseText)
+        if (!result.success) {
+          throw new Error(result.error || '아티스트 배정에 실패했습니다.')
+        }
+      } catch (parseError) {
+        console.error('Success response parse error:', parseError)
+        // 성공적인 상태 코드이지만 JSON이 아닌 경우는 성공으로 처리
+        console.log('Treating as success despite parse error')
       }
 
       onSuccess()
