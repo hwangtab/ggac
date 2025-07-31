@@ -1,7 +1,6 @@
 {
   "framework": "nextjs",
   "regions": ["icn1"],
-  "buildCommand": "npm run build",
   "headers": [
     {
       "source": "/_next/static/css/(.*\\.css)",
@@ -257,38 +256,7 @@
   "functions": {
     "src/app/api/**/*.ts": {
       "memory": 1024,
-      "maxDuration": 30,
-      "regions": ["icn1"]
-    },
-    "src/app/api/posts/[id]/likes/route.ts": {
-      "memory": 1024,
-      "maxDuration": 30,
-      "regions": ["icn1"]
-    },
-    "src/app/api/posts/[id]/route.ts": {
-      "memory": 1024,
-      "maxDuration": 30,
-      "regions": ["icn1"]
-    },
-    "src/app/api/posts/[id]/view/route.ts": {
-      "memory": 1024,
-      "maxDuration": 30,
-      "regions": ["icn1"]
-    },
-    "src/app/api/posts/[id]/attachments/route.ts": {
-      "memory": 1024,
-      "maxDuration": 30,
-      "regions": ["icn1"]
-    },
-    "src/app/api/admin/artists/[id]/members/route.ts": {
-      "memory": 1024,
-      "maxDuration": 30,
-      "regions": ["icn1"]
-    },
-    "src/app/api/admin/artist-assignment/route.ts": {
-      "memory": 1024,
-      "maxDuration": 30,
-      "regions": ["icn1"]
+      "maxDuration": 30
     }
   },
   "rewrites": [
