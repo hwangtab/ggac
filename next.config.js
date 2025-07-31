@@ -9,6 +9,7 @@ const nextConfig = {
   // Transpile packages for client-side compatibility
   transpilePackages: [
     '@supabase/auth-helpers-nextjs',
+    '@supabase/supabase-js',
     'react-markdown'
   ],
   
@@ -29,6 +30,13 @@ const nextConfig = {
         poll: 1000,
         aggregateTimeout: 300,
         ignored: /node_modules/,
+      };
+
+      // 개발 환경에서 Supabase 모듈 로딩 안정성 향상
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        '@supabase/supabase-js': require.resolve('@supabase/supabase-js'),
+        '@supabase/auth-helpers-nextjs': require.resolve('@supabase/auth-helpers-nextjs'),
       };
     }
     

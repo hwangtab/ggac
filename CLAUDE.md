@@ -483,3 +483,43 @@ NEVER proactively create documentation files (*.md) or README files. Only create
 - **Solution**: Remove deprecated `serverExternalPackages` configuration from `next.config.js`
 - **Problem**: Edge Runtime compatibility issues with Supabase
 - **Solution**: Ensure API routes use Node.js runtime: `export const runtime = 'nodejs'`
+
+## Token Optimization Strategy
+
+### Role Division for Efficiency
+
+**Gemini CLI Tasks** (Claude delegates directly via terminal):
+- Code exploration and file analysis
+- Pattern searching across codebase  
+- Simple code transformations
+- Mass file operations
+- Repetitive search and replace
+
+**Claude Tasks** (Supervision and precision work):
+- Complex implementation logic
+- Architecture decisions
+- Quality validation and testing
+- Final verification and build checks
+- Code review and optimization
+
+### Implementation Rules
+
+**IMPORTANT**: Claude must directly command Gemini CLI via terminal, not ask the user to do it.
+
+**Correct Pattern**:
+```bash
+# Claude directly executes
+gemini -p "@src/app/api/ 모든 API 파일에서 NextResponse.json 패턴 찾아서 분석해줘"
+```
+
+**Incorrect Pattern**:
+```
+❌ 사용자에게 gemini 명령어 실행 요청하기  
+❌ 단순 탐색에 Claude 토큰 소모하기
+```
+
+### Benefits
+- **90% token savings** on exploration and repetitive tasks
+- **Faster processing** with Gemini's large context window
+- **Higher quality** - Claude focuses on complex logic and supervision
+- **Better workflow** - Seamless delegation without user intervention

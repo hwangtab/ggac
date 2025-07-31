@@ -5,7 +5,7 @@ export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 
 // POST: 아티스트에 멤버 배정
 export async function POST(
@@ -13,9 +13,18 @@ export async function POST(
   context: { params: Promise<{ id: string }> }
 ) {
   const resolvedParams = await context.params;
+  
+  // 필수 환경 변수 확인
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    console.error('Missing Supabase environment variables')
+    return NextResponse.json(
+      { error: 'Server configuration error' },
+      { status: 500 }
+    )
+  }
+
   try {
-    const cookieStore = cookies()
-    const supabase = createServerComponentClient({ cookies: () => cookieStore })
+    const supabase = createRouteHandlerClient({ cookies })
 
     // 사용자 인증 확인
     const { data: { session }, error: authError } = await supabase.auth.getSession()
@@ -121,6 +130,18 @@ export async function POST(
 
   } catch (error) {
     console.error('Admin artist assignment API error:', error)
+    
+    // Supabase 관련 에러인지 확인
+    if (error && typeof error === 'object' && 'message' in error) {
+      const errorMessage = (error as { message: string }).message
+      if (errorMessage.includes('Cannot find module')) {
+        return NextResponse.json(
+          { error: 'Supabase module loading error. Please try again.' },
+          { status: 500 }
+        )
+      }
+    }
+    
     return NextResponse.json(
       { error: '아티스트 배정 중 오류가 발생했습니다.' },
       { status: 500 }
