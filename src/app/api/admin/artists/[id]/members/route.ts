@@ -41,11 +41,27 @@ export async function POST(
         'auth-token'
       ]
       
+      // 모든 쿠키 이름을 확인하여 supabase 관련 토큰 찾기
+      const allCookies = cookieStore.getAll()
+      console.log('Available cookies:', allCookies.map(c => c.name))
+      
       for (const name of possibleTokenNames) {
         const cookie = cookieStore.get(name)
         if (cookie?.value) {
           accessToken = cookie.value
+          console.log('Found token in cookie:', name)
           break
+        }
+      }
+      
+      // 추가: sb- 접두사가 있는 모든 쿠키 확인
+      if (!accessToken) {
+        for (const cookie of allCookies) {
+          if (cookie.name.startsWith('sb-') && cookie.name.includes('access')) {
+            accessToken = cookie.value
+            console.log('Found Supabase token:', cookie.name)
+            break
+          }
         }
       }
     }
