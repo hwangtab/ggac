@@ -7,21 +7,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createClient } from '@supabase/supabase-js'
 
-// GET: 아티스트의 배정된 멤버 목록 조회
-export async function GET(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
-  return NextResponse.json({ message: 'GET method available' })
-}
-
 // POST: 아티스트에 멤버 배정
-export async function POST(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
-  const resolvedParams = await context.params;
-  
+export async function POST(request: NextRequest) {
   // 필수 환경 변수 확인
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
     console.error('Missing Supabase environment variables')
@@ -116,12 +103,11 @@ export async function POST(
     }
 
     // 요청 데이터 파싱
-    const { memberId, role } = await request.json()
-    const artistId = resolvedParams.id
+    const { artistId, memberId, role } = await request.json()
 
-    if (!memberId || !role) {
+    if (!artistId || !memberId || !role) {
       return NextResponse.json(
-        { error: '멤버 ID와 역할이 필요합니다.' },
+        { error: '아티스트 ID, 멤버 ID와 역할이 필요합니다.' },
         { status: 400 }
       )
     }
