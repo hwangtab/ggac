@@ -4,15 +4,9 @@ export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
 import rateLimiterUtils from '@/utils/rateLimiter';
-
-function getSupabaseAdmin() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
 
 export async function POST(
   request: NextRequest,
@@ -25,51 +19,41 @@ export async function POST(
     const rateLimitResult = await rateLimiterUtils.applyRateLimit(rateLimitConfig)(request);
     if (!rateLimitResult.success) {
       return NextResponse.json(
-        { error: 'Too many requests' },
+        { error: '요청이 너무 많습니다.' },
         { status: 429 }
       );
     }
 
     const commentId = resolvedParams.id;
     
-    // Authorization header에서 토큰 추출
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json(
-        { error: 'Authorization header missing' },
-        { status: 401 }
-      );
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-
-    // 토큰으로 사용자 확인
-    const supabaseAdmin = getSupabaseAdmin();
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    // 표준 인증 패턴: 쿠키 기반 세션 확인
+    const cookieStore = cookies();
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+    const { data: { session }, error: authError } = await supabase.auth.getSession();
     
-    if (authError || !user) {
+    if (authError || !session?.user) {
       return NextResponse.json(
-        { error: 'Invalid token' },
+        { error: '인증이 필요합니다.' },
         { status: 401 }
       );
     }
 
     // 사용자가 승인된 회원인지 확인
-    const { data: profile, error: profileError } = await supabaseAdmin
+    const { data: profile, error: profileError } = await supabase
       .from('member_profiles')
       .select('registration_status, is_active')
-      .eq('id', user.id)
+      .eq('id', session.user.id)
       .single();
 
     if (profileError || !profile || profile.registration_status !== 'approved' || !profile.is_active) {
       return NextResponse.json(
-        { error: 'Unauthorized - Member approval required' },
+        { error: '승인된 회원만 댓글에 좋아요를 누를 수 있습니다.' },
         { status: 403 }
       );
     }
 
     // 댓글이 존재하는지 확인
-    const { data: comment, error: commentError } = await supabaseAdmin
+    const { data: comment, error: commentError } = await supabase
       .from('comments')
       .select('id')
       .eq('id', commentId)
@@ -77,22 +61,22 @@ export async function POST(
 
     if (commentError || !comment) {
       return NextResponse.json(
-        { error: 'Comment not found' },
+        { error: '댓글을 찾을 수 없습니다.' },
         { status: 404 }
       );
     }
 
     // 좋아요 토글 실행
-    const { data: result, error: toggleError } = await supabaseAdmin
+    const { data: result, error: toggleError } = await supabase
       .rpc('toggle_comment_like', {
         p_comment_id: commentId,
-        p_user_id: user.id
+        p_user_id: session.user.id
       });
 
     if (toggleError) {
-      console.error('Error toggling comment like:', toggleError);
+      console.error('댓글 좋아요 토글 오류:', toggleError);
       return NextResponse.json(
-        { error: 'Failed to toggle like' },
+        { error: '좋아요 처리 중 오류가 발생했습니다.' },
         { status: 500 }
       );
     }
@@ -100,7 +84,7 @@ export async function POST(
     const likeResult = result?.[0];
     if (!likeResult) {
       return NextResponse.json(
-        { error: 'No result from toggle function' },
+        { error: '좋아요 처리 결과를 받을 수 없습니다.' },
         { status: 500 }
       );
     }
@@ -112,9 +96,9 @@ export async function POST(
     });
 
   } catch (error) {
-    console.error('Error in comment like API:', error);
+    console.error('댓글 좋아요 API 오류:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: '서버 오류가 발생했습니다.' },
       { status: 500 }
     );
   }
