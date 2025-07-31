@@ -5,7 +5,7 @@ export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import { createClient } from '@supabase/supabase-js'
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 
 // POST: 아티스트에 멤버 배정
 export async function POST(
@@ -14,87 +14,14 @@ export async function POST(
 ) {
   const resolvedParams = await context.params;
   
-  // 필수 환경 변수 확인
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-    console.error('Missing Supabase environment variables')
-    return NextResponse.json(
-      { error: 'Server configuration error' },
-      { status: 500 }
-    )
-  }
-
   try {
-    const cookieStore = await cookies()
+    const cookieStore = cookies()
+    const supabase = createServerComponentClient({ cookies: () => cookieStore })
+
+    // 사용자 인증 확인
+    const { data: { session }, error: authError } = await supabase.auth.getSession()
     
-    // Authorization 헤더에서 토큰 가져오기 (우선순위)
-    const authHeader = request.headers.get('authorization')
-    let accessToken: string | null = null
-    
-    if (authHeader?.startsWith('Bearer ')) {
-      accessToken = authHeader.substring(7)
-    } else {
-      // 쿠키에서 액세스 토큰 찾기
-      const possibleTokenNames = [
-        'sb-access-token',
-        'supabase-auth-token', 
-        'supabase.auth.token',
-        'auth-token'
-      ]
-      
-      // 모든 쿠키 이름을 확인하여 supabase 관련 토큰 찾기
-      const allCookies = cookieStore.getAll()
-      console.log('Available cookies:', allCookies.map(c => c.name))
-      
-      for (const name of possibleTokenNames) {
-        const cookie = cookieStore.get(name)
-        if (cookie?.value) {
-          accessToken = cookie.value
-          console.log('Found token in cookie:', name)
-          break
-        }
-      }
-      
-      // 추가: sb- 접두사가 있는 모든 쿠키 확인
-      if (!accessToken) {
-        for (const cookie of allCookies) {
-          if (cookie.name.startsWith('sb-') && cookie.name.includes('access')) {
-            accessToken = cookie.value
-            console.log('Found Supabase token:', cookie.name)
-            break
-          }
-        }
-      }
-    }
-
-    if (!accessToken) {
-      return NextResponse.json(
-        { error: '인증이 필요합니다.' },
-        { status: 401 }
-      )
-    }
-
-    // 서비스 역할 키로 Supabase 클라이언트 생성 (데이터베이스 작업용)
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      }
-    )
-
-    // 토큰 검증을 위한 일반 클라이언트
-    const authSupabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
-
-    // 토큰으로 사용자 정보 가져오기
-    const { data: { user }, error: authError } = await authSupabase.auth.getUser(accessToken)
-    
-    if (authError || !user) {
+    if (authError || !session?.user) {
       return NextResponse.json(
         { error: '인증이 필요합니다.' },
         { status: 401 }
@@ -105,7 +32,7 @@ export async function POST(
     const { data: profile, error: profileError } = await supabase
       .from('member_profiles')
       .select('is_admin, registration_status, is_active')
-      .eq('id', user.id)
+      .eq('id', session.user.id)
       .single()
 
     if (profileError) {
