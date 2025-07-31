@@ -76,6 +76,7 @@ export default function AssignArtistModal({ artist, members, isOpen, onClose, on
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'same-origin',
         body: JSON.stringify({
           memberId: selectedMember,
           role: selectedRole
