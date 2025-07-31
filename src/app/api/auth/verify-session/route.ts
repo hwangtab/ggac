@@ -1,4 +1,4 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
@@ -8,7 +8,8 @@ export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
-    const supabase = createRouteHandlerClient({ cookies });
+    const cookieStore = cookies()
+    const supabase = createServerComponentClient({ cookies: () => cookieStore });
     
     // 세션 확인
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
