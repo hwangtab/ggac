@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator } from '@/utils/rateLimiter'
 import { validateAdvancedSearchQuery, buildSearchQuery } from '@/utils/advancedFiltering'
@@ -194,7 +194,8 @@ export async function POST(request: NextRequest) {
       return rateLimitResult.response
     }
 
-    const supabase = createRouteHandlerClient({ cookies })
+    const cookieStore = cookies()
+    const supabase = createServerComponentClient({ cookies: () => cookieStore })
     
     // 관리자 권한 확인
     const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -202,13 +203,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from('member_profiles')
-      .select('is_admin')
+      .select('is_admin, registration_status, is_active')
       .eq('id', user.id)
       .single()
 
-    if (!profile?.is_admin) {
+    if (profileError) {
+      console.error('Profile fetch error:', profileError)
+      return NextResponse.json(
+        { error: '프로필 정보를 조회할 수 없습니다.' },
+        { status: 500 }
+      )
+    }
+
+    if (!profile.is_admin || profile.registration_status !== 'approved' || !profile.is_active) {
       return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 })
     }
 
@@ -342,7 +351,8 @@ export async function GET(request: NextRequest) {
       return rateLimitResult.response
     }
 
-    const supabase = createRouteHandlerClient({ cookies })
+    const cookieStore = cookies()
+    const supabase = createServerComponentClient({ cookies: () => cookieStore })
     
     // 관리자 권한 확인
     const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -350,13 +360,21 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from('member_profiles')
-      .select('is_admin')
+      .select('is_admin, registration_status, is_active')
       .eq('id', user.id)
       .single()
 
-    if (!profile?.is_admin) {
+    if (profileError) {
+      console.error('Profile fetch error:', profileError)
+      return NextResponse.json(
+        { error: '프로필 정보를 조회할 수 없습니다.' },
+        { status: 500 }
+      )
+    }
+
+    if (!profile.is_admin || profile.registration_status !== 'approved' || !profile.is_active) {
       return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 })
     }
 

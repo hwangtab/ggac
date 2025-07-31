@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 
 // API 라우트를 동적으로 렌더링하도록 강제 설정
@@ -22,22 +22,39 @@ export async function GET(request: NextRequest) {
       return rateLimitResult.response
     }
     
-    const supabase = createRouteHandlerClient({ cookies })
+    const cookieStore = cookies()
+    const supabase = createServerComponentClient({ cookies: () => cookieStore })
     
-    // Check authentication and admin status
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    // 사용자 인증 확인
+    const { data: { session }, error: authError } = await supabase.auth.getSession()
+    
+    if (authError || !session?.user) {
+      return NextResponse.json(
+        { error: '인증이 필요합니다.' },
+        { status: 401 }
+      )
     }
 
-    const { data: profile } = await supabase
+    // 관리자 권한 확인
+    const { data: profile, error: profileError } = await supabase
       .from('member_profiles')
-      .select('is_admin, is_active, registration_status')
-      .eq('id', user.id)
+      .select('is_admin, registration_status, is_active')
+      .eq('id', session.user.id)
       .single()
 
-    if (!profile?.is_admin || !profile?.is_active || profile?.registration_status !== 'approved') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    if (profileError) {
+      console.error('Profile fetch error:', profileError)
+      return NextResponse.json(
+        { error: '프로필 정보를 조회할 수 없습니다.' },
+        { status: 500 }
+      )
+    }
+
+    if (!profile.is_admin || profile.registration_status !== 'approved' || !profile.is_active) {
+      return NextResponse.json(
+        { error: '관리자 권한이 필요합니다.' },
+        { status: 403 }
+      )
     }
 
     // Get query parameters
@@ -129,7 +146,7 @@ export async function GET(request: NextRequest) {
 
     if (postsError) {
       console.error('Posts fetch error:', postsError)
-      return NextResponse.json({ error: 'Failed to fetch posts' }, { status: 500 })
+      return NextResponse.json({ error: '게시글을 조회하는 중 오류가 발생했습니다.' }, { status: 500 })
     }
 
     // Get total count for pagination
@@ -154,7 +171,7 @@ export async function GET(request: NextRequest) {
 
     if (countError) {
       console.error('Count fetch error:', countError)
-      return NextResponse.json({ error: 'Failed to fetch count' }, { status: 500 })
+      return NextResponse.json({ error: '게시글 수를 조회하는 중 오류가 발생했습니다.' }, { status: 500 })
     }
 
     const totalCount = count || 0
@@ -195,6 +212,6 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Admin posts API error:', error)
     logSecurityEvent('ADMIN_POSTS_API_ERROR', { error: error instanceof Error ? error.message : 'Unknown error' }, 'medium')
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
   }
 }

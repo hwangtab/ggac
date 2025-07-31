@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator } from '@/utils/rateLimiter'
 import { validateAdvancedSearchQuery, buildSearchQuery } from '@/utils/advancedFiltering'
@@ -114,10 +114,12 @@ export async function POST(request: NextRequest) {
       return rateLimitResult.response
     }
 
-    const supabase = createRouteHandlerClient({ cookies })
+    const cookieStore = cookies()
+    const supabase = createServerComponentClient({ cookies: () => cookieStore })
     
     // 관리자 권한 확인
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    const { data: { session }, error: authError } = await supabase.auth.getSession()
+    const user = session?.user
     if (authError || !user) {
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
@@ -255,10 +257,12 @@ export async function GET(request: NextRequest) {
       return rateLimitResult.response
     }
 
-    const supabase = createRouteHandlerClient({ cookies })
+    const cookieStore = cookies()
+    const supabase = createServerComponentClient({ cookies: () => cookieStore })
     
     // 관리자 권한 확인
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    const { data: { session }, error: authError } = await supabase.auth.getSession()
+    const user = session?.user
     if (authError || !user) {
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }

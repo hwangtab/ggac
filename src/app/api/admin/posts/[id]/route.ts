@@ -4,36 +4,53 @@ export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const resolvedParams = await context.params;
   try {
-    const supabase = createRouteHandlerClient({ cookies })
+    const cookieStore = cookies()
+    const supabase = createServerComponentClient({ cookies: () => cookieStore })
     const { id } = resolvedParams
     
-    // Check authentication and admin status
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    // 사용자 인증 확인
+    const { data: { session }, error: authError } = await supabase.auth.getSession()
+    
+    if (authError || !session?.user) {
+      return NextResponse.json(
+        { error: '인증이 필요합니다.' },
+        { status: 401 }
+      )
     }
 
-    const { data: profile } = await supabase
+    // 관리자 권한 확인
+    const { data: profile, error: profileError } = await supabase
       .from('member_profiles')
-      .select('is_admin, is_active, registration_status')
-      .eq('id', user.id)
+      .select('is_admin, registration_status, is_active')
+      .eq('id', session.user.id)
       .single()
 
-    if (!profile?.is_admin || !profile?.is_active || profile?.registration_status !== 'approved') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    if (profileError) {
+      console.error('Profile fetch error:', profileError)
+      return NextResponse.json(
+        { error: '프로필 정보를 조회할 수 없습니다.' },
+        { status: 500 }
+      )
+    }
+
+    if (!profile.is_admin || profile.registration_status !== 'approved' || !profile.is_active) {
+      return NextResponse.json(
+        { error: '관리자 권한이 필요합니다.' },
+        { status: 403 }
+      )
     }
 
     // Get action from request body
     const { action } = await request.json()
 
     if (!action || !['delete', 'restore', 'pin', 'unpin'].includes(action)) {
-      return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
+      return NextResponse.json({ error: '잘못된 작업입니다.' }, { status: 400 })
     }
 
     // Get the post to check if it exists
@@ -44,7 +61,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       .single()
 
     if (!post) {
-      return NextResponse.json({ error: 'Post not found' }, { status: 404 })
+      return NextResponse.json({ error: '게시글을 찾을 수 없습니다.' }, { status: 404 })
     }
 
     // Prepare update data based on action
@@ -53,24 +70,24 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     switch (action) {
       case 'delete':
         if (post.is_deleted) {
-          return NextResponse.json({ error: 'Post is already deleted' }, { status: 400 })
+          return NextResponse.json({ error: '이미 삭제된 게시글입니다.' }, { status: 400 })
         }
         updateData = { is_deleted: true }
         break
       
       case 'restore':
         if (!post.is_deleted) {
-          return NextResponse.json({ error: 'Post is not deleted' }, { status: 400 })
+          return NextResponse.json({ error: '삭제되지 않은 게시글입니다.' }, { status: 400 })
         }
         updateData = { is_deleted: false }
         break
       
       case 'pin':
         if (post.category !== '공지') {
-          return NextResponse.json({ error: 'Only announcements can be pinned' }, { status: 400 })
+          return NextResponse.json({ error: '공지사항만 고정할 수 있습니다.' }, { status: 400 })
         }
         if (post.is_pinned) {
-          return NextResponse.json({ error: 'Post is already pinned' }, { status: 400 })
+          return NextResponse.json({ error: '이미 고정된 게시글입니다.' }, { status: 400 })
         }
         updateData = { 
           is_pinned: true,
@@ -80,7 +97,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       
       case 'unpin':
         if (!post.is_pinned) {
-          return NextResponse.json({ error: 'Post is not pinned' }, { status: 400 })
+          return NextResponse.json({ error: '고정되지 않은 게시글입니다.' }, { status: 400 })
         }
         updateData = { 
           is_pinned: false,
@@ -99,16 +116,16 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
     if (updateError) {
       console.error('Post update error:', updateError)
-      return NextResponse.json({ error: 'Failed to update post' }, { status: 500 })
+      return NextResponse.json({ error: '게시글 업데이트에 실패했습니다.' }, { status: 500 })
     }
 
     return NextResponse.json({ 
       success: true,
       post: updatedPost,
-      message: `Post ${action} successful`
+      message: `게시글 ${action === 'delete' ? '삭제' : action === 'restore' ? '복원' : action === 'pin' ? '고정' : '고정 해제'}가 완료되었습니다.`
     })
   } catch (error) {
     console.error('Admin post action API error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
   }
 }

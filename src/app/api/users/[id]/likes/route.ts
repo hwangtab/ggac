@@ -9,7 +9,7 @@ export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import distributedRateLimiter, { DISTRIBUTED_RATE_LIMIT_CONFIGS, createDistributedUserKeyGenerator } from '@/utils/distributedRateLimiter'
 import type { UserLikedPost } from '@/types'
@@ -34,7 +34,8 @@ export async function GET(
       return rateLimitResult.response
     }
 
-    const supabase = createRouteHandlerClient({ cookies })
+    const cookieStore = cookies()
+    const supabase = createServerComponentClient({ cookies: () => cookieStore })
     const { data: { session } } = await supabase.auth.getSession()
 
     if (!session?.user) {
