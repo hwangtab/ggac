@@ -73,6 +73,7 @@ export async function GET(
         id,
         title,
         content,
+        content_format,
         category,
         author_id,
         created_at,

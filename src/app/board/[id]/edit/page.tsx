@@ -3,11 +3,19 @@
 import { supabase } from '../../../../lib/supabase/client';
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import dynamic from 'next/dynamic';
+
+// RichTextEditor를 동적으로 로드하여 SSR 이슈 방지
+const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), {
+  ssr: false,
+  loading: () => <div className="h-96 bg-gray-100 rounded-lg animate-pulse" />
+});
 
 interface Post {
   id: string;
   title: string;
   content: string;
+  content_format?: string;
   category: string;
   author_id: string;
 }
@@ -18,6 +26,7 @@ export default function PostEditPage() {
   const [isMember, setIsMember] = useState<boolean>(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [useRichEditor, setUseRichEditor] = useState(false);
   const router = useRouter();
   const params = useParams();
   const postId = params.id as string;
@@ -70,6 +79,7 @@ export default function PostEditPage() {
         }
 
         setPost(postData as any);
+        setUseRichEditor(postData.content_format === 'html');
         setLoading(false);
       } catch (e) {
         console.error('Error fetching data:', e);
@@ -92,6 +102,7 @@ export default function PostEditPage() {
       .update({
         title: post.title,
         content: post.content,
+        content_format: useRichEditor ? 'html' : 'plain',
         category: post.category,
         updated_at: new Date().toISOString()
       })
@@ -214,19 +225,41 @@ export default function PostEditPage() {
                   </select>
                 </div>
 
+                {/* 에디터 선택 */}
                 <div className="mb-4">
-                  <label htmlFor="content" className="block text-sm font-medium text-gray-700 mb-1">
-                    내용
-                  </label>
-                  <textarea
-                    id="content"
-                    name="content"
-                    value={post.content}
-                    onChange={handleChange}
-                    rows={10}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    required
-                  />
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700">내용</label>
+                    <div className="flex items-center space-x-2">
+                      <label className="flex items-center text-sm text-gray-600">
+                        <input
+                          type="checkbox"
+                          checked={useRichEditor}
+                          onChange={(e) => setUseRichEditor(e.target.checked)}
+                          className="mr-2 rounded"
+                        />
+                        리치 에디터 사용 (이미지 삽입 가능)
+                      </label>
+                    </div>
+                  </div>
+                  
+                  {useRichEditor ? (
+                    <RichTextEditor
+                      value={post.content}
+                      onChange={(content) => setPost(prev => prev ? { ...prev, content } : prev)}
+                      placeholder="게시글 내용을 입력하세요..."
+                      height={400}
+                    />
+                  ) : (
+                    <textarea
+                      id="content"
+                      name="content"
+                      value={post.content}
+                      onChange={handleChange}
+                      rows={10}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      required
+                    />
+                  )}
                 </div>
 
                 <div className="flex justify-end space-x-3">

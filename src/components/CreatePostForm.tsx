@@ -4,6 +4,13 @@ import { BOARD_CATEGORIES } from '@/constants/categories';
 import type { Post, PostAttachment } from '@/types';
 import { logPostCreated } from '@/utils/activityLogger';
 import { FiUpload, FiX, FiImage, FiFile, FiVideo, FiMusic, FiPaperclip } from 'react-icons/fi';
+import dynamic from 'next/dynamic';
+
+// TinyMCE를 동적으로 로드하여 SSR 이슈 방지
+const RichTextEditor = dynamic(() => import('./RichTextEditor'), {
+  ssr: false,
+  loading: () => <div className="h-96 bg-gray-100 rounded-lg animate-pulse" />
+});
 
 interface CreatePostFormProps {
   authorId: string;
@@ -15,6 +22,7 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ authorId, onNewPost, sh
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [category, setCategory] = useState('잡담');
+  const [useRichEditor, setUseRichEditor] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -50,6 +58,7 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ authorId, onNewPost, sh
       const postData = {
         title,
         content,
+        content_format: useRichEditor ? 'html' : 'plain',
         category,
         author_id: authorId,
         ...(category === '공지' && {
@@ -104,6 +113,7 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ authorId, onNewPost, sh
       setTitle('');
       setContent('');
       setCategory('잡담');
+      setUseRichEditor(false);
       setSelectedFiles([]);
 
     } catch (error) {
@@ -280,18 +290,45 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ authorId, onNewPost, sh
             disabled={loading}
           />
         </div>
+        
+        {/* 에디터 선택 */}
         <div>
-          <label htmlFor="content" className="block text-sm font-medium text-gray-700 mb-2">내용</label>
-          <textarea
-            id="content"
-            rows={8}
-            className="block w-full border border-gray-300 rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-base transition-colors resize-vertical min-h-[200px]"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="게시글 내용을 입력하세요"
-            required
-            disabled={loading}
-          ></textarea>
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-sm font-medium text-gray-700">내용</label>
+            <div className="flex items-center space-x-2">
+              <label className="flex items-center text-sm text-gray-600">
+                <input
+                  type="checkbox"
+                  checked={useRichEditor}
+                  onChange={(e) => setUseRichEditor(e.target.checked)}
+                  disabled={loading}
+                  className="mr-2 rounded"
+                />
+                리치 에디터 사용 (이미지 삽입 가능)
+              </label>
+            </div>
+          </div>
+          
+          {useRichEditor ? (
+            <RichTextEditor
+              value={content}
+              onChange={setContent}
+              placeholder="게시글 내용을 입력하세요..."
+              disabled={loading}
+              height={400}
+            />
+          ) : (
+            <textarea
+              id="content"
+              rows={8}
+              className="block w-full border border-gray-300 rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-base transition-colors resize-vertical min-h-[200px]"
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              placeholder="게시글 내용을 입력하세요"
+              required
+              disabled={loading}
+            />
+          )}
         </div>
 
         {/* 첨부파일 섹션 */}
