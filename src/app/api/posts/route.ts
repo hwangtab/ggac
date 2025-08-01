@@ -116,7 +116,7 @@ async function GET(request: NextRequest) {
     const ascending = sortOrder === 'asc'
     if (sortBy === 'created_at') {
       // 고정 게시글을 먼저 표시하고, 그 다음 생성일 순
-      query = query.order('is_pinned', { ascending: false })
+      query = query.order('is_pinned', { ascending: false, nullsFirst: false })
       query = query.order('created_at', { ascending })
     } else {
       query = query.order(sortBy, { ascending })
