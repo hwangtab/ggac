@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
-import { rateLimit } from '@/utils/rateLimit'
+import { applyRateLimit, RATE_LIMIT_CONFIGS } from '@/utils/rateLimiter'
 
 /**
  * 사용자 설정 조회 API
@@ -10,10 +10,11 @@ import { rateLimit } from '@/utils/rateLimit'
 export async function GET(request: NextRequest) {
   try {
     // Rate limiting 적용
-    const rateLimitResult = await rateLimit(request, 'GENERAL_API')
+    const rateLimiter = applyRateLimit(RATE_LIMIT_CONFIGS.GENERAL_API)
+    const rateLimitResult = rateLimiter(request)
     if (!rateLimitResult.success) {
       return NextResponse.json(
-        { error: 'Too many requests' },
+        { error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' },
         { status: 429 }
       )
     }
@@ -23,7 +24,7 @@ export async function GET(request: NextRequest) {
     // 인증 확인
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
     // URL 파라미터에서 카테고리 필터 확인
@@ -97,10 +98,11 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     // Rate limiting 적용
-    const rateLimitResult = await rateLimit(request, 'GENERAL_API')
+    const rateLimiter = applyRateLimit(RATE_LIMIT_CONFIGS.GENERAL_API)
+    const rateLimitResult = rateLimiter(request)
     if (!rateLimitResult.success) {
       return NextResponse.json(
-        { error: 'Too many requests' },
+        { error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' },
         { status: 429 }
       )
     }
@@ -110,7 +112,7 @@ export async function POST(request: NextRequest) {
     // 인증 확인
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
     const body = await request.json()
@@ -161,10 +163,11 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     // Rate limiting 적용
-    const rateLimitResult = await rateLimit(request, 'GENERAL_API')
+    const rateLimiter = applyRateLimit(RATE_LIMIT_CONFIGS.GENERAL_API)
+    const rateLimitResult = rateLimiter(request)
     if (!rateLimitResult.success) {
       return NextResponse.json(
-        { error: 'Too many requests' },
+        { error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' },
         { status: 429 }
       )
     }
@@ -174,7 +177,7 @@ export async function PUT(request: NextRequest) {
     // 인증 확인
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
     const body = await request.json()
