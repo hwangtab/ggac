@@ -59,7 +59,18 @@ export const usePostsWithPagination = ({
 
       let postsQuery = supabase
         .from('posts')
-        .select('*')
+        .select(`
+          id,
+          title,
+          content,
+          category,
+          author_id,
+          created_at,
+          updated_at,
+          is_deleted,
+          is_pinned,
+          like_count
+        `)
         .eq('is_deleted', false)
         .range(startIndex, endIndex);
 
@@ -68,8 +79,8 @@ export const usePostsWithPagination = ({
         postsQuery = postsQuery.eq('category', category);
       }
 
-      // 정렬: is_pinned 필드가 있다면 우선 정렬, 그 다음 최신순
-      postsQuery = postsQuery.order('is_pinned', { ascending: false });
+      // 정렬: is_pinned 필드를 우선 정렬 (NULL을 FALSE로 처리), 그 다음 최신순
+      postsQuery = postsQuery.order('is_pinned', { ascending: false, nullsFirst: false });
       postsQuery = postsQuery.order('created_at', { ascending: false });
 
       const { data: postsData, error: postsError } = await postsQuery;
