@@ -46,10 +46,21 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ authorId, onNewPost, sh
     setLoading(true);
 
     try {
-      // 1. 게시글 생성
+      // 1. 게시글 생성 (공지 카테고리인 경우 자동으로 핀 설정)
+      const postData = {
+        title,
+        content,
+        category,
+        author_id: authorId,
+        ...(category === '공지' && {
+          is_pinned: true,
+          pinned_at: new Date().toISOString()
+        })
+      };
+
       const { data, error } = await supabase
         .from('posts')
-        .insert([{ title, content, category, author_id: authorId }])
+        .insert([postData])
         .select()
         .single();
 
