@@ -18,7 +18,7 @@ const rateLimiter = applyRateLimit({
   keyGenerator: createUserKeyGenerator('posts')
 })
 
-export async function GET(request: NextRequest) {
+async function GET(request: NextRequest) {
   try {
     // Rate limiting 적용
     const rateLimitResult = rateLimiter(request)
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
 
     // 쿼리 파라미터 처리
     const { searchParams } = new URL(request.url)
-    const category = searchParams.get('category') || 'all'
+    const category = searchParams.get('category') || '전체'  // 'all' -> '전체'로 변경
     const searchRaw = searchParams.get('search') || ''
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'))
     const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 50)
@@ -69,8 +69,8 @@ export async function GET(request: NextRequest) {
       search = searchValidation.sanitized
     }
 
-    // 허용된 카테고리 검증
-    const allowedCategories = ['all', '공지', '잡담', '홍보', '건의']
+    // 허용된 카테고리 검증 - '전체' 사용으로 통일
+    const allowedCategories = ['전체', '공지', '잡담', '홍보', '건의']
     if (!allowedCategories.includes(category)) {
       return NextResponse.json({ error: '유효하지 않은 카테고리입니다.' }, { status: 400 })
     }
@@ -101,8 +101,8 @@ export async function GET(request: NextRequest) {
       `)
       .eq('is_deleted', false) // 삭제되지 않은 게시글만
 
-    // 카테고리 필터 적용
-    if (category !== 'all') {
+    // 카테고리 필터 적용 - '전체' 사용으로 통일
+    if (category !== '전체') {
       query = query.eq('category', category)
     }
 
@@ -138,7 +138,7 @@ export async function GET(request: NextRequest) {
       .select('id', { count: 'exact', head: true })
       .eq('is_deleted', false)
 
-    if (category !== 'all') {
+    if (category !== '전체') {
       countQuery = countQuery.eq('category', category)
     }
 
@@ -199,7 +199,7 @@ export async function GET(request: NextRequest) {
         has_prev: page > 1
       },
       filters: {
-        category: category === 'all' ? null : category,
+        category: category === '전체' ? null : category,
         search: search || null,
         sort_by: sortBy,
         sort_order: sortOrder

@@ -68,12 +68,9 @@ export const usePostsWithPagination = ({
         postsQuery = postsQuery.eq('category', category);
       }
 
-      // 정렬: 첫 페이지에서는 공지사항 우선, 그 다음 최신순
-      if (page === 1) {
-        postsQuery = postsQuery.order('created_at', { ascending: false });
-      } else {
-        postsQuery = postsQuery.order('created_at', { ascending: false });
-      }
+      // 정렬: is_pinned 필드가 있다면 우선 정렬, 그 다음 최신순
+      postsQuery = postsQuery.order('is_pinned', { ascending: false });
+      postsQuery = postsQuery.order('created_at', { ascending: false });
 
       const { data: postsData, error: postsError } = await postsQuery;
 
@@ -119,20 +116,8 @@ export const usePostsWithPagination = ({
         })
       );
 
-      // 공지사항 상단 고정 정렬 (첫 페이지에만 적용)
-      let sortedPosts = postsWithLikes;
-      if (page === 1) {
-        sortedPosts = sortedPosts.sort((a, b) => {
-          // 공지사항을 최상단에 고정
-          if (a.category === '공지' && b.category !== '공지') return -1;
-          if (a.category !== '공지' && b.category === '공지') return 1;
-          
-          // 같은 카테고리 내에서는 최신순
-          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-        });
-      }
-
-      setPosts(sortedPosts);
+      // 정렬은 이미 데이터베이스에서 처리되므로 추가 정렬 불필요
+      setPosts(postsWithLikes);
     } catch (err) {
       console.error('Error fetching posts:', err);
       setError(err instanceof Error ? err.message : '게시글을 불러오는 중 오류가 발생했습니다.');
@@ -253,7 +238,7 @@ export const usePostsWithPagination = ({
     loading,
     error,
   };
-};
+};;
 
 // 공지사항만 별도 조회하는 훅 (첫 페이지 고정용)
 export const useAnnouncementPosts = () => {
