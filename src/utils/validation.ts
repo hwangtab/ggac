@@ -4,9 +4,13 @@
  */
 
 import { sanitizeHtml, detectXssPatterns, logSecurityEvent } from './security';
+import type { UUIDValidationResult, SecurityEventType, SecurityEventSeverity } from '@/types';
 
 // UUID v4 검증 정규식
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// 임시 ID 검증 정규식 (temp-{UUID} 형식)
+const TEMP_ID_REGEX = /^temp-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // 데이터베이스 검증 관련 타입
 interface DatabaseValidationResult {
@@ -70,22 +74,54 @@ export const isValidUUID = (value: string): boolean => {
 };
 
 /**
- * UUID 검증 (DatabaseValidationResult 형태로 반환)
+ * 임시 ID 검증 (temp-{UUID} 형식)
  */
-export const validateUUID = (uuid: string, paramName: string = 'ID'): DatabaseValidationResult => {
+export const isValidTempId = (value: string): boolean => {
+  if (!value || typeof value !== 'string') {
+    return false;
+  }
+  return TEMP_ID_REGEX.test(value);
+};
+
+/**
+ * UUID 또는 임시 ID 검증
+ */
+export const isValidUUIDOrTempId = (value: string): boolean => {
+  return isValidUUID(value) || isValidTempId(value);
+};
+
+/**
+ * UUID 검증 (DatabaseValidationResult 형태로 반환)
+ * 임시 ID (temp-{UUID}) 형식도 허용
+ */
+export const validateUUID = (uuid: string, paramName: string = 'ID'): UUIDValidationResult => {
   const errors: string[] = [];
   const warnings: string[] = [];
 
   if (typeof uuid !== 'string') {
     errors.push(`${paramName}가 문자열이 아닙니다.`);
-    return { isValid: false, sanitized: '', errors, warnings };
+    return { 
+      isValid: false, 
+      sanitized: '', 
+      errors: Object.freeze(errors), 
+      warnings: Object.freeze(warnings),
+      idType: 'invalid'
+    };
   }
 
   const trimmed = uuid.trim();
+  let idType: 'uuid' | 'temp-id' | 'invalid' = 'invalid';
 
-  if (!isValidUUID(trimmed)) {
-    errors.push(`잘못된 ${paramName} 형식입니다. UUID 형식이어야 합니다.`);
-    logSecurityEvent('INVALID_UUID_FORMAT', { uuid: trimmed, paramName }, 'medium');
+  // UUID 또는 임시 ID 형식 검증
+  if (isValidUUID(trimmed)) {
+    idType = 'uuid';
+  } else if (isValidTempId(trimmed)) {
+    idType = 'temp-id';
+    warnings.push(`임시 ID가 사용되었습니다: ${paramName}`);
+    logSecurityEvent('TEMP_ID_USAGE', { tempId: trimmed, paramName }, 'low');
+  } else {
+    errors.push(`잘못된 ${paramName} 형식입니다. UUID 또는 임시 ID 형식이어야 합니다.`);
+    logSecurityEvent('INVALID_UUID_OR_TEMP_ID_FORMAT', { uuid: trimmed, paramName }, 'medium');
   }
 
   // XSS 및 SQL 인젝션 검증 (UUID는 이미 제한적이지만 추가 보안)
@@ -99,10 +135,11 @@ export const validateUUID = (uuid: string, paramName: string = 'ID'): DatabaseVa
   return {
     isValid: errors.length === 0,
     sanitized,
-    errors,
-    warnings
-  };
-};
+    errors: Object.freeze(errors),
+    warnings: Object.freeze(warnings),
+    idType
+  } as const;
+};;
 
 /**
  * 이메일 주소 검증

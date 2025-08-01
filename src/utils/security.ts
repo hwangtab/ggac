@@ -3,6 +3,111 @@
  * XSS, 인젝션 공격 방지를 위한 입력 검증 및 데이터 정제
  */
 
+import type { SecurityEventType, SecurityEventSeverity, SecurityEventContext } from '@/types';
+
+/**
+ * 암호학적으로 안전한 UUID 생성
+ * 브라우저 및 Node.js 환경에서 모두 동작
+ */
+export const generateSecureUUID = (): string => {
+  // 브라우저 환경에서 crypto API 사용 가능한 경우
+  if (typeof window !== 'undefined' && window.crypto && window.crypto.randomUUID) {
+    return window.crypto.randomUUID();
+  }
+  
+  // Node.js 환경 또는 crypto.randomUUID 미지원 브라우저
+  const getRandomValues = (() => {
+    if (typeof window !== 'undefined' && window.crypto && window.crypto.getRandomValues) {
+      return (arr: Uint8Array) => window.crypto.getRandomValues(arr);
+    } else if (typeof require !== 'undefined') {
+      // Node.js 환경
+      try {
+        const crypto = require('crypto');
+        return (arr: Uint8Array) => {
+          const buffer = crypto.randomBytes(arr.length);
+          arr.set(buffer);
+          return arr;
+        };
+      } catch (e) {
+        // crypto 모듈 사용 불가능한 경우 fallback
+        console.warn('[Security Warning] crypto module not available, using fallback UUID generation');
+        return null;
+      }
+    }
+    return null;
+  })();
+
+  if (getRandomValues) {
+    // RFC 4122 version 4 UUID 생성
+    const bytes = new Uint8Array(16);
+    getRandomValues(bytes);
+    
+    // Version 4 (random) UUID 형식으로 변환
+    bytes[6] = (bytes[6] & 0x0f) | 0x40; // Version 4
+    bytes[8] = (bytes[8] & 0x3f) | 0x80; // Variant 10
+
+    const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+  }
+
+  // 최후의 fallback (보안성이 낮으므로 경고)
+  console.warn('[Security Warning] Using fallback UUID generation - not cryptographically secure');
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
+
+/**
+ * 임시 리소스 ID 생성
+ * 임시 파일, 세션 등에 사용할 안전한 ID 생성
+ */
+export const generateTempId = (): string => {
+  const uuid = generateSecureUUID();
+  return `temp-${uuid}`;
+};
+
+/**
+ * 세션 토큰 생성
+ * 사용자 세션, CSRF 토큰 등에 사용할 안전한 토큰 생성
+ */
+export const generateSecureToken = (length: number = 32): string => {
+  const getRandomValues = (() => {
+    if (typeof window !== 'undefined' && window.crypto && window.crypto.getRandomValues) {
+      return (arr: Uint8Array) => window.crypto.getRandomValues(arr);
+    } else if (typeof require !== 'undefined') {
+      try {
+        const crypto = require('crypto');
+        return (arr: Uint8Array) => {
+          const buffer = crypto.randomBytes(arr.length);
+          arr.set(buffer);
+          return arr;
+        };
+      } catch (e) {
+        console.warn('[Security Warning] crypto module not available for token generation');
+        return null;
+      }
+    }
+    return null;
+  })();
+
+  if (getRandomValues) {
+    const bytes = new Uint8Array(length);
+    getRandomValues(bytes);
+    return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+  }
+
+  // Fallback (경고와 함께)
+  console.warn('[Security Warning] Using fallback token generation - not cryptographically secure');
+  const chars = '0123456789abcdef';
+  let result = '';
+  for (let i = 0; i < length * 2; i++) {
+    result += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return result;
+};
+
 /**
  * HTML 특수 문자를 안전하게 이스케이프 처리
  * XSS 공격 방지를 위해 모든 사용자 입력에 적용 필수
@@ -284,14 +389,78 @@ export const validateUserInput = (input: string, maxLength: number = 1000): {
  * 로깅을 위한 보안 이벤트 기록
  * 보안 위반 시도를 모니터링하기 위한 로깅
  */
-export const logSecurityEvent = (event: string, details: any, severity: 'low' | 'medium' | 'high' = 'medium') => {
+export const logSecurityEvent = (
+  event: SecurityEventType, 
+  details: SecurityEventContext, 
+  severity: SecurityEventSeverity = 'medium'
+): void => {
+  // 불변 이벤트 컨텍스트 생성
+  const immutableDetails: SecurityEventContext = Object.freeze({
+    ...details,
+    timestamp: new Date().toISOString(),
+    severity,
+    eventType: event
+  });
+
   if (process.env.NODE_ENV === 'development') {
-    console.warn(`[SECURITY ${severity.toUpperCase()}] ${event}:`, details);
+    console.warn(`[SECURITY ${severity.toUpperCase()}] ${event}:`, immutableDetails);
   }
   
   // 프로덕션에서는 보안 모니터링 서비스로 전송
-  // 예: Sentry, LogRocket 등
-};
+  if (process.env.NODE_ENV === 'production') {
+    // 비동기로 보안 이벤트 전송 (에러가 발생해도 주요 로직에 영향 없도록)
+    Promise.resolve().then(async () => {
+      try {
+        // 외부 보안 모니터링 서비스 전송
+        if (process.env.SECURITY_WEBHOOK_URL) {
+          await fetch(process.env.SECURITY_WEBHOOK_URL, {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              'User-Agent': `GGAC-Security-Monitor/1.0`
+            },
+            body: JSON.stringify({
+              type: 'security_event',
+              event,
+              severity,
+              details: immutableDetails,
+              environment: 'production',
+              timestamp: immutableDetails.timestamp
+            })
+          });
+        }
+
+        // 심각도가 높은 경우 즉시 알림
+        if (severity === 'high') {
+          console.error(`[CRITICAL SECURITY EVENT] ${event}`, immutableDetails);
+          
+          // 추가 알림 채널 (예: Slack, Discord 등)
+          if (process.env.SECURITY_ALERT_WEBHOOK_URL) {
+            await fetch(process.env.SECURITY_ALERT_WEBHOOK_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                text: `🚨 Critical Security Event: ${event}`,
+                attachments: [{
+                  color: 'danger',
+                  fields: [
+                    { title: 'Event', value: event, short: true },
+                    { title: 'Severity', value: severity.toUpperCase(), short: true },
+                    { title: 'Details', value: JSON.stringify(immutableDetails, null, 2), short: false }
+                  ],
+                  timestamp: immutableDetails.timestamp
+                }]
+              })
+            });
+          }
+        }
+      } catch (error) {
+        // 보안 로깅 실패는 콘솔에만 기록 (무한 루프 방지)
+        console.error('[Security] Failed to send security event:', error);
+      }
+    });
+  }
+};;
 
 /**
  * Content Security Policy 정책 생성

@@ -975,6 +975,130 @@ export interface PostAttachment {
   updated_at?: string
 }
 
+// 임시 첨부 파일에 대한 확장된 타입 정의
+export interface TempPostAttachment extends PostAttachment {
+  /** 임시 파일 여부 */
+  is_temporary: true;
+  /** 임시 세션 ID (사용자 ID) */
+  temp_session: string;
+  /** 만료 시간 */
+  expires_at: string;
+}
+
+// 일반 첨부 파일 타입 (임시가 아닌)
+export interface PermanentPostAttachment extends PostAttachment {
+  /** 임시 파일 여부 */
+  is_temporary: false;
+  /** 임시 세션 ID (일반 파일은 null) */
+  temp_session?: never;
+  /** 만료 시간 (일반 파일은 null) */
+  expires_at?: never;
+}
+
+// Union 타입으로 모든 첨부 파일 커버
+export type AnyPostAttachment = TempPostAttachment | PermanentPostAttachment;
+
+// 파일 업로드 응답에 대한 강화된 타입
+export interface FileUploadSuccessResponse {
+  success: true;
+  message: string;
+  attachment: AnyPostAttachment;
+  url: string;
+  // 임시 파일인 경우에만 존재
+  tempId?: string;
+  expiresAt?: string;
+}
+
+export interface FileUploadErrorResponse {
+  success: false;
+  error: string;
+  details?: string[];
+}
+
+export type FileUploadApiResponse = FileUploadSuccessResponse | FileUploadErrorResponse;
+
+// 파일 검증 결과에 대한 강화된 타입
+export interface StrictFileValidationResult {
+  readonly isValid: boolean;
+  readonly fileType: 'image' | 'document' | 'video' | 'audio' | null;
+  readonly errors: readonly string[];
+  readonly warnings: readonly string[];
+  readonly detectedMimeType?: string;
+  readonly detectedExtension?: string;
+  readonly securityRisk: 'none' | 'low' | 'medium' | 'high';
+}
+
+// UUID 검증 결과에 대한 강화된 타입
+export interface UUIDValidationResult {
+  readonly isValid: boolean;
+  readonly sanitized: string;
+  readonly errors: readonly string[];
+  readonly warnings: readonly string[];
+  readonly idType: 'uuid' | 'temp-id' | 'invalid';
+}
+
+// 보안 이벤트 로깅을 위한 타입
+export type SecurityEventType = 
+  | 'INVALID_UUID_OR_TEMP_ID_FORMAT'
+  | 'TEMP_ID_USAGE'
+  | 'MALICIOUS_UUID_ATTEMPT'
+  | 'XSS_ATTEMPT_IN_EMAIL'
+  | 'SQL_INJECTION_ATTEMPT'
+  | 'MALICIOUS_USERNAME'
+  | 'XSS_ATTEMPT_IN_TITLE'
+  | 'XSS_ATTEMPT_IN_CONTENT'
+  | 'MALICIOUS_URL'
+  | 'MALICIOUS_FILENAME'
+  | 'SQL_INJECTION_IN_SEARCH'
+  | 'XSS_IN_SEARCH'
+  | 'CSP_VIOLATION';
+
+export type SecurityEventSeverity = 'low' | 'medium' | 'high';
+
+export interface SecurityEventContext {
+  readonly [key: string]: unknown;
+  readonly timestamp?: string;
+  readonly userAgent?: string;
+  readonly clientIP?: string;
+}
+
+// CSP 위반 리포트 타입
+export interface CSPViolationReport {
+  readonly 'document-uri': string;
+  readonly referrer: string;
+  readonly 'violated-directive': string;
+  readonly 'effective-directive': string;
+  readonly 'original-policy': string;
+  readonly disposition: string;
+  readonly 'blocked-uri': string;
+  readonly 'line-number'?: number;
+  readonly 'column-number'?: number;
+  readonly 'source-file'?: string;
+}
+
+export interface CSPReportWrapper {
+  readonly 'csp-report': CSPViolationReport;
+}
+
+// 클린업 작업에 대한 타입
+export interface TempFileCleanupResult {
+  readonly message: string;
+  readonly cleaned: number;
+  readonly files: readonly {
+    readonly id: string;
+    readonly fileName: string;
+  }[];
+}
+
+export interface TempFileCleanupStats {
+  readonly total: number;
+  readonly active: number;
+  readonly expired: number;
+  readonly totalSize: number;
+  readonly expiredSize: number;
+  readonly expiredSizeMB: number;
+}
+
 /**
  * 첨부파일 업로드 요청
  */
