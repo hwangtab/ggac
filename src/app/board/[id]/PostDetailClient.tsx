@@ -6,11 +6,19 @@ import { useRouter } from 'next/navigation';
 import CommentSection from '../../../components/CommentSection';
 import PostLikeButton from '../../../components/PostLikeButton';
 import PostAttachmentsDisplay from '../../../components/PostAttachmentsDisplay';
+import dynamic from 'next/dynamic';
+
+// PostContentRenderer를 동적으로 로드하여 SSR 이슈 방지
+const PostContentRenderer = dynamic(() => import('@/components/PostContentRenderer'), {
+  ssr: false,
+  loading: () => <div className="animate-pulse bg-gray-100 h-32 rounded" />
+});
 
 interface Post {
   id: string;
   title: string;
   content: string;
+  content_format?: string;
   category: string;
   author_id: string;
   created_at: string;
@@ -384,9 +392,11 @@ export default function PostDetailClient({ postId }: PostDetailClientProps) {
             {/* 게시글 본문 */}
             <div className="p-6">
               <div className="prose max-w-none">
-                <div className="whitespace-pre-wrap text-gray-800 leading-relaxed">
-                  {post.content}
-                </div>
+                <PostContentRenderer
+                  content={post.content}
+                  contentFormat={post.content_format as 'plain' | 'html' | 'markdown' || 'plain'}
+                  className="text-gray-800 leading-relaxed"
+                />
               </div>
             </div>
 

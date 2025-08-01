@@ -910,6 +910,8 @@ export interface Post {
   title: string
   /** 게시글 내용 (마크다운 지원) */
   content: string
+  /** 콘텐츠 형식 (plain, html, markdown) */
+  content_format?: 'plain' | 'html' | 'markdown'
   /** 게시글 카테고리 */
   category: BoardCategory
   /** 작성자 ID */

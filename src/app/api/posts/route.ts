@@ -88,6 +88,7 @@ async function GET(request: NextRequest) {
         id,
         title,
         content,
+        content_format,
         category,
         author_id,
         created_at,
