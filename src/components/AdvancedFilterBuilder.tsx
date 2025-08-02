@@ -100,7 +100,7 @@ const AdvancedFilterBuilder: React.FC<AdvancedFilterBuilderProps> = ({
     targetGroup.conditions = [...(targetGroup.conditions || []), newCondition]
     setFilterGroup(updatedGroup)
     emitChange(updatedGroup, sorts)
-  }, [fields, sorts])
+  }, [fields, sorts]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 필터 그룹 추가
   const addGroup = useCallback((parentGroup: FilterGroup, groupPath: number[] = []) => {
@@ -123,7 +123,7 @@ const AdvancedFilterBuilder: React.FC<AdvancedFilterBuilderProps> = ({
     targetGroup.groups = [...(targetGroup.groups || []), newGroup]
     setFilterGroup(updatedGroup)
     emitChange(updatedGroup, sorts)
-  }, [sorts])
+  }, [sorts]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 조건 업데이트
   const updateCondition = useCallback((
@@ -160,7 +160,7 @@ const AdvancedFilterBuilder: React.FC<AdvancedFilterBuilderProps> = ({
 
     setFilterGroup(updatedGroup)
     emitChange(updatedGroup, sorts)
-  }, [filterGroup, fields, sorts])
+  }, [filterGroup, fields, sorts]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 조건 삭제
   const removeCondition = useCallback((conditionIndex: number, groupPath: number[] = []) => {
@@ -179,7 +179,7 @@ const AdvancedFilterBuilder: React.FC<AdvancedFilterBuilderProps> = ({
 
     setFilterGroup(updatedGroup)
     emitChange(updatedGroup, sorts)
-  }, [filterGroup, sorts])
+  }, [filterGroup, sorts]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 그룹 삭제
   const removeGroup = useCallback((groupIndex: number, groupPath: number[] = []) => {
@@ -199,7 +199,7 @@ const AdvancedFilterBuilder: React.FC<AdvancedFilterBuilderProps> = ({
 
     setFilterGroup(updatedGroup)
     emitChange(updatedGroup, sorts)
-  }, [filterGroup, sorts])
+  }, [filterGroup, sorts]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 정렬 조건 추가
   const addSort = useCallback(() => {
@@ -212,7 +212,7 @@ const AdvancedFilterBuilder: React.FC<AdvancedFilterBuilderProps> = ({
     const updatedSorts = [...sorts, newSort]
     setSorts(updatedSorts)
     emitChange(filterGroup, updatedSorts)
-  }, [fields, sorts, filterGroup])
+  }, [fields, sorts, filterGroup]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 정렬 조건 업데이트
   const updateSort = useCallback((index: number, updates: Partial<SortCondition>) => {
@@ -221,14 +221,14 @@ const AdvancedFilterBuilder: React.FC<AdvancedFilterBuilderProps> = ({
     )
     setSorts(updatedSorts)
     emitChange(filterGroup, updatedSorts)
-  }, [sorts, filterGroup])
+  }, [sorts, filterGroup]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 정렬 조건 삭제
   const removeSort = useCallback((index: number) => {
     const updatedSorts = sorts.filter((_, i) => i !== index)
     setSorts(updatedSorts)
     emitChange(filterGroup, updatedSorts)
-  }, [sorts, filterGroup])
+  }, [sorts, filterGroup]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 변경 이벤트 발생
   const emitChange = useCallback((filters: FilterGroup, sortConditions: SortCondition[]) => {

@@ -5,7 +5,7 @@
 
 'use client'
 
-import React, { useState, useCallback, useRef } from 'react'
+import React, { useState, useCallback, useRef, useMemo } from 'react'
 import { FiUpload, FiX, FiImage, FiFile, FiVideo, FiMusic, FiCheck, FiAlertCircle } from 'react-icons/fi'
 import type { PostAttachment, PostAttachmentUpload } from '@/types'
 
@@ -41,7 +41,7 @@ const PostAttachmentUploader: React.FC<PostAttachmentUploaderProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // 허용된 파일 타입
-  const ALLOWED_TYPES = [
+  const ALLOWED_TYPES = useMemo(() => [
     'image/jpeg',
     'image/png', 
     'image/gif',
@@ -53,7 +53,7 @@ const PostAttachmentUploader: React.FC<PostAttachmentUploaderProps> = ({
     'video/webm',
     'audio/mpeg',
     'audio/wav'
-  ]
+  ], [])
 
   const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB per file
 
@@ -105,7 +105,7 @@ const PostAttachmentUploader: React.FC<PostAttachmentUploaderProps> = ({
     }))
 
     setUploadingFiles(prev => [...prev, ...newUploadingFiles])
-  }, [uploadingFiles, maxFiles, maxTotalSize, onUploadError])
+  }, [uploadingFiles, maxFiles, maxTotalSize, onUploadError, ALLOWED_TYPES, MAX_FILE_SIZE])
 
   // 드래그 앤 드롭 핸들러
   const handleDragOver = useCallback((e: React.DragEvent) => {
