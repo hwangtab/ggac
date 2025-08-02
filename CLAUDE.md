@@ -31,6 +31,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run deploy` - Trigger manual deployment via webhook  
 - `npm run deploy:notify` - Send deployment notification to Slack
 
+### Rich Text Editor System
+The application uses React-Quill as the rich text editor (migrated from TinyMCE):
+- **Component**: `src/components/QuillEditor.tsx` - Main React-Quill wrapper
+- **Legacy Wrapper**: `src/components/RichTextEditor.tsx` - Maintains interface compatibility
+- **Features**: Text formatting, lists, alignment, links, images, drag & drop
+- **Security**: HTML sanitization, file validation, restricted formats
+- **Styling**: Custom CSS with Tailwind integration, Korean font support
+- **No API Key Required**: Fully self-hosted solution
+
 ### Rate Limiting System
 The codebase includes a comprehensive rate limiting system in `src/utils/rateLimiter.ts`:
 - `GENERAL_API`: 60 requests per minute for standard API calls
