@@ -6,19 +6,27 @@ import 'react-quill/dist/quill.snow.css';
 import { validateFile, sanitizeImageFile } from '@/utils/fileValidation';
 import { generateTempId } from '@/utils/security';
 
-const ReactQuill = dynamic(() => import('react-quill'), { 
-  ssr: false,
-  loading: () => (
-    <div className="animate-pulse bg-gray-100 rounded-md" style={{ height: 400 }}>
-      <div className="h-12 bg-gray-200 rounded-t-md mb-2"></div>
-      <div className="px-3 py-2 space-y-2">
-        <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-        <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-        <div className="h-4 bg-gray-200 rounded w-5/6"></div>
+const ReactQuill = dynamic(
+  async () => {
+    const { default: RQ } = await import('react-quill');
+    const QuillWrapper = ({ forwardedRef, ...props }: any) => <RQ ref={forwardedRef} {...props} />;
+    QuillWrapper.displayName = 'QuillWrapper';
+    return QuillWrapper;
+  },
+  { 
+    ssr: false,
+    loading: () => (
+      <div className="animate-pulse bg-gray-100 rounded-md" style={{ height: 400 }}>
+        <div className="h-12 bg-gray-200 rounded-t-md mb-2"></div>
+        <div className="px-3 py-2 space-y-2">
+          <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+          <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+          <div className="h-4 bg-gray-200 rounded w-5/6"></div>
+        </div>
       </div>
-    </div>
-  )
-});
+    )
+  }
+);
 
 interface QuillEditorProps {
   value: string;
@@ -177,7 +185,7 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
         theme="snow"
         value={value}
         onChange={onChange}
-        ref={quillRef}
+        forwardedRef={quillRef}
         modules={modules}
         formats={formats}
         placeholder={placeholder}
