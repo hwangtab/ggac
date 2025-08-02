@@ -112,7 +112,7 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
             if (file) {
               try {
                 const imageUrl = await handleImageUpload(file);
-                const quill = quillRef.current;
+                const quill = quillRef.current?.getEditor();
                 if (quill) {
                   const range = quill.getSelection(true);
                   quill.insertEmbed(range.index, 'image', imageUrl, 'user');
@@ -147,7 +147,7 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
     const imageFiles = files.filter(file => file.type.startsWith('image/'));
     
     if (imageFiles.length > 0) {
-      const quill = quillRef.current;
+      const quill = quillRef.current?.getEditor();
       if (quill) {
         try {
           for (const file of imageFiles) {
@@ -176,13 +176,8 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
       <ReactQuill
         theme="snow"
         value={value}
-        onChange={(content, delta, source, editor) => {
-          // ref를 직접 설정하는 대신 onChange에서 editor 참조 저장
-          if (quillRef.current !== editor) {
-            quillRef.current = editor;
-          }
-          onChange(content);
-        }}
+        onChange={onChange}
+        ref={quillRef}
         modules={modules}
         formats={formats}
         placeholder={placeholder}
