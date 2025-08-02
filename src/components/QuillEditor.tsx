@@ -2,13 +2,13 @@
 
 import React, { useMemo, useRef, useCallback, useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import 'react-quill/dist/quill.snow.css';
+import 'react-quill-new/dist/quill.snow.css';
 import { validateFile, sanitizeImageFile } from '@/utils/fileValidation';
 import { generateTempId } from '@/utils/security';
 
 const ReactQuill = dynamic(
   async () => {
-    const { default: RQ } = await import('react-quill');
+    const { default: RQ } = await import('react-quill-new');
     const QuillWrapper = ({ forwardedRef, ...props }: any) => <RQ ref={forwardedRef} {...props} />;
     QuillWrapper.displayName = 'QuillWrapper';
     return QuillWrapper;

@@ -442,8 +442,8 @@ const nextConfig = {
               "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com",
               // 폰트 정책
               "font-src 'self' https://fonts.gstatic.com",
-              // 이미지 정책 - data: URI 제거, Supabase storage 추가
-              "img-src 'self' https: blob: https://*.supabase.co",
+              // 이미지 정책 - data: URI 추가 (Next.js Image blur 지원), Supabase storage 추가
+              "img-src 'self' https: blob: data: https://*.supabase.co",
               // 미디어 정책
               "media-src 'self' https://www.youtube.com https://*.supabase.co",
               // 프레임 정책
