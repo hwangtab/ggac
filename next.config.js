@@ -435,13 +435,13 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              // TinyMCE 호환을 위한 스크립트 정책 (unsafe-eval은 TinyMCE 필수)
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.youtube.com https://www.google-analytics.com https://cdn.tiny.cloud",
-              // 스타일 정책 - TinyMCE 스킨 지원
-              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tiny.cloud",
-              "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tiny.cloud",
+              // React-Quill 호환을 위한 스크립트 정책
+              "script-src 'self' 'unsafe-inline' https://www.youtube.com https://www.google-analytics.com",
+              // 스타일 정책
+              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+              "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com",
               // 폰트 정책
-              "font-src 'self' https://fonts.gstatic.com https://cdn.tiny.cloud",
+              "font-src 'self' https://fonts.gstatic.com",
               // 이미지 정책 - data: URI 제거, Supabase storage 추가
               "img-src 'self' https: blob: https://*.supabase.co",
               // 미디어 정책
@@ -450,8 +450,8 @@ const nextConfig = {
               "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com",
               // 연결 정책
               process.env.NODE_ENV === 'development' 
-                ? "connect-src 'self' http://localhost:* https://api.supabase.io https://*.supabase.co ws://localhost:* wss://localhost:* wss://*.supabase.co https://cdn.tiny.cloud"
-                : "connect-src 'self' https://api.supabase.io https://*.supabase.co wss://*.supabase.co https://cdn.tiny.cloud",
+                ? "connect-src 'self' http://localhost:* https://api.supabase.io https://*.supabase.co ws://localhost:* wss://localhost:* wss://*.supabase.co"
+                : "connect-src 'self' https://api.supabase.io https://*.supabase.co wss://*.supabase.co",
               // 객체 및 기타 보안 정책
               "object-src 'none'",
               "base-uri 'self'",
