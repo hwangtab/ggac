@@ -25,8 +25,13 @@ CREATE INDEX IF NOT EXISTS idx_post_embedded_images_position ON public.post_embe
 -- RLS policies for post_embedded_images
 ALTER TABLE public.post_embedded_images ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies if they exist (ignore errors if they don't exist)
+DROP POLICY IF EXISTS "Approved members can view embedded images" ON public.post_embedded_images;
+DROP POLICY IF EXISTS "Post authors can manage embedded images" ON public.post_embedded_images;
+DROP POLICY IF EXISTS "Admins can manage all embedded images" ON public.post_embedded_images;
+
 -- Allow approved members to view embedded images
-CREATE POLICY IF NOT EXISTS "Approved members can view embedded images" ON public.post_embedded_images
+CREATE POLICY "Approved members can view embedded images" ON public.post_embedded_images
   FOR SELECT USING (
     EXISTS (
       SELECT 1 FROM public.member_profiles 
@@ -37,7 +42,7 @@ CREATE POLICY IF NOT EXISTS "Approved members can view embedded images" ON publi
   );
 
 -- Allow post authors to manage their embedded images
-CREATE POLICY IF NOT EXISTS "Post authors can manage embedded images" ON public.post_embedded_images
+CREATE POLICY "Post authors can manage embedded images" ON public.post_embedded_images
   FOR ALL USING (
     EXISTS (
       SELECT 1 FROM public.posts 
@@ -47,7 +52,7 @@ CREATE POLICY IF NOT EXISTS "Post authors can manage embedded images" ON public.
   );
 
 -- Allow admins to manage all embedded images
-CREATE POLICY IF NOT EXISTS "Admins can manage all embedded images" ON public.post_embedded_images
+CREATE POLICY "Admins can manage all embedded images" ON public.post_embedded_images
   FOR ALL USING (
     EXISTS (
       SELECT 1 FROM public.member_profiles 
