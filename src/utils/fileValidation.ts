@@ -173,8 +173,9 @@ export const validateFile = async (file: File): Promise<StrictFileValidationResu
 
   if (!mimeType) {
     warnings.push('MIME 타입이 감지되지 않았습니다.');
-    securityRisk = Math.max(securityRisk === 'none' ? 0 : securityRisk === 'low' ? 1 : securityRisk === 'medium' ? 2 : 3, 1) === 1 ? 'low' : 
-                securityRisk === 'medium' ? 'medium' : 'high';
+    if (securityRisk === 'none') {
+      securityRisk = 'low';
+    }
   }
 
   // 4. 파일 타입 결정 및 검증
@@ -192,7 +193,9 @@ export const validateFile = async (file: File): Promise<StrictFileValidationResu
       // 확장자와 MIME 타입이 일치하지 않는 경우 경고
       if (extensionMatch && !mimeMatch) {
         warnings.push(`파일 확장자(${extension})와 MIME 타입(${mimeType})이 일치하지 않습니다.`);
-        securityRisk = Math.max(securityRisk === 'none' ? 0 : securityRisk === 'low' ? 1 : securityRisk === 'medium' ? 2 : 3, 2) === 2 ? 'medium' : 'high';
+        if (securityRisk === 'none' || securityRisk === 'low') {
+          securityRisk = 'medium';
+        }
       }
       
       // 파일 크기 검증

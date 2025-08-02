@@ -18,8 +18,12 @@ ON public.post_attachments(temp_session)
 WHERE is_temporary = TRUE;
 
 -- Update RLS policies to handle temporary attachments
+-- Drop existing policies if they exist (ignore errors if they don't exist)
+DROP POLICY IF EXISTS "Users can upload temporary attachments" ON public.post_attachments;
+DROP POLICY IF EXISTS "Users can view own temporary attachments" ON public.post_attachments;
+
 -- Allow users to upload temporary attachments with their session
-CREATE POLICY IF NOT EXISTS "Users can upload temporary attachments" ON public.post_attachments
+CREATE POLICY "Users can upload temporary attachments" ON public.post_attachments
 FOR INSERT WITH CHECK (
   is_temporary = TRUE 
   AND temp_session IS NOT NULL
@@ -36,7 +40,7 @@ FOR INSERT WITH CHECK (
 );
 
 -- Allow users to view their own temporary attachments
-CREATE POLICY IF NOT EXISTS "Users can view own temporary attachments" ON public.post_attachments
+CREATE POLICY "Users can view own temporary attachments" ON public.post_attachments
 FOR SELECT USING (
   (is_temporary = TRUE AND temp_session = auth.uid()::text)
   OR is_temporary = FALSE -- Regular attachments follow existing policies
