@@ -493,7 +493,7 @@ export const updateImageBlacklist = (newDomains: string[]): void => {
   logSecurityEvent('IMAGE_BLACKLIST_UPDATED', { newDomains }, 'medium');
 };
 
-export default {
+const imageValidationUtils = {
   validateImageUrl,
   validateImageUrls,
   createImageProxy,
@@ -503,3 +503,5 @@ export default {
   updateImageWhitelist,
   updateImageBlacklist
 };
+
+export default imageValidationUtils;

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '../lib/supabase/client';
 import { BOARD_CATEGORIES } from '@/constants/categories';
 import type { Post, PostAttachment } from '@/types';
@@ -32,7 +32,7 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ authorId, onNewPost, sh
   const postCategories = BOARD_CATEGORIES.slice(1);
 
   // 허용된 파일 타입
-  const ALLOWED_TYPES = [
+  const ALLOWED_TYPES = useMemo(() => [
     'image/jpeg',
     'image/png', 
     'image/gif',
@@ -44,7 +44,7 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ authorId, onNewPost, sh
     'video/webm',
     'audio/mpeg',
     'audio/wav'
-  ];
+  ], []);
 
   const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB per file
   const MAX_FILES = 10;
@@ -192,7 +192,7 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ authorId, onNewPost, sh
 
     // 오류가 있으면 표시하고 중단
     if (errors.length > 0) {
-      alert(errors.join('\\n'));
+      alert(errors.join('\n'));
       return;
     }
 
@@ -204,7 +204,7 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ authorId, onNewPost, sh
     );
 
     setSelectedFiles(prev => [...prev, ...newFiles]);
-  }, [selectedFiles]);
+  }, [selectedFiles, ALLOWED_TYPES, MAX_FILE_SIZE, MAX_FILES]);
 
   // 드래그 앤 드롭 핸들러
   const handleDragOver = useCallback((e: React.DragEvent) => {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { FiUsers, FiCheck, FiX, FiEye, FiSearch, FiFilter, FiRefreshCw, FiBarChart, FiPackage, FiShield, FiAlertCircle, FiPause, FiSettings } from 'react-icons/fi'
 import AdminLayout from '../components/AdminLayout'
 import MemberCard from './components/MemberCard'
@@ -85,17 +85,17 @@ export default function MembersPage() {
       fetchMembers()
     }
     fetchMemberStatsData() // 통계는 항상 별도로 로드
-  }, [filter, searchTerm, useAdvancedFilter])
+  }, [filter, searchTerm, useAdvancedFilter]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 고급 필터 상태가 변경될 때 쿼리 실행
   useEffect(() => {
     if (useAdvancedFilter && advancedQuery) {
       executeAdvancedSearch(advancedQuery)
     }
-  }, [useAdvancedFilter, advancedQuery])
+  }, [useAdvancedFilter, advancedQuery]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 필드 정의 조회
-  const fetchFieldDefinitions = async () => {
+  const fetchFieldDefinitions = useCallback(async () => {
     try {
       const response = await fetch('/api/admin/members/advanced-search')
       if (response.ok) {
@@ -105,10 +105,10 @@ export default function MembersPage() {
     } catch (error) {
       console.error('필드 정의 조회 실패:', error)
     }
-  }
+  }, [])
 
   // 고급 검색 실행
-  const executeAdvancedSearch = async (query: AdvancedSearchQuery) => {
+  const executeAdvancedSearch = useCallback(async (query: AdvancedSearchQuery) => {
     try {
       setLoading(true)
       setError(null)
@@ -142,10 +142,10 @@ export default function MembersPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   // 통계 데이터 조회 (메인 통계용)
-  const fetchMemberStatsData = async () => {
+  const fetchMemberStatsData = useCallback(async () => {
     try {
       setStatsLoading(true)
       const response = await fetch('/api/admin/members/stats')
@@ -159,7 +159,7 @@ export default function MembersPage() {
     } finally {
       setStatsLoading(false)
     }
-  }
+  }, [])
 
   // 상세 통계 모달용
   const fetchMemberStats = async () => {
@@ -255,7 +255,7 @@ export default function MembersPage() {
     }
   }
 
-  const fetchMembers = async (forceRefresh = false) => {
+  const fetchMembers = useCallback(async (forceRefresh = false) => {
     try {
       setLoading(true)
       setError(null)
@@ -297,7 +297,7 @@ export default function MembersPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [filter, searchTerm])
 
   const handleMemberAction = async (memberId: string, action: 'approve' | 'reject' | 'deactivate' | 'activate' | 'suspend' | 'unsuspend', params?: any) => {
     try {

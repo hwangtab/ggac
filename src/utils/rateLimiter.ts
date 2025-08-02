@@ -381,7 +381,7 @@ export const createGeoRateLimit = (req: NextRequest) => {
   return RATE_LIMIT_CONFIGS.GENERAL_API;
 };
 
-export default {
+const rateLimiterConfig = {
   applyRateLimit,
   createRateLimitMiddleware,
   createDynamicRateLimit,
@@ -391,3 +391,5 @@ export default {
   createIPKeyGenerator,
   createRouteKeyGenerator
 };
+
+export default rateLimiterConfig;

@@ -519,7 +519,7 @@ export {
   UpstashRedisClient
 };
 
-export default {
+const distributedRateLimiterConfig = {
   applyRateLimit: (config: DistributedRateLimitConfig) => distributedRateLimiter.applyRateLimit(config),
   resetRateLimit: (key: string) => distributedRateLimiter.resetRateLimit(key),
   getRateLimitStats: (key: string) => distributedRateLimiter.getRateLimitStats(key),
@@ -529,3 +529,5 @@ export default {
   createRouteKeyGenerator: createDistributedRouteKeyGenerator,
   addRateLimitHeaders: addDistributedRateLimitHeaders
 };
+
+export default distributedRateLimiterConfig;
