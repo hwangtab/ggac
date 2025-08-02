@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
     const cached = imageCache.get(cacheKey);
     
     if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-      const response = new NextResponse(cached.data, { 
+      const response = new NextResponse(new Uint8Array(cached.data), { 
         status: 200,
         headers: {
           ...cached.headers,
@@ -129,7 +129,7 @@ export async function GET(request: NextRequest) {
       // 오래된 캐시 정리
       cleanupCache();
 
-      const response = new NextResponse(imageData, {
+      const response = new NextResponse(new Uint8Array(imageData), {
         status: 200,
         headers: responseHeaders
       });

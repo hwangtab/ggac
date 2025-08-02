@@ -69,7 +69,7 @@ export function createImageResponse(
     ...additionalHeaders
   }
 
-  return new NextResponse(buffer, { status: 200, headers })
+  return new NextResponse(new Uint8Array(buffer), { status: 200, headers })
 }
 
 /**
@@ -115,7 +115,7 @@ export function createFileDownloadResponse(
     'X-Content-Type-Options': 'nosniff'
   }
 
-  return new NextResponse(buffer, { status: 200, headers })
+  return new NextResponse(new Uint8Array(buffer), { status: 200, headers })
 }
 
 /**
