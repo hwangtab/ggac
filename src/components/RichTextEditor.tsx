@@ -93,6 +93,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   }, []);
 
   const editorConfig = {
+    apiKey: process.env.NEXT_PUBLIC_TINYMCE_API_KEY,
     height,
     menubar: false,
     // 보안상 안전한 플러그인만 사용
