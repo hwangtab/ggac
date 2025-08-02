@@ -70,27 +70,36 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
       // 2. 이미지 메타데이터 제거
       const sanitizedFile = await sanitizeImageFile(file);
       
-      // 3. 서버 업로드
+      // 3. /api/media/upload API 사용 (MediaManager와 동일한 방식)
       const formData = new FormData();
       formData.append('file', sanitizedFile);
-      const tempPostId = generateTempId();
+      formData.append('bucket', 'attachments');
+
+      // 메타데이터 추가
+      const metadata = {
+        original_filename: file.name,
+        file_size: file.size,
+        content_type: file.type,
+        uploaded_at: new Date().toISOString()
+      };
+      formData.append('metadata', JSON.stringify(metadata));
 
       console.log('[QuillEditor] 서버 업로드 시작');
 
-      const response = await fetch(`/api/posts/${tempPostId}/attachments`, {
+      const response = await fetch('/api/media/upload', {
         method: 'POST',
         body: formData,
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({ error: '서버 응답을 파싱할 수 없습니다.' }));
         throw new Error(errorData.error || '이미지 업로드에 실패했습니다.');
       }
 
       const result = await response.json();
-      console.log('[QuillEditor] 이미지 업로드 성공:', result.url);
+      console.log('[QuillEditor] 이미지 업로드 성공:', result.public_url);
       
-      return result.url;
+      return result.public_url;
     } catch (error) {
       console.error('[QuillEditor] 이미지 업로드 오류:', error);
       throw error;
@@ -127,7 +136,21 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
                   quill.setSelection(range.index + 1);
                 }
               } catch (error: any) {
-                alert('이미지 업로드에 실패했습니다: ' + error.message);
+                console.error('[QuillEditor] 이미지 업로드 실패:', error);
+                
+                // 사용자 친화적인 에러 메시지
+                let userMessage = '이미지 업로드에 실패했습니다.';
+                if (error.message.includes('파일 크기')) {
+                  userMessage = '이미지 파일 크기가 너무 큽니다. 5MB 이하의 이미지를 선택해주세요.';
+                } else if (error.message.includes('파일 형식') || error.message.includes('지원하지 않는')) {
+                  userMessage = '지원하지 않는 이미지 형식입니다. JPG, PNG, GIF, WebP 파일만 업로드 가능합니다.';
+                } else if (error.message.includes('네트워크') || error.message.includes('서버')) {
+                  userMessage = '네트워크 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
+                } else if (error.message.includes('권한')) {
+                  userMessage = '파일 업로드 권한이 없습니다. 로그인 상태를 확인해주세요.';
+                }
+                
+                alert(userMessage);
               }
             }
           };
@@ -144,7 +167,7 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
   // 허용할 포맷 (보안상 제한)
   const formats = [
     'header', 'bold', 'italic', 'underline', 'strike',
-    'list', 'bullet', 'align', 'link', 'image',
+    'list', 'align', 'link', 'image',
     'blockquote', 'code-block'
   ];
 
@@ -165,7 +188,21 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
             quill.setSelection(range.index + 1);
           }
         } catch (error: any) {
-          alert('이미지 업로드에 실패했습니다: ' + error.message);
+          console.error('[QuillEditor] 이미지 업로드 실패:', error);
+                
+                // 사용자 친화적인 에러 메시지
+                let userMessage = '이미지 업로드에 실패했습니다.';
+                if (error.message.includes('파일 크기')) {
+                  userMessage = '이미지 파일 크기가 너무 큽니다. 5MB 이하의 이미지를 선택해주세요.';
+                } else if (error.message.includes('파일 형식') || error.message.includes('지원하지 않는')) {
+                  userMessage = '지원하지 않는 이미지 형식입니다. JPG, PNG, GIF, WebP 파일만 업로드 가능합니다.';
+                } else if (error.message.includes('네트워크') || error.message.includes('서버')) {
+                  userMessage = '네트워크 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
+                } else if (error.message.includes('권한')) {
+                  userMessage = '파일 업로드 권한이 없습니다. 로그인 상태를 확인해주세요.';
+                }
+                
+                alert(userMessage);
         }
       }
     }
