@@ -221,8 +221,7 @@ const MediaManager: React.FC<MediaManagerProps> = ({
     isValidFileType, 
     isValidFileSize, 
     generatePreview, 
-    onUploadError,
-    startUpload
+    onUploadError
   ])
 
   // 업로드 시작
