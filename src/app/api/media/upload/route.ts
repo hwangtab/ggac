@@ -3,8 +3,15 @@
  * MediaManager 컴포넌트에서 사용하는 범용 파일 업로드 API
  */
 
+// Next.js 14 App Router 설정
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+export const maxDuration = 30
+export const preferredRegion = 'icn1'
+
 import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import type { MediaFile } from '@/types'
 import { 
@@ -12,6 +19,32 @@ import {
   createErrorResponse, 
   createJsonResponse 
 } from '@/utils/apiResponse'
+
+// Service Role 클라이언트는 Storage 작업에만 사용
+function getSupabaseAdmin() {
+  console.log('[SUPABASE ADMIN] 환경 변수 확인');
+  console.log('[SUPABASE ADMIN] SUPABASE_URL:', !!process.env.NEXT_PUBLIC_SUPABASE_URL);
+  console.log('[SUPABASE ADMIN] SERVICE_ROLE_KEY:', !!process.env.SUPABASE_SERVICE_ROLE_KEY);
+  
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured');
+  }
+  
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    throw new Error('NEXT_PUBLIC_SUPABASE_URL is not configured');
+  }
+  
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    }
+  );
+}
 
 // 기본 설정
 const DEFAULT_MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
@@ -98,35 +131,10 @@ async function extractFileMetadata(file: File): Promise<Record<string, any>> {
     uploaded_at: new Date().toISOString()
   }
 
-  // 이미지 파일인 경우 추가 메타데이터 추출
-  if (file.type.startsWith('image/')) {
-    try {
-      const dimensions = await getImageDimensions(file)
-      metadata.width = dimensions.width
-      metadata.height = dimensions.height
-    } catch (error) {
-      console.error('Failed to extract image dimensions:', error)
-    }
-  }
+  // TODO: 이미지 크기 추출은 클라이언트에서 처리하거나 sharp 라이브러리 사용
+  // 현재는 서버 환경에서 DOM API를 사용할 수 없으므로 스킵
 
   return metadata
-}
-
-// 이미지 크기 추출
-function getImageDimensions(file: File): Promise<{ width: number; height: number }> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      const img = new Image()
-      img.onload = () => {
-        resolve({ width: img.width, height: img.height })
-      }
-      img.onerror = reject
-      img.src = e.target?.result as string
-    }
-    reader.onerror = reject
-    reader.readAsDataURL(file)
-  })
 }
 
 /**
@@ -187,8 +195,18 @@ export async function POST(request: NextRequest) {
     // Storage 경로 생성
     const storagePath = generateStoragePath(bucket, session.user.id, file.name)
 
+    // Storage 클라이언트 생성 및 파일 업로드
+    let supabaseAdmin;
+    try {
+      supabaseAdmin = getSupabaseAdmin();
+      console.log('[UPLOAD API] Storage 클라이언트 생성 성공');
+    } catch (error) {
+      console.error('[UPLOAD API] Supabase Admin 클라이언트 생성 오류:', error);
+      return createErrorResponse('Storage 서비스를 사용할 수 없습니다. 관리자에게 문의하세요.', 503);
+    }
+
     // Supabase Storage에 파일 업로드
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
       .from(bucket)
       .upload(storagePath, file, {
         cacheControl: '3600',
@@ -197,11 +215,18 @@ export async function POST(request: NextRequest) {
 
     if (uploadError) {
       console.error('Storage upload error:', uploadError)
-      return createErrorResponse('파일 업로드에 실패했습니다.', 500)
+      
+      // Storage bucket이 없는 경우 특별한 메시지
+      if (uploadError.message?.includes('bucket') || uploadError.message?.includes('not found')) {
+        return createErrorResponse('Storage가 설정되지 않았습니다. 관리자가 Supabase Storage bucket을 생성해야 합니다.', 503);
+      }
+      return createErrorResponse(`파일 업로드에 실패했습니다: ${uploadError.message}`, 500);
     }
 
+    console.log('[UPLOAD API] Storage 업로드 성공:', uploadData);
+
     // 공개 URL 생성
-    const { data: publicUrlData } = supabase.storage
+    const { data: publicUrlData } = supabaseAdmin.storage
       .from(bucket)
       .getPublicUrl(storagePath)
 
@@ -261,8 +286,17 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '50')
     const offset = parseInt(searchParams.get('offset') || '0')
 
+    // Storage 클라이언트 생성
+    let supabaseAdmin;
+    try {
+      supabaseAdmin = getSupabaseAdmin();
+    } catch (error) {
+      console.error('[LIST API] Supabase Admin 클라이언트 생성 오류:', error);
+      return createErrorResponse('Storage 서비스를 사용할 수 없습니다.', 503);
+    }
+
     // Storage에서 사용자 파일 목록 조회
-    const { data: files, error: listError } = await supabase.storage
+    const { data: files, error: listError } = await supabaseAdmin.storage
       .from(bucket)
       .list(`${session.user.id}/`, {
         limit,
@@ -278,7 +312,7 @@ export async function GET(request: NextRequest) {
     // MediaFile 형태로 변환
     const mediaFiles: MediaFile[] = (files || []).map((file, index) => {
       const filePath = `${session.user.id}/${file.name}`
-      const { data: publicUrlData } = supabase.storage
+      const { data: publicUrlData } = supabaseAdmin.storage
         .from(bucket)
         .getPublicUrl(filePath)
 
