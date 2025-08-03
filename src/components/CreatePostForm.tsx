@@ -22,7 +22,6 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ authorId, onNewPost, sh
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [category, setCategory] = useState('잡담');
-  const [useRichEditor, setUseRichEditor] = useState(true);
   const [loading, setLoading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -58,7 +57,7 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ authorId, onNewPost, sh
       const postData = {
         title,
         content,
-        content_format: useRichEditor ? 'html' : 'plain',
+        content_format: 'html', // 항상 HTML 형식 사용
         category,
         author_id: authorId,
         ...(category === '공지' && {
@@ -113,7 +112,6 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ authorId, onNewPost, sh
       setTitle('');
       setContent('');
       setCategory('잡담');
-      setUseRichEditor(true);
       setSelectedFiles([]);
 
     } catch (error) {
@@ -291,44 +289,16 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ authorId, onNewPost, sh
           />
         </div>
         
-        {/* 에디터 선택 */}
+        {/* 리치 에디터 (기본) */}
         <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="block text-sm font-medium text-gray-700">내용</label>
-            <div className="flex items-center space-x-2">
-              <label className="flex items-center text-sm text-gray-600">
-                <input
-                  type="checkbox"
-                  checked={useRichEditor}
-                  onChange={(e) => setUseRichEditor(e.target.checked)}
-                  disabled={loading}
-                  className="mr-2 rounded"
-                />
-                리치 에디터 사용 (이미지 삽입, 서식 지원)
-              </label>
-            </div>
-          </div>
-          
-          {useRichEditor ? (
-            <RichTextEditor
-              value={content}
-              onChange={setContent}
-              placeholder="게시글 내용을 입력하세요..."
-              disabled={loading}
-              height={400}
-            />
-          ) : (
-            <textarea
-              id="content"
-              rows={8}
-              className="block w-full border border-gray-300 rounded-lg shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-base transition-colors resize-vertical min-h-[200px]"
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder="게시글 내용을 입력하세요"
-              required
-              disabled={loading}
-            />
-          )}
+          <label className="block text-sm font-medium text-gray-700 mb-2">내용</label>
+          <RichTextEditor
+            value={content}
+            onChange={setContent}
+            placeholder="게시글 내용을 입력하세요..."
+            disabled={loading}
+            height={400}
+          />
         </div>
 
         {/* 첨부파일 섹션 */}
