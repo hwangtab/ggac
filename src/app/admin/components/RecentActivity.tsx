@@ -42,10 +42,6 @@ const RecentActivity: React.FC = () => {
   const [days, setDays] = useState(7)
   const [limit, setLimit] = useState(10)
 
-  useEffect(() => {
-    fetchRecentActivity()
-  }, [fetchRecentActivity])
-
   const fetchRecentActivity = useCallback(async (page = 1) => {
     try {
       setRefreshing(true)
@@ -70,6 +66,10 @@ const RecentActivity: React.FC = () => {
       setRefreshing(false)
     }
   }, [days, limit])
+
+  useEffect(() => {
+    fetchRecentActivity()
+  }, [fetchRecentActivity])
 
   const handleRefresh = () => {
     fetchRecentActivity(pagination?.currentPage || 1)

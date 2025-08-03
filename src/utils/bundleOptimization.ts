@@ -93,7 +93,9 @@ export const createLazyComponent = <T extends any>(
   preload: boolean = false
 ) => {
   // React.lazy를 동적으로 import하여 사용
-  const React = require('react')
+  const React = typeof window !== 'undefined' ? require('react') : null
+  if (!React) return null
+  
   const LazyComponent = React.lazy(importFunc)
   
   // 프리로드 옵션이 활성화된 경우 즉시 프리로드
@@ -255,25 +257,13 @@ export const generateBundleReport = (): BundleAnalysis => {
   }
 }
 
-// HOC for bundle size monitoring
-export const withBundleMonitoring = <P extends object>(
-  Component: React.ComponentType<P>
-): React.ComponentType<P> => {
-  const WrappedComponent: React.ComponentType<P> = (props: P) => {
-    React.useEffect(() => {
-      const timeout = setTimeout(() => {
-        monitorBundleSize()
-      }, 1000)
-      
-      return () => clearTimeout(timeout)
-    }, [])
-    
-    return React.createElement(Component, props)
+// Simple bundle monitoring utility (without React dependency)
+export const startBundleMonitoring = () => {
+  if (typeof window !== 'undefined') {
+    setTimeout(() => {
+      monitorBundleSize()
+    }, 1000)
   }
-  
-  WrappedComponent.displayName = `withBundleMonitoring(${Component.displayName || Component.name})`
-  
-  return WrappedComponent
 }
 
 const bundleOptimization = {
@@ -285,7 +275,7 @@ const bundleOptimization = {
   findDuplicateModules,
   getBundleRecommendations,
   generateBundleReport,
-  withBundleMonitoring
+  startBundleMonitoring
 }
 
 export default bundleOptimization
