@@ -10,6 +10,7 @@ import PaginationControls from './PaginationControls'
 import PostLikeButton from './PostLikeButton'
 import PostAttachmentPreview from './PostAttachmentPreview'
 import { FiImage, FiFile, FiVideo, FiMusic } from 'react-icons/fi'
+import { createTextPreview } from '@/utils/textUtils'
 
 import type { Post } from '@/types'
 
@@ -183,12 +184,27 @@ const PostList: React.FC<PostListProps> = ({
                   className="text-gray-700 mt-2 leading-relaxed cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors"
                   onClick={() => router.push(`/board/${post.id}`)}
                 >
-                  <p className="line-clamp-3">
-                    {post.content.length > 150 ? `${post.content.substring(0, 150)}...` : post.content}
-                  </p>
-                  {post.content.length > 150 && (
-                    <span className="text-primary-600 text-sm mt-1 inline-block">더 보기</span>
-                  )}
+                  {(() => {
+                    const preview = createTextPreview(post.content, 150);
+                    return (
+                      <>
+                        <p className="line-clamp-3">
+                          {preview.text}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1">
+                          {preview.isTruncated && (
+                            <span className="text-primary-600 text-sm inline-block">더 보기</span>
+                          )}
+                          {preview.hasImages && (
+                            <span className="text-blue-600 text-xs flex items-center gap-1">
+                              <FiImage className="w-3 h-3" />
+                              이미지 {preview.imageCount}개
+                            </span>
+                          )}
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
                 <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
                   <div className="flex flex-col gap-2">
