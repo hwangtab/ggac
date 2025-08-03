@@ -35,9 +35,14 @@ const DEFAULT_GLOBAL_DATA: GlobalData = {
 // Supabase에서 전체 아티스트 목록 조회 (데이터베이스 우선, JSON 파일 백업)
 export const getArtistsFromDB = cache(async (): Promise<Artist[]> => {
   try {
-    const supabase = createServerComponentClient({ cookies })
+    // 정적 생성 시점에서도 접근 가능하도록 createClient 사용
+    const { createClient } = await import('@supabase/supabase-js')
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
     
-    // 데이터베이스에서 아티스트 목록 조회
+    // 데이터베이스에서 아티스트 목록 조회 (public 접근 가능한 데이터만)
     const { data: dbArtists, error } = await supabase
       .from('artists')
       .select('*')
@@ -116,7 +121,12 @@ function convertDatabaseArtistToArtist(dbArtist: DatabaseArtist): Artist {
 // Supabase에서 아티스트 조회 (데이터베이스 우선, JSON 파일 백업)
 export const getArtistBySlugFromDB = cache(async (slug: string): Promise<Artist | null> => {
   try {
-    const supabase = createServerComponentClient({ cookies })
+    // 정적 생성 시점에서도 접근 가능하도록 createClient 사용
+    const { createClient } = await import('@supabase/supabase-js')
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
     
     // 데이터베이스에서 아티스트 조회
     const { data: dbArtist, error } = await supabase
@@ -131,14 +141,14 @@ export const getArtistBySlugFromDB = cache(async (slug: string): Promise<Artist 
     
     // 데이터베이스에 없으면 JSON 파일에서 조회 (백업)
     console.log(`Artist ${slug} not found in database, falling back to JSON`)
-    const artists = await getArtists()
+    const artists = await getArtistsFromJSON()
     return artists.find(artist => artist.slug === slug) || null
     
   } catch (error) {
     console.error('Error fetching artist from database:', error)
     
     // 오류 발생 시 JSON 파일에서 조회 (백업)
-    const artists = await getArtists()
+    const artists = await getArtistsFromJSON()
     return artists.find(artist => artist.slug === slug) || null
   }
 })
