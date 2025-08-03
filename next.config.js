@@ -435,8 +435,10 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              // React-Quill 호환을 위한 스크립트 정책
-              "script-src 'self' 'unsafe-inline' https://www.youtube.com https://www.google-analytics.com",
+              // React-Quill 호환을 위한 스크립트 정책 (개발 환경에서 React Refresh 지원)
+              "script-src 'self' 'unsafe-inline'" + 
+              (process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : "") + 
+              " https://www.youtube.com https://www.google-analytics.com",
               // 스타일 정책
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com",
