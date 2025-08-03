@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { FiUser, FiEdit3, FiMusic, FiClock, FiChevronRight, FiRefreshCw } from 'react-icons/fi'
 
 interface ActivityItem {
@@ -44,9 +44,9 @@ const RecentActivity: React.FC = () => {
 
   useEffect(() => {
     fetchRecentActivity()
-  }, [days, limit])
+  }, [fetchRecentActivity])
 
-  const fetchRecentActivity = async (page = 1) => {
+  const fetchRecentActivity = useCallback(async (page = 1) => {
     try {
       setRefreshing(true)
       const params = new URLSearchParams({
@@ -69,7 +69,7 @@ const RecentActivity: React.FC = () => {
       setLoading(false)
       setRefreshing(false)
     }
-  }
+  }, [days, limit])
 
   const handleRefresh = () => {
     fetchRecentActivity(pagination?.currentPage || 1)
