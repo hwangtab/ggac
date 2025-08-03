@@ -2,8 +2,6 @@
  * 번들 크기 최적화를 위한 유틸리티 함수들
  */
 
-import React from 'react'
-
 // 현재 번들 크기 및 성능 정보
 export interface BundleStats {
   totalSize: number
@@ -90,10 +88,12 @@ export const optimizedImport = <T>(
 /**
  * 지연 로딩 최적화
  */
-export const createLazyComponent = <T extends React.ComponentType<any>>(
+export const createLazyComponent = <T extends any>(
   importFunc: () => Promise<{ default: T }>,
   preload: boolean = false
 ) => {
+  // React.lazy를 동적으로 import하여 사용
+  const React = require('react')
   const LazyComponent = React.lazy(importFunc)
   
   // 프리로드 옵션이 활성화된 경우 즉시 프리로드

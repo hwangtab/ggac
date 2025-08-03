@@ -221,7 +221,8 @@ const MediaManager: React.FC<MediaManagerProps> = ({
     isValidFileType, 
     isValidFileSize, 
     generatePreview, 
-    onUploadError
+    onUploadError,
+    startUpload
   ])
 
   // 업로드 시작
@@ -297,7 +298,7 @@ const MediaManager: React.FC<MediaManagerProps> = ({
     if (completedFiles.length > 0) {
       onUploadComplete?.(completedFiles)
     }
-  }, [uploadFile, onUploadError, onUploadComplete, completedFiles])
+  }, [uploadFile, onUploadError, onUploadComplete])
 
   // 드래그 앤 드롭 처리
   const handleDragOver = useCallback((e: React.DragEvent) => {

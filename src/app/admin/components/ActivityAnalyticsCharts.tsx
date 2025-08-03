@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { FiBarChart, FiTrendingUp, FiUsers, FiClock, FiRefreshCw, FiDownload } from 'react-icons/fi'
 
 interface PatternAnalysis {
@@ -54,7 +54,7 @@ const ActivityAnalyticsCharts: React.FC<AnalyticsChartsProps> = ({
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'patterns' | 'trends'>('patterns')
 
-  const fetchAnalyticsData = async () => {
+  const fetchAnalyticsData = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
@@ -93,11 +93,11 @@ const ActivityAnalyticsCharts: React.FC<AnalyticsChartsProps> = ({
     } finally {
       setLoading(false)
     }
-  }
+  }, [userId, days])
 
   useEffect(() => {
     fetchAnalyticsData()
-  }, [userId, days])
+  }, [userId, days, fetchAnalyticsData])
 
   const renderHourlyChart = (hourlyData: Record<number, number>) => {
     const hours = Array.from({ length: 24 }, (_, i) => i)
