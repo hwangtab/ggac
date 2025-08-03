@@ -22,7 +22,7 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ authorId, onNewPost, sh
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [category, setCategory] = useState('잡담');
-  const [useRichEditor, setUseRichEditor] = useState(false);
+  const [useRichEditor, setUseRichEditor] = useState(true);
   const [loading, setLoading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -113,7 +113,7 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ authorId, onNewPost, sh
       setTitle('');
       setContent('');
       setCategory('잡담');
-      setUseRichEditor(false);
+      setUseRichEditor(true);
       setSelectedFiles([]);
 
     } catch (error) {
@@ -304,7 +304,7 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ authorId, onNewPost, sh
                   disabled={loading}
                   className="mr-2 rounded"
                 />
-                리치 에디터 사용 (이미지 삽입 가능)
+                리치 에디터 사용 (이미지 삽입, 서식 지원)
               </label>
             </div>
           </div>
