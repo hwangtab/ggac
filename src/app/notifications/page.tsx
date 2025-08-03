@@ -5,7 +5,7 @@
 
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { 
   FiBell, 
   FiCheck, 
@@ -37,7 +37,7 @@ const NotificationsPage = () => {
   const pageSize = 20
 
   // 알림 목록 조회
-  const fetchNotifications = async (page = 1) => {
+  const fetchNotifications = useCallback(async (page = 1) => {
     setLoading(true)
     try {
       const params = new URLSearchParams({
@@ -59,7 +59,7 @@ const NotificationsPage = () => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [filterType, showUnreadOnly, pageSize])
 
   // 통계 조회
   const fetchStats = async () => {
@@ -198,7 +198,7 @@ const NotificationsPage = () => {
   useEffect(() => {
     fetchNotifications(currentPage)
     fetchStats()
-  }, [currentPage, filterType, showUnreadOnly])
+  }, [currentPage, filterType, showUnreadOnly, fetchNotifications])
 
   // 시간 포맷팅
   const formatTime = (dateString: string) => {

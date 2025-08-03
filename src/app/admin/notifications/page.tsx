@@ -5,7 +5,7 @@
 
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { FiBell, FiSend, FiUsers, FiEdit3, FiTrash2, FiPlus } from 'react-icons/fi'
 import type { CreateBulkNotificationRequest, NotificationType } from '@/types'
 
@@ -66,7 +66,7 @@ const AdminNotificationsPage = () => {
   }
 
   // 대상자 자동 선택
-  const selectAudience = (audience: string) => {
+  const selectAudience = useCallback((audience: string) => {
     let targetMembers: string[] = []
     
     switch (audience) {
@@ -87,7 +87,7 @@ const AdminNotificationsPage = () => {
     }
     
     setSelectedMembers(new Set(targetMembers))
-  }
+  }, [members])
 
   // 대량 알림 발송
   const sendBulkNotification = async () => {
@@ -172,7 +172,7 @@ const AdminNotificationsPage = () => {
     if (notificationForm.audience !== 'custom') {
       selectAudience(notificationForm.audience)
     }
-  }, [notificationForm.audience, members])
+  }, [notificationForm.audience, members, selectAudience])
 
   // 초기 데이터 로딩
   useEffect(() => {

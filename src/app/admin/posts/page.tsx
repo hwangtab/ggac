@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { FiEdit3, FiEye, FiTrash2, FiSearch, FiFilter, FiRefreshCw, FiBookmark, FiMessageSquare, FiCalendar, FiUser, FiSettings } from 'react-icons/fi'
 import AdminLayout from '../components/AdminLayout'
 import PostCard from './components/PostCard'
@@ -56,21 +56,6 @@ export default function PostsPage() {
   const [advancedQuery, setAdvancedQuery] = useState<AdvancedSearchQuery | null>(null)
   const [advancedResult, setAdvancedResult] = useState<FilteredResult | null>(null)
 
-  useEffect(() => {
-    if (useAdvancedFilter) {
-      fetchFieldDefinitions()
-    } else {
-      fetchData()
-    }
-  }, [filter, searchTerm, currentPage, useAdvancedFilter])
-
-  // 고급 필터 상태가 변경될 때 쿼리 실행
-  useEffect(() => {
-    if (useAdvancedFilter && advancedQuery) {
-      executeAdvancedSearch(advancedQuery)
-    }
-  }, [currentPage, useAdvancedFilter, advancedQuery])
-
   // 필드 정의 조회
   const fetchFieldDefinitions = async () => {
     try {
@@ -85,7 +70,7 @@ export default function PostsPage() {
   }
 
   // 고급 검색 실행
-  const executeAdvancedSearch = async (query: AdvancedSearchQuery) => {
+  const executeAdvancedSearch = useCallback(async (query: AdvancedSearchQuery) => {
     try {
       setLoading(true)
       setError(null)
@@ -127,9 +112,9 @@ export default function PostsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [currentPage])
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
@@ -160,7 +145,22 @@ export default function PostsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [filter, searchTerm, currentPage])
+
+  useEffect(() => {
+    if (useAdvancedFilter) {
+      fetchFieldDefinitions()
+    } else {
+      fetchData()
+    }
+  }, [filter, searchTerm, currentPage, useAdvancedFilter, fetchData])
+
+  // 고급 필터 상태가 변경될 때 쿼리 실행
+  useEffect(() => {
+    if (useAdvancedFilter && advancedQuery) {
+      executeAdvancedSearch(advancedQuery)
+    }
+  }, [currentPage, useAdvancedFilter, advancedQuery, executeAdvancedSearch])
 
   const handlePostAction = async (postId: string, action: 'delete' | 'restore' | 'pin' | 'unpin') => {
     try {
