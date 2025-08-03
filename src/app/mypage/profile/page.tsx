@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import MypageLayout from '../components/MypageLayout'
 import PermissionCheck from '../components/PermissionCheck'
@@ -16,11 +16,7 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false)
   const router = useRouter()
 
-  useEffect(() => {
-    fetchProfile()
-  }, [])
-
-  const fetchProfile = async () => {
+  const fetchProfile = useCallback(async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession()
       
@@ -48,7 +44,11 @@ export default function ProfilePage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [router])
+
+  useEffect(() => {
+    fetchProfile()
+  }, [fetchProfile])
 
   const handleUpdate = async (updates: Partial<MemberProfile>) => {
     if (!profile) return

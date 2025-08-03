@@ -261,7 +261,7 @@ export function usePostLikes({
     } finally {
       isProcessingRef.current = false
     }
-  }, [user, postId, onLikeChange])
+  }, [user, postId, onLikeChange, state.isLiked, state.likeCount])
 
   // 에러 클리어
   const clearError = useCallback(() => {

@@ -222,6 +222,7 @@ const MediaManager: React.FC<MediaManagerProps> = ({
     isValidFileSize, 
     generatePreview, 
     onUploadError
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   ])
 
   // 업로드 시작
@@ -297,7 +298,7 @@ const MediaManager: React.FC<MediaManagerProps> = ({
     if (completedFiles.length > 0) {
       onUploadComplete?.(completedFiles)
     }
-  }, [uploadFile, onUploadError, onUploadComplete])
+  }, [uploadFile, onUploadError, onUploadComplete, completedFiles])
 
   // 드래그 앤 드롭 처리
   const handleDragOver = useCallback((e: React.DragEvent) => {

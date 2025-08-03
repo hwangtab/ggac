@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import MypageLayout from '../components/MypageLayout'
 import PermissionCheck from '../components/PermissionCheck'
@@ -15,11 +15,7 @@ export default function ArtistPage() {
   const [saving, setSaving] = useState(false)
   const router = useRouter()
 
-  useEffect(() => {
-    fetchArtist()
-  }, [])
-
-  const fetchArtist = async () => {
+  const fetchArtist = useCallback(async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession()
       
@@ -50,7 +46,11 @@ export default function ArtistPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [router])
+
+  useEffect(() => {
+    fetchArtist()
+  }, [fetchArtist])
 
   const handleUpdate = async (updates: Partial<DatabaseArtist>) => {
     if (!artist) return
