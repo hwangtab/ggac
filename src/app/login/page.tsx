@@ -29,11 +29,15 @@ export default function LoginPage() {
   // 안전한 리다이렉트 함수 (모바일 최적화 버전)
   const waitForAuthStateAndRedirect = async () => {
     try {
-      console.log('🔄 [LOGIN DEBUG] Starting auth state confirmation...');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔄 [LOGIN DEBUG] Starting auth state confirmation...');
+      }
       setMessage('로그인 성공! 인증 상태를 확인하는 중...');
       
       const isMobile = isMobileDeviceForAuth();
-      console.log(`📱 [LOGIN DEBUG] Mobile device detected: ${isMobile}`);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`📱 [LOGIN DEBUG] Mobile device detected: ${isMobile}`);
+      }
       
       // 모바일에서는 더 긴 재시도 로직 (네트워크 불안정성 고려)
       let session = null;
@@ -43,7 +47,9 @@ export default function LoginPage() {
       const retryDelay = isMobile ? 500 : 200;
       
       while (!session && retries < maxRetries) {
-        console.log(`🔄 [LOGIN DEBUG] Session check attempt ${retries + 1}/${maxRetries} (Mobile: ${isMobile})`);
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`🔄 [LOGIN DEBUG] Session check attempt ${retries + 1}/${maxRetries} (Mobile: ${isMobile})`);
+        }
         
         const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
         
@@ -58,7 +64,9 @@ export default function LoginPage() {
           if (currentProfile && !profileError) {
             session = currentSession;
             profile = currentProfile;
+            if (process.env.NODE_ENV === 'development') {
             console.log('✅ [LOGIN DEBUG] Session and profile confirmed');
+          }
             break;
           }
         }
@@ -70,21 +78,27 @@ export default function LoginPage() {
       }
       
       if (!session || !profile) {
+        if (process.env.NODE_ENV === 'development') {
         console.error('❌ [LOGIN DEBUG] Session confirmation failed');
+      }
         setMessage('인증 확인에 실패했습니다. 다시 시도해주세요.');
         return;
       }
       
       // 리다이렉트 실행 (모바일 환경 최적화)
       if (profile.registration_status === 'approved' && profile.is_active) {
+        if (process.env.NODE_ENV === 'development') {
         console.log('🎯 [LOGIN DEBUG] Approved user, redirecting to board...');
+      }
         setMessage('인증 완료! 게시판으로 이동합니다...');
         
         // 모바일에서는 더 긴 딜레이와 router.push 사용
         const redirectDelay = isMobile ? 800 : 300;
         
         setTimeout(() => {
-          console.log('🚀 [LOGIN DEBUG] Redirecting to board...');
+          if (process.env.NODE_ENV === 'development') {
+            console.log('🚀 [LOGIN DEBUG] Redirecting to board...');
+          }
           
           // 모바일에서는 router.push 우선 시도, 실패 시 window.location.href 사용
           if (isMobile) {

@@ -195,7 +195,9 @@ export async function middleware(request: NextRequest) {
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
     if (sessionError) {
-      console.log(`❌ [MIDDLEWARE DEBUG] Session error (Mobile: ${isMobile}):`, sessionError.message);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`❌ [MIDDLEWARE DEBUG] Session error (Mobile: ${isMobile}):`, sessionError.message);
+      }
       authError = true;
     } else {
       user = session?.user || null;
@@ -204,7 +206,9 @@ export async function middleware(request: NextRequest) {
       }
     }
   } catch (error) {
-    console.log(`💥 [MIDDLEWARE DEBUG] Auth error in middleware (Mobile: ${isMobile}):`, error);
+    if (process.env.NODE_ENV === 'development') {
+        console.log(`💥 [MIDDLEWARE DEBUG] Auth error in middleware (Mobile: ${isMobile}):`, error);
+      }
     authError = true;
   }
 
@@ -270,12 +274,16 @@ export async function middleware(request: NextRequest) {
     }
     
   } catch (error) {
-    console.log(`💥 [MIDDLEWARE DEBUG] Database error in middleware (Mobile: ${isMobile}):`, error);
+    if (process.env.NODE_ENV === 'development') {
+        console.log(`💥 [MIDDLEWARE DEBUG] Database error in middleware (Mobile: ${isMobile}):`, error);
+      }
     profileError = error;
     
     // 모바일에서는 네트워크 오류 시 더 관대하게 처리
     if (isMobile && !isProtectedPage) {
-      console.log('📱 [MIDDLEWARE DEBUG] Mobile device - allowing public page access despite DB error');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('📱 [MIDDLEWARE DEBUG] Mobile device - allowing public page access despite DB error');
+      }
       return res;
     }
     
@@ -357,13 +365,19 @@ export async function middleware(request: NextRequest) {
     }
 
     if (userStatus === 'approved' && isActive) {
-      console.log(`🎯 [MIDDLEWARE DEBUG] Redirecting approved user to board (Mobile: ${isMobile})`);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`🎯 [MIDDLEWARE DEBUG] Redirecting approved user to board (Mobile: ${isMobile})`);
+      }
       return NextResponse.redirect(new URL('/board', request.nextUrl.origin)); // 승인된 사용자는 게시판으로
     } else if (userStatus === 'pending') {
-      console.log(`⏳ [MIDDLEWARE DEBUG] Redirecting pending user (Mobile: ${isMobile})`);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`⏳ [MIDDLEWARE DEBUG] Redirecting pending user (Mobile: ${isMobile})`);
+      }
       return NextResponse.redirect(new URL('/register/pending', request.nextUrl.origin));
     } else if (userStatus === 'rejected') {
-      console.log(`❌ [MIDDLEWARE DEBUG] Redirecting rejected user (Mobile: ${isMobile})`);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`❌ [MIDDLEWARE DEBUG] Redirecting rejected user (Mobile: ${isMobile})`);
+      }
       return NextResponse.redirect(new URL('/register/rejected', request.nextUrl.origin));
     }
     // 그 외의 경우 (예: 아직 이메일 인증만 완료된 상태)는 현재 페이지 유지 (signup/login)
