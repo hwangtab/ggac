@@ -115,27 +115,35 @@ export async function GET(request: NextRequest) {
     }
 
     // 관리자 권한 확인
-    console.log('[DEBUG] Checking admin permission for user:', session.user.id)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[DEBUG] Checking admin permission for user:', session.user.id)
+    }
     try {
       await checkAdminPermission(supabase, session.user.id)
-      console.log('[DEBUG] Admin permission check passed')
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[DEBUG] Admin permission check passed')
+      }
     } catch (permError) {
       console.error('[DEBUG] Admin permission check failed:', permError)
       throw permError
     }
 
     // 데이터베이스에서 시스템 설정 조회
-    console.log('[DEBUG] Calling get_system_settings function')
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[DEBUG] Calling get_system_settings function')
+    }
     const { data: initialSettingsData, error: settingsError } = await supabase
       .rpc('get_system_settings', { include_sensitive: true })
     
     let settingsData = initialSettingsData
 
-    console.log('[DEBUG] get_system_settings result:', { 
-      hasData: !!settingsData, 
-      dataLength: settingsData?.length || 0, 
-      error: settingsError 
-    })
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[DEBUG] get_system_settings result:', { 
+        hasData: !!settingsData, 
+        dataLength: settingsData?.length || 0, 
+        error: settingsError 
+      })
+    }
 
     if (settingsError) {
       console.error('Settings query error:', settingsError)
