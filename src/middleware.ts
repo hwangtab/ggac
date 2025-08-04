@@ -187,7 +187,8 @@ export async function middleware(request: NextRequest) {
   
   // 크리티컬 경로 판단 (게시판 관련 경로)
   const isCriticalPath = request.nextUrl.pathname.startsWith('/board') || 
-                        request.nextUrl.pathname.startsWith('/admin');
+                       request.nextUrl.pathname.startsWith('/admin') ||
+                       request.nextUrl.pathname.startsWith('/mypage');
   
   try {
     // 모바일 환경에서는 더 관대한 세션 확인
@@ -210,7 +211,7 @@ export async function middleware(request: NextRequest) {
   // 인증 에러 발생 시 공개 페이지는 허용하고 보호된 페이지만 리다이렉트
   if (authError) {
     const { pathname } = request.nextUrl;
-    const PROTECTED_PAGES = ['/admin'];
+    const PROTECTED_PAGES = ['/admin', '/board', '/mypage'];
     const isProtectedPage = PROTECTED_PAGES.some(path => pathname.startsWith(path));
     
     if (isProtectedPage) {
@@ -225,7 +226,7 @@ export async function middleware(request: NextRequest) {
   // 정의된 경로들
   const AUTH_PAGES = ['/login', '/signup'];
   const REGISTRATION_PAGES = ['/register/pending', '/register/rejected'];
-  const PROTECTED_PAGES = ['/admin'];
+  const PROTECTED_PAGES = ['/admin', '/board', '/mypage'];
 
   const isAuthPage = AUTH_PAGES.includes(pathname);
   const isRegistrationPage = REGISTRATION_PAGES.includes(pathname);

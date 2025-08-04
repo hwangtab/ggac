@@ -280,43 +280,6 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
     return response.json()
   }, [])
 
-  // 파일 선택 처리
-  const handleFileSelect = useCallback(async (file: File) => {
-    if (disabled) return
-
-    // 파일 유효성 검사
-    const validationError = validateFile(file)
-    if (validationError) {
-      onUploadError?.(validationError)
-      return
-    }
-
-    try {
-      // 미리보기 생성 및 이미지 크기 추출
-      const { preview, width, height } = await generatePreview(file)
-      
-      setUploadState({
-        isUploading: false,
-        progress: 0,
-        preview,
-        imageMetadata: { width, height }
-      })
-
-      setSelectedFile(file)
-      
-      // 크롭 모달 표시 (이미지 파일인 경우)
-      if (file.type.startsWith('image/')) {
-        setShowCropModal(true)
-      } else {
-        // 크롭이 필요 없는 경우 바로 업로드
-        await startUpload(file, undefined, { width, height })
-      }
-    } catch (error) {
-      console.error('File preview generation failed:', error)
-      onUploadError?.('파일 미리보기 생성에 실패했습니다.')
-    }
-  }, [disabled, validateFile, generatePreview, onUploadError])
-
   // 업로드 시작
   const startUpload = useCallback(async (
     file: File, 
@@ -376,6 +339,44 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
       onUploadError?.(errorMessage)
     }
   }, [uploadProfilePhoto, onUploadComplete, onUploadError])
+
+  // 파일 선택 처리
+  const handleFileSelect = useCallback(async (file: File) => {
+    if (disabled) return
+
+    // 파일 유효성 검사
+    const validationError = validateFile(file)
+    if (validationError) {
+      onUploadError?.(validationError)
+      return
+    }
+
+    try {
+      // 미리보기 생성 및 이미지 크기 추출
+      const { preview, width, height } = await generatePreview(file)
+      
+      setUploadState({
+        isUploading: false,
+        progress: 0,
+        preview,
+        imageMetadata: { width, height }
+      })
+
+      setSelectedFile(file)
+      
+      // 크롭 모달 표시 (이미지 파일인 경우)
+      if (file.type.startsWith('image/')) {
+        setShowCropModal(true)
+      } else {
+        // 크롭이 필요 없는 경우 바로 업로드
+        await startUpload(file, undefined, { width, height })
+      }
+    } catch (error) {
+      console.error('File preview generation failed:', error)
+      onUploadError?.('파일 미리보기 생성에 실패했습니다.')
+    }
+  }, [disabled, validateFile, generatePreview, onUploadError, startUpload])
+
 
   // 파일 입력 클릭
   const handleFileInputClick = useCallback(() => {
