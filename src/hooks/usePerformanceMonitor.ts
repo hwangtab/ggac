@@ -341,11 +341,12 @@ export const useRenderPerformance = (componentName: string) => {
   useEffect(() => {
     const renderStart = performance.now()
     const currentRenderCount = ++renderCountRef.current
+    // Effect cleanup에서 사용할 renderTimes ref를 미리 저장
+    const renderTimes = renderTimesRef.current
 
     return () => {
       const renderEnd = performance.now()
       const renderTime = renderEnd - renderStart
-      const renderTimes = renderTimesRef.current
       
       renderTimes.push(renderTime)
       if (renderTimes.length > 100) {

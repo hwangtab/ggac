@@ -22,6 +22,64 @@ const OptimizedLiquidMetalParticles = ({ particleCount, width, height }: Optimiz
   const lastMouseMoveRef = useRef(0)
   const isDirtyRef = useRef(true) // 리렌더링 필요 여부
 
+  // WebGL 렌더링 함수 (simplified)
+  const renderParticles = useCallback((deltaTime: number) => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const gl = canvas.getContext('webgl2')
+    if (!gl) return
+
+    // 간단한 파티클 렌더링 (실제 구현은 LiquidMetalParticles 로직 사용)
+    gl.clearColor(0, 0, 0, 0)
+    gl.clear(gl.COLOR_BUFFER_BIT)
+
+    // 여기에 실제 파티클 렌더링 로직 구현
+    // (기존 LiquidMetalParticles의 로직을 최적화하여 적용)
+  }, [])
+
+  // 최적화된 렌더링 루프
+  const renderFrame = useCallback((currentTime: number) => {
+    if (!isVisibleRef.current) return
+
+    const deltaTime = currentTime - lastRenderTimeRef.current
+    
+    // 60fps 제한 (프레임 스킵)
+    if (deltaTime < fpsTargetRef.current) {
+      animationIdRef.current = requestAnimationFrame(renderFrame)
+      return
+    }
+
+    // 마우스 움직임이 없고 일정 시간이 지나면 렌더링 스킵
+    const timeSinceMouseMove = currentTime - lastMouseMoveRef.current
+    const shouldSkipRender = timeSinceMouseMove > 2000 && !isDirtyRef.current
+
+    if (shouldSkipRender) {
+      // 2초 후 렌더링 주기를 30fps로 낮춤
+      fpsTargetRef.current = 1000 / 30
+    } else {
+      // 활성 상태에서는 60fps 유지
+      fpsTargetRef.current = 1000 / 60
+    }
+
+    if (!shouldSkipRender || isDirtyRef.current) {
+      // 실제 렌더링 로직 (WebGL)
+      renderParticles(deltaTime)
+      isDirtyRef.current = false
+    }
+
+    lastRenderTimeRef.current = currentTime
+    animationIdRef.current = requestAnimationFrame(renderFrame)
+  }, [renderParticles])
+
+  // 애니메이션 시작
+  const startAnimation = useCallback(() => {
+    if (animationIdRef.current) return
+
+    lastRenderTimeRef.current = performance.now()
+    animationIdRef.current = requestAnimationFrame(renderFrame)
+  }, [renderFrame])
+
   // Intersection Observer로 가시성 감지
   useEffect(() => {
     const canvas = canvasRef.current
@@ -49,7 +107,7 @@ const OptimizedLiquidMetalParticles = ({ particleCount, width, height }: Optimiz
     return () => {
       observer.disconnect()
     }
-  }, [])
+  }, [startAnimation])
 
   // 마우스 움직임 감지
   useEffect(() => {
@@ -86,64 +144,6 @@ const OptimizedLiquidMetalParticles = ({ particleCount, width, height }: Optimiz
       window.removeEventListener('mouseleave', handleMouseLeave)
     }
   }, [width, height])
-
-  // 최적화된 렌더링 루프
-  const renderFrame = useCallback((currentTime: number) => {
-    if (!isVisibleRef.current) return
-
-    const deltaTime = currentTime - lastRenderTimeRef.current
-    
-    // 60fps 제한 (프레임 스킵)
-    if (deltaTime < fpsTargetRef.current) {
-      animationIdRef.current = requestAnimationFrame(renderFrame)
-      return
-    }
-
-    // 마우스 움직임이 없고 일정 시간이 지나면 렌더링 스킵
-    const timeSinceMouseMove = currentTime - lastMouseMoveRef.current
-    const shouldSkipRender = timeSinceMouseMove > 2000 && !isDirtyRef.current
-
-    if (shouldSkipRender) {
-      // 2초 후 렌더링 주기를 30fps로 낮춤
-      fpsTargetRef.current = 1000 / 30
-    } else {
-      // 활성 상태에서는 60fps 유지
-      fpsTargetRef.current = 1000 / 60
-    }
-
-    if (!shouldSkipRender || isDirtyRef.current) {
-      // 실제 렌더링 로직 (WebGL)
-      renderParticles(deltaTime)
-      isDirtyRef.current = false
-    }
-
-    lastRenderTimeRef.current = currentTime
-    animationIdRef.current = requestAnimationFrame(renderFrame)
-  }, [])
-
-  // WebGL 렌더링 함수 (simplified)
-  const renderParticles = useCallback((deltaTime: number) => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-
-    const gl = canvas.getContext('webgl2')
-    if (!gl) return
-
-    // 간단한 파티클 렌더링 (실제 구현은 LiquidMetalParticles 로직 사용)
-    gl.clearColor(0, 0, 0, 0)
-    gl.clear(gl.COLOR_BUFFER_BIT)
-
-    // 여기에 실제 파티클 렌더링 로직 구현
-    // (기존 LiquidMetalParticles의 로직을 최적화하여 적용)
-  }, [])
-
-  // 애니메이션 시작
-  const startAnimation = useCallback(() => {
-    if (animationIdRef.current) return
-
-    lastRenderTimeRef.current = performance.now()
-    animationIdRef.current = requestAnimationFrame(renderFrame)
-  }, [renderFrame])
 
   // 초기화 및 정리
   useEffect(() => {

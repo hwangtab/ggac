@@ -147,84 +147,6 @@ const MediaManager: React.FC<MediaManagerProps> = ({
     }
   }, [bucket])
 
-  // 파일 선택 처리
-  const handleFileSelect = useCallback(async (files: FileList | File[]) => {
-    if (disabled || isUploading) return
-
-    const fileArray = Array.from(files)
-    
-    // 파일 개수 제한 확인
-    if (mode === 'single' && fileArray.length > 1) {
-      onUploadError?.('한 번에 하나의 파일만 업로드할 수 있습니다.')
-      return
-    }
-
-    if (completedFiles.length + uploadingFiles.length + fileArray.length > config.max_files) {
-      onUploadError?.(`최대 ${config.max_files}개의 파일만 업로드할 수 있습니다.`)
-      return
-    }
-
-    // 파일 유효성 검사 및 미리보기 생성
-    const validFiles: UploadingFile[] = []
-    
-    for (const file of fileArray) {
-      if (!isValidFileType(file)) {
-        onUploadError?.(`지원하지 않는 파일 형식입니다: ${file.type}`)
-        continue
-      }
-
-      if (!isValidFileSize(file)) {
-        onUploadError?.(`파일 크기가 너무 큽니다: ${(file.size / 1024 / 1024).toFixed(1)}MB`)
-        continue
-      }
-
-      try {
-        const preview = await generatePreview(file)
-        
-        validFiles.push({
-          id: `uploading-${Date.now()}-${Math.random()}`,
-          file,
-          progress: 0,
-          status: 'pending',
-          preview
-        })
-      } catch (error) {
-        console.error('Preview generation failed:', error)
-        validFiles.push({
-          id: `uploading-${Date.now()}-${Math.random()}`,
-          file,
-          progress: 0,
-          status: 'pending'
-        })
-      }
-    }
-
-    if (validFiles.length === 0) return
-
-    // 단일 모드에서는 기존 파일 제거
-    if (mode === 'single') {
-      setUploadingFiles([])
-      setCompletedFiles([])
-    }
-
-    setUploadingFiles(prev => [...prev, ...validFiles])
-    
-    // 업로드 시작
-    startUpload(validFiles)
-  }, [
-    disabled, 
-    isUploading, 
-    mode, 
-    completedFiles.length, 
-    uploadingFiles.length, 
-    config.max_files, 
-    isValidFileType, 
-    isValidFileSize, 
-    generatePreview, 
-    onUploadError
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  ])
-
   // 업로드 시작
   const startUpload = useCallback(async (files: UploadingFile[]) => {
     setIsUploading(true)
@@ -299,6 +221,85 @@ const MediaManager: React.FC<MediaManagerProps> = ({
       onUploadComplete?.(completedFiles)
     }
   }, [uploadFile, onUploadError, onUploadComplete, completedFiles])
+
+  // 파일 선택 처리
+  const handleFileSelect = useCallback(async (files: FileList | File[]) => {
+    if (disabled || isUploading) return
+
+    const fileArray = Array.from(files)
+    
+    // 파일 개수 제한 확인
+    if (mode === 'single' && fileArray.length > 1) {
+      onUploadError?.('한 번에 하나의 파일만 업로드할 수 있습니다.')
+      return
+    }
+
+    if (completedFiles.length + uploadingFiles.length + fileArray.length > config.max_files) {
+      onUploadError?.(`최대 ${config.max_files}개의 파일만 업로드할 수 있습니다.`)
+      return
+    }
+
+    // 파일 유효성 검사 및 미리보기 생성
+    const validFiles: UploadingFile[] = []
+    
+    for (const file of fileArray) {
+      if (!isValidFileType(file)) {
+        onUploadError?.(`지원하지 않는 파일 형식입니다: ${file.type}`)
+        continue
+      }
+
+      if (!isValidFileSize(file)) {
+        onUploadError?.(`파일 크기가 너무 큽니다: ${(file.size / 1024 / 1024).toFixed(1)}MB`)
+        continue
+      }
+
+      try {
+        const preview = await generatePreview(file)
+        
+        validFiles.push({
+          id: `uploading-${Date.now()}-${Math.random()}`,
+          file,
+          progress: 0,
+          status: 'pending',
+          preview
+        })
+      } catch (error) {
+        console.error('Preview generation failed:', error)
+        validFiles.push({
+          id: `uploading-${Date.now()}-${Math.random()}`,
+          file,
+          progress: 0,
+          status: 'pending'
+        })
+      }
+    }
+
+    if (validFiles.length === 0) return
+
+    // 단일 모드에서는 기존 파일 제거
+    if (mode === 'single') {
+      setUploadingFiles([])
+      setCompletedFiles([])
+    }
+
+    setUploadingFiles(prev => [...prev, ...validFiles])
+    
+    // 업로드 시작
+    startUpload(validFiles)
+  }, [
+    disabled, 
+    isUploading, 
+    mode, 
+    completedFiles.length, 
+    uploadingFiles.length, 
+    config.max_files, 
+    isValidFileType, 
+    isValidFileSize, 
+    generatePreview, 
+    onUploadError,
+    startUpload
+  ])
+
 
   // 드래그 앤 드롭 처리
   const handleDragOver = useCallback((e: React.DragEvent) => {
