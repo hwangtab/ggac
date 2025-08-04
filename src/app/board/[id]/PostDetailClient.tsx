@@ -339,7 +339,7 @@ export default function PostDetailClient({ postId }: PostDetailClientProps) {
                 )}
               </div>
               
-              <h1 className="text-3xl font-bold text-gray-900 mb-4">{post.title}</h1>
+              <h1 className="text-3xl font-bold font-serif text-gray-900 mb-4">{post.title}</h1>
               
               <div className="flex items-center space-x-4 text-sm text-gray-600">
                 <div className="flex items-center space-x-2">
