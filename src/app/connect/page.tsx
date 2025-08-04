@@ -115,7 +115,7 @@ const ConnectPage = async () => {
             <div className="text-center">
               <Link 
                 href="/signup"
-                className="btn-primary text-lg px-8 py-4"
+                className="btn-primary text-lg px-8 py-4 sm:px-8 sm:py-3 rounded-lg w-full sm:w-auto text-center min-h-[44px] hover:-translate-y-0.5 hover:shadow-lg transition-all duration-300"
               >
                 동료 되기 (조합원 가입하기)
               </Link>
@@ -138,7 +138,7 @@ const ConnectPage = async () => {
               href={globalData.supportFormUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="btn-secondary text-lg px-8 py-4"
+              className="btn-secondary text-lg px-8 py-4 sm:px-8 sm:py-3 rounded-lg w-full sm:w-auto text-center min-h-[44px] hover:-translate-y-0.5 hover:shadow-lg transition-all duration-300"
             >
               예술 생태계 가꾸기 (후원 문의하기)
             </a>
