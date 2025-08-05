@@ -174,7 +174,7 @@ const PostList: React.FC<PostListProps> = ({
                   )}
                 </div>
                 <h3 
-                  className="text-xl font-bold font-serif text-gray-900 mb-2 cursor-pointer hover:text-primary-600 transition-colors"
+                  className="text-xl font-bold font-post text-gray-900 mb-2 cursor-pointer hover:text-primary-600 transition-colors"
                   onClick={() => router.push(`/board/${post.id}`)}
                 >
                   {post.title}

@@ -20,6 +20,13 @@ const okGung = localFont({
   preload: true,
 })
 
+const santokki = localFont({
+  src: '../../public/fonts/HSSanTokki2.0(2024).ttf',
+  variable: '--font-santokki',
+  display: 'swap',
+  preload: true,
+})
+
 export const metadata: Metadata = {
   title: '경기아트콜렉티브',
   description: '경계 없는 상상, 함께 만드는 울림. 예술로 숨 쉬고, 협동으로 길을 내는 경기아트콜렉티브입니다.',
@@ -77,7 +84,7 @@ export default async function RootLayout({
   const globalData = await getGlobalData()
 
   return (
-    <html lang="ko" className={`${gmarketSans.variable} ${okGung.variable}`}>
+    <html lang="ko" className={`${gmarketSans.variable} ${okGung.variable} ${santokki.variable}`}>
       <body suppressHydrationWarning>
         <ErrorBoundary>
           {/* Skip Links for Keyboard Navigation */}
