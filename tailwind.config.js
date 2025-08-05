@@ -34,8 +34,8 @@ module.exports = {
         }
       },
       fontFamily: {
-        sans: ['var(--font-pretendard)', 'system-ui', 'sans-serif'],
-        serif: ['var(--font-noto-serif-kr)', 'serif'],
+        sans: ['var(--font-gmarket-sans)', 'system-ui', 'sans-serif'],
+        serif: ['var(--font-ok-gung)', 'serif'],
       },
       animation: {
         'fade-in': 'fadeIn 0.5s ease-in-out',

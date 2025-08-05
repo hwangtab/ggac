@@ -2,24 +2,21 @@ import type { Metadata } from 'next'
 import './globals.css'
 import ErrorBoundary from '@/components/ErrorBoundary'
 import ConditionalLayout from '@/components/ConditionalLayout'
-import { Noto_Serif_KR } from 'next/font/google'
 import localFont from 'next/font/local'
 import { getGlobalData } from '@/lib/data'
 import { Suspense } from 'react'
 
-const pretendard = localFont({
-  src: '../../public/fonts/PretendardVariable.woff2',
-  display: 'swap', // 폰트 로딩 최적화: CLS 방지
-  weight: '45 920',
-  variable: '--font-pretendard',
+const gmarketSans = localFont({
+  src: '../../public/fonts/GmarketSansTTFLight.ttf',
+  variable: '--font-gmarket-sans',
+  display: 'swap',
   preload: true,
 })
 
-const notoSerifKr = Noto_Serif_KR({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--font-noto-serif-kr',
-  display: 'swap', // 폰트 로딩 최적화: CLS 방지
+const okGung = localFont({
+  src: '../../public/fonts/OK GUNG.ttf',
+  variable: '--font-ok-gung',
+  display: 'swap',
   preload: true,
 })
 
@@ -80,7 +77,7 @@ export default async function RootLayout({
   const globalData = await getGlobalData()
 
   return (
-    <html lang="ko" className={`${pretendard.variable} ${notoSerifKr.variable}`}>
+    <html lang="ko" className={`${gmarketSans.variable} ${okGung.variable}`}>
       <body suppressHydrationWarning>
         <ErrorBoundary>
           {/* Skip Links for Keyboard Navigation */}
