@@ -35,6 +35,7 @@ module.exports = {
       },
       fontFamily: {
         sans: ['var(--font-gmarket-sans)', 'system-ui', 'sans-serif'],
+        post: ['var(--font-santokki)', 'sans-serif'],
         serif: ['var(--font-ok-gung)', 'serif'],
       },
       animation: {

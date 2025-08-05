@@ -48,7 +48,7 @@ const FeaturedProjects = ({ projects }: FeaturedProjectsProps) => {
                       </span>
                     </div>
                     
-                    <h3 className="text-xl font-serif font-semibold mb-3 group-hover:text-primary-600 transition-colors duration-200">
+                    <h3 className="text-xl font-post font-semibold mb-3 group-hover:text-primary-600 transition-colors duration-200">
                       {project.title}
                     </h3>
                     
