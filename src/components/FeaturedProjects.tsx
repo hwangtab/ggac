@@ -65,7 +65,7 @@ const FeaturedProjects = ({ projects }: FeaturedProjectsProps) => {
         <div className="text-center mt-12">
           <Link 
             href="/archive"
-            className="btn-primary"
+            className="btn-primary text-lg px-8 py-4 sm:px-8 sm:py-3 rounded-lg w-full sm:w-auto text-center min-h-[44px] hover:-translate-y-0.5 hover:shadow-lg transition-all duration-300"
           >
             모든 프로젝트 보기
           </Link>

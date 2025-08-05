@@ -296,6 +296,11 @@ class ActivityLogger {
     if (typeof window === 'undefined') {
       return false
     }
+    
+    // 개발 환경에서는 활동 로깅 비활성화
+    if (process.env.NODE_ENV === 'development') {
+      return true
+    }
 
     try {
       const enhancedRequest = {

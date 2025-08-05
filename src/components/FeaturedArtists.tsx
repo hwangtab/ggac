@@ -36,14 +36,27 @@ const FeaturedArtists = ({ artists }: FeaturedArtistsProps) => {
                   <div>
                     <div className="mb-2 flex flex-wrap justify-center gap-1">
                       {Array.isArray(artist.category) ? (
-                        artist.category.map((cat, index) => (
-                          <span 
-                            key={index}
-                            className="inline-block px-3 py-1 bg-gray-100 text-gray-700 text-sm font-medium rounded-full"
-                          >
-                            {cat}
-                          </span>
-                        ))
+                        <>
+                          {artist.category.slice(0, 3).map((cat, index) => (
+                            <span 
+                              key={index}
+                              className="inline-block px-3 py-1 bg-gray-100 text-gray-700 text-sm font-medium rounded-full"
+                            >
+                              {cat}
+                            </span>
+                          ))}
+                          {artist.category.length > 3 && (
+                            <span 
+                              className="inline-block px-3 py-1 bg-gray-200 text-gray-600 text-sm font-medium rounded-full cursor-help relative group/tooltip"
+                              title={artist.category.slice(3).join(', ')}
+                            >
+                              +{artist.category.length - 3}개
+                              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-1 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
+                                {artist.category.slice(3).join(', ')}
+                              </div>
+                            </span>
+                          )}
+                        </>
                       ) : (
                         <span className="inline-block px-3 py-1 bg-gray-100 text-gray-700 text-sm font-medium rounded-full">
                           {artist.category}
@@ -68,7 +81,7 @@ const FeaturedArtists = ({ artists }: FeaturedArtistsProps) => {
         <div className="text-center mt-12">
           <Link 
             href="/artists"
-            className="btn-secondary"
+            className="btn-secondary text-lg px-8 py-4 sm:px-8 sm:py-3 rounded-lg w-full sm:w-auto text-center min-h-[44px] hover:-translate-y-0.5 hover:shadow-lg transition-all duration-300"
           >
             모든 아티스트 보기
           </Link>
