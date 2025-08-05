@@ -64,7 +64,7 @@ const FeaturedArtists = ({ artists }: FeaturedArtistsProps) => {
                       )}
                     </div>
                     
-                    <h3 className="text-xl font-post font-semibold mb-3 group-hover:text-primary-600 transition-colors duration-200">
+                    <h3 className="text-xl font-post font-semibold mb-3 text-gray-700 group-hover:text-primary-600 transition-colors duration-200">
                       {artist.name}
                     </h3>
                     
