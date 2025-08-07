@@ -103,10 +103,16 @@ module.exports = {
         
         // 텍스트 공통 스타일
         '.heading-primary': {
-          '@apply text-4xl md:text-5xl lg:text-6xl font-serif font-bold': {},
+          '@apply text-4xl md:text-5xl lg:text-6xl font-serif font-bold text-primary-900': {},
         },
         '.heading-secondary': {
-          '@apply text-2xl md:text-3xl lg:text-4xl font-serif font-semibold': {},
+          '@apply text-2xl md:text-3xl lg:text-4xl font-serif font-semibold text-primary-800': {},
+        },
+        '.heading-tertiary': {
+          '@apply text-xl md:text-2xl font-serif font-semibold text-primary-700': {},
+        },
+        '.heading-quaternary': {
+          '@apply text-lg font-serif font-medium text-primary-600': {},
         },
         '.text-body': {
           '@apply text-base md:text-lg leading-relaxed': {},
