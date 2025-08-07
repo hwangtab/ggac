@@ -209,7 +209,7 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ className =
         <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
           {/* 헤더 */}
           <div className="flex items-center justify-between p-4 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900">알림</h3>
+            <h3 className="heading-tertiary">알림</h3>
             <div className="flex items-center space-x-2">
               {stats && stats.unread_count > 0 && (
                 <button

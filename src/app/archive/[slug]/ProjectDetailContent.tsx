@@ -144,7 +144,7 @@ export default function ProjectDetailContent({
             {/* Video */}
             {project.videoUrl && (
               <div className="mt-12">
-                <h3 className="text-xl font-serif font-semibold mb-6">관련 영상</h3>
+                <h3 className="heading-tertiary mb-6">관련 영상</h3>
                 <div className="aspect-video bg-gray-100 rounded-2xl flex items-center justify-center">
                   <span className="text-gray-500">
                     Video: {project.videoUrl}
@@ -159,7 +159,7 @@ export default function ProjectDetailContent({
                 <ReactMarkdown
                   components={{
                     h3: ({ node, ...props }) => (
-                      <h3 className="text-xl font-serif font-semibold mb-6 text-gray-900" {...props} />
+                      <h3 className="heading-tertiary mb-6" {...props} />
                     ),
                     a: ({node, ...props}) => (
                       <a
@@ -184,7 +184,7 @@ export default function ProjectDetailContent({
             {/* Related Articles */}
             {project.relatedArticles && project.relatedArticles.length > 0 && (
               <div className="mt-12">
-                <h3 className="text-xl font-serif font-semibold mb-6">관련 기사</h3>
+                <h3 className="heading-tertiary mb-6">관련 기사</h3>
                 <div className="grid md:grid-cols-2 gap-6">
                   {project.relatedArticles.map((article, index) => (
                     <ArticleCard key={index} article={article} />
@@ -196,7 +196,7 @@ export default function ProjectDetailContent({
             {/* Gallery */}
             {project.gallery && project.gallery.length > 0 && (
               <div className="mt-12">
-                <h3 className="text-xl font-serif font-semibold mb-6">갤러리</h3>
+                <h3 className="heading-tertiary mb-6">갤러리</h3>
                 <div className="grid md:grid-cols-2 gap-6">
                   {project.gallery.map((image, index) => (
                     <div 
@@ -243,7 +243,7 @@ export default function ProjectDetailContent({
         <div className="container-custom">
           <div className="text-center">
             <div className="max-w-2xl mx-auto mb-8">
-              <h3 className="text-xl font-serif font-semibold text-gray-900 mb-3">
+              <h3 className="heading-tertiary mb-3">
                 다른 프로젝트들도 만나보세요
               </h3>
               <p className="text-gray-600">

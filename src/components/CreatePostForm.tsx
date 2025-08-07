@@ -258,7 +258,7 @@ const CreatePostForm: React.FC<CreatePostFormProps> = ({ authorId, onNewPost, sh
 
   return (
     <div className="bg-white p-6 sm:p-8 rounded-xl shadow-lg mb-12">
-      <h2 className="text-2xl font-semibold mb-6 text-gray-900">새 게시글 작성</h2>
+      <h2 className="heading-secondary mb-6">새 게시글 작성</h2>
       
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>
