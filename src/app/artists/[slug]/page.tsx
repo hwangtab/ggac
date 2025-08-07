@@ -320,7 +320,7 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
                 <FiUser className="w-6 h-6 text-primary-600" />
                 <div className="w-8 h-0.5 bg-gradient-to-l from-transparent to-primary-500"></div>
               </div>
-              <h2 className="text-2xl md:text-3xl font-serif font-semibold text-gray-900 mb-3">
+              <h2 className="heading-secondary mb-3">
                 {isMinimal ? '아티스트 소개' : '작업 세계'}
               </h2>
               <p className="text-gray-600 max-w-2xl mx-auto">
@@ -337,7 +337,7 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
                       <div className="w-20 h-20 bg-gradient-to-br from-primary-100 to-accent-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <div className="text-2xl">🎵</div>
                       </div>
-                      <h3 className="text-lg font-serif font-semibold text-gray-900 mb-2">창작자 정보</h3>
+                      <h3 className="heading-tertiary mb-2">창작자 정보</h3>
                       <p className="text-sm text-gray-600">
                         예술가의 배경과 경험을 통해 작품 세계를 이해해보세요.
                       </p>
@@ -381,7 +381,7 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
                   <FiLink className="w-6 h-6 text-accent-600" />
                   <div className="w-8 h-0.5 bg-gradient-to-l from-transparent to-accent-500"></div>
                 </div>
-                <h2 className="text-2xl md:text-3xl font-serif font-semibold text-gray-900 mb-3">
+                <h2 className="heading-secondary mb-3">
                   포트폴리오 & 소셜
                 </h2>
                 <p className="text-gray-600 max-w-2xl mx-auto">
@@ -435,7 +435,7 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
                     <FiPlay className="w-6 h-6 text-red-600" />
                     <div className="w-8 h-0.5 bg-gradient-to-l from-transparent to-red-500"></div>
                   </div>
-                  <h2 className="text-2xl md:text-3xl font-serif font-semibold text-gray-900 mb-3">
+                  <h2 className="heading-secondary mb-3">
                     영상으로 만나는 작품들
                   </h2>
                   <p className="text-gray-600 max-w-2xl mx-auto">
@@ -513,7 +513,7 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
                     <FiFolder className="w-6 h-6 text-primary-600" />
                     <div className="w-8 h-0.5 bg-gradient-to-l from-transparent to-primary-500"></div>
                   </div>
-                  <h2 className="text-2xl md:text-3xl font-serif font-semibold text-gray-900 mb-3">
+                  <h2 className="heading-secondary mb-3">
                     참여 프로젝트
                   </h2>
                   <p className="text-gray-600 max-w-2xl mx-auto">
@@ -536,7 +536,7 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
           <div className="container-custom">
             <div className="text-center px-4">
               <div className="max-w-2xl mx-auto mb-8">
-                <h3 className="text-xl font-serif font-semibold text-gray-900 mb-3">
+                <h3 className="heading-tertiary mb-3">
                   다른 아티스트들도 만나보세요
                 </h3>
                 <p className="text-gray-600">
