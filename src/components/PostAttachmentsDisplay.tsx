@@ -132,7 +132,7 @@ const PostAttachmentsDisplay: React.FC<PostAttachmentsDisplayProps> = ({
       {/* 이미지 갤러리 */}
       {images.length > 0 && (
         <div>
-          <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+          <h3 className="heading-tertiary mb-4 flex items-center">
             <FiImage className="w-5 h-5 mr-2" />
             이미지 ({images.length})
           </h3>
@@ -172,7 +172,7 @@ const PostAttachmentsDisplay: React.FC<PostAttachmentsDisplayProps> = ({
       {/* 기타 파일들 */}
       {otherFiles.length > 0 && (
         <div>
-          <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+          <h3 className="heading-tertiary mb-4 flex items-center">
             <FiFile className="w-5 h-5 mr-2" />
             첨부파일 ({otherFiles.length})
           </h3>
