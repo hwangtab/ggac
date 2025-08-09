@@ -1,7 +1,7 @@
 'use client'
 
 import { FiUser, FiUserPlus, FiEye, FiX, FiMusic, FiExternalLink } from 'react-icons/fi'
-import Image from 'next/image'
+import OptimizedImage from '@/components/OptimizedImage'
 
 interface Artist {
   id: string
@@ -76,12 +76,13 @@ export default function ArtistCard({ artist, onAssign, onRemoveAssignment, isLoa
           {/* 프로필 이미지 */}
           <div className="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
             {artist.profileImage ? (
-              <Image
+              <OptimizedImage
                 src={artist.profileImage}
                 alt={artist.name}
                 width={64}
                 height={64}
                 className="w-full h-full object-cover"
+                fallbackText={artist.name.slice(0, 2)}
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
