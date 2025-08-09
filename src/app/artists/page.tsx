@@ -2,6 +2,9 @@ import ArtistsContent from './ArtistsContent'
 import { getArtists } from '@/lib/data'
 import type { Metadata } from 'next'
 
+// ISR 최적화: 아티스트 정보는 12시간 캐시 (중간 빈도 업데이트)
+export const revalidate = 43200
+
 export const metadata: Metadata = {
   title: '함께하는 사람들 | 경기아트콜렉티브 협동조합',
   description: '경기도를 기반으로 활동하는 다양한 분야의 예술가들을 만나보세요. 음악, 시각예술, 공연예술 등 각자의 고유한 색깔로 창작하는 우리 조합원들을 소개합니다.',

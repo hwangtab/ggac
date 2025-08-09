@@ -2,6 +2,9 @@ import ArchiveContent from './ArchiveContent'
 import { getProjectsSorted, getArtists } from '@/lib/data'
 import type { Metadata } from 'next'
 
+// ISR 최적화: 프로젝트는 6시간 캐시 (상대적으로 자주 업데이트)
+export const revalidate = 21600
+
 export const metadata: Metadata = {
   title: '프로젝트 | 경기아트콜렉티브 협동조합',
   description: '경기아트콜렉티브가 만들어가는 다양한 창작 프로젝트들입니다. 음반제작, 공연기획, 예술교육, 문화행사 등 우리의 발자취를 확인해보세요.',
