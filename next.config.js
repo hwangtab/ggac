@@ -223,7 +223,7 @@ const nextConfig = {
   // Enhanced security headers and MIME type configuration
   async headers() {
     return [
-      // CSS 파일에 대한 올바른 MIME 타입 헤더
+      // CSS 파일에 대한 올바른 MIME 타입 헤더 (강화된 설정)
       {
         source: '/_next/static/css/(.*)',
         headers: [
@@ -238,6 +238,15 @@ const nextConfig = {
           {
             key: 'X-Content-Type-Options',
             value: 'nosniff',
+          },
+          {
+            key: 'X-XSS-Protection',
+            value: '0',
+          },
+          // CSS-specific security headers
+          {
+            key: 'Content-Security-Policy',
+            value: "default-src 'none'; style-src 'unsafe-inline'",
           },
         ],
       },
