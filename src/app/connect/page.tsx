@@ -5,15 +5,130 @@ import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
   title: '소통과 참여 | 경기아트콜렉티브 협동조합',
-  description: '당신의 참여로 새로운 물결이 시작됩니다.',
+  description: '경기도 예술가들과 함께하세요. 조합원 가입, 후원, 협업 문의 등 다양한 방법으로 예술 생태계 발전에 참여할 수 있습니다.',
+  keywords: [
+    '조합원가입', '예술가모집', '후원', '협업', '문화예술지원', '경기도예술', 
+    '창작지원', '예술교육', '문화기획', '지역예술', '협동조합가입'
+  ],
+  authors: [{ name: '경기아트콜렉티브 협동조합' }],
+  creator: '경기아트콜렉티브 협동조합',
+  publisher: '경기아트콜렉티브 협동조합',
+  metadataBase: new URL('https://ggac.kr'),
+  alternates: {
+    canonical: '/connect',
+    languages: {
+      'ko-KR': '/connect',
+    },
+  },
+  openGraph: {
+    title: '소통과 참여 | 경기아트콜렉티브 협동조합',
+    description: '경기도 예술가들과 함께하세요. 조합원 가입, 후원, 협업 문의 등 다양한 방법으로 예술 생태계 발전에 참여할 수 있습니다.',
+    url: 'https://ggac.kr/connect',
+    siteName: '경기아트콜렉티브 협동조합',
+    images: [
+      {
+        url: '/images/logo/gac_og_branded.webp',
+        width: 1200,
+        height: 630,
+        alt: '경기아트콜렉티브 협동조합 - 소통과 참여',
+      },
+    ],
+    locale: 'ko_KR',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: '소통과 참여 | 경기아트콜렉티브 협동조합',
+    description: '당신의 참여로 새로운 물결이 시작됩니다. 경기도 예술가들과 함께하세요.',
+    images: ['/images/logo/gac_og_branded.webp'],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
 }
 
 const ConnectPage = async () => {
   // 개선된 데이터 로딩 - 캐싱된 함수 사용 (기존 디자인 유지)
   const globalData = await getGlobalData()
 
+  // JSON-LD 구조화 데이터 - 조직 정보
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    '@id': 'https://ggac.kr#organization',
+    name: '경기아트콜렉티브 협동조합',
+    alternateName: 'GGAC',
+    description: '경기도를 기반으로 활동하는 예술가들이 모여 설립한 생산자 협동조합',
+    url: 'https://ggac.kr',
+    logo: {
+      '@type': 'ImageObject',
+      url: 'https://ggac.kr/images/logo/gac_logo.webp',
+      width: 512,
+      height: 512,
+    },
+    image: 'https://ggac.kr/images/logo/gac_og_branded.webp',
+    foundingDate: '2025-05-01',
+    foundingLocation: {
+      '@type': 'Place',
+      name: '경기도',
+      addressRegion: '경기도',
+      addressCountry: 'KR',
+    },
+    address: {
+      '@type': 'PostalAddress',
+      streetAddress: globalData.contact.address,
+      addressRegion: '경기도',
+      addressCountry: 'KR',
+    },
+    contactPoint: [
+      {
+        '@type': 'ContactPoint',
+        telephone: globalData.contact.phone,
+        contactType: 'customer service',
+        availableLanguage: 'Korean',
+      },
+      {
+        '@type': 'ContactPoint',
+        email: globalData.contact.email,
+        contactType: 'customer service',
+        availableLanguage: 'Korean',
+      }
+    ],
+    sameAs: [
+      globalData.social.instagram,
+      globalData.social.youtube,
+    ],
+    organizationType: '협동조합',
+    areaServed: {
+      '@type': 'Place',
+      name: '경기도',
+    },
+    knowsAbout: [
+      '음악 제작', '공연 기획', '예술 교육', '문화 기획', '창작 지원'
+    ],
+    memberOf: {
+      '@type': 'Organization',
+      name: '한국 협동조합 연합회',
+    },
+  }
+
   return (
-    <div className="pt-20">
+    <>
+      {/* JSON-LD 구조화 데이터 */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      
+      <div className="pt-20">
       {/* Hero Section */}
       <section className="py-16 md:py-24 bg-gradient-to-br from-primary-50 to-accent-50">
         <div className="container-custom text-center">
@@ -230,7 +345,8 @@ const ConnectPage = async () => {
           </div>
         </div>
       </section>
-    </div>
+      </div>
+    </>
   )
 }
 

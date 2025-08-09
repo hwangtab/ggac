@@ -104,10 +104,12 @@ const OptimizedHeroImage = ({
       {/* 오류 상태 처리 - PNG 폴백 시도 */}
       {imageError && (
         <div className="absolute inset-0">
-          <img 
+          <Image 
             src="/images/hero.png"
             alt={alt}
-            className="w-full h-full object-cover"
+            fill
+            className="object-cover"
+            priority={priority}
             onError={() => console.error('[OptimizedHeroImage] PNG 폴백도 실패')}
             onLoad={() => {
               console.log('[OptimizedHeroImage] PNG 폴백 로드 성공')

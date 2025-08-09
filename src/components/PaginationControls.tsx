@@ -66,19 +66,20 @@ const PaginationControls: React.FC<PaginationControlsProps> = ({
       </div>
 
       {/* 페이지네이션 컨트롤 */}
-      <div className="flex items-center space-x-1">
-        {/* 이전 페이지 버튼 */}
-        <button
-          onClick={handlePrevious}
-          disabled={currentPage === 1 || loading}
-          className={`
-            px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200
-            ${currentPage === 1 || loading
-              ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
-              : 'text-gray-700 bg-white hover:bg-gray-50 hover:text-primary-600 border border-gray-300'
-            }
-          `}
-          aria-label="이전 페이지"
+      <nav aria-label="페이지네이션" role="navigation">
+        <div className="flex items-center space-x-1">
+          {/* 이전 페이지 버튼 */}
+          <button
+            onClick={handlePrevious}
+            disabled={currentPage === 1 || loading}
+            aria-label="이전 페이지"
+            className={`
+              px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200
+              ${currentPage === 1 || loading
+                ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                : 'text-gray-700 bg-white hover:bg-gray-50 hover:text-primary-600 border border-gray-300'
+              }
+            `}
         >
           <span className="hidden sm:inline">이전</span>
           <span className="sm:hidden">‹</span>
@@ -126,6 +127,7 @@ const PaginationControls: React.FC<PaginationControlsProps> = ({
         <button
           onClick={handleNext}
           disabled={currentPage === totalPages || loading}
+          aria-label="다음 페이지"
           className={`
             px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200
             ${currentPage === totalPages || loading
@@ -133,12 +135,12 @@ const PaginationControls: React.FC<PaginationControlsProps> = ({
               : 'text-gray-700 bg-white hover:bg-gray-50 hover:text-primary-600 border border-gray-300'
             }
           `}
-          aria-label="다음 페이지"
         >
           <span className="hidden sm:inline">다음</span>
           <span className="sm:hidden">›</span>
         </button>
-      </div>
+        </div>
+      </nav>
 
       {/* 모바일용 더 보기 버튼 (옵션) */}
       {currentPage < totalPages && (
@@ -146,6 +148,7 @@ const PaginationControls: React.FC<PaginationControlsProps> = ({
           <button
             onClick={handleNext}
             disabled={loading}
+            aria-label="더 많은 게시글 보기"
             className={`
               px-6 py-3 text-sm font-medium rounded-lg transition-colors duration-200 w-full
               ${loading
