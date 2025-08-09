@@ -22,11 +22,28 @@ const OptimizedImage = memo(function OptimizedImage({
   const [isLoading, setIsLoading] = useState(true)
   const [currentSrc, setCurrentSrc] = useState(src)
 
-  // 이미지 상태 초기화 및 fallback 로직
+  // 이미지 경로 사전 변환 함수
+  const getOptimalImageSrc = (originalSrc: string): string => {
+    // 외부 URL은 그대로 사용
+    if (originalSrc.startsWith('http')) {
+      return originalSrc
+    }
+    
+    // 로컬 이미지의 경우 실제 존재하는 파일 확장자로 변환
+    if (originalSrc.includes('/images/artists/') && originalSrc.endsWith('.webp')) {
+      // 아티스트 이미지는 주로 JPG로 존재
+      return originalSrc.replace('.webp', '.jpg')
+    }
+    
+    return originalSrc
+  }
+
+  // 이미지 상태 초기화 및 사전 변환
   useEffect(() => {
     setHasError(false)
     setIsLoading(true)
-    setCurrentSrc(src)
+    const optimalSrc = getOptimalImageSrc(src)
+    setCurrentSrc(optimalSrc)
   }, [src])
 
   const handleError = () => {
