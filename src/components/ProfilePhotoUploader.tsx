@@ -453,6 +453,7 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
 
         {/* 프로필 사진 또는 기본 아바타 */}
         {displayImageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={displayImageUrl}
             alt={`${userDisplayName}의 프로필 사진`}
@@ -585,6 +586,7 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
                     maxHeight={600}
                     keepSelection
                   >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       ref={imageRef}
                       src={uploadState.preview}
@@ -603,6 +605,7 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
                 <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
                   {croppedImageUrl ? (
                     <div className="text-center">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={croppedImageUrl}
                         alt="크롭 미리보기"

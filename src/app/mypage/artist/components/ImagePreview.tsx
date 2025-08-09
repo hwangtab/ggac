@@ -79,6 +79,7 @@ export default function ImagePreview({ currentImage, onImageChange, value }: Ima
         <div className="flex items-center gap-4">
           {currentImage ? (
             <div className="w-20 h-20 rounded-lg overflow-hidden bg-gray-100">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={currentImage}
                 alt="현재 프로필"
@@ -147,11 +148,14 @@ export default function ImagePreview({ currentImage, onImageChange, value }: Ima
                 </div>
               )}
               {imageStatus === 'success' && previewImage && (
-                <img
-                  src={previewImage}
-                  alt="새 프로필 미리보기"
-                  className="w-full h-full object-cover"
-                />
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={previewImage}
+                    alt="새 프로필 미리보기"
+                    className="w-full h-full object-cover"
+                  />
+                </>
               )}
               {imageStatus === 'error' && (
                 <div className="w-full h-full flex items-center justify-center">

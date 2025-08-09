@@ -103,6 +103,7 @@ const YoutubeVideos: React.FC<YoutubeVideosProps> = ({
                   <div className="lg:col-span-1">
                     {thumbnailUrl ? (
                       <div className="relative aspect-video bg-gray-100 rounded-lg overflow-hidden">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={thumbnailUrl}
                           alt={video.title || '유튜브 동영상'}

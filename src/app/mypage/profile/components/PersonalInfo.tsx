@@ -42,6 +42,7 @@ const PersonalInfo: React.FC<PersonalInfoProps> = ({
           {/* 프로필 사진 표시 */}
           <div className="relative w-32 h-32 rounded-full overflow-hidden border-2 border-gray-200 bg-gray-100">
             {artistPhotoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={artistPhotoUrl}
                 alt={`${data.display_name}의 프로필 사진`}

@@ -405,6 +405,7 @@ const MediaManager: React.FC<MediaManagerProps> = ({
               {/* 미리보기 또는 아이콘 */}
               <div className="flex-shrink-0">
                 {file.preview ? (
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={file.preview}
                     alt={file.file.name}
@@ -480,6 +481,7 @@ const MediaManager: React.FC<MediaManagerProps> = ({
               {/* 미리보기 또는 아이콘 */}
               <div className="flex-shrink-0">
                 {file.type.startsWith('image/') ? (
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={file.public_url}
                     alt={file.name}

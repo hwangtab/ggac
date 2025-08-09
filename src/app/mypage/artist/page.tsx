@@ -150,6 +150,7 @@ export default function ArtistPage() {
               <div className="flex items-start space-x-4">
                 {artist.profile_image && (
                   <div className="flex-shrink-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={artist.profile_image}
                       alt={artist.name}
