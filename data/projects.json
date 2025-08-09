@@ -113,5 +113,27 @@
       }
     ],
     "relatedArticles": null
+  },
+  {
+    "id": "project-006",
+    "slug": "hyper-no-sis",
+    "title": "HYPER_NO_SIS",
+    "category": "공연·전시",
+    "publishedDate": "2025-08-17",
+    "coverImage": "/images/projects/hypernosis.png",
+    "description": "세 명의 싱어송라이터와 한 명의 전자음악가가 만나 새로운 음악이 탄생하는 순간을 함께 해 주세요.\n\n### 참여 아티스트\n\n**Jisu** @jisu.music  \nJISU는 온 마음을 쓴다. 온갖 다양한 마음에 대해 쓰는 아티스트이며 또, 마음을 많이 써서 가사와 음악을 만드는 아티스트다.\n\n**Summertigers** @jang.summer.tigers  \n\"8월 19일 생일인 사람\"\n\n**Dos Chillos** @yahoyahodan  \n증상: 기막힘 / 처방: 주먹 도수치료\n\n**Soyeon** @mis_aaaa00\n\n### 공연 정보\n\n**일시**: 2025.08.17 (일) 오픈 18:00 / 시작 18:30  \n**장소**: D.O.T / 수원 행궁동 @d.o.t_kr  \n**가격**: 예매 15,000원 / 현매 20,000원  \n**할인**: 경기아트콜렉티브협동조합 조합원 예매 5,000원 할인 @ggartcollective  \n**기획**: 야호야호단 @yahoyahodan",
+    "gallery": null,
+    "videoUrl": null,
+    "artistIds": ["artist-001"],
+    "ticketing": [
+      {
+        "platform": "네이버 예약",
+        "url": "https://booking.naver.com/booking/5/bizes/1442738/items/6973361?fbclid=PAZXh0bgNhZW0CMTEAAaduKPyKuum9F30S8azjmwshuGtJycEzctNhXGyCMBLjooiOqZ7lkJxOkJDXXw_aem_FgQrpXIrZmB2hghR1Q_daA&startDateTime=2025-08-17T00%3A00%3A00%2B09%3A00",
+        "available": true,
+        "startDate": "2025-08-01",
+        "endDate": "2025-08-17"
+      }
+    ],
+    "relatedArticles": null
   }
 ]
