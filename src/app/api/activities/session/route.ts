@@ -6,8 +6,36 @@ import { sanitizeInput } from '@/utils/security'
 
 /**
  * 사용자 세션 관리 API
- * POST /api/activities/session
+ * GET /api/activities/session - 현재 세션 상태 확인
+ * POST /api/activities/session - 세션 관리
  */
+
+export const dynamic = 'force-dynamic'
+
+/**
+ * 현재 세션 상태 확인
+ */
+export async function GET(request: NextRequest) {
+  return withRateLimit('GENERAL_API')(async () => {
+    try {
+      const supabase = createRouteHandlerClient({ cookies })
+      const { data: { session }, error } = await supabase.auth.getSession()
+
+      if (error) {
+        return NextResponse.json({ error: '세션 확인 실패' }, { status: 500 })
+      }
+
+      return NextResponse.json({ 
+        authenticated: !!session?.user,
+        user_id: session?.user?.id || null,
+        expires_at: session?.expires_at || null
+      })
+    } catch (error) {
+      console.error('세션 GET API 오류:', error)
+      return NextResponse.json({ error: '서버 오류' }, { status: 500 })
+    }
+  })(request)
+}
 export async function POST(request: NextRequest) {
   return withRateLimit('GENERAL_API')(async () => {
     try {

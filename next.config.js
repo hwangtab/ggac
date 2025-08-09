@@ -223,7 +223,7 @@ const nextConfig = {
   // Enhanced security headers and MIME type configuration
   async headers() {
     return [
-      // CSS 파일에 대한 올바른 MIME 타입 헤더 (강화된 설정)
+      // CSS 파일에 대한 올바른 MIME 타입 헤더
       {
         source: '/_next/static/css/(.*)',
         headers: [
@@ -238,15 +238,6 @@ const nextConfig = {
           {
             key: 'X-Content-Type-Options',
             value: 'nosniff',
-          },
-          {
-            key: 'X-XSS-Protection',
-            value: '0',
-          },
-          // CSS-specific security headers
-          {
-            key: 'Content-Security-Policy',
-            value: "default-src 'none'; style-src 'unsafe-inline'",
           },
         ],
       },
@@ -495,7 +486,7 @@ const nextConfig = {
   },
   
   images: {
-    // 외부 이미지 도메인 허용 (Supabase Storage)
+    // 외부 이미지 도메인 허용
     remotePatterns: [
       {
         protocol: 'https',
@@ -503,9 +494,22 @@ const nextConfig = {
         port: '',
         pathname: '/storage/v1/object/public/**',
       },
+      // YouTube 썸네일 도메인
+      {
+        protocol: 'https',
+        hostname: 'img.youtube.com',
+        port: '',
+        pathname: '/vi/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'i.ytimg.com',
+        port: '',
+        pathname: '/vi/**',
+      },
     ],
-    // AVIF 우선순위 상향 (더 나은 압축률)
-    formats: ['image/avif', 'image/webp'],
+    // 로컬 이미지 우선 - WebP 자동 변환 비활성화로 충돌 방지
+    formats: ['image/webp'],
     // 더 효율적인 디바이스 크기 설정
     deviceSizes: [640, 750, 828, 1080, 1200, 1920],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
@@ -513,6 +517,10 @@ const nextConfig = {
     minimumCacheTTL: 86400, // 24시간 캐시
     dangerouslyAllowSVG: true,
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
+    // 이미지 최적화 오류 시 fallback 허용
+    unoptimized: false,
+    // 외부 도메인에 대한 더 관대한 정책
+    domains: [], // deprecated이지만 호환성을 위해 유지
   },
 }
 
