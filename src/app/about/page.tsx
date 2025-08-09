@@ -5,7 +5,54 @@ import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
   title: '우리의 이야기 | 경기아트콜렉티브 협동조합',
-  description: '우리는 예술로 숨 쉬고, 협동으로 길을 냅니다.',
+  description: '경기도를 기반으로 활동하는 예술가들이 모여 설립한 생산자 협동조합. 예술로 숨 쉬고, 협동으로 길을 내어 지속가능한 창작 생태계를 만들어갑니다.',
+  keywords: [
+    '경기아트콜렉티브', '협동조합', '경기도', '예술가', '창작자', '생산자협동조합', 
+    '예술교육', '음반제작', '공연기획', '문화예술', '지역예술', '예술생태계'
+  ],
+  authors: [{ name: '경기아트콜렉티브 협동조합' }],
+  creator: '경기아트콜렉티브 협동조합',
+  publisher: '경기아트콜렉티브 협동조합',
+  metadataBase: new URL('https://ggac.kr'),
+  alternates: {
+    canonical: '/about',
+    languages: {
+      'ko-KR': '/about',
+    },
+  },
+  openGraph: {
+    title: '우리의 이야기 | 경기아트콜렉티브 협동조합',
+    description: '경기도를 기반으로 활동하는 예술가들이 모여 설립한 생산자 협동조합. 예술로 숨 쉬고, 협동으로 길을 내어 지속가능한 창작 생태계를 만들어갑니다.',
+    url: 'https://ggac.kr/about',
+    siteName: '경기아트콜렉티브 협동조합',
+    images: [
+      {
+        url: '/images/logo/gac_og_branded.webp',
+        width: 1200,
+        height: 630,
+        alt: '경기아트콜렉티브 협동조합 - 우리의 이야기',
+      },
+    ],
+    locale: 'ko_KR',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: '우리의 이야기 | 경기아트콜렉티브 협동조합',
+    description: '예술로 숨 쉬고, 협동으로 길을 내어 지속가능한 창작 생태계를 만들어갑니다.',
+    images: ['/images/logo/gac_og_branded.webp'],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
 }
 
 const AboutPage = async () => {

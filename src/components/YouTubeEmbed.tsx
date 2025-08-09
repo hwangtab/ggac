@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
+import Image from 'next/image'
 import { FiPlay, FiExternalLink } from 'react-icons/fi'
 
 interface YouTubeEmbedProps {
@@ -66,14 +67,14 @@ const YouTubeEmbed: React.FC<YouTubeEmbedProps> = ({ videoUrl, title }) => {
         {!isLoaded ? (
           // 썸네일과 플레이 버튼
           <div className="relative w-full h-full cursor-pointer" onClick={() => setIsLoaded(true)}>
-            <img
+            <Image
               src={thumbnailUrl}
-              alt={title}
-              className="w-full h-full object-cover transition-all duration-500 group-hover:scale-105"
-              onError={(e) => {
-                // 썸네일 로드 실패 시 기본 썸네일 사용
-                const target = e.target as HTMLImageElement
-                target.src = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
+              alt={`${title} YouTube 비디오 썸네일`}
+              fill
+              className="object-cover transition-all duration-500 group-hover:scale-105"
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+              onError={() => {
+                // 썸네일 로드 실패는 Next.js Image에서 자동 처리됨
               }}
             />
             

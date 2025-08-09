@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, memo } from 'react'
+import Image from 'next/image'
 import type { TicketingInfo, LinkPreview, TicketingCardProps } from '@/types'
 
 const TicketingCard = ({ ticketing }: TicketingCardProps) => {
@@ -124,11 +125,13 @@ const TicketingCard = ({ ticketing }: TicketingCardProps) => {
         className="block"
       >
         {preview.image ? (
-          <div className="aspect-video bg-gray-100">
-            <img 
+          <div className="aspect-video bg-gray-100 relative">
+            <Image 
               src={preview.image} 
-              alt={preview.title}
-              className="w-full h-full object-cover"
+              alt={`${preview.title || ticketing.title} 티켓 미리보기`}
+              fill
+              className="object-cover"
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
               onError={(e) => {
                 // 이미지 로드 실패 시 fallback - XSS 방지를 위한 안전한 DOM 조작
                 const target = e.target as HTMLImageElement
@@ -190,15 +193,18 @@ const TicketingCard = ({ ticketing }: TicketingCardProps) => {
           <div className="flex items-center justify-between text-xs text-gray-500">
             <div className="flex items-center">
               {preview.favicon && (
-                <img 
-                  src={preview.favicon} 
-                  alt=""
-                  className="w-4 h-4 mr-1"
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement
-                    target.style.display = 'none'
-                  }}
-                />
+                <div className="relative w-4 h-4 mr-1">
+                  <Image 
+                    src={preview.favicon} 
+                    alt=""
+                    width={16}
+                    height={16}
+                    className="object-contain"
+                    onError={() => {
+                      // favicon 로드 실패 시 숨김
+                    }}
+                  />
+                </div>
               )}
               <span className="truncate">
                 {preview.siteName || new URL(ticketing.url).hostname}

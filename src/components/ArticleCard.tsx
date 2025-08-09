@@ -2,6 +2,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, memo } from 'react'
+import Image from 'next/image'
 import type { LinkPreview, ArticleInfo, ArticleCardProps } from '@/types'
 
 const ArticleCard = ({ article }: ArticleCardProps) => {
@@ -88,40 +89,16 @@ const ArticleCard = ({ article }: ArticleCardProps) => {
         className="block"
       >
         {preview.image ? (
-          <div className="aspect-video bg-gray-100">
-            <img 
+          <div className="aspect-video bg-gray-100 relative">
+            <Image 
               src={preview.image} 
-              alt={preview.title}
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                const target = e.target as HTMLImageElement
-                target.style.display = 'none'
-                const parent = target.parentElement
-                if (parent) {
-                  // innerHTML 대신 안전한 DOM 조작 사용
-                  while (parent.firstChild) {
-                    parent.removeChild(parent.firstChild);
-                  }
-                  
-                  const fallbackDiv = document.createElement('div')
-                  fallbackDiv.className = 'w-full h-full bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center'
-                  
-                  const centerDiv = document.createElement('div')
-                  centerDiv.className = 'text-center'
-                  
-                  const iconDiv = document.createElement('div')
-                  iconDiv.className = 'text-2xl mb-2'
-                  iconDiv.textContent = '📰'
-                  
-                  const textDiv = document.createElement('div')
-                  textDiv.className = 'text-blue-600 font-medium'
-                  textDiv.textContent = (preview.siteName || article.title) || '기사 제목'
-                  
-                  centerDiv.appendChild(iconDiv)
-                  centerDiv.appendChild(textDiv)
-                  fallbackDiv.appendChild(centerDiv)
-                  parent.appendChild(fallbackDiv)
-                }
+              alt={preview.title || article.title || '기사 이미지'}
+              fill
+              className="object-cover"
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+              onError={() => {
+                // Next.js Image의 onError는 제한적이므로 fallback UI를 state로 관리
+                setHasError(true)
               }}
             />
           </div>
@@ -148,15 +125,18 @@ const ArticleCard = ({ article }: ArticleCardProps) => {
           <div className="flex items-center justify-between text-xs text-gray-500">
             <div className="flex items-center">
               {preview.favicon && (
-                <img 
-                  src={preview.favicon} 
-                  alt=""
-                  className="w-4 h-4 mr-1"
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement
-                    target.style.display = 'none'
-                  }}
-                />
+                <div className="relative w-4 h-4 mr-1">
+                  <Image 
+                    src={preview.favicon} 
+                    alt=""
+                    width={16}
+                    height={16}
+                    className="object-contain"
+                    onError={() => {
+                      // favicon 로드 실패 시 숨김
+                    }}
+                  />
+                </div>
               )}
               <span className="truncate">
                 {preview.siteName || new URL(article.url).hostname}
