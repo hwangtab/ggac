@@ -229,8 +229,9 @@ const PostAttachmentsDisplay: React.FC<PostAttachmentsDisplayProps> = ({
               </svg>
             </button>
             
-            {/* 이미지 */}
+            {/* 이미지 - 외부 업로드 이미지이므로 <img> 태그 사용 */}
             <div className="relative" onClick={(e) => e.stopPropagation()}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={selectedImage.file_url}
                 alt={selectedImage.alt_text || selectedImage.file_name}

@@ -37,6 +37,7 @@ const ImageModal: React.FC<ImageModalProps> = ({ attachment, onClose }) => {
         >
           <FiX className="w-8 h-8" />
         </button>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={attachment.file_url}
           alt={attachment.alt_text || attachment.file_name}
