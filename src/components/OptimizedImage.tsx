@@ -20,22 +20,49 @@ const OptimizedImage = memo(function OptimizedImage({
 }: OptimizedImageProps) {
   const [hasError, setHasError] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [currentSrc, setCurrentSrc] = useState(src)
 
-  // 이미지 상태 초기화
+  // 이미지 상태 초기화 및 fallback 로직
   useEffect(() => {
-    // Next.js Image 컴포넌트의 자동 최적화에 의존
     setHasError(false)
     setIsLoading(true)
+    setCurrentSrc(src)
   }, [src])
 
   const handleError = () => {
+    // WebP에서 JPG로 fallback 시도
+    if (currentSrc.endsWith('.webp')) {
+      const jpgSrc = currentSrc.replace('.webp', '.jpg')
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`Image failed to load: ${currentSrc}, trying fallback: ${jpgSrc}`)
+      }
+      setCurrentSrc(jpgSrc)
+      setIsLoading(true)
+      return
+    }
+    
+    // JPG에서 PNG로 fallback 시도 (드물지만 가능한 경우)
+    if (currentSrc.endsWith('.jpg')) {
+      const pngSrc = currentSrc.replace('.jpg', '.png')
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`Image failed to load: ${currentSrc}, trying PNG fallback: ${pngSrc}`)
+      }
+      setCurrentSrc(pngSrc)
+      setIsLoading(true)
+      return
+    }
+    
     setHasError(true)
-    console.log(`Image failed to load: ${src}`)
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`Image failed to load: ${currentSrc}`)
+    }
   }
 
   const handleLoad = () => {
     setIsLoading(false)
-    console.log(`Image loaded: ${src}`)
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`Image loaded: ${currentSrc}`)
+    }
   }
 
   if (hasError) {
@@ -49,7 +76,7 @@ const OptimizedImage = memo(function OptimizedImage({
   }
 
   const imageProps = {
-    src,
+    src: currentSrc,
     alt,
     quality,
     priority,
@@ -58,7 +85,7 @@ const OptimizedImage = memo(function OptimizedImage({
     className,
     // Next.js가 자동으로 WebP/AVIF 변환하므로 placeholder는 기본값 사용
     placeholder: 'blur' as const,
-    blurDataURL: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABIAAgACgAKAAoADhCSVqcGzAAAAAElFTkSuQmCC',
+    blurDataURL: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAIAAoDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAhEAACAQMDBQAAAAAAAAAAAAABAgMABAUGIWGRkqGx0f/EABUBAQEAAAAAAAAAAAAAAAAAAAMF/8QAGhEAAgIDAAAAAAAAAAAAAAAAAAECEgMRkf/aAAwDAQACEQMRAD8AltJagyeH0AthI5xdrLcNM91BF5pX2HaH9bcfaSXWGaRmknyJckliyjqTzSlT54b6bk+h0R//2Q==',
     ...(fill 
       ? { 
           fill: true, 
