@@ -244,14 +244,24 @@ textarea:focus-visible {
 @layer base {
   html {
     scroll-behavior: smooth;
+    max-width: 100vw;
+    overflow-x: hidden;
   }
   
   body {
     @apply font-sans text-gray-900 bg-white;
+    max-width: 100vw;
     overflow-x: hidden;
     word-break: keep-all;
     overflow-wrap: break-word;
     hyphens: none;
+    position: relative;
+  }
+
+  /* 모든 요소에 box-sizing 강제 적용 */
+  *, *::before, *::after {
+    box-sizing: border-box;
+    max-width: 100%;
   }
   
   /* 모든 텍스트 요소에 한글 친화적 줄바꿈 적용 */

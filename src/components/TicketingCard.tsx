@@ -128,7 +128,7 @@ const TicketingCard = ({ ticketing }: TicketingCardProps) => {
           <div className="aspect-video bg-gray-100 relative">
             <Image 
               src={preview.image} 
-              alt={`${preview.title || ticketing.title} 티켓 미리보기`}
+              alt={`${preview.title || ticketing.platform} 티켓 미리보기`}
               fill
               className="object-cover"
               sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
