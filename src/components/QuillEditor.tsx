@@ -230,6 +230,13 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
         style={{ height: height }}
       />
       <style jsx global>{`
+        .quill-editor-container {
+          max-width: 100%;
+          word-wrap: break-word;
+          overflow-wrap: anywhere;
+          overflow-x: hidden;
+        }
+        
         .quill-editor-container .ql-container {
           font-family: "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
           font-size: 14px;
@@ -306,6 +313,9 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
           font-family: 'Courier New', monospace;
           font-size: 13px;
           overflow-x: auto;
+          max-width: 100%;
+          word-break: break-all;
+          overflow-wrap: anywhere;
         }
 
         /* 인라인 코드 스타일링 */

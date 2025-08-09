@@ -232,8 +232,8 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
             
             <div className={`${isMinimal ? 'text-center' : 'grid lg:grid-cols-2 gap-8 items-center'}`}>
               {/* Profile Image */}
-              <div className={`${isMinimal ? 'mb-8' : ''}`}>
-                <div className={`${isMinimal ? 'w-64 h-64 sm:w-80 sm:h-80 md:w-96 md:h-96 mx-auto' : 'w-64 h-64 sm:w-80 sm:h-80 md:w-96 md:h-96'} overflow-hidden rounded-full`}>
+              <div className={`${isMinimal ? 'mb-8' : ''} flex justify-center`}>
+                <div className={`${isMinimal ? 'w-48 h-48 sm:w-64 sm:h-64 md:w-80 md:h-80 lg:w-96 lg:h-96 max-w-[90vw] max-h-[90vw]' : 'w-48 h-48 sm:w-64 sm:h-64 md:w-80 md:h-80 lg:w-96 lg:h-96 max-w-[40vw] max-h-[40vw]'} overflow-hidden rounded-full relative`}>
                   <OptimizedImage
                     src={artist.profileImage}
                     alt={artist.name}
@@ -390,14 +390,14 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
               </div>
 
               {/* 포트폴리오 링크들 */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 max-w-6xl mx-auto px-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 max-w-6xl mx-auto px-4 overflow-hidden">
                 {artist.portfolioLinks.map((link, index) => (
                   <a
                     key={index}
                     href={link.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="group relative overflow-hidden bg-white/70 backdrop-blur-sm rounded-2xl p-4 sm:p-6 shadow-lg border border-white/20 hover:shadow-2xl hover:scale-105 transition-all duration-300 min-w-0"
+                    className="group relative overflow-hidden bg-white/70 backdrop-blur-sm rounded-2xl p-4 sm:p-6 shadow-lg border border-white/20 hover:shadow-2xl hover:scale-105 transition-all duration-300 min-w-0 break-words"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex-1 min-w-0">
@@ -446,7 +446,7 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
 
                 {/* 비디오 그리드 */}
                 <div className={`
-                  grid gap-6 sm:gap-8 px-4
+                  grid gap-6 sm:gap-8 px-4 overflow-hidden
                   ${artist.youtubeVideos.length === 1 
                     ? 'grid-cols-1 max-w-3xl mx-auto' 
                     : artist.youtubeVideos.length === 2 
