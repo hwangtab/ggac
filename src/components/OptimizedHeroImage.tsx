@@ -77,7 +77,7 @@ const OptimizedHeroImage = ({
       {/* 메인 이미지 - AVIF/WebP/PNG 폴백 */}
       <picture>
         <source srcSet="/images/hero.avif" type="image/avif" />
-        <source srcSet="/images/hero.webp" type="image/webp" />
+        
         <Image
           src="/images/hero.png"
           alt={alt}

@@ -6,11 +6,11 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
 const nextConfig = {
   reactStrictMode: true,
   
-  // Transpile packages for client-side compatibility
+  // 최적화된 transpile 패키지 목록 - 필수만 유지
   transpilePackages: [
     '@supabase/auth-helpers-nextjs',
-    '@supabase/supabase-js',
-    'react-markdown'
+    '@supabase/supabase-js'
+    // react-markdown 제거: 이미 최적화된 패키지이므로 불필요
   ],
   
   // 번들 최적화 설정
@@ -495,11 +495,12 @@ const nextConfig = {
         pathname: '/storage/v1/object/public/**',
       },
     ],
-    formats: ['image/webp', 'image/avif'],
+    // AVIF 우선순위 상향 (더 나은 압축률)
+    formats: ['image/avif', 'image/webp'],
     // 더 효율적인 디바이스 크기 설정
     deviceSizes: [640, 750, 828, 1080, 1200, 1920],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
-    // 더 공격적인 최적화를 위한 설정
+    // 성능 vs 품질 밸런스를 위한 최적화
     minimumCacheTTL: 86400, // 24시간 캐시
     dangerouslyAllowSVG: true,
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",

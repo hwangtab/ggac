@@ -1,6 +1,79 @@
 import fs from 'fs'
 import path from 'path'
 import { cache } from 'react'
+
+// 메모리 효율을 위한 고급 캐시 관리
+interface CacheEntry<T> {
+  data: T
+  timestamp: number
+  hits: number
+}
+
+class MemoryEfficientCache<T> {
+  private cache = new Map<string, CacheEntry<T>>()
+  private maxSize = 100 // 최대 캐시 항목 수
+  private maxAge = 300000 // 5분 TTL
+  
+  get(key: string): T | null {
+    const entry = this.cache.get(key)
+    if (!entry) return null
+    
+    // TTL 체크
+    if (Date.now() - entry.timestamp > this.maxAge) {
+      this.cache.delete(key)
+      return null
+    }
+    
+    // 히트 카운트 증가
+    entry.hits++
+    return entry.data
+  }
+  
+  set(key: string, data: T): void {
+    // 캐시 크기 관리 - LRU 기반 제거
+    if (this.cache.size >= this.maxSize) {
+      this.evictLeastUsed()
+    }
+    
+    this.cache.set(key, {
+      data,
+      timestamp: Date.now(),
+      hits: 0
+    })
+  }
+  
+  private evictLeastUsed(): void {
+    let leastUsedKey = ''
+    let leastHits = Infinity
+    
+    for (const [key, entry] of this.cache.entries()) {
+      if (entry.hits < leastHits) {
+        leastHits = entry.hits
+        leastUsedKey = key
+      }
+    }
+    
+    if (leastUsedKey) {
+      this.cache.delete(leastUsedKey)
+    }
+  }
+  
+  clear(): void {
+    this.cache.clear()
+  }
+}
+
+// 전역 캐시 인스턴스 - 런타임에만 생성
+let artistCache: MemoryEfficientCache<Artist[]> | null = null
+let projectCache: MemoryEfficientCache<Project[]> | null = null
+
+// 캐시 초기화 함수
+function initCaches() {
+  if (typeof window === 'undefined' && !artistCache) {
+    artistCache = new MemoryEfficientCache<Artist[]>()
+    projectCache = new MemoryEfficientCache<Project[]>()
+  }
+}
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 
@@ -34,6 +107,13 @@ const DEFAULT_GLOBAL_DATA: GlobalData = {
 
 // Supabase에서 전체 아티스트 목록 조회 (데이터베이스 우선, JSON 파일 백업)
 export const getArtistsFromDB = cache(async (): Promise<Artist[]> => {
+  initCaches()
+  
+  // 고급 캐시에서 먼저 확인
+  const cached = artistCache?.get('artists')
+  if (cached) {
+    return cached
+  }
   try {
     // 정적 생성 시점에서도 접근 가능하도록 createClient 사용
     const { createClient } = await import('@supabase/supabase-js')
@@ -49,18 +129,24 @@ export const getArtistsFromDB = cache(async (): Promise<Artist[]> => {
       .order('created_at', { ascending: true })
     
     if (!error && dbArtists && dbArtists.length > 0) {
-      return dbArtists.map(convertDatabaseArtistToArtist)
+      const result = dbArtists.map(convertDatabaseArtistToArtist)
+      artistCache?.set('artists', result)
+      return result
     }
     
     // 데이터베이스에 데이터가 없으면 JSON 파일에서 조회 (백업)
     console.log('No artists found in database, falling back to JSON')
-    return await getArtistsFromJSON()
+    const fallbackResult = await getArtistsFromJSON()
+    artistCache?.set('artists', fallbackResult)
+    return fallbackResult
     
   } catch (error) {
     console.error('Error fetching artists from database:', error)
     
     // 오류 발생 시 JSON 파일에서 조회 (백업)
-    return await getArtistsFromJSON()
+    const errorFallbackResult = await getArtistsFromJSON()
+    artistCache?.set('artists', errorFallbackResult)
+    return errorFallbackResult
   }
 })
 
@@ -80,13 +166,25 @@ export const getArtistsFromJSON = cache(async (): Promise<Artist[]> => {
 export const getArtists = getArtistsFromDB
 
 export const getProjects = cache(async (): Promise<Project[]> => {
+  initCaches()
+  
+  // 고급 캐시에서 먼저 확인
+  const cached = projectCache?.get('projects')
+  if (cached) {
+    return cached
+  }
+  
   try {
     const filePath = path.join(process.cwd(), 'data/projects.json')
     const fileContents = await fs.promises.readFile(filePath, 'utf8')
-    return JSON.parse(fileContents)
+    const result = JSON.parse(fileContents)
+    projectCache?.set('projects', result)
+    return result
   } catch (error) {
     console.error('Error loading projects data:', error)
-    return []
+    const emptyResult: Project[] = []
+    projectCache?.set('projects', emptyResult)
+    return emptyResult
   }
 })
 
@@ -100,6 +198,9 @@ export const getGlobalData = cache(async (): Promise<GlobalData> => {
     return DEFAULT_GLOBAL_DATA
   }
 })
+
+// ISR 최적화를 위한 revalidate 설정
+export const revalidate = 86400 // 24시간 (전역 설정은 거의 변경되지 않음)
 
 // DatabaseArtist를 Artist 타입으로 변환하는 함수
 function convertDatabaseArtistToArtist(dbArtist: DatabaseArtist): Artist {

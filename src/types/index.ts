@@ -1580,10 +1580,10 @@ export interface OptimizedImageProps {
   quality?: number
   /** 이미지 로드 실패 시 표시할 텍스트 */
   fallbackText?: string
-  /** WEBP 우선 사용 여부 */
-  preferWebp?: boolean
   /** 원본 비율 유지 여부 */
   preserveAspectRatio?: boolean
+  /** @deprecated preferWebp는 더 이상 사용되지 않음. Next.js가 자동으로 AVIF/WebP 선택 */
+  preferWebp?: boolean
 }
 
 /**

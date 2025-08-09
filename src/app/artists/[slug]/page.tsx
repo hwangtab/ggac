@@ -10,6 +10,9 @@ import { getArtistSlugs, getArtistBySlug, getArtistProjects, type Artist } from 
 import type { Metadata } from 'next'
 import { sanitizeJsonLd } from '@/utils/sanitize'
 
+// ISR 최적화: 개별 아티스트 페이지는 12시간 캐시
+export const revalidate = 43200
+
 interface ArtistPageProps {
   params: Promise<{
     slug: string

@@ -13,9 +13,9 @@ const OptimizedImage = memo(function OptimizedImage({
   priority = false,
   fill = false,
   sizes,
-  quality = 85,
+  quality = 75, // Next.js config의 기본값과 일치
   fallbackText,
-  preferWebp = true,
+  // preferWebp 제거: Next.js가 자동으로 AVIF/WebP 선택
   preserveAspectRatio = false
 }: OptimizedImageProps) {
   const [hasError, setHasError] = useState(false)
@@ -62,12 +62,13 @@ const OptimizedImage = memo(function OptimizedImage({
     ...(fill 
       ? { 
           fill: true, 
-          sizes: sizes || '(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw'
+          // 더 세밀한 sizes 속성으로 대역폭 최적화
+          sizes: sizes || '(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw'
         }
       : { 
           width: width || 800, 
           height: height || 600,
-          sizes: sizes || '(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw'
+          sizes: sizes || '(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw'
         }
     )
   }

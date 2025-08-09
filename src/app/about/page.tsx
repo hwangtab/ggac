@@ -3,6 +3,9 @@ import Link from 'next/link'
 import { getProjects } from '@/lib/data'
 import type { Metadata } from 'next'
 
+// ISR 최적화: 정적 콘텐츠는 24시간 캐시
+export const revalidate = 86400
+
 export const metadata: Metadata = {
   title: '우리의 이야기 | 경기아트콜렉티브 협동조합',
   description: '경기도를 기반으로 활동하는 예술가들이 모여 설립한 생산자 협동조합. 예술로 숨 쉬고, 협동으로 길을 내어 지속가능한 창작 생태계를 만들어갑니다.',
