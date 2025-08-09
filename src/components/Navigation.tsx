@@ -112,7 +112,7 @@ const Navigation = () => {
             : 'bg-white/90 backdrop-blur-md shadow-sm'
       }`}>
       <div className="container-custom">
-        <div className="flex items-center justify-between h-16 md:h-20">
+        <div className="flex items-center justify-between h-16 md:h-20 overflow-x-hidden">
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-3">
             <div className={`relative w-10 h-10 transition-all duration-300 ${
@@ -215,11 +215,11 @@ const Navigation = () => {
           </div>
 
           {/* Tablet Menu */}
-          <div className="hidden md:flex lg:hidden items-center space-x-3">
+          <div className="hidden md:flex lg:hidden items-center space-x-2 flex-shrink-0">
             {/* Simplified tablet menu with key items */}
             <Link
               href="/"
-              className={`font-medium transition-colors duration-300 text-sm ${
+              className={`font-medium transition-colors duration-300 text-xs ${
                 pathname === '/' ? activeColor : `${textColor} ${hoverColor}`
               }`}
             >
@@ -227,7 +227,7 @@ const Navigation = () => {
             </Link>
             <Link
               href="/about"
-              className={`font-medium transition-colors duration-300 text-sm ${
+              className={`font-medium transition-colors duration-300 text-xs ${
                 pathname === '/about' ? activeColor : `${textColor} ${hoverColor}`
               }`}
             >
@@ -235,23 +235,23 @@ const Navigation = () => {
             </Link>
             <Link
               href="/archive"
-              className={`font-medium transition-colors duration-300 text-sm ${
+              className={`font-medium transition-colors duration-300 text-xs ${
                 pathname === '/archive' ? activeColor : `${textColor} ${hoverColor}`
               }`}
             >
-              PROJECTS
+              PROJECT
             </Link>
             <Link
               href="/artists"
-              className={`font-medium transition-colors duration-300 text-sm ${
+              className={`font-medium transition-colors duration-300 text-xs ${
                 pathname === '/artists' ? activeColor : `${textColor} ${hoverColor}`
               }`}
             >
-              ARTISTS
+              ARTIST
             </Link>
             <Link
               href="/board"
-              className={`font-medium transition-colors duration-300 text-sm ${
+              className={`font-medium transition-colors duration-300 text-xs ${
                 pathname === '/board' ? activeColor : `${textColor} ${hoverColor}`
               }`}
               onClick={(e) => {
@@ -260,17 +260,10 @@ const Navigation = () => {
             >
               BOARD
             </Link>
-            <Link
-              href="/connect"
-              className={`font-medium transition-colors duration-300 text-sm ${
-                pathname === '/connect' ? activeColor : `${textColor} ${hoverColor}`
-              }`}
-            >
-              CONNECT
-            </Link>
+            {/* CONNECT는 모바일 메뉴로만 접근 가능하게 변경 */}
             
             {/* Tablet Auth Section */}
-            <div className="flex items-center space-x-2 ml-2 pl-2 border-l border-gray-300/20">
+            <div className="flex items-center space-x-1 ml-1 pl-1 border-l border-gray-300/20">
               {user ? (
                 <>
                   <Link
