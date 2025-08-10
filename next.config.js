@@ -404,9 +404,9 @@ const nextConfig = {
           },
         ],
       },
-      // CSS 파일 제외 - MIME 타입 충돌 방지
+      // 모든 정적 파일 제외 - MIME 타입 충돌 완전 방지
       {
-        source: '/((?!api|_next/static/css).*)',
+        source: '/((?!api|_next/static).*)',
         headers: [
           {
             key: 'X-Content-Type-Options',
