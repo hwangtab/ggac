@@ -404,9 +404,9 @@ const nextConfig = {
           },
         ],
       },
-      // 모든 정적 파일 제외 - MIME 타입 충돌 완전 방지
+      // 정적 파일과 API 제외 - MIME 타입 충돌 방지
       {
-        source: '/((?!api|_next/static).*)',
+        source: '/((?!api|_next/static/css|_next/static/js|_next/static/chunks).*)',
         headers: [
           {
             key: 'X-Content-Type-Options',
