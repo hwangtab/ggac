@@ -22,64 +22,22 @@ const OptimizedImage = memo(function OptimizedImage({
   const [isLoading, setIsLoading] = useState(true)
   const [currentSrc, setCurrentSrc] = useState(src)
 
-  // 이미지 경로 사전 변환 함수
-  const getOptimalImageSrc = (originalSrc: string): string => {
-    // 외부 URL은 그대로 사용
-    if (originalSrc.startsWith('http')) {
-      return originalSrc
-    }
-    
-    // 로컬 이미지의 경우 실제 존재하는 파일 확장자로 변환
-    if (originalSrc.includes('/images/artists/') && originalSrc.endsWith('.webp')) {
-      // 아티스트 이미지는 주로 JPG로 존재
-      return originalSrc.replace('.webp', '.jpg')
-    }
-    
-    return originalSrc
-  }
-
-  // 이미지 상태 초기화 및 사전 변환
+  // 이미지 상태 초기화 - Next.js가 모든 최적화 처리
   useEffect(() => {
     setHasError(false)
     setIsLoading(true)
-    const optimalSrc = getOptimalImageSrc(src)
-    setCurrentSrc(optimalSrc)
+    setCurrentSrc(src)
   }, [src])
 
   const handleError = () => {
-    // WebP에서 JPG로 fallback 시도
-    if (currentSrc.endsWith('.webp')) {
-      const jpgSrc = currentSrc.replace('.webp', '.jpg')
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`Image failed to load: ${currentSrc}, trying fallback: ${jpgSrc}`)
-      }
-      setCurrentSrc(jpgSrc)
-      setIsLoading(true)
-      return
-    }
-    
-    // JPG에서 PNG로 fallback 시도 (드물지만 가능한 경우)
-    if (currentSrc.endsWith('.jpg')) {
-      const pngSrc = currentSrc.replace('.jpg', '.png')
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`Image failed to load: ${currentSrc}, trying PNG fallback: ${pngSrc}`)
-      }
-      setCurrentSrc(pngSrc)
-      setIsLoading(true)
-      return
-    }
-    
+    // Next.js가 모든 형식 변환과 브라우저 호환성을 처리하므로
+    // 에러 시 바로 fallbackText 표시
     setHasError(true)
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`Image failed to load: ${currentSrc}`)
-    }
+    setIsLoading(false)
   }
 
   const handleLoad = () => {
     setIsLoading(false)
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`Image loaded: ${currentSrc}`)
-    }
   }
 
   if (hasError) {
