@@ -30,8 +30,33 @@ const OptimizedImage = memo(function OptimizedImage({
   }, [src])
 
   const handleError = () => {
-    // Next.js가 모든 형식 변환과 브라우저 호환성을 처리하므로
-    // 에러 시 바로 fallbackText 표시
+    // 완전한 이미지 폴백 체인: WebP → JPEG → JPG → PNG
+    
+    // 1단계: WebP → JPEG 시도 (맥 환경 우선)
+    if (currentSrc.endsWith('.webp')) {
+      const jpegSrc = currentSrc.replace('.webp', '.jpeg')
+      setCurrentSrc(jpegSrc)
+      setIsLoading(true)
+      return
+    }
+    
+    // 2단계: JPEG → JPG 시도
+    if (currentSrc.endsWith('.jpeg')) {
+      const jpgSrc = currentSrc.replace('.jpeg', '.jpg')
+      setCurrentSrc(jpgSrc)
+      setIsLoading(true)
+      return
+    }
+    
+    // 3단계: JPG → PNG 시도
+    if (currentSrc.endsWith('.jpg')) {
+      const pngSrc = currentSrc.replace('.jpg', '.png')
+      setCurrentSrc(pngSrc)
+      setIsLoading(true)
+      return
+    }
+    
+    // 최종 실패 시에만 fallbackText 표시
     setHasError(true)
     setIsLoading(false)
   }
