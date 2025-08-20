@@ -393,7 +393,7 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
               </div>
 
               {/* 포트폴리오 링크들 */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 max-w-6xl mx-auto px-4 overflow-hidden">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 max-w-6xl mx-auto px-4 pb-4">
                 {artist.portfolioLinks.map((link, index) => (
                   <a
                     key={index}
