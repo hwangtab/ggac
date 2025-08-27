@@ -13,7 +13,7 @@ const OptimizedImage = memo(function OptimizedImage({
   priority = false,
   fill = false,
   sizes,
-  quality = 75, // Next.js config의 기본값과 일치
+  quality = 80, // 품질과 성능의 최적 균형
   fallbackText,
   // preferWebp 제거: Next.js가 자동으로 AVIF/WebP 선택
   preserveAspectRatio = false
@@ -30,25 +30,17 @@ const OptimizedImage = memo(function OptimizedImage({
   }, [src])
 
   const handleError = () => {
-    // 완전한 이미지 폴백 체인: WebP → JPEG → JPG → PNG
+    // 최적화된 이미지 폴백 체인: WebP → JPG → PNG (JPEG 단계 제거로 속도 향상)
     
-    // 1단계: WebP → JPEG 시도 (맥 환경 우선)
+    // 1단계: WebP → JPG 시도 (가장 일반적인 형식)
     if (currentSrc.endsWith('.webp')) {
-      const jpegSrc = currentSrc.replace('.webp', '.jpeg')
-      setCurrentSrc(jpegSrc)
-      setIsLoading(true)
-      return
-    }
-    
-    // 2단계: JPEG → JPG 시도
-    if (currentSrc.endsWith('.jpeg')) {
-      const jpgSrc = currentSrc.replace('.jpeg', '.jpg')
+      const jpgSrc = currentSrc.replace('.webp', '.jpg')
       setCurrentSrc(jpgSrc)
       setIsLoading(true)
       return
     }
     
-    // 3단계: JPG → PNG 시도
+    // 2단계: JPG → PNG 시도 (최종 폴백)
     if (currentSrc.endsWith('.jpg')) {
       const pngSrc = currentSrc.replace('.jpg', '.png')
       setCurrentSrc(pngSrc)

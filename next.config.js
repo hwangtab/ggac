@@ -509,13 +509,13 @@ const nextConfig = {
         pathname: '/vi/**',
       },
     ],
-    // 로컬 이미지 우선 - WebP 자동 변환 비활성화로 충돌 방지
-    formats: ['image/webp'],
-    // 더 효율적인 디바이스 크기 설정
-    deviceSizes: [640, 750, 828, 1080, 1200, 1920],
+    // 최적화된 이미지 형식 우선순위
+    formats: ['image/webp', 'image/avif'],
+    // 최적화된 디바이스 크기 설정 (불필요한 크기 제거로 성능 향상)
+    deviceSizes: [640, 828, 1200, 1920],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
-    // 성능 vs 품질 밸런스를 위한 최적화
-    minimumCacheTTL: 86400, // 24시간 캐시
+    // 개발환경 최적화: 빠른 업데이트를 위한 단축된 캐시 시간
+    minimumCacheTTL: process.env.NODE_ENV === 'development' ? 3600 : 86400, // 개발: 1시간, 프로덕션: 24시간
     dangerouslyAllowSVG: true,
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
     // 이미지 최적화 오류 시 fallback 허용
