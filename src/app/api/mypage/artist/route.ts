@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 import { z } from 'zod'
+import { updateArtistInJsonFile, commitAndPushJsonChanges } from '@/utils/jsonSync'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -234,6 +235,21 @@ export async function PATCH(request: NextRequest) {
         { error: '아티스트 정보 업데이트에 실패했습니다.' },
         { status: 500 }
       )
+    }
+
+    // JSON 파일 동기화 시도 (백그라운드에서 실행, 실패해도 API 응답에는 영향 없음)
+    try {
+      const jsonUpdateSuccess = await updateArtistInJsonFile(profile.artist_id, updateData)
+      
+      if (jsonUpdateSuccess) {
+        // Git commit/push도 백그라운드에서 실행
+        commitAndPushJsonChanges().catch(error => {
+          console.error('Git commit/push failed (background):', error)
+        })
+        console.log('JSON file sync completed successfully')
+      }
+    } catch (error) {
+      console.error('JSON sync error (non-blocking):', error)
     }
 
     return NextResponse.json({ 
