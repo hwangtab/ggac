@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 import { z } from 'zod'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { updateArtistInJsonFile, commitAndPushJsonChanges } from '@/utils/jsonSync'
 
 export const dynamic = 'force-dynamic'
@@ -237,23 +238,48 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
-    // JSON 파일 동기화 시도 (백그라운드에서 실행, 실패해도 API 응답에는 영향 없음)
+    // 🚀 즉시 캐시 무효화 - 웹사이트에 실시간 반영
     try {
-      const jsonUpdateSuccess = await updateArtistInJsonFile(profile.artist_id, updateData)
-      
-      if (jsonUpdateSuccess) {
-        // Git commit/push도 백그라운드에서 실행
-        commitAndPushJsonChanges().catch(error => {
-          console.error('Git commit/push failed (background):', error)
-        })
-        console.log('JSON file sync completed successfully')
+      // 아티스트 슬러그 조회 (데이터베이스에서)
+      const { data: artistForSlug } = await supabase
+        .from('artists')
+        .select('slug')
+        .eq('legacy_id', profile.artist_id)
+        .single()
+
+      if (artistForSlug?.slug) {
+        // 관련된 모든 페이지의 캐시 무효화
+        revalidatePath(`/artists/${artistForSlug.slug}`) // 개별 아티스트 페이지
+        revalidatePath('/artists') // 아티스트 목록 페이지
+        revalidatePath('/') // 메인 페이지 (featured artists)
+        revalidateTag('artists') // 아티스트 관련 모든 캐시
+        
+        console.log(`Successfully invalidated cache for artist: ${artistForSlug.slug}`)
       }
-    } catch (error) {
-      console.error('JSON sync error (non-blocking):', error)
+    } catch (cacheError) {
+      console.error('Cache invalidation error (non-blocking):', cacheError)
     }
 
+    // JSON 파일 동기화 시도 (백그라운드에서 실행, 실패해도 API 응답에는 영향 없음)
+    // 데이터베이스가 primary source이므로 JSON은 백업/로깅 목적으로만 사용
+    setImmediate(async () => {
+      try {
+        const jsonUpdateSuccess = await updateArtistInJsonFile(profile.artist_id, updateData)
+        
+        if (jsonUpdateSuccess) {
+          // Git commit/push는 완전히 백그라운드에서 실행 (응답 시간에 영향 없음)
+          commitAndPushJsonChanges().catch(error => {
+            console.error('Git commit/push failed (background, non-critical):', error)
+          })
+          console.log('JSON backup sync completed')
+        }
+      } catch (error) {
+        console.error('JSON sync error (non-critical, background):', error)
+      }
+    })
+
     return NextResponse.json({ 
-      message: '아티스트 정보가 성공적으로 업데이트되었습니다.',
+      message: '아티스트 정보가 성공적으로 업데이트되었습니다. 웹사이트에 즉시 반영됩니다.',
       artist: updatedArtist 
     })
 
