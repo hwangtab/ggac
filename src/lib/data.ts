@@ -237,7 +237,11 @@ export const getArtistBySlugFromDB = cache(async (slug: string): Promise<Artist 
       .single()
     
     if (!error && dbArtist) {
-      return convertDatabaseArtistToArtist(dbArtist)
+      const convertedArtist = convertDatabaseArtistToArtist(dbArtist)
+      
+      // 성공적으로 데이터베이스에서 조회했음을 로그
+      console.log(`Successfully fetched artist ${slug} from database`)
+      return convertedArtist
     }
     
     // 데이터베이스에 없으면 JSON 파일에서 조회 (백업)
