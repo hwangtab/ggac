@@ -78,10 +78,12 @@ const ArchiveContent = ({ projects, artists }: ArchiveContentProps) => {
                       <OptimizedImage 
                         src={project.coverImage}
                         alt={project.title}
-                        width={600}
-                        height={400}
+                        width={500} // 더 효율적인 크기로 최적화 (600 → 500)
+                        height={350} // 비율에 맞게 조정 (400 → 350)
                         className="object-cover w-full h-full"
-                        sizes="(max-width: 768px) 100vw, 600px"
+                        sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 500px"
+                        priority={index < 8} // 첫 8개 프로젝트 우선 로딩 (모바일 2열, 데스크톱 3열 기준)
+                        quality={85} // 아티스트 페이지와 동일한 품질
                       />
                       <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors duration-300" />
                     </div>
