@@ -145,8 +145,9 @@ export const usePostsWithPagination = ({
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     
-    // 🚨 임시: 좋아요 새로고침 문제 해결을 위해 실시간 업데이트 완전 비활성화
-    const disableRealtime = true;
+    // ✅ 중복 요청 방지 로직 개선으로 실시간 업데이트 재활성화
+    // 모바일에서는 여전히 비활성화 (성능상 이유)
+    const disableRealtime = false;
     
     if (isMobile || isIOS || disableRealtime) {
       console.log('[REALTIME] 실시간 업데이트 비활성화됨:', { isMobile, isIOS, disableRealtime });

@@ -49,14 +49,32 @@ export default function PostDetailClient({ postId }: PostDetailClientProps) {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // 사용자 인증 확인 (선택적)
+        // 사용자 인증 확인 - 세션 유효성 검사 강화
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
-        const currentUser = session?.user || null;
-        setUser(currentUser);
+        if (sessionError) {
+          console.warn('Session error:', sessionError);
+          // 세션 에러가 있으면 토큰 갱신 시도
+          const { data: refreshedSession, error: refreshError } = await supabase.auth.refreshSession();
+          
+          if (refreshError || !refreshedSession.session) {
+            console.warn('Token refresh failed, clearing session');
+            await supabase.auth.signOut();
+            setUser(null);
+            setIsMember(false);
+          } else {
+            setUser(refreshedSession.session.user);
+          }
+        } else {
+          setUser(session?.user || null);
+        }
 
-        // 사용자 권한 확인 (로그인한 사용자만)
+        const currentUser = session?.user || null;
+
+        // 사용자 권한 확인 (로그인한 사용자만) - 디버깅 로그 추가
         if (currentUser) {
+          console.log('🔍 [PostDetailClient] Checking member status for user:', currentUser.id);
+          
           const { data: profile, error: profileError } = await supabase
             .from('member_profiles')
             .select('registration_status, is_active')
@@ -64,12 +82,19 @@ export default function PostDetailClient({ postId }: PostDetailClientProps) {
             .single();
 
           if (profileError) {
-            console.error('Error fetching profile:', profileError);
+            console.error('❌ [PostDetailClient] Error fetching profile:', profileError);
             setIsMember(false);
           } else if (profile) {
-            setIsMember((profile as any).registration_status === 'approved' && (profile as any).is_active);
+            const isApprovedMember = (profile as any).registration_status === 'approved' && (profile as any).is_active;
+            console.log('📋 [PostDetailClient] Profile data:', profile);
+            console.log(`✅ [PostDetailClient] Member status: ${isApprovedMember ? 'APPROVED' : 'NOT_APPROVED'}`);
+            setIsMember(isApprovedMember);
+          } else {
+            console.warn('⚠️ [PostDetailClient] No profile found for user');
+            setIsMember(false);
           }
         } else {
+          console.log('👤 [PostDetailClient] No current user');
           setIsMember(false);
         }
 

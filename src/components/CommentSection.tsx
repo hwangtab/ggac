@@ -69,21 +69,29 @@ const CommentSection: React.FC<CommentSectionProps> = ({ postId, currentUserId, 
         // 각 댓글의 좋아요 정보 가져오기
         const commentsWithLikes = await Promise.all(
           data.map(async (comment) => {
-            // 좋아요 수 조회
-            const { count: likeCount } = await supabase
+            // 좋아요 수 조회 - 406 에러 방지를 위해 head 옵션 제거
+            const { count: likeCount, error: countError } = await supabase
               .from('comment_likes')
-              .select('*', { count: 'exact', head: true })
+              .select('*', { count: 'exact' })
               .eq('comment_id', (comment as any).id);
+
+            if (countError) {
+              console.warn('좋아요 수 조회 실패:', countError);
+            }
 
             // 현재 사용자의 좋아요 여부 조회
             let isLiked = false;
             if (user) {
-              const { data: userLike } = await supabase
+              const { data: userLike, error: likeError } = await supabase
                 .from('comment_likes')
                 .select('id')
                 .eq('comment_id', (comment as any).id)
                 .eq('user_id', user.id)
-                .single();
+                .maybeSingle(); // single() 대신 maybeSingle() 사용하여 에러 방지
+              
+              if (likeError) {
+                console.warn('사용자 좋아요 상태 조회 실패:', likeError);
+              }
               
               isLiked = !!userLike;
             }
