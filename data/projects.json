@@ -196,5 +196,30 @@
     "artistIds": ["artist-006", "artist-008", "artist-009"],
     "ticketing": null,
     "relatedArticles": []
+  },
+  {
+    "id": "project-010",
+    "slug": "health-concert",
+    "title": "건강열전 (健康列傳)",
+    "category": "공연·전시",
+    "publishedDate": "2025-09-18",
+    "coverImage": "/images/projects/health.jpg",
+    "description": "Play long the long play\n\n서로 다른 네 갈래의 음악,\n한자리에 모여 건강을 기원합니다.\n롱플레이어에서 오래 돌려 듣는 힐링의 무대!\n\n### 공연 정보\n\n**일시**: 2025년 9월 18일 (목) 오후 7시  \n**장소**: 수원 롱플레이어 (빈티지 LP바/카페)  \n**가격**: 예매/현매 15,000원 (음료 할인)  \n**할인**: 경기아트콜렉티브 조합원 5천원 할인\n\n### 라인업\n\n- 희우\n- 유동혁  \n- 더 밀리웨이스\n- 야마가타 트윅스터\n\n서로 다른 음악적 색깔을 가진 네 팀이 한자리에 모여 건강을 기원하는 특별한 무대를 선사합니다. 롱플레이어의 아늑한 분위기 속에서 오래 돌려 듣는 힐링의 시간을 함께해보세요.",
+    "gallery": null,
+    "videoUrl": null,
+    "artistIds": ["artist-010", "artist-005", "artist-004"],
+    "ticketing": [
+      {
+        "platform": "네이버 예약",
+        "url": "https://booking.naver.com/booking/5/bizes/1442738/items/7028436?startDateTime=2025-09-18T00%3A00%3A00%2B09%3A00",
+        "available": true,
+        "startDate": "2025-09-01",
+        "endDate": "2025-09-18"
+      }
+    ],
+    "relatedArticles": [{
+      "title": "뉴스아트",
+      "url": "https://www.news-art.co.kr/news/article.html?no=32815"
+    }]
   }
 ]
