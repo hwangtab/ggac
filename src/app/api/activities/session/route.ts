@@ -53,8 +53,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: '유효한 action이 필요합니다. (start, update, end)' }, { status: 400 })
       }
 
-      if ((action === 'start' || action === 'update') && !session_token) {
-        return NextResponse.json({ error: 'session_token이 필요합니다.' }, { status: 400 })
+      if (action === 'start' && !session_token) {
+        return NextResponse.json({ error: 'session_token이 필요합니다.' }, { status: 400 });
+      }
+      if (action === 'update' && !body.session_id) {
+        return NextResponse.json({ error: 'session_id가 필요합니다.' }, { status: 400 });
       }
 
       // 입력 검증 및 sanitization
