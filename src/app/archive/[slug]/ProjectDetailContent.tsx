@@ -170,7 +170,7 @@ export default function ProjectDetailContent({
                       {...props}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-primary-600 hover:text-primary-700 underline"
+                      className="text-primary-600 hover:text-primary-700 underline underline-offset-4 hover:underline-offset-6"
                     />
                   )
                 }}
@@ -202,7 +202,7 @@ export default function ProjectDetailContent({
                         {...props}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-primary-600 hover:text-primary-700 underline"
+                        className="text-primary-600 hover:text-primary-700 underline underline-offset-4 hover:underline-offset-6"
                       />
                     )
                   }}
@@ -300,7 +300,7 @@ export default function ProjectDetailContent({
                               }))
                               handleImageStart(index)
                             }}
-                            className="text-primary-600 hover:text-primary-700 text-sm underline"
+                            className="text-primary-600 hover:text-primary-700 text-sm underline underline-offset-4 hover:underline-offset-6"
                           >
                             다시 시도
                           </button>

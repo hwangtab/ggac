@@ -289,14 +289,14 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
                       ) : artist.contact.includes('@') ? (
                         <a 
                           href={`mailto:${artist.contact}`}
-                          className="hover:text-primary-600 transition-colors duration-200 underline ml-1"
+                          className="hover:text-primary-600 transition-colors duration-200 underline underline-offset-4 hover:underline-offset-6 ml-1"
                         >
                           {artist.contact}
                         </a>
                       ) : artist.contact.match(/^[0-9\-\s\(\)]+$/) ? (
                         <a 
                           href={`tel:${artist.contact.replace(/[\s\-\(\)]/g, '')}`}
-                          className="hover:text-primary-600 transition-colors duration-200 underline ml-1"
+                          className="hover:text-primary-600 transition-colors duration-200 underline underline-offset-4 hover:underline-offset-6 ml-1"
                         >
                           {artist.contact}
                         </a>
@@ -359,7 +359,7 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
                             {...props}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-primary-600 hover:text-primary-700 underline"
+                            className="text-primary-600 hover:text-primary-700 underline underline-offset-4 hover:underline-offset-6"
                           />
                         )
                       }}

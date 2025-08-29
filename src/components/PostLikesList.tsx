@@ -248,7 +248,7 @@ export const PostLikesCount: React.FC<PostLikesCountProps> = ({
     <>
       <button
         onClick={() => setShowModal(true)}
-        className={`text-gray-600 text-sm hover:text-primary-600 hover:underline ${className}`}
+        className={`text-gray-600 text-sm hover:text-primary-600 hover:underline hover:underline-offset-4 ${className}`}
       >
         좋아요 {likeCount.toLocaleString()}개
       </button>

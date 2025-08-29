@@ -208,7 +208,7 @@ export const ParticlesErrorState = ({
             {error && (
               <button
                 onClick={() => setShowDetails(!showDetails)}
-                className="text-white/40 text-xs underline"
+                className="text-white/40 text-xs underline underline-offset-2 hover:underline-offset-4"
               >
                 {showDetails ? '숨기기' : '자세히'}
               </button>
