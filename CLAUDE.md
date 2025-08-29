@@ -21,7 +21,9 @@ ANALYZE=true npm run build      # Bundle size analysis
 ### Deployment
 ```bash
 npm run vercel:deploy           # Vercel production deployment
+npm run vercel:preview          # Vercel preview deployment
 npm run deploy                  # Deploy webhook trigger
+npm run deploy:notify           # Deploy notification script
 ```
 
 ### Post-Task Checklist
@@ -36,10 +38,14 @@ After completing any development task:
 This is a **Next.js 15 App Router** project for 경기아트콜렉티브 협동조합 (Gyeonggi Art Collective Cooperative).
 
 ### Key Technologies
-- **Frontend**: React 19 + TypeScript + Tailwind CSS
+- **Framework**: Next.js 15.4.4 (App Router) + React 19
+- **Language**: TypeScript (strict: false for gradual migration)
+- **Styling**: Tailwind CSS + custom particle systems (WebGL/Canvas)
 - **Backend**: Next.js API routes + Supabase
-- **Auth**: Supabase Auth with role-based access control
 - **Database**: Supabase PostgreSQL
+- **Auth**: Supabase Auth with role-based access control
+- **Rich Text**: React Quill editor + react-markdown
+- **Testing**: Playwright E2E testing
 - **Deployment**: Vercel with automatic deployments
 
 ### Data Management Strategy
@@ -107,11 +113,16 @@ src/
 All API routes should use standardized responses:
 ```typescript
 // Success
-return ApiSuccess(data)
+return createSuccessResponse(data)
 
-// Error  
-return ApiError.badRequest('Error message')
-return ApiError.unauthorized('Login required')
+// Error responses
+return createErrorResponse('Error message', 400)
+return createErrorResponse('Login required', 401)
+
+// Specialized error handlers
+import { createAuthError, createForbiddenError } from '@/utils/apiErrorHandler'
+throw createAuthError('Login required')
+throw createForbiddenError('Access denied')
 ```
 
 ### Authentication Flow

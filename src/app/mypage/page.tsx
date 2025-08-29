@@ -45,7 +45,7 @@ export default function MypagePage() {
               <div>
                 <Link
                   href="/"
-                  className="text-gray-500 hover:text-gray-700 text-sm underline"
+                  className="text-gray-500 hover:text-gray-700 text-sm underline underline-offset-4 hover:underline-offset-6"
                 >
                   홈으로 돌아가기
                 </Link>

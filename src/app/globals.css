@@ -519,6 +519,23 @@ textarea:focus-visible {
   }
 }
 
+/* Enhanced Link Styles */
+@layer components {
+  /* 개선된 링크 스타일 - 밑줄 간격 조절 */
+  .link-enhanced {
+    @apply underline;
+    text-underline-offset: 0.2em;
+    text-decoration-thickness: 1px;
+    text-decoration-skip-ink: auto;
+    transition: all 0.2s ease;
+  }
+  
+  .link-enhanced:hover {
+    text-underline-offset: 0.25em;
+    text-decoration-thickness: 1.5px;
+  }
+}
+
 /* Line clamp utilities */
 @layer utilities {
   .line-clamp-1 {
@@ -540,5 +557,43 @@ textarea:focus-visible {
     -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
+  }
+  
+  /* 링크 밑줄 간격 유틸리티 클래스 */
+  .underline-offset-auto {
+    text-underline-offset: auto;
+  }
+  
+  .underline-offset-1 {
+    text-underline-offset: 0.1em;
+  }
+  
+  .underline-offset-2 {
+    text-underline-offset: 0.15em;
+  }
+  
+  .underline-offset-4 {
+    text-underline-offset: 0.2em;
+  }
+  
+  .underline-offset-6 {
+    text-underline-offset: 0.25em;
+  }
+  
+  .underline-thick {
+    text-decoration-thickness: 1.5px;
+  }
+  
+  .underline-thin {
+    text-decoration-thickness: 1px;
+  }
+  
+  /* 호버 시 밑줄 간격 증가 효과 */
+  .hover\:underline-offset-4:hover {
+    text-underline-offset: 0.2em;
+  }
+  
+  .hover\:underline-offset-6:hover {
+    text-underline-offset: 0.25em;
   }
 }

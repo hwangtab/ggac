@@ -106,7 +106,7 @@ const Footer = ({ globalData }: FooterProps) => {
                 이메일: 
                 <a 
                   href={`mailto:${data.contact.email}`}
-                  className="hover:text-white transition-colors duration-200 underline ml-1"
+                  className="hover:text-white transition-colors duration-200 underline underline-offset-4 hover:underline-offset-6 ml-1"
                 >
                   {data.contact.email}
                 </a>
@@ -115,7 +115,7 @@ const Footer = ({ globalData }: FooterProps) => {
                 전화: 
                 <a 
                   href={`tel:${data.contact.phone}`}
-                  className="hover:text-white transition-colors duration-200 underline ml-1"
+                  className="hover:text-white transition-colors duration-200 underline underline-offset-4 hover:underline-offset-6 ml-1"
                 >
                   {data.contact.phone}
                 </a>
@@ -126,7 +126,7 @@ const Footer = ({ globalData }: FooterProps) => {
                   href={`https://map.naver.com/v5/search/${encodeURIComponent(data.contact.address)}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="hover:text-white transition-colors duration-200 underline ml-1"
+                  className="hover:text-white transition-colors duration-200 underline underline-offset-4 hover:underline-offset-6 ml-1"
                 >
                   {data.contact.address}
                 </a>

@@ -294,6 +294,16 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
         .quill-editor-container .ql-editor a {
           color: #2563eb;
           text-decoration: underline;
+          text-underline-offset: 0.2em;
+          text-decoration-thickness: 1px;
+          text-decoration-skip-ink: auto;
+          transition: all 0.2s ease;
+        }
+        
+        .quill-editor-container .ql-editor a:hover {
+          text-underline-offset: 0.25em;
+          text-decoration-thickness: 1.5px;
+          color: #1d4ed8;
         }
 
         /* 블록 인용 스타일링 */
