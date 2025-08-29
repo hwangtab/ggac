@@ -171,17 +171,25 @@ export async function fetchLinkPreview(url: string): Promise<LinkPreview | null>
     
     const favicon = getFaviconUrl()
     
-    // XSS 방지를 위한 데이터 정제
+    // HTML 엔티티 디코딩 및 XSS 방지를 위한 데이터 정제
     const sanitizeText = (text: string): string => {
       if (typeof text !== 'string') return ''
-      return text
-        .replace(/[<>"'&]/g, (char) => {
+      
+      // 1단계: HTML 엔티티 디코딩
+      const decoded = text
+        .replace(/&#x27;/g, "'")   // 작은따옴표
+        .replace(/&#39;/g, "'")    // 작은따옴표 (다른 인코딩)
+        .replace(/&quot;/g, '"')   // 큰따옴표
+        .replace(/&lt;/g, '<')     // 작은 부등호
+        .replace(/&gt;/g, '>')     // 큰 부등호
+        .replace(/&amp;/g, '&')    // 앰퍼샌드 (마지막에 처리)
+      
+      // 2단계: 안전하지 않은 HTML 태그만 이스케이프 (XSS 방지)
+      return decoded
+        .replace(/[<>]/g, (char) => {
           const map: { [key: string]: string } = {
             '<': '&lt;',
-            '>': '&gt;',
-            '"': '&quot;',
-            "'": '&#x27;',
-            '&': '&amp;'
+            '>': '&gt;'
           }
           return map[char] || char
         })
