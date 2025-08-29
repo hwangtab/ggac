@@ -35,10 +35,33 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ className =
   const calculateDropdownPosition = () => {
     if (buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect()
-      setDropdownPosition({
-        top: rect.bottom + window.scrollY + 8, // 8px margin
-        left: rect.right + window.scrollX - 320, // 320px is w-80
-      })
+      const dropdownWidth = 320 // w-80
+      const margin = 8
+      
+      // Fixed positioning에서는 scrollY/scrollX 불필요
+      let top = rect.bottom + margin
+      let left = rect.right - dropdownWidth
+      
+      // 뷰포트 경계 체크 및 조정
+      const viewportHeight = window.innerHeight
+      const viewportWidth = window.innerWidth
+      
+      // 오른쪽 경계 체크
+      if (left < margin) {
+        left = margin
+      }
+      
+      // 아래쪽 경계 체크 (드롭다운이 뷰포트 밖으로 나가면 위로 올림)
+      const dropdownHeight = 400 // max-h-96 추정값
+      if (top + dropdownHeight > viewportHeight) {
+        top = rect.top - dropdownHeight - margin
+        // 위쪽으로도 공간이 부족하면 화면 내부로 조정
+        if (top < margin) {
+          top = margin
+        }
+      }
+      
+      setDropdownPosition({ top, left })
     }
   }
 
