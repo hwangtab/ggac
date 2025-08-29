@@ -6,7 +6,7 @@ import dynamic from 'next/dynamic'
 import OptimizedImage from '@/components/OptimizedImage'
 import TicketingCard from '@/components/TicketingCard'
 import ArticleCard from '@/components/ArticleCard'
-import { convertUrlsToMarkdownLinks } from '@/utils/markdown'
+
 import { TicketingInfo } from '@/utils/linkPreview'
 import type { Project, Artist } from '@/types'
 
@@ -174,7 +174,7 @@ export default function ProjectDetailContent({
                     />
                   )
                 }}
-              >{convertUrlsToMarkdownLinks(project.description)}</ReactMarkdown>
+              >{project.description}</ReactMarkdown>
             </div>
 
             {/* Video */}
