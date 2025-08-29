@@ -47,8 +47,10 @@ export function usePostLikes({
 
   const supabase = createClientComponentClient()
   
-  // 간단한 중복 방지
+  // 중복 요청 방지 및 캐싱
   const isProcessingRef = useRef(false)
+  const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const lastFetchRef = useRef<string>('')
   
   // 사용자 정보 가져오기
   useEffect(() => {
@@ -67,10 +69,23 @@ export function usePostLikes({
     return () => subscription.unsubscribe()
   }, [supabase])
 
-  // 좋아요 상태 초기화 및 조회
-  const fetchLikeStatus = useCallback(async () => {
+  // 좋아요 상태 초기화 및 조회 - 디바운싱 및 중복 방지 추가
+  const fetchLikeStatus = useCallback(async (force: boolean = false) => {
     if (!user || !postId) return
 
+    // 중복 요청 방지 - 같은 요청이 이미 진행 중이면 무시
+    const fetchKey = `${user.id}-${postId}`
+    if (!force && lastFetchRef.current === fetchKey) {
+      console.log('[usePostLikes] 중복 요청 방지:', fetchKey);
+      return
+    }
+
+    // 이전 타임아웃 클리어
+    if (fetchTimeoutRef.current) {
+      clearTimeout(fetchTimeoutRef.current)
+    }
+
+    lastFetchRef.current = fetchKey
     setState(prev => ({ ...prev, isLoading: true, error: null }))
 
     try {
@@ -115,8 +130,13 @@ export function usePostLikes({
         error: error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.',
         isLoading: false
       }))
+    } finally {
+      // 요청 완료 후 일정 시간 후 중복 방지 키 리셋 (디바운싱)
+      fetchTimeoutRef.current = setTimeout(() => {
+        lastFetchRef.current = ''
+      }, 1000) // 1초 후 리셋
     }
-  }, [user, postId])
+  }, [user?.id, postId]) // user 대신 user?.id로 변경하여 불필요한 재호출 방지
 
   // 좋아요 토글
   const toggleLike = useCallback(async () => {
@@ -268,12 +288,26 @@ export function usePostLikes({
     setState(prev => ({ ...prev, error: null }))
   }, [])
 
-  // 사용자 로그인 상태 변경 시 좋아요 상태 조회
+  // 사용자 로그인 상태 변경 시 좋아요 상태 조회 - 디바운싱 적용
   useEffect(() => {
     if (user && postId) {
-      fetchLikeStatus()
+      // 디바운싱: 짧은 지연 후 요청 실행
+      const debounceTimeout = setTimeout(() => {
+        fetchLikeStatus()
+      }, 100) // 100ms 디바운싱
+
+      return () => clearTimeout(debounceTimeout)
     }
-  }, [user, postId, fetchLikeStatus])
+  }, [user?.id, postId]) // fetchLikeStatus 의존성 제거하여 무한 루프 방지
+
+  // 컴포넌트 언마운트시 타임아웃 정리
+  useEffect(() => {
+    return () => {
+      if (fetchTimeoutRef.current) {
+        clearTimeout(fetchTimeoutRef.current)
+      }
+    }
+  }, [])
 
   return {
     // 상태
