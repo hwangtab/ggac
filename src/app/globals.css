@@ -353,7 +353,7 @@ textarea:focus-visible {
 }
 
 .prose ul {
-  @apply text-gray-700 space-y-2 ml-4 text-left mt-6 mb-6;
+  @apply text-gray-700 space-y-2 ml-4 text-left mt-8 mb-6;
   word-break: keep-all;
   overflow-wrap: break-word;
   hyphens: none;
@@ -398,7 +398,7 @@ textarea:focus-visible {
 
 /* Style for paragraphs that only contain a strong tag, making them act as subheadings */
 .prose > p > strong:only-child {
-  @apply block font-semibold text-primary-800 mt-6 mb-2;
+  @apply block text-lg font-post font-semibold text-primary-700 mt-8 mb-4;
 }
 
 .prose > p:first-child > strong:only-child {
