@@ -150,6 +150,7 @@ export default function ProjectDetailContent({
                 height={600}
                 className="w-full h-auto object-cover"
                 priority={true}
+                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 80vw, 800px"
                 fallbackText={project.title.slice(0, 3)}
               />
             </div>
@@ -263,13 +264,15 @@ export default function ProjectDetailContent({
                       <OptimizedImage 
                         src={image}
                         alt={`${project.title} - 이미지 ${index + 1}`}
-                        width={600}
-                        height={600}
+                        width={500} // 더 작은 크기로 최적화 (600 → 500)
+                        height={500}
                         className={`w-full h-full object-cover transition-all duration-300 ${
                           galleryLoadingStates[index] ? 'opacity-0' : 'opacity-100 group-hover:scale-105'
                         }`}
                         fallbackText={(index + 1).toString()}
                         priority={index < 2} // 첫 2개 이미지만 우선 로딩
+                        sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 500px"
+                        quality={85} // 약간 더 높은 품질로 최적화
                         onLoadStart={() => handleImageStart(index)}
                         onLoad={() => handleImageLoad(index)}
                         onError={() => handleImageError(index)}
