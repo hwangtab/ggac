@@ -31,6 +31,15 @@ export default function ProjectDetailContent({
   // 라이트박스 상태 관리
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
+  
+  // 갤러리 로딩 상태 관리
+  const [galleryLoadingStates, setGalleryLoadingStates] = useState<{[key: number]: boolean}>({})
+  const [galleryErrorStates, setGalleryErrorStates] = useState<{[key: number]: boolean}>({})
+  
+  // 갤러리 전체 로딩 완료 여부 계산
+  const isGalleryLoading = project.gallery ? 
+    Object.keys(galleryLoadingStates).length < project.gallery.length ||
+    Object.values(galleryLoadingStates).some(loading => loading) : false
 
   const openLightbox = (index: number) => {
     setCurrentImageIndex(index)
@@ -55,6 +64,32 @@ export default function ProjectDetailContent({
         prev === 0 ? project.gallery!.length - 1 : prev - 1
       )
     }
+  }
+
+  // 갤러리 이미지 로딩 상태 핸들러
+  const handleImageLoad = (index: number) => {
+    setGalleryLoadingStates(prev => ({
+      ...prev,
+      [index]: false
+    }))
+  }
+
+  const handleImageError = (index: number) => {
+    setGalleryLoadingStates(prev => ({
+      ...prev,
+      [index]: false
+    }))
+    setGalleryErrorStates(prev => ({
+      ...prev,
+      [index]: true
+    }))
+  }
+
+  const handleImageStart = (index: number) => {
+    setGalleryLoadingStates(prev => ({
+      ...prev,
+      [index]: true
+    }))
   }
 
   return (
@@ -197,27 +232,77 @@ export default function ProjectDetailContent({
             {project.gallery && project.gallery.length > 0 && (
               <div className="mt-12">
                 <h3 className="heading-tertiary mb-6">갤러리</h3>
+                
+                {/* 갤러리 전체 로딩 표시 */}
+                {isGalleryLoading && (
+                  <div className="mb-4 text-center">
+                    <div className="inline-flex items-center gap-2 text-primary-600 text-sm">
+                      <div className="w-4 h-4 border-2 border-primary-200 border-t-primary-600 rounded-full animate-spin"></div>
+                      갤러리 로딩 중...
+                    </div>
+                  </div>
+                )}
+                
                 <div className="grid md:grid-cols-2 gap-6">
                   {project.gallery.map((image, index) => (
                     <div 
                       key={index}
-                      className="aspect-square rounded-2xl overflow-hidden shadow-lg cursor-pointer group relative"
-                      onClick={() => openLightbox(index)}
+                      className="aspect-square rounded-2xl overflow-hidden shadow-lg cursor-pointer group relative bg-gray-100"
+                      onClick={() => !galleryLoadingStates[index] && openLightbox(index)}
+                      style={{ minHeight: '300px' }} // 레이아웃 안정성을 위한 최소 높이
                     >
+                      {/* 개별 이미지 스켈레톤 - 한 번만 표시 */}
+                      {galleryLoadingStates[index] && (
+                        <div className="absolute inset-0 bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
+                          <div className="text-gray-400 text-lg font-medium">
+                            {index + 1}
+                          </div>
+                        </div>
+                      )}
+                      
                       <OptimizedImage 
                         src={image}
                         alt={`${project.title} - 이미지 ${index + 1}`}
                         width={600}
                         height={600}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        className={`w-full h-full object-cover transition-all duration-300 ${
+                          galleryLoadingStates[index] ? 'opacity-0' : 'opacity-100 group-hover:scale-105'
+                        }`}
                         fallbackText={(index + 1).toString()}
+                        priority={index < 2} // 첫 2개 이미지만 우선 로딩
+                        onLoadStart={() => handleImageStart(index)}
+                        onLoad={() => handleImageLoad(index)}
+                        onError={() => handleImageError(index)}
+                        suppressSkeleton={true} // 외부에서 스켈레톤 관리
                       />
-                      {/* 호버 오버레이 */}
-                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300 flex items-center justify-center">
-                        <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 text-white text-sm bg-black/50 px-3 py-1 rounded-full">
-                          클릭하여 확대
+                      
+                      {/* 호버 오버레이 - 로딩 완료 시에만 활성화 */}
+                      {!galleryLoadingStates[index] && !galleryErrorStates[index] && (
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300 flex items-center justify-center">
+                          <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 text-white text-sm bg-black/50 px-3 py-1 rounded-full">
+                            클릭하여 확대
+                          </div>
                         </div>
-                      </div>
+                      )}
+                      
+                      {/* 로딩 실패 시 재시도 버튼 */}
+                      {galleryErrorStates[index] && (
+                        <div className="absolute inset-0 bg-gray-50 flex items-center justify-center">
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setGalleryErrorStates(prev => ({
+                                ...prev,
+                                [index]: false
+                              }))
+                              handleImageStart(index)
+                            }}
+                            className="text-primary-600 hover:text-primary-700 text-sm underline"
+                          >
+                            다시 시도
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

@@ -16,7 +16,11 @@ const OptimizedImage = memo(function OptimizedImage({
   quality = 80, // 품질과 성능의 최적 균형
   fallbackText,
   // preferWebp 제거: Next.js가 자동으로 AVIF/WebP 선택
-  preserveAspectRatio = false
+  preserveAspectRatio = false,
+  onLoadStart,
+  onLoad: onLoadProp,
+  onError: onErrorProp,
+  suppressSkeleton = false // 외부 스켈레톤 사용 시 내부 스켈레톤 비활성화
 }: OptimizedImageProps) {
   const [hasError, setHasError] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -27,7 +31,8 @@ const OptimizedImage = memo(function OptimizedImage({
     setHasError(false)
     setIsLoading(true)
     setCurrentSrc(src)
-  }, [src])
+    onLoadStart?.() // 외부 로딩 시작 알림
+  }, [src, onLoadStart])
 
   const handleError = () => {
     // 최적화된 이미지 폴백 체인: WebP → JPG → PNG (JPEG 단계 제거로 속도 향상)
@@ -51,10 +56,12 @@ const OptimizedImage = memo(function OptimizedImage({
     // 최종 실패 시에만 fallbackText 표시
     setHasError(true)
     setIsLoading(false)
+    onErrorProp?.() // 외부 에러 핸들러 호출
   }
 
   const handleLoad = () => {
     setIsLoading(false)
+    onLoadProp?.() // 외부 로딩 완료 핸들러 호출
   }
 
   if (hasError) {
@@ -95,7 +102,8 @@ const OptimizedImage = memo(function OptimizedImage({
   // Progressive loading with loading indicator
   return (
     <div className={fill ? `relative ${className}` : className}>
-      {isLoading && (
+      {/* 외부에서 스켈레톤을 제공하지 않을 때만 내부 스켈레톤 표시 */}
+      {isLoading && !suppressSkeleton && (
         <div className="absolute inset-0 bg-gradient-to-br from-gray-100 to-gray-200 animate-pulse flex items-center justify-center">
           <div className="w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin"></div>
         </div>
@@ -103,7 +111,7 @@ const OptimizedImage = memo(function OptimizedImage({
       <Image 
         {...imageProps} 
         alt={alt || ''} 
-        className={`transition-opacity duration-300 ${isLoading ? 'opacity-0' : 'opacity-100'} ${fill ? '' : className}`}
+        className={`transition-opacity duration-500 ${isLoading ? 'opacity-0' : 'opacity-100'} ${fill ? '' : className}`}
       />
     </div>
   )

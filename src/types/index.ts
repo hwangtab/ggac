@@ -772,6 +772,14 @@ export interface OptimizedImageProps {
   className?: string
   priority?: boolean
   fallbackText?: string
+  fill?: boolean
+  sizes?: string
+  quality?: number
+  preserveAspectRatio?: boolean
+  onLoadStart?: () => void
+  onLoad?: () => void
+  onError?: () => void
+  suppressSkeleton?: boolean
 }
 
 // === 유틸리티 타입 정의 ===

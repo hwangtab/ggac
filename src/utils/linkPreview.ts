@@ -4,22 +4,93 @@ import type { LinkPreview, TicketingInfo } from '@/types'
 // 기존에 별도로 정의되어 있던 TicketingInfo를 export로 유지 (하위 호환성)
 export type { LinkPreview, TicketingInfo } from '@/types'
 
+// 재시도 로직을 가진 fetch 함수
+async function fetchWithRetry(url: string, maxRetries = 3): Promise<Response | null> {
+  const userAgents = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  ]
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`🔄 [LinkPreview] Attempt ${attempt}/${maxRetries} for: ${url}`)
+      
+      const randomUserAgent = userAgents[Math.floor(Math.random() * userAgents.length)]
+      console.log(`👤 [LinkPreview] Using User-Agent: ${randomUserAgent.substring(0, 50)}...`)
+      
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 10000) // 10초 타임아웃
+      
+      const response = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': randomUserAgent,
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+          'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+          'Sec-Fetch-Dest': 'document',
+          'Sec-Fetch-Mode': 'navigate',
+          'Sec-Fetch-Site': 'none',
+          'DNT': '1',
+          'Connection': 'keep-alive',
+          'Upgrade-Insecure-Requests': '1',
+        },
+        next: { 
+          revalidate: process.env.NODE_ENV === 'development' ? 60 : 3600
+        }
+      })
+      
+      clearTimeout(timeoutId)
+      
+      console.log(`📡 [LinkPreview] Response: ${response.status} ${response.statusText} (attempt ${attempt})`)
+      
+      if (response.ok) {
+        return response
+      } else if (response.status === 429) {
+        // Rate limiting - 긴 대기
+        const delay = Math.min(1000 * Math.pow(2, attempt), 10000)
+        console.warn(`⏱️ [LinkPreview] Rate limited, waiting ${delay}ms before retry`)
+        await new Promise(resolve => setTimeout(resolve, delay))
+      } else if (response.status >= 500) {
+        // 서버 오류 - 재시도
+        const delay = 1000 * attempt
+        console.warn(`🔄 [LinkPreview] Server error ${response.status}, waiting ${delay}ms before retry`)
+        await new Promise(resolve => setTimeout(resolve, delay))
+      } else {
+        // 클라이언트 오류 (4xx) - 재시도하지 않음
+        console.error(`❌ [LinkPreview] Client error ${response.status} for ${url}, not retrying`)
+        return null
+      }
+      
+    } catch (error) {
+      console.error(`💥 [LinkPreview] Attempt ${attempt} failed:`, error)
+      
+      if (attempt === maxRetries) {
+        return null
+      }
+      
+      // 네트워크 오류 시 점진적 대기
+      const delay = 1000 * attempt
+      console.log(`⏳ [LinkPreview] Waiting ${delay}ms before retry...`)
+      await new Promise(resolve => setTimeout(resolve, delay))
+    }
+  }
+  
+  return null
+}
+
 export async function fetchLinkPreview(url: string): Promise<LinkPreview | null> {
   try {
-    console.log(`Fetching link preview for: ${url}`)
+    console.log(`🔍 [LinkPreview] Starting fetch for: ${url}`)
     
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8',
-        'Cache-Control': 'no-cache',
-      },
-      next: { revalidate: 3600 } // 1시간 캐시
-    })
+    const response = await fetchWithRetry(url, 3)
     
-    if (!response.ok) {
-      console.error(`Failed to fetch ${url}: ${response.status} ${response.statusText}`)
+    if (!response) {
+      console.error(`❌ [LinkPreview] All retry attempts failed for: ${url}`)
       return null
     }
     
@@ -127,7 +198,26 @@ export async function fetchLinkPreview(url: string): Promise<LinkPreview | null>
       favicon
     }
     
-    console.log(`Successfully extracted preview for ${url}:`, preview)
+    // 상세 로깅
+    console.log(`✅ [LinkPreview] Successfully extracted preview for ${url}:`)
+    console.log(`📄 Title: "${preview.title}"`)
+    console.log(`📝 Description: "${preview.description.substring(0, 100)}${preview.description.length > 100 ? '...' : ''}"`)
+    console.log(`🖼️ Image: ${preview.image || 'none'}`)
+    console.log(`🏷️ Site Name: "${preview.siteName}"`)
+    console.log(`🔗 Favicon: ${preview.favicon || 'none'}`)
+    
+    // 이미지가 없는 경우 경고
+    if (!preview.image) {
+      console.warn(`⚠️ [LinkPreview] No image found for ${url}`)
+      console.log(`🔍 [LinkPreview] Available meta tags:`)
+      $('meta[property^="og:"], meta[name^="twitter:"], meta[property^="twitter:"]').each((_, el) => {
+        const $el = $(el)
+        const property = $el.attr('property') || $el.attr('name')
+        const content = $el.attr('content')
+        console.log(`    ${property}: ${content}`)
+      })
+    }
+    
     return preview
     
   } catch (error) {
