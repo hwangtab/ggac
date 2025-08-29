@@ -353,7 +353,7 @@ textarea:focus-visible {
 }
 
 .prose ul {
-  @apply text-gray-700 space-y-2 ml-4 text-left mb-6;
+  @apply text-gray-700 space-y-2 ml-4 text-left mt-6 mb-6;
   word-break: keep-all;
   overflow-wrap: break-word;
   hyphens: none;
@@ -396,8 +396,9 @@ textarea:focus-visible {
   white-space: normal;
 }
 
+/* Style for paragraphs that only contain a strong tag, making them act as subheadings */
 .prose > p > strong:only-child {
-  @apply block mt-8 mb-3;
+  @apply block font-semibold text-primary-800 mt-6 mb-2;
 }
 
 .prose > p:first-child > strong:only-child {
@@ -406,20 +407,6 @@ textarea:focus-visible {
 
 .prose li strong {
   @apply inline mt-0 mb-0;
-}
-
-.prose ul + p > strong:only-child,
-.prose ol + p > strong:only-child {
-  @apply block mt-8 mb-3 !important;
-}
-
-/* 리스트 다음 오는 일반 문단의 상단 간격 증가 */
-.prose ul + p {
-  @apply mt-8;
-}
-
-.prose ol + p {
-  @apply mt-8;
 }
 
 .prose em {
