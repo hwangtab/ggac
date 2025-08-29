@@ -508,6 +508,58 @@ const nextConfig = {
         port: '',
         pathname: '/vi/**',
       },
+      // 네이버 예약 이미지 도메인
+      {
+        protocol: 'https',
+        hostname: 'naverbooking-phinf.pstatic.net',
+        port: '',
+        pathname: '/**',
+      },
+      // 네이버 관련 이미지 도메인 (일반)
+      {
+        protocol: 'https',
+        hostname: '*.pstatic.net',
+        port: '',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.naver.com',
+        port: '',
+        pathname: '/**',
+      },
+      // 뉴스아트 이미지 도메인
+      {
+        protocol: 'https',
+        hostname: 'www.news-art.co.kr',
+        port: '',
+        pathname: '/data/**',
+      },
+      // 링크 프리뷰용 일반 이미지 도메인 (보안상 제한적 허용)
+      {
+        protocol: 'https',
+        hostname: '**',
+        port: '',
+        pathname: '/**.jpg',
+      },
+      {
+        protocol: 'https',
+        hostname: '**',
+        port: '',
+        pathname: '/**.jpeg',
+      },
+      {
+        protocol: 'https',
+        hostname: '**',
+        port: '',
+        pathname: '/**.png',
+      },
+      {
+        protocol: 'https',
+        hostname: '**',
+        port: '',
+        pathname: '/**.webp',
+      },
     ],
     // 최적화된 이미지 형식 우선순위
     formats: ['image/webp', 'image/avif'],
