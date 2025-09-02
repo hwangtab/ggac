@@ -1,0 +1,14 @@
+{
+  "allowlist": [],
+  "report-type": "summary",
+  "package-manager": "npm",
+  "levels": {
+    "low": false,
+    "moderate": false,
+    "high": true,
+    "critical": true
+  },
+  "advisories": [],
+  "whitelist": [],
+  "skip-dev": false
+}

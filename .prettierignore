@@ -1,0 +1,51 @@
+# Dependencies
+node_modules
+.pnpm
+
+# Build outputs
+.next
+dist
+build
+out
+
+# Environment and config files
+.env*
+*.log
+
+# IDE and OS files
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+
+# Package manager files
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Generated files
+*.d.ts
+.tsbuildinfo
+
+# Documentation (already formatted)
+CHANGELOG.md
+README.md
+
+# Data files
+data/
+public/
+
+# Playwright
+test-results/
+playwright-report/
+
+# Coverage reports
+coverage/
+.nyc_output/
+
+# Lock files
+*.lock
