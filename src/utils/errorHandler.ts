@@ -397,9 +397,9 @@ export class ApiErrorHandler {
       logError(logEntry)
     }
 
-    // TODO: 알림이 필요한 경우 (슬랙, 이메일 등)
+    // 알림이 필요한 경우 (향후 슬랙, 이메일 등 연동 가능)
     if (finalErrorInfo.shouldNotify) {
-      // 여기에 알림 로직 구현
+      // 현재는 콘솔 로그로 처리, 향후 외부 알림 서비스 연동 예정
       console.error('[CRITICAL ERROR NOTIFICATION NEEDED]', finalErrorInfo.message)
     }
 

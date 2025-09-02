@@ -2,7 +2,8 @@
 
 import React, { useMemo } from 'react';
 import DOMPurify from 'dompurify';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown from 'react-markdown'
+import Image from 'next/image';
 import { detectXssPatterns, logSecurityEvent } from '@/utils/security';
 
 interface PostContentRendererProps {
@@ -69,7 +70,20 @@ export const PostContentRenderer: React.FC<PostContentRendererProps> = ({
         <ReactMarkdown
           components={{
             a: ({node, ...props}) => <a {...props} target="_blank" rel="noopener noreferrer" />,
-            img: ({node, ...props}) => <img {...props} style={{ maxWidth: '100%' }} />,
+            img: ({node, src, alt, ...props}) => {
+              if (!src || typeof src !== 'string') return null;
+              return (
+                <Image
+                  src={src}
+                  alt={alt || '이미지'}
+                  width={800}
+                  height={600}
+                  style={{ maxWidth: '100%', height: 'auto' }}
+                  className="rounded-lg"
+                  unoptimized
+                />
+              );
+            },
           }}
         >
           {content}

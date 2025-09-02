@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { FiEye, FiCheck, FiX, FiUser, FiPause, FiPlay, FiMail, FiCalendar, FiShield, FiAlertCircle, FiClock } from 'react-icons/fi'
 
 interface Member {
@@ -43,7 +44,7 @@ interface MemberCardProps {
   isLoading: boolean
 }
 
-export default function MemberCard({ member, onView, onAction, isLoading }: MemberCardProps) {
+function MemberCard({ member, onView, onAction, isLoading }: MemberCardProps) {
   const getStatusColor = (member: Member) => {
     if (member.is_suspended) {
       return 'bg-red-100 text-red-800'
@@ -260,3 +261,5 @@ export default function MemberCard({ member, onView, onAction, isLoading }: Memb
     </div>
   )
 }
+
+export default memo(MemberCard)

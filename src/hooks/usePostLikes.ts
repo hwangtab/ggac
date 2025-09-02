@@ -139,7 +139,7 @@ export function usePostLikes({
         lastFetchRef.current = ''
       }, 1000) // 1초 후 리셋
     }
-  }, [user?.id, postId]) // user 대신 user?.id로 변경하여 불필요한 재호출 방지
+  }, [multiLoadingState, user?.id, postId])
 
   // 좋아요 토글
   const toggleLike = useCallback(async () => {
@@ -281,7 +281,7 @@ export function usePostLikes({
       
       return false
     }
-  }, [user, postId, onLikeChange, state.isLiked, state.likeCount])
+  }, [user, postId, onLikeChange, state.isLiked, state.likeCount, multiLoadingState])
 
   // 에러 클리어
   const clearError = useCallback(() => {
@@ -298,7 +298,7 @@ export function usePostLikes({
 
       return () => clearTimeout(debounceTimeout)
     }
-  }, [user?.id, postId]) // fetchLikeStatus 의존성 제거하여 무한 루프 방지
+  }, [fetchLikeStatus, user?.id, postId])
 
   // 컴포넌트 언마운트시 타임아웃 정리
   useEffect(() => {

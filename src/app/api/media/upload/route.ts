@@ -131,8 +131,22 @@ async function extractFileMetadata(file: File): Promise<Record<string, any>> {
     uploaded_at: new Date().toISOString()
   }
 
-  // TODO: 이미지 크기 추출은 클라이언트에서 처리하거나 sharp 라이브러리 사용
-  // 현재는 서버 환경에서 DOM API를 사용할 수 없으므로 스킵
+  // 이미지 파일인 경우 크기 정보 추출
+  if (file.type.startsWith('image/')) {
+    try {
+      const sharp = require('sharp')
+      const buffer = Buffer.from(await file.arrayBuffer())
+      const imageMetadata = await sharp(buffer).metadata()
+      
+      if (imageMetadata.width && imageMetadata.height) {
+        metadata.width = imageMetadata.width
+        metadata.height = imageMetadata.height
+      }
+    } catch (error) {
+      console.warn('이미지 크기 추출 실패:', error)
+      // 크기 추출 실패해도 업로드는 계속 진행
+    }
+  }
 
   return metadata
 }
