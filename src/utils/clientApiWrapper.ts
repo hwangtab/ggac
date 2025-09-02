@@ -231,7 +231,7 @@ async function executeRequest<T = any>(
 
       // 성공 메시지 표시
       if (showSuccessMessage && successResponse.message) {
-        // TODO: 토스트나 알림 시스템과 통합
+        // 향후 토스트나 알림 시스템과 통합 예정
         console.log(`[SUCCESS] ${successResponse.message}`)
       }
 
@@ -264,7 +264,7 @@ async function executeRequest<T = any>(
 
   // 모든 재시도 실패
   if (!skipErrorDisplay && lastError) {
-    // TODO: 에러 토스트나 알림 시스템과 통합
+    // 향후 에러 토스트나 알림 시스템과 통합 예정
     console.error(`[CLIENT API] Final error:`, lastError)
   }
 

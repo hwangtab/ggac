@@ -212,6 +212,8 @@ export interface ImageCropSettings {
   }
   /** 종횡비 유지 여부 */
   maintain_aspect_ratio?: boolean
+  /** 크롭 종횡비 */
+  aspectRatio?: number
 }
 
 /**

@@ -1,12 +1,25 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
+import dynamic from 'next/dynamic'
 import { FiUsers, FiMusic, FiEdit3, FiSettings, FiBarChart, FiShield } from 'react-icons/fi'
 import AdminLayout from './components/AdminLayout'
 import DashboardStats from './components/DashboardStats'
 import RecentActivity from './components/RecentActivity'
 import RealTimeActivityMonitor from './components/RealTimeActivityMonitor'
-import ActivityAnalyticsCharts from './components/ActivityAnalyticsCharts'
+
+// 큰 컴포넌트들을 동적 로딩으로 변경
+const ActivityAnalyticsCharts = dynamic(() => import('./components/ActivityAnalyticsCharts'), {
+  loading: () => (
+    <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+      <div className="animate-pulse">
+        <div className="h-6 bg-gray-200 rounded w-1/4 mb-4"></div>
+        <div className="h-64 bg-gray-100 rounded"></div>
+      </div>
+    </div>
+  ),
+  ssr: false
+})
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState({

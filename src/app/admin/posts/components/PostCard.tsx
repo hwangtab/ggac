@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { FiEye, FiBookmark, FiTrash2, FiRotateCcw, FiUser, FiCalendar, FiMessageSquare, FiEdit3, FiExternalLink } from 'react-icons/fi'
 import type { Post } from '@/types'
 
@@ -10,7 +11,7 @@ interface PostCardProps {
   isLoading: boolean
 }
 
-export default function PostCard({ post, onView, onAction, isLoading }: PostCardProps) {
+function PostCard({ post, onView, onAction, isLoading }: PostCardProps) {
   const getCategoryColor = (category: string) => {
     switch (category) {
       case '공지':
@@ -181,3 +182,5 @@ export default function PostCard({ post, onView, onAction, isLoading }: PostCard
     </div>
   )
 }
+
+export default memo(PostCard)

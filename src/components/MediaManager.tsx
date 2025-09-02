@@ -7,6 +7,7 @@
 
 import React, { useState, useCallback, useRef } from 'react'
 import { FiUpload, FiX, FiImage, FiLoader, FiCheck, FiAlertCircle, FiEdit3 } from 'react-icons/fi'
+import ImageCropModal from './ImageCropModal'
 import type { 
   MediaFile, 
   MediaManagerConfig, 
@@ -37,6 +38,8 @@ interface MediaManagerProps {
   disabled?: boolean
   /** 크롭 모드 활성화 여부 */
   enableCrop?: boolean
+  /** 크롭 설정 */
+  cropSettings?: ImageCropSettings
 }
 
 interface UploadingFile {
@@ -60,13 +63,57 @@ const MediaManager: React.FC<MediaManagerProps> = ({
   bucket = 'attachments',
   className = '',
   disabled = false,
-  enableCrop = false
+  enableCrop = false,
+  cropSettings
 }) => {
   const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([])
   const [completedFiles, setCompletedFiles] = useState<MediaFile[]>(existingFiles)
   const [isDragOver, setIsDragOver] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
+  const [cropModal, setCropModal] = useState<{
+    isOpen: boolean
+    file: MediaFile | null
+    imageUrl: string
+  }>({
+    isOpen: false,
+    file: null,
+    imageUrl: ''
+  })
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // 크롭 처리
+  const handleCrop = useCallback(async (croppedBlob: Blob, cropArea: any) => {
+    if (!cropModal.file) return
+
+    try {
+      // 크롭된 이미지를 새 파일로 생성
+      const croppedFile = new File([croppedBlob], `cropped_${cropModal.file.name}`, {
+        type: croppedBlob.type
+      })
+
+      // 기존 파일 삭제
+      if (onFileDelete) {
+        await onFileDelete(cropModal.file.id)
+      }
+
+      // 새 파일 업로드  
+      const uploadingFile: UploadingFile = {
+        file: croppedFile,
+        progress: 0,
+        id: `upload-${Date.now()}-${Math.random()}`,
+        status: 'uploading'
+      }
+      await uploadFile(uploadingFile)
+      
+      // 모달 닫기
+      setCropModal({ isOpen: false, file: null, imageUrl: '' })
+    } catch (error) {
+      console.error('크롭 처리 오류:', error)
+      if (onUploadError) {
+        onUploadError('이미지 크롭 처리 중 오류가 발생했습니다.')
+      }
+    }
+  }, [cropModal.file, onFileDelete, onUploadError])
 
   // 파일 타입 확인
   const isValidFileType = useCallback((file: File): boolean => {
@@ -508,7 +555,12 @@ const MediaManager: React.FC<MediaManagerProps> = ({
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
-                      // TODO: 크롭 모달 열기
+                      // 크롭 모달 열기
+                      setCropModal({
+                        isOpen: true,
+                        file,
+                        imageUrl: file.public_url
+                      })
                     }}
                     className="text-gray-400 hover:text-gray-600"
                     title="이미지 편집"
@@ -538,6 +590,18 @@ const MediaManager: React.FC<MediaManagerProps> = ({
         <div className="mt-4 p-3 bg-gray-100 rounded text-xs text-gray-600">
           <p>Config: {JSON.stringify(config, null, 2)}</p>
         </div>
+      )}
+
+      {/* 이미지 크롭 모달 */}
+      {enableCrop && (
+        <ImageCropModal
+          isOpen={cropModal.isOpen}
+          imageUrl={cropModal.imageUrl}
+          imageName={cropModal.file?.name || ''}
+          onClose={() => setCropModal({ isOpen: false, file: null, imageUrl: '' })}
+          onCrop={handleCrop}
+          aspectRatio={cropSettings?.aspectRatio}
+        />
       )}
     </div>
   )

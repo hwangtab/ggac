@@ -10,7 +10,7 @@
 
 'use client'
 
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 
 // 로딩 상태 타입 정의
 export interface LoadingState {
@@ -58,7 +58,7 @@ const DEFAULT_OPTIONS: Partial<AsyncOperationOptions> = {
  * 단일 작업 로딩 상태 관리 훅
  */
 export function useLoadingState(initialOptions?: Partial<AsyncOperationOptions>) {
-  const options = { ...DEFAULT_OPTIONS, ...initialOptions }
+  const options = useMemo(() => ({ ...DEFAULT_OPTIONS, ...initialOptions }), [initialOptions])
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
   
   const [state, setState] = useState<LoadingState>({
@@ -236,7 +236,7 @@ export function useLoadingState(initialOptions?: Partial<AsyncOperationOptions>)
  * 다중 작업 로딩 상태 관리 훅
  */
 export function useMultiLoadingState(globalOptions?: Partial<AsyncOperationOptions>) {
-  const options = { ...DEFAULT_OPTIONS, ...globalOptions }
+  const options = useMemo(() => ({ ...DEFAULT_OPTIONS, ...globalOptions }), [globalOptions])
   const timeoutRefs = useRef<Record<string, NodeJS.Timeout>>({})
   
   const [state, setState] = useState<MultiLoadingState>({
