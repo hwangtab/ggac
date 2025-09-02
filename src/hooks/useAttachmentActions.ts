@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
+import { useMultiLoadingState } from '@/hooks/useLoadingState'
 import type { PostAttachment } from '@/types'
 
 interface AttachmentEditForm {
@@ -24,7 +25,16 @@ export const useAttachmentActions = ({
     alt_text: '',
     is_primary: false
   })
-  const [actionLoading, setActionLoading] = useState<string | null>(null)
+  
+  // 다중 작업 로딩 상태 관리
+  const multiLoadingState = useMultiLoadingState({
+    timeout: 10000, // 10초 타임아웃
+    enableLogging: true,
+    onError: (error) => {
+      console.error('첨부파일 작업 오류:', error)
+      alert(error.message || '작업에 실패했습니다.')
+    }
+  })
 
   // 파일 다운로드
   const handleDownload = useCallback((attachment: PostAttachment) => {
@@ -56,9 +66,7 @@ export const useAttachmentActions = ({
   const saveEdit = useCallback(async (attachmentId: string) => {
     if (!onAttachmentUpdate) return
 
-    try {
-      setActionLoading(attachmentId)
-
+    return multiLoadingState.executeAsync(`edit-${attachmentId}`, async () => {
       const response = await fetch(`/api/posts/${postId}/attachments/${attachmentId}`, {
         method: 'PUT',
         headers: {
@@ -75,14 +83,10 @@ export const useAttachmentActions = ({
 
       onAttachmentUpdate(result.attachment)
       setEditingAttachment(null)
-
-    } catch (error) {
-      console.error('첨부파일 수정 오류:', error)
-      alert(error instanceof Error ? error.message : '수정에 실패했습니다.')
-    } finally {
-      setActionLoading(null)
-    }
-  }, [postId, editForm, onAttachmentUpdate])
+      
+      return result.attachment
+    })
+  }, [postId, editForm, onAttachmentUpdate, multiLoadingState])
 
   // 첨부파일 삭제
   const deleteAttachment = useCallback(async (attachmentId: string) => {
@@ -90,9 +94,7 @@ export const useAttachmentActions = ({
 
     if (!confirm('첨부파일을 삭제하시겠습니까?')) return
 
-    try {
-      setActionLoading(attachmentId)
-
+    return multiLoadingState.executeAsync(`delete-${attachmentId}`, async () => {
       const response = await fetch(`/api/posts/${postId}/attachments/${attachmentId}`, {
         method: 'DELETE'
       })
@@ -103,20 +105,22 @@ export const useAttachmentActions = ({
       }
 
       onAttachmentDelete(attachmentId)
-
-    } catch (error) {
-      console.error('첨부파일 삭제 오류:', error)
-      alert(error instanceof Error ? error.message : '삭제에 실패했습니다.')
-    } finally {
-      setActionLoading(null)
-    }
-  }, [postId, onAttachmentDelete])
+      
+      return true
+    })
+  }, [postId, onAttachmentDelete, multiLoadingState])
 
   return {
     // State
     editingAttachment,
     editForm,
-    actionLoading,
+    
+    // Loading states - 특정 작업별 로딩 상태
+    isEditLoading: (attachmentId: string) => multiLoadingState.getLoadingState(`edit-${attachmentId}`).isLoading,
+    isDeleteLoading: (attachmentId: string) => multiLoadingState.getLoadingState(`delete-${attachmentId}`).isLoading,
+    isAnyLoading: multiLoadingState.isAnyLoading,
+    hasAnyError: multiLoadingState.hasAnyError,
+    globalError: multiLoadingState.globalError,
     
     // Actions
     handleDownload,
@@ -126,6 +130,13 @@ export const useAttachmentActions = ({
     deleteAttachment,
     
     // Form controls
-    setEditForm
+    setEditForm,
+    
+    // Utility functions
+    clearError: (attachmentId: string) => {
+      multiLoadingState.clearError(`edit-${attachmentId}`)
+      multiLoadingState.clearError(`delete-${attachmentId}`)
+    },
+    clearAllErrors: () => multiLoadingState.reset()
   }
 }
