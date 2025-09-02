@@ -92,6 +92,34 @@ export default function PostEditPage() {
     if (postId) {
       fetchData();
     }
+
+    // 인증 상태 변경 리스너 추가
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!session?.user) {
+        router.replace('/login');
+      } else {
+        // 세션이 갱신되면 멤버 상태 재확인
+        console.log('🔄 [Edit Auth Change] Rechecking member status');
+        const { data: profile, error: profileError } = await supabase
+          .from('member_profiles')
+          .select('registration_status, is_active')
+          .eq('id', session.user.id)
+          .single();
+
+        if (profileError) {
+          console.error('🔄 [Edit Auth Change] Error fetching profile:', profileError);
+          setIsMember(false);
+        } else if (profile) {
+          const isApprovedMember = (profile as MemberProfile).registration_status === 'approved' && (profile as MemberProfile).is_active;
+          console.log('🔄 [Edit Auth Change] Updated member status:', isApprovedMember);
+          setIsMember(isApprovedMember);
+        }
+      }
+    });
+
+    return () => {
+      authListener?.subscription.unsubscribe();
+    };
   }, [postId, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {

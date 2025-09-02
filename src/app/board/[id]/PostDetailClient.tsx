@@ -47,6 +47,41 @@ export default function PostDetailClient({ postId }: PostDetailClientProps) {
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
+  // 조합원 상태 확인 함수를 별도로 분리
+  const checkMemberStatus = async (currentUser: any) => {
+    if (!currentUser) {
+      console.log('🔍 [PostDetailClient] No current user');
+      setIsMember(false);
+      return;
+    }
+
+    console.log('🔍 [PostDetailClient] Checking member status for user:', currentUser.id);
+    
+    try {
+      const { data: profile, error: profileError } = await supabase
+        .from('member_profiles')
+        .select('registration_status, is_active')
+        .eq('id', currentUser.id)
+        .single();
+
+      if (profileError) {
+        console.error('❌ [PostDetailClient] Error fetching profile:', profileError);
+        setIsMember(false);
+      } else if (profile) {
+        const isApprovedMember = (profile as MemberProfile).registration_status === 'approved' && (profile as MemberProfile).is_active;
+        console.log('📋 [PostDetailClient] Profile data:', profile);
+        console.log(`✅ [PostDetailClient] Member status: ${isApprovedMember ? 'APPROVED' : 'NOT_APPROVED'}`);
+        setIsMember(isApprovedMember);
+      } else {
+        console.warn('⚠️ [PostDetailClient] No profile found for user');
+        setIsMember(false);
+      }
+    } catch (error) {
+      console.error('❌ [PostDetailClient] Exception while checking member status:', error);
+      setIsMember(false);
+    }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -72,32 +107,8 @@ export default function PostDetailClient({ postId }: PostDetailClientProps) {
 
         const currentUser = session?.user || null;
 
-        // 사용자 권한 확인 (로그인한 사용자만) - 디버깅 로그 추가
-        if (currentUser) {
-          console.log('🔍 [PostDetailClient] Checking member status for user:', currentUser.id);
-          
-          const { data: profile, error: profileError } = await supabase
-            .from('member_profiles')
-            .select('registration_status, is_active')
-            .eq('id', currentUser.id)
-            .single();
-
-          if (profileError) {
-            console.error('❌ [PostDetailClient] Error fetching profile:', profileError);
-            setIsMember(false);
-          } else if (profile) {
-            const isApprovedMember = (profile as MemberProfile).registration_status === 'approved' && (profile as MemberProfile).is_active;
-            console.log('📋 [PostDetailClient] Profile data:', profile);
-            console.log(`✅ [PostDetailClient] Member status: ${isApprovedMember ? 'APPROVED' : 'NOT_APPROVED'}`);
-            setIsMember(isApprovedMember);
-          } else {
-            console.warn('⚠️ [PostDetailClient] No profile found for user');
-            setIsMember(false);
-          }
-        } else {
-          console.log('👤 [PostDetailClient] No current user');
-          setIsMember(false);
-        }
+        // 사용자 권한 확인 (로그인한 사용자만)
+        await checkMemberStatus(currentUser);
 
         // 게시글 가져오기
         const { data: postData, error: postError } = await supabase
@@ -206,10 +217,22 @@ export default function PostDetailClient({ postId }: PostDetailClientProps) {
       fetchData();
     }
 
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+    // 🚨 수정된 부분: 세션 변경 시 조합원 상태 적절히 처리
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
       const newUser = session?.user || null;
       setUser(newUser);
-      setIsMember(false); // 로그아웃 시 멤버 상태 초기화
+      
+      console.log('🔄 [Auth Change] Auth state changed, event:', _event);
+      
+      // 로그아웃인 경우에만 멤버 상태 초기화
+      if (!newUser) {
+        console.log('🔄 [Auth Change] User logged out, clearing member status');
+        setIsMember(false);
+      } else {
+        // 사용자가 있으면 멤버 상태 재확인 (세션 갱신, 탭 전환 등)
+        console.log('🔄 [Auth Change] User session updated, rechecking member status');
+        await checkMemberStatus(newUser);
+      }
     });
 
     return () => {
