@@ -7,6 +7,7 @@ import PostList from '../../components/PostList';
 import CreatePostForm from '../../components/CreatePostForm';
 import { usePagination } from '../../hooks/usePagination';
 import { usePostsWithPagination } from '../../hooks/usePostsWithPagination';
+import type { MemberProfile } from '@/types';
 
 function BoardContent() {
   const [user, setUser] = useState<any>(null);
@@ -81,7 +82,7 @@ function BoardContent() {
             setUserLoading(false);
           }
         } else if (profile && mounted) {
-          setIsMember((profile as any).registration_status === 'approved' && (profile as any).is_active);
+          setIsMember((profile as MemberProfile).registration_status === 'approved' && (profile as MemberProfile).is_active);
           setUserLoading(false);
         }
       } catch (e) {
