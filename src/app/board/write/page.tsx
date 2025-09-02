@@ -26,6 +26,34 @@ export default function WritePage() {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
+  // 조합원 상태 확인 함수를 별도로 분리
+  const checkMemberStatus = async (currentUser: any) => {
+    if (!currentUser) {
+      router.replace('/login');
+      return;
+    }
+
+    try {
+      const { data: profile, error: profileError } = await supabase
+        .from('member_profiles')
+        .select('registration_status, is_active')
+        .eq('id', currentUser.id)
+        .single();
+
+      if (profileError) {
+        console.error('🔍 [Write] Error fetching profile:', profileError);
+        setIsMember(false);
+      } else if (profile) {
+        const isApprovedMember = (profile as MemberProfile).registration_status === 'approved' && (profile as MemberProfile).is_active;
+        console.log('🔍 [Write] Member status:', isApprovedMember);
+        setIsMember(isApprovedMember);
+      }
+    } catch (error) {
+      console.error('🔍 [Write] Exception while checking member status:', error);
+      setIsMember(false);
+    }
+  };
+
   useEffect(() => {
     const fetchUserData = async () => {
       try {
@@ -39,18 +67,7 @@ export default function WritePage() {
         const currentUser = session.user;
         setUser(currentUser);
 
-        const { data: profile, error: profileError } = await supabase
-          .from('member_profiles')
-          .select('registration_status, is_active')
-          .eq('id', currentUser.id)
-          .single();
-
-        if (profileError) {
-          console.error('Error fetching profile:', profileError);
-        } else if (profile) {
-          setIsMember((profile as MemberProfile).registration_status === 'approved' && (profile as MemberProfile).is_active);
-        }
-
+        await checkMemberStatus(currentUser);
         setLoading(false);
       } catch (e) {
         console.error('Error fetching user data:', e);
@@ -61,9 +78,13 @@ export default function WritePage() {
 
     fetchUserData();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (!session?.user) {
         router.replace('/login');
+      } else {
+        // 세션이 갱신되면 멤버 상태 재확인
+        console.log('🔄 [Write Auth Change] Rechecking member status');
+        await checkMemberStatus(session.user);
       }
     });
 
