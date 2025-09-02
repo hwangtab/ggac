@@ -39,7 +39,9 @@ const PostAttachmentViewer: React.FC<PostAttachmentViewerProps> = ({
   const {
     editingAttachment,
     editForm,
-    actionLoading,
+    isEditLoading,
+    isDeleteLoading,
+    isAnyLoading,
     handleDownload,
     startEdit,
     cancelEdit,
@@ -88,7 +90,7 @@ const PostAttachmentViewer: React.FC<PostAttachmentViewerProps> = ({
             isAdmin={isAdmin}
             isEditing={editingAttachment === attachment.id}
             editForm={editForm}
-            actionLoading={actionLoading === attachment.id}
+            actionLoading={isEditLoading(attachment.id) || isDeleteLoading(attachment.id)}
             onView={setSelectedImage}
             onDownload={handleDownload}
             onEdit={startEdit}

@@ -1,22 +1,14 @@
 /**
  * 게시글 목록 조회 API
- * 새로운 API 래퍼 시스템 사용
+ * 좋아요 정보를 포함한 게시글 목록 제공
  */
 
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator } from '@/utils/rateLimiter'
 import { validateSearchQuery } from '@/utils/validation'
-import { 
-  apiGet, 
-  ApiSuccess, 
-  ApiError, 
-  requireAuth, 
-  parsePaginationParams, 
-  parseSortParams,
-  validateApiInput
-} from '@/utils/apiWrapper'
+import { createErrorHandler, withErrorHandling, PREDEFINED_ERRORS } from '@/utils/errorHandler'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -27,102 +19,73 @@ const rateLimiter = applyRateLimit({
   keyGenerator: createUserKeyGenerator('posts')
 })
 
-// 게시글 데이터 타입 정의
-interface PostData {
-  id: string
-  title: string
-  content: string
-  content_format: string
-  category: string
-  author_id: string
-  created_at: string
-  updated_at: string
-  is_pinned: boolean
-  like_count: number
-  comment_count: number
-  is_liked?: boolean
-  author: {
-    display_name: string
-    email: string
-  }
-}
-
-interface PostListResponse {
-  posts: PostData[]
-  pagination: {
-    current_page: number
-    total_pages: number
-    total_count: number
-    per_page: number
-    has_next: boolean
-    has_prev: boolean
-  }
-  filters: {
-    category: string | null
-    search: string | null
-    sort_by: string
-    sort_order: string
-  }
-}
-
-export async function GET(request: NextRequest) {
-  // 인증 확인을 여기서 먼저 수행
-  const supabase = createRouteHandlerClient({ cookies })
-  const { data: { session } } = await supabase.auth.getSession()
-  const userId = requireAuth(session?.user?.id)
+async function GET(request: NextRequest) {
+  const errorHandler = createErrorHandler('/api/posts', 'GET')
   
-  return apiGet(async () => {
+  return withErrorHandling(errorHandler, async () => {
     // Rate limiting 적용
     const rateLimitResult = rateLimiter(request)
     if (!rateLimitResult.success) {
-      throw ApiError.tooManyRequests('너무 많은 요청입니다. 잠시 후 다시 시도해주세요.')
+      return rateLimitResult.response
     }
+
+    const supabase = createRouteHandlerClient({ cookies })
+    
+    // 인증 확인
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) {
+      return errorHandler.respondWith('UNAUTHORIZED')
+    }
+
+    // 에러 핸들러에 사용자 ID 추가
+    errorHandler['context'].userId = session.user.id
 
     // 회원 상태 확인
     const { data: profile } = await supabase
       .from('member_profiles')
       .select('registration_status, is_active')
-      .eq('id', userId)
+      .eq('id', session.user.id)
       .single()
 
     if (!profile || profile.registration_status !== 'approved' || !profile.is_active) {
-      throw ApiError.forbidden('승인된 회원만 접근할 수 있습니다.')
+      return errorHandler.respondWith('MEMBER_NOT_APPROVED')
     }
 
     // 쿼리 파라미터 처리
     const { searchParams } = new URL(request.url)
-    const category = searchParams.get('category') || '전체'
+    const category = searchParams.get('category') || '전체'  // 'all' -> '전체'로 변경
     const searchRaw = searchParams.get('search') || ''
-    const includeLikes = searchParams.get('include_likes') !== 'false'
-    
-    // 페이지네이션 파라미터 파싱
-    const { page, limit, offset } = parsePaginationParams(searchParams, 20, 50)
-    
-    // 정렬 파라미터 파싱
-    const allowedSortFields = ['created_at', 'updated_at', 'like_count', 'title']
-    const { orderBy: sortBy, orderDirection: sortOrder } = parseSortParams(
-      searchParams, 
-      allowedSortFields, 
-      'created_at'
-    )
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1'))
+    const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 50)
+    const offset = (page - 1) * limit
+    const sortBy = searchParams.get('sort') || 'created_at'
+    const sortOrder = searchParams.get('order') || 'desc'
+    const includeLikes = searchParams.get('include_likes') !== 'false' // 기본적으로 포함
 
     // 검색어 검증
     let search = ''
     if (searchRaw) {
       const searchValidation = validateSearchQuery(searchRaw)
       if (!searchValidation.isValid) {
-        throw ApiError.badRequest(`유효하지 않은 검색어입니다: ${searchValidation.errors.join(', ')}`)
+        return NextResponse.json({ 
+          error: '유효하지 않은 검색어입니다.', 
+          details: searchValidation.errors 
+        }, { status: 400 })
       }
       search = searchValidation.sanitized
     }
 
-    // 허용된 카테고리 검증
+    // 허용된 카테고리 검증 - '전체' 사용으로 통일
     const allowedCategories = ['전체', '공지', '잡담', '홍보', '건의']
-    validateApiInput(
-      category,
-      (cat): cat is string => allowedCategories.includes(cat),
-      '유효하지 않은 카테고리입니다.'
-    )
+    if (!allowedCategories.includes(category)) {
+      return NextResponse.json({ error: '유효하지 않은 카테고리입니다.' }, { status: 400 })
+    }
+
+    // 허용된 정렬 필드 검증
+    const allowedSortFields = ['created_at', 'updated_at', 'like_count', 'title']
+    if (!allowedSortFields.includes(sortBy)) {
+      return NextResponse.json({ error: '유효하지 않은 정렬 필드입니다.' }, { status: 400 })
+    }
 
     // 기본 쿼리 구성
     let query = supabase
@@ -143,9 +106,9 @@ export async function GET(request: NextRequest) {
           email
         )
       `)
-      .eq('is_deleted', false)
+      .eq('is_deleted', false) // 삭제되지 않은 게시글만
 
-    // 카테고리 필터 적용
+    // 카테고리 필터 적용 - '전체' 사용으로 통일
     if (category !== '전체') {
       query = query.eq('category', category)
     }
@@ -172,7 +135,10 @@ export async function GET(request: NextRequest) {
     const { data: posts, error: postsError } = await query
 
     if (postsError) {
-      throw new Error(`게시글 조회 실패: ${postsError.message}`)
+      return errorHandler.handleError(postsError, {
+        message: 'Failed to fetch posts',
+        userMessage: '게시글을 조회할 수 없습니다.'
+      })
     }
 
     // 총 개수 조회 (같은 조건으로)
@@ -193,7 +159,10 @@ export async function GET(request: NextRequest) {
     const { count, error: countError } = await countQuery
 
     if (countError) {
-      throw new Error(`게시글 수 조회 실패: ${countError.message}`)
+      return errorHandler.handleError(countError, {
+        message: 'Failed to fetch post count',
+        userMessage: '게시글 수를 조회할 수 없습니다.'
+      })
     }
 
     // 댓글 수와 현재 사용자의 좋아요 상태 추가
@@ -213,7 +182,7 @@ export async function GET(request: NextRequest) {
             .from('post_likes')
             .select('id')
             .eq('post_id', post.id)
-            .eq('user_id', userId)
+            .eq('user_id', session.user.id)
             .single()
           
           isLiked = !!userLike
@@ -222,16 +191,15 @@ export async function GET(request: NextRequest) {
         return {
           ...post,
           comment_count: commentCount || 0,
-          is_liked: includeLikes ? isLiked : undefined,
-          author: Array.isArray(post.author) ? post.author[0] : post.author
-        } as PostData
+          is_liked: includeLikes ? isLiked : undefined
+        }
       })
     )
 
     const totalCount = count || 0
     const totalPages = Math.ceil(totalCount / limit)
 
-    const result: PostListResponse = {
+    return NextResponse.json({
       posts: postsWithExtra,
       pagination: {
         current_page: page,
@@ -247,12 +215,7 @@ export async function GET(request: NextRequest) {
         sort_by: sortBy,
         sort_order: sortOrder
       }
-    }
+    })
 
-    return ApiSuccess.ok(result, '게시글 목록을 성공적으로 조회했습니다.')
-  }, '/api/posts', { 
-    userId, 
-    cacheable: true,
-    maxAge: 60 // 1분 캐시
-  })
+    }, request.url)
 }

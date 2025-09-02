@@ -16,7 +16,7 @@ import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { validateUUID, isValidTempId } from '@/utils/validation'
 import { generateUniqueFileName, sanitizeFileNameWithDetails } from '@/utils/fileNameSanitizer'
-import { validateFileName } from '@/utils/fileValidation'
+import { validateFile, FILE_VALIDATION_PROFILES, formatValidationErrors } from '@/utils/fileUploadValidation'
 
 // Service Role 클라이언트는 Storage 작업에만 사용
 function getSupabaseAdmin() {
@@ -40,18 +40,6 @@ function getSupabaseAdmin() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 }
-
-// 허용된 파일 타입과 크기
-const ALLOWED_FILE_TYPES = {
-  image: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
-  document: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
-  video: ['video/mp4', 'video/webm'],
-  audio: ['audio/mpeg', 'audio/wav']
-}
-
-const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
-const MAX_TOTAL_SIZE = 10 * 1024 * 1024 // 10MB per post
-const MAX_FILES_PER_POST = 10
 
 /**
  * 첨부파일 목록 조회
@@ -211,65 +199,18 @@ export async function POST(
       return NextResponse.json({ error: '파일이 선택되지 않았습니다.' }, { status: 400 })
     }
 
-    // 1. 파일명 보안 검증
-    const fileNameValidation = validateFileName(file.name);
-    if (!fileNameValidation.isValid) {
-      console.error('[UPLOAD API] 파일명 검증 실패:', fileNameValidation.errors);
+    // 공통 파일 검증 로직 사용
+    const validation = validateFile(file, FILE_VALIDATION_PROFILES.POST_ATTACHMENTS, [], session.user.id)
+    
+    if (!validation.isValid) {
+      console.error('[UPLOAD API] 파일 검증 실패:', validation.errors)
       return NextResponse.json({ 
-        error: `파일명이 유효하지 않습니다: ${fileNameValidation.errors.join(', ')}` 
-      }, { status: 400 });
-    }
-
-    // 2. 파일 확장자 검증
-    const extension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
-    const allowedExtensions = {
-      image: ['.jpg', '.jpeg', '.png', '.gif', '.webp'],
-      document: ['.pdf', '.doc', '.docx'],
-      video: ['.mp4', '.webm'],
-      audio: ['.mp3', '.wav']
-    };
-
-    let fileType: 'image' | 'document' | 'video' | 'audio' | null = null;
-    for (const [type, extensions] of Object.entries(allowedExtensions)) {
-      if (extensions.includes(extension)) {
-        fileType = type as 'image' | 'document' | 'video' | 'audio';
-        break;
-      }
-    }
-
-    if (!fileType) {
-      return NextResponse.json({ 
-        error: `지원하지 않는 파일 확장자입니다: ${extension}` 
-      }, { status: 400 });
-    }
-
-    // 3. MIME 타입과 확장자 일치성 검증
-    const expectedMimeTypes = ALLOWED_FILE_TYPES[fileType];
-    if (!expectedMimeTypes.includes(file.type)) {
-      console.warn('[UPLOAD API] MIME 타입과 확장자 불일치:', {
-        extension,
-        mimeType: file.type,
-        expected: expectedMimeTypes
-      });
-      return NextResponse.json({ 
-        error: `파일 형식이 일치하지 않습니다. 확장자: ${extension}, MIME 타입: ${file.type}` 
-      }, { status: 400 });
-    }
-
-    // 4. 파일 크기 검증 (타입별 제한)
-    const maxSizes = {
-      image: 5 * 1024 * 1024,    // 5MB
-      document: 10 * 1024 * 1024, // 10MB
-      video: 50 * 1024 * 1024,   // 50MB
-      audio: 20 * 1024 * 1024    // 20MB
-    };
-
-    const maxSize = maxSizes[fileType];
-    if (file.size > maxSize) {
-      return NextResponse.json({ 
-        error: `${fileType} 파일 크기가 너무 큽니다. 최대 ${Math.round(maxSize / 1024 / 1024)}MB까지 업로드 가능합니다.` 
+        error: formatValidationErrors(validation.errors)
       }, { status: 400 })
     }
+
+    // 파일 타입 추출 (검증에서 이미 확인됨)
+    const fileType = validation.fileType!
 
     // 임시 ID가 아닌 경우에만 첨부파일 제한 확인
     if (!isTempId) {
@@ -286,27 +227,23 @@ export async function POST(
       const currentCount = existingAttachments?.length || 0
       const currentTotalSize = existingAttachments?.reduce((sum, att) => sum + att.file_size, 0) || 0
 
+      // 검증 설정에서 제한값 가져오기
+      const config = FILE_VALIDATION_PROFILES.POST_ATTACHMENTS
+      
       // 제한 확인
-      if (currentCount >= MAX_FILES_PER_POST) {
+      if (currentCount >= (config.maxFiles || 10)) {
         return NextResponse.json({ 
-          error: `첨부파일 개수 제한을 초과했습니다. (최대 ${MAX_FILES_PER_POST}개)` 
+          error: `첨부파일 개수 제한을 초과했습니다. (최대 ${config.maxFiles}개)` 
         }, { status: 400 })
       }
 
-      if (currentTotalSize + file.size > MAX_TOTAL_SIZE) {
+      if (config.maxTotalSize && currentTotalSize + file.size > config.maxTotalSize) {
         return NextResponse.json({ 
-          error: `첨부파일 총 크기 제한을 초과했습니다. (최대 ${MAX_TOTAL_SIZE / 1024 / 1024}MB)` 
+          error: `첨부파일 총 크기 제한을 초과했습니다. (최대 ${config.maxTotalSize / 1024 / 1024}MB)` 
         }, { status: 400 })
       }
     } else {
       console.log('[UPLOAD API] 임시 ID - 첨부파일 제한 확인 생략');
-      
-      // 임시 파일의 경우 개별 파일 크기만 제한
-      if (file.size > MAX_FILE_SIZE) {
-        return NextResponse.json({ 
-          error: `파일 크기가 너무 큽니다. 최대 ${MAX_FILE_SIZE / 1024 / 1024}MB까지 업로드 가능합니다.` 
-        }, { status: 400 })
-      }
     }
 
     // Storage 클라이언트 생성 및 파일 업로드
@@ -322,17 +259,10 @@ export async function POST(
       }, { status: 503 })
     }
 
-    // 파일명 정제 및 고유 파일명 생성
+    // 파일명 정제 및 고유 파일명 생성 (공통 검증에서 이미 생성됨)
     console.log('[UPLOAD API] 파일명 정제 시작');
-    const fileNameResult = sanitizeFileNameWithDetails(file.name);
-    console.log('[UPLOAD API] 파일명 정제 결과:', {
-      original: fileNameResult.original,
-      sanitized: fileNameResult.sanitized,
-      hasChanges: fileNameResult.hasChanges
-    });
-    
-    const uniqueFileName = generateUniqueFileName(file.name);
-    console.log('[UPLOAD API] 고유 파일명 생성:', uniqueFileName);
+    const uniqueFileName = validation.uniqueFileName || generateUniqueFileName(file.name);
+    console.log('[UPLOAD API] 고유 파일명:', uniqueFileName);
     
     // 파일을 Supabase Storage에 업로드
     console.log('[UPLOAD API] 파일 버퍼 변환 시작');
@@ -514,17 +444,4 @@ export async function POST(
       error: `서버 오류가 발생했습니다: ${error instanceof Error ? error.message : '알 수 없는 오류'}` 
     }, { status: 500 })
   }
-}
-
-/**
- * 파일 MIME 타입에서 파일 종류 추출
- */
-function getFileType(mimeType: string): 'image' | 'document' | 'video' | 'audio' | null {
-  if (mimeType.startsWith('image/')) return 'image'
-  if (mimeType.startsWith('video/')) return 'video'
-  if (mimeType.startsWith('audio/')) return 'audio'
-  if (mimeType.includes('pdf') || mimeType.includes('document') || mimeType.includes('word')) {
-    return 'document'
-  }
-  return null
 }

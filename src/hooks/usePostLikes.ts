@@ -9,6 +9,7 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import type { PostLikeToggleResponse } from '@/types'
 import { createLogger } from '@/utils/logger'
+import { useMultiLoadingState } from '@/hooks/useLoadingState'
 
 const log = createLogger('usePostLikes');
 
@@ -17,10 +18,6 @@ interface PostLikeState {
   likeCount: number
   /** 현재 사용자의 좋아요 여부 */
   isLiked: boolean
-  /** 로딩 상태 */
-  isLoading: boolean
-  /** 에러 상태 */
-  error: string | null
 }
 
 interface UsePostLikesProps {
@@ -43,17 +40,23 @@ export function usePostLikes({
   const [user, setUser] = useState<any>(null)
   const [state, setState] = useState<PostLikeState>({
     likeCount: initialLikeCount,
-    isLiked: initialIsLiked,
-    isLoading: false,
-    error: null
+    isLiked: initialIsLiked
   })
 
   const supabase = createClientComponentClient()
   
   // 중복 요청 방지 및 캐싱
-  const isProcessingRef = useRef(false)
   const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const lastFetchRef = useRef<string>('')
+  
+  // 로딩 상태 관리
+  const multiLoadingState = useMultiLoadingState({
+    timeout: 5000,
+    enableLogging: true,
+    onError: (error) => {
+      log.error('PostLikes 작업 오류:', error)
+    }
+  })
   
   // 사용자 정보 가져오기
   useEffect(() => {
@@ -89,7 +92,7 @@ export function usePostLikes({
     }
 
     lastFetchRef.current = fetchKey
-    setState(prev => ({ ...prev, isLoading: true, error: null }))
+    multiLoadingState.startLoading('fetch')
 
     try {
       log.debug('GET 요청 시작:', `/api/posts/${postId}/likes`);
@@ -122,17 +125,14 @@ export function usePostLikes({
       setState(prev => ({
         ...prev,
         likeCount: data.like_count || 0,
-        isLiked: data.is_liked || false,
-        isLoading: false
+        isLiked: data.is_liked || false
       }))
+      
+      multiLoadingState.finishLoading('fetch', data)
 
     } catch (error) {
       log.error('GET 오류:', error)
-      setState(prev => ({
-        ...prev,
-        error: error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.',
-        isLoading: false
-      }))
+      multiLoadingState.failLoading('fetch', error as Error)
     } finally {
       // 요청 완료 후 일정 시간 후 중복 방지 키 리셋 (디바운싱)
       fetchTimeoutRef.current = setTimeout(() => {
@@ -146,7 +146,7 @@ export function usePostLikes({
     log.debug('toggleLike 시작', { 
       postId, 
       hasUser: !!user,
-      isProcessing: isProcessingRef.current
+      isToggling: multiLoadingState.getLoadingState('toggle').isLoading
     })
     
     if (!user) {
@@ -166,12 +166,10 @@ export function usePostLikes({
     }
 
     // 중복 처리 방지
-    if (isProcessingRef.current) {
+    if (multiLoadingState.getLoadingState('toggle').isLoading) {
       log.debug('이미 처리 중 - 요청 무시');
       return false
     }
-
-    isProcessingRef.current = true
     
     // Optimistic update - UI 즉시 업데이트
     const optimisticIsLiked = !state.isLiked
@@ -180,10 +178,10 @@ export function usePostLikes({
     setState(prev => ({ 
       ...prev, 
       isLiked: optimisticIsLiked, 
-      likeCount: optimisticCount,
-      isLoading: true, 
-      error: null 
+      likeCount: optimisticCount
     }))
+    
+    multiLoadingState.startLoading('toggle')
     
     // 부모 컴포넌트에 즉시 알림 (실시간 업데이트보다 빠른 UI 반영)
     if (onLikeChange) {
@@ -241,9 +239,10 @@ export function usePostLikes({
       setState(prev => ({
         ...prev,
         likeCount: successData.like_count,
-        isLiked: successData.liked,
-        isLoading: false
+        isLiked: successData.liked
       }))
+      
+      multiLoadingState.finishLoading('toggle', successData)
 
       // 콜백 호출 (postId 포함)
       onLikeChange?.(postId, successData.liked, successData.like_count)
@@ -265,10 +264,10 @@ export function usePostLikes({
       setState(prev => ({
         ...prev,
         isLiked: rollbackIsLiked,
-        likeCount: rollbackCount,
-        error: errorMessage,
-        isLoading: false
+        likeCount: rollbackCount
       }))
+      
+      multiLoadingState.failLoading('toggle', errorMessage)
       
       // 부모 컴포넌트에 롤백 알림
       if (onLikeChange) {
@@ -281,15 +280,13 @@ export function usePostLikes({
       }
       
       return false
-    } finally {
-      isProcessingRef.current = false
     }
   }, [user, postId, onLikeChange, state.isLiked, state.likeCount])
 
   // 에러 클리어
   const clearError = useCallback(() => {
-    setState(prev => ({ ...prev, error: null }))
-  }, [])
+    multiLoadingState.reset()
+  }, [multiLoadingState])
 
   // 사용자 로그인 상태 변경 시 좋아요 상태 조회 - 디바운싱 적용
   useEffect(() => {
@@ -316,8 +313,10 @@ export function usePostLikes({
     // 상태
     likeCount: state.likeCount,
     isLiked: state.isLiked,
-    isLoading: state.isLoading,
-    error: state.error,
+    isLoading: multiLoadingState.isAnyLoading,
+    isFetching: multiLoadingState.getLoadingState('fetch').isLoading,
+    isToggling: multiLoadingState.getLoadingState('toggle').isLoading,
+    error: multiLoadingState.globalError,
     
     // 액션
     toggleLike,
@@ -325,6 +324,7 @@ export function usePostLikes({
     clearError,
     
     // 유틸
-    canLike: !!user
+    canLike: !!user,
+    reset: () => multiLoadingState.reset()
   }
 }
