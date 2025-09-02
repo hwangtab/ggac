@@ -953,6 +953,32 @@ export interface Post {
 }
 
 /**
+ * 좋아요 정보가 포함된 게시글 인터페이스
+ * usePostsWithPagination에서 사용되는 확장된 Post 타입
+ */
+export interface PostWithLikes extends Post {
+  /** 좋아요 수 (필수) */
+  like_count: number
+  /** 현재 사용자의 좋아요 여부 (필수) */
+  is_liked: boolean
+}
+
+/**
+ * Supabase 실시간 업데이트 페이로드 인터페이스
+ */
+export interface SupabaseRealtimePayload<T = any> {
+  eventType?: string
+  event_type?: string
+  old?: T
+  old_record?: T
+  new?: T
+  new_record?: T
+  schema?: string
+  table?: string
+  commit_timestamp?: string
+}
+
+/**
  * 게시글 첨부파일 인터페이스
  * Supabase post_attachments 테이블과 연동되는 표준 인터페이스
  */
@@ -1546,6 +1572,17 @@ export interface Comment {
     name: string
     email: string
   }
+}
+
+/**
+ * 좋아요 정보가 포함된 댓글 인터페이스
+ * CommentSection에서 사용되는 확장된 Comment 타입
+ */
+export interface CommentWithLikes extends Comment {
+  /** 좋아요 수 */
+  like_count: number
+  /** 현재 사용자의 좋아요 여부 */
+  is_liked: boolean
 }
 
 /**

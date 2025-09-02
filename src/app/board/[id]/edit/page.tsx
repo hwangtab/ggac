@@ -4,6 +4,7 @@ import { supabase } from '../../../../lib/supabase/client';
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
+import type { MemberProfile, Post as PostType } from '@/types';
 
 // RichTextEditor를 동적으로 로드하여 SSR 이슈 방지
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), {
@@ -55,7 +56,7 @@ export default function PostEditPage() {
         if (profileError) {
           console.error('Error fetching profile:', profileError);
         } else if (profile) {
-          setIsMember((profile as any).registration_status === 'approved' && (profile as any).is_active);
+          setIsMember((profile as MemberProfile).registration_status === 'approved' && (profile as MemberProfile).is_active);
         }
 
         // 게시글 가져오기
@@ -78,7 +79,7 @@ export default function PostEditPage() {
           return;
         }
 
-        setPost(postData as any);
+        setPost(postData as unknown as PostType);
         setUseRichEditor(postData.content_format === 'html');
         setLoading(false);
       } catch (e) {

@@ -7,6 +7,7 @@ import CommentSection from '../../../components/CommentSection';
 import PostLikeButton from '../../../components/PostLikeButton';
 import PostAttachmentsDisplay from '../../../components/PostAttachmentsDisplay';
 import dynamic from 'next/dynamic';
+import type { MemberProfile, Post as PostType } from '@/types';
 
 // PostContentRenderer를 동적으로 로드하여 SSR 이슈 방지
 const PostContentRenderer = dynamic(() => import('@/components/PostContentRenderer'), {
@@ -85,7 +86,7 @@ export default function PostDetailClient({ postId }: PostDetailClientProps) {
             console.error('❌ [PostDetailClient] Error fetching profile:', profileError);
             setIsMember(false);
           } else if (profile) {
-            const isApprovedMember = (profile as any).registration_status === 'approved' && (profile as any).is_active;
+            const isApprovedMember = (profile as MemberProfile).registration_status === 'approved' && (profile as MemberProfile).is_active;
             console.log('📋 [PostDetailClient] Profile data:', profile);
             console.log(`✅ [PostDetailClient] Member status: ${isApprovedMember ? 'APPROVED' : 'NOT_APPROVED'}`);
             setIsMember(isApprovedMember);
@@ -167,25 +168,26 @@ export default function PostDetailClient({ postId }: PostDetailClientProps) {
         }
 
         // 작성자 프로필 가져오기
-        console.debug(`[PostDetail] Fetching author profile for user ID: ${(postData as any).author_id}`);
+        const post = postData as unknown as PostType;
+        console.debug(`[PostDetail] Fetching author profile for user ID: ${post.author_id}`);
         const { data: authorData, error: authorError } = await supabase
           .from('public_profiles')
           .select('id, display_name')
-          .eq('id', (postData as any).author_id)
+          .eq('id', post.author_id)
           .single();
 
         if (authorError) {
           console.warn(`[PostDetail] Failed to fetch author profile: ${authorError.message}`);
           // 기본 프로필 설정
           setAuthorProfile({
-            id: (postData as any).author_id,
+            id: post.author_id,
             display_name: '알 수 없는 사용자',
             profile_image_url: undefined
           });
         } else {
           console.debug('[PostDetail] Author profile loaded successfully');
           setAuthorProfile((authorData as any) || {
-            id: (postData as any).author_id,
+            id: post.author_id,
             display_name: '알 수 없는 사용자',
             profile_image_url: undefined
           });

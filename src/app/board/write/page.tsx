@@ -4,6 +4,7 @@ import { supabase } from '../../../lib/supabase/client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
+import type { MemberProfile } from '@/types';
 
 // Lazy load the CreatePostForm component
 const CreatePostForm = dynamic(() => import('../../../components/CreatePostForm'), {
@@ -47,7 +48,7 @@ export default function WritePage() {
         if (profileError) {
           console.error('Error fetching profile:', profileError);
         } else if (profile) {
-          setIsMember((profile as any).registration_status === 'approved' && (profile as any).is_active);
+          setIsMember((profile as MemberProfile).registration_status === 'approved' && (profile as MemberProfile).is_active);
         }
 
         setLoading(false);

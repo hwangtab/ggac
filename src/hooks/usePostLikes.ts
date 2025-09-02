@@ -8,6 +8,9 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import type { PostLikeToggleResponse } from '@/types'
+import { createLogger } from '@/utils/logger'
+
+const log = createLogger('usePostLikes');
 
 interface PostLikeState {
   /** 좋아요 수 */
@@ -76,7 +79,7 @@ export function usePostLikes({
     // 중복 요청 방지 - 같은 요청이 이미 진행 중이면 무시
     const fetchKey = `${user.id}-${postId}`
     if (!force && lastFetchRef.current === fetchKey) {
-      console.log('[usePostLikes] 중복 요청 방지:', fetchKey);
+      log.debug('중복 요청 방지:', fetchKey);
       return
     }
 
@@ -89,11 +92,11 @@ export function usePostLikes({
     setState(prev => ({ ...prev, isLoading: true, error: null }))
 
     try {
-      console.log('[usePostLikes] GET 요청 시작:', `/api/posts/${postId}/likes`);
+      log.debug('GET 요청 시작:', `/api/posts/${postId}/likes`);
       
       const response = await fetch(`/api/posts/${postId}/likes`)
       
-      console.log('[usePostLikes] GET 응답:', response.status, response.statusText);
+      log.debug('GET 응답:', response.status, response.statusText);
       
       if (!response.ok) {
         let errorMessage = '좋아요 정보를 불러올 수 없습니다.';
@@ -102,7 +105,7 @@ export function usePostLikes({
           const errorData = await response.json();
           errorMessage = errorData.error || errorMessage;
         } catch (parseError) {
-          console.error('[usePostLikes] JSON 파싱 실패:', parseError);
+          log.error('JSON 파싱 실패:', parseError);
           if (response.status === 404) {
             errorMessage = 'API 엔드포인트를 찾을 수 없습니다.';
           } else if (response.status >= 500) {
@@ -114,7 +117,7 @@ export function usePostLikes({
       }
 
       const data = await response.json();
-      console.log('[usePostLikes] GET 데이터:', data);
+      log.debug('GET 데이터:', data);
 
       setState(prev => ({
         ...prev,
@@ -124,7 +127,7 @@ export function usePostLikes({
       }))
 
     } catch (error) {
-      console.error('[usePostLikes] GET 오류:', error)
+      log.error('GET 오류:', error)
       setState(prev => ({
         ...prev,
         error: error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.',
@@ -140,7 +143,7 @@ export function usePostLikes({
 
   // 좋아요 토글
   const toggleLike = useCallback(async () => {
-    console.log('[usePostLikes] toggleLike 시작', { 
+    log.debug('toggleLike 시작', { 
       postId, 
       hasUser: !!user,
       isProcessing: isProcessingRef.current
@@ -164,7 +167,7 @@ export function usePostLikes({
 
     // 중복 처리 방지
     if (isProcessingRef.current) {
-      console.log('[usePostLikes] 이미 처리 중 - 요청 무시');
+      log.debug('이미 처리 중 - 요청 무시');
       return false
     }
 
@@ -184,7 +187,7 @@ export function usePostLikes({
     
     // 부모 컴포넌트에 즉시 알림 (실시간 업데이트보다 빠른 UI 반영)
     if (onLikeChange) {
-      console.log('[usePostLikes] Optimistic update - 부모에 즉시 알림:', {
+      log.debug('Optimistic update - 부모에 즉시 알림:', {
         postId,
         liked: optimisticIsLiked,
         count: optimisticCount
@@ -200,23 +203,23 @@ export function usePostLikes({
         }
       })
 
-      console.log('[usePostLikes] POST 응답:', {
+      log.debug('POST 응답:', {
         status: response.status,
         statusText: response.statusText,
         ok: response.ok
       });
 
       if (!response.ok) {
-        console.error('[usePostLikes] POST 응답 오류:', response.status);
+        log.error('POST 응답 오류:', response.status);
         
         let errorMessage = '좋아요 처리에 실패했습니다.';
         
         try {
           const errorData = await response.json();
-          console.error('[usePostLikes] 서버 에러 응답:', errorData);
+          log.error('서버 에러 응답:', errorData);
           errorMessage = errorData.error || errorData.message || errorMessage;
         } catch (parseError) {
-          console.error('[usePostLikes] JSON 파싱 실패:', parseError);
+          log.error('JSON 파싱 실패:', parseError);
           if (response.status === 401) {
             errorMessage = '로그인이 필요합니다.';
           } else if (response.status === 403) {
@@ -232,7 +235,7 @@ export function usePostLikes({
       }
 
       const successData: PostLikeToggleResponse = await response.json();
-      console.log('[usePostLikes] POST 성공:', successData);
+      log.debug('POST 성공:', successData);
 
       // 상태 업데이트
       setState(prev => ({
@@ -248,7 +251,7 @@ export function usePostLikes({
       return true
 
     } catch (error) {
-      console.error('[usePostLikes] POST 오류:', error)
+      log.error('POST 오류:', error)
       
       // Optimistic update 롤백
       const rollbackIsLiked = !optimisticIsLiked
@@ -269,7 +272,7 @@ export function usePostLikes({
       
       // 부모 컴포넌트에 롤백 알림
       if (onLikeChange) {
-        console.log('[usePostLikes] 에러 발생 - 롤백 알림:', {
+        log.debug('에러 발생 - 롤백 알림:', {
           postId,
           liked: rollbackIsLiked,
           count: rollbackCount

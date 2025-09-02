@@ -12,6 +12,9 @@ import { formatDistanceToNow } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import type { Notification, NotificationStats } from '@/types'
 import Portal from './Portal'
+import { createLogger } from '@/utils/logger'
+
+const log = createLogger('NotificationDropdown');
 
 interface NotificationDropdownProps {
   /** 드롭다운 위치 조정을 위한 클래스 */
@@ -222,11 +225,11 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ className =
 
     // 라우팅 실행
     if (targetRoute) {
-      console.log(`🔗 [NotificationDropdown] Navigating to: ${targetRoute} (type: ${notification.type})`)
+      log.debug(`Navigating to: ${targetRoute} (type: ${notification.type})`)
       router.push(targetRoute)
       setIsOpen(false)
     } else {
-      console.warn(`⚠️ [NotificationDropdown] No route defined for notification:`, notification)
+      log.warn(`No route defined for notification:`, notification)
     }
   }
 

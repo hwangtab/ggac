@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase/client';
-import type { Post } from '@/types';
+import type { Post, PostWithLikes, SupabaseRealtimePayload } from '@/types';
 
 interface UsePostsWithPaginationProps {
   page: number;
@@ -11,7 +11,7 @@ interface UsePostsWithPaginationProps {
 }
 
 interface PostsResult {
-  posts: Post[];
+  posts: PostWithLikes[];
   totalCount: number;
   loading: boolean;
   error: string | null;
@@ -22,7 +22,7 @@ export const usePostsWithPagination = ({
   pageSize,
   category,
 }: UsePostsWithPaginationProps): PostsResult => {
-  const [posts, setPosts] = useState<Post[]>([]);
+  const [posts, setPosts] = useState<PostWithLikes[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -106,14 +106,14 @@ export const usePostsWithPagination = ({
                 ...post,
                 like_count: likeData.like_count || 0,
                 is_liked: likeData.is_liked || false
-              } as any;
+              } as PostWithLikes;
             } else {
               // API 호출 실패 시 기본값 사용
               return {
                 ...post,
                 like_count: 0,
                 is_liked: false
-              } as any;
+              } as PostWithLikes;
             }
           } catch (error) {
             console.error(`좋아요 정보 조회 실패 (Post ${post.id}):`, error);
@@ -122,7 +122,7 @@ export const usePostsWithPagination = ({
               ...post,
               like_count: 0,
               is_liked: false
-            } as any;
+            } as PostWithLikes;
           }
         })
       );
@@ -166,9 +166,10 @@ export const usePostsWithPagination = ({
           (payload) => {
             
             // 마이너 업데이트 필터링 (좋아요, 조회수 등)
-            const eventType = (payload as any).eventType || (payload as any).event_type;
-            const oldRecord = (payload as any).old || (payload as any).old_record;
-            const newRecord = (payload as any).new || (payload as any).new_record;
+            const realtimePayload = payload as unknown as SupabaseRealtimePayload<Post>;
+            const eventType = realtimePayload.eventType || realtimePayload.event_type;
+            const oldRecord = realtimePayload.old || realtimePayload.old_record;
+            const newRecord = realtimePayload.new || realtimePayload.new_record;
             
             console.log('[REALTIME] 실시간 업데이트 수신 - 전체 페이로드:', {
               eventType,
@@ -268,7 +269,7 @@ export const useAnnouncementPosts = () => {
           .order('created_at', { ascending: false });
 
         if (error) throw error;
-        setAnnouncements((data as any) || []);
+        setAnnouncements((data as unknown as Post[]) || []);
       } catch (err) {
         console.error('Error fetching announcements:', err);
         setAnnouncements([]);
