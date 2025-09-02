@@ -172,15 +172,61 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ className =
     }
   }
 
-  // 알림 클릭 핸들러
+  // 알림 클릭 핸들러 - 타입별 라우팅 로직
   const handleNotificationClick = (notification: Notification) => {
     if (!notification.read_at) {
       markAsRead(notification.id)
     }
 
-    if (notification.related_post_id) {
-      router.push(`/board/${notification.related_post_id}`)
+    let targetRoute: string | null = null
+
+    // 알림 타입에 따른 라우팅 결정
+    switch (notification.type) {
+      case 'post_reply':
+      case 'post_new':
+      case 'post_mention':
+        // 게시글 관련 알림 - 해당 게시글로 이동
+        if (notification.related_post_id) {
+          targetRoute = `/board/${notification.related_post_id}`
+        }
+        break
+        
+      case 'system_notice':
+      case 'maintenance':
+        // 시스템 공지/점검 알림 - 전체 알림 페이지로 이동
+        targetRoute = '/notifications'
+        break
+        
+      case 'member_approved':
+      case 'member_rejected':
+      case 'artist_approved': 
+      case 'artist_rejected':
+        // 회원/아티스트 권한 관련 알림 - 마이페이지로 이동
+        targetRoute = '/mypage'
+        break
+        
+      case 'welcome':
+        // 환영 메시지 - 홈페이지로 이동
+        targetRoute = '/'
+        break
+        
+      default:
+        // 기본값: 관련 게시글이 있으면 해당 게시글로, 없으면 전체 알림 페이지로
+        if (notification.related_post_id) {
+          targetRoute = `/board/${notification.related_post_id}`
+        } else {
+          targetRoute = '/notifications'
+        }
+        break
+    }
+
+    // 라우팅 실행
+    if (targetRoute) {
+      console.log(`🔗 [NotificationDropdown] Navigating to: ${targetRoute} (type: ${notification.type})`)
+      router.push(targetRoute)
       setIsOpen(false)
+    } else {
+      console.warn(`⚠️ [NotificationDropdown] No route defined for notification:`, notification)
     }
   }
 
