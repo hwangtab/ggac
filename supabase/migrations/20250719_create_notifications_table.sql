@@ -157,17 +157,26 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- 트리거: 새 게시글 알림 자동 생성
 CREATE OR REPLACE FUNCTION notify_new_post()
 RETURNS TRIGGER AS $$
+DECLARE
+  user_record RECORD;
 BEGIN
   -- 공지사항인 경우 모든 승인된 멤버에게 알림
   IF NEW.category = '공지' THEN
-    PERFORM create_bulk_notification(
-      (SELECT ARRAY_AGG(id) FROM member_profiles WHERE registration_status = 'approved'),
-      'post_new',
-      '새 공지사항이 등록되었습니다',
-      NEW.title,
-      jsonb_build_object('post_id', NEW.id, 'category', NEW.category),
-      NOW() + INTERVAL '7 days'
-    );
+    -- 각 사용자별로 개별 알림 생성 (related_post_id 포함)
+    FOR user_record IN 
+      SELECT id FROM member_profiles WHERE registration_status = 'approved'
+    LOOP
+      PERFORM create_notification(
+        user_record.id,
+        'post_new',
+        '새 공지사항이 등록되었습니다',
+        NEW.title,
+        jsonb_build_object('post_id', NEW.id, 'category', NEW.category),
+        NEW.id,  -- related_post_id 설정
+        NEW.author_id,  -- related_user_id 설정  
+        NOW() + INTERVAL '7 days'
+      );
+    END LOOP;
   END IF;
   
   RETURN NEW;
