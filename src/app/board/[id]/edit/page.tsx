@@ -73,14 +73,14 @@ export default function PostEditPage() {
         }
 
         // 작성자 확인
-        if (postData.author_id !== currentUser.id) {
+        if (postData?.author_id !== currentUser.id) {
           setError('수정 권한이 없습니다.');
           setLoading(false);
           return;
         }
 
         setPost(postData as unknown as PostType);
-        setUseRichEditor(postData.content_format === 'html');
+        setUseRichEditor(postData?.content_format === 'html');
         setLoading(false);
       } catch (e) {
         console.error('Error fetching data:', e);
