@@ -180,6 +180,14 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
 
   // 알림 클릭 핸들러 - 타입별 라우팅 로직
   const handleNotificationClick = (notification: Notification) => {
+    // 디버깅: 클릭된 알림 정보
+    console.log('🔍 [NotificationDropdown] Clicked notification:', {
+      type: notification.type,
+      title: notification.title,
+      related_post_id: notification.related_post_id,
+      data_post_id: notification.data?.post_id,
+    })
+
     if (!notification.read_at) {
       markAsRead(notification.id)
     }
@@ -192,16 +200,18 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
       case 'post_new':
       case 'post_mention':
         // 게시글 관련 알림 - 해당 게시글로 이동
-        if (notification.related_post_id) {
-          targetRoute = `/board/${notification.related_post_id}`
+        const postIdForPost = notification.related_post_id || notification.data?.post_id
+        if (postIdForPost) {
+          targetRoute = `/board/${postIdForPost}`
         }
         break
 
       case 'system_notice':
       case 'maintenance':
         // 시스템 공지/점검 알림 - 관련 게시글이 있으면 해당 게시글로, 없으면 전체 알림 페이지로
-        if (notification.related_post_id) {
-          targetRoute = `/board/${notification.related_post_id}`
+        const postId = notification.related_post_id || notification.data?.post_id
+        if (postId) {
+          targetRoute = `/board/${postId}`
         } else {
           targetRoute = '/notifications'
         }
@@ -222,8 +232,9 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
 
       default:
         // 기본값: 관련 게시글이 있으면 해당 게시글로, 없으면 전체 알림 페이지로
-        if (notification.related_post_id) {
-          targetRoute = `/board/${notification.related_post_id}`
+        const defaultPostId = notification.related_post_id || notification.data?.post_id
+        if (defaultPostId) {
+          targetRoute = `/board/${defaultPostId}`
         } else {
           targetRoute = '/notifications'
         }
@@ -232,10 +243,12 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
 
     // 라우팅 실행
     if (targetRoute) {
+      console.log(`✅ [NotificationDropdown] Navigating to: ${targetRoute}`)
       log.debug(`Navigating to: ${targetRoute} (type: ${notification.type})`)
       router.push(targetRoute)
       setIsOpen(false)
     } else {
+      console.log(`❌ [NotificationDropdown] No route found for: ${notification.type}`)
       log.warn(`No route defined for notification:`, notification)
     }
   }
