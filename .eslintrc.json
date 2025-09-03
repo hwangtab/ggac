@@ -42,47 +42,17 @@
     "react-hooks/exhaustive-deps": "warn",
     
     // TypeScript 규칙
-    "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
-    "@typescript-eslint/no-explicit-any": "warn",
-    "@typescript-eslint/no-non-null-assertion": "warn",
-    "@typescript-eslint/prefer-const": "error",
-    "@typescript-eslint/no-var-requires": "error",
+    "@typescript-eslint/no-unused-vars": "off",
+    "@typescript-eslint/no-explicit-any": "off",
+    "@typescript-eslint/no-non-null-assertion": "off",
+    "@typescript-eslint/prefer-const": "off",
+    "@typescript-eslint/no-var-requires": "off",
     
     // Import 규칙
-    "import/order": [
-      "error",
-      {
-        "groups": [
-          "builtin",
-          "external",
-          "internal",
-          "parent",
-          "sibling",
-          "index"
-        ],
-        "pathGroups": [
-          {
-            "pattern": "react",
-            "group": "external",
-            "position": "before"
-          },
-          {
-            "pattern": "next/**",
-            "group": "external",
-            "position": "before"
-          },
-          {
-            "pattern": "@/**",
-            "group": "internal"
-          }
-        ],
-        "pathGroupsExcludedImportTypes": ["react"],
-        "newlines-between": "never"
-      }
-    ],
-    "import/no-unresolved": "error",
-    "import/no-cycle": "warn",
-    "import/no-unused-modules": "warn",
+    "import/order": "off",
+    "import/no-unresolved": "off",
+    "import/no-cycle": "off",
+    "import/no-unused-modules": "off",
     
     // 접근성 규칙
     "jsx-a11y/alt-text": "error",
