@@ -180,12 +180,19 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
 
   // 알림 클릭 핸들러 - 타입별 라우팅 로직
   const handleNotificationClick = (notification: Notification) => {
+    // 🔍 전체 알림 객체 구조 출력
+    console.log('🔍 [NotificationDropdown] Full notification object:', notification)
+
     // 디버깅: 클릭된 알림 정보
-    console.log('🔍 [NotificationDropdown] Clicked notification:', {
+    console.log('📋 [NotificationDropdown] Clicked notification details:', {
+      id: notification.id,
       type: notification.type,
       title: notification.title,
+      message: notification.message,
       related_post_id: notification.related_post_id,
+      data: notification.data,
       data_post_id: notification.data?.post_id,
+      data_keys: notification.data ? Object.keys(notification.data) : 'no data',
     })
 
     if (!notification.read_at) {
@@ -201,6 +208,10 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
       case 'post_mention':
         // 게시글 관련 알림 - 해당 게시글로 이동
         const postIdForPost = notification.related_post_id || notification.data?.post_id
+        console.log('🎯 [post_new] postIdForPost:', postIdForPost, {
+          related_post_id: notification.related_post_id,
+          data_post_id: notification.data?.post_id,
+        })
         if (postIdForPost) {
           targetRoute = `/board/${postIdForPost}`
         }
@@ -210,6 +221,7 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
       case 'maintenance':
         // 시스템 공지/점검 알림 - 관련 게시글이 있으면 해당 게시글로, 없으면 전체 알림 페이지로
         const postId = notification.related_post_id || notification.data?.post_id
+        console.log('🎯 [system_notice] postId:', postId)
         if (postId) {
           targetRoute = `/board/${postId}`
         } else {
@@ -233,6 +245,7 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
       default:
         // 기본값: 관련 게시글이 있으면 해당 게시글로, 없으면 전체 알림 페이지로
         const defaultPostId = notification.related_post_id || notification.data?.post_id
+        console.log('🎯 [default] defaultPostId:', defaultPostId)
         if (defaultPostId) {
           targetRoute = `/board/${defaultPostId}`
         } else {
@@ -249,6 +262,10 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
       setIsOpen(false)
     } else {
       console.log(`❌ [NotificationDropdown] No route found for: ${notification.type}`)
+      console.log('❌ [NotificationDropdown] Available data:', {
+        related_post_id: notification.related_post_id,
+        data: notification.data,
+      })
       log.warn(`No route defined for notification:`, notification)
     }
   }
