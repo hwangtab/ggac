@@ -3,12 +3,12 @@
  * 사용자 활동을 자동으로 추적하고 기록하는 시스템
  */
 
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import type { 
-  ActivityActionType, 
-  ActivityTargetType, 
+import { supabase } from '@/lib/supabase/client'
+import type {
+  ActivityActionType,
+  ActivityTargetType,
   ActivityLogRequest,
-  UserSession 
+  UserSession,
 } from '@/types'
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'none'
@@ -22,7 +22,7 @@ interface ActivityLoggerConfig {
 }
 
 class ActivityLogger {
-  private supabase = createClientComponentClient()
+  // Use safe Supabase client wrapper instead of direct client creation
   private config: ActivityLoggerConfig
   private sessionId: string | null = null
   private sessionToken: string | null = null
@@ -39,20 +39,20 @@ class ActivityLogger {
       info: 1,
       warn: 2,
       error: 3,
-      none: 4
+      none: 4,
     }
-    
+
     if (levels[level] < levels[this.config.logLevel || 'error']) {
       return
     }
-    
+
     if (!this.config.enableConsoleLogging) {
       return
     }
-    
+
     // 민감한 정보 필터링
     const sanitizedData = this.sanitizeLogData(data)
-    
+
     const logMethod = (console as any)[level] || console.log
     if (sanitizedData) {
       logMethod(`[ActivityLogger:${level.toUpperCase()}] ${message}`, sanitizedData)
@@ -66,35 +66,46 @@ class ActivityLogger {
    */
   private sanitizeLogData(data: any): any {
     if (!data) return data
-    
+
     const sensitiveKeys = [
-      'access_token', 'refresh_token', 'token', 'password', 'secret', 'key',
-      'authorization', 'bearer', 'session_token', 'apikey', 'api_key',
-      'supabase_anon_key', 'supabase_service_role_key'
+      'access_token',
+      'refresh_token',
+      'token',
+      'password',
+      'secret',
+      'key',
+      'authorization',
+      'bearer',
+      'session_token',
+      'apikey',
+      'api_key',
+      'supabase_anon_key',
+      'supabase_service_role_key',
     ]
-    
+
     if (typeof data === 'string') {
       // JWT 토큰이나 API 키 패턴 검출 및 마스킹
-      return data.replace(/^(ey[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]*)/g, '[JWT_TOKEN_REDACTED]')
-                .replace(/^(sb-[a-zA-Z0-9]{20,})/g, '[SUPABASE_KEY_REDACTED]')
-                .replace(/^([A-Za-z0-9]{32,})/g, '[API_KEY_REDACTED]')
+      return data
+        .replace(/^(ey[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]*)/g, '[JWT_TOKEN_REDACTED]')
+        .replace(/^(sb-[a-zA-Z0-9]{20,})/g, '[SUPABASE_KEY_REDACTED]')
+        .replace(/^([A-Za-z0-9]{32,})/g, '[API_KEY_REDACTED]')
     }
-    
+
     if (typeof data !== 'object' || data === null) {
       return data
     }
-    
+
     const sanitized = Array.isArray(data) ? [...data] : { ...data }
-    
+
     const sanitizeRecursive = (obj: any): any => {
       if (typeof obj !== 'object' || obj === null) {
         return obj
       }
-      
+
       if (Array.isArray(obj)) {
         return obj.map(sanitizeRecursive)
       }
-      
+
       const result: any = {}
       for (const [key, value] of Object.entries(obj)) {
         const lowerKey = key.toLowerCase()
@@ -108,7 +119,7 @@ class ActivityLogger {
       }
       return result
     }
-    
+
     return sanitizeRecursive(sanitized)
   }
 
@@ -119,7 +130,7 @@ class ActivityLogger {
       batchSize: 10,
       flushInterval: 5000, // 5초
       logLevel: process.env.NODE_ENV === 'development' ? 'debug' : 'error',
-      ...config
+      ...config,
     }
 
     // 브라우저에서만 실행
@@ -136,13 +147,16 @@ class ActivityLogger {
     try {
       this.secureLog('debug', '세션 초기화 시작')
 
-      const { data: { session }, error: sessionError } = await this.supabase.auth.getSession()
-      
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession()
+
       if (sessionError) {
         this.secureLog('error', '세션 조회 오류', sessionError)
         return
       }
-      
+
       if (session?.user) {
         this.sessionToken = session.access_token
         this.secureLog('debug', '사용자 세션 확인됨', { userId: session.user.id })
@@ -152,9 +166,9 @@ class ActivityLogger {
       }
 
       // 인증 상태 변경 리스너
-      this.supabase.auth.onAuthStateChange(async (event, session) => {
+      supabase.auth.onAuthStateChange(async (event, session) => {
         this.secureLog('debug', '인증 상태 변경', { event })
-        
+
         if (event === 'SIGNED_IN' && session?.user) {
           this.sessionToken = session.access_token
           await this.startSession(session.user.id)
@@ -178,9 +192,12 @@ class ActivityLogger {
       this.flushPendingLogs()
       if (this.sessionId) {
         // 동기적으로 로그아웃 기록 (백그라운드에서)
-        navigator.sendBeacon('/api/activities/logout', JSON.stringify({
-          session_id: this.sessionId
-        }))
+        navigator.sendBeacon(
+          '/api/activities/logout',
+          JSON.stringify({
+            session_id: this.sessionId,
+          })
+        )
       }
     })
 
@@ -192,11 +209,14 @@ class ActivityLogger {
     })
 
     // 주기적으로 세션 활동 업데이트 (5분마다)
-    setInterval(() => {
-      if (!document.hidden && this.sessionId) {
-        this.updateSessionActivity()
-      }
-    }, 5 * 60 * 1000)
+    setInterval(
+      () => {
+        if (!document.hidden && this.sessionId) {
+          this.updateSessionActivity()
+        }
+      },
+      5 * 60 * 1000
+    )
   }
 
   /**
@@ -209,26 +229,26 @@ class ActivityLogger {
         browser: navigator.userAgent,
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         screen: `${screen.width}x${screen.height}`,
-        language: navigator.language
+        language: navigator.language,
       }
 
       const response = await fetch('/api/activities/session', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.sessionToken}`
+          Authorization: `Bearer ${this.sessionToken}`,
         },
         body: JSON.stringify({
           action: 'start',
           session_token: sessionToken,
-          metadata
-        })
+          metadata,
+        }),
       })
 
       if (response.ok) {
         const data = await response.json()
         this.sessionId = data.session_id
-        
+
         this.secureLog('debug', '활동 추적 세션 시작', { sessionId: this.sessionId })
       }
     } catch (error) {
@@ -247,12 +267,12 @@ class ActivityLogger {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.sessionToken}`
+          Authorization: `Bearer ${this.sessionToken}`,
         },
         body: JSON.stringify({
           action: 'end',
-          session_id: this.sessionId
-        })
+          session_id: this.sessionId,
+        }),
       })
 
       this.secureLog('debug', '활동 추적 세션 종료', { sessionId: this.sessionId })
@@ -272,16 +292,16 @@ class ActivityLogger {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.sessionToken}`
+          Authorization: `Bearer ${this.sessionToken}`,
         },
         body: JSON.stringify({
           action: 'update',
           session_id: this.sessionId,
           metadata: {
             last_page: window.location.pathname,
-            timestamp: new Date().toISOString()
-          }
-        })
+            timestamp: new Date().toISOString(),
+          },
+        }),
       })
     } catch (error) {
       this.secureLog('error', '세션 활동 업데이트 오류', error)
@@ -296,7 +316,7 @@ class ActivityLogger {
     if (typeof window === 'undefined') {
       return false
     }
-    
+
     // 개발 환경에서는 활동 로깅 비활성화
     if (process.env.NODE_ENV === 'development') {
       return true
@@ -310,8 +330,8 @@ class ActivityLogger {
           page: window.location?.pathname || '',
           referrer: document?.referrer || '',
           timestamp: new Date().toISOString(),
-          session_id: this.sessionId
-        }
+          session_id: this.sessionId,
+        },
       }
 
       if (this.config.enableBatching) {
@@ -368,7 +388,7 @@ class ActivityLogger {
         if (retryCount <= 3) {
           this.pendingLogs.push({
             ...log,
-            metadata: { ...log.metadata, retryCount }
+            metadata: { ...log.metadata, retryCount },
           })
         }
       })
@@ -385,9 +405,9 @@ class ActivityLogger {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.sessionToken}`
+        Authorization: `Bearer ${this.sessionToken}`,
       },
-      body: JSON.stringify(request)
+      body: JSON.stringify(request),
     })
 
     if (!response.ok) {
@@ -408,9 +428,9 @@ class ActivityLogger {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.sessionToken}`
+        Authorization: `Bearer ${this.sessionToken}`,
       },
-      body: JSON.stringify({ logs })
+      body: JSON.stringify({ logs }),
     })
 
     if (!response.ok) {
@@ -432,7 +452,7 @@ class ActivityLogger {
     return this.logActivity({
       action_type: 'page_viewed',
       target_type: 'system',
-      metadata: { path, ...metadata }
+      metadata: { path, ...metadata },
     })
   }
 
@@ -441,7 +461,7 @@ class ActivityLogger {
       action_type: 'post_created',
       target_type: 'post',
       target_id: postId,
-      metadata
+      metadata,
     })
   }
 
@@ -450,16 +470,20 @@ class ActivityLogger {
       action_type: 'post_updated',
       target_type: 'post',
       target_id: postId,
-      metadata
+      metadata,
     })
   }
 
-  public async logCommentCreated(commentId: string, postId: string, metadata?: Record<string, any>) {
+  public async logCommentCreated(
+    commentId: string,
+    postId: string,
+    metadata?: Record<string, any>
+  ) {
     return this.logActivity({
       action_type: 'comment_created',
       target_type: 'comment',
       target_id: commentId,
-      metadata: { post_id: postId, ...metadata }
+      metadata: { post_id: postId, ...metadata },
     })
   }
 
@@ -468,7 +492,7 @@ class ActivityLogger {
       action_type: 'like_added',
       target_type: 'post',
       target_id: postId,
-      metadata
+      metadata,
     })
   }
 
@@ -477,7 +501,7 @@ class ActivityLogger {
       action_type: 'like_removed',
       target_type: 'post',
       target_id: postId,
-      metadata
+      metadata,
     })
   }
 
@@ -485,7 +509,7 @@ class ActivityLogger {
     return this.logActivity({
       action_type: 'profile_updated',
       target_type: 'profile',
-      metadata: { section, ...metadata }
+      metadata: { section, ...metadata },
     })
   }
 
@@ -494,7 +518,7 @@ class ActivityLogger {
       action_type: 'file_uploaded',
       target_type: 'file',
       target_id: fileId,
-      metadata: { file_type: fileType, ...metadata }
+      metadata: { file_type: fileType, ...metadata },
     })
   }
 
@@ -502,7 +526,7 @@ class ActivityLogger {
     return this.logActivity({
       action_type: 'search_performed',
       target_type: 'system',
-      metadata: { query, results_count: results, ...metadata }
+      metadata: { query, results_count: results, ...metadata },
     })
   }
 
@@ -511,7 +535,7 @@ class ActivityLogger {
       action_type: 'notification_read',
       target_type: 'notification',
       target_id: notificationId,
-      metadata
+      metadata,
     })
   }
 }
@@ -542,7 +566,11 @@ export const logPostUpdated = (postId: string, metadata?: Record<string, any>) =
   return activityLogger.logPostUpdated(postId, metadata)
 }
 
-export const logCommentCreated = (commentId: string, postId: string, metadata?: Record<string, any>) => {
+export const logCommentCreated = (
+  commentId: string,
+  postId: string,
+  metadata?: Record<string, any>
+) => {
   if (typeof window === 'undefined') return Promise.resolve(false)
   return activityLogger.logCommentCreated(commentId, postId, metadata)
 }
@@ -562,7 +590,11 @@ export const logProfileUpdated = (section: string, metadata?: Record<string, any
   return activityLogger.logProfileUpdated(section, metadata)
 }
 
-export const logFileUploaded = (fileId: string, fileType: string, metadata?: Record<string, any>) => {
+export const logFileUploaded = (
+  fileId: string,
+  fileType: string,
+  metadata?: Record<string, any>
+) => {
   if (typeof window === 'undefined') return Promise.resolve(false)
   return activityLogger.logFileUploaded(fileId, fileType, metadata)
 }
