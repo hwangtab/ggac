@@ -125,7 +125,7 @@ export default function PostDetailClient({ postId }: PostDetailClientProps) {
 
         // 좋아요 정보를 API를 통해 가져오기
         let enrichedPostData: Post = { 
-          ...postData, 
+          ...(postData as any), 
           like_count: 0, 
           is_liked: false 
         } as Post;
@@ -135,7 +135,7 @@ export default function PostDetailClient({ postId }: PostDetailClientProps) {
           if (response.ok) {
             const likeData = await response.json();
             enrichedPostData = {
-              ...postData,
+              ...(postData as any),
               like_count: likeData.like_count || 0,
               is_liked: likeData.is_liked || false
             } as Post;
