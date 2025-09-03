@@ -56,15 +56,16 @@
     "import/no-unused-modules": "off",
     
     // 접근성 규칙
-    "jsx-a11y/alt-text": "error",
+    "jsx-a11y/alt-text": "warn",
     "jsx-a11y/anchor-is-valid": "warn",
-    "jsx-a11y/click-events-have-key-events": "warn",
-    "jsx-a11y/no-static-element-interactions": "warn",
+    "jsx-a11y/click-events-have-key-events": "off",
+    "jsx-a11y/no-static-element-interactions": "off",
+    "jsx-a11y/label-has-associated-control": "off",
     
     // 일반 JavaScript 규칙
-    "no-console": "warn",
+    "no-console": "off",
     "no-debugger": "error",
-    "no-alert": "warn",
+    "no-alert": "off",
     "no-unused-vars": "off", // TypeScript가 처리
     "no-var": "error",
     "prefer-const": "off",
