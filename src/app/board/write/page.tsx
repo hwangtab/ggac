@@ -1,13 +1,16 @@
-'use client';
+'use client'
 
-import { supabase } from '../../../lib/supabase/client';
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import dynamic from 'next/dynamic';
-import type { MemberProfile } from '@/types';
+// 정적 생성 방지 - 인증이 필요한 동적 페이지
+export const dynamic = 'force-dynamic'
+
+import { supabase } from '../../../lib/supabase/client'
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import nextDynamic from 'next/dynamic'
+import type { MemberProfile } from '@/types'
 
 // Lazy load the CreatePostForm component
-const CreatePostForm = dynamic(() => import('../../../components/CreatePostForm'), {
+const CreatePostForm = nextDynamic(() => import('../../../components/CreatePostForm'), {
   loading: () => (
     <div className="bg-white rounded-lg shadow-sm p-6">
       <div className="animate-pulse space-y-4">
@@ -17,20 +20,20 @@ const CreatePostForm = dynamic(() => import('../../../components/CreatePostForm'
         <div className="h-10 bg-gray-200 rounded w-24"></div>
       </div>
     </div>
-  )
-});
+  ),
+})
 
 export default function WritePage() {
-  const [user, setUser] = useState<any>(null);
-  const [isMember, setIsMember] = useState<boolean>(false);
-  const [loading, setLoading] = useState(true);
-  const router = useRouter();
+  const [user, setUser] = useState<any>(null)
+  const [isMember, setIsMember] = useState<boolean>(false)
+  const [loading, setLoading] = useState(true)
+  const router = useRouter()
 
   // 조합원 상태 확인 함수를 별도로 분리
   const checkMemberStatus = async (currentUser: any) => {
     if (!currentUser) {
-      router.replace('/login');
-      return;
+      router.replace('/login')
+      return
     }
 
     try {
@@ -38,75 +41,80 @@ export default function WritePage() {
         .from('member_profiles')
         .select('registration_status, is_active')
         .eq('id', currentUser.id)
-        .single();
+        .single()
 
       if (profileError) {
-        console.error('🔍 [Write] Error fetching profile:', profileError);
-        setIsMember(false);
+        console.error('🔍 [Write] Error fetching profile:', profileError)
+        setIsMember(false)
       } else if (profile) {
-        const isApprovedMember = (profile as MemberProfile).registration_status === 'approved' && (profile as MemberProfile).is_active;
-        console.log('🔍 [Write] Member status:', isApprovedMember);
-        setIsMember(isApprovedMember);
+        const isApprovedMember =
+          (profile as MemberProfile).registration_status === 'approved' &&
+          (profile as MemberProfile).is_active
+        console.log('🔍 [Write] Member status:', isApprovedMember)
+        setIsMember(isApprovedMember)
       }
     } catch (error) {
-      console.error('🔍 [Write] Exception while checking member status:', error);
-      setIsMember(false);
+      console.error('🔍 [Write] Exception while checking member status:', error)
+      setIsMember(false)
     }
-  };
+  }
 
   useEffect(() => {
     const fetchUserData = async () => {
       try {
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession()
 
         if (sessionError || !session?.user) {
-          router.replace('/login');
-          return;
+          router.replace('/login')
+          return
         }
 
-        const currentUser = session.user;
-        setUser(currentUser);
+        const currentUser = session.user
+        setUser(currentUser)
 
-        await checkMemberStatus(currentUser);
-        setLoading(false);
+        await checkMemberStatus(currentUser)
+        setLoading(false)
       } catch (e) {
-        console.error('Error fetching user data:', e);
-        setLoading(false);
-        router.replace('/login');
+        console.error('Error fetching user data:', e)
+        setLoading(false)
+        router.replace('/login')
       }
-    };
+    }
 
-    fetchUserData();
+    fetchUserData()
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (!session?.user) {
-        router.replace('/login');
+        router.replace('/login')
       } else {
         // 세션이 갱신되면 멤버 상태 재확인
-        console.log('🔄 [Write Auth Change] Rechecking member status');
-        await checkMemberStatus(session.user);
+        console.log('🔄 [Write Auth Change] Rechecking member status')
+        await checkMemberStatus(session.user)
       }
-    });
+    })
 
     return () => {
-      authListener?.subscription.unsubscribe();
-    };
-  }, [router]);
+      authListener?.subscription.unsubscribe()
+    }
+  }, [router])
 
   const handlePostCreated = () => {
-    router.push('/board');
-  };
+    router.push('/board')
+  }
 
   if (loading) {
     return (
       <div className="min-h-screen pt-24 md:pt-28 flex items-center justify-center">
         <div className="text-lg">로딩 중...</div>
       </div>
-    );
+    )
   }
 
   if (!user) {
-    return null;
+    return null
   }
 
   if (!isMember) {
@@ -129,7 +137,7 @@ export default function WritePage() {
           </div>
         </div>
       </div>
-    );
+    )
   }
 
   return (
@@ -140,27 +148,34 @@ export default function WritePage() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
                 <h1 className="text-3xl md:text-4xl font-bold text-gray-900">게시글 작성</h1>
-                <p className="text-gray-600 mt-2">새로운 게시글을 작성하고 조합원들과 소통해보세요.</p>
+                <p className="text-gray-600 mt-2">
+                  새로운 게시글을 작성하고 조합원들과 소통해보세요.
+                </p>
               </div>
               <button
                 onClick={() => router.push('/board')}
                 className="inline-flex items-center text-gray-600 hover:text-gray-800 transition-colors text-sm sm:text-base"
               >
                 <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15 19l-7-7 7-7"
+                  />
                 </svg>
                 게시판으로 돌아가기
               </button>
             </div>
           </div>
-          
-          <CreatePostForm 
-            authorId={user.id} 
+
+          <CreatePostForm
+            authorId={user.id}
             onNewPost={handlePostCreated}
             showSuccessRedirect={true}
           />
         </div>
       </div>
     </div>
-  );
+  )
 }

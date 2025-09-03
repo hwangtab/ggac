@@ -6,6 +6,9 @@
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
+
+// 정적 생성 방지 - 인증이 필요한 동적 페이지
+export const dynamic = 'force-dynamic'
 import {
   FiBell,
   FiCheck,

@@ -1,13 +1,16 @@
 'use client'
 
+// 정적 생성 방지 - 인증이 필요한 동적 페이지
+export const dynamic = 'force-dynamic'
+
 import { supabase } from '../../../../lib/supabase/client'
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import dynamic from 'next/dynamic'
+import nextDynamic from 'next/dynamic'
 import type { MemberProfile, Post as PostType } from '@/types'
 
 // RichTextEditor를 동적으로 로드하여 SSR 이슈 방지
-const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), {
+const RichTextEditor = nextDynamic(() => import('@/components/RichTextEditor'), {
   ssr: false,
   loading: () => <div className="h-96 bg-gray-100 rounded-lg animate-pulse" />,
 })

@@ -1,6 +1,11 @@
 import { notFound } from 'next/navigation'
 import ProjectDetailContent from './ProjectDetailContent'
-import { getProjectSlugs, getProjectBySlug, getProjectArtists, type Project as ProjectType } from '@/lib/data'
+import {
+  getProjectSlugs,
+  getProjectBySlug,
+  getProjectArtists,
+  type Project as ProjectType,
+} from '@/lib/data'
 import { fetchLinkPreview } from '@/utils/linkPreview'
 import type { Metadata } from 'next'
 
@@ -10,10 +15,16 @@ interface ProjectPageProps {
   }>
 }
 
-// generateStaticParams 개선 - 캐싱된 함수 사용
+// generateStaticParams 개선 - 환경 변수 안전성 체크 추가
 export async function generateStaticParams() {
-  const slugs = await getProjectSlugs()
-  return slugs.map((slug) => ({ slug }))
+  try {
+    const slugs = await getProjectSlugs()
+    return slugs.map(slug => ({ slug }))
+  } catch (error) {
+    console.warn('Failed to generate static params for archive:', error)
+    // 빌드 시점에서 환경 변수가 없을 때 빈 배열 반환
+    return []
+  }
 }
 
 // generateMetadata 개선 - 캐싱된 함수 사용
@@ -33,12 +44,12 @@ export async function generateMetadata({ params }: ProjectPageProps): Promise<Me
     if (project.coverImage) {
       return project.coverImage.replace('.webp', '.jpg')
     }
-    
+
     // 2. 갤러리 첫 번째 이미지 사용
     if (project.gallery && project.gallery.length > 0) {
       return project.gallery[0].replace('.webp', '.jpg')
     }
-    
+
     // 3. 기본 로고 이미지
     return '/images/logo/gac_og.webp'
   }
@@ -59,7 +70,7 @@ export async function generateMetadata({ params }: ProjectPageProps): Promise<Me
           width: 1200,
           height: 630,
           alt: project.title,
-        }
+        },
       ],
       locale: 'ko_KR',
       type: 'article',
@@ -69,7 +80,7 @@ export async function generateMetadata({ params }: ProjectPageProps): Promise<Me
       title: project.title,
       description: project.description.split('\n')[0],
       images: [ogImageUrl],
-    }
+    },
   }
 }
 
