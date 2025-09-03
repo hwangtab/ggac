@@ -21,21 +21,21 @@ interface PostFormData {
 export const usePostCreation = ({
   authorId,
   onNewPost,
-  showSuccessRedirect = false
+  showSuccessRedirect = false,
 }: UsePostCreationProps) => {
   const loadingState = useLoadingState({
     timeout: 15000, // 15초 타임아웃
     enableLogging: true,
-    onSuccess: (post) => {
+    onSuccess: post => {
       if (showSuccessRedirect) {
         alert('게시글이 성공적으로 작성되었습니다!')
       }
       onNewPost(post)
     },
-    onError: (error) => {
+    onError: error => {
       console.error('게시글 작성 오류:', error)
       alert(error.message || '게시글 작성에 실패했습니다.')
-    }
+    },
   })
 
   const createPost = async (
@@ -52,11 +52,11 @@ export const usePostCreation = ({
         author_id: authorId,
         ...(formData.category === '공지' && {
           is_pinned: true,
-          pinned_at: new Date().toISOString()
-        })
+          pinned_at: new Date().toISOString(),
+        }),
       }
 
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('posts')
         .insert([postData])
         .select()
@@ -73,7 +73,7 @@ export const usePostCreation = ({
         await logPostCreated(postId, {
           category: formData.category,
           title: formData.title.substring(0, 50),
-          character_count: formData.content.length
+          character_count: formData.content.length,
         })
       } catch (logError) {
         console.error('활동 로깅 오류:', logError)
@@ -87,7 +87,9 @@ export const usePostCreation = ({
         } catch (uploadError) {
           console.error('[Submit] 첨부파일 업로드 실패:', uploadError)
           // 첨부파일 업로드 실패 시에도 게시글은 이미 생성됨을 알림
-          alert(`게시글은 성공적으로 작성되었지만, 첨부파일 업로드에 실패했습니다.\n게시글 수정을 통해 나중에 첨부파일을 추가할 수 있습니다.`)
+          alert(
+            `게시글은 성공적으로 작성되었지만, 첨부파일 업로드에 실패했습니다.\n게시글 수정을 통해 나중에 첨부파일을 추가할 수 있습니다.`
+          )
         }
       }
 
@@ -107,6 +109,6 @@ export const usePostCreation = ({
     error: loadingState.error,
     createPost,
     clearError: loadingState.clearError,
-    reset: loadingState.reset
+    reset: loadingState.reset,
   }
 }

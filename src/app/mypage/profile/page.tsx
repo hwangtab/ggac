@@ -18,8 +18,10 @@ export default function ProfilePage() {
 
   const fetchProfile = useCallback(async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
       if (!session?.user) {
         router.push('/login')
         return
@@ -57,17 +59,19 @@ export default function ProfilePage() {
     setError(null)
 
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
       if (!session?.user) {
         throw new Error('로그인이 필요합니다.')
       }
 
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('member_profiles')
         .update({
           ...updates,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         })
         .eq('id', session.user.id)
 
@@ -78,7 +82,7 @@ export default function ProfilePage() {
       // 프로필 업데이트 활동 로깅
       try {
         await activityLogger.logProfileUpdated('member_profile', {
-          updatedFields: Object.keys(updates)
+          updatedFields: Object.keys(updates),
         })
       } catch (activityError) {
         console.debug('Profile update activity logging failed:', activityError)
@@ -86,10 +90,9 @@ export default function ProfilePage() {
 
       // 프로필 다시 가져오기
       await fetchProfile()
-      
+
       // 성공 알림 (간단한 상태로)
       alert('프로필이 성공적으로 업데이트되었습니다.')
-      
     } catch (error: any) {
       console.error('Profile update error:', error)
       setError(error.message || '프로필 업데이트에 실패했습니다.')
@@ -100,8 +103,8 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <MypageLayout 
-        title="개인 프로필" 
+      <MypageLayout
+        title="개인 프로필"
         description="개인 정보 및 조합 관련 정보를 수정할 수 있습니다."
       >
         <div className="flex items-center justify-center py-12">
@@ -112,12 +115,9 @@ export default function ProfilePage() {
   }
 
   return (
-    <PermissionCheck 
-      requiredPermission="member"
-      redirectTo="/register/pending"
-    >
-      <MypageLayout 
-        title="개인 프로필" 
+    <PermissionCheck requiredPermission="member" redirectTo="/register/pending">
+      <MypageLayout
+        title="개인 프로필"
         description="개인 정보 및 조합 관련 정보를 수정할 수 있습니다."
       >
         {error && (
@@ -127,18 +127,11 @@ export default function ProfilePage() {
         )}
 
         {profile ? (
-          <ProfileEditForm 
-            profile={profile}
-            onUpdate={handleUpdate}
-            loading={saving}
-          />
+          <ProfileEditForm profile={profile} onUpdate={handleUpdate} loading={saving} />
         ) : (
           <div className="text-center py-8">
             <p className="text-gray-500">프로필을 불러올 수 없습니다.</p>
-            <button 
-              onClick={() => router.refresh()}
-              className="mt-4 btn-secondary"
-            >
+            <button onClick={() => router.refresh()} className="mt-4 btn-secondary">
               다시 시도
             </button>
           </div>
