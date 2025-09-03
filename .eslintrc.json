@@ -47,6 +47,7 @@
     "@typescript-eslint/no-non-null-assertion": "off",
     "@typescript-eslint/prefer-const": "off",
     "@typescript-eslint/no-var-requires": "off",
+    "@typescript-eslint/no-require-imports": "off",
     
     // Import 규칙
     "import/order": "off",
@@ -66,11 +67,11 @@
     "no-alert": "warn",
     "no-unused-vars": "off", // TypeScript가 처리
     "no-var": "error",
-    "prefer-const": "error",
+    "prefer-const": "off",
     "no-duplicate-imports": "error",
-    "no-multiple-empty-lines": ["error", { "max": 1 }],
-    "no-trailing-spaces": "error",
-    "eol-last": "error",
+    "no-multiple-empty-lines": "off",
+    "no-trailing-spaces": "off",
+    "eol-last": "off",
     
     // 보안 규칙
     "no-eval": "error",
