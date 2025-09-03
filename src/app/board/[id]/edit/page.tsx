@@ -1,62 +1,68 @@
-'use client';
+'use client'
 
-import { supabase } from '../../../../lib/supabase/client';
-import { useEffect, useState } from 'react';
-import { useRouter, useParams } from 'next/navigation';
-import dynamic from 'next/dynamic';
-import type { MemberProfile, Post as PostType } from '@/types';
+import { supabase } from '../../../../lib/supabase/client'
+import { useEffect, useState } from 'react'
+import { useRouter, useParams } from 'next/navigation'
+import dynamic from 'next/dynamic'
+import type { MemberProfile, Post as PostType } from '@/types'
 
 // RichTextEditor를 동적으로 로드하여 SSR 이슈 방지
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), {
   ssr: false,
-  loading: () => <div className="h-96 bg-gray-100 rounded-lg animate-pulse" />
-});
+  loading: () => <div className="h-96 bg-gray-100 rounded-lg animate-pulse" />,
+})
 
 interface Post {
-  id: string;
-  title: string;
-  content: string;
-  content_format?: string;
-  category: string;
-  author_id: string;
+  id: string
+  title: string
+  content: string
+  content_format?: string
+  category: string
+  author_id: string
 }
 
 export default function PostEditPage() {
-  const [post, setPost] = useState<Post | null>(null);
-  const [user, setUser] = useState<any>(null);
-  const [isMember, setIsMember] = useState<boolean>(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [useRichEditor, setUseRichEditor] = useState(false);
-  const router = useRouter();
-  const params = useParams();
-  const postId = params.id as string;
+  const [post, setPost] = useState<Post | null>(null)
+  const [user, setUser] = useState<any>(null)
+  const [isMember, setIsMember] = useState<boolean>(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [useRichEditor, setUseRichEditor] = useState(false)
+  const router = useRouter()
+  const params = useParams()
+  const postId = params.id as string
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         // 사용자 인증 확인
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession()
 
         if (sessionError || !session?.user) {
-          router.replace('/login');
-          return;
+          router.replace('/login')
+          return
         }
 
-        const currentUser = session.user;
-        setUser(currentUser);
+        const currentUser = session.user
+        setUser(currentUser)
 
         // 사용자 권한 확인
         const { data: profile, error: profileError } = await supabase
           .from('member_profiles')
           .select('registration_status, is_active')
           .eq('id', currentUser.id)
-          .single();
+          .single()
 
         if (profileError) {
-          console.error('Error fetching profile:', profileError);
+          console.error('Error fetching profile:', profileError)
         } else if (profile) {
-          setIsMember((profile as MemberProfile).registration_status === 'approved' && (profile as MemberProfile).is_active);
+          setIsMember(
+            (profile as MemberProfile).registration_status === 'approved' &&
+              (profile as MemberProfile).is_active
+          )
         }
 
         // 게시글 가져오기
@@ -64,67 +70,69 @@ export default function PostEditPage() {
           .from('posts')
           .select('*')
           .eq('id', postId)
-          .single();
+          .single()
 
-        if (postError) {
-          setError('게시글을 찾을 수 없습니다.');
-          setLoading(false);
-          return;
+        if (postError || !postData) {
+          setError('게시글을 찾을 수 없습니다.')
+          setLoading(false)
+          return
         }
 
         // 작성자 확인
-        if (postData?.author_id !== currentUser.id) {
-          setError('수정 권한이 없습니다.');
-          setLoading(false);
-          return;
+        if (postData.author_id !== currentUser.id) {
+          setError('수정 권한이 없습니다.')
+          setLoading(false)
+          return
         }
 
-        setPost(postData as unknown as PostType);
-        setUseRichEditor(postData?.content_format === 'html');
-        setLoading(false);
+        setPost(postData as unknown as PostType)
+        setUseRichEditor(postData.content_format === 'html')
+        setLoading(false)
       } catch (e) {
-        console.error('Error fetching data:', e);
-        setError('데이터를 불러오는 중 오류가 발생했습니다.');
-        setLoading(false);
+        console.error('Error fetching data:', e)
+        setError('데이터를 불러오는 중 오류가 발생했습니다.')
+        setLoading(false)
       }
-    };
+    }
 
     if (postId) {
-      fetchData();
+      fetchData()
     }
 
     // 인증 상태 변경 리스너 추가
     const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (!session?.user) {
-        router.replace('/login');
+        router.replace('/login')
       } else {
         // 세션이 갱신되면 멤버 상태 재확인
-        console.log('🔄 [Edit Auth Change] Rechecking member status');
+        console.log('🔄 [Edit Auth Change] Rechecking member status')
         const { data: profile, error: profileError } = await supabase
           .from('member_profiles')
           .select('registration_status, is_active')
           .eq('id', session.user.id)
-          .single();
+          .single()
 
         if (profileError) {
-          console.error('🔄 [Edit Auth Change] Error fetching profile:', profileError);
-          setIsMember(false);
+          console.error('🔄 [Edit Auth Change] Error fetching profile:', profileError)
+          setIsMember(false)
         } else if (profile) {
-          const isApprovedMember = (profile as MemberProfile).registration_status === 'approved' && (profile as MemberProfile).is_active;
-          console.log('🔄 [Edit Auth Change] Updated member status:', isApprovedMember);
-          setIsMember(isApprovedMember);
+          const isApprovedMember =
+            (profile as MemberProfile).registration_status === 'approved' &&
+            (profile as MemberProfile).is_active
+          console.log('🔄 [Edit Auth Change] Updated member status:', isApprovedMember)
+          setIsMember(isApprovedMember)
         }
       }
-    });
+    })
 
     return () => {
-      authListener?.subscription.unsubscribe();
-    };
-  }, [postId, router]);
+      authListener?.subscription.unsubscribe()
+    }
+  }, [postId, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!post || !user) return;
+    e.preventDefault()
+    if (!post || !user) return
 
     const { error } = await supabase
       .from('posts')
@@ -133,29 +141,31 @@ export default function PostEditPage() {
         content: post.content,
         content_format: useRichEditor ? 'html' : 'plain',
         category: post.category,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       })
-      .eq('id', post.id);
+      .eq('id', post.id)
 
     if (error) {
-      alert('게시글 수정 중 오류가 발생했습니다.');
+      alert('게시글 수정 중 오류가 발생했습니다.')
     } else {
-      alert('게시글이 수정되었습니다.');
-      router.push(`/board/${post.id}`);
+      alert('게시글이 수정되었습니다.')
+      router.push(`/board/${post.id}`)
     }
-  };
+  }
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setPost(prev => prev ? { ...prev, [name]: value } : null);
-  };
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+  ) => {
+    const { name, value } = e.target
+    setPost(prev => (prev ? { ...prev, [name]: value } : null))
+  }
 
   if (loading) {
     return (
       <div className="min-h-screen pt-24 md:pt-28 flex items-center justify-center">
         <div className="text-lg">로딩 중...</div>
       </div>
-    );
+    )
   }
 
   if (error || !post) {
@@ -176,7 +186,7 @@ export default function PostEditPage() {
           </div>
         </div>
       </div>
-    );
+    )
   }
 
   if (!isMember) {
@@ -186,9 +196,7 @@ export default function PostEditPage() {
           <div className="max-w-4xl mx-auto">
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
               <h1 className="text-2xl font-bold text-yellow-800 mb-4">접근 권한이 없습니다</h1>
-              <p className="text-yellow-700 mb-4">
-                게시글 수정은 승인된 조합원만 가능합니다.
-              </p>
+              <p className="text-yellow-700 mb-4">게시글 수정은 승인된 조합원만 가능합니다.</p>
               <button
                 onClick={() => router.push('/board')}
                 className="bg-yellow-600 text-white px-4 py-2 rounded-lg hover:bg-yellow-700 transition-colors"
@@ -199,7 +207,7 @@ export default function PostEditPage() {
           </div>
         </div>
       </div>
-    );
+    )
   }
 
   return (
@@ -219,7 +227,7 @@ export default function PostEditPage() {
             <form onSubmit={handleSubmit}>
               <div className="p-6 border-b border-gray-200">
                 <h1 className="text-2xl font-bold text-gray-900 mb-6">게시글 수정</h1>
-                
+
                 <div className="mb-4">
                   <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">
                     제목
@@ -236,7 +244,10 @@ export default function PostEditPage() {
                 </div>
 
                 <div className="mb-4">
-                  <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label
+                    htmlFor="category"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
                     카테고리
                   </label>
                   <select
@@ -263,18 +274,18 @@ export default function PostEditPage() {
                         <input
                           type="checkbox"
                           checked={useRichEditor}
-                          onChange={(e) => setUseRichEditor(e.target.checked)}
+                          onChange={e => setUseRichEditor(e.target.checked)}
                           className="mr-2 rounded"
                         />
                         리치 에디터 사용 (이미지 삽입 가능)
                       </label>
                     </div>
                   </div>
-                  
+
                   {useRichEditor ? (
                     <RichTextEditor
                       value={post.content}
-                      onChange={(content) => setPost(prev => prev ? { ...prev, content } : prev)}
+                      onChange={content => setPost(prev => (prev ? { ...prev, content } : prev))}
                       placeholder="게시글 내용을 입력하세요..."
                       height={400}
                     />
@@ -312,5 +323,5 @@ export default function PostEditPage() {
         </div>
       </div>
     </div>
-  );
+  )
 }
