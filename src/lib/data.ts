@@ -13,51 +13,51 @@ class MemoryEfficientCache<T> {
   private cache = new Map<string, CacheEntry<T>>()
   private maxSize = 100 // 최대 캐시 항목 수
   private maxAge = 300000 // 5분 TTL
-  
+
   get(key: string): T | null {
     const entry = this.cache.get(key)
     if (!entry) return null
-    
+
     // TTL 체크
     if (Date.now() - entry.timestamp > this.maxAge) {
       this.cache.delete(key)
       return null
     }
-    
+
     // 히트 카운트 증가
     entry.hits++
     return entry.data
   }
-  
+
   set(key: string, data: T): void {
     // 캐시 크기 관리 - LRU 기반 제거
     if (this.cache.size >= this.maxSize) {
       this.evictLeastUsed()
     }
-    
+
     this.cache.set(key, {
       data,
       timestamp: Date.now(),
-      hits: 0
+      hits: 0,
     })
   }
-  
+
   private evictLeastUsed(): void {
     let leastUsedKey = ''
     let leastHits = Infinity
-    
+
     for (const [key, entry] of this.cache.entries()) {
       if (entry.hits < leastHits) {
         leastHits = entry.hits
         leastUsedKey = key
       }
     }
-    
+
     if (leastUsedKey) {
       this.cache.delete(leastUsedKey)
     }
   }
-  
+
   clear(): void {
     this.cache.clear()
   }
@@ -92,57 +92,64 @@ const DEFAULT_GLOBAL_DATA: GlobalData = {
   contact: {
     email: 'contact@ggac.kr',
     phone: '',
-    address: ''
+    address: '',
   },
   social: {
     instagram: '',
-    youtube: ''
+    youtube: '',
   },
   businessInfo: {
     establishedDate: '2025-05-01',
     registrationDate: '2025-05-14',
-    registrationNumber: ''
-  }
+    registrationNumber: '',
+  },
 }
 
 // Supabase에서 전체 아티스트 목록 조회 (데이터베이스 우선, JSON 파일 백업)
 export const getArtistsFromDB = cache(async (): Promise<Artist[]> => {
   initCaches()
-  
+
   // 고급 캐시에서 먼저 확인
   const cached = artistCache?.get('artists')
   if (cached) {
     return cached
   }
   try {
+    // 환경 변수 체크 추가
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      console.warn('Supabase environment variables not available, falling back to JSON')
+      const fallbackResult = await getArtistsFromJSON()
+      artistCache?.set('artists', fallbackResult)
+      return fallbackResult
+    }
+
     // 정적 생성 시점에서도 접근 가능하도록 createClient 사용
     const { createClient } = await import('@supabase/supabase-js')
     const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
     )
-    
+
     // 데이터베이스에서 아티스트 목록 조회 (public 접근 가능한 데이터만)
     const { data: dbArtists, error } = await supabase
       .from('artists')
       .select('*')
       .order('created_at', { ascending: true })
-    
+
     if (!error && dbArtists && dbArtists.length > 0) {
       const result = dbArtists.map(convertDatabaseArtistToArtist)
       artistCache?.set('artists', result)
       return result
     }
-    
+
     // 데이터베이스에 데이터가 없으면 JSON 파일에서 조회 (백업)
     console.log('No artists found in database, falling back to JSON')
     const fallbackResult = await getArtistsFromJSON()
     artistCache?.set('artists', fallbackResult)
     return fallbackResult
-    
   } catch (error) {
     console.error('Error fetching artists from database:', error)
-    
+
     // 오류 발생 시 JSON 파일에서 조회 (백업)
     const errorFallbackResult = await getArtistsFromJSON()
     artistCache?.set('artists', errorFallbackResult)
@@ -167,13 +174,13 @@ export const getArtists = getArtistsFromDB
 
 export const getProjects = cache(async (): Promise<Project[]> => {
   initCaches()
-  
+
   // 고급 캐시에서 먼저 확인
   const cached = projectCache?.get('projects')
   if (cached) {
     return cached
   }
-  
+
   try {
     const filePath = path.join(process.cwd(), 'data/projects.json')
     const fileContents = await fs.promises.readFile(filePath, 'utf8')
@@ -215,43 +222,49 @@ function convertDatabaseArtistToArtist(dbArtist: DatabaseArtist): Artist {
     templateType: dbArtist.template_type || '콜라주형',
     portfolioLinks: dbArtist.portfolio_links || [],
     youtubeVideos: dbArtist.youtube_videos || [],
-    contact: dbArtist.contact || ''
+    contact: dbArtist.contact || '',
   }
 }
 
 // Supabase에서 아티스트 조회 (데이터베이스 우선, JSON 파일 백업)
 export const getArtistBySlugFromDB = cache(async (slug: string): Promise<Artist | null> => {
   try {
+    // 환경 변수 체크 추가
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      console.warn('Supabase environment variables not available, falling back to JSON')
+      const artists = await getArtistsFromJSON()
+      return artists.find(artist => artist.slug === slug) || null
+    }
+
     // 정적 생성 시점에서도 접근 가능하도록 createClient 사용
     const { createClient } = await import('@supabase/supabase-js')
     const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
     )
-    
+
     // 데이터베이스에서 아티스트 조회
     const { data: dbArtist, error } = await supabase
       .from('artists')
       .select('*')
       .eq('slug', slug)
       .single()
-    
+
     if (!error && dbArtist) {
       const convertedArtist = convertDatabaseArtistToArtist(dbArtist)
-      
+
       // 성공적으로 데이터베이스에서 조회했음을 로그
       console.log(`Successfully fetched artist ${slug} from database`)
       return convertedArtist
     }
-    
+
     // 데이터베이스에 없으면 JSON 파일에서 조회 (백업)
     console.log(`Artist ${slug} not found in database, falling back to JSON`)
     const artists = await getArtistsFromJSON()
     return artists.find(artist => artist.slug === slug) || null
-    
   } catch (error) {
     console.error('Error fetching artist from database:', error)
-    
+
     // 오류 발생 시 JSON 파일에서 조회 (백업)
     const artists = await getArtistsFromJSON()
     return artists.find(artist => artist.slug === slug) || null
@@ -292,19 +305,21 @@ export const getProjectSlugs = cache(async (): Promise<string[]> => {
 })
 
 // 아티스트 이름 매핑 (프로젝트에서 아티스트 이름 표시용)
-export const getArtistNamesById = cache(async (artistIds: string[]): Promise<Record<string, string>> => {
-  const artists = await getArtistsFromDB()
-  const nameMap: Record<string, string> = {}
-  
-  artistIds.forEach(id => {
-    const artist = artists.find(a => a.id === id)
-    if (artist) {
-      nameMap[id] = artist.name
-    }
-  })
-  
-  return nameMap
-})
+export const getArtistNamesById = cache(
+  async (artistIds: string[]): Promise<Record<string, string>> => {
+    const artists = await getArtistsFromDB()
+    const nameMap: Record<string, string> = {}
+
+    artistIds.forEach(id => {
+      const artist = artists.find(a => a.id === id)
+      if (artist) {
+        nameMap[id] = artist.name
+      }
+    })
+
+    return nameMap
+  }
+)
 
 // 프로젝트에 참여한 아티스트들 정보 가져오기
 export const getProjectArtists = cache(async (artistIds: string[]): Promise<Artist[]> => {
@@ -319,4 +334,3 @@ export const getArtistProjects = cache(async (artistId: string): Promise<Project
     .filter(project => project.artistIds.includes(artistId))
     .sort((a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime())
 })
-

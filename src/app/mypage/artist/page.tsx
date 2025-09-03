@@ -1,5 +1,8 @@
 'use client'
 
+// 정적 생성 방지 - 인증이 필요한 동적 페이지
+export const dynamic = 'force-dynamic'
+
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import MypageLayout from '../components/MypageLayout'
@@ -17,8 +20,10 @@ export default function ArtistPage() {
 
   const fetchArtist = useCallback(async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
       if (!session?.user) {
         router.push('/login')
         return
@@ -75,13 +80,12 @@ export default function ArtistPage() {
       }
 
       const data = await response.json()
-      
+
       // 업데이트된 아티스트 정보로 상태 업데이트
       setArtist(data.artist)
-      
+
       // 성공 알림 (향후 toast로 개선 가능)
       alert('아티스트 프로필이 성공적으로 업데이트되었습니다.')
-      
     } catch (error: any) {
       console.error('Artist update error:', error)
       setError(error.message || '아티스트 프로필 업데이트에 실패했습니다.')
@@ -92,8 +96,8 @@ export default function ArtistPage() {
 
   if (loading) {
     return (
-      <MypageLayout 
-        title="아티스트 프로필" 
+      <MypageLayout
+        title="아티스트 프로필"
         description="아티스트 정보와 포트폴리오를 관리할 수 있습니다."
       >
         <div className="flex items-center justify-center py-12">
@@ -104,37 +108,45 @@ export default function ArtistPage() {
   }
 
   return (
-    <PermissionCheck 
+    <PermissionCheck
       requiredPermission="artist"
       redirectTo="/mypage"
       fallback={
-        <MypageLayout 
-          title="아티스트 프로필" 
+        <MypageLayout
+          title="아티스트 프로필"
           description="아티스트 정보와 포트폴리오를 관리할 수 있습니다."
         >
           <div className="text-center py-12">
             <div className="text-gray-500 mb-4">
-              <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              <svg
+                className="mx-auto h-12 w-12 text-gray-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                />
               </svg>
             </div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">아티스트 권한 필요</h3>
             <p className="text-gray-600 text-sm mb-4">
-              이 페이지에 접근하려면 아티스트 권한이 필요합니다.<br />
+              이 페이지에 접근하려면 아티스트 권한이 필요합니다.
+              <br />
               관리자에게 아티스트 권한 요청을 문의해 주세요.
             </p>
-            <button
-              onClick={() => router.push('/connect')}
-              className="btn-primary"
-            >
+            <button onClick={() => router.push('/connect')} className="btn-primary">
               문의하기
             </button>
           </div>
         </MypageLayout>
       }
     >
-      <MypageLayout 
-        title="아티스트 프로필" 
+      <MypageLayout
+        title="아티스트 프로필"
         description="아티스트 정보와 포트폴리오를 관리할 수 있습니다."
       >
         {error && (
@@ -159,12 +171,8 @@ export default function ArtistPage() {
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <h2 className="text-xl font-semibold text-gray-900 mb-2">
-                    {artist.name}
-                  </h2>
-                  <p className="text-gray-600 text-sm mb-2">
-                    {artist.one_liner}
-                  </p>
+                  <h2 className="text-xl font-semibold text-gray-900 mb-2">{artist.name}</h2>
+                  <p className="text-gray-600 text-sm mb-2">{artist.one_liner}</p>
                   <div className="flex flex-wrap gap-2">
                     {artist.category?.map((cat, index) => (
                       <span
@@ -180,19 +188,12 @@ export default function ArtistPage() {
             </div>
 
             {/* 편집 폼 */}
-            <ArtistEditForm 
-              artist={artist}
-              onUpdate={handleUpdate}
-              loading={saving}
-            />
+            <ArtistEditForm artist={artist} onUpdate={handleUpdate} loading={saving} />
           </div>
         ) : (
           <div className="text-center py-8">
             <p className="text-gray-500">아티스트 정보를 불러올 수 없습니다.</p>
-            <button 
-              onClick={() => window.location.reload()}
-              className="mt-4 btn-secondary"
-            >
+            <button onClick={() => window.location.reload()} className="mt-4 btn-secondary">
               다시 시도
             </button>
           </div>
