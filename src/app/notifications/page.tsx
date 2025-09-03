@@ -6,22 +6,23 @@
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { 
-  FiBell, 
-  FiCheck, 
-  FiTrash2, 
-  FiFilter, 
+import {
+  FiBell,
+  FiCheck,
+  FiTrash2,
+  FiFilter,
   FiRefreshCw,
   FiChevronLeft,
-  FiChevronRight
+  FiChevronRight,
 } from 'react-icons/fi'
 import { formatDistanceToNow } from 'date-fns'
 import { ko } from 'date-fns/locale'
-import type { 
-  Notification, 
-  NotificationListResponse, 
-  NotificationStats, 
-  NotificationType 
+import { useRouter } from 'next/navigation'
+import type {
+  Notification,
+  NotificationListResponse,
+  NotificationStats,
+  NotificationType,
 } from '@/types'
 
 const NotificationsPage = () => {
@@ -35,31 +36,35 @@ const NotificationsPage = () => {
   const [selectedNotifications, setSelectedNotifications] = useState<Set<string>>(new Set())
 
   const pageSize = 20
+  const router = useRouter()
 
   // 알림 목록 조회
-  const fetchNotifications = useCallback(async (page = 1) => {
-    setLoading(true)
-    try {
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: pageSize.toString(),
-        ...(filterType !== 'all' && { type: filterType }),
-        ...(showUnreadOnly && { unread_only: 'true' })
-      })
+  const fetchNotifications = useCallback(
+    async (page = 1) => {
+      setLoading(true)
+      try {
+        const params = new URLSearchParams({
+          page: page.toString(),
+          limit: pageSize.toString(),
+          ...(filterType !== 'all' && { type: filterType }),
+          ...(showUnreadOnly && { unread_only: 'true' }),
+        })
 
-      const response = await fetch(`/api/notifications?${params}`)
-      if (response.ok) {
-        const data: NotificationListResponse = await response.json()
-        setNotifications(data.notifications)
-        setTotalPages(data.pagination.total_pages)
-        setCurrentPage(page)
+        const response = await fetch(`/api/notifications?${params}`)
+        if (response.ok) {
+          const data: NotificationListResponse = await response.json()
+          setNotifications(data.notifications)
+          setTotalPages(data.pagination.total_pages)
+          setCurrentPage(page)
+        }
+      } catch (error) {
+        console.error('알림 조회 실패:', error)
+      } finally {
+        setLoading(false)
       }
-    } catch (error) {
-      console.error('알림 조회 실패:', error)
-    } finally {
-      setLoading(false)
-    }
-  }, [filterType, showUnreadOnly, pageSize])
+    },
+    [filterType, showUnreadOnly, pageSize]
+  )
 
   // 통계 조회
   const fetchStats = async () => {
@@ -78,13 +83,13 @@ const NotificationsPage = () => {
   const markAsRead = async (notificationId: string) => {
     try {
       const response = await fetch(`/api/notifications/${notificationId}`, {
-        method: 'PATCH'
+        method: 'PATCH',
       })
-      
+
       if (response.ok) {
-        setNotifications(prev => 
-          prev.map(notification => 
-            notification.id === notificationId 
+        setNotifications(prev =>
+          prev.map(notification =>
+            notification.id === notificationId
               ? { ...notification, read_at: new Date().toISOString() }
               : notification
           )
@@ -100,9 +105,9 @@ const NotificationsPage = () => {
   const deleteNotification = async (notificationId: string) => {
     try {
       const response = await fetch(`/api/notifications/${notificationId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
       })
-      
+
       if (response.ok) {
         setNotifications(prev => prev.filter(n => n.id !== notificationId))
         setSelectedNotifications(prev => {
@@ -121,14 +126,14 @@ const NotificationsPage = () => {
   const markAllAsRead = async () => {
     try {
       const response = await fetch('/api/notifications/bulk', {
-        method: 'PATCH'
+        method: 'PATCH',
       })
-      
+
       if (response.ok) {
-        setNotifications(prev => 
+        setNotifications(prev =>
           prev.map(notification => ({
             ...notification,
-            read_at: notification.read_at || new Date().toISOString()
+            read_at: notification.read_at || new Date().toISOString(),
           }))
         )
         await fetchStats()
@@ -142,15 +147,13 @@ const NotificationsPage = () => {
   const deleteSelected = async () => {
     if (selectedNotifications.size === 0) return
 
-    const deletePromises = Array.from(selectedNotifications).map(id => 
+    const deletePromises = Array.from(selectedNotifications).map(id =>
       fetch(`/api/notifications/${id}`, { method: 'DELETE' })
     )
 
     try {
       await Promise.all(deletePromises)
-      setNotifications(prev => 
-        prev.filter(n => !selectedNotifications.has(n.id))
-      )
+      setNotifications(prev => prev.filter(n => !selectedNotifications.has(n.id)))
       setSelectedNotifications(new Set())
       await fetchStats()
     } catch (error) {
@@ -194,6 +197,62 @@ const NotificationsPage = () => {
     setSelectedNotifications(new Set())
   }
 
+  // 알림 클릭 핸들러 - NotificationDropdown과 동일한 라우팅 로직
+  const handleNotificationClick = (notification: Notification) => {
+    // 자동으로 읽음 처리
+    if (!notification.read_at) {
+      markAsRead(notification.id)
+    }
+
+    let targetRoute: string | null = null
+
+    // 알림 타입에 따른 라우팅 결정
+    switch (notification.type) {
+      case 'post_reply':
+      case 'post_new':
+      case 'post_mention':
+        // 게시글 관련 알림 - 해당 게시글로 이동
+        if (notification.related_post_id) {
+          targetRoute = `/board/${notification.related_post_id}`
+        }
+        break
+
+      case 'system_notice':
+      case 'maintenance':
+        // 시스템 공지/점검 알림 - 관련 게시글이 있으면 해당 게시글로, 없으면 현재 페이지 유지
+        if (notification.related_post_id) {
+          targetRoute = `/board/${notification.related_post_id}`
+        }
+        break
+
+      case 'member_approved':
+      case 'member_rejected':
+      case 'artist_approved':
+      case 'artist_rejected':
+        // 회원/아티스트 권한 관련 알림 - 마이페이지로 이동
+        targetRoute = '/mypage'
+        break
+
+      case 'welcome':
+        // 환영 메시지 - 홈페이지로 이동
+        targetRoute = '/'
+        break
+
+      default:
+        // 기본값: 관련 게시글이 있으면 해당 게시글로
+        if (notification.related_post_id) {
+          targetRoute = `/board/${notification.related_post_id}`
+        }
+        break
+    }
+
+    // 라우팅 실행
+    if (targetRoute) {
+      console.log(`Navigating to: ${targetRoute} (type: ${notification.type})`)
+      router.push(targetRoute)
+    }
+  }
+
   // 초기 로딩
   useEffect(() => {
     fetchNotifications(currentPage)
@@ -202,9 +261,9 @@ const NotificationsPage = () => {
 
   // 시간 포맷팅
   const formatTime = (dateString: string) => {
-    return formatDistanceToNow(new Date(dateString), { 
-      addSuffix: true, 
-      locale: ko 
+    return formatDistanceToNow(new Date(dateString), {
+      addSuffix: true,
+      locale: ko,
     })
   }
 
@@ -220,7 +279,7 @@ const NotificationsPage = () => {
       artist_rejected: 'bg-red-100 text-red-800',
       system_notice: 'bg-yellow-100 text-yellow-800',
       maintenance: 'bg-orange-100 text-orange-800',
-      welcome: 'bg-pink-100 text-pink-800'
+      welcome: 'bg-pink-100 text-pink-800',
     }
     return colors[type] || 'bg-gray-100 text-gray-800'
   }
@@ -237,7 +296,7 @@ const NotificationsPage = () => {
       artist_rejected: '아티스트 거부',
       system_notice: '시스템 공지',
       maintenance: '점검',
-      welcome: '환영'
+      welcome: '환영',
     }
     return names[type] || type
   }
@@ -259,7 +318,7 @@ const NotificationsPage = () => {
                 )}
               </div>
             </div>
-            
+
             <div className="flex items-center space-x-3">
               <button
                 onClick={() => fetchNotifications(currentPage)}
@@ -268,7 +327,7 @@ const NotificationsPage = () => {
                 <FiRefreshCw className="w-4 h-4 mr-1" />
                 새로고침
               </button>
-              
+
               {stats && stats.unread_count > 0 && (
                 <button
                   onClick={markAllAsRead}
@@ -288,7 +347,7 @@ const NotificationsPage = () => {
                 <FiFilter className="w-4 h-4 text-gray-500 mr-2" />
                 <select
                   value={filterType}
-                  onChange={(e) => handleFilterChange(e.target.value as NotificationType | 'all')}
+                  onChange={e => handleFilterChange(e.target.value as NotificationType | 'all')}
                   className="text-sm border border-gray-300 rounded-lg px-3 py-1"
                 >
                   <option value="all">모든 유형</option>
@@ -299,7 +358,7 @@ const NotificationsPage = () => {
                   <option value="system_notice">시스템 공지</option>
                 </select>
               </div>
-              
+
               <label className="flex items-center text-sm text-gray-600">
                 <input
                   type="checkbox"
@@ -313,9 +372,7 @@ const NotificationsPage = () => {
 
             {selectedNotifications.size > 0 && (
               <div className="flex items-center space-x-2">
-                <span className="text-sm text-gray-600">
-                  {selectedNotifications.size}개 선택됨
-                </span>
+                <span className="text-sm text-gray-600">{selectedNotifications.size}개 선택됨</span>
                 <button
                   onClick={deleteSelected}
                   className="flex items-center px-3 py-1 text-sm text-red-600 hover:text-red-700 border border-red-300 rounded-lg hover:bg-red-50"
@@ -357,25 +414,29 @@ const NotificationsPage = () => {
 
               {/* 목록 */}
               <ul className="divide-y divide-gray-200">
-                {notifications.map((notification) => (
+                {notifications.map(notification => (
                   <li
                     key={notification.id}
-                    className={`p-4 hover:bg-gray-50 transition-colors ${
+                    className={`p-4 hover:bg-gray-50 transition-colors cursor-pointer ${
                       !notification.read_at ? 'bg-blue-50' : ''
                     }`}
+                    onClick={() => handleNotificationClick(notification)}
                   >
                     <div className="flex items-start">
                       <input
                         type="checkbox"
                         checked={selectedNotifications.has(notification.id)}
                         onChange={() => toggleSelection(notification.id)}
+                        onClick={e => e.stopPropagation()}
                         className="mt-1 mr-3 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                       />
-                      
+
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center">
-                            <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getTypeColor(notification.type)}`}>
+                            <span
+                              className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getTypeColor(notification.type)}`}
+                            >
                               {getTypeName(notification.type)}
                             </span>
                             {!notification.read_at && (
@@ -386,19 +447,20 @@ const NotificationsPage = () => {
                             {formatTime(notification.created_at)}
                           </span>
                         </div>
-                        
+
                         <h3 className="text-sm font-medium text-gray-900 mb-1">
                           {notification.title}
                         </h3>
-                        <p className="text-sm text-gray-600 mb-2">
-                          {notification.message}
-                        </p>
+                        <p className="text-sm text-gray-600 mb-2">{notification.message}</p>
                       </div>
 
                       <div className="flex items-center space-x-1 ml-4">
                         {!notification.read_at && (
                           <button
-                            onClick={() => markAsRead(notification.id)}
+                            onClick={e => {
+                              e.stopPropagation()
+                              markAsRead(notification.id)
+                            }}
                             className="p-2 text-gray-400 hover:text-green-600 rounded-lg hover:bg-green-50"
                             title="읽음 처리"
                           >
@@ -406,7 +468,10 @@ const NotificationsPage = () => {
                           </button>
                         )}
                         <button
-                          onClick={() => deleteNotification(notification.id)}
+                          onClick={e => {
+                            e.stopPropagation()
+                            deleteNotification(notification.id)
+                          }}
                           className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50"
                           title="삭제"
                         >
@@ -424,7 +489,7 @@ const NotificationsPage = () => {
                   <div className="text-sm text-gray-600">
                     {currentPage} / {totalPages} 페이지
                   </div>
-                  
+
                   <div className="flex items-center space-x-2">
                     <button
                       onClick={() => setCurrentPage(currentPage - 1)}

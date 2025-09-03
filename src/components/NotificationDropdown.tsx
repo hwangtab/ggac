@@ -14,7 +14,7 @@ import type { Notification, NotificationStats } from '@/types'
 import Portal from './Portal'
 import { createLogger } from '@/utils/logger'
 
-const log = createLogger('NotificationDropdown');
+const log = createLogger('NotificationDropdown')
 
 interface NotificationDropdownProps {
   /** 드롭다운 위치 조정을 위한 클래스 */
@@ -23,7 +23,10 @@ interface NotificationDropdownProps {
   isDark?: boolean
 }
 
-const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ className = '', isDark = false }) => {
+const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
+  className = '',
+  isDark = false,
+}) => {
   const [isOpen, setIsOpen] = useState(false)
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [stats, setStats] = useState<NotificationStats | null>(null)
@@ -40,20 +43,20 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ className =
       const rect = buttonRef.current.getBoundingClientRect()
       const dropdownWidth = 320 // w-80
       const margin = 8
-      
+
       // Fixed positioning에서는 scrollY/scrollX 불필요
       let top = rect.bottom + margin
       let left = rect.right - dropdownWidth
-      
+
       // 뷰포트 경계 체크 및 조정
       const viewportHeight = window.innerHeight
       const viewportWidth = window.innerWidth
-      
+
       // 오른쪽 경계 체크
       if (left < margin) {
         left = margin
       }
-      
+
       // 아래쪽 경계 체크 (드롭다운이 뷰포트 밖으로 나가면 위로 올림)
       const dropdownHeight = 400 // max-h-96 추정값
       if (top + dropdownHeight > viewportHeight) {
@@ -63,7 +66,7 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ className =
           top = margin
         }
       }
-      
+
       setDropdownPosition({ top, left })
     }
   }
@@ -101,7 +104,7 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ className =
   // 알림 목록 조회
   const fetchNotifications = async () => {
     if (loading) return
-    
+
     setLoading(true)
     try {
       const response = await fetch('/api/notifications?limit=10')
@@ -120,13 +123,13 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ className =
   const markAsRead = async (notificationId: string) => {
     try {
       const response = await fetch(`/api/notifications/${notificationId}`, {
-        method: 'PATCH'
+        method: 'PATCH',
       })
-      
+
       if (response.ok) {
-        setNotifications(prev => 
-          prev.map(notification => 
-            notification.id === notificationId 
+        setNotifications(prev =>
+          prev.map(notification =>
+            notification.id === notificationId
               ? { ...notification, read_at: new Date().toISOString() }
               : notification
           )
@@ -142,9 +145,9 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ className =
   const deleteNotification = async (notificationId: string) => {
     try {
       const response = await fetch(`/api/notifications/${notificationId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
       })
-      
+
       if (response.ok) {
         setNotifications(prev => prev.filter(n => n.id !== notificationId))
         await fetchStats() // 통계 업데이트
@@ -158,14 +161,14 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ className =
   const markAllAsRead = async () => {
     try {
       const response = await fetch('/api/notifications/bulk', {
-        method: 'PATCH'
+        method: 'PATCH',
       })
-      
+
       if (response.ok) {
-        setNotifications(prev => 
+        setNotifications(prev =>
           prev.map(notification => ({
             ...notification,
-            read_at: notification.read_at || new Date().toISOString()
+            read_at: notification.read_at || new Date().toISOString(),
           }))
         )
         await fetchStats() // 통계 업데이트
@@ -193,26 +196,30 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ className =
           targetRoute = `/board/${notification.related_post_id}`
         }
         break
-        
+
       case 'system_notice':
       case 'maintenance':
-        // 시스템 공지/점검 알림 - 전체 알림 페이지로 이동
-        targetRoute = '/notifications'
+        // 시스템 공지/점검 알림 - 관련 게시글이 있으면 해당 게시글로, 없으면 전체 알림 페이지로
+        if (notification.related_post_id) {
+          targetRoute = `/board/${notification.related_post_id}`
+        } else {
+          targetRoute = '/notifications'
+        }
         break
-        
+
       case 'member_approved':
       case 'member_rejected':
-      case 'artist_approved': 
+      case 'artist_approved':
       case 'artist_rejected':
         // 회원/아티스트 권한 관련 알림 - 마이페이지로 이동
         targetRoute = '/mypage'
         break
-        
+
       case 'welcome':
         // 환영 메시지 - 홈페이지로 이동
         targetRoute = '/'
         break
-        
+
       default:
         // 기본값: 관련 게시글이 있으면 해당 게시글로, 없으면 전체 알림 페이지로
         if (notification.related_post_id) {
@@ -250,9 +257,9 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ className =
 
   // 시간 포맷팅
   const formatTime = (dateString: string) => {
-    return formatDistanceToNow(new Date(dateString), { 
-      addSuffix: true, 
-      locale: ko 
+    return formatDistanceToNow(new Date(dateString), {
+      addSuffix: true,
+      locale: ko,
     })
   }
 
@@ -263,9 +270,7 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ className =
         ref={buttonRef}
         onClick={handleToggle}
         className={`relative p-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 rounded-lg transition-colors ${
-          isDark 
-            ? 'text-white hover:text-accent-300' 
-            : 'text-gray-600 hover:text-gray-900'
+          isDark ? 'text-white hover:text-accent-300' : 'text-gray-600 hover:text-gray-900'
         }`}
         aria-label="알림"
       >
@@ -321,7 +326,7 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ className =
                 </div>
               ) : (
                 <ul className="divide-y divide-gray-200">
-                  {notifications.map((notification) => (
+                  {notifications.map(notification => (
                     <li
                       key={notification.id}
                       className={`p-4 hover:bg-gray-50 cursor-pointer transition-colors ${
@@ -332,9 +337,11 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ className =
                       <div className="flex items-start justify-between">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center mb-1">
-                            <div className={`w-2 h-2 rounded-full mr-2 ${
-                              !notification.read_at ? 'bg-blue-500' : 'bg-gray-300'
-                            }`} />
+                            <div
+                              className={`w-2 h-2 rounded-full mr-2 ${
+                                !notification.read_at ? 'bg-blue-500' : 'bg-gray-300'
+                              }`}
+                            />
                             <p className="text-sm font-medium text-gray-900 truncate">
                               {notification.title}
                             </p>
@@ -346,12 +353,12 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ className =
                             {formatTime(notification.created_at)}
                           </p>
                         </div>
-                        
+
                         {/* 액션 버튼들 */}
                         <div className="flex items-center space-x-1 ml-2">
                           {!notification.read_at && (
                             <button
-                              onClick={(e) => {
+                              onClick={e => {
                                 e.stopPropagation()
                                 markAsRead(notification.id)
                               }}
@@ -362,7 +369,7 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ className =
                             </button>
                           )}
                           <button
-                            onClick={(e) => {
+                            onClick={e => {
                               e.stopPropagation()
                               deleteNotification(notification.id)
                             }}
