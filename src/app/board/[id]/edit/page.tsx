@@ -134,7 +134,7 @@ export default function PostEditPage() {
     e.preventDefault()
     if (!post || !user) return
 
-    const { error } = await supabase
+    const { error } = await (supabase as any)
       .from('posts')
       .update({
         title: post.title,
