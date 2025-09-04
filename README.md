@@ -162,6 +162,30 @@ Framer Motion을 사용하여 부드러운 인터랙션 구현
 2. Vercel이 자동으로 빌드 및 배포
 3. 프리뷰 URL 생성 (PR 시)
 
+## 빠른 배포/검증 체크리스트
+
+- 환경변수 확인(Vercel)
+  - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`(Preview/Prod)
+  - `SUPABASE_SERVICE_ROLE_KEY`(모든 환경, 서버 전용)
+  - 선택: `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_DOMAIN`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`
+- 마이그레이션 적용 여부
+  - Supabase 콘솔에서 `supabase/migrations/20250904_add_link_previews_cache.sql` 실행 완료 확인
+  - 테이블 `public.link_previews` 존재 및 RLS 활성 확인
+- 프리뷰 재배포
+  - PR 생성 또는 `git commit --allow-empty -m "chore: redeploy" && git push`
+  - 혹은 `vercel deploy` (옵션)
+- 기능 검증(Preview URL 기준)
+  - 링크 프리뷰 API: `GET /api/link-preview?url=<뉴스기사URL>` → 200/JSON, 재호출 시 캐시 적중(응답 지연 감소)
+  - 영속 캐시: Supabase `link_previews`에 row 생성 확인
+  - 레이트리밋: `/api/link-preview` 여러 번 호출 시 `X-RateLimit-*` 헤더 표기, 과다 호출 시 429
+  - 미디어 업로드: `/api/media/upload` POST로 작은 이미지 업로드 → 200, 공개 URL 생성, 과다 업로드 시 429
+  - CSP: 홈/아티스트 등 일반 페이지 콘솔 경고 없음, 에디터 페이지는 정상 동작(툴바/입력 가능)
+  - 홈 헤더: 최상단에서 투명, 스크롤 시 불투명 전환
+- SEO 파일
+  - `/robots.txt`(API로 제공), `/sitemap.xml` 경로 접근 시 200
+- 이미지 정책
+  - 외부 미리보기 이미지/파비콘은 프록시 경유로 정상 표시, 콘솔 오류 없음
+
 ## 라이선스
 
 © 2025 경기아트콜렉티브 협동조합. All rights reserved.
