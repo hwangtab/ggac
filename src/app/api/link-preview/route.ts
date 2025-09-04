@@ -1,7 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { fetchLinkPreview } from '@/utils/linkPreview'
+import distLimiter from '@/utils/distributedRateLimiter'
 
 export async function GET(request: NextRequest) {
+  // 분산 레이트리밋 (Upstash 있으면 Redis, 없으면 메모리)
+  const limiter = await distLimiter.applyRateLimit({
+    ...distLimiter.CONFIGS.SEARCH_API,
+    keyGenerator: distLimiter.createRouteKeyGenerator('link_preview'),
+  })
+  const limit = await limiter(request)
+  if (!limit.success && limit.response) {
+    return limit.response
+  }
   const { searchParams } = new URL(request.url)
   const url = searchParams.get('url')
 
@@ -33,7 +43,13 @@ export async function GET(request: NextRequest) {
     }
 
     console.log('Successfully fetched preview for:', url)
-    return NextResponse.json(preview)
+    const res = NextResponse.json(preview)
+    return distLimiter.addRateLimitHeaders(
+      res,
+      distLimiter.CONFIGS.SEARCH_API.maxRequests,
+      limit.remaining,
+      limit.resetTime
+    )
   } catch (error) {
     console.error('Link preview API error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

@@ -8,6 +8,7 @@ import {
 } from '@/lib/data'
 import { fetchLinkPreview } from '@/utils/linkPreview'
 import type { Metadata } from 'next'
+import { getSiteUrl } from '@/utils/site'
 
 interface ProjectPageProps {
   params: Promise<{
@@ -54,7 +55,7 @@ export async function generateMetadata({ params }: ProjectPageProps): Promise<Me
     return '/images/logo/gac_og.webp'
   }
 
-  const ogImageUrl = `https://ggac.kr${getOgImage()}`
+  const ogImageUrl = `${getSiteUrl()}${getOgImage()}`
 
   return {
     title: `${project.title} | 경기아트콜렉티브 협동조합`,
@@ -62,7 +63,7 @@ export async function generateMetadata({ params }: ProjectPageProps): Promise<Me
     openGraph: {
       title: project.title,
       description: project.description.split('\n')[0],
-      url: `https://ggac.kr/archive/${project.slug}`,
+      url: `${getSiteUrl()}/archive/${project.slug}`,
       siteName: '경기아트콜렉티브 협동조합',
       images: [
         {
