@@ -8,6 +8,7 @@ import type { PostAttachment } from '@/types';
 interface PostAttachmentsDisplayProps {
   postId: string;
   className?: string;
+  attachments?: PostAttachment[];
 }
 
 interface AttachmentWithStats {
@@ -24,14 +25,20 @@ interface AttachmentWithStats {
 
 const PostAttachmentsDisplay: React.FC<PostAttachmentsDisplayProps> = ({
   postId,
-  className = ''
+  className = '',
+  attachments: initialAttachments
 }) => {
-  const [attachments, setAttachments] = useState<PostAttachment[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [attachments, setAttachments] = useState<PostAttachment[]>(initialAttachments || []);
+  const [loading, setLoading] = useState(!initialAttachments);
   const [error, setError] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<PostAttachment | null>(null);
 
   useEffect(() => {
+    if (initialAttachments) {
+      setAttachments(initialAttachments)
+      setLoading(false)
+      return
+    }
     const fetchAttachments = async () => {
       try {
         setLoading(true);
@@ -54,7 +61,7 @@ const PostAttachmentsDisplay: React.FC<PostAttachmentsDisplayProps> = ({
     if (postId) {
       fetchAttachments();
     }
-  }, [postId]);
+  }, [postId, initialAttachments]);
 
   // 파일 타입별 아이콘 반환
   const getFileIcon = (fileType: string) => {
