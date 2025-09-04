@@ -21,14 +21,34 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
+DECLARE
+  has_is_deleted boolean;
 BEGIN
-  UPDATE public.posts p
-  SET comment_count = (
-    SELECT COUNT(1)
-    FROM public.comments c
-    WHERE c.post_id = p.id AND c.is_deleted = FALSE
-  )
-  WHERE p.id = p_post_id;
+  -- Detect presence of is_deleted column on comments table (for portability)
+  SELECT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'comments'
+      AND column_name = 'is_deleted'
+  ) INTO has_is_deleted;
+
+  IF has_is_deleted THEN
+    UPDATE public.posts p
+    SET comment_count = (
+      SELECT COUNT(1)
+      FROM public.comments c
+      WHERE c.post_id = p.id AND c.is_deleted = FALSE
+    )
+    WHERE p.id = p_post_id;
+  ELSE
+    UPDATE public.posts p
+    SET comment_count = (
+      SELECT COUNT(1)
+      FROM public.comments c
+      WHERE c.post_id = p.id
+    )
+    WHERE p.id = p_post_id;
+  END IF;
 END;
 $$;
 
@@ -79,7 +99,7 @@ DO $$ BEGIN
     SELECT 1 FROM pg_trigger WHERE tgname = 'trg_comments_recalc_counts'
   ) THEN
     CREATE TRIGGER trg_comments_recalc_counts
-    AFTER INSERT OR DELETE OR UPDATE OF is_deleted, post_id ON public.comments
+    AFTER INSERT OR DELETE OR UPDATE ON public.comments
     FOR EACH ROW EXECUTE FUNCTION public.trg_comments_recalc();
   END IF;
 END $$;
