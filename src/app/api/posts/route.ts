@@ -223,7 +223,7 @@ export async function GET(request: NextRequest) {
         return ApiSuccess.ok(result, '게시글이 없습니다.')
       }
 
-      // 🚀 병렬 처리: 댓글 수, 사용자 좋아요, 전체 개수를 동시에 조회
+      // 🚀 병렬 처리: 댓글 수, 첨부파일 통계, 사용자 좋아요, 전체 개수를 동시에 조회
       const commentCountPromise = (
         supabase.from('comments').select('post_id, count(*)', { head: false }) as any
       )
@@ -238,6 +238,12 @@ export async function GET(request: NextRequest) {
               .in('post_id', postIds)
               .eq('user_id', userId)
           : Promise.resolve({ data: [] as { post_id: string }[] })
+
+      // 첨부파일 통계: 한 번의 조회로 post_id, file_type만 가져와 서버에서 집계
+      const attachmentsStatsPromise = supabase
+        .from('post_attachments')
+        .select('post_id, file_type, file_size')
+        .in('post_id', postIds)
 
       let countQuery = supabase
         .from('posts')
@@ -255,8 +261,17 @@ export async function GET(request: NextRequest) {
         )
       }
 
-      const [{ data: commentCounts }, { data: userLikes }, { count, error: countError }] =
-        await Promise.all([commentCountPromise, userLikesPromise, countQuery])
+      const [
+        { data: commentCounts },
+        { data: userLikes },
+        { data: attachmentRows },
+        { count, error: countError },
+      ] = await Promise.all([
+        commentCountPromise,
+        userLikesPromise,
+        attachmentsStatsPromise,
+        countQuery,
+      ])
 
       if (countError) {
         throw new Error(`게시글 수 조회 실패: ${countError.message}`)
@@ -269,6 +284,40 @@ export async function GET(request: NextRequest) {
         const count = (item as any).count ?? 0
         commentCountMap.set(postId, count)
       })
+
+      // 게시글별 첨부파일 통계 계산
+      const attachmentStatsMap = new Map<string, {
+        total_attachments: number
+        total_size: number
+        image_count: number
+        document_count: number
+        video_count: number
+        audio_count: number
+      }>()
+      if (attachmentRows && Array.isArray(attachmentRows)) {
+        for (const row of attachmentRows as any[]) {
+          const pid = row.post_id as string
+          const type = (row.file_type as string) || 'document'
+          const size = (row.file_size as number) || 0
+          if (!attachmentStatsMap.has(pid)) {
+            attachmentStatsMap.set(pid, {
+              total_attachments: 0,
+              total_size: 0,
+              image_count: 0,
+              document_count: 0,
+              video_count: 0,
+              audio_count: 0,
+            })
+          }
+          const s = attachmentStatsMap.get(pid)!
+          s.total_attachments += 1
+          s.total_size += size
+          if (type === 'image') s.image_count += 1
+          else if (type === 'video') s.video_count += 1
+          else if (type === 'audio') s.audio_count += 1
+          else s.document_count += 1
+        }
+      }
 
       // ✅ 좋아요 수는 posts.like_count 컬럼을 그대로 사용 (추가 쿼리 제거)
 
@@ -285,6 +334,14 @@ export async function GET(request: NextRequest) {
         // like_count는 DB 컬럼값 사용
         like_count: (post as any).like_count || 0,
         is_liked: includeLikes ? userLikesMap.get(post.id) || false : undefined,
+        attachments_stats: attachmentStatsMap.get(post.id) || {
+          total_attachments: 0,
+          total_size: 0,
+          image_count: 0,
+          document_count: 0,
+          video_count: 0,
+          audio_count: 0,
+        },
         author: Array.isArray(post.author) ? post.author[0] : post.author,
       })) as PostData[]
 
