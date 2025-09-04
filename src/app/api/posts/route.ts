@@ -225,14 +225,10 @@ export async function GET(request: NextRequest) {
 
       // 🚀 병렬 처리: 댓글 수, 사용자 좋아요, 전체 개수를 동시에 조회
       const commentCountPromise = (
-        supabase
-          .from('comments')
-          // 그룹 집계: post_id별 댓글 수
-          .select('post_id, count:id', { head: false }) as any
+        supabase.from('comments').select('post_id, count(*)', { head: false }) as any
       )
         .in('post_id', postIds)
         .eq('is_deleted', false)
-        .group('post_id')
 
       const userLikesPromise =
         includeLikes && userId
