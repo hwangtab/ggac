@@ -1,8 +1,8 @@
-
 'use client'
 
 import { useState, useEffect, useCallback, memo } from 'react'
 import Image from 'next/image'
+import { createImageProxy } from '@/utils/imageValidation'
 import type { LinkPreview, ArticleInfo, ArticleCardProps } from '@/types'
 
 const ArticleCard = ({ article }: ArticleCardProps) => {
@@ -14,7 +14,7 @@ const ArticleCard = ({ article }: ArticleCardProps) => {
     try {
       setIsLoading(true)
       const response = await fetch(`/api/link-preview?url=${encodeURIComponent(article.url)}`)
-      
+
       if (response.ok) {
         const previewData = await response.json()
         setPreview(previewData)
@@ -52,12 +52,7 @@ const ArticleCard = ({ article }: ArticleCardProps) => {
   if (hasError || !preview) {
     return (
       <div className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow">
-        <a 
-          href={article.url} 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="block"
-        >
+        <a href={article.url} target="_blank" rel="noopener noreferrer" className="block">
           <div className="aspect-video bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center">
             <div className="text-center">
               <div className="text-2xl mb-2">📰</div>
@@ -65,12 +60,8 @@ const ArticleCard = ({ article }: ArticleCardProps) => {
             </div>
           </div>
           <div className="p-4">
-            <h4 className="font-semibold text-gray-900 truncate flex-1 mr-2">
-              {article.title}
-            </h4>
-            <p className="text-gray-600 text-sm">
-              기사 링크로 이동
-            </p>
+            <h4 className="font-semibold text-gray-900 truncate flex-1 mr-2">{article.title}</h4>
+            <p className="text-gray-600 text-sm">기사 링크로 이동</p>
             <div className="mt-2 text-xs text-gray-500 truncate">
               {new URL(article.url).hostname}
             </div>
@@ -82,16 +73,11 @@ const ArticleCard = ({ article }: ArticleCardProps) => {
 
   return (
     <div className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow">
-      <a 
-        href={article.url} 
-        target="_blank" 
-        rel="noopener noreferrer"
-        className="block"
-      >
+      <a href={article.url} target="_blank" rel="noopener noreferrer" className="block">
         {preview.image ? (
           <div className="aspect-video bg-gray-100 relative">
-            <Image 
-              src={preview.image} 
+            <Image
+              src={createImageProxy(preview.image)}
               alt={preview.title || article.title || '기사 이미지'}
               fill
               className="object-cover"
@@ -110,24 +96,22 @@ const ArticleCard = ({ article }: ArticleCardProps) => {
             </div>
           </div>
         )}
-        
+
         <div className="p-4">
           <h4 className="font-semibold text-gray-900 line-clamp-2 flex-1 mr-2">
             {preview.title || article.title}
           </h4>
-          
+
           {preview.description && (
-            <p className="text-gray-600 text-sm line-clamp-2 mb-2">
-              {preview.description}
-            </p>
+            <p className="text-gray-600 text-sm line-clamp-2 mb-2">{preview.description}</p>
           )}
-          
+
           <div className="flex items-center justify-between text-xs text-gray-500">
             <div className="flex items-center">
               {preview.favicon && (
                 <div className="relative w-4 h-4 mr-1">
-                  <Image 
-                    src={preview.favicon} 
+                  <Image
+                    src={createImageProxy(preview.favicon)}
                     alt=""
                     width={16}
                     height={16}
@@ -138,9 +122,7 @@ const ArticleCard = ({ article }: ArticleCardProps) => {
                   />
                 </div>
               )}
-              <span className="truncate">
-                {preview.siteName || new URL(article.url).hostname}
-              </span>
+              <span className="truncate">{preview.siteName || new URL(article.url).hostname}</span>
             </div>
           </div>
         </div>
