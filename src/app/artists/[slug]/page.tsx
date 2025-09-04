@@ -8,6 +8,7 @@ import ArtistProjects from '@/components/ArtistProjects'
 import { convertUrlsToMarkdownLinks } from '@/utils/markdown'
 import { getArtistSlugs, getArtistBySlug, getArtistProjects, type Artist } from '@/lib/data'
 import type { Metadata } from 'next'
+import { getSiteUrl } from '@/utils/site'
 import { sanitizeJsonLd } from '@/utils/sanitize'
 
 // ISR 최적화: 개별 아티스트 페이지는 12시간 캐시
@@ -33,10 +34,7 @@ export async function generateStaticParams() {
 
 // 안정적인 베이스 URL 생성
 function getBaseUrl(): string {
-  if (process.env.NODE_ENV === 'production') {
-    return 'https://ggac.kr'
-  }
-  return 'http://localhost:3000'
+  return getSiteUrl()
 }
 
 // generateMetadata 개선 - 캐싱된 함수 사용
