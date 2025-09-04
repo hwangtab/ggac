@@ -4,25 +4,24 @@
 
 -- 1. 복합 인덱스: 게시글 조회 최적화
 -- posts 테이블의 주요 조회 패턴에 최적화된 인덱스 추가
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_posts_optimized_list 
+CREATE INDEX IF NOT EXISTS idx_posts_optimized_list 
 ON posts (is_deleted, category, is_pinned DESC, created_at DESC)
 WHERE is_deleted = false;
 
 -- 2. 좋아요 관련 인덱스 최적화
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_post_likes_optimized 
+CREATE INDEX IF NOT EXISTS idx_post_likes_optimized 
 ON post_likes (post_id, user_id);
 
 -- 3. 댓글 수 조회 최적화 인덱스
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_comments_post_count 
-ON comments (post_id)
-WHERE is_deleted = false;
+CREATE INDEX IF NOT EXISTS idx_comments_post_count 
+ON comments (post_id);
 
 -- 4. 게시글별 좋아요 수 계산을 위한 인덱스
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_post_likes_count 
+CREATE INDEX IF NOT EXISTS idx_post_likes_count 
 ON post_likes (post_id);
 
 -- 5. 작성자 정보 조회 최적화
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_member_profiles_author_info 
+CREATE INDEX IF NOT EXISTS idx_member_profiles_author_info 
 ON member_profiles (id, display_name, email, registration_status)
 WHERE registration_status = 'approved';
 
