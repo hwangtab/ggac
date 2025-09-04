@@ -54,13 +54,14 @@ export default function LoginPage() {
       }
 
       // 모바일에서는 더 긴 재시도 로직 (네트워크 불안정성 고려)
-      let session = null
-      let profile = null
+      let session: any = null
+      let profile: any = null
       let retries = 0
       const maxRetries = isMobile ? 5 : 3
       const retryDelay = isMobile ? 500 : 200
+      let lastProfileError: any = null
 
-      while (!session && retries < maxRetries) {
+      while (retries < maxRetries) {
         if (process.env.NODE_ENV === 'development') {
           console.log(
             `🔄 [LOGIN DEBUG] Session check attempt ${retries + 1}/${maxRetries} (Mobile: ${isMobile})`
@@ -73,21 +74,32 @@ export default function LoginPage() {
         } = await supabase.auth.getSession()
 
         if (currentSession && !sessionError) {
-          // 프로필 확인
-          const { data: currentProfile, error: profileError } = await supabase
-            .from('member_profiles')
-            .select('registration_status, is_active, display_name')
-            .eq('id', currentSession.user.id)
-            .single()
-
-          if (currentProfile && !profileError) {
-            session = currentSession
-            profile = currentProfile
-            if (process.env.NODE_ENV === 'development') {
-              console.log('✅ [LOGIN DEBUG] Session and profile confirmed')
+          session = currentSession
+          // 프로필 확인은 시도하되, 실패하더라도 리다이렉트는 진행 (미들웨어가 최종 판정)
+          try {
+            const { data: currentProfile, error: profileError } = await supabase
+              .from('member_profiles')
+              .select('registration_status, is_active, display_name')
+              .eq('id', currentSession.user.id)
+              .single()
+            if (currentProfile && !profileError) {
+              profile = currentProfile
+              if (process.env.NODE_ENV === 'development') {
+                console.log('✅ [LOGIN DEBUG] Session and profile confirmed')
+              }
+            } else {
+              lastProfileError = profileError
+              if (process.env.NODE_ENV === 'development') {
+                console.log('⚠️ [LOGIN DEBUG] Profile fetch failed, will fallback to middleware redirect')
+              }
             }
-            break
+          } catch (e) {
+            lastProfileError = e
+            if (process.env.NODE_ENV === 'development') {
+              console.log('⚠️ [LOGIN DEBUG] Profile fetch exception, will fallback to middleware redirect')
+            }
           }
+          break
         }
 
         retries++
@@ -96,16 +108,18 @@ export default function LoginPage() {
         }
       }
 
-      if (!session || !profile) {
+      // 세션이 확인되면, 프로필 여부와 관계없이 우선 라우팅
+      if (!session) {
         if (process.env.NODE_ENV === 'development') {
-          console.error('❌ [LOGIN DEBUG] Session confirmation failed')
+          console.error('❌ [LOGIN DEBUG] No session confirmed - falling back to direct navigation')
         }
-        setMessage('인증 확인에 실패했습니다. 다시 시도해주세요.')
+        // 세션 확인이 지연되어도 라우팅을 트리거해 미들웨어로 판정 위임
+        navigateWithRetry('/board', isMobile ? 5 : 3)
         return
       }
 
-      // 리다이렉트 실행 (모바일 환경 최적화)
-      if (profile.registration_status === 'approved' && profile.is_active) {
+      // 프로필이 있으면 상태에 맞춰 라우팅, 없으면 게시판으로 위임
+      if (profile && profile.registration_status === 'approved' && profile.is_active) {
         if (process.env.NODE_ENV === 'development') {
           console.log('🎯 [LOGIN DEBUG] Approved user, redirecting to board...')
         }
@@ -128,9 +142,11 @@ export default function LoginPage() {
         setMessage('승인이 거부되었습니다. 관련 페이지로 이동합니다...')
         router.push('/register/rejected')
       } else {
-        console.log('❓ [LOGIN DEBUG] Unknown user status, redirecting to home')
-        setMessage('홈페이지로 이동합니다...')
-        router.push('/')
+        // 프로필을 못가져오거나 알 수 없는 상태: 게시판으로 보내고 미들웨어에 판정 위임
+        if (process.env.NODE_ENV === 'development') {
+          console.log('❓ [LOGIN DEBUG] Profile missing or unknown - navigating to board and delegating to middleware', lastProfileError)
+        }
+        navigateWithRetry('/board', isMobile ? 5 : 3)
       }
     } catch (error) {
       console.error('💥 [LOGIN DEBUG] Error during auth state confirmation:', error)
