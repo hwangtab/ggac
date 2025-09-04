@@ -50,55 +50,65 @@ BEGIN
 END;
 $$;
 
--- 3) Triggers on comments (insert/delete/update is_deleted)
-DO $$ BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_trigger WHERE tgname = 'trg_comments_after_insert_recalc_count'
-  ) THEN
-    CREATE TRIGGER trg_comments_after_insert_recalc_count
-    AFTER INSERT ON public.comments
-    FOR EACH ROW EXECUTE FUNCTION public.recalc_post_comment_count(NEW.post_id);
+-- Unified trigger function for comments table
+DROP FUNCTION IF EXISTS public.trg_comments_recalc() CASCADE;
+CREATE OR REPLACE FUNCTION public.trg_comments_recalc()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    PERFORM public.recalc_post_comment_count(NEW.post_id);
+  ELSIF TG_OP = 'DELETE' THEN
+    PERFORM public.recalc_post_comment_count(OLD.post_id);
+  ELSIF TG_OP = 'UPDATE' THEN
+    -- handle is_deleted or post_id change
+    IF NEW.post_id IS DISTINCT FROM OLD.post_id THEN
+      PERFORM public.recalc_post_comment_count(OLD.post_id);
+    END IF;
+    PERFORM public.recalc_post_comment_count(COALESCE(NEW.post_id, OLD.post_id));
   END IF;
-END $$;
+  RETURN NULL;
+END;
+$$;
 
 DO $$ BEGIN
   IF NOT EXISTS (
-    SELECT 1 FROM pg_trigger WHERE tgname = 'trg_comments_after_delete_recalc_count'
+    SELECT 1 FROM pg_trigger WHERE tgname = 'trg_comments_recalc_counts'
   ) THEN
-    CREATE TRIGGER trg_comments_after_delete_recalc_count
-    AFTER DELETE ON public.comments
-    FOR EACH ROW EXECUTE FUNCTION public.recalc_post_comment_count(OLD.post_id);
+    CREATE TRIGGER trg_comments_recalc_counts
+    AFTER INSERT OR DELETE OR UPDATE OF is_deleted, post_id ON public.comments
+    FOR EACH ROW EXECUTE FUNCTION public.trg_comments_recalc();
   END IF;
 END $$;
 
-DO $$ BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_trigger WHERE tgname = 'trg_comments_after_update_recalc_count'
-  ) THEN
-    CREATE TRIGGER trg_comments_after_update_recalc_count
-    AFTER UPDATE OF is_deleted ON public.comments
-    FOR EACH ROW EXECUTE FUNCTION public.recalc_post_comment_count(NEW.post_id);
+-- Unified trigger function for post_likes table
+DROP FUNCTION IF EXISTS public.trg_post_likes_recalc() CASCADE;
+CREATE OR REPLACE FUNCTION public.trg_post_likes_recalc()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    PERFORM public.recalc_post_like_count(NEW.post_id);
+  ELSIF TG_OP = 'DELETE' THEN
+    PERFORM public.recalc_post_like_count(OLD.post_id);
   END IF;
-END $$;
-
--- 4) Triggers on post_likes (insert/delete)
-DO $$ BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_trigger WHERE tgname = 'trg_likes_after_insert_recalc_count'
-  ) THEN
-    CREATE TRIGGER trg_likes_after_insert_recalc_count
-    AFTER INSERT ON public.post_likes
-    FOR EACH ROW EXECUTE FUNCTION public.recalc_post_like_count(NEW.post_id);
-  END IF;
-END $$;
+  RETURN NULL;
+END;
+$$;
 
 DO $$ BEGIN
   IF NOT EXISTS (
-    SELECT 1 FROM pg_trigger WHERE tgname = 'trg_likes_after_delete_recalc_count'
+    SELECT 1 FROM pg_trigger WHERE tgname = 'trg_likes_recalc_count'
   ) THEN
-    CREATE TRIGGER trg_likes_after_delete_recalc_count
-    AFTER DELETE ON public.post_likes
-    FOR EACH ROW EXECUTE FUNCTION public.recalc_post_like_count(OLD.post_id);
+    CREATE TRIGGER trg_likes_recalc_count
+    AFTER INSERT OR DELETE ON public.post_likes
+    FOR EACH ROW EXECUTE FUNCTION public.trg_post_likes_recalc();
   END IF;
 END $$;
 
@@ -116,4 +126,3 @@ UPDATE public.posts p
 SET like_count = (
   SELECT COUNT(1) FROM public.post_likes l WHERE l.post_id = p.id
 );
-
