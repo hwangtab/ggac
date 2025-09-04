@@ -9,11 +9,23 @@ interface CacheEntry<T> {
   hits: number
 }
 
+/**
+ * In-memory cache with TTL and simple LRU-style eviction.
+ *
+ * The cache stores up to `maxSize` entries. When an entry is older than
+ * `maxAge` milliseconds it will be removed on access. If the cache exceeds
+ * `maxSize`, the least frequently accessed entry is evicted.
+ */
 class MemoryEfficientCache<T> {
   private cache = new Map<string, CacheEntry<T>>()
   private maxSize = 100 // 최대 캐시 항목 수
   private maxAge = 300000 // 5분 TTL
 
+  /**
+   * Retrieve a value from cache.
+   * @param key - Cache key
+   * @returns Cached value or `null` if missing/expired
+   */
   get(key: string): T | null {
     const entry = this.cache.get(key)
     if (!entry) return null
@@ -29,6 +41,11 @@ class MemoryEfficientCache<T> {
     return entry.data
   }
 
+  /**
+   * Store data in the cache.
+   * @param key - Cache key
+   * @param data - Value to cache
+   */
   set(key: string, data: T): void {
     // 캐시 크기 관리 - LRU 기반 제거
     if (this.cache.size >= this.maxSize) {
@@ -42,6 +59,7 @@ class MemoryEfficientCache<T> {
     })
   }
 
+  /** Remove the least frequently used entry from the cache. */
   private evictLeastUsed(): void {
     let leastUsedKey = ''
     let leastHits = Infinity
@@ -58,6 +76,7 @@ class MemoryEfficientCache<T> {
     }
   }
 
+  /** Clear all cached entries. */
   clear(): void {
     this.cache.clear()
   }
