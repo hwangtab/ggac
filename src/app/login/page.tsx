@@ -3,11 +3,11 @@
 // 정적 생성 방지 - 인증이 필요한 동적 페이지
 export const dynamic = 'force-dynamic'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '../../lib/supabase/client'
-import { useStablePageLoad } from '../../utils/routeProtection'
+import { useStablePageLoad, useSafeNavigation } from '../../utils/routeProtection'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -16,6 +16,7 @@ export default function LoginPage() {
   const [message, setMessage] = useState('')
   const router = useRouter()
   const { isLoading: pageLoading, isReady } = useStablePageLoad('/login')
+  const { navigateWithRetry } = useSafeNavigation()
 
   // 모바일 디바이스 감지 함수 (waitForAuthStateAndRedirect에서 사용)
   const isMobileDeviceForAuth = () => {
@@ -110,26 +111,13 @@ export default function LoginPage() {
         }
         setMessage('인증 완료! 게시판으로 이동합니다...')
 
-        // 모바일에서는 더 긴 딜레이와 router.push 사용
+        // 모바일에서의 세션 동기화를 고려한 지연 후 안전한 네비게이션
         const redirectDelay = isMobile ? 800 : 300
-
         setTimeout(() => {
           if (process.env.NODE_ENV === 'development') {
-            console.log('🚀 [LOGIN DEBUG] Redirecting to board...')
+            console.log('🚀 [LOGIN DEBUG] Redirecting to board with retry...')
           }
-
-          // 모바일에서는 router.push 우선 시도, 실패 시 window.location.href 사용
-          if (isMobile) {
-            try {
-              router.push('/board')
-              console.log('📱 [LOGIN DEBUG] Mobile redirect via router.push')
-            } catch (routerError) {
-              console.warn('⚠️ [LOGIN DEBUG] Router.push failed, falling back to window.location')
-              window.location.href = '/board'
-            }
-          } else {
-            window.location.href = '/board'
-          }
+          navigateWithRetry('/board', isMobile ? 5 : 3)
         }, redirectDelay)
       } else if (profile && profile.registration_status === 'pending') {
         console.log('⏳ [LOGIN DEBUG] Pending user, redirecting to pending page...')
