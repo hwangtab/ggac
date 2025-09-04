@@ -8,6 +8,7 @@ import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator } from '@/utils/rateLimiter'
 import { validateSearchQuery } from '@/utils/validation'
+import { createTextPreview } from '@/utils/textUtils'
 import {
   apiGet,
   ApiSuccess,
@@ -142,8 +143,7 @@ export async function GET(request: NextRequest) {
         is_pinned,
         like_count,
         author:member_profiles!posts_author_id_fkey (
-          display_name,
-          email
+          display_name
         )
       `
         )
@@ -242,7 +242,7 @@ export async function GET(request: NextRequest) {
       // 첨부파일 통계: 한 번의 조회로 post_id, file_type만 가져와 서버에서 집계
       const attachmentsStatsPromise = supabase
         .from('post_attachments')
-        .select('post_id, file_type, file_size')
+        .select('post_id, file_type')
         .in('post_id', postIds)
 
       let countQuery = supabase
@@ -288,7 +288,6 @@ export async function GET(request: NextRequest) {
       // 게시글별 첨부파일 통계 계산
       const attachmentStatsMap = new Map<string, {
         total_attachments: number
-        total_size: number
         image_count: number
         document_count: number
         video_count: number
@@ -298,11 +297,9 @@ export async function GET(request: NextRequest) {
         for (const row of attachmentRows as any[]) {
           const pid = row.post_id as string
           const type = (row.file_type as string) || 'document'
-          const size = (row.file_size as number) || 0
           if (!attachmentStatsMap.has(pid)) {
             attachmentStatsMap.set(pid, {
               total_attachments: 0,
-              total_size: 0,
               image_count: 0,
               document_count: 0,
               video_count: 0,
@@ -311,7 +308,6 @@ export async function GET(request: NextRequest) {
           }
           const s = attachmentStatsMap.get(pid)!
           s.total_attachments += 1
-          s.total_size += size
           if (type === 'image') s.image_count += 1
           else if (type === 'video') s.video_count += 1
           else if (type === 'audio') s.audio_count += 1
@@ -328,22 +324,34 @@ export async function GET(request: NextRequest) {
       })
 
       // 🚀 최적화된 결과 조합
-      const postsWithExtra = (posts || []).map(post => ({
-        ...post,
-        comment_count: commentCountMap.get(post.id) || 0,
-        // like_count는 DB 컬럼값 사용
-        like_count: (post as any).like_count || 0,
-        is_liked: includeLikes ? userLikesMap.get(post.id) || false : undefined,
-        attachments_stats: attachmentStatsMap.get(post.id) || {
-          total_attachments: 0,
-          total_size: 0,
-          image_count: 0,
-          document_count: 0,
-          video_count: 0,
-          audio_count: 0,
-        },
-        author: Array.isArray(post.author) ? post.author[0] : post.author,
-      })) as PostData[]
+      const postsWithExtra = (posts || []).map(raw => {
+        const post: any = {
+          id: raw.id,
+          title: raw.title,
+          // 서버에서 미리보기 텍스트 생성 (본문은 응답에서 제외)
+          content_preview: createTextPreview(raw.content || '', 150).text,
+          preview_has_images: createTextPreview(raw.content || '', 150).hasImages,
+          preview_image_count: createTextPreview(raw.content || '', 150).imageCount,
+          content_format: raw.content_format,
+          category: raw.category,
+          author_id: raw.author_id,
+          created_at: raw.created_at,
+          updated_at: raw.updated_at,
+          is_pinned: raw.is_pinned,
+          like_count: (raw as any).like_count || 0,
+          comment_count: commentCountMap.get(raw.id) || 0,
+          is_liked: includeLikes ? userLikesMap.get(raw.id) || false : undefined,
+          attachments_stats: attachmentStatsMap.get(raw.id) || {
+            total_attachments: 0,
+            image_count: 0,
+            document_count: 0,
+            video_count: 0,
+            audio_count: 0,
+          },
+          author: Array.isArray((raw as any).author) ? (raw as any).author[0] : (raw as any).author,
+        }
+        return post
+      }) as any[]
 
       const totalCount = count || 0
       const totalPages = Math.ceil(totalCount / limit)

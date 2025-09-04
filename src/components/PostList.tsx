@@ -160,20 +160,27 @@ const PostList: React.FC<PostListProps> = ({
                   onClick={() => router.push(`/board/${post.id}`)}
                 >
                   {(() => {
-                    const preview = createTextPreview(post.content, 150);
+                    const serverPreview = (post as any).content_preview as string | undefined
+                    const hasImages = (post as any).preview_has_images as boolean | undefined
+                    const imageCount = (post as any).preview_image_count as number | undefined
+                    const fallback = serverPreview ? null : createTextPreview(post.content, 150)
+                    const text = serverPreview || fallback!.text
+                    const truncated = fallback ? fallback.isTruncated : (text.length > 150)
+                    const showImages = hasImages ?? fallback!.hasImages
+                    const imgCount = imageCount ?? fallback!.imageCount
                     return (
                       <>
                         <p className="line-clamp-3">
-                          {preview.text}
+                          {text}
                         </p>
                         <div className="flex items-center gap-2 mt-1">
-                          {preview.isTruncated && (
+                          {truncated && (
                             <span className="text-primary-600 text-sm inline-block">더 보기</span>
                           )}
-                          {preview.hasImages && (
+                          {showImages && (
                             <span className="text-blue-600 text-xs flex items-center gap-1">
                               <FiImage className="w-3 h-3" />
-                              이미지 {preview.imageCount}개
+                              이미지 {imgCount}
                             </span>
                           )}
                         </div>
