@@ -40,6 +40,8 @@ interface PostDetailClientProps {
 
 export default function PostDetailClient({ postId }: PostDetailClientProps) {
   const [post, setPost] = useState<Post | null>(null);
+  const [initialComments, setInitialComments] = useState<any[] | null>(null);
+  const [initialAttachments, setInitialAttachments] = useState<any[] | null>(null);
   const [authorProfile, setAuthorProfile] = useState<Profile | null>(null);
   const [user, setUser] = useState<any>(null);
   const [isMember, setIsMember] = useState<boolean>(false);
@@ -85,67 +87,35 @@ export default function PostDetailClient({ postId }: PostDetailClientProps) {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // 사용자 인증 확인 - 세션 유효성 검사 강화
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
-        if (sessionError) {
-          console.warn('Session error:', sessionError);
-          // 세션 에러가 있으면 토큰 갱신 시도
-          const { data: refreshedSession, error: refreshError } = await supabase.auth.refreshSession();
-          
-          if (refreshError || !refreshedSession.session) {
-            console.warn('Token refresh failed, clearing session');
-            await supabase.auth.signOut();
-            setUser(null);
-            setIsMember(false);
-          } else {
-            setUser(refreshedSession.session.user);
-          }
-        } else {
-          setUser(session?.user || null);
-        }
-
+        // 사용자 세션 확인(선택) + 멤버 상태 확인
+        const { data: { session } } = await supabase.auth.getSession();
         const currentUser = session?.user || null;
-
-        // 사용자 권한 확인 (로그인한 사용자만)
+        setUser(currentUser);
         await checkMemberStatus(currentUser);
 
-        // 게시글 가져오기
-        const { data: postData, error: postError } = await supabase
-          .from('posts')
-          .select('*')
-          .eq('id', postId)
-          .single();
-
-        if (postError) {
-          setError('게시글을 찾을 수 없습니다.');
-          setLoading(false);
-          return;
+        // 상세 API로 단일 요청 (댓글/첨부 포함)
+        const res = await fetch(`/api/posts/${postId}?include_comments=true&include_attachments=true`, { cache: 'no-store' })
+        if (!res.ok) {
+          setError('게시글을 불러올 수 없습니다.')
+          setLoading(false)
+          return
         }
-
-        // 좋아요 정보를 API를 통해 가져오기
-        let enrichedPostData: Post = { 
-          ...(postData as any), 
-          like_count: 0, 
-          is_liked: false 
-        } as Post;
-        
-        try {
-          const response = await fetch(`/api/posts/${postId}/likes`);
-          if (response.ok) {
-            const likeData = await response.json();
-            enrichedPostData = {
-              ...(postData as any),
-              like_count: likeData.like_count || 0,
-              is_liked: likeData.is_liked || false
-            } as Post;
-          }
-        } catch (error) {
-          console.error('좋아요 정보 조회 실패:', error);
-          // 에러 발생 시 기본값 사용
-        }
-
-        setPost(enrichedPostData);
+        const data = await res.json()
+        const detail = data.post
+        setPost({
+          id: detail.id,
+          title: detail.title,
+          content: detail.content,
+          content_format: detail.content_format,
+          category: detail.category,
+          author_id: detail.author_id,
+          created_at: detail.created_at,
+          like_count: detail.like_count,
+          is_liked: detail.is_liked,
+          view_count: detail.view_count,
+        })
+        if (detail.comments) setInitialComments(detail.comments)
+        if (detail.attachments) setInitialAttachments(detail.attachments)
 
         // 게시글 조회수 증가 (작성자 본인이 아닌 경우)
         try {
@@ -178,30 +148,16 @@ export default function PostDetailClient({ postId }: PostDetailClientProps) {
           // 조회수 업데이트 실패는 게시글 표시를 막지 않음
         }
 
-        // 작성자 프로필 가져오기
-        const post = postData as unknown as PostType;
-        console.debug(`[PostDetail] Fetching author profile for user ID: ${post.author_id}`);
-        const { data: authorData, error: authorError } = await supabase
-          .from('public_profiles')
-          .select('id, display_name')
-          .eq('id', post.author_id)
-          .single();
-
-        if (authorError) {
-          console.warn(`[PostDetail] Failed to fetch author profile: ${authorError.message}`);
-          // 기본 프로필 설정
-          setAuthorProfile({
-            id: post.author_id,
-            display_name: '알 수 없는 사용자',
-            profile_image_url: undefined
-          });
+        // 작성자 프로필 (API 응답 내 author.display_name 사용, 부족하면 폴백 조회)
+        if (detail.author?.display_name) {
+          setAuthorProfile({ id: detail.author_id, display_name: detail.author.display_name })
         } else {
-          console.debug('[PostDetail] Author profile loaded successfully');
-          setAuthorProfile((authorData as any) || {
-            id: post.author_id,
-            display_name: '알 수 없는 사용자',
-            profile_image_url: undefined
-          });
+          const { data: authorData } = await supabase
+            .from('public_profiles')
+            .select('id, display_name')
+            .eq('id', detail.author_id)
+            .maybeSingle()
+          setAuthorProfile(authorData || { id: detail.author_id, display_name: '알 수 없는 사용자' })
         }
 
         setLoading(false);
@@ -429,12 +385,7 @@ export default function PostDetailClient({ postId }: PostDetailClientProps) {
                   showCount={true}
                   showLabel={false}
                   onLikeChange={(postId, liked, count) => {
-                    // 좋아요 상태 변경 시 post 상태 업데이트 (새로고침 방지)
-                    setPost(prev => prev ? {
-                      ...prev,
-                      like_count: count,
-                      is_liked: liked
-                    } : prev)
+                    setPost(prev => prev ? { ...prev, like_count: count, is_liked: liked } : prev)
                   }}
                 />
               </div>
@@ -453,13 +404,13 @@ export default function PostDetailClient({ postId }: PostDetailClientProps) {
 
             {/* 첨부파일 */}
             <div className="px-6 pb-6">
-              <PostAttachmentsDisplay postId={post.id} />
+              <PostAttachmentsDisplay postId={post.id} attachments={initialAttachments || undefined} />
             </div>
           </div>
 
           {/* 댓글 섹션 */}
           <div className="mt-8">
-            <CommentSection postId={post.id} currentUserId={user?.id} isMember={isMember} />
+            <CommentSection postId={post.id} currentUserId={user?.id} isMember={isMember} initialComments={initialComments || undefined} />
           </div>
         </div>
       </div>

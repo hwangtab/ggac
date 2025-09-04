@@ -43,22 +43,17 @@ export async function GET(
     }
 
     const supabase = createRouteHandlerClient({ cookies })
-    
-    // 인증 확인
+    // 세션은 선택 사항(공개 열람 허용), 사용자 ID가 있으면 is_liked 등 계산에 사용
     const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
-    }
-
-    // 회원 상태 확인
-    const { data: profile } = await supabase
-      .from('member_profiles')
-      .select('registration_status, is_active, is_admin')
-      .eq('id', session.user.id)
-      .single()
-
-    if (!profile || profile.registration_status !== 'approved' || !profile.is_active) {
-      return NextResponse.json({ error: '승인된 회원만 접근할 수 있습니다.' }, { status: 403 })
+    const userId = session?.user?.id || null
+    let isAdmin = false
+    if (userId) {
+      const { data: prof } = await supabase
+        .from('member_profiles')
+        .select('is_admin')
+        .eq('id', userId)
+        .single()
+      isAdmin = !!prof?.is_admin
     }
 
     const validPostId = uuidValidation.sanitized
@@ -94,19 +89,21 @@ export async function GET(
     }
 
     // 삭제된 게시글 접근 권한 확인
-    if (post.is_deleted && !profile.is_admin && post.author_id !== session.user.id) {
+    if (post.is_deleted && !(isAdmin || (userId && post.author_id === userId))) {
       return NextResponse.json({ error: '삭제된 게시글입니다.' }, { status: 404 })
     }
 
-    // 현재 사용자의 좋아요 상태 확인
-    const { data: userLike } = await supabase
-      .from('post_likes')
-      .select('id')
-      .eq('post_id', validPostId)
-      .eq('user_id', session.user.id)
-      .single()
-
-    const isLiked = !!userLike
+    // 현재 사용자의 좋아요 상태 확인(선택)
+    let isLiked = false
+    if (userId) {
+      const { data: userLike } = await supabase
+        .from('post_likes')
+        .select('id')
+        .eq('post_id', validPostId)
+        .eq('user_id', userId)
+        .maybeSingle()
+      isLiked = !!userLike
+    }
 
     // 댓글 수 조회
     const { count: commentCount } = await supabase
@@ -125,8 +122,7 @@ export async function GET(
           author_id,
           created_at,
           author:member_profiles!comments_author_id_fkey (
-            display_name,
-            email
+            display_name
           )
         `)
         .eq('post_id', validPostId)
@@ -136,6 +132,33 @@ export async function GET(
         console.error('댓글 조회 오류:', commentsError)
       } else {
         comments = commentsData || []
+        // 댓글 좋아요 메타 병합(집계 + 사용자 좋아요)
+        const ids = comments.map((c: any) => c.id)
+        if (ids.length > 0) {
+          // 집계: 댓글별 좋아요 수
+          const { data: likeRows } = await supabase
+            .from('comment_likes')
+            .select('comment_id')
+            .in('comment_id', ids)
+          const likeCountMap = new Map<string, number>()
+          likeRows?.forEach((r: any) => {
+            likeCountMap.set(r.comment_id, (likeCountMap.get(r.comment_id) || 0) + 1)
+          })
+          let userLikedSet: Set<string> | null = null
+          if (userId) {
+            const { data: userLiked } = await supabase
+              .from('comment_likes')
+              .select('comment_id')
+              .in('comment_id', ids)
+              .eq('user_id', userId)
+            userLikedSet = new Set((userLiked || []).map((x: any) => x.comment_id))
+          }
+          comments = comments.map((c: any) => ({
+            ...c,
+            like_count: likeCountMap.get(c.id) || 0,
+            is_liked: userLikedSet ? userLikedSet.has(c.id) : false,
+          }))
+        }
       }
     }
 

@@ -13,10 +13,11 @@ interface CommentSectionProps {
   postId: string
   currentUserId?: string
   isMember: boolean
+  initialComments?: CommentWithLikes[]
 }
 
-const CommentSection: React.FC<CommentSectionProps> = ({ postId, currentUserId, isMember }) => {
-  const [comments, setComments] = useState<CommentWithLikes[]>([])
+const CommentSection: React.FC<CommentSectionProps> = ({ postId, currentUserId, isMember, initialComments }) => {
+  const [comments, setComments] = useState<CommentWithLikes[]>(initialComments || [])
   const [newComment, setNewComment] = useState('')
   const [loading, setLoading] = useState(false)
   const [profiles, setProfiles] = useState<Record<string, string>>({})
@@ -122,8 +123,13 @@ const CommentSection: React.FC<CommentSectionProps> = ({ postId, currentUserId, 
   }, [comments])
 
   useEffect(() => {
+    if (initialComments && initialComments.length >= 0) {
+      // 초기 데이터가 제공되면 네트워크 요청 생략
+      setComments(initialComments)
+      return
+    }
     fetchComments()
-  }, [postId, fetchComments])
+  }, [postId, fetchComments, initialComments])
 
   useEffect(() => {
     if (comments.length > 0) {
