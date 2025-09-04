@@ -215,6 +215,15 @@ const nextConfig = {
   // Enhanced security headers (keep simple for static assets)
   async headers() {
     return [
+      // Ensure CSS is served with correct MIME and nosniff to prevent accidental script execution
+      {
+        source: '/_next/static/css/(.*)',
+        headers: [
+          { key: 'Content-Type', value: 'text/css; charset=utf-8' },
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+        ],
+      },
       // Next static assets: rely on Next/Vercel defaults, only add caching
       {
         source: '/_next/static/(.*)',
