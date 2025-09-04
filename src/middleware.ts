@@ -89,7 +89,6 @@ export async function middleware(request: NextRequest) {
           "frame-ancestors 'none'",
           "worker-src 'self' blob:",
           "manifest-src 'self'",
-          'plugin-types application/pdf',
           'report-uri /api/security/csp-report',
           'report-to default',
           ...(process.env.NODE_ENV === 'production' ? ['upgrade-insecure-requests'] : []),

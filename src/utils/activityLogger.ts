@@ -322,6 +322,12 @@ class ActivityLogger {
       return true
     }
 
+    // 비로그인 사용자는 로깅 시도하지 않음(401 노이즈 방지)
+    if (!this.sessionId || !this.sessionToken) {
+      this.secureLog('debug', 'Skipping activity log for anonymous user')
+      return true
+    }
+
     try {
       const enhancedRequest = {
         ...request,
