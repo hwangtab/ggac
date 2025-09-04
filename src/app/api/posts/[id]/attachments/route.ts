@@ -63,18 +63,16 @@ export async function GET(
     
     const validPostId = uuidValidation.sanitized;
     
+    // 공개 읽기 허용: 인증 없이도 첨부파일 목록을 조회할 수 있게 함
+    // (쓰기/업로드는 계속 보호됨)
     const supabase = createRouteHandlerClient({ cookies })
-    const { data: { session } } = await supabase.auth.getSession()
-
-    if (!session?.user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
-    }
 
     // 게시글 존재 확인
     const { data: post, error: postError } = await supabase
       .from('posts')
       .select('id, author_id')
       .eq('id', validPostId)
+      .eq('is_deleted', false)
       .single()
 
     if (postError || !post) {
