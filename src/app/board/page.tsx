@@ -12,6 +12,8 @@ import { usePagination } from '../../hooks/usePagination'
 import { usePostsWithPagination } from '../../hooks/usePostsWithPagination'
 import type { MemberProfile } from '@/types'
 
+// 🚀 성능 최적화: 클라이언트 컴포넌트이므로 캐싱은 Hook과 API에서 처리
+
 function BoardContent() {
   const [user, setUser] = useState<any>(null)
   const [isMember, setIsMember] = useState<boolean>(false)

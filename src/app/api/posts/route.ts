@@ -8,14 +8,14 @@ import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator } from '@/utils/rateLimiter'
 import { validateSearchQuery } from '@/utils/validation'
-import { 
-  apiGet, 
-  ApiSuccess, 
-  ApiError, 
-  requireAuth, 
-  parsePaginationParams, 
+import {
+  apiGet,
+  ApiSuccess,
+  ApiError,
+  requireAuth,
+  parsePaginationParams,
   parseSortParams,
-  validateApiInput
+  validateApiInput,
 } from '@/utils/apiWrapper'
 
 export const dynamic = 'force-dynamic'
@@ -24,7 +24,7 @@ export const runtime = 'nodejs'
 // Rate limiting 설정
 const rateLimiter = applyRateLimit({
   ...RATE_LIMIT_CONFIGS.GENERAL_API,
-  keyGenerator: createUserKeyGenerator('posts')
+  keyGenerator: createUserKeyGenerator('posts'),
 })
 
 // 게시글 데이터 타입 정의
@@ -65,69 +65,82 @@ interface PostListResponse {
   }
 }
 
+// 🚀 성능 최적화: API 라우트 추가 캐싱 설정
+export const revalidate = 0 // API는 항상 최신 데이터 반환 (클라이언트 캐싱으로 성능 확보)
+
 export async function GET(request: NextRequest) {
   // 인증 확인을 여기서 먼저 수행
   const supabase = createRouteHandlerClient({ cookies })
-  const { data: { session } } = await supabase.auth.getSession()
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
   const userId = requireAuth(session?.user?.id)
-  
-  return apiGet(async () => {
-    // Rate limiting 적용
-    const rateLimitResult = rateLimiter(request)
-    if (!rateLimitResult.success) {
-      throw ApiError.tooManyRequests('너무 많은 요청입니다. 잠시 후 다시 시도해주세요.')
-    }
 
-    // 회원 상태 확인
-    const { data: profile } = await supabase
-      .from('member_profiles')
-      .select('registration_status, is_active')
-      .eq('id', userId)
-      .single()
+  return apiGet(
+    async () => {
+      // 🚀 성능 측정 시작
+      const startTime = Date.now()
+      console.log('📊 [PERFORMANCE] API 요청 시작:', { timestamp: new Date().toISOString() })
 
-    if (!profile || profile.registration_status !== 'approved' || !profile.is_active) {
-      throw ApiError.forbidden('승인된 회원만 접근할 수 있습니다.')
-    }
-
-    // 쿼리 파라미터 처리
-    const { searchParams } = new URL(request.url)
-    const category = searchParams.get('category') || '전체'
-    const searchRaw = searchParams.get('search') || ''
-    const includeLikes = searchParams.get('include_likes') !== 'false'
-    
-    // 페이지네이션 파라미터 파싱
-    const { page, limit, offset } = parsePaginationParams(searchParams, 20, 50)
-    
-    // 정렬 파라미터 파싱
-    const allowedSortFields = ['created_at', 'updated_at', 'like_count', 'title']
-    const { orderBy: sortBy, orderDirection: sortOrder } = parseSortParams(
-      searchParams, 
-      allowedSortFields, 
-      'created_at'
-    )
-
-    // 검색어 검증
-    let search = ''
-    if (searchRaw) {
-      const searchValidation = validateSearchQuery(searchRaw)
-      if (!searchValidation.isValid) {
-        throw ApiError.badRequest(`유효하지 않은 검색어입니다: ${searchValidation.errors.join(', ')}`)
+      // Rate limiting 적용
+      const rateLimitResult = rateLimiter(request)
+      if (!rateLimitResult.success) {
+        throw ApiError.tooManyRequests('너무 많은 요청입니다. 잠시 후 다시 시도해주세요.')
       }
-      search = searchValidation.sanitized
-    }
 
-    // 허용된 카테고리 검증
-    const allowedCategories = ['전체', '공지', '잡담', '홍보', '건의']
-    validateApiInput(
-      category,
-      (cat): cat is string => allowedCategories.includes(cat),
-      '유효하지 않은 카테고리입니다.'
-    )
+      // 회원 상태 확인 (간소화 - 필수 필드만)
+      const { data: profile } = await supabase
+        .from('member_profiles')
+        .select('registration_status, is_active')
+        .eq('id', userId)
+        .single()
 
-    // 기본 쿼리 구성
-    let query = supabase
-      .from('posts')
-      .select(`
+      if (!profile || profile.registration_status !== 'approved' || !profile.is_active) {
+        throw ApiError.forbidden('승인된 회원만 접근할 수 있습니다.')
+      }
+
+      // 쿼리 파라미터 처리
+      const { searchParams } = new URL(request.url)
+      const category = searchParams.get('category') || '전체'
+      const searchRaw = searchParams.get('search') || ''
+      const includeLikes = searchParams.get('include_likes') !== 'false'
+
+      // 페이지네이션 파라미터 파싱
+      const { page, limit, offset } = parsePaginationParams(searchParams, 20, 50)
+
+      // 정렬 파라미터 파싱
+      const allowedSortFields = ['created_at', 'updated_at', 'like_count', 'title']
+      const { orderBy: sortBy, orderDirection: sortOrder } = parseSortParams(
+        searchParams,
+        allowedSortFields,
+        'created_at'
+      )
+
+      // 검색어 검증
+      let search = ''
+      if (searchRaw) {
+        const searchValidation = validateSearchQuery(searchRaw)
+        if (!searchValidation.isValid) {
+          throw ApiError.badRequest(
+            `유효하지 않은 검색어입니다: ${searchValidation.errors.join(', ')}`
+          )
+        }
+        search = searchValidation.sanitized
+      }
+
+      // 허용된 카테고리 검증
+      const allowedCategories = ['전체', '공지', '잡담', '홍보', '건의']
+      validateApiInput(
+        category,
+        (cat): cat is string => allowedCategories.includes(cat),
+        '유효하지 않은 카테고리입니다.'
+      )
+
+      // 🚀 최적화된 쿼리: 기본 게시글 정보 + 작성자 정보 조회
+      let query = supabase
+        .from('posts')
+        .select(
+          `
         id,
         title,
         content,
@@ -142,117 +155,183 @@ export async function GET(request: NextRequest) {
           display_name,
           email
         )
-      `)
-      .eq('is_deleted', false)
+      `
+        )
+        .eq('is_deleted', false)
 
-    // 카테고리 필터 적용
-    if (category !== '전체') {
-      query = query.eq('category', category)
-    }
+      // 카테고리 필터 적용
+      if (category !== '전체') {
+        query = query.eq('category', category)
+      }
 
-    // 검색어 적용
-    if (search) {
-      const escapedSearch = search.replace(/'/g, "''").replace(/\\/g, '\\\\')
-      query = query.or(`title.ilike.%${escapedSearch}%,content.ilike.%${escapedSearch}%`)
-    }
+      // 검색어 적용
+      if (search) {
+        const escapedSearch = search.replace(/'/g, "''").replace(/\\/g, '\\\\')
+        query = query.or(`title.ilike.%${escapedSearch}%,content.ilike.%${escapedSearch}%`)
+      }
 
-    // 정렬 적용
-    const ascending = sortOrder === 'asc'
-    if (sortBy === 'created_at') {
-      // 고정 게시글을 먼저 표시하고, 그 다음 생성일 순
-      query = query.order('is_pinned', { ascending: false, nullsFirst: false })
-      query = query.order('created_at', { ascending })
-    } else {
-      query = query.order(sortBy, { ascending })
-    }
+      // 정렬 적용
+      const ascending = sortOrder === 'asc'
+      if (sortBy === 'created_at') {
+        // 고정 게시글을 먼저 표시하고, 그 다음 생성일 순
+        query = query.order('is_pinned', { ascending: false, nullsFirst: false })
+        query = query.order('created_at', { ascending })
+      } else {
+        query = query.order(sortBy, { ascending })
+      }
 
-    // 페이지네이션 적용
-    query = query.range(offset, offset + limit - 1)
+      // 페이지네이션 적용
+      query = query.range(offset, offset + limit - 1)
 
-    const { data: posts, error: postsError } = await query
+      const { data: posts, error: postsError } = await query
 
-    if (postsError) {
-      throw new Error(`게시글 조회 실패: ${postsError.message}`)
-    }
+      if (postsError) {
+        throw new Error(`게시글 조회 실패: ${postsError.message}`)
+      }
 
-    // 총 개수 조회 (같은 조건으로)
-    let countQuery = supabase
-      .from('posts')
-      .select('id', { count: 'exact', head: true })
-      .eq('is_deleted', false)
+      // 🚀 성능 최적화: 배치로 모든 부가 정보 조회
+      const postIds = (posts || []).map(post => post.id)
 
-    if (category !== '전체') {
-      countQuery = countQuery.eq('category', category)
-    }
-
-    if (search) {
-      const escapedSearch = search.replace(/'/g, "''").replace(/\\/g, '\\\\')
-      countQuery = countQuery.or(`title.ilike.%${escapedSearch}%,content.ilike.%${escapedSearch}%`)
-    }
-
-    const { count, error: countError } = await countQuery
-
-    if (countError) {
-      throw new Error(`게시글 수 조회 실패: ${countError.message}`)
-    }
-
-    // 댓글 수와 현재 사용자의 좋아요 상태 추가
-    const postsWithExtra = await Promise.all(
-      (posts || []).map(async (post) => {
-        // 댓글 수 조회
-        const { count: commentCount } = await supabase
-          .from('comments')
+      if (postIds.length === 0) {
+        // 게시글이 없는 경우 총 개수만 조회
+        let countQuery = supabase
+          .from('posts')
           .select('id', { count: 'exact', head: true })
-          .eq('post_id', post.id)
+          .eq('is_deleted', false)
 
-        let isLiked = false
-        
-        // 좋아요 정보 포함 시 현재 사용자의 좋아요 상태 확인
-        if (includeLikes) {
-          const { data: userLike } = await supabase
-            .from('post_likes')
-            .select('id')
-            .eq('post_id', post.id)
-            .eq('user_id', userId)
-            .single()
-          
-          isLiked = !!userLike
+        if (category !== '전체') {
+          countQuery = countQuery.eq('category', category)
         }
 
-        return {
-          ...post,
-          comment_count: commentCount || 0,
-          is_liked: includeLikes ? isLiked : undefined,
-          author: Array.isArray(post.author) ? post.author[0] : post.author
-        } as PostData
-      })
-    )
+        if (search) {
+          const escapedSearch = search.replace(/'/g, "''").replace(/\\/g, '\\\\')
+          countQuery = countQuery.or(
+            `title.ilike.%${escapedSearch}%,content.ilike.%${escapedSearch}%`
+          )
+        }
 
-    const totalCount = count || 0
-    const totalPages = Math.ceil(totalCount / limit)
+        const { count } = await countQuery
 
-    const result: PostListResponse = {
-      posts: postsWithExtra,
-      pagination: {
-        current_page: page,
-        total_pages: totalPages,
-        total_count: totalCount,
-        per_page: limit,
-        has_next: page < totalPages,
-        has_prev: page > 1
-      },
-      filters: {
-        category: category === '전체' ? null : category,
-        search: search || null,
-        sort_by: sortBy,
-        sort_order: sortOrder
+        const result: PostListResponse = {
+          posts: [],
+          pagination: {
+            current_page: page,
+            total_pages: 0,
+            total_count: count || 0,
+            per_page: limit,
+            has_next: false,
+            has_prev: false,
+          },
+          filters: {
+            category: category === '전체' ? null : category,
+            search: search || null,
+            sort_by: sortBy,
+            sort_order: sortOrder,
+          },
+        }
+
+        return ApiSuccess.ok(result, '게시글이 없습니다.')
       }
-    }
 
-    return ApiSuccess.ok(result, '게시글 목록을 성공적으로 조회했습니다.')
-  }, '/api/posts', { 
-    userId, 
-    cacheable: true,
-    maxAge: 60 // 1분 캐시
-  })
+      // 🚀 배치 쿼리 1: 모든 게시글의 댓글 수를 한 번에 조회
+      const { data: commentCounts } = await supabase
+        .from('comments')
+        .select('post_id')
+        .in('post_id', postIds)
+        .eq('is_deleted', false)
+
+      // 게시글별 댓글 수 계산
+      const commentCountMap = new Map<string, number>()
+      commentCounts?.forEach(comment => {
+        const postId = comment.post_id
+        commentCountMap.set(postId, (commentCountMap.get(postId) || 0) + 1)
+      })
+
+      // 🚀 배치 쿼리 2: 현재 사용자의 좋아요 상태를 한 번에 조회 (includeLikes가 true일 때만)
+      let userLikesMap = new Map<string, boolean>()
+      if (includeLikes) {
+        const { data: userLikes } = await supabase
+          .from('post_likes')
+          .select('post_id')
+          .in('post_id', postIds)
+          .eq('user_id', userId)
+
+        userLikes?.forEach(like => {
+          userLikesMap.set(like.post_id, true)
+        })
+      }
+
+      // 🚀 최적화된 결과 조합
+      const postsWithExtra = (posts || []).map(post => ({
+        ...post,
+        comment_count: commentCountMap.get(post.id) || 0,
+        is_liked: includeLikes ? userLikesMap.get(post.id) || false : undefined,
+        author: Array.isArray(post.author) ? post.author[0] : post.author,
+      })) as PostData[]
+
+      // 총 개수 조회 (같은 조건으로)
+      let countQuery = supabase
+        .from('posts')
+        .select('id', { count: 'exact', head: true })
+        .eq('is_deleted', false)
+
+      if (category !== '전체') {
+        countQuery = countQuery.eq('category', category)
+      }
+
+      if (search) {
+        const escapedSearch = search.replace(/'/g, "''").replace(/\\/g, '\\\\')
+        countQuery = countQuery.or(
+          `title.ilike.%${escapedSearch}%,content.ilike.%${escapedSearch}%`
+        )
+      }
+
+      const { count, error: countError } = await countQuery
+
+      if (countError) {
+        throw new Error(`게시글 수 조회 실패: ${countError.message}`)
+      }
+
+      const totalCount = count || 0
+      const totalPages = Math.ceil(totalCount / limit)
+
+      const result: PostListResponse = {
+        posts: postsWithExtra,
+        pagination: {
+          current_page: page,
+          total_pages: totalPages,
+          total_count: totalCount,
+          per_page: limit,
+          has_next: page < totalPages,
+          has_prev: page > 1,
+        },
+        filters: {
+          category: category === '전체' ? null : category,
+          search: search || null,
+          sort_by: sortBy,
+          sort_order: sortOrder,
+        },
+      }
+
+      // 🚀 성능 측정 완료
+      const endTime = Date.now()
+      const duration = endTime - startTime
+      console.log('📊 [PERFORMANCE] API 응답 완료:', {
+        duration: `${duration}ms`,
+        postsCount: postsWithExtra.length,
+        totalCount,
+        dbQueries: includeLikes ? 4 : 3, // posts + commentCounts + userLikes(optional) + count
+        cacheHit: false, // 첫 로드는 항상 cache miss
+        timestamp: new Date().toISOString(),
+      })
+
+      return ApiSuccess.ok(result, `게시글 목록을 성공적으로 조회했습니다. (${duration}ms)`)
+    },
+    '/api/posts',
+    {
+      userId,
+      cacheable: true,
+      maxAge: 60, // 1분 캐시
+    }
+  )
 }
