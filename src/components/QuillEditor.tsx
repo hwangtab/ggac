@@ -279,11 +279,11 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
         }
 
         .quill-editor-container .ql-editor {
-          min-height: 300px;
-          max-height: none;
+          min-height: 120px;
+          max-height: 500px;
           padding: 12px 15px;
-          overflow-y: auto;
-          resize: vertical;
+          overflow-y: hidden;
+          resize: none;
           box-sizing: border-box;
         }
 
@@ -303,7 +303,7 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
           border-radius: 0 0 0.5rem 0.5rem;
           background: white;
           height: auto !important;
-          overflow-y: visible;
+          overflow: visible;
         }
 
         .quill-editor-container .ql-toolbar .ql-formats {
