@@ -108,8 +108,16 @@ export default function Head() {
         (d as any).write = function(html){
           try{
             if (typeof html === 'string'){
-              html = html.replace(/<script([^>]*?)src=("|')([^"']*\/_next\/static\/css\/[^"']*?\.css)\2([^>]*)><\/script>/gi, '<link rel="stylesheet" href="$3">');
-              html = html.replace(/<link([^>]*?)rel=("|')preload\2([^>]*?)as=("|')script\4([^>]*?)href=("|')([^"']*?\.css)\6([^>]*)>/gi, '<link rel="preload" as="style" href="$7">');
+              // Replace <script src="...css"> with stylesheet link (supports both quote types)
+              html = html.replace(/<script([^>]*?)src=(?:"([^"]*\/_next\/static\/css\/[^\"]*?\.css)"|'([^']*\/_next\/static\/css\/[^']*?\.css)')([^>]*)><\/script>/gi, function(_m, _p1, dHref, sHref, _p4){
+                const href = dHref || sHref || '';
+                return '<link rel="stylesheet" href="' + href + '">';
+              });
+              // Fix wrong preload/modulepreload for CSS and convert to style
+              html = html.replace(/<link([^>]*?)rel=(?:"preload"|'preload')([^>]*?)as=(?:"script"|'script')([^>]*?)href=(?:"([^"]*?\.css)"|'([^']*?\.css)')([^>]*)>/gi, function(_m, _p1, _p2, _p3, dHref, sHref, _p6){
+                const href = dHref || sHref || '';
+                return '<link rel="preload" as="style" href="' + href + '">';
+              });
             }
           }catch(_){ }
           return origWrite(html);
