@@ -1,5 +1,6 @@
 import { load } from 'cheerio'
 import dns from 'dns/promises'
+import { getCachedPreviewFromDB, setCachedPreviewToDB } from '@/utils/linkPreviewCache'
 import type { LinkPreview, TicketingInfo } from '@/types'
 
 // 기존에 별도로 정의되어 있던 TicketingInfo를 export로 유지 (하위 호환성)
@@ -193,11 +194,14 @@ async function fetchWithRetry(url: string, maxRetries = 3): Promise<Response | n
 export async function fetchLinkPreview(url: string): Promise<LinkPreview | null> {
   try {
     console.log(`🔍 [LinkPreview] Starting fetch for: ${url}`)
-    // 캐시 조회
-    const cached = getCache(url)
-    if (cached) {
-      return cached
+    // 캐시 조회 (DB → 메모리 순서)
+    const dbCached = await getCachedPreviewFromDB(url)
+    if (dbCached) {
+      setCache(url, dbCached)
+      return dbCached
     }
+    const cached = getCache(url)
+    if (cached) return cached
     // Preflight 검증 (프로토콜/호스트/DNS/IP/헤더)
     const preflight = await preflightRequest(url)
     if (!preflight.ok) {
@@ -359,8 +363,9 @@ export async function fetchLinkPreview(url: string): Promise<LinkPreview | null>
       )
     }
 
-    // 캐시 저장
+    // 캐시 저장 (메모리 + DB)
     setCache(url, preview)
+    setCachedPreviewToDB(url, preview).catch(() => {})
     return preview
   } catch (error) {
     console.error(`Error fetching link preview for ${url}:`, error)
