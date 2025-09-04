@@ -8,7 +8,7 @@
 
 ## 기술 스택
 
-- **Framework**: Next.js 14 (App Router)
+- **Framework**: Next.js 15 (App Router)
 - **Language**: TypeScript
 - **Styling**: Tailwind CSS
 - **Animation**: Framer Motion
@@ -78,6 +78,29 @@ npm run build
 # 로컬 서버에서 빌드 결과 확인
 npm run start
 ```
+
+## 환경 변수 설정
+
+아래 값을 로컬(`.env.local`)과 Vercel(Development/Preview/Production)에 설정하세요.
+
+- 필수(클라이언트/서버 공용)
+  - `NEXT_PUBLIC_SUPABASE_URL`
+  - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- 필수(서버 전용)
+  - `SUPABASE_SERVICE_ROLE_KEY` (서비스 롤 키 — 서버에서만 사용)
+- 권장
+  - `NEXT_PUBLIC_SITE_URL` (예: Production: https://ggac.kr, Preview: Vercel Preview URL)
+  - `NEXT_PUBLIC_DOMAIN`
+  - `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` (있으면 분산 레이트리밋 활성)
+
+### 링크 프리뷰 캐시
+- 인메모리(1시간) + Supabase 영속 캐시(기본 6시간)를 사용합니다.
+- 영속 캐시 활성 조건: `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`
+- 테이블/마이그레이션: `supabase/migrations/20250904_add_link_previews_cache.sql`
+
+### 보안/운영
+- 일반 페이지는 강화된 CSP 적용(미들웨어에서 inline script 최소화), 에디터 페이지는 호환을 위해 완화.
+- `/api/link-preview`, `/api/media/upload`에 분산 레이트리밋 적용(Upstash 없으면 메모리 폴백).
 
 ## 페이지 구성
 
