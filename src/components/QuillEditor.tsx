@@ -455,11 +455,6 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
           opacity: 0.6;
         }
 
-        /* 리사이즈 핸들 스타일링 */
-        .quill-editor-container .ql-editor {
-          resize: vertical;
-        }
-
         .quill-editor-container .ql-editor:focus {
           outline: none;
           box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
