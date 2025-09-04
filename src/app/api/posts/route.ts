@@ -18,7 +18,6 @@ import {
   validateApiInput,
 } from '@/utils/apiWrapper'
 
-export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
 // Rate limiting 설정
@@ -66,7 +65,7 @@ interface PostListResponse {
 }
 
 // 🚀 성능 최적화: API 라우트 추가 캐싱 설정
-export const revalidate = 0 // API는 항상 최신 데이터 반환 (클라이언트 캐싱으로 성능 확보)
+export const revalidate = 60 // 60초 동안 결과 캐시
 
 export async function GET(request: NextRequest) {
   // 로그인은 선택사항 (좋아요 상태 확인용)
@@ -240,47 +239,22 @@ export async function GET(request: NextRequest) {
         return ApiSuccess.ok(result, '게시글이 없습니다.')
       }
 
-      // 🚀 배치 쿼리 1: 모든 게시글의 댓글 수를 한 번에 조회
-      const { data: commentCounts } = await supabase
-        .from('comments')
-        .select('post_id')
+      // 🚀 병렬 처리: 댓글 수, 사용자 좋아요, 전체 개수를 동시에 조회
+      const commentCountPromise = (
+        supabase.from('comments').select('post_id, count(*)', { head: false }) as any
+      )
         .in('post_id', postIds)
         .eq('is_deleted', false)
 
-      // 게시글별 댓글 수 계산
-      const commentCountMap = new Map<string, number>()
-      commentCounts?.forEach(comment => {
-        const postId = comment.post_id
-        commentCountMap.set(postId, (commentCountMap.get(postId) || 0) + 1)
-      })
+      const userLikesPromise =
+        includeLikes && userId
+          ? supabase
+              .from('post_likes')
+              .select('post_id')
+              .in('post_id', postIds)
+              .eq('user_id', userId)
+          : Promise.resolve({ data: [] as { post_id: string }[] })
 
-      // ✅ 좋아요 수는 posts.like_count 컬럼을 그대로 사용 (추가 쿼리 제거)
-
-      // 🚀 배치 쿼리 3: 현재 사용자의 좋아요 상태를 한 번에 조회 (includeLikes가 true일 때만)
-      let userLikesMap = new Map<string, boolean>()
-      if (includeLikes && userId) {
-        const { data: userLikes } = await supabase
-          .from('post_likes')
-          .select('post_id')
-          .in('post_id', postIds)
-          .eq('user_id', userId)
-
-        userLikes?.forEach(like => {
-          userLikesMap.set(like.post_id, true)
-        })
-      }
-
-      // 🚀 최적화된 결과 조합
-      const postsWithExtra = (posts || []).map(post => ({
-        ...post,
-        comment_count: commentCountMap.get(post.id) || 0,
-        // like_count는 DB 컬럼값 사용
-        like_count: (post as any).like_count || 0,
-        is_liked: includeLikes ? userLikesMap.get(post.id) || false : undefined,
-        author: Array.isArray(post.author) ? post.author[0] : post.author,
-      })) as PostData[]
-
-      // 총 개수 조회 (같은 조건으로)
       let countQuery = supabase
         .from('posts')
         .select('id', { count: 'exact', head: true })
@@ -297,11 +271,38 @@ export async function GET(request: NextRequest) {
         )
       }
 
-      const { count, error: countError } = await countQuery
+      const [{ data: commentCounts }, { data: userLikes }, { count, error: countError }] =
+        await Promise.all([commentCountPromise, userLikesPromise, countQuery])
 
       if (countError) {
         throw new Error(`게시글 수 조회 실패: ${countError.message}`)
       }
+
+      // 게시글별 댓글 수 계산
+      const commentCountMap = new Map<string, number>()
+      commentCounts?.forEach(item => {
+        const postId = item.post_id
+        const count = (item as any).count ?? 0
+        commentCountMap.set(postId, count)
+      })
+
+      // ✅ 좋아요 수는 posts.like_count 컬럼을 그대로 사용 (추가 쿼리 제거)
+
+      // 사용자 좋아요 맵 생성
+      const userLikesMap = new Map<string, boolean>()
+      userLikes?.forEach(like => {
+        userLikesMap.set(like.post_id, true)
+      })
+
+      // 🚀 최적화된 결과 조합
+      const postsWithExtra = (posts || []).map(post => ({
+        ...post,
+        comment_count: commentCountMap.get(post.id) || 0,
+        // like_count는 DB 컬럼값 사용
+        like_count: (post as any).like_count || 0,
+        is_liked: includeLikes ? userLikesMap.get(post.id) || false : undefined,
+        author: Array.isArray(post.author) ? post.author[0] : post.author,
+      })) as PostData[]
 
       const totalCount = count || 0
       const totalPages = Math.ceil(totalCount / limit)
