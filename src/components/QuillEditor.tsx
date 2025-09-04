@@ -50,6 +50,54 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
     console.log('[QuillEditor] 컴포넌트 초기화 완료')
   }, [])
 
+  // 스크롤 상태 관리 및 키보드 단축키
+  useEffect(() => {
+    const editor = quillRef.current?.getEditor()
+    const editorElement = editor?.container?.querySelector('.ql-editor')
+
+    if (!editorElement) return
+
+    // 스크롤 힌트 관리
+    const checkScrollable = () => {
+      const isScrollable = editorElement.scrollHeight > editorElement.clientHeight
+      editorElement.classList.toggle('scrollable', isScrollable)
+    }
+
+    // 키보드 단축키 핸들러
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        switch (e.key) {
+          case 'Home':
+            e.preventDefault()
+            editor?.setSelection(0, 0)
+            editorElement.scrollTop = 0
+            break
+          case 'End':
+            e.preventDefault()
+            const length = editor?.getLength() || 0
+            editor?.setSelection(length - 1, 0)
+            editorElement.scrollTop = editorElement.scrollHeight
+            break
+        }
+      }
+    }
+
+    // 이벤트 리스너 등록
+    const observer = new ResizeObserver(checkScrollable)
+    observer.observe(editorElement)
+    editorElement.addEventListener('input', checkScrollable)
+    editorElement.addEventListener('keydown', handleKeyDown)
+
+    // 초기 체크
+    checkScrollable()
+
+    return () => {
+      observer.disconnect()
+      editorElement.removeEventListener('input', checkScrollable)
+      editorElement.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [quillRef.current])
+
   // 이미지 업로드 핸들러 (기존 TinyMCE 로직 재사용)
   const handleImageUpload = useCallback(async (file: File): Promise<string> => {
     try {
@@ -280,11 +328,14 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
 
         .quill-editor-container .ql-editor {
           min-height: 120px;
-          max-height: 500px;
+          max-height: min(60vh, 500px);
           padding: 12px 15px;
-          overflow-y: hidden;
+          overflow-y: auto;
           resize: none;
           box-sizing: border-box;
+          transition: height 0.2s ease;
+          scrollbar-width: thin;
+          scrollbar-color: rgba(156, 163, 175, 0.3) transparent;
         }
 
         .quill-editor-container .ql-toolbar {
@@ -378,24 +429,30 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
           font-size: 13px;
         }
 
-        /* 커스텀 스크롤바 스타일링 */
+        /* 얇고 세련된 커스텀 스크롤바 */
         .quill-editor-container .ql-editor::-webkit-scrollbar {
-          width: 8px;
+          width: 4px;
         }
 
         .quill-editor-container .ql-editor::-webkit-scrollbar-track {
-          background: #f1f5f9;
-          border-radius: 4px;
+          background: transparent;
         }
 
         .quill-editor-container .ql-editor::-webkit-scrollbar-thumb {
-          background: #cbd5e1;
-          border-radius: 4px;
-          transition: background 0.2s ease;
+          background: rgba(156, 163, 175, 0.3);
+          border-radius: 2px;
+          transition:
+            background 0.2s ease,
+            opacity 0.2s ease;
         }
 
         .quill-editor-container .ql-editor::-webkit-scrollbar-thumb:hover {
-          background: #94a3b8;
+          background: rgba(107, 114, 128, 0.5);
+        }
+
+        /* 스크롤바 자동 숨김/표시 효과 */
+        .quill-editor-container .ql-editor:not(:hover)::-webkit-scrollbar-thumb {
+          opacity: 0.6;
         }
 
         /* 리사이즈 핸들 스타일링 */
@@ -406,6 +463,44 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
         .quill-editor-container .ql-editor:focus {
           outline: none;
           box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+        }
+
+        /* 반응형 높이 최적화 */
+        @media (max-width: 640px) {
+          .quill-editor-container .ql-editor {
+            max-height: min(40vh, 350px);
+            min-height: 100px;
+          }
+        }
+
+        @media (min-width: 641px) and (max-width: 1024px) {
+          .quill-editor-container .ql-editor {
+            max-height: min(50vh, 450px);
+          }
+        }
+
+        @media (min-width: 1025px) {
+          .quill-editor-container .ql-editor {
+            max-height: min(60vh, 500px);
+          }
+        }
+
+        /* 스크롤 힌트 그라데이션 */
+        .quill-editor-container .ql-editor::after {
+          content: '';
+          position: absolute;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          height: 20px;
+          background: linear-gradient(transparent, rgba(255, 255, 255, 0.8));
+          pointer-events: none;
+          opacity: 0;
+          transition: opacity 0.3s ease;
+        }
+
+        .quill-editor-container .ql-editor.scrollable::after {
+          opacity: 1;
         }
 
         /* 비활성화 상태 */
