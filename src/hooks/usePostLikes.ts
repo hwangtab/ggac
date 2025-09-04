@@ -27,6 +27,8 @@ interface UsePostLikesProps {
   initialLikeCount?: number
   /** 초기 좋아요 상태 */
   initialIsLiked?: boolean
+  /** 목록 등에서 서버가 is_liked를 이미 제공했으면 초기 조회를 생략 */
+  prefetched?: boolean
   /** 상태 변경 콜백 */
   onLikeChange?: (postId: string, liked: boolean, count: number) => void
 }
@@ -35,6 +37,7 @@ export function usePostLikes({
   postId,
   initialLikeCount = 0,
   initialIsLiked = false,
+  prefetched = false,
   onLikeChange
 }: UsePostLikesProps) {
   const [user, setUser] = useState<any>(null)
@@ -290,7 +293,7 @@ export function usePostLikes({
 
   // 사용자 로그인 상태 변경 시 좋아요 상태 조회 - 디바운싱 적용
   useEffect(() => {
-    if (user && postId) {
+    if (user && postId && !prefetched) {
       // 디바운싱: 짧은 지연 후 요청 실행
       const debounceTimeout = setTimeout(() => {
         fetchLikeStatus()
@@ -298,7 +301,7 @@ export function usePostLikes({
 
       return () => clearTimeout(debounceTimeout)
     }
-  }, [fetchLikeStatus, user?.id, postId])
+  }, [fetchLikeStatus, user?.id, postId, prefetched])
 
   // 컴포넌트 언마운트시 타임아웃 정리
   useEffect(() => {

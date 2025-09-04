@@ -60,6 +60,7 @@ const PostLikeButton: React.FC<PostLikeButtonProps> = ({
     postId,
     initialLikeCount,
     initialIsLiked,
+    prefetched: true,
     onLikeChange
   })
 
