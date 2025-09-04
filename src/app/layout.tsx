@@ -5,6 +5,7 @@ import ConditionalLayout from '@/components/ConditionalLayout'
 import localFont from 'next/font/local'
 import { getGlobalData } from '@/lib/data'
 import { Suspense } from 'react'
+import Script from 'next/script'
 
 const gmarketSans = localFont({
   src: '../../public/fonts/GmarketSansTTFLight.ttf',
@@ -93,6 +94,10 @@ export default async function RootLayout({
   return (
     <html lang="ko" className={`${gmarketSans.variable} ${okGung.variable} ${santokki.variable}`}>
       <body suppressHydrationWarning>
+        {/* Guard against accidental CSS being loaded as <script> by third-party/preload mishaps */}
+        <Script id="css-script-guard" strategy="beforeInteractive">
+          {`(function(){try{var d=document;var cssScripts=d.querySelectorAll('script[src$=".css"],script[src*="/_next/static/css/"]');cssScripts.forEach(function(s){var href=s.getAttribute('src');if(!href) return;var ln=d.createElement('link');ln.setAttribute('rel','stylesheet');ln.setAttribute('href',href);s.parentNode&&s.parentNode.replaceChild(ln,s);});var wrongPreloads=d.querySelectorAll('link[rel="preload"][as="script"][href$=".css"],link[rel="preload"][as="script"][href*="/_next/static/css/"]');wrongPreloads.forEach(function(l){l.setAttribute('as','style');});}catch(e){}})();`}
+        </Script>
         <ErrorBoundary>
           {/* Skip Links for Keyboard Navigation */}
           <div className="skip-links">
