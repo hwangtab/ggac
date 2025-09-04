@@ -87,23 +87,7 @@ export async function GET(request: NextRequest) {
         throw ApiError.tooManyRequests('너무 많은 요청입니다. 잠시 후 다시 시도해주세요.')
       }
 
-      // 로그인한 사용자만 회원 상태 확인
-      let profile = null
-      if (userId) {
-        const { data: profileData } = await supabase
-          .from('member_profiles')
-          .select('registration_status, is_active')
-          .eq('id', userId)
-          .single()
-
-        if (
-          (profileData && profileData.registration_status !== 'approved') ||
-          !profileData?.is_active
-        ) {
-          throw ApiError.forbidden('승인된 회원만 접근할 수 있습니다.')
-        }
-        profile = profileData
-      }
+      // 읽기(목록 조회)는 공개 허용. 회원 상태 확인으로 차단하지 않음.
 
       // 쿼리 파라미터 처리
       const { searchParams } = new URL(request.url)
@@ -241,10 +225,14 @@ export async function GET(request: NextRequest) {
 
       // 🚀 병렬 처리: 댓글 수, 사용자 좋아요, 전체 개수를 동시에 조회
       const commentCountPromise = (
-        supabase.from('comments').select('post_id, count(*)', { head: false }) as any
+        supabase
+          .from('comments')
+          // 그룹 집계: post_id별 댓글 수
+          .select('post_id, count:id', { head: false }) as any
       )
         .in('post_id', postIds)
         .eq('is_deleted', false)
+        .group('post_id')
 
       const userLikesPromise =
         includeLikes && userId
@@ -342,8 +330,9 @@ export async function GET(request: NextRequest) {
     '/api/posts',
     {
       userId,
-      cacheable: true,
-      maxAge: 60, // 1분 캐시
+      // 사용자별(is_liked 포함) 응답은 퍼블릭 캐시 금지
+      cacheable: !userId,
+      maxAge: 60, // 비로그인 트래픽만 1분 캐시
     }
   )
 }
