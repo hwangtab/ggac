@@ -254,18 +254,7 @@ export async function GET(request: NextRequest) {
         commentCountMap.set(postId, (commentCountMap.get(postId) || 0) + 1)
       })
 
-      // 🚀 배치 쿼리 2: 모든 게시글의 좋아요 수를 한 번에 조회
-      const { data: likeCounts } = await supabase
-        .from('post_likes')
-        .select('post_id')
-        .in('post_id', postIds)
-
-      // 게시글별 좋아요 수 계산
-      const likeCountMap = new Map<string, number>()
-      likeCounts?.forEach(like => {
-        const postId = like.post_id
-        likeCountMap.set(postId, (likeCountMap.get(postId) || 0) + 1)
-      })
+      // ✅ 좋아요 수는 posts.like_count 컬럼을 그대로 사용 (추가 쿼리 제거)
 
       // 🚀 배치 쿼리 3: 현재 사용자의 좋아요 상태를 한 번에 조회 (includeLikes가 true일 때만)
       let userLikesMap = new Map<string, boolean>()
@@ -285,7 +274,8 @@ export async function GET(request: NextRequest) {
       const postsWithExtra = (posts || []).map(post => ({
         ...post,
         comment_count: commentCountMap.get(post.id) || 0,
-        like_count: likeCountMap.get(post.id) || 0,
+        // like_count는 DB 컬럼값 사용
+        like_count: (post as any).like_count || 0,
         is_liked: includeLikes ? userLikesMap.get(post.id) || false : undefined,
         author: Array.isArray(post.author) ? post.author[0] : post.author,
       })) as PostData[]
@@ -341,7 +331,7 @@ export async function GET(request: NextRequest) {
         duration: `${duration}ms`,
         postsCount: postsWithExtra.length,
         totalCount,
-        dbQueries: includeLikes && userId ? 5 : 4, // posts + commentCounts + likeCounts + userLikes(optional) + count
+        dbQueries: includeLikes && userId ? 4 : 3, // posts + commentCounts + userLikes(optional) + count
         cacheHit: false, // 첫 로드는 항상 cache miss
         timestamp: new Date().toISOString(),
       })
