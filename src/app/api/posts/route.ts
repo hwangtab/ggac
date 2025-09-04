@@ -69,12 +69,12 @@ interface PostListResponse {
 export const revalidate = 0 // API는 항상 최신 데이터 반환 (클라이언트 캐싱으로 성능 확보)
 
 export async function GET(request: NextRequest) {
-  // 인증 확인을 여기서 먼저 수행
+  // 로그인은 선택사항 (좋아요 상태 확인용)
   const supabase = createRouteHandlerClient({ cookies })
   const {
     data: { session },
   } = await supabase.auth.getSession()
-  const userId = requireAuth(session?.user?.id)
+  const userId = session?.user?.id || null // 로그인 상태는 선택사항
 
   return apiGet(
     async () => {
@@ -88,15 +88,22 @@ export async function GET(request: NextRequest) {
         throw ApiError.tooManyRequests('너무 많은 요청입니다. 잠시 후 다시 시도해주세요.')
       }
 
-      // 회원 상태 확인 (간소화 - 필수 필드만)
-      const { data: profile } = await supabase
-        .from('member_profiles')
-        .select('registration_status, is_active')
-        .eq('id', userId)
-        .single()
+      // 로그인한 사용자만 회원 상태 확인
+      let profile = null
+      if (userId) {
+        const { data: profileData } = await supabase
+          .from('member_profiles')
+          .select('registration_status, is_active')
+          .eq('id', userId)
+          .single()
 
-      if (!profile || profile.registration_status !== 'approved' || !profile.is_active) {
-        throw ApiError.forbidden('승인된 회원만 접근할 수 있습니다.')
+        if (
+          (profileData && profileData.registration_status !== 'approved') ||
+          !profileData?.is_active
+        ) {
+          throw ApiError.forbidden('승인된 회원만 접근할 수 있습니다.')
+        }
+        profile = profileData
       }
 
       // 쿼리 파라미터 처리
@@ -247,9 +254,22 @@ export async function GET(request: NextRequest) {
         commentCountMap.set(postId, (commentCountMap.get(postId) || 0) + 1)
       })
 
-      // 🚀 배치 쿼리 2: 현재 사용자의 좋아요 상태를 한 번에 조회 (includeLikes가 true일 때만)
+      // 🚀 배치 쿼리 2: 모든 게시글의 좋아요 수를 한 번에 조회
+      const { data: likeCounts } = await supabase
+        .from('post_likes')
+        .select('post_id')
+        .in('post_id', postIds)
+
+      // 게시글별 좋아요 수 계산
+      const likeCountMap = new Map<string, number>()
+      likeCounts?.forEach(like => {
+        const postId = like.post_id
+        likeCountMap.set(postId, (likeCountMap.get(postId) || 0) + 1)
+      })
+
+      // 🚀 배치 쿼리 3: 현재 사용자의 좋아요 상태를 한 번에 조회 (includeLikes가 true일 때만)
       let userLikesMap = new Map<string, boolean>()
-      if (includeLikes) {
+      if (includeLikes && userId) {
         const { data: userLikes } = await supabase
           .from('post_likes')
           .select('post_id')
@@ -265,6 +285,7 @@ export async function GET(request: NextRequest) {
       const postsWithExtra = (posts || []).map(post => ({
         ...post,
         comment_count: commentCountMap.get(post.id) || 0,
+        like_count: likeCountMap.get(post.id) || 0,
         is_liked: includeLikes ? userLikesMap.get(post.id) || false : undefined,
         author: Array.isArray(post.author) ? post.author[0] : post.author,
       })) as PostData[]
@@ -320,7 +341,7 @@ export async function GET(request: NextRequest) {
         duration: `${duration}ms`,
         postsCount: postsWithExtra.length,
         totalCount,
-        dbQueries: includeLikes ? 4 : 3, // posts + commentCounts + userLikes(optional) + count
+        dbQueries: includeLikes && userId ? 5 : 4, // posts + commentCounts + likeCounts + userLikes(optional) + count
         cacheHit: false, // 첫 로드는 항상 cache miss
         timestamp: new Date().toISOString(),
       })
