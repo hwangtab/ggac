@@ -212,42 +212,16 @@ const nextConfig = {
     }
   },
 
-  // Enhanced security headers and MIME type configuration
+  // Enhanced security headers (keep simple for static assets)
   async headers() {
     return [
-      // CSS 파일에 대한 올바른 MIME 타입 헤더
+      // Next static assets: rely on Next/Vercel defaults, only add caching
       {
-        source: '/_next/static/css/(.*)',
+        source: '/_next/static/(.*)',
         headers: [
-          {
-            key: 'Content-Type',
-            value: 'text/css; charset=utf-8',
-          },
           {
             key: 'Cache-Control',
             value: 'public, max-age=31536000, immutable',
-          },
-          {
-            key: 'X-Content-Type-Options',
-            value: 'nosniff',
-          },
-        ],
-      },
-      // JavaScript 파일에 대한 헤더
-      {
-        source: '/_next/static/js/(.*)',
-        headers: [
-          {
-            key: 'Content-Type',
-            value: 'application/javascript; charset=utf-8',
-          },
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=31536000, immutable',
-          },
-          {
-            key: 'X-Content-Type-Options',
-            value: 'nosniff',
           },
         ],
       },
@@ -255,10 +229,6 @@ const nextConfig = {
       {
         source: '/images/(.*\\.webp)',
         headers: [
-          {
-            key: 'Content-Type',
-            value: 'image/webp',
-          },
           {
             key: 'Cache-Control',
             value: 'public, max-age=86400',
@@ -270,10 +240,6 @@ const nextConfig = {
         source: '/images/(.*\\.avif)',
         headers: [
           {
-            key: 'Content-Type',
-            value: 'image/avif',
-          },
-          {
             key: 'Cache-Control',
             value: 'public, max-age=86400',
           },
@@ -284,10 +250,6 @@ const nextConfig = {
         source: '/images/(.*\\.jpg)',
         headers: [
           {
-            key: 'Content-Type',
-            value: 'image/jpeg',
-          },
-          {
             key: 'Cache-Control',
             value: 'public, max-age=86400',
           },
@@ -296,10 +258,6 @@ const nextConfig = {
       {
         source: '/images/(.*\\.jpeg)',
         headers: [
-          {
-            key: 'Content-Type',
-            value: 'image/jpeg',
-          },
           {
             key: 'Cache-Control',
             value: 'public, max-age=86400',
@@ -311,10 +269,6 @@ const nextConfig = {
         source: '/images/(.*\\.png)',
         headers: [
           {
-            key: 'Content-Type',
-            value: 'image/png',
-          },
-          {
             key: 'Cache-Control',
             value: 'public, max-age=86400',
           },
@@ -325,10 +279,6 @@ const nextConfig = {
         source: '/images/(.*\\.svg)',
         headers: [
           {
-            key: 'Content-Type',
-            value: 'image/svg+xml',
-          },
-          {
             key: 'Cache-Control',
             value: 'public, max-age=86400',
           },
@@ -338,10 +288,6 @@ const nextConfig = {
       {
         source: '/(.*\\.woff2)',
         headers: [
-          {
-            key: 'Content-Type',
-            value: 'font/woff2',
-          },
           {
             key: 'Cache-Control',
             value: 'public, max-age=31536000, immutable',
@@ -356,10 +302,6 @@ const nextConfig = {
         source: '/(.*\\.woff)',
         headers: [
           {
-            key: 'Content-Type',
-            value: 'font/woff',
-          },
-          {
             key: 'Cache-Control',
             value: 'public, max-age=31536000, immutable',
           },
@@ -372,10 +314,6 @@ const nextConfig = {
       {
         source: '/(.*\\.ttf)',
         headers: [
-          {
-            key: 'Content-Type',
-            value: 'font/ttf',
-          },
           {
             key: 'Cache-Control',
             value: 'public, max-age=31536000, immutable',
@@ -396,7 +334,7 @@ const nextConfig = {
           },
         ],
       },
-      // 정적 파일과 API 제외 - MIME 타입 충돌 방지 (CSS, JS 파일 완전 제외)
+      // 정적 파일과 API 제외 - MIME 타입 충돌 방지 (CSS/JS는 상단 규칙에 의해 처리됨)
       {
         source: '/((?!api|_next/static|favicon|images|robots|sitemap).*)',
         headers: [
