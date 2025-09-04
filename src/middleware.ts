@@ -59,42 +59,46 @@ export async function middleware(request: NextRequest) {
   const res = NextResponse.next()
   const supabase = createMiddlewareClient({ req: request, res })
 
-  // ====== CSP 세분화: 기본 경로는 더 엄격한 스크립트 정책(비-inline) 적용 ======
-  try {
-    const pathname = request.nextUrl.pathname
-    const isEditorPath = pathname.startsWith('/board/write') || /\/board\/.+\/edit$/.test(pathname)
+  // NOTE: 엄격 CSP는 기본 비활성화. 필요 시 NEXT_STRICT_CSP=true 로 활성화.
+  const enableStrictCsp = process.env.NEXT_STRICT_CSP === 'true'
+  if (enableStrictCsp) {
+    try {
+      const pathname = request.nextUrl.pathname
+      const isEditorPath =
+        pathname.startsWith('/board/write') || /\/board\/.+\/edit$/.test(pathname)
 
-    if (!isEditorPath) {
-      const strictCsp = [
-        "default-src 'self'",
-        // 스크립트: inline/unsafe-eval 제거
-        "script-src 'self' https://www.youtube.com https://www.google-analytics.com",
-        // 스타일은 기존과 동일(폰트/프레임워크 호환성)
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-        "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com",
-        // 폰트/이미지/미디어/프레임/연결
-        "font-src 'self' https://fonts.gstatic.com",
-        "img-src 'self' https: blob: data: https://*.supabase.co",
-        "media-src 'self' https://www.youtube.com https://*.supabase.co",
-        "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com",
-        process.env.NODE_ENV === 'development'
-          ? "connect-src 'self' http://localhost:* https://api.supabase.io https://*.supabase.co ws://localhost:* wss://localhost:* wss://*.supabase.co"
-          : "connect-src 'self' https://api.supabase.io https://*.supabase.co wss://*.supabase.co",
-        "object-src 'none'",
-        "base-uri 'self'",
-        "form-action 'self'",
-        "frame-ancestors 'none'",
-        "worker-src 'self' blob:",
-        "manifest-src 'self'",
-        'plugin-types application/pdf',
-        'report-uri /api/security/csp-report',
-        'report-to default',
-        ...(process.env.NODE_ENV === 'production' ? ['upgrade-insecure-requests'] : []),
-      ].join('; ')
-      res.headers.set('Content-Security-Policy', strictCsp)
+      if (!isEditorPath) {
+        const strictCsp = [
+          "default-src 'self'",
+          // 스크립트: inline/unsafe-eval 제거
+          "script-src 'self' https://www.youtube.com https://www.google-analytics.com",
+          // 스타일은 기존과 동일(폰트/프레임워크 호환성)
+          "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+          "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com",
+          // 폰트/이미지/미디어/프레임/연결
+          "font-src 'self' https://fonts.gstatic.com",
+          "img-src 'self' https: blob: data: https://*.supabase.co",
+          "media-src 'self' https://www.youtube.com https://*.supabase.co",
+          "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com",
+          process.env.NODE_ENV === 'development'
+            ? "connect-src 'self' http://localhost:* https://api.supabase.io https://*.supabase.co ws://localhost:* wss://localhost:* wss://*.supabase.co"
+            : "connect-src 'self' https://api.supabase.io https://*.supabase.co wss://*.supabase.co",
+          "object-src 'none'",
+          "base-uri 'self'",
+          "form-action 'self'",
+          "frame-ancestors 'none'",
+          "worker-src 'self' blob:",
+          "manifest-src 'self'",
+          'plugin-types application/pdf',
+          'report-uri /api/security/csp-report',
+          'report-to default',
+          ...(process.env.NODE_ENV === 'production' ? ['upgrade-insecure-requests'] : []),
+        ].join('; ')
+        res.headers.set('Content-Security-Policy', strictCsp)
+      }
+    } catch (e) {
+      // 실패 시 무시(기본 헤더는 next.config.js에 의해 적용됨)
     }
-  } catch (e) {
-    // 실패 시 무시(기본 헤더는 next.config.js에 의해 적용됨)
   }
 
   // 🚨 CRITICAL: API 라우트는 절대 미들웨어에서 처리하지 않음
