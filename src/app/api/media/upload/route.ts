@@ -14,76 +14,78 @@ import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import type { MediaFile } from '@/types'
-import { 
-  createSuccessResponse, 
-  createErrorResponse, 
-  createJsonResponse 
-} from '@/utils/apiResponse'
+import { createSuccessResponse, createErrorResponse, createJsonResponse } from '@/utils/apiResponse'
+import distLimiter from '@/utils/distributedRateLimiter'
 
 // Service Role 클라이언트는 Storage 작업에만 사용
 function getSupabaseAdmin() {
-  console.log('[SUPABASE ADMIN] 환경 변수 확인');
-  console.log('[SUPABASE ADMIN] SUPABASE_URL:', !!process.env.NEXT_PUBLIC_SUPABASE_URL);
-  console.log('[SUPABASE ADMIN] SERVICE_ROLE_KEY:', !!process.env.SUPABASE_SERVICE_ROLE_KEY);
-  
+  console.log('[SUPABASE ADMIN] 환경 변수 확인')
+  console.log('[SUPABASE ADMIN] SUPABASE_URL:', !!process.env.NEXT_PUBLIC_SUPABASE_URL)
+  console.log('[SUPABASE ADMIN] SERVICE_ROLE_KEY:', !!process.env.SUPABASE_SERVICE_ROLE_KEY)
+
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured');
+    throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured')
   }
-  
+
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-    throw new Error('NEXT_PUBLIC_SUPABASE_URL is not configured');
+    throw new Error('NEXT_PUBLIC_SUPABASE_URL is not configured')
   }
-  
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    }
-  );
+
+  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  })
 }
 
 // 기본 설정
 const DEFAULT_MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 const DEFAULT_ALLOWED_TYPES = [
   'image/jpeg',
-  'image/png', 
+  'image/png',
   'image/gif',
   'image/webp',
   'application/pdf',
   'video/mp4',
-  'video/webm'
+  'video/webm',
 ]
 
 // 버킷별 설정
 const BUCKET_CONFIGS = {
   profiles: {
     max_file_size: 2 * 1024 * 1024, // 2MB
-    allowed_types: ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+    allowed_types: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
   },
   attachments: {
     max_file_size: 50 * 1024 * 1024, // 50MB
     allowed_types: [
-      'image/jpeg', 'image/png', 'image/gif', 'image/webp',
-      'application/pdf', 'video/mp4', 'video/webm', 'audio/mpeg'
-    ]
-  }
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'application/pdf',
+      'video/mp4',
+      'video/webm',
+      'audio/mpeg',
+    ],
+  },
 }
 
 // 파일 타입 검증
-function validateFile(file: File, bucket: string = 'attachments'): { valid: boolean; error?: string } {
+function validateFile(
+  file: File,
+  bucket: string = 'attachments'
+): { valid: boolean; error?: string } {
   const config = BUCKET_CONFIGS[bucket as keyof typeof BUCKET_CONFIGS] || {
     max_file_size: DEFAULT_MAX_FILE_SIZE,
-    allowed_types: DEFAULT_ALLOWED_TYPES
+    allowed_types: DEFAULT_ALLOWED_TYPES,
   }
 
   if (!config.allowed_types.includes(file.type)) {
     return {
       valid: false,
-      error: `지원하지 않는 파일 형식입니다. 허용된 형식: ${config.allowed_types.join(', ')}`
+      error: `지원하지 않는 파일 형식입니다. 허용된 형식: ${config.allowed_types.join(', ')}`,
     }
   }
 
@@ -91,7 +93,7 @@ function validateFile(file: File, bucket: string = 'attachments'): { valid: bool
     const maxSizeMB = (config.max_file_size / 1024 / 1024).toFixed(1)
     return {
       valid: false,
-      error: `파일 크기가 너무 큽니다. 최대 ${maxSizeMB}MB까지 가능합니다.`
+      error: `파일 크기가 너무 큽니다. 최대 ${maxSizeMB}MB까지 가능합니다.`,
     }
   }
 
@@ -103,15 +105,18 @@ function generateSafeFileName(originalName: string, userId: string): string {
   const timestamp = Date.now()
   const randomId = Math.random().toString(36).substring(2, 8)
   const extension = originalName.split('.').pop()?.toLowerCase() || 'bin'
-  const baseName = originalName.split('.')[0].replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 50)
-  
+  const baseName = originalName
+    .split('.')[0]
+    .replace(/[^a-zA-Z0-9_-]/g, '_')
+    .substring(0, 50)
+
   return `${userId}_${timestamp}_${randomId}_${baseName}.${extension}`
 }
 
 // Storage 경로 생성
 function generateStoragePath(bucket: string, userId: string, fileName: string): string {
   const safeFileName = generateSafeFileName(fileName, userId)
-  
+
   switch (bucket) {
     case 'profiles':
       return `profiles/${userId}/${safeFileName}`
@@ -128,7 +133,7 @@ async function extractFileMetadata(file: File): Promise<Record<string, any>> {
     original_filename: file.name,
     file_size: file.size,
     content_type: file.type,
-    uploaded_at: new Date().toISOString()
+    uploaded_at: new Date().toISOString(),
   }
 
   // 이미지 파일인 경우 크기 정보 추출
@@ -137,7 +142,7 @@ async function extractFileMetadata(file: File): Promise<Record<string, any>> {
       const sharp = require('sharp')
       const buffer = Buffer.from(await file.arrayBuffer())
       const imageMetadata = await sharp(buffer).metadata()
-      
+
       if (imageMetadata.width && imageMetadata.height) {
         metadata.width = imageMetadata.width
         metadata.height = imageMetadata.height
@@ -156,11 +161,24 @@ async function extractFileMetadata(file: File): Promise<Record<string, any>> {
  */
 export async function POST(request: NextRequest) {
   try {
+    // 분산 레이트리밋: 파일 업로드 시간당 10회
+    const limiter = await distLimiter.applyRateLimit({
+      ...distLimiter.CONFIGS.FILE_UPLOAD,
+      keyGenerator: distLimiter.createUserKeyGenerator('upload'),
+    })
+    const limit = await limiter(request)
+    if (!limit.success && limit.response) {
+      return limit.response
+    }
+
     const supabase = createRouteHandlerClient({ cookies })
 
     // 사용자 인증 확인
-    const { data: { session }, error: authError } = await supabase.auth.getSession()
-    
+    const {
+      data: { session },
+      error: authError,
+    } = await supabase.auth.getSession()
+
     if (authError || !session?.user) {
       return createErrorResponse('로그인이 필요합니다.', 401)
     }
@@ -210,13 +228,13 @@ export async function POST(request: NextRequest) {
     const storagePath = generateStoragePath(bucket, session.user.id, file.name)
 
     // Storage 클라이언트 생성 및 파일 업로드
-    let supabaseAdmin;
+    let supabaseAdmin
     try {
-      supabaseAdmin = getSupabaseAdmin();
-      console.log('[UPLOAD API] Storage 클라이언트 생성 성공');
+      supabaseAdmin = getSupabaseAdmin()
+      console.log('[UPLOAD API] Storage 클라이언트 생성 성공')
     } catch (error) {
-      console.error('[UPLOAD API] Supabase Admin 클라이언트 생성 오류:', error);
-      return createErrorResponse('Storage 서비스를 사용할 수 없습니다. 관리자에게 문의하세요.', 503);
+      console.error('[UPLOAD API] Supabase Admin 클라이언트 생성 오류:', error)
+      return createErrorResponse('Storage 서비스를 사용할 수 없습니다. 관리자에게 문의하세요.', 503)
     }
 
     // Supabase Storage에 파일 업로드
@@ -224,25 +242,26 @@ export async function POST(request: NextRequest) {
       .from(bucket)
       .upload(storagePath, file, {
         cacheControl: '3600',
-        upsert: false
+        upsert: false,
       })
 
     if (uploadError) {
       console.error('Storage upload error:', uploadError)
-      
+
       // Storage bucket이 없는 경우 특별한 메시지
       if (uploadError.message?.includes('bucket') || uploadError.message?.includes('not found')) {
-        return createErrorResponse('Storage가 설정되지 않았습니다. 관리자가 Supabase Storage bucket을 생성해야 합니다.', 503);
+        return createErrorResponse(
+          'Storage가 설정되지 않았습니다. 관리자가 Supabase Storage bucket을 생성해야 합니다.',
+          503
+        )
       }
-      return createErrorResponse(`파일 업로드에 실패했습니다: ${uploadError.message}`, 500);
+      return createErrorResponse(`파일 업로드에 실패했습니다: ${uploadError.message}`, 500)
     }
 
-    console.log('[UPLOAD API] Storage 업로드 성공:', uploadData);
+    console.log('[UPLOAD API] Storage 업로드 성공:', uploadData)
 
     // 공개 URL 생성
-    const { data: publicUrlData } = supabaseAdmin.storage
-      .from(bucket)
-      .getPublicUrl(storagePath)
+    const { data: publicUrlData } = supabaseAdmin.storage.from(bucket).getPublicUrl(storagePath)
 
     if (!publicUrlData?.publicUrl) {
       return createErrorResponse('공개 URL 생성에 실패했습니다.', 500)
@@ -261,20 +280,25 @@ export async function POST(request: NextRequest) {
       path: storagePath,
       public_url: publicUrlData.publicUrl,
       uploaded_at: new Date().toISOString(),
-      metadata: finalMetadata
+      metadata: finalMetadata,
     }
 
     // 성공 응답
-    return createSuccessResponse({
+    const res = createSuccessResponse({
       file: mediaFile,
       // 호환성을 위한 추가 필드들
       id: mediaFile.id,
       name: mediaFile.name,
       path: mediaFile.path,
       public_url: mediaFile.public_url,
-      metadata: finalMetadata
+      metadata: finalMetadata,
     })
-
+    return distLimiter.addRateLimitHeaders(
+      res,
+      distLimiter.CONFIGS.FILE_UPLOAD.maxRequests,
+      limit.remaining,
+      limit.resetTime
+    )
   } catch (error) {
     console.error('Media upload error:', error)
     return createErrorResponse('서버 오류가 발생했습니다.', 500)
@@ -286,11 +310,23 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
+    // 목록 조회는 분당 30회 제한
+    const gLimiter = await distLimiter.applyRateLimit({
+      ...distLimiter.CONFIGS.SEARCH_API,
+      keyGenerator: distLimiter.createUserKeyGenerator('upload_list'),
+    })
+    const gLimit = await gLimiter(request)
+    if (!gLimit.success && gLimit.response) {
+      return gLimit.response
+    }
     const supabase = createRouteHandlerClient({ cookies })
 
     // 사용자 인증 확인
-    const { data: { session }, error: authError } = await supabase.auth.getSession()
-    
+    const {
+      data: { session },
+      error: authError,
+    } = await supabase.auth.getSession()
+
     if (authError || !session?.user) {
       return createErrorResponse('로그인이 필요합니다.', 401)
     }
@@ -301,12 +337,12 @@ export async function GET(request: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0')
 
     // Storage 클라이언트 생성
-    let supabaseAdmin;
+    let supabaseAdmin
     try {
-      supabaseAdmin = getSupabaseAdmin();
+      supabaseAdmin = getSupabaseAdmin()
     } catch (error) {
-      console.error('[LIST API] Supabase Admin 클라이언트 생성 오류:', error);
-      return createErrorResponse('Storage 서비스를 사용할 수 없습니다.', 503);
+      console.error('[LIST API] Supabase Admin 클라이언트 생성 오류:', error)
+      return createErrorResponse('Storage 서비스를 사용할 수 없습니다.', 503)
     }
 
     // Storage에서 사용자 파일 목록 조회
@@ -315,7 +351,7 @@ export async function GET(request: NextRequest) {
       .list(`${session.user.id}/`, {
         limit,
         offset,
-        sortBy: { column: 'created_at', order: 'desc' }
+        sortBy: { column: 'created_at', order: 'desc' },
       })
 
     if (listError) {
@@ -326,9 +362,7 @@ export async function GET(request: NextRequest) {
     // MediaFile 형태로 변환
     const mediaFiles: MediaFile[] = (files || []).map((file, index) => {
       const filePath = `${session.user.id}/${file.name}`
-      const { data: publicUrlData } = supabaseAdmin.storage
-        .from(bucket)
-        .getPublicUrl(filePath)
+      const { data: publicUrlData } = supabaseAdmin.storage.from(bucket).getPublicUrl(filePath)
 
       return {
         id: `${bucket}-${file.name}-${index}`,
@@ -338,16 +372,21 @@ export async function GET(request: NextRequest) {
         path: filePath,
         public_url: publicUrlData?.publicUrl || '',
         uploaded_at: file.created_at || new Date().toISOString(),
-        metadata: file.metadata || {}
+        metadata: file.metadata || {},
       }
     })
 
-    return createSuccessResponse({
+    const resList = createSuccessResponse({
       files: mediaFiles,
       total: mediaFiles.length,
-      has_more: mediaFiles.length === limit
+      has_more: mediaFiles.length === limit,
     })
-
+    return distLimiter.addRateLimitHeaders(
+      resList,
+      distLimiter.CONFIGS.SEARCH_API.maxRequests,
+      gLimit.remaining,
+      gLimit.resetTime
+    )
   } catch (error) {
     console.error('Media list error:', error)
     return createErrorResponse('서버 오류가 발생했습니다.', 500)
