@@ -132,15 +132,36 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- 5) Helpful indexes (idempotent)
-CREATE INDEX IF NOT EXISTS idx_comments_post_id_is_deleted ON public.comments (post_id, is_deleted);
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'comments' AND column_name = 'is_deleted'
+  ) THEN
+    CREATE INDEX IF NOT EXISTS idx_comments_post_id_is_deleted ON public.comments (post_id, is_deleted);
+  ELSE
+    CREATE INDEX IF NOT EXISTS idx_comments_post_id ON public.comments (post_id);
+  END IF;
+END $$;
 CREATE INDEX IF NOT EXISTS idx_post_likes_post_id_user_id ON public.post_likes (post_id, user_id);
 
--- 6) Backfill counts once
-UPDATE public.posts p
-SET comment_count = (
-  SELECT COUNT(1) FROM public.comments c WHERE c.post_id = p.id AND c.is_deleted = FALSE
-);
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'comments' AND column_name = 'is_deleted'
+  ) THEN
+    UPDATE public.posts p
+    SET comment_count = (
+      SELECT COUNT(1) FROM public.comments c WHERE c.post_id = p.id AND c.is_deleted = FALSE
+    );
+  ELSE
+    UPDATE public.posts p
+    SET comment_count = (
+      SELECT COUNT(1) FROM public.comments c WHERE c.post_id = p.id
+    );
+  END IF;
+END $$;
 
 UPDATE public.posts p
 SET like_count = (
