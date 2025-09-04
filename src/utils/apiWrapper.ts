@@ -87,6 +87,10 @@ export class ApiSuccess<T = any> {
     // 캐시 헤더 설정
     if (options.cacheable) {
       headers['Cache-Control'] = `public, max-age=${options.maxAge || 3600}`
+    } else {
+      // 로그인 사용자 등 민감 응답은 private 캐시 및 no-store 권장
+      headers['Cache-Control'] = 'private, no-store'
+      headers['Vary'] = 'Cookie, Authorization'
     }
 
     // CORS 헤더 설정
