@@ -11,17 +11,18 @@ import NotificationDropdown from './NotificationDropdown'
 
 const Navigation = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
-  const [isScrolled, setIsScrolled] = useState(false)
+  // 상단 고정 헤더 투명/불투명 제어
+  const [isAtTop, setIsAtTop] = useState(true)
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const pathname = usePathname()
   const router = useRouter()
-  
+
   // 홈페이지인지 확인
   const isHomePage = pathname === '/'
-  
+
   // 간소화된 색상 로직
-  const isDark = isHomePage && !isScrolled
+  const isDark = isHomePage && isAtTop
   const textColor = isDark ? 'text-white' : 'text-gray-700'
   const activeColor = isDark ? 'text-accent-300' : 'text-primary-600'
   const hoverColor = isDark ? 'hover:text-accent-300' : 'hover:text-primary-600'
@@ -35,12 +36,14 @@ const Navigation = () => {
     { href: '/connect', label: 'CONNECT' },
   ]
 
-  // 스크롤 이벤트
+  // 스크롤 이벤트: 초기 위치 포함해 즉시 평가
   useEffect(() => {
     const handleScroll = () => {
-      setIsScrolled(window.scrollY > 20)
+      setIsAtTop(window.scrollY <= 20)
     }
-    window.addEventListener('scroll', handleScroll)
+    // 초기 상태 동기화 (hydrate 직후 상단이면 투명)
+    handleScroll()
+    window.addEventListener('scroll', handleScroll, { passive: true })
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
@@ -51,7 +54,10 @@ const Navigation = () => {
     const getUser = async () => {
       try {
         // 세션 기반 인증 상태 확인 (미들웨어와 일치)
-        const { data: { session }, error } = await supabase.auth.getSession()
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession()
         if (error) {
           console.error('Session error in Navigation:', error)
           if (mounted) {
@@ -60,7 +66,7 @@ const Navigation = () => {
           }
           return
         }
-        
+
         if (mounted) {
           setUser(session?.user || null)
           setLoading(false)
@@ -76,7 +82,9 @@ const Navigation = () => {
 
     getUser()
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
       if (mounted) {
         setUser(session?.user || null)
         // 인증 상태 변경 시 즉시 로딩 상태 해제
@@ -100,24 +108,23 @@ const Navigation = () => {
   }
 
   return (
-    <nav 
+    <nav
       id="navigation"
-      role="navigation" 
+      role="navigation"
       aria-label="주요 내비게이션"
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        isScrolled 
-          ? 'bg-white/90 backdrop-blur-md shadow-sm' 
-          : isHomePage 
-            ? 'bg-transparent' 
-            : 'bg-white/90 backdrop-blur-md shadow-sm'
-      }`}>
+        isHomePage && isAtTop ? 'bg-transparent' : 'bg-white/90 backdrop-blur-md shadow-sm'
+      }`}
+    >
       <div className="container-custom">
         <div className="flex items-center justify-between h-16 md:h-20 overflow-x-hidden">
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-3">
-            <div className={`relative w-10 h-10 transition-all duration-300 ${
-              isDark ? 'brightness-0 invert' : ''
-            }`}>
+            <div
+              className={`relative w-10 h-10 transition-all duration-300 ${
+                isDark ? 'brightness-0 invert' : ''
+              }`}
+            >
               <Image
                 src="/images/logo/gac_logo.webp"
                 alt="경기아트콜렉티브 협동조합"
@@ -127,7 +134,9 @@ const Navigation = () => {
                 priority
               />
             </div>
-            <span className={`font-serif font-bold text-xl hidden sm:inline transition-colors duration-300 ${textColor}`}>
+            <span
+              className={`font-serif font-bold text-xl hidden sm:inline transition-colors duration-300 ${textColor}`}
+            >
               경기아트콜렉티브
             </span>
           </Link>
@@ -136,16 +145,14 @@ const Navigation = () => {
           <div className="hidden lg:flex items-center space-x-6">
             {/* Main Navigation */}
             <div className="flex items-center space-x-4 lg:space-x-6">
-              {menuItems.map((item) => (
+              {menuItems.map(item => (
                 <Link
                   key={item.href}
                   href={item.href}
                   className={`font-medium transition-colors duration-300 ${
-                    pathname === item.href
-                      ? activeColor
-                      : `${textColor} ${hoverColor}`
+                    pathname === item.href ? activeColor : `${textColor} ${hoverColor}`
                   }`}
-                  onClick={(e) => {
+                  onClick={e => {
                     // Add error handling for board navigation
                     if (item.href === '/board') {
                       try {
@@ -164,14 +171,14 @@ const Navigation = () => {
                 </Link>
               ))}
             </div>
-            
+
             {/* Auth Section */}
             <div className="flex items-center space-x-2 lg:space-x-4 ml-2 lg:ml-4 pl-2 lg:pl-4 border-l border-gray-300/20">
               {user ? (
                 <>
                   {/* 알림 드롭다운 */}
                   <NotificationDropdown isDark={isDark} />
-                  
+
                   <Link
                     href="/mypage"
                     className={`font-medium transition-colors duration-300 text-xs lg:text-sm ${
@@ -200,10 +207,10 @@ const Navigation = () => {
                   <Link
                     href="/signup"
                     className={`font-medium transition-colors duration-300 text-xs lg:text-sm px-2 lg:px-3 py-1 rounded-md ${
-                      pathname === '/signup' 
-                        ? 'bg-primary-600 text-white' 
-                        : isDark 
-                          ? 'bg-accent-300 text-gray-900 hover:bg-accent-400' 
+                      pathname === '/signup'
+                        ? 'bg-primary-600 text-white'
+                        : isDark
+                          ? 'bg-accent-300 text-gray-900 hover:bg-accent-400'
                           : 'bg-primary-600 text-white hover:bg-primary-700'
                     }`}
                   >
@@ -254,14 +261,14 @@ const Navigation = () => {
               className={`font-medium transition-colors duration-300 text-xs ${
                 pathname === '/board' ? activeColor : `${textColor} ${hoverColor}`
               }`}
-              onClick={(e) => {
+              onClick={e => {
                 // Board is now publicly accessible - no auth check needed
               }}
             >
               BOARD
             </Link>
             {/* CONNECT는 모바일 메뉴로만 접근 가능하게 변경 */}
-            
+
             {/* Tablet Auth Section */}
             <div className="flex items-center space-x-1 ml-1 pl-1 border-l border-gray-300/20">
               {user ? (
@@ -294,10 +301,10 @@ const Navigation = () => {
                   <Link
                     href="/signup"
                     className={`font-medium transition-colors duration-300 text-xs px-2 py-1 rounded-md ${
-                      pathname === '/signup' 
-                        ? 'bg-primary-600 text-white' 
-                        : isDark 
-                          ? 'bg-accent-300 text-gray-900 hover:bg-accent-400' 
+                      pathname === '/signup'
+                        ? 'bg-primary-600 text-white'
+                        : isDark
+                          ? 'bg-accent-300 text-gray-900 hover:bg-accent-400'
                           : 'bg-primary-600 text-white hover:bg-primary-700'
                     }`}
                   >
@@ -318,22 +325,28 @@ const Navigation = () => {
           >
             <span className="sr-only">{isMenuOpen ? '메뉴 닫기' : '메뉴 열기'}</span>
             <div className="w-6 h-6 flex flex-col justify-center items-center">
-              <span className={`bg-current h-0.5 w-6 transition-all duration-300 ${
-                isMenuOpen ? 'rotate-45 translate-y-0.5' : ''
-              }`} />
-              <span className={`bg-current h-0.5 w-6 mt-1 transition-all duration-300 ${
-                isMenuOpen ? 'opacity-0' : ''
-              }`} />
-              <span className={`bg-current h-0.5 w-6 mt-1 transition-all duration-300 ${
-                isMenuOpen ? '-rotate-45 -translate-y-1.5' : ''
-              }`} />
+              <span
+                className={`bg-current h-0.5 w-6 transition-all duration-300 ${
+                  isMenuOpen ? 'rotate-45 translate-y-0.5' : ''
+                }`}
+              />
+              <span
+                className={`bg-current h-0.5 w-6 mt-1 transition-all duration-300 ${
+                  isMenuOpen ? 'opacity-0' : ''
+                }`}
+              />
+              <span
+                className={`bg-current h-0.5 w-6 mt-1 transition-all duration-300 ${
+                  isMenuOpen ? '-rotate-45 -translate-y-1.5' : ''
+                }`}
+              />
             </div>
           </button>
         </div>
 
         {/* Mobile Menu */}
         {isMenuOpen && (
-          <div 
+          <div
             id="mobile-menu"
             className="md:hidden absolute left-4 right-4 top-full mt-2 z-50"
             role="menu"
@@ -341,11 +354,11 @@ const Navigation = () => {
           >
             <div className="bg-white/95 backdrop-blur-md rounded-lg shadow-lg p-2 border border-gray-200/20">
               {/* Main Menu Items */}
-              {menuItems.map((item) => (
+              {menuItems.map(item => (
                 <Link
                   key={item.href}
                   href={item.href}
-                  onClick={(e) => {
+                  onClick={e => {
                     setIsMenuOpen(false)
                     // Add error handling for board navigation
                     if (item.href === '/board') {
@@ -369,7 +382,7 @@ const Navigation = () => {
                   {item.label}
                 </Link>
               ))}
-              
+
               {/* Mobile Auth Section */}
               <div className="border-t border-gray-200/50 mt-2 pt-2">
                 {user ? (
