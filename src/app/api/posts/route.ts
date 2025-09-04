@@ -156,8 +156,20 @@ export async function GET(request: NextRequest) {
 
       // 검색어 적용
       if (search) {
-        const escapedSearch = search.replace(/'/g, "''").replace(/\\/g, '\\\\')
-        query = query.or(`title.ilike.%${escapedSearch}%,content.ilike.%${escapedSearch}%`)
+        // 검색 토큰 상한(최대 3개), 각 토큰 길이 제한(>=2)
+        const tokens = search
+          .split(/\s+/)
+          .map(t => t.trim())
+          .filter(t => t.length >= 2)
+          .slice(0, 3)
+
+        if (tokens.length > 0) {
+          const esc = (s: string) => s.replace(/'/g, "''").replace(/\\/g, '\\\\')
+          // 모든 토큰이 매칭되도록 AND 구성: (title ilike %t1% OR content ilike %t1%) AND ...
+          // Supabase query builder에서 or()는 OR만 지원하므로 키워리스트를 줄여 부하를 완화
+          const pattern = tokens.map(t => `title.ilike.%${esc(t)}%,content.ilike.%${esc(t)}%`).join(',')
+          query = query.or(pattern)
+        }
       }
 
       // 정렬 적용
@@ -179,7 +191,7 @@ export async function GET(request: NextRequest) {
         throw new Error(`게시글 조회 실패: ${postsError.message}`)
       }
 
-      // 🚀 성능 최적화: 배치로 모든 부가 정보 조회
+      // 🚀 성능 최적화: 배치로 모든 부가 정보 조회 (RPC 우선, 실패 시 폴백)
       const postIds = (posts || []).map(post => post.id)
 
       if (postIds.length === 0) {
@@ -224,20 +236,39 @@ export async function GET(request: NextRequest) {
       }
 
       // 🚀 병렬 처리: 댓글 수, 첨부파일 통계, 사용자 좋아요, 전체 개수를 동시에 조회
-      const commentCountPromise = (
-        supabase.from('comments').select('post_id, count(*)', { head: false }) as any
-      )
-        .in('post_id', postIds)
-        .eq('is_deleted', false)
+      // RPC: get_posts_meta(post_ids uuid[], user_id uuid) RETURNS JSONB with { comments: {post_id: count}, likes: [post_id...] }
+      let rpcComments: Record<string, number> | null = null
+      let rpcUserLiked: Set<string> | null = null
+      try {
+        const { data: meta } = await supabase
+          .rpc('get_posts_meta', {
+            p_post_ids: postIds,
+            p_user_id: includeLikes && userId ? userId : null,
+          } as any)
+        if (meta && typeof meta === 'object') {
+          rpcComments = (meta as any).comments || null
+          const likedArr = ((meta as any).user_liked || []) as string[]
+          rpcUserLiked = new Set(likedArr)
+        }
+      } catch (e) {
+        // RPC가 없거나 실패하면 폴백 쿼리로 처리
+      }
 
-      const userLikesPromise =
-        includeLikes && userId
-          ? supabase
-              .from('post_likes')
-              .select('post_id')
-              .in('post_id', postIds)
-              .eq('user_id', userId)
-          : Promise.resolve({ data: [] as { post_id: string }[] })
+      const commentCountPromise = rpcComments
+        ? Promise.resolve({ data: null as any })
+        : ((supabase.from('comments').select('post_id, count(*)', { head: false }) as any)
+            .in('post_id', postIds)
+            .eq('is_deleted', false))
+
+      const userLikesPromise = rpcUserLiked
+        ? Promise.resolve({ data: null as any })
+        : (includeLikes && userId
+            ? supabase
+                .from('post_likes')
+                .select('post_id')
+                .in('post_id', postIds)
+                .eq('user_id', userId)
+            : Promise.resolve({ data: [] as { post_id: string }[] }))
 
       // 첨부파일 통계: 한 번의 조회로 post_id, file_type만 가져와 서버에서 집계
       const attachmentsStatsPromise = supabase
@@ -279,11 +310,17 @@ export async function GET(request: NextRequest) {
 
       // 게시글별 댓글 수 계산
       const commentCountMap = new Map<string, number>()
-      commentCounts?.forEach(item => {
-        const postId = item.post_id
-        const count = (item as any).count ?? 0
-        commentCountMap.set(postId, count)
-      })
+      if (rpcComments) {
+        Object.entries(rpcComments).forEach(([pid, cnt]) => {
+          commentCountMap.set(pid, Number(cnt) || 0)
+        })
+      } else {
+        commentCounts?.forEach(item => {
+          const postId = item.post_id
+          const count = (item as any).count ?? 0
+          commentCountMap.set(postId, count)
+        })
+      }
 
       // 게시글별 첨부파일 통계 계산
       const attachmentStatsMap = new Map<string, {
@@ -319,9 +356,13 @@ export async function GET(request: NextRequest) {
 
       // 사용자 좋아요 맵 생성
       const userLikesMap = new Map<string, boolean>()
-      userLikes?.forEach(like => {
-        userLikesMap.set(like.post_id, true)
-      })
+      if (rpcUserLiked) {
+        rpcUserLiked.forEach(pid => userLikesMap.set(pid, true))
+      } else {
+        userLikes?.forEach(like => {
+          userLikesMap.set(like.post_id, true)
+        })
+      }
 
       // 🚀 최적화된 결과 조합
       const postsWithExtra = (posts || []).map(raw => {
