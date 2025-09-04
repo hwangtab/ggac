@@ -6,6 +6,42 @@ import type { LinkPreview, TicketingInfo } from '@/types'
 // 기존에 별도로 정의되어 있던 TicketingInfo를 export로 유지 (하위 호환성)
 export type { LinkPreview, TicketingInfo } from '@/types'
 
+// 간단한 런타임 캐시 (서버 인스턴스 생명주기 내)
+interface CacheEntry<T> {
+  data: T
+  ts: number
+}
+const previewCache = new Map<string, CacheEntry<LinkPreview>>()
+const PREVIEW_TTL_MS = 60 * 60 * 1000 // 1시간
+
+function getCache(url: string): LinkPreview | null {
+  const key = url.trim()
+  const entry = previewCache.get(key)
+  if (!entry) return null
+  if (Date.now() - entry.ts > PREVIEW_TTL_MS) {
+    previewCache.delete(key)
+    return null
+  }
+  return entry.data
+}
+
+function setCache(url: string, data: LinkPreview) {
+  const key = url.trim()
+  previewCache.set(key, { data, ts: Date.now() })
+  // 메모리 사용 제한: 500개 초과 시 오래된 항목 제거
+  if (previewCache.size > 500) {
+    let oldestKey: string | null = null
+    let oldestTs = Infinity
+    for (const [k, v] of previewCache.entries()) {
+      if (v.ts < oldestTs) {
+        oldestTs = v.ts
+        oldestKey = k
+      }
+    }
+    if (oldestKey) previewCache.delete(oldestKey)
+  }
+}
+
 // ---- SSRF/프리플라이트 보호 설정 ----
 const MAX_HTML_BYTES = 2_000_000 // 2MB 상한
 const ALLOWED_PROTOCOLS = new Set(['http:', 'https:'])
@@ -370,41 +406,6 @@ export async function fetchLinkPreview(url: string): Promise<LinkPreview | null>
   } catch (error) {
     console.error(`Error fetching link preview for ${url}:`, error)
     return null
-  }
-  // 간단한 런타임 캐시 (서버 인스턴스 생명주기 내)
-  interface CacheEntry<T> {
-    data: T
-    ts: number
-  }
-  const previewCache = new Map<string, CacheEntry<LinkPreview>>()
-  const PREVIEW_TTL_MS = 60 * 60 * 1000 // 1시간
-
-  function getCache(url: string): LinkPreview | null {
-    const key = url.trim()
-    const entry = previewCache.get(key)
-    if (!entry) return null
-    if (Date.now() - entry.ts > PREVIEW_TTL_MS) {
-      previewCache.delete(key)
-      return null
-    }
-    return entry.data
-  }
-
-  function setCache(url: string, data: LinkPreview) {
-    const key = url.trim()
-    previewCache.set(key, { data, ts: Date.now() })
-    // 메모리 사용 제한: 500개 초과 시 오래된 항목 제거
-    if (previewCache.size > 500) {
-      let oldestKey: string | null = null
-      let oldestTs = Infinity
-      for (const [k, v] of previewCache.entries()) {
-        if (v.ts < oldestTs) {
-          oldestTs = v.ts
-          oldestKey = k
-        }
-      }
-      if (oldestKey) previewCache.delete(oldestKey)
-    }
   }
 }
 
