@@ -1,19 +1,19 @@
-'use client';
+'use client'
 
-import React, { useMemo, useRef, useCallback, useEffect } from 'react';
-import dynamic from 'next/dynamic';
-import 'react-quill-new/dist/quill.snow.css';
-import { validateFile, sanitizeImageFile } from '@/utils/fileValidation';
-import { generateTempId } from '@/utils/security';
+import React, { useMemo, useRef, useCallback, useEffect } from 'react'
+import dynamic from 'next/dynamic'
+import 'react-quill-new/dist/quill.snow.css'
+import { validateFile, sanitizeImageFile } from '@/utils/fileValidation'
+import { generateTempId } from '@/utils/security'
 
 const ReactQuill = dynamic(
   async () => {
-    const { default: RQ } = await import('react-quill-new');
-    const QuillWrapper = ({ forwardedRef, ...props }: any) => <RQ ref={forwardedRef} {...props} />;
-    QuillWrapper.displayName = 'QuillWrapper';
-    return QuillWrapper;
+    const { default: RQ } = await import('react-quill-new')
+    const QuillWrapper = ({ forwardedRef, ...props }: any) => <RQ ref={forwardedRef} {...props} />
+    QuillWrapper.displayName = 'QuillWrapper'
+    return QuillWrapper
   },
-  { 
+  {
     ssr: false,
     loading: () => (
       <div className="animate-pulse bg-gray-100 rounded-md" style={{ height: 400 }}>
@@ -24,16 +24,16 @@ const ReactQuill = dynamic(
           <div className="h-4 bg-gray-200 rounded w-5/6"></div>
         </div>
       </div>
-    )
+    ),
   }
-);
+)
 
 interface QuillEditorProps {
-  value: string;
-  onChange: (content: string) => void;
-  placeholder?: string;
-  disabled?: boolean;
-  height?: number;
+  value: string
+  onChange: (content: string) => void
+  placeholder?: string
+  disabled?: boolean
+  height?: number
 }
 
 export const QuillEditor: React.FC<QuillEditorProps> = ({
@@ -43,181 +43,202 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
   disabled = false,
   height = 400,
 }) => {
-  const quillRef = useRef<any>(null);
+  const quillRef = useRef<any>(null)
 
   // 컴포넌트 마운트 시 디버깅 로그
   useEffect(() => {
-    console.log('[QuillEditor] 컴포넌트 초기화 완료');
-  }, []);
+    console.log('[QuillEditor] 컴포넌트 초기화 완료')
+  }, [])
 
   // 이미지 업로드 핸들러 (기존 TinyMCE 로직 재사용)
   const handleImageUpload = useCallback(async (file: File): Promise<string> => {
     try {
-      console.log('[QuillEditor] 이미지 업로드 시작:', file.name);
+      console.log('[QuillEditor] 이미지 업로드 시작:', file.name)
 
       // 1. 파일 검증
-      const validation = await validateFile(file);
+      const validation = await validateFile(file)
       if (!validation.isValid) {
-        throw new Error(`파일 검증 실패: ${validation.errors.join(', ')}`);
+        throw new Error(`파일 검증 실패: ${validation.errors.join(', ')}`)
       }
 
       if (validation.fileType !== 'image') {
-        throw new Error('이미지 파일만 업로드할 수 있습니다.');
+        throw new Error('이미지 파일만 업로드할 수 있습니다.')
       }
 
-      console.log('[QuillEditor] 파일 검증 완료');
+      console.log('[QuillEditor] 파일 검증 완료')
 
       // 2. 이미지 메타데이터 제거
-      const sanitizedFile = await sanitizeImageFile(file);
-      
+      const sanitizedFile = await sanitizeImageFile(file)
+
       // 3. /api/media/upload API 사용 (MediaManager와 동일한 방식)
-      const formData = new FormData();
-      formData.append('file', sanitizedFile);
-      formData.append('bucket', 'attachments');
+      const formData = new FormData()
+      formData.append('file', sanitizedFile)
+      formData.append('bucket', 'attachments')
 
       // 메타데이터 추가
       const metadata = {
         original_filename: file.name,
         file_size: file.size,
         content_type: file.type,
-        uploaded_at: new Date().toISOString()
-      };
-      formData.append('metadata', JSON.stringify(metadata));
+        uploaded_at: new Date().toISOString(),
+      }
+      formData.append('metadata', JSON.stringify(metadata))
 
-      console.log('[QuillEditor] 서버 업로드 시작');
+      console.log('[QuillEditor] 서버 업로드 시작')
 
       const response = await fetch('/api/media/upload', {
         method: 'POST',
         body: formData,
-      });
+      })
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: '서버 응답을 파싱할 수 없습니다.' }));
-        throw new Error(errorData.error || '이미지 업로드에 실패했습니다.');
+        const errorData = await response
+          .json()
+          .catch(() => ({ error: '서버 응답을 파싱할 수 없습니다.' }))
+        throw new Error(errorData.error || '이미지 업로드에 실패했습니다.')
       }
 
-      const result = await response.json();
-      console.log('[QuillEditor] 이미지 업로드 성공:', result.public_url);
-      
-      return result.public_url;
+      const result = await response.json()
+      console.log('[QuillEditor] 이미지 업로드 성공:', result.public_url)
+
+      return result.public_url
     } catch (error) {
-      console.error('[QuillEditor] 이미지 업로드 오류:', error);
-      throw error;
+      console.error('[QuillEditor] 이미지 업로드 오류:', error)
+      throw error
     }
-  }, []);
+  }, [])
 
   // Quill 모듈 설정
-  const modules = useMemo(() => ({
-    toolbar: {
-      container: [
-        [{ 'header': [1, 2, 3, false] }],
-        ['bold', 'italic', 'underline', 'strike'],
-        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-        [{ 'align': [] }],
-        ['link', 'image'],
-        ['blockquote', 'code-block'],
-        ['clean']
-      ],
-      handlers: {
-        image: function() {
-          const input = document.createElement('input');
-          input.setAttribute('type', 'file');
-          input.setAttribute('accept', 'image/*');
-          
-          input.onchange = async () => {
-            const file = input.files?.[0];
-            if (file) {
-              try {
-                const imageUrl = await handleImageUpload(file);
-                const quill = quillRef.current?.getEditor();
-                if (quill) {
-                  const range = quill.getSelection(true);
-                  quill.insertEmbed(range.index, 'image', imageUrl, 'user');
-                  quill.setSelection(range.index + 1);
+  const modules = useMemo(
+    () => ({
+      toolbar: {
+        container: [
+          [{ header: [1, 2, 3, false] }],
+          ['bold', 'italic', 'underline', 'strike'],
+          [{ list: 'ordered' }, { list: 'bullet' }],
+          [{ align: [] }],
+          ['link', 'image'],
+          ['blockquote', 'code-block'],
+          ['clean'],
+        ],
+        handlers: {
+          image: function () {
+            const input = document.createElement('input')
+            input.setAttribute('type', 'file')
+            input.setAttribute('accept', 'image/*')
+
+            input.onchange = async () => {
+              const file = input.files?.[0]
+              if (file) {
+                try {
+                  const imageUrl = await handleImageUpload(file)
+                  const quill = quillRef.current?.getEditor()
+                  if (quill) {
+                    const range = quill.getSelection(true)
+                    quill.insertEmbed(range.index, 'image', imageUrl, 'user')
+                    quill.setSelection(range.index + 1)
+                  }
+                } catch (error: any) {
+                  console.error('[QuillEditor] 이미지 업로드 실패:', error)
+
+                  // 사용자 친화적인 에러 메시지
+                  let userMessage = '이미지 업로드에 실패했습니다.'
+                  if (error.message.includes('파일 크기')) {
+                    userMessage =
+                      '이미지 파일 크기가 너무 큽니다. 5MB 이하의 이미지를 선택해주세요.'
+                  } else if (
+                    error.message.includes('파일 형식') ||
+                    error.message.includes('지원하지 않는')
+                  ) {
+                    userMessage =
+                      '지원하지 않는 이미지 형식입니다. JPG, PNG, GIF, WebP 파일만 업로드 가능합니다.'
+                  } else if (error.message.includes('네트워크') || error.message.includes('서버')) {
+                    userMessage = '네트워크 오류가 발생했습니다. 잠시 후 다시 시도해주세요.'
+                  } else if (error.message.includes('권한')) {
+                    userMessage = '파일 업로드 권한이 없습니다. 로그인 상태를 확인해주세요.'
+                  }
+
+                  alert(userMessage)
                 }
-              } catch (error: any) {
-                console.error('[QuillEditor] 이미지 업로드 실패:', error);
-                
-                // 사용자 친화적인 에러 메시지
-                let userMessage = '이미지 업로드에 실패했습니다.';
-                if (error.message.includes('파일 크기')) {
-                  userMessage = '이미지 파일 크기가 너무 큽니다. 5MB 이하의 이미지를 선택해주세요.';
-                } else if (error.message.includes('파일 형식') || error.message.includes('지원하지 않는')) {
-                  userMessage = '지원하지 않는 이미지 형식입니다. JPG, PNG, GIF, WebP 파일만 업로드 가능합니다.';
-                } else if (error.message.includes('네트워크') || error.message.includes('서버')) {
-                  userMessage = '네트워크 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
-                } else if (error.message.includes('권한')) {
-                  userMessage = '파일 업로드 권한이 없습니다. 로그인 상태를 확인해주세요.';
-                }
-                
-                alert(userMessage);
               }
             }
-          };
-          
-          input.click();
-        }
-      }
-    },
-    clipboard: {
-      matchVisual: false
-    }
-  }), [handleImageUpload]);
+
+            input.click()
+          },
+        },
+      },
+      clipboard: {
+        matchVisual: false,
+      },
+    }),
+    [handleImageUpload]
+  )
 
   // 허용할 포맷 (보안상 제한)
   const formats = [
-    'header', 'bold', 'italic', 'underline', 'strike',
-    'list', 'align', 'link', 'image',
-    'blockquote', 'code-block'
-  ];
+    'header',
+    'bold',
+    'italic',
+    'underline',
+    'strike',
+    'list',
+    'align',
+    'link',
+    'image',
+    'blockquote',
+    'code-block',
+  ]
 
   // 드래그 앤 드롭 핸들러
-  const handleDrop = useCallback(async (e: React.DragEvent) => {
-    e.preventDefault();
-    const files = Array.from(e.dataTransfer.files);
-    const imageFiles = files.filter(file => file.type.startsWith('image/'));
-    
-    if (imageFiles.length > 0) {
-      const quill = quillRef.current?.getEditor();
-      if (quill) {
-        try {
-          for (const file of imageFiles) {
-            const imageUrl = await handleImageUpload(file);
-            const range = quill.getSelection(true);
-            quill.insertEmbed(range.index, 'image', imageUrl, 'user');
-            quill.setSelection(range.index + 1);
+  const handleDrop = useCallback(
+    async (e: React.DragEvent) => {
+      e.preventDefault()
+      const files = Array.from(e.dataTransfer.files)
+      const imageFiles = files.filter(file => file.type.startsWith('image/'))
+
+      if (imageFiles.length > 0) {
+        const quill = quillRef.current?.getEditor()
+        if (quill) {
+          try {
+            for (const file of imageFiles) {
+              const imageUrl = await handleImageUpload(file)
+              const range = quill.getSelection(true)
+              quill.insertEmbed(range.index, 'image', imageUrl, 'user')
+              quill.setSelection(range.index + 1)
+            }
+          } catch (error: any) {
+            console.error('[QuillEditor] 이미지 업로드 실패:', error)
+
+            // 사용자 친화적인 에러 메시지
+            let userMessage = '이미지 업로드에 실패했습니다.'
+            if (error.message.includes('파일 크기')) {
+              userMessage = '이미지 파일 크기가 너무 큽니다. 5MB 이하의 이미지를 선택해주세요.'
+            } else if (
+              error.message.includes('파일 형식') ||
+              error.message.includes('지원하지 않는')
+            ) {
+              userMessage =
+                '지원하지 않는 이미지 형식입니다. JPG, PNG, GIF, WebP 파일만 업로드 가능합니다.'
+            } else if (error.message.includes('네트워크') || error.message.includes('서버')) {
+              userMessage = '네트워크 오류가 발생했습니다. 잠시 후 다시 시도해주세요.'
+            } else if (error.message.includes('권한')) {
+              userMessage = '파일 업로드 권한이 없습니다. 로그인 상태를 확인해주세요.'
+            }
+
+            alert(userMessage)
           }
-        } catch (error: any) {
-          console.error('[QuillEditor] 이미지 업로드 실패:', error);
-                
-                // 사용자 친화적인 에러 메시지
-                let userMessage = '이미지 업로드에 실패했습니다.';
-                if (error.message.includes('파일 크기')) {
-                  userMessage = '이미지 파일 크기가 너무 큽니다. 5MB 이하의 이미지를 선택해주세요.';
-                } else if (error.message.includes('파일 형식') || error.message.includes('지원하지 않는')) {
-                  userMessage = '지원하지 않는 이미지 형식입니다. JPG, PNG, GIF, WebP 파일만 업로드 가능합니다.';
-                } else if (error.message.includes('네트워크') || error.message.includes('서버')) {
-                  userMessage = '네트워크 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
-                } else if (error.message.includes('권한')) {
-                  userMessage = '파일 업로드 권한이 없습니다. 로그인 상태를 확인해주세요.';
-                }
-                
-                alert(userMessage);
         }
       }
-    }
-  }, [handleImageUpload]);
+    },
+    [handleImageUpload]
+  )
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-  }, []);
+    e.preventDefault()
+  }, [])
 
   return (
-    <div 
-      className="quill-editor-container"
-      onDrop={handleDrop}
-      onDragOver={handleDragOver}
-    >
+    <div className="quill-editor-container" onDrop={handleDrop} onDragOver={handleDragOver}>
       <ReactQuill
         theme="snow"
         value={value}
@@ -227,27 +248,45 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
         formats={formats}
         placeholder={placeholder}
         readOnly={disabled}
-        style={{ height: height }}
+        style={{ minHeight: 'auto' }}
       />
       <style jsx global>{`
         .quill-editor-container {
           max-width: 100%;
           word-wrap: break-word;
           overflow-wrap: anywhere;
-          overflow-x: hidden;
+          overflow: visible;
         }
-        
+
         .quill-editor-container .ql-container {
-          font-family: "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
+          font-family:
+            'Pretendard',
+            -apple-system,
+            BlinkMacSystemFont,
+            system-ui,
+            Roboto,
+            'Helvetica Neue',
+            'Segoe UI',
+            'Apple SD Gothic Neo',
+            'Noto Sans KR',
+            'Malgun Gothic',
+            'Apple Color Emoji',
+            'Segoe UI Emoji',
+            'Segoe UI Symbol',
+            sans-serif;
           font-size: 14px;
           line-height: 1.6;
         }
-        
+
         .quill-editor-container .ql-editor {
-          min-height: ${height - 42}px;
+          min-height: 300px;
+          max-height: none;
           padding: 12px 15px;
+          overflow-y: auto;
+          resize: vertical;
+          box-sizing: border-box;
         }
-        
+
         .quill-editor-container .ql-toolbar {
           border-top: 1px solid #d1d5db;
           border-left: 1px solid #d1d5db;
@@ -256,13 +295,15 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
           background: #f9fafb;
           padding: 8px;
         }
-        
+
         .quill-editor-container .ql-container {
           border-bottom: 1px solid #d1d5db;
           border-left: 1px solid #d1d5db;
           border-right: 1px solid #d1d5db;
           border-radius: 0 0 0.5rem 0.5rem;
           background: white;
+          height: auto !important;
+          overflow-y: visible;
         }
 
         .quill-editor-container .ql-toolbar .ql-formats {
@@ -299,7 +340,7 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
           text-decoration-skip-ink: auto;
           transition: all 0.2s ease;
         }
-        
+
         .quill-editor-container .ql-editor a:hover {
           text-underline-offset: 0.25em;
           text-decoration-thickness: 1.5px;
@@ -337,6 +378,36 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
           font-size: 13px;
         }
 
+        /* 커스텀 스크롤바 스타일링 */
+        .quill-editor-container .ql-editor::-webkit-scrollbar {
+          width: 8px;
+        }
+
+        .quill-editor-container .ql-editor::-webkit-scrollbar-track {
+          background: #f1f5f9;
+          border-radius: 4px;
+        }
+
+        .quill-editor-container .ql-editor::-webkit-scrollbar-thumb {
+          background: #cbd5e1;
+          border-radius: 4px;
+          transition: background 0.2s ease;
+        }
+
+        .quill-editor-container .ql-editor::-webkit-scrollbar-thumb:hover {
+          background: #94a3b8;
+        }
+
+        /* 리사이즈 핸들 스타일링 */
+        .quill-editor-container .ql-editor {
+          resize: vertical;
+        }
+
+        .quill-editor-container .ql-editor:focus {
+          outline: none;
+          box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+        }
+
         /* 비활성화 상태 */
         .quill-editor-container.disabled .ql-toolbar {
           pointer-events: none;
@@ -346,10 +417,11 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
         .quill-editor-container.disabled .ql-editor {
           background-color: #f9fafb;
           cursor: not-allowed;
+          resize: none;
         }
       `}</style>
     </div>
-  );
-};
+  )
+}
 
-export default QuillEditor;
+export default QuillEditor
