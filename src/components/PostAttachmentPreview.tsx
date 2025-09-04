@@ -6,6 +6,7 @@ import { FiImage, FiFile, FiVideo, FiMusic } from 'react-icons/fi';
 interface PostAttachmentPreviewProps {
   postId: string;
   className?: string;
+  stats?: AttachmentStats | null;
 }
 
 interface AttachmentStats {
@@ -18,12 +19,19 @@ interface AttachmentStats {
 
 const PostAttachmentPreview: React.FC<PostAttachmentPreviewProps> = ({
   postId,
-  className = ''
+  className = '',
+  stats: propStats = null
 }) => {
-  const [stats, setStats] = useState<AttachmentStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<AttachmentStats | null>(propStats);
+  const [loading, setLoading] = useState(!propStats);
 
   useEffect(() => {
+    if (propStats) {
+      setStats(propStats)
+      setLoading(false)
+      return
+    }
+
     const fetchAttachmentStats = async () => {
       try {
         const response = await fetch(`/api/posts/${postId}/attachments`);
@@ -39,7 +47,7 @@ const PostAttachmentPreview: React.FC<PostAttachmentPreviewProps> = ({
     };
 
     fetchAttachmentStats();
-  }, [postId]);
+  }, [postId, propStats]);
 
   if (loading || !stats || stats.total_attachments === 0) {
     return null;

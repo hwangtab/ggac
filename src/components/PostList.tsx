@@ -2,7 +2,6 @@ import React, { useState, useEffect, memo } from 'react'
 
 import { useRouter } from 'next/navigation'
 
-import { supabase } from '@/lib/supabase/client'
 import { BOARD_CATEGORIES, BOARD_CATEGORY_STYLES } from '@/constants/categories'
 
 import CommentSection from './CommentSection'
@@ -28,10 +27,7 @@ interface PostListProps {
   onCategoryChange?: (category: string) => void
 }
 
-interface Profile {
-  id: string
-  display_name: string
-}
+// author display name is provided by API; avoid extra client fetches for speed
 
 const PostList: React.FC<PostListProps> = ({ 
   posts, 
@@ -45,7 +41,6 @@ const PostList: React.FC<PostListProps> = ({
   onPageChange,
   onCategoryChange
 }) => {
-  const [profiles, setProfiles] = useState<Record<string, string>>({})
   const [selectedCategory, setSelectedCategory] = useState<string>('전체')
   const [expandedPosts, setExpandedPosts] = useState<Set<string>>(new Set())
   const [localPosts, setLocalPosts] = useState<Post[]>(posts)
@@ -57,27 +52,7 @@ const PostList: React.FC<PostListProps> = ({
     setLocalPosts(posts)
   }, [posts])
 
-  useEffect(() => {
-    const fetchProfiles = async () => {
-      const authorIds = Array.from(new Set(localPosts.map(post => post.author_id)))
-      if (authorIds.length === 0) return
-
-      const { data, error } = await supabase
-        .from('member_profiles')
-        .select('id, display_name')
-        .in('id', authorIds)
-
-      if (data && !error) {
-        const profileMap: Record<string, string> = {}
-        data.forEach((profile: any) => {
-          profileMap[profile.id] = profile.display_name || 'Unknown'
-        })
-        setProfiles(profileMap)
-      }
-    }
-
-    fetchProfiles()
-  }, [localPosts])
+  // Removed client-side profile fetching; use post.author?.display_name from API
 
   // 로컬 상태를 사용하여 즉시 UI 업데이트
   const displayPosts = localPosts
@@ -209,9 +184,9 @@ const PostList: React.FC<PostListProps> = ({
                 <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
                   <div className="flex flex-col gap-2">
                     <span className="text-sm text-gray-600">
-                      작성자: <span className="font-medium">{profiles[post.author_id] || 'Loading...'}</span>
+                      작성자: <span className="font-medium">{post.author?.display_name || '알 수 없음'}</span>
                     </span>
-                    <PostAttachmentPreview postId={post.id} />
+                    <PostAttachmentPreview postId={post.id} stats={post.attachments_stats as any} />
                   </div>
                   <div className="flex items-center gap-4">
                     {/* 좋아요 버튼은 조합원만 */}

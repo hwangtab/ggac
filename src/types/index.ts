@@ -952,6 +952,8 @@ export interface Post {
   is_liked?: boolean
   /** 첨부파일 목록 (조인된 데이터) */
   attachments?: PostAttachment[]
+  /** 첨부파일 통계 (목록 API 동시 제공) */
+  attachments_stats?: PostAttachmentStats
 }
 
 /**
