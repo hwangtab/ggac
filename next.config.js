@@ -394,8 +394,7 @@ const nextConfig = {
               // 워커 및 매니페스트 정책
               "worker-src 'self' blob:",
               "manifest-src 'self'",
-              // 플러그인 타입 제한
-              'plugin-types application/pdf',
+              // 플러그인 차단은 object-src 'none'으로 처리 (plugin-types는 deprecated)
               // CSP 위반 리포팅
               'report-uri /api/security/csp-report',
               'report-to default',
