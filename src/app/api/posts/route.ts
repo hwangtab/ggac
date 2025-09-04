@@ -142,6 +142,7 @@ export async function GET(request: NextRequest) {
         updated_at,
         is_pinned,
         like_count,
+        comment_count,
         author:member_profiles!posts_author_id_fkey (
           display_name
         )
@@ -254,11 +255,8 @@ export async function GET(request: NextRequest) {
         // RPC가 없거나 실패하면 폴백 쿼리로 처리
       }
 
-      const commentCountPromise = rpcComments
-        ? Promise.resolve({ data: null as any })
-        : ((supabase.from('comments').select('post_id, count(*)', { head: false }) as any)
-            .in('post_id', postIds)
-            .eq('is_deleted', false))
+      // 댓글 수는 posts.comment_count 컬럼을 사용하므로 추가 쿼리 불필요
+      const commentCountPromise = Promise.resolve({ data: null as any })
 
       const userLikesPromise = rpcUserLiked
         ? Promise.resolve({ data: null as any })
@@ -310,17 +308,7 @@ export async function GET(request: NextRequest) {
 
       // 게시글별 댓글 수 계산
       const commentCountMap = new Map<string, number>()
-      if (rpcComments) {
-        Object.entries(rpcComments).forEach(([pid, cnt]) => {
-          commentCountMap.set(pid, Number(cnt) || 0)
-        })
-      } else {
-        commentCounts?.forEach(item => {
-          const postId = item.post_id
-          const count = (item as any).count ?? 0
-          commentCountMap.set(postId, count)
-        })
-      }
+      // kept for backward compatibility; now sourced from posts.comment_count
 
       // 게시글별 첨부파일 통계 계산
       const attachmentStatsMap = new Map<string, {
@@ -380,7 +368,7 @@ export async function GET(request: NextRequest) {
           updated_at: raw.updated_at,
           is_pinned: raw.is_pinned,
           like_count: (raw as any).like_count || 0,
-          comment_count: commentCountMap.get(raw.id) || 0,
+          comment_count: (raw as any).comment_count || 0,
           is_liked: includeLikes ? userLikesMap.get(raw.id) || false : undefined,
           attachments_stats: attachmentStatsMap.get(raw.id) || {
             total_attachments: 0,
@@ -422,7 +410,7 @@ export async function GET(request: NextRequest) {
         duration: `${duration}ms`,
         postsCount: postsWithExtra.length,
         totalCount,
-        dbQueries: includeLikes && userId ? 4 : 3, // posts + commentCounts + userLikes(optional) + count
+        dbQueries: includeLikes && userId ? 3 : 2, // posts + userLikes(optional) + count (comments in column)
         cacheHit: false, // 첫 로드는 항상 cache miss
         timestamp: new Date().toISOString(),
       })
