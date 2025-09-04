@@ -193,6 +193,11 @@ async function fetchWithRetry(url: string, maxRetries = 3): Promise<Response | n
 export async function fetchLinkPreview(url: string): Promise<LinkPreview | null> {
   try {
     console.log(`🔍 [LinkPreview] Starting fetch for: ${url}`)
+    // 캐시 조회
+    const cached = getCache(url)
+    if (cached) {
+      return cached
+    }
     // Preflight 검증 (프로토콜/호스트/DNS/IP/헤더)
     const preflight = await preflightRequest(url)
     if (!preflight.ok) {
@@ -354,10 +359,47 @@ export async function fetchLinkPreview(url: string): Promise<LinkPreview | null>
       )
     }
 
+    // 캐시 저장
+    setCache(url, preview)
     return preview
   } catch (error) {
     console.error(`Error fetching link preview for ${url}:`, error)
     return null
+  }
+  // 간단한 런타임 캐시 (서버 인스턴스 생명주기 내)
+  interface CacheEntry<T> {
+    data: T
+    ts: number
+  }
+  const previewCache = new Map<string, CacheEntry<LinkPreview>>()
+  const PREVIEW_TTL_MS = 60 * 60 * 1000 // 1시간
+
+  function getCache(url: string): LinkPreview | null {
+    const key = url.trim()
+    const entry = previewCache.get(key)
+    if (!entry) return null
+    if (Date.now() - entry.ts > PREVIEW_TTL_MS) {
+      previewCache.delete(key)
+      return null
+    }
+    return entry.data
+  }
+
+  function setCache(url: string, data: LinkPreview) {
+    const key = url.trim()
+    previewCache.set(key, { data, ts: Date.now() })
+    // 메모리 사용 제한: 500개 초과 시 오래된 항목 제거
+    if (previewCache.size > 500) {
+      let oldestKey: string | null = null
+      let oldestTs = Infinity
+      for (const [k, v] of previewCache.entries()) {
+        if (v.ts < oldestTs) {
+          oldestTs = v.ts
+          oldestKey = k
+        }
+      }
+      if (oldestKey) previewCache.delete(oldestKey)
+    }
   }
 }
 
