@@ -41,11 +41,6 @@ export const usePostsWithPagination = ({
       setLoading(true)
       setError(null)
 
-      // 현재 로그인한 사용자 확인
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-
       // 🚀 최적화된 단일 API 호출: 모든 데이터를 한 번에 가져옴
       const params = new URLSearchParams({
         page: page.toString(),
