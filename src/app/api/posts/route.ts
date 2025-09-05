@@ -166,7 +166,6 @@ export async function GET(request: NextRequest) {
       `
         )
         .or('is_deleted.is.false,is_deleted.is.null')
-        .not('is_deleted', 'is', true)
 
       // 카테고리 필터 적용
       if (category !== '전체') {
@@ -274,13 +273,12 @@ export async function GET(request: NextRequest) {
         // RPC가 없거나 실패하면 폴백 쿼리로 처리
       }
 
-      // 댓글 수: RPC 결과가 없으면 폴백 쿼리로 집계
+      // 댓글 수: RPC 결과가 없으면 폴백 쿼리 (post_id만 가져와 서버에서 집계)
       const commentCountPromise = rpcComments
         ? Promise.resolve({ data: null as any })
-        : ((db as any).from('comments').select('post_id, count:count(*)', { head: false }) as any)
+        : ((db as any).from('comments').select('post_id', { head: false }) as any)
             .in('post_id', postIds)
             .eq('is_deleted', false)
-            .group('post_id')
 
       const userLikesPromise = rpcUserLiked
         ? Promise.resolve({ data: null as any })
@@ -337,11 +335,23 @@ export async function GET(request: NextRequest) {
           commentCountMap.set(pid, Number(cnt) || 0)
         })
       } else {
-        commentCounts?.forEach(item => {
-          const postId = item.post_id
-          const count = (item as any).count ?? 0
-          commentCountMap.set(postId, count)
-        })
+        if (Array.isArray(commentCounts) && commentCounts.length > 0) {
+          const first: any = commentCounts[0]
+          if ('count' in first) {
+            // 만약 count 필드가 있다면 그대로 사용
+            commentCounts.forEach((item: any) => {
+              const postId = item.post_id
+              const count = Number(item.count) || 0
+              commentCountMap.set(postId, count)
+            })
+          } else {
+            // post_id만 있는 경우 서버에서 집계
+            commentCounts.forEach((item: any) => {
+              const postId = item.post_id
+              commentCountMap.set(postId, (commentCountMap.get(postId) || 0) + 1)
+            })
+          }
+        }
       }
 
       // 게시글별 첨부파일 통계 계산
