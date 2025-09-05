@@ -380,6 +380,10 @@ const nextConfig = {
               "script-src 'self' 'unsafe-inline'" +
                 (process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : '') +
                 ' https://www.youtube.com https://www.google-analytics.com',
+              // 스크립트 요소별 세밀한 제어 (MIME 타입 오류 방지)
+              "script-src-elem 'self' 'unsafe-inline'" +
+                (process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : '') +
+                ' https://www.youtube.com https://www.google-analytics.com',
               // 스타일 정책
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com",
