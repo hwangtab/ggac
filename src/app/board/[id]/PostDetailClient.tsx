@@ -1,106 +1,126 @@
-'use client';
+'use client'
 
-import { supabase } from '../../../lib/supabase/client';
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import CommentSection from '../../../components/CommentSection';
-import PostLikeButton from '../../../components/PostLikeButton';
-import PostAttachmentsDisplay from '../../../components/PostAttachmentsDisplay';
-import dynamic from 'next/dynamic';
-import type { MemberProfile, Post as PostType } from '@/types';
+import { supabase } from '../../../lib/supabase/client'
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import CommentSection from '../../../components/CommentSection'
+import PostLikeButton from '../../../components/PostLikeButton'
+import PostAttachmentsDisplay from '../../../components/PostAttachmentsDisplay'
+import dynamic from 'next/dynamic'
+import type { MemberProfile, Post as PostType } from '@/types'
 
 // PostContentRenderer를 동적으로 로드하여 SSR 이슈 방지
 const PostContentRenderer = dynamic(() => import('@/components/PostContentRenderer'), {
   ssr: false,
-  loading: () => <div className="animate-pulse bg-gray-100 h-32 rounded" />
-});
+  loading: () => <div className="animate-pulse bg-gray-100 h-32 rounded" />,
+})
 
 interface Post {
-  id: string;
-  title: string;
-  content: string;
-  content_format?: string;
-  category: string;
-  author_id: string;
-  created_at: string;
-  view_count?: number;
-  like_count?: number;
-  is_liked?: boolean;
+  id: string
+  title: string
+  content: string
+  content_format?: string
+  category: string
+  author_id: string
+  created_at: string
+  view_count?: number
+  like_count?: number
+  is_liked?: boolean
 }
 
 interface Profile {
-  id: string;
-  display_name: string;
-  profile_image_url?: string;
+  id: string
+  display_name: string
+  profile_image_url?: string
 }
 
 interface PostDetailClientProps {
-  postId: string;
+  postId: string
 }
 
 export default function PostDetailClient({ postId }: PostDetailClientProps) {
-  const [post, setPost] = useState<Post | null>(null);
-  const [initialComments, setInitialComments] = useState<any[] | null>(null);
-  const [initialAttachments, setInitialAttachments] = useState<any[] | null>(null);
-  const [authorProfile, setAuthorProfile] = useState<Profile | null>(null);
-  const [user, setUser] = useState<any>(null);
-  const [isMember, setIsMember] = useState<boolean>(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
+  const [post, setPost] = useState<Post | null>(null)
+  const [initialComments, setInitialComments] = useState<any[] | null>(null)
+  const [initialAttachments, setInitialAttachments] = useState<any[] | null>(null)
+  const [authorProfile, setAuthorProfile] = useState<Profile | null>(null)
+  const [user, setUser] = useState<any>(null)
+  const [isMember, setIsMember] = useState<boolean>(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const router = useRouter()
 
   // 조합원 상태 확인 함수를 별도로 분리
   const checkMemberStatus = async (currentUser: any) => {
     if (!currentUser) {
-      console.log('🔍 [PostDetailClient] No current user');
-      setIsMember(false);
-      return;
+      console.log('🔍 [PostDetailClient] No current user')
+      setIsMember(false)
+      return
     }
 
-    console.log('🔍 [PostDetailClient] Checking member status for user:', currentUser.id);
-    
+    console.log('🔍 [PostDetailClient] Checking member status for user:', currentUser.id)
+
     try {
       const { data: profile, error: profileError } = await supabase
         .from('member_profiles')
         .select('registration_status, is_active')
         .eq('id', currentUser.id)
-        .single();
+        .single()
 
       if (profileError) {
-        console.error('❌ [PostDetailClient] Error fetching profile:', profileError);
-        setIsMember(false);
+        console.error('❌ [PostDetailClient] Error fetching profile:', profileError)
+        setIsMember(false)
       } else if (profile) {
-        const isApprovedMember = (profile as MemberProfile).registration_status === 'approved' && (profile as MemberProfile).is_active;
-        console.log('📋 [PostDetailClient] Profile data:', profile);
-        console.log(`✅ [PostDetailClient] Member status: ${isApprovedMember ? 'APPROVED' : 'NOT_APPROVED'}`);
-        setIsMember(isApprovedMember);
+        const isApprovedMember =
+          (profile as MemberProfile).registration_status === 'approved' &&
+          (profile as MemberProfile).is_active
+        console.log('📋 [PostDetailClient] Profile data:', profile)
+        console.log(
+          `✅ [PostDetailClient] Member status: ${isApprovedMember ? 'APPROVED' : 'NOT_APPROVED'}`
+        )
+        setIsMember(isApprovedMember)
       } else {
-        console.warn('⚠️ [PostDetailClient] No profile found for user');
-        setIsMember(false);
+        console.warn('⚠️ [PostDetailClient] No profile found for user')
+        setIsMember(false)
       }
     } catch (error) {
-      console.error('❌ [PostDetailClient] Exception while checking member status:', error);
-      setIsMember(false);
+      console.error('❌ [PostDetailClient] Exception while checking member status:', error)
+      setIsMember(false)
     }
-  };
+  }
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         // 사용자 세션 확인(선택) + 멤버 상태 확인
-        const { data: { session } } = await supabase.auth.getSession();
-        const currentUser = session?.user || null;
-        setUser(currentUser);
-        await checkMemberStatus(currentUser);
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        const currentUser = session?.user || null
+        setUser(currentUser)
+        await checkMemberStatus(currentUser)
 
         // 상세 API로 단일 요청 (댓글/첨부 포함)
-        const res = await fetch(`/api/posts/${postId}?include_comments=true&include_attachments=true`, { cache: 'no-store' })
+        const res = await fetch(
+          `/api/posts/${postId}?include_comments=true&include_attachments=true`,
+          { cache: 'no-store' }
+        )
         if (!res.ok) {
-          setError('게시글을 불러올 수 없습니다.')
+          const errorData = await res.json().catch(() => null)
+          const errorMessage = errorData?.error || `게시글을 불러올 수 없습니다. (${res.status})`
+          console.error('❌ [PostDetailClient] API 오류:', res.status, errorMessage)
+          setError(errorMessage)
           setLoading(false)
           return
         }
         const data = await res.json()
+
+        if (!data.post) {
+          console.error('❌ [PostDetailClient] 응답에 post 데이터가 없습니다:', data)
+          setError('게시글 데이터를 찾을 수 없습니다.')
+          setLoading(false)
+          return
+        }
+
         const detail = data.post
         setPost({
           id: detail.id,
@@ -121,24 +141,24 @@ export default function PostDetailClient({ postId }: PostDetailClientProps) {
         try {
           const lastViewTime = localStorage.getItem(`post_view_${postId}`)
           const now = Date.now()
-          
+
           // 최근 10분 내에 본 적이 없는 경우에만 조회수 증가
-          if (!lastViewTime || (now - parseInt(lastViewTime)) > 10 * 60 * 1000) {
+          if (!lastViewTime || now - parseInt(lastViewTime) > 10 * 60 * 1000) {
             const viewResponse = await fetch(`/api/posts/${postId}/view`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'x-last-view-time': lastViewTime || '0'
-              }
+                'x-last-view-time': lastViewTime || '0',
+              },
             })
-            
+
             if (viewResponse.ok) {
               const viewData = await viewResponse.json()
               console.debug(`[PostDetail] View count updated: ${viewData.view_count}`)
-              
+
               // 게시글 데이터에 조회수 업데이트
-              setPost(prev => prev ? { ...prev, view_count: viewData.view_count } : prev)
-              
+              setPost(prev => (prev ? { ...prev, view_count: viewData.view_count } : prev))
+
               // 로컬 스토리지에 조회 시간 저장
               localStorage.setItem(`post_view_${postId}`, now.toString())
             }
@@ -157,100 +177,99 @@ export default function PostDetailClient({ postId }: PostDetailClientProps) {
             .select('id, display_name')
             .eq('id', detail.author_id)
             .maybeSingle()
-          setAuthorProfile(authorData || { id: detail.author_id, display_name: '알 수 없는 사용자' })
+          setAuthorProfile(
+            authorData || { id: detail.author_id, display_name: '알 수 없는 사용자' }
+          )
         }
 
-        setLoading(false);
-        console.debug('[PostDetail] Data loading completed');
+        setLoading(false)
+        console.debug('[PostDetail] Data loading completed')
       } catch (e) {
-        console.error('Error fetching data:', e);
-        setError('데이터를 불러오는 중 오류가 발생했습니다.');
-        setLoading(false);
+        console.error('Error fetching data:', e)
+        setError('데이터를 불러오는 중 오류가 발생했습니다.')
+        setLoading(false)
       }
-    };
+    }
 
     if (postId) {
-      fetchData();
+      fetchData()
     }
 
     // 🚨 수정된 부분: 세션 변경 시 조합원 상태 적절히 처리
     const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      const newUser = session?.user || null;
-      setUser(newUser);
-      
-      console.log('🔄 [Auth Change] Auth state changed, event:', _event);
-      
+      const newUser = session?.user || null
+      setUser(newUser)
+
+      console.log('🔄 [Auth Change] Auth state changed, event:', _event)
+
       // 로그아웃인 경우에만 멤버 상태 초기화
       if (!newUser) {
-        console.log('🔄 [Auth Change] User logged out, clearing member status');
-        setIsMember(false);
+        console.log('🔄 [Auth Change] User logged out, clearing member status')
+        setIsMember(false)
       } else {
         // 사용자가 있으면 멤버 상태 재확인 (세션 갱신, 탭 전환 등)
-        console.log('🔄 [Auth Change] User session updated, rechecking member status');
-        await checkMemberStatus(newUser);
+        console.log('🔄 [Auth Change] User session updated, rechecking member status')
+        await checkMemberStatus(newUser)
       }
-    });
+    })
 
     return () => {
-      authListener?.subscription.unsubscribe();
-    };
-  }, [postId, router]);
+      authListener?.subscription.unsubscribe()
+    }
+  }, [postId, router])
 
   const handleDeletePost = async () => {
-    if (!post || !user || post.author_id !== user.id) return;
+    if (!post || !user || post.author_id !== user.id) return
 
-    if (!confirm('정말로 이 게시글을 삭제하시겠습니까?')) return;
+    if (!confirm('정말로 이 게시글을 삭제하시겠습니까?')) return
 
-    const { error } = await supabase
-      .from('posts')
-      .delete()
-      .eq('id', post.id);
+    const { error } = await supabase.from('posts').delete().eq('id', post.id)
 
     if (error) {
-      alert('게시글 삭제 중 오류가 발생했습니다.');
+      alert('게시글 삭제 중 오류가 발생했습니다.')
     } else {
-      alert('게시글이 삭제되었습니다.');
-      router.push('/board');
+      alert('게시글이 삭제되었습니다.')
+      router.push('/board')
     }
-  };
+  }
 
   const handleEditPost = () => {
-    if (!post || !user || post.author_id !== user.id) return;
-    router.push(`/board/${post.id}/edit`);
-  };
+    if (!post || !user || post.author_id !== user.id) return
+    router.push(`/board/${post.id}/edit`)
+  }
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
+    const date = new Date(dateString)
     return date.toLocaleDateString('ko-KR', {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
-    });
-  };
+    })
+  }
 
   const getCategoryColor = (category: string) => {
     switch (category) {
       case '공지':
-        return 'bg-red-100 text-red-800';
+        return 'bg-red-100 text-red-800'
       case '잡담':
-        return 'bg-blue-100 text-blue-800';
+        return 'bg-blue-100 text-blue-800'
       case '홍보':
-        return 'bg-green-100 text-green-800';
+        return 'bg-green-100 text-green-800'
       case '건의':
-        return 'bg-yellow-100 text-yellow-800';
+        return 'bg-yellow-100 text-yellow-800'
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-gray-100 text-gray-800'
     }
-  };
+  }
 
   if (loading) {
     return (
       <div className="min-h-screen pt-24 md:pt-28 flex items-center justify-center">
         <div className="text-lg">로딩 중...</div>
       </div>
-    );
+    )
   }
 
   if (error || !post) {
@@ -271,7 +290,7 @@ export default function PostDetailClient({ postId }: PostDetailClientProps) {
           </div>
         </div>
       </div>
-    );
+    )
   }
 
   return (
@@ -292,7 +311,8 @@ export default function PostDetailClient({ postId }: PostDetailClientProps) {
           {!user && (
             <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-blue-800 mb-2">
-                <strong>안내:</strong> 게시물을 읽어볼 수 있지만, 댓글 작성과 좋아요는 조합원만 가능합니다.
+                <strong>안내:</strong> 게시물을 읽어볼 수 있지만, 댓글 작성과 좋아요는 조합원만
+                가능합니다.
               </p>
               <div className="flex gap-2">
                 <button
@@ -314,7 +334,8 @@ export default function PostDetailClient({ postId }: PostDetailClientProps) {
           {!isMember && user && (
             <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
               <p className="text-yellow-800">
-                <strong>알림:</strong> 조합원 승인 대기 중입니다. 승인 후 댓글 작성과 좋아요가 가능합니다.
+                <strong>알림:</strong> 조합원 승인 대기 중입니다. 승인 후 댓글 작성과 좋아요가
+                가능합니다.
               </p>
             </div>
           )}
@@ -324,7 +345,9 @@ export default function PostDetailClient({ postId }: PostDetailClientProps) {
             {/* 게시글 헤더 */}
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between mb-4">
-                <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getCategoryColor(post.category)}`}>
+                <span
+                  className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getCategoryColor(post.category)}`}
+                >
                   {post.category}
                 </span>
                 {user && post.author_id === user.id && (
@@ -344,9 +367,9 @@ export default function PostDetailClient({ postId }: PostDetailClientProps) {
                   </div>
                 )}
               </div>
-              
+
               <h1 className="text-3xl font-bold font-post text-gray-700 mb-4">{post.title}</h1>
-              
+
               <div className="flex items-center space-x-4 text-sm text-gray-600">
                 <div className="flex items-center space-x-2">
                   {authorProfile?.profile_image_url ? (
@@ -370,8 +393,18 @@ export default function PostDetailClient({ postId }: PostDetailClientProps) {
                 <span>•</span>
                 <div className="flex items-center space-x-1">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                    />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                    />
                   </svg>
                   <span>{post.view_count || 0}</span>
                 </div>
@@ -385,7 +418,7 @@ export default function PostDetailClient({ postId }: PostDetailClientProps) {
                   showCount={true}
                   showLabel={false}
                   onLikeChange={(postId, liked, count) => {
-                    setPost(prev => prev ? { ...prev, like_count: count, is_liked: liked } : prev)
+                    setPost(prev => (prev ? { ...prev, like_count: count, is_liked: liked } : prev))
                   }}
                 />
               </div>
@@ -396,7 +429,7 @@ export default function PostDetailClient({ postId }: PostDetailClientProps) {
               <div className="prose max-w-none">
                 <PostContentRenderer
                   content={post.content}
-                  contentFormat={post.content_format as 'plain' | 'html' | 'markdown' || 'plain'}
+                  contentFormat={(post.content_format as 'plain' | 'html' | 'markdown') || 'plain'}
                   className="text-gray-800 leading-relaxed"
                 />
               </div>
@@ -404,16 +437,24 @@ export default function PostDetailClient({ postId }: PostDetailClientProps) {
 
             {/* 첨부파일 */}
             <div className="px-6 pb-6">
-              <PostAttachmentsDisplay postId={post.id} attachments={initialAttachments || undefined} />
+              <PostAttachmentsDisplay
+                postId={post.id}
+                attachments={initialAttachments || undefined}
+              />
             </div>
           </div>
 
           {/* 댓글 섹션 */}
           <div className="mt-8">
-            <CommentSection postId={post.id} currentUserId={user?.id} isMember={isMember} initialComments={initialComments || undefined} />
+            <CommentSection
+              postId={post.id}
+              currentUserId={user?.id}
+              isMember={isMember}
+              initialComments={initialComments || undefined}
+            />
           </div>
         </div>
       </div>
     </div>
-  );
+  )
 }
