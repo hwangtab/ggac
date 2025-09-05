@@ -144,7 +144,7 @@ export function usePostLikes({
         // 요청 완료 후 일정 시간 후 중복 방지 키 리셋 (디바운싱)
         fetchTimeoutRef.current = setTimeout(() => {
           lastFetchRef.current = ''
-        }, 1000) // 1초 후 리셋
+        }, 2000) // 2초 후 리셋으로 증가하여 중복 요청 방지 강화
       }
     },
     [multiLoadingState, user?.id, postId]
@@ -303,23 +303,29 @@ export function usePostLikes({
     // 기본: 서버가 안 줬다면 조회
     let shouldFetch = !prefetched
 
-    // 성능을 위해 전체 재조회는 피하되, 다음 경우에 한해 검증성 조회 수행:
-    // - 서버가 is_liked=false로 왔지만, 좋아요 수가 1~3 사이인 경우(소수여서 내 좋아요일 가능성 높음)
+    // prefetched가 true인 경우 서버에서 이미 정확한 데이터를 제공했으므로
+    // 매우 제한적인 경우에만 재조회 수행
     if (
       !shouldFetch &&
       prefetched &&
       initialIsLiked === false &&
       initialLikeCount > 0 &&
-      initialLikeCount <= 3
+      initialLikeCount <= 2 // 3에서 2로 줄여서 더 엄격하게 제한
     ) {
       shouldFetch = true
     }
 
+    // prefetched이고 이미 좋아요를 눌렀거나 좋아요가 없는 경우 재조회 생략
+    if (prefetched && (initialIsLiked || initialLikeCount === 0)) {
+      shouldFetch = false
+    }
+
     if (!shouldFetch) return
 
+    // 디바운스 시간을 500ms로 증가하여 연속된 상태 변경 시 불필요한 요청 방지
     const debounceTimeout = setTimeout(() => {
-      fetchLikeStatus(true) // 강제 조회로 초기 상태 확정
-    }, 100)
+      fetchLikeStatus(false) // force=false로 변경하여 중복 방지 로직 활용
+    }, 500)
 
     return () => clearTimeout(debounceTimeout)
   }, [fetchLikeStatus, user?.id, postId, prefetched, initialIsLiked, initialLikeCount])
