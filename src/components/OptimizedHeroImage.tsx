@@ -11,16 +11,16 @@ interface OptimizedHeroImageProps {
   onLoad?: () => void
 }
 
-const OptimizedHeroImage = ({ 
-  alt, 
-  priority = false, 
-  className = "", 
+const OptimizedHeroImage = ({
+  alt,
+  priority = false,
+  className = '',
   style = {},
-  onLoad
+  onLoad,
 }: OptimizedHeroImageProps) => {
   const [imageLoaded, setImageLoaded] = useState(false)
   const [imageError, setImageError] = useState(false)
-  
+
   // 디버깅: 컴포넌트 마운트 시 로그
   if (process.env.NODE_ENV === 'development') {
     console.log('[OptimizedHeroImage] 컴포넌트 렌더링', { imageLoaded, imageError })
@@ -41,7 +41,7 @@ const OptimizedHeroImage = ({
     <div className="relative w-full h-full">
       {/* 최적화된 블러 플레이스홀더 - 레이아웃 시프트 방지 */}
       {!imageLoaded && (
-        <div 
+        <div
           className="absolute inset-0"
           style={{
             background: `
@@ -73,63 +73,31 @@ const OptimizedHeroImage = ({
           }}
         />
       )}
-      
-      {/* 메인 이미지 - AVIF/WebP/PNG 폴백 */}
-      <picture>
-        <source srcSet="/images/hero.avif" type="image/avif" />
-        
-        <Image
-          src="/images/hero.png"
-          alt={alt}
-          fill
-          className={`object-cover transition-opacity duration-700 ${
-            imageLoaded ? 'opacity-100' : 'opacity-0'
-          } ${className}`}
-          priority={true}
-          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 100vw, 100vw"
-          style={{ 
-            ...style,
-            willChange: imageLoaded ? 'auto' : 'opacity',
-            backfaceVisibility: 'hidden',
-          }}
-          onLoad={handleLoad}
-          onError={handleError}
-          decoding="async"
-          loading="eager"
-          placeholder="blur"
-          blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k="
-        />
-      </picture>
-      
+
+      {/* 메인 이미지 - Next Image 단일 사용 (Next가 AVIF/WebP 자동 서빙 및 올바른 프리로드 처리) */}
+      <Image
+        src="/images/hero.png"
+        alt={alt}
+        fill
+        className={`object-cover transition-opacity duration-700 ${
+          imageLoaded ? 'opacity-100' : 'opacity-0'
+        } ${className}`}
+        priority={priority}
+        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 100vw, 100vw"
+        style={{
+          ...style,
+          willChange: imageLoaded ? 'auto' : 'opacity',
+          backfaceVisibility: 'hidden',
+        }}
+        onLoad={handleLoad}
+        onError={handleError}
+        placeholder="blur"
+        blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k="
+        fetchPriority={priority ? 'high' : undefined}
+      />
+
       {/* 오류 상태 처리 - PNG 폴백 시도 */}
-      {imageError && (
-        <div className="absolute inset-0">
-          <Image 
-            src="/images/hero.png"
-            alt={alt}
-            fill
-            className="object-cover"
-            priority={priority}
-            onError={() => console.error('[OptimizedHeroImage] PNG 폴백도 실패')}
-            onLoad={() => {
-              console.log('[OptimizedHeroImage] PNG 폴백 로드 성공')
-              setImageLoaded(true)
-              setImageError(false)
-            }}
-          />
-          {/* 최종 실패 시 UI */}
-          <div className="absolute inset-0 bg-gray-900 flex items-center justify-center">
-            <div className="text-white text-center">
-              <div className="w-12 h-12 mx-auto mb-2 opacity-50">
-                <svg fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <p className="text-sm opacity-70">이미지 로딩 실패</p>
-            </div>
-          </div>
-        </div>
-      )}
+      {imageError && <div className="absolute inset-0 bg-gray-900/60" />}
     </div>
   )
 }
