@@ -165,7 +165,7 @@ export async function GET(request: NextRequest) {
         )
       `
         )
-        .eq('is_deleted', false)
+        .not('is_deleted', 'is', true)
 
       // 카테고리 필터 적용
       if (category !== '전체') {
@@ -300,7 +300,7 @@ export async function GET(request: NextRequest) {
       let countQuery = db
         .from('posts')
         .select('id', { count: 'exact', head: true })
-        .eq('is_deleted', false)
+        .not('is_deleted', 'is', true)
 
       if (category !== '전체') {
         countQuery = countQuery.eq('category', category)
