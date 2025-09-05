@@ -72,6 +72,8 @@ export async function middleware(request: NextRequest) {
           "default-src 'self'",
           // 스크립트: inline/unsafe-eval 제거
           "script-src 'self' https://www.youtube.com https://www.google-analytics.com",
+          // 스크립트 요소별 세밀한 제어 (MIME 타입 오류 방지)
+          "script-src-elem 'self' https://www.youtube.com https://www.google-analytics.com",
           // 스타일은 기존과 동일(폰트/프레임워크 호환성)
           "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
           "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com",
