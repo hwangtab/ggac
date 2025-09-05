@@ -161,7 +161,7 @@ function BoardContent() {
 
         {/* 비로그인 사용자 안내 */}
         {!user && (
-          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg relative z-10 pointer-events-auto">
             <p className="text-blue-800 mb-2">
               <strong>안내:</strong> 게시물을 읽어볼 수 있지만, 글 작성과 댓글, 좋아요는 조합원만
               가능합니다.
@@ -169,13 +169,15 @@ function BoardContent() {
             <div className="flex gap-2">
               <button
                 onClick={() => router.push('/login')}
-                className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 transition-colors"
+                type="button"
+                className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
               >
                 로그인
               </button>
               <button
                 onClick={() => router.push('/signup')}
-                className="bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700 transition-colors"
+                type="button"
+                className="bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700 transition-colors focus:outline-none focus:ring-2 focus:ring-green-400"
               >
                 조합원 가입
               </button>
@@ -185,7 +187,7 @@ function BoardContent() {
 
         {/* 로그인했지만 승인 대기 중인 사용자 */}
         {!isMember && user && (
-          <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg relative z-10 pointer-events-auto">
             <p className="text-yellow-800">
               <strong>알림:</strong> 조합원 승인 대기 중입니다. 승인 후 게시글 작성이 가능합니다.
             </p>
@@ -194,10 +196,11 @@ function BoardContent() {
 
         {/* 조합원만 글쓰기 버튼 표시 */}
         {isMember && user && (
-          <div className="mb-6">
+          <div className="mb-6 relative z-10 pointer-events-auto">
             <button
               onClick={() => router.push('/board/write')}
-              className="bg-primary-600 text-white px-6 py-3 rounded-lg hover:bg-primary-700 transition-colors font-medium"
+              type="button"
+              className="bg-primary-600 text-white px-6 py-3 rounded-lg hover:bg-primary-700 transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-primary-400"
             >
               새 게시글 작성
             </button>
