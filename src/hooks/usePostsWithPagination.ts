@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase/client'
 import type { Post, PostWithLikes, SupabaseRealtimePayload } from '@/types'
 
@@ -26,8 +26,22 @@ export const usePostsWithPagination = ({
   const [totalCount, setTotalCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // 요청 중복 방지 및 과도한 재요청 방지
+  const inFlightRef = useRef(false)
+  const lastFetchAtRef = useRef(0)
+  const scheduledRefetchRef = useRef<NodeJS.Timeout | null>(null)
 
   const fetchPosts = useCallback(async () => {
+    // 1) 중복 호출 방지: 이미 진행 중이면 무시
+    if (inFlightRef.current) {
+      return
+    }
+    // 2) 과도한 빈번 호출 억제: 마지막 호출 1.2초 이내면 무시
+    const now = Date.now()
+    if (now - lastFetchAtRef.current < 1200) {
+      return
+    }
+
     // 🚀 성능 측정 시작
     const startTime = Date.now()
     console.log('📊 [HOOK PERFORMANCE] 게시글 로딩 시작:', {
@@ -38,6 +52,7 @@ export const usePostsWithPagination = ({
     })
 
     try {
+      inFlightRef.current = true
       setLoading(true)
       setError(null)
 
@@ -103,9 +118,10 @@ export const usePostsWithPagination = ({
     } catch (err) {
       console.error('Error fetching posts:', err)
       setError(err instanceof Error ? err.message : '게시글을 불러오는 중 오류가 발생했습니다.')
-      setPosts([])
-      setTotalCount(0)
+      // 오류 시에는 마지막 정상 데이터 유지 (UX 안정)
     } finally {
+      lastFetchAtRef.current = Date.now()
+      inFlightRef.current = false
       setLoading(false)
     }
   }, [page, pageSize, category])
@@ -184,13 +200,23 @@ export const usePostsWithPagination = ({
               })
             }
 
-            console.log('[REALTIME] 게시글 목록 새로고침 실행')
-            fetchPosts()
+            // 과도한 재요청 방지: 1.5초 단위로 통합 호출
+            if (scheduledRefetchRef.current) {
+              return
+            }
+            scheduledRefetchRef.current = setTimeout(() => {
+              scheduledRefetchRef.current = null
+              fetchPosts()
+            }, 1500)
           }
         )
         .subscribe()
 
       return () => {
+        if (scheduledRefetchRef.current) {
+          clearTimeout(scheduledRefetchRef.current)
+          scheduledRefetchRef.current = null
+        }
         subscription.unsubscribe()
       }
     } catch (error) {
