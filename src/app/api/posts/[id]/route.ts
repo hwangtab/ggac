@@ -11,32 +11,35 @@ export const preferredRegion = 'icn1'
 import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
-import distributedRateLimiter, { DISTRIBUTED_RATE_LIMIT_CONFIGS, createDistributedUserKeyGenerator } from '@/utils/distributedRateLimiter'
+import distributedRateLimiter, {
+  DISTRIBUTED_RATE_LIMIT_CONFIGS,
+  createDistributedUserKeyGenerator,
+} from '@/utils/distributedRateLimiter'
 import { validateUUID } from '@/utils/validation'
 
-export async function GET(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
-  const resolvedParams = await context.params;
-  const postId = resolvedParams.id;
-  
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await context.params
+  const postId = resolvedParams.id
+
   try {
     // UUID 형식 검증
-    const uuidValidation = validateUUID(postId, '게시글 ID');
+    const uuidValidation = validateUUID(postId, '게시글 ID')
     if (!uuidValidation.isValid) {
-      console.log('[API] POST 상세 UUID 검증 실패:', uuidValidation.errors);
-      return NextResponse.json({ 
-        error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.' 
-      }, { status: 400 });
+      console.log('[API] POST 상세 UUID 검증 실패:', uuidValidation.errors)
+      return NextResponse.json(
+        {
+          error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.',
+        },
+        { status: 400 }
+      )
     }
-    
+
     // 분산 Rate limiting 적용
     const rateLimiter = await distributedRateLimiter.applyRateLimit({
       ...DISTRIBUTED_RATE_LIMIT_CONFIGS.GENERAL_API,
-      keyGenerator: createDistributedUserKeyGenerator('post_detail')
+      keyGenerator: createDistributedUserKeyGenerator('post_detail'),
     })
-    
+
     const rateLimitResult = await rateLimiter(request)
     if (!rateLimitResult.success && rateLimitResult.response) {
       return rateLimitResult.response
@@ -44,7 +47,9 @@ export async function GET(
 
     const supabase = createRouteHandlerClient({ cookies })
     // 세션은 선택 사항(공개 열람 허용), 사용자 ID가 있으면 is_liked 등 계산에 사용
-    const { data: { session } } = await supabase.auth.getSession()
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
     const userId = session?.user?.id || null
     let isAdmin = false
     if (userId) {
@@ -64,7 +69,8 @@ export async function GET(
     // 게시글 기본 정보 조회
     const { data: post, error: postError } = await supabase
       .from('posts')
-      .select(`
+      .select(
+        `
         id,
         title,
         content,
@@ -80,7 +86,8 @@ export async function GET(
           display_name,
           email
         )
-      `)
+      `
+      )
       .eq('id', validPostId)
       .single()
 
@@ -116,7 +123,8 @@ export async function GET(
     if (includeComments) {
       const { data: commentsData, error: commentsError } = await supabase
         .from('comments')
-        .select(`
+        .select(
+          `
           id,
           content,
           author_id,
@@ -124,7 +132,8 @@ export async function GET(
           author:member_profiles!comments_author_id_fkey (
             display_name
           )
-        `)
+        `
+        )
         .eq('post_id', validPostId)
         .order('created_at', { ascending: true })
 
@@ -135,7 +144,7 @@ export async function GET(
         // 댓글 좋아요 메타 병합(집계 + 사용자 좋아요)
         const ids = comments.map((c: any) => c.id)
         if (ids.length > 0) {
-          // 집계: 댓글별 좋아요 수
+          // 집계: 댓글별 좋아요 수 (그룹화하여 적은 페이로드)
           const { data: likeRows } = await supabase
             .from('comment_likes')
             .select('comment_id')
@@ -184,11 +193,10 @@ export async function GET(
       comment_count: commentCount || 0,
       is_liked: isLiked,
       comments: includeComments ? comments : undefined,
-      attachments: includeAttachments ? attachments : undefined
+      attachments: includeAttachments ? attachments : undefined,
     }
 
     return NextResponse.json({ post: responseData })
-
   } catch (error) {
     console.error('게시글 상세 API 오류:', error)
     return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })

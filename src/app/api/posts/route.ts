@@ -276,9 +276,10 @@ export async function GET(request: NextRequest) {
       // 댓글 수: RPC 결과가 없으면 폴백 쿼리로 집계
       const commentCountPromise = rpcComments
         ? Promise.resolve({ data: null as any })
-        : ((db as any).from('comments').select('post_id, count(*)', { head: false }) as any)
+        : ((db as any).from('comments').select('post_id, count:count(*)', { head: false }) as any)
             .in('post_id', postIds)
             .eq('is_deleted', false)
+            .group('post_id')
 
       const userLikesPromise = rpcUserLiked
         ? Promise.resolve({ data: null as any })
@@ -389,13 +390,14 @@ export async function GET(request: NextRequest) {
 
       // 🚀 최적화된 결과 조합
       const postsWithExtra = (posts || []).map(raw => {
+        const preview = createTextPreview(raw.content || '', 150)
         const post: any = {
           id: raw.id,
           title: raw.title,
           // 서버에서 미리보기 텍스트 생성 (본문은 응답에서 제외)
-          content_preview: createTextPreview(raw.content || '', 150).text,
-          preview_has_images: createTextPreview(raw.content || '', 150).hasImages,
-          preview_image_count: createTextPreview(raw.content || '', 150).imageCount,
+          content_preview: preview.text,
+          preview_has_images: preview.hasImages,
+          preview_image_count: preview.imageCount,
           content_format: raw.content_format,
           category: raw.category,
           author_id: raw.author_id,
