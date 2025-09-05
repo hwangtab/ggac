@@ -5,6 +5,7 @@
 
 import { NextRequest } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator } from '@/utils/rateLimiter'
 import { validateSearchQuery } from '@/utils/validation'
@@ -76,6 +77,23 @@ export async function GET(request: NextRequest) {
   } = await supabase.auth.getSession()
   const userId = session?.user?.id || null // 로그인 상태는 선택사항
 
+  // 비로그인 사용자의 공개 읽기에서 RLS로 인해 빈 목록이 되는 환경을 대비해
+  // 서비스 롤 클라이언트를 읽기 전용으로 활용 (서버에서만, 키는 노출되지 않음)
+  const adminClient = (() => {
+    try {
+      const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+      const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+      if (!url || !key) return null
+      return createClient(url, key, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      })
+    } catch {
+      return null
+    }
+  })()
+  // 읽기 쿼리에 사용할 DB 클라이언트 선택
+  const db = userId ? supabase : adminClient || supabase
+
   return apiGet(
     async () => {
       // 🚀 성능 측정 시작
@@ -128,7 +146,7 @@ export async function GET(request: NextRequest) {
       )
 
       // 🚀 최적화된 쿼리: 기본 게시글 정보 + 작성자 정보 조회
-      let query = supabase
+      let query = db
         .from('posts')
         .select(
           `
@@ -167,7 +185,9 @@ export async function GET(request: NextRequest) {
           const esc = (s: string) => s.replace(/'/g, "''").replace(/\\/g, '\\\\')
           // 모든 토큰이 매칭되도록 AND 구성: (title ilike %t1% OR content ilike %t1%) AND ...
           // Supabase query builder에서 or()는 OR만 지원하므로 키워리스트를 줄여 부하를 완화
-          const pattern = tokens.map(t => `title.ilike.%${esc(t)}%,content.ilike.%${esc(t)}%`).join(',')
+          const pattern = tokens
+            .map(t => `title.ilike.%${esc(t)}%,content.ilike.%${esc(t)}%`)
+            .join(',')
           query = query.or(pattern)
         }
       }
@@ -240,11 +260,10 @@ export async function GET(request: NextRequest) {
       let rpcComments: Record<string, number> | null = null
       let rpcUserLiked: Set<string> | null = null
       try {
-        const { data: meta } = await supabase
-          .rpc('get_posts_meta', {
-            p_post_ids: postIds,
-            p_user_id: includeLikes && userId ? userId : null,
-          } as any)
+        const { data: meta } = await supabase.rpc('get_posts_meta', {
+          p_post_ids: postIds,
+          p_user_id: includeLikes && userId ? userId : null,
+        } as any)
         if (meta && typeof meta === 'object') {
           rpcComments = (meta as any).comments || null
           const likedArr = ((meta as any).user_liked || []) as string[]
@@ -257,27 +276,27 @@ export async function GET(request: NextRequest) {
       // 댓글 수: RPC 결과가 없으면 폴백 쿼리로 집계
       const commentCountPromise = rpcComments
         ? Promise.resolve({ data: null as any })
-        : ((supabase.from('comments').select('post_id, count(*)', { head: false }) as any)
+        : ((db as any).from('comments').select('post_id, count(*)', { head: false }) as any)
             .in('post_id', postIds)
-            .eq('is_deleted', false))
+            .eq('is_deleted', false)
 
       const userLikesPromise = rpcUserLiked
         ? Promise.resolve({ data: null as any })
-        : (includeLikes && userId
-            ? supabase
-                .from('post_likes')
-                .select('post_id')
-                .in('post_id', postIds)
-                .eq('user_id', userId)
-            : Promise.resolve({ data: [] as { post_id: string }[] }))
+        : includeLikes && userId
+          ? supabase
+              .from('post_likes')
+              .select('post_id')
+              .in('post_id', postIds)
+              .eq('user_id', userId)
+          : Promise.resolve({ data: [] as { post_id: string }[] })
 
       // 첨부파일 통계: 한 번의 조회로 post_id, file_type만 가져와 서버에서 집계
-      const attachmentsStatsPromise = supabase
+      const attachmentsStatsPromise = db
         .from('post_attachments')
         .select('post_id, file_type')
         .in('post_id', postIds)
 
-      let countQuery = supabase
+      let countQuery = db
         .from('posts')
         .select('id', { count: 'exact', head: true })
         .eq('is_deleted', false)
@@ -324,13 +343,16 @@ export async function GET(request: NextRequest) {
       }
 
       // 게시글별 첨부파일 통계 계산
-      const attachmentStatsMap = new Map<string, {
-        total_attachments: number
-        image_count: number
-        document_count: number
-        video_count: number
-        audio_count: number
-      }>()
+      const attachmentStatsMap = new Map<
+        string,
+        {
+          total_attachments: number
+          image_count: number
+          document_count: number
+          video_count: number
+          audio_count: number
+        }
+      >()
       if (attachmentRows && Array.isArray(attachmentRows)) {
         for (const row of attachmentRows as any[]) {
           const pid = row.post_id as string
