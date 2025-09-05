@@ -10,6 +10,7 @@ export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import distributedRateLimiter, {
   DISTRIBUTED_RATE_LIMIT_CONFIGS,
@@ -62,12 +63,28 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     }
 
     const validPostId = uuidValidation.sanitized
+    // RLS로 인해 비로그인 시 공개 읽기가 막히는 환경을 대비해
+    // 서버에서만 사용하는 서비스 롤 클라이언트를 읽기 전용으로 활용
+    const adminClient = (() => {
+      try {
+        const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+        const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+        if (!url || !key) return null
+        return createClient(url, key, {
+          auth: { autoRefreshToken: false, persistSession: false },
+        })
+      } catch {
+        return null
+      }
+    })()
+    // 읽기 전용 DB 클라이언트 선택 (좋아요 등 사용자 의존 로직은 supabase 사용)
+    const db = userId ? supabase : adminClient || supabase
     const { searchParams } = new URL(request.url)
     const includeComments = searchParams.get('include_comments') !== 'false' // 기본적으로 포함
     const includeAttachments = searchParams.get('include_attachments') !== 'false' // 기본적으로 포함
 
     // 게시글 기본 정보 조회
-    const { data: post, error: postError } = await supabase
+    const { data: post, error: postError } = await db
       .from('posts')
       .select(
         `
@@ -142,7 +159,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     }
 
     // 댓글 수 조회
-    const { count: commentCount } = await supabase
+    const { count: commentCount } = await db
       .from('comments')
       .select('id', { count: 'exact', head: true })
       .eq('post_id', validPostId)
@@ -150,7 +167,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     // 댓글 목록 조회 (요청 시)
     let comments: any[] = []
     if (includeComments) {
-      const { data: commentsData, error: commentsError } = await supabase
+      const { data: commentsData, error: commentsError } = await db
         .from('comments')
         .select(
           `
@@ -174,7 +191,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         const ids = comments.map((c: any) => c.id)
         if (ids.length > 0) {
           // 집계: 댓글별 좋아요 수 (그룹화하여 적은 페이로드)
-          const { data: likeRows } = await supabase
+          const { data: likeRows } = await db
             .from('comment_likes')
             .select('comment_id')
             .in('comment_id', ids)
@@ -203,7 +220,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     // 첨부파일 목록 조회 (요청 시)
     let attachments: any[] = []
     if (includeAttachments) {
-      const { data: attachmentsData, error: attachmentsError } = await supabase
+      const { data: attachmentsData, error: attachmentsError } = await db
         .from('post_attachments')
         .select('*')
         .eq('post_id', validPostId)
