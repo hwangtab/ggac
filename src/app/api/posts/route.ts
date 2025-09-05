@@ -165,6 +165,7 @@ export async function GET(request: NextRequest) {
         )
       `
         )
+        .or('is_deleted.is.false,is_deleted.is.null')
         .not('is_deleted', 'is', true)
 
       // 카테고리 필터 적용
@@ -216,10 +217,10 @@ export async function GET(request: NextRequest) {
 
       if (postIds.length === 0) {
         // 게시글이 없는 경우 총 개수만 조회
-        let countQuery = supabase
+        let countQuery = db
           .from('posts')
           .select('id', { count: 'exact', head: true })
-          .eq('is_deleted', false)
+          .or('is_deleted.is.false,is_deleted.is.null')
 
         if (category !== '전체') {
           countQuery = countQuery.eq('category', category)
@@ -260,7 +261,7 @@ export async function GET(request: NextRequest) {
       let rpcComments: Record<string, number> | null = null
       let rpcUserLiked: Set<string> | null = null
       try {
-        const { data: meta } = await supabase.rpc('get_posts_meta', {
+        const { data: meta } = await (db as any).rpc('get_posts_meta', {
           p_post_ids: postIds,
           p_user_id: includeLikes && userId ? userId : null,
         } as any)
@@ -300,7 +301,7 @@ export async function GET(request: NextRequest) {
       let countQuery = db
         .from('posts')
         .select('id', { count: 'exact', head: true })
-        .not('is_deleted', 'is', true)
+        .or('is_deleted.is.false,is_deleted.is.null')
 
       if (category !== '전체') {
         countQuery = countQuery.eq('category', category)
