@@ -248,7 +248,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({
                             })}
                           </span>
                         </div>
-                        <p className="text-gray-700 text-sm leading-relaxed mb-2">
+                        <p className="text-gray-700 text-sm leading-relaxed mb-2 whitespace-pre-line">
                           {popularComment.content}
                         </p>
                         <div className="flex items-center gap-2">
@@ -302,7 +302,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({
                           })}
                         </span>
                       </div>
-                      <p className="text-gray-700 text-sm leading-relaxed mb-2">
+                      <p className="text-gray-700 text-sm leading-relaxed mb-2 whitespace-pre-line">
                         {comment.content}
                       </p>
                       <div className="flex items-center gap-2">
