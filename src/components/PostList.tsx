@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 
 import { BOARD_CATEGORIES, BOARD_CATEGORY_STYLES } from '@/constants/categories'
 
-import CommentSection from './CommentSection'
+import dynamic from 'next/dynamic'
 import PaginationControls from './PaginationControls'
 import PostLikeButton from './PostLikeButton'
 import PostAttachmentPreview from './PostAttachmentPreview'
@@ -12,6 +12,11 @@ import { FiImage, FiFile, FiVideo, FiMusic } from 'react-icons/fi'
 import { createTextPreview } from '@/utils/textUtils'
 
 import type { Post } from '@/types'
+
+const CommentSection = dynamic(() => import('./CommentSection'), {
+  loading: () => <div>댓글 로딩중...</div>,
+  ssr: false,
+})
 
 interface PostListProps {
   posts: Post[]
