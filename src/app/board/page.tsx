@@ -145,12 +145,6 @@ function BoardContent() {
     paginationActions.goToPage(page)
   }
 
-  if (userLoading) {
-    return (
-      <div className="min-h-screen pt-24 md:pt-28 flex items-center justify-center">Loading...</div>
-    )
-  }
-
   return (
     <div className="min-h-screen bg-gray-50 pt-20 md:pt-24">
       <div className="container mx-auto px-4 pt-8 pb-16">
@@ -160,7 +154,7 @@ function BoardContent() {
         </div>
 
         {/* 비로그인 사용자 안내 */}
-        {!user && (
+        {!user && !userLoading && (
           <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg relative z-10 pointer-events-auto">
             <p className="text-blue-800 mb-2">
               <strong>안내:</strong> 게시물을 읽어볼 수 있지만, 글 작성과 댓글, 좋아요는 조합원만
@@ -186,7 +180,7 @@ function BoardContent() {
         )}
 
         {/* 로그인했지만 승인 대기 중인 사용자 */}
-        {!isMember && user && (
+        {!isMember && user && !userLoading && (
           <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg relative z-10 pointer-events-auto">
             <p className="text-yellow-800">
               <strong>알림:</strong> 조합원 승인 대기 중입니다. 승인 후 게시글 작성이 가능합니다.
@@ -195,7 +189,7 @@ function BoardContent() {
         )}
 
         {/* 조합원만 글쓰기 버튼 표시 */}
-        {isMember && user && (
+        {isMember && user && !userLoading && (
           <div className="mb-6 relative z-10 pointer-events-auto">
             <button
               onClick={() => router.push('/board/write')}
