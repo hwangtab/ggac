@@ -143,7 +143,7 @@ export default function BoardClient({ initialData }: BoardClientProps) {
     }
   }
 
-  // URL 변경 시 데이터 새로고침
+  // URL 변경 시 데이터 새로고침 및 초기 로드 폴백
   useEffect(() => {
     if (cursor && cursor !== nextCursor) {
       loadMorePosts(cursor)
@@ -152,8 +152,12 @@ export default function BoardClient({ initialData }: BoardClientProps) {
       setPosts(initialData.posts)
       setHasNext(initialData.hasNext)
       setNextCursor(initialData.nextCursor)
+    } else if (!cursor && !initialData && posts.length === 0) {
+      // 초기 데이터가 없고 커서도 없으면 첫 페이지 API 호출
+      console.log('🔄 [BoardClient] 초기 데이터 없음, API 호출로 폴백')
+      loadMorePosts('')
     }
-  }, [cursor, category])
+  }, [cursor, category, initialData])
 
   const handleCategoryChange = (newCategory: string) => {
     const params = new URLSearchParams()
