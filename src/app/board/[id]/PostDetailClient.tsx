@@ -36,16 +36,30 @@ interface Profile {
 
 interface PostDetailClientProps {
   postId: string
+  initialData?: {
+    post: any
+    comments: any[]
+    attachments: any[]
+    author: any
+  }
 }
 
-export default function PostDetailClient({ postId }: PostDetailClientProps) {
-  const [post, setPost] = useState<Post | null>(null)
-  const [initialComments, setInitialComments] = useState<any[] | null>(null)
-  const [initialAttachments, setInitialAttachments] = useState<any[] | null>(null)
-  const [authorProfile, setAuthorProfile] = useState<Profile | null>(null)
+export default function PostDetailClient({ postId, initialData }: PostDetailClientProps) {
+  const [post, setPost] = useState<Post | null>(initialData?.post || null)
+  const [initialComments, setInitialComments] = useState<any[] | null>(
+    initialData?.comments || null
+  )
+  const [initialAttachments, setInitialAttachments] = useState<any[] | null>(
+    initialData?.attachments || null
+  )
+  const [authorProfile, setAuthorProfile] = useState<Profile | null>(
+    initialData?.author
+      ? { id: initialData.post?.author_id, display_name: initialData.author.display_name }
+      : null
+  )
   const [user, setUser] = useState<any>(null)
   const [isMember, setIsMember] = useState<boolean>(false)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!initialData) // 초기 데이터가 있으면 로딩 false
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
@@ -99,43 +113,71 @@ export default function PostDetailClient({ postId }: PostDetailClientProps) {
         setUser(currentUser)
         await checkMemberStatus(currentUser)
 
-        // 상세 API로 단일 요청 (댓글/첨부 포함)
-        const res = await fetch(
-          `/api/posts/${postId}?include_comments=true&include_attachments=true`,
-          { cache: 'no-store' }
-        )
-        if (!res.ok) {
-          const errorData = await res.json().catch(() => null)
-          const errorMessage = errorData?.error || `게시글을 불러올 수 없습니다. (${res.status})`
-          console.error('❌ [PostDetailClient] API 오류:', res.status, errorMessage)
-          setError(errorMessage)
-          setLoading(false)
-          return
-        }
-        const data = await res.json()
+        // 초기 데이터가 없는 경우에만 API 호출
+        if (!initialData) {
+          // 상세 API로 단일 요청 (댓글/첨부 포함)
+          const res = await fetch(
+            `/api/posts/${postId}?include_comments=true&include_attachments=true`,
+            { cache: 'no-store' }
+          )
+          if (!res.ok) {
+            const errorData = await res.json().catch(() => null)
+            const errorMessage = errorData?.error || `게시글을 불러올 수 없습니다. (${res.status})`
+            console.error('❌ [PostDetailClient] API 오류:', res.status, errorMessage)
+            setError(errorMessage)
+            setLoading(false)
+            return
+          }
+          const data = await res.json()
 
-        if (!data.post) {
-          console.error('❌ [PostDetailClient] 응답에 post 데이터가 없습니다:', data)
-          setError('게시글 데이터를 찾을 수 없습니다.')
-          setLoading(false)
-          return
-        }
+          if (!data.post) {
+            console.error('❌ [PostDetailClient] 응답에 post 데이터가 없습니다:', data)
+            setError('게시글 데이터를 찾을 수 없습니다.')
+            setLoading(false)
+            return
+          }
 
-        const detail = data.post
-        setPost({
-          id: detail.id,
-          title: detail.title,
-          content: detail.content,
-          content_format: detail.content_format,
-          category: detail.category,
-          author_id: detail.author_id,
-          created_at: detail.created_at,
-          like_count: detail.like_count,
-          is_liked: detail.is_liked,
-          view_count: detail.view_count,
-        })
-        if (detail.comments) setInitialComments(detail.comments)
-        if (detail.attachments) setInitialAttachments(detail.attachments)
+          const detail = data.post
+          setPost({
+            id: detail.id,
+            title: detail.title,
+            content: detail.content,
+            content_format: detail.content_format,
+            category: detail.category,
+            author_id: detail.author_id,
+            created_at: detail.created_at,
+            like_count: detail.like_count,
+            is_liked: detail.is_liked,
+            view_count: detail.view_count,
+          })
+          if (detail.comments) setInitialComments(detail.comments)
+          if (detail.attachments) setInitialAttachments(detail.attachments)
+
+          // 작성자 프로필 (API 응답 내 author.display_name 사용, 부족하면 폴백 조회)
+          if (detail.author?.display_name) {
+            setAuthorProfile({ id: detail.author_id, display_name: detail.author.display_name })
+          } else {
+            const { data: authorData } = await supabase
+              .from('public_profiles')
+              .select('id, display_name')
+              .eq('id', detail.author_id)
+              .maybeSingle()
+            setAuthorProfile(
+              authorData || { id: detail.author_id, display_name: '알 수 없는 사용자' }
+            )
+          }
+        } else {
+          // 초기 데이터가 있는 경우 사용자별 데이터만 업데이트 (좋아요 상태 등)
+          if (currentUser && post) {
+            const res = await fetch(`/api/posts/${postId}/user-data?user_id=${currentUser.id}`)
+            if (res.ok) {
+              const userData = await res.json()
+              if (userData.success) {
+                setPost(prev => (prev ? { ...prev, is_liked: userData.data.is_liked } : prev))
+              }
+            }
+          }
+        }
 
         // 게시글 조회수 증가 (작성자 본인이 아닌 경우)
         try {
@@ -166,20 +208,6 @@ export default function PostDetailClient({ postId }: PostDetailClientProps) {
         } catch (viewError) {
           console.warn('[PostDetail] Failed to update view count:', viewError)
           // 조회수 업데이트 실패는 게시글 표시를 막지 않음
-        }
-
-        // 작성자 프로필 (API 응답 내 author.display_name 사용, 부족하면 폴백 조회)
-        if (detail.author?.display_name) {
-          setAuthorProfile({ id: detail.author_id, display_name: detail.author.display_name })
-        } else {
-          const { data: authorData } = await supabase
-            .from('public_profiles')
-            .select('id, display_name')
-            .eq('id', detail.author_id)
-            .maybeSingle()
-          setAuthorProfile(
-            authorData || { id: detail.author_id, display_name: '알 수 없는 사용자' }
-          )
         }
 
         setLoading(false)
@@ -216,7 +244,7 @@ export default function PostDetailClient({ postId }: PostDetailClientProps) {
     return () => {
       authListener?.subscription.unsubscribe()
     }
-  }, [postId, router])
+  }, [postId, router, initialData])
 
   const handleDeletePost = async () => {
     if (!post || !user || post.author_id !== user.id) return
