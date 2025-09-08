@@ -8,7 +8,6 @@ import {
 } from '@/lib/data'
 import { fetchLinkPreview } from '@/utils/linkPreview'
 import type { Metadata } from 'next'
-import { getSiteUrl } from '@/utils/site'
 
 interface ProjectPageProps {
   params: Promise<{
@@ -39,7 +38,7 @@ export async function generateMetadata({ params }: ProjectPageProps): Promise<Me
     }
   }
 
-  // OG 이미지 결정 로직
+  // OG 이미지 결정 로직 (상대 경로 반환)
   const getOgImage = () => {
     // 1. coverImage가 있으면 우선 사용
     if (project.coverImage) {
@@ -55,7 +54,8 @@ export async function generateMetadata({ params }: ProjectPageProps): Promise<Me
     return '/images/logo/gac_og.webp'
   }
 
-  const ogImageUrl = `${getSiteUrl()}${getOgImage()}`
+  // 상대 경로 사용: 레이아웃(metadataBase)와 결합되어 절대 URL이 생성됨
+  const ogImageUrl = getOgImage()
 
   return {
     title: `${project.title} | 경기아트콜렉티브 협동조합`,
@@ -63,7 +63,8 @@ export async function generateMetadata({ params }: ProjectPageProps): Promise<Me
     openGraph: {
       title: project.title,
       description: project.description.split('\n')[0],
-      url: `${getSiteUrl()}/archive/${project.slug}`,
+      // 상대 경로 사용: 레이아웃의 metadataBase와 결합됨
+      url: `/archive/${project.slug}`,
       siteName: '경기아트콜렉티브 협동조합',
       images: [
         {
