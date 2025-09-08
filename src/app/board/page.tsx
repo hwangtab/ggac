@@ -1,6 +1,6 @@
 // 하이브리드 렌더링: 서버 컴포넌트 + 클라이언트 하이드레이션
 import { Suspense } from 'react'
-import BoardClient from './BoardClient'
+import BoardClientBridge from './BoardClientBridge'
 import BoardServerData from './BoardServerData'
 
 // ISR 설정 - 서버 컴포넌트에서 초기 데이터 캐싱
@@ -28,23 +28,10 @@ async function BoardPage({
           </div>
         }
       >
-        <BoardClientWrapper />
+        <BoardClientBridge />
       </Suspense>
     </div>
   )
-}
-
-// 클라이언트 데이터 읽기 및 BoardClient에 전달하는 래퍼
-function BoardClientWrapper() {
-  // 서버에서 제공한 초기 데이터 읽기
-  const initialDataScript =
-    typeof document !== 'undefined'
-      ? document.getElementById('initial-posts-data')?.textContent
-      : null
-
-  const initialData = initialDataScript ? JSON.parse(initialDataScript) : undefined
-
-  return <BoardClient initialData={initialData} />
 }
 
 export default BoardPage
