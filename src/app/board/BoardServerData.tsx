@@ -101,8 +101,20 @@ async function getInitialPosts(
     // 미리보기 텍스트 생성 및 정리 (HTML 태그 제거 + 이미지 정보 추출)
     const processedPosts = actualPosts.map(post => {
       const preview = createTextPreview(post.content || '', 150)
+      // 클라이언트로 보내는 초기 데이터는 필요한 필드만 유지하여 페이로드 최소화
       return {
-        ...post,
+        id: post.id,
+        title: post.title,
+        content: '', // 대용량 본문은 초기 페이로드에서 제외
+        content_format: post.content_format,
+        category: post.category,
+        author_id: post.author_id,
+        created_at: post.created_at,
+        updated_at: post.updated_at,
+        is_pinned: post.is_pinned,
+        like_count: post.like_count,
+        author: post.author,
+        // 미리보기/첨부 통계는 서버에서 계산해 전달
         content_preview: preview.text,
         preview_has_images: preview.hasImages,
         preview_image_count: preview.imageCount,
@@ -115,8 +127,8 @@ async function getInitialPosts(
           video_count: 0,
           audio_count: 0,
         },
-      }
-    }) as unknown as Post[]
+      } as unknown as Post
+    })
 
     return {
       posts: processedPosts,
