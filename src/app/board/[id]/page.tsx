@@ -106,8 +106,8 @@ async function getInitialPostData(postId: string): Promise<InitialPostData | nul
       })
 
   try {
-    // 게시글 기본 정보 조회
-    const { data: post, error: postError } = await supabaseAdmin
+    // 병렬 조회로 왕복 시간 최소화
+    const postQuery = supabaseAdmin
       .from('posts')
       .select(
         `
@@ -131,13 +131,7 @@ async function getInitialPostData(postId: string): Promise<InitialPostData | nul
       .not('is_deleted', 'is', true)
       .single()
 
-    if (postError || !post) {
-      console.error('서버 게시글 조회 오류:', postError)
-      return null
-    }
-
-    // 댓글 조회
-    const { data: comments = [] } = await supabaseAdmin
+    const commentsQuery = supabaseAdmin
       .from('comments')
       .select(
         `
@@ -156,12 +150,19 @@ async function getInitialPostData(postId: string): Promise<InitialPostData | nul
       .eq('is_deleted', false)
       .order('created_at', { ascending: true })
 
-    // 첨부파일 조회
-    const { data: attachments = [] } = await supabaseAdmin
+    const attachmentsQuery = supabaseAdmin
       .from('post_attachments')
       .select('*')
       .eq('post_id', postId)
       .order('created_at', { ascending: true })
+
+    const [{ data: post, error: postError }, { data: comments = [] }, { data: attachments = [] }] =
+      await Promise.all([postQuery, commentsQuery, attachmentsQuery])
+
+    if (postError || !post) {
+      console.error('서버 게시글 조회 오류:', postError)
+      return null
+    }
 
     return {
       post: {
@@ -220,8 +221,23 @@ export default async function PostDetailPage({ params }: { params: Promise<{ id:
 
   return (
     <div>
-      {/* 서버에서 초기 데이터 제공 (ISR 캐시됨) */}
-      <PostDetailServerData postId={postId} />
+      {/* 서버에서 초기 데이터 제공 (ISR 캐시됨) - 스트리밍을 위해 Suspense로 감싸기 */}
+      <Suspense
+        fallback={
+          <div className="container mx-auto px-4 pt-24 md:pt-28">
+            <div className="max-w-4xl mx-auto">
+              <div className="h-6 w-48 bg-gray-200 rounded mb-4 animate-pulse" />
+              <div className="bg-white rounded-lg shadow p-6 animate-pulse">
+                <div className="w-24 h-5 bg-gray-200 rounded mb-3" />
+                <div className="w-3/4 h-8 bg-gray-200 rounded mb-4" />
+                <div className="w-full h-24 bg-gray-200 rounded" />
+              </div>
+            </div>
+          </div>
+        }
+      >
+        <PostDetailServerData postId={postId} />
+      </Suspense>
 
       {/* 클라이언트 컴포넌트로 하이브리드 렌더링 */}
       <Suspense
