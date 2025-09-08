@@ -116,6 +116,11 @@ export async function middleware(request: NextRequest) {
     return res
   }
 
+  // Fast-path: skip system settings fetch for board pages to reduce first-load latency
+  if (request.nextUrl.pathname.startsWith('/board')) {
+    return res
+  }
+
   // 시스템 설정 확인
   const systemSettings = await getSystemSettings(supabase)
 
