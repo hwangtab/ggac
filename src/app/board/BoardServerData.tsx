@@ -1,5 +1,6 @@
 // 서버 컴포넌트: 초기 게시글 데이터를 ISR로 제공
 import { createClient } from '@supabase/supabase-js'
+import { createTextPreview } from '@/utils/textUtils'
 import type { Post } from '@/types'
 
 // ISR 설정 - 60초마다 재검증
@@ -97,22 +98,25 @@ async function getInitialPosts(
       nextCursor = `${encodeURIComponent(lastPost.created_at)}|${lastPost.id}`
     }
 
-    // 미리보기 텍스트 생성 및 정리
-    const processedPosts = actualPosts.map(post => ({
-      ...post,
-      content_preview: post.content?.substring(0, 150) + '...' || '',
-      preview_has_images: false, // 서버에서는 간단하게 처리
-      preview_image_count: 0,
-      comment_count: 0, // 초기값, 클라이언트에서 업데이트
-      is_liked: false, // 초기값, 클라이언트에서 업데이트
-      attachments_stats: {
-        total_attachments: 0,
-        image_count: 0,
-        document_count: 0,
-        video_count: 0,
-        audio_count: 0,
-      },
-    })) as unknown as Post[]
+    // 미리보기 텍스트 생성 및 정리 (HTML 태그 제거 + 이미지 정보 추출)
+    const processedPosts = actualPosts.map(post => {
+      const preview = createTextPreview(post.content || '', 150)
+      return {
+        ...post,
+        content_preview: preview.text,
+        preview_has_images: preview.hasImages,
+        preview_image_count: preview.imageCount,
+        comment_count: 0, // 초기값, 클라이언트에서 업데이트
+        is_liked: false, // 초기값, 클라이언트에서 업데이트
+        attachments_stats: {
+          total_attachments: 0,
+          image_count: 0,
+          document_count: 0,
+          video_count: 0,
+          audio_count: 0,
+        },
+      }
+    }) as unknown as Post[]
 
     return {
       posts: processedPosts,

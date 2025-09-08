@@ -9,7 +9,7 @@ import CommentSection from './CommentSection'
 import PostLikeButton from './PostLikeButton'
 import PostAttachmentPreview from './PostAttachmentPreview'
 import { FiImage, FiFile, FiVideo, FiMusic } from 'react-icons/fi'
-import { createTextPreview } from '@/utils/textUtils'
+import { createTextPreview, stripHtmlTags } from '@/utils/textUtils'
 
 import type { Post } from '@/types'
 
@@ -169,7 +169,8 @@ const PostList: React.FC<PostListProps> = ({
                   const hasImages = (post as any).preview_has_images as boolean | undefined
                   const imageCount = (post as any).preview_image_count as number | undefined
                   const fallback = serverPreview ? null : createTextPreview(post.content, 150)
-                  const text = serverPreview || fallback!.text
+                  const rawText = serverPreview ?? fallback!.text
+                  const text = serverPreview ? stripHtmlTags(serverPreview) : rawText
                   const truncated = fallback ? fallback.isTruncated : text.length > 150
                   const showImages = hasImages ?? fallback!.hasImages
                   const imgCount = imageCount ?? fallback!.imageCount
