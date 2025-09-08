@@ -51,12 +51,12 @@ interface PostData {
 interface PostListResponse {
   posts: PostData[]
   pagination: {
-    current_page: number
-    total_pages: number
-    total_count: number
-    per_page: number
+    limit: number
     has_next: boolean
     has_prev: boolean
+    next_cursor: string | null
+    prev_cursor: string | null
+    total_count?: number // 선택적, 성능상 이유로 제외 가능
   }
   filters: {
     category: string | null
@@ -114,8 +114,10 @@ export async function GET(request: NextRequest) {
       const searchRaw = searchParams.get('search') || ''
       const includeLikes = searchParams.get('include_likes') !== 'false'
 
-      // 페이지네이션 파라미터 파싱
-      const { page, limit, offset } = parsePaginationParams(searchParams, 20, 50)
+      // 키셋 페이지네이션 파라미터 파싱
+      const limit = Math.min(parseInt(searchParams.get('limit') || '20', 10), 50)
+      const cursor = searchParams.get('cursor') // created_at:id 형태
+      const direction = searchParams.get('direction') || 'next' // next | prev
 
       // 정렬 파라미터 파싱
       const allowedSortFields = ['created_at', 'updated_at', 'like_count', 'title']
@@ -165,7 +167,7 @@ export async function GET(request: NextRequest) {
         )
       `
         )
-        .or('is_deleted.is.false,is_deleted.is.null')
+        .not('is_deleted', 'is', true)
 
       // 카테고리 필터 적용
       if (category !== '전체') {
@@ -192,18 +194,50 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      // 정렬 적용
-      const ascending = sortOrder === 'asc'
-      if (sortBy === 'created_at') {
-        // 고정 게시글을 먼저 표시하고, 그 다음 생성일 순
-        query = query.order('is_pinned', { ascending: false, nullsFirst: false })
-        query = query.order('created_at', { ascending })
+      // 키셋 페이지네이션 적용
+      if (cursor && sortBy === 'created_at') {
+        try {
+          // ISO 타임스탬프에 콜론이 포함되므로 파이프(|)로 구분
+          const [encodedCreatedAt, cursorId] = cursor.split('|')
+          const cursorCreatedAt = encodedCreatedAt ? decodeURIComponent(encodedCreatedAt) : null
+
+          if (cursorCreatedAt && cursorId && !isNaN(Date.parse(cursorCreatedAt))) {
+            if (direction === 'prev') {
+              // 이전 페이지: created_at > cursor 또는 (created_at = cursor AND id > cursor_id)
+              query = query.or(
+                `created_at.gt.${cursorCreatedAt},and(created_at.eq.${cursorCreatedAt},id.gt.${cursorId})`
+              )
+              query = query.order('created_at', { ascending: true })
+              query = query.order('id', { ascending: true })
+            } else {
+              // 다음 페이지: created_at < cursor 또는 (created_at = cursor AND id < cursor_id)
+              query = query.or(
+                `created_at.lt.${cursorCreatedAt},and(created_at.eq.${cursorCreatedAt},id.lt.${cursorId})`
+              )
+              query = query.order('created_at', { ascending: false })
+              query = query.order('id', { ascending: false })
+            }
+          }
+        } catch (error) {
+          console.warn('커서 파싱 오류, 첫 페이지로 폴백:', error)
+          // 커서 파싱 실패 시 첫 페이지로 폴백
+        }
       } else {
-        query = query.order(sortBy, { ascending })
+        // 첫 페이지 또는 비시간순 정렬
+        const ascending = sortOrder === 'asc'
+        if (sortBy === 'created_at') {
+          // 고정 게시글을 먼저 표시하고, 그 다음 생성일 순
+          query = query.order('is_pinned', { ascending: false, nullsFirst: false })
+          query = query.order('created_at', { ascending })
+          query = query.order('id', { ascending })
+        } else {
+          query = query.order(sortBy, { ascending })
+          query = query.order('id', { ascending })
+        }
       }
 
-      // 페이지네이션 적용
-      query = query.range(offset, offset + limit - 1)
+      // limit + 1로 다음 페이지 존재 여부 확인
+      query = query.limit(limit + 1)
 
       const { data: posts, error: postsError } = await query
 
@@ -211,38 +245,25 @@ export async function GET(request: NextRequest) {
         throw new Error(`게시글 조회 실패: ${postsError.message}`)
       }
 
-      // 🚀 성능 최적화: 배치로 모든 부가 정보 조회 (RPC 우선, 실패 시 폴백)
-      const postIds = (posts || []).map(post => post.id)
+      // 키셋 페이지네이션: 다음 페이지 존재 여부 확인 및 실제 데이터 분리
+      let actualPosts = posts || []
+      const hasNext = actualPosts.length > limit
+
+      if (hasNext) {
+        actualPosts = actualPosts.slice(0, limit) // 초과분 제거
+      }
+
+      const postIds = actualPosts.map(post => post.id)
 
       if (postIds.length === 0) {
-        // 게시글이 없는 경우 총 개수만 조회
-        let countQuery = db
-          .from('posts')
-          .select('id', { count: 'exact', head: true })
-          .or('is_deleted.is.false,is_deleted.is.null')
-
-        if (category !== '전체') {
-          countQuery = countQuery.eq('category', category)
-        }
-
-        if (search) {
-          const escapedSearch = search.replace(/'/g, "''").replace(/\\/g, '\\\\')
-          countQuery = countQuery.or(
-            `title.ilike.%${escapedSearch}%,content.ilike.%${escapedSearch}%`
-          )
-        }
-
-        const { count } = await countQuery
-
         const result: PostListResponse = {
           posts: [],
           pagination: {
-            current_page: page,
-            total_pages: 0,
-            total_count: count || 0,
-            per_page: limit,
+            limit,
             has_next: false,
-            has_prev: false,
+            has_prev: !!cursor, // 커서가 있으면 이전 페이지 존재
+            next_cursor: null,
+            prev_cursor: null,
           },
           filters: {
             category: category === '전체' ? null : category,
@@ -296,37 +317,8 @@ export async function GET(request: NextRequest) {
         .select('post_id, file_type')
         .in('post_id', postIds)
 
-      let countQuery = db
-        .from('posts')
-        .select('id', { count: 'exact', head: true })
-        .or('is_deleted.is.false,is_deleted.is.null')
-
-      if (category !== '전체') {
-        countQuery = countQuery.eq('category', category)
-      }
-
-      if (search) {
-        const escapedSearch = search.replace(/'/g, "''").replace(/\\/g, '\\\\')
-        countQuery = countQuery.or(
-          `title.ilike.%${escapedSearch}%,content.ilike.%${escapedSearch}%`
-        )
-      }
-
-      const [
-        { data: commentCounts },
-        { data: userLikes },
-        { data: attachmentRows },
-        { count, error: countError },
-      ] = await Promise.all([
-        commentCountPromise,
-        userLikesPromise,
-        attachmentsStatsPromise,
-        countQuery,
-      ])
-
-      if (countError) {
-        throw new Error(`게시글 수 조회 실패: ${countError.message}`)
-      }
+      const [{ data: commentCounts }, { data: userLikes }, { data: attachmentRows }] =
+        await Promise.all([commentCountPromise, userLikesPromise, attachmentsStatsPromise])
 
       // 게시글별 댓글 수 계산
       const commentCountMap = new Map<string, number>()
@@ -399,8 +391,8 @@ export async function GET(request: NextRequest) {
         })
       }
 
-      // 🚀 최적화된 결과 조합
-      const postsWithExtra = (posts || []).map(raw => {
+      // 🚀 최적화된 결과 조합 (실제 반환할 posts 사용)
+      const postsWithExtra = actualPosts.map(raw => {
         const preview = createTextPreview(raw.content || '', 150)
         const post: any = {
           id: raw.id,
@@ -430,18 +422,33 @@ export async function GET(request: NextRequest) {
         return post
       }) as any[]
 
-      const totalCount = count || 0
-      const totalPages = Math.ceil(totalCount / limit)
+      // 커서 생성: 첫 번째와 마지막 게시글 기준
+      let nextCursor: string | null = null
+      let prevCursor: string | null = null
+
+      if (postsWithExtra.length > 0) {
+        const lastPost = postsWithExtra[postsWithExtra.length - 1]
+        const firstPost = postsWithExtra[0]
+
+        if (hasNext) {
+          // ISO 타임스탬프에 콜론이 포함되므로 파이프(|)를 구분자로 사용
+          nextCursor = `${encodeURIComponent(lastPost.created_at)}|${lastPost.id}`
+        }
+
+        if (cursor) {
+          // 이미 커서를 통해 접근한 경우, 첫 번째 게시글로 이전 커서 생성
+          prevCursor = `${encodeURIComponent(firstPost.created_at)}|${firstPost.id}`
+        }
+      }
 
       const result: PostListResponse = {
         posts: postsWithExtra,
         pagination: {
-          current_page: page,
-          total_pages: totalPages,
-          total_count: totalCount,
-          per_page: limit,
-          has_next: page < totalPages,
-          has_prev: page > 1,
+          limit,
+          has_next: hasNext,
+          has_prev: !!cursor,
+          next_cursor: nextCursor,
+          prev_cursor: prevCursor,
         },
         filters: {
           category: category === '전체' ? null : category,
@@ -454,11 +461,12 @@ export async function GET(request: NextRequest) {
       // 🚀 성능 측정 완료
       const endTime = Date.now()
       const duration = endTime - startTime
-      console.log('📊 [PERFORMANCE] API 응답 완료:', {
+      console.log('📊 [PERFORMANCE] API 응답 완료 (키셋 페이지네이션):', {
         duration: `${duration}ms`,
         postsCount: postsWithExtra.length,
-        totalCount,
-        dbQueries: includeLikes && userId ? 3 : 2, // posts + userLikes(optional) + count (comments in column)
+        hasNext,
+        cursor: cursor || 'first_page',
+        dbQueries: includeLikes && userId ? 3 : 2, // posts + userLikes(optional) (no count query)
         cacheHit: false, // 첫 로드는 항상 cache miss
         timestamp: new Date().toISOString(),
       })

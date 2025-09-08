@@ -5,11 +5,11 @@ import { useRouter } from 'next/navigation'
 import { BOARD_CATEGORIES, BOARD_CATEGORY_STYLES } from '@/constants/categories'
 
 import CommentSection from './CommentSection'
-import PaginationControls from './PaginationControls'
+// import PaginationControls from './PaginationControls' // 키셋 페이지네이션으로 대체
 import PostLikeButton from './PostLikeButton'
 import PostAttachmentPreview from './PostAttachmentPreview'
 import { FiImage, FiFile, FiVideo, FiMusic } from 'react-icons/fi'
-import { createTextPreview } from '@/utils/textUtils'
+import { createTextPreview, stripHtmlTags } from '@/utils/textUtils'
 
 import type { Post } from '@/types'
 
@@ -17,13 +17,12 @@ interface PostListProps {
   posts: Post[]
   currentUserId?: string
   isMember: boolean
-  // 페이지네이션 props
-  currentPage?: number
-  totalPages?: number
-  totalCount?: number
-  pageSize?: number
+  // 키셋 페이지네이션 props
+  hasNext?: boolean
+  hasPrev?: boolean
   loading?: boolean
-  onPageChange?: (page: number) => void
+  onNextPage?: () => void
+  onPrevPage?: () => void
   onCategoryChange?: (category: string) => void
 }
 
@@ -33,12 +32,11 @@ const PostList: React.FC<PostListProps> = ({
   posts,
   currentUserId,
   isMember,
-  currentPage = 1,
-  totalPages = 1,
-  totalCount = 0,
-  pageSize = 10,
+  hasNext = false,
+  hasPrev = false,
   loading = false,
-  onPageChange,
+  onNextPage,
+  onPrevPage,
   onCategoryChange,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('전체')
@@ -116,7 +114,7 @@ const PostList: React.FC<PostListProps> = ({
       {loading ? (
         <div className="space-y-4">
           {/* 로딩 스켈레톤 */}
-          {[...Array(pageSize)].map((_, index) => (
+          {[...Array(5)].map((_, index) => (
             <div key={index} className="bg-white p-6 rounded-lg shadow-md animate-pulse">
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-12 h-5 bg-gray-200 rounded-full"></div>
@@ -171,7 +169,8 @@ const PostList: React.FC<PostListProps> = ({
                   const hasImages = (post as any).preview_has_images as boolean | undefined
                   const imageCount = (post as any).preview_image_count as number | undefined
                   const fallback = serverPreview ? null : createTextPreview(post.content, 150)
-                  const text = serverPreview || fallback!.text
+                  const rawText = serverPreview ?? fallback!.text
+                  const text = serverPreview ? stripHtmlTags(serverPreview) : rawText
                   const truncated = fallback ? fallback.isTruncated : text.length > 150
                   const showImages = hasImages ?? fallback!.hasImages
                   const imgCount = imageCount ?? fallback!.imageCount
@@ -246,17 +245,35 @@ const PostList: React.FC<PostListProps> = ({
         </div>
       )}
 
-      {/* 페이지네이션 컨트롤 */}
-      {onPageChange && totalPages > 1 && (
-        <PaginationControls
-          currentPage={currentPage}
-          totalPages={totalPages}
-          totalCount={totalCount}
-          pageSize={pageSize}
-          onPageChange={onPageChange}
-          loading={loading}
-          className="mt-8"
-        />
+      {/* 키셋 페이지네이션 컨트롤 */}
+      {(hasPrev || hasNext) && (
+        <div className="mt-8 flex justify-between items-center">
+          <button
+            onClick={onPrevPage}
+            disabled={!hasPrev || loading}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              hasPrev && !loading
+                ? 'bg-primary-600 text-white hover:bg-primary-700'
+                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            }`}
+          >
+            ← 이전 페이지
+          </button>
+
+          <span className="text-gray-600">{loading ? '로딩 중...' : '더 많은 게시글'}</span>
+
+          <button
+            onClick={onNextPage}
+            disabled={!hasNext || loading}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              hasNext && !loading
+                ? 'bg-primary-600 text-white hover:bg-primary-700'
+                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            }`}
+          >
+            다음 페이지 →
+          </button>
+        </div>
       )}
     </div>
   )

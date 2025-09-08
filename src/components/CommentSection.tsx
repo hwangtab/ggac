@@ -16,7 +16,12 @@ interface CommentSectionProps {
   initialComments?: CommentWithLikes[]
 }
 
-const CommentSection: React.FC<CommentSectionProps> = ({ postId, currentUserId, isMember, initialComments }) => {
+const CommentSection: React.FC<CommentSectionProps> = ({
+  postId,
+  currentUserId,
+  isMember,
+  initialComments,
+}) => {
   const [comments, setComments] = useState<CommentWithLikes[]>(initialComments || [])
   const [newComment, setNewComment] = useState('')
   const [loading, setLoading] = useState(false)
@@ -109,16 +114,16 @@ const CommentSection: React.FC<CommentSectionProps> = ({ postId, currentUserId, 
     const authorIds = Array.from(new Set(comments.map(comment => comment.author_id)))
 
     const { data, error } = await supabase
-      .from('member_profiles')
+      .from('public_profiles')
       .select('id, display_name')
       .in('id', authorIds)
 
     if (data && !error) {
       const profileMap: Record<string, string> = {}
       data.forEach((profile: any) => {
-        profileMap[profile.id] = profile.display_name || 'Unknown'
+        profileMap[profile.id] = profile.display_name || '알 수 없는 사용자'
       })
-      setProfiles(profileMap)
+      setProfiles(prev => ({ ...prev, ...profileMap }))
     }
   }, [comments])
 
@@ -126,6 +131,15 @@ const CommentSection: React.FC<CommentSectionProps> = ({ postId, currentUserId, 
     if (initialComments && initialComments.length >= 0) {
       // 초기 데이터가 제공되면 네트워크 요청 생략
       setComments(initialComments)
+      // 초기 댓글에 포함된 작성자명을 우선 매핑하여 즉시 표시
+      const initialMap: Record<string, string> = {}
+      ;(initialComments as any[]).forEach(c => {
+        const name = c?.author?.display_name || c?.author?.name
+        if (name) initialMap[c.author_id] = name
+      })
+      if (Object.keys(initialMap).length > 0) {
+        setProfiles(prev => ({ ...prev, ...initialMap }))
+      }
       return
     }
     fetchComments()
@@ -221,7 +235,9 @@ const CommentSection: React.FC<CommentSectionProps> = ({ postId, currentUserId, 
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">
                           <span className="font-medium text-sm text-gray-900">
-                            {profiles[popularComment.author_id] || 'Loading...'}
+                            {(popularComment as any)?.author?.display_name ||
+                              profiles[popularComment.author_id] ||
+                              '알 수 없는 사용자'}
                           </span>
                           <span className="text-xs text-gray-500">
                             {new Date(popularComment.created_at).toLocaleDateString('ko-KR', {
@@ -232,7 +248,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({ postId, currentUserId, 
                             })}
                           </span>
                         </div>
-                        <p className="text-gray-700 text-sm leading-relaxed mb-2">
+                        <p className="text-gray-700 text-sm leading-relaxed mb-2 whitespace-pre-line">
                           {popularComment.content}
                         </p>
                         <div className="flex items-center gap-2">
@@ -273,7 +289,9 @@ const CommentSection: React.FC<CommentSectionProps> = ({ postId, currentUserId, 
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
                         <span className="font-medium text-sm text-gray-900">
-                          {profiles[comment.author_id] || 'Loading...'}
+                          {(comment as any)?.author?.display_name ||
+                            profiles[comment.author_id] ||
+                            '알 수 없는 사용자'}
                         </span>
                         <span className="text-xs text-gray-500">
                           {new Date(comment.created_at).toLocaleDateString('ko-KR', {
@@ -284,7 +302,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({ postId, currentUserId, 
                           })}
                         </span>
                       </div>
-                      <p className="text-gray-700 text-sm leading-relaxed mb-2">
+                      <p className="text-gray-700 text-sm leading-relaxed mb-2 whitespace-pre-line">
                         {comment.content}
                       </p>
                       <div className="flex items-center gap-2">
