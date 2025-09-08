@@ -22,13 +22,21 @@ async function getInitialPosts(
   limit: number = 20
 ): Promise<InitialPostsData> {
   // Service role 클라이언트 생성 (서버에서만 사용)
-  const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    {
-      auth: { autoRefreshToken: false, persistSession: false },
-    }
-  )
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!url) {
+    console.error('NEXT_PUBLIC_SUPABASE_URL이 설정되지 않았습니다')
+    return { posts: [], hasNext: false, nextCursor: null }
+  }
+
+  const supabaseAdmin = key
+    ? createClient(url, key, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      })
+    : createClient(url, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '', {
+        auth: { autoRefreshToken: false, persistSession: false },
+      })
 
   try {
     let query = supabaseAdmin
@@ -50,7 +58,7 @@ async function getInitialPosts(
         )
       `
       )
-      .or('is_deleted.is.false,is_deleted.is.null')
+      .not('is_deleted', 'is', true)
 
     // 카테고리 필터 적용
     if (category !== '전체') {
@@ -85,7 +93,8 @@ async function getInitialPosts(
     let nextCursor: string | null = null
     if (hasNext && actualPosts.length > 0) {
       const lastPost = actualPosts[actualPosts.length - 1]
-      nextCursor = `${lastPost.created_at}:${lastPost.id}`
+      // ISO 타임스탬프에 콜론이 포함되므로 파이프(|)를 구분자로 사용
+      nextCursor = `${encodeURIComponent(lastPost.created_at)}|${lastPost.id}`
     }
 
     // 미리보기 텍스트 생성 및 정리
@@ -112,6 +121,7 @@ async function getInitialPosts(
     }
   } catch (error) {
     console.error('초기 게시글 데이터 조회 실패:', error)
+    console.error('카테고리:', category, '제한:', limit)
     return {
       posts: [],
       hasNext: false,
