@@ -20,7 +20,7 @@ const OptimizedImage = memo(function OptimizedImage({
   onLoadStart,
   onLoad: onLoadProp,
   onError: onErrorProp,
-  suppressSkeleton = false // 외부 스켈레톤 사용 시 내부 스켈레톤 비활성화
+  suppressSkeleton = false, // 외부 스켈레톤 사용 시 내부 스켈레톤 비활성화
 }: OptimizedImageProps) {
   const [hasError, setHasError] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -36,7 +36,7 @@ const OptimizedImage = memo(function OptimizedImage({
 
   const handleError = () => {
     // 최적화된 이미지 폴백 체인: WebP → JPG → PNG (JPEG 단계 제거로 속도 향상)
-    
+
     // 1단계: WebP → JPG 시도 (가장 일반적인 형식)
     if (currentSrc.endsWith('.webp')) {
       const jpgSrc = currentSrc.replace('.webp', '.jpg')
@@ -44,7 +44,7 @@ const OptimizedImage = memo(function OptimizedImage({
       setIsLoading(true)
       return
     }
-    
+
     // 2단계: JPG → PNG 시도 (최종 폴백)
     if (currentSrc.endsWith('.jpg')) {
       const pngSrc = currentSrc.replace('.jpg', '.png')
@@ -52,7 +52,7 @@ const OptimizedImage = memo(function OptimizedImage({
       setIsLoading(true)
       return
     }
-    
+
     // 최종 실패 시에만 fallbackText 표시
     setHasError(true)
     setIsLoading(false)
@@ -66,7 +66,9 @@ const OptimizedImage = memo(function OptimizedImage({
 
   if (hasError) {
     return (
-      <div className={`bg-gradient-to-br from-primary-100 to-accent-100 flex items-center justify-center ${className}`}>
+      <div
+        className={`bg-gradient-to-br from-primary-100 to-accent-100 flex items-center justify-center ${className}`}
+      >
         <span className="text-primary-600 font-medium text-center px-4 text-2xl font-sans">
           {fallbackText || alt.slice(0, 3)}
         </span>
@@ -84,19 +86,23 @@ const OptimizedImage = memo(function OptimizedImage({
     className,
     // Next.js가 자동으로 WebP/AVIF 변환하므로 placeholder는 기본값 사용
     placeholder: 'blur' as const,
-    blurDataURL: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAIAAoDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAhEAACAQMDBQAAAAAAAAAAAAABAgMABAUGIWGRkqGx0f/EABUBAQEAAAAAAAAAAAAAAAAAAAMF/8QAGhEAAgIDAAAAAAAAAAAAAAAAAAECEgMRkf/aAAwDAQACEQMRAD8AltJagyeH0AthI5xdrLcNM91BF5pX2HaH9bcfaSXWGaRmknyJckliyjqTzSlT54b6bk+h0R//2Q==',
-    ...(fill 
-      ? { 
-          fill: true, 
+    blurDataURL:
+      'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAIAAoDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAhEAACAQMDBQAAAAAAAAAAAAABAgMABAUGIWGRkqGx0f/EABUBAQEAAAAAAAAAAAAAAAAAAAMF/8QAGhEAAgIDAAAAAAAAAAAAAAAAAAECEgMRkf/aAAwDAQACEQMRAD8AltJagyeH0AthI5xdrLcNM91BF5pX2HaH9bcfaSXWGaRmknyJckliyjqTzSlT54b6bk+h0R//2Q==',
+    ...(fill
+      ? {
+          fill: true,
           // 더 세밀한 sizes 속성으로 대역폭 최적화
-          sizes: sizes || '(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw'
+          sizes:
+            sizes ||
+            '(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw',
         }
-      : { 
-          width: width || 800, 
+      : {
+          width: width || 800,
           height: height || 600,
-          sizes: sizes || '(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw'
-        }
-    )
+          sizes:
+            sizes ||
+            '(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw',
+        }),
   }
 
   // Progressive loading with loading indicator
@@ -108,10 +114,12 @@ const OptimizedImage = memo(function OptimizedImage({
           <div className="w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin"></div>
         </div>
       )}
-      <Image 
-        {...imageProps} 
-        alt={alt || ''} 
-        className={`transition-opacity duration-500 ${isLoading ? 'opacity-0' : 'opacity-100'} ${fill ? '' : className}`}
+      <Image
+        {...imageProps}
+        alt={alt || ''}
+        className={`transition-opacity duration-500 ${
+          suppressSkeleton ? '' : isLoading ? 'opacity-0' : 'opacity-100'
+        } ${fill ? '' : className}`}
       />
     </div>
   )
