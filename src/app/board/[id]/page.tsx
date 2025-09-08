@@ -89,13 +89,21 @@ interface InitialPostData {
 async function getInitialPostData(postId: string): Promise<InitialPostData | null> {
   // Service role 클라이언트 생성 (서버에서만 사용)
   const { createClient } = await import('@supabase/supabase-js')
-  const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    {
-      auth: { autoRefreshToken: false, persistSession: false },
-    }
-  )
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!url) {
+    console.error('NEXT_PUBLIC_SUPABASE_URL이 설정되지 않았습니다')
+    return null
+  }
+
+  const supabaseAdmin = key
+    ? createClient(url, key, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      })
+    : createClient(url, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '', {
+        auth: { autoRefreshToken: false, persistSession: false },
+      })
 
   try {
     // 게시글 기본 정보 조회
@@ -120,7 +128,7 @@ async function getInitialPostData(postId: string): Promise<InitialPostData | nul
       `
       )
       .eq('id', postId)
-      .or('is_deleted.is.false,is_deleted.is.null')
+      .not('is_deleted', 'is', true)
       .single()
 
     if (postError || !post) {

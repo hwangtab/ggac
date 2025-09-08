@@ -167,7 +167,7 @@ export async function GET(request: NextRequest) {
         )
       `
         )
-        .or('is_deleted.is.false,is_deleted.is.null')
+        .not('is_deleted', 'is', true)
 
       // 카테고리 필터 적용
       if (category !== '전체') {
@@ -196,23 +196,31 @@ export async function GET(request: NextRequest) {
 
       // 키셋 페이지네이션 적용
       if (cursor && sortBy === 'created_at') {
-        const [cursorCreatedAt, cursorId] = cursor.split(':')
-        if (cursorCreatedAt && cursorId) {
-          if (direction === 'prev') {
-            // 이전 페이지: created_at > cursor 또는 (created_at = cursor AND id > cursor_id)
-            query = query.or(
-              `created_at.gt.${cursorCreatedAt},and(created_at.eq.${cursorCreatedAt},id.gt.${cursorId})`
-            )
-            query = query.order('created_at', { ascending: true })
-            query = query.order('id', { ascending: true })
-          } else {
-            // 다음 페이지: created_at < cursor 또는 (created_at = cursor AND id < cursor_id)
-            query = query.or(
-              `created_at.lt.${cursorCreatedAt},and(created_at.eq.${cursorCreatedAt},id.lt.${cursorId})`
-            )
-            query = query.order('created_at', { ascending: false })
-            query = query.order('id', { ascending: false })
+        try {
+          // ISO 타임스탬프에 콜론이 포함되므로 파이프(|)로 구분
+          const [encodedCreatedAt, cursorId] = cursor.split('|')
+          const cursorCreatedAt = encodedCreatedAt ? decodeURIComponent(encodedCreatedAt) : null
+
+          if (cursorCreatedAt && cursorId && !isNaN(Date.parse(cursorCreatedAt))) {
+            if (direction === 'prev') {
+              // 이전 페이지: created_at > cursor 또는 (created_at = cursor AND id > cursor_id)
+              query = query.or(
+                `created_at.gt.${cursorCreatedAt},and(created_at.eq.${cursorCreatedAt},id.gt.${cursorId})`
+              )
+              query = query.order('created_at', { ascending: true })
+              query = query.order('id', { ascending: true })
+            } else {
+              // 다음 페이지: created_at < cursor 또는 (created_at = cursor AND id < cursor_id)
+              query = query.or(
+                `created_at.lt.${cursorCreatedAt},and(created_at.eq.${cursorCreatedAt},id.lt.${cursorId})`
+              )
+              query = query.order('created_at', { ascending: false })
+              query = query.order('id', { ascending: false })
+            }
           }
+        } catch (error) {
+          console.warn('커서 파싱 오류, 첫 페이지로 폴백:', error)
+          // 커서 파싱 실패 시 첫 페이지로 폴백
         }
       } else {
         // 첫 페이지 또는 비시간순 정렬
@@ -423,12 +431,13 @@ export async function GET(request: NextRequest) {
         const firstPost = postsWithExtra[0]
 
         if (hasNext) {
-          nextCursor = `${lastPost.created_at}:${lastPost.id}`
+          // ISO 타임스탬프에 콜론이 포함되므로 파이프(|)를 구분자로 사용
+          nextCursor = `${encodeURIComponent(lastPost.created_at)}|${lastPost.id}`
         }
 
         if (cursor) {
           // 이미 커서를 통해 접근한 경우, 첫 번째 게시글로 이전 커서 생성
-          prevCursor = `${firstPost.created_at}:${firstPost.id}`
+          prevCursor = `${encodeURIComponent(firstPost.created_at)}|${firstPost.id}`
         }
       }
 
