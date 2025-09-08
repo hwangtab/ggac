@@ -1,6 +1,7 @@
 // 서버 컴포넌트: 초기 게시글 데이터를 ISR로 제공
 import { createClient } from '@supabase/supabase-js'
 import { createTextPreview } from '@/utils/textUtils'
+import { headers } from 'next/headers'
 import type { Post } from '@/types'
 
 // ISR 설정 - 60초마다 재검증
@@ -148,6 +149,29 @@ async function getInitialPosts(
 
 // 서버 컴포넌트
 export default async function BoardServerData({ category = '전체', limit = 20 }: ServerDataProps) {
+  // Try edge-cached API first
+  try {
+    const h = await headers()
+    const proto = h.get('x-forwarded-proto') || 'https'
+    const host = (h.get('x-forwarded-host') || h.get('host') || '') as string
+    const url = `${proto}://${host}/api/board/posts?category=${encodeURIComponent(category)}&limit=${limit}`
+    const res = await fetch(url, {
+      next: { revalidate: 60, tags: ['board-initial', `board-${category}`] },
+    })
+    if (res.ok) {
+      const json = await res.json()
+      return (
+        <script
+          id="initial-posts-data"
+          type="application/json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(json) }}
+        />
+      )
+    }
+  } catch (e) {
+    console.warn('Board API fetch failed, falling back to direct query:', e)
+  }
+
   const initialData = await getInitialPosts(category, limit)
 
   // 클라이언트 컴포넌트에 데이터 전달을 위해 script 태그로 삽입
