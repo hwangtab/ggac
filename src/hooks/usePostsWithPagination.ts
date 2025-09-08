@@ -5,25 +5,31 @@ import { supabase } from '../lib/supabase/client'
 import type { Post, PostWithLikes, SupabaseRealtimePayload } from '@/types'
 
 interface UsePostsWithPaginationProps {
-  page: number
-  pageSize: number
+  limit: number
   category?: string
+  cursor?: string | null
 }
 
 interface PostsResult {
   posts: PostWithLikes[]
-  totalCount: number
+  hasNext: boolean
+  hasPrev: boolean
+  nextCursor: string | null
+  prevCursor: string | null
   loading: boolean
   error: string | null
 }
 
 export const usePostsWithPagination = ({
-  page,
-  pageSize,
+  limit,
   category,
+  cursor,
 }: UsePostsWithPaginationProps): PostsResult => {
   const [posts, setPosts] = useState<PostWithLikes[]>([])
-  const [totalCount, setTotalCount] = useState(0)
+  const [hasNext, setHasNext] = useState(false)
+  const [hasPrev, setHasPrev] = useState(false)
+  const [nextCursor, setNextCursor] = useState<string | null>(null)
+  const [prevCursor, setPrevCursor] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   // 요청 중복 방지 및 과도한 재요청 방지
@@ -44,9 +50,9 @@ export const usePostsWithPagination = ({
 
     // 🚀 성능 측정 시작
     const startTime = Date.now()
-    console.log('📊 [HOOK PERFORMANCE] 게시글 로딩 시작:', {
-      page,
-      pageSize,
+    console.log('📊 [HOOK PERFORMANCE] 게시글 로딩 시작 (키셋):', {
+      limit,
+      cursor,
       category,
       timestamp: new Date().toISOString(),
     })
@@ -56,12 +62,12 @@ export const usePostsWithPagination = ({
       setLoading(true)
       setError(null)
 
-      // 🚀 최적화된 단일 API 호출: 모든 데이터를 한 번에 가져옴
+      // 🚀 최적화된 단일 API 호출: 키셋 페이지네이션
       const params = new URLSearchParams({
-        page: page.toString(),
-        limit: pageSize.toString(),
+        limit: limit.toString(),
         include_likes: 'true',
         ...(category && category !== '전체' && { category }),
+        ...(cursor && { cursor }),
       })
 
       // API 호출을 캐싱과 함께 수행
@@ -103,15 +109,19 @@ export const usePostsWithPagination = ({
       }))
 
       setPosts(postsWithLikes)
-      setTotalCount(pagination.total_count)
+      setHasNext(pagination.has_next)
+      setHasPrev(pagination.has_prev)
+      setNextCursor(pagination.next_cursor)
+      setPrevCursor(pagination.prev_cursor)
 
       // 🚀 성능 측정 완료
       const endTime = Date.now()
       const duration = endTime - startTime
-      console.log('📊 [HOOK PERFORMANCE] 게시글 로딩 완료:', {
+      console.log('📊 [HOOK PERFORMANCE] 게시글 로딩 완료 (키셋):', {
         duration: `${duration}ms`,
         postsLoaded: postsWithLikes.length,
-        totalCount: pagination.total_count,
+        hasNext: pagination.has_next,
+        nextCursor: pagination.next_cursor,
         cacheUsed: response.headers.get('x-cache-status') || 'unknown',
         timestamp: new Date().toISOString(),
       })
@@ -124,7 +134,7 @@ export const usePostsWithPagination = ({
       inFlightRef.current = false
       setLoading(false)
     }
-  }, [page, pageSize, category])
+  }, [limit, category, cursor])
 
   // 실시간 업데이트 구독 (최적화됨)
   const subscribeToChanges = useCallback(() => {
@@ -237,7 +247,10 @@ export const usePostsWithPagination = ({
 
   return {
     posts,
-    totalCount,
+    hasNext,
+    hasPrev,
+    nextCursor,
+    prevCursor,
     loading,
     error,
   }

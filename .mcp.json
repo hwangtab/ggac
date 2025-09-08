@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "codex-bridge": {
+      "command": "uvx",
+      "args": ["codex-bridge"],
+      "env": {
+        "CODEX_TIMEOUT": "600"
+      }
+    }
+  }
+}
