@@ -38,6 +38,11 @@ const Navigation = () => {
 
   // 스크롤 이벤트: 초기 위치 포함해 즉시 평가
   useEffect(() => {
+    // Hint Next.js to prefetch board route for faster nav
+    try {
+      if (pathname !== '/board') router.prefetch('/board')
+    } catch {}
+
     const handleScroll = () => {
       setIsAtTop(window.scrollY <= 20)
     }
@@ -149,6 +154,7 @@ const Navigation = () => {
                 <Link
                   key={item.href}
                   href={item.href}
+                  prefetch={item.href === '/board'}
                   className={`font-medium transition-colors duration-300 ${
                     pathname === item.href ? activeColor : `${textColor} ${hoverColor}`
                   }`}
@@ -258,6 +264,7 @@ const Navigation = () => {
             </Link>
             <Link
               href="/board"
+              prefetch
               className={`font-medium transition-colors duration-300 text-xs ${
                 pathname === '/board' ? activeColor : `${textColor} ${hoverColor}`
               }`}
@@ -358,6 +365,7 @@ const Navigation = () => {
                 <Link
                   key={item.href}
                   href={item.href}
+                  prefetch={item.href === '/board'}
                   onClick={e => {
                     setIsMenuOpen(false)
                     // Add error handling for board navigation
