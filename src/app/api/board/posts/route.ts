@@ -45,16 +45,16 @@ export async function GET(req: NextRequest) {
     like_count: row.like_count,
     author: { display_name: row.author_display_name },
     content_preview: row.content_preview,
-    preview_has_images: false,
-    preview_image_count: 0,
+    preview_has_images: (row.image_count || 0) > 0,
+    preview_image_count: row.image_count || 0,
     comment_count: 0,
     is_liked: false,
     attachments_stats: {
-      total_attachments: 0,
-      image_count: 0,
-      document_count: 0,
-      video_count: 0,
-      audio_count: 0,
+      total_attachments: row.total_attachments || 0,
+      image_count: row.image_count || 0,
+      document_count: row.document_count || 0,
+      video_count: row.video_count || 0,
+      audio_count: row.audio_count || 0,
     },
   }))
 
