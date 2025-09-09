@@ -102,16 +102,32 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
     }
   }
 
+  // Helper: schedule at idle or next tick
+  const scheduleIdle = (fn: () => void) => {
+    if (typeof (window as any).requestIdleCallback === 'function') {
+      ;(window as any).requestIdleCallback(fn, { timeout: 1500 })
+    } else {
+      setTimeout(fn, 0)
+    }
+  }
+
   useEffect(() => {
     const fetchData = async () => {
       try {
         // 사용자 세션 확인(선택) + 멤버 상태 확인
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
-        const currentUser = session?.user || null
-        setUser(currentUser)
-        await checkMemberStatus(currentUser)
+        // Defer auth/member check to avoid blocking first paint
+        scheduleIdle(async () => {
+          try {
+            const {
+              data: { session },
+            } = await supabase.auth.getSession()
+            const currentUser = session?.user || null
+            setUser(currentUser)
+            await checkMemberStatus(currentUser)
+          } catch (e) {
+            console.warn('[PostDetail] auth/member check deferred failed:', e)
+          }
+        })
 
         // 초기 데이터가 없는 경우에만 API 호출
         if (!initialData) {
@@ -168,47 +184,49 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
           }
         } else {
           // 초기 데이터가 있는 경우 사용자별 데이터만 업데이트 (좋아요 상태 등)
-          if (currentUser && post) {
-            const res = await fetch(`/api/posts/${postId}/user-data?user_id=${currentUser.id}`)
-            if (res.ok) {
-              const userData = await res.json()
-              if (userData.success) {
-                setPost(prev => (prev ? { ...prev, is_liked: userData.data.is_liked } : prev))
+          scheduleIdle(async () => {
+            try {
+              const {
+                data: { session },
+              } = await supabase.auth.getSession()
+              const currUser = session?.user || null
+              if (currUser && post) {
+                const res = await fetch(`/api/posts/${postId}/user-data?user_id=${currUser.id}`)
+                if (res.ok) {
+                  const userData = await res.json()
+                  if (userData.success) {
+                    setPost(prev => (prev ? { ...prev, is_liked: userData.data.is_liked } : prev))
+                  }
+                }
               }
-            }
-          }
+            } catch {}
+          })
         }
 
         // 게시글 조회수 증가 (작성자 본인이 아닌 경우)
-        try {
-          const lastViewTime = localStorage.getItem(`post_view_${postId}`)
-          const now = Date.now()
-
-          // 최근 10분 내에 본 적이 없는 경우에만 조회수 증가
-          if (!lastViewTime || now - parseInt(lastViewTime) > 10 * 60 * 1000) {
-            const viewResponse = await fetch(`/api/posts/${postId}/view`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'x-last-view-time': lastViewTime || '0',
-              },
-            })
-
-            if (viewResponse.ok) {
-              const viewData = await viewResponse.json()
-              console.debug(`[PostDetail] View count updated: ${viewData.view_count}`)
-
-              // 게시글 데이터에 조회수 업데이트
-              setPost(prev => (prev ? { ...prev, view_count: viewData.view_count } : prev))
-
-              // 로컬 스토리지에 조회 시간 저장
-              localStorage.setItem(`post_view_${postId}`, now.toString())
+        // Defer view count update to idle
+        scheduleIdle(async () => {
+          try {
+            const lastViewTime = localStorage.getItem(`post_view_${postId}`)
+            const now = Date.now()
+            if (!lastViewTime || now - parseInt(lastViewTime) > 10 * 60 * 1000) {
+              const viewResponse = await fetch(`/api/posts/${postId}/view`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'x-last-view-time': lastViewTime || '0',
+                },
+              })
+              if (viewResponse.ok) {
+                const viewData = await viewResponse.json()
+                setPost(prev => (prev ? { ...prev, view_count: viewData.view_count } : prev))
+                localStorage.setItem(`post_view_${postId}`, now.toString())
+              }
             }
+          } catch (viewError) {
+            console.warn('[PostDetail] Failed to update view count:', viewError)
           }
-        } catch (viewError) {
-          console.warn('[PostDetail] Failed to update view count:', viewError)
-          // 조회수 업데이트 실패는 게시글 표시를 막지 않음
-        }
+        })
 
         setLoading(false)
         console.debug('[PostDetail] Data loading completed')
