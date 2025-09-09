@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { getPostMetadata } from '@/lib/posts'
 import PostDetailClient from './PostDetailClient'
 import { Suspense } from 'react'
+import { headers } from 'next/headers'
 
 // 동적 메타데이터 생성
 export async function generateMetadata({
@@ -189,6 +190,27 @@ async function getInitialPostData(postId: string): Promise<InitialPostData | nul
 
 // 서버 컴포넌트: 초기 데이터를 클라이언트에 전달
 async function PostDetailServerData({ postId }: { postId: string }) {
+  // Try edge-cached API first
+  try {
+    const h = await headers()
+    const proto = h.get('x-forwarded-proto') || 'https'
+    const host = (h.get('x-forwarded-host') || h.get('host') || '') as string
+    const url = `${proto}://${host}/api/board/post/${postId}`
+    const res = await fetch(url, { next: { revalidate: 60, tags: ['board-post', postId] } })
+    if (res.ok) {
+      const json = await res.json()
+      return (
+        <script
+          id="initial-post-data"
+          type="application/json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(json) }}
+        />
+      )
+    }
+  } catch (e) {
+    console.warn('[PostDetail] API fetch failed, fallback to direct query:', e)
+  }
+
   const initialData = await getInitialPostData(postId)
 
   if (!initialData) {
