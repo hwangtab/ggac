@@ -3,7 +3,7 @@
 // 정적 생성 방지 - 인증이 필요한 동적 페이지
 export const dynamic = 'force-dynamic'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '../../lib/supabase/client'
@@ -14,6 +14,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
+  const [isAlreadyLoggedIn, setIsAlreadyLoggedIn] = useState(false)
+  const [currentUser, setCurrentUser] = useState<any>(null)
   const router = useRouter()
   const { isLoading: pageLoading, isReady } = useStablePageLoad('/login')
   const { navigateWithRetry } = useSafeNavigation()
@@ -39,6 +41,37 @@ export default function LoginPage() {
       'ontouchstart' in window
     )
   }
+
+  // 페이지 로드 시 현재 인증 상태 확인
+  useEffect(() => {
+    const checkAuthStatus = async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+
+        if (session?.user) {
+          setIsAlreadyLoggedIn(true)
+          setCurrentUser(session.user)
+
+          // 사용자 프로필 정보 가져오기
+          const { data: profile } = await supabase
+            .from('member_profiles')
+            .select('registration_status, is_active, display_name')
+            .eq('id', session.user.id)
+            .single()
+
+          if (profile) {
+            setCurrentUser({ ...session.user, profile })
+          }
+        }
+      } catch (error) {
+        console.error('인증 상태 확인 중 오류:', error)
+      }
+    }
+
+    checkAuthStatus()
+  }, [])
 
   // 안전한 리다이렉트 함수 (모바일 최적화 버전)
   const waitForAuthStateAndRedirect = async () => {
@@ -90,13 +123,17 @@ export default function LoginPage() {
             } else {
               lastProfileError = profileError
               if (process.env.NODE_ENV === 'development') {
-                console.log('⚠️ [LOGIN DEBUG] Profile fetch failed, will fallback to middleware redirect')
+                console.log(
+                  '⚠️ [LOGIN DEBUG] Profile fetch failed, will fallback to middleware redirect'
+                )
               }
             }
           } catch (e) {
             lastProfileError = e
             if (process.env.NODE_ENV === 'development') {
-              console.log('⚠️ [LOGIN DEBUG] Profile fetch exception, will fallback to middleware redirect')
+              console.log(
+                '⚠️ [LOGIN DEBUG] Profile fetch exception, will fallback to middleware redirect'
+              )
             }
           }
           break
@@ -144,7 +181,10 @@ export default function LoginPage() {
       } else {
         // 프로필을 못가져오거나 알 수 없는 상태: 게시판으로 보내고 미들웨어에 판정 위임
         if (process.env.NODE_ENV === 'development') {
-          console.log('❓ [LOGIN DEBUG] Profile missing or unknown - navigating to board and delegating to middleware', lastProfileError)
+          console.log(
+            '❓ [LOGIN DEBUG] Profile missing or unknown - navigating to board and delegating to middleware',
+            lastProfileError
+          )
         }
         navigateWithRetry('/board', isMobile ? 5 : 3)
       }
@@ -365,84 +405,126 @@ export default function LoginPage() {
 
         {/* 폼 섹션 */}
         <div className="bg-white shadow-xl rounded-2xl overflow-hidden">
-          <form onSubmit={handleLogin} className="p-8 space-y-6">
-            <div className="space-y-6">
-              <div>
-                <label
-                  htmlFor="email-address"
-                  className="block text-sm font-medium text-gray-700 mb-2"
+          {isAlreadyLoggedIn ? (
+            /* 이미 로그인된 사용자를 위한 UI */
+            <div className="p-8 text-center">
+              <div className="mx-auto h-16 w-16 flex items-center justify-center rounded-full bg-green-100 mb-6">
+                <svg className="h-8 w-8 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path
+                    fillRule="evenodd"
+                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">이미 로그인되어 있습니다</h2>
+              <p className="text-gray-600 mb-6">
+                {currentUser?.profile?.display_name || currentUser?.email}님으로 로그인된
+                상태입니다.
+              </p>
+              <div className="space-y-3">
+                <button onClick={() => router.push('/board')} className="w-full btn-primary">
+                  게시판으로 이동
+                </button>
+                <button onClick={() => router.push('/mypage')} className="w-full btn-secondary">
+                  마이페이지로 이동
+                </button>
+                <button
+                  onClick={async () => {
+                    await supabase.auth.signOut()
+                    setIsAlreadyLoggedIn(false)
+                    setCurrentUser(null)
+                    setMessage('로그아웃되었습니다.')
+                  }}
+                  className="w-full text-gray-500 hover:text-gray-700 py-2 text-sm"
                 >
-                  이메일 주소
-                </label>
-                <input
-                  id="email-address"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors disabled:bg-gray-50 disabled:text-gray-500"
-                  placeholder="이메일 주소를 입력하세요"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  disabled={loading}
-                />
-              </div>
-
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-                  비밀번호
-                </label>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors disabled:bg-gray-50 disabled:text-gray-500"
-                  placeholder="비밀번호를 입력하세요"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  disabled={loading}
-                />
+                  다른 계정으로 로그인
+                </button>
               </div>
             </div>
+          ) : (
+            <form onSubmit={handleLogin} className="p-8 space-y-6">
+              <div className="space-y-6">
+                <div>
+                  <label
+                    htmlFor="email-address"
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                  >
+                    이메일 주소
+                  </label>
+                  <input
+                    id="email-address"
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors disabled:bg-gray-50 disabled:text-gray-500"
+                    placeholder="이메일 주소를 입력하세요"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    disabled={loading}
+                  />
+                </div>
 
-            <div className="pt-4">
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-primary-600 hover:bg-primary-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-semibold py-4 px-6 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-              >
-                {loading ? (
-                  <span className="flex items-center justify-center">
-                    <svg
-                      className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      ></circle>
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      ></path>
-                    </svg>
-                    로그인 중...
-                  </span>
-                ) : (
-                  '로그인'
-                )}
-              </button>
-            </div>
-          </form>
+                <div>
+                  <label
+                    htmlFor="password"
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                  >
+                    비밀번호
+                  </label>
+                  <input
+                    id="password"
+                    name="password"
+                    type="password"
+                    autoComplete="current-password"
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors disabled:bg-gray-50 disabled:text-gray-500"
+                    placeholder="비밀번호를 입력하세요"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+
+              <div className="pt-4">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-primary-600 hover:bg-primary-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-semibold py-4 px-6 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                >
+                  {loading ? (
+                    <span className="flex items-center justify-center">
+                      <svg
+                        className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
+                      </svg>
+                      로그인 중...
+                    </span>
+                  ) : (
+                    '로그인'
+                  )}
+                </button>
+              </div>
+            </form>
+          )}
         </div>
 
         {/* 하단 링크 */}
