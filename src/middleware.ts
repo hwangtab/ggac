@@ -439,25 +439,38 @@ export async function middleware(request: NextRequest) {
       })
     }
 
-    if (userStatus === 'approved' && isActive) {
-      if (process.env.NODE_ENV === 'development') {
-        console.log(
-          `🎯 [MIDDLEWARE DEBUG] Redirecting approved user to board (Mobile: ${isMobile})`
-        )
-      }
-      return NextResponse.redirect(new URL('/board', request.nextUrl.origin)) // 승인된 사용자는 게시판으로
-    } else if (userStatus === 'pending') {
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`⏳ [MIDDLEWARE DEBUG] Redirecting pending user (Mobile: ${isMobile})`)
-      }
-      return NextResponse.redirect(new URL('/register/pending', request.nextUrl.origin))
-    } else if (userStatus === 'rejected') {
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`❌ [MIDDLEWARE DEBUG] Redirecting rejected user (Mobile: ${isMobile})`)
-      }
-      return NextResponse.redirect(new URL('/register/rejected', request.nextUrl.origin))
+    // 로그인 페이지는 인증된 사용자도 접근 가능하도록 허용 (로그인 페이지에서 자체 처리)
+    if (pathname === '/login') {
+      return res
     }
-    // 그 외의 경우 (예: 아직 이메일 인증만 완료된 상태)는 현재 페이지 유지 (signup/login)
+
+    // 회원가입 페이지에 대한 기존 리다이렉트 로직
+    if (pathname === '/signup') {
+      if (userStatus === 'approved' && isActive) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log(
+            `🎯 [MIDDLEWARE DEBUG] Redirecting approved user to board from signup (Mobile: ${isMobile})`
+          )
+        }
+        return NextResponse.redirect(new URL('/board', request.nextUrl.origin))
+      } else if (userStatus === 'pending') {
+        if (process.env.NODE_ENV === 'development') {
+          console.log(
+            `⏳ [MIDDLEWARE DEBUG] Redirecting pending user from signup (Mobile: ${isMobile})`
+          )
+        }
+        return NextResponse.redirect(new URL('/register/pending', request.nextUrl.origin))
+      } else if (userStatus === 'rejected') {
+        if (process.env.NODE_ENV === 'development') {
+          console.log(
+            `❌ [MIDDLEWARE DEBUG] Redirecting rejected user from signup (Mobile: ${isMobile})`
+          )
+        }
+        return NextResponse.redirect(new URL('/register/rejected', request.nextUrl.origin))
+      }
+    }
+
+    // 그 외의 경우는 현재 페이지 유지
     return res
   }
 
