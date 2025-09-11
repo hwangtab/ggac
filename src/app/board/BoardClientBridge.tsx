@@ -12,10 +12,11 @@ interface InitialPostsData {
 
 interface BoardClientBridgeProps {
   postId?: string
+  refreshKey?: string
 }
 
 // 클라이언트 컴포넌트: 서버에서 주입한 초기 데이터를 DOM에서 읽어와 BoardClient에 전달
-export default function BoardClientBridge({ postId }: BoardClientBridgeProps = {}) {
+export default function BoardClientBridge({ postId, refreshKey }: BoardClientBridgeProps = {}) {
   const [initialData, setInitialData] = useState<InitialPostsData | undefined>(undefined)
   const [isDataLoaded, setIsDataLoaded] = useState(false)
 
@@ -40,7 +41,7 @@ export default function BoardClientBridge({ postId }: BoardClientBridgeProps = {
     } finally {
       setIsDataLoaded(true)
     }
-  }, [])
+  }, [refreshKey]) // refreshKey 변경 시 데이터 재로드
 
   // 데이터 로딩이 완료되지 않았으면 로딩 표시
   if (!isDataLoaded) {

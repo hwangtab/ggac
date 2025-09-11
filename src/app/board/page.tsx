@@ -10,10 +10,11 @@ export const revalidate = 60
 async function BoardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ category?: string; cursor?: string }>
+  searchParams: Promise<{ category?: string; cursor?: string; refresh?: string }>
 }) {
   const params = await searchParams
   const category = params.category || '전체'
+  const refreshKey = params.refresh
 
   return (
     <div>
@@ -34,11 +35,11 @@ async function BoardPage({
           </div>
         }
       >
-        <BoardServerData category={category} limit={20} />
+        <BoardServerData category={category} limit={20} refreshKey={refreshKey} />
       </Suspense>
 
       {/* 클라이언트 컴포넌트로 하이드레이션 */}
-      <BoardClientBridge />
+      <BoardClientBridge refreshKey={refreshKey} />
     </div>
   )
 }

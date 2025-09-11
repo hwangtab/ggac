@@ -10,6 +10,7 @@ export const revalidate = 60
 interface ServerDataProps {
   category?: string
   limit?: number
+  refreshKey?: string
 }
 
 interface InitialPostsData {
@@ -144,15 +145,22 @@ async function getInitialPosts(
 }
 
 // 서버 컴포넌트
-export default async function BoardServerData({ category = '전체', limit = 20 }: ServerDataProps) {
+export default async function BoardServerData({
+  category = '전체',
+  limit = 20,
+  refreshKey,
+}: ServerDataProps) {
   // Try edge-cached API first
   try {
     const h = await headers()
     const proto = h.get('x-forwarded-proto') || 'https'
     const host = (h.get('x-forwarded-host') || h.get('host') || '') as string
-    const url = `${proto}://${host}/api/board/posts?category=${encodeURIComponent(category)}&limit=${limit}`
+    const url = `${proto}://${host}/api/board/posts?category=${encodeURIComponent(category)}&limit=${limit}${refreshKey ? `&refresh=${refreshKey}` : ''}`
     const res = await fetch(url, {
-      next: { revalidate: 60, tags: ['board-initial', `board-${category}`] },
+      // refreshKey가 있으면 캐시 무효화
+      next: refreshKey
+        ? { revalidate: 0 }
+        : { revalidate: 60, tags: ['board-initial', `board-${category}`] },
     })
     if (res.ok) {
       const json = await res.json()
