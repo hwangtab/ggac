@@ -142,10 +142,10 @@ src/
 
 ### API Response Format
 
-All API routes should use standardized responses from `@/utils/apiWrapper`:
+All API routes should use standardized responses from `@/utils/apiResponse`:
 
 ```typescript
-import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
+import { ApiSuccess, ApiError } from '@/utils/apiResponse'
 
 // Success responses
 return ApiSuccess.ok(data, 'Optional success message').toNextResponse()

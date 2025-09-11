@@ -48,13 +48,11 @@ async function getInitialPosts(
         id,
         title,
         content,
-        content_format,
         category,
         author_id,
         created_at,
         updated_at,
         is_pinned,
-        like_count,
         author:member_profiles!posts_author_id_fkey (
           display_name
         )
@@ -107,13 +105,11 @@ async function getInitialPosts(
         id: post.id,
         title: post.title,
         content: '', // 대용량 본문은 초기 페이로드에서 제외
-        content_format: post.content_format,
         category: post.category,
         author_id: post.author_id,
         created_at: post.created_at,
         updated_at: post.updated_at,
         is_pinned: post.is_pinned,
-        like_count: post.like_count,
         author: post.author,
         // 미리보기/첨부 통계는 서버에서 계산해 전달
         content_preview: preview.text,
