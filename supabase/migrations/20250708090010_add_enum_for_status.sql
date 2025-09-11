@@ -8,12 +8,37 @@ DROP POLICY IF EXISTS "Approved members can view posts" ON public.posts;
 DROP POLICY IF EXISTS "Approved members can create posts" ON public.posts;
 DROP POLICY IF EXISTS "Allow members to create comments" ON public.comments;
 
--- 1. 'pending', 'approved', 'rejected' 값을 가지는 새로운 ENUM 타입을 생성합니다.
-CREATE TYPE public.member_status AS ENUM (
-  'pending',
-  'approved',
-  'rejected'
-);
+DO $$
+BEGIN
+  -- Create enum type if not exists
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_type t
+    JOIN pg_namespace n ON n.oid = t.typnamespace
+    WHERE t.typname = 'member_status' AND n.nspname = 'public'
+  ) THEN
+    CREATE TYPE public.member_status AS ENUM (
+      'pending',
+      'approved',
+      'rejected'
+    );
+  END IF;
+
+  -- Migrate column to enum type only if not already enum
+  IF EXISTS (
+    SELECT 1
+    FROM pg_attribute a
+    JOIN pg_class c ON c.oid = a.attrelid
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    JOIN pg_type t ON t.oid = a.atttypid
+    WHERE n.nspname='public' AND c.relname='member_profiles' AND a.attname='registration_status'
+      AND t.typname <> 'member_status'
+  ) THEN
+    ALTER TABLE public.member_profiles
+      ALTER COLUMN registration_status DROP DEFAULT,
+      ALTER COLUMN registration_status TYPE public.member_status USING registration_status::public.member_status,
+      ALTER COLUMN registration_status SET DEFAULT 'pending';
+  END IF;
+END$$;
 
 -- 2. member_profiles 테이블의 registration_status 컬럼을 수정합니다.
 ALTER TABLE public.member_profiles

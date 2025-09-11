@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 import { validateSearchQuery } from '@/utils/validation'
-import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator, addRateLimitHeaders } from '@/utils/rateLimiter'
+import {
+  applyRateLimit,
+  RATE_LIMIT_CONFIGS,
+  createUserKeyGenerator,
+  addRateLimitHeaders,
+} from '@/utils/rateLimiter'
 import { logSecurityEvent } from '@/utils/security'
 
 export const dynamic = 'force-dynamic'
@@ -14,25 +19,27 @@ export async function GET(request: NextRequest) {
     // Rate limiting 적용
     const rateLimiter = applyRateLimit({
       ...RATE_LIMIT_CONFIGS.ADMIN_API,
-      keyGenerator: createUserKeyGenerator('admin_members')
+      keyGenerator: createUserKeyGenerator('admin_members'),
     })
-    
+
     const rateLimitResult = rateLimiter(request)
     if (!rateLimitResult.success && rateLimitResult.response) {
       return rateLimitResult.response
     }
-    
-    const cookieStore = cookies()
-    const supabase = createServerComponentClient({ cookies: () => cookieStore })
+
+    const cookieStore = await cookies()
+    const supabase = createServerComponentClient({
+      cookies: () => cookieStore,
+    } as any)
 
     // 사용자 인증 확인
-    const { data: { session }, error: authError } = await supabase.auth.getSession()
-    
+    const {
+      data: { session },
+      error: authError,
+    } = await supabase.auth.getSession()
+
     if (authError || !session?.user) {
-      return NextResponse.json(
-        { error: '인증이 필요합니다.' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
     // 관리자 권한 확인
@@ -44,17 +51,11 @@ export async function GET(request: NextRequest) {
 
     if (profileError) {
       console.error('Profile fetch error:', profileError)
-      return NextResponse.json(
-        { error: '프로필 정보를 조회할 수 없습니다.' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: '프로필 정보를 조회할 수 없습니다.' }, { status: 500 })
     }
 
     if (!profile.is_admin || profile.registration_status !== 'approved' || !profile.is_active) {
-      return NextResponse.json(
-        { error: '관리자 권한이 필요합니다.' },
-        { status: 403 }
-      )
+      return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 })
     }
 
     // 쿼리 파라미터 추출 및 검증
@@ -64,29 +65,36 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1')
     const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100) // 최대 100개 제한
     const offset = (page - 1) * limit
-    
+
     // 입력 검증
     let search = ''
     if (searchRaw) {
       const searchValidation = validateSearchQuery(searchRaw)
       if (!searchValidation.isValid) {
-        logSecurityEvent('INVALID_MEMBER_SEARCH', { 
-          query: searchRaw, 
-          errors: searchValidation.errors 
-        }, 'medium')
-        return NextResponse.json({ 
-          error: '유효하지 않은 검색어입니다.', 
-          details: searchValidation.errors 
-        }, { status: 400 })
+        logSecurityEvent(
+          'INVALID_MEMBER_SEARCH',
+          {
+            query: searchRaw,
+            errors: searchValidation.errors,
+          },
+          'medium'
+        )
+        return NextResponse.json(
+          {
+            error: '유효하지 않은 검색어입니다.',
+            details: searchValidation.errors,
+          },
+          { status: 400 }
+        )
       }
       search = searchValidation.sanitized
     }
-    
+
     // 페이지 번호 검증
     if (page < 1 || page > 10000) {
       return NextResponse.json({ error: '유효하지 않은 페이지 번호입니다.' }, { status: 400 })
     }
-    
+
     // 필터 값 검증
     const allowedFilters = ['all', 'pending', 'approved', 'rejected']
     if (!allowedFilters.includes(filter)) {
@@ -94,9 +102,8 @@ export async function GET(request: NextRequest) {
     }
 
     // 기본 쿼리 구성
-    let query = supabase
-      .from('member_profiles')
-      .select(`
+    let query = supabase.from('member_profiles').select(
+      `
         id,
         display_name,
         email,
@@ -123,7 +130,9 @@ export async function GET(request: NextRequest) {
         engagement_score,
         approved_by,
         rejected_by
-      `, { count: 'exact' })
+      `,
+      { count: 'exact' }
+    )
 
     // 필터 적용
     if (filter !== 'all') {
@@ -133,13 +142,13 @@ export async function GET(request: NextRequest) {
     // 검색 적용 (SQL 인젝션 방지)
     if (search) {
       const escapedSearch = search.replace(/'/g, "''").replace(/\\/g, '\\\\')
-      query = query.or(`display_name.ilike.%${escapedSearch}%,email.ilike.%${escapedSearch}%,real_name.ilike.%${escapedSearch}%`)
+      query = query.or(
+        `display_name.ilike.%${escapedSearch}%,email.ilike.%${escapedSearch}%,real_name.ilike.%${escapedSearch}%`
+      )
     }
 
     // 정렬 및 페이지네이션
-    query = query
-      .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1)
+    query = query.order('created_at', { ascending: false }).range(offset, offset + limit - 1)
 
     const { data: members, error: membersError, count } = await query
 
@@ -161,10 +170,10 @@ export async function GET(request: NextRequest) {
         currentPage: page,
         totalPages,
         totalCount: count || 0,
-        hasNext
-      }
+        hasNext,
+      },
     })
-    
+
     // Rate limit 헤더 추가
     return addRateLimitHeaders(
       response,
@@ -172,10 +181,13 @@ export async function GET(request: NextRequest) {
       rateLimitResult.remaining,
       rateLimitResult.resetTime
     )
-
   } catch (error) {
     console.error('Admin members API error:', error)
-    logSecurityEvent('ADMIN_MEMBERS_API_ERROR', { error: error instanceof Error ? error.message : 'Unknown error' }, 'medium')
+    logSecurityEvent(
+      'ADMIN_MEMBERS_API_ERROR',
+      { error: error instanceof Error ? error.message : 'Unknown error' },
+      'medium'
+    )
     return NextResponse.json(
       { error: '회원 정보를 조회하는 중 오류가 발생했습니다.' },
       { status: 500 }

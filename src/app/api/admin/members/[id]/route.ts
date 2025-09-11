@@ -7,46 +7,49 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { validateFormData } from '@/utils/validation'
-import distributedRateLimiter, { DISTRIBUTED_RATE_LIMIT_CONFIGS, createDistributedUserKeyGenerator, addDistributedRateLimitHeaders } from '@/utils/distributedRateLimiter'
+import distributedRateLimiter, {
+  DISTRIBUTED_RATE_LIMIT_CONFIGS,
+  createDistributedUserKeyGenerator,
+  addDistributedRateLimitHeaders,
+} from '@/utils/distributedRateLimiter'
 import { logSecurityEvent } from '@/utils/security'
 
 // PATCH: 회원 상태 변경
-export async function PATCH(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
-  const resolvedParams = await context.params;
+export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await context.params
   // 함수 호출 확인용 로그
   console.log('[PATCH] 회원 관리 API 호출됨:', {
     memberId: resolvedParams.id,
     timestamp: new Date().toISOString(),
     url: request.url,
-    method: request.method
+    method: request.method,
   })
-  
+
   try {
     // 분산 Rate limiting 적용
     const rateLimiter = await distributedRateLimiter.applyRateLimit({
       ...DISTRIBUTED_RATE_LIMIT_CONFIGS.ADMIN_API,
-      keyGenerator: createDistributedUserKeyGenerator('admin_member_action')
+      keyGenerator: createDistributedUserKeyGenerator('admin_member_action'),
     })
-    
+
     const rateLimitResult = await rateLimiter(request)
     if (!rateLimitResult.success && rateLimitResult.response) {
       return rateLimitResult.response
     }
-    
-    const cookieStore = cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+
+    const cookieStore = await cookies()
+    const supabase = createRouteHandlerClient({
+      cookies: () => cookieStore,
+    } as any)
 
     // 사용자 인증 확인
-    const { data: { session }, error: authError } = await supabase.auth.getSession()
-    
+    const {
+      data: { session },
+      error: authError,
+    } = await supabase.auth.getSession()
+
     if (authError || !session?.user) {
-      return NextResponse.json(
-        { error: '인증이 필요합니다.' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
     // 관리자 권한 확인
@@ -58,44 +61,32 @@ export async function PATCH(
 
     if (profileError) {
       console.error('Profile fetch error:', profileError)
-      return NextResponse.json(
-        { error: '프로필 정보를 조회할 수 없습니다.' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: '프로필 정보를 조회할 수 없습니다.' }, { status: 500 })
     }
 
     if (!profile.is_admin || profile.registration_status !== 'approved' || !profile.is_active) {
-      return NextResponse.json(
-        { error: '관리자 권한이 필요합니다.' },
-        { status: 403 }
-      )
+      return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 })
     }
 
     // 요청 데이터 파싱 및 검증
     const requestData = await request.json()
     const memberId = resolvedParams.id
-    
+
     // 멤버 ID 검증 (UUID 형식)
     const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
     if (!uuidPattern.test(memberId)) {
-      return NextResponse.json(
-        { error: '유효하지 않은 멤버 ID입니다.' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: '유효하지 않은 멤버 ID입니다.' }, { status: 400 })
     }
-    
+
     // 액션 검증
     const { action, suspension_reason, suspension_until } = requestData
     const allowedActions = ['approve', 'reject', 'activate', 'deactivate', 'suspend', 'unsuspend']
-    
+
     if (!action || !allowedActions.includes(action)) {
       logSecurityEvent('INVALID_MEMBER_ACTION', { action, memberId }, 'medium')
-      return NextResponse.json(
-        { error: '유효하지 않은 액션입니다.' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: '유효하지 않은 액션입니다.' }, { status: 400 })
     }
-    
+
     // 정지 관련 데이터 검증
     if (action === 'suspend') {
       if (suspension_reason) {
@@ -104,20 +95,14 @@ export async function PATCH(
           { suspension_reason: 'content' }
         )
         if (!reasonValidation.isValid) {
-          return NextResponse.json(
-            { error: '유효하지 않은 정지 사유입니다.' },
-            { status: 400 }
-          )
+          return NextResponse.json({ error: '유효하지 않은 정지 사유입니다.' }, { status: 400 })
         }
       }
-      
+
       if (suspension_until) {
         const datePattern = /^\d{4}-\d{2}-\d{2}$/
         if (!datePattern.test(suspension_until)) {
-          return NextResponse.json(
-            { error: '유효하지 않은 날짜 형식입니다.' },
-            { status: 400 }
-          )
+          return NextResponse.json({ error: '유효하지 않은 날짜 형식입니다.' }, { status: 400 })
         }
       }
     }
@@ -130,15 +115,12 @@ export async function PATCH(
       .single()
 
     if (targetError || !targetMember) {
-      return NextResponse.json(
-        { error: '회원을 찾을 수 없습니다.' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: '회원을 찾을 수 없습니다.' }, { status: 404 })
     }
 
     // 액션에 따른 업데이트 데이터 준비
     let updateData: any = {}
-    
+
     switch (action) {
       case 'approve':
         if (targetMember.registration_status !== 'pending') {
@@ -152,7 +134,7 @@ export async function PATCH(
           is_active: true,
           approved_by: session.user.id,
           approved_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         }
         break
 
@@ -167,7 +149,7 @@ export async function PATCH(
           registration_status: 'rejected',
           is_active: false,
           rejected_by: session.user.id,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         }
         break
 
@@ -180,7 +162,7 @@ export async function PATCH(
         }
         updateData = {
           is_active: true,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         }
         break
 
@@ -193,23 +175,20 @@ export async function PATCH(
         }
         updateData = {
           is_active: false,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         }
         break
 
       case 'suspend':
         if (targetMember.registration_status !== 'approved') {
-          return NextResponse.json(
-            { error: '승인된 회원만 정지할 수 있습니다.' },
-            { status: 400 }
-          )
+          return NextResponse.json({ error: '승인된 회원만 정지할 수 있습니다.' }, { status: 400 })
         }
         updateData = {
           is_suspended: true,
           is_active: false,
           suspension_reason: suspension_reason || '관리자에 의한 정지',
           suspension_until: suspension_until || null,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         }
         break
 
@@ -225,7 +204,7 @@ export async function PATCH(
           is_active: true,
           suspension_reason: null,
           suspension_until: null,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         }
         break
     }
@@ -240,10 +219,7 @@ export async function PATCH(
 
     if (updateError) {
       console.error('Member update error:', updateError)
-      return NextResponse.json(
-        { error: '회원 상태 업데이트에 실패했습니다.' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: '회원 상태 업데이트에 실패했습니다.' }, { status: 500 })
     }
 
     // 성공 응답
@@ -253,23 +229,27 @@ export async function PATCH(
       activate: '활성화',
       deactivate: '비활성화',
       suspend: '정지',
-      unsuspend: '정지해제'
+      unsuspend: '정지해제',
     }
-    
+
     // 보안 이벤트 로깅
-    logSecurityEvent('MEMBER_STATUS_CHANGED', {
-      memberId,
-      action,
-      targetMember: targetMember.display_name,
-      adminId: session.user.id
-    }, 'medium')
+    logSecurityEvent(
+      'MEMBER_STATUS_CHANGED',
+      {
+        memberId,
+        action,
+        targetMember: targetMember.display_name,
+        adminId: session.user.id,
+      },
+      'medium'
+    )
 
     const response = NextResponse.json({
       success: true,
       message: `${targetMember.display_name}님이 ${actionMessages[action]}되었습니다.`,
-      member: updatedMember
+      member: updatedMember,
     })
-    
+
     // 분산 Rate limit 헤더 추가
     return addDistributedRateLimitHeaders(
       response,
@@ -277,17 +257,17 @@ export async function PATCH(
       rateLimitResult.remaining,
       rateLimitResult.resetTime
     )
-
   } catch (error) {
     console.error('Admin member action API error:', error)
-    logSecurityEvent('ADMIN_MEMBER_ACTION_ERROR', { 
-      error: error instanceof Error ? error.message : 'Unknown error',
-      memberId: resolvedParams.id
-    }, 'high')
-    return NextResponse.json(
-      { error: '회원 상태 변경 중 오류가 발생했습니다.' },
-      { status: 500 }
+    logSecurityEvent(
+      'ADMIN_MEMBER_ACTION_ERROR',
+      {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        memberId: resolvedParams.id,
+      },
+      'high'
     )
+    return NextResponse.json({ error: '회원 상태 변경 중 오류가 발생했습니다.' }, { status: 500 })
   }
 }
 

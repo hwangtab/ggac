@@ -36,6 +36,7 @@ export default function BoardClient({ initialData }: BoardClientProps) {
     let mounted = true
 
     const fetchUserAndProfile = async () => {
+      console.log('🔍 [BoardClient] 사용자 인증 상태 확인 시작')
       try {
         const {
           data: { session },
@@ -43,7 +44,7 @@ export default function BoardClient({ initialData }: BoardClientProps) {
         } = await supabase.auth.getSession()
 
         if (sessionError) {
-          console.error('Error getting session:', sessionError)
+          console.error('❌ [BoardClient] 세션 오류:', sessionError)
           if (mounted) {
             setUserLoading(false)
           }
@@ -51,8 +52,13 @@ export default function BoardClient({ initialData }: BoardClientProps) {
         }
 
         const currentUser = session?.user || null
+        console.log('🔍 [BoardClient] 세션 확인 완료:', {
+          hasUser: !!currentUser,
+          userId: currentUser?.id,
+        })
 
         if (!currentUser) {
+          console.log('✅ [BoardClient] 로그인하지 않은 사용자 - userLoading false로 설정')
           if (mounted) {
             setUser(null)
             setIsMember(false)
@@ -73,12 +79,13 @@ export default function BoardClient({ initialData }: BoardClientProps) {
           .single()
 
         if (profileError) {
-          console.error('Error fetching profile:', profileError)
+          console.error('❌ [BoardClient] 프로필 조회 오류:', profileError)
           if (mounted) {
             setIsMember(false)
             setUserLoading(false)
           }
         } else if (profile && mounted) {
+          console.log('✅ [BoardClient] 프로필 조회 성공, userLoading false로 설정')
           setIsMember(
             (profile as MemberProfile).registration_status === 'approved' &&
               (profile as MemberProfile).is_active
@@ -86,11 +93,12 @@ export default function BoardClient({ initialData }: BoardClientProps) {
           setUserLoading(false)
         }
       } catch (e) {
-        console.error('Error in fetchUserAndProfile:', e)
+        console.error('❌ [BoardClient] fetchUserAndProfile 오류:', e)
         if (mounted) {
           setUser(null)
           setIsMember(false)
           setUserLoading(false)
+          console.log('✅ [BoardClient] catch에서 userLoading false로 설정')
         }
       }
     }
