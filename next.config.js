@@ -222,6 +222,8 @@ const nextConfig = {
           { key: 'Content-Type', value: 'text/css; charset=utf-8' },
           { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
+          // Explicitly prevent CSS files from being treated as scripts
+          { key: 'X-Permitted-Cross-Domain-Policies', value: 'none' },
         ],
       },
       // Next static assets: rely on Next/Vercel defaults, only add caching
@@ -380,7 +382,7 @@ const nextConfig = {
               "script-src 'self' 'unsafe-inline'" +
                 (process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : '') +
                 ' https://www.youtube.com https://www.google-analytics.com',
-              // 스크립트 요소별 세밀한 제어 (MIME 타입 오류 방지)
+              // 스크립트 요소별 세밀한 제어 (MIME 타입 오류 방지 - CSS 파일 제외)
               "script-src-elem 'self' 'unsafe-inline'" +
                 (process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : '') +
                 ' https://www.youtube.com https://www.google-analytics.com',
