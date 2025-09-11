@@ -379,7 +379,18 @@ const nextConfig = {
             value:
               process.env.NODE_ENV === 'development'
                 ? // 개발 환경에서 완화된 CSP - CSS MIME 타입 오류 방지
-                  "default-src 'self' 'unsafe-inline' 'unsafe-eval'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:; font-src 'self'"
+                  [
+                    "default-src 'self'",
+                    "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+                    "script-src-elem 'self' 'unsafe-inline' 'unsafe-eval'",
+                    "style-src 'self' 'unsafe-inline'",
+                    "style-src-elem 'self' 'unsafe-inline'",
+                    "img-src 'self' data: https:",
+                    "connect-src 'self' http://localhost:* https: ws://localhost:* wss://localhost:*",
+                    "font-src 'self' data:",
+                    "object-src 'none'",
+                    "base-uri 'self'",
+                  ].join('; ')
                 : [
                     "default-src 'self'",
                     // React-Quill 호환을 위한 스크립트 정책 (개발 환경에서 React Refresh 지원)

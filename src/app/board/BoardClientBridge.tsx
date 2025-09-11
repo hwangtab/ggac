@@ -22,23 +22,55 @@ export default function BoardClientBridge({ postId, refreshKey }: BoardClientBri
 
   useEffect(() => {
     // 서버에서 제공한 초기 데이터 읽기
-    try {
-      const initialDataScript = document.getElementById('initial-posts-data')?.textContent
+    const loadInitialData = () => {
+      try {
+        const initialDataScript = document.getElementById('initial-posts-data')
 
-      if (initialDataScript) {
-        const parsedData = JSON.parse(initialDataScript) as InitialPostsData
+        if (!initialDataScript) {
+          console.warn(
+            '⚠️ [BoardClientBridge] initial-posts-data 스크립트 태그를 찾을 수 없습니다.'
+          )
+          return null
+        }
+
+        const scriptContent = initialDataScript.textContent
+        if (!scriptContent || scriptContent.trim() === '') {
+          console.warn('⚠️ [BoardClientBridge] 스크립트 태그가 비어있습니다.')
+          return null
+        }
+
+        const parsedData = JSON.parse(scriptContent) as InitialPostsData
         console.log(
           '📥 [BoardClientBridge] 서버 초기 데이터 로드됨:',
-          parsedData.posts.length,
+          parsedData.posts?.length || 0,
           '개 게시물'
         )
-        setInitialData(parsedData)
-      } else {
-        console.warn('⚠️ [BoardClientBridge] 서버 초기 데이터가 없습니다. API 호출로 폴백합니다.')
+        return parsedData
+      } catch (error) {
+        console.error('❌ [BoardClientBridge] 초기 데이터 파싱 오류:', error)
+        return null
       }
-    } catch (error) {
-      console.error('❌ [BoardClientBridge] 초기 데이터 파싱 오류:', error)
-    } finally {
+    }
+
+    // 즉시 시도
+    let data = loadInitialData()
+
+    if (!data) {
+      // DOM이 완전히 로드되지 않았을 수 있으므로 짧은 지연 후 재시도
+      console.log('🔄 [BoardClientBridge] 초기 데이터 로드 재시도 중...')
+      const retryTimeout = setTimeout(() => {
+        data = loadInitialData()
+        if (data) {
+          setInitialData(data)
+        } else {
+          console.warn('⚠️ [BoardClientBridge] 서버 초기 데이터가 없습니다. API 호출로 폴백합니다.')
+        }
+        setIsDataLoaded(true)
+      }, 100)
+
+      return () => clearTimeout(retryTimeout)
+    } else {
+      setInitialData(data)
       setIsDataLoaded(true)
     }
   }, [refreshKey]) // refreshKey 변경 시 데이터 재로드
