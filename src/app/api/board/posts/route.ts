@@ -21,14 +21,42 @@ export async function GET(req: NextRequest) {
     auth: { autoRefreshToken: false, persistSession: false },
   })
 
-  // Prefer RPC if available for trimmed payload
-  const { data, error } = await supabase.rpc('get_posts_preview', {
-    p_category: category,
-    p_limit: limit,
-  })
+  // Direct query instead of RPC to avoid schema issues
+  let query = supabase
+    .from('posts')
+    .select(
+      `
+      id,
+      title,
+      content,
+      category,
+      author_id,
+      created_at,
+      updated_at,
+      is_pinned,
+      author:member_profiles!posts_author_id_fkey (
+        display_name
+      )
+    `
+    )
+    .not('is_deleted', 'is', true)
+
+  // Apply category filter
+  if (category !== '전체') {
+    query = query.eq('category', category)
+  }
+
+  // Apply ordering and limit
+  query = query
+    .order('is_pinned', { ascending: false, nullsFirst: false })
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(limit)
+
+  const { data, error } = await query
 
   if (error) {
-    return createErrorResponse(`Failed to fetch previews: ${error.message}`, 500)
+    return createErrorResponse(`Failed to fetch posts: ${error.message}`, 500)
   }
 
   // Shape to client expectation
@@ -36,25 +64,23 @@ export async function GET(req: NextRequest) {
     id: row.id,
     title: row.title,
     content: '',
-    content_format: row.content_format,
     category: row.category,
     author_id: row.author_id,
     created_at: row.created_at,
     updated_at: row.updated_at,
     is_pinned: row.is_pinned,
-    like_count: row.like_count,
-    author: { display_name: row.author_display_name },
-    content_preview: row.content_preview,
-    preview_has_images: (row.image_count || 0) > 0,
-    preview_image_count: row.image_count || 0,
+    author: { display_name: row.author?.display_name },
+    content_preview: (row.content || '').substring(0, 150) + '...',
+    preview_has_images: false,
+    preview_image_count: 0,
     comment_count: 0,
     is_liked: false,
     attachments_stats: {
-      total_attachments: row.total_attachments || 0,
-      image_count: row.image_count || 0,
-      document_count: row.document_count || 0,
-      video_count: row.video_count || 0,
-      audio_count: row.audio_count || 0,
+      total_attachments: 0,
+      image_count: 0,
+      document_count: 0,
+      video_count: 0,
+      audio_count: 0,
     },
   }))
 

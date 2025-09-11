@@ -38,15 +38,7 @@ async function BoardPage({
       </Suspense>
 
       {/* 클라이언트 컴포넌트로 하이드레이션 */}
-      <Suspense
-        fallback={
-          <div className="min-h-screen pt-24 md:pt-28 flex items-center justify-center">
-            <div className="text-gray-600">게시판을 로드하는 중...</div>
-          </div>
-        }
-      >
-        <BoardClientBridge />
-      </Suspense>
+      <BoardClientBridge />
     </div>
   )
 }
