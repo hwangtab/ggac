@@ -33,13 +33,11 @@ interface PostData {
   id: string
   title: string
   content: string
-  content_format: string
   category: string
   author_id: string
   created_at: string
   updated_at: string
   is_pinned: boolean
-  like_count: number
   comment_count: number
   is_liked?: boolean
   author: {
@@ -71,11 +69,21 @@ export const revalidate = 60 // 60초 동안 결과 캐시
 
 export async function GET(request: NextRequest) {
   // 로그인은 선택사항 (좋아요 상태 확인용)
-  const supabase = createRouteHandlerClient({ cookies })
+  const cookieStore = await cookies()
+  const supabase = createRouteHandlerClient({
+    cookies: () => cookieStore,
+  } as any)
   const {
     data: { session },
   } = await supabase.auth.getSession()
   const userId = session?.user?.id || null // 로그인 상태는 선택사항
+
+  // 🔍 DEBUG: 세션 및 사용자 상태 로그
+  console.log('🔍 [Posts API] Session info:', {
+    hasSession: !!session,
+    userId,
+    userEmail: session?.user?.email,
+  })
 
   // 비로그인 사용자의 공개 읽기에서 RLS로 인해 빈 목록이 되는 환경을 대비해
   // 서비스 롤 클라이언트를 읽기 전용으로 활용 (서버에서만, 키는 노출되지 않음)
@@ -83,16 +91,27 @@ export async function GET(request: NextRequest) {
     try {
       const url = process.env.NEXT_PUBLIC_SUPABASE_URL
       const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+      console.log('🔍 [Posts API] Environment vars:', {
+        hasUrl: !!url,
+        hasServiceKey: !!key,
+      })
       if (!url || !key) return null
       return createClient(url, key, {
         auth: { autoRefreshToken: false, persistSession: false },
       })
-    } catch {
+    } catch (error) {
+      console.error('🔍 [Posts API] Admin client creation error:', error)
       return null
     }
   })()
+
   // 읽기 쿼리에 사용할 DB 클라이언트 선택
   const db = userId ? supabase : adminClient || supabase
+  console.log('🔍 [Posts API] DB Client selected:', {
+    clientType: userId ? 'user-supabase' : adminClient ? 'admin-client' : 'fallback-supabase',
+    hasUserId: !!userId,
+    hasAdminClient: !!adminClient,
+  })
 
   return apiGet(
     async () => {
@@ -155,13 +174,11 @@ export async function GET(request: NextRequest) {
         id,
         title,
         content,
-        content_format,
         category,
         author_id,
         created_at,
         updated_at,
         is_pinned,
-        like_count,
         author:member_profiles!posts_author_id_fkey (
           display_name
         )
@@ -241,7 +258,16 @@ export async function GET(request: NextRequest) {
 
       const { data: posts, error: postsError } = await query
 
+      // 🔍 DEBUG: 쿼리 결과 로그
+      console.log('🔍 [Posts API] Query result:', {
+        postsCount: posts?.length || 0,
+        hasError: !!postsError,
+        error: postsError?.message,
+        firstPostTitle: posts?.[0]?.title,
+      })
+
       if (postsError) {
+        console.error('🔍 [Posts API] Posts query error:', postsError)
         throw new Error(`게시글 조회 실패: ${postsError.message}`)
       }
 
@@ -254,6 +280,12 @@ export async function GET(request: NextRequest) {
       }
 
       const postIds = actualPosts.map(post => post.id)
+
+      console.log('🔍 [Posts API] Final result:', {
+        finalPostsCount: actualPosts.length,
+        postIds: postIds.slice(0, 3), // 처음 3개만
+        hasNext,
+      })
 
       if (postIds.length === 0) {
         const result: PostListResponse = {
@@ -401,7 +433,6 @@ export async function GET(request: NextRequest) {
           content_preview: preview.text,
           preview_has_images: preview.hasImages,
           preview_image_count: preview.imageCount,
-          content_format: raw.content_format,
           category: raw.category,
           author_id: raw.author_id,
           created_at: raw.created_at,

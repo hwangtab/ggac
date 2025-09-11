@@ -49,3 +49,4 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- 함수 실행 권한 설정
 REVOKE ALL ON FUNCTION toggle_post_like FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION toggle_post_like TO authenticated;
+

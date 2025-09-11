@@ -15,17 +15,25 @@ CREATE INDEX IF NOT EXISTS idx_posts_pinned ON public.posts(is_pinned, pinned_at
 -- Create index for category and pinned status (for announcement pinning)
 CREATE INDEX IF NOT EXISTS idx_posts_category_pinned ON public.posts(category, is_pinned, created_at DESC);
 
--- Update RLS policies to allow admins to manage pinned posts
-CREATE POLICY IF NOT EXISTS "Admins can manage pinned posts" ON public.posts 
-  FOR UPDATE USING (
-    EXISTS (
-      SELECT 1 FROM public.member_profiles 
-      WHERE member_profiles.id = auth.uid() 
-      AND member_profiles.is_admin = true
-      AND member_profiles.is_active = true
-      AND member_profiles.registration_status = 'approved'
-    )
-  );
+-- Update RLS policies to allow admins to manage pinned posts (idempotent)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE schemaname='public' AND tablename='posts' AND policyname='Admins can manage pinned posts'
+  ) THEN
+    CREATE POLICY "Admins can manage pinned posts" ON public.posts 
+      FOR UPDATE USING (
+        EXISTS (
+          SELECT 1 FROM public.member_profiles 
+          WHERE member_profiles.id = auth.uid() 
+          AND member_profiles.is_admin = true
+          AND member_profiles.is_active = true
+          AND member_profiles.registration_status = 'approved'
+        )
+      );
+  END IF;
+END$$;
 
 -- Comment on new columns
 COMMENT ON COLUMN public.posts.is_pinned IS 'Whether the post is pinned (공지사항 only)';

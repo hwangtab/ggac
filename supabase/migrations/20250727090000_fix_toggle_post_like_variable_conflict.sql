@@ -47,3 +47,4 @@ BEGIN
   RETURN QUERY SELECT v_is_liked, v_final_like_count;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
