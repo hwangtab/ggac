@@ -165,11 +165,21 @@ export default async function BoardServerData({
     if (res.ok) {
       const json = await res.json()
       return (
-        <script
-          id="initial-posts-data"
-          type="application/json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(json) }}
-        />
+        <>
+          <script
+            id="initial-posts-data"
+            type="application/json"
+            dangerouslySetInnerHTML={{ __html: JSON.stringify(json) }}
+          />
+          {/* Debug info for development */}
+          {process.env.NODE_ENV === 'development' && (
+            <script
+              dangerouslySetInnerHTML={{
+                __html: `console.log('[BoardServerData] API 데이터 로드됨:', ${json.posts?.length || 0}개 게시물);`,
+              }}
+            />
+          )}
+        </>
       )
     }
   } catch (e) {
@@ -180,12 +190,22 @@ export default async function BoardServerData({
 
   // 클라이언트 컴포넌트에 데이터 전달을 위해 script 태그로 삽입
   return (
-    <script
-      id="initial-posts-data"
-      type="application/json"
-      dangerouslySetInnerHTML={{
-        __html: JSON.stringify(initialData),
-      }}
-    />
+    <>
+      <script
+        id="initial-posts-data"
+        type="application/json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(initialData),
+        }}
+      />
+      {/* Debug info for development */}
+      {process.env.NODE_ENV === 'development' && (
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `console.log('[BoardServerData] Direct 데이터 로드됨:', ${initialData.posts?.length || 0}개 게시물);`,
+          }}
+        />
+      )}
+    </>
   )
 }

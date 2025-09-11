@@ -16,6 +16,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
   const category = searchParams.get('category') || '전체'
   const limit = Math.min(parseInt(searchParams.get('limit') || '20', 10) || 20, 50)
+  const refresh = searchParams.get('refresh')
 
   const supabase = createClient(url, serviceKey || anonKey!, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -85,7 +86,9 @@ export async function GET(req: NextRequest) {
   }))
 
   return createJsonResponse({ posts, hasNext: posts.length === limit, nextCursor: null }, 200, {
-    // Edge-friendly caching
-    'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
+    // Edge-friendly caching, but disable if refresh parameter is present
+    'Cache-Control': refresh
+      ? 'no-cache, no-store, must-revalidate'
+      : 'public, s-maxage=60, stale-while-revalidate=300',
   })
 }
