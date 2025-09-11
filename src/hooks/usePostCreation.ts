@@ -94,10 +94,6 @@ export const usePostCreation = ({
       }
 
       // 4. 성공 처리
-      if (showSuccessRedirect) {
-        alert('게시글이 성공적으로 작성되었습니다!')
-      }
-
       onNewPost(data as unknown as Post)
 
       return postId

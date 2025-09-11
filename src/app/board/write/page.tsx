@@ -102,7 +102,8 @@ export default function WritePage() {
   }, [router])
 
   const handlePostCreated = () => {
-    router.push('/board')
+    // 게시판으로 리다이렉트하면서 데이터 새로고침을 위해 timestamp 추가
+    router.push(`/board?refresh=${Date.now()}`)
   }
 
   if (loading) {

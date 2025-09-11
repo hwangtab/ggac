@@ -376,46 +376,50 @@ const nextConfig = {
           },
           {
             key: 'Content-Security-Policy',
-            value: [
-              "default-src 'self'",
-              // React-Quill 호환을 위한 스크립트 정책 (개발 환경에서 React Refresh 지원)
-              "script-src 'self' 'unsafe-inline'" +
-                (process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : '') +
-                ' https://www.youtube.com https://www.google-analytics.com',
-              // 스크립트 요소별 세밀한 제어 (MIME 타입 오류 방지 - CSS 파일 제외)
-              "script-src-elem 'self' 'unsafe-inline'" +
-                (process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : '') +
-                ' https://www.youtube.com https://www.google-analytics.com',
-              // 스타일 정책
-              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-              "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com",
-              // 폰트 정책
-              "font-src 'self' https://fonts.gstatic.com",
-              // 이미지 정책 - data: URI 추가 (Next.js Image blur 지원), Supabase storage 추가
-              "img-src 'self' https: blob: data: https://*.supabase.co",
-              // 미디어 정책
-              "media-src 'self' https://www.youtube.com https://*.supabase.co",
-              // 프레임 정책
-              "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com",
-              // 연결 정책
+            value:
               process.env.NODE_ENV === 'development'
-                ? "connect-src 'self' http://localhost:* https://api.supabase.io https://*.supabase.co ws://localhost:* wss://localhost:* wss://*.supabase.co"
-                : "connect-src 'self' https://api.supabase.io https://*.supabase.co wss://*.supabase.co",
-              // 객체 및 기타 보안 정책
-              "object-src 'none'",
-              "base-uri 'self'",
-              "form-action 'self'",
-              "frame-ancestors 'none'",
-              // 워커 및 매니페스트 정책
-              "worker-src 'self' blob:",
-              "manifest-src 'self'",
-              // 플러그인 차단은 object-src 'none'으로 처리 (plugin-types는 deprecated)
-              // CSP 위반 리포팅
-              'report-uri /api/security/csp-report',
-              'report-to default',
-              // Remove upgrade-insecure-requests in development to allow HTTP
-              ...(process.env.NODE_ENV === 'production' ? ['upgrade-insecure-requests'] : []),
-            ].join('; '),
+                ? // 개발 환경에서 완화된 CSP - CSS MIME 타입 오류 방지
+                  "default-src 'self' 'unsafe-inline' 'unsafe-eval'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:; font-src 'self'"
+                : [
+                    "default-src 'self'",
+                    // React-Quill 호환을 위한 스크립트 정책 (개발 환경에서 React Refresh 지원)
+                    "script-src 'self' 'unsafe-inline'" +
+                      (process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : '') +
+                      ' https://www.youtube.com https://www.google-analytics.com',
+                    // 스크립트 요소별 세밀한 제어 - CSS 파일을 script로 처리하지 않도록 명시적 제외
+                    "script-src-elem 'self' 'unsafe-inline'" +
+                      (process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : '') +
+                      ' https://www.youtube.com https://www.google-analytics.com',
+                    // 스타일 정책
+                    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+                    "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com",
+                    // 폰트 정책
+                    "font-src 'self' https://fonts.gstatic.com",
+                    // 이미지 정책 - data: URI 추가 (Next.js Image blur 지원), Supabase storage 추가
+                    "img-src 'self' https: blob: data: https://*.supabase.co",
+                    // 미디어 정책
+                    "media-src 'self' https://www.youtube.com https://*.supabase.co",
+                    // 프레임 정책
+                    "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com",
+                    // 연결 정책
+                    process.env.NODE_ENV === 'development'
+                      ? "connect-src 'self' http://localhost:* https://api.supabase.io https://*.supabase.co ws://localhost:* wss://localhost:* wss://*.supabase.co"
+                      : "connect-src 'self' https://api.supabase.io https://*.supabase.co wss://*.supabase.co",
+                    // 객체 및 기타 보안 정책
+                    "object-src 'none'",
+                    "base-uri 'self'",
+                    "form-action 'self'",
+                    "frame-ancestors 'none'",
+                    // 워커 및 매니페스트 정책
+                    "worker-src 'self' blob:",
+                    "manifest-src 'self'",
+                    // 플러그인 차단은 object-src 'none'으로 처리 (plugin-types는 deprecated)
+                    // CSP 위반 리포팅
+                    'report-uri /api/security/csp-report',
+                    'report-to default',
+                    // Remove upgrade-insecure-requests in development to allow HTTP
+                    ...(process.env.NODE_ENV === 'production' ? ['upgrade-insecure-requests'] : []),
+                  ].join('; '),
           },
           {
             key: 'Report-To',
