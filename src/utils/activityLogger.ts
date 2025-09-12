@@ -208,14 +208,15 @@ class ActivityLogger {
       }
     })
 
-    // 주기적으로 세션 활동 업데이트 (5분마다)
+    // 주기적으로 세션 활동 업데이트 (기본 90초, 환경변수로 조정)
+    const pingMs = Number(process.env.NEXT_PUBLIC_SESSION_PING_MS || 90000)
     setInterval(
       () => {
         if (!document.hidden && this.sessionId) {
           this.updateSessionActivity()
         }
       },
-      5 * 60 * 1000
+      isNaN(pingMs) ? 90000 : pingMs
     )
   }
 
@@ -305,6 +306,33 @@ class ActivityLogger {
       })
     } catch (error) {
       this.secureLog('error', '세션 활동 업데이트 오류', error)
+    }
+  }
+
+  /**
+   * 외부에서 세션 활동 갱신을 강제로 트리거 (페이지 전환 등)
+   */
+  public async heartbeat(extra?: Record<string, any>) {
+    if (!this.sessionId) return
+    try {
+      await fetch('/api/activities/session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.sessionToken}`,
+        },
+        body: JSON.stringify({
+          action: 'update',
+          session_id: this.sessionId,
+          metadata: {
+            last_page: typeof window !== 'undefined' ? window.location.pathname : undefined,
+            timestamp: new Date().toISOString(),
+            ...extra,
+          },
+        }),
+      })
+    } catch (e) {
+      this.secureLog('error', 'heartbeat update error', e)
     }
   }
 
