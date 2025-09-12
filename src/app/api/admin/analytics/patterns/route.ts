@@ -44,6 +44,7 @@ export async function GET(request: NextRequest) {
       const userId = searchParams.get('user_id')
       const days = parseInt(searchParams.get('days') || '30')
       const analysisType = searchParams.get('type') || 'activity_patterns'
+      const excludeTest = searchParams.get('exclude_test') !== 'false' // 기본 true
 
       const startDate = new Date()
       startDate.setDate(startDate.getDate() - days)
@@ -53,7 +54,7 @@ export async function GET(request: NextRequest) {
       switch (analysisType) {
         case 'activity_patterns':
           // 활동 패턴 분석
-          analysisResult = await analyzeActivityPatterns(db, userId, startDate)
+          analysisResult = await analyzeActivityPatterns(db, userId, startDate, excludeTest)
           break
 
         case 'user_behavior':
@@ -99,7 +100,12 @@ export async function GET(request: NextRequest) {
 /**
  * 활동 패턴 분석
  */
-async function analyzeActivityPatterns(supabase: any, userId: string | null, startDate: Date) {
+async function analyzeActivityPatterns(
+  supabase: any,
+  userId: string | null,
+  startDate: Date,
+  excludeTest: boolean
+) {
   // 시간대별 활동 분석
   let query = supabase
     .from('user_activities')
@@ -109,6 +115,12 @@ async function analyzeActivityPatterns(supabase: any, userId: string | null, sta
   // userId가 있을 때만 user_id 필터 적용
   if (userId) {
     query = query.eq('user_id', userId)
+  }
+
+  // 테스트 데이터 제외 옵션: metadata.generated !== true
+  if (excludeTest) {
+    // PostgREST JSONB field filter
+    query = query.filter('metadata->>generated', 'neq', 'true') as any
   }
 
   const { data: hourlyActivity } = await query
