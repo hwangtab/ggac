@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from '@supabase/supabase-js'
 import { validateSearchQuery } from '@/utils/validation'
 import {
   applyRateLimit,
@@ -28,9 +29,7 @@ export async function GET(request: NextRequest) {
     }
 
     const cookieStore = await cookies()
-    const supabase = createServerComponentClient({
-      cookies: () => cookieStore,
-    } as any)
+    const supabase = createServerComponentClient({ cookies: () => cookieStore } as any)
 
     // 사용자 인증 확인
     const {
@@ -102,7 +101,17 @@ export async function GET(request: NextRequest) {
     }
 
     // 기본 쿼리 구성
-    let query = supabase.from('member_profiles').select(
+    // 서비스 롤 클라이언트(있으면 RLS 영향 없이 조회)
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const db =
+      url && serviceKey
+        ? createClient(url, serviceKey, {
+            auth: { autoRefreshToken: false, persistSession: false },
+          })
+        : supabase
+
+    let query = db.from('member_profiles').select(
       `
         id,
         display_name,

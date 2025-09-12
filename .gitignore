@@ -15,6 +15,10 @@
 # production
 /build
 
+# backups and local data (do not commit)
+backups/
+docs/*.csv
+
 # misc
 .DS_Store
 *.pem
