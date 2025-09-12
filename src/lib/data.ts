@@ -93,6 +93,17 @@ function initCaches() {
     projectCache = new MemoryEfficientCache<Project[]>()
   }
 }
+
+// 외부에서 아티스트 캐시를 무효화할 수 있도록 헬퍼를 노출
+export function invalidateArtistsCache() {
+  try {
+    initCaches()
+    artistCache?.clear()
+  } catch (e) {
+    // 캐시 무효화 실패는 치명적이지 않음
+    console.warn('invalidateArtistsCache failed:', e)
+  }
+}
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 
