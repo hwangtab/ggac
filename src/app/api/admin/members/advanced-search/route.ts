@@ -20,8 +20,18 @@ const rateLimiter = applyRateLimit({
 // 멤버 필드 정의
 const MEMBER_FIELD_DEFINITIONS: FieldDefinition[] = [
   {
-    name: 'name',
-    label: '이름',
+    name: 'display_name',
+    label: '표시명',
+    type: 'string',
+    filterable: true,
+    sortable: true,
+    searchable: true,
+    operators: ['equals', 'not_equals', 'contains', 'not_contains', 'starts_with', 'ends_with'],
+    defaultOperator: 'contains',
+  },
+  {
+    name: 'real_name',
+    label: '실명',
     type: 'string',
     filterable: true,
     sortable: true,
@@ -85,7 +95,7 @@ const MEMBER_FIELD_DEFINITIONS: FieldDefinition[] = [
     defaultOperator: 'equals',
   },
   {
-    name: 'phone',
+    name: 'phone_number',
     label: '연락처',
     type: 'string',
     filterable: true,
@@ -95,27 +105,16 @@ const MEMBER_FIELD_DEFINITIONS: FieldDefinition[] = [
     defaultOperator: 'contains',
   },
   {
-    name: 'organization',
-    label: '소속',
-    type: 'string',
-    filterable: true,
-    sortable: true,
-    searchable: true,
-    operators: ['equals', 'not_equals', 'contains', 'not_contains', 'starts_with', 'ends_with'],
-    defaultOperator: 'contains',
-  },
-  {
-    name: 'cooperative_role',
-    label: '협동조합 역할',
+    name: 'membership_type',
+    label: '멤버십 유형',
     type: 'select',
     filterable: true,
     sortable: true,
     searchable: false,
     options: [
-      { value: 'member', label: '조합원' },
-      { value: 'associate', label: '준조합원' },
-      { value: 'supporter', label: '후원자' },
-      { value: 'partner', label: '협력파트너' },
+      { value: 'regular', label: '일반' },
+      { value: 'premium', label: '프리미엄' },
+      { value: 'lifetime', label: '종신' },
     ],
     operators: ['equals', 'not_equals', 'in', 'not_in'],
     defaultOperator: 'equals',
@@ -282,7 +281,7 @@ export async function POST(request: NextRequest) {
       ) c ON mp.id = c.author_id
     `
 
-    const allowedSearchFields = ['name', 'email', 'phone', 'organization']
+    const allowedSearchFields = ['display_name', 'real_name', 'email', 'phone_number']
 
     try {
       const { sql, params, countSql } = buildSearchQuery(query, baseQuery, allowedSearchFields)
@@ -291,9 +290,9 @@ export async function POST(request: NextRequest) {
       const dataQuery = sql.replace(
         'SELECT * FROM',
         `SELECT 
-          mp.id, mp.name, mp.email, mp.phone, mp.organization,
+          mp.id, mp.display_name, mp.real_name, mp.email, mp.phone_number,
           mp.registration_status, mp.is_artist, mp.is_admin, mp.is_active,
-          mp.cooperative_role, mp.artist_id, mp.artist_role,
+          mp.membership_type, mp.artist_id, mp.artist_role,
           mp.created_at, mp.updated_at, mp.last_login_at, mp.suspension_until,
           a.name as artist_name, a.slug as artist_slug,
           COALESCE(p.post_count, 0) as post_count,
