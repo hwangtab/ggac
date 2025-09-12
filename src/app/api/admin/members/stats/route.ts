@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from '@supabase/supabase-js'
 import type { MemberStatistics } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -12,13 +13,13 @@ export async function GET(request: NextRequest) {
     const supabase = createServerComponentClient({ cookies: () => cookieStore })
 
     // 사용자 인증 확인
-    const { data: { session }, error: authError } = await supabase.auth.getSession()
-    
+    const {
+      data: { session },
+      error: authError,
+    } = await supabase.auth.getSession()
+
     if (authError || !session?.user) {
-      return NextResponse.json(
-        { error: '인증이 필요합니다.' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
     // 관리자 권한 확인
@@ -28,17 +29,27 @@ export async function GET(request: NextRequest) {
       .eq('id', session.user.id)
       .single()
 
-    if (profileError || !profile.is_admin || profile.registration_status !== 'approved' || !profile.is_active) {
-      return NextResponse.json(
-        { error: '관리자 권한이 필요합니다.' },
-        { status: 403 }
-      )
+    if (
+      profileError ||
+      !profile.is_admin ||
+      profile.registration_status !== 'approved' ||
+      !profile.is_active
+    ) {
+      return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 })
     }
 
+    // 서비스 롤 클라이언트(있으면 RLS 우회)
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const db =
+      url && serviceKey
+        ? createClient(url, serviceKey, {
+            auth: { autoRefreshToken: false, persistSession: false },
+          })
+        : supabase
+
     // 전체 회원 데이터 조회 (복합 상태 계산용)
-    const { data: allMembers, error: membersError } = await supabase
-      .from('member_profiles')
-      .select(`
+    const { data: allMembers, error: membersError } = await db.from('member_profiles').select(`
         id,
         registration_status,
         is_active,
@@ -62,21 +73,18 @@ export async function GET(request: NextRequest) {
     // 복합 상태 기반 통계 계산
     const totalMembers = allMembers.length
     const pendingMembers = allMembers.filter(m => m.registration_status === 'pending').length
-    const activeApprovedMembers = allMembers.filter(m => 
-      m.registration_status === 'approved' && 
-      m.is_active && 
-      !m.is_suspended
+    const activeApprovedMembers = allMembers.filter(
+      m => m.registration_status === 'approved' && m.is_active && !m.is_suspended
     ).length
-    const inactiveApprovedMembers = allMembers.filter(m => 
-      m.registration_status === 'approved' && 
-      !m.is_active
+    const inactiveApprovedMembers = allMembers.filter(
+      m => m.registration_status === 'approved' && !m.is_active
     ).length
     const totalApprovedMembers = allMembers.filter(m => m.registration_status === 'approved').length
     const rejectedMembers = allMembers.filter(m => m.registration_status === 'rejected').length
     const suspendedMembers = allMembers.filter(m => m.is_suspended).length
     const artistMembers = allMembers.filter(m => m.is_artist).length
     const adminMembers = allMembers.filter(m => m.is_admin).length
-    
+
     console.log('📊 복합 통계 계산 완료:', {
       totalMembers,
       pendingMembers,
@@ -84,29 +92,29 @@ export async function GET(request: NextRequest) {
       inactiveApprovedMembers,
       totalApprovedMembers,
       rejectedMembers,
-      suspendedMembers
+      suspendedMembers,
     })
 
     // 멤버십 타입별 분포 (이미 로드된 데이터 사용)
     const membershipTypeDistribution = {
       regular: 0,
       premium: 0,
-      lifetime: 0
+      lifetime: 0,
     }
 
     allMembers.forEach(member => {
       if (member.membership_type in membershipTypeDistribution) {
-        membershipTypeDistribution[member.membership_type as keyof typeof membershipTypeDistribution]++
+        membershipTypeDistribution[
+          member.membership_type as keyof typeof membershipTypeDistribution
+        ]++
       }
     })
 
     // 월별 가입 통계 (이미 로드된 데이터 사용)
     const oneYearAgo = new Date()
     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
-    
-    const monthlyData = allMembers.filter(member => 
-      new Date(member.created_at) >= oneYearAgo
-    )
+
+    const monthlyData = allMembers.filter(member => new Date(member.created_at) >= oneYearAgo)
 
     const monthlyRegistrations: { month: string; count: number }[] = []
     const monthCounts: { [key: string]: number } = {}
@@ -136,7 +144,10 @@ export async function GET(request: NextRequest) {
     const completenessData = allMembers.filter(m => m.profile_completeness_score != null)
     let averageProfileCompleteness = 0
     if (completenessData.length > 0) {
-      const total = completenessData.reduce((sum, member) => sum + (member.profile_completeness_score || 0), 0)
+      const total = completenessData.reduce(
+        (sum, member) => sum + (member.profile_completeness_score || 0),
+        0
+      )
       averageProfileCompleteness = Math.round(total / completenessData.length)
     }
 
@@ -161,11 +172,10 @@ export async function GET(request: NextRequest) {
       monthlyRegistrations,
       membershipTypeDistribution,
       averageProfileCompleteness,
-      averageEngagementScore
+      averageEngagementScore,
     }
 
     return NextResponse.json(stats)
-
   } catch (error) {
     console.error('Member stats API error:', error)
     return NextResponse.json(
