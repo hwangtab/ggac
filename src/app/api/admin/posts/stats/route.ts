@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 
 export const dynamic = 'force-dynamic'
@@ -8,9 +9,11 @@ export const runtime = 'nodejs'
 export async function GET(request: NextRequest) {
   try {
     const supabase = createRouteHandlerClient({ cookies })
-    
+
     // Check authentication and admin status
-    const { data: { user } } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -25,34 +28,38 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
+    // service-role 우선 사용
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const db = serviceKey
+      ? createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
+
     // Get total posts count
-    const { count: totalPosts } = await supabase
+    const { count: totalPosts } = await db
       .from('posts')
       .select('id', { count: 'exact', head: true })
 
     // Get deleted posts count
-    const { count: totalDeleted } = await supabase
+    const { count: totalDeleted } = await db
       .from('posts')
       .select('id', { count: 'exact', head: true })
       .eq('is_deleted', true)
 
     // Get pinned posts count
-    const { count: totalPinned } = await supabase
+    const { count: totalPinned } = await db
       .from('posts')
       .select('id', { count: 'exact', head: true })
       .eq('is_pinned', true)
 
     // Get category stats
-    const { data: categoryData } = await supabase
-      .from('posts')
-      .select('category')
-      .eq('is_deleted', false)
+    const { data: categoryData } = await db.from('posts').select('category').eq('is_deleted', false)
 
     const categoryStats = {
       공지: 0,
       잡담: 0,
       홍보: 0,
-      건의: 0
+      건의: 0,
     }
 
     if (categoryData) {
@@ -67,7 +74,7 @@ export async function GET(request: NextRequest) {
       totalPosts: totalPosts || 0,
       totalDeleted: totalDeleted || 0,
       totalPinned: totalPinned || 0,
-      categoryStats
+      categoryStats,
     }
 
     return NextResponse.json(stats)
