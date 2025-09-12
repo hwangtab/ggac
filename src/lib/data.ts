@@ -163,7 +163,7 @@ export const getArtistsFromDB = async (): Promise<Artist[]> => {
           fetch: (input: RequestInfo | URL, init?: RequestInit) =>
             fetch(input, {
               ...init,
-              next: { revalidate: 3600, tags: ['artists'] },
+              next: { revalidate: 0, tags: ['artists'] },
             }),
         },
       }
@@ -285,7 +285,7 @@ export const getArtistBySlugFromDB = async (slug: string): Promise<Artist | null
           fetch: (input: RequestInfo | URL, init?: RequestInit) =>
             fetch(input, {
               ...init,
-              next: { revalidate: 3600, tags: ['artists'] },
+              next: { revalidate: 0, tags: ['artists'] },
             }),
         },
       }
