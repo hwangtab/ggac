@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { cache } from 'react'
+// Note: avoid React cache for artists to ensure tag-based revalidation works reliably
 
 // 메모리 효율을 위한 고급 캐시 관리
 interface CacheEntry<T> {
@@ -136,14 +137,12 @@ const DEFAULT_GLOBAL_DATA: GlobalData = {
 }
 
 // Supabase에서 전체 아티스트 목록 조회 (데이터베이스 우선, JSON 파일 백업)
-export const getArtistsFromDB = cache(async (): Promise<Artist[]> => {
+export const getArtistsFromDB = async (): Promise<Artist[]> => {
   initCaches()
 
   // 고급 캐시에서 먼저 확인
   const cached = artistCache?.get('artists')
-  if (cached) {
-    return cached
-  }
+  if (cached) return cached
   try {
     // 환경 변수 체크 추가
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
@@ -155,9 +154,19 @@ export const getArtistsFromDB = cache(async (): Promise<Artist[]> => {
 
     // 정적 생성 시점에서도 접근 가능하도록 createClient 사용
     const { createClient } = await import('@supabase/supabase-js')
+    // Attach Next.js cache tags so revalidateTag('artists') busts this cache across instances
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      {
+        global: {
+          fetch: (input: RequestInfo | URL, init?: RequestInit) =>
+            fetch(input, {
+              ...init,
+              next: { revalidate: 3600, tags: ['artists'] },
+            }),
+        },
+      }
     )
 
     // 데이터베이스에서 아티스트 목록 조회 (public 접근 가능한 데이터만)
@@ -185,10 +194,10 @@ export const getArtistsFromDB = cache(async (): Promise<Artist[]> => {
     artistCache?.set('artists', errorFallbackResult)
     return errorFallbackResult
   }
-})
+}
 
 // JSON 파일에서 아티스트 조회 (백업용)
-export const getArtistsFromJSON = cache(async (): Promise<Artist[]> => {
+export const getArtistsFromJSON = async (): Promise<Artist[]> => {
   try {
     const filePath = path.join(process.cwd(), 'data/artists.json')
     const fileContents = await fs.promises.readFile(filePath, 'utf8')
@@ -197,7 +206,7 @@ export const getArtistsFromJSON = cache(async (): Promise<Artist[]> => {
     console.error('Error loading artists data from JSON:', error)
     return []
   }
-})
+}
 
 // 기존 함수를 새로운 DB 조회 함수로 교체
 export const getArtists = getArtistsFromDB
@@ -257,7 +266,7 @@ function convertDatabaseArtistToArtist(dbArtist: DatabaseArtist): Artist {
 }
 
 // Supabase에서 아티스트 조회 (데이터베이스 우선, JSON 파일 백업)
-export const getArtistBySlugFromDB = cache(async (slug: string): Promise<Artist | null> => {
+export const getArtistBySlugFromDB = async (slug: string): Promise<Artist | null> => {
   try {
     // 환경 변수 체크 추가
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
@@ -270,7 +279,16 @@ export const getArtistBySlugFromDB = cache(async (slug: string): Promise<Artist 
     const { createClient } = await import('@supabase/supabase-js')
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      {
+        global: {
+          fetch: (input: RequestInfo | URL, init?: RequestInit) =>
+            fetch(input, {
+              ...init,
+              next: { revalidate: 3600, tags: ['artists'] },
+            }),
+        },
+      }
     )
 
     // 데이터베이스에서 아티스트 조회
@@ -299,7 +317,7 @@ export const getArtistBySlugFromDB = cache(async (slug: string): Promise<Artist 
     const artists = await getArtistsFromJSON()
     return artists.find(artist => artist.slug === slug) || null
   }
-})
+}
 
 // 기존 함수를 새로운 DB 조회 함수로 교체
 export const getArtistBySlug = getArtistBySlugFromDB
