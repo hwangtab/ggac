@@ -107,7 +107,7 @@ export async function GET(request: NextRequest) {
       ? createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
       : supabase
 
-    // Build query based on filter - STEP 3: Add attachments JOIN
+    // Build query based on filter
     let query = db
       .from('posts')
       .select(
@@ -115,6 +115,7 @@ export async function GET(request: NextRequest) {
         id,
         title,
         content,
+        content_format,
         category,
         author_id,
         created_at,
@@ -123,17 +124,9 @@ export async function GET(request: NextRequest) {
         is_pinned,
         pinned_at,
         like_count,
-        author:member_profiles (
+        author:member_profiles!posts_author_id_fkey (
           display_name,
           email
-        ),
-        attachments:post_attachments(
-          id,
-          file_name,
-          file_url,
-          file_type,
-          file_size,
-          is_primary
         )
       `
       )
