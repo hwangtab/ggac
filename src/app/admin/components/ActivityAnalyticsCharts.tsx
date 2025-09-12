@@ -44,15 +44,16 @@ interface AnalyticsChartsProps {
   days?: number
 }
 
-const ActivityAnalyticsCharts: React.FC<AnalyticsChartsProps> = ({
-  userId,
-  days = 30
-}) => {
+const ActivityAnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ userId, days = 30 }) => {
   const [patternData, setPatternData] = useState<PatternAnalysis | null>(null)
   const [trendData, setTrendData] = useState<TrendData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'patterns' | 'trends'>('patterns')
+  const [excludeTest, setExcludeTest] = useState(true)
+  const [trendPeriod, setTrendPeriod] = useState<'daily' | 'weekly' | 'monthly'>('weekly')
+  const [trendWeeks, setTrendWeeks] = useState(8)
+  const [topK, setTopK] = useState(8)
 
   const fetchAnalyticsData = useCallback(async () => {
     try {
@@ -63,9 +64,10 @@ const ActivityAnalyticsCharts: React.FC<AnalyticsChartsProps> = ({
       const patternParams = new URLSearchParams({
         type: 'activity_patterns',
         days: days.toString(),
-        ...(userId && { user_id: userId })
+        ...(userId && { user_id: userId }),
+        exclude_test: excludeTest ? 'true' : 'false',
       })
-      
+
       const patternResponse = await fetch(`/api/admin/analytics/patterns?${patternParams}`)
       if (!patternResponse.ok) {
         throw new Error('패턴 데이터 조회 실패')
@@ -76,24 +78,23 @@ const ActivityAnalyticsCharts: React.FC<AnalyticsChartsProps> = ({
       // 트렌드 분석 데이터
       const trendParams = new URLSearchParams({
         type: 'activity',
-        period: 'weekly',
-        weeks: '8'
+        period: trendPeriod,
+        weeks: String(trendWeeks),
       })
-      
+
       const trendResponse = await fetch(`/api/admin/analytics/trends?${trendParams}`)
       if (!trendResponse.ok) {
         throw new Error('트렌드 데이터 조회 실패')
       }
       const trendResult = await trendResponse.json()
       setTrendData(trendResult)
-
     } catch (err) {
       console.error('분석 데이터 조회 오류:', err)
       setError(err instanceof Error ? err.message : '데이터 조회에 실패했습니다.')
     } finally {
       setLoading(false)
     }
-  }, [userId, days])
+  }, [userId, days, excludeTest, trendPeriod, trendWeeks])
 
   useEffect(() => {
     fetchAnalyticsData()
@@ -110,7 +111,7 @@ const ActivityAnalyticsCharts: React.FC<AnalyticsChartsProps> = ({
           {hours.map(hour => {
             const count = hourlyData[hour] || 0
             const height = Math.max((count / maxValue) * 100, 2)
-            
+
             return (
               <div key={hour} className="flex flex-col items-center">
                 <div className="flex-1 flex items-end">
@@ -120,9 +121,7 @@ const ActivityAnalyticsCharts: React.FC<AnalyticsChartsProps> = ({
                     title={`${hour}:00 - ${count}개`}
                   />
                 </div>
-                <div className="text-xs text-gray-500 mt-1">
-                  {hour % 6 === 0 ? `${hour}h` : ''}
-                </div>
+                <div className="text-xs text-gray-500 mt-1">{hour % 6 === 0 ? `${hour}h` : ''}</div>
               </div>
             )
           })}
@@ -147,7 +146,7 @@ const ActivityAnalyticsCharts: React.FC<AnalyticsChartsProps> = ({
           {dayNames.map((dayName, index) => {
             const count = dayData[index] || 0
             const height = Math.max((count / maxValue) * 100, 2)
-            
+
             return (
               <div key={index} className="flex flex-col items-center">
                 <div className="flex-1 flex items-end w-full">
@@ -157,9 +156,7 @@ const ActivityAnalyticsCharts: React.FC<AnalyticsChartsProps> = ({
                     title={`${dayName}요일 - ${count}개`}
                   />
                 </div>
-                <div className="text-xs text-gray-700 mt-1 font-medium">
-                  {dayName}
-                </div>
+                <div className="text-xs text-gray-700 mt-1 font-medium">{dayName}</div>
               </div>
             )
           })}
@@ -171,21 +168,21 @@ const ActivityAnalyticsCharts: React.FC<AnalyticsChartsProps> = ({
   const renderActionTypeChart = (actionData: Record<string, number>) => {
     const sortedActions = Object.entries(actionData)
       .sort(([, a], [, b]) => b - a)
-      .slice(0, 8) // 상위 8개만 표시
+      .slice(0, topK)
 
     const maxValue = Math.max(...sortedActions.map(([, count]) => count), 1)
 
     const actionLabels: Record<string, string> = {
-      'login': '로그인',
-      'logout': '로그아웃',
-      'post_created': '게시글 작성',
-      'post_updated': '게시글 수정',
-      'comment_created': '댓글 작성',
-      'like_added': '좋아요',
-      'like_removed': '좋아요 취소',
-      'profile_updated': '프로필 수정',
-      'file_uploaded': '파일 업로드',
-      'page_viewed': '페이지 조회'
+      login: '로그인',
+      logout: '로그아웃',
+      post_created: '게시글 작성',
+      post_updated: '게시글 수정',
+      comment_created: '댓글 작성',
+      like_added: '좋아요',
+      like_removed: '좋아요 취소',
+      profile_updated: '프로필 수정',
+      file_uploaded: '파일 업로드',
+      page_viewed: '페이지 조회',
     }
 
     return (
@@ -194,10 +191,13 @@ const ActivityAnalyticsCharts: React.FC<AnalyticsChartsProps> = ({
         <div className="space-y-2">
           {sortedActions.map(([actionType, count]) => {
             const width = (count / maxValue) * 100
-            
+
             return (
               <div key={actionType} className="flex items-center gap-3">
-                <div className="w-20 text-xs text-gray-600 truncate" title={actionLabels[actionType] || actionType}>
+                <div
+                  className="w-20 text-xs text-gray-600 truncate"
+                  title={actionLabels[actionType] || actionType}
+                >
                   {actionLabels[actionType] || actionType}
                 </div>
                 <div className="flex-1 bg-gray-200 rounded-full h-4 relative">
@@ -220,15 +220,18 @@ const ActivityAnalyticsCharts: React.FC<AnalyticsChartsProps> = ({
     if (!series || series.length === 0) return null
 
     const maxValue = Math.max(...series.map(item => item.value), 1)
-    
+
     return (
       <div className="space-y-2">
         <h4 className="text-sm font-medium text-gray-700">주간 활동 트렌드</h4>
         <div className="grid grid-cols-8 gap-1 h-32">
           {series.map((item, index) => {
             const height = Math.max((item.value / maxValue) * 100, 2)
-            const weekLabel = new Date(item.date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })
-            
+            const weekLabel = new Date(item.date).toLocaleDateString('ko-KR', {
+              month: 'short',
+              day: 'numeric',
+            })
+
             return (
               <div key={index} className="flex flex-col items-center">
                 <div className="flex-1 flex items-end w-full">
@@ -251,17 +254,23 @@ const ActivityAnalyticsCharts: React.FC<AnalyticsChartsProps> = ({
 
   const getTrendIcon = (direction: string) => {
     switch (direction) {
-      case 'up': return <FiTrendingUp className="w-4 h-4 text-green-600" />
-      case 'down': return <FiTrendingUp className="w-4 h-4 text-red-600 transform rotate-180" />
-      default: return <FiBarChart className="w-4 h-4 text-gray-600" />
+      case 'up':
+        return <FiTrendingUp className="w-4 h-4 text-green-600" />
+      case 'down':
+        return <FiTrendingUp className="w-4 h-4 text-red-600 transform rotate-180" />
+      default:
+        return <FiBarChart className="w-4 h-4 text-gray-600" />
     }
   }
 
   const getTrendColor = (direction: string) => {
     switch (direction) {
-      case 'up': return 'text-green-600'
-      case 'down': return 'text-red-600'
-      default: return 'text-gray-600'
+      case 'up':
+        return 'text-green-600'
+      case 'down':
+        return 'text-red-600'
+      default:
+        return 'text-gray-600'
     }
   }
 
@@ -309,11 +318,20 @@ const ActivityAnalyticsCharts: React.FC<AnalyticsChartsProps> = ({
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-900">활동 분석</h2>
           <div className="flex items-center gap-2">
+            {/* 테스트 데이터 제외 토글 */}
+            <label className="flex items-center gap-2 text-xs text-gray-700 bg-gray-100 px-2 py-1 rounded-md">
+              <input
+                type="checkbox"
+                checked={excludeTest}
+                onChange={e => setExcludeTest(e.target.checked)}
+              />
+              테스트 데이터 제외
+            </label>
             <div className="flex bg-gray-100 rounded-lg p-1">
               <button
                 onClick={() => setActiveTab('patterns')}
                 className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                  activeTab === 'patterns' 
+                  activeTab === 'patterns'
                     ? 'bg-white text-gray-900 shadow-sm'
                     : 'text-gray-600 hover:text-gray-900'
                 }`}
@@ -323,7 +341,7 @@ const ActivityAnalyticsCharts: React.FC<AnalyticsChartsProps> = ({
               <button
                 onClick={() => setActiveTab('trends')}
                 className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                  activeTab === 'trends' 
+                  activeTab === 'trends'
                     ? 'bg-white text-gray-900 shadow-sm'
                     : 'text-gray-600 hover:text-gray-900'
                 }`}
@@ -345,6 +363,41 @@ const ActivityAnalyticsCharts: React.FC<AnalyticsChartsProps> = ({
       <div className="p-6">
         {activeTab === 'patterns' && patternData && (
           <div className="space-y-8">
+            {/* 상위 K 설정 */}
+            <div className="flex items-center gap-3 text-sm text-gray-700">
+              <label className="flex items-center gap-2">
+                상위
+                <select
+                  value={topK}
+                  onChange={e => setTopK(Number(e.target.value))}
+                  className="border rounded px-2 py-1 text-sm"
+                >
+                  {[5, 8, 10, 15].map(k => (
+                    <option key={k} value={k}>
+                      {k}
+                    </option>
+                  ))}
+                </select>
+                개 표시
+              </label>
+              {patternData.activityPatterns.dataQuality && (
+                <span
+                  className={`px-2 py-1 rounded text-xs ${
+                    patternData.activityPatterns.dataQuality.dataSource === 'real'
+                      ? 'bg-green-100 text-green-800'
+                      : patternData.activityPatterns.dataQuality.dataSource === 'mixed'
+                        ? 'bg-yellow-100 text-yellow-800'
+                        : 'bg-red-100 text-red-800'
+                  }`}
+                >
+                  {patternData.activityPatterns.dataQuality.dataSource === 'real'
+                    ? '✓ 실제 데이터'
+                    : patternData.activityPatterns.dataQuality.dataSource === 'mixed'
+                      ? `⚠ 혼합 데이터 (테스트 ${patternData.activityPatterns.dataQuality.testDataCount})`
+                      : `⚠ 테스트 데이터 (${patternData.activityPatterns.dataQuality.testDataCount})`}
+                </span>
+              )}
+            </div>
             {/* 데이터 품질 표시 */}
             {patternData.activityPatterns.dataQuality && (
               <div className="bg-gray-50 rounded-lg p-4 mb-6">
@@ -355,30 +408,38 @@ const ActivityAnalyticsCharts: React.FC<AnalyticsChartsProps> = ({
                       <div className="flex items-center gap-2">
                         <div className="w-3 h-3 bg-green-500 rounded-full"></div>
                         <span className="text-sm text-gray-700">
-                          실제 데이터: {patternData.activityPatterns.dataQuality.realDataCount.toLocaleString()}개
+                          실제 데이터:{' '}
+                          {patternData.activityPatterns.dataQuality.realDataCount.toLocaleString()}
+                          개
                         </span>
                       </div>
                       {patternData.activityPatterns.dataQuality.testDataCount > 0 && (
                         <div className="flex items-center gap-2">
                           <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
                           <span className="text-sm text-gray-700">
-                            테스트 데이터: {patternData.activityPatterns.dataQuality.testDataCount.toLocaleString()}개
+                            테스트 데이터:{' '}
+                            {patternData.activityPatterns.dataQuality.testDataCount.toLocaleString()}
+                            개
                           </span>
                         </div>
                       )}
                     </div>
                   </div>
                   <div className="text-right">
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
-                      patternData.activityPatterns.dataQuality.dataSource === 'real' 
-                        ? 'bg-green-100 text-green-800'
+                    <span
+                      className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                        patternData.activityPatterns.dataQuality.dataSource === 'real'
+                          ? 'bg-green-100 text-green-800'
+                          : patternData.activityPatterns.dataQuality.dataSource === 'mixed'
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : 'bg-red-100 text-red-800'
+                      }`}
+                    >
+                      {patternData.activityPatterns.dataQuality.dataSource === 'real'
+                        ? '✓ 실제 데이터'
                         : patternData.activityPatterns.dataQuality.dataSource === 'mixed'
-                        ? 'bg-yellow-100 text-yellow-800'
-                        : 'bg-red-100 text-red-800'
-                    }`}>
-                      {patternData.activityPatterns.dataQuality.dataSource === 'real' ? '✓ 실제 데이터' :
-                       patternData.activityPatterns.dataQuality.dataSource === 'mixed' ? '⚠ 혼합 데이터' : 
-                       '⚠ 테스트 데이터'}
+                          ? '⚠ 혼합 데이터'
+                          : '⚠ 테스트 데이터'}
                     </span>
                   </div>
                 </div>
@@ -398,7 +459,7 @@ const ActivityAnalyticsCharts: React.FC<AnalyticsChartsProps> = ({
                   <FiBarChart className="w-8 h-8 text-blue-600" />
                 </div>
               </div>
-              
+
               <div className="bg-green-50 rounded-lg p-4">
                 <div className="flex items-center justify-between">
                   <div>
@@ -410,7 +471,7 @@ const ActivityAnalyticsCharts: React.FC<AnalyticsChartsProps> = ({
                   <FiClock className="w-8 h-8 text-green-600" />
                 </div>
               </div>
-              
+
               <div className="bg-purple-50 rounded-lg p-4">
                 <div className="flex items-center justify-between">
                   <div>
@@ -433,15 +494,42 @@ const ActivityAnalyticsCharts: React.FC<AnalyticsChartsProps> = ({
                 {renderDayOfWeekChart(patternData.activityPatterns.dayOfWeekDistribution)}
               </div>
             </div>
-            
-            <div>
-              {renderActionTypeChart(patternData.activityPatterns.actionTypeDistribution)}
-            </div>
+
+            <div>{renderActionTypeChart(patternData.activityPatterns.actionTypeDistribution)}</div>
           </div>
         )}
 
         {activeTab === 'trends' && trendData && (
           <div className="space-y-8">
+            {/* 컨트롤: 기간/주 수 */}
+            <div className="flex items-center gap-3 text-sm text-gray-700">
+              <label className="flex items-center gap-2">
+                기간
+                <select
+                  value={trendPeriod}
+                  onChange={e => setTrendPeriod(e.target.value as any)}
+                  className="border rounded px-2 py-1 text-sm"
+                >
+                  <option value="daily">일간</option>
+                  <option value="weekly">주간</option>
+                  <option value="monthly">월간</option>
+                </select>
+              </label>
+              <label className="flex items-center gap-2">
+                윈도우(주)
+                <select
+                  value={trendWeeks}
+                  onChange={e => setTrendWeeks(Number(e.target.value))}
+                  className="border rounded px-2 py-1 text-sm"
+                >
+                  {[4, 8, 12, 24].map(w => (
+                    <option key={w} value={w}>
+                      {w}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
             {/* 트렌드 요약 */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-orange-50 rounded-lg p-4">
@@ -450,7 +538,9 @@ const ActivityAnalyticsCharts: React.FC<AnalyticsChartsProps> = ({
                     <p className="text-sm font-medium text-orange-900">전체 트렌드</p>
                     <div className="flex items-center gap-2">
                       {getTrendIcon(trendData.trends.overall.direction)}
-                      <span className={`text-lg font-bold ${getTrendColor(trendData.trends.overall.direction)}`}>
+                      <span
+                        className={`text-lg font-bold ${getTrendColor(trendData.trends.overall.direction)}`}
+                      >
                         {trendData.trends.overall.percentage > 0 ? '+' : ''}
                         {trendData.trends.overall.percentage}%
                       </span>
@@ -459,7 +549,7 @@ const ActivityAnalyticsCharts: React.FC<AnalyticsChartsProps> = ({
                   <FiTrendingUp className="w-8 h-8 text-orange-600" />
                 </div>
               </div>
-              
+
               <div className="bg-blue-50 rounded-lg p-4">
                 <div className="flex items-center justify-between">
                   <div>
@@ -471,7 +561,7 @@ const ActivityAnalyticsCharts: React.FC<AnalyticsChartsProps> = ({
                   <FiBarChart className="w-8 h-8 text-blue-600" />
                 </div>
               </div>
-              
+
               <div className="bg-green-50 rounded-lg p-4">
                 <div className="flex items-center justify-between">
                   <div>
@@ -486,9 +576,7 @@ const ActivityAnalyticsCharts: React.FC<AnalyticsChartsProps> = ({
             </div>
 
             {/* 트렌드 차트 */}
-            <div>
-              {renderTrendChart(trendData.series)}
-            </div>
+            <div>{renderTrendChart(trendData.series)}</div>
           </div>
         )}
       </div>
