@@ -112,18 +112,21 @@ const CommentSection: React.FC<CommentSectionProps> = ({
 
   const fetchProfiles = useCallback(async () => {
     const authorIds = Array.from(new Set(comments.map(comment => comment.author_id)))
+    if (authorIds.length === 0) return
 
-    const { data, error } = await supabase
-      .from('public_profiles')
-      .select('id, display_name')
-      .in('id', authorIds)
-
-    if (data && !error) {
-      const profileMap: Record<string, string> = {}
-      data.forEach((profile: any) => {
-        profileMap[profile.id] = profile.display_name || '알 수 없는 사용자'
-      })
-      setProfiles(prev => ({ ...prev, ...profileMap }))
+    try {
+      const res = await fetch(`/api/profiles?ids=${encodeURIComponent(authorIds.join(','))}`)
+      if (!res.ok) return
+      const json = await res.json()
+      if (json?.success && Array.isArray(json.data)) {
+        const profileMap: Record<string, string> = {}
+        json.data.forEach((p: any) => {
+          profileMap[p.id] = p.display_name || '알 수 없는 사용자'
+        })
+        setProfiles(prev => ({ ...prev, ...profileMap }))
+      }
+    } catch (_) {
+      // 네트워크 오류는 무시하고 기본 표시 유지
     }
   }, [comments])
 

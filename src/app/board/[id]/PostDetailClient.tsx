@@ -173,14 +173,20 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
           if (detail.author?.display_name) {
             setAuthorProfile({ id: detail.author_id, display_name: detail.author.display_name })
           } else {
-            const { data: authorData } = await supabase
-              .from('public_profiles')
-              .select('id, display_name')
-              .eq('id', detail.author_id)
-              .maybeSingle()
-            setAuthorProfile(
-              authorData || { id: detail.author_id, display_name: '알 수 없는 사용자' }
-            )
+            try {
+              const res = await fetch(`/api/profiles?ids=${encodeURIComponent(detail.author_id)}`)
+              if (res.ok) {
+                const json = await res.json()
+                const first = Array.isArray(json?.data) ? json.data[0] : null
+                setAuthorProfile(
+                  first || { id: detail.author_id, display_name: '알 수 없는 사용자' }
+                )
+              } else {
+                setAuthorProfile({ id: detail.author_id, display_name: '알 수 없는 사용자' })
+              }
+            } catch (_) {
+              setAuthorProfile({ id: detail.author_id, display_name: '알 수 없는 사용자' })
+            }
           }
         } else {
           // 초기 데이터가 있는 경우 사용자별 데이터만 업데이트 (좋아요 상태 등)
