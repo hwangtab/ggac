@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from '@supabase/supabase-js'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -12,13 +13,13 @@ export async function GET(request: NextRequest) {
     const supabase = createServerComponentClient({ cookies: () => cookieStore })
 
     // 사용자 인증 확인
-    const { data: { session }, error: authError } = await supabase.auth.getSession()
-    
+    const {
+      data: { session },
+      error: authError,
+    } = await supabase.auth.getSession()
+
     if (authError || !session?.user) {
-      return NextResponse.json(
-        { error: '인증이 필요합니다.' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
     // 관리자 권한 확인
@@ -30,51 +31,44 @@ export async function GET(request: NextRequest) {
 
     if (profileError) {
       console.error('Profile fetch error:', profileError)
-      return NextResponse.json(
-        { error: '프로필 정보를 조회할 수 없습니다.' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: '프로필 정보를 조회할 수 없습니다.' }, { status: 500 })
     }
 
     if (!profile.is_admin || profile.registration_status !== 'approved' || !profile.is_active) {
-      return NextResponse.json(
-        { error: '관리자 권한이 필요합니다.' },
-        { status: 403 }
-      )
+      return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 })
     }
 
     // 통계 데이터 수집
+    // 서비스 롤 클라이언트(있으면 RLS 우회, 없으면 세션 기반)
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const db =
+      url && serviceKey
+        ? createClient(url, serviceKey, {
+            auth: { autoRefreshToken: false, persistSession: false },
+          })
+        : supabase
+
     const [membersResult, postsResult, artistsResult] = await Promise.all([
-      // 전체 회원 수 및 승인 대기 회원 수
-      supabase
-        .from('member_profiles')
-        .select('registration_status', { count: 'exact' }),
-      
-      // 전체 게시글 수
-      supabase
-        .from('posts')
-        .select('*', { count: 'exact' })
-        .eq('is_deleted', false),
-      
-      // 활성 아티스트 수
-      supabase
+      db.from('member_profiles').select('registration_status', { count: 'exact' }),
+      db.from('posts').select('*', { count: 'exact' }).eq('is_deleted', false),
+      db
         .from('member_profiles')
         .select('*', { count: 'exact' })
         .eq('is_artist', true)
-        .eq('is_active', true)
+        .eq('is_active', true),
     ])
 
     // 전체 회원 수
     const totalMembers = membersResult.count || 0
-    
+
     // 승인 대기 회원 수
-    const pendingMembers = membersResult.data?.filter(
-      member => member.registration_status === 'pending'
-    ).length || 0
-    
+    const pendingMembers =
+      membersResult.data?.filter(member => member.registration_status === 'pending').length || 0
+
     // 전체 게시글 수
     const totalPosts = postsResult.count || 0
-    
+
     // 활성 아티스트 수
     const activeArtists = artistsResult.count || 0
 
@@ -82,11 +76,10 @@ export async function GET(request: NextRequest) {
       totalMembers,
       pendingApprovals: pendingMembers,
       totalPosts,
-      activeArtists
+      activeArtists,
     }
 
     return NextResponse.json(stats)
-
   } catch (error) {
     console.error('Admin stats API error:', error)
     return NextResponse.json(

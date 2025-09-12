@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from '@supabase/supabase-js'
 import { getArtists } from '@/lib/data'
 
 export const dynamic = 'force-dynamic'
@@ -13,13 +14,13 @@ export async function GET(request: NextRequest) {
     const supabase = createServerComponentClient({ cookies: () => cookieStore })
 
     // 사용자 인증 확인
-    const { data: { session }, error: authError } = await supabase.auth.getSession()
-    
+    const {
+      data: { session },
+      error: authError,
+    } = await supabase.auth.getSession()
+
     if (authError || !session?.user) {
-      return NextResponse.json(
-        { error: '인증이 필요합니다.' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
     // 관리자 권한 확인
@@ -31,26 +32,30 @@ export async function GET(request: NextRequest) {
 
     if (profileError) {
       console.error('Profile fetch error:', profileError)
-      return NextResponse.json(
-        { error: '프로필 정보를 조회할 수 없습니다.' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: '프로필 정보를 조회할 수 없습니다.' }, { status: 500 })
     }
 
     if (!profile.is_admin || profile.registration_status !== 'approved' || !profile.is_active) {
-      return NextResponse.json(
-        { error: '관리자 권한이 필요합니다.' },
-        { status: 403 }
-      )
+      return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 })
     }
 
     // JSON 파일에서 아티스트 데이터 가져오기
     const artists = await getArtists()
 
     // 각 아티스트에 대해 배정된 멤버 정보 조회
+    // 서비스 롤 클라이언트(있으면 RLS 우회)
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const db =
+      url && serviceKey
+        ? createClient(url, serviceKey, {
+            auth: { autoRefreshToken: false, persistSession: false },
+          })
+        : supabase
+
     const artistsWithMembers = await Promise.all(
-      artists.map(async (artist) => {
-        const { data: assignedMembers, error } = await supabase
+      artists.map(async artist => {
+        const { data: assignedMembers, error } = await db
           .from('member_profiles')
           .select('id, display_name, email, artist_role')
           .eq('artist_id', artist.id)
@@ -61,21 +66,20 @@ export async function GET(request: NextRequest) {
           console.error(`Error fetching members for artist ${artist.id}:`, error)
           return {
             ...artist,
-            assignedMembers: []
+            assignedMembers: [],
           }
         }
 
         return {
           ...artist,
-          assignedMembers: assignedMembers || []
+          assignedMembers: assignedMembers || [],
         }
       })
     )
 
     return NextResponse.json({
-      artists: artistsWithMembers
+      artists: artistsWithMembers,
     })
-
   } catch (error) {
     console.error('Admin artists API error:', error)
     return NextResponse.json(
