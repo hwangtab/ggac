@@ -292,7 +292,14 @@ export async function PATCH(request: NextRequest) {
     // 데이터베이스가 primary source이므로 JSON은 백업/로깅 목적으로만 사용
     setImmediate(async () => {
       try {
-        const jsonUpdateSuccess = await updateArtistInJsonFile(profile.artist_id, updateData)
+        // 아티스트 slug를 사용하여 JSON 파일 업데이트
+        const artistSlug = updatedArtist?.slug
+        if (!artistSlug) {
+          console.warn('Artist slug not found, skipping JSON sync')
+          return
+        }
+
+        const jsonUpdateSuccess = await updateArtistInJsonFile(artistSlug, updateData)
 
         if (jsonUpdateSuccess) {
           // Git commit/push는 완전히 백그라운드에서 실행 (응답 시간에 영향 없음)
