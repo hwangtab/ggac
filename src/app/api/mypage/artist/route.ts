@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { updateArtistInJsonFile, commitAndPushJsonChanges } from '@/utils/jsonSync'
@@ -209,8 +210,34 @@ export async function PATCH(request: NextRequest) {
     // 연락처 정리 (빈 문자열을 null로 변환)
     const contactValue = updateData.contact === '' ? null : updateData.contact
 
-    // 아티스트 정보 업데이트
-    const { data: updatedArtist, error: updateError } = await supabase
+    // 아티스트 정보 업데이트 (service-role 우선 사용) + 서버 측 소유자 검증
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const db = serviceKey
+      ? createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : supabase
+
+    const { data: ownerCheck, error: ownerError } = await supabase
+      .from('member_profiles')
+      .select('id, artist_id, is_artist, is_active, registration_status')
+      .eq('id', session.user.id)
+      .eq('artist_id', profile.artist_id)
+      .single()
+
+    if (
+      ownerError ||
+      !ownerCheck ||
+      !ownerCheck.is_artist ||
+      !ownerCheck.is_active ||
+      ownerCheck.registration_status !== 'approved'
+    ) {
+      return NextResponse.json(
+        { error: '아티스트 권한이 없거나 비활성 상태입니다.' },
+        { status: 403 }
+      )
+    }
+
+    const { data: updatedArtist, error: updateError } = await db
       .from('artists')
       .update({
         name: updateData.name,
@@ -231,7 +258,10 @@ export async function PATCH(request: NextRequest) {
 
     if (updateError) {
       console.error('Artist update error:', updateError)
-      return NextResponse.json({ error: '아티스트 정보 업데이트에 실패했습니다.' }, { status: 500 })
+      return NextResponse.json(
+        { error: '아티스트 정보 업데이트에 실패했습니다.', details: updateError.message },
+        { status: 500 }
+      )
     }
 
     // 🚀 즉시 캐시 무효화 - 웹사이트에 실시간 반영
