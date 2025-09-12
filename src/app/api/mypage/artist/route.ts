@@ -274,15 +274,19 @@ export async function PATCH(request: NextRequest) {
         .single()
 
       if (artistForSlug?.slug) {
-        // 관련된 모든 페이지의 캐시 무효화
+        // 관련된 모든 페이지의 캐시 무효화 (즉시 반영)
         revalidatePath(`/artists/${artistForSlug.slug}`) // 개별 아티스트 페이지
         revalidatePath('/artists') // 아티스트 목록 페이지
         revalidatePath('/') // 메인 페이지 (featured artists)
         revalidateTag('artists') // 아티스트 관련 모든 캐시
-        // 인메모리 캐시 무효화(데이터 소스: DB → JSON 폴백)
+
+        // 인메모리 캐시 강제 무효화 (즉시 최신 데이터 반영)
         invalidateArtistsCache()
 
-        console.log(`Successfully invalidated cache for artist: ${artistForSlug.slug}`)
+        // Next.js 라우터 캐시도 강제로 무효화 (추가 보험)
+        revalidatePath(`/artists/${artistForSlug.slug}`, 'page')
+
+        console.log(`✅ Successfully invalidated all caches for artist: ${artistForSlug.slug}`)
       }
     } catch (cacheError) {
       console.error('Cache invalidation error (non-blocking):', cacheError)
