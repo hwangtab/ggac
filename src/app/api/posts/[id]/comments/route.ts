@@ -12,7 +12,7 @@ const PAGE_SIZE_MAX = 100
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params
   const { searchParams } = new URL(request.url)
-  const limit = Math.min(parseInt(searchParams.get('limit') || '30', 10), PAGE_SIZE_MAX)
+  const limit = Math.min(parseInt(searchParams.get('limit') || '20', 10), PAGE_SIZE_MAX)
   const cursor = searchParams.get('cursor') || '' // format: encodeURIComponent(`${created_at}|${id}`)
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
