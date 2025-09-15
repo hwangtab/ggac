@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react'
 import Link from 'next/link'
 import OptimizedImage from '@/components/OptimizedImage'
+import { getProjectSummary } from '@/utils/projectUtils'
 import { useFilter } from '@/hooks/useFilter'
 import { ARCHIVE_CATEGORIES } from '@/constants/categories'
 import type { Project, Artist } from '@/types'
@@ -18,12 +19,15 @@ const ArchiveContent = ({ projects, artists }: ArchiveContentProps) => {
   const filteredProjects = useFilter(projects, selectedCategory, { allLabel: 'All' })
 
   // Memoize artist name lookup to prevent O(n²) operations on every render
-  const getArtistNames = useCallback((artistIds: string[]) => {
-    return artistIds
-      .map(id => artists.find(artist => artist.id === id)?.name)
-      .filter(Boolean)
-      .join(', ')
-  }, [artists])
+  const getArtistNames = useCallback(
+    (artistIds: string[]) => {
+      return artistIds
+        .map(id => artists.find(artist => artist.id === id)?.name)
+        .filter(Boolean)
+        .join(', ')
+    },
+    [artists]
+  )
 
   return (
     <div className="pt-20">
@@ -31,11 +35,12 @@ const ArchiveContent = ({ projects, artists }: ArchiveContentProps) => {
       <section className="py-16 md:py-24 bg-gradient-to-br from-primary-50 to-accent-50">
         <div className="container-custom text-center">
           <h1 className="heading-primary mb-6">
-            우리가 만들어가는<br />
+            우리가 만들어가는
+            <br />
             프로젝트들
           </h1>
           <p className="text-body text-gray-600 max-w-3xl mx-auto">
-            진행 중인 프로젝트부터 완성된 작품까지, 우리의 창작 여정을 함께 나누는 공간입니다. 
+            진행 중인 프로젝트부터 완성된 작품까지, 우리의 창작 여정을 함께 나누는 공간입니다.
             각각의 프로젝트에는 예술가들의 열정과 협동의 가치가 담겨 있습니다.
           </p>
         </div>
@@ -45,7 +50,7 @@ const ArchiveContent = ({ projects, artists }: ArchiveContentProps) => {
       <section className="py-8 bg-white sticky top-16 z-40 border-b">
         <div className="container-custom">
           <div className="flex flex-wrap justify-center gap-2">
-            {ARCHIVE_CATEGORIES.map((category) => (
+            {ARCHIVE_CATEGORIES.map(category => (
               <button
                 key={category}
                 onClick={() => setSelectedCategory(category)}
@@ -67,15 +72,12 @@ const ArchiveContent = ({ projects, artists }: ArchiveContentProps) => {
         <div className="container-custom">
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
             {filteredProjects.map((project, index) => (
-              <div 
-                key={project.id}
-                className="group opacity-100 transition-all duration-300"
-              >
+              <div key={project.id} className="group opacity-100 transition-all duration-300">
                 <Link href={`/archive/${project.slug}`}>
                   <div className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2 overflow-hidden h-full flex flex-col">
                     {/* Project Image */}
                     <div className="relative h-48 overflow-hidden flex-shrink-0">
-                      <OptimizedImage 
+                      <OptimizedImage
                         src={project.coverImage}
                         alt={project.title}
                         width={500} // 더 효율적인 크기로 최적화 (600 → 500)
@@ -98,15 +100,15 @@ const ArchiveContent = ({ projects, artists }: ArchiveContentProps) => {
                           {new Date(project.publishedDate).toLocaleDateString('ko-KR')}
                         </span>
                       </div>
-                      
+
                       <h3 className="text-lg font-post font-semibold mb-2 text-gray-700 group-hover:text-primary-600 transition-colors duration-200">
                         {project.title}
                       </h3>
-                      
+
                       <p className="text-gray-600 text-sm mb-3 line-clamp-3 flex-grow">
-                        {project.description.split('\n')[0]}
+                        {getProjectSummary(project, 120)}
                       </p>
-                      
+
                       {project.artistIds.length > 0 && (
                         <p className="text-xs text-gray-500 mt-auto">
                           참여: {getArtistNames(project.artistIds)}
@@ -121,9 +123,7 @@ const ArchiveContent = ({ projects, artists }: ArchiveContentProps) => {
 
           {filteredProjects.length === 0 && (
             <div className="text-center py-16">
-              <p className="text-gray-500 text-lg">
-                해당 카테고리에 프로젝트가 없습니다.
-              </p>
+              <p className="text-gray-500 text-lg">해당 카테고리에 프로젝트가 없습니다.</p>
             </div>
           )}
         </div>
