@@ -783,6 +783,12 @@ export interface OptimizedImageProps {
   onLoad?: () => void
   onError?: () => void
   suppressSkeleton?: boolean
+  /** Next.js 이미지 최적화를 우회할지 여부 */
+  unoptimized?: boolean
+  /** 최적화 파이프라인 대기 타임아웃(ms) */
+  loadTimeoutMs?: number
+  /** 우회 후에도 응답 없을 때 에러로 전환하기까지의 추가 타임아웃(ms) */
+  errorTimeoutMs?: number
 }
 
 // === 유틸리티 타입 정의 ===
@@ -1644,6 +1650,12 @@ export interface OptimizedImageProps {
   preserveAspectRatio?: boolean
   /** @deprecated preferWebp는 더 이상 사용되지 않음. Next.js가 자동으로 AVIF/WebP 선택 */
   preferWebp?: boolean
+  /** Next.js 이미지 최적화를 우회할지 여부 */
+  unoptimized?: boolean
+  /** 최적화 파이프라인 대기 타임아웃(ms) */
+  loadTimeoutMs?: number
+  /** 우회 후에도 응답 없을 때 에러로 전환하기까지의 추가 타임아웃(ms) */
+  errorTimeoutMs?: number
 }
 
 /**
