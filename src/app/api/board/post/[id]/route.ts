@@ -48,7 +48,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       .not('is_deleted', 'is', true)
       .single()
 
-    const COMMENTS_PAGE_SIZE = 30
+    const COMMENTS_PAGE_SIZE = 20
     const commentsQuery = supabase
       .from('comments')
       .select(

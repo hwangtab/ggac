@@ -50,7 +50,7 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
     initialData?.comments || null
   )
   const [commentsPage, setCommentsPage] = useState(1)
-  const [hasMoreComments, setHasMoreComments] = useState((initialData?.comments?.length || 0) >= 30)
+  const [hasMoreComments, setHasMoreComments] = useState((initialData?.comments?.length || 0) >= 20)
   const [commentsCursor, setCommentsCursor] = useState<string | null>(
     initialData?.comments && initialData.comments.length > 0
       ? encodeURIComponent(
@@ -177,7 +177,7 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
           })
           if (detail.comments) {
             setInitialComments(detail.comments)
-            setHasMoreComments(detail.comments.length >= 30)
+            setHasMoreComments(detail.comments.length >= 20)
             if (detail.comments.length > 0) {
               const last = detail.comments[detail.comments.length - 1]
               setCommentsCursor(encodeURIComponent(`${last.created_at}|${last.id}`))
@@ -324,7 +324,7 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
     try {
       const nextPage = commentsPage + 1
       const resp = await fetch(
-        `/api/posts/${postId}/comments?limit=30${commentsCursor ? `&cursor=${commentsCursor}` : ''}`,
+        `/api/posts/${postId}/comments?limit=20${commentsCursor ? `&cursor=${commentsCursor}` : ''}`,
         { cache: 'no-store' }
       )
       if (resp.ok) {
