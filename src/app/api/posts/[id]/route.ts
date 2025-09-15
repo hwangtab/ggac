@@ -84,6 +84,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const { searchParams } = new URL(request.url)
     const includeComments = searchParams.get('include_comments') !== 'false' // 기본적으로 포함
     const includeAttachments = searchParams.get('include_attachments') !== 'false' // 기본적으로 포함
+    const includeContent = searchParams.get('include_content') !== 'false' // 기본 포함, false면 본문 지연 로딩
     const commentsLimit = Math.min(parseInt(searchParams.get('limit') || '30', 10), 100)
     const commentsOffset = Math.max(parseInt(searchParams.get('offset') || '0', 10), 0)
 
@@ -240,12 +241,15 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     }
 
     // 응답 데이터 구성
-    const responseData = {
+    const responseData: any = {
       ...post,
       comment_count: commentCount || 0,
       is_liked: isLiked,
       comments: includeComments ? comments : undefined,
       attachments: includeAttachments ? attachments : undefined,
+    }
+    if (!includeContent) {
+      responseData.content = ''
     }
 
     const total = Date.now() - t0
