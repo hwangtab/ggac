@@ -1,6 +1,7 @@
 import { memo } from 'react'
 import Link from 'next/link'
 import OptimizedImage from '@/components/OptimizedImage'
+import { getProjectSummary } from '@/utils/projectUtils'
 import type { Project, FeaturedProjectsProps } from '@/types'
 
 const FeaturedProjects = ({ projects }: FeaturedProjectsProps) => {
@@ -10,22 +11,23 @@ const FeaturedProjects = ({ projects }: FeaturedProjectsProps) => {
         <div className="text-center mb-12">
           <h2 className="heading-secondary mb-4">최근 활동</h2>
           <p className="text-body text-gray-600 max-w-2xl mx-auto">
-            우리의 가장 최근 작업들을 만나보세요. 각각의 프로젝트는 
-            협동조합 구성원들의 창의적 실험과 협력의 결과입니다.
+            우리의 가장 최근 작업들을 만나보세요. 각각의 프로젝트는 협동조합 구성원들의 창의적
+            실험과 협력의 결과입니다.
           </p>
         </div>
 
         <div className="grid md:grid-cols-2 gap-8 lg:gap-12">
           {projects.map((project, index) => (
-            <div 
-              key={project.id}
-              className={`group ${index === 0 ? 'md:col-span-2' : ''}`}
-            >
+            <div key={project.id} className={`group ${index === 0 ? 'md:col-span-2' : ''}`}>
               <Link href={`/archive/${project.slug}`}>
-                <div className={`relative overflow-hidden rounded-2xl bg-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2 ${index === 0 ? '' : 'h-full'}`}>
+                <div
+                  className={`relative overflow-hidden rounded-2xl bg-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2 ${index === 0 ? '' : 'h-full'}`}
+                >
                   {/* Project Image */}
-                  <div className={`relative ${index === 0 ? 'h-64 md:h-80' : 'h-64'} overflow-hidden`}>
-                    <OptimizedImage 
+                  <div
+                    className={`relative ${index === 0 ? 'h-64 md:h-80' : 'h-64'} overflow-hidden`}
+                  >
+                    <OptimizedImage
                       src={project.coverImage}
                       alt={project.title}
                       width={800}
@@ -47,13 +49,15 @@ const FeaturedProjects = ({ projects }: FeaturedProjectsProps) => {
                         {new Date(project.publishedDate).toLocaleDateString('ko-KR')}
                       </span>
                     </div>
-                    
+
                     <h3 className="text-xl font-post font-semibold mb-3 text-gray-700 group-hover:text-primary-600 transition-colors duration-200">
                       {project.title}
                     </h3>
-                    
-                    <p className={`text-gray-600 ${index === 0 ? 'line-clamp-3' : 'line-clamp-4 flex-grow'}`}>
-                      {project.description.split('\n')[0]}
+
+                    <p
+                      className={`text-gray-600 ${index === 0 ? 'line-clamp-3' : 'line-clamp-4 flex-grow'}`}
+                    >
+                      {getProjectSummary(project, index === 0 ? 120 : 150)}
                     </p>
                   </div>
                 </div>
@@ -63,7 +67,7 @@ const FeaturedProjects = ({ projects }: FeaturedProjectsProps) => {
         </div>
 
         <div className="text-center mt-12">
-          <Link 
+          <Link
             href="/archive"
             className="btn-primary text-lg px-8 py-4 sm:px-8 sm:py-3 rounded-lg w-full sm:w-auto text-center min-h-[44px] hover:-translate-y-0.5 hover:shadow-lg transition-all duration-300"
           >

@@ -12,12 +12,12 @@ import type { BoardCategory } from '@/constants/categories'
 /**
  * 설정 카테고리
  */
-export type SettingCategory = 
-  | 'notification'    // 알림 설정
-  | 'privacy'        // 개인정보 설정
-  | 'interface'      // 인터페이스 설정
-  | 'security'       // 보안 설정
-  | 'preference'     // 개인 취향 설정
+export type SettingCategory =
+  | 'notification' // 알림 설정
+  | 'privacy' // 개인정보 설정
+  | 'interface' // 인터페이스 설정
+  | 'security' // 보안 설정
+  | 'preference' // 개인 취향 설정
 
 /**
  * 사용자 설정 인터페이스
@@ -244,17 +244,17 @@ export interface MediaManagerConfig {
 /**
  * 알림 유형
  */
-export type NotificationType = 
-  | 'post_new'          // 새 게시글 알림
-  | 'post_reply'        // 게시글 댓글 알림
-  | 'post_mention'      // 게시글 멘션 알림
-  | 'member_approved'   // 회원 승인 알림
-  | 'member_rejected'   // 회원 거부 알림
-  | 'artist_approved'   // 아티스트 권한 승인 알림
-  | 'artist_rejected'   // 아티스트 권한 거부 알림
-  | 'system_notice'     // 시스템 공지 알림
-  | 'maintenance'       // 점검 알림
-  | 'welcome'           // 환영 메시지
+export type NotificationType =
+  | 'post_new' // 새 게시글 알림
+  | 'post_reply' // 게시글 댓글 알림
+  | 'post_mention' // 게시글 멘션 알림
+  | 'member_approved' // 회원 승인 알림
+  | 'member_rejected' // 회원 거부 알림
+  | 'artist_approved' // 아티스트 권한 승인 알림
+  | 'artist_rejected' // 아티스트 권한 거부 알림
+  | 'system_notice' // 시스템 공지 알림
+  | 'maintenance' // 점검 알림
+  | 'welcome' // 환영 메시지
 
 /**
  * 알림 인터페이스
@@ -365,22 +365,22 @@ export interface NotificationListResponse {
 /**
  * 필터 연산자
  */
-export type FilterOperator = 
-  | 'equals'           // 같음
-  | 'not_equals'       // 같지 않음
-  | 'contains'         // 포함
-  | 'not_contains'     // 포함하지 않음
-  | 'starts_with'      // 시작
-  | 'ends_with'        // 끝남
-  | 'greater_than'     // 초과
-  | 'greater_equal'    // 이상
-  | 'less_than'        // 미만
-  | 'less_equal'       // 이하
-  | 'between'          // 범위
-  | 'in'               // 목록에 포함
-  | 'not_in'           // 목록에 미포함
-  | 'is_null'          // null임
-  | 'is_not_null'      // null이 아님
+export type FilterOperator =
+  | 'equals' // 같음
+  | 'not_equals' // 같지 않음
+  | 'contains' // 포함
+  | 'not_contains' // 포함하지 않음
+  | 'starts_with' // 시작
+  | 'ends_with' // 끝남
+  | 'greater_than' // 초과
+  | 'greater_equal' // 이상
+  | 'less_than' // 미만
+  | 'less_equal' // 이하
+  | 'between' // 범위
+  | 'in' // 목록에 포함
+  | 'not_in' // 목록에 미포함
+  | 'is_null' // null임
+  | 'is_not_null' // null이 아님
 
 /**
  * 필터 조건
@@ -580,6 +580,8 @@ export interface Project {
   ticketing?: TicketingInfo[]
   /** 관련 기사들 */
   relatedArticles?: RelatedArticle[]
+  /** 커스텀 요약 (선택적) - 없으면 스마트 추출 사용 */
+  summary?: string
 }
 
 /**
@@ -691,7 +693,6 @@ export interface BusinessInfo {
   registrationNumber: string
 }
 
-
 // === API 응답 타입 정의 ===
 
 /**
@@ -789,12 +790,18 @@ export interface OptimizedImageProps {
 /**
  * 필수 필드만 포함하는 아티스트 요약 타입
  */
-export type ArtistSummary = Pick<Artist, 'id' | 'slug' | 'name' | 'category' | 'profileImage' | 'oneLiner'>
+export type ArtistSummary = Pick<
+  Artist,
+  'id' | 'slug' | 'name' | 'category' | 'profileImage' | 'oneLiner'
+>
 
 /**
  * 필수 필드만 포함하는 프로젝트 요약 타입
  */
-export type ProjectSummary = Pick<Project, 'id' | 'slug' | 'title' | 'category' | 'publishedDate' | 'coverImage' | 'description'>
+export type ProjectSummary = Pick<
+  Project,
+  'id' | 'slug' | 'title' | 'category' | 'publishedDate' | 'coverImage' | 'description'
+>
 
 /**
  * 폼 데이터 검증용 타입 (회원가입 등)
@@ -816,7 +823,7 @@ export interface FormValidationResult {
 export enum ArtistCategory {
   CREATOR = '창작자',
   ORGANIZER = '기획자',
-  BOTH = '창작자/기획자'
+  BOTH = '창작자/기획자',
 }
 
 /**
@@ -827,7 +834,7 @@ export enum ProjectCategory {
   EXHIBITION = '전시',
   MUSIC = '음악',
   MULTIMEDIA = '멀티미디어',
-  COLLABORATION = '협업'
+  COLLABORATION = '협업',
 }
 
 /**
@@ -835,7 +842,7 @@ export enum ProjectCategory {
  */
 export enum TemplateType {
   MINIMAL = '미니멀형',
-  COLLAGE = '콜라주형'
+  COLLAGE = '콜라주형',
 }
 
 // === 상수 정의 ===
@@ -855,7 +862,7 @@ export const DEFAULT_VALUES = {
   /** 이미지 최적화 기본 품질 */
   IMAGE_QUALITY: 85,
   /** 캐시 만료 시간 (초) */
-  CACHE_DURATION: 3600
+  CACHE_DURATION: 3600,
 } as const
 
 /**
@@ -866,7 +873,7 @@ export const BREAKPOINTS = {
   MD: '768px',
   LG: '1024px',
   XL: '1280px',
-  '2XL': '1536px'
+  '2XL': '1536px',
 } as const
 
 /**
@@ -877,34 +884,36 @@ export const BREAKPOINTS = {
  * Artist 타입 검증
  */
 export function isArtist(obj: any): obj is Artist {
-  return typeof obj === 'object' &&
+  return (
+    typeof obj === 'object' &&
     typeof obj.id === 'string' &&
     typeof obj.slug === 'string' &&
     typeof obj.name === 'string' &&
     typeof obj.oneLiner === 'string' &&
     typeof obj.bio === 'string'
+  )
 }
 
 /**
  * Project 타입 검증
  */
 export function isProject(obj: any): obj is Project {
-  return typeof obj === 'object' &&
+  return (
+    typeof obj === 'object' &&
     typeof obj.id === 'string' &&
     typeof obj.slug === 'string' &&
     typeof obj.title === 'string' &&
     typeof obj.category === 'string' &&
     typeof obj.publishedDate === 'string' &&
     Array.isArray(obj.artistIds)
+  )
 }
 
 /**
  * LinkPreview 타입 검증
  */
 export function isLinkPreview(obj: any): obj is LinkPreview {
-  return typeof obj === 'object' &&
-    typeof obj.title === 'string' &&
-    typeof obj.url === 'string'
+  return typeof obj === 'object' && typeof obj.title === 'string' && typeof obj.url === 'string'
 }
 
 // === 게시판 시스템 타입 정의 ===
@@ -1016,67 +1025,67 @@ export interface PostAttachment {
 // 임시 첨부 파일에 대한 확장된 타입 정의
 export interface TempPostAttachment extends PostAttachment {
   /** 임시 파일 여부 */
-  is_temporary: true;
+  is_temporary: true
   /** 임시 세션 ID (사용자 ID) */
-  temp_session: string;
+  temp_session: string
   /** 만료 시간 */
-  expires_at: string;
+  expires_at: string
 }
 
 // 일반 첨부 파일 타입 (임시가 아닌)
 export interface PermanentPostAttachment extends PostAttachment {
   /** 임시 파일 여부 */
-  is_temporary: false;
+  is_temporary: false
   /** 임시 세션 ID (일반 파일은 null) */
-  temp_session?: never;
+  temp_session?: never
   /** 만료 시간 (일반 파일은 null) */
-  expires_at?: never;
+  expires_at?: never
 }
 
 // Union 타입으로 모든 첨부 파일 커버
-export type AnyPostAttachment = TempPostAttachment | PermanentPostAttachment;
+export type AnyPostAttachment = TempPostAttachment | PermanentPostAttachment
 
 // 파일 업로드 응답에 대한 강화된 타입
 export interface FileUploadSuccessResponse {
-  success: true;
-  message: string;
-  attachment: AnyPostAttachment;
-  url: string;
+  success: true
+  message: string
+  attachment: AnyPostAttachment
+  url: string
   // 임시 파일인 경우에만 존재
-  tempId?: string;
-  expiresAt?: string;
+  tempId?: string
+  expiresAt?: string
 }
 
 export interface FileUploadErrorResponse {
-  success: false;
-  error: string;
-  details?: string[];
+  success: false
+  error: string
+  details?: string[]
 }
 
-export type FileUploadApiResponse = FileUploadSuccessResponse | FileUploadErrorResponse;
+export type FileUploadApiResponse = FileUploadSuccessResponse | FileUploadErrorResponse
 
 // 파일 검증 결과에 대한 강화된 타입
 export interface StrictFileValidationResult {
-  readonly isValid: boolean;
-  readonly fileType: 'image' | 'document' | 'video' | 'audio' | null;
-  readonly errors: readonly string[];
-  readonly warnings: readonly string[];
-  readonly detectedMimeType?: string;
-  readonly detectedExtension?: string;
-  readonly securityRisk: 'none' | 'low' | 'medium' | 'high';
+  readonly isValid: boolean
+  readonly fileType: 'image' | 'document' | 'video' | 'audio' | null
+  readonly errors: readonly string[]
+  readonly warnings: readonly string[]
+  readonly detectedMimeType?: string
+  readonly detectedExtension?: string
+  readonly securityRisk: 'none' | 'low' | 'medium' | 'high'
 }
 
 // UUID 검증 결과에 대한 강화된 타입
 export interface UUIDValidationResult {
-  readonly isValid: boolean;
-  readonly sanitized: string;
-  readonly errors: readonly string[];
-  readonly warnings: readonly string[];
-  readonly idType: 'uuid' | 'temp-id' | 'invalid';
+  readonly isValid: boolean
+  readonly sanitized: string
+  readonly errors: readonly string[]
+  readonly warnings: readonly string[]
+  readonly idType: 'uuid' | 'temp-id' | 'invalid'
 }
 
 // 보안 이벤트 로깅을 위한 타입
-export type SecurityEventType = 
+export type SecurityEventType =
   // 기본 보안 이벤트
   | 'INVALID_UUID_OR_TEMP_ID_FORMAT'
   | 'TEMP_ID_USAGE'
@@ -1152,7 +1161,7 @@ export type SecurityEventType =
   | 'ADMIN_SETTINGS_RESET_TO_DEFAULTS'
   | 'ADMIN_SETTINGS_RESET_ERROR'
   | 'ADMIN_AUTH_ERROR'
-  | 'ADMIN_PERMISSION_DENIED' 
+  | 'ADMIN_PERMISSION_DENIED'
   | 'ADMIN_INVALID_REQUEST'
   | 'ADMIN_DATABASE_ERROR'
   | 'ADMIN_EXPORT_ERROR'
@@ -1183,7 +1192,7 @@ export type SecurityEventType =
   | 'SETTINGS_VALIDATION_FAILED'
   | 'ADMIN_SETTINGS_CACHE_INVALIDATED'
   | 'ADMIN_SETTINGS_CACHE_INVALIDATION_ERROR'
-  
+
   // 파일 검증 관련 보안 이벤트
   | 'DANGEROUS_FILE_EXTENSION'
   | 'SUSPICIOUS_IMAGE_URL'
@@ -1199,52 +1208,52 @@ export type SecurityEventType =
   | 'MALICIOUS_URL'
   | 'MALICIOUS_FILENAME'
   | 'SQL_INJECTION_IN_SEARCH'
-  | 'XSS_IN_SEARCH';
+  | 'XSS_IN_SEARCH'
 
-export type SecurityEventSeverity = 'low' | 'medium' | 'high';
+export type SecurityEventSeverity = 'low' | 'medium' | 'high'
 
 export interface SecurityEventContext {
-  readonly [key: string]: unknown;
-  readonly timestamp?: string;
-  readonly userAgent?: string;
-  readonly clientIP?: string;
+  readonly [key: string]: unknown
+  readonly timestamp?: string
+  readonly userAgent?: string
+  readonly clientIP?: string
 }
 
 // CSP 위반 리포트 타입
 export interface CSPViolationReport {
-  readonly 'document-uri': string;
-  readonly referrer: string;
-  readonly 'violated-directive': string;
-  readonly 'effective-directive': string;
-  readonly 'original-policy': string;
-  readonly disposition: string;
-  readonly 'blocked-uri': string;
-  readonly 'line-number'?: number;
-  readonly 'column-number'?: number;
-  readonly 'source-file'?: string;
+  readonly 'document-uri': string
+  readonly referrer: string
+  readonly 'violated-directive': string
+  readonly 'effective-directive': string
+  readonly 'original-policy': string
+  readonly disposition: string
+  readonly 'blocked-uri': string
+  readonly 'line-number'?: number
+  readonly 'column-number'?: number
+  readonly 'source-file'?: string
 }
 
 export interface CSPReportWrapper {
-  readonly 'csp-report': CSPViolationReport;
+  readonly 'csp-report': CSPViolationReport
 }
 
 // 클린업 작업에 대한 타입
 export interface TempFileCleanupResult {
-  readonly message: string;
-  readonly cleaned: number;
+  readonly message: string
+  readonly cleaned: number
   readonly files: readonly {
-    readonly id: string;
-    readonly fileName: string;
-  }[];
+    readonly id: string
+    readonly fileName: string
+  }[]
 }
 
 export interface TempFileCleanupStats {
-  readonly total: number;
-  readonly active: number;
-  readonly expired: number;
-  readonly totalSize: number;
-  readonly expiredSize: number;
-  readonly expiredSizeMB: number;
+  readonly total: number
+  readonly active: number
+  readonly expired: number
+  readonly totalSize: number
+  readonly expiredSize: number
+  readonly expiredSizeMB: number
 }
 
 /**
@@ -1354,7 +1363,7 @@ export interface PostLikeStats {
 /**
  * 활동 타입 열거형
  */
-export type ActivityActionType = 
+export type ActivityActionType =
   | 'login'
   | 'logout'
   | 'post_created'
@@ -1380,7 +1389,7 @@ export type ActivityActionType =
 /**
  * 대상 타입 열거형
  */
-export type ActivityTargetType = 
+export type ActivityTargetType =
   | 'post'
   | 'comment'
   | 'user'
@@ -1593,13 +1602,15 @@ export interface CommentWithLikes extends Comment {
  * Post 타입 검증
  */
 export function isPost(obj: any): obj is Post {
-  return typeof obj === 'object' &&
+  return (
+    typeof obj === 'object' &&
     typeof obj.id === 'string' &&
     typeof obj.title === 'string' &&
     typeof obj.content === 'string' &&
     typeof obj.category === 'string' &&
     typeof obj.author_id === 'string' &&
     typeof obj.created_at === 'string'
+  )
 }
 
 // === 컴포넌트 Props 타입 정의 ===
@@ -1778,7 +1789,7 @@ export interface MemberProfile {
   approved_by?: string
   /** 거부자 */
   rejected_by?: string
-  
+
   // 아티스트 관련 필드
   /** 연결된 아티스트 ID */
   artist_id?: string | null
@@ -1786,13 +1797,13 @@ export interface MemberProfile {
   is_artist: boolean
   /** 아티스트 역할 */
   artist_role: 'owner' | 'manager' | 'collaborator'
-  
+
   // 프로필 사진 관련 필드
   /** 프로필 사진 URL */
   profile_photo_url?: string | null
   /** 프로필 사진 메타데이터 */
   profile_photo_metadata?: ProfilePhotoMetadata
-  
+
   // 새로운 상태 관리 필드
   /** 마지막 로그인 시간 */
   last_login_at?: string
@@ -1853,7 +1864,7 @@ export interface DatabaseArtist {
   created_at: string
   /** 수정일시 */
   updated_at: string
-  
+
   /** 연결된 멤버 정보 (조인 시 사용) */
   members?: {
     id: string
@@ -2031,12 +2042,33 @@ export interface ArtistPermissionCheck {
 /**
  * 아티스트 요약 정보 타입 (목록 표시용)
  */
-export type ArtistSummaryDB = Pick<DatabaseArtist, 'id' | 'legacy_id' | 'slug' | 'name' | 'category' | 'profile_photo_url' | 'profile_photo_metadata' | 'one_liner' | 'template_type'>
+export type ArtistSummaryDB = Pick<
+  DatabaseArtist,
+  | 'id'
+  | 'legacy_id'
+  | 'slug'
+  | 'name'
+  | 'category'
+  | 'profile_photo_url'
+  | 'profile_photo_metadata'
+  | 'one_liner'
+  | 'template_type'
+>
 
 /**
  * 멤버 프로필 요약 정보 타입
  */
-export type MemberProfileSummary = Pick<MemberProfile, 'id' | 'display_name' | 'email' | 'is_artist' | 'artist_id' | 'artist_role' | 'registration_status' | 'is_active'>
+export type MemberProfileSummary = Pick<
+  MemberProfile,
+  | 'id'
+  | 'display_name'
+  | 'email'
+  | 'is_artist'
+  | 'artist_id'
+  | 'artist_role'
+  | 'registration_status'
+  | 'is_active'
+>
 
 /**
  * 마이페이지 메뉴 아이템 타입
@@ -2057,26 +2089,30 @@ export interface MypageMenuItem {
  * MemberProfile 타입 가드
  */
 export function isMemberProfile(obj: any): obj is MemberProfile {
-  return typeof obj === 'object' &&
+  return (
+    typeof obj === 'object' &&
     typeof obj.id === 'string' &&
     typeof obj.display_name === 'string' &&
     typeof obj.email === 'string' &&
     typeof obj.registration_status === 'string' &&
     typeof obj.is_active === 'boolean' &&
     typeof obj.is_artist === 'boolean'
+  )
 }
 
 /**
  * DatabaseArtist 타입 가드
  */
 export function isDatabaseArtist(obj: any): obj is DatabaseArtist {
-  return typeof obj === 'object' &&
+  return (
+    typeof obj === 'object' &&
     typeof obj.id === 'string' &&
     typeof obj.legacy_id === 'string' &&
     typeof obj.slug === 'string' &&
     typeof obj.name === 'string' &&
     Array.isArray(obj.category) &&
     typeof obj.template_type === 'string'
+  )
 }
 
 /**
@@ -2100,7 +2136,16 @@ export interface MemberStatusHistory {
   /** 변경 수행자 ID */
   changed_by?: string
   /** 수행된 액션 */
-  action: 'approve' | 'reject' | 'activate' | 'deactivate' | 'suspend' | 'unsuspend' | 'promote' | 'demote' | 'update'
+  action:
+    | 'approve'
+    | 'reject'
+    | 'activate'
+    | 'deactivate'
+    | 'suspend'
+    | 'unsuspend'
+    | 'promote'
+    | 'demote'
+    | 'update'
   /** 이전 상태 */
   previous_status: any
   /** 새로운 상태 */
@@ -2149,7 +2194,13 @@ export interface MemberBulkOperation {
   /** 고유 식별자 */
   id: string
   /** 작업 타입 */
-  operation_type: 'bulk_approve' | 'bulk_reject' | 'bulk_activate' | 'bulk_deactivate' | 'bulk_suspend' | 'bulk_export'
+  operation_type:
+    | 'bulk_approve'
+    | 'bulk_reject'
+    | 'bulk_activate'
+    | 'bulk_deactivate'
+    | 'bulk_suspend'
+    | 'bulk_export'
   /** 수행자 ID */
   performed_by: string
   /** 대상 멤버 ID 목록 */
@@ -2219,7 +2270,12 @@ export interface MemberStatistics {
  */
 export interface BulkOperationRequest {
   /** 작업 타입 */
-  operation_type: 'bulk_approve' | 'bulk_reject' | 'bulk_activate' | 'bulk_deactivate' | 'bulk_suspend'
+  operation_type:
+    | 'bulk_approve'
+    | 'bulk_reject'
+    | 'bulk_activate'
+    | 'bulk_deactivate'
+    | 'bulk_suspend'
   /** 대상 멤버 ID 목록 */
   member_ids: string[]
   /** 작업 파라미터 */
@@ -2236,7 +2292,15 @@ export interface BulkOperationRequest {
 /**
  * 멤버 액션 타입
  */
-export type MemberAction = 'approve' | 'reject' | 'activate' | 'deactivate' | 'suspend' | 'unsuspend' | 'promote' | 'demote'
+export type MemberAction =
+  | 'approve'
+  | 'reject'
+  | 'activate'
+  | 'deactivate'
+  | 'suspend'
+  | 'unsuspend'
+  | 'promote'
+  | 'demote'
 
 /**
  * 멤버 필터 옵션
@@ -2279,7 +2343,7 @@ export interface MemberFilterOptions {
 export const ARTIST_ROLES = {
   OWNER: 'owner',
   MANAGER: 'manager',
-  COLLABORATOR: 'collaborator'
+  COLLABORATOR: 'collaborator',
 } as const
 
 /**
@@ -2287,7 +2351,7 @@ export const ARTIST_ROLES = {
  */
 export const TEMPLATE_TYPES = {
   MINIMAL: '미니멀형',
-  COLLAGE: '콜라주형'
+  COLLAGE: '콜라주형',
 } as const
 
 /**
@@ -2297,5 +2361,5 @@ export const FILE_UPLOAD_LIMITS = {
   MAX_SIZE: 5 * 1024 * 1024, // 5MB
   ACCEPTED_TYPES: ['image/jpeg', 'image/png', 'image/webp'],
   MAX_PORTFOLIO_LINKS: 10,
-  MAX_YOUTUBE_VIDEOS: 20
+  MAX_YOUTUBE_VIDEOS: 20,
 } as const
