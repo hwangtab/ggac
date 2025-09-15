@@ -324,7 +324,7 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
     try {
       const nextPage = commentsPage + 1
       const resp = await fetch(
-        `/api/posts/${postId}/comments?limit=20${commentsCursor ? `&cursor=${commentsCursor}` : ''}`,
+        `/api/posts/${postId}/comments/list?limit=20${commentsCursor ? `&cursor=${commentsCursor}` : ''}`,
         { cache: 'no-store' }
       )
       if (resp.ok) {
