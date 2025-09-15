@@ -18,6 +18,9 @@ interface ProjectPageProps {
   }>
 }
 
+// ISR: 참여 아티스트명 등 외부 데이터 변경을 주기적으로 반영
+export const revalidate = 3600 // 1시간마다 재생성
+
 // generateStaticParams 개선 - 환경 변수 안전성 체크 추가
 export async function generateStaticParams() {
   try {
