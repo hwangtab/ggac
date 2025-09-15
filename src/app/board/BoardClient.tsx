@@ -19,7 +19,8 @@ interface BoardClientProps {
 export default function BoardClient({ initialData }: BoardClientProps) {
   const [user, setUser] = useState<any>(null)
   const [isMember, setIsMember] = useState<boolean>(false)
-  const [userLoading, setUserLoading] = useState(true)
+  // 사용자의 인증/프로필 확인이 늦더라도 목록 렌더를 막지 않도록 기본 false
+  const [userLoading, setUserLoading] = useState(false)
   const [posts, setPosts] = useState<Post[]>(initialData?.posts || [])
   const [hasNext, setHasNext] = useState(initialData?.hasNext || false)
   const [nextCursor, setNextCursor] = useState<string | null>(initialData?.nextCursor || null)
@@ -103,6 +104,7 @@ export default function BoardClient({ initialData }: BoardClientProps) {
       }
     }
 
+    // 인증/프로필 확인은 비동기적으로 진행하되, 목록 렌더는 차단하지 않음
     fetchUserAndProfile()
 
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -195,11 +197,7 @@ export default function BoardClient({ initialData }: BoardClientProps) {
     router.push(`/board?${params.toString()}`)
   }
 
-  if (userLoading) {
-    return (
-      <div className="min-h-screen pt-24 md:pt-28 flex items-center justify-center">Loading...</div>
-    )
-  }
+  // 사용자 로딩 상태로 전체 화면을 막지 않음
 
   return (
     <div className="min-h-screen bg-gray-50 pt-20 md:pt-24">
