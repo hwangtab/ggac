@@ -46,7 +46,17 @@ export function usePostLikes({
     isLiked: initialIsLiked,
   })
 
-  const supabase = createClientComponentClient()
+  // Lazily initialize Supabase client and auth session at idle to avoid
+  // impacting initial render on list/detail views.
+  const supabaseRef = useRef<ReturnType<typeof createClientComponentClient> | null>(null)
+
+  const scheduleIdle = (fn: () => void) => {
+    if (typeof (window as any).requestIdleCallback === 'function') {
+      ;(window as any).requestIdleCallback(fn, { timeout: 2000 })
+    } else {
+      setTimeout(fn, 0)
+    }
+  }
 
   // 중복 요청 방지 및 캐싱
   const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -63,24 +73,30 @@ export function usePostLikes({
 
   // 사용자 정보 가져오기
   useEffect(() => {
-    const getUser = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      setUser(session?.user || null)
-    }
-
-    getUser()
-
-    // 인증 상태 변경 리스너
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      setUser(session?.user || null)
+    let unsub: (() => void) | null = null
+    scheduleIdle(() => {
+      try {
+        if (!supabaseRef.current) supabaseRef.current = createClientComponentClient()
+        const supabase = supabaseRef.current
+        ;(async () => {
+          const {
+            data: { session },
+          } = await supabase!.auth.getSession()
+          setUser(session?.user || null)
+        })()
+        const { data } = supabase!.auth.onAuthStateChange((_event, session) => {
+          setUser(session?.user || null)
+        })
+        unsub = () => data.subscription.unsubscribe()
+      } catch {}
     })
 
-    return () => subscription.unsubscribe()
-  }, [supabase])
+    return () => {
+      try {
+        unsub && unsub()
+      } catch {}
+    }
+  }, [])
 
   // 좋아요 상태 초기화 및 조회 - 디바운싱 및 중복 방지 추가
   const fetchLikeStatus = useCallback(
