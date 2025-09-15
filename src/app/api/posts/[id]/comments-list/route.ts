@@ -11,7 +11,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   const { id } = await context.params
   const { searchParams } = new URL(request.url)
   const limit = Math.min(parseInt(searchParams.get('limit') || '20', 10), PAGE_SIZE_MAX)
-  const cursor = searchParams.get('cursor') || '' // format: encodeURIComponent(`${created_at}|${id}`)
+  const cursor = searchParams.get('cursor') || ''
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -25,7 +25,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   })
 
   try {
-    // Try RPC keyset if exists
     try {
       const rpcLimit = limit + 1
       const parts = cursor ? decodeURIComponent(cursor).split('|') : []
@@ -52,7 +51,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       }
     } catch {}
 
-    // Fallback: direct select and in-memory keyset filter
     let query = supabase
       .from('comments')
       .select(
