@@ -170,31 +170,47 @@ export default function BoardClient({ initialData }: BoardClientProps) {
   }, [cursor, category, initialData])
 
   const handleCategoryChange = (newCategory: string) => {
+    setLoading(true)
     const params = new URLSearchParams()
     if (newCategory !== '전체') {
       params.set('category', newCategory)
     }
-    router.push(`/board?${params.toString()}`)
+    const url = `/board?${params.toString()}`
+    try {
+      // 사전 프리패치로 체감 로딩 감소
+      ;(router as any).prefetch?.(url)
+    } catch {}
+    router.push(url)
   }
 
   const handleNextPage = () => {
     if (nextCursor) {
+      setLoading(true)
       const params = new URLSearchParams()
       params.set('cursor', nextCursor)
       if (category !== '전체') {
         params.set('category', category)
       }
-      router.push(`/board?${params.toString()}`)
+      const url = `/board?${params.toString()}`
+      try {
+        ;(router as any).prefetch?.(url)
+      } catch {}
+      router.push(url)
     }
   }
 
   const handlePrevPage = () => {
     // 이전 페이지는 단순화: 첫 페이지로 돌아가기
+    setLoading(true)
     const params = new URLSearchParams()
     if (category !== '전체') {
       params.set('category', category)
     }
-    router.push(`/board?${params.toString()}`)
+    const url = `/board?${params.toString()}`
+    try {
+      ;(router as any).prefetch?.(url)
+    } catch {}
+    router.push(url)
   }
 
   // 사용자 로딩 상태로 전체 화면을 막지 않음
