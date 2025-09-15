@@ -32,7 +32,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         content,
         author_id,
         created_at,
-        like_count,
         author:member_profiles!comments_author_id_fkey (display_name)
       `
       )
@@ -81,9 +80,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       nextCursor = encodeURIComponent(`${last.created_at}|${last.id}`)
     }
 
+    const normalized = (comments as any[]).map(c => ({
+      ...c,
+      like_count: (c as any).like_count ?? 0,
+    }))
     return NextResponse.json({
       success: true,
-      data: { comments, has_next: hasNext, next_cursor: nextCursor },
+      data: { comments: normalized, has_next: hasNext, next_cursor: nextCursor },
     })
   } catch (e: any) {
     return NextResponse.json(
