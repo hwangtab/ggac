@@ -196,7 +196,12 @@ async function PostDetailServerData({ postId }: { postId: string }) {
     const proto = h.get('x-forwarded-proto') || 'https'
     const host = (h.get('x-forwarded-host') || h.get('host') || '') as string
     const url = `${proto}://${host}/api/board/post/${postId}`
-    const res = await fetch(url, { next: { revalidate: 60, tags: ['board-post', postId] } })
+    const res = await fetch(url, {
+      next: {
+        revalidate: 60,
+        tags: ['board-post', postId, `comments-post-${postId}`, `attachments-post-${postId}`],
+      },
+    })
     if (res.ok) {
       const json = await res.json()
       return (

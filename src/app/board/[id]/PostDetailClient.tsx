@@ -51,6 +51,13 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
   )
   const [commentsPage, setCommentsPage] = useState(1)
   const [hasMoreComments, setHasMoreComments] = useState((initialData?.comments?.length || 0) >= 30)
+  const [commentsCursor, setCommentsCursor] = useState<string | null>(
+    initialData?.comments && initialData.comments.length > 0
+      ? encodeURIComponent(
+          `${initialData.comments[initialData.comments.length - 1].created_at}|${initialData.comments[initialData.comments.length - 1].id}`
+        )
+      : null
+  )
   const [initialAttachments, setInitialAttachments] = useState<any[] | null>(
     initialData?.attachments || null
   )
@@ -135,7 +142,7 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
         if (!initialData) {
           // 상세 API로 단일 요청 (댓글/첨부 포함)
           const res = await fetch(
-            `/api/posts/${postId}?include_comments=true&include_attachments=true`,
+            `/api/posts/${postId}?include_comments=true&include_attachments=true&include_content=false`,
             { cache: 'no-store' }
           )
           if (!res.ok) {
@@ -159,7 +166,7 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
           setPost({
             id: detail.id,
             title: detail.title,
-            content: detail.content,
+            content: detail.content || '',
             content_format: detail.content_format,
             category: detail.category,
             author_id: detail.author_id,
@@ -171,8 +178,29 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
           if (detail.comments) {
             setInitialComments(detail.comments)
             setHasMoreComments(detail.comments.length >= 30)
+            if (detail.comments.length > 0) {
+              const last = detail.comments[detail.comments.length - 1]
+              setCommentsCursor(encodeURIComponent(`${last.created_at}|${last.id}`))
+            }
           }
           if (detail.attachments) setInitialAttachments(detail.attachments)
+
+          // Lazy-load content after initial paint when omitted
+          scheduleIdle(async () => {
+            try {
+              if (!detail.content) {
+                const c = await fetch(`/api/posts/${postId}/content`)
+                if (c.ok) {
+                  const cj = await c.json()
+                  setPost(prev =>
+                    prev
+                      ? { ...prev, content: cj.content, content_format: cj.content_format }
+                      : prev
+                  )
+                }
+              }
+            } catch {}
+          })
 
           // 작성자 프로필 (API 응답 내 author.display_name 사용, 부족하면 폴백 조회)
           if (detail.author?.display_name) {
@@ -208,6 +236,22 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
                   if (userData.success) {
                     setPost(prev => (prev ? { ...prev, is_liked: userData.data.is_liked } : prev))
                   }
+                }
+              }
+            } catch {}
+          })
+          // Lazy-load content if missing from initial data
+          scheduleIdle(async () => {
+            try {
+              if (post && !post.content) {
+                const c = await fetch(`/api/posts/${postId}/content`)
+                if (c.ok) {
+                  const cj = await c.json()
+                  setPost(prev =>
+                    prev
+                      ? { ...prev, content: cj.content, content_format: cj.content_format }
+                      : prev
+                  )
                 }
               }
             } catch {}
@@ -279,17 +323,17 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
   const loadMoreComments = async () => {
     try {
       const nextPage = commentsPage + 1
-      const offset = (nextPage - 1) * 30
       const resp = await fetch(
-        `/api/posts/${postId}?include_comments=true&include_attachments=false&offset=${offset}&limit=30`,
+        `/api/posts/${postId}/comments?limit=30${commentsCursor ? `&cursor=${commentsCursor}` : ''}`,
         { cache: 'no-store' }
       )
       if (resp.ok) {
         const data = await resp.json()
-        const extra = (data?.post?.comments as any[]) || []
+        const extra = (data?.data?.comments as any[]) || []
         setInitialComments(prev => [...(prev || []), ...extra])
         setCommentsPage(nextPage)
-        setHasMoreComments(extra.length >= 30)
+        setHasMoreComments(!!data?.data?.has_next)
+        setCommentsCursor(data?.data?.next_cursor || null)
       }
     } catch {}
   }
