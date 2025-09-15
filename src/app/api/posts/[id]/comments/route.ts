@@ -133,6 +133,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     try {
       revalidateTag(`comments-post-${postId}`)
+      revalidateTag(`attachments-post-${postId}`)
+      revalidateTag('board-post')
+      revalidateTag(postId)
     } catch {}
 
     return NextResponse.json({ success: true, data })
