@@ -7,7 +7,10 @@ import {
   type Project as ProjectType,
 } from '@/lib/data'
 import { fetchLinkPreview } from '@/utils/linkPreview'
+import { getProjectSummary } from '@/utils/projectUtils'
 import type { Metadata } from 'next'
+import { generateProjectOgImage } from '@/utils/imageUrl'
+import { generateProjectStructuredData, structuredDataToScript } from '@/utils/structuredData'
 
 interface ProjectPageProps {
   params: Promise<{
@@ -38,31 +41,17 @@ export async function generateMetadata({ params }: ProjectPageProps): Promise<Me
     }
   }
 
-  // OG 이미지 결정 로직 (상대 경로 반환)
-  const getOgImage = () => {
-    // 1. coverImage가 있으면 우선 사용
-    if (project.coverImage) {
-      return project.coverImage.replace('.webp', '.jpg')
-    }
+  // OG 이미지 생성 - 통합 유틸리티 사용
+  const ogImageUrl = generateProjectOgImage(project)
 
-    // 2. 갤러리 첫 번째 이미지 사용
-    if (project.gallery && project.gallery.length > 0) {
-      return project.gallery[0].replace('.webp', '.jpg')
-    }
-
-    // 3. 기본 로고 이미지
-    return '/images/logo/gac_og.webp'
-  }
-
-  // 상대 경로 사용: 레이아웃(metadataBase)와 결합되어 절대 URL이 생성됨
-  const ogImageUrl = getOgImage()
+  const projectSummary = getProjectSummary(project, 150)
 
   return {
     title: `${project.title} | 경기아트콜렉티브 협동조합`,
-    description: project.description.split('\n')[0],
+    description: projectSummary,
     openGraph: {
       title: project.title,
-      description: project.description.split('\n')[0],
+      description: projectSummary,
       // 상대 경로 사용: 레이아웃의 metadataBase와 결합됨
       url: `/archive/${project.slug}`,
       siteName: '경기아트콜렉티브 협동조합',
@@ -80,7 +69,7 @@ export async function generateMetadata({ params }: ProjectPageProps): Promise<Me
     twitter: {
       card: 'summary_large_image',
       title: project.title,
-      description: project.description.split('\n')[0],
+      description: projectSummary,
       images: [ogImageUrl],
     },
   }
@@ -112,11 +101,24 @@ const ProjectDetailPage = async ({ params }: ProjectPageProps) => {
       )
     : []
 
+  // 구조화된 데이터 생성
+  const structuredData = generateProjectStructuredData({
+    title: project.title,
+    description: project.description,
+    slug: project.slug,
+    coverImage: project.coverImage,
+    gallery: project.gallery,
+    artistIds: project.artistIds,
+  })
+
   return (
-    <ProjectDetailContent
-      project={{ ...project, relatedArticles: articlesWithPreview }}
-      participatingArtists={participatingArtists}
-    />
+    <>
+      {structuredDataToScript(structuredData)}
+      <ProjectDetailContent
+        project={{ ...project, relatedArticles: articlesWithPreview }}
+        participatingArtists={participatingArtists}
+      />
+    </>
   )
 }
 
