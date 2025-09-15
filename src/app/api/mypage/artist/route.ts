@@ -286,6 +286,29 @@ export async function PATCH(request: NextRequest) {
         // Next.js 라우터 캐시도 강제로 무효화 (추가 보험)
         revalidatePath(`/artists/${artistForSlug.slug}`, 'page')
 
+        // 아티스트가 포함된 프로젝트 상세 페이지들도 함께 무효화 (아카이브)
+        try {
+          const fs = await import('fs')
+          const path = await import('path')
+          const projectsPath = path.join(process.cwd(), 'data', 'projects.json')
+          const raw = await fs.promises.readFile(projectsPath, 'utf8')
+          const projects = JSON.parse(raw)
+          const affected = projects.filter(
+            (p: any) => Array.isArray(p.artistIds) && p.artistIds.includes(profile.artist_id)
+          )
+          for (const p of affected) {
+            if (p?.slug) {
+              revalidatePath(`/archive/${p.slug}`)
+              // 페이지 캐시도 명시적 무효화
+              revalidatePath(`/archive/${p.slug}`, 'page')
+            }
+          }
+          // 목록 페이지도 함께
+          revalidatePath('/archive')
+        } catch (e) {
+          console.warn('Archive revalidation skipped:', (e as any)?.message || e)
+        }
+
         console.log(`✅ Successfully invalidated all caches for artist: ${artistForSlug.slug}`)
       }
     } catch (cacheError) {
