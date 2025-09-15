@@ -23,6 +23,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   const postId = resolvedParams.id
 
   try {
+    const timings: Record<string, number> = {}
+    const t0 = Date.now()
     // UUID 형식 검증
     const uuidValidation = validateUUID(postId, '게시글 ID')
     if (!uuidValidation.isValid) {
@@ -84,6 +86,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const includeAttachments = searchParams.get('include_attachments') !== 'false' // 기본적으로 포함
 
     // 게시글 기본 정보 조회
+    const postStart = Date.now()
     const { data: post, error: postError } = await db
       .from('posts')
       .select(
@@ -108,6 +111,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       .eq('id', validPostId)
       .single()
 
+    timings.post_ms = Date.now() - postStart
     if (postError || !post) {
       // 더 자세한 로깅 추가
       console.log(`[API] 게시글 조회 실패 - ID: ${validPostId}`)
@@ -148,6 +152,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
     // 현재 사용자의 좋아요 상태 확인(선택)
     let isLiked = false
+    const likeStart = Date.now()
     if (userId) {
       const { data: userLike } = await supabase
         .from('post_likes')
@@ -157,16 +162,20 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         .maybeSingle()
       isLiked = !!userLike
     }
+    timings.user_like_ms = Date.now() - likeStart
 
     // 댓글 수 조회
+    const countStart = Date.now()
     const { count: commentCount } = await db
       .from('comments')
       .select('id', { count: 'exact', head: true })
       .eq('post_id', validPostId)
+    timings.comment_count_ms = Date.now() - countStart
 
     // 댓글 목록 조회 (요청 시)
     let comments: any[] = []
     if (includeComments) {
+      const commentsStart = Date.now()
       const { data: commentsData, error: commentsError } = await db
         .from('comments')
         .select(
@@ -183,6 +192,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         .eq('post_id', validPostId)
         .order('created_at', { ascending: true })
 
+      timings.comments_ms = Date.now() - commentsStart
       if (commentsError) {
         console.error('댓글 조회 오류:', commentsError)
       } else {
@@ -190,29 +200,35 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         // 댓글 좋아요 메타 병합(집계 + 사용자 좋아요)
         const ids = comments.map((c: any) => c.id)
         if (ids.length > 0) {
-          // 집계: 댓글별 좋아요 수 (그룹화하여 적은 페이로드)
+          const likesStart = Date.now()
+          // 집계: 댓글별 좋아요 수 (현재는 전체 로우 스캔)
           const { data: likeRows } = await db
             .from('comment_likes')
             .select('comment_id')
             .in('comment_id', ids)
+          timings.comment_likes_scan_ms = Date.now() - likesStart
+          const mapStart = Date.now()
           const likeCountMap = new Map<string, number>()
           likeRows?.forEach((r: any) => {
             likeCountMap.set(r.comment_id, (likeCountMap.get(r.comment_id) || 0) + 1)
           })
           let userLikedSet: Set<string> | null = null
           if (userId) {
+            const userLikesStart = Date.now()
             const { data: userLiked } = await supabase
               .from('comment_likes')
               .select('comment_id')
               .in('comment_id', ids)
               .eq('user_id', userId)
             userLikedSet = new Set((userLiked || []).map((x: any) => x.comment_id))
+            timings.comment_likes_user_ms = Date.now() - userLikesStart
           }
           comments = comments.map((c: any) => ({
             ...c,
             like_count: likeCountMap.get(c.id) || 0,
             is_liked: userLikedSet ? userLikedSet.has(c.id) : false,
           }))
+          timings.comment_likes_aggregate_ms = Date.now() - mapStart
         }
       }
     }
@@ -220,11 +236,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     // 첨부파일 목록 조회 (요청 시)
     let attachments: any[] = []
     if (includeAttachments) {
+      const attStart = Date.now()
       const { data: attachmentsData, error: attachmentsError } = await db
         .from('post_attachments')
         .select('*')
         .eq('post_id', validPostId)
         .order('sort_order', { ascending: true })
+      timings.attachments_ms = Date.now() - attStart
 
       if (attachmentsError) {
         console.error('첨부파일 조회 오류:', attachmentsError)
@@ -242,6 +260,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       attachments: includeAttachments ? attachments : undefined,
     }
 
+    const total = Date.now() - t0
+    if (process.env.POST_DETAIL_TIMING === '1') {
+      ;(timings as any).total_ms = total
+      return NextResponse.json({ post: responseData, _timings: timings })
+    }
     return NextResponse.json({ post: responseData })
   } catch (error) {
     console.error('게시글 상세 API 오류:', error)

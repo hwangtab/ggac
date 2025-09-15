@@ -21,6 +21,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   })
 
   try {
+    const timings: Record<string, number> = {}
+    const t0 = Date.now()
     const postQuery = supabase
       .from('posts')
       .select(
@@ -68,8 +70,20 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       .eq('post_id', postId)
       .order('created_at', { ascending: true })
 
-    const [{ data: post, error: postError }, { data: comments = [] }, { data: attachments = [] }] =
-      await Promise.all([postQuery, commentsQuery, attachmentsQuery])
+    const t1 = Date.now()
+    const [postRes, commentsRes, attachmentsRes] = await Promise.all([
+      postQuery,
+      commentsQuery,
+      attachmentsQuery,
+    ])
+    const t2 = Date.now()
+
+    const { data: post, error: postError } = postRes
+    const comments = (commentsRes.data as any[]) || []
+    const attachments = (attachmentsRes.data as any[]) || []
+
+    timings.queue_ms = t1 - t0
+    timings.query_ms = t2 - t1
 
     if (postError || !post) {
       return createErrorResponse('Post not found', 404)
@@ -94,9 +108,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       author: post.author,
     }
 
-    return createJsonResponse(payload, 200, {
+    const headers: Record<string, string> = {
       'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
-    })
+    }
+    if (process.env.POST_DETAIL_TIMING === '1') {
+      headers['x-debug-timing'] = JSON.stringify(timings)
+    }
+    return createJsonResponse(payload, 200, headers)
   } catch (e: any) {
     return createErrorResponse('Failed to fetch post detail', 500)
   }
