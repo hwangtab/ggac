@@ -2,6 +2,7 @@ import { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { getPostMetadata } from '@/lib/posts'
 import PostDetailClient from './PostDetailClient'
+import PostDetailClientBridge from './PostDetailClientBridge'
 import { Suspense } from 'react'
 import { headers } from 'next/headers'
 
@@ -266,29 +267,10 @@ export default async function PostDetailPage({ params }: { params: Promise<{ id:
         <PostDetailServerData postId={postId} />
       </Suspense>
 
-      {/* 클라이언트 컴포넌트로 하이브리드 렌더링 */}
-      <Suspense
-        fallback={
-          <div className="min-h-screen pt-24 md:pt-28 flex items-center justify-center">
-            <div className="text-gray-600">게시글을 로드하는 중...</div>
-          </div>
-        }
-      >
-        <PostDetailClientWrapper postId={postId} />
-      </Suspense>
+      {/* 클라이언트 컴포넌트로 하이브리드 렌더링 (브리지에서 DOM 스크립트 읽기) */}
+      <PostDetailClientBridge postId={postId} />
     </div>
   )
 }
 
-// 클라이언트 데이터 읽기 및 PostDetailClient에 전달하는 래퍼
-function PostDetailClientWrapper({ postId }: { postId: string }) {
-  // 서버에서 제공한 초기 데이터 읽기
-  const initialDataScript =
-    typeof document !== 'undefined'
-      ? document.getElementById('initial-post-data')?.textContent
-      : null
-
-  const initialData = initialDataScript ? JSON.parse(initialDataScript) : undefined
-
-  return <PostDetailClient postId={postId} initialData={initialData} />
-}
+// 기존 서버 컴포넌트 래퍼 제거: 클라이언트 브리지에서 처리
