@@ -280,8 +280,6 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
     try {
       const nextPage = commentsPage + 1
       const offset = (nextPage - 1) * 30
-      const res = await fetch(`/api/posts/${postId}/attachments?offset=-1`, { cache: 'no-store' })
-      // 위는 더미 요청 방지용 캐시 깨기; 실제 댓글 API가 없다면 당장은 서버 상세 API 재호출로 대체
       const resp = await fetch(
         `/api/posts/${postId}?include_comments=true&include_attachments=false&offset=${offset}&limit=30`,
         { cache: 'no-store' }
