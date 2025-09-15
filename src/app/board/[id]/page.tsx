@@ -5,6 +5,8 @@ import PostDetailClient from './PostDetailClient'
 import PostDetailClientBridge from './PostDetailClientBridge'
 import { Suspense } from 'react'
 import { headers } from 'next/headers'
+import { generatePostOgImage } from '@/utils/imageUrl'
+import { generatePostStructuredData, structuredDataToScript } from '@/utils/structuredData'
 
 // 동적 메타데이터 생성
 export async function generateMetadata({
@@ -25,20 +27,17 @@ export async function generateMetadata({
       }
     }
 
-    const { post, author, thumbnail, description, categoryEmoji } = metadata
+    const { post, author, thumbnail, description, categoryEmoji, keywords } = metadata
 
     const title = `${categoryEmoji} [${post.category}] ${post.title} - 경기아트콜렉티브`
 
-    // 직접 이미지 URL 사용 (API 라우트 우회)
-    const ogImageUrl = thumbnail
-      ? thumbnail.startsWith('http')
-        ? thumbnail
-        : `https://ggac.kr${thumbnail}`
-      : 'https://ggac.kr/images/logo/gac_og.webp'
+    // OG 이미지 생성 - 통합 유틸리티 사용
+    const ogImageUrl = generatePostOgImage(thumbnail)
 
     return {
       title,
       description,
+      keywords: keywords?.join(', '),
       authors: [{ name: author?.display_name || '경기아트콜렉티브' }],
       openGraph: {
         title,
@@ -247,8 +246,21 @@ export default async function PostDetailPage({ params }: { params: Promise<{ id:
     notFound()
   }
 
+  // 구조화된 데이터 생성
+  const structuredData = generatePostStructuredData({
+    id: postId,
+    title: metadata.post.title,
+    content: metadata.post.content,
+    category: metadata.post.category,
+    created_at: metadata.post.created_at,
+    updated_at: metadata.post.updated_at,
+    author: metadata.author,
+    thumbnail: metadata.thumbnail,
+  })
+
   return (
     <div>
+      {structuredDataToScript(structuredData)}
       {/* 서버에서 초기 데이터 제공 (ISR 캐시됨) - 스트리밍을 위해 Suspense로 감싸기 */}
       <Suspense
         fallback={

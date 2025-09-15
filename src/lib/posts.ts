@@ -182,6 +182,62 @@ export function getCategoryEmoji(category: string): string {
 /**
  * 게시물의 전체 메타데이터 정보 조회
  */
+// SNS 공유용 키워드 생성 함수
+function generatePostKeywords(post: any, author: any): string[] {
+  const keywords: string[] = []
+
+  // 기본 사이트 키워드
+  keywords.push('경기아트콜렉티브', '협동조합', '예술가 커뮤니티')
+
+  // 카테고리 기반 키워드
+  const categoryKeywords: Record<string, string[]> = {
+    공지: ['공지사항', '안내', '알림'],
+    잡담: ['소통', '이야기', '대화'],
+    홍보: ['홍보', '프로모션', '이벤트', '공연', '전시'],
+    건의: ['건의사항', '제안', '개선'],
+  }
+
+  if (post.category && categoryKeywords[post.category]) {
+    keywords.push(...categoryKeywords[post.category])
+  }
+
+  // 작성자 이름 (키워드로 활용)
+  if (author?.display_name) {
+    keywords.push(author.display_name)
+  }
+
+  // 제목에서 의미있는 단어 추출 (3글자 이상 한글 단어)
+  if (post.title) {
+    const titleWords = post.title
+      .replace(/[^\w가-힣\s]/g, ' ')
+      .split(/\s+/)
+      .filter((word: string) => word.length >= 2 && /[가-힣]/.test(word))
+      .slice(0, 3) // 최대 3개만
+    keywords.push(...titleWords)
+  }
+
+  // 내용에서 자주 언급되는 단어 추출 (간단한 방식)
+  if (post.content) {
+    const contentText = extractTextFromContent(post.content)
+    const commonWords = [
+      '음악',
+      '공연',
+      '전시',
+      '작품',
+      '아티스트',
+      '예술',
+      '창작',
+      '협업',
+      '프로젝트',
+    ]
+    const foundWords = commonWords.filter(word => contentText.includes(word))
+    keywords.push(...foundWords.slice(0, 2)) // 최대 2개만
+  }
+
+  // 중복 제거 및 최대 10개로 제한
+  return [...new Set(keywords)].slice(0, 10)
+}
+
 export async function getPostMetadata(postId: string) {
   try {
     // 1) 캐시 가능한 내부 API로 먼저 시도하여 DB 왕복 최소화
@@ -218,7 +274,10 @@ export async function getPostMetadata(postId: string) {
     const description = extractTextFromContent(post.content)
     const categoryEmoji = getCategoryEmoji(post.category)
 
-    return { post, author, thumbnail, description, categoryEmoji }
+    // 키워드 생성: 카테고리, 제목, 내용에서 추출
+    const keywords = generatePostKeywords(post, author)
+
+    return { post, author, thumbnail, description, categoryEmoji, keywords }
   } catch (error) {
     console.error('[Posts] Error fetching post metadata:', error)
     return null
