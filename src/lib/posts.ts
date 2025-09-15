@@ -11,11 +11,8 @@ function getSupabaseAdmin() {
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY || !process.env.NEXT_PUBLIC_SUPABASE_URL) {
     throw new Error('Supabase configuration missing for server-side post queries')
   }
-  
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
+
+  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 }
 
 // 게시물 상세 정보 인터페이스
@@ -44,31 +41,30 @@ export interface AuthorProfile {
 export async function getPostById(postId: string): Promise<PostDetail | null> {
   try {
     // UUID 형식 기본 검증
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
     if (!uuidRegex.test(postId)) {
-      console.log('[Posts] Invalid UUID format:', postId);
-      return null;
+      console.log('[Posts] Invalid UUID format:', postId)
+      return null
     }
 
-    const supabase = getSupabaseAdmin();
+    const supabase = getSupabaseAdmin()
 
     const { data: post, error } = await supabase
       .from('posts')
       .select('*')
       .eq('id', postId)
       .eq('is_deleted', false)
-      .single();
+      .single()
 
     if (error || !post) {
-      console.log('[Posts] Post not found:', postId, error?.message);
-      return null;
+      console.log('[Posts] Post not found:', postId, error?.message)
+      return null
     }
 
-    return post as PostDetail;
-    
+    return post as PostDetail
   } catch (error) {
-    console.error('[Posts] Error fetching post:', error);
-    return null;
+    console.error('[Posts] Error fetching post:', error)
+    return null
   }
 }
 
@@ -77,31 +73,30 @@ export async function getPostById(postId: string): Promise<PostDetail | null> {
  */
 export async function getPostAuthor(authorId: string): Promise<AuthorProfile | null> {
   try {
-    const supabase = getSupabaseAdmin();
+    const supabase = getSupabaseAdmin()
 
     // public_profiles 뷰에서 조회 (member_profiles와 매핑)
     const { data: profile, error } = await supabase
       .from('public_profiles')
       .select('id, display_name, profile_image_url')
       .eq('id', authorId)
-      .single();
+      .single()
 
     if (error || !profile) {
-      console.log('[Posts] Author profile not found:', authorId, error?.message);
+      console.log('[Posts] Author profile not found:', authorId, error?.message)
       return {
         id: authorId,
-        display_name: '알 수 없는 사용자'
-      };
+        display_name: '알 수 없는 사용자',
+      }
     }
 
-    return profile as AuthorProfile;
-    
+    return profile as AuthorProfile
   } catch (error) {
-    console.error('[Posts] Error fetching author:', error);
+    console.error('[Posts] Error fetching author:', error)
     return {
       id: authorId,
-      display_name: '알 수 없는 사용자'
-    };
+      display_name: '알 수 없는 사용자',
+    }
   }
 }
 
@@ -110,7 +105,7 @@ export async function getPostAuthor(authorId: string): Promise<AuthorProfile | n
  */
 export async function getPostImages(postId: string): Promise<PostAttachment[]> {
   try {
-    const supabase = getSupabaseAdmin();
+    const supabase = getSupabaseAdmin()
 
     const { data: images, error } = await supabase
       .from('post_attachments')
@@ -118,18 +113,17 @@ export async function getPostImages(postId: string): Promise<PostAttachment[]> {
       .eq('post_id', postId)
       .eq('file_type', 'image')
       .order('is_primary', { ascending: false }) // 대표 이미지 우선
-      .order('created_at', { ascending: true });  // 그 다음 업로드 순서
+      .order('created_at', { ascending: true }) // 그 다음 업로드 순서
 
     if (error) {
-      console.error('[Posts] Error fetching images:', error);
-      return [];
+      console.error('[Posts] Error fetching images:', error)
+      return []
     }
 
-    return images || [];
-    
+    return images || []
   } catch (error) {
-    console.error('[Posts] Error fetching post images:', error);
-    return [];
+    console.error('[Posts] Error fetching post images:', error)
+    return []
   }
 }
 
@@ -138,17 +132,16 @@ export async function getPostImages(postId: string): Promise<PostAttachment[]> {
  */
 export async function getPostThumbnail(postId: string): Promise<string | null> {
   try {
-    const images = await getPostImages(postId);
-    
+    const images = await getPostImages(postId)
+
     if (images.length > 0) {
-      return images[0].file_url;
+      return images[0].file_url
     }
-    
-    return null;
-    
+
+    return null
   } catch (error) {
-    console.error('[Posts] Error fetching post thumbnail:', error);
-    return null;
+    console.error('[Posts] Error fetching post thumbnail:', error)
+    return null
   }
 }
 
@@ -156,20 +149,20 @@ export async function getPostThumbnail(postId: string): Promise<string | null> {
  * 게시물 내용에서 텍스트만 추출 (HTML 태그 제거)
  */
 export function extractTextFromContent(content: string, maxLength: number = 150): string {
-  if (!content) return '';
-  
+  if (!content) return ''
+
   // HTML 태그 제거
-  const textOnly = content.replace(/<[^>]*>/g, '');
-  
+  const textOnly = content.replace(/<[^>]*>/g, '')
+
   // 연속된 공백과 줄바꿈 정리
-  const cleaned = textOnly.replace(/\s+/g, ' ').trim();
-  
+  const cleaned = textOnly.replace(/\s+/g, ' ').trim()
+
   // 길이 제한
   if (cleaned.length <= maxLength) {
-    return cleaned;
+    return cleaned
   }
-  
-  return cleaned.substring(0, maxLength) + '...';
+
+  return cleaned.substring(0, maxLength) + '...'
 }
 
 /**
@@ -177,13 +170,13 @@ export function extractTextFromContent(content: string, maxLength: number = 150)
  */
 export function getCategoryEmoji(category: string): string {
   const categoryEmojis: Record<string, string> = {
-    '공지': '📢',
-    '잡담': '💬',
-    '홍보': '📣',
-    '건의': '💡'
-  };
-  
-  return categoryEmojis[category] || '📝';
+    공지: '📢',
+    잡담: '💬',
+    홍보: '📣',
+    건의: '💡',
+  }
+
+  return categoryEmojis[category] || '📝'
 }
 
 /**
@@ -191,29 +184,43 @@ export function getCategoryEmoji(category: string): string {
  */
 export async function getPostMetadata(postId: string) {
   try {
-    const [post, thumbnail] = await Promise.all([
-      getPostById(postId),
-      getPostThumbnail(postId)
-    ]);
+    // 1) 캐시 가능한 내부 API로 먼저 시도하여 DB 왕복 최소화
+    const base = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://ggac.kr'
+    let post: any | null = null
+    let author: any | null = null
+    let thumbnail: string | null = null
+    try {
+      const res = await fetch(`${base}/api/board/post/${postId}`, {
+        next: { revalidate: 60, tags: ['board-post', postId] },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        const payload = data || {}
+        post = payload.post || null
+        author = payload.author || null
+        const atts = (payload.attachments as any[]) || []
+        const img = atts.find((a: any) => a.file_type === 'image')
+        thumbnail = img ? img.file_url || null : null
+      }
+    } catch {}
 
+    // 2) 폴백: 기존 서버 쿼리 사용
     if (!post) {
-      return null;
+      const [p, thumb] = await Promise.all([getPostById(postId), getPostThumbnail(postId)])
+      if (!p) return null
+      post = p
+      thumbnail = thumb
+      author = await getPostAuthor(p.author_id)
+    } else if (!author && post?.author_id) {
+      author = await getPostAuthor(post.author_id)
     }
 
-    const author = await getPostAuthor(post.author_id);
-    const description = extractTextFromContent(post.content);
-    const categoryEmoji = getCategoryEmoji(post.category);
+    const description = extractTextFromContent(post.content)
+    const categoryEmoji = getCategoryEmoji(post.category)
 
-    return {
-      post,
-      author,
-      thumbnail,
-      description,
-      categoryEmoji
-    };
-    
+    return { post, author, thumbnail, description, categoryEmoji }
   } catch (error) {
-    console.error('[Posts] Error fetching post metadata:', error);
-    return null;
+    console.error('[Posts] Error fetching post metadata:', error)
+    return null
   }
 }

@@ -49,6 +49,8 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
   const [initialComments, setInitialComments] = useState<any[] | null>(
     initialData?.comments || null
   )
+  const [commentsPage, setCommentsPage] = useState(1)
+  const [hasMoreComments, setHasMoreComments] = useState((initialData?.comments?.length || 0) >= 30)
   const [initialAttachments, setInitialAttachments] = useState<any[] | null>(
     initialData?.attachments || null
   )
@@ -166,7 +168,10 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
             is_liked: detail.is_liked,
             view_count: detail.view_count,
           })
-          if (detail.comments) setInitialComments(detail.comments)
+          if (detail.comments) {
+            setInitialComments(detail.comments)
+            setHasMoreComments(detail.comments.length >= 30)
+          }
           if (detail.attachments) setInitialAttachments(detail.attachments)
 
           // 작성자 프로필 (API 응답 내 author.display_name 사용, 부족하면 폴백 조회)
@@ -269,6 +274,27 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
       authListener?.subscription.unsubscribe()
     }
   }, [postId, router, initialData])
+
+  // 댓글 더보기 로드
+  const loadMoreComments = async () => {
+    try {
+      const nextPage = commentsPage + 1
+      const offset = (nextPage - 1) * 30
+      const res = await fetch(`/api/posts/${postId}/attachments?offset=-1`, { cache: 'no-store' })
+      // 위는 더미 요청 방지용 캐시 깨기; 실제 댓글 API가 없다면 당장은 서버 상세 API 재호출로 대체
+      const resp = await fetch(
+        `/api/posts/${postId}?include_comments=true&include_attachments=false&offset=${offset}&limit=30`,
+        { cache: 'no-store' }
+      )
+      if (resp.ok) {
+        const data = await resp.json()
+        const extra = (data?.post?.comments as any[]) || []
+        setInitialComments(prev => [...(prev || []), ...extra])
+        setCommentsPage(nextPage)
+        setHasMoreComments(extra.length >= 30)
+      }
+    } catch {}
+  }
 
   const handleDeletePost = async () => {
     if (!post || !user || post.author_id !== user.id) return
@@ -504,6 +530,16 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
               isMember={isMember}
               initialComments={initialComments || undefined}
             />
+            {hasMoreComments && (
+              <div className="flex justify-center mt-4">
+                <button
+                  onClick={loadMoreComments}
+                  className="px-4 py-2 text-sm rounded-lg border bg-white hover:bg-gray-50"
+                >
+                  댓글 더보기
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
