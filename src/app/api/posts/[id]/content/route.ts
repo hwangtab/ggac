@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
 export const dynamic = 'force-dynamic'
+export const runtime = 'edge'
 export const preferredRegion = 'icn1'
 
 export async function GET(_req: NextRequest, context: { params: Promise<{ id: string }> }) {
