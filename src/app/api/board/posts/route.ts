@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createErrorResponse, createJsonResponse } from '@/utils/apiResponse'
+import { stripHtmlTags } from '@/utils/textUtils'
 
 export const revalidate = 60
 export const dynamic = 'force-dynamic'
@@ -62,29 +63,33 @@ export async function GET(req: NextRequest) {
     return createErrorResponse(`Failed to fetch posts: ${error.message}`, 500)
   }
 
-  const basePosts = (data || []).map((row: any) => ({
-    id: row.id,
-    title: row.title,
-    content: '',
-    category: row.category,
-    author_id: row.author_id,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
-    is_pinned: row.is_pinned,
-    author: { display_name: row.author?.display_name },
-    content_preview: (row.content || '').substring(0, 150) + '...',
-    preview_has_images: false,
-    preview_image_count: 0,
-    comment_count: 0,
-    is_liked: false,
-    attachments_stats: {
-      total_attachments: 0,
-      image_count: 0,
-      document_count: 0,
-      video_count: 0,
-      audio_count: 0,
-    },
-  }))
+  const basePosts = (data || []).map((row: any) => {
+    const clean = stripHtmlTags(row.content || '')
+    const preview = clean.length > 150 ? `${clean.substring(0, 150)}...` : clean
+    return {
+      id: row.id,
+      title: row.title,
+      content: '',
+      category: row.category,
+      author_id: row.author_id,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      is_pinned: row.is_pinned,
+      author: { display_name: row.author?.display_name },
+      content_preview: preview,
+      preview_has_images: false,
+      preview_image_count: 0,
+      comment_count: 0,
+      is_liked: false,
+      attachments_stats: {
+        total_attachments: 0,
+        image_count: 0,
+        document_count: 0,
+        video_count: 0,
+        audio_count: 0,
+      },
+    }
+  })
 
   // Enrich with aggregated attachment stats
   try {
