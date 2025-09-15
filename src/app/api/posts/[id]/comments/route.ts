@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { cookies } from 'next/headers'
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { revalidateTag } from 'next/cache'
 
 export const dynamic = 'force-dynamic'
 export const preferredRegion = 'icn1'
@@ -87,6 +90,52 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       success: true,
       data: { comments: normalized, has_next: hasNext, next_cursor: nextCursor },
     })
+  } catch (e: any) {
+    return NextResponse.json(
+      { success: false, error: e?.message || 'Unexpected error' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id: postId } = await context.params
+  try {
+    const supabase = createRouteHandlerClient({ cookies })
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    const userId = session?.user?.id
+    if (!userId)
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+
+    const body = await request.json().catch(() => ({}))
+    const content = (body?.content || '').toString().trim()
+    if (!content)
+      return NextResponse.json({ success: false, error: '내용이 비어있습니다.' }, { status: 400 })
+
+    const { data: profile } = await supabase
+      .from('member_profiles')
+      .select('registration_status, is_active')
+      .eq('id', userId)
+      .maybeSingle()
+    const isMember =
+      !!profile && (profile as any).registration_status === 'approved' && (profile as any).is_active
+    if (!isMember)
+      return NextResponse.json({ success: false, error: '권한이 없습니다.' }, { status: 403 })
+
+    const { data, error } = await supabase
+      .from('comments')
+      .insert([{ post_id: postId, author_id: userId, content }])
+      .select('id, content, author_id, created_at')
+      .single()
+    if (error) return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+
+    try {
+      revalidateTag(`comments-post-${postId}`)
+    } catch {}
+
+    return NextResponse.json({ success: true, data })
   } catch (e: any) {
     return NextResponse.json(
       { success: false, error: e?.message || 'Unexpected error' },

@@ -160,19 +160,14 @@ const CommentSection: React.FC<CommentSectionProps> = ({
 
     setLoading(true)
 
-    const { data, error } = await (supabase as any)
-      .from('comments')
-      .insert([
-        {
-          post_id: postId,
-          author_id: currentUserId,
-          content: newComment.trim(),
-        },
-      ])
-      .select()
-      .single()
-
-    if (data && !error) {
+    try {
+      const res = await fetch(`/api/posts/${postId}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: newComment.trim() }),
+      })
+      if (!res.ok) throw new Error('댓글 작성 실패')
+      const { data } = await res.json()
       // 활동 로깅
       try {
         await logCommentCreated((data as any).id, postId, {
@@ -192,21 +187,22 @@ const CommentSection: React.FC<CommentSectionProps> = ({
 
       setComments(prev => [...prev, newCommentWithLikes as CommentWithLikes])
       setNewComment('')
-    } else {
+    } catch (err) {
+      console.error(err)
       alert('댓글 작성 중 오류가 발생했습니다.')
+    } finally {
+      setLoading(false)
     }
-
-    setLoading(false)
   }
 
   const handleDeleteComment = async (commentId: string) => {
     if (!confirm('댓글을 삭제하시겠습니까?')) return
 
-    const { error } = await supabase.from('comments').delete().eq('id', commentId)
-
-    if (!error) {
+    try {
+      const res = await fetch(`/api/posts/${postId}/comments/${commentId}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('삭제 실패')
       setComments(prev => prev.filter(comment => comment.id !== commentId))
-    } else {
+    } catch (e) {
       alert('댓글 삭제 중 오류가 발생했습니다.')
     }
   }
