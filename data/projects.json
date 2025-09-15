@@ -236,4 +236,32 @@
     "ticketing": null,
     "relatedArticles": []
   }
+  ,
+  {
+    "id": "project-012",
+    "slug": "ancestral-exorcism-public-service",
+    "title": "조상퇴마 공공서비스 祖上退魔 公共役務",
+    "category": "공연·전시",
+    "publishedDate": "2025-10-05",
+    "coverImage": "https://www.news-art.co.kr/data/photos/20250938/art_17579216938217_43270f.png?iqs=0.8526265046007049",
+    "description": "조상퇴마 공공서비스\n\n수신: 관객 제위\n제목: 조상퇴마 공공서비스 공연 시행에 관한 건\n\n귀하의 건승을 기원합니다.\n\n아래와 같이 종합 장르 인디 음악 공연을 시행하고자 하오니 검토 후 참조하여 주시기 바랍니다.\n\n- 다 음 -\n\n공연명: 조상퇴마 공공서비스\n\n### 기획의도\n우리는 현재에 살며 불확실한 미래를 염려하고 때로는 우울함에 빠진다. 그러나 과거는 절대적으로 확실하고 그 굴레에서는 결코 벗어날 수 없다.\n\n조상은 핏줄 속에 남아 끊임없이 우리를 민족과 문화 전통으로 묶어두고 우리의 무의식을 지배한다. 조상이라는 이름의 무의식의 지배자에게 바치는 찬미 제례 제사 차례는 유교문화라는 허울 속에 때로는 체계를 공고히하며 때로는 우리의 허황된 욕심을 투영하는 거울이 되기도 한다.\n\n조상퇴마 공공서비스는 이런 거울을 깨트리고 체계를 강제로 무너트리는 음악을 제공한다. 국가나 사회가 제공하지 못하는 이런 서비스를 통해 관객은 조상과 뿌리에 묶여 고통받던 기억을 치유받거나 혹은 그 과정을 통해 조상이라는 개념 자체를 내쫓는 의식에 참여하게 된다.\n\n### 공연 정보\n- **공연장**: 무대륙 (마포구 토정로 5길 12 지하)\n- **공연일시**: 2025년 10월 5일(日) 18:00 개장 / 18:30 시작\n\n### 라인업\n- 은해 @eh_x3x\n- 제트싸이저 @Zsthyger\n- 괴뢰고무반도체 @qeruigomoo\n- 포라빔 @porabim.2067\n- 워프드 세이비어 @warpedsaviorband\n- 사바하 @sabbaha.kr\n\n### 안내\n- **후원**: 경기아트콜렉티브협동조합\n- **관람비**: 예매 25,000원 / 현매 30,000원 (경아콜 조합원 예매 5,000원 할인)\n- **예매**: 프로필 링크 참조\n\n",
+    "gallery": null,
+    "videoUrl": null,
+    "artistIds": ["artist-001", "artist-009"],
+    "ticketing": [
+      {
+        "platform": "네이버 예약",
+        "url": "https://booking.naver.com/booking/5/bizes/1442738/items/7066686?startDateTime=2025-10-05T00%3A00%3A00%2B09%3A00&tab=details",
+        "available": true,
+        "startDate": "2025-09-15",
+        "endDate": "2025-10-05"
+      }
+    ],
+    "relatedArticles": [
+      {
+        "title": "뉴스아트 기사",
+        "url": "https://www.news-art.co.kr/news/article.html?no=32833"
+      }
+    ]
+  }
 ]
