@@ -184,6 +184,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
           content,
           author_id,
           created_at,
+          like_count,
           author:member_profiles!comments_author_id_fkey (
             display_name
           )
@@ -197,39 +198,23 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         console.error('댓글 조회 오류:', commentsError)
       } else {
         comments = commentsData || []
-        // 댓글 좋아요 메타 병합(집계 + 사용자 좋아요)
+        // 사용자별 좋아요만 확인(카운트는 comments.like_count 사용)
         const ids = comments.map((c: any) => c.id)
-        if (ids.length > 0) {
-          const likesStart = Date.now()
-          // 집계: 댓글별 좋아요 수 (현재는 전체 로우 스캔)
-          const { data: likeRows } = await db
+        let userLikedSet: Set<string> | null = null
+        if (userId && ids.length > 0) {
+          const userLikesStart = Date.now()
+          const { data: userLiked } = await supabase
             .from('comment_likes')
             .select('comment_id')
             .in('comment_id', ids)
-          timings.comment_likes_scan_ms = Date.now() - likesStart
-          const mapStart = Date.now()
-          const likeCountMap = new Map<string, number>()
-          likeRows?.forEach((r: any) => {
-            likeCountMap.set(r.comment_id, (likeCountMap.get(r.comment_id) || 0) + 1)
-          })
-          let userLikedSet: Set<string> | null = null
-          if (userId) {
-            const userLikesStart = Date.now()
-            const { data: userLiked } = await supabase
-              .from('comment_likes')
-              .select('comment_id')
-              .in('comment_id', ids)
-              .eq('user_id', userId)
-            userLikedSet = new Set((userLiked || []).map((x: any) => x.comment_id))
-            timings.comment_likes_user_ms = Date.now() - userLikesStart
-          }
-          comments = comments.map((c: any) => ({
-            ...c,
-            like_count: likeCountMap.get(c.id) || 0,
-            is_liked: userLikedSet ? userLikedSet.has(c.id) : false,
-          }))
-          timings.comment_likes_aggregate_ms = Date.now() - mapStart
+            .eq('user_id', userId)
+          userLikedSet = new Set((userLiked || []).map((x: any) => x.comment_id))
+          timings.comment_likes_user_ms = Date.now() - userLikesStart
         }
+        comments = comments.map((c: any) => ({
+          ...c,
+          is_liked: userLikedSet ? userLikedSet.has(c.id) : false,
+        }))
       }
     }
 
