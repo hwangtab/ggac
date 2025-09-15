@@ -84,6 +84,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const { searchParams } = new URL(request.url)
     const includeComments = searchParams.get('include_comments') !== 'false' // 기본적으로 포함
     const includeAttachments = searchParams.get('include_attachments') !== 'false' // 기본적으로 포함
+    const commentsLimit = Math.min(parseInt(searchParams.get('limit') || '30', 10), 100)
+    const commentsOffset = Math.max(parseInt(searchParams.get('offset') || '0', 10), 0)
 
     // 게시글 기본 정보 조회
     const postStart = Date.now()
@@ -192,6 +194,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         )
         .eq('post_id', validPostId)
         .order('created_at', { ascending: true })
+        .range(commentsOffset, commentsOffset + commentsLimit - 1)
 
       timings.comments_ms = Date.now() - commentsStart
       if (commentsError) {

@@ -48,6 +48,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       .not('is_deleted', 'is', true)
       .single()
 
+    const COMMENTS_PAGE_SIZE = 30
     const commentsQuery = supabase
       .from('comments')
       .select(
@@ -64,6 +65,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       .eq('post_id', postId)
       .eq('is_deleted', false)
       .order('created_at', { ascending: true })
+      .range(0, COMMENTS_PAGE_SIZE - 1)
 
     const attachmentsQuery = supabase
       .from('post_attachments')
@@ -94,7 +96,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       post: {
         ...post,
         is_liked: false,
-        comment_count: (comments || []).length,
+        comment_count: (comments || []).length, // 전체 개수는 별도 API로 제공 가능
         attachments_stats: {
           total_attachments: (attachments || []).length,
           image_count: (attachments || []).filter((att: any) => att.file_type === 'image').length,
