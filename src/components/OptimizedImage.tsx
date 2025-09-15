@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { useState, useEffect, memo } from 'react'
+import { useState, useEffect, useMemo, useRef, memo } from 'react'
 import type { OptimizedImageProps } from '@/types'
 
 const OptimizedImage = memo(function OptimizedImage({
@@ -21,18 +21,70 @@ const OptimizedImage = memo(function OptimizedImage({
   onLoad: onLoadProp,
   onError: onErrorProp,
   suppressSkeleton = false, // 외부 스켈레톤 사용 시 내부 스켈레톤 비활성화
+  unoptimized = false, // 특정 도메인 등에서 최적화 우회
+  loadTimeoutMs = 8000, // 최적화 파이프라인 타임아웃 후 우회
+  errorTimeoutMs = 5000, // 우회 후에도 응답 없을 때 에러 처리까지 대기
 }: OptimizedImageProps) {
   const [hasError, setHasError] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [currentSrc, setCurrentSrc] = useState(src)
+  const [useUnoptimized, setUseUnoptimized] = useState<boolean>(false)
+
+  // 최적화 우회 대상 도메인 목록 (간헐적 응답 지연/차단 이슈 대응)
+  const UNOPTIMIZED_HOSTS = useMemo(() => new Set(['www.news-art.co.kr', 'news-art.co.kr']), [])
+
+  const activeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const loadingRef = useRef<boolean>(true)
+
+  // src 기준으로 호스트 파싱 (상대 경로는 무시)
+  const srcHost = useMemo(() => {
+    try {
+      const u = new URL(src)
+      return u.hostname
+    } catch {
+      return ''
+    }
+  }, [src])
 
   // 이미지 상태 초기화 - Next.js가 모든 최적화 처리
   useEffect(() => {
+    // 초기화
     setHasError(false)
     setIsLoading(true)
+    loadingRef.current = true
     setCurrentSrc(src)
+    setUseUnoptimized(unoptimized || (srcHost ? UNOPTIMIZED_HOSTS.has(srcHost) : false))
     onLoadStart?.() // 외부 로딩 시작 알림
-  }, [src, onLoadStart])
+
+    // 타임아웃 기반 우회: 지정 시간 내 로드 이벤트가 없으면 unoptimized로 스위칭
+    if (activeTimer.current) {
+      clearTimeout(activeTimer.current)
+      activeTimer.current = null
+    }
+    activeTimer.current = setTimeout(() => {
+      if (loadingRef.current) {
+        // 1차: 최적화 우회 시도
+        setUseUnoptimized(true)
+        // 2차: 우회 후에도 응답 없으면 에러 처리
+        if (activeTimer.current) clearTimeout(activeTimer.current)
+        activeTimer.current = setTimeout(() => {
+          if (loadingRef.current) {
+            setHasError(true)
+            setIsLoading(false)
+            loadingRef.current = false
+            onErrorProp?.()
+          }
+        }, errorTimeoutMs)
+      }
+    }, loadTimeoutMs)
+
+    return () => {
+      if (activeTimer.current) {
+        clearTimeout(activeTimer.current)
+        activeTimer.current = null
+      }
+    }
+  }, [src, srcHost, UNOPTIMIZED_HOSTS, unoptimized, onLoadStart, loadTimeoutMs, errorTimeoutMs])
 
   const handleError = () => {
     // 최적화된 이미지 폴백 체인: WebP → JPG → PNG (JPEG 단계 제거로 속도 향상)
@@ -56,11 +108,17 @@ const OptimizedImage = memo(function OptimizedImage({
     // 최종 실패 시에만 fallbackText 표시
     setHasError(true)
     setIsLoading(false)
+    loadingRef.current = false
     onErrorProp?.() // 외부 에러 핸들러 호출
   }
 
   const handleLoad = () => {
     setIsLoading(false)
+    loadingRef.current = false
+    if (activeTimer.current) {
+      clearTimeout(activeTimer.current)
+      activeTimer.current = null
+    }
     onLoadProp?.() // 외부 로딩 완료 핸들러 호출
   }
 
@@ -84,6 +142,7 @@ const OptimizedImage = memo(function OptimizedImage({
     onError: handleError,
     onLoad: handleLoad,
     className,
+    unoptimized: useUnoptimized,
     // Next.js가 자동으로 WebP/AVIF 변환하므로 placeholder는 기본값 사용
     placeholder: 'blur' as const,
     blurDataURL:
