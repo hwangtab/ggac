@@ -147,7 +147,7 @@ async function getInitialPosts(
 // 서버 컴포넌트
 export default async function BoardServerData({
   category = '전체',
-  limit = 20,
+  limit = 15,
   refreshKey,
 }: ServerDataProps) {
   // Try edge-cached API first

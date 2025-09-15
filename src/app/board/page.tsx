@@ -35,7 +35,7 @@ async function BoardPage({
           </div>
         }
       >
-        <BoardServerData category={category} limit={20} refreshKey={refreshKey} />
+        <BoardServerData category={category} limit={15} refreshKey={refreshKey} />
       </Suspense>
 
       {/* 클라이언트 컴포넌트로 하이드레이션 */}
