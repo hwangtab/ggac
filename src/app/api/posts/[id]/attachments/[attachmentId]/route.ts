@@ -12,18 +12,16 @@ export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { revalidateTag } from 'next/cache'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 
 // Service Role 클라이언트는 Storage 작업에만 사용
 function getSupabaseAdmin() {
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured');
+    throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured')
   }
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 }
 
 /**
@@ -33,10 +31,12 @@ export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string; attachmentId: string }> }
 ) {
-  const resolvedParams = await context.params;
+  const resolvedParams = await context.params
   try {
     const supabase = createRouteHandlerClient({ cookies })
-    const { data: { session } } = await supabase.auth.getSession()
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
 
     if (!session?.user) {
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
@@ -57,7 +57,6 @@ export async function GET(
     }
 
     return NextResponse.json({ attachment })
-
   } catch (error) {
     console.error('첨부파일 조회 API 오류:', error)
     return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
@@ -71,10 +70,12 @@ export async function PUT(
   request: NextRequest,
   context: { params: Promise<{ id: string; attachmentId: string }> }
 ) {
-  const resolvedParams = await context.params;
+  const resolvedParams = await context.params
   try {
     const supabase = createRouteHandlerClient({ cookies })
-    const { data: { session } } = await supabase.auth.getSession()
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
 
     if (!session?.user) {
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
@@ -87,10 +88,12 @@ export async function PUT(
     // 첨부파일과 게시글 권한 확인
     const { data: attachment, error: attachmentError } = await supabase
       .from('post_attachments')
-      .select(`
+      .select(
+        `
         *,
-        posts!post_attachments_post_id_fkey(author_id)
-      `)
+        posts!post_attachments_post_id_fkey(author_id, category)
+      `
+      )
       .eq('id', attachmentId)
       .eq('post_id', postId)
       .single()
@@ -116,7 +119,8 @@ export async function PUT(
     // 첨부파일 정보 업데이트
     const updateData: any = {}
     if (alt_text !== undefined) updateData.alt_text = alt_text
-    if (is_primary !== undefined) updateData.is_primary = is_primary && attachment.file_type === 'image'
+    if (is_primary !== undefined)
+      updateData.is_primary = is_primary && attachment.file_type === 'image'
     if (sort_order !== undefined) updateData.sort_order = sort_order
 
     const { data: updatedAttachment, error: updateError } = await supabase
@@ -131,11 +135,21 @@ export async function PUT(
       return NextResponse.json({ error: '첨부파일 수정에 실패했습니다.' }, { status: 500 })
     }
 
+    try {
+      revalidateTag(`attachments-post-${postId}`)
+      revalidateTag(`comments-post-${postId}`)
+      revalidateTag('board-post')
+      revalidateTag(postId)
+      if ((updatedAttachment as any)?.posts?.category) {
+        revalidateTag(`board-${(updatedAttachment as any).posts.category}`)
+        revalidateTag('board-initial')
+      }
+    } catch {}
+
     return NextResponse.json({
       message: '첨부파일이 성공적으로 수정되었습니다.',
-      attachment: updatedAttachment
+      attachment: updatedAttachment,
     })
-
   } catch (error) {
     console.error('첨부파일 수정 API 오류:', error)
     return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
@@ -149,10 +163,12 @@ export async function DELETE(
   request: NextRequest,
   context: { params: Promise<{ id: string; attachmentId: string }> }
 ) {
-  const resolvedParams = await context.params;
+  const resolvedParams = await context.params
   try {
     const supabase = createRouteHandlerClient({ cookies })
-    const { data: { session } } = await supabase.auth.getSession()
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
 
     if (!session?.user) {
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
@@ -163,10 +179,12 @@ export async function DELETE(
     // 첨부파일과 게시글 권한 확인
     const { data: attachment, error: attachmentError } = await supabase
       .from('post_attachments')
-      .select(`
+      .select(
+        `
         *,
-        posts!post_attachments_post_id_fkey(author_id)
-      `)
+        posts!post_attachments_post_id_fkey(author_id, category)
+      `
+      )
       .eq('id', attachmentId)
       .eq('post_id', postId)
       .single()
@@ -191,12 +209,12 @@ export async function DELETE(
 
     // Storage에서 파일 삭제 (가능한 경우에만)
     try {
-      const supabaseAdmin = getSupabaseAdmin();
+      const supabaseAdmin = getSupabaseAdmin()
       const urlParts = attachment.file_url.split('/')
       const fileName = urlParts[urlParts.length - 1]
       if (fileName) {
         const fullPath = `posts/${postId}/${fileName}`
-        
+
         const { error: storageError } = await supabaseAdmin.storage
           .from('attachments')
           .remove([fullPath])
@@ -222,10 +240,20 @@ export async function DELETE(
       return NextResponse.json({ error: '첨부파일 삭제에 실패했습니다.' }, { status: 500 })
     }
 
-    return NextResponse.json({
-      message: '첨부파일이 성공적으로 삭제되었습니다.'
-    })
+    try {
+      revalidateTag(`attachments-post-${postId}`)
+      revalidateTag(`comments-post-${postId}`)
+      revalidateTag('board-post')
+      revalidateTag(postId)
+      if ((attachment as any)?.posts?.category) {
+        revalidateTag(`board-${(attachment as any).posts.category}`)
+        revalidateTag('board-initial')
+      }
+    } catch {}
 
+    return NextResponse.json({
+      message: '첨부파일이 성공적으로 삭제되었습니다.',
+    })
   } catch (error) {
     console.error('첨부파일 삭제 API 오류:', error)
     return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
