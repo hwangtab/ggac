@@ -4,6 +4,7 @@ import { createErrorResponse, createJsonResponse } from '@/utils/apiResponse'
 
 export const revalidate = 60
 export const dynamic = 'force-dynamic'
+export const runtime = 'edge'
 export const preferredRegion = 'icn1'
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
