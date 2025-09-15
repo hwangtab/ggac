@@ -4,6 +4,8 @@ import { createErrorResponse, createJsonResponse } from '@/utils/apiResponse'
 
 export const revalidate = 60
 export const dynamic = 'force-dynamic'
+export const runtime = 'edge'
+export const preferredRegion = 'icn1'
 
 export async function GET(req: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
