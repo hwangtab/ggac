@@ -36,7 +36,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       `
       )
       .eq('post_id', id)
-      .eq('is_deleted', false)
       .order('created_at', { ascending: true })
       .order('id', { ascending: true })
 
