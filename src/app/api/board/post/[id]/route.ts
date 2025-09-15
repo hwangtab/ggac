@@ -31,18 +31,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
         `
         id,
         title,
-        content,
-        content_format,
         category,
         author_id,
         created_at,
-        updated_at,
-        like_count,
-        view_count,
-        is_pinned,
-        author:member_profiles!posts_author_id_fkey (
-          display_name
-        )
+        author:member_profiles!posts_author_id_fkey (display_name)
       `
       )
       .eq('id', postId)
@@ -58,19 +50,16 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
         content,
         author_id,
         created_at,
-        like_count,
-        parent_id,
         author:member_profiles!comments_author_id_fkey (display_name)
       `
       )
       .eq('post_id', postId)
-      .eq('is_deleted', false)
       .order('created_at', { ascending: true })
       .range(0, COMMENTS_PAGE_SIZE - 1)
 
     const attachmentsQuery = supabase
       .from('post_attachments')
-      .select('*')
+      .select('file_url, file_type, is_primary, created_at')
       .eq('post_id', postId)
       .order('created_at', { ascending: true })
 
