@@ -187,7 +187,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
           content,
           author_id,
           created_at,
-          like_count,
           author:member_profiles!comments_author_id_fkey (
             display_name
           )
@@ -217,6 +216,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         }
         comments = comments.map((c: any) => ({
           ...c,
+          like_count: (c as any).like_count ?? 0,
           is_liked: userLikedSet ? userLikedSet.has(c.id) : false,
         }))
       }
