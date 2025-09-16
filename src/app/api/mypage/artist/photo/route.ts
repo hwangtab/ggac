@@ -8,17 +8,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
-import type { 
-  ProfilePhotoUploadResponse, 
-  ProfilePhotoMetadata,
-  ImageCropSettings 
-} from '@/types'
+import sharp from 'sharp'
+import type { ProfilePhotoUploadResponse, ProfilePhotoMetadata, ImageCropSettings } from '@/types'
 
-// 허용된 파일 타입
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
-
-// 최대 파일 크기 (5MB - 아티스트 사진은 더 큰 사이즈 허용)
 const MAX_FILE_SIZE = 5 * 1024 * 1024
+const WEBP_QUALITY = 82
+const JPEG_QUALITY = 85
 
 // 파일 타입 검증
 function validateFileType(file: File): boolean {
@@ -31,15 +27,133 @@ function validateFileSize(file: File): boolean {
 }
 
 // Storage 경로 생성 (아티스트용)
-function generateArtistStoragePath(artistId: string, fileExtension: string): string {
+function generateArtistStoragePaths(artistId: string, originalFilename: string) {
   const timestamp = Date.now()
-  return `${artistId}/profile_${timestamp}.${fileExtension}`
+  const randomId = Math.random().toString(36).substring(2, 8)
+  const extension = (originalFilename.split('.').pop() || 'jpg').toLowerCase()
+  const baseName = `profile_${timestamp}_${randomId}`
+  const basePath = `${artistId}/${baseName}`
+
+  return {
+    originalPath: `${basePath}.${extension}`,
+    webpPath: `${basePath}.webp`,
+    fallbackPath: `${basePath}.fallback.jpg`,
+    extension,
+  }
 }
 
-// 파일 확장자 추출
-function getFileExtension(filename: string): string {
-  const parts = filename.split('.')
-  return parts.length > 1 ? parts.pop()?.toLowerCase() || 'jpg' : 'jpg'
+async function uploadImageWithVariants(
+  supabase: ReturnType<typeof createRouteHandlerClient>,
+  bucket: string,
+  paths: ReturnType<typeof generateArtistStoragePaths>,
+  originalBuffer: Buffer,
+  contentType: string
+) {
+  const variantPaths: NonNullable<ProfilePhotoMetadata['variants']> = {
+    original: paths.originalPath,
+  }
+  const variantUrls: NonNullable<ProfilePhotoMetadata['variant_urls']> = {}
+  const variantMetadata: NonNullable<ProfilePhotoMetadata['variant_metadata']> = {
+    original: {
+      size: originalBuffer.length,
+      content_type: contentType,
+    },
+  }
+
+  const { error: originalUploadError } = await supabase.storage
+    .from(bucket)
+    .upload(paths.originalPath, originalBuffer, {
+      cacheControl: '3600',
+      upsert: false,
+      contentType,
+    })
+
+  if (originalUploadError) {
+    console.error('Artist photo original upload failed:', originalUploadError)
+    return {
+      success: false,
+      error: '프로필 사진 업로드 중 오류가 발생했습니다.',
+      variantPaths,
+      variantUrls,
+      variantMetadata,
+    }
+  }
+
+  variantUrls.original = supabase.storage
+    .from(bucket)
+    .getPublicUrl(paths.originalPath).data?.publicUrl
+
+  if (!contentType.includes('gif')) {
+    try {
+      const webpBuffer = await sharp(originalBuffer).webp({ quality: WEBP_QUALITY }).toBuffer()
+      const { error: webpError } = await supabase.storage
+        .from(bucket)
+        .upload(paths.webpPath, webpBuffer, {
+          cacheControl: '3600',
+          upsert: true,
+          contentType: 'image/webp',
+        })
+
+      if (!webpError) {
+        variantPaths.webp = paths.webpPath
+        variantUrls.webp = supabase.storage
+          .from(bucket)
+          .getPublicUrl(paths.webpPath).data?.publicUrl
+        variantMetadata.webp = {
+          size: webpBuffer.length,
+          content_type: 'image/webp',
+        }
+      } else {
+        console.warn('Artist photo WebP upload failed:', webpError)
+      }
+    } catch (error) {
+      console.warn('Artist photo WebP conversion failed:', error)
+    }
+  }
+
+  const isOriginalJpeg = ['.jpg', '.jpeg'].includes(paths.extension)
+
+  if (isOriginalJpeg) {
+    variantPaths.fallback = paths.originalPath
+    variantUrls.fallback = variantUrls.original
+    variantMetadata.fallback = {
+      size: originalBuffer.length,
+      content_type: contentType,
+    }
+  } else {
+    try {
+      const jpegBuffer = await sharp(originalBuffer).jpeg({ quality: JPEG_QUALITY }).toBuffer()
+      const { error: fallbackError } = await supabase.storage
+        .from(bucket)
+        .upload(paths.fallbackPath, jpegBuffer, {
+          cacheControl: '3600',
+          upsert: true,
+          contentType: 'image/jpeg',
+        })
+
+      if (!fallbackError) {
+        variantPaths.fallback = paths.fallbackPath
+        variantUrls.fallback = supabase.storage
+          .from(bucket)
+          .getPublicUrl(paths.fallbackPath).data?.publicUrl
+        variantMetadata.fallback = {
+          size: jpegBuffer.length,
+          content_type: 'image/jpeg',
+        }
+      } else {
+        console.warn('Artist photo JPEG fallback upload failed:', fallbackError)
+      }
+    } catch (error) {
+      console.warn('Artist photo JPEG conversion failed:', error)
+    }
+  }
+
+  return {
+    success: true,
+    variantPaths,
+    variantUrls,
+    variantMetadata,
+  }
 }
 
 /**
@@ -50,19 +164,19 @@ export async function PUT(request: NextRequest) {
     const supabase = createRouteHandlerClient({ cookies })
 
     // 사용자 인증 확인
-    const { data: { session }, error: authError } = await supabase.auth.getSession()
-    
+    const {
+      data: { session },
+      error: authError,
+    } = await supabase.auth.getSession()
+
     if (authError || !session?.user) {
-      return NextResponse.json(
-        { success: false, error: '로그인이 필요합니다.' },
-        { status: 401 }
-      )
+      return NextResponse.json({ success: false, error: '로그인이 필요합니다.' }, { status: 401 })
     }
 
     // 사용자의 아티스트 권한 확인
     const { data: profile, error: profileError } = await supabase
       .from('member_profiles')
-      .select('artist_id, is_artist, registration_status, is_active')
+      .select('artist_id, is_artist, registration_status, is_active, profile_photo_metadata')
       .eq('id', session.user.id)
       .single()
 
@@ -83,7 +197,10 @@ export async function PUT(request: NextRequest) {
 
     if (profile.registration_status !== 'approved' || !profile.is_active) {
       return NextResponse.json(
-        { success: false, error: '승인된 활성 멤버만 아티스트 프로필 사진을 업로드할 수 있습니다.' },
+        {
+          success: false,
+          error: '승인된 활성 멤버만 아티스트 프로필 사진을 업로드할 수 있습니다.',
+        },
         { status: 403 }
       )
     }
@@ -104,7 +221,10 @@ export async function PUT(request: NextRequest) {
     // 파일 유효성 검사
     if (!validateFileType(file)) {
       return NextResponse.json(
-        { success: false, error: '지원하지 않는 파일 형식입니다. JPEG, PNG, WebP, GIF만 가능합니다.' },
+        {
+          success: false,
+          error: '지원하지 않는 파일 형식입니다. JPEG, PNG, WebP, GIF만 가능합니다.',
+        },
         { status: 400 }
       )
     }
@@ -139,41 +259,28 @@ export async function PUT(request: NextRequest) {
     // 기존 아티스트 프로필 사진 조회
     const { data: currentArtist } = await supabase
       .from('artists')
-      .select('profile_photo_url')
+      .select('profile_photo_url, profile_photo_metadata')
       .eq('legacy_id', profile.artist_id)
       .single()
 
     // Storage 경로 생성
-    const fileExtension = getFileExtension(file.name)
-    const storagePath = generateArtistStoragePath(profile.artist_id, fileExtension)
+    const storagePaths = generateArtistStoragePaths(profile.artist_id, file.name)
+    const fileBuffer = Buffer.from(await file.arrayBuffer())
 
-    // Supabase Storage에 파일 업로드
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('artists')
-      .upload(storagePath, file, {
-        cacheControl: '3600',
-        upsert: false
-      })
-
-    if (uploadError) {
-      console.error('Storage upload error:', uploadError)
-      return NextResponse.json(
-        { success: false, error: '파일 업로드에 실패했습니다.' },
-        { status: 500 }
-      )
+    const uploadResult = await uploadImageWithVariants(
+      supabase,
+      'artists',
+      storagePaths,
+      fileBuffer,
+      file.type
+    )
+    if (!uploadResult.success) {
+      return NextResponse.json({ success: false, error: uploadResult.error }, { status: 500 })
     }
 
-    // 공개 URL 생성
-    const { data: publicUrlData } = supabase.storage
-      .from('artists')
-      .getPublicUrl(storagePath)
-
-    if (!publicUrlData?.publicUrl) {
-      return NextResponse.json(
-        { success: false, error: '공개 URL 생성에 실패했습니다.' },
-        { status: 500 }
-      )
-    }
+    const variantUrls = uploadResult.variantUrls
+    const variantPaths = uploadResult.variantPaths
+    const variantMetadata = uploadResult.variantMetadata
 
     // 최종 메타데이터 생성 (서버 사이드에서는 클라이언트 제공 메타데이터 사용)
     const finalMetadata: ProfilePhotoMetadata = {
@@ -186,26 +293,33 @@ export async function PUT(request: NextRequest) {
       // 클라이언트에서 제공된 이미지 크기 정보 사용
       width: providedMetadata.width,
       height: providedMetadata.height,
-      ...providedMetadata
+      ...providedMetadata,
+      variants: variantPaths,
+      variant_urls: variantUrls,
+      variant_metadata: variantMetadata,
     }
 
     // 아티스트 테이블 업데이트
     const { error: updateError } = await supabase
       .from('artists')
       .update({
-        profile_photo_url: publicUrlData.publicUrl,
+        profile_photo_url: variantUrls.webp || variantUrls.fallback || variantUrls.original || null,
         profile_photo_metadata: finalMetadata,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       })
       .eq('legacy_id', profile.artist_id)
 
     if (updateError) {
       console.error('Database update error:', updateError)
-      
+
       // 실패 시 업로드된 파일 삭제
-      await supabase.storage
-        .from('artists')
-        .remove([storagePath])
+      const toRemove = [variantPaths.original, variantPaths.webp, variantPaths.fallback].filter(
+        (value): value is string => Boolean(value)
+      )
+
+      if (toRemove.length > 0) {
+        await supabase.storage.from('artists').remove(toRemove)
+      }
 
       return NextResponse.json(
         { success: false, error: '데이터베이스 업데이트에 실패했습니다.' },
@@ -214,33 +328,40 @@ export async function PUT(request: NextRequest) {
     }
 
     // 기존 아티스트 프로필 사진 삭제 (Storage에서)
-    if (currentArtist?.profile_photo_url) {
+    const removalTargets = new Set<string>()
+    if (currentArtist?.profile_photo_metadata?.variants) {
+      const variants = currentArtist.profile_photo_metadata.variants
+      if (variants.original) removalTargets.add(variants.original)
+      if (variants.webp) removalTargets.add(variants.webp)
+      if (variants.fallback) removalTargets.add(variants.fallback)
+    } else if (currentArtist?.profile_photo_url) {
       try {
-        // URL에서 파일 경로 추출
         const url = new URL(currentArtist.profile_photo_url)
         const pathParts = url.pathname.split('/')
         const fileName = pathParts[pathParts.length - 1]
-        const oldPath = `${profile.artist_id}/${fileName}`
-
-        await supabase.storage
-          .from('artists')
-          .remove([oldPath])
+        removalTargets.add(`${profile.artist_id}/${fileName}`)
       } catch (error) {
-        console.error('Failed to delete old artist photo:', error)
-        // 이 오류는 치명적이지 않으므로 계속 진행
+        console.error('Failed to parse previous photo URL for cleanup:', error)
+      }
+    }
+
+    if (removalTargets.size > 0) {
+      try {
+        await supabase.storage.from('artists').remove(Array.from(removalTargets))
+      } catch (error) {
+        console.error('Failed to delete previous artist photo variants:', error)
       }
     }
 
     // 성공 응답
     const response: ProfilePhotoUploadResponse = {
       success: true,
-      photo_url: publicUrlData.publicUrl,
+      photo_url: variantUrls.webp || variantUrls.fallback || variantUrls.original || null,
       metadata: finalMetadata,
-      public_url: publicUrlData.publicUrl
+      public_url: variantUrls.webp || variantUrls.fallback || variantUrls.original || null,
     }
 
     return NextResponse.json(response, { status: 200 })
-
   } catch (error) {
     console.error('Artist photo upload error:', error)
     return NextResponse.json(
@@ -258,13 +379,13 @@ export async function DELETE(request: NextRequest) {
     const supabase = createRouteHandlerClient({ cookies })
 
     // 사용자 인증 확인
-    const { data: { session }, error: authError } = await supabase.auth.getSession()
-    
+    const {
+      data: { session },
+      error: authError,
+    } = await supabase.auth.getSession()
+
     if (authError || !session?.user) {
-      return NextResponse.json(
-        { success: false, error: '로그인이 필요합니다.' },
-        { status: 401 }
-      )
+      return NextResponse.json({ success: false, error: '로그인이 필요합니다.' }, { status: 401 })
     }
 
     // 사용자의 아티스트 권한 확인
@@ -317,9 +438,7 @@ export async function DELETE(request: NextRequest) {
       const fileName = pathParts[pathParts.length - 1]
       const filePath = `${profile.artist_id}/${fileName}`
 
-      const { error: deleteError } = await supabase.storage
-        .from('artists')
-        .remove([filePath])
+      const { error: deleteError } = await supabase.storage.from('artists').remove([filePath])
 
       if (deleteError) {
         console.error('Storage delete error:', deleteError)
@@ -334,7 +453,7 @@ export async function DELETE(request: NextRequest) {
       .update({
         profile_photo_url: null,
         profile_photo_metadata: null,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       })
       .eq('legacy_id', profile.artist_id)
 
@@ -350,7 +469,6 @@ export async function DELETE(request: NextRequest) {
       { success: true, message: '아티스트 프로필 사진이 성공적으로 삭제되었습니다.' },
       { status: 200 }
     )
-
   } catch (error) {
     console.error('Artist photo delete error:', error)
     return NextResponse.json(
@@ -368,13 +486,13 @@ export async function GET(request: NextRequest) {
     const supabase = createRouteHandlerClient({ cookies })
 
     // 사용자 인증 확인
-    const { data: { session }, error: authError } = await supabase.auth.getSession()
-    
+    const {
+      data: { session },
+      error: authError,
+    } = await supabase.auth.getSession()
+
     if (authError || !session?.user) {
-      return NextResponse.json(
-        { success: false, error: '로그인이 필요합니다.' },
-        { status: 401 }
-      )
+      return NextResponse.json({ success: false, error: '로그인이 필요합니다.' }, { status: 401 })
     }
 
     // 사용자의 아티스트 권한 확인
@@ -412,13 +530,15 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    return NextResponse.json({
-      success: true,
-      photo_url: artist.profile_photo_url,
-      metadata: artist.profile_photo_metadata,
-      has_photo: !!artist.profile_photo_url
-    }, { status: 200 })
-
+    return NextResponse.json(
+      {
+        success: true,
+        photo_url: artist.profile_photo_url,
+        metadata: artist.profile_photo_metadata,
+        has_photo: !!artist.profile_photo_url,
+      },
+      { status: 200 }
+    )
   } catch (error) {
     console.error('Artist photo metadata error:', error)
     return NextResponse.json(
