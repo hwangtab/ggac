@@ -16,6 +16,7 @@
     "audit:security": "npm audit --audit-level high",
     "images:optimize": "node scripts/utils/image-processing/ensure-webp.js && node scripts/utils/image-processing/update-image-references.js",
     "images:verify": "node scripts/utils/image-processing/update-image-references.js --check && node scripts/utils/image-processing/verify-webp.js",
+    "storage:ensure-webp": "node scripts/utils/storage/ensure-supabase-webp.js",
     "prepare": "husky install",
     "vercel:build": "npm run images:optimize && npm run images:verify && next build",
     "vercel:dev": "vercel dev",
