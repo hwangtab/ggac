@@ -8,11 +8,11 @@
 import React, { useState, useCallback, useRef } from 'react'
 import { FiUpload, FiX, FiImage, FiLoader, FiCheck, FiAlertCircle, FiEdit3 } from 'react-icons/fi'
 import ImageCropModal from './ImageCropModal'
-import type { 
-  MediaFile, 
-  MediaManagerConfig, 
+import type {
+  MediaFile,
+  MediaManagerConfig,
   ImageCropSettings,
-  ProfilePhotoMetadata 
+  ProfilePhotoMetadata,
 } from '@/types'
 
 interface MediaManagerProps {
@@ -64,7 +64,7 @@ const MediaManager: React.FC<MediaManagerProps> = ({
   className = '',
   disabled = false,
   enableCrop = false,
-  cropSettings
+  cropSettings,
 }) => {
   const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([])
   const [completedFiles, setCompletedFiles] = useState<MediaFile[]>(existingFiles)
@@ -77,53 +77,62 @@ const MediaManager: React.FC<MediaManagerProps> = ({
   }>({
     isOpen: false,
     file: null,
-    imageUrl: ''
+    imageUrl: '',
   })
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // 크롭 처리
-  const handleCrop = useCallback(async (croppedBlob: Blob, cropArea: any) => {
-    if (!cropModal.file) return
+  const handleCrop = useCallback(
+    async (croppedBlob: Blob, cropArea: any) => {
+      if (!cropModal.file) return
 
-    try {
-      // 크롭된 이미지를 새 파일로 생성
-      const croppedFile = new File([croppedBlob], `cropped_${cropModal.file.name}`, {
-        type: croppedBlob.type
-      })
+      try {
+        // 크롭된 이미지를 새 파일로 생성
+        const croppedFile = new File([croppedBlob], `cropped_${cropModal.file.name}`, {
+          type: croppedBlob.type,
+        })
 
-      // 기존 파일 삭제
-      if (onFileDelete) {
-        await onFileDelete(cropModal.file.id)
-      }
+        // 기존 파일 삭제
+        if (onFileDelete) {
+          await onFileDelete(cropModal.file.id)
+        }
 
-      // 새 파일 업로드  
-      const uploadingFile: UploadingFile = {
-        file: croppedFile,
-        progress: 0,
-        id: `upload-${Date.now()}-${Math.random()}`,
-        status: 'uploading'
+        // 새 파일 업로드
+        const uploadingFile: UploadingFile = {
+          file: croppedFile,
+          progress: 0,
+          id: `upload-${Date.now()}-${Math.random()}`,
+          status: 'uploading',
+        }
+        await uploadFile(uploadingFile)
+
+        // 모달 닫기
+        setCropModal({ isOpen: false, file: null, imageUrl: '' })
+      } catch (error) {
+        console.error('크롭 처리 오류:', error)
+        if (onUploadError) {
+          onUploadError('이미지 크롭 처리 중 오류가 발생했습니다.')
+        }
       }
-      await uploadFile(uploadingFile)
-      
-      // 모달 닫기
-      setCropModal({ isOpen: false, file: null, imageUrl: '' })
-    } catch (error) {
-      console.error('크롭 처리 오류:', error)
-      if (onUploadError) {
-        onUploadError('이미지 크롭 처리 중 오류가 발생했습니다.')
-      }
-    }
-  }, [cropModal.file, onFileDelete, onUploadError])
+    },
+    [cropModal.file, onFileDelete, onUploadError]
+  )
 
   // 파일 타입 확인
-  const isValidFileType = useCallback((file: File): boolean => {
-    return config.allowed_types.includes(file.type)
-  }, [config.allowed_types])
+  const isValidFileType = useCallback(
+    (file: File): boolean => {
+      return config.allowed_types.includes(file.type)
+    },
+    [config.allowed_types]
+  )
 
   // 파일 크기 확인
-  const isValidFileSize = useCallback((file: File): boolean => {
-    return file.size <= config.max_file_size
-  }, [config.max_file_size])
+  const isValidFileSize = useCallback(
+    (file: File): boolean => {
+      return file.size <= config.max_file_size
+    },
+    [config.max_file_size]
+  )
 
   // 이미지 파일 여부 확인
   const isImageFile = useCallback((file: File): boolean => {
@@ -131,247 +140,258 @@ const MediaManager: React.FC<MediaManagerProps> = ({
   }, [])
 
   // 파일 미리보기 생성
-  const generatePreview = useCallback((file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      if (!isImageFile(file)) {
-        resolve('')
-        return
-      }
+  const generatePreview = useCallback(
+    (file: File): Promise<string> => {
+      return new Promise((resolve, reject) => {
+        if (!isImageFile(file)) {
+          resolve('')
+          return
+        }
 
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        resolve(e.target?.result as string || '')
-      }
-      reader.onerror = reject
-      reader.readAsDataURL(file)
-    })
-  }, [isImageFile])
+        const reader = new FileReader()
+        reader.onload = e => {
+          resolve((e.target?.result as string) || '')
+        }
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+    },
+    [isImageFile]
+  )
 
   // 파일 업로드 처리
-  const uploadFile = useCallback(async (uploadingFile: UploadingFile): Promise<MediaFile> => {
-    const { file, cropSettings } = uploadingFile
+  const uploadFile = useCallback(
+    async (uploadingFile: UploadingFile): Promise<MediaFile> => {
+      const { file, cropSettings } = uploadingFile
 
-    // FormData 생성
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('bucket', bucket)
-    
-    if (cropSettings) {
-      formData.append('crop_settings', JSON.stringify(cropSettings))
-    }
+      // FormData 생성
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('bucket', bucket)
 
-    // 메타데이터 추가
-    const metadata: Partial<ProfilePhotoMetadata> = {
-      original_filename: file.name,
-      file_size: file.size,
-      content_type: file.type,
-      uploaded_at: new Date().toISOString()
-    }
-    formData.append('metadata', JSON.stringify(metadata))
+      if (cropSettings) {
+        formData.append('crop_settings', JSON.stringify(cropSettings))
+      }
 
-    // 업로드 API 호출
-    const response = await fetch(`/api/media/upload`, {
-      method: 'POST',
-      body: formData
-    })
+      // 메타데이터 추가
+      const metadata: Partial<ProfilePhotoMetadata> = {
+        original_filename: file.name,
+        file_size: file.size,
+        content_type: file.type,
+        uploaded_at: new Date().toISOString(),
+      }
+      formData.append('metadata', JSON.stringify(metadata))
 
-    if (!response.ok) {
-      const errorData = await response.json()
-      throw new Error(errorData.error || 'Upload failed')
-    }
+      // 업로드 API 호출
+      const response = await fetch(`/api/media/upload`, {
+        method: 'POST',
+        body: formData,
+      })
 
-    const result = await response.json()
-    
-    return {
-      id: result.id,
-      name: result.name,
-      size: file.size,
-      type: file.type,
-      path: result.path,
-      public_url: result.public_url,
-      uploaded_at: new Date().toISOString(),
-      metadata: result.metadata || {}
-    }
-  }, [bucket])
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Upload failed')
+      }
+
+      const result = await response.json()
+      const uploadedFile: MediaFile | undefined = result.file
+
+      return {
+        id: uploadedFile?.id || result.id,
+        name: uploadedFile?.name || result.name || file.name,
+        size: uploadedFile?.size || file.size,
+        type: uploadedFile?.type || file.type,
+        path: uploadedFile?.path || result.path,
+        public_url: uploadedFile?.public_url || result.public_url,
+        variants: uploadedFile?.variants || result.variants,
+        variant_urls: uploadedFile?.variant_urls || result.variant_urls,
+        uploaded_at: uploadedFile?.uploaded_at || new Date().toISOString(),
+        metadata: uploadedFile?.metadata || result.metadata || {},
+      }
+    },
+    [bucket]
+  )
 
   // 업로드 시작
-  const startUpload = useCallback(async (files: UploadingFile[]) => {
-    setIsUploading(true)
+  const startUpload = useCallback(
+    async (files: UploadingFile[]) => {
+      setIsUploading(true)
 
-    for (const file of files) {
-      try {
-        // 상태 업데이트: 업로딩 중
-        setUploadingFiles(prev => 
-          prev.map(f => 
-            f.id === file.id 
-              ? { ...f, status: 'uploading', progress: 0 }
-              : f
+      for (const file of files) {
+        try {
+          // 상태 업데이트: 업로딩 중
+          setUploadingFiles(prev =>
+            prev.map(f => (f.id === file.id ? { ...f, status: 'uploading', progress: 0 } : f))
           )
-        )
 
-        // 진행률 시뮬레이션
-        const progressInterval = setInterval(() => {
-          setUploadingFiles(prev => 
-            prev.map(f => 
-              f.id === file.id && f.status === 'uploading'
-                ? { ...f, progress: Math.min(f.progress + 10, 90) }
+          // 진행률 시뮬레이션
+          const progressInterval = setInterval(() => {
+            setUploadingFiles(prev =>
+              prev.map(f =>
+                f.id === file.id && f.status === 'uploading'
+                  ? { ...f, progress: Math.min(f.progress + 10, 90) }
+                  : f
+              )
+            )
+          }, 200)
+
+          // 실제 업로드
+          const uploadedFile = await uploadFile(file)
+
+          clearInterval(progressInterval)
+
+          // 상태 업데이트: 완료
+          setUploadingFiles(prev =>
+            prev.map(f => (f.id === file.id ? { ...f, status: 'completed', progress: 100 } : f))
+          )
+
+          // 완료된 파일 목록에 추가
+          setCompletedFiles(prev => [...prev, uploadedFile])
+
+          // 잠시 후 업로딩 목록에서 제거
+          setTimeout(() => {
+            setUploadingFiles(prev => prev.filter(f => f.id !== file.id))
+          }, 1000)
+        } catch (error) {
+          console.error('Upload failed:', error)
+
+          setUploadingFiles(prev =>
+            prev.map(f =>
+              f.id === file.id
+                ? {
+                    ...f,
+                    status: 'error',
+                    error: error instanceof Error ? error.message : 'Upload failed',
+                  }
                 : f
             )
           )
-        }, 200)
 
-        // 실제 업로드
-        const uploadedFile = await uploadFile(file)
-
-        clearInterval(progressInterval)
-
-        // 상태 업데이트: 완료
-        setUploadingFiles(prev => 
-          prev.map(f => 
-            f.id === file.id 
-              ? { ...f, status: 'completed', progress: 100 }
-              : f
-          )
-        )
-
-        // 완료된 파일 목록에 추가
-        setCompletedFiles(prev => [...prev, uploadedFile])
-
-        // 잠시 후 업로딩 목록에서 제거
-        setTimeout(() => {
-          setUploadingFiles(prev => prev.filter(f => f.id !== file.id))
-        }, 1000)
-
-      } catch (error) {
-        console.error('Upload failed:', error)
-        
-        setUploadingFiles(prev => 
-          prev.map(f => 
-            f.id === file.id 
-              ? { 
-                  ...f, 
-                  status: 'error', 
-                  error: error instanceof Error ? error.message : 'Upload failed'
-                }
-              : f
-          )
-        )
-
-        onUploadError?.(error instanceof Error ? error.message : 'Upload failed')
+          onUploadError?.(error instanceof Error ? error.message : 'Upload failed')
+        }
       }
-    }
 
-    setIsUploading(false)
+      setIsUploading(false)
 
-    // 업로드 완료 콜백 호출
-    if (completedFiles.length > 0) {
-      onUploadComplete?.(completedFiles)
-    }
-  }, [uploadFile, onUploadError, onUploadComplete, completedFiles])
+      // 업로드 완료 콜백 호출
+      if (completedFiles.length > 0) {
+        onUploadComplete?.(completedFiles)
+      }
+    },
+    [uploadFile, onUploadError, onUploadComplete, completedFiles]
+  )
 
   // 파일 선택 처리
-  const handleFileSelect = useCallback(async (files: FileList | File[]) => {
-    if (disabled || isUploading) return
+  const handleFileSelect = useCallback(
+    async (files: FileList | File[]) => {
+      if (disabled || isUploading) return
 
-    const fileArray = Array.from(files)
-    
-    // 파일 개수 제한 확인
-    if (mode === 'single' && fileArray.length > 1) {
-      onUploadError?.('한 번에 하나의 파일만 업로드할 수 있습니다.')
-      return
-    }
+      const fileArray = Array.from(files)
 
-    if (completedFiles.length + uploadingFiles.length + fileArray.length > config.max_files) {
-      onUploadError?.(`최대 ${config.max_files}개의 파일만 업로드할 수 있습니다.`)
-      return
-    }
-
-    // 파일 유효성 검사 및 미리보기 생성
-    const validFiles: UploadingFile[] = []
-    
-    for (const file of fileArray) {
-      if (!isValidFileType(file)) {
-        onUploadError?.(`지원하지 않는 파일 형식입니다: ${file.type}`)
-        continue
+      // 파일 개수 제한 확인
+      if (mode === 'single' && fileArray.length > 1) {
+        onUploadError?.('한 번에 하나의 파일만 업로드할 수 있습니다.')
+        return
       }
 
-      if (!isValidFileSize(file)) {
-        onUploadError?.(`파일 크기가 너무 큽니다: ${(file.size / 1024 / 1024).toFixed(1)}MB`)
-        continue
+      if (completedFiles.length + uploadingFiles.length + fileArray.length > config.max_files) {
+        onUploadError?.(`최대 ${config.max_files}개의 파일만 업로드할 수 있습니다.`)
+        return
       }
 
-      try {
-        const preview = await generatePreview(file)
-        
-        validFiles.push({
-          id: `uploading-${Date.now()}-${Math.random()}`,
-          file,
-          progress: 0,
-          status: 'pending',
-          preview
-        })
-      } catch (error) {
-        console.error('Preview generation failed:', error)
-        validFiles.push({
-          id: `uploading-${Date.now()}-${Math.random()}`,
-          file,
-          progress: 0,
-          status: 'pending'
-        })
+      // 파일 유효성 검사 및 미리보기 생성
+      const validFiles: UploadingFile[] = []
+
+      for (const file of fileArray) {
+        if (!isValidFileType(file)) {
+          onUploadError?.(`지원하지 않는 파일 형식입니다: ${file.type}`)
+          continue
+        }
+
+        if (!isValidFileSize(file)) {
+          onUploadError?.(`파일 크기가 너무 큽니다: ${(file.size / 1024 / 1024).toFixed(1)}MB`)
+          continue
+        }
+
+        try {
+          const preview = await generatePreview(file)
+
+          validFiles.push({
+            id: `uploading-${Date.now()}-${Math.random()}`,
+            file,
+            progress: 0,
+            status: 'pending',
+            preview,
+          })
+        } catch (error) {
+          console.error('Preview generation failed:', error)
+          validFiles.push({
+            id: `uploading-${Date.now()}-${Math.random()}`,
+            file,
+            progress: 0,
+            status: 'pending',
+          })
+        }
       }
-    }
 
-    if (validFiles.length === 0) return
+      if (validFiles.length === 0) return
 
-    // 단일 모드에서는 기존 파일 제거
-    if (mode === 'single') {
-      setUploadingFiles([])
-      setCompletedFiles([])
-    }
+      // 단일 모드에서는 기존 파일 제거
+      if (mode === 'single') {
+        setUploadingFiles([])
+        setCompletedFiles([])
+      }
 
-    setUploadingFiles(prev => [...prev, ...validFiles])
-    
-    // 업로드 시작
-    startUpload(validFiles)
-  }, [
-    disabled, 
-    isUploading, 
-    mode, 
-    completedFiles.length, 
-    uploadingFiles.length, 
-    config.max_files, 
-    isValidFileType, 
-    isValidFileSize, 
-    generatePreview, 
-    onUploadError,
-    startUpload
-  ])
+      setUploadingFiles(prev => [...prev, ...validFiles])
 
+      // 업로드 시작
+      startUpload(validFiles)
+    },
+    [
+      disabled,
+      isUploading,
+      mode,
+      completedFiles.length,
+      uploadingFiles.length,
+      config.max_files,
+      isValidFileType,
+      isValidFileSize,
+      generatePreview,
+      onUploadError,
+      startUpload,
+    ]
+  )
 
   // 드래그 앤 드롭 처리
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    if (!disabled) {
-      setIsDragOver(true)
-    }
-  }, [disabled])
+  const handleDragOver = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault()
+      if (!disabled) {
+        setIsDragOver(true)
+      }
+    },
+    [disabled]
+  )
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     setIsDragOver(false)
   }, [])
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragOver(false)
-    
-    if (disabled) return
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault()
+      setIsDragOver(false)
 
-    const files = e.dataTransfer.files
-    if (files.length > 0) {
-      handleFileSelect(files)
-    }
-  }, [disabled, handleFileSelect])
+      if (disabled) return
+
+      const files = e.dataTransfer.files
+      if (files.length > 0) {
+        handleFileSelect(files)
+      }
+    },
+    [disabled, handleFileSelect]
+  )
 
   // 파일 입력 클릭
   const handleFileInputClick = useCallback(() => {
@@ -381,10 +401,13 @@ const MediaManager: React.FC<MediaManagerProps> = ({
   }, [disabled])
 
   // 파일 삭제
-  const handleFileDelete = useCallback((fileId: string) => {
-    setCompletedFiles(prev => prev.filter(f => f.id !== fileId))
-    onFileDelete?.(fileId)
-  }, [onFileDelete])
+  const handleFileDelete = useCallback(
+    (fileId: string) => {
+      setCompletedFiles(prev => prev.filter(f => f.id !== fileId))
+      onFileDelete?.(fileId)
+    },
+    [onFileDelete]
+  )
 
   // 업로딩 파일 제거
   const handleUploadingFileRemove = useCallback((fileId: string) => {
@@ -418,7 +441,7 @@ const MediaManager: React.FC<MediaManagerProps> = ({
           className="hidden"
           multiple={mode === 'multiple'}
           accept={config.allowed_types.join(',')}
-          onChange={(e) => {
+          onChange={e => {
             if (e.target.files) {
               handleFileSelect(e.target.files)
             }
@@ -429,10 +452,9 @@ const MediaManager: React.FC<MediaManagerProps> = ({
         <div className="flex flex-col items-center">
           <FiUpload className="w-8 h-8 text-gray-400 mb-2" />
           <p className="text-sm text-gray-600 mb-1">
-            {mode === 'single' 
-              ? '파일을 클릭하거나 드래그하여 업로드' 
-              : '파일들을 클릭하거나 드래그하여 업로드'
-            }
+            {mode === 'single'
+              ? '파일을 클릭하거나 드래그하여 업로드'
+              : '파일들을 클릭하거나 드래그하여 업로드'}
           </p>
           <p className="text-xs text-gray-500">
             최대 {formatFileSize(config.max_file_size)}, {config.allowed_types.join(', ')}
@@ -444,11 +466,8 @@ const MediaManager: React.FC<MediaManagerProps> = ({
       {uploadingFiles.length > 0 && (
         <div className="mt-4 space-y-2">
           <h4 className="text-sm font-medium text-gray-700">업로딩 중</h4>
-          {uploadingFiles.map((file) => (
-            <div
-              key={file.id}
-              className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg"
-            >
+          {uploadingFiles.map(file => (
+            <div key={file.id} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
               {/* 미리보기 또는 아이콘 */}
               <div className="flex-shrink-0">
                 {file.preview ? (
@@ -465,12 +484,8 @@ const MediaManager: React.FC<MediaManagerProps> = ({
 
               {/* 파일 정보 */}
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">
-                  {file.file.name}
-                </p>
-                <p className="text-xs text-gray-500">
-                  {formatFileSize(file.file.size)}
-                </p>
+                <p className="text-sm font-medium text-gray-900 truncate">{file.file.name}</p>
+                <p className="text-xs text-gray-500">{formatFileSize(file.file.size)}</p>
 
                 {/* 진행률 바 */}
                 {file.status === 'uploading' && (
@@ -483,9 +498,7 @@ const MediaManager: React.FC<MediaManagerProps> = ({
                 )}
 
                 {/* 에러 메시지 */}
-                {file.error && (
-                  <p className="text-xs text-red-600 mt-1">{file.error}</p>
-                )}
+                {file.error && <p className="text-xs text-red-600 mt-1">{file.error}</p>}
               </div>
 
               {/* 상태 아이콘 */}
@@ -493,15 +506,11 @@ const MediaManager: React.FC<MediaManagerProps> = ({
                 {file.status === 'uploading' && (
                   <FiLoader className="w-4 h-4 text-primary-600 animate-spin" />
                 )}
-                {file.status === 'completed' && (
-                  <FiCheck className="w-4 h-4 text-green-600" />
-                )}
-                {file.status === 'error' && (
-                  <FiAlertCircle className="w-4 h-4 text-red-600" />
-                )}
+                {file.status === 'completed' && <FiCheck className="w-4 h-4 text-green-600" />}
+                {file.status === 'error' && <FiAlertCircle className="w-4 h-4 text-red-600" />}
                 {(file.status === 'pending' || file.status === 'error') && (
                   <button
-                    onClick={(e) => {
+                    onClick={e => {
                       e.stopPropagation()
                       handleUploadingFileRemove(file.id)
                     }}
@@ -520,7 +529,7 @@ const MediaManager: React.FC<MediaManagerProps> = ({
       {completedFiles.length > 0 && (
         <div className="mt-4 space-y-2">
           <h4 className="text-sm font-medium text-gray-700">업로드된 파일</h4>
-          {completedFiles.map((file) => (
+          {completedFiles.map(file => (
             <div
               key={file.id}
               className="flex items-center space-x-3 p-3 bg-green-50 border border-green-200 rounded-lg"
@@ -541,25 +550,21 @@ const MediaManager: React.FC<MediaManagerProps> = ({
 
               {/* 파일 정보 */}
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">
-                  {file.name}
-                </p>
-                <p className="text-xs text-gray-500">
-                  {formatFileSize(file.size)} • 업로드 완료
-                </p>
+                <p className="text-sm font-medium text-gray-900 truncate">{file.name}</p>
+                <p className="text-xs text-gray-500">{formatFileSize(file.size)} • 업로드 완료</p>
               </div>
 
               {/* 액션 버튼들 */}
               <div className="flex-shrink-0 flex items-center space-x-1">
                 {enableCrop && file.type.startsWith('image/') && (
                   <button
-                    onClick={(e) => {
+                    onClick={e => {
                       e.stopPropagation()
                       // 크롭 모달 열기
                       setCropModal({
                         isOpen: true,
                         file,
-                        imageUrl: file.public_url
+                        imageUrl: file.public_url,
                       })
                     }}
                     className="text-gray-400 hover:text-gray-600"
@@ -568,9 +573,9 @@ const MediaManager: React.FC<MediaManagerProps> = ({
                     <FiEdit3 className="w-4 h-4" />
                   </button>
                 )}
-                
+
                 <button
-                  onClick={(e) => {
+                  onClick={e => {
                     e.stopPropagation()
                     handleFileDelete(file.id)
                   }}
