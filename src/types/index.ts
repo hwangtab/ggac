@@ -123,6 +123,33 @@ export interface ProfilePhotoMetadata {
   uploaded_at?: string
   /** 처리 완료 여부 */
   processed?: boolean
+  /** 저장된 변형 파일 경로 */
+  variants?: {
+    original: string
+    webp?: string
+    fallback?: string
+  }
+  /** 각 변형 파일의 공개 URL */
+  variant_urls?: {
+    original?: string
+    webp?: string
+    fallback?: string
+  }
+  /** 변형 파일의 추가 메타데이터 (파일 크기 등) */
+  variant_metadata?: {
+    original?: {
+      size?: number
+      content_type?: string
+    }
+    webp?: {
+      size?: number
+      content_type?: string
+    }
+    fallback?: {
+      size?: number
+      content_type?: string
+    }
+  }
   /** 다양한 크기의 이미지 버전들 */
   versions?: {
     thumbnail?: string
@@ -187,6 +214,18 @@ export interface MediaFile {
   path: string
   /** 공개 URL */
   public_url: string
+  /** 변형 파일 경로 모음 */
+  variants?: {
+    original: string
+    webp?: string
+    fallback?: string
+  }
+  /** 변형 파일의 공개 URL 모음 */
+  variant_urls?: {
+    original?: string
+    webp?: string
+    fallback?: string
+  }
   /** 업로드 시간 */
   uploaded_at: string
   /** 메타데이터 */

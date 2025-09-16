@@ -10,6 +10,8 @@ export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
+import path from 'path'
+import sharp from 'sharp'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
@@ -50,6 +52,9 @@ const DEFAULT_ALLOWED_TYPES = [
   'video/mp4',
   'video/webm',
 ]
+
+const WEBP_QUALITY = 82
+const JPEG_QUALITY = 85
 
 // 버킷별 설정
 const BUCKET_CONFIGS = {
@@ -113,22 +118,41 @@ function generateSafeFileName(originalName: string, userId: string): string {
   return `${userId}_${timestamp}_${randomId}_${baseName}.${extension}`
 }
 
-// Storage 경로 생성
-function generateStoragePath(bucket: string, userId: string, fileName: string): string {
+// Storage 경로 생성 및 이미지 변형 경로 계산
+function generateStoragePaths(bucket: string, userId: string, fileName: string) {
   const safeFileName = generateSafeFileName(fileName, userId)
+  const extension = path.extname(safeFileName).toLowerCase()
+  const nameWithoutExtension = extension
+    ? safeFileName.slice(0, safeFileName.length - extension.length)
+    : safeFileName
 
-  switch (bucket) {
-    case 'profiles':
-      return `profiles/${userId}/${safeFileName}`
-    case 'attachments':
-      return `attachments/${userId}/${safeFileName}`
-    default:
-      return `general/${userId}/${safeFileName}`
+  const basePrefix = (() => {
+    switch (bucket) {
+      case 'profiles':
+        return `profiles/${userId}`
+      case 'attachments':
+        return `attachments/${userId}`
+      default:
+        return `general/${userId}`
+    }
+  })()
+
+  const originalPath = `${basePrefix}/${safeFileName}`
+  const webpPath = `${basePrefix}/${nameWithoutExtension}.webp`
+  const fallbackPath = `${basePrefix}/${nameWithoutExtension}.fallback.jpg`
+
+  return {
+    originalPath,
+    webpPath,
+    fallbackPath,
+    extension,
+    basePrefix,
+    baseName: nameWithoutExtension,
   }
 }
 
 // 파일 메타데이터 추출
-async function extractFileMetadata(file: File): Promise<Record<string, any>> {
+async function extractFileMetadata(file: File, buffer?: Buffer): Promise<Record<string, any>> {
   const metadata: Record<string, any> = {
     original_filename: file.name,
     file_size: file.size,
@@ -139,9 +163,8 @@ async function extractFileMetadata(file: File): Promise<Record<string, any>> {
   // 이미지 파일인 경우 크기 정보 추출
   if (file.type.startsWith('image/')) {
     try {
-      const sharp = require('sharp')
-      const buffer = Buffer.from(await file.arrayBuffer())
-      const imageMetadata = await sharp(buffer).metadata()
+      const sourceBuffer = buffer || Buffer.from(await file.arrayBuffer())
+      const imageMetadata = await sharp(sourceBuffer).metadata()
 
       if (imageMetadata.width && imageMetadata.height) {
         metadata.width = imageMetadata.width
@@ -154,6 +177,146 @@ async function extractFileMetadata(file: File): Promise<Record<string, any>> {
   }
 
   return metadata
+}
+
+interface StorageUploadResult {
+  original: {
+    path: string
+    url: string
+    size: number
+    contentType: string
+  }
+  webp?: {
+    path: string
+    url: string
+    size: number
+    contentType: string
+  }
+  fallback?: {
+    path: string
+    url: string
+    size: number
+    contentType: string
+  }
+}
+
+async function uploadFileToStorage(
+  supabaseAdmin: ReturnType<typeof getSupabaseAdmin>,
+  bucket: string,
+  filePath: string,
+  buffer: Buffer,
+  contentType: string,
+  upsert: boolean = false
+) {
+  return supabaseAdmin.storage.from(bucket).upload(filePath, buffer, {
+    cacheControl: '3600',
+    upsert,
+    contentType,
+  })
+}
+
+async function uploadImageWithVariants(
+  supabaseAdmin: ReturnType<typeof getSupabaseAdmin>,
+  bucket: string,
+  paths: ReturnType<typeof generateStoragePaths>,
+  originalBuffer: Buffer,
+  originalContentType: string
+): Promise<StorageUploadResult> {
+  const result: StorageUploadResult = {
+    original: {
+      path: paths.originalPath,
+      url: '',
+      size: originalBuffer.length,
+      contentType: originalContentType,
+    },
+  }
+
+  const { error: originalUploadError } = await uploadFileToStorage(
+    supabaseAdmin,
+    bucket,
+    paths.originalPath,
+    originalBuffer,
+    originalContentType,
+    false
+  )
+
+  if (originalUploadError) {
+    throw new Error(`원본 파일 업로드 실패: ${originalUploadError.message}`)
+  }
+
+  const { data: originalUrlData } = supabaseAdmin.storage
+    .from(bucket)
+    .getPublicUrl(paths.originalPath)
+  result.original.url = originalUrlData?.publicUrl || ''
+
+  // GIF는 Sharp 변환 시 애니메이션이 손실될 수 있으므로 변환 생략
+  const shouldGenerateVariants =
+    originalContentType.startsWith('image/') && !['image/gif'].includes(originalContentType)
+
+  if (!shouldGenerateVariants) {
+    return result
+  }
+
+  // WebP 변환
+  const webpBuffer = await sharp(originalBuffer).webp({ quality: WEBP_QUALITY }).toBuffer()
+  const { error: webpUploadError } = await uploadFileToStorage(
+    supabaseAdmin,
+    bucket,
+    paths.webpPath,
+    webpBuffer,
+    'image/webp',
+    true
+  )
+
+  if (!webpUploadError) {
+    const { data: webpUrlData } = supabaseAdmin.storage.from(bucket).getPublicUrl(paths.webpPath)
+    result.webp = {
+      path: paths.webpPath,
+      url: webpUrlData?.publicUrl || '',
+      size: webpBuffer.length,
+      contentType: 'image/webp',
+    }
+  } else {
+    console.warn('WebP 변환 업로드 실패:', webpUploadError)
+  }
+
+  // JPG 폴백 생성 (원본이 이미 JPEG라면 재사용)
+  const isOriginalJpeg = ['.jpg', '.jpeg'].includes(paths.extension)
+  if (isOriginalJpeg) {
+    result.fallback = {
+      path: paths.originalPath,
+      url: result.original.url,
+      size: originalBuffer.length,
+      contentType: originalContentType,
+    }
+    return result
+  }
+
+  const jpegBuffer = await sharp(originalBuffer).jpeg({ quality: JPEG_QUALITY }).toBuffer()
+  const { error: jpegUploadError } = await uploadFileToStorage(
+    supabaseAdmin,
+    bucket,
+    paths.fallbackPath,
+    jpegBuffer,
+    'image/jpeg',
+    true
+  )
+
+  if (!jpegUploadError) {
+    const { data: jpegUrlData } = supabaseAdmin.storage
+      .from(bucket)
+      .getPublicUrl(paths.fallbackPath)
+    result.fallback = {
+      path: paths.fallbackPath,
+      url: jpegUrlData?.publicUrl || '',
+      size: jpegBuffer.length,
+      contentType: 'image/jpeg',
+    }
+  } else {
+    console.warn('JPEG 폴백 업로드 실패:', jpegUploadError)
+  }
+
+  return result
 }
 
 /**
@@ -225,7 +388,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Storage 경로 생성
-    const storagePath = generateStoragePath(bucket, session.user.id, file.name)
+    const storagePaths = generateStoragePaths(bucket, session.user.id, file.name)
 
     // Storage 클라이언트 생성 및 파일 업로드
     let supabaseAdmin
@@ -237,48 +400,83 @@ export async function POST(request: NextRequest) {
       return createErrorResponse('Storage 서비스를 사용할 수 없습니다. 관리자에게 문의하세요.', 503)
     }
 
-    // Supabase Storage에 파일 업로드
-    const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
-      .from(bucket)
-      .upload(storagePath, file, {
-        cacheControl: '3600',
-        upsert: false,
-      })
+    const fileBuffer = Buffer.from(await file.arrayBuffer())
 
-    if (uploadError) {
-      console.error('Storage upload error:', uploadError)
-
-      // Storage bucket이 없는 경우 특별한 메시지
-      if (uploadError.message?.includes('bucket') || uploadError.message?.includes('not found')) {
+    let uploadResult: StorageUploadResult
+    try {
+      uploadResult = await uploadImageWithVariants(
+        supabaseAdmin,
+        bucket,
+        storagePaths,
+        fileBuffer,
+        file.type
+      )
+    } catch (error: any) {
+      console.error('Storage upload error:', error)
+      const message =
+        typeof error?.message === 'string' ? error.message : '파일 업로드에 실패했습니다.'
+      if (message.includes('bucket') || message.includes('not found')) {
         return createErrorResponse(
           'Storage가 설정되지 않았습니다. 관리자가 Supabase Storage bucket을 생성해야 합니다.',
           503
         )
       }
-      return createErrorResponse(`파일 업로드에 실패했습니다: ${uploadError.message}`, 500)
+      return createErrorResponse(`파일 업로드에 실패했습니다: ${message}`, 500)
     }
 
-    console.log('[UPLOAD API] Storage 업로드 성공:', uploadData)
+    console.log('[UPLOAD API] Storage 업로드 성공:', uploadResult.original.path)
 
-    // 공개 URL 생성
-    const { data: publicUrlData } = supabaseAdmin.storage.from(bucket).getPublicUrl(storagePath)
-
-    if (!publicUrlData?.publicUrl) {
-      return createErrorResponse('공개 URL 생성에 실패했습니다.', 500)
+    const variantUrls = {
+      original: uploadResult.original.url,
+      webp: uploadResult.webp?.url,
+      fallback: uploadResult.fallback?.url,
     }
 
     // 파일 메타데이터 추출
-    const fileMetadata = await extractFileMetadata(file)
-    const finalMetadata = { ...fileMetadata, ...userMetadata }
+    const fileMetadata = await extractFileMetadata(file, fileBuffer)
+    const finalMetadata = {
+      ...fileMetadata,
+      ...userMetadata,
+      variants: {
+        original: uploadResult.original.path,
+        webp: uploadResult.webp?.path,
+        fallback: uploadResult.fallback?.path,
+      },
+      variant_urls: variantUrls,
+      variant_metadata: {
+        original: {
+          size: uploadResult.original.size,
+          content_type: uploadResult.original.contentType,
+        },
+        webp: uploadResult.webp
+          ? {
+              size: uploadResult.webp.size,
+              content_type: uploadResult.webp.contentType,
+            }
+          : undefined,
+        fallback: uploadResult.fallback
+          ? {
+              size: uploadResult.fallback.size,
+              content_type: uploadResult.fallback.contentType,
+            }
+          : undefined,
+      },
+    }
 
     // MediaFile 객체 생성
     const mediaFile: MediaFile = {
-      id: uploadData.id || `upload-${Date.now()}-${Math.random()}`,
+      id: `upload-${Date.now()}-${Math.random()}`,
       name: file.name,
       size: file.size,
       type: file.type,
-      path: storagePath,
-      public_url: publicUrlData.publicUrl,
+      path: uploadResult.webp?.path || uploadResult.original.path,
+      public_url: variantUrls.webp || variantUrls.original || '',
+      variants: {
+        original: uploadResult.original.path,
+        webp: uploadResult.webp?.path,
+        fallback: uploadResult.fallback?.path,
+      },
+      variant_urls: variantUrls,
       uploaded_at: new Date().toISOString(),
       metadata: finalMetadata,
     }
@@ -292,6 +490,8 @@ export async function POST(request: NextRequest) {
       path: mediaFile.path,
       public_url: mediaFile.public_url,
       metadata: finalMetadata,
+      variants: mediaFile.variants,
+      variant_urls: mediaFile.variant_urls,
     })
     return distLimiter.addRateLimitHeaders(
       res,
@@ -359,22 +559,67 @@ export async function GET(request: NextRequest) {
       return createErrorResponse('파일 목록 조회에 실패했습니다.', 500)
     }
 
-    // MediaFile 형태로 변환
-    const mediaFiles: MediaFile[] = (files || []).map((file, index) => {
-      const filePath = `${session.user.id}/${file.name}`
-      const { data: publicUrlData } = supabaseAdmin.storage.from(bucket).getPublicUrl(filePath)
+    const allFileNames = new Set((files || []).map(file => file.name))
 
-      return {
-        id: `${bucket}-${file.name}-${index}`,
-        name: file.name,
-        size: file.metadata?.size || 0,
-        type: file.metadata?.mimetype || 'application/octet-stream',
-        path: filePath,
-        public_url: publicUrlData?.publicUrl || '',
-        uploaded_at: file.created_at || new Date().toISOString(),
-        metadata: file.metadata || {},
-      }
-    })
+    // MediaFile 형태로 변환 (WebP/폴백 파일은 목록에서 제외하고 메타데이터로 제공)
+    const mediaFiles: MediaFile[] = (files || [])
+      .filter(file => {
+        if (!file.name) return false
+        if (file.name.endsWith('.webp')) return false
+        if (file.name.endsWith('.fallback.jpg')) return false
+        return true
+      })
+      .map((file, index) => {
+        const filePath = `${session.user.id}/${file.name}`
+        const ext = path.extname(file.name)
+        const baseName = ext ? file.name.slice(0, file.name.length - ext.length) : file.name
+
+        const webpName = `${baseName}.webp`
+        const fallbackName = `${baseName}.fallback.jpg`
+
+        const variantPaths = {
+          original: filePath,
+          webp: allFileNames.has(webpName) ? `${session.user.id}/${webpName}` : undefined,
+          fallback: allFileNames.has(fallbackName)
+            ? `${session.user.id}/${fallbackName}`
+            : ['.jpg', '.jpeg'].includes(ext.toLowerCase())
+              ? filePath
+              : undefined,
+        }
+
+        const { data: originalUrlData } = supabaseAdmin.storage
+          .from(bucket)
+          .getPublicUrl(variantPaths.original)
+        const { data: webpUrlData } = variantPaths.webp
+          ? supabaseAdmin.storage.from(bucket).getPublicUrl(variantPaths.webp)
+          : { data: undefined }
+        const { data: fallbackUrlData } = variantPaths.fallback
+          ? supabaseAdmin.storage.from(bucket).getPublicUrl(variantPaths.fallback)
+          : { data: undefined }
+
+        const variantUrls = {
+          original: originalUrlData?.publicUrl,
+          webp: webpUrlData?.publicUrl,
+          fallback: fallbackUrlData?.publicUrl,
+        }
+
+        return {
+          id: `${bucket}-${file.name}-${index}`,
+          name: file.name,
+          size: file.metadata?.size || 0,
+          type: file.metadata?.mimetype || 'application/octet-stream',
+          path: variantPaths.webp || variantPaths.original,
+          public_url: variantUrls.webp || variantUrls.original || '',
+          variants: variantPaths,
+          variant_urls: variantUrls,
+          uploaded_at: file.created_at || new Date().toISOString(),
+          metadata: {
+            ...(file.metadata || {}),
+            variants: variantPaths,
+            variant_urls: variantUrls,
+          },
+        }
+      })
 
     const resList = createSuccessResponse({
       files: mediaFiles,
