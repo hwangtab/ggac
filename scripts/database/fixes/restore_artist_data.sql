@@ -208,10 +208,14 @@ SET
   updated_at = NOW()
 WHERE legacy_id = 'artist-007';
 
--- ACMEin 복구
+-- Zsthyger 복구
 UPDATE artists 
 SET 
-  bio = '말로 표현할 수 없는 것들을 전하기 위한 여행을 기록합니다. 악기와 악사의 가치를 증명하는 방법은 연주뿐이다. ACME 스튜디오 준비 중 
+  bio = '악기와 악사의 가치를 증명하는 방법은 연주뿐이다.
+
+### ACME 스튜디오
+
+- 준비 중
 
 ### 주요 장르 
 
@@ -227,7 +231,7 @@ SET
     { "title": "Panzerkorps - The Flag Taken Back", "url": "https://www.youtube.com/watch?v=sQnlWqGrorg" }
   ]'::jsonb,
   contact = 'eutaxmusic@gmail.com',
-  category = ARRAY['창작자'],
+  category = ARRAY['창작자', '프로듀서', '편곡가', '기타', '연주자'],
   template_type = '콜라주형',
   updated_at = NOW()
 WHERE legacy_id = 'artist-009';

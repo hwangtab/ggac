@@ -166,16 +166,22 @@
   {
     "id": "artist-009",
     "slug": "acmein",
-    "name": "ACMEin",
-    "category": "창작자",
+    "name": "Zsthyger",
+    "category": [
+      "창작자",
+      "프로듀서",
+      "편곡가",
+      "기타",
+      "연주자"
+    ],
     "profileImage": "/images/artists/acmein.webp",
     "oneLiner": "말로 표현할 수 없는 것들을 전하기 위한 여행을 기록합니다.",
-    "bio": "말로 표현할 수 없는 것들을 전하기 위한 여행을 기록합니다. 악기와 악사의 가치를 증명하는 방법은 연주뿐이다. ACME 스튜디오 준비 중 \n\n### 주요 장르 \n\n- 전자음악\n- 메탈\n- 클래식",
+    "bio": "악기와 악사의 가치를 증명하는 방법은 연주뿐이다.\n\n### ACME 스튜디오\n\n- 준비 중\n\n### 주요 장르 \n\n- 전자음악\n- 메탈\n- 클래식",
     "templateType": "콜라주형",
     "portfolioLinks": [
       { "title": "Instagram", "url": "https://www.instagram.com/zsthyger" }
     ],
-     "youtubeVideos": [
+    "youtubeVideos": [
       { "title": "El Patron - The Alliance", "url": "https://www.youtube.com/watch?v=lxDUrUut0Os" },
       { "title": "Panzerkorps - The Flag Taken Back", "url": "https://www.youtube.com/watch?v=sQnlWqGrorg" }
     ],
