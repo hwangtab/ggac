@@ -3,6 +3,9 @@
 
 echo "🔍 Running pre-commit checks..."
 
+echo "🔍 Checking image assets..."
+npm run images:verify
+
 # Lint staged files
 npx lint-staged
 
