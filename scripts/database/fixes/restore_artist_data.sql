@@ -249,7 +249,7 @@ SET
 - 포크 
 - 록',
   one_liner = '장현호의 곡들은 소외된 이들과 보통 사람들을 연결하고, 아픔의 현장을 위로하려는 진심을 담고 있습니다.',
-  profile_photo_url = '/images/artists/janghyunho.png',
+  profile_photo_url = '/images/artists/janghyunho.webp',
   portfolio_links = NULL,
   youtube_videos = '[
     {
@@ -276,7 +276,7 @@ SET
 ### 음악 장르
 - 힙합',
   one_liner = '신을 찾는 여정 속 철학적인 가사들을 풀어냅니다.',
-  profile_photo_url = '/images/artists/anazao.jpg',
+  profile_photo_url = '/images/artists/anazao.webp',
   portfolio_links = '[
     {
       "title": "Linktree",
@@ -314,7 +314,7 @@ SET
 - 포크
 - 판소리',
   one_liner = '전통 판소리 창법을 기반으로 현대적인 음악을 선보이며 자신만의 독창적인 음악 세계를 구축하고 있습니다.',
-  profile_photo_url = '/images/artists/heewoo.jpg',
+  profile_photo_url = '/images/artists/heewoo.webp',
   portfolio_links = NULL,
   youtube_videos = '[
     {

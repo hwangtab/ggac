@@ -159,7 +159,7 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
     if (artist.profileImage) {
       return artist.profileImage.replace('.webp', '.jpg')
     }
-    return '/images/logo/gac_logo.jpg'
+    return '/images/logo/gac_logo.webp'
   }
 
   const imageUrl = `${baseUrl}${getProfileImageUrl()}`

@@ -49,7 +49,7 @@ VALUES
     'simon-dm', 
     'Simon DM', 
     ARRAY['창작자'], 
-    '/images/artists/simon-dm.jpg', 
+    '/images/artists/simon-dm.webp', 
     '사운드와 서사가 교차하는 지점에서 감정의 서사를 그려냅니다.', 
     'Simon DM(前 국가대표기타선수)은 기타리스트이자 프로듀서로 활동합니다. Progressive Metal을 기반으로 Rock과 Pop은 물론, 오케스트라와 시네마틱 사운드에 이르기까지 다양한 장르를 넘나들며, 자신만의 음악 세계를 구축해왔습니다.
 
