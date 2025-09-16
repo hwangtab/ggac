@@ -2,24 +2,29 @@
 
 ## 1. 개요
 
-경기아트콜렉티브 웹사이트에 마이페이지 시스템을 구축하여 아티스트가 자신의 아티스트 상세페이지를 관리할 수 있도록 한다. 이 시스템은 기존 member_profiles 테이블을 확장하여 구현하며, 조합원 승인 시 관리자가 직접 아티스트 ID를 할당하는 방식으로 운영된다.
+경기아트콜렉티브 웹사이트에 마이페이지 시스템을 구축하여 아티스트가 자신의
+아티스트 상세페이지를 관리할 수 있도록 한다. 이 시스템은 기존 member_profiles
+테이블을 확장하여 구현하며, 조합원 승인 시 관리자가 직접 아티스트 ID를 할당하는
+방식으로 운영된다.
 
 ## 2. 시스템 아키텍처
 
 ### 2.1 데이터베이스 설계
 
 #### 2.1.1 member_profiles 테이블 확장
+
 현재 member_profiles 테이블에 다음 컬럼을 추가한다:
 
 ```sql
 -- 아티스트 관련 컬럼 추가
-ALTER TABLE public.member_profiles 
+ALTER TABLE public.member_profiles
 ADD COLUMN artist_id TEXT REFERENCES public.artists(legacy_id),
 ADD COLUMN is_artist BOOLEAN DEFAULT false,
 ADD COLUMN artist_role TEXT DEFAULT 'owner' CHECK (artist_role IN ('owner', 'manager', 'collaborator'));
 ```
 
 #### 2.1.2 artists 테이블 생성 (JSON 데이터 마이그레이션용)
+
 기존 JSON 데이터를 데이터베이스로 이관하기 위한 테이블:
 
 ```sql
@@ -42,6 +47,7 @@ CREATE TABLE public.artists (
 ```
 
 #### 2.1.3 RLS 정책 설정
+
 아티스트 정보 수정 권한 제어를 위한 정책:
 
 ```sql
@@ -79,6 +85,7 @@ CREATE POLICY "Admins can update all artists" ON public.artists
 ### 2.2 아티스트 승인 프로세스
 
 #### 2.2.1 조합원 승인 시 아티스트 ID 할당
+
 1. 관리자가 Supabase 대시보드에서 member_profiles 테이블에 접근
 2. 승인할 조합원의 `registration_status`를 'approved'로 변경
 3. 해당 조합원이 아티스트인 경우:
@@ -87,26 +94,28 @@ CREATE POLICY "Admins can update all artists" ON public.artists
    - `artist_role`을 'owner'로 설정
 
 #### 2.2.2 아티스트 ID 매핑 테이블
+
 관리자 참조용 아티스트 ID 목록:
 
-| Legacy ID | Artist Name | Slug | Contact |
-|-----------|------------|------|---------|
-| artist-001 | 사바하 | sabbaha | sabbaha.doom@gmail.com |
-| artist-002 | Simon DM | simon-dm | lizard1022@naver.com |
-| artist-003 | 로잘린송 | rosalyn-song | durisongsong@gmail.com |
-| artist-004 | themilliways | themilliways | me@jtjoo.com |
-| artist-005 | 유동혁 | yoo-dong-hyuk | amuro4@naver.com |
-| artist-006 | 최기타 | choi-guitar | choisguitar@naver.com |
-| artist-007 | 남수 | namsu | - |
-| artist-008 | 황경하 | hwang-gyeong-ha | hwangtab@gmail.com |
-| artist-009 | ACMEin | acmein | eutaxmusic@gmail.com |
-| artist-010 | 장현호 | jang-hyun-ho | - |
-| artist-011 | ANAZAO | anazao | - |
-| artist-012 | 희우 | heewoo | - |
+| Legacy ID  | Artist Name  | Slug            | Contact                |
+| ---------- | ------------ | --------------- | ---------------------- |
+| artist-001 | 사바하       | sabbaha         | sabbaha.doom@gmail.com |
+| artist-002 | Simon DM     | simon-dm        | lizard1022@naver.com   |
+| artist-003 | 로잘린송     | rosalyn-song    | durisongsong@gmail.com |
+| artist-004 | themilliways | themilliways    | me@jtjoo.com           |
+| artist-005 | 유동혁       | yoo-dong-hyuk   | amuro4@naver.com       |
+| artist-006 | 최기타       | choi-guitar     | choisguitar@naver.com  |
+| artist-007 | 남수         | namsu           | -                      |
+| artist-008 | 황경하       | hwang-gyeong-ha | hwangtab@gmail.com     |
+| artist-009 | Zsthyger     | acmein          | eutaxmusic@gmail.com   |
+| artist-010 | 장현호       | jang-hyun-ho    | -                      |
+| artist-011 | ANAZAO       | anazao          | -                      |
+| artist-012 | 희우         | heewoo          | -                      |
 
 ## 3. 마이페이지 구조 설계
 
 ### 3.1 라우트 구조
+
 ```
 /mypage
 ├── page.tsx                 # 메인 마이페이지 (대시보드)
@@ -136,6 +145,7 @@ CREATE POLICY "Admins can update all artists" ON public.artists
 ### 3.2 컴포넌트 설계
 
 #### 3.2.1 MypageLayout 컴포넌트
+
 ```typescript
 interface MypageLayoutProps {
   children: React.ReactNode
@@ -143,10 +153,10 @@ interface MypageLayoutProps {
   description?: string
 }
 
-const MypageLayout: React.FC<MypageLayoutProps> = ({ 
-  children, 
-  title, 
-  description 
+const MypageLayout: React.FC<MypageLayoutProps> = ({
+  children,
+  title,
+  description
 }) => {
   return (
     <div className="min-h-screen bg-gray-50">
@@ -176,6 +186,7 @@ const MypageLayout: React.FC<MypageLayoutProps> = ({
 ```
 
 #### 3.2.2 PermissionCheck 컴포넌트
+
 ```typescript
 interface PermissionCheckProps {
   children: React.ReactNode
@@ -189,13 +200,13 @@ const PermissionCheck: React.FC<PermissionCheckProps> = ({
   fallback
 }) => {
   const { user, profile, loading } = useAuth()
-  
+
   if (loading) return <LoadingSpinner />
-  
+
   if (!user || !profile) {
     return fallback || <AccessDenied />
   }
-  
+
   switch (requiredPermission) {
     case 'member':
       if (profile.registration_status !== 'approved' || !profile.is_active) {
@@ -213,7 +224,7 @@ const PermissionCheck: React.FC<PermissionCheckProps> = ({
       }
       break
   }
-  
+
   return <>{children}</>
 }
 ```
@@ -223,20 +234,22 @@ const PermissionCheck: React.FC<PermissionCheckProps> = ({
 ### 4.1 개인 프로필 관리
 
 #### 4.1.1 편집 가능한 필드
+
 - **기본 정보**: display_name, phone_number, birth_date
 - **조합 정보**: monthly_fee, bank_name, account_number, account_holder
 - **연락처**: email (읽기 전용)
 
 #### 4.1.2 ProfileEditForm 컴포넌트
+
 ```typescript
 interface ProfileEditFormProps {
   profile: MemberProfile
   onUpdate: (updates: Partial<MemberProfile>) => Promise<void>
 }
 
-const ProfileEditForm: React.FC<ProfileEditFormProps> = ({ 
-  profile, 
-  onUpdate 
+const ProfileEditForm: React.FC<ProfileEditFormProps> = ({
+  profile,
+  onUpdate
 }) => {
   const [formData, setFormData] = useState({
     display_name: profile.display_name,
@@ -247,29 +260,29 @@ const ProfileEditForm: React.FC<ProfileEditFormProps> = ({
     account_number: profile.account_number,
     account_holder: profile.account_holder
   })
-  
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     await onUpdate(formData)
   }
-  
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      <PersonalInfo 
-        data={formData} 
-        onChange={setFormData} 
+      <PersonalInfo
+        data={formData}
+        onChange={setFormData}
       />
-      <CooperativeInfo 
-        data={formData} 
-        onChange={setFormData} 
+      <CooperativeInfo
+        data={formData}
+        onChange={setFormData}
       />
-      <AccountInfo 
-        data={formData} 
-        onChange={setFormData} 
+      <AccountInfo
+        data={formData}
+        onChange={setFormData}
       />
       <div className="flex justify-end">
-        <button 
-          type="submit" 
+        <button
+          type="submit"
           className="btn-primary"
         >
           저장
@@ -283,6 +296,7 @@ const ProfileEditForm: React.FC<ProfileEditFormProps> = ({
 ### 4.2 아티스트 프로필 관리
 
 #### 4.2.1 편집 가능한 필드
+
 - **기본 정보**: name, category, one_liner, template_type
 - **상세 정보**: bio (마크다운 지원)
 - **미디어**: profile_image (업로드 기능)
@@ -291,15 +305,16 @@ const ProfileEditForm: React.FC<ProfileEditFormProps> = ({
 - **연락처**: contact
 
 #### 4.2.2 ArtistEditForm 컴포넌트
+
 ```typescript
 interface ArtistEditFormProps {
   artist: Artist
   onUpdate: (updates: Partial<Artist>) => Promise<void>
 }
 
-const ArtistEditForm: React.FC<ArtistEditFormProps> = ({ 
-  artist, 
-  onUpdate 
+const ArtistEditForm: React.FC<ArtistEditFormProps> = ({
+  artist,
+  onUpdate
 }) => {
   const [formData, setFormData] = useState({
     name: artist.name,
@@ -312,43 +327,43 @@ const ArtistEditForm: React.FC<ArtistEditFormProps> = ({
     youtube_videos: artist.youtube_videos || [],
     contact: artist.contact
   })
-  
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     await onUpdate(formData)
   }
-  
+
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
-      <BasicInfo 
-        data={formData} 
-        onChange={setFormData} 
+      <BasicInfo
+        data={formData}
+        onChange={setFormData}
       />
-      <BioEditor 
-        value={formData.bio} 
-        onChange={(bio) => setFormData({ ...formData, bio })} 
+      <BioEditor
+        value={formData.bio}
+        onChange={(bio) => setFormData({ ...formData, bio })}
       />
-      <MediaManager 
+      <MediaManager
         currentImage={formData.profile_image}
-        onImageUpdate={(profile_image) => 
+        onImageUpdate={(profile_image) =>
           setFormData({ ...formData, profile_image })
         }
       />
-      <PortfolioLinks 
+      <PortfolioLinks
         links={formData.portfolio_links}
-        onChange={(portfolio_links) => 
+        onChange={(portfolio_links) =>
           setFormData({ ...formData, portfolio_links })
         }
       />
-      <YoutubeVideos 
+      <YoutubeVideos
         videos={formData.youtube_videos}
-        onChange={(youtube_videos) => 
+        onChange={(youtube_videos) =>
           setFormData({ ...formData, youtube_videos })
         }
       />
       <div className="flex justify-end">
-        <button 
-          type="submit" 
+        <button
+          type="submit"
           className="btn-primary"
         >
           저장
@@ -362,6 +377,7 @@ const ArtistEditForm: React.FC<ArtistEditFormProps> = ({
 ## 5. 타입 정의 업데이트
 
 ### 5.1 MemberProfile 인터페이스 확장
+
 ```typescript
 export interface MemberProfile {
   // 기존 필드들...
@@ -383,7 +399,7 @@ export interface MemberProfile {
   updated_at: string
   approved_at?: string
   approved_by?: string
-  
+
   // 새로 추가되는 필드들
   artist_id?: string | null
   is_artist: boolean
@@ -392,6 +408,7 @@ export interface MemberProfile {
 ```
 
 ### 5.2 Artist 인터페이스 확장
+
 ```typescript
 export interface Artist {
   // 기존 필드들...
@@ -409,7 +426,7 @@ export interface Artist {
   contact: string | null
   created_at: string
   updated_at: string
-  
+
   // 연결된 멤버 정보 (조인용)
   members?: {
     id: string
@@ -422,6 +439,7 @@ export interface Artist {
 ## 6. API 엔드포인트 설계
 
 ### 6.1 프로필 관리 API
+
 ```typescript
 // /api/mypage/profile
 export async function GET(request: NextRequest) {
@@ -443,6 +461,7 @@ export async function PATCH(request: NextRequest) {
 ```
 
 ### 6.2 미디어 업로드 API
+
 ```typescript
 // /api/mypage/upload
 export async function POST(request: NextRequest) {
@@ -455,16 +474,19 @@ export async function POST(request: NextRequest) {
 ## 7. 보안 고려사항
 
 ### 7.1 권한 검증
+
 - 모든 API 요청에서 사용자 인증 상태 확인
 - 아티스트 정보 수정 시 연결된 멤버인지 확인
 - 파일 업로드 시 파일 타입 및 크기 제한
 
 ### 7.2 데이터 유효성 검사
+
 - 입력 데이터 sanitization
 - 마크다운 콘텐츠 XSS 방지
 - 이미지 업로드 시 악성 파일 검증
 
 ### 7.3 RLS 정책
+
 - 멤버는 자신의 프로필만 수정 가능
 - 아티스트 정보는 연결된 멤버만 수정 가능
 - 관리자는 모든 데이터 접근 가능
@@ -472,36 +494,42 @@ export async function POST(request: NextRequest) {
 ## 8. 구현 단계
 
 ### Phase 1: 데이터베이스 설정
+
 1. member_profiles 테이블 확장 마이그레이션
 2. artists 테이블 생성 및 JSON 데이터 이관
 3. RLS 정책 설정
 4. 타입 정의 업데이트
 
 ### Phase 2: 기본 마이페이지 구조
+
 1. 마이페이지 라우트 설정
 2. 기본 레이아웃 및 네비게이션
 3. 권한 체크 시스템
 4. 프로필 조회 API
 
 ### Phase 3: 개인 프로필 관리
+
 1. 개인 프로필 편집 폼
 2. 프로필 업데이트 API
 3. 유효성 검사 및 에러 처리
 4. 성공/실패 알림
 
 ### Phase 4: 아티스트 프로필 관리
+
 1. 아티스트 정보 편집 폼
 2. 아티스트 업데이트 API
 3. 마크다운 에디터
 4. 포트폴리오 및 동영상 관리
 
 ### Phase 5: 미디어 관리
+
 1. 이미지 업로드 기능
 2. Supabase Storage 연동
 3. 이미지 최적화 (WebP 변환)
 4. 미디어 파일 관리
 
 ### Phase 6: 고급 기능
+
 1. 활동 로그 시스템
 2. 변경 이력 추적
 3. 알림 시스템
@@ -510,16 +538,19 @@ export async function POST(request: NextRequest) {
 ## 9. 테스트 계획
 
 ### 9.1 단위 테스트
+
 - 권한 체크 로직
 - 데이터 유효성 검사
 - API 엔드포인트
 
 ### 9.2 통합 테스트
+
 - 사용자 플로우 테스트
 - 데이터베이스 연동 테스트
 - 파일 업로드 테스트
 
 ### 9.3 사용자 테스트
+
 - 아티스트 피드백 수집
 - 관리자 워크플로우 테스트
 - 모바일 환경 테스트
@@ -527,20 +558,24 @@ export async function POST(request: NextRequest) {
 ## 10. 배포 및 운영
 
 ### 10.1 배포 준비사항
+
 - 환경 변수 설정
 - Supabase Storage 버킷 생성
 - RLS 정책 적용 확인
 
 ### 10.2 모니터링
+
 - 사용자 활동 로그
 - 에러 로그 모니터링
 - 성능 지표 추적
 
 ### 10.3 유지보수
+
 - 정기적인 데이터베이스 백업
 - 이미지 파일 정리
 - 사용자 피드백 반영
 
 ---
 
-이 문서는 마이페이지 시스템의 전체적인 구현 계획을 담고 있으며, 개발 과정에서 필요에 따라 업데이트될 수 있습니다.
+이 문서는 마이페이지 시스템의 전체적인 구현 계획을 담고 있으며, 개발 과정에서
+필요에 따라 업데이트될 수 있습니다.

@@ -271,33 +271,28 @@ The Milliways는 Douglas Adams의 소설 "은하수를 여행하는 히치하이
   (
     'artist-009', 
     'acmein', 
-    'ACMEin', 
-    ARRAY['창작자'], 
+    'Zsthyger', 
+    ARRAY['창작자', '프로듀서', '편곡가', '기타', '연주자'], 
     '/images/artists/acmein.webp', 
-    '일렉트로닉 사운드를 기반으로 한 실험적이고 에너지 넘치는 음악을 만듭니다.', 
-    'ACMEin은 일렉트로닉 음악을 기반으로 한 실험적이고 에너지 넘치는 사운드를 추구하는 프로듀서입니다.
+    '말로 표현할 수 없는 것들을 전하기 위한 여행을 기록합니다.', 
+    '악기와 악사의 가치를 증명하는 방법은 연주뿐이다.
 
-### 음악적 스타일
+### ACME 스튜디오
 
-다양한 전자음악 장르를 넘나들며 독창적인 사운드를 만들어내며, 특히 에너지 넘치는 비트와 실험적인 사운드 디자인이 특징입니다.
+- 준비 중
 
-### 주요 장르
+### 주요 장르 
 
-- Electronic
-- Experimental Electronic
-- IDM
-- Breakbeat
-- Ambient Techno
-
-### 작업 특징
-
-전통적인 일렉트로닉 음악의 틀을 벗어나 새로운 형태의 전자음악을 실험하며, 라이브 퍼포먼스에서도 독특한 에너지를 선보입니다.', 
+- 전자음악
+- 메탈
+- 클래식', 
     '콜라주형', 
     '[
-      {"title": "Bandcamp", "url": "https://acmein.bandcamp.com/"}
+      {"title": "Instagram", "url": "https://www.instagram.com/zsthyger"}
     ]'::jsonb, 
     '[
-      {"title": "ACMEin - Digital Pulse", "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}
+      {"title": "El Patron - The Alliance", "url": "https://www.youtube.com/watch?v=lxDUrUut0Os"},
+      {"title": "Panzerkorps - The Flag Taken Back", "url": "https://www.youtube.com/watch?v=sQnlWqGrorg"}
     ]'::jsonb, 
     'eutaxmusic@gmail.com'
   ),
