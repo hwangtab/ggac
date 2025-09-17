@@ -83,6 +83,7 @@ export async function GET(req: NextRequest) {
       is_liked: false,
       attachments_stats: {
         total_attachments: 0,
+        total_size: 0,
         image_count: 0,
         document_count: 0,
         video_count: 0,
@@ -97,19 +98,34 @@ export async function GET(req: NextRequest) {
     if (ids.length > 0) {
       const { data: attRows } = await supabase
         .from('post_attachments')
-        .select('post_id, file_type')
+        .select('post_id, file_type, file_size')
         .in('post_id', ids)
 
       const statsMap = new Map<
         string,
-        { total: number; image: number; document: number; video: number; audio: number }
+        {
+          total: number
+          totalSize: number
+          image: number
+          document: number
+          video: number
+          audio: number
+        }
       >()
       ;(attRows || []).forEach((r: any) => {
         const key = r.post_id as string
         const type = (r.file_type as string) || 'other'
         const cnt = 1
-        const curr = statsMap.get(key) || { total: 0, image: 0, document: 0, video: 0, audio: 0 }
+        const curr = statsMap.get(key) || {
+          total: 0,
+          totalSize: 0,
+          image: 0,
+          document: 0,
+          video: 0,
+          audio: 0,
+        }
         curr.total += cnt
+        curr.totalSize += Number(r.file_size) || 0
         if (type === 'image') curr.image += cnt
         else if (type === 'document') curr.document += cnt
         else if (type === 'video') curr.video += cnt
@@ -122,6 +138,7 @@ export async function GET(req: NextRequest) {
         if (s) {
           p.attachments_stats = {
             total_attachments: s.total,
+            total_size: s.totalSize,
             image_count: s.image,
             document_count: s.document,
             video_count: s.video,
