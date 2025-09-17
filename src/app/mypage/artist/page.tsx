@@ -15,6 +15,7 @@ export default function ArtistPage() {
   const [artist, setArtist] = useState<DatabaseArtist | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const router = useRouter()
 
@@ -84,8 +85,7 @@ export default function ArtistPage() {
       // 업데이트된 아티스트 정보로 상태 업데이트
       setArtist(data.artist)
 
-      // 성공 알림 (향후 toast로 개선 가능)
-      alert('아티스트 프로필이 성공적으로 업데이트되었습니다.')
+      setSuccessMessage('아티스트 프로필이 성공적으로 업데이트되었습니다.')
     } catch (error: any) {
       console.error('Artist update error:', error)
       setError(error.message || '아티스트 프로필 업데이트에 실패했습니다.')
@@ -93,6 +93,12 @@ export default function ArtistPage() {
       setSaving(false)
     }
   }
+
+  useEffect(() => {
+    if (!successMessage) return
+    const timer = setTimeout(() => setSuccessMessage(null), 4000)
+    return () => clearTimeout(timer)
+  }, [successMessage])
 
   if (loading) {
     return (
@@ -159,6 +165,12 @@ export default function ArtistPage() {
         {error && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
             <p className="text-red-600 text-sm">{error}</p>
+          </div>
+        )}
+
+        {successMessage && (
+          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-md">
+            <p className="text-green-700 text-sm">{successMessage}</p>
           </div>
         )}
 
