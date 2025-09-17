@@ -2,6 +2,7 @@ import { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { getPostMetadata } from '@/lib/posts'
 import PostDetailClient from './PostDetailClient'
+import PostDetailClientBridge from './PostDetailClientBridge'
 import { Suspense } from 'react'
 import { headers } from 'next/headers'
 import { generatePostOgImage } from '@/utils/imageUrl'
@@ -275,6 +276,9 @@ export default async function PostDetailPage({ params }: { params: Promise<{ id:
       >
         <PostDetailServerData postId={postId} />
       </Suspense>
+
+      {/* 클라이언트 컴포넌트로 하이브리드 렌더링 (브리지에서 DOM 스크립트 읽기) */}
+      <PostDetailClientBridge postId={postId} />
     </div>
   )
 }
