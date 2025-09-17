@@ -59,7 +59,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
     const attachmentsQuery = supabase
       .from('post_attachments')
-      .select('file_url, file_type, is_primary, created_at')
+      .select('file_url, file_type, file_size, is_primary, created_at')
       .eq('post_id', postId)
       .order('created_at', { ascending: true })
 
@@ -82,6 +82,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       return createErrorResponse('Post not found', 404)
     }
 
+    const totalSize = (attachments || []).reduce(
+      (sum, att: any) => sum + (Number(att.file_size) || 0),
+      0
+    )
+
     const payload = {
       post: {
         ...post,
@@ -89,6 +94,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
         comment_count: (comments || []).length, // 전체 개수는 별도 API로 제공 가능
         attachments_stats: {
           total_attachments: (attachments || []).length,
+          total_size: totalSize,
           image_count: (attachments || []).filter((att: any) => att.file_type === 'image').length,
           document_count: (attachments || []).filter((att: any) => att.file_type === 'document')
             .length,
