@@ -176,7 +176,7 @@ export async function PUT(request: NextRequest) {
     // 사용자의 아티스트 권한 확인
     const { data: profile, error: profileError } = await supabase
       .from('member_profiles')
-      .select('artist_id, is_artist, registration_status, is_active, profile_photo_metadata')
+      .select('artist_id, is_artist, registration_status, is_active')
       .eq('id', session.user.id)
       .single()
 
