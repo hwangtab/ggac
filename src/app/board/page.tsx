@@ -1,6 +1,5 @@
 // 하이브리드 렌더링: 서버 컴포넌트 + 클라이언트 하이드레이션
 import { Suspense } from 'react'
-import BoardClientBridge from './BoardClientBridge'
 import BoardServerData from './BoardServerData'
 
 // ISR 설정 - 서버 컴포넌트에서 초기 데이터 캐싱
@@ -37,9 +36,6 @@ async function BoardPage({
       >
         <BoardServerData category={category} limit={15} refreshKey={refreshKey} />
       </Suspense>
-
-      {/* 클라이언트 컴포넌트로 하이드레이션 */}
-      <BoardClientBridge refreshKey={refreshKey} />
     </div>
   )
 }

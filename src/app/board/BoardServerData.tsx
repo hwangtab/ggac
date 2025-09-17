@@ -1,8 +1,9 @@
 // 서버 컴포넌트: 초기 게시글 데이터를 ISR로 제공
 import { createClient } from '@supabase/supabase-js'
-import { createTextPreview } from '@/utils/textUtils'
 import { headers } from 'next/headers'
-import type { Post } from '@/types'
+import BoardClient from './BoardClient'
+import { createTextPreview } from '@/utils/textUtils'
+import type { Post, PostAttachmentStats } from '@/types'
 
 // ISR 설정 - 60초마다 재검증
 export const revalidate = 60
@@ -13,8 +14,15 @@ interface ServerDataProps {
   refreshKey?: string
 }
 
+type BoardInitialPost = Post & {
+  content_preview: string
+  preview_has_images: boolean
+  preview_image_count: number
+  attachments_stats: NonNullable<Post['attachments_stats']>
+}
+
 interface InitialPostsData {
-  posts: Post[]
+  posts: BoardInitialPost[]
   hasNext: boolean
   nextCursor: string | null
 }
@@ -91,45 +99,110 @@ async function getInitialPosts(
       actualPosts.pop() // 초과분 제거
     }
 
-    let nextCursor: string | null = null
-    if (hasNext && actualPosts.length > 0) {
-      const lastPost = actualPosts[actualPosts.length - 1]
-      // ISO 타임스탬프에 콜론이 포함되므로 파이프(|)를 구분자로 사용
-      nextCursor = `${encodeURIComponent(lastPost.created_at)}|${lastPost.id}`
-    }
-
-    // 미리보기 텍스트 생성 및 정리 (HTML 태그 제거 + 이미지 정보 추출)
-    const processedPosts = actualPosts.map(post => {
+    const basePosts: BoardInitialPost[] = actualPosts.map(post => {
+      const rawAuthor = Array.isArray(post.author) ? post.author[0] : post.author
+      const authorDisplayName = rawAuthor?.display_name
       const preview = createTextPreview(post.content || '', 150)
-      // 클라이언트로 보내는 초기 데이터는 필요한 필드만 유지하여 페이로드 최소화
       return {
         id: post.id,
         title: post.title,
-        content: '', // 대용량 본문은 초기 페이로드에서 제외
+        content: '',
         category: post.category,
         author_id: post.author_id,
         created_at: post.created_at,
         updated_at: post.updated_at,
         is_pinned: post.is_pinned,
-        author: post.author,
-        // 미리보기/첨부 통계는 서버에서 계산해 전달
+        author: authorDisplayName
+          ? {
+              name: '',
+              email: '',
+              display_name: authorDisplayName,
+            }
+          : undefined,
         content_preview: preview.text,
         preview_has_images: preview.hasImages,
         preview_image_count: preview.imageCount,
-        comment_count: 0, // 초기값, 클라이언트에서 업데이트
-        is_liked: false, // 초기값, 클라이언트에서 업데이트
+        comment_count: 0,
+        is_liked: false,
         attachments_stats: {
           total_attachments: 0,
+          total_size: 0,
           image_count: 0,
           document_count: 0,
           video_count: 0,
           audio_count: 0,
-        },
-      } as unknown as Post
+        } satisfies PostAttachmentStats,
+      }
     })
 
+    const postIds = basePosts.map(post => post.id)
+    if (postIds.length) {
+      const { data: attachmentRows, error: attachmentError } = await supabaseAdmin
+        .from('post_attachments')
+        .select('post_id, file_type, file_size')
+        .in('post_id', postIds)
+
+      if (!attachmentError && attachmentRows) {
+        const statsMap = new Map<
+          string,
+          {
+            total: number
+            totalSize: number
+            image: number
+            document: number
+            video: number
+            audio: number
+          }
+        >()
+
+        attachmentRows.forEach(row => {
+          const key = String(row.post_id)
+          const type = (row.file_type as string) || 'other'
+          const current = statsMap.get(key) || {
+            total: 0,
+            totalSize: 0,
+            image: 0,
+            document: 0,
+            video: 0,
+            audio: 0,
+          }
+
+          current.total += 1
+          current.totalSize += Number(row.file_size) || 0
+          if (type === 'image') current.image += 1
+          else if (type === 'document') current.document += 1
+          else if (type === 'video') current.video += 1
+          else if (type === 'audio') current.audio += 1
+
+          statsMap.set(key, current)
+        })
+
+        basePosts.forEach(post => {
+          const stats = statsMap.get(String(post.id))
+          if (stats) {
+            post.attachments_stats = {
+              total_attachments: stats.total,
+              total_size: stats.totalSize,
+              image_count: stats.image,
+              document_count: stats.document,
+              video_count: stats.video,
+              audio_count: stats.audio,
+            }
+            post.preview_has_images = stats.image > 0
+            post.preview_image_count = stats.image
+          }
+        })
+      }
+    }
+
+    let nextCursor: string | null = null
+    if (hasNext && actualPosts.length > 0) {
+      const lastPost = actualPosts[actualPosts.length - 1]
+      nextCursor = `${encodeURIComponent(lastPost.created_at)}|${lastPost.id}`
+    }
+
     return {
-      posts: processedPosts,
+      posts: basePosts,
       hasNext,
       nextCursor,
     }
@@ -150,62 +223,46 @@ export default async function BoardServerData({
   limit = 15,
   refreshKey,
 }: ServerDataProps) {
-  // Try edge-cached API first
+  let initialData: InitialPostsData = { posts: [], hasNext: false, nextCursor: null }
+
   try {
     const h = await headers()
     const proto = h.get('x-forwarded-proto') || 'https'
-    const host = (h.get('x-forwarded-host') || h.get('host') || '') as string
-    const url = `${proto}://${host}/api/board/posts?category=${encodeURIComponent(category)}&limit=${limit}${refreshKey ? `&refresh=${refreshKey}` : ''}`
-    const res = await fetch(url, {
-      // refreshKey가 있으면 캐시 무효화
-      next: refreshKey
-        ? { revalidate: 0 }
-        : { revalidate: 60, tags: ['board-initial', `board-${category}`] },
+    const host = h.get('x-forwarded-host') || h.get('host') || ''
+    const search = new URLSearchParams({
+      category,
+      limit: String(limit),
     })
-    if (res.ok) {
-      const json = await res.json()
-      return (
-        <>
-          <script
-            id="initial-posts-data"
-            type="application/json"
-            dangerouslySetInnerHTML={{ __html: JSON.stringify(json) }}
-          />
-          {/* Debug info for development */}
-          {process.env.NODE_ENV === 'development' && (
-            <script
-              dangerouslySetInnerHTML={{
-                __html: `console.log('[BoardServerData] API 데이터 로드됨:', ${json.posts?.length || 0}개 게시물);`,
-              }}
-            />
-          )}
-        </>
-      )
+    if (refreshKey) {
+      search.set('refresh', refreshKey)
     }
-  } catch (e) {
-    console.warn('Board API fetch failed, falling back to direct query:', e)
+
+    if (host) {
+      const apiUrl = `${proto}://${host}/api/board/posts?${search.toString()}`
+      const res = await fetch(apiUrl, {
+        next: refreshKey
+          ? { revalidate: 0 }
+          : { revalidate: 60, tags: ['board-initial', `board-${category}`] },
+      })
+
+      if (res.ok) {
+        const json = (await res.json()) as Partial<InitialPostsData>
+        initialData = {
+          posts: (json.posts as BoardInitialPost[]) || [],
+          hasNext: Boolean(json.hasNext),
+          nextCursor: json.nextCursor ?? null,
+        }
+      } else {
+        console.warn('Board API responded with status', res.status)
+      }
+    }
+  } catch (error) {
+    console.warn('Board API fetch failed, falling back to direct query:', error)
   }
 
-  const initialData = await getInitialPosts(category, limit)
+  if (!initialData.posts.length) {
+    initialData = await getInitialPosts(category, limit)
+  }
 
-  // 클라이언트 컴포넌트에 데이터 전달을 위해 script 태그로 삽입
-  return (
-    <>
-      <script
-        id="initial-posts-data"
-        type="application/json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify(initialData),
-        }}
-      />
-      {/* Debug info for development */}
-      {process.env.NODE_ENV === 'development' && (
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `console.log('[BoardServerData] Direct 데이터 로드됨:', ${initialData.posts?.length || 0}개 게시물);`,
-          }}
-        />
-      )}
-    </>
-  )
+  return <BoardClient initialData={initialData} />
 }
