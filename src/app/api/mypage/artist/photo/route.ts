@@ -12,6 +12,7 @@ import { revalidatePath, revalidateTag } from 'next/cache'
 import { cookies } from 'next/headers'
 import sharp from 'sharp'
 import type { ProfilePhotoUploadResponse, ProfilePhotoMetadata, ImageCropSettings } from '@/types'
+import { invalidateArtistsCache } from '@/lib/data'
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 const MAX_FILE_SIZE = 5 * 1024 * 1024
@@ -425,6 +426,7 @@ export async function PUT(request: NextRequest) {
         revalidatePath(`/artists/${currentArtist.slug}`)
       }
       revalidatePath('/artists')
+      invalidateArtistsCache()
     } catch (error) {
       console.warn('Failed to revalidate artist caches:', error)
     }
@@ -563,6 +565,7 @@ export async function DELETE(request: NextRequest) {
         revalidatePath(`/artists/${artist.slug}`)
       }
       revalidatePath('/artists')
+      invalidateArtistsCache()
     } catch (error) {
       console.warn('Failed to revalidate artist caches after delete:', error)
     }
