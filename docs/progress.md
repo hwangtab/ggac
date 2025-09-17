@@ -1,0 +1,26 @@
+# Repository Progress Log
+
+## Recent Changes
+
+- Removed the legacy `profile_image` column and unified all artist image
+  references around `profile_photo_url`.
+- Updated fallback JSON (`data/artists.json`) to reference the latest
+  Supabase-hosted profile images, preventing build-time regressions when
+  Supabase lookups fail.
+- Refined the artist photo upload flow to invalidate caches and surface a single
+  inline success message instead of multiple browser alerts.
+- Removed the layout-level CSS script guard that was interfering with hydration,
+  unblocking client-side rendering of dynamic pages such as the board.
+
+## Next Steps
+
+1. Investigate the remaining `/board` hydration failure by collecting the
+   corresponding `errorId`/`digest` values from Vercel logs and aligning
+   server/client error boundaries.
+2. Verify that `/artists` renders Supabase-hosted images after the latest
+   deployment and purge any stale CDN cache if required.
+3. Once `/board` stabilises, run a regression pass on other ISR pages
+   (`/archive`, `/artists/[slug]`) to confirm there are no lingering static
+   fallbacks.
+4. Document any additional findings and update this log with outcomes and new
+   action items.

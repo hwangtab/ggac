@@ -54,3 +54,9 @@ secrets). When touching authentication, middleware, or Supabase policies, rerun
 Playwright suites and verify response headers locally. Use Vercel deployment
 scripts only when authorized, and document any new environment variables in the
 README.
+
+## Progress Tracking
+
+Maintain an ongoing change log in `docs/progress.md`. After each significant
+task or investigation, append the latest “Recent Changes” and refresh the “Next
+Steps” so the document always reflects the current state of work.。
