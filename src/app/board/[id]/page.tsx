@@ -155,8 +155,15 @@ async function getInitialPostData(postId: string): Promise<InitialPostData | nul
       .eq('post_id', postId)
       .order('created_at', { ascending: true })
 
-    const [{ data: post, error: postError }, { data: comments = [] }, { data: attachments = [] }] =
+    const [{ data: post, error: postError }, { data: commentsRaw }, { data: attachmentsRaw }] =
       await Promise.all([postQuery, commentsQuery, attachmentsQuery])
+
+    const comments = Array.isArray(commentsRaw) ? commentsRaw : commentsRaw ? [commentsRaw] : []
+    const attachments = Array.isArray(attachmentsRaw)
+      ? attachmentsRaw
+      : attachmentsRaw
+        ? [attachmentsRaw]
+        : []
 
     if (postError || !post) {
       console.error('서버 게시글 조회 오류:', postError)
@@ -164,20 +171,20 @@ async function getInitialPostData(postId: string): Promise<InitialPostData | nul
     }
 
     const authorRecord = Array.isArray(post.author) ? post.author[0] : post.author
-    const totalSize = attachments.reduce((sum, att) => sum + (att.file_size || 0), 0)
+    const totalSize = (attachments || []).reduce((sum, att) => sum + (att.file_size || 0), 0)
 
     return {
       post: {
         ...post,
         is_liked: false, // 서버에서는 기본값, 클라이언트에서 업데이트
-        comment_count: comments.length,
+        comment_count: (comments || []).length,
         attachments_stats: {
-          total_attachments: attachments.length,
+          total_attachments: (attachments || []).length,
           total_size: totalSize,
-          image_count: attachments.filter(att => att.file_type === 'image').length,
-          document_count: attachments.filter(att => att.file_type === 'document').length,
-          video_count: attachments.filter(att => att.file_type === 'video').length,
-          audio_count: attachments.filter(att => att.file_type === 'audio').length,
+          image_count: (attachments || []).filter(att => att.file_type === 'image').length,
+          document_count: (attachments || []).filter(att => att.file_type === 'document').length,
+          video_count: (attachments || []).filter(att => att.file_type === 'video').length,
+          audio_count: (attachments || []).filter(att => att.file_type === 'audio').length,
         },
       },
       comments,
