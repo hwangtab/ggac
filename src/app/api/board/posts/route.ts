@@ -12,6 +12,12 @@ export async function GET(req: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  console.info('[API board/posts] env check', {
+    hasUrl: Boolean(url),
+    hasServiceKey: Boolean(serviceKey),
+    hasAnonKey: Boolean(anonKey),
+    runtime: 'nodejs',
+  })
   if (!url || (!serviceKey && !anonKey)) {
     return createErrorResponse('Supabase credentials not configured', 500)
   }
@@ -60,6 +66,10 @@ export async function GET(req: NextRequest) {
   const { data, error } = await query
 
   if (error) {
+    console.warn('[API board/posts] query error', {
+      message: error.message,
+      code: (error as any).code,
+    })
     return createErrorResponse(`Failed to fetch posts: ${error.message}`, 500)
   }
 
