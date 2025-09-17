@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import sharp from 'sharp'
 import type { ProfilePhotoUploadResponse, ProfilePhotoMetadata, ImageCropSettings } from '@/types'
@@ -15,6 +16,19 @@ const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 const MAX_FILE_SIZE = 5 * 1024 * 1024
 const WEBP_QUALITY = 82
 const JPEG_QUALITY = 85
+
+function getSupabaseAdmin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!url || !serviceKey) {
+    throw new Error('Supabase admin credentials are not configured')
+  }
+
+  return createClient(url, serviceKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  })
+}
 
 // 파일 타입 검증
 function validateFileType(file: File): boolean {
@@ -174,13 +188,33 @@ export async function PUT(request: NextRequest) {
     }
 
     // 사용자의 아티스트 권한 확인
-    const { data: profile, error: profileError } = await supabase
+    let profileQuery = await supabase
       .from('member_profiles')
       .select('artist_id, is_artist, registration_status, is_active')
       .eq('id', session.user.id)
-      .single()
+      .maybeSingle()
 
-    if (profileError || !profile) {
+    if (!profileQuery.data) {
+      try {
+        const admin = getSupabaseAdmin()
+        const adminResult = await admin
+          .from('member_profiles')
+          .select('artist_id, is_artist, registration_status, is_active')
+          .eq('id', session.user.id)
+          .maybeSingle()
+        if (adminResult.error) {
+          console.error('Admin profile lookup error:', adminResult.error)
+        } else {
+          profileQuery = adminResult
+        }
+      } catch (error) {
+        console.error('Failed to create admin client for profile lookup:', error)
+      }
+    }
+
+    const profile = profileQuery.data
+
+    if (!profile) {
       return NextResponse.json(
         { success: false, error: '사용자 정보를 찾을 수 없습니다.' },
         { status: 404 }
@@ -257,11 +291,31 @@ export async function PUT(request: NextRequest) {
     }
 
     // 기존 아티스트 프로필 사진 조회
-    const { data: currentArtist } = await supabase
+    let currentArtistQuery = await supabase
       .from('artists')
       .select('profile_photo_url, profile_photo_metadata')
       .eq('legacy_id', profile.artist_id)
-      .single()
+      .maybeSingle()
+
+    if (!currentArtistQuery.data) {
+      try {
+        const admin = getSupabaseAdmin()
+        const adminResult = await admin
+          .from('artists')
+          .select('profile_photo_url, profile_photo_metadata')
+          .eq('legacy_id', profile.artist_id)
+          .maybeSingle()
+        if (adminResult.error) {
+          console.error('Admin artist lookup error:', adminResult.error)
+        } else {
+          currentArtistQuery = adminResult
+        }
+      } catch (error) {
+        console.error('Failed to create admin client for artist lookup:', error)
+      }
+    }
+
+    const currentArtist = currentArtistQuery.data
 
     // Storage 경로 생성
     const storagePaths = generateArtistStoragePaths(profile.artist_id, file.name)
