@@ -37,8 +37,18 @@ export const viewport = {
 
 export const metadata: Metadata = {
   title: '경기아트콜렉티브',
-  description: '경계 없는 상상, 함께 만드는 울림. 예술로 숨 쉬고, 협동으로 길을 내는 경기아트콜렉티브입니다.',
-  keywords: ['경기아트콜렉티브', '협동조합', '예술', '창작', '경기도', '아티스트', '예술가', '콜라보레이션'],
+  description:
+    '경계 없는 상상, 함께 만드는 울림. 예술로 숨 쉬고, 협동으로 길을 내는 경기아트콜렉티브입니다.',
+  keywords: [
+    '경기아트콜렉티브',
+    '협동조합',
+    '예술',
+    '창작',
+    '경기도',
+    '아티스트',
+    '예술가',
+    '콜라보레이션',
+  ],
   authors: [{ name: '경기아트콜렉티브' }],
   creator: '경기아트콜렉티브',
   publisher: '경기아트콜렉티브',
@@ -51,7 +61,8 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: '경기아트콜렉티브',
-    description: '경계 없는 상상, 함께 만드는 울림. 예술로 숨 쉬고, 협동으로 길을 내는 경기아트콜렉티브입니다.',
+    description:
+      '경계 없는 상상, 함께 만드는 울림. 예술로 숨 쉬고, 협동으로 길을 내는 경기아트콜렉티브입니다.',
     url: 'https://ggac.kr',
     siteName: '경기아트콜렉티브',
     images: [
@@ -83,11 +94,7 @@ export const metadata: Metadata = {
   },
 }
 
-export default async function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
   // 개선된 데이터 로딩 - 캐싱된 함수 사용
   const globalData = await getGlobalData()
 
@@ -95,9 +102,6 @@ export default async function RootLayout({
     <html lang="ko" className={`${gmarketSans.variable} ${okGung.variable} ${santokki.variable}`}>
       <body suppressHydrationWarning>
         {/* Guard against accidental CSS being loaded as <script> by third-party/preload mishaps */}
-        <Script id="css-script-guard" strategy="beforeInteractive">
-          {`(function(){try{var d=document;var cssScripts=d.querySelectorAll('script[src$=".css"],script[src*="/_next/static/css/"]');cssScripts.forEach(function(s){var href=s.getAttribute('src');if(!href) return;var ln=d.createElement('link');ln.setAttribute('rel','stylesheet');ln.setAttribute('href',href);s.parentNode&&s.parentNode.replaceChild(ln,s);});var wrongPreloads=d.querySelectorAll('link[rel="preload"][as="script"][href$=".css"],link[rel="preload"][as="script"][href*="/_next/static/css/"]');wrongPreloads.forEach(function(l){l.setAttribute('as','style');});}catch(e){}})();`}
-        </Script>
         <ErrorBoundary>
           {/* Skip Links for Keyboard Navigation */}
           <div className="skip-links">
@@ -108,18 +112,25 @@ export default async function RootLayout({
               내비게이션으로 건너뛰기
             </a>
           </div>
-          
-          <Suspense fallback={
-            <div className="min-h-screen flex items-center justify-center" role="status" aria-live="polite">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-4" aria-hidden="true"></div>
-                <p className="text-gray-600">페이지를 불러오는 중...</p>
+
+          <Suspense
+            fallback={
+              <div
+                className="min-h-screen flex items-center justify-center"
+                role="status"
+                aria-live="polite"
+              >
+                <div className="text-center">
+                  <div
+                    className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-4"
+                    aria-hidden="true"
+                  ></div>
+                  <p className="text-gray-600">페이지를 불러오는 중...</p>
+                </div>
               </div>
-            </div>
-          }>
-            <ConditionalLayout globalData={globalData}>
-              {children}
-            </ConditionalLayout>
+            }
+          >
+            <ConditionalLayout globalData={globalData}>{children}</ConditionalLayout>
           </Suspense>
         </ErrorBoundary>
       </body>
