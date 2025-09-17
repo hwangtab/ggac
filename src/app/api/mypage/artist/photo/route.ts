@@ -56,8 +56,10 @@ function generateArtistStoragePaths(artistId: string, originalFilename: string) 
   }
 }
 
+type AdminClient = ReturnType<typeof getSupabaseAdmin>
+
 async function uploadImageWithVariants(
-  supabase: ReturnType<typeof createRouteHandlerClient>,
+  supabase: AdminClient,
   bucket: string,
   paths: ReturnType<typeof generateArtistStoragePaths>,
   originalBuffer: Buffer,
@@ -176,6 +178,16 @@ async function uploadImageWithVariants(
 export async function PUT(request: NextRequest) {
   try {
     const supabase = createRouteHandlerClient({ cookies })
+    let supabaseAdmin: AdminClient
+    try {
+      supabaseAdmin = getSupabaseAdmin()
+    } catch (error) {
+      console.error('Failed to initialise Supabase admin client:', error)
+      return NextResponse.json(
+        { success: false, error: '서버 설정 오류로 인해 업로드를 진행할 수 없습니다.' },
+        { status: 500 }
+      )
+    }
 
     // 사용자 인증 확인
     const {
@@ -195,20 +207,15 @@ export async function PUT(request: NextRequest) {
       .maybeSingle()
 
     if (!profileQuery.data) {
-      try {
-        const admin = getSupabaseAdmin()
-        const adminResult = await admin
-          .from('member_profiles')
-          .select('artist_id, is_artist, registration_status, is_active')
-          .eq('id', session.user.id)
-          .maybeSingle()
-        if (adminResult.error) {
-          console.error('Admin profile lookup error:', adminResult.error)
-        } else {
-          profileQuery = adminResult
-        }
-      } catch (error) {
-        console.error('Failed to create admin client for profile lookup:', error)
+      const adminResult = await supabaseAdmin
+        .from('member_profiles')
+        .select('artist_id, is_artist, registration_status, is_active')
+        .eq('id', session.user.id)
+        .maybeSingle()
+      if (adminResult.error) {
+        console.error('Admin profile lookup error:', adminResult.error)
+      } else {
+        profileQuery = adminResult
       }
     }
 
@@ -298,20 +305,15 @@ export async function PUT(request: NextRequest) {
       .maybeSingle()
 
     if (!currentArtistQuery.data) {
-      try {
-        const admin = getSupabaseAdmin()
-        const adminResult = await admin
-          .from('artists')
-          .select('profile_photo_url, profile_photo_metadata')
-          .eq('legacy_id', profile.artist_id)
-          .maybeSingle()
-        if (adminResult.error) {
-          console.error('Admin artist lookup error:', adminResult.error)
-        } else {
-          currentArtistQuery = adminResult
-        }
-      } catch (error) {
-        console.error('Failed to create admin client for artist lookup:', error)
+      const adminResult = await supabaseAdmin
+        .from('artists')
+        .select('profile_photo_url, profile_photo_metadata')
+        .eq('legacy_id', profile.artist_id)
+        .maybeSingle()
+      if (adminResult.error) {
+        console.error('Admin artist lookup error:', adminResult.error)
+      } else {
+        currentArtistQuery = adminResult
       }
     }
 
@@ -322,7 +324,7 @@ export async function PUT(request: NextRequest) {
     const fileBuffer = Buffer.from(await file.arrayBuffer())
 
     const uploadResult = await uploadImageWithVariants(
-      supabase,
+      supabaseAdmin,
       'artists',
       storagePaths,
       fileBuffer,
@@ -372,7 +374,7 @@ export async function PUT(request: NextRequest) {
       )
 
       if (toRemove.length > 0) {
-        await supabase.storage.from('artists').remove(toRemove)
+        await supabaseAdmin.storage.from('artists').remove(toRemove)
       }
 
       return NextResponse.json(
@@ -401,7 +403,7 @@ export async function PUT(request: NextRequest) {
 
     if (removalTargets.size > 0) {
       try {
-        await supabase.storage.from('artists').remove(Array.from(removalTargets))
+        await supabaseAdmin.storage.from('artists').remove(Array.from(removalTargets))
       } catch (error) {
         console.error('Failed to delete previous artist photo variants:', error)
       }
