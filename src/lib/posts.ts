@@ -54,7 +54,7 @@ export async function getPostById(postId: string): Promise<PostDetail | null> {
       .from('posts')
       .select('*')
       .eq('id', postId)
-      .eq('is_deleted', false)
+      .not('is_deleted', 'is', true)
       .single()
 
     if (error || !post) {
