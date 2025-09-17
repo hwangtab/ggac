@@ -8,10 +8,13 @@ import type { PostAttachment } from '@/types'
 
 // Service Role 클라이언트 생성
 function getSupabaseAdmin() {
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY || !process.env.NEXT_PUBLIC_SUPABASE_URL) {
+  const hasUrl = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL)
+  const hasSrv = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY)
+  if (!hasUrl || !hasSrv) {
+    // 명시적으로 로깅하여 배포 환경 변수 누락을 파악하기 쉽게 함
+    console.error('[Posts] Missing env for service client', { hasUrl, hasSrv })
     throw new Error('Supabase configuration missing for server-side post queries')
   }
-
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 }
 
