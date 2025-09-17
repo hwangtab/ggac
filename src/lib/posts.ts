@@ -41,10 +41,9 @@ export interface AuthorProfile {
  */
 export async function getPostById(postId: string): Promise<PostDetail | null> {
   try {
-    // UUID 형식 기본 검증
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(postId)) {
-      console.log('[Posts] Invalid UUID format:', postId)
+    // 기본 입력값 검증 (빈 문자열 체크)
+    if (!postId || postId.trim() === '') {
+      console.log('[Posts] Empty postId provided')
       return null
     }
 
