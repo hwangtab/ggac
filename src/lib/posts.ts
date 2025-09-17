@@ -23,6 +23,7 @@ export interface PostDetail {
   category: string
   author_id: string
   created_at: string
+  updated_at?: string
   view_count?: number
   is_deleted: boolean
 }
@@ -240,41 +241,19 @@ function generatePostKeywords(post: any, author: any): string[] {
 
 export async function getPostMetadata(postId: string) {
   try {
-    // 1) 캐시 가능한 내부 API로 먼저 시도하여 DB 왕복 최소화
-    const base = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://ggac.kr'
-    let post: any | null = null
-    let author: any | null = null
-    let thumbnail: string | null = null
-    try {
-      const res = await fetch(`${base}/api/board/post/${postId}`, {
-        next: { revalidate: 60, tags: ['board-post', postId] },
-      })
-      if (res.ok) {
-        const data = await res.json()
-        const payload = data || {}
-        post = payload.post || null
-        author = payload.author || null
-        const atts = (payload.attachments as any[]) || []
-        const img = atts.find((a: any) => a.file_type === 'image')
-        thumbnail = img ? img.file_url || null : null
-      }
-    } catch {}
-
-    // 2) 폴백: 기존 서버 쿼리 사용
+    // 직접 DB 조회로 단순화하여 데이터 일관성 확보
+    const post = await getPostById(postId)
     if (!post) {
-      const [p, thumb] = await Promise.all([getPostById(postId), getPostThumbnail(postId)])
-      if (!p) return null
-      post = p
-      thumbnail = thumb
-      author = await getPostAuthor(p.author_id)
-    } else if (!author && post?.author_id) {
-      author = await getPostAuthor(post.author_id)
+      return null
     }
+
+    const [author, thumbnail] = await Promise.all([
+      getPostAuthor(post.author_id),
+      getPostThumbnail(postId),
+    ])
 
     const description = extractTextFromContent(post.content)
     const categoryEmoji = getCategoryEmoji(post.category)
-
-    // 키워드 생성: 카테고리, 제목, 내용에서 추출
     const keywords = generatePostKeywords(post, author)
 
     return { post, author, thumbnail, description, categoryEmoji, keywords }

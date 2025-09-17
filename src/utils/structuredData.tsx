@@ -95,7 +95,7 @@ export function generateProjectStructuredData(project: {
 export function generatePostStructuredData(post: {
   id: string
   title: string
-  content: string
+  content: string | null // content가 null일 수 있음을 명시
   category: string
   created_at: string
   updated_at?: string
@@ -109,11 +109,17 @@ export function generatePostStructuredData(post: {
     forSocialSharing: true,
   })
 
+  // HTML 태그 제거 및 null-safe 처리
+  const descriptionText = (post.content || '')
+    .replace(/<[^>]*>/g, '') // HTML 태그 제거
+    .trim()
+    .substring(0, 150)
+
   return {
     '@context': 'https://schema.org',
     '@type': 'Article',
     headline: post.title,
-    description: post.content.substring(0, 160) + '...',
+    description: descriptionText ? `${descriptionText}...` : `${post.title}에 대한 게시글입니다.`,
     url: `https://ggac.kr/board/${post.id}`,
     image: imageUrl,
     datePublished: post.created_at,
