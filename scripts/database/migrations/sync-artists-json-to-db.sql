@@ -14,7 +14,7 @@ SELECT * FROM artists;
 -- DELETE FROM artists;
 
 -- 전체 아티스트 데이터 재삽입
-INSERT INTO artists (legacy_id, slug, name, category, profile_image, one_liner, bio, template_type, portfolio_links, youtube_videos, contact)
+INSERT INTO artists (legacy_id, slug, name, category, profile_photo_url, one_liner, bio, template_type, portfolio_links, youtube_videos, contact)
 VALUES 
   -- artist-001: 사바하
   (
@@ -152,7 +152,7 @@ DO UPDATE SET
   slug = EXCLUDED.slug,
   name = EXCLUDED.name,
   category = EXCLUDED.category,
-  profile_image = EXCLUDED.profile_image,
+  profile_photo_url = EXCLUDED.profile_photo_url,
   one_liner = EXCLUDED.one_liner,
   bio = EXCLUDED.bio,
   template_type = EXCLUDED.template_type,

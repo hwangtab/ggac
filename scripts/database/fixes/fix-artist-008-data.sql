@@ -49,7 +49,7 @@ SET
 ### 예술적 지향 
 
 황경하에게 예술은 개인의 영달을 위한 도구가 아니라 사회 변혁을 위한 수단입니다. 현장과 호흡하는 예술, 민중과 함께하는 예술을 지향하며, 명성과 부를 좇기보다 시대의 아픔에 공감하고 약자와 연대하는 예술을 실천하고 있습니다.',
-  profile_image = '/images/artists/hwang.webp',
+  profile_photo_url = '/images/artists/hwang.webp',
   portfolio_links = '[
     {"title": "포트폴리오", "url": "https://hwangtab.github.io/home"},
     {"title": "Instagram", "url": "https://www.instagram.com/podopodopo/"},

@@ -107,6 +107,13 @@ export default function ArtistPage() {
     )
   }
 
+  const previewImageForDisplay =
+    artist?.profile_photo_url ||
+    artist?.profile_photo_metadata?.variant_urls?.webp ||
+    artist?.profile_photo_metadata?.variant_urls?.fallback ||
+    artist?.profile_photo_metadata?.variant_urls?.original ||
+    ''
+
   return (
     <PermissionCheck
       requiredPermission="artist"
@@ -160,11 +167,11 @@ export default function ArtistPage() {
             {/* 아티스트 기본 정보 표시 */}
             <div className="bg-gradient-to-r from-primary-50 to-accent-50 rounded-lg p-6 border border-gray-200">
               <div className="flex items-start space-x-4">
-                {artist.profile_image && (
+                {previewImageForDisplay && (
                   <div className="flex-shrink-0">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={artist.profile_image}
+                      src={previewImageForDisplay}
                       alt={artist.name}
                       className="w-16 h-16 rounded-lg object-cover"
                     />

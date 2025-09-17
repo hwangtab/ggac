@@ -255,7 +255,12 @@ function convertDatabaseArtistToArtist(dbArtist: DatabaseArtist): Artist {
     slug: dbArtist.slug,
     name: dbArtist.name,
     category: dbArtist.category || [],
-    profileImage: dbArtist.profile_photo_url || dbArtist.profile_image || '',
+    profileImage:
+      dbArtist.profile_photo_url ||
+      dbArtist.profile_photo_metadata?.variant_urls?.webp ||
+      dbArtist.profile_photo_metadata?.variant_urls?.fallback ||
+      dbArtist.profile_photo_metadata?.variant_urls?.original ||
+      '',
     oneLiner: dbArtist.one_liner || '',
     bio: dbArtist.bio || '',
     templateType: dbArtist.template_type || '콜라주형',

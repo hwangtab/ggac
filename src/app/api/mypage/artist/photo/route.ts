@@ -362,7 +362,6 @@ export async function PUT(request: NextRequest) {
       .from('artists')
       .update({
         profile_photo_url: variantUrls.webp || variantUrls.fallback || variantUrls.original || null,
-        profile_image: variantUrls.webp || variantUrls.fallback || variantUrls.original || null,
         profile_photo_metadata: finalMetadata,
         updated_at: new Date().toISOString(),
       })
@@ -547,7 +546,6 @@ export async function DELETE(request: NextRequest) {
       .from('artists')
       .update({
         profile_photo_url: null,
-        profile_image: null,
         profile_photo_metadata: null,
         updated_at: new Date().toISOString(),
       })

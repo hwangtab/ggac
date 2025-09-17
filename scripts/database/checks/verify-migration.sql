@@ -131,7 +131,7 @@ SELECT
     array_length(category, 1) as category_count,
     template_type,
     CASE 
-        WHEN profile_image IS NOT NULL THEN '✅'
+        WHEN profile_photo_url IS NOT NULL THEN '✅'
         ELSE '❌'
     END as has_image,
     CASE 

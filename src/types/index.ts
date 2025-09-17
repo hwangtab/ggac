@@ -1897,8 +1897,6 @@ export interface DatabaseArtist {
   profile_photo_url: string | null
   /** 프로필 사진 메타데이터 */
   profile_photo_metadata?: ProfilePhotoMetadata
-  /** 프로필 이미지 경로 (기존 방식, 마이그레이션 후 삭제 예정) */
-  profile_image?: string
   /** 한 줄 소개 */
   one_liner: string
   /** 상세 소개 (마크다운) */
@@ -2060,7 +2058,8 @@ export interface ArtistUpdateRequest {
   one_liner?: string
   bio?: string
   template_type?: '미니멀형' | '콜라주형'
-  profile_image?: string
+  profile_photo_url?: string | null
+  profile_photo_metadata?: ProfilePhotoMetadata
   portfolio_links?: PortfolioLink[]
   youtube_videos?: YouTubeVideo[]
   contact?: string
