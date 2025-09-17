@@ -55,6 +55,11 @@ Playwright suites and verify response headers locally. Use Vercel deployment
 scripts only when authorized, and document any new environment variables in the
 README.
 
+- CLI credentials: source the values that already live in `.env.local` and your
+  shell profile (e.g. `~/.zshrc`) when running Supabase or Vercel CLI commands.
+  The service role key and `VERCEL_TOKEN` are pre-populated there—never hardcode
+  or echo them back in logs.
+
 ## Progress Tracking
 
 Maintain an ongoing change log in `docs/progress.md`. After each significant
