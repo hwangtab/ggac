@@ -2,7 +2,6 @@ import { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { getPostMetadata } from '@/lib/posts'
 import PostDetailClient from './PostDetailClient'
-import PostDetailClientBridge from './PostDetailClientBridge'
 import { Suspense } from 'react'
 import { headers } from 'next/headers'
 import { generatePostOgImage } from '@/utils/imageUrl'
@@ -165,6 +164,9 @@ async function getInitialPostData(postId: string): Promise<InitialPostData | nul
       return null
     }
 
+    const authorRecord = Array.isArray(post.author) ? post.author[0] : post.author
+    const totalSize = attachments.reduce((sum, att) => sum + (att.file_size || 0), 0)
+
     return {
       post: {
         ...post,
@@ -172,6 +174,7 @@ async function getInitialPostData(postId: string): Promise<InitialPostData | nul
         comment_count: comments.length,
         attachments_stats: {
           total_attachments: attachments.length,
+          total_size: totalSize,
           image_count: attachments.filter(att => att.file_type === 'image').length,
           document_count: attachments.filter(att => att.file_type === 'document').length,
           video_count: attachments.filter(att => att.file_type === 'video').length,
@@ -180,7 +183,7 @@ async function getInitialPostData(postId: string): Promise<InitialPostData | nul
       },
       comments,
       attachments,
-      author: post.author,
+      author: authorRecord ? { display_name: authorRecord.display_name } : null,
     }
   } catch (error) {
     console.error('초기 게시글 데이터 조회 실패:', error)
@@ -190,48 +193,42 @@ async function getInitialPostData(postId: string): Promise<InitialPostData | nul
 
 // 서버 컴포넌트: 초기 데이터를 클라이언트에 전달
 async function PostDetailServerData({ postId }: { postId: string }) {
-  // Try edge-cached API first
+  let initialData: InitialPostData | null = null
+
   try {
     const h = await headers()
     const proto = h.get('x-forwarded-proto') || 'https'
-    const host = (h.get('x-forwarded-host') || h.get('host') || '') as string
-    const url = `${proto}://${host}/api/board/post/${postId}`
-    const res = await fetch(url, {
-      next: {
-        revalidate: 60,
-        tags: ['board-post', postId, `comments-post-${postId}`, `attachments-post-${postId}`],
-      },
-    })
-    if (res.ok) {
-      const json = await res.json()
-      return (
-        <script
-          id="initial-post-data"
-          type="application/json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(json) }}
-        />
-      )
+    const host = h.get('x-forwarded-host') || h.get('host') || ''
+
+    if (host) {
+      const url = `${proto}://${host}/api/board/post/${postId}`
+      const res = await fetch(url, {
+        next: {
+          revalidate: 60,
+          tags: ['board-post', postId, `comments-post-${postId}`, `attachments-post-${postId}`],
+        },
+      })
+
+      if (res.ok) {
+        const json = (await res.json()) as InitialPostData
+        initialData = json
+      } else {
+        console.warn('[PostDetail] API responded with status', res.status)
+      }
     }
   } catch (e) {
     console.warn('[PostDetail] API fetch failed, fallback to direct query:', e)
   }
 
-  const initialData = await getInitialPostData(postId)
-
   if (!initialData) {
-    return null
+    initialData = await getInitialPostData(postId)
   }
 
-  // 클라이언트 컴포넌트에 데이터 전달을 위해 script 태그로 삽입
-  return (
-    <script
-      id="initial-post-data"
-      type="application/json"
-      dangerouslySetInnerHTML={{
-        __html: JSON.stringify(initialData),
-      }}
-    />
-  )
+  if (!initialData) {
+    return <PostDetailClient postId={postId} />
+  }
+
+  return <PostDetailClient postId={postId} initialData={initialData} />
 }
 
 // 서버 컴포넌트 (메타데이터 생성용)
@@ -278,9 +275,6 @@ export default async function PostDetailPage({ params }: { params: Promise<{ id:
       >
         <PostDetailServerData postId={postId} />
       </Suspense>
-
-      {/* 클라이언트 컴포넌트로 하이브리드 렌더링 (브리지에서 DOM 스크립트 읽기) */}
-      <PostDetailClientBridge postId={postId} />
     </div>
   )
 }
