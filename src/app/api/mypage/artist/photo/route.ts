@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { createClient } from '@supabase/supabase-js'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { cookies } from 'next/headers'
 import sharp from 'sharp'
 import type { ProfilePhotoUploadResponse, ProfilePhotoMetadata, ImageCropSettings } from '@/types'
@@ -300,14 +301,14 @@ export async function PUT(request: NextRequest) {
     // 기존 아티스트 프로필 사진 조회
     let currentArtistQuery = await supabase
       .from('artists')
-      .select('profile_photo_url, profile_photo_metadata')
+      .select('profile_photo_url, profile_photo_metadata, slug')
       .eq('legacy_id', profile.artist_id)
       .maybeSingle()
 
     if (!currentArtistQuery.data) {
       const adminResult = await supabaseAdmin
         .from('artists')
-        .select('profile_photo_url, profile_photo_metadata')
+        .select('profile_photo_url, profile_photo_metadata, slug')
         .eq('legacy_id', profile.artist_id)
         .maybeSingle()
       if (adminResult.error) {
@@ -417,6 +418,17 @@ export async function PUT(request: NextRequest) {
       public_url: variantUrls.webp || variantUrls.fallback || variantUrls.original || null,
     }
 
+    // 캐시 무효화
+    try {
+      revalidateTag('artists')
+      if (currentArtist?.slug) {
+        revalidatePath(`/artists/${currentArtist.slug}`)
+      }
+      revalidatePath('/artists')
+    } catch (error) {
+      console.warn('Failed to revalidate artist caches:', error)
+    }
+
     return NextResponse.json(response, { status: 200 })
   } catch (error) {
     console.error('Artist photo upload error:', error)
@@ -433,6 +445,16 @@ export async function PUT(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const supabase = createRouteHandlerClient({ cookies })
+    let supabaseAdmin: AdminClient
+    try {
+      supabaseAdmin = getSupabaseAdmin()
+    } catch (error) {
+      console.error('Failed to initialise Supabase admin client:', error)
+      return NextResponse.json(
+        { success: false, error: '서버 설정 오류로 인해 삭제를 진행할 수 없습니다.' },
+        { status: 500 }
+      )
+    }
 
     // 사용자 인증 확인
     const {
@@ -469,7 +491,7 @@ export async function DELETE(request: NextRequest) {
     // 현재 아티스트 프로필 사진 정보 조회
     const { data: artist, error: artistError } = await supabase
       .from('artists')
-      .select('profile_photo_url')
+      .select('profile_photo_url, profile_photo_metadata, slug')
       .eq('legacy_id', profile.artist_id)
       .single()
 
@@ -489,15 +511,29 @@ export async function DELETE(request: NextRequest) {
 
     // Storage에서 파일 삭제
     try {
-      const url = new URL(artist.profile_photo_url)
-      const pathParts = url.pathname.split('/')
-      const fileName = pathParts[pathParts.length - 1]
-      const filePath = `${profile.artist_id}/${fileName}`
+      const removalTargets = new Set<string>()
+      if (artist.profile_photo_metadata?.variants) {
+        const variants = artist.profile_photo_metadata.variants
+        if (variants.original) removalTargets.add(variants.original)
+        if (variants.webp) removalTargets.add(variants.webp)
+        if (variants.fallback) removalTargets.add(variants.fallback)
+      }
 
-      const { error: deleteError } = await supabase.storage.from('artists').remove([filePath])
+      if (removalTargets.size === 0) {
+        const url = new URL(artist.profile_photo_url)
+        const pathParts = url.pathname.split('/')
+        const fileName = pathParts[pathParts.length - 1]
+        removalTargets.add(`${profile.artist_id}/${fileName}`)
+      }
 
-      if (deleteError) {
-        console.error('Storage delete error:', deleteError)
+      if (removalTargets.size > 0) {
+        const { error: deleteError } = await supabaseAdmin.storage
+          .from('artists')
+          .remove(Array.from(removalTargets))
+
+        if (deleteError) {
+          console.error('Storage delete error:', deleteError)
+        }
       }
     } catch (error) {
       console.error('Failed to parse storage URL:', error)
@@ -519,6 +555,16 @@ export async function DELETE(request: NextRequest) {
         { success: false, error: '데이터베이스 업데이트에 실패했습니다.' },
         { status: 500 }
       )
+    }
+
+    try {
+      revalidateTag('artists')
+      if (artist.slug) {
+        revalidatePath(`/artists/${artist.slug}`)
+      }
+      revalidatePath('/artists')
+    } catch (error) {
+      console.warn('Failed to revalidate artist caches after delete:', error)
     }
 
     return NextResponse.json(
