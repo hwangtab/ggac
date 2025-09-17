@@ -197,29 +197,31 @@ export default async function PostDetailPage({ params }: { params: Promise<{ id:
 
   // 데이터 페칭 로직을 페이지 컴포넌트에서 직접 수행
   const [metadata, initialData] = await Promise.all([
-    getPostMetadata(postId),
+    getPostMetadata(postId).catch(() => null),
     getInitialPostData(postId),
   ])
 
-  if (!metadata || !initialData) {
+  if (!initialData) {
     notFound()
   }
 
-  // 구조화된 데이터 생성
-  const structuredData = generatePostStructuredData({
-    id: postId,
-    title: metadata.post.title,
-    content: metadata.post.content,
-    category: metadata.post.category,
-    created_at: metadata.post.created_at,
-    updated_at: metadata.post.updated_at || metadata.post.created_at,
-    author: metadata.author,
-    thumbnail: metadata.thumbnail,
-  })
+  // 구조화된 데이터 생성(메타데이터 실패 시 생략)
+  const structuredData = metadata
+    ? generatePostStructuredData({
+        id: postId,
+        title: metadata.post.title,
+        content: metadata.post.content,
+        category: metadata.post.category,
+        created_at: metadata.post.created_at,
+        updated_at: metadata.post.updated_at || metadata.post.created_at,
+        author: metadata.author,
+        thumbnail: metadata.thumbnail,
+      })
+    : null
 
   return (
     <div>
-      {structuredDataToScript(structuredData)}
+      {structuredData ? structuredDataToScript(structuredData) : null}
       {/* Suspense와 PostDetailClient를 직접 사용 */}
       <Suspense
         fallback={
