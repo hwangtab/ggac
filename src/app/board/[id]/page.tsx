@@ -2,9 +2,7 @@ import { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { getPostMetadata } from '@/lib/posts'
 import PostDetailClient from './PostDetailClient'
-import PostDetailClientBridge from './PostDetailClientBridge'
 import { Suspense } from 'react'
-import { headers } from 'next/headers'
 import { generatePostOgImage } from '@/utils/imageUrl'
 import { generatePostStructuredData, structuredDataToScript } from '@/utils/structuredData'
 
@@ -192,55 +190,18 @@ async function getInitialPostData(postId: string): Promise<InitialPostData | nul
   }
 }
 
-// 서버 컴포넌트: 초기 데이터를 클라이언트에 전달
-async function PostDetailServerData({ postId }: { postId: string }) {
-  let initialData: InitialPostData | null = null
-
-  try {
-    const h = await headers()
-    const proto = h.get('x-forwarded-proto') || 'https'
-    const host = h.get('x-forwarded-host') || h.get('host') || ''
-
-    if (host) {
-      const url = `${proto}://${host}/api/board/post/${postId}`
-      const res = await fetch(url, {
-        next: {
-          revalidate: 60,
-          tags: ['board-post', postId, `comments-post-${postId}`, `attachments-post-${postId}`],
-        },
-      })
-
-      if (res.ok) {
-        const json = (await res.json()) as InitialPostData
-        initialData = json
-      } else {
-        console.warn('[PostDetail] API responded with status', res.status)
-      }
-    }
-  } catch (e) {
-    console.warn('[PostDetail] API fetch failed, fallback to direct query:', e)
-  }
-
-  if (!initialData) {
-    initialData = await getInitialPostData(postId)
-  }
-
-  if (!initialData) {
-    return <PostDetailClient postId={postId} />
-  }
-
-  return <PostDetailClient postId={postId} initialData={initialData} />
-}
-
 // 서버 컴포넌트 (메타데이터 생성용)
 export default async function PostDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params
   const postId = resolvedParams.id
 
-  // 게시물 존재 여부 확인
-  const metadata = await getPostMetadata(postId)
+  // 데이터 페칭 로직을 페이지 컴포넌트에서 직접 수행
+  const [metadata, initialData] = await Promise.all([
+    getPostMetadata(postId),
+    getInitialPostData(postId),
+  ])
 
-  if (!metadata) {
+  if (!metadata || !initialData) {
     notFound()
   }
 
@@ -251,7 +212,7 @@ export default async function PostDetailPage({ params }: { params: Promise<{ id:
     content: metadata.post.content,
     category: metadata.post.category,
     created_at: metadata.post.created_at,
-    updated_at: metadata.post.updated_at,
+    updated_at: metadata.post.updated_at || metadata.post.created_at,
     author: metadata.author,
     thumbnail: metadata.thumbnail,
   })
@@ -259,7 +220,7 @@ export default async function PostDetailPage({ params }: { params: Promise<{ id:
   return (
     <div>
       {structuredDataToScript(structuredData)}
-      {/* 서버에서 초기 데이터 제공 (ISR 캐시됨) - 스트리밍을 위해 Suspense로 감싸기 */}
+      {/* Suspense와 PostDetailClient를 직접 사용 */}
       <Suspense
         fallback={
           <div className="container mx-auto px-4 pt-24 md:pt-28">
@@ -274,13 +235,8 @@ export default async function PostDetailPage({ params }: { params: Promise<{ id:
           </div>
         }
       >
-        <PostDetailServerData postId={postId} />
+        <PostDetailClient postId={postId} initialData={initialData} />
       </Suspense>
-
-      {/* 클라이언트 컴포넌트로 하이브리드 렌더링 (브리지에서 DOM 스크립트 읽기) */}
-      <PostDetailClientBridge postId={postId} />
     </div>
   )
 }
-
-// 기존 서버 컴포넌트 래퍼 제거: 클라이언트 브리지에서 처리
