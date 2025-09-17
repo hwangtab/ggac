@@ -34,7 +34,7 @@ CREATE TABLE public.artists (
   slug TEXT UNIQUE NOT NULL,
   name TEXT NOT NULL,
   category TEXT[],
-  profile_image TEXT,
+  profile_photo_url TEXT,
   one_liner TEXT,
   bio TEXT,
   template_type TEXT DEFAULT '콜라주형' CHECK (template_type IN ('미니멀형', '콜라주형')),
@@ -299,7 +299,7 @@ const ProfileEditForm: React.FC<ProfileEditFormProps> = ({
 
 - **기본 정보**: name, category, one_liner, template_type
 - **상세 정보**: bio (마크다운 지원)
-- **미디어**: profile_image (업로드 기능)
+- **미디어**: profile_photo_url (업로드 기능)
 - **포트폴리오**: portfolio_links (동적 추가/제거)
 - **동영상**: youtube_videos (동적 추가/제거)
 - **연락처**: contact
@@ -322,7 +322,7 @@ const ArtistEditForm: React.FC<ArtistEditFormProps> = ({
     one_liner: artist.one_liner,
     bio: artist.bio,
     template_type: artist.template_type,
-    profile_image: artist.profile_image,
+    profile_photo_url: artist.profile_photo_url,
     portfolio_links: artist.portfolio_links || [],
     youtube_videos: artist.youtube_videos || [],
     contact: artist.contact
@@ -344,9 +344,9 @@ const ArtistEditForm: React.FC<ArtistEditFormProps> = ({
         onChange={(bio) => setFormData({ ...formData, bio })}
       />
       <MediaManager
-        currentImage={formData.profile_image}
-        onImageUpdate={(profile_image) =>
-          setFormData({ ...formData, profile_image })
+        currentImage={formData.profile_photo_url}
+        onImageUpdate={(profile_photo_url) =>
+          setFormData({ ...formData, profile_photo_url })
         }
       />
       <PortfolioLinks
@@ -417,7 +417,7 @@ export interface Artist {
   slug: string
   name: string
   category: string | string[]
-  profile_image: string
+  profile_photo_url: string | null
   one_liner: string
   bio: string
   template_type: 'minimal' | 'collage' | '미니멀형' | '콜라주형'

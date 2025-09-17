@@ -123,7 +123,7 @@ WITH artist_health_check AS (
     CASE WHEN one_liner IS NOT NULL AND LENGTH(one_liner) > 0 THEN 1 ELSE 0 END as has_oneliner,
     CASE WHEN bio IS NOT NULL AND LENGTH(bio) > 10 THEN 1 ELSE 0 END as has_bio,
     CASE WHEN template_type IN ('미니멀형', '콜라주형') THEN 1 ELSE 0 END as valid_template,
-    CASE WHEN profile_image IS NOT NULL AND LENGTH(profile_image) > 0 THEN 1 ELSE 0 END as has_image,
+    CASE WHEN profile_photo_url IS NOT NULL AND LENGTH(profile_photo_url) > 0 THEN 1 ELSE 0 END as has_image,
     -- 선택 필드 체크
     CASE WHEN portfolio_links IS NOT NULL AND jsonb_array_length(portfolio_links) > 0 THEN 1 ELSE 0 END as has_portfolio,
     CASE WHEN youtube_videos IS NOT NULL AND jsonb_array_length(youtube_videos) > 0 THEN 1 ELSE 0 END as has_youtube
