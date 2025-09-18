@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import ProjectDetailContent from './ProjectDetailContent'
+import ErrorBoundary from '@/components/ErrorBoundary'
 import {
   getProjectSlugs,
   getProjectBySlug,
@@ -171,10 +172,21 @@ const ProjectDetailPage = async ({ params }: ProjectPageProps) => {
   return (
     <>
       {structuredDataToScript(structuredData)}
-      <ProjectDetailContent
-        project={{ ...project, relatedArticles: articlesWithPreview }}
-        participatingArtists={participatingArtists}
-      />
+      <ErrorBoundary
+        componentName="ProjectDetailPage"
+        onError={(error, errorInfo, errorId) => {
+          console.error(`Project page error for slug: ${resolvedParams.slug}`, {
+            error: error.message,
+            errorId,
+            projectTitle: project.title,
+          })
+        }}
+      >
+        <ProjectDetailContent
+          project={{ ...project, relatedArticles: articlesWithPreview }}
+          participatingArtists={participatingArtists}
+        />
+      </ErrorBoundary>
     </>
   )
 }
