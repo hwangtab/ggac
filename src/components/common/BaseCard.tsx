@@ -52,18 +52,20 @@ const BaseCard = memo(function BaseCard({
   hoverable = true,
   imagePosition = 'top',
   footer,
-  onClick
+  onClick,
 }: BaseCardProps) {
   // 카드 스타일 계산
   const getCardStyles = () => {
     const baseStyles = 'bg-white rounded-2xl shadow-lg overflow-hidden'
-    const hoverStyles = hoverable ? 'hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2' : ''
-    const cursorStyles = (href || onClick) ? 'cursor-pointer' : ''
-    
+    const hoverStyles = hoverable
+      ? 'hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2'
+      : ''
+    const cursorStyles = href || onClick ? 'cursor-pointer' : ''
+
     const variantStyles = {
       default: 'h-full flex flex-col',
       compact: 'h-auto',
-      featured: 'h-full flex flex-col border-2 border-primary-100'
+      featured: 'h-full flex flex-col border-2 border-primary-100',
     }
 
     return `${baseStyles} ${hoverStyles} ${cursorStyles} ${variantStyles[variant]} ${className}`
@@ -81,11 +83,13 @@ const BaseCard = memo(function BaseCard({
     const imageClasses = {
       top: 'w-full h-48',
       left: 'w-32 h-32 flex-shrink-0',
-      right: 'w-32 h-32 flex-shrink-0'
+      right: 'w-32 h-32 flex-shrink-0',
     }
 
     return (
-      <div className={`relative overflow-hidden ${imageClasses[imagePosition]} ${imagePosition === 'top' ? 'flex-shrink-0' : ''}`}>
+      <div
+        className={`relative overflow-hidden ${imageClasses[imagePosition]} ${imagePosition === 'top' ? 'flex-shrink-0' : ''}`}
+      >
         <OptimizedImage
           src={image.src}
           alt={image.alt}
@@ -107,46 +111,34 @@ const BaseCard = memo(function BaseCard({
       {/* 헤더: 카테고리와 날짜 */}
       {(category || date) && (
         <div className="flex items-center justify-between mb-3">
-          {category && (
-            <span className={getCategoryStyles()}>
-              {category}
-            </span>
-          )}
-          {date && (
-            <span className="text-sm text-gray-500">
-              {date}
-            </span>
-          )}
+          {category && <span className={getCategoryStyles()}>{category}</span>}
+          {date && <span className="text-sm text-gray-500">{date}</span>}
         </div>
       )}
 
       {/* 제목 */}
-      <h3 className={`font-serif font-semibold mb-2 transition-colors duration-200 ${
-        variant === 'featured' ? 'text-xl' : 'text-lg'
-      } ${hoverable ? 'group-hover:text-primary-600' : ''}`}>
+      <h3
+        className={`font-serif font-semibold mb-2 transition-colors duration-200 ${
+          variant === 'featured' ? 'text-2xl' : 'text-xl'
+        } ${hoverable ? 'group-hover:text-primary-600' : ''}`}
+      >
         {title}
       </h3>
 
       {/* 설명 */}
-      <p className={`text-gray-600 mb-3 flex-grow ${
-        variant === 'compact' ? 'text-sm line-clamp-2' : 'text-sm line-clamp-3'
-      }`}>
+      <p
+        className={`text-gray-600 mb-3 flex-grow ${
+          variant === 'compact' ? 'text-sm line-clamp-2' : 'text-sm line-clamp-3'
+        }`}
+      >
         {description}
       </p>
 
       {/* 작성자 정보 */}
-      {author && (
-        <p className="text-xs text-gray-500 mt-auto">
-          {author}
-        </p>
-      )}
+      {author && <p className="text-xs text-gray-500 mt-auto">{author}</p>}
 
       {/* 커스텀 푸터 */}
-      {footer && (
-        <div className="mt-3 pt-3 border-t border-gray-100">
-          {footer}
-        </div>
-      )}
+      {footer && <div className="mt-3 pt-3 border-t border-gray-100">{footer}</div>}
     </div>
   )
 
@@ -154,21 +146,21 @@ const BaseCard = memo(function BaseCard({
   const cardContent = (
     <div className={`group ${getCardStyles()}`}>
       {imagePosition === 'top' && renderImage()}
-      
+
       {imagePosition === 'left' && (
         <div className="flex">
           {renderImage()}
           {renderContent()}
         </div>
       )}
-      
+
       {imagePosition === 'right' && (
         <div className="flex">
           {renderContent()}
           {renderImage()}
         </div>
       )}
-      
+
       {imagePosition === 'top' && renderContent()}
     </div>
   )

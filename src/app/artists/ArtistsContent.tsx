@@ -16,7 +16,7 @@ const ArtistsContent = ({ artists }: ArtistsContentProps) => {
   // 실제 아티스트 데이터에서 동적으로 카테고리 추출
   const availableCategories = useMemo(() => {
     const categories = new Set<string>()
-    
+
     // 모든 아티스트의 카테고리를 수집
     artists.forEach(artist => {
       if (Array.isArray(artist.category)) {
@@ -25,7 +25,7 @@ const ArtistsContent = ({ artists }: ArtistsContentProps) => {
         categories.add(artist.category)
       }
     })
-    
+
     // 'All'을 첫 번째로, 나머지는 알파벳 순으로 정렬
     return ['All', ...Array.from(categories).sort()]
   }, [artists])
@@ -37,12 +37,10 @@ const ArtistsContent = ({ artists }: ArtistsContentProps) => {
       {/* Hero Section */}
       <section className="py-16 md:py-24 bg-gradient-to-br from-primary-50 to-accent-50">
         <div className="container-custom text-center">
-          <h1 className="heading-primary mb-6">
-            서로의 우주가 되어
-          </h1>
+          <h1 className="heading-primary mb-6">서로의 우주가 되어</h1>
           <p className="text-body text-gray-600 max-w-3xl mx-auto">
-            경기아트콜렉티브는 독립된 예술가들의 섬이 아닌, 서로가 서로에게 영감이 되고 지지가 되어주는 연결된 우주입니다. 
-            이곳에서 각자의 빛으로 반짝이는 우리의 동료들을 만나보세요.
+            경기아트콜렉티브는 독립된 예술가들의 섬이 아닌, 서로가 서로에게 영감이 되고 지지가
+            되어주는 연결된 우주입니다. 이곳에서 각자의 빛으로 반짝이는 우리의 동료들을 만나보세요.
           </p>
         </div>
       </section>
@@ -51,7 +49,7 @@ const ArtistsContent = ({ artists }: ArtistsContentProps) => {
       <section className="py-8 bg-white sticky top-16 z-40 border-b">
         <div className="container-custom">
           <div className="flex justify-center gap-2 flex-wrap">
-            {availableCategories.map((category) => (
+            {availableCategories.map(category => (
               <button
                 key={category}
                 onClick={() => setSelectedCategory(category)}
@@ -72,7 +70,7 @@ const ArtistsContent = ({ artists }: ArtistsContentProps) => {
       <section className="py-16">
         <div className="container-custom">
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-12">
-            {filteredArtists.map((artist) => (
+            {filteredArtists.map(artist => (
               <div key={artist.id} className="group">
                 <Link href={`/artists/${artist.slug}`}>
                   <div className="text-center transform hover:scale-105 transition-transform duration-300">
@@ -94,7 +92,7 @@ const ArtistsContent = ({ artists }: ArtistsContentProps) => {
                         {Array.isArray(artist.category) ? (
                           <>
                             {artist.category.slice(0, 3).map((cat, index) => (
-                              <span 
+                              <span
                                 key={index}
                                 className="inline-block px-3 py-1 bg-gray-100 text-gray-700 text-sm font-medium rounded-full"
                               >
@@ -102,7 +100,7 @@ const ArtistsContent = ({ artists }: ArtistsContentProps) => {
                               </span>
                             ))}
                             {artist.category.length > 3 && (
-                              <span 
+                              <span
                                 className="inline-block px-3 py-1 bg-gray-200 text-gray-600 text-sm font-medium rounded-full cursor-help relative group/tooltip"
                                 title={artist.category.slice(3).join(', ')}
                               >
@@ -119,11 +117,11 @@ const ArtistsContent = ({ artists }: ArtistsContentProps) => {
                           </span>
                         )}
                       </div>
-                      
-                      <h3 className="text-lg font-post font-semibold mb-2 text-gray-700 group-hover:text-primary-600 transition-colors duration-200">
+
+                      <h3 className="text-xl font-post font-semibold mb-2 text-gray-700 group-hover:text-primary-600 transition-colors duration-200">
                         {artist.name}
                       </h3>
-                      
+
                       <p className="text-gray-600 text-sm leading-relaxed px-2">
                         {artist.oneLiner}
                       </p>
@@ -136,9 +134,7 @@ const ArtistsContent = ({ artists }: ArtistsContentProps) => {
 
           {filteredArtists.length === 0 && (
             <div className="text-center py-16">
-              <p className="text-gray-500 text-lg">
-                해당 카테고리에 아티스트가 없습니다.
-              </p>
+              <p className="text-gray-500 text-lg">해당 카테고리에 아티스트가 없습니다.</p>
             </div>
           )}
         </div>

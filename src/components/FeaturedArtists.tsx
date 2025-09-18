@@ -10,13 +10,13 @@ const FeaturedArtists = ({ artists }: FeaturedArtistsProps) => {
         <div className="text-center mb-12">
           <h2 className="heading-secondary mb-4">함께하는 사람들</h2>
           <p className="text-body text-gray-600 max-w-2xl mx-auto">
-            서로의 우주가 되어주는 예술가들을 만나보세요. 
-            각자의 고유한 세계관과 창작 철학을 통해 새로운 가능성을 탐구합니다.
+            서로의 우주가 되어주는 예술가들을 만나보세요. 각자의 고유한 세계관과 창작 철학을 통해
+            새로운 가능성을 탐구합니다.
           </p>
         </div>
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
-          {artists.map((artist) => (
+          {artists.map(artist => (
             <div key={artist.id} className="group">
               <Link href={`/artists/${artist.slug}`}>
                 <div className="text-center">
@@ -38,7 +38,7 @@ const FeaturedArtists = ({ artists }: FeaturedArtistsProps) => {
                       {Array.isArray(artist.category) ? (
                         <>
                           {artist.category.slice(0, 3).map((cat, index) => (
-                            <span 
+                            <span
                               key={index}
                               className="inline-block px-3 py-1 bg-gray-100 text-gray-700 text-sm font-medium rounded-full"
                             >
@@ -46,7 +46,7 @@ const FeaturedArtists = ({ artists }: FeaturedArtistsProps) => {
                             </span>
                           ))}
                           {artist.category.length > 3 && (
-                            <span 
+                            <span
                               className="inline-block px-3 py-1 bg-gray-200 text-gray-600 text-sm font-medium rounded-full cursor-help relative group/tooltip"
                               title={artist.category.slice(3).join(', ')}
                             >
@@ -63,14 +63,12 @@ const FeaturedArtists = ({ artists }: FeaturedArtistsProps) => {
                         </span>
                       )}
                     </div>
-                    
-                    <h3 className="text-xl font-post font-semibold mb-3 text-gray-700 group-hover:text-primary-600 transition-colors duration-200">
+
+                    <h3 className="text-2xl font-post font-semibold mb-3 text-gray-700 group-hover:text-primary-600 transition-colors duration-200">
                       {artist.name}
                     </h3>
-                    
-                    <p className="text-gray-600 text-sm leading-relaxed">
-                      {artist.oneLiner}
-                    </p>
+
+                    <p className="text-gray-600 text-sm leading-relaxed">{artist.oneLiner}</p>
                   </div>
                 </div>
               </Link>
@@ -79,7 +77,7 @@ const FeaturedArtists = ({ artists }: FeaturedArtistsProps) => {
         </div>
 
         <div className="text-center mt-12">
-          <Link 
+          <Link
             href="/artists"
             className="btn-secondary text-lg px-8 py-4 sm:px-8 sm:py-3 rounded-lg w-full sm:w-auto text-center min-h-[44px] hover:-translate-y-0.5 hover:shadow-lg transition-all duration-300"
           >
