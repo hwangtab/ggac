@@ -101,7 +101,7 @@ const ArchiveContent = ({ projects, artists }: ArchiveContentProps) => {
                         </span>
                       </div>
 
-                      <h3 className="text-lg font-post font-semibold mb-2 text-gray-700 group-hover:text-primary-600 transition-colors duration-200">
+                      <h3 className="text-xl font-post font-semibold mb-2 text-gray-700 group-hover:text-primary-600 transition-colors duration-200">
                         {project.title}
                       </h3>
 

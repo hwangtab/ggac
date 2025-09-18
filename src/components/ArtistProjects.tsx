@@ -24,7 +24,7 @@ export default function ArtistProjects({
           <div className="w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mx-auto mb-6">
             <div className="text-3xl text-gray-400">🎭</div>
           </div>
-          <h3 className="text-lg font-serif font-semibold text-gray-700 mb-2">
+          <h3 className="text-xl font-serif font-semibold text-gray-700 mb-2">
             아직 등록된 프로젝트가 없습니다
           </h3>
           <p className="text-gray-500 text-sm">
@@ -102,7 +102,7 @@ export default function ArtistProjects({
                 </div>
 
                 {/* 제목 */}
-                <h3 className="font-serif font-semibold text-primary-700 text-lg mb-3 group-hover:text-primary-600 transition-colors duration-200 line-clamp-2">
+                <h3 className="font-serif font-semibold text-primary-700 text-xl mb-3 group-hover:text-primary-600 transition-colors duration-200 line-clamp-2">
                   {project.title}
                 </h3>
 
