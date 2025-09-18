@@ -105,12 +105,12 @@ export function generateImageUrl(imagePath?: string | null, options: ImageUrlOpt
 
 /**
  * SNS 공유를 위한 이미지 형식 변환
- * WebP를 JPG로 변환 (더 넓은 SNS 플랫폼 호환성)
+ * WebP를 JPEG로 변환 (더 넓은 SNS 플랫폼 호환성)
  */
 function convertToSocialFormat(imagePath: string): string {
-  // WebP를 JPG로 변환
+  // WebP를 JPEG로 변환
   if (imagePath.includes('.webp')) {
-    return imagePath.replace('.webp', '.jpg')
+    return imagePath.replace('.webp', '.jpeg')
   }
 
   return imagePath
