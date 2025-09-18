@@ -2,10 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Cafe24ProUp Font */
+/* PeoplefirstFightingTTF Font */
 @font-face {
-  font-family: 'Cafe24ProUp';
-  src: url('/fonts/Cafe24PROUP.woff2') format('woff2');
+  font-family: 'PeoplefirstFightingTTF';
+  src: url('/fonts/PeoplefirstFightingTTF.ttf') format('truetype');
   font-weight: normal;
   font-display: swap;
 }
