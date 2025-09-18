@@ -21,13 +21,6 @@ const okGung = localFont({
   preload: true,
 })
 
-const santokki = localFont({
-  src: '../../public/fonts/HSSanTokki2.0(2024).ttf',
-  variable: '--font-santokki',
-  display: 'swap',
-  preload: true,
-})
-
 export const viewport = {
   width: 'device-width',
   initialScale: 1,
@@ -99,7 +92,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const globalData = await getGlobalData()
 
   return (
-    <html lang="ko" className={`${gmarketSans.variable} ${okGung.variable} ${santokki.variable}`}>
+    <html lang="ko" className={`${gmarketSans.variable} ${okGung.variable}`}>
       <body suppressHydrationWarning>
         {/* Guard against accidental CSS being loaded as <script> by third-party/preload mishaps */}
         <ErrorBoundary>
