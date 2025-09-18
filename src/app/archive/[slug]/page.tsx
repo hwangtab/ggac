@@ -172,16 +172,7 @@ const ProjectDetailPage = async ({ params }: ProjectPageProps) => {
   return (
     <>
       {structuredDataToScript(structuredData)}
-      <ErrorBoundary
-        componentName="ProjectDetailPage"
-        onError={(error, errorInfo, errorId) => {
-          console.error(`Project page error for slug: ${resolvedParams.slug}`, {
-            error: error.message,
-            errorId,
-            projectTitle: project.title,
-          })
-        }}
-      >
+      <ErrorBoundary componentName="ProjectDetailPage">
         <ProjectDetailContent
           project={{ ...project, relatedArticles: articlesWithPreview }}
           participatingArtists={participatingArtists}
