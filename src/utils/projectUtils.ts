@@ -3,6 +3,18 @@
  */
 
 /**
+ * 문자열을 메타데이터용으로 안전하게 정리
+ */
+function sanitizeForMetadata(str: string): string {
+  if (!str) return ''
+
+  return str
+    .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // 제어 문자 제거
+    .replace(/\s+/g, ' ') // 여러 공백을 하나로
+    .trim()
+}
+
+/**
  * 프로젝트 설명에서 의미있는 요약을 추출하는 함수
  * 형식적인 문구나 제목 반복을 건너뛰고 실제 내용을 찾아서 반환
  */
@@ -13,9 +25,13 @@ export function extractMeaningfulSummary(
 ): string {
   if (!description) return ''
 
-  const lines = description
+  // 입력 문자열을 안전하게 정리
+  const safeDescription = sanitizeForMetadata(description)
+  const safeTitle = sanitizeForMetadata(title)
+
+  const lines = safeDescription
     .split('\n')
-    .map(line => line.trim())
+    .map(line => sanitizeForMetadata(line))
     .filter(line => line.length > 0)
 
   // 건너뛸 패턴들
@@ -32,7 +48,7 @@ export function extractMeaningfulSummary(
   ]
 
   // 제목과 유사한 줄도 건너뛰기
-  const titleWords = title.toLowerCase().split(/\s+/)
+  const titleWords = safeTitle.toLowerCase().split(/\s+/)
 
   for (const line of lines) {
     // 건너뛸 패턴 체크
@@ -91,13 +107,28 @@ export function getProjectSummary(
   project: { title: string; description: string; summary?: string },
   maxLength: number = 120
 ): string {
-  // 커스텀 summary가 있으면 우선 사용
-  if (project.summary) {
-    return project.summary.length <= maxLength
-      ? project.summary
-      : project.summary.substring(0, maxLength) + '...'
-  }
+  try {
+    // 입력값 유효성 검사
+    if (!project || typeof project !== 'object') {
+      return '경기아트콜렉티브 프로젝트'
+    }
 
-  // 없으면 스마트 추출
-  return extractMeaningfulSummary(project.description, project.title, maxLength)
+    const safeTitle = sanitizeForMetadata(project.title || '')
+    const safeDescription = sanitizeForMetadata(project.description || '')
+    const safeSummary = project.summary ? sanitizeForMetadata(project.summary) : ''
+
+    // 커스텀 summary가 있으면 우선 사용
+    if (safeSummary) {
+      return safeSummary.length <= maxLength
+        ? safeSummary
+        : safeSummary.substring(0, maxLength) + '...'
+    }
+
+    // 없으면 스마트 추출
+    const extracted = extractMeaningfulSummary(safeDescription, safeTitle, maxLength)
+    return extracted || '경기아트콜렉티브 프로젝트'
+  } catch (error) {
+    console.error('Error in getProjectSummary:', error)
+    return '경기아트콜렉티브 프로젝트'
+  }
 }
