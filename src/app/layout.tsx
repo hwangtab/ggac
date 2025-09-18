@@ -14,13 +14,6 @@ const gmarketSans = localFont({
   preload: true,
 })
 
-const okGung = localFont({
-  src: '../../public/fonts/OK GUNG.ttf',
-  variable: '--font-ok-gung',
-  display: 'swap',
-  preload: true,
-})
-
 export const viewport = {
   width: 'device-width',
   initialScale: 1,
@@ -92,7 +85,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const globalData = await getGlobalData()
 
   return (
-    <html lang="ko" className={`${gmarketSans.variable} ${okGung.variable}`}>
+    <html lang="ko" className={`${gmarketSans.variable}`}>
       <body suppressHydrationWarning>
         {/* Guard against accidental CSS being loaded as <script> by third-party/preload mishaps */}
         <ErrorBoundary>
