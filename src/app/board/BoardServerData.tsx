@@ -241,7 +241,7 @@ export default async function BoardServerData({
       const apiUrl = `${proto}://${host}/api/board/posts?${search.toString()}`
       const res = await fetch(apiUrl, {
         next: refreshKey
-          ? { revalidate: 0 }
+          ? { revalidate: 30 }
           : { revalidate: 60, tags: ['board-initial', `board-${category}`] },
       })
 
