@@ -33,39 +33,74 @@ const OptimizedImage = memo(function OptimizedImage({
   // 최적화 우회 대상 도메인 목록 (간헐적 응답 지연/차단 이슈 대응)
   const UNOPTIMIZED_HOSTS = useMemo(() => new Set(['www.news-art.co.kr', 'news-art.co.kr']), [])
 
+  // Supabase Storage URL 패턴 감지
+  const SUPABASE_STORAGE_PATTERN = useMemo(
+    () => /\.supabase\.co\/storage\/v1\/object\/public\//i,
+    []
+  )
+
   const activeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const loadingRef = useRef<boolean>(true)
 
-  // src 기준으로 호스트 파싱 (상대 경로는 무시)
-  const srcHost = useMemo(() => {
+  // src 기준으로 호스트 파싱 및 URL 타입 결정
+  const { srcHost, isSupabaseStorage, isExternalUrl } = useMemo(() => {
     try {
       const u = new URL(src)
-      return u.hostname
+      const hostname = u.hostname
+      const isSupabase = SUPABASE_STORAGE_PATTERN.test(src)
+      const isExternal = Boolean(hostname)
+      return {
+        srcHost: hostname,
+        isSupabaseStorage: isSupabase,
+        isExternalUrl: isExternal,
+      }
     } catch {
-      return ''
+      return {
+        srcHost: '',
+        isSupabaseStorage: false,
+        isExternalUrl: false,
+      }
     }
-  }, [src])
+  }, [src, SUPABASE_STORAGE_PATTERN])
 
-  // 이미지 상태 초기화 - Next.js가 모든 최적화 처리
+  // 이미지 상태 초기화 - URL 타입별 최적화 전략 적용
   useEffect(() => {
     // 초기화
     setHasError(false)
     setIsLoading(true)
     loadingRef.current = true
     setCurrentSrc(src)
-    setUseUnoptimized(unoptimized || (srcHost ? UNOPTIMIZED_HOSTS.has(srcHost) : false))
-    onLoadStart?.() // 외부 로딩 시작 알림
 
-    // 타임아웃 기반 우회: 지정 시간 내 로드 이벤트가 없으면 unoptimized로 스위칭
+    // URL 타입별 최적화 설정
+    const shouldUseUnoptimized =
+      unoptimized || (srcHost ? UNOPTIMIZED_HOSTS.has(srcHost) : false) || isSupabaseStorage // Supabase Storage는 항상 unoptimized 사용
+
+    setUseUnoptimized(shouldUseUnoptimized)
+    onLoadStart?.()
+
+    // Supabase Storage 이미지의 경우 더 짧은 타임아웃 적용
+    const currentLoadTimeout = isSupabaseStorage ? 5000 : loadTimeoutMs
+    const currentErrorTimeout = isSupabaseStorage ? 3000 : errorTimeoutMs
+
+    // 타임아웃 기반 우회
     if (activeTimer.current) {
       clearTimeout(activeTimer.current)
       activeTimer.current = null
     }
+
     activeTimer.current = setTimeout(() => {
       if (loadingRef.current) {
-        // 1차: 최적화 우회 시도
+        // Supabase/외부 URL의 경우 즉시 에러 처리
+        if (isSupabaseStorage || isExternalUrl) {
+          setHasError(true)
+          setIsLoading(false)
+          loadingRef.current = false
+          onErrorProp?.()
+          return
+        }
+
+        // 로컬 이미지의 경우 기존 로직 적용
         setUseUnoptimized(true)
-        // 2차: 우회 후에도 응답 없으면 에러 처리
         if (activeTimer.current) clearTimeout(activeTimer.current)
         activeTimer.current = setTimeout(() => {
           if (loadingRef.current) {
@@ -74,9 +109,9 @@ const OptimizedImage = memo(function OptimizedImage({
             loadingRef.current = false
             onErrorProp?.()
           }
-        }, errorTimeoutMs)
+        }, currentErrorTimeout)
       }
-    }, loadTimeoutMs)
+    }, currentLoadTimeout)
 
     return () => {
       if (activeTimer.current) {
@@ -84,11 +119,40 @@ const OptimizedImage = memo(function OptimizedImage({
         activeTimer.current = null
       }
     }
-  }, [src, srcHost, UNOPTIMIZED_HOSTS, unoptimized, onLoadStart, loadTimeoutMs, errorTimeoutMs])
+  }, [
+    src,
+    srcHost,
+    UNOPTIMIZED_HOSTS,
+    unoptimized,
+    onLoadStart,
+    loadTimeoutMs,
+    errorTimeoutMs,
+    isSupabaseStorage,
+    isExternalUrl,
+  ])
 
   const handleError = () => {
-    // 최적화된 이미지 폴백 체인: WebP → JPG → PNG (JPEG 단계 제거로 속도 향상)
+    // Supabase Storage URL의 경우 폴백 시도 없이 바로 에러 처리
+    if (isSupabaseStorage) {
+      console.warn(`[OptimizedImage] Supabase Storage 이미지 로딩 실패: ${currentSrc}`)
+      setHasError(true)
+      setIsLoading(false)
+      loadingRef.current = false
+      onErrorProp?.()
+      return
+    }
 
+    // 기타 외부 URL의 경우도 폴백 시도 없이 바로 에러 처리
+    if (isExternalUrl) {
+      console.warn(`[OptimizedImage] 외부 이미지 로딩 실패: ${currentSrc}`)
+      setHasError(true)
+      setIsLoading(false)
+      loadingRef.current = false
+      onErrorProp?.()
+      return
+    }
+
+    // 로컬 이미지만 기존 폴백 체인 적용: WebP → JPG → PNG
     // 1단계: WebP → JPG 시도 (가장 일반적인 형식)
     if (currentSrc.endsWith('.webp')) {
       const jpgSrc = currentSrc.replace('.webp', '.jpg')
@@ -109,7 +173,7 @@ const OptimizedImage = memo(function OptimizedImage({
     setHasError(true)
     setIsLoading(false)
     loadingRef.current = false
-    onErrorProp?.() // 외부 에러 핸들러 호출
+    onErrorProp?.()
   }
 
   const handleLoad = () => {
