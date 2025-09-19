@@ -155,16 +155,25 @@ export const getArtistsFromDB = async (): Promise<Artist[]> => {
     // 정적 생성 시점에서도 접근 가능하도록 createClient 사용
     const { createClient } = await import('@supabase/supabase-js')
     // Attach Next.js cache tags so revalidateTag('artists') busts this cache across instances
+    const revalidateValue = 3600
+    console.log(
+      `🔍 [DEBUG] getArtistsFromDB: Using revalidate=${revalidateValue} for artists query`
+    )
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
       {
         global: {
-          fetch: (input: RequestInfo | URL, init?: RequestInit) =>
-            fetch(input, {
+          fetch: (input: RequestInfo | URL, init?: RequestInit) => {
+            console.log(`🔍 [DEBUG] Supabase fetch called with revalidate=${revalidateValue}`, {
+              input,
+              init,
+            })
+            return fetch(input, {
               ...init,
-              next: { revalidate: 3600, tags: ['artists'] },
-            }),
+              next: { revalidate: revalidateValue, tags: ['artists'] },
+            })
+          },
         },
       }
     )
@@ -282,16 +291,25 @@ export const getArtistBySlugFromDB = async (slug: string): Promise<Artist | null
 
     // 정적 생성 시점에서도 접근 가능하도록 createClient 사용
     const { createClient } = await import('@supabase/supabase-js')
+    const revalidateValue = 3600
+    console.log(
+      `🔍 [DEBUG] getArtistBySlugFromDB: Using revalidate=${revalidateValue} for artists query`
+    )
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
       {
         global: {
-          fetch: (input: RequestInfo | URL, init?: RequestInit) =>
-            fetch(input, {
+          fetch: (input: RequestInfo | URL, init?: RequestInit) => {
+            console.log(`🔍 [DEBUG] Supabase fetch called with revalidate=${revalidateValue}`, {
+              input,
+              init,
+            })
+            return fetch(input, {
               ...init,
-              next: { revalidate: 3600, tags: ['artists'] },
-            }),
+              next: { revalidate: revalidateValue, tags: ['artists'] },
+            })
+          },
         },
       }
     )
