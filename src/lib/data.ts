@@ -86,6 +86,7 @@ class MemoryEfficientCache<T> {
 // 전역 캐시 인스턴스 - 런타임에만 생성
 let artistCache: MemoryEfficientCache<Artist[]> | null = null
 let projectCache: MemoryEfficientCache<Project[]> | null = null
+let legacyArtistMapPromise: Promise<Map<string, Artist>> | null = null
 
 // 캐시 초기화 함수
 function initCaches() {
@@ -100,6 +101,7 @@ export function invalidateArtistsCache() {
   try {
     initCaches()
     artistCache?.clear()
+    legacyArtistMapPromise = null
   } catch (e) {
     // 캐시 무효화 실패는 치명적이지 않음
     console.warn('invalidateArtistsCache failed:', e)
@@ -185,7 +187,18 @@ export const getArtistsFromDB = async (): Promise<Artist[]> => {
       .order('created_at', { ascending: true })
 
     if (!error && dbArtists && dbArtists.length > 0) {
-      const result = dbArtists.map(convertDatabaseArtistToArtist)
+      let result = dbArtists.map(convertDatabaseArtistToArtist)
+
+      try {
+        const legacyMap = await getLegacyArtistMap()
+        result = result.map(artist => {
+          const fallback = legacyMap.get(artist.slug) || legacyMap.get(artist.id)
+          return applyProfileImageFallback(artist, fallback)
+        })
+      } catch (fallbackError) {
+        console.warn('Failed to apply legacy artist image fallback:', fallbackError)
+      }
+
       artistCache?.set('artists', result)
       return result
     }
@@ -279,6 +292,45 @@ function convertDatabaseArtistToArtist(dbArtist: DatabaseArtist): Artist {
   }
 }
 
+async function getLegacyArtistMap(): Promise<Map<string, Artist>> {
+  if (!legacyArtistMapPromise) {
+    legacyArtistMapPromise = (async () => {
+      const legacyArtists = await getArtistsFromJSON()
+      const map = new Map<string, Artist>()
+
+      for (const artist of legacyArtists) {
+        if (artist.id) {
+          map.set(artist.id, artist)
+        }
+        if (artist.slug) {
+          map.set(artist.slug, artist)
+        }
+      }
+
+      return map
+    })()
+  }
+
+  return legacyArtistMapPromise
+}
+
+function applyProfileImageFallback(artist: Artist, fallback?: Artist): Artist {
+  if (!fallback?.profileImage) {
+    return artist
+  }
+
+  const candidate = artist.profileImage?.trim()
+
+  if (candidate && candidate !== '/images/default-avatar.webp') {
+    return artist
+  }
+
+  return {
+    ...artist,
+    profileImage: fallback.profileImage,
+  }
+}
+
 // Supabase에서 아티스트 조회 (데이터베이스 우선, JSON 파일 백업)
 export const getArtistBySlugFromDB = async (slug: string): Promise<Artist | null> => {
   try {
@@ -322,7 +374,15 @@ export const getArtistBySlugFromDB = async (slug: string): Promise<Artist | null
       .single()
 
     if (!error && dbArtist) {
-      const convertedArtist = convertDatabaseArtistToArtist(dbArtist)
+      let convertedArtist = convertDatabaseArtistToArtist(dbArtist)
+
+      try {
+        const legacyMap = await getLegacyArtistMap()
+        const fallback = legacyMap.get(convertedArtist.slug) || legacyMap.get(convertedArtist.id)
+        convertedArtist = applyProfileImageFallback(convertedArtist, fallback)
+      } catch (fallbackError) {
+        console.warn('Failed to apply legacy artist image fallback:', fallbackError)
+      }
 
       // 성공적으로 데이터베이스에서 조회했음을 로그
       console.log(`Successfully fetched artist ${slug} from database`)
