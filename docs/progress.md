@@ -2,6 +2,9 @@
 
 ## Recent Changes
 
+- Investigated `/artists` image regressions and confirmed Supabase
+  `artists.profile_photo_url` entries still point to legacy repo assets or
+  `NULL`, so new storage uploads never reach the frontend rendering pipeline.
 - Rebuilt the board list and detail bootstrap paths so the server now hands
   initial post data directly to the client components, eliminating brittle DOM
   script probes and the associated hydration failures.
@@ -17,13 +20,15 @@
 
 ## Next Steps
 
-1. Verify in production that `/board` list and detail pages hydrate correctly
+1. Backfill `artists.profile_photo_url` (and `profile_photo_metadata`) with the
+   actual Supabase public URLs for the affected rows, or re-run the upload flow
+   per artist to persist the metadata.
+2. Re-run `/artists` after backfill and ensure `OptimizedImage` no longer shows
+   error fallbacks; confirm CDN cache invalidation is not required once URLs
+   change.
+3. Verify in production that `/board` list and detail pages hydrate correctly
    with the new server hand-offs and capture any residual `errorId`/`digest`
    references from Vercel if issues persist.
-2. Confirm that `/artists` renders Supabase-hosted images after the latest
-   deployment and purge any stale CDN cache if required.
-3. Once `/board` stabilises, run a regression pass on other ISR pages
+4. Once `/board` stabilises, run a regression pass on other ISR pages
    (`/archive`, `/artists/[slug]`) to confirm there are no lingering static
    fallbacks.
-4. Document any additional findings and update this log with outcomes and new
-   action items.
