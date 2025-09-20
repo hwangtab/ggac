@@ -56,7 +56,7 @@ const OptimizedImage = memo(function OptimizedImage({
       const basePath = pathPart.slice(0, -ext.length - 1)
       const querySuffix = queryPart ? `?${queryPart}` : ''
 
-      const preferredOrder = ['webp', 'jpg', 'jpeg', 'png', 'gif']
+      const preferredOrder = ['webp', 'jpg', 'jpeg', 'png']
       const queue: string[] = []
 
       for (const candidateExt of preferredOrder) {
