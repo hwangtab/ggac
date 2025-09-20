@@ -85,7 +85,7 @@ const ArchiveContent = ({ projects, artists }: ArchiveContentProps) => {
                         className="object-cover w-full h-full"
                         sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 500px"
                         priority={index < 8} // 첫 8개 프로젝트 우선 로딩 (모바일 2열, 데스크톱 3열 기준)
-                        quality={85} // 아티스트 페이지와 동일한 품질
+                        quality={80} // next.config.js qualities 설정에 맞춤
                       />
                       <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors duration-300" />
                     </div>
