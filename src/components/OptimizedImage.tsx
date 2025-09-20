@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { useState, useEffect, useMemo, useRef, memo } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback, memo } from 'react'
 import type { OptimizedImageProps } from '@/types'
 
 const OptimizedImage = memo(function OptimizedImage({
@@ -41,6 +41,34 @@ const OptimizedImage = memo(function OptimizedImage({
 
   const activeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const loadingRef = useRef<boolean>(true)
+  const fallbackQueueRef = useRef<string[]>([])
+
+  const buildFallbackQueue = useCallback((input: string): string[] => {
+    if (!input) return []
+
+    try {
+      // 쿼리스트링 분리
+      const [pathPart, queryPart] = input.split('?', 2)
+      const extensionMatch = pathPart.match(/\.([a-zA-Z0-9]+)$/)
+      if (!extensionMatch) return []
+
+      const ext = extensionMatch[1].toLowerCase()
+      const basePath = pathPart.slice(0, -ext.length - 1)
+      const querySuffix = queryPart ? `?${queryPart}` : ''
+
+      const preferredOrder = ['webp', 'jpg', 'jpeg', 'png', 'gif']
+      const queue: string[] = []
+
+      for (const candidateExt of preferredOrder) {
+        if (candidateExt === ext) continue
+        queue.push(`${basePath}.${candidateExt}${querySuffix}`)
+      }
+
+      return queue
+    } catch {
+      return []
+    }
+  }, [])
 
   // src 기준으로 호스트 파싱 및 URL 타입 결정
   const { srcHost, isSupabaseStorage, isExternalUrl } = useMemo(() => {
@@ -70,6 +98,7 @@ const OptimizedImage = memo(function OptimizedImage({
     setIsLoading(true)
     loadingRef.current = true
     setCurrentSrc(src)
+    fallbackQueueRef.current = buildFallbackQueue(src)
 
     // URL 타입별 최적화 설정
     const shouldUseUnoptimized =
@@ -152,24 +181,16 @@ const OptimizedImage = memo(function OptimizedImage({
       return
     }
 
-    // 로컬 이미지만 기존 폴백 체인 적용: WebP → JPG → PNG
-    // 1단계: WebP → JPG 시도 (가장 일반적인 형식)
-    if (currentSrc.endsWith('.webp')) {
-      const jpgSrc = currentSrc.replace('.webp', '.jpg')
-      setCurrentSrc(jpgSrc)
-      setIsLoading(true)
-      return
-    }
-
-    // 2단계: JPG → PNG 시도 (최종 폴백)
-    if (currentSrc.endsWith('.jpg')) {
-      const pngSrc = currentSrc.replace('.jpg', '.png')
-      setCurrentSrc(pngSrc)
+    // 로컬 이미지 폴백 큐에서 다음 후보 선택
+    const nextFallback = fallbackQueueRef.current.shift()
+    if (nextFallback) {
+      setCurrentSrc(nextFallback)
       setIsLoading(true)
       return
     }
 
     // 최종 실패 시에만 fallbackText 표시
+    console.warn(`[OptimizedImage] 로컬 이미지 폴백 실패: ${currentSrc}`)
     setHasError(true)
     setIsLoading(false)
     loadingRef.current = false
