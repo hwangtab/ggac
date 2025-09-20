@@ -1,10 +1,11 @@
 'use client'
 
-import React, { useMemo, useRef, useCallback, useEffect } from 'react'
+import React, { useMemo, useRef, useCallback, useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
 import 'react-quill-new/dist/quill.snow.css'
 import { validateFile, sanitizeImageFile } from '@/utils/fileValidation'
 import { generateTempId } from '@/utils/security'
+import toast from 'react-hot-toast'
 
 const ReactQuill = dynamic(
   async () => {
@@ -44,6 +45,15 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
   height = 400,
 }) => {
   const quillRef = useRef<any>(null)
+
+  // 업로드 상태 관리
+  const [uploadStatus, setUploadStatus] = useState<{
+    isUploading: boolean
+    fileName: string | null
+  }>({
+    isUploading: false,
+    fileName: null,
+  })
 
   // 컴포넌트 마운트 시 디버깅 로그
   useEffect(() => {
@@ -100,6 +110,15 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
 
   // 이미지 업로드 핸들러 (기존 TinyMCE 로직 재사용)
   const handleImageUpload = useCallback(async (file: File): Promise<string> => {
+    // 업로드 상태 시작
+    setUploadStatus({
+      isUploading: true,
+      fileName: file.name,
+    })
+
+    // 로딩 토스트 시작
+    const toastId = toast.loading(`${file.name} 업로드 중...`)
+
     try {
       console.log('[QuillEditor] 이미지 업로드 시작:', file.name)
 
@@ -149,9 +168,47 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
       const result = await response.json()
       console.log('[QuillEditor] 이미지 업로드 성공:', result.public_url)
 
+      // 성공 처리
+      toast.success(`${file.name} 업로드 완료!`, {
+        id: toastId,
+      })
+
+      // 업로드 상태 리셋
+      setUploadStatus({
+        isUploading: false,
+        fileName: null,
+      })
+
       return result.public_url
     } catch (error) {
       console.error('[QuillEditor] 이미지 업로드 오류:', error)
+
+      // 사용자 친화적인 에러 메시지
+      let userMessage = '이미지 업로드에 실패했습니다.'
+      const errorMessage = error instanceof Error ? error.message : String(error)
+
+      if (errorMessage.includes('파일 크기')) {
+        userMessage = '이미지 파일 크기가 너무 큽니다. 5MB 이하의 이미지를 선택해주세요.'
+      } else if (errorMessage.includes('파일 형식') || errorMessage.includes('지원하지 않는')) {
+        userMessage =
+          '지원하지 않는 이미지 형식입니다. JPG, PNG, GIF, WebP 파일만 업로드 가능합니다.'
+      } else if (errorMessage.includes('네트워크') || errorMessage.includes('서버')) {
+        userMessage = '네트워크 오류가 발생했습니다. 잠시 후 다시 시도해주세요.'
+      } else if (errorMessage.includes('권한')) {
+        userMessage = '파일 업로드 권한이 없습니다. 로그인 상태를 확인해주세요.'
+      }
+
+      // 오류 토스트 표시
+      toast.error(userMessage, {
+        id: toastId,
+      })
+
+      // 업로드 상태 리셋
+      setUploadStatus({
+        isUploading: false,
+        fileName: null,
+      })
+
       throw error
     }
   }, [])
@@ -187,26 +244,8 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
                     quill.setSelection(range.index + 1)
                   }
                 } catch (error: any) {
+                  // handleImageUpload가 이미 토스트 에러 메시지를 처리하므로 추가 처리 불필요
                   console.error('[QuillEditor] 이미지 업로드 실패:', error)
-
-                  // 사용자 친화적인 에러 메시지
-                  let userMessage = '이미지 업로드에 실패했습니다.'
-                  if (error.message.includes('파일 크기')) {
-                    userMessage =
-                      '이미지 파일 크기가 너무 큽니다. 5MB 이하의 이미지를 선택해주세요.'
-                  } else if (
-                    error.message.includes('파일 형식') ||
-                    error.message.includes('지원하지 않는')
-                  ) {
-                    userMessage =
-                      '지원하지 않는 이미지 형식입니다. JPG, PNG, GIF, WebP 파일만 업로드 가능합니다.'
-                  } else if (error.message.includes('네트워크') || error.message.includes('서버')) {
-                    userMessage = '네트워크 오류가 발생했습니다. 잠시 후 다시 시도해주세요.'
-                  } else if (error.message.includes('권한')) {
-                    userMessage = '파일 업로드 권한이 없습니다. 로그인 상태를 확인해주세요.'
-                  }
-
-                  alert(userMessage)
                 }
               }
             }
@@ -255,25 +294,8 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
               quill.setSelection(range.index + 1)
             }
           } catch (error: any) {
+            // handleImageUpload가 이미 토스트 에러 메시지를 처리하므로 추가 처리 불필요
             console.error('[QuillEditor] 이미지 업로드 실패:', error)
-
-            // 사용자 친화적인 에러 메시지
-            let userMessage = '이미지 업로드에 실패했습니다.'
-            if (error.message.includes('파일 크기')) {
-              userMessage = '이미지 파일 크기가 너무 큽니다. 5MB 이하의 이미지를 선택해주세요.'
-            } else if (
-              error.message.includes('파일 형식') ||
-              error.message.includes('지원하지 않는')
-            ) {
-              userMessage =
-                '지원하지 않는 이미지 형식입니다. JPG, PNG, GIF, WebP 파일만 업로드 가능합니다.'
-            } else if (error.message.includes('네트워크') || error.message.includes('서버')) {
-              userMessage = '네트워크 오류가 발생했습니다. 잠시 후 다시 시도해주세요.'
-            } else if (error.message.includes('권한')) {
-              userMessage = '파일 업로드 권한이 없습니다. 로그인 상태를 확인해주세요.'
-            }
-
-            alert(userMessage)
           }
         }
       }
@@ -287,6 +309,18 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
 
   return (
     <div className="quill-editor-container" onDrop={handleDrop} onDragOver={handleDragOver}>
+      {/* 업로드 진행 상태 표시 */}
+      {uploadStatus.isUploading && (
+        <div className="upload-status-bar">
+          <div className="upload-progress">
+            <div className="upload-spinner">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+            </div>
+            <span className="upload-text">{uploadStatus.fileName} 업로드 중...</span>
+          </div>
+        </div>
+      )}
+
       <ReactQuill
         theme="snow"
         value={value}
@@ -295,7 +329,7 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
         modules={modules}
         formats={formats}
         placeholder={placeholder}
-        readOnly={disabled}
+        readOnly={disabled || uploadStatus.isUploading}
         style={{ minHeight: 'auto' }}
       />
       <style jsx global>{`
@@ -304,6 +338,35 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
           word-wrap: break-word;
           overflow-wrap: anywhere;
           overflow: visible;
+        }
+
+        /* 업로드 상태 바 스타일 */
+        .upload-status-bar {
+          background: linear-gradient(90deg, #e3f2fd 0%, #f3e5f5 100%);
+          border: 1px solid #2196f3;
+          border-radius: 8px 8px 0 0;
+          padding: 12px 16px;
+          margin-bottom: -1px;
+          z-index: 10;
+          position: relative;
+        }
+
+        .upload-progress {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .upload-spinner {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .upload-text {
+          font-size: 14px;
+          font-weight: 500;
+          color: #1976d2;
         }
 
         .quill-editor-container .ql-container {
