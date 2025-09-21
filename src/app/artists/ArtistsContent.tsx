@@ -70,7 +70,7 @@ const ArtistsContent = ({ artists }: ArtistsContentProps) => {
       <section className="py-16">
         <div className="container-custom">
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-12">
-            {filteredArtists.map(artist => (
+            {filteredArtists.map((artist, index) => (
               <div key={artist.id} className="group">
                 <Link href={`/artists/${artist.slug}`}>
                   <div className="text-center transform hover:scale-105 transition-transform duration-300">
@@ -83,6 +83,7 @@ const ArtistsContent = ({ artists }: ArtistsContentProps) => {
                         height={400}
                         className="rounded-full object-cover w-full h-full"
                         sizes="(max-width: 768px) 100vw, 400px"
+                        priority={index < 6} // 첫 6개 아티스트 이미지 우선 로딩 (모바일 2열×3행, 데스크톱 3열×2행)
                       />
                     </div>
 
