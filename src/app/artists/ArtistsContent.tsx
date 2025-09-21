@@ -119,7 +119,7 @@ const ArtistsContent = ({ artists }: ArtistsContentProps) => {
                         )}
                       </div>
 
-                      <h3 className="text-xl font-post font-semibold mb-2 text-gray-700 group-hover:text-primary-600 transition-colors duration-200">
+                      <h3 className="text-3xl font-post font-semibold mb-2 text-gray-700 group-hover:text-primary-600 transition-colors duration-200">
                         {artist.name}
                       </h3>
 
