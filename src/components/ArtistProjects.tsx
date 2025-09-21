@@ -68,6 +68,7 @@ export default function ArtistProjects({
                   height={375}
                   className="object-cover w-full h-full group-hover:scale-110 transition-transform duration-500"
                   sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                  priority={index < 2} // 첫 2개 프로젝트 이미지 우선 로딩
                 />
 
                 {/* 카테고리 배지 */}
