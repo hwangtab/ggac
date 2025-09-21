@@ -108,22 +108,36 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
     }
   }, [quillRef.current])
 
-  // 에디터에 이미지 삽입하는 헬퍼 함수
-  const insertImageToEditor = useCallback((imageUrl: string): boolean => {
+  // 에디터에 이미지 삽입하는 헬퍼 함수 (비동기 처리)
+  const insertImageToEditor = useCallback(async (imageUrl: string): Promise<boolean> => {
     try {
-      const quill = quillRef.current?.getEditor()
+      // Quill 에디터 준비 상태 확인 (최대 3초 대기)
+      let quill = quillRef.current?.getEditor()
+      let attempts = 0
+      const maxAttempts = 30 // 100ms * 30 = 3초
+
+      while (!quill && attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 100))
+        quill = quillRef.current?.getEditor()
+        attempts++
+        console.log(`[QuillEditor] 에디터 준비 대기 중... (${attempts}/${maxAttempts})`)
+      }
+
       if (!quill) {
-        console.error('[QuillEditor] Quill 에디터 참조를 찾을 수 없습니다')
+        console.error('[QuillEditor] Quill 에디터를 찾을 수 없습니다 (타임아웃)')
         return false
       }
 
       console.log('[QuillEditor] 에디터에 이미지 삽입 시작:', imageUrl)
 
+      // 에디터에 포커스 설정
+      quill.focus()
+
       // 현재 선택 영역 가져오기, 없으면 문서 끝으로 설정
       let range = quill.getSelection()
       if (!range) {
         const length = quill.getLength()
-        range = { index: length - 1, length: 0 }
+        range = { index: Math.max(0, length - 1), length: 0 }
         console.log('[QuillEditor] 선택 영역이 없어서 문서 끝으로 설정:', range)
       } else {
         console.log('[QuillEditor] 현재 선택 영역:', range)
@@ -131,16 +145,16 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
 
       // 이미지 삽입
       quill.insertEmbed(range.index, 'image', imageUrl, 'user')
+      console.log('[QuillEditor] 이미지 삽입 완료')
 
       // 커서를 이미지 다음으로 이동 (약간의 지연을 두고)
-      setTimeout(() => {
-        try {
-          quill.setSelection(range.index + 1, 0)
-          console.log('[QuillEditor] 커서 위치 조정 완료')
-        } catch (selectionError) {
-          console.warn('[QuillEditor] 커서 위치 조정 실패:', selectionError)
-        }
-      }, 100)
+      await new Promise(resolve => setTimeout(resolve, 150))
+      try {
+        quill.setSelection(range.index + 1, 0)
+        console.log('[QuillEditor] 커서 위치 조정 완료')
+      } catch (selectionError) {
+        console.warn('[QuillEditor] 커서 위치 조정 실패:', selectionError)
+      }
 
       console.log('[QuillEditor] 이미지 삽입 성공')
       return true
@@ -150,16 +164,13 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
     }
   }, [])
 
-  // 이미지 업로드 핸들러 (기존 TinyMCE 로직 재사용)
+  // 이미지 업로드 핸들러 (토스트 없는 순수 업로드 함수)
   const handleImageUpload = useCallback(async (file: File): Promise<string> => {
     // 업로드 상태 시작
     setUploadStatus({
       isUploading: true,
       fileName: file.name,
     })
-
-    // 로딩 토스트 시작
-    const toastId = toast.loading(`${file.name} 업로드 중...`)
 
     try {
       console.log('[QuillEditor] 이미지 업로드 시작:', file.name)
@@ -210,7 +221,7 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
       const result = await response.json()
       console.log('[QuillEditor] 이미지 업로드 성공:', result.public_url)
 
-      // 업로드 상태 리셋 (삽입 전에 먼저)
+      // 업로드 상태 리셋
       setUploadStatus({
         isUploading: false,
         fileName: null,
@@ -219,26 +230,6 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
       return result.public_url
     } catch (error) {
       console.error('[QuillEditor] 이미지 업로드 오류:', error)
-
-      // 사용자 친화적인 에러 메시지
-      let userMessage = '이미지 업로드에 실패했습니다.'
-      const errorMessage = error instanceof Error ? error.message : String(error)
-
-      if (errorMessage.includes('파일 크기')) {
-        userMessage = '이미지 파일 크기가 너무 큽니다. 5MB 이하의 이미지를 선택해주세요.'
-      } else if (errorMessage.includes('파일 형식') || errorMessage.includes('지원하지 않는')) {
-        userMessage =
-          '지원하지 않는 이미지 형식입니다. JPG, PNG, GIF, WebP 파일만 업로드 가능합니다.'
-      } else if (errorMessage.includes('네트워크') || errorMessage.includes('서버')) {
-        userMessage = '네트워크 오류가 발생했습니다. 잠시 후 다시 시도해주세요.'
-      } else if (errorMessage.includes('권한')) {
-        userMessage = '파일 업로드 권한이 없습니다. 로그인 상태를 확인해주세요.'
-      }
-
-      // 오류 토스트 표시
-      toast.error(userMessage, {
-        id: toastId,
-      })
 
       // 업로드 상태 리셋
       setUploadStatus({
@@ -276,8 +267,8 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
                 try {
                   const imageUrl = await handleImageUpload(file)
 
-                  // 에디터에 이미지 삽입 시도
-                  const insertSuccess = insertImageToEditor(imageUrl)
+                  // 에디터에 이미지 삽입 시도 (비동기)
+                  const insertSuccess = await insertImageToEditor(imageUrl)
 
                   if (insertSuccess) {
                     toast.success(`${file.name} 업로드 및 삽입 완료!`, {
@@ -289,9 +280,30 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
                     })
                   }
                 } catch (error: any) {
-                  // handleImageUpload가 이미 토스트 에러 메시지를 처리하므로 추가 처리 불필요
                   console.error('[QuillEditor] 이미지 업로드 실패:', error)
-                  // 토스트 ID가 이미 처리되었으므로 여기서는 별도 처리 안함
+
+                  // 사용자 친화적인 에러 메시지
+                  let userMessage = '이미지 업로드에 실패했습니다.'
+                  const errorMessage = error instanceof Error ? error.message : String(error)
+
+                  if (errorMessage.includes('파일 크기')) {
+                    userMessage =
+                      '이미지 파일 크기가 너무 큽니다. 5MB 이하의 이미지를 선택해주세요.'
+                  } else if (
+                    errorMessage.includes('파일 형식') ||
+                    errorMessage.includes('지원하지 않는')
+                  ) {
+                    userMessage =
+                      '지원하지 않는 이미지 형식입니다. JPG, PNG, GIF, WebP 파일만 업로드 가능합니다.'
+                  } else if (errorMessage.includes('네트워크') || errorMessage.includes('서버')) {
+                    userMessage = '네트워크 오류가 발생했습니다. 잠시 후 다시 시도해주세요.'
+                  } else if (errorMessage.includes('권한')) {
+                    userMessage = '파일 업로드 권한이 없습니다. 로그인 상태를 확인해주세요.'
+                  }
+
+                  toast.error(userMessage, {
+                    id: toastId,
+                  })
                 }
               }
             }
@@ -337,8 +349,8 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
           try {
             const imageUrl = await handleImageUpload(file)
 
-            // 에디터에 이미지 삽입 시도
-            const insertSuccess = insertImageToEditor(imageUrl)
+            // 에디터에 이미지 삽입 시도 (비동기)
+            const insertSuccess = await insertImageToEditor(imageUrl)
 
             if (insertSuccess) {
               toast.success(`${file.name} 업로드 및 삽입 완료!`, {
@@ -350,9 +362,29 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
               })
             }
           } catch (error: any) {
-            // handleImageUpload가 이미 토스트 에러 메시지를 처리하므로 추가 처리 불필요
             console.error('[QuillEditor] 이미지 업로드 실패:', error)
-            // 토스트 ID가 이미 처리되었으므로 여기서는 별도 처리 안함
+
+            // 사용자 친화적인 에러 메시지
+            let userMessage = '이미지 업로드에 실패했습니다.'
+            const errorMessage = error instanceof Error ? error.message : String(error)
+
+            if (errorMessage.includes('파일 크기')) {
+              userMessage = '이미지 파일 크기가 너무 큽니다. 5MB 이하의 이미지를 선택해주세요.'
+            } else if (
+              errorMessage.includes('파일 형식') ||
+              errorMessage.includes('지원하지 않는')
+            ) {
+              userMessage =
+                '지원하지 않는 이미지 형식입니다. JPG, PNG, GIF, WebP 파일만 업로드 가능합니다.'
+            } else if (errorMessage.includes('네트워크') || errorMessage.includes('서버')) {
+              userMessage = '네트워크 오류가 발생했습니다. 잠시 후 다시 시도해주세요.'
+            } else if (errorMessage.includes('권한')) {
+              userMessage = '파일 업로드 권한이 없습니다. 로그인 상태를 확인해주세요.'
+            }
+
+            toast.error(userMessage, {
+              id: toastId,
+            })
           }
         }
       }
