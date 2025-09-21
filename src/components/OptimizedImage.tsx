@@ -22,8 +22,8 @@ const OptimizedImage = memo(function OptimizedImage({
   onError: onErrorProp,
   suppressSkeleton = false, // 외부 스켈레톤 사용 시 내부 스켈레톤 비활성화
   unoptimized = false, // 특정 도메인 등에서 최적화 우회
-  loadTimeoutMs = 8000, // 최적화 파이프라인 타임아웃 후 우회
-  errorTimeoutMs = 5000, // 우회 후에도 응답 없을 때 에러 처리까지 대기
+  loadTimeoutMs = 3000, // 최적화 파이프라인 타임아웃 후 우회 (로컬 이미지용 단축)
+  errorTimeoutMs = 2000, // 우회 후에도 응답 없을 때 에러 처리까지 대기
 }: OptimizedImageProps) {
   const [hasError, setHasError] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -108,8 +108,8 @@ const OptimizedImage = memo(function OptimizedImage({
     onLoadStart?.()
 
     // Supabase Storage 이미지의 경우 더 짧은 타임아웃 적용
-    const currentLoadTimeout = isSupabaseStorage ? 5000 : loadTimeoutMs
-    const currentErrorTimeout = isSupabaseStorage ? 3000 : errorTimeoutMs
+    const currentLoadTimeout = isSupabaseStorage ? 4000 : loadTimeoutMs
+    const currentErrorTimeout = isSupabaseStorage ? 2000 : errorTimeoutMs
 
     // 타임아웃 기반 우회
     if (activeTimer.current) {

@@ -512,7 +512,7 @@ const nextConfig = {
     // 외부 도메인에 대한 더 관대한 정책
     domains: [], // deprecated이지만 호환성을 위해 유지
     // 이미지 품질 설정 (Next.js 16 대비)
-    qualities: [50, 75, 80, 90, 100],
+    qualities: [50, 75, 80, 85, 90, 100],
   },
 }
 
