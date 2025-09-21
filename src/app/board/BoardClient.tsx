@@ -19,8 +19,8 @@ interface BoardClientProps {
 export default function BoardClient({ initialData }: BoardClientProps) {
   const [user, setUser] = useState<any>(null)
   const [isMember, setIsMember] = useState<boolean>(false)
-  // 사용자의 인증/프로필 확인이 늦더라도 목록 렌더를 막지 않도록 기본 false
-  const [userLoading, setUserLoading] = useState(false)
+  // 초기 로딩 상태를 true로 설정하여 인증 확인 중 안내창 깜빡임 방지
+  const [userLoading, setUserLoading] = useState(true)
   const [posts, setPosts] = useState<Post[]>(initialData?.posts || [])
   const [hasNext, setHasNext] = useState(initialData?.hasNext || false)
   const [nextCursor, setNextCursor] = useState<string | null>(initialData?.nextCursor || null)
@@ -223,8 +223,8 @@ export default function BoardClient({ initialData }: BoardClientProps) {
           <p className="text-gray-600">경기아트콜렉티브 협동조합 조합원들의 소통 공간입니다.</p>
         </div>
 
-        {/* 비로그인 사용자 안내 */}
-        {!user && (
+        {/* 비로그인 사용자 안내 - 로딩 중에는 표시하지 않음 */}
+        {!user && !userLoading && (
           <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg relative z-10 pointer-events-auto">
             <p className="text-blue-800 mb-2">
               <strong>안내:</strong> 게시물을 읽어볼 수 있지만, 글 작성과 댓글, 좋아요는 조합원만
@@ -249,8 +249,8 @@ export default function BoardClient({ initialData }: BoardClientProps) {
           </div>
         )}
 
-        {/* 로그인했지만 승인 대기 중인 사용자 */}
-        {!isMember && user && (
+        {/* 로그인했지만 승인 대기 중인 사용자 - 로딩 중에는 표시하지 않음 */}
+        {!isMember && user && !userLoading && (
           <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg relative z-10 pointer-events-auto">
             <p className="text-yellow-800">
               <strong>알림:</strong> 조합원 승인 대기 중입니다. 승인 후 게시글 작성이 가능합니다.
