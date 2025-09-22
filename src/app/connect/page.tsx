@@ -167,79 +167,90 @@ const ConnectPage = async () => {
 
               <div className="grid md:grid-cols-2 gap-8 mb-12">
                 {/* 자격 */}
-                <div className="bg-white rounded-2xl p-8 shadow-lg h-full">
-                  <h3 className="text-3xl font-serif font-semibold mb-6 text-center text-primary-600">
+                <a
+                  href="https://docs.google.com/forms/d/e/1FAIpQLScicp159Y6DgYJv2N-x4DGigsLWiOCLf6jl-meRSfXfuMahAQ/viewform?usp=header"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-white rounded-2xl p-8 shadow-lg h-full hover:shadow-xl transform hover:scale-105 transition-all duration-300 group cursor-pointer"
+                >
+                  <h3 className="text-3xl font-serif font-semibold mb-6 text-center text-primary-600 group-hover:text-primary-700 transition-colors duration-300">
                     자격
                   </h3>
                   <div className="space-y-6">
                     <div>
-                      <h4 className="font-semibold text-gray-900 mb-3 flex items-center">
-                        <span className="w-2 h-2 bg-primary-600 rounded-full mr-3"></span>
+                      <h4 className="font-semibold text-gray-900 mb-3 flex items-center group-hover:text-primary-600 transition-colors duration-300">
+                        <span className="w-2 h-2 bg-primary-600 rounded-full mr-3 group-hover:bg-primary-700 transition-colors duration-300"></span>
                         경기도 기반 예술가
                       </h4>
-                      <p className="text-sm text-gray-600 leading-relaxed ml-5">
+                      <p className="text-sm text-gray-600 leading-relaxed ml-5 group-hover:text-primary-600 transition-colors duration-300">
                         경기도에 거주하거나 활동하는 모든 분야의 예술가
                       </p>
                     </div>
                     <div>
-                      <h4 className="font-semibold text-gray-900 mb-3 flex items-center">
-                        <span className="w-2 h-2 bg-primary-600 rounded-full mr-3"></span>
+                      <h4 className="font-semibold text-gray-900 mb-3 flex items-center group-hover:text-primary-600 transition-colors duration-300">
+                        <span className="w-2 h-2 bg-primary-600 rounded-full mr-3 group-hover:bg-primary-700 transition-colors duration-300"></span>
                         문화예술 기획자
                       </h4>
-                      <p className="text-sm text-gray-600 leading-relaxed ml-5">
+                      <p className="text-sm text-gray-600 leading-relaxed ml-5 group-hover:text-primary-600 transition-colors duration-300">
                         문화예술 기획, 제작, 운영 등의 활동을 하는 전문가
                       </p>
                     </div>
                     <div>
-                      <h4 className="font-semibold text-gray-900 mb-3 flex items-center">
-                        <span className="w-2 h-2 bg-primary-600 rounded-full mr-3"></span>
+                      <h4 className="font-semibold text-gray-900 mb-3 flex items-center group-hover:text-primary-600 transition-colors duration-300">
+                        <span className="w-2 h-2 bg-primary-600 rounded-full mr-3 group-hover:bg-primary-700 transition-colors duration-300"></span>
                         동참 희망자
                       </h4>
-                      <p className="text-sm text-gray-600 leading-relaxed ml-5">
+                      <p className="text-sm text-gray-600 leading-relaxed ml-5 group-hover:text-primary-600 transition-colors duration-300">
                         조합의 취지에 동의하고 예술 생태계 발전에 기여하고자 하는 모든 분
                       </p>
                     </div>
                   </div>
                   <div className="mt-8 pt-6 border-t border-gray-100">
-                    <p className="text-sm text-gray-500 text-center">
+                    <p className="text-sm text-gray-500 text-center group-hover:text-primary-600 transition-colors duration-300">
                       예술가와 기획자, 그리고 예술을 사랑하는 모든 분들을 환영합니다.
                     </p>
                   </div>
-                </div>
+                </a>
 
                 {/* 약속 */}
-                <div className="bg-white rounded-2xl p-8 shadow-lg h-full">
-                  <h3 className="text-3xl font-serif font-semibold mb-6 text-center text-accent-600">
+                <a
+                  href="https://docs.google.com/forms/d/e/1FAIpQLScicp159Y6DgYJv2N-x4DGigsLWiOCLf6jl-meRSfXfuMahAQ/viewform?usp=header"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-white rounded-2xl p-8 shadow-lg h-full hover:shadow-xl transform hover:scale-105 transition-all duration-300 group cursor-pointer"
+                >
+                  <h3 className="text-3xl font-serif font-semibold mb-6 text-center text-accent-600 group-hover:text-accent-700 transition-colors duration-300">
                     약속
                   </h3>
                   <div className="space-y-6">
                     <div>
-                      <h4 className="font-semibold text-gray-900 mb-3 flex items-center">
-                        <span className="w-2 h-2 bg-accent-600 rounded-full mr-3"></span>
+                      <h4 className="font-semibold text-gray-900 mb-3 flex items-center group-hover:text-accent-600 transition-colors duration-300">
+                        <span className="w-2 h-2 bg-accent-600 rounded-full mr-3 group-hover:bg-accent-700 transition-colors duration-300"></span>
                         출자금
                       </h4>
-                      <p className="text-sm text-gray-600 leading-relaxed ml-5">
+                      <p className="text-sm text-gray-600 leading-relaxed ml-5 group-hover:text-accent-600 transition-colors duration-300">
                         조합원이 되기 위해 최소 1좌(10,000원) 이상의 출자가 필요합니다. 출자금은
                         조합의 소중한 자본금이 되며, 탈퇴 시 정관에 따라 환급됩니다.
                       </p>
                     </div>
                     <div>
-                      <h4 className="font-semibold text-gray-900 mb-3 flex items-center">
-                        <span className="w-2 h-2 bg-accent-600 rounded-full mr-3"></span>월 회비
+                      <h4 className="font-semibold text-gray-900 mb-3 flex items-center group-hover:text-accent-600 transition-colors duration-300">
+                        <span className="w-2 h-2 bg-accent-600 rounded-full mr-3 group-hover:bg-accent-700 transition-colors duration-300"></span>
+                        월 회비
                       </h4>
-                      <p className="text-sm text-gray-600 leading-relaxed ml-5">
+                      <p className="text-sm text-gray-600 leading-relaxed ml-5 group-hover:text-accent-600 transition-colors duration-300">
                         조합 운영을 위해 월 10,000원의 회비가 있습니다. (이사회 의결로 조정 가능)
                       </p>
                     </div>
                   </div>
                   <div className="mt-8 pt-6 border-t border-gray-100">
-                    <p className="text-sm text-gray-500 text-center leading-relaxed">
+                    <p className="text-sm text-gray-500 text-center leading-relaxed group-hover:text-accent-600 transition-colors duration-300">
                       조합원의 능동적인 참여를 통해 함께 성장하는 지속가능한 공동체를 만들어갑니다.
                       이는 조합원이 지닌 역량과 가치를 발휘하며 물질적, 정신적으로 상호 협력하는
                       과정을 통해 이루어집니다.
                     </p>
                   </div>
-                </div>
+                </a>
               </div>
 
               <div className="text-center">
