@@ -106,7 +106,7 @@ const ArtistsContent = ({ artists }: ArtistsContentProps) => {
                                 title={artist.category.slice(3).join(', ')}
                               >
                                 +{artist.category.length - 3}개
-                                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-3 px-3 py-1.5 bg-gray-800 text-white text-sm rounded-lg opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap max-w-xs z-50">
+                                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-3 px-3 py-1.5 bg-gray-800 text-white text-sm rounded-lg opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-normal max-w-sm leading-relaxed text-center z-50">
                                   {artist.category.slice(3).join(', ')}
                                 </div>
                               </span>
