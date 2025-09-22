@@ -68,6 +68,7 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
   )
   const [user, setUser] = useState<any>(null)
   const [isMember, setIsMember] = useState<boolean>(false)
+  const [authLoading, setAuthLoading] = useState<boolean>(true) // 인증 상태 확인 중
   const [loading, setLoading] = useState(!initialData) // 초기 데이터가 있으면 로딩 false
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
@@ -135,6 +136,9 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
             await checkMemberStatus(currentUser)
           } catch (e) {
             console.warn('[PostDetail] auth/member check deferred failed:', e)
+          } finally {
+            // 인증 확인 완료
+            setAuthLoading(false)
           }
         })
 
@@ -229,6 +233,9 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
                 data: { session },
               } = await supabase.auth.getSession()
               const currUser = session?.user || null
+              setUser(currUser)
+              await checkMemberStatus(currUser)
+
               if (currUser && post) {
                 const res = await fetch(`/api/posts/${postId}/user-data?user_id=${currUser.id}`)
                 if (res.ok) {
@@ -238,7 +245,11 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
                   }
                 }
               }
-            } catch {}
+            } catch {
+            } finally {
+              // 인증 확인 완료
+              setAuthLoading(false)
+            }
           })
           // Lazy-load content if missing from initial data
           scheduleIdle(async () => {
@@ -427,8 +438,8 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
             </button>
           </div>
 
-          {/* 비로그인/비조합원 사용자 안내 */}
-          {!user && (
+          {/* 비로그인/비조합원 사용자 안내 - 인증 확인 완료 후에만 표시 */}
+          {!authLoading && !user && (
             <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-blue-800 mb-2">
                 <strong>안내:</strong> 게시물을 읽어볼 수 있지만, 댓글 작성과 좋아요는 조합원만
@@ -451,7 +462,7 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
             </div>
           )}
 
-          {!isMember && user && (
+          {!authLoading && !isMember && user && (
             <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
               <p className="text-yellow-800">
                 <strong>알림:</strong> 조합원 승인 대기 중입니다. 승인 후 댓글 작성과 좋아요가
