@@ -8,24 +8,21 @@ import { cookies } from 'next/headers'
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 
 // POST: 아티스트에 멤버 배정
-export async function POST(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
-  const resolvedParams = await context.params;
-  
+export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await context.params
+
   try {
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     const supabase = createServerComponentClient({ cookies: () => cookieStore })
 
     // 사용자 인증 확인
-    const { data: { session }, error: authError } = await supabase.auth.getSession()
-    
+    const {
+      data: { session },
+      error: authError,
+    } = await supabase.auth.getSession()
+
     if (authError || !session?.user) {
-      return NextResponse.json(
-        { error: '인증이 필요합니다.' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
     // 관리자 권한 확인
@@ -37,17 +34,11 @@ export async function POST(
 
     if (profileError) {
       console.error('Profile fetch error:', profileError)
-      return NextResponse.json(
-        { error: '프로필 정보를 조회할 수 없습니다.' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: '프로필 정보를 조회할 수 없습니다.' }, { status: 500 })
     }
 
     if (!profile.is_admin || profile.registration_status !== 'approved' || !profile.is_active) {
-      return NextResponse.json(
-        { error: '관리자 권한이 필요합니다.' },
-        { status: 403 }
-      )
+      return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 })
     }
 
     // 요청 데이터 파싱
@@ -55,17 +46,11 @@ export async function POST(
     const artistId = resolvedParams.id
 
     if (!memberId || !role) {
-      return NextResponse.json(
-        { error: '멤버 ID와 역할이 필요합니다.' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: '멤버 ID와 역할이 필요합니다.' }, { status: 400 })
     }
 
     if (!['owner', 'manager', 'collaborator'].includes(role)) {
-      return NextResponse.json(
-        { error: '유효하지 않은 역할입니다.' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: '유효하지 않은 역할입니다.' }, { status: 400 })
     }
 
     // 대상 멤버 확인
@@ -78,10 +63,7 @@ export async function POST(
       .single()
 
     if (memberError || !targetMember) {
-      return NextResponse.json(
-        { error: '멤버를 찾을 수 없습니다.' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: '멤버를 찾을 수 없습니다.' }, { status: 404 })
     }
 
     // 이미 다른 아티스트에 배정되어 있는지 확인
@@ -99,7 +81,7 @@ export async function POST(
         artist_id: artistId,
         artist_role: role,
         is_artist: true,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       })
       .eq('id', memberId)
       .select()
@@ -107,22 +89,18 @@ export async function POST(
 
     if (updateError) {
       console.error('Member update error:', updateError)
-      return NextResponse.json(
-        { error: '아티스트 배정에 실패했습니다.' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: '아티스트 배정에 실패했습니다.' }, { status: 500 })
     }
 
     // 성공 응답
     return NextResponse.json({
       success: true,
       message: `${targetMember.display_name}님이 아티스트로 배정되었습니다.`,
-      member: updatedMember
+      member: updatedMember,
     })
-
   } catch (error) {
     console.error('Admin artist assignment API error:', error)
-    
+
     // Supabase 관련 에러인지 확인
     if (error && typeof error === 'object' && 'message' in error) {
       const errorMessage = (error as { message: string }).message
@@ -133,11 +111,8 @@ export async function POST(
         )
       }
     }
-    
-    return NextResponse.json(
-      { error: '아티스트 배정 중 오류가 발생했습니다.' },
-      { status: 500 }
-    )
+
+    return NextResponse.json({ error: '아티스트 배정 중 오류가 발생했습니다.' }, { status: 500 })
   }
 }
 

@@ -29,7 +29,7 @@ const Footer = ({ globalData }: FooterProps) => {
     siteName: '경기아트콜렉티브 협동조합',
     siteDescription: '경계 없는 상상, 함께 만드는 울림',
     contact: {
-      email: 'contact@gac.coop',
+      email: 'contact@ggac.kr',
       phone: '0507-1384-3144',
       address: '경기도 고양시 덕양구 성사동 719',
     },
@@ -40,7 +40,7 @@ const Footer = ({ globalData }: FooterProps) => {
     businessInfo: {
       establishedDate: '2025-05-01',
       registrationDate: '2025-05-14',
-      registrationNumber: '285051-0001472',
+      registrationNumber: '513-86-03832',
     },
   }
 

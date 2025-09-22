@@ -13,7 +13,7 @@ import type { AdvancedSearchQuery, FilteredResult, FieldDefinition } from '@/typ
 // Rate limiting 설정
 const rateLimiter = applyRateLimit({
   ...RATE_LIMIT_CONFIGS.ADMIN_API,
-  keyGenerator: createUserKeyGenerator('posts_advanced_search')
+  keyGenerator: createUserKeyGenerator('posts_advanced_search'),
 })
 
 // 게시글 필드 정의
@@ -26,7 +26,7 @@ const POST_FIELD_DEFINITIONS: FieldDefinition[] = [
     sortable: true,
     searchable: true,
     operators: ['equals', 'not_equals', 'contains', 'not_contains', 'starts_with', 'ends_with'],
-    defaultOperator: 'contains'
+    defaultOperator: 'contains',
   },
   {
     name: 'content',
@@ -36,7 +36,7 @@ const POST_FIELD_DEFINITIONS: FieldDefinition[] = [
     sortable: false,
     searchable: true,
     operators: ['contains', 'not_contains'],
-    defaultOperator: 'contains'
+    defaultOperator: 'contains',
   },
   {
     name: 'category',
@@ -49,10 +49,10 @@ const POST_FIELD_DEFINITIONS: FieldDefinition[] = [
       { value: '공지', label: '공지사항' },
       { value: '잡담', label: '잡담' },
       { value: '홍보', label: '홍보' },
-      { value: '건의', label: '건의사항' }
+      { value: '건의', label: '건의사항' },
     ],
     operators: ['equals', 'not_equals', 'in', 'not_in'],
-    defaultOperator: 'equals'
+    defaultOperator: 'equals',
   },
   {
     name: 'author_id',
@@ -62,7 +62,7 @@ const POST_FIELD_DEFINITIONS: FieldDefinition[] = [
     sortable: false,
     searchable: false,
     operators: ['equals', 'not_equals', 'in', 'not_in'],
-    defaultOperator: 'equals'
+    defaultOperator: 'equals',
   },
   {
     name: 'created_at',
@@ -72,7 +72,7 @@ const POST_FIELD_DEFINITIONS: FieldDefinition[] = [
     sortable: true,
     searchable: false,
     operators: ['equals', 'greater_than', 'greater_equal', 'less_than', 'less_equal', 'between'],
-    defaultOperator: 'greater_equal'
+    defaultOperator: 'greater_equal',
   },
   {
     name: 'updated_at',
@@ -82,7 +82,7 @@ const POST_FIELD_DEFINITIONS: FieldDefinition[] = [
     sortable: true,
     searchable: false,
     operators: ['equals', 'greater_than', 'greater_equal', 'less_than', 'less_equal', 'between'],
-    defaultOperator: 'greater_equal'
+    defaultOperator: 'greater_equal',
   },
   {
     name: 'is_pinned',
@@ -92,7 +92,7 @@ const POST_FIELD_DEFINITIONS: FieldDefinition[] = [
     sortable: true,
     searchable: false,
     operators: ['equals'],
-    defaultOperator: 'equals'
+    defaultOperator: 'equals',
   },
   {
     name: 'comment_count',
@@ -102,8 +102,8 @@ const POST_FIELD_DEFINITIONS: FieldDefinition[] = [
     sortable: true,
     searchable: false,
     operators: ['equals', 'greater_than', 'greater_equal', 'less_than', 'less_equal', 'between'],
-    defaultOperator: 'greater_equal'
-  }
+    defaultOperator: 'greater_equal',
+  },
 ]
 
 export async function POST(request: NextRequest) {
@@ -114,11 +114,14 @@ export async function POST(request: NextRequest) {
       return rateLimitResult.response
     }
 
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     const supabase = createServerComponentClient({ cookies: () => cookieStore })
-    
+
     // 관리자 권한 확인
-    const { data: { session }, error: authError } = await supabase.auth.getSession()
+    const {
+      data: { session },
+      error: authError,
+    } = await supabase.auth.getSession()
     const user = session?.user
     if (authError || !user) {
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
@@ -140,10 +143,13 @@ export async function POST(request: NextRequest) {
     // 쿼리 검증
     const validation = validateAdvancedSearchQuery(searchQuery, POST_FIELD_DEFINITIONS)
     if (!validation.isValid) {
-      return NextResponse.json({ 
-        error: '잘못된 검색 쿼리입니다.', 
-        details: validation.errors 
-      }, { status: 400 })
+      return NextResponse.json(
+        {
+          error: '잘못된 검색 쿼리입니다.',
+          details: validation.errors,
+        },
+        { status: 400 }
+      )
     }
 
     // 기본값 설정
@@ -152,20 +158,22 @@ export async function POST(request: NextRequest) {
       pagination: {
         page: 1,
         limit: 20,
-        ...searchQuery.pagination
-      }
+        ...searchQuery.pagination,
+      },
     }
 
     // 간단한 필터 추출 (복잡한 조건은 지원하지 않음)
     const simpleFilters: any = {}
     const searchText = query.search?.query || ''
     const searchFields = query.search?.fields || ['title', 'content']
-    
+
     // 기본적인 필터만 추출
     if (query.filters?.conditions) {
       for (const condition of query.filters.conditions) {
-        if (condition.operator === 'equals' && 
-            ['category', 'is_pinned', 'is_deleted'].includes(condition.field)) {
+        if (
+          condition.operator === 'equals' &&
+          ['category', 'is_pinned', 'is_deleted'].includes(condition.field)
+        ) {
           simpleFilters[condition.field] = condition.value
         }
       }
@@ -176,7 +184,9 @@ export async function POST(request: NextRequest) {
     let sortDirection = 'desc'
     if (query.sorts && query.sorts.length > 0) {
       const firstSort = query.sorts[0]
-      if (['title', 'category', 'created_at', 'updated_at', 'comment_count'].includes(firstSort.field)) {
+      if (
+        ['title', 'category', 'created_at', 'updated_at', 'comment_count'].includes(firstSort.field)
+      ) {
         sortField = firstSort.field
         sortDirection = firstSort.direction
       }
@@ -194,13 +204,13 @@ export async function POST(request: NextRequest) {
           p_sort_field: sortField,
           p_sort_direction: sortDirection,
           p_page: page,
-          p_limit: limit
+          p_limit: limit,
         }),
         supabase.rpc('count_posts_advanced', {
           p_filters: simpleFilters,
           p_search_query: searchText,
-          p_search_fields: searchFields
-        })
+          p_search_fields: searchFields,
+        }),
       ])
 
       if (dataResult.error) {
@@ -226,22 +236,23 @@ export async function POST(request: NextRequest) {
           limit,
           total_pages: totalPages,
           has_next: page < totalPages,
-          has_prev: page > 1
+          has_prev: page > 1,
         },
         applied_filters: query.filters || { operator: 'AND', conditions: [] },
-        applied_sorts: query.sorts || []
+        applied_sorts: query.sorts || [],
       }
 
       return NextResponse.json(result)
-
     } catch (queryError) {
       console.error('쿼리 실행 오류:', queryError)
-      return NextResponse.json({ 
-        error: '검색 쿼리 실행 중 오류가 발생했습니다.',
-        details: queryError instanceof Error ? queryError.message : String(queryError)
-      }, { status: 500 })
+      return NextResponse.json(
+        {
+          error: '검색 쿼리 실행 중 오류가 발생했습니다.',
+          details: queryError instanceof Error ? queryError.message : String(queryError),
+        },
+        { status: 500 }
+      )
     }
-
   } catch (error) {
     console.error('고급 검색 API 오류:', error)
     return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
@@ -257,11 +268,14 @@ export async function GET(request: NextRequest) {
       return rateLimitResult.response
     }
 
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     const supabase = createServerComponentClient({ cookies: () => cookieStore })
-    
+
     // 관리자 권한 확인
-    const { data: { session }, error: authError } = await supabase.auth.getSession()
+    const {
+      data: { session },
+      error: authError,
+    } = await supabase.auth.getSession()
     const user = session?.user
     if (authError || !user) {
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
@@ -281,9 +295,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       fields: POST_FIELD_DEFINITIONS,
       target: 'posts',
-      description: '게시글 고급 검색을 위한 필드 정의'
+      description: '게시글 고급 검색을 위한 필드 정의',
     })
-
   } catch (error) {
     console.error('필드 정의 조회 오류:', error)
     return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })

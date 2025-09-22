@@ -10,7 +10,7 @@ export const runtime = 'nodejs'
 // GET: 아티스트 목록 및 배정 정보 조회
 export async function GET(request: NextRequest) {
   try {
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     const supabase = createServerComponentClient({ cookies: () => cookieStore })
 
     // 사용자 인증 확인

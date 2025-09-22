@@ -11,7 +11,7 @@ import { createSuccessResponse, createErrorResponse } from '@/utils/apiResponse'
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const resolvedParams = await context.params
   try {
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     const supabase = createServerComponentClient({ cookies: () => cookieStore })
     const { id } = resolvedParams
 

@@ -11,17 +11,17 @@ export const runtime = 'nodejs'
  */
 export async function GET(request: NextRequest) {
   try {
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     const supabase = createServerComponentClient({ cookies: () => cookieStore })
 
     // 사용자 인증 확인
-    const { data: { session }, error: authError } = await supabase.auth.getSession()
-    
+    const {
+      data: { session },
+      error: authError,
+    } = await supabase.auth.getSession()
+
     if (authError || !session?.user) {
-      return NextResponse.json(
-        { error: '인증이 필요합니다.' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
     // 관리자 권한 확인
@@ -33,17 +33,11 @@ export async function GET(request: NextRequest) {
 
     if (profileError) {
       console.error('Profile fetch error:', profileError)
-      return NextResponse.json(
-        { error: '프로필 정보를 조회할 수 없습니다.' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: '프로필 정보를 조회할 수 없습니다.' }, { status: 500 })
     }
 
     if (!profile.is_admin || profile.registration_status !== 'approved' || !profile.is_active) {
-      return NextResponse.json(
-        { error: '관리자 권한이 필요합니다.' },
-        { status: 403 }
-      )
+      return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 })
     }
 
     // 쿼리 파라미터 추출
@@ -58,7 +52,7 @@ export async function GET(request: NextRequest) {
     console.log('Monthly stats request:', {
       months,
       startDate: startDate.toISOString(),
-      endDate: endDate.toISOString()
+      endDate: endDate.toISOString(),
     })
 
     // 월별 회원 가입 통계
@@ -99,22 +93,25 @@ export async function GET(request: NextRequest) {
     }
 
     // 월별 데이터 그룹화
-    const monthlyData: Record<string, {
-      year: number
-      month: number
-      newMembers: number
-      approvedMembers: number
-      newPosts: number
-      totalActivities: number
-      uniqueActiveUsers: Set<string>
-    }> = {}
+    const monthlyData: Record<
+      string,
+      {
+        year: number
+        month: number
+        newMembers: number
+        approvedMembers: number
+        newPosts: number
+        totalActivities: number
+        uniqueActiveUsers: Set<string>
+      }
+    > = {}
 
     // 지난 N개월 초기화
     for (let i = 0; i < months; i++) {
       const date = new Date()
       date.setMonth(date.getMonth() - i)
       const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-      
+
       monthlyData[key] = {
         year: date.getFullYear(),
         month: date.getMonth() + 1,
@@ -122,7 +119,7 @@ export async function GET(request: NextRequest) {
         approvedMembers: 0,
         newPosts: 0,
         totalActivities: 0,
-        uniqueActiveUsers: new Set()
+        uniqueActiveUsers: new Set(),
       }
     }
 
@@ -130,7 +127,7 @@ export async function GET(request: NextRequest) {
     memberStats?.forEach(member => {
       const date = new Date(member.created_at)
       const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-      
+
       if (monthlyData[key]) {
         monthlyData[key].newMembers++
         if (member.registration_status === 'approved') {
@@ -143,7 +140,7 @@ export async function GET(request: NextRequest) {
     postStats?.forEach(post => {
       const date = new Date(post.created_at)
       const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-      
+
       if (monthlyData[key]) {
         monthlyData[key].newPosts++
       }
@@ -153,7 +150,7 @@ export async function GET(request: NextRequest) {
     activityStats?.forEach(activity => {
       const date = new Date(activity.created_at)
       const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-      
+
       if (monthlyData[key]) {
         monthlyData[key].totalActivities++
         // user_id가 있다면 고유 사용자로 추가 (실제 스키마에 맞게 수정 필요)
@@ -162,9 +159,7 @@ export async function GET(request: NextRequest) {
     })
 
     // 결과 정렬 및 포맷팅
-    const sortedMonths = Object.keys(monthlyData)
-      .sort()
-      .reverse() // 최신 월부터
+    const sortedMonths = Object.keys(monthlyData).sort().reverse() // 최신 월부터
 
     const monthlyStats = sortedMonths.map(key => {
       const data = monthlyData[key]
@@ -177,7 +172,7 @@ export async function GET(request: NextRequest) {
         approvedMembers: data.approvedMembers,
         newPosts: data.newPosts,
         totalActivities: data.totalActivities,
-        activeUsers: data.uniqueActiveUsers.size
+        activeUsers: data.uniqueActiveUsers.size,
       }
     })
 
@@ -190,17 +185,25 @@ export async function GET(request: NextRequest) {
       const percentage = Math.round(((current - previous) / previous) * 100)
       return {
         change: `${percentage >= 0 ? '+' : ''}${percentage}%`,
-        trend: percentage > 5 ? 'up' as const : percentage < -5 ? 'down' as const : 'stable' as const,
-        value: percentage
+        trend:
+          percentage > 5
+            ? ('up' as const)
+            : percentage < -5
+              ? ('down' as const)
+              : ('stable' as const),
+        value: percentage,
       }
     }
 
-    const trends = thisMonth && lastMonth ? {
-      members: calculateTrend(thisMonth.newMembers, lastMonth.newMembers),
-      posts: calculateTrend(thisMonth.newPosts, lastMonth.newPosts),
-      activities: calculateTrend(thisMonth.totalActivities, lastMonth.totalActivities),
-      activeUsers: calculateTrend(thisMonth.activeUsers, lastMonth.activeUsers)
-    } : null
+    const trends =
+      thisMonth && lastMonth
+        ? {
+            members: calculateTrend(thisMonth.newMembers, lastMonth.newMembers),
+            posts: calculateTrend(thisMonth.newPosts, lastMonth.newPosts),
+            activities: calculateTrend(thisMonth.totalActivities, lastMonth.totalActivities),
+            activeUsers: calculateTrend(thisMonth.activeUsers, lastMonth.activeUsers),
+          }
+        : null
 
     return NextResponse.json({
       monthlyStats,
@@ -211,10 +214,9 @@ export async function GET(request: NextRequest) {
         months,
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
-        generatedAt: new Date().toISOString()
-      }
+        generatedAt: new Date().toISOString(),
+      },
     })
-
   } catch (error) {
     console.error('Monthly stats API error:', error)
     return NextResponse.json(

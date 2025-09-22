@@ -9,7 +9,7 @@ export const runtime = 'nodejs'
 // GET: 아티스트 권한 관리 가능한 멤버 목록 조회
 export async function GET(request: NextRequest) {
   try {
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     const supabase = createServerComponentClient({ cookies: () => cookieStore })
 
     // 사용자 인증 확인

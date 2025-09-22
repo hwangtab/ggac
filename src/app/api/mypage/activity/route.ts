@@ -39,23 +39,23 @@ interface ActivityResponse {
 const ActivityQuerySchema = z.object({
   filter: z.enum(['all', 'posts', 'comments', 'profile']).default('all'),
   page: z.coerce.number().min(1).default(1),
-  limit: z.coerce.number().min(1).max(100).default(20)
+  limit: z.coerce.number().min(1).max(100).default(20),
 })
 
 // GET: 현재 사용자의 활동 내역 조회
 export async function GET(request: NextRequest) {
   try {
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     const supabase = createServerComponentClient({ cookies: () => cookieStore })
 
     // 사용자 인증 확인
-    const { data: { session }, error: authError } = await supabase.auth.getSession()
-    
+    const {
+      data: { session },
+      error: authError,
+    } = await supabase.auth.getSession()
+
     if (authError || !session?.user) {
-      return NextResponse.json(
-        { error: '인증이 필요합니다.' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
     // 사용자 프로필 확인 (승인된 멤버인지 체크)
@@ -67,10 +67,7 @@ export async function GET(request: NextRequest) {
 
     if (profileError) {
       console.error('Profile fetch error:', profileError)
-      return NextResponse.json(
-        { error: '프로필 정보를 가져올 수 없습니다.' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: '프로필 정보를 가져올 수 없습니다.' }, { status: 500 })
     }
 
     if (!profile || profile.registration_status !== 'approved' || !profile.is_active) {
@@ -85,7 +82,7 @@ export async function GET(request: NextRequest) {
     const queryResult = ActivityQuerySchema.safeParse({
       filter: searchParams.get('filter'),
       page: searchParams.get('page'),
-      limit: searchParams.get('limit')
+      limit: searchParams.get('limit'),
     })
 
     if (!queryResult.success) {
@@ -124,8 +121,8 @@ export async function GET(request: NextRequest) {
             entityId: post.id,
             createdAt: post.created_at,
             metadata: {
-              category: post.category
-            }
+              category: post.category,
+            },
           })
 
           // 게시글 수정 활동 (생성일과 수정일이 다른 경우)
@@ -137,8 +134,8 @@ export async function GET(request: NextRequest) {
               entityId: post.id,
               createdAt: post.updated_at,
               metadata: {
-                category: post.category
-              }
+                category: post.category,
+              },
             })
           }
         })
@@ -149,7 +146,8 @@ export async function GET(request: NextRequest) {
     if (filter === 'all' || filter === 'comments') {
       const { data: comments, error: commentsError } = await supabase
         .from('comments')
-        .select(`
+        .select(
+          `
           id,
           created_at,
           posts:post_id (
@@ -157,7 +155,8 @@ export async function GET(request: NextRequest) {
             title,
             category
           )
-        `)
+        `
+        )
         .eq('author_id', userId)
         .order('created_at', { ascending: false })
 
@@ -174,8 +173,8 @@ export async function GET(request: NextRequest) {
             metadata: {
               postTitle: post?.title || '알 수 없는 게시글',
               postId: post?.id, // 게시글 ID 추가
-              category: post?.category
-            }
+              category: post?.category,
+            },
           })
         })
       }
@@ -199,16 +198,15 @@ export async function GET(request: NextRequest) {
       currentPage: page,
       totalPages,
       totalCount,
-      hasNext: page < totalPages
+      hasNext: page < totalPages,
     }
 
     const response: ActivityResponse = {
       activities: paginatedActivities,
-      pagination
+      pagination,
     }
 
     return NextResponse.json(response)
-
   } catch (error) {
     console.error('Activity API error:', error)
     return NextResponse.json(
