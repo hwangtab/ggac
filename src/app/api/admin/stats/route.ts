@@ -9,7 +9,7 @@ export const runtime = 'nodejs'
 // GET: 관리자 대시보드 통계 조회
 export async function GET(request: NextRequest) {
   try {
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     const supabase = createServerComponentClient({ cookies: () => cookieStore })
 
     // 사용자 인증 확인

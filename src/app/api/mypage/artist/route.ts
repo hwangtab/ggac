@@ -75,7 +75,7 @@ const ArtistUpdateSchema = z.object({
 // GET: 현재 사용자의 아티스트 정보 조회
 export async function GET(request: NextRequest) {
   try {
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     const supabase = createServerComponentClient({ cookies: () => cookieStore })
 
     // 사용자 인증 확인
@@ -131,7 +131,7 @@ export async function GET(request: NextRequest) {
 // PATCH: 아티스트 정보 업데이트
 export async function PATCH(request: NextRequest) {
   try {
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     const supabase = createServerComponentClient({ cookies: () => cookieStore })
 
     // 사용자 인증 확인

@@ -9,7 +9,7 @@ export const runtime = 'nodejs'
 
 export async function GET(request: NextRequest) {
   try {
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     const supabase = createServerComponentClient({ cookies: () => cookieStore })
 
     // 사용자 인증 확인

@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
       return rateLimitResult.response
     }
 
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     const supabase = createServerComponentClient({ cookies: () => cookieStore })
 
     // 사용자 인증 확인
@@ -385,7 +385,7 @@ export async function POST(request: NextRequest) {
 // GET: 대량 작업 상태 조회
 export async function GET(request: NextRequest) {
   try {
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     const supabase = createServerComponentClient({ cookies: () => cookieStore })
 
     // 사용자 인증 확인

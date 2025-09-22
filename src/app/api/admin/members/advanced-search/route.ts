@@ -212,7 +212,7 @@ export async function POST(request: NextRequest) {
       return rateLimitResult.response
     }
 
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     const supabase = createServerComponentClient({ cookies: () => cookieStore })
 
     // 관리자 권한 확인
@@ -378,7 +378,7 @@ export async function GET(request: NextRequest) {
       return rateLimitResult.response
     }
 
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     const supabase = createServerComponentClient({ cookies: () => cookieStore })
 
     // 관리자 권한 확인

@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
-import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator, addRateLimitHeaders } from '@/utils/rateLimiter'
+import {
+  applyRateLimit,
+  RATE_LIMIT_CONFIGS,
+  createUserKeyGenerator,
+  addRateLimitHeaders,
+} from '@/utils/rateLimiter'
 import { logSecurityEvent } from '@/utils/security'
 
 export const dynamic = 'force-dynamic'
@@ -31,25 +36,25 @@ export async function GET(request: NextRequest) {
     // Rate limiting 적용
     const rateLimiter = applyRateLimit({
       ...RATE_LIMIT_CONFIGS.ADMIN_API,
-      keyGenerator: createUserKeyGenerator('admin_settings_backup')
+      keyGenerator: createUserKeyGenerator('admin_settings_backup'),
     })
-    
+
     const rateLimitResult = rateLimiter(request)
     if (!rateLimitResult.success && rateLimitResult.response) {
       return rateLimitResult.response
     }
 
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     const supabase = createServerComponentClient({ cookies: () => cookieStore })
 
     // 사용자 인증 및 관리자 권한 확인
-    const { data: { session }, error: authError } = await supabase.auth.getSession()
-    
+    const {
+      data: { session },
+      error: authError,
+    } = await supabase.auth.getSession()
+
     if (authError || !session?.user) {
-      return NextResponse.json(
-        { error: '인증이 필요합니다.' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
     console.log('[DEBUG] Backup API: Checking admin permission for user:', session.user.id)
@@ -63,21 +68,23 @@ export async function GET(request: NextRequest) {
 
     // 모든 시스템 설정 조회 (민감한 정보 포함)
     console.log('[DEBUG] Backup API: Calling get_system_settings function')
-    const { data: initialSettingsData, error: settingsError } = await supabase
-      .rpc('get_system_settings', { include_sensitive: true })
+    const { data: initialSettingsData, error: settingsError } = await supabase.rpc(
+      'get_system_settings',
+      { include_sensitive: true }
+    )
 
     let settingsData = initialSettingsData
 
-    console.log('[DEBUG] Backup API: get_system_settings result:', { 
-      hasData: !!settingsData, 
-      dataLength: settingsData?.length || 0, 
-      error: settingsError 
+    console.log('[DEBUG] Backup API: get_system_settings result:', {
+      hasData: !!settingsData,
+      dataLength: settingsData?.length || 0,
+      error: settingsError,
     })
 
     if (settingsError) {
       console.error('Settings backup error:', settingsError)
       console.error('Error details:', JSON.stringify(settingsError, null, 2))
-      
+
       // 폴백: 직접 테이블 쿼리 시도
       console.log('[DEBUG] Backup API: Attempting fallback with direct table query')
       try {
@@ -86,17 +93,22 @@ export async function GET(request: NextRequest) {
           .select('category, setting_key, setting_value, description, is_sensitive, updated_at')
           .order('category')
           .order('setting_key')
-        
+
         if (fallbackError) {
           console.error('[DEBUG] Backup API: Fallback query also failed:', fallbackError)
           throw new Error(`백업을 위한 설정 테이블 조회 실패: ${fallbackError.message}`)
         }
-        
-        console.log('[DEBUG] Backup API: Fallback query succeeded, data length:', fallbackData?.length || 0)
+
+        console.log(
+          '[DEBUG] Backup API: Fallback query succeeded, data length:',
+          fallbackData?.length || 0
+        )
         settingsData = fallbackData
       } catch (fallbackErr) {
         console.error('[DEBUG] Backup API: Fallback mechanism failed:', fallbackErr)
-        throw new Error(`백업을 위한 설정을 조회할 수 없습니다: ${settingsError.message || settingsError.code}`)
+        throw new Error(
+          `백업을 위한 설정을 조회할 수 없습니다: ${settingsError.message || settingsError.code}`
+        )
       }
     }
 
@@ -106,25 +118,29 @@ export async function GET(request: NextRequest) {
         created_at: new Date().toISOString(),
         created_by: session.user.id,
         version: '1.0',
-        description: '시스템 설정 백업 파일'
+        description: '시스템 설정 백업 파일',
       },
-      settings: settingsData || []
+      settings: settingsData || [],
     }
 
     // 보안 이벤트 로깅
-    logSecurityEvent('ADMIN_SETTINGS_BACKUP_CREATED', {
-      adminId: session.user.id,
-      settingsCount: settingsData?.length || 0
-    }, 'medium')
+    logSecurityEvent(
+      'ADMIN_SETTINGS_BACKUP_CREATED',
+      {
+        adminId: session.user.id,
+        settingsCount: settingsData?.length || 0,
+      },
+      'medium'
+    )
 
     const response = new NextResponse(JSON.stringify(backupData, null, 2), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
-        'Content-Disposition': `attachment; filename="ggac-settings-backup-${new Date().toISOString().split('T')[0]}.json"`
-      }
+        'Content-Disposition': `attachment; filename="ggac-settings-backup-${new Date().toISOString().split('T')[0]}.json"`,
+      },
     })
-    
+
     // Rate limit 헤더 추가
     return addRateLimitHeaders(
       response,
@@ -132,13 +148,16 @@ export async function GET(request: NextRequest) {
       rateLimitResult.remaining,
       rateLimitResult.resetTime
     )
-
   } catch (error) {
     console.error('Admin settings backup error:', error)
-    logSecurityEvent('ADMIN_SETTINGS_BACKUP_ERROR', { 
-      error: error instanceof Error ? error.message : 'Unknown error'
-    }, 'high')
-    
+    logSecurityEvent(
+      'ADMIN_SETTINGS_BACKUP_ERROR',
+      {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      },
+      'high'
+    )
+
     return NextResponse.json(
       { error: error instanceof Error ? error.message : '설정 백업 중 오류가 발생했습니다.' },
       { status: error instanceof Error && error.message.includes('권한') ? 403 : 500 }
@@ -153,48 +172,42 @@ export async function POST(request: NextRequest) {
     const rateLimiter = applyRateLimit({
       maxRequests: 3, // 복원은 더 제한적으로
       windowMs: 60 * 60 * 1000, // 1시간
-      keyGenerator: createUserKeyGenerator('admin_settings_restore')
+      keyGenerator: createUserKeyGenerator('admin_settings_restore'),
     })
-    
+
     const rateLimitResult = rateLimiter(request)
     if (!rateLimitResult.success && rateLimitResult.response) {
       return rateLimitResult.response
     }
 
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     const supabase = createServerComponentClient({ cookies: () => cookieStore })
 
     // 사용자 인증 및 관리자 권한 확인
-    const { data: { session }, error: authError } = await supabase.auth.getSession()
-    
+    const {
+      data: { session },
+      error: authError,
+    } = await supabase.auth.getSession()
+
     if (authError || !session?.user) {
-      return NextResponse.json(
-        { error: '인증이 필요합니다.' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
     await checkAdminPermission(supabase, session.user.id)
 
     // 요청 데이터 파싱
     const requestData = await request.json()
-    
+
     // 백업 파일 유효성 검사
     if (!requestData || !requestData.settings || !Array.isArray(requestData.settings)) {
-      return NextResponse.json(
-        { error: '유효하지 않은 백업 파일입니다.' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: '유효하지 않은 백업 파일입니다.' }, { status: 400 })
     }
 
     const { settings: backupSettings, metadata } = requestData
 
     // 백업 파일 메타데이터 검증
     if (metadata?.version !== '1.0') {
-      return NextResponse.json(
-        { error: '지원하지 않는 백업 파일 버전입니다.' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: '지원하지 않는 백업 파일 버전입니다.' }, { status: 400 })
     }
 
     // 설정 복원 실행
@@ -212,12 +225,11 @@ export async function POST(request: NextRequest) {
         }
 
         // 데이터베이스 업데이트
-        const { error: updateError } = await supabase
-          .rpc('update_system_setting', {
-            p_category: category,
-            p_setting_key: setting_key,
-            p_setting_value: setting_value
-          })
+        const { error: updateError } = await supabase.rpc('update_system_setting', {
+          p_category: category,
+          p_setting_key: setting_key,
+          p_setting_value: setting_value,
+        })
 
         if (updateError) {
           console.error(`Setting restore error for ${category}.${setting_key}:`, updateError)
@@ -232,25 +244,30 @@ export async function POST(request: NextRequest) {
     }
 
     // 보안 이벤트 로깅
-    logSecurityEvent('ADMIN_SETTINGS_RESTORED', {
-      adminId: session.user.id,
-      restored: restoreResults,
-      errors: errorResults,
-      backupMetadata: metadata
-    }, 'high') // 복원은 높은 보안 등급
+    logSecurityEvent(
+      'ADMIN_SETTINGS_RESTORED',
+      {
+        adminId: session.user.id,
+        restored: restoreResults,
+        errors: errorResults,
+        backupMetadata: metadata,
+      },
+      'high'
+    ) // 복원은 높은 보안 등급
 
     const response = NextResponse.json({
       success: errorResults.length === 0,
-      message: errorResults.length === 0 
-        ? '설정이 성공적으로 복원되었습니다.'
-        : `일부 설정 복원에 실패했습니다. 성공: ${restoreResults.length}, 실패: ${errorResults.length}`,
+      message:
+        errorResults.length === 0
+          ? '설정이 성공적으로 복원되었습니다.'
+          : `일부 설정 복원에 실패했습니다. 성공: ${restoreResults.length}, 실패: ${errorResults.length}`,
       details: {
         restored: restoreResults,
         errors: errorResults,
-        backupInfo: metadata
-      }
+        backupInfo: metadata,
+      },
     })
-    
+
     // Rate limit 헤더 추가
     return addRateLimitHeaders(
       response,
@@ -258,13 +275,16 @@ export async function POST(request: NextRequest) {
       rateLimitResult.remaining,
       rateLimitResult.resetTime
     )
-
   } catch (error) {
     console.error('Admin settings restore error:', error)
-    logSecurityEvent('ADMIN_SETTINGS_RESTORE_ERROR', { 
-      error: error instanceof Error ? error.message : 'Unknown error'
-    }, 'high')
-    
+    logSecurityEvent(
+      'ADMIN_SETTINGS_RESTORE_ERROR',
+      {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      },
+      'high'
+    )
+
     return NextResponse.json(
       { error: error instanceof Error ? error.message : '설정 복원 중 오류가 발생했습니다.' },
       { status: error instanceof Error && error.message.includes('권한') ? 403 : 500 }
