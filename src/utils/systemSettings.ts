@@ -112,11 +112,11 @@ function getDefaultSettings(): SystemSettingsData {
       site_title: { value: '경기아트콜렉티브' },
       site_description: { value: '경계 없는 상상, 함께 만드는 울림' },
       max_members: { value: 1000, current_count: 0 },
-      contact_info: { 
-        email: 'contact@ggac.kr', 
-        phone: '0507-1384-3144', 
-        address: '경기도 고양시 덕양구 성사동 719' 
-      }
+      contact_info: {
+        email: 'contact@ggac.kr',
+        phone: '0507-1384-3144',
+        address: '경기도 고양시 덕양구 성사동 719',
+      },
     },
     email: {
       smtp_config: {
@@ -126,29 +126,29 @@ function getDefaultSettings(): SystemSettingsData {
         user: '',
         password: '',
         from_email: 'noreply@ggac.kr',
-        from_name: '경기아트콜렉티브'
+        from_name: '경기아트콜렉티브',
       },
       email_templates: {
         welcome: { subject: '환영합니다', enabled: true },
         approval: { subject: '가입이 승인되었습니다', enabled: true },
-        rejection: { subject: '가입이 거부되었습니다', enabled: true }
+        rejection: { subject: '가입이 거부되었습니다', enabled: true },
       },
       notification_settings: {
         admin_notifications: true,
         member_notifications: true,
-        system_notifications: true
-      }
+        system_notifications: true,
+      },
     },
     security: {
       session_config: {
         timeout_minutes: 480,
         max_concurrent_sessions: 3,
-        require_reauth_for_sensitive: true
+        require_reauth_for_sensitive: true,
       },
       login_policy: {
         max_attempts: 5,
         lockout_duration_minutes: 15,
-        require_strong_password: true
+        require_strong_password: true,
       },
       password_policy: {
         min_length: 8,
@@ -156,52 +156,52 @@ function getDefaultSettings(): SystemSettingsData {
         require_lowercase: true,
         require_numbers: true,
         require_special: true,
-        history_count: 5
+        history_count: 5,
       },
       email_verification: {
         required: false,
         token_expiry_hours: 24,
-        resend_limit: 3
+        resend_limit: 3,
       },
       rate_limiting: {
         api_requests_per_minute: 60,
         login_attempts_per_hour: 10,
-        registration_per_day: 50
-      }
+        registration_per_day: 50,
+      },
     },
     features: {
       board_features: {
         enabled: true,
         categories: ['공지', '잡담', '홍보', '건의'],
         allow_anonymous: false,
-        moderation_enabled: true
+        moderation_enabled: true,
       },
       artist_features: {
         registration_enabled: true,
         portfolio_upload: true,
         public_profile: true,
-        collaboration_requests: true
+        collaboration_requests: true,
       },
       comment_features: {
         enabled: true,
         nested_replies: true,
         max_depth: 3,
         moderation_enabled: true,
-        allow_editing: true
+        allow_editing: true,
       },
       file_upload: {
         enabled: true,
         max_size_mb: 50,
         allowed_types: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'docx'],
-        virus_scan: false
+        virus_scan: false,
       },
       social_features: {
         likes_enabled: true,
         sharing_enabled: true,
         follow_system: false,
-        activity_feed: true
-      }
-    }
+        activity_feed: true,
+      },
+    },
   }
 }
 
@@ -213,15 +213,16 @@ function getDefaultSettings(): SystemSettingsData {
 export async function getSystemSettings(forceRefresh = false): Promise<SystemSettingsData | null> {
   try {
     // 캐시 확인
-    if (!forceRefresh && cachedSettings && (Date.now() - cacheTimestamp) < CACHE_DURATION) {
+    if (!forceRefresh && cachedSettings && Date.now() - cacheTimestamp < CACHE_DURATION) {
       return cachedSettings
     }
 
-    const cookieStore = cookies()
-    const supabase = createServerComponentClient({ cookies: () => cookieStore })
+    const cookieStore = await cookies()
+    const supabase = createServerComponentClient({ cookies: () => cookieStore as any })
 
-    const { data: settingsData, error } = await supabase
-      .rpc('get_system_settings', { include_sensitive: false })
+    const { data: settingsData, error } = await supabase.rpc('get_system_settings', {
+      include_sensitive: false,
+    })
 
     if (error) {
       console.error('Failed to fetch system settings:', error)
@@ -234,7 +235,7 @@ export async function getSystemSettings(forceRefresh = false): Promise<SystemSet
       site: {} as any,
       email: {} as any,
       security: {} as any,
-      features: {} as any
+      features: {} as any,
     }
 
     for (const row of settingsData || []) {
@@ -246,7 +247,7 @@ export async function getSystemSettings(forceRefresh = false): Promise<SystemSet
         settings[category] = {} as any
       }
 
-      (settings[category] as any)[settingKey] = settingValue
+      ;(settings[category] as any)[settingKey] = settingValue
     }
 
     // 캐시 업데이트
@@ -271,14 +272,17 @@ export async function isMaintenanceMode(): Promise<{ enabled: boolean; message?:
 
   return {
     enabled: settings.site.maintenance_mode.enabled,
-    message: settings.site.maintenance_mode.message
+    message: settings.site.maintenance_mode.message,
   }
 }
 
 /**
  * 회원 가입이 허용되는지 확인합니다
  */
-export async function isRegistrationEnabled(): Promise<{ enabled: boolean; require_approval?: boolean }> {
+export async function isRegistrationEnabled(): Promise<{
+  enabled: boolean
+  require_approval?: boolean
+}> {
   const settings = await getSystemSettings()
   if (!settings?.site?.registration_enabled) {
     return { enabled: true, require_approval: true }
@@ -286,25 +290,29 @@ export async function isRegistrationEnabled(): Promise<{ enabled: boolean; requi
 
   return {
     enabled: settings.site.registration_enabled.enabled,
-    require_approval: settings.site.registration_enabled.require_approval
+    require_approval: settings.site.registration_enabled.require_approval,
   }
 }
 
 /**
  * 최대 회원 수에 도달했는지 확인합니다
  */
-export async function isMaxMembersReached(): Promise<{ reached: boolean; current: number; max: number }> {
+export async function isMaxMembersReached(): Promise<{
+  reached: boolean
+  current: number
+  max: number
+}> {
   const settings = await getSystemSettings()
   if (!settings?.site?.max_members) {
     return { reached: false, current: 0, max: 1000 }
   }
 
   const { value: maxMembers, current_count: currentCount } = settings.site.max_members
-  
+
   return {
     reached: currentCount >= maxMembers,
     current: currentCount,
-    max: maxMembers
+    max: maxMembers,
   }
 }
 
@@ -330,7 +338,7 @@ export async function getSecurityPolicies() {
     login: settings.security.login_policy,
     password: settings.security.password_policy,
     emailVerification: settings.security.email_verification,
-    rateLimiting: settings.security.rate_limiting
+    rateLimiting: settings.security.rate_limiting,
   }
 }
 
@@ -348,14 +356,16 @@ export async function getFeatureFlags() {
     artist: settings.features.artist_features,
     comments: settings.features.comment_features,
     fileUpload: settings.features.file_upload,
-    social: settings.features.social_features
+    social: settings.features.social_features,
   }
 }
 
 /**
  * 특정 기능이 활성화되어 있는지 확인합니다
  */
-export async function isFeatureEnabled(feature: 'board' | 'artist_registration' | 'comments' | 'file_upload'): Promise<boolean> {
+export async function isFeatureEnabled(
+  feature: 'board' | 'artist_registration' | 'comments' | 'file_upload'
+): Promise<boolean> {
   const features = await getFeatureFlags()
   if (!features) {
     return true // 기본값으로 활성화
@@ -395,8 +405,8 @@ export async function getSiteInfo() {
       contact: {
         email: 'contact@ggac.kr',
         phone: '0507-1384-3144',
-        address: '경기도 고양시 덕양구 성사동 719'
-      }
+        address: '경기도 고양시 덕양구 성사동 719',
+      },
     }
   }
 
@@ -406,7 +416,7 @@ export async function getSiteInfo() {
     contact: settings.site.contact_info || {
       email: 'contact@ggac.kr',
       phone: '0507-1384-3144',
-      address: '경기도 고양시 덕양구 성사동 719'
-    }
+      address: '경기도 고양시 덕양구 성사동 719',
+    },
   }
 }
