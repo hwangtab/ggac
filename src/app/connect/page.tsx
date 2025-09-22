@@ -254,12 +254,14 @@ const ConnectPage = async () => {
               </div>
 
               <div className="text-center">
-                <Link
-                  href="/signup"
+                <a
+                  href="https://docs.google.com/forms/d/e/1FAIpQLScicp159Y6DgYJv2N-x4DGigsLWiOCLf6jl-meRSfXfuMahAQ/viewform?usp=header"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="btn-primary text-lg px-8 py-4 sm:px-8 sm:py-3 rounded-lg w-full sm:w-auto text-center min-h-[44px] hover:-translate-y-0.5 hover:shadow-lg transition-all duration-300"
                 >
                   동료 되기 (조합원 가입하기)
-                </Link>
+                </a>
               </div>
             </div>
           </div>
@@ -276,7 +278,7 @@ const ConnectPage = async () => {
               </p>
 
               <a
-                href={globalData.supportFormUrl}
+                href="https://docs.google.com/forms/d/e/1FAIpQLScicp159Y6DgYJv2N-x4DGigsLWiOCLf6jl-meRSfXfuMahAQ/viewform?usp=header"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn-secondary text-lg px-8 py-4 sm:px-8 sm:py-3 rounded-lg w-full sm:w-auto text-center min-h-[44px] hover:-translate-y-0.5 hover:shadow-lg transition-all duration-300"
