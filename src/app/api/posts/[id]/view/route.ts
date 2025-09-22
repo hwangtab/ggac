@@ -14,37 +14,40 @@ import { validateUUID } from '@/utils/validation'
  * 게시글 조회수 증가 API
  * POST /api/posts/[id]/view
  */
-export async function POST(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
-  const resolvedParams = await context.params;
+export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await context.params
   try {
-    const postId = resolvedParams.id;
-    
+    const postId = resolvedParams.id
+
     // UUID 형식 검증
-    const uuidValidation = validateUUID(postId, '게시글 ID');
+    const uuidValidation = validateUUID(postId, '게시글 ID')
     if (!uuidValidation.isValid) {
-      console.log('[API] VIEW UUID 검증 실패:', uuidValidation.errors);
-      return NextResponse.json({ 
-        error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.' 
-      }, { status: 400 });
+      console.log('[API] VIEW UUID 검증 실패:', uuidValidation.errors)
+      return NextResponse.json(
+        {
+          error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.',
+        },
+        { status: 400 }
+      )
     }
-    
+
     // Rate limiting 적용
     const rateLimiter = applyRateLimit(RATE_LIMIT_CONFIGS.GENERAL_API)
     const rateLimitResult = rateLimiter(request)
-    
+
     if (!rateLimitResult.success) {
       return rateLimitResult.response!
     }
 
-    const validPostId = uuidValidation.sanitized;
+    const validPostId = uuidValidation.sanitized
 
-    const supabase = createRouteHandlerClient({ cookies })
+    const cookieStore = await cookies()
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
 
     // 사용자 세션 확인 (선택사항 - 비로그인 사용자도 조회 가능)
-    const { data: { session } } = await supabase.auth.getSession()
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
     const userId = session?.user?.id
 
     // Service Role 클라이언트 생성 (view count 업데이트용)
@@ -54,16 +57,12 @@ export async function POST(
       return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
     }
 
-    const serviceSupabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      serviceRoleKey,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      }
-    )
+    const serviceSupabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    })
 
     // 게시글 존재 여부 및 작성자 확인
     const { data: post, error: postError } = await serviceSupabase
@@ -79,32 +78,35 @@ export async function POST(
 
     // 작성자 본인은 조회수 증가시키지 않음
     if (userId && post.author_id === userId) {
-      return NextResponse.json({ 
-        success: true, 
+      return NextResponse.json({
+        success: true,
         view_count: post.view_count,
-        message: 'Author view - count not incremented'
+        message: 'Author view - count not incremented',
       })
     }
 
     // 중복 조회 방지를 위한 세션 체크
     const viewSessionKey = `post_view_${validPostId}`
     const lastViewTime = request.headers.get('x-last-view-time')
-    
+
     // 최근 10분 내 같은 게시글을 본 경우 조회수 증가하지 않음
     if (lastViewTime) {
       const timeDiff = Date.now() - parseInt(lastViewTime)
-      if (timeDiff < 10 * 60 * 1000) { // 10분
-        return NextResponse.json({ 
-          success: true, 
+      if (timeDiff < 10 * 60 * 1000) {
+        // 10분
+        return NextResponse.json({
+          success: true,
           view_count: post.view_count,
-          message: 'Recent view - count not incremented'
+          message: 'Recent view - count not incremented',
         })
       }
     }
 
     // 조회수 증가 (데이터베이스 함수 사용)
-    const { data: result, error: incrementError } = await serviceSupabase
-      .rpc('increment_post_view_count', { post_uuid: validPostId })
+    const { data: result, error: incrementError } = await serviceSupabase.rpc(
+      'increment_post_view_count',
+      { post_uuid: validPostId }
+    )
 
     if (incrementError) {
       console.error('조회수 증가 오류:', incrementError)
@@ -116,18 +118,16 @@ export async function POST(
     // 활동 로그 기록 (로그인한 사용자만)
     if (userId) {
       try {
-        await serviceSupabase
-          .from('user_activities')
-          .insert({
-            user_id: userId,
-            action_type: 'page_viewed',
-            target_type: 'post',
-            target_id: validPostId,
-            details: {
-              post_title: post.title,
-              view_count: newViewCount
-            }
-          })
+        await serviceSupabase.from('user_activities').insert({
+          user_id: userId,
+          action_type: 'page_viewed',
+          target_type: 'post',
+          target_id: validPostId,
+          details: {
+            post_title: post.title,
+            view_count: newViewCount,
+          },
+        })
       } catch (activityError) {
         // 활동 로그 실패는 조회수 증가를 막지 않음
         console.warn('활동 로그 기록 실패:', activityError)
@@ -138,19 +138,15 @@ export async function POST(
     const response = NextResponse.json({
       success: true,
       view_count: newViewCount,
-      message: 'View count incremented'
+      message: 'View count incremented',
     })
 
     response.headers.set('x-view-time', Date.now().toString())
 
     return response
-
   } catch (error) {
     console.error('게시글 조회 추적 오류:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
@@ -158,26 +154,27 @@ export async function POST(
  * 게시글 조회수 조회 API
  * GET /api/posts/[id]/view
  */
-export async function GET(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
-  const resolvedParams = await context.params;
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await context.params
   try {
-    const postId = resolvedParams.id;
-    
-    // UUID 형식 검증
-    const uuidValidation = validateUUID(postId, '게시글 ID');
-    if (!uuidValidation.isValid) {
-      console.log('[API] VIEW GET UUID 검증 실패:', uuidValidation.errors);
-      return NextResponse.json({ 
-        error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.' 
-      }, { status: 400 });
-    }
-    
-    const validPostId = uuidValidation.sanitized;
+    const postId = resolvedParams.id
 
-    const supabase = createRouteHandlerClient({ cookies })
+    // UUID 형식 검증
+    const uuidValidation = validateUUID(postId, '게시글 ID')
+    if (!uuidValidation.isValid) {
+      console.log('[API] VIEW GET UUID 검증 실패:', uuidValidation.errors)
+      return NextResponse.json(
+        {
+          error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.',
+        },
+        { status: 400 }
+      )
+    }
+
+    const validPostId = uuidValidation.sanitized
+
+    const cookieStore = await cookies()
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
 
     // 게시글 조회수 조회
     const { data: post, error } = await supabase
@@ -193,14 +190,10 @@ export async function GET(
 
     return NextResponse.json({
       success: true,
-      view_count: post.view_count || 0
+      view_count: post.view_count || 0,
     })
-
   } catch (error) {
     console.error('게시글 조회수 조회 오류:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

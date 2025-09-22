@@ -179,7 +179,8 @@ async function uploadImageWithVariants(
  */
 export async function PUT(request: NextRequest) {
   try {
-    const supabase = createRouteHandlerClient({ cookies })
+    const cookieStore = await cookies()
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
     let supabaseAdmin: AdminClient
     try {
       supabaseAdmin = getSupabaseAdmin()
@@ -446,7 +447,8 @@ export async function PUT(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
-    const supabase = createRouteHandlerClient({ cookies })
+    const cookieStore = await cookies()
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
     let supabaseAdmin: AdminClient
     try {
       supabaseAdmin = getSupabaseAdmin()
@@ -588,7 +590,8 @@ export async function DELETE(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createRouteHandlerClient({ cookies })
+    const cookieStore = await cookies()
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
 
     // 사용자 인증 확인
     const {

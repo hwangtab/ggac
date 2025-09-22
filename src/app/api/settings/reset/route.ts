@@ -12,16 +12,16 @@ export async function POST(request: NextRequest) {
     // Rate limiting 적용
     const rateLimitResult = await rateLimit(request, 'GENERAL_API')
     if (!rateLimitResult.success) {
-      return NextResponse.json(
-        { error: 'Too many requests' },
-        { status: 429 }
-      )
+      return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
     }
 
-    const supabase = createRouteHandlerClient({ cookies })
+    const cookieStore = await cookies()
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
 
     // 인증 확인
-    const { data: { session } } = await supabase.auth.getSession()
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     // 설정 초기화 (기본값으로 복원)
     const { data: deletedCount, error } = await supabase.rpc('reset_user_settings', {
       p_category: category || null,
-      p_setting_key: setting_key || null
+      p_setting_key: setting_key || null,
     })
 
     if (error) {
@@ -55,14 +55,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       deleted_count: deletedCount,
-      message
+      message,
     })
-
   } catch (error) {
     console.error('Settings reset API error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

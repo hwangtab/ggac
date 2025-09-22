@@ -8,16 +8,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator } from '@/utils/rateLimiter'
-import type { 
-  NotificationListResponse, 
-  CreateNotificationRequest, 
-  Notification 
-} from '@/types'
+import type { NotificationListResponse, CreateNotificationRequest, Notification } from '@/types'
 
 // Rate limiting 설정
 const rateLimiter = applyRateLimit({
   ...RATE_LIMIT_CONFIGS.GENERAL_API,
-  keyGenerator: createUserKeyGenerator('notifications')
+  keyGenerator: createUserKeyGenerator('notifications'),
 })
 
 export async function GET(request: NextRequest) {
@@ -28,10 +24,14 @@ export async function GET(request: NextRequest) {
       return rateLimitResult.response
     }
 
-    const supabase = createRouteHandlerClient({ cookies })
-    
+    const cookieStore = await cookies()
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
+
     // 사용자 인증 확인
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser()
     if (authError || !user) {
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(50, Math.max(10, parseInt(searchParams.get('limit') || '20')))
     const type = searchParams.get('type')
     const unread_only = searchParams.get('unread_only') === 'true'
-    
+
     // 입력 검증
     if (type && (typeof type !== 'string' || type.length > 50)) {
       return NextResponse.json({ error: '잘못된 타입 파라미터입니다.' }, { status: 400 })
@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
     if (type) {
       query = query.eq('type', type)
     }
-    
+
     if (unread_only) {
       query = query.is('read_at', null)
     }
@@ -95,12 +95,11 @@ export async function GET(request: NextRequest) {
         limit,
         total_pages: totalPages,
         has_next: page < totalPages,
-        has_prev: page > 1
-      }
+        has_prev: page > 1,
+      },
     }
 
     return NextResponse.json(response)
-
   } catch (error) {
     console.error('알림 API 오류:', error)
     return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
@@ -112,18 +111,22 @@ export async function POST(request: NextRequest) {
     // Rate limiting 적용 (더 엄격한 제한)
     const adminRateLimiter = applyRateLimit({
       ...RATE_LIMIT_CONFIGS.ADMIN_API,
-      keyGenerator: createUserKeyGenerator('create_notification')
+      keyGenerator: createUserKeyGenerator('create_notification'),
     })
-    
+
     const rateLimitResult = adminRateLimiter(request)
     if (!rateLimitResult.success) {
       return rateLimitResult.response
     }
 
-    const supabase = createRouteHandlerClient({ cookies })
-    
+    const cookieStore = await cookies()
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
+
     // 관리자 권한 확인
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser()
     if (authError || !user) {
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
@@ -158,11 +161,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '메시지가 유효하지 않습니다.' }, { status: 400 })
     }
 
-    if (body.related_post_id && (typeof body.related_post_id !== 'string' || body.related_post_id.length > 100)) {
+    if (
+      body.related_post_id &&
+      (typeof body.related_post_id !== 'string' || body.related_post_id.length > 100)
+    ) {
       return NextResponse.json({ error: '관련 게시글 ID가 유효하지 않습니다.' }, { status: 400 })
     }
 
-    if (body.related_user_id && (typeof body.related_user_id !== 'string' || body.related_user_id.length > 100)) {
+    if (
+      body.related_user_id &&
+      (typeof body.related_user_id !== 'string' || body.related_user_id.length > 100)
+    ) {
       return NextResponse.json({ error: '관련 사용자 ID가 유효하지 않습니다.' }, { status: 400 })
     }
 
@@ -175,7 +184,7 @@ export async function POST(request: NextRequest) {
       p_data: body.data || {},
       p_related_post_id: body.related_post_id || null,
       p_related_user_id: body.related_user_id || null,
-      p_expires_at: body.expires_at || null
+      p_expires_at: body.expires_at || null,
     })
 
     if (error) {
@@ -183,12 +192,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '알림을 생성할 수 없습니다.' }, { status: 500 })
     }
 
-    return NextResponse.json({ 
-      success: true, 
+    return NextResponse.json({
+      success: true,
       notification_id: notification,
-      message: '알림이 성공적으로 생성되었습니다.' 
+      message: '알림이 성공적으로 생성되었습니다.',
     })
-
   } catch (error) {
     console.error('알림 생성 API 오류:', error)
     return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })

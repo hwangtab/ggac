@@ -19,10 +19,13 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const supabase = createRouteHandlerClient({ cookies })
+    const cookieStore = await cookies()
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
 
     // 인증 확인
-    const { data: { session } } = await supabase.auth.getSession()
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
     if (!session) {
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
@@ -33,61 +36,51 @@ export async function GET(request: NextRequest) {
 
     // 사용자 설정 조회 (기본값 포함)
     let query = supabase.rpc('get_user_settings')
-    
+
     if (category) {
       // 카테고리별 필터링은 클라이언트에서 처리 (RPC 함수 한계)
       const { data: allSettings, error } = await query
-      
+
       if (error) {
         console.error('Settings fetch error:', error)
-        return NextResponse.json(
-          { error: 'Failed to fetch settings' },
-          { status: 500 }
-        )
+        return NextResponse.json({ error: 'Failed to fetch settings' }, { status: 500 })
       }
 
-      const filteredSettings = allSettings?.filter((setting: any) => 
-        setting.category === category
-      ) || []
+      const filteredSettings =
+        allSettings?.filter((setting: any) => setting.category === category) || []
 
       return NextResponse.json({
         success: true,
         settings: filteredSettings,
-        category: category
+        category: category,
       })
     } else {
       const { data: settings, error } = await query
 
       if (error) {
         console.error('Settings fetch error:', error)
-        return NextResponse.json(
-          { error: 'Failed to fetch settings' },
-          { status: 500 }
-        )
+        return NextResponse.json({ error: 'Failed to fetch settings' }, { status: 500 })
       }
 
       // 카테고리별로 그룹화
-      const groupedSettings = settings?.reduce((acc: any, setting: any) => {
-        if (!acc[setting.category]) {
-          acc[setting.category] = []
-        }
-        acc[setting.category].push(setting)
-        return acc
-      }, {}) || {}
+      const groupedSettings =
+        settings?.reduce((acc: any, setting: any) => {
+          if (!acc[setting.category]) {
+            acc[setting.category] = []
+          }
+          acc[setting.category].push(setting)
+          return acc
+        }, {}) || {}
 
       return NextResponse.json({
         success: true,
         settings: groupedSettings,
-        total: settings?.length || 0
+        total: settings?.length || 0,
       })
     }
-
   } catch (error) {
     console.error('Settings API error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
@@ -107,10 +100,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const supabase = createRouteHandlerClient({ cookies })
+    const cookieStore = await cookies()
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
 
     // 인증 확인
-    const { data: { session } } = await supabase.auth.getSession()
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
     if (!session) {
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
@@ -130,7 +126,7 @@ export async function POST(request: NextRequest) {
     const { data: settingId, error } = await supabase.rpc('upsert_user_setting', {
       p_category: category,
       p_setting_key: setting_key,
-      p_setting_value: setting_value
+      p_setting_value: setting_value,
     })
 
     if (error) {
@@ -144,15 +140,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       setting_id: settingId,
-      message: 'Setting updated successfully'
+      message: 'Setting updated successfully',
     })
-
   } catch (error) {
     console.error('Settings update API error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
@@ -172,10 +164,13 @@ export async function PUT(request: NextRequest) {
       )
     }
 
-    const supabase = createRouteHandlerClient({ cookies })
+    const cookieStore = await cookies()
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
 
     // 인증 확인
-    const { data: { session } } = await supabase.auth.getSession()
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
     if (!session) {
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
@@ -185,10 +180,7 @@ export async function PUT(request: NextRequest) {
 
     // 입력 유효성 검사
     if (!Array.isArray(settings) || settings.length === 0) {
-      return NextResponse.json(
-        { error: 'Settings must be a non-empty array' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Settings must be a non-empty array' }, { status: 400 })
     }
 
     const results = []
@@ -204,7 +196,7 @@ export async function PUT(request: NextRequest) {
           category,
           setting_key,
           success: false,
-          error: 'Missing required fields'
+          error: 'Missing required fields',
         })
         errorCount++
         continue
@@ -214,7 +206,7 @@ export async function PUT(request: NextRequest) {
         const { data: settingId, error } = await supabase.rpc('upsert_user_setting', {
           p_category: category,
           p_setting_key: setting_key,
-          p_setting_value: setting_value
+          p_setting_value: setting_value,
         })
 
         if (error) {
@@ -222,7 +214,7 @@ export async function PUT(request: NextRequest) {
             category,
             setting_key,
             success: false,
-            error: error.message
+            error: error.message,
           })
           errorCount++
         } else {
@@ -230,7 +222,7 @@ export async function PUT(request: NextRequest) {
             category,
             setting_key,
             success: true,
-            setting_id: settingId
+            setting_id: settingId,
           })
           successCount++
         }
@@ -239,7 +231,7 @@ export async function PUT(request: NextRequest) {
           category,
           setting_key,
           success: false,
-          error: 'Internal error'
+          error: 'Internal error',
         })
         errorCount++
       }
@@ -251,15 +243,11 @@ export async function PUT(request: NextRequest) {
       summary: {
         total: settings.length,
         success: successCount,
-        errors: errorCount
-      }
+        errors: errorCount,
+      },
     })
-
   } catch (error) {
     console.error('Bulk settings update API error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

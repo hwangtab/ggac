@@ -213,7 +213,7 @@ export async function POST(request: NextRequest) {
     }
 
     const cookieStore = await cookies()
-    const supabase = createServerComponentClient({ cookies: () => cookieStore })
+    const supabase = createServerComponentClient({ cookies: () => cookieStore as any })
 
     // 관리자 권한 확인
     const {
@@ -379,7 +379,7 @@ export async function GET(request: NextRequest) {
     }
 
     const cookieStore = await cookies()
-    const supabase = createServerComponentClient({ cookies: () => cookieStore })
+    const supabase = createServerComponentClient({ cookies: () => cookieStore as any })
 
     // 관리자 권한 확인
     const {

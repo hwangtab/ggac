@@ -8,7 +8,8 @@ export const runtime = 'nodejs'
 
 export async function GET(request: NextRequest) {
   // 인증/권한 확인(한 번)
-  const supabase = createServerComponentClient({ cookies })
+  const cookieStore = await cookies()
+  const supabase = createServerComponentClient({ cookies: () => cookieStore as any })
   const {
     data: { session },
   } = await supabase.auth.getSession()

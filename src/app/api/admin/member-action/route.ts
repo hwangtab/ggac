@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     }
 
     const cookieStore = await cookies()
-    const supabase = createServerComponentClient({ cookies: () => cookieStore })
+    const supabase = createServerComponentClient({ cookies: () => cookieStore as any })
 
     // 사용자 인증 확인
     const {

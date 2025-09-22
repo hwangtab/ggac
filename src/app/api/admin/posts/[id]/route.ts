@@ -12,7 +12,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   const resolvedParams = await context.params
   try {
     const cookieStore = await cookies()
-    const supabase = createServerComponentClient({ cookies: () => cookieStore })
+    const supabase = createServerComponentClient({ cookies: () => cookieStore as any })
     const { id } = resolvedParams
 
     // 사용자 인증 확인
