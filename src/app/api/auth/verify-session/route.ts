@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic'
 export async function GET() {
   try {
     const cookieStore = await cookies()
-    const supabase = createServerComponentClient({ cookies: () => cookieStore })
+    const supabase = createServerComponentClient({ cookies: () => cookieStore as any })
 
     // 세션 확인
     const {

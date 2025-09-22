@@ -35,7 +35,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     }
 
     const cookieStore = await cookies()
-    const supabase = createServerComponentClient({ cookies: () => cookieStore })
+    const supabase = createServerComponentClient({ cookies: () => cookieStore as any })
     const {
       data: { session },
     } = await supabase.auth.getSession()

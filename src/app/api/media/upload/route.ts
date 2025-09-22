@@ -334,7 +334,8 @@ export async function POST(request: NextRequest) {
       return limit.response
     }
 
-    const supabase = createRouteHandlerClient({ cookies })
+    const cookieStore = await cookies()
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
 
     // 사용자 인증 확인
     const {
@@ -519,7 +520,8 @@ export async function GET(request: NextRequest) {
     if (!gLimit.success && gLimit.response) {
       return gLimit.response
     }
-    const supabase = createRouteHandlerClient({ cookies })
+    const cookieStore = await cookies()
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
 
     // 사용자 인증 확인
     const {

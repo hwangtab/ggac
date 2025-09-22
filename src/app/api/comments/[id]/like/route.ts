@@ -22,7 +22,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     // 표준 인증 패턴: 쿠키 기반 세션 확인
     const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
     const {
       data: { session },
       error: authError,

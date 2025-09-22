@@ -10,8 +10,11 @@ import { withRateLimit } from '@/utils/rateLimit'
 export async function GET(request: NextRequest) {
   return withRateLimit('ADMIN_API')(async () => {
     try {
-      const supabase = createServerComponentClient({ cookies })
-      const { data: { session } } = await supabase.auth.getSession()
+      const cookieStore = await cookies()
+      const supabase = createServerComponentClient({ cookies: () => cookieStore as any })
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
 
       if (!session?.user) {
         return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
@@ -43,7 +46,8 @@ export async function GET(request: NextRequest) {
       // 기본 쿼리 구성
       let query = supabase
         .from('user_activities')
-        .select(`
+        .select(
+          `
           id,
           user_id,
           action_type,
@@ -58,7 +62,9 @@ export async function GET(request: NextRequest) {
             display_name,
             email
           )
-        `, { count: 'exact' })
+        `,
+          { count: 'exact' }
+        )
         .gte('created_at', startDate.toISOString())
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1)
@@ -94,21 +100,20 @@ export async function GET(request: NextRequest) {
           totalCount,
           limit,
           hasNext,
-          hasPrev
+          hasPrev,
         },
         filters: {
           userId,
           days,
           actionType,
-          targetType
+          targetType,
         },
         metadata: {
           generatedAt: new Date().toISOString(),
           period: `${days}일`,
-          startDate: startDate.toISOString()
-        }
+          startDate: startDate.toISOString(),
+        },
       })
-
     } catch (error) {
       console.error('사용자 활동 API 오류:', error)
       return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })

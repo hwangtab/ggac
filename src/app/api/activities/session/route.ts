@@ -18,17 +18,21 @@ export const dynamic = 'force-dynamic'
 export async function GET(request: NextRequest) {
   return withRateLimit('GENERAL_API')(async () => {
     try {
-      const supabase = createRouteHandlerClient({ cookies })
-      const { data: { session }, error } = await supabase.auth.getSession()
+      const cookieStore = await cookies()
+      const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession()
 
       if (error) {
         return NextResponse.json({ error: '세션 확인 실패' }, { status: 500 })
       }
 
-      return NextResponse.json({ 
+      return NextResponse.json({
         authenticated: !!session?.user,
         user_id: session?.user?.id || null,
-        expires_at: session?.expires_at || null
+        expires_at: session?.expires_at || null,
       })
     } catch (error) {
       console.error('세션 GET API 오류:', error)
@@ -39,8 +43,11 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   return withRateLimit('GENERAL_API')(async () => {
     try {
-      const supabase = createRouteHandlerClient({ cookies })
-      const { data: { session } } = await supabase.auth.getSession()
+      const cookieStore = await cookies()
+      const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
 
       if (!session?.user) {
         return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
@@ -50,28 +57,35 @@ export async function POST(request: NextRequest) {
       const { action, session_token, metadata = {} } = body
 
       if (!action || !['start', 'update', 'end'].includes(action)) {
-        return NextResponse.json({ error: '유효한 action이 필요합니다. (start, update, end)' }, { status: 400 })
+        return NextResponse.json(
+          { error: '유효한 action이 필요합니다. (start, update, end)' },
+          { status: 400 }
+        )
       }
 
       if (action === 'start' && !session_token) {
-        return NextResponse.json({ error: 'session_token이 필요합니다.' }, { status: 400 });
+        return NextResponse.json({ error: 'session_token이 필요합니다.' }, { status: 400 })
       }
       if (action === 'update' && !body.session_id) {
-        return NextResponse.json({ error: 'session_id가 필요합니다.' }, { status: 400 });
+        return NextResponse.json({ error: 'session_id가 필요합니다.' }, { status: 400 })
       }
 
       // 입력 검증 및 sanitization
-      const sanitizedMetadata = typeof metadata === 'object' ? 
-        Object.keys(metadata).reduce((acc, key) => {
-          acc[key] = typeof metadata[key] === 'string' ? 
-            sanitizeInput(metadata[key]) : metadata[key]
-          return acc
-        }, {} as Record<string, any>) : {}
+      const sanitizedMetadata =
+        typeof metadata === 'object'
+          ? Object.keys(metadata).reduce(
+              (acc, key) => {
+                acc[key] =
+                  typeof metadata[key] === 'string' ? sanitizeInput(metadata[key]) : metadata[key]
+                return acc
+              },
+              {} as Record<string, any>
+            )
+          : {}
 
       // 클라이언트 정보 수집
-      const clientIP = request.headers.get('x-forwarded-for') || 
-                      request.headers.get('x-real-ip') || 
-                      '127.0.0.1'
+      const clientIP =
+        request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '127.0.0.1'
       const userAgent = request.headers.get('user-agent') || 'Unknown'
 
       // 세션 관리 함수 호출
@@ -81,7 +95,7 @@ export async function POST(request: NextRequest) {
         p_action: action,
         p_ip_address: clientIP,
         p_user_agent: userAgent,
-        p_metadata: sanitizedMetadata
+        p_metadata: sanitizedMetadata,
       })
 
       if (error) {
@@ -89,10 +103,10 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: '세션 관리에 실패했습니다.' }, { status: 500 })
       }
 
-      const response: any = { 
+      const response: any = {
         success: true,
         action,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       }
 
       if (action === 'start') {
@@ -100,7 +114,6 @@ export async function POST(request: NextRequest) {
       }
 
       return NextResponse.json(response)
-
     } catch (error) {
       console.error('세션 API 오류:', error)
       return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
