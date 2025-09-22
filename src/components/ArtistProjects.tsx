@@ -103,7 +103,7 @@ export default function ArtistProjects({
                 </div>
 
                 {/* 제목 */}
-                <h3 className="font-serif font-semibold text-primary-700 text-xl mb-3 group-hover:text-primary-600 transition-colors duration-200 line-clamp-2">
+                <h3 className="font-serif font-semibold text-primary-700 text-2xl mb-3 group-hover:text-primary-600 transition-colors duration-200 line-clamp-2">
                   {project.title}
                 </h3>
 
