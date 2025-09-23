@@ -30,7 +30,12 @@ interface ArtistCardProps {
   isLoading: boolean
 }
 
-export default function ArtistCard({ artist, onAssign, onRemoveAssignment, isLoading }: ArtistCardProps) {
+export default function ArtistCard({
+  artist,
+  onAssign,
+  onRemoveAssignment,
+  isLoading,
+}: ArtistCardProps) {
   const getArtistProfileUrl = (slug: string) => {
     return `/artists/${slug}`
   }
@@ -95,17 +100,11 @@ export default function ArtistCard({ artist, onAssign, onRemoveAssignment, isLoa
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between">
               <div>
-                <h3 className="text-lg font-semibold text-gray-900 truncate">
-                  {artist.name}
-                </h3>
-                <p className="text-sm text-gray-600 mt-1">
-                  {formatCategory(artist.category)}
-                </p>
-                <p className="text-sm text-gray-500 mt-1 line-clamp-2">
-                  {artist.oneLiner}
-                </p>
+                <h3 className="text-lg font-semibold text-gray-900 truncate">{artist.name}</h3>
+                <p className="text-sm text-gray-600 mt-1">{formatCategory(artist.category)}</p>
+                <p className="text-sm text-gray-500 mt-1 line-clamp-2">{artist.oneLiner}</p>
               </div>
-              
+
               {/* 액션 버튼 */}
               <div className="flex items-center space-x-2 ml-4">
                 <a
@@ -136,7 +135,7 @@ export default function ArtistCard({ artist, onAssign, onRemoveAssignment, isLoa
         <div className="border-t border-gray-200 p-4 bg-gray-50">
           <h4 className="text-sm font-medium text-gray-900 mb-2">배정된 멤버</h4>
           <div className="space-y-2">
-            {artist.assignedMembers.map((member) => (
+            {artist.assignedMembers.map(member => (
               <div
                 key={member.id}
                 className="flex items-center justify-between p-2 bg-white rounded border"
@@ -146,23 +145,23 @@ export default function ArtistCard({ artist, onAssign, onRemoveAssignment, isLoa
                     <FiUser className="w-4 h-4 text-gray-500" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-900">
-                      {member.display_name}
-                    </p>
+                    <p className="text-sm font-medium text-gray-900">{member.display_name}</p>
                     <p className="text-xs text-gray-500">{member.email}</p>
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${getRoleColor(member.artist_role)}`}>
+                  <span
+                    className={`px-2 py-1 text-xs font-medium rounded-full ${getRoleColor(member.artist_role)}`}
+                  >
                     {getRoleText(member.artist_role)}
                   </span>
                   <button
                     onClick={() => onRemoveAssignment(artist.id, member.id)}
                     disabled={isLoading}
-                    className="p-1 text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
+                    className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
                     title="배정 해제"
                   >
-                    <FiX className="w-3 h-3" />
+                    <FiX className="w-4 h-4" />
                   </button>
                 </div>
               </div>
