@@ -1,7 +1,8 @@
 'use client'
 
-import { FiUser, FiUserPlus, FiEye, FiX, FiMusic, FiExternalLink } from 'react-icons/fi'
+import { FiUser, FiUserPlus, FiMusic, FiExternalLink, FiX } from 'react-icons/fi'
 import OptimizedImage from '@/components/OptimizedImage'
+import { Icon } from '@/components/Icon'
 
 interface Artist {
   id: string
@@ -36,12 +37,6 @@ export default function ArtistCard({
   onRemoveAssignment,
   isLoading,
 }: ArtistCardProps) {
-  // 통일된 아이콘 스타일 (순수 TailwindCSS 사용)
-  const iconProps = {
-    className: 'w-4 h-4 block',
-    style: { strokeWidth: 1.5 },
-  }
-
   const getArtistProfileUrl = (slug: string) => {
     return `/artists/${slug}`
   }
@@ -97,7 +92,7 @@ export default function ArtistCard({
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
-                <FiMusic {...iconProps} className="w-5 h-5 text-gray-400" />
+                <Icon as={FiMusic} className="w-5 h-5 text-gray-400" />
               </div>
             )}
           </div>
@@ -120,7 +115,7 @@ export default function ArtistCard({
                   className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
                   title="프로필 보기"
                 >
-                  <FiExternalLink {...iconProps} />
+                  <Icon as={FiExternalLink} className="w-4 h-4" />
                 </a>
                 <button
                   onClick={onAssign}
@@ -128,7 +123,7 @@ export default function ArtistCard({
                   className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-50"
                   title="아티스트 배정"
                 >
-                  <FiUserPlus {...iconProps} />
+                  <Icon as={FiUserPlus} className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -148,7 +143,7 @@ export default function ArtistCard({
               >
                 <div className="flex items-center space-x-3">
                   <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
-                    <FiUser {...iconProps} className="text-gray-500" />
+                    <Icon as={FiUser} className="w-4 h-4 text-gray-500" />
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-900">{member.display_name}</p>
@@ -167,7 +162,7 @@ export default function ArtistCard({
                     className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
                     title="배정 해제"
                   >
-                    <FiX {...iconProps} />
+                    <Icon as={FiX} className="w-4 h-4" />
                   </button>
                 </div>
               </div>
