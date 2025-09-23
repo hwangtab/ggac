@@ -36,6 +36,14 @@ export default function ArtistCard({
   onRemoveAssignment,
   isLoading,
 }: ArtistCardProps) {
+  // 통일된 아이콘 스타일
+  const iconStyle = {
+    width: '16px',
+    height: '16px',
+    strokeWidth: 1.5,
+    display: 'block' as const,
+  }
+
   const getArtistProfileUrl = (slug: string) => {
     return `/artists/${slug}`
   }
@@ -114,7 +122,7 @@ export default function ArtistCard({
                   className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
                   title="프로필 보기"
                 >
-                  <FiExternalLink className="w-4 h-4" strokeWidth={1.5} />
+                  <FiExternalLink style={iconStyle} />
                 </a>
                 <button
                   onClick={onAssign}
@@ -122,7 +130,7 @@ export default function ArtistCard({
                   className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-50"
                   title="아티스트 배정"
                 >
-                  <FiUserPlus className="w-4 h-4" strokeWidth={1.5} />
+                  <FiUserPlus style={iconStyle} />
                 </button>
               </div>
             </div>
@@ -142,7 +150,7 @@ export default function ArtistCard({
               >
                 <div className="flex items-center space-x-3">
                   <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
-                    <FiUser className="w-4 h-4 text-gray-500" strokeWidth={1.5} />
+                    <FiUser className="text-gray-500" style={iconStyle} />
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-900">{member.display_name}</p>
@@ -161,7 +169,7 @@ export default function ArtistCard({
                     className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
                     title="배정 해제"
                   >
-                    <FiX className="w-4 h-4" strokeWidth={1.5} />
+                    <FiX style={iconStyle} />
                   </button>
                 </div>
               </div>
