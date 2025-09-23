@@ -40,7 +40,6 @@ export default function ArtistCard({
   const iconStyle = {
     width: '16px',
     height: '16px',
-    strokeWidth: 1.5,
     display: 'block' as const,
   }
 
@@ -122,7 +121,7 @@ export default function ArtistCard({
                   className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
                   title="프로필 보기"
                 >
-                  <FiExternalLink style={iconStyle} />
+                  <FiExternalLink style={iconStyle} strokeWidth={1.5} className="!w-4 !h-4" />
                 </a>
                 <button
                   onClick={onAssign}
@@ -130,7 +129,7 @@ export default function ArtistCard({
                   className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-50"
                   title="아티스트 배정"
                 >
-                  <FiUserPlus style={iconStyle} />
+                  <FiUserPlus style={iconStyle} strokeWidth={1.5} className="!w-4 !h-4" />
                 </button>
               </div>
             </div>
@@ -150,7 +149,11 @@ export default function ArtistCard({
               >
                 <div className="flex items-center space-x-3">
                   <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
-                    <FiUser className="text-gray-500" style={iconStyle} />
+                    <FiUser
+                      className="text-gray-500 !w-4 !h-4"
+                      style={iconStyle}
+                      strokeWidth={1.5}
+                    />
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-900">{member.display_name}</p>
@@ -169,7 +172,7 @@ export default function ArtistCard({
                     className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
                     title="배정 해제"
                   >
-                    <FiX style={iconStyle} />
+                    <FiX style={iconStyle} strokeWidth={1.5} className="!w-4 !h-4" />
                   </button>
                 </div>
               </div>
