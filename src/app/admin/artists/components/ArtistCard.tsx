@@ -97,7 +97,7 @@ export default function ArtistCard({
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
-                <FiMusic className="w-6 h-6 text-gray-400" />
+                <FiMusic {...iconProps} className="w-5 h-5 text-gray-400" />
               </div>
             )}
           </div>
@@ -148,7 +148,7 @@ export default function ArtistCard({
               >
                 <div className="flex items-center space-x-3">
                   <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
-                    <FiUser className="text-gray-500 w-4 h-4 block" style={{ strokeWidth: 1.5 }} />
+                    <FiUser {...iconProps} className="text-gray-500" />
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-900">{member.display_name}</p>
