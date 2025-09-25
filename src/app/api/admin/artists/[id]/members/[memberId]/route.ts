@@ -6,6 +6,7 @@ export const preferredRegion = 'icn1'
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from '@supabase/supabase-js'
 
 // DELETE: 아티스트 배정 해제
 export async function DELETE(
@@ -46,8 +47,17 @@ export async function DELETE(
     const artistId = resolvedParams.id
     const memberId = resolvedParams.memberId
 
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const db =
+      url && serviceKey
+        ? createClient(url, serviceKey, {
+            auth: { autoRefreshToken: false, persistSession: false },
+          })
+        : supabase
+
     // 대상 멤버 확인
-    const { data: targetMember, error: memberError } = await supabase
+    const { data: targetMember, error: memberError } = await db
       .from('member_profiles')
       .select('id, display_name, email, artist_id, artist_role')
       .eq('id', memberId)
@@ -66,7 +76,7 @@ export async function DELETE(
     }
 
     // 아티스트 배정 해제
-    const { data: updatedMember, error: updateError } = await supabase
+    const { data: updatedMember, error: updateError } = await db
       .from('member_profiles')
       .update({
         artist_id: null,

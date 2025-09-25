@@ -6,6 +6,7 @@ export const preferredRegion = 'icn1'
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from '@supabase/supabase-js'
 
 // POST: 아티스트에 멤버 배정
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -54,7 +55,16 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     }
 
     // 대상 멤버 확인
-    const { data: targetMember, error: memberError } = await supabase
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const db =
+      url && serviceKey
+        ? createClient(url, serviceKey, {
+            auth: { autoRefreshToken: false, persistSession: false },
+          })
+        : supabase
+
+    const { data: targetMember, error: memberError } = await db
       .from('member_profiles')
       .select('id, display_name, email, artist_id, artist_role')
       .eq('id', memberId)
@@ -75,7 +85,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     }
 
     // 아티스트 배정 업데이트
-    const { data: updatedMember, error: updateError } = await supabase
+    const { data: updatedMember, error: updateError } = await db
       .from('member_profiles')
       .update({
         artist_id: artistId,
