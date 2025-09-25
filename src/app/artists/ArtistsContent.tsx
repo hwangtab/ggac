@@ -79,11 +79,11 @@ const ArtistsContent = ({ artists }: ArtistsContentProps) => {
                       <OptimizedImage
                         src={artist.profileImage}
                         alt={artist.name}
-                        width={400}
-                        height={400}
+                        width={320}
+                        height={320}
                         className="rounded-full object-cover w-full h-full"
-                        sizes="(max-width: 768px) 100vw, 400px"
-                        priority={index < 6} // 첫 6개 아티스트 이미지 우선 로딩 (모바일 2열×3행, 데스크톱 3열×2행)
+                        sizes="(max-width: 640px) 320px, (max-width: 768px) 256px, 320px"
+                        priority={index < 3} // 첫 3개 아티스트 이미지만 우선 로딩 (모바일 최적화)
                       />
                     </div>
 

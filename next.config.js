@@ -498,13 +498,13 @@ const nextConfig = {
       // 링크 프리뷰용 일반 이미지 도메인 (보안상 제한적 허용)
       // 외부 일반 도메인 와일드카드 제거: 비허용 도메인은 이미지 프록시 경유
     ],
-    // 최적화된 이미지 형식 우선순위
+    // 최적화된 이미지 형식 우선순위 (모바일 우선)
     formats: ['image/webp', 'image/avif'],
-    // 최적화된 디바이스 크기 설정 (불필요한 크기 제거로 성능 향상)
-    deviceSizes: [640, 828, 1200, 1920],
-    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
-    // 개발환경 최적화: 빠른 업데이트를 위한 단축된 캐시 시간
-    minimumCacheTTL: process.env.NODE_ENV === 'development' ? 3600 : 86400, // 개발: 1시간, 프로덕션: 24시간
+    // 모바일 우선 디바이스 크기 설정 (320px 추가로 모바일 성능 향상)
+    deviceSizes: [320, 640, 828, 1200, 1920],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256, 320, 384],
+    // 모바일 성능 최적화: 더 짧은 캐시 시간으로 빠른 응답성 확보
+    minimumCacheTTL: process.env.NODE_ENV === 'development' ? 600 : 86400, // 개발: 10분, 프로덕션: 24시간
     dangerouslyAllowSVG: true,
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
     // 이미지 최적화 오류 시 fallback 허용
