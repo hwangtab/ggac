@@ -2,6 +2,9 @@
 
 ## Recent Changes
 
+- Updated the admin artist assignment API to use a Supabase service-role client,
+  so member verification and updates bypass RLS and no longer return 404 "멤버를
+  찾을 수 없습니다" errors during assignment.
 - Investigated `/artists` image regressions and confirmed Supabase
   `artists.profile_photo_url` entries still point to legacy repo assets or
   `NULL`, so new storage uploads never reach the frontend rendering pipeline.
@@ -20,15 +23,18 @@
 
 ## Next Steps
 
-1. Backfill `artists.profile_photo_url` (and `profile_photo_metadata`) with the
+1. Verify on staging and production that admin users can assign and unassign
+   artist members without triggering RLS-related 404 errors, and capture
+   Supabase logs if anomalies persist.
+2. Backfill `artists.profile_photo_url` (and `profile_photo_metadata`) with the
    actual Supabase public URLs for the affected rows, or re-run the upload flow
    per artist to persist the metadata.
-2. Re-run `/artists` after backfill and ensure `OptimizedImage` no longer shows
+3. Re-run `/artists` after backfill and ensure `OptimizedImage` no longer shows
    error fallbacks; confirm CDN cache invalidation is not required once URLs
    change.
-3. Verify in production that `/board` list and detail pages hydrate correctly
+4. Verify in production that `/board` list and detail pages hydrate correctly
    with the new server hand-offs and capture any residual `errorId`/`digest`
    references from Vercel if issues persist.
-4. Once `/board` stabilises, run a regression pass on other ISR pages
+5. Once `/board` stabilises, run a regression pass on other ISR pages
    (`/archive`, `/artists/[slug]`) to confirm there are no lingering static
    fallbacks.
