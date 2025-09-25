@@ -143,7 +143,13 @@ const OptimizedImage = memo(function OptimizedImage({
       ? 'auto'
       : 'low'
 
-  const wrapperClass = fill ? (className ? `relative ${className}` : 'relative') : 'relative'
+  const wrapperClass = fill
+    ? className
+      ? `relative ${className}`
+      : 'relative'
+    : className
+      ? `${className} relative`
+      : 'relative'
 
   const handleError = () => {
     const nextFallback = fallbackQueueRef.current.shift()
