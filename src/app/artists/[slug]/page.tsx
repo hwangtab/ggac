@@ -249,11 +249,11 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
                     <OptimizedImage
                       src={artist.profileImage}
                       alt={artist.name}
-                      width={800}
-                      height={800}
+                      width={400}
+                      height={400}
                       className="rounded-full object-cover w-full h-full"
                       priority={true}
-                      sizes="(max-width: 768px) 100vw, 800px"
+                      sizes="(max-width: 640px) 90vw, (max-width: 768px) 320px, 400px"
                     />
                   </div>
                 </div>
