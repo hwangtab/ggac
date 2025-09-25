@@ -2,9 +2,15 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
   enabled: process.env.ANALYZE === 'true',
 })
 
+const IMAGE_ALLOWED_QUALITIES = [50, 65, 75, 80, 85, 90, 100]
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+
+  env: {
+    NEXT_PUBLIC_IMAGE_ALLOWED_QUALITIES: IMAGE_ALLOWED_QUALITIES.join(','),
+  },
 
   // 최적화된 transpile 패키지 목록 - 필수만 유지
   transpilePackages: [
@@ -512,7 +518,7 @@ const nextConfig = {
     // 외부 도메인에 대한 더 관대한 정책
     domains: [], // deprecated이지만 호환성을 위해 유지
     // 이미지 품질 설정 (Next.js 16 대비)
-    qualities: [50, 75, 80, 85, 90, 100],
+    qualities: IMAGE_ALLOWED_QUALITIES,
   },
 }
 
