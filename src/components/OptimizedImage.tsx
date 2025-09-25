@@ -143,6 +143,8 @@ const OptimizedImage = memo(function OptimizedImage({
       ? 'auto'
       : 'low'
 
+  const wrapperClass = fill ? (className ? `relative ${className}` : 'relative') : 'relative'
+
   const handleError = () => {
     const nextFallback = fallbackQueueRef.current.shift()
 
@@ -210,7 +212,7 @@ const OptimizedImage = memo(function OptimizedImage({
 
   // 렌더링
   return (
-    <div className={fill ? `relative ${className}` : className}>
+    <div className={wrapperClass}>
       {/* 로딩 스켈레톤 (외부 스켈레톤이 없을 때만) */}
       {isLoading && !suppressSkeleton && (
         <div

@@ -5,6 +5,9 @@
 - Updated the OptimizedImage component to share the exact quality allow-list
   with `next.config.js`, added automatic fallbacks (WebP→JPEG/PNG→default
   avatar), and tuned fetch priority so images load reliably on mobile networks.
+- Re-pointed the themilliways Supabase profile to the latest uploaded WebP
+  variant and tightened the loading skeleton overlay so lazy loaders stay
+  centered within cards.
 - Updated the admin artist assignment API to use a Supabase service-role client,
   so member verification and updates bypass RLS and no longer return 404 "멤버를
   찾을 수 없습니다" errors during assignment.
