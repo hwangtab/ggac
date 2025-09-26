@@ -54,7 +54,7 @@ export const metadata: Metadata = {
     siteName: '경기아트콜렉티브',
     images: [
       {
-        url: '/images/logo/gac_og_branded.webp',
+        url: '/images/logo/gac_og.webp',
         width: 1200,
         height: 630,
         alt: '경기아트콜렉티브 - 경계 없는 상상, 함께 만드는 울림',
@@ -67,7 +67,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: '경기아트콜렉티브',
     description: '경계 없는 상상, 함께 만드는 울림',
-    images: ['/images/logo/gac_og_branded.webp'],
+    images: ['/images/logo/gac_og.webp'],
   },
   icons: {
     icon: '/images/logo/gac_logo.webp',

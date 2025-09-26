@@ -41,7 +41,7 @@ export const metadata: Metadata = {
     siteName: '경기아트콜렉티브 협동조합',
     images: [
       {
-        url: '/images/logo/gac_og_branded.webp',
+        url: '/images/logo/gac_og.webp',
         width: 1200,
         height: 630,
         alt: '경기아트콜렉티브 협동조합 - 소통과 참여',
@@ -54,7 +54,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: '소통과 참여 | 경기아트콜렉티브 협동조합',
     description: '당신의 참여로 새로운 물결이 시작됩니다. 경기도 예술가들과 함께하세요.',
-    images: ['/images/logo/gac_og_branded.webp'],
+    images: ['/images/logo/gac_og.webp'],
   },
   robots: {
     index: true,
@@ -88,7 +88,7 @@ const ConnectPage = async () => {
       width: 512,
       height: 512,
     },
-    image: 'https://ggac.kr/images/logo/gac_og_branded.webp',
+    image: 'https://ggac.kr/images/logo/gac_og.webp',
     foundingDate: '2025-05-01',
     foundingLocation: {
       '@type': 'Place',

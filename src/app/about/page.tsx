@@ -42,7 +42,7 @@ export const metadata: Metadata = {
     siteName: '경기아트콜렉티브 협동조합',
     images: [
       {
-        url: '/images/logo/gac_og_branded.webp',
+        url: '/images/logo/gac_og.webp',
         width: 1200,
         height: 630,
         alt: '경기아트콜렉티브 협동조합 - 우리의 이야기',
@@ -55,7 +55,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: '우리의 이야기 | 경기아트콜렉티브 협동조합',
     description: '예술로 숨 쉬고, 협동으로 길을 내어 지속가능한 창작 생태계를 만들어갑니다.',
-    images: ['/images/logo/gac_og_branded.webp'],
+    images: ['/images/logo/gac_og.webp'],
   },
   robots: {
     index: true,
