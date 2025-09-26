@@ -230,11 +230,6 @@ const nextConfig = {
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           // Explicitly prevent CSS files from being treated as scripts
           { key: 'X-Permitted-Cross-Domain-Policies', value: 'none' },
-          // 추가 보안 헤더로 CSS 파일의 스크립트 실행 방지
-          {
-            key: 'Content-Security-Policy',
-            value: "default-src 'none'; style-src 'unsafe-inline';",
-          },
         ],
       },
       // JavaScript 파일에 대한 명시적 MIME 타입 설정
