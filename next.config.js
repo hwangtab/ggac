@@ -408,6 +408,7 @@ const nextConfig = {
                     "img-src 'self' data: https: blob:",
                     "connect-src 'self' http://localhost:* https: ws://localhost:* wss://localhost:* https://*.supabase.co wss://*.supabase.co",
                     "font-src 'self' data:",
+                    "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com",
                     "object-src 'none'",
                     "base-uri 'self'",
                     "worker-src 'self' blob:",
