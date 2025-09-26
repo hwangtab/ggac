@@ -216,16 +216,33 @@ const OptimizedImage = memo(function OptimizedImage({
         }),
   }
 
+  // 동적으로 rounded 클래스 감지
+  const getRoundedClass = (className?: string): string => {
+    if (!className) return ''
+
+    // rounded-full 클래스가 있는지 확인
+    if (className.includes('rounded-full')) return 'rounded-full'
+
+    // 다른 rounded 클래스들 확인 (간단한 패턴 매칭)
+    const roundedClasses = className.split(' ').filter(cls => cls.startsWith('rounded-'))
+    return roundedClasses.join(' ')
+  }
+
+  const skeletonRoundedClass = getRoundedClass(className)
+
   // 렌더링
   return (
     <div className={wrapperClass}>
       {/* 로딩 스켈레톤 (외부 스켈레톤이 없을 때만) */}
       {isLoading && !suppressSkeleton && (
         <div
-          className="absolute inset-0 bg-gradient-to-br from-gray-100 to-gray-200 animate-pulse flex items-center justify-center"
+          className={`absolute inset-0 bg-gradient-to-br from-gray-100 to-gray-200 animate-pulse ${skeletonRoundedClass}`}
           style={{ width: fill ? '100%' : width, height: fill ? '100%' : height }}
         >
-          <div className="w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin"></div>
+          {/* 스피너는 별도 레이어에서 중앙 배치 - rounded 클리핑 회피 */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin"></div>
+          </div>
         </div>
       )}
 
