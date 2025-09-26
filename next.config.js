@@ -230,6 +230,20 @@ const nextConfig = {
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           // Explicitly prevent CSS files from being treated as scripts
           { key: 'X-Permitted-Cross-Domain-Policies', value: 'none' },
+          // 추가 보안 헤더로 CSS 파일의 스크립트 실행 방지
+          {
+            key: 'Content-Security-Policy',
+            value: "default-src 'none'; style-src 'unsafe-inline';",
+          },
+        ],
+      },
+      // JavaScript 파일에 대한 명시적 MIME 타입 설정
+      {
+        source: '/_next/static/chunks/(.*)',
+        headers: [
+          { key: 'Content-Type', value: 'application/javascript; charset=utf-8' },
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
         ],
       },
       // Next static assets: rely on Next/Vercel defaults, only add caching
@@ -391,11 +405,13 @@ const nextConfig = {
                     "script-src-elem 'self' 'unsafe-inline' 'unsafe-eval'",
                     "style-src 'self' 'unsafe-inline'",
                     "style-src-elem 'self' 'unsafe-inline'",
-                    "img-src 'self' data: https:",
-                    "connect-src 'self' http://localhost:* https: ws://localhost:* wss://localhost:*",
+                    "img-src 'self' data: https: blob:",
+                    "connect-src 'self' http://localhost:* https: ws://localhost:* wss://localhost:* https://*.supabase.co wss://*.supabase.co",
                     "font-src 'self' data:",
                     "object-src 'none'",
                     "base-uri 'self'",
+                    "worker-src 'self' blob:",
+                    "manifest-src 'self'",
                   ].join('; ')
                 : [
                     "default-src 'self'",
