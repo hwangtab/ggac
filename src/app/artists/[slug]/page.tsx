@@ -468,7 +468,7 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
                   {artist.youtubeVideos.map((video, index) => (
                     <div
                       key={index}
-                      className="transform transition-all duration-500 hover:-translate-y-2"
+                      className="transform transition-all duration-500"
                       style={{
                         animationDelay: `${index * 200}ms`,
                       }}
