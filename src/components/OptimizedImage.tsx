@@ -73,6 +73,11 @@ function buildFallbackQueue(src: string, extraSources?: string[]): string[] {
   }
 
   if (src) {
+    // Supabase 이미지인 경우 재시도를 위해 동일 URL 한 번 더 추가
+    if (src.includes('supabase.co')) {
+      queue.add(src) // 재시도용 동일 URL
+    }
+
     if (src.endsWith('.webp')) {
       queue.add(src.replace(/\.webp$/i, '.avif'))
       queue.add(src.replace(/\.webp$/i, '.jpg'))
@@ -116,7 +121,9 @@ const OptimizedImage = memo(function OptimizedImage({
   const [isLoading, setIsLoading] = useState(true)
   const [networkQuality, setNetworkQuality] = useState({ quality: 80, priority: false })
   const [currentSrc, setCurrentSrc] = useState(src)
+  const [retryCount, setRetryCount] = useState(0)
   const fallbackQueueRef = useRef<string[]>([])
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   // 네트워크 조건 감지
   useEffect(() => {
@@ -129,8 +136,24 @@ const OptimizedImage = memo(function OptimizedImage({
     setCurrentSrc(src)
     setHasError(false)
     setIsLoading(true)
+    setRetryCount(0)
+
+    // 기존 타이머 정리
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current)
+    }
+
     onLoadStart?.()
   }, [src, fallbackSources, onLoadStart])
+
+  // 컴포넌트 언마운트 시 타이머 정리
+  useEffect(() => {
+    return () => {
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current)
+      }
+    }
+  }, [])
 
   // 최적화된 품질 계산 (네트워크 조건 반영 + 허용된 값으로 제한)
   const optimizedQuality = getValidQuality(Math.min(quality, networkQuality.quality))
@@ -152,6 +175,32 @@ const OptimizedImage = memo(function OptimizedImage({
       : 'relative'
 
   const handleError = () => {
+    const isSupabaseImage = currentSrc.includes('supabase.co')
+    const maxRetries = isSupabaseImage ? 3 : 1
+
+    // Supabase 이미지의 경우 재시도 로직 적용
+    if (isSupabaseImage && retryCount < maxRetries) {
+      const retryDelay = Math.min(1000 * Math.pow(2, retryCount), 5000) // 지수 백오프, 최대 5초
+
+      console.warn(
+        `[OptimizedImage] Supabase 이미지 재시도 ${retryCount + 1}/${maxRetries}: ${currentSrc}`
+      )
+
+      retryTimeoutRef.current = setTimeout(() => {
+        setRetryCount(prev => prev + 1)
+        setIsLoading(true)
+        setHasError(false)
+        // 같은 URL로 재시도 (브라우저 캐시 무시를 위해 timestamp 추가)
+        const retryUrl = currentSrc.includes('?')
+          ? `${currentSrc}&retry=${Date.now()}`
+          : `${currentSrc}?retry=${Date.now()}`
+        setCurrentSrc(retryUrl)
+      }, retryDelay)
+
+      return
+    }
+
+    // 재시도 실패 또는 일반 이미지의 경우 fallback으로 이동
     const nextFallback = fallbackQueueRef.current.shift()
 
     if (nextFallback) {
@@ -159,10 +208,11 @@ const OptimizedImage = memo(function OptimizedImage({
       setCurrentSrc(nextFallback)
       setHasError(false)
       setIsLoading(true)
+      setRetryCount(0) // 새 이미지이므로 재시도 카운트 리셋
       return
     }
 
-    console.warn(`[OptimizedImage] 이미지 로딩 실패: ${currentSrc}`)
+    console.warn(`[OptimizedImage] 모든 이미지 로딩 실패: ${currentSrc}`)
     setHasError(true)
     setIsLoading(false)
     onErrorProp?.()
@@ -170,19 +220,51 @@ const OptimizedImage = memo(function OptimizedImage({
 
   const handleLoad = () => {
     setIsLoading(false)
+
+    // 로딩 성공 로깅 (개발 환경에서만)
+    if (process.env.NODE_ENV === 'development') {
+      const isSupabaseImage = currentSrc.includes('supabase.co')
+      const retryText = retryCount > 0 ? ` (${retryCount}회 재시도 후)` : ''
+      console.log(`[OptimizedImage] ✅ 이미지 로드 성공${retryText}: ${currentSrc}`)
+
+      if (isSupabaseImage) {
+        console.log(
+          `[OptimizedImage] 📊 Supabase 이미지 로딩 통계 - 성공 (재시도: ${retryCount}회)`
+        )
+      }
+    }
+
     onLoadProp?.()
+  }
+
+  // 재시도 핸들러
+  const handleRetry = () => {
+    setHasError(false)
+    setIsLoading(true)
+    setRetryCount(0)
+    setCurrentSrc(src) // 원본 이미지로 다시 시도
+    fallbackQueueRef.current = buildFallbackQueue(src, fallbackSources)
   }
 
   // 에러 상태 - fallback UI
   if (hasError) {
     return (
       <div
-        className={`bg-gradient-to-br from-primary-100 to-accent-100 flex items-center justify-center ${className}`}
+        className={`bg-gradient-to-br from-primary-100 to-accent-100 flex flex-col items-center justify-center gap-2 ${className}`}
         style={{ width: fill ? '100%' : width, height: fill ? '100%' : height }}
       >
-        <span className="text-primary-600 font-medium text-center px-4 text-2xl font-sans">
+        <span className="text-primary-600 font-medium text-center px-4 text-xl font-sans">
           {fallbackText || alt.slice(0, 3)}
         </span>
+        {src?.includes('supabase.co') && (
+          <button
+            onClick={handleRetry}
+            className="text-xs text-primary-500 hover:text-primary-700 underline transition-colors"
+            title="이미지 다시 로드"
+          >
+            재시도
+          </button>
+        )}
       </div>
     )
   }

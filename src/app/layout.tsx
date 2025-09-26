@@ -74,7 +74,7 @@ export const metadata: Metadata = {
     shortcut: '/images/logo/gac_logo.webp',
     apple: '/images/logo/gac_logo.webp',
   },
-  manifest: '/manifest.webmanifest',
+  manifest: '/manifest.json',
   other: {
     'naver-site-verification': 'c0d96b266d116917a2157019601290e977a0fa8a',
     'google-site-verification': '',
