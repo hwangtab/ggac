@@ -237,7 +237,6 @@ const OptimizedImage = memo(function OptimizedImage({
       {isLoading && !suppressSkeleton && (
         <div
           className={`absolute inset-0 bg-gradient-to-br from-gray-100 to-gray-200 animate-pulse ${skeletonRoundedClass}`}
-          style={{ width: fill ? '100%' : width, height: fill ? '100%' : height }}
         >
           {/* 스피너는 별도 레이어에서 중앙 배치 - rounded 클리핑 회피 */}
           <div className="absolute inset-0 flex items-center justify-center">
