@@ -34,7 +34,7 @@ export const metadata: Metadata = {
     type: 'website',
     images: [
       {
-        url: '/images/logo/gac_og_branded.webp',
+        url: '/images/logo/gac_og.webp',
         width: 1200,
         height: 630,
         alt: '경기아트콜렉티브 협동조합',

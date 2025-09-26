@@ -14,7 +14,7 @@ const ORGANIZATION_DATA = {
   alternateName: 'Gyeonggi Art Collective',
   description: '예술로 숨 쉬고, 협동으로 길을 내는 협동조합입니다.',
   url: 'https://ggac.kr',
-  logo: 'https://ggac.kr/images/logo/gac_og_branded.webp',
+  logo: 'https://ggac.kr/images/logo/gac_og.webp',
   foundingDate: '2024',
   address: {
     '@type': 'PostalAddress',
