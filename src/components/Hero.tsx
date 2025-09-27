@@ -285,8 +285,8 @@ const Hero = () => {
               lineHeight: 1.2
             }}
           >
-            <span className="block">경계 없는 상상,</span>
-            <span className="block">함께 만드는 울림</span>
+            <span className="block">틀을 깨는 소리,</span>
+            <span className="block">함께 쌓는 무대</span>
           </h1>
           <p 
             className={`text-lg sm:text-xl md:text-2xl mb-6 sm:mb-8 max-w-2xl mx-auto leading-relaxed ${
@@ -309,8 +309,8 @@ const Hero = () => {
               lineHeight: 1.4
             }}
           >
-            예술로 숨 쉬고, 협동으로 길을 내는<br />
-            경기아트콜렉티브 협동조합
+            실험과 연대로 새로운 예술 생태계를 만드는<br />
+            경기아트콜렉티브
           </p>
           <div className={`flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center ${
               prefersReducedMotion 
