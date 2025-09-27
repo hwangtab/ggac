@@ -368,15 +368,19 @@ textarea:focus-visible {
 
 /* Prose styling for project descriptions */
 .prose h1 {
-  @apply text-3xl font-post font-bold text-primary-900 mt-12 mb-6 pb-3 border-b-2 border-primary-300;
+  @apply text-4xl font-post font-bold text-primary-900 mt-12 mb-6 pb-3 border-b-2 border-primary-300;
 }
 
 .prose h2 {
-  @apply text-2xl font-post font-semibold text-primary-800 mt-10 mb-5 pb-2 border-b border-primary-200;
+  @apply text-3xl font-post font-semibold text-primary-800 mt-10 mb-5 pb-2 border-b border-primary-200;
 }
 
 .prose h3 {
-  @apply text-xl font-post font-semibold text-primary-700 mt-8 mb-4 pb-2 border-b border-primary-200;
+  @apply text-2xl font-post font-semibold text-primary-700 mt-8 mb-4 pb-2 border-b border-primary-200;
+}
+
+.prose h4 {
+  @apply text-xl font-post font-semibold text-primary-700 mt-6 mb-3;
 }
 
 .prose h1:first-child,
