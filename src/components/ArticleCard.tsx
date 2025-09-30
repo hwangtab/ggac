@@ -1,16 +1,26 @@
 'use client'
 
 import { useState, useEffect, useCallback, memo } from 'react'
+import Link from 'next/link'
 import Image from 'next/image'
 import { createImageProxy } from '@/utils/imageValidation'
 import type { LinkPreview, ArticleInfo, ArticleCardProps } from '@/types'
 
 const ArticleCard = ({ article }: ArticleCardProps) => {
+  // 내부 링크 판별 (상대 경로로 시작하는 경우)
+  const isInternalLink = article.url.startsWith('/')
+
   const [preview, setPreview] = useState<LinkPreview | null>(article.preview || null)
-  const [isLoading, setIsLoading] = useState(!article.preview)
+  const [isLoading, setIsLoading] = useState(!article.preview && !isInternalLink)
   const [hasError, setHasError] = useState(false)
 
   const fetchPreview = useCallback(async () => {
+    // 내부 링크는 Link Preview API 호출하지 않음
+    if (isInternalLink) {
+      setIsLoading(false)
+      return
+    }
+
     try {
       setIsLoading(true)
       const response = await fetch(`/api/link-preview?url=${encodeURIComponent(article.url)}`)
@@ -28,7 +38,7 @@ const ArticleCard = ({ article }: ArticleCardProps) => {
     } finally {
       setIsLoading(false)
     }
-  }, [article.url])
+  }, [article.url, isInternalLink])
 
   useEffect(() => {
     if (!article.preview && article.url) {
@@ -49,6 +59,28 @@ const ArticleCard = ({ article }: ArticleCardProps) => {
     )
   }
 
+  // 내부 링크 렌더링
+  if (isInternalLink) {
+    return (
+      <div className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow">
+        <Link href={article.url} className="block">
+          <div className="aspect-video bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center">
+            <div className="text-center">
+              <div className="text-2xl mb-2">🔗</div>
+              <div className="text-purple-600 font-medium">{article.title}</div>
+            </div>
+          </div>
+          <div className="p-4">
+            <h4 className="font-semibold text-gray-900 truncate flex-1 mr-2">{article.title}</h4>
+            <p className="text-gray-600 text-sm">관련 프로젝트 보기</p>
+            <div className="mt-2 text-xs text-gray-500">ggac.kr</div>
+          </div>
+        </Link>
+      </div>
+    )
+  }
+
+  // 외부 링크: 에러 또는 미리보기 없음
   if (hasError || !preview) {
     return (
       <div className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow">
@@ -63,7 +95,13 @@ const ArticleCard = ({ article }: ArticleCardProps) => {
             <h4 className="font-semibold text-gray-900 truncate flex-1 mr-2">{article.title}</h4>
             <p className="text-gray-600 text-sm">기사 링크로 이동</p>
             <div className="mt-2 text-xs text-gray-500 truncate">
-              {new URL(article.url).hostname}
+              {(() => {
+                try {
+                  return new URL(article.url).hostname
+                } catch {
+                  return 'External Link'
+                }
+              })()}
             </div>
           </div>
         </a>
