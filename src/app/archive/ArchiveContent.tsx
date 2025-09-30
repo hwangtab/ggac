@@ -123,9 +123,11 @@ const ArchiveContent = ({ projects, artists }: ArchiveContentProps) => {
                         </span>
                       </div>
 
-                      <h3 className="text-2xl font-post font-semibold mb-2 text-gray-700 group-hover:text-primary-600 transition-colors duration-200 line-clamp-2 min-h-[3.5rem]">
-                        {project.title}
-                      </h3>
+                      <div className="min-h-[3.5rem] mb-2 flex items-start">
+                        <h3 className="text-2xl font-post font-semibold text-gray-700 group-hover:text-primary-600 transition-colors duration-200 line-clamp-2">
+                          {project.title}
+                        </h3>
+                      </div>
 
                       <p className="text-gray-600 text-sm mb-4 line-clamp-3">
                         {getProjectSummary(project, 120)}
