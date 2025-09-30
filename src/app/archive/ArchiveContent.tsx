@@ -127,12 +127,12 @@ const ArchiveContent = ({ projects, artists }: ArchiveContentProps) => {
                         {project.title}
                       </h3>
 
-                      <p className="text-gray-600 text-sm mb-3 line-clamp-3 flex-grow">
+                      <p className="text-gray-600 text-sm mb-4 line-clamp-3">
                         {getProjectSummary(project, 120)}
                       </p>
 
                       {project.artistIds.length > 0 && (
-                        <p className="text-xs text-gray-500 mt-auto">
+                        <p className="text-xs text-gray-500 mt-auto pt-2">
                           참여: {getArtistNames(project.artistIds)}
                         </p>
                       )}
