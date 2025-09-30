@@ -1,10 +1,12 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import Link from 'next/link'
 import OptimizedImage from '@/components/OptimizedImage'
+import PaginationControls from '@/components/PaginationControls'
 import { getProjectSummary } from '@/utils/projectUtils'
 import { useFilter } from '@/hooks/useFilter'
+import { usePagination } from '@/hooks/usePagination'
 import { ARCHIVE_CATEGORIES } from '@/constants/categories'
 import type { Project, Artist } from '@/types'
 
@@ -15,8 +17,28 @@ interface ArchiveContentProps {
 
 const ArchiveContent = ({ projects, artists }: ArchiveContentProps) => {
   const [selectedCategory, setSelectedCategory] = useState('All')
+  const PROJECTS_PER_PAGE = 9 // 3x3 그리드
 
   const filteredProjects = useFilter(projects, selectedCategory, { allLabel: 'All' })
+
+  // 페이지네이션 상태
+  const [paginationState, paginationActions] = usePagination({
+    initialPage: 1,
+    pageSize: PROJECTS_PER_PAGE,
+    totalCount: filteredProjects.length,
+    basePath: '/archive',
+  })
+
+  // 현재 페이지에 표시할 프로젝트
+  const startIndex = (paginationState.currentPage - 1) * PROJECTS_PER_PAGE
+  const endIndex = startIndex + PROJECTS_PER_PAGE
+  const paginatedProjects = filteredProjects.slice(startIndex, endIndex)
+
+  // 카테고리 변경 시 1페이지로 리셋
+  useEffect(() => {
+    paginationActions.setTotalCount(filteredProjects.length)
+    paginationActions.goToPage(1)
+  }, [selectedCategory, filteredProjects.length])
 
   // Memoize artist name lookup to prevent O(n²) operations on every render
   const getArtistNames = useCallback(
@@ -71,7 +93,7 @@ const ArchiveContent = ({ projects, artists }: ArchiveContentProps) => {
       <section className="py-16">
         <div className="container-custom">
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
-            {filteredProjects.map((project, index) => (
+            {paginatedProjects.map((project, index) => (
               <div key={project.id} className="group opacity-100 transition-all duration-300">
                 <Link href={`/archive/${project.slug}`}>
                   <div className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2 overflow-hidden h-full flex flex-col">
@@ -127,6 +149,18 @@ const ArchiveContent = ({ projects, artists }: ArchiveContentProps) => {
             </div>
           )}
         </div>
+
+        {/* Pagination */}
+        {filteredProjects.length > 0 && (
+          <PaginationControls
+            currentPage={paginationState.currentPage}
+            totalPages={paginationState.totalPages}
+            totalCount={filteredProjects.length}
+            pageSize={PROJECTS_PER_PAGE}
+            onPageChange={paginationActions.goToPage}
+            className="mt-12"
+          />
+        )}
       </section>
     </div>
   )
