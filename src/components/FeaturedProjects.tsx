@@ -40,7 +40,7 @@ const FeaturedProjects = ({ projects }: FeaturedProjectsProps) => {
                   </div>
 
                   {/* Project Info */}
-                  <div className={`p-6 ${index === 0 ? '' : 'flex flex-col h-full'}`}>
+                  <div className={`p-6 pb-8 ${index === 0 ? '' : 'flex flex-col h-full'}`}>
                     <div className="flex items-center justify-between mb-3">
                       <span className="inline-block px-3 py-1 bg-primary-100 text-primary-700 text-sm font-medium rounded-full">
                         {project.category}
