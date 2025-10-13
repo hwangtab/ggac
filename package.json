@@ -27,7 +27,7 @@
   },
   "dependencies": {
     "@supabase/auth-helpers-nextjs": "^0.10.0",
-    "@supabase/supabase-js": "^2.57.0",
+    "@supabase/supabase-js": "^2.75.0",
     "@types/dompurify": "^3.0.5",
     "@types/react-image-crop": "^8.1.6",
     "@types/webgl2": "^0.0.11",
