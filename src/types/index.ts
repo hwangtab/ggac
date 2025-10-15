@@ -615,6 +615,11 @@ export interface Project {
   videoUrl?: string | null
   /** 참여 아티스트 ID 목록 */
   artistIds: string[]
+  /** 신청 폼 정보 (공연 신청, 참가 신청 등) */
+  applicationForm?: {
+    title: string
+    url: string
+  }
   /** 티켓팅 정보 */
   ticketing?: TicketingInfo[]
   /** 관련 기사들 */

@@ -300,6 +300,10 @@
     "gallery": null,
     "videoUrl": null,
     "artistIds": ["artist-001", "artist-008", "artist-004", "artist-012", "artist-005", "artist-009", "artist-002", "artist-003"],
+    "applicationForm": {
+      "title": "공연 및 판매 신청하기",
+      "url": "https://temporal-curio-ad9.notion.site/28cec71d506780819624e4fb08d71504"
+    },
     "ticketing": [
       {
         "platform": "네이버 예약",
@@ -309,11 +313,6 @@
         "endDate": "2025-11-23"
       }
     ],
-    "relatedArticles": [
-      {
-        "title": "공연 및 판매 신청하기",
-        "url": "https://temporal-curio-ad9.notion.site/28cec71d506780819624e4fb08d71504"
-      }
-    ]
+    "relatedArticles": []
   }
 ]
