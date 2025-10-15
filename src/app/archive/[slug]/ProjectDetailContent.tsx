@@ -181,7 +181,7 @@ export default function ProjectDetailContent({
             {/* Application Form */}
             {project.applicationForm && (
               <div className="mt-12">
-                <h3 className="heading-tertiary mb-6">{project.applicationForm.title}</h3>
+                <h3 className="heading-tertiary mb-6">신청하기</h3>
                 <a
                   href={project.applicationForm.url}
                   target="_blank"
