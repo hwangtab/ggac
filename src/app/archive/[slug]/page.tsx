@@ -117,7 +117,7 @@ export async function generateMetadata({ params }: ProjectPageProps): Promise<Me
             width: 1200,
             height: 630,
             alt: safeTitle,
-            type: 'image/jpeg',
+            type: 'image/webp',
           },
         ],
         locale: 'ko_KR',

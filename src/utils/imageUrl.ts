@@ -105,14 +105,11 @@ export function generateImageUrl(imagePath?: string | null, options: ImageUrlOpt
 
 /**
  * SNS 공유를 위한 이미지 형식 변환
- * WebP를 JPEG로 변환 (더 넓은 SNS 플랫폼 호환성)
+ * 현대 SNS 플랫폼은 WebP를 지원하므로 변환 불필요
  */
 function convertToSocialFormat(imagePath: string): string {
-  // WebP를 JPEG로 변환
-  if (imagePath.includes('.webp')) {
-    return imagePath.replace('.webp', '.jpeg')
-  }
-
+  // WebP는 카카오톡, 페이스북, 트위터 등 주요 SNS에서 모두 지원됨
+  // 변환 없이 그대로 반환
   return imagePath
 }
 
