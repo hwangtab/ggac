@@ -178,6 +178,21 @@ export default function ProjectDetailContent({
               </div>
             )}
 
+            {/* Application Form */}
+            {project.applicationForm && (
+              <div className="mt-12">
+                <h3 className="heading-tertiary mb-6">{project.applicationForm.title}</h3>
+                <a
+                  href={project.applicationForm.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block w-full md:w-auto px-8 py-4 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl transition-colors duration-200 text-center shadow-lg hover:shadow-xl"
+                >
+                  {project.applicationForm.title} →
+                </a>
+              </div>
+            )}
+
             {/* Ticketing */}
             {project.ticketing && project.ticketing.length > 0 && (
               <div className="mt-12">
