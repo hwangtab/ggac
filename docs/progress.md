@@ -3,8 +3,8 @@
 ## Recent Changes
 
 - Added the '펑크포크 & 블루스' 공연 홍보 프로젝트, including Markdown copy,
-  event details, Yoo Dong Hyuk linkage, and DOT 인스타그램 DM 예매 정보를
-  `data/projects.json`에 반영.
+  event details, Yoo Dong Hyuk linkage, DOT 인스타그램 DM 예매 정보, and the
+  공식 뉴스아트 기사 링크를 `data/projects.json`에 반영.
 - Updated the OptimizedImage component to share the exact quality allow-list
   with `next.config.js`, added automatic fallbacks (WebP→JPEG/PNG→default
   avatar), and tuned fetch priority so images load reliably on mobile networks.
