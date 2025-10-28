@@ -26,35 +26,38 @@ const Lightbox = ({ images, currentIndex, onClose, onNext, onPrev }: LightboxPro
   return (
     <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center animate-fade-in">
       {/* Close Button */}
-      <button 
-        onClick={onClose} 
+      <button
+        onClick={onClose}
         className="absolute top-4 right-4 text-white/80 hover:text-white transition-colors z-50"
       >
         <FiX size={32} />
       </button>
 
       {/* Main Image */}
-      <div className="relative w-full h-full max-w-4xl max-h-[90vh] flex items-center justify-center">
+      <div className="relative w-full h-full max-w-4xl max-h-[90vh] flex items-center justify-center px-6">
         <OptimizedImage
           src={images[currentIndex]}
           alt={`갤러리 이미지 ${currentIndex + 1}`}
-          fill
-          className="object-contain"
-          sizes="100vw"
+          width={1600}
+          height={900}
+          className="w-full h-auto max-h-[90vh] object-contain mx-auto"
+          suppressSkeleton
+          quality={90}
+          sizes="(max-width: 768px) 100vw, 80vw"
         />
       </div>
 
       {/* Prev Button */}
-      <button 
-        onClick={onPrev} 
+      <button
+        onClick={onPrev}
         className="absolute left-4 top-1/2 -translate-y-1/2 text-white/80 hover:text-white transition-colors bg-black/30 rounded-full p-2"
       >
         <FiChevronLeft size={32} />
       </button>
 
       {/* Next Button */}
-      <button 
-        onClick={onNext} 
+      <button
+        onClick={onNext}
         className="absolute right-4 top-1/2 -translate-y-1/2 text-white/80 hover:text-white transition-colors bg-black/30 rounded-full p-2"
       >
         <FiChevronRight size={32} />
