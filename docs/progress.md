@@ -9,6 +9,8 @@
   이미지 경로를 롱플레이어 촬영 장면(`IMG_6060.webp`)으로 조정.
 - Updated the 사바하 라이브 영상 촬영 현장 스케치 복기 내용을 실제 작업 흐름과
   뒷풀이 분위기에 맞게 수정.
+- Re-classified the 사바하 라이브 영상 촬영 프로젝트를 `행사` 카테고리로 조정해
+  아카이브 목록 필터와 정렬이 실제 진행 맥락과 맞춰지도록 함.
 - Added the '펑크포크 & 블루스' 공연 홍보 프로젝트, including Markdown copy,
   event details, Yoo Dong Hyuk linkage, DOT 인스타그램 DM 예매 정보, and the
   공식 뉴스아트 기사 링크를 `data/projects.json`에 반영.
