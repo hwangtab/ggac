@@ -5,6 +5,8 @@
 - Added the 사바하 라이브 영상 촬영 기록을 `data/projects.json`에 등록하고, 대표
   이미지(1280×721 PNG), 상세 갤러리, YouTube 임베드 섹션을 포함하도록 프로젝트
   상세 UI를 확장.
+- Corrected the 사바하 라이브 영상 촬영 프로젝트의 공개 날짜(2025-10-12)와 대표
+  이미지 경로를 롱플레이어 촬영 장면(`IMG_6060.webp`)으로 조정.
 - Added the '펑크포크 & 블루스' 공연 홍보 프로젝트, including Markdown copy,
   event details, Yoo Dong Hyuk linkage, DOT 인스타그램 DM 예매 정보, and the
   공식 뉴스아트 기사 링크를 `data/projects.json`에 반영.
