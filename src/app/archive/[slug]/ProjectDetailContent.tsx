@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import OptimizedImage from '@/components/OptimizedImage'
+import YouTubeEmbed from '@/components/YouTubeEmbed'
 import TicketingCard from '@/components/TicketingCard'
 import ArticleCard from '@/components/ArticleCard'
 
@@ -171,9 +172,17 @@ export default function ProjectDetailContent({
             {/* Video */}
             {project.videoUrl && (
               <div className="mt-12">
-                <h3 className="heading-tertiary mb-6">관련 영상</h3>
-                <div className="aspect-video bg-gray-100 rounded-2xl flex items-center justify-center">
-                  <span className="text-gray-500">Video: {project.videoUrl}</span>
+                <h3 className="heading-tertiary mb-6">영상 보기</h3>
+                <YouTubeEmbed videoUrl={project.videoUrl} title={project.title} />
+                <div className="mt-4 text-sm text-gray-500">
+                  <a
+                    href={project.videoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary-600 hover:text-primary-700 underline underline-offset-4 hover:underline-offset-6"
+                  >
+                    YouTube에서 영상 열기 →
+                  </a>
                 </div>
               </div>
             )}
