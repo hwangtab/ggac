@@ -341,5 +341,34 @@
         "url": "https://www.news-art.co.kr/news/article.html?no=32861"
       }
     ]
+  },
+  {
+    "id": "project-016",
+    "slug": "sabbaha-live-shoot",
+    "title": "사바하 라이브 영상 촬영",
+    "category": "공연·전시",
+    "publishedDate": "2024-10-12",
+    "coverImage": "/images/projects/sabbaha-acme-live.webp",
+    "description": "사바하의 라이브 영상을 촬영하기 위해 ACME 스튜디오가 다시 모였습니다. 조명과 세트, 촬영 동선까지 모두 직접 꾸려 몰입감 있는 붉은 색조의 무대를 완성했고, 긴장감과 에너지가 동시에 터져 나오는 순간을 영상으로 담아냈습니다.\n\n### 현장 스케치\n- 사운드와 카메라 포지션을 계속 점검하며 베스트 테이크를 위한 리허설을 반복했습니다.\n- 무대 뒤편에서는 소품과 커튼, 드레이프를 수차례 교체하며 곡마다 다른 분위기를 표현했습니다.\n- 촬영이 끝난 뒤에는 준비한 다과로 간단히 에너지를 보충하며 서로의 작업을 되돌아보는 시간을 가졌습니다.\n\n### 촬영 이후 이야기\n촬영을 마치고 출장작곡가 김동산이 운영하는 복합 문화공간 롱플레이어(바·음반샵·공연장)를 방문해 함께 뒷풀이를 즐겼습니다. 현장에서 공유한 아이디어를 더 구체화하며 다음 프로젝트를 위한 영감을 나눴습니다.",
+    "gallery": [
+      "/images/archive/sabbaha-acme-live/IMG_6003.webp",
+      "/images/archive/sabbaha-acme-live/IMG_6010.webp",
+      "/images/archive/sabbaha-acme-live/IMG_6011.webp",
+      "/images/archive/sabbaha-acme-live/IMG_6012.webp",
+      "/images/archive/sabbaha-acme-live/IMG_6013.webp",
+      "/images/archive/sabbaha-acme-live/IMG_6019.webp",
+      "/images/archive/sabbaha-acme-live/IMG_6021.webp",
+      "/images/archive/sabbaha-acme-live/IMG_6023.webp",
+      "/images/archive/sabbaha-acme-live/IMG_6024.webp",
+      "/images/archive/sabbaha-acme-live/IMG_6060.webp"
+    ],
+    "videoUrl": "https://youtu.be/F8JH5d9pOt8?si=MFZqmf9-6zsUJEfb",
+    "artistIds": ["artist-001", "artist-009", "artist-003", "artist-002", "artist-008"],
+    "relatedArticles": [
+      {
+        "title": "뉴스아트",
+        "url": "https://www.news-art.co.kr/news/article.html?no=32856"
+      }
+    ]
   }
 ]
