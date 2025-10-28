@@ -15,6 +15,8 @@
   조합원으로 명시해 문맥을 보강.
 - Fixed the 프로젝트 상세 라이트박스가 빈 화면으로 보이던 문제를 해결하기 위해
   라이트박스 이미지 렌더링 방식을 리사이즈 기반으로 조정.
+- Enabled 아카이브 라이트박스를 배경을 클릭해도 닫히도록 만들어 사용자 흐름을
+  자연스럽게 개선.
 - Added the '펑크포크 & 블루스' 공연 홍보 프로젝트, including Markdown copy,
   event details, Yoo Dong Hyuk linkage, DOT 인스타그램 DM 예매 정보, and the
   공식 뉴스아트 기사 링크를 `data/projects.json`에 반영.

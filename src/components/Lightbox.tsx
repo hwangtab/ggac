@@ -24,7 +24,16 @@ const Lightbox = ({ images, currentIndex, onClose, onNext, onPrev }: LightboxPro
   }, [onClose, onNext, onPrev])
 
   return (
-    <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center animate-fade-in">
+    <div
+      className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center animate-fade-in"
+      onClick={event => {
+        if (event.target === event.currentTarget) {
+          onClose()
+        }
+      }}
+      role="dialog"
+      aria-modal="true"
+    >
       {/* Close Button */}
       <button
         onClick={onClose}
