@@ -11,7 +11,10 @@
   뒷풀이 분위기에 맞게 수정.
 - Re-classified the 사바하 라이브 영상 촬영 프로젝트를 `행사` 카테고리로 조정해
   아카이브 목록 필터와 정렬이 실제 진행 맥락과 맞춰지도록 함.
-- Clarified the ACME 스튜디오 모임 표현을 장소 중심 서술로 다듬어 문맥을 보강.
+- Clarified the ACME 스튜디오 모임 표현을 장소 중심 서술로 다듬고, 주체를
+  조합원으로 명시해 문맥을 보강.
+- Fixed the 프로젝트 상세 라이트박스가 빈 화면으로 보이던 문제를 해결하기 위해
+  라이트박스 이미지 렌더링 방식을 리사이즈 기반으로 조정.
 - Added the '펑크포크 & 블루스' 공연 홍보 프로젝트, including Markdown copy,
   event details, Yoo Dong Hyuk linkage, DOT 인스타그램 DM 예매 정보, and the
   공식 뉴스아트 기사 링크를 `data/projects.json`에 반영.
