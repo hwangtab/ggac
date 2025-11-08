@@ -1,43 +1,43 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
-import { supabase } from '../../lib/supabase/client'
-import PostList from '../../components/PostList'
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase/client'
+import PostList from '@/components/PostList'
 import type { MemberProfile, Post } from '@/types'
 
-interface InitialPostsData {
-  posts: Post[]
-  hasNext: boolean
-  nextCursor: string | null
-}
-
 interface BoardClientProps {
-  initialData?: InitialPostsData
+  initialData: {
+    posts: Post[]
+    hasNext: boolean
+    hasPrev: boolean
+    currentPage: number
+  }
+  category: string
+  page: number
 }
 
-export default function BoardClient({ initialData }: BoardClientProps) {
+const BoardClient = ({ initialData, category, page }: BoardClientProps) => {
+  const router = useRouter()
   const [user, setUser] = useState<any>(null)
-  const [isMember, setIsMember] = useState<boolean>(false)
-  // 초기 로딩 상태를 true로 설정하여 인증 확인 중 안내창 깜빡임 방지
+  const [isMember, setIsMember] = useState(false)
   const [userLoading, setUserLoading] = useState(true)
-  const [posts, setPosts] = useState<Post[]>(initialData?.posts || [])
-  const [hasNext, setHasNext] = useState(initialData?.hasNext || false)
-  const [nextCursor, setNextCursor] = useState<string | null>(initialData?.nextCursor || null)
+  const [posts, setPosts] = useState<Post[]>(initialData.posts)
+  const [hasNext, setHasNext] = useState(initialData.hasNext)
+  const [hasPrev, setHasPrev] = useState(initialData.hasPrev)
   const [loading, setLoading] = useState(false)
 
-  const router = useRouter()
-  const searchParams = useSearchParams()
+  useEffect(() => {
+    setPosts(initialData.posts)
+    setHasNext(initialData.hasNext)
+    setHasPrev(initialData.hasPrev)
+    setLoading(false)
+  }, [initialData])
 
-  const category = searchParams.get('category') || '전체'
-  const cursor = searchParams.get('cursor') || null
-
-  // 사용자 인증 상태 관리
   useEffect(() => {
     let mounted = true
 
     const fetchUserAndProfile = async () => {
-      console.log('🔍 [BoardClient] 사용자 인증 상태 확인 시작')
       try {
         const {
           data: { session },
@@ -45,7 +45,7 @@ export default function BoardClient({ initialData }: BoardClientProps) {
         } = await supabase.auth.getSession()
 
         if (sessionError) {
-          console.error('❌ [BoardClient] 세션 오류:', sessionError)
+          console.error('세션 조회 오류:', sessionError)
           if (mounted) {
             setUserLoading(false)
           }
@@ -53,13 +53,8 @@ export default function BoardClient({ initialData }: BoardClientProps) {
         }
 
         const currentUser = session?.user || null
-        console.log('🔍 [BoardClient] 세션 확인 완료:', {
-          hasUser: !!currentUser,
-          userId: currentUser?.id,
-        })
 
         if (!currentUser) {
-          console.log('✅ [BoardClient] 로그인하지 않은 사용자 - userLoading false로 설정')
           if (mounted) {
             setUser(null)
             setIsMember(false)
@@ -72,7 +67,6 @@ export default function BoardClient({ initialData }: BoardClientProps) {
           setUser(currentUser)
         }
 
-        // 프로필 정보 가져오기 (로그인한 사용자만)
         const { data: profile, error: profileError } = await supabase
           .from('member_profiles')
           .select('registration_status, is_active')
@@ -80,43 +74,38 @@ export default function BoardClient({ initialData }: BoardClientProps) {
           .single()
 
         if (profileError) {
-          console.error('❌ [BoardClient] 프로필 조회 오류:', profileError)
+          console.error('프로필 조회 오류:', profileError)
           if (mounted) {
             setIsMember(false)
             setUserLoading(false)
           }
         } else if (profile && mounted) {
-          console.log('✅ [BoardClient] 프로필 조회 성공, userLoading false로 설정')
           setIsMember(
             (profile as MemberProfile).registration_status === 'approved' &&
               (profile as MemberProfile).is_active
           )
           setUserLoading(false)
         }
-      } catch (e) {
-        console.error('❌ [BoardClient] fetchUserAndProfile 오류:', e)
+      } catch (error) {
+        console.error('fetchUserAndProfile 실패:', error)
         if (mounted) {
           setUser(null)
           setIsMember(false)
           setUserLoading(false)
-          console.log('✅ [BoardClient] catch에서 userLoading false로 설정')
         }
       }
     }
 
-    // 인증/프로필 확인은 비동기적으로 진행하되, 목록 렌더는 차단하지 않음
     fetchUserAndProfile()
 
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (mounted) {
-        const newUser = session?.user || null
-        setUser(newUser)
-
-        if (!newUser) {
-          setIsMember(false)
-        } else {
-          fetchUserAndProfile()
-        }
+      if (!mounted) return
+      const newUser = session?.user || null
+      setUser(newUser)
+      if (!newUser) {
+        setIsMember(false)
+      } else {
+        fetchUserAndProfile()
       }
     })
 
@@ -124,96 +113,36 @@ export default function BoardClient({ initialData }: BoardClientProps) {
       mounted = false
       authListener?.subscription.unsubscribe()
     }
-  }, [router])
+  }, [])
 
-  // 클라이언트에서 추가 데이터 로드 (커서 기반 페이지네이션)
-  const loadMorePosts = async (newCursor: string) => {
-    setLoading(true)
-    try {
-      const params = new URLSearchParams({
-        limit: '20',
-        cursor: newCursor,
-        include_likes: 'true',
-        ...(category !== '전체' && { category }),
-      })
-
-      const response = await fetch(`/api/posts?${params.toString()}`)
-      const result = await response.json()
-
-      if (result.success) {
-        const { posts: newPosts, pagination } = result.data
-        setPosts(newPosts)
-        setHasNext(pagination.has_next)
-        setNextCursor(pagination.next_cursor)
-      }
-    } catch (error) {
-      console.error('게시글 로드 오류:', error)
-    } finally {
-      setLoading(false)
+  const buildBoardUrl = (params: { category?: string; page?: number }) => {
+    const search = new URLSearchParams()
+    if (params.category && params.category !== '전체') {
+      search.set('category', params.category)
     }
+    if (params.page && params.page > 1) {
+      search.set('page', params.page.toString())
+    }
+    const query = search.toString()
+    return query ? `/board?${query}` : '/board'
   }
-
-  // URL 변경 시 데이터 새로고침 및 초기 로드 폴백
-  useEffect(() => {
-    if (cursor && cursor !== nextCursor) {
-      loadMorePosts(cursor)
-    } else if (!cursor && initialData) {
-      // 첫 페이지로 돌아온 경우 초기 데이터 사용
-      setPosts(initialData.posts)
-      setHasNext(initialData.hasNext)
-      setNextCursor(initialData.nextCursor)
-    } else if (!cursor && !initialData && posts.length === 0) {
-      // 초기 데이터가 없고 커서도 없으면 첫 페이지 API 호출
-      console.log('🔄 [BoardClient] 초기 데이터 없음, API 호출로 폴백')
-      loadMorePosts('')
-    }
-  }, [cursor, category, initialData])
 
   const handleCategoryChange = (newCategory: string) => {
     setLoading(true)
-    const params = new URLSearchParams()
-    if (newCategory !== '전체') {
-      params.set('category', newCategory)
-    }
-    const url = `/board?${params.toString()}`
-    try {
-      // 사전 프리패치로 체감 로딩 감소
-      ;(router as any).prefetch?.(url)
-    } catch {}
-    router.push(url)
+    router.push(buildBoardUrl({ category: newCategory, page: 1 }))
   }
 
   const handleNextPage = () => {
-    if (nextCursor) {
-      setLoading(true)
-      const params = new URLSearchParams()
-      params.set('cursor', nextCursor)
-      if (category !== '전체') {
-        params.set('category', category)
-      }
-      const url = `/board?${params.toString()}`
-      try {
-        ;(router as any).prefetch?.(url)
-      } catch {}
-      router.push(url)
-    }
+    if (!hasNext) return
+    setLoading(true)
+    router.push(buildBoardUrl({ category, page: page + 1 }))
   }
 
   const handlePrevPage = () => {
-    // 이전 페이지는 단순화: 첫 페이지로 돌아가기
+    if (!hasPrev) return
     setLoading(true)
-    const params = new URLSearchParams()
-    if (category !== '전체') {
-      params.set('category', category)
-    }
-    const url = `/board?${params.toString()}`
-    try {
-      ;(router as any).prefetch?.(url)
-    } catch {}
-    router.push(url)
+    router.push(buildBoardUrl({ category, page: Math.max(1, page - 1) }))
   }
-
-  // 사용자 로딩 상태로 전체 화면을 막지 않음
 
   return (
     <div className="min-h-screen bg-gray-50 pt-20 md:pt-24">
@@ -223,7 +152,6 @@ export default function BoardClient({ initialData }: BoardClientProps) {
           <p className="text-gray-600">경기아트콜렉티브 협동조합 조합원들의 소통 공간입니다.</p>
         </div>
 
-        {/* 비로그인 사용자 안내 - 로딩 중에는 표시하지 않음 */}
         {!user && !userLoading && (
           <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg relative z-10 pointer-events-auto">
             <p className="text-blue-800 mb-2">
@@ -249,7 +177,6 @@ export default function BoardClient({ initialData }: BoardClientProps) {
           </div>
         )}
 
-        {/* 로그인했지만 승인 대기 중인 사용자 - 로딩 중에는 표시하지 않음 */}
         {!isMember && user && !userLoading && (
           <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg relative z-10 pointer-events-auto">
             <p className="text-yellow-800">
@@ -258,7 +185,6 @@ export default function BoardClient({ initialData }: BoardClientProps) {
           </div>
         )}
 
-        {/* 조합원만 글쓰기 버튼 표시 */}
         {isMember && user && (
           <div className="mb-6 relative z-10 pointer-events-auto">
             <button
@@ -276,13 +202,16 @@ export default function BoardClient({ initialData }: BoardClientProps) {
           currentUserId={user?.id}
           isMember={isMember}
           hasNext={hasNext}
-          hasPrev={!!cursor}
+          hasPrev={hasPrev}
           loading={loading}
           onNextPage={handleNextPage}
           onPrevPage={handlePrevPage}
           onCategoryChange={handleCategoryChange}
+          selectedCategory={category}
         />
       </div>
     </div>
   )
 }
+
+export default BoardClient
