@@ -1,6 +1,17 @@
 import ArchiveContent from './ArchiveContent'
 import { getProjectsSorted, getArtists } from '@/lib/data'
+import { ARCHIVE_CATEGORIES } from '@/constants/categories'
+import type { ArchiveCategory } from '@/constants/categories'
 import type { Metadata } from 'next'
+import type { Project } from '@/types'
+
+const PROJECTS_PER_PAGE = 9
+
+type ArchivePageProps = {
+  searchParams?: {
+    [key: string]: string | string[] | undefined
+  }
+}
 
 // ISR 최적화: 프로젝트는 6시간 캐시 (상대적으로 자주 업데이트)
 export const revalidate = 21600
@@ -67,12 +78,58 @@ export const metadata: Metadata = {
   },
 }
 
-const ArchivePage = async () => {
-  // 개선된 데이터 로딩 - 중복 제거 및 캐싱 활용
-  const projects = await getProjectsSorted() // 이미 정렬된 프로젝트들
+const getSingleParam = (value?: string | string[] | null): string | undefined => {
+  if (!value) return undefined
+  return Array.isArray(value) ? value[0] : value
+}
+
+const filterProjectsByCategory = (projects: Project[], category: ArchiveCategory) => {
+  if (category === 'All') {
+    return projects
+  }
+
+  return projects.filter(project => project.category === category)
+}
+
+const ArchivePage = async ({ searchParams = {} }: ArchivePageProps) => {
+  const projects = await getProjectsSorted()
   const artists = await getArtists()
 
-  return <ArchiveContent projects={projects} artists={artists} />
+  const rawCategory = getSingleParam(searchParams.category)
+  const selectedCategory = ARCHIVE_CATEGORIES.includes(rawCategory as ArchiveCategory)
+    ? (rawCategory as ArchiveCategory)
+    : 'All'
+
+  const filteredProjects = filterProjectsByCategory(projects, selectedCategory)
+  const totalCount = filteredProjects.length
+  const totalPages = Math.max(1, Math.ceil(totalCount / PROJECTS_PER_PAGE))
+
+  const requestedPage = Number(getSingleParam(searchParams.page)) || 1
+  const currentPage = Math.min(Math.max(1, requestedPage), totalPages)
+  const startIndex = (currentPage - 1) * PROJECTS_PER_PAGE
+  const paginatedProjects = filteredProjects.slice(startIndex, startIndex + PROJECTS_PER_PAGE)
+
+  const artistIds = new Set<string>()
+  paginatedProjects.forEach(project => {
+    project.artistIds.forEach(id => artistIds.add(id))
+  })
+
+  const artistNameMap: Record<string, string> = {}
+  artists.forEach(artist => {
+    if (artistIds.has(artist.id)) {
+      artistNameMap[artist.id] = artist.name
+    }
+  })
+
+  return (
+    <ArchiveContent
+      projects={paginatedProjects}
+      selectedCategory={selectedCategory}
+      pagination={{ currentPage, totalPages, totalCount }}
+      pageSize={PROJECTS_PER_PAGE}
+      artistNameMap={artistNameMap}
+    />
+  )
 }
 
 export default ArchivePage
