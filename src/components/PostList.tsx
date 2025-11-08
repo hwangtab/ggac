@@ -17,13 +17,13 @@ interface PostListProps {
   posts: Post[]
   currentUserId?: string
   isMember: boolean
-  // 키셋 페이지네이션 props
   hasNext?: boolean
   hasPrev?: boolean
   loading?: boolean
   onNextPage?: () => void
   onPrevPage?: () => void
   onCategoryChange?: (category: string) => void
+  selectedCategory?: string
 }
 
 // author display name is provided by API; avoid extra client fetches for speed
@@ -38,11 +38,16 @@ const PostList: React.FC<PostListProps> = ({
   onNextPage,
   onPrevPage,
   onCategoryChange,
+  selectedCategory = '전체',
 }) => {
-  const [selectedCategory, setSelectedCategory] = useState<string>('전체')
+  const [activeCategory, setActiveCategory] = useState<string>(selectedCategory)
   const [expandedPosts, setExpandedPosts] = useState<Set<string>>(new Set())
   const [localPosts, setLocalPosts] = useState<Post[]>(posts)
   const router = useRouter()
+
+  useEffect(() => {
+    setActiveCategory(selectedCategory)
+  }, [selectedCategory])
 
   // posts prop이 변경될 때 localPosts 동기화
   useEffect(() => {
@@ -64,10 +69,8 @@ const PostList: React.FC<PostListProps> = ({
   }, [])
 
   const handleCategoryChange = (category: string) => {
-    setSelectedCategory(category)
-    if (onCategoryChange) {
-      onCategoryChange(category)
-    }
+    setActiveCategory(category)
+    onCategoryChange?.(category)
   }
 
   const getCategoryBadgeColor = (category: string) => {
@@ -100,7 +103,7 @@ const PostList: React.FC<PostListProps> = ({
               onClick={() => handleCategoryChange(category)}
               disabled={loading}
               className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                selectedCategory === category
+                activeCategory === category
                   ? 'bg-primary-600 text-white'
                   : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
               } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}

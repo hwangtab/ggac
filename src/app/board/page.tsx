@@ -2,22 +2,22 @@
 import { Suspense } from 'react'
 import BoardServerData from './BoardServerData'
 
-// ISR 설정 - 서버 컴포넌트에서 초기 데이터 캐싱
 export const revalidate = 60
 
-// 서버 컴포넌트 - ISR로 초기 데이터 캐싱
-async function BoardPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ category?: string; cursor?: string; refresh?: string }>
-}) {
-  const params = await searchParams
-  const category = params.category || '전체'
-  const refreshKey = params.refresh
+interface BoardPageProps {
+  searchParams?: {
+    category?: string
+    page?: string
+  }
+}
+
+const BoardPage = ({ searchParams = {} }: BoardPageProps) => {
+  const category = searchParams.category || '전체'
+  const pageParam = parseInt(searchParams.page || '1', 10)
+  const page = Number.isFinite(pageParam) && pageParam > 0 ? pageParam : 1
 
   return (
     <div>
-      {/* 서버에서 초기 데이터 제공 (ISR 캐시됨) - 즉시 스트리밍을 위해 Suspense로 감싸기 */}
       <Suspense
         fallback={
           <div className="pt-24 md:pt-28 container mx-auto px-4">
@@ -34,7 +34,7 @@ async function BoardPage({
           </div>
         }
       >
-        <BoardServerData category={category} limit={15} refreshKey={refreshKey} />
+        <BoardServerData category={category} page={page} pageSize={15} />
       </Suspense>
     </div>
   )
