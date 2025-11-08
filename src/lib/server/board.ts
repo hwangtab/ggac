@@ -8,6 +8,8 @@ export type BoardInitialPost = Post & {
   preview_has_images: boolean
   preview_image_count: number
   attachments_stats: NonNullable<Post['attachments_stats']>
+  comment_count: number
+  like_count: number
 }
 
 export interface BoardListParams {
@@ -116,7 +118,7 @@ export const fetchBoardPosts = cache(
         preview_has_images: preview.hasImages,
         preview_image_count: preview.imageCount,
         comment_count: 0,
-        is_liked: false,
+        like_count: 0,
         attachments_stats: {
           total_attachments: 0,
           total_size: 0,
@@ -130,12 +132,16 @@ export const fetchBoardPosts = cache(
 
     const postIds = basePosts.map(post => post.id)
     if (postIds.length) {
-      const { data: attachmentRows, error: attachmentError } = await supabase
-        .from('post_attachments')
-        .select('post_id, file_type, file_size')
-        .in('post_id', postIds)
+      const [attachmentResult, commentResult, likeResult] = await Promise.all([
+        supabase
+          .from('post_attachments')
+          .select('post_id, file_type, file_size')
+          .in('post_id', postIds),
+        supabase.from('comments').select('post_id').eq('is_deleted', false).in('post_id', postIds),
+        supabase.from('post_likes').select('post_id').in('post_id', postIds),
+      ])
 
-      if (!attachmentError && attachmentRows) {
+      if (!attachmentResult.error && attachmentResult.data) {
         const statsMap = new Map<
           string,
           {
@@ -148,7 +154,7 @@ export const fetchBoardPosts = cache(
           }
         >()
 
-        attachmentRows.forEach(row => {
+        attachmentResult.data.forEach(row => {
           const key = String(row.post_id)
           const type = (row.file_type as string) || 'other'
           const current = statsMap.get(key) || {
@@ -184,6 +190,28 @@ export const fetchBoardPosts = cache(
             post.preview_has_images = stats.image > 0
             post.preview_image_count = stats.image
           }
+        })
+      }
+
+      if (!commentResult.error && commentResult.data) {
+        const commentCountMap = new Map<string, number>()
+        commentResult.data.forEach(row => {
+          const key = String(row.post_id)
+          commentCountMap.set(key, (commentCountMap.get(key) || 0) + 1)
+        })
+        basePosts.forEach(post => {
+          post.comment_count = commentCountMap.get(post.id) ?? 0
+        })
+      }
+
+      if (!likeResult.error && likeResult.data) {
+        const likeCountMap = new Map<string, number>()
+        likeResult.data.forEach(row => {
+          const key = String(row.post_id)
+          likeCountMap.set(key, (likeCountMap.get(key) || 0) + 1)
+        })
+        basePosts.forEach(post => {
+          post.like_count = likeCountMap.get(post.id) ?? 0
         })
       }
     }
