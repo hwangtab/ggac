@@ -130,43 +130,4 @@ export const usePagination = ({
   return [state, actions]
 }
 
-// 페이지 번호 배열 생성 유틸리티
-export const generatePageNumbers = (
-  currentPage: number,
-  totalPages: number,
-  maxVisible: number = 5
-): (number | '...')[] => {
-  if (totalPages <= maxVisible) {
-    return Array.from({ length: totalPages }, (_, i) => i + 1)
-  }
-
-  const pages: (number | '...')[] = []
-  const halfVisible = Math.floor(maxVisible / 2)
-
-  if (currentPage <= halfVisible + 1) {
-    // 시작 부분
-    for (let i = 1; i <= maxVisible - 1; i++) {
-      pages.push(i)
-    }
-    pages.push('...')
-    pages.push(totalPages)
-  } else if (currentPage >= totalPages - halfVisible) {
-    // 끝 부분
-    pages.push(1)
-    pages.push('...')
-    for (let i = totalPages - maxVisible + 2; i <= totalPages; i++) {
-      pages.push(i)
-    }
-  } else {
-    // 중간 부분
-    pages.push(1)
-    pages.push('...')
-    for (let i = currentPage - halfVisible + 1; i <= currentPage + halfVisible - 1; i++) {
-      pages.push(i)
-    }
-    pages.push('...')
-    pages.push(totalPages)
-  }
-
-  return pages
-}
+export { generatePageNumbers } from '@/utils/pagination'

@@ -413,7 +413,7 @@ export const getProjectBySlug = cache(async (slug: string): Promise<Project | nu
 // 정렬된 프로젝트 가져오기 (최신순)
 export const getProjectsSorted = cache(async (): Promise<Project[]> => {
   const projects = await getProjects()
-  return projects.sort(
+  return [...projects].sort(
     (a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime()
   )
 })
