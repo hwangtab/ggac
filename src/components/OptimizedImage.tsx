@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { useState, useEffect, useRef, memo } from 'react'
+import { useState, useEffect, useRef, memo, useCallback } from 'react'
 import type { OptimizedImageProps } from '@/types'
 
 // Next.js 설정과 동기화된 허용 품질 값 파싱
@@ -65,6 +65,23 @@ function getNetworkQuality(): { quality: number; priority: boolean } {
   }
 }
 
+function splitUrl(url: string): { path: string; query: string } {
+  if (!url) {
+    return { path: '', query: '' }
+  }
+
+  const [path, ...rest] = url.split('?')
+
+  return {
+    path,
+    query: rest.length ? `?${rest.join('?')}` : '',
+  }
+}
+
+function appendQuery(path: string, query: string): string {
+  return query ? `${path}${query}` : path
+}
+
 function buildFallbackQueue(src: string, extraSources?: string[]): string[] {
   const queue = new Set<string>()
 
@@ -73,27 +90,22 @@ function buildFallbackQueue(src: string, extraSources?: string[]): string[] {
   }
 
   if (src) {
-    // Supabase 이미지인 경우 재시도를 위해 동일 URL 한 번 더 추가
-    if (src.includes('supabase.co')) {
-      queue.add(src) // 재시도용 동일 URL
+    queue.add(src)
+    const { path, query } = splitUrl(src)
+    const normalizedPath = path.toLowerCase()
+
+    const addReplacements = (extension: string) => {
+      queue.add(appendQuery(path.replace(/\.[^/.]+$/i, `.${extension}`), query))
     }
 
-    if (src.endsWith('.webp')) {
-      queue.add(src.replace(/\.webp$/i, '.avif'))
-      queue.add(src.replace(/\.webp$/i, '.jpg'))
-      queue.add(src.replace(/\.webp$/i, '.jpeg'))
-      queue.add(src.replace(/\.webp$/i, '.png'))
-    } else if (src.endsWith('.avif')) {
-      queue.add(src.replace(/\.avif$/i, '.webp'))
-      queue.add(src.replace(/\.avif$/i, '.jpg'))
-      queue.add(src.replace(/\.avif$/i, '.jpeg'))
-      queue.add(src.replace(/\.avif$/i, '.png'))
+    if (normalizedPath.endsWith('.webp')) {
+      ;['avif', 'jpg', 'jpeg', 'png'].forEach(ext => addReplacements(ext))
+    } else if (normalizedPath.endsWith('.avif')) {
+      ;['webp', 'jpg', 'jpeg', 'png'].forEach(ext => addReplacements(ext))
     }
   }
 
   queue.add('/images/default-avatar.webp')
-
-  queue.delete(src)
 
   return Array.from(queue)
 }
@@ -116,6 +128,8 @@ const OptimizedImage = memo(function OptimizedImage({
   suppressSkeleton = false,
   unoptimized = false,
   fallbackSources,
+  loadTimeoutMs,
+  errorTimeoutMs,
 }: OptimizedImageProps) {
   const [hasError, setHasError] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -124,6 +138,20 @@ const OptimizedImage = memo(function OptimizedImage({
   const [retryCount, setRetryCount] = useState(0)
   const fallbackQueueRef = useRef<string[]>([])
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const errorTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const imageRef = useRef<HTMLImageElement | null>(null)
+
+  const clearLoadAndErrorTimers = useCallback(() => {
+    if (loadTimeoutRef.current) {
+      clearTimeout(loadTimeoutRef.current)
+      loadTimeoutRef.current = null
+    }
+    if (errorTimeoutRef.current) {
+      clearTimeout(errorTimeoutRef.current)
+      errorTimeoutRef.current = null
+    }
+  }, [])
 
   // 네트워크 조건 감지
   useEffect(() => {
@@ -137,6 +165,8 @@ const OptimizedImage = memo(function OptimizedImage({
     setHasError(false)
     setIsLoading(true)
     setRetryCount(0)
+    imageRef.current = null
+    clearLoadAndErrorTimers()
 
     // 기존 타이머 정리
     if (retryTimeoutRef.current) {
@@ -144,7 +174,7 @@ const OptimizedImage = memo(function OptimizedImage({
     }
 
     onLoadStart?.()
-  }, [src, fallbackSources, onLoadStart])
+  }, [clearLoadAndErrorTimers, fallbackSources, onLoadStart, src])
 
   // 컴포넌트 언마운트 시 타이머 정리
   useEffect(() => {
@@ -152,8 +182,9 @@ const OptimizedImage = memo(function OptimizedImage({
       if (retryTimeoutRef.current) {
         clearTimeout(retryTimeoutRef.current)
       }
+      clearLoadAndErrorTimers()
     }
-  }, [])
+  }, [clearLoadAndErrorTimers])
 
   // 최적화된 품질 계산 (네트워크 조건 반영 + 허용된 값으로 제한)
   const optimizedQuality = getValidQuality(Math.min(quality, networkQuality.quality))
@@ -174,7 +205,8 @@ const OptimizedImage = memo(function OptimizedImage({
       ? `${className} relative`
       : 'relative'
 
-  const handleError = () => {
+  const handleError = useCallback(() => {
+    clearLoadAndErrorTimers()
     const isSupabaseImage = currentSrc.includes('supabase.co')
     const maxRetries = isSupabaseImage ? 3 : 1
 
@@ -216,12 +248,61 @@ const OptimizedImage = memo(function OptimizedImage({
     setHasError(true)
     setIsLoading(false)
     onErrorProp?.()
-  }
+  }, [clearLoadAndErrorTimers, currentSrc, retryCount, onErrorProp])
 
-  const handleLoad = () => {
+  useEffect(() => {
+    if (!isLoading) {
+      clearLoadAndErrorTimers()
+      return
+    }
+
+    const isSupabaseImage = currentSrc.includes('supabase.co')
+    const resolvedLoadTimeout = loadTimeoutMs ?? (isSupabaseImage ? 12000 : 8000)
+    const resolvedErrorTimeout = errorTimeoutMs ?? 4000
+
+    if (resolvedLoadTimeout > 0) {
+      loadTimeoutRef.current = setTimeout(() => {
+        console.warn(
+          `[OptimizedImage] 로딩 지연 감지(${resolvedLoadTimeout}ms) → 대체 로직 실행: ${currentSrc}`
+        )
+        clearLoadAndErrorTimers()
+        handleError()
+      }, resolvedLoadTimeout)
+    }
+
+    if (resolvedErrorTimeout > 0) {
+      errorTimeoutRef.current = setTimeout(() => {
+        console.warn(
+          `[OptimizedImage] 최종 타임아웃(${resolvedLoadTimeout + resolvedErrorTimeout}ms) → 에러 전환: ${currentSrc}`
+        )
+        clearLoadAndErrorTimers()
+        setHasError(prev => {
+          if (!prev) {
+            onErrorProp?.()
+          }
+          return true
+        })
+        setIsLoading(false)
+      }, resolvedLoadTimeout + resolvedErrorTimeout)
+    }
+
+    return () => {
+      clearLoadAndErrorTimers()
+    }
+  }, [
+    clearLoadAndErrorTimers,
+    currentSrc,
+    errorTimeoutMs,
+    handleError,
+    isLoading,
+    loadTimeoutMs,
+    onErrorProp,
+  ])
+
+  const markImageLoaded = useCallback(() => {
+    clearLoadAndErrorTimers()
     setIsLoading(false)
 
-    // 로딩 성공 로깅 (개발 환경에서만)
     if (process.env.NODE_ENV === 'development') {
       const isSupabaseImage = currentSrc.includes('supabase.co')
       const retryText = retryCount > 0 ? ` (${retryCount}회 재시도 후)` : ''
@@ -235,15 +316,32 @@ const OptimizedImage = memo(function OptimizedImage({
     }
 
     onLoadProp?.()
+  }, [clearLoadAndErrorTimers, currentSrc, retryCount, onLoadProp])
+
+  const handleLoad = () => {
+    markImageLoaded()
   }
+
+  const handleLoadingComplete = (img: HTMLImageElement) => {
+    imageRef.current = img
+    markImageLoaded()
+  }
+
+  useEffect(() => {
+    const img = imageRef.current
+    if (img && img.complete && img.naturalWidth > 0) {
+      markImageLoaded()
+    }
+  }, [currentSrc, markImageLoaded])
 
   // 재시도 핸들러
   const handleRetry = () => {
     setHasError(false)
     setIsLoading(true)
     setRetryCount(0)
-    setCurrentSrc(src) // 원본 이미지로 다시 시도
     fallbackQueueRef.current = buildFallbackQueue(src, fallbackSources)
+    setCurrentSrc(src) // 원본 이미지로 다시 시도
+    clearLoadAndErrorTimers()
   }
 
   // 에러 상태 - fallback UI
@@ -278,7 +376,6 @@ const OptimizedImage = memo(function OptimizedImage({
 
   const imageProps = {
     src: currentSrc,
-    alt: alt || '',
     quality: optimizedQuality,
     priority: shouldPrioritize,
     fetchPriority,
@@ -328,7 +425,10 @@ const OptimizedImage = memo(function OptimizedImage({
       )}
 
       <Image
+        alt={alt || ''}
         {...imageProps}
+        ref={imageRef}
+        onLoadingComplete={handleLoadingComplete}
         className={`transition-opacity duration-500 ${
           suppressSkeleton ? '' : isLoading ? 'opacity-0' : 'opacity-100'
         } ${fill ? '' : className}`}

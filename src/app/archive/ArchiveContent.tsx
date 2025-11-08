@@ -29,6 +29,8 @@ const ArchiveContent = ({ projects, artists }: ArchiveContentProps) => {
     basePath: '/archive',
   })
 
+  const isFirstPage = paginationState.currentPage === 1
+
   // 현재 페이지에 표시할 프로젝트
   const startIndex = (paginationState.currentPage - 1) * PROJECTS_PER_PAGE
   const endIndex = startIndex + PROJECTS_PER_PAGE
@@ -106,7 +108,7 @@ const ArchiveContent = ({ projects, artists }: ArchiveContentProps) => {
                         height={280} // 비율 유지 (350 → 280)
                         className="object-cover w-full h-full"
                         sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 400px"
-                        priority={index < 3} // 첫 3개만 우선 로딩 (모바일 최적화)
+                        priority={isFirstPage && index < 3} // 첫 페이지 상단 3개만 우선 로딩
                         quality={75} // 모바일 성능 향상을 위해 품질 조정
                       />
                       <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors duration-300" />
