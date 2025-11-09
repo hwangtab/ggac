@@ -205,50 +205,61 @@ const OptimizedImage = memo(function OptimizedImage({
       ? `${className} relative`
       : 'relative'
 
-  const handleError = useCallback(() => {
-    clearLoadAndErrorTimers()
-    const isSupabaseImage = currentSrc.includes('supabase.co')
-    const maxRetries = isSupabaseImage ? 3 : 1
+  const handleError = useCallback(
+    (event?: React.SyntheticEvent<HTMLImageElement>) => {
+      clearLoadAndErrorTimers()
+      const isSupabaseImage = currentSrc.includes('supabase.co')
+      const maxRetries = isSupabaseImage ? 3 : 1
 
-    // Supabase 이미지의 경우 재시도 로직 적용
-    if (isSupabaseImage && retryCount < maxRetries) {
-      const retryDelay = Math.min(1000 * Math.pow(2, retryCount), 5000) // 지수 백오프, 최대 5초
+      // Supabase 이미지의 경우 재시도 로직 적용
+      if (isSupabaseImage && retryCount < maxRetries) {
+        const retryDelay = Math.min(1000 * Math.pow(2, retryCount), 5000) // 지수 백오프, 최대 5초
 
-      console.warn(
-        `[OptimizedImage] Supabase 이미지 재시도 ${retryCount + 1}/${maxRetries}: ${currentSrc}`
-      )
+        console.warn(
+          `[OptimizedImage] Supabase 이미지 재시도 ${retryCount + 1}/${maxRetries}: ${currentSrc}`
+        )
 
-      retryTimeoutRef.current = setTimeout(() => {
-        setRetryCount(prev => prev + 1)
-        setIsLoading(true)
+        retryTimeoutRef.current = setTimeout(() => {
+          setRetryCount(prev => prev + 1)
+          setIsLoading(true)
+          setHasError(false)
+          // 같은 URL로 재시도 (브라우저 캐시 무시를 위해 timestamp 추가)
+          const cacheBuster = `retry=${Date.now()}`
+          const separator = currentSrc.includes('?') ? '&' : '?'
+          const retryUrl = `${currentSrc}${separator}${cacheBuster}`
+          setCurrentSrc(retryUrl)
+        }, retryDelay)
+
+        return
+      }
+
+      // 재시도 실패 또는 일반 이미지의 경우 fallback으로 이동
+      const nextFallback = fallbackQueueRef.current.shift()
+
+      if (nextFallback) {
+        console.warn(
+          `[OptimizedImage] 이미지 로딩 실패: ${currentSrc} → 대체 시도: ${nextFallback}`
+        )
+        setCurrentSrc(nextFallback)
         setHasError(false)
-        // 같은 URL로 재시도 (브라우저 캐시 무시를 위해 timestamp 추가)
-        const retryUrl = currentSrc.includes('?')
-          ? `${currentSrc}&retry=${Date.now()}`
-          : `${currentSrc}?retry=${Date.now()}`
-        setCurrentSrc(retryUrl)
-      }, retryDelay)
+        setIsLoading(true)
+        setRetryCount(0) // 새 이미지이므로 재시도 카운트 리셋
+        return
+      }
 
-      return
-    }
-
-    // 재시도 실패 또는 일반 이미지의 경우 fallback으로 이동
-    const nextFallback = fallbackQueueRef.current.shift()
-
-    if (nextFallback) {
-      console.warn(`[OptimizedImage] 이미지 로딩 실패: ${currentSrc} → 대체 시도: ${nextFallback}`)
-      setCurrentSrc(nextFallback)
-      setHasError(false)
-      setIsLoading(true)
-      setRetryCount(0) // 새 이미지이므로 재시도 카운트 리셋
-      return
-    }
-
-    console.warn(`[OptimizedImage] 모든 이미지 로딩 실패: ${currentSrc}`)
-    setHasError(true)
-    setIsLoading(false)
-    onErrorProp?.()
-  }, [clearLoadAndErrorTimers, currentSrc, retryCount, onErrorProp])
+      console.warn(`[OptimizedImage] 모든 이미지 로딩 실패: ${currentSrc}`)
+      setHasError(true)
+      setIsLoading(false)
+      onErrorProp?.()
+      if (event?.type === 'error') {
+        const target = event.target as HTMLImageElement | undefined
+        if (target) {
+          target.src = '/images/default-avatar.webp'
+        }
+      }
+    },
+    [clearLoadAndErrorTimers, currentSrc, retryCount, onErrorProp]
+  )
 
   useEffect(() => {
     if (!isLoading) {
