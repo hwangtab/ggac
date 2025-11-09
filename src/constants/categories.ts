@@ -10,10 +10,10 @@ export const ARCHIVE_CATEGORIES = [
   '공연·전시',
   '예술교육',
   '지원·용역사업',
-  '행사'
+  '행사',
 ] as const
 
-export type ArchiveCategory = typeof ARCHIVE_CATEGORIES[number]
+export type ArchiveCategory = (typeof ARCHIVE_CATEGORIES)[number]
 
 // 아티스트 카테고리 (공개, 국제적 - 영문 All 사용)
 export const ARTIST_CATEGORIES = [
@@ -26,44 +26,38 @@ export const ARTIST_CATEGORIES = [
   '작사가',
   '창작자',
   '편곡가',
-  '프로듀서'
+  '프로듀서',
 ] as const
 
-export type ArtistCategory = typeof ARTIST_CATEGORIES[number]
+export type ArtistCategory = (typeof ARTIST_CATEGORIES)[number]
 
 // 게시판 카테고리 (멤버 전용, 친밀한 분위기 - 한글 전체 사용)
-export const BOARD_CATEGORIES = [
-  '전체',
-  '공지',
-  '잡담',
-  '홍보',
-  '건의'
-] as const
+export const BOARD_CATEGORIES = ['전체', '공지', '잡담', '홍보', '건의'] as const
 
-export type BoardCategory = typeof BOARD_CATEGORIES[number]
+export type BoardCategory = (typeof BOARD_CATEGORIES)[number]
 
-// 카테고리별 스타일 매핑 (PostList에서 사용)
+// 카테고리별 스타일 매핑 (게시글 카드 꾸밈용)
 export const BOARD_CATEGORY_STYLES = {
-  '공지': 'bg-red-100 text-red-800',
-  '잡담': 'bg-blue-100 text-blue-800', 
-  '홍보': 'bg-green-100 text-green-800',
-  '건의': 'bg-yellow-100 text-yellow-800'
+  공지: 'bg-red-100 text-red-800',
+  잡담: 'bg-blue-100 text-blue-800',
+  홍보: 'bg-green-100 text-green-800',
+  건의: 'bg-yellow-100 text-yellow-800',
 } as const
 
 // 카테고리 그룹 통합 (타입 안정성을 위해)
 export const CATEGORIES = {
   ARCHIVE: {
     ALL: 'All' as const,
-    ITEMS: ARCHIVE_CATEGORIES.slice(1) // 'All'을 제외한 실제 카테고리들
+    ITEMS: ARCHIVE_CATEGORIES.slice(1), // 'All'을 제외한 실제 카테고리들
   },
   ARTISTS: {
     ALL: 'All' as const,
-    ITEMS: ARTIST_CATEGORIES.slice(1)
+    ITEMS: ARTIST_CATEGORIES.slice(1),
   },
   BOARD: {
     ALL: '전체' as const,
-    ITEMS: BOARD_CATEGORIES.slice(1)
-  }
+    ITEMS: BOARD_CATEGORIES.slice(1),
+  },
 } as const
 
 // 카테고리 유효성 검사 헬퍼 함수들
