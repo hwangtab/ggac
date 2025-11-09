@@ -77,7 +77,6 @@ export const metadata: Metadata = {
   manifest: '/manifest.json',
   other: {
     'naver-site-verification': 'c0d96b266d116917a2157019601290e977a0fa8a',
-    'google-site-verification': '',
   },
 }
 
