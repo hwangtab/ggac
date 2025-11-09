@@ -1,5 +1,5 @@
-import BoardClient from './BoardClient'
 import { fetchBoardPosts } from '@/lib/server/board'
+import BoardPageShell from '@/components/board/BoardPageShell'
 
 export const revalidate = 60
 
@@ -17,11 +17,14 @@ const BoardServerData = async ({
   const initialData = await fetchBoardPosts({ category, page, pageSize })
 
   return (
-    <BoardClient
-      key={`${category}-${initialData.currentPage}`}
-      initialData={initialData}
+    <BoardPageShell
+      posts={initialData.posts}
       category={category}
-      page={initialData.currentPage}
+      pagination={{
+        hasNext: initialData.hasNext,
+        hasPrev: initialData.hasPrev,
+        currentPage: initialData.currentPage,
+      }}
     />
   )
 }
