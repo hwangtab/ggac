@@ -1,36 +1,24 @@
-'use client'
-
-import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import OptimizedImage from '@/components/OptimizedImage'
-import { useFilter } from '@/hooks/useFilter'
 import type { Artist } from '@/types'
 
 interface ArtistsContentProps {
   artists: Artist[]
+  categories: string[]
+  selectedCategory: string
 }
 
-const ArtistsContent = ({ artists }: ArtistsContentProps) => {
-  const [selectedCategory, setSelectedCategory] = useState('All')
+const buildCategoryHref = (category: string) => {
+  const params = new URLSearchParams()
+  if (category !== 'All') {
+    params.set('category', category)
+  }
+  const query = params.toString()
+  return query ? `/artists?${query}` : '/artists'
+}
 
-  // 실제 아티스트 데이터에서 동적으로 카테고리 추출
-  const availableCategories = useMemo(() => {
-    const categories = new Set<string>()
-
-    // 모든 아티스트의 카테고리를 수집
-    artists.forEach(artist => {
-      if (Array.isArray(artist.category)) {
-        artist.category.forEach(cat => categories.add(cat))
-      } else if (artist.category) {
-        categories.add(artist.category)
-      }
-    })
-
-    // 'All'을 첫 번째로, 나머지는 알파벳 순으로 정렬
-    return ['All', ...Array.from(categories).sort()]
-  }, [artists])
-
-  const filteredArtists = useFilter(artists, selectedCategory, { allLabel: 'All' })
+const ArtistsContent = ({ artists, categories, selectedCategory }: ArtistsContentProps) => {
+  const hasArtists = artists.length > 0
 
   return (
     <div className="pt-20">
@@ -49,10 +37,10 @@ const ArtistsContent = ({ artists }: ArtistsContentProps) => {
       <section className="py-8 bg-white sticky top-16 z-40 border-b">
         <div className="container-custom">
           <div className="flex justify-center gap-2 flex-wrap">
-            {availableCategories.map(category => (
-              <button
+            {categories.map(category => (
+              <Link
                 key={category}
-                onClick={() => setSelectedCategory(category)}
+                href={buildCategoryHref(category)}
                 className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
                   selectedCategory === category
                     ? 'bg-primary-600 text-white'
@@ -60,7 +48,7 @@ const ArtistsContent = ({ artists }: ArtistsContentProps) => {
                 }`}
               >
                 {category}
-              </button>
+              </Link>
             ))}
           </div>
         </div>
@@ -70,7 +58,7 @@ const ArtistsContent = ({ artists }: ArtistsContentProps) => {
       <section className="py-16">
         <div className="container-custom">
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-12">
-            {filteredArtists.map((artist, index) => (
+            {artists.map((artist, index) => (
               <div key={artist.id} className="group">
                 <Link href={`/artists/${artist.slug}`}>
                   <div className="text-center transform hover:scale-105 transition-transform duration-300">
@@ -133,7 +121,7 @@ const ArtistsContent = ({ artists }: ArtistsContentProps) => {
             ))}
           </div>
 
-          {filteredArtists.length === 0 && (
+          {!hasArtists && (
             <div className="text-center py-16">
               <p className="text-gray-500 text-lg">해당 카테고리에 아티스트가 없습니다.</p>
             </div>
