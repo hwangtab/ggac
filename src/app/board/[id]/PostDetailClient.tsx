@@ -6,14 +6,8 @@ import { useRouter } from 'next/navigation'
 import CommentSection from '../../../components/CommentSection'
 import PostLikeButton from '../../../components/PostLikeButton'
 import PostAttachmentsDisplay from '../../../components/PostAttachmentsDisplay'
-import dynamic from 'next/dynamic'
+import PostContentRenderer from '@/components/PostContentRenderer'
 import type { MemberProfile } from '@/types'
-
-// PostContentRenderer를 동적으로 로드하여 SSR 이슈 방지
-const PostContentRenderer = dynamic(() => import('@/components/PostContentRenderer'), {
-  ssr: false,
-  loading: () => <div className="animate-pulse bg-gray-100 h-32 rounded" />,
-})
 
 interface Post {
   id: string
