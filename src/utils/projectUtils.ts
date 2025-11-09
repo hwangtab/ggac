@@ -6,7 +6,7 @@
  * 문자열을 메타데이터용으로 안전하게 정리
  * 마크다운 문법을 제거하고 plain text로 변환
  */
-function sanitizeForMetadata(str: string): string {
+export function stripMarkdown(str: string): string {
   if (!str) return ''
 
   return (
@@ -32,6 +32,10 @@ function sanitizeForMetadata(str: string): string {
       .replace(/\s+/g, ' ')
       .trim()
   )
+}
+
+function sanitizeForMetadata(str: string): string {
+  return stripMarkdown(str)
 }
 
 /**
