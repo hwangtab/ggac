@@ -1,11 +1,6 @@
 import ServerBoardView from './ServerBoardView'
 import type { BoardInitialPost } from '@/lib/server/board'
-import dynamic from 'next/dynamic'
-
-const BoardUserSection = dynamic(() => import('./BoardUserSection'), {
-  ssr: false,
-  loading: () => null,
-})
+import BoardUserSection from './BoardUserSection'
 
 interface BoardPageShellProps {
   posts: BoardInitialPost[]
