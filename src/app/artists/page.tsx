@@ -68,11 +68,51 @@ export const metadata: Metadata = {
   },
 }
 
-const ArtistsPage = async () => {
-  // 개선된 데이터 로딩 - 타입까지 포함된 캐싱 함수 사용
+type ArtistsPageProps = {
+  searchParams?: {
+    category?: string | string[]
+  }
+}
+
+const normalizeParam = (value?: string | string[] | null): string | undefined => {
+  if (!value) return undefined
+  return Array.isArray(value) ? value[0] : value
+}
+
+const ArtistsPage = async ({ searchParams = {} }: ArtistsPageProps) => {
   const artists = await getArtists()
 
-  return <ArtistsContent artists={artists} />
+  const categoriesSet = new Set<string>()
+  artists.forEach(artist => {
+    if (Array.isArray(artist.category)) {
+      artist.category.forEach(cat => categoriesSet.add(cat))
+    } else if (artist.category) {
+      categoriesSet.add(artist.category)
+    }
+  })
+
+  const sortedCategories = Array.from(categoriesSet).sort((a, b) => a.localeCompare(b, 'ko'))
+  const categories = ['All', ...sortedCategories]
+
+  const rawCategory = normalizeParam(searchParams.category)
+  const selectedCategory = rawCategory && categories.includes(rawCategory) ? rawCategory : 'All'
+
+  const filteredArtists =
+    selectedCategory === 'All'
+      ? artists
+      : artists.filter(artist =>
+          Array.isArray(artist.category)
+            ? artist.category.includes(selectedCategory)
+            : artist.category === selectedCategory
+        )
+
+  return (
+    <ArtistsContent
+      artists={filteredArtists}
+      categories={categories}
+      selectedCategory={selectedCategory}
+    />
+  )
 }
 
 export default ArtistsPage
