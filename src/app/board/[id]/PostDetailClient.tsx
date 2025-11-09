@@ -1,13 +1,13 @@
 'use client'
 
 import { supabase } from '../../../lib/supabase/client'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import CommentSection from '../../../components/CommentSection'
 import PostLikeButton from '../../../components/PostLikeButton'
 import PostAttachmentsDisplay from '../../../components/PostAttachmentsDisplay'
 import dynamic from 'next/dynamic'
-import type { MemberProfile, Post as PostType } from '@/types'
+import type { MemberProfile } from '@/types'
 
 // PostContentRenderer를 동적으로 로드하여 SSR 이슈 방지
 const PostContentRenderer = dynamic(() => import('@/components/PostContentRenderer'), {
@@ -36,40 +36,53 @@ interface Profile {
 
 interface PostDetailClientProps {
   postId: string
-  initialData?: {
-    post: any
+  initialData: {
+    post: Post
     comments: any[]
     attachments: any[]
-    author: any
+    author: { display_name: string } | null
   }
 }
 
 export default function PostDetailClient({ postId, initialData }: PostDetailClientProps) {
-  const [post, setPost] = useState<Post | null>(initialData?.post || null)
-  const [initialComments, setInitialComments] = useState<any[] | null>(
-    initialData?.comments || null
+  const initialPost = useMemo<Post | null>(() => {
+    if (!initialData?.post) return null
+    const detail = initialData.post
+    return {
+      id: detail.id,
+      title: detail.title,
+      content: detail.content || '',
+      content_format: detail.content_format,
+      category: detail.category,
+      author_id: detail.author_id,
+      created_at: detail.created_at,
+      like_count: detail.like_count,
+      is_liked: detail.is_liked,
+      view_count: detail.view_count,
+    }
+  }, [initialData])
+
+  const [post, setPost] = useState<Post | null>(initialPost)
+  const [initialComments, setInitialComments] = useState<any[]>(
+    initialData.comments?.slice(0, 20) || []
   )
   const [commentsPage, setCommentsPage] = useState(1)
-  const [hasMoreComments, setHasMoreComments] = useState((initialData?.comments?.length || 0) >= 20)
-  const [commentsCursor, setCommentsCursor] = useState<string | null>(
-    initialData?.comments && initialData.comments.length > 0
-      ? encodeURIComponent(
-          `${initialData.comments[initialData.comments.length - 1].created_at}|${initialData.comments[initialData.comments.length - 1].id}`
-        )
-      : null
-  )
-  const [initialAttachments, setInitialAttachments] = useState<any[] | null>(
-    initialData?.attachments || null
-  )
-  const [authorProfile, setAuthorProfile] = useState<Profile | null>(
-    initialData?.author
-      ? { id: initialData.post?.author_id, display_name: initialData.author.display_name }
-      : null
+  const [hasMoreComments, setHasMoreComments] = useState((initialData.comments?.length || 0) >= 20)
+  const [commentsCursor, setCommentsCursor] = useState<string | null>(() => {
+    const comments = initialData.comments || []
+    if (comments.length === 0) return null
+    const last = comments[comments.length - 1]
+    return encodeURIComponent(`${last.created_at}|${last.id}`)
+  })
+  const [initialAttachments] = useState<any[]>(initialData.attachments || [])
+  const [authorProfile] = useState<Profile | null>(() =>
+    initialData.author
+      ? { id: initialData.post.author_id, display_name: initialData.author.display_name }
+      : { id: initialData.post.author_id, display_name: '알 수 없음' }
   )
   const [user, setUser] = useState<any>(null)
   const [isMember, setIsMember] = useState<boolean>(false)
   const [authLoading, setAuthLoading] = useState<boolean>(true) // 인증 상태 확인 중
-  const [loading, setLoading] = useState(!initialData) // 초기 데이터가 있으면 로딩 false
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
@@ -122,213 +135,96 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
   }
 
   useEffect(() => {
-    const fetchData = async () => {
+    let isMounted = true
+
+    const hydrateUserState = async () => {
       try {
-        // 사용자 세션 확인(선택) + 멤버 상태 확인
-        // Defer auth/member check to avoid blocking first paint
-        scheduleIdle(async () => {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        if (!isMounted) return
+        const currentUser = session?.user || null
+        setUser(currentUser)
+        await checkMemberStatus(currentUser)
+
+        if (currentUser) {
           try {
-            const {
-              data: { session },
-            } = await supabase.auth.getSession()
-            const currentUser = session?.user || null
-            setUser(currentUser)
-            await checkMemberStatus(currentUser)
-          } catch (e) {
-            console.warn('[PostDetail] auth/member check deferred failed:', e)
-          } finally {
-            // 인증 확인 완료
-            setAuthLoading(false)
-          }
-        })
-
-        // 초기 데이터가 없는 경우에만 API 호출
-        if (!initialData) {
-          // 상세 API로 단일 요청 (댓글/첨부 포함)
-          const res = await fetch(
-            `/api/posts/${postId}?include_comments=true&include_attachments=true&include_content=false`,
-            { cache: 'no-store' }
-          )
-          if (!res.ok) {
-            const errorData = await res.json().catch(() => null)
-            const errorMessage = errorData?.error || `게시글을 불러올 수 없습니다. (${res.status})`
-            console.error('❌ [PostDetailClient] API 오류:', res.status, errorMessage)
-            setError(errorMessage)
-            setLoading(false)
-            return
-          }
-          const data = await res.json()
-
-          if (!data.post) {
-            console.error('❌ [PostDetailClient] 응답에 post 데이터가 없습니다:', data)
-            setError('게시글 데이터를 찾을 수 없습니다.')
-            setLoading(false)
-            return
-          }
-
-          const detail = data.post
-          setPost({
-            id: detail.id,
-            title: detail.title,
-            content: detail.content || '',
-            content_format: detail.content_format,
-            category: detail.category,
-            author_id: detail.author_id,
-            created_at: detail.created_at,
-            like_count: detail.like_count,
-            is_liked: detail.is_liked,
-            view_count: detail.view_count,
-          })
-          if (detail.comments) {
-            setInitialComments(detail.comments)
-            setHasMoreComments(detail.comments.length >= 20)
-            if (detail.comments.length > 0) {
-              const last = detail.comments[detail.comments.length - 1]
-              setCommentsCursor(encodeURIComponent(`${last.created_at}|${last.id}`))
-            }
-          }
-          if (detail.attachments) setInitialAttachments(detail.attachments)
-
-          // Lazy-load content after initial paint when omitted
-          scheduleIdle(async () => {
-            try {
-              if (!detail.content) {
-                const c = await fetch(`/api/posts/${postId}/content`)
-                if (c.ok) {
-                  const cj = await c.json()
-                  setPost(prev =>
-                    prev
-                      ? { ...prev, content: cj.content, content_format: cj.content_format }
-                      : prev
-                  )
-                }
-              }
-            } catch {}
-          })
-
-          // 작성자 프로필 (API 응답 내 author.display_name 사용, 부족하면 폴백 조회)
-          if (detail.author?.display_name) {
-            setAuthorProfile({ id: detail.author_id, display_name: detail.author.display_name })
-          } else {
-            try {
-              const res = await fetch(`/api/profiles?ids=${encodeURIComponent(detail.author_id)}`)
-              if (res.ok) {
-                const json = await res.json()
-                const first = Array.isArray(json?.data) ? json.data[0] : null
-                setAuthorProfile(
-                  first || { id: detail.author_id, display_name: '알 수 없는 사용자' }
+            const res = await fetch(`/api/posts/${postId}/user-data?user_id=${currentUser.id}`)
+            if (res.ok) {
+              const userData = await res.json()
+              if (userData.success) {
+                setPost(prev =>
+                  prev ? { ...prev, is_liked: userData.data.is_liked ?? prev.is_liked } : prev
                 )
-              } else {
-                setAuthorProfile({ id: detail.author_id, display_name: '알 수 없는 사용자' })
               }
-            } catch (_) {
-              setAuthorProfile({ id: detail.author_id, display_name: '알 수 없는 사용자' })
             }
+          } catch {
+            // ignore
           }
-        } else {
-          // 초기 데이터가 있는 경우 사용자별 데이터만 업데이트 (좋아요 상태 등)
-          scheduleIdle(async () => {
-            try {
-              const {
-                data: { session },
-              } = await supabase.auth.getSession()
-              const currUser = session?.user || null
-              setUser(currUser)
-              await checkMemberStatus(currUser)
-
-              if (currUser && post) {
-                const res = await fetch(`/api/posts/${postId}/user-data?user_id=${currUser.id}`)
-                if (res.ok) {
-                  const userData = await res.json()
-                  if (userData.success) {
-                    setPost(prev => (prev ? { ...prev, is_liked: userData.data.is_liked } : prev))
-                  }
-                }
-              }
-            } catch {
-            } finally {
-              // 인증 확인 완료
-              setAuthLoading(false)
-            }
-          })
-          // Lazy-load content if missing from initial data
-          scheduleIdle(async () => {
-            try {
-              if (post && !post.content) {
-                const c = await fetch(`/api/posts/${postId}/content`)
-                if (c.ok) {
-                  const cj = await c.json()
-                  setPost(prev =>
-                    prev
-                      ? { ...prev, content: cj.content, content_format: cj.content_format }
-                      : prev
-                  )
-                }
-              }
-            } catch {}
-          })
         }
-
-        // 게시글 조회수 증가 (작성자 본인이 아닌 경우)
-        // Defer view count update to idle
-        scheduleIdle(async () => {
-          try {
-            const lastViewTime = localStorage.getItem(`post_view_${postId}`)
-            const now = Date.now()
-            if (!lastViewTime || now - parseInt(lastViewTime) > 10 * 60 * 1000) {
-              const viewResponse = await fetch(`/api/posts/${postId}/view`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'x-last-view-time': lastViewTime || '0',
-                },
-              })
-              if (viewResponse.ok) {
-                const viewData = await viewResponse.json()
-                setPost(prev => (prev ? { ...prev, view_count: viewData.view_count } : prev))
-                localStorage.setItem(`post_view_${postId}`, now.toString())
-              }
-            }
-          } catch (viewError) {
-            console.warn('[PostDetail] Failed to update view count:', viewError)
-          }
-        })
-
-        setLoading(false)
-        console.debug('[PostDetail] Data loading completed')
       } catch (e) {
-        console.error('Error fetching data:', e)
-        setError('데이터를 불러오는 중 오류가 발생했습니다.')
-        setLoading(false)
+        console.warn('[PostDetail] auth check failed:', e)
+      } finally {
+        if (isMounted) {
+          setAuthLoading(false)
+        }
       }
     }
 
-    if (postId) {
-      fetchData()
+    const incrementViewCount = async () => {
+      try {
+        const lastViewTime = localStorage.getItem(`post_view_${postId}`)
+        const now = Date.now()
+        if (!lastViewTime || now - parseInt(lastViewTime) > 10 * 60 * 1000) {
+          const viewResponse = await fetch(`/api/posts/${postId}/view`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-last-view-time': lastViewTime || '0',
+            },
+          })
+          if (viewResponse.ok) {
+            const viewData = await viewResponse.json()
+            setPost(prev => (prev ? { ...prev, view_count: viewData.view_count } : prev))
+            localStorage.setItem(`post_view_${postId}`, now.toString())
+          }
+        }
+      } catch (viewError) {
+        console.warn('[PostDetail] Failed to update view count:', viewError)
+      }
     }
 
-    // 🚨 수정된 부분: 세션 변경 시 조합원 상태 적절히 처리
+    scheduleIdle(hydrateUserState)
+    scheduleIdle(incrementViewCount)
+
     const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
       const newUser = session?.user || null
       setUser(newUser)
 
-      console.log('🔄 [Auth Change] Auth state changed, event:', _event)
-
-      // 로그아웃인 경우에만 멤버 상태 초기화
       if (!newUser) {
-        console.log('🔄 [Auth Change] User logged out, clearing member status')
         setIsMember(false)
+        setPost(prev => (prev ? { ...prev, is_liked: false } : prev))
       } else {
-        // 사용자가 있으면 멤버 상태 재확인 (세션 갱신, 탭 전환 등)
-        console.log('🔄 [Auth Change] User session updated, rechecking member status')
         await checkMemberStatus(newUser)
+        try {
+          const res = await fetch(`/api/posts/${postId}/user-data?user_id=${newUser.id}`)
+          if (res.ok) {
+            const userData = await res.json()
+            if (userData.success) {
+              setPost(prev =>
+                prev ? { ...prev, is_liked: userData.data.is_liked ?? prev.is_liked } : prev
+              )
+            }
+          }
+        } catch {}
       }
     })
 
     return () => {
+      isMounted = false
       authListener?.subscription.unsubscribe()
     }
-  }, [postId, router, initialData])
+  }, [postId])
 
   // 댓글 더보기 로드
   const loadMoreComments = async () => {
@@ -341,7 +237,7 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
       if (resp.ok) {
         const data = await resp.json()
         const extra = (data?.data?.comments as any[]) || []
-        setInitialComments(prev => [...(prev || []), ...extra])
+        setInitialComments(prev => [...prev, ...extra])
         setCommentsPage(nextPage)
         setHasMoreComments(!!data?.data?.has_next)
         setCommentsCursor(data?.data?.next_cursor || null)
@@ -393,14 +289,6 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
       default:
         return 'bg-gray-100 text-gray-800'
     }
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen pt-24 md:pt-28 flex items-center justify-center">
-        <div className="text-lg">로딩 중...</div>
-      </div>
-    )
   }
 
   if (error || !post) {
@@ -568,10 +456,7 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
 
             {/* 첨부파일 */}
             <div className="px-6 pb-6">
-              <PostAttachmentsDisplay
-                postId={post.id}
-                attachments={initialAttachments || undefined}
-              />
+              <PostAttachmentsDisplay postId={post.id} attachments={initialAttachments} />
             </div>
           </div>
 
@@ -581,7 +466,7 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
               postId={post.id}
               currentUserId={user?.id}
               isMember={isMember}
-              initialComments={initialComments || undefined}
+              initialComments={initialComments}
             />
             {hasMoreComments && (
               <div className="flex justify-center mt-4">

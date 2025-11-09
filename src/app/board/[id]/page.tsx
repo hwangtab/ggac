@@ -148,6 +148,7 @@ async function getInitialPostData(postId: string): Promise<InitialPostData | nul
       .eq('post_id', postId)
       .eq('is_deleted', false)
       .order('created_at', { ascending: true })
+      .limit(20)
 
     const attachmentsQuery = supabaseAdmin
       .from('post_attachments')
@@ -211,6 +212,7 @@ export default async function PostDetailPage({ params }: { params: Promise<{ id:
   if (!initialData) {
     notFound()
   }
+  const resolvedInitialData = initialData as InitialPostData
 
   // 구조화된 데이터 생성(메타데이터 실패 시 생략)
   const structuredData = metadata
@@ -244,7 +246,7 @@ export default async function PostDetailPage({ params }: { params: Promise<{ id:
           </div>
         }
       >
-        <PostDetailClient postId={postId} initialData={initialData} />
+        <PostDetailClient postId={postId} initialData={resolvedInitialData} />
       </Suspense>
     </div>
   )
