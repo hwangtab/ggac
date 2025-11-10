@@ -97,14 +97,18 @@ const AboutPage = async () => {
   ]
 
   // 프로젝트를 이벤트 형태로 변환
-  const projectEvents = sortedProjects.map(project => ({
-    date: project.publishedDate,
-    title: project.title,
-    description: `${project.category} - ${getProjectSummary(project, 140)}`,
-    type: 'project',
-    slug: project.slug,
-    category: project.category,
-  }))
+  const projectEvents = sortedProjects.map(project => {
+    const summary = getProjectSummary(project, 140)
+    return {
+      date: project.publishedDate,
+      title: project.title,
+      description: `${project.category} - ${summary}`,
+      summary,
+      type: 'project' as const,
+      slug: project.slug,
+      category: project.category,
+    }
+  })
 
   // 카테고리별 색상 매핑
   const getCategoryColor = (category: string) => {
@@ -280,11 +284,25 @@ const AboutPage = async () => {
                           event.title
                         )}
                       </h3>
-                      <p className="text-gray-600 text-sm leading-relaxed">
-                        {event.type === 'project'
-                          ? event.description.replace(/^[^-]*-\s*/, '') // 카테고리 부분 제거
-                          : event.description}
-                      </p>
+                      {(() => {
+                        const summaryText: string =
+                          event.type === 'project' && 'summary' in event
+                            ? (event.summary as string)
+                            : event.description
+                        const displayText: string =
+                          event.type === 'project'
+                            ? summaryText.replace(/^[^-]*-\s*/, '')
+                            : summaryText
+
+                        return (
+                          <p
+                            className="text-gray-600 text-sm leading-relaxed line-clamp-2"
+                            title={summaryText}
+                          >
+                            {displayText}
+                          </p>
+                        )
+                      })()}
                     </div>
                   </div>
                 ))}
