@@ -6,32 +6,37 @@
  * 문자열을 메타데이터용으로 안전하게 정리
  * 마크다운 문법을 제거하고 plain text로 변환
  */
-export function stripMarkdown(str: string): string {
+export function stripMarkdown(str: string, options: { preserveLineBreaks?: boolean } = {}): string {
   if (!str) return ''
 
-  return (
-    str
-      // 마크다운 제목 제거 (### 제목, ## 제목, # 제목)
-      .replace(/^#{1,6}\s+/gm, '')
-      // 강조 문법 제거 (**텍스트**, __텍스트__)
-      .replace(/(\*\*|__)(.*?)\1/g, '$2')
-      // 이탤릭 제거 (*텍스트*, _텍스트_) - 강조 제거 후 처리
-      .replace(/(\*|_)(.*?)\1/g, '$2')
-      // 링크 제거 [텍스트](url) -> 텍스트만 남김
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-      // 이미지 제거 ![alt](url) -> 빈 문자열
-      .replace(/!\[([^\]]*)\]\([^)]+\)/g, '')
-      // 인라인 코드 제거 `code` -> code
-      .replace(/`([^`]+)`/g, '$1')
-      // 리스트 마커 제거 (-, *, +, 숫자.)
-      .replace(/^[\s]*[-*+]\s+/gm, '')
-      .replace(/^[\s]*\d+\.\s+/gm, '')
-      // 제어 문자 제거
-      .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
-      // 여러 공백을 하나로
-      .replace(/\s+/g, ' ')
+  const text = str
+    // 마크다운 제목 제거 (### 제목, ## 제목, # 제목)
+    .replace(/^#{1,6}\s+/gm, '')
+    // 강조 문법 제거 (**텍스트**, __텍스트__)
+    .replace(/(\*\*|__)(.*?)\1/g, '$2')
+    // 이탤릭 제거 (*텍스트*, _텍스트_) - 강조 제거 후 처리
+    .replace(/(\*|_)(.*?)\1/g, '$2')
+    // 링크 제거 [텍스트](url) -> 텍스트만 남김
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    // 이미지 제거 ![alt](url) -> 빈 문자열
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, '')
+    // 인라인 코드 제거 `code` -> code
+    .replace(/`([^`]+)`/g, '$1')
+    // 리스트 마커 제거 (-, *, +, 숫자.)
+    .replace(/^[\s]*[-*+]\s+/gm, '')
+    .replace(/^[\s]*\d+\.\s+/gm, '')
+    // 제어 문자 제거
+    .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
+
+  if (options.preserveLineBreaks) {
+    return text
+      .replace(/\r\n?/g, '\n')
+      .replace(/[ \t]+\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
       .trim()
-  )
+  }
+
+  return text.replace(/\s+/g, ' ').trim()
 }
 
 function sanitizeForMetadata(str: string): string {
@@ -138,7 +143,7 @@ export function getProjectSummary(
     }
 
     const safeTitle = sanitizeForMetadata(project.title || '')
-    const safeDescription = sanitizeForMetadata(project.description || '')
+    const safeDescription = stripMarkdown(project.description || '', { preserveLineBreaks: true })
     const safeSummary = project.summary ? sanitizeForMetadata(project.summary) : ''
 
     // 커스텀 summary가 있으면 우선 사용
