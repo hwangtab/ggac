@@ -54,11 +54,21 @@ const FeaturedProjects = ({ projects }: FeaturedProjectsProps) => {
                       {project.title}
                     </h3>
 
-                    <p
-                      className={`text-gray-600 ${index === 0 ? 'line-clamp-3' : 'line-clamp-4 flex-grow'}`}
-                    >
-                      {getProjectSummary(project, index === 0 ? 120 : 150)}
-                    </p>
+                    {(() => {
+                      const limit = index === 0 ? 120 : 150
+                      const summary = getProjectSummary(project, limit)
+                      const truncated =
+                        summary.length > limit ? `${summary.slice(0, limit)}...` : summary
+
+                      return (
+                        <p
+                          className={`text-gray-600 ${index === 0 ? 'line-clamp-3' : 'line-clamp-4 flex-grow'}`}
+                          title={summary}
+                        >
+                          {truncated}
+                        </p>
+                      )
+                    })()}
                   </div>
                 </div>
               </Link>
