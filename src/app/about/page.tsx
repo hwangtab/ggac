@@ -1,7 +1,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { getProjects } from '@/lib/data'
-import { stripMarkdown } from '@/utils/projectUtils'
+import { getProjectSummary } from '@/utils/projectUtils'
 import type { Metadata } from 'next'
 
 // ISR 최적화: 정적 콘텐츠는 24시간 캐시
@@ -100,7 +100,7 @@ const AboutPage = async () => {
   const projectEvents = sortedProjects.map(project => ({
     date: project.publishedDate,
     title: project.title,
-    description: `${project.category} - ${stripMarkdown(project.description).split('\n')[0]}`,
+    description: `${project.category} - ${getProjectSummary(project, 140)}`,
     type: 'project',
     slug: project.slug,
     category: project.category,
