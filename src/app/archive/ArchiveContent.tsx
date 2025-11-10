@@ -58,13 +58,13 @@ const ArchiveContent = ({
   return (
     <div className="pt-20">
       <section className="py-16 md:py-24 bg-gradient-to-br from-primary-50 to-accent-50">
-        <div className="container-custom text-center">
-          <h1 className="heading-primary mb-6">
+        <div className="tw-container-custom text-center">
+          <h1 className="tw-heading-primary mb-6">
             우리가 만들어가는
             <br />
             프로젝트들
           </h1>
-          <p className="text-body text-gray-600 max-w-3xl mx-auto">
+          <p className="tw-text-body text-gray-600 max-w-3xl mx-auto">
             진행 중인 프로젝트부터 완성된 작품까지, 우리의 창작 여정을 함께 나누는 공간입니다.
             각각의 프로젝트에는 예술가들의 열정과 협동의 가치가 담겨 있습니다.
           </p>
@@ -72,7 +72,7 @@ const ArchiveContent = ({
       </section>
 
       <section className="py-8 bg-white sticky top-16 z-40 border-b">
-        <div className="container-custom">
+        <div className="tw-container-custom">
           <div className="flex flex-wrap justify-center gap-2">
             {ARCHIVE_CATEGORIES.map(category => {
               const isActive = category === selectedCategory
@@ -98,7 +98,7 @@ const ArchiveContent = ({
       </section>
 
       <section className="py-16">
-        <div className="container-custom">
+        <div className="tw-container-custom">
           {hasResults ? (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
               {projects.map((project, index) => (

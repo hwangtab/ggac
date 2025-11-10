@@ -7,10 +7,10 @@ import type { Project, FeaturedProjectsProps } from '@/types'
 const FeaturedProjects = ({ projects }: FeaturedProjectsProps) => {
   return (
     <section className="py-16 md:py-24 bg-gray-50">
-      <div className="container-custom">
+      <div className="tw-container-custom">
         <div className="text-center mb-12">
-          <h2 className="heading-secondary mb-4">최근 활동</h2>
-          <p className="text-body text-gray-600 max-w-2xl mx-auto">
+          <h2 className="tw-heading-secondary mb-4">최근 활동</h2>
+          <p className="tw-text-body text-gray-600 max-w-2xl mx-auto">
             우리의 가장 최근 작업들을 만나보세요. 각각의 프로젝트는 협동조합 구성원들의 창의적
             실험과 협력의 결과입니다.
           </p>
@@ -79,7 +79,7 @@ const FeaturedProjects = ({ projects }: FeaturedProjectsProps) => {
         <div className="text-center mt-12">
           <Link
             href="/archive"
-            className="btn-primary text-lg px-8 py-4 sm:px-8 sm:py-3 rounded-lg w-full sm:w-auto text-center min-h-[44px] hover:-translate-y-0.5 hover:shadow-lg transition-all duration-300"
+            className="tw-btn-primary text-lg px-8 py-4 sm:px-8 sm:py-3 rounded-lg w-full sm:w-auto text-center min-h-[44px] hover:-translate-y-0.5 hover:shadow-lg transition-all duration-300"
           >
             모든 프로젝트 보기
           </Link>

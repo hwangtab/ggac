@@ -47,7 +47,7 @@ const Footer = ({ globalData }: FooterProps) => {
   const data = globalData || defaultData
   return (
     <footer className="bg-gray-900 text-white py-12">
-      <div className="container-custom">
+      <div className="tw-container-custom">
         <div className="grid md:grid-cols-3 gap-8 mb-8">
           {/* Logo & Description */}
           <div>

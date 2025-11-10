@@ -24,9 +24,9 @@ const ArtistsContent = ({ artists, categories, selectedCategory }: ArtistsConten
     <div className="pt-20">
       {/* Hero Section */}
       <section className="py-16 md:py-24 bg-gradient-to-br from-primary-50 to-accent-50">
-        <div className="container-custom text-center">
-          <h1 className="heading-primary mb-6">서로의 우주가 되어</h1>
-          <p className="text-body text-gray-600 max-w-3xl mx-auto">
+        <div className="tw-container-custom text-center">
+          <h1 className="tw-heading-primary mb-6">서로의 우주가 되어</h1>
+          <p className="tw-text-body text-gray-600 max-w-3xl mx-auto">
             경기아트콜렉티브는 독립된 예술가들의 섬이 아닌, 서로가 서로에게 영감이 되고 지지가
             되어주는 연결된 우주입니다. 이곳에서 각자의 빛으로 반짝이는 우리의 동료들을 만나보세요.
           </p>
@@ -35,7 +35,7 @@ const ArtistsContent = ({ artists, categories, selectedCategory }: ArtistsConten
 
       {/* Filter Section */}
       <section className="py-8 bg-white sticky top-16 z-40 border-b">
-        <div className="container-custom">
+        <div className="tw-container-custom">
           <div className="flex justify-center gap-2 flex-wrap">
             {categories.map(category => (
               <Link
@@ -56,7 +56,7 @@ const ArtistsContent = ({ artists, categories, selectedCategory }: ArtistsConten
 
       {/* Artists Canvas */}
       <section className="py-16">
-        <div className="container-custom">
+        <div className="tw-container-custom">
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-12">
             {artists.map((artist, index) => (
               <div key={artist.id} className="group">

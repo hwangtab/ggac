@@ -110,7 +110,7 @@ const PermissionCheck: React.FC<PermissionCheckProps> = ({
           <div className="text-gray-500">
             <p className="text-lg font-medium mb-2">로그인이 필요합니다</p>
             <p className="text-sm">이 페이지에 접근하려면 로그인해 주세요.</p>
-            <button onClick={() => router.push('/login')} className="mt-4 btn-primary">
+            <button onClick={() => router.push('/login')} className="mt-4 tw-btn-primary">
               로그인하기
             </button>
           </div>
@@ -191,7 +191,10 @@ const PermissionCheck: React.FC<PermissionCheckProps> = ({
                 <>
                   <p className="text-lg font-medium mb-2">{message.title}</p>
                   <p className="text-sm mb-4">{message.description}</p>
-                  <button onClick={() => router.push(message.actionHref)} className="btn-primary">
+                  <button
+                    onClick={() => router.push(message.actionHref)}
+                    className="tw-btn-primary"
+                  >
                     {message.action}
                   </button>
                 </>

@@ -121,7 +121,7 @@ const Navigation = () => {
         isHomePage && isAtTop ? 'bg-transparent' : 'bg-white/90 backdrop-blur-md shadow-sm'
       }`}
     >
-      <div className="container-custom">
+      <div className="tw-container-custom">
         <div className="flex items-center justify-between h-16 md:h-20 overflow-x-hidden">
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-3">

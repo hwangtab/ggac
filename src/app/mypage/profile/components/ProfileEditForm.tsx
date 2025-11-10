@@ -12,11 +12,7 @@ interface ProfileEditFormProps {
   loading: boolean
 }
 
-const ProfileEditForm: React.FC<ProfileEditFormProps> = ({ 
-  profile, 
-  onUpdate,
-  loading
-}) => {
+const ProfileEditForm: React.FC<ProfileEditFormProps> = ({ profile, onUpdate, loading }) => {
   const [formData, setFormData] = useState({
     display_name: profile.display_name || '',
     phone_number: profile.phone_number || '',
@@ -24,7 +20,7 @@ const ProfileEditForm: React.FC<ProfileEditFormProps> = ({
     monthly_fee: profile.monthly_fee || 0,
     bank_name: profile.bank_name || '',
     account_number: profile.account_number || '',
-    account_holder: profile.account_holder || ''
+    account_holder: profile.account_holder || '',
   })
 
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -35,7 +31,7 @@ const ProfileEditForm: React.FC<ProfileEditFormProps> = ({
   const handleChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }))
     setIsDirty(true)
-    
+
     // 에러 클리어
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }))
@@ -77,7 +73,7 @@ const ProfileEditForm: React.FC<ProfileEditFormProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!validateForm()) {
       return
     }
@@ -122,7 +118,7 @@ const ProfileEditForm: React.FC<ProfileEditFormProps> = ({
       monthly_fee: profile.monthly_fee || 0,
       bank_name: profile.bank_name || '',
       account_number: profile.account_number || '',
-      account_holder: profile.account_holder || ''
+      account_holder: profile.account_holder || '',
     })
     setErrors({})
     setIsDirty(false)
@@ -131,11 +127,11 @@ const ProfileEditForm: React.FC<ProfileEditFormProps> = ({
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
       {/* 개인 정보 */}
-      <PersonalInfo 
+      <PersonalInfo
         data={{
           display_name: formData.display_name,
           phone_number: formData.phone_number,
-          birth_date: formData.birth_date
+          birth_date: formData.birth_date,
         }}
         artistPhotoUrl={artistData?.profile_photo_url || null}
         artistPhotoMetadata={artistData?.profile_photo_metadata}
@@ -146,39 +142,29 @@ const ProfileEditForm: React.FC<ProfileEditFormProps> = ({
       />
 
       {/* 조합 정보 */}
-      <CooperativeInfo 
-        data={formData}
-        errors={errors}
-        onChange={handleChange}
-      />
+      <CooperativeInfo data={formData} errors={errors} onChange={handleChange} />
 
       {/* 계좌 정보 */}
-      <AccountInfo 
-        data={formData}
-        errors={errors}
-        onChange={handleChange}
-      />
+      <AccountInfo data={formData} errors={errors} onChange={handleChange} />
 
       {/* 버튼 */}
       <div className="flex justify-between items-center pt-6 border-t border-gray-200">
-        <div className="text-sm text-gray-500">
-          {isDirty && '* 변경된 내용이 있습니다.'}
-        </div>
-        
+        <div className="text-sm text-gray-500">{isDirty && '* 변경된 내용이 있습니다.'}</div>
+
         <div className="flex space-x-3">
           <button
             type="button"
             onClick={handleReset}
             disabled={!isDirty || loading}
-            className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+            className="tw-btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
           >
             취소
           </button>
-          
-          <button 
-            type="submit" 
+
+          <button
+            type="submit"
             disabled={!isDirty || loading}
-            className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+            className="tw-btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? (
               <div className="flex items-center">

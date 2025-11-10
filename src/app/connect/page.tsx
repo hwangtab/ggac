@@ -140,13 +140,13 @@ const ConnectPage = async () => {
       <div className="pt-20">
         {/* Hero Section */}
         <section className="py-16 md:py-24 bg-gradient-to-br from-primary-50 to-accent-50">
-          <div className="container-custom text-center">
-            <h1 className="heading-primary mb-6">
+          <div className="tw-container-custom text-center">
+            <h1 className="tw-heading-primary mb-6">
               당신의 참여로
               <br />
               새로운 물결이 시작됩니다
             </h1>
-            <p className="text-body text-gray-600 max-w-3xl mx-auto">
+            <p className="tw-text-body text-gray-600 max-w-3xl mx-auto">
               경기아트콜렉티브와 함께 예술의 새로운 가능성을 만들어가세요. 동료가 되어주시거나,
               우리의 활동을 응원해 주시는 모든 분들을 환영합니다.
             </p>
@@ -155,11 +155,11 @@ const ConnectPage = async () => {
 
         {/* Join Section */}
         <section className="py-16 md:py-24">
-          <div className="container-custom">
+          <div className="tw-container-custom">
             <div className="max-w-4xl mx-auto">
               <div className="text-center mb-12">
-                <h2 className="heading-secondary mb-4">함께 흐를까요?</h2>
-                <p className="text-body text-gray-600">
+                <h2 className="tw-heading-secondary mb-4">함께 흐를까요?</h2>
+                <p className="tw-text-body text-gray-600">
                   경기도를 기반으로 활동하는 예술가, 기획자, 그리고 우리의 취지에 공감하는 모든
                   분들과 함께하고 싶습니다.
                 </p>
@@ -258,7 +258,7 @@ const ConnectPage = async () => {
                   href="https://docs.google.com/forms/d/e/1FAIpQLScicp159Y6DgYJv2N-x4DGigsLWiOCLf6jl-meRSfXfuMahAQ/viewform?usp=header"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="btn-primary text-lg px-8 py-4 sm:px-8 sm:py-3 rounded-lg w-full sm:w-auto text-center min-h-[44px] hover:-translate-y-0.5 hover:shadow-lg transition-all duration-300"
+                  className="tw-btn-primary text-lg px-8 py-4 sm:px-8 sm:py-3 rounded-lg w-full sm:w-auto text-center min-h-[44px] hover:-translate-y-0.5 hover:shadow-lg transition-all duration-300"
                 >
                   동료 되기 (조합원 가입하기)
                 </a>
@@ -269,10 +269,10 @@ const ConnectPage = async () => {
 
         {/* Support Section */}
         <section className="py-16 md:py-24 bg-gray-50">
-          <div className="container-custom">
+          <div className="tw-container-custom">
             <div className="max-w-4xl mx-auto text-center">
-              <h2 className="heading-secondary mb-6">예술의 씨앗에 물을 주세요</h2>
-              <p className="text-body text-gray-600 mb-8 max-w-2xl mx-auto">
+              <h2 className="tw-heading-secondary mb-6">예술의 씨앗에 물을 주세요</h2>
+              <p className="tw-text-body text-gray-600 mb-8 max-w-2xl mx-auto">
                 직접 조합원이 되지 않더라도, 후원을 통해 경기 지역 예술 생태계 발전에 함께할 수
                 있습니다. 여러분의 관심과 지원이 예술가들에게 큰 힘이 됩니다.
               </p>
@@ -281,7 +281,7 @@ const ConnectPage = async () => {
                 href="https://docs.google.com/forms/d/e/1FAIpQLScicp159Y6DgYJv2N-x4DGigsLWiOCLf6jl-meRSfXfuMahAQ/viewform?usp=header"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="btn-secondary text-lg px-8 py-4 sm:px-8 sm:py-3 rounded-lg w-full sm:w-auto text-center min-h-[44px] hover:-translate-y-0.5 hover:shadow-lg transition-all duration-300"
+                className="tw-btn-secondary text-lg px-8 py-4 sm:px-8 sm:py-3 rounded-lg w-full sm:w-auto text-center min-h-[44px] hover:-translate-y-0.5 hover:shadow-lg transition-all duration-300"
               >
                 예술 생태계 가꾸기 (후원 문의하기)
               </a>
@@ -291,11 +291,11 @@ const ConnectPage = async () => {
 
         {/* Contact Section */}
         <section className="py-16 md:py-24">
-          <div className="container-custom">
+          <div className="tw-container-custom">
             <div className="max-w-4xl mx-auto">
               <div className="text-center mb-12">
-                <h2 className="heading-secondary mb-4">연락처</h2>
-                <p className="text-body text-gray-600">
+                <h2 className="tw-heading-secondary mb-4">연락처</h2>
+                <p className="tw-text-body text-gray-600">
                   궁금한 점이 있으시거나 더 자세한 이야기를 나누고 싶으시면 언제든 연락해 주세요.
                 </p>
               </div>

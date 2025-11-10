@@ -314,22 +314,22 @@ textarea:focus-visible {
 }
 
 @layer components {
-  .container-custom {
+  .tw-container-custom {
     @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
   }
 
-  .text-body {
+  .tw-text-body {
     @apply text-base md:text-lg leading-relaxed;
     word-break: keep-all;
     overflow-wrap: break-word;
     hyphens: none;
   }
 
-  .btn-primary {
+  .tw-btn-primary {
     @apply bg-primary-600 hover:bg-primary-700 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200;
   }
 
-  .btn-secondary {
+  .tw-btn-secondary {
     @apply bg-transparent hover:bg-gray-100 text-gray-900 border border-gray-300 px-6 py-3 rounded-lg font-medium transition-colors duration-200;
   }
 

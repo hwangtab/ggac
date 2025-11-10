@@ -34,7 +34,7 @@ const ServerBoardView = ({
     <div className="min-h-screen bg-gray-50 pt-20 md:pt-24">
       <div className="container mx-auto px-4 pt-8 pb-16">
         <div className="mb-8">
-          <h2 className="heading-secondary mb-2">조합원 게시판</h2>
+          <h2 className="tw-heading-secondary mb-2">조합원 게시판</h2>
           <p className="text-gray-600">경기아트콜렉티브 협동조합 조합원들의 소통 공간입니다.</p>
         </div>
 

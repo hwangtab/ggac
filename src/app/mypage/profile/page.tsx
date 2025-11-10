@@ -134,7 +134,7 @@ export default function ProfilePage() {
         ) : (
           <div className="text-center py-8">
             <p className="text-gray-500">프로필을 불러올 수 없습니다.</p>
-            <button onClick={() => router.refresh()} className="mt-4 btn-secondary">
+            <button onClick={() => router.refresh()} className="mt-4 tw-btn-secondary">
               다시 시도
             </button>
           </div>

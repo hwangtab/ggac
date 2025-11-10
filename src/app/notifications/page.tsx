@@ -316,7 +316,7 @@ const NotificationsPage = () => {
             <div className="flex items-center">
               <FiBell className="w-8 h-8 text-primary-600 mr-3" />
               <div>
-                <h1 className="heading-secondary">알림</h1>
+                <h1 className="tw-heading-secondary">알림</h1>
                 {stats && (
                   <p className="text-sm text-gray-600">
                     전체 {stats.total_notifications}개 | 미읽음 {stats.unread_count}개
