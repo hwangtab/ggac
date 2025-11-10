@@ -329,8 +329,8 @@ export default function SignupPage() {
               />
             </svg>
           </div>
-          <h1 className="heading-secondary text-gray-900 mb-4">조합원 가입 신청</h1>
-          <p className="text-body text-gray-600 max-w-md mx-auto">
+          <h1 className="tw-heading-secondary text-gray-900 mb-4">조합원 가입 신청</h1>
+          <p className="tw-text-body text-gray-600 max-w-md mx-auto">
             경기아트콜렉티브 협동조합에 오신 것을 환영합니다.
             <br />
             아래 양식을 작성하여 조합원 가입을 신청해주세요.

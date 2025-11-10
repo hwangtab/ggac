@@ -151,7 +151,7 @@ export default function ArtistPage() {
               <br />
               관리자에게 아티스트 권한 요청을 문의해 주세요.
             </p>
-            <button onClick={() => router.push('/connect')} className="btn-primary">
+            <button onClick={() => router.push('/connect')} className="tw-btn-primary">
               문의하기
             </button>
           </div>
@@ -212,7 +212,7 @@ export default function ArtistPage() {
         ) : (
           <div className="text-center py-8">
             <p className="text-gray-500">아티스트 정보를 불러올 수 없습니다.</p>
-            <button onClick={() => window.location.reload()} className="mt-4 btn-secondary">
+            <button onClick={() => window.location.reload()} className="mt-4 tw-btn-secondary">
               다시 시도
             </button>
           </div>

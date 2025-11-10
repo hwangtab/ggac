@@ -6,10 +6,10 @@ import type { Artist, FeaturedArtistsProps } from '@/types'
 const FeaturedArtists = ({ artists }: FeaturedArtistsProps) => {
   return (
     <section className="py-16 md:py-24">
-      <div className="container-custom">
+      <div className="tw-container-custom">
         <div className="text-center mb-12">
-          <h2 className="heading-secondary mb-4">함께하는 사람들</h2>
-          <p className="text-body text-gray-600 max-w-2xl mx-auto">
+          <h2 className="tw-heading-secondary mb-4">함께하는 사람들</h2>
+          <p className="tw-text-body text-gray-600 max-w-2xl mx-auto">
             서로의 우주가 되어주는 예술가들을 만나보세요. 각자의 고유한 세계관과 창작 철학을 통해
             새로운 가능성을 탐구합니다.
           </p>
@@ -79,7 +79,7 @@ const FeaturedArtists = ({ artists }: FeaturedArtistsProps) => {
         <div className="text-center mt-12">
           <Link
             href="/artists"
-            className="btn-secondary text-lg px-8 py-4 sm:px-8 sm:py-3 rounded-lg w-full sm:w-auto text-center min-h-[44px] hover:-translate-y-0.5 hover:shadow-lg transition-all duration-300"
+            className="tw-btn-secondary text-lg px-8 py-4 sm:px-8 sm:py-3 rounded-lg w-full sm:w-auto text-center min-h-[44px] hover:-translate-y-0.5 hover:shadow-lg transition-all duration-300"
           >
             모든 아티스트 보기
           </Link>

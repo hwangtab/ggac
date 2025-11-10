@@ -86,7 +86,7 @@ export default function ProjectDetailContent({
     <div className="pt-20 bg-gradient-to-b from-primary-50 via-accent-50 to-gray-200 min-h-screen">
       {/* Header */}
       <section className="py-16 md:py-24">
-        <div className="container-custom">
+        <div className="tw-container-custom">
           <div className="max-w-4xl mx-auto text-center">
             <div className="mb-6">
               <Link
@@ -106,7 +106,7 @@ export default function ProjectDetailContent({
               </span>
             </div>
 
-            <h1 className="heading-primary mb-6">{project.title}</h1>
+            <h1 className="tw-heading-primary mb-6">{project.title}</h1>
 
             {participatingArtists.length > 0 && (
               <div className="flex flex-wrap justify-center gap-2">
@@ -130,7 +130,7 @@ export default function ProjectDetailContent({
 
       {/* Main Image */}
       <section className="py-8">
-        <div className="container-custom">
+        <div className="tw-container-custom">
           <div className="max-w-4xl mx-auto">
             <div className="rounded-2xl overflow-hidden shadow-lg">
               <OptimizedImage
@@ -150,7 +150,7 @@ export default function ProjectDetailContent({
 
       {/* Content */}
       <section className="py-16">
-        <div className="container-custom">
+        <div className="tw-container-custom">
           <div className="max-w-4xl mx-auto">
             <div className="prose prose-lg max-w-none">
               <ReactMarkdown
@@ -172,7 +172,7 @@ export default function ProjectDetailContent({
             {/* Video */}
             {project.videoUrl && (
               <div className="mt-12">
-                <h3 className="heading-tertiary mb-6">영상 보기</h3>
+                <h3 className="tw-heading-tertiary mb-6">영상 보기</h3>
                 <YouTubeEmbed videoUrl={project.videoUrl} title={project.title} />
                 <div className="mt-4 text-sm text-gray-500">
                   <a
@@ -190,7 +190,7 @@ export default function ProjectDetailContent({
             {/* Application Form */}
             {project.applicationForm && (
               <div className="mt-12">
-                <h3 className="heading-tertiary mb-6">신청하기</h3>
+                <h3 className="tw-heading-tertiary mb-6">신청하기</h3>
                 <a
                   href={project.applicationForm.url}
                   target="_blank"
@@ -207,7 +207,9 @@ export default function ProjectDetailContent({
               <div className="mt-12">
                 <ReactMarkdown
                   components={{
-                    h3: ({ node, ...props }) => <h3 className="heading-tertiary mb-6" {...props} />,
+                    h3: ({ node, ...props }) => (
+                      <h3 className="tw-heading-tertiary mb-6" {...props} />
+                    ),
                     a: ({ node, ...props }) => (
                       <a
                         {...props}
@@ -231,7 +233,7 @@ export default function ProjectDetailContent({
             {/* Related Articles */}
             {project.relatedArticles && project.relatedArticles.length > 0 && (
               <div className="mt-12">
-                <h3 className="heading-tertiary mb-6">관련 기사</h3>
+                <h3 className="tw-heading-tertiary mb-6">관련 기사</h3>
                 <div className="grid md:grid-cols-2 gap-6">
                   {project.relatedArticles.map((article, index) => (
                     <ArticleCard key={index} article={article} />
@@ -243,7 +245,7 @@ export default function ProjectDetailContent({
             {/* Gallery */}
             {project.gallery && project.gallery.length > 0 && (
               <div className="mt-12">
-                <h3 className="heading-tertiary mb-6">갤러리</h3>
+                <h3 className="tw-heading-tertiary mb-6">갤러리</h3>
 
                 {/* 갤러리 전체 로딩 표시는 제거하고, 각 카드 단위 스켈레톤만 유지 */}
 
@@ -333,15 +335,15 @@ export default function ProjectDetailContent({
 
       {/* Navigation */}
       <section className="pt-8 pb-20 mt-4">
-        <div className="container-custom">
+        <div className="tw-container-custom">
           <div className="text-center">
             <div className="max-w-2xl mx-auto mb-8">
-              <h3 className="heading-tertiary mb-3">다른 프로젝트들도 만나보세요</h3>
+              <h3 className="tw-heading-tertiary mb-3">다른 프로젝트들도 만나보세요</h3>
               <p className="text-gray-600">
                 경기아트콜렉티브가 함께 만들어가는 더 많은 프로젝트들을 탐험해보세요.
               </p>
             </div>
-            <Link href="/archive" className="btn-primary">
+            <Link href="/archive" className="tw-btn-primary">
               다른 프로젝트 보기
             </Link>
           </div>

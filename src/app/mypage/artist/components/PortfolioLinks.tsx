@@ -9,11 +9,7 @@ interface PortfolioLinksProps {
   onChange: (links: PortfolioLink[]) => void
 }
 
-const PortfolioLinks: React.FC<PortfolioLinksProps> = ({
-  links,
-  errors,
-  onChange
-}) => {
+const PortfolioLinks: React.FC<PortfolioLinksProps> = ({ links, errors, onChange }) => {
   const addLink = () => {
     onChange([...links, { title: '', url: '' }])
   }
@@ -23,9 +19,7 @@ const PortfolioLinks: React.FC<PortfolioLinksProps> = ({
   }
 
   const updateLink = (index: number, field: 'title' | 'url', value: string) => {
-    const updatedLinks = links.map((link, i) => 
-      i === index ? { ...link, [field]: value } : link
-    )
+    const updatedLinks = links.map((link, i) => (i === index ? { ...link, [field]: value } : link))
     onChange(updatedLinks)
   }
 
@@ -39,7 +33,7 @@ const PortfolioLinks: React.FC<PortfolioLinksProps> = ({
     { name: 'Twitter/X', placeholder: 'https://twitter.com/username' },
     { name: 'Facebook', placeholder: 'https://facebook.com/page' },
     { name: 'TikTok', placeholder: 'https://tiktok.com/@username' },
-    { name: 'Website', placeholder: 'https://yourwebsite.com' }
+    { name: 'Website', placeholder: 'https://yourwebsite.com' },
   ]
 
   return (
@@ -49,7 +43,7 @@ const PortfolioLinks: React.FC<PortfolioLinksProps> = ({
           <FiLink className="w-5 h-5 text-primary-600 mr-3" />
           <h2 className="text-lg font-semibold text-gray-900">포트폴리오 링크</h2>
         </div>
-        
+
         <button
           type="button"
           onClick={addLink}
@@ -64,28 +58,19 @@ const PortfolioLinks: React.FC<PortfolioLinksProps> = ({
         {links.length === 0 ? (
           <div className="text-center py-8 border-2 border-dashed border-gray-300 rounded-lg">
             <FiLink className="w-8 h-8 text-gray-400 mx-auto mb-3" />
-            <p className="text-gray-500 text-sm mb-3">
-              포트폴리오 링크를 추가해보세요
-            </p>
+            <p className="text-gray-500 text-sm mb-3">포트폴리오 링크를 추가해보세요</p>
             <p className="text-gray-400 text-xs mb-4">
               SNS, 스트리밍 플랫폼, 개인 웹사이트 등을 연결할 수 있습니다
             </p>
-            <button
-              type="button"
-              onClick={addLink}
-              className="btn-primary"
-            >
-              <FiPlus className="w-4 h-4 mr-1" />
-              첫 번째 링크 추가
+            <button type="button" onClick={addLink} className="tw-btn-primary">
+              <FiPlus className="w-4 h-4 mr-1" />첫 번째 링크 추가
             </button>
           </div>
         ) : (
           links.map((link, index) => (
             <div key={index} className="bg-white border border-gray-200 rounded-lg p-4">
               <div className="flex items-start justify-between mb-3">
-                <div className="text-sm font-medium text-gray-700">
-                  링크 #{index + 1}
-                </div>
+                <div className="text-sm font-medium text-gray-700">링크 #{index + 1}</div>
                 <button
                   type="button"
                   onClick={() => removeLink(index)}
@@ -94,20 +79,18 @@ const PortfolioLinks: React.FC<PortfolioLinksProps> = ({
                   <FiTrash2 className="w-4 h-4" />
                 </button>
               </div>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* 링크 제목 */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    링크 제목
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">링크 제목</label>
                   <input
                     type="text"
                     value={link.title}
-                    onChange={(e) => updateLink(index, 'title', e.target.value)}
+                    onChange={e => updateLink(index, 'title', e.target.value)}
                     className={`w-full px-3 py-2 border rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
-                      errors[`portfolio_${index}_title`] 
-                        ? 'border-red-300 focus:ring-red-500 focus:border-red-500' 
+                      errors[`portfolio_${index}_title`]
+                        ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
                         : 'border-gray-300'
                     }`}
                     placeholder="예: Instagram, YouTube, 개인 웹사이트"
@@ -121,17 +104,15 @@ const PortfolioLinks: React.FC<PortfolioLinksProps> = ({
 
                 {/* 링크 URL */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    링크 URL
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">링크 URL</label>
                   <div className="relative">
                     <input
                       type="url"
                       value={link.url}
-                      onChange={(e) => updateLink(index, 'url', e.target.value)}
+                      onChange={e => updateLink(index, 'url', e.target.value)}
                       className={`w-full px-3 py-2 pr-10 border rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
-                        errors[`portfolio_${index}_url`] 
-                          ? 'border-red-300 focus:ring-red-500 focus:border-red-500' 
+                        errors[`portfolio_${index}_url`]
+                          ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
                           : 'border-gray-300'
                       }`}
                       placeholder="https://..."
@@ -148,9 +129,7 @@ const PortfolioLinks: React.FC<PortfolioLinksProps> = ({
                     )}
                   </div>
                   {errors[`portfolio_${index}_url`] && (
-                    <p className="mt-1 text-xs text-red-600">
-                      {errors[`portfolio_${index}_url`]}
-                    </p>
+                    <p className="mt-1 text-xs text-red-600">{errors[`portfolio_${index}_url`]}</p>
                   )}
                 </div>
               </div>
@@ -161,11 +140,9 @@ const PortfolioLinks: React.FC<PortfolioLinksProps> = ({
 
       {/* 플랫폼 제안 */}
       <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-        <h4 className="text-sm font-medium text-blue-900 mb-3">
-          추천 플랫폼
-        </h4>
+        <h4 className="text-sm font-medium text-blue-900 mb-3">추천 플랫폼</h4>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
-          {platformSuggestions.map((platform) => (
+          {platformSuggestions.map(platform => (
             <button
               key={platform.name}
               type="button"

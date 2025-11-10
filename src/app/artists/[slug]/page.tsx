@@ -227,7 +227,7 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
       <div className="pt-20 bg-gradient-to-b from-primary-50 via-accent-50 to-gray-200 min-h-screen">
         {/* Header */}
         <section className="py-16 md:py-24">
-          <div className="container-custom">
+          <div className="tw-container-custom">
             <div className="max-w-4xl mx-auto px-4">
               <div className="mb-6">
                 <Link
@@ -281,11 +281,13 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
                   </div>
 
                   <div className={`${isMinimal ? 'text-center' : ''}`}>
-                    <h1 className={`${isMinimal ? 'heading-secondary' : 'heading-primary'} mb-4`}>
+                    <h1
+                      className={`${isMinimal ? 'tw-heading-secondary' : 'tw-heading-primary'} mb-4`}
+                    >
                       {artist.name}
                     </h1>
 
-                    <p className="text-body text-gray-600 mb-6">{artist.oneLiner}</p>
+                    <p className="tw-text-body text-gray-600 mb-6">{artist.oneLiner}</p>
 
                     {/* Contact */}
                     <div className="text-sm text-gray-500">
@@ -321,7 +323,7 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
 
         {/* Bio Section */}
         <section className="py-12 sm:py-20">
-          <div className="container-custom">
+          <div className="tw-container-custom">
             <div className="max-w-6xl mx-auto px-4">
               {/* 섹션 헤더 */}
               <div className="text-center mb-12">
@@ -330,7 +332,7 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
                   <FiUser className="w-6 h-6 text-primary-600" />
                   <div className="w-8 h-0.5 bg-gradient-to-l from-transparent to-primary-500"></div>
                 </div>
-                <h2 className="heading-secondary mb-3">
+                <h2 className="tw-heading-secondary mb-3">
                   {isMinimal ? '아티스트 소개' : '작업 세계'}
                 </h2>
                 <p className="text-gray-600 max-w-2xl mx-auto">
@@ -349,7 +351,7 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
                         <div className="w-20 h-20 bg-gradient-to-br from-primary-100 to-accent-100 rounded-full flex items-center justify-center mx-auto mb-4">
                           <div className="text-2xl">🎵</div>
                         </div>
-                        <h3 className="heading-tertiary mb-2">창작자 정보</h3>
+                        <h3 className="tw-heading-tertiary mb-2">창작자 정보</h3>
                         <p className="text-sm text-gray-600">
                           예술가의 배경과 경험을 통해 작품 세계를 이해해보세요.
                         </p>
@@ -386,7 +388,7 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
         {/* Portfolio Links */}
         {artist.portfolioLinks && artist.portfolioLinks.length > 0 && (
           <section className="py-12 sm:py-20">
-            <div className="container-custom">
+            <div className="tw-container-custom">
               <div className="max-w-6xl mx-auto px-4">
                 {/* 섹션 헤더 */}
                 <div className="text-center mb-12">
@@ -395,7 +397,7 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
                     <FiLink className="w-6 h-6 text-accent-600" />
                     <div className="w-8 h-0.5 bg-gradient-to-l from-transparent to-accent-500"></div>
                   </div>
-                  <h2 className="heading-secondary mb-3">포트폴리오 & 소셜</h2>
+                  <h2 className="tw-heading-secondary mb-3">포트폴리오 & 소셜</h2>
                   <p className="text-gray-600 max-w-2xl mx-auto">
                     {artist.name}의 다양한 플랫폼과 작품들을 더 자세히 만나보세요.
                   </p>
@@ -436,7 +438,7 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
         {/* YouTube Videos */}
         {artist.youtubeVideos && artist.youtubeVideos.length > 0 && (
           <section className="py-12 sm:py-20">
-            <div className="container-custom">
+            <div className="tw-container-custom">
               <div className="max-w-6xl mx-auto px-4">
                 {/* 섹션 헤더 */}
                 <div className="text-center mb-12">
@@ -445,7 +447,7 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
                     <FiPlay className="w-6 h-6 text-red-600" />
                     <div className="w-8 h-0.5 bg-gradient-to-l from-transparent to-red-500"></div>
                   </div>
-                  <h2 className="heading-secondary mb-3">영상으로 만나는 작품들</h2>
+                  <h2 className="tw-heading-secondary mb-3">영상으로 만나는 작품들</h2>
                   <p className="text-gray-600 max-w-2xl mx-auto">
                     {artist.name}의 음악 세계를 직접 경험해보세요. 각 영상은 아티스트의 고유한
                     감성과 창작 철학을 담고 있습니다.
@@ -516,7 +518,7 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
         {/* 참여 프로젝트 섹션 */}
         {artistProjects.length > 0 && (
           <section className="py-12 sm:py-20">
-            <div className="container-custom">
+            <div className="tw-container-custom">
               <div className="max-w-6xl mx-auto px-4">
                 {/* 섹션 헤더 */}
                 <div className="text-center mb-12">
@@ -525,7 +527,7 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
                     <FiFolder className="w-6 h-6 text-primary-600" />
                     <div className="w-8 h-0.5 bg-gradient-to-l from-transparent to-primary-500"></div>
                   </div>
-                  <h2 className="heading-secondary mb-3">참여 프로젝트</h2>
+                  <h2 className="tw-heading-secondary mb-3">참여 프로젝트</h2>
                   <p className="text-gray-600 max-w-2xl mx-auto">
                     {artist.name}이(가) 참여한 경기아트콜렉티브의 다양한 프로젝트들을 만나보세요.
                   </p>
@@ -540,15 +542,15 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
 
         {/* Navigation */}
         <section className="pt-8 pb-12 sm:pb-20 mt-4">
-          <div className="container-custom">
+          <div className="tw-container-custom">
             <div className="text-center px-4">
               <div className="max-w-2xl mx-auto mb-8">
-                <h3 className="heading-tertiary mb-3">다른 아티스트들도 만나보세요</h3>
+                <h3 className="tw-heading-tertiary mb-3">다른 아티스트들도 만나보세요</h3>
                 <p className="text-gray-600">
                   경기아트콜렉티브와 함께하는 더 많은 예술가들의 세계를 탐험해보세요.
                 </p>
               </div>
-              <Link href="/artists" className="btn-primary">
+              <Link href="/artists" className="tw-btn-primary">
                 다른 아티스트 보기
               </Link>
             </div>

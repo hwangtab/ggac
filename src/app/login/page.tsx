@@ -315,8 +315,8 @@ export default function LoginPage() {
               />
             </svg>
           </div>
-          <h1 className="heading-secondary mb-4">로그인</h1>
-          <p className="text-body text-gray-600">
+          <h1 className="tw-heading-secondary mb-4">로그인</h1>
+          <p className="tw-text-body text-gray-600">
             경기아트콜렉티브 협동조합에
             <br />
             오신 것을 환영합니다.
@@ -423,10 +423,10 @@ export default function LoginPage() {
                 상태입니다.
               </p>
               <div className="space-y-3">
-                <button onClick={() => router.push('/board')} className="w-full btn-primary">
+                <button onClick={() => router.push('/board')} className="w-full tw-btn-primary">
                   게시판으로 이동
                 </button>
-                <button onClick={() => router.push('/mypage')} className="w-full btn-secondary">
+                <button onClick={() => router.push('/mypage')} className="w-full tw-btn-secondary">
                   마이페이지로 이동
                 </button>
                 <button

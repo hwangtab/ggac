@@ -66,79 +66,80 @@ module.exports = {
     },
   },
   plugins: [
+    require('@tailwindcss/line-clamp'),
     function ({ addUtilities }) {
       const newUtilities = {
         // 카드 공통 스타일
-        '.card-base': {
+        '.tw-card-base': {
           '@apply bg-white rounded-2xl shadow-lg overflow-hidden': {},
         },
-        '.card-hover': {
+        '.tw-card-hover': {
           '@apply hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2': {},
         },
-        '.card-interactive': {
+        '.tw-card-interactive': {
           '@apply cursor-pointer group': {},
         },
 
         // 버튼 공통 스타일
-        '.btn-primary': {
+        '.tw-btn-primary': {
           '@apply bg-primary-600 text-white hover:bg-primary-700 px-4 py-2 rounded-lg font-medium transition-colors duration-200':
             {},
         },
-        '.btn-secondary': {
+        '.tw-btn-secondary': {
           '@apply bg-gray-100 text-gray-700 hover:bg-gray-200 px-4 py-2 rounded-lg font-medium transition-colors duration-200':
             {},
         },
-        '.btn-accent': {
+        '.tw-btn-accent': {
           '@apply bg-accent-500 text-white hover:bg-accent-600 px-4 py-2 rounded-full font-medium transition-colors duration-200':
             {},
         },
 
         // 카테고리 배지 스타일
-        '.badge-primary': {
+        '.tw-badge-primary': {
           '@apply inline-block px-3 py-1 bg-primary-100 text-primary-700 text-sm font-medium rounded-full':
             {},
         },
-        '.badge-secondary': {
+        '.tw-badge-secondary': {
           '@apply inline-block px-3 py-1 bg-gray-100 text-gray-700 text-sm font-medium rounded-full':
             {},
         },
-        '.badge-accent': {
+        '.tw-badge-accent': {
           '@apply inline-block px-3 py-1 bg-accent-100 text-accent-700 text-sm font-medium rounded-full':
             {},
         },
 
         // 텍스트 공통 스타일
-        '.heading-primary': {
+        '.tw-heading-primary': {
           '@apply text-4xl md:text-5xl lg:text-6xl font-serif font-bold text-gray-900': {},
         },
-        '.heading-secondary': {
+        '.tw-heading-secondary': {
           '@apply text-2xl md:text-3xl lg:text-4xl font-serif font-semibold text-primary-800': {},
         },
-        '.heading-tertiary': {
+        '.tw-heading-tertiary': {
           '@apply text-xl md:text-2xl font-serif font-semibold text-primary-700': {},
         },
-        '.heading-quaternary': {
+        '.tw-heading-quaternary': {
           '@apply text-lg font-serif font-medium text-primary-600': {},
         },
-        '.text-body': {
+        '.tw-text-body': {
           '@apply text-base md:text-lg leading-relaxed': {},
         },
 
         // 컨테이너 스타일
-        '.container-custom': {
+        '.tw-container-custom': {
           '@apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8': {},
         },
 
         // 그리드 공통 패턴
-        '.grid-cards': {
+        '.tw-grid-cards': {
           '@apply grid sm:grid-cols-2 lg:grid-cols-3 gap-8': {},
         },
-        '.grid-artists': {
+        '.tw-grid-artists': {
           '@apply grid sm:grid-cols-2 lg:grid-cols-3 gap-12': {},
         },
 
         // 이미지 오버레이
-        '.image-overlay': {
+        '.tw-image-overlay': {
           '@apply absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors duration-300':
             {},
         },
@@ -164,20 +165,20 @@ module.exports = {
         },
 
         // 로딩 상태
-        '.loading-skeleton': {
+        '.tw-loading-skeleton': {
           '@apply animate-pulse bg-gray-200 rounded': {},
         },
 
         // 폼 스타일
-        '.form-input': {
+        '.tw-form-input': {
           '@apply block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm':
             {},
         },
-        '.form-textarea': {
+        '.tw-form-textarea': {
           '@apply block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm':
             {},
         },
-        '.form-select': {
+        '.tw-form-select': {
           '@apply block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 pr-8 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm':
             {},
         },

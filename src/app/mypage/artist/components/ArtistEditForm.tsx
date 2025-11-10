@@ -13,11 +13,7 @@ interface ArtistEditFormProps {
   loading: boolean
 }
 
-const ArtistEditForm: React.FC<ArtistEditFormProps> = ({ 
-  artist, 
-  onUpdate,
-  loading
-}) => {
+const ArtistEditForm: React.FC<ArtistEditFormProps> = ({ artist, onUpdate, loading }) => {
   const [formData, setFormData] = useState({
     name: artist.name || '',
     category: artist.category || [],
@@ -28,7 +24,7 @@ const ArtistEditForm: React.FC<ArtistEditFormProps> = ({
     profile_photo_metadata: artist.profile_photo_metadata || undefined,
     portfolio_links: artist.portfolio_links || [],
     youtube_videos: artist.youtube_videos || [],
-    contact: artist.contact || ''
+    contact: artist.contact || '',
   })
 
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -37,7 +33,7 @@ const ArtistEditForm: React.FC<ArtistEditFormProps> = ({
   const handleChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }))
     setIsDirty(true)
-    
+
     // 에러 클리어
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }))
@@ -108,7 +104,7 @@ const ArtistEditForm: React.FC<ArtistEditFormProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!validateForm()) {
       return
     }
@@ -132,7 +128,7 @@ const ArtistEditForm: React.FC<ArtistEditFormProps> = ({
       profile_photo_metadata: artist.profile_photo_metadata || undefined,
       portfolio_links: artist.portfolio_links || [],
       youtube_videos: artist.youtube_videos || [],
-      contact: artist.contact || ''
+      contact: artist.contact || '',
     })
     setErrors({})
     setIsDirty(false)
@@ -141,80 +137,68 @@ const ArtistEditForm: React.FC<ArtistEditFormProps> = ({
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
       {/* 기본 정보 */}
-      <BasicInfo 
-        data={formData}
-        errors={errors}
-        onChange={handleChange}
-      />
+      <BasicInfo data={formData} errors={errors} onChange={handleChange} />
 
       {/* 바이오 에디터 */}
-      <BioEditor 
+      <BioEditor
         value={formData.bio}
         error={errors.bio}
-        onChange={(bio) => handleChange('bio', bio)}
+        onChange={bio => handleChange('bio', bio)}
       />
 
       {/* 포트폴리오 링크 */}
-      <PortfolioLinks 
+      <PortfolioLinks
         links={formData.portfolio_links}
         errors={errors}
-        onChange={(links) => handleChange('portfolio_links', links)}
+        onChange={links => handleChange('portfolio_links', links)}
       />
 
       {/* 유튜브 동영상 */}
-      <YoutubeVideos 
+      <YoutubeVideos
         videos={formData.youtube_videos}
         errors={errors}
-        onChange={(videos) => handleChange('youtube_videos', videos)}
+        onChange={videos => handleChange('youtube_videos', videos)}
       />
 
       {/* 연락처 */}
       <div className="bg-gray-50 rounded-lg p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">연락처</h3>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            이메일 (선택사항)
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">이메일 (선택사항)</label>
           <input
             type="email"
             value={formData.contact}
-            onChange={(e) => handleChange('contact', e.target.value)}
+            onChange={e => handleChange('contact', e.target.value)}
             className={`w-full px-3 py-2 border rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
-              errors.contact 
-                ? 'border-red-300 focus:ring-red-500 focus:border-red-500' 
+              errors.contact
+                ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
                 : 'border-gray-300'
             }`}
             placeholder="artist@example.com"
           />
-          {errors.contact && (
-            <p className="mt-1 text-xs text-red-600">{errors.contact}</p>
-          )}
-          <p className="mt-1 text-xs text-gray-500">
-            공개적으로 표시될 연락처입니다.
-          </p>
+          {errors.contact && <p className="mt-1 text-xs text-red-600">{errors.contact}</p>}
+          <p className="mt-1 text-xs text-gray-500">공개적으로 표시될 연락처입니다.</p>
         </div>
       </div>
 
       {/* 버튼 */}
       <div className="flex justify-between items-center pt-6 border-t border-gray-200">
-        <div className="text-sm text-gray-500">
-          {isDirty && '* 변경된 내용이 있습니다.'}
-        </div>
-        
+        <div className="text-sm text-gray-500">{isDirty && '* 변경된 내용이 있습니다.'}</div>
+
         <div className="flex space-x-3">
           <button
             type="button"
             onClick={handleReset}
             disabled={!isDirty || loading}
-            className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+            className="tw-btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
           >
             취소
           </button>
-          
-          <button 
-            type="submit" 
+
+          <button
+            type="submit"
             disabled={!isDirty || loading}
-            className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+            className="tw-btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? (
               <div className="flex items-center">

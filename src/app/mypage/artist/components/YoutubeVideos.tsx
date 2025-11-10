@@ -9,11 +9,7 @@ interface YoutubeVideosProps {
   onChange: (videos: YouTubeVideo[]) => void
 }
 
-const YoutubeVideos: React.FC<YoutubeVideosProps> = ({
-  videos,
-  errors,
-  onChange
-}) => {
+const YoutubeVideos: React.FC<YoutubeVideosProps> = ({ videos, errors, onChange }) => {
   const addVideo = () => {
     onChange([...videos, { title: '', url: '' }])
   }
@@ -23,7 +19,7 @@ const YoutubeVideos: React.FC<YoutubeVideosProps> = ({
   }
 
   const updateVideo = (index: number, field: 'title' | 'url', value: string) => {
-    const updatedVideos = videos.map((video, i) => 
+    const updatedVideos = videos.map((video, i) =>
       i === index ? { ...video, [field]: value } : video
     )
     onChange(updatedVideos)
@@ -49,7 +45,7 @@ const YoutubeVideos: React.FC<YoutubeVideosProps> = ({
           <FiYoutube className="w-5 h-5 text-red-600 mr-3" />
           <h2 className="text-lg font-semibold text-gray-900">유튜브 동영상</h2>
         </div>
-        
+
         <button
           type="button"
           onClick={addVideo}
@@ -64,31 +60,26 @@ const YoutubeVideos: React.FC<YoutubeVideosProps> = ({
         {videos.length === 0 ? (
           <div className="text-center py-8 border-2 border-dashed border-gray-300 rounded-lg">
             <FiYoutube className="w-8 h-8 text-gray-400 mx-auto mb-3" />
-            <p className="text-gray-500 text-sm mb-3">
-              유튜브 동영상을 추가해보세요
-            </p>
+            <p className="text-gray-500 text-sm mb-3">유튜브 동영상을 추가해보세요</p>
             <p className="text-gray-400 text-xs mb-4">
               공연 영상, 작품 소개, 인터뷰 등을 공유할 수 있습니다
             </p>
             <button
               type="button"
               onClick={addVideo}
-              className="btn-primary bg-red-600 hover:bg-red-700"
+              className="tw-btn-primary bg-red-600 hover:bg-red-700"
             >
-              <FiPlus className="w-4 h-4 mr-1" />
-              첫 번째 동영상 추가
+              <FiPlus className="w-4 h-4 mr-1" />첫 번째 동영상 추가
             </button>
           </div>
         ) : (
           videos.map((video, index) => {
             const thumbnailUrl = getYouTubeThumbnail(video.url)
-            
+
             return (
               <div key={index} className="bg-white border border-gray-200 rounded-lg p-4">
                 <div className="flex items-start justify-between mb-3">
-                  <div className="text-sm font-medium text-gray-700">
-                    동영상 #{index + 1}
-                  </div>
+                  <div className="text-sm font-medium text-gray-700">동영상 #{index + 1}</div>
                   <button
                     type="button"
                     onClick={() => removeVideo(index)}
@@ -97,7 +88,7 @@ const YoutubeVideos: React.FC<YoutubeVideosProps> = ({
                     <FiTrash2 className="w-4 h-4" />
                   </button>
                 </div>
-                
+
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                   {/* 동영상 미리보기 */}
                   <div className="lg:col-span-1">
@@ -140,10 +131,10 @@ const YoutubeVideos: React.FC<YoutubeVideosProps> = ({
                       <input
                         type="text"
                         value={video.title}
-                        onChange={(e) => updateVideo(index, 'title', e.target.value)}
+                        onChange={e => updateVideo(index, 'title', e.target.value)}
                         className={`w-full px-3 py-2 border rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
-                          errors[`youtube_${index}_title`] 
-                            ? 'border-red-300 focus:ring-red-500 focus:border-red-500' 
+                          errors[`youtube_${index}_title`]
+                            ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
                             : 'border-gray-300'
                         }`}
                         placeholder="동영상 제목을 입력하세요"
@@ -163,10 +154,10 @@ const YoutubeVideos: React.FC<YoutubeVideosProps> = ({
                       <input
                         type="url"
                         value={video.url}
-                        onChange={(e) => updateVideo(index, 'url', e.target.value)}
+                        onChange={e => updateVideo(index, 'url', e.target.value)}
                         className={`w-full px-3 py-2 border rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
-                          errors[`youtube_${index}_url`] 
-                            ? 'border-red-300 focus:ring-red-500 focus:border-red-500' 
+                          errors[`youtube_${index}_url`]
+                            ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
                             : 'border-gray-300'
                         }`}
                         placeholder="https://www.youtube.com/watch?v=..."
@@ -190,9 +181,7 @@ const YoutubeVideos: React.FC<YoutubeVideosProps> = ({
 
       {/* URL 형식 가이드 */}
       <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-        <h4 className="text-sm font-medium text-blue-900 mb-3">
-          유튜브 URL 형식 안내
-        </h4>
+        <h4 className="text-sm font-medium text-blue-900 mb-3">유튜브 URL 형식 안내</h4>
         <div className="text-xs text-blue-800 space-y-2">
           <div>
             <div className="font-medium">일반 링크:</div>
