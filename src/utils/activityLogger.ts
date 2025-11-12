@@ -239,6 +239,7 @@ class ActivityLogger {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${this.sessionToken}`,
         },
+        credentials: 'include',
         body: JSON.stringify({
           action: 'start',
           session_token: sessionToken,
@@ -270,6 +271,7 @@ class ActivityLogger {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${this.sessionToken}`,
         },
+        credentials: 'include',
         body: JSON.stringify({
           action: 'end',
           session_id: this.sessionId,
@@ -295,6 +297,7 @@ class ActivityLogger {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${this.sessionToken}`,
         },
+        credentials: 'include',
         body: JSON.stringify({
           action: 'update',
           session_id: this.sessionId,
@@ -321,6 +324,7 @@ class ActivityLogger {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${this.sessionToken}`,
         },
+        credentials: 'include',
         body: JSON.stringify({
           action: 'update',
           session_id: this.sessionId,
@@ -441,6 +445,7 @@ class ActivityLogger {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${this.sessionToken}`,
       },
+      credentials: 'include',
       body: JSON.stringify(request),
     })
 
@@ -464,6 +469,7 @@ class ActivityLogger {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${this.sessionToken}`,
       },
+      credentials: 'include',
       body: JSON.stringify({ logs }),
     })
 

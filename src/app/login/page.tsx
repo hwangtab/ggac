@@ -231,9 +231,11 @@ export default function LoginPage() {
           await fetch('/api/activities/log', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify({
-              actionType: 'login',
-              details: {
+              action_type: 'login',
+              target_type: 'auth',
+              metadata: {
                 user_agent: navigator.userAgent,
                 timestamp: new Date().toISOString(),
               },
