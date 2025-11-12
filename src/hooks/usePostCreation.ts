@@ -68,16 +68,14 @@ export const usePostCreation = ({
 
       const postId = (data as unknown as Post).id
 
-      // 2. 활동 로깅
-      try {
-        await logPostCreated(postId, {
-          category: formData.category,
-          title: formData.title.substring(0, 50),
-          character_count: formData.content.length,
-        })
-      } catch (logError) {
+      // 2. 활동 로깅 (비블로킹: await 제거로 타임아웃 방지)
+      logPostCreated(postId, {
+        category: formData.category,
+        title: formData.title.substring(0, 50),
+        character_count: formData.content.length,
+      }).catch(logError => {
         console.error('활동 로깅 오류:', logError)
-      }
+      })
 
       // 3. 첨부파일 업로드 (있는 경우)
       if (uploadAttachmentsFn) {
