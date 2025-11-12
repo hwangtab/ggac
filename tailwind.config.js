@@ -63,10 +63,143 @@ module.exports = {
       overflowWrap: {
         'break-words': 'break-word',
       },
+      typography: {
+        DEFAULT: {
+          css: {
+            color: '#1f2937',
+            maxWidth: 'none',
+            // 한글 친화적 설정
+            'h1, h2, h3, h4, h5, h6, p, li, td, th': {
+              wordBreak: 'keep-all',
+              overflowWrap: 'break-word',
+              hyphens: 'none',
+            },
+            // 헤딩 스타일 - font-post 사용
+            h1: {
+              color: '#1e3a8a',
+              fontFamily: 'PeoplefirstFightingTTF, serif',
+              fontWeight: '700',
+              fontSize: '2.25rem',
+              marginTop: '3rem',
+              marginBottom: '1.5rem',
+              paddingBottom: '0.75rem',
+              borderBottom: '2px solid #bae6fd',
+            },
+            'h1:first-child': {
+              marginTop: '0',
+            },
+            h2: {
+              color: '#075985',
+              fontFamily: 'PeoplefirstFightingTTF, serif',
+              fontWeight: '600',
+              fontSize: '1.875rem',
+              marginTop: '2.5rem',
+              marginBottom: '1.25rem',
+              paddingBottom: '0.5rem',
+              borderBottom: '1px solid #bae6fd',
+            },
+            'h2:first-child': {
+              marginTop: '0',
+            },
+            h3: {
+              color: '#0369a1',
+              fontFamily: 'PeoplefirstFightingTTF, serif',
+              fontWeight: '600',
+              fontSize: '1.5rem',
+              marginTop: '2rem',
+              marginBottom: '1rem',
+              paddingBottom: '0.5rem',
+              borderBottom: '1px solid #bae6fd',
+            },
+            'h3:first-child': {
+              marginTop: '0',
+            },
+            h4: {
+              color: '#0369a1',
+              fontFamily: 'PeoplefirstFightingTTF, serif',
+              fontWeight: '600',
+              fontSize: '1.25rem',
+              marginTop: '1.5rem',
+              marginBottom: '0.75rem',
+            },
+            // 본문 텍스트
+            p: {
+              color: '#374151',
+              lineHeight: '1.75',
+              marginBottom: '1rem',
+            },
+            // 리스트 스타일
+            ul: {
+              color: '#374151',
+              marginTop: '2rem',
+              marginBottom: '1.5rem',
+              marginLeft: '1rem',
+              textAlign: 'left',
+            },
+            'ul > li': {
+              position: 'relative',
+              paddingLeft: '1rem',
+              marginBottom: '0.5rem',
+              textAlign: 'left',
+            },
+            'ul > li::before': {
+              content: '"•"',
+              position: 'absolute',
+              left: '0',
+              color: '#0284c7',
+              fontWeight: '600',
+            },
+            // strong, em 스타일
+            strong: {
+              color: '#075985',
+              fontWeight: '600',
+              wordBreak: 'break-all',
+              overflowWrap: 'break-word',
+              whiteSpace: 'normal',
+            },
+            'li strong': {
+              color: '#075985',
+              fontWeight: '600',
+              display: 'inline',
+              marginTop: '0',
+              marginBottom: '0',
+            },
+            // p > strong:only-child를 subheading처럼 표시
+            'p > strong:only-child': {
+              display: 'block',
+              fontSize: '1.125rem',
+              fontFamily: 'PeoplefirstFightingTTF, serif',
+              fontWeight: '600',
+              color: '#0369a1',
+              marginTop: '2rem',
+              marginBottom: '1rem',
+            },
+            'p:first-child > strong:only-child': {
+              marginTop: '0',
+            },
+            em: {
+              color: '#bd5608',
+              fontStyle: 'italic',
+            },
+            // 링크 스타일
+            a: {
+              color: '#0284c7',
+              textDecoration: 'underline',
+              textUnderlineOffset: '0.2em',
+              textDecorationThickness: '1px',
+              '&:hover': {
+                color: '#0369a1',
+                textUnderlineOffset: '0.25em',
+                textDecorationThickness: '1.5px',
+              },
+            },
+          },
+        },
+      },
     },
   },
   plugins: [
-    require('@tailwindcss/line-clamp'),
+    require('@tailwindcss/typography'),
     function ({ addUtilities }) {
       const newUtilities = {
         // 카드 공통 스타일
@@ -142,26 +275,6 @@ module.exports = {
         '.tw-image-overlay': {
           '@apply absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors duration-300':
             {},
-        },
-
-        // 텍스트 라인 클램프
-        '.line-clamp-2': {
-          display: '-webkit-box',
-          '-webkit-line-clamp': '2',
-          '-webkit-box-orient': 'vertical',
-          overflow: 'hidden',
-        },
-        '.line-clamp-3': {
-          display: '-webkit-box',
-          '-webkit-line-clamp': '3',
-          '-webkit-box-orient': 'vertical',
-          overflow: 'hidden',
-        },
-        '.line-clamp-4': {
-          display: '-webkit-box',
-          '-webkit-line-clamp': '4',
-          '-webkit-box-orient': 'vertical',
-          overflow: 'hidden',
         },
 
         // 로딩 상태

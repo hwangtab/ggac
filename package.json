@@ -54,6 +54,7 @@
     "@commitlint/config-conventional": "^19.0.3",
     "@next/bundle-analyzer": "^15.3.5",
     "@playwright/test": "^1.53.2",
+    "@tailwindcss/typography": "^0.5.19",
     "@types/node": "^24.0.10",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",

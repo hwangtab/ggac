@@ -325,14 +325,6 @@ textarea:focus-visible {
     hyphens: none;
   }
 
-  .tw-btn-primary {
-    @apply bg-primary-600 hover:bg-primary-700 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200;
-  }
-
-  .tw-btn-secondary {
-    @apply bg-transparent hover:bg-gray-100 text-gray-900 border border-gray-300 px-6 py-3 rounded-lg font-medium transition-colors duration-200;
-  }
-
   .project-image {
     @apply w-full h-full object-cover;
   }
@@ -366,97 +358,6 @@ textarea:focus-visible {
   color: white;
 }
 
-/* Prose styling for project descriptions */
-.prose h1 {
-  @apply text-4xl font-post font-bold text-primary-900 mt-12 mb-6 pb-3 border-b-2 border-primary-300;
-}
-
-.prose h2 {
-  @apply text-3xl font-post font-semibold text-primary-800 mt-10 mb-5 pb-2 border-b border-primary-200;
-}
-
-.prose h3 {
-  @apply text-2xl font-post font-semibold text-primary-700 mt-8 mb-4 pb-2 border-b border-primary-200;
-}
-
-.prose h4 {
-  @apply text-xl font-post font-semibold text-primary-700 mt-6 mb-3;
-}
-
-.prose h1:first-child,
-.prose h2:first-child,
-.prose h3:first-child {
-  @apply mt-0;
-}
-
-.prose p {
-  @apply text-gray-700 leading-relaxed mb-4;
-  word-break: keep-all;
-  overflow-wrap: break-word;
-  hyphens: none;
-}
-
-.prose ul {
-  @apply text-gray-700 space-y-2 ml-4 text-left mt-8 mb-6;
-  word-break: keep-all;
-  overflow-wrap: break-word;
-  hyphens: none;
-}
-
-.text-center .prose ul {
-  @apply ml-0 list-none;
-  text-align: center;
-}
-
-.text-center .prose li {
-  @apply pl-0;
-  text-align: center;
-}
-
-.text-center .prose li::before {
-  display: none;
-}
-
-.prose li {
-  @apply relative pl-4 mb-2 text-left;
-  word-break: keep-all;
-  overflow-wrap: break-word;
-  hyphens: none;
-}
-
-.prose li::before {
-  content: '•';
-  @apply absolute left-0 text-primary-600 font-semibold;
-}
-
-.prose li strong {
-  @apply text-primary-800 font-semibold inline mt-0 mb-0;
-}
-
-.prose strong {
-  @apply text-primary-800 font-semibold;
-  word-break: break-all;
-  overflow-wrap: break-word;
-  white-space: normal;
-}
-
-/* Style for paragraphs that only contain a strong tag, making them act as subheadings */
-.prose > p > strong:only-child {
-  @apply block text-lg font-post font-semibold text-primary-700 mt-8 mb-4;
-}
-
-.prose > p:first-child > strong:only-child {
-  @apply mt-0;
-}
-
-.prose li strong {
-  @apply inline mt-0 mb-0;
-}
-
-.prose em {
-  @apply text-accent-700 italic;
-}
-
 /* Force left alignment for category tags */
 .category-tags-left {
   text-align: left !important;
@@ -486,14 +387,6 @@ textarea:focus-visible {
   box-shadow:
     0 25px 50px -12px rgba(0, 0, 0, 0.25),
     0 0 0 1px rgba(0, 0, 0, 0.05);
-}
-
-/* 텍스트 라인 제한 */
-.line-clamp-2 {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 
 /* 부드러운 애니메이션을 위한 키프레임 */
@@ -580,29 +473,8 @@ textarea:focus-visible {
   }
 }
 
-/* Line clamp utilities */
+/* Link and text utilities */
 @layer utilities {
-  .line-clamp-1 {
-    display: -webkit-box;
-    -webkit-line-clamp: 1;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-
-  .line-clamp-2 {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-
-  .line-clamp-3 {
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-
   /* 링크 밑줄 간격 유틸리티 클래스 */
   .underline-offset-auto {
     text-underline-offset: auto;
