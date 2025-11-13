@@ -473,6 +473,12 @@ const nextConfig = {
         port: '',
         pathname: '/storage/v1/object/public/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'btugywkltavbogdnhwpu.supabase.co',
+        port: '',
+        pathname: '/storage/v1/object/public/**',
+      },
       // YouTube 썸네일 도메인
       {
         protocol: 'https',
