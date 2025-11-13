@@ -384,6 +384,20 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
       clipboard: {
         matchVisual: false,
       },
+      keyboard: {
+        bindings: {
+          linebreak: {
+            key: 13, // Enter key
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            handler: function (this: any, range: any) {
+              // Quill의 context에서 this.quill 접근
+              this.quill.insertText(range.index, '\n')
+              this.quill.setSelection(range.index + 1)
+              return false // 기본 동작(새 paragraph 생성) 방지
+            },
+          },
+        },
+      },
     }),
     [handleImageUpload, insertImageToEditor]
   )
@@ -401,6 +415,7 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
     'image',
     'blockquote',
     'code-block',
+    'break', // 줄바꿈 처리를 위해 추가
   ]
 
   // 드래그 앤 드롭 핸들러
