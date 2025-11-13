@@ -176,8 +176,8 @@ module.exports = {
             'p > strong:only-child': {
               display: 'block',
               fontSize: '1.125rem',
-              fontFamily: 'PeoplefirstFightingTTF, serif',
-              fontWeight: '600',
+              fontFamily: "var(--font-gmarket-sans), 'system-ui', sans-serif",
+              fontWeight: '700',
               color: '#0369a1',
               marginTop: '2rem',
               marginBottom: '1rem',
