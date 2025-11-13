@@ -1,3 +1,13 @@
+const createQuillIndentStyles = () => {
+  const styles = {}
+  for (let level = 1; level <= 8; level += 1) {
+    styles[`li[class~="ql-indent-${level}"]`] = {
+      marginLeft: `${level * 1.5}rem`,
+    }
+  }
+  return styles
+}
+
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
@@ -155,29 +165,45 @@ module.exports = {
               color: '#0284c7',
               fontWeight: '600',
             },
-            'ol[data-list="bullet"]': {
-              color: '#374151',
-              marginTop: '2rem',
-              marginBottom: '1.5rem',
-              marginLeft: '1rem',
-              paddingLeft: '0',
-              textAlign: 'left',
-              listStyleType: 'none',
-            },
-            'ol[data-list="bullet"] > li': {
+            'li[data-list="bullet"]': {
               position: 'relative',
               paddingLeft: '1rem',
               marginBottom: '0.5rem',
               textAlign: 'left',
               listStyleType: 'none',
             },
-            'ol[data-list="bullet"] > li::before': {
+            'li[data-list="bullet"]::before': {
               content: '"•"',
               position: 'absolute',
               left: '0',
               color: '#0284c7',
               fontWeight: '600',
             },
+            'li[data-list="ordered"]': {
+              listStyleType: 'decimal',
+              marginLeft: '1.5rem',
+              paddingLeft: '0.25rem',
+            },
+            'li[data-list="checked"], li[data-list="unchecked"]': {
+              position: 'relative',
+              paddingLeft: '1.5rem',
+              marginBottom: '0.5rem',
+              listStyleType: 'none',
+            },
+            'li[data-list="checked"]::before, li[data-list="unchecked"]::before': {
+              position: 'absolute',
+              left: '0',
+              fontWeight: '600',
+              color: '#0284c7',
+              fontFamily: 'system-ui, sans-serif',
+            },
+            'li[data-list="checked"]::before': {
+              content: '"☑"',
+            },
+            'li[data-list="unchecked"]::before': {
+              content: '"☐"',
+            },
+            ...createQuillIndentStyles(),
             // 숫자 리스트 스타일
             ol: {
               color: '#374151',
