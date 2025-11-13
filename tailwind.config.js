@@ -161,7 +161,7 @@ module.exports = {
             strong: {
               color: '#075985',
               fontWeight: '600',
-              wordBreak: 'break-all',
+              wordBreak: 'keep-all',
               overflowWrap: 'break-word',
               whiteSpace: 'normal',
             },
