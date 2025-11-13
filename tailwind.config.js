@@ -126,15 +126,6 @@ module.exports = {
             p: {
               color: '#374151',
               lineHeight: '1.65',
-              marginBottom: '0.25rem',
-            },
-            // 빈 줄 바로 앞에 오는 p 태그의 하단 여백 제거
-            'p:has(+ p:has(> br:only-child))': {
-              marginBottom: '0',
-            },
-            // 빈 p 태그는 여백 없음 (Quill 에디터의 <p><br></p> 처리)
-            'p:empty': {
-              marginBottom: '0',
             },
             // Quill이 생성하는 <p><br></p> 형태의 빈 줄도 여백 제거
             'p:has(> br:only-child)': {
