@@ -45,8 +45,8 @@ module.exports = {
       },
       fontFamily: {
         sans: ['var(--font-gmarket-sans)', 'system-ui', 'sans-serif'],
-        post: ['PeoplefirstFightingTTF', 'sans-serif'],
-        serif: ['PeoplefirstFightingTTF', 'serif'],
+        post: ['var(--font-peoplefirst)', 'sans-serif'],
+        serif: ['var(--font-peoplefirst)', 'serif'],
       },
       animation: {
         'fade-in': 'fadeIn 0.5s ease-in-out',

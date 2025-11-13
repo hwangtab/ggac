@@ -1,14 +1,10 @@
 'use client'
 
-import React, { useMemo, useRef, useCallback, useEffect, useState } from 'react'
+import React, { useMemo, useRef, useCallback, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import 'react-quill-new/dist/quill.snow.css'
-import { validateFile, sanitizeImageFile } from '@/utils/fileValidation'
 import toast from 'react-hot-toast'
-
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
-const EDITOR_WAIT_INTERVAL = 100
-const MAX_EDITOR_WAIT_ATTEMPTS = 30
+import { useImageUpload } from '@/hooks/useImageUpload'
 
 const ReactQuill = dynamic(
   async () => {
@@ -48,15 +44,8 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
   height = 400,
 }) => {
   const quillRef = useRef<any>(null)
-
-  // 업로드 상태 관리
-  const [uploadStatus, setUploadStatus] = useState<{
-    isUploading: boolean
-    fileName: string | null
-  }>({
-    isUploading: false,
-    fileName: null,
-  })
+  const hasAppliedTypographyRef = useRef(false)
+  const { uploadStatus, uploadImage } = useImageUpload()
 
   // 컴포넌트 마운트 시 디버깅 로그
   useEffect(() => {
@@ -111,155 +100,78 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
     }
   }, [quillRef.current])
 
-  // 렌더러와 동일한 타이포그래피 적용
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-
-    let rafId: number | null = null
-    let attempts = 0
-    const maxAttempts = 30
-
-    const applyTypographyClass = () => {
-      const quillInstance = quillRef.current?.getEditor?.()
-      const editorRoot = quillInstance?.root as HTMLElement | undefined
-
-      if (editorRoot) {
-        editorRoot.classList.remove('prose', 'max-w-none')
-        editorRoot.classList.add('editor-content')
-        return
-      }
-
-      if (attempts < maxAttempts) {
-        attempts += 1
-        rafId = window.requestAnimationFrame(applyTypographyClass)
-      }
+  const getEditorInstance = useCallback(() => {
+    const editor = quillRef.current?.getEditor?.()
+    if (!editor) {
+      throw new Error('Quill editor is not ready')
     }
-
-    applyTypographyClass()
-
-    return () => {
-      if (rafId) {
-        window.cancelAnimationFrame(rafId)
-      }
-    }
+    return editor
   }, [])
 
-  const waitForQuillEditor = useCallback(async () => {
-    let attempts = 0
-
-    while (attempts < MAX_EDITOR_WAIT_ATTEMPTS) {
-      const editor = quillRef.current?.getEditor?.()
-      if (editor) {
-        return editor
-      }
-      attempts += 1
-      await sleep(EDITOR_WAIT_INTERVAL)
-    }
-
-    throw new Error('Quill editor not ready')
-  }, [])
-
-  // 에디터에 이미지 삽입하는 헬퍼 함수
   const insertImageToEditor = useCallback(
-    async (imageUrl: string): Promise<boolean> => {
+    (imageUrl: string): boolean => {
       try {
-        const quill = await waitForQuillEditor()
+        const quill = getEditorInstance()
         const selection = quill.getSelection(true)
         const insertionIndex =
-          selection && typeof selection.index === 'number'
-            ? selection.index
-            : Math.max(0, quill.getLength() - 1)
+          selection && typeof selection.index === 'number' ? selection.index : quill.getLength()
 
         quill.focus()
         quill.insertEmbed(insertionIndex, 'image', imageUrl, 'user')
         quill.setSelection(insertionIndex + 1, 0)
         return true
       } catch (error) {
-        console.error('[QuillEditor] 이미지 삽입 중 오류 발생, 에디터 끝에 삽입 시도', error)
-
-        try {
-          const quill = await waitForQuillEditor()
-          const fallbackIndex = quill.getLength()
-          quill.insertEmbed(fallbackIndex, 'image', imageUrl, 'user')
-          quill.setSelection(fallbackIndex + 1, 0)
-          return true
-        } catch (fallbackError) {
-          console.error('[QuillEditor] 이미지 삽입에 실패했습니다.', fallbackError)
-          return false
-        }
+        console.error('[QuillEditor] 이미지 삽입 실패:', error)
+        return false
       }
     },
-    [waitForQuillEditor]
+    [getEditorInstance]
   )
 
-  // 이미지 업로드 핸들러 (토스트 없는 순수 업로드 함수)
-  const handleImageUpload = useCallback(async (file: File): Promise<string> => {
-    // 업로드 상태 시작
-    setUploadStatus({
-      isUploading: true,
-      fileName: file.name,
-    })
-
-    try {
-      console.log('[QuillEditor] 이미지 업로드 시작:', file.name)
-
-      // 1. 파일 검증
-      const validation = await validateFile(file)
-      if (!validation.isValid) {
-        throw new Error(`파일 검증 실패: ${validation.errors.join(', ')}`)
-      }
-
-      if (validation.fileType !== 'image') {
-        throw new Error('이미지 파일만 업로드할 수 있습니다.')
-      }
-
-      console.log('[QuillEditor] 파일 검증 완료')
-
-      // 2. 이미지 메타데이터 제거
-      const sanitizedFile = await sanitizeImageFile(file)
-
-      // 3. /api/media/upload API 사용 (MediaManager와 동일한 방식)
-      const formData = new FormData()
-      formData.append('file', sanitizedFile)
-      formData.append('bucket', 'attachments')
-
-      // 메타데이터 추가
-      const metadata = {
-        original_filename: file.name,
-        file_size: file.size,
-        content_type: file.type,
-        uploaded_at: new Date().toISOString(),
-      }
-      formData.append('metadata', JSON.stringify(metadata))
-
-      console.log('[QuillEditor] 서버 업로드 시작')
-
-      const response = await fetch('/api/media/upload', {
-        method: 'POST',
-        body: formData,
-      })
-
-      if (!response.ok) {
-        const errorData = await response
-          .json()
-          .catch(() => ({ error: '서버 응답을 파싱할 수 없습니다.' }))
-        throw new Error(errorData.error || '이미지 업로드에 실패했습니다.')
-      }
-
-      const result = await response.json()
-      console.log('[QuillEditor] 이미지 업로드 성공:', result.public_url)
-
-      return result.public_url
-    } catch (error) {
-      console.error('[QuillEditor] 이미지 업로드 오류:', error)
-      throw error
-    } finally {
-      setUploadStatus({
-        isUploading: false,
-        fileName: null,
-      })
-    }
+  const handleSelectionChange = useCallback((_range: any, _source: any, editor: any) => {
+    if (hasAppliedTypographyRef.current || !editor?.root) return
+    editor.root.classList.add('prose', 'max-w-none')
+    hasAppliedTypographyRef.current = true
   }, [])
+
+  const buildUploadErrorMessage = (error: unknown) => {
+    const baseMessage = '이미지 업로드에 실패했습니다.'
+    if (!(error instanceof Error)) return baseMessage
+    const message = error.message || ''
+    if (message.includes('파일 크기')) {
+      return '이미지 파일 크기가 너무 큽니다. 5MB 이하의 이미지를 선택해주세요.'
+    }
+    if (message.includes('파일 형식') || message.includes('지원하지 않는')) {
+      return '지원하지 않는 이미지 형식입니다. JPG, PNG, GIF, WebP 파일만 업로드 가능합니다.'
+    }
+    if (message.includes('네트워크') || message.includes('서버')) {
+      return '네트워크 오류가 발생했습니다. 잠시 후 다시 시도해주세요.'
+    }
+    if (message.includes('권한')) {
+      return '파일 업로드 권한이 없습니다. 로그인 상태를 확인해주세요.'
+    }
+    return baseMessage
+  }
+
+  const processImageFile = useCallback(
+    async (file: File) => {
+      const toastId = toast.loading(`${file.name} 업로드 중...`)
+      try {
+        const imageUrl = await uploadImage(file)
+        const insertSuccess = insertImageToEditor(imageUrl)
+
+        if (insertSuccess) {
+          toast.success(`${file.name} 업로드 및 삽입 완료!`, { id: toastId })
+        } else {
+          toast.error('이미지 업로드는 성공했지만 에디터에 삽입하지 못했습니다.', { id: toastId })
+        }
+      } catch (error) {
+        console.error('[QuillEditor] 이미지 업로드 실패:', error)
+        toast.error(buildUploadErrorMessage(error), { id: toastId })
+      }
+    },
+    [insertImageToEditor, uploadImage]
+  )
 
   // Quill 모듈 설정
   const modules = useMemo(
@@ -283,48 +195,7 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
             input.onchange = async () => {
               const file = input.files?.[0]
               if (file) {
-                const toastId = toast.loading(`${file.name} 업로드 중...`)
-                try {
-                  const imageUrl = await handleImageUpload(file)
-
-                  // 에디터에 이미지 삽입 시도 (비동기)
-                  const insertSuccess = await insertImageToEditor(imageUrl)
-
-                  if (insertSuccess) {
-                    toast.success(`${file.name} 업로드 및 삽입 완료!`, {
-                      id: toastId,
-                    })
-                  } else {
-                    toast.error('이미지 업로드는 성공했지만 에디터에 삽입하지 못했습니다.', {
-                      id: toastId,
-                    })
-                  }
-                } catch (error: any) {
-                  console.error('[QuillEditor] 이미지 업로드 실패:', error)
-
-                  // 사용자 친화적인 에러 메시지
-                  let userMessage = '이미지 업로드에 실패했습니다.'
-                  const errorMessage = error instanceof Error ? error.message : String(error)
-
-                  if (errorMessage.includes('파일 크기')) {
-                    userMessage =
-                      '이미지 파일 크기가 너무 큽니다. 5MB 이하의 이미지를 선택해주세요.'
-                  } else if (
-                    errorMessage.includes('파일 형식') ||
-                    errorMessage.includes('지원하지 않는')
-                  ) {
-                    userMessage =
-                      '지원하지 않는 이미지 형식입니다. JPG, PNG, GIF, WebP 파일만 업로드 가능합니다.'
-                  } else if (errorMessage.includes('네트워크') || errorMessage.includes('서버')) {
-                    userMessage = '네트워크 오류가 발생했습니다. 잠시 후 다시 시도해주세요.'
-                  } else if (errorMessage.includes('권한')) {
-                    userMessage = '파일 업로드 권한이 없습니다. 로그인 상태를 확인해주세요.'
-                  }
-
-                  toast.error(userMessage, {
-                    id: toastId,
-                  })
-                }
+                await processImageFile(file)
               }
             }
 
@@ -336,7 +207,7 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
         matchVisual: false,
       },
     }),
-    [handleImageUpload, insertImageToEditor]
+    [processImageFile]
   )
 
   // 허용할 포맷 (보안상 제한)
@@ -366,51 +237,11 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
         console.log('[QuillEditor] 드래그 앤 드롭으로', imageFiles.length, '개 이미지 처리 시작')
 
         for (const file of imageFiles) {
-          const toastId = toast.loading(`${file.name} 업로드 중...`)
-          try {
-            const imageUrl = await handleImageUpload(file)
-
-            // 에디터에 이미지 삽입 시도 (비동기)
-            const insertSuccess = await insertImageToEditor(imageUrl)
-
-            if (insertSuccess) {
-              toast.success(`${file.name} 업로드 및 삽입 완료!`, {
-                id: toastId,
-              })
-            } else {
-              toast.error('이미지 업로드는 성공했지만 에디터에 삽입하지 못했습니다.', {
-                id: toastId,
-              })
-            }
-          } catch (error: any) {
-            console.error('[QuillEditor] 이미지 업로드 실패:', error)
-
-            // 사용자 친화적인 에러 메시지
-            let userMessage = '이미지 업로드에 실패했습니다.'
-            const errorMessage = error instanceof Error ? error.message : String(error)
-
-            if (errorMessage.includes('파일 크기')) {
-              userMessage = '이미지 파일 크기가 너무 큽니다. 5MB 이하의 이미지를 선택해주세요.'
-            } else if (
-              errorMessage.includes('파일 형식') ||
-              errorMessage.includes('지원하지 않는')
-            ) {
-              userMessage =
-                '지원하지 않는 이미지 형식입니다. JPG, PNG, GIF, WebP 파일만 업로드 가능합니다.'
-            } else if (errorMessage.includes('네트워크') || errorMessage.includes('서버')) {
-              userMessage = '네트워크 오류가 발생했습니다. 잠시 후 다시 시도해주세요.'
-            } else if (errorMessage.includes('권한')) {
-              userMessage = '파일 업로드 권한이 없습니다. 로그인 상태를 확인해주세요.'
-            }
-
-            toast.error(userMessage, {
-              id: toastId,
-            })
-          }
+          await processImageFile(file)
         }
       }
     },
-    [handleImageUpload, insertImageToEditor]
+    [processImageFile]
   )
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -448,6 +279,7 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
         placeholder={placeholder}
         readOnly={disabled || uploadStatus.isUploading}
         style={{ minHeight: 'auto' }}
+        onChangeSelection={handleSelectionChange}
       />
     </div>
   )

@@ -2,14 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* PeoplefirstFightingTTF Font */
-@font-face {
-  font-family: 'PeoplefirstFightingTTF';
-  src: url('/fonts/PeoplefirstFightingTTF.ttf') format('truetype');
-  font-weight: normal;
-  font-display: swap;
-}
-
 /* React Image Crop Styles */
 @import 'react-image-crop/dist/ReactCrop.css';
 
