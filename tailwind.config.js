@@ -87,7 +87,7 @@ module.exports = {
             // 헤딩 스타일 - font-post 사용
             h1: {
               color: '#1e3a8a',
-              fontFamily: 'PeoplefirstFightingTTF, serif',
+              fontFamily: 'var(--font-peoplefirst), serif',
               fontWeight: '700',
               fontSize: '2.25rem',
               marginTop: '3rem',
@@ -100,7 +100,7 @@ module.exports = {
             },
             h2: {
               color: '#075985',
-              fontFamily: 'PeoplefirstFightingTTF, serif',
+              fontFamily: 'var(--font-peoplefirst), serif',
               fontWeight: '600',
               fontSize: '1.875rem',
               marginTop: '2.5rem',
@@ -113,7 +113,7 @@ module.exports = {
             },
             h3: {
               color: '#0369a1',
-              fontFamily: 'PeoplefirstFightingTTF, serif',
+              fontFamily: 'var(--font-peoplefirst), serif',
               fontWeight: '600',
               fontSize: '1.5rem',
               marginTop: '2rem',
@@ -126,7 +126,7 @@ module.exports = {
             },
             h4: {
               color: '#0369a1',
-              fontFamily: 'PeoplefirstFightingTTF, serif',
+              fontFamily: 'var(--font-peoplefirst), serif',
               fontWeight: '600',
               fontSize: '1.25rem',
               marginTop: '1.5rem',
