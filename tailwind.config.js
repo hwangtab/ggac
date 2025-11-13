@@ -177,18 +177,12 @@ module.exports = {
               marginTop: '0',
               marginBottom: '0',
             },
-            // p > strong:only-child를 subheading처럼 표시
+            // p > strong:only-child - 일반 strong과 동일하게 처리
             'p > strong:only-child': {
-              display: 'block',
-              fontSize: '1.125rem',
+              display: 'inline',
               fontFamily: "var(--font-gmarket-sans), 'system-ui', sans-serif",
-              fontWeight: '700',
-              color: '#0369a1',
-              marginTop: '2rem',
-              marginBottom: '1rem',
-            },
-            'p:first-child > strong:only-child': {
-              marginTop: '0',
+              fontWeight: '600',
+              color: '#075985',
             },
             em: {
               color: '#bd5608',
