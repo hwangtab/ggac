@@ -439,13 +439,11 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
 
             {/* 게시글 본문 */}
             <div className="p-6">
-              <div className="prose max-w-none">
-                <PostContentRenderer
-                  content={post.content}
-                  contentFormat={(post.content_format as 'plain' | 'html' | 'markdown') || 'plain'}
-                  className="text-gray-800 leading-relaxed"
-                />
-              </div>
+              <PostContentRenderer
+                content={post.content}
+                contentFormat={(post.content_format as 'plain' | 'html' | 'markdown') || 'plain'}
+                className="text-gray-800 leading-relaxed"
+              />
             </div>
 
             {/* 첨부파일 */}
