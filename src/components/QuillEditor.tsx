@@ -4,8 +4,11 @@ import React, { useMemo, useRef, useCallback, useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
 import 'react-quill-new/dist/quill.snow.css'
 import { validateFile, sanitizeImageFile } from '@/utils/fileValidation'
-import { generateTempId } from '@/utils/security'
 import toast from 'react-hot-toast'
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+const EDITOR_WAIT_INTERVAL = 100
+const MAX_EDITOR_WAIT_ATTEMPTS = 30
 
 const ReactQuill = dynamic(
   async () => {
@@ -121,7 +124,8 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
       const editorRoot = quillInstance?.root as HTMLElement | undefined
 
       if (editorRoot) {
-        editorRoot.classList.add('prose', 'max-w-none')
+        editorRoot.classList.remove('prose', 'max-w-none')
+        editorRoot.classList.add('editor-content')
         return
       }
 
@@ -140,130 +144,53 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
     }
   }, [])
 
-  // 에디터에 이미지 삽입하는 헬퍼 함수 (개선된 Selection API 및 검증 로직)
-  const insertImageToEditor = useCallback(async (imageUrl: string): Promise<boolean> => {
-    try {
-      // Quill 에디터 준비 상태 확인 (최대 3초 대기)
-      let quill = quillRef.current?.getEditor()
-      let attempts = 0
-      const maxAttempts = 30 // 100ms * 30 = 3초
+  const waitForQuillEditor = useCallback(async () => {
+    let attempts = 0
 
-      while (!quill && attempts < maxAttempts) {
-        await new Promise(resolve => setTimeout(resolve, 100))
-        quill = quillRef.current?.getEditor()
-        attempts++
-        console.log(`[QuillEditor] 에디터 준비 대기 중... (${attempts}/${maxAttempts})`)
+    while (attempts < MAX_EDITOR_WAIT_ATTEMPTS) {
+      const editor = quillRef.current?.getEditor?.()
+      if (editor) {
+        return editor
       }
-
-      if (!quill) {
-        console.error('[QuillEditor] Quill 에디터를 찾을 수 없습니다 (타임아웃)')
-        return false
-      }
-
-      console.log('[QuillEditor] 에디터에 이미지 삽입 시작:', imageUrl)
-      console.log('[QuillEditor] 에디터 현재 내용 길이:', quill.getLength())
-
-      // 에디터에 포커스 설정
-      quill.focus()
-      await new Promise(resolve => setTimeout(resolve, 100)) // 포커스 안정화 대기
-
-      // Selection API 개선: 강제 포커스 및 유효성 검증
-      let range = quill.getSelection(true) // 강제 포커스 옵션 사용
-      console.log('[QuillEditor] getSelection(true) 결과:', range, '타입:', typeof range)
-
-      // Selection 객체 유효성 검증 및 수정
-      if (!range || typeof range !== 'object' || typeof range.index !== 'number') {
-        console.warn('[QuillEditor] 비정상적인 Selection 객체, 대체 방식 사용')
-        const length = quill.getLength()
-        range = { index: Math.max(0, length - 1), length: 0 }
-        console.log('[QuillEditor] 대체 삽입 위치 설정:', range)
-      } else {
-        console.log('[QuillEditor] 유효한 선택 영역 확인:', range)
-      }
-
-      // 삽입 전 에디터 상태 저장
-      const beforeLength = quill.getLength()
-      const beforeContent = quill.getContents()
-      console.log('[QuillEditor] 삽입 전 에디터 길이:', beforeLength)
-
-      // 방법 1: 표준 insertEmbed 시도
-      try {
-        quill.insertEmbed(range.index, 'image', imageUrl, 'user')
-        console.log('[QuillEditor] insertEmbed 호출 완료')
-
-        // 삽입 후 에디터 상태 확인
-        await new Promise(resolve => setTimeout(resolve, 200))
-        const afterLength = quill.getLength()
-        const afterContent = quill.getContents()
-        console.log('[QuillEditor] 삽입 후 에디터 길이:', afterLength)
-
-        // 삽입 성공 검증
-        if (afterLength > beforeLength) {
-          console.log('[QuillEditor] 표준 방식 삽입 성공 확인됨')
-
-          // 커서를 이미지 다음으로 이동
-          try {
-            quill.setSelection(range.index + 1, 0)
-            console.log('[QuillEditor] 커서 위치 조정 완료')
-          } catch (selectionError) {
-            console.warn('[QuillEditor] 커서 위치 조정 실패:', selectionError)
-          }
-
-          return true
-        } else {
-          console.warn('[QuillEditor] 표준 방식 삽입 실패, 대체 방식 시도')
-        }
-      } catch (embedError) {
-        console.error('[QuillEditor] insertEmbed 오류:', embedError)
-      }
-
-      // 방법 2: HTML 직접 삽입 방식 (Fallback)
-      try {
-        console.log('[QuillEditor] HTML 직접 삽입 방식 시도')
-        const imageHtml = `<img src="${imageUrl}" alt="업로드된 이미지" style="max-width: 100%; height: auto;">`
-
-        // 현재 위치에 HTML 삽입
-        const delta = quill.clipboard.convert(imageHtml)
-        quill.updateContents(delta, 'user')
-
-        // 삽입 확인
-        await new Promise(resolve => setTimeout(resolve, 200))
-        const finalLength = quill.getLength()
-
-        if (finalLength > beforeLength) {
-          console.log('[QuillEditor] HTML 삽입 방식 성공')
-          return true
-        } else {
-          console.warn('[QuillEditor] HTML 삽입 방식도 실패')
-        }
-      } catch (htmlError) {
-        console.error('[QuillEditor] HTML 삽입 오류:', htmlError)
-      }
-
-      // 방법 3: 에디터 끝에 강제 삽입 (Last Resort)
-      try {
-        console.log('[QuillEditor] 에디터 끝 강제 삽입 시도')
-        const length = quill.getLength()
-        quill.insertEmbed(length - 1, 'image', imageUrl, 'user')
-
-        await new Promise(resolve => setTimeout(resolve, 200))
-        const finalLength = quill.getLength()
-
-        if (finalLength > beforeLength) {
-          console.log('[QuillEditor] 강제 삽입 성공')
-          return true
-        }
-      } catch (forceError) {
-        console.error('[QuillEditor] 강제 삽입 오류:', forceError)
-      }
-
-      console.error('[QuillEditor] 모든 삽입 방식 실패')
-      return false
-    } catch (error) {
-      console.error('[QuillEditor] 이미지 삽입 함수 전체 오류:', error)
-      return false
+      attempts += 1
+      await sleep(EDITOR_WAIT_INTERVAL)
     }
+
+    throw new Error('Quill editor not ready')
   }, [])
+
+  // 에디터에 이미지 삽입하는 헬퍼 함수
+  const insertImageToEditor = useCallback(
+    async (imageUrl: string): Promise<boolean> => {
+      try {
+        const quill = await waitForQuillEditor()
+        const selection = quill.getSelection(true)
+        const insertionIndex =
+          selection && typeof selection.index === 'number'
+            ? selection.index
+            : Math.max(0, quill.getLength() - 1)
+
+        quill.focus()
+        quill.insertEmbed(insertionIndex, 'image', imageUrl, 'user')
+        quill.setSelection(insertionIndex + 1, 0)
+        return true
+      } catch (error) {
+        console.error('[QuillEditor] 이미지 삽입 중 오류 발생, 에디터 끝에 삽입 시도', error)
+
+        try {
+          const quill = await waitForQuillEditor()
+          const fallbackIndex = quill.getLength()
+          quill.insertEmbed(fallbackIndex, 'image', imageUrl, 'user')
+          quill.setSelection(fallbackIndex + 1, 0)
+          return true
+        } catch (fallbackError) {
+          console.error('[QuillEditor] 이미지 삽입에 실패했습니다.', fallbackError)
+          return false
+        }
+      }
+    },
+    [waitForQuillEditor]
+  )
 
   // 이미지 업로드 핸들러 (토스트 없는 순수 업로드 함수)
   const handleImageUpload = useCallback(async (file: File): Promise<string> => {
@@ -322,23 +249,15 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
       const result = await response.json()
       console.log('[QuillEditor] 이미지 업로드 성공:', result.public_url)
 
-      // 업로드 상태 리셋
-      setUploadStatus({
-        isUploading: false,
-        fileName: null,
-      })
-
       return result.public_url
     } catch (error) {
       console.error('[QuillEditor] 이미지 업로드 오류:', error)
-
-      // 업로드 상태 리셋
+      throw error
+    } finally {
       setUploadStatus({
         isUploading: false,
         fileName: null,
       })
-
-      throw error
     }
   }, [])
 

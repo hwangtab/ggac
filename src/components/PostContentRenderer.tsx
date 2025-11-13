@@ -97,7 +97,7 @@ export const PostContentRenderer: React.FC<PostContentRendererProps> = ({
   if (contentFormat === 'html') {
     return (
       <div
-        className={`prose max-w-none ${className}`}
+        className={`editor-content ${className}`}
         dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
       />
     )
@@ -105,7 +105,7 @@ export const PostContentRenderer: React.FC<PostContentRendererProps> = ({
 
   if (contentFormat === 'markdown') {
     return (
-      <div className={`prose max-w-none ${className}`}>
+      <div className={`editor-content ${className}`}>
         <ReactMarkdown
           components={{
             a: ({ node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />,
@@ -132,7 +132,9 @@ export const PostContentRenderer: React.FC<PostContentRendererProps> = ({
 
   // Fallback for 'plain' text
   return (
-    <div className={`whitespace-pre-wrap text-gray-800 leading-relaxed ${className}`}>
+    <div
+      className={`editor-content whitespace-pre-wrap text-gray-800 leading-relaxed ${className}`}
+    >
       {content}
     </div>
   )

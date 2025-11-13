@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import '../styles/editor-content.css'
 import ErrorBoundary from '@/components/ErrorBoundary'
 import ConditionalLayout from '@/components/ConditionalLayout'
 import localFont from 'next/font/local'
