@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
 import './globals.css'
-import '../styles/editor-content.css'
 import ErrorBoundary from '@/components/ErrorBoundary'
 import ConditionalLayout from '@/components/ConditionalLayout'
 import localFont from 'next/font/local'
@@ -12,6 +11,13 @@ import { Toaster } from 'react-hot-toast'
 const gmarketSans = localFont({
   src: '../../public/fonts/GmarketSansTTFLight.ttf',
   variable: '--font-gmarket-sans',
+  display: 'swap',
+  preload: true,
+})
+
+const peoplefirst = localFont({
+  src: '../../public/fonts/PeoplefirstFightingTTF.ttf',
+  variable: '--font-peoplefirst',
   display: 'swap',
   preload: true,
 })
@@ -86,7 +92,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const globalData = await getGlobalData()
 
   return (
-    <html lang="ko" className={`${gmarketSans.variable}`}>
+    <html lang="ko" className={`${gmarketSans.variable} ${peoplefirst.variable}`}>
       <body suppressHydrationWarning>
         {/* Guard against accidental CSS being loaded as <script> by third-party/preload mishaps */}
         <ErrorBoundary>
