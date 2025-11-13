@@ -77,6 +77,7 @@ export const PostContentRenderer: React.FC<PostContentRendererProps> = ({
       ALLOW_ARIA_ATTR: false,
       ALLOW_DATA_ATTR: false,
       ALLOW_UNKNOWN_PROTOCOLS: false,
+      ADD_ATTR: ['data-list', 'data-indent', 'data-checked'],
     })
 
     if (sanitized !== content) {
