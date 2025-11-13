@@ -126,7 +126,11 @@ module.exports = {
             p: {
               color: '#374151',
               lineHeight: '1.75',
-              marginBottom: '1rem',
+              marginBottom: '0.5rem',
+            },
+            // 빈 p 태그는 여백 없음 (Quill 에디터의 연속 Enter 처리)
+            'p:empty': {
+              marginBottom: '0',
             },
             // 리스트 스타일
             ul: {
