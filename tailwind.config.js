@@ -135,6 +135,7 @@ module.exports = {
             // Quill이 생성하는 <p><br></p> 형태의 빈 줄도 여백 제거
             'p:has(> br:only-child)': {
               marginBottom: '0',
+              lineHeight: '0',
             },
             // 리스트 스타일
             ul: {
