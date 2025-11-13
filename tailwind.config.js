@@ -103,8 +103,8 @@ module.exports = {
             },
             h3: {
               color: '#0369a1',
-              fontFamily: "var(--font-gmarket-sans), 'system-ui', sans-serif",
-              fontWeight: '700',
+              fontFamily: 'PeoplefirstFightingTTF, serif',
+              fontWeight: '600',
               fontSize: '1.5rem',
               marginTop: '2rem',
               marginBottom: '1rem',
@@ -116,8 +116,8 @@ module.exports = {
             },
             h4: {
               color: '#0369a1',
-              fontFamily: "var(--font-gmarket-sans), 'system-ui', sans-serif",
-              fontWeight: '700',
+              fontFamily: 'PeoplefirstFightingTTF, serif',
+              fontWeight: '600',
               fontSize: '1.25rem',
               marginTop: '1.5rem',
               marginBottom: '0.75rem',
@@ -126,10 +126,14 @@ module.exports = {
             p: {
               color: '#374151',
               lineHeight: '1.75',
-              marginBottom: '0.5rem',
+              marginBottom: '0.25rem',
             },
-            // 빈 p 태그는 여백 없음 (Quill 에디터의 연속 Enter 처리)
+            // 빈 p 태그는 여백 없음 (Quill 에디터의 <p><br></p> 처리)
             'p:empty': {
+              marginBottom: '0',
+            },
+            // Quill이 생성하는 <p><br></p> 형태의 빈 줄도 여백 제거
+            'p:has(> br:only-child)': {
               marginBottom: '0',
             },
             // 리스트 스타일
