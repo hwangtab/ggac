@@ -103,8 +103,8 @@ module.exports = {
             },
             h3: {
               color: '#0369a1',
-              fontFamily: 'PeoplefirstFightingTTF, serif',
-              fontWeight: '600',
+              fontFamily: "var(--font-gmarket-sans), 'system-ui', sans-serif",
+              fontWeight: '700',
               fontSize: '1.5rem',
               marginTop: '2rem',
               marginBottom: '1rem',
@@ -116,8 +116,8 @@ module.exports = {
             },
             h4: {
               color: '#0369a1',
-              fontFamily: 'PeoplefirstFightingTTF, serif',
-              fontWeight: '600',
+              fontFamily: "var(--font-gmarket-sans), 'system-ui', sans-serif",
+              fontWeight: '700',
               fontSize: '1.25rem',
               marginTop: '1.5rem',
               marginBottom: '0.75rem',
