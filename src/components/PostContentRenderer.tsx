@@ -75,7 +75,7 @@ export const PostContentRenderer: React.FC<PostContentRendererProps> = ({
       ],
       FORBID_TAGS: ['script', 'object', 'embed', 'form', 'input', 'style', 'iframe', 'frame'],
       ALLOW_ARIA_ATTR: false,
-      ALLOW_DATA_ATTR: false,
+      ALLOW_DATA_ATTR: true,
       ALLOW_UNKNOWN_PROTOCOLS: false,
       ADD_ATTR: ['data-list', 'data-indent', 'data-checked'],
     })
