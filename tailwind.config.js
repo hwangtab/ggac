@@ -139,12 +139,14 @@ module.exports = {
               marginBottom: '1.5rem',
               marginLeft: '1rem',
               textAlign: 'left',
+              listStyleType: 'none',
             },
             'ul > li': {
               position: 'relative',
               paddingLeft: '1rem',
               marginBottom: '0.5rem',
               textAlign: 'left',
+              listStyleType: 'none',
             },
             'ul > li::before': {
               content: '"•"',
@@ -152,6 +154,21 @@ module.exports = {
               left: '0',
               color: '#0284c7',
               fontWeight: '600',
+            },
+            // 숫자 리스트 스타일
+            ol: {
+              color: '#374151',
+              marginTop: '2rem',
+              marginBottom: '1.5rem',
+              marginLeft: '1rem',
+              paddingLeft: '1rem',
+              textAlign: 'left',
+              listStyleType: 'decimal',
+            },
+            'ol > li': {
+              paddingLeft: '0.5rem',
+              marginBottom: '0.5rem',
+              textAlign: 'left',
             },
             // strong, em 스타일
             strong: {
