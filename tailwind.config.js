@@ -155,6 +155,29 @@ module.exports = {
               color: '#0284c7',
               fontWeight: '600',
             },
+            'ol[data-list="bullet"]': {
+              color: '#374151',
+              marginTop: '2rem',
+              marginBottom: '1.5rem',
+              marginLeft: '1rem',
+              paddingLeft: '0',
+              textAlign: 'left',
+              listStyleType: 'none',
+            },
+            'ol[data-list="bullet"] > li': {
+              position: 'relative',
+              paddingLeft: '1rem',
+              marginBottom: '0.5rem',
+              textAlign: 'left',
+              listStyleType: 'none',
+            },
+            'ol[data-list="bullet"] > li::before': {
+              content: '"•"',
+              position: 'absolute',
+              left: '0',
+              color: '#0284c7',
+              fontWeight: '600',
+            },
             // 숫자 리스트 스타일
             ol: {
               color: '#374151',
