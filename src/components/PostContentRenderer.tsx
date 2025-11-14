@@ -19,7 +19,10 @@ export const PostContentRenderer: React.FC<PostContentRendererProps> = ({
 }) => {
   const normalizeBlankParagraphs = (html: string) => {
     if (!html) return html
-    return html.replace(/(?:<p>(?:\s|&nbsp;|<br\s*\/?>)*<\/p>)+/gi, '<br />')
+    return html
+      .replace(/<p[^>]*data-empty-line="true"[^>]*>\s*<\/p>/gi, '<p data-empty-line="true"></p>')
+      .replace(/<p>(?:\s|&nbsp;|<br\s*\/?>)*<\/p>/gi, '<p data-empty-line="true"></p>')
+      .replace(/(?:<p data-empty-line="true"><\/p>){2,}/gi, '<p data-empty-line="true"></p>')
   }
 
   const sanitizedHtml = useMemo(() => {
