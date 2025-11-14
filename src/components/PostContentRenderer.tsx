@@ -17,6 +17,11 @@ export const PostContentRenderer: React.FC<PostContentRendererProps> = ({
   contentFormat = 'plain',
   className = '',
 }) => {
+  const normalizeBlankParagraphs = (html: string) => {
+    if (!html) return html
+    return html.replace(/(?:<p>(?:\s|&nbsp;|<br\s*\/?>)*<\/p>)+/gi, '<br />')
+  }
+
   const sanitizedHtml = useMemo(() => {
     if (contentFormat !== 'html') return ''
 
@@ -80,18 +85,20 @@ export const PostContentRenderer: React.FC<PostContentRendererProps> = ({
       ADD_ATTR: ['data-list', 'data-indent', 'data-checked'],
     })
 
-    if (sanitized !== content) {
+    const normalized = normalizeBlankParagraphs(sanitized)
+
+    if (normalized !== content) {
       logSecurityEvent(
         'CONTENT_SANITIZED',
         {
           originalLength: content.length,
-          sanitizedLength: sanitized.length,
+          sanitizedLength: normalized.length,
         },
         'medium'
       )
     }
 
-    return sanitized
+    return normalized
   }, [content, contentFormat])
 
   if (contentFormat === 'html') {
