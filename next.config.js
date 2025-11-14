@@ -163,7 +163,7 @@ const nextConfig = {
 
   // 실험적 기능 활성화
   experimental: {
-    optimizeCss: true, // CSS 최적화
+    optimizeCss: false, // CSS 최적화 비활성화 - CSS를 스크립트로 잘못 로드하는 문제 방지
     optimizePackageImports: ['react-icons', 'framer-motion', 'date-fns', 'lodash-es'],
     // 개발 환경 최적화
     ...(process.env.NODE_ENV === 'development' && {
