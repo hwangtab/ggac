@@ -45,7 +45,12 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
 }) => {
   const quillRef = useRef<any>(null)
   const hasAppliedTypographyRef = useRef(false)
+  const isNormalizingRef = useRef(false)
   const { uploadStatus, uploadImage } = useImageUpload()
+  const collapseConsecutiveEmptyParagraphs = useCallback((html: string) => {
+    if (!html) return html
+    return html.replace(/(?:<p>(?:\s|&nbsp;|<br\s*\/?>)*<\/p>){2,}/gi, '<p><br></p>')
+  }, [])
 
   // 컴포넌트 마운트 시 디버깅 로그
   useEffect(() => {
@@ -107,6 +112,38 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
     }
     return editor
   }, [])
+
+  const handleEditorChange = useCallback(
+    (content: string) => {
+      if (isNormalizingRef.current) {
+        isNormalizingRef.current = false
+        onChange(content)
+        return
+      }
+
+      const normalized = collapseConsecutiveEmptyParagraphs(content)
+
+      if (normalized !== content) {
+        try {
+          const quill = getEditorInstance()
+          const range = quill.getSelection()
+          const delta = quill.clipboard.convert(normalized)
+          isNormalizingRef.current = true
+          quill.setContents(delta, 'silent')
+          if (range) {
+            quill.setSelection(range)
+          }
+        } catch (error) {
+          console.error('[QuillEditor] 에디터 콘텐츠 정규화 실패:', error)
+        }
+        onChange(normalized)
+        return
+      }
+
+      onChange(content)
+    },
+    [collapseConsecutiveEmptyParagraphs, getEditorInstance, onChange]
+  )
 
   const insertImageToEditor = useCallback(
     (imageUrl: string): boolean => {
@@ -272,7 +309,7 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
       <ReactQuill
         theme="snow"
         value={value}
-        onChange={onChange}
+        onChange={handleEditorChange}
         forwardedRef={quillRef}
         modules={modules}
         formats={formats}
