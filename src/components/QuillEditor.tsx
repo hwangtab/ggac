@@ -47,9 +47,12 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
   const hasAppliedTypographyRef = useRef(false)
   const isNormalizingRef = useRef(false)
   const { uploadStatus, uploadImage } = useImageUpload()
-  const collapseConsecutiveEmptyParagraphs = useCallback((html: string) => {
+  const normalizeEmptyParagraphs = useCallback((html: string) => {
     if (!html) return html
-    return html.replace(/(?:<p>(?:\s|&nbsp;|<br\s*\/?>)*<\/p>){2,}/gi, '<p><br></p>')
+    return html
+      .replace(/<p[^>]*data-empty-line="true"[^>]*>\s*<\/p>/gi, '<p data-empty-line="true"></p>')
+      .replace(/<p>(?:\s|&nbsp;|<br\s*\/?>)*<\/p>/gi, '<p data-empty-line="true"></p>')
+      .replace(/(?:<p data-empty-line="true"><\/p>){2,}/gi, '<p data-empty-line="true"></p>')
   }, [])
 
   // 컴포넌트 마운트 시 디버깅 로그
@@ -121,7 +124,7 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
         return
       }
 
-      const normalized = collapseConsecutiveEmptyParagraphs(content)
+      const normalized = normalizeEmptyParagraphs(content)
 
       if (normalized !== content) {
         try {
@@ -142,7 +145,7 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
 
       onChange(content)
     },
-    [collapseConsecutiveEmptyParagraphs, getEditorInstance, onChange]
+    [normalizeEmptyParagraphs, getEditorInstance, onChange]
   )
 
   const insertImageToEditor = useCallback(

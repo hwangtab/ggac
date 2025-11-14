@@ -728,4 +728,18 @@ textarea:focus-visible {
   .hover\:underline-offset-6:hover {
     text-underline-offset: 0.25em;
   }
+
+  /* Consistent spacing for intentional blank lines coming from the editor */
+  .prose p[data-empty-line='true'] {
+    margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
+    line-height: 1;
+    min-height: 0.5rem;
+    padding: 0;
+  }
+
+  .prose p[data-empty-line='true']::before {
+    content: '';
+    display: block;
+  }
 }
