@@ -216,6 +216,7 @@ const MediaManager: React.FC<MediaManagerProps> = ({
   const startUpload = useCallback(
     async (files: UploadingFile[]) => {
       setIsUploading(true)
+      const uploadedThisBatch: MediaFile[] = []
 
       for (const file of files) {
         try {
@@ -238,6 +239,8 @@ const MediaManager: React.FC<MediaManagerProps> = ({
           // 실제 업로드
           const uploadedFile = await uploadFile(file)
 
+          // 방금 업로드된 파일을 로컬 배열에 추가
+          uploadedThisBatch.push(uploadedFile)
           clearInterval(progressInterval)
 
           // 상태 업데이트: 완료
@@ -274,8 +277,9 @@ const MediaManager: React.FC<MediaManagerProps> = ({
       setIsUploading(false)
 
       // 업로드 완료 콜백 호출
-      if (completedFiles.length > 0) {
-        onUploadComplete?.(completedFiles)
+      // 클로저 스냅샷 문제 해결: completedFiles(의존성)와 uploadedThisBatch(로컬)를 합쳐서 전달
+      if (uploadedThisBatch.length > 0 && onUploadComplete) {
+        onUploadComplete([...completedFiles, ...uploadedThisBatch])
       }
     },
     [uploadFile, onUploadError, onUploadComplete, completedFiles]
