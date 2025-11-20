@@ -23,7 +23,15 @@ import {
   formatValidationErrors,
 } from '@/utils/fileUploadValidation'
 
-// Service Role 클라이언트는 Storage 작업에만 사용
+/**
+ * Service Role 클라이언트 생성 (POST 업로드 전용)
+ *
+ * 주의: 이 함수는 POST 엔드포인트에서만 사용됩니다.
+ * - 용도: Storage 버킷에 파일을 업로드하기 위한 권한 필요
+ * - GET 엔드포인트: createRouteHandlerClient 사용 (RLS 정책 적용)
+ *
+ * Service Role Key는 RLS를 우회하므로, 인증된 사용자의 업로드 작업에만 제한적으로 사용
+ */
 function getSupabaseAdmin() {
   console.log('[SUPABASE ADMIN] 환경 변수 확인')
   console.log('[SUPABASE ADMIN] SUPABASE_URL:', !!process.env.NEXT_PUBLIC_SUPABASE_URL)

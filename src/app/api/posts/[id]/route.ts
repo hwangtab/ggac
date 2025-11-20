@@ -66,8 +66,23 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     }
 
     const validPostId = uuidValidation.sanitized
-    // RLS로 인해 비로그인 시 공개 읽기가 막히는 환경을 대비해
-    // 서버에서만 사용하는 서비스 롤 클라이언트를 읽기 전용으로 활용
+
+    /**
+     * Service Role 클라이언트 사용 의도 (읽기 전용)
+     *
+     * 목적: 비로그인 사용자도 공개 게시글을 조회할 수 있도록 RLS 우회
+     *
+     * 설계 배경:
+     * - RLS 정책이 엄격하게 설정된 환경에서, 익명 사용자는 공개 게시글도 읽지 못할 수 있음
+     * - 서버 사이드에서 Service Role Key를 사용해 공개 데이터 읽기를 보장
+     *
+     * 보안 고려사항:
+     * - 읽기 전용으로만 사용 (쓰기 작업 없음)
+     * - 사용자별 데이터(좋아요 등)는 여전히 createRouteHandlerClient 사용
+     * - 대안: RLS 정책을 "공개 게시글은 익명 읽기 허용"으로 수정하는 것이 더 바람직함
+     *
+     * TODO: RLS 정책 정리 후 adminClient 사용 제거 검토
+     */
     const adminClient = (() => {
       try {
         const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -80,7 +95,10 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         return null
       }
     })()
-    // 읽기 전용 DB 클라이언트 선택 (좋아요 등 사용자 의존 로직은 supabase 사용)
+
+    // 읽기 전용 DB 클라이언트 선택
+    // - 로그인 사용자: createRouteHandlerClient (사용자별 데이터 접근)
+    // - 비로그인 사용자: adminClient (공개 데이터만 읽기)
     const db = userId ? supabase : adminClient || supabase
     const { searchParams } = new URL(request.url)
     const includeComments = searchParams.get('include_comments') !== 'false' // 기본적으로 포함
