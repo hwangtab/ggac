@@ -141,6 +141,14 @@ const OptimizedImage = memo(function OptimizedImage({
   const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const errorTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const imageRef = useRef<HTMLImageElement | null>(null)
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
+
+  const clearPolling = useCallback(() => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current)
+      pollingIntervalRef.current = null
+    }
+  }, [])
 
   const clearLoadAndErrorTimers = useCallback(() => {
     if (loadTimeoutRef.current) {
@@ -151,7 +159,8 @@ const OptimizedImage = memo(function OptimizedImage({
       clearTimeout(errorTimeoutRef.current)
       errorTimeoutRef.current = null
     }
-  }, [])
+    clearPolling()
+  }, [clearPolling])
 
   // 네트워크 조건 감지
   useEffect(() => {
@@ -268,8 +277,10 @@ const OptimizedImage = memo(function OptimizedImage({
     }
 
     const isSupabaseImage = currentSrc.includes('supabase.co')
-    const resolvedLoadTimeout = loadTimeoutMs ?? (isSupabaseImage ? 12000 : 8000)
-    const resolvedErrorTimeout = errorTimeoutMs ?? 4000
+    // Priority 이미지는 타임아웃 단축 (폴링으로 빠른 감지)
+    const baseLoadTimeout = priority ? 2000 : isSupabaseImage ? 12000 : 8000
+    const resolvedLoadTimeout = loadTimeoutMs ?? baseLoadTimeout
+    const resolvedErrorTimeout = errorTimeoutMs ?? (priority ? 2000 : 4000)
 
     if (resolvedLoadTimeout > 0) {
       loadTimeoutRef.current = setTimeout(() => {
@@ -310,6 +321,37 @@ const OptimizedImage = memo(function OptimizedImage({
     onErrorProp,
   ])
 
+  const startPolling = useCallback(() => {
+    clearPolling() // 기존 폴링 정리
+
+    const pollingInterval = priority ? 50 : 200 // ms
+    const maxPollingDuration = priority ? 3000 : 6000 // ms
+    const startTime = Date.now()
+
+    pollingIntervalRef.current = setInterval(() => {
+      const img = imageRef.current
+      const elapsedTime = Date.now() - startTime
+
+      // 이미지가 완전히 로드되었는지 확인
+      if (img && img.complete && img.naturalWidth > 0) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log(
+            `[OptimizedImage] 🔄 폴링으로 이미지 로드 감지 (${elapsedTime}ms): ${currentSrc}`
+          )
+        }
+        clearLoadAndErrorTimers()
+        setIsLoading(false)
+        onLoadProp?.()
+        return
+      }
+
+      // 최대 폴링 시간 초과 시 중단
+      if (elapsedTime > maxPollingDuration) {
+        clearPolling()
+      }
+    }, pollingInterval)
+  }, [priority, currentSrc, clearPolling, clearLoadAndErrorTimers, onLoadProp])
+
   const markImageLoaded = useCallback(() => {
     clearLoadAndErrorTimers()
     setIsLoading(false)
@@ -335,6 +377,7 @@ const OptimizedImage = memo(function OptimizedImage({
 
   const handleLoadingComplete = (img: HTMLImageElement) => {
     imageRef.current = img
+    // Next.js Image의 onLoadingComplete 콜백이 호출됨 (정상 흐름)
     markImageLoaded()
   }
 
@@ -342,8 +385,13 @@ const OptimizedImage = memo(function OptimizedImage({
     const img = imageRef.current
     if (img && img.complete && img.naturalWidth > 0) {
       markImageLoaded()
+      return
     }
-  }, [currentSrc, markImageLoaded])
+    // 이미지가 아직 준비되지 않은 경우 폴링 시작 (onLoadingComplete 미호출 대비)
+    if (isLoading && !imageRef.current) {
+      startPolling()
+    }
+  }, [currentSrc, markImageLoaded, isLoading, startPolling])
 
   // 재시도 핸들러
   const handleRetry = () => {
