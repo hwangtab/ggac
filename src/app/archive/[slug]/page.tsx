@@ -11,7 +11,13 @@ import { fetchLinkPreview } from '@/utils/linkPreview'
 import { getProjectSummary } from '@/utils/projectUtils'
 import type { Metadata } from 'next'
 import { generateProjectOgImage } from '@/utils/imageUrl'
-import { generateProjectStructuredData, structuredDataToScript } from '@/utils/structuredData'
+import {
+  generateProjectStructuredData,
+  generateEventStructuredData,
+  generateBreadcrumbStructuredData,
+  combineStructuredData,
+  structuredDataToScript,
+} from '@/utils/structuredData'
 
 interface ProjectPageProps {
   params: Promise<{
@@ -234,15 +240,37 @@ const ProjectDetailPage = async ({ params }: ProjectPageProps) => {
       )
     : []
 
-  // 구조화된 데이터 생성
-  const structuredData = generateProjectStructuredData({
-    title: project.title,
-    description: project.description,
-    slug: project.slug,
-    coverImage: project.coverImage,
-    gallery: project.gallery,
-    artistIds: project.artistIds,
-  })
+  // 구조화된 데이터 생성 - 프로젝트 타입에 따른 스마트 선택
+  const isEvent = project.category === '공연·전시' || project.category === '행사'
+
+  const breadcrumbData = generateBreadcrumbStructuredData([
+    { name: '홈', url: 'https://ggac.kr' },
+    { name: '프로젝트', url: 'https://ggac.kr/archive' },
+    { name: project.title, url: `https://ggac.kr/archive/${project.slug}` },
+  ])
+
+  const projectSchema = isEvent
+    ? generateEventStructuredData({
+        title: project.title,
+        description: project.description,
+        slug: project.slug,
+        publishedDate: project.publishedDate,
+        coverImage: project.coverImage,
+        gallery: project.gallery,
+        artistIds: project.artistIds,
+        ticketing: project.ticketing,
+        category: project.category,
+      })
+    : generateProjectStructuredData({
+        title: project.title,
+        description: project.description,
+        slug: project.slug,
+        coverImage: project.coverImage,
+        gallery: project.gallery,
+        artistIds: project.artistIds,
+      })
+
+  const structuredData = combineStructuredData([projectSchema, breadcrumbData])
 
   return (
     <>

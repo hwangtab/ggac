@@ -178,6 +178,82 @@ export function generateArtistStructuredData(artist: {
 }
 
 /**
+ * 이벤트(공연·전시)용 구조화된 데이터 생성
+ */
+export function generateEventStructuredData(project: {
+  title: string
+  description: string
+  slug: string
+  publishedDate: string
+  coverImage?: string | null
+  gallery?: string[]
+  artistIds?: string[]
+  ticketing?: Array<{
+    platform: string
+    url: string
+    available: boolean
+    price?: string
+    startDate?: string
+    endDate?: string
+  }>
+  category: string
+}): object {
+  const imageUrl = generateImageUrl(project.coverImage || project.gallery?.[0], {
+    absolute: true,
+    forSocialSharing: true,
+  })
+
+  // 티켓팅 시작일 또는 발행일을 이벤트 날짜로 사용
+  const eventDate = project.ticketing?.[0]?.startDate || project.publishedDate
+  const endDate = project.ticketing?.[0]?.endDate
+
+  const location = {
+    '@type': 'Place',
+    name: '경기도',
+    address: {
+      '@type': 'PostalAddress',
+      addressRegion: '경기도',
+      addressCountry: 'KR',
+    },
+  }
+
+  const eventSchema: any = {
+    '@context': 'https://schema.org',
+    '@type': 'Event',
+    name: project.title,
+    description: project.description,
+    url: `https://ggac.kr/archive/${project.slug}`,
+    image: imageUrl,
+    startDate: eventDate,
+    eventStatus: 'https://schema.org/EventScheduled',
+    eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+    location,
+    organizer: ORGANIZATION_DATA,
+    performer: ORGANIZATION_DATA,
+    inLanguage: 'ko-KR',
+  }
+
+  if (endDate) {
+    eventSchema.endDate = endDate
+  }
+
+  // 티켓팅 정보 추가
+  if (project.ticketing && project.ticketing.length > 0) {
+    eventSchema.offers = project.ticketing.map((ticket: any) => ({
+      '@type': 'Offer',
+      url: ticket.url,
+      price: ticket.price || '0',
+      priceCurrency: 'KRW',
+      availability: ticket.available ? 'https://schema.org/InStock' : 'https://schema.org/SoldOut',
+      validFrom: ticket.startDate,
+      validThrough: ticket.endDate,
+    }))
+  }
+
+  return eventSchema
+}
+
+/**
  * 브레드크럼 네비게이션 구조화된 데이터 생성
  */
 export function generateBreadcrumbStructuredData(

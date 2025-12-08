@@ -12,19 +12,17 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const postId = id
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   console.info('[API board/post] env check', {
     hasUrl: Boolean(url),
-    hasServiceKey: Boolean(serviceKey),
     hasAnonKey: Boolean(anonKey),
     runtime: 'nodejs',
   })
-  if (!url || (!serviceKey && !anonKey)) {
+  if (!url || !anonKey) {
     return createErrorResponse('Supabase credentials not configured', 500)
   }
 
-  const supabase = createClient(url, serviceKey || anonKey!, {
+  const supabase = createClient(url, anonKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   })
 

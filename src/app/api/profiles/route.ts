@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-function getSupabaseAdmin() {
+function getSupabaseClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !key) throw new Error('Supabase admin configuration missing')
-  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!url || !anonKey) throw new Error('Supabase configuration missing')
+  return createClient(url, anonKey, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
 export async function GET(req: NextRequest) {
@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Too many ids (max 100)' }, { status: 400 })
     }
 
-    const supabase = getSupabaseAdmin()
+    const supabase = getSupabaseClient()
 
     // Try public view first, then fallback to member_profiles
     let profiles: Array<{ id: string; display_name: string }> = []

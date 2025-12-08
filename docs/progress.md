@@ -44,6 +44,19 @@
   inline success message instead of multiple browser alerts.
 - Removed the layout-level CSS script guard that was interfering with hydration,
   unblocking client-side rendering of dynamic pages such as the board.
+- Recorded the latest findings (service-role key 노출, `/api/media/upload` 경로
+  오류, MediaManager 업로드 콜백 버그) in `docs/code-review-20251120.md` so the
+  follow-up fixes can be tracked alongside other progress notes.
+- Reworked the public board/profile APIs to rely solely on the Supabase anon key
+  (`src/app/api/posts/*`, `src/app/api/board/post/[id]/route.ts`,
+  `src/app/api/profiles/route.ts`) so service-role credentials are never exposed
+  via Edge handlers.
+- Fixed `/api/media/upload` GET so it now lists `attachments/${userId}` and
+  `profiles/${userId}` prefixes consistently with the upload paths, ensuring the
+  media picker actually surfaces freshly uploaded files.
+- Updated `MediaManager` to accumulate each batch’s uploads and invoke
+  `onUploadComplete` with the latest state instead of a stale snapshot, keeping
+  parent components in sync after every upload cycle.
 
 ## Next Steps
 

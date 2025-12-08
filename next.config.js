@@ -201,23 +201,6 @@ const nextConfig = {
     maxDuration: 30,
   },
 
-  // SEO 및 메타데이터 라우트 설정
-  async rewrites() {
-    return {
-      beforeFiles: [
-        // SEO 파일들을 API로 리다이렉트
-        {
-          source: '/sitemap.xml',
-          destination: '/api/sitemap',
-        },
-        {
-          source: '/robots.txt',
-          destination: '/api/robots',
-        },
-      ],
-    }
-  },
-
   // Enhanced security headers (keep simple for static assets)
   async headers() {
     return [

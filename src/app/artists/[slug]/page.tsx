@@ -10,6 +10,12 @@ import { getArtistSlugs, getArtistBySlug, getArtistProjects, type Artist } from 
 import type { Metadata } from 'next'
 import { getSiteUrl } from '@/utils/site'
 import { sanitizeJsonLd } from '@/utils/sanitize'
+import {
+  generateArtistStructuredData,
+  generateBreadcrumbStructuredData,
+  combineStructuredData,
+  structuredDataToScript,
+} from '@/utils/structuredData'
 
 // ISR 최적화: 개별 아티스트 페이지는 12시간 캐시
 export const revalidate = 43200
@@ -164,65 +170,29 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
 
   const imageUrl = `${baseUrl}${getProfileImageUrl()}`
 
-  // JSON-LD 구조화 데이터 - XSS 방지를 위한 데이터 정제
-  const sanitizeJsonLdValue = (value: any): any => {
-    if (typeof value === 'string') {
-      // HTML 태그와 스크립트 제거, 특수 문자 이스케이프
-      return value
-        .replace(/<[^>]*>/g, '') // HTML 태그 제거
-        .replace(/[<>"'&]/g, char => {
-          // 특수 문자 HTML 엔티티로 변환
-          const map: { [key: string]: string } = {
-            '<': '&lt;',
-            '>': '&gt;',
-            '"': '&quot;',
-            "'": '&#x27;',
-            '&': '&amp;',
-          }
-          return map[char] || char
-        })
-        .slice(0, 500) // 길이 제한
-    }
-    return value
-  }
+  // 구조화된 데이터 생성 - 유틸리티 함수 사용
+  const artistSchema = generateArtistStructuredData({
+    name: artist.name,
+    slug: resolvedParams.slug,
+    bio: artist.oneLiner,
+    categories: Array.isArray(artist.category) ? artist.category : [artist.category],
+    profilePhotoUrl: artist.profileImage,
+  })
 
-  const jsonLd = {
-    '@context': 'https://schema.org',
-    '@type': 'Person',
-    '@id': `${baseUrl}/artists/${resolvedParams.slug}#person`,
-    name: sanitizeJsonLd(artist.name),
-    description: sanitizeJsonLd(artist.oneLiner),
-    image: {
-      '@type': 'ImageObject',
-      url: imageUrl,
-      width: 800,
-      height: 800,
-    },
-    url: `${baseUrl}/artists/${resolvedParams.slug}`,
-    sameAs: artist.portfolioLinks?.map(link => sanitizeJsonLd(link.url)) || [],
-    jobTitle: Array.isArray(artist.category)
-      ? artist.category.map(cat => sanitizeJsonLd(cat)).join(', ')
-      : sanitizeJsonLd(artist.category),
-    memberOf: {
-      '@type': 'Organization',
-      '@id': `${baseUrl}#organization`,
-      name: '경기아트콜렉티브 협동조합',
-      url: baseUrl,
-    },
-    email: artist.contact?.includes('@') ? sanitizeJsonLd(artist.contact) : undefined,
-    workLocation: {
-      '@type': 'Place',
-      name: '경기도',
-    },
-  }
+  // 브레드크럼 추가
+  const breadcrumbData = generateBreadcrumbStructuredData([
+    { name: '홈', url: baseUrl },
+    { name: '아티스트', url: `${baseUrl}/artists` },
+    { name: artist.name, url: `${baseUrl}/artists/${resolvedParams.slug}` },
+  ])
+
+  // 여러 스키마 결합
+  const jsonLd = combineStructuredData([artistSchema, breadcrumbData])
 
   return (
     <>
       {/* JSON-LD 구조화 데이터 */}
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
+      {structuredDataToScript(jsonLd)}
 
       <div className="pt-20 bg-gradient-to-b from-primary-50 via-accent-50 to-gray-200 min-h-screen">
         {/* Header */}

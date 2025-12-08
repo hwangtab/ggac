@@ -119,6 +119,17 @@ function generateSafeFileName(originalName: string, userId: string): string {
 }
 
 // Storage 경로 생성 및 이미지 변형 경로 계산
+function getBucketPrefix(bucket: string, userId: string) {
+  switch (bucket) {
+    case 'profiles':
+      return `profiles/${userId}`
+    case 'attachments':
+      return `attachments/${userId}`
+    default:
+      return `general/${userId}`
+  }
+}
+
 function generateStoragePaths(bucket: string, userId: string, fileName: string) {
   const safeFileName = generateSafeFileName(fileName, userId)
   const extension = path.extname(safeFileName).toLowerCase()
@@ -126,16 +137,7 @@ function generateStoragePaths(bucket: string, userId: string, fileName: string) 
     ? safeFileName.slice(0, safeFileName.length - extension.length)
     : safeFileName
 
-  const basePrefix = (() => {
-    switch (bucket) {
-      case 'profiles':
-        return `profiles/${userId}`
-      case 'attachments':
-        return `attachments/${userId}`
-      default:
-        return `general/${userId}`
-    }
-  })()
+  const basePrefix = getBucketPrefix(bucket, userId)
 
   const originalPath = `${basePrefix}/${safeFileName}`
   const webpPath = `${basePrefix}/${nameWithoutExtension}.webp`
@@ -548,9 +550,12 @@ export async function GET(request: NextRequest) {
     }
 
     // Storage에서 사용자 파일 목록 조회
+    const basePrefix = getBucketPrefix(bucket, session.user.id)
+    const listPrefix = `${basePrefix}/`
+
     const { data: files, error: listError } = await supabaseAdmin.storage
       .from(bucket)
-      .list(`${session.user.id}/`, {
+      .list(listPrefix, {
         limit,
         offset,
         sortBy: { column: 'created_at', order: 'desc' },
@@ -572,7 +577,7 @@ export async function GET(request: NextRequest) {
         return true
       })
       .map((file, index) => {
-        const filePath = `${session.user.id}/${file.name}`
+        const filePath = `${basePrefix}/${file.name}`
         const ext = path.extname(file.name)
         const baseName = ext ? file.name.slice(0, file.name.length - ext.length) : file.name
 
@@ -581,9 +586,9 @@ export async function GET(request: NextRequest) {
 
         const variantPaths = {
           original: filePath,
-          webp: allFileNames.has(webpName) ? `${session.user.id}/${webpName}` : undefined,
+          webp: allFileNames.has(webpName) ? `${basePrefix}/${webpName}` : undefined,
           fallback: allFileNames.has(fallbackName)
-            ? `${session.user.id}/${fallbackName}`
+            ? `${basePrefix}/${fallbackName}`
             : ['.jpg', '.jpeg'].includes(ext.toLowerCase())
               ? filePath
               : undefined,
