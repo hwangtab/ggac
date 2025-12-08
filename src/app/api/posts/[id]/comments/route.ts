@@ -16,13 +16,12 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   const cursor = searchParams.get('cursor') || '' // format: encodeURIComponent(`${created_at}|${id}`)
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  if (!url || (!serviceKey && !anonKey)) {
+  if (!url || !anonKey) {
     return NextResponse.json({ success: false, error: 'Supabase not configured' }, { status: 500 })
   }
 
-  const supabase = createClient(url, serviceKey || anonKey!, {
+  const supabase = createClient(url, anonKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   })
 

@@ -4,7 +4,12 @@ import { getPostMetadata } from '@/lib/posts'
 import PostDetailClient from './PostDetailClient'
 import { Suspense } from 'react'
 import { generatePostOgImage } from '@/utils/imageUrl'
-import { generatePostStructuredData, structuredDataToScript } from '@/utils/structuredData'
+import {
+  generatePostStructuredData,
+  generateBreadcrumbStructuredData,
+  combineStructuredData,
+  structuredDataToScript,
+} from '@/utils/structuredData'
 
 // 동적 메타데이터 생성
 export async function generateMetadata({
@@ -215,7 +220,7 @@ export default async function PostDetailPage({ params }: { params: Promise<{ id:
   const resolvedInitialData = initialData as InitialPostData
 
   // 구조화된 데이터 생성(메타데이터 실패 시 생략)
-  const structuredData = metadata
+  const postSchema = metadata
     ? generatePostStructuredData({
         id: postId,
         title: metadata.post.title,
@@ -227,6 +232,17 @@ export default async function PostDetailPage({ params }: { params: Promise<{ id:
         thumbnail: metadata.thumbnail,
       })
     : null
+
+  const breadcrumbData = metadata
+    ? generateBreadcrumbStructuredData([
+        { name: '홈', url: 'https://ggac.kr' },
+        { name: '게시판', url: 'https://ggac.kr/board' },
+        { name: metadata.post.title, url: `https://ggac.kr/board/${postId}` },
+      ])
+    : null
+
+  const structuredData =
+    postSchema && breadcrumbData ? combineStructuredData([postSchema, breadcrumbData]) : postSchema
 
   return (
     <div>

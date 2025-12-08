@@ -1,10 +1,11 @@
 import { MetadataRoute } from 'next'
 import { getArtists, getProjects } from '@/lib/data'
+import { getSiteUrl } from '@/utils/site'
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = 'https://ggac.kr'
+  const baseUrl = getSiteUrl()
   const now = new Date()
-  
+
   try {
     // 정적 페이지들
     const staticPages: MetadataRoute.Sitemap = [
@@ -44,6 +45,24 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         changeFrequency: 'daily',
         priority: 0.6,
       },
+      {
+        url: `${baseUrl}/privacy`,
+        lastModified: now,
+        changeFrequency: 'monthly',
+        priority: 0.5,
+      },
+      {
+        url: `${baseUrl}/terms`,
+        lastModified: now,
+        changeFrequency: 'monthly',
+        priority: 0.5,
+      },
+      {
+        url: `${baseUrl}/faq`,
+        lastModified: now,
+        changeFrequency: 'monthly',
+        priority: 0.7,
+      },
     ]
 
     // 동적 아티스트 페이지들
@@ -67,7 +86,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     return [...staticPages, ...artistPages, ...projectPages]
   } catch (error) {
     console.error('Error generating sitemap:', error)
-    
+
     // 에러 시 기본 정적 페이지만 반환
     return [
       {
@@ -96,6 +115,30 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       },
       {
         url: `${baseUrl}/connect`,
+        lastModified: now,
+        changeFrequency: 'monthly',
+        priority: 0.7,
+      },
+      {
+        url: `${baseUrl}/board`,
+        lastModified: now,
+        changeFrequency: 'daily',
+        priority: 0.6,
+      },
+      {
+        url: `${baseUrl}/privacy`,
+        lastModified: now,
+        changeFrequency: 'monthly',
+        priority: 0.5,
+      },
+      {
+        url: `${baseUrl}/terms`,
+        lastModified: now,
+        changeFrequency: 'monthly',
+        priority: 0.5,
+      },
+      {
+        url: `${baseUrl}/faq`,
         lastModified: now,
         changeFrequency: 'monthly',
         priority: 0.7,

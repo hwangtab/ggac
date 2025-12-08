@@ -9,13 +9,12 @@ export const revalidate = 60
 
 export async function GET(request: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  if (!url || (!serviceKey && !anonKey)) {
+  if (!url || !anonKey) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 })
   }
 
-  const supabase = createClient(url, serviceKey || anonKey!, {
+  const supabase = createClient(url, anonKey, {
     auth: { autoRefreshToken: false, persistSession: false }
   })
 
@@ -168,4 +167,3 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: `Error: ${msg}` }, { status: 500 })
   }
 }
-
