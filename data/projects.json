@@ -13,11 +13,23 @@
       "/images/projects/Founding-General-Meeting-03.webp"
     ],
     "videoUrl": null,
-    "artistIds": ["artist-001", "artist-002", "artist-003", "artist-004", "artist-005", "artist-006", "artist-007", "artist-008", "artist-009"],
-    "relatedArticles": [{
+    "artistIds": [
+      "artist-001",
+      "artist-002",
+      "artist-003",
+      "artist-004",
+      "artist-005",
+      "artist-006",
+      "artist-007",
+      "artist-008",
+      "artist-009"
+    ],
+    "relatedArticles": [
+      {
         "title": "수원 뉴스",
         "url": "https://news.suwon.go.kr/?p=41&viewMode=view&reqIdx=202504132058301024"
-    }]
+      }
+    ]
   },
   {
     "id": "project-002",
@@ -39,12 +51,23 @@
       "/images/projects/opening-party-09.webp"
     ],
     "videoUrl": null,
-    "artistIds": ["artist-001", "artist-002", "artist-003", "artist-004", "artist-005", "artist-006", "artist-008", "artist-009"],
+    "artistIds": [
+      "artist-001",
+      "artist-002",
+      "artist-003",
+      "artist-004",
+      "artist-005",
+      "artist-006",
+      "artist-008",
+      "artist-009"
+    ],
     "ticketing": null,
-    "relatedArticles": [{
+    "relatedArticles": [
+      {
         "title": "수원 뉴스",
         "url": "https://news.suwon.go.kr/?p=41&page=1&mode=blog&viewMode=view&reqIdx=202506292251376469"
-      }]
+      }
+    ]
   },
   {
     "id": "project-003",
@@ -64,10 +87,17 @@
       "/images/projects/studioparty7.webp"
     ],
     "videoUrl": null,
-    "artistIds": ["artist-001", "artist-002", "artist-003", "artist-004", "artist-006", "artist-008"],
+    "artistIds": [
+      "artist-001",
+      "artist-002",
+      "artist-003",
+      "artist-004",
+      "artist-006",
+      "artist-008"
+    ],
     "relatedArticles": []
   },
-    {
+  {
     "id": "project-004",
     "slug": "metal-syndicate-network",
     "title": "철조망: METAL SYNDICATE NETWORK 개최",
@@ -77,7 +107,11 @@
     "description": "수원 언더그라운드, 메탈 씬의 새 물결 '철조망: METAL SYNDICATE NETWORK'을 개최합니다.\n\n서울-경기 지역을 기반으로 활동하는 다섯 개의 유수 메탈 밴드가 한자리에 모여, 한국 메탈 씬의 현재와 미래를 가늠할 수 있는 강렬한 음악적 경험을 선사할 예정입니다.\n\n이번 공연의 타이틀인 '철조망'은 단순한 물리적 경계를 넘어, 어려움 속에서도 서로를 지지하고 연대하는 메탈 공동체의 강인한 정신을 상징한다. 이번 기획은 'METAL / SYNDICATE / NETWORK'라는 부제를 통해 특정 장르적 유행을 좇기보다, 공통된 지역 기반에서 활동하는 독립적인 메탈 아티스트들의 조직적 연대를 도모합니다.\n\n### 일정\n\n2025년 7월 13일 (일) 18:00\n\n### 장소\n\nDOT (수원시 팔달구 화서문로 34-1 지하1층)",
     "gallery": null,
     "videoUrl": null,
-    "artistIds": ["artist-001", "artist-009", "artist-014"],
+    "artistIds": [
+      "artist-001",
+      "artist-009",
+      "artist-014"
+    ],
     "ticketing": [
       {
         "platform": "네이버 예약",
@@ -108,7 +142,9 @@
     "description": "펜타포트 락페스티벌이 열리는 그날, 펜타에 초대받지 못한 뮤지션들과 펜타에 갈 수 없는 관객들을 위한\n\n 지하 언더그라운드 락페스티벌, 팬티포트가 열린다.\n\n### 장소\n\n신촌 인피니티클럽 \n\n### 라인업\n\n- Bron\n- Melki\n- Gobchang\n- Lee Hyojun\n- The Pictures\n- Jisu\n- Mooii\n- Sabbaha\n- Qeruigomoo\n- Moon, Night and Stars",
     "gallery": null,
     "videoUrl": null,
-    "artistIds": ["artist-001"],
+    "artistIds": [
+      "artist-001"
+    ],
     "ticketing": [
       {
         "platform": "네이버 예약",
@@ -130,7 +166,9 @@
     "description": "세 명의 싱어송라이터와 한 명의 전자음악가가 만나 새로운 음악이 탄생하는 순간을 함께 해 주세요.\n\n### 참여 아티스트\n\n**Jisu** [@jisu.music](https://www.instagram.com/jisu.music)  \nJISU는 온 마음을 쓴다. 온갖 다양한 마음에 대해 쓰는 아티스트이며 또, 마음을 많이 써서 가사와 음악을 만드는 아티스트다.\n\n**Summertigers** [@jang.summer.tigers](https://www.instagram.com/jang.summer.tigers)  \n\"8월 19일 생일인 사람\"\n\n**Dos Chillos** [@yahoyahodan](https://www.instagram.com/yahoyahodan)  \n증상: 기막힘 / 처방: 주먹 도수치료\n\n**Soyeon** [@mis_aaaa00](https://www.instagram.com/mis_aaaa00)\n\n### 공연 정보\n\n**일시**: 2025.08.17 (일) 오픈 18:00 / 시작 18:30  \n**장소**: D.O.T / 수원 행궁동 [@d.o.t_kr](https://www.instagram.com/d.o.t_kr)  \n**가격**: 예매 15,000원 / 현매 20,000원  \n**할인**: 경기아트콜렉티브협동조합 조합원 예매 5,000원 할인 [@ggartcollective](https://www.instagram.com/ggartcollective)  \n**기획**: 야호야호단 [@yahoyahodan](https://www.instagram.com/yahoyahodan)",
     "gallery": null,
     "videoUrl": null,
-    "artistIds": ["artist-001"],
+    "artistIds": [
+      "artist-001"
+    ],
     "ticketing": [
       {
         "platform": "네이버 예약",
@@ -152,7 +190,9 @@
     "description": "소리로 쌓아 올린 모노리스  \n저주로 무너질 오벨리스크\n\n### 참여 아티스트\n\n**HUMAN INFRASTRUCTURE** [@infraphysics](https://www.instagram.com/infraphysics), [@infrawang](https://www.instagram.com/infrawang)\n\n**TOHAL KYNA** [@tohal_kyna](https://www.instagram.com/tohal_kyna)\n\n**GOBCHANG** [@gobchangnoise](https://www.instagram.com/gobchangnoise)\n\n**NAHUA** [@nahuamx](https://www.instagram.com/nahuamx)\n\n**SABBAHA** [@sabbaha_kr](https://www.instagram.com/sabbaha_kr)\n\n### 공연 정보\n\n**일시**: 2025.08.30 입장 18:00 / 시작 18:30  \n**장소**: 닻올림 [@DOTOLIM](https://www.instagram.com/dotolim) (와우산로 29)  \n**가격**: 예매 30,000원 / 현매 35,000원  \n**할인**: 경기아트콜렉티브협동조합 조합원 예매 5,000원 할인  \n**기획**: 야호야호단 [@yahoyahodan](https://www.instagram.com/yahoyahodan)",
     "gallery": null,
     "videoUrl": null,
-    "artistIds": ["artist-001"],
+    "artistIds": [
+      "artist-001"
+    ],
     "ticketing": [
       {
         "platform": "네이버 예약",
@@ -180,7 +220,10 @@
       "/images/projects/record5.webp"
     ],
     "videoUrl": null,
-    "artistIds": ["artist-001", "artist-008"],
+    "artistIds": [
+      "artist-001",
+      "artist-008"
+    ],
     "ticketing": null,
     "relatedArticles": []
   },
@@ -199,7 +242,11 @@
       "/images/projects/kimdongsanstudio4.webp"
     ],
     "videoUrl": null,
-    "artistIds": ["artist-006", "artist-008", "artist-009"],
+    "artistIds": [
+      "artist-006",
+      "artist-008",
+      "artist-009"
+    ],
     "ticketing": null,
     "relatedArticles": []
   },
@@ -213,7 +260,11 @@
     "description": "(건강문제로 취소)\n\n오는 9월 18일 목요일 오후 7시, 수원시 팔달구에 위치한 빈티지 LP바 겸 카페 '롱플레이어'에서 특별한 음악 공연 '건강열전(健康列傳)'이 개최될 예정이었으나, 건강 문제로 취소되었습니다.\n\n'건강열전'이라는 제목은 각기 다른 음악적 색채를 지닌 아티스트들이 모여 관객들의 마음과 몸의 건강을 기원한다는 의미를 담고 있습니다. 부제인 'Play long the long play'는 공연장인 롱플레이어의 특성을 살려 LP처럼 오래도록 여운이 남는 음악을 선사하겠다는 기획 의도를 표현했습니다.\n\n### 출연진 소개\n\n**희우**\n전통 판소리 창법을 현대 음악에 접목시킨 독창적인 스타일의 싱어송라이터입니다. 판소리의 깊은 감정 표현과 현대적 편곡을 결합해 전통과 현대를 잇는 음악을 선보입니다. 대금과 가야금 등 전통 악기 사운드를 현대적으로 재해석한 그의 음악은 시간을 초월한 감동을 전달합니다.\n\n**유동혁**\n펑크록에서 출발해 펑크포크라는 독특한 장르를 개척한 뮤지션입니다. 젊은 시절 펑크록 밴드 활동 중 겪은 상실의 경험을 통기타 연주와 함께 거칠면서도 따뜻한 감성으로 풀어냅니다. 그의 음악에는 방황과 아픔의 시간들이 고스란히 녹아들어 있습니다.\n\n**더 밀리웨이스 (themilliways)**\n음악가 주진태의 1인 솔로 프로젝트로, 앰비언트와 포스트 록을 기반으로 한 실험적 사운드를 추구합니다. 2000년대 초반부터 작곡 활동을 시작한 그는 다양한 사회 운동에 연대해왔으며, 서태지컴퍼니에서 콘텐츠 프로듀서로 활동한 경험을 바탕으로 음악과 미디어의 교차점에서 독창적인 작업을 이어가고 있습니다. 2017년 폐암 말기 진단 후 회복의 시간을 거쳐 2021년 솔로 데뷔한 그의 음악은 존재와 내면을 탐구하는 깊이 있는 메시지를 담고 있습니다.\n\n**야마가타 트윅스터**\n스스로를 '무투가요 민중엔터테이너'라고 칭하는 독특한 퍼포먼스 아티스트입니다. 2008년부터 홍대 앞에서 활동을 시작한 그는 댄스 음악에 맞춰 춤과 노래를 결합한 한받의 퍼포먼스로 관객들과 소통합니다. 클럽 공연뿐만 아니라 각종 투쟁 현장에 연대하며 음악을 통한 사회적 메시지 전달에도 적극적입니다.\n\n### 공연 정보\n\n- **일시**: 2025년 9월 18일 (목) 오후 7시\n- **장소**: 수원 롱플레이어 (빈티지 LP바/카페)\n- **입장료**: 예매/현매 15,000원 (음료 할인 제공)\n- **할인**: 경기아트콜렉티브 조합원 5,000원 할인 \n\n### 공연 장소\n\n공연이 열리는 롱플레이어는 음반과 카메라, 드립커피를 매개로 음악과 아날로그 문화를 즐길 수 있는 공간입니다. 시대가 지나 버려지는 물건들을 고쳐 다시 사용하는 문화를 추구하는 이곳은 누구나 와서 원하는 음반을 들으며 음악 관련 소품들로 추억을 소환할 수 있는 특별한 장소로 알려져 있습니다.\n\n각기 다른 음악적 여정을 걸어온 네 팀의 아티스트들이 선사할 치유와 위로의 무대가 이번 가을, 많은 이들에게 음악적 건강함을 선물할 것으로 기대됩니다.",
     "gallery": null,
     "videoUrl": null,
-    "artistIds": ["artist-012", "artist-005", "artist-004"],
+    "artistIds": [
+      "artist-012",
+      "artist-005",
+      "artist-004"
+    ],
     "ticketing": [
       {
         "platform": "네이버 예약",
@@ -223,10 +274,12 @@
         "endDate": "2025-09-18"
       }
     ],
-    "relatedArticles": [{
-      "title": "뉴스아트",
-      "url": "https://www.news-art.co.kr/news/article.html?no=32815"
-    }]
+    "relatedArticles": [
+      {
+        "title": "뉴스아트",
+        "url": "https://www.news-art.co.kr/news/article.html?no=32815"
+      }
+    ]
   },
   {
     "id": "project-011",
@@ -238,7 +291,10 @@
     "description": "강철의 연대, 파괴의 연쇄 — 끝없는 철조망의 두 번째 물결이 수원에 상륙합니다. 경기도 로컬 메탈 기획 ‘철조망: METAL SYNDICATE NETWORK’의 2회차가 앨리웨이 탭하우스에서 펼쳐집니다.\n\n### 공연 정보\n- **일시**: 2025.09.06 (토)  \n  OPEN 20:00 / FIRE 20:30\n- **장소**: 수원 앨리웨이 탭하우스 (팔달구 정조로 751-11, 4층)  \n  [@alleywaytaphouse](https://www.instagram.com/alleywaytaphouse)\n- **기획 라인**: 초대 [D.O.T.](https://www.instagram.com/d.o.t_kr)에서 이어지는 경기도 로컬 메탈 네트워크\n- **입장 안내**: 무료입장 유료퇴장\n\n### 라인업\n- Adults of Bodom\n- WeRockenStein — [@werockenstein_official](https://www.instagram.com/werockenstein_official)\n- Metisse — [@band_metisse](https://www.instagram.com/band_metisse)\n- Sabbaha — [@sabbaha_kr](https://www.instagram.com/sabbaha_kr)\n- PanzerKorps\n\n---\n\n### EN\nCHEOL-JO-MANG 2ND WAVE — METAL SYNDICATE NETWORK 2TERNAL  \nForged in iron. Linked by destruction.  \nCoordinates: Alleyway Taphouse Suwon ([@alleywaytaphouse](https://www.instagram.com/alleywaytaphouse))  \n4F, 751-11 Jeongjo-ro, Paldal-gu, Suwon-si, Gyeonggi-do  \nOperation Start: 2025.09.06 (Sat) — OPEN 20:00 / FIRE 20:30\n\n",
     "gallery": null,
     "videoUrl": null,
-    "artistIds": ["artist-009", "artist-001"],
+    "artistIds": [
+      "artist-009",
+      "artist-001"
+    ],
     "ticketing": null,
     "relatedArticles": [
       {
@@ -246,8 +302,7 @@
         "url": "/archive/metal-syndicate-network"
       }
     ]
-  }
-  ,
+  },
   {
     "id": "project-012",
     "slug": "ancestral-exorcism-public-service",
@@ -258,7 +313,10 @@
     "description": "전통과 관습의 굴레를 음악으로 해체하는 6팀의 실험적 인디 공연. 조상이라는 무의식의 지배에서 벗어나는 치유적 음악 경험을 제공합니다.\n\n수신: 관객 제위\n제목: 조상퇴마 공공서비스 공연 시행에 관한 건\n\n귀하의 건승을 기원합니다.\n\n아래와 같이 종합 장르 인디 음악 공연을 시행하고자 하오니 검토 후 참조하여 주시기 바랍니다.\n\n- 다 음 -\n\n공연명: 조상퇴마 공공서비스\n\n### 기획의도\n우리는 현재에 살며 불확실한 미래를 염려하고 때로는 우울함에 빠진다. 그러나 과거는 절대적으로 확실하고 그 굴레에서는 결코 벗어날 수 없다.\n\n조상은 핏줄 속에 남아 끊임없이 우리를 민족과 문화 전통으로 묶어두고 우리의 무의식을 지배한다. 조상이라는 이름의 무의식의 지배자에게 바치는 찬미 제례 제사 차례는 유교문화라는 허울 속에 때로는 체계를 공고히하며 때로는 우리의 허황된 욕심을 투영하는 거울이 되기도 한다.\n\n조상퇴마 공공서비스는 이런 거울을 깨트리고 체계를 강제로 무너트리는 음악을 제공한다. 국가나 사회가 제공하지 못하는 이런 서비스를 통해 관객은 조상과 뿌리에 묶여 고통받던 기억을 치유받거나 혹은 그 과정을 통해 조상이라는 개념 자체를 내쫓는 의식에 참여하게 된다.\n\n### 공연 정보\n- **공연장**: 무대륙 (마포구 토정로 5길 12 지하)\n- **공연일시**: 2025년 10월 5일(日) 18:00 개장 / 18:30 시작\n\n### 라인업\n- 은해 @eh_x3x\n- 제트싸이저 @Zsthyger\n- 괴뢰고무반도체 @qeruigomoo\n- 포라빔 @porabim.2067\n- 워프드 세이비어 @warpedsaviorband\n- 사바하 @sabbaha.kr\n\n### 안내\n- **후원**: 경기아트콜렉티브협동조합\n- **관람비**: 예매 25,000원 / 현매 30,000원 (경아콜 조합원 예매 5,000원 할인)\n- **예매**: 프로필 링크 참조\n\n",
     "gallery": null,
     "videoUrl": null,
-    "artistIds": ["artist-001", "artist-009"],
+    "artistIds": [
+      "artist-001",
+      "artist-009"
+    ],
     "ticketing": [
       {
         "platform": "네이버 예약",
@@ -285,7 +343,9 @@
     "description": "⛧ SATANIC RITUAL & PERVERSIONS VOL. II ⛧\n🏄‍♂️ OVIJABOARD SVRFERS 📖\n\n어두운 교실. 낡은 종이. 빛 바랜 동전. 그리고 손가락.\n주문을 외워. 너를 불러내. 그리고 메시지를 받아.\n그들이 미워. 손톱을 펼쳐. 피가 흘러. 피가 흘러. 피가 흘러.\n\nA dark classroom. Old paper. Rusty coins. And fingers.\nThe chant begins. We call you forth. And the message arrives.\nHate them. The nails growth. Blood flows. Blood flows. Blood flows.\n\n### 공연 정보\n\n**일시**: 2025.11.1 (토) OPEN 18:00 START 18:30\n**장소**: 중구 수표로6길 10 지하 A.C.S. @_a_c_s___\n**입장료**: 현매 ONLY 30,000원, 할로윈 코스튬 착용 시 20,000원\n\n### 출연진\n\nStarring;\nSabbaha / Nahua / Isher / Reasco\nViridian / G.I.O.K. / Melki / Ondea\n\n### EN\n\nJung-gu, Supyoro 6-gil 10, Basement A.C.S. @a_c_s__\nNovember 1, 2025 (Sat) OPEN 18:00 START 18:30\nDoor only: 30,000 KRW | With Halloween costume: 20,000 KRW\n\n### 면책 고지\n\n본 공연에서 등장하는 모든 퍼포먼스, 등장인물, 의식은 창작된 허구입니다.\n실존하는 종교적 신념이나 의례와 유사한 부분이 있을 경우, 이는 우연이거나 상징적인 표현일 뿐입니다.\n이 공연은 실제 종교 의식이 아닌, 예술적 퍼포먼스입니다.\n\n### Disclaimer\n\nAll performances, characters, and rituals presented in this show are fictional.\nAny resemblance to real religious beliefs or ceremonies is purely coincidental or symbolic.\nThis event is an artistic performance, not an actual religious ritual.",
     "gallery": null,
     "videoUrl": null,
-    "artistIds": ["artist-001"],
+    "artistIds": [
+      "artist-001"
+    ],
     "ticketing": null,
     "relatedArticles": []
   },
@@ -299,7 +359,16 @@
     "description": "### 🎸 수원 사운드 마켓 🎸\n\n**연주하고 악기 팔고 돈 벌고 가세요**\n\n당신의 소음을 팔아라. 당신의 기어에게 새로운 주인을 찾아줘라. 수원의 지하경제 활성화에 조력하는 일요일 오후.\n\n### 행사 개요\n\n**📅 일시**: 2025년 11월 23일 (일) 16:00-19:00  \n**📍 장소**: [DOT (수원시 팔달구 화서문로 34-1 지하1층)](https://map.naver.com/p/search/수원시%20팔달구%20화서문로%2034-1)\n**🎤 공연**: 10-12팀 (1팀당 세팅 포함 10-15분)  \n**💰 입장료**: 예매 1만원, 조합원 무료\n\n### 이런 행사입니다\n\n✓ 판매하려는 악기로 공연하고 쓰던 악기/장비 바로 경매  \n✓ 악기 말고도 음반, 굿즈, 당신이 담근 꿀단지도 가능  \n✓ 공연 중에 관객이 물건 구경하고 흥정해도 됨  \n✓ 정신없고 재미있고 익스트림함  \n✓ 경매로 팔리니까 얼마에 팔릴지는 그날 가봐야 앎  \n✓ 판매 수익 100%는 당신 거\n\n### 필수 조건\n\n⚠️ **판매할 물건 최소 1개 이상 필수**  \n(악기 외에도 아버지 찬장에 있던 인삼주나 직접 담근 된장도 팔 수 있음)\n\n### 판매 가능한 것들\n\n- 악기 (기타, 베이스, 드럼, 건반, 관악기, 현악기 등)\n- 음향장비 (앰프, 이펙터, 믹서, 마이크, 케이블, 스탠드)\n- 하드웨어 (신디사이저, MIDI 컨트롤러, 드럼머신, 루퍼 등)\n- 소프트웨어 (DAW 라이선스, 플러그인, 샘플팩)\n- 음반 (자작 CD, 바이닐, 카세트)\n- 굿즈 (포스터, 티셔츠, 스티커 등)\n- 기타 창작물 (그림, 수제품 등)\n- 세션/레슨 쿠폰 (당신 자신을 팔아도 됨)\n- 고장난 정크 기어 (익스트림 정크 코너)\n- 아버지 찬장에 있던 인삼주\n- 직접 담근 된장\n- **뭐든 다 됨**\n\n### 현재 라인업\n\n- 도수치료\n- 황국장\n- The Milliways\n- RB\n- 희우\n- 유동혁\n- ZSTHYGER\n- The Projectors\n- and more+++\n\n### 주의사항\n\n- 1팀당 공연 시간 엄수 (15분)\n- 세팅 시간 최소화 부탁\n- 판매 물건은 당일 꼭 가져오기\n- 경매에서 안 팔릴 수도 있음 (최저가 낮게 설정 추천)\n- 반품 불가 (구입 후에 돌이킬 수 없음)\n\n### 신청 안내\n\n**마감**: 2025년 11월 초  \n**선정**: 재미있는 공연과 판매 물품을 기준으로 선정합니다.  \n**발표**: 선정된 팀에게 기재하신 연락처로 개별 연락드립니다.  \n**단톡방**: 선정 후 참가자 단톡방을 개설합니다.",
     "gallery": null,
     "videoUrl": null,
-    "artistIds": ["artist-001", "artist-008", "artist-004", "artist-012", "artist-005", "artist-009", "artist-002", "artist-003"],
+    "artistIds": [
+      "artist-001",
+      "artist-008",
+      "artist-004",
+      "artist-012",
+      "artist-005",
+      "artist-009",
+      "artist-002",
+      "artist-003"
+    ],
     "applicationForm": {
       "title": "공연 및 판매 신청하기",
       "url": "https://temporal-curio-ad9.notion.site/28cec71d506780819624e4fb08d71504"
@@ -325,7 +394,9 @@
     "description": "### 공연 소개\n\n\"펑크는 죽지 않았다, 다만 포크가 되었을 뿐.\" 11월 9일 일요일 밤, 수원 행궁동의 라이브 클럽 도트(d.o.t)에서 펑크포크로 진화한 싱어송라이터 **유동혁**과 삶의 편에 서는 블루스 집단 **김동산과 블루이웃**이 마주 앉습니다. 날 선 펑크의 에너지와 포크의 서정, 그리고 블루스의 따뜻한 위로가 한 무대에서 교차하는 순간을 만나보세요.\n\n### 출연\n\n- 유동혁 — 펑크록 밴드 '요괴인간' 출신, 상실 이후 통기타로 사람들의 삶을 노래하는 '펑크포크' 아티스트\n- 김동산과 블루이웃 — 출장 작곡가 김동산이 이웃들의 서사를 블루스로 풀어내는 밴드\n\n### 공연 정보\n\n- 일시: 2025년 11월 9일 (일) 저녁 7시 / 도어 오픈 18:30\n- 장소: 경기도 수원시 팔달구 행궁동 라이브 클럽 도트(d.o.t)\n- 티켓: 예매 15,000원 / 현장 20,000원\n\n### 예매 안내\n\n도트 인스타그램 계정 DM으로 사전 예매를 진행합니다. 작은 공간에서 펼쳐지는 공연인 만큼 조기 매진이 예상되니 서둘러 주세요. 펑크의 직설과 블루스의 위로가 만나는 밤, 서로 다른 길을 걸어온 두 음악가의 진심이 깊어가는 가을밤을 채웁니다.",
     "gallery": null,
     "videoUrl": null,
-    "artistIds": ["artist-005"],
+    "artistIds": [
+      "artist-005"
+    ],
     "ticketing": [
       {
         "platform": "인스타그램 DM",
@@ -363,12 +434,32 @@
       "/images/archive/sabbaha-acme-live/IMG_6060.webp"
     ],
     "videoUrl": "https://youtu.be/F8JH5d9pOt8?si=MFZqmf9-6zsUJEfb",
-    "artistIds": ["artist-001", "artist-009", "artist-003", "artist-002", "artist-008"],
+    "artistIds": [
+      "artist-001",
+      "artist-009",
+      "artist-003",
+      "artist-002",
+      "artist-008"
+    ],
     "relatedArticles": [
       {
         "title": "뉴스아트",
         "url": "https://www.news-art.co.kr/news/article.html?no=32856"
       }
     ]
+  },
+  {
+    "id": "project-017",
+    "slug": "2025-year-end-party",
+    "title": "경기아트콜렉티브 2025 망년회",
+    "category": "행사",
+    "publishedDate": "2025-12-17",
+    "coverImage": "/images/projects/2025 year-end-party.png",
+    "description": "경기아트콜렉티브의 2025년 한 해를 마무리하는 망년회가 열립니다. 조합원 여러분과 함께 즐거운 시간을 보내고자 합니다.\n\n### 행사 정보\n\n- **일시**: 2025년 12월 28일 (일) 오후 3시\n- **장소**: ACME 스튜디오 (경기 수원시 권선구 권선동 963-7 B1)\n\n### 주요 프로그램\n\n1. AI 신기술 활용 워크샵\n2. 이사장 화형식\n3. 주지육림 잔치",
+    "gallery": null,
+    "videoUrl": "https://youtu.be/RH8Wou_os6o",
+    "artistIds": [],
+    "ticketing": null,
+    "relatedArticles": []
   }
 ]
