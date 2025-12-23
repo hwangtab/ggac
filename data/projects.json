@@ -15,11 +15,8 @@
     "videoUrl": null,
     "artistIds": [
       "artist-001",
-      "artist-002",
-      "artist-003",
       "artist-004",
       "artist-005",
-      "artist-006",
       "artist-007",
       "artist-008",
       "artist-009"
@@ -53,11 +50,8 @@
     "videoUrl": null,
     "artistIds": [
       "artist-001",
-      "artist-002",
-      "artist-003",
       "artist-004",
       "artist-005",
-      "artist-006",
       "artist-008",
       "artist-009"
     ],
@@ -89,10 +83,7 @@
     "videoUrl": null,
     "artistIds": [
       "artist-001",
-      "artist-002",
-      "artist-003",
       "artist-004",
-      "artist-006",
       "artist-008"
     ],
     "relatedArticles": []
@@ -243,7 +234,6 @@
     ],
     "videoUrl": null,
     "artistIds": [
-      "artist-006",
       "artist-008",
       "artist-009"
     ],
@@ -365,9 +355,7 @@
       "artist-004",
       "artist-012",
       "artist-005",
-      "artist-009",
-      "artist-002",
-      "artist-003"
+      "artist-009"
     ],
     "applicationForm": {
       "title": "공연 및 판매 신청하기",
@@ -437,8 +425,6 @@
     "artistIds": [
       "artist-001",
       "artist-009",
-      "artist-003",
-      "artist-002",
       "artist-008"
     ],
     "relatedArticles": [
