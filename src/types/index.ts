@@ -6,6 +6,7 @@
  * - settings.ts: 사용자 설정 관련 타입
  * - media.ts: 미디어/프로필 사진 관련 타입
  * - notification.ts: 알림 시스템 관련 타입
+ * - filter.ts: 고급 필터링 시스템 타입
  */
 
 import type { BoardCategory } from '@/constants/categories'
@@ -14,6 +15,7 @@ import type { BoardCategory } from '@/constants/categories'
 export * from './settings'
 export * from './media'
 export * from './notification'
+export * from './filter'
 
 // === 핵심 데이터 타입 정의 ===
 
