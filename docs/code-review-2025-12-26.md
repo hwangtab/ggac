@@ -309,3 +309,92 @@ touch src/types/{artist,project,notification,filter,settings,media,api}.ts
 - [Next.js 15 문서](https://nextjs.org/docs)
 - [React 19 새로운 기능](https://react.dev/blog)
 - [Supabase 모범 사례](https://supabase.com/docs/guides/best-practices)
+
+---
+
+## ✅ 완료된 개선 사항 (2025-12-26)
+
+### 1. 불필요한 의존성 제거
+
+- `@tailwindcss/line-clamp` 제거 (TailwindCSS 3.3+ 내장)
+- `claude` 패키지 제거 (미사용)
+
+### 2. ESLint max-lines 규칙 추가
+
+```json
+"max-lines": ["warn", { "max": 600, "skipBlankLines": true, "skipComments": true }]
+```
+
+### 3. 타입 파일 분리
+
+| 파일                    | 줄 수 | 내용               |
+| ----------------------- | ----- | ------------------ |
+| `types/settings.ts`     | 97줄  | 사용자 설정 타입   |
+| `types/notification.ts` | 122줄 | 알림 시스템 타입   |
+| `types/filter.ts`       | 163줄 | 고급 필터링 타입   |
+| `types/media.ts`        | 176줄 | 미디어/프로필 타입 |
+
+### 4. LiquidMetalParticles 셰이더 분리
+
+- `particles/shaders.ts` 생성 (355줄)
+- 메인 컴포넌트: 1,394줄 → 1,207줄
+
+---
+
+## 🔍 추가 발견 사항 (2차 리뷰)
+
+### 1. console.log 정리 필요
+
+**영향 파일**: 50+ 파일  
+**위치**: `src/lib/`, `src/utils/`, `src/hooks/`, `src/app/api/` 등
+
+**권장사항**:
+
+- 프로덕션 빌드에서 자동 제거 설정 추가
+- 또는 커스텀 logger 유틸리티 사용
+
+```javascript
+// next.config.js
+module.exports = {
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production',
+  },
+}
+```
+
+### 2. TODO 주석 해결 필요
+
+**위치**: `src/app/api/posts/[id]/route.ts:84`
+
+```typescript
+// TODO: RLS 정책 정리 후 adminClient 사용 제거 검토
+```
+
+### 3. Admin 페이지 분리 권장
+
+| 파일                      | 현재 줄 수 | 권장                |
+| ------------------------- | ---------- | ------------------- |
+| `admin/members/page.tsx`  | 764줄      | 컴포넌트 분리       |
+| `admin/settings/page.tsx` | 711줄      | 탭별 컴포넌트 분리  |
+| `signup/page.tsx`         | 621줄      | 폼 로직 훅으로 분리 |
+
+---
+
+## 📊 현재 ESLint max-lines 경고 현황
+
+| 파일                       | 줄 수   | 상태             |
+| -------------------------- | ------- | ---------------- |
+| `types/index.ts`           | 1,334줄 | 🔴 분리 진행 중  |
+| `LiquidMetalParticles.tsx` | 1,207줄 | 🟡 셰이더 분리됨 |
+| `admin/members/page.tsx`   | 764줄   | 🟠 분리 권장     |
+| `admin/settings/page.tsx`  | 711줄   | 🟠 분리 권장     |
+| `signup/page.tsx`          | 621줄   | 🟡 경미          |
+
+---
+
+## 🎯 다음 단계 권장사항
+
+1. **console.log 자동 제거 설정** - 프로덕션 빌드 최적화
+2. **TODO 주석 해결** - RLS 정책 검토
+3. **Admin 컴포넌트 분리** - 재사용성 및 테스트 용이성 향상
+4. **types/index.ts 추가 분리** - 게시판, 활동 추적 타입 분리
