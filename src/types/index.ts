@@ -1,13 +1,21 @@
 /**
  * 중앙화된 타입 정의 시스템
  * 모든 타입스크립트 인터페이스와 타입 정의를 중앙에서 관리
+ *
+ * 도메인별 타입 파일:
+ * - settings.ts: 사용자 설정 관련 타입
+ * - media.ts: 미디어/프로필 사진 관련 타입
+ * - notification.ts: 알림 시스템 관련 타입
  */
 
 import type { BoardCategory } from '@/constants/categories'
 
-// === 핵심 데이터 타입 정의 ===
+// === 도메인별 타입 Re-exports ===
+export * from './settings'
+export * from './media'
+export * from './notification'
 
-// === 사용자 설정 시스템 타입 정의 ===
+// === 핵심 데이터 타입 정의 ===
 
 /**
  * 설정 카테고리
