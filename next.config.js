@@ -12,6 +12,12 @@ const nextConfig = {
     NEXT_PUBLIC_IMAGE_ALLOWED_QUALITIES: IMAGE_ALLOWED_QUALITIES.join(','),
   },
 
+  // 컴파일러 옵션 설정
+  compiler: {
+    // 프로덕션 빌드에서 console.log 제거 (error, warn은 유지)
+    removeConsole: process.env.NODE_ENV === 'production' ? { exclude: ['error', 'warn'] } : false,
+  },
+
   // 최적화된 transpile 패키지 목록 - 필수만 유지
   transpilePackages: [
     '@supabase/auth-helpers-nextjs',
