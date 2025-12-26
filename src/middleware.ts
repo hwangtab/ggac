@@ -2,508 +2,60 @@ import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-// 시스템 설정 캐시 (5분 캐시)
-let settingsCache: {
-  maintenanceMode: boolean
-  maintenanceMessage?: string
-  registrationEnabled: boolean
-  timestamp: number
-} | null = null
-
-const SETTINGS_CACHE_DURATION = 5 * 60 * 1000 // 5분
-
-async function getSystemSettings(supabase: any) {
-  // 캐시 확인
-  if (settingsCache && Date.now() - settingsCache.timestamp < SETTINGS_CACHE_DURATION) {
-    return settingsCache
-  }
-
-  try {
-    const { data, error } = await supabase.rpc('get_system_settings', { include_sensitive: false })
-
-    if (error) {
-      console.error('Failed to fetch system settings:', error)
-      return null
-    }
-
-    let maintenanceMode = false
-    let maintenanceMessage = '시스템 점검 중입니다. 잠시 후 다시 이용해 주세요.'
-    let registrationEnabled = true
-
-    // 설정 파싱
-    for (const setting of data || []) {
-      if (setting.category === 'site' && setting.setting_key === 'maintenance_mode') {
-        maintenanceMode = setting.setting_value?.enabled || false
-        maintenanceMessage = setting.setting_value?.message || maintenanceMessage
-      } else if (setting.category === 'site' && setting.setting_key === 'registration_enabled') {
-        registrationEnabled = setting.setting_value?.enabled !== false
-      }
-    }
-
-    // 캐시 업데이트
-    settingsCache = {
-      maintenanceMode,
-      maintenanceMessage,
-      registrationEnabled,
-      timestamp: Date.now(),
-    }
-
-    return settingsCache
-  } catch (error) {
-    console.error('System settings fetch error in middleware:', error)
-    return null
-  }
-}
+import { applyCSP } from './middleware/csp'
+import { getSystemSettings } from './middleware/settings'
+import { handleAuth } from './middleware/auth'
+import { getMaintenanceResponse } from './middleware/maintenance'
 
 export async function middleware(request: NextRequest) {
+  // 1. 기본 응답 객체 생성 및 Supabase 클라이언트 초기화
   const res = NextResponse.next()
   const supabase = createMiddlewareClient({ req: request, res })
 
-  // NOTE: 엄격 CSP는 기본 비활성화. 필요 시 NEXT_STRICT_CSP=true 로 활성화.
-  const enableStrictCsp = process.env.NEXT_STRICT_CSP === 'true'
-  if (enableStrictCsp) {
-    try {
-      const pathname = request.nextUrl.pathname
-      const isEditorPath =
-        pathname.startsWith('/board/write') || /\/board\/.+\/edit$/.test(pathname)
+  // 2. CSP 보안 헤더 적용
+  applyCSP(request, res)
 
-      if (!isEditorPath) {
-        const strictCsp = [
-          "default-src 'self'",
-          // 스크립트: inline/unsafe-eval 제거
-          "script-src 'self' https://www.youtube.com https://www.google-analytics.com",
-          // 스크립트 요소별 세밀한 제어 (MIME 타입 오류 방지)
-          "script-src-elem 'self' https://www.youtube.com https://www.google-analytics.com",
-          // 스타일은 기존과 동일(폰트/프레임워크 호환성)
-          "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-          "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com",
-          // 폰트/이미지/미디어/프레임/연결
-          "font-src 'self' https://fonts.gstatic.com",
-          "img-src 'self' https: blob: data: https://*.supabase.co",
-          "media-src 'self' https://www.youtube.com https://*.supabase.co",
-          "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com",
-          process.env.NODE_ENV === 'development'
-            ? "connect-src 'self' http://localhost:* https://api.supabase.io https://*.supabase.co ws://localhost:* wss://localhost:* wss://*.supabase.co"
-            : "connect-src 'self' https://api.supabase.io https://*.supabase.co wss://*.supabase.co",
-          "object-src 'none'",
-          "base-uri 'self'",
-          "form-action 'self'",
-          "frame-ancestors 'none'",
-          "worker-src 'self' blob:",
-          "manifest-src 'self'",
-          'report-uri /api/security/csp-report',
-          'report-to default',
-          ...(process.env.NODE_ENV === 'production' ? ['upgrade-insecure-requests'] : []),
-        ].join('; ')
-        res.headers.set('Content-Security-Policy', strictCsp)
-      }
-    } catch (e) {
-      // 실패 시 무시(기본 헤더는 next.config.js에 의해 적용됨)
-    }
-  }
+  // 3. API 및 정적 파일 경로 우회
+  const { pathname } = request.nextUrl
 
-  // 🚨 CRITICAL: API 라우트는 절대 미들웨어에서 처리하지 않음
-  // 동적 API 라우트 문제 해결을 위한 명시적 체크
-  if (request.nextUrl.pathname.startsWith('/api/')) {
+  // API 라우트는 절대 미들웨어에서 처리하지 않음 (동적 API 라우트 문제 해결)
+  if (pathname.startsWith('/api/')) {
     if (process.env.NODE_ENV === 'development') {
-      console.log('⚠️ [MIDDLEWARE] API route bypassed:', request.nextUrl.pathname)
+      console.log('⚠️ [MIDDLEWARE] API route bypassed:', pathname)
     }
     return NextResponse.next()
   }
 
-  // Skip middleware for static files to reduce API calls
-  if (request.nextUrl.pathname.startsWith('/_next') || request.nextUrl.pathname.includes('.')) {
+  // 정적 파일 및 Next.js 내부 경로 패스
+  if (pathname.startsWith('/_next') || pathname.includes('.')) {
     return res
   }
 
-  // Fast-path: skip system settings fetch for board pages to reduce first-load latency
-  if (request.nextUrl.pathname.startsWith('/board')) {
-    return res
-  }
+  // Fast-path: 게시판 페이지는 시스템 설정 조회 지연을 줄이기 위해 바로 통과할 수도 있으나
+  // 유지보수 모드 체크를 위해 필요함. 단, 성능을 위해 특정 경로는 제외 가능.
+  // 여기서는 로직 단순화를 위해 모든 페이지에서 설정 조회 (캐시됨)
 
-  // 시스템 설정 확인
+  // 4. 시스템 설정 조회
   const systemSettings = await getSystemSettings(supabase)
 
-  // 유지보수 모드 확인
+  // 5. 인증 및 권한 처리
+  const authResult = await handleAuth(request, res, supabase, systemSettings)
+
+  if (!authResult.shouldContinue && authResult.response) {
+    return authResult.response
+  }
+
+  // 6. 유지보수 모드 최종 확인
+  // authResult.shouldContinue가 true여도 유지보수 모드이고 관리자가 아니면 차단
   if (systemSettings?.maintenanceMode) {
-    // 관리자는 유지보수 모드에서도 접근 가능
-    let isAdmin = false
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      if (session?.user) {
-        const { data: profile } = await supabase
-          .from('member_profiles')
-          .select('is_admin')
-          .eq('id', session.user.id)
-          .single()
-        isAdmin = profile?.is_admin || false
-      }
-    } catch (error) {
-      console.error('Admin check error:', error)
-    }
+    const isAdmin = authResult.profile?.is_admin === true
 
     if (!isAdmin) {
-      // 유지보수 페이지 HTML 반환
-      const maintenanceHtml = `
-        <!DOCTYPE html>
-        <html lang="ko">
-        <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>시스템 점검 중 - 경기아트콜렉티브</title>
-          <style>
-            body {
-              font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
-              margin: 0;
-              padding: 0;
-              display: flex;
-              justify-content: center;
-              align-items: center;
-              min-height: 100vh;
-              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-              color: #333;
-            }
-            .container {
-              text-align: center;
-              background: white;
-              padding: 3rem;
-              border-radius: 20px;
-              box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-              max-width: 500px;
-              margin: 1rem;
-            }
-            h1 {
-              font-size: 2rem;
-              margin-bottom: 1rem;
-              color: #667eea;
-            }
-            p {
-              font-size: 1.1rem;
-              line-height: 1.6;
-              color: #666;
-              margin-bottom: 2rem;
-            }
-            .icon {
-              font-size: 4rem;
-              margin-bottom: 1rem;
-            }
-            .retry-btn {
-              background: #667eea;
-              color: white;
-              border: none;
-              padding: 1rem 2rem;
-              border-radius: 10px;
-              font-size: 1rem;
-              cursor: pointer;
-              transition: background 0.3s;
-            }
-            .retry-btn:hover {
-              background: #5a67d8;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="icon">🛠️</div>
-            <h1>시스템 점검 중</h1>
-            <p>${systemSettings.maintenanceMessage}</p>
-            <button class="retry-btn" onclick="window.location.reload()">새로고침</button>
-          </div>
-        </body>
-        </html>
-      `
-
-      return new Response(maintenanceHtml, {
-        status: 503,
-        headers: {
-          'Content-Type': 'text/html; charset=utf-8',
-          'Retry-After': '3600', // 1시간 후 재시도 권장
-        },
-      })
+      return getMaintenanceResponse(systemSettings.maintenanceMessage)
     }
   }
 
-  let user = null
-  let authError = false
-
-  // 모바일 디바이스 감지
-  const userAgent = request.headers.get('user-agent')?.toLowerCase() || ''
-  const isMobile =
-    /android|iphone|ipod|ipad|blackberry|windows phone|mobile/.test(userAgent) ||
-    request.headers.get('sec-ch-ua-mobile') === '?1'
-
-  // 크리티컬 경로 판단 (게시판 관련 경로)
-  const isCriticalPath =
-    request.nextUrl.pathname.startsWith('/board') ||
-    request.nextUrl.pathname.startsWith('/admin') ||
-    request.nextUrl.pathname.startsWith('/mypage')
-
-  try {
-    // 모바일 환경에서는 더 관대한 세션 확인
-    const {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession()
-
-    if (sessionError) {
-      if (process.env.NODE_ENV === 'development') {
-        console.log(
-          `❌ [MIDDLEWARE DEBUG] Session error (Mobile: ${isMobile}):`,
-          sessionError.message
-        )
-      }
-      authError = true
-    } else {
-      user = session?.user || null
-      if (process.env.NODE_ENV === 'development' && isCriticalPath) {
-        console.log(
-          `📋 [MIDDLEWARE DEBUG] Session state for ${request.nextUrl.pathname} (Mobile: ${isMobile}):`,
-          user ? 'Authenticated' : 'Not authenticated'
-        )
-      }
-    }
-  } catch (error) {
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`💥 [MIDDLEWARE DEBUG] Auth error in middleware (Mobile: ${isMobile}):`, error)
-    }
-    authError = true
-  }
-
-  // 인증 에러 발생 시 공개 페이지는 허용하고 보호된 페이지만 리다이렉트
-  if (authError) {
-    const { pathname } = request.nextUrl
-    // auth 조회가 실패해도 공개 경로는 통과
-    const isBoardWrite = pathname.startsWith('/board/write')
-    const isBoardEdit = /\/board\/.+\/edit$/.test(pathname)
-    const isProtectedPage =
-      pathname.startsWith('/admin') || pathname.startsWith('/mypage') || isBoardWrite || isBoardEdit
-
-    if (isProtectedPage) {
-      return NextResponse.redirect(new URL('/login', request.nextUrl.origin))
-    }
-    // 공개 페이지는 그대로 진행
-    return res
-  }
-
-  const { pathname } = request.nextUrl
-
-  // 정의된 경로들
-  const AUTH_PAGES = ['/login', '/signup']
-  const REGISTRATION_PAGES = ['/register/pending', '/register/rejected']
-
-  // 게시판 공개 읽기 허용 정책
-  // - 읽기(목록/상세)는 공개
-  // - 쓰기/수정은 보호
-  const isBoardWrite = pathname.startsWith('/board/write')
-  const isBoardEdit = /\/board\/.+\/edit$/.test(pathname)
-  const isBoardProtected = isBoardWrite || isBoardEdit
-
-  // 보호 페이지 판별: 관리자/마이페이지/게시판 쓰기·수정
-  const isProtectedPage =
-    pathname.startsWith('/admin') || pathname.startsWith('/mypage') || isBoardProtected
-
-  const isAuthPage = AUTH_PAGES.includes(pathname)
-  const isRegistrationPage = REGISTRATION_PAGES.includes(pathname)
-
-  // 1. 인증되지 않은 사용자 처리
-  if (!user) {
-    // 보호된 페이지에 접근 시 로그인 페이지로 리다이렉트
-    if (isProtectedPage) {
-      return NextResponse.redirect(new URL('/login', request.nextUrl.origin))
-    }
-    // 인증 페이지는 그대로 진행
-    return res
-  }
-
-  // 2. 인증된 사용자 처리
-  // member_profiles 정보 가져오기 (단순화된 조회)
-  let profile = null
-  let profileError = null
-
-  try {
-    const { data, error } = await supabase
-      .from('member_profiles')
-      .select('registration_status, is_active, is_admin, display_name')
-      .eq('id', user.id)
-      .single()
-
-    if (data && !error) {
-      profile = data
-      if (process.env.NODE_ENV === 'development' && isCriticalPath) {
-        console.log(`✅ [MIDDLEWARE DEBUG] Profile found (Mobile: ${isMobile}):`, {
-          status: profile.registration_status,
-          active: profile.is_active,
-        })
-      }
-    } else {
-      profileError = error
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`❌ [MIDDLEWARE DEBUG] Profile error (Mobile: ${isMobile}):`, error?.message)
-      }
-    }
-  } catch (error) {
-    if (process.env.NODE_ENV === 'development') {
-      console.log(
-        `💥 [MIDDLEWARE DEBUG] Database error in middleware (Mobile: ${isMobile}):`,
-        error
-      )
-    }
-    profileError = error
-
-    // 모바일에서는 네트워크 오류 시 더 관대하게 처리
-    if (isMobile && !isProtectedPage) {
-      if (process.env.NODE_ENV === 'development') {
-        console.log(
-          '📱 [MIDDLEWARE DEBUG] Mobile device - allowing public page access despite DB error'
-        )
-      }
-      return res
-    }
-
-    // 데이터베이스 에러 시 기본적으로 공개 페이지는 허용
-    if (!isProtectedPage) {
-      return res
-    }
-    // 보호된 페이지는 로그인으로 리다이렉트
-    return NextResponse.redirect(new URL('/login', request.nextUrl.origin))
-  }
-
-  // 프로필이 없거나 에러 발생 시 (조합원 가입 플로우 문제일 수 있음)
-  if (!profile || profileError) {
-    console.log('Profile not found or error for user:', user.id, profileError?.message)
-
-    // 인증 페이지나 등록 페이지는 그대로 진행
-    if (isAuthPage || isRegistrationPage) {
-      return res
-    }
-
-    // 보호된 페이지나 기타 페이지에서는 승인 대기 페이지로 리다이렉트
-    // (프로필이 없으면 트리거 실패이므로 대기 상태로 간주)
-    if (isProtectedPage) {
-      return NextResponse.redirect(new URL('/register/pending', request.nextUrl.origin))
-    }
-
-    // 그 외의 페이지는 그대로 진행 (공개 페이지들)
-    return res
-  }
-
-  // 사용자의 현재 상태
-  const userStatus = profile.registration_status
-  const isActive = profile.is_active
-  const isAdmin = profile.is_admin
-
-  // 2.1. 인증 페이지에 접근 시 리다이렉트
-  if (isAuthPage) {
-    // 회원 가입 페이지에서 등록이 비활성화되어 있으면 차단
-    if (pathname === '/signup' && systemSettings && !systemSettings.registrationEnabled) {
-      const registrationDisabledHtml = `
-        <!DOCTYPE html>
-        <html lang="ko">
-        <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>회원 가입 일시 중단 - 경기아트콜렉티브</title>
-          <style>
-            body {
-              font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-              margin: 0; padding: 0; display: flex; justify-content: center; align-items: center;
-              min-height: 100vh; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: #333;
-            }
-            .container { text-align: center; background: white; padding: 3rem; border-radius: 20px;
-              box-shadow: 0 20px 40px rgba(0,0,0,0.1); max-width: 500px; margin: 1rem; }
-            h1 { font-size: 2rem; margin-bottom: 1rem; color: #f5576c; }
-            p { font-size: 1.1rem; line-height: 1.6; color: #666; margin-bottom: 2rem; }
-            .icon { font-size: 4rem; margin-bottom: 1rem; }
-            .home-btn { background: #f5576c; color: white; border: none; padding: 1rem 2rem;
-              border-radius: 10px; font-size: 1rem; cursor: pointer; transition: background 0.3s;
-              text-decoration: none; display: inline-block; }
-            .home-btn:hover { background: #e14856; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="icon">🚫</div>
-            <h1>회원 가입 일시 중단</h1>
-            <p>현재 회원 가입이 일시 중단되었습니다.<br>양해 부탁드립니다.</p>
-            <a href="/" class="home-btn">홈으로 돌아가기</a>
-          </div>
-        </body>
-        </html>
-      `
-
-      return new Response(registrationDisabledHtml, {
-        status: 403,
-        headers: { 'Content-Type': 'text/html; charset=utf-8' },
-      })
-    }
-
-    // 로그인 페이지는 인증된 사용자도 접근 가능하도록 허용 (로그인 페이지에서 자체 처리)
-    if (pathname === '/login') {
-      return res
-    }
-
-    // 회원가입 페이지에 대한 기존 리다이렉트 로직
-    if (pathname === '/signup') {
-      if (userStatus === 'approved' && isActive) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log(
-            `🎯 [MIDDLEWARE DEBUG] Redirecting approved user to board from signup (Mobile: ${isMobile})`
-          )
-        }
-        return NextResponse.redirect(new URL('/board', request.nextUrl.origin))
-      } else if (userStatus === 'pending') {
-        if (process.env.NODE_ENV === 'development') {
-          console.log(
-            `⏳ [MIDDLEWARE DEBUG] Redirecting pending user from signup (Mobile: ${isMobile})`
-          )
-        }
-        return NextResponse.redirect(new URL('/register/pending', request.nextUrl.origin))
-      } else if (userStatus === 'rejected') {
-        if (process.env.NODE_ENV === 'development') {
-          console.log(
-            `❌ [MIDDLEWARE DEBUG] Redirecting rejected user from signup (Mobile: ${isMobile})`
-          )
-        }
-        return NextResponse.redirect(new URL('/register/rejected', request.nextUrl.origin))
-      }
-    }
-
-    // 그 외의 경우는 현재 페이지 유지
-    return res
-  }
-
-  // 2.2. 등록 관련 페이지에 접근 시 리다이렉트
-  if (isRegistrationPage) {
-    const expectedPath = `/register/${userStatus}`
-    if (pathname !== expectedPath) {
-      // 현재 경로가 사용자의 상태와 다르면 올바른 상태 페이지로 리다이렉트
-      return NextResponse.redirect(new URL(expectedPath, request.nextUrl.origin))
-    }
-    // 상태가 approved이고 활성화된 경우, 등록 페이지에 있으면 게시판으로
-    if (userStatus === 'approved' && isActive) {
-      return NextResponse.redirect(new URL('/board', request.nextUrl.origin))
-    }
-    // 현재 경로가 상태와 일치하면 그대로 진행
-    return res
-  }
-
-  // 2.3. 보호된 페이지에 접근 시 권한 확인
-  if (isProtectedPage) {
-    if (userStatus !== 'approved' || !isActive) {
-      // 승인되지 않거나 비활성화된 사용자는 게시판/관리자 페이지 접근 불가
-      return NextResponse.redirect(new URL('/register/pending', request.nextUrl.origin))
-    }
-    // 관리자 페이지는 is_admin도 확인
-    if (pathname.startsWith('/admin') && !isAdmin) {
-      return NextResponse.redirect(new URL('/board', request.nextUrl.origin)) // 관리자 아니면 게시판으로
-    }
-    // 모든 조건 통과, 페이지 진행
-    return res
-  }
-
-  // 그 외의 모든 페이지 요청은 그대로 진행
+  // 7. 최종 응답 반환 (쿠키 등이 설정된 res 객체)
   return res
 }
 
