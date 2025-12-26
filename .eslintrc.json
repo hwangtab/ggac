@@ -13,12 +13,7 @@
       "jsx": true
     }
   },
-  "plugins": [
-    "@typescript-eslint",
-    "react",
-    "jsx-a11y",
-    "import"
-  ],
+  "plugins": ["@typescript-eslint", "react", "jsx-a11y", "import"],
   "rules": {
     // React 규칙
     "react/no-unescaped-entities": "off",
@@ -32,16 +27,13 @@
     "react/no-direct-mutation-state": "error",
     "react/no-unused-state": "warn",
     "react/no-unknown-property": "off",
-    
     // Next.js 규칙
     "@next/next/no-img-element": "warn",
     "@next/next/no-html-link-for-pages": "error",
     "@next/next/no-sync-scripts": "error",
-    
     // React Hooks 규칙
     "react-hooks/rules-of-hooks": "error",
     "react-hooks/exhaustive-deps": "off",
-    
     // TypeScript 규칙
     "@typescript-eslint/no-unused-vars": "off",
     "@typescript-eslint/no-explicit-any": "off",
@@ -51,13 +43,11 @@
     "@typescript-eslint/no-require-imports": "off",
     "@typescript-eslint/no-unused-expressions": "off",
     "@typescript-eslint/no-unnecessary-type-constraint": "off",
-    
     // Import 규칙
     "import/order": "off",
     "import/no-unresolved": "off",
     "import/no-cycle": "off",
     "import/no-unused-modules": "off",
-    
     // 접근성 규칙
     "jsx-a11y/alt-text": "warn",
     "jsx-a11y/anchor-is-valid": "warn",
@@ -68,7 +58,6 @@
     "jsx-a11y/heading-has-content": "off",
     "jsx-a11y/no-autofocus": "off",
     "jsx-a11y/no-noninteractive-element-interactions": "off",
-    
     // 일반 JavaScript 규칙
     "no-console": "off",
     "no-debugger": "error",
@@ -80,7 +69,15 @@
     "no-multiple-empty-lines": "off",
     "no-trailing-spaces": "off",
     "eol-last": "off",
-    
+    // 코드 품질 규칙
+    "max-lines": [
+      "warn",
+      {
+        "max": 600,
+        "skipBlankLines": true,
+        "skipComments": true
+      }
+    ],
     // 보안 규칙
     "no-eval": "error",
     "no-implied-eval": "error",
@@ -102,11 +99,5 @@
     "es2021": true,
     "node": true
   },
-  "ignorePatterns": [
-    ".next",
-    "node_modules",
-    "dist",
-    "build",
-    "*.d.ts"
-  ]
+  "ignorePatterns": [".next", "node_modules", "dist", "build", "*.d.ts"]
 }
