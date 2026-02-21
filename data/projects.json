@@ -447,5 +447,85 @@
     "artistIds": [],
     "ticketing": null,
     "relatedArticles": []
+  },
+  {
+    "id": "project-018",
+    "slug": "health-concert-2026",
+    "title": "건강열전 2026",
+    "category": "공연·전시",
+    "publishedDate": "2026-03-01",
+    "coverImage": "/images/projects/health-2026.jpeg",
+    "description": "붉은 말의 해 2026년, 뮤지션들과 관객들의 건강을 기원하는 공연입니다.\n\n### 공연 정보\n\n- **일시**: 2026년 3월 1일 (일) 오후 6시 시작\n- **장소**: 롱플레이어 (경기도 수원시 팔달구 정조로886번길 12)\n- **티켓**: 예매 15,000원 / 현매 20,000원\n- **예매 기간**: 2026년 1월 26일 ~ 2026년 2월 21일\n\n### 초대 뮤지션\n\n**희우**  \n국악과 피아노를 활용해 동서양의 조화를 통해 자신의 이야기를 풀어내는 싱어송라이터입니다.\n\n**유동혁**  \n오랫동안 펑크 음악을 해오다 펑크보다 더 큰 포크를 만나, 포크의 매력에 빠져 결국 포크로 펑크를 하게 된 싱어송라이터입니다.\n\n**야마가타 트윅스터**  \n인디음악에 관심이 있다면 반드시 들어봐야 할 음악가입니다. 멜랑꼴리의 진수성찬 같은 정서와 독특한 리듬감이 몸을 멈출 수 없게 만들고, 사회성이 짙은 가사는 계속 철학적인 질문을 던집니다.\n\n### 오시는 길\n\n수원역 7번 출구로 나와 AK백화점 근처 버스 정류장에서 13번 버스를 타고 **장안문·수원전통문화관** 정류장에서 하차해 주세요. 버스 진행 방향으로 10~15보 정도 이동하면 오른쪽에 골목이 보이고, 그 골목으로 들어오면 롱플레이어가 있습니다.",
+    "gallery": null,
+    "videoUrl": null,
+    "artistIds": [
+      "artist-012",
+      "artist-005"
+    ],
+    "ticketing": [
+      {
+        "platform": "네이버 예약",
+        "url": "https://booking.naver.com/booking/5/bizes/1442738/items/7388007",
+        "available": true,
+        "price": "15000",
+        "startDate": "2026-01-26",
+        "endDate": "2026-02-21"
+      }
+    ],
+    "relatedArticles": []
+  },
+  {
+    "id": "project-019",
+    "slug": "satanic-ritual-perversions-vol-iii-mea-culpa",
+    "title": "SR&P Vol. III: MEA CULPA",
+    "category": "공연·전시",
+    "publishedDate": "2026-02-28",
+    "coverImage": "/images/projects/srp-vol3-mea-culpa.png",
+    "description": "### SR&P Vol. III: MEA CULPA\n\nSATANIC RITUAL & PERVERSION VOL. III\n\n붉은 노이즈가 안구를 짓이긴다.\n찢겨진 고해성사, 파열되는 금기.\n죽어버린 신의 자리에 박힌 녹슨 단검.\n비명은 선율이 되고 상처는 그림이 된다.\n타락한 육체의 성찬에 초대하노니.\n\n내 탓이요, 내 탓이요, 나의 가장 큰 탓이로소이다.\n\n심연의 진동에 몸을 맡겨라.\n구원 따위는 이 소음 속에 박멸되었으니.\n\n### LINE UP\n\n- Forbidden403Error (Matrix)\n- Dagger Wound (USA)\n- Lucy Valentine\n- K-Supermotel\n- Sabbaha\n\n### INFO\n\n- **장소**: 무대륙 (서울특별시 마포구 토정로5길 12 지하1층)\n- **일시**: 2026. 02. 28. (토)\n- **오픈/시작**: Open 18:00 / Start 18:30\n- **러닝타임**: 4시간 30분\n- **입장가**: 예매 20,000원 / 현매 30,000원\n- **네이버 예약 노출가**: 15,000 ~ 20,000원\n- **관람등급**: 만 18세 이상 관람가 (생일이 지난 2009년 이전 출생자)\n\n### 관람 시 유의사항\n\n1. 본 공연은 만 18세 이상 관람가입니다.\n2. 본 공연은 고음량 사운드가 포함되어 있어 관람에 불편을 느끼실 수 있습니다. 청력 보호를 위해 공연장 입구에 1회용 귀마개가 비치되어 있으니 필요하신 분은 자유롭게 이용해 주세요.\n3. 본 공연에는 라이브 퍼포먼스의 일부로 과격한 신체 표현, S&M적 연출, 출혈 장면이 포함되어 있습니다. 시각적 자극에 민감하신 분들께서는 관람에 유의해 주세요.\n4. 공연의 원활한 진행과 관객 안전을 위해, 사전 협의되지 않은 돌발 행동 및 타인에게 불쾌감을 줄 수 있는 행위는 삼가 주세요.",
+    "gallery": null,
+    "videoUrl": null,
+    "artistIds": [
+      "artist-001"
+    ],
+    "ticketing": [
+      {
+        "platform": "네이버 예약",
+        "url": "https://booking.naver.com/booking/5/bizes/1442738/items/7376040?startDateTime=2026-02-28T00%3A00%3A00%2B09%3A00",
+        "available": true,
+        "startDate": "2026-02-21",
+        "endDate": "2026-02-28"
+      }
+    ],
+    "relatedArticles": [
+      {
+        "title": "⛧ SATANIC RITUAL & PERVERSIONS VOL. II ⛧",
+        "url": "/archive/satanic-ritual-perversions-vol-ii"
+      }
+    ]
+  },
+  {
+    "id": "project-020",
+    "slug": "metal-syndicate-network-iii",
+    "title": "철조망 III: METAL SYNDICATE NETWORK III",
+    "category": "공연·전시",
+    "publishedDate": "2026-01-11",
+    "coverImage": "/images/projects/metal-syndicate-network-3.webp",
+    "description": "로컬의 거친 에너지가 거미줄처럼 얽혀 거대한 물결을 만듭니다. 세 번째를 맞이한 철조망은 경기, 서울의 메탈 음악을 결속시키는 단단한 네트워크가 되고자 합니다.\n\n메탈을 몰라도 상관없습니다. 지하로 내려오는 순간 온몸을 감싸는 진동과 낯선 해방감이 당신을 압도할 테니까요. 장르의 경계를 허물고 모두가 하나 되어 날뛰는 이 짜릿한 연대에 합류하세요. 지금껏 경험하지 못한 가장 뜨거운 일요일 밤이 기다리고 있습니다.\n\n### 공연 정보\n\n- **공연명**: 철조망 III METAL SYNDICATE NETWORK III\n- **일시**: 2026년 1월 11일 (일) 입장 18:00 / 시작 18:30\n- **장소**: DOT (수원시 팔달구 화서문로 34-1, B1F)\n- **티켓**: 예매 20,000원 / 현매 30,000원 / 경기아트콜렉티브 조합원 5,000원 할인\n- **기획**: 야호야호단\n- **지원**: 경기아트콜렉티브협동조합\n\n### 라인업\n\n- Sabbaha\n- Nahua\n- Nu.M.D.\n- Deadwire\n\n### 아카이브 안내\n\n본 페이지는 2026년 1월 11일에 종료된 공연의 아카이브 기록입니다.",
+    "gallery": null,
+    "videoUrl": null,
+    "artistIds": [
+      "artist-001"
+    ],
+    "ticketing": null,
+    "relatedArticles": [
+      {
+        "title": "철조망: METAL SYNDICATE NETWORK",
+        "url": "/archive/metal-syndicate-network"
+      },
+      {
+        "title": "철조망 2회: METAL SYNDICATE NETWORK 2TERNAL",
+        "url": "/archive/metal-syndicate-network-2ternal"
+      }
+    ]
   }
 ]
