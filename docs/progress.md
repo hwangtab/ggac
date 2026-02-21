@@ -2,6 +2,12 @@
 
 ## Recent Changes
 
+- Updated `철조망 III: METAL SYNDICATE NETWORK III` cover image to the higher
+  resolution poster file
+  (`/images/projects/PF_PF282396_251230_130025.webp`).
+- Removed the mistaken internal archive link from
+  `SR&P Vol. III: MEA CULPA` (`project-019`) `relatedArticles` so the project
+  no longer shows a misleading "related article" section.
 - Registered the archived project `철조망 III: METAL SYNDICATE NETWORK III`
   in `data/projects.json` with no ticketing link, lineup/details for the
   2026-01-11 finished show, and a poster asset
