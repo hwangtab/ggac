@@ -5,6 +5,7 @@ import {
   getProjectSlugs,
   getProjectBySlug,
   getProjectArtists,
+  getProjectsSorted,
   type Project as ProjectType,
 } from '@/lib/data'
 import { fetchLinkPreview } from '@/utils/linkPreview'
@@ -23,6 +24,82 @@ interface ProjectPageProps {
   params: Promise<{
     slug: string
   }>
+}
+
+type RelatedProjectItem = Pick<
+  ProjectType,
+  'slug' | 'title' | 'coverImage' | 'publishedDate' | 'category'
+>
+
+const RELATED_SERIES_RULES: Array<{ key: string; patterns: RegExp[] }> = [
+  {
+    key: 'metal-syndicate-network',
+    patterns: [/metal-syndicate-network/i, /철조망/i, /METAL\s+SYNDICATE\s+NETWORK/i],
+  },
+  {
+    key: 'satanic-ritual-perversions',
+    patterns: [/satanic-ritual-perversions/i, /SR&P/i, /SATANIC\s+RITUAL\s*&\s*PERVERSIONS/i],
+  },
+]
+
+function extractSeriesKeys(project: ProjectType): string[] {
+  const searchableText = `${project.slug} ${project.title}`
+  return RELATED_SERIES_RULES.filter(rule =>
+    rule.patterns.some(pattern => pattern.test(searchableText))
+  ).map(rule => rule.key)
+}
+
+function extractInternalArchiveSlugs(project: ProjectType): string[] {
+  if (!project.relatedArticles) return []
+
+  return project.relatedArticles
+    .map(article => {
+      if (!article.url.startsWith('/archive/')) return null
+      const slug = article.url.replace('/archive/', '').split(/[?#]/)[0]?.trim()
+      return slug || null
+    })
+    .filter((slug): slug is string => Boolean(slug))
+}
+
+function buildRelatedProjects(currentProject: ProjectType, allProjects: ProjectType[]): RelatedProjectItem[] {
+  const currentSeriesKeys = new Set(extractSeriesKeys(currentProject))
+  const internalSlugs = new Set(extractInternalArchiveSlugs(currentProject))
+  const relatedMap = new Map<string, RelatedProjectItem>()
+
+  if (currentSeriesKeys.size === 0 && internalSlugs.size === 0) return []
+
+  allProjects
+    .filter(project => project.slug !== currentProject.slug)
+    .forEach(project => {
+      if (internalSlugs.has(project.slug)) {
+        relatedMap.set(project.slug, {
+          slug: project.slug,
+          title: project.title,
+          coverImage: project.coverImage,
+          publishedDate: project.publishedDate,
+          category: project.category,
+        })
+        return
+      }
+
+      const matchedSeries = extractSeriesKeys(project).some(seriesKey =>
+        currentSeriesKeys.has(seriesKey)
+      )
+
+      if (matchedSeries) {
+        relatedMap.set(project.slug, {
+          slug: project.slug,
+          title: project.title,
+          coverImage: project.coverImage,
+          publishedDate: project.publishedDate,
+          category: project.category,
+        })
+      }
+    })
+
+  return Array.from(relatedMap.values())
+    .sort((a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime())
+    .slice(0, 6)
 }
 
 // ISR: 참여 아티스트명 등 외부 데이터 변경을 주기적으로 반영
@@ -226,9 +303,17 @@ const ProjectDetailPage = async ({ params }: ProjectPageProps) => {
   // 참여 아티스트 정보 가져오기
   const participatingArtists = await getProjectArtists(project.artistIds)
 
-  const articlesWithPreview = project.relatedArticles
+  const allProjects = await getProjectsSorted()
+  const relatedProjects = buildRelatedProjects(project, allProjects)
+
+  // "관련 기사"는 외부 링크만 표시하고, 내부 /archive 링크는 "연관 게시물"로 분리
+  const externalRelatedArticles = (project.relatedArticles || []).filter(
+    article => !article.url.startsWith('/archive/')
+  )
+
+  const articlesWithPreview = externalRelatedArticles
     ? await Promise.all(
-        project.relatedArticles.map(async article => {
+        externalRelatedArticles.map(async article => {
           try {
             const preview = await fetchLinkPreview(article.url)
             return { ...article, preview }
@@ -279,6 +364,7 @@ const ProjectDetailPage = async ({ params }: ProjectPageProps) => {
         <ProjectDetailContent
           project={{ ...project, relatedArticles: articlesWithPreview }}
           participatingArtists={participatingArtists}
+          relatedProjects={relatedProjects}
         />
       </ErrorBoundary>
     </>

@@ -2,6 +2,10 @@
 
 ## Recent Changes
 
+- Added a unified `연관 게시물` section for project detail pages by separating
+  internal `/archive/*` links from `relatedArticles` and auto-linking series
+  projects (currently including 철조망/METAL SYNDICATE NETWORK and SR&P
+  series).
 - Updated `철조망 III: METAL SYNDICATE NETWORK III` cover image to the higher
   resolution poster file
   (`/images/projects/PF_PF282396_251230_130025.webp`).

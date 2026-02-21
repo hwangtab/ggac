@@ -23,11 +23,15 @@ const Lightbox = dynamic(() => import('@/components/Lightbox'), {
 interface ProjectDetailContentProps {
   project: Project
   participatingArtists: Artist[]
+  relatedProjects: Array<
+    Pick<Project, 'slug' | 'title' | 'coverImage' | 'publishedDate' | 'category'>
+  >
 }
 
 export default function ProjectDetailContent({
   project,
   participatingArtists,
+  relatedProjects,
 }: ProjectDetailContentProps) {
   // 라이트박스 상태 관리
   const [lightboxOpen, setLightboxOpen] = useState(false)
@@ -225,6 +229,44 @@ export default function ProjectDetailContent({
                 <div className="grid md:grid-cols-2 gap-6">
                   {project.ticketing.map((ticket, index) => (
                     <TicketingCard key={index} ticketing={ticket as TicketingInfo} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Related Projects */}
+            {relatedProjects.length > 0 && (
+              <div className="mt-12">
+                <h3 className="tw-heading-tertiary mb-6">연관 게시물</h3>
+                <div className="grid md:grid-cols-2 gap-6">
+                  {relatedProjects.map(relatedProject => (
+                    <Link
+                      key={relatedProject.slug}
+                      href={`/archive/${relatedProject.slug}`}
+                      className="group block border border-gray-200 rounded-2xl overflow-hidden bg-white hover:shadow-lg transition-shadow duration-200"
+                    >
+                      <div className="aspect-video overflow-hidden bg-gray-100">
+                        <OptimizedImage
+                          src={relatedProject.coverImage}
+                          alt={relatedProject.title}
+                          width={640}
+                          height={360}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          fallbackText={relatedProject.title.slice(0, 3)}
+                        />
+                      </div>
+                      <div className="p-4">
+                        <div className="text-sm text-primary-600 font-medium mb-2">
+                          {relatedProject.category}
+                        </div>
+                        <h4 className="font-semibold text-gray-900 line-clamp-2 mb-2">
+                          {relatedProject.title}
+                        </h4>
+                        <p className="text-sm text-gray-500">
+                          {new Date(relatedProject.publishedDate).toLocaleDateString('ko-KR')}
+                        </p>
+                      </div>
+                    </Link>
                   ))}
                 </div>
               </div>
