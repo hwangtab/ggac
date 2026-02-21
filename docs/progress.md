@@ -2,6 +2,9 @@
 
 ## Recent Changes
 
+- Fixed `건강열전 2026` poster loading by restoring a tracked cover asset path
+  (`/images/projects/health-2026.jpeg`) and regenerating the file from the
+  latest poster source to prevent `/_next/image` 400 responses in deployments.
 - Added a unified `연관 게시물` section for project detail pages by separating
   internal `/archive/*` links from `relatedArticles` and auto-linking series
   projects (currently including 철조망/METAL SYNDICATE NETWORK and SR&P
