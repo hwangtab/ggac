@@ -167,11 +167,9 @@ const ConnectPage = async () => {
 
               <div className="grid md:grid-cols-2 gap-8 mb-12">
                 {/* 자격 */}
-                <a
-                  href="https://docs.google.com/forms/d/e/1FAIpQLScicp159Y6DgYJv2N-x4DGigsLWiOCLf6jl-meRSfXfuMahAQ/viewform?usp=header"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="bg-white rounded-2xl p-8 shadow-lg h-full hover:shadow-xl transform hover:scale-105 transition-all duration-300 group cursor-pointer"
+                <Link
+                  href="/signup"
+                  className="block bg-white rounded-2xl p-8 shadow-lg h-full hover:shadow-xl transform hover:scale-105 transition-all duration-300 group cursor-pointer"
                 >
                   <h3 className="text-3xl font-serif font-semibold mb-6 text-center text-primary-600 group-hover:text-primary-700 transition-colors duration-300">
                     자격
@@ -210,14 +208,12 @@ const ConnectPage = async () => {
                       예술가와 기획자, 그리고 예술을 사랑하는 모든 분들을 환영합니다.
                     </p>
                   </div>
-                </a>
+                </Link>
 
                 {/* 약속 */}
-                <a
-                  href="https://docs.google.com/forms/d/e/1FAIpQLScicp159Y6DgYJv2N-x4DGigsLWiOCLf6jl-meRSfXfuMahAQ/viewform?usp=header"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="bg-white rounded-2xl p-8 shadow-lg h-full hover:shadow-xl transform hover:scale-105 transition-all duration-300 group cursor-pointer"
+                <Link
+                  href="/signup"
+                  className="block bg-white rounded-2xl p-8 shadow-lg h-full hover:shadow-xl transform hover:scale-105 transition-all duration-300 group cursor-pointer"
                 >
                   <h3 className="text-3xl font-serif font-semibold mb-6 text-center text-accent-600 group-hover:text-accent-700 transition-colors duration-300">
                     약속
@@ -250,18 +246,16 @@ const ConnectPage = async () => {
                       과정을 통해 이루어집니다.
                     </p>
                   </div>
-                </a>
+                </Link>
               </div>
 
               <div className="text-center">
-                <a
-                  href="https://docs.google.com/forms/d/e/1FAIpQLScicp159Y6DgYJv2N-x4DGigsLWiOCLf6jl-meRSfXfuMahAQ/viewform?usp=header"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="tw-btn-primary text-lg px-8 py-4 sm:px-8 sm:py-3 rounded-lg w-full sm:w-auto text-center min-h-[44px] hover:-translate-y-0.5 hover:shadow-lg transition-all duration-300"
+                <Link
+                  href="/signup"
+                  className="tw-btn-primary text-lg px-8 py-4 sm:px-8 sm:py-3 rounded-lg w-full sm:w-auto inline-block text-center min-h-[44px] hover:-translate-y-0.5 hover:shadow-lg transition-all duration-300"
                 >
                   동료 되기 (조합원 가입하기)
-                </a>
+                </Link>
               </div>
             </div>
           </div>

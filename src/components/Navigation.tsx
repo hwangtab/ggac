@@ -44,7 +44,7 @@ const Navigation = () => {
     } catch {}
 
     const handleScroll = () => {
-      setIsAtTop(window.scrollY <= 20)
+      setIsAtTop(window.scrollY <= 50)
     }
     // 초기 상태 동기화 (hydrate 직후 상단이면 투명)
     handleScroll()
