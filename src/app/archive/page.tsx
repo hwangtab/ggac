@@ -1,6 +1,13 @@
 import ArchiveContent from './ArchiveContent'
 import { getProjectsSorted, getArtists } from '@/lib/data'
 import { ARCHIVE_CATEGORIES } from '@/constants/categories'
+import {
+  generateItemListStructuredData,
+  generateBreadcrumbStructuredData,
+  combineStructuredData,
+  structuredDataToScript,
+} from '@/utils/structuredData'
+import { normalizeSingleParam } from '@/utils/searchParams'
 import type { ArchiveCategory } from '@/constants/categories'
 import type { Metadata } from 'next'
 import type { Project } from '@/types'
@@ -78,11 +85,6 @@ export const metadata: Metadata = {
   },
 }
 
-const getSingleParam = (value?: string | string[] | null): string | undefined => {
-  if (!value) return undefined
-  return Array.isArray(value) ? value[0] : value
-}
-
 const filterProjectsByCategory = (projects: Project[], category: ArchiveCategory) => {
   if (category === 'All') {
     return projects
@@ -95,7 +97,7 @@ const ArchivePage = async ({ searchParams = {} }: ArchivePageProps) => {
   const projects = await getProjectsSorted()
   const artists = await getArtists()
 
-  const rawCategory = getSingleParam(searchParams.category)
+  const rawCategory = normalizeSingleParam(searchParams.category)
   const selectedCategory = ARCHIVE_CATEGORIES.includes(rawCategory as ArchiveCategory)
     ? (rawCategory as ArchiveCategory)
     : 'All'
@@ -104,7 +106,7 @@ const ArchivePage = async ({ searchParams = {} }: ArchivePageProps) => {
   const totalCount = filteredProjects.length
   const totalPages = Math.max(1, Math.ceil(totalCount / PROJECTS_PER_PAGE))
 
-  const requestedPage = Number(getSingleParam(searchParams.page)) || 1
+  const requestedPage = Number(normalizeSingleParam(searchParams.page)) || 1
   const currentPage = Math.min(Math.max(1, requestedPage), totalPages)
   const startIndex = (currentPage - 1) * PROJECTS_PER_PAGE
   const paginatedProjects = filteredProjects.slice(startIndex, startIndex + PROJECTS_PER_PAGE)
@@ -121,14 +123,30 @@ const ArchivePage = async ({ searchParams = {} }: ArchivePageProps) => {
     }
   })
 
+  const jsonLd = combineStructuredData([
+    generateItemListStructuredData(
+      projects.map(project => ({
+        name: project.title,
+        url: `https://ggac.kr/archive/${project.slug}`,
+      }))
+    ),
+    generateBreadcrumbStructuredData([
+      { name: '홈', url: 'https://ggac.kr' },
+      { name: '프로젝트', url: 'https://ggac.kr/archive' },
+    ]),
+  ])
+
   return (
-    <ArchiveContent
-      projects={paginatedProjects}
-      selectedCategory={selectedCategory}
-      pagination={{ currentPage, totalPages, totalCount }}
-      pageSize={PROJECTS_PER_PAGE}
-      artistNameMap={artistNameMap}
-    />
+    <>
+      {structuredDataToScript(jsonLd)}
+      <ArchiveContent
+        projects={paginatedProjects}
+        selectedCategory={selectedCategory}
+        pagination={{ currentPage, totalPages, totalCount }}
+        pageSize={PROJECTS_PER_PAGE}
+        artistNameMap={artistNameMap}
+      />
+    </>
   )
 }
 

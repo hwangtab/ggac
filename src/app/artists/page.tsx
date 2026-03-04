@@ -1,5 +1,12 @@
 import ArtistsContent from './ArtistsContent'
 import { getArtists } from '@/lib/data'
+import {
+  generateItemListStructuredData,
+  generateBreadcrumbStructuredData,
+  combineStructuredData,
+  structuredDataToScript,
+} from '@/utils/structuredData'
+import { normalizeSingleParam } from '@/utils/searchParams'
 import type { Metadata } from 'next'
 
 // ISR 최적화: 아티스트 정보는 12시간 캐시 (중간 빈도 업데이트)
@@ -74,11 +81,6 @@ type ArtistsPageProps = {
   }
 }
 
-const normalizeParam = (value?: string | string[] | null): string | undefined => {
-  if (!value) return undefined
-  return Array.isArray(value) ? value[0] : value
-}
-
 const ArtistsPage = async ({ searchParams = {} }: ArtistsPageProps) => {
   const artists = await getArtists()
 
@@ -94,7 +96,7 @@ const ArtistsPage = async ({ searchParams = {} }: ArtistsPageProps) => {
   const sortedCategories = Array.from(categoriesSet).sort((a, b) => a.localeCompare(b, 'ko'))
   const categories = ['All', ...sortedCategories]
 
-  const rawCategory = normalizeParam(searchParams.category)
+  const rawCategory = normalizeSingleParam(searchParams.category)
   const selectedCategory = rawCategory && categories.includes(rawCategory) ? rawCategory : 'All'
 
   const filteredArtists =
@@ -106,12 +108,28 @@ const ArtistsPage = async ({ searchParams = {} }: ArtistsPageProps) => {
             : artist.category === selectedCategory
         )
 
+  const jsonLd = combineStructuredData([
+    generateItemListStructuredData(
+      artists.map(artist => ({
+        name: artist.name,
+        url: `https://ggac.kr/artists/${artist.slug}`,
+      }))
+    ),
+    generateBreadcrumbStructuredData([
+      { name: '홈', url: 'https://ggac.kr' },
+      { name: '함께하는 사람들', url: 'https://ggac.kr/artists' },
+    ]),
+  ])
+
   return (
-    <ArtistsContent
-      artists={filteredArtists}
-      categories={categories}
-      selectedCategory={selectedCategory}
-    />
+    <>
+      {structuredDataToScript(jsonLd)}
+      <ArtistsContent
+        artists={filteredArtists}
+        categories={categories}
+        selectedCategory={selectedCategory}
+      />
+    </>
   )
 }
 

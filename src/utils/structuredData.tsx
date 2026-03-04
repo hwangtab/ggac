@@ -15,7 +15,7 @@ const ORGANIZATION_DATA = {
   description: '예술로 숨 쉬고, 협동으로 길을 내는 협동조합입니다.',
   url: 'https://ggac.kr',
   logo: 'https://ggac.kr/images/logo/gac_og.webp',
-  foundingDate: '2024',
+  foundingDate: '2025',
   address: {
     '@type': 'PostalAddress',
     addressLocality: '수원시',
@@ -44,11 +44,6 @@ export function generateWebsiteStructuredData(): object {
     description:
       '경계 없는 상상, 함께 만드는 울림. 예술로 숨 쉬고, 협동으로 길을 내는 협동조합입니다.',
     publisher: ORGANIZATION_DATA,
-    potentialAction: {
-      '@type': 'SearchAction',
-      target: 'https://ggac.kr/search?q={search_term_string}',
-      'query-input': 'required name=search_term_string',
-    },
   }
 }
 
@@ -110,16 +105,17 @@ export function generatePostStructuredData(post: {
   })
 
   // HTML 태그 제거 및 null-safe 처리
-  const descriptionText = (post.content || '')
-    .replace(/<[^>]*>/g, '') // HTML 태그 제거
-    .trim()
-    .substring(0, 150)
+  const stripped = (post.content || '').replace(/<[^>]*>/g, '').trim()
+  const descriptionText = stripped.substring(0, 150)
+  const descriptionSuffix = stripped.length > 150 ? '...' : ''
 
   return {
     '@context': 'https://schema.org',
     '@type': 'Article',
     headline: post.title,
-    description: descriptionText ? `${descriptionText}...` : `${post.title}에 대한 게시글입니다.`,
+    description: descriptionText
+      ? `${descriptionText}${descriptionSuffix}`
+      : `${post.title}에 대한 게시글입니다.`,
     url: `https://ggac.kr/board/${post.id}`,
     image: imageUrl,
     datePublished: post.created_at,
@@ -254,6 +250,24 @@ export function generateEventStructuredData(project: {
 }
 
 /**
+ * 목록 페이지용 ItemList 구조화된 데이터 생성
+ */
+export function generateItemListStructuredData(
+  items: Array<{ name: string; url: string }>
+): object {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    itemListElement: items.map((item, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      name: item.name,
+      url: item.url,
+    })),
+  }
+}
+
+/**
  * 브레드크럼 네비게이션 구조화된 데이터 생성
  */
 export function generateBreadcrumbStructuredData(
@@ -309,6 +323,8 @@ export function generateFAQStructuredData(
 
 /**
  * 구조화된 데이터를 JSON-LD script 태그로 변환
+ * @warning Server Component 트리에서만 호출해야 합니다.
+ * Client Component에서 호출하면 hydration 오류가 발생할 수 있습니다.
  */
 export function structuredDataToScript(data: object): React.ReactElement {
   return (
@@ -323,14 +339,20 @@ export function structuredDataToScript(data: object): React.ReactElement {
 
 /**
  * 여러 구조화된 데이터를 병합
+ * @graph 내 아이템에서 중복 @context 필드를 제거
  */
 export function combineStructuredData(dataArray: object[]): object {
   if (dataArray.length === 1) {
     return dataArray[0]
   }
 
+  const graphItems = dataArray.map(item => {
+    const { '@context': _ctx, ...rest } = item as Record<string, unknown>
+    return rest
+  })
+
   return {
     '@context': 'https://schema.org',
-    '@graph': dataArray,
+    '@graph': graphItems,
   }
 }
