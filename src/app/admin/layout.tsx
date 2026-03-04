@@ -1,4 +1,7 @@
+import { NOINDEX_METADATA } from '@/constants/seo'
 import { ReactNode } from 'react'
+
+export const metadata = NOINDEX_METADATA
 
 interface AdminRootLayoutProps {
   children: ReactNode

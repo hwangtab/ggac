@@ -4,46 +4,24 @@ import { getSiteUrl } from '@/utils/site'
 export default function robots(): MetadataRoute.Robots {
   const baseUrl = getSiteUrl()
 
+  const privateRoutes = [
+    '/admin',
+    '/mypage',
+    '/login',
+    '/signup',
+    '/notifications',
+    '/register',
+    '/board/write',
+  ]
+
   return {
     rules: [
-      // 일반 크롤러
+      // 모든 크롤러: 공개 경로 허용, 비공개 경로 차단
+      // 개별 봇 규칙을 쓰면 * 규칙이 무시되므로 단일 * 규칙으로 통합
       {
         userAgent: '*',
         allow: '/',
-      },
-      // 주요 검색 엔진
-      {
-        userAgent: 'Googlebot',
-        allow: '/',
-      },
-      {
-        userAgent: 'Naverbot',
-        allow: '/',
-      },
-      {
-        userAgent: 'Yeti',
-        allow: '/',
-      },
-      // AI 검색 엔진 봇 명시적 허용
-      {
-        userAgent: 'GPTBot',
-        allow: '/',
-      },
-      {
-        userAgent: 'CCBot',
-        allow: '/',
-      },
-      {
-        userAgent: 'Google-Extended',
-        allow: '/',
-      },
-      {
-        userAgent: 'PerplexityBot',
-        allow: '/',
-      },
-      {
-        userAgent: 'ClaudeBot',
-        allow: '/',
+        disallow: privateRoutes,
       },
     ],
     sitemap: `${baseUrl}/sitemap.xml`,

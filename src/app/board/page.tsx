@@ -1,8 +1,54 @@
 // 하이브리드 렌더링: 서버 컴포넌트 + 클라이언트 하이드레이션
 import { Suspense } from 'react'
 import BoardServerData from './BoardServerData'
+import { generateBreadcrumbStructuredData, structuredDataToScript } from '@/utils/structuredData'
+import type { Metadata } from 'next'
 
 export const revalidate = 60
+
+export const metadata: Metadata = {
+  title: '자유게시판 | 경기아트콜렉티브 협동조합',
+  description: '경기아트콜렉티브 협동조합 조합원들의 이야기, 공지, 활동 소식을 나누는 공간입니다.',
+  keywords: ['자유게시판', '경기아트콜렉티브', '공지', '활동소식', '협동조합게시판'],
+  authors: [{ name: '경기아트콜렉티브 협동조합' }],
+  alternates: {
+    canonical: '/board',
+    languages: { 'ko-KR': '/board' },
+  },
+  openGraph: {
+    title: '자유게시판 | 경기아트콜렉티브 협동조합',
+    description: '경기아트콜렉티브 협동조합 조합원들의 이야기와 활동 소식을 나눕니다.',
+    url: '/board',
+    siteName: '경기아트콜렉티브 협동조합',
+    images: [
+      {
+        url: '/images/logo/gac_og.webp',
+        width: 1200,
+        height: 630,
+        alt: '경기아트콜렉티브 협동조합',
+      },
+    ],
+    locale: 'ko_KR',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: '자유게시판 | 경기아트콜렉티브 협동조합',
+    description: '경기아트콜렉티브 협동조합 조합원들의 이야기와 활동 소식을 나눕니다.',
+    images: ['/images/logo/gac_og.webp'],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
+}
 
 interface BoardPageProps {
   searchParams?: {
@@ -11,32 +57,42 @@ interface BoardPageProps {
   }
 }
 
+const boardBreadcrumbJsonLd = structuredDataToScript(
+  generateBreadcrumbStructuredData([
+    { name: '홈', url: 'https://ggac.kr' },
+    { name: '자유게시판', url: 'https://ggac.kr/board' },
+  ])
+)
+
 const BoardPage = ({ searchParams = {} }: BoardPageProps) => {
   const category = searchParams.category || '전체'
   const pageParam = parseInt(searchParams.page || '1', 10)
   const page = Number.isFinite(pageParam) && pageParam > 0 ? pageParam : 1
 
   return (
-    <div>
-      <Suspense
-        fallback={
-          <div className="pt-24 md:pt-28 container mx-auto px-4">
-            <div className="h-6 w-40 bg-gray-200 rounded mb-4 animate-pulse" />
-            <div className="space-y-4">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="bg-white p-6 rounded-lg shadow-md animate-pulse">
-                  <div className="w-24 h-4 bg-gray-200 rounded mb-2" />
-                  <div className="w-2/3 h-6 bg-gray-200 rounded mb-3" />
-                  <div className="w-full h-16 bg-gray-200 rounded" />
-                </div>
-              ))}
+    <>
+      {boardBreadcrumbJsonLd}
+      <div>
+        <Suspense
+          fallback={
+            <div className="pt-24 md:pt-28 container mx-auto px-4">
+              <div className="h-6 w-40 bg-gray-200 rounded mb-4 animate-pulse" />
+              <div className="space-y-4">
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="bg-white p-6 rounded-lg shadow-md animate-pulse">
+                    <div className="w-24 h-4 bg-gray-200 rounded mb-2" />
+                    <div className="w-2/3 h-6 bg-gray-200 rounded mb-3" />
+                    <div className="w-full h-16 bg-gray-200 rounded" />
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        }
-      >
-        <BoardServerData category={category} page={page} pageSize={15} />
-      </Suspense>
-    </div>
+          }
+        >
+          <BoardServerData category={category} page={page} pageSize={15} />
+        </Suspense>
+      </div>
+    </>
   )
 }
 
