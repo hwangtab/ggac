@@ -375,20 +375,14 @@ const OptimizedImage = memo(function OptimizedImage({
     markImageLoaded()
   }
 
-  const handleLoadingComplete = (img: HTMLImageElement) => {
-    imageRef.current = img
-    // Next.js Image의 onLoadingComplete 콜백이 호출됨 (정상 흐름)
-    markImageLoaded()
-  }
-
   useEffect(() => {
     const img = imageRef.current
     if (img && img.complete && img.naturalWidth > 0) {
       markImageLoaded()
       return
     }
-    // 이미지가 아직 준비되지 않은 경우 폴링 시작 (onLoadingComplete 미호출 대비)
-    if (isLoading && !imageRef.current) {
+    // 이미지가 아직 로드되지 않은 경우 폴링으로 보조 감지
+    if (isLoading) {
       startPolling()
     }
   }, [currentSrc, markImageLoaded, isLoading, startPolling])
@@ -487,7 +481,6 @@ const OptimizedImage = memo(function OptimizedImage({
         alt={alt || ''}
         {...imageProps}
         ref={imageRef}
-        onLoadingComplete={handleLoadingComplete}
         className={`transition-opacity duration-500 ${
           suppressSkeleton ? '' : isLoading ? 'opacity-0' : 'opacity-100'
         } ${fill ? '' : className}`}

@@ -539,10 +539,15 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
 
       {/* 크롭 모달 */}
       {showCropModal && selectedFile && uploadState.preview && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="crop-modal-title"
+        >
           <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium">프로필 사진 크롭</h3>
+              <h3 id="crop-modal-title" className="text-lg font-medium">프로필 사진 크롭</h3>
               <button
                 onClick={() => {
                   setShowCropModal(false)
