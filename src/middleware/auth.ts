@@ -31,25 +31,25 @@ export async function handleAuth(
     pathname.startsWith('/board') || pathname.startsWith('/admin') || pathname.startsWith('/mypage')
 
   try {
-    // 모바일 환경에서는 더 관대한 세션 확인
+    // getUser()는 서버에서 JWT를 검증하므로 getSession()보다 안전
     const {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession()
+      data: { user: authUser },
+      error: userError,
+    } = await supabase.auth.getUser()
 
-    if (sessionError) {
+    if (userError) {
       if (process.env.NODE_ENV === 'development') {
         console.log(
-          `❌ [MIDDLEWARE DEBUG] Session error (Mobile: ${isMobile}):`,
-          sessionError.message
+          `❌ [MIDDLEWARE DEBUG] Auth error (Mobile: ${isMobile}):`,
+          userError.message
         )
       }
       authError = true
     } else {
-      user = session?.user || null
+      user = authUser || null
       if (process.env.NODE_ENV === 'development' && isCriticalPath) {
         console.log(
-          `📋 [MIDDLEWARE DEBUG] Session state for ${pathname} (Mobile: ${isMobile}):`,
+          `📋 [MIDDLEWARE DEBUG] Auth state for ${pathname} (Mobile: ${isMobile}):`,
           user ? 'Authenticated' : 'Not authenticated'
         )
       }

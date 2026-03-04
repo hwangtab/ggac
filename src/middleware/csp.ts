@@ -4,11 +4,16 @@ import type { NextRequest } from 'next/server'
 /**
  * Configure Strict Content Security Policy (CSP)
  *
- * NOTE: Strict CSP is disabled by default.
- * Enable by setting NEXT_STRICT_CSP=true in environment variables.
+ * CSP is enabled by default in production.
+ * Set NEXT_STRICT_CSP=false to disable (not recommended in production).
+ * Set NEXT_STRICT_CSP=true to enable in development.
  */
 export function applyCSP(request: NextRequest, response: NextResponse) {
-  const enableStrictCsp = process.env.NEXT_STRICT_CSP === 'true'
+  const isProduction = process.env.NODE_ENV === 'production'
+  const envOverride = process.env.NEXT_STRICT_CSP
+  const enableStrictCsp = envOverride !== undefined
+    ? envOverride === 'true'
+    : isProduction
 
   if (!enableStrictCsp) {
     return response

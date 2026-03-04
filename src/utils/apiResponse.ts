@@ -85,13 +85,15 @@ export function createCacheableResponse(
   })
 }
 
+const ALLOWED_ORIGIN = process.env.NEXT_PUBLIC_SITE_URL || 'https://ggac.kr'
+
 /**
  * CORS 헤더 포함 응답 생성
  */
 export function createCorsResponse(
   data: any,
   status: number = 200,
-  origin: string = '*'
+  origin: string = ALLOWED_ORIGIN
 ) {
   return createJsonResponse(data, status, {
     'Access-Control-Allow-Origin': origin,
@@ -121,7 +123,7 @@ export function createFileDownloadResponse(
 /**
  * OPTIONS 요청 처리 (CORS preflight)
  */
-export function createOptionsResponse(origin: string = '*') {
+export function createOptionsResponse(origin: string = ALLOWED_ORIGIN) {
   return new NextResponse(null, {
     status: 200,
     headers: {

@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-// 간단한 보호: 환경변수 DEPLOY_HOOK_SECRET이 설정돼 있으면 헤더로 검증
-function validateSecret(req: NextRequest) {
+// 보호: DEPLOY_HOOK_SECRET 헤더 검증 (프로덕션에서는 필수)
+function validateSecret(req: NextRequest): boolean {
   const required = process.env.DEPLOY_HOOK_SECRET
-  if (!required) return true
+  if (!required) {
+    // 프로덕션에서는 시크릿 미설정 시 차단
+    if (process.env.NODE_ENV === 'production') return false
+    return true
+  }
   const provided = req.headers.get('x-deploy-secret') || req.nextUrl.searchParams.get('secret')
   return provided === required
 }
@@ -13,10 +17,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // Vercel 통합 Deploy Hook URL (프로젝트에 이미 존재하는 URL)
-  const vercelDeployUrl =
-    process.env.VERCEL_DEPLOY_HOOK_URL ||
-    'https://api.vercel.com/v1/integrations/deploy/prj_gKX9zLcsyxU1udy08ob4AUOeZYmL/LykkHw6E67'
+  const vercelDeployUrl = process.env.VERCEL_DEPLOY_HOOK_URL
+  if (!vercelDeployUrl) {
+    return NextResponse.json({ error: 'VERCEL_DEPLOY_HOOK_URL is not configured' }, { status: 500 })
+  }
 
   try {
     const res = await fetch(vercelDeployUrl, {

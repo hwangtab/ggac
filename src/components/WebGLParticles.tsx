@@ -8,20 +8,51 @@ interface WebGLParticlesProps {
   height: number
 }
 
+// Shader sources hoisted to module level to avoid per-render string recreation
+const VERTEX_SHADER_SOURCE = `
+    attribute vec2 a_position;
+    attribute float a_size;
+    attribute float a_alpha;
+    uniform vec2 u_resolution;
+    uniform vec2 u_mouse;
+    varying float v_alpha;
+
+    void main() {
+      vec2 parallax = (a_position + u_mouse * 0.1);
+      vec2 position = (parallax / u_resolution) * 2.0 - 1.0;
+      gl_Position = vec4(position * vec2(1, -1), 0, 1);
+      gl_PointSize = a_size;
+      v_alpha = a_alpha;
+    }
+  `
+
+const FRAGMENT_SHADER_SOURCE = `
+    precision mediump float;
+    varying float v_alpha;
+
+    void main() {
+      float distance = length(gl_PointCoord - vec2(0.5));
+      if (distance > 0.5) discard;
+
+      float alpha = v_alpha * (1.0 - distance * 2.0);
+      gl_FragColor = vec4(1.0, 0.863, 0.706, alpha * 0.6); // 따뜻한 색상
+    }
+  `
+
 const WebGLParticles = ({ particleCount, width, height }: WebGLParticlesProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const glRef = useRef<WebGLRenderingContext | null>(null)
   const programRef = useRef<WebGLProgram | null>(null)
   const animationFrameRef = useRef<number | null>(null)
   const mousePositionRef = useRef({ x: 0, y: 0 })
-  
+
   // WebGL 리소스 참조 - 메모리 최적화
   const buffersRef = useRef<{
     position: WebGLBuffer | null
     size: WebGLBuffer | null
     alpha: WebGLBuffer | null
   }>({ position: null, size: null, alpha: null })
-  
+
   const locationsRef = useRef<{
     uniforms: {
       resolution: WebGLUniformLocation | null
@@ -33,38 +64,6 @@ const WebGLParticles = ({ particleCount, width, height }: WebGLParticlesProps) =
       alpha: number
     }
   } | null>(null)
-
-  // Vertex shader source
-  const vertexShaderSource = `
-    attribute vec2 a_position;
-    attribute float a_size;
-    attribute float a_alpha;
-    uniform vec2 u_resolution;
-    uniform vec2 u_mouse;
-    varying float v_alpha;
-    
-    void main() {
-      vec2 parallax = (a_position + u_mouse * 0.1);
-      vec2 position = (parallax / u_resolution) * 2.0 - 1.0;
-      gl_Position = vec4(position * vec2(1, -1), 0, 1);
-      gl_PointSize = a_size;
-      v_alpha = a_alpha;
-    }
-  `
-
-  // Fragment shader source
-  const fragmentShaderSource = `
-    precision mediump float;
-    varying float v_alpha;
-    
-    void main() {
-      float distance = length(gl_PointCoord - vec2(0.5));
-      if (distance > 0.5) discard;
-      
-      float alpha = v_alpha * (1.0 - distance * 2.0);
-      gl_FragColor = vec4(1.0, 0.863, 0.706, alpha * 0.6); // 따뜻한 색상
-    }
-  `
 
   // 파티클 데이터
   const particleDataRef = useRef<{
@@ -93,25 +92,25 @@ const WebGLParticles = ({ particleCount, width, height }: WebGLParticlesProps) =
   }, [])
 
   const createProgram = useCallback((gl: WebGLRenderingContext) => {
-    const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource)
-    const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource)
-    
+    const vertexShader = createShader(gl, gl.VERTEX_SHADER, VERTEX_SHADER_SOURCE)
+    const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, FRAGMENT_SHADER_SOURCE)
+
     if (!vertexShader || !fragmentShader) return null
-    
+
     const program = gl.createProgram()
     if (!program) return null
-    
+
     gl.attachShader(program, vertexShader)
     gl.attachShader(program, fragmentShader)
     gl.linkProgram(program)
-    
+
     if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
       console.error('Program link error:', gl.getProgramInfoLog(program))
       return null
     }
-    
+
     return program
-  }, [createShader, vertexShaderSource, fragmentShaderSource])
+  }, [createShader])
 
   const initWebGL = useCallback(() => {
     const canvas = canvasRef.current

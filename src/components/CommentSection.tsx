@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase/client'
 import { logCommentCreated } from '@/utils/activityLogger'
 import CommentLikeButton from './CommentLikeButton'
@@ -64,47 +64,46 @@ const CommentSection: React.FC<CommentSectionProps> = ({
         return
       }
 
-      if (data) {
-        // 각 댓글의 좋아요 정보 가져오기
-        const commentsWithLikes = await Promise.all(
-          data.map(async comment => {
-            // 좋아요 수 조회 - 406 에러 방지를 위해 head 옵션 제거
-            const { count: likeCount, error: countError } = await supabase
-              .from('comment_likes')
-              .select('*', { count: 'exact' })
-              .eq('comment_id', (comment as any).id)
-
-            if (countError) {
-              console.warn('좋아요 수 조회 실패:', countError)
-            }
-
-            // 현재 사용자의 좋아요 여부 조회
-            let isLiked = false
-            if (user) {
-              const { data: userLike, error: likeError } = await supabase
-                .from('comment_likes')
-                .select('id')
-                .eq('comment_id', (comment as any).id)
-                .eq('user_id', user.id)
-                .maybeSingle() // single() 대신 maybeSingle() 사용하여 에러 방지
-
-              if (likeError) {
-                console.warn('사용자 좋아요 상태 조회 실패:', likeError)
-              }
-
-              isLiked = !!userLike
-            }
-
-            return {
-              ...(comment as any),
-              like_count: likeCount || 0,
-              is_liked: isLiked,
-            }
-          })
-        )
-
-        setComments(commentsWithLikes as CommentWithLikes[])
+      if (!data || data.length === 0) {
+        setComments([])
+        return
       }
+
+      const commentIds = data.map(c => (c as any).id)
+
+      // 배치 조회 1: 모든 댓글의 좋아요 목록 (N+1 → 1 쿼리)
+      const { data: allLikes } = await supabase
+        .from('comment_likes')
+        .select('comment_id')
+        .in('comment_id', commentIds)
+
+      const likeCountMap: Record<string, number> = {}
+      commentIds.forEach(id => { likeCountMap[id] = 0 })
+      ;(allLikes || []).forEach((row: any) => {
+        likeCountMap[row.comment_id] = (likeCountMap[row.comment_id] || 0) + 1
+      })
+
+      // 배치 조회 2: 현재 사용자의 좋아요 목록 (N+1 → 1 쿼리)
+      const likedSet = new Set<string>()
+      if (user && commentIds.length > 0) {
+        const { data: userLikes } = await supabase
+          .from('comment_likes')
+          .select('comment_id')
+          .eq('user_id', user.id)
+          .in('comment_id', commentIds)
+
+        ;(userLikes || []).forEach((row: any) => {
+          likedSet.add(row.comment_id)
+        })
+      }
+
+      const commentsWithLikes = data.map(comment => ({
+        ...(comment as any),
+        like_count: likeCountMap[(comment as any).id] || 0,
+        is_liked: likedSet.has((comment as any).id),
+      }))
+
+      setComments(commentsWithLikes as CommentWithLikes[])
     } catch (error) {
       console.error('Error fetching comments with likes:', error)
     }
@@ -207,19 +206,20 @@ const CommentSection: React.FC<CommentSectionProps> = ({
     }
   }
 
+  const { popularComment, regularComments } = useMemo(
+    () => getPopularAndRegularComments(comments),
+    [comments]
+  )
+
   return (
     <div className="mt-6 border-t border-gray-200 pt-6">
       <h4 className="text-lg font-semibold mb-4">댓글 {comments.length}개</h4>
 
       {/* 댓글 목록 */}
       <div className="space-y-4 mb-6">
-        {(() => {
-          const { popularComment, regularComments } = getPopularAndRegularComments(comments)
-
-          return (
-            <>
-              {/* 인기 댓글 */}
-              {popularComment && (
+        <>
+          {/* 인기 댓글 */}
+          {popularComment && (
                 <div className="mb-6">
                   <div className="flex items-center gap-2 mb-3">
                     <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
@@ -282,7 +282,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({
               )}
 
               {/* 일반 댓글들 */}
-              {regularComments.map(comment => (
+          {regularComments.map(comment => (
                 <div key={comment.id} className="bg-gray-50 p-4 rounded-lg">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -333,9 +333,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({
                   </div>
                 </div>
               ))}
-            </>
-          )
-        })()}
+        </>
 
         {comments.length === 0 && (
           <p className="text-gray-500 text-center py-4">첫 번째 댓글을 작성해보세요.</p>

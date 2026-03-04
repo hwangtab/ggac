@@ -4,10 +4,10 @@ import {
   createImageResponse,
   createOptionsResponse,
 } from '@/utils/apiResponse'
+import { isUnsafeHost } from '@/utils/ssrfProtection'
 
 export const dynamic = 'force-dynamic'
 
-// Simple host allowlist (expand as needed)
 const ALLOWED_PROTOCOLS = new Set(['http:', 'https:'])
 
 export async function GET(req: NextRequest) {
@@ -24,6 +24,11 @@ export async function GET(req: NextRequest) {
 
   if (!ALLOWED_PROTOCOLS.has(target.protocol)) {
     return createErrorResponse('Unsupported protocol', 400)
+  }
+
+  // SSRF protection: block private/internal IPs
+  if (await isUnsafeHost(target.hostname)) {
+    return createErrorResponse('Forbidden', 403)
   }
 
   try {
@@ -57,7 +62,6 @@ export async function GET(req: NextRequest) {
     // Cache for 1 day at the CDN/browser level
     return createImageResponse(buff, contentType, {
       'Cache-Control': 'public, max-age=86400',
-      'Access-Control-Allow-Origin': '*',
     })
   } catch (err: any) {
     const msg = err?.name === 'AbortError' ? 'Timeout fetching image' : 'Failed to fetch image'
@@ -66,5 +70,5 @@ export async function GET(req: NextRequest) {
 }
 
 export function OPTIONS() {
-  return createOptionsResponse('*')
+  return createOptionsResponse(process.env.NEXT_PUBLIC_SITE_URL || 'https://ggac.kr')
 }
