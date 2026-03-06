@@ -27,10 +27,17 @@ export const metadata: Metadata = {
     '경기도',
     '수원',
   ],
+  alternates: {
+    canonical: '/',
+    languages: { 'ko-KR': '/' },
+  },
   openGraph: {
     title: '경기아트콜렉티브 협동조합',
     description:
       '경계 없는 상상, 함께 만드는 울림. 예술로 숨 쉬고, 협동으로 길을 내는 협동조합입니다.',
+    url: '/',
+    siteName: '경기아트콜렉티브 협동조합',
+    locale: 'ko_KR',
     type: 'website',
     images: [
       {

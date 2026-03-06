@@ -27,6 +27,7 @@ export async function generateMetadata({
       return {
         title: '게시물을 찾을 수 없습니다 - 경기아트콜렉티브',
         description: '요청하신 게시물을 찾을 수 없습니다.',
+        robots: { index: false, follow: false },
       }
     }
 
@@ -40,13 +41,14 @@ export async function generateMetadata({
     return {
       title,
       description,
-      keywords: keywords?.join(', '),
+      keywords,
       authors: [{ name: author?.display_name || '경기아트콜렉티브' }],
       openGraph: {
         title,
         description,
         url: `https://ggac.kr/board/${postId}`,
-        siteName: '경기아트콜렉티브',
+        siteName: '경기아트콜렉티브 협동조합',
+        locale: 'ko_KR',
         images: [
           {
             url: ogImageUrl,

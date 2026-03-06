@@ -58,7 +58,7 @@ export const metadata: Metadata = {
     description:
       '경계 없는 상상, 함께 만드는 울림. 예술로 숨 쉬고, 협동으로 길을 내는 경기아트콜렉티브입니다.',
     url: 'https://ggac.kr',
-    siteName: '경기아트콜렉티브',
+    siteName: '경기아트콜렉티브 협동조합',
     images: [
       {
         url: '/images/logo/gac_og.webp',

@@ -11,9 +11,7 @@ import type { NextRequest } from 'next/server'
 export function applyCSP(request: NextRequest, response: NextResponse) {
   const isProduction = process.env.NODE_ENV === 'production'
   const envOverride = process.env.NEXT_STRICT_CSP
-  const enableStrictCsp = envOverride !== undefined
-    ? envOverride === 'true'
-    : isProduction
+  const enableStrictCsp = envOverride !== undefined ? envOverride === 'true' : isProduction
 
   if (!enableStrictCsp) {
     return response
@@ -27,10 +25,10 @@ export function applyCSP(request: NextRequest, response: NextResponse) {
     if (!isEditorPath) {
       const strictCsp = [
         "default-src 'self'",
-        // Scripts: remove inline/unsafe-eval in strict mode
-        "script-src 'self' https://www.youtube.com https://www.google-analytics.com",
+        // Scripts: unsafe-inline required for Next.js hydration inline scripts
+        "script-src 'self' 'unsafe-inline' https://www.youtube.com https://www.google-analytics.com",
         // Script elements fine-grained control
-        "script-src-elem 'self' https://www.youtube.com https://www.google-analytics.com",
+        "script-src-elem 'self' 'unsafe-inline' https://www.youtube.com https://www.google-analytics.com",
         // Styles: allow unsafe-inline for compatibility with CSS-in-JS libs and fonts
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
         "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com",
