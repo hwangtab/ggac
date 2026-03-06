@@ -3,29 +3,27 @@
 ## Recent Changes
 
 - Fixed `건강열전 2026` poster loading by restoring a tracked cover asset path
-  (`/images/projects/health-2026.jpeg`) and regenerating the file from the
+  (`/images/projects/health-2026.webp`) and regenerating the file from the
   latest poster source to prevent `/_next/image` 400 responses in deployments.
 - Added a unified `연관 게시물` section for project detail pages by separating
   internal `/archive/*` links from `relatedArticles` and auto-linking series
-  projects (currently including 철조망/METAL SYNDICATE NETWORK and SR&P
-  series).
+  projects (currently including 철조망/METAL SYNDICATE NETWORK and SR&P series).
 - Updated `철조망 III: METAL SYNDICATE NETWORK III` cover image to the higher
-  resolution poster file
-  (`/images/projects/PF_PF282396_251230_130025.webp`).
-- Removed the mistaken internal archive link from
-  `SR&P Vol. III: MEA CULPA` (`project-019`) `relatedArticles` so the project
-  no longer shows a misleading "related article" section.
-- Registered the archived project `철조망 III: METAL SYNDICATE NETWORK III`
-  in `data/projects.json` with no ticketing link, lineup/details for the
-  2026-01-11 finished show, and a poster asset
+  resolution poster file (`/images/projects/PF_PF282396_251230_130025.webp`).
+- Removed the mistaken internal archive link from `SR&P Vol. III: MEA CULPA`
+  (`project-019`) `relatedArticles` so the project no longer shows a misleading
+  "related article" section.
+- Registered the archived project `철조망 III: METAL SYNDICATE NETWORK III` in
+  `data/projects.json` with no ticketing link, lineup/details for the 2026-01-11
+  finished show, and a poster asset
   (`/images/projects/metal-syndicate-network-3.webp`).
 - Registered `SR&P Vol. III: MEA CULPA` in `data/projects.json` with the
-  corrected Naver booking link, age-rating/caution notes, lineup info, and a
-  new cover image asset (`/images/projects/srp-vol3-mea-culpa.png`).
-- Registered `건강열전 2026` as a new archive project in
-  `data/projects.json` with Naver booking link, invited musician lineup
-  descriptions, Longplayer directions, and a newly saved cover image
-  (`/images/projects/health-2026.jpeg`).
+  corrected Naver booking link, age-rating/caution notes, lineup info, and a new
+  cover image asset (`/images/projects/srp-vol3-mea-culpa.webp`).
+- Registered `건강열전 2026` as a new archive project in `data/projects.json`
+  with Naver booking link, invited musician lineup descriptions, Longplayer
+  directions, and a newly saved cover image
+  (`/images/projects/health-2026.webp`).
 - Added the 사바하 라이브 영상 촬영 기록을 `data/projects.json`에 등록하고, 대표
   이미지(1280×721 PNG), 상세 갤러리, YouTube 임베드 섹션을 포함하도록 프로젝트
   상세 UI를 확장.

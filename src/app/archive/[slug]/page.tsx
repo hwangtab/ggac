@@ -61,7 +61,10 @@ function extractInternalArchiveSlugs(project: ProjectType): string[] {
     .filter((slug): slug is string => Boolean(slug))
 }
 
-function buildRelatedProjects(currentProject: ProjectType, allProjects: ProjectType[]): RelatedProjectItem[] {
+function buildRelatedProjects(
+  currentProject: ProjectType,
+  allProjects: ProjectType[]
+): RelatedProjectItem[] {
   const currentSeriesKeys = new Set(extractSeriesKeys(currentProject))
   const internalSlugs = new Set(extractInternalArchiveSlugs(currentProject))
   const relatedMap = new Map<string, RelatedProjectItem>()
@@ -264,6 +267,7 @@ function getNotFoundMetadata(): Metadata {
   return {
     title: 'Project Not Found | 경기아트콜렉티브 협동조합',
     description: '요청하신 프로젝트를 찾을 수 없습니다.',
+    robots: { index: false, follow: false },
     openGraph: {
       title: 'Project Not Found',
       description: '요청하신 프로젝트를 찾을 수 없습니다.',

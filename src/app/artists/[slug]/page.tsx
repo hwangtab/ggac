@@ -51,6 +51,7 @@ export async function generateMetadata({ params }: ArtistPageProps): Promise<Met
   if (!artist) {
     return {
       title: 'Artist Not Found | 경기아트콜렉티브',
+      robots: { index: false, follow: false },
     }
   }
 
