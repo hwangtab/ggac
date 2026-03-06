@@ -2,6 +2,9 @@
 
 ## Recent Changes
 
+- Fixed the initial home-page header flash so the first visit keeps the header
+  transparent over the hero until scroll state sync completes, instead of
+  briefly rendering the opaque white header.
 - Fixed `건강열전 2026` poster loading by restoring a tracked cover asset path
   (`/images/projects/health-2026.webp`) and regenerating the file from the
   latest poster source to prevent `/_next/image` 400 responses in deployments.
