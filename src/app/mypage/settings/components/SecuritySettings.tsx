@@ -41,10 +41,12 @@ export default function SecuritySettings({ settings, onUpdate }: SecuritySetting
             id="session-timeout"
             disabled={updating === 'session_timeout'}
             value={sessionTimeout.minutes || 480}
-            onChange={(e) => updateSettingValue('session_timeout', {
-              ...sessionTimeout,
-              minutes: parseInt(e.target.value)
-            })}
+            onChange={e =>
+              updateSettingValue('session_timeout', {
+                ...sessionTimeout,
+                minutes: parseInt(e.target.value),
+              })
+            }
             className="block w-48 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 disabled:opacity-50"
           >
             {sessionTimeout.options?.map((option: number) => (
@@ -71,10 +73,12 @@ export default function SecuritySettings({ settings, onUpdate }: SecuritySetting
             <button
               type="button"
               disabled={updating === 'login_notifications'}
-              onClick={() => updateSettingValue('login_notifications', {
-                ...loginNotifications,
-                notify_new_device: !loginNotifications.notify_new_device
-              })}
+              onClick={() =>
+                updateSettingValue('login_notifications', {
+                  ...loginNotifications,
+                  notify_new_device: !loginNotifications.notify_new_device,
+                })
+              }
               className={`${
                 loginNotifications.notify_new_device ? 'bg-primary-600' : 'bg-gray-200'
               } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50`}
@@ -90,15 +94,19 @@ export default function SecuritySettings({ settings, onUpdate }: SecuritySetting
           <div className="flex items-center justify-between">
             <div>
               <label className="text-sm font-medium text-gray-700">의심스러운 활동 알림</label>
-              <p className="text-sm text-gray-500">비정상적인 로그인 시도가 감지되면 알림을 받습니다</p>
+              <p className="text-sm text-gray-500">
+                비정상적인 로그인 시도가 감지되면 알림을 받습니다
+              </p>
             </div>
             <button
               type="button"
               disabled={updating === 'login_notifications'}
-              onClick={() => updateSettingValue('login_notifications', {
-                ...loginNotifications,
-                notify_suspicious: !loginNotifications.notify_suspicious
-              })}
+              onClick={() =>
+                updateSettingValue('login_notifications', {
+                  ...loginNotifications,
+                  notify_suspicious: !loginNotifications.notify_suspicious,
+                })
+              }
               className={`${
                 loginNotifications.notify_suspicious ? 'bg-primary-600' : 'bg-gray-200'
               } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50`}
@@ -120,15 +128,19 @@ export default function SecuritySettings({ settings, onUpdate }: SecuritySetting
           <div className="flex items-center justify-between">
             <div>
               <label className="text-sm font-medium text-gray-700">2단계 인증 사용</label>
-              <p className="text-sm text-gray-500">계정 보안을 강화하기 위해 2단계 인증을 사용합니다</p>
+              <p className="text-sm text-gray-500">
+                계정 보안을 강화하기 위해 2단계 인증을 사용합니다
+              </p>
             </div>
             <button
               type="button"
               disabled={updating === 'two_factor'}
-              onClick={() => updateSettingValue('two_factor', {
-                ...twoFactor,
-                enabled: !twoFactor.enabled
-              })}
+              onClick={() =>
+                updateSettingValue('two_factor', {
+                  ...twoFactor,
+                  enabled: !twoFactor.enabled,
+                })
+              }
               className={`${
                 twoFactor.enabled ? 'bg-primary-600' : 'bg-gray-200'
               } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50`}
@@ -153,10 +165,12 @@ export default function SecuritySettings({ settings, onUpdate }: SecuritySetting
                       type="radio"
                       disabled={updating === 'two_factor'}
                       checked={twoFactor.method === option}
-                      onChange={() => updateSettingValue('two_factor', {
-                        ...twoFactor,
-                        method: option
-                      })}
+                      onChange={() =>
+                        updateSettingValue('two_factor', {
+                          ...twoFactor,
+                          method: option,
+                        })
+                      }
                       className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 disabled:opacity-50"
                     />
                     <label htmlFor={`2fa-${option}`} className="ml-3 text-sm text-gray-700">
@@ -218,7 +232,9 @@ export default function SecuritySettings({ settings, onUpdate }: SecuritySetting
           <div className="flex items-center justify-between py-3">
             <div>
               <h4 className="text-sm font-medium text-red-700">계정 삭제</h4>
-              <p className="text-sm text-red-500">계정과 관련된 모든 데이터가 영구적으로 삭제됩니다</p>
+              <p className="text-sm text-red-500">
+                계정과 관련된 모든 데이터가 영구적으로 삭제됩니다
+              </p>
             </div>
             <button
               type="button"

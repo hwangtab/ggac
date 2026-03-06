@@ -20,7 +20,7 @@ Object.assign(process.env, envVars)
 // 활동 유형 정의
 const ACTIVITY_TYPES = [
   'login',
-  'page_viewed', 
+  'page_viewed',
   'post_created',
   'post_updated',
   'comment_created',
@@ -28,7 +28,7 @@ const ACTIVITY_TYPES = [
   'like_removed',
   'profile_updated',
   'file_uploaded',
-  'search_performed'
+  'search_performed',
 ]
 
 // 페이지 경로 정의
@@ -45,7 +45,7 @@ const PAGE_PATHS = [
   '/mypage/artist',
   '/admin',
   '/admin/members',
-  '/admin/reports'
+  '/admin/reports',
 ]
 
 async function generateTestActivityData() {
@@ -80,7 +80,7 @@ async function generateTestActivityData() {
 
     // 2. 지난 30일간의 활동 데이터 생성
     console.log('\n2. 지난 30일간의 활동 데이터 생성 중...')
-    
+
     const activities = []
     const now = new Date()
     const startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000) // 30일 전
@@ -88,20 +88,20 @@ async function generateTestActivityData() {
     // 각 회원별로 랜덤한 활동 생성
     for (const member of members) {
       const activityCount = Math.floor(Math.random() * 50) + 10 // 10-60개 활동
-      
+
       for (let i = 0; i < activityCount; i++) {
         // 랜덤한 날짜 생성 (지난 30일 내)
         const randomDate = new Date(
           startDate.getTime() + Math.random() * (now.getTime() - startDate.getTime())
         )
-        
+
         // 랜덤한 활동 유형
         const actionType = ACTIVITY_TYPES[Math.floor(Math.random() * ACTIVITY_TYPES.length)]
-        
+
         // 활동별 메타데이터 생성
-        let metadata = { 
+        let metadata = {
           generated: true,
-          timestamp: randomDate.toISOString()
+          timestamp: randomDate.toISOString(),
         }
         let targetType = 'system'
         let targetId = null
@@ -147,7 +147,7 @@ async function generateTestActivityData() {
           metadata,
           ip_address: `192.168.1.${Math.floor(Math.random() * 255)}`,
           user_agent: 'Generated Test Data',
-          created_at: randomDate.toISOString()
+          created_at: randomDate.toISOString(),
         })
       }
     }
@@ -156,28 +156,28 @@ async function generateTestActivityData() {
 
     // 3. 배치로 데이터베이스에 삽입
     console.log('\n3. 데이터베이스에 활동 데이터 삽입 중...')
-    
+
     const batchSize = 100
     let insertedCount = 0
-    
+
     for (let i = 0; i < activities.length; i += batchSize) {
       const batch = activities.slice(i, i + batchSize)
-      
-      const { data, error } = await supabase
-        .from('user_activities')
-        .insert(batch)
+
+      const { data, error } = await supabase.from('user_activities').insert(batch)
 
       if (error) {
-        console.error(`배치 ${Math.floor(i/batchSize) + 1} 삽입 오류:`, error)
+        console.error(`배치 ${Math.floor(i / batchSize) + 1} 삽입 오류:`, error)
       } else {
         insertedCount += batch.length
-        console.log(`진행률: ${insertedCount}/${activities.length} (${Math.round(insertedCount/activities.length*100)}%)`)
+        console.log(
+          `진행률: ${insertedCount}/${activities.length} (${Math.round((insertedCount / activities.length) * 100)}%)`
+        )
       }
     }
 
     // 4. 생성된 데이터 확인
     console.log('\n4. 생성된 데이터 확인 중...')
-    
+
     const { data: recentActivities, error: checkError } = await supabase
       .from('user_activities')
       .select('action_type, created_at, metadata')
@@ -215,7 +215,6 @@ async function generateTestActivityData() {
     console.log('\n=== 테스트 데이터 생성 완료 ===')
     console.log(`총 ${insertedCount}개의 활동 데이터가 생성되었습니다.`)
     console.log('이제 리포트 생성을 테스트해보세요!')
-
   } catch (error) {
     console.error('테스트 데이터 생성 중 오류 발생:', error)
   }

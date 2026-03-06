@@ -2,56 +2,56 @@ name: Deploy Notifications
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   notify-deploy:
     runs-on: ubuntu-latest
-    
+
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Send deploy start notification
-      if: github.event_name == 'push'
-      run: |
-        curl -X POST https://slack.com/api/chat.postMessage \
-          -H "Authorization: Bearer ${{ secrets.SLACK_BOT_TOKEN }}" \
-          -H "Content-Type: application/json" \
-          -d '{
-            "channel": "C094ELD4D4L",
-            "text": "🚀 **GGAC 웹사이트** 배포 시작\n\n📋 **배포 정보:**\n• 브랜치: `${{ github.ref_name }}`\n• 커밋: `${{ github.sha }}`\n• 작성자: ${{ github.actor }}\n• 시간: $(date)\n\n⏳ Vercel에서 자동 배포 중...",
-            "username": "GitHub Deploy Bot",
-            "icon_emoji": ":github:"
-          }'
+      - uses: actions/checkout@v4
 
-    - name: Wait for deployment
-      if: github.event_name == 'push'
-      run: sleep 60
-
-    - name: Check deployment status
-      if: github.event_name == 'push'
-      run: |
-        # Vercel 배포 상태 확인 (간단한 사이트 접근 테스트)
-        if curl -f -s https://ggac.kr > /dev/null; then
+      - name: Send deploy start notification
+        if: github.event_name == 'push'
+        run: |
           curl -X POST https://slack.com/api/chat.postMessage \
             -H "Authorization: Bearer ${{ secrets.SLACK_BOT_TOKEN }}" \
             -H "Content-Type: application/json" \
             -d '{
               "channel": "C094ELD4D4L",
-              "text": "✅ **GGAC 웹사이트** 배포 완료!\n\n🎉 **배포 성공:**\n• 브랜치: `${{ github.ref_name }}`\n• 커밋: `${{ github.sha }}`\n• URL: https://ggac.kr\n• 완료 시간: $(date)\n\n🔗 사이트 확인: https://ggac.kr",
+              "text": "🚀 **GGAC 웹사이트** 배포 시작\n\n📋 **배포 정보:**\n• 브랜치: `${{ github.ref_name }}`\n• 커밋: `${{ github.sha }}`\n• 작성자: ${{ github.actor }}\n• 시간: $(date)\n\n⏳ Vercel에서 자동 배포 중...",
               "username": "GitHub Deploy Bot",
-              "icon_emoji": ":white_check_mark:"
+              "icon_emoji": ":github:"
             }'
-        else
-          curl -X POST https://slack.com/api/chat.postMessage \
-            -H "Authorization: Bearer ${{ secrets.SLACK_BOT_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "channel": "C094ELD4D4L",
-              "text": "❌ **GGAC 웹사이트** 배포 실패\n\n💥 **배포 실패:**\n• 브랜치: `${{ github.ref_name }}`\n• 커밋: `${{ github.sha }}`\n• 실패 시간: $(date)\n\n⚠️ Vercel 대시보드에서 로그를 확인해주세요.",
-              "username": "GitHub Deploy Bot",
-              "icon_emoji": ":x:"
-            }'
-        fi
+
+      - name: Wait for deployment
+        if: github.event_name == 'push'
+        run: sleep 60
+
+      - name: Check deployment status
+        if: github.event_name == 'push'
+        run: |
+          # Vercel 배포 상태 확인 (간단한 사이트 접근 테스트)
+          if curl -f -s https://ggac.kr > /dev/null; then
+            curl -X POST https://slack.com/api/chat.postMessage \
+              -H "Authorization: Bearer ${{ secrets.SLACK_BOT_TOKEN }}" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "channel": "C094ELD4D4L",
+                "text": "✅ **GGAC 웹사이트** 배포 완료!\n\n🎉 **배포 성공:**\n• 브랜치: `${{ github.ref_name }}`\n• 커밋: `${{ github.sha }}`\n• URL: https://ggac.kr\n• 완료 시간: $(date)\n\n🔗 사이트 확인: https://ggac.kr",
+                "username": "GitHub Deploy Bot",
+                "icon_emoji": ":white_check_mark:"
+              }'
+          else
+            curl -X POST https://slack.com/api/chat.postMessage \
+              -H "Authorization: Bearer ${{ secrets.SLACK_BOT_TOKEN }}" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "channel": "C094ELD4D4L",
+                "text": "❌ **GGAC 웹사이트** 배포 실패\n\n💥 **배포 실패:**\n• 브랜치: `${{ github.ref_name }}`\n• 커밋: `${{ github.sha }}`\n• 실패 시간: $(date)\n\n⚠️ Vercel 대시보드에서 로그를 확인해주세요.",
+                "username": "GitHub Deploy Bot",
+                "icon_emoji": ":x:"
+              }'
+          fi

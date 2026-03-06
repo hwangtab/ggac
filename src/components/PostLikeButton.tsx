@@ -43,72 +43,67 @@ const PostLikeButton: React.FC<PostLikeButtonProps> = ({
   showLabel = false,
   className = '',
   onLikeChange,
-  onClick
+  onClick,
 }) => {
   const [isAnimating, setIsAnimating] = useState(false)
   const animationTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  
-  const {
-    likeCount,
-    isLiked,
-    isLoading,
-    error,
-    toggleLike,
-    clearError,
-    canLike
-  } = usePostLikes({
+
+  const { likeCount, isLiked, isLoading, error, toggleLike, clearError, canLike } = usePostLikes({
     postId,
     initialLikeCount,
     initialIsLiked,
     prefetched: true,
-    onLikeChange
+    onLikeChange,
   })
 
   // 좋아요 버튼 클릭 처리
-  const handleClick = useCallback(async (event: React.MouseEvent) => {
-    // 이벤트 기본 동작 방지 (form submit 등)
-    event.preventDefault()
-    event.stopPropagation()
+  const handleClick = useCallback(
+    async (event: React.MouseEvent) => {
+      // 이벤트 기본 동작 방지 (form submit 등)
+      event.preventDefault()
+      event.stopPropagation()
 
-    if (!canLike) {
-      return
-    }
+      if (!canLike) {
+        return
+      }
 
-    if (isLoading || isAnimating) {
-      return
-    }
+      if (isLoading || isAnimating) {
+        return
+      }
 
-    setIsAnimating(true)
+      setIsAnimating(true)
 
-    try {
-      const success = await toggleLike()
-      
-      if (success) {
-        onClick?.()
-      } else {
+      try {
+        const success = await toggleLike()
+
+        if (success) {
+          onClick?.()
+        } else {
+          setIsAnimating(false)
+        }
+
+        if (error) {
+          console.error('[PostLikeButton] 에러:', error)
+          clearError()
+        }
+      } catch (err) {
+        console.error('[PostLikeButton] 처리 중 오류:', err)
         setIsAnimating(false)
-      }
+      } finally {
+        // 기존 타이머가 있다면 취소
+        if (animationTimeoutRef.current) {
+          clearTimeout(animationTimeoutRef.current)
+        }
 
-      if (error) {
-        console.error('[PostLikeButton] 에러:', error)
-        clearError()
+        // 애니메이션 유지 시간 (300ms)
+        animationTimeoutRef.current = setTimeout(() => {
+          setIsAnimating(false)
+          animationTimeoutRef.current = null
+        }, 300)
       }
-    } catch (err) {
-      console.error('[PostLikeButton] 처리 중 오류:', err)
-      setIsAnimating(false)
-    } finally {
-      // 기존 타이머가 있다면 취소
-      if (animationTimeoutRef.current) {
-        clearTimeout(animationTimeoutRef.current)
-      }
-      
-      // 애니메이션 유지 시간 (300ms)
-      animationTimeoutRef.current = setTimeout(() => {
-        setIsAnimating(false)
-        animationTimeoutRef.current = null
-      }, 300)
-    }
-  }, [canLike, isLoading, isAnimating, toggleLike, onClick, error, clearError])
+    },
+    [canLike, isLoading, isAnimating, toggleLike, onClick, error, clearError]
+  )
 
   // 크기별 스타일
   const sizeClasses = {
@@ -116,20 +111,20 @@ const PostLikeButton: React.FC<PostLikeButtonProps> = ({
       button: 'p-1',
       icon: 'w-4 h-4',
       text: 'text-xs',
-      gap: 'gap-1'
+      gap: 'gap-1',
     },
     md: {
       button: 'p-2',
       icon: 'w-5 h-5',
       text: 'text-sm',
-      gap: 'gap-2'
+      gap: 'gap-2',
     },
     lg: {
       button: 'p-3',
       icon: 'w-6 h-6',
       text: 'text-base',
-      gap: 'gap-2'
-    }
+      gap: 'gap-2',
+    },
   }
 
   // 변형별 스타일
@@ -137,15 +132,16 @@ const PostLikeButton: React.FC<PostLikeButtonProps> = ({
     default: {
       button: `
         flex items-center ${sizeClasses[size].gap} rounded-lg border transition-all duration-200
-        ${isLiked 
-          ? 'bg-red-50 border-red-200 text-red-600 hover:bg-red-100' 
-          : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100 hover:border-red-200'
+        ${
+          isLiked
+            ? 'bg-red-50 border-red-200 text-red-600 hover:bg-red-100'
+            : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100 hover:border-red-200'
         }
         ${isLoading ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105'}
         ${isAnimating ? 'scale-110' : ''}
       `,
       icon: isLiked ? 'text-red-500' : 'text-gray-500',
-      count: isLiked ? 'text-red-600' : 'text-gray-600'
+      count: isLiked ? 'text-red-600' : 'text-gray-600',
     },
     minimal: {
       button: `
@@ -155,21 +151,22 @@ const PostLikeButton: React.FC<PostLikeButtonProps> = ({
         ${isAnimating ? 'scale-110' : ''}
       `,
       icon: isLiked ? 'text-red-500' : 'text-gray-500',
-      count: isLiked ? 'text-red-500' : 'text-gray-600'
+      count: isLiked ? 'text-red-500' : 'text-gray-600',
     },
     card: {
       button: `
         flex items-center ${sizeClasses[size].gap} rounded-full px-3 py-1 transition-all duration-200
-        ${isLiked 
-          ? 'bg-red-500 text-white' 
-          : 'bg-white border border-gray-300 text-gray-600 hover:bg-red-50 hover:border-red-300'
+        ${
+          isLiked
+            ? 'bg-red-500 text-white'
+            : 'bg-white border border-gray-300 text-gray-600 hover:bg-red-50 hover:border-red-300'
         }
         ${isLoading ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105'}
         ${isAnimating ? 'scale-110' : ''}
       `,
       icon: isLiked ? 'text-white' : 'text-gray-600',
-      count: isLiked ? 'text-white' : 'text-gray-600'
-    }
+      count: isLiked ? 'text-white' : 'text-gray-600',
+    },
   }
 
   const currentVariant = variantClasses[variant]
@@ -181,7 +178,7 @@ const PostLikeButton: React.FC<PostLikeButtonProps> = ({
       const timer = setTimeout(() => {
         clearError()
       }, 3000)
-      
+
       return () => clearTimeout(timer)
     }
   }, [error, clearError])
@@ -202,13 +199,7 @@ const PostLikeButton: React.FC<PostLikeButtonProps> = ({
       onClick={handleClick}
       disabled={isLoading || !canLike || isAnimating}
       className={`relative ${currentVariant.button} ${currentSize.button} ${className}`}
-      title={
-        !canLike 
-          ? '로그인이 필요합니다' 
-          : isLiked 
-            ? '좋아요 취소' 
-            : '좋아요'
-      }
+      title={!canLike ? '로그인이 필요합니다' : isLiked ? '좋아요 취소' : '좋아요'}
       aria-label={`좋아요 ${likeCount || 0}개${isLiked ? ' (좋아요 누름)' : ''}`}
     >
       {/* 하트 아이콘 */}
@@ -237,9 +228,11 @@ const PostLikeButton: React.FC<PostLikeButtonProps> = ({
       {/* 로딩 표시 */}
       {isLoading && (
         <span className="ml-1">
-          <div className={`animate-spin rounded-full border-2 border-gray-300 border-t-red-500 ${
-            size === 'sm' ? 'w-3 h-3' : size === 'md' ? 'w-4 h-4' : 'w-5 h-5'
-          }`}></div>
+          <div
+            className={`animate-spin rounded-full border-2 border-gray-300 border-t-red-500 ${
+              size === 'sm' ? 'w-3 h-3' : size === 'md' ? 'w-4 h-4' : 'w-5 h-5'
+            }`}
+          ></div>
         </span>
       )}
 

@@ -30,17 +30,19 @@ export const FilterGroupRenderer: React.FC<FilterGroupRendererProps> = ({
   onUpdateCondition,
   onRemoveCondition,
   onRemoveGroup,
-  onUpdateGroupOperator
+  onUpdateGroupOperator,
 }) => {
   const isRootGroup = level === 0
-  const hasContent = (group.conditions && group.conditions.length > 0) || 
-                    (group.groups && group.groups.length > 0)
+  const hasContent =
+    (group.conditions && group.conditions.length > 0) || (group.groups && group.groups.length > 0)
 
   return (
-    <div className={`
+    <div
+      className={`
       relative border-l-2 pl-4 
       ${level === 0 ? 'border-blue-500' : level === 1 ? 'border-green-500' : 'border-orange-500'}
-    `}>
+    `}
+    >
       {/* 그룹 헤더 */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center space-x-3">
@@ -96,7 +98,7 @@ export const FilterGroupRenderer: React.FC<FilterGroupRendererProps> = ({
               fields={fields}
               operatorLabels={operatorLabels}
               onUpdate={(index, updates) => onUpdateCondition(index, updates, groupPath)}
-              onRemove={(index) => onRemoveCondition(index, groupPath)}
+              onRemove={index => onRemoveCondition(index, groupPath)}
             />
           ))}
         </div>
@@ -133,7 +135,7 @@ export const FilterGroupRenderer: React.FC<FilterGroupRendererProps> = ({
           <FiPlus className="w-4 h-4 mr-1" />
           조건 추가
         </button>
-        
+
         {level < 2 && ( // 최대 3단계까지만 중첩 허용
           <button
             onClick={() => onAddGroup(group, groupPath)}

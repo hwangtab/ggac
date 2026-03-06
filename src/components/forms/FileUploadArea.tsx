@@ -20,7 +20,7 @@ const iconMap = {
   image: FiImage,
   video: FiVideo,
   audio: FiMusic,
-  file: FiFile
+  file: FiFile,
 }
 
 export const FileUploadArea: React.FC<FileUploadAreaProps> = ({
@@ -33,7 +33,7 @@ export const FileUploadArea: React.FC<FileUploadAreaProps> = ({
   onDragLeave,
   onDrop,
   getFileIcon,
-  formatFileSize
+  formatFileSize,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -54,10 +54,7 @@ export const FileUploadArea: React.FC<FileUploadAreaProps> = ({
       <div
         className={`
           border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors
-          ${isDragOver
-            ? 'border-blue-400 bg-blue-50'
-            : 'border-gray-300 hover:border-gray-400'
-          }
+          ${isDragOver ? 'border-blue-400 bg-blue-50' : 'border-gray-300 hover:border-gray-400'}
         `}
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
@@ -72,32 +69,24 @@ export const FileUploadArea: React.FC<FileUploadAreaProps> = ({
           className="hidden"
           accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
         />
-        
+
         <div className="flex flex-col items-center">
           <FiUpload className="w-8 h-8 text-gray-400 mb-2" />
-          <p className="text-gray-600 mb-1">
-            파일을 드래그하거나 클릭하여 업로드
-          </p>
-          <p className="text-sm text-gray-500">
-            최대 {maxFiles}개 파일, 각각 5MB 이하
-          </p>
-          <p className="text-xs text-gray-400 mt-1">
-            이미지, 동영상, 음성, PDF, DOC 파일 지원
-          </p>
+          <p className="text-gray-600 mb-1">파일을 드래그하거나 클릭하여 업로드</p>
+          <p className="text-sm text-gray-500">최대 {maxFiles}개 파일, 각각 5MB 이하</p>
+          <p className="text-xs text-gray-400 mt-1">이미지, 동영상, 음성, PDF, DOC 파일 지원</p>
         </div>
       </div>
 
       {/* 선택된 파일 목록 */}
       {selectedFiles.length > 0 && (
         <div className="space-y-2">
-          <h4 className="font-medium text-gray-900">
-            첨부파일 ({selectedFiles.length}개)
-          </h4>
+          <h4 className="font-medium text-gray-900">첨부파일 ({selectedFiles.length}개)</h4>
           <div className="space-y-2">
             {selectedFiles.map((file, index) => {
               const iconType = getFileIcon(file.type)
               const IconComponent = iconMap[iconType as keyof typeof iconMap]
-              
+
               return (
                 <div
                   key={`${file.name}-${index}`}
@@ -106,18 +95,14 @@ export const FileUploadArea: React.FC<FileUploadAreaProps> = ({
                   <div className="flex items-center space-x-3">
                     <IconComponent className="w-5 h-5 text-gray-500" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">
-                        {file.name}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {formatFileSize(file.size)}
-                      </p>
+                      <p className="text-sm font-medium text-gray-900 truncate">{file.name}</p>
+                      <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
                     </div>
                   </div>
-                  
+
                   <button
                     type="button"
-                    onClick={(e) => {
+                    onClick={e => {
                       e.stopPropagation()
                       onRemoveFile(index)
                     }}

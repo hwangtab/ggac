@@ -27,10 +27,7 @@ async function checkPostsSchema() {
   try {
     // posts 테이블 구조 확인 (샘플 데이터로)
     console.log('1. posts 테이블 샘플 데이터 조회')
-    const { data: posts, error: postsError } = await supabase
-      .from('posts')
-      .select('*')
-      .limit(1)
+    const { data: posts, error: postsError } = await supabase.from('posts').select('*').limit(1)
 
     if (postsError) {
       console.error('❌ posts 조회 오류:', postsError.message)
@@ -76,11 +73,12 @@ async function checkPostsSchema() {
       if (allComments.length > 0) {
         console.log('최근 댓글들:')
         allComments.slice(0, 3).forEach(comment => {
-          console.log(`  - "${comment.content?.substring(0, 30)}..." (게시글: ${comment.post_id}) - ${comment.created_at}`)
+          console.log(
+            `  - "${comment.content?.substring(0, 30)}..." (게시글: ${comment.post_id}) - ${comment.created_at}`
+          )
         })
       }
     }
-
   } catch (error) {
     console.error('스키마 확인 중 오류 발생:', error)
   }

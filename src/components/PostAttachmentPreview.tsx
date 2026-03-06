@@ -1,29 +1,29 @@
-'use client';
+'use client'
 
-import React, { useState, useEffect } from 'react';
-import { FiImage, FiFile, FiVideo, FiMusic } from 'react-icons/fi';
+import React, { useState, useEffect } from 'react'
+import { FiImage, FiFile, FiVideo, FiMusic } from 'react-icons/fi'
 
 interface PostAttachmentPreviewProps {
-  postId: string;
-  className?: string;
-  stats?: AttachmentStats | null;
+  postId: string
+  className?: string
+  stats?: AttachmentStats | null
 }
 
 interface AttachmentStats {
-  total_attachments: number;
-  image_count: number;
-  document_count: number;
-  video_count: number;
-  audio_count: number;
+  total_attachments: number
+  image_count: number
+  document_count: number
+  video_count: number
+  audio_count: number
 }
 
 const PostAttachmentPreview: React.FC<PostAttachmentPreviewProps> = ({
   postId,
   className = '',
-  stats: propStats = null
+  stats: propStats = null,
 }) => {
-  const [stats, setStats] = useState<AttachmentStats | null>(propStats);
-  const [loading, setLoading] = useState(!propStats);
+  const [stats, setStats] = useState<AttachmentStats | null>(propStats)
+  const [loading, setLoading] = useState(!propStats)
 
   useEffect(() => {
     if (propStats) {
@@ -34,23 +34,23 @@ const PostAttachmentPreview: React.FC<PostAttachmentPreviewProps> = ({
 
     const fetchAttachmentStats = async () => {
       try {
-        const response = await fetch(`/api/posts/${postId}/attachments`);
+        const response = await fetch(`/api/posts/${postId}/attachments`)
         if (response.ok) {
-          const data = await response.json();
-          setStats(data.stats);
+          const data = await response.json()
+          setStats(data.stats)
         }
       } catch (error) {
-        console.error('첨부파일 정보 조회 실패:', error);
+        console.error('첨부파일 정보 조회 실패:', error)
       } finally {
-        setLoading(false);
+        setLoading(false)
       }
-    };
+    }
 
-    fetchAttachmentStats();
-  }, [postId, propStats]);
+    fetchAttachmentStats()
+  }, [postId, propStats])
 
   if (loading || !stats || stats.total_attachments === 0) {
-    return null;
+    return null
   }
 
   return (
@@ -80,7 +80,7 @@ const PostAttachmentPreview: React.FC<PostAttachmentPreviewProps> = ({
         </div>
       )}
     </div>
-  );
-};
+  )
+}
 
-export default PostAttachmentPreview;
+export default PostAttachmentPreview

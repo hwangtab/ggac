@@ -16,7 +16,10 @@ interface SettingsTab {
   id: SettingCategory
   label: string
   icon: React.ComponentType<{ className?: string }>
-  component: React.ComponentType<{ settings: SettingWithDefault[], onUpdate: (category: SettingCategory, key: string, value: any) => Promise<void> }>
+  component: React.ComponentType<{
+    settings: SettingWithDefault[]
+    onUpdate: (category: SettingCategory, key: string, value: any) => Promise<void>
+  }>
 }
 
 export default function MypageSettingsPage() {
@@ -26,7 +29,7 @@ export default function MypageSettingsPage() {
     privacy: [],
     interface: [],
     security: [],
-    preference: []
+    preference: [],
   })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string | null>(null)
@@ -36,32 +39,32 @@ export default function MypageSettingsPage() {
       id: 'notification',
       label: '알림 설정',
       icon: FiBell,
-      component: NotificationSettings
+      component: NotificationSettings,
     },
     {
       id: 'privacy',
       label: '개인정보',
       icon: FiUser,
-      component: PrivacySettings
+      component: PrivacySettings,
     },
     {
       id: 'interface',
       label: '인터페이스',
       icon: FiMonitor,
-      component: InterfaceSettings
+      component: InterfaceSettings,
     },
     {
       id: 'security',
       label: '보안',
       icon: FiLock,
-      component: SecuritySettings
+      component: SecuritySettings,
     },
     {
       id: 'preference',
       label: '취향 설정',
       icon: FiShield,
-      component: PreferenceSettings
-    }
+      component: PreferenceSettings,
+    },
   ]
 
   // 설정 조회
@@ -69,13 +72,13 @@ export default function MypageSettingsPage() {
     try {
       setLoading(true)
       const response = await fetch('/api/settings')
-      
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)
       }
 
       const data = await response.json()
-      
+
       if (data.success) {
         setSettings(data.settings)
       } else {
@@ -89,20 +92,24 @@ export default function MypageSettingsPage() {
   }
 
   // 설정 업데이트
-  const updateSetting = async (category: SettingCategory, setting_key: string, setting_value: any) => {
+  const updateSetting = async (
+    category: SettingCategory,
+    setting_key: string,
+    setting_value: any
+  ) => {
     try {
       setSaving(`${category}.${setting_key}`)
-      
+
       const response = await fetch('/api/settings', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           category,
           setting_key,
-          setting_value
-        })
+          setting_value,
+        }),
       })
 
       if (!response.ok) {
@@ -110,16 +117,16 @@ export default function MypageSettingsPage() {
       }
 
       const data = await response.json()
-      
+
       if (data.success) {
         // 로컬 상태 업데이트
         setSettings(prev => ({
           ...prev,
-          [category]: prev[category].map(setting => 
+          [category]: prev[category].map(setting =>
             setting.setting_key === setting_key
               ? { ...setting, setting_value, is_default: false }
               : setting
-          )
+          ),
         }))
       } else {
         throw new Error(data.error || 'Failed to update setting')
@@ -139,72 +146,66 @@ export default function MypageSettingsPage() {
   const ActiveComponent = tabs.find(tab => tab.id === activeTab)?.component
 
   return (
-    <PermissionCheck 
-      requiredPermission="member"
-      redirectTo="/register/pending"
-    >
+    <PermissionCheck requiredPermission="member" redirectTo="/register/pending">
       <MypageLayout title="설정" description="개인 설정을 관리합니다.">
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        {/* 탭 네비게이션 */}
-        <div className="border-b border-gray-200">
-          <nav className="flex space-x-8 px-6" aria-label="Tabs">
-            {tabs.map((tab) => {
-              const IconComponent = tab.icon
-              const isActive = activeTab === tab.id
-              
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`${
-                    isActive
-                      ? 'border-primary-500 text-primary-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center transition-colors`}
-                >
-                  <IconComponent className="w-4 h-4 mr-2" />
-                  {tab.label}
-                </button>
-              )
-            })}
-          </nav>
-        </div>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+          {/* 탭 네비게이션 */}
+          <div className="border-b border-gray-200">
+            <nav className="flex space-x-8 px-6" aria-label="Tabs">
+              {tabs.map(tab => {
+                const IconComponent = tab.icon
+                const isActive = activeTab === tab.id
 
-        {/* 설정 내용 */}
-        <div className="p-6">
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-              <span className="ml-3 text-gray-600">설정을 불러오는 중...</span>
-            </div>
-          ) : ActiveComponent ? (
-            <SettingsSection
-              title={tabs.find(tab => tab.id === activeTab)?.label || ''}
-              description={getTabDescription(activeTab)}
-            >
-              <ActiveComponent 
-                settings={settings[activeTab] || []}
-                onUpdate={updateSetting}
-              />
-            </SettingsSection>
-          ) : (
-            <div className="text-center py-12">
-              <FiSettings className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">설정을 선택해 주세요</h3>
-              <p className="text-gray-600">왼쪽 탭에서 원하는 설정 카테고리를 선택하세요.</p>
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`${
+                      isActive
+                        ? 'border-primary-500 text-primary-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center transition-colors`}
+                  >
+                    <IconComponent className="w-4 h-4 mr-2" />
+                    {tab.label}
+                  </button>
+                )
+              })}
+            </nav>
+          </div>
+
+          {/* 설정 내용 */}
+          <div className="p-6">
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+                <span className="ml-3 text-gray-600">설정을 불러오는 중...</span>
+              </div>
+            ) : ActiveComponent ? (
+              <SettingsSection
+                title={tabs.find(tab => tab.id === activeTab)?.label || ''}
+                description={getTabDescription(activeTab)}
+              >
+                <ActiveComponent settings={settings[activeTab] || []} onUpdate={updateSetting} />
+              </SettingsSection>
+            ) : (
+              <div className="text-center py-12">
+                <FiSettings className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">설정을 선택해 주세요</h3>
+                <p className="text-gray-600">왼쪽 탭에서 원하는 설정 카테고리를 선택하세요.</p>
+              </div>
+            )}
+          </div>
+
+          {/* 저장 상태 표시 */}
+          {saving && (
+            <div className="fixed bottom-4 right-4 bg-primary-600 text-white px-4 py-2 rounded-lg shadow-lg flex items-center">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+              저장 중...
             </div>
           )}
         </div>
-
-        {/* 저장 상태 표시 */}
-        {saving && (
-          <div className="fixed bottom-4 right-4 bg-primary-600 text-white px-4 py-2 rounded-lg shadow-lg flex items-center">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-            저장 중...
-          </div>
-        )}
-      </div>
-    </MypageLayout>
+      </MypageLayout>
     </PermissionCheck>
   )
 }

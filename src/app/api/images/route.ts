@@ -17,16 +17,16 @@ export async function GET(request: NextRequest) {
     // 보안을 위한 경로 정리
     const cleanPath = imagePath.replace(/^\/+/, '').replace(/\.\.+/g, '.')
     const publicPath = path.join(process.cwd(), 'public')
-    
+
     // WebP를 JPG로 변환하는 경우
     if (cleanPath.toLowerCase().endsWith('.webp') && format === 'jpg') {
       const jpgPath = cleanPath.replace(/\.webp$/i, '.jpg')
       const jpgFullPath = path.join(publicPath, jpgPath)
-      
+
       // JPG 파일이 이미 존재하는 경우
       if (fs.existsSync(jpgFullPath)) {
         const imageBuffer = fs.readFileSync(jpgFullPath)
-        
+
         return new NextResponse(imageBuffer, {
           status: 200,
           headers: {
@@ -39,17 +39,20 @@ export async function GET(request: NextRequest) {
         })
       }
     }
-    
+
     // 원본 파일 경로
     const fullImagePath = path.join(publicPath, cleanPath)
-    
+
     // 파일 존재 확인
     if (!fs.existsSync(fullImagePath)) {
       console.error('Image not found:', fullImagePath)
-      
+
       // 대체 이미지 반환 (투명 1x1 픽셀)
-      const transparentPixel = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64')
-      
+      const transparentPixel = Buffer.from(
+        'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
+        'base64'
+      )
+
       return new NextResponse(transparentPixel, {
         status: 404,
         headers: {
@@ -63,7 +66,7 @@ export async function GET(request: NextRequest) {
     // 원본 이미지 반환
     const imageBuffer = fs.readFileSync(fullImagePath)
     const ext = path.extname(cleanPath).toLowerCase()
-    
+
     const mimeTypes: { [key: string]: string } = {
       '.jpg': 'image/jpeg',
       '.jpeg': 'image/jpeg',
@@ -72,9 +75,9 @@ export async function GET(request: NextRequest) {
       '.webp': 'image/webp',
       '.svg': 'image/svg+xml',
     }
-    
+
     const contentType = mimeTypes[ext] || 'application/octet-stream'
-    
+
     return new NextResponse(imageBuffer, {
       status: 200,
       headers: {
@@ -85,13 +88,15 @@ export async function GET(request: NextRequest) {
         'X-Content-Type-Options': 'nosniff',
       },
     })
-
   } catch (error) {
     console.error('Image API error:', error)
-    
+
     // 에러 시 투명 픽셀 반환
-    const transparentPixel = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64')
-    
+    const transparentPixel = Buffer.from(
+      'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
+      'base64'
+    )
+
     return new NextResponse(transparentPixel, {
       status: 500,
       headers: {
@@ -116,21 +121,21 @@ export async function HEAD(request: NextRequest) {
 
     const cleanPath = imagePath.replace(/^\/+/, '').replace(/\.\.+/g, '.')
     const publicPath = path.join(process.cwd(), 'public')
-    
+
     let targetPath = cleanPath
     if (cleanPath.toLowerCase().endsWith('.webp') && format === 'jpg') {
       targetPath = cleanPath.replace(/\.webp$/i, '.jpg')
     }
-    
+
     const fullImagePath = path.join(publicPath, targetPath)
-    
+
     if (!fs.existsSync(fullImagePath)) {
       return new NextResponse(null, { status: 404 })
     }
 
     const stats = fs.statSync(fullImagePath)
     const ext = path.extname(targetPath).toLowerCase()
-    
+
     const mimeTypes: { [key: string]: string } = {
       '.jpg': 'image/jpeg',
       '.jpeg': 'image/jpeg',
@@ -138,7 +143,7 @@ export async function HEAD(request: NextRequest) {
       '.gif': 'image/gif',
       '.webp': 'image/webp',
     }
-    
+
     return new NextResponse(null, {
       status: 200,
       headers: {

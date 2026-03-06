@@ -6,19 +6,8 @@
 'use client'
 
 import React, { useState } from 'react'
-import { 
-  FiFilter, 
-  FiX, 
-  FiSave,
-  FiChevronDown,
-  FiChevronRight,
-  FiRefreshCw
-} from 'react-icons/fi'
-import type { 
-  FilterOperator, 
-  FieldDefinition,
-  AdvancedSearchQuery
-} from '@/types'
+import { FiFilter, FiX, FiSave, FiChevronDown, FiChevronRight, FiRefreshCw } from 'react-icons/fi'
+import type { FilterOperator, FieldDefinition, AdvancedSearchQuery } from '@/types'
 import { useAdvancedFilter } from '@/hooks/useAdvancedFilter'
 import { FilterGroupRenderer } from './filters/FilterGroupRenderer'
 import { SortConditionEditor } from './filters/SortConditionEditor'
@@ -47,7 +36,7 @@ const AdvancedFilterBuilder: React.FC<AdvancedFilterBuilderProps> = ({
   onChange,
   onSave,
   onLoadPreset,
-  presets = []
+  presets = [],
 }) => {
   const [isExpanded, setIsExpanded] = useState(true)
   const [showSaveDialog, setShowSaveDialog] = useState(false)
@@ -70,7 +59,7 @@ const AdvancedFilterBuilder: React.FC<AdvancedFilterBuilderProps> = ({
     in: '목록에 포함',
     not_in: '목록에 미포함',
     is_null: '비어있음',
-    is_not_null: '비어있지 않음'
+    is_not_null: '비어있지 않음',
   }
 
   const {
@@ -86,12 +75,12 @@ const AdvancedFilterBuilder: React.FC<AdvancedFilterBuilderProps> = ({
     updateSort,
     removeSort,
     resetFilters,
-    hasActiveFilters
+    hasActiveFilters,
   } = useAdvancedFilter({
     fields,
     initialFilters,
     initialSorts,
-    onChange
+    onChange,
   })
 
   // 저장 처리
@@ -100,7 +89,7 @@ const AdvancedFilterBuilder: React.FC<AdvancedFilterBuilderProps> = ({
 
     const query: AdvancedSearchQuery = {
       filters: filterGroup,
-      sorts
+      sorts,
     }
 
     onSave(query, presetName.trim())
@@ -126,9 +115,7 @@ const AdvancedFilterBuilder: React.FC<AdvancedFilterBuilderProps> = ({
           <FiFilter className="w-5 h-5 text-gray-600" />
           <h3 className="font-medium text-gray-900">고급 검색</h3>
           {hasActiveFilters && (
-            <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-              활성
-            </span>
+            <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">활성</span>
           )}
         </div>
 
@@ -255,18 +242,16 @@ const AdvancedFilterBuilder: React.FC<AdvancedFilterBuilderProps> = ({
                 <FiX className="w-5 h-5" />
               </button>
             </div>
-            
+
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                설정 이름
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">설정 이름</label>
               <input
                 type="text"
                 value={presetName}
-                onChange={(e) => setPresetName(e.target.value)}
+                onChange={e => setPresetName(e.target.value)}
                 placeholder="예: 최근 게시물 검색"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                onKeyDown={(e) => e.key === 'Enter' && handleSave()}
+                onKeyDown={e => e.key === 'Enter' && handleSave()}
                 autoFocus
               />
             </div>

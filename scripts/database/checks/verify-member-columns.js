@@ -31,14 +31,14 @@ async function verifyMemberColumns() {
 
     console.log('📋 member_profiles 테이블 컬럼 목록:')
     console.log('─'.repeat(80))
-    
+
     const requiredColumns = [
       'approved_by',
-      'approved_at', 
+      'approved_at',
       'rejected_by',
       'is_suspended',
       'suspension_reason',
-      'suspension_until'
+      'suspension_until',
     ]
 
     let missingColumns = []
@@ -47,8 +47,10 @@ async function verifyMemberColumns() {
     columns.forEach(col => {
       const isRequired = requiredColumns.includes(col.column_name)
       const status = isRequired ? '✅ 필수' : '   일반'
-      console.log(`${status} ${col.column_name.padEnd(25)} ${col.data_type.padEnd(20)} ${col.is_nullable}`)
-      
+      console.log(
+        `${status} ${col.column_name.padEnd(25)} ${col.data_type.padEnd(20)} ${col.is_nullable}`
+      )
+
       if (isRequired) {
         existingColumns.push(col.column_name)
       }
@@ -59,7 +61,7 @@ async function verifyMemberColumns() {
 
     console.log('\n📊 컬럼 검증 결과:')
     console.log('─'.repeat(50))
-    
+
     if (missingColumns.length === 0) {
       console.log('✅ 모든 필수 컬럼이 존재합니다!')
       existingColumns.forEach(col => {
@@ -79,14 +81,16 @@ async function verifyMemberColumns() {
     // 샘플 데이터 확인
     console.log('\n🧪 샘플 회원 데이터 확인:')
     console.log('─'.repeat(50))
-    
+
     const { data: members, error: memberError } = await supabase
       .from('member_profiles')
-      .select(`
+      .select(
+        `
         id, display_name, registration_status, is_active, 
         approved_by, approved_at, rejected_by, 
         is_suspended, suspension_reason, suspension_until
-      `)
+      `
+      )
       .limit(3)
 
     if (memberError) {
@@ -105,21 +109,23 @@ async function verifyMemberColumns() {
     // API 테스트
     console.log('🧪 API 접근 테스트:')
     console.log('─'.repeat(50))
-    
-    const testResponse = await fetch(`${supabaseUrl.replace('supabase.co', 'supabase.co')}/rest/v1/member_profiles?select=id,display_name&limit=1`, {
-      headers: {
-        'apikey': supabaseServiceKey,
-        'Authorization': `Bearer ${supabaseServiceKey}`,
-        'Content-Type': 'application/json'
+
+    const testResponse = await fetch(
+      `${supabaseUrl.replace('supabase.co', 'supabase.co')}/rest/v1/member_profiles?select=id,display_name&limit=1`,
+      {
+        headers: {
+          apikey: supabaseServiceKey,
+          Authorization: `Bearer ${supabaseServiceKey}`,
+          'Content-Type': 'application/json',
+        },
       }
-    })
+    )
 
     if (testResponse.ok) {
       console.log('✅ Supabase API 접근 성공')
     } else {
       console.log('❌ Supabase API 접근 실패:', testResponse.status)
     }
-
   } catch (error) {
     console.error('❌ 검증 중 오류 발생:', error)
   }

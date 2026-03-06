@@ -1,7 +1,18 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { FiMusic, FiUsers, FiSearch, FiFilter, FiRefreshCw, FiPlus, FiEdit3, FiEye, FiUserCheck, FiUserX } from 'react-icons/fi'
+import {
+  FiMusic,
+  FiUsers,
+  FiSearch,
+  FiFilter,
+  FiRefreshCw,
+  FiPlus,
+  FiEdit3,
+  FiEye,
+  FiUserCheck,
+  FiUserX,
+} from 'react-icons/fi'
 import AdminLayout from '../components/AdminLayout'
 import ArtistCard from './components/ArtistCard'
 import AssignArtistModal from './components/AssignArtistModal'
@@ -54,10 +65,10 @@ export default function ArtistsPage() {
     try {
       setLoading(true)
       setError(null)
-      
+
       const [artistsResponse, membersResponse] = await Promise.all([
         fetch('/api/admin/artists'),
-        fetch('/api/admin/artists/members')
+        fetch('/api/admin/artists/members'),
       ])
 
       if (!artistsResponse.ok || !membersResponse.ok) {
@@ -85,9 +96,9 @@ export default function ArtistsPage() {
   const handleRemoveAssignment = async (artistId: string, memberId: string) => {
     try {
       setActionLoading(`${artistId}-${memberId}`)
-      
+
       const response = await fetch(`/api/admin/artists/${artistId}/members/${memberId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
       })
 
       if (!response.ok) {
@@ -112,20 +123,23 @@ export default function ArtistsPage() {
   }
 
   const filteredArtists = artists.filter(artist => {
-    const matchesSearch = artist.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         artist.oneLiner.toLowerCase().includes(searchTerm.toLowerCase())
-    
+    const matchesSearch =
+      artist.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      artist.oneLiner.toLowerCase().includes(searchTerm.toLowerCase())
+
     if (filter === 'all') return matchesSearch
-    
+
     const hasAssignedMembers = artist.assignedMembers && artist.assignedMembers.length > 0
-    
+
     if (filter === 'assigned') return matchesSearch && hasAssignedMembers
     if (filter === 'unassigned') return matchesSearch && !hasAssignedMembers
-    
+
     return matchesSearch
   })
 
-  const assignedArtistsCount = artists.filter(a => a.assignedMembers && a.assignedMembers.length > 0).length
+  const assignedArtistsCount = artists.filter(
+    a => a.assignedMembers && a.assignedMembers.length > 0
+  ).length
   const unassignedArtistsCount = artists.length - assignedArtistsCount
   const totalMembers = members.filter(m => m.is_artist).length
 
@@ -181,7 +195,7 @@ export default function ArtistsPage() {
                 type="text"
                 placeholder="아티스트명, 소개로 검색..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={e => setSearchTerm(e.target.value)}
                 className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
               />
             </div>
@@ -189,7 +203,7 @@ export default function ArtistsPage() {
               <FiFilter className="w-5 h-5 text-gray-400" />
               <select
                 value={filter}
-                onChange={(e) => setFilter(e.target.value as any)}
+                onChange={e => setFilter(e.target.value as any)}
                 className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
                 <option value="all">전체</option>
@@ -215,7 +229,7 @@ export default function ArtistsPage() {
               총 {filteredArtists.length}명의 아티스트가 있습니다.
             </p>
           </div>
-          
+
           <div className="p-6">
             {loading ? (
               <div className="space-y-4">
@@ -256,7 +270,7 @@ export default function ArtistsPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {filteredArtists.map((artist) => (
+                {filteredArtists.map(artist => (
                   <ArtistCard
                     key={artist.id}
                     artist={artist}

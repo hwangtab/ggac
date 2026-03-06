@@ -1,40 +1,41 @@
-import React from 'react';
+import React from 'react'
 
 interface BentoGridItemProps {
-  children: React.ReactNode;
-  className?: string;
-  size?: 'small' | 'wide' | 'tall' | 'large';
+  children: React.ReactNode
+  className?: string
+  size?: 'small' | 'wide' | 'tall' | 'large'
 }
 
-const BentoGridItem: React.FC<BentoGridItemProps> = ({ 
-  children, 
+const BentoGridItem: React.FC<BentoGridItemProps> = ({
+  children,
   className = '',
-  size = 'small'
+  size = 'small',
 }) => {
   const sizeClasses = {
     small: 'bento-small',
     wide: 'bento-wide',
     tall: 'bento-tall',
-    large: 'bento-large'
-  };
+    large: 'bento-large',
+  }
 
   // Generate dynamic gradient based on size
   const getGradientClass = () => {
     switch (size) {
       case 'large':
-        return 'gradient-electric';
+        return 'gradient-electric'
       case 'wide':
-        return 'gradient-neon';
+        return 'gradient-neon'
       case 'tall':
-        return 'gradient-cosmic';
+        return 'gradient-cosmic'
       case 'small':
       default:
-        return 'gradient-gold';
+        return 'gradient-gold'
     }
-  };
+  }
 
   return (
-    <div className={`
+    <div
+      className={`
       bento-item 
       ${sizeClasses[size]} 
       ${getGradientClass()}
@@ -43,17 +44,16 @@ const BentoGridItem: React.FC<BentoGridItemProps> = ({
       group
       cursor-pointer
       ${className}
-    `}>
+    `}
+    >
       {/* Gradient overlay for content readability */}
       <div className="absolute inset-0 bg-gradient-to-br from-black/40 via-transparent to-black/60 rounded-[24px]" />
-      
+
       {/* Content container with glass effect */}
       <div className="relative h-full flex flex-col justify-end text-white">
-        <div className="creative-post-card p-4 backdrop-blur-sm">
-          {children}
-        </div>
+        <div className="creative-post-card p-4 backdrop-blur-sm">{children}</div>
       </div>
-      
+
       {/* Hover effect particles */}
       <div className="absolute inset-0 opacity-0 group-hover:opacity-20 transition-opacity duration-300 pointer-events-none">
         <div className="absolute top-4 left-4 w-2 h-2 bg-white rounded-full animate-pulse" />
@@ -61,20 +61,18 @@ const BentoGridItem: React.FC<BentoGridItemProps> = ({
         <div className="absolute bottom-6 left-8 w-1.5 h-1.5 bg-white rounded-full animate-pulse delay-200" />
       </div>
     </div>
-  );
-};
-
-interface BentoGridShowcaseProps {
-  children: React.ReactNode;
-  className?: string;
+  )
 }
 
-const BentoGridShowcase: React.FC<BentoGridShowcaseProps> = ({ 
-  children, 
-  className = '' 
-}) => {
+interface BentoGridShowcaseProps {
+  children: React.ReactNode
+  className?: string
+}
+
+const BentoGridShowcase: React.FC<BentoGridShowcaseProps> = ({ children, className = '' }) => {
   return (
-    <div className={`
+    <div
+      className={`
       bento-grid 
       responsive
       grid-cols-1 sm:grid-cols-2 lg:grid-cols-4
@@ -83,10 +81,11 @@ const BentoGridShowcase: React.FC<BentoGridShowcaseProps> = ({
       min-h-[400px] lg:h-[600px]
       p-4
       ${className}
-    `}>
+    `}
+    >
       {children}
     </div>
-  );
-};
+  )
+}
 
-export { BentoGridShowcase, BentoGridItem };
+export { BentoGridShowcase, BentoGridItem }

@@ -7,7 +7,7 @@ import { BOARD_CATEGORIES } from '@/constants/categories'
 // TinyMCE를 동적으로 로드하여 SSR 이슈 방지
 const RichTextEditor = dynamic(() => import('../RichTextEditor'), {
   ssr: false,
-  loading: () => <div className="h-96 bg-gray-100 rounded-lg animate-pulse" />
+  loading: () => <div className="h-96 bg-gray-100 rounded-lg animate-pulse" />,
 })
 
 interface PostFormFieldsProps {
@@ -25,7 +25,7 @@ export const PostFormFields: React.FC<PostFormFieldsProps> = ({
   category,
   onTitleChange,
   onContentChange,
-  onCategoryChange
+  onCategoryChange,
 }) => {
   // '전체'는 필터링용이므로 제외하고 실제 게시글 카테고리만 사용
   const postCategories = BOARD_CATEGORIES.slice(1)
@@ -40,7 +40,7 @@ export const PostFormFields: React.FC<PostFormFieldsProps> = ({
         <input
           type="text"
           value={title}
-          onChange={(e) => onTitleChange(e.target.value)}
+          onChange={e => onTitleChange(e.target.value)}
           placeholder="게시글 제목을 입력하세요"
           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           required
@@ -54,11 +54,11 @@ export const PostFormFields: React.FC<PostFormFieldsProps> = ({
         </label>
         <select
           value={category}
-          onChange={(e) => onCategoryChange(e.target.value)}
+          onChange={e => onCategoryChange(e.target.value)}
           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           required
         >
-          {postCategories.map((cat) => (
+          {postCategories.map(cat => (
             <option key={cat} value={cat}>
               {cat}
             </option>

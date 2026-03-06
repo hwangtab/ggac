@@ -5,11 +5,11 @@ import { useState, useEffect } from 'react'
 /**
  * 고급 파티클 스켈레톤 - 실제 파티클과 유사한 로딩 애니메이션
  */
-export const AdvancedParticlesSkeleton = ({ 
-  particleCount = 12, 
-  width, 
-  height 
-}: { 
+export const AdvancedParticlesSkeleton = ({
+  particleCount = 12,
+  width,
+  height,
+}: {
   particleCount?: number
   width: number
   height: number
@@ -20,13 +20,13 @@ export const AdvancedParticlesSkeleton = ({
     const interval = setInterval(() => {
       setAnimationPhase(prev => (prev + 1) % 3)
     }, 2000)
-    
+
     return () => clearInterval(interval)
   }, [])
 
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden">
-      <div 
+      <div
         className="relative w-full h-full"
         style={{
           filter: 'blur(0.5px)',
@@ -51,8 +51,7 @@ export const AdvancedParticlesSkeleton = ({
                 animationDelay: `${delay}s`,
                 animationDuration: `${1.5 + (i % 2) * 0.5}s`,
                 transform: `translate(-50%, -50%) scale(${
-                  animationPhase === 0 ? 1 : 
-                  animationPhase === 1 ? 1.2 : 0.8
+                  animationPhase === 0 ? 1 : animationPhase === 1 ? 1.2 : 0.8
                 })`,
                 transition: 'transform 2s ease-in-out',
               }}
@@ -60,7 +59,7 @@ export const AdvancedParticlesSkeleton = ({
           )
         })}
       </div>
-      
+
       {/* 로딩 텍스트 (선택적) */}
       <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
         <div className="text-white/40 text-sm font-light tracking-wide">
@@ -91,8 +90,8 @@ export const MinimalParticlesSkeleton = () => (
           key={i}
           className="absolute w-1 h-1 bg-white/10 rounded-full animate-pulse"
           style={{
-            left: `${20 + (i * 9) % 60}%`,
-            top: `${30 + (i * 13) % 40}%`,
+            left: `${20 + ((i * 9) % 60)}%`,
+            top: `${30 + ((i * 13) % 40)}%`,
             animationDelay: `${i * 0.2}s`,
             animationDuration: `${2 + (i % 3) * 0.5}s`,
           }}
@@ -105,11 +104,7 @@ export const MinimalParticlesSkeleton = () => (
 /**
  * 프로그레시브 로딩 스켈레톤 - 단계별 로딩 시각화
  */
-export const ProgressiveParticlesSkeleton = ({ 
-  progress = 0 
-}: { 
-  progress?: number 
-}) => {
+export const ProgressiveParticlesSkeleton = ({ progress = 0 }: { progress?: number }) => {
   const totalDots = 16
   const activeDots = Math.floor((progress / 100) * totalDots)
 
@@ -118,21 +113,17 @@ export const ProgressiveParticlesSkeleton = ({
       {/* 진행률 표시 */}
       <div className="absolute top-4 left-1/2 transform -translate-x-1/2">
         <div className="bg-black/20 backdrop-blur-sm rounded-full px-3 py-1">
-          <div className="text-white/60 text-xs font-mono">
-            {progress.toFixed(0)}%
-          </div>
+          <div className="text-white/60 text-xs font-mono">{progress.toFixed(0)}%</div>
         </div>
       </div>
-      
+
       {/* 진행률에 따른 점진적 파티클 표시 */}
       <div className="grid grid-cols-4 gap-4 w-64 h-32 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
         {Array.from({ length: totalDots }, (_, i) => (
           <div
             key={i}
             className={`w-2 h-2 rounded-full transition-all duration-300 ${
-              i < activeDots 
-                ? 'bg-white/60 scale-100' 
-                : 'bg-white/20 scale-75'
+              i < activeDots ? 'bg-white/60 scale-100' : 'bg-white/20 scale-75'
             }`}
             style={{
               animationDelay: `${i * 0.1}s`,
@@ -168,10 +159,10 @@ export const WaveParticlesSkeleton = () => (
 /**
  * 오류 상태 컴포넌트 - 파티클 로딩 실패 시
  */
-export const ParticlesErrorState = ({ 
-  onRetry, 
-  error 
-}: { 
+export const ParticlesErrorState = ({
+  onRetry,
+  error,
+}: {
   onRetry?: () => void
   error?: Error | string
 }) => {
@@ -184,18 +175,18 @@ export const ParticlesErrorState = ({
           <div className="text-center">
             <div className="w-12 h-12 mx-auto mb-3 text-red-400/60">
               <svg fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                <path
+                  fillRule="evenodd"
+                  d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                  clipRule="evenodd"
+                />
               </svg>
             </div>
-            
-            <h3 className="text-white/80 text-sm font-medium mb-2">
-              파티클 시스템 로딩 실패
-            </h3>
-            
-            <p className="text-white/60 text-xs mb-3">
-              네트워크 상태를 확인하고 다시 시도해주세요
-            </p>
-            
+
+            <h3 className="text-white/80 text-sm font-medium mb-2">파티클 시스템 로딩 실패</h3>
+
+            <p className="text-white/60 text-xs mb-3">네트워크 상태를 확인하고 다시 시도해주세요</p>
+
             {onRetry && (
               <button
                 onClick={onRetry}
@@ -204,7 +195,7 @@ export const ParticlesErrorState = ({
                 다시 시도
               </button>
             )}
-            
+
             {error && (
               <button
                 onClick={() => setShowDetails(!showDetails)}
@@ -213,7 +204,7 @@ export const ParticlesErrorState = ({
                 {showDetails ? '숨기기' : '자세히'}
               </button>
             )}
-            
+
             {showDetails && error && (
               <div className="mt-3 p-2 bg-black/30 rounded text-left">
                 <code className="text-red-300/80 text-xs break-all">
@@ -231,10 +222,10 @@ export const ParticlesErrorState = ({
 /**
  * 성공 상태 컴포넌트 - 파티클 로딩 완료 시
  */
-export const ParticlesSuccessState = ({ 
-  onComplete, 
-  autoHide = true 
-}: { 
+export const ParticlesSuccessState = ({
+  onComplete,
+  autoHide = true,
+}: {
   onComplete?: () => void
   autoHide?: boolean
 }) => {
@@ -243,7 +234,7 @@ export const ParticlesSuccessState = ({
       const timer = setTimeout(() => {
         onComplete?.()
       }, 1500)
-      
+
       return () => clearTimeout(timer)
     }
   }, [autoHide, onComplete])
@@ -254,7 +245,11 @@ export const ParticlesSuccessState = ({
         <div className="bg-green-500/20 backdrop-blur-sm rounded-full p-3 animate-ping">
           <div className="w-6 h-6 text-green-400">
             <svg fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+              <path
+                fillRule="evenodd"
+                d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                clipRule="evenodd"
+              />
             </svg>
           </div>
         </div>

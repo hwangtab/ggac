@@ -43,10 +43,12 @@ export default function NotificationSettings({ settings, onUpdate }: Notificatio
             <button
               type="button"
               disabled={updating === 'email_notifications'}
-              onClick={() => updateSettingValue('email_notifications', {
-                ...emailNotifications,
-                enabled: !emailNotifications.enabled
-              })}
+              onClick={() =>
+                updateSettingValue('email_notifications', {
+                  ...emailNotifications,
+                  enabled: !emailNotifications.enabled,
+                })
+              }
               className={`${
                 emailNotifications.enabled ? 'bg-primary-600' : 'bg-gray-200'
               } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50`}
@@ -68,10 +70,12 @@ export default function NotificationSettings({ settings, onUpdate }: Notificatio
                   type="checkbox"
                   disabled={updating === 'email_notifications'}
                   checked={emailNotifications.post_notifications || false}
-                  onChange={(e) => updateSettingValue('email_notifications', {
-                    ...emailNotifications,
-                    post_notifications: e.target.checked
-                  })}
+                  onChange={e =>
+                    updateSettingValue('email_notifications', {
+                      ...emailNotifications,
+                      post_notifications: e.target.checked,
+                    })
+                  }
                   className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded disabled:opacity-50"
                 />
                 <label htmlFor="email-post-notifications" className="ml-3 text-sm text-gray-700">
@@ -84,10 +88,12 @@ export default function NotificationSettings({ settings, onUpdate }: Notificatio
                   type="checkbox"
                   disabled={updating === 'email_notifications'}
                   checked={emailNotifications.comment_notifications || false}
-                  onChange={(e) => updateSettingValue('email_notifications', {
-                    ...emailNotifications,
-                    comment_notifications: e.target.checked
-                  })}
+                  onChange={e =>
+                    updateSettingValue('email_notifications', {
+                      ...emailNotifications,
+                      comment_notifications: e.target.checked,
+                    })
+                  }
                   className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded disabled:opacity-50"
                 />
                 <label htmlFor="email-comment-notifications" className="ml-3 text-sm text-gray-700">
@@ -100,10 +106,12 @@ export default function NotificationSettings({ settings, onUpdate }: Notificatio
                   type="checkbox"
                   disabled={updating === 'email_notifications'}
                   checked={emailNotifications.system_notifications || false}
-                  onChange={(e) => updateSettingValue('email_notifications', {
-                    ...emailNotifications,
-                    system_notifications: e.target.checked
-                  })}
+                  onChange={e =>
+                    updateSettingValue('email_notifications', {
+                      ...emailNotifications,
+                      system_notifications: e.target.checked,
+                    })
+                  }
                   className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded disabled:opacity-50"
                 />
                 <label htmlFor="email-system-notifications" className="ml-3 text-sm text-gray-700">
@@ -128,10 +136,12 @@ export default function NotificationSettings({ settings, onUpdate }: Notificatio
             <button
               type="button"
               disabled={updating === 'web_notifications'}
-              onClick={() => updateSettingValue('web_notifications', {
-                ...webNotifications,
-                enabled: !webNotifications.enabled
-              })}
+              onClick={() =>
+                updateSettingValue('web_notifications', {
+                  ...webNotifications,
+                  enabled: !webNotifications.enabled,
+                })
+              }
               className={`${
                 webNotifications.enabled ? 'bg-primary-600' : 'bg-gray-200'
               } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50`}
@@ -153,10 +163,12 @@ export default function NotificationSettings({ settings, onUpdate }: Notificatio
                   type="checkbox"
                   disabled={updating === 'web_notifications'}
                   checked={webNotifications.post_notifications || false}
-                  onChange={(e) => updateSettingValue('web_notifications', {
-                    ...webNotifications,
-                    post_notifications: e.target.checked
-                  })}
+                  onChange={e =>
+                    updateSettingValue('web_notifications', {
+                      ...webNotifications,
+                      post_notifications: e.target.checked,
+                    })
+                  }
                   className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded disabled:opacity-50"
                 />
                 <label htmlFor="web-post-notifications" className="ml-3 text-sm text-gray-700">
@@ -169,10 +181,12 @@ export default function NotificationSettings({ settings, onUpdate }: Notificatio
                   type="checkbox"
                   disabled={updating === 'web_notifications'}
                   checked={webNotifications.comment_notifications || false}
-                  onChange={(e) => updateSettingValue('web_notifications', {
-                    ...webNotifications,
-                    comment_notifications: e.target.checked
-                  })}
+                  onChange={e =>
+                    updateSettingValue('web_notifications', {
+                      ...webNotifications,
+                      comment_notifications: e.target.checked,
+                    })
+                  }
                   className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded disabled:opacity-50"
                 />
                 <label htmlFor="web-comment-notifications" className="ml-3 text-sm text-gray-700">
@@ -185,10 +199,12 @@ export default function NotificationSettings({ settings, onUpdate }: Notificatio
                   type="checkbox"
                   disabled={updating === 'web_notifications'}
                   checked={webNotifications.mention_notifications || false}
-                  onChange={(e) => updateSettingValue('web_notifications', {
-                    ...webNotifications,
-                    mention_notifications: e.target.checked
-                  })}
+                  onChange={e =>
+                    updateSettingValue('web_notifications', {
+                      ...webNotifications,
+                      mention_notifications: e.target.checked,
+                    })
+                  }
                   className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded disabled:opacity-50"
                 />
                 <label htmlFor="web-mention-notifications" className="ml-3 text-sm text-gray-700">
@@ -212,10 +228,12 @@ export default function NotificationSettings({ settings, onUpdate }: Notificatio
                 type="radio"
                 disabled={updating === 'notification_frequency'}
                 checked={notificationFrequency.value === option}
-                onChange={() => updateSettingValue('notification_frequency', {
-                  ...notificationFrequency,
-                  value: option
-                })}
+                onChange={() =>
+                  updateSettingValue('notification_frequency', {
+                    ...notificationFrequency,
+                    value: option,
+                  })
+                }
                 className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 disabled:opacity-50"
               />
               <label htmlFor={`frequency-${option}`} className="ml-3 text-sm text-gray-700">

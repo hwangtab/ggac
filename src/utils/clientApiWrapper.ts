@@ -1,6 +1,6 @@
 /**
  * 클라이언트 사이드 API 호출 공통 래퍼 함수
- * 
+ *
  * 프론트엔드에서 API를 호출할 때 사용하는 통합된 래퍼입니다.
  * - 자동 에러 처리
  * - 로딩 상태 통합
@@ -69,9 +69,9 @@ let globalConfig: ClientApiConfig = {
   retryAttempts: 2,
   retryDelay: 1000,
   defaultHeaders: {
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
   },
-  debug: process.env.NODE_ENV === 'development'
+  debug: process.env.NODE_ENV === 'development',
 }
 
 // 간단한 메모리 캐시
@@ -107,7 +107,7 @@ function setCachedData<T>(key: string, data: T, ttl: number): void {
   apiCache.set(key, {
     data,
     timestamp: Date.now(),
-    ttl
+    ttl,
   })
 }
 
@@ -123,7 +123,7 @@ function delay(ms: number): Promise<void> {
  */
 function serializeParams(params: Record<string, any>): string {
   const urlParams = new URLSearchParams()
-  
+
   Object.entries(params).forEach(([key, value]) => {
     if (value !== null && value !== undefined) {
       if (Array.isArray(value)) {
@@ -133,7 +133,7 @@ function serializeParams(params: Record<string, any>): string {
       }
     }
   })
-  
+
   return urlParams.toString()
 }
 
@@ -172,7 +172,7 @@ async function executeRequest<T = any>(
 
   const headers = {
     ...globalConfig.defaultHeaders,
-    ...fetchOptions.headers
+    ...fetchOptions.headers,
   }
 
   let lastError: Error | null = null
@@ -181,7 +181,9 @@ async function executeRequest<T = any>(
   while (attempt <= (retryAttempts || 0)) {
     try {
       if (globalConfig.debug) {
-        console.log(`[CLIENT API] ${fetchOptions.method || 'GET'} ${fullUrl} (attempt ${attempt + 1})`)
+        console.log(
+          `[CLIENT API] ${fetchOptions.method || 'GET'} ${fullUrl} (attempt ${attempt + 1})`
+        )
       }
 
       // 타임아웃 설정
@@ -191,7 +193,7 @@ async function executeRequest<T = any>(
       const response = await fetch(fullUrl, {
         ...fetchOptions,
         headers,
-        signal: controller.signal
+        signal: controller.signal,
       })
 
       if (timeoutId) clearTimeout(timeoutId)
@@ -213,8 +215,9 @@ async function executeRequest<T = any>(
 
       if (!response.ok) {
         const errorResponse = responseData as ApiErrorResponse
-        const errorMessage = errorResponse.error || `HTTP ${response.status}: ${response.statusText}`
-        
+        const errorMessage =
+          errorResponse.error || `HTTP ${response.status}: ${response.statusText}`
+
         if (globalConfig.debug) {
           console.error(`[CLIENT API] Error ${response.status}:`, errorResponse)
         }
@@ -240,10 +243,9 @@ async function executeRequest<T = any>(
       }
 
       return successResponse
-
     } catch (error) {
       lastError = error as Error
-      
+
       if (error instanceof ClientApiError) {
         // 재시도 불가능한 에러들
         if (error.status === 401 || error.status === 403 || error.status === 404) {
@@ -252,7 +254,7 @@ async function executeRequest<T = any>(
       }
 
       attempt++
-      
+
       if (attempt <= (retryAttempts || 0)) {
         if (globalConfig.debug) {
           console.log(`[CLIENT API] Retrying in ${retryDelay}ms...`)
@@ -286,7 +288,7 @@ export async function apiGet<T = any>(
 
   return executeRequest<T>(fullUrl, {
     ...options,
-    method: 'GET'
+    method: 'GET',
   })
 }
 
@@ -299,7 +301,7 @@ export async function apiPost<T = any>(
   return executeRequest<T>(url, {
     ...options,
     method: 'POST',
-    body: data ? JSON.stringify(data) : undefined
+    body: data ? JSON.stringify(data) : undefined,
   })
 }
 
@@ -312,7 +314,7 @@ export async function apiPut<T = any>(
   return executeRequest<T>(url, {
     ...options,
     method: 'PUT',
-    body: data ? JSON.stringify(data) : undefined
+    body: data ? JSON.stringify(data) : undefined,
   })
 }
 
@@ -325,7 +327,7 @@ export async function apiPatch<T = any>(
   return executeRequest<T>(url, {
     ...options,
     method: 'PATCH',
-    body: data ? JSON.stringify(data) : undefined
+    body: data ? JSON.stringify(data) : undefined,
   })
 }
 
@@ -336,7 +338,7 @@ export async function apiDelete<T = any>(
 ): Promise<ApiSuccessResponse<T>> {
   return executeRequest<T>(url, {
     ...options,
-    method: 'DELETE'
+    method: 'DELETE',
   })
 }
 
@@ -349,7 +351,7 @@ export async function apiUpload<T = any>(
   options: RequestOptions = {}
 ): Promise<ApiSuccessResponse<T>> {
   const { headers, ...otherOptions } = options
-  
+
   return executeRequest<T>(url, {
     ...otherOptions,
     method: 'POST',
@@ -357,11 +359,9 @@ export async function apiUpload<T = any>(
     headers: {
       // Content-Type을 FormData가 자동 설정하도록 제거
       ...Object.fromEntries(
-        Object.entries(headers || {}).filter(([key]) => 
-          key.toLowerCase() !== 'content-type'
-        )
-      )
-    }
+        Object.entries(headers || {}).filter(([key]) => key.toLowerCase() !== 'content-type')
+      ),
+    },
   })
 }
 
@@ -418,6 +418,6 @@ export function getCacheInfo(): Array<{ key: string; size: number; age: number }
   return Array.from(apiCache.entries()).map(([key, value]) => ({
     key,
     size: JSON.stringify(value.data).length,
-    age: now - value.timestamp
+    age: now - value.timestamp,
   }))
 }

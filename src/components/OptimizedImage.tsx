@@ -214,6 +214,10 @@ const OptimizedImage = memo(function OptimizedImage({
       ? `${className} relative`
       : 'relative'
 
+  const handleErrorRef = useRef<((event?: React.SyntheticEvent<HTMLImageElement>) => void) | null>(
+    null
+  )
+
   const handleError = useCallback(
     (event?: React.SyntheticEvent<HTMLImageElement>) => {
       clearLoadAndErrorTimers()
@@ -271,6 +275,10 @@ const OptimizedImage = memo(function OptimizedImage({
   )
 
   useEffect(() => {
+    handleErrorRef.current = handleError
+  }, [handleError])
+
+  useEffect(() => {
     if (!isLoading) {
       clearLoadAndErrorTimers()
       return
@@ -288,7 +296,7 @@ const OptimizedImage = memo(function OptimizedImage({
           `[OptimizedImage] 로딩 지연 감지(${resolvedLoadTimeout}ms) → 대체 로직 실행: ${currentSrc}`
         )
         clearLoadAndErrorTimers()
-        handleError()
+        handleErrorRef.current?.()
       }, resolvedLoadTimeout)
     }
 
@@ -311,15 +319,7 @@ const OptimizedImage = memo(function OptimizedImage({
     return () => {
       clearLoadAndErrorTimers()
     }
-  }, [
-    clearLoadAndErrorTimers,
-    currentSrc,
-    errorTimeoutMs,
-    handleError,
-    isLoading,
-    loadTimeoutMs,
-    onErrorProp,
-  ])
+  }, [clearLoadAndErrorTimers, currentSrc, errorTimeoutMs, isLoading, loadTimeoutMs, onErrorProp])
 
   const startPolling = useCallback(() => {
     clearPolling() // 기존 폴링 정리
@@ -348,6 +348,12 @@ const OptimizedImage = memo(function OptimizedImage({
       // 최대 폴링 시간 초과 시 중단
       if (elapsedTime > maxPollingDuration) {
         clearPolling()
+        // 이미지 요소가 존재하고 완료 상태면 로드 처리
+        if (img && img.complete) {
+          clearLoadAndErrorTimers()
+          setIsLoading(false)
+          onLoadProp?.()
+        }
       }
     }, pollingInterval)
   }, [priority, currentSrc, clearPolling, clearLoadAndErrorTimers, onLoadProp])
@@ -371,9 +377,9 @@ const OptimizedImage = memo(function OptimizedImage({
     onLoadProp?.()
   }, [clearLoadAndErrorTimers, currentSrc, retryCount, onLoadProp])
 
-  const handleLoad = () => {
+  const handleLoad = useCallback(() => {
     markImageLoaded()
-  }
+  }, [markImageLoaded])
 
   useEffect(() => {
     const img = imageRef.current
@@ -386,6 +392,15 @@ const OptimizedImage = memo(function OptimizedImage({
       startPolling()
     }
   }, [currentSrc, markImageLoaded, isLoading, startPolling])
+
+  // 절대 안전 타임아웃: 15초 후에도 로딩 중이면 강제 해제
+  useEffect(() => {
+    if (!isLoading) return
+    const safetyTimeout = setTimeout(() => {
+      setIsLoading(false)
+    }, 15000)
+    return () => clearTimeout(safetyTimeout)
+  }, [isLoading, currentSrc])
 
   // 재시도 핸들러
   const handleRetry = () => {

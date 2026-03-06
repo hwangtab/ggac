@@ -78,39 +78,42 @@ const WebGLParticles = ({ particleCount, width, height }: WebGLParticlesProps) =
   const createShader = useCallback((gl: WebGLRenderingContext, type: number, source: string) => {
     const shader = gl.createShader(type)
     if (!shader) return null
-    
+
     gl.shaderSource(shader, source)
     gl.compileShader(shader)
-    
+
     if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
       console.error('Shader compile error:', gl.getShaderInfoLog(shader))
       gl.deleteShader(shader)
       return null
     }
-    
+
     return shader
   }, [])
 
-  const createProgram = useCallback((gl: WebGLRenderingContext) => {
-    const vertexShader = createShader(gl, gl.VERTEX_SHADER, VERTEX_SHADER_SOURCE)
-    const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, FRAGMENT_SHADER_SOURCE)
+  const createProgram = useCallback(
+    (gl: WebGLRenderingContext) => {
+      const vertexShader = createShader(gl, gl.VERTEX_SHADER, VERTEX_SHADER_SOURCE)
+      const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, FRAGMENT_SHADER_SOURCE)
 
-    if (!vertexShader || !fragmentShader) return null
+      if (!vertexShader || !fragmentShader) return null
 
-    const program = gl.createProgram()
-    if (!program) return null
+      const program = gl.createProgram()
+      if (!program) return null
 
-    gl.attachShader(program, vertexShader)
-    gl.attachShader(program, fragmentShader)
-    gl.linkProgram(program)
+      gl.attachShader(program, vertexShader)
+      gl.attachShader(program, fragmentShader)
+      gl.linkProgram(program)
 
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-      console.error('Program link error:', gl.getProgramInfoLog(program))
-      return null
-    }
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        console.error('Program link error:', gl.getProgramInfoLog(program))
+        return null
+      }
 
-    return program
-  }, [createShader])
+      return program
+    },
+    [createShader]
+  )
 
   const initWebGL = useCallback(() => {
     const canvas = canvasRef.current
@@ -123,11 +126,12 @@ const WebGLParticles = ({ particleCount, width, height }: WebGLParticlesProps) =
       depth: false,
       premultipliedAlpha: false,
       preserveDrawingBuffer: false,
-      powerPreference: 'default'
+      powerPreference: 'default',
     }
 
-    const gl = canvas.getContext('webgl', contextAttributes) || 
-               canvas.getContext('experimental-webgl', contextAttributes)
+    const gl =
+      canvas.getContext('webgl', contextAttributes) ||
+      canvas.getContext('experimental-webgl', contextAttributes)
     if (!gl || !('useProgram' in gl)) {
       console.warn('WebGL not supported')
       return false
@@ -154,13 +158,13 @@ const WebGLParticles = ({ particleCount, width, height }: WebGLParticlesProps) =
     locationsRef.current = {
       uniforms: {
         resolution: webglContext.getUniformLocation(program, 'u_resolution'),
-        mouse: webglContext.getUniformLocation(program, 'u_mouse')
+        mouse: webglContext.getUniformLocation(program, 'u_mouse'),
       },
       attributes: {
         position: webglContext.getAttribLocation(program, 'a_position'),
         size: webglContext.getAttribLocation(program, 'a_size'),
-        alpha: webglContext.getAttribLocation(program, 'a_alpha')
-      }
+        alpha: webglContext.getAttribLocation(program, 'a_alpha'),
+      },
     }
 
     // 재사용 가능한 버퍼 생성
@@ -184,21 +188,21 @@ const WebGLParticles = ({ particleCount, width, height }: WebGLParticlesProps) =
 
     for (let i = 0; i < particleCount; i++) {
       const i2 = i * 2
-      
+
       // Position
       positions[i2] = Math.random() * width
       positions[i2 + 1] = Math.random() * height
-      
+
       // Size
       sizes[i] = Math.random() * 3 + 1
-      
+
       // Alpha
       alphas[i] = Math.random()
-      
+
       // Velocity
       velocities[i2] = (Math.random() - 0.5) * 0.5
       velocities[i2 + 1] = (Math.random() - 0.5) * 0.5
-      
+
       // Twinkle
       twinklePhases[i] = Math.random() * Math.PI * 2
       twinkleSpeeds[i] = Math.random() * 0.02 + 0.01
@@ -210,7 +214,7 @@ const WebGLParticles = ({ particleCount, width, height }: WebGLParticlesProps) =
       alphas,
       velocities,
       twinklePhases,
-      twinkleSpeeds
+      twinkleSpeeds,
     }
   }, [particleCount, width, height])
 
@@ -220,9 +224,17 @@ const WebGLParticles = ({ particleCount, width, height }: WebGLParticlesProps) =
     const particleData = particleDataRef.current
     const locations = locationsRef.current
     const buffers = buffersRef.current
-    
-    if (!gl || !program || !particleData || !locations || 
-        !buffers.position || !buffers.size || !buffers.alpha) return
+
+    if (
+      !gl ||
+      !program ||
+      !particleData ||
+      !locations ||
+      !buffers.position ||
+      !buffers.size ||
+      !buffers.alpha
+    )
+      return
 
     // Clear canvas
     gl.clearColor(0, 0, 0, 0)
@@ -231,17 +243,17 @@ const WebGLParticles = ({ particleCount, width, height }: WebGLParticlesProps) =
     // Update particle positions and twinkle (벡터화된 업데이트)
     for (let i = 0; i < particleCount; i++) {
       const i2 = i * 2
-      
+
       // Update positions
       particleData.positions[i2] += particleData.velocities[i2]
       particleData.positions[i2 + 1] += particleData.velocities[i2 + 1]
-      
+
       // Wrap around screen
       if (particleData.positions[i2] < 0) particleData.positions[i2] = width
       else if (particleData.positions[i2] > width) particleData.positions[i2] = 0
       if (particleData.positions[i2 + 1] < 0) particleData.positions[i2 + 1] = height
       else if (particleData.positions[i2 + 1] > height) particleData.positions[i2 + 1] = 0
-      
+
       // Update twinkle (optimized sin calculation)
       particleData.twinklePhases[i] += particleData.twinkleSpeeds[i]
       particleData.alphas[i] = Math.abs(Math.sin(particleData.twinklePhases[i])) * 0.6 + 0.4
@@ -281,11 +293,11 @@ const WebGLParticles = ({ particleCount, width, height }: WebGLParticlesProps) =
   const handleMouseMove = useCallback((event: MouseEvent) => {
     const canvas = canvasRef.current
     if (!canvas) return
-    
+
     const rect = canvas.getBoundingClientRect()
     mousePositionRef.current = {
       x: event.clientX - rect.left,
-      y: event.clientY - rect.top
+      y: event.clientY - rect.top,
     }
   }, [])
 
@@ -361,7 +373,7 @@ const WebGLParticles = ({ particleCount, width, height }: WebGLParticlesProps) =
       style={{
         pointerEvents: 'none',
         zIndex: 30,
-        opacity: 0.6
+        opacity: 0.6,
       }}
     />
   )

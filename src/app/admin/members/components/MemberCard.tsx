@@ -1,7 +1,19 @@
 'use client'
 
 import { memo } from 'react'
-import { FiEye, FiCheck, FiX, FiUser, FiPause, FiPlay, FiMail, FiCalendar, FiShield, FiAlertCircle, FiClock } from 'react-icons/fi'
+import {
+  FiEye,
+  FiCheck,
+  FiX,
+  FiUser,
+  FiPause,
+  FiPlay,
+  FiMail,
+  FiCalendar,
+  FiShield,
+  FiAlertCircle,
+  FiClock,
+} from 'react-icons/fi'
 
 interface Member {
   id: string
@@ -40,7 +52,11 @@ interface Member {
 interface MemberCardProps {
   member: Member
   onView: () => void
-  onAction: (memberId: string, action: 'approve' | 'reject' | 'deactivate' | 'activate' | 'suspend' | 'unsuspend', params?: any) => void
+  onAction: (
+    memberId: string,
+    action: 'approve' | 'reject' | 'deactivate' | 'activate' | 'suspend' | 'unsuspend',
+    params?: any
+  ) => void
   isLoading: boolean
 }
 
@@ -49,7 +65,7 @@ function MemberCard({ member, onView, onAction, isLoading }: MemberCardProps) {
     if (member.is_suspended) {
       return 'bg-red-100 text-red-800'
     }
-    
+
     switch (member.registration_status) {
       case 'pending':
         return 'bg-yellow-100 text-yellow-800'
@@ -66,7 +82,7 @@ function MemberCard({ member, onView, onAction, isLoading }: MemberCardProps) {
     if (member.is_suspended) {
       return '정지됨'
     }
-    
+
     switch (member.registration_status) {
       case 'pending':
         return '승인 대기'
@@ -83,14 +99,16 @@ function MemberCard({ member, onView, onAction, isLoading }: MemberCardProps) {
     return new Date(dateString).toLocaleDateString('ko-KR', {
       year: 'numeric',
       month: 'short',
-      day: 'numeric'
+      day: 'numeric',
     })
   }
 
   return (
-    <div className={`bg-white border rounded-lg p-4 hover:shadow-md transition-shadow ${
-      member.is_suspended ? 'border-red-200 bg-red-50' : 'border-gray-200'
-    }`}>
+    <div
+      className={`bg-white border rounded-lg p-4 hover:shadow-md transition-shadow ${
+        member.is_suspended ? 'border-red-200 bg-red-50' : 'border-gray-200'
+      }`}
+    >
       <div className="flex items-start justify-between">
         <div className="flex items-start space-x-4 flex-1">
           {/* 프로필 아이콘 */}
@@ -104,7 +122,9 @@ function MemberCard({ member, onView, onAction, isLoading }: MemberCardProps) {
               <h3 className="text-lg font-semibold text-gray-900 truncate">
                 {member.display_name}
               </h3>
-              <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(member)}`}>
+              <span
+                className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(member)}`}
+              >
                 {getStatusText(member)}
               </span>
               {member.is_artist && (
@@ -128,22 +148,20 @@ function MemberCard({ member, onView, onAction, isLoading }: MemberCardProps) {
                 </span>
               )}
             </div>
-            
+
             <div className="mt-1 space-y-1">
               <div className="flex items-center text-sm text-gray-600">
                 <FiMail className="w-4 h-4 mr-1" />
                 <span className="truncate">{member.email}</span>
               </div>
               {member.real_name && (
-                <div className="text-sm text-gray-600">
-                  실명: {member.real_name}
-                </div>
+                <div className="text-sm text-gray-600">실명: {member.real_name}</div>
               )}
               <div className="flex items-center text-sm text-gray-500">
                 <FiCalendar className="w-4 h-4 mr-1" />
                 <span>가입일: {formatDate(member.created_at)}</span>
               </div>
-              
+
               {/* 추가 정보 표시 */}
               <div className="flex items-center gap-4 text-xs text-gray-500 mt-1">
                 <span>프로필: {member.profile_completeness_score}%</span>
@@ -152,7 +170,7 @@ function MemberCard({ member, onView, onAction, isLoading }: MemberCardProps) {
                   <span>최근 로그인: {formatDate(member.last_login_at)}</span>
                 )}
               </div>
-              
+
               {member.is_suspended && member.suspension_reason && (
                 <div className="flex items-center text-sm text-red-600 mt-1">
                   <FiAlertCircle className="w-4 h-4 mr-1" />
@@ -214,9 +232,13 @@ function MemberCard({ member, onView, onAction, isLoading }: MemberCardProps) {
                 }`}
                 title={member.is_active ? '비활성화' : '활성화'}
               >
-                {member.is_active ? <FiPause className="w-4 h-4" /> : <FiPlay className="w-4 h-4" />}
+                {member.is_active ? (
+                  <FiPause className="w-4 h-4" />
+                ) : (
+                  <FiPlay className="w-4 h-4" />
+                )}
               </button>
-              
+
               {/* 정지/정지해제 버튼 */}
               <button
                 onClick={() => {
@@ -225,14 +247,17 @@ function MemberCard({ member, onView, onAction, isLoading }: MemberCardProps) {
                   } else {
                     const reason = prompt('정지 사유를 입력하세요:', '이용규칙 위반')
                     if (!reason) return
-                    
-                    const until = prompt('정지 기간을 입력하세요 (YYYY-MM-DD 형식, 비우면 무기한):', '')
-                    
+
+                    const until = prompt(
+                      '정지 기간을 입력하세요 (YYYY-MM-DD 형식, 비우면 무기한):',
+                      ''
+                    )
+
                     const params: any = { suspension_reason: reason }
                     if (until) {
                       params.suspension_until = until
                     }
-                    
+
                     onAction(member.id, 'suspend', params)
                   }
                 }}

@@ -10,12 +10,10 @@ async function convertWebPtoJPG() {
     if (file.endsWith('.webp')) {
       const webpPath = path.join(projectsDir, file)
       const jpgPath = path.join(projectsDir, file.replace('.webp', '.jpg'))
-      
+
       if (!fs.existsSync(jpgPath)) {
         try {
-          await sharp(webpPath)
-            .jpeg({ quality: 80 })
-            .toFile(jpgPath)
+          await sharp(webpPath).jpeg({ quality: 80 }).toFile(jpgPath)
           console.log(`Converted ${file} to JPG`)
         } catch (err) {
           console.error(`Error converting ${file}:`, err)

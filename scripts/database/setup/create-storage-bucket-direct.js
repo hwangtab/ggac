@@ -41,14 +41,14 @@ async function createProfilesBucket() {
     // 1. 현재 bucket 목록 확인
     console.log('1️⃣ 현재 bucket 목록 확인...')
     const { data: buckets, error: listError } = await supabase.storage.listBuckets()
-    
+
     if (listError) {
       console.error('❌ Bucket 목록 조회 실패:', listError.message)
       return
     }
 
     console.log(`✅ 현재 bucket 수: ${buckets?.length || 0}개`)
-    
+
     const profilesBucketExists = buckets?.some(bucket => bucket.id === 'profiles')
     if (profilesBucketExists) {
       console.log('✅ profiles bucket이 이미 존재합니다!')
@@ -60,7 +60,7 @@ async function createProfilesBucket() {
     const { data, error } = await supabase.storage.createBucket('profiles', {
       public: true,
       fileSizeLimit: 2097152, // 2MB
-      allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+      allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
     })
 
     if (error) {
@@ -81,7 +81,7 @@ async function createProfilesBucket() {
     console.log('\n3️⃣ 생성 결과 재확인...')
     const { data: updatedBuckets } = await supabase.storage.listBuckets()
     const newProfilesBucket = updatedBuckets?.find(bucket => bucket.id === 'profiles')
-    
+
     if (newProfilesBucket) {
       console.log('✅ profiles bucket 생성 및 확인 완료!')
       console.log('📋 최종 정보:', {
@@ -89,15 +89,16 @@ async function createProfilesBucket() {
         name: newProfilesBucket.name,
         public: newProfilesBucket.public,
         file_size_limit: newProfilesBucket.file_size_limit,
-        allowed_mime_types: newProfilesBucket.allowed_mime_types
+        allowed_mime_types: newProfilesBucket.allowed_mime_types,
       })
-      
+
       console.log('\n🎉 프로필 사진 업로드 기능이 활성화되었습니다!')
-      console.log('👉 이제 웹사이트에서 마이페이지 → 개인 프로필에서 프로필 사진을 업로드할 수 있습니다.')
+      console.log(
+        '👉 이제 웹사이트에서 마이페이지 → 개인 프로필에서 프로필 사진을 업로드할 수 있습니다.'
+      )
     } else {
       console.log('⚠️ bucket 생성이 완료되었지만 확인되지 않았습니다')
     }
-
   } catch (error) {
     console.error('❌ 처리 중 오류 발생:', error.message)
   }

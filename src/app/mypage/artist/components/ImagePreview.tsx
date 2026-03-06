@@ -1,90 +1,84 @@
-'use client';
+'use client'
 
-import { useState, useEffect } from 'react';
-import { Camera, Link, AlertCircle, Check } from 'lucide-react';
+import { useState, useEffect } from 'react'
+import { Camera, Link, AlertCircle, Check } from 'lucide-react'
 
 interface ImagePreviewProps {
-  currentImage?: string;
-  onImageChange: (imageUrl: string) => void;
-  value: string;
+  currentImage?: string
+  onImageChange: (imageUrl: string) => void
+  value: string
 }
 
-type ImageStatus = 'idle' | 'loading' | 'success' | 'error';
+type ImageStatus = 'idle' | 'loading' | 'success' | 'error'
 
 export default function ImagePreview({ currentImage, onImageChange, value }: ImagePreviewProps) {
-  const [imageUrl, setImageUrl] = useState(value || '');
-  const [imageStatus, setImageStatus] = useState<ImageStatus>('idle');
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [imageUrl, setImageUrl] = useState(value || '')
+  const [imageStatus, setImageStatus] = useState<ImageStatus>('idle')
+  const [previewImage, setPreviewImage] = useState<string | null>(null)
 
   // URL 유효성 검사
   const isValidUrl = (url: string) => {
     try {
-      new URL(url);
-      return /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(url);
+      new URL(url)
+      return /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(url)
     } catch {
-      return false;
+      return false
     }
-  };
+  }
 
   // 이미지 로딩 테스트
   const testImageLoad = (url: string) => {
     if (!url || !isValidUrl(url)) {
-      setImageStatus('idle');
-      setPreviewImage(null);
-      return;
+      setImageStatus('idle')
+      setPreviewImage(null)
+      return
     }
 
-    setImageStatus('loading');
-    
-    const img = new Image();
+    setImageStatus('loading')
+
+    const img = new Image()
     img.onload = () => {
-      setImageStatus('success');
-      setPreviewImage(url);
-    };
+      setImageStatus('success')
+      setPreviewImage(url)
+    }
     img.onerror = () => {
-      setImageStatus('error');
-      setPreviewImage(null);
-    };
-    img.src = url;
-  };
+      setImageStatus('error')
+      setPreviewImage(null)
+    }
+    img.src = url
+  }
 
   // URL 입력 핸들러
   const handleUrlChange = (newUrl: string) => {
-    setImageUrl(newUrl);
-    onImageChange(newUrl);
-    
+    setImageUrl(newUrl)
+    onImageChange(newUrl)
+
     // 디바운스를 위한 타이머
     const timeoutId = setTimeout(() => {
-      testImageLoad(newUrl);
-    }, 500);
+      testImageLoad(newUrl)
+    }, 500)
 
-    return () => clearTimeout(timeoutId);
-  };
+    return () => clearTimeout(timeoutId)
+  }
 
   // 초기 이미지 로딩
   useEffect(() => {
     if (value) {
-      testImageLoad(value);
+      testImageLoad(value)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value]);
+  }, [value])
 
   return (
     <div className="space-y-4">
       {/* 현재 이미지 표시 */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          현재 프로필 이미지
-        </label>
+        <label className="block text-sm font-medium text-gray-700 mb-2">현재 프로필 이미지</label>
         <div className="flex items-center gap-4">
           {currentImage ? (
             <div className="w-20 h-20 rounded-lg overflow-hidden bg-gray-100">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={currentImage}
-                alt="현재 프로필"
-                className="w-full h-full object-cover"
-              />
+              <img src={currentImage} alt="현재 프로필" className="w-full h-full object-cover" />
             </div>
           ) : (
             <div className="w-20 h-20 rounded-lg bg-gray-100 flex items-center justify-center">
@@ -110,7 +104,7 @@ export default function ImagePreview({ currentImage, onImageChange, value }: Ima
             type="url"
             id="imageUrl"
             value={imageUrl}
-            onChange={(e) => handleUrlChange(e.target.value)}
+            onChange={e => handleUrlChange(e.target.value)}
             placeholder="https://example.com/image.jpg"
             className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
@@ -119,15 +113,11 @@ export default function ImagePreview({ currentImage, onImageChange, value }: Ima
             {imageStatus === 'loading' && (
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
             )}
-            {imageStatus === 'success' && (
-              <Check className="h-4 w-4 text-green-500" />
-            )}
-            {imageStatus === 'error' && (
-              <AlertCircle className="h-4 w-4 text-red-500" />
-            )}
+            {imageStatus === 'success' && <Check className="h-4 w-4 text-green-500" />}
+            {imageStatus === 'error' && <AlertCircle className="h-4 w-4 text-red-500" />}
           </div>
         </div>
-        
+
         {/* 입력 가이드 */}
         <p className="mt-1 text-xs text-gray-500">
           JPG, PNG, GIF, WebP 형식의 이미지 URL을 입력하세요
@@ -137,9 +127,7 @@ export default function ImagePreview({ currentImage, onImageChange, value }: Ima
       {/* 새 이미지 프리뷰 */}
       {imageUrl && (
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            미리보기
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">미리보기</label>
           <div className="flex items-center gap-4">
             <div className="w-20 h-20 rounded-lg overflow-hidden bg-gray-100 border-2 border-dashed border-gray-300">
               {imageStatus === 'loading' && (
@@ -192,9 +180,7 @@ export default function ImagePreview({ currentImage, onImageChange, value }: Ima
           <div className="flex">
             <AlertCircle className="h-5 w-5 text-red-400 mt-0.5" />
             <div className="ml-3">
-              <h3 className="text-sm font-medium text-red-800">
-                이미지를 불러올 수 없습니다
-              </h3>
+              <h3 className="text-sm font-medium text-red-800">이미지를 불러올 수 없습니다</h3>
               <div className="mt-1 text-sm text-red-700">
                 <ul className="list-disc list-inside space-y-1">
                   <li>URL이 올바른지 확인해주세요</li>
@@ -218,5 +204,5 @@ export default function ImagePreview({ currentImage, onImageChange, value }: Ima
         </ul>
       </div>
     </div>
-  );
+  )
 }

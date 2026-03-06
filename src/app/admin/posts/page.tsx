@@ -1,7 +1,19 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { FiEdit3, FiEye, FiTrash2, FiSearch, FiFilter, FiRefreshCw, FiBookmark, FiMessageSquare, FiCalendar, FiUser, FiSettings } from 'react-icons/fi'
+import {
+  FiEdit3,
+  FiEye,
+  FiTrash2,
+  FiSearch,
+  FiFilter,
+  FiRefreshCw,
+  FiBookmark,
+  FiMessageSquare,
+  FiCalendar,
+  FiUser,
+  FiSettings,
+} from 'react-icons/fi'
 import AdminLayout from '../components/AdminLayout'
 import PostCard from './components/PostCard'
 import PostDetailModal from './components/PostDetailModal'
@@ -36,20 +48,22 @@ export default function PostsPage() {
     totalPosts: 0,
     totalDeleted: 0,
     totalPinned: 0,
-    categoryStats: { 공지: 0, 잡담: 0, 홍보: 0, 건의: 0 }
+    categoryStats: { 공지: 0, 잡담: 0, 홍보: 0, 건의: 0 },
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('전체')
   const [selectedStatus, setSelectedStatus] = useState('all')
-  const [filter, setFilter] = useState<'all' | '공지' | '잡담' | '홍보' | '건의' | 'deleted' | 'pinned'>('all')
+  const [filter, setFilter] = useState<
+    'all' | '공지' | '잡담' | '홍보' | '건의' | 'deleted' | 'pinned'
+  >('all')
   const [selectedPost, setSelectedPost] = useState<Post | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
-  
+
   // 고급 필터링 상태
   const [useAdvancedFilter, setUseAdvancedFilter] = useState(false)
   const [fieldDefinitions, setFieldDefinitions] = useState<FieldDefinition[]>([])
@@ -70,63 +84,67 @@ export default function PostsPage() {
   }
 
   // 고급 검색 실행
-  const executeAdvancedSearch = useCallback(async (query: AdvancedSearchQuery) => {
-    try {
-      setLoading(true)
-      setError(null)
-      
-      const searchQuery = {
-        ...query,
-        pagination: {
-          page: currentPage,
-          limit: 20,
-          ...query.pagination
+  const executeAdvancedSearch = useCallback(
+    async (query: AdvancedSearchQuery) => {
+      try {
+        setLoading(true)
+        setError(null)
+
+        const searchQuery = {
+          ...query,
+          pagination: {
+            page: currentPage,
+            limit: 20,
+            ...query.pagination,
+          },
         }
-      }
 
-      const response = await fetch('/api/admin/posts/advanced-search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(searchQuery)
-      })
+        const response = await fetch('/api/admin/posts/advanced-search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(searchQuery),
+        })
 
-      if (!response.ok) {
-        throw new Error('고급 검색 중 오류가 발생했습니다.')
-      }
+        if (!response.ok) {
+          throw new Error('고급 검색 중 오류가 발생했습니다.')
+        }
 
-      const result: FilteredResult = await response.json()
-      setAdvancedResult(result)
-      setPosts(result.data)
-      setTotalPages(result.pagination.total_pages)
-      
-      // 통계는 별도 조회
-      const statsResponse = await fetch('/api/admin/posts/stats')
-      if (statsResponse.ok) {
-        const statsData: PostStats = await statsResponse.json()
-        setStats(statsData)
+        const result: FilteredResult = await response.json()
+        setAdvancedResult(result)
+        setPosts(result.data)
+        setTotalPages(result.pagination.total_pages)
+
+        // 통계는 별도 조회
+        const statsResponse = await fetch('/api/admin/posts/stats')
+        if (statsResponse.ok) {
+          const statsData: PostStats = await statsResponse.json()
+          setStats(statsData)
+        }
+      } catch (err) {
+        console.error('Advanced search error:', err)
+        setError(err instanceof Error ? err.message : '고급 검색 중 오류가 발생했습니다.')
+      } finally {
+        setLoading(false)
       }
-      
-    } catch (err) {
-      console.error('Advanced search error:', err)
-      setError(err instanceof Error ? err.message : '고급 검색 중 오류가 발생했습니다.')
-    } finally {
-      setLoading(false)
-    }
-  }, [currentPage])
+    },
+    [currentPage]
+  )
 
   const fetchData = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
-      
+
       const [postsResponse, statsResponse] = await Promise.all([
-        fetch(`/api/admin/posts?${new URLSearchParams({
-          filter,
-          search: searchTerm,
-          page: currentPage.toString(),
-          limit: '20'
-        })}`),
-        fetch('/api/admin/posts/stats')
+        fetch(
+          `/api/admin/posts?${new URLSearchParams({
+            filter,
+            search: searchTerm,
+            page: currentPage.toString(),
+            limit: '20',
+          })}`
+        ),
+        fetch('/api/admin/posts/stats'),
       ])
 
       if (!postsResponse.ok || !statsResponse.ok) {
@@ -162,16 +180,19 @@ export default function PostsPage() {
     }
   }, [currentPage, useAdvancedFilter, advancedQuery, executeAdvancedSearch])
 
-  const handlePostAction = async (postId: string, action: 'delete' | 'restore' | 'pin' | 'unpin') => {
+  const handlePostAction = async (
+    postId: string,
+    action: 'delete' | 'restore' | 'pin' | 'unpin'
+  ) => {
     try {
       setActionLoading(postId)
-      
+
       const response = await fetch(`/api/admin/posts/${postId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ action })
+        body: JSON.stringify({ action }),
       })
 
       if (!response.ok) {
@@ -185,7 +206,7 @@ export default function PostsPage() {
       } else {
         await fetchData()
       }
-      
+
       // 모달이 열려있다면 게시글 정보 업데이트
       if (selectedPost && selectedPost.id === postId) {
         const updatedPost = posts.find(p => p.id === postId)
@@ -222,27 +243,37 @@ export default function PostsPage() {
 
   const getFilterLabel = (filter: string) => {
     switch (filter) {
-      case 'all': return '전체'
-      case 'deleted': return '삭제됨'
-      case 'pinned': return '고정됨'
-      default: return filter
+      case 'all':
+        return '전체'
+      case 'deleted':
+        return '삭제됨'
+      case 'pinned':
+        return '고정됨'
+      default:
+        return filter
     }
   }
 
   // 고급 필터 모드가 아닐 때만 클라이언트 사이드 필터링 적용
-  const displayedPosts = useAdvancedFilter ? posts : posts.filter(post => {
-    const matchesSearch = !searchTerm || 
-      post.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      post.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (post.author?.display_name || post.author?.name || '').toLowerCase().includes(searchTerm.toLowerCase())
-    
-    const matchesCategory = selectedCategory === '전체' || post.category === selectedCategory
-    const matchesStatus = selectedStatus === 'all' || 
-      (selectedStatus === 'active' && !post.is_deleted) ||
-      (selectedStatus === 'deleted' && post.is_deleted)
-    
-    return matchesSearch && matchesCategory && matchesStatus
-  })
+  const displayedPosts = useAdvancedFilter
+    ? posts
+    : posts.filter(post => {
+        const matchesSearch =
+          !searchTerm ||
+          post.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          post.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (post.author?.display_name || post.author?.name || '')
+            .toLowerCase()
+            .includes(searchTerm.toLowerCase())
+
+        const matchesCategory = selectedCategory === '전체' || post.category === selectedCategory
+        const matchesStatus =
+          selectedStatus === 'all' ||
+          (selectedStatus === 'active' && !post.is_deleted) ||
+          (selectedStatus === 'deleted' && post.is_deleted)
+
+        return matchesSearch && matchesCategory && matchesStatus
+      })
 
   return (
     <AdminLayout title="게시글 관리" description="게시글 및 댓글 관리">
@@ -318,7 +349,7 @@ export default function PostsPage() {
               <FiFilter className="w-5 h-5 text-gray-400" />
               <select
                 value={filter}
-                onChange={(e) => handleFilterChange(e.target.value as typeof filter)}
+                onChange={e => handleFilterChange(e.target.value as typeof filter)}
                 className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                 disabled={useAdvancedFilter}
               >
@@ -330,7 +361,7 @@ export default function PostsPage() {
                 <option value="pinned">고정됨</option>
                 <option value="deleted">삭제됨</option>
               </select>
-              
+
               <button
                 onClick={() => {
                   setUseAdvancedFilter(!useAdvancedFilter)
@@ -350,9 +381,13 @@ export default function PostsPage() {
                 <FiSettings className="w-4 h-4 mr-2" />
                 {useAdvancedFilter ? '기본 필터' : '고급 필터'}
               </button>
-              
+
               <button
-                onClick={useAdvancedFilter ? () => advancedQuery && executeAdvancedSearch(advancedQuery) : fetchData}
+                onClick={
+                  useAdvancedFilter
+                    ? () => advancedQuery && executeAdvancedSearch(advancedQuery)
+                    : fetchData
+                }
                 className="flex items-center px-3 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
               >
                 <FiRefreshCw className="w-4 h-4 mr-2" />
@@ -367,7 +402,7 @@ export default function PostsPage() {
               fields={fieldDefinitions}
               initialFilters={advancedQuery?.filters}
               initialSorts={advancedQuery?.sorts}
-              onChange={(query) => {
+              onChange={query => {
                 setAdvancedQuery(query)
                 executeAdvancedSearch(query)
               }}
@@ -379,22 +414,22 @@ export default function PostsPage() {
             <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <div className="flex items-center justify-between">
                 <div className="text-sm text-blue-800">
-                  <span className="font-medium">검색 결과:</span> 
-                  {' '}{advancedResult.filtered}개 게시글 (전체 {advancedResult.total}개 중)
+                  <span className="font-medium">검색 결과:</span> {advancedResult.filtered}개 게시글
+                  (전체 {advancedResult.total}개 중)
                 </div>
                 <div className="text-xs text-blue-600">
                   페이지 {advancedResult.pagination.page} / {advancedResult.pagination.total_pages}
                 </div>
               </div>
-              
+
               {/* 적용된 필터 요약 */}
               {advancedResult.applied_filters.conditions.length > 0 && (
                 <div className="mt-2 text-xs text-blue-700">
                   <span className="font-medium">적용된 필터:</span>{' '}
                   {advancedResult.applied_filters.conditions.length}개 조건
-                  {advancedResult.applied_filters.groups && 
-                   advancedResult.applied_filters.groups.length > 0 && 
-                   `, ${advancedResult.applied_filters.groups.length}개 그룹`}
+                  {advancedResult.applied_filters.groups &&
+                    advancedResult.applied_filters.groups.length > 0 &&
+                    `, ${advancedResult.applied_filters.groups.length}개 그룹`}
                 </div>
               )}
 
@@ -406,7 +441,8 @@ export default function PostsPage() {
                     const field = fieldDefinitions.find(f => f.name === sort.field)
                     return (
                       <span key={index}>
-                        {field?.label || sort.field} ({sort.direction === 'asc' ? '오름차순' : '내림차순'})
+                        {field?.label || sort.field} (
+                        {sort.direction === 'asc' ? '오름차순' : '내림차순'})
                         {index < advancedResult.applied_sorts.length - 1 && ', '}
                       </span>
                     )
@@ -417,20 +453,17 @@ export default function PostsPage() {
           )}
         </div>
 
-
         {/* 게시글 목록 */}
         <div className="bg-white rounded-lg border border-gray-200">
           <div className="p-6 border-b border-gray-200">
             <h2 className="text-lg font-semibold text-gray-900">게시글 목록</h2>
             <p className="text-sm text-gray-600 mt-1">
-              {useAdvancedFilter && advancedResult ? (
-                `${advancedResult.filtered}개의 게시글이 검색되었습니다. (전체 ${advancedResult.total}개 중)`
-              ) : (
-                `총 ${displayedPosts.length}개의 게시글이 있습니다. (${getFilterLabel(filter)})`
-              )}
+              {useAdvancedFilter && advancedResult
+                ? `${advancedResult.filtered}개의 게시글이 검색되었습니다. (전체 ${advancedResult.total}개 중)`
+                : `총 ${displayedPosts.length}개의 게시글이 있습니다. (${getFilterLabel(filter)})`}
             </p>
           </div>
-          
+
           <div className="p-6">
             {loading ? (
               <div className="space-y-4">
@@ -486,7 +519,7 @@ export default function PostsPage() {
               >
                 이전
               </button>
-              
+
               {[...Array(totalPages)].map((_, i) => (
                 <button
                   key={i + 1}
@@ -500,7 +533,7 @@ export default function PostsPage() {
                   {i + 1}
                 </button>
               ))}
-              
+
               <button
                 onClick={() => handlePageChange(currentPage + 1)}
                 disabled={currentPage === totalPages}

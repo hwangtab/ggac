@@ -93,7 +93,9 @@ async function debugMemberId() {
     } else {
       recentMembers.forEach((member, index) => {
         const isTarget = member.id === memberId
-        console.log(`${isTarget ? '🎯' : `${index + 1}.`} ${member.display_name} (${member.registration_status})`)
+        console.log(
+          `${isTarget ? '🎯' : `${index + 1}.`} ${member.display_name} (${member.registration_status})`
+        )
         console.log(`   ID: ${member.id}`)
         console.log(`   생성: ${new Date(member.created_at).toLocaleString('ko-KR')}`)
         console.log('')
@@ -104,10 +106,11 @@ async function debugMemberId() {
     console.log('6️⃣ UPDATE 시뮬레이션:')
     console.log('실행할 쿼리 구조:')
     console.log('UPDATE member_profiles')
-    console.log(`SET registration_status = 'approved', is_active = true, approved_by = 'admin-id', approved_at = NOW()`)
+    console.log(
+      `SET registration_status = 'approved', is_active = true, approved_by = 'admin-id', approved_at = NOW()`
+    )
     console.log(`WHERE id = '${memberId}'`)
     console.log('RETURNING *;')
-
   } catch (error) {
     console.error('❌ 전체 검증 중 오류:', error)
   }

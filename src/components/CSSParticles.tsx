@@ -29,7 +29,7 @@ const CSSParticles = memo(({ particleCount, width, height }: CSSParticlesProps) 
     const particleArray: Particle[] = []
 
     // 화면 크기 기반 최적화된 파티클 수
-    const densityFactor = Math.min(width * height / 500000, 1) // 500k 픽셀 기준
+    const densityFactor = Math.min((width * height) / 500000, 1) // 500k 픽셀 기준
     const optimizedCount = Math.floor(maxParticles * densityFactor)
 
     for (let i = 0; i < optimizedCount; i++) {
@@ -68,7 +68,7 @@ const CSSParticles = memo(({ particleCount, width, height }: CSSParticlesProps) 
   })
 
   return (
-    <div 
+    <div
       className="absolute inset-0 pointer-events-none overflow-hidden"
       style={{
         // 컨테이너에 통합 백드롭 필터 적용 (120개 개별 필터 → 1개 통합)
@@ -81,11 +81,8 @@ const CSSParticles = memo(({ particleCount, width, height }: CSSParticlesProps) 
         willChange: 'auto', // 정적이므로 willChange 제거
       }}
     >
-      {particles.map((particle) => (
-        <div
-          key={particle.id}
-          style={getParticleStyle(particle)}
-        />
+      {particles.map(particle => (
+        <div key={particle.id} style={getParticleStyle(particle)} />
       ))}
     </div>
   )

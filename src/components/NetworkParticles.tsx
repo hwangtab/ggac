@@ -65,39 +65,42 @@ const NetworkParticles = ({ particleCount, width, height }: NetworkParticlesProp
   const createShader = useCallback((gl: WebGLRenderingContext, type: number, source: string) => {
     const shader = gl.createShader(type)
     if (!shader) return null
-    
+
     gl.shaderSource(shader, source)
     gl.compileShader(shader)
-    
+
     if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
       console.error('Shader compile error:', gl.getShaderInfoLog(shader))
       gl.deleteShader(shader)
       return null
     }
-    
+
     return shader
   }, [])
 
-  const createProgram = useCallback((gl: WebGLRenderingContext) => {
-    const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource)
-    const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource)
-    
-    if (!vertexShader || !fragmentShader) return null
-    
-    const program = gl.createProgram()
-    if (!program) return null
-    
-    gl.attachShader(program, vertexShader)
-    gl.attachShader(program, fragmentShader)
-    gl.linkProgram(program)
-    
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-      console.error('Program link error:', gl.getProgramInfoLog(program))
-      return null
-    }
-    
-    return program
-  }, [createShader, vertexShaderSource, fragmentShaderSource])
+  const createProgram = useCallback(
+    (gl: WebGLRenderingContext) => {
+      const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource)
+      const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource)
+
+      if (!vertexShader || !fragmentShader) return null
+
+      const program = gl.createProgram()
+      if (!program) return null
+
+      gl.attachShader(program, vertexShader)
+      gl.attachShader(program, fragmentShader)
+      gl.linkProgram(program)
+
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        console.error('Program link error:', gl.getProgramInfoLog(program))
+        return null
+      }
+
+      return program
+    },
+    [createShader, vertexShaderSource, fragmentShaderSource]
+  )
 
   const initWebGL = useCallback(() => {
     const canvas = canvasRef.current
@@ -141,21 +144,21 @@ const NetworkParticles = ({ particleCount, width, height }: NetworkParticlesProp
 
     for (let i = 0; i < particleCount; i++) {
       const i2 = i * 2
-      
+
       // Position
       positions[i2] = Math.random() * width
       positions[i2 + 1] = Math.random() * height
-      
+
       // Size - 네트워크 노드는 조금 더 큰 사이즈
       sizes[i] = Math.random() * 4 + 2
-      
+
       // Alpha
       alphas[i] = Math.random() * 0.7 + 0.3
-      
+
       // Velocity - 느린 움직임으로 안정감 표현
       velocities[i2] = (Math.random() - 0.5) * 0.3
       velocities[i2 + 1] = (Math.random() - 0.5) * 0.3
-      
+
       // Twinkle
       twinklePhases[i] = Math.random() * Math.PI * 2
       twinkleSpeeds[i] = Math.random() * 0.015 + 0.005
@@ -167,69 +170,73 @@ const NetworkParticles = ({ particleCount, width, height }: NetworkParticlesProp
       alphas,
       velocities,
       twinklePhases,
-      twinkleSpeeds
+      twinkleSpeeds,
     }
   }, [particleCount, width, height])
 
   // Canvas 2D를 사용한 연결선 렌더링 (WebGL 대신)
-  const drawConnections = useCallback((canvas: HTMLCanvasElement) => {
-    const ctx = canvas.getContext('2d')
-    const particleData = particleDataRef.current
-    if (!ctx || !particleData) return
+  const drawConnections = useCallback(
+    (canvas: HTMLCanvasElement) => {
+      const ctx = canvas.getContext('2d')
+      const particleData = particleDataRef.current
+      if (!ctx || !particleData) return
 
-    const maxConnectDistance = 120
-    const mouseInfluenceRadius = 150
-    const mouseInfluenceMultiplier = 2.0
-    const mouseX = mousePositionRef.current.x
-    const mouseY = mousePositionRef.current.y
+      const maxConnectDistance = 120
+      const mouseInfluenceRadius = 150
+      const mouseInfluenceMultiplier = 2.0
+      const mouseX = mousePositionRef.current.x
+      const mouseY = mousePositionRef.current.y
 
-    ctx.strokeStyle = 'rgba(255, 153, 102, 0.3)' // 협동조합 연결색
-    ctx.lineWidth = 1
+      ctx.strokeStyle = 'rgba(255, 153, 102, 0.3)' // 협동조합 연결색
+      ctx.lineWidth = 1
 
-    for (let i = 0; i < particleCount; i++) {
-      for (let j = i + 1; j < particleCount; j++) {
-        const i2 = i * 2
-        const j2 = j * 2
-        
-        const dx = particleData.positions[i2] - particleData.positions[j2]
-        const dy = particleData.positions[i2 + 1] - particleData.positions[j2 + 1]
-        const distance = Math.sqrt(dx * dx + dy * dy)
+      for (let i = 0; i < particleCount; i++) {
+        for (let j = i + 1; j < particleCount; j++) {
+          const i2 = i * 2
+          const j2 = j * 2
 
-        // 마우스 근처 파티클들의 연결 거리 증가
-        const midX = (particleData.positions[i2] + particleData.positions[j2]) / 2
-        const midY = (particleData.positions[i2 + 1] + particleData.positions[j2 + 1]) / 2
-        const mouseDistanceToMid = Math.sqrt((midX - mouseX) ** 2 + (midY - mouseY) ** 2)
-        
-        const connectionThreshold = mouseDistanceToMid < mouseInfluenceRadius 
-          ? maxConnectDistance * mouseInfluenceMultiplier 
-          : maxConnectDistance
+          const dx = particleData.positions[i2] - particleData.positions[j2]
+          const dy = particleData.positions[i2 + 1] - particleData.positions[j2 + 1]
+          const distance = Math.sqrt(dx * dx + dy * dy)
 
-        if (distance < connectionThreshold) {
-          let alpha = 1.0 - (distance / connectionThreshold)
-          
-          // 마우스 근처에서 연결선 강조
-          if (mouseDistanceToMid < mouseInfluenceRadius) {
-            alpha *= 1.5
+          // 마우스 근처 파티클들의 연결 거리 증가
+          const midX = (particleData.positions[i2] + particleData.positions[j2]) / 2
+          const midY = (particleData.positions[i2 + 1] + particleData.positions[j2 + 1]) / 2
+          const mouseDistanceToMid = Math.sqrt((midX - mouseX) ** 2 + (midY - mouseY) ** 2)
+
+          const connectionThreshold =
+            mouseDistanceToMid < mouseInfluenceRadius
+              ? maxConnectDistance * mouseInfluenceMultiplier
+              : maxConnectDistance
+
+          if (distance < connectionThreshold) {
+            let alpha = 1.0 - distance / connectionThreshold
+
+            // 마우스 근처에서 연결선 강조
+            if (mouseDistanceToMid < mouseInfluenceRadius) {
+              alpha *= 1.5
+            }
+
+            ctx.globalAlpha = Math.max(0, Math.min(0.3, alpha * 0.3))
+            ctx.beginPath()
+            ctx.moveTo(particleData.positions[i2], particleData.positions[i2 + 1])
+            ctx.lineTo(particleData.positions[j2], particleData.positions[j2 + 1])
+            ctx.stroke()
           }
-          
-          ctx.globalAlpha = Math.max(0, Math.min(0.3, alpha * 0.3))
-          ctx.beginPath()
-          ctx.moveTo(particleData.positions[i2], particleData.positions[i2 + 1])
-          ctx.lineTo(particleData.positions[j2], particleData.positions[j2 + 1])
-          ctx.stroke()
         }
       }
-    }
-    
-    ctx.globalAlpha = 1 // 원래대로 복원
-  }, [particleCount])
+
+      ctx.globalAlpha = 1 // 원래대로 복원
+    },
+    [particleCount]
+  )
 
   const render = useCallback(() => {
     const gl = glRef.current
     const program = programRef.current
     const particleData = particleDataRef.current
     const canvas = canvasRef.current
-    
+
     if (!gl || !program || !particleData || !canvas) return
 
     // Canvas 전체 클리어
@@ -241,17 +248,17 @@ const NetworkParticles = ({ particleCount, width, height }: NetworkParticlesProp
     // 파티클 위치 및 트윙클 업데이트
     for (let i = 0; i < particleCount; i++) {
       const i2 = i * 2
-      
+
       // Update positions
       particleData.positions[i2] += particleData.velocities[i2]
       particleData.positions[i2 + 1] += particleData.velocities[i2 + 1]
-      
+
       // Wrap around screen
       if (particleData.positions[i2] < 0) particleData.positions[i2] = width
       if (particleData.positions[i2] > width) particleData.positions[i2] = 0
       if (particleData.positions[i2 + 1] < 0) particleData.positions[i2 + 1] = height
       if (particleData.positions[i2 + 1] > height) particleData.positions[i2 + 1] = 0
-      
+
       // Update twinkle
       particleData.twinklePhases[i] += particleData.twinkleSpeeds[i]
       particleData.alphas[i] = Math.abs(Math.sin(particleData.twinklePhases[i])) * 0.6 + 0.4
@@ -267,7 +274,7 @@ const NetworkParticles = ({ particleCount, width, height }: NetworkParticlesProp
     // Set uniforms
     const resolutionUniform = gl.getUniformLocation(program, 'u_resolution')
     const mouseUniform = gl.getUniformLocation(program, 'u_mouse')
-    
+
     gl.uniform2f(resolutionUniform, width, height)
     gl.uniform2f(mouseUniform, mousePositionRef.current.x, mousePositionRef.current.y)
 
@@ -314,11 +321,11 @@ const NetworkParticles = ({ particleCount, width, height }: NetworkParticlesProp
   const handleMouseMove = useCallback((event: MouseEvent) => {
     const canvas = canvasRef.current
     if (!canvas) return
-    
+
     const rect = canvas.getBoundingClientRect()
     mousePositionRef.current = {
       x: event.clientX - rect.left,
-      y: event.clientY - rect.top
+      y: event.clientY - rect.top,
     }
   }, [])
 
@@ -333,7 +340,7 @@ const NetworkParticles = ({ particleCount, width, height }: NetworkParticlesProp
       console.warn('❌ NetworkParticles WebGL 초기화 실패')
       return
     }
-    
+
     console.log('✅ NetworkParticles WebGL 초기화 성공')
 
     initParticles()
@@ -347,7 +354,17 @@ const NetworkParticles = ({ particleCount, width, height }: NetworkParticlesProp
       }
       window.removeEventListener('mousemove', handleMouseMove)
     }
-  }, [width, height, particleCount, initWebGL, initParticles, animate, handleMouseMove, drawConnections, render])
+  }, [
+    width,
+    height,
+    particleCount,
+    initWebGL,
+    initParticles,
+    animate,
+    handleMouseMove,
+    drawConnections,
+    render,
+  ])
 
   return (
     <canvas
@@ -356,7 +373,7 @@ const NetworkParticles = ({ particleCount, width, height }: NetworkParticlesProp
       style={{
         pointerEvents: 'none',
         zIndex: 30,
-        opacity: 0.7
+        opacity: 0.7,
       }}
     />
   )

@@ -10,11 +10,7 @@ interface BioEditorProps {
   onChange: (value: string) => void
 }
 
-const BioEditor: React.FC<BioEditorProps> = ({
-  value,
-  error,
-  onChange
-}) => {
+const BioEditor: React.FC<BioEditorProps> = ({ value, error, onChange }) => {
   const [isPreview, setIsPreview] = useState(false)
 
   const markdownGuide = `
@@ -55,15 +51,13 @@ const BioEditor: React.FC<BioEditorProps> = ({
           <FiEdit3 className="w-5 h-5 text-primary-600 mr-3" />
           <h2 className="text-lg font-semibold text-gray-900">아티스트 소개</h2>
         </div>
-        
+
         <div className="flex items-center space-x-2">
           <button
             type="button"
             onClick={() => setIsPreview(false)}
             className={`px-3 py-1 text-sm rounded-md transition-colors duration-200 ${
-              !isPreview 
-                ? 'bg-primary-100 text-primary-700' 
-                : 'text-gray-600 hover:text-gray-900'
+              !isPreview ? 'bg-primary-100 text-primary-700' : 'text-gray-600 hover:text-gray-900'
             }`}
           >
             <FiEdit3 className="w-4 h-4 mr-1 inline" />
@@ -73,9 +67,7 @@ const BioEditor: React.FC<BioEditorProps> = ({
             type="button"
             onClick={() => setIsPreview(true)}
             className={`px-3 py-1 text-sm rounded-md transition-colors duration-200 ${
-              isPreview 
-                ? 'bg-primary-100 text-primary-700' 
-                : 'text-gray-600 hover:text-gray-900'
+              isPreview ? 'bg-primary-100 text-primary-700' : 'text-gray-600 hover:text-gray-900'
             }`}
           >
             <FiEye className="w-4 h-4 mr-1 inline" />
@@ -94,11 +86,11 @@ const BioEditor: React.FC<BioEditorProps> = ({
               </label>
               <textarea
                 value={value}
-                onChange={(e) => onChange(e.target.value)}
+                onChange={e => onChange(e.target.value)}
                 rows={15}
                 className={`w-full px-3 py-2 border rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 font-mono text-sm ${
-                  error 
-                    ? 'border-red-300 focus:ring-red-500 focus:border-red-500' 
+                  error
+                    ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
                     : 'border-gray-300'
                 }`}
                 placeholder={`자신의 음악이나 예술 활동에 대해 자세히 소개해주세요.
@@ -115,12 +107,10 @@ const BioEditor: React.FC<BioEditorProps> = ({
 ### 경력사항
 ...`}
               />
-              {error && (
-                <p className="mt-1 text-xs text-red-600">{error}</p>
-              )}
+              {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
               <p className="mt-1 text-xs text-gray-500">
-                마크다운 문법을 사용하여 풍부한 서식으로 작성할 수 있습니다. 
-                우측의 가이드를 참고하세요.
+                마크다운 문법을 사용하여 풍부한 서식으로 작성할 수 있습니다. 우측의 가이드를
+                참고하세요.
               </p>
             </div>
           ) : (
@@ -152,47 +142,45 @@ const BioEditor: React.FC<BioEditorProps> = ({
               <div>
                 <div className="font-medium">제목</div>
                 <div className="font-mono bg-white px-2 py-1 rounded mt-1">
-                  # 큰 제목<br />
-                  ## 중간 제목<br />
+                  # 큰 제목
+                  <br />
+                  ## 중간 제목
+                  <br />
                   ### 작은 제목
                 </div>
               </div>
-              
+
               <div>
                 <div className="font-medium">텍스트 스타일</div>
                 <div className="font-mono bg-white px-2 py-1 rounded mt-1">
-                  **굵게**<br />
+                  **굵게**
+                  <br />
                   *기울임*
                 </div>
               </div>
-              
+
               <div>
                 <div className="font-medium">목록</div>
                 <div className="font-mono bg-white px-2 py-1 rounded mt-1">
-                  - 순서없는 목록<br />
+                  - 순서없는 목록
+                  <br />
                   1. 순서있는 목록
                 </div>
               </div>
-              
+
               <div>
                 <div className="font-medium">링크</div>
-                <div className="font-mono bg-white px-2 py-1 rounded mt-1">
-                  [텍스트](URL)
-                </div>
+                <div className="font-mono bg-white px-2 py-1 rounded mt-1">[텍스트](URL)</div>
               </div>
-              
+
               <div>
                 <div className="font-medium">구분선</div>
-                <div className="font-mono bg-white px-2 py-1 rounded mt-1">
-                  ---
-                </div>
+                <div className="font-mono bg-white px-2 py-1 rounded mt-1">---</div>
               </div>
-              
+
               <div>
                 <div className="font-medium">인용문</div>
-                <div className="font-mono bg-white px-2 py-1 rounded mt-1">
-                  &gt; 인용문 내용
-                </div>
+                <div className="font-mono bg-white px-2 py-1 rounded mt-1">&gt; 인용문 내용</div>
               </div>
             </div>
           </div>

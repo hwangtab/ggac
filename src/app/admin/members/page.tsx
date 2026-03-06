@@ -1,12 +1,31 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { FiUsers, FiCheck, FiX, FiEye, FiSearch, FiFilter, FiRefreshCw, FiBarChart, FiPackage, FiShield, FiAlertCircle, FiPause, FiSettings } from 'react-icons/fi'
+import {
+  FiUsers,
+  FiCheck,
+  FiX,
+  FiEye,
+  FiSearch,
+  FiFilter,
+  FiRefreshCw,
+  FiBarChart,
+  FiPackage,
+  FiShield,
+  FiAlertCircle,
+  FiPause,
+  FiSettings,
+} from 'react-icons/fi'
 import AdminLayout from '../components/AdminLayout'
 import MemberCard from './components/MemberCard'
 import MemberDetailModal from './components/MemberDetailModal'
 import AdvancedFilterBuilder from '@/components/AdvancedFilterBuilder'
-import type { AdvancedSearchQuery, FilteredResult, FieldDefinition, MemberStatistics } from '@/types'
+import type {
+  AdvancedSearchQuery,
+  FilteredResult,
+  FieldDefinition,
+  MemberStatistics,
+} from '@/types'
 
 interface Member {
   id: string
@@ -71,7 +90,7 @@ export default function MembersPage() {
     reason: string
     until: string
   }>({ reason: '', until: '' })
-  
+
   // 고급 필터링 상태
   const [useAdvancedFilter, setUseAdvancedFilter] = useState(false)
   const [fieldDefinitions, setFieldDefinitions] = useState<FieldDefinition[]>([])
@@ -112,20 +131,20 @@ export default function MembersPage() {
     try {
       setLoading(true)
       setError(null)
-      
+
       const searchQuery = {
         ...query,
         pagination: {
           page: 1,
           limit: 50,
-          ...query.pagination
-        }
+          ...query.pagination,
+        },
       }
 
       const response = await fetch('/api/admin/members/advanced-search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(searchQuery)
+        body: JSON.stringify(searchQuery),
       })
 
       if (!response.ok) {
@@ -135,7 +154,6 @@ export default function MembersPage() {
       const result: FilteredResult = await response.json()
       setAdvancedResult(result)
       setMembers(result.data)
-      
     } catch (err) {
       console.error('Advanced search error:', err)
       setError(err instanceof Error ? err.message : '고급 검색 중 오류가 발생했습니다.')
@@ -175,7 +193,9 @@ export default function MembersPage() {
     }
   }
 
-  const handleBulkAction = async (action: 'bulk_approve' | 'bulk_reject' | 'bulk_activate' | 'bulk_deactivate' | 'bulk_suspend') => {
+  const handleBulkAction = async (
+    action: 'bulk_approve' | 'bulk_reject' | 'bulk_activate' | 'bulk_deactivate' | 'bulk_suspend'
+  ) => {
     if (selectedMembers.size === 0) {
       alert('선택된 회원이 없습니다.')
       return
@@ -183,20 +203,21 @@ export default function MembersPage() {
 
     const memberIds = Array.from(selectedMembers)
     const confirmMessage = `선택된 ${memberIds.length}명의 회원에 대해 ${action}을 수행하시겠습니까?`
-    
+
     if (!confirm(confirmMessage)) return
 
     try {
       setBulkActionLoading(true)
-      
+
       const requestBody: any = {
         operation_type: action,
         member_ids: memberIds,
-        parameters: {}
+        parameters: {},
       }
 
       if (action === 'bulk_suspend') {
-        requestBody.parameters.suspension_reason = suspensionData.reason || '관리자에 의한 대량 정지'
+        requestBody.parameters.suspension_reason =
+          suspensionData.reason || '관리자에 의한 대량 정지'
         if (suspensionData.until) {
           requestBody.parameters.suspension_until = suspensionData.until
         }
@@ -207,7 +228,7 @@ export default function MembersPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify(requestBody),
       })
 
       if (!response.ok) {
@@ -216,8 +237,10 @@ export default function MembersPage() {
       }
 
       const result = await response.json()
-      alert(`작업이 완료되었습니다. 성공: ${result.summary.success}건, 실패: ${result.summary.errors}건`)
-      
+      alert(
+        `작업이 완료되었습니다. 성공: ${result.summary.success}건, 실패: ${result.summary.errors}건`
+      )
+
       // 선택 해제 및 데이터 새로고침
       setSelectedMembers(new Set())
       setShowBulkActions(false)
@@ -226,7 +249,7 @@ export default function MembersPage() {
       } else {
         await fetchMembers()
       }
-      
+
       // 통계도 새로고침
       await fetchMemberStatsData()
     } catch (error) {
@@ -255,71 +278,80 @@ export default function MembersPage() {
     }
   }
 
-  const fetchMembers = useCallback(async (forceRefresh = false) => {
-    try {
-      setLoading(true)
-      setError(null)
-      
-      const params = new URLSearchParams({
-        filter,
-        search: searchTerm,
-        page: '1',
-        limit: '50'
-      })
+  const fetchMembers = useCallback(
+    async (forceRefresh = false) => {
+      try {
+        setLoading(true)
+        setError(null)
 
-      // 강제 새로고침 시 캐시 무시
-      const fetchOptions: RequestInit = {
-        method: 'GET'
-      }
-      
-      if (forceRefresh) {
-        fetchOptions.cache = 'no-cache'
-        fetchOptions.headers = {
-          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        const params = new URLSearchParams({
+          filter,
+          search: searchTerm,
+          page: '1',
+          limit: '50',
+        })
+
+        // 강제 새로고침 시 캐시 무시
+        const fetchOptions: RequestInit = {
+          method: 'GET',
         }
-        // 타임스탬프 추가하여 캐시 회피
-        params.append('_t', Date.now().toString())
+
+        if (forceRefresh) {
+          fetchOptions.cache = 'no-cache'
+          fetchOptions.headers = {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+          }
+          // 타임스탬프 추가하여 캐시 회피
+          params.append('_t', Date.now().toString())
+        }
+
+        const response = await fetch(`/api/admin/members?${params}`, fetchOptions)
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.error || '회원 정보를 불러오는 중 오류가 발생했습니다.')
+        }
+
+        const data: MembersResponse = await response.json()
+        setMembers(data.members)
+        console.log('🔄 Members refreshed, count:', data.members.length)
+      } catch (err) {
+        console.error('Members fetch error:', err)
+        setError(
+          err instanceof Error ? err.message : '회원 정보를 불러오는 중 오류가 발생했습니다.'
+        )
+      } finally {
+        setLoading(false)
       }
+    },
+    [filter, searchTerm]
+  )
 
-      const response = await fetch(`/api/admin/members?${params}`, fetchOptions)
-      
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || '회원 정보를 불러오는 중 오류가 발생했습니다.')
-      }
-
-      const data: MembersResponse = await response.json()
-      setMembers(data.members)
-      console.log('🔄 Members refreshed, count:', data.members.length)
-    } catch (err) {
-      console.error('Members fetch error:', err)
-      setError(err instanceof Error ? err.message : '회원 정보를 불러오는 중 오류가 발생했습니다.')
-    } finally {
-      setLoading(false)
-    }
-  }, [filter, searchTerm])
-
-  const handleMemberAction = async (memberId: string, action: 'approve' | 'reject' | 'deactivate' | 'activate' | 'suspend' | 'unsuspend', params?: any) => {
+  const handleMemberAction = async (
+    memberId: string,
+    action: 'approve' | 'reject' | 'deactivate' | 'activate' | 'suspend' | 'unsuspend',
+    params?: any
+  ) => {
     try {
       console.log('🚀 Member action started:', { memberId, action, params })
       setActionLoading(memberId)
-      
+
       const requestBody = { memberId, action, ...params }
       console.log('📤 API request:', requestBody)
-      
+
       const response = await fetch('/api/admin/member-action', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify(requestBody),
       })
 
       console.log('📥 API response status:', response.status, response.statusText)
-      
+
       if (!response.ok) {
         let errorMessage = '회원 상태 변경에 실패했습니다.'
-        
+
         try {
           // 응답이 JSON인지 확인
           const contentType = response.headers.get('content-type')
@@ -331,7 +363,7 @@ export default function MembersPage() {
             // HTML이나 다른 형태의 응답
             const textResponse = await response.text()
             console.error('❌ Non-JSON API error response:', textResponse.substring(0, 500))
-            
+
             if (response.status === 405) {
               errorMessage = 'API 메서드가 지원되지 않습니다. 시스템 관리자에게 문의하세요.'
             } else if (response.status === 404) {
@@ -344,7 +376,7 @@ export default function MembersPage() {
           console.error('❌ Error parsing API response:', parseError)
           errorMessage = `서버 응답을 처리할 수 없습니다. (HTTP ${response.status})`
         }
-        
+
         throw new Error(errorMessage)
       }
 
@@ -365,15 +397,15 @@ export default function MembersPage() {
         console.log(`📝 Updating member ${memberId} in local state:`)
         console.log('   Old status:', members.find(m => m.id === memberId)?.registration_status)
         console.log('   New status:', successData.member.registration_status)
-        
+
         setMembers(prevMembers => {
-          const updatedMembers = prevMembers.map(m => 
+          const updatedMembers = prevMembers.map(m =>
             m.id === memberId ? { ...m, ...successData.member } : m
           )
           console.log('✅ Local state updated, member count:', updatedMembers.length)
           return updatedMembers
         })
-        
+
         // 선택된 회원 정보도 즉시 업데이트
         if (selectedMember && selectedMember.id === memberId) {
           console.log('🔄 Updating selected member info immediately')
@@ -390,10 +422,10 @@ export default function MembersPage() {
       } else {
         await fetchMembers(true) // 강제 새로고침
       }
-      
+
       // 통계도 새로고침
       await fetchMemberStatsData()
-      
+
       console.log('✅ Member action completed successfully')
     } catch (err) {
       console.error('❌ Member action error:', err)
@@ -435,14 +467,17 @@ export default function MembersPage() {
   }
 
   // 고급 필터 모드가 아닐 때만 클라이언트 사이드 필터링 적용
-  const filteredMembers = useAdvancedFilter ? members : members.filter(member => {
-    const matchesSearch = member.display_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         member.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         member.real_name?.toLowerCase().includes(searchTerm.toLowerCase())
-    
-    if (filter === 'all') return matchesSearch
-    return matchesSearch && member.registration_status === filter
-  })
+  const filteredMembers = useAdvancedFilter
+    ? members
+    : members.filter(member => {
+        const matchesSearch =
+          member.display_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          member.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          member.real_name?.toLowerCase().includes(searchTerm.toLowerCase())
+
+        if (filter === 'all') return matchesSearch
+        return matchesSearch && member.registration_status === filter
+      })
 
   // 통계는 별도 API에서 가져오므로 로딩 중 기본값 사용
   const statsData = memberStats || {
@@ -454,7 +489,7 @@ export default function MembersPage() {
     rejectedMembers: 0,
     suspendedMembers: 0,
     artistMembers: 0,
-    adminMembers: 0
+    adminMembers: 0,
   }
 
   return (
@@ -466,7 +501,9 @@ export default function MembersPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">전체 회원</p>
-                <p className="text-2xl font-bold text-gray-900">{statsLoading ? '...' : statsData.totalMembers}</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {statsLoading ? '...' : statsData.totalMembers}
+                </p>
               </div>
               <FiUsers className="w-8 h-8 text-blue-500" />
             </div>
@@ -475,7 +512,9 @@ export default function MembersPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">승인 대기</p>
-                <p className="text-2xl font-bold text-yellow-600">{statsLoading ? '...' : statsData.pendingMembers}</p>
+                <p className="text-2xl font-bold text-yellow-600">
+                  {statsLoading ? '...' : statsData.pendingMembers}
+                </p>
               </div>
               <FiRefreshCw className="w-8 h-8 text-yellow-500" />
             </div>
@@ -484,7 +523,9 @@ export default function MembersPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">활성 회원</p>
-                <p className="text-2xl font-bold text-green-600">{statsLoading ? '...' : statsData.activeMembers}</p>
+                <p className="text-2xl font-bold text-green-600">
+                  {statsLoading ? '...' : statsData.activeMembers}
+                </p>
                 <p className="text-xs text-gray-500 mt-1">승인 + 활성</p>
               </div>
               <FiCheck className="w-8 h-8 text-green-500" />
@@ -494,7 +535,9 @@ export default function MembersPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">비활성화된 회원</p>
-                <p className="text-2xl font-bold text-orange-600">{statsLoading ? '...' : statsData.inactiveMembers}</p>
+                <p className="text-2xl font-bold text-orange-600">
+                  {statsLoading ? '...' : statsData.inactiveMembers}
+                </p>
                 <p className="text-xs text-gray-500 mt-1">승인 + 비활성</p>
               </div>
               <FiPause className="w-8 h-8 text-orange-500" />
@@ -508,7 +551,9 @@ export default function MembersPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">전체 승인됨</p>
-                <p className="text-2xl font-bold text-blue-600">{statsLoading ? '...' : statsData.approvedMembers}</p>
+                <p className="text-2xl font-bold text-blue-600">
+                  {statsLoading ? '...' : statsData.approvedMembers}
+                </p>
                 <p className="text-xs text-gray-500 mt-1">활성 + 비활성</p>
               </div>
               <FiShield className="w-8 h-8 text-blue-500" />
@@ -518,7 +563,9 @@ export default function MembersPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">거부됨</p>
-                <p className="text-2xl font-bold text-red-600">{statsLoading ? '...' : statsData.rejectedMembers}</p>
+                <p className="text-2xl font-bold text-red-600">
+                  {statsLoading ? '...' : statsData.rejectedMembers}
+                </p>
               </div>
               <FiX className="w-8 h-8 text-red-500" />
             </div>
@@ -528,7 +575,9 @@ export default function MembersPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">정지된 회원</p>
-                <p className="text-2xl font-bold text-red-600">{statsLoading ? '...' : statsData.suspendedMembers}</p>
+                <p className="text-2xl font-bold text-red-600">
+                  {statsLoading ? '...' : statsData.suspendedMembers}
+                </p>
               </div>
               <FiAlertCircle className="w-8 h-8 text-red-500" />
             </div>
@@ -537,7 +586,9 @@ export default function MembersPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">아티스트</p>
-                <p className="text-2xl font-bold text-purple-600">{statsLoading ? '...' : statsData.artistMembers}</p>
+                <p className="text-2xl font-bold text-purple-600">
+                  {statsLoading ? '...' : statsData.artistMembers}
+                </p>
               </div>
               <FiShield className="w-8 h-8 text-purple-500" />
             </div>
@@ -546,7 +597,9 @@ export default function MembersPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">관리자</p>
-                <p className="text-2xl font-bold text-indigo-600">{statsLoading ? '...' : statsData.adminMembers}</p>
+                <p className="text-2xl font-bold text-indigo-600">
+                  {statsLoading ? '...' : statsData.adminMembers}
+                </p>
               </div>
               <FiSettings className="w-8 h-8 text-indigo-500" />
             </div>
@@ -576,7 +629,7 @@ export default function MembersPage() {
                 type="text"
                 placeholder="회원명, 이메일, 실명으로 검색..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={e => setSearchTerm(e.target.value)}
                 className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                 disabled={useAdvancedFilter}
               />
@@ -585,7 +638,7 @@ export default function MembersPage() {
               <FiFilter className="w-5 h-5 text-gray-400" />
               <select
                 value={filter}
-                onChange={(e) => setFilter(e.target.value as any)}
+                onChange={e => setFilter(e.target.value as any)}
                 className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                 disabled={useAdvancedFilter}
               >
@@ -594,7 +647,7 @@ export default function MembersPage() {
                 <option value="approved">승인됨</option>
                 <option value="rejected">거부됨</option>
               </select>
-              
+
               <button
                 onClick={() => {
                   setUseAdvancedFilter(!useAdvancedFilter)
@@ -614,16 +667,20 @@ export default function MembersPage() {
                 <FiSettings className="w-4 h-4 mr-2" />
                 {useAdvancedFilter ? '기본 필터' : '고급 필터'}
               </button>
-              
+
               <button
-                onClick={useAdvancedFilter ? () => advancedQuery && executeAdvancedSearch(advancedQuery) : () => fetchMembers(true)}
+                onClick={
+                  useAdvancedFilter
+                    ? () => advancedQuery && executeAdvancedSearch(advancedQuery)
+                    : () => fetchMembers(true)
+                }
                 disabled={loading}
                 className="flex items-center px-3 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50"
               >
                 <FiRefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                 새로고침
               </button>
-              
+
               {/* 대량 작업 버튼 */}
               <button
                 onClick={() => setShowBulkActions(!showBulkActions)}
@@ -640,7 +697,7 @@ export default function MembersPage() {
               fields={fieldDefinitions}
               initialFilters={advancedQuery?.filters}
               initialSorts={advancedQuery?.sorts}
-              onChange={(query) => {
+              onChange={query => {
                 setAdvancedQuery(query)
                 executeAdvancedSearch(query)
               }}
@@ -652,22 +709,22 @@ export default function MembersPage() {
             <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <div className="flex items-center justify-between">
                 <div className="text-sm text-blue-800">
-                  <span className="font-medium">검색 결과:</span> 
-                  {' '}{advancedResult.filtered}명의 회원 (전체 {advancedResult.total}명 중)
+                  <span className="font-medium">검색 결과:</span> {advancedResult.filtered}명의 회원
+                  (전체 {advancedResult.total}명 중)
                 </div>
                 <div className="text-xs text-blue-600">
                   페이지 {advancedResult.pagination.page} / {advancedResult.pagination.total_pages}
                 </div>
               </div>
-              
+
               {/* 적용된 필터 요약 */}
               {advancedResult.applied_filters.conditions.length > 0 && (
                 <div className="mt-2 text-xs text-blue-700">
                   <span className="font-medium">적용된 필터:</span>{' '}
                   {advancedResult.applied_filters.conditions.length}개 조건
-                  {advancedResult.applied_filters.groups && 
-                   advancedResult.applied_filters.groups.length > 0 && 
-                   `, ${advancedResult.applied_filters.groups.length}개 그룹`}
+                  {advancedResult.applied_filters.groups &&
+                    advancedResult.applied_filters.groups.length > 0 &&
+                    `, ${advancedResult.applied_filters.groups.length}개 그룹`}
                 </div>
               )}
 
@@ -679,7 +736,8 @@ export default function MembersPage() {
                     const field = fieldDefinitions.find(f => f.name === sort.field)
                     return (
                       <span key={index}>
-                        {field?.label || sort.field} ({sort.direction === 'asc' ? '오름차순' : '내림차순'})
+                        {field?.label || sort.field} (
+                        {sort.direction === 'asc' ? '오름차순' : '내림차순'})
                         {index < advancedResult.applied_sorts.length - 1 && ', '}
                       </span>
                     )
@@ -702,21 +760,23 @@ export default function MembersPage() {
                 <FiX className="w-5 h-5" />
               </button>
             </div>
-            
+
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <p className="text-sm text-gray-600">선택된 회원: {selectedMembers.size}명</p>
                 <div className="flex items-center space-x-2">
                   <input
                     type="checkbox"
-                    checked={selectedMembers.size === filteredMembers.length && filteredMembers.length > 0}
+                    checked={
+                      selectedMembers.size === filteredMembers.length && filteredMembers.length > 0
+                    }
                     onChange={handleSelectAll}
                     className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                   />
                   <label className="text-sm text-gray-700">전체 선택</label>
                 </div>
               </div>
-              
+
               {selectedMembers.size > 0 && (
                 <div className="flex flex-wrap gap-2">
                   <button
@@ -756,7 +816,7 @@ export default function MembersPage() {
                   </button>
                 </div>
               )}
-              
+
               {bulkActionLoading && (
                 <div className="flex items-center text-sm text-gray-500">
                   <div className="w-4 h-4 border-2 border-primary-500 border-t-transparent rounded-full animate-spin mr-2"></div>
@@ -772,14 +832,12 @@ export default function MembersPage() {
           <div className="p-6 border-b border-gray-200">
             <h2 className="text-lg font-semibold text-gray-900">회원 목록</h2>
             <p className="text-sm text-gray-600 mt-1">
-              {useAdvancedFilter && advancedResult ? (
-                `${advancedResult.filtered}명의 회원이 검색되었습니다. (전체 ${advancedResult.total}명 중)`
-              ) : (
-                `총 ${filteredMembers.length}명의 회원이 있습니다.`
-              )}
+              {useAdvancedFilter && advancedResult
+                ? `${advancedResult.filtered}명의 회원이 검색되었습니다. (전체 ${advancedResult.total}명 중)`
+                : `총 ${filteredMembers.length}명의 회원이 있습니다.`}
             </p>
           </div>
-          
+
           <div className="p-6">
             {loading ? (
               <div className="space-y-4">
@@ -820,7 +878,7 @@ export default function MembersPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {filteredMembers.map((member) => (
+                {filteredMembers.map(member => (
                   <div key={member.id} className="flex items-center space-x-3">
                     {showBulkActions && (
                       <input

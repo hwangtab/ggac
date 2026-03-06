@@ -78,7 +78,9 @@ const CommentSection: React.FC<CommentSectionProps> = ({
         .in('comment_id', commentIds)
 
       const likeCountMap: Record<string, number> = {}
-      commentIds.forEach(id => { likeCountMap[id] = 0 })
+      commentIds.forEach(id => {
+        likeCountMap[id] = 0
+      })
       ;(allLikes || []).forEach((row: any) => {
         likeCountMap[row.comment_id] = (likeCountMap[row.comment_id] || 0) + 1
       })
@@ -220,119 +222,115 @@ const CommentSection: React.FC<CommentSectionProps> = ({
         <>
           {/* 인기 댓글 */}
           {popularComment && (
-                <div className="mb-6">
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                      ⭐ 인기 댓글
+            <div className="mb-6">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                  ⭐ 인기 댓글
+                </span>
+                <span className="text-xs text-gray-500">좋아요 {popularComment.like_count}개</span>
+              </div>
+              <div className="bg-red-50 border border-red-200 p-4 rounded-lg">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="font-medium text-sm text-gray-900">
+                        {(popularComment as any)?.author?.display_name ||
+                          profiles[popularComment.author_id] ||
+                          '알 수 없는 사용자'}
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        {new Date(popularComment.created_at).toLocaleDateString('ko-KR', {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </span>
+                    </div>
+                    <p className="text-gray-700 text-sm leading-relaxed mb-2 whitespace-pre-line">
+                      {popularComment.content}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <CommentLikeButton
+                        commentId={popularComment.id}
+                        initialLikeCount={popularComment.like_count}
+                        initialIsLiked={popularComment.is_liked}
+                        size="sm"
+                        onLikeChange={(liked, count) => {
+                          setComments(prev =>
+                            prev.map(c =>
+                              c.id === popularComment.id
+                                ? { ...c, like_count: count, is_liked: liked }
+                                : c
+                            )
+                          )
+                        }}
+                      />
+                    </div>
+                  </div>
+                  {currentUserId === popularComment.author_id && (
+                    <button
+                      onClick={() => handleDeleteComment(popularComment.id)}
+                      className="text-gray-400 hover:text-red-600 text-sm ml-2"
+                    >
+                      삭제
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 일반 댓글들 */}
+          {regularComments.map(comment => (
+            <div key={comment.id} className="bg-gray-50 p-4 rounded-lg">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="font-medium text-sm text-gray-900">
+                      {(comment as any)?.author?.display_name ||
+                        profiles[comment.author_id] ||
+                        '알 수 없는 사용자'}
                     </span>
                     <span className="text-xs text-gray-500">
-                      좋아요 {popularComment.like_count}개
+                      {new Date(comment.created_at).toLocaleDateString('ko-KR', {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
                     </span>
                   </div>
-                  <div className="bg-red-50 border border-red-200 p-4 rounded-lg">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="font-medium text-sm text-gray-900">
-                            {(popularComment as any)?.author?.display_name ||
-                              profiles[popularComment.author_id] ||
-                              '알 수 없는 사용자'}
-                          </span>
-                          <span className="text-xs text-gray-500">
-                            {new Date(popularComment.created_at).toLocaleDateString('ko-KR', {
-                              month: 'short',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </span>
-                        </div>
-                        <p className="text-gray-700 text-sm leading-relaxed mb-2 whitespace-pre-line">
-                          {popularComment.content}
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <CommentLikeButton
-                            commentId={popularComment.id}
-                            initialLikeCount={popularComment.like_count}
-                            initialIsLiked={popularComment.is_liked}
-                            size="sm"
-                            onLikeChange={(liked, count) => {
-                              setComments(prev =>
-                                prev.map(c =>
-                                  c.id === popularComment.id
-                                    ? { ...c, like_count: count, is_liked: liked }
-                                    : c
-                                )
-                              )
-                            }}
-                          />
-                        </div>
-                      </div>
-                      {currentUserId === popularComment.author_id && (
-                        <button
-                          onClick={() => handleDeleteComment(popularComment.id)}
-                          className="text-gray-400 hover:text-red-600 text-sm ml-2"
-                        >
-                          삭제
-                        </button>
-                      )}
-                    </div>
+                  <p className="text-gray-700 text-sm leading-relaxed mb-2 whitespace-pre-line">
+                    {comment.content}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <CommentLikeButton
+                      commentId={comment.id}
+                      initialLikeCount={comment.like_count}
+                      initialIsLiked={comment.is_liked}
+                      size="sm"
+                      onLikeChange={(liked, count) => {
+                        setComments(prev =>
+                          prev.map(c =>
+                            c.id === comment.id ? { ...c, like_count: count, is_liked: liked } : c
+                          )
+                        )
+                      }}
+                    />
                   </div>
                 </div>
-              )}
-
-              {/* 일반 댓글들 */}
-          {regularComments.map(comment => (
-                <div key={comment.id} className="bg-gray-50 p-4 rounded-lg">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="font-medium text-sm text-gray-900">
-                          {(comment as any)?.author?.display_name ||
-                            profiles[comment.author_id] ||
-                            '알 수 없는 사용자'}
-                        </span>
-                        <span className="text-xs text-gray-500">
-                          {new Date(comment.created_at).toLocaleDateString('ko-KR', {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </span>
-                      </div>
-                      <p className="text-gray-700 text-sm leading-relaxed mb-2 whitespace-pre-line">
-                        {comment.content}
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <CommentLikeButton
-                          commentId={comment.id}
-                          initialLikeCount={comment.like_count}
-                          initialIsLiked={comment.is_liked}
-                          size="sm"
-                          onLikeChange={(liked, count) => {
-                            setComments(prev =>
-                              prev.map(c =>
-                                c.id === comment.id
-                                  ? { ...c, like_count: count, is_liked: liked }
-                                  : c
-                              )
-                            )
-                          }}
-                        />
-                      </div>
-                    </div>
-                    {currentUserId === comment.author_id && (
-                      <button
-                        onClick={() => handleDeleteComment(comment.id)}
-                        className="text-gray-400 hover:text-red-600 text-sm ml-2"
-                      >
-                        삭제
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
+                {currentUserId === comment.author_id && (
+                  <button
+                    onClick={() => handleDeleteComment(comment.id)}
+                    className="text-gray-400 hover:text-red-600 text-sm ml-2"
+                  >
+                    삭제
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
         </>
 
         {comments.length === 0 && (

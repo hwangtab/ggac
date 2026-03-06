@@ -3,39 +3,39 @@
  * Automatically removes logs in production while keeping them in development
  */
 
-type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 
 class Logger {
-  private isDev = process.env.NODE_ENV === 'development';
+  private isDev = process.env.NODE_ENV === 'development'
 
   debug(message: string, ...args: any[]) {
     if (this.isDev) {
-      console.debug(message, ...args);
+      console.debug(message, ...args)
     }
   }
 
   info(message: string, ...args: any[]) {
     if (this.isDev) {
-      console.info(message, ...args);
+      console.info(message, ...args)
     }
   }
 
   warn(message: string, ...args: any[]) {
-    console.warn(message, ...args);
+    console.warn(message, ...args)
   }
 
   error(message: string, ...args: any[]) {
-    console.error(message, ...args);
+    console.error(message, ...args)
   }
 
   log(message: string, ...args: any[]) {
     if (this.isDev) {
-      console.log(message, ...args);
+      console.log(message, ...args)
     }
   }
 }
 
-export const logger = new Logger();
+export const logger = new Logger()
 
 // Convenience functions for specific contexts
 export const createLogger = (context: string) => ({
@@ -44,4 +44,4 @@ export const createLogger = (context: string) => ({
   warn: (message: string, ...args: any[]) => logger.warn(`[${context}] ${message}`, ...args),
   error: (message: string, ...args: any[]) => logger.error(`[${context}] ${message}`, ...args),
   log: (message: string, ...args: any[]) => logger.log(`[${context}] ${message}`, ...args),
-});
+})

@@ -22,7 +22,7 @@ async function checkDatabaseStatus() {
 
   try {
     console.log('1. 📊 Testing basic connectivity...')
-    
+
     // Test basic connectivity by checking if we can query the member_profiles table
     const { data: profiles, error: profilesError } = await supabase
       .from('member_profiles')
@@ -40,22 +40,15 @@ async function checkDatabaseStatus() {
     }
 
     console.log('\n2. 📋 Checking required tables...')
-    
+
     // Check for admin-specific tables by trying to query them
-    const adminTables = [
-      'member_status_history',
-      'member_login_history', 
-      'member_bulk_operations'
-    ]
+    const adminTables = ['member_status_history', 'member_login_history', 'member_bulk_operations']
 
     const tableStatus = []
 
     for (const tableName of adminTables) {
       try {
-        const { error } = await supabase
-          .from(tableName)
-          .select('id')
-          .limit(1)
+        const { error } = await supabase.from(tableName).select('id').limit(1)
 
         if (error) {
           if (error.message.includes('does not exist')) {
@@ -76,19 +69,21 @@ async function checkDatabaseStatus() {
     }
 
     console.log('\n3. 🏛️ Checking member_profiles table structure...')
-    
+
     // Try to check if we can access some admin-specific columns
     const adminColumns = [
-      'is_admin', 'is_suspended', 'suspension_reason', 'profile_completeness_score',
-      'verification_status', 'membership_type', 'engagement_score'
+      'is_admin',
+      'is_suspended',
+      'suspension_reason',
+      'profile_completeness_score',
+      'verification_status',
+      'membership_type',
+      'engagement_score',
     ]
 
     for (const column of adminColumns) {
       try {
-        const { error } = await supabase
-          .from('member_profiles')
-          .select(column)
-          .limit(1)
+        const { error } = await supabase.from('member_profiles').select(column).limit(1)
 
         if (error) {
           console.log(`❌ Column '${column}' not accessible: ${error.message}`)
@@ -101,7 +96,7 @@ async function checkDatabaseStatus() {
     }
 
     console.log('\n4. 👑 Checking for admin users...')
-    
+
     try {
       const { data: adminUsers, error: adminError } = await supabase
         .from('member_profiles')
@@ -113,7 +108,8 @@ async function checkDatabaseStatus() {
       } else if (adminUsers && adminUsers.length > 0) {
         console.log(`✅ Found ${adminUsers.length} admin user(s):`)
         adminUsers.forEach(user => {
-          const status = user.is_active && user.registration_status === 'approved' ? '✅ Active' : '⚠️ Inactive'
+          const status =
+            user.is_active && user.registration_status === 'approved' ? '✅ Active' : '⚠️ Inactive'
           console.log(`   ${status} ${user.display_name} (${user.email})`)
         })
       } else {
@@ -124,7 +120,7 @@ async function checkDatabaseStatus() {
     }
 
     console.log('\n📋 Summary and Next Steps:')
-    
+
     const missingTables = tableStatus.filter(t => !t.exists)
     if (missingTables.length > 0) {
       console.log('\n❌ Missing admin tables:')
@@ -143,7 +139,6 @@ async function checkDatabaseStatus() {
     console.log('3. Edit setup-admin-database.sql and replace admin@example.com with that email')
     console.log('4. Run the SQL script in Supabase Dashboard')
     console.log('5. That user will become an admin and can access /admin')
-
   } catch (error) {
     console.error('❌ Database check failed:', error.message)
   }
@@ -154,12 +149,12 @@ function loadEnvFromFile() {
   try {
     const fs = require('fs')
     const path = require('path')
-    
+
     const envPath = path.join(__dirname, '.env.local')
     if (fs.existsSync(envPath)) {
       const envContent = fs.readFileSync(envPath, 'utf8')
       const lines = envContent.split('\n')
-      
+
       for (const line of lines) {
         const trimmed = line.trim()
         if (trimmed && !trimmed.startsWith('#')) {
