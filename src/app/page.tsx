@@ -71,7 +71,7 @@ export default async function Home() {
   const combinedStructuredData = combineStructuredData([websiteData, organizationData])
 
   return (
-    <div>
+    <div data-home-page="true">
       {structuredDataToScript(combinedStructuredData)}
       <Hero />
       <FeaturedProjects projects={featuredProjects} />

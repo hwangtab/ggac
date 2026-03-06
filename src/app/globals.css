@@ -112,6 +112,16 @@ textarea:focus-visible {
   }
 }
 
+@supports selector(body:has(*)) {
+  /* 첫 진입 시 홈 히어로 위 헤더가 흰 배경으로 번쩍이는 현상을 방지한다. */
+  body:has([data-home-page='true']) #navigation[data-at-top='true'] {
+    background: transparent !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}
+
 /* Safari-Specific Optimizations */
 @media not all and (min-resolution: 0.001dpcm) {
   @supports (-webkit-appearance: none) {

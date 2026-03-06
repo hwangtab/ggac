@@ -13,6 +13,7 @@ const Navigation = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   // 상단 고정 헤더 투명/불투명 제어
   const [isAtTop, setIsAtTop] = useState(true)
+  const [hasScrollSync, setHasScrollSync] = useState(false)
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const pathname = usePathname()
@@ -43,21 +44,23 @@ const Navigation = () => {
       if (pathname !== '/board') router.prefetch('/board')
     } catch {}
 
-    const handleScroll = () => {
+    const syncScrollState = () => {
       setIsAtTop(window.scrollY <= 50)
+      setHasScrollSync(true)
     }
-    // 초기 상태 동기화 (hydrate 직후 상단이면 투명)
-    handleScroll()
 
-    // 이중 체크: 브라우저가 스크롤 위치를 복원하거나 레이아웃이 안정화되는 시간 확보 (Hydration 이슈 대응)
-    const timer = setTimeout(handleScroll, 100)
+    // 초기 상태를 첫 페인트 전에 최대한 맞추고, 브라우저 스크롤 복원도 한 번 더 반영한다.
+    syncScrollState()
+    const frame = window.requestAnimationFrame(syncScrollState)
+    const timer = window.setTimeout(syncScrollState, 120)
 
-    window.addEventListener('scroll', handleScroll, { passive: true })
+    window.addEventListener('scroll', syncScrollState, { passive: true })
     return () => {
-      window.removeEventListener('scroll', handleScroll)
-      clearTimeout(timer)
+      window.removeEventListener('scroll', syncScrollState)
+      window.cancelAnimationFrame(frame)
+      window.clearTimeout(timer)
     }
-  }, [])
+  }, [pathname, router])
 
   // 사용자 인증 상태 관리 (개선된 버전)
   useEffect(() => {
@@ -124,7 +127,10 @@ const Navigation = () => {
       id="navigation"
       role="navigation"
       aria-label="주요 내비게이션"
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+      data-at-top={isAtTop ? 'true' : 'false'}
+      className={`fixed top-0 left-0 right-0 z-50 ${
+        hasScrollSync ? 'transition-all duration-300' : 'transition-none'
+      } ${
         isHomePage && isAtTop ? 'bg-transparent' : 'bg-white/90 backdrop-blur-md shadow-sm'
       }`}
     >
