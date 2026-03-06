@@ -12,7 +12,11 @@ interface OptimizedLiquidMetalParticlesProps {
  * RAF 최적화가 적용된 WebGL 파티클 시스템
  * 불필요한 렌더링을 제거하고 60fps를 안정적으로 유지
  */
-const OptimizedLiquidMetalParticles = ({ particleCount, width, height }: OptimizedLiquidMetalParticlesProps) => {
+const OptimizedLiquidMetalParticles = ({
+  particleCount,
+  width,
+  height,
+}: OptimizedLiquidMetalParticlesProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const animationIdRef = useRef<number | null>(null)
   const lastRenderTimeRef = useRef(0)
@@ -39,38 +43,41 @@ const OptimizedLiquidMetalParticles = ({ particleCount, width, height }: Optimiz
   }, [])
 
   // 최적화된 렌더링 루프
-  const renderFrame = useCallback((currentTime: number) => {
-    if (!isVisibleRef.current) return
+  const renderFrame = useCallback(
+    (currentTime: number) => {
+      if (!isVisibleRef.current) return
 
-    const deltaTime = currentTime - lastRenderTimeRef.current
-    
-    // 60fps 제한 (프레임 스킵)
-    if (deltaTime < fpsTargetRef.current) {
+      const deltaTime = currentTime - lastRenderTimeRef.current
+
+      // 60fps 제한 (프레임 스킵)
+      if (deltaTime < fpsTargetRef.current) {
+        animationIdRef.current = requestAnimationFrame(renderFrame)
+        return
+      }
+
+      // 마우스 움직임이 없고 일정 시간이 지나면 렌더링 스킵
+      const timeSinceMouseMove = currentTime - lastMouseMoveRef.current
+      const shouldSkipRender = timeSinceMouseMove > 2000 && !isDirtyRef.current
+
+      if (shouldSkipRender) {
+        // 2초 후 렌더링 주기를 30fps로 낮춤
+        fpsTargetRef.current = 1000 / 30
+      } else {
+        // 활성 상태에서는 60fps 유지
+        fpsTargetRef.current = 1000 / 60
+      }
+
+      if (!shouldSkipRender || isDirtyRef.current) {
+        // 실제 렌더링 로직 (WebGL)
+        renderParticles(deltaTime)
+        isDirtyRef.current = false
+      }
+
+      lastRenderTimeRef.current = currentTime
       animationIdRef.current = requestAnimationFrame(renderFrame)
-      return
-    }
-
-    // 마우스 움직임이 없고 일정 시간이 지나면 렌더링 스킵
-    const timeSinceMouseMove = currentTime - lastMouseMoveRef.current
-    const shouldSkipRender = timeSinceMouseMove > 2000 && !isDirtyRef.current
-
-    if (shouldSkipRender) {
-      // 2초 후 렌더링 주기를 30fps로 낮춤
-      fpsTargetRef.current = 1000 / 30
-    } else {
-      // 활성 상태에서는 60fps 유지
-      fpsTargetRef.current = 1000 / 60
-    }
-
-    if (!shouldSkipRender || isDirtyRef.current) {
-      // 실제 렌더링 로직 (WebGL)
-      renderParticles(deltaTime)
-      isDirtyRef.current = false
-    }
-
-    lastRenderTimeRef.current = currentTime
-    animationIdRef.current = requestAnimationFrame(renderFrame)
-  }, [renderParticles])
+    },
+    [renderParticles]
+  )
 
   // 애니메이션 시작
   const startAnimation = useCallback(() => {
@@ -86,10 +93,10 @@ const OptimizedLiquidMetalParticles = ({ particleCount, width, height }: Optimiz
     if (!canvas) return
 
     const observer = new IntersectionObserver(
-      (entries) => {
+      entries => {
         const entry = entries[0]
         isVisibleRef.current = entry.isIntersecting
-        
+
         if (!entry.isIntersecting && animationIdRef.current) {
           // 화면에서 벗어나면 애니메이션 중지
           cancelAnimationFrame(animationIdRef.current)
@@ -122,7 +129,7 @@ const OptimizedLiquidMetalParticles = ({ particleCount, width, height }: Optimiz
       // 마우스 위치가 크게 변경된 경우만 업데이트
       const deltaX = Math.abs(newX - mousePositionRef.current.x)
       const deltaY = Math.abs(newY - mousePositionRef.current.y)
-      
+
       if (deltaX > 5 || deltaY > 5) {
         mousePositionRef.current = { x: newX, y: newY }
         lastMouseMoveRef.current = performance.now()

@@ -2,7 +2,9 @@
 
 ## 📋 개요
 
-경기아트콜렉티브 협동조합의 프로필 사진 업로드 및 관리 시스템에 대한 종합 문서입니다. 이 시스템은 아티스트 프로필 사진을 안전하고 효율적으로 관리하기 위해 구현되었습니다.
+경기아트콜렉티브 협동조합의 프로필 사진 업로드 및 관리 시스템에 대한 종합
+문서입니다. 이 시스템은 아티스트 프로필 사진을 안전하고 효율적으로 관리하기 위해
+구현되었습니다.
 
 ## 🏗️ 시스템 아키텍처
 
@@ -50,6 +52,7 @@ src/
 ### ProfilePhotoUploader 컴포넌트
 
 **주요 기능:**
+
 - 드래그 앤 드롭 파일 업로드
 - 파일 타입 및 크기 검증
 - 이미지 미리보기 생성
@@ -58,18 +61,21 @@ src/
 - 프로필 사진 삭제 기능
 
 **지원 파일 형식:**
+
 - JPEG (.jpg, .jpeg)
 - PNG (.png)
 - WebP (.webp)
 - GIF (.gif)
 
 **크기 제한:**
+
 - 아티스트 프로필 사진: 최대 5MB
 - 일반 미디어: 최대 10MB
 
 ### MediaManager 컴포넌트
 
 **주요 기능:**
+
 - 단일/다중 파일 업로드 지원
 - 다양한 Storage bucket 지원
 - 파일 메타데이터 관리
@@ -81,6 +87,7 @@ src/
 #### `/api/mypage/artist/photo`
 
 **PUT** - 아티스트 프로필 사진 업로드/변경
+
 - 인증 확인 (로그인 필요)
 - 아티스트 권한 확인 (is_artist, artist_id)
 - 승인 상태 확인 (registration_status: 'approved')
@@ -90,23 +97,27 @@ src/
 - 기존 파일 정리
 
 **DELETE** - 아티스트 프로필 사진 삭제
+
 - 권한 확인
 - Storage에서 파일 삭제
 - 데이터베이스 레코드 정리
 
 **GET** - 아티스트 프로필 사진 메타데이터 조회
+
 - 현재 프로필 사진 정보 반환
 - 메타데이터 포함
 
 #### `/api/media/upload`
 
 **POST** - 범용 미디어 파일 업로드
+
 - 다중 bucket 지원 (profiles, attachments, artists)
 - 파일 타입별 크기 제한
 - 메타데이터 자동 추출
 - 안전한 파일명 생성
 
 **GET** - 업로드된 파일 목록 조회
+
 - 사용자별 파일 목록
 - 페이지네이션 지원
 
@@ -115,12 +126,13 @@ src/
 ### artists 테이블
 
 ```sql
-ALTER TABLE artists 
+ALTER TABLE artists
 ADD COLUMN profile_photo_url TEXT,
 ADD COLUMN profile_photo_metadata JSONB;
 ```
 
 **profile_photo_metadata 구조:**
+
 ```json
 {
   "original_filename": "photo.jpg",
@@ -142,6 +154,7 @@ ADD COLUMN profile_photo_metadata JSONB;
 ### member_profiles 테이블
 
 기존 필드 활용:
+
 - `is_artist`: 아티스트 권한 여부
 - `artist_id`: 연결된 아티스트 프로필 ID
 - `registration_status`: 'approved' 상태 확인
@@ -151,6 +164,7 @@ ADD COLUMN profile_photo_metadata JSONB;
 ### 클라이언트 사이드 검증
 
 1. **파일 타입 검증**
+
    ```typescript
    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
    if (!allowedTypes.includes(file.type)) {
@@ -188,6 +202,7 @@ ADD COLUMN profile_photo_metadata JSONB;
 ### 프로필 페이지 (/mypage/profile)
 
 **PersonalInfo 컴포넌트:**
+
 - 아티스트 프로필 사진 읽기 전용 표시
 - 아티스트 프로필 관리 페이지로 이동 링크
 - 권한 없는 사용자에게 안내 메시지
@@ -195,6 +210,7 @@ ADD COLUMN profile_photo_metadata JSONB;
 ### 아티스트 관리 페이지 (/mypage/artist)
 
 **ProfilePhotoUploader 사용:**
+
 - 드래그 앤 드롭 업로드 영역
 - 현재 프로필 사진 표시
 - 업로드 진행률 시각화
@@ -231,6 +247,7 @@ ADD COLUMN profile_photo_metadata JSONB;
 ### 통합 테스트
 
 **`test-profile-photo-integration.js`**
+
 - 컴포넌트 파일 존재 확인
 - API 엔드포인트 검증
 - TypeScript 컴파일 테스트
@@ -240,6 +257,7 @@ ADD COLUMN profile_photo_metadata JSONB;
 ### E2E 테스트
 
 **`test-profile-photo-e2e.js`**
+
 - Playwright 기반 브라우저 테스트
 - 전체 업로드 플로우 검증
 - UI 상호작용 테스트
@@ -248,6 +266,7 @@ ADD COLUMN profile_photo_metadata JSONB;
 ### 보안 및 성능 테스트
 
 **`test-profile-photo-security.js`**
+
 - API 보안 검증
 - 파일 검증 테스트
 - 성능 측정
@@ -258,11 +277,13 @@ ADD COLUMN profile_photo_metadata JSONB;
 ### Supabase 마이그레이션
 
 1. **데이터베이스 스키마 적용**
+
    ```sql
    -- supabase/migrations/20250720_add_artist_profile_photo_fields.sql 실행
    ```
 
 2. **Storage Bucket 설정**
+
    ```sql
    -- supabase/migrations/20250720_setup_profile_storage.sql 실행
    ```

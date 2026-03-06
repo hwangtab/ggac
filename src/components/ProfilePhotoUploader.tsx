@@ -8,12 +8,20 @@
 import React, { useState, useCallback, useRef } from 'react'
 import ReactCrop, { type Crop, type PixelCrop } from 'react-image-crop'
 import 'react-image-crop/dist/ReactCrop.css'
-import { FiCamera, FiUser, FiEdit3, FiTrash2, FiLoader, FiUpload, FiRotateCcw } from 'react-icons/fi'
-import type { 
+import {
+  FiCamera,
+  FiUser,
+  FiEdit3,
+  FiTrash2,
+  FiLoader,
+  FiUpload,
+  FiRotateCcw,
+} from 'react-icons/fi'
+import type {
   ProfilePhotoUploadRequest,
   ProfilePhotoUploadResponse,
   ProfilePhotoMetadata,
-  ImageCropSettings
+  ImageCropSettings,
 } from '@/types'
 
 interface ProfilePhotoUploaderProps {
@@ -42,7 +50,7 @@ interface UploadState {
   progress: number
   preview?: string
   error?: string
-  imageMetadata?: { width?: number, height?: number }
+  imageMetadata?: { width?: number; height?: number }
 }
 
 const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
@@ -54,11 +62,11 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
   onPhotoDelete,
   size = 'medium',
   disabled = false,
-  className = ''
+  className = '',
 }) => {
   const [uploadState, setUploadState] = useState<UploadState>({
     isUploading: false,
-    progress: 0
+    progress: 0,
   })
   const [isHovered, setIsHovered] = useState(false)
   const [showCropModal, setShowCropModal] = useState(false)
@@ -74,13 +82,13 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
   const sizeClasses = {
     small: 'w-16 h-16',
     medium: 'w-24 h-24',
-    large: 'w-32 h-32'
+    large: 'w-32 h-32',
   }
 
   const iconSizes = {
     small: 'w-4 h-4',
     medium: 'w-5 h-5',
-    large: 'w-6 h-6'
+    large: 'w-6 h-6',
   }
 
   // 파일 유효성 검사
@@ -100,85 +108,91 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
   }, [])
 
   // 파일 미리보기 생성 및 이미지 크기 추출
-  const generatePreview = useCallback((file: File): Promise<{preview: string, width?: number, height?: number}> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        const dataUrl = e.target?.result as string
-        
-        // 이미지 파일인 경우 크기 정보 추출
-        if (file.type.startsWith('image/')) {
-          const img = new Image()
-          img.onload = () => {
-            resolve({
-              preview: dataUrl,
-              width: img.width,
-              height: img.height
-            })
-          }
-          img.onerror = () => {
+  const generatePreview = useCallback(
+    (file: File): Promise<{ preview: string; width?: number; height?: number }> => {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = e => {
+          const dataUrl = e.target?.result as string
+
+          // 이미지 파일인 경우 크기 정보 추출
+          if (file.type.startsWith('image/')) {
+            const img = new Image()
+            img.onload = () => {
+              resolve({
+                preview: dataUrl,
+                width: img.width,
+                height: img.height,
+              })
+            }
+            img.onerror = () => {
+              resolve({ preview: dataUrl })
+            }
+            img.src = dataUrl
+          } else {
             resolve({ preview: dataUrl })
           }
-          img.src = dataUrl
-        } else {
-          resolve({ preview: dataUrl })
         }
-      }
-      reader.onerror = reject
-      reader.readAsDataURL(file)
-    })
-  }, [])
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+    },
+    []
+  )
 
   // Canvas를 사용하여 크롭된 이미지 생성
-  const getCroppedImg = useCallback((
-    image: HTMLImageElement,
-    crop: PixelCrop,
-    outputSize: { width: number; height: number } = { width: 400, height: 400 }
-  ): Promise<File> => {
-    return new Promise((resolve, reject) => {
-      const canvas = document.createElement('canvas')
-      const ctx = canvas.getContext('2d')
+  const getCroppedImg = useCallback(
+    (
+      image: HTMLImageElement,
+      crop: PixelCrop,
+      outputSize: { width: number; height: number } = { width: 400, height: 400 }
+    ): Promise<File> => {
+      return new Promise((resolve, reject) => {
+        const canvas = document.createElement('canvas')
+        const ctx = canvas.getContext('2d')
 
-      if (!ctx) {
-        reject(new Error('Canvas context not available'))
-        return
-      }
+        if (!ctx) {
+          reject(new Error('Canvas context not available'))
+          return
+        }
 
-      const scaleX = image.naturalWidth / image.width
-      const scaleY = image.naturalHeight / image.height
+        const scaleX = image.naturalWidth / image.width
+        const scaleY = image.naturalHeight / image.height
 
-      canvas.width = outputSize.width
-      canvas.height = outputSize.height
+        canvas.width = outputSize.width
+        canvas.height = outputSize.height
 
-      ctx.drawImage(
-        image,
-        crop.x * scaleX,
-        crop.y * scaleY,
-        crop.width * scaleX,
-        crop.height * scaleY,
-        0,
-        0,
-        outputSize.width,
-        outputSize.height
-      )
+        ctx.drawImage(
+          image,
+          crop.x * scaleX,
+          crop.y * scaleY,
+          crop.width * scaleX,
+          crop.height * scaleY,
+          0,
+          0,
+          outputSize.width,
+          outputSize.height
+        )
 
-      canvas.toBlob(
-        (blob) => {
-          if (!blob) {
-            reject(new Error('Canvas is empty'))
-            return
-          }
-          const file = new File([blob], `cropped_${selectedFile?.name || 'image.jpg'}`, {
-            type: 'image/jpeg',
-            lastModified: Date.now()
-          })
-          resolve(file)
-        },
-        'image/jpeg',
-        0.95
-      )
-    })
-  }, [selectedFile])
+        canvas.toBlob(
+          blob => {
+            if (!blob) {
+              reject(new Error('Canvas is empty'))
+              return
+            }
+            const file = new File([blob], `cropped_${selectedFile?.name || 'image.jpg'}`, {
+              type: 'image/jpeg',
+              lastModified: Date.now(),
+            })
+            resolve(file)
+          },
+          'image/jpeg',
+          0.95
+        )
+      })
+    },
+    [selectedFile]
+  )
 
   // 크롭 미리보기 업데이트
   const updateCropPreview = useCallback(async (crop: PixelCrop) => {
@@ -214,7 +228,7 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
     )
 
     // 미리보기 URL 생성
-    canvas.toBlob((blob) => {
+    canvas.toBlob(blob => {
       if (blob) {
         const url = URL.createObjectURL(blob)
         setCroppedImageUrl(url)
@@ -234,149 +248,156 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
       x,
       y,
       width: cropSize,
-      height: cropSize
+      height: cropSize,
     }
 
     setCrop(newCrop)
   }, [])
 
   // 아티스트 프로필 사진 업로드 (Supabase Storage)
-  const uploadProfilePhoto = useCallback(async (
-    file: File, 
-    cropSettings?: ImageCropSettings,
-    imageMetadata?: { width?: number, height?: number }
-  ): Promise<ProfilePhotoUploadResponse> => {
-    // 아티스트 프로필 업데이트를 위한 FormData 생성
-    const formData = new FormData()
-    formData.append('file', file)
-    
-    if (cropSettings) {
-      formData.append('crop_settings', JSON.stringify(cropSettings))
-    }
+  const uploadProfilePhoto = useCallback(
+    async (
+      file: File,
+      cropSettings?: ImageCropSettings,
+      imageMetadata?: { width?: number; height?: number }
+    ): Promise<ProfilePhotoUploadResponse> => {
+      // 아티스트 프로필 업데이트를 위한 FormData 생성
+      const formData = new FormData()
+      formData.append('file', file)
 
-    // 메타데이터 추가 (클라이언트에서 추출한 이미지 크기 포함)
-    const metadata: Partial<ProfilePhotoMetadata> = {
-      original_filename: file.name,
-      file_size: file.size,
-      content_type: file.type,
-      uploaded_at: new Date().toISOString(),
-      crop_info: cropSettings,
-      width: imageMetadata?.width,
-      height: imageMetadata?.height
-    }
-    formData.append('metadata', JSON.stringify(metadata))
+      if (cropSettings) {
+        formData.append('crop_settings', JSON.stringify(cropSettings))
+      }
 
-    // 아티스트 프로필 사진 업로드 API 사용
-    const response = await fetch('/api/mypage/artist/photo', {
-      method: 'PUT',
-      body: formData
-    })
+      // 메타데이터 추가 (클라이언트에서 추출한 이미지 크기 포함)
+      const metadata: Partial<ProfilePhotoMetadata> = {
+        original_filename: file.name,
+        file_size: file.size,
+        content_type: file.type,
+        uploaded_at: new Date().toISOString(),
+        crop_info: cropSettings,
+        width: imageMetadata?.width,
+        height: imageMetadata?.height,
+      }
+      formData.append('metadata', JSON.stringify(metadata))
 
-    if (!response.ok) {
-      const errorData = await response.json()
-      throw new Error(errorData.error || '파일 업로드에 실패했습니다.')
-    }
+      // 아티스트 프로필 사진 업로드 API 사용
+      const response = await fetch('/api/mypage/artist/photo', {
+        method: 'PUT',
+        body: formData,
+      })
 
-    return response.json()
-  }, [])
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || '파일 업로드에 실패했습니다.')
+      }
+
+      return response.json()
+    },
+    []
+  )
 
   // 업로드 시작
-  const startUpload = useCallback(async (
-    file: File, 
-    cropSettings?: ImageCropSettings,
-    imageMetadata?: { width?: number, height?: number }
-  ) => {
-    setUploadState(prev => ({
-      ...prev,
-      isUploading: true,
-      progress: 0,
-      error: undefined
-    }))
-
-    try {
-      // 진행률 시뮬레이션
-      const progressInterval = setInterval(() => {
-        setUploadState(prev => ({
-          ...prev,
-          progress: Math.min(prev.progress + 10, 90)
-        }))
-      }, 200)
-
-      // 실제 업로드 (이미지 메타데이터 포함)
-      const response = await uploadProfilePhoto(file, cropSettings, imageMetadata)
-
-      clearInterval(progressInterval)
-
-      setUploadState({
-        isUploading: false,
-        progress: 100
-      })
-
-      // 성공 콜백 호출
-      onUploadComplete?.(response)
-
-      // 상태 초기화
-      setTimeout(() => {
-        setUploadState({
-          isUploading: false,
-          progress: 0
-        })
-        setSelectedFile(null)
-        setShowCropModal(false)
-      }, 1000)
-
-    } catch (error) {
-      console.error('Profile photo upload failed:', error)
-      
-      const errorMessage = error instanceof Error ? error.message : 'Upload failed'
-      
+  const startUpload = useCallback(
+    async (
+      file: File,
+      cropSettings?: ImageCropSettings,
+      imageMetadata?: { width?: number; height?: number }
+    ) => {
       setUploadState(prev => ({
         ...prev,
-        isUploading: false,
-        error: errorMessage
+        isUploading: true,
+        progress: 0,
+        error: undefined,
       }))
 
-      onUploadError?.(errorMessage)
-    }
-  }, [uploadProfilePhoto, onUploadComplete, onUploadError])
+      try {
+        // 진행률 시뮬레이션
+        const progressInterval = setInterval(() => {
+          setUploadState(prev => ({
+            ...prev,
+            progress: Math.min(prev.progress + 10, 90),
+          }))
+        }, 200)
+
+        // 실제 업로드 (이미지 메타데이터 포함)
+        const response = await uploadProfilePhoto(file, cropSettings, imageMetadata)
+
+        clearInterval(progressInterval)
+
+        setUploadState({
+          isUploading: false,
+          progress: 100,
+        })
+
+        // 성공 콜백 호출
+        onUploadComplete?.(response)
+
+        // 상태 초기화
+        setTimeout(() => {
+          setUploadState({
+            isUploading: false,
+            progress: 0,
+          })
+          setSelectedFile(null)
+          setShowCropModal(false)
+        }, 1000)
+      } catch (error) {
+        console.error('Profile photo upload failed:', error)
+
+        const errorMessage = error instanceof Error ? error.message : 'Upload failed'
+
+        setUploadState(prev => ({
+          ...prev,
+          isUploading: false,
+          error: errorMessage,
+        }))
+
+        onUploadError?.(errorMessage)
+      }
+    },
+    [uploadProfilePhoto, onUploadComplete, onUploadError]
+  )
 
   // 파일 선택 처리
-  const handleFileSelect = useCallback(async (file: File) => {
-    if (disabled) return
+  const handleFileSelect = useCallback(
+    async (file: File) => {
+      if (disabled) return
 
-    // 파일 유효성 검사
-    const validationError = validateFile(file)
-    if (validationError) {
-      onUploadError?.(validationError)
-      return
-    }
-
-    try {
-      // 미리보기 생성 및 이미지 크기 추출
-      const { preview, width, height } = await generatePreview(file)
-      
-      setUploadState({
-        isUploading: false,
-        progress: 0,
-        preview,
-        imageMetadata: { width, height }
-      })
-
-      setSelectedFile(file)
-      
-      // 크롭 모달 표시 (이미지 파일인 경우)
-      if (file.type.startsWith('image/')) {
-        setShowCropModal(true)
-      } else {
-        // 크롭이 필요 없는 경우 바로 업로드
-        await startUpload(file, undefined, { width, height })
+      // 파일 유효성 검사
+      const validationError = validateFile(file)
+      if (validationError) {
+        onUploadError?.(validationError)
+        return
       }
-    } catch (error) {
-      console.error('File preview generation failed:', error)
-      onUploadError?.('파일 미리보기 생성에 실패했습니다.')
-    }
-  }, [disabled, validateFile, generatePreview, onUploadError, startUpload])
 
+      try {
+        // 미리보기 생성 및 이미지 크기 추출
+        const { preview, width, height } = await generatePreview(file)
+
+        setUploadState({
+          isUploading: false,
+          progress: 0,
+          preview,
+          imageMetadata: { width, height },
+        })
+
+        setSelectedFile(file)
+
+        // 크롭 모달 표시 (이미지 파일인 경우)
+        if (file.type.startsWith('image/')) {
+          setShowCropModal(true)
+        } else {
+          // 크롭이 필요 없는 경우 바로 업로드
+          await startUpload(file, undefined, { width, height })
+        }
+      } catch (error) {
+        console.error('File preview generation failed:', error)
+        onUploadError?.('파일 미리보기 생성에 실패했습니다.')
+      }
+    },
+    [disabled, validateFile, generatePreview, onUploadError, startUpload]
+  )
 
   // 파일 입력 클릭
   const handleFileInputClick = useCallback(() => {
@@ -386,16 +407,19 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
   }, [disabled])
 
   // 드래그 앤 드롭 처리
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    
-    if (disabled) return
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault()
 
-    const files = e.dataTransfer.files
-    if (files.length > 0) {
-      handleFileSelect(files[0])
-    }
-  }, [disabled, handleFileSelect])
+      if (disabled) return
+
+      const files = e.dataTransfer.files
+      if (files.length > 0) {
+        handleFileSelect(files[0])
+      }
+    },
+    [disabled, handleFileSelect]
+  )
 
   // 아티스트 프로필 사진 삭제
   const handlePhotoDelete = useCallback(async () => {
@@ -405,7 +429,7 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
 
     try {
       const response = await fetch('/api/mypage/artist/photo', {
-        method: 'DELETE'
+        method: 'DELETE',
       })
 
       if (!response.ok) {
@@ -434,7 +458,7 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         onDrop={handleDrop}
-        onDragOver={(e) => e.preventDefault()}
+        onDragOver={e => e.preventDefault()}
         onClick={handleFileInputClick}
       >
         {/* 파일 입력 */}
@@ -443,7 +467,7 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
           type="file"
           className="hidden"
           accept="image/jpeg,image/png,image/webp,image/gif"
-          onChange={(e) => {
+          onChange={e => {
             if (e.target.files?.[0]) {
               handleFileSelect(e.target.files[0])
             }
@@ -484,9 +508,7 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
               ) : (
                 <FiCamera className={`${iconSizes[size]} mx-auto mb-1`} />
               )}
-              <div className="text-xs">
-                {displayImageUrl ? '변경' : '추가'}
-              </div>
+              <div className="text-xs">{displayImageUrl ? '변경' : '추가'}</div>
             </div>
           </div>
         )}
@@ -515,23 +537,22 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
 
       {/* 에러 메시지 */}
       {uploadState.error && (
-        <div className="mt-2 text-xs text-red-600 text-center">
-          {uploadState.error}
-        </div>
+        <div className="mt-2 text-xs text-red-600 text-center">{uploadState.error}</div>
       )}
 
       {/* 파일 정보 */}
       {currentMetadata && (
         <div className="mt-2 text-xs text-gray-500 text-center">
           {currentMetadata.width && currentMetadata.height && (
-            <div>{currentMetadata.width} × {currentMetadata.height}</div>
+            <div>
+              {currentMetadata.width} × {currentMetadata.height}
+            </div>
           )}
           {currentMetadata.file_size && (
             <div>
-              {currentMetadata.file_size < 1024 * 1024 
+              {currentMetadata.file_size < 1024 * 1024
                 ? `${(currentMetadata.file_size / 1024).toFixed(1)} KB`
-                : `${(currentMetadata.file_size / 1024 / 1024).toFixed(1)} MB`
-              }
+                : `${(currentMetadata.file_size / 1024 / 1024).toFixed(1)} MB`}
             </div>
           )}
         </div>
@@ -547,7 +568,9 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
         >
           <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
-              <h3 id="crop-modal-title" className="text-lg font-medium">프로필 사진 크롭</h3>
+              <h3 id="crop-modal-title" className="text-lg font-medium">
+                프로필 사진 크롭
+              </h3>
               <button
                 onClick={() => {
                   setShowCropModal(false)
@@ -561,11 +584,16 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
                 disabled={uploadState.isUploading}
               >
                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
                 </svg>
               </button>
             </div>
-            
+
             <p className="text-sm text-gray-600 mb-4">
               드래그하여 프로필 사진으로 사용할 영역을 선택해주세요. 정사각형으로 크롭됩니다.
             </p>
@@ -577,8 +605,8 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
                 <div className="border border-gray-200 rounded-lg overflow-hidden">
                   <ReactCrop
                     crop={crop}
-                    onChange={(c) => setCrop(c)}
-                    onComplete={(c) => {
+                    onChange={c => setCrop(c)}
+                    onComplete={c => {
                       setCompletedCrop(c)
                       if (c.width > 0 && c.height > 0) {
                         updateCropPreview(c)
@@ -624,22 +652,23 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
                     </div>
                   )}
                 </div>
-                
+
                 {/* 크롭 정보 */}
                 {completedCrop && (
                   <div className="text-xs text-gray-500 space-y-1">
-                    <div>크기: {Math.round(completedCrop.width)} × {Math.round(completedCrop.height)}</div>
-                    <div>위치: ({Math.round(completedCrop.x)}, {Math.round(completedCrop.y)})</div>
+                    <div>
+                      크기: {Math.round(completedCrop.width)} × {Math.round(completedCrop.height)}
+                    </div>
+                    <div>
+                      위치: ({Math.round(completedCrop.x)}, {Math.round(completedCrop.y)})
+                    </div>
                   </div>
                 )}
               </div>
             </div>
 
             {/* 숨겨진 캔버스 (미리보기용) */}
-            <canvas
-              ref={previewCanvasRef}
-              className="hidden"
-            />
+            <canvas ref={previewCanvasRef} className="hidden" />
 
             {/* 하단 버튼들 */}
             <div className="flex flex-col sm:flex-row justify-between items-center mt-6 pt-4 border-t border-gray-200 gap-3">
@@ -647,7 +676,9 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
                 <button
                   onClick={() => {
                     if (imageRef.current) {
-                      onImageLoad({ currentTarget: imageRef.current } as React.SyntheticEvent<HTMLImageElement>)
+                      onImageLoad({
+                        currentTarget: imageRef.current,
+                      } as React.SyntheticEvent<HTMLImageElement>)
                     }
                   }}
                   className="flex items-center px-3 py-2 text-sm text-gray-600 bg-gray-100 rounded hover:bg-gray-200 transition-colors"
@@ -679,14 +710,14 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
                       try {
                         // 크롭된 이미지 생성
                         const croppedFile = await getCroppedImg(imageRef.current, completedCrop)
-                        
+
                         // 크롭 설정 생성
                         const cropSettings: ImageCropSettings = {
                           x: completedCrop.x,
                           y: completedCrop.y,
                           width: completedCrop.width,
                           height: completedCrop.height,
-                          output_size: { width: 400, height: 400 }
+                          output_size: { width: 400, height: 400 },
                         }
 
                         // 업로드 시작

@@ -19,23 +19,23 @@
 
 ### Props
 
-| 속성 | 타입 | 기본값 | 필수 | 설명 |
-|------|------|--------|------|------|
-| `src` | `string` | - | ✅ | 이미지 URL |
-| `alt` | `string` | - | ✅ | 대체 텍스트 |
-| `width` | `number` | - | - | 이미지 너비 |
-| `height` | `number` | - | - | 이미지 높이 |
-| `className` | `string` | `''` | - | 추가 CSS 클래스 |
-| `priority` | `boolean` | `false` | - | 우선 로딩 여부 |
-| `fill` | `boolean` | `false` | - | 부모 요소 채우기 |
-| `sizes` | `string` | - | - | 반응형 이미지 크기 |
-| `quality` | `number` | `80` | - | 이미지 품질 (1-100) |
-| `fallbackText` | `string` | - | - | 오류 시 표시할 텍스트 |
-| `preserveAspectRatio` | `boolean` | `false` | - | 종횡비 유지 |
-| `onLoadStart` | `() => void` | - | - | 로딩 시작 콜백 |
-| `onLoad` | `() => void` | - | - | 로딩 완료 콜백 |
-| `onError` | `(error: Error) => void` | - | - | 에러 발생 콜백 |
-| `suppressSkeleton` | `boolean` | `false` | - | 스켈레톤 UI 비활성화 |
+| 속성                  | 타입                     | 기본값  | 필수 | 설명                  |
+| --------------------- | ------------------------ | ------- | ---- | --------------------- |
+| `src`                 | `string`                 | -       | ✅   | 이미지 URL            |
+| `alt`                 | `string`                 | -       | ✅   | 대체 텍스트           |
+| `width`               | `number`                 | -       | -    | 이미지 너비           |
+| `height`              | `number`                 | -       | -    | 이미지 높이           |
+| `className`           | `string`                 | `''`    | -    | 추가 CSS 클래스       |
+| `priority`            | `boolean`                | `false` | -    | 우선 로딩 여부        |
+| `fill`                | `boolean`                | `false` | -    | 부모 요소 채우기      |
+| `sizes`               | `string`                 | -       | -    | 반응형 이미지 크기    |
+| `quality`             | `number`                 | `80`    | -    | 이미지 품질 (1-100)   |
+| `fallbackText`        | `string`                 | -       | -    | 오류 시 표시할 텍스트 |
+| `preserveAspectRatio` | `boolean`                | `false` | -    | 종횡비 유지           |
+| `onLoadStart`         | `() => void`             | -       | -    | 로딩 시작 콜백        |
+| `onLoad`              | `() => void`             | -       | -    | 로딩 완료 콜백        |
+| `onError`             | `(error: Error) => void` | -       | -    | 에러 발생 콜백        |
+| `suppressSkeleton`    | `boolean`                | `false` | -    | 스켈레톤 UI 비활성화  |
 
 ### 사용 예제
 
@@ -75,29 +75,29 @@
 
 ### Props
 
-| 속성 | 타입 | 기본값 | 필수 | 설명 |
-|------|------|--------|------|------|
-| `id` | `string` | - | ✅ | 컴포넌트 고유 ID |
-| `config` | `MediaManagerConfig` | - | ✅ | 미디어 관리 설정 |
-| `existingFiles` | `MediaFile[]` | `[]` | - | 기존 파일 목록 |
-| `onUploadComplete` | `(files: MediaFile[]) => void` | - | - | 업로드 완료 콜백 |
-| `onUploadError` | `(error: string) => void` | - | - | 업로드 오류 콜백 |
-| `onFileDelete` | `(fileId: string) => void` | - | - | 파일 삭제 콜백 |
-| `mode` | `'single' \| 'multiple'` | `'multiple'` | - | 업로드 모드 |
-| `bucket` | `string` | `'attachments'` | - | Storage 버킷명 |
-| `className` | `string` | `''` | - | 추가 CSS 클래스 |
-| `disabled` | `boolean` | `false` | - | 비활성화 상태 |
-| `enableCrop` | `boolean` | `false` | - | 크롭 기능 활성화 |
-| `cropSettings` | `ImageCropSettings` | - | - | 크롭 설정 |
+| 속성               | 타입                           | 기본값          | 필수 | 설명             |
+| ------------------ | ------------------------------ | --------------- | ---- | ---------------- |
+| `id`               | `string`                       | -               | ✅   | 컴포넌트 고유 ID |
+| `config`           | `MediaManagerConfig`           | -               | ✅   | 미디어 관리 설정 |
+| `existingFiles`    | `MediaFile[]`                  | `[]`            | -    | 기존 파일 목록   |
+| `onUploadComplete` | `(files: MediaFile[]) => void` | -               | -    | 업로드 완료 콜백 |
+| `onUploadError`    | `(error: string) => void`      | -               | -    | 업로드 오류 콜백 |
+| `onFileDelete`     | `(fileId: string) => void`     | -               | -    | 파일 삭제 콜백   |
+| `mode`             | `'single' \| 'multiple'`       | `'multiple'`    | -    | 업로드 모드      |
+| `bucket`           | `string`                       | `'attachments'` | -    | Storage 버킷명   |
+| `className`        | `string`                       | `''`            | -    | 추가 CSS 클래스  |
+| `disabled`         | `boolean`                      | `false`         | -    | 비활성화 상태    |
+| `enableCrop`       | `boolean`                      | `false`         | -    | 크롭 기능 활성화 |
+| `cropSettings`     | `ImageCropSettings`            | -               | -    | 크롭 설정        |
 
 ### MediaManagerConfig 인터페이스
 
 ```typescript
 interface MediaManagerConfig {
-  allowed_types: string[]        // 허용 파일 타입
-  max_file_size: number         // 최대 파일 크기 (bytes)
-  max_files?: number            // 최대 파일 수
-  enable_preview?: boolean      // 미리보기 활성화
+  allowed_types: string[] // 허용 파일 타입
+  max_file_size: number // 최대 파일 크기 (bytes)
+  max_files?: number // 최대 파일 수
+  enable_preview?: boolean // 미리보기 활성화
 }
 ```
 
@@ -141,22 +141,22 @@ interface MediaManagerConfig {
 
 ### Props
 
-| 속성 | 타입 | 기본값 | 필수 | 설명 |
-|------|------|--------|------|------|
-| `isOpen` | `boolean` | - | ✅ | 모달 열림 상태 |
-| `imageUrl` | `string` | - | ✅ | 크롭할 이미지 URL |
-| `imageName` | `string` | - | ✅ | 이미지 파일명 |
-| `onClose` | `() => void` | - | ✅ | 모달 닫기 콜백 |
-| `onCrop` | `(blob: Blob, area: CropArea) => void` | - | ✅ | 크롭 완료 콜백 |
-| `aspectRatio` | `number` | - | - | 고정 종횡비 (width/height) |
+| 속성          | 타입                                   | 기본값 | 필수 | 설명                       |
+| ------------- | -------------------------------------- | ------ | ---- | -------------------------- |
+| `isOpen`      | `boolean`                              | -      | ✅   | 모달 열림 상태             |
+| `imageUrl`    | `string`                               | -      | ✅   | 크롭할 이미지 URL          |
+| `imageName`   | `string`                               | -      | ✅   | 이미지 파일명              |
+| `onClose`     | `() => void`                           | -      | ✅   | 모달 닫기 콜백             |
+| `onCrop`      | `(blob: Blob, area: CropArea) => void` | -      | ✅   | 크롭 완료 콜백             |
+| `aspectRatio` | `number`                               | -      | -    | 고정 종횡비 (width/height) |
 
 ### CropArea 인터페이스
 
 ```typescript
 interface CropArea {
-  x: number      // X 좌표
-  y: number      // Y 좌표
-  width: number  // 너비
+  x: number // X 좌표
+  y: number // Y 좌표
+  width: number // 너비
   height: number // 높이
 }
 ```
@@ -167,19 +167,19 @@ interface CropArea {
 const [cropModal, setCropModal] = useState({
   isOpen: false,
   imageUrl: '',
-  imageName: ''
+  imageName: '',
 })
 
 const handleCropComplete = (croppedBlob: Blob, cropArea: CropArea) => {
   // 크롭된 이미지 처리
   const file = new File([croppedBlob], 'cropped-image.jpg', {
-    type: 'image/jpeg'
+    type: 'image/jpeg',
   })
   uploadCroppedImage(file)
   setCropModal({ isOpen: false, imageUrl: '', imageName: '' })
 }
 
-<ImageCropModal
+;<ImageCropModal
   isOpen={cropModal.isOpen}
   imageUrl={cropModal.imageUrl}
   imageName={cropModal.imageName}
@@ -197,17 +197,17 @@ const handleCropComplete = (croppedBlob: Blob, cropArea: CropArea) => {
 
 ### Props
 
-| 속성 | 타입 | 기본값 | 필수 | 설명 |
-|------|------|--------|------|------|
-| `attachments` | `PostAttachment[]` | - | ✅ | 첨부파일 목록 |
-| `postId` | `string` | - | ✅ | 게시글 ID |
-| `isAuthor` | `boolean` | `false` | - | 작성자 여부 |
-| `isAdmin` | `boolean` | `false` | - | 관리자 여부 |
-| `onAttachmentUpdate` | `(attachment: PostAttachment) => void` | - | - | 첨부파일 업데이트 콜백 |
-| `onAttachmentDelete` | `(attachmentId: string) => void` | - | - | 첨부파일 삭제 콜백 |
-| `showActions` | `boolean` | `false` | - | 액션 버튼 표시 |
-| `layout` | `'grid' \| 'list'` | `'grid'` | - | 레이아웃 모드 |
-| `className` | `string` | `''` | - | 추가 CSS 클래스 |
+| 속성                 | 타입                                   | 기본값   | 필수 | 설명                   |
+| -------------------- | -------------------------------------- | -------- | ---- | ---------------------- |
+| `attachments`        | `PostAttachment[]`                     | -        | ✅   | 첨부파일 목록          |
+| `postId`             | `string`                               | -        | ✅   | 게시글 ID              |
+| `isAuthor`           | `boolean`                              | `false`  | -    | 작성자 여부            |
+| `isAdmin`            | `boolean`                              | `false`  | -    | 관리자 여부            |
+| `onAttachmentUpdate` | `(attachment: PostAttachment) => void` | -        | -    | 첨부파일 업데이트 콜백 |
+| `onAttachmentDelete` | `(attachmentId: string) => void`       | -        | -    | 첨부파일 삭제 콜백     |
+| `showActions`        | `boolean`                              | `false`  | -    | 액션 버튼 표시         |
+| `layout`             | `'grid' \| 'list'`                     | `'grid'` | -    | 레이아웃 모드          |
+| `className`          | `string`                               | `''`     | -    | 추가 CSS 클래스        |
 
 ### 사용 예제
 
@@ -239,18 +239,18 @@ const handleCropComplete = (croppedBlob: Blob, cropArea: CropArea) => {
 
 ### Props
 
-| 속성 | 타입 | 기본값 | 필수 | 설명 |
-|------|------|--------|------|------|
-| `authorId` | `string` | - | ✅ | 작성자 ID |
-| `onNewPost` | `(post: Post) => void` | - | ✅ | 게시글 생성 콜백 |
-| `showSuccessRedirect` | `boolean` | `false` | - | 성공 시 리다이렉트 표시 |
+| 속성                  | 타입                   | 기본값  | 필수 | 설명                    |
+| --------------------- | ---------------------- | ------- | ---- | ----------------------- |
+| `authorId`            | `string`               | -       | ✅   | 작성자 ID               |
+| `onNewPost`           | `(post: Post) => void` | -       | ✅   | 게시글 생성 콜백        |
+| `showSuccessRedirect` | `boolean`              | `false` | -    | 성공 시 리다이렉트 표시 |
 
 ### 사용 예제
 
 ```tsx
 <CreatePostForm
   authorId={currentUser.id}
-  onNewPost={(newPost) => {
+  onNewPost={newPost => {
     setPosts(prev => [newPost, ...prev])
     router.push(`/board/${newPost.id}`)
   }}
@@ -266,12 +266,12 @@ const handleCropComplete = (croppedBlob: Blob, cropArea: CropArea) => {
 
 ### Props
 
-| 속성 | 타입 | 기본값 | 필수 | 설명 |
-|------|------|--------|------|------|
-| `children` | `ReactNode` | - | ✅ | 자식 컴포넌트 |
-| `title` | `string` | - | - | 페이지 제목 |
-| `subtitle` | `string` | - | - | 페이지 부제목 |
-| `actions` | `ReactNode` | - | - | 페이지 액션 버튼들 |
+| 속성       | 타입        | 기본값 | 필수 | 설명               |
+| ---------- | ----------- | ------ | ---- | ------------------ |
+| `children` | `ReactNode` | -      | ✅   | 자식 컴포넌트      |
+| `title`    | `string`    | -      | -    | 페이지 제목        |
+| `subtitle` | `string`    | -      | -    | 페이지 부제목      |
+| `actions`  | `ReactNode` | -      | -    | 페이지 액션 버튼들 |
 
 ### 사용 예제
 
@@ -279,11 +279,7 @@ const handleCropComplete = (croppedBlob: Blob, cropArea: CropArea) => {
 <AdminLayout
   title="회원 관리"
   subtitle="협동조합 회원들을 관리하고 승인 처리를 수행합니다"
-  actions={
-    <button className="btn-primary">
-      새 회원 초대
-    </button>
-  }
+  actions={<button className="btn-primary">새 회원 초대</button>}
 >
   <MemberList />
 </AdminLayout>
@@ -295,8 +291,10 @@ const handleCropComplete = (croppedBlob: Blob, cropArea: CropArea) => {
 
 ### TypeScript 사용 권장사항
 
-1. **Props 인터페이스 정의**: 모든 컴포넌트는 명확한 Props 타입을 정의해야 합니다.
-2. **Generic 활용**: 재사용 가능한 컴포넌트는 Generic을 활용하여 타입 안전성을 보장합니다.
+1. **Props 인터페이스 정의**: 모든 컴포넌트는 명확한 Props 타입을 정의해야
+   합니다.
+2. **Generic 활용**: 재사용 가능한 컴포넌트는 Generic을 활용하여 타입 안전성을
+   보장합니다.
 3. **Optional Props**: 선택적 속성은 `?`를 사용하고 기본값을 명시합니다.
 
 ### 컴포넌트 설계 원칙
@@ -314,4 +312,5 @@ const handleCropComplete = (croppedBlob: Blob, cropArea: CropArea) => {
 
 ---
 
-*이 문서는 지속적으로 업데이트되며, 새로운 컴포넌트가 추가되면 해당 API 문서도 함께 작성됩니다.*
+_이 문서는 지속적으로 업데이트되며, 새로운 컴포넌트가 추가되면 해당 API 문서도
+함께 작성됩니다._

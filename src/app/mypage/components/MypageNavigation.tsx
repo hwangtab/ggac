@@ -20,17 +20,19 @@ const MypageNavigation: React.FC<MypageNavigationProps> = ({ currentPath }) => {
   useEffect(() => {
     const getUser = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession()
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
         if (session?.user) {
           setUser(session.user)
-          
+
           // 프로필 정보 가져오기
           const { data: profileData } = await supabase
             .from('member_profiles')
             .select('*')
             .eq('id', session.user.id)
             .single()
-          
+
           setProfile(profileData)
         }
       } catch (error) {
@@ -49,7 +51,7 @@ const MypageNavigation: React.FC<MypageNavigationProps> = ({ currentPath }) => {
       label: '대시보드',
       href: '/mypage',
       icon: FiActivity,
-      isActive: currentPath === '/mypage'
+      isActive: currentPath === '/mypage',
     },
     {
       id: 'profile',
@@ -57,7 +59,7 @@ const MypageNavigation: React.FC<MypageNavigationProps> = ({ currentPath }) => {
       href: '/mypage/profile',
       icon: FiUser,
       requiredPermission: 'member',
-      isActive: currentPath === '/mypage/profile'
+      isActive: currentPath === '/mypage/profile',
     },
     {
       id: 'artist',
@@ -65,7 +67,7 @@ const MypageNavigation: React.FC<MypageNavigationProps> = ({ currentPath }) => {
       href: '/mypage/artist',
       icon: FiMusic,
       requiredPermission: 'artist',
-      isActive: currentPath === '/mypage/artist'
+      isActive: currentPath === '/mypage/artist',
     },
     {
       id: 'activity',
@@ -73,7 +75,7 @@ const MypageNavigation: React.FC<MypageNavigationProps> = ({ currentPath }) => {
       href: '/mypage/activity',
       icon: FiActivity,
       requiredPermission: 'member',
-      isActive: currentPath === '/mypage/activity'
+      isActive: currentPath === '/mypage/activity',
     },
     {
       id: 'settings',
@@ -82,8 +84,8 @@ const MypageNavigation: React.FC<MypageNavigationProps> = ({ currentPath }) => {
       icon: FiSettings,
       requiredPermission: 'member',
       isActive: currentPath === '/mypage/settings',
-      badge: '준비중'
-    }
+      badge: '준비중',
+    },
   ]
 
   if (loading) {
@@ -125,23 +127,21 @@ const MypageNavigation: React.FC<MypageNavigationProps> = ({ currentPath }) => {
       {/* 메뉴 */}
       <nav className="p-4">
         <ul className="space-y-1">
-          {menuItems.map((item) => {
+          {menuItems.map(item => {
             const IconComponent = item.icon
             const isActive = item.isActive
-            
+
             // 권한이 필요한 메뉴 아이템 처리
             if (item.requiredPermission && item.requiredPermission !== 'member') {
               return (
                 <li key={item.id}>
-                  <PermissionCheck 
+                  <PermissionCheck
                     requiredPermission={item.requiredPermission}
                     fallback={
                       <div className="flex items-center px-3 py-2 text-sm text-gray-400 cursor-not-allowed">
                         {IconComponent && <IconComponent className="w-4 h-4 mr-3" />}
                         <span className="flex-1">{item.label}</span>
-                        <span className="text-xs bg-gray-100 px-2 py-1 rounded">
-                          권한 없음
-                        </span>
+                        <span className="text-xs bg-gray-100 px-2 py-1 rounded">권한 없음</span>
                       </div>
                     }
                   >
@@ -160,9 +160,7 @@ const MypageNavigation: React.FC<MypageNavigationProps> = ({ currentPath }) => {
                           {item.badge}
                         </span>
                       )}
-                      {isActive && (
-                        <FiChevronRight className="w-4 h-4 ml-2" />
-                      )}
+                      {isActive && <FiChevronRight className="w-4 h-4 ml-2" />}
                     </Link>
                   </PermissionCheck>
                 </li>
@@ -186,9 +184,7 @@ const MypageNavigation: React.FC<MypageNavigationProps> = ({ currentPath }) => {
                       {item.badge}
                     </span>
                   )}
-                  {isActive && (
-                    <FiChevronRight className="w-4 h-4 ml-2" />
-                  )}
+                  {isActive && <FiChevronRight className="w-4 h-4 ml-2" />}
                 </Link>
               </li>
             )

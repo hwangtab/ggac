@@ -22,21 +22,21 @@ interface FilterOptions {
 
 /**
  * 범용 필터링 훅
- * 
+ *
  * @template T - 필터링할 아이템의 타입
  * @param items - 필터링할 아이템 배열
  * @param selectedCategory - 선택된 카테고리
  * @param options - 필터링 옵션
  * @returns 필터링된 아이템 배열
- * 
+ *
  * @example
  * // 기본 사용법 (프로젝트 필터링)
  * const filteredProjects = useFilter(projects, selectedCategory, { allLabel: 'All' })
- * 
- * @example  
+ *
+ * @example
  * // 다중 카테고리 지원 (아티스트 필터링)
  * const filteredArtists = useFilter(artists, selectedCategory, { allLabel: 'All' })
- * 
+ *
  * @example
  * // 게시판 필터링 (한글 전체 라벨)
  * const filteredPosts = useFilter(posts, selectedCategory, { allLabel: '전체' })
@@ -57,14 +57,14 @@ export const useFilter = <T extends FilterableItem>(
     // 필터링 로직
     return items.filter(item => {
       const { category } = item
-      
+
       // 카테고리가 배열인 경우 (아티스트의 다중 카테고리)
       if (Array.isArray(category)) {
         return caseInsensitive
           ? category.some(cat => cat.toLowerCase() === selectedCategory.toLowerCase())
           : category.includes(selectedCategory)
       }
-      
+
       // 카테고리가 단일 문자열인 경우 (프로젝트, 게시판)
       return caseInsensitive
         ? category.toLowerCase() === selectedCategory.toLowerCase()
@@ -81,7 +81,7 @@ export const useClientFilter = useFilter
 
 /**
  * 카테고리 카운트를 포함한 필터링 정보 반환 훅
- * 
+ *
  * @template T - 필터링할 아이템의 타입
  * @param items - 필터링할 아이템 배열
  * @param categories - 전체 카테고리 배열
@@ -96,17 +96,18 @@ export const useFilterWithCounts = <T extends FilterableItem>(
   options: FilterOptions = {}
 ) => {
   const { allLabel = 'All' } = options
-  
+
   const filteredItems = useFilter(items, selectedCategory, options)
-  
+
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = {}
-    
+
     // 전체 개수 계산
     counts[allLabel] = items.length
-    
+
     // 각 카테고리별 개수 계산
-    categories.slice(1).forEach(category => { // allLabel 제외
+    categories.slice(1).forEach(category => {
+      // allLabel 제외
       counts[category] = items.filter(item => {
         if (Array.isArray(item.category)) {
           return item.category.includes(category)
@@ -114,14 +115,14 @@ export const useFilterWithCounts = <T extends FilterableItem>(
         return item.category === category
       }).length
     })
-    
+
     return counts
   }, [items, categories, allLabel])
-  
+
   return {
     filteredItems,
     categoryCounts,
     totalCount: items.length,
-    filteredCount: filteredItems.length
+    filteredCount: filteredItems.length,
   }
 }

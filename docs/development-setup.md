@@ -18,6 +18,7 @@
 ## 💻 시스템 요구사항
 
 ### 최소 요구사항
+
 - **Node.js**: 18.17.0 이상 (LTS 권장)
 - **npm**: 9.0.0 이상
 - **Git**: 2.30.0 이상
@@ -25,6 +26,7 @@
 - **저장공간**: 10GB 이상 여유 공간
 
 ### 권장 환경
+
 - **OS**: macOS 12+, Windows 11, Ubuntu 20.04+
 - **브라우저**: Chrome 100+, Firefox 98+, Safari 15+
 - **에디터**: VS Code 1.70+ (권장), WebStorm 2022.2+
@@ -36,20 +38,22 @@
 ### 1. Node.js 설치
 
 **macOS (Homebrew 사용):**
+
 ```bash
 brew install node@18
 brew install npm
 ```
 
 **Windows (Chocolatey 사용):**
+
 ```powershell
 choco install nodejs --version=18.17.0
 ```
 
-**직접 설치:**
-[Node.js 공식 웹사이트](https://nodejs.org)에서 LTS 버전 다운로드
+**직접 설치:** [Node.js 공식 웹사이트](https://nodejs.org)에서 LTS 버전 다운로드
 
 ### 2. 필수 전역 패키지 설치
+
 ```bash
 # Next.js CLI
 npm install -g create-next-app
@@ -65,6 +69,7 @@ npm install -g sharp-cli
 ```
 
 ### 3. Git 설정
+
 ```bash
 # 사용자 정보 설정
 git config --global user.name "Your Name"
@@ -85,6 +90,7 @@ git config --global core.autocrlf input
 ## 📁 프로젝트 설정
 
 ### 1. 리포지토리 클론
+
 ```bash
 # SSH (권장)
 git clone git@github.com:hwangtab/ggac.git
@@ -96,6 +102,7 @@ cd ggac
 ```
 
 ### 2. 의존성 설치
+
 ```bash
 # NPM 의존성 설치
 npm install
@@ -108,6 +115,7 @@ npm rebuild sharp
 ```
 
 ### 3. 프로젝트 구조 확인
+
 ```
 ggac/
 ├── src/
@@ -132,6 +140,7 @@ ggac/
 ## ⚙️ 환경 변수 설정
 
 ### 1. 환경 변수 파일 생성
+
 ```bash
 # .env.local 파일 생성 (Git에서 무시됨)
 cp .env.example .env.local
@@ -140,6 +149,7 @@ cp .env.example .env.local
 ### 2. 필수 환경 변수 설정
 
 **`.env.local` 파일 편집:**
+
 ```bash
 # Supabase 설정
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
@@ -167,6 +177,7 @@ UPSTASH_REDIS_REST_TOKEN=your_redis_token
 ```
 
 ### 3. 환경 변수 검증
+
 ```bash
 # 환경 변수 확인
 npm run env:check
@@ -180,11 +191,13 @@ npm run dev
 ## 🗄️ 데이터베이스 설정
 
 ### 1. Supabase 프로젝트 생성
+
 1. [Supabase](https://supabase.com)에 로그인
 2. 새 프로젝트 생성
 3. 프로젝트 URL과 API 키 복사
 
 ### 2. 데이터베이스 스키마 설정
+
 ```bash
 # Supabase CLI 설치 (선택사항)
 npm install -g supabase
@@ -197,6 +210,7 @@ supabase db push
 ```
 
 ### 3. 초기 데이터 설정
+
 ```bash
 # 아티스트 데이터 로드
 npm run data:seed
@@ -210,6 +224,7 @@ ls data/
 ## 🚀 개발 서버 실행
 
 ### 1. 개발 서버 시작
+
 ```bash
 # 기본 개발 서버 (포트 3000)
 npm run dev
@@ -222,6 +237,7 @@ npm run dev:debug
 ```
 
 ### 2. 빌드 및 테스트
+
 ```bash
 # 프로덕션 빌드
 npm run build
@@ -240,6 +256,7 @@ npm run check
 ```
 
 ### 3. 개발 도구 실행
+
 ```bash
 # 번들 분석기
 ANALYZE=true npm run build
@@ -256,6 +273,7 @@ npm run storybook
 ## 🔧 VS Code 확장 프로그램
 
 ### 필수 확장 프로그램
+
 ```json
 {
   "recommendations": [
@@ -274,7 +292,9 @@ npm run storybook
 ```
 
 ### VS Code 설정
+
 **`.vscode/settings.json`:**
+
 ```json
 {
   "typescript.preferences.importModuleSpecifier": "relative",
@@ -299,11 +319,13 @@ npm run storybook
 ## 📱 브라우저 개발 도구
 
 ### Chrome DevTools 확장
+
 - **React Developer Tools**
 - **Redux DevTools** (상태 관리 디버깅)
 - **Lighthouse** (성능 분석)
 
 ### 모바일 테스트
+
 ```bash
 # iOS Safari 디버깅
 npm run dev -- --hostname 0.0.0.0
@@ -319,6 +341,7 @@ npx ngrok http 3000
 ### 일반적인 문제들
 
 **1. Node.js 버전 문제**
+
 ```bash
 # 현재 버전 확인
 node --version
@@ -329,6 +352,7 @@ nvm use 18
 ```
 
 **2. 의존성 충돌**
+
 ```bash
 # 노드 모듈 재설치
 rm -rf node_modules package-lock.json
@@ -339,6 +363,7 @@ npm cache clean --force
 ```
 
 **3. Sharp 모듈 오류**
+
 ```bash
 # Sharp 재설치
 npm uninstall sharp
@@ -349,6 +374,7 @@ npm rebuild sharp
 ```
 
 **4. 포트 충돌**
+
 ```bash
 # 포트 사용 프로세스 확인
 lsof -i :3000
@@ -358,6 +384,7 @@ kill -9 <PID>
 ```
 
 **5. 타입스크립트 오류**
+
 ```bash
 # 타입스크립트 서버 재시작
 # VS Code: Cmd/Ctrl + Shift + P → "TypeScript: Restart TS Server"
@@ -368,6 +395,7 @@ npm install
 ```
 
 **6. 환경 변수 문제**
+
 ```bash
 # 환경 변수 로드 확인
 npm run env:check
@@ -379,26 +407,28 @@ chmod 600 .env.local
 ### 성능 최적화
 
 **1. 개발 서버 속도 향상**
+
 ```javascript
 // next.config.js
 module.exports = {
   // 빠른 새로고침
   experimental: {
-    optimizeCss: true
+    optimizeCss: true,
   },
   // 웹팩 캐시 활용
   webpack: (config, { dev }) => {
     if (dev) {
       config.cache = {
-        type: 'filesystem'
+        type: 'filesystem',
       }
     }
     return config
-  }
+  },
 }
 ```
 
 **2. TypeScript 성능 향상**
+
 ```json
 // tsconfig.json
 {
@@ -436,6 +466,7 @@ npm run health-check
 ## 📞 도움말
 
 ### 공식 문서
+
 - [Next.js 문서](https://nextjs.org/docs)
 - [React 문서](https://react.dev)
 - [TypeScript 문서](https://www.typescriptlang.org/docs)
@@ -443,14 +474,17 @@ npm run health-check
 - [Supabase 문서](https://supabase.com/docs)
 
 ### 커뮤니티 리소스
+
 - [Next.js GitHub](https://github.com/vercel/next.js)
 - [React Discord](https://discord.gg/react)
 - [TypeScript Discord](https://discord.gg/typescript)
 
 ### 프로젝트별 문의
+
 - GitHub Issues: 버그 리포트 및 기능 요청
 - 개발팀 Slack: 실시간 질문 및 토론
 
 ---
 
-*이 가이드는 지속적으로 업데이트되며, 새로운 도구나 설정이 추가되면 함께 문서화됩니다.*
+_이 가이드는 지속적으로 업데이트되며, 새로운 도구나 설정이 추가되면 함께
+문서화됩니다._

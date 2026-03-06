@@ -3,21 +3,21 @@
  * SQL 쿼리 생성, 조건 검증, 필터 최적화 등을 담당
  */
 
-import type { 
-  FilterCondition, 
-  FilterGroup, 
-  FilterOperator, 
+import type {
+  FilterCondition,
+  FilterGroup,
+  FilterOperator,
   SortCondition,
   AdvancedSearchQuery,
   FieldDefinition,
-  LogicalOperator
+  LogicalOperator,
 } from '@/types'
 
 /**
  * 필터 조건을 SQL WHERE 절로 변환
  */
 export function buildWhereClause(
-  condition: FilterCondition, 
+  condition: FilterCondition,
   paramIndex: number = 1
 ): { sql: string; params: any[]; nextIndex: number } {
   const { field, operator, value, type } = condition
@@ -193,7 +193,7 @@ export function buildOrderByClause(sorts: SortCondition[]): string {
 
   // 우선순위로 정렬하고 SQL 생성
   const sortedSorts = [...sorts].sort((a, b) => (a.priority || 0) - (b.priority || 0))
-  
+
   const orderClauses = sortedSorts.map(sort => {
     if (!isValidFieldName(sort.field)) {
       throw new Error(`Invalid field name in sort: ${sort.field}`)
@@ -230,10 +230,10 @@ export function buildSearchQuery(
 
   // 전체 텍스트 검색 처리
   if (query.search && query.search.query.trim()) {
-    const searchFields = query.search.fields.filter(field => 
-      allowedFields.length === 0 || allowedFields.includes(field)
+    const searchFields = query.search.fields.filter(
+      field => allowedFields.length === 0 || allowedFields.includes(field)
     )
-    
+
     if (searchFields.length > 0) {
       const searchConditions = searchFields.map(field => {
         if (!isValidFieldName(field)) {
@@ -241,16 +241,16 @@ export function buildSearchQuery(
         }
         return `${field} ILIKE $${paramIndex}`
       })
-      
+
       const searchClause = `(${searchConditions.join(' OR ')})`
       const searchValue = `%${query.search.query}%`
-      
+
       if (whereClause) {
         whereClause += ` AND ${searchClause}`
       } else {
         whereClause = `WHERE ${searchClause}`
       }
-      
+
       // 모든 검색 필드에 같은 값 추가
       searchFields.forEach(() => {
         allParams.push(searchValue)
@@ -272,18 +272,14 @@ export function buildSearchQuery(
   }
 
   // 최종 쿼리 조합
-  const sql = [
-    `SELECT * FROM ${baseTable}`,
-    whereClause,
-    orderByClause,
-    limitClause
-  ].filter(Boolean).join(' ')
+  const sql = [`SELECT * FROM ${baseTable}`, whereClause, orderByClause, limitClause]
+    .filter(Boolean)
+    .join(' ')
 
   // 카운트 쿼리 (페이지네이션용)
-  const countSql = [
-    `SELECT COUNT(*) as total FROM ${baseTable}`,
-    whereClause
-  ].filter(Boolean).join(' ')
+  const countSql = [`SELECT COUNT(*) as total FROM ${baseTable}`, whereClause]
+    .filter(Boolean)
+    .join(' ')
 
   return { sql, params: allParams, countSql }
 }
@@ -405,7 +401,7 @@ export function validateFilterGroup(
     group.conditions.forEach((condition, index) => {
       const fieldDef = fieldDefs?.find(def => def.name === condition.field)
       const validation = validateFilterCondition(condition, fieldDef)
-      
+
       if (!validation.isValid) {
         validation.errors.forEach(error => {
           errors.push(`Condition ${index + 1}: ${error}`)
@@ -418,7 +414,7 @@ export function validateFilterGroup(
   if (group.groups) {
     group.groups.forEach((nestedGroup, index) => {
       const validation = validateFilterGroup(nestedGroup, fieldDefs)
-      
+
       if (!validation.isValid) {
         validation.errors.forEach(error => {
           errors.push(`Group ${index + 1}: ${error}`)
@@ -428,8 +424,10 @@ export function validateFilterGroup(
   }
 
   // 최소한 하나의 조건이나 그룹이 있어야 함
-  if ((!group.conditions || group.conditions.length === 0) && 
-      (!group.groups || group.groups.length === 0)) {
+  if (
+    (!group.conditions || group.conditions.length === 0) &&
+    (!group.groups || group.groups.length === 0)
+  ) {
     errors.push('Filter group must have at least one condition or nested group')
   }
 
@@ -476,7 +474,7 @@ export function validateAdvancedSearchQuery(
   // 페이지네이션 검증
   if (query.pagination) {
     const { page, limit } = query.pagination
-    
+
     if (!Number.isInteger(page) || page < 1) {
       errors.push('Page must be a positive integer')
     }
@@ -518,7 +516,7 @@ export function createDefaultFilterGroup(operator: LogicalOperator = 'AND'): Fil
   return {
     operator,
     conditions: [],
-    groups: []
+    groups: [],
   }
 }
 
@@ -535,7 +533,7 @@ export function createFilterCondition(
     field,
     operator,
     value,
-    type
+    type,
   }
 }
 
@@ -550,7 +548,7 @@ export function createSortCondition(
   return {
     field,
     direction,
-    priority
+    priority,
   }
 }
 
@@ -566,7 +564,7 @@ const advancedFiltering = {
   validateAdvancedSearchQuery,
   createDefaultFilterGroup,
   createFilterCondition,
-  createSortCondition
+  createSortCondition,
 }
 
 export default advancedFiltering

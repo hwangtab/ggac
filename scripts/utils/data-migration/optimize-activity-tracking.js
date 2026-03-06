@@ -15,7 +15,7 @@ const colors = {
   blue: '\x1b[34m',
   cyan: '\x1b[36m',
   reset: '\x1b[0m',
-  bold: '\x1b[1m'
+  bold: '\x1b[1m',
 }
 
 function colorize(text, color) {
@@ -30,7 +30,8 @@ function logSection(title) {
 
 function logOptimization(name, status, details = '') {
   const icon = status === 'applied' ? '✅' : status === 'skipped' ? '⏭️' : '🔧'
-  const color = status === 'applied' ? colors.green : status === 'skipped' ? colors.yellow : colors.cyan
+  const color =
+    status === 'applied' ? colors.green : status === 'skipped' ? colors.yellow : colors.cyan
   console.log(`${icon} ${colorize(name, color)}${details ? ` - ${details}` : ''}`)
 }
 
@@ -40,7 +41,7 @@ class ActivityTrackingOptimizer {
       database: [],
       api: [],
       client: [],
-      monitoring: []
+      monitoring: [],
     }
   }
 
@@ -52,7 +53,7 @@ class ActivityTrackingOptimizer {
       await this.optimizeAPIEndpoints()
       await this.optimizeClientSide()
       await this.optimizeMonitoring()
-      
+
       this.generateOptimizationReport()
     } catch (error) {
       console.error(colorize(`\n❌ 최적화 실행 중 오류: ${error.message}`, colors.red))
@@ -72,21 +73,22 @@ class ActivityTrackingOptimizer {
           'CREATE INDEX CONCURRENTLY idx_user_activities_user_created ON user_activities(user_id, created_at DESC);',
           'CREATE INDEX CONCURRENTLY idx_user_activities_action_created ON user_activities(action_type, created_at DESC);',
           'CREATE INDEX CONCURRENTLY idx_user_sessions_user_login ON user_sessions(user_id, login_at DESC);',
-          'CREATE INDEX CONCURRENTLY idx_user_sessions_active ON user_sessions(is_active, last_activity DESC) WHERE is_active = true;'
-        ]
+          'CREATE INDEX CONCURRENTLY idx_user_sessions_active ON user_sessions(is_active, last_activity DESC) WHERE is_active = true;',
+        ],
       },
       {
         name: '파티션 테이블 제안',
         type: 'partitioning',
         description: '대용량 활동 데이터를 위한 월별 파티셔닝',
-        recommendation: '월 단위로 user_activities 테이블 파티셔닝 고려 (데이터량이 100만 건 이상일 때)'
+        recommendation:
+          '월 단위로 user_activities 테이블 파티셔닝 고려 (데이터량이 100만 건 이상일 때)',
       },
       {
         name: '자동 데이터 정리',
         type: 'cleanup',
         description: '오래된 활동 데이터 자동 정리',
-        recommendation: '6개월 이상된 활동 로그 자동 아카이빙 또는 삭제 고려'
-      }
+        recommendation: '6개월 이상된 활동 로그 자동 아카이빙 또는 삭제 고려',
+      },
     ]
 
     for (const optimization of dbOptimizations) {
@@ -103,20 +105,20 @@ class ActivityTrackingOptimizer {
         name: '응답 캐싱 개선',
         file: 'API 엔드포인트',
         optimization: 'Redis 캐싱 또는 CDN 캐싱 구현',
-        impact: '분석 API 응답 시간 50-80% 단축'
+        impact: '분석 API 응답 시간 50-80% 단축',
       },
       {
         name: '배치 처리 최적화',
         file: '/api/activities/batch-log',
         optimization: '배치 크기 조정 및 트랜잭션 최적화',
-        impact: '대량 로그 처리 성능 향상'
+        impact: '대량 로그 처리 성능 향상',
       },
       {
         name: '압축 및 페이징',
         file: '모든 분석 API',
         optimization: 'gzip 압축 및 커서 기반 페이징',
-        impact: '네트워크 대역폭 30-50% 절약'
-      }
+        impact: '네트워크 대역폭 30-50% 절약',
+      },
     ]
 
     for (const optimization of apiOptimizations) {
@@ -133,20 +135,20 @@ class ActivityTrackingOptimizer {
         name: '실시간 모니터링 최적화',
         component: 'RealTimeActivityMonitor',
         optimization: '불필요한 리렌더링 방지 및 메모이제이션',
-        implementation: 'React.memo와 useMemo 적용'
+        implementation: 'React.memo와 useMemo 적용',
       },
       {
         name: '차트 렌더링 최적화',
         component: 'ActivityAnalyticsCharts',
         optimization: '가상화된 차트 렌더링',
-        implementation: '대용량 데이터셋에 대한 점진적 로딩'
+        implementation: '대용량 데이터셋에 대한 점진적 로딩',
       },
       {
         name: '활동 로깅 배칭',
         component: 'ActivityLogger',
         optimization: '클라이언트 사이드 배칭 구현',
-        implementation: '여러 활동을 모아서 일괄 전송'
-      }
+        implementation: '여러 활동을 모아서 일괄 전송',
+      },
     ]
 
     for (const optimization of clientOptimizations) {
@@ -163,20 +165,20 @@ class ActivityTrackingOptimizer {
         name: '성능 메트릭 수집',
         type: 'metrics',
         description: 'API 응답 시간, 데이터베이스 쿼리 성능 모니터링',
-        tools: ['OpenTelemetry', 'Prometheus', 'Grafana']
+        tools: ['OpenTelemetry', 'Prometheus', 'Grafana'],
       },
       {
         name: '오류 추적 강화',
         type: 'error-tracking',
         description: '활동 로깅 실패 및 분석 오류 추적',
-        implementation: 'Sentry 또는 LogRocket 연동'
+        implementation: 'Sentry 또는 LogRocket 연동',
       },
       {
         name: '자동 알림 시스템',
         type: 'alerting',
         description: '시스템 성능 저하 시 자동 알림',
-        triggers: ['API 응답 시간 초과', '에러율 증가', '데이터베이스 연결 실패']
-      }
+        triggers: ['API 응답 시간 초과', '에러율 증가', '데이터베이스 연결 실패'],
+      },
     ]
 
     for (const optimization of monitoringOptimizations) {
@@ -189,18 +191,20 @@ class ActivityTrackingOptimizer {
     logSection('최적화 보고서')
 
     console.log(colorize('📊 적용된 최적화:', colors.bold))
-    
+
     const categories = [
       { name: '데이터베이스', key: 'database', icon: '🗄️' },
       { name: 'API 엔드포인트', key: 'api', icon: '🔌' },
       { name: '클라이언트 사이드', key: 'client', icon: '💻' },
-      { name: '모니터링', key: 'monitoring', icon: '📈' }
+      { name: '모니터링', key: 'monitoring', icon: '📈' },
     ]
 
     categories.forEach(category => {
       const optimizations = this.optimizations[category.key]
-      console.log(`\n${category.icon} ${colorize(category.name, colors.cyan)} (${optimizations.length}개)`)
-      
+      console.log(
+        `\n${category.icon} ${colorize(category.name, colors.cyan)} (${optimizations.length}개)`
+      )
+
       optimizations.forEach((opt, index) => {
         console.log(`  ${index + 1}. ${opt.name}`)
         if (opt.description) {
@@ -268,7 +272,11 @@ ORDER BY tablename, attname;
         path.join(process.cwd(), 'optimize-activity-tracking.sql'),
         dbOptimizationSQL
       )
-      logOptimization('데이터베이스 최적화 스크립트 생성', 'applied', 'optimize-activity-tracking.sql')
+      logOptimization(
+        '데이터베이스 최적화 스크립트 생성',
+        'applied',
+        'optimize-activity-tracking.sql'
+      )
     } catch (error) {
       logOptimization('데이터베이스 최적화 스크립트 생성', 'failed', error.message)
     }
@@ -279,37 +287,37 @@ ORDER BY tablename, attname;
         api: {
           responseTime: {
             threshold: 1000,
-            unit: 'ms'
+            unit: 'ms',
           },
           errorRate: {
             threshold: 5,
-            unit: 'percent'
-          }
+            unit: 'percent',
+          },
         },
         database: {
           queryTime: {
             threshold: 500,
-            unit: 'ms'
+            unit: 'ms',
           },
           connectionPool: {
             threshold: 80,
-            unit: 'percent'
-          }
-        }
+            unit: 'percent',
+          },
+        },
       },
       alerts: {
         channels: ['email', 'slack'],
         escalation: {
           immediate: ['critical'],
           delayed: ['warning'],
-          schedule: ['info']
-        }
+          schedule: ['info'],
+        },
       },
       retention: {
         metrics: '30d',
         logs: '7d',
-        traces: '3d'
-      }
+        traces: '3d',
+      },
     }
 
     try {

@@ -8,7 +8,11 @@ interface AudioVisualizationParticlesProps {
   height: number
 }
 
-const AudioVisualizationParticles = ({ particleCount, width, height }: AudioVisualizationParticlesProps) => {
+const AudioVisualizationParticles = ({
+  particleCount,
+  width,
+  height,
+}: AudioVisualizationParticlesProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const glRef = useRef<WebGLRenderingContext | null>(null)
   const programRef = useRef<WebGLProgram | null>(null)
@@ -111,39 +115,42 @@ const AudioVisualizationParticles = ({ particleCount, width, height }: AudioVisu
   const createShader = useCallback((gl: WebGLRenderingContext, type: number, source: string) => {
     const shader = gl.createShader(type)
     if (!shader) return null
-    
+
     gl.shaderSource(shader, source)
     gl.compileShader(shader)
-    
+
     if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
       console.error('Shader compile error:', gl.getShaderInfoLog(shader))
       gl.deleteShader(shader)
       return null
     }
-    
+
     return shader
   }, [])
 
-  const createProgram = useCallback((gl: WebGLRenderingContext) => {
-    const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource)
-    const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource)
-    
-    if (!vertexShader || !fragmentShader) return null
-    
-    const program = gl.createProgram()
-    if (!program) return null
-    
-    gl.attachShader(program, vertexShader)
-    gl.attachShader(program, fragmentShader)
-    gl.linkProgram(program)
-    
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-      console.error('Program link error:', gl.getProgramInfoLog(program))
-      return null
-    }
-    
-    return program
-  }, [createShader, vertexShaderSource, fragmentShaderSource])
+  const createProgram = useCallback(
+    (gl: WebGLRenderingContext) => {
+      const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource)
+      const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource)
+
+      if (!vertexShader || !fragmentShader) return null
+
+      const program = gl.createProgram()
+      if (!program) return null
+
+      gl.attachShader(program, vertexShader)
+      gl.attachShader(program, fragmentShader)
+      gl.linkProgram(program)
+
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        console.error('Program link error:', gl.getProgramInfoLog(program))
+        return null
+      }
+
+      return program
+    },
+    [createShader, vertexShaderSource, fragmentShaderSource]
+  )
 
   const initWebGL = useCallback(() => {
     const canvas = canvasRef.current
@@ -185,17 +192,17 @@ const AudioVisualizationParticles = ({ particleCount, width, height }: AudioVisu
 
     for (let i = 0; i < particleCount; i++) {
       const i2 = i * 2
-      
+
       // 그리드 형태로 배치 (웨이브 효과를 위해)
       const cols = Math.ceil(Math.sqrt(particleCount))
-      const x = (i % cols) / cols * width
-      const y = Math.floor(i / cols) / Math.ceil(particleCount / cols) * height
-      
+      const x = ((i % cols) / cols) * width
+      const y = (Math.floor(i / cols) / Math.ceil(particleCount / cols)) * height
+
       positions[i2] = x
       positions[i2 + 1] = y
       basePositions[i2] = x
       basePositions[i2 + 1] = y
-      
+
       // 둠메탈 특성: 더 큰 파티클, 적당한 투명도
       sizes[i] = Math.random() * 3 + 2
       alphas[i] = Math.random() * 0.4 + 0.6
@@ -205,7 +212,7 @@ const AudioVisualizationParticles = ({ particleCount, width, height }: AudioVisu
       positions,
       sizes,
       alphas,
-      basePositions
+      basePositions,
     }
   }, [particleCount, width, height])
 
@@ -213,7 +220,7 @@ const AudioVisualizationParticles = ({ particleCount, width, height }: AudioVisu
     const gl = glRef.current
     const program = programRef.current
     const particleData = particleDataRef.current
-    
+
     if (!gl || !program || !particleData) return
 
     // 시간 업데이트
@@ -226,12 +233,17 @@ const AudioVisualizationParticles = ({ particleCount, width, height }: AudioVisu
     // 마우스 위치에 따른 주파수/진폭 계산 (대폭 강화)
     const mouseX = mousePositionRef.current.x / width
     const mouseY = mousePositionRef.current.y / height
-    const frequency = 0.005 + mouseX * 0.095  // 0.005~0.1 (20배 증가)
-    const amplitude = 30 + mouseY * 120       // 30~150 (3배 증가)
-    
+    const frequency = 0.005 + mouseX * 0.095 // 0.005~0.1 (20배 증가)
+    const amplitude = 30 + mouseY * 120 // 30~150 (3배 증가)
+
     // 디버깅용 (10초마다 로그)
     if (Math.floor(timeRef.current) % 10 === 0 && Math.floor(timeRef.current * 10) % 10 === 0) {
-      console.log('🎵 주파수/진폭:', { frequency: frequency.toFixed(3), amplitude: amplitude.toFixed(1), mouseX: mouseX.toFixed(2), mouseY: mouseY.toFixed(2) })
+      console.log('🎵 주파수/진폭:', {
+        frequency: frequency.toFixed(3),
+        amplitude: amplitude.toFixed(1),
+        mouseX: mouseX.toFixed(2),
+        mouseY: mouseY.toFixed(2),
+      })
     }
 
     // Set uniforms
@@ -240,7 +252,7 @@ const AudioVisualizationParticles = ({ particleCount, width, height }: AudioVisu
     const timeUniform = gl.getUniformLocation(program, 'u_time')
     const frequencyUniform = gl.getUniformLocation(program, 'u_frequency')
     const amplitudeUniform = gl.getUniformLocation(program, 'u_amplitude')
-    
+
     gl.uniform2f(resolutionUniform, width, height)
     gl.uniform2f(mouseUniform, mousePositionRef.current.x, mousePositionRef.current.y)
     gl.uniform1f(timeUniform, timeRef.current)
@@ -290,11 +302,11 @@ const AudioVisualizationParticles = ({ particleCount, width, height }: AudioVisu
   const handleMouseMove = useCallback((event: MouseEvent) => {
     const canvas = canvasRef.current
     if (!canvas) return
-    
+
     const rect = canvas.getBoundingClientRect()
     mousePositionRef.current = {
       x: event.clientX - rect.left,
-      y: event.clientY - rect.top
+      y: event.clientY - rect.top,
     }
   }, [])
 
@@ -309,7 +321,7 @@ const AudioVisualizationParticles = ({ particleCount, width, height }: AudioVisu
       console.warn('❌ AudioVisualizationParticles WebGL 초기화 실패')
       return
     }
-    
+
     console.log('✅ AudioVisualizationParticles WebGL 초기화 성공')
 
     initParticles()
@@ -332,7 +344,7 @@ const AudioVisualizationParticles = ({ particleCount, width, height }: AudioVisu
       style={{
         pointerEvents: 'none',
         zIndex: 30,
-        opacity: 0.8
+        opacity: 0.8,
       }}
     />
   )

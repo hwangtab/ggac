@@ -1,7 +1,17 @@
 'use client'
 
 import { memo } from 'react'
-import { FiEye, FiBookmark, FiTrash2, FiRotateCcw, FiUser, FiCalendar, FiMessageSquare, FiEdit3, FiExternalLink } from 'react-icons/fi'
+import {
+  FiEye,
+  FiBookmark,
+  FiTrash2,
+  FiRotateCcw,
+  FiUser,
+  FiCalendar,
+  FiMessageSquare,
+  FiEdit3,
+  FiExternalLink,
+} from 'react-icons/fi'
 import type { Post } from '@/types'
 
 interface PostCardProps {
@@ -33,7 +43,7 @@ function PostCard({ post, onView, onAction, isLoading }: PostCardProps) {
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
     })
   }
 
@@ -47,15 +57,19 @@ function PostCard({ post, onView, onAction, isLoading }: PostCardProps) {
   }
 
   return (
-    <div className={`border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow ${
-      post.is_deleted ? 'bg-red-50 border-red-200' : 'bg-white'
-    } ${post.is_pinned ? 'border-l-4 border-l-green-500' : ''}`}>
+    <div
+      className={`border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow ${
+        post.is_deleted ? 'bg-red-50 border-red-200' : 'bg-white'
+      } ${post.is_pinned ? 'border-l-4 border-l-green-500' : ''}`}
+    >
       <div className="p-4">
         <div className="flex items-start justify-between">
           <div className="flex-1 min-w-0">
             {/* 헤더 정보 */}
             <div className="flex items-center space-x-2 mb-2">
-              <span className={`px-2 py-1 text-xs font-medium rounded-full ${getCategoryColor(post.category)}`}>
+              <span
+                className={`px-2 py-1 text-xs font-medium rounded-full ${getCategoryColor(post.category)}`}
+              >
                 {post.category}
               </span>
               {post.is_pinned && (
@@ -72,16 +86,16 @@ function PostCard({ post, onView, onAction, isLoading }: PostCardProps) {
             </div>
 
             {/* 제목 */}
-            <h3 className={`text-lg font-semibold mb-2 ${
-              post.is_deleted ? 'text-gray-500 line-through' : 'text-gray-900'
-            }`}>
+            <h3
+              className={`text-lg font-semibold mb-2 ${
+                post.is_deleted ? 'text-gray-500 line-through' : 'text-gray-900'
+              }`}
+            >
               {post.title}
             </h3>
 
             {/* 내용 미리보기 */}
-            <p className={`text-sm mb-3 ${
-              post.is_deleted ? 'text-gray-400' : 'text-gray-600'
-            }`}>
+            <p className={`text-sm mb-3 ${post.is_deleted ? 'text-gray-400' : 'text-gray-600'}`}>
               {truncateContent(post.content)}
             </p>
 

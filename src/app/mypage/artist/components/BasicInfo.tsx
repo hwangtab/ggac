@@ -17,11 +17,7 @@ interface BasicInfoProps {
   onChange: (field: string, value: any) => void
 }
 
-const BasicInfo: React.FC<BasicInfoProps> = ({
-  data,
-  errors,
-  onChange
-}) => {
+const BasicInfo: React.FC<BasicInfoProps> = ({ data, errors, onChange }) => {
   const categoryOptions = [
     '창작자',
     '기획자',
@@ -34,12 +30,12 @@ const BasicInfo: React.FC<BasicInfoProps> = ({
     '사운드 디자이너',
     '비주얼 아티스트',
     '퍼포머',
-    '기타'
+    '기타',
   ]
 
   const templateOptions = [
     { value: '미니멀형', label: '미니멀형 - 깔끔하고 간결한 레이아웃' },
-    { value: '콜라주형', label: '콜라주형 - 풍부한 시각적 요소와 이미지' }
+    { value: '콜라주형', label: '콜라주형 - 풍부한 시각적 요소와 이미지' },
   ]
 
   const handleCategoryChange = (category: string, checked: boolean) => {
@@ -72,9 +68,7 @@ const BasicInfo: React.FC<BasicInfoProps> = ({
         {/* 아티스트 프로필 사진 */}
         <div>
           <div className="mb-4">
-            <h3 className="text-sm font-medium text-gray-700 mb-2">
-              아티스트 프로필 사진
-            </h3>
+            <h3 className="text-sm font-medium text-gray-700 mb-2">아티스트 프로필 사진</h3>
             <p className="text-xs text-gray-500">
               공개 아티스트 페이지에 표시될 대표 사진입니다. 개인 프로필에서도 이 사진이 표시됩니다.
             </p>
@@ -89,9 +83,7 @@ const BasicInfo: React.FC<BasicInfoProps> = ({
                 onPhotoDelete={handlePhotoDelete}
                 size="large"
               />
-              <p className="mt-2 text-sm text-gray-500 text-center">
-                최대 2MB, JPEG/PNG/WebP/GIF
-              </p>
+              <p className="mt-2 text-sm text-gray-500 text-center">최대 2MB, JPEG/PNG/WebP/GIF</p>
             </div>
           </div>
           {errors.profile_photo_url && (
@@ -101,23 +93,19 @@ const BasicInfo: React.FC<BasicInfoProps> = ({
 
         {/* 아티스트 이름 */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            아티스트 이름 *
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">아티스트 이름 *</label>
           <input
             type="text"
             value={data.name}
-            onChange={(e) => onChange('name', e.target.value)}
+            onChange={e => onChange('name', e.target.value)}
             className={`w-full px-3 py-2 border rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
-              errors.name 
-                ? 'border-red-300 focus:ring-red-500 focus:border-red-500' 
+              errors.name
+                ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
                 : 'border-gray-300'
             }`}
             placeholder="아티스트 이름을 입력하세요"
           />
-          {errors.name && (
-            <p className="mt-1 text-xs text-red-600">{errors.name}</p>
-          )}
+          {errors.name && <p className="mt-1 text-xs text-red-600">{errors.name}</p>}
         </div>
 
         {/* 카테고리 */}
@@ -126,21 +114,19 @@ const BasicInfo: React.FC<BasicInfoProps> = ({
             카테고리 * (복수 선택 가능)
           </label>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            {categoryOptions.map((category) => (
+            {categoryOptions.map(category => (
               <label key={category} className="flex items-center">
                 <input
                   type="checkbox"
                   checked={data.category.includes(category)}
-                  onChange={(e) => handleCategoryChange(category, e.target.checked)}
+                  onChange={e => handleCategoryChange(category, e.target.checked)}
                   className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                 />
                 <span className="ml-2 text-sm text-gray-700">{category}</span>
               </label>
             ))}
           </div>
-          {errors.category && (
-            <p className="mt-1 text-xs text-red-600">{errors.category}</p>
-          )}
+          {errors.category && <p className="mt-1 text-xs text-red-600">{errors.category}</p>}
           <p className="mt-1 text-xs text-gray-500">
             자신의 역할과 관련된 카테고리를 선택해주세요.
           </p>
@@ -148,17 +134,15 @@ const BasicInfo: React.FC<BasicInfoProps> = ({
 
         {/* 한 줄 소개 */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            한 줄 소개 *
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">한 줄 소개 *</label>
           <input
             type="text"
             value={data.one_liner}
-            onChange={(e) => onChange('one_liner', e.target.value)}
+            onChange={e => onChange('one_liner', e.target.value)}
             maxLength={100}
             className={`w-full px-3 py-2 border rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
-              errors.one_liner 
-                ? 'border-red-300 focus:ring-red-500 focus:border-red-500' 
+              errors.one_liner
+                ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
                 : 'border-gray-300'
             }`}
             placeholder="자신을 한 줄로 표현해보세요"
@@ -171,9 +155,7 @@ const BasicInfo: React.FC<BasicInfoProps> = ({
                 간단하게 자신의 음악이나 예술 활동을 소개해주세요.
               </p>
             )}
-            <span className="text-xs text-gray-400">
-              {data.one_liner.length}/100
-            </span>
+            <span className="text-xs text-gray-400">{data.one_liner.length}/100</span>
           </div>
         </div>
 
@@ -183,23 +165,21 @@ const BasicInfo: React.FC<BasicInfoProps> = ({
             프로필 페이지 스타일
           </label>
           <div className="space-y-3">
-            {templateOptions.map((template) => (
+            {templateOptions.map(template => (
               <label key={template.value} className="flex items-start">
                 <input
                   type="radio"
                   name="template_type"
                   value={template.value}
                   checked={data.template_type === template.value}
-                  onChange={(e) => onChange('template_type', e.target.value)}
+                  onChange={e => onChange('template_type', e.target.value)}
                   className="mt-1 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                 />
                 <div className="ml-3">
                   <div className="text-sm font-medium text-gray-900">
                     {template.label.split(' - ')[0]}
                   </div>
-                  <div className="text-xs text-gray-500">
-                    {template.label.split(' - ')[1]}
-                  </div>
+                  <div className="text-xs text-gray-500">{template.label.split(' - ')[1]}</div>
                 </div>
               </label>
             ))}

@@ -66,15 +66,19 @@ export function validatePasswordPolicy(policy: {
     errors.push({
       field: 'password_min_length',
       message: '최소 비밀번호 길이는 4-128자 사이여야 합니다.',
-      category: 'security'
+      category: 'security',
     })
   }
 
-  if (!Number.isInteger(policy.history_count) || policy.history_count < 0 || policy.history_count > 50) {
+  if (
+    !Number.isInteger(policy.history_count) ||
+    policy.history_count < 0 ||
+    policy.history_count > 50
+  ) {
     errors.push({
       field: 'password_history_count',
       message: '비밀번호 히스토리 개수는 0-50개 사이여야 합니다.',
-      category: 'security'
+      category: 'security',
     })
   }
 
@@ -91,19 +95,28 @@ export function validateSessionConfig(config: {
 }): ValidationError[] {
   const errors: ValidationError[] = []
 
-  if (!Number.isInteger(config.timeout_minutes) || config.timeout_minutes < 1 || config.timeout_minutes > 10080) { // 최대 1주일
+  if (
+    !Number.isInteger(config.timeout_minutes) ||
+    config.timeout_minutes < 1 ||
+    config.timeout_minutes > 10080
+  ) {
+    // 최대 1주일
     errors.push({
       field: 'session_timeout',
       message: '세션 타임아웃은 1분에서 1주일(10080분) 사이여야 합니다.',
-      category: 'security'
+      category: 'security',
     })
   }
 
-  if (!Number.isInteger(config.max_concurrent_sessions) || config.max_concurrent_sessions < 1 || config.max_concurrent_sessions > 100) {
+  if (
+    !Number.isInteger(config.max_concurrent_sessions) ||
+    config.max_concurrent_sessions < 1 ||
+    config.max_concurrent_sessions > 100
+  ) {
     errors.push({
       field: 'max_concurrent_sessions',
       message: '최대 동시 세션 수는 1-100개 사이여야 합니다.',
-      category: 'security'
+      category: 'security',
     })
   }
 
@@ -120,19 +133,28 @@ export function validateLoginPolicy(policy: {
 }): ValidationError[] {
   const errors: ValidationError[] = []
 
-  if (!Number.isInteger(policy.max_attempts) || policy.max_attempts < 1 || policy.max_attempts > 100) {
+  if (
+    !Number.isInteger(policy.max_attempts) ||
+    policy.max_attempts < 1 ||
+    policy.max_attempts > 100
+  ) {
     errors.push({
       field: 'max_login_attempts',
       message: '최대 로그인 시도 횟수는 1-100회 사이여야 합니다.',
-      category: 'security'
+      category: 'security',
     })
   }
 
-  if (!Number.isInteger(policy.lockout_duration_minutes) || policy.lockout_duration_minutes < 1 || policy.lockout_duration_minutes > 1440) { // 최대 24시간
+  if (
+    !Number.isInteger(policy.lockout_duration_minutes) ||
+    policy.lockout_duration_minutes < 1 ||
+    policy.lockout_duration_minutes > 1440
+  ) {
+    // 최대 24시간
     errors.push({
       field: 'lockout_duration_minutes',
       message: '잠금 지속 시간은 1분에서 24시간(1440분) 사이여야 합니다.',
-      category: 'security'
+      category: 'security',
     })
   }
 
@@ -158,7 +180,7 @@ export function validateSmtpConfig(config: {
       errors.push({
         field: 'smtp_host',
         message: 'SMTP 호스트 이름이 너무 깁니다 (최대 255자).',
-        category: 'email'
+        category: 'email',
       })
     }
 
@@ -166,15 +188,16 @@ export function validateSmtpConfig(config: {
       errors.push({
         field: 'smtp_port',
         message: 'SMTP 포트는 1-65535 사이의 유효한 포트 번호여야 합니다.',
-        category: 'email'
+        category: 'email',
       })
     }
 
-    if (config.user && config.user.length > 320) { // 이메일 최대 길이
+    if (config.user && config.user.length > 320) {
+      // 이메일 최대 길이
       errors.push({
         field: 'smtp_user',
         message: 'SMTP 사용자명이 너무 깁니다 (최대 320자).',
-        category: 'email'
+        category: 'email',
       })
     }
 
@@ -182,7 +205,7 @@ export function validateSmtpConfig(config: {
       errors.push({
         field: 'smtp_password',
         message: 'SMTP 비밀번호가 너무 깁니다 (최대 1024자).',
-        category: 'email'
+        category: 'email',
       })
     }
   }
@@ -191,7 +214,7 @@ export function validateSmtpConfig(config: {
     errors.push({
       field: 'from_email',
       message: '발신자 이메일 주소가 유효하지 않습니다.',
-      category: 'email'
+      category: 'email',
     })
   }
 
@@ -199,7 +222,7 @@ export function validateSmtpConfig(config: {
     errors.push({
       field: 'from_name',
       message: '발신자 이름이 너무 깁니다 (최대 100자).',
-      category: 'email'
+      category: 'email',
     })
   }
 
@@ -222,13 +245,13 @@ export function validateSiteConfig(config: {
     errors.push({
       field: 'site_title',
       message: '사이트 제목은 필수입니다.',
-      category: 'site'
+      category: 'site',
     })
   } else if (config.site_title.length > 100) {
     errors.push({
       field: 'site_title',
       message: '사이트 제목이 너무 깁니다 (최대 100자).',
-      category: 'site'
+      category: 'site',
     })
   }
 
@@ -236,15 +259,19 @@ export function validateSiteConfig(config: {
     errors.push({
       field: 'site_description',
       message: '사이트 설명이 너무 깁니다 (최대 500자).',
-      category: 'site'
+      category: 'site',
     })
   }
 
-  if (!Number.isInteger(config.max_members) || config.max_members < 1 || config.max_members > 1000000) {
+  if (
+    !Number.isInteger(config.max_members) ||
+    config.max_members < 1 ||
+    config.max_members > 1000000
+  ) {
     errors.push({
       field: 'max_members',
       message: '최대 회원 수는 1-1,000,000명 사이여야 합니다.',
-      category: 'site'
+      category: 'site',
     })
   }
 
@@ -263,11 +290,16 @@ export function validateFileUploadConfig(config: {
   const errors: ValidationError[] = []
 
   if (config.enabled) {
-    if (!Number.isInteger(config.max_size_mb) || config.max_size_mb < 1 || config.max_size_mb > 1024) { // 최대 1GB
+    if (
+      !Number.isInteger(config.max_size_mb) ||
+      config.max_size_mb < 1 ||
+      config.max_size_mb > 1024
+    ) {
+      // 최대 1GB
       errors.push({
         field: 'max_file_size',
         message: '최대 파일 크기는 1MB-1024MB 사이여야 합니다.',
-        category: 'features'
+        category: 'features',
       })
     }
 
@@ -275,22 +307,32 @@ export function validateFileUploadConfig(config: {
       errors.push({
         field: 'allowed_file_types',
         message: '허용할 파일 형식을 최소 1개 이상 선택해야 합니다.',
-        category: 'features'
+        category: 'features',
       })
     } else {
       const validTypes = [
-        'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
-        'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'text/plain', 'text/csv', 'application/zip', 'application/x-zip-compressed'
+        'image/jpeg',
+        'image/png',
+        'image/gif',
+        'image/webp',
+        'image/svg+xml',
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'text/plain',
+        'text/csv',
+        'application/zip',
+        'application/x-zip-compressed',
       ]
-      
+
       const invalidTypes = config.allowed_types.filter(type => !validTypes.includes(type))
       if (invalidTypes.length > 0) {
         errors.push({
           field: 'allowed_file_types',
           message: `지원하지 않는 파일 형식: ${invalidTypes.join(', ')}`,
-          category: 'features'
+          category: 'features',
         })
       }
     }
@@ -312,7 +354,7 @@ export function validateAllSettings(settings: any): ValidationResult {
       site_description: settings.site.site_description,
       max_members: settings.site.max_members,
       maintenance_mode: settings.site.maintenance_mode,
-      registration_enabled: settings.site.registration_enabled
+      registration_enabled: settings.site.registration_enabled,
     })
     allErrors.push(...siteErrors)
   }
@@ -325,7 +367,7 @@ export function validateAllSettings(settings: any): ValidationResult {
       user: settings.email.smtp_user,
       password: settings.email.smtp_password,
       from_email: settings.email.from_email,
-      from_name: settings.email.from_name
+      from_name: settings.email.from_name,
     })
     allErrors.push(...emailErrors)
   }
@@ -335,14 +377,14 @@ export function validateAllSettings(settings: any): ValidationResult {
     const sessionErrors = validateSessionConfig({
       timeout_minutes: settings.security.session_timeout,
       max_concurrent_sessions: 5, // 기본값
-      require_reauth_for_sensitive: true // 기본값
+      require_reauth_for_sensitive: true, // 기본값
     })
     allErrors.push(...sessionErrors)
 
     const loginErrors = validateLoginPolicy({
       max_attempts: settings.security.max_login_attempts,
       lockout_duration_minutes: 30, // 기본값
-      require_strong_password: true // 기본값
+      require_strong_password: true, // 기본값
     })
     allErrors.push(...loginErrors)
 
@@ -352,7 +394,7 @@ export function validateAllSettings(settings: any): ValidationResult {
       require_lowercase: true, // 기본값
       require_numbers: true, // 기본값
       require_special: false, // 기본값
-      history_count: 5 // 기본값
+      history_count: 5, // 기본값
     })
     allErrors.push(...passwordErrors)
   }
@@ -363,14 +405,14 @@ export function validateAllSettings(settings: any): ValidationResult {
       enabled: settings.features.file_uploads_enabled,
       max_size_mb: 10, // 기본값
       allowed_types: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'], // 기본값
-      virus_scan: false // 기본값
+      virus_scan: false, // 기본값
     })
     allErrors.push(...fileErrors)
   }
 
   return {
     isValid: allErrors.length === 0,
-    errors: allErrors
+    errors: allErrors,
   }
 }
 
@@ -404,10 +446,16 @@ export function validateField(category: string, field: string, value: any): Vali
       if (field === 'session_timeout' && (!Number.isInteger(value) || value < 1 || value > 10080)) {
         return { field, message: '세션 타임아웃은 1분-1주일(10080분) 사이여야 합니다.', category }
       }
-      if (field === 'max_login_attempts' && (!Number.isInteger(value) || value < 1 || value > 100)) {
+      if (
+        field === 'max_login_attempts' &&
+        (!Number.isInteger(value) || value < 1 || value > 100)
+      ) {
         return { field, message: '최대 로그인 시도 횟수는 1-100회 사이여야 합니다.', category }
       }
-      if (field === 'password_min_length' && (!Number.isInteger(value) || value < 4 || value > 128)) {
+      if (
+        field === 'password_min_length' &&
+        (!Number.isInteger(value) || value < 4 || value > 128)
+      ) {
         return { field, message: '최소 비밀번호 길이는 4-128자 사이여야 합니다.', category }
       }
       break

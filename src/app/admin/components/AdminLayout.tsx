@@ -27,38 +27,38 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ title, description, children 
       id: 'dashboard',
       label: '대시보드',
       href: '/admin',
-      icon: <FiHome className="w-5 h-5" />
+      icon: <FiHome className="w-5 h-5" />,
     },
     {
       id: 'members',
       label: '회원 관리',
       href: '/admin/members',
-      icon: <FiUsers className="w-5 h-5" />
+      icon: <FiUsers className="w-5 h-5" />,
     },
     {
       id: 'artists',
       label: '아티스트 관리',
       href: '/admin/artists',
-      icon: <FiMusic className="w-5 h-5" />
+      icon: <FiMusic className="w-5 h-5" />,
     },
     {
       id: 'posts',
       label: '게시글 관리',
       href: '/admin/posts',
-      icon: <FiEdit3 className="w-5 h-5" />
+      icon: <FiEdit3 className="w-5 h-5" />,
     },
     {
       id: 'reports',
       label: '리포트 및 분석',
       href: '/admin/reports',
-      icon: <FiBarChart className="w-5 h-5" />
+      icon: <FiBarChart className="w-5 h-5" />,
     },
     {
       id: 'settings',
       label: '시스템 설정',
       href: '/admin/settings',
-      icon: <FiSettings className="w-5 h-5" />
-    }
+      icon: <FiSettings className="w-5 h-5" />,
+    },
   ]
 
   const isActive = (href: string) => {
@@ -88,7 +88,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ title, description, children 
         {/* 메뉴 */}
         <nav className="flex-1 px-3 py-4 overflow-y-auto">
           <ul className="space-y-1">
-            {menuItems.map((item) => (
+            {menuItems.map(item => (
               <li key={item.id}>
                 <Link
                   href={item.href}
@@ -129,16 +129,12 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ title, description, children 
         <header className="bg-white shadow-sm border-b border-gray-200">
           <div className="px-6 py-4">
             <h1 className="text-2xl font-semibold text-gray-900">{title}</h1>
-            {description && (
-              <p className="text-sm text-gray-600 mt-1">{description}</p>
-            )}
+            {description && <p className="text-sm text-gray-600 mt-1">{description}</p>}
           </div>
         </header>
 
         {/* 콘텐츠 */}
-        <main className="flex-1 px-6 py-6">
-          {children}
-        </main>
+        <main className="flex-1 px-6 py-6">{children}</main>
 
         {/* 간단한 푸터 */}
         <footer className="bg-white border-t border-gray-200 px-6 py-4 mt-auto">

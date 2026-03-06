@@ -1,6 +1,17 @@
 'use client'
 
-import { FiX, FiBookmark, FiTrash2, FiRotateCcw, FiUser, FiCalendar, FiMessageSquare, FiEdit3, FiExternalLink, FiAlertCircle } from 'react-icons/fi'
+import {
+  FiX,
+  FiBookmark,
+  FiTrash2,
+  FiRotateCcw,
+  FiUser,
+  FiCalendar,
+  FiMessageSquare,
+  FiEdit3,
+  FiExternalLink,
+  FiAlertCircle,
+} from 'react-icons/fi'
 import { useState } from 'react'
 import type { Post } from '@/types'
 
@@ -12,7 +23,13 @@ interface PostDetailModalProps {
   isLoading: boolean
 }
 
-export default function PostDetailModal({ post, isOpen, onClose, onAction, isLoading }: PostDetailModalProps) {
+export default function PostDetailModal({
+  post,
+  isOpen,
+  onClose,
+  onAction,
+  isLoading,
+}: PostDetailModalProps) {
   const [confirmAction, setConfirmAction] = useState<{ action: string; title: string } | null>(null)
 
   if (!isOpen) return null
@@ -38,7 +55,7 @@ export default function PostDetailModal({ post, isOpen, onClose, onAction, isLoa
       month: 'long',
       day: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
     })
   }
 
@@ -60,7 +77,7 @@ export default function PostDetailModal({ post, isOpen, onClose, onAction, isLoa
       delete: '삭제',
       restore: '복구',
       pin: '고정',
-      unpin: '고정 해제'
+      unpin: '고정 해제',
     }
 
     setConfirmAction({ action, title: actionTitles[action] })
@@ -80,7 +97,9 @@ export default function PostDetailModal({ post, isOpen, onClose, onAction, isLoa
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div className="flex items-center space-x-2">
             <h2 className="text-xl font-semibold text-gray-900">게시글 상세</h2>
-            <span className={`px-2 py-1 text-xs font-medium rounded-full ${getCategoryColor(post.category)}`}>
+            <span
+              className={`px-2 py-1 text-xs font-medium rounded-full ${getCategoryColor(post.category)}`}
+            >
               {post.category}
             </span>
             {post.is_pinned && (
@@ -95,10 +114,7 @@ export default function PostDetailModal({ post, isOpen, onClose, onAction, isLoa
               </span>
             )}
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-md transition-colors"
-          >
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-md transition-colors">
             <FiX className="w-5 h-5" />
           </button>
         </div>
@@ -113,7 +129,9 @@ export default function PostDetailModal({ post, isOpen, onClose, onAction, isLoa
                   <FiUser className="w-4 h-4 text-gray-500 mr-2" />
                   <div>
                     <p className="text-sm text-gray-600">작성자</p>
-                    <p className="text-sm font-medium text-gray-900">{post.author?.display_name || post.author?.name}</p>
+                    <p className="text-sm font-medium text-gray-900">
+                      {post.author?.display_name || post.author?.name}
+                    </p>
                     <p className="text-xs text-gray-500">{post.author?.email}</p>
                   </div>
                 </div>
@@ -121,7 +139,9 @@ export default function PostDetailModal({ post, isOpen, onClose, onAction, isLoa
                   <FiCalendar className="w-4 h-4 text-gray-500 mr-2" />
                   <div>
                     <p className="text-sm text-gray-600">작성일</p>
-                    <p className="text-sm font-medium text-gray-900">{formatDate(post.created_at)}</p>
+                    <p className="text-sm font-medium text-gray-900">
+                      {formatDate(post.created_at)}
+                    </p>
                     {post.updated_at && post.updated_at !== post.created_at && (
                       <p className="text-xs text-gray-500">수정: {formatDate(post.updated_at)}</p>
                     )}
@@ -141,7 +161,9 @@ export default function PostDetailModal({ post, isOpen, onClose, onAction, isLoa
                     <FiBookmark className="w-4 h-4 text-green-500 mr-2" />
                     <div>
                       <p className="text-sm text-gray-600">고정일</p>
-                      <p className="text-sm font-medium text-gray-900">{formatDate(post.pinned_at)}</p>
+                      <p className="text-sm font-medium text-gray-900">
+                        {formatDate(post.pinned_at)}
+                      </p>
                     </div>
                   </div>
                 )}
@@ -150,9 +172,11 @@ export default function PostDetailModal({ post, isOpen, onClose, onAction, isLoa
 
             {/* 게시글 제목 */}
             <div>
-              <h3 className={`text-2xl font-bold mb-2 ${
-                post.is_deleted ? 'text-gray-500 line-through' : 'text-gray-900'
-              }`}>
+              <h3
+                className={`text-2xl font-bold mb-2 ${
+                  post.is_deleted ? 'text-gray-500 line-through' : 'text-gray-900'
+                }`}
+              >
                 {post.title}
               </h3>
             </div>
@@ -160,9 +184,11 @@ export default function PostDetailModal({ post, isOpen, onClose, onAction, isLoa
             {/* 게시글 내용 */}
             <div>
               <h4 className="text-sm font-medium text-gray-900 mb-3">내용</h4>
-              <div className={`prose max-w-none ${
-                post.is_deleted ? 'text-gray-400' : 'text-gray-700'
-              }`}>
+              <div
+                className={`prose max-w-none ${
+                  post.is_deleted ? 'text-gray-400' : 'text-gray-700'
+                }`}
+              >
                 {formatContent(post.content)}
               </div>
             </div>
@@ -197,7 +223,7 @@ export default function PostDetailModal({ post, isOpen, onClose, onAction, isLoa
               게시글 페이지로 이동
             </a>
           </div>
-          
+
           <div className="flex items-center space-x-3">
             {/* 고정/고정해제 버튼 (공지사항에만) */}
             {post.category === '공지' && !post.is_deleted && (
@@ -235,7 +261,7 @@ export default function PostDetailModal({ post, isOpen, onClose, onAction, isLoa
                 삭제
               </button>
             )}
-            
+
             <button
               onClick={onClose}
               className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
@@ -255,9 +281,7 @@ export default function PostDetailModal({ post, isOpen, onClose, onAction, isLoa
                 <FiAlertCircle className="w-6 h-6 text-yellow-500 mr-3" />
                 <h3 className="text-lg font-semibold text-gray-900">확인</h3>
               </div>
-              <p className="text-gray-600 mb-6">
-                이 게시글을 {confirmAction.title}하시겠습니까?
-              </p>
+              <p className="text-gray-600 mb-6">이 게시글을 {confirmAction.title}하시겠습니까?</p>
               <div className="flex justify-end space-x-3">
                 <button
                   onClick={() => setConfirmAction(null)}

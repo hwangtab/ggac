@@ -27,7 +27,9 @@ export const LazyActivityLog = lazy(() => import('@/app/mypage/activity/page'))
 
 // 파티클 시스템 지연 로딩
 export const LazyLiquidMetalParticles = lazy(() => import('./LiquidMetalParticles'))
-export const LazyOptimizedLiquidMetalParticles = lazy(() => import('./OptimizedLiquidMetalParticles'))
+export const LazyOptimizedLiquidMetalParticles = lazy(
+  () => import('./OptimizedLiquidMetalParticles')
+)
 export const LazyWebGLParticles = lazy(() => import('./WebGLParticles'))
 export const LazyCSSParticles = lazy(() => import('./CSSParticles'))
 export const LazyNetworkParticles = lazy(() => import('./NetworkParticles'))
@@ -39,7 +41,7 @@ export const LazyReactIcons = {
   FiX: lazy(() => import('react-icons/fi').then(module => ({ default: module.FiX }))),
   FiUser: lazy(() => import('react-icons/fi').then(module => ({ default: module.FiUser }))),
   FiHome: lazy(() => import('react-icons/fi').then(module => ({ default: module.FiHome }))),
-  
+
   // 관리자 아이콘 (지연 로드)
   FiUsers: lazy(() => import('react-icons/fi').then(module => ({ default: module.FiUsers }))),
   FiEdit3: lazy(() => import('react-icons/fi').then(module => ({ default: module.FiEdit3 }))),
@@ -47,11 +49,17 @@ export const LazyReactIcons = {
   FiBarChart: lazy(() => import('react-icons/fi').then(module => ({ default: module.FiBarChart }))),
   FiActivity: lazy(() => import('react-icons/fi').then(module => ({ default: module.FiActivity }))),
   FiMusic: lazy(() => import('react-icons/fi').then(module => ({ default: module.FiMusic }))),
-  
+
   // 기타 아이콘 (지연 로드)
-  FiChevronRight: lazy(() => import('react-icons/fi').then(module => ({ default: module.FiChevronRight }))),
-  FiChevronLeft: lazy(() => import('react-icons/fi').then(module => ({ default: module.FiChevronLeft }))),
-  FiRefreshCw: lazy(() => import('react-icons/fi').then(module => ({ default: module.FiRefreshCw }))),
+  FiChevronRight: lazy(() =>
+    import('react-icons/fi').then(module => ({ default: module.FiChevronRight }))
+  ),
+  FiChevronLeft: lazy(() =>
+    import('react-icons/fi').then(module => ({ default: module.FiChevronLeft }))
+  ),
+  FiRefreshCw: lazy(() =>
+    import('react-icons/fi').then(module => ({ default: module.FiRefreshCw }))
+  ),
   FiDownload: lazy(() => import('react-icons/fi').then(module => ({ default: module.FiDownload }))),
   FiUpload: lazy(() => import('react-icons/fi').then(module => ({ default: module.FiUpload }))),
   FiSearch: lazy(() => import('react-icons/fi').then(module => ({ default: module.FiSearch }))),
@@ -62,7 +70,9 @@ export const LazyReactIcons = {
   FiPhone: lazy(() => import('react-icons/fi').then(module => ({ default: module.FiPhone }))),
   FiMapPin: lazy(() => import('react-icons/fi').then(module => ({ default: module.FiMapPin }))),
   FiGlobe: lazy(() => import('react-icons/fi').then(module => ({ default: module.FiGlobe }))),
-  FiInstagram: lazy(() => import('react-icons/fi').then(module => ({ default: module.FiInstagram }))),
+  FiInstagram: lazy(() =>
+    import('react-icons/fi').then(module => ({ default: module.FiInstagram }))
+  ),
   FiYoutube: lazy(() => import('react-icons/fi').then(module => ({ default: module.FiYoutube }))),
 }
 
@@ -73,10 +83,10 @@ interface LazyWrapperProps {
   [key: string]: any
 }
 
-export const LazyWrapper: React.FC<LazyWrapperProps> = ({ 
-  component: Component, 
-  fallback = <LoadingSpinner />, 
-  ...props 
+export const LazyWrapper: React.FC<LazyWrapperProps> = ({
+  component: Component,
+  fallback = <LoadingSpinner />,
+  ...props
 }) => {
   return (
     <React.Suspense fallback={fallback}>
@@ -89,21 +99,21 @@ export const LazyWrapper: React.FC<LazyWrapperProps> = ({
 export const pageOptimizations = {
   admin: {
     preload: ['LazyAdminLayout'],
-    defer: ['LazyMemberManagement', 'LazyPostManagement', 'LazyArtistManagement']
+    defer: ['LazyMemberManagement', 'LazyPostManagement', 'LazyArtistManagement'],
   },
   mypage: {
     preload: ['LazyMypageLayout'],
-    defer: ['LazyArtistProfile', 'LazyProfileEdit', 'LazyActivityLog']
+    defer: ['LazyArtistProfile', 'LazyProfileEdit', 'LazyActivityLog'],
   },
   particles: {
     preload: [], // 성능 기반 동적 로딩
-    defer: ['LazyLiquidMetalParticles', 'LazyOptimizedLiquidMetalParticles', 'LazyWebGLParticles']
-  }
+    defer: ['LazyLiquidMetalParticles', 'LazyOptimizedLiquidMetalParticles', 'LazyWebGLParticles'],
+  },
 }
 
 // 프리로드 유틸리티
 export const preloadComponents = async (components: string[]) => {
-  const preloadPromises = components.map(async (componentName) => {
+  const preloadPromises = components.map(async componentName => {
     switch (componentName) {
       case 'LazyAdminLayout':
         return import('@/app/admin/components/AdminLayout')
@@ -116,7 +126,7 @@ export const preloadComponents = async (components: string[]) => {
         return Promise.resolve()
     }
   })
-  
+
   await Promise.all(preloadPromises)
 }
 
@@ -138,7 +148,7 @@ const lazyComponents = {
   LazyWrapper,
   LoadingSpinner,
   pageOptimizations,
-  preloadComponents
+  preloadComponents,
 }
 
 export default lazyComponents

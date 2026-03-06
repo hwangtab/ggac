@@ -1,6 +1,20 @@
 'use client'
 
-import { FiX, FiCheck, FiUser, FiMail, FiPhone, FiCalendar, FiDollarSign, FiCreditCard, FiShield, FiMusic, FiPause, FiPlay, FiAlertCircle } from 'react-icons/fi'
+import {
+  FiX,
+  FiCheck,
+  FiUser,
+  FiMail,
+  FiPhone,
+  FiCalendar,
+  FiDollarSign,
+  FiCreditCard,
+  FiShield,
+  FiMusic,
+  FiPause,
+  FiPlay,
+  FiAlertCircle,
+} from 'react-icons/fi'
 import { useState } from 'react'
 
 interface Member {
@@ -41,11 +55,21 @@ interface MemberDetailModalProps {
   member: Member
   isOpen: boolean
   onClose: () => void
-  onAction: (memberId: string, action: 'approve' | 'reject' | 'deactivate' | 'activate' | 'suspend' | 'unsuspend', params?: any) => void
+  onAction: (
+    memberId: string,
+    action: 'approve' | 'reject' | 'deactivate' | 'activate' | 'suspend' | 'unsuspend',
+    params?: any
+  ) => void
   isLoading: boolean
 }
 
-export default function MemberDetailModal({ member, isOpen, onClose, onAction, isLoading }: MemberDetailModalProps) {
+export default function MemberDetailModal({
+  member,
+  isOpen,
+  onClose,
+  onAction,
+  isLoading,
+}: MemberDetailModalProps) {
   const [confirmAction, setConfirmAction] = useState<{ action: string; title: string } | null>(null)
 
   if (!isOpen) return null
@@ -82,7 +106,7 @@ export default function MemberDetailModal({ member, isOpen, onClose, onAction, i
       month: 'long',
       day: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
     })
   }
 
@@ -90,18 +114,20 @@ export default function MemberDetailModal({ member, isOpen, onClose, onAction, i
     if (!amount) return '설정되지 않음'
     return new Intl.NumberFormat('ko-KR', {
       style: 'currency',
-      currency: 'KRW'
+      currency: 'KRW',
     }).format(amount)
   }
 
-  const handleAction = (action: 'approve' | 'reject' | 'deactivate' | 'activate' | 'suspend' | 'unsuspend') => {
+  const handleAction = (
+    action: 'approve' | 'reject' | 'deactivate' | 'activate' | 'suspend' | 'unsuspend'
+  ) => {
     const actionTitles = {
       approve: '승인',
       reject: '거부',
       deactivate: '비활성화',
       activate: '활성화',
       suspend: '정지',
-      unsuspend: '정지해제'
+      unsuspend: '정지해제',
     }
 
     setConfirmAction({ action, title: actionTitles[action] })
@@ -112,14 +138,14 @@ export default function MemberDetailModal({ member, isOpen, onClose, onAction, i
       if (confirmAction.action === 'suspend') {
         const reason = prompt('정지 사유를 입력하세요:', '이용규칙 위반')
         if (!reason) return
-        
+
         const until = prompt('정지 기간을 입력하세요 (YYYY-MM-DD 형식, 비우면 무기한):', '')
-        
+
         const params: any = { suspension_reason: reason }
         if (until) {
           params.suspension_until = until
         }
-        
+
         onAction(member.id, confirmAction.action as any, params)
       } else {
         onAction(member.id, confirmAction.action as any)
@@ -133,7 +159,9 @@ export default function MemberDetailModal({ member, isOpen, onClose, onAction, i
       <div className="bg-white rounded-lg shadow-xl w-full max-w-xs sm:max-w-sm md:max-w-lg lg:max-w-2xl xl:max-w-4xl min-h-0 max-h-full my-4 sm:my-8 overflow-hidden flex flex-col">
         {/* 헤더 */}
         <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200 flex-shrink-0">
-          <h2 className="text-lg sm:text-xl font-semibold text-gray-900 truncate">회원 상세 정보</h2>
+          <h2 className="text-lg sm:text-xl font-semibold text-gray-900 truncate">
+            회원 상세 정보
+          </h2>
           <button
             onClick={onClose}
             className="p-2 hover:bg-gray-100 rounded-md transition-colors flex-shrink-0 ml-2"
@@ -152,9 +180,13 @@ export default function MemberDetailModal({ member, isOpen, onClose, onAction, i
                   <FiUser className="w-6 h-6 sm:w-8 sm:h-8 text-gray-500" />
                 </div>
                 <div className="sm:ml-4 min-w-0 flex-1">
-                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">{member.display_name}</h3>
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">
+                    {member.display_name}
+                  </h3>
                   <div className="flex flex-wrap gap-1 sm:gap-2 mt-1">
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full whitespace-nowrap ${getStatusColor(member.registration_status)}`}>
+                    <span
+                      className={`px-2 py-1 text-xs font-medium rounded-full whitespace-nowrap ${getStatusColor(member.registration_status)}`}
+                    >
                       {getStatusText(member.registration_status)}
                     </span>
                     {member.is_artist && (
@@ -219,14 +251,18 @@ export default function MemberDetailModal({ member, isOpen, onClose, onAction, i
                   <FiCalendar className="w-4 h-4 text-gray-500 mr-2 mt-0.5 flex-shrink-0" />
                   <div className="min-w-0 flex-1">
                     <p className="text-xs sm:text-sm text-gray-600">가입일</p>
-                    <p className="text-sm font-medium text-gray-900 break-words">{formatDate(member.created_at)}</p>
+                    <p className="text-sm font-medium text-gray-900 break-words">
+                      {formatDate(member.created_at)}
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-start min-w-0">
                   <FiCalendar className="w-4 h-4 text-gray-500 mr-2 mt-0.5 flex-shrink-0" />
                   <div className="min-w-0 flex-1">
                     <p className="text-xs sm:text-sm text-gray-600">최종 업데이트</p>
-                    <p className="text-sm font-medium text-gray-900 break-words">{formatDate(member.updated_at)}</p>
+                    <p className="text-sm font-medium text-gray-900 break-words">
+                      {formatDate(member.updated_at)}
+                    </p>
                   </div>
                 </div>
                 {member.last_login_at && (
@@ -234,7 +270,9 @@ export default function MemberDetailModal({ member, isOpen, onClose, onAction, i
                     <FiCalendar className="w-4 h-4 text-gray-500 mr-2 mt-0.5 flex-shrink-0" />
                     <div className="min-w-0 flex-1">
                       <p className="text-xs sm:text-sm text-gray-600">최근 로그인</p>
-                      <p className="text-sm font-medium text-gray-900 break-words">{formatDate(member.last_login_at)}</p>
+                      <p className="text-sm font-medium text-gray-900 break-words">
+                        {formatDate(member.last_login_at)}
+                      </p>
                     </div>
                   </div>
                 )}
@@ -249,7 +287,9 @@ export default function MemberDetailModal({ member, isOpen, onClose, onAction, i
                   <FiUser className="w-4 h-4 text-gray-500 mr-2" />
                   <div>
                     <p className="text-sm text-gray-600">프로필 완성도</p>
-                    <p className="text-sm font-medium text-gray-900">{member.profile_completeness_score}%</p>
+                    <p className="text-sm font-medium text-gray-900">
+                      {member.profile_completeness_score}%
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center">
@@ -281,9 +321,11 @@ export default function MemberDetailModal({ member, isOpen, onClose, onAction, i
                   <FiMail className="w-4 h-4 text-gray-500 mr-2" />
                   <div>
                     <p className="text-sm text-gray-600">이메일 인증</p>
-                    <p className={`text-sm font-medium ${
-                      member.verification_status.email ? 'text-green-600' : 'text-red-600'
-                    }`}>
+                    <p
+                      className={`text-sm font-medium ${
+                        member.verification_status.email ? 'text-green-600' : 'text-red-600'
+                      }`}
+                    >
                       {member.verification_status.email ? '완료' : '미인증'}
                     </p>
                   </div>
@@ -292,9 +334,11 @@ export default function MemberDetailModal({ member, isOpen, onClose, onAction, i
                   <FiPhone className="w-4 h-4 text-gray-500 mr-2" />
                   <div>
                     <p className="text-sm text-gray-600">전화번호 인증</p>
-                    <p className={`text-sm font-medium ${
-                      member.verification_status.phone ? 'text-green-600' : 'text-red-600'
-                    }`}>
+                    <p
+                      className={`text-sm font-medium ${
+                        member.verification_status.phone ? 'text-green-600' : 'text-red-600'
+                      }`}
+                    >
                       {member.verification_status.phone ? '완료' : '미인증'}
                     </p>
                   </div>
@@ -303,9 +347,11 @@ export default function MemberDetailModal({ member, isOpen, onClose, onAction, i
                   <FiShield className="w-4 h-4 text-gray-500 mr-2" />
                   <div>
                     <p className="text-sm text-gray-600">신원 인증</p>
-                    <p className={`text-sm font-medium ${
-                      member.verification_status.identity ? 'text-green-600' : 'text-red-600'
-                    }`}>
+                    <p
+                      className={`text-sm font-medium ${
+                        member.verification_status.identity ? 'text-green-600' : 'text-red-600'
+                      }`}
+                    >
                       {member.verification_status.identity ? '완료' : '미인증'}
                     </p>
                   </div>
@@ -340,7 +386,9 @@ export default function MemberDetailModal({ member, isOpen, onClose, onAction, i
                       <FiDollarSign className="w-4 h-4 text-gray-500 mr-2" />
                       <div>
                         <p className="text-sm text-gray-600">월 조합비</p>
-                        <p className="text-sm font-medium text-gray-900">{formatCurrency(member.monthly_fee)}</p>
+                        <p className="text-sm font-medium text-gray-900">
+                          {formatCurrency(member.monthly_fee)}
+                        </p>
                       </div>
                     </div>
                   )}
@@ -411,7 +459,7 @@ export default function MemberDetailModal({ member, isOpen, onClose, onAction, i
               </button>
             </>
           )}
-          
+
           {member.registration_status === 'approved' && (
             <>
               <button
@@ -423,10 +471,14 @@ export default function MemberDetailModal({ member, isOpen, onClose, onAction, i
                     : 'bg-green-600 text-white hover:bg-green-700'
                 }`}
               >
-                {member.is_active ? <FiPause className="w-4 h-4 mr-2" /> : <FiPlay className="w-4 h-4 mr-2" />}
+                {member.is_active ? (
+                  <FiPause className="w-4 h-4 mr-2" />
+                ) : (
+                  <FiPlay className="w-4 h-4 mr-2" />
+                )}
                 {member.is_active ? '비활성화' : '활성화'}
               </button>
-              
+
               <button
                 onClick={() => handleAction(member.is_suspended ? 'unsuspend' : 'suspend')}
                 disabled={isLoading}
@@ -441,7 +493,7 @@ export default function MemberDetailModal({ member, isOpen, onClose, onAction, i
               </button>
             </>
           )}
-          
+
           <button
             onClick={onClose}
             className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 text-sm sm:text-base"

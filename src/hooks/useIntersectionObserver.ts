@@ -40,7 +40,7 @@ export const useIntersectionObserver = (
   const [isIntersecting, setIsIntersecting] = useState(false)
   const [hasIntersected, setHasIntersected] = useState(false)
   const [intersectionRatio, setIntersectionRatio] = useState(0)
-  
+
   const targetRef = useRef<HTMLDivElement | null>(null)
   const observerRef = useRef<IntersectionObserver | null>(null)
 
@@ -55,14 +55,14 @@ export const useIntersectionObserver = (
   const handleIntersection = useCallback(
     (entries: IntersectionObserverEntry[]) => {
       const [entry] = entries
-      
+
       setIsIntersecting(entry.isIntersecting)
       setIntersectionRatio(entry.intersectionRatio)
-      
+
       // triggerOnce가 true면 한번 교차 후 더 이상 추적하지 않음
       if (entry.isIntersecting && !hasIntersected) {
         setHasIntersected(true)
-        
+
         if (triggerOnce && observerRef.current) {
           observerRef.current.disconnect()
         }
@@ -90,7 +90,9 @@ export const useIntersectionObserver = (
 
       // 개발 환경에서 디버깅 정보 출력
       if (process.env.NODE_ENV === 'development') {
-        console.log(`🔍 IntersectionObserver: observing element with threshold ${threshold}, rootMargin ${rootMargin}`)
+        console.log(
+          `🔍 IntersectionObserver: observing element with threshold ${threshold}, rootMargin ${rootMargin}`
+        )
       }
     } catch (error) {
       console.error('IntersectionObserver creation failed:', error)
@@ -124,7 +126,9 @@ export const useIntersectionObserver = (
  * 지연 로딩 전용 간소화된 훅
  * 한번 로딩되면 다시는 언로드하지 않는 용도
  */
-export const useLazyLoading = (options: Omit<UseIntersectionObserverOptions, 'triggerOnce'> = {}) => {
+export const useLazyLoading = (
+  options: Omit<UseIntersectionObserverOptions, 'triggerOnce'> = {}
+) => {
   const { hasIntersected, targetRef } = useIntersectionObserver({
     ...options,
     triggerOnce: true,
@@ -141,12 +145,7 @@ export const useLazyLoading = (options: Omit<UseIntersectionObserverOptions, 'tr
  * 컴포넌트가 실제로 보여질 때만 리소스 로딩
  */
 export const useViewportEntry = (options: UseIntersectionObserverOptions = {}) => {
-  const { 
-    isIntersecting, 
-    hasIntersected, 
-    intersectionRatio,
-    targetRef 
-  } = useIntersectionObserver({
+  const { isIntersecting, hasIntersected, intersectionRatio, targetRef } = useIntersectionObserver({
     threshold: [0, 0.25, 0.5, 0.75, 1],
     rootMargin: '50px',
     triggerOnce: false,
@@ -154,9 +153,14 @@ export const useViewportEntry = (options: UseIntersectionObserverOptions = {}) =
   })
 
   // 컴포넌트 가시성 상태 계산
-  const visibilityState = intersectionRatio === 0 ? 'hidden' :
-                         intersectionRatio < 0.5 ? 'partial' :
-                         intersectionRatio === 1 ? 'full' : 'mostly'
+  const visibilityState =
+    intersectionRatio === 0
+      ? 'hidden'
+      : intersectionRatio < 0.5
+        ? 'partial'
+        : intersectionRatio === 1
+          ? 'full'
+          : 'mostly'
 
   return {
     targetRef,

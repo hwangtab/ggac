@@ -1,39 +1,34 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef } from 'react'
 
 // Liquid Hover Effect 컴포넌트
 interface LiquidHoverEffectProps {
-  children: React.ReactNode;
-  className?: string;
+  children: React.ReactNode
+  className?: string
 }
 
-const LiquidHoverEffect: React.FC<LiquidHoverEffectProps> = ({ 
-  children, 
-  className = '' 
-}) => {
+const LiquidHoverEffect: React.FC<LiquidHoverEffectProps> = ({ children, className = '' }) => {
   return (
-    <div className={`
+    <div
+      className={`
       liquid-hover
       relative
       overflow-hidden
       ${className}
-    `}>
+    `}
+    >
       {children}
     </div>
-  );
-};
+  )
+}
 
 // Morphing Button 컴포넌트
 interface MorphingButtonProps {
-  children: React.ReactNode;
-  className?: string;
-  onClick?: () => void;
+  children: React.ReactNode
+  className?: string
+  onClick?: () => void
 }
 
-const MorphingButton: React.FC<MorphingButtonProps> = ({ 
-  children, 
-  className = '',
-  onClick 
-}) => {
+const MorphingButton: React.FC<MorphingButtonProps> = ({ children, className = '', onClick }) => {
   return (
     <button
       className={`
@@ -53,47 +48,47 @@ const MorphingButton: React.FC<MorphingButtonProps> = ({
     >
       {children}
     </button>
-  );
-};
+  )
+}
 
 // Particle Burst Effect 컴포넌트
 interface ParticleBurstEffectProps {
-  children: React.ReactNode;
-  className?: string;
-  particleCount?: number;
+  children: React.ReactNode
+  className?: string
+  particleCount?: number
 }
 
-const ParticleBurstEffect: React.FC<ParticleBurstEffectProps> = ({ 
-  children, 
+const ParticleBurstEffect: React.FC<ParticleBurstEffectProps> = ({
+  children,
   className = '',
-  particleCount = 10
+  particleCount = 10,
 }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [particles, setParticles] = useState<Array<{id: number, x: number, y: number}>>([]);
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [particles, setParticles] = useState<Array<{ id: number; x: number; y: number }>>([])
 
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!containerRef.current) return;
-    
-    const rect = containerRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    
+    if (!containerRef.current) return
+
+    const rect = containerRef.current.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+
     const newParticles = Array.from({ length: particleCount }, (_, i) => ({
       id: Date.now() + i,
       x,
-      y
-    }));
-    
-    setParticles(newParticles);
-    
+      y,
+    }))
+
+    setParticles(newParticles)
+
     // 파티클 애니메이션 후 제거
     setTimeout(() => {
-      setParticles([]);
-    }, 1000);
-  };
+      setParticles([])
+    }, 1000)
+  }
 
   return (
-    <div 
+    <div
       ref={containerRef}
       className={`
         particle-burst
@@ -104,8 +99,8 @@ const ParticleBurstEffect: React.FC<ParticleBurstEffectProps> = ({
       onClick={handleClick}
     >
       {children}
-      
-      {particles.map((particle) => (
+
+      {particles.map(particle => (
         <div
           key={particle.id}
           className="absolute w-2 h-2 rounded-full bg-electric-400"
@@ -113,12 +108,12 @@ const ParticleBurstEffect: React.FC<ParticleBurstEffectProps> = ({
             left: particle.x,
             top: particle.y,
             transform: 'translate(-50%, -50%)',
-            animation: 'particleBurst 1s ease-out forwards'
+            animation: 'particleBurst 1s ease-out forwards',
           }}
         />
       ))}
     </div>
-  );
-};
+  )
+}
 
-export { LiquidHoverEffect, MorphingButton, ParticleBurstEffect };
+export { LiquidHoverEffect, MorphingButton, ParticleBurstEffect }

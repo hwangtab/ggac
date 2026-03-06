@@ -1,25 +1,30 @@
 # 경기아트콜렉티브 협동조합 RLS 정책 위반 문제 완전 진단 및 해결 보고서
 
 ## 📋 문제 상황
+
 - **사용자 ID**: `ab6617b4-532c-4820-8a75-553139868b2a`
-- **오류 메시지**: "new row violates row-level security policy for table member_profiles"
+- **오류 메시지**: "new row violates row-level security policy for table
+  member_profiles"
 - **발생 위치**: `/register/member-info` 페이지에서 조합원 정보 저장 시
 - **HTTP 상태 코드**: 403/406 오류
 
 ## 🔍 진단 결과
 
 ### 1. 테이블 구조 분석
+
 - **테이블명**: `member_profiles`
 - **기본 키**: `id` (UUID, `auth.users(id)` 참조)
 - **중요 발견**: `user_id` 컬럼이 존재하지 않음 (일부 스크립트에서 잘못 참조)
 - **애플리케이션 코드**: 올바르게 `id` 컬럼 사용 중
 
 ### 2. RLS 정책 상태
+
 - **현재 정책**: 기본 정책들이 존재하지만 UPSERT 작업 차단
 - **문제 원인**: 정책이 INSERT와 UPDATE를 모두 허용하지 않음
 - **테이블 접근**: 기본 SELECT는 가능하지만 사용자별 접근 제한됨
 
 ### 3. 사용자 인증 상태
+
 - **auth.users**: 사용자가 정상적으로 존재
 - **member_profiles**: 해당 사용자의 프로필 데이터 없음
 - **인증 흐름**: 정상 작동 중
@@ -81,7 +86,7 @@ CREATE POLICY "Users can update own profile" ON member_profiles
   FOR UPDATE USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
 
 -- Step 6: 검증
-SELECT 
+SELECT
   id,
   email,
   display_name,
@@ -89,7 +94,7 @@ SELECT
   is_active,
   created_at,
   updated_at
-FROM member_profiles 
+FROM member_profiles
 WHERE id = 'ab6617b4-532c-4820-8a75-553139868b2a';
 ```
 
@@ -116,6 +121,7 @@ WHERE id = 'ab6617b4-532c-4820-8a75-553139868b2a';
 ## 🎯 예상 결과
 
 **해결 후 예상되는 상황:**
+
 - ✅ 사용자가 `/register/member-info` 페이지에서 정보 입력 가능
 - ✅ UPSERT 작업이 성공적으로 수행됨
 - ✅ "조합원 정보가 성공적으로 저장되었습니다" 메시지 표시
@@ -124,6 +130,7 @@ WHERE id = 'ab6617b4-532c-4820-8a75-553139868b2a';
 ## 🔒 보안 고려사항
 
 **새로운 RLS 정책의 보안 수준:**
+
 - 사용자는 자신의 프로필만 조회/생성/수정 가능
 - 다른 사용자의 프로필에는 접근 불가
 - 관리자 권한은 별도 정책으로 관리
@@ -139,12 +146,14 @@ WHERE id = 'ab6617b4-532c-4820-8a75-553139868b2a';
 ## 🆘 문제 해결이 안 될 경우
 
 **추가 확인 사항:**
+
 1. 사용자 세션이 올바른지 확인
 2. `auth.uid()` 함수가 정상 작동하는지 확인
 3. 테이블 트리거 함수 확인
 4. 브라우저 캐시 삭제 후 재시도
 
 **대안 해결책:**
+
 1. RLS를 완전히 비활성화 후 애플리케이션 레벨에서 보안 처리
 2. 더 단순한 RLS 정책 구조로 변경
 3. 사용자 인증 흐름 재점검
@@ -162,4 +171,5 @@ WHERE id = 'ab6617b4-532c-4820-8a75-553139868b2a';
 
 **📅 작성일**: 2025-07-07  
 **⏰ 작성 시간**: 진단 및 해결 방안 수립 완료  
-**🎯 목표**: 사용자 `ab6617b4-532c-4820-8a75-553139868b2a`가 조합원 정보를 성공적으로 저장할 수 있도록 RLS 정책 수정
+**🎯 목표**: 사용자 `ab6617b4-532c-4820-8a75-553139868b2a`가 조합원 정보를
+성공적으로 저장할 수 있도록 RLS 정책 수정

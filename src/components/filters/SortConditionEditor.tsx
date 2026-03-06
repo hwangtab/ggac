@@ -17,7 +17,7 @@ export const SortConditionEditor: React.FC<SortConditionEditorProps> = ({
   fields,
   onAdd,
   onUpdate,
-  onRemove
+  onRemove,
 }) => {
   return (
     <div className="space-y-4">
@@ -33,9 +33,7 @@ export const SortConditionEditor: React.FC<SortConditionEditorProps> = ({
       </div>
 
       {sorts.length === 0 ? (
-        <div className="text-center py-4 text-gray-500 text-sm">
-          정렬 조건이 없습니다.
-        </div>
+        <div className="text-center py-4 text-gray-500 text-sm">정렬 조건이 없습니다.</div>
       ) : (
         <div className="space-y-2">
           {sorts.map((sort, index) => (
@@ -49,7 +47,7 @@ export const SortConditionEditor: React.FC<SortConditionEditorProps> = ({
               <div className="flex-1">
                 <select
                   value={sort.field}
-                  onChange={(e) => onUpdate(index, { field: e.target.value })}
+                  onChange={e => onUpdate(index, { field: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   {fields.map(field => (
@@ -64,7 +62,7 @@ export const SortConditionEditor: React.FC<SortConditionEditorProps> = ({
               <div className="flex-1">
                 <select
                   value={sort.direction}
-                  onChange={(e) => onUpdate(index, { direction: e.target.value as 'asc' | 'desc' })}
+                  onChange={e => onUpdate(index, { direction: e.target.value as 'asc' | 'desc' })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="desc">내림차순 (높은 값부터)</option>
@@ -87,8 +85,8 @@ export const SortConditionEditor: React.FC<SortConditionEditorProps> = ({
 
       {sorts.length > 1 && (
         <div className="text-sm text-gray-600 bg-blue-50 p-3 rounded-lg">
-          <strong>정렬 우선순위:</strong> 위에서부터 차례대로 적용됩니다. 
-          첫 번째 조건이 같은 경우 두 번째 조건으로 정렬됩니다.
+          <strong>정렬 우선순위:</strong> 위에서부터 차례대로 적용됩니다. 첫 번째 조건이 같은 경우
+          두 번째 조건으로 정렬됩니다.
         </div>
       )}
     </div>

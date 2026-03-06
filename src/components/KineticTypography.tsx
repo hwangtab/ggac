@@ -16,7 +16,7 @@ const KineticTypography: React.FC<KineticTypographyProps> = ({
   variant = 'kinetic',
   className = '',
   delay = 0,
-  duration = 4000
+  duration = 4000,
 }) => {
   const [isVisible, setIsVisible] = useState(false)
   const prefersReducedMotion = usePrefersReducedMotion()
@@ -29,21 +29,22 @@ const KineticTypography: React.FC<KineticTypographyProps> = ({
   // If user prefers reduced motion, show static text with gradient
   if (prefersReducedMotion) {
     return (
-      <div 
+      <div
         className={`
           ${variant === 'hero' ? 'heading-hero' : ''}
           ${variant === 'kinetic' ? 'text-kinetic' : ''}
           ${variant === 'shimmer' ? 'heading-hero' : ''}
           ${className}
         `}
-        style={{ 
+        style={{
           animation: 'none',
-          background: variant === 'hero' || variant === 'shimmer' 
-            ? 'linear-gradient(135deg, #00d4ff, #ff0099)'
-            : 'linear-gradient(45deg, #00ff88, #ff0099, #ffd700, #00d4ff)',
+          background:
+            variant === 'hero' || variant === 'shimmer'
+              ? 'linear-gradient(135deg, #00d4ff, #ff0099)'
+              : 'linear-gradient(45deg, #00ff88, #ff0099, #ffd700, #00d4ff)',
           backgroundClip: 'text',
           WebkitBackgroundClip: 'text',
-          color: 'transparent'
+          color: 'transparent',
         }}
       >
         {children}
@@ -64,7 +65,7 @@ const KineticTypography: React.FC<KineticTypographyProps> = ({
   }
 
   return (
-    <div 
+    <div
       className={`
         ${getVariantClasses()}
         ${isVisible ? 'opacity-100' : 'opacity-0'}
@@ -72,7 +73,7 @@ const KineticTypography: React.FC<KineticTypographyProps> = ({
         ${className}
       `}
       style={{
-        animationDuration: `${duration}ms`
+        animationDuration: `${duration}ms`,
       }}
     >
       {children}

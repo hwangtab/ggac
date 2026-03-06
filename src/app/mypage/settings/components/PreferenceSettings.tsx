@@ -42,10 +42,12 @@ export default function PreferenceSettings({ settings, onUpdate }: PreferenceSet
             <button
               type="button"
               disabled={updating === 'content_filter'}
-              onClick={() => updateSettingValue('content_filter', {
-                ...contentFilter,
-                adult_content: !contentFilter.adult_content
-              })}
+              onClick={() =>
+                updateSettingValue('content_filter', {
+                  ...contentFilter,
+                  adult_content: !contentFilter.adult_content,
+                })
+              }
               className={`${
                 contentFilter.adult_content ? 'bg-primary-600' : 'bg-gray-200'
               } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50`}
@@ -66,10 +68,12 @@ export default function PreferenceSettings({ settings, onUpdate }: PreferenceSet
             <button
               type="button"
               disabled={updating === 'content_filter'}
-              onClick={() => updateSettingValue('content_filter', {
-                ...contentFilter,
-                violence_content: !contentFilter.violence_content
-              })}
+              onClick={() =>
+                updateSettingValue('content_filter', {
+                  ...contentFilter,
+                  violence_content: !contentFilter.violence_content,
+                })
+              }
               className={`${
                 contentFilter.violence_content ? 'bg-primary-600' : 'bg-gray-200'
               } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50`}
@@ -91,15 +95,19 @@ export default function PreferenceSettings({ settings, onUpdate }: PreferenceSet
           <div className="flex items-center justify-between">
             <div>
               <label className="text-sm font-medium text-gray-700">고대비 모드</label>
-              <p className="text-sm text-gray-500">텍스트와 배경의 대비를 높여 가독성을 향상시킵니다</p>
+              <p className="text-sm text-gray-500">
+                텍스트와 배경의 대비를 높여 가독성을 향상시킵니다
+              </p>
             </div>
             <button
               type="button"
               disabled={updating === 'accessibility'}
-              onClick={() => updateSettingValue('accessibility', {
-                ...accessibility,
-                high_contrast: !accessibility.high_contrast
-              })}
+              onClick={() =>
+                updateSettingValue('accessibility', {
+                  ...accessibility,
+                  high_contrast: !accessibility.high_contrast,
+                })
+              }
               className={`${
                 accessibility.high_contrast ? 'bg-primary-600' : 'bg-gray-200'
               } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50`}
@@ -120,10 +128,12 @@ export default function PreferenceSettings({ settings, onUpdate }: PreferenceSet
             <button
               type="button"
               disabled={updating === 'accessibility'}
-              onClick={() => updateSettingValue('accessibility', {
-                ...accessibility,
-                large_text: !accessibility.large_text
-              })}
+              onClick={() =>
+                updateSettingValue('accessibility', {
+                  ...accessibility,
+                  large_text: !accessibility.large_text,
+                })
+              }
               className={`${
                 accessibility.large_text ? 'bg-primary-600' : 'bg-gray-200'
               } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50`}
@@ -144,10 +154,12 @@ export default function PreferenceSettings({ settings, onUpdate }: PreferenceSet
             <button
               type="button"
               disabled={updating === 'accessibility'}
-              onClick={() => updateSettingValue('accessibility', {
-                ...accessibility,
-                reduced_motion: !accessibility.reduced_motion
-              })}
+              onClick={() =>
+                updateSettingValue('accessibility', {
+                  ...accessibility,
+                  reduced_motion: !accessibility.reduced_motion,
+                })
+              }
               className={`${
                 accessibility.reduced_motion ? 'bg-primary-600' : 'bg-gray-200'
               } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50`}
@@ -161,7 +173,9 @@ export default function PreferenceSettings({ settings, onUpdate }: PreferenceSet
           </div>
         </div>
 
-        {(accessibility.high_contrast || accessibility.large_text || accessibility.reduced_motion) && (
+        {(accessibility.high_contrast ||
+          accessibility.large_text ||
+          accessibility.reduced_motion) && (
           <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
             <p className="text-sm text-blue-800">
               ℹ️ 접근성 설정 기능은 향후 업데이트에서 완전히 지원될 예정입니다.
@@ -182,10 +196,12 @@ export default function PreferenceSettings({ settings, onUpdate }: PreferenceSet
             <button
               type="button"
               disabled={updating === 'auto_save'}
-              onClick={() => updateSettingValue('auto_save', {
-                ...autoSave,
-                enabled: !autoSave.enabled
-              })}
+              onClick={() =>
+                updateSettingValue('auto_save', {
+                  ...autoSave,
+                  enabled: !autoSave.enabled,
+                })
+              }
               className={`${
                 autoSave.enabled ? 'bg-primary-600' : 'bg-gray-200'
               } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50`}
@@ -200,17 +216,22 @@ export default function PreferenceSettings({ settings, onUpdate }: PreferenceSet
 
           {autoSave.enabled && (
             <div className="ml-4 border-l-2 border-gray-300 pl-4">
-              <label htmlFor="auto-save-interval" className="block text-sm font-medium text-gray-700 mb-2">
+              <label
+                htmlFor="auto-save-interval"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
                 저장 간격
               </label>
               <select
                 id="auto-save-interval"
                 disabled={updating === 'auto_save'}
                 value={autoSave.interval_minutes || 5}
-                onChange={(e) => updateSettingValue('auto_save', {
-                  ...autoSave,
-                  interval_minutes: parseInt(e.target.value)
-                })}
+                onChange={e =>
+                  updateSettingValue('auto_save', {
+                    ...autoSave,
+                    interval_minutes: parseInt(e.target.value),
+                  })
+                }
                 className="block w-32 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 disabled:opacity-50"
               >
                 <option value={1}>1분</option>
@@ -245,13 +266,15 @@ export default function PreferenceSettings({ settings, onUpdate }: PreferenceSet
                   fetch('/api/settings/reset', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({})
-                  }).then(() => {
-                    alert('설정이 초기화되었습니다. 페이지를 새로고침하세요.')
-                    window.location.reload()
-                  }).catch(() => {
-                    alert('설정 초기화에 실패했습니다.')
+                    body: JSON.stringify({}),
                   })
+                    .then(() => {
+                      alert('설정이 초기화되었습니다. 페이지를 새로고침하세요.')
+                      window.location.reload()
+                    })
+                    .catch(() => {
+                      alert('설정 초기화에 실패했습니다.')
+                    })
                 }
               }}
             >
@@ -284,7 +307,9 @@ export default function PreferenceSettings({ settings, onUpdate }: PreferenceSet
               type="button"
               className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
               onClick={() => {
-                if (confirm('브라우저 캐시를 초기화하시겠습니까? 일부 설정이 초기화될 수 있습니다.')) {
+                if (
+                  confirm('브라우저 캐시를 초기화하시겠습니까? 일부 설정이 초기화될 수 있습니다.')
+                ) {
                   // 로컬 스토리지 및 세션 스토리지 정리
                   localStorage.clear()
                   sessionStorage.clear()

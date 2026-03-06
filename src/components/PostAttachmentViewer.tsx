@@ -32,7 +32,7 @@ const PostAttachmentViewer: React.FC<PostAttachmentViewerProps> = ({
   onAttachmentDelete,
   showActions = false,
   layout = 'grid',
-  className = ''
+  className = '',
 }) => {
   const [selectedImage, setSelectedImage] = useState<PostAttachment | null>(null)
 
@@ -47,11 +47,11 @@ const PostAttachmentViewer: React.FC<PostAttachmentViewerProps> = ({
     cancelEdit,
     saveEdit,
     deleteAttachment,
-    setEditForm
+    setEditForm,
   } = useAttachmentActions({
     postId,
     onAttachmentUpdate,
-    onAttachmentDelete
+    onAttachmentDelete,
   })
 
   // 첨부파일 타입별 분류
@@ -69,18 +69,21 @@ const PostAttachmentViewer: React.FC<PostAttachmentViewerProps> = ({
     ...imageAttachments,
     ...videoAttachments,
     ...audioAttachments,
-    ...documentAttachments
+    ...documentAttachments,
   ]
 
   return (
     <div className={`${className}`}>
       {/* 첨부파일 그리드/리스트 */}
-      <div className={`
-        ${layout === 'grid' 
-          ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4' 
-          : 'space-y-3'
+      <div
+        className={`
+        ${
+          layout === 'grid'
+            ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4'
+            : 'space-y-3'
         }
-      `}>
+      `}
+      >
         {allAttachments.map(attachment => (
           <AttachmentCard
             key={attachment.id}
@@ -104,10 +107,7 @@ const PostAttachmentViewer: React.FC<PostAttachmentViewerProps> = ({
 
       {/* 이미지 모달 */}
       {selectedImage && (
-        <ImageModal
-          attachment={selectedImage}
-          onClose={() => setSelectedImage(null)}
-        />
+        <ImageModal attachment={selectedImage} onClose={() => setSelectedImage(null)} />
       )}
     </div>
   )

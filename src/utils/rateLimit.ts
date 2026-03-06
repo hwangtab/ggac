@@ -10,11 +10,11 @@ export const withRateLimit = (configKey: keyof typeof RATE_LIMIT_CONFIGS) => {
     return async (request: NextRequest): Promise<NextResponse> => {
       const rateLimiter = applyRateLimit(RATE_LIMIT_CONFIGS[configKey])
       const rateLimitResult = rateLimiter(request)
-      
+
       if (!rateLimitResult.success) {
         return rateLimitResult.response!
       }
-      
+
       return handler(request)
     }
   }
@@ -24,7 +24,10 @@ export const withRateLimit = (configKey: keyof typeof RATE_LIMIT_CONFIGS) => {
  * 직접 rate limiting을 체크하는 함수
  * API 핸들러에서 직접 사용할 수 있음
  */
-export const rateLimit = async (request: NextRequest, configKey: keyof typeof RATE_LIMIT_CONFIGS = 'GENERAL_API') => {
+export const rateLimit = async (
+  request: NextRequest,
+  configKey: keyof typeof RATE_LIMIT_CONFIGS = 'GENERAL_API'
+) => {
   const rateLimiter = applyRateLimit(RATE_LIMIT_CONFIGS[configKey])
   return rateLimiter(request)
 }

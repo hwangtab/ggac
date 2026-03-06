@@ -18,7 +18,7 @@ const ActivityAnalyticsCharts = dynamic(() => import('./components/ActivityAnaly
       </div>
     </div>
   ),
-  ssr: false
+  ssr: false,
 })
 
 export default function AdminDashboard() {
@@ -26,7 +26,7 @@ export default function AdminDashboard() {
     totalMembers: 0,
     pendingApprovals: 0,
     totalPosts: 0,
-    activeArtists: 0
+    activeArtists: 0,
   })
 
   useEffect(() => {
@@ -53,7 +53,7 @@ export default function AdminDashboard() {
       icon: <FiUsers className="w-6 h-6" />,
       href: '/admin/members',
       count: stats.pendingApprovals,
-      countLabel: '승인 대기'
+      countLabel: '승인 대기',
     },
     {
       title: '아티스트 관리',
@@ -61,7 +61,7 @@ export default function AdminDashboard() {
       icon: <FiMusic className="w-6 h-6" />,
       href: '/admin/artists',
       count: stats.activeArtists,
-      countLabel: '활성 아티스트'
+      countLabel: '활성 아티스트',
     },
     {
       title: '게시글 관리',
@@ -69,7 +69,7 @@ export default function AdminDashboard() {
       icon: <FiEdit3 className="w-6 h-6" />,
       href: '/admin/posts',
       count: stats.totalPosts,
-      countLabel: '전체 게시글'
+      countLabel: '전체 게시글',
     },
     {
       title: '시스템 설정',
@@ -77,8 +77,8 @@ export default function AdminDashboard() {
       icon: <FiSettings className="w-6 h-6" />,
       href: '/admin/settings',
       count: null,
-      countLabel: null
-    }
+      countLabel: null,
+    },
   ]
 
   return (

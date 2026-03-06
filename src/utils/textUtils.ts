@@ -10,12 +10,12 @@
  */
 export const stripHtmlTags = (html: string): string => {
   if (typeof html !== 'string') {
-    return String(html);
+    return String(html)
   }
 
   // HTML 태그 제거
-  const withoutTags = html.replace(/<[^>]*>/g, '');
-  
+  const withoutTags = html.replace(/<[^>]*>/g, '')
+
   // HTML 엔티티 디코딩
   const decoded = withoutTags
     .replace(/&lt;/g, '<')
@@ -26,11 +26,11 @@ export const stripHtmlTags = (html: string): string => {
     .replace(/&#x2F;/g, '/')
     .replace(/&#x60;/g, '`')
     .replace(/&#x3D;/g, '=')
-    .replace(/&nbsp;/g, ' ');
-  
+    .replace(/&nbsp;/g, ' ')
+
   // 연속 공백 및 줄바꿈 정리
-  return decoded.replace(/\s+/g, ' ').trim();
-};
+  return decoded.replace(/\s+/g, ' ').trim()
+}
 
 /**
  * HTML에서 이미지 정보 추출
@@ -42,24 +42,24 @@ export const extractImageInfo = (html: string) => {
     return {
       hasImages: false,
       imageCount: 0,
-      firstImageSrc: null
-    };
+      firstImageSrc: null,
+    }
   }
 
-  const imgRegex = /<img[^>]+src=["']([^"']+)["'][^>]*>/gi;
-  const matches: string[] = [];
-  let match;
-  
+  const imgRegex = /<img[^>]+src=["']([^"']+)["'][^>]*>/gi
+  const matches: string[] = []
+  let match
+
   while ((match = imgRegex.exec(html)) !== null) {
-    matches.push(match[1]);
+    matches.push(match[1])
   }
-  
+
   return {
     hasImages: matches.length > 0,
     imageCount: matches.length,
-    firstImageSrc: matches[0] || null
-  };
-};
+    firstImageSrc: matches[0] || null,
+  }
+}
 
 /**
  * 텍스트 미리보기 생성
@@ -69,21 +69,19 @@ export const extractImageInfo = (html: string) => {
  * @returns 미리보기 텍스트와 이미지 정보
  */
 export const createTextPreview = (html: string, maxLength: number = 150) => {
-  const cleanText = stripHtmlTags(html);
-  const imageInfo = extractImageInfo(html);
-  
-  const isTextTruncated = cleanText.length > maxLength;
-  const previewText = isTextTruncated 
-    ? `${cleanText.substring(0, maxLength)}...` 
-    : cleanText;
-  
+  const cleanText = stripHtmlTags(html)
+  const imageInfo = extractImageInfo(html)
+
+  const isTextTruncated = cleanText.length > maxLength
+  const previewText = isTextTruncated ? `${cleanText.substring(0, maxLength)}...` : cleanText
+
   return {
     text: previewText,
     isTruncated: isTextTruncated,
     originalLength: cleanText.length,
-    ...imageInfo
-  };
-};
+    ...imageInfo,
+  }
+}
 
 /**
  * HTML에서 링크 정보 추출
@@ -95,24 +93,24 @@ export const extractLinkInfo = (html: string) => {
     return {
       hasLinks: false,
       linkCount: 0,
-      links: []
-    };
+      links: [],
+    }
   }
 
-  const linkRegex = /<a[^>]+href=["']([^"']+)["'][^>]*>([^<]*)<\/a>/gi;
-  const links: Array<{ url: string; text: string }> = [];
-  let match;
-  
+  const linkRegex = /<a[^>]+href=["']([^"']+)["'][^>]*>([^<]*)<\/a>/gi
+  const links: Array<{ url: string; text: string }> = []
+  let match
+
   while ((match = linkRegex.exec(html)) !== null) {
     links.push({
       url: match[1],
-      text: match[2] || match[1]
-    });
+      text: match[2] || match[1],
+    })
   }
-  
+
   return {
     hasLinks: links.length > 0,
     linkCount: links.length,
-    links
-  };
-};
+    links,
+  }
+}

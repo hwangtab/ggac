@@ -33,14 +33,14 @@ const AdminNotificationsPage = () => {
   const [selectedMembers, setSelectedMembers] = useState<Set<string>>(new Set())
   const [templates, setTemplates] = useState<NotificationTemplate[]>([])
   const [loading, setLoading] = useState(false)
-  
+
   // 알림 발송 폼 상태
   const [notificationForm, setNotificationForm] = useState({
     type: 'system_notice' as NotificationType,
     title: '',
     message: '',
     audience: 'all' as 'all' | 'approved' | 'artists' | 'admins' | 'custom',
-    expires_hours: 24
+    expires_hours: 24,
   })
 
   // 템플릿 폼 상태
@@ -49,7 +49,7 @@ const AdminNotificationsPage = () => {
     type: 'system_notice' as NotificationType,
     title: '',
     message: '',
-    target_audience: 'all' as 'all' | 'artists' | 'members' | 'admins'
+    target_audience: 'all' as 'all' | 'artists' | 'members' | 'admins',
   })
 
   // 멤버 목록 조회
@@ -66,28 +66,33 @@ const AdminNotificationsPage = () => {
   }
 
   // 대상자 자동 선택
-  const selectAudience = useCallback((audience: string) => {
-    let targetMembers: string[] = []
-    
-    switch (audience) {
-      case 'all':
-        targetMembers = members.map(m => m.id)
-        break
-      case 'approved':
-        targetMembers = members.filter(m => m.registration_status === 'approved').map(m => m.id)
-        break
-      case 'artists':
-        targetMembers = members.filter(m => m.is_artist && m.registration_status === 'approved').map(m => m.id)
-        break
-      case 'admins':
-        targetMembers = members.filter(m => m.is_admin).map(m => m.id)
-        break
-      default:
-        return
-    }
-    
-    setSelectedMembers(new Set(targetMembers))
-  }, [members])
+  const selectAudience = useCallback(
+    (audience: string) => {
+      let targetMembers: string[] = []
+
+      switch (audience) {
+        case 'all':
+          targetMembers = members.map(m => m.id)
+          break
+        case 'approved':
+          targetMembers = members.filter(m => m.registration_status === 'approved').map(m => m.id)
+          break
+        case 'artists':
+          targetMembers = members
+            .filter(m => m.is_artist && m.registration_status === 'approved')
+            .map(m => m.id)
+          break
+        case 'admins':
+          targetMembers = members.filter(m => m.is_admin).map(m => m.id)
+          break
+        default:
+          return
+      }
+
+      setSelectedMembers(new Set(targetMembers))
+    },
+    [members]
+  )
 
   // 대량 알림 발송
   const sendBulkNotification = async () => {
@@ -111,26 +116,26 @@ const AdminNotificationsPage = () => {
         type: notificationForm.type,
         title: notificationForm.title,
         message: notificationForm.message,
-        expires_at: expiresAt.toISOString()
+        expires_at: expiresAt.toISOString(),
       }
 
       const response = await fetch('/api/notifications/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestData)
+        body: JSON.stringify(requestData),
       })
 
       if (response.ok) {
         const result = await response.json()
         alert(`${result.created_count}개의 알림이 성공적으로 발송되었습니다.`)
-        
+
         // 폼 초기화
         setNotificationForm({
           type: 'system_notice',
           title: '',
           message: '',
           audience: 'all',
-          expires_hours: 24
+          expires_hours: 24,
         })
         setSelectedMembers(new Set())
       } else {
@@ -191,7 +196,7 @@ const AdminNotificationsPage = () => {
       artist_rejected: '아티스트 거부',
       system_notice: '시스템 공지',
       maintenance: '점검',
-      welcome: '환영'
+      welcome: '환영',
     }
     return names[type] || type
   }
@@ -240,18 +245,18 @@ const AdminNotificationsPage = () => {
           {/* 알림 발송 폼 */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">알림 발송</h3>
-            
+
             {/* 알림 유형 */}
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                알림 유형
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">알림 유형</label>
               <select
                 value={notificationForm.type}
-                onChange={(e) => setNotificationForm(prev => ({ 
-                  ...prev, 
-                  type: e.target.value as NotificationType 
-                }))}
+                onChange={e =>
+                  setNotificationForm(prev => ({
+                    ...prev,
+                    type: e.target.value as NotificationType,
+                  }))
+                }
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               >
                 <option value="system_notice">시스템 공지</option>
@@ -263,15 +268,15 @@ const AdminNotificationsPage = () => {
 
             {/* 대상자 */}
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                대상자
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">대상자</label>
               <select
                 value={notificationForm.audience}
-                onChange={(e) => setNotificationForm(prev => ({ 
-                  ...prev, 
-                  audience: e.target.value as any 
-                }))}
+                onChange={e =>
+                  setNotificationForm(prev => ({
+                    ...prev,
+                    audience: e.target.value as any,
+                  }))
+                }
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               >
                 <option value="all">전체 사용자</option>
@@ -284,16 +289,16 @@ const AdminNotificationsPage = () => {
 
             {/* 제목 */}
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                제목
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">제목</label>
               <input
                 type="text"
                 value={notificationForm.title}
-                onChange={(e) => setNotificationForm(prev => ({ 
-                  ...prev, 
-                  title: e.target.value 
-                }))}
+                onChange={e =>
+                  setNotificationForm(prev => ({
+                    ...prev,
+                    title: e.target.value,
+                  }))
+                }
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 placeholder="알림 제목을 입력하세요"
                 maxLength={200}
@@ -302,15 +307,15 @@ const AdminNotificationsPage = () => {
 
             {/* 메시지 */}
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                메시지
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">메시지</label>
               <textarea
                 value={notificationForm.message}
-                onChange={(e) => setNotificationForm(prev => ({ 
-                  ...prev, 
-                  message: e.target.value 
-                }))}
+                onChange={e =>
+                  setNotificationForm(prev => ({
+                    ...prev,
+                    message: e.target.value,
+                  }))
+                }
                 rows={4}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 placeholder="알림 내용을 입력하세요"
@@ -325,10 +330,12 @@ const AdminNotificationsPage = () => {
               </label>
               <select
                 value={notificationForm.expires_hours}
-                onChange={(e) => setNotificationForm(prev => ({ 
-                  ...prev, 
-                  expires_hours: parseInt(e.target.value) 
-                }))}
+                onChange={e =>
+                  setNotificationForm(prev => ({
+                    ...prev,
+                    expires_hours: parseInt(e.target.value),
+                  }))
+                }
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               >
                 <option value={1}>1시간</option>
@@ -369,7 +376,7 @@ const AdminNotificationsPage = () => {
             </div>
 
             <div className="max-h-96 overflow-y-auto border border-gray-200 rounded-lg">
-              {members.map((member) => (
+              {members.map(member => (
                 <div
                   key={member.id}
                   className={`p-3 border-b border-gray-200 last:border-b-0 ${
@@ -399,15 +406,20 @@ const AdminNotificationsPage = () => {
                               아티스트
                             </span>
                           )}
-                          <span className={`px-2 py-1 text-xs rounded-full ${
-                            member.registration_status === 'approved'
-                              ? 'bg-green-100 text-green-800'
+                          <span
+                            className={`px-2 py-1 text-xs rounded-full ${
+                              member.registration_status === 'approved'
+                                ? 'bg-green-100 text-green-800'
+                                : member.registration_status === 'pending'
+                                  ? 'bg-yellow-100 text-yellow-800'
+                                  : 'bg-red-100 text-red-800'
+                            }`}
+                          >
+                            {member.registration_status === 'approved'
+                              ? '승인'
                               : member.registration_status === 'pending'
-                              ? 'bg-yellow-100 text-yellow-800'
-                              : 'bg-red-100 text-red-800'
-                          }`}>
-                            {member.registration_status === 'approved' ? '승인' :
-                             member.registration_status === 'pending' ? '대기' : '거부'}
+                                ? '대기'
+                                : '거부'}
                           </span>
                         </div>
                       </div>
@@ -423,11 +435,8 @@ const AdminNotificationsPage = () => {
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-lg font-semibold text-gray-900">알림 템플릿</h3>
-            <button
-              className="flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
-            >
-              <FiPlus className="w-4 h-4 mr-2" />
-              새 템플릿
+            <button className="flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700">
+              <FiPlus className="w-4 h-4 mr-2" />새 템플릿
             </button>
           </div>
 

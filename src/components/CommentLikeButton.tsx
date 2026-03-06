@@ -34,24 +34,18 @@ const CommentLikeButton: React.FC<CommentLikeButtonProps> = ({
   size = 'sm',
   showCount = true,
   className = '',
-  onLikeChange
+  onLikeChange,
 }) => {
   const [isAnimating, setIsAnimating] = useState(false)
-  
-  const {
-    likeCount,
-    isLiked,
-    isLoading,
-    error,
-    toggleLike,
-    clearError,
-    canLike
-  } = useCommentLikes({
-    commentId,
-    initialLikeCount,
-    initialIsLiked,
-    onLikeChange
-  })
+
+  const { likeCount, isLiked, isLoading, error, toggleLike, clearError, canLike } = useCommentLikes(
+    {
+      commentId,
+      initialLikeCount,
+      initialIsLiked,
+      onLikeChange,
+    }
+  )
 
   // 좋아요 버튼 클릭 처리
   const handleClick = useCallback(async () => {
@@ -82,14 +76,14 @@ const CommentLikeButton: React.FC<CommentLikeButtonProps> = ({
       button: 'p-1',
       icon: 'w-3 h-3',
       text: 'text-xs',
-      gap: 'gap-1'
+      gap: 'gap-1',
     },
     md: {
       button: 'p-1.5',
       icon: 'w-4 h-4',
       text: 'text-sm',
-      gap: 'gap-1.5'
-    }
+      gap: 'gap-1.5',
+    },
   }
 
   const currentSize = sizeClasses[size]
@@ -101,21 +95,12 @@ const CommentLikeButton: React.FC<CommentLikeButtonProps> = ({
       className={`
         flex items-center ${currentSize.gap} ${currentSize.button} 
         transition-all duration-200 rounded
-        ${isLiked 
-          ? 'text-red-500 hover:text-red-600' 
-          : 'text-gray-400 hover:text-red-400'
-        }
+        ${isLiked ? 'text-red-500 hover:text-red-600' : 'text-gray-400 hover:text-red-400'}
         ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}
         ${isAnimating ? 'scale-110' : ''}
         ${className}
       `}
-      title={
-        !canLike 
-          ? '로그인이 필요합니다' 
-          : isLiked 
-            ? '좋아요 취소' 
-            : '좋아요'
-      }
+      title={!canLike ? '로그인이 필요합니다' : isLiked ? '좋아요 취소' : '좋아요'}
       aria-label={`댓글 좋아요 ${likeCount}개${isLiked ? ' (좋아요 누름)' : ''}`}
     >
       {/* 하트 아이콘 */}
@@ -129,17 +114,17 @@ const CommentLikeButton: React.FC<CommentLikeButtonProps> = ({
 
       {/* 좋아요 수 */}
       {showCount && likeCount > 0 && (
-        <span className={`${currentSize.text} font-medium`}>
-          {likeCount}
-        </span>
+        <span className={`${currentSize.text} font-medium`}>{likeCount}</span>
       )}
 
       {/* 로딩 표시 */}
       {isLoading && (
         <span className="ml-1">
-          <div className={`animate-spin rounded-full border-2 border-gray-300 border-t-red-500 ${
-            size === 'sm' ? 'w-2 h-2' : 'w-3 h-3'
-          }`}></div>
+          <div
+            className={`animate-spin rounded-full border-2 border-gray-300 border-t-red-500 ${
+              size === 'sm' ? 'w-2 h-2' : 'w-3 h-3'
+            }`}
+          ></div>
         </span>
       )}
     </button>

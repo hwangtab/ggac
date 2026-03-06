@@ -21,19 +21,19 @@ const PerformanceMonitor = ({
   mode = 'compact',
   autoHide = false,
   showOnlyWhenLowPerf = false,
-  devOnly = true
+  devOnly = true,
 }: PerformanceMonitorProps) => {
   const [isVisible, setIsVisible] = useState(!autoHide)
   const [isExpanded, setIsExpanded] = useState(false)
   const { metrics, history, isActive, generateReport } = usePerformanceMonitor({
     enabled: true,
-    devOnly
+    devOnly,
   })
 
   // 자동 숨김 로직
   useEffect(() => {
     if (!autoHide || !metrics.isLowPerformance) return
-    
+
     setIsVisible(true)
     const timer = setTimeout(() => setIsVisible(false), 5000)
     return () => clearTimeout(timer)
@@ -103,32 +103,29 @@ const PerformanceMonitor = ({
   if (mode === 'minimal') {
     return (
       <div className={getPositionStyles()}>
-        <div 
+        <div
           className="bg-black/80 backdrop-blur-sm rounded-lg px-3 py-2 min-w-[120px] cursor-pointer"
           onClick={() => setIsExpanded(!isExpanded)}
         >
           <div className="flex items-center justify-between text-xs font-mono">
-            <span className={`${getStatusColor()} font-bold`}>
-              {metrics.fps}fps
-            </span>
+            <span className={`${getStatusColor()} font-bold`}>{metrics.fps}fps</span>
             <button
-              onClick={(e) => { e.stopPropagation(); setIsVisible(false) }}
+              onClick={e => {
+                e.stopPropagation()
+                setIsVisible(false)
+              }}
               className="text-white/50 hover:text-white/80 ml-2"
             >
               ×
             </button>
           </div>
-          
+
           {isExpanded && (
             <div className="mt-2 pt-2 border-t border-white/20 text-xs text-white/70">
               <div>평균: {metrics.avgFps}fps</div>
-              <div className={getMemoryColor()}>
-                메모리: {metrics.memoryUsage}MB
-              </div>
+              <div className={getMemoryColor()}>메모리: {metrics.memoryUsage}MB</div>
               {metrics.jankCount > 0 && (
-                <div className="text-red-400">
-                  Jank: {metrics.jankCount}
-                </div>
+                <div className="text-red-400">Jank: {metrics.jankCount}</div>
               )}
             </div>
           )}
@@ -160,22 +157,22 @@ const PerformanceMonitor = ({
               <span className="text-white/70">FPS:</span>
               <span className={getStatusColor()}>{metrics.fps}</span>
             </div>
-            
+
             <div className="flex justify-between">
               <span className="text-white/70">평균:</span>
               <span className="text-white/90">{metrics.avgFps}</span>
             </div>
-            
+
             <div className="flex justify-between">
               <span className="text-white/70">프레임 시간:</span>
               <span className="text-white/90">{metrics.frameTime}ms</span>
             </div>
-            
+
             <div className="flex justify-between">
               <span className="text-white/70">메모리:</span>
               <span className={getMemoryColor()}>{metrics.memoryUsage}MB</span>
             </div>
-            
+
             {metrics.jankCount > 0 && (
               <div className="flex justify-between">
                 <span className="text-white/70">Jank:</span>
@@ -216,30 +213,22 @@ const PerformanceMonitor = ({
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-white/5 rounded p-2">
               <div className="text-white/70 text-xs">FPS</div>
-              <div className={`text-lg font-mono ${getStatusColor()}`}>
-                {metrics.fps}
-              </div>
+              <div className={`text-lg font-mono ${getStatusColor()}`}>{metrics.fps}</div>
             </div>
-            
+
             <div className="bg-white/5 rounded p-2">
               <div className="text-white/70 text-xs">평균 FPS</div>
-              <div className="text-lg font-mono text-white/90">
-                {metrics.avgFps}
-              </div>
+              <div className="text-lg font-mono text-white/90">{metrics.avgFps}</div>
             </div>
-            
+
             <div className="bg-white/5 rounded p-2">
               <div className="text-white/70 text-xs">프레임 시간</div>
-              <div className="text-lg font-mono text-white/90">
-                {metrics.frameTime}ms
-              </div>
+              <div className="text-lg font-mono text-white/90">{metrics.frameTime}ms</div>
             </div>
-            
+
             <div className="bg-white/5 rounded p-2">
               <div className="text-white/70 text-xs">메모리</div>
-              <div className={`text-lg font-mono ${getMemoryColor()}`}>
-                {metrics.memoryUsage}MB
-              </div>
+              <div className={`text-lg font-mono ${getMemoryColor()}`}>{metrics.memoryUsage}MB</div>
             </div>
           </div>
 
@@ -258,8 +247,12 @@ const PerformanceMonitor = ({
             <div className="flex items-end h-12 gap-0.5">
               {history.slice(-30).map((point, index) => {
                 const height = Math.max((point.fps / 60) * 100, 2)
-                const color = point.fps >= 50 ? 'bg-green-400' : 
-                             point.fps >= 30 ? 'bg-yellow-400' : 'bg-red-400'
+                const color =
+                  point.fps >= 50
+                    ? 'bg-green-400'
+                    : point.fps >= 30
+                      ? 'bg-yellow-400'
+                      : 'bg-red-400'
                 return (
                   <div
                     key={index}

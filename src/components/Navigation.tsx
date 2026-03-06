@@ -41,7 +41,7 @@ const Navigation = () => {
     // Hint Next.js to prefetch board route for faster nav
     try {
       if (pathname !== '/board') router.prefetch('/board')
-    } catch { }
+    } catch {}
 
     const handleScroll = () => {
       setIsAtTop(window.scrollY <= 50)
@@ -124,16 +124,18 @@ const Navigation = () => {
       id="navigation"
       role="navigation"
       aria-label="주요 내비게이션"
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${isHomePage && isAtTop ? 'bg-transparent' : 'bg-white/90 backdrop-blur-md shadow-sm'
-        }`}
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+        isHomePage && isAtTop ? 'bg-transparent' : 'bg-white/90 backdrop-blur-md shadow-sm'
+      }`}
     >
       <div className="tw-container-custom">
         <div className="flex items-center justify-between h-16 md:h-20 overflow-x-hidden">
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-3">
             <div
-              className={`relative w-10 h-10 transition-all duration-300 ${isDark ? 'brightness-0 invert' : ''
-                }`}
+              className={`relative w-10 h-10 transition-all duration-300 ${
+                isDark ? 'brightness-0 invert' : ''
+              }`}
             >
               <Image
                 src="/images/logo/gac_logo.webp"
@@ -160,8 +162,9 @@ const Navigation = () => {
                   key={item.href}
                   href={item.href}
                   prefetch={item.href === '/board'}
-                  className={`font-medium transition-colors duration-300 ${pathname === item.href ? activeColor : `${textColor} ${hoverColor}`
-                    }`}
+                  className={`font-medium transition-colors duration-300 ${
+                    pathname === item.href ? activeColor : `${textColor} ${hoverColor}`
+                  }`}
                   onClick={e => {
                     // Add error handling for board navigation
                     if (item.href === '/board') {
@@ -191,8 +194,9 @@ const Navigation = () => {
 
                   <Link
                     href="/mypage"
-                    className={`font-medium transition-colors duration-300 text-xs lg:text-sm ${pathname.startsWith('/mypage') ? activeColor : `${textColor} ${hoverColor}`
-                      }`}
+                    className={`font-medium transition-colors duration-300 text-xs lg:text-sm ${
+                      pathname.startsWith('/mypage') ? activeColor : `${textColor} ${hoverColor}`
+                    }`}
                   >
                     마이페이지
                   </Link>
@@ -207,19 +211,21 @@ const Navigation = () => {
                 <>
                   <Link
                     href="/login"
-                    className={`font-medium transition-colors duration-300 text-xs lg:text-sm ${pathname === '/login' ? activeColor : `${textColor} ${hoverColor}`
-                      }`}
+                    className={`font-medium transition-colors duration-300 text-xs lg:text-sm ${
+                      pathname === '/login' ? activeColor : `${textColor} ${hoverColor}`
+                    }`}
                   >
                     로그인
                   </Link>
                   <Link
                     href="/signup"
-                    className={`font-medium transition-colors duration-300 text-xs lg:text-sm px-2 lg:px-3 py-1 rounded-md ${pathname === '/signup'
+                    className={`font-medium transition-colors duration-300 text-xs lg:text-sm px-2 lg:px-3 py-1 rounded-md ${
+                      pathname === '/signup'
                         ? 'bg-primary-600 text-white'
                         : isDark
                           ? 'bg-accent-300 text-gray-900 hover:bg-accent-400'
                           : 'bg-primary-600 text-white hover:bg-primary-700'
-                      }`}
+                    }`}
                   >
                     조합원 가입
                   </Link>
@@ -233,37 +239,42 @@ const Navigation = () => {
             {/* Simplified tablet menu with key items */}
             <Link
               href="/"
-              className={`font-medium transition-colors duration-300 text-xs ${pathname === '/' ? activeColor : `${textColor} ${hoverColor}`
-                }`}
+              className={`font-medium transition-colors duration-300 text-xs ${
+                pathname === '/' ? activeColor : `${textColor} ${hoverColor}`
+              }`}
             >
               HOME
             </Link>
             <Link
               href="/about"
-              className={`font-medium transition-colors duration-300 text-xs ${pathname === '/about' ? activeColor : `${textColor} ${hoverColor}`
-                }`}
+              className={`font-medium transition-colors duration-300 text-xs ${
+                pathname === '/about' ? activeColor : `${textColor} ${hoverColor}`
+              }`}
             >
               ABOUT
             </Link>
             <Link
               href="/archive"
-              className={`font-medium transition-colors duration-300 text-xs ${pathname === '/archive' ? activeColor : `${textColor} ${hoverColor}`
-                }`}
+              className={`font-medium transition-colors duration-300 text-xs ${
+                pathname === '/archive' ? activeColor : `${textColor} ${hoverColor}`
+              }`}
             >
               PROJECT
             </Link>
             <Link
               href="/artists"
-              className={`font-medium transition-colors duration-300 text-xs ${pathname === '/artists' ? activeColor : `${textColor} ${hoverColor}`
-                }`}
+              className={`font-medium transition-colors duration-300 text-xs ${
+                pathname === '/artists' ? activeColor : `${textColor} ${hoverColor}`
+              }`}
             >
               ARTIST
             </Link>
             <Link
               href="/board"
               prefetch
-              className={`font-medium transition-colors duration-300 text-xs ${pathname === '/board' ? activeColor : `${textColor} ${hoverColor}`
-                }`}
+              className={`font-medium transition-colors duration-300 text-xs ${
+                pathname === '/board' ? activeColor : `${textColor} ${hoverColor}`
+              }`}
               onClick={e => {
                 // Board is now publicly accessible - no auth check needed
               }}
@@ -278,8 +289,9 @@ const Navigation = () => {
                 <>
                   <Link
                     href="/mypage"
-                    className={`font-medium transition-colors duration-300 text-xs ${pathname.startsWith('/mypage') ? activeColor : `${textColor} ${hoverColor}`
-                      }`}
+                    className={`font-medium transition-colors duration-300 text-xs ${
+                      pathname.startsWith('/mypage') ? activeColor : `${textColor} ${hoverColor}`
+                    }`}
                   >
                     마이페이지
                   </Link>
@@ -294,19 +306,21 @@ const Navigation = () => {
                 <>
                   <Link
                     href="/login"
-                    className={`font-medium transition-colors duration-300 text-xs ${pathname === '/login' ? activeColor : `${textColor} ${hoverColor}`
-                      }`}
+                    className={`font-medium transition-colors duration-300 text-xs ${
+                      pathname === '/login' ? activeColor : `${textColor} ${hoverColor}`
+                    }`}
                   >
                     로그인
                   </Link>
                   <Link
                     href="/signup"
-                    className={`font-medium transition-colors duration-300 text-xs px-2 py-1 rounded-md ${pathname === '/signup'
+                    className={`font-medium transition-colors duration-300 text-xs px-2 py-1 rounded-md ${
+                      pathname === '/signup'
                         ? 'bg-primary-600 text-white'
                         : isDark
                           ? 'bg-accent-300 text-gray-900 hover:bg-accent-400'
                           : 'bg-primary-600 text-white hover:bg-primary-700'
-                      }`}
+                    }`}
                   >
                     가입
                   </Link>
@@ -326,16 +340,19 @@ const Navigation = () => {
             <span className="sr-only">{isMenuOpen ? '메뉴 닫기' : '메뉴 열기'}</span>
             <div className="w-6 h-6 flex flex-col justify-center items-center">
               <span
-                className={`bg-current h-0.5 w-6 transition-all duration-300 ${isMenuOpen ? 'rotate-45 translate-y-0.5' : ''
-                  }`}
+                className={`bg-current h-0.5 w-6 transition-all duration-300 ${
+                  isMenuOpen ? 'rotate-45 translate-y-0.5' : ''
+                }`}
               />
               <span
-                className={`bg-current h-0.5 w-6 mt-1 transition-all duration-300 ${isMenuOpen ? 'opacity-0' : ''
-                  }`}
+                className={`bg-current h-0.5 w-6 mt-1 transition-all duration-300 ${
+                  isMenuOpen ? 'opacity-0' : ''
+                }`}
               />
               <span
-                className={`bg-current h-0.5 w-6 mt-1 transition-all duration-300 ${isMenuOpen ? '-rotate-45 -translate-y-1.5' : ''
-                  }`}
+                className={`bg-current h-0.5 w-6 mt-1 transition-all duration-300 ${
+                  isMenuOpen ? '-rotate-45 -translate-y-1.5' : ''
+                }`}
               />
             </div>
           </button>
@@ -371,10 +388,11 @@ const Navigation = () => {
                       }
                     }
                   }}
-                  className={`block py-3 px-4 rounded-md transition-colors duration-200 ${pathname === item.href
+                  className={`block py-3 px-4 rounded-md transition-colors duration-200 ${
+                    pathname === item.href
                       ? 'text-primary-600 bg-primary-50'
                       : 'text-gray-700 hover:text-primary-600 hover:bg-gray-50'
-                    }`}
+                  }`}
                 >
                   {item.label}
                 </Link>
@@ -387,10 +405,11 @@ const Navigation = () => {
                     <Link
                       href="/mypage"
                       onClick={() => setIsMenuOpen(false)}
-                      className={`block py-3 px-4 rounded-md transition-colors duration-200 ${pathname.startsWith('/mypage')
+                      className={`block py-3 px-4 rounded-md transition-colors duration-200 ${
+                        pathname.startsWith('/mypage')
                           ? 'text-primary-600 bg-primary-50'
                           : 'text-gray-700 hover:text-primary-600 hover:bg-gray-50'
-                        }`}
+                      }`}
                     >
                       마이페이지
                     </Link>
@@ -409,20 +428,22 @@ const Navigation = () => {
                     <Link
                       href="/login"
                       onClick={() => setIsMenuOpen(false)}
-                      className={`block py-3 px-4 rounded-md transition-colors duration-200 ${pathname === '/login'
+                      className={`block py-3 px-4 rounded-md transition-colors duration-200 ${
+                        pathname === '/login'
                           ? 'text-primary-600 bg-primary-50'
                           : 'text-gray-700 hover:text-primary-600 hover:bg-gray-50'
-                        }`}
+                      }`}
                     >
                       로그인
                     </Link>
                     <Link
                       href="/signup"
                       onClick={() => setIsMenuOpen(false)}
-                      className={`block py-3 px-4 rounded-md transition-colors duration-200 font-medium ${pathname === '/signup'
+                      className={`block py-3 px-4 rounded-md transition-colors duration-200 font-medium ${
+                        pathname === '/signup'
                           ? 'text-white bg-primary-600'
                           : 'text-white bg-primary-600 hover:bg-primary-700'
-                        }`}
+                      }`}
                     >
                       조합원 가입
                     </Link>

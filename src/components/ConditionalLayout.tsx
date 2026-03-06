@@ -20,7 +20,9 @@ export default function ConditionalLayout({ children, globalData }: ConditionalL
     // 관리자 페이지에서는 Navigation과 Footer 없이 children만 렌더링
     return (
       <ActivityTracker>
-        <main id="main-content" className="min-h-screen">{children}</main>
+        <main id="main-content" className="min-h-screen">
+          {children}
+        </main>
       </ActivityTracker>
     )
   }
@@ -30,7 +32,9 @@ export default function ConditionalLayout({ children, globalData }: ConditionalL
     <ActivityTracker>
       <div className="min-h-screen flex flex-col">
         <Navigation />
-        <main id="main-content" className="flex-1">{children}</main>
+        <main id="main-content" className="flex-1">
+          {children}
+        </main>
         <Footer globalData={globalData} />
       </div>
     </ActivityTracker>

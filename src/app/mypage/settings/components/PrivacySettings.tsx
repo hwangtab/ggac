@@ -42,10 +42,12 @@ export default function PrivacySettings({ settings, onUpdate }: PrivacySettingsP
                 type="radio"
                 disabled={updating === 'profile_visibility'}
                 checked={profileVisibility.level === option}
-                onChange={() => updateSettingValue('profile_visibility', {
-                  ...profileVisibility,
-                  level: option
-                })}
+                onChange={() =>
+                  updateSettingValue('profile_visibility', {
+                    ...profileVisibility,
+                    level: option,
+                  })
+                }
                 className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 disabled:opacity-50"
               />
               <label htmlFor={`profile-${option}`} className="ml-3 text-sm">
@@ -69,10 +71,12 @@ export default function PrivacySettings({ settings, onUpdate }: PrivacySettingsP
             <button
               type="button"
               disabled={updating === 'activity_visibility'}
-              onClick={() => updateSettingValue('activity_visibility', {
-                ...activityVisibility,
-                show_activity: !activityVisibility.show_activity
-              })}
+              onClick={() =>
+                updateSettingValue('activity_visibility', {
+                  ...activityVisibility,
+                  show_activity: !activityVisibility.show_activity,
+                })
+              }
               className={`${
                 activityVisibility.show_activity ? 'bg-primary-600' : 'bg-gray-200'
               } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50`}
@@ -88,15 +92,19 @@ export default function PrivacySettings({ settings, onUpdate }: PrivacySettingsP
           <div className="flex items-center justify-between">
             <div>
               <label className="text-sm font-medium text-gray-700">마지막 접속 시간 표시</label>
-              <p className="text-sm text-gray-500">마지막으로 접속한 시간을 다른 사용자에게 표시합니다</p>
+              <p className="text-sm text-gray-500">
+                마지막으로 접속한 시간을 다른 사용자에게 표시합니다
+              </p>
             </div>
             <button
               type="button"
               disabled={updating === 'activity_visibility'}
-              onClick={() => updateSettingValue('activity_visibility', {
-                ...activityVisibility,
-                show_last_seen: !activityVisibility.show_last_seen
-              })}
+              onClick={() =>
+                updateSettingValue('activity_visibility', {
+                  ...activityVisibility,
+                  show_last_seen: !activityVisibility.show_last_seen,
+                })
+              }
               className={`${
                 activityVisibility.show_last_seen ? 'bg-primary-600' : 'bg-gray-200'
               } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50`}
@@ -123,10 +131,12 @@ export default function PrivacySettings({ settings, onUpdate }: PrivacySettingsP
             <button
               type="button"
               disabled={updating === 'contact_visibility'}
-              onClick={() => updateSettingValue('contact_visibility', {
-                ...contactVisibility,
-                show_email: !contactVisibility.show_email
-              })}
+              onClick={() =>
+                updateSettingValue('contact_visibility', {
+                  ...contactVisibility,
+                  show_email: !contactVisibility.show_email,
+                })
+              }
               className={`${
                 contactVisibility.show_email ? 'bg-primary-600' : 'bg-gray-200'
               } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50`}
@@ -147,10 +157,12 @@ export default function PrivacySettings({ settings, onUpdate }: PrivacySettingsP
             <button
               type="button"
               disabled={updating === 'contact_visibility'}
-              onClick={() => updateSettingValue('contact_visibility', {
-                ...contactVisibility,
-                show_phone: !contactVisibility.show_phone
-              })}
+              onClick={() =>
+                updateSettingValue('contact_visibility', {
+                  ...contactVisibility,
+                  show_phone: !contactVisibility.show_phone,
+                })
+              }
               className={`${
                 contactVisibility.show_phone ? 'bg-primary-600' : 'bg-gray-200'
               } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50`}

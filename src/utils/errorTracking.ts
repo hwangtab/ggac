@@ -29,16 +29,16 @@ class ErrorTracker {
   private errors: ErrorReport[] = []
   private sessionId: string
   private maxErrors = 100 // 메모리 사용량 제한
-  
+
   constructor() {
     this.sessionId = this.generateSessionId()
-    
+
     // 전역 에러 핸들러 등록
     this.setupGlobalErrorHandlers()
-    
+
     // 전역 객체에 등록 (성능 모니터링과 연동)
     if (typeof window !== 'undefined') {
-      (window as any).__ERROR_TRACKER__ = this
+      ;(window as any).__ERROR_TRACKER__ = this
     }
   }
 
@@ -53,7 +53,7 @@ class ErrorTracker {
     if (typeof window === 'undefined') return
 
     // JavaScript 런타임 에러
-    window.addEventListener('error', (event) => {
+    window.addEventListener('error', event => {
       this.trackError({
         componentName: 'Global',
         errorType: 'RuntimeError',
@@ -61,32 +61,39 @@ class ErrorTracker {
         stack: event.error?.stack,
         filename: event.filename,
         lineno: event.lineno,
-        colno: event.colno
+        colno: event.colno,
       })
     })
 
     // Promise rejection 에러
-    window.addEventListener('unhandledrejection', (event) => {
+    window.addEventListener('unhandledrejection', event => {
       this.trackError({
         componentName: 'Global',
         errorType: 'UnhandledPromiseRejection',
-        message: typeof event.reason === 'string' ? event.reason : event.reason?.message || 'Unknown promise rejection',
-        stack: event.reason?.stack
+        message:
+          typeof event.reason === 'string'
+            ? event.reason
+            : event.reason?.message || 'Unknown promise rejection',
+        stack: event.reason?.stack,
       })
     })
 
     // 리소스 로딩 에러
-    window.addEventListener('error', (event) => {
-      if (event.target && event.target !== window) {
-        const target = event.target as HTMLElement
-        this.trackError({
-          componentName: 'ResourceLoader',
-          errorType: 'ResourceLoadError',
-          message: `Failed to load resource: ${target.tagName}`,
-          resource: (target as any).src || (target as any).href
-        })
-      }
-    }, true)
+    window.addEventListener(
+      'error',
+      event => {
+        if (event.target && event.target !== window) {
+          const target = event.target as HTMLElement
+          this.trackError({
+            componentName: 'ResourceLoader',
+            errorType: 'ResourceLoadError',
+            message: `Failed to load resource: ${target.tagName}`,
+            resource: (target as any).src || (target as any).href,
+          })
+        }
+      },
+      true
+    )
   }
 
   /**
@@ -113,12 +120,12 @@ class ErrorTracker {
       url: window.location.href,
       userAgent: navigator.userAgent,
       buildVersion: process.env.NEXT_PUBLIC_BUILD_VERSION || 'unknown',
-      sessionId: this.sessionId
+      sessionId: this.sessionId,
     }
 
     // 에러 저장
     this.errors.push(errorReport)
-    
+
     // 메모리 사용량 제한
     if (this.errors.length > this.maxErrors) {
       this.errors.shift()
@@ -149,9 +156,11 @@ class ErrorTracker {
   private isCriticalError(errorData: { errorType: string; componentName: string }): boolean {
     const criticalTypes = ['ChunkLoadError', 'SecurityError', 'NetworkError']
     const criticalComponents = ['App', 'RootLayout', 'ErrorBoundary']
-    
-    return criticalTypes.includes(errorData.errorType) || 
-           criticalComponents.includes(errorData.componentName)
+
+    return (
+      criticalTypes.includes(errorData.errorType) ||
+      criticalComponents.includes(errorData.componentName)
+    )
   }
 
   /**
@@ -159,7 +168,7 @@ class ErrorTracker {
    */
   private handleCriticalError(errorReport: ErrorReport) {
     console.error('🚨 Critical error detected:', errorReport)
-    
+
     // 프로덕션에서 외부 서비스로 즉시 전송
     if (process.env.NODE_ENV === 'production') {
       this.sendToExternalService([errorReport], true)
@@ -182,7 +191,7 @@ class ErrorTracker {
   private async sendToExternalService(errors: ErrorReport[], immediate = false) {
     // 실제 환경에서는 Sentry, LogRocket, DataDog 등의 서비스 사용
     console.log('Sending errors to external service:', errors)
-    
+
     // 예시: fetch를 사용한 로깅 서비스 전송
     /*
     try {
@@ -206,20 +215,21 @@ class ErrorTracker {
       errorsByComponent: {},
       errorsByType: {},
       criticalErrors: 0,
-      lastError: this.errors[this.errors.length - 1]
+      lastError: this.errors[this.errors.length - 1],
     }
 
     this.errors.forEach(error => {
       // 컴포넌트별 집계
-      metrics.errorsByComponent[error.componentName] = 
+      metrics.errorsByComponent[error.componentName] =
         (metrics.errorsByComponent[error.componentName] || 0) + 1
 
       // 타입별 집계
-      metrics.errorsByType[error.errorType] = 
-        (metrics.errorsByType[error.errorType] || 0) + 1
+      metrics.errorsByType[error.errorType] = (metrics.errorsByType[error.errorType] || 0) + 1
 
       // 치명적 에러 카운트
-      if (this.isCriticalError({ errorType: error.errorType, componentName: error.componentName })) {
+      if (
+        this.isCriticalError({ errorType: error.errorType, componentName: error.componentName })
+      ) {
         metrics.criticalErrors++
       }
     })
@@ -240,11 +250,11 @@ class ErrorTracker {
         totalErrors: metrics.totalErrors,
         criticalErrors: metrics.criticalErrors,
         timestamp: new Date().toISOString(),
-        url: window.location.href
+        url: window.location.href,
       },
       metrics,
       recentErrors,
-      recommendations: this.generateRecommendations(metrics)
+      recommendations: this.generateRecommendations(metrics),
     }
   }
 
@@ -256,18 +266,22 @@ class ErrorTracker {
 
     // 높은 에러율 컴포넌트 식별
     const topErrorComponents = Object.entries(metrics.errorsByComponent)
-      .sort(([,a], [,b]) => b - a)
+      .sort(([, a], [, b]) => b - a)
       .slice(0, 3)
 
     topErrorComponents.forEach(([component, count]) => {
       if (count > 5) {
-        recommendations.push(`${component} 컴포넌트에서 ${count}개의 에러가 발생했습니다. 안정성 개선이 필요합니다.`)
+        recommendations.push(
+          `${component} 컴포넌트에서 ${count}개의 에러가 발생했습니다. 안정성 개선이 필요합니다.`
+        )
       }
     })
 
     // 치명적 에러 경고
     if (metrics.criticalErrors > 0) {
-      recommendations.push(`${metrics.criticalErrors}개의 치명적 에러가 감지되었습니다. 즉시 수정이 필요합니다.`)
+      recommendations.push(
+        `${metrics.criticalErrors}개의 치명적 에러가 감지되었습니다. 즉시 수정이 필요합니다.`
+      )
     }
 
     // 리소스 로딩 에러
@@ -303,7 +317,7 @@ class ErrorTracker {
     const patterns = {
       frequentErrors: {} as Record<string, number>,
       timePatterns: {} as Record<string, number>,
-      componentRelations: {} as Record<string, string[]>
+      componentRelations: {} as Record<string, string[]>,
     }
 
     this.errors.forEach(error => {

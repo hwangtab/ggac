@@ -18,14 +18,17 @@
 ## 🔐 인증 API
 
 ### POST `/api/auth/verify-session`
+
 현재 세션의 유효성을 검증합니다.
 
 **Headers:**
+
 ```
 Authorization: Bearer <token>
 ```
 
 **Response:**
+
 ```typescript
 {
   success: boolean
@@ -51,14 +54,17 @@ Authorization: Bearer <token>
 ## 👥 사용자 관리 API
 
 ### GET `/api/mypage/activity`
+
 사용자의 활동 내역을 조회합니다.
 
 **Query Parameters:**
+
 - `page`: 페이지 번호 (기본값: 1)
 - `limit`: 페이지당 항목 수 (기본값: 20)
 - `type`: 활동 타입 필터 (`post`, `comment`, `like`)
 
 **Response:**
+
 ```typescript
 {
   success: true
@@ -77,9 +83,11 @@ Authorization: Bearer <token>
 ```
 
 ### GET `/api/mypage/artist`
+
 아티스트 정보를 조회합니다.
 
 **Response:**
+
 ```typescript
 {
   success: true
@@ -101,9 +109,11 @@ Authorization: Bearer <token>
 ```
 
 ### PUT `/api/mypage/artist`
+
 아티스트 정보를 업데이트합니다.
 
 **Request Body:**
+
 ```typescript
 {
   name: string
@@ -122,9 +132,11 @@ Authorization: Bearer <token>
 ## 📝 게시글 API
 
 ### GET `/api/posts`
+
 게시글 목록을 조회합니다.
 
 **Query Parameters:**
+
 - `page`: 페이지 번호 (기본값: 1)
 - `limit`: 페이지당 항목 수 (기본값: 20)
 - `category`: 카테고리 필터
@@ -134,6 +146,7 @@ Authorization: Bearer <token>
 - `order`: 정렬 순서 (`asc`, `desc`)
 
 **Response:**
+
 ```typescript
 {
   success: true
@@ -155,9 +168,11 @@ Authorization: Bearer <token>
 ```
 
 ### GET `/api/posts/[id]`
+
 특정 게시글을 조회합니다.
 
 **Response:**
+
 ```typescript
 {
   success: true
@@ -184,9 +199,11 @@ Authorization: Bearer <token>
 ```
 
 ### POST `/api/posts`
+
 새 게시글을 작성합니다.
 
 **Request Body:**
+
 ```typescript
 {
   title: string
@@ -198,6 +215,7 @@ Authorization: Bearer <token>
 ```
 
 **Response:**
+
 ```typescript
 {
   success: true
@@ -209,9 +227,11 @@ Authorization: Bearer <token>
 ```
 
 ### PUT `/api/posts/[id]`
+
 게시글을 수정합니다.
 
 **Request Body:**
+
 ```typescript
 {
   title?: string
@@ -221,9 +241,11 @@ Authorization: Bearer <token>
 ```
 
 ### DELETE `/api/posts/[id]`
+
 게시글을 삭제합니다.
 
 **Response:**
+
 ```typescript
 {
   success: true
@@ -232,9 +254,11 @@ Authorization: Bearer <token>
 ```
 
 ### POST `/api/posts/[id]/likes`
+
 게시글 좋아요를 토글합니다.
 
 **Response:**
+
 ```typescript
 {
   success: true
@@ -247,9 +271,11 @@ Authorization: Bearer <token>
 ```
 
 ### PUT `/api/posts/[id]/view`
+
 게시글 조회수를 증가시킵니다.
 
 **Response:**
+
 ```typescript
 {
   success: true
@@ -264,9 +290,11 @@ Authorization: Bearer <token>
 ## 💬 댓글 API
 
 ### POST `/api/comments/[id]/like`
+
 댓글 좋아요를 토글합니다.
 
 **Response:**
+
 ```typescript
 {
   success: true
@@ -283,9 +311,11 @@ Authorization: Bearer <token>
 ## 📎 첨부파일 API
 
 ### GET `/api/posts/[id]/attachments`
+
 게시글의 첨부파일 목록을 조회합니다.
 
 **Response:**
+
 ```typescript
 {
   success: true
@@ -296,9 +326,11 @@ Authorization: Bearer <token>
 ```
 
 ### PUT `/api/posts/[id]/attachments/[attachmentId]`
+
 첨부파일 정보를 수정합니다.
 
 **Request Body:**
+
 ```typescript
 {
   alt_text?: string
@@ -307,9 +339,11 @@ Authorization: Bearer <token>
 ```
 
 ### DELETE `/api/posts/[id]/attachments/[attachmentId]`
+
 첨부파일을 삭제합니다.
 
 **Response:**
+
 ```typescript
 {
   success: true
@@ -322,14 +356,17 @@ Authorization: Bearer <token>
 ## 🔔 알림 API
 
 ### GET `/api/notifications`
+
 알림 목록을 조회합니다.
 
 **Query Parameters:**
+
 - `page`: 페이지 번호
 - `limit`: 페이지당 항목 수
 - `unread_only`: 읽지 않은 알림만 조회 (true/false)
 
 **Response:**
+
 ```typescript
 {
   success: true
@@ -342,9 +379,11 @@ Authorization: Bearer <token>
 ```
 
 ### PUT `/api/notifications/[id]`
+
 특정 알림을 읽음 처리합니다.
 
 **Response:**
+
 ```typescript
 {
   success: true
@@ -356,9 +395,11 @@ Authorization: Bearer <token>
 ```
 
 ### PUT `/api/notifications/bulk`
+
 여러 알림을 일괄 처리합니다.
 
 **Request Body:**
+
 ```typescript
 {
   notification_ids: string[]
@@ -367,9 +408,11 @@ Authorization: Bearer <token>
 ```
 
 ### GET `/api/notifications/stats`
+
 알림 통계를 조회합니다.
 
 **Response:**
+
 ```typescript
 {
   success: true
@@ -386,9 +429,11 @@ Authorization: Bearer <token>
 ## 🛡️ 관리자 API
 
 ### GET `/api/admin/stats`
+
 관리자 대시보드 통계를 조회합니다.
 
 **Response:**
+
 ```typescript
 {
   success: true
@@ -408,9 +453,11 @@ Authorization: Bearer <token>
 ```
 
 ### GET `/api/admin/members`
+
 회원 목록을 관리자 권한으로 조회합니다.
 
 **Query Parameters:**
+
 - `page`: 페이지 번호
 - `limit`: 페이지당 항목 수
 - `status`: 회원 상태 필터 (`pending`, `approved`, `rejected`)
@@ -419,6 +466,7 @@ Authorization: Bearer <token>
 - `order`: 정렬 순서
 
 **Response:**
+
 ```typescript
 {
   success: true
@@ -437,9 +485,11 @@ Authorization: Bearer <token>
 ```
 
 ### PUT `/api/admin/members/[id]`
+
 회원 상태를 변경합니다.
 
 **Request Body:**
+
 ```typescript
 {
   action: 'approve' | 'reject' | 'activate' | 'deactivate' | 'suspend' | 'unsuspend'
@@ -448,15 +498,19 @@ Authorization: Bearer <token>
 ```
 
 ### GET `/api/admin/posts`
+
 모든 게시글을 관리자 권한으로 조회합니다.
 
 ### GET `/api/admin/artists`
+
 아티스트 목록을 관리자 권한으로 조회합니다.
 
 ### POST `/api/admin/reports/generate`
+
 관리자 리포트를 생성합니다.
 
 **Request Body:**
+
 ```typescript
 {
   type: 'members' | 'posts' | 'activities' | 'comprehensive'
@@ -474,14 +528,17 @@ Authorization: Bearer <token>
 ## 🖼️ 미디어 API
 
 ### POST `/api/media/upload`
+
 파일을 업로드합니다.
 
 **Request Body:** `multipart/form-data`
+
 - `file`: 업로드할 파일
 - `bucket`: Storage 버킷명 (선택)
 - `folder`: 폴더 경로 (선택)
 
 **Response:**
+
 ```typescript
 {
   success: true
@@ -505,17 +562,21 @@ Authorization: Bearer <token>
 ```
 
 ### GET `/api/images`
+
 이미지 목록을 조회합니다.
 
 **Query Parameters:**
+
 - `folder`: 폴더 경로
 - `limit`: 조회 개수
 - `type`: 이미지 타입 필터
 
 ### GET `/api/images/proxy`
+
 외부 이미지를 프록시합니다.
 
 **Query Parameters:**
+
 - `url`: 프록시할 이미지 URL
 
 ---
@@ -523,12 +584,15 @@ Authorization: Bearer <token>
 ## 🔗 기타 API
 
 ### GET `/api/link-preview`
+
 URL의 메타데이터를 추출합니다.
 
 **Query Parameters:**
+
 - `url`: 미리보기할 URL
 
 **Response:**
+
 ```typescript
 {
   success: true
@@ -544,12 +608,15 @@ URL의 메타데이터를 추출합니다.
 ```
 
 ### POST `/api/security/csp-report`
+
 CSP 위반 리포트를 수집합니다.
 
 ### GET `/api/settings`
+
 시스템 설정을 조회합니다.
 
 ### PUT `/api/settings`
+
 시스템 설정을 업데이트합니다.
 
 ---
@@ -557,6 +624,7 @@ CSP 위반 리포트를 수집합니다.
 ## 📊 공통 응답 형식
 
 ### 성공 응답
+
 ```typescript
 {
   success: true
@@ -571,6 +639,7 @@ CSP 위반 리포트를 수집합니다.
 ```
 
 ### 오류 응답
+
 ```typescript
 {
   success: false
@@ -588,6 +657,7 @@ CSP 위반 리포트를 수집합니다.
 ```
 
 ### 페이지네이션 정보
+
 ```typescript
 interface PaginationInfo {
   current_page: number
@@ -604,16 +674,19 @@ interface PaginationInfo {
 ## 🔒 인증 및 권한
 
 ### 인증 방식
+
 - **Session 기반**: Supabase Auth를 통한 세션 관리
 - **Bearer Token**: API 호출 시 Authorization 헤더 사용
 
 ### 권한 레벨
+
 - **Public**: 인증 없이 접근 가능
 - **User**: 로그인한 사용자만 접근
 - **Author**: 컨텐츠 작성자만 접근
 - **Admin**: 관리자만 접근
 
 ### 에러 코드
+
 - `400`: Bad Request - 잘못된 요청
 - `401`: Unauthorized - 인증 필요
 - `403`: Forbidden - 권한 없음
@@ -623,4 +696,5 @@ interface PaginationInfo {
 
 ---
 
-*이 API 문서는 지속적으로 업데이트되며, 새로운 엔드포인트가 추가되면 해당 문서도 함께 작성됩니다.*
+_이 API 문서는 지속적으로 업데이트되며, 새로운 엔드포인트가 추가되면 해당 문서도
+함께 작성됩니다._

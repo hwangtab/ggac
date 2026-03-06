@@ -1,6 +1,6 @@
 /**
  * 공통 에러 처리 유틸리티
- * 
+ *
  * API 라우트에서 사용하는 표준화된 에러 처리와 로깅을 제공합니다.
  * - 구조화된 에러 로깅
  * - 표준화된 에러 응답
@@ -22,7 +22,7 @@ export enum ErrorCategory {
   FILE_UPLOAD = 'file_upload',
   RATE_LIMIT = 'rate_limit',
   SYSTEM = 'system',
-  UNKNOWN = 'unknown'
+  UNKNOWN = 'unknown',
 }
 
 // 에러 심각도 레벨
@@ -30,7 +30,7 @@ export enum ErrorSeverity {
   LOW = 'low',
   MEDIUM = 'medium',
   HIGH = 'high',
-  CRITICAL = 'critical'
+  CRITICAL = 'critical',
 }
 
 // 구조화된 에러 정보
@@ -78,7 +78,7 @@ export const PREDEFINED_ERRORS = {
     message: 'User not authenticated',
     userMessage: '인증이 필요합니다.',
     statusCode: 401,
-    shouldLog: true
+    shouldLog: true,
   } as ErrorInfo,
 
   SESSION_EXPIRED: {
@@ -87,7 +87,7 @@ export const PREDEFINED_ERRORS = {
     message: 'Session expired',
     userMessage: '세션이 만료되었습니다. 다시 로그인해주세요.',
     statusCode: 401,
-    shouldLog: true
+    shouldLog: true,
   } as ErrorInfo,
 
   // Authorization Errors
@@ -97,7 +97,7 @@ export const PREDEFINED_ERRORS = {
     message: 'Access denied',
     userMessage: '접근 권한이 없습니다.',
     statusCode: 403,
-    shouldLog: true
+    shouldLog: true,
   } as ErrorInfo,
 
   MEMBER_NOT_APPROVED: {
@@ -106,7 +106,7 @@ export const PREDEFINED_ERRORS = {
     message: 'Member not approved',
     userMessage: '승인된 회원만 접근할 수 있습니다.',
     statusCode: 403,
-    shouldLog: true
+    shouldLog: true,
   } as ErrorInfo,
 
   // Validation Errors
@@ -116,7 +116,7 @@ export const PREDEFINED_ERRORS = {
     message: 'Invalid input data',
     userMessage: '입력 데이터가 유효하지 않습니다.',
     statusCode: 400,
-    shouldLog: false
+    shouldLog: false,
   } as ErrorInfo,
 
   MISSING_REQUIRED_FIELD: {
@@ -125,7 +125,7 @@ export const PREDEFINED_ERRORS = {
     message: 'Required field missing',
     userMessage: '필수 항목이 누락되었습니다.',
     statusCode: 400,
-    shouldLog: false
+    shouldLog: false,
   } as ErrorInfo,
 
   // Not Found Errors
@@ -135,7 +135,7 @@ export const PREDEFINED_ERRORS = {
     message: 'Resource not found',
     userMessage: '요청한 리소스를 찾을 수 없습니다.',
     statusCode: 404,
-    shouldLog: false
+    shouldLog: false,
   } as ErrorInfo,
 
   // Database Errors
@@ -146,7 +146,7 @@ export const PREDEFINED_ERRORS = {
     userMessage: '데이터베이스 연결에 실패했습니다.',
     statusCode: 503,
     shouldLog: true,
-    shouldNotify: true
+    shouldNotify: true,
   } as ErrorInfo,
 
   DATABASE_QUERY_ERROR: {
@@ -155,7 +155,7 @@ export const PREDEFINED_ERRORS = {
     message: 'Database query failed',
     userMessage: '데이터베이스 오류가 발생했습니다.',
     statusCode: 500,
-    shouldLog: true
+    shouldLog: true,
   } as ErrorInfo,
 
   // External Service Errors
@@ -165,7 +165,7 @@ export const PREDEFINED_ERRORS = {
     message: 'Supabase Storage error',
     userMessage: '파일 저장소 오류가 발생했습니다.',
     statusCode: 503,
-    shouldLog: true
+    shouldLog: true,
   } as ErrorInfo,
 
   // File Upload Errors
@@ -175,7 +175,7 @@ export const PREDEFINED_ERRORS = {
     message: 'File size exceeds limit',
     userMessage: '파일 크기가 제한을 초과했습니다.',
     statusCode: 413,
-    shouldLog: false
+    shouldLog: false,
   } as ErrorInfo,
 
   UNSUPPORTED_FILE_TYPE: {
@@ -184,7 +184,7 @@ export const PREDEFINED_ERRORS = {
     message: 'Unsupported file type',
     userMessage: '지원하지 않는 파일 형식입니다.',
     statusCode: 400,
-    shouldLog: false
+    shouldLog: false,
   } as ErrorInfo,
 
   // Rate Limit Errors
@@ -194,7 +194,7 @@ export const PREDEFINED_ERRORS = {
     message: 'Rate limit exceeded',
     userMessage: '요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.',
     statusCode: 429,
-    shouldLog: true
+    shouldLog: true,
   } as ErrorInfo,
 
   // System Errors
@@ -204,7 +204,7 @@ export const PREDEFINED_ERRORS = {
     message: 'Internal server error',
     userMessage: '서버 내부 오류가 발생했습니다.',
     statusCode: 500,
-    shouldLog: true
+    shouldLog: true,
   } as ErrorInfo,
 
   SERVICE_UNAVAILABLE: {
@@ -214,7 +214,7 @@ export const PREDEFINED_ERRORS = {
     userMessage: '서비스를 일시적으로 사용할 수 없습니다.',
     statusCode: 503,
     shouldLog: true,
-    shouldNotify: true
+    shouldNotify: true,
   } as ErrorInfo,
 
   // Unknown Error
@@ -224,8 +224,8 @@ export const PREDEFINED_ERRORS = {
     message: 'Unknown error occurred',
     userMessage: '알 수 없는 오류가 발생했습니다.',
     statusCode: 500,
-    shouldLog: true
-  } as ErrorInfo
+    shouldLog: true,
+  } as ErrorInfo,
 } as const
 
 /**
@@ -268,7 +268,7 @@ function logError(entry: ErrorLogEntry): void {
     requestData: entry.requestData ? maskSensitiveData(entry.requestData) : undefined,
     responseTime: entry.responseTime,
     userAgent: entry.context.userAgent,
-    ip: entry.context.ip
+    ip: entry.context.ip,
   }
 
   // 심각도에 따른 로깅 레벨 결정
@@ -307,7 +307,11 @@ export function analyzeSupabaseError(error: any): ErrorInfo {
   }
 
   // 데이터베이스 연결 에러
-  if (message.includes('connection') || message.includes('timeout') || code === 'CONNECTION_ERROR') {
+  if (
+    message.includes('connection') ||
+    message.includes('timeout') ||
+    code === 'CONNECTION_ERROR'
+  ) {
     return PREDEFINED_ERRORS.DATABASE_CONNECTION_ERROR
   }
 
@@ -346,7 +350,7 @@ export class ApiErrorHandler {
   constructor(context: ApiContext) {
     this.context = {
       ...context,
-      timestamp: new Date()
+      timestamp: new Date(),
     }
   }
 
@@ -354,7 +358,7 @@ export class ApiErrorHandler {
    * 에러를 처리하고 NextResponse를 반환
    */
   handleError(
-    error: Error | any, 
+    error: Error | any,
     errorInfo?: Partial<ErrorInfo>,
     requestData?: any,
     responseTime?: number
@@ -370,16 +374,20 @@ export class ApiErrorHandler {
         userMessage: '오류가 발생했습니다.',
         statusCode: 500,
         shouldLog: true,
-        ...errorInfo
+        ...errorInfo,
       }
-    } else if (error?.message && Object.values(PREDEFINED_ERRORS).find(e => e.message === error.message)) {
+    } else if (
+      error?.message &&
+      Object.values(PREDEFINED_ERRORS).find(e => e.message === error.message)
+    ) {
       // 미리 정의된 에러인 경우
       finalErrorInfo = Object.values(PREDEFINED_ERRORS).find(e => e.message === error.message)!
     } else {
       // Supabase 에러 분석 또는 일반 에러
-      finalErrorInfo = error?.code || error?.status 
-        ? analyzeSupabaseError(error)
-        : PREDEFINED_ERRORS.INTERNAL_SERVER_ERROR
+      finalErrorInfo =
+        error?.code || error?.status
+          ? analyzeSupabaseError(error)
+          : PREDEFINED_ERRORS.INTERNAL_SERVER_ERROR
     }
 
     // 에러 로깅 수행
@@ -391,9 +399,9 @@ export class ApiErrorHandler {
         originalError: error instanceof Error ? error : undefined,
         stack: error instanceof Error ? error.stack : undefined,
         requestData,
-        responseTime
+        responseTime,
       }
-      
+
       logError(logEntry)
     }
 
@@ -405,11 +413,11 @@ export class ApiErrorHandler {
 
     // NextResponse 반환
     return NextResponse.json(
-      { 
+      {
         error: finalErrorInfo.userMessage,
         category: finalErrorInfo.category,
-        code: finalErrorInfo.statusCode
-      }, 
+        code: finalErrorInfo.statusCode,
+      },
       { status: finalErrorInfo.statusCode }
     )
   }
@@ -417,7 +425,10 @@ export class ApiErrorHandler {
   /**
    * 미리 정의된 에러 타입으로 응답 생성
    */
-  respondWith(errorType: keyof typeof PREDEFINED_ERRORS, details?: Record<string, any>): NextResponse {
+  respondWith(
+    errorType: keyof typeof PREDEFINED_ERRORS,
+    details?: Record<string, any>
+  ): NextResponse {
     const errorInfo = { ...PREDEFINED_ERRORS[errorType], details }
     return this.handleError(new Error(errorInfo.message), errorInfo)
   }
@@ -439,9 +450,9 @@ export class ApiErrorHandler {
       userMessage,
       statusCode,
       details,
-      shouldLog: true
+      shouldLog: true,
     }
-    
+
     return this.handleError(new Error(errorInfo.message), errorInfo)
   }
 }
@@ -449,12 +460,16 @@ export class ApiErrorHandler {
 /**
  * 간편한 에러 핸들러 생성 함수
  */
-export function createErrorHandler(endpoint: string, method: string, userId?: string): ApiErrorHandler {
+export function createErrorHandler(
+  endpoint: string,
+  method: string,
+  userId?: string
+): ApiErrorHandler {
   return new ApiErrorHandler({
     endpoint,
     method,
     userId,
-    timestamp: new Date()
+    timestamp: new Date(),
   })
 }
 
@@ -467,7 +482,7 @@ export async function withErrorHandling<T>(
   requestData?: any
 ): Promise<T | NextResponse> {
   const startTime = Date.now()
-  
+
   try {
     return await operation()
   } catch (error) {

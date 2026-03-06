@@ -19,7 +19,7 @@ export const FilterConditionEditor: React.FC<FilterConditionEditorProps> = ({
   fields,
   onUpdate,
   onRemove,
-  operatorLabels
+  operatorLabels,
 }) => {
   const field = fields.find(f => f.name === condition.field)
 
@@ -28,13 +28,40 @@ export const FilterConditionEditor: React.FC<FilterConditionEditorProps> = ({
     switch (fieldType) {
       case 'string':
       case 'text':
-        return ['equals', 'not_equals', 'contains', 'not_contains', 'starts_with', 'ends_with', 'is_null', 'is_not_null']
+        return [
+          'equals',
+          'not_equals',
+          'contains',
+          'not_contains',
+          'starts_with',
+          'ends_with',
+          'is_null',
+          'is_not_null',
+        ]
       case 'number':
       case 'integer':
-        return ['equals', 'not_equals', 'greater_than', 'greater_equal', 'less_than', 'less_equal', 'between', 'is_null', 'is_not_null']
+        return [
+          'equals',
+          'not_equals',
+          'greater_than',
+          'greater_equal',
+          'less_than',
+          'less_equal',
+          'between',
+          'is_null',
+          'is_not_null',
+        ]
       case 'date':
       case 'datetime':
-        return ['equals', 'not_equals', 'greater_than', 'greater_equal', 'less_than', 'less_equal', 'between']
+        return [
+          'equals',
+          'not_equals',
+          'greater_than',
+          'greater_equal',
+          'less_than',
+          'less_equal',
+          'between',
+        ]
       case 'boolean':
         return ['equals', 'not_equals']
       case 'select':
@@ -60,9 +87,11 @@ export const FilterConditionEditor: React.FC<FilterConditionEditorProps> = ({
           <input
             type={field?.type === 'number' ? 'number' : field?.type === 'date' ? 'date' : 'text'}
             value={values[0] || ''}
-            onChange={(e) => onUpdate(conditionIndex, { 
-              value: [e.target.value, values[1] || ''] 
-            })}
+            onChange={e =>
+              onUpdate(conditionIndex, {
+                value: [e.target.value, values[1] || ''],
+              })
+            }
             placeholder="시작값"
             className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
@@ -70,9 +99,11 @@ export const FilterConditionEditor: React.FC<FilterConditionEditorProps> = ({
           <input
             type={field?.type === 'number' ? 'number' : field?.type === 'date' ? 'date' : 'text'}
             value={values[1] || ''}
-            onChange={(e) => onUpdate(conditionIndex, { 
-              value: [values[0] || '', e.target.value] 
-            })}
+            onChange={e =>
+              onUpdate(conditionIndex, {
+                value: [values[0] || '', e.target.value],
+              })
+            }
             placeholder="끝값"
             className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
@@ -84,9 +115,11 @@ export const FilterConditionEditor: React.FC<FilterConditionEditorProps> = ({
       return (
         <textarea
           value={Array.isArray(condition.value) ? condition.value.join('\n') : condition.value}
-          onChange={(e) => onUpdate(conditionIndex, { 
-            value: e.target.value.split('\n').filter(v => v.trim()) 
-          })}
+          onChange={e =>
+            onUpdate(conditionIndex, {
+              value: e.target.value.split('\n').filter(v => v.trim()),
+            })
+          }
           placeholder="값을 줄바꿈으로 구분하여 입력"
           rows={3}
           className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -98,7 +131,7 @@ export const FilterConditionEditor: React.FC<FilterConditionEditorProps> = ({
       return (
         <select
           value={condition.value as string}
-          onChange={(e) => onUpdate(conditionIndex, { value: e.target.value })}
+          onChange={e => onUpdate(conditionIndex, { value: e.target.value })}
           className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="">선택하세요</option>
@@ -115,7 +148,7 @@ export const FilterConditionEditor: React.FC<FilterConditionEditorProps> = ({
       return (
         <select
           value={condition.value as string}
-          onChange={(e) => onUpdate(conditionIndex, { value: e.target.value })}
+          onChange={e => onUpdate(conditionIndex, { value: e.target.value })}
           className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="">선택하세요</option>
@@ -129,7 +162,7 @@ export const FilterConditionEditor: React.FC<FilterConditionEditorProps> = ({
       <input
         type={field?.type === 'number' ? 'number' : field?.type === 'date' ? 'date' : 'text'}
         value={condition.value as string}
-        onChange={(e) => onUpdate(conditionIndex, { value: e.target.value })}
+        onChange={e => onUpdate(conditionIndex, { value: e.target.value })}
         placeholder="값을 입력하세요"
         className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
@@ -142,7 +175,7 @@ export const FilterConditionEditor: React.FC<FilterConditionEditorProps> = ({
       <div className="flex-1">
         <select
           value={condition.field}
-          onChange={(e) => onUpdate(conditionIndex, { field: e.target.value })}
+          onChange={e => onUpdate(conditionIndex, { field: e.target.value })}
           className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           {fields.map(field => (
@@ -157,7 +190,7 @@ export const FilterConditionEditor: React.FC<FilterConditionEditorProps> = ({
       <div className="flex-1">
         <select
           value={condition.operator}
-          onChange={(e) => onUpdate(conditionIndex, { operator: e.target.value as FilterOperator })}
+          onChange={e => onUpdate(conditionIndex, { operator: e.target.value as FilterOperator })}
           className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           {availableOperators.map(operator => (
@@ -169,9 +202,7 @@ export const FilterConditionEditor: React.FC<FilterConditionEditorProps> = ({
       </div>
 
       {/* 값 입력 */}
-      <div className="flex-2">
-        {renderValueInput()}
-      </div>
+      <div className="flex-2">{renderValueInput()}</div>
 
       {/* 삭제 버튼 */}
       <button

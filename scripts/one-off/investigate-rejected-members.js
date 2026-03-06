@@ -2,7 +2,7 @@
 
 /**
  * Database Investigation Script for Rejected Members Issue
- * 
+ *
  * This script investigates why the "Rejected Count" is showing 0 in admin reports
  * by directly querying the database and analyzing the data.
  */
@@ -16,7 +16,7 @@ function loadEnvFile() {
   try {
     const envPath = path.join(__dirname, '.env.local')
     const envData = fs.readFileSync(envPath, 'utf8')
-    
+
     envData.split('\n').forEach(line => {
       const [key, ...valueParts] = line.split('=')
       if (key && valueParts.length > 0) {
@@ -44,20 +44,16 @@ async function investigateRejectedMembers() {
     process.exit(1)
   }
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    serviceRoleKey,
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    }
-  )
+  const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, serviceRoleKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  })
 
   try {
     console.log('📊 1. Querying all member profiles...')
-    
+
     // Query all member profiles
     const { data: allMembers, error: allMembersError } = await supabase
       .from('member_profiles')
@@ -70,12 +66,13 @@ async function investigateRejectedMembers() {
     }
 
     console.log(`📈 Total members found: ${allMembers?.length || 0}`)
-    
+
     // Analyze registration statuses
-    const statusCounts = allMembers?.reduce((acc, member) => {
-      acc[member.registration_status] = (acc[member.registration_status] || 0) + 1
-      return acc
-    }, {}) || {}
+    const statusCounts =
+      allMembers?.reduce((acc, member) => {
+        acc[member.registration_status] = (acc[member.registration_status] || 0) + 1
+        return acc
+      }, {}) || {}
 
     console.log('\n📋 Registration status breakdown:')
     Object.entries(statusCounts).forEach(([status, count]) => {
@@ -83,7 +80,7 @@ async function investigateRejectedMembers() {
     })
 
     console.log('\n🔍 2. Looking for rejected members specifically...')
-    
+
     // Query specifically for rejected members
     const { data: rejectedMembers, error: rejectedError } = await supabase
       .from('member_profiles')
@@ -97,7 +94,7 @@ async function investigateRejectedMembers() {
     }
 
     console.log(`📊 Rejected members found: ${rejectedMembers?.length || 0}`)
-    
+
     if (rejectedMembers && rejectedMembers.length > 0) {
       console.log('\n📝 Rejected members details:')
       rejectedMembers.forEach(member => {
@@ -113,12 +110,12 @@ async function investigateRejectedMembers() {
     }
 
     console.log('\n📅 3. Testing date range filtering...')
-    
+
     // Test different date ranges to see if they affect the count
     const now = new Date()
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
     const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000)
-    
+
     // Set proper time boundaries
     thirtyDaysAgo.setHours(0, 0, 0, 0)
     sixtyDaysAgo.setHours(0, 0, 0, 0)
@@ -153,7 +150,7 @@ async function investigateRejectedMembers() {
     }
 
     console.log('\n🔍 4. Simulating the exact report generation query...')
-    
+
     // Simulate the exact query from the report generation code
     const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
     const endDate = new Date()
@@ -175,10 +172,11 @@ async function investigateRejectedMembers() {
 
     console.log(`📊 Total registrations in report period: ${reportRegistrations?.length || 0}`)
 
-    const reportStatusStats = reportRegistrations?.reduce((acc, user) => {
-      acc[user.registration_status] = (acc[user.registration_status] || 0) + 1
-      return acc
-    }, {}) || {}
+    const reportStatusStats =
+      reportRegistrations?.reduce((acc, user) => {
+        acc[user.registration_status] = (acc[user.registration_status] || 0) + 1
+        return acc
+      }, {}) || {}
 
     console.log('\n📋 Report period status breakdown:')
     Object.entries(reportStatusStats).forEach(([status, count]) => {
@@ -188,7 +186,7 @@ async function investigateRejectedMembers() {
     console.log(`\n📈 Rejected count from report logic: ${reportStatusStats.rejected || 0}`)
 
     console.log('\n🔍 5. Checking for data inconsistencies...')
-    
+
     // Check if there are any weird registration_status values
     const uniqueStatuses = [...new Set(allMembers?.map(m => m.registration_status) || [])]
     console.log(`📋 All unique registration_status values found:`)
@@ -201,7 +199,6 @@ async function investigateRejectedMembers() {
     console.log(`📊 Members with null/undefined registration_status: ${nullStatuses.length}`)
 
     console.log('\n✅ Investigation complete!')
-
   } catch (error) {
     console.error('❌ Investigation failed:', error)
   }

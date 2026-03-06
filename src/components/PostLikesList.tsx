@@ -27,7 +27,7 @@ const PostLikesList: React.FC<PostLikesListProps> = ({
   likeCount,
   isModal = false,
   onClose,
-  className = ''
+  className = '',
 }) => {
   const [likedUsers, setLikedUsers] = useState<PostLikedUser[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -36,38 +36,40 @@ const PostLikesList: React.FC<PostLikesListProps> = ({
   const [hasMore, setHasMore] = useState(true)
 
   // 좋아요한 사용자 목록 조회
-  const fetchLikedUsers = useCallback(async (pageNum: number = 1, append: boolean = false) => {
-    setIsLoading(true)
-    setError(null)
+  const fetchLikedUsers = useCallback(
+    async (pageNum: number = 1, append: boolean = false) => {
+      setIsLoading(true)
+      setError(null)
 
-    try {
-      const response = await fetch(
-        `/api/posts/${postId}/likes?include_users=true&limit=20&offset=${(pageNum - 1) * 20}`
-      )
-      const data = await response.json()
+      try {
+        const response = await fetch(
+          `/api/posts/${postId}/likes?include_users=true&limit=20&offset=${(pageNum - 1) * 20}`
+        )
+        const data = await response.json()
 
-      if (!response.ok) {
-        throw new Error(data.error || '좋아요 목록을 불러올 수 없습니다.')
+        if (!response.ok) {
+          throw new Error(data.error || '좋아요 목록을 불러올 수 없습니다.')
+        }
+
+        const users = data.liked_users || []
+
+        if (append) {
+          setLikedUsers(prev => [...prev, ...users])
+        } else {
+          setLikedUsers(users)
+        }
+
+        setHasMore(users.length === 20) // 20개 미만이면 더 이상 없음
+        setPage(pageNum)
+      } catch (error) {
+        console.error('좋아요 목록 조회 오류:', error)
+        setError(error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.')
+      } finally {
+        setIsLoading(false)
       }
-
-      const users = data.liked_users || []
-      
-      if (append) {
-        setLikedUsers(prev => [...prev, ...users])
-      } else {
-        setLikedUsers(users)
-      }
-
-      setHasMore(users.length === 20) // 20개 미만이면 더 이상 없음
-      setPage(pageNum)
-
-    } catch (error) {
-      console.error('좋아요 목록 조회 오류:', error)
-      setError(error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.')
-    } finally {
-      setIsLoading(false)
-    }
-  }, [postId])
+    },
+    [postId]
+  )
 
   // 더 보기
   const loadMore = useCallback(() => {
@@ -103,7 +105,7 @@ const PostLikesList: React.FC<PostLikesListProps> = ({
       return date.toLocaleDateString('ko-KR', {
         year: 'numeric',
         month: 'short',
-        day: 'numeric'
+        day: 'numeric',
       })
     }
   }
@@ -139,15 +141,10 @@ const PostLikesList: React.FC<PostLikesListProps> = ({
       <div className="flex items-center justify-between p-4 border-b border-gray-200">
         <div className="flex items-center gap-2">
           <FiHeart className="w-5 h-5 text-red-500" />
-          <h3 className="font-semibold text-gray-900">
-            좋아요 {likeCount.toLocaleString()}개
-          </h3>
+          <h3 className="font-semibold text-gray-900">좋아요 {likeCount.toLocaleString()}개</h3>
         </div>
         {isModal && onClose && (
-          <button
-            onClick={onClose}
-            className="p-1 text-gray-400 hover:text-gray-600"
-          >
+          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600">
             <FiX className="w-5 h-5" />
           </button>
         )}
@@ -162,7 +159,7 @@ const PostLikesList: React.FC<PostLikesListProps> = ({
           </div>
         ) : (
           <div className="space-y-1">
-            {likedUsers.map((user) => (
+            {likedUsers.map(user => (
               <div
                 key={user.user_id}
                 className="flex items-center justify-between p-3 hover:bg-gray-50"
@@ -177,15 +174,11 @@ const PostLikesList: React.FC<PostLikesListProps> = ({
                     <p className="font-medium text-gray-900 text-sm">
                       {user.display_name || '익명'}
                     </p>
-                    <p className="text-gray-500 text-xs">
-                      {user.email}
-                    </p>
+                    <p className="text-gray-500 text-xs">{user.email}</p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-gray-500 text-xs">
-                    {formatDate(user.liked_at)}
-                  </p>
+                  <p className="text-gray-500 text-xs">{formatDate(user.liked_at)}</p>
                 </div>
               </div>
             ))}
@@ -238,7 +231,7 @@ interface PostLikesCountProps {
 export const PostLikesCount: React.FC<PostLikesCountProps> = ({
   postId,
   likeCount,
-  className = ''
+  className = '',
 }) => {
   const [showModal, setShowModal] = useState(false)
 

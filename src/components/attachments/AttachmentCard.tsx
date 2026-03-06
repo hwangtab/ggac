@@ -1,7 +1,17 @@
 'use client'
 
 import React from 'react'
-import { FiImage, FiFile, FiVideo, FiMusic, FiDownload, FiEdit3, FiTrash2, FiEye, FiStar } from 'react-icons/fi'
+import {
+  FiImage,
+  FiFile,
+  FiVideo,
+  FiMusic,
+  FiDownload,
+  FiEdit3,
+  FiTrash2,
+  FiEye,
+  FiStar,
+} from 'react-icons/fi'
 import type { PostAttachment } from '@/types'
 import OptimizedImage from '../OptimizedImage'
 
@@ -28,10 +38,14 @@ interface AttachmentCardProps {
 // 파일 아이콘 선택
 const getFileIcon = (fileType: string) => {
   switch (fileType) {
-    case 'image': return FiImage
-    case 'video': return FiVideo
-    case 'audio': return FiMusic
-    default: return FiFile
+    case 'image':
+      return FiImage
+    case 'video':
+      return FiVideo
+    case 'audio':
+      return FiMusic
+    default:
+      return FiFile
   }
 }
 
@@ -58,7 +72,7 @@ export const AttachmentCard: React.FC<AttachmentCardProps> = ({
   onSave,
   onCancel,
   onDelete,
-  onEditFormChange
+  onEditFormChange,
 }) => {
   const FileIcon = getFileIcon(attachment.file_type)
   const canEdit = showActions && (isAuthor || isAdmin)
@@ -69,13 +83,11 @@ export const AttachmentCard: React.FC<AttachmentCardProps> = ({
         <div className="space-y-3">
           {/* Alt Text 편집 */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              설명 (Alt Text)
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">설명 (Alt Text)</label>
             <input
               type="text"
               value={editForm.alt_text}
-              onChange={(e) => onEditFormChange?.({ ...editForm, alt_text: e.target.value })}
+              onChange={e => onEditFormChange?.({ ...editForm, alt_text: e.target.value })}
               placeholder="이미지 설명을 입력하세요"
               className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
@@ -88,7 +100,7 @@ export const AttachmentCard: React.FC<AttachmentCardProps> = ({
                 type="checkbox"
                 id={`primary-${attachment.id}`}
                 checked={editForm.is_primary}
-                onChange={(e) => onEditFormChange?.({ ...editForm, is_primary: e.target.checked })}
+                onChange={e => onEditFormChange?.({ ...editForm, is_primary: e.target.checked })}
                 className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
               />
               <label htmlFor={`primary-${attachment.id}`} className="ml-2 text-sm text-gray-700">
@@ -124,7 +136,7 @@ export const AttachmentCard: React.FC<AttachmentCardProps> = ({
       {/* 파일 내용 */}
       <div className="p-3">
         {attachment.file_type === 'image' ? (
-          <div 
+          <div
             className="aspect-square mb-3 bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform"
             onClick={() => onView?.(attachment)}
           >
@@ -147,9 +159,7 @@ export const AttachmentCard: React.FC<AttachmentCardProps> = ({
           <h4 className="text-sm font-medium text-gray-900 truncate" title={attachment.file_name}>
             {attachment.file_name}
           </h4>
-          <p className="text-xs text-gray-500">
-            {formatFileSize(attachment.file_size)}
-          </p>
+          <p className="text-xs text-gray-500">{formatFileSize(attachment.file_size)}</p>
           {attachment.alt_text && (
             <p className="text-xs text-gray-600 line-clamp-2" title={attachment.alt_text}>
               {attachment.alt_text}

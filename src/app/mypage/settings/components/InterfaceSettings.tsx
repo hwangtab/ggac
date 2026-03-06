@@ -43,10 +43,12 @@ export default function InterfaceSettings({ settings, onUpdate }: InterfaceSetti
                 type="radio"
                 disabled={updating === 'theme'}
                 checked={theme.mode === option}
-                onChange={() => updateSettingValue('theme', {
-                  ...theme,
-                  mode: option
-                })}
+                onChange={() =>
+                  updateSettingValue('theme', {
+                    ...theme,
+                    mode: option,
+                  })
+                }
                 className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 disabled:opacity-50"
               />
               <label htmlFor={`theme-${option}`} className="ml-3 text-sm">
@@ -77,13 +79,18 @@ export default function InterfaceSettings({ settings, onUpdate }: InterfaceSetti
                 type="radio"
                 disabled={updating === 'language'}
                 checked={language.locale === option}
-                onChange={() => updateSettingValue('language', {
-                  ...language,
-                  locale: option
-                })}
+                onChange={() =>
+                  updateSettingValue('language', {
+                    ...language,
+                    locale: option,
+                  })
+                }
                 className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 disabled:opacity-50"
               />
-              <label htmlFor={`language-${option}`} className="ml-3 text-sm font-medium text-gray-700">
+              <label
+                htmlFor={`language-${option}`}
+                className="ml-3 text-sm font-medium text-gray-700"
+              >
                 {getLanguageLabel(option)}
               </label>
             </div>
@@ -91,9 +98,7 @@ export default function InterfaceSettings({ settings, onUpdate }: InterfaceSetti
         </div>
         {language.locale === 'en' && (
           <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-            <p className="text-sm text-blue-800">
-              ℹ️ 영어 버전은 향후 지원될 예정입니다.
-            </p>
+            <p className="text-sm text-blue-800">ℹ️ 영어 버전은 향후 지원될 예정입니다.</p>
           </div>
         )}
       </div>
@@ -103,17 +108,22 @@ export default function InterfaceSettings({ settings, onUpdate }: InterfaceSetti
         <h3 className="text-lg font-medium text-gray-900 mb-4">시간대 설정</h3>
         <div className="space-y-4">
           <div>
-            <label htmlFor="timezone-select" className="block text-sm font-medium text-gray-700 mb-2">
+            <label
+              htmlFor="timezone-select"
+              className="block text-sm font-medium text-gray-700 mb-2"
+            >
               시간대
             </label>
             <select
               id="timezone-select"
               disabled={updating === 'timezone'}
               value={timezone.value || 'Asia/Seoul'}
-              onChange={(e) => updateSettingValue('timezone', {
-                ...timezone,
-                value: e.target.value
-              })}
+              onChange={e =>
+                updateSettingValue('timezone', {
+                  ...timezone,
+                  value: e.target.value,
+                })
+              }
               className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 disabled:opacity-50"
             >
               <option value="Asia/Seoul">서울 (GMT+9)</option>
@@ -135,17 +145,22 @@ export default function InterfaceSettings({ settings, onUpdate }: InterfaceSetti
         <div className="space-y-6">
           {/* 페이지당 항목 수 */}
           <div>
-            <label htmlFor="items-per-page" className="block text-sm font-medium text-gray-700 mb-2">
+            <label
+              htmlFor="items-per-page"
+              className="block text-sm font-medium text-gray-700 mb-2"
+            >
               페이지당 게시글 수
             </label>
             <select
               id="items-per-page"
               disabled={updating === 'post_display'}
               value={postDisplay.items_per_page || 20}
-              onChange={(e) => updateSettingValue('post_display', {
-                ...postDisplay,
-                items_per_page: parseInt(e.target.value)
-              })}
+              onChange={e =>
+                updateSettingValue('post_display', {
+                  ...postDisplay,
+                  items_per_page: parseInt(e.target.value),
+                })
+              }
               className="block w-32 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 disabled:opacity-50"
             >
               <option value={10}>10개</option>
@@ -166,10 +181,12 @@ export default function InterfaceSettings({ settings, onUpdate }: InterfaceSetti
                   type="radio"
                   disabled={updating === 'post_display'}
                   checked={postDisplay.view_mode === 'card'}
-                  onChange={() => updateSettingValue('post_display', {
-                    ...postDisplay,
-                    view_mode: 'card'
-                  })}
+                  onChange={() =>
+                    updateSettingValue('post_display', {
+                      ...postDisplay,
+                      view_mode: 'card',
+                    })
+                  }
                   className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 disabled:opacity-50"
                 />
                 <label htmlFor="view-card" className="ml-3 text-sm text-gray-700">
@@ -183,10 +200,12 @@ export default function InterfaceSettings({ settings, onUpdate }: InterfaceSetti
                   type="radio"
                   disabled={updating === 'post_display'}
                   checked={postDisplay.view_mode === 'list'}
-                  onChange={() => updateSettingValue('post_display', {
-                    ...postDisplay,
-                    view_mode: 'list'
-                  })}
+                  onChange={() =>
+                    updateSettingValue('post_display', {
+                      ...postDisplay,
+                      view_mode: 'list',
+                    })
+                  }
                   className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 disabled:opacity-50"
                 />
                 <label htmlFor="view-list" className="ml-3 text-sm text-gray-700">
@@ -205,10 +224,12 @@ export default function InterfaceSettings({ settings, onUpdate }: InterfaceSetti
             <button
               type="button"
               disabled={updating === 'post_display'}
-              onClick={() => updateSettingValue('post_display', {
-                ...postDisplay,
-                show_images: !postDisplay.show_images
-              })}
+              onClick={() =>
+                updateSettingValue('post_display', {
+                  ...postDisplay,
+                  show_images: !postDisplay.show_images,
+                })
+              }
               className={`${
                 postDisplay.show_images ? 'bg-primary-600' : 'bg-gray-200'
               } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50`}

@@ -9,15 +9,15 @@ import { NextResponse } from 'next/server'
  * JSON 응답 생성 헬퍼
  */
 export function createJsonResponse(
-  data: any, 
-  status: number = 200, 
+  data: any,
+  status: number = 200,
   additionalHeaders: Record<string, string> = {}
 ) {
   const headers = {
     'Content-Type': 'application/json; charset=utf-8',
     'X-Content-Type-Options': 'nosniff',
     'Cache-Control': 'no-store', // API 응답은 기본적으로 캐시하지 않음
-    ...additionalHeaders
+    ...additionalHeaders,
   }
 
   return NextResponse.json(data, { status, headers })
@@ -27,30 +27,22 @@ export function createJsonResponse(
  * 성공 응답 생성
  */
 export function createSuccessResponse(
-  data: any, 
+  data: any,
   status: number = 200,
   additionalHeaders: Record<string, string> = {}
 ) {
-  return createJsonResponse(
-    { success: true, ...data }, 
-    status, 
-    additionalHeaders
-  )
+  return createJsonResponse({ success: true, ...data }, status, additionalHeaders)
 }
 
 /**
  * 오류 응답 생성
  */
 export function createErrorResponse(
-  error: string, 
+  error: string,
   status: number = 400,
   additionalHeaders: Record<string, string> = {}
 ) {
-  return createJsonResponse(
-    { success: false, error }, 
-    status, 
-    additionalHeaders
-  )
+  return createJsonResponse({ success: false, error }, status, additionalHeaders)
 }
 
 /**
@@ -66,7 +58,7 @@ export function createImageResponse(
     'Content-Length': buffer.length.toString(),
     'X-Content-Type-Options': 'nosniff',
     'Cache-Control': 'public, max-age=86400',
-    ...additionalHeaders
+    ...additionalHeaders,
   }
 
   return new NextResponse(new Uint8Array(buffer), { status: 200, headers })
@@ -81,7 +73,7 @@ export function createCacheableResponse(
   status: number = 200
 ) {
   return createJsonResponse(data, status, {
-    'Cache-Control': `public, max-age=${maxAge}`
+    'Cache-Control': `public, max-age=${maxAge}`,
   })
 }
 
@@ -98,7 +90,7 @@ export function createCorsResponse(
   return createJsonResponse(data, status, {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   })
 }
 
@@ -114,7 +106,7 @@ export function createFileDownloadResponse(
     'Content-Type': contentType,
     'Content-Disposition': `attachment; filename="${filename}"`,
     'Content-Length': buffer.length.toString(),
-    'X-Content-Type-Options': 'nosniff'
+    'X-Content-Type-Options': 'nosniff',
   }
 
   return new NextResponse(new Uint8Array(buffer), { status: 200, headers })
@@ -130,8 +122,8 @@ export function createOptionsResponse(origin: string = ALLOWED_ORIGIN) {
       'Access-Control-Allow-Origin': origin,
       'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      'Access-Control-Max-Age': '86400'
-    }
+      'Access-Control-Max-Age': '86400',
+    },
   })
 }
 
@@ -142,6 +134,6 @@ export function createHealthCheckResponse() {
   return createJsonResponse({
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    version: process.env.npm_package_version || '1.0.0'
+    version: process.env.npm_package_version || '1.0.0',
   })
 }

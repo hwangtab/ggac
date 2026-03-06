@@ -11,13 +11,13 @@ async function checkPostsTables() {
   // Load environment variables from .env.local
   const fs = require('fs')
   const path = require('path')
-  
+
   try {
     const envPath = path.join(__dirname, '.env.local')
     if (fs.existsSync(envPath)) {
       const envContent = fs.readFileSync(envPath, 'utf8')
       const lines = envContent.split('\\n')
-      
+
       for (const line of lines) {
         const trimmed = line.trim()
         if (trimmed && !trimmed.startsWith('#')) {
@@ -45,7 +45,7 @@ async function checkPostsTables() {
 
   try {
     console.log('1. 📊 Checking posts table structure...')
-    
+
     // Check posts table columns
     const { data: posts, error: postsError } = await supabase
       .from('posts')
@@ -64,7 +64,7 @@ async function checkPostsTables() {
     }
 
     console.log('\\n2. 📋 Checking post_attachments table...')
-    
+
     const { data: attachments, error: attachmentsError } = await supabase
       .from('post_attachments')
       .select('id')
@@ -74,14 +74,16 @@ async function checkPostsTables() {
       if (attachmentsError.message.includes('does not exist')) {
         console.log('❌ post_attachments table does not exist')
       } else {
-        console.log(`⚠️ post_attachments table exists but has access issues: ${attachmentsError.message}`)
+        console.log(
+          `⚠️ post_attachments table exists but has access issues: ${attachmentsError.message}`
+        )
       }
     } else {
       console.log('✅ post_attachments table exists and accessible')
     }
 
     console.log('\\n3. 📋 Checking post_likes table...')
-    
+
     const { data: likes, error: likesError } = await supabase
       .from('post_likes')
       .select('id')
@@ -98,7 +100,7 @@ async function checkPostsTables() {
     }
 
     console.log('\\n4. 👑 Checking admin users status...')
-    
+
     const { data: adminUsers, error: adminError } = await supabase
       .from('member_profiles')
       .select('display_name, email, is_admin, is_active, registration_status')
@@ -109,7 +111,8 @@ async function checkPostsTables() {
     } else if (adminUsers && adminUsers.length > 0) {
       console.log(`✅ Found ${adminUsers.length} admin user(s):`)
       adminUsers.forEach(user => {
-        const status = user.is_active && user.registration_status === 'approved' ? '✅ Active' : '⚠️ Inactive'
+        const status =
+          user.is_active && user.registration_status === 'approved' ? '✅ Active' : '⚠️ Inactive'
         console.log(`   ${status} ${user.display_name} (${user.email})`)
       })
     } else {
@@ -118,7 +121,6 @@ async function checkPostsTables() {
 
     console.log('\\n📋 Summary:')
     console.log('This shows the exact status of posts-related tables that the admin API needs.')
-
   } catch (error) {
     console.error('❌ Check failed:', error.message)
   }

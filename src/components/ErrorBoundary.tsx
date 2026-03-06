@@ -48,18 +48,18 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     super(props)
     this.state = {
       hasError: false,
-      retryCount: 0
+      retryCount: 0,
     }
   }
 
   static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
     // 고유한 에러 ID 생성
     const errorId = `error_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    
+
     return {
       hasError: true,
       error,
-      errorId
+      errorId,
     }
   }
 
@@ -108,9 +108,9 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
    * 외부 로깅 서비스로 에러 전송 (프로덕션)
    */
   private logErrorToService = (
-    error: Error, 
-    errorInfo: ErrorInfo, 
-    errorId: string, 
+    error: Error,
+    errorInfo: ErrorInfo,
+    errorId: string,
     componentName: string
   ) => {
     const errorData = {
@@ -122,7 +122,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       url: window.location.href,
       userAgent: navigator.userAgent,
       timestamp: new Date().toISOString(),
-      buildVersion: process.env.NEXT_PUBLIC_BUILD_VERSION || 'unknown'
+      buildVersion: process.env.NEXT_PUBLIC_BUILD_VERSION || 'unknown',
     }
 
     // 실제 로깅 서비스로 전송 (예: Sentry, LogRocket 등)
@@ -146,7 +146,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
    */
   private startAutoRecovery = () => {
     const { autoRecoveryTime = 5000, maxRetries = 3 } = this.props
-    
+
     if (this.state.retryCount < maxRetries && autoRecoveryTime > 0) {
       this.autoRecoveryTimer = setTimeout(() => {
         console.log(`🔄 Auto-recovery attempt ${this.state.retryCount + 1}/${maxRetries}`)
@@ -160,13 +160,13 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
    */
   private handleReset = () => {
     const newRetryCount = this.state.retryCount + 1
-    
+
     this.setState({
       hasError: false,
       error: undefined,
       errorInfo: undefined,
       errorId: undefined,
-      retryCount: newRetryCount
+      retryCount: newRetryCount,
     })
 
     // 개발 환경에서 재시도 로그
@@ -189,7 +189,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
    */
   private renderCustomErrorHandler = (error: Error): ReactNode | null => {
     const { errorHandlers } = this.props
-    
+
     if (!errorHandlers) return null
 
     // 에러 타입이나 메시지를 기반으로 커스텀 핸들러 찾기
@@ -251,10 +251,11 @@ const DefaultErrorFallback: React.FC<ErrorFallbackProps> = ({
   errorId,
   retryCount,
   reset,
-  componentName
+  componentName,
 }) => {
   const isDev = process.env.NODE_ENV === 'development'
-  const isMinorError = componentName && ['LazyParticles', 'PerformanceMonitor'].includes(componentName)
+  const isMinorError =
+    componentName && ['LazyParticles', 'PerformanceMonitor'].includes(componentName)
 
   // 경미한 에러 (파티클 등)의 경우 간단한 fallback
   if (isMinorError) {
@@ -263,7 +264,11 @@ const DefaultErrorFallback: React.FC<ErrorFallbackProps> = ({
         <div className="text-center text-white/60 p-4">
           <div className="w-8 h-8 mx-auto mb-2 opacity-40">
             <svg fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              <path
+                fillRule="evenodd"
+                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                clipRule="evenodd"
+              />
             </svg>
           </div>
           <p className="text-sm mb-2">{componentName} 로딩 실패</p>
@@ -287,16 +292,21 @@ const DefaultErrorFallback: React.FC<ErrorFallbackProps> = ({
             <div className="flex items-center mb-4">
               <div className="w-8 h-8 text-red-600 mr-3">
                 <svg fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  <path
+                    fillRule="evenodd"
+                    d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                    clipRule="evenodd"
+                  />
                 </svg>
               </div>
               <h2 className="text-2xl font-bold text-red-800">
                 {componentName ? `${componentName} 오류` : '페이지 오류가 발생했습니다'}
               </h2>
             </div>
-            
+
             <p className="text-red-700 mb-4">
-              죄송합니다. {componentName ? '컴포넌트를' : '페이지를'} 불러오는 중에 오류가 발생했습니다.
+              죄송합니다. {componentName ? '컴포넌트를' : '페이지를'} 불러오는 중에 오류가
+              발생했습니다.
               {retryCount > 0 && ` (재시도 횟수: ${retryCount})`}
             </p>
 
@@ -314,7 +324,7 @@ const DefaultErrorFallback: React.FC<ErrorFallbackProps> = ({
                 페이지 새로고침
               </button>
               <button
-                onClick={() => window.location.href = '/'}
+                onClick={() => (window.location.href = '/')}
                 className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors"
               >
                 홈으로 돌아가기

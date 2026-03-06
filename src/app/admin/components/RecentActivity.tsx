@@ -42,30 +42,33 @@ const RecentActivity: React.FC = () => {
   const [days, setDays] = useState(7)
   const [limit, setLimit] = useState(10)
 
-  const fetchRecentActivity = useCallback(async (page = 1) => {
-    try {
-      setRefreshing(true)
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: limit.toString(),
-        days: days.toString()
-      })
-      
-      const response = await fetch(`/api/admin/activity?${params}`)
-      if (response.ok) {
-        const data: ActivityResponse = await response.json()
-        setActivities(data.activities || [])
-        setPagination(data.pagination)
-      } else {
-        console.error('Failed to fetch activities:', response.status)
+  const fetchRecentActivity = useCallback(
+    async (page = 1) => {
+      try {
+        setRefreshing(true)
+        const params = new URLSearchParams({
+          page: page.toString(),
+          limit: limit.toString(),
+          days: days.toString(),
+        })
+
+        const response = await fetch(`/api/admin/activity?${params}`)
+        if (response.ok) {
+          const data: ActivityResponse = await response.json()
+          setActivities(data.activities || [])
+          setPagination(data.pagination)
+        } else {
+          console.error('Failed to fetch activities:', response.status)
+        }
+      } catch (error) {
+        console.error('Failed to fetch recent activity:', error)
+      } finally {
+        setLoading(false)
+        setRefreshing(false)
       }
-    } catch (error) {
-      console.error('Failed to fetch recent activity:', error)
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }, [days, limit])
+    },
+    [days, limit]
+  )
 
   useEffect(() => {
     fetchRecentActivity()
@@ -114,16 +117,16 @@ const RecentActivity: React.FC = () => {
     const date = new Date(timestamp)
     const now = new Date()
     const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60))
-    
+
     if (diffInHours < 1) return '방금 전'
     if (diffInHours < 24) return `${diffInHours}시간 전`
-    
+
     const diffInDays = Math.floor(diffInHours / 24)
     if (diffInDays < 7) return `${diffInDays}일 전`
-    
+
     return date.toLocaleDateString('ko-KR', {
       month: 'short',
-      day: 'numeric'
+      day: 'numeric',
     })
   }
 
@@ -168,7 +171,7 @@ const RecentActivity: React.FC = () => {
         <div className="flex items-center gap-4">
           <select
             value={days}
-            onChange={(e) => setDays(parseInt(e.target.value))}
+            onChange={e => setDays(parseInt(e.target.value))}
             className="text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
           >
             <option value={1}>최근 1일</option>
@@ -178,7 +181,7 @@ const RecentActivity: React.FC = () => {
           </select>
           <select
             value={limit}
-            onChange={(e) => setLimit(parseInt(e.target.value))}
+            onChange={e => setLimit(parseInt(e.target.value))}
             className="text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
           >
             <option value={10}>10개씩</option>
@@ -198,9 +201,11 @@ const RecentActivity: React.FC = () => {
 
       {/* 활동 목록 */}
       <div className="space-y-4">
-        {activities.map((activity) => (
+        {activities.map(activity => (
           <div key={activity.id} className="flex items-start gap-4 p-3 rounded-lg hover:bg-gray-50">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${getActivityColor(activity.type)}`}>
+            <div
+              className={`w-8 h-8 rounded-full flex items-center justify-center ${getActivityColor(activity.type)}`}
+            >
               {getActivityIcon(activity.type)}
             </div>
             <div className="flex-1 min-w-0">
@@ -212,13 +217,20 @@ const RecentActivity: React.FC = () => {
                   </span>
                 )}
                 {activity.status && (
-                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs ${
-                    activity.status === 'approved' ? 'bg-green-100 text-green-800' :
-                    activity.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                    'bg-gray-100 text-gray-800'
-                  }`}>
-                    {activity.status === 'approved' ? '승인됨' : 
-                     activity.status === 'pending' ? '대기중' : activity.status}
+                  <span
+                    className={`inline-flex items-center px-2 py-1 rounded-full text-xs ${
+                      activity.status === 'approved'
+                        ? 'bg-green-100 text-green-800'
+                        : activity.status === 'pending'
+                          ? 'bg-yellow-100 text-yellow-800'
+                          : 'bg-gray-100 text-gray-800'
+                    }`}
+                  >
+                    {activity.status === 'approved'
+                      ? '승인됨'
+                      : activity.status === 'pending'
+                        ? '대기중'
+                        : activity.status}
                   </span>
                 )}
               </div>

@@ -214,7 +214,7 @@
       ]
     },
     {
-      "source": "/((?!api).*)", 
+      "source": "/((?!api).*)",
       "headers": [
         {
           "key": "X-Content-Type-Options",

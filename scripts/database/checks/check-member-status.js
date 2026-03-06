@@ -25,13 +25,15 @@ async function checkMemberStatus() {
     // 1. 현재 회원 상태 조회
     const { data: member, error } = await supabase
       .from('member_profiles')
-      .select(`
+      .select(
+        `
         id, display_name, email, real_name,
         registration_status, is_active, is_admin, is_artist,
         approved_by, approved_at, rejected_by,
         is_suspended, suspension_reason, suspension_until,
         created_at, updated_at
-      `)
+      `
+      )
       .eq('id', memberId)
       .single()
 
@@ -52,7 +54,7 @@ async function checkMemberStatus() {
     console.log(`📧 이메일: ${member.email}`)
     console.log(`🆔 실명: ${member.real_name || '없음'}`)
     console.log('')
-    
+
     console.log('📊 상태 정보:')
     console.log('─'.repeat(40))
     console.log(`📝 등록 상태: ${member.registration_status}`)
@@ -66,12 +68,14 @@ async function checkMemberStatus() {
     console.log('─'.repeat(40))
     console.log(`🎯 생성일: ${new Date(member.created_at).toLocaleString('ko-KR')}`)
     console.log(`✏️  수정일: ${new Date(member.updated_at).toLocaleString('ko-KR')}`)
-    
+
     if (member.approved_by) {
       console.log(`✅ 승인자: ${member.approved_by}`)
-      console.log(`✅ 승인일: ${member.approved_at ? new Date(member.approved_at).toLocaleString('ko-KR') : '없음'}`)
+      console.log(
+        `✅ 승인일: ${member.approved_at ? new Date(member.approved_at).toLocaleString('ko-KR') : '없음'}`
+      )
     }
-    
+
     if (member.rejected_by) {
       console.log(`❌ 거부자: ${member.rejected_by}`)
     }
@@ -80,7 +84,7 @@ async function checkMemberStatus() {
     console.log('')
     console.log('🔍 승인 가능성 분석:')
     console.log('─'.repeat(40))
-    
+
     if (member.registration_status === 'pending') {
       console.log('✅ 승인 대기 상태 - 승인 가능')
     } else if (member.registration_status === 'approved') {
@@ -104,21 +108,20 @@ async function checkMemberStatus() {
     console.log('')
     console.log('🔒 권한 검증:')
     console.log('─'.repeat(40))
-    
+
     // 관리자 계정으로 업데이트 테스트 (실제 실행 안함)
     console.log('UPDATE 권한 테스트 (시뮬레이션):')
     console.log('✓ Service Role Key 사용 - 모든 권한 있음')
     console.log('✓ RLS 정책 우회 가능')
-    
-    return member
 
+    return member
   } catch (error) {
     console.error('❌ 상태 확인 중 오류:', error)
   }
 }
 
 // 실행
-checkMemberStatus().then((member) => {
+checkMemberStatus().then(member => {
   if (member) {
     console.log('')
     console.log('💡 다음 단계:')

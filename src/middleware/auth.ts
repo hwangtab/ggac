@@ -39,10 +39,7 @@ export async function handleAuth(
 
     if (userError) {
       if (process.env.NODE_ENV === 'development') {
-        console.log(
-          `❌ [MIDDLEWARE DEBUG] Auth error (Mobile: ${isMobile}):`,
-          userError.message
-        )
+        console.log(`❌ [MIDDLEWARE DEBUG] Auth error (Mobile: ${isMobile}):`, userError.message)
       }
       authError = true
     } else {

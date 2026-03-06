@@ -41,16 +41,13 @@ async function verifyActivitySystem() {
   try {
     // 2. 테이블 존재 확인
     console.log('2. 데이터베이스 테이블 존재 확인')
-    
+
     const tables = ['user_activities', 'user_sessions', 'daily_activity_stats']
-    
+
     for (const tableName of tables) {
       try {
-        const { data, error } = await supabase
-          .from(tableName)
-          .select('id')
-          .limit(1)
-        
+        const { data, error } = await supabase.from(tableName).select('id').limit(1)
+
         if (error) {
           console.log(`❌ ${tableName}: ${error.message}`)
         } else {
@@ -63,7 +60,7 @@ async function verifyActivitySystem() {
 
     // 3. RPC 함수 존재 확인
     console.log('\n3. RPC 함수 동작 확인')
-    
+
     try {
       const { data, error } = await supabase.rpc('log_user_activity', {
         p_user_id: '00000000-0000-0000-0000-000000000000', // 더미 UUID
@@ -72,9 +69,9 @@ async function verifyActivitySystem() {
         p_target_id: null,
         p_metadata: { test: true },
         p_ip_address: '127.0.0.1',
-        p_user_agent: 'Test Script'
+        p_user_agent: 'Test Script',
       })
-      
+
       if (error) {
         console.log(`❌ log_user_activity RPC: ${error.message}`)
       } else {
@@ -90,9 +87,9 @@ async function verifyActivitySystem() {
         p_session_token: 'test_session',
         p_action: 'start',
         p_ip_address: '127.0.0.1',
-        p_user_agent: 'Test Script'
+        p_user_agent: 'Test Script',
       })
-      
+
       if (error) {
         console.log(`❌ manage_user_session RPC: ${error.message}`)
       } else {
@@ -104,14 +101,14 @@ async function verifyActivitySystem() {
 
     // 4. 기존 데이터 확인
     console.log('\n4. 기존 활동 데이터 확인')
-    
+
     try {
       const { data: activities, error } = await supabase
         .from('user_activities')
         .select('id, action_type, created_at')
         .order('created_at', { ascending: false })
         .limit(10)
-      
+
       if (error) {
         console.log(`❌ user_activities 조회: ${error.message}`)
       } else {
@@ -129,12 +126,10 @@ async function verifyActivitySystem() {
 
     // 5. 전체 활동 통계
     console.log('\n5. 전체 활동 통계')
-    
+
     try {
-      const { data: stats, error } = await supabase
-        .from('user_activities')
-        .select('action_type')
-      
+      const { data: stats, error } = await supabase.from('user_activities').select('action_type')
+
       if (error) {
         console.log(`❌ 활동 통계 조회: ${error.message}`)
       } else {
@@ -142,7 +137,7 @@ async function verifyActivitySystem() {
           acc[activity.action_type] = (acc[activity.action_type] || 0) + 1
           return acc
         }, {})
-        
+
         console.log(`✅ 총 활동 수: ${stats.length}개`)
         console.log('활동 유형별:')
         Object.entries(actionTypes).forEach(([type, count]) => {
@@ -155,14 +150,14 @@ async function verifyActivitySystem() {
 
     // 6. 회원 프로필 확인
     console.log('\n6. 활성 회원 확인')
-    
+
     try {
       const { data: members, error } = await supabase
         .from('member_profiles')
         .select('id, display_name, registration_status, is_active')
         .eq('registration_status', 'approved')
         .eq('is_active', true)
-      
+
       if (error) {
         console.log(`❌ 회원 조회: ${error.message}`)
       } else {
@@ -177,37 +172,39 @@ async function verifyActivitySystem() {
 
     // 7. 리포트 생성 테스트용 쿼리
     console.log('\n7. 리포트 생성 쿼리 테스트')
-    
+
     try {
       const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
       const endDate = new Date()
-      
+
       const { data: reportData, error } = await supabase
         .from('user_activities')
-        .select(`
+        .select(
+          `
           id,
           user_id,
           action_type,
           created_at,
           member_profiles(display_name, email, registration_status)
-        `)
+        `
+        )
         .gte('created_at', startDate.toISOString())
         .lte('created_at', endDate.toISOString())
         .limit(100)
-      
+
       if (error) {
         console.log(`❌ 리포트 쿼리: ${error.message}`)
       } else {
         console.log(`✅ 리포트 데이터: ${reportData.length}개 활동 조회됨`)
-        
+
         const uniqueUsers = new Set(reportData.map(d => d.user_id)).size
         console.log(`  - 활동한 고유 사용자: ${uniqueUsers}명`)
-        
+
         const actionCounts = reportData.reduce((acc, activity) => {
           acc[activity.action_type] = (acc[activity.action_type] || 0) + 1
           return acc
         }, {})
-        
+
         console.log('  - 활동 유형별 분포:')
         Object.entries(actionCounts).forEach(([type, count]) => {
           console.log(`    * ${type}: ${count}개`)
@@ -218,7 +215,6 @@ async function verifyActivitySystem() {
     }
 
     console.log('\n=== 검증 완료 ===')
-
   } catch (error) {
     console.error('검증 중 오류 발생:', error)
   }

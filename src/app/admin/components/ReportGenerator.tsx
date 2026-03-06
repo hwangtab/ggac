@@ -12,12 +12,12 @@ export default function ReportGenerator({ onReportGenerated }: ReportGeneratorPr
   const [reportType, setReportType] = useState('comprehensive')
   const [dateRange, setDateRange] = useState({
     start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    end: new Date().toISOString().split('T')[0]
+    end: new Date().toISOString().split('T')[0],
   })
   const [filters, setFilters] = useState({
     includeInactive: false,
     minimumActivity: 0,
-    categories: [] as string[]
+    categories: [] as string[],
   })
   const [generatedReport, setGeneratedReport] = useState<any>(null)
 
@@ -27,29 +27,29 @@ export default function ReportGenerator({ onReportGenerated }: ReportGeneratorPr
       name: '종합 리포트',
       description: '모든 지표를 포함한 전체 시스템 분석',
       icon: FiBarChart,
-      color: 'blue'
+      color: 'blue',
     },
     {
       id: 'member_activity',
       name: '멤버 활동 리포트',
       description: '사용자 활동 패턴 및 참여도 분석',
       icon: FiUsers,
-      color: 'green'
+      color: 'green',
     },
     {
       id: 'post_engagement',
       name: '게시글 참여도 리포트',
       description: '게시글 조회, 댓글, 좋아요 등 참여도 분석',
       icon: FiFileText,
-      color: 'purple'
+      color: 'purple',
     },
     {
       id: 'user_registration',
       name: '신규 가입 리포트',
       description: '회원 가입 현황 및 승인 상태 분석',
       icon: FiUsers,
-      color: 'orange'
-    }
+      color: 'orange',
+    },
   ]
 
   const handleGenerateReport = async () => {
@@ -60,13 +60,13 @@ export default function ReportGenerator({ onReportGenerated }: ReportGeneratorPr
       const response = await fetch('/api/admin/reports/generate', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           reportType,
           dateRange,
-          filters
-        })
+          filters,
+        }),
       })
 
       if (!response.ok) {
@@ -74,7 +74,7 @@ export default function ReportGenerator({ onReportGenerated }: ReportGeneratorPr
       }
 
       const data = await response.json()
-      
+
       if (data.success) {
         setGeneratedReport(data.report)
         onReportGenerated?.(data.report)
@@ -95,12 +95,12 @@ export default function ReportGenerator({ onReportGenerated }: ReportGeneratorPr
     const dataStr = JSON.stringify(generatedReport, null, 2)
     const dataBlob = new Blob([dataStr], { type: 'application/json' })
     const url = URL.createObjectURL(dataBlob)
-    
+
     const link = document.createElement('a')
     link.href = url
     link.download = `report_${generatedReport.metadata.type}_${generatedReport.metadata.generatedAt.split('T')[0]}.json`
     link.click()
-    
+
     URL.revokeObjectURL(url)
   }
 
@@ -123,11 +123,9 @@ export default function ReportGenerator({ onReportGenerated }: ReportGeneratorPr
 
         {/* 리포트 유형 선택 */}
         <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-3">
-            리포트 유형
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-3">리포트 유형</label>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {reportTypes.map((type) => {
+            {reportTypes.map(type => {
               const IconComponent = type.icon
               return (
                 <div
@@ -140,26 +138,32 @@ export default function ReportGenerator({ onReportGenerated }: ReportGeneratorPr
                   onClick={() => setReportType(type.id)}
                 >
                   <div className="flex items-start">
-                    <IconComponent 
+                    <IconComponent
                       className={`w-5 h-5 mt-1 mr-3 ${
                         reportType === type.id ? `text-${type.color}-600` : 'text-gray-600'
-                      }`} 
+                      }`}
                     />
                     <div>
-                      <h3 className={`font-medium ${
-                        reportType === type.id ? `text-${type.color}-900` : 'text-gray-900'
-                      }`}>
+                      <h3
+                        className={`font-medium ${
+                          reportType === type.id ? `text-${type.color}-900` : 'text-gray-900'
+                        }`}
+                      >
                         {type.name}
                       </h3>
-                      <p className={`text-sm mt-1 ${
-                        reportType === type.id ? `text-${type.color}-700` : 'text-gray-600'
-                      }`}>
+                      <p
+                        className={`text-sm mt-1 ${
+                          reportType === type.id ? `text-${type.color}-700` : 'text-gray-600'
+                        }`}
+                      >
                         {type.description}
                       </p>
                     </div>
                   </div>
                   {reportType === type.id && (
-                    <div className={`absolute top-2 right-2 w-4 h-4 bg-${type.color}-600 rounded-full flex items-center justify-center`}>
+                    <div
+                      className={`absolute top-2 right-2 w-4 h-4 bg-${type.color}-600 rounded-full flex items-center justify-center`}
+                    >
                       <div className="w-2 h-2 bg-white rounded-full"></div>
                     </div>
                   )}
@@ -181,7 +185,7 @@ export default function ReportGenerator({ onReportGenerated }: ReportGeneratorPr
               <input
                 type="date"
                 value={dateRange.start}
-                onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
+                onChange={e => setDateRange({ ...dateRange, start: e.target.value })}
                 className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
@@ -190,7 +194,7 @@ export default function ReportGenerator({ onReportGenerated }: ReportGeneratorPr
               <input
                 type="date"
                 value={dateRange.end}
-                onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
+                onChange={e => setDateRange({ ...dateRange, end: e.target.value })}
                 className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
@@ -208,20 +212,20 @@ export default function ReportGenerator({ onReportGenerated }: ReportGeneratorPr
               <input
                 type="checkbox"
                 checked={filters.includeInactive}
-                onChange={(e) => setFilters({ ...filters, includeInactive: e.target.checked })}
+                onChange={e => setFilters({ ...filters, includeInactive: e.target.checked })}
                 className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
               />
               <span className="ml-2 text-sm text-gray-600">비활성 사용자 포함</span>
             </label>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">
-                최소 활동 수 (필터링 기준)
-              </label>
+              <label className="block text-sm text-gray-600 mb-1">최소 활동 수 (필터링 기준)</label>
               <input
                 type="number"
                 min="0"
                 value={filters.minimumActivity}
-                onChange={(e) => setFilters({ ...filters, minimumActivity: parseInt(e.target.value) || 0 })}
+                onChange={e =>
+                  setFilters({ ...filters, minimumActivity: parseInt(e.target.value) || 0 })
+                }
                 className="block w-32 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
@@ -280,7 +284,8 @@ export default function ReportGenerator({ onReportGenerated }: ReportGeneratorPr
               <div>
                 <span className="font-medium text-gray-700">분석 기간:</span>
                 <span className="ml-2 text-gray-600">
-                  {formatDate(generatedReport.metadata.dateRange.start)} ~ {formatDate(generatedReport.metadata.dateRange.end)}
+                  {formatDate(generatedReport.metadata.dateRange.start)} ~{' '}
+                  {formatDate(generatedReport.metadata.dateRange.end)}
                 </span>
               </div>
             </div>
@@ -288,45 +293,46 @@ export default function ReportGenerator({ onReportGenerated }: ReportGeneratorPr
 
           {/* 주요 지표 요약 */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            {generatedReport.metadata.summary && Object.entries(generatedReport.metadata.summary).map(([key, value]: [string, any]) => {
-              // 한국어 키를 그대로 표시하고, 영어 키는 한국어로 변환
-              const getKoreanLabel = (key: string) => {
-                const keyMap: { [key: string]: string } = {
-                  // 기존 영어 키들 (하위 호환성을 위해)
-                  'totalActivities': '총활동수',
-                  'uniqueUsers': '순사용자수',
-                  'totalMembers': '총회원수',
-                  'approvedMembers': '승인회원수',
-                  'pendingMembers': '대기회원수',
-                  'activeMembers': '활성회원수',
-                  'totalPosts': '총게시글수',
-                  'totalComments': '총댓글수',
-                  'totalViews': '총조회수',
-                  'totalLikes': '총좋아요수',
-                  'averageEngagement': '평균참여도',
-                  'totalRegistrations': '총신규등록수',
-                  'approvedCount': '승인수',
-                  'pendingCount': '대기수',
-                  'rejectedCount': '거부수',
-                  'artistCount': '아티스트수',
-                  'topActivity': '주요활동',
-                  'averageActivitiesPerUser': '사용자당평균활동수'
-                }
-                // 이미 한국어면 그대로 반환, 영어면 변환
-                return keyMap[key] || key
-              }
+            {generatedReport.metadata.summary &&
+              Object.entries(generatedReport.metadata.summary).map(
+                ([key, value]: [string, any]) => {
+                  // 한국어 키를 그대로 표시하고, 영어 키는 한국어로 변환
+                  const getKoreanLabel = (key: string) => {
+                    const keyMap: { [key: string]: string } = {
+                      // 기존 영어 키들 (하위 호환성을 위해)
+                      totalActivities: '총활동수',
+                      uniqueUsers: '순사용자수',
+                      totalMembers: '총회원수',
+                      approvedMembers: '승인회원수',
+                      pendingMembers: '대기회원수',
+                      activeMembers: '활성회원수',
+                      totalPosts: '총게시글수',
+                      totalComments: '총댓글수',
+                      totalViews: '총조회수',
+                      totalLikes: '총좋아요수',
+                      averageEngagement: '평균참여도',
+                      totalRegistrations: '총신규등록수',
+                      approvedCount: '승인수',
+                      pendingCount: '대기수',
+                      rejectedCount: '거부수',
+                      artistCount: '아티스트수',
+                      topActivity: '주요활동',
+                      averageActivitiesPerUser: '사용자당평균활동수',
+                    }
+                    // 이미 한국어면 그대로 반환, 영어면 변환
+                    return keyMap[key] || key
+                  }
 
-              return (
-                <div key={key} className="bg-blue-50 rounded-lg p-4 text-center">
-                  <div className="text-2xl font-bold text-blue-600">
-                    {typeof value === 'number' ? formatNumber(value) : String(value)}
-                  </div>
-                  <div className="text-sm text-blue-700">
-                    {getKoreanLabel(key)}
-                  </div>
-                </div>
-              )
-            })}
+                  return (
+                    <div key={key} className="bg-blue-50 rounded-lg p-4 text-center">
+                      <div className="text-2xl font-bold text-blue-600">
+                        {typeof value === 'number' ? formatNumber(value) : String(value)}
+                      </div>
+                      <div className="text-sm text-blue-700">{getKoreanLabel(key)}</div>
+                    </div>
+                  )
+                }
+              )}
           </div>
 
           {/* 상세 데이터 표시는 별도 컴포넌트로 분리 예정 */}

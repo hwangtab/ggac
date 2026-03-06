@@ -3,29 +3,36 @@
 ## 코드 작성 후 필수 단계
 
 ### 1. 코드 품질 검사
+
 ```bash
 npm run lint
 ```
+
 - ESLint 오류 수정 필수
 
 ### 2. 빌드 테스트
+
 ```bash
 npm run build
 ```
+
 - 빌드 오류 해결 필수
 - TypeScript 타입 오류 수정
 
 ### 3. E2E 테스트 (주요 기능 변경 시)
+
 ```bash
 npx playwright test
 ```
 
 ### 4. 번들 크기 확인 (성능 최적화 시)
+
 ```bash
 ANALYZE=true npm run build
 ```
 
 ## Git 커밋 전 체크리스트
+
 - [ ] 코드 리뷰 완료
 - [ ] 린트 오류 없음
 - [ ] 빌드 성공
@@ -33,6 +40,7 @@ ANALYZE=true npm run build
 - [ ] 보안 검토 (API 키, 민감정보 제외)
 
 ## 배포 전 최종 점검
+
 - [ ] 프로덕션 빌드 테스트
 - [ ] 이미지 최적화 확인
 - [ ] CSP 헤더 호환성

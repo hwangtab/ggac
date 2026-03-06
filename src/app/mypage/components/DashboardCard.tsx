@@ -22,18 +22,21 @@ const DashboardCard: React.FC<DashboardCardProps> = ({
   buttonText,
   disabled = false,
   badge,
-  className = ''
+  className = '',
 }) => {
   const cardContent = (
-    <div className={`
+    <div
+      className={`
       bg-white rounded-lg border border-gray-200 p-6 transition-all duration-200
       min-h-[200px] flex flex-col justify-between
-      ${disabled 
-        ? 'opacity-60 cursor-not-allowed' 
-        : 'hover:shadow-md hover:border-primary-300 hover:-translate-y-1 cursor-pointer'
+      ${
+        disabled
+          ? 'opacity-60 cursor-not-allowed'
+          : 'hover:shadow-md hover:border-primary-300 hover:-translate-y-1 cursor-pointer'
       }
       ${className}
-    `}>
+    `}
+    >
       {/* 상단 영역: 아이콘, 제목, 배지 */}
       <div>
         <div className="flex items-start justify-between mb-4">
@@ -52,13 +55,11 @@ const DashboardCard: React.FC<DashboardCardProps> = ({
             <FiArrowRight className="w-5 h-5 text-gray-400 transition-transform duration-200 group-hover:translate-x-1" />
           )}
         </div>
-        
+
         {/* 설명 텍스트 */}
-        <p className="text-gray-600 text-sm leading-relaxed">
-          {description}
-        </p>
+        <p className="text-gray-600 text-sm leading-relaxed">{description}</p>
       </div>
-      
+
       {/* 하단 영역: 버튼 (있는 경우) */}
       {buttonText && !disabled && (
         <div className="flex justify-end mt-4 pt-2">

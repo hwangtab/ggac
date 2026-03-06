@@ -1,6 +1,6 @@
 /**
  * API 응답 처리 공통 래퍼 함수
- * 
+ *
  * API 호출의 일관된 성공/실패 처리, 타입 안전성, 에러 핸들링을 제공합니다.
  * - 표준화된 응답 형식
  * - 자동 에러 처리 및 로깅
@@ -78,8 +78,8 @@ export class ApiSuccess<T = any> {
       meta: {
         timestamp: new Date().toISOString(),
         requestId: options.requestId,
-        version: process.env.npm_package_version || '1.0.0'
-      }
+        version: process.env.npm_package_version || '1.0.0',
+      },
     }
 
     const headers: Record<string, string> = {}
@@ -147,8 +147,8 @@ export class ApiError extends Error {
       meta: {
         timestamp: new Date().toISOString(),
         requestId: options.requestId,
-        version: process.env.npm_package_version || '1.0.0'
-      }
+        version: process.env.npm_package_version || '1.0.0',
+      },
     }
 
     return createErrorResponse(this.message, this.statusCode)
@@ -185,7 +185,9 @@ export class ApiError extends Error {
     return new ApiError(message, 422, 'UNPROCESSABLE_ENTITY')
   }
 
-  static tooManyRequests(message: string = '너무 많은 요청입니다. 잠시 후 다시 시도해주세요.'): ApiError {
+  static tooManyRequests(
+    message: string = '너무 많은 요청입니다. 잠시 후 다시 시도해주세요.'
+  ): ApiError {
     return new ApiError(message, 429, 'TOO_MANY_REQUESTS')
   }
 
@@ -223,11 +225,12 @@ export async function withApiWrapper<T>(
   options: ApiOperationOptions = {}
 ): Promise<NextResponse> {
   const startTime = Date.now()
-  const requestId = options.requestId || `req_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`
-  
+  const requestId =
+    options.requestId || `req_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`
+
   // 에러 핸들러 생성
   const errorHandler = createErrorHandler(context.endpoint, context.method, context.userId)
-  
+
   try {
     // 타임아웃 설정
     let timeoutId: NodeJS.Timeout | null = null
@@ -247,7 +250,7 @@ export async function withApiWrapper<T>(
 
     // 작업 실행
     const result = await operationPromise
-    
+
     // 타임아웃 클리어
     if (timeoutId) {
       clearTimeout(timeoutId)
@@ -260,7 +263,7 @@ export async function withApiWrapper<T>(
       console.log(`[API SUCCESS] ${context.method} ${context.endpoint} - ${responseTime}ms`, {
         requestId,
         userId: context.userId,
-        responseTime
+        responseTime,
       })
     }
 
@@ -271,7 +274,6 @@ export async function withApiWrapper<T>(
 
     // 기본 성공 응답
     return new ApiSuccess(result, options.successMessage).toNextResponse({ ...options, requestId })
-
   } catch (error) {
     const responseTime = Date.now() - startTime
 
@@ -283,7 +285,7 @@ export async function withApiWrapper<T>(
           userId: context.userId,
           error: error.message,
           statusCode: error.statusCode,
-          responseTime
+          responseTime,
         })
       }
       return error.toNextResponse({ ...options, requestId })
@@ -384,7 +386,10 @@ export function parsePaginationParams(
   maxLimit: number = 100
 ): PaginationParams {
   const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
-  const limit = Math.min(maxLimit, Math.max(1, parseInt(searchParams.get('limit') || defaultLimit.toString(), 10)))
+  const limit = Math.min(
+    maxLimit,
+    Math.max(1, parseInt(searchParams.get('limit') || defaultLimit.toString(), 10))
+  )
   const offset = (page - 1) * limit
 
   return { page, limit, offset }

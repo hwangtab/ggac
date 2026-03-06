@@ -66,8 +66,10 @@ async function investigatePostsData() {
       console.error('❌ 최근 게시글 조회 오류:', recentError.message)
     } else {
       console.log(`✅ 최근 30일 게시글: ${recentPosts.length}개`)
-      console.log(`   조회 기간: ${startDate.toISOString().split('T')[0]} ~ ${endDate.toISOString().split('T')[0]}`)
-      
+      console.log(
+        `   조회 기간: ${startDate.toISOString().split('T')[0]} ~ ${endDate.toISOString().split('T')[0]}`
+      )
+
       if (recentPosts.length > 0) {
         const totalViews = recentPosts.reduce((sum, post) => sum + (post.views || 0), 0)
         const totalLikes = recentPosts.reduce((sum, post) => sum + (post.likes || 0), 0)
@@ -120,13 +122,15 @@ async function investigatePostsData() {
     if (allPosts.length > 0) {
       const totalViews = allPosts.reduce((sum, post) => sum + (post.views || 0), 0)
       const totalLikes = allPosts.reduce((sum, post) => sum + (post.likes || 0), 0)
-      
+
       console.log('전체 기간 통계:')
       console.log(`  - 총 게시글: ${allPosts.length}개`)
       console.log(`  - 총 댓글: ${allComments.length}개`)
       console.log(`  - 총 조회수: ${totalViews}`)
       console.log(`  - 총 좋아요: ${totalLikes}`)
-      console.log(`  - 평균 참여도: ${allPosts.length > 0 ? Math.round(((allComments.length + totalLikes) / allPosts.length) * 100) / 100 : 0}`)
+      console.log(
+        `  - 평균 참여도: ${allPosts.length > 0 ? Math.round(((allComments.length + totalLikes) / allPosts.length) * 100) / 100 : 0}`
+      )
     }
 
     // 6. 결론 및 권장사항
@@ -140,7 +144,6 @@ async function investigatePostsData() {
     } else {
       console.log('✅ 최근 데이터가 존재하므로 다른 원인 조사 필요')
     }
-
   } catch (error) {
     console.error('조사 중 오류 발생:', error)
   }

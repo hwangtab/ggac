@@ -31,37 +31,41 @@ export function useCommentLikes({
   commentId,
   initialLikeCount = 0,
   initialIsLiked = false,
-  onLikeChange
+  onLikeChange,
 }: UseCommentLikesProps) {
   const [user, setUser] = useState<any>(null)
   const [state, setState] = useState<CommentLikeState>({
     likeCount: initialLikeCount,
-    isLiked: initialIsLiked
+    isLiked: initialIsLiked,
   })
 
   const supabase = createClientComponentClient()
-  
+
   // 로딩 상태 관리
   const loadingState = useLoadingState({
     timeout: 5000,
     enableLogging: true,
-    onError: (error) => {
+    onError: error => {
       console.error('댓글 좋아요 오류:', error)
       setState(prev => ({ ...prev, isLiked: !prev.isLiked })) // 롤백
-    }
+    },
   })
 
   // 사용자 정보 가져오기
   useEffect(() => {
     const getUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
       setUser(session?.user || null)
     }
-    
+
     getUser()
 
     // 인증 상태 변경 리스너
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user || null)
     })
 
@@ -86,15 +90,17 @@ export function useCommentLikes({
     setState(prev => ({
       ...prev,
       isLiked: optimisticIsLiked,
-      likeCount: optimisticCount
+      likeCount: optimisticCount,
     }))
-    
+
     // 즉시 콜백 호출
     onLikeChange?.(optimisticIsLiked, optimisticCount)
 
     return loadingState.executeAsync(async () => {
       // 토큰 가져오기
-      const { data: { session } } = await supabase.auth.getSession()
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
       if (!session?.access_token) {
         throw new Error('인증 토큰이 없습니다.')
       }
@@ -103,8 +109,8 @@ export function useCommentLikes({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        }
+          Authorization: `Bearer ${session.access_token}`,
+        },
       })
 
       const data = await response.json()
@@ -117,7 +123,7 @@ export function useCommentLikes({
       setState(prev => ({
         ...prev,
         likeCount: data.like_count,
-        isLiked: data.liked
+        isLiked: data.liked,
       }))
 
       // 최종 콜백 호출
@@ -138,13 +144,13 @@ export function useCommentLikes({
     isLiked: state.isLiked,
     isLoading: loadingState.isLoading,
     error: loadingState.error,
-    
+
     // 액션
     toggleLike,
     clearError,
-    
+
     // 유틸
     canLike: !!user,
-    reset: loadingState.reset
+    reset: loadingState.reset,
   }
 }
