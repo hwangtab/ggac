@@ -5,6 +5,11 @@
 - Fixed the initial home-page header flash so the first visit keeps the header
   transparent over the hero until scroll state sync completes, instead of
   briefly rendering the opaque white header.
+- Restored a CI-level Playwright smoke job in `.github/workflows/ci.yml`, moved
+  Playwright onto its own port in `playwright.config.ts`, and made middleware
+  skip Supabase auth wiring when env vars are absent so PRs can exercise the
+  homepage in Chromium without depending on full Supabase-backed end-to-end
+  flows.
 - Fixed `건강열전 2026` poster loading by restoring a tracked cover asset path
   (`/images/projects/health-2026.webp`) and regenerating the file from the
   latest poster source to prevent `/_next/image` 400 responses in deployments.

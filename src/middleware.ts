@@ -7,10 +7,13 @@ import { getSystemSettings } from './middleware/settings'
 import { handleAuth } from './middleware/auth'
 import { getMaintenanceResponse } from './middleware/maintenance'
 
+function hasSupabaseMiddlewareConfig() {
+  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+}
+
 export async function middleware(request: NextRequest) {
-  // 1. 기본 응답 객체 생성 및 Supabase 클라이언트 초기화
+  // 1. 기본 응답 객체 생성
   const res = NextResponse.next()
-  const supabase = createMiddlewareClient({ req: request, res })
 
   // 2. CSP 보안 헤더 적용
   applyCSP(request, res)
@@ -30,6 +33,15 @@ export async function middleware(request: NextRequest) {
   if (pathname.startsWith('/_next') || pathname.includes('.')) {
     return res
   }
+
+  if (!hasSupabaseMiddlewareConfig()) {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('⚠️ [MIDDLEWARE] Supabase env missing, skipping auth middleware')
+    }
+    return res
+  }
+
+  const supabase = createMiddlewareClient({ req: request, res })
 
   // Fast-path: 게시판 페이지는 시스템 설정 조회 지연을 줄이기 위해 바로 통과할 수도 있으나
   // 유지보수 모드 체크를 위해 필요함. 단, 성능을 위해 특정 경로는 제외 가능.
