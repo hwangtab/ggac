@@ -29,7 +29,7 @@ export async function GET() {
       )
     }
 
-    if (!user || !user) {
+    if (!user) {
       console.log('[VERIFY-SESSION] No session found')
       return NextResponse.json(
         {

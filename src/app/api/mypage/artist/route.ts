@@ -3,6 +3,7 @@ import { cookies } from 'next/headers'
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 import { createClient } from '@supabase/supabase-js'
 import { z } from 'zod'
+import { createOptionsResponse } from '@/utils/apiResponse'
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { updateArtistInJsonFile, commitAndPushJsonChanges } from '@/utils/jsonSync'
 import { invalidateArtistsCache } from '@/lib/data'
@@ -351,13 +352,6 @@ export async function PATCH(request: NextRequest) {
 }
 
 // OPTIONS: CORS 지원
-export async function OPTIONS(request: NextRequest) {
-  return new NextResponse(null, {
-    status: 200,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, PATCH, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    },
-  })
+export async function OPTIONS() {
+  return createOptionsResponse()
 }
