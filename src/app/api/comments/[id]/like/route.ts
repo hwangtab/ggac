@@ -24,11 +24,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const cookieStore = await cookies()
     const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
     const {
-      data: { session },
+      data: { user },
       error: authError,
-    } = await supabase.auth.getSession()
+    } = await supabase.auth.getUser()
 
-    if (authError || !session?.user) {
+    if (authError || !user) {
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const { data: profile, error: profileError } = await supabase
       .from('member_profiles')
       .select('registration_status, is_active')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .single()
 
     if (
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     // 좋아요 토글 실행
     const { data: result, error: toggleError } = await supabase.rpc('toggle_comment_like', {
       p_comment_id: commentId,
-      p_user_id: session.user.id,
+      p_user_id: user.id,
     })
 
     if (toggleError) {

@@ -15,10 +15,10 @@ export async function POST(request: NextRequest) {
       const cookieStore = await cookies()
       const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
       const {
-        data: { session },
-      } = await supabase.auth.getSession()
+        data: { user },
+      } = await supabase.auth.getUser()
 
-      if (!session?.user) {
+      if (!user) {
         return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
       }
 
@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
               : {}
 
           const { data, error } = await supabase.rpc('log_user_activity', {
-            p_user_id: session.user.id,
+            p_user_id: user.id,
             p_action_type: log.action_type,
             p_target_type: log.target_type || null,
             p_target_id: log.target_id || null,

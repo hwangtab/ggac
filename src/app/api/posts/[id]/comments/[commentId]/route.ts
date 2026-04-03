@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { revalidateTag } from 'next/cache'
+import { validateUUID } from '@/utils/validation'
 
 export const dynamic = 'force-dynamic'
 export const preferredRegion = 'icn1'
@@ -11,13 +12,26 @@ export async function DELETE(
   context: { params: Promise<{ id: string; commentId: string }> }
 ) {
   const { id: postId, commentId } = await context.params
+
+  const postIdValidation = validateUUID(postId, '게시글 ID')
+  if (!postIdValidation.isValid) {
+    return NextResponse.json({ success: false, error: postIdValidation.errors[0] }, { status: 400 })
+  }
+  const commentIdValidation = validateUUID(commentId, '댓글 ID')
+  if (!commentIdValidation.isValid) {
+    return NextResponse.json(
+      { success: false, error: commentIdValidation.errors[0] },
+      { status: 400 }
+    )
+  }
+
   try {
     const cookieStore = await cookies()
     const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
     const {
-      data: { session },
-    } = await supabase.auth.getSession()
-    const userId = session?.user?.id
+      data: { user },
+    } = await supabase.auth.getUser()
+    const userId = user?.id
     if (!userId)
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
 

@@ -99,9 +99,10 @@ const nextConfig = {
       }
 
       // 트리 쉐이킹 최적화
+      // sideEffects: false 는 제거 — Supabase, Framer Motion 등 초기화 코드가 있는
+      // 외부 패키지를 의도치 않게 트리쉐이킹할 수 있어 런타임 오류를 유발할 수 있음
       config.optimization.usedExports = true
       config.optimization.providedExports = true
-      config.optimization.sideEffects = false
 
       // 더 공격적인 압축 설정
       if (config.optimization.minimizer) {

@@ -119,10 +119,9 @@ export async function POST(request: NextRequest) {
 
     // 관리자 권한 확인
     const {
-      data: { session },
+      data: { user },
       error: authError,
-    } = await supabase.auth.getSession()
-    const user = session?.user
+    } = await supabase.auth.getUser()
     if (authError || !user) {
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
@@ -273,10 +272,9 @@ export async function GET(request: NextRequest) {
 
     // 관리자 권한 확인
     const {
-      data: { session },
+      data: { user },
       error: authError,
-    } = await supabase.auth.getSession()
-    const user = session?.user
+    } = await supabase.auth.getUser()
     if (authError || !user) {
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }

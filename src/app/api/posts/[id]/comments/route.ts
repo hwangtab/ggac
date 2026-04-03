@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { revalidateTag } from 'next/cache'
+import { validateUUID } from '@/utils/validation'
 
 export const dynamic = 'force-dynamic'
 export const preferredRegion = 'icn1'
@@ -11,6 +12,11 @@ const PAGE_SIZE_MAX = 100
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params
+
+  const uuidValidation = validateUUID(id, '게시글 ID')
+  if (!uuidValidation.isValid) {
+    return NextResponse.json({ success: false, error: uuidValidation.errors[0] }, { status: 400 })
+  }
   const { searchParams } = new URL(request.url)
   const limit = Math.min(parseInt(searchParams.get('limit') || '20', 10), PAGE_SIZE_MAX)
   const cursor = searchParams.get('cursor') || '' // format: encodeURIComponent(`${created_at}|${id}`)
@@ -99,13 +105,17 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id: postId } = await context.params
+  const postIdValidation = validateUUID(postId, '게시글 ID')
+  if (!postIdValidation.isValid) {
+    return NextResponse.json({ success: false, error: postIdValidation.errors[0] }, { status: 400 })
+  }
   try {
     const cookieStore = await cookies()
     const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
     const {
-      data: { session },
-    } = await supabase.auth.getSession()
-    const userId = session?.user?.id
+      data: { user },
+    } = await supabase.auth.getUser()
+    const userId = user?.id
     if (!userId)
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
 

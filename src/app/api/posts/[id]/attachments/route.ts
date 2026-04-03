@@ -150,18 +150,18 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     console.log('[UPLOAD API] Supabase 클라이언트 생성 완료')
 
     const {
-      data: { session },
-    } = await supabase.auth.getSession()
-    console.log('[UPLOAD API] 세션 조회 완료:', !!session?.user)
+      data: { user },
+    } = await supabase.auth.getUser()
+    console.log('[UPLOAD API] 세션 조회 완료:', !!user)
 
-    if (!session?.user) {
+    if (!user) {
       console.error('[UPLOAD API] 인증 실패 - 세션 없음')
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
     const validPostId = uuidValidation.sanitized
     const isTempId = isValidTempId(validPostId)
-    console.log('[UPLOAD API] 인증 성공, 사용자 ID:', session.user.id, '임시 ID:', isTempId)
+    console.log('[UPLOAD API] 인증 성공, 사용자 ID:', user.id, '임시 ID:', isTempId)
 
     // 임시 ID가 아닌 경우에만 게시글 존재 및 권한 확인
     let post = null
@@ -180,7 +180,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
       console.log('[UPLOAD API] 게시글 조회 성공, 작성자:', postData.author_id)
 
-      if (postData.author_id !== session.user.id) {
+      if (postData.author_id !== user.id) {
         console.error('[UPLOAD API] 권한 없음 - 작성자가 아님')
         return NextResponse.json(
           { error: '게시글 작성자만 첨부파일을 업로드할 수 있습니다.' },
@@ -214,12 +214,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     }
 
     // 공통 파일 검증 로직 사용
-    const validation = validateFile(
-      file,
-      FILE_VALIDATION_PROFILES.POST_ATTACHMENTS,
-      [],
-      session.user.id
-    )
+    const validation = validateFile(file, FILE_VALIDATION_PROFILES.POST_ATTACHMENTS, [], user.id)
 
     if (!validation.isValid) {
       console.error('[UPLOAD API] 파일 검증 실패:', validation.errors)
@@ -443,7 +438,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         alt_text: altText || null,
         is_primary: false, // 임시 파일은 대표 이미지가 될 수 없음
         is_temporary: true,
-        temp_session: session.user.id, // 사용자 ID를 세션으로 사용
+        temp_session: user.id, // 사용자 ID를 세션으로 사용
         expires_at: expiresAt.toISOString(),
       }
 

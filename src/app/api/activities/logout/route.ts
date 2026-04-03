@@ -22,9 +22,9 @@ export async function POST(request: NextRequest) {
 
     // 인증 확인
     const {
-      data: { session },
-    } = await supabase.auth.getSession()
-    if (!session) {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
 
     // 세션 종료 처리
     const { data: sessionResult, error: sessionError } = await supabase.rpc('manage_user_session', {
-      p_user_id: session.user.id,
+      p_user_id: user.id,
       p_session_token: sessionToken,
       p_action: 'end',
       p_ip_address: ip,

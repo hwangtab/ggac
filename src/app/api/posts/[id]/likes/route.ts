@@ -45,10 +45,10 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const cookieStore = await cookies()
     const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
     const {
-      data: { session },
-    } = await supabase.auth.getSession()
+      data: { user },
+    } = await supabase.auth.getUser()
 
-    if (!session?.user) {
+    if (!user) {
       console.log('[API] GET 인증 실패')
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
@@ -70,7 +70,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       .from('post_likes')
       .select('id')
       .eq('post_id', postId)
-      .eq('user_id', session.user.id)
+      .eq('user_id', user.id)
       .single()
 
     const result = {
@@ -117,21 +117,21 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const cookieStore = await cookies()
     const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
     const {
-      data: { session },
-    } = await supabase.auth.getSession()
+      data: { user },
+    } = await supabase.auth.getUser()
 
-    if (!session?.user) {
+    if (!user) {
       console.log('[API] POST 인증 실패')
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
-    console.log('[API] 인증 성공:', session.user.email)
+    console.log('[API] 인증 성공:', user.email)
 
     // 사용자 승인 상태 확인
     const { data: profile, error: profileError } = await supabase
       .from('member_profiles')
       .select('registration_status, is_active')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .single()
 
     if (profileError) {
@@ -168,7 +168,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     console.log('[API] toggle_post_like RPC 호출')
     const { data: toggleResult, error: toggleError } = await supabase.rpc('toggle_post_like', {
       p_post_id: uuidValidation.sanitized,
-      p_user_id: session.user.id,
+      p_user_id: user.id,
     })
 
     if (toggleError) {
@@ -196,7 +196,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     // 활동 로깅
     try {
       await supabase.rpc('log_user_activity', {
-        p_user_id: session.user.id,
+        p_user_id: user.id,
         p_action_type: result.liked ? 'like_added' : 'like_removed',
         p_target_type: 'post',
         p_target_id: uuidValidation.sanitized,

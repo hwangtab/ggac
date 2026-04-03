@@ -17,11 +17,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
     // 사용자 인증 확인
     const {
-      data: { session },
+      data: { user },
       error: authError,
-    } = await supabase.auth.getSession()
+    } = await supabase.auth.getUser()
 
-    if (authError || !session?.user) {
+    if (authError || !user) {
       return createErrorResponse('인증이 필요합니다.', 401)
     }
 
@@ -29,7 +29,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const { data: profile, error: profileError } = await supabase
       .from('member_profiles')
       .select('is_admin, registration_status, is_active')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .single()
 
     if (profileError) {

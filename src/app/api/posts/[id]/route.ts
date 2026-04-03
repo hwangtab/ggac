@@ -52,9 +52,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
     // 세션은 선택 사항(공개 열람 허용), 사용자 ID가 있으면 is_liked 등 계산에 사용
     const {
-      data: { session },
-    } = await supabase.auth.getSession()
-    const userId = session?.user?.id || null
+      data: { user },
+    } = await supabase.auth.getUser()
+    const userId = user?.id || null
     let isAdmin = false
     if (userId) {
       const { data: prof } = await supabase

@@ -3,6 +3,7 @@ export const runtime = 'nodejs'
 export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
+import { createOptionsResponse } from '@/utils/apiResponse'
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
@@ -44,11 +45,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
     // 사용자 인증 확인
     const {
-      data: { session },
+      data: { user },
       error: authError,
-    } = await supabase.auth.getSession()
+    } = await supabase.auth.getUser()
 
-    if (authError || !session?.user) {
+    if (authError || !user) {
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
@@ -56,7 +57,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const { data: profile, error: profileError } = await supabase
       .from('member_profiles')
       .select('is_admin, registration_status, is_active')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .single()
 
     if (profileError) {
@@ -132,7 +133,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         updateData = {
           registration_status: 'approved',
           is_active: true,
-          approved_by: session.user.id,
+          approved_by: user.id,
           approved_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }
@@ -148,7 +149,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         updateData = {
           registration_status: 'rejected',
           is_active: false,
-          rejected_by: session.user.id,
+          rejected_by: user.id,
           updated_at: new Date().toISOString(),
         }
         break
@@ -239,7 +240,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         memberId,
         action,
         targetMember: targetMember.display_name,
-        adminId: session.user.id,
+        adminId: user.id,
       },
       'medium'
     )
@@ -272,13 +273,6 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 }
 
 // OPTIONS: CORS 지원
-export async function OPTIONS(request: NextRequest) {
-  return new NextResponse(null, {
-    status: 200,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'PATCH, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    },
-  })
+export async function OPTIONS() {
+  return createOptionsResponse()
 }

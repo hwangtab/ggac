@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSuccessResponse, createErrorResponse } from '@/utils/apiResponse'
 
+const MAX_FIELD_LENGTH = 4096 // 4KB per field
+const MAX_MESSAGE_LENGTH = 1024
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -10,16 +13,24 @@ export async function POST(request: NextRequest) {
       return createErrorResponse('Missing required fields: message, timestamp', 400)
     }
 
+    // 입력 길이 제한 (로그 인플레이션 방지)
+    const message = String(body.message || '').slice(0, MAX_MESSAGE_LENGTH)
+    const stack = body.stack ? String(body.stack).slice(0, MAX_FIELD_LENGTH) : undefined
+    const componentStack = body.componentStack
+      ? String(body.componentStack).slice(0, MAX_FIELD_LENGTH)
+      : undefined
+    const url = body.url ? String(body.url).slice(0, 512) : 'unknown'
+
     // Construct error log entry
     const errorLog = {
       timestamp: body.timestamp,
-      url: body.url || 'unknown',
-      message: body.message,
-      stack: body.stack,
-      componentStack: body.componentStack,
-      userAgent: body.userAgent || request.headers.get('user-agent'),
+      url,
+      message,
+      stack,
+      componentStack,
+      userAgent: request.headers.get('user-agent'),
       ip: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown',
-      errorId: body.errorId || `client_error_${Date.now()}`,
+      errorId: body.errorId ? String(body.errorId).slice(0, 64) : `client_error_${Date.now()}`,
       level: 'error',
       source: 'client',
     }

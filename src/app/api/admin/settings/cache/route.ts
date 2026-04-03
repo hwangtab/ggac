@@ -1,3 +1,4 @@
+import { createOptionsResponse } from '@/utils/apiResponse'
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
@@ -50,21 +51,21 @@ export async function POST(request: NextRequest) {
 
     // 사용자 인증 및 관리자 권한 확인
     const {
-      data: { session },
+      data: { user },
       error: authError,
-    } = await supabase.auth.getSession()
+    } = await supabase.auth.getUser()
 
-    if (authError || !session?.user) {
+    if (authError || !user) {
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
-    await checkAdminPermission(supabase, session.user.id)
+    await checkAdminPermission(supabase, user.id)
 
     // 요청 데이터 파싱
     const requestData = await request.json()
     const { cacheType = 'all' } = requestData
 
-    console.log('[DEBUG] Cache invalidation request:', { cacheType, adminId: session.user.id })
+    console.log('[DEBUG] Cache invalidation request:', { cacheType, adminId: user.id })
 
     // 설정 캐시 무효화
     refreshSettingsCache()
@@ -73,7 +74,7 @@ export async function POST(request: NextRequest) {
     logSecurityEvent(
       'ADMIN_SETTINGS_CACHE_INVALIDATED',
       {
-        adminId: session.user.id,
+        adminId: user.id,
         cacheType,
       },
       'low'
@@ -132,15 +133,15 @@ export async function GET(request: NextRequest) {
 
     // 사용자 인증 및 관리자 권한 확인
     const {
-      data: { session },
+      data: { user },
       error: authError,
-    } = await supabase.auth.getSession()
+    } = await supabase.auth.getUser()
 
-    if (authError || !session?.user) {
+    if (authError || !user) {
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
-    await checkAdminPermission(supabase, session.user.id)
+    await checkAdminPermission(supabase, user.id)
 
     // 캐시 상태 정보 수집
     const cacheStatus = {
@@ -178,13 +179,6 @@ export async function GET(request: NextRequest) {
 }
 
 // OPTIONS: CORS 지원
-export async function OPTIONS(request: NextRequest) {
-  return new NextResponse(null, {
-    status: 200,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    },
-  })
+export async function OPTIONS() {
+  return createOptionsResponse()
 }

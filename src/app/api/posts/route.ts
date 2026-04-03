@@ -62,9 +62,9 @@ export async function GET(request: NextRequest) {
     cookies: () => cookieStore,
   } as any)
   const {
-    data: { session },
-  } = await supabase.auth.getSession()
-  const userId = session?.user?.id || null
+    data: { user },
+  } = await supabase.auth.getUser()
+  const userId = user?.id || null
 
   return apiGet(
     async () => {

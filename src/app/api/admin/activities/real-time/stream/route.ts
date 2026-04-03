@@ -11,15 +11,15 @@ export async function GET(request: NextRequest) {
   const cookieStore = await cookies()
   const supabase = createServerComponentClient({ cookies: () => cookieStore as any })
   const {
-    data: { session },
-  } = await supabase.auth.getSession()
-  if (!session?.user) {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) {
     return new Response('Unauthorized', { status: 401 })
   }
   const { data: profile } = await supabase
     .from('member_profiles')
     .select('is_admin, registration_status, is_active')
-    .eq('id', session.user.id)
+    .eq('id', user.id)
     .single()
   if (!profile?.is_admin || profile.registration_status !== 'approved' || !profile.is_active) {
     return new Response('Forbidden', { status: 403 })

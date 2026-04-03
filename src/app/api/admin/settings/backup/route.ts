@@ -1,3 +1,4 @@
+import { createOptionsResponse } from '@/utils/apiResponse'
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
@@ -49,17 +50,17 @@ export async function GET(request: NextRequest) {
 
     // 사용자 인증 및 관리자 권한 확인
     const {
-      data: { session },
+      data: { user },
       error: authError,
-    } = await supabase.auth.getSession()
+    } = await supabase.auth.getUser()
 
-    if (authError || !session?.user) {
+    if (authError || !user) {
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
-    console.log('[DEBUG] Backup API: Checking admin permission for user:', session.user.id)
+    console.log('[DEBUG] Backup API: Checking admin permission for user:', user.id)
     try {
-      await checkAdminPermission(supabase, session.user.id)
+      await checkAdminPermission(supabase, user.id)
       console.log('[DEBUG] Backup API: Admin permission check passed')
     } catch (permError) {
       console.error('[DEBUG] Backup API: Admin permission check failed:', permError)
@@ -116,7 +117,7 @@ export async function GET(request: NextRequest) {
     const backupData = {
       metadata: {
         created_at: new Date().toISOString(),
-        created_by: session.user.id,
+        created_by: user.id,
         version: '1.0',
         description: '시스템 설정 백업 파일',
       },
@@ -127,7 +128,7 @@ export async function GET(request: NextRequest) {
     logSecurityEvent(
       'ADMIN_SETTINGS_BACKUP_CREATED',
       {
-        adminId: session.user.id,
+        adminId: user.id,
         settingsCount: settingsData?.length || 0,
       },
       'medium'
@@ -185,15 +186,15 @@ export async function POST(request: NextRequest) {
 
     // 사용자 인증 및 관리자 권한 확인
     const {
-      data: { session },
+      data: { user },
       error: authError,
-    } = await supabase.auth.getSession()
+    } = await supabase.auth.getUser()
 
-    if (authError || !session?.user) {
+    if (authError || !user) {
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
-    await checkAdminPermission(supabase, session.user.id)
+    await checkAdminPermission(supabase, user.id)
 
     // 요청 데이터 파싱
     const requestData = await request.json()
@@ -247,7 +248,7 @@ export async function POST(request: NextRequest) {
     logSecurityEvent(
       'ADMIN_SETTINGS_RESTORED',
       {
-        adminId: session.user.id,
+        adminId: user.id,
         restored: restoreResults,
         errors: errorResults,
         backupMetadata: metadata,
@@ -293,13 +294,6 @@ export async function POST(request: NextRequest) {
 }
 
 // OPTIONS: CORS 지원
-export async function OPTIONS(request: NextRequest) {
-  return new NextResponse(null, {
-    status: 200,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    },
-  })
+export async function OPTIONS() {
+  return createOptionsResponse()
 }

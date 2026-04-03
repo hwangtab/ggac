@@ -21,18 +21,18 @@ export async function GET(request: NextRequest) {
       const cookieStore = await cookies()
       const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
       const {
-        data: { session },
+        data: { user },
         error,
-      } = await supabase.auth.getSession()
+      } = await supabase.auth.getUser()
 
       if (error) {
         return NextResponse.json({ error: '세션 확인 실패' }, { status: 500 })
       }
 
       return NextResponse.json({
-        authenticated: !!session?.user,
-        user_id: session?.user?.id || null,
-        expires_at: session?.expires_at || null,
+        authenticated: !!user,
+        user_id: user?.id || null,
+        expires_at: null,
       })
     } catch (error) {
       console.error('세션 GET API 오류:', error)
@@ -46,10 +46,10 @@ export async function POST(request: NextRequest) {
       const cookieStore = await cookies()
       const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
       const {
-        data: { session },
-      } = await supabase.auth.getSession()
+        data: { user },
+      } = await supabase.auth.getUser()
 
-      if (!session?.user) {
+      if (!user) {
         return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
       }
 
@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
 
       // 세션 관리 함수 호출
       const { data, error } = await supabase.rpc('manage_user_session', {
-        p_user_id: session.user.id,
+        p_user_id: user.id,
         p_session_token: session_token || body.session_id || '',
         p_action: action,
         p_ip_address: clientIP,

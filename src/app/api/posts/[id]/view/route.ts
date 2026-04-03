@@ -46,9 +46,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     // 사용자 세션 확인 (선택사항 - 비로그인 사용자도 조회 가능)
     const {
-      data: { session },
-    } = await supabase.auth.getSession()
-    const userId = session?.user?.id
+      data: { user },
+    } = await supabase.auth.getUser()
+    const userId = user?.id
 
     // Service Role 클라이언트 생성 (view count 업데이트용)
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY

@@ -1,3 +1,4 @@
+import { createOptionsResponse } from '@/utils/apiResponse'
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
@@ -43,15 +44,14 @@ export async function POST(request: NextRequest) {
 
     // 사용자 인증 확인
     const {
-      data: { session },
+      data: { user },
       error: authError,
-    } = await supabase.auth.getSession()
+    } = await supabase.auth.getUser()
 
     console.log('[POST] 인증 상태 확인:', {
-      hasSession: !!session,
-      hasUser: !!session?.user,
-      userId: session?.user?.id,
-      userEmail: session?.user?.email,
+      hasUser: !!user,
+      userId: user?.id,
+      userEmail: user?.email,
       authError: authError
         ? {
             message: authError.message,
@@ -60,21 +60,21 @@ export async function POST(request: NextRequest) {
         : null,
     })
 
-    if (authError || !session?.user) {
-      console.log('[POST] 인증 실패:', { authError, hasSession: !!session })
+    if (authError || !user) {
+      console.log('[POST] 인증 실패:', { authError })
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
     // 관리자 권한 확인
     console.log('[POST] 관리자 권한 확인 시작:', {
-      userId: session.user.id,
-      userEmail: session.user.email,
+      userId: user.id,
+      userEmail: user.email,
     })
 
     const { data: profile, error: profileError } = await supabase
       .from('member_profiles')
       .select('is_admin, registration_status, is_active')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .single()
 
     console.log('[POST] 프로필 조회 결과:', {
@@ -213,7 +213,7 @@ export async function POST(request: NextRequest) {
         updateData = {
           registration_status: 'approved',
           is_active: true,
-          approved_by: session.user.id,
+          approved_by: user.id,
           approved_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }
@@ -229,7 +229,7 @@ export async function POST(request: NextRequest) {
         updateData = {
           registration_status: 'rejected',
           is_active: false,
-          rejected_by: session.user.id,
+          rejected_by: user.id,
           updated_at: new Date().toISOString(),
         }
         break
@@ -325,7 +325,7 @@ export async function POST(request: NextRequest) {
         memberId,
         action,
         targetMember: targetMember.display_name,
-        adminId: session.user.id,
+        adminId: user.id,
       },
       'medium'
     )
@@ -358,13 +358,6 @@ export async function POST(request: NextRequest) {
 }
 
 // OPTIONS: CORS 지원
-export async function OPTIONS(request: NextRequest) {
-  return new NextResponse(null, {
-    status: 200,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    },
-  })
+export async function OPTIONS() {
+  return createOptionsResponse()
 }

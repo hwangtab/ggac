@@ -23,9 +23,9 @@ export async function POST(request: NextRequest) {
 
     // 인증 확인
     const {
-      data: { session },
-    } = await supabase.auth.getSession()
-    if (!session) {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
     const { data: profile } = await supabase
       .from('member_profiles')
       .select('is_admin, registration_status')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .single()
 
     if (!profile?.is_admin || profile.registration_status !== 'approved') {
@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
       id: `report_${Date.now()}`,
       type: reportType,
       generatedAt: new Date().toISOString(),
-      generatedBy: session.user.id,
+      generatedBy: user.id,
       dateRange: {
         start: startDate.toISOString(),
         end: endDate.toISOString(),

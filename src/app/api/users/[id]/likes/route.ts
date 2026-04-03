@@ -37,10 +37,10 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const cookieStore = await cookies()
     const supabase = createServerComponentClient({ cookies: () => cookieStore as any })
     const {
-      data: { session },
-    } = await supabase.auth.getSession()
+      data: { user },
+    } = await supabase.auth.getUser()
 
-    if (!session?.user) {
+    if (!user) {
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
@@ -51,11 +51,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const offset = (page - 1) * limit
 
     // 본인 데이터이거나 관리자만 조회 가능
-    if (session.user.id !== requestedUserId) {
+    if (user.id !== requestedUserId) {
       const { data: profile } = await supabase
         .from('member_profiles')
         .select('is_admin')
-        .eq('id', session.user.id)
+        .eq('id', user.id)
         .single()
 
       if (!profile?.is_admin) {

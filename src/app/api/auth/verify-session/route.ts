@@ -13,9 +13,9 @@ export async function GET() {
 
     // 세션 확인
     const {
-      data: { session },
+      data: { user },
       error: sessionError,
-    } = await supabase.auth.getSession()
+    } = await supabase.auth.getUser()
 
     if (sessionError) {
       console.log('[VERIFY-SESSION] Session error:', sessionError)
@@ -29,7 +29,7 @@ export async function GET() {
       )
     }
 
-    if (!session || !session.user) {
+    if (!user || !user) {
       console.log('[VERIFY-SESSION] No session found')
       return NextResponse.json(
         {
@@ -44,7 +44,7 @@ export async function GET() {
     const { data: profile, error: profileError } = await supabase
       .from('member_profiles')
       .select('registration_status, is_active, display_name')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .single()
 
     if (profileError) {
@@ -52,7 +52,7 @@ export async function GET() {
       return NextResponse.json(
         {
           authenticated: true,
-          user: session.user,
+          user: user,
           profile: null,
           error: 'Profile not found',
           details: profileError.message,
@@ -65,9 +65,9 @@ export async function GET() {
     return NextResponse.json(
       {
         authenticated: true,
-        user: session.user,
+        user: user,
         profile: profile,
-        sessionId: session.access_token?.substring(0, 10) + '...', // 디버깅용 세션 ID 일부
+        sessionId: user.id?.substring(0, 10) + '...', // 디버깅용 사용자 ID 일부
       },
       { status: 200 }
     )

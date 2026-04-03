@@ -27,10 +27,10 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   const cookieStore = await cookies()
   const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
   const {
-    data: { session },
-  } = await supabase.auth.getSession()
+    data: { user },
+  } = await supabase.auth.getUser()
 
-  if (!session?.user) {
+  if (!user) {
     return NextResponse.json(
       { success: false, error: 'UNAUTHORIZED', data: { is_liked: false } },
       { status: 401 }
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
   const searchParams = new URL(request.url).searchParams
   const userIdFromQuery = searchParams.get('user_id')
-  if (userIdFromQuery && userIdFromQuery !== session.user.id) {
+  if (userIdFromQuery && userIdFromQuery !== user.id) {
     return NextResponse.json(
       { success: false, error: 'FORBIDDEN', data: { is_liked: false } },
       { status: 403 }
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     .from('post_likes')
     .select('id')
     .eq('post_id', validation.sanitized)
-    .eq('user_id', session.user.id)
+    .eq('user_id', user.id)
     .maybeSingle()
 
   if (likeError) {

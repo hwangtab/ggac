@@ -21,10 +21,6 @@ import distLimiter from '@/utils/distributedRateLimiter'
 
 // Service Role 클라이언트는 Storage 작업에만 사용
 function getSupabaseAdmin() {
-  console.log('[SUPABASE ADMIN] 환경 변수 확인')
-  console.log('[SUPABASE ADMIN] SUPABASE_URL:', !!process.env.NEXT_PUBLIC_SUPABASE_URL)
-  console.log('[SUPABASE ADMIN] SERVICE_ROLE_KEY:', !!process.env.SUPABASE_SERVICE_ROLE_KEY)
-
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured')
   }
@@ -39,6 +35,27 @@ function getSupabaseAdmin() {
       persistSession: false,
     },
   })
+}
+
+// 매직 바이트 시그니처 (서버 사이드 Buffer 기반)
+const MAGIC_BYTE_SIGNATURES: Record<string, number[][]> = {
+  'image/jpeg': [[0xff, 0xd8, 0xff]],
+  'image/png': [[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]],
+  'image/gif': [[0x47, 0x49, 0x46, 0x38]],
+  'image/webp': [[0x52, 0x49, 0x46, 0x46]],
+  'application/pdf': [[0x25, 0x50, 0x44, 0x46]],
+  'video/mp4': [[0x00, 0x00, 0x00, 0x20, 0x66, 0x74, 0x79, 0x70]],
+  'video/webm': [[0x1a, 0x45, 0xdf, 0xa3]],
+  'audio/mpeg': [
+    [0xff, 0xfb],
+    [0x49, 0x44, 0x33],
+  ],
+}
+
+function checkMagicBytes(buffer: Buffer, mimeType: string): boolean {
+  const signatures = MAGIC_BYTE_SIGNATURES[mimeType]
+  if (!signatures) return true // 알 수 없는 타입은 통과 (MIME 검증에 의존)
+  return signatures.some(sig => sig.every((byte, i) => buffer[i] === byte))
 }
 
 // 기본 설정
@@ -341,11 +358,11 @@ export async function POST(request: NextRequest) {
 
     // 사용자 인증 확인
     const {
-      data: { session },
+      data: { user },
       error: authError,
-    } = await supabase.auth.getSession()
+    } = await supabase.auth.getUser()
 
-    if (authError || !session?.user) {
+    if (authError || !user) {
       return createErrorResponse('로그인이 필요합니다.', 401)
     }
 
@@ -353,7 +370,7 @@ export async function POST(request: NextRequest) {
     const { data: profile, error: profileError } = await supabase
       .from('member_profiles')
       .select('registration_status, is_active')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .single()
 
     if (profileError || !profile) {
@@ -391,7 +408,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Storage 경로 생성
-    const storagePaths = generateStoragePaths(bucket, session.user.id, file.name)
+    const storagePaths = generateStoragePaths(bucket, user.id, file.name)
 
     // Storage 클라이언트 생성 및 파일 업로드
     let supabaseAdmin
@@ -404,6 +421,11 @@ export async function POST(request: NextRequest) {
     }
 
     const fileBuffer = Buffer.from(await file.arrayBuffer())
+
+    // 매직 바이트 검증 (파일 내용이 MIME 타입과 일치하는지 확인)
+    if (!checkMagicBytes(fileBuffer, file.type)) {
+      return createErrorResponse('파일 내용이 선언된 파일 형식과 일치하지 않습니다.', 400)
+    }
 
     let uploadResult: StorageUploadResult
     try {
@@ -527,11 +549,11 @@ export async function GET(request: NextRequest) {
 
     // 사용자 인증 확인
     const {
-      data: { session },
+      data: { user },
       error: authError,
-    } = await supabase.auth.getSession()
+    } = await supabase.auth.getUser()
 
-    if (authError || !session?.user) {
+    if (authError || !user) {
       return createErrorResponse('로그인이 필요합니다.', 401)
     }
 
@@ -550,7 +572,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Storage에서 사용자 파일 목록 조회
-    const basePrefix = getBucketPrefix(bucket, session.user.id)
+    const basePrefix = getBucketPrefix(bucket, user.id)
     const listPrefix = `${basePrefix}/`
 
     const { data: files, error: listError } = await supabaseAdmin.storage

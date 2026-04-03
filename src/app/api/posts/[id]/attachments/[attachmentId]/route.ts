@@ -36,10 +36,10 @@ export async function GET(
     const cookieStore = await cookies()
     const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
     const {
-      data: { session },
-    } = await supabase.auth.getSession()
+      data: { user },
+    } = await supabase.auth.getUser()
 
-    if (!session?.user) {
+    if (!user) {
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
@@ -76,10 +76,10 @@ export async function PUT(
     const cookieStore = await cookies()
     const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
     const {
-      data: { session },
-    } = await supabase.auth.getSession()
+      data: { user },
+    } = await supabase.auth.getUser()
 
-    if (!session?.user) {
+    if (!user) {
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
@@ -104,7 +104,7 @@ export async function PUT(
       return NextResponse.json({ error: '첨부파일을 찾을 수 없습니다.' }, { status: 404 })
     }
 
-    if (attachment.posts.author_id !== session.user.id) {
+    if (attachment.posts.author_id !== user.id) {
       return NextResponse.json({ error: '권한이 없습니다.' }, { status: 403 })
     }
 
@@ -170,10 +170,10 @@ export async function DELETE(
     const cookieStore = await cookies()
     const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
     const {
-      data: { session },
-    } = await supabase.auth.getSession()
+      data: { user },
+    } = await supabase.auth.getUser()
 
-    if (!session?.user) {
+    if (!user) {
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
@@ -200,10 +200,10 @@ export async function DELETE(
     const { data: profile } = await supabase
       .from('member_profiles')
       .select('is_admin')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .single()
 
-    const isAuthor = attachment.posts.author_id === session.user.id
+    const isAuthor = attachment.posts.author_id === user.id
     const isAdmin = profile?.is_admin === true
 
     if (!isAuthor && !isAdmin) {

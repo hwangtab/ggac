@@ -15,10 +15,10 @@ export async function POST(request: NextRequest) {
       const cookieStore = await cookies()
       const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
       const {
-        data: { session },
-      } = await supabase.auth.getSession()
+        data: { user },
+      } = await supabase.auth.getUser()
 
-      if (!session?.user) {
+      if (!user) {
         return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
       }
 
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
 
       // 데이터베이스에 활동 로그 기록
       const { data, error } = await supabase.rpc('log_user_activity', {
-        p_user_id: session.user.id,
+        p_user_id: user.id,
         p_action_type: action_type,
         p_target_type: target_type,
         p_target_id: target_id,

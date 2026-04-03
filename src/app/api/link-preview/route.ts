@@ -1,8 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { fetchLinkPreview } from '@/utils/linkPreview'
 import distLimiter from '@/utils/distributedRateLimiter'
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { cookies } from 'next/headers'
 
 export async function GET(request: NextRequest) {
+  // 인증 확인 — 로그인한 사용자만 링크 프리뷰 요청 가능
+  const cookieStore = await cookies()
+  const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) {
+    return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 })
+  }
+
   // 분산 레이트리밋 (Upstash 있으면 Redis, 없으면 메모리)
   const limiter = await distLimiter.applyRateLimit({
     ...distLimiter.CONFIGS.SEARCH_API,
