@@ -189,6 +189,9 @@ export async function generateMetadata({ params }: ProjectPageProps): Promise<Me
     const metadata = {
       title: `${safeTitle} | 경기아트콜렉티브 협동조합`,
       description: projectSummary,
+      alternates: {
+        canonical: `/archive/${safeSlug}`,
+      },
       openGraph: {
         title: safeTitle,
         description: projectSummary,

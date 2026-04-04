@@ -17,7 +17,7 @@ async function getBoardPostsForSitemap(): Promise<Array<{ id: string; updated_at
       .select('id, updated_at')
       .eq('is_deleted', false)
       .order('updated_at', { ascending: false })
-      .limit(500)
+      .limit(1000)
 
     if (error || !data) return []
     return data
@@ -50,6 +50,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
     const artistPages: MetadataRoute.Sitemap = artists.map(artist => ({
       url: `${baseUrl}/artists/${artist.slug}`,
+      lastModified: new Date(),
       changeFrequency: 'monthly',
       priority: 0.6,
     }))

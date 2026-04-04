@@ -28,11 +28,20 @@ export const metadata: Metadata = {
     siteName: '경기아트콜렉티브 협동조합',
     type: 'website',
     locale: 'ko_KR',
+    images: [
+      {
+        url: '/images/logo/gac_og.webp',
+        width: 1200,
+        height: 630,
+        alt: '경기아트콜렉티브 협동조합 - 자주 묻는 질문',
+      },
+    ],
   },
   twitter: {
-    card: 'summary',
+    card: 'summary_large_image',
     title: '자주 묻는 질문 | 경기아트콜렉티브 협동조합',
     description: '경기아트콜렉티브 협동조합에 대해 자주 묻는 질문과 답변',
+    images: ['/images/logo/gac_og.webp'],
   },
   alternates: {
     canonical: '/faq',
