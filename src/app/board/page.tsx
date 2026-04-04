@@ -6,48 +6,58 @@ import type { Metadata } from 'next'
 
 export const revalidate = 60
 
-export const metadata: Metadata = {
-  title: '자유게시판 | 경기아트콜렉티브 협동조합',
-  description: '경기아트콜렉티브 협동조합 조합원들의 이야기, 공지, 활동 소식을 나누는 공간입니다.',
-  keywords: ['자유게시판', '경기아트콜렉티브', '공지', '활동소식', '협동조합게시판'],
-  authors: [{ name: '경기아트콜렉티브 협동조합' }],
-  alternates: {
-    canonical: '/board',
-    languages: { 'ko-KR': '/board' },
-  },
-  openGraph: {
+export async function generateMetadata({
+  searchParams = {},
+}: {
+  searchParams?: { page?: string; category?: string }
+}): Promise<Metadata> {
+  const page = Number(searchParams.page) || 1
+  const canonical = page > 1 ? `/board?page=${page}` : '/board'
+
+  return {
     title: '자유게시판 | 경기아트콜렉티브 협동조합',
-    description: '경기아트콜렉티브 협동조합 조합원들의 이야기와 활동 소식을 나눕니다.',
-    url: '/board',
-    siteName: '경기아트콜렉티브 협동조합',
-    images: [
-      {
-        url: '/images/logo/gac_og.webp',
-        width: 1200,
-        height: 630,
-        alt: '경기아트콜렉티브 협동조합',
-      },
-    ],
-    locale: 'ko_KR',
-    type: 'website',
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: '자유게시판 | 경기아트콜렉티브 협동조합',
-    description: '경기아트콜렉티브 협동조합 조합원들의 이야기와 활동 소식을 나눕니다.',
-    images: ['/images/logo/gac_og.webp'],
-  },
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: {
+    description:
+      '경기아트콜렉티브 협동조합 조합원들의 이야기, 공지, 활동 소식을 나누는 공간입니다.',
+    keywords: ['자유게시판', '경기아트콜렉티브', '공지', '활동소식', '협동조합게시판'],
+    authors: [{ name: '경기아트콜렉티브 협동조합' }],
+    alternates: {
+      canonical,
+      languages: { 'ko-KR': canonical },
+    },
+    openGraph: {
+      title: '자유게시판 | 경기아트콜렉티브 협동조합',
+      description: '경기아트콜렉티브 협동조합 조합원들의 이야기와 활동 소식을 나눕니다.',
+      url: canonical,
+      siteName: '경기아트콜렉티브 협동조합',
+      images: [
+        {
+          url: '/images/logo/gac_og.webp',
+          width: 1200,
+          height: 630,
+          alt: '경기아트콜렉티브 협동조합',
+        },
+      ],
+      locale: 'ko_KR',
+      type: 'website',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: '자유게시판 | 경기아트콜렉티브 협동조합',
+      description: '경기아트콜렉티브 협동조합 조합원들의 이야기와 활동 소식을 나눕니다.',
+      images: ['/images/logo/gac_og.webp'],
+    },
+    robots: {
       index: true,
       follow: true,
-      'max-video-preview': -1,
-      'max-image-preview': 'large',
-      'max-snippet': -1,
+      googleBot: {
+        index: true,
+        follow: true,
+        'max-video-preview': -1,
+        'max-image-preview': 'large',
+        'max-snippet': -1,
+      },
     },
-  },
+  }
 }
 
 interface BoardPageProps {

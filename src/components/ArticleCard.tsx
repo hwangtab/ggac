@@ -151,6 +151,7 @@ const ArticleCard = ({ article }: ArticleCardProps) => {
                   <Image
                     src={createImageProxy(preview.favicon)}
                     alt=""
+                    aria-hidden="true"
                     width={16}
                     height={16}
                     className="object-contain"
