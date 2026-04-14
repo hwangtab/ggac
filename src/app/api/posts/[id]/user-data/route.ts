@@ -8,8 +8,7 @@ export const runtime = 'nodejs'
 export const maxDuration = 30
 
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { createSupabaseServer } from '@/lib/supabase/server'
 import { validateUUID } from '@/utils/validation'
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -24,8 +23,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     )
   }
 
-  const cookieStore = await cookies()
-  const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
+  const supabase = await createSupabaseServer()
   const {
     data: { user },
   } = await supabase.auth.getUser()

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { cookies } from 'next/headers'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { createSupabaseServer } from '@/lib/supabase/server'
 import { revalidateTag } from 'next/cache'
 import { validateUUID } from '@/utils/validation'
 
@@ -110,8 +109,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     return NextResponse.json({ success: false, error: postIdValidation.errors[0] }, { status: 400 })
   }
   try {
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
+    const supabase = await createSupabaseServer()
     const {
       data: { user },
     } = await supabase.auth.getUser()

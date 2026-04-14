@@ -1,7 +1,6 @@
 import { createOptionsResponse } from '@/utils/apiResponse'
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createSupabaseServer } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
 import { validateSearchQuery } from '@/utils/validation'
 import {
@@ -29,8 +28,7 @@ export async function GET(request: NextRequest) {
       return rateLimitResult.response
     }
 
-    const cookieStore = await cookies()
-    const supabase = createServerComponentClient({ cookies: () => cookieStore as any } as any)
+    const supabase = await createSupabaseServer()
 
     // 사용자 인증 확인
     const {

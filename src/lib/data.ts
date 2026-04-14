@@ -107,9 +107,6 @@ export function invalidateArtistsCache() {
     console.warn('invalidateArtistsCache failed:', e)
   }
 }
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
-
 // 중앙화된 타입 시스템에서 임포트
 import type { Artist, Project, GlobalData, DatabaseArtist } from '@/types'
 

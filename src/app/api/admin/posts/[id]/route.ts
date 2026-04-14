@@ -4,15 +4,13 @@ export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createSupabaseServer } from '@/lib/supabase/server'
 import { createSuccessResponse, createErrorResponse } from '@/utils/apiResponse'
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const resolvedParams = await context.params
   try {
-    const cookieStore = await cookies()
-    const supabase = createServerComponentClient({ cookies: () => cookieStore as any })
+    const supabase = await createSupabaseServer()
     const { id } = resolvedParams
 
     // 사용자 인증 확인

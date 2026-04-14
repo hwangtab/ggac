@@ -10,8 +10,7 @@ export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createSupabaseServer } from '@/lib/supabase/server'
 import distributedRateLimiter, {
   DISTRIBUTED_RATE_LIMIT_CONFIGS,
   createDistributedUserKeyGenerator,
@@ -31,8 +30,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       return rateLimitResult.response
     }
 
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
+    const supabase = await createSupabaseServer()
 
     // 사용자 인증 확인
     const {
@@ -90,8 +88,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       return rateLimitResult.response
     }
 
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
+    const supabase = await createSupabaseServer()
 
     // 사용자 인증 확인
     const {

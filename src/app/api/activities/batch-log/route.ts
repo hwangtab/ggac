@@ -1,5 +1,4 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createSupabaseServer } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { withRateLimit } from '@/utils/rateLimit'
 import { sanitizeInput } from '@/utils/security'
@@ -12,8 +11,7 @@ import type { ActivityLogRequest } from '@/types'
 export async function POST(request: NextRequest) {
   return withRateLimit('GENERAL_API')(async () => {
     try {
-      const cookieStore = await cookies()
-      const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
+      const supabase = await createSupabaseServer()
       const {
         data: { user },
       } = await supabase.auth.getUser()

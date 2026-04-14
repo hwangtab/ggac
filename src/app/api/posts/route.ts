@@ -3,8 +3,7 @@
  */
 
 import { NextRequest } from 'next/server'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createSupabaseServer } from '@/lib/supabase/server'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator } from '@/utils/rateLimiter'
 import { apiGet, ApiSuccess, ApiError, validateApiInput } from '@/utils/apiWrapper'
 import { fetchBoardPosts } from '@/lib/server/board'
@@ -57,10 +56,7 @@ interface PostListResponse {
 }
 
 export async function GET(request: NextRequest) {
-  const cookieStore = await cookies()
-  const supabase = createRouteHandlerClient({
-    cookies: () => cookieStore,
-  } as any)
+  const supabase = await createSupabaseServer()
   const {
     data: { user },
   } = await supabase.auth.getUser()

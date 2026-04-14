@@ -12,9 +12,8 @@ export const preferredRegion = 'icn1'
 import { NextRequest, NextResponse } from 'next/server'
 import path from 'path'
 import sharp from 'sharp'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { createSupabaseServer } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
-import { cookies } from 'next/headers'
 import type { MediaFile } from '@/types'
 import { createSuccessResponse, createErrorResponse, createJsonResponse } from '@/utils/apiResponse'
 import distLimiter from '@/utils/distributedRateLimiter'
@@ -360,8 +359,7 @@ export async function POST(request: NextRequest) {
       return limit.response
     }
 
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
+    const supabase = await createSupabaseServer()
 
     // 사용자 인증 확인
     const {
@@ -551,8 +549,7 @@ export async function GET(request: NextRequest) {
     if (!gLimit.success && gLimit.response) {
       return gLimit.response
     }
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
+    const supabase = await createSupabaseServer()
 
     // 사용자 인증 확인
     const {

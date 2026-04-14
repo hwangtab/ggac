@@ -9,8 +9,7 @@ export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createSupabaseServer } from '@/lib/supabase/server'
 import distributedRateLimiter, {
   DISTRIBUTED_RATE_LIMIT_CONFIGS,
   createDistributedUserKeyGenerator,
@@ -34,8 +33,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       return rateLimitResult.response
     }
 
-    const cookieStore = await cookies()
-    const supabase = createServerComponentClient({ cookies: () => cookieStore as any })
+    const supabase = await createSupabaseServer()
     const {
       data: { user },
     } = await supabase.auth.getUser()

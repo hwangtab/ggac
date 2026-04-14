@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createSupabaseServer } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 import { createOptionsResponse } from '@/utils/apiResponse'
@@ -76,8 +75,7 @@ const ArtistUpdateSchema = z.object({
 // GET: 현재 사용자의 아티스트 정보 조회
 export async function GET(request: NextRequest) {
   try {
-    const cookieStore = await cookies()
-    const supabase = createServerComponentClient({ cookies: () => cookieStore as any })
+    const supabase = await createSupabaseServer()
 
     // 사용자 인증 확인
     const {
@@ -132,8 +130,7 @@ export async function GET(request: NextRequest) {
 // PATCH: 아티스트 정보 업데이트
 export async function PATCH(request: NextRequest) {
   try {
-    const cookieStore = await cookies()
-    const supabase = createServerComponentClient({ cookies: () => cookieStore as any })
+    const supabase = await createSupabaseServer()
 
     // 사용자 인증 확인
     const {

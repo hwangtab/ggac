@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createSupabaseServer } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
-import { cookies } from 'next/headers'
 
 // API 라우트를 동적으로 렌더링하도록 강제 설정
 export const runtime = 'nodejs'
@@ -28,8 +27,7 @@ export async function GET(request: NextRequest) {
       return rateLimitResult.response
     }
 
-    const cookieStore = await cookies()
-    const supabase = createServerComponentClient({ cookies: () => cookieStore as any })
+    const supabase = await createSupabaseServer()
 
     // 사용자 인증 확인
     const {

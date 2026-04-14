@@ -4,9 +4,8 @@ export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { createSupabaseServer } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
-import { cookies } from 'next/headers'
 import { applyRateLimit, RATE_LIMIT_CONFIGS } from '@/utils/rateLimiter'
 import { validateUUID } from '@/utils/validation'
 
@@ -41,8 +40,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     const validPostId = uuidValidation.sanitized
 
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
+    const supabase = await createSupabaseServer()
 
     // 사용자 세션 확인 (선택사항 - 비로그인 사용자도 조회 가능)
     const {
@@ -173,8 +171,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
     const validPostId = uuidValidation.sanitized
 
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
+    const supabase = await createSupabaseServer()
 
     // 게시글 조회수 조회
     const { data: post, error } = await supabase

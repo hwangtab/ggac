@@ -1,6 +1,8 @@
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createBrowserClient } from '@supabase/ssr'
 
-let _supabaseClient: ReturnType<typeof createClientComponentClient> | null = null
+type SupabaseBrowserClient = ReturnType<typeof createBrowserClient>
+
+let _supabaseClient: SupabaseBrowserClient | null = null
 
 // 환경 변수 체크 함수
 function hasValidSupabaseConfig(): boolean {
@@ -57,7 +59,10 @@ export function getSupabaseClient() {
   if (!_supabaseClient) {
     if (hasValidSupabaseConfig()) {
       try {
-        _supabaseClient = createClientComponentClient()
+        _supabaseClient = createBrowserClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+        )
       } catch (error) {
         console.warn('Failed to create Supabase client:', error)
         _supabaseClient = createDummyClient()
@@ -71,7 +76,7 @@ export function getSupabaseClient() {
 }
 
 // 기존 호환성을 위한 export (getter 사용)
-export const supabase = new Proxy({} as ReturnType<typeof createClientComponentClient>, {
+export const supabase = new Proxy({} as SupabaseBrowserClient, {
   get(target, prop) {
     const client = getSupabaseClient()
     return (client as any)[prop]

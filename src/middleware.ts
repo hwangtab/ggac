@@ -1,4 +1,4 @@
-import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
+import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
@@ -12,8 +12,8 @@ function hasSupabaseMiddlewareConfig() {
 }
 
 export async function middleware(request: NextRequest) {
-  // 1. 기본 응답 객체 생성
-  const res = NextResponse.next()
+  // 1. 기본 응답 객체 생성 (request를 전달해야 쿠키 업데이트가 제대로 동작함)
+  const res = NextResponse.next({ request })
 
   // 2. CSP 보안 헤더 적용
   applyCSP(request, res)
@@ -41,7 +41,21 @@ export async function middleware(request: NextRequest) {
     return res
   }
 
-  const supabase = createMiddlewareClient({ req: request, res })
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+          cookiesToSet.forEach(({ name, value, options }) => res.cookies.set(name, value, options))
+        },
+      },
+    }
+  )
 
   // Fast-path: 게시판 페이지는 시스템 설정 조회 지연을 줄이기 위해 바로 통과할 수도 있으나
   // 유지보수 모드 체크를 위해 필요함. 단, 성능을 위해 특정 경로는 제외 가능.

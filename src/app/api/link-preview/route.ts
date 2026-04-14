@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { fetchLinkPreview } from '@/utils/linkPreview'
 import distLimiter from '@/utils/distributedRateLimiter'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createSupabaseServer } from '@/lib/supabase/server'
 
 export async function GET(request: NextRequest) {
   // 인증 확인 — 로그인한 사용자만 링크 프리뷰 요청 가능
-  const cookieStore = await cookies()
-  const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
+  const supabase = await createSupabaseServer()
   const {
     data: { user },
   } = await supabase.auth.getUser()

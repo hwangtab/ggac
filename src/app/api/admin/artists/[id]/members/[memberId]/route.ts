@@ -5,8 +5,7 @@ export const preferredRegion = 'icn1'
 
 import { createOptionsResponse } from '@/utils/apiResponse'
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createSupabaseServer } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
 
 // DELETE: 아티스트 배정 해제
@@ -16,8 +15,7 @@ export async function DELETE(
 ) {
   const resolvedParams = await context.params
   try {
-    const cookieStore = await cookies()
-    const supabase = createServerComponentClient({ cookies: () => cookieStore as any })
+    const supabase = await createSupabaseServer()
 
     // 사용자 인증 확인
     const {

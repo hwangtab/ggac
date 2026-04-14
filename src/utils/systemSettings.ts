@@ -1,5 +1,4 @@
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createSupabaseServer } from '@/lib/supabase/server'
 
 interface SystemSettingsData {
   site: {
@@ -217,8 +216,7 @@ export async function getSystemSettings(forceRefresh = false): Promise<SystemSet
       return cachedSettings
     }
 
-    const cookieStore = await cookies()
-    const supabase = createServerComponentClient({ cookies: () => cookieStore as any })
+    const supabase = await createSupabaseServer()
 
     const { data: settingsData, error } = await supabase.rpc('get_system_settings', {
       include_sensitive: false,

@@ -1,6 +1,5 @@
 import { NextRequest } from 'next/server'
-import { cookies } from 'next/headers'
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createSupabaseServer } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
 
 export const dynamic = 'force-dynamic'
@@ -8,8 +7,7 @@ export const runtime = 'nodejs'
 
 export async function GET(request: NextRequest) {
   // 인증/권한 확인(한 번)
-  const cookieStore = await cookies()
-  const supabase = createServerComponentClient({ cookies: () => cookieStore as any })
+  const supabase = await createSupabaseServer()
   const {
     data: { user },
   } = await supabase.auth.getUser()

@@ -9,9 +9,8 @@ export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { createSupabaseServer } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
-import { cookies } from 'next/headers'
 import distributedRateLimiter, {
   DISTRIBUTED_RATE_LIMIT_CONFIGS,
   createDistributedUserKeyGenerator,
@@ -48,8 +47,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       return rateLimitResult.response
     }
 
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
+    const supabase = await createSupabaseServer()
     // 세션은 선택 사항(공개 열람 허용), 사용자 ID가 있으면 is_liked 등 계산에 사용
     const {
       data: { user },

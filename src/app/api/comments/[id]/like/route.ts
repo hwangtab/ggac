@@ -4,8 +4,7 @@ export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createSupabaseServer } from '@/lib/supabase/server'
 import rateLimiterUtils from '@/utils/rateLimiter'
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -21,8 +20,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const commentId = resolvedParams.id
 
     // 표준 인증 패턴: 쿠키 기반 세션 확인
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
+    const supabase = await createSupabaseServer()
     const {
       data: { user },
       error: authError,

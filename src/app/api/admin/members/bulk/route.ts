@@ -1,7 +1,6 @@
 import { createOptionsResponse } from '@/utils/apiResponse'
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createSupabaseServer } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
 import type { BulkOperationRequest } from '@/types'
 import { validateFormData } from '@/utils/validation'
@@ -30,8 +29,7 @@ export async function POST(request: NextRequest) {
       return rateLimitResult.response
     }
 
-    const cookieStore = await cookies()
-    const supabase = createServerComponentClient({ cookies: () => cookieStore as any })
+    const supabase = await createSupabaseServer()
 
     // 사용자 인증 확인
     const {
@@ -386,8 +384,7 @@ export async function POST(request: NextRequest) {
 // GET: 대량 작업 상태 조회
 export async function GET(request: NextRequest) {
   try {
-    const cookieStore = await cookies()
-    const supabase = createServerComponentClient({ cookies: () => cookieStore as any })
+    const supabase = await createSupabaseServer()
 
     // 사용자 인증 확인
     const {

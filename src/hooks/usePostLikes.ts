@@ -6,7 +6,7 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { getSupabaseClient } from '@/lib/supabase/client'
 import type { PostLikeToggleResponse } from '@/types'
 import { createLogger } from '@/utils/logger'
 import { useMultiLoadingState } from '@/hooks/useLoadingState'
@@ -48,7 +48,7 @@ export function usePostLikes({
 
   // Lazily initialize Supabase client and auth session at idle to avoid
   // impacting initial render on list/detail views.
-  const supabaseRef = useRef<ReturnType<typeof createClientComponentClient> | null>(null)
+  const supabaseRef = useRef<ReturnType<typeof getSupabaseClient> | null>(null)
 
   const scheduleIdle = (fn: () => void) => {
     if (typeof (window as any).requestIdleCallback === 'function') {
@@ -76,7 +76,7 @@ export function usePostLikes({
     let unsub: (() => void) | null = null
     scheduleIdle(() => {
       try {
-        if (!supabaseRef.current) supabaseRef.current = createClientComponentClient()
+        if (!supabaseRef.current) supabaseRef.current = getSupabaseClient()
         const supabase = supabaseRef.current
         ;(async () => {
           const {

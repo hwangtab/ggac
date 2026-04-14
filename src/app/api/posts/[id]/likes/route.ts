@@ -10,8 +10,7 @@ export const runtime = 'nodejs'
 export const maxDuration = 30
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createSupabaseServer } from '@/lib/supabase/server'
 import type { PostLikeToggleResponse } from '@/types'
 import { validateUUID } from '@/utils/validation'
 
@@ -42,8 +41,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       timestamp: new Date().toISOString(),
     })
 
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
+    const supabase = await createSupabaseServer()
     const {
       data: { user },
     } = await supabase.auth.getUser()
@@ -114,8 +112,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       timestamp: new Date().toISOString(),
     })
 
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
+    const supabase = await createSupabaseServer()
     const {
       data: { user },
     } = await supabase.auth.getUser()

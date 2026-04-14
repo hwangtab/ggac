@@ -6,7 +6,7 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { getSupabaseClient } from '@/lib/supabase/client'
 import { useLoadingState } from '@/hooks/useLoadingState'
 
 interface CommentLikeState {
@@ -39,7 +39,7 @@ export function useCommentLikes({
     isLiked: initialIsLiked,
   })
 
-  const supabase = createClientComponentClient()
+  const supabase = getSupabaseClient()
 
   // 로딩 상태 관리
   const loadingState = useLoadingState({

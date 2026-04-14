@@ -4,9 +4,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createSupabaseServer } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
-import { cookies } from 'next/headers'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator } from '@/utils/rateLimiter'
 import { validateAdvancedSearchQuery, buildSearchQuery } from '@/utils/advancedFiltering'
 import type { AdvancedSearchQuery, FilteredResult, FieldDefinition } from '@/types'
@@ -212,8 +211,7 @@ export async function POST(request: NextRequest) {
       return rateLimitResult.response
     }
 
-    const cookieStore = await cookies()
-    const supabase = createServerComponentClient({ cookies: () => cookieStore as any })
+    const supabase = await createSupabaseServer()
 
     // 관리자 권한 확인
     const {
@@ -378,8 +376,7 @@ export async function GET(request: NextRequest) {
       return rateLimitResult.response
     }
 
-    const cookieStore = await cookies()
-    const supabase = createServerComponentClient({ cookies: () => cookieStore as any })
+    const supabase = await createSupabaseServer()
 
     // 관리자 권한 확인
     const {

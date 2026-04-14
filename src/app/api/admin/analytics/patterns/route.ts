@@ -1,6 +1,5 @@
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createSupabaseServer } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
-import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
 import { withRateLimit } from '@/utils/rateLimit'
 
@@ -11,8 +10,7 @@ import { withRateLimit } from '@/utils/rateLimit'
 export async function GET(request: NextRequest) {
   return withRateLimit('ADMIN_API')(async () => {
     try {
-      const cookieStore = await cookies()
-      const supabase = createServerComponentClient({ cookies: () => cookieStore as any })
+      const supabase = await createSupabaseServer()
       const {
         data: { user },
       } = await supabase.auth.getUser()

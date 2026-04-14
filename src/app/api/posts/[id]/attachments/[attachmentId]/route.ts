@@ -13,8 +13,7 @@ export const preferredRegion = 'icn1'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { revalidateTag } from 'next/cache'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createSupabaseServer } from '@/lib/supabase/server'
 
 // Service Role 클라이언트는 Storage 작업에만 사용
 function getSupabaseAdmin() {
@@ -33,8 +32,7 @@ export async function GET(
 ) {
   const resolvedParams = await context.params
   try {
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
+    const supabase = await createSupabaseServer()
     const {
       data: { user },
     } = await supabase.auth.getUser()
@@ -73,8 +71,7 @@ export async function PUT(
 ) {
   const resolvedParams = await context.params
   try {
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
+    const supabase = await createSupabaseServer()
     const {
       data: { user },
     } = await supabase.auth.getUser()
@@ -167,8 +164,7 @@ export async function DELETE(
 ) {
   const resolvedParams = await context.params
   try {
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
+    const supabase = await createSupabaseServer()
     const {
       data: { user },
     } = await supabase.auth.getUser()

@@ -13,8 +13,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { revalidateTag } from 'next/cache'
 import type { PostAttachment, PostAttachmentStats } from '@/types'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createSupabaseServer } from '@/lib/supabase/server'
 import { validateUUID, isValidTempId } from '@/utils/validation'
 import { generateUniqueFileName, sanitizeFileNameWithDetails } from '@/utils/fileNameSanitizer'
 import {
@@ -75,8 +74,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
     // 공개 읽기 허용: 인증 없이도 첨부파일 목록을 조회할 수 있게 함
     // (쓰기/업로드는 계속 보호됨)
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
+    const supabase = await createSupabaseServer()
 
     // 게시글 존재 확인
     const { data: post, error: postError } = await supabase
@@ -145,8 +143,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     console.log('[UPLOAD API] UUID 검증 성공:', postId)
 
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
+    const supabase = await createSupabaseServer()
     console.log('[UPLOAD API] Supabase 클라이언트 생성 완료')
 
     const {

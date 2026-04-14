@@ -6,10 +6,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { createSupabaseServer } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
 import { revalidatePath, revalidateTag } from 'next/cache'
-import { cookies } from 'next/headers'
 import sharp from 'sharp'
 import type { ProfilePhotoUploadResponse, ProfilePhotoMetadata, ImageCropSettings } from '@/types'
 import { invalidateArtistsCache } from '@/lib/data'
@@ -179,8 +178,7 @@ async function uploadImageWithVariants(
  */
 export async function PUT(request: NextRequest) {
   try {
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
+    const supabase = await createSupabaseServer()
     let supabaseAdmin: AdminClient
     try {
       supabaseAdmin = getSupabaseAdmin()
@@ -447,8 +445,7 @@ export async function PUT(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
+    const supabase = await createSupabaseServer()
     let supabaseAdmin: AdminClient
     try {
       supabaseAdmin = getSupabaseAdmin()
@@ -590,8 +587,7 @@ export async function DELETE(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore as any })
+    const supabase = await createSupabaseServer()
 
     // 사용자 인증 확인
     const {
