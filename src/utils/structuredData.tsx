@@ -13,15 +13,17 @@ const ORGANIZATION_DATA = {
   '@id': 'https://ggac.kr/#organization',
   name: '경기아트콜렉티브 협동조합',
   alternateName: 'Gyeonggi Art Collective',
+  legalName: '경기아트콜렉티브 협동조합',
   description: '예술로 숨 쉬고, 협동으로 길을 내는 협동조합입니다.',
   url: 'https://ggac.kr',
   logo: 'https://ggac.kr/images/logo/gac_og.webp',
-  foundingDate: '2025',
+  foundingDate: '2025-05-01',
   address: {
     '@type': 'PostalAddress',
     streetAddress: '성사동 719',
     addressLocality: '고양시 덕양구',
     addressRegion: '경기도',
+    postalCode: '10577',
     addressCountry: 'KR',
   },
   contactPoint: {
@@ -31,6 +33,11 @@ const ORGANIZATION_DATA = {
     contactType: 'customer service',
     availableLanguage: 'Korean',
   },
+  areaServed: {
+    '@type': 'AdministrativeArea',
+    name: '경기도',
+  },
+  knowsAbout: ['음악 제작', '공연 기획', '시각예술', '예술교육', '문화예술 행사', '아티스트 협업'],
   sameAs: [
     'https://www.instagram.com/ggartcollective',
     'https://www.youtube.com/@%EA%B2%BD%EC%95%84%EC%BD%9C',
@@ -44,11 +51,13 @@ export function generateWebsiteStructuredData(): object {
   return {
     '@context': 'https://schema.org',
     '@type': 'WebSite',
+    '@id': 'https://ggac.kr/#website',
     name: '경기아트콜렉티브 협동조합',
     url: 'https://ggac.kr',
     description:
       '경계 없는 상상, 함께 만드는 울림. 예술로 숨 쉬고, 협동으로 길을 내는 협동조합입니다.',
-    publisher: ORGANIZATION_DATA,
+    inLanguage: 'ko-KR',
+    publisher: { '@id': 'https://ggac.kr/#organization' },
   }
 }
 
@@ -72,20 +81,17 @@ export function generateProjectStructuredData(project: {
   return {
     '@context': 'https://schema.org',
     '@type': 'CreativeWork',
+    '@id': `https://ggac.kr/archive/${project.slug}#work`,
     name: project.title,
     description: project.description,
     url: `https://ggac.kr/archive/${project.slug}`,
     image: imageUrl,
-    creator: ORGANIZATION_DATA,
-    publisher: ORGANIZATION_DATA,
+    creator: { '@id': 'https://ggac.kr/#organization' },
+    publisher: { '@id': 'https://ggac.kr/#organization' },
     dateCreated: project.date,
     genre: '예술 프로젝트',
     inLanguage: 'ko-KR',
-    isPartOf: {
-      '@type': 'WebSite',
-      name: '경기아트콜렉티브 협동조합',
-      url: 'https://ggac.kr',
-    },
+    isPartOf: { '@id': 'https://ggac.kr/#website' },
   }
 }
 
@@ -129,18 +135,14 @@ export function generatePostStructuredData(post: {
       '@type': 'Person',
       name: post.author?.display_name || '경기아트콜렉티브',
     },
-    publisher: ORGANIZATION_DATA,
+    publisher: { '@id': 'https://ggac.kr/#organization' },
     mainEntityOfPage: {
       '@type': 'WebPage',
       '@id': `https://ggac.kr/board/${post.id}`,
     },
     articleSection: post.category,
     inLanguage: 'ko-KR',
-    isPartOf: {
-      '@type': 'WebSite',
-      name: '경기아트콜렉티브 협동조합',
-      url: 'https://ggac.kr',
-    },
+    isPartOf: { '@id': 'https://ggac.kr/#website' },
   }
 }
 
@@ -153,28 +155,31 @@ export function generateArtistStructuredData(artist: {
   bio?: string
   categories?: string[]
   profilePhotoUrl?: string | null
+  portfolioLinks?: Array<{ title: string; url: string }> | null
 }): object {
   const imageUrl = generateImageUrl(artist.profilePhotoUrl, {
     absolute: true,
     forSocialSharing: true,
   })
 
+  const sameAs = artist.portfolioLinks
+    ?.map(link => link.url)
+    .filter(url => url && url.startsWith('http'))
+
   return {
     '@context': 'https://schema.org',
     '@type': 'Person',
+    '@id': `https://ggac.kr/artists/${artist.slug}#person`,
     name: artist.name,
     description: artist.bio,
     url: `https://ggac.kr/artists/${artist.slug}`,
     image: imageUrl,
     jobTitle: '아티스트',
-    worksFor: ORGANIZATION_DATA,
-    nationality: 'Korean',
-    memberOf: {
-      '@type': 'Organization',
-      name: '경기아트콜렉티브 협동조합',
-    },
+    worksFor: { '@id': 'https://ggac.kr/#organization' },
+    memberOf: { '@id': 'https://ggac.kr/#organization' },
     genre: artist.categories?.join(', '),
     inLanguage: 'ko-KR',
+    ...(sameAs && sameAs.length > 0 ? { sameAs } : {}),
   }
 }
 
@@ -229,8 +234,8 @@ export function generateEventStructuredData(project: {
     eventStatus: 'https://schema.org/EventScheduled',
     eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
     location,
-    organizer: ORGANIZATION_DATA,
-    performer: ORGANIZATION_DATA,
+    organizer: { '@id': 'https://ggac.kr/#organization' },
+    performer: { '@id': 'https://ggac.kr/#organization' },
     inLanguage: 'ko-KR',
   }
 

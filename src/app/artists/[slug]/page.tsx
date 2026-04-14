@@ -177,6 +177,7 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
     bio: artist.oneLiner,
     categories: Array.isArray(artist.category) ? artist.category : [artist.category],
     profilePhotoUrl: artist.profileImage,
+    portfolioLinks: artist.portfolioLinks,
   })
 
   // 브레드크럼 추가
