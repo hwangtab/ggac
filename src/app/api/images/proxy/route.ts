@@ -5,12 +5,19 @@ import {
   createOptionsResponse,
 } from '@/utils/apiResponse'
 import { isUnsafeHost } from '@/utils/ssrfProtection'
+import { applyRateLimit, RATE_LIMIT_CONFIGS } from '@/utils/rateLimiter'
 
 export const dynamic = 'force-dynamic'
 
 const ALLOWED_PROTOCOLS = new Set(['http:', 'https:'])
+const imageProxyRateLimit = applyRateLimit(RATE_LIMIT_CONFIGS.GENERAL_API)
 
 export async function GET(req: NextRequest) {
+  const rateLimitResult = imageProxyRateLimit(req)
+  if (!rateLimitResult.success) {
+    return createErrorResponse('요청이 너무 많습니다. 잠시 후 다시 시도해주세요.', 429)
+  }
+
   const urlParam = req.nextUrl.searchParams.get('url')
   if (!urlParam) return createErrorResponse('Missing url parameter', 400)
 

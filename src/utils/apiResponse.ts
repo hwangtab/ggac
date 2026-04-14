@@ -8,8 +8,8 @@ import { NextResponse } from 'next/server'
 /**
  * JSON 응답 생성 헬퍼
  */
-export function createJsonResponse(
-  data: any,
+export function createJsonResponse<T = unknown>(
+  data: T,
   status: number = 200,
   additionalHeaders: Record<string, string> = {}
 ) {
@@ -26,8 +26,8 @@ export function createJsonResponse(
 /**
  * 성공 응답 생성
  */
-export function createSuccessResponse(
-  data: any,
+export function createSuccessResponse<T = unknown>(
+  data: T,
   status: number = 200,
   additionalHeaders: Record<string, string> = {}
 ) {
@@ -67,8 +67,8 @@ export function createImageResponse(
 /**
  * 캐시 가능한 응답 생성
  */
-export function createCacheableResponse(
-  data: any,
+export function createCacheableResponse<T = unknown>(
+  data: T,
   maxAge: number = 3600, // 1시간 기본값
   status: number = 200
 ) {
@@ -82,8 +82,8 @@ const ALLOWED_ORIGIN = process.env.NEXT_PUBLIC_SITE_URL || 'https://ggac.kr'
 /**
  * CORS 헤더 포함 응답 생성
  */
-export function createCorsResponse(
-  data: any,
+export function createCorsResponse<T = unknown>(
+  data: T,
   status: number = 200,
   origin: string = ALLOWED_ORIGIN
 ) {

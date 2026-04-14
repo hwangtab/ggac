@@ -27,11 +27,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     // UUID 형식 검증
     const uuidValidation = validateUUID(postId, '게시글 ID')
     if (!uuidValidation.isValid) {
-      console.log('[API] POST 상세 UUID 검증 실패:', uuidValidation.errors)
       return NextResponse.json(
-        {
-          error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.',
-        },
+        { error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.' },
         { status: 400 }
       )
     }
@@ -133,36 +130,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
     timings.post_ms = Date.now() - postStart
     if (postError || !post) {
-      // 더 자세한 로깅 추가
-      console.log(`[API] 게시글 조회 실패 - ID: ${validPostId}`)
-      console.log(`[API] 데이터베이스 오류:`, postError)
-      console.log(`[API] 게시글 데이터:`, post)
-      console.log(`[API] 사용자 ID: ${userId || '비로그인'}`)
-
-      if (postError) {
-        console.error(`[API] Supabase 오류 상세:`, {
-          code: postError.code,
-          message: postError.message,
-          details: postError.details,
-          hint: postError.hint,
-        })
-      }
-
-      return NextResponse.json(
-        {
-          error: '게시글을 찾을 수 없습니다.',
-          debug:
-            process.env.NODE_ENV === 'development'
-              ? {
-                  postId: validPostId,
-                  hasError: !!postError,
-                  errorCode: postError?.code,
-                  errorMessage: postError?.message,
-                }
-              : undefined,
-        },
-        { status: 404 }
-      )
+      console.error(`[API] 게시글 조회 실패 - ID: ${validPostId}`, postError)
+      return NextResponse.json({ error: '게시글을 찾을 수 없습니다.' }, { status: 404 })
     }
 
     // 삭제된 게시글 접근 권한 확인

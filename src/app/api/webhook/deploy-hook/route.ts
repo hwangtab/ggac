@@ -50,11 +50,9 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ message: 'Deploy triggered' })
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: 'Internal server error', details: error?.message },
-      { status: 500 }
-    )
+  } catch (error) {
+    console.error('[API] 배포 훅 오류:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 

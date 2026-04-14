@@ -1,13 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import type { User } from '@supabase/supabase-js'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
 import type { MemberProfile } from '@/types'
 
 const BoardUserSection = () => {
   const router = useRouter()
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [isMember, setIsMember] = useState(false)
   const [loading, setLoading] = useState(true)
 

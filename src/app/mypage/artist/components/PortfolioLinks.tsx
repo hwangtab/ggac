@@ -68,7 +68,10 @@ const PortfolioLinks: React.FC<PortfolioLinksProps> = ({ links, errors, onChange
           </div>
         ) : (
           links.map((link, index) => (
-            <div key={index} className="bg-white border border-gray-200 rounded-lg p-4">
+            <div
+              key={`${link.url || 'new'}-${index}`}
+              className="bg-white border border-gray-200 rounded-lg p-4"
+            >
               <div className="flex items-start justify-between mb-3">
                 <div className="text-sm font-medium text-gray-700">링크 #{index + 1}</div>
                 <button

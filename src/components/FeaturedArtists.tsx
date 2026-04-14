@@ -37,9 +37,9 @@ const FeaturedArtists = ({ artists }: FeaturedArtistsProps) => {
                     <div className="mb-2 flex flex-wrap justify-center gap-1">
                       {Array.isArray(artist.category) ? (
                         <>
-                          {artist.category.slice(0, 3).map((cat, index) => (
+                          {artist.category.slice(0, 3).map(cat => (
                             <span
-                              key={index}
+                              key={cat}
                               className="inline-block px-3 py-1 bg-gray-100 text-gray-700 text-sm font-medium rounded-full"
                             >
                               {cat}

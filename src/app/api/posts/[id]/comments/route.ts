@@ -66,7 +66,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
     const { data: rows, error } = await query
     if (error) {
-      return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+      console.error('[API] 댓글 조회 오류:', error)
+      return NextResponse.json(
+        { success: false, error: '댓글 조회에 실패했습니다.' },
+        { status: 500 }
+      )
     }
 
     let comments = rows || []
@@ -94,9 +98,10 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       success: true,
       data: { comments: normalized, has_next: hasNext, next_cursor: nextCursor },
     })
-  } catch (e: any) {
+  } catch (e) {
+    console.error('[API] 댓글 GET 오류:', e)
     return NextResponse.json(
-      { success: false, error: e?.message || 'Unexpected error' },
+      { success: false, error: '서버 오류가 발생했습니다.' },
       { status: 500 }
     )
   }
@@ -137,7 +142,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       .insert([{ post_id: postId, author_id: userId, content }])
       .select('id, content, author_id, created_at')
       .single()
-    if (error) return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    if (error) {
+      console.error('[API] 댓글 작성 오류:', error)
+      return NextResponse.json(
+        { success: false, error: '댓글 작성에 실패했습니다.' },
+        { status: 500 }
+      )
+    }
 
     try {
       revalidateTag(`comments-post-${postId}`)
@@ -147,9 +158,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     } catch {}
 
     return NextResponse.json({ success: true, data })
-  } catch (e: any) {
+  } catch (e) {
+    console.error('[API] 댓글 POST 오류:', e)
     return NextResponse.json(
-      { success: false, error: e?.message || 'Unexpected error' },
+      { success: false, error: '서버 오류가 발생했습니다.' },
       { status: 500 }
     )
   }

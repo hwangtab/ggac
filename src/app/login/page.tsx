@@ -4,6 +4,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect } from 'react'
+import type { User } from '@supabase/supabase-js'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '../../lib/supabase/client'
@@ -15,7 +16,10 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [isAlreadyLoggedIn, setIsAlreadyLoggedIn] = useState(false)
-  const [currentUser, setCurrentUser] = useState<any>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [currentUser, setCurrentUser] = useState<
+    (User & { profile?: { display_name?: string } }) | null
+  >(null)
   const router = useRouter()
   const { isLoading: pageLoading, isReady } = useStablePageLoad('/login')
   const { navigateWithRetry } = useSafeNavigation()

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import type { User } from '@supabase/supabase-js'
 
 import Link from 'next/link'
 import Image from 'next/image'
@@ -14,7 +15,7 @@ const Navigation = () => {
   // 상단 고정 헤더 투명/불투명 제어
   const [isAtTop, setIsAtTop] = useState(true)
   const [hasScrollSync, setHasScrollSync] = useState(false)
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const pathname = usePathname()
   const router = useRouter()
@@ -130,9 +131,7 @@ const Navigation = () => {
       data-at-top={isAtTop ? 'true' : 'false'}
       className={`fixed top-0 left-0 right-0 z-50 ${
         hasScrollSync ? 'transition-all duration-300' : 'transition-none'
-      } ${
-        isHomePage && isAtTop ? 'bg-transparent' : 'bg-white/90 backdrop-blur-md shadow-sm'
-      }`}
+      } ${isHomePage && isAtTop ? 'bg-transparent' : 'bg-white/90 backdrop-blur-md shadow-sm'}`}
     >
       <div className="tw-container-custom">
         <div className="flex items-center justify-between h-16 md:h-20 overflow-x-hidden">

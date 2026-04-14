@@ -155,19 +155,12 @@ export const getArtistsFromDB = async (): Promise<Artist[]> => {
     const { createClient } = await import('@supabase/supabase-js')
     // Attach Next.js cache tags so revalidateTag('artists') busts this cache across instances
     const revalidateValue = 3600
-    console.log(
-      `🔍 [DEBUG] getArtistsFromDB: Using revalidate=${revalidateValue} for artists query`
-    )
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
       {
         global: {
           fetch: (input: RequestInfo | URL, init?: RequestInit) => {
-            console.log(`🔍 [DEBUG] Supabase fetch called with revalidate=${revalidateValue}`, {
-              input,
-              init,
-            })
             return fetch(input, {
               ...init,
               next: { revalidate: revalidateValue, tags: ['artists'] },
@@ -201,7 +194,6 @@ export const getArtistsFromDB = async (): Promise<Artist[]> => {
     }
 
     // 데이터베이스에 데이터가 없으면 JSON 파일에서 조회 (백업)
-    console.log('No artists found in database, falling back to JSON')
     const fallbackResult = await getArtistsFromJSON()
     artistCache?.set('artists', fallbackResult)
     return fallbackResult
@@ -341,19 +333,12 @@ export const getArtistBySlugFromDB = async (slug: string): Promise<Artist | null
     // 정적 생성 시점에서도 접근 가능하도록 createClient 사용
     const { createClient } = await import('@supabase/supabase-js')
     const revalidateValue = 3600
-    console.log(
-      `🔍 [DEBUG] getArtistBySlugFromDB: Using revalidate=${revalidateValue} for artists query`
-    )
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
       {
         global: {
           fetch: (input: RequestInfo | URL, init?: RequestInit) => {
-            console.log(`🔍 [DEBUG] Supabase fetch called with revalidate=${revalidateValue}`, {
-              input,
-              init,
-            })
             return fetch(input, {
               ...init,
               next: { revalidate: revalidateValue, tags: ['artists'] },
@@ -381,13 +366,10 @@ export const getArtistBySlugFromDB = async (slug: string): Promise<Artist | null
         console.warn('Failed to apply legacy artist image fallback:', fallbackError)
       }
 
-      // 성공적으로 데이터베이스에서 조회했음을 로그
-      console.log(`Successfully fetched artist ${slug} from database`)
       return convertedArtist
     }
 
     // 데이터베이스에 없으면 JSON 파일에서 조회 (백업)
-    console.log(`Artist ${slug} not found in database, falling back to JSON`)
     const artists = await getArtistsFromJSON()
     return artists.find(artist => artist.slug === slug) || null
   } catch (error) {

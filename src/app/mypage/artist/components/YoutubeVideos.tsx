@@ -77,7 +77,10 @@ const YoutubeVideos: React.FC<YoutubeVideosProps> = ({ videos, errors, onChange 
             const thumbnailUrl = getYouTubeThumbnail(video.url)
 
             return (
-              <div key={index} className="bg-white border border-gray-200 rounded-lg p-4">
+              <div
+                key={`${video.url || 'new'}-${index}`}
+                className="bg-white border border-gray-200 rounded-lg p-4"
+              >
                 <div className="flex items-start justify-between mb-3">
                   <div className="text-sm font-medium text-gray-700">동영상 #{index + 1}</div>
                   <button

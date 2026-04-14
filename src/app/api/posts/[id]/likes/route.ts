@@ -18,8 +18,6 @@ import { validateUUID } from '@/utils/validation'
  * 게시글 좋아요 정보 조회
  */
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  console.log('🟢 [API] GET 라우트 진입')
-
   try {
     const resolvedParams = await context.params
     const postId = resolvedParams.id
@@ -27,19 +25,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     // UUID 형식 검증
     const uuidValidation = validateUUID(postId, '게시글 ID')
     if (!uuidValidation.isValid) {
-      console.log('[API] GET UUID 검증 실패:', uuidValidation.errors)
       return NextResponse.json(
-        {
-          error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.',
-        },
+        { error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.' },
         { status: 400 }
       )
     }
-
-    console.log('[API] GET /api/posts/[id]/likes 시작', {
-      postId: uuidValidation.sanitized,
-      timestamp: new Date().toISOString(),
-    })
 
     const supabase = await createSupabaseServer()
     const {
@@ -47,7 +37,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     } = await supabase.auth.getUser()
 
     if (!user) {
-      console.log('[API] GET 인증 실패')
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
@@ -59,7 +48,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       .single()
 
     if (postError || !post) {
-      console.log('[API] GET 게시글 없음:', postError)
       return NextResponse.json({ error: '게시글을 찾을 수 없습니다.' }, { status: 404 })
     }
 
@@ -71,16 +59,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       .eq('user_id', user.id)
       .single()
 
-    const result = {
+    return NextResponse.json({
       post_id: postId,
       like_count: post.like_count || 0,
       is_liked: !!userLike,
-    }
-
-    console.log('[API] GET 성공:', result)
-    return NextResponse.json(result)
+    })
   } catch (error) {
-    console.error('[API] GET 오류:', error)
+    console.error('[API] GET /likes 오류:', error)
     return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
   }
 }
@@ -89,8 +74,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
  * 게시글 좋아요 토글 (추가/제거)
  */
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  console.log('🟢 [API] POST 라우트 진입')
-
   try {
     const resolvedParams = await context.params
     const postId = resolvedParams.id
@@ -98,19 +81,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     // UUID 형식 검증
     const uuidValidation = validateUUID(postId, '게시글 ID')
     if (!uuidValidation.isValid) {
-      console.log('[API] POST UUID 검증 실패:', uuidValidation.errors)
       return NextResponse.json(
-        {
-          error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.',
-        },
+        { error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.' },
         { status: 400 }
       )
     }
-
-    console.log('[API] POST /api/posts/[id]/likes 시작', {
-      postId: uuidValidation.sanitized,
-      timestamp: new Date().toISOString(),
-    })
 
     const supabase = await createSupabaseServer()
     const {
@@ -118,11 +93,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     } = await supabase.auth.getUser()
 
     if (!user) {
-      console.log('[API] POST 인증 실패')
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
-
-    console.log('[API] 인증 성공:', user.email)
 
     // 사용자 승인 상태 확인
     const { data: profile, error: profileError } = await supabase
@@ -137,7 +109,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     }
 
     if (!profile || profile.registration_status !== 'approved' || !profile.is_active) {
-      console.log('[API] 승인되지 않은 사용자:', profile)
       return NextResponse.json({ error: '승인된 회원만 좋아요를 할 수 있습니다.' }, { status: 403 })
     }
 
@@ -149,12 +120,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       .single()
 
     if (postError || !post) {
-      console.error('[API] 게시글 조회 오류:', postError)
       return NextResponse.json({ error: '게시글을 찾을 수 없습니다.' }, { status: 404 })
     }
 
     if (post.is_deleted) {
-      console.log('[API] 삭제된 게시글')
       return NextResponse.json(
         { error: '삭제된 게시글에는 좋아요를 할 수 없습니다.' },
         { status: 400 }
@@ -162,31 +131,19 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     }
 
     // 좋아요 토글 실행
-    console.log('[API] toggle_post_like RPC 호출')
     const { data: toggleResult, error: toggleError } = await supabase.rpc('toggle_post_like', {
       p_post_id: uuidValidation.sanitized,
       p_user_id: user.id,
     })
 
     if (toggleError) {
-      console.error('[API] RPC 오류 상세:', {
-        message: toggleError.message,
-        details: toggleError.details,
-        hint: toggleError.hint,
-        code: toggleError.code,
-      })
-      return NextResponse.json(
-        {
-          error: '좋아요 처리에 실패했습니다.',
-          details: toggleError.message,
-        },
-        { status: 500 }
-      )
+      console.error('[API] toggle_post_like RPC 오류:', toggleError)
+      return NextResponse.json({ error: '좋아요 처리에 실패했습니다.' }, { status: 500 })
     }
 
     const result = toggleResult?.[0]
     if (!result) {
-      console.error('[API] RPC 결과 없음')
+      console.error('[API] toggle_post_like RPC 결과 없음')
       return NextResponse.json({ error: '좋아요 처리 결과를 확인할 수 없습니다.' }, { status: 500 })
     }
 
@@ -213,43 +170,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       message: result.liked ? '좋아요를 추가했습니다.' : '좋아요를 취소했습니다.',
     }
 
-    console.log('[API] POST 성공:', response)
     return NextResponse.json(response)
   } catch (error) {
-    console.error('[API] POST 오류:', error)
-    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
-  }
-}
-
-/**
- * 헬스 체크 (관리자용)
- */
-export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  console.log('🟢 [API] DELETE 라우트 진입 (헬스체크)')
-
-  try {
-    const resolvedParams = await context.params
-    const postId = resolvedParams.id
-
-    // UUID 형식 검증
-    const uuidValidation = validateUUID(postId, '게시글 ID')
-    if (!uuidValidation.isValid) {
-      console.log('[API] DELETE UUID 검증 실패:', uuidValidation.errors)
-      return NextResponse.json(
-        {
-          error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.',
-        },
-        { status: 400 }
-      )
-    }
-
-    return NextResponse.json({
-      status: 'healthy',
-      postId: uuidValidation.sanitized,
-      timestamp: new Date().toISOString(),
-    })
-  } catch (error) {
-    console.error('[API] DELETE 오류:', error)
+    console.error('[API] POST /likes 오류:', error)
     return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
   }
 }

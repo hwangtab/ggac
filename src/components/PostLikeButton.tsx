@@ -200,7 +200,8 @@ const PostLikeButton: React.FC<PostLikeButtonProps> = ({
       disabled={isLoading || !canLike || isAnimating}
       className={`relative ${currentVariant.button} ${currentSize.button} ${className}`}
       title={!canLike ? '로그인이 필요합니다' : isLiked ? '좋아요 취소' : '좋아요'}
-      aria-label={`좋아요 ${likeCount || 0}개${isLiked ? ' (좋아요 누름)' : ''}`}
+      aria-label={`좋아요 ${likeCount || 0}개`}
+      aria-pressed={isLiked}
     >
       {/* 하트 아이콘 */}
       <span className={`${currentVariant.icon} transition-all duration-200`}>
