@@ -100,10 +100,26 @@ const Footer = ({ globalData }: FooterProps) => {
               </li>
               <li>
                 <Link
+                  href="/board"
+                  className="text-gray-400 hover:text-white transition-colors duration-200"
+                >
+                  자유게시판
+                </Link>
+              </li>
+              <li>
+                <Link
                   href="/connect"
                   className="text-gray-400 hover:text-white transition-colors duration-200"
                 >
                   소통과 참여
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/faq"
+                  className="text-gray-400 hover:text-white transition-colors duration-200"
+                >
+                  자주 묻는 질문
                 </Link>
               </li>
             </ul>
@@ -168,7 +184,7 @@ const Footer = ({ globalData }: FooterProps) => {
         </div>
 
         {/* Bottom */}
-        <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center">
+        <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="text-gray-400 text-sm mb-4 md:mb-0">
             <p>
               설립신고: {new Date(data.businessInfo.establishedDate).toLocaleDateString('ko-KR')} |
@@ -176,7 +192,17 @@ const Footer = ({ globalData }: FooterProps) => {
             </p>
             <p>사업자등록번호: {data.businessInfo.registrationNumber}</p>
           </div>
-          <p className="text-gray-400 text-sm">© 2025 {data.siteName}. All rights reserved.</p>
+          <div className="flex flex-col items-center md:items-end gap-2">
+            <div className="flex space-x-4 text-gray-500 text-xs">
+              <Link href="/privacy" className="hover:text-gray-300 transition-colors duration-200">
+                개인정보처리방침
+              </Link>
+              <Link href="/terms" className="hover:text-gray-300 transition-colors duration-200">
+                이용약관
+              </Link>
+            </div>
+            <p className="text-gray-400 text-sm">© 2025 {data.siteName}. All rights reserved.</p>
+          </div>
         </div>
       </div>
     </footer>

@@ -6,10 +6,24 @@ export const metadata: Metadata = {
   description:
     '경기아트콜렉티브 협동조합의 개인정보처리방침을 확인하세요. 개인정보 수집, 이용, 보관, 파기에 관한 정책을 안내합니다.',
   keywords: ['개인정보처리방침', '개인정보보호', '경기아트콜렉티브', '협동조합', '개인정보 정책'],
+  alternates: {
+    canonical: '/privacy',
+  },
   openGraph: {
     title: '개인정보처리방침 - 경기아트콜렉티브 협동조합',
     description: '경기아트콜렉티브 협동조합의 개인정보처리방침을 확인하세요.',
+    url: '/privacy',
+    siteName: '경기아트콜렉티브 협동조합',
     type: 'website',
+    locale: 'ko_KR',
+    images: [
+      {
+        url: '/images/logo/gac_og.webp',
+        width: 1200,
+        height: 630,
+        alt: '경기아트콜렉티브 협동조합',
+      },
+    ],
   },
   robots: {
     index: true,

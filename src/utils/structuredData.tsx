@@ -10,6 +10,7 @@ import { generateImageUrl } from './imageUrl'
 // 기본 조직 정보
 const ORGANIZATION_DATA = {
   '@type': 'Organization',
+  '@id': 'https://ggac.kr/#organization',
   name: '경기아트콜렉티브 협동조합',
   alternateName: 'Gyeonggi Art Collective',
   description: '예술로 숨 쉬고, 협동으로 길을 내는 협동조합입니다.',
@@ -18,12 +19,15 @@ const ORGANIZATION_DATA = {
   foundingDate: '2025',
   address: {
     '@type': 'PostalAddress',
-    addressLocality: '수원시',
+    streetAddress: '성사동 719',
+    addressLocality: '고양시 덕양구',
     addressRegion: '경기도',
     addressCountry: 'KR',
   },
   contactPoint: {
     '@type': 'ContactPoint',
+    telephone: '0507-1384-3144',
+    email: 'contact@ggac.kr',
     contactType: 'customer service',
     availableLanguage: 'Korean',
   },

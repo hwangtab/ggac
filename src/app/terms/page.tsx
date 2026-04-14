@@ -6,10 +6,24 @@ export const metadata: Metadata = {
   description:
     '경기아트콜렉티브 협동조합 웹사이트 이용약관을 확인하세요. 서비스 이용 시 준수해야 할 규정과 조건들을 안내합니다.',
   keywords: ['이용약관', '서비스 약관', '경기아트콜렉티브', '협동조합', '웹사이트 이용규정'],
+  alternates: {
+    canonical: '/terms',
+  },
   openGraph: {
     title: '이용약관 - 경기아트콜렉티브 협동조합',
     description: '경기아트콜렉티브 협동조합 웹사이트 이용약관을 확인하세요.',
+    url: '/terms',
+    siteName: '경기아트콜렉티브 협동조합',
     type: 'website',
+    locale: 'ko_KR',
+    images: [
+      {
+        url: '/images/logo/gac_og.webp',
+        width: 1200,
+        height: 630,
+        alt: '경기아트콜렉티브 협동조합',
+      },
+    ],
   },
   robots: {
     index: true,

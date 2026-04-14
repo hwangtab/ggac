@@ -12,8 +12,14 @@ export default function manifest(): MetadataRoute.Manifest {
     icons: [
       {
         src: '/images/logo/gac_logo.webp',
-        sizes: 'any',
+        sizes: '192x192',
         type: 'image/webp',
+      },
+      {
+        src: '/images/logo/gac_og.webp',
+        sizes: '1200x630',
+        type: 'image/webp',
+        purpose: 'any',
       },
     ],
   }

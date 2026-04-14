@@ -12,6 +12,7 @@ export default function robots(): MetadataRoute.Robots {
     '/notifications',
     '/register',
     '/board/write',
+    '/board/*/edit',
   ]
 
   return {
