@@ -15,7 +15,7 @@ export async function generateMetadata({
   const canonical = page > 1 ? `/board?page=${page}` : '/board'
 
   return {
-    title: '자유게시판 | 경기아트콜렉티브 협동조합',
+    title: '자유게시판',
     description:
       '경기아트콜렉티브 협동조합 조합원들의 이야기, 공지, 활동 소식을 나누는 공간입니다.',
     keywords: ['자유게시판', '경기아트콜렉티브', '공지', '활동소식', '협동조합게시판'],

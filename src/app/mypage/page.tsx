@@ -6,7 +6,7 @@ import DashboardCard from './components/DashboardCard'
 import PermissionCheck from './components/PermissionCheck'
 
 export const metadata: Metadata = {
-  title: '마이페이지 | 경기아트콜렉티브',
+  title: '마이페이지',
   description: '개인 프로필 및 아티스트 정보를 관리하세요.',
   robots: {
     index: false,

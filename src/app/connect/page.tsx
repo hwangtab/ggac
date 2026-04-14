@@ -7,7 +7,7 @@ import type { Metadata } from 'next'
 export const revalidate = 86400
 
 export const metadata: Metadata = {
-  title: '소통과 참여 | 경기아트콜렉티브 협동조합',
+  title: '소통과 참여',
   description:
     '경기도 예술가들과 함께하세요. 조합원 가입, 후원, 협업 문의 등 다양한 방법으로 예술 생태계 발전에 참여할 수 있습니다.',
   keywords: [
@@ -26,7 +26,6 @@ export const metadata: Metadata = {
   authors: [{ name: '경기아트콜렉티브 협동조합' }],
   creator: '경기아트콜렉티브 협동조합',
   publisher: '경기아트콜렉티브 협동조합',
-  metadataBase: new URL('https://ggac.kr'),
   alternates: {
     canonical: '/connect',
     languages: {

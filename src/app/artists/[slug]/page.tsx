@@ -50,8 +50,8 @@ export async function generateMetadata({ params }: ArtistPageProps): Promise<Met
 
   if (!artist) {
     return {
-      title: 'Artist Not Found | 경기아트콜렉티브',
-      robots: { index: false, follow: false },
+      title: 'Artist Not Found',
+      robots: { index: false, follow: true },
     }
   }
 
@@ -74,11 +74,10 @@ export async function generateMetadata({ params }: ArtistPageProps): Promise<Met
   const ogImageUrl = `${baseUrl}${getOgImage()}`
 
   return {
-    title,
+    title: artist.name,
     description,
-    metadataBase: new URL(baseUrl),
     alternates: {
-      canonical: pageUrl,
+      canonical: `/artists/${artist.slug}`,
     },
     keywords: [
       '경기아트콜렉티브',

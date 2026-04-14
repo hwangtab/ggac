@@ -187,7 +187,7 @@ export async function generateMetadata({ params }: ProjectPageProps): Promise<Me
     }
 
     const metadata = {
-      title: `${safeTitle} | 경기아트콜렉티브 협동조합`,
+      title: safeTitle,
       description: projectSummary,
       alternates: {
         canonical: `/archive/${safeSlug}`,
@@ -236,7 +236,7 @@ export async function generateMetadata({ params }: ProjectPageProps): Promise<Me
 // 기본 메타데이터 반환 함수
 function getDefaultMetadata(): Metadata {
   return {
-    title: '프로젝트 | 경기아트콜렉티브 협동조합',
+    title: '프로젝트',
     description: '경기아트콜렉티브 프로젝트',
     openGraph: {
       title: '경기아트콜렉티브 프로젝트',
@@ -268,9 +268,9 @@ function getDefaultMetadata(): Metadata {
 // 프로젝트를 찾을 수 없을 때 메타데이터
 function getNotFoundMetadata(): Metadata {
   return {
-    title: 'Project Not Found | 경기아트콜렉티브 협동조합',
+    title: 'Project Not Found',
     description: '요청하신 프로젝트를 찾을 수 없습니다.',
-    robots: { index: false, follow: false },
+    robots: { index: false, follow: true },
     openGraph: {
       title: 'Project Not Found',
       description: '요청하신 프로젝트를 찾을 수 없습니다.',

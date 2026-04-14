@@ -13,7 +13,7 @@ import type { Metadata } from 'next'
 export const revalidate = 43200
 
 export const metadata: Metadata = {
-  title: '함께하는 사람들 | 경기아트콜렉티브 협동조합',
+  title: '함께하는 사람들',
   description:
     '경기도를 기반으로 활동하는 다양한 분야의 예술가들을 만나보세요. 음악, 시각예술, 공연예술 등 각자의 고유한 색깔로 창작하는 우리 조합원들을 소개합니다.',
   keywords: [
@@ -32,7 +32,6 @@ export const metadata: Metadata = {
   authors: [{ name: '경기아트콜렉티브 협동조합' }],
   creator: '경기아트콜렉티브 협동조합',
   publisher: '경기아트콜렉티브 협동조합',
-  metadataBase: new URL('https://ggac.kr'),
   alternates: {
     canonical: '/artists',
     languages: {

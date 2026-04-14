@@ -9,7 +9,7 @@ import FAQAccordion from '@/components/FAQAccordion'
 import faqData from '../../../data/faq.json'
 
 export const metadata: Metadata = {
-  title: '자주 묻는 질문 | 경기아트콜렉티브 협동조합',
+  title: '자주 묻는 질문',
   description:
     '경기아트콜렉티브 협동조합에 대해 자주 묻는 질문과 답변입니다. 조합 가입, 활동, 협업, 후원 등에 대한 정보를 확인하세요.',
   keywords: [

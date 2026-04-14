@@ -28,7 +28,8 @@ const ORGANIZATION_DATA = {
     availableLanguage: 'Korean',
   },
   sameAs: [
-    // SNS 계정이 있다면 여기에 추가
+    'https://www.instagram.com/ggartcollective',
+    'https://www.youtube.com/@%EA%B2%BD%EC%95%84%EC%BD%9C',
   ],
 }
 

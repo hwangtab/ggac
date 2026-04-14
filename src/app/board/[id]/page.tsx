@@ -25,15 +25,16 @@ export async function generateMetadata({
 
     if (!metadata) {
       return {
-        title: '게시물을 찾을 수 없습니다 - 경기아트콜렉티브',
+        title: '게시물을 찾을 수 없습니다',
         description: '요청하신 게시물을 찾을 수 없습니다.',
-        robots: { index: false, follow: false },
+        robots: { index: false, follow: true },
       }
     }
 
     const { post, author, thumbnail, description, categoryEmoji, keywords } = metadata
 
-    const title = `${categoryEmoji} [${post.category}] ${post.title} - 경기아트콜렉티브`
+    const ogTitle = `${categoryEmoji} [${post.category}] ${post.title} - 경기아트콜렉티브`
+    const title = `${categoryEmoji} [${post.category}] ${post.title}`
 
     // OG 이미지 생성 - 통합 유틸리티 사용
     const ogImageUrl = generatePostOgImage(thumbnail)
@@ -44,7 +45,7 @@ export async function generateMetadata({
       keywords,
       authors: [{ name: author?.display_name || '경기아트콜렉티브' }],
       openGraph: {
-        title,
+        title: ogTitle,
         description,
         url: `https://ggac.kr/board/${postId}`,
         siteName: '경기아트콜렉티브 협동조합',
@@ -64,7 +65,7 @@ export async function generateMetadata({
       },
       twitter: {
         card: 'summary_large_image',
-        title,
+        title: ogTitle,
         description,
         images: [ogImageUrl],
       },
@@ -75,7 +76,7 @@ export async function generateMetadata({
   } catch (error) {
     console.error('[Metadata] Error generating metadata:', error)
     return {
-      title: '게시물 - 경기아트콜렉티브',
+      title: '게시물',
       description: '경기아트콜렉티브 협동조합 조합원들의 소통 공간입니다.',
     }
   }

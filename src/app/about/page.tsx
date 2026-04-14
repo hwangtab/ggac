@@ -14,7 +14,7 @@ import type { Metadata } from 'next'
 export const revalidate = 86400
 
 export const metadata: Metadata = {
-  title: '우리의 이야기 | 경기아트콜렉티브 협동조합',
+  title: '우리의 이야기',
   description:
     '경기도를 기반으로 활동하는 예술가들이 모여 설립한 생산자 협동조합. 예술로 숨 쉬고, 협동으로 길을 내어 지속가능한 창작 생태계를 만들어갑니다.',
   keywords: [
@@ -34,7 +34,6 @@ export const metadata: Metadata = {
   authors: [{ name: '경기아트콜렉티브 협동조합' }],
   creator: '경기아트콜렉티브 협동조합',
   publisher: '경기아트콜렉티브 협동조합',
-  metadataBase: new URL('https://ggac.kr'),
   alternates: {
     canonical: '/about',
     languages: {

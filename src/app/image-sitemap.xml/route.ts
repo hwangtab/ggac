@@ -57,10 +57,7 @@ ${imageXml}
 
     // 아티스트 프로필 이미지
     for (const artist of artists) {
-      const profileUrl =
-        (artist as { profilePhotoUrl?: string | null }).profilePhotoUrl ||
-        (artist as { profile_photo_url?: string | null }).profile_photo_url
-
+      const profileUrl = artist.profileImage
       if (!profileUrl) continue
 
       const imgUrl = generateImageUrl(profileUrl, { absolute: true })

@@ -33,7 +33,7 @@ export async function generateMetadata({
   const canonical = page > 1 ? `/archive?page=${page}` : '/archive'
 
   return {
-    title: '프로젝트 | 경기아트콜렉티브 협동조합',
+    title: '프로젝트',
     description:
       '경기아트콜렉티브가 만들어가는 다양한 창작 프로젝트들입니다. 음반제작, 공연기획, 예술교육, 문화행사 등 우리의 발자취를 확인해보세요.',
     keywords: [
@@ -51,7 +51,6 @@ export async function generateMetadata({
     authors: [{ name: '경기아트콜렉티브 협동조합' }],
     creator: '경기아트콜렉티브 협동조합',
     publisher: '경기아트콜렉티브 협동조합',
-    metadataBase: new URL('https://ggac.kr'),
     alternates: {
       canonical,
       languages: {

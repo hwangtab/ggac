@@ -11,7 +11,9 @@ import {
 } from '@/utils/structuredData'
 
 export const metadata: Metadata = {
-  title: '경기아트콜렉티브 협동조합 - 경계 없는 상상, 함께 만드는 울림',
+  title: {
+    absolute: '경기아트콜렉티브 협동조합 - 경계 없는 상상, 함께 만드는 울림',
+  },
   description:
     '예술로 숨 쉬고, 협동으로 길을 내는 협동조합입니다. 다양한 장르의 아티스트들이 함께 만들어가는 창작 공동체로, 음악, 미술, 영상, 공연 등 모든 예술 분야에서 활동하며 서로의 영감을 나누고 새로운 가능성을 탐구합니다.',
   keywords: [

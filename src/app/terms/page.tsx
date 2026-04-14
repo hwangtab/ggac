@@ -2,7 +2,7 @@ import { generateBreadcrumbStructuredData, structuredDataToScript } from '@/util
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: '이용약관 - 경기아트콜렉티브 협동조합',
+  title: '이용약관',
   description:
     '경기아트콜렉티브 협동조합 웹사이트 이용약관을 확인하세요. 서비스 이용 시 준수해야 할 규정과 조건들을 안내합니다.',
   keywords: ['이용약관', '서비스 약관', '경기아트콜렉티브', '협동조합', '웹사이트 이용규정'],
