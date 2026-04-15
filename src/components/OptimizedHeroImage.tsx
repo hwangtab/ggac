@@ -76,7 +76,7 @@ const OptimizedHeroImage = ({
 
       {/* 메인 이미지 - Next Image 단일 사용 (Next가 AVIF/WebP 자동 서빙 및 올바른 프리로드 처리) */}
       <Image
-        src="/images/hero.webp"
+        src="/images/projects/opening-party-04.webp"
         alt={alt}
         fill
         className={`object-cover transition-opacity duration-700 ${
