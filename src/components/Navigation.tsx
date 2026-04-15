@@ -178,7 +178,9 @@ const Navigation = () => {
 
             {/* Auth Section */}
             <div className="flex items-center space-x-2 lg:space-x-4 ml-2 lg:ml-4 pl-2 lg:pl-4 border-l border-gray-300/20">
-              {user ? (
+              {loading ? (
+                <div className="w-20 h-6" />
+              ) : user ? (
                 <>
                   {/* 알림 드롭다운 */}
                   <NotificationDropdown isDark={isDark} />
@@ -273,7 +275,9 @@ const Navigation = () => {
 
             {/* Tablet Auth Section */}
             <div className="flex items-center space-x-1 ml-1 pl-1 border-l border-gray-300/20">
-              {user ? (
+              {loading ? (
+                <div className="w-12 h-6" />
+              ) : user ? (
                 <>
                   <Link
                     href="/mypage"
@@ -377,7 +381,7 @@ const Navigation = () => {
 
               {/* Mobile Auth Section */}
               <div className="border-t border-gray-200/50 mt-2 pt-2">
-                {user ? (
+                {loading ? null : user ? (
                   <>
                     <Link
                       href="/mypage"

@@ -137,7 +137,7 @@ export const fetchBoardPosts = cache(
           .from('post_attachments')
           .select('post_id, file_type, file_size')
           .in('post_id', postIds),
-        supabase.from('comments').select('post_id').eq('is_deleted', false).in('post_id', postIds),
+        supabase.from('comments').select('post_id').in('post_id', postIds),
         supabase.from('post_likes').select('post_id').in('post_id', postIds),
       ])
 
