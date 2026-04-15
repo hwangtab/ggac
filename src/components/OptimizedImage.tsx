@@ -285,8 +285,9 @@ const OptimizedImage = memo(function OptimizedImage({
     }
 
     const isSupabaseImage = currentSrc.includes('supabase.co')
+    const isLocalImage = currentSrc.startsWith('/images/') || currentSrc.startsWith('/fonts/')
     // Priority 이미지는 타임아웃 단축 (폴링으로 빠른 감지)
-    const baseLoadTimeout = priority ? 2000 : isSupabaseImage ? 12000 : 8000
+    const baseLoadTimeout = priority ? 2000 : isLocalImage ? 3000 : isSupabaseImage ? 12000 : 8000
     const resolvedLoadTimeout = loadTimeoutMs ?? baseLoadTimeout
     const resolvedErrorTimeout = errorTimeoutMs ?? (priority ? 2000 : 4000)
 
@@ -481,7 +482,7 @@ const OptimizedImage = memo(function OptimizedImage({
   return (
     <div className={wrapperClass}>
       {/* 로딩 스켈레톤 (외부 스켈레톤이 없을 때만) */}
-      {isLoading && !suppressSkeleton && (
+      {isLoading && !suppressSkeleton && !priority && (
         <div
           className={`absolute inset-0 bg-gradient-to-br from-gray-100 to-gray-200 animate-pulse ${skeletonRoundedClass}`}
         >
@@ -495,9 +496,14 @@ const OptimizedImage = memo(function OptimizedImage({
       <Image
         alt={alt || ''}
         {...imageProps}
-        ref={imageRef}
+        ref={(el: HTMLImageElement | null) => {
+          imageRef.current = el
+          if (el && el.complete && el.naturalWidth > 0) {
+            markImageLoaded()
+          }
+        }}
         className={`transition-opacity duration-500 ${
-          suppressSkeleton ? '' : isLoading ? 'opacity-0' : 'opacity-100'
+          suppressSkeleton || priority ? '' : isLoading ? 'opacity-0' : 'opacity-100'
         } ${fill ? '' : className}`}
       />
     </div>
