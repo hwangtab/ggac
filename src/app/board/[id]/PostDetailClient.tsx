@@ -152,8 +152,8 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
                 )
               }
             }
-          } catch {
-            // ignore
+          } catch (userDataError) {
+            console.error('[PostDetailClient] user-data fetch 오류:', userDataError)
           }
         }
       } catch (e) {
@@ -210,7 +210,9 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
               )
             }
           }
-        } catch {}
+        } catch (authChangeUserDataError) {
+          console.error('[PostDetailClient] auth 변경 후 user-data fetch 오류:', authChangeUserDataError)
+        }
       }
     })
 
@@ -236,7 +238,9 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
         setHasMoreComments(!!data?.data?.has_next)
         setCommentsCursor(data?.data?.next_cursor || null)
       }
-    } catch {}
+    } catch (loadMoreError) {
+      console.error('[PostDetailClient] 댓글 더보기 오류:', loadMoreError)
+    }
   }
 
   const handleDeletePost = async () => {
@@ -244,13 +248,17 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
 
     if (!confirm('정말로 이 게시글을 삭제하시겠습니까?')) return
 
-    const { error } = await supabase.from('posts').delete().eq('id', post.id)
-
-    if (error) {
-      alert('게시글 삭제 중 오류가 발생했습니다.')
-    } else {
+    try {
+      const res = await fetch(`/api/posts/${postId}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || '삭제에 실패했습니다.')
+      }
       alert('게시글이 삭제되었습니다.')
       router.push('/board')
+    } catch (deleteError) {
+      console.error('[PostDetailClient] 게시글 삭제 오류:', deleteError)
+      alert(deleteError instanceof Error ? deleteError.message : '게시글 삭제 중 오류가 발생했습니다.')
     }
   }
 

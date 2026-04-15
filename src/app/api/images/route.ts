@@ -18,6 +18,12 @@ export async function GET(request: NextRequest) {
     const cleanPath = imagePath.replace(/^\/+/, '').replace(/\.\.+/g, '.')
     const publicPath = path.join(process.cwd(), 'public')
 
+    // Path traversal defense: ensure resolved path stays within publicPath
+    const resolved = path.resolve(publicPath, cleanPath)
+    if (!resolved.startsWith(publicPath)) {
+      return new NextResponse(null, { status: 403 })
+    }
+
     // WebP를 JPG로 변환하는 경우
     if (cleanPath.toLowerCase().endsWith('.webp') && format === 'jpg') {
       const jpgPath = cleanPath.replace(/\.webp$/i, '.jpg')
@@ -121,6 +127,12 @@ export async function HEAD(request: NextRequest) {
 
     const cleanPath = imagePath.replace(/^\/+/, '').replace(/\.\.+/g, '.')
     const publicPath = path.join(process.cwd(), 'public')
+
+    // Path traversal defense
+    const resolvedHead = path.resolve(publicPath, cleanPath)
+    if (!resolvedHead.startsWith(publicPath)) {
+      return new NextResponse(null, { status: 403 })
+    }
 
     let targetPath = cleanPath
     if (cleanPath.toLowerCase().endsWith('.webp') && format === 'jpg') {

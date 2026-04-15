@@ -100,10 +100,27 @@ function getCachedData<T>(key: string): T | null {
   return cached.data
 }
 
+const MAX_CACHE_SIZE = 100
+
+/**
+ * 만료된 캐시 항목 제거
+ */
+function pruneCache(): void {
+  const now = Date.now()
+  for (const [key, value] of apiCache.entries()) {
+    if (now > value.timestamp + value.ttl) {
+      apiCache.delete(key)
+    }
+  }
+}
+
 /**
  * 데이터 캐시에 저장
  */
 function setCachedData<T>(key: string, data: T, ttl: number): void {
+  if (apiCache.size > MAX_CACHE_SIZE) {
+    pruneCache()
+  }
   apiCache.set(key, {
     data,
     timestamp: Date.now(),

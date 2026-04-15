@@ -444,14 +444,14 @@ export async function POST(request: NextRequest) {
     } catch (error: any) {
       console.error('Storage upload error:', error)
       const message =
-        typeof error?.message === 'string' ? error.message : '파일 업로드에 실패했습니다.'
+        typeof error?.message === 'string' ? error.message : ''
       if (message.includes('bucket') || message.includes('not found')) {
         return createErrorResponse(
           'Storage가 설정되지 않았습니다. 관리자가 Supabase Storage bucket을 생성해야 합니다.',
           503
         )
       }
-      return createErrorResponse(`파일 업로드에 실패했습니다: ${message}`, 500)
+      return createErrorResponse('파일 업로드에 실패했습니다.', 500)
     }
 
     console.log('[UPLOAD API] Storage 업로드 성공:', uploadResult.original.path)

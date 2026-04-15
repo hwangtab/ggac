@@ -45,7 +45,10 @@ export async function DELETE(
     }
 
     const { error } = await supabase.from('comments').delete().eq('id', commentId)
-    if (error) return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    if (error) {
+      console.error('[API] 댓글 삭제 실패:', error)
+      return NextResponse.json({ success: false, error: '댓글 삭제에 실패했습니다.' }, { status: 500 })
+    }
 
     try {
       revalidateTag(`comments-post-${postId}`)
@@ -56,8 +59,9 @@ export async function DELETE(
 
     return NextResponse.json({ success: true })
   } catch (e: any) {
+    console.error('[API] 댓글 삭제 예외 발생:', e)
     return NextResponse.json(
-      { success: false, error: e?.message || 'Unexpected error' },
+      { success: false, error: '요청 처리에 실패했습니다.' },
       { status: 500 }
     )
   }

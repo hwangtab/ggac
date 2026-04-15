@@ -83,7 +83,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
     const { data: rows, error } = await query
     if (error) {
-      return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+      console.error('[API] 댓글 조회 실패:', error)
+      return NextResponse.json({ success: false, error: '댓글을 불러오는 데 실패했습니다.' }, { status: 500 })
     }
 
     let comments = rows || []
@@ -112,8 +113,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       data: { comments: normalized, has_next: hasNext, next_cursor: nextCursor },
     })
   } catch (e: any) {
+    console.error('[API] 댓글 조회 예외 발생:', e)
     return NextResponse.json(
-      { success: false, error: e?.message || 'Unexpected error' },
+      { success: false, error: '요청 처리에 실패했습니다.' },
       { status: 500 }
     )
   }

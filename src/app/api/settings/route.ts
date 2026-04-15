@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
     if (error) {
       console.error('Setting update error:', error)
       return NextResponse.json(
-        { error: error.message || 'Failed to update setting' },
+        { error: '설정 업데이트에 실패했습니다.' },
         { status: 400 }
       )
     }
@@ -206,11 +206,12 @@ export async function PUT(request: NextRequest) {
         })
 
         if (error) {
+          console.error('Bulk setting update error:', error)
           results.push({
             category,
             setting_key,
             success: false,
-            error: error.message,
+            error: '설정 업데이트에 실패했습니다.',
           })
           errorCount++
         } else {

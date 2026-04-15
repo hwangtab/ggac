@@ -45,16 +45,18 @@ export async function GET(req: NextRequest) {
     }
 
     if (error) {
+      console.error('[API] 프로필 조회 실패:', error)
       return NextResponse.json(
-        { success: false, error: error.message || 'Failed to fetch profiles' },
+        { success: false, error: '프로필 정보를 불러오는 데 실패했습니다.' },
         { status: 500 }
       )
     }
 
     return NextResponse.json({ success: true, data: profiles })
   } catch (e: any) {
+    console.error('[API] 프로필 조회 예외 발생:', e)
     return NextResponse.json(
-      { success: false, error: e?.message || 'Unexpected error' },
+      { success: false, error: '요청 처리에 실패했습니다.' },
       { status: 500 }
     )
   }

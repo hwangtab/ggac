@@ -103,13 +103,7 @@ export const useFileUpload = ({
     async (postId: string): Promise<void> => {
       if (selectedFiles.length === 0) return
 
-      console.log(`[Upload] 시작: ${selectedFiles.length}개 파일 업로드`)
-
-      const uploadPromises = selectedFiles.map(async (file, index) => {
-        console.log(
-          `[Upload] ${index + 1}/${selectedFiles.length}: ${file.name} (${file.type}, ${file.size} bytes)`
-        )
-
+      const uploadPromises = selectedFiles.map(async (file) => {
         const formData = new FormData()
         formData.append('file', file)
 
@@ -117,8 +111,6 @@ export const useFileUpload = ({
           method: 'POST',
           body: formData,
         })
-
-        console.log(`[Upload] ${file.name} 응답: ${response.status} ${response.statusText}`)
 
         if (!response.ok) {
           const result = await response.json().catch(() => ({ error: '응답 파싱 실패' }))
@@ -128,13 +120,11 @@ export const useFileUpload = ({
         }
 
         const result = await response.json()
-        console.log(`[Upload] ${file.name} 성공:`, result)
         return result
       })
 
       try {
-        const results = await Promise.all(uploadPromises)
-        console.log(`[Upload] 전체 완료: ${results.length}개 파일 성공`)
+        await Promise.all(uploadPromises)
       } catch (error) {
         console.error('[Upload] 첨부파일 업로드 실패:', error)
         const errorMessage = error instanceof Error ? error.message : '알 수 없는 오류'

@@ -188,20 +188,23 @@ export async function GET(request: NextRequest) {
     const totalCount = count || 0
     const totalPages = Math.ceil(totalCount / limit)
 
-    // STEP 4: Restore comment count calculation
-    const postsWithCommentCount = await Promise.all(
-      posts.map(async post => {
-        const { count: commentCount } = await db
-          .from('comments')
-          .select('id', { count: 'exact', head: true })
-          .eq('post_id', post.id)
+    // Get all comment counts in one query instead of N+1 individual queries
+    const postIds = posts.map(p => p.id)
+    const { data: commentCounts } = await db
+      .from('comments')
+      .select('post_id')
+      .in('post_id', postIds)
 
-        return {
-          ...post,
-          comment_count: commentCount || 0,
-        }
-      })
-    )
+    // Build a count map
+    const countMap = new Map<string, number>()
+    for (const row of commentCounts || []) {
+      countMap.set(row.post_id, (countMap.get(row.post_id) || 0) + 1)
+    }
+
+    const postsWithCommentCount = posts.map(post => ({
+      ...post,
+      comment_count: countMap.get(post.id) || 0,
+    }))
 
     const response = NextResponse.json({
       posts: postsWithCommentCount,

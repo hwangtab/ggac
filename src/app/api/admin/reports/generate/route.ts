@@ -66,10 +66,6 @@ export async function POST(request: NextRequest) {
     startDate.setHours(0, 0, 0, 0)
     endDate.setHours(23, 59, 59, 999)
 
-    console.log(
-      `리포트 생성 시작 - 타입: ${reportType}, 기간: ${startDate.toISOString()} ~ ${endDate.toISOString()}`
-    )
-
     switch (reportType) {
       case 'member_activity':
         reportData = await generateMemberActivityReport(
@@ -136,8 +132,6 @@ async function generateMemberActivityReport(
   endDate: Date,
   filters: any
 ) {
-  console.log('멤버 활동 리포트 생성 시작...')
-
   // 1. 전체 회원 통계 (기본 데이터)
   const { data: allMembers, error: membersError } = await supabase
     .from('member_profiles')
@@ -147,8 +141,6 @@ async function generateMemberActivityReport(
   if (membersError) {
     console.error('회원 데이터 조회 오류:', membersError)
   }
-
-  console.log(`전체 회원 수: ${allMembers?.length || 0}`)
 
   // 2. 기간별 활동 통계 (수정된 쿼리 - 관계 문제 해결)
   const { data: activities, error: activitiesError } = await supabase
@@ -160,8 +152,6 @@ async function generateMemberActivityReport(
   if (activitiesError) {
     console.error('사용자 활동 데이터 조회 오류:', activitiesError)
   }
-
-  console.log(`조회된 활동 수: ${activities?.length || 0}`)
 
   // 3. 활동별 집계
   const activitySummary =
@@ -260,9 +250,6 @@ async function generatePostEngagementReport(
     .lte('created_at', endDate.toISOString())
     .order('created_at', { ascending: false })
 
-  // 댓글 통계 (개선된 날짜 범위 사용)
-  console.log(`댓글 조회 시작 - 기간: ${startDate.toISOString()} ~ ${endDate.toISOString()}`)
-
   const { data: comments, error: commentsError } = await supabase
     .from('comments')
     .select('id, post_id, created_at')
@@ -271,16 +258,6 @@ async function generatePostEngagementReport(
 
   if (commentsError) {
     console.error('댓글 조회 오류:', commentsError)
-  }
-
-  console.log(`조회된 댓글 수: ${comments?.length || 0}개`)
-  if (comments && comments.length > 0) {
-    console.log('조회된 댓글들:')
-    comments.forEach((comment: any) => {
-      console.log(
-        `  - 댓글 ID: ${comment.id}, 게시글: ${comment.post_id}, 작성일: ${comment.created_at}`
-      )
-    })
   }
 
   // 게시글별 댓글 수 계산
@@ -339,8 +316,6 @@ async function generateUserRegistrationReport(
   endDate: Date,
   filters: any
 ) {
-  console.log('사용자 등록 리포트 생성 시작...')
-
   // 1. 기간 내 신규 등록자 (created_at 기준)
   const { data: newRegistrations } = await supabase
     .from('member_profiles')
@@ -348,16 +323,12 @@ async function generateUserRegistrationReport(
     .gte('created_at', startDate.toISOString())
     .lte('created_at', endDate.toISOString())
 
-  console.log(`기간 내 신규 등록: ${newRegistrations?.length || 0}명`)
-
   // 2. 기간 내 상태가 변경된 회원들 (updated_at 기준)
   const { data: statusChanges } = await supabase
     .from('member_profiles')
     .select('id, display_name, email, registration_status, is_artist, created_at, updated_at')
     .gte('updated_at', startDate.toISOString())
     .lte('updated_at', endDate.toISOString())
-
-  console.log(`기간 내 상태 변경: ${statusChanges?.length || 0}명`)
 
   // 3. 신규 등록 통계
   const newRegistrationStats =
@@ -381,8 +352,6 @@ async function generateUserRegistrationReport(
     .gte('updated_at', startDate.toISOString())
     .lte('updated_at', endDate.toISOString())
     .order('updated_at', { ascending: false })
-
-  console.log(`기간 내 거부된 회원: ${recentlyRejected?.length || 0}명`)
 
   return {
     summary: {
@@ -440,8 +409,6 @@ async function generateComprehensiveReport(
 
 // 일별 활동 분석
 async function getDailyActivityBreakdown(supabase: any, startDate: Date, endDate: Date) {
-  console.log('일별 활동 통계 조회 중...')
-
   const { data, error } = await supabase
     .from('daily_activity_stats')
     .select('activity_date, action_type, count')
@@ -453,7 +420,6 @@ async function getDailyActivityBreakdown(supabase: any, startDate: Date, endDate
     console.error('일별 활동 통계 조회 오류:', error)
   }
 
-  console.log(`일별 활동 통계 수: ${data?.length || 0}`)
   return data || []
 }
 

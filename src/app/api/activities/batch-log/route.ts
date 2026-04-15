@@ -78,14 +78,16 @@ export async function POST(request: NextRequest) {
           })
 
           if (error) {
-            errors.push({ index: i, error: error.message })
+            console.error(`[API] 활동 로그 기록 실패 (index: ${i}):`, error)
+            errors.push({ index: i, error: '활동 로그 기록에 실패했습니다.' })
           } else {
             results.push({ index: i, activity_id: data })
           }
         } catch (error) {
+          console.error(`[API] 활동 로그 기록 예외 발생 (index: ${i}):`, error)
           errors.push({
             index: i,
-            error: error instanceof Error ? error.message : '알 수 없는 오류',
+            error: '활동 로그 기록에 실패했습니다.',
           })
         }
       }

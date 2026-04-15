@@ -88,7 +88,9 @@ export function usePostLikes({
           setUser(session?.user || null)
         })
         unsub = () => data.subscription.unsubscribe()
-      } catch {}
+      } catch (authInitError) {
+        console.error('[usePostLikes] auth 초기화 실패:', authInitError)
+      }
     })
 
     return () => {
@@ -196,6 +198,10 @@ export function usePostLikes({
       return false
     }
 
+    // Capture pre-toggle state for reliable rollback on rapid double-clicks
+    const preToggleLiked = state.isLiked
+    const preToggleCount = state.likeCount
+
     // Optimistic update - UI 즉시 업데이트
     const optimisticIsLiked = !state.isLiked
     const optimisticCount = optimisticIsLiked ? state.likeCount + 1 : state.likeCount - 1
@@ -276,10 +282,7 @@ export function usePostLikes({
     } catch (error) {
       log.error('POST 오류:', error)
 
-      // Optimistic update 롤백
-      const rollbackIsLiked = !optimisticIsLiked
-      const rollbackCount = rollbackIsLiked ? optimisticCount + 1 : optimisticCount - 1
-
+      // Optimistic update 롤백 - use pre-toggle snapshot to avoid wrong values on rapid clicks
       let errorMessage = '좋아요 처리에 실패했습니다.'
       if (error instanceof Error) {
         errorMessage = error.message
@@ -287,8 +290,8 @@ export function usePostLikes({
 
       setState(prev => ({
         ...prev,
-        isLiked: rollbackIsLiked,
-        likeCount: rollbackCount,
+        isLiked: preToggleLiked,
+        likeCount: preToggleCount,
       }))
 
       multiLoadingState.failLoading('toggle', errorMessage)
@@ -297,10 +300,10 @@ export function usePostLikes({
       if (onLikeChange) {
         log.debug('에러 발생 - 롤백 알림:', {
           postId,
-          liked: rollbackIsLiked,
-          count: rollbackCount,
+          liked: preToggleLiked,
+          count: preToggleCount,
         })
-        onLikeChange(postId, rollbackIsLiked, rollbackCount)
+        onLikeChange(postId, preToggleLiked, preToggleCount)
       }
 
       return false

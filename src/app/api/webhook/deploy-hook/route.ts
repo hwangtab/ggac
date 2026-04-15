@@ -43,8 +43,9 @@ export async function POST(req: NextRequest) {
 
     if (!res.ok) {
       const text = await res.text().catch(() => '')
+      console.error('[API] Deploy trigger failed:', res.status, text)
       return NextResponse.json(
-        { error: 'Deploy trigger failed', status: res.status, body: text },
+        { error: 'Deploy trigger failed' },
         { status: 500 }
       )
     }

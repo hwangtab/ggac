@@ -155,7 +155,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       revalidateTag(`attachments-post-${postId}`)
       revalidateTag('board-post')
       revalidateTag(postId)
-    } catch {}
+    } catch (revalidateError) {
+      console.error('[API] 캐시 재검증 실패:', revalidateError)
+    }
 
     return NextResponse.json({ success: true, data })
   } catch (e) {

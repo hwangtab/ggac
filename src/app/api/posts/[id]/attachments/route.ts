@@ -324,7 +324,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       }
       return NextResponse.json(
         {
-          error: `파일 업로드에 실패했습니다: ${uploadError.message}`,
+          error: '파일 업로드에 실패했습니다.',
         },
         { status: 500 }
       )
@@ -394,7 +394,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
         return NextResponse.json(
           {
-            error: `첨부파일 정보 저장에 실패했습니다: ${dbError.message}`,
+            error: '첨부파일 정보 저장에 실패했습니다.',
           },
           { status: 500 }
         )
@@ -460,7 +460,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
         return NextResponse.json(
           {
-            error: `임시 이미지 저장에 실패했습니다: ${tempDbError.message}`,
+            error: '임시 이미지 저장에 실패했습니다.',
           },
           { status: 500 }
         )
@@ -483,7 +483,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     })
     return NextResponse.json(
       {
-        error: `서버 오류가 발생했습니다: ${error instanceof Error ? error.message : '알 수 없는 오류'}`,
+        error: '서버 오류가 발생했습니다.',
       },
       { status: 500 }
     )

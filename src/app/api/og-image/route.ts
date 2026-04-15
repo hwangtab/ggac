@@ -61,8 +61,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(
       {
-        error: 'Failed to process request',
-        details: error instanceof Error ? error.message : 'Unknown error',
+        error: '요청 처리에 실패했습니다.',
       },
       {
         status: 500,

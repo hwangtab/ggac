@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
 
     const res = await fetch(target.toString(), {
       method: 'GET',
-      redirect: 'follow',
+      redirect: 'manual',
       signal: controller.signal,
       // Spoof a common UA to improve success rate on strict sites
       headers: {
@@ -57,6 +57,27 @@ export async function GET(req: NextRequest) {
     })
 
     clearTimeout(timeout)
+
+    // Handle redirects manually to prevent SSRF bypass
+    if (res.status === 301 || res.status === 302 || res.status === 307 || res.status === 308) {
+      const location = res.headers.get('location')
+      if (!location) {
+        return createErrorResponse('Redirect with no Location header', 400)
+      }
+      let redirectUrl: URL
+      try {
+        redirectUrl = new URL(location)
+      } catch {
+        return createErrorResponse('Invalid redirect URL', 400)
+      }
+      if (!ALLOWED_PROTOCOLS.has(redirectUrl.protocol)) {
+        return createErrorResponse('Redirect to unsupported protocol', 400)
+      }
+      if (await isUnsafeHost(redirectUrl.hostname)) {
+        return createErrorResponse('Redirect to forbidden host', 400)
+      }
+      return createErrorResponse('Redirect not followed', 400)
+    }
 
     if (!res.ok) {
       return createErrorResponse(`Upstream error: ${res.status}`, 400)

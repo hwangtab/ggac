@@ -48,15 +48,6 @@ export const usePostsWithPagination = ({
       return
     }
 
-    // 🚀 성능 측정 시작
-    const startTime = Date.now()
-    console.log('📊 [HOOK PERFORMANCE] 게시글 로딩 시작 (키셋):', {
-      limit,
-      cursor,
-      category,
-      timestamp: new Date().toISOString(),
-    })
-
     try {
       inFlightRef.current = true
       setLoading(true)
@@ -114,17 +105,6 @@ export const usePostsWithPagination = ({
       setNextCursor(pagination.next_cursor)
       setPrevCursor(pagination.prev_cursor)
 
-      // 🚀 성능 측정 완료
-      const endTime = Date.now()
-      const duration = endTime - startTime
-      console.log('📊 [HOOK PERFORMANCE] 게시글 로딩 완료 (키셋):', {
-        duration: `${duration}ms`,
-        postsLoaded: postsWithLikes.length,
-        hasNext: pagination.has_next,
-        nextCursor: pagination.next_cursor,
-        cacheUsed: response.headers.get('x-cache-status') || 'unknown',
-        timestamp: new Date().toISOString(),
-      })
     } catch (err) {
       console.error('Error fetching posts:', err)
       setError(err instanceof Error ? err.message : '게시글을 불러오는 중 오류가 발생했습니다.')
@@ -148,7 +128,6 @@ export const usePostsWithPagination = ({
     const disableRealtime = false
 
     if (isMobile || isIOS || disableRealtime) {
-      console.log('[REALTIME] 실시간 업데이트 비활성화됨:', { isMobile, isIOS, disableRealtime })
       return () => {} // 빈 함수 반환
     }
 
@@ -168,11 +147,6 @@ export const usePostsWithPagination = ({
             const eventType = realtimePayload.eventType || realtimePayload.event_type
             const oldRecord = realtimePayload.old || realtimePayload.old_record
             const newRecord = realtimePayload.new || realtimePayload.new_record
-
-            console.log('[REALTIME] 실시간 업데이트 수신 - 최적화됨:', {
-              eventType,
-              postId: newRecord?.id,
-            })
 
             if (eventType === 'UPDATE' && oldRecord && newRecord) {
               // 변경된 필드 분석
@@ -196,18 +170,8 @@ export const usePostsWithPagination = ({
               )
 
               if (isMinorUpdate && !hasMajorFieldChanges) {
-                console.log('[REALTIME] 마이너 업데이트 감지 - 새로고침 건너뜀:', {
-                  changedFields,
-                  postId: newRecord.id,
-                })
                 return // 불필요한 새로고침 방지
               }
-
-              console.log('[REALTIME] 메이저 필드 변경 감지:', {
-                changedFields,
-                hasMajorFieldChanges,
-                postId: newRecord.id,
-              })
             }
 
             // 과도한 재요청 방지: 1.5초 단위로 통합 호출

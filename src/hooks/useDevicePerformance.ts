@@ -21,7 +21,7 @@ interface DevicePerformanceInfo {
 export function useDevicePerformance(): DevicePerformanceInfo {
   const [performanceInfo, setPerformanceInfo] = useState<DevicePerformanceInfo>({
     performanceLevel: 'medium',
-    hardwareConcurrency: navigator.hardwareConcurrency || 4,
+    hardwareConcurrency: typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 4 : 4,
     deviceMemory: null,
     isLowPowerMode: false,
     gpuTier: 'medium',

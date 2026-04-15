@@ -16,12 +16,11 @@ export async function GET() {
     } = await supabase.auth.getUser()
 
     if (sessionError) {
-      console.log('[VERIFY-SESSION] Session error:', sessionError)
+      console.error('[VERIFY-SESSION] Session error:', sessionError)
       return NextResponse.json(
         {
           authenticated: false,
           error: 'Session error',
-          details: sessionError.message,
         },
         { status: 401 }
       )
@@ -46,14 +45,13 @@ export async function GET() {
       .single()
 
     if (profileError) {
-      console.log('[VERIFY-SESSION] Profile error:', profileError)
+      console.error('[VERIFY-SESSION] Profile error:', profileError)
       return NextResponse.json(
         {
           authenticated: true,
-          user: user,
+          user: { id: user.id, email: user.email },
           profile: null,
           error: 'Profile not found',
-          details: profileError.message,
         },
         { status: 200 }
       )
@@ -63,9 +61,8 @@ export async function GET() {
     return NextResponse.json(
       {
         authenticated: true,
-        user: user,
+        user: { id: user.id, email: user.email },
         profile: profile,
-        sessionId: user.id?.substring(0, 10) + '...', // 디버깅용 사용자 ID 일부
       },
       { status: 200 }
     )
@@ -75,7 +72,6 @@ export async function GET() {
       {
         authenticated: false,
         error: 'Internal server error',
-        details: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }
     )

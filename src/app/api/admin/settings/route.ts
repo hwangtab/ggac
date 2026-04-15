@@ -202,14 +202,15 @@ export async function GET(request: NextRequest) {
 
         if (fallbackError) {
           console.error('[DEBUG] Fallback query also failed:', fallbackError)
-          throw new Error(`설정 테이블 조회 실패: ${fallbackError.message}`)
+          console.error('[API] 설정 테이블 직접 조회 실패:', fallbackError)
+          throw new Error('설정 테이블 조회 실패')
         }
 
         console.log('[DEBUG] Fallback query succeeded, data length:', fallbackData?.length || 0)
         settingsData = fallbackData
       } catch (fallbackErr) {
         console.error('[DEBUG] Fallback mechanism failed:', fallbackErr)
-        throw new Error(`설정을 조회할 수 없습니다: ${settingsError.message || settingsError.code}`)
+        throw new Error('설정을 조회할 수 없습니다.')
       }
     }
 
@@ -262,9 +263,10 @@ export async function GET(request: NextRequest) {
       'medium'
     )
 
+    const isPermissionError = error instanceof Error && error.message.includes('권한')
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : '설정 조회 중 오류가 발생했습니다.' },
-      { status: error instanceof Error && error.message.includes('권한') ? 403 : 500 }
+      { error: isPermissionError ? '관리자 권한이 필요합니다.' : '설정 조회 중 오류가 발생했습니다.' },
+      { status: isPermissionError ? 403 : 500 }
     )
   }
 }
@@ -500,9 +502,10 @@ export async function PUT(request: NextRequest) {
       'high'
     )
 
+    const isPermissionError = error instanceof Error && error.message.includes('권한')
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : '설정 업데이트 중 오류가 발생했습니다.' },
-      { status: error instanceof Error && error.message.includes('권한') ? 403 : 500 }
+      { error: isPermissionError ? '관리자 권한이 필요합니다.' : '설정 업데이트 중 오류가 발생했습니다.' },
+      { status: isPermissionError ? 403 : 500 }
     )
   }
 }

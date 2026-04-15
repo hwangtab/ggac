@@ -166,6 +166,7 @@ async function fetchWithRetry(url: string, maxRetries = 3): Promise<Response | n
 
       const response = await fetch(url, {
         signal: controller.signal,
+        redirect: 'manual',
         headers: {
           'User-Agent': randomUserAgent,
           Accept: 'text/html,application/xhtml+xml',
@@ -184,6 +185,33 @@ async function fetchWithRetry(url: string, maxRetries = 3): Promise<Response | n
           revalidate: process.env.NODE_ENV === 'development' ? 60 : 3600,
         },
       })
+
+      // Handle redirects manually to prevent SSRF bypass
+      if (response.status >= 300 && response.status < 400) {
+        const location = response.headers.get('location')
+        if (!location) {
+          console.warn(`[LinkPreview] Redirect with no Location header for: ${url}`)
+          return null
+        }
+        let redirectUrl: URL
+        try {
+          redirectUrl = new URL(location)
+        } catch {
+          console.warn(`[LinkPreview] Invalid redirect URL: ${location}`)
+          return null
+        }
+        if (!ALLOWED_PROTOCOLS.has(redirectUrl.protocol)) {
+          console.warn(`[LinkPreview] Redirect to unsupported protocol: ${redirectUrl.protocol}`)
+          return null
+        }
+        if (await isUnsafeHost(redirectUrl.hostname)) {
+          console.warn(`[LinkPreview] Redirect to forbidden host blocked: ${redirectUrl.hostname}`)
+          return null
+        }
+        // Safe redirect — treat as a non-retryable client error (caller should use the redirect URL if needed)
+        console.warn(`[LinkPreview] Redirect not followed for SSRF safety: ${location}`)
+        return null
+      }
 
       clearTimeout(timeoutId)
 

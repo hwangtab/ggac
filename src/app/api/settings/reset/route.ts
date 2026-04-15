@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     if (error) {
       console.error('Settings reset error:', error)
       return NextResponse.json(
-        { error: error.message || 'Failed to reset settings' },
+        { error: '설정 초기화에 실패했습니다.' },
         { status: 400 }
       )
     }

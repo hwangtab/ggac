@@ -129,26 +129,3 @@ export async function POST(request: NextRequest) {
   }
 }
 
-/**
- * CSP 위반 통계 조회 (관리자용)
- */
-export async function GET(request: NextRequest) {
-  try {
-    // 간단한 관리자 인증 (실제로는 더 강력한 인증 필요)
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // 여기서는 간단한 응답만 반환 (실제로는 데이터베이스에서 통계 조회)
-    return NextResponse.json({
-      message: 'CSP violation reporting endpoint is active',
-      endpoint: '/api/security/csp-report',
-      methods: ['POST'],
-      note: 'This endpoint collects CSP violation reports from browsers',
-    })
-  } catch (error) {
-    console.error('[CSP] 통계 조회 중 오류:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
-  }
-}

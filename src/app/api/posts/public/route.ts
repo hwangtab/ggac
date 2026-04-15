@@ -83,7 +83,10 @@ export async function GET(request: NextRequest) {
     query = query.limit(limit + 1)
 
     const { data, error } = await query
-    if (error) return NextResponse.json({ error: `Failed to fetch posts: ${error.message}` }, { status: 500 })
+    if (error) {
+      console.error('[API] 게시글 조회 실패:', error)
+      return NextResponse.json({ error: '게시글을 불러오는 데 실패했습니다.' }, { status: 500 })
+    }
 
     let actual = data || []
     const hasNext = actual.length > limit
@@ -163,7 +166,7 @@ export async function GET(request: NextRequest) {
       { status: 200, headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300' } }
     )
   } catch (e) {
-    const msg = (e && (e as any).message) ? (e as any).message : 'Unknown error'
-    return NextResponse.json({ error: `Error: ${msg}` }, { status: 500 })
+    console.error('[API] 게시글 조회 예외 발생:', e)
+    return NextResponse.json({ error: '요청 처리에 실패했습니다.' }, { status: 500 })
   }
 }
