@@ -32,10 +32,6 @@ import {
  * Service Role Key는 RLS를 우회하므로, 인증된 사용자의 업로드 작업에만 제한적으로 사용
  */
 function getSupabaseAdmin() {
-  console.log('[SUPABASE ADMIN] 환경 변수 확인')
-  console.log('[SUPABASE ADMIN] SUPABASE_URL:', !!process.env.NEXT_PUBLIC_SUPABASE_URL)
-  console.log('[SUPABASE ADMIN] SERVICE_ROLE_KEY:', !!process.env.SUPABASE_SERVICE_ROLE_KEY)
-
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     console.error('[SUPABASE ADMIN] SUPABASE_SERVICE_ROLE_KEY가 설정되지 않음')
     throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured')
@@ -46,7 +42,6 @@ function getSupabaseAdmin() {
     throw new Error('NEXT_PUBLIC_SUPABASE_URL is not configured')
   }
 
-  console.log('[SUPABASE ADMIN] 클라이언트 생성 중...')
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 }
 
@@ -61,7 +56,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     // UUID 형식 검증
     const uuidValidation = validateUUID(postId, '게시글 ID')
     if (!uuidValidation.isValid) {
-      console.log('[API] ATTACHMENTS GET UUID 검증 실패:', uuidValidation.errors)
       return NextResponse.json(
         {
           error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.',
@@ -126,7 +120,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const resolvedParams = await context.params
   try {
-    console.log('[UPLOAD API] 요청 시작')
     const postId = resolvedParams.id
 
     // UUID 형식 검증
@@ -141,15 +134,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       )
     }
 
-    console.log('[UPLOAD API] UUID 검증 성공:', postId)
-
     const supabase = await createSupabaseServer()
-    console.log('[UPLOAD API] Supabase 클라이언트 생성 완료')
 
     const {
       data: { user },
     } = await supabase.auth.getUser()
-    console.log('[UPLOAD API] 세션 조회 완료:', !!user)
 
     if (!user) {
       console.error('[UPLOAD API] 인증 실패 - 세션 없음')
@@ -158,12 +147,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     const validPostId = uuidValidation.sanitized
     const isTempId = isValidTempId(validPostId)
-    console.log('[UPLOAD API] 인증 성공, 사용자 ID:', user.id, '임시 ID:', isTempId)
 
     // 임시 ID가 아닌 경우에만 게시글 존재 및 권한 확인
     let post = null
     if (!isTempId) {
-      console.log('[UPLOAD API] 게시글 조회 시작:', validPostId)
       const { data: postData, error: postError } = await supabase
         .from('posts')
         .select('id, author_id, category')
@@ -175,8 +162,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         return NextResponse.json({ error: '게시글을 찾을 수 없습니다.' }, { status: 404 })
       }
 
-      console.log('[UPLOAD API] 게시글 조회 성공, 작성자:', postData.author_id)
-
       if (postData.author_id !== user.id) {
         console.error('[UPLOAD API] 권한 없음 - 작성자가 아님')
         return NextResponse.json(
@@ -186,24 +171,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       }
 
       post = postData
-    } else {
-      console.log('[UPLOAD API] 임시 ID로 업로드 - 게시글 존재 확인 생략')
     }
 
     // 멀티파트 폼 데이터 파싱
-    console.log('[UPLOAD API] 폼 데이터 파싱 시작')
     const formData = await request.formData()
     const file = formData.get('file') as File
     const altText = (formData.get('alt_text') as string) || ''
     const isPrimary = formData.get('is_primary') === 'true'
-
-    console.log('[UPLOAD API] 파일 정보:', {
-      name: file?.name,
-      type: file?.type,
-      size: file?.size,
-      altText,
-      isPrimary,
-    })
 
     if (!file || file.size === 0) {
       console.error('[UPLOAD API] 파일이 없음')
@@ -214,7 +188,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const validation = validateFile(file, FILE_VALIDATION_PROFILES.POST_ATTACHMENTS, [], user.id)
 
     if (!validation.isValid) {
-      console.error('[UPLOAD API] 파일 검증 실패:', validation.errors)
       return NextResponse.json(
         {
           error: formatValidationErrors(validation.errors),
@@ -263,16 +236,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
           { status: 400 }
         )
       }
-    } else {
-      console.log('[UPLOAD API] 임시 ID - 첨부파일 제한 확인 생략')
     }
 
     // Storage 클라이언트 생성 및 파일 업로드
-    console.log('[UPLOAD API] Storage 클라이언트 생성 시작')
     let supabaseAdmin
     try {
       supabaseAdmin = getSupabaseAdmin()
-      console.log('[UPLOAD API] Storage 클라이언트 생성 성공')
     } catch (error) {
       console.error('[UPLOAD API] Supabase Admin 클라이언트 생성 오류:', error)
       return NextResponse.json(
@@ -284,20 +253,15 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     }
 
     // 파일명 정제 및 고유 파일명 생성 (공통 검증에서 이미 생성됨)
-    console.log('[UPLOAD API] 파일명 정제 시작')
     const uniqueFileName = validation.uniqueFileName || generateUniqueFileName(file.name)
-    console.log('[UPLOAD API] 고유 파일명:', uniqueFileName)
 
     // 파일을 Supabase Storage에 업로드
-    console.log('[UPLOAD API] 파일 버퍼 변환 시작')
     const fileBuffer = await file.arrayBuffer()
-    console.log('[UPLOAD API] 파일 버퍼 변환 완료, 크기:', fileBuffer.byteLength)
 
     // 임시 파일과 영구 파일의 경로 구분
     const filePath = isTempId
       ? `temp/${validPostId}/${uniqueFileName}`
       : `posts/${validPostId}/${uniqueFileName}`
-    console.log('[UPLOAD API] Storage 업로드 시작:', filePath, '(임시:', isTempId, ')')
 
     const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
       .from('attachments')
@@ -330,18 +294,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       )
     }
 
-    console.log('[UPLOAD API] Storage 업로드 성공:', uploadData)
-
     // 업로드된 파일의 공개 URL 생성
-    console.log('[UPLOAD API] 공개 URL 생성 시작')
     const { data: urlData } = supabaseAdmin.storage.from('attachments').getPublicUrl(filePath)
-    console.log('[UPLOAD API] 공개 URL 생성 완료:', urlData.publicUrl)
 
     // 임시 파일이 아닌 경우에만 데이터베이스 저장
     if (!isTempId) {
       // 대표 이미지로 설정하는 경우 기존 대표 이미지 해제
       if (isPrimary && fileType === 'image') {
-        console.log('[UPLOAD API] 기존 대표 이미지 해제 시작')
         const { error: primaryError } = await supabase
           .from('post_attachments')
           .update({ is_primary: false })
@@ -350,13 +309,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
         if (primaryError) {
           console.warn('[UPLOAD API] 기존 대표 이미지 해제 실패:', primaryError)
-        } else {
-          console.log('[UPLOAD API] 기존 대표 이미지 해제 완료')
         }
       }
 
       // 첨부파일 메타데이터를 데이터베이스에 저장
-      console.log('[UPLOAD API] 메타데이터 저장 시작')
       const attachmentData = {
         post_id: validPostId,
         file_name: file.name,
@@ -367,7 +323,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         alt_text: altText || null,
         is_primary: isPrimary && fileType === 'image',
       }
-      console.log('[UPLOAD API] 저장할 데이터:', attachmentData)
 
       const { data: attachment, error: dbError } = await supabase
         .from('post_attachments')
@@ -384,10 +339,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         })
 
         // 업로드된 파일 삭제 (롤백)
-        console.log('[UPLOAD API] 파일 롤백 시작')
         try {
           await supabaseAdmin.storage.from('attachments').remove([filePath])
-          console.log('[UPLOAD API] 파일 롤백 완료')
         } catch (rollbackError) {
           console.error('[UPLOAD API] 파일 롤백 실패:', rollbackError)
         }
@@ -399,8 +352,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
           { status: 500 }
         )
       }
-
-      console.log('[UPLOAD API] 메타데이터 저장 성공:', attachment)
 
       try {
         revalidateTag(`attachments-post-${validPostId}`)
@@ -419,7 +370,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       })
     } else {
       // 임시 파일의 경우 임시 첨부파일로 데이터베이스에 저장
-      console.log('[UPLOAD API] 임시 파일 메타데이터 저장 시작')
 
       // 24시간 후 만료 설정
       const expiresAt = new Date()
@@ -439,8 +389,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         expires_at: expiresAt.toISOString(),
       }
 
-      console.log('[UPLOAD API] 임시 첨부파일 저장 데이터:', tempAttachmentData)
-
       const { data: tempAttachment, error: tempDbError } = await supabase
         .from('post_attachments')
         .insert(tempAttachmentData)
@@ -453,7 +401,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         // 실패 시 업로드된 파일 삭제
         try {
           await supabaseAdmin.storage.from('attachments').remove([filePath])
-          console.log('[UPLOAD API] 임시 파일 롤백 완료')
         } catch (rollbackError) {
           console.error('[UPLOAD API] 임시 파일 롤백 실패:', rollbackError)
         }
@@ -466,7 +413,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         )
       }
 
-      console.log('[UPLOAD API] 임시 파일 업로드 완료:', tempAttachment)
       return NextResponse.json({
         message: '임시 이미지가 성공적으로 업로드되었습니다.',
         url: urlData.publicUrl,

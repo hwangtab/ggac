@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { stripHtmlTags } from '@/utils/textUtils'
+import { escapePostgrestValue } from '@/utils/validation'
 
 export const runtime = 'edge'
 export const dynamic = 'force-dynamic'
@@ -55,22 +56,23 @@ export async function GET(request: NextRequest) {
         .filter(t => t.length >= 2)
         .slice(0, 3)
       if (tokens.length > 0) {
-        const esc = (s: string) => s.replace(/'/g, "''").replace(/\\/g, '\\\\')
-        const pattern = tokens.map(t => `title.ilike.%${esc(t)}%,content.ilike.%${esc(t)}%`).join(',')
+        const pattern = tokens.map(t => `title.ilike.%${escapePostgrestValue(t)}%,content.ilike.%${escapePostgrestValue(t)}%`).join(',')
         query = query.or(pattern)
       }
     }
 
     const ascending = sortOrder === 'asc'
     if (cursor) {
-      const [enc, id] = cursor.split('|')
+      const [enc, rawId] = cursor.split('|')
       const createdAt = enc ? decodeURIComponent(enc) : null
-      if (createdAt && id) {
+      const isValidTimestamp = createdAt && /^\d{4}-\d{2}-\d{2}T[\d:.+Z-]+$/.test(createdAt)
+      const isValidUuid = rawId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawId)
+      if (isValidTimestamp && isValidUuid) {
         if (ascending) {
-          query = query.or(`created_at.gt.${createdAt},and(created_at.eq.${createdAt},id.gt.${id})`)
+          query = query.or(`created_at.gt.${createdAt},and(created_at.eq.${createdAt},id.gt.${rawId})`)
           query = query.order('created_at', { ascending: true }).order('id', { ascending: true })
         } else {
-          query = query.or(`created_at.lt.${createdAt},and(created_at.eq.${createdAt},id.lt.${id})`)
+          query = query.or(`created_at.lt.${createdAt},and(created_at.eq.${createdAt},id.lt.${rawId})`)
           query = query.order('created_at', { ascending: false }).order('id', { ascending: false })
         }
       }

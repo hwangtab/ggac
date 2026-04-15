@@ -177,26 +177,6 @@ throw ApiError.internalServerError('Server error')
 - Rate limiting for media upload and link preview endpoints
 - Request/response logging and monitoring
 
-### Client-Side API Integration
-
-Use `@/utils/clientApiWrapper` for consistent client-side API calls:
-
-```typescript
-import { apiGet, apiPost, apiPut, apiDelete } from '@/utils/clientApiWrapper'
-
-// GET request with caching
-const users = await apiGet<User[]>('/api/users', { cache: true })
-
-// POST with error handling
-try {
-  const newUser = await apiPost<User>('/api/users', userData)
-} catch (error) {
-  if (error instanceof ClientApiError) {
-    console.error(error.message, error.statusCode)
-  }
-}
-```
-
 ## Common Issues & Solutions
 
 ### Image Loading Errors

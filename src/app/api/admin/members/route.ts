@@ -2,7 +2,7 @@ import { createOptionsResponse } from '@/utils/apiResponse'
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
-import { validateSearchQuery } from '@/utils/validation'
+import { validateSearchQuery, escapePostgrestValue } from '@/utils/validation'
 import {
   applyRateLimit,
   RATE_LIMIT_CONFIGS,
@@ -149,7 +149,7 @@ export async function GET(request: NextRequest) {
 
     // 검색 적용 (SQL 인젝션 방지)
     if (search) {
-      const escapedSearch = search.replace(/'/g, "''").replace(/\\/g, '\\\\')
+      const escapedSearch = escapePostgrestValue(search)
       query = query.or(
         `display_name.ilike.%${escapedSearch}%,email.ilike.%${escapedSearch}%,real_name.ilike.%${escapedSearch}%`
       )

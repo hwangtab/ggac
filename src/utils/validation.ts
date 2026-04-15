@@ -595,6 +595,15 @@ export const validateSearchQuery = (query: string): DatabaseValidationResult => 
   }
 }
 
+/**
+ * PostgREST .or() 필터에 삽입되는 값을 안전하게 이스케이프합니다.
+ * - 따옴표, 백슬래시 이스케이프
+ * - PostgREST 구분자(. , ( ))는 제거
+ */
+export function escapePostgrestValue(s: string): string {
+  return s.replace(/\\/g, '\\\\').replace(/'/g, "''").replace(/[.,()]/g, '')
+}
+
 // 검증 규칙 상수
 export const VALIDATION_RULES = {
   EMAIL_MAX_LENGTH: 254,

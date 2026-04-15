@@ -5,7 +5,7 @@ import { createClient } from '@supabase/supabase-js'
 // API 라우트를 동적으로 렌더링하도록 강제 설정
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-import { validateSearchQuery } from '@/utils/validation'
+import { validateSearchQuery, escapePostgrestValue } from '@/utils/validation'
 import {
   applyRateLimit,
   RATE_LIMIT_CONFIGS,
@@ -142,7 +142,7 @@ export async function GET(request: NextRequest) {
     // Apply search (SQL 인젝션 방지를 위해 파라미터 바인딩 사용)
     if (search) {
       // 이스케이프 처리된 검색어 사용
-      const escapedSearch = search.replace(/'/g, "''").replace(/\\/g, '\\\\')
+      const escapedSearch = escapePostgrestValue(search)
       query = query.or(`title.ilike.%${escapedSearch}%,content.ilike.%${escapedSearch}%`)
     }
 
@@ -171,7 +171,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (search) {
-      const escapedSearch = search.replace(/'/g, "''").replace(/\\/g, '\\\\')
+      const escapedSearch = escapePostgrestValue(search)
       countQuery = countQuery.or(`title.ilike.%${escapedSearch}%,content.ilike.%${escapedSearch}%`)
     }
 
