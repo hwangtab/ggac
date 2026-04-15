@@ -57,7 +57,6 @@ export async function GET() {
       )
     }
 
-    console.log('[VERIFY-SESSION] Session and profile verified successfully')
     return NextResponse.json(
       {
         authenticated: true,

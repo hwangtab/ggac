@@ -8,6 +8,7 @@ export const runtime = 'nodejs'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { timingSafeEqual } from 'crypto'
 
 // Service Role 클라이언트 (RLS 우회 가능)
 function getSupabaseAdmin() {
@@ -31,7 +32,16 @@ export async function POST(request: NextRequest) {
     const authHeader = request.headers.get('authorization')
     const expectedToken = process.env.CLEANUP_CRON_TOKEN
 
-    if (!expectedToken || authHeader !== `Bearer ${expectedToken}`) {
+    if (!expectedToken || !authHeader) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // 타이밍 공격 방지를 위한 상수 시간 비교
+    const providedBuf = Buffer.from(authHeader)
+    const expectedBuf = Buffer.from(`Bearer ${expectedToken}`)
+    const isValid =
+      providedBuf.length === expectedBuf.length && timingSafeEqual(providedBuf, expectedBuf)
+    if (!isValid) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -143,7 +153,16 @@ export async function GET(request: NextRequest) {
     const authHeader = request.headers.get('authorization')
     const expectedToken = process.env.CLEANUP_CRON_TOKEN
 
-    if (!expectedToken || authHeader !== `Bearer ${expectedToken}`) {
+    if (!expectedToken || !authHeader) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // 타이밍 공격 방지를 위한 상수 시간 비교
+    const providedBuf = Buffer.from(authHeader)
+    const expectedBuf = Buffer.from(`Bearer ${expectedToken}`)
+    const isValid =
+      providedBuf.length === expectedBuf.length && timingSafeEqual(providedBuf, expectedBuf)
+    if (!isValid) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 

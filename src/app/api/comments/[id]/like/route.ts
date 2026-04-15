@@ -6,6 +6,7 @@ export const preferredRegion = 'icn1'
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import rateLimiterUtils from '@/utils/rateLimiter'
+import { validateUUID } from '@/utils/validation'
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const resolvedParams = await context.params
@@ -18,6 +19,15 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     }
 
     const commentId = resolvedParams.id
+
+    // UUID 형식 검증
+    const uuidValidation = validateUUID(commentId, '댓글 ID')
+    if (!uuidValidation.isValid) {
+      return NextResponse.json(
+        { error: uuidValidation.errors[0] || '잘못된 댓글 ID 형식입니다.' },
+        { status: 400 }
+      )
+    }
 
     // 표준 인증 패턴: 쿠키 기반 세션 확인
     const supabase = await createSupabaseServer()

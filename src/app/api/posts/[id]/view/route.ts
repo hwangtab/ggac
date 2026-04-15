@@ -84,7 +84,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     }
 
     // 중복 조회 방지를 위한 세션 체크
-    const viewSessionKey = `post_view_${validPostId}`
     const lastViewTime = request.headers.get('x-last-view-time')
 
     // 최근 10분 내 같은 게시글을 본 경우 조회수 증가하지 않음

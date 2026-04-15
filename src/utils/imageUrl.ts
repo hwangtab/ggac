@@ -65,7 +65,6 @@ export function generatePostOgImage(thumbnail?: string | null): string {
 export function generateImageUrl(imagePath?: string | null, options: ImageUrlOptions = {}): string {
   const {
     fallbackPaths = [],
-    forSocialSharing = false,
     absolute = false,
     baseUrl = 'https://ggac.kr',
   } = options
@@ -77,11 +76,8 @@ export function generateImageUrl(imagePath?: string | null, options: ImageUrlOpt
 
   let finalPath = selectedPath
 
-  // 절대 URL인 경우 그대로 사용 (단, SNS 공유용 변환은 적용)
+  // 절대 URL인 경우 그대로 사용
   if (finalPath.startsWith('http')) {
-    if (forSocialSharing) {
-      finalPath = convertToSocialFormat(finalPath)
-    }
     return finalPath
   }
 
@@ -90,27 +86,12 @@ export function generateImageUrl(imagePath?: string | null, options: ImageUrlOpt
     finalPath = `/${finalPath}`
   }
 
-  // SNS 공유용 변환 (WebP -> JPG)
-  if (forSocialSharing) {
-    finalPath = convertToSocialFormat(finalPath)
-  }
-
   // 절대 URL 변환
   if (absolute) {
     return `${baseUrl.replace(/\/$/, '')}${finalPath}`
   }
 
   return finalPath
-}
-
-/**
- * SNS 공유를 위한 이미지 형식 변환
- * 현대 SNS 플랫폼은 WebP를 지원하므로 변환 불필요
- */
-function convertToSocialFormat(imagePath: string): string {
-  // WebP는 카카오톡, 페이스북, 트위터 등 주요 SNS에서 모두 지원됨
-  // 변환 없이 그대로 반환
-  return imagePath
 }
 
 /**

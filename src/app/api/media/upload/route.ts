@@ -419,7 +419,6 @@ export async function POST(request: NextRequest) {
     let supabaseAdmin
     try {
       supabaseAdmin = getSupabaseAdmin()
-      console.log('[UPLOAD API] Storage 클라이언트 생성 성공')
     } catch (error) {
       console.error('[UPLOAD API] Supabase Admin 클라이언트 생성 오류:', error)
       return createErrorResponse('Storage 서비스를 사용할 수 없습니다. 관리자에게 문의하세요.', 503)

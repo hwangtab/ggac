@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { validateUUID } from '@/utils/validation'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'edge'
@@ -7,6 +8,15 @@ export const preferredRegion = 'icn1'
 
 export async function GET(_req: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params
+
+  const uuidValidation = validateUUID(id, '게시글 ID')
+  if (!uuidValidation.isValid) {
+    return NextResponse.json(
+      { error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.' },
+      { status: 400 }
+    )
+  }
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!url || !anonKey) {

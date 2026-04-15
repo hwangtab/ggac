@@ -55,11 +55,6 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
       .replace(/(?:<p data-empty-line="true"><\/p>){2,}/gi, '<p data-empty-line="true"></p>')
   }, [])
 
-  // 컴포넌트 마운트 시 디버깅 로그
-  useEffect(() => {
-    console.log('[QuillEditor] 컴포넌트 초기화 완료')
-  }, [])
-
   // 스크롤 상태 관리 및 키보드 단축키
   useEffect(() => {
     const editor = quillRef.current?.getEditor()

@@ -90,6 +90,7 @@ const CommentLikeButton: React.FC<CommentLikeButtonProps> = ({
 
   return (
     <button
+      type="button"
       onClick={handleClick}
       disabled={isLoading || !canLike}
       className={`

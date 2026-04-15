@@ -17,13 +17,6 @@ import { logSecurityEvent } from '@/utils/security'
 // PATCH: 회원 상태 변경
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const resolvedParams = await context.params
-  // 함수 호출 확인용 로그
-  console.log('[PATCH] 회원 관리 API 호출됨:', {
-    memberId: resolvedParams.id,
-    timestamp: new Date().toISOString(),
-    url: request.url,
-    method: request.method,
-  })
 
   try {
     // 분산 Rate limiting 적용

@@ -20,7 +20,6 @@ const nextConfig = {
 
   // 최적화된 transpile 패키지 목록 - 필수만 유지
   transpilePackages: [
-    '@supabase/auth-helpers-nextjs',
     '@supabase/supabase-js',
     // react-markdown 제거: 이미 최적화된 패키지이므로 불필요
   ],
@@ -48,7 +47,6 @@ const nextConfig = {
       config.resolve.alias = {
         ...config.resolve.alias,
         '@supabase/supabase-js': require.resolve('@supabase/supabase-js'),
-        '@supabase/auth-helpers-nextjs': require.resolve('@supabase/auth-helpers-nextjs'),
       }
     }
 
@@ -70,13 +68,6 @@ const nextConfig = {
             reactIcons: {
               test: /[\\/]node_modules[\\/]react-icons[\\/]/,
               name: 'react-icons',
-              priority: 20,
-              reuseExistingChunk: true,
-            },
-            // Framer Motion 별도 번들
-            framerMotion: {
-              test: /[\\/]node_modules[\\/]framer-motion[\\/]/,
-              name: 'framer-motion',
               priority: 20,
               reuseExistingChunk: true,
             },
@@ -114,9 +105,7 @@ const nextConfig = {
                 ...minimizer.options.terserOptions,
                 compress: {
                   ...minimizer.options.terserOptions?.compress,
-                  drop_console: true,
                   drop_debugger: true,
-                  pure_funcs: ['console.log', 'console.debug'],
                 },
                 mangle: {
                   safari10: true,
@@ -149,10 +138,6 @@ const nextConfig = {
     // 해상도 별칭 추가로 번들 크기 최적화
     config.resolve.alias = {
       ...config.resolve.alias,
-      // lodash 트리 쉐이킹
-      lodash: 'lodash-es',
-      // moment.js 대신 date-fns 사용 권장
-      moment: 'date-fns',
     }
 
     // 불필요한 모듈 제외
@@ -171,7 +156,7 @@ const nextConfig = {
   // 실험적 기능 활성화
   experimental: {
     optimizeCss: false, // CSS 최적화 비활성화 - CSS를 스크립트로 잘못 로드하는 문제 방지
-    optimizePackageImports: ['react-icons', 'framer-motion', 'date-fns', 'lodash-es'],
+    optimizePackageImports: ['react-icons', 'date-fns', 'lodash-es'],
     // 개발 환경 최적화
     ...(process.env.NODE_ENV === 'development' && {
       forceSwcTransforms: true,
@@ -202,11 +187,6 @@ const nextConfig = {
   generateEtags: false,
   poweredByHeader: false,
   compress: true,
-
-  // 서버리스 함수 최적화
-  serverRuntimeConfig: {
-    maxDuration: 30,
-  },
 
   // Enhanced security headers (keep simple for static assets)
   async headers() {
@@ -463,12 +443,6 @@ const nextConfig = {
         port: '',
         pathname: '/storage/v1/object/public/**',
       },
-      {
-        protocol: 'https',
-        hostname: 'btugywkltavbogdnhwpu.supabase.co',
-        port: '',
-        pathname: '/storage/v1/object/public/**',
-      },
       // YouTube 썸네일 도메인
       {
         protocol: 'https',
@@ -481,13 +455,6 @@ const nextConfig = {
         hostname: 'i.ytimg.com',
         port: '',
         pathname: '/vi/**',
-      },
-      // 네이버 예약 이미지 도메인
-      {
-        protocol: 'https',
-        hostname: 'naverbooking-phinf.pstatic.net',
-        port: '',
-        pathname: '/**',
       },
       // 네이버 관련 이미지 도메인 (일반)
       {
@@ -523,8 +490,6 @@ const nextConfig = {
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
     // 이미지 최적화 오류 시 fallback 허용
     unoptimized: false,
-    // 외부 도메인에 대한 더 관대한 정책
-    domains: [], // deprecated이지만 호환성을 위해 유지
     // 이미지 품질 설정 (Next.js 16 대비)
     qualities: IMAGE_ALLOWED_QUALITIES,
   },

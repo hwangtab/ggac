@@ -170,20 +170,6 @@ const Navigation = () => {
                   className={`font-medium transition-colors duration-300 ${
                     pathname === item.href ? activeColor : `${textColor} ${hoverColor}`
                   }`}
-                  onClick={e => {
-                    // Add error handling for board navigation
-                    if (item.href === '/board') {
-                      try {
-                        // Board is now publicly accessible - no auth check needed
-                        // Just handle potential navigation errors
-                      } catch (error) {
-                        console.error('Navigation error:', error)
-                        e.preventDefault()
-                        // Fallback to browser navigation
-                        window.location.href = item.href
-                      }
-                    }
-                  }}
                 >
                   {item.label}
                 </Link>
@@ -280,9 +266,6 @@ const Navigation = () => {
               className={`font-medium transition-colors duration-300 text-xs ${
                 pathname === '/board' ? activeColor : `${textColor} ${hoverColor}`
               }`}
-              onClick={e => {
-                // Board is now publicly accessible - no auth check needed
-              }}
             >
               BOARD
             </Link>
@@ -336,6 +319,7 @@ const Navigation = () => {
 
           {/* Mobile Menu Button */}
           <button
+            id="mobile-menu-button"
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             className={`md:hidden p-2 rounded-md transition-colors duration-300 ${textColor} ${hoverColor} focus:outline-none focus:ring-2 focus:ring-primary-500`}
             aria-expanded={isMenuOpen}
@@ -378,20 +362,8 @@ const Navigation = () => {
                   key={item.href}
                   href={item.href}
                   prefetch={item.href === '/board'}
-                  onClick={e => {
+                  onClick={() => {
                     setIsMenuOpen(false)
-                    // Add error handling for board navigation
-                    if (item.href === '/board') {
-                      try {
-                        // Board is now publicly accessible - no auth check needed
-                        // Just handle potential navigation errors
-                      } catch (error) {
-                        console.error('Mobile navigation error:', error)
-                        e.preventDefault()
-                        // Fallback to browser navigation
-                        window.location.href = item.href
-                      }
-                    }
                   }}
                   className={`block py-3 px-4 rounded-md transition-colors duration-200 ${
                     pathname === item.href

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { isValidUUID } from '@/utils/validation'
 
 function getSupabaseClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -22,6 +23,15 @@ export async function GET(req: NextRequest) {
     }
     if (ids.length > 100) {
       return NextResponse.json({ success: false, error: 'Too many ids (max 100)' }, { status: 400 })
+    }
+
+    // UUID 형식 검증 - 유효하지 않은 ID가 하나라도 있으면 400 반환
+    const invalidIds = ids.filter(id => !isValidUUID(id))
+    if (invalidIds.length > 0) {
+      return NextResponse.json(
+        { success: false, error: '유효하지 않은 ID 형식이 포함되어 있습니다.' },
+        { status: 400 }
+      )
     }
 
     const supabase = getSupabaseClient()

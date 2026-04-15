@@ -330,9 +330,7 @@ const NetworkParticles = ({ particleCount, width, height }: NetworkParticlesProp
   }, [])
 
   useEffect(() => {
-    console.log('🔗 NetworkParticles (하이브리드) 초기화 시작', { width, height, particleCount })
     if (width < 768) {
-      console.log('📱 모바일 화면으로 NetworkParticles 비활성화')
       return
     }
 

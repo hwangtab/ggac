@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { validateUUID } from '@/utils/validation'
 
 export const runtime = 'edge'
 export const dynamic = 'force-dynamic'
@@ -9,6 +10,15 @@ const PAGE_SIZE_MAX = 100
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params
+
+  const uuidValidation = validateUUID(id, '게시글 ID')
+  if (!uuidValidation.isValid) {
+    return NextResponse.json(
+      { success: false, error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.' },
+      { status: 400 }
+    )
+  }
+
   const { searchParams } = new URL(request.url)
   const limit = Math.min(parseInt(searchParams.get('limit') || '20', 10), PAGE_SIZE_MAX)
   const cursor = searchParams.get('cursor') || ''
