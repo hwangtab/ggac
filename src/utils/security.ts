@@ -345,8 +345,13 @@ export const sanitizeHtmlWithWhitelist = (input: string): string => {
       return ''
     }
 
-    // 속성 검증 (간단한 구현)
-    const cleanMatch = match.replace(/on\w+\s*=\s*["'][^"']*["']/gi, '') // 이벤트 핸들러 제거
+    // 속성 검증: 이벤트 핸들러 제거 후 javascript:/vbscript: href 차단
+    let cleanMatch = match.replace(/on\w+\s*=\s*["'][^"']*["']/gi, '') // 이벤트 핸들러 제거
+    if (tag === 'a') {
+      // href에 javascript: 또는 vbscript: 프로토콜이 있으면 해당 속성 제거
+      cleanMatch = cleanMatch.replace(/href\s*=\s*["'][\s\S]*?javascript:[\s\S]*?["']/gi, '')
+      cleanMatch = cleanMatch.replace(/href\s*=\s*["'][\s\S]*?vbscript:[\s\S]*?["']/gi, '')
+    }
     return cleanMatch
   })
 }

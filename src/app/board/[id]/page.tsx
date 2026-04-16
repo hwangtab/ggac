@@ -147,7 +147,6 @@ async function getInitialPostData(postId: string): Promise<InitialPostData | nul
         author_id,
         created_at,
         like_count,
-        parent_id,
         author:member_profiles!comments_author_id_fkey (
           display_name
         )

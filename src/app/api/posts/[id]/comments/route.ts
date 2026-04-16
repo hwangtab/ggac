@@ -39,6 +39,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         content,
         author_id,
         created_at,
+        like_count,
         author:member_profiles!comments_author_id_fkey (display_name)
       `
       )

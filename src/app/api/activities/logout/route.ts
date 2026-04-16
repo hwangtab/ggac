@@ -13,7 +13,10 @@ export async function POST(request: NextRequest) {
     const rateLimitResult = rateLimiter(request)
 
     if (!rateLimitResult.success) {
-      return rateLimitResult.response!
+      return (
+        rateLimitResult.response ??
+        NextResponse.json({ error: '요청이 너무 많습니다.' }, { status: 429 })
+      )
     }
 
     const supabase = await createSupabaseServer()

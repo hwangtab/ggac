@@ -42,11 +42,11 @@ export async function POST(request: NextRequest) {
 
     const { data: profile } = await supabase
       .from('member_profiles')
-      .select('is_admin')
+      .select('is_admin, registration_status, is_active')
       .eq('id', user.id)
       .single()
 
-    if (!profile?.is_admin) {
+    if (!profile?.is_admin || profile.registration_status !== 'approved' || !profile.is_active) {
       return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 })
     }
 

@@ -174,6 +174,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
           content,
           author_id,
           created_at,
+          like_count,
           author:member_profiles!comments_author_id_fkey (
             display_name
           )
@@ -286,10 +287,10 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     let isAdmin = false
     const { data: prof } = await supabase
       .from('member_profiles')
-      .select('is_admin')
+      .select('is_admin, registration_status, is_active')
       .eq('id', user.id)
       .single()
-    isAdmin = !!prof?.is_admin
+    isAdmin = !!(prof?.is_admin && prof.registration_status === 'approved' && prof.is_active)
 
     // 게시글 조회 및 소유자 확인
     const { data: post, error: postError } = await supabase

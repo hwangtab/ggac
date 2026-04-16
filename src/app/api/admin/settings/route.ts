@@ -69,7 +69,10 @@ const SETTING_MAPPINGS = {
     smtp_host: { key: 'smtp_config', transform: (value: any) => value?.host || '' },
     smtp_port: { key: 'smtp_config', transform: (value: any) => value?.port || 587 },
     smtp_user: { key: 'smtp_config', transform: (value: any) => value?.user || '' },
-    smtp_password: { key: 'smtp_config', transform: (value: any) => value?.password || '' },
+    smtp_password: {
+      key: 'smtp_config',
+      transform: (value: any) => (value?.password ? '••••••••' : ''),
+    },
     from_email: {
       key: 'smtp_config',
       transform: (value: any) => value?.from_email || 'noreply@ggac.kr',

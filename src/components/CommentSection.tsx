@@ -1,3 +1,5 @@
+'use client'
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase/client'
 import { logCommentCreated } from '@/utils/activityLogger'

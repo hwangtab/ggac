@@ -12,7 +12,10 @@ export const withRateLimit = (configKey: keyof typeof RATE_LIMIT_CONFIGS) => {
       const rateLimitResult = rateLimiter(request)
 
       if (!rateLimitResult.success) {
-        return rateLimitResult.response!
+        return (
+          rateLimitResult.response ??
+          NextResponse.json({ error: '요청이 너무 많습니다.' }, { status: 429 })
+        )
       }
 
       return handler(request)
