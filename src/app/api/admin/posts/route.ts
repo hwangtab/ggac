@@ -225,11 +225,7 @@ export async function GET(request: NextRequest) {
     )
   } catch (error) {
     console.error('Admin posts API error:', error)
-    logSecurityEvent(
-      'ADMIN_POSTS_API_ERROR',
-      { error: error instanceof Error ? error.message : 'Unknown error' },
-      'medium'
-    )
+    logSecurityEvent('ADMIN_POSTS_API_ERROR', { error: '서버 오류가 발생했습니다.' }, 'medium')
     return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
   }
 }

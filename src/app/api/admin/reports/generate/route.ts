@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServer } from '@/lib/supabase/server'
-import { createClient } from '@supabase/supabase-js'
 import { applyRateLimit, RATE_LIMIT_CONFIGS } from '@/utils/rateLimiter'
+import { requireAdmin } from '@/lib/server/adminAuth'
 
 /**
  * 멤버 리포트 생성 API
@@ -17,43 +16,12 @@ export async function POST(request: NextRequest) {
       return rateLimitResult.response!
     }
 
-    const supabase = await createSupabaseServer()
-
-    // 인증 확인
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // 관리자 권한 확인
-    const { data: profile } = await supabase
-      .from('member_profiles')
-      .select('is_admin, registration_status')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile?.is_admin || profile.registration_status !== 'approved') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
+    const auth = await requireAdmin()
+    if (auth instanceof NextResponse) return auth
+    const { db: serviceSupabase, user } = auth
 
     const body = await request.json()
     const { reportType, dateRange, filters } = body
-
-    // Service Role 클라이언트 생성 (RLS 우회용)
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (!serviceRoleKey) {
-      console.error('SUPABASE_SERVICE_ROLE_KEY가 설정되지 않았습니다.')
-      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
-    }
-
-    const serviceSupabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceRoleKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    })
 
     // 리포트 유형별 데이터 생성 (Service Role 클라이언트 사용)
     let reportData

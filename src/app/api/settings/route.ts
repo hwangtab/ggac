@@ -128,10 +128,7 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error('Setting update error:', error)
-      return NextResponse.json(
-        { error: '설정 업데이트에 실패했습니다.' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: '설정 업데이트에 실패했습니다.' }, { status: 400 })
     }
 
     return NextResponse.json({

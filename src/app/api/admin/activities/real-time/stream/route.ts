@@ -92,17 +92,41 @@ export async function GET(request: NextRequest) {
       }
 
       // 첫 전송 + 주기적 전송
+      const MAX_DURATION_MS = 5 * 60 * 1000 // 5분 최대 연결 시간
+      const startTime = Date.now()
       let timer: any
-      pushOnce()
-      timer = setInterval(pushOnce, intervalMs)
 
-      // 정리
       const close = () => {
         clearInterval(timer)
-        controller.close()
+        if (maxDurationTimer) clearTimeout(maxDurationTimer)
+        try {
+          controller.close()
+        } catch {
+          // 이미 닫혀 있으면 무시
+        }
       }
-      // Close when runtime signals are available
-      // 타입 안전하게 접근
+
+      const wrappedPushOnce = async () => {
+        if (Date.now() - startTime >= MAX_DURATION_MS) {
+          controller.enqueue(encoder.encode(`event:close\n`))
+          controller.enqueue(encoder.encode(`data:${JSON.stringify({ reason: 'timeout' })}\n\n`))
+          close()
+          return
+        }
+        await pushOnce()
+      }
+
+      pushOnce()
+      timer = setInterval(wrappedPushOnce, intervalMs)
+
+      // 최대 연결 시간 보장 타이머
+      const maxDurationTimer = setTimeout(() => {
+        controller.enqueue(encoder.encode(`event:close\n`))
+        controller.enqueue(encoder.encode(`data:${JSON.stringify({ reason: 'timeout' })}\n\n`))
+        close()
+      }, MAX_DURATION_MS)
+
+      // 클라이언트 연결 해제 시 정리
       const anyReq: any = request as any
       if (anyReq?.signal && typeof anyReq.signal.addEventListener === 'function') {
         anyReq.signal.addEventListener('abort', close)

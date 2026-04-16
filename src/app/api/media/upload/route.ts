@@ -442,8 +442,7 @@ export async function POST(request: NextRequest) {
       )
     } catch (error: any) {
       console.error('Storage upload error:', error)
-      const message =
-        typeof error?.message === 'string' ? error.message : ''
+      const message = typeof error?.message === 'string' ? error.message : ''
       if (message.includes('bucket') || message.includes('not found')) {
         return createErrorResponse(
           'Storage가 설정되지 않았습니다. 관리자가 Supabase Storage bucket을 생성해야 합니다.',

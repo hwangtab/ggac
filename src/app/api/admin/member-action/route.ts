@@ -17,13 +17,6 @@ export const dynamic = 'force-dynamic'
 
 // POST: 회원 액션 처리 (단순한 경로로 우회)
 export async function POST(request: NextRequest) {
-  // 함수 호출 확인용 로그
-  console.log('[POST] 회원 액션 API 호출됨:', {
-    timestamp: new Date().toISOString(),
-    url: request.url,
-    method: request.method,
-  })
-
   let requestData: any = {} // catch 블록에서 접근 가능하도록 함수 최상단에 선언
 
   try {
@@ -46,74 +39,38 @@ export async function POST(request: NextRequest) {
       error: authError,
     } = await supabase.auth.getUser()
 
-    console.log('[POST] 인증 상태 확인:', {
-      hasUser: !!user,
-      userId: user?.id,
-      userEmail: user?.email,
-      authError: authError
-        ? {
-            message: authError.message,
-            name: authError.name,
-          }
-        : null,
-    })
-
     if (authError || !user) {
-      console.log('[POST] 인증 실패:', { authError })
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
     // 관리자 권한 확인
-    console.log('[POST] 관리자 권한 확인 시작:', {
-      userId: user.id,
-      userEmail: user.email,
-    })
-
     const { data: profile, error: profileError } = await supabase
       .from('member_profiles')
       .select('is_admin, registration_status, is_active')
       .eq('id', user.id)
       .single()
 
-    console.log('[POST] 프로필 조회 결과:', {
-      profile,
-      profileError: profileError
-        ? {
-            message: profileError.message,
-            details: profileError.details,
-            hint: profileError.hint,
-            code: profileError.code,
-          }
-        : null,
-    })
-
     if (profileError) {
-      console.error('[POST] Profile fetch error:', profileError)
+      console.error('[member-action] Profile fetch error:', profileError)
       return NextResponse.json({ error: '프로필 정보를 조회할 수 없습니다.' }, { status: 500 })
     }
 
     if (!profile.is_admin || profile.registration_status !== 'approved' || !profile.is_active) {
-      console.log('[POST] 관리자 권한 부족:', {
-        is_admin: profile.is_admin,
-        registration_status: profile.registration_status,
-        is_active: profile.is_active,
-      })
       return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 })
     }
 
-    console.log('[POST] 관리자 권한 확인 완료')
-
     // 관리자 작업용 서비스 롤 클라이언트 생성
-    const adminSupabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!supabaseUrl || !serviceRoleKey) {
+      console.error('[member-action] SUPABASE_SERVICE_ROLE_KEY가 설정되지 않았습니다.')
+      return NextResponse.json({ error: '서버 구성 오류입니다.' }, { status: 500 })
+    }
+    const adminSupabase = createClient(supabaseUrl, serviceRoleKey)
 
     // 요청 데이터 파싱 및 검증
     requestData = await request.json()
     const { memberId, action, suspension_reason, suspension_until } = requestData
-
-    console.log('[POST] 받은 요청 데이터:', { memberId, action })
 
     // 멤버 ID 검증 (UUID 형식)
     const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -150,52 +107,16 @@ export async function POST(request: NextRequest) {
     }
 
     // 대상 회원 정보 조회
-    console.log('[POST] 회원 정보 조회 시작:', {
-      memberId,
-      memberIdType: typeof memberId,
-      memberIdLength: memberId ? memberId.length : 'null',
-    })
-
     const { data: targetMember, error: targetError } = await adminSupabase
       .from('member_profiles')
       .select('id, display_name, registration_status, is_active, is_suspended')
       .eq('id', memberId)
       .single()
 
-    console.log('[POST] Supabase 응답:', {
-      targetMember,
-      targetError: targetError ? JSON.stringify(targetError, null, 2) : null,
-      hasTargetMember: !!targetMember,
-      errorDetails: targetError
-        ? {
-            message: targetError.message,
-            details: targetError.details,
-            hint: targetError.hint,
-            code: targetError.code,
-            fullError: targetError,
-          }
-        : null,
-    })
-
     if (targetError || !targetMember) {
-      console.error('[POST] Target member fetch error:', {
-        targetError,
-        memberId,
-        errorMessage: targetError?.message,
-        errorCode: targetError?.code,
-      })
-      return NextResponse.json(
-        { error: '회원을 찾을 수 없습니다.', details: targetError?.message },
-        { status: 404 }
-      )
+      console.error('[member-action] Target member fetch error:', targetError?.message)
+      return NextResponse.json({ error: '회원을 찾을 수 없습니다.' }, { status: 404 })
     }
-
-    console.log('[POST] 대상 회원 정보:', {
-      memberId,
-      currentStatus: targetMember.registration_status,
-      isActive: targetMember.is_active,
-      requestedAction: action,
-    })
 
     // 액션에 따른 업데이트 데이터 준비
     let updateData: any = {}
@@ -256,7 +177,6 @@ export async function POST(request: NextRequest) {
           is_active: false,
           updated_at: new Date().toISOString(),
         }
-        console.log('[POST] 비활성화 업데이트 데이터:', updateData)
         break
 
       case 'suspend':
@@ -289,8 +209,6 @@ export async function POST(request: NextRequest) {
         break
     }
 
-    console.log('[POST] 데이터베이스 업데이트 시작:', { memberId, updateData })
-
     // 데이터베이스 업데이트
     const { data: updatedMember, error: updateError } = await adminSupabase
       .from('member_profiles')
@@ -300,11 +218,9 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (updateError) {
-      console.error('Member update error:', updateError)
+      console.error('[member-action] Member update error:', updateError.message)
       return NextResponse.json({ error: '회원 상태 업데이트에 실패했습니다.' }, { status: 500 })
     }
-
-    console.log('[POST] 업데이트 성공:', updatedMember)
 
     // 성공 응답
     const actionMessages: Record<string, string> = {
@@ -342,7 +258,7 @@ export async function POST(request: NextRequest) {
       rateLimitResult.resetTime
     )
   } catch (error) {
-    console.error('Admin member action API error:', error)
+    console.error('[member-action] Admin member action API error:', error)
     logSecurityEvent(
       'ADMIN_MEMBER_ACTION_ERROR',
       {

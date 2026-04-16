@@ -235,14 +235,18 @@ export async function GET(request: NextRequest) {
     logSecurityEvent(
       'ADMIN_SETTINGS_ACCESS_ERROR',
       {
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: '서버 오류가 발생했습니다.',
       },
       'medium'
     )
 
     const isPermissionError = error instanceof Error && error.message.includes('권한')
     return NextResponse.json(
-      { error: isPermissionError ? '관리자 권한이 필요합니다.' : '설정 조회 중 오류가 발생했습니다.' },
+      {
+        error: isPermissionError
+          ? '관리자 권한이 필요합니다.'
+          : '설정 조회 중 오류가 발생했습니다.',
+      },
       { status: isPermissionError ? 403 : 500 }
     )
   }
@@ -473,14 +477,18 @@ export async function PUT(request: NextRequest) {
     logSecurityEvent(
       'ADMIN_SETTINGS_UPDATE_ERROR',
       {
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: '서버 오류가 발생했습니다.',
       },
       'high'
     )
 
     const isPermissionError = error instanceof Error && error.message.includes('권한')
     return NextResponse.json(
-      { error: isPermissionError ? '관리자 권한이 필요합니다.' : '설정 업데이트 중 오류가 발생했습니다.' },
+      {
+        error: isPermissionError
+          ? '관리자 권한이 필요합니다.'
+          : '설정 업데이트 중 오류가 발생했습니다.',
+      },
       { status: isPermissionError ? 403 : 500 }
     )
   }

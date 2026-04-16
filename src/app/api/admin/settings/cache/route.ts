@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
     logSecurityEvent(
       'ADMIN_SETTINGS_CACHE_INVALIDATION_ERROR',
       {
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: '서버 오류가 발생했습니다.',
       },
       'medium'
     )

@@ -353,13 +353,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(result)
     } catch (queryError) {
       console.error('쿼리 실행 오류:', queryError)
-      return NextResponse.json(
-        {
-          error: '검색 쿼리 실행 중 오류가 발생했습니다.',
-          details: queryError instanceof Error ? queryError.message : String(queryError),
-        },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: '검색 쿼리 실행 중 오류가 발생했습니다.' }, { status: 500 })
     }
   } catch (error) {
     console.error('고급 검색 API 오류:', error)

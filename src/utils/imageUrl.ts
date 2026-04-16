@@ -63,11 +63,7 @@ export function generatePostOgImage(thumbnail?: string | null): string {
  * 범용 이미지 URL 생성 함수
  */
 export function generateImageUrl(imagePath?: string | null, options: ImageUrlOptions = {}): string {
-  const {
-    fallbackPaths = [],
-    absolute = false,
-    baseUrl = 'https://ggac.kr',
-  } = options
+  const { fallbackPaths = [], absolute = false, baseUrl = 'https://ggac.kr' } = options
 
   // 사용할 이미지 경로 결정 (우선순위: imagePath -> fallbackPaths -> 기본 로고)
   const allPaths = [imagePath, ...fallbackPaths, '/images/logo/gac_og.webp']

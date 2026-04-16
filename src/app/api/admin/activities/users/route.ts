@@ -1,6 +1,6 @@
-import { createSupabaseServer } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { withRateLimit } from '@/utils/rateLimit'
+import { requireAdmin } from '@/lib/server/adminAuth'
 
 /**
  * 사용자별 활동 조회 API
@@ -9,25 +9,9 @@ import { withRateLimit } from '@/utils/rateLimit'
 export async function GET(request: NextRequest) {
   return withRateLimit('ADMIN_API')(async () => {
     try {
-      const supabase = await createSupabaseServer()
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-
-      if (!user) {
-        return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
-      }
-
-      // 관리자 권한 확인
-      const { data: profile } = await supabase
-        .from('member_profiles')
-        .select('is_admin, registration_status')
-        .eq('id', user.id)
-        .single()
-
-      if (!profile?.is_admin || profile.registration_status !== 'approved') {
-        return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 })
-      }
+      const auth = await requireAdmin()
+      if (auth instanceof NextResponse) return auth
+      const { db } = auth
 
       const { searchParams } = new URL(request.url)
       const userId = searchParams.get('user_id')
@@ -42,7 +26,7 @@ export async function GET(request: NextRequest) {
       startDate.setDate(startDate.getDate() - days)
 
       // 기본 쿼리 구성
-      let query = supabase
+      let query = db
         .from('user_activities')
         .select(
           `

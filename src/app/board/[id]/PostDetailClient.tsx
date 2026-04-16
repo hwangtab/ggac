@@ -211,7 +211,10 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
             }
           }
         } catch (authChangeUserDataError) {
-          console.error('[PostDetailClient] auth 변경 후 user-data fetch 오류:', authChangeUserDataError)
+          console.error(
+            '[PostDetailClient] auth 변경 후 user-data fetch 오류:',
+            authChangeUserDataError
+          )
         }
       }
     })
@@ -258,7 +261,9 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
       router.push('/board')
     } catch (deleteError) {
       console.error('[PostDetailClient] 게시글 삭제 오류:', deleteError)
-      alert(deleteError instanceof Error ? deleteError.message : '게시글 삭제 중 오류가 발생했습니다.')
+      alert(
+        deleteError instanceof Error ? deleteError.message : '게시글 삭제 중 오류가 발생했습니다.'
+      )
     }
   }
 

@@ -601,7 +601,10 @@ export const validateSearchQuery = (query: string): DatabaseValidationResult => 
  * - PostgREST 구분자(. , ( ))는 제거
  */
 export function escapePostgrestValue(s: string): string {
-  return s.replace(/\\/g, '\\\\').replace(/'/g, "''").replace(/[.,()]/g, '')
+  return s
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "''")
+    .replace(/[.,()]/g, '')
 }
 
 // 검증 규칙 상수

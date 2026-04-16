@@ -103,7 +103,7 @@ export const useFileUpload = ({
     async (postId: string): Promise<void> => {
       if (selectedFiles.length === 0) return
 
-      const uploadPromises = selectedFiles.map(async (file) => {
+      const uploadPromises = selectedFiles.map(async file => {
         const formData = new FormData()
         formData.append('file', file)
 

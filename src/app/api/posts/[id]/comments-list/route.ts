@@ -94,7 +94,10 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const { data: rows, error } = await query
     if (error) {
       console.error('[API] 댓글 조회 실패:', error)
-      return NextResponse.json({ success: false, error: '댓글을 불러오는 데 실패했습니다.' }, { status: 500 })
+      return NextResponse.json(
+        { success: false, error: '댓글을 불러오는 데 실패했습니다.' },
+        { status: 500 }
+      )
     }
 
     let comments = rows || []

@@ -4,10 +4,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServer } from '@/lib/supabase/server'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator } from '@/utils/rateLimiter'
 import { validateAdvancedSearchQuery, buildSearchQuery } from '@/utils/advancedFiltering'
 import type { AdvancedSearchQuery, FilteredResult, FieldDefinition } from '@/types'
+import { requireAdmin } from '@/lib/server/adminAuth'
 
 // Rate limiting 설정
 const rateLimiter = applyRateLimit({
@@ -113,26 +113,9 @@ export async function POST(request: NextRequest) {
       return rateLimitResult.response
     }
 
-    const supabase = await createSupabaseServer()
-
-    // 관리자 권한 확인
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
-    }
-
-    const { data: profile } = await supabase
-      .from('member_profiles')
-      .select('is_admin, is_artist, registration_status')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile?.is_admin) {
-      return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 })
-    }
+    const auth = await requireAdmin()
+    if (auth instanceof NextResponse) return auth
+    const { db: supabase } = auth
 
     // 요청 본문 파싱
     const searchQuery: AdvancedSearchQuery = await request.json()
@@ -245,7 +228,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: '검색 쿼리 실행 중 오류가 발생했습니다.',
-          details: queryError instanceof Error ? queryError.message : String(queryError),
+          details: '쿼리 실행에 실패했습니다.',
         },
         { status: 500 }
       )
@@ -265,26 +248,8 @@ export async function GET(request: NextRequest) {
       return rateLimitResult.response
     }
 
-    const supabase = await createSupabaseServer()
-
-    // 관리자 권한 확인
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
-    }
-
-    const { data: profile } = await supabase
-      .from('member_profiles')
-      .select('is_admin')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile?.is_admin) {
-      return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 })
-    }
+    const auth = await requireAdmin()
+    if (auth instanceof NextResponse) return auth
 
     // 게시글 필드 정의 반환
     return NextResponse.json({

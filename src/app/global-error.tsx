@@ -16,7 +16,16 @@ export default function GlobalError({
   return (
     <html lang="ko">
       <body>
-        <div style={{ display: 'flex', minHeight: '100vh', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '1rem' }}>
+        <div
+          style={{
+            display: 'flex',
+            minHeight: '100vh',
+            alignItems: 'center',
+            justifyContent: 'center',
+            textAlign: 'center',
+            padding: '1rem',
+          }}
+        >
           <div>
             <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1rem' }}>
               페이지를 불러올 수 없습니다
@@ -26,7 +35,14 @@ export default function GlobalError({
             </p>
             <button
               onClick={reset}
-              style={{ padding: '0.5rem 1.5rem', backgroundColor: '#7c3aed', color: 'white', borderRadius: '0.5rem', border: 'none', cursor: 'pointer' }}
+              style={{
+                padding: '0.5rem 1.5rem',
+                backgroundColor: '#7c3aed',
+                color: 'white',
+                borderRadius: '0.5rem',
+                border: 'none',
+                cursor: 'pointer',
+              }}
             >
               다시 시도
             </button>

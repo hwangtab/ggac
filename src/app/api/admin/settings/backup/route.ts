@@ -56,17 +56,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
-    console.log('[DEBUG] Backup API: Checking admin permission for user:', user.id)
     try {
       await checkAdminPermission(supabase, user.id)
-      console.log('[DEBUG] Backup API: Admin permission check passed')
     } catch (permError) {
-      console.error('[DEBUG] Backup API: Admin permission check failed:', permError)
       throw permError
     }
 
-    // 모든 시스템 설정 조회 (민감한 정보 포함)
-    console.log('[DEBUG] Backup API: Calling get_system_settings function')
+    // 모든 시스템 설정 조회 (민감한 정보 포함 — 응답 전 마스킹됨)
     const { data: initialSettingsData, error: settingsError } = await supabase.rpc(
       'get_system_settings',
       { include_sensitive: true }
@@ -74,18 +70,10 @@ export async function GET(request: NextRequest) {
 
     let settingsData = initialSettingsData
 
-    console.log('[DEBUG] Backup API: get_system_settings result:', {
-      hasData: !!settingsData,
-      dataLength: settingsData?.length || 0,
-      error: settingsError,
-    })
-
     if (settingsError) {
-      console.error('Settings backup error:', settingsError)
-      console.error('Error details:', JSON.stringify(settingsError, null, 2))
+      console.error('[backup] Settings backup error:', settingsError.message)
 
       // 폴백: 직접 테이블 쿼리 시도
-      console.log('[DEBUG] Backup API: Attempting fallback with direct table query')
       try {
         const { data: fallbackData, error: fallbackError } = await supabase
           .from('system_settings')
@@ -94,22 +82,21 @@ export async function GET(request: NextRequest) {
           .order('setting_key')
 
         if (fallbackError) {
-          console.error('[DEBUG] Backup API: Fallback query also failed:', fallbackError)
-          throw new Error(`백업을 위한 설정 테이블 조회 실패: ${fallbackError.message}`)
+          console.error('[backup] Fallback query also failed:', fallbackError.message)
+          throw new Error('설정 백업 중 오류가 발생했습니다.')
         }
 
-        console.log(
-          '[DEBUG] Backup API: Fallback query succeeded, data length:',
-          fallbackData?.length || 0
-        )
         settingsData = fallbackData
-      } catch (fallbackErr) {
-        console.error('[DEBUG] Backup API: Fallback mechanism failed:', fallbackErr)
-        throw new Error(
-          `백업을 위한 설정을 조회할 수 없습니다: ${settingsError.message || settingsError.code}`
-        )
+      } catch {
+        throw new Error('설정 백업 중 오류가 발생했습니다.')
       }
     }
+
+    // 민감한 설정값 마스킹 (SMTP 비밀번호, API 키 등)
+    const sanitizedSettings = (settingsData || []).map((s: any) => ({
+      ...s,
+      setting_value: s.is_sensitive ? '***REDACTED***' : s.setting_value,
+    }))
 
     // 백업 파일 생성
     const backupData = {
@@ -117,9 +104,9 @@ export async function GET(request: NextRequest) {
         created_at: new Date().toISOString(),
         created_by: user.id,
         version: '1.0',
-        description: '시스템 설정 백업 파일',
+        description: '시스템 설정 백업 파일 (민감한 값은 제외됨)',
       },
-      settings: settingsData || [],
+      settings: sanitizedSettings,
     }
 
     // 보안 이벤트 로깅
@@ -152,15 +139,12 @@ export async function GET(request: NextRequest) {
     logSecurityEvent(
       'ADMIN_SETTINGS_BACKUP_ERROR',
       {
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: '서버 오류가 발생했습니다.',
       },
       'high'
     )
 
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : '설정 백업 중 오류가 발생했습니다.' },
-      { status: error instanceof Error && error.message.includes('권한') ? 403 : 500 }
-    )
+    return NextResponse.json({ error: '설정 백업 중 오류가 발생했습니다.' }, { status: 500 })
   }
 }
 
@@ -278,7 +262,7 @@ export async function POST(request: NextRequest) {
     logSecurityEvent(
       'ADMIN_SETTINGS_RESTORE_ERROR',
       {
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: '서버 오류가 발생했습니다.',
       },
       'high'
     )

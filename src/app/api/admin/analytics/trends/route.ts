@@ -1,7 +1,6 @@
-import { createSupabaseServer } from '@/lib/supabase/server'
-import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { withRateLimit } from '@/utils/rateLimit'
+import { requireAdmin } from '@/lib/server/adminAuth'
 
 /**
  * 트렌드 분석 API
@@ -10,39 +9,14 @@ import { withRateLimit } from '@/utils/rateLimit'
 export async function GET(request: NextRequest) {
   return withRateLimit('ADMIN_API')(async () => {
     try {
-      const supabase = await createSupabaseServer()
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-
-      if (!user) {
-        return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
-      }
-
-      // 관리자 권한 확인
-      const { data: profile } = await supabase
-        .from('member_profiles')
-        .select('is_admin, registration_status')
-        .eq('id', user.id)
-        .single()
-
-      if (!profile?.is_admin || profile.registration_status !== 'approved') {
-        return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 })
-      }
+      const auth = await requireAdmin()
+      if (auth instanceof NextResponse) return auth
+      const { db } = auth
 
       const { searchParams } = new URL(request.url)
       const period = searchParams.get('period') || 'daily' // daily, weekly, monthly
       const weeks = parseInt(searchParams.get('weeks') || '8')
       const trendType = searchParams.get('type') || 'activity' // activity, users, engagement
-
-      // service-role 우선 사용으로 RLS/빈 결과 오판 방지
-      const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
-      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-      const db = serviceKey
-        ? createClient(url, serviceKey, {
-            auth: { autoRefreshToken: false, persistSession: false },
-          })
-        : supabase
 
       let trendData: any = {}
 
@@ -60,7 +34,7 @@ export async function GET(request: NextRequest) {
           break
 
         case 'performance':
-          trendData = await getPerformanceTrends(supabase, period, weeks)
+          trendData = await getPerformanceTrends(db, period, weeks)
           break
 
         default:

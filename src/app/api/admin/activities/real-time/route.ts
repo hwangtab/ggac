@@ -1,7 +1,6 @@
-import { createSupabaseServer } from '@/lib/supabase/server'
-import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { withRateLimit } from '@/utils/rateLimit'
+import { requireAdmin } from '@/lib/server/adminAuth'
 
 /**
  * 실시간 활성 사용자 조회 API
@@ -10,39 +9,13 @@ import { withRateLimit } from '@/utils/rateLimit'
 export async function GET(request: NextRequest) {
   return withRateLimit('ADMIN_API')(async () => {
     try {
-      const supabase = await createSupabaseServer()
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-
-      if (!user) {
-        return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
-      }
-
-      // 관리자 권한 확인
-      const { data: profile } = await supabase
-        .from('member_profiles')
-        .select('is_admin, registration_status')
-        .eq('id', user.id)
-        .single()
-
-      if (!profile?.is_admin || profile.registration_status !== 'approved') {
-        return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 })
-      }
+      const auth = await requireAdmin()
+      if (auth instanceof NextResponse) return auth
+      const { db } = auth
 
       const { searchParams } = new URL(request.url)
       const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 100)
       const includeActivity = searchParams.get('include_activity') === 'true'
-
-      // 서비스 롤 클라이언트(있으면 RLS 우회)
-      const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-      const db =
-        url && serviceKey
-          ? createClient(url, serviceKey, {
-              auth: { autoRefreshToken: false, persistSession: false },
-            })
-          : supabase
 
       // 실시간 활성 사용자 조회 (active_users_view 사용)
       const { data: activeUsers, error: activeError } = await db

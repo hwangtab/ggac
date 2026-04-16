@@ -111,7 +111,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       console.error('Admin posts [ID] - Post update error:', updateError)
       console.error('Update data:', updateData)
       console.error('Post ID:', id)
-      return createErrorResponse(`게시글 업데이트에 실패했습니다: ${updateError.message}`, 500)
+      return createErrorResponse('게시글 업데이트에 실패했습니다.', 500)
     }
 
     const actionMessage =

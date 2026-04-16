@@ -100,15 +100,16 @@ export async function GET(request: NextRequest) {
     }
 
     // 기본 쿼리 구성
-    // 서비스 롤 클라이언트(있으면 RLS 영향 없이 조회)
+    // 서비스 롤 클라이언트 (RLS 영향 없이 전체 조회)
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    const db =
-      url && serviceKey
-        ? createClient(url, serviceKey, {
-            auth: { autoRefreshToken: false, persistSession: false },
-          })
-        : supabase
+    if (!url || !serviceKey) {
+      console.error('[admin/members] SUPABASE_SERVICE_ROLE_KEY가 설정되지 않았습니다.')
+      return NextResponse.json({ error: '서버 구성 오류입니다.' }, { status: 500 })
+    }
+    const db = createClient(url, serviceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
 
     let query = db.from('member_profiles').select(
       `
@@ -191,11 +192,7 @@ export async function GET(request: NextRequest) {
     )
   } catch (error) {
     console.error('Admin members API error:', error)
-    logSecurityEvent(
-      'ADMIN_MEMBERS_API_ERROR',
-      { error: error instanceof Error ? error.message : 'Unknown error' },
-      'medium'
-    )
+    logSecurityEvent('ADMIN_MEMBERS_API_ERROR', { error: '서버 오류가 발생했습니다.' }, 'medium')
     return NextResponse.json(
       { error: '회원 정보를 조회하는 중 오류가 발생했습니다.' },
       { status: 500 }

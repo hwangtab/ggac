@@ -45,8 +45,17 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const { memberId, role } = await request.json()
     const artistId = resolvedParams.id
 
-    if (!memberId || !role) {
-      return NextResponse.json({ error: '멤버 ID와 역할이 필요합니다.' }, { status: 400 })
+    // UUID 형식 검증
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!artistId || !uuidPattern.test(artistId)) {
+      return NextResponse.json({ error: '유효하지 않은 아티스트 ID입니다.' }, { status: 400 })
+    }
+    if (!memberId || !uuidPattern.test(memberId)) {
+      return NextResponse.json({ error: '유효하지 않은 멤버 ID입니다.' }, { status: 400 })
+    }
+
+    if (!role) {
+      return NextResponse.json({ error: '역할이 필요합니다.' }, { status: 400 })
     }
 
     if (!['owner', 'manager', 'collaborator'].includes(role)) {
@@ -56,12 +65,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     // 대상 멤버 확인
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    const db =
-      url && serviceKey
-        ? createClient(url, serviceKey, {
-            auth: { autoRefreshToken: false, persistSession: false },
-          })
-        : supabase
+    if (!url || !serviceKey) {
+      console.error('[artists/members] SUPABASE_SERVICE_ROLE_KEY가 설정되지 않았습니다.')
+      return NextResponse.json({ error: '서버 구성 오류입니다.' }, { status: 500 })
+    }
+    const db = createClient(url, serviceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
 
     const { data: targetMember, error: memberError } = await db
       .from('member_profiles')

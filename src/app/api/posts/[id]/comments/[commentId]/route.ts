@@ -47,7 +47,10 @@ export async function DELETE(
     const { error } = await supabase.from('comments').delete().eq('id', commentId)
     if (error) {
       console.error('[API] 댓글 삭제 실패:', error)
-      return NextResponse.json({ success: false, error: '댓글 삭제에 실패했습니다.' }, { status: 500 })
+      return NextResponse.json(
+        { success: false, error: '댓글 삭제에 실패했습니다.' },
+        { status: 500 }
+      )
     }
 
     try {
