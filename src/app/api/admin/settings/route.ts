@@ -1,6 +1,7 @@
 import { createOptionsResponse } from '@/utils/apiResponse'
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { checkAdminPermission } from '@/lib/server/adminAuth'
 import {
   applyRateLimit,
   RATE_LIMIT_CONFIGS,
@@ -108,24 +109,6 @@ const SETTING_MAPPINGS = {
     },
     file_uploads_enabled: { key: 'file_upload', transform: (value: any) => value?.enabled || true },
   },
-}
-
-async function checkAdminPermission(supabase: any, userId: string) {
-  const { data: profile, error } = await supabase
-    .from('member_profiles')
-    .select('is_admin, registration_status, is_active')
-    .eq('id', userId)
-    .single()
-
-  if (error || !profile) {
-    throw new Error('프로필 정보를 조회할 수 없습니다.')
-  }
-
-  if (!profile.is_admin || profile.registration_status !== 'approved' || !profile.is_active) {
-    throw new Error('관리자 권한이 필요합니다.')
-  }
-
-  return profile
 }
 
 // GET: 관리자 설정 조회

@@ -1,6 +1,5 @@
 import { createOptionsResponse } from '@/utils/apiResponse'
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServer } from '@/lib/supabase/server'
 import {
   applyRateLimit,
   RATE_LIMIT_CONFIGS,
@@ -8,6 +7,7 @@ import {
   addRateLimitHeaders,
 } from '@/utils/rateLimiter'
 import { logSecurityEvent } from '@/utils/security'
+import { requireAdmin } from '@/lib/server/adminAuth'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -26,33 +26,9 @@ export async function GET(request: NextRequest) {
       return rateLimitResult.response
     }
 
-    const supabase = await createSupabaseServer()
-
-    // 사용자 인증 확인
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
-    }
-
-    // 관리자 권한 확인
-    const { data: profile, error: profileError } = await supabase
-      .from('member_profiles')
-      .select('is_admin, registration_status, is_active')
-      .eq('id', user.id)
-      .single()
-
-    if (profileError) {
-      console.error('Profile fetch error:', profileError)
-      return NextResponse.json({ error: '프로필 정보를 조회할 수 없습니다.' }, { status: 500 })
-    }
-
-    if (!profile.is_admin || profile.registration_status !== 'approved' || !profile.is_active) {
-      return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 })
-    }
+    const auth = await requireAdmin()
+    if (auth instanceof NextResponse) return auth
+    const { db } = auth
 
     // 쿼리 파라미터 추출 및 검증
     const { searchParams } = new URL(request.url)
@@ -72,7 +48,7 @@ export async function GET(request: NextRequest) {
     const activities: any[] = []
 
     // 최근 회원 가입 활동 (DB 레벨에서 페이지네이션 적용)
-    const { data: memberActivities, error: memberError } = await supabase
+    const { data: memberActivities, error: memberError } = await db
       .from('member_profiles')
       .select('id, display_name, created_at, registration_status, approved_at, updated_at')
       .gte('created_at', cutoffDate)
@@ -113,7 +89,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 최근 게시글 활동 (DB 레벨에서 페이지네이션 적용)
-    const { data: postActivities, error: postError } = await supabase
+    const { data: postActivities, error: postError } = await db
       .from('posts')
       .select(
         `

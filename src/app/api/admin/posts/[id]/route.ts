@@ -4,39 +4,15 @@ export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServer } from '@/lib/supabase/server'
+import { requireAdmin } from '@/lib/server/adminAuth'
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const resolvedParams = await context.params
   try {
-    const supabase = await createSupabaseServer()
+    const auth = await requireAdmin()
+    if (auth instanceof NextResponse) return auth
+    const { db } = auth
     const { id } = resolvedParams
-
-    // 사용자 인증 확인
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
-    }
-
-    // 관리자 권한 확인
-    const { data: profile, error: profileError } = await supabase
-      .from('member_profiles')
-      .select('is_admin, registration_status, is_active')
-      .eq('id', user.id)
-      .single()
-
-    if (profileError) {
-      console.error('Admin posts [ID] - Profile fetch error:', profileError)
-      return NextResponse.json({ error: '프로필 정보를 조회할 수 없습니다.' }, { status: 500 })
-    }
-
-    if (!profile.is_admin || profile.registration_status !== 'approved' || !profile.is_active) {
-      return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 })
-    }
 
     // Get action from request body
     const { action } = await request.json()
@@ -46,7 +22,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     }
 
     // Get the post to check if it exists
-    const { data: post } = await supabase
+    const { data: post } = await db
       .from('posts')
       .select('id, category, is_deleted, is_pinned')
       .eq('id', id)
@@ -99,7 +75,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     }
 
     // Update the post
-    const { data: updatedPost, error: updateError } = await supabase
+    const { data: updatedPost, error: updateError } = await db
       .from('posts')
       .update(updateData)
       .eq('id', id)
@@ -108,8 +84,6 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
     if (updateError) {
       console.error('Admin posts [ID] - Post update error:', updateError)
-      console.error('Update data:', updateData)
-      console.error('Post ID:', id)
       return NextResponse.json({ error: '게시글 업데이트에 실패했습니다.' }, { status: 500 })
     }
 

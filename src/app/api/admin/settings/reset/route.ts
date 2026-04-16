@@ -1,6 +1,7 @@
 import { createOptionsResponse } from '@/utils/apiResponse'
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { checkAdminPermission } from '@/lib/server/adminAuth'
 import {
   applyRateLimit,
   RATE_LIMIT_CONFIGS,
@@ -12,24 +13,6 @@ import { refreshSettingsCache } from '@/utils/systemSettings'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
-
-async function checkAdminPermission(supabase: any, userId: string) {
-  const { data: profile, error } = await supabase
-    .from('member_profiles')
-    .select('is_admin, registration_status, is_active')
-    .eq('id', userId)
-    .single()
-
-  if (error || !profile) {
-    throw new Error('프로필 정보를 조회할 수 없습니다.')
-  }
-
-  if (!profile.is_admin || profile.registration_status !== 'approved' || !profile.is_active) {
-    throw new Error('관리자 권한이 필요합니다.')
-  }
-
-  return profile
-}
 
 // 기본 설정값 정의
 const DEFAULT_SETTINGS = [
@@ -268,7 +251,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
     }
 
-    console.log('[DEBUG] Reset API: Checking admin permission for user:', user.id)
     await checkAdminPermission(supabase, user.id)
 
     // 요청 데이터 파싱 (어떤 설정을 초기화할지 결정)
@@ -315,7 +297,6 @@ export async function POST(request: NextRequest) {
 
     // 설정 복원 성공 시 캐시 무효화
     if (resetResults.length > 0) {
-      console.log('[DEBUG] Settings reset to defaults, invalidating cache')
       refreshSettingsCache()
     }
 
@@ -363,9 +344,14 @@ export async function POST(request: NextRequest) {
       'high'
     )
 
+    const isPermissionError = error instanceof Error && error.message.includes('권한')
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : '설정 초기화 중 오류가 발생했습니다.' },
-      { status: error instanceof Error && error.message.includes('권한') ? 403 : 500 }
+      {
+        error: isPermissionError
+          ? '관리자 권한이 필요합니다.'
+          : '설정 초기화 중 오류가 발생했습니다.',
+      },
+      { status: isPermissionError ? 403 : 500 }
     )
   }
 }

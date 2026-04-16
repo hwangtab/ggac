@@ -154,7 +154,6 @@ async function getInitialPostData(postId: string): Promise<InitialPostData | nul
       `
       )
       .eq('post_id', postId)
-      .eq('is_deleted', false)
       .order('created_at', { ascending: true })
       .limit(20)
 

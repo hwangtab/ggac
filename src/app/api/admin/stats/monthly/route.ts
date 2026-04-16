@@ -1,6 +1,6 @@
 import { createOptionsResponse } from '@/utils/apiResponse'
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServer } from '@/lib/supabase/server'
+import { requireAdmin } from '@/lib/server/adminAuth'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -11,33 +11,9 @@ export const runtime = 'nodejs'
  */
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createSupabaseServer()
-
-    // 사용자 인증 확인
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
-    }
-
-    // 관리자 권한 확인
-    const { data: profile, error: profileError } = await supabase
-      .from('member_profiles')
-      .select('is_admin, registration_status, is_active')
-      .eq('id', user.id)
-      .single()
-
-    if (profileError) {
-      console.error('Profile fetch error:', profileError)
-      return NextResponse.json({ error: '프로필 정보를 조회할 수 없습니다.' }, { status: 500 })
-    }
-
-    if (!profile.is_admin || profile.registration_status !== 'approved' || !profile.is_active) {
-      return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 })
-    }
+    const auth = await requireAdmin()
+    if (auth instanceof NextResponse) return auth
+    const { db } = auth
 
     // 쿼리 파라미터 추출
     const { searchParams } = new URL(request.url)
@@ -48,14 +24,8 @@ export async function GET(request: NextRequest) {
     const startDate = new Date()
     startDate.setMonth(startDate.getMonth() - months)
 
-    console.log('Monthly stats request:', {
-      months,
-      startDate: startDate.toISOString(),
-      endDate: endDate.toISOString(),
-    })
-
     // 월별 회원 가입 통계
-    const { data: memberStats, error: memberError } = await supabase
+    const { data: memberStats, error: memberError } = await db
       .from('member_profiles')
       .select('created_at, registration_status')
       .gte('created_at', startDate.toISOString())
@@ -67,7 +37,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 월별 게시글 통계
-    const { data: postStats, error: postError } = await supabase
+    const { data: postStats, error: postError } = await db
       .from('posts')
       .select('created_at, is_deleted')
       .gte('created_at', startDate.toISOString())
@@ -80,7 +50,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 월별 활동 통계
-    const { data: activityStats, error: activityError } = await supabase
+    const { data: activityStats, error: activityError } = await db
       .from('user_activities')
       .select('created_at, action_type')
       .gte('created_at', startDate.toISOString())

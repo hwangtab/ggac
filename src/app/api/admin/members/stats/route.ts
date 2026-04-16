@@ -84,16 +84,6 @@ export async function GET(request: NextRequest) {
     const artistMembers = allMembers.filter(m => m.is_artist).length
     const adminMembers = allMembers.filter(m => m.is_admin).length
 
-    console.log('📊 복합 통계 계산 완료:', {
-      totalMembers,
-      pendingMembers,
-      activeApprovedMembers,
-      inactiveApprovedMembers,
-      totalApprovedMembers,
-      rejectedMembers,
-      suspendedMembers,
-    })
-
     // 멤버십 타입별 분포 (이미 로드된 데이터 사용)
     const membershipTypeDistribution = {
       regular: 0,
