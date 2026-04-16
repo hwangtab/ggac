@@ -5,10 +5,25 @@ export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/server/adminAuth'
+import {
+  applyRateLimit,
+  RATE_LIMIT_CONFIGS,
+  createUserKeyGenerator,
+  addRateLimitHeaders,
+} from '@/utils/rateLimiter'
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const resolvedParams = await context.params
   try {
+    const rateLimiter = applyRateLimit({
+      ...RATE_LIMIT_CONFIGS.ADMIN_API,
+      keyGenerator: createUserKeyGenerator('admin_posts_action'),
+    })
+    const rateLimitResult = rateLimiter(request)
+    if (!rateLimitResult.success && rateLimitResult.response) {
+      return rateLimitResult.response
+    }
+
     const auth = await requireAdmin()
     if (auth instanceof NextResponse) return auth
     const { db } = auth
@@ -95,14 +110,20 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
           : action === 'pin'
             ? '고정'
             : '고정 해제'
-    return NextResponse.json({
+
+    const response = NextResponse.json({
       success: true,
       post: updatedPost,
       message: `게시글 ${actionMessage}가 완료되었습니다.`,
     })
+    return addRateLimitHeaders(
+      response,
+      RATE_LIMIT_CONFIGS.ADMIN_API.maxRequests,
+      rateLimitResult.remaining,
+      rateLimitResult.resetTime
+    )
   } catch (error) {
     console.error('Admin posts [ID] - API error:', error)
-
     return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
   }
 }

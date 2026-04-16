@@ -209,7 +209,10 @@ export async function PATCH(request: NextRequest) {
     const contactValue = updateData.contact === '' ? null : updateData.contact
 
     // 아티스트 정보 업데이트 (service-role 우선 사용) + 서버 측 소유자 검증
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    if (!url) {
+      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
+    }
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
     const db = serviceKey
       ? createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })

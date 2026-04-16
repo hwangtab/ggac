@@ -1,6 +1,12 @@
 import { createOptionsResponse } from '@/utils/apiResponse'
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/server/adminAuth'
+import {
+  applyRateLimit,
+  RATE_LIMIT_CONFIGS,
+  createUserKeyGenerator,
+  addRateLimitHeaders,
+} from '@/utils/rateLimiter'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -11,6 +17,15 @@ export const runtime = 'nodejs'
  */
 export async function GET(request: NextRequest) {
   try {
+    const rateLimiter = applyRateLimit({
+      ...RATE_LIMIT_CONFIGS.ADMIN_API,
+      keyGenerator: createUserKeyGenerator('admin_stats_monthly'),
+    })
+    const rateLimitResult = rateLimiter(request)
+    if (!rateLimitResult.success && rateLimitResult.response) {
+      return rateLimitResult.response
+    }
+
     const auth = await requireAdmin()
     if (auth instanceof NextResponse) return auth
     const { db } = auth
@@ -174,7 +189,7 @@ export async function GET(request: NextRequest) {
           }
         : null
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       monthlyStats,
       currentMonth: thisMonth,
       previousMonth: lastMonth,
@@ -186,6 +201,12 @@ export async function GET(request: NextRequest) {
         generatedAt: new Date().toISOString(),
       },
     })
+    return addRateLimitHeaders(
+      response,
+      RATE_LIMIT_CONFIGS.ADMIN_API.maxRequests,
+      rateLimitResult.remaining,
+      rateLimitResult.resetTime
+    )
   } catch (error) {
     console.error('Monthly stats API error:', error)
     return NextResponse.json(

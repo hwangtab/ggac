@@ -12,10 +12,10 @@ export const preferredRegion = 'icn1'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { revalidateTag } from 'next/cache'
-import type { PostAttachment, PostAttachmentStats } from '@/types'
+import type { PostAttachmentStats } from '@/types'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { validateUUID, isValidTempId } from '@/utils/validation'
-import { generateUniqueFileName, sanitizeFileNameWithDetails } from '@/utils/fileNameSanitizer'
+import { generateUniqueFileName } from '@/utils/fileNameSanitizer'
 import {
   validateFile,
   FILE_VALIDATION_PROFILES,

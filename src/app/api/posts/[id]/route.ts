@@ -16,6 +16,7 @@ import distributedRateLimiter, {
   createDistributedUserKeyGenerator,
 } from '@/utils/distributedRateLimiter'
 import { validateUUID } from '@/utils/validation'
+import { revalidateTag } from 'next/cache'
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const resolvedParams = await context.params
@@ -246,6 +247,96 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     return NextResponse.json({ post: responseData })
   } catch (error) {
     console.error('게시글 상세 API 오류:', error)
+    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
+  }
+}
+
+/**
+ * 게시글 삭제 (소프트 삭제)
+ * DELETE /api/posts/[id]
+ */
+export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await context.params
+  const postId = resolvedParams.id
+
+  try {
+    // UUID 형식 검증
+    const uuidValidation = validateUUID(postId, '게시글 ID')
+    if (!uuidValidation.isValid) {
+      return NextResponse.json(
+        { error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.' },
+        { status: 400 }
+      )
+    }
+
+    const validPostId = uuidValidation.sanitized
+
+    const supabase = await createSupabaseServer()
+
+    // 사용자 인증 확인
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 })
+    }
+
+    // 관리자 여부 확인
+    let isAdmin = false
+    const { data: prof } = await supabase
+      .from('member_profiles')
+      .select('is_admin')
+      .eq('id', user.id)
+      .single()
+    isAdmin = !!prof?.is_admin
+
+    // 게시글 조회 및 소유자 확인
+    const { data: post, error: postError } = await supabase
+      .from('posts')
+      .select('id, author_id, category, is_deleted')
+      .eq('id', validPostId)
+      .single()
+
+    if (postError || !post) {
+      return NextResponse.json({ error: '게시글을 찾을 수 없습니다.' }, { status: 404 })
+    }
+
+    if (post.is_deleted) {
+      return NextResponse.json({ error: '이미 삭제된 게시글입니다.' }, { status: 404 })
+    }
+
+    // 작성자 본인 또는 관리자만 삭제 가능
+    if (post.author_id !== user.id && !isAdmin) {
+      return NextResponse.json({ error: '게시글을 삭제할 권한이 없습니다.' }, { status: 403 })
+    }
+
+    // 소프트 삭제 수행
+    const { error: updateError } = await supabase
+      .from('posts')
+      .update({ is_deleted: true })
+      .eq('id', validPostId)
+
+    if (updateError) {
+      console.error('[API] 게시글 삭제 실패:', updateError)
+      return NextResponse.json({ error: '게시글 삭제에 실패했습니다.' }, { status: 500 })
+    }
+
+    // 캐시 무효화
+    try {
+      revalidateTag(`post-${validPostId}`)
+      revalidateTag('board-post')
+      if (post.category) {
+        revalidateTag(`board-${post.category}`)
+        revalidateTag('board-initial')
+      }
+    } catch {
+      // 캐시 무효화 실패는 무시
+    }
+
+    return NextResponse.json({ message: '게시글이 삭제되었습니다.' })
+  } catch (error) {
+    console.error('게시글 삭제 API 오류:', error)
     return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
   }
 }

@@ -1,7 +1,6 @@
 import { createOptionsResponse } from '@/utils/apiResponse'
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServer } from '@/lib/supabase/server'
-import { createClient } from '@supabase/supabase-js'
+import { requireAdmin } from '@/lib/server/adminAuth'
 import { validateSearchQuery, escapePostgrestValue } from '@/utils/validation'
 import {
   applyRateLimit,
@@ -28,33 +27,9 @@ export async function GET(request: NextRequest) {
       return rateLimitResult.response
     }
 
-    const supabase = await createSupabaseServer()
-
-    // 사용자 인증 확인
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
-    }
-
-    // 관리자 권한 확인
-    const { data: profile, error: profileError } = await supabase
-      .from('member_profiles')
-      .select('is_admin, registration_status, is_active')
-      .eq('id', user.id)
-      .single()
-
-    if (profileError) {
-      console.error('Profile fetch error:', profileError)
-      return NextResponse.json({ error: '프로필 정보를 조회할 수 없습니다.' }, { status: 500 })
-    }
-
-    if (!profile.is_admin || profile.registration_status !== 'approved' || !profile.is_active) {
-      return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 })
-    }
+    const auth = await requireAdmin()
+    if (auth instanceof NextResponse) return auth
+    const { db } = auth
 
     // 쿼리 파라미터 추출 및 검증
     const { searchParams } = new URL(request.url)
@@ -99,18 +74,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '유효하지 않은 필터입니다.' }, { status: 400 })
     }
 
-    // 기본 쿼리 구성
-    // 서비스 롤 클라이언트 (RLS 영향 없이 전체 조회)
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (!url || !serviceKey) {
-      console.error('[admin/members] SUPABASE_SERVICE_ROLE_KEY가 설정되지 않았습니다.')
-      return NextResponse.json({ error: '서버 구성 오류입니다.' }, { status: 500 })
-    }
-    const db = createClient(url, serviceKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    })
-
+    // 기본 쿼리 구성 (서비스 롤 클라이언트로 RLS 우회)
     let query = db.from('member_profiles').select(
       `
         id,

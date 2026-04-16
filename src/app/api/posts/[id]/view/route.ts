@@ -55,7 +55,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
     }
 
-    const serviceSupabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceRoleKey, {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    if (!supabaseUrl) {
+      console.error('NEXT_PUBLIC_SUPABASE_URL이 설정되지 않았습니다.')
+      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
+    }
+
+    const serviceSupabase = createClient(supabaseUrl, serviceRoleKey, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,

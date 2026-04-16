@@ -1,7 +1,6 @@
 import { createOptionsResponse } from '@/utils/apiResponse'
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServer } from '@/lib/supabase/server'
-import { createClient } from '@supabase/supabase-js'
+import { requireAdmin } from '@/lib/server/adminAuth'
 import type { BulkOperationRequest } from '@/types'
 import { validateFormData } from '@/utils/validation'
 import {
@@ -29,43 +28,9 @@ export async function POST(request: NextRequest) {
       return rateLimitResult.response
     }
 
-    const supabase = await createSupabaseServer()
-
-    // 사용자 인증 확인
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
-    }
-
-    // 관리자 권한 확인
-    const { data: profile, error: profileError } = await supabase
-      .from('member_profiles')
-      .select('is_admin, registration_status, is_active')
-      .eq('id', user.id)
-      .single()
-
-    if (profileError) {
-      console.error('Profile fetch error:', profileError)
-      return NextResponse.json({ error: '프로필 정보를 조회할 수 없습니다.' }, { status: 500 })
-    }
-
-    if (!profile.is_admin || profile.registration_status !== 'approved' || !profile.is_active) {
-      return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 })
-    }
-
-    // 서비스 롤 클라이언트(있으면 RLS 우회)
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    const db =
-      url && serviceKey
-        ? createClient(url, serviceKey, {
-            auth: { autoRefreshToken: false, persistSession: false },
-          })
-        : supabase
+    const auth = await requireAdmin()
+    if (auth instanceof NextResponse) return auth
+    const { db, user } = auth
 
     // 요청 데이터 파싱 및 검증
     const requestData = await request.json()
@@ -356,8 +321,7 @@ export async function POST(request: NextRequest) {
         .update({
           status: 'failed',
           completed_at: new Date().toISOString(),
-          error_message:
-            operationError instanceof Error ? operationError.message : '알 수 없는 오류',
+          error_message: '작업 처리 중 오류가 발생했습니다.',
           results: {
             success_count: successCount,
             error_count: errorCount,
@@ -384,36 +348,21 @@ export async function POST(request: NextRequest) {
 // GET: 대량 작업 상태 조회
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createSupabaseServer()
-
-    // 사용자 인증 확인
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+    const rateLimiter = applyRateLimit({
+      ...RATE_LIMIT_CONFIGS.ADMIN_API,
+      keyGenerator: createUserKeyGenerator('admin_members_bulk_status'),
+    })
+    const rateLimitResult = rateLimiter(request)
+    if (!rateLimitResult.success && rateLimitResult.response) {
+      return rateLimitResult.response
     }
 
-    // 관리자 권한 확인
-    const { data: profile, error: profileError } = await supabase
-      .from('member_profiles')
-      .select('is_admin, registration_status, is_active')
-      .eq('id', user.id)
-      .single()
-
-    if (
-      profileError ||
-      !profile.is_admin ||
-      profile.registration_status !== 'approved' ||
-      !profile.is_active
-    ) {
-      return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 })
-    }
+    const auth = await requireAdmin()
+    if (auth instanceof NextResponse) return auth
+    const { db } = auth
 
     // 대량 작업 이력 조회
-    const { data: operations, error: operationsError } = await supabase
+    const { data: operations, error: operationsError } = await db
       .from('member_bulk_operations')
       .select(
         `
@@ -441,9 +390,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '대량 작업 이력을 조회할 수 없습니다.' }, { status: 500 })
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       operations: operations || [],
     })
+    return addRateLimitHeaders(
+      response,
+      RATE_LIMIT_CONFIGS.ADMIN_API.maxRequests,
+      rateLimitResult.remaining,
+      rateLimitResult.resetTime
+    )
   } catch (error) {
     console.error('Bulk operations list API error:', error)
     return NextResponse.json(

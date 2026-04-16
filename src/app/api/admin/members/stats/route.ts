@@ -1,51 +1,31 @@
 import { createOptionsResponse } from '@/utils/apiResponse'
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServer } from '@/lib/supabase/server'
-import { createClient } from '@supabase/supabase-js'
+import { requireAdmin } from '@/lib/server/adminAuth'
 import type { MemberStatistics } from '@/types'
+import {
+  applyRateLimit,
+  RATE_LIMIT_CONFIGS,
+  createUserKeyGenerator,
+  addRateLimitHeaders,
+} from '@/utils/rateLimiter'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createSupabaseServer()
-
-    // 사용자 인증 확인
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+    const rateLimiter = applyRateLimit({
+      ...RATE_LIMIT_CONFIGS.ADMIN_API,
+      keyGenerator: createUserKeyGenerator('admin_members_stats'),
+    })
+    const rateLimitResult = rateLimiter(request)
+    if (!rateLimitResult.success && rateLimitResult.response) {
+      return rateLimitResult.response
     }
 
-    // 관리자 권한 확인
-    const { data: profile, error: profileError } = await supabase
-      .from('member_profiles')
-      .select('is_admin, registration_status, is_active')
-      .eq('id', user.id)
-      .single()
-
-    if (
-      profileError ||
-      !profile.is_admin ||
-      profile.registration_status !== 'approved' ||
-      !profile.is_active
-    ) {
-      return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 })
-    }
-
-    // 서비스 롤 클라이언트(있으면 RLS 우회)
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    const db =
-      url && serviceKey
-        ? createClient(url, serviceKey, {
-            auth: { autoRefreshToken: false, persistSession: false },
-          })
-        : supabase
+    const auth = await requireAdmin()
+    if (auth instanceof NextResponse) return auth
+    const { db } = auth
 
     // 전체 회원 데이터 조회 (복합 상태 계산용)
     const { data: allMembers, error: membersError } = await db.from('member_profiles').select(`
@@ -164,7 +144,13 @@ export async function GET(request: NextRequest) {
       averageEngagementScore,
     }
 
-    return NextResponse.json(stats)
+    const response = NextResponse.json(stats)
+    return addRateLimitHeaders(
+      response,
+      RATE_LIMIT_CONFIGS.ADMIN_API.maxRequests,
+      rateLimitResult.remaining,
+      rateLimitResult.resetTime
+    )
   } catch (error) {
     console.error('Member stats API error:', error)
     return NextResponse.json(

@@ -1,27 +1,25 @@
-import { NextRequest } from 'next/server'
-import { createSupabaseServer } from '@/lib/supabase/server'
-import { createClient } from '@supabase/supabase-js'
+import { NextRequest, NextResponse } from 'next/server'
+import { requireAdmin } from '@/lib/server/adminAuth'
+import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator } from '@/utils/rateLimiter'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
 export async function GET(request: NextRequest) {
-  // 인증/권한 확인(한 번)
-  const supabase = await createSupabaseServer()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) {
-    return new Response('Unauthorized', { status: 401 })
+  // Rate limiting (SSE는 addRateLimitHeaders 생략)
+  const rateLimiter = applyRateLimit({
+    ...RATE_LIMIT_CONFIGS.ADMIN_API,
+    keyGenerator: createUserKeyGenerator('admin_realtime_stream'),
+  })
+  const rateLimitResult = rateLimiter(request)
+  if (!rateLimitResult.success && rateLimitResult.response) {
+    return rateLimitResult.response
   }
-  const { data: profile } = await supabase
-    .from('member_profiles')
-    .select('is_admin, registration_status, is_active')
-    .eq('id', user.id)
-    .single()
-  if (!profile?.is_admin || profile.registration_status !== 'approved' || !profile.is_active) {
-    return new Response('Forbidden', { status: 403 })
-  }
+
+  // 인증/권한 확인
+  const auth = await requireAdmin()
+  if (auth instanceof NextResponse) return auth
+  const { db } = auth
 
   const { searchParams } = new URL(request.url)
   const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 100)
@@ -30,12 +28,6 @@ export async function GET(request: NextRequest) {
     Math.max(parseInt(searchParams.get('interval') || '15000'), 3000),
     60000
   )
-
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  const db = serviceKey
-    ? createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
-    : supabase
 
   const stream = new ReadableStream({
     start(controller) {

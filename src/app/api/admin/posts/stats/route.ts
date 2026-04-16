@@ -1,38 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServer } from '@/lib/supabase/server'
-import { createClient } from '@supabase/supabase-js'
+import { requireAdmin } from '@/lib/server/adminAuth'
+import {
+  applyRateLimit,
+  RATE_LIMIT_CONFIGS,
+  createUserKeyGenerator,
+  addRateLimitHeaders,
+} from '@/utils/rateLimiter'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createSupabaseServer()
-
-    // Check authentication and admin status
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const rateLimiter = applyRateLimit({
+      ...RATE_LIMIT_CONFIGS.ADMIN_API,
+      keyGenerator: createUserKeyGenerator('admin_posts_stats'),
+    })
+    const rateLimitResult = rateLimiter(request)
+    if (!rateLimitResult.success && rateLimitResult.response) {
+      return rateLimitResult.response
     }
 
-    const { data: profile } = await supabase
-      .from('member_profiles')
-      .select('is_admin, is_active, registration_status')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile?.is_admin || !profile?.is_active || profile?.registration_status !== 'approved') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-
-    // service-role 우선 사용
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    const db = serviceKey
-      ? createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
-      : supabase
+    const auth = await requireAdmin()
+    if (auth instanceof NextResponse) return auth
+    const { db } = auth
 
     // Get total posts count
     const { count: totalPosts } = await db
@@ -76,7 +67,13 @@ export async function GET(request: NextRequest) {
       categoryStats,
     }
 
-    return NextResponse.json(stats)
+    const response = NextResponse.json(stats)
+    return addRateLimitHeaders(
+      response,
+      RATE_LIMIT_CONFIGS.ADMIN_API.maxRequests,
+      rateLimitResult.remaining,
+      rateLimitResult.resetTime
+    )
   } catch (error) {
     console.error('Admin posts stats API error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

@@ -25,7 +25,7 @@ interface Post {
 interface Profile {
   id: string
   display_name: string
-  profile_image_url?: string
+  profile_photo_url?: string
 }
 
 interface PostDetailClientProps {
@@ -398,10 +398,10 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
 
               <div className="flex items-center space-x-4 text-sm text-gray-600">
                 <div className="flex items-center space-x-2">
-                  {authorProfile?.profile_image_url ? (
+                  {authorProfile?.profile_photo_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={authorProfile.profile_image_url}
+                      src={authorProfile.profile_photo_url}
                       alt={authorProfile.display_name}
                       className="w-8 h-8 rounded-full"
                     />

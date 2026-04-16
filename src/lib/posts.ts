@@ -35,7 +35,7 @@ export interface PostDetail {
 export interface AuthorProfile {
   id: string
   display_name: string
-  profile_image_url?: string
+  profile_photo_url?: string
 }
 
 /**
@@ -78,36 +78,19 @@ export async function getPostAuthor(authorId: string): Promise<AuthorProfile | n
   try {
     const supabase = getSupabaseAdmin()
 
-    // 우선 public_profiles 뷰 시도, 없으면 member_profiles로 폴백
-    let profile: any = null
-    let error: any = null
-    try {
-      const res = await supabase
-        .from('public_profiles')
-        .select('id, display_name, profile_image_url')
-        .eq('id', authorId)
-        .maybeSingle()
-      profile = res.data
-      error = res.error
-    } catch (e: any) {
-      error = e
-    }
+    // member_profiles에서 직접 조회 (public_profiles 뷰에는 profile_photo_url이 없음)
+    const { data: profile, error } = await supabase
+      .from('member_profiles')
+      .select('id, display_name, profile_photo_url')
+      .eq('id', authorId)
+      .maybeSingle()
 
     if (!profile) {
-      const res2 = await supabase
-        .from('member_profiles')
-        .select('id, display_name')
-        .eq('id', authorId)
-        .maybeSingle()
-      profile = res2.data
-      if (!profile) {
-        console.log('[Posts] Author profile not found:', authorId, error?.message)
-        return {
-          id: authorId,
-          display_name: '알 수 없는 사용자',
-        }
+      console.log('[Posts] Author profile not found:', authorId, error?.message)
+      return {
+        id: authorId,
+        display_name: '알 수 없는 사용자',
       }
-      return profile as AuthorProfile
     }
 
     return profile as AuthorProfile

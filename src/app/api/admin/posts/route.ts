@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServer } from '@/lib/supabase/server'
-import { createClient } from '@supabase/supabase-js'
+import { requireAdmin } from '@/lib/server/adminAuth'
 
 // API 라우트를 동적으로 렌더링하도록 강제 설정
 export const runtime = 'nodejs'
@@ -27,33 +26,9 @@ export async function GET(request: NextRequest) {
       return rateLimitResult.response
     }
 
-    const supabase = await createSupabaseServer()
-
-    // 사용자 인증 확인
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
-    }
-
-    // 관리자 권한 확인
-    const { data: profile, error: profileError } = await supabase
-      .from('member_profiles')
-      .select('is_admin, registration_status, is_active')
-      .eq('id', user.id)
-      .single()
-
-    if (profileError) {
-      console.error('Profile fetch error:', profileError)
-      return NextResponse.json({ error: '프로필 정보를 조회할 수 없습니다.' }, { status: 500 })
-    }
-
-    if (!profile.is_admin || profile.registration_status !== 'approved' || !profile.is_active) {
-      return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 })
-    }
+    const auth = await requireAdmin()
+    if (auth instanceof NextResponse) return auth
+    const { db } = auth
 
     // Get query parameters
     const { searchParams } = new URL(request.url)
@@ -97,13 +72,6 @@ export async function GET(request: NextRequest) {
     if (!allowedFilters.includes(filter)) {
       return NextResponse.json({ error: '유효하지 않은 필터입니다.' }, { status: 400 })
     }
-
-    // service-role 우선 사용으로 RLS 영향 제거
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    const db = serviceKey
-      ? createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
-      : supabase
 
     // Build query based on filter
     let query = db

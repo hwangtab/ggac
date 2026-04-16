@@ -1,7 +1,6 @@
 import { createOptionsResponse } from '@/utils/apiResponse'
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServer } from '@/lib/supabase/server'
-import { createClient } from '@supabase/supabase-js'
+import { requireAdmin } from '@/lib/server/adminAuth'
 import { validateFormData } from '@/utils/validation'
 import {
   applyRateLimit,
@@ -31,42 +30,9 @@ export async function POST(request: NextRequest) {
       return rateLimitResult.response
     }
 
-    const supabase = await createSupabaseServer()
-
-    // 사용자 인증 확인
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
-    }
-
-    // 관리자 권한 확인
-    const { data: profile, error: profileError } = await supabase
-      .from('member_profiles')
-      .select('is_admin, registration_status, is_active')
-      .eq('id', user.id)
-      .single()
-
-    if (profileError) {
-      console.error('[member-action] Profile fetch error:', profileError)
-      return NextResponse.json({ error: '프로필 정보를 조회할 수 없습니다.' }, { status: 500 })
-    }
-
-    if (!profile.is_admin || profile.registration_status !== 'approved' || !profile.is_active) {
-      return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 })
-    }
-
-    // 관리자 작업용 서비스 롤 클라이언트 생성
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (!supabaseUrl || !serviceRoleKey) {
-      console.error('[member-action] SUPABASE_SERVICE_ROLE_KEY가 설정되지 않았습니다.')
-      return NextResponse.json({ error: '서버 구성 오류입니다.' }, { status: 500 })
-    }
-    const adminSupabase = createClient(supabaseUrl, serviceRoleKey)
+    const auth = await requireAdmin()
+    if (auth instanceof NextResponse) return auth
+    const { db: adminSupabase, user } = auth
 
     // 요청 데이터 파싱 및 검증
     requestData = await request.json()

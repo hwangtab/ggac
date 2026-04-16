@@ -15,7 +15,7 @@ import sharp from 'sharp'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
 import type { MediaFile } from '@/types'
-import { createSuccessResponse, createErrorResponse, createJsonResponse } from '@/utils/apiResponse'
+import { createSuccessResponse, createErrorResponse } from '@/utils/apiResponse'
 import distLimiter from '@/utils/distributedRateLimiter'
 
 // Service Role 클라이언트는 Storage 작업에만 사용
