@@ -36,6 +36,37 @@ npm run deploy                  # Deploy webhook trigger
 npm run deploy:notify           # Deploy notification script
 ```
 
+### CLI Tools Available
+
+Both **Vercel CLI** and **Supabase CLI** are installed globally and can be
+invoked directly (no need to wrap through npm scripts).
+
+```bash
+# Vercel CLI (installed via fnm global)
+vercel --version                # Check version
+vercel whoami                   # Current account
+vercel env pull .env.local      # Pull env vars to local
+vercel env ls                   # List environment variables
+vercel deploy                   # Preview deployment
+vercel deploy --prod            # Production deployment
+vercel logs <deployment-url>    # View runtime logs
+vercel inspect <deployment-url> # Inspect a deployment
+
+# Supabase CLI (installed via Homebrew)
+supabase --version              # Check version
+supabase status                 # Local dev stack status
+supabase db push                # Apply migrations to linked project
+supabase db pull                # Pull remote schema to local
+supabase migration new <name>   # Create a new migration
+supabase migration list         # List migrations (local vs remote)
+supabase gen types typescript   # Generate TS types from DB schema
+supabase link --project-ref <ref>  # Link local repo to remote project
+```
+
+Use these CLIs directly for env sync, migration work, and deployment inspection
+rather than spinning up one-off scripts. For destructive operations (e.g.,
+`db push` to production, `env rm`), confirm with the user first.
+
 ### Post-Task Checklist
 
 After completing any development task:
