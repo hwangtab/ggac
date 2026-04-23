@@ -15,7 +15,7 @@ const FeaturedArtists = ({ artists }: FeaturedArtistsProps) => {
           </p>
         </div>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
           {artists.map(artist => (
             <div key={artist.id} className="group">
               <Link href={`/artists/${artist.slug}`}>

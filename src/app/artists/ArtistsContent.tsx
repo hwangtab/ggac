@@ -57,7 +57,7 @@ const ArtistsContent = ({ artists, categories, selectedCategory }: ArtistsConten
       {/* Artists Canvas */}
       <section className="py-16">
         <div className="tw-container-custom">
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-12">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-12">
             {artists.map((artist, index) => (
               <div key={artist.id} className="group">
                 <Link href={`/artists/${artist.slug}`}>

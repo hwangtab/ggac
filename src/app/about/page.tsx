@@ -269,7 +269,7 @@ const AboutPage = async () => {
                       >
                         <div className="w-3 h-3 bg-white rounded-full"></div>
                       </div>
-                      <div className="ml-6">
+                      <div className="ml-6 min-w-0 flex-1">
                         <div className="flex items-center gap-2 mb-2">
                           <div
                             className={`text-sm font-medium ${

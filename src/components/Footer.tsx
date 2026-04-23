@@ -48,7 +48,7 @@ const Footer = ({ globalData }: FooterProps) => {
   return (
     <footer className="bg-gray-900 text-white py-12">
       <div className="tw-container-custom">
-        <div className="grid md:grid-cols-3 gap-8 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
           {/* Logo & Description */}
           <div>
             <div className="flex items-center space-x-3 mb-4">

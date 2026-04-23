@@ -226,7 +226,7 @@ export default function ProjectDetailContent({
                 >
                   ### 예매하기
                 </ReactMarkdown>
-                <div className="grid md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {project.ticketing.map((ticket, index) => (
                     <TicketingCard key={index} ticketing={ticket as TicketingInfo} />
                   ))}
@@ -238,7 +238,7 @@ export default function ProjectDetailContent({
             {relatedProjects.length > 0 && (
               <div className="mt-12">
                 <h3 className="tw-heading-tertiary mb-6">연관 게시물</h3>
-                <div className="grid md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {relatedProjects.map(relatedProject => (
                     <Link
                       key={relatedProject.slug}
@@ -276,7 +276,7 @@ export default function ProjectDetailContent({
             {project.relatedArticles && project.relatedArticles.length > 0 && (
               <div className="mt-12">
                 <h3 className="tw-heading-tertiary mb-6">관련 기사</h3>
-                <div className="grid md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {project.relatedArticles.map((article, index) => (
                     <ArticleCard key={index} article={article} />
                   ))}
@@ -291,7 +291,7 @@ export default function ProjectDetailContent({
 
                 {/* 갤러리 전체 로딩 표시는 제거하고, 각 카드 단위 스켈레톤만 유지 */}
 
-                <div className="grid md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {project.gallery.map((image, index) => (
                     <div
                       key={index}

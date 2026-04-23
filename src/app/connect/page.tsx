@@ -164,7 +164,7 @@ const ConnectPage = async () => {
                 </p>
               </div>
 
-              <div className="grid md:grid-cols-2 gap-8 mb-12">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
                 {/* 자격 */}
                 <Link
                   href="/signup"
@@ -293,7 +293,7 @@ const ConnectPage = async () => {
                 </p>
               </div>
 
-              <div className="grid md:grid-cols-3 gap-8 text-center">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
                 <a
                   href={`mailto:${globalData.contact.email}`}
                   className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 group cursor-pointer"

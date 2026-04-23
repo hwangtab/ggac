@@ -16,7 +16,7 @@ const FeaturedProjects = ({ projects }: FeaturedProjectsProps) => {
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-8 lg:gap-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12">
           {projects.map((project, index) => (
             <div key={project.id} className={`group ${index === 0 ? 'md:col-span-2' : ''}`}>
               <Link href={`/archive/${project.slug}`}>
