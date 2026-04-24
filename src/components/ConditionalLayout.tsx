@@ -10,10 +10,18 @@ import type { GlobalData } from '@/types'
 interface ConditionalLayoutProps {
   children: ReactNode
   globalData: GlobalData
+  currentPath: string
 }
 
-export default function ConditionalLayout({ children, globalData }: ConditionalLayoutProps) {
-  const pathname = usePathname()
+export default function ConditionalLayout({
+  children,
+  globalData,
+  currentPath,
+}: ConditionalLayoutProps) {
+  // usePathname()은 정적 prerender 시점에 빈 값을 반환할 수 있어,
+  // 미들웨어에서 헤더로 받아온 currentPath를 fallback으로 사용한다.
+  const pathnameFromHook = usePathname()
+  const pathname = pathnameFromHook || currentPath
   const isAdminPage = pathname.startsWith('/admin')
 
   if (isAdminPage) {
@@ -31,7 +39,7 @@ export default function ConditionalLayout({ children, globalData }: ConditionalL
   return (
     <ActivityTracker>
       <div className="min-h-screen flex flex-col">
-        <Navigation />
+        <Navigation initialPath={currentPath} />
         <main id="main-content" className="flex-1">
           {children}
         </main>

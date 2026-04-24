@@ -10,14 +10,21 @@ import { usePathname, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
 import NotificationDropdown from './NotificationDropdown'
 
-const Navigation = () => {
+interface NavigationProps {
+  initialPath?: string
+}
+
+const Navigation = ({ initialPath }: NavigationProps = {}) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   // 상단 고정 헤더 투명/불투명 제어
   const [isAtTop, setIsAtTop] = useState(true)
   const [hasScrollSync, setHasScrollSync] = useState(false)
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
-  const pathname = usePathname()
+  // usePathname()은 정적 prerender 시점에 빈 값을 반환할 수 있어,
+  // 부모 layout이 미들웨어 헤더로 전달한 initialPath를 fallback으로 사용.
+  const pathnameFromHook = usePathname()
+  const pathname = pathnameFromHook || initialPath || '/'
   const router = useRouter()
 
   // 홈페이지인지 확인

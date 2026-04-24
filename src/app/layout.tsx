@@ -7,6 +7,7 @@ import { getGlobalData } from '@/lib/data'
 import { Suspense } from 'react'
 import Script from 'next/script'
 import { Toaster } from 'react-hot-toast'
+import { headers } from 'next/headers'
 
 const gmarketSans = localFont({
   src: '../../public/fonts/GmarketSansTTFLight.ttf',
@@ -94,6 +95,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // 개선된 데이터 로딩 - 캐싱된 함수 사용
   const globalData = await getGlobalData()
 
+  // 미들웨어에서 주입한 현재 경로를 읽어 클라이언트 컴포넌트에 전달.
+  // usePathname()이 정적 prerender 시점에 빈 값을 돌려줘 헤더 색상이
+  // 잘못 SSR되는 문제를 방지하기 위한 fallback.
+  const headersList = await headers()
+  const currentPath = headersList.get('x-pathname') || '/'
+
   return (
     <html lang="ko" className={`${gmarketSans.variable} ${peoplefirst.variable}`}>
       <body suppressHydrationWarning>
@@ -158,7 +165,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               </div>
             }
           >
-            <ConditionalLayout globalData={globalData}>{children}</ConditionalLayout>
+            <ConditionalLayout globalData={globalData} currentPath={currentPath}>
+              {children}
+            </ConditionalLayout>
           </Suspense>
 
           {/* Toast notifications */}
