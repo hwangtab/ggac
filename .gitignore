@@ -21,6 +21,9 @@ backups/
 # internal documentation — governance/meeting records, sensitive content
 docs/
 
+# playwright MCP session logs — may contain PII/sensitive test data
+.playwright-mcp/
+
 # misc
 .DS_Store
 *.pem
