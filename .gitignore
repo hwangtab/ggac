@@ -17,7 +17,9 @@
 
 # backups and local data (do not commit)
 backups/
-docs/*.csv
+
+# internal documentation — governance/meeting records, sensitive content
+docs/
 
 # misc
 .DS_Store
