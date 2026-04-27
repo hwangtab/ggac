@@ -211,13 +211,19 @@ const nextConfig = {
           { key: 'X-Content-Type-Options', value: 'nosniff' },
         ],
       },
-      // Next static assets: rely on Next/Vercel defaults, only add caching
+      // Next static assets: rely on Next/Vercel defaults, only add caching.
+      // X-Robots-Tag로 검색 엔진이 정적 자원을 색인하지 않도록 명시
+      // (GSC "크롤링됨 - 색인 안 됨" 노이즈 제거).
       {
         source: '/_next/static/(.*)',
         headers: [
           {
             key: 'Cache-Control',
             value: 'public, max-age=31536000, immutable',
+          },
+          {
+            key: 'X-Robots-Tag',
+            value: 'noindex',
           },
         ],
       },

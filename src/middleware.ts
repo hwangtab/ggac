@@ -39,6 +39,15 @@ export async function middleware(request: NextRequest) {
     return res
   }
 
+  // Trailing slash 정규화: `/about/` → `/about` 301 리디렉션.
+  // next.config.js의 skipTrailingSlashRedirect: true 때문에 자동 처리되지 않아
+  // GSC에 "사용자가 선택한 표준이 없는 중복 페이지"로 잡힌 이슈를 해결한다.
+  if (pathname.length > 1 && pathname.endsWith('/')) {
+    const url = request.nextUrl.clone()
+    url.pathname = pathname.replace(/\/+$/, '')
+    return NextResponse.redirect(url, 301)
+  }
+
   if (!hasSupabaseMiddlewareConfig()) {
     if (process.env.NODE_ENV === 'development') {
       console.warn('⚠️ [MIDDLEWARE] Supabase env missing, skipping auth middleware')

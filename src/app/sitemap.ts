@@ -12,15 +12,25 @@ async function getBoardPostsForSitemap(): Promise<Array<{ id: string; updated_at
     const supabase = createClient(url, key, {
       auth: { autoRefreshToken: false, persistSession: false },
     })
+    // 색인 가치가 있는 게시글만 sitemap에 포함:
+    // - 잡담 카테고리 제외 (개인적 단상 위주)
+    // - 본문 길이 200자 이상 (thin content 방지)
+    // page.tsx의 noindex 정책과 동기화하여 GSC 신호 일관성 확보.
     const { data, error } = await supabase
       .from('posts')
-      .select('id, updated_at')
+      .select('id, updated_at, content, category')
       .eq('is_deleted', false)
+      .neq('category', '잡담')
       .order('updated_at', { ascending: false })
       .limit(1000)
 
     if (error || !data) return []
     return data
+      .filter(post => {
+        const text = (post.content || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
+        return text.length >= 200
+      })
+      .map(({ id, updated_at }) => ({ id, updated_at }))
   } catch {
     return []
   }

@@ -258,7 +258,10 @@ export async function getPostMetadata(postId: string) {
     const categoryEmoji = getCategoryEmoji(post.category)
     const keywords = generatePostKeywords(post, author)
 
-    return { post, author, thumbnail, description, categoryEmoji, keywords }
+    // 색인 가치 판단을 위한 본문 텍스트 길이 (HTML/공백 제거 후)
+    const contentTextLength = extractTextFromContent(post.content, Number.MAX_SAFE_INTEGER).length
+
+    return { post, author, thumbnail, description, categoryEmoji, keywords, contentTextLength }
   } catch (error) {
     console.error('[Posts] Error fetching post metadata:', error)
     return null

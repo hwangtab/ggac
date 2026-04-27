@@ -20,6 +20,10 @@ import {
 // ISR 최적화: 개별 아티스트 페이지는 12시간 캐시
 export const revalidate = 43200
 
+// 탈퇴/삭제된 아티스트 슬러그: Google 색인에서 빠르게 제외하기 위해
+// noindex 메타데이터 + 404 응답을 명시적으로 반환한다.
+const WITHDRAWN_SLUGS = new Set(['rosalyn-song', 'simon-dm'])
+
 interface ArtistPageProps {
   params: Promise<{
     slug: string
@@ -30,7 +34,9 @@ interface ArtistPageProps {
 export async function generateStaticParams() {
   try {
     const slugs = await getArtistSlugs()
-    return slugs.map(slug => ({ slug }))
+    return slugs
+      .filter(slug => !WITHDRAWN_SLUGS.has(slug))
+      .map(slug => ({ slug }))
   } catch (error) {
     console.warn('Failed to generate static params for artists:', error)
     // 빌드 시점에서 환경 변수가 없을 때 빈 배열 반환
@@ -46,6 +52,14 @@ function getBaseUrl(): string {
 // generateMetadata 개선 - 캐싱된 함수 사용
 export async function generateMetadata({ params }: ArtistPageProps): Promise<Metadata> {
   const resolvedParams = await params
+
+  if (WITHDRAWN_SLUGS.has(resolvedParams.slug)) {
+    return {
+      title: 'Artist Not Found',
+      robots: { index: false, follow: false },
+    }
+  }
+
   const artist = await getArtistBySlug(resolvedParams.slug)
 
   if (!artist) {
@@ -147,6 +161,12 @@ export async function generateMetadata({ params }: ArtistPageProps): Promise<Met
 
 const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
   const resolvedParams = await params
+
+  // 탈퇴 아티스트는 즉시 404
+  if (WITHDRAWN_SLUGS.has(resolvedParams.slug)) {
+    notFound()
+  }
+
   // 개선된 데이터 로딩 - 단일 함수로 아티스트 조회
   const artist = await getArtistBySlug(resolvedParams.slug)
 

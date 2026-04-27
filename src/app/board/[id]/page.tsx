@@ -31,7 +31,8 @@ export async function generateMetadata({
       }
     }
 
-    const { post, author, thumbnail, description, categoryEmoji, keywords } = metadata
+    const { post, author, thumbnail, description, categoryEmoji, keywords, contentTextLength } =
+      metadata
 
     const ogTitle = `${categoryEmoji} [${post.category}] ${post.title} - 경기아트콜렉티브`
     const title = `${categoryEmoji} [${post.category}] ${post.title}`
@@ -39,11 +40,20 @@ export async function generateMetadata({
     // OG 이미지 생성 - 통합 유틸리티 사용
     const ogImageUrl = generatePostOgImage(thumbnail)
 
+    // Thin content는 색인 가치가 낮아 GSC "크롤링됨 - 색인 안 됨"으로 잡힘.
+    // 본문이 짧거나 잡담 카테고리면 noindex 처리해 사이트 전반의 색인 품질 확보.
+    const isThinContent = contentTextLength < 200
+    const isLowValueCategory = post.category === '잡담'
+    const shouldNoindex = isThinContent || isLowValueCategory
+
     return {
       title,
       description,
       keywords,
       authors: [{ name: author?.display_name || '경기아트콜렉티브' }],
+      ...(shouldNoindex && {
+        robots: { index: false, follow: true },
+      }),
       openGraph: {
         title: ogTitle,
         description,
