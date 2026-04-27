@@ -43,6 +43,7 @@ interface ErrorFallbackProps {
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   private autoRecoveryTimer?: NodeJS.Timeout
   private retryTimer?: NodeJS.Timeout
+  private mounted = true
 
   constructor(props: ErrorBoundaryProps) {
     super(props)
@@ -96,11 +97,14 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 
   componentWillUnmount() {
+    this.mounted = false
     if (this.autoRecoveryTimer) {
       clearTimeout(this.autoRecoveryTimer)
+      this.autoRecoveryTimer = undefined
     }
     if (this.retryTimer) {
       clearTimeout(this.retryTimer)
+      this.retryTimer = undefined
     }
   }
 
@@ -149,6 +153,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 
     if (this.state.retryCount < maxRetries && autoRecoveryTime > 0) {
       this.autoRecoveryTimer = setTimeout(() => {
+        if (!this.mounted) return
         console.log(`🔄 Auto-recovery attempt ${this.state.retryCount + 1}/${maxRetries}`)
         this.handleReset()
       }, autoRecoveryTime)
@@ -159,6 +164,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
    * 에러 상태 리셋 및 재시도
    */
   private handleReset = () => {
+    if (!this.mounted) return
     const newRetryCount = this.state.retryCount + 1
 
     this.setState({
@@ -169,7 +175,6 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       retryCount: newRetryCount,
     })
 
-    // 개발 환경에서 재시도 로그
     if (process.env.NODE_ENV === 'development') {
       console.log(`🔄 ErrorBoundary reset - Retry count: ${newRetryCount}`)
     }
@@ -179,7 +184,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
    * 수동 리셋 (사용자 액션)
    */
   private handleManualReset = () => {
-    // 재시도 카운터 초기화
+    if (!this.mounted) return
     this.setState({ retryCount: 0 })
     this.handleReset()
   }

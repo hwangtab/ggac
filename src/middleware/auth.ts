@@ -30,6 +30,13 @@ export async function handleAuth(
   const isCriticalPath =
     pathname.startsWith('/board') || pathname.startsWith('/admin') || pathname.startsWith('/mypage')
 
+  // 게시판 공개 읽기 허용 정책: 쓰기/수정만 보호
+  const isBoardWrite = pathname.startsWith('/board/write')
+  const isBoardEdit = /\/board\/.+\/edit$/.test(pathname)
+  const isBoardProtected = isBoardWrite || isBoardEdit
+  const isProtectedPage =
+    pathname.startsWith('/admin') || pathname.startsWith('/mypage') || isBoardProtected
+
   try {
     // getUser()는 서버에서 JWT를 검증하므로 getSession()보다 안전
     const {
@@ -60,35 +67,18 @@ export async function handleAuth(
 
   // 인증 에러 발생 시 공개 페이지는 허용하고 보호된 페이지만 리다이렉트
   if (authError) {
-    // auth 조회가 실패해도 공개 경로는 통과
-    const isBoardWrite = pathname.startsWith('/board/write')
-    const isBoardEdit = /\/board\/.+\/edit$/.test(pathname)
-    const isProtectedPage =
-      pathname.startsWith('/admin') || pathname.startsWith('/mypage') || isBoardWrite || isBoardEdit
-
     if (isProtectedPage) {
       return {
         response: NextResponse.redirect(new URL('/login', request.nextUrl.origin)),
         shouldContinue: false,
       }
     }
-    // 공개 페이지는 그대로 진행
     return { shouldContinue: true }
   }
 
   // 정의된 경로들
   const AUTH_PAGES = ['/login', '/signup']
   const REGISTRATION_PAGES = ['/register/pending', '/register/rejected']
-
-  // 게시판 공개 읽기 허용 정책
-  const isBoardWrite = pathname.startsWith('/board/write')
-  const isBoardEdit = /\/board\/.+\/edit$/.test(pathname)
-  const isBoardProtected = isBoardWrite || isBoardEdit
-
-  // 보호 페이지 판별: 관리자/마이페이지/게시판 쓰기·수정
-  const isProtectedPage =
-    pathname.startsWith('/admin') || pathname.startsWith('/mypage') || isBoardProtected
-
   const isAuthPage = AUTH_PAGES.includes(pathname)
   const isRegistrationPage = REGISTRATION_PAGES.includes(pathname)
 
