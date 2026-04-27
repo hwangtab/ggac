@@ -45,7 +45,7 @@
   "devDependencies": {
     "@commitlint/cli": "^19.0.3",
     "@commitlint/config-conventional": "^19.0.3",
-    "@next/bundle-analyzer": "^15.3.5",
+    "@next/bundle-analyzer": "^16.2.4",
     "@playwright/test": "^1.53.2",
     "@tailwindcss/typography": "^0.5.19",
     "@types/dompurify": "^3.0.5",
