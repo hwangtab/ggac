@@ -1,4 +1,26 @@
-import { createSupabaseServer } from '@/lib/supabase/server'
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
+
+/**
+ * 주의: getSystemSettings는 일반 사용자 요청에서도 호출될 수 있으므로 service role
+ * client로 system_settings 테이블을 직접 읽는다. 기존 get_system_settings RPC는
+ * SECURITY DEFINER 내부에서 admin 권한 체크를 수행하기 때문에, 일반 사용자가 호출하면
+ * 항상 실패하여 maintenance_mode 등이 무력화되는 버그가 있었다.
+ */
+
+let serviceRoleClient: SupabaseClient | null = null
+
+function getServiceRoleClient(): SupabaseClient | null {
+  if (serviceRoleClient) return serviceRoleClient
+
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !serviceKey) return null
+
+  serviceRoleClient = createClient(url, serviceKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  })
+  return serviceRoleClient
+}
 
 interface SystemSettingsData {
   site: {
@@ -216,11 +238,16 @@ export async function getSystemSettings(forceRefresh = false): Promise<SystemSet
       return cachedSettings
     }
 
-    const supabase = await createSupabaseServer()
+    const admin = getServiceRoleClient()
+    if (!admin) {
+      // service role 미설정 시 기본값 반환 (개발 환경 등)
+      return getDefaultSettings()
+    }
 
-    const { data: settingsData, error } = await supabase.rpc('get_system_settings', {
-      include_sensitive: false,
-    })
+    const { data: settingsData, error } = await admin
+      .from('system_settings')
+      .select('category, setting_key, setting_value')
+      .in('category', ['site', 'email', 'security', 'features'])
 
     if (error) {
       console.error('Failed to fetch system settings:', error)
