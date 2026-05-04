@@ -1,5 +1,6 @@
 import { createOptionsResponse } from '@/utils/apiResponse'
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { checkAdminPermission } from '@/lib/server/adminAuth'
 import {
@@ -9,6 +10,28 @@ import {
   addRateLimitHeaders,
 } from '@/utils/rateLimiter'
 import { logSecurityEvent } from '@/utils/security'
+import { createLogger, maskId } from '@/utils/logger'
+import { refreshSettingsCache } from '@/utils/systemSettings'
+
+const log = createLogger('admin/settings/backup')
+
+const BackupSettingSchema = z.object({
+  category: z.string().min(1).max(64),
+  setting_key: z.string().min(1).max(128),
+  setting_value: z.unknown(),
+})
+
+const RestoreBodySchema = z.object({
+  metadata: z
+    .object({
+      version: z.string(),
+      created_at: z.string().optional(),
+      created_by: z.string().optional(),
+      description: z.string().optional(),
+    })
+    .passthrough(),
+  settings: z.array(BackupSettingSchema).min(1, '복원할 설정이 비어 있습니다.'),
+})
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -54,7 +77,7 @@ export async function GET(request: NextRequest) {
     let settingsData = initialSettingsData
 
     if (settingsError) {
-      console.error('[backup] Settings backup error:', settingsError.message)
+      log.warn('Settings backup RPC failed, trying fallback', { message: settingsError.message })
 
       // 폴백: 직접 테이블 쿼리 시도
       try {
@@ -65,7 +88,7 @@ export async function GET(request: NextRequest) {
           .order('setting_key')
 
         if (fallbackError) {
-          console.error('[backup] Fallback query also failed:', fallbackError.message)
+          log.error('Fallback query also failed', { message: fallbackError.message })
           throw new Error('설정 백업 중 오류가 발생했습니다.')
         }
 
@@ -92,11 +115,11 @@ export async function GET(request: NextRequest) {
       settings: sanitizedSettings,
     }
 
-    // 보안 이벤트 로깅
+    // 보안 이벤트 로깅 — adminId 평문 노출 회피 (PII 마스킹)
     logSecurityEvent(
       'ADMIN_SETTINGS_BACKUP_CREATED',
       {
-        adminId: user.id,
+        adminId: maskId(user.id),
         settingsCount: settingsData?.length || 0,
       },
       'medium'
@@ -118,7 +141,7 @@ export async function GET(request: NextRequest) {
       rateLimitResult.resetTime
     )
   } catch (error) {
-    console.error('Admin settings backup error:', error)
+    log.error('Admin settings backup error', error)
     logSecurityEvent(
       'ADMIN_SETTINGS_BACKUP_ERROR',
       {
@@ -160,18 +183,22 @@ export async function POST(request: NextRequest) {
 
     await checkAdminPermission(supabase, user.id)
 
-    // 요청 데이터 파싱
-    const requestData = await request.json()
-
-    // 백업 파일 유효성 검사
-    if (!requestData || !requestData.settings || !Array.isArray(requestData.settings)) {
-      return NextResponse.json({ error: '유효하지 않은 백업 파일입니다.' }, { status: 400 })
+    // 요청 데이터 파싱 + Zod 검증
+    const rawJson = await request.json().catch(() => null)
+    const parsed = RestoreBodySchema.safeParse(rawJson)
+    if (!parsed.success) {
+      return NextResponse.json(
+        {
+          error: '유효하지 않은 백업 파일입니다.',
+          issues: parsed.error.issues.map(i => ({ path: i.path, message: i.message })),
+        },
+        { status: 400 }
+      )
     }
-
-    const { settings: backupSettings, metadata } = requestData
+    const { settings: backupSettings, metadata } = parsed.data
 
     // 백업 파일 메타데이터 검증
-    if (metadata?.version !== '1.0') {
+    if (metadata.version !== '1.0') {
       return NextResponse.json({ error: '지원하지 않는 백업 파일 버전입니다.' }, { status: 400 })
     }
 
@@ -211,6 +238,11 @@ export async function POST(request: NextRequest) {
         console.error(`Setting restore exception:`, err)
         errorResults.push(`${setting.category || 'unknown'}.${setting.setting_key || 'unknown'}`)
       }
+    }
+
+    // 설정이 하나라도 복원되었다면 캐시 무효화 — 다음 조회부터 새 값이 반영되도록 한다.
+    if (restoreResults.length > 0) {
+      refreshSettingsCache()
     }
 
     // 보안 이벤트 로깅
