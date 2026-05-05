@@ -1,6 +1,9 @@
 import fs from 'fs'
 import path from 'path'
 import { cache } from 'react'
+import { createLogger } from '@/utils/logger'
+
+const log = createLogger('data')
 // Note: avoid React cache for artists to ensure tag-based revalidation works reliably
 
 // 메모리 효율을 위한 고급 캐시 관리
@@ -104,7 +107,7 @@ export function invalidateArtistsCache() {
     legacyArtistMapPromise = null
   } catch (e) {
     // 캐시 무효화 실패는 치명적이지 않음
-    console.warn('invalidateArtistsCache failed:', e)
+    log.warn('invalidateArtistsCache failed', e)
   }
 }
 // 중앙화된 타입 시스템에서 임포트
@@ -145,7 +148,7 @@ export const getArtistsFromDB = async (): Promise<Artist[]> => {
   try {
     // 환경 변수 체크 추가
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-      console.warn('Supabase environment variables not available, falling back to JSON')
+      log.warn('Supabase environment variables not available, falling back to JSON')
       const fallbackResult = await getArtistsFromJSON()
       artistCache?.set('artists', fallbackResult)
       return fallbackResult
@@ -186,7 +189,7 @@ export const getArtistsFromDB = async (): Promise<Artist[]> => {
           return applyProfileImageFallback(artist, fallback)
         })
       } catch (fallbackError) {
-        console.warn('Failed to apply legacy artist image fallback:', fallbackError)
+        log.warn('Failed to apply legacy artist image fallback:', fallbackError)
       }
 
       artistCache?.set('artists', result)
@@ -198,7 +201,7 @@ export const getArtistsFromDB = async (): Promise<Artist[]> => {
     artistCache?.set('artists', fallbackResult)
     return fallbackResult
   } catch (error) {
-    console.error('Error fetching artists from database:', error)
+    log.error('Error fetching artists from database:', error)
 
     // 오류 발생 시 JSON 파일에서 조회 (백업)
     const errorFallbackResult = await getArtistsFromJSON()
@@ -214,7 +217,7 @@ export const getArtistsFromJSON = async (): Promise<Artist[]> => {
     const fileContents = await fs.promises.readFile(filePath, 'utf8')
     return JSON.parse(fileContents)
   } catch (error) {
-    console.error('Error loading artists data from JSON:', error)
+    log.error('Error loading artists data from JSON:', error)
     return []
   }
 }
@@ -238,7 +241,7 @@ export const getProjects = cache(async (): Promise<Project[]> => {
     projectCache?.set('projects', result)
     return result
   } catch (error) {
-    console.error('Error loading projects data:', error)
+    log.error('Error loading projects data:', error)
     const emptyResult: Project[] = []
     projectCache?.set('projects', emptyResult)
     return emptyResult
@@ -251,13 +254,21 @@ export const getGlobalData = cache(async (): Promise<GlobalData> => {
     const fileContents = await fs.promises.readFile(filePath, 'utf8')
     return JSON.parse(fileContents)
   } catch (error) {
-    console.error('Error loading global data:', error)
+    log.error('Error loading global data:', error)
     return DEFAULT_GLOBAL_DATA
   }
 })
 
 // ISR 최적화를 위한 revalidate 설정
-export const revalidate = 86400 // 24시간 (전역 설정은 거의 변경되지 않음)
+//
+// 주의: 본 모듈에는 두 계층의 TTL이 의도적으로 다르게 설정되어 있다.
+//   - fetch level: 3600초 (1시간) — Supabase 호출 캐시. 아티스트 데이터가 자주 갱신되지 않으나,
+//     관리자 수정 시 revalidateTag('artists')로 즉시 무효화 가능하므로 1시간으로 두어
+//     stale 데이터 노출 시간을 짧게 유지한다.
+//   - page/module level: 86400초 (24시간) — 전역(Global) 설정/JSON은 사실상 변경이 거의 없으므로
+//     ISR로 길게 캐시한다. 여기 값과 fetch level 값이 다른 것은 각각이 다른 데이터에 적용되기
+//     때문이며, 의도된 차이다.
+export const revalidate = 86400
 
 // DatabaseArtist를 Artist 타입으로 변환하는 함수
 function convertDatabaseArtistToArtist(dbArtist: DatabaseArtist): Artist {
@@ -325,7 +336,7 @@ export const getArtistBySlugFromDB = async (slug: string): Promise<Artist | null
   try {
     // 환경 변수 체크 추가
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-      console.warn('Supabase environment variables not available, falling back to JSON')
+      log.warn('Supabase environment variables not available, falling back to JSON')
       const artists = await getArtistsFromJSON()
       return artists.find(artist => artist.slug === slug) || null
     }
@@ -363,7 +374,7 @@ export const getArtistBySlugFromDB = async (slug: string): Promise<Artist | null
         const fallback = legacyMap.get(convertedArtist.slug) || legacyMap.get(convertedArtist.id)
         convertedArtist = applyProfileImageFallback(convertedArtist, fallback)
       } catch (fallbackError) {
-        console.warn('Failed to apply legacy artist image fallback:', fallbackError)
+        log.warn('Failed to apply legacy artist image fallback:', fallbackError)
       }
 
       return convertedArtist
@@ -373,7 +384,7 @@ export const getArtistBySlugFromDB = async (slug: string): Promise<Artist | null
     const artists = await getArtistsFromJSON()
     return artists.find(artist => artist.slug === slug) || null
   } catch (error) {
-    console.error('Error fetching artist from database:', error)
+    log.error('Error fetching artist from database:', error)
 
     // 오류 발생 시 JSON 파일에서 조회 (백업)
     const artists = await getArtistsFromJSON()

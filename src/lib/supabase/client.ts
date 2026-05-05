@@ -1,4 +1,7 @@
 import { createBrowserClient } from '@supabase/ssr'
+import { createLogger } from '@/utils/logger'
+
+const log = createLogger('supabase/client')
 
 type SupabaseBrowserClient = ReturnType<typeof createBrowserClient>
 
@@ -64,11 +67,11 @@ export function getSupabaseClient() {
           process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
         )
       } catch (error) {
-        console.warn('Failed to create Supabase client:', error)
+        log.warn('Failed to create Supabase client', error)
         _supabaseClient = createDummyClient()
       }
     } else {
-      console.warn('Supabase environment variables not configured, using dummy client')
+      log.warn('Supabase environment variables not configured, using dummy client')
       _supabaseClient = createDummyClient()
     }
   }

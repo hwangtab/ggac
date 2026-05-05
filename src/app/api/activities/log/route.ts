@@ -1,4 +1,5 @@
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { createErrorResponse } from '@/utils/apiResponse'
 import { NextRequest, NextResponse } from 'next/server'
 import { withRateLimit } from '@/utils/rateLimit'
 import { sanitizeInput } from '@/utils/security'
@@ -17,14 +18,14 @@ export async function POST(request: NextRequest) {
       } = await supabase.auth.getUser()
 
       if (!user) {
-        return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+        return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
       }
 
       const body = (await request.json()) as ActivityLogRequest
       const { action_type, target_type = null, target_id = null, metadata = {} } = body
 
       if (!action_type) {
-        return NextResponse.json({ error: 'action_type이 필요합니다.' }, { status: 400 })
+        return createErrorResponse({ success: false, error: 'action_type이 필요합니다.' }, 400)
       }
 
       // 입력 검증 및 sanitization
@@ -59,7 +60,7 @@ export async function POST(request: NextRequest) {
 
       if (error) {
         console.error('활동 로그 저장 오류:', error)
-        return NextResponse.json({ error: '활동 로그 저장에 실패했습니다.' }, { status: 500 })
+        return createErrorResponse({ success: false, error: '활동 로그 저장에 실패했습니다.' }, 500)
       }
 
       return NextResponse.json({
@@ -69,7 +70,7 @@ export async function POST(request: NextRequest) {
       })
     } catch (error) {
       console.error('활동 로그 API 오류:', error)
-      return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
+      return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
     }
   })(request)
 }

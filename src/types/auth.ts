@@ -1,5 +1,14 @@
 import type { ProfilePhotoMetadata } from './media'
 
+/**
+ * 조합원 프로필 정보.
+ *
+ * 결제·은행 정보(monthly_fee, bank_name, account_number, account_holder),
+ * suspension_*(is_suspended/suspension_reason/suspension_until),
+ * profile_completeness_score, verification_status, engagement_score 필드는
+ * 모두 관리자 UI 또는 회원 가입/마이페이지에서 실제 사용 중임을 확인함
+ * (2026-05 audit). 추가 정리 필요 시 사용처 grep 후 제거.
+ */
 export interface MemberProfile {
   id: string
   display_name: string

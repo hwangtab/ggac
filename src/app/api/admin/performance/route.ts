@@ -8,7 +8,7 @@ export const runtime = 'nodejs'
 export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
-import { createOptionsResponse } from '@/utils/apiResponse'
+import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/server/adminAuth'
 import { getApiStats, getApiHealth, exportApiMetrics } from '@/utils/apiPerformanceMonitor'
@@ -21,11 +21,11 @@ import {
 
 export async function GET(request: NextRequest) {
   try {
-    const rateLimiter = applyRateLimit({
+    const rateLimiter = await applyRateLimit({
       ...RATE_LIMIT_CONFIGS.ADMIN_API,
       keyGenerator: createUserKeyGenerator('admin_performance'),
     })
-    const rateLimitResult = rateLimiter(request)
+    const rateLimitResult = await rateLimiter(request)
     if (!rateLimitResult.success && rateLimitResult.response) {
       return rateLimitResult.response
     }
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
 
       case 'endpoint': {
         if (!endpoint) {
-          return NextResponse.json({ error: 'endpoint 파라미터가 필요합니다.' }, { status: 400 })
+          return createErrorResponse({ success: false, error: 'endpoint 파라미터가 필요합니다.' }, 400)
         }
 
         const endpointStats = getApiStats(endpoint, timeWindow)
@@ -110,7 +110,7 @@ export async function GET(request: NextRequest) {
       }
 
       default:
-        return NextResponse.json({ error: '지원하지 않는 액션입니다.' }, { status: 400 })
+        return createErrorResponse({ success: false, error: '지원하지 않는 액션입니다.' }, 400)
     }
 
     return addRateLimitHeaders(
@@ -121,7 +121,7 @@ export async function GET(request: NextRequest) {
     )
   } catch (error) {
     console.error('API 성능 모니터링 API 오류:', error)
-    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
+    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
   }
 }
 

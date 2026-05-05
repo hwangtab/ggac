@@ -67,12 +67,12 @@ export default function ProfilePage() {
         throw new Error('로그인이 필요합니다.')
       }
 
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from('member_profiles')
         .update({
           ...updates,
           updated_at: new Date().toISOString(),
-        })
+        } as never)
         .eq('id', session.user.id)
 
       if (error) {

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createErrorResponse } from '@/utils/apiResponse'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { applyRateLimit, RATE_LIMIT_CONFIGS } from '@/utils/rateLimiter'
 
@@ -9,13 +10,13 @@ import { applyRateLimit, RATE_LIMIT_CONFIGS } from '@/utils/rateLimiter'
 export async function POST(request: NextRequest) {
   try {
     // Rate limiting 적용
-    const rateLimiter = applyRateLimit(RATE_LIMIT_CONFIGS.AUTH_API)
-    const rateLimitResult = rateLimiter(request)
+    const rateLimiter = await applyRateLimit(RATE_LIMIT_CONFIGS.AUTH_API)
+    const rateLimitResult = await rateLimiter(request)
 
     if (!rateLimitResult.success) {
       return (
         rateLimitResult.response ??
-        NextResponse.json({ error: '요청이 너무 많습니다.' }, { status: 429 })
+        createErrorResponse({ success: false, error: '요청이 너무 많습니다.' }, 429)
       )
     }
 
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser()
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return createErrorResponse({ success: false, error: 'Unauthorized' }, 401)
     }
 
     const body = await request.json()
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest) {
 
     if (sessionError) {
       console.error('Session management error:', sessionError)
-      return NextResponse.json({ error: 'Failed to manage session' }, { status: 500 })
+      return createErrorResponse({ success: false, error: 'Failed to manage session' }, 500)
     }
 
     return NextResponse.json({
@@ -65,6 +66,6 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error('Logout logging error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return createErrorResponse({ success: false, error: 'Internal server error' }, 500)
   }
 }

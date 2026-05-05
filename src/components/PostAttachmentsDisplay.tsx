@@ -1,9 +1,10 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import { FiDownload, FiImage, FiFile, FiVideo, FiMusic, FiExternalLink } from 'react-icons/fi'
 import type { PostAttachment } from '@/types'
+import { useDialogA11y } from '@/hooks/useDialogA11y'
 
 interface PostAttachmentsDisplayProps {
   postId: string
@@ -91,22 +92,21 @@ const PostAttachmentsDisplay: React.FC<PostAttachmentsDisplayProps> = ({
     setSelectedImage(null)
   }
 
-  // 라이트박스 키보드 이벤트
+  // 라이트박스 a11y: ESC, 포커스 트랩, 포커스 복원
+  const lightboxRef = useRef<HTMLDivElement>(null)
+  useDialogA11y({
+    containerRef: lightboxRef,
+    onClose: closeLightbox,
+    isOpen: Boolean(selectedImage),
+  })
+
+  // 라이트박스가 열린 동안 body 스크롤 잠금
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        closeLightbox()
-      }
-    }
-
-    if (selectedImage) {
-      document.addEventListener('keydown', handleKeyDown)
-      document.body.style.overflow = 'hidden'
-    }
-
+    if (!selectedImage) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
     return () => {
-      document.removeEventListener('keydown', handleKeyDown)
-      document.body.style.overflow = 'unset'
+      document.body.style.overflow = previousOverflow
     }
   }, [selectedImage])
 
@@ -218,8 +218,13 @@ const PostAttachmentsDisplay: React.FC<PostAttachmentsDisplayProps> = ({
       {/* 이미지 라이트박스 모달 */}
       {selectedImage && (
         <div
+          ref={lightboxRef}
           className="fixed inset-0 z-50 bg-black bg-opacity-90 flex items-center justify-center p-4"
           onClick={closeLightbox}
+          role="dialog"
+          aria-modal="true"
+          aria-label="첨부 이미지 확대 보기"
+          tabIndex={-1}
         >
           <div className="relative max-w-4xl max-h-full">
             {/* 닫기 버튼 */}

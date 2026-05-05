@@ -4,6 +4,7 @@ export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
+import { createErrorResponse } from '@/utils/apiResponse'
 import { requireAdmin } from '@/lib/server/adminAuth'
 import {
   applyRateLimit,
@@ -15,11 +16,11 @@ import {
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const resolvedParams = await context.params
   try {
-    const rateLimiter = applyRateLimit({
+    const rateLimiter = await applyRateLimit({
       ...RATE_LIMIT_CONFIGS.ADMIN_API,
       keyGenerator: createUserKeyGenerator('admin_posts_action'),
     })
-    const rateLimitResult = rateLimiter(request)
+    const rateLimitResult = await rateLimiter(request)
     if (!rateLimitResult.success && rateLimitResult.response) {
       return rateLimitResult.response
     }
@@ -33,7 +34,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const { action } = await request.json()
 
     if (!action || !['delete', 'restore', 'pin', 'unpin'].includes(action)) {
-      return NextResponse.json({ error: '잘못된 작업입니다.' }, { status: 400 })
+      return createErrorResponse({ success: false, error: '잘못된 작업입니다.' }, 400)
     }
 
     // Get the post to check if it exists
@@ -44,7 +45,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       .single()
 
     if (!post) {
-      return NextResponse.json({ error: '게시글을 찾을 수 없습니다.' }, { status: 404 })
+      return createErrorResponse({ success: false, error: '게시글을 찾을 수 없습니다.' }, 404)
     }
 
     // Prepare update data based on action
@@ -53,24 +54,24 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     switch (action) {
       case 'delete':
         if (post.is_deleted) {
-          return NextResponse.json({ error: '이미 삭제된 게시글입니다.' }, { status: 400 })
+          return createErrorResponse({ success: false, error: '이미 삭제된 게시글입니다.' }, 400)
         }
         updateData = { is_deleted: true }
         break
 
       case 'restore':
         if (!post.is_deleted) {
-          return NextResponse.json({ error: '삭제되지 않은 게시글입니다.' }, { status: 400 })
+          return createErrorResponse({ success: false, error: '삭제되지 않은 게시글입니다.' }, 400)
         }
         updateData = { is_deleted: false }
         break
 
       case 'pin':
         if (post.category !== '공지') {
-          return NextResponse.json({ error: '공지사항만 고정할 수 있습니다.' }, { status: 400 })
+          return createErrorResponse({ success: false, error: '공지사항만 고정할 수 있습니다.' }, 400)
         }
         if (post.is_pinned) {
-          return NextResponse.json({ error: '이미 고정된 게시글입니다.' }, { status: 400 })
+          return createErrorResponse({ success: false, error: '이미 고정된 게시글입니다.' }, 400)
         }
         updateData = {
           is_pinned: true,
@@ -80,7 +81,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
       case 'unpin':
         if (!post.is_pinned) {
-          return NextResponse.json({ error: '고정되지 않은 게시글입니다.' }, { status: 400 })
+          return createErrorResponse({ success: false, error: '고정되지 않은 게시글입니다.' }, 400)
         }
         updateData = {
           is_pinned: false,
@@ -99,7 +100,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
     if (updateError) {
       console.error('Admin posts [ID] - Post update error:', updateError)
-      return NextResponse.json({ error: '게시글 업데이트에 실패했습니다.' }, { status: 500 })
+      return createErrorResponse({ success: false, error: '게시글 업데이트에 실패했습니다.' }, 500)
     }
 
     const actionMessage =
@@ -124,6 +125,6 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     )
   } catch (error) {
     console.error('Admin posts [ID] - API error:', error)
-    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
+    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
   }
 }

@@ -328,6 +328,9 @@ export const sanitizeImageFile = async (file: File): Promise<File> => {
     const canvas = document.createElement('canvas')
     const ctx = canvas.getContext('2d')
     const img = new Image()
+    const objectUrl = URL.createObjectURL(file)
+
+    const cleanup = () => URL.revokeObjectURL(objectUrl)
 
     img.onload = () => {
       canvas.width = img.width
@@ -338,6 +341,7 @@ export const sanitizeImageFile = async (file: File): Promise<File> => {
 
         canvas.toBlob(
           blob => {
+            cleanup()
             if (blob) {
               const sanitizedFile = new File([blob], file.name, {
                 type: file.type,
@@ -352,11 +356,15 @@ export const sanitizeImageFile = async (file: File): Promise<File> => {
           0.95
         )
       } else {
+        cleanup()
         resolve(file)
       }
     }
 
-    img.onerror = () => resolve(file)
-    img.src = URL.createObjectURL(file)
+    img.onerror = () => {
+      cleanup()
+      resolve(file)
+    }
+    img.src = objectUrl
   })
 }

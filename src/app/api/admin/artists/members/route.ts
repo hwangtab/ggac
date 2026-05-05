@@ -14,11 +14,11 @@ export const runtime = 'nodejs'
 // GET: 아티스트 권한 관리 가능한 멤버 목록 조회
 export async function GET(request: NextRequest) {
   try {
-    const rateLimiter = applyRateLimit({
+    const rateLimiter = await applyRateLimit({
       ...RATE_LIMIT_CONFIGS.ADMIN_API,
       keyGenerator: createUserKeyGenerator('admin_artists_members'),
     })
-    const rateLimitResult = rateLimiter(request)
+    const rateLimitResult = await rateLimiter(request)
     if (!rateLimitResult.success && rateLimitResult.response) {
       return rateLimitResult.response
     }

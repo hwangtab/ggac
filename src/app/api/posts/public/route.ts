@@ -1,18 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createErrorResponse } from '@/utils/apiResponse'
 import { createClient } from '@supabase/supabase-js'
 import { stripHtmlTags } from '@/utils/textUtils'
 import { escapePostgrestValue } from '@/utils/validation'
+import { createLogger } from '@/utils/logger'
 
+const log = createLogger('api/posts/public')
+
+// 동적 라우트로 강제 — `force-dynamic` 가 ISR `revalidate` 와 충돌하므로 후자 제거.
+// 캐시 정책은 응답 헤더(Cache-Control / s-maxage / stale-while-revalidate)에서 직접 관리한다.
 export const runtime = 'edge'
 export const dynamic = 'force-dynamic'
 export const preferredRegion = 'icn1'
-export const revalidate = 60
 
 export async function GET(request: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!url || !anonKey) {
-    return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 })
+    return createErrorResponse({ success: false, error: 'Supabase not configured' }, 500)
   }
 
   const supabase = createClient(url, anonKey, {
@@ -86,8 +91,8 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await query
     if (error) {
-      console.error('[API] 게시글 조회 실패:', error)
-      return NextResponse.json({ error: '게시글을 불러오는 데 실패했습니다.' }, { status: 500 })
+      log.error('게시글 조회 실패', { message: error.message })
+      return createErrorResponse({ success: false, error: '게시글을 불러오는 데 실패했습니다.' }, 500)
     }
 
     let actual = data || []
@@ -168,7 +173,7 @@ export async function GET(request: NextRequest) {
       { status: 200, headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300' } }
     )
   } catch (e) {
-    console.error('[API] 게시글 조회 예외 발생:', e)
-    return NextResponse.json({ error: '요청 처리에 실패했습니다.' }, { status: 500 })
+    log.error('게시글 조회 예외 발생', e)
+    return createErrorResponse({ success: false, error: '요청 처리에 실패했습니다.' }, 500)
   }
 }

@@ -5,20 +5,19 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { createErrorResponse } from '@/utils/apiResponse'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator } from '@/utils/rateLimiter'
 import type { NotificationListResponse, CreateNotificationRequest, Notification } from '@/types'
 
-// Rate limiting 설정
-const rateLimiter = applyRateLimit({
-  ...RATE_LIMIT_CONFIGS.GENERAL_API,
-  keyGenerator: createUserKeyGenerator('notifications'),
-})
-
 export async function GET(request: NextRequest) {
   try {
     // Rate limiting 적용
-    const rateLimitResult = rateLimiter(request)
+    const rateLimiter = await applyRateLimit({
+      ...RATE_LIMIT_CONFIGS.GENERAL_API,
+      keyGenerator: createUserKeyGenerator('notifications'),
+    })
+    const rateLimitResult = await rateLimiter(request)
     if (!rateLimitResult.success) {
       return rateLimitResult.response
     }
@@ -31,7 +30,7 @@ export async function GET(request: NextRequest) {
       error: authError,
     } = await supabase.auth.getUser()
     if (authError || !user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
     }
 
     // URL 파라미터 추출 및 검증
@@ -43,7 +42,7 @@ export async function GET(request: NextRequest) {
 
     // 입력 검증
     if (type && (typeof type !== 'string' || type.length > 50)) {
-      return NextResponse.json({ error: '잘못된 타입 파라미터입니다.' }, { status: 400 })
+      return createErrorResponse({ success: false, error: '잘못된 타입 파라미터입니다.' }, 400)
     }
 
     const offset = (page - 1) * limit
@@ -71,7 +70,7 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('알림 조회 오류:', error)
-      return NextResponse.json({ error: '알림을 불러올 수 없습니다.' }, { status: 500 })
+      return createErrorResponse({ success: false, error: '알림을 불러올 수 없습니다.' }, 500)
     }
 
     // 미읽은 알림 수 조회
@@ -100,19 +99,19 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(response)
   } catch (error) {
     console.error('알림 API 오류:', error)
-    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
+    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
     // Rate limiting 적용 (더 엄격한 제한)
-    const adminRateLimiter = applyRateLimit({
+    const adminRateLimiter = await applyRateLimit({
       ...RATE_LIMIT_CONFIGS.ADMIN_API,
       keyGenerator: createUserKeyGenerator('create_notification'),
     })
 
-    const rateLimitResult = adminRateLimiter(request)
+    const rateLimitResult = await adminRateLimiter(request)
     if (!rateLimitResult.success) {
       return rateLimitResult.response
     }
@@ -125,7 +124,7 @@ export async function POST(request: NextRequest) {
       error: authError,
     } = await supabase.auth.getUser()
     if (authError || !user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
     }
 
     const { data: profile } = await supabase
@@ -135,7 +134,7 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (!profile?.is_admin || profile.registration_status !== 'approved' || !profile.is_active) {
-      return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 })
+      return createErrorResponse({ success: false, error: '관리자 권한이 필요합니다.' }, 403)
     }
 
     // 요청 본문 파싱 및 검증
@@ -143,33 +142,33 @@ export async function POST(request: NextRequest) {
 
     // 입력 데이터 검증
     if (!body.user_id || typeof body.user_id !== 'string' || body.user_id.length > 100) {
-      return NextResponse.json({ error: '사용자 ID가 유효하지 않습니다.' }, { status: 400 })
+      return createErrorResponse({ success: false, error: '사용자 ID가 유효하지 않습니다.' }, 400)
     }
 
     if (!body.type || typeof body.type !== 'string' || body.type.length > 50) {
-      return NextResponse.json({ error: '알림 유형이 유효하지 않습니다.' }, { status: 400 })
+      return createErrorResponse({ success: false, error: '알림 유형이 유효하지 않습니다.' }, 400)
     }
 
     if (!body.title || typeof body.title !== 'string' || body.title.length > 200) {
-      return NextResponse.json({ error: '제목이 유효하지 않습니다.' }, { status: 400 })
+      return createErrorResponse({ success: false, error: '제목이 유효하지 않습니다.' }, 400)
     }
 
     if (!body.message || typeof body.message !== 'string' || body.message.length > 1000) {
-      return NextResponse.json({ error: '메시지가 유효하지 않습니다.' }, { status: 400 })
+      return createErrorResponse({ success: false, error: '메시지가 유효하지 않습니다.' }, 400)
     }
 
     if (
       body.related_post_id &&
       (typeof body.related_post_id !== 'string' || body.related_post_id.length > 100)
     ) {
-      return NextResponse.json({ error: '관련 게시글 ID가 유효하지 않습니다.' }, { status: 400 })
+      return createErrorResponse({ success: false, error: '관련 게시글 ID가 유효하지 않습니다.' }, 400)
     }
 
     if (
       body.related_user_id &&
       (typeof body.related_user_id !== 'string' || body.related_user_id.length > 100)
     ) {
-      return NextResponse.json({ error: '관련 사용자 ID가 유효하지 않습니다.' }, { status: 400 })
+      return createErrorResponse({ success: false, error: '관련 사용자 ID가 유효하지 않습니다.' }, 400)
     }
 
     // 알림 생성
@@ -186,7 +185,7 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error('알림 생성 오류:', error)
-      return NextResponse.json({ error: '알림을 생성할 수 없습니다.' }, { status: 500 })
+      return createErrorResponse({ success: false, error: '알림을 생성할 수 없습니다.' }, 500)
     }
 
     return NextResponse.json({
@@ -196,6 +195,6 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error('알림 생성 API 오류:', error)
-    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
+    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
   }
 }

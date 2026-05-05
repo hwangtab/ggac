@@ -15,11 +15,11 @@ export const runtime = 'nodejs'
 // GET: 아티스트 목록 및 배정 정보 조회
 export async function GET(request: NextRequest) {
   try {
-    const rateLimiter = applyRateLimit({
+    const rateLimiter = await applyRateLimit({
       ...RATE_LIMIT_CONFIGS.ADMIN_API,
       keyGenerator: createUserKeyGenerator('admin_artists'),
     })
-    const rateLimitResult = rateLimiter(request)
+    const rateLimitResult = await rateLimiter(request)
     if (!rateLimitResult.success && rateLimitResult.response) {
       return rateLimitResult.response
     }

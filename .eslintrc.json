@@ -59,7 +59,9 @@
     "jsx-a11y/no-autofocus": "off",
     "jsx-a11y/no-noninteractive-element-interactions": "off",
     // 일반 JavaScript 규칙
-    "no-console": "off",
+    // logger.ts 통합을 위해 신규 코드는 console 직접 사용을 피하라.
+    // warn/error는 fallback 호환을 위해 일시 허용. 점진적으로 logger로 이전한다.
+    "no-console": ["warn", { "allow": ["warn", "error"] }],
     "no-debugger": "error",
     "no-alert": "off",
     "no-unused-vars": "off", // TypeScript가 처리

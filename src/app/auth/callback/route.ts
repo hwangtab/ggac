@@ -1,5 +1,10 @@
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { createLogger } from '@/utils/logger'
+
+const log = createLogger('auth/callback')
+
+const maskId = (id?: string | null): string => (id ? `${id.slice(0, 6)}…` : '<unknown>')
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url)
@@ -57,9 +62,9 @@ export async function GET(request: NextRequest) {
             p_session_id: sessionToken,
           })
 
-          console.log(`로그인 활동 기록됨: 사용자 ${user.id}`)
+          log.info('로그인 활동 기록됨', { userId: maskId(user.id) })
         } catch (activityError) {
-          console.error('Login activity logging failed:', activityError)
+          log.error('Login activity logging failed', activityError)
         }
 
         const { data: profile } = await supabase
@@ -70,7 +75,7 @@ export async function GET(request: NextRequest) {
 
         if (!profile) {
           // 트리거가 실패한 경우 대비 - 프로필 생성 시도
-          console.log('Profile not found for user:', user.id, 'attempting to create...')
+          log.warn('Profile not found, attempting to create', { userId: maskId(user.id) })
 
           try {
             const { error: createError } = await supabase.from('member_profiles').insert({
@@ -91,13 +96,13 @@ export async function GET(request: NextRequest) {
             })
 
             if (createError) {
-              console.error('Profile creation failed:', createError)
+              log.error('Profile creation failed', createError)
               // 프로필 생성에 실패해도 승인 대기 페이지로 이동 (관리자가 수동으로 처리 가능)
             } else {
-              console.log('Profile created successfully for user:', user.id)
+              log.info('Profile created successfully', { userId: maskId(user.id) })
             }
           } catch (insertError) {
-            console.error('Profile insertion error:', insertError)
+            log.error('Profile insertion error', insertError)
           }
 
           // 승인 대기 페이지로 바로 이동
@@ -118,7 +123,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.redirect(`${requestUrl.origin}/register/rejected`)
       }
     } catch (error) {
-      console.error('Auth callback error:', error)
+      log.error('Auth callback error', error)
     }
   }
 

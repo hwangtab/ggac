@@ -15,8 +15,11 @@ import sharp from 'sharp'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
 import type { MediaFile } from '@/types'
-import { createSuccessResponse, createErrorResponse } from '@/utils/apiResponse'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import distLimiter from '@/utils/distributedRateLimiter'
+import { createLogger } from '@/utils/logger'
+
+const log = createLogger('api/media/upload')
 
 // Service Role 클라이언트는 Storage 작업에만 사용
 function getSupabaseAdmin() {
@@ -196,7 +199,7 @@ async function extractFileMetadata(file: File, buffer?: Buffer): Promise<Record<
         metadata.height = imageMetadata.height
       }
     } catch (error) {
-      console.warn('이미지 크기 추출 실패:', error)
+      log.warn('이미지 크기 추출 실패', error)
       // 크기 추출 실패해도 업로드는 계속 진행
     }
   }
@@ -302,7 +305,7 @@ async function uploadImageWithVariants(
       contentType: 'image/webp',
     }
   } else {
-    console.warn('WebP 변환 업로드 실패:', webpUploadError)
+    log.warn('WebP 변환 업로드 실패', webpUploadError)
   }
 
   // JPG 폴백 생성 (원본이 이미 JPEG라면 재사용)
@@ -338,7 +341,7 @@ async function uploadImageWithVariants(
       contentType: 'image/jpeg',
     }
   } else {
-    console.warn('JPEG 폴백 업로드 실패:', jpegUploadError)
+    log.warn('JPEG 폴백 업로드 실패', jpegUploadError)
   }
 
   return result
@@ -368,7 +371,7 @@ export async function POST(request: NextRequest) {
     } = await supabase.auth.getUser()
 
     if (authError || !user) {
-      return createErrorResponse('로그인이 필요합니다.', 401)
+      return ApiError.unauthorized('로그인이 필요합니다.').toNextResponse()
     }
 
     // 사용자 상태 확인 (승인된 멤버만)
@@ -379,11 +382,11 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (profileError || !profile) {
-      return createErrorResponse('사용자 정보를 찾을 수 없습니다.', 404)
+      return ApiError.notFound('사용자 정보를 찾을 수 없습니다.').toNextResponse()
     }
 
     if (profile.registration_status !== 'approved' || !profile.is_active) {
-      return createErrorResponse('승인된 활성 멤버만 파일을 업로드할 수 있습니다.', 403)
+      return ApiError.forbidden('승인된 활성 멤버만 파일을 업로드할 수 있습니다.').toNextResponse()
     }
 
     // FormData 파싱
@@ -393,13 +396,13 @@ export async function POST(request: NextRequest) {
     const metadataStr = formData.get('metadata') as string
 
     if (!file) {
-      return createErrorResponse('파일이 제공되지 않았습니다.', 400)
+      return ApiError.badRequest('파일이 제공되지 않았습니다.').toNextResponse()
     }
 
     // 파일 유효성 검사
     const validation = validateFile(file, bucket)
     if (!validation.valid) {
-      return createErrorResponse(validation.error!, 400)
+      return ApiError.badRequest(validation.error!).toNextResponse()
     }
 
     // 사용자 제공 메타데이터 파싱
@@ -408,7 +411,7 @@ export async function POST(request: NextRequest) {
       try {
         userMetadata = JSON.parse(metadataStr)
       } catch (error) {
-        console.error('Invalid metadata:', error)
+        log.error('Invalid metadata', error)
       }
     }
 
@@ -420,15 +423,19 @@ export async function POST(request: NextRequest) {
     try {
       supabaseAdmin = getSupabaseAdmin()
     } catch (error) {
-      console.error('[UPLOAD API] Supabase Admin 클라이언트 생성 오류:', error)
-      return createErrorResponse('Storage 서비스를 사용할 수 없습니다. 관리자에게 문의하세요.', 503)
+      log.error('Supabase Admin 클라이언트 생성 오류', error)
+      return ApiError.serviceUnavailable(
+        'Storage 서비스를 사용할 수 없습니다. 관리자에게 문의하세요.'
+      ).toNextResponse()
     }
 
     const fileBuffer = Buffer.from(await file.arrayBuffer())
 
     // 매직 바이트 검증 (파일 내용이 MIME 타입과 일치하는지 확인)
     if (!checkMagicBytes(fileBuffer, file.type)) {
-      return createErrorResponse('파일 내용이 선언된 파일 형식과 일치하지 않습니다.', 400)
+      return ApiError.badRequest(
+        '파일 내용이 선언된 파일 형식과 일치하지 않습니다.'
+      ).toNextResponse()
     }
 
     let uploadResult: StorageUploadResult
@@ -440,19 +447,18 @@ export async function POST(request: NextRequest) {
         fileBuffer,
         file.type
       )
-    } catch (error: any) {
-      console.error('Storage upload error:', error)
-      const message = typeof error?.message === 'string' ? error.message : ''
+    } catch (error: unknown) {
+      log.error('Storage upload error', error)
+      const message = error instanceof Error ? error.message : ''
       if (message.includes('bucket') || message.includes('not found')) {
-        return createErrorResponse(
-          'Storage가 설정되지 않았습니다. 관리자가 Supabase Storage bucket을 생성해야 합니다.',
-          503
-        )
+        return ApiError.serviceUnavailable(
+          'Storage가 설정되지 않았습니다. 관리자가 Supabase Storage bucket을 생성해야 합니다.'
+        ).toNextResponse()
       }
-      return createErrorResponse('파일 업로드에 실패했습니다.', 500)
+      return ApiError.internalServerError('파일 업로드에 실패했습니다.').toNextResponse()
     }
 
-    console.log('[UPLOAD API] Storage 업로드 성공:', uploadResult.original.path)
+    log.debug('Storage 업로드 성공', { path: uploadResult.original.path })
 
     const variantUrls = {
       original: uploadResult.original.url,
@@ -510,9 +516,8 @@ export async function POST(request: NextRequest) {
     }
 
     // 성공 응답
-    const res = createSuccessResponse({
+    const res = ApiSuccess.created({
       file: mediaFile,
-      // 호환성을 위한 추가 필드들
       id: mediaFile.id,
       name: mediaFile.name,
       path: mediaFile.path,
@@ -520,7 +525,7 @@ export async function POST(request: NextRequest) {
       metadata: finalMetadata,
       variants: mediaFile.variants,
       variant_urls: mediaFile.variant_urls,
-    })
+    }).toNextResponse()
     return distLimiter.addRateLimitHeaders(
       res,
       distLimiter.CONFIGS.FILE_UPLOAD.maxRequests,
@@ -528,8 +533,8 @@ export async function POST(request: NextRequest) {
       limit.resetTime
     )
   } catch (error) {
-    console.error('Media upload error:', error)
-    return createErrorResponse('서버 오류가 발생했습니다.', 500)
+    log.error('Media upload error', error)
+    return ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse()
   }
 }
 
@@ -556,7 +561,7 @@ export async function GET(request: NextRequest) {
     } = await supabase.auth.getUser()
 
     if (authError || !user) {
-      return createErrorResponse('로그인이 필요합니다.', 401)
+      return ApiError.unauthorized('로그인이 필요합니다.').toNextResponse()
     }
 
     const { searchParams } = new URL(request.url)
@@ -569,8 +574,8 @@ export async function GET(request: NextRequest) {
     try {
       supabaseAdmin = getSupabaseAdmin()
     } catch (error) {
-      console.error('[LIST API] Supabase Admin 클라이언트 생성 오류:', error)
-      return createErrorResponse('Storage 서비스를 사용할 수 없습니다.', 503)
+      log.error('Supabase Admin 클라이언트 생성 오류 (LIST)', error)
+      return ApiError.serviceUnavailable('Storage 서비스를 사용할 수 없습니다.').toNextResponse()
     }
 
     // Storage에서 사용자 파일 목록 조회
@@ -586,8 +591,8 @@ export async function GET(request: NextRequest) {
       })
 
     if (listError) {
-      console.error('Storage list error:', listError)
-      return createErrorResponse('파일 목록 조회에 실패했습니다.', 500)
+      log.error('Storage list error', listError)
+      return ApiError.internalServerError('파일 목록 조회에 실패했습니다.').toNextResponse()
     }
 
     const allFileNames = new Set((files || []).map(file => file.name))
@@ -652,11 +657,11 @@ export async function GET(request: NextRequest) {
         }
       })
 
-    const resList = createSuccessResponse({
+    const resList = ApiSuccess.ok({
       files: mediaFiles,
       total: mediaFiles.length,
       has_more: mediaFiles.length === limit,
-    })
+    }).toNextResponse()
     return distLimiter.addRateLimitHeaders(
       resList,
       distLimiter.CONFIGS.SEARCH_API.maxRequests,
@@ -664,7 +669,7 @@ export async function GET(request: NextRequest) {
       gLimit.resetTime
     )
   } catch (error) {
-    console.error('Media list error:', error)
-    return createErrorResponse('서버 오류가 발생했습니다.', 500)
+    log.error('Media list error', error)
+    return ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse()
   }
 }

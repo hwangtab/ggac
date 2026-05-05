@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createErrorResponse } from '@/utils/apiResponse'
 import { withRateLimit } from '@/utils/rateLimit'
 import { requireAdmin } from '@/lib/server/adminAuth'
 
@@ -66,7 +67,7 @@ export async function GET(request: NextRequest) {
 
       if (error) {
         console.error('활동 조회 오류:', error)
-        return NextResponse.json({ error: '활동 데이터 조회에 실패했습니다.' }, { status: 500 })
+        return createErrorResponse({ success: false, error: '활동 데이터 조회에 실패했습니다.' }, 500)
       }
 
       const totalCount = count || 0
@@ -98,7 +99,7 @@ export async function GET(request: NextRequest) {
       })
     } catch (error) {
       console.error('사용자 활동 API 오류:', error)
-      return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
+      return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
     }
   })(request)
 }

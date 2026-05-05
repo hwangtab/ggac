@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { FiX } from 'react-icons/fi'
 import type { PostAttachment } from '@/types'
 
@@ -10,10 +10,41 @@ interface ImageModalProps {
 }
 
 export const ImageModal: React.FC<ImageModalProps> = ({ attachment, onClose }) => {
-  // Escape 키로 닫기 + 포커스 트랩
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
+  const [previousFocus, setPreviousFocus] = useState<HTMLElement | null>(null)
+
+  useEffect(() => {
+    setPreviousFocus(document.activeElement as HTMLElement)
+    closeButtonRef.current?.focus()
+    return () => {
+      if (previousFocus) previousFocus.focus()
+    }
+  }, [])
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
+
+      if (e.key === 'Tab' && dialogRef.current) {
+        const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        )
+        const first = focusable[0]
+        const last = focusable[focusable.length - 1]
+        if (focusable.length === 0) return
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            e.preventDefault()
+            last?.focus()
+          }
+        } else {
+          if (document.activeElement === last) {
+            e.preventDefault()
+            first?.focus()
+          }
+        }
+      }
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
@@ -21,16 +52,21 @@ export const ImageModal: React.FC<ImageModalProps> = ({ attachment, onClose }) =
 
   return (
     <div
+      ref={dialogRef}
       className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4"
       role="dialog"
       aria-modal="true"
-      aria-label={attachment.alt_text || attachment.file_name}
+      aria-labelledby="image-modal-title"
       onClick={e => {
         if (e.target === e.currentTarget) onClose()
       }}
     >
       <div className="relative max-w-4xl max-h-full">
+        <h3 id="image-modal-title" className="sr-only">
+          {attachment.alt_text || attachment.file_name}
+        </h3>
         <button
+          ref={closeButtonRef}
           onClick={onClose}
           className="absolute top-4 right-4 text-white hover:text-gray-300 z-10"
           aria-label="닫기"

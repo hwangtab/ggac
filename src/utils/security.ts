@@ -173,65 +173,7 @@ export const sanitizeUrl = (url: string): string => {
   }
 }
 
-/**
- * JSON-LD 스키마 데이터 검증 및 정제
- * 구조화된 데이터의 XSS 위험 제거
- */
-export const sanitizeJsonLd = (data: any): any => {
-  if (!data || typeof data !== 'object') {
-    return null
-  }
-
-  const sanitized: any = {}
-
-  // 필수 스키마 속성 검증
-  if (data['@context']) {
-    sanitized['@context'] = sanitizeHtml(String(data['@context']))
-  }
-
-  if (data['@type']) {
-    sanitized['@type'] = sanitizeHtml(String(data['@type']))
-  }
-
-  // 안전한 문자열 속성들
-  const safeStringProps = [
-    '@id',
-    'name',
-    'description',
-    'alternateName',
-    'url',
-    'sameAs',
-    'jobTitle',
-    'worksFor',
-  ]
-
-  safeStringProps.forEach(prop => {
-    if (data[prop]) {
-      if (prop === 'url' || prop === 'sameAs') {
-        // URL 속성은 URL 검증 적용
-        if (Array.isArray(data[prop])) {
-          sanitized[prop] = data[prop].map((url: string) => sanitizeUrl(url))
-        } else {
-          sanitized[prop] = sanitizeUrl(String(data[prop]))
-        }
-      } else {
-        // 일반 문자열 속성은 HTML 이스케이프
-        sanitized[prop] = sanitizeHtml(String(data[prop]))
-      }
-    }
-  })
-
-  // 이미지 데이터 검증
-  if (data.image) {
-    if (typeof data.image === 'string') {
-      sanitized.image = sanitizeUrl(data.image)
-    } else if (Array.isArray(data.image)) {
-      sanitized.image = data.image.map((img: string) => sanitizeUrl(img))
-    }
-  }
-
-  return sanitized
-}
+// JSON-LD sanitize는 src/utils/sanitize.ts의 sanitizeJsonLd로 통합되었습니다.
 
 /**
  * 플랫폼명 검증 및 정제

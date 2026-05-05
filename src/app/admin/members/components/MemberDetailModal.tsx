@@ -15,7 +15,8 @@ import {
   FiPlay,
   FiAlertCircle,
 } from 'react-icons/fi'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useDialogA11y } from '@/hooks/useDialogA11y'
 
 interface Member {
   id: string
@@ -71,6 +72,18 @@ export default function MemberDetailModal({
   isLoading,
 }: MemberDetailModalProps) {
   const [confirmAction, setConfirmAction] = useState<{ action: string; title: string } | null>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
+
+  useDialogA11y({ containerRef: dialogRef, onClose, isOpen })
+
+  useEffect(() => {
+    if (!isOpen) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [isOpen])
 
   if (!isOpen) return null
 
@@ -155,14 +168,32 @@ export default function MemberDetailModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4 z-50 overflow-y-auto">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-xs sm:max-w-sm md:max-w-lg lg:max-w-2xl xl:max-w-4xl min-h-0 max-h-full my-4 sm:my-8 overflow-hidden flex flex-col">
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4 z-50 overflow-y-auto"
+      role="presentation"
+      onClick={e => {
+        if (e.target === e.currentTarget) onClose()
+      }}
+    >
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="member-detail-modal-title"
+        tabIndex={-1}
+        className="bg-white rounded-lg shadow-xl w-full max-w-xs sm:max-w-sm md:max-w-lg lg:max-w-2xl xl:max-w-4xl min-h-0 max-h-full my-4 sm:my-8 overflow-hidden flex flex-col"
+      >
         {/* 헤더 */}
         <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200 flex-shrink-0">
-          <h2 className="text-lg sm:text-xl font-semibold text-gray-900 truncate">
+          <h2
+            id="member-detail-modal-title"
+            className="text-lg sm:text-xl font-semibold text-gray-900 truncate"
+          >
             회원 상세 정보
           </h2>
           <button
+            type="button"
+            aria-label="모달 닫기"
             onClick={onClose}
             className="p-2 hover:bg-gray-100 rounded-md transition-colors flex-shrink-0 ml-2"
           >

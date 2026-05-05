@@ -1,4 +1,5 @@
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { createErrorResponse } from '@/utils/apiResponse'
 import { NextRequest, NextResponse } from 'next/server'
 import { withRateLimit } from '@/utils/rateLimit'
 import { sanitizeInput } from '@/utils/security'
@@ -17,13 +18,13 @@ export async function POST(request: NextRequest) {
       } = await supabase.auth.getUser()
 
       if (!user) {
-        return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+        return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
       }
 
       const { logs } = (await request.json()) as { logs: ActivityLogRequest[] }
 
       if (!Array.isArray(logs) || logs.length === 0) {
-        return NextResponse.json({ error: '유효한 로그 배열이 필요합니다.' }, { status: 400 })
+        return createErrorResponse({ success: false, error: '유효한 로그 배열이 필요합니다.' }, 400)
       }
 
       if (logs.length > 100) {
@@ -102,7 +103,7 @@ export async function POST(request: NextRequest) {
       })
     } catch (error) {
       console.error('배치 로그 API 오류:', error)
-      return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
+      return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
     }
   })(request)
 }

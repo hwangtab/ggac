@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createErrorResponse } from '@/utils/apiResponse'
 import { requireAdmin } from '@/lib/server/adminAuth'
 import {
   applyRateLimit,
@@ -12,11 +13,11 @@ export const runtime = 'nodejs'
 
 export async function GET(request: NextRequest) {
   try {
-    const rateLimiter = applyRateLimit({
+    const rateLimiter = await applyRateLimit({
       ...RATE_LIMIT_CONFIGS.ADMIN_API,
       keyGenerator: createUserKeyGenerator('admin_posts_stats'),
     })
-    const rateLimitResult = rateLimiter(request)
+    const rateLimitResult = await rateLimiter(request)
     if (!rateLimitResult.success && rateLimitResult.response) {
       return rateLimitResult.response
     }
@@ -76,6 +77,6 @@ export async function GET(request: NextRequest) {
     )
   } catch (error) {
     console.error('Admin posts stats API error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return createErrorResponse({ success: false, error: 'Internal server error' }, 500)
   }
 }

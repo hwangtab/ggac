@@ -1,6 +1,15 @@
 /**
  * API 응답 헬퍼 유틸리티
  * 일관된 헤더와 응답 형식을 보장합니다.
+ *
+ * ⚠️ 신규 API 라우트는 이 모듈의 함수를 직접 호출하지 말고
+ * `@/utils/apiWrapper`의 `ApiSuccess` / `ApiError` 클래스를 사용하세요.
+ * 이 함수들은 wrapper 내부 구현/하위호환을 위해 유지됩니다.
+ *
+ * - createSuccessResponse({ url }) → 본문은 { success: true, url } (spread)
+ * - ApiSuccess.ok({ url }).toNextResponse() → 본문은 { success: true, data: { url }, meta }
+ *
+ * 두 형식은 다르므로 라우트별로 일관성을 유지하세요.
  */
 
 import { NextResponse } from 'next/server'
@@ -36,13 +45,18 @@ export function createSuccessResponse<T = unknown>(
 
 /**
  * 오류 응답 생성
+ *
+ * 메시지 문자열 또는 이미 구성된 에러 응답 본문을 받을 수 있다.
+ * 객체 형태로 전달하면 `meta`/`code` 같은 부가 필드가 보존된다.
  */
 export function createErrorResponse(
-  error: string,
+  errorOrBody: string | { success: false; error: string; [key: string]: unknown },
   status: number = 400,
   additionalHeaders: Record<string, string> = {}
 ) {
-  return createJsonResponse({ success: false, error }, status, additionalHeaders)
+  const body =
+    typeof errorOrBody === 'string' ? { success: false as const, error: errorOrBody } : errorOrBody
+  return createJsonResponse(body, status, additionalHeaders)
 }
 
 /**

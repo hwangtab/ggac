@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createErrorResponse } from '@/utils/apiResponse'
 import { fetchLinkPreview } from '@/utils/linkPreview'
 import distLimiter from '@/utils/distributedRateLimiter'
 import { createSupabaseServer } from '@/lib/supabase/server'
@@ -10,7 +11,7 @@ export async function GET(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) {
-    return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 })
+    return createErrorResponse({ success: false, error: '로그인이 필요합니다.' }, 401)
   }
 
   // 분산 레이트리밋 (Upstash 있으면 Redis, 없으면 메모리)
@@ -26,24 +27,24 @@ export async function GET(request: NextRequest) {
   const url = searchParams.get('url')
 
   if (!url) {
-    return NextResponse.json({ error: 'URL parameter is required' }, { status: 400 })
+    return createErrorResponse({ success: false, error: 'URL parameter is required' }, 400)
   }
 
   try {
     // 프로토콜 및 형식 1차 검증 (세부 SSRF 검사는 유틸 내부에서 수행)
     const parsed = new URL(url)
     if (!['http:', 'https:'].includes(parsed.protocol)) {
-      return NextResponse.json({ error: 'Only http/https are allowed' }, { status: 400 })
+      return createErrorResponse({ success: false, error: 'Only http/https are allowed' }, 400)
     }
   } catch {
-    return NextResponse.json({ error: 'Invalid URL format' }, { status: 400 })
+    return createErrorResponse({ success: false, error: 'Invalid URL format' }, 400)
   }
 
   try {
     const preview = await fetchLinkPreview(url)
 
     if (!preview) {
-      return NextResponse.json({ error: 'Failed to fetch link preview' }, { status: 404 })
+      return createErrorResponse({ success: false, error: 'Failed to fetch link preview' }, 404)
     }
 
     const res = NextResponse.json(preview)
@@ -55,7 +56,7 @@ export async function GET(request: NextRequest) {
     )
   } catch (error) {
     console.error('Link preview API error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return createErrorResponse({ success: false, error: 'Internal server error' }, 500)
   }
 }
 

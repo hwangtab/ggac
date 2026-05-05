@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import Image from 'next/image'
 import { FiX, FiRotateCcw, FiCheck, FiMove, FiMaximize2 } from 'react-icons/fi'
 
@@ -41,6 +41,37 @@ const ImageCropModal: React.FC<ImageCropModalProps> = ({
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 })
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const imageRef = useRef<HTMLImageElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (!isOpen) return
+    closeButtonRef.current?.focus()
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+      if (e.key === 'Tab' && dialogRef.current) {
+        const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        )
+        if (focusable.length === 0) return
+        const first = focusable[0]
+        const last = focusable[focusable.length - 1]
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            e.preventDefault()
+            last?.focus()
+          }
+        } else {
+          if (document.activeElement === last) {
+            e.preventDefault()
+            first?.focus()
+          }
+        }
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, onClose])
 
   // 이미지 로드 완료 시 초기 크롭 영역 설정
   const handleImageLoad = useCallback(
@@ -187,14 +218,24 @@ const ImageCropModal: React.FC<ImageCropModalProps> = ({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+    <div
+      ref={dialogRef}
+      className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="image-crop-modal-title"
+    >
       <div className="bg-white rounded-lg shadow-xl max-w-4xl max-h-[90vh] w-full mx-4 flex flex-col">
         {/* 헤더 */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900">이미지 크롭 - {imageName}</h3>
+          <h3 id="image-crop-modal-title" className="text-lg font-semibold text-gray-900">
+            이미지 크롭 - {imageName}
+          </h3>
           <button
+            ref={closeButtonRef}
             onClick={onClose}
             className="p-2 text-gray-400 hover:text-gray-600 rounded-md transition-colors"
+            aria-label="이미지 크롭 모달 닫기"
           >
             <FiX className="w-5 h-5" />
           </button>

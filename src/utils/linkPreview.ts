@@ -7,12 +7,20 @@ import type { LinkPreview, TicketingInfo } from '@/types'
 export type { LinkPreview, TicketingInfo } from '@/types'
 
 // 간단한 런타임 캐시 (서버 인스턴스 생명주기 내)
+//
+// ⚠️ TTL 불일치 주의:
+//   - 인메모리 캐시 (이 파일): 1시간
+//   - 영속 캐시 (linkPreviewCache.ts, Supabase): 6시간 (21600초)
+//
+// 메모리 캐시는 짧게 가져가서 서버 재시작/재배포 시점에 자연 무효화되도록 하고,
+// DB 캐시는 외부 사이트의 메타데이터가 자주 변하지 않으므로 더 길게 둔다. 둘이 일치
+// 해야 한다는 가정에 의존하지 말 것 — 무효화 정책이 다른 두 단계 캐시이다.
 interface CacheEntry<T> {
   data: T
   ts: number
 }
 const previewCache = new Map<string, CacheEntry<LinkPreview>>()
-const PREVIEW_TTL_MS = 60 * 60 * 1000 // 1시간
+const PREVIEW_TTL_MS = 60 * 60 * 1000 // 1시간 (영속 캐시는 6시간 — 위 주석 참고)
 
 function getCache(url: string): LinkPreview | null {
   const key = url.trim()

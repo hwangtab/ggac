@@ -115,21 +115,21 @@ export const useFileUpload = ({
         if (!response.ok) {
           const result = await response.json().catch(() => ({ error: '응답 파싱 실패' }))
           const errorMsg = result.error || `${file.name} 업로드에 실패했습니다.`
-          console.error(`[Upload] ${file.name} 실패:`, errorMsg)
-          throw new Error(errorMsg)
+          throw new Error(`${file.name}: ${errorMsg}`)
         }
 
-        const result = await response.json()
-        return result
+        return response.json()
       })
 
-      try {
-        await Promise.all(uploadPromises)
-      } catch (error) {
-        console.error('[Upload] 첨부파일 업로드 실패:', error)
-        const errorMessage = error instanceof Error ? error.message : '알 수 없는 오류'
-        alert(`첨부파일 업로드 중 오류가 발생했습니다:\n${errorMessage}`)
-        throw error
+      const results = await Promise.allSettled(uploadPromises)
+      const failures = results
+        .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+        .map(r => (r.reason instanceof Error ? r.reason.message : String(r.reason)))
+
+      if (failures.length > 0) {
+        const message = `다음 첨부파일 업로드에 실패했습니다:\n${failures.join('\n')}`
+        alert(message)
+        throw new Error(message)
       }
     },
     [selectedFiles]

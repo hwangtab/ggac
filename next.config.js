@@ -387,6 +387,10 @@ const nextConfig = {
                   ].join('; ')
                 : [
                     "default-src 'self'",
+                    // TODO(security): script-src에 'unsafe-inline'이 남아 있다. 단계적으로
+                    //   1) middleware에서 요청별 nonce 생성, 2) Next.js _document/layout에서 nonce 주입,
+                    //   3) 외부 라이브러리(react-quill 등) 호환성 검증 후 'unsafe-inline'을 제거하고
+                    //   `'nonce-<value>'` 정책으로 전환할 것.
                     // React-Quill 호환을 위한 스크립트 정책 (개발 환경에서 React Refresh 지원)
                     "script-src 'self' 'unsafe-inline'" +
                       (process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : '') +

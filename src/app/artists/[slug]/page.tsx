@@ -34,9 +34,7 @@ interface ArtistPageProps {
 export async function generateStaticParams() {
   try {
     const slugs = await getArtistSlugs()
-    return slugs
-      .filter(slug => !WITHDRAWN_SLUGS.has(slug))
-      .map(slug => ({ slug }))
+    return slugs.filter(slug => !WITHDRAWN_SLUGS.has(slug)).map(slug => ({ slug }))
   } catch (error) {
     console.warn('Failed to generate static params for artists:', error)
     // 빌드 시점에서 환경 변수가 없을 때 빈 배열 반환

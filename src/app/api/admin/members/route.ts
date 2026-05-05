@@ -1,4 +1,4 @@
-import { createOptionsResponse } from '@/utils/apiResponse'
+import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/server/adminAuth'
 import { validateSearchQuery, escapePostgrestValue } from '@/utils/validation'
@@ -17,12 +17,12 @@ export const runtime = 'nodejs'
 export async function GET(request: NextRequest) {
   try {
     // Rate limiting 적용
-    const rateLimiter = applyRateLimit({
+    const rateLimiter = await applyRateLimit({
       ...RATE_LIMIT_CONFIGS.ADMIN_API,
       keyGenerator: createUserKeyGenerator('admin_members'),
     })
 
-    const rateLimitResult = rateLimiter(request)
+    const rateLimitResult = await rateLimiter(request)
     if (!rateLimitResult.success && rateLimitResult.response) {
       return rateLimitResult.response
     }
@@ -65,13 +65,13 @@ export async function GET(request: NextRequest) {
 
     // 페이지 번호 검증
     if (page < 1 || page > 10000) {
-      return NextResponse.json({ error: '유효하지 않은 페이지 번호입니다.' }, { status: 400 })
+      return createErrorResponse({ success: false, error: '유효하지 않은 페이지 번호입니다.' }, 400)
     }
 
     // 필터 값 검증
     const allowedFilters = ['all', 'pending', 'approved', 'rejected']
     if (!allowedFilters.includes(filter)) {
-      return NextResponse.json({ error: '유효하지 않은 필터입니다.' }, { status: 400 })
+      return createErrorResponse({ success: false, error: '유효하지 않은 필터입니다.' }, 400)
     }
 
     // 기본 쿼리 구성 (서비스 롤 클라이언트로 RLS 우회)

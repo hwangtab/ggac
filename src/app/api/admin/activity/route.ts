@@ -1,4 +1,4 @@
-import { createOptionsResponse } from '@/utils/apiResponse'
+import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
 import { NextRequest, NextResponse } from 'next/server'
 import {
   applyRateLimit,
@@ -16,12 +16,12 @@ export const runtime = 'nodejs'
 export async function GET(request: NextRequest) {
   try {
     // Rate limiting 적용
-    const rateLimiter = applyRateLimit({
+    const rateLimiter = await applyRateLimit({
       ...RATE_LIMIT_CONFIGS.ADMIN_API,
       keyGenerator: createUserKeyGenerator('admin_activity'),
     })
 
-    const rateLimitResult = rateLimiter(request)
+    const rateLimitResult = await rateLimiter(request)
     if (!rateLimitResult.success && rateLimitResult.response) {
       return rateLimitResult.response
     }
@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
 
     // 페이지 번호 검증
     if (page > 1000) {
-      return NextResponse.json({ error: '유효하지 않은 페이지 번호입니다.' }, { status: 400 })
+      return createErrorResponse({ success: false, error: '유효하지 않은 페이지 번호입니다.' }, 400)
     }
 
     const offset = (page - 1) * limit

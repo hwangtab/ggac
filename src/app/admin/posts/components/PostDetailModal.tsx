@@ -12,8 +12,9 @@ import {
   FiExternalLink,
   FiAlertCircle,
 } from 'react-icons/fi'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Post } from '@/types'
+import { useDialogA11y } from '@/hooks/useDialogA11y'
 
 interface PostDetailModalProps {
   post: Post
@@ -31,6 +32,18 @@ export default function PostDetailModal({
   isLoading,
 }: PostDetailModalProps) {
   const [confirmAction, setConfirmAction] = useState<{ action: string; title: string } | null>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
+
+  useDialogA11y({ containerRef: dialogRef, onClose, isOpen })
+
+  useEffect(() => {
+    if (!isOpen) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [isOpen])
 
   if (!isOpen) return null
 
@@ -91,12 +104,27 @@ export default function PostDetailModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+      role="presentation"
+      onClick={e => {
+        if (e.target === e.currentTarget) onClose()
+      }}
+    >
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="post-detail-modal-title"
+        tabIndex={-1}
+        className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
+      >
         {/* 헤더 */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div className="flex items-center space-x-2">
-            <h2 className="text-xl font-semibold text-gray-900">게시글 상세</h2>
+            <h2 id="post-detail-modal-title" className="text-xl font-semibold text-gray-900">
+              게시글 상세
+            </h2>
             <span
               className={`px-2 py-1 text-xs font-medium rounded-full ${getCategoryColor(post.category)}`}
             >
@@ -114,7 +142,12 @@ export default function PostDetailModal({
               </span>
             )}
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-md transition-colors">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="모달 닫기"
+            className="p-2 hover:bg-gray-100 rounded-md transition-colors"
+          >
             <FiX className="w-5 h-5" />
           </button>
         </div>

@@ -10,6 +10,7 @@ export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
+import { createErrorResponse } from '@/utils/apiResponse'
 import { createClient } from '@supabase/supabase-js'
 import { revalidateTag } from 'next/cache'
 import type { PostAttachmentStats } from '@/types'
@@ -79,7 +80,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       .single()
 
     if (postError || !post) {
-      return NextResponse.json({ error: '게시글을 찾을 수 없습니다.' }, { status: 404 })
+      return createErrorResponse({ success: false, error: '게시글을 찾을 수 없습니다.' }, 404)
     }
 
     // 첨부파일 목록 조회
@@ -91,7 +92,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
     if (attachmentsError) {
       console.error('첨부파일 조회 오류:', attachmentsError)
-      return NextResponse.json({ error: '첨부파일을 조회할 수 없습니다.' }, { status: 500 })
+      return createErrorResponse({ success: false, error: '첨부파일을 조회할 수 없습니다.' }, 500)
     }
 
     // 첨부파일 통계 계산 (클라이언트 사이드에서)
@@ -110,7 +111,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     })
   } catch (error) {
     console.error('첨부파일 조회 API 오류:', error)
-    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
+    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
   }
 }
 
@@ -142,7 +143,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     if (!user) {
       console.error('[UPLOAD API] 인증 실패 - 세션 없음')
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
     }
 
     const validPostId = uuidValidation.sanitized
@@ -159,7 +160,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
       if (postError || !postData) {
         console.error('[UPLOAD API] 게시글 조회 실패:', postError)
-        return NextResponse.json({ error: '게시글을 찾을 수 없습니다.' }, { status: 404 })
+        return createErrorResponse({ success: false, error: '게시글을 찾을 수 없습니다.' }, 404)
       }
 
       if (postData.author_id !== user.id) {
@@ -181,7 +182,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     if (!file || file.size === 0) {
       console.error('[UPLOAD API] 파일이 없음')
-      return NextResponse.json({ error: '파일이 선택되지 않았습니다.' }, { status: 400 })
+      return createErrorResponse({ success: false, error: '파일이 선택되지 않았습니다.' }, 400)
     }
 
     // 공통 파일 검증 로직 사용
@@ -208,7 +209,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
       if (existingError) {
         console.error('기존 첨부파일 조회 오류:', existingError)
-        return NextResponse.json({ error: '첨부파일 제한 확인에 실패했습니다.' }, { status: 500 })
+        return createErrorResponse({ success: false, error: '첨부파일 제한 확인에 실패했습니다.' }, 500)
       }
 
       const currentCount = existingAttachments?.length || 0

@@ -35,9 +35,7 @@ function getServiceRoleClient(): SupabaseClient | null {
   return serviceRoleClient
 }
 
-export async function getSystemSettings(
-  _supabase?: unknown
-): Promise<PublicSystemSettings | null> {
+export async function getSystemSettings(_supabase?: unknown): Promise<PublicSystemSettings | null> {
   // _supabase 인자는 하위 호환성을 위해 유지하되 사용하지 않는다.
   // 일반 사용자도 settings를 읽어야 하므로 service role client를 사용한다.
   void _supabase

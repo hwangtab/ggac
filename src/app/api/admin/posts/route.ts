@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createErrorResponse } from '@/utils/apiResponse'
 import { requireAdmin } from '@/lib/server/adminAuth'
 
 // API 라우트를 동적으로 렌더링하도록 강제 설정
@@ -16,12 +17,12 @@ import { logSecurityEvent } from '@/utils/security'
 export async function GET(request: NextRequest) {
   try {
     // Rate limiting 적용
-    const rateLimiter = applyRateLimit({
+    const rateLimiter = await applyRateLimit({
       ...RATE_LIMIT_CONFIGS.ADMIN_API,
       keyGenerator: createUserKeyGenerator('admin_posts'),
     })
 
-    const rateLimitResult = rateLimiter(request)
+    const rateLimitResult = await rateLimiter(request)
     if (!rateLimitResult.success && rateLimitResult.response) {
       return rateLimitResult.response
     }
@@ -64,13 +65,13 @@ export async function GET(request: NextRequest) {
 
     // 페이지 번호 검증
     if (page < 1 || page > 10000) {
-      return NextResponse.json({ error: '유효하지 않은 페이지 번호입니다.' }, { status: 400 })
+      return createErrorResponse({ success: false, error: '유효하지 않은 페이지 번호입니다.' }, 400)
     }
 
     // 필터 값 검증
     const allowedFilters = ['all', 'deleted', 'pinned', '공지', '잡담', '홍보', '건의']
     if (!allowedFilters.includes(filter)) {
-      return NextResponse.json({ error: '유효하지 않은 필터입니다.' }, { status: 400 })
+      return createErrorResponse({ success: false, error: '유효하지 않은 필터입니다.' }, 400)
     }
 
     // Build query based on filter
@@ -194,6 +195,6 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Admin posts API error:', error)
     logSecurityEvent('ADMIN_POSTS_API_ERROR', { error: '서버 오류가 발생했습니다.' }, 'medium')
-    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
+    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
   }
 }

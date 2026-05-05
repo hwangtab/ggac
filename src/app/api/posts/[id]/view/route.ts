@@ -4,6 +4,7 @@ export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
+import { createErrorResponse } from '@/utils/apiResponse'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
 import { applyRateLimit, RATE_LIMIT_CONFIGS } from '@/utils/rateLimiter'
@@ -22,22 +23,20 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const uuidValidation = validateUUID(postId, '게시글 ID')
     if (!uuidValidation.isValid) {
       console.log('[API] VIEW UUID 검증 실패:', uuidValidation.errors)
-      return NextResponse.json(
-        {
-          error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.',
-        },
-        { status: 400 }
+      return createErrorResponse(
+        { success: false, error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.' },
+        400
       )
     }
 
     // Rate limiting 적용
-    const rateLimiter = applyRateLimit(RATE_LIMIT_CONFIGS.GENERAL_API)
-    const rateLimitResult = rateLimiter(request)
+    const rateLimiter = await applyRateLimit(RATE_LIMIT_CONFIGS.GENERAL_API)
+    const rateLimitResult = await rateLimiter(request)
 
     if (!rateLimitResult.success) {
       return (
         rateLimitResult.response ??
-        NextResponse.json({ error: '요청이 너무 많습니다.' }, { status: 429 })
+        createErrorResponse({ success: false, error: '요청이 너무 많습니다.' }, 429)
       )
     }
 
@@ -55,13 +54,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
     if (!serviceRoleKey) {
       console.error('SUPABASE_SERVICE_ROLE_KEY가 설정되지 않았습니다.')
-      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
+      return createErrorResponse({ success: false, error: 'Server configuration error' }, 500)
     }
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     if (!supabaseUrl) {
       console.error('NEXT_PUBLIC_SUPABASE_URL이 설정되지 않았습니다.')
-      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
+      return createErrorResponse({ success: false, error: 'Server configuration error' }, 500)
     }
 
     const serviceSupabase = createClient(supabaseUrl, serviceRoleKey, {
@@ -80,7 +79,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       .single()
 
     if (postError || !post) {
-      return NextResponse.json({ error: 'Post not found' }, { status: 404 })
+      return createErrorResponse({ success: false, error: 'Post not found' }, 404)
     }
 
     // 작성자 본인은 조회수 증가시키지 않음
@@ -116,7 +115,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     if (incrementError) {
       console.error('조회수 증가 오류:', incrementError)
-      return NextResponse.json({ error: 'Failed to increment view count' }, { status: 500 })
+      return createErrorResponse({ success: false, error: 'Failed to increment view count' }, 500)
     }
 
     const newViewCount = result || post.view_count + 1
@@ -152,7 +151,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     return response
   } catch (error) {
     console.error('게시글 조회 추적 오류:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return createErrorResponse({ success: false, error: 'Internal server error' }, 500)
   }
 }
 
@@ -169,11 +168,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const uuidValidation = validateUUID(postId, '게시글 ID')
     if (!uuidValidation.isValid) {
       console.log('[API] VIEW GET UUID 검증 실패:', uuidValidation.errors)
-      return NextResponse.json(
-        {
-          error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.',
-        },
-        { status: 400 }
+      return createErrorResponse(
+        { success: false, error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.' },
+        400
       )
     }
 
@@ -190,7 +187,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       .single()
 
     if (error || !post) {
-      return NextResponse.json({ error: 'Post not found' }, { status: 404 })
+      return createErrorResponse({ success: false, error: 'Post not found' }, 404)
     }
 
     return NextResponse.json({
@@ -199,6 +196,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     })
   } catch (error) {
     console.error('게시글 조회수 조회 오류:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return createErrorResponse({ success: false, error: 'Internal server error' }, 500)
   }
 }

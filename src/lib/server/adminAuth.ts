@@ -1,6 +1,9 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { createLogger } from '@/utils/logger'
+
+const log = createLogger('adminAuth')
 
 export type AdminAuthSuccess = {
   db: SupabaseClient
@@ -50,9 +53,7 @@ export async function requireAdmin(): Promise<AdminAuthSuccess | NextResponse> {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
   if (!supabaseUrl || !serviceKey) {
-    console.error(
-      '[adminAuth] SUPABASE_SERVICE_ROLE_KEY 또는 NEXT_PUBLIC_SUPABASE_URL이 설정되지 않았습니다.'
-    )
+    log.error('SUPABASE_SERVICE_ROLE_KEY 또는 NEXT_PUBLIC_SUPABASE_URL이 설정되지 않았습니다.')
     return NextResponse.json({ error: '서버 구성 오류입니다.' }, { status: 500 })
   }
 

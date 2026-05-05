@@ -1,10 +1,21 @@
 /**
  * 분산 Rate Limiting 시스템
  * Redis/Upstash 기반으로 서버리스 환경 최적화
+ *
+ * ⚠️ 분산 환경(Vercel 등) 운영 시 반드시 다음 환경변수 설정 필요:
+ *   - UPSTASH_REDIS_REST_URL
+ *   - UPSTASH_REDIS_REST_TOKEN
+ *
+ * 환경변수가 없으면 인메모리 폴백으로 동작하며, 이는 서버리스 인스턴스마다
+ * 별도의 카운터를 갖게 되어 실질적으로 rate limiting이 무효화됩니다.
+ * 운영 환경에서 메모리 폴백이 사용되면 시작 시 반복적으로 경고를 출력합니다.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { logSecurityEvent } from './security'
+import { createLogger } from './logger'
+
+const log = createLogger('distributedRateLimiter')
 
 // Upstash Redis REST API를 위한 인터페이스
 interface UpstashRedisConfig {
@@ -122,8 +133,23 @@ class DistributedRateLimiter {
         token: upstashToken,
       })
     } else {
-      console.warn('Upstash Redis credentials not found, falling back to memory store')
       this.fallbackToMemory = true
+      const baseMessage =
+        'Upstash Redis 자격 증명이 없어 메모리 기반 폴백으로 동작합니다. ' +
+        '서버리스/분산 환경에서는 인스턴스별로 카운터가 분리되어 rate limit이 무효화됩니다. ' +
+        'UPSTASH_REDIS_REST_URL 및 UPSTASH_REDIS_REST_TOKEN을 설정하세요.'
+
+      if (process.env.NODE_ENV === 'production') {
+        // 운영 환경에서는 보안 이벤트로 기록하여 모니터링 채널에서 즉시 인지하도록 함
+        log.error(baseMessage)
+        try {
+          logSecurityEvent('RATE_LIMIT_MEMORY_FALLBACK', { env: 'production' }, 'high')
+        } catch {
+          // logSecurityEvent 자체 실패는 무시 (로그 채널 의존성 회피)
+        }
+      } else {
+        log.warn(baseMessage)
+      }
     }
   }
 
@@ -188,7 +214,7 @@ class DistributedRateLimiter {
         totalHits: currentCount,
       }
     } catch (error) {
-      console.error('Redis rate limiting failed, falling back to memory:', error)
+      log.error('Redis rate limiting failed, falling back to memory', error)
 
       // Redis 실패 시 메모리 폴백
       const result = await this.fallbackMemoryLimit(key, windowMs, maxRequests)
@@ -361,7 +387,7 @@ class DistributedRateLimiter {
           return result
         }
       } catch (error) {
-        console.error('Distributed rate limiting error:', error)
+        log.error('Distributed rate limiting error', error)
 
         // 에러 발생 시 허용 (fail-open)
         return {
@@ -385,7 +411,7 @@ class DistributedRateLimiter {
         await this.redis.del(`${key}:blocked`)
       }
     } catch (error) {
-      console.error('Failed to reset rate limit:', error)
+      log.error('Failed to reset rate limit', error)
     }
   }
 
@@ -412,7 +438,7 @@ class DistributedRateLimiter {
         }
       }
     } catch (error) {
-      console.error('Failed to get rate limit stats:', error)
+      log.error('Failed to get rate limit stats', error)
       return null
     }
   }

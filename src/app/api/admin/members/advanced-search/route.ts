@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { createErrorResponse } from '@/utils/apiResponse'
 import { requireAdmin } from '@/lib/server/adminAuth'
 import {
   applyRateLimit,
@@ -13,12 +14,6 @@ import {
 } from '@/utils/rateLimiter'
 import { validateAdvancedSearchQuery, buildSearchQuery } from '@/utils/advancedFiltering'
 import type { AdvancedSearchQuery, FilteredResult, FieldDefinition } from '@/types'
-
-// Rate limiting 설정
-const rateLimiter = applyRateLimit({
-  ...RATE_LIMIT_CONFIGS.ADMIN_API,
-  keyGenerator: createUserKeyGenerator('members_advanced_search'),
-})
 
 // 멤버 필드 정의
 const MEMBER_FIELD_DEFINITIONS: FieldDefinition[] = [
@@ -210,7 +205,11 @@ const MEMBER_FIELD_DEFINITIONS: FieldDefinition[] = [
 export async function POST(request: NextRequest) {
   try {
     // Rate limiting 적용
-    const rateLimitResult = rateLimiter(request)
+    const rateLimiter = await applyRateLimit({
+      ...RATE_LIMIT_CONFIGS.ADMIN_API,
+      keyGenerator: createUserKeyGenerator('members_advanced_search'),
+    })
+    const rateLimitResult = await rateLimiter(request)
     if (!rateLimitResult.success) {
       return rateLimitResult.response
     }
@@ -294,12 +293,12 @@ export async function POST(request: NextRequest) {
 
       if (dataResult.error) {
         console.error('데이터 조회 오류:', dataResult.error)
-        return NextResponse.json({ error: '검색 중 오류가 발생했습니다.' }, { status: 500 })
+        return createErrorResponse({ success: false, error: '검색 중 오류가 발생했습니다.' }, 500)
       }
 
       if (countResult.error) {
         console.error('카운트 조회 오류:', countResult.error)
-        return NextResponse.json({ error: '검색 중 오류가 발생했습니다.' }, { status: 500 })
+        return createErrorResponse({ success: false, error: '검색 중 오류가 발생했습니다.' }, 500)
       }
 
       const members = dataResult.data || []
@@ -331,11 +330,11 @@ export async function POST(request: NextRequest) {
       )
     } catch (queryError) {
       console.error('쿼리 실행 오류:', queryError)
-      return NextResponse.json({ error: '검색 쿼리 실행 중 오류가 발생했습니다.' }, { status: 500 })
+      return createErrorResponse({ success: false, error: '검색 쿼리 실행 중 오류가 발생했습니다.' }, 500)
     }
   } catch (error) {
     console.error('고급 검색 API 오류:', error)
-    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
+    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
   }
 }
 
@@ -343,7 +342,11 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     // Rate limiting 적용
-    const rateLimitResult = rateLimiter(request)
+    const rateLimiter = await applyRateLimit({
+      ...RATE_LIMIT_CONFIGS.ADMIN_API,
+      keyGenerator: createUserKeyGenerator('members_advanced_search'),
+    })
+    const rateLimitResult = await rateLimiter(request)
     if (!rateLimitResult.success) {
       return rateLimitResult.response
     }
@@ -364,6 +367,6 @@ export async function GET(request: NextRequest) {
     )
   } catch (error) {
     console.error('필드 정의 조회 오류:', error)
-    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
+    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
   }
 }

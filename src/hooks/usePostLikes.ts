@@ -6,6 +6,7 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
+import type { User } from '@supabase/supabase-js'
 import { getSupabaseClient } from '@/lib/supabase/client'
 import type { PostLikeToggleResponse } from '@/types'
 import { createLogger } from '@/utils/logger'
@@ -40,7 +41,7 @@ export function usePostLikes({
   prefetched = false,
   onLikeChange,
 }: UsePostLikesProps) {
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [state, setState] = useState<PostLikeState>({
     likeCount: initialLikeCount,
     isLiked: initialIsLiked,
@@ -51,8 +52,8 @@ export function usePostLikes({
   const supabaseRef = useRef<ReturnType<typeof getSupabaseClient> | null>(null)
 
   const scheduleIdle = (fn: () => void) => {
-    if (typeof (window as any).requestIdleCallback === 'function') {
-      ;(window as any).requestIdleCallback(fn, { timeout: 2000 })
+    if (typeof window.requestIdleCallback === 'function') {
+      window.requestIdleCallback(fn, { timeout: 2000 })
     } else {
       setTimeout(fn, 0)
     }
@@ -89,7 +90,7 @@ export function usePostLikes({
         })
         unsub = () => data.subscription.unsubscribe()
       } catch (authInitError) {
-        console.error('[usePostLikes] auth 초기화 실패:', authInitError)
+        log.error('auth 초기화 실패:', authInitError)
       }
     })
 

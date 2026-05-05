@@ -3,7 +3,7 @@ export const runtime = 'nodejs'
 export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
-import { createOptionsResponse } from '@/utils/apiResponse'
+import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/server/adminAuth'
 import {
@@ -20,11 +20,11 @@ export async function DELETE(
 ) {
   const resolvedParams = await context.params
   try {
-    const rateLimiter = applyRateLimit({
+    const rateLimiter = await applyRateLimit({
       ...RATE_LIMIT_CONFIGS.ADMIN_API,
       keyGenerator: createUserKeyGenerator('admin_artists_member_action'),
     })
-    const rateLimitResult = rateLimiter(request)
+    const rateLimitResult = await rateLimiter(request)
     if (!rateLimitResult.success && rateLimitResult.response) {
       return rateLimitResult.response
     }
@@ -39,10 +39,10 @@ export async function DELETE(
     // UUID 형식 검증
     const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
     if (!artistId || !uuidPattern.test(artistId)) {
-      return NextResponse.json({ error: '유효하지 않은 아티스트 ID입니다.' }, { status: 400 })
+      return createErrorResponse({ success: false, error: '유효하지 않은 아티스트 ID입니다.' }, 400)
     }
     if (!memberId || !uuidPattern.test(memberId)) {
-      return NextResponse.json({ error: '유효하지 않은 멤버 ID입니다.' }, { status: 400 })
+      return createErrorResponse({ success: false, error: '유효하지 않은 멤버 ID입니다.' }, 400)
     }
 
     // 대상 멤버 확인
@@ -53,7 +53,7 @@ export async function DELETE(
       .single()
 
     if (memberError || !targetMember) {
-      return NextResponse.json({ error: '멤버를 찾을 수 없습니다.' }, { status: 404 })
+      return createErrorResponse({ success: false, error: '멤버를 찾을 수 없습니다.' }, 404)
     }
 
     // 해당 아티스트에 배정된 멤버인지 확인
@@ -79,7 +79,7 @@ export async function DELETE(
 
     if (updateError) {
       console.error('Member update error:', updateError)
-      return NextResponse.json({ error: '아티스트 배정 해제에 실패했습니다.' }, { status: 500 })
+      return createErrorResponse({ success: false, error: '아티스트 배정 해제에 실패했습니다.' }, 500)
     }
 
     const response = NextResponse.json({

@@ -1,7 +1,7 @@
-import { createOptionsResponse } from '@/utils/apiResponse'
+import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { requireAdmin } from '@/lib/server/adminAuth'
-import { validateFormData } from '@/utils/validation'
 import {
   applyRateLimit,
   RATE_LIMIT_CONFIGS,
@@ -9,6 +9,31 @@ import {
   addRateLimitHeaders,
 } from '@/utils/rateLimiter'
 import { logSecurityEvent } from '@/utils/security'
+import { createLogger, maskId } from '@/utils/logger'
+
+const log = createLogger('admin/member-action')
+
+const MemberActionSchema = z
+  .object({
+    memberId: z.string().uuid('유효하지 않은 멤버 ID입니다.'),
+    action: z.enum(['approve', 'reject', 'activate', 'deactivate', 'suspend', 'unsuspend']),
+    suspension_reason: z.string().min(1).max(500).optional(),
+    suspension_until: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, '날짜는 YYYY-MM-DD 형식이어야 합니다.')
+      .optional(),
+  })
+  .strict()
+  .refine(
+    data => {
+      if (data.action !== 'suspend') return true
+      // suspend 액션이 아니면 정지 관련 필드 무시
+      return true
+    },
+    { message: '정지 액션 외에는 정지 관련 필드를 지정할 수 없습니다.' }
+  )
+
+type MemberActionInput = z.infer<typeof MemberActionSchema>
 
 // API 라우트를 동적으로 렌더링하도록 강제 설정
 export const runtime = 'nodejs'
@@ -16,16 +41,16 @@ export const dynamic = 'force-dynamic'
 
 // POST: 회원 액션 처리 (단순한 경로로 우회)
 export async function POST(request: NextRequest) {
-  let requestData: any = {} // catch 블록에서 접근 가능하도록 함수 최상단에 선언
+  let parsedInput: MemberActionInput | null = null
 
   try {
     // Rate limiting 적용
-    const rateLimiter = applyRateLimit({
+    const rateLimiter = await applyRateLimit({
       ...RATE_LIMIT_CONFIGS.ADMIN_API,
       keyGenerator: createUserKeyGenerator('admin_member_action'),
     })
 
-    const rateLimitResult = rateLimiter(request)
+    const rateLimitResult = await rateLimiter(request)
     if (!rateLimitResult.success && rateLimitResult.response) {
       return rateLimitResult.response
     }
@@ -34,43 +59,24 @@ export async function POST(request: NextRequest) {
     if (auth instanceof NextResponse) return auth
     const { db: adminSupabase, user } = auth
 
-    // 요청 데이터 파싱 및 검증
-    requestData = await request.json()
-    const { memberId, action, suspension_reason, suspension_until } = requestData
-
-    // 멤버 ID 검증 (UUID 형식)
-    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!memberId || !uuidPattern.test(memberId)) {
-      return NextResponse.json({ error: '유효하지 않은 멤버 ID입니다.' }, { status: 400 })
+    // 요청 데이터 파싱 및 Zod 검증
+    let raw: unknown
+    try {
+      raw = await request.json()
+    } catch {
+      return createErrorResponse({ success: false, error: '유효하지 않은 JSON 본문입니다.' }, 400)
     }
 
-    // 액션 검증
-    const allowedActions = ['approve', 'reject', 'activate', 'deactivate', 'suspend', 'unsuspend']
-
-    if (!action || !allowedActions.includes(action)) {
-      logSecurityEvent('INVALID_MEMBER_ACTION', { action, memberId }, 'medium')
-      return NextResponse.json({ error: '유효하지 않은 액션입니다.' }, { status: 400 })
+    const parsed = MemberActionSchema.safeParse(raw)
+    if (!parsed.success) {
+      logSecurityEvent('INVALID_MEMBER_ACTION', { issues: parsed.error.flatten() }, 'medium')
+      return NextResponse.json(
+        { error: '유효하지 않은 요청입니다.', details: parsed.error.flatten() },
+        { status: 400 }
+      )
     }
-
-    // 정지 관련 데이터 검증
-    if (action === 'suspend') {
-      if (suspension_reason) {
-        const reasonValidation = validateFormData(
-          { suspension_reason },
-          { suspension_reason: 'content' }
-        )
-        if (!reasonValidation.isValid) {
-          return NextResponse.json({ error: '유효하지 않은 정지 사유입니다.' }, { status: 400 })
-        }
-      }
-
-      if (suspension_until) {
-        const datePattern = /^\d{4}-\d{2}-\d{2}$/
-        if (!datePattern.test(suspension_until)) {
-          return NextResponse.json({ error: '유효하지 않은 날짜 형식입니다.' }, { status: 400 })
-        }
-      }
-    }
+    parsedInput = parsed.data
+    const { memberId, action, suspension_reason, suspension_until } = parsedInput
 
     // 대상 회원 정보 조회
     const { data: targetMember, error: targetError } = await adminSupabase
@@ -80,8 +86,11 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (targetError || !targetMember) {
-      console.error('[member-action] Target member fetch error:', targetError?.message)
-      return NextResponse.json({ error: '회원을 찾을 수 없습니다.' }, { status: 404 })
+      log.error('Target member fetch error', {
+        message: targetError?.message,
+        memberId: maskId(memberId),
+      })
+      return createErrorResponse({ success: false, error: '회원을 찾을 수 없습니다.' }, 404)
     }
 
     // 액션에 따른 업데이트 데이터 준비
@@ -147,7 +156,7 @@ export async function POST(request: NextRequest) {
 
       case 'suspend':
         if (targetMember.registration_status !== 'approved') {
-          return NextResponse.json({ error: '승인된 회원만 정지할 수 있습니다.' }, { status: 400 })
+          return createErrorResponse({ success: false, error: '승인된 회원만 정지할 수 있습니다.' }, 400)
         }
         updateData = {
           is_suspended: true,
@@ -184,8 +193,12 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (updateError) {
-      console.error('[member-action] Member update error:', updateError.message)
-      return NextResponse.json({ error: '회원 상태 업데이트에 실패했습니다.' }, { status: 500 })
+      log.error('Member update error', {
+        message: updateError.message,
+        memberId: maskId(memberId),
+        action,
+      })
+      return createErrorResponse({ success: false, error: '회원 상태 업데이트에 실패했습니다.' }, 500)
     }
 
     // 성공 응답
@@ -198,14 +211,13 @@ export async function POST(request: NextRequest) {
       unsuspend: '정지해제',
     }
 
-    // 보안 이벤트 로깅
+    // 보안 이벤트 로깅 — PII(원본 ID/표시명) 평문 노출 회피
     logSecurityEvent(
       'MEMBER_STATUS_CHANGED',
       {
-        memberId,
+        memberId: maskId(memberId),
         action,
-        targetMember: targetMember.display_name,
-        adminId: user.id,
+        adminId: maskId(user.id),
       },
       'medium'
     )
@@ -224,16 +236,16 @@ export async function POST(request: NextRequest) {
       rateLimitResult.resetTime
     )
   } catch (error) {
-    console.error('[member-action] Admin member action API error:', error)
+    log.error('Admin member action API error', error)
     logSecurityEvent(
       'ADMIN_MEMBER_ACTION_ERROR',
       {
         error: error instanceof Error ? error.message : 'Unknown error',
-        requestBody: JSON.stringify(requestData),
+        action: parsedInput?.action,
       },
       'high'
     )
-    return NextResponse.json({ error: '회원 상태 변경 중 오류가 발생했습니다.' }, { status: 500 })
+    return createErrorResponse({ success: false, error: '회원 상태 변경 중 오류가 발생했습니다.' }, 500)
   }
 }
 

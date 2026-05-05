@@ -7,6 +7,7 @@ export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
 import { NextRequest, NextResponse } from 'next/server'
+import { createErrorResponse } from '@/utils/apiResponse'
 import { createClient } from '@supabase/supabase-js'
 import { timingSafeEqual } from 'crypto'
 
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest) {
     const expectedToken = process.env.CLEANUP_CRON_TOKEN
 
     if (!expectedToken || !authHeader) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return createErrorResponse({ success: false, error: 'Unauthorized' }, 401)
     }
 
     // 타이밍 공격 방지를 위한 상수 시간 비교
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest) {
     const isValid =
       providedBuf.length === expectedBuf.length && timingSafeEqual(providedBuf, expectedBuf)
     if (!isValid) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return createErrorResponse({ success: false, error: 'Unauthorized' }, 401)
     }
 
     console.log('[CLEANUP] 임시 첨부파일 정리 시작')
@@ -154,7 +155,7 @@ export async function GET(request: NextRequest) {
     const expectedToken = process.env.CLEANUP_CRON_TOKEN
 
     if (!expectedToken || !authHeader) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return createErrorResponse({ success: false, error: 'Unauthorized' }, 401)
     }
 
     // 타이밍 공격 방지를 위한 상수 시간 비교
@@ -163,7 +164,7 @@ export async function GET(request: NextRequest) {
     const isValid =
       providedBuf.length === expectedBuf.length && timingSafeEqual(providedBuf, expectedBuf)
     if (!isValid) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return createErrorResponse({ success: false, error: 'Unauthorized' }, 401)
     }
 
     const supabaseAdmin = getSupabaseAdmin()
@@ -175,7 +176,7 @@ export async function GET(request: NextRequest) {
       .eq('is_temporary', true)
 
     if (error) {
-      return NextResponse.json({ error: 'Failed to get stats' }, { status: 500 })
+      return createErrorResponse({ success: false, error: 'Failed to get stats' }, 500)
     }
 
     const now = new Date()
@@ -195,6 +196,6 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error('[CLEANUP] 통계 조회 중 오류:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return createErrorResponse({ success: false, error: 'Internal server error' }, 500)
   }
 }

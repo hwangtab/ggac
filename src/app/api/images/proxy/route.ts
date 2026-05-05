@@ -1,41 +1,40 @@
 import { NextRequest } from 'next/server'
-import {
-  createErrorResponse,
-  createImageResponse,
-  createOptionsResponse,
-} from '@/utils/apiResponse'
+import { createImageResponse, createOptionsResponse } from '@/utils/apiResponse'
+import { ApiError } from '@/utils/apiWrapper'
 import { isUnsafeHost } from '@/utils/ssrfProtection'
-import { applyRateLimit, RATE_LIMIT_CONFIGS } from '@/utils/rateLimiter'
+import distLimiter from '@/utils/distributedRateLimiter'
 
 export const dynamic = 'force-dynamic'
 
 const ALLOWED_PROTOCOLS = new Set(['http:', 'https:'])
-const imageProxyRateLimit = applyRateLimit(RATE_LIMIT_CONFIGS.GENERAL_API)
 
 export async function GET(req: NextRequest) {
-  const rateLimitResult = imageProxyRateLimit(req)
-  if (!rateLimitResult.success) {
-    return createErrorResponse('요청이 너무 많습니다. 잠시 후 다시 시도해주세요.', 429)
+  const rateLimiter = await distLimiter.applyRateLimit({
+    ...distLimiter.CONFIGS.GENERAL_API,
+    keyGenerator: distLimiter.createIPKeyGenerator('img_proxy'),
+  })
+  const rateLimitResult = await rateLimiter(req)
+  if (!rateLimitResult.success && rateLimitResult.response) {
+    return rateLimitResult.response
   }
 
   const urlParam = req.nextUrl.searchParams.get('url')
-  if (!urlParam) return createErrorResponse('Missing url parameter', 400)
+  if (!urlParam) return ApiError.badRequest('Missing url parameter').toNextResponse()
 
   let target: URL
   try {
     const decoded = decodeURIComponent(urlParam)
     target = new URL(decoded)
   } catch {
-    return createErrorResponse('Invalid url parameter', 400)
+    return ApiError.badRequest('Invalid url parameter').toNextResponse()
   }
 
   if (!ALLOWED_PROTOCOLS.has(target.protocol)) {
-    return createErrorResponse('Unsupported protocol', 400)
+    return ApiError.badRequest('Unsupported protocol').toNextResponse()
   }
 
-  // SSRF protection: block private/internal IPs
   if (await isUnsafeHost(target.hostname)) {
-    return createErrorResponse('Forbidden', 403)
+    return ApiError.forbidden('Forbidden').toNextResponse()
   }
 
   try {
@@ -62,25 +61,25 @@ export async function GET(req: NextRequest) {
     if (res.status === 301 || res.status === 302 || res.status === 307 || res.status === 308) {
       const location = res.headers.get('location')
       if (!location) {
-        return createErrorResponse('Redirect with no Location header', 400)
+        return ApiError.badRequest('Redirect with no Location header').toNextResponse()
       }
       let redirectUrl: URL
       try {
         redirectUrl = new URL(location)
       } catch {
-        return createErrorResponse('Invalid redirect URL', 400)
+        return ApiError.badRequest('Invalid redirect URL').toNextResponse()
       }
       if (!ALLOWED_PROTOCOLS.has(redirectUrl.protocol)) {
-        return createErrorResponse('Redirect to unsupported protocol', 400)
+        return ApiError.badRequest('Redirect to unsupported protocol').toNextResponse()
       }
       if (await isUnsafeHost(redirectUrl.hostname)) {
-        return createErrorResponse('Redirect to forbidden host', 400)
+        return ApiError.badRequest('Redirect to forbidden host').toNextResponse()
       }
-      return createErrorResponse('Redirect not followed', 400)
+      return ApiError.badRequest('Redirect not followed').toNextResponse()
     }
 
     if (!res.ok) {
-      return createErrorResponse(`Upstream error: ${res.status}`, 400)
+      return ApiError.badRequest(`Upstream error: ${res.status}`).toNextResponse()
     }
 
     // Derive content type
@@ -91,9 +90,10 @@ export async function GET(req: NextRequest) {
     return createImageResponse(buff, contentType, {
       'Cache-Control': 'public, max-age=86400',
     })
-  } catch (err: any) {
-    const msg = err?.name === 'AbortError' ? 'Timeout fetching image' : 'Failed to fetch image'
-    return createErrorResponse(msg, 400)
+  } catch (err: unknown) {
+    const isAbort = err instanceof Error && err.name === 'AbortError'
+    const msg = isAbort ? 'Timeout fetching image' : 'Failed to fetch image'
+    return ApiError.badRequest(msg).toNextResponse()
   }
 }
 

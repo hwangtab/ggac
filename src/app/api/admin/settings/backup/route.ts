@@ -1,4 +1,4 @@
-import { createOptionsResponse } from '@/utils/apiResponse'
+import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createSupabaseServer } from '@/lib/supabase/server'
@@ -40,12 +40,12 @@ export const runtime = 'nodejs'
 export async function GET(request: NextRequest) {
   try {
     // Rate limiting 적용
-    const rateLimiter = applyRateLimit({
+    const rateLimiter = await applyRateLimit({
       ...RATE_LIMIT_CONFIGS.ADMIN_API,
       keyGenerator: createUserKeyGenerator('admin_settings_backup'),
     })
 
-    const rateLimitResult = rateLimiter(request)
+    const rateLimitResult = await rateLimiter(request)
     if (!rateLimitResult.success && rateLimitResult.response) {
       return rateLimitResult.response
     }
@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
     } = await supabase.auth.getUser()
 
     if (authError || !user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
     }
 
     try {
@@ -150,7 +150,7 @@ export async function GET(request: NextRequest) {
       'high'
     )
 
-    return NextResponse.json({ error: '설정 백업 중 오류가 발생했습니다.' }, { status: 500 })
+    return createErrorResponse({ success: false, error: '설정 백업 중 오류가 발생했습니다.' }, 500)
   }
 }
 
@@ -158,13 +158,13 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     // Rate limiting 적용 (더 엄격한 제한)
-    const rateLimiter = applyRateLimit({
+    const rateLimiter = await applyRateLimit({
       maxRequests: 3, // 복원은 더 제한적으로
       windowMs: 60 * 60 * 1000, // 1시간
       keyGenerator: createUserKeyGenerator('admin_settings_restore'),
     })
 
-    const rateLimitResult = rateLimiter(request)
+    const rateLimitResult = await rateLimiter(request)
     if (!rateLimitResult.success && rateLimitResult.response) {
       return rateLimitResult.response
     }
@@ -178,7 +178,7 @@ export async function POST(request: NextRequest) {
     } = await supabase.auth.getUser()
 
     if (authError || !user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
     }
 
     await checkAdminPermission(supabase, user.id)
@@ -199,7 +199,7 @@ export async function POST(request: NextRequest) {
 
     // 백업 파일 메타데이터 검증
     if (metadata.version !== '1.0') {
-      return NextResponse.json({ error: '지원하지 않는 백업 파일 버전입니다.' }, { status: 400 })
+      return createErrorResponse({ success: false, error: '지원하지 않는 백업 파일 버전입니다.' }, 400)
     }
 
     // 설정 복원 실행

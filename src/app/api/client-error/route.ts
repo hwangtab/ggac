@@ -1,19 +1,20 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createSuccessResponse, createErrorResponse } from '@/utils/apiResponse'
+import { NextRequest } from 'next/server'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
+import { createLogger } from '@/utils/logger'
 
-const MAX_FIELD_LENGTH = 4096 // 4KB per field
+const log = createLogger('api/client-error')
+
+const MAX_FIELD_LENGTH = 4096
 const MAX_MESSAGE_LENGTH = 1024
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
 
-    // Validate required fields
     if (!body.message || !body.timestamp) {
-      return createErrorResponse('Missing required fields: message, timestamp', 400)
+      return ApiError.badRequest('Missing required fields: message, timestamp').toNextResponse()
     }
 
-    // 입력 길이 제한 (로그 인플레이션 방지)
     const message = String(body.message || '').slice(0, MAX_MESSAGE_LENGTH)
     const stack = body.stack ? String(body.stack).slice(0, MAX_FIELD_LENGTH) : undefined
     const componentStack = body.componentStack
@@ -21,7 +22,6 @@ export async function POST(request: NextRequest) {
       : undefined
     const url = body.url ? String(body.url).slice(0, 512) : 'unknown'
 
-    // Construct error log entry
     const errorLog = {
       timestamp: body.timestamp,
       url,
@@ -35,45 +35,35 @@ export async function POST(request: NextRequest) {
       source: 'client',
     }
 
-    // Log to console for now (in production, you might want to send to external service)
-    console.error('Client Error Logged:', {
+    log.error('Client Error Logged', {
       errorId: errorLog.errorId,
       url: errorLog.url,
       message: errorLog.message,
       timestamp: errorLog.timestamp,
-      userAgent: errorLog.userAgent,
-      ip: errorLog.ip,
     })
 
-    // In development, log full stack trace
     if (process.env.NODE_ENV === 'development') {
-      console.error('Full Error Details:', errorLog)
+      log.debug('Full Error Details', errorLog)
     }
 
-    // In production, you might want to:
-    // 1. Send to external logging service (Sentry, DataDog, etc.)
-    // 2. Store in database for analysis
-    // 3. Send alerts for critical errors
-
-    return createSuccessResponse({
+    return ApiSuccess.ok({
       logged: true,
       errorId: errorLog.errorId,
-    })
+    }).toNextResponse()
   } catch (error) {
-    console.error('Error logging client error:', error)
-    return createErrorResponse('Failed to log client error', 500)
+    log.error('Failed to log client error', error)
+    return ApiError.internalServerError('Failed to log client error').toNextResponse()
   }
 }
 
-// Only allow POST requests
 export async function GET() {
-  return createErrorResponse('Only POST requests are allowed', 405)
+  return ApiError.methodNotAllowed('Only POST requests are allowed').toNextResponse()
 }
 
 export async function PUT() {
-  return createErrorResponse('Only POST requests are allowed', 405)
+  return ApiError.methodNotAllowed('Only POST requests are allowed').toNextResponse()
 }
 
 export async function DELETE() {
-  return createErrorResponse('Only POST requests are allowed', 405)
+  return ApiError.methodNotAllowed('Only POST requests are allowed').toNextResponse()
 }

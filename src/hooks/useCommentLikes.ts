@@ -6,6 +6,7 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
+import type { User } from '@supabase/supabase-js'
 import { getSupabaseClient } from '@/lib/supabase/client'
 import { useLoadingState } from '@/hooks/useLoadingState'
 
@@ -33,7 +34,7 @@ export function useCommentLikes({
   initialIsLiked = false,
   onLikeChange,
 }: UseCommentLikesProps) {
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [state, setState] = useState<CommentLikeState>({
     likeCount: initialLikeCount,
     isLiked: initialIsLiked,

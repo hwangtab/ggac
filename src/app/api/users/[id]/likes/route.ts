@@ -9,6 +9,7 @@ export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
+import { createErrorResponse } from '@/utils/apiResponse'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import distributedRateLimiter, {
   DISTRIBUTED_RATE_LIMIT_CONFIGS,
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     } = await supabase.auth.getUser()
 
     if (!user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
     }
 
     const requestedUserId = resolvedParams.id
@@ -57,7 +58,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         .single()
 
       if (!profile?.is_admin) {
-        return NextResponse.json({ error: '권한이 없습니다.' }, { status: 403 })
+        return createErrorResponse({ success: false, error: '권한이 없습니다.' }, 403)
       }
     }
 
@@ -70,7 +71,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
     if (likesError) {
       console.error('좋아요 목록 조회 오류:', likesError)
-      return NextResponse.json({ error: '좋아요 목록을 조회할 수 없습니다.' }, { status: 500 })
+      return createErrorResponse({ success: false, error: '좋아요 목록을 조회할 수 없습니다.' }, 500)
     }
 
     // 총 좋아요 수 조회
@@ -81,7 +82,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
     if (countError) {
       console.error('좋아요 수 조회 오류:', countError)
-      return NextResponse.json({ error: '좋아요 수를 조회할 수 없습니다.' }, { status: 500 })
+      return createErrorResponse({ success: false, error: '좋아요 수를 조회할 수 없습니다.' }, 500)
     }
 
     const total = totalCount || 0
@@ -100,6 +101,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     })
   } catch (error) {
     console.error('사용자 좋아요 목록 API 오류:', error)
-    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
+    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
   }
 }

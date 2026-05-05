@@ -5,14 +5,16 @@
 
 import { createClient } from '@supabase/supabase-js'
 import type { PostAttachment } from '@/types'
+import { createLogger, maskId } from '@/utils/logger'
+
+const log = createLogger('Posts')
 
 // Service Role 클라이언트 생성
 function getSupabaseAdmin() {
   const hasUrl = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL)
   const hasSrv = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY)
   if (!hasUrl || !hasSrv) {
-    // 명시적으로 로깅하여 배포 환경 변수 누락을 파악하기 쉽게 함
-    console.error('[Posts] Missing env for service client', { hasUrl, hasSrv })
+    log.error('Missing env for service client', { hasUrl, hasSrv })
     throw new Error('Supabase configuration missing for server-side post queries')
   }
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
@@ -46,7 +48,7 @@ export async function getPostById(postId: string): Promise<PostDetail | null> {
   try {
     // 기본 입력값 검증 (빈 문자열 체크)
     if (!postId || postId.trim() === '') {
-      console.log('[Posts] Empty postId provided')
+      log.debug('Empty postId provided')
       return null
     }
 
@@ -60,13 +62,13 @@ export async function getPostById(postId: string): Promise<PostDetail | null> {
       .single()
 
     if (error || !post) {
-      console.log('[Posts] Post not found:', postId, error?.message)
+      log.debug('Post not found:', maskId(postId), error?.message)
       return null
     }
 
     return post as PostDetail
   } catch (error) {
-    console.error('[Posts] Error fetching post:', error)
+    log.error('Error fetching post:', error)
     return null
   }
 }
@@ -86,7 +88,7 @@ export async function getPostAuthor(authorId: string): Promise<AuthorProfile | n
       .maybeSingle()
 
     if (!profile) {
-      console.log('[Posts] Author profile not found:', authorId, error?.message)
+      log.debug('Author profile not found:', maskId(authorId), error?.message)
       return {
         id: authorId,
         display_name: '알 수 없는 사용자',
@@ -95,7 +97,7 @@ export async function getPostAuthor(authorId: string): Promise<AuthorProfile | n
 
     return profile as AuthorProfile
   } catch (error) {
-    console.error('[Posts] Error fetching author:', error)
+    log.error('Error fetching author:', error)
     return {
       id: authorId,
       display_name: '알 수 없는 사용자',
@@ -119,13 +121,13 @@ export async function getPostImages(postId: string): Promise<PostAttachment[]> {
       .order('created_at', { ascending: true }) // 그 다음 업로드 순서
 
     if (error) {
-      console.error('[Posts] Error fetching images:', error)
+      log.error('Error fetching images:', error)
       return []
     }
 
     return images || []
   } catch (error) {
-    console.error('[Posts] Error fetching post images:', error)
+    log.error('Error fetching post images:', error)
     return []
   }
 }
@@ -143,7 +145,7 @@ export async function getPostThumbnail(postId: string): Promise<string | null> {
 
     return null
   } catch (error) {
-    console.error('[Posts] Error fetching post thumbnail:', error)
+    log.error('Error fetching post thumbnail:', error)
     return null
   }
 }
@@ -263,7 +265,7 @@ export async function getPostMetadata(postId: string) {
 
     return { post, author, thumbnail, description, categoryEmoji, keywords, contentTextLength }
   } catch (error) {
-    console.error('[Posts] Error fetching post metadata:', error)
+    log.error('Error fetching post metadata:', error)
     return null
   }
 }

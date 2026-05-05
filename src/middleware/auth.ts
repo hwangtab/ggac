@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { getRegistrationDisabledHtml } from './templates'
+import { createLogger } from '@/utils/logger'
+
+const log = createLogger('middleware/auth')
+
+// PII(user.id) 평문 로깅을 막기 위한 마스킹 헬퍼.
+// 처음 6자만 남기고 나머지는 가린다.
+const maskId = (id?: string | null): string => (id ? `${id.slice(0, 6)}…` : '<unknown>')
 
 export interface AuthResult {
   response?: NextResponse
@@ -153,7 +160,10 @@ export async function handleAuth(
 
   // 프로필이 없거나 에러 발생 시 (조합원 가입 플로우 문제일 수 있음)
   if (!profile || profileError) {
-    console.log('Profile not found or error for user:', user.id, profileError?.message)
+    log.warn('Profile not found or error', {
+      userId: maskId(user.id),
+      error: (profileError as { message?: string } | null)?.message,
+    })
 
     // 인증 페이지나 등록 페이지는 그대로 진행
     if (isAuthPage || isRegistrationPage) {

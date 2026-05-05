@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createErrorResponse } from '@/utils/apiResponse'
 import fs from 'fs'
 import path from 'path'
 
@@ -11,7 +12,7 @@ export async function GET(request: NextRequest) {
     const format = searchParams.get('format') || 'jpg'
 
     if (!imagePath) {
-      return NextResponse.json({ error: 'Image path is required' }, { status: 400 })
+      return createErrorResponse({ success: false, error: 'Image path is required' }, 400)
     }
 
     // 보안을 위한 경로 정리

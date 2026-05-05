@@ -1,13 +1,11 @@
 'use client'
 
-import { supabase } from '../../../lib/supabase/client'
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import CommentSection from '../../../components/CommentSection'
 import PostLikeButton from '../../../components/PostLikeButton'
 import PostAttachmentsDisplay from '../../../components/PostAttachmentsDisplay'
 import PostContentRenderer from '@/components/PostContentRenderer'
-import type { MemberProfile } from '@/types'
 
 interface Post {
   id: string
@@ -36,9 +34,15 @@ interface PostDetailClientProps {
     attachments: any[]
     author: { display_name: string } | null
   }
+  initialUser: {
+    id: string
+    display_name: string
+    profile_photo_url?: string
+    is_member: boolean
+  } | null
 }
 
-export default function PostDetailClient({ postId, initialData }: PostDetailClientProps) {
+export default function PostDetailClient({ postId, initialData, initialUser }: PostDetailClientProps) {
   const initialPost = useMemo<Post | null>(() => {
     if (!initialData?.post) return null
     const detail = initialData.post
@@ -74,96 +78,18 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
       ? { id: initialData.post.author_id, display_name: initialData.author.display_name }
       : { id: initialData.post.author_id, display_name: '알 수 없음' }
   )
-  const [user, setUser] = useState<any>(null)
-  const [isMember, setIsMember] = useState<boolean>(false)
-  const [authLoading, setAuthLoading] = useState<boolean>(true) // 인증 상태 확인 중
+  const [user, setUser] = useState<any>(initialUser)
+  const [isMember, setIsMember] = useState<boolean>(initialUser?.is_member ?? false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
-  // 조합원 상태 확인 함수를 별도로 분리
-  const checkMemberStatus = async (currentUser: any) => {
-    if (!currentUser) {
-      console.log('🔍 [PostDetailClient] No current user')
-      setIsMember(false)
-      return
-    }
-
-    console.log('🔍 [PostDetailClient] Checking member status for user:', currentUser.id)
-
-    try {
-      const { data: profile, error: profileError } = await supabase
-        .from('member_profiles')
-        .select('registration_status, is_active')
-        .eq('id', currentUser.id)
-        .single()
-
-      if (profileError) {
-        console.error('❌ [PostDetailClient] Error fetching profile:', profileError)
-        setIsMember(false)
-      } else if (profile) {
-        const isApprovedMember =
-          (profile as MemberProfile).registration_status === 'approved' &&
-          (profile as MemberProfile).is_active
-        console.log('📋 [PostDetailClient] Profile data:', profile)
-        console.log(
-          `✅ [PostDetailClient] Member status: ${isApprovedMember ? 'APPROVED' : 'NOT_APPROVED'}`
-        )
-        setIsMember(isApprovedMember)
-      } else {
-        console.warn('⚠️ [PostDetailClient] No profile found for user')
-        setIsMember(false)
-      }
-    } catch (error) {
-      console.error('❌ [PostDetailClient] Exception while checking member status:', error)
-      setIsMember(false)
-    }
-  }
-
-  // Helper: schedule at idle or next tick
-  const scheduleIdle = (fn: () => void) => {
-    if (typeof (window as any).requestIdleCallback === 'function') {
-      ;(window as any).requestIdleCallback(fn, { timeout: 1500 })
-    } else {
-      setTimeout(fn, 0)
-    }
-  }
-
   useEffect(() => {
-    let isMounted = true
-
-    const hydrateUserState = async () => {
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
-        if (!isMounted) return
-        const currentUser = session?.user || null
-        setUser(currentUser)
-        await checkMemberStatus(currentUser)
-
-        if (currentUser) {
-          try {
-            const res = await fetch(`/api/posts/${postId}/user-data?user_id=${currentUser.id}`)
-            if (res.ok) {
-              const userData = await res.json()
-              if (userData.success) {
-                setPost(prev =>
-                  prev ? { ...prev, is_liked: userData.data.is_liked ?? prev.is_liked } : prev
-                )
-              }
-            }
-          } catch (userDataError) {
-            console.error('[PostDetailClient] user-data fetch 오류:', userDataError)
-          }
-        }
-      } catch (e) {
-        console.warn('[PostDetail] auth check failed:', e)
-      } finally {
-        if (isMounted) {
-          setAuthLoading(false)
-        }
-      }
+    // 서버에서 전달받은 사용자 정보 사용
+    if (initialUser) {
+      setUser(initialUser)
+      setIsMember(initialUser.is_member)
     }
+    // initialUser가 null인 경우: 미로그인 상태 그대로 유지
 
     const incrementViewCount = async () => {
       try {
@@ -188,41 +114,7 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
       }
     }
 
-    scheduleIdle(hydrateUserState)
-    scheduleIdle(incrementViewCount)
-
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      const newUser = session?.user || null
-      setUser(newUser)
-
-      if (!newUser) {
-        setIsMember(false)
-        setPost(prev => (prev ? { ...prev, is_liked: false } : prev))
-      } else {
-        await checkMemberStatus(newUser)
-        try {
-          const res = await fetch(`/api/posts/${postId}/user-data?user_id=${newUser.id}`)
-          if (res.ok) {
-            const userData = await res.json()
-            if (userData.success) {
-              setPost(prev =>
-                prev ? { ...prev, is_liked: userData.data.is_liked ?? prev.is_liked } : prev
-              )
-            }
-          }
-        } catch (authChangeUserDataError) {
-          console.error(
-            '[PostDetailClient] auth 변경 후 user-data fetch 오류:',
-            authChangeUserDataError
-          )
-        }
-      }
-    })
-
-    return () => {
-      isMounted = false
-      authListener?.subscription.unsubscribe()
-    }
+    incrementViewCount()
   }, [postId])
 
   // 댓글 더보기 로드
@@ -333,8 +225,8 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
             </button>
           </div>
 
-          {/* 비로그인/비조합원 사용자 안내 - 인증 확인 완료 후에만 표시 */}
-          {!authLoading && !user && (
+          {/* 비로그인/비조합원 사용자 안내 */}
+          {!user && (
             <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-blue-800 mb-2">
                 <strong>안내:</strong> 게시물을 읽어볼 수 있지만, 댓글 작성과 좋아요는 조합원만
@@ -357,7 +249,7 @@ export default function PostDetailClient({ postId, initialData }: PostDetailClie
             </div>
           )}
 
-          {!authLoading && !isMember && user && (
+          {!isMember && user && (
             <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
               <p className="text-yellow-800">
                 <strong>알림:</strong> 조합원 승인 대기 중입니다. 승인 후 댓글 작성과 좋아요가

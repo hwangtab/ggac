@@ -10,6 +10,7 @@ export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
+import { createErrorResponse } from '@/utils/apiResponse'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import distributedRateLimiter, {
   DISTRIBUTED_RATE_LIMIT_CONFIGS,
@@ -38,7 +39,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       error: authError,
     } = await supabase.auth.getUser()
     if (authError || !user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
     }
 
     // ID 검증
@@ -47,7 +48,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       typeof resolvedParams.id !== 'string' ||
       resolvedParams.id.length > 100
     ) {
-      return NextResponse.json({ error: '잘못된 알림 ID입니다.' }, { status: 400 })
+      return createErrorResponse({ success: false, error: '잘못된 알림 ID입니다.' }, 400)
     }
 
     // 알림 읽음 처리
@@ -57,11 +58,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
     if (error) {
       console.error('알림 읽음 처리 오류:', error)
-      return NextResponse.json({ error: '알림을 읽음 처리할 수 없습니다.' }, { status: 500 })
+      return createErrorResponse({ success: false, error: '알림을 읽음 처리할 수 없습니다.' }, 500)
     }
 
     if (!data) {
-      return NextResponse.json({ error: '알림을 찾을 수 없거나 권한이 없습니다.' }, { status: 404 })
+      return createErrorResponse({ success: false, error: '알림을 찾을 수 없거나 권한이 없습니다.' }, 404)
     }
 
     return NextResponse.json({
@@ -70,7 +71,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     })
   } catch (error) {
     console.error('알림 읽음 처리 API 오류:', error)
-    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
+    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
   }
 }
 
@@ -96,7 +97,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       error: authError,
     } = await supabase.auth.getUser()
     if (authError || !user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
     }
 
     // ID 검증
@@ -105,7 +106,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       typeof resolvedParams.id !== 'string' ||
       resolvedParams.id.length > 100
     ) {
-      return NextResponse.json({ error: '잘못된 알림 ID입니다.' }, { status: 400 })
+      return createErrorResponse({ success: false, error: '잘못된 알림 ID입니다.' }, 400)
     }
 
     // 알림 삭제 (본인 알림만 삭제 가능)
@@ -117,7 +118,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
 
     if (error) {
       console.error('알림 삭제 오류:', error)
-      return NextResponse.json({ error: '알림을 삭제할 수 없습니다.' }, { status: 500 })
+      return createErrorResponse({ success: false, error: '알림을 삭제할 수 없습니다.' }, 500)
     }
 
     return NextResponse.json({
@@ -126,6 +127,6 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     })
   } catch (error) {
     console.error('알림 삭제 API 오류:', error)
-    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
+    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
   }
 }

@@ -10,6 +10,9 @@
 
 import { NextResponse } from 'next/server'
 import { SupabaseClient } from '@supabase/supabase-js'
+import { createLogger, maskId } from '@/utils/logger'
+
+const log = createLogger('errorHandler')
 
 // 에러 카테고리 정의
 export enum ErrorCategory {
@@ -253,11 +256,11 @@ function maskSensitiveData(data: any): any {
  */
 function logError(entry: ErrorLogEntry): void {
   const logData = {
-    id: entry.id,
+    id: maskId(entry.id),
     timestamp: entry.context.timestamp || new Date(),
     endpoint: entry.context.endpoint,
     method: entry.context.method,
-    userId: entry.context.userId,
+    userId: maskId(entry.context.userId),
     category: entry.error.category,
     severity: entry.error.severity,
     message: entry.error.message,
@@ -275,14 +278,14 @@ function logError(entry: ErrorLogEntry): void {
   switch (entry.error.severity) {
     case ErrorSeverity.CRITICAL:
     case ErrorSeverity.HIGH:
-      console.error('[API ERROR]', JSON.stringify(logData, null, 2))
+      log.error('[API ERROR]', logData)
       break
     case ErrorSeverity.MEDIUM:
-      console.warn('[API WARNING]', JSON.stringify(logData, null, 2))
+      log.warn('[API WARNING]', logData)
       break
     case ErrorSeverity.LOW:
     default:
-      console.log('[API INFO]', JSON.stringify(logData, null, 2))
+      log.info('[API INFO]', logData)
       break
   }
 }
@@ -407,8 +410,8 @@ export class ApiErrorHandler {
 
     // 알림이 필요한 경우 (향후 슬랙, 이메일 등 연동 가능)
     if (finalErrorInfo.shouldNotify) {
-      // 현재는 콘솔 로그로 처리, 향후 외부 알림 서비스 연동 예정
-      console.error('[CRITICAL ERROR NOTIFICATION NEEDED]', finalErrorInfo.message)
+      // 현재는 로거로 처리, 향후 외부 알림 서비스 연동 예정
+      log.error('[CRITICAL ERROR NOTIFICATION NEEDED]', finalErrorInfo.message)
     }
 
     // NextResponse 반환

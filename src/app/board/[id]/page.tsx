@@ -4,6 +4,7 @@ import { getPostMetadata } from '@/lib/posts'
 import PostDetailClient from './PostDetailClient'
 import { Suspense } from 'react'
 import { generatePostOgImage } from '@/utils/imageUrl'
+import { createSupabaseServer } from '@/lib/supabase/server'
 import {
   generatePostStructuredData,
   generateBreadcrumbStructuredData,
@@ -100,10 +101,21 @@ interface InitialPostData {
   comments: any[]
   attachments: any[]
   author: any
+  user: UserData | null
+}
+
+interface UserData {
+  id: string
+  display_name: string
+  profile_photo_url?: string
+  is_member: boolean
+  is_admin?: boolean
 }
 
 // 서버 컴포넌트: 초기 게시글 데이터를 ISR로 제공
-async function getInitialPostData(postId: string): Promise<InitialPostData | null> {
+async function getInitialPostData(
+  postId: string
+): Promise<(InitialPostData & { user: UserData | null }) | null> {
   // Service role 클라이언트 생성 (서버에서만 사용)
   const { createClient } = await import('@supabase/supabase-js')
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -190,6 +202,31 @@ async function getInitialPostData(postId: string): Promise<InitialPostData | nul
     const authorRecord = Array.isArray(post.author) ? post.author[0] : post.author
     const totalSize = (attachments || []).reduce((sum, att) => sum + (att.file_size || 0), 0)
 
+    // 인증된 사용자 정보 조회 (쿠키 기반 세션 복원 필요)
+    const supabaseServer = await createSupabaseServer()
+    const { data: { user: serverUser } } = await supabaseServer.auth.getUser()
+
+    let userData: UserData | null = null
+    if (serverUser) {
+      const { data: profile } = await supabaseAdmin
+        .from('member_profiles')
+        .select('display_name, profile_photo_url, registration_status, is_active, is_admin')
+        .eq('id', serverUser.id)
+        .single()
+
+      if (profile) {
+        userData = {
+          id: serverUser.id,
+          display_name: (profile as any).display_name || '알 수 없음',
+          profile_photo_url: (profile as any).profile_photo_url,
+          is_member:
+            (profile as any).registration_status === 'approved' &&
+            (profile as any).is_active === true,
+          is_admin: (profile as any).is_admin === true,
+        }
+      }
+    }
+
     return {
       post: {
         ...post,
@@ -207,6 +244,7 @@ async function getInitialPostData(postId: string): Promise<InitialPostData | nul
       comments,
       attachments,
       author: authorRecord ? { display_name: authorRecord.display_name } : null,
+      user: userData,
     }
   } catch (error) {
     console.error('초기 게시글 데이터 조회 실패:', error)
@@ -228,7 +266,7 @@ export default async function PostDetailPage({ params }: { params: Promise<{ id:
   if (!initialData) {
     notFound()
   }
-  const resolvedInitialData = initialData as InitialPostData
+  const resolvedInitialData = initialData as InitialPostData & { user: UserData | null }
 
   // 구조화된 데이터 생성(메타데이터 실패 시 생략)
   const postSchema = metadata
@@ -273,7 +311,11 @@ export default async function PostDetailPage({ params }: { params: Promise<{ id:
           </div>
         }
       >
-        <PostDetailClient postId={postId} initialData={resolvedInitialData} />
+        <PostDetailClient
+          postId={postId}
+          initialData={resolvedInitialData}
+          initialUser={resolvedInitialData.user}
+        />
       </Suspense>
     </div>
   )

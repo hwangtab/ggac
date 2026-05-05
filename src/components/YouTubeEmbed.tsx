@@ -32,7 +32,12 @@ const YouTubeEmbed: React.FC<YouTubeEmbedProps> = ({ videoUrl, title }) => {
       <iframe
         src={`https://www.youtube.com/embed/${videoId}`}
         title={title}
-        allow="autoplay; encrypted-media; picture-in-picture; web-share"
+        // YouTube 재생에 필요한 최소 권한만 허용. autoplay/picture-in-picture/web-share는 제외하여
+        // 임베드 페이지에서 사용자 동의 없는 자동 재생/공유 가능성을 차단한다.
+        allow="encrypted-media; fullscreen"
+        referrerPolicy="strict-origin-when-cross-origin"
+        loading="lazy"
+        sandbox="allow-scripts allow-same-origin allow-presentation"
         allowFullScreen
         className="w-full aspect-video border-0"
       />

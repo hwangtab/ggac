@@ -7,6 +7,14 @@ import type { NextRequest } from 'next/server'
  * CSP is enabled by default in production.
  * Set NEXT_STRICT_CSP=false to disable (not recommended in production).
  * Set NEXT_STRICT_CSP=true to enable in development.
+ *
+ * TODO(L1, 보안 강화): script-src/style-src의 'unsafe-inline'을 점진적으로 nonce 기반 정책으로 전환.
+ *   1) middleware에서 요청별 base64 nonce 생성 → response 헤더(`x-nonce`)와 layout context에 노출.
+ *   2) Next.js `next/script` 및 inline `<script>`에 `nonce` 속성을 주입. Next의 hydration script도
+ *      `experimental.scriptLoader.nonce` 또는 NextResponse 헤더를 통해 nonce 적용.
+ *   3) 외부 inline event handler(onclick 등)를 모두 제거하고 addEventListener 패턴으로 마이그레이션.
+ *   4) CSS-in-JS (styled-components 등)에 nonce 지원 → style-src-elem 'unsafe-inline' 제거.
+ *   5) 단계별 롤아웃: report-only 모드로 위반 사례 수집 후, 본 정책에 strict-dynamic + nonce 도입.
  */
 export function applyCSP(request: NextRequest, response: NextResponse) {
   const isProduction = process.env.NODE_ENV === 'production'

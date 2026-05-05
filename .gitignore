@@ -52,3 +52,4 @@ next-env.d.ts
 test-*.js
 test-github-mcp.js
 test-slack-mcp.js
+.env*.local

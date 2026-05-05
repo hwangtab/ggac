@@ -4,6 +4,7 @@ export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
+import { createErrorResponse } from '@/utils/apiResponse'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import rateLimiterUtils from '@/utils/rateLimiter'
 import { validateUUID } from '@/utils/validation'
@@ -13,9 +14,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   try {
     // Rate limiting
     const rateLimitConfig = rateLimiterUtils.RATE_LIMIT_CONFIGS.AUTH_API
-    const rateLimitResult = await rateLimiterUtils.applyRateLimit(rateLimitConfig)(request)
+    const rateLimiter = await rateLimiterUtils.applyRateLimit(rateLimitConfig)
+    const rateLimitResult = await rateLimiter(request)
     if (!rateLimitResult.success) {
-      return NextResponse.json({ error: '요청이 너무 많습니다.' }, { status: 429 })
+      return createErrorResponse({ success: false, error: '요청이 너무 많습니다.' }, 429)
     }
 
     const commentId = resolvedParams.id
@@ -37,7 +39,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     } = await supabase.auth.getUser()
 
     if (authError || !user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
     }
 
     // 사용자가 승인된 회원인지 확인
@@ -67,7 +69,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       .single()
 
     if (commentError || !comment) {
-      return NextResponse.json({ error: '댓글을 찾을 수 없습니다.' }, { status: 404 })
+      return createErrorResponse({ success: false, error: '댓글을 찾을 수 없습니다.' }, 404)
     }
 
     // 좋아요 토글 실행
@@ -78,12 +80,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     if (toggleError) {
       console.error('댓글 좋아요 토글 오류:', toggleError)
-      return NextResponse.json({ error: '좋아요 처리 중 오류가 발생했습니다.' }, { status: 500 })
+      return createErrorResponse({ success: false, error: '좋아요 처리 중 오류가 발생했습니다.' }, 500)
     }
 
     const likeResult = result?.[0]
     if (!likeResult) {
-      return NextResponse.json({ error: '좋아요 처리 결과를 받을 수 없습니다.' }, { status: 500 })
+      return createErrorResponse({ success: false, error: '좋아요 처리 결과를 받을 수 없습니다.' }, 500)
     }
 
     return NextResponse.json({
@@ -93,6 +95,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     })
   } catch (error) {
     console.error('댓글 좋아요 API 오류:', error)
-    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
+    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
   }
 }

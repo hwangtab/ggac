@@ -1,5 +1,6 @@
-import { createOptionsResponse } from '@/utils/apiResponse'
+import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { checkAdminPermission } from '@/lib/server/adminAuth'
 import {
@@ -10,20 +11,30 @@ import {
 } from '@/utils/rateLimiter'
 import { logSecurityEvent } from '@/utils/security'
 import { refreshSettingsCache } from '@/utils/systemSettings'
+import { createLogger, maskId } from '@/utils/logger'
+import { ApiError, ApiSuccess } from '@/utils/apiWrapper'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
+
+const log = createLogger('admin/settings/cache')
+
+const CacheInvalidateSchema = z
+  .object({
+    cacheType: z.enum(['all', 'settings', 'middleware']).optional().default('all'),
+  })
+  .strict()
 
 // POST: 시스템 설정 캐시 무효화
 export async function POST(request: NextRequest) {
   try {
     // Rate limiting 적용
-    const rateLimiter = applyRateLimit({
+    const rateLimiter = await applyRateLimit({
       ...RATE_LIMIT_CONFIGS.ADMIN_API,
       keyGenerator: createUserKeyGenerator('admin_settings_cache_invalidate'),
     })
 
-    const rateLimitResult = rateLimiter(request)
+    const rateLimitResult = await rateLimiter(request)
     if (!rateLimitResult.success && rateLimitResult.response) {
       return rateLimitResult.response
     }
@@ -37,37 +48,40 @@ export async function POST(request: NextRequest) {
     } = await supabase.auth.getUser()
 
     if (authError || !user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+      throw ApiError.unauthorized('인증이 필요합니다.')
     }
 
     await checkAdminPermission(supabase, user.id)
 
-    // 요청 데이터 파싱
-    const requestData = await request.json()
-    const { cacheType = 'all' } = requestData
+    // 요청 데이터 파싱 + Zod 검증
+    let cacheType: 'all' | 'settings' | 'middleware' = 'all'
+    const rawJson = await request.json().catch(() => ({}))
+    const parsed = CacheInvalidateSchema.safeParse(rawJson)
+    if (!parsed.success) {
+      throw ApiError.badRequest('유효하지 않은 캐시 타입입니다.')
+    }
+    cacheType = parsed.data.cacheType
 
     // 설정 캐시 무효화
     refreshSettingsCache()
 
-    // 보안 이벤트 로깅
+    // 보안 이벤트 로깅 — adminId 평문 노출 회피
     logSecurityEvent(
       'ADMIN_SETTINGS_CACHE_INVALIDATED',
       {
-        adminId: user.id,
+        adminId: maskId(user.id),
         cacheType,
       },
       'low'
     )
 
-    const response = NextResponse.json({
-      success: true,
-      message: '설정 캐시가 성공적으로 무효화되었습니다.',
-      timestamp: new Date().toISOString(),
-      details: {
+    const response = ApiSuccess.ok(
+      {
         cacheType,
         invalidatedAt: new Date().toISOString(),
       },
-    })
+      '설정 캐시가 성공적으로 무효화되었습니다.'
+    ).toNextResponse()
 
     // Rate limit 헤더 추가
     return addRateLimitHeaders(
@@ -77,7 +91,7 @@ export async function POST(request: NextRequest) {
       rateLimitResult.resetTime
     )
   } catch (error) {
-    console.error('Admin settings cache invalidation error:', error)
+    log.error('Admin settings cache invalidation error', error)
     logSecurityEvent(
       'ADMIN_SETTINGS_CACHE_INVALIDATION_ERROR',
       {
@@ -102,12 +116,12 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     // Rate limiting 적용
-    const rateLimiter = applyRateLimit({
+    const rateLimiter = await applyRateLimit({
       ...RATE_LIMIT_CONFIGS.ADMIN_API,
       keyGenerator: createUserKeyGenerator('admin_settings_cache_status'),
     })
 
-    const rateLimitResult = rateLimiter(request)
+    const rateLimitResult = await rateLimiter(request)
     if (!rateLimitResult.success && rateLimitResult.response) {
       return rateLimitResult.response
     }
@@ -121,7 +135,7 @@ export async function GET(request: NextRequest) {
     } = await supabase.auth.getUser()
 
     if (authError || !user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
     }
 
     await checkAdminPermission(supabase, user.id)
@@ -152,7 +166,7 @@ export async function GET(request: NextRequest) {
       rateLimitResult.resetTime
     )
   } catch (error) {
-    console.error('Admin settings cache status error:', error)
+    log.error('Admin settings cache status error', error)
 
     const isPermissionError = error instanceof Error && error.message.includes('권한')
     return NextResponse.json(

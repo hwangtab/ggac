@@ -7,6 +7,7 @@ export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
 import { NextRequest, NextResponse } from 'next/server'
+import { createErrorResponse } from '@/utils/apiResponse'
 import { logSecurityEvent } from '@/utils/security'
 
 interface CSPReport {
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest) {
     const report: CSPReport = await request.json()
 
     if (!report['csp-report']) {
-      return NextResponse.json({ error: 'Invalid CSP report format' }, { status: 400 })
+      return createErrorResponse({ success: false, error: 'Invalid CSP report format' }, 400)
     }
 
     const cspReport = report['csp-report']
@@ -125,6 +126,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: 'received' })
   } catch (error) {
     console.error('[CSP] 리포트 처리 중 오류:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return createErrorResponse({ success: false, error: 'Internal server error' }, 500)
   }
 }

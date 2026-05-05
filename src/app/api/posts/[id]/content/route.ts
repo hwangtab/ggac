@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createErrorResponse } from '@/utils/apiResponse'
 import { createClient } from '@supabase/supabase-js'
 import { validateUUID } from '@/utils/validation'
 
@@ -20,7 +21,7 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ id: st
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!url || !anonKey) {
-    return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 })
+    return createErrorResponse({ success: false, error: 'Supabase not configured' }, 500)
   }
 
   const supabase = createClient(url, anonKey, {
@@ -36,7 +37,7 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ id: st
 
   if (error || !data) {
     if (error) console.error('[API] 게시글 내용 조회 실패:', error)
-    return NextResponse.json({ error: '게시글을 찾을 수 없습니다.' }, { status: 404 })
+    return createErrorResponse({ success: false, error: '게시글을 찾을 수 없습니다.' }, 404)
   }
   return NextResponse.json({
     content: (data as any).content || '',

@@ -1,7 +1,10 @@
 import { cache } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import { createTextPreview } from '@/utils/textUtils'
+import { createLogger } from '@/utils/logger'
 import type { Post, PostAttachmentStats } from '@/types'
+
+const log = createLogger('fetchBoardPosts')
 
 export type BoardInitialPost = Post & {
   content_preview: string
@@ -83,7 +86,7 @@ export const fetchBoardPosts = cache(
     const { data, error } = await query
 
     if (error) {
-      console.error('[fetchBoardPosts] Failed to load posts:', error.message)
+      log.error('Failed to load posts:', error.message)
       return { posts: [], hasNext: false, hasPrev: safePage > 1, currentPage: safePage }
     }
 

@@ -1,6 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createErrorResponse } from '@/utils/apiResponse'
+import { z } from 'zod'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { rateLimit } from '@/utils/rateLimit'
+import { createLogger } from '@/utils/logger'
+
+const log = createLogger('api/settings/reset')
+
+const ResetBodySchema = z
+  .object({
+    category: z.string().min(1).max(64).nullable().optional(),
+    setting_key: z.string().min(1).max(128).nullable().optional(),
+  })
+  .strict()
 
 /**
  * 사용자 설정 초기화 API
@@ -8,34 +20,38 @@ import { rateLimit } from '@/utils/rateLimit'
  */
 export async function POST(request: NextRequest) {
   try {
-    // Rate limiting 적용
     const rateLimitResult = await rateLimit(request, 'GENERAL_API')
     if (!rateLimitResult.success) {
-      return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+      return createErrorResponse({ success: false, error: 'Too many requests' }, 429)
     }
 
     const supabase = await createSupabaseServer()
 
-    // 인증 확인
     const {
       data: { user },
     } = await supabase.auth.getUser()
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return createErrorResponse({ success: false, error: 'Unauthorized' }, 401)
     }
 
-    const body = await request.json()
-    const { category, setting_key } = body
+    const rawJson = await request.json().catch(() => ({}))
+    const parsed = ResetBodySchema.safeParse(rawJson)
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: '유효하지 않은 요청입니다.', details: parsed.error.flatten() },
+        { status: 400 }
+      )
+    }
+    const { category, setting_key } = parsed.data
 
-    // 설정 초기화 (기본값으로 복원)
     const { data: deletedCount, error } = await supabase.rpc('reset_user_settings', {
       p_category: category || null,
       p_setting_key: setting_key || null,
     })
 
     if (error) {
-      console.error('Settings reset error:', error)
-      return NextResponse.json({ error: '설정 초기화에 실패했습니다.' }, { status: 400 })
+      log.error('Settings reset error', error)
+      return createErrorResponse({ success: false, error: '설정 초기화에 실패했습니다.' }, 400)
     }
 
     let message = ''
@@ -53,7 +69,7 @@ export async function POST(request: NextRequest) {
       message,
     })
   } catch (error) {
-    console.error('Settings reset API error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    log.error('Settings reset API error', error)
+    return createErrorResponse({ success: false, error: 'Internal server error' }, 500)
   }
 }

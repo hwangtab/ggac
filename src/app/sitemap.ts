@@ -27,7 +27,10 @@ async function getBoardPostsForSitemap(): Promise<Array<{ id: string; updated_at
     if (error || !data) return []
     return data
       .filter(post => {
-        const text = (post.content || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
+        const text = (post.content || '')
+          .replace(/<[^>]*>/g, '')
+          .replace(/\s+/g, ' ')
+          .trim()
         return text.length >= 200
       })
       .map(({ id, updated_at }) => ({ id, updated_at }))

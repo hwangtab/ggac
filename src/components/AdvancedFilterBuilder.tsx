@@ -5,7 +5,7 @@
 
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { FiFilter, FiX, FiSave, FiChevronDown, FiChevronRight, FiRefreshCw } from 'react-icons/fi'
 import type { FilterOperator, FieldDefinition, AdvancedSearchQuery } from '@/types'
 import { useAdvancedFilter } from '@/hooks/useAdvancedFilter'
@@ -42,6 +42,10 @@ const AdvancedFilterBuilder: React.FC<AdvancedFilterBuilderProps> = ({
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [presetName, setPresetName] = useState('')
   const [activeTab, setActiveTab] = useState<'filters' | 'sorts'>('filters')
+
+  // 저장 다이얼로그 a11y: focus 관리
+  const saveDialogRef = useRef<HTMLDivElement>(null)
+  const [previousFocus, setPreviousFocus] = useState<HTMLElement | null>(null)
 
   // 연산자별 한글 이름
   const operatorLabels: Record<FilterOperator, string> = {
@@ -82,6 +86,57 @@ const AdvancedFilterBuilder: React.FC<AdvancedFilterBuilderProps> = ({
     initialSorts,
     onChange,
   })
+
+  // 저장 다이얼로그 a11y: 열릴 때 이전 focus 저장 + focus 이동
+  useEffect(() => {
+    if (showSaveDialog) {
+      setPreviousFocus(document.activeElement as HTMLElement)
+      // input autoFocus는 ref가 설정된 후 focus
+      setTimeout(() => {
+        const input = saveDialogRef.current?.querySelector<HTMLInputElement>('input[type="text"]')
+        input?.focus()
+      }, 0)
+    }
+  }, [showSaveDialog])
+
+  // 저장 다이얼로그 닫힐 때 이전 focus 복원
+  useEffect(() => {
+    if (!showSaveDialog && previousFocus) {
+      previousFocus.focus()
+    }
+  }, [showSaveDialog, previousFocus])
+
+  // 키보드 이벤트: Escape + focus trap (저장 다이얼로그)
+  useEffect(() => {
+    if (!showSaveDialog) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowSaveDialog(false)
+        return
+      }
+      if (e.key === 'Tab' && saveDialogRef.current) {
+        const focusable = saveDialogRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+        if (focusable.length === 0) return
+        const first = focusable[0]
+        const last = focusable[focusable.length - 1]
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            e.preventDefault()
+            last?.focus()
+          }
+        } else {
+          if (document.activeElement === last) {
+            e.preventDefault()
+            first?.focus()
+          }
+        }
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [showSaveDialog])
 
   // 저장 처리
   const handleSave = () => {
@@ -231,10 +286,18 @@ const AdvancedFilterBuilder: React.FC<AdvancedFilterBuilderProps> = ({
 
       {/* 저장 다이얼로그 */}
       {showSaveDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div
+          ref={saveDialogRef}
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="advanced-filter-save-title"
+        >
           <div className="bg-white rounded-lg p-6 w-96 max-w-full mx-4">
             <div className="flex items-center justify-between mb-4">
-              <h4 className="font-medium text-gray-900">설정 저장</h4>
+              <h4 id="advanced-filter-save-title" className="font-medium text-gray-900">
+                설정 저장
+              </h4>
               <button
                 onClick={() => setShowSaveDialog(false)}
                 className="text-gray-400 hover:text-gray-600"

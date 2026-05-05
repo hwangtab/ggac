@@ -5,7 +5,7 @@
 
 'use client'
 
-import React, { useState, useCallback, useRef } from 'react'
+import React, { useState, useCallback, useRef, useEffect } from 'react'
 import ReactCrop, { type Crop, type PixelCrop } from 'react-image-crop'
 import 'react-image-crop/dist/ReactCrop.css'
 import {
@@ -77,6 +77,8 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const imageRef = useRef<HTMLImageElement>(null)
   const previewCanvasRef = useRef<HTMLCanvasElement>(null)
+  const cropDialogRef = useRef<HTMLDivElement>(null)
+  const cropCloseButtonRef = useRef<HTMLButtonElement>(null)
 
   // 크기별 스타일 설정
   const sizeClasses = {
@@ -227,7 +229,7 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
       crop.height
     )
 
-    // 미리보기 URL 생성
+    // 미리보기 URL 생성 (이전 URL은 useEffect cleanup이 revoke)
     canvas.toBlob(blob => {
       if (blob) {
         const url = URL.createObjectURL(blob)
@@ -235,6 +237,81 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
       }
     })
   }, [])
+
+  // Blob URL 메모리 누수 방지: 교체 및 언마운트 시 모두 revoke
+  const currentBlobUrl = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (croppedImageUrl) {
+      // 이전 blob URL revoke (교체 시)
+      if (currentBlobUrl.current) {
+        URL.revokeObjectURL(currentBlobUrl.current)
+      }
+      currentBlobUrl.current = croppedImageUrl
+    }
+    // 언마운트 시 최종 revoke
+    return () => {
+      if (currentBlobUrl.current) {
+        URL.revokeObjectURL(currentBlobUrl.current)
+        currentBlobUrl.current = null
+      }
+    }
+  })
+
+  // 크롭 모달 a11y: 열릴 때 focus 이동, focus trap, Escape 처리, 이전 focus 복원
+  const [previousFocus, setPreviousFocus] = useState<HTMLElement | null>(null)
+
+  // 모달 열릴 때 이전 focus 저장 + focus 이동
+  useEffect(() => {
+    if (showCropModal) {
+      setPreviousFocus(document.activeElement as HTMLElement)
+      cropCloseButtonRef.current?.focus()
+    }
+  }, [showCropModal])
+
+  // 모달 닫힐 때 이전 focus 복원
+  useEffect(() => {
+    if (!showCropModal && previousFocus) {
+      previousFocus.focus()
+    }
+  }, [showCropModal, previousFocus])
+
+  // 키보드 이벤트: Escape + focus trap
+  useEffect(() => {
+    if (!showCropModal) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !uploadState.isUploading) {
+        setShowCropModal(false)
+        setSelectedFile(null)
+        setCrop(undefined)
+        setCompletedCrop(undefined)
+        setCroppedImageUrl(undefined)
+        setUploadState({ isUploading: false, progress: 0 })
+        return
+      }
+      if (e.key === 'Tab' && cropDialogRef.current) {
+        const focusable = cropDialogRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+        if (focusable.length === 0) return
+        const first = focusable[0]
+        const last = focusable[focusable.length - 1]
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            e.preventDefault()
+            last?.focus()
+          }
+        } else {
+          if (document.activeElement === last) {
+            e.preventDefault()
+            first?.focus()
+          }
+        }
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [showCropModal, uploadState.isUploading])
 
   // 이미지 로드 완료 시 기본 크롭 영역 설정
   const onImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
@@ -561,6 +638,7 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
       {/* 크롭 모달 */}
       {showCropModal && selectedFile && uploadState.preview && (
         <div
+          ref={cropDialogRef}
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
           role="dialog"
           aria-modal="true"
@@ -572,6 +650,8 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
                 프로필 사진 크롭
               </h3>
               <button
+                ref={cropCloseButtonRef}
+                aria-label="크롭 모달 닫기"
                 onClick={() => {
                   setShowCropModal(false)
                   setSelectedFile(null)

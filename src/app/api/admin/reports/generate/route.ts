@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createErrorResponse } from '@/utils/apiResponse'
 import { applyRateLimit, RATE_LIMIT_CONFIGS } from '@/utils/rateLimiter'
 import { requireAdmin } from '@/lib/server/adminAuth'
 
@@ -9,13 +10,13 @@ import { requireAdmin } from '@/lib/server/adminAuth'
 export async function POST(request: NextRequest) {
   try {
     // Rate limiting 적용
-    const rateLimiter = applyRateLimit(RATE_LIMIT_CONFIGS.ADMIN_API)
-    const rateLimitResult = rateLimiter(request)
+    const rateLimiter = await applyRateLimit(RATE_LIMIT_CONFIGS.ADMIN_API)
+    const rateLimitResult = await rateLimiter(request)
 
     if (!rateLimitResult.success) {
       return (
         rateLimitResult.response ??
-        NextResponse.json({ error: '요청이 너무 많습니다.' }, { status: 429 })
+        createErrorResponse({ success: false, error: '요청이 너무 많습니다.' }, 429)
       )
     }
 
@@ -66,7 +67,7 @@ export async function POST(request: NextRequest) {
         reportData = await generateComprehensiveReport(serviceSupabase, startDate, endDate, filters)
         break
       default:
-        return NextResponse.json({ error: 'Invalid report type' }, { status: 400 })
+        return createErrorResponse({ success: false, error: 'Invalid report type' }, 400)
     }
 
     // 리포트 메타데이터 생성
@@ -92,7 +93,7 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error('Report generation error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return createErrorResponse({ success: false, error: 'Internal server error' }, 500)
   }
 }
 

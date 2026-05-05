@@ -197,8 +197,13 @@ throw ApiError.internalServerError('Server error')
 - **Authentication**: Supabase Auth with JWT tokens
 - **Authorization**: Role-based access control (admin/user)
 - **Middleware**: Handles auth, CSP headers, and request processing
-- **Rate Limiting**: Distributed rate limiting with Upstash Redis (fallback to
-  memory)
+- **Rate Limiting**: Distributed rate limiting via
+  `@/utils/distributedRateLimiter` (Upstash Redis REST). 인스턴스별 메모리
+  폴백은 단일 노드 환경에서만 의미가 있으며, Vercel 등 분산 환경에서는
+  `UPSTASH_REDIS_REST_URL`·`UPSTASH_REDIS_REST_TOKEN`을 반드시 설정해야 한다.
+  운영 환경에서 폴백이 사용되면 부팅 시점에 보안 로그
+  (`RATE_LIMIT_MEMORY_FALLBACK`)가 high 심각도로 기록된다. 레거시 인메모리 모듈
+  `@/utils/rateLimiter`는 신규 코드에서 사용 금지.
 - **Error Handling**: Centralized error handling with `ApiErrorHandler`
 
 ### Key Middleware Features

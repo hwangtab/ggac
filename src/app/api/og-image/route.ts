@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createErrorResponse } from '@/utils/apiResponse'
 import fs from 'fs'
 import path from 'path'
 
@@ -10,7 +11,7 @@ export async function GET(request: NextRequest) {
     const artistSlug = searchParams.get('artist')
 
     if (!artistSlug) {
-      return NextResponse.json({ error: 'Artist slug is required' }, { status: 400 })
+      return createErrorResponse({ success: false, error: 'Artist slug is required' }, 400)
     }
 
     // 아티스트 데이터 로드
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest) {
     const artist = artistsData.find((a: any) => a.slug === artistSlug)
 
     if (!artist) {
-      return NextResponse.json({ error: 'Artist not found' }, { status: 404 })
+      return createErrorResponse({ success: false, error: 'Artist not found' }, 404)
     }
 
     // 베이스 URL 설정

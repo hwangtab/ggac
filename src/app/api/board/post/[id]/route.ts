@@ -1,31 +1,31 @@
 import { NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { createErrorResponse, createJsonResponse } from '@/utils/apiResponse'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { validateUUID } from '@/utils/validation'
+import { createLogger } from '@/utils/logger'
 
-export const revalidate = 60
+// `dynamic = 'force-dynamic'` 적용으로 ISR `revalidate`는 의미 없음 — 헤더로 캐시 제어.
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 export const preferredRegion = 'icn1'
 
+const log = createLogger('api/board/post')
+
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
-  const postId = id
+  const { id: postId } = await params
 
   const uuidValidation = validateUUID(postId, '게시글 ID')
   if (!uuidValidation.isValid) {
-    return createErrorResponse(uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.', 400)
+    return ApiError.badRequest(
+      uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.'
+    ).toNextResponse()
   }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  console.info('[API board/post] env check', {
-    hasUrl: Boolean(url),
-    hasAnonKey: Boolean(anonKey),
-    runtime: 'nodejs',
-  })
   if (!url || !anonKey) {
-    return createErrorResponse('Supabase credentials not configured', 500)
+    log.error('Supabase 환경변수 누락', { hasUrl: Boolean(url), hasAnonKey: Boolean(anonKey) })
+    return ApiError.internalServerError('Supabase credentials not configured').toNextResponse()
   }
 
   const supabase = createClient(url, anonKey, {
@@ -81,57 +81,61 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     ])
     const t2 = Date.now()
 
+    interface AttachmentRow {
+      file_url: string
+      file_type: string
+      file_size: number | string | null
+      is_primary: boolean | null
+      created_at: string
+    }
+
     const { data: post, error: postError } = postRes
-    const comments = (commentsRes.data as any[]) || []
-    const attachments = (attachmentsRes.data as any[]) || []
+    const comments = (commentsRes.data as unknown[]) || []
+    const attachments = (attachmentsRes.data as AttachmentRow[]) || []
 
     timings.queue_ms = t1 - t0
     timings.query_ms = t2 - t1
 
     if (postError || !post) {
-      console.warn('[API board/post] query failed or empty', {
+      log.warn('게시글 조회 실패 또는 없음', {
         postError: postError?.message,
-        postId,
         commentsCount: comments.length,
         attachmentsCount: attachments.length,
       })
-      return createErrorResponse('Post not found', 404)
+      return ApiError.notFound('Post not found').toNextResponse()
     }
 
-    const totalSize = (attachments || []).reduce(
-      (sum, att: any) => sum + (Number(att.file_size) || 0),
-      0
-    )
+    const totalSize = attachments.reduce((sum, att) => sum + (Number(att.file_size) || 0), 0)
 
     const payload = {
       post: {
         ...post,
         is_liked: false,
-        comment_count: (comments || []).length, // 전체 개수는 별도 API로 제공 가능
+        comment_count: comments.length,
         attachments_stats: {
-          total_attachments: (attachments || []).length,
+          total_attachments: attachments.length,
           total_size: totalSize,
-          image_count: (attachments || []).filter((att: any) => att.file_type === 'image').length,
-          document_count: (attachments || []).filter((att: any) => att.file_type === 'document')
-            .length,
-          video_count: (attachments || []).filter((att: any) => att.file_type === 'video').length,
-          audio_count: (attachments || []).filter((att: any) => att.file_type === 'audio').length,
+          image_count: attachments.filter(att => att.file_type === 'image').length,
+          document_count: attachments.filter(att => att.file_type === 'document').length,
+          video_count: attachments.filter(att => att.file_type === 'video').length,
+          audio_count: attachments.filter(att => att.file_type === 'audio').length,
         },
       },
       comments,
       attachments,
-      author: post.author,
+      author: (post as { author?: unknown }).author,
     }
 
-    const headers: Record<string, string> = {
-      'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
-    }
+    const extraHeaders: Record<string, string> = {}
     if (process.env.POST_DETAIL_TIMING === '1') {
-      headers['x-debug-timing'] = JSON.stringify(timings)
+      extraHeaders['x-debug-timing'] = JSON.stringify(timings)
     }
-    return createJsonResponse(payload, 200, headers)
-  } catch (e: any) {
-    console.error('[API board/post] unexpected error', { message: e?.message, name: e?.name })
-    return createErrorResponse('Failed to fetch post detail', 500)
+    return ApiSuccess.ok(payload).toNextResponse({
+      cacheControl: 'public, s-maxage=60, stale-while-revalidate=300',
+      extraHeaders,
+    })
+  } catch (e) {
+    log.error('예상치 못한 오류', e)
+    return ApiError.internalServerError('Failed to fetch post detail').toNextResponse()
   }
 }

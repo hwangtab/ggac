@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { FiX, FiUser, FiUserPlus, FiCheck } from 'react-icons/fi'
 import Image from 'next/image'
+import { useDialogA11y } from '@/hooks/useDialogA11y'
 
 interface Artist {
   id: string
@@ -54,6 +55,9 @@ export default function AssignArtistModal({
   )
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
+
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useDialogA11y({ containerRef: dialogRef, onClose, isOpen })
 
   if (!isOpen) return null
 
@@ -172,11 +176,20 @@ export default function AssignArtistModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+    <div
+      ref={dialogRef}
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="assign-artist-modal-title"
+      tabIndex={-1}
+    >
       <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col">
         {/* 헤더 */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 flex-shrink-0">
-          <h2 className="text-xl font-semibold text-gray-900">아티스트 배정</h2>
+          <h2 id="assign-artist-modal-title" className="text-xl font-semibold text-gray-900">
+            아티스트 배정
+          </h2>
           <button
             onClick={handleClose}
             className="p-2 hover:bg-gray-100 rounded-md transition-colors"

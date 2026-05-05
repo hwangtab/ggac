@@ -1,4 +1,4 @@
-import { createOptionsResponse } from '@/utils/apiResponse'
+import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/server/adminAuth'
 import {
@@ -17,11 +17,11 @@ export const runtime = 'nodejs'
  */
 export async function GET(request: NextRequest) {
   try {
-    const rateLimiter = applyRateLimit({
+    const rateLimiter = await applyRateLimit({
       ...RATE_LIMIT_CONFIGS.ADMIN_API,
       keyGenerator: createUserKeyGenerator('admin_stats_monthly'),
     })
-    const rateLimitResult = rateLimiter(request)
+    const rateLimitResult = await rateLimiter(request)
     if (!rateLimitResult.success && rateLimitResult.response) {
       return rateLimitResult.response
     }
@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
 
     if (memberError) {
       console.error('Member stats error:', memberError)
-      return NextResponse.json({ error: '회원 통계 조회 실패' }, { status: 500 })
+      return createErrorResponse({ success: false, error: '회원 통계 조회 실패' }, 500)
     }
 
     // 월별 게시글 통계
@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
 
     if (postError) {
       console.error('Post stats error:', postError)
-      return NextResponse.json({ error: '게시글 통계 조회 실패' }, { status: 500 })
+      return createErrorResponse({ success: false, error: '게시글 통계 조회 실패' }, 500)
     }
 
     // 월별 활동 통계
@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
 
     if (activityError) {
       console.error('Activity stats error:', activityError)
-      return NextResponse.json({ error: '활동 통계 조회 실패' }, { status: 500 })
+      return createErrorResponse({ success: false, error: '활동 통계 조회 실패' }, 500)
     }
 
     // 월별 데이터 그룹화

@@ -1,6 +1,9 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
+import { createLogger } from '@/utils/logger'
+
+const log = createLogger('useIntersectionObserver')
 
 interface UseIntersectionObserverOptions extends IntersectionObserverInit {
   // 한번 교차한 후 계속 추적할지 여부
@@ -71,6 +74,9 @@ export const useIntersectionObserver = (
     [hasIntersected, triggerOnce]
   )
 
+  // observer 옵션 중 의미 있는 변화만 감지하기 위한 직렬화 키
+  const observerOptionsKey = useMemo(() => JSON.stringify(observerOptions ?? {}), [observerOptions])
+
   // IntersectionObserver 설정 및 정리
   useEffect(() => {
     const target = targetRef.current
@@ -87,15 +93,8 @@ export const useIntersectionObserver = (
       })
 
       observerRef.current.observe(target)
-
-      // 개발 환경에서 디버깅 정보 출력
-      if (process.env.NODE_ENV === 'development') {
-        console.log(
-          `🔍 IntersectionObserver: observing element with threshold ${threshold}, rootMargin ${rootMargin}`
-        )
-      }
     } catch (error) {
-      console.error('IntersectionObserver creation failed:', error)
+      log.error('IntersectionObserver 생성 실패', error)
     }
 
     return () => {
@@ -103,6 +102,8 @@ export const useIntersectionObserver = (
         observerRef.current.disconnect()
       }
     }
+    // observerOptionsKey 사용으로 객체 참조 변경 시 불필요한 재구독을 방지
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     handleIntersection,
     threshold,
@@ -110,7 +111,7 @@ export const useIntersectionObserver = (
     preloadMargin,
     hasIntersected,
     triggerOnce,
-    observerOptions,
+    observerOptionsKey,
   ])
 
   return {

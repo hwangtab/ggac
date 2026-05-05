@@ -1,5 +1,6 @@
-import { createOptionsResponse } from '@/utils/apiResponse'
+import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { checkAdminPermission } from '@/lib/server/adminAuth'
 import {
@@ -10,6 +11,54 @@ import {
 } from '@/utils/rateLimiter'
 import { logSecurityEvent } from '@/utils/security'
 import { refreshSettingsCache } from '@/utils/systemSettings'
+import { createLogger } from '@/utils/logger'
+
+const log = createLogger('admin/settings')
+
+// PUT 요청 본문 스키마 (모든 카테고리/필드는 optional, 일부 업데이트 허용)
+const SystemSettingsUpdateSchema = z
+  .object({
+    site: z
+      .object({
+        maintenance_mode: z.boolean().optional(),
+        registration_enabled: z.boolean().optional(),
+        site_title: z.string().min(1).max(200).optional(),
+        site_description: z.string().max(500).optional(),
+        max_members: z.number().int().min(1).max(1_000_000).optional(),
+      })
+      .partial()
+      .optional(),
+    email: z
+      .object({
+        smtp_host: z.string().max(255).optional(),
+        smtp_port: z.number().int().min(1).max(65535).optional(),
+        smtp_user: z.string().max(255).optional(),
+        smtp_password: z.string().max(255).optional(),
+        from_email: z.string().email().or(z.string().length(0)).optional(),
+        from_name: z.string().max(100).optional(),
+      })
+      .partial()
+      .optional(),
+    security: z
+      .object({
+        session_timeout: z.number().int().min(1).max(10080).optional(),
+        max_login_attempts: z.number().int().min(1).max(100).optional(),
+        password_min_length: z.number().int().min(4).max(64).optional(),
+        require_email_verification: z.boolean().optional(),
+      })
+      .partial()
+      .optional(),
+    features: z
+      .object({
+        board_enabled: z.boolean().optional(),
+        artist_registration_enabled: z.boolean().optional(),
+        comments_enabled: z.boolean().optional(),
+        file_uploads_enabled: z.boolean().optional(),
+      })
+      .partial()
+      .optional(),
+  })
+  .strict()
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -118,12 +167,12 @@ const SETTING_MAPPINGS = {
 export async function GET(request: NextRequest) {
   try {
     // Rate limiting 적용
-    const rateLimiter = applyRateLimit({
+    const rateLimiter = await applyRateLimit({
       ...RATE_LIMIT_CONFIGS.ADMIN_API,
       keyGenerator: createUserKeyGenerator('admin_settings_get'),
     })
 
-    const rateLimitResult = rateLimiter(request)
+    const rateLimitResult = await rateLimiter(request)
     if (!rateLimitResult.success && rateLimitResult.response) {
       return rateLimitResult.response
     }
@@ -137,7 +186,7 @@ export async function GET(request: NextRequest) {
     } = await supabase.auth.getUser()
 
     if (authError || !user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
     }
 
     // 관리자 권한 확인
@@ -156,7 +205,7 @@ export async function GET(request: NextRequest) {
     let settingsData = initialSettingsData
 
     if (settingsError) {
-      console.error('Settings query error:', settingsError)
+      log.error('Settings query error', settingsError)
 
       // 폴백: 직접 테이블 쿼리 시도
       try {
@@ -167,7 +216,7 @@ export async function GET(request: NextRequest) {
           .order('setting_key')
 
         if (fallbackError) {
-          console.error('[API] 설정 테이블 직접 조회 실패:', fallbackError)
+          log.error('설정 테이블 직접 조회 실패', fallbackError)
           throw new Error('설정 테이블 조회 실패')
         }
 
@@ -217,7 +266,7 @@ export async function GET(request: NextRequest) {
       rateLimitResult.resetTime
     )
   } catch (error) {
-    console.error('Admin settings GET error:', error)
+    log.error('Admin settings GET error', error)
     logSecurityEvent(
       'ADMIN_SETTINGS_ACCESS_ERROR',
       {
@@ -242,12 +291,12 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     // Rate limiting 적용
-    const rateLimiter = applyRateLimit({
+    const rateLimiter = await applyRateLimit({
       ...RATE_LIMIT_CONFIGS.ADMIN_API,
       keyGenerator: createUserKeyGenerator('admin_settings_update'),
     })
 
-    const rateLimitResult = rateLimiter(request)
+    const rateLimitResult = await rateLimiter(request)
     if (!rateLimitResult.success && rateLimitResult.response) {
       return rateLimitResult.response
     }
@@ -261,18 +310,26 @@ export async function PUT(request: NextRequest) {
     } = await supabase.auth.getUser()
 
     if (authError || !user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
     }
 
     // 관리자 권한 확인
     await checkAdminPermission(supabase, user.id)
 
-    // 요청 데이터 파싱
-    const requestData: SystemSettings = await request.json()
-
-    // 기본적인 유효성 검사
-    if (!requestData || typeof requestData !== 'object') {
-      return NextResponse.json({ error: '유효하지 않은 설정 데이터입니다.' }, { status: 400 })
+    // 요청 데이터 파싱 + Zod 검증
+    let requestData: z.infer<typeof SystemSettingsUpdateSchema>
+    try {
+      const rawJson = await request.json()
+      const parsed = SystemSettingsUpdateSchema.safeParse(rawJson)
+      if (!parsed.success) {
+        return NextResponse.json(
+          { error: '유효하지 않은 설정 데이터입니다.', details: parsed.error.flatten() },
+          { status: 400 }
+        )
+      }
+      requestData = parsed.data
+    } catch {
+      return createErrorResponse({ success: false, error: '유효하지 않은 JSON 본문입니다.' }, 400)
     }
 
     // 설정별로 데이터베이스 업데이트
@@ -411,13 +468,13 @@ export async function PUT(request: NextRequest) {
           })
 
           if (updateError) {
-            console.error(`Setting update error for ${category}.${settingKey}:`, updateError)
+            log.error(`Setting update error for ${category}.${settingKey}`, updateError)
             errorResults.push(`${category}.${settingKey}`)
           } else {
             updateResults.push(`${category}.${settingKey}`)
           }
         } catch (err) {
-          console.error(`Setting update exception for ${category}.${settingKey}:`, err)
+          log.error(`Setting update exception for ${category}.${settingKey}`, err)
           errorResults.push(`${category}.${settingKey}`)
         }
       }
@@ -459,7 +516,7 @@ export async function PUT(request: NextRequest) {
       rateLimitResult.resetTime
     )
   } catch (error) {
-    console.error('Admin settings PUT error:', error)
+    log.error('Admin settings PUT error', error)
     logSecurityEvent(
       'ADMIN_SETTINGS_UPDATE_ERROR',
       {

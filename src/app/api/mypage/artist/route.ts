@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
 import { z } from 'zod'
-import { createOptionsResponse } from '@/utils/apiResponse'
+import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { updateArtistInJsonFile, commitAndPushJsonChanges } from '@/utils/jsonSync'
 import { invalidateArtistsCache } from '@/lib/data'
@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
     } = await supabase.auth.getUser()
 
     if (authError || !user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
     }
 
     // 사용자의 프로필 정보 조회 (아티스트 ID 확인)
@@ -96,16 +96,16 @@ export async function GET(request: NextRequest) {
 
     if (profileError) {
       console.error('Profile fetch error:', profileError)
-      return NextResponse.json({ error: '프로필 정보를 조회할 수 없습니다.' }, { status: 500 })
+      return createErrorResponse({ success: false, error: '프로필 정보를 조회할 수 없습니다.' }, 500)
     }
 
     // 아티스트 권한 확인
     if (!profile.is_artist || !profile.artist_id) {
-      return NextResponse.json({ error: '아티스트 권한이 없습니다.' }, { status: 403 })
+      return createErrorResponse({ success: false, error: '아티스트 권한이 없습니다.' }, 403)
     }
 
     if (profile.registration_status !== 'approved' || !profile.is_active) {
-      return NextResponse.json({ error: '승인된 멤버만 접근할 수 있습니다.' }, { status: 403 })
+      return createErrorResponse({ success: false, error: '승인된 멤버만 접근할 수 있습니다.' }, 403)
     }
 
     // 아티스트 정보 조회
@@ -117,13 +117,13 @@ export async function GET(request: NextRequest) {
 
     if (artistError) {
       console.error('Artist fetch error:', artistError)
-      return NextResponse.json({ error: '아티스트 정보를 조회할 수 없습니다.' }, { status: 500 })
+      return createErrorResponse({ success: false, error: '아티스트 정보를 조회할 수 없습니다.' }, 500)
     }
 
     return NextResponse.json({ artist })
   } catch (error) {
     console.error('Artist GET error:', error)
-    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
+    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
   }
 }
 
@@ -139,7 +139,7 @@ export async function PATCH(request: NextRequest) {
     } = await supabase.auth.getUser()
 
     if (authError || !user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
     }
 
     // 요청 데이터 파싱 및 검증
@@ -169,16 +169,16 @@ export async function PATCH(request: NextRequest) {
 
     if (profileError) {
       console.error('Profile fetch error:', profileError)
-      return NextResponse.json({ error: '프로필 정보를 조회할 수 없습니다.' }, { status: 500 })
+      return createErrorResponse({ success: false, error: '프로필 정보를 조회할 수 없습니다.' }, 500)
     }
 
     // 아티스트 권한 확인
     if (!profile.is_artist || !profile.artist_id) {
-      return NextResponse.json({ error: '아티스트 권한이 없습니다.' }, { status: 403 })
+      return createErrorResponse({ success: false, error: '아티스트 권한이 없습니다.' }, 403)
     }
 
     if (profile.registration_status !== 'approved' || !profile.is_active) {
-      return NextResponse.json({ error: '승인된 멤버만 접근할 수 있습니다.' }, { status: 403 })
+      return createErrorResponse({ success: false, error: '승인된 멤버만 접근할 수 있습니다.' }, 403)
     }
 
     // 포트폴리오 링크 유효성 검사
@@ -211,7 +211,7 @@ export async function PATCH(request: NextRequest) {
     // 아티스트 정보 업데이트 (service-role 우선 사용) + 서버 측 소유자 검증
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL
     if (!url) {
-      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
+      return createErrorResponse({ success: false, error: 'Server configuration error' }, 500)
     }
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
     const db = serviceKey
@@ -347,7 +347,7 @@ export async function PATCH(request: NextRequest) {
     })
   } catch (error) {
     console.error('Artist PATCH error:', error)
-    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
+    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
   }
 }
 

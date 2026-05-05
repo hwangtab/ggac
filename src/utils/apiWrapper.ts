@@ -11,9 +11,12 @@
 import { NextResponse } from 'next/server'
 import { createErrorHandler, ApiErrorHandler } from '@/utils/errorHandler'
 import { createSuccessResponse, createErrorResponse } from '@/utils/apiResponse'
+import { createLogger, maskId } from '@/utils/logger'
+
+const log = createLogger('apiWrapper')
 
 // 표준 API 응답 타입 정의
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success: boolean
   data?: T
   error?: string
@@ -26,7 +29,7 @@ export interface ApiResponse<T = any> {
 }
 
 // API 성공 응답 타입
-export interface ApiSuccessResponse<T = any> extends ApiResponse<T> {
+export interface ApiSuccessResponse<T = unknown> extends ApiResponse<T> {
   success: true
   data: T
 }
@@ -51,6 +54,10 @@ export interface ApiOperationOptions {
   cacheable?: boolean
   /** 캐시 최대 시간 (초) */
   maxAge?: number
+  /** Cache-Control 헤더를 직접 지정 (cacheable/maxAge 보다 우선) */
+  cacheControl?: string
+  /** 추가 응답 헤더 */
+  extraHeaders?: Record<string, string>
   /** CORS 허용 여부 */
   enableCors?: boolean
   /** 로깅 비활성화 */
@@ -60,7 +67,7 @@ export interface ApiOperationOptions {
 /**
  * API 성공 응답 래퍼
  */
-export class ApiSuccess<T = any> {
+export class ApiSuccess<T = unknown> {
   constructor(
     public data: T,
     public message?: string,
@@ -84,11 +91,19 @@ export class ApiSuccess<T = any> {
 
     const headers: Record<string, string> = {}
 
-    // 캐시 헤더 설정
-    if (options.cacheable) {
+    // 캐시 헤더 설정 (cacheControl > cacheable/maxAge > 기본 private no-store)
+    //
+    // 캐시 TTL 정책 가이드 (혼선을 방지하기 위해 한 곳에 명시):
+    //   - 게시글 목록/상세: s-maxage=60, stale-while-revalidate=300 (라우트에서 직접)
+    //   - 정적 이미지/asset: public, max-age=31536000, immutable
+    //   - OG/이미지 프록시: public, max-age=86400 (1일)
+    //   - 일반 cacheable API: max-age=3600 (1시간) — 본 옵션 기본값
+    //   - 인증/사용자 응답: private, no-store + Vary: Cookie/Authorization (기본)
+    if (options.cacheControl) {
+      headers['Cache-Control'] = options.cacheControl
+    } else if (options.cacheable) {
       headers['Cache-Control'] = `public, max-age=${options.maxAge || 3600}`
     } else {
-      // 로그인 사용자 등 민감 응답은 private 캐시 및 no-store 권장
       headers['Cache-Control'] = 'private, no-store'
       headers['Vary'] = 'Cookie, Authorization'
     }
@@ -98,6 +113,10 @@ export class ApiSuccess<T = any> {
       headers['Access-Control-Allow-Origin'] = '*'
       headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
       headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    }
+
+    if (options.extraHeaders) {
+      Object.assign(headers, options.extraHeaders)
     }
 
     return createSuccessResponse(response, options.successStatus || this.statusCode, headers)
@@ -139,6 +158,7 @@ export class ApiError extends Error {
 
   /**
    * NextResponse로 변환
+   * ⚠️ details는 항상 제거 — 내부 에러 정보가 클라이언트에 누출되는 보안 취약점 방지
    */
   toNextResponse(options: ApiOperationOptions = {}): NextResponse {
     const response: ApiErrorResponse = {
@@ -147,11 +167,33 @@ export class ApiError extends Error {
       meta: {
         timestamp: new Date().toISOString(),
         requestId: options.requestId,
-        version: process.env.npm_package_version || '1.0.0',
       },
     }
 
-    return createErrorResponse(this.message, this.statusCode)
+    const headers: Record<string, string> = {
+      'Cache-Control': 'private, no-store',
+      Vary: 'Cookie, Authorization',
+    }
+
+    if (options.enableCors) {
+      headers['Access-Control-Allow-Origin'] = '*'
+      headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+      headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    }
+
+    if (this.statusCode === 429) {
+      headers['Retry-After'] = '60'
+    }
+
+    if (options.extraHeaders) {
+      Object.assign(headers, options.extraHeaders)
+    }
+
+    return createErrorResponse(
+      response as { success: false; error: string; [key: string]: unknown },
+      this.statusCode,
+      headers
+    )
   }
 
   /**
@@ -260,9 +302,9 @@ export async function withApiWrapper<T>(
 
     // 성공 로깅
     if (!options.disableLogging) {
-      console.log(`[API SUCCESS] ${context.method} ${context.endpoint} - ${responseTime}ms`, {
+      log.info(`[SUCCESS] ${context.method} ${context.endpoint} - ${responseTime}ms`, {
         requestId,
-        userId: context.userId,
+        userId: maskId(context.userId),
         responseTime,
       })
     }
@@ -280,9 +322,9 @@ export async function withApiWrapper<T>(
     // ApiError 처리
     if (error instanceof ApiError) {
       if (!options.disableLogging) {
-        console.error(`[API ERROR] ${context.method} ${context.endpoint} - ${responseTime}ms`, {
+        log.error(`[ERROR] ${context.method} ${context.endpoint} - ${responseTime}ms`, {
           requestId,
-          userId: context.userId,
+          userId: maskId(context.userId),
           error: error.message,
           statusCode: error.statusCode,
           responseTime,

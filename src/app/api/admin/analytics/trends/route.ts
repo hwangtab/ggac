@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createErrorResponse } from '@/utils/apiResponse'
 import { withRateLimit } from '@/utils/rateLimit'
 import { requireAdmin } from '@/lib/server/adminAuth'
 
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest) {
           break
 
         default:
-          return NextResponse.json({ error: '지원되지 않는 트렌드 유형입니다.' }, { status: 400 })
+          return createErrorResponse({ success: false, error: '지원되지 않는 트렌드 유형입니다.' }, 400)
       }
 
       return NextResponse.json({
@@ -53,7 +54,7 @@ export async function GET(request: NextRequest) {
       })
     } catch (error) {
       console.error('트렌드 분석 API 오류:', error)
-      return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
+      return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
     }
   })(request)
 }

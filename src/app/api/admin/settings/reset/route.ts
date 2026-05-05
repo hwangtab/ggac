@@ -1,18 +1,24 @@
-import { createOptionsResponse } from '@/utils/apiResponse'
+import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { checkAdminPermission } from '@/lib/server/adminAuth'
-import {
-  applyRateLimit,
-  RATE_LIMIT_CONFIGS,
-  createUserKeyGenerator,
-  addRateLimitHeaders,
-} from '@/utils/rateLimiter'
+import { applyRateLimit, createUserKeyGenerator, addRateLimitHeaders } from '@/utils/rateLimiter'
 import { logSecurityEvent } from '@/utils/security'
 import { refreshSettingsCache } from '@/utils/systemSettings'
+import { createLogger } from '@/utils/logger'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
+
+const log = createLogger('admin/settings/reset')
+
+const ResetRequestSchema = z
+  .object({
+    resetType: z.enum(['all', 'category']).optional().default('all'),
+    category: z.enum(['site', 'email', 'security', 'features']).nullable().optional(),
+  })
+  .strict()
 
 // 기본 설정값 정의
 const DEFAULT_SETTINGS = [
@@ -228,13 +234,13 @@ const DEFAULT_SETTINGS = [
 export async function POST(request: NextRequest) {
   try {
     // Rate limiting 적용 (매우 엄격하게)
-    const rateLimiter = applyRateLimit({
+    const rateLimiter = await applyRateLimit({
       maxRequests: 1, // 1시간에 1번만
       windowMs: 60 * 60 * 1000, // 1시간
       keyGenerator: createUserKeyGenerator('admin_settings_reset'),
     })
 
-    const rateLimitResult = rateLimiter(request)
+    const rateLimitResult = await rateLimiter(request)
     if (!rateLimitResult.success && rateLimitResult.response) {
       return rateLimitResult.response
     }
@@ -248,14 +254,28 @@ export async function POST(request: NextRequest) {
     } = await supabase.auth.getUser()
 
     if (authError || !user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
     }
 
     await checkAdminPermission(supabase, user.id)
 
-    // 요청 데이터 파싱 (어떤 설정을 초기화할지 결정)
-    const requestData = await request.json()
-    const { resetType = 'all', category = null } = requestData
+    // 요청 데이터 파싱 + Zod 검증
+    let resetType: 'all' | 'category'
+    let category: string | null
+    try {
+      const rawJson = await request.json().catch(() => ({}))
+      const parsed = ResetRequestSchema.safeParse(rawJson)
+      if (!parsed.success) {
+        return NextResponse.json(
+          { error: '유효하지 않은 요청입니다.', details: parsed.error.flatten() },
+          { status: 400 }
+        )
+      }
+      resetType = parsed.data.resetType
+      category = parsed.data.category ?? null
+    } catch {
+      return createErrorResponse({ success: false, error: '유효하지 않은 JSON 본문입니다.' }, 400)
+    }
 
     let settingsToReset = DEFAULT_SETTINGS
 
@@ -264,7 +284,7 @@ export async function POST(request: NextRequest) {
       settingsToReset = DEFAULT_SETTINGS.filter(setting => setting.category === category)
 
       if (settingsToReset.length === 0) {
-        return NextResponse.json({ error: '유효하지 않은 카테고리입니다.' }, { status: 400 })
+        return createErrorResponse({ success: false, error: '유효하지 않은 카테고리입니다.' }, 400)
       }
     }
 
@@ -281,8 +301,8 @@ export async function POST(request: NextRequest) {
         })
 
         if (updateError) {
-          console.error(
-            `Setting reset error for ${setting.category}.${setting.setting_key}:`,
+          log.error(
+            `Setting reset error for ${setting.category}.${setting.setting_key}`,
             updateError
           )
           errorResults.push(`${setting.category}.${setting.setting_key}`)
@@ -290,7 +310,7 @@ export async function POST(request: NextRequest) {
           resetResults.push(`${setting.category}.${setting.setting_key}`)
         }
       } catch (err) {
-        console.error(`Setting reset exception:`, err)
+        log.error('Setting reset exception', err)
         errorResults.push(`${setting.category}.${setting.setting_key}`)
       }
     }
@@ -335,7 +355,7 @@ export async function POST(request: NextRequest) {
       rateLimitResult.resetTime
     )
   } catch (error) {
-    console.error('Admin settings reset error:', error)
+    log.error('Admin settings reset error', error)
     logSecurityEvent(
       'ADMIN_SETTINGS_RESET_ERROR',
       {

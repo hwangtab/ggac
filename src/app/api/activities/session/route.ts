@@ -1,4 +1,5 @@
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { createErrorResponse } from '@/utils/apiResponse'
 import { NextRequest, NextResponse } from 'next/server'
 import { withRateLimit } from '@/utils/rateLimit'
 import { sanitizeInput } from '@/utils/security'
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest) {
       } = await supabase.auth.getUser()
 
       if (error) {
-        return NextResponse.json({ error: '세션 확인 실패' }, { status: 500 })
+        return createErrorResponse({ success: false, error: '세션 확인 실패' }, 500)
       }
 
       return NextResponse.json({
@@ -34,7 +35,7 @@ export async function GET(request: NextRequest) {
       })
     } catch (error) {
       console.error('세션 GET API 오류:', error)
-      return NextResponse.json({ error: '서버 오류' }, { status: 500 })
+      return createErrorResponse({ success: false, error: '서버 오류' }, 500)
     }
   })(request)
 }
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest) {
       } = await supabase.auth.getUser()
 
       if (!user) {
-        return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+        return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
       }
 
       const body = await request.json()
@@ -61,10 +62,10 @@ export async function POST(request: NextRequest) {
       }
 
       if (action === 'start' && !session_token) {
-        return NextResponse.json({ error: 'session_token이 필요합니다.' }, { status: 400 })
+        return createErrorResponse({ success: false, error: 'session_token이 필요합니다.' }, 400)
       }
       if (action === 'update' && !body.session_id) {
-        return NextResponse.json({ error: 'session_id가 필요합니다.' }, { status: 400 })
+        return createErrorResponse({ success: false, error: 'session_id가 필요합니다.' }, 400)
       }
 
       // 입력 검증 및 sanitization
@@ -97,7 +98,7 @@ export async function POST(request: NextRequest) {
 
       if (error) {
         console.error('세션 관리 오류:', error)
-        return NextResponse.json({ error: '세션 관리에 실패했습니다.' }, { status: 500 })
+        return createErrorResponse({ success: false, error: '세션 관리에 실패했습니다.' }, 500)
       }
 
       const response: any = {
@@ -113,7 +114,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(response)
     } catch (error) {
       console.error('세션 API 오류:', error)
-      return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
+      return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
     }
   })(request)
 }

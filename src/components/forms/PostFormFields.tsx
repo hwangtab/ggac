@@ -1,14 +1,8 @@
 'use client'
 
 import React from 'react'
-import dynamic from 'next/dynamic'
 import { BOARD_CATEGORIES } from '@/constants/categories'
-
-// TinyMCE를 동적으로 로드하여 SSR 이슈 방지
-const RichTextEditor = dynamic(() => import('../RichTextEditor'), {
-  ssr: false,
-  loading: () => <div className="h-96 bg-gray-100 rounded-lg animate-pulse" />,
-})
+import RichTextEditor from '../RichTextEditorDynamic'
 
 interface PostFormFieldsProps {
   title: string

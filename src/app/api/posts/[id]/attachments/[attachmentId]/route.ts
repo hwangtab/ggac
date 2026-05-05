@@ -11,6 +11,7 @@ export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
+import { createErrorResponse } from '@/utils/apiResponse'
 import { createClient } from '@supabase/supabase-js'
 import { revalidateTag } from 'next/cache'
 import { createSupabaseServer } from '@/lib/supabase/server'
@@ -41,7 +42,7 @@ export async function GET(
     } = await supabase.auth.getUser()
 
     if (!user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
     }
 
     const { id: postId, attachmentId } = resolvedParams
@@ -55,13 +56,13 @@ export async function GET(
       .single()
 
     if (error || !attachment) {
-      return NextResponse.json({ error: '첨부파일을 찾을 수 없습니다.' }, { status: 404 })
+      return createErrorResponse({ success: false, error: '첨부파일을 찾을 수 없습니다.' }, 404)
     }
 
     return NextResponse.json({ attachment })
   } catch (error) {
     console.error('첨부파일 조회 API 오류:', error)
-    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
+    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
   }
 }
 
@@ -80,7 +81,7 @@ export async function PUT(
     } = await supabase.auth.getUser()
 
     if (!user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
     }
 
     const { id: postId, attachmentId } = resolvedParams
@@ -101,11 +102,11 @@ export async function PUT(
       .single()
 
     if (attachmentError || !attachment) {
-      return NextResponse.json({ error: '첨부파일을 찾을 수 없습니다.' }, { status: 404 })
+      return createErrorResponse({ success: false, error: '첨부파일을 찾을 수 없습니다.' }, 404)
     }
 
     if (attachment.posts.author_id !== user.id) {
-      return NextResponse.json({ error: '권한이 없습니다.' }, { status: 403 })
+      return createErrorResponse({ success: false, error: '권한이 없습니다.' }, 403)
     }
 
     // 대표 이미지로 설정하는 경우 기존 대표 이미지 해제
@@ -134,7 +135,7 @@ export async function PUT(
 
     if (updateError) {
       console.error('첨부파일 수정 오류:', updateError)
-      return NextResponse.json({ error: '첨부파일 수정에 실패했습니다.' }, { status: 500 })
+      return createErrorResponse({ success: false, error: '첨부파일 수정에 실패했습니다.' }, 500)
     }
 
     try {
@@ -154,7 +155,7 @@ export async function PUT(
     })
   } catch (error) {
     console.error('첨부파일 수정 API 오류:', error)
-    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
+    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
   }
 }
 
@@ -173,7 +174,7 @@ export async function DELETE(
     } = await supabase.auth.getUser()
 
     if (!user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
     }
 
     const { id: postId, attachmentId } = resolvedParams
@@ -192,7 +193,7 @@ export async function DELETE(
       .single()
 
     if (attachmentError || !attachment) {
-      return NextResponse.json({ error: '첨부파일을 찾을 수 없습니다.' }, { status: 404 })
+      return createErrorResponse({ success: false, error: '첨부파일을 찾을 수 없습니다.' }, 404)
     }
 
     // 사용자 권한 확인 (작성자 또는 관리자)
@@ -206,7 +207,7 @@ export async function DELETE(
     const isAdmin = profile?.is_admin === true
 
     if (!isAuthor && !isAdmin) {
-      return NextResponse.json({ error: '권한이 없습니다.' }, { status: 403 })
+      return createErrorResponse({ success: false, error: '권한이 없습니다.' }, 403)
     }
 
     // Storage에서 파일 삭제 (가능한 경우에만)
@@ -239,7 +240,7 @@ export async function DELETE(
 
     if (deleteError) {
       console.error('첨부파일 DB 삭제 오류:', deleteError)
-      return NextResponse.json({ error: '첨부파일 삭제에 실패했습니다.' }, { status: 500 })
+      return createErrorResponse({ success: false, error: '첨부파일 삭제에 실패했습니다.' }, 500)
     }
 
     try {
@@ -258,6 +259,6 @@ export async function DELETE(
     })
   } catch (error) {
     console.error('첨부파일 삭제 API 오류:', error)
-    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
+    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
   }
 }

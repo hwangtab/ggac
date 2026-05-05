@@ -101,6 +101,7 @@ npm run start
 ### 보안/운영
 - 일반 페이지는 강화된 CSP 적용(미들웨어에서 inline script 최소화), 에디터 페이지는 호환을 위해 완화.
 - `/api/link-preview`, `/api/media/upload`에 분산 레이트리밋 적용(Upstash 없으면 메모리 폴백).
+- ⚠️ **프로덕션(Vercel 등 분산/서버리스 환경)에서는 반드시 `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` 을 설정해야 함.** 메모리 폴백은 인스턴스마다 카운터가 분리돼 사실상 rate limit이 무력화된다(서버 시작 시 ERROR 로그로 경고).
 
 ## 페이지 구성
 

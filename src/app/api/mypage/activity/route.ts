@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createErrorResponse } from '@/utils/apiResponse'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { z } from 'zod'
 
@@ -53,7 +54,7 @@ export async function GET(request: NextRequest) {
     } = await supabase.auth.getUser()
 
     if (authError || !user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
     }
 
     // 사용자 프로필 확인 (승인된 멤버인지 체크)
@@ -65,7 +66,7 @@ export async function GET(request: NextRequest) {
 
     if (profileError) {
       console.error('Profile fetch error:', profileError)
-      return NextResponse.json({ error: '프로필 정보를 가져올 수 없습니다.' }, { status: 500 })
+      return createErrorResponse({ success: false, error: '프로필 정보를 가져올 수 없습니다.' }, 500)
     }
 
     if (!profile || profile.registration_status !== 'approved' || !profile.is_active) {

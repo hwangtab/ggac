@@ -1,6 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createErrorResponse } from '@/utils/apiResponse'
+import { z } from 'zod'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { applyRateLimit, RATE_LIMIT_CONFIGS } from '@/utils/rateLimiter'
+import { createLogger } from '@/utils/logger'
+
+const log = createLogger('api/settings')
+
+const SettingValueSchema = z.unknown()
+
+const SingleSettingSchema = z.object({
+  category: z.string().min(1).max(64),
+  setting_key: z.string().min(1).max(128),
+  setting_value: SettingValueSchema,
+})
+
+const BulkSettingsSchema = z.object({
+  settings: z.array(SingleSettingSchema).min(1).max(100),
+})
 
 /**
  * 사용자 설정 조회 API
@@ -9,8 +26,8 @@ import { applyRateLimit, RATE_LIMIT_CONFIGS } from '@/utils/rateLimiter'
 export async function GET(request: NextRequest) {
   try {
     // Rate limiting 적용
-    const rateLimiter = applyRateLimit(RATE_LIMIT_CONFIGS.GENERAL_API)
-    const rateLimitResult = rateLimiter(request)
+    const rateLimiter = await applyRateLimit(RATE_LIMIT_CONFIGS.GENERAL_API)
+    const rateLimitResult = await rateLimiter(request)
     if (!rateLimitResult.success) {
       return NextResponse.json(
         { error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' },
@@ -25,7 +42,7 @@ export async function GET(request: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser()
     if (!user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
     }
 
     // URL 파라미터에서 카테고리 필터 확인
@@ -40,8 +57,8 @@ export async function GET(request: NextRequest) {
       const { data: allSettings, error } = await query
 
       if (error) {
-        console.error('Settings fetch error:', error)
-        return NextResponse.json({ error: 'Failed to fetch settings' }, { status: 500 })
+        log.error('Settings fetch error:', error)
+        return createErrorResponse({ success: false, error: 'Failed to fetch settings' }, 500)
       }
 
       const filteredSettings =
@@ -56,8 +73,8 @@ export async function GET(request: NextRequest) {
       const { data: settings, error } = await query
 
       if (error) {
-        console.error('Settings fetch error:', error)
-        return NextResponse.json({ error: 'Failed to fetch settings' }, { status: 500 })
+        log.error('Settings fetch error:', error)
+        return createErrorResponse({ success: false, error: 'Failed to fetch settings' }, 500)
       }
 
       // 카테고리별로 그룹화
@@ -77,8 +94,8 @@ export async function GET(request: NextRequest) {
       })
     }
   } catch (error) {
-    console.error('Settings API error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    log.error('Settings API error:', error)
+    return createErrorResponse({ success: false, error: 'Internal server error' }, 500)
   }
 }
 
@@ -89,8 +106,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     // Rate limiting 적용
-    const rateLimiter = applyRateLimit(RATE_LIMIT_CONFIGS.GENERAL_API)
-    const rateLimitResult = rateLimiter(request)
+    const rateLimiter = await applyRateLimit(RATE_LIMIT_CONFIGS.GENERAL_API)
+    const rateLimitResult = await rateLimiter(request)
     if (!rateLimitResult.success) {
       return NextResponse.json(
         { error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' },
@@ -105,19 +122,24 @@ export async function POST(request: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser()
     if (!user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
     }
 
-    const body = await request.json()
-    const { category, setting_key, setting_value } = body
+    let body: unknown
+    try {
+      body = await request.json()
+    } catch {
+      return createErrorResponse({ success: false, error: '유효하지 않은 JSON 본문입니다.' }, 400)
+    }
 
-    // 입력 유효성 검사
-    if (!category || !setting_key || setting_value === undefined) {
+    const parsed = SingleSettingSchema.safeParse(body)
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: 'Missing required fields: category, setting_key, setting_value' },
+        { error: '유효하지 않은 설정 데이터입니다.', details: parsed.error.flatten() },
         { status: 400 }
       )
     }
+    const { category, setting_key, setting_value } = parsed.data
 
     // 설정 업데이트
     const { data: settingId, error } = await supabase.rpc('upsert_user_setting', {
@@ -127,8 +149,8 @@ export async function POST(request: NextRequest) {
     })
 
     if (error) {
-      console.error('Setting update error:', error)
-      return NextResponse.json({ error: '설정 업데이트에 실패했습니다.' }, { status: 400 })
+      log.error('Setting update error:', error)
+      return createErrorResponse({ success: false, error: '설정 업데이트에 실패했습니다.' }, 400)
     }
 
     return NextResponse.json({
@@ -137,8 +159,8 @@ export async function POST(request: NextRequest) {
       message: 'Setting updated successfully',
     })
   } catch (error) {
-    console.error('Settings update API error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    log.error('Settings update API error:', error)
+    return createErrorResponse({ success: false, error: 'Internal server error' }, 500)
   }
 }
 
@@ -149,8 +171,8 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     // Rate limiting 적용
-    const rateLimiter = applyRateLimit(RATE_LIMIT_CONFIGS.GENERAL_API)
-    const rateLimitResult = rateLimiter(request)
+    const rateLimiter = await applyRateLimit(RATE_LIMIT_CONFIGS.GENERAL_API)
+    const rateLimitResult = await rateLimiter(request)
     if (!rateLimitResult.success) {
       return NextResponse.json(
         { error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' },
@@ -165,36 +187,31 @@ export async function PUT(request: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser()
     if (!user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
     }
 
-    const body = await request.json()
-    const { settings } = body
-
-    // 입력 유효성 검사
-    if (!Array.isArray(settings) || settings.length === 0) {
-      return NextResponse.json({ error: 'Settings must be a non-empty array' }, { status: 400 })
+    let body: unknown
+    try {
+      body = await request.json()
+    } catch {
+      return createErrorResponse({ success: false, error: '유효하지 않은 JSON 본문입니다.' }, 400)
     }
+
+    const parsed = BulkSettingsSchema.safeParse(body)
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: '유효하지 않은 설정 데이터입니다.', details: parsed.error.flatten() },
+        { status: 400 }
+      )
+    }
+    const { settings } = parsed.data
 
     const results = []
     let successCount = 0
     let errorCount = 0
 
-    // 각 설정을 순차적으로 업데이트
-    for (const setting of settings) {
-      const { category, setting_key, setting_value } = setting
-
-      if (!category || !setting_key || setting_value === undefined) {
-        results.push({
-          category,
-          setting_key,
-          success: false,
-          error: 'Missing required fields',
-        })
-        errorCount++
-        continue
-      }
-
+    // 각 설정을 순차적으로 업데이트 (Zod로 형식은 이미 검증됨)
+    for (const { category, setting_key, setting_value } of settings) {
       try {
         const { data: settingId, error } = await supabase.rpc('upsert_user_setting', {
           p_category: category,
@@ -203,7 +220,7 @@ export async function PUT(request: NextRequest) {
         })
 
         if (error) {
-          console.error('Bulk setting update error:', error)
+          log.error('Bulk setting update error:', error)
           results.push({
             category,
             setting_key,
@@ -221,6 +238,7 @@ export async function PUT(request: NextRequest) {
           successCount++
         }
       } catch (err) {
+        log.error('Bulk setting update exception:', err)
         results.push({
           category,
           setting_key,
@@ -241,7 +259,7 @@ export async function PUT(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error('Bulk settings update API error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    log.error('Bulk settings update API error:', error)
+    return createErrorResponse({ success: false, error: 'Internal server error' }, 500)
   }
 }

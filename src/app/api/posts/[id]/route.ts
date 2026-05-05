@@ -9,6 +9,7 @@ export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
+import { createErrorResponse } from '@/utils/apiResponse'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
 import distributedRateLimiter, {
@@ -132,12 +133,12 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     timings.post_ms = Date.now() - postStart
     if (postError || !post) {
       console.error(`[API] 게시글 조회 실패 - ID: ${validPostId}`, postError)
-      return NextResponse.json({ error: '게시글을 찾을 수 없습니다.' }, { status: 404 })
+      return createErrorResponse({ success: false, error: '게시글을 찾을 수 없습니다.' }, 404)
     }
 
     // 삭제된 게시글 접근 권한 확인
     if (post.is_deleted && !(isAdmin || (userId && post.author_id === userId))) {
-      return NextResponse.json({ error: '삭제된 게시글입니다.' }, { status: 404 })
+      return createErrorResponse({ success: false, error: '삭제된 게시글입니다.' }, 404)
     }
 
     // 현재 사용자의 좋아요 상태 확인(선택)
@@ -248,7 +249,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     return NextResponse.json({ post: responseData })
   } catch (error) {
     console.error('게시글 상세 API 오류:', error)
-    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
+    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
   }
 }
 
@@ -280,7 +281,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     } = await supabase.auth.getUser()
 
     if (!user) {
-      return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 })
+      return createErrorResponse({ success: false, error: '로그인이 필요합니다.' }, 401)
     }
 
     // 관리자 여부 확인
@@ -300,16 +301,16 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       .single()
 
     if (postError || !post) {
-      return NextResponse.json({ error: '게시글을 찾을 수 없습니다.' }, { status: 404 })
+      return createErrorResponse({ success: false, error: '게시글을 찾을 수 없습니다.' }, 404)
     }
 
     if (post.is_deleted) {
-      return NextResponse.json({ error: '이미 삭제된 게시글입니다.' }, { status: 404 })
+      return createErrorResponse({ success: false, error: '이미 삭제된 게시글입니다.' }, 404)
     }
 
     // 작성자 본인 또는 관리자만 삭제 가능
     if (post.author_id !== user.id && !isAdmin) {
-      return NextResponse.json({ error: '게시글을 삭제할 권한이 없습니다.' }, { status: 403 })
+      return createErrorResponse({ success: false, error: '게시글을 삭제할 권한이 없습니다.' }, 403)
     }
 
     // 소프트 삭제 수행
@@ -320,7 +321,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
 
     if (updateError) {
       console.error('[API] 게시글 삭제 실패:', updateError)
-      return NextResponse.json({ error: '게시글 삭제에 실패했습니다.' }, { status: 500 })
+      return createErrorResponse({ success: false, error: '게시글 삭제에 실패했습니다.' }, 500)
     }
 
     // 캐시 무효화
@@ -338,6 +339,6 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     return NextResponse.json({ message: '게시글이 삭제되었습니다.' })
   } catch (error) {
     console.error('게시글 삭제 API 오류:', error)
-    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
+    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
   }
 }

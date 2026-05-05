@@ -7,11 +7,11 @@ export const runtime = 'nodejs'
 
 export async function GET(request: NextRequest) {
   // Rate limiting (SSE는 addRateLimitHeaders 생략)
-  const rateLimiter = applyRateLimit({
+  const rateLimiter = await applyRateLimit({
     ...RATE_LIMIT_CONFIGS.ADMIN_API,
     keyGenerator: createUserKeyGenerator('admin_realtime_stream'),
   })
-  const rateLimitResult = rateLimiter(request)
+  const rateLimitResult = await rateLimiter(request)
   if (!rateLimitResult.success && rateLimitResult.response) {
     return rateLimitResult.response
   }

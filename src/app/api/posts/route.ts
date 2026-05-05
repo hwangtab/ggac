@@ -11,10 +11,7 @@ import { fetchBoardPosts } from '@/lib/server/board'
 export const runtime = 'nodejs'
 export const revalidate = 60
 
-const rateLimiter = applyRateLimit({
-  ...RATE_LIMIT_CONFIGS.GENERAL_API,
-  keyGenerator: createUserKeyGenerator('posts'),
-})
+
 
 interface PostData {
   id: string
@@ -64,7 +61,11 @@ export async function GET(request: NextRequest) {
 
   return apiGet(
     async () => {
-      const rateLimitResult = rateLimiter(request)
+      const rateLimiter = await applyRateLimit({
+        ...RATE_LIMIT_CONFIGS.GENERAL_API,
+        keyGenerator: createUserKeyGenerator('posts'),
+      })
+      const rateLimitResult = await rateLimiter(request)
       if (!rateLimitResult.success) {
         throw ApiError.tooManyRequests('너무 많은 요청입니다. 잠시 후 다시 시도해주세요.')
       }

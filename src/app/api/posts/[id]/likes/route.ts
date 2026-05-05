@@ -10,6 +10,7 @@ export const runtime = 'nodejs'
 export const maxDuration = 30
 
 import { NextRequest, NextResponse } from 'next/server'
+import { createErrorResponse } from '@/utils/apiResponse'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import type { PostLikeToggleResponse } from '@/types'
 import { validateUUID } from '@/utils/validation'
@@ -37,7 +38,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     } = await supabase.auth.getUser()
 
     if (!user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
     }
 
     // 게시글 존재 확인
@@ -48,7 +49,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       .single()
 
     if (postError || !post) {
-      return NextResponse.json({ error: '게시글을 찾을 수 없습니다.' }, { status: 404 })
+      return createErrorResponse({ success: false, error: '게시글을 찾을 수 없습니다.' }, 404)
     }
 
     // 현재 사용자의 좋아요 여부 확인
@@ -66,7 +67,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     })
   } catch (error) {
     console.error('[API] GET /likes 오류:', error)
-    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
+    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
   }
 }
 
@@ -93,7 +94,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     } = await supabase.auth.getUser()
 
     if (!user) {
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
     }
 
     // 사용자 승인 상태 확인
@@ -105,11 +106,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     if (profileError) {
       console.error('[API] 프로필 조회 오류:', profileError)
-      return NextResponse.json({ error: '회원 정보를 확인할 수 없습니다.' }, { status: 500 })
+      return createErrorResponse({ success: false, error: '회원 정보를 확인할 수 없습니다.' }, 500)
     }
 
     if (!profile || profile.registration_status !== 'approved' || !profile.is_active) {
-      return NextResponse.json({ error: '승인된 회원만 좋아요를 할 수 있습니다.' }, { status: 403 })
+      return createErrorResponse({ success: false, error: '승인된 회원만 좋아요를 할 수 있습니다.' }, 403)
     }
 
     // 게시글 존재 확인
@@ -120,7 +121,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       .single()
 
     if (postError || !post) {
-      return NextResponse.json({ error: '게시글을 찾을 수 없습니다.' }, { status: 404 })
+      return createErrorResponse({ success: false, error: '게시글을 찾을 수 없습니다.' }, 404)
     }
 
     if (post.is_deleted) {
@@ -138,13 +139,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     if (toggleError) {
       console.error('[API] toggle_post_like RPC 오류:', toggleError)
-      return NextResponse.json({ error: '좋아요 처리에 실패했습니다.' }, { status: 500 })
+      return createErrorResponse({ success: false, error: '좋아요 처리에 실패했습니다.' }, 500)
     }
 
     const result = toggleResult?.[0]
     if (!result) {
       console.error('[API] toggle_post_like RPC 결과 없음')
-      return NextResponse.json({ error: '좋아요 처리 결과를 확인할 수 없습니다.' }, { status: 500 })
+      return createErrorResponse({ success: false, error: '좋아요 처리 결과를 확인할 수 없습니다.' }, 500)
     }
 
     // 활동 로깅
@@ -173,6 +174,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     return NextResponse.json(response)
   } catch (error) {
     console.error('[API] POST /likes 오류:', error)
-    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
+    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
   }
 }
