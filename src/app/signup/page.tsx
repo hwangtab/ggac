@@ -422,7 +422,7 @@ export default function SignupPage() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 gap-4">
                 <FormField
                   label="이메일 주소"
                   name="email"
@@ -476,7 +476,7 @@ export default function SignupPage() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 gap-4">
                 <FormField
                   label="표시 이름"
                   name="displayName"
@@ -486,7 +486,6 @@ export default function SignupPage() {
                   required={true}
                   error={fieldErrors.displayName}
                   state={fieldStates.displayName}
-                  disabled={loading}
                   fieldRef={fieldRefs.displayName}
                 />
                 <FormField
@@ -498,7 +497,6 @@ export default function SignupPage() {
                   required={true}
                   error={fieldErrors.realName}
                   state={fieldStates.realName}
-                  disabled={loading}
                   fieldRef={fieldRefs.realName}
                 />
                 <FormField
@@ -511,7 +509,6 @@ export default function SignupPage() {
                   required={true}
                   error={fieldErrors.phoneNumber}
                   state={fieldStates.phoneNumber}
-                  disabled={loading}
                   fieldRef={fieldRefs.phoneNumber}
                 />
                 <FormField
@@ -523,7 +520,6 @@ export default function SignupPage() {
                   required={true}
                   error={fieldErrors.birthDate}
                   state={fieldStates.birthDate}
-                  disabled={loading}
                   fieldRef={fieldRefs.birthDate}
                 />
               </div>
@@ -553,8 +549,8 @@ export default function SignupPage() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="md:col-span-2">
+              <div className="grid grid-cols-1 gap-4">
+                <div className="">
                   <label
                     htmlFor="monthlyFee"
                     className="block text-sm font-medium text-gray-700 mb-2"
@@ -601,7 +597,7 @@ export default function SignupPage() {
                   disabled={loading}
                   fieldRef={fieldRefs.accountNumber}
                 />
-                <div className="md:col-span-2">
+                <div className="">
                   <FormField
                     label="예금주"
                     name="accountHolder"
