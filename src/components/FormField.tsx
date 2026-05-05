@@ -33,7 +33,7 @@ const FormField: React.FC<FormFieldProps> = ({
 }) => {
   const getInputClasses = () => {
     const baseClasses =
-      'w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all duration-200 disabled:bg-gray-50 disabled:text-gray-500'
+      'w-full box-border px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all duration-200 disabled:bg-gray-50 disabled:text-gray-500'
 
     switch (state) {
       case 'error':
