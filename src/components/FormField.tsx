@@ -14,6 +14,7 @@ interface FormFieldProps {
   state?: 'default' | 'error' | 'success'
   disabled?: boolean
   fieldRef?: React.RefObject<HTMLInputElement | null>
+  helpText?: string
 }
 
 const FormField: React.FC<FormFieldProps> = ({
@@ -28,6 +29,7 @@ const FormField: React.FC<FormFieldProps> = ({
   state = 'default',
   disabled = false,
   fieldRef,
+  helpText,
 }) => {
   const getInputClasses = () => {
     const baseClasses =
@@ -105,6 +107,11 @@ const FormField: React.FC<FormFieldProps> = ({
           </div>
         )}
       </div>
+
+      {/* 도움말 텍스트 */}
+      {helpText && (
+        <p className="text-xs text-gray-500">{helpText}</p>
+      )}
 
       {/* 에러 메시지 */}
       {error && (

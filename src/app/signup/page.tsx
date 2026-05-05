@@ -95,8 +95,8 @@ export default function SignupPage() {
           const birthDate = new Date(value)
           const today = new Date()
           const age = today.getFullYear() - birthDate.getFullYear()
-          if (age < 14 || age > 100) {
-            error = '14세 이상 100세 이하만 가입 가능합니다.'
+          if (isNaN(age) || age < 15 || age > 120) {
+            error = '만 15세 이상 120세 이하만 가입 가능합니다.'
             state = 'error'
           } else {
             state = 'success'
@@ -525,6 +525,7 @@ export default function SignupPage() {
                   state={fieldStates.birthDate}
                   disabled={loading}
                   fieldRef={fieldRefs.birthDate}
+                  helpText="조합원 자격 확인용입니다. 만 15세 이상 가입 가능합니다."
                 />
               </div>
             </div>
