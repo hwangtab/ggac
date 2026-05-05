@@ -397,7 +397,7 @@ export default function SignupPage() {
 
         {/* 폼 섹션 */}
         <div className="bg-white shadow-xl rounded-2xl overflow-hidden">
-          <form onSubmit={handleSignup} className="p-3 md:p-8 space-y-6 md:space-y-8 overflow-x-hidden box-border">
+          <form onSubmit={handleSignup} className="p-4 md:p-8 space-y-6 md:space-y-8 overflow-x-hidden">
             {/* 계정 정보 섹션 */}
             <div className="space-y-6">
               <div className="pb-4 border-b border-gray-200">
@@ -422,7 +422,7 @@ export default function SignupPage() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 min-w-0">
+              <div className="grid grid-cols-1 gap-4">
                 <FormField
                   label="이메일 주소"
                   name="email"
@@ -476,7 +476,7 @@ export default function SignupPage() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 min-w-0">
+              <div className="grid grid-cols-1 gap-4">
                 <FormField
                   label="표시 이름"
                   name="displayName"
@@ -520,7 +520,6 @@ export default function SignupPage() {
                   required={true}
                   error={fieldErrors.birthDate}
                   state={fieldStates.birthDate}
-                  disabled={loading}
                   fieldRef={fieldRefs.birthDate}
                 />
               </div>
@@ -550,7 +549,7 @@ export default function SignupPage() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 min-w-0">
+              <div className="grid grid-cols-1 gap-4">
                 <div className="">
                   <label
                     htmlFor="monthlyFee"

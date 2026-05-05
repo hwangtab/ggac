@@ -753,3 +753,37 @@ textarea:focus-visible {
     display: block;
   }
 }
+
+/* ── Mobile Safari date input fixes ── */
+/* Strip native iOS date picker styling that overrides Tailwind */
+input[type="date"] {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  background-color: white !important;
+  background-image: none !important;
+  -moz-appearance: none !important;
+}
+
+/* Style the calendar picker indicator */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  background-color: transparent !important;
+  padding: 4px 8px !important;
+  border-radius: 4px !important;
+  cursor: pointer !important;
+  opacity: 0.5 !important;
+  transition: opacity 0.2s ease !important;
+}
+
+input[type="date"]:hover::-webkit-calendar-picker-indicator {
+  opacity: 1 !important;
+}
+
+input[type="date"]:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+}
+
+/* Prevent native iOS date picker from having its own background/border */
+input[type="date"]::-webkit-date-and-time-value {
+  text-align: left;
+}

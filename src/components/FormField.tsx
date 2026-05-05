@@ -33,15 +33,19 @@ const FormField: React.FC<FormFieldProps> = ({
 }) => {
   const getInputClasses = () => {
     const baseClasses =
-      'w-full box-border px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all duration-200 disabled:bg-gray-50 disabled:text-gray-500'
+      'w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all duration-200 disabled:bg-gray-50 disabled:text-gray-500'
+
+    // Mobile Safari date input: strip native styling that overrides Tailwind
+    const dateOverrides =
+      type === 'date' ? ' appearance-none bg-white' : ''
 
     switch (state) {
       case 'error':
-        return `${baseClasses} border-red-500 focus:ring-red-500 focus:border-red-500 bg-red-50`
+        return `${baseClasses} border-red-500 focus:ring-red-500 focus:border-red-500 bg-red-50${dateOverrides}`
       case 'success':
-        return `${baseClasses} border-green-500 focus:ring-green-500 focus:border-green-500 bg-green-50`
+        return `${baseClasses} border-green-500 focus:ring-green-500 focus:border-green-500 bg-green-50${dateOverrides}`
       default:
-        return `${baseClasses} border-gray-300 focus:ring-primary-500 focus:border-primary-500`
+        return `${baseClasses} border-gray-300 focus:ring-primary-500 focus:border-primary-500${dateOverrides}`
     }
   }
 
@@ -74,6 +78,7 @@ const FormField: React.FC<FormFieldProps> = ({
           disabled={disabled}
           className={getInputClasses()}
           autoComplete={type === 'email' ? 'email' : type === 'password' ? 'new-password' : 'off'}
+          style={type === 'date' ? { appearance: 'none', WebkitAppearance: 'none' } as React.CSSProperties : undefined}
         />
 
         {/* 상태 아이콘 */}
