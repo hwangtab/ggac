@@ -397,7 +397,7 @@ export default function SignupPage() {
 
         {/* 폼 섹션 */}
         <div className="bg-white shadow-xl rounded-2xl overflow-hidden">
-          <form onSubmit={handleSignup} className="p-8 space-y-8">
+          <form onSubmit={handleSignup} className="p-4 md:p-8 space-y-6 md:space-y-8 overflow-x-hidden">
             {/* 계정 정보 섹션 */}
             <div className="space-y-6">
               <div className="pb-4 border-b border-gray-200">
@@ -525,7 +525,6 @@ export default function SignupPage() {
                   state={fieldStates.birthDate}
                   disabled={loading}
                   fieldRef={fieldRefs.birthDate}
-                  helpText="조합원 자격 확인용입니다. 만 15세 이상 가입 가능합니다."
                 />
               </div>
             </div>
