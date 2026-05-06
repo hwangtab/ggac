@@ -36,11 +36,12 @@ export async function DELETE(
     const artistId = resolvedParams.id
     const memberId = resolvedParams.memberId
 
-    // UUID 형식 검증
-    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!artistId || !uuidPattern.test(artistId)) {
+    // 아티스트 ID 형식 검증 — member_profiles.artist_id는 legacy_id를 보관한다.
+    const legacyIdPattern = /^artist-\d{3,}$/
+    if (!artistId || !legacyIdPattern.test(artistId)) {
       return createErrorResponse({ success: false, error: '유효하지 않은 아티스트 ID입니다.' }, 400)
     }
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
     if (!memberId || !uuidPattern.test(memberId)) {
       return createErrorResponse({ success: false, error: '유효하지 않은 멤버 ID입니다.' }, 400)
     }

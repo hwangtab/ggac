@@ -35,13 +35,24 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const { memberId, role } = await request.json()
     const artistId = resolvedParams.id
 
-    // UUID 형식 검증
-    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!artistId || !uuidPattern.test(artistId)) {
+    // 아티스트 ID 형식 검증 — member_profiles.artist_id는 legacy_id(예: 'artist-015')를 보관한다.
+    const legacyIdPattern = /^artist-\d{3,}$/
+    if (!artistId || !legacyIdPattern.test(artistId)) {
       return createErrorResponse({ success: false, error: '유효하지 않은 아티스트 ID입니다.' }, 400)
     }
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
     if (!memberId || !uuidPattern.test(memberId)) {
       return createErrorResponse({ success: false, error: '유효하지 않은 멤버 ID입니다.' }, 400)
+    }
+
+    // 아티스트 존재 확인
+    const { data: artistExists, error: artistLookupError } = await db
+      .from('artists')
+      .select('legacy_id')
+      .eq('legacy_id', artistId)
+      .maybeSingle()
+    if (artistLookupError || !artistExists) {
+      return createErrorResponse({ success: false, error: '아티스트를 찾을 수 없습니다.' }, 404)
     }
 
     if (!role) {
