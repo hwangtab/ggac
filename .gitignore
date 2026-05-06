@@ -53,3 +53,6 @@ test-*.js
 test-github-mcp.js
 test-slack-mcp.js
 .env*.local
+
+# Playwright test artifacts
+test-results/

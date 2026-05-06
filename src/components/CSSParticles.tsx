@@ -25,7 +25,9 @@ interface Particle {
 const CSSParticles = memo(({ particleCount, width, height }: CSSParticlesProps) => {
   // 파티클 데이터 생성 (성능상 최대 120개로 확장) - 메모리 최적화
   const particles = useMemo(() => {
-    const maxParticles = Math.min(particleCount, 120)
+    // 60개로 상한 — 데스크탑에서 120 → 60으로 절반 감소, Style&Layout 부하 추가 완화.
+    // 시각적으로는 충분히 풍성하면서 paint 비용이 크게 떨어짐.
+    const maxParticles = Math.min(particleCount, 60)
     const particleArray: Particle[] = []
 
     // 화면 크기 기반 최적화된 파티클 수
@@ -71,14 +73,13 @@ const CSSParticles = memo(({ particleCount, width, height }: CSSParticlesProps) 
     <div
       className="absolute inset-0 pointer-events-none overflow-hidden"
       style={{
-        // 컨테이너에 통합 백드롭 필터 적용 (120개 개별 필터 → 1개 통합)
-        backdropFilter: 'blur(1px) saturate(120%)',
+        // backdrop-filter 제거 — Style & Layout 비용이 데스크탑에서 1700ms+ 차지하던 주범
+        // (PSI 데스크탑 점수 -22 정도). 미세한 블러/saturate 효과 손실 < 성능 이득.
         // GPU 가속 및 컴포지트 레이어 최적화
         transform: 'translateZ(0)',
         isolation: 'isolate',
         contain: 'layout style paint',
-        // 성능 최적화를 위한 레이어 힌트
-        willChange: 'auto', // 정적이므로 willChange 제거
+        willChange: 'auto',
       }}
     >
       {particles.map(particle => (

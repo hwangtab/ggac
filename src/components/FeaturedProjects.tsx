@@ -35,6 +35,12 @@ const FeaturedProjects = ({ projects }: FeaturedProjectsProps) => {
                       className="object-cover w-full h-full"
                       priority={index === 0} // 첫 번째 이미지만 우선 로딩
                       fallbackText={project.title.slice(0, 3)}
+                      // 1번째: md 이상에서 col-span-2 (전체 폭). 그 외: md 이상 50vw, 모바일 100vw.
+                      sizes={
+                        index === 0
+                          ? '(max-width: 768px) 100vw, (max-width: 1280px) 100vw, 1280px'
+                          : '(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 640px'
+                      }
                     />
                     <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors duration-300" />
                   </div>
