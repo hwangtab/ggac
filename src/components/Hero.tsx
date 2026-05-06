@@ -302,14 +302,13 @@ const Hero = () => {
             <span className="block">틀을 깨는 소리</span>
             <span className="block">함께 쌓는 무대</span>
           </h1>
+          {/*
+           * LCP 요소 — 진입 애니메이션을 의도적으로 제거.
+           * 기존 delay-300 duration-600 + showText 시퀀스 때문에 hydration 직후
+           * 0.9~1.2초 동안 opacity 0이 유지돼 LCP가 ~2.7s 늦춰지던 회귀 수정.
+           */}
           <p
-            className={`text-lg sm:text-xl md:text-2xl mb-6 sm:mb-8 max-w-2xl mx-auto leading-relaxed ${
-              prefersReducedMotion
-                ? 'opacity-100'
-                : `transition-all duration-600 ease-out delay-300 ${
-                    showText ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
-                  }`
-            }`}
+            className="text-lg sm:text-xl md:text-2xl mb-6 sm:mb-8 max-w-2xl mx-auto leading-relaxed opacity-100"
             style={{
               color: 'rgba(255, 255, 255, 0.92)',
               textShadow: `
