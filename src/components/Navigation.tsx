@@ -7,7 +7,8 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 
-import { supabase } from '@/lib/supabase/client'
+// Supabase 클라이언트는 dynamic import — 초기 vendors 번들에서 분리해 LCP/FCP 가속.
+// 인증 UI는 loading 상태로 시작했다가 마운트 직후 비동기로 채워진다.
 import NotificationDropdown from './NotificationDropdown'
 
 interface NavigationProps {
@@ -70,59 +71,58 @@ const Navigation = ({ initialPath }: NavigationProps = {}) => {
     }
   }, [pathname, router])
 
-  // 사용자 인증 상태 관리 (개선된 버전)
+  // 사용자 인증 상태 관리 — Supabase 클라이언트를 dynamic import로 분리
   useEffect(() => {
     let mounted = true
+    let unsubscribe: (() => void) | undefined
 
-    const getUser = async () => {
+    ;(async () => {
       try {
-        // 세션 기반 인증 상태 확인 (미들웨어와 일치)
+        const { supabase } = await import('@/lib/supabase/client')
+        if (!mounted) return
+
         const {
           data: { session },
           error,
         } = await supabase.auth.getSession()
-        if (error) {
-          console.error('Session error in Navigation:', error)
-          if (mounted) {
-            setUser(null)
-            setLoading(false)
-          }
-          return
-        }
 
         if (mounted) {
-          setUser(session?.user || null)
+          if (error) {
+            console.error('Session error in Navigation:', error)
+            setUser(null)
+          } else {
+            setUser(session?.user || null)
+          }
           setLoading(false)
         }
+
+        const {
+          data: { subscription },
+        } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+          if (mounted) {
+            setUser(nextSession?.user || null)
+            setLoading(false)
+          }
+        })
+        unsubscribe = () => subscription.unsubscribe()
       } catch (error) {
-        console.error('Error getting session:', error)
+        console.error('Error initializing Supabase in Navigation:', error)
         if (mounted) {
           setUser(null)
           setLoading(false)
         }
       }
-    }
-
-    getUser()
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      if (mounted) {
-        setUser(session?.user || null)
-        // 인증 상태 변경 시 즉시 로딩 상태 해제
-        setLoading(false)
-      }
-    })
+    })()
 
     return () => {
       mounted = false
-      subscription.unsubscribe()
+      unsubscribe?.()
     }
   }, [])
 
   const handleLogout = async () => {
     try {
+      const { supabase } = await import('@/lib/supabase/client')
       await supabase.auth.signOut()
       router.push('/')
     } catch (error) {
