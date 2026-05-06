@@ -5,110 +5,11 @@
 
 import type { SecurityEventType, SecurityEventSeverity, SecurityEventContext } from '@/types'
 
-/**
- * 암호학적으로 안전한 UUID 생성
- * 브라우저 및 Node.js 환경에서 모두 동작
- */
-export const generateSecureUUID = (): string => {
-  // 브라우저 환경에서 crypto API 사용 가능한 경우
-  if (typeof window !== 'undefined' && window.crypto && window.crypto.randomUUID) {
-    return window.crypto.randomUUID()
-  }
-
-  // Node.js 환경 또는 crypto.randomUUID 미지원 브라우저
-  const getRandomValues = (() => {
-    if (typeof window !== 'undefined' && window.crypto && window.crypto.getRandomValues) {
-      return (arr: Uint8Array) => window.crypto.getRandomValues(arr)
-    } else if (typeof require !== 'undefined') {
-      // Node.js 환경
-      try {
-        const crypto = require('crypto')
-        return (arr: Uint8Array) => {
-          const buffer = crypto.randomBytes(arr.length)
-          arr.set(buffer)
-          return arr
-        }
-      } catch (e) {
-        // crypto 모듈 사용 불가능한 경우 fallback
-        console.warn(
-          '[Security Warning] crypto module not available, using fallback UUID generation'
-        )
-        return null
-      }
-    }
-    return null
-  })()
-
-  if (getRandomValues) {
-    // RFC 4122 version 4 UUID 생성
-    const bytes = new Uint8Array(16)
-    getRandomValues(bytes)
-
-    // Version 4 (random) UUID 형식으로 변환
-    bytes[6] = (bytes[6] & 0x0f) | 0x40 // Version 4
-    bytes[8] = (bytes[8] & 0x3f) | 0x80 // Variant 10
-
-    const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')
-    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`
-  }
-
-  // 최후의 fallback (보안성이 낮으므로 경고)
-  console.warn('[Security Warning] Using fallback UUID generation - not cryptographically secure')
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-    const r = (Math.random() * 16) | 0
-    const v = c === 'x' ? r : (r & 0x3) | 0x8
-    return v.toString(16)
-  })
-}
-
-/**
- * 임시 리소스 ID 생성
- * 임시 파일, 세션 등에 사용할 안전한 ID 생성
- */
-export const generateTempId = (): string => {
-  const uuid = generateSecureUUID()
-  return `temp-${uuid}`
-}
-
-/**
- * 세션 토큰 생성
- * 사용자 세션, CSRF 토큰 등에 사용할 안전한 토큰 생성
- */
-export const generateSecureToken = (length: number = 32): string => {
-  const getRandomValues = (() => {
-    if (typeof window !== 'undefined' && window.crypto && window.crypto.getRandomValues) {
-      return (arr: Uint8Array) => window.crypto.getRandomValues(arr)
-    } else if (typeof require !== 'undefined') {
-      try {
-        const crypto = require('crypto')
-        return (arr: Uint8Array) => {
-          const buffer = crypto.randomBytes(arr.length)
-          arr.set(buffer)
-          return arr
-        }
-      } catch (e) {
-        console.warn('[Security Warning] crypto module not available for token generation')
-        return null
-      }
-    }
-    return null
-  })()
-
-  if (getRandomValues) {
-    const bytes = new Uint8Array(length)
-    getRandomValues(bytes)
-    return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')
-  }
-
-  // Fallback (경고와 함께)
-  console.warn('[Security Warning] Using fallback token generation - not cryptographically secure')
-  const chars = '0123456789abcdef'
-  let result = ''
-  for (let i = 0; i < length * 2; i++) {
-    result += chars[Math.floor(Math.random() * chars.length)]
-  }
-  return result
-}
+// generateSecureUUID/generateTempId/generateSecureToken은 어디서도 import되지 않는
+// dead code였고, 내부의 require('crypto') 때문에 webpack이 crypto-browserify(319KB)를
+// 클라이언트 vendors 청크에 강제 포함시키고 있었음 — 제거.
+// 향후 필요해지면 globalThis.crypto.randomUUID() / crypto.getRandomValues() 사용 (Node 18+ 및
+// 모든 모던 브라우저에서 동일 API).
 
 /**
  * HTML 특수 문자를 안전하게 이스케이프 처리
