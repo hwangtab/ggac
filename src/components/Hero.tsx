@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback, memo } from 'react'
 import Link from 'next/link'
 import OptimizedHeroImage from './OptimizedHeroImage'
-import LazyParticles from './LazyParticles'
 import ErrorBoundary from './ErrorBoundary'
 import PerformanceMonitor from './PerformanceMonitor'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
@@ -75,38 +74,6 @@ const Hero = () => {
     [isMobileDevice]
   )
 
-  // 파티클 수 계산 - 모바일 최적화 강화
-  const getOptimalParticleCount = useCallback(
-    (width: number, height: number) => {
-      const area = width * height
-      const isMobile = isMobileDevice()
-
-      // 모바일에서 파티클 수 대폭 감소
-      if (isMobile) {
-        const mobileDensity = area / 40000 // 모바일: 밀도 대폭 감소
-        let mobileCount = Math.min(Math.max(Math.floor(mobileDensity), 20), 60) // 20-60개로 제한
-
-        // 작은 화면에서 더 감소
-        if (width < 480) {
-          mobileCount = Math.floor(mobileCount * 0.5)
-        }
-
-        return Math.min(mobileCount, 40) // 모바일 최대 40개
-      }
-
-      // 데스크톱
-      const density = area / 15000
-      let baseCount = Math.min(Math.max(Math.floor(density), 150), 500)
-
-      // 성능이 좋지 않은 기기 감지
-      if (navigator.hardwareConcurrency && navigator.hardwareConcurrency < 4) {
-        baseCount = Math.floor(baseCount * 0.6)
-      }
-
-      return Math.min(baseCount, 250)
-    },
-    [isMobileDevice]
-  )
 
   // Safari 모바일 뷰포트 호환성을 위한 안전한 차원 측정
   const getSafeViewportDimensions = useCallback(() => {
@@ -225,20 +192,6 @@ const Hero = () => {
           // 정적 그라데이션이므로 GPU 최적화 불필요
         }}
       />
-
-      {/* Layer 5: 지연 로딩 파티클 애니메이션 - 접근성 및 성능 최적화 */}
-      {!prefersReducedMotion && dimensions.width > 0 && dimensions.height > 0 && (
-        <div aria-hidden="true">
-          <LazyParticles
-            particleCount={getOptimalParticleCount(dimensions.width, dimensions.height)}
-            width={dimensions.width}
-            height={dimensions.height}
-            preloadDistance="300px"
-            enablePreloading={true}
-            priority="high"
-          />
-        </div>
-      )}
 
       {/* Layer 4: 글래스모피즘 텍스트 컨테이너 */}
       <div className="relative text-center text-white px-4" style={{ zIndex: 20 }}>

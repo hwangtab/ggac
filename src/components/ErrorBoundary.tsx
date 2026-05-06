@@ -259,8 +259,7 @@ const DefaultErrorFallback: React.FC<ErrorFallbackProps> = ({
   componentName,
 }) => {
   const isDev = process.env.NODE_ENV === 'development'
-  const isMinorError =
-    componentName && ['LazyParticles', 'PerformanceMonitor'].includes(componentName)
+  const isMinorError = componentName && ['PerformanceMonitor'].includes(componentName)
 
   // 경미한 에러 (파티클 등)의 경우 간단한 fallback
   if (isMinorError) {
