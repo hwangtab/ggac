@@ -13,7 +13,9 @@ const MypageLayout: React.FC<MypageLayoutProps> = ({
   const pathname = usePathname()
 
   return (
-    <div className={`min-h-screen bg-gray-50 ${className}`}>
+    // flex-1로 main(flex-col) 잔여 영역만 채우기 — 콘텐츠 짧아도 footer가 viewport 하단에 자연스럽게 붙고,
+    // bg-gray-50도 딱 main 영역만 칠해진다. (이전 min-h-screen은 viewport+Footer만큼 늘어나는 부작용이 있었음)
+    <div className={`flex-1 bg-gray-50 ${className}`}>
       <div className="pt-20">
         {' '}
         {/* Navigation height offset */}

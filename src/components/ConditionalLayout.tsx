@@ -40,7 +40,7 @@ export default function ConditionalLayout({
     <ActivityTracker>
       <div className="min-h-screen flex flex-col">
         <Navigation initialPath={currentPath} />
-        <main id="main-content" className="flex-1">
+        <main id="main-content" className="flex-1 flex flex-col">
           {children}
         </main>
         <Footer globalData={globalData} />
