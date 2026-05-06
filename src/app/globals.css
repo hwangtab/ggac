@@ -6,11 +6,16 @@
 @import 'react-image-crop/dist/ReactCrop.css';
 
 /*
- * Pretendard Variable (dynamic-subset)
+ * Pretendard Variable (dynamic-subset, font-display: optional)
  * 92개 unicode-range 분할 woff2 — 브라우저가 페이지에서 실제 사용된 글자가 포함된
  * 서브셋만 fetch한다. 한국어 일반 문서 기준 ~50~150KB만 다운로드됨.
+ *
+ * font-display: optional — 100ms 안에 폰트가 안 받아지면 fallback을 그 페이지에
+ * 영구 사용. swap 시 발생하던 LCP 지연/CLS/jank 제거. 캐시된 재방문은 즉시 Pretendard.
+ * 원본은 node_modules/pretendard/.../pretendardvariable-dynamic-subset.css (display: swap)이며,
+ * src/styles/pretendard-dynamic-subset.css는 빌드 타임에 생성된 optional 변형 사본이다.
  */
-@import 'pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css';
+@import '../styles/pretendard-dynamic-subset.css';
 
 /*
  * 모든 곳에서 'Pretendard Variable' 가족을 쓰되, font-weight 유틸리티
