@@ -72,18 +72,17 @@ export async function generateMetadata({ params }: ArtistPageProps): Promise<Met
   const baseUrl = getBaseUrl()
   const pageUrl = `${baseUrl}/artists/${artist.slug}`
 
-  // OG 이미지 결정 로직
-  const getOgImage = () => {
-    // 프로필 이미지를 JPG 버전으로 사용
-    if (artist.profileImage) {
-      return artist.profileImage.replace('.webp', '.jpg')
-    }
-
-    // 기본 로고 이미지
-    return '/images/logo/gac_og.webp'
+  // OG 이미지 결정 로직 — 절대 URL은 그대로 사용, 상대 경로만 baseUrl prefix.
+  // KakaoTalk 등 일부 플랫폼이 webp를 인식하지 못해 jpg 컴패니언으로 치환한다.
+  // og:image:type 이 image/jpeg 이므로 폴백 경로도 .jpg 로 통일한다.
+  const buildOgImageUrl = () => {
+    const source = artist.profileImage || '/images/logo/gac_og.webp'
+    const isAbsolute = /^https?:\/\//i.test(source)
+    const raw = isAbsolute ? source : `${baseUrl}${source}`
+    return raw.replace(/\.webp(\?.*)?$/i, '.jpg$1')
   }
 
-  const ogImageUrl = `${baseUrl}${getOgImage()}`
+  const ogImageUrl = buildOgImageUrl()
 
   return {
     title: artist.name,
@@ -177,16 +176,6 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
 
   const isMinimal = artist.templateType === '미니멀형'
   const baseUrl = getBaseUrl()
-
-  // 프로필 이미지 URL (JPG 버전 우선)
-  const getProfileImageUrl = () => {
-    if (artist.profileImage) {
-      return artist.profileImage.replace('.webp', '.jpg')
-    }
-    return '/images/logo/gac_logo.webp'
-  }
-
-  const imageUrl = `${baseUrl}${getProfileImageUrl()}`
 
   // 구조화된 데이터 생성 - 유틸리티 함수 사용
   const artistSchema = generateArtistStructuredData({
