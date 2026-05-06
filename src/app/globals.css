@@ -330,6 +330,43 @@ textarea:focus-visible {
     overflow-wrap: break-word;
     hyphens: none;
   }
+
+  /*
+   * text-wrap으로 줄바꿈 시각적 균형 — Chromium 117+ / Safari 17.5+ / Firefox 121+
+   * - 본문(p/li/td/th/figcaption/blockquote): pretty (마지막 줄 짧아지는 현상 회피)
+   * - 헤딩(h1~h6): balance (2~4줄짜리 짧은 텍스트에 최적)
+   * 미지원 브라우저는 무시 → word-break: keep-all 동작은 그대로 유지
+   */
+  p,
+  li,
+  td,
+  th,
+  figcaption,
+  blockquote,
+  dd,
+  dt {
+    text-wrap: pretty;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    text-wrap: balance;
+  }
+
+  /* 코드/URL/모노스페이스는 어절 유지가 의미 없으므로 자유 줄바꿈 */
+  code,
+  pre,
+  kbd,
+  samp,
+  [class*='font-mono'] {
+    word-break: normal;
+    overflow-wrap: anywhere;
+    text-wrap: wrap;
+  }
 }
 
 @layer components {
