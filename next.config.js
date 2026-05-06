@@ -494,8 +494,9 @@ const nextConfig = {
     // 모바일 우선 디바이스 크기 설정 (320px 추가로 모바일 성능 향상)
     deviceSizes: [320, 640, 828, 1200, 1920],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 320, 384],
-    // 모바일 성능 최적화: 더 짧은 캐시 시간으로 빠른 응답성 확보
-    minimumCacheTTL: process.env.NODE_ENV === 'development' ? 600 : 86400, // 개발: 10분, 프로덕션: 24시간
+    // 캐시 수명 — 정적 자산은 길게(31일)가 재방문 LCP에 유리.
+    // 이미지가 변경되면 파일명/쿼리스트링이 바뀌므로 stale 콘텐츠 위험은 거의 없음.
+    minimumCacheTTL: process.env.NODE_ENV === 'development' ? 600 : 60 * 60 * 24 * 31, // dev 10m / prod 31d
     dangerouslyAllowSVG: true,
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
     // 이미지 최적화 오류 시 fallback 허용
