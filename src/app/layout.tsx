@@ -9,18 +9,24 @@ import Script from 'next/script'
 import { Toaster } from 'react-hot-toast'
 import { headers } from 'next/headers'
 
-const gmarketSans = localFont({
-  src: '../../public/fonts/GmarketSansTTFLight.ttf',
-  variable: '--font-gmarket-sans',
+// 본문 기본 폰트 — Pretendard Regular (KS X 1001 + Latin 서브셋, ~613KB woff2)
+const pretendard = localFont({
+  src: '../../public/fonts/Pretendard-Regular.subset.woff2',
+  variable: '--font-pretendard',
   display: 'swap',
   preload: true,
+  weight: '400',
+  style: 'normal',
 })
 
-const peoplefirst = localFont({
-  src: '../../public/fonts/PeoplefirstFightingTTF.ttf',
-  variable: '--font-peoplefirst',
+// 헤딩(h1~h6, prose) 전용 — Pretendard Black 900, critical path 아니라 preload 해제
+const pretendardBlack = localFont({
+  src: '../../public/fonts/Pretendard-Black.subset.woff2',
+  variable: '--font-pretendard-black',
   display: 'swap',
-  preload: true,
+  preload: false,
+  weight: '900',
+  style: 'normal',
 })
 
 export const viewport = {
@@ -102,7 +108,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const currentPath = headersList.get('x-pathname') || '/'
 
   return (
-    <html lang="ko" className={`${gmarketSans.variable} ${peoplefirst.variable}`}>
+    <html lang="ko" className={`${pretendard.variable} ${pretendardBlack.variable}`}>
       <body suppressHydrationWarning>
         <Script
           id="css-script-guard"

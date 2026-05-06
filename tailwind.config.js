@@ -44,14 +44,16 @@ module.exports = {
         },
       },
       fontFamily: {
-        sans: ['var(--font-gmarket-sans)', 'system-ui', 'sans-serif'],
-        post: ['var(--font-peoplefirst)', 'sans-serif'],
-        serif: ['var(--font-peoplefirst)', 'serif'],
+        sans: ['var(--font-pretendard)', 'system-ui', 'sans-serif'],
+        post: ['var(--font-pretendard-black)', 'sans-serif'],
+        serif: ['var(--font-pretendard-black)', 'serif'],
       },
       animation: {
         'fade-in': 'fadeIn 0.5s ease-in-out',
         'slide-up': 'slideUp 0.5s ease-out',
         float: 'float 6s ease-in-out infinite',
+        // 0~8% 구간 opacity 0으로 고정해 ~150ms 이내 빠른 라우트에서는 사실상 깜빡이지 않음
+        'brand-loader': 'brandLoader 1.8s ease-in-out infinite',
       },
       keyframes: {
         fadeIn: {
@@ -65,6 +67,12 @@ module.exports = {
         float: {
           '0%, 100%': { transform: 'translateY(0px)' },
           '50%': { transform: 'translateY(-20px)' },
+        },
+        brandLoader: {
+          '0%, 8%': { opacity: '0', transform: 'scale(0.96)' },
+          '25%': { opacity: '1', transform: 'scale(1)' },
+          '60%': { opacity: '0.55', transform: 'scale(0.94)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
         },
       },
       wordBreak: {
@@ -87,7 +95,7 @@ module.exports = {
             // 헤딩 스타일 - font-post 사용
             h1: {
               color: '#1e3a8a',
-              fontFamily: 'var(--font-peoplefirst), serif',
+              fontFamily: 'var(--font-pretendard-black), serif',
               fontWeight: '700',
               fontSize: '2.25rem',
               marginTop: '3rem',
@@ -100,7 +108,7 @@ module.exports = {
             },
             h2: {
               color: '#075985',
-              fontFamily: 'var(--font-peoplefirst), serif',
+              fontFamily: 'var(--font-pretendard-black), serif',
               fontWeight: '600',
               fontSize: '1.875rem',
               marginTop: '2.5rem',
@@ -113,7 +121,7 @@ module.exports = {
             },
             h3: {
               color: '#0369a1',
-              fontFamily: 'var(--font-peoplefirst), serif',
+              fontFamily: 'var(--font-pretendard-black), serif',
               fontWeight: '600',
               fontSize: '1.5rem',
               marginTop: '2rem',
@@ -126,7 +134,7 @@ module.exports = {
             },
             h4: {
               color: '#0369a1',
-              fontFamily: 'var(--font-peoplefirst), serif',
+              fontFamily: 'var(--font-pretendard-black), serif',
               fontWeight: '600',
               fontSize: '1.25rem',
               marginTop: '1.5rem',
@@ -153,7 +161,7 @@ module.exports = {
             },
             'ul > li': {
               position: 'relative',
-              paddingLeft: '1rem',
+              paddingLeft: '1.5rem',
               marginBottom: '0.5rem',
               textAlign: 'left',
               listStyleType: 'none',
@@ -161,13 +169,15 @@ module.exports = {
             'ul > li::before': {
               content: '"•"',
               position: 'absolute',
-              left: '0',
+              left: '0.25rem',
+              top: '0',
               color: '#0284c7',
               fontWeight: '600',
+              lineHeight: 'inherit',
             },
             'li[data-list="bullet"]': {
               position: 'relative',
-              paddingLeft: '1rem',
+              paddingLeft: '1.5rem',
               marginBottom: '0.5rem',
               textAlign: 'left',
               listStyleType: 'none',
@@ -175,9 +185,11 @@ module.exports = {
             'li[data-list="bullet"]::before': {
               content: '"•"',
               position: 'absolute',
-              left: '0',
+              left: '0.25rem',
+              top: '0',
               color: '#0284c7',
               fontWeight: '600',
+              lineHeight: 'inherit',
             },
             'li[data-list="ordered"]': {
               listStyleType: 'decimal',
@@ -237,7 +249,7 @@ module.exports = {
             // p > strong:only-child - 일반 strong과 동일하게 처리
             'p > strong:only-child': {
               display: 'inline',
-              fontFamily: "var(--font-gmarket-sans), 'system-ui', sans-serif",
+              fontFamily: "var(--font-pretendard), 'system-ui', sans-serif",
               fontWeight: '600',
               color: '#075985',
             },
