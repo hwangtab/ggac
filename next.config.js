@@ -76,6 +76,23 @@ const nextConfig = {
               priority: 30,
               reuseExistingChunk: true,
             },
+            // DOMPurify — board/[id] PostContentRenderer에서만 사용 (정적 import).
+            // 별도 chunk로 분리해 메인 vendors에서 빼고 board 페이지 진입 시점에만 로드.
+            dompurify: {
+              test: /[\\/]node_modules[\\/]dompurify[\\/]/,
+              name: 'dompurify',
+              chunks: 'all',
+              priority: 30,
+              reuseExistingChunk: true,
+            },
+            // react-markdown — 게시글/아티스트 bio 렌더링 시점에만 필요
+            reactMarkdown: {
+              test: /[\\/]node_modules[\\/](react-markdown|mdast-util-.*|micromark.*|unified|hast-util-.*|unist-util-.*|vfile.*|bail|trough|is-plain-obj|trim-lines|space-separated-tokens|comma-separated-tokens|property-information|html-url-attributes|character-entities.*|decode-named-character-reference|devlop|estree-util-is-identifier-name|extend|longest-streak|markdown-table|zwitch|stringify-entities|ccount|escape-string-regexp)[\\/]/,
+              name: 'react-markdown',
+              chunks: 'all',
+              priority: 28,
+              reuseExistingChunk: true,
+            },
             vendor: {
               test: /[\\/]node_modules[\\/]/,
               name: 'vendors',
