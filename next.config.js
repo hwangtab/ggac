@@ -141,6 +141,10 @@ const nextConfig = {
                 compress: {
                   ...minimizer.options.terserOptions?.compress,
                   drop_debugger: true,
+                  // production 번들에서 console.log/debug/info 제거.
+                  // console.error/warn은 운영 진단 가치가 있어 유지.
+                  // 개발 환경(NODE_ENV=development)에서는 dev 빌드라 적용되지 않음.
+                  pure_funcs: ['console.log', 'console.debug', 'console.info'],
                 },
                 mangle: {
                   safari10: true,
@@ -422,11 +426,10 @@ const nextConfig = {
                   ].join('; ')
                 : [
                     "default-src 'self'",
-                    // TODO(security): script-src에 'unsafe-inline'이 남아 있다. 단계적으로
-                    //   1) middleware에서 요청별 nonce 생성, 2) Next.js _document/layout에서 nonce 주입,
-                    //   3) 외부 라이브러리(react-quill 등) 호환성 검증 후 'unsafe-inline'을 제거하고
-                    //   `'nonce-<value>'` 정책으로 전환할 것.
-                    // React-Quill 호환을 위한 스크립트 정책 (개발 환경에서 React Refresh 지원)
+                    // 일반 HTML 라우트는 src/middleware/csp.ts에서 요청별 nonce + strict-dynamic
+                    // CSP를 우선 주입한다. 이 정적 헤더는 fallback이며, 미들웨어가 CSP 적용을
+                    // 건너뛰는 에디터 경로(board/write, board/[id]/edit)에 한해 적용된다.
+                    // 에디터는 react-quill의 인라인 스크립트 호환을 위해 'unsafe-inline' 유지.
                     "script-src 'self' 'unsafe-inline'" +
                       (process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : '') +
                       ' https://www.youtube.com https://www.google-analytics.com',
