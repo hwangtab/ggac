@@ -299,7 +299,7 @@ const Hero = () => {
               lineHeight: 1.2,
             }}
           >
-            <span className="block">틀을 깨는 소리,</span>
+            <span className="block">틀을 깨는 소리</span>
             <span className="block">함께 쌓는 무대</span>
           </h1>
           <p
