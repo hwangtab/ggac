@@ -80,5 +80,21 @@
       "react-dom": "$react-dom"
     },
     "quill": "2.0.2"
+  },
+  "browserslist": {
+    "production": [
+      ">0.3%",
+      "not dead",
+      "not op_mini all",
+      "Chrome >= 109",
+      "Firefox >= 115",
+      "Safari >= 16",
+      "Edge >= 109"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
   }
 }
