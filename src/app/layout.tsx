@@ -88,6 +88,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // 잘못 SSR되는 문제를 방지하기 위한 fallback.
   const headersList = await headers()
   const currentPath = headersList.get('x-pathname') || '/'
+  // CSP nonce는 middleware/csp.ts에서 요청별로 발급해 x-nonce 헤더로 전달.
+  // strict-dynamic + 'nonce-X' 정책에서 Next.js 인라인 부트스트랩 스크립트가 신뢰받으려면
+  // 이 nonce를 next/script의 nonce prop에 명시 주입해야 한다.
+  const nonce = headersList.get('x-nonce') || undefined
 
   return (
     <html lang="ko">
@@ -95,6 +99,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <Script
           id="css-script-guard"
           strategy="beforeInteractive"
+          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html: `
 (function(){

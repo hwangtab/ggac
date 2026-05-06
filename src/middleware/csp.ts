@@ -8,14 +8,23 @@ import type { NextRequest } from 'next/server'
  * Set NEXT_STRICT_CSP=false to disable (not recommended in production).
  * Set NEXT_STRICT_CSP=true to enable in development.
  *
- * TODO(L1, 보안 강화): script-src/style-src의 'unsafe-inline'을 점진적으로 nonce 기반 정책으로 전환.
- *   1) middleware에서 요청별 base64 nonce 생성 → response 헤더(`x-nonce`)와 layout context에 노출.
- *   2) Next.js `next/script` 및 inline `<script>`에 `nonce` 속성을 주입. Next의 hydration script도
- *      `experimental.scriptLoader.nonce` 또는 NextResponse 헤더를 통해 nonce 적용.
- *   3) 외부 inline event handler(onclick 등)를 모두 제거하고 addEventListener 패턴으로 마이그레이션.
- *   4) CSS-in-JS (styled-components 등)에 nonce 지원 → style-src-elem 'unsafe-inline' 제거.
- *   5) 단계별 롤아웃: report-only 모드로 위반 사례 수집 후, 본 정책에 strict-dynamic + nonce 도입.
+ * 2026-05 nonce 도입: script-src의 'unsafe-inline' 제거.
+ *   - 요청별 base64 nonce 생성 → response 헤더(`x-nonce`)로 layout/Script 컴포넌트에 노출
+ *   - 'strict-dynamic'으로 nonce 부여된 스크립트가 로드한 후속 스크립트(예: Next.js dynamic
+ *     chunks)도 자동 신뢰
+ *   - style-src의 'unsafe-inline'은 유지 (Tailwind CSS-in-JS 잔재 + Next.js 이미지 플레이스홀더
+ *     인라인 style 호환성). 추후 별도 작업으로 nonce화 가능.
  */
+
+function generateNonce(): string {
+  // Web Crypto API (Edge runtime 및 모든 모던 환경에서 사용 가능)
+  const bytes = new Uint8Array(16)
+  globalThis.crypto.getRandomValues(bytes)
+  let binary = ''
+  for (const b of bytes) binary += String.fromCharCode(b)
+  return btoa(binary)
+}
+
 export function applyCSP(request: NextRequest, response: NextResponse) {
   const isProduction = process.env.NODE_ENV === 'production'
   const envOverride = process.env.NEXT_STRICT_CSP
@@ -31,12 +40,18 @@ export function applyCSP(request: NextRequest, response: NextResponse) {
     const isEditorPath = pathname.startsWith('/board/write') || /\/board\/.+\/edit$/.test(pathname)
 
     if (!isEditorPath) {
+      const nonce = generateNonce()
+      // 후속 단계에서 layout이 headers().get('x-nonce')로 읽어 <Script nonce>에 주입.
+      response.headers.set('x-nonce', nonce)
+      request.headers.set('x-nonce', nonce)
+
       const strictCsp = [
         "default-src 'self'",
-        // Scripts: unsafe-inline required for Next.js hydration inline scripts
-        "script-src 'self' 'unsafe-inline' https://www.youtube.com https://www.google-analytics.com",
-        // Script elements fine-grained control
-        "script-src-elem 'self' 'unsafe-inline' https://www.youtube.com https://www.google-analytics.com",
+        // Scripts: nonce + strict-dynamic. 'strict-dynamic'은 nonce된 스크립트가 로드한 후속
+        // 스크립트(Next.js webpack chunks 등)도 신뢰하므로 별도 host allowlist 불필요.
+        // 'unsafe-inline'은 nonce/strict-dynamic 미지원 구형 브라우저용 fallback (모던 브라우저는 무시).
+        `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https: 'unsafe-inline'`,
+        `script-src-elem 'self' 'nonce-${nonce}' 'strict-dynamic' https: 'unsafe-inline'`,
         // Styles: allow unsafe-inline for compatibility with CSS-in-JS libs and fonts
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
         "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com",
