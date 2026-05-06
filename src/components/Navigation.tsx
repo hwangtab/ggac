@@ -158,9 +158,7 @@ const Navigation = ({ initialPath }: NavigationProps = {}) => {
                 priority
               />
             </div>
-            <span
-              className={`font-serif font-bold text-xl hidden sm:inline transition-colors duration-300 ${textColor}`}
-            >
+            <span className={`font-serif font-bold text-xl hidden sm:inline ${textColor}`}>
               경기아트콜렉티브
             </span>
           </Link>

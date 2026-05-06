@@ -10,7 +10,9 @@ import { useRenderPerformance } from '@/hooks/usePerformanceMonitor'
 import { getErrorTracker } from '@/utils/errorTracking'
 
 const Hero = () => {
-  const [isLoaded, setIsLoaded] = useState(false)
+  // glass 카드 진입 애니메이션 제거 — isLoaded 게이팅 때문에 첫 페인트가
+  // transparent → glass로 두 번 paint되어 LCP가 헤더 텍스트로 떨어지던 문제 해결.
+  // 카드 자체는 첫 프레임에 최종 스타일로 그려지고, h1/button만 showText로 미세하게 fade-in.
   const [showText, setShowText] = useState(false)
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 })
 
@@ -113,10 +115,7 @@ const Hero = () => {
       getErrorTracker()
     }
 
-    // 진입 애니메이션 시퀀스 - 타이밍 최적화
-    const timer1 = setTimeout(() => {
-      if (mounted) setIsLoaded(true)
-    }, 50)
+    // h1/button 미세 진입만 유지 — 카드 자체는 즉시 paint
     const timer2 = setTimeout(() => {
       if (mounted) setShowText(true)
     }, 300)
@@ -133,7 +132,6 @@ const Hero = () => {
 
     return () => {
       mounted = false
-      clearTimeout(timer1)
       clearTimeout(timer2)
       window.removeEventListener('resize', debouncedResize)
       // debounce 타이머도 정리
@@ -196,40 +194,25 @@ const Hero = () => {
       {/* Layer 4: 글래스모피즘 텍스트 컨테이너 */}
       <div className="relative text-center text-white px-4" style={{ zIndex: 20 }}>
         <div
-          className={`glass-hero-container max-w-6xl mx-auto rounded-3xl 
+          className="glass-hero-container max-w-6xl mx-auto rounded-3xl
             px-6 py-6 sm:px-10 sm:py-8 md:px-12 md:py-9 lg:px-16 lg:py-11
             mx-2 sm:mx-4 md:mx-auto
             rounded-2xl sm:rounded-3xl
-            ${
-              prefersReducedMotion
-                ? 'opacity-100'
-                : `transition-all duration-800 ease-out ${
-                    isLoaded
-                      ? 'opacity-100 translate-y-0 scale-100'
-                      : 'opacity-0 translate-y-3 scale-98'
-                  }`
-            }`}
+            opacity-100"
           style={{
-            backdropFilter: isLoaded
-              ? `blur(var(--glassmorphism-blur, 12px)) saturate(var(--glassmorphism-saturation, 180%))`
-              : 'blur(0px)',
-            background: isLoaded
-              ? `linear-gradient(
+            backdropFilter: `blur(var(--glassmorphism-blur, 12px)) saturate(var(--glassmorphism-saturation, 180%))`,
+            background: `linear-gradient(
               135deg,
               rgba(255, 255, 255, var(--glassmorphism-bg-alpha, 0.12)) 0%,
               rgba(255, 255, 255, calc(var(--glassmorphism-bg-alpha, 0.12) * 0.67)) 50%,
               rgba(255, 255, 255, calc(var(--glassmorphism-bg-alpha, 0.12) * 0.42)) 100%
-            )`
-              : 'transparent',
-            border: isLoaded ? '1px solid rgba(255, 255, 255, 0.2)' : '1px solid transparent',
-            boxShadow: isLoaded
-              ? `
+            )`,
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            boxShadow: `
               0 8px 32px rgba(0, 0, 0, 0.3),
               0 2px 16px rgba(0, 0, 0, 0.2),
               inset 0 1px 0 rgba(255, 255, 255, 0.1)
-            `
-              : 'none',
-            willChange: 'transform',
+            `,
             transform: 'translateZ(0)',
           }}
         >
