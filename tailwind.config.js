@@ -96,7 +96,7 @@ module.exports = {
             h1: {
               color: '#1e3a8a',
               fontFamily: 'var(--font-pretendard-black), serif',
-              fontWeight: '700',
+              fontWeight: '900',
               fontSize: '2.25rem',
               marginTop: '3rem',
               marginBottom: '1.5rem',
@@ -109,7 +109,7 @@ module.exports = {
             h2: {
               color: '#075985',
               fontFamily: 'var(--font-pretendard-black), serif',
-              fontWeight: '600',
+              fontWeight: '800',
               fontSize: '1.875rem',
               marginTop: '2.5rem',
               marginBottom: '1.25rem',
@@ -122,7 +122,7 @@ module.exports = {
             h3: {
               color: '#0369a1',
               fontFamily: 'var(--font-pretendard-black), serif',
-              fontWeight: '600',
+              fontWeight: '800',
               fontSize: '1.5rem',
               marginTop: '2rem',
               marginBottom: '1rem',
@@ -135,7 +135,7 @@ module.exports = {
             h4: {
               color: '#0369a1',
               fontFamily: 'var(--font-pretendard-black), serif',
-              fontWeight: '600',
+              fontWeight: '800',
               fontSize: '1.25rem',
               marginTop: '1.5rem',
               marginBottom: '0.75rem',

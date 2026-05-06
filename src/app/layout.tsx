@@ -2,32 +2,14 @@ import type { Metadata } from 'next'
 import './globals.css'
 import ErrorBoundary from '@/components/ErrorBoundary'
 import ConditionalLayout from '@/components/ConditionalLayout'
-import localFont from 'next/font/local'
 import { getGlobalData } from '@/lib/data'
 import { Suspense } from 'react'
 import Script from 'next/script'
 import { Toaster } from 'react-hot-toast'
 import { headers } from 'next/headers'
 
-// 본문 기본 폰트 — Pretendard Regular (KS X 1001 + Latin 서브셋, ~613KB woff2)
-const pretendard = localFont({
-  src: '../../public/fonts/Pretendard-Regular.subset.woff2',
-  variable: '--font-pretendard',
-  display: 'swap',
-  preload: true,
-  weight: '400',
-  style: 'normal',
-})
-
-// 헤딩(h1~h6, prose) 전용 — Pretendard Black 900, critical path 아니라 preload 해제
-const pretendardBlack = localFont({
-  src: '../../public/fonts/Pretendard-Black.subset.woff2',
-  variable: '--font-pretendard-black',
-  display: 'swap',
-  preload: false,
-  weight: '900',
-  style: 'normal',
-})
+// 폰트는 globals.css의 @import 'pretendard/.../pretendardvariable-dynamic-subset.css'로 로드된다.
+// 브라우저가 unicode-range 매칭 기반으로 실제 사용 글자가 포함된 서브셋만 자동 fetch.
 
 export const viewport = {
   width: 'device-width',
@@ -108,7 +90,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const currentPath = headersList.get('x-pathname') || '/'
 
   return (
-    <html lang="ko" className={`${pretendard.variable} ${pretendardBlack.variable}`}>
+    <html lang="ko">
       <body suppressHydrationWarning>
         <Script
           id="css-script-guard"
