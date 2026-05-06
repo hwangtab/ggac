@@ -58,6 +58,24 @@ const nextConfig = {
         splitChunks: {
           chunks: 'all',
           cacheGroups: {
+            // 무거운 에디터 묶음 — board write/edit에서만 dynamic import되는데
+            // 기본 vendor 룰이 chunks:'all'이라 메인으로 빨려들어가던 회귀를 방지.
+            // lodash.isequal/clonedeep은 quill-delta의 transitive dep.
+            quill: {
+              test: /[\\/]node_modules[\\/](react-quill-new|quill|parchment|quill-delta|fast-diff|lodash\.isequal|lodash\.clonedeep)[\\/]/,
+              name: 'quill',
+              chunks: 'async',
+              priority: 30,
+              reuseExistingChunk: true,
+            },
+            // 프로필 사진 크롭 — mypage/profile에서만 사용 (정적 import이므로 chunks:'all'로 자체 청크 유지)
+            imageCrop: {
+              test: /[\\/]node_modules[\\/]react-image-crop[\\/]/,
+              name: 'image-crop',
+              chunks: 'all',
+              priority: 30,
+              reuseExistingChunk: true,
+            },
             vendor: {
               test: /[\\/]node_modules[\\/]/,
               name: 'vendors',
