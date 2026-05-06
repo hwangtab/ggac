@@ -783,6 +783,34 @@ input[type="date"]:focus {
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
 }
 
+/* Force full height for date inputs on iOS Safari */
+input[type="date"]::-webkit-datetime-edit {
+  padding: 0 !important;
+  height: 100% !important;
+  display: inline-flex;
+  align-items: center;
+  width: 100% !important;
+}
+
+input[type="date"]::-webkit-datetime-edit-fields-wrap {
+  height: 100% !important;
+}
+
+input[type="date"]::-webkit-datetime-edit-text,
+input[type="date"]::-webkit-datetime-edit-month-field,
+input[type="date"]::-webkit-datetime-edit-day-field,
+input[type="date"]::-webkit-datetime-edit-year-field {
+  padding: 0 2px !important;
+  color: inherit !important;
+  font-size: inherit !important;
+}
+
+/* Ensure the input itself renders at full height */
+input[type="date"] {
+  min-height: 2.75rem !important;
+  line-height: normal !important;
+}
+
 /* Prevent native iOS date picker from having its own background/border */
 input[type="date"]::-webkit-date-and-time-value {
   text-align: left;

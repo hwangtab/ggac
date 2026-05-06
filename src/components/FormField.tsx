@@ -37,7 +37,7 @@ const FormField: React.FC<FormFieldProps> = ({
 
     // Mobile Safari date input: strip native styling that overrides Tailwind
     const dateOverrides =
-      type === 'date' ? ' appearance-none bg-white' : ''
+      type === 'date' ? ' appearance-none bg-white min-h-[2.75rem]' : ''
 
     switch (state) {
       case 'error':
