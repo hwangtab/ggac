@@ -21,19 +21,12 @@ const OptimizedHeroImage = ({
   const [imageLoaded, setImageLoaded] = useState(false)
   const [imageError, setImageError] = useState(false)
 
-  // 디버깅: 컴포넌트 마운트 시 로그
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[OptimizedHeroImage] 컴포넌트 렌더링', { imageLoaded, imageError })
-  }
-
   const handleLoad = () => {
-    console.log('[OptimizedHeroImage] 이미지 로드 완료')
     setImageLoaded(true)
     onLoad?.()
   }
 
   const handleError = () => {
-    console.error('[OptimizedHeroImage] 이미지 로드 실패')
     setImageError(true)
   }
 

@@ -269,8 +269,6 @@ export const QuillEditor: React.FC<QuillEditorProps> = ({
       const imageFiles = files.filter(file => file.type.startsWith('image/'))
 
       if (imageFiles.length > 0) {
-        console.log('[QuillEditor] 드래그 앤 드롭으로', imageFiles.length, '개 이미지 처리 시작')
-
         for (const file of imageFiles) {
           await processImageFile(file)
         }
