@@ -209,7 +209,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
       if (existingError) {
         console.error('기존 첨부파일 조회 오류:', existingError)
-        return createErrorResponse({ success: false, error: '첨부파일 제한 확인에 실패했습니다.' }, 500)
+        return createErrorResponse(
+          { success: false, error: '첨부파일 제한 확인에 실패했습니다.' },
+          500
+        )
       }
 
       const currentCount = existingAttachments?.length || 0

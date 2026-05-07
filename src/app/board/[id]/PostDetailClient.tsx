@@ -42,7 +42,11 @@ interface PostDetailClientProps {
   } | null
 }
 
-export default function PostDetailClient({ postId, initialData, initialUser }: PostDetailClientProps) {
+export default function PostDetailClient({
+  postId,
+  initialData,
+  initialUser,
+}: PostDetailClientProps) {
   const initialPost = useMemo<Post | null>(() => {
     if (!initialData?.post) return null
     const detail = initialData.post

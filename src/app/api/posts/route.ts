@@ -11,8 +11,6 @@ import { fetchBoardPosts } from '@/lib/server/board'
 export const runtime = 'nodejs'
 export const revalidate = 60
 
-
-
 interface PostData {
   id: string
   title: string

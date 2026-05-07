@@ -80,12 +80,18 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     if (toggleError) {
       console.error('댓글 좋아요 토글 오류:', toggleError)
-      return createErrorResponse({ success: false, error: '좋아요 처리 중 오류가 발생했습니다.' }, 500)
+      return createErrorResponse(
+        { success: false, error: '좋아요 처리 중 오류가 발생했습니다.' },
+        500
+      )
     }
 
     const likeResult = result?.[0]
     if (!likeResult) {
-      return createErrorResponse({ success: false, error: '좋아요 처리 결과를 받을 수 없습니다.' }, 500)
+      return createErrorResponse(
+        { success: false, error: '좋아요 처리 결과를 받을 수 없습니다.' },
+        500
+      )
     }
 
     return NextResponse.json({

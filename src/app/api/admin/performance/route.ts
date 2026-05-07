@@ -54,7 +54,10 @@ export async function GET(request: NextRequest) {
 
       case 'endpoint': {
         if (!endpoint) {
-          return createErrorResponse({ success: false, error: 'endpoint 파라미터가 필요합니다.' }, 400)
+          return createErrorResponse(
+            { success: false, error: 'endpoint 파라미터가 필요합니다.' },
+            400
+          )
         }
 
         const endpointStats = getApiStats(endpoint, timeWindow)

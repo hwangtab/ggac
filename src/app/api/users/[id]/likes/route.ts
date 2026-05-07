@@ -71,7 +71,10 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
     if (likesError) {
       console.error('좋아요 목록 조회 오류:', likesError)
-      return createErrorResponse({ success: false, error: '좋아요 목록을 조회할 수 없습니다.' }, 500)
+      return createErrorResponse(
+        { success: false, error: '좋아요 목록을 조회할 수 없습니다.' },
+        500
+      )
     }
 
     // 총 좋아요 수 조회

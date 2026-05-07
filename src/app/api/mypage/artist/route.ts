@@ -96,7 +96,10 @@ export async function GET(request: NextRequest) {
 
     if (profileError) {
       console.error('Profile fetch error:', profileError)
-      return createErrorResponse({ success: false, error: '프로필 정보를 조회할 수 없습니다.' }, 500)
+      return createErrorResponse(
+        { success: false, error: '프로필 정보를 조회할 수 없습니다.' },
+        500
+      )
     }
 
     // 아티스트 권한 확인
@@ -105,7 +108,10 @@ export async function GET(request: NextRequest) {
     }
 
     if (profile.registration_status !== 'approved' || !profile.is_active) {
-      return createErrorResponse({ success: false, error: '승인된 멤버만 접근할 수 있습니다.' }, 403)
+      return createErrorResponse(
+        { success: false, error: '승인된 멤버만 접근할 수 있습니다.' },
+        403
+      )
     }
 
     // 아티스트 정보 조회
@@ -117,7 +123,10 @@ export async function GET(request: NextRequest) {
 
     if (artistError) {
       console.error('Artist fetch error:', artistError)
-      return createErrorResponse({ success: false, error: '아티스트 정보를 조회할 수 없습니다.' }, 500)
+      return createErrorResponse(
+        { success: false, error: '아티스트 정보를 조회할 수 없습니다.' },
+        500
+      )
     }
 
     return NextResponse.json({ artist })
@@ -169,7 +178,10 @@ export async function PATCH(request: NextRequest) {
 
     if (profileError) {
       console.error('Profile fetch error:', profileError)
-      return createErrorResponse({ success: false, error: '프로필 정보를 조회할 수 없습니다.' }, 500)
+      return createErrorResponse(
+        { success: false, error: '프로필 정보를 조회할 수 없습니다.' },
+        500
+      )
     }
 
     // 아티스트 권한 확인
@@ -178,7 +190,10 @@ export async function PATCH(request: NextRequest) {
     }
 
     if (profile.registration_status !== 'approved' || !profile.is_active) {
-      return createErrorResponse({ success: false, error: '승인된 멤버만 접근할 수 있습니다.' }, 403)
+      return createErrorResponse(
+        { success: false, error: '승인된 멤버만 접근할 수 있습니다.' },
+        403
+      )
     }
 
     // 포트폴리오 링크 유효성 검사

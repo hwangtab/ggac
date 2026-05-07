@@ -110,7 +110,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     }
 
     if (!profile || profile.registration_status !== 'approved' || !profile.is_active) {
-      return createErrorResponse({ success: false, error: '승인된 회원만 좋아요를 할 수 있습니다.' }, 403)
+      return createErrorResponse(
+        { success: false, error: '승인된 회원만 좋아요를 할 수 있습니다.' },
+        403
+      )
     }
 
     // 게시글 존재 확인
@@ -145,7 +148,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const result = toggleResult?.[0]
     if (!result) {
       console.error('[API] toggle_post_like RPC 결과 없음')
-      return createErrorResponse({ success: false, error: '좋아요 처리 결과를 확인할 수 없습니다.' }, 500)
+      return createErrorResponse(
+        { success: false, error: '좋아요 처리 결과를 확인할 수 없습니다.' },
+        500
+      )
     }
 
     // 활동 로깅

@@ -19,7 +19,13 @@ export const RATE_LIMIT_CONFIGS = DISTRIBUTED_RATE_LIMIT_CONFIGS
 // DistributedRateLimitConfig에서 필요한 부분만 추출 (기존 API 호환성)
 type RateLimitConfig = Pick<
   DistributedRateLimitConfig,
-  'windowMs' | 'maxRequests' | 'message' | 'keyGenerator' | 'skipSuccessfulRequests' | 'skipFailedRequests' | 'blockDuration'
+  | 'windowMs'
+  | 'maxRequests'
+  | 'message'
+  | 'keyGenerator'
+  | 'skipSuccessfulRequests'
+  | 'skipFailedRequests'
+  | 'blockDuration'
 >
 
 // applyRateLimit: async 함수로 distributedRateLimiter에 위임

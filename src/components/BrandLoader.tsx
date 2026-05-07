@@ -6,10 +6,7 @@ interface BrandLoaderProps {
   className?: string
 }
 
-export default function BrandLoader({
-  withHeaderOffset = true,
-  className = '',
-}: BrandLoaderProps) {
+export default function BrandLoader({ withHeaderOffset = true, className = '' }: BrandLoaderProps) {
   return (
     <div
       role="status"

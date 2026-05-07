@@ -330,7 +330,10 @@ export async function POST(request: NextRequest) {
       )
     } catch (queryError) {
       console.error('쿼리 실행 오류:', queryError)
-      return createErrorResponse({ success: false, error: '검색 쿼리 실행 중 오류가 발생했습니다.' }, 500)
+      return createErrorResponse(
+        { success: false, error: '검색 쿼리 실행 중 오류가 발생했습니다.' },
+        500
+      )
     }
   } catch (error) {
     console.error('고급 검색 API 오류:', error)

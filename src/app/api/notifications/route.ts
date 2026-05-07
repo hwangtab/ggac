@@ -161,14 +161,20 @@ export async function POST(request: NextRequest) {
       body.related_post_id &&
       (typeof body.related_post_id !== 'string' || body.related_post_id.length > 100)
     ) {
-      return createErrorResponse({ success: false, error: '관련 게시글 ID가 유효하지 않습니다.' }, 400)
+      return createErrorResponse(
+        { success: false, error: '관련 게시글 ID가 유효하지 않습니다.' },
+        400
+      )
     }
 
     if (
       body.related_user_id &&
       (typeof body.related_user_id !== 'string' || body.related_user_id.length > 100)
     ) {
-      return createErrorResponse({ success: false, error: '관련 사용자 ID가 유효하지 않습니다.' }, 400)
+      return createErrorResponse(
+        { success: false, error: '관련 사용자 ID가 유효하지 않습니다.' },
+        400
+      )
     }
 
     // 알림 생성

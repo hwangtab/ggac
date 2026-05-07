@@ -47,7 +47,10 @@ export async function GET(request: NextRequest) {
           break
 
         default:
-          return createErrorResponse({ success: false, error: '지원되지 않는 분석 유형입니다.' }, 400)
+          return createErrorResponse(
+            { success: false, error: '지원되지 않는 분석 유형입니다.' },
+            400
+          )
       }
 
       return NextResponse.json({

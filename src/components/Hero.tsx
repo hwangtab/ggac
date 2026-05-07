@@ -76,7 +76,6 @@ const Hero = () => {
     [isMobileDevice]
   )
 
-
   // Safari 모바일 뷰포트 호환성을 위한 안전한 차원 측정
   const getSafeViewportDimensions = useCallback(() => {
     const isSafariMobile = /iPad|iPhone|iPod/.test(navigator.userAgent)

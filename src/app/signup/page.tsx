@@ -397,7 +397,10 @@ export default function SignupPage() {
 
         {/* 폼 섹션 */}
         <div className="bg-white shadow-xl rounded-2xl overflow-hidden">
-          <form onSubmit={handleSignup} className="p-4 md:p-8 space-y-6 md:space-y-8 overflow-x-hidden">
+          <form
+            onSubmit={handleSignup}
+            className="p-4 md:p-8 space-y-6 md:space-y-8 overflow-x-hidden"
+          >
             {/* 계정 정보 섹션 */}
             <div className="space-y-6">
               <div className="pb-4 border-b border-gray-200">

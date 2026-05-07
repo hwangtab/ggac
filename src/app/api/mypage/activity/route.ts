@@ -66,7 +66,10 @@ export async function GET(request: NextRequest) {
 
     if (profileError) {
       console.error('Profile fetch error:', profileError)
-      return createErrorResponse({ success: false, error: '프로필 정보를 가져올 수 없습니다.' }, 500)
+      return createErrorResponse(
+        { success: false, error: '프로필 정보를 가져올 수 없습니다.' },
+        500
+      )
     }
 
     if (!profile || profile.registration_status !== 'approved' || !profile.is_active) {

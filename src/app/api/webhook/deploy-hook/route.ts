@@ -33,7 +33,10 @@ export async function POST(req: NextRequest) {
 
   const vercelDeployUrl = process.env.VERCEL_DEPLOY_HOOK_URL
   if (!vercelDeployUrl) {
-    return createErrorResponse({ success: false, error: 'VERCEL_DEPLOY_HOOK_URL is not configured' }, 500)
+    return createErrorResponse(
+      { success: false, error: 'VERCEL_DEPLOY_HOOK_URL is not configured' },
+      500
+    )
   }
 
   try {

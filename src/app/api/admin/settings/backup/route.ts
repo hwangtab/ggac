@@ -199,7 +199,10 @@ export async function POST(request: NextRequest) {
 
     // 백업 파일 메타데이터 검증
     if (metadata.version !== '1.0') {
-      return createErrorResponse({ success: false, error: '지원하지 않는 백업 파일 버전입니다.' }, 400)
+      return createErrorResponse(
+        { success: false, error: '지원하지 않는 백업 파일 버전입니다.' },
+        400
+      )
     }
 
     // 설정 복원 실행

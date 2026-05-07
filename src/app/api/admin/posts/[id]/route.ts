@@ -68,7 +68,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
       case 'pin':
         if (post.category !== '공지') {
-          return createErrorResponse({ success: false, error: '공지사항만 고정할 수 있습니다.' }, 400)
+          return createErrorResponse(
+            { success: false, error: '공지사항만 고정할 수 있습니다.' },
+            400
+          )
         }
         if (post.is_pinned) {
           return createErrorResponse({ success: false, error: '이미 고정된 게시글입니다.' }, 400)

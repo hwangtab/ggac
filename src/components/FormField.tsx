@@ -36,8 +36,7 @@ const FormField: React.FC<FormFieldProps> = ({
       'w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all duration-200 disabled:bg-gray-50 disabled:text-gray-500'
 
     // Mobile Safari date input: strip native styling that overrides Tailwind
-    const dateOverrides =
-      type === 'date' ? ' appearance-none bg-white min-h-[2.75rem]' : ''
+    const dateOverrides = type === 'date' ? ' appearance-none bg-white min-h-[2.75rem]' : ''
 
     switch (state) {
       case 'error':
@@ -78,7 +77,11 @@ const FormField: React.FC<FormFieldProps> = ({
           disabled={disabled}
           className={getInputClasses()}
           autoComplete={type === 'email' ? 'email' : type === 'password' ? 'new-password' : 'off'}
-          style={type === 'date' ? { appearance: 'none', WebkitAppearance: 'none' } as React.CSSProperties : undefined}
+          style={
+            type === 'date'
+              ? ({ appearance: 'none', WebkitAppearance: 'none' } as React.CSSProperties)
+              : undefined
+          }
         />
 
         {/* 상태 아이콘 */}
@@ -114,9 +117,7 @@ const FormField: React.FC<FormFieldProps> = ({
       </div>
 
       {/* 도움말 텍스트 */}
-      {helpText && (
-        <p className="text-xs text-gray-500">{helpText}</p>
-      )}
+      {helpText && <p className="text-xs text-gray-500">{helpText}</p>}
 
       {/* 에러 메시지 */}
       {error && (

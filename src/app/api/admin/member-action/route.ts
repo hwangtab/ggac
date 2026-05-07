@@ -156,7 +156,10 @@ export async function POST(request: NextRequest) {
 
       case 'suspend':
         if (targetMember.registration_status !== 'approved') {
-          return createErrorResponse({ success: false, error: '승인된 회원만 정지할 수 있습니다.' }, 400)
+          return createErrorResponse(
+            { success: false, error: '승인된 회원만 정지할 수 있습니다.' },
+            400
+          )
         }
         updateData = {
           is_suspended: true,
@@ -198,7 +201,10 @@ export async function POST(request: NextRequest) {
         memberId: maskId(memberId),
         action,
       })
-      return createErrorResponse({ success: false, error: '회원 상태 업데이트에 실패했습니다.' }, 500)
+      return createErrorResponse(
+        { success: false, error: '회원 상태 업데이트에 실패했습니다.' },
+        500
+      )
     }
 
     // 성공 응답
@@ -245,7 +251,10 @@ export async function POST(request: NextRequest) {
       },
       'high'
     )
-    return createErrorResponse({ success: false, error: '회원 상태 변경 중 오류가 발생했습니다.' }, 500)
+    return createErrorResponse(
+      { success: false, error: '회원 상태 변경 중 오류가 발생했습니다.' },
+      500
+    )
   }
 }
 

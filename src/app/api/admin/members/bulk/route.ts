@@ -80,14 +80,20 @@ export async function POST(request: NextRequest) {
           { suspension_reason: 'content' }
         )
         if (!reasonValidation.isValid) {
-          return createErrorResponse({ success: false, error: '유효하지 않은 정지 사유입니다.' }, 400)
+          return createErrorResponse(
+            { success: false, error: '유효하지 않은 정지 사유입니다.' },
+            400
+          )
         }
       }
 
       if (parameters.suspension_until) {
         const datePattern = /^\d{4}-\d{2}-\d{2}$/
         if (!datePattern.test(parameters.suspension_until)) {
-          return createErrorResponse({ success: false, error: '유효하지 않은 날짜 형식입니다.' }, 400)
+          return createErrorResponse(
+            { success: false, error: '유효하지 않은 날짜 형식입니다.' },
+            400
+          )
         }
       }
     }
@@ -108,7 +114,10 @@ export async function POST(request: NextRequest) {
 
     if (bulkError) {
       console.error('Bulk operation log error:', bulkError)
-      return createErrorResponse({ success: false, error: '대량 작업 로그 생성에 실패했습니다.' }, 500)
+      return createErrorResponse(
+        { success: false, error: '대량 작업 로그 생성에 실패했습니다.' },
+        500
+      )
     }
 
     // 작업 시작 표시
@@ -330,7 +339,10 @@ export async function POST(request: NextRequest) {
         })
         .eq('id', bulkOperation.id)
 
-      return createErrorResponse({ success: false, error: '대량 작업 처리 중 오류가 발생했습니다.' }, 500)
+      return createErrorResponse(
+        { success: false, error: '대량 작업 처리 중 오류가 발생했습니다.' },
+        500
+      )
     }
   } catch (error) {
     console.error('Bulk members API error:', error)
@@ -341,7 +353,10 @@ export async function POST(request: NextRequest) {
       },
       'high'
     )
-    return createErrorResponse({ success: false, error: '대량 작업 처리 중 오류가 발생했습니다.' }, 500)
+    return createErrorResponse(
+      { success: false, error: '대량 작업 처리 중 오류가 발생했습니다.' },
+      500
+    )
   }
 }
 
@@ -387,7 +402,10 @@ export async function GET(request: NextRequest) {
 
     if (operationsError) {
       console.error('Operations fetch error:', operationsError)
-      return createErrorResponse({ success: false, error: '대량 작업 이력을 조회할 수 없습니다.' }, 500)
+      return createErrorResponse(
+        { success: false, error: '대량 작업 이력을 조회할 수 없습니다.' },
+        500
+      )
     }
 
     const response = NextResponse.json({

@@ -115,7 +115,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     )
   } catch (error) {
     console.error('Admin artist assignment API error:', error)
-    return createErrorResponse({ success: false, error: '아티스트 배정 중 오류가 발생했습니다.' }, 500)
+    return createErrorResponse(
+      { success: false, error: '아티스트 배정 중 오류가 발생했습니다.' },
+      500
+    )
   }
 }
 

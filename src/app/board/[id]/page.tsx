@@ -204,7 +204,9 @@ async function getInitialPostData(
 
     // 인증된 사용자 정보 조회 (쿠키 기반 세션 복원 필요)
     const supabaseServer = await createSupabaseServer()
-    const { data: { user: serverUser } } = await supabaseServer.auth.getUser()
+    const {
+      data: { user: serverUser },
+    } = await supabaseServer.auth.getUser()
 
     let userData: UserData | null = null
     if (serverUser) {

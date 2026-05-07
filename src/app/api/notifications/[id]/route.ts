@@ -62,7 +62,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     }
 
     if (!data) {
-      return createErrorResponse({ success: false, error: '알림을 찾을 수 없거나 권한이 없습니다.' }, 404)
+      return createErrorResponse(
+        { success: false, error: '알림을 찾을 수 없거나 권한이 없습니다.' },
+        404
+      )
     }
 
     return NextResponse.json({

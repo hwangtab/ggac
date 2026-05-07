@@ -75,7 +75,6 @@ const Navigation = ({ initialPath }: NavigationProps = {}) => {
   useEffect(() => {
     let mounted = true
     let unsubscribe: (() => void) | undefined
-
     ;(async () => {
       try {
         const { supabase } = await import('@/lib/supabase/client')

@@ -67,7 +67,10 @@ export async function GET(request: NextRequest) {
 
       if (error) {
         console.error('활동 조회 오류:', error)
-        return createErrorResponse({ success: false, error: '활동 데이터 조회에 실패했습니다.' }, 500)
+        return createErrorResponse(
+          { success: false, error: '활동 데이터 조회에 실패했습니다.' },
+          500
+        )
       }
 
       const totalCount = count || 0

@@ -80,7 +80,10 @@ export async function DELETE(
 
     if (updateError) {
       console.error('Member update error:', updateError)
-      return createErrorResponse({ success: false, error: '아티스트 배정 해제에 실패했습니다.' }, 500)
+      return createErrorResponse(
+        { success: false, error: '아티스트 배정 해제에 실패했습니다.' },
+        500
+      )
     }
 
     const response = NextResponse.json({
