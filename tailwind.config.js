@@ -271,6 +271,27 @@ module.exports = {
             },
           },
         },
+        // prose-sm/base/lg variant가 자체 padding-inline-start 룰로 우리의
+        // DEFAULT.paddingLeft를 덮어쓰는 회귀를 차단. ::before bullet 위치는
+        // DEFAULT 그대로 left:0.25rem이므로 paddingLeft만 동일하게 강제한다.
+        sm: {
+          css: {
+            'ul > li': { paddingInlineStart: '1.5rem', paddingLeft: '1.5rem' },
+            'li[data-list="bullet"]': { paddingInlineStart: '1.5rem', paddingLeft: '1.5rem' },
+          },
+        },
+        base: {
+          css: {
+            'ul > li': { paddingInlineStart: '1.5rem', paddingLeft: '1.5rem' },
+            'li[data-list="bullet"]': { paddingInlineStart: '1.5rem', paddingLeft: '1.5rem' },
+          },
+        },
+        lg: {
+          css: {
+            'ul > li': { paddingInlineStart: '1.5rem', paddingLeft: '1.5rem' },
+            'li[data-list="bullet"]': { paddingInlineStart: '1.5rem', paddingLeft: '1.5rem' },
+          },
+        },
       },
     },
   },
