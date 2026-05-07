@@ -1,13 +1,3 @@
-const createQuillIndentStyles = () => {
-  const styles = {}
-  for (let level = 1; level <= 8; level += 1) {
-    styles[`li[class~="ql-indent-${level}"]`] = {
-      marginLeft: `${level * 1.5}rem`,
-    }
-  }
-  return styles
-}
-
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
@@ -81,215 +71,20 @@ module.exports = {
       overflowWrap: {
         'break-words': 'break-word',
       },
+      // @tailwindcss/typography는 기본 동작이 충분하다고 판단해 대부분의 커스텀을
+      // 제거. 브랜드 아이덴티티(헤딩/strong/em 색상)만 색 오버라이드로 유지하고
+      // 나머지(margin, fontSize, list-style, fontFamily 등)는 플러그인 기본값.
+      // word-break: keep-all 등 한글 처리는 globals.css :where(body) layer가 담당.
       typography: {
         DEFAULT: {
           css: {
-            color: '#1f2937',
             maxWidth: 'none',
-            // 한글 친화적 설정
-            'h1, h2, h3, h4, h5, h6, p, li, td, th': {
-              wordBreak: 'keep-all',
-              overflowWrap: 'break-word',
-              hyphens: 'none',
-            },
-            // 헤딩 스타일 - font-post 사용
-            h1: {
-              color: '#1e3a8a',
-              fontFamily: 'var(--font-pretendard-black), serif',
-              fontWeight: '900',
-              fontSize: '2.25rem',
-              marginTop: '3rem',
-              marginBottom: '1.5rem',
-              paddingBottom: '0.75rem',
-              borderBottom: '2px solid #bae6fd',
-            },
-            'h1:first-child': {
-              marginTop: '0',
-            },
-            h2: {
-              color: '#075985',
-              fontFamily: 'var(--font-pretendard-black), serif',
-              fontWeight: '800',
-              fontSize: '1.875rem',
-              marginTop: '2.5rem',
-              marginBottom: '1.25rem',
-              paddingBottom: '0.5rem',
-              borderBottom: '1px solid #bae6fd',
-            },
-            'h2:first-child': {
-              marginTop: '0',
-            },
-            h3: {
-              color: '#0369a1',
-              fontFamily: 'var(--font-pretendard-black), serif',
-              fontWeight: '800',
-              fontSize: '1.5rem',
-              marginTop: '2rem',
-              marginBottom: '1rem',
-              paddingBottom: '0.5rem',
-              borderBottom: '1px solid #bae6fd',
-            },
-            'h3:first-child': {
-              marginTop: '0',
-            },
-            h4: {
-              color: '#0369a1',
-              fontFamily: 'var(--font-pretendard-black), serif',
-              fontWeight: '800',
-              fontSize: '1.25rem',
-              marginTop: '1.5rem',
-              marginBottom: '0.75rem',
-            },
-            // 본문 텍스트
-            p: {
-              color: '#374151',
-              lineHeight: '1.65',
-            },
-            // Quill이 생성하는 <p><br></p> 형태의 빈 줄도 여백 제거
-            'p:has(> br:only-child)': {
-              marginBottom: '0',
-              lineHeight: '0.5rem',
-            },
-            // 리스트 스타일
-            ul: {
-              color: '#374151',
-              marginTop: '2rem',
-              marginBottom: '1.5rem',
-              marginLeft: '1rem',
-              textAlign: 'left',
-              listStyleType: 'none',
-            },
-            'ul > li': {
-              position: 'relative',
-              paddingLeft: '1.5rem',
-              marginBottom: '0.5rem',
-              textAlign: 'left',
-              listStyleType: 'none',
-            },
-            'ul > li::before': {
-              content: '"•"',
-              position: 'absolute',
-              left: '0.25rem',
-              top: '0',
-              color: '#0284c7',
-              fontWeight: '600',
-              lineHeight: 'inherit',
-            },
-            'li[data-list="bullet"]': {
-              position: 'relative',
-              paddingLeft: '1.5rem',
-              marginBottom: '0.5rem',
-              textAlign: 'left',
-              listStyleType: 'none',
-            },
-            'li[data-list="bullet"]::before': {
-              content: '"•"',
-              position: 'absolute',
-              left: '0.25rem',
-              top: '0',
-              color: '#0284c7',
-              fontWeight: '600',
-              lineHeight: 'inherit',
-            },
-            'li[data-list="ordered"]': {
-              listStyleType: 'decimal',
-              marginLeft: '1.5rem',
-              paddingLeft: '0.25rem',
-            },
-            'li[data-list="checked"], li[data-list="unchecked"]': {
-              position: 'relative',
-              paddingLeft: '1.5rem',
-              marginBottom: '0.5rem',
-              listStyleType: 'none',
-            },
-            'li[data-list="checked"]::before, li[data-list="unchecked"]::before': {
-              position: 'absolute',
-              left: '0',
-              fontWeight: '600',
-              color: '#0284c7',
-              fontFamily: 'system-ui, sans-serif',
-            },
-            'li[data-list="checked"]::before': {
-              content: '"☑"',
-            },
-            'li[data-list="unchecked"]::before': {
-              content: '"☐"',
-            },
-            ...createQuillIndentStyles(),
-            // 숫자 리스트 스타일
-            ol: {
-              color: '#374151',
-              marginTop: '2rem',
-              marginBottom: '1.5rem',
-              marginLeft: '1rem',
-              paddingLeft: '1rem',
-              textAlign: 'left',
-              listStyleType: 'decimal',
-            },
-            'ol > li': {
-              paddingLeft: '0.5rem',
-              marginBottom: '0.5rem',
-              textAlign: 'left',
-            },
-            // strong, em 스타일
-            strong: {
-              color: '#075985',
-              fontWeight: '600',
-              wordBreak: 'keep-all',
-              overflowWrap: 'break-word',
-              whiteSpace: 'normal',
-            },
-            'li strong': {
-              color: '#075985',
-              fontWeight: '600',
-              display: 'inline',
-              marginTop: '0',
-              marginBottom: '0',
-            },
-            // p > strong:only-child - 일반 strong과 동일하게 처리
-            'p > strong:only-child': {
-              display: 'inline',
-              fontFamily: "var(--font-pretendard), 'system-ui', sans-serif",
-              fontWeight: '600',
-              color: '#075985',
-            },
-            em: {
-              color: '#bd5608',
-              fontStyle: 'italic',
-            },
-            // 링크 스타일
-            a: {
-              color: '#0284c7',
-              textDecoration: 'underline',
-              textUnderlineOffset: '0.2em',
-              textDecorationThickness: '1px',
-              '&:hover': {
-                color: '#0369a1',
-                textUnderlineOffset: '0.25em',
-                textDecorationThickness: '1.5px',
-              },
-            },
-          },
-        },
-        // prose-sm/base/lg variant가 자체 padding-inline-start 룰로 우리의
-        // DEFAULT.paddingLeft를 덮어쓰는 회귀를 차단. ::before bullet 위치는
-        // DEFAULT 그대로 left:0.25rem이므로 paddingLeft만 동일하게 강제한다.
-        sm: {
-          css: {
-            'ul > li': { paddingInlineStart: '1.5rem', paddingLeft: '1.5rem' },
-            'li[data-list="bullet"]': { paddingInlineStart: '1.5rem', paddingLeft: '1.5rem' },
-          },
-        },
-        base: {
-          css: {
-            'ul > li': { paddingInlineStart: '1.5rem', paddingLeft: '1.5rem' },
-            'li[data-list="bullet"]': { paddingInlineStart: '1.5rem', paddingLeft: '1.5rem' },
-          },
-        },
-        lg: {
-          css: {
-            'ul > li': { paddingInlineStart: '1.5rem', paddingLeft: '1.5rem' },
-            'li[data-list="bullet"]': { paddingInlineStart: '1.5rem', paddingLeft: '1.5rem' },
+            'h1, h2': { color: '#075985' },
+            h1: { color: '#1e3a8a' },
+            h3: { color: '#0369a1' },
+            h4: { color: '#0369a1' },
+            strong: { color: '#075985' },
+            em: { color: '#bd5608' },
           },
         },
       },
