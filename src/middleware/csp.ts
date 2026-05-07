@@ -4,13 +4,16 @@ import type { NextRequest } from 'next/server'
 /**
  * Configure Strict Content Security Policy (CSP)
  *
- * CSP is enabled by default in production.
- * Set NEXT_STRICT_CSP=false to disable (not recommended in production).
- * Set NEXT_STRICT_CSP=true to enable in development.
+ * 현재 정책: script-src/style-src에 'unsafe-inline' 사용. Lighthouse csp-xss 감사 -4점.
  *
- * 정책 결정(2026-05-07): 콘텐츠 라우트를 정적 prerender로 전환하면서 요청별 nonce 발급이
- * 의미가 없어져 'nonce-X' / 'strict-dynamic' 정책을 'unsafe-inline'으로 복원.
- * Trade-off로 권장사항 점수가 -4 정도 떨어지지만 정적 cache hit으로 LCP/TTFB 큰 폭 개선.
+ * Hash 기반 CSP는 시도해 봤으나 Next.js App Router의 streaming RSC 인라인 스크립트가
+ * 빌드 ID와 webpack chunk 파일명을 본문에 임베드해 빌드마다 522±10개로 출렁이고,
+ * postbuild에서 hash를 추출해도 middleware 번들은 그 전에 만들어지기 때문에 단일
+ * 빌드 안에서 일관성 보장 불가. 두-pass 빌드는 가능하지만 비용 대비 4점이라 보류.
+ *
+ * Real nonce CSP는 layout.tsx의 await headers() 호출이 필요한데, 이는 모든 페이지를
+ * dynamic으로 강제해 정적 prerender의 LCP/TTFB 이득을 잃게 됨. 보안 4점 vs 성능 trade-off
+ * 에서 성능을 선택.
  */
 export function applyCSP(request: NextRequest, response: NextResponse) {
   const isProduction = process.env.NODE_ENV === 'production'
@@ -23,7 +26,6 @@ export function applyCSP(request: NextRequest, response: NextResponse) {
 
   try {
     const pathname = request.nextUrl.pathname
-    // Skip CSP for editor pages which might need more permissive rules
     const isEditorPath = pathname.startsWith('/board/write') || /\/board\/.+\/edit$/.test(pathname)
 
     if (!isEditorPath) {
