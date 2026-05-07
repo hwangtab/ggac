@@ -50,9 +50,9 @@ export default function AssignArtistModal({
   onSuccess,
 }: AssignArtistModalProps) {
   const [selectedMember, setSelectedMember] = useState<string>('')
-  const [selectedRole, setSelectedRole] = useState<'owner' | 'manager' | 'collaborator'>(
-    'collaborator'
-  )
+  // 일반적으로 아티스트 본인 계정 배정이 가장 흔한 케이스라 기본 역할을 '대표(owner)'로 둠.
+  // 매니저/협력자는 명시적으로 골라야 적용된다.
+  const [selectedRole, setSelectedRole] = useState<'owner' | 'manager' | 'collaborator'>('owner')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
 
@@ -146,7 +146,7 @@ export default function AssignArtistModal({
 
   const resetForm = () => {
     setSelectedMember('')
-    setSelectedRole('collaborator')
+    setSelectedRole('owner')
     setSearchTerm('')
   }
 
@@ -315,9 +315,9 @@ export default function AssignArtistModal({
                   }
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
-                  <option value="collaborator">협력자</option>
-                  <option value="manager">매니저</option>
                   <option value="owner">대표</option>
+                  <option value="manager">매니저</option>
+                  <option value="collaborator">협력자</option>
                 </select>
                 <p className="mt-1 text-sm text-gray-500">
                   {selectedRole === 'owner' && '아티스트 프로필을 완전히 관리할 수 있습니다.'}
