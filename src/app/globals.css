@@ -135,12 +135,22 @@ textarea:focus-visible {
 }
 
 @supports selector(body:has(*)) {
-  /* 첫 진입 시 홈 히어로 위 헤더가 흰 배경으로 번쩍이는 현상을 방지한다. */
+  /*
+   * 정적 prerender 시점에는 usePathname()이 빈 값이라 isHomePage=false로
+   * SSR되어 홈 진입 시 헤더가 흰 배경/회색 텍스트 → 투명/흰 텍스트로 짧게 깜빡인다.
+   * /page.tsx의 [data-home-page='true']와 #navigation[data-at-top='true']를
+   * :has()로 결합해 CSS만으로 hydration 전부터 최종 상태(투명+흰 텍스트)로 SSR된다.
+   */
   body:has([data-home-page='true']) #navigation[data-at-top='true'] {
     background: transparent !important;
     box-shadow: none !important;
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
+  }
+  body:has([data-home-page='true']) #navigation[data-at-top='true'] a,
+  body:has([data-home-page='true']) #navigation[data-at-top='true'] button,
+  body:has([data-home-page='true']) #navigation[data-at-top='true'] span {
+    color: #fff;
   }
 }
 
