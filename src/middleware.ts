@@ -20,11 +20,7 @@ export async function middleware(request: NextRequest) {
 
   // 3. API 및 정적 파일 경로 우회
   const { pathname } = request.nextUrl
-
-  // 서버 컴포넌트(루트 레이아웃)에서 현재 경로를 알 수 있도록 헤더로 전달.
-  // 클라이언트 컴포넌트의 usePathname()이 정적 prerender 시점에 빈 값을
-  // 돌려줘 헤더 색상이 잘못 SSR되는 문제를 방지한다.
-  res.headers.set('x-pathname', pathname)
+  // x-pathname 주입 제거: layout이 더 이상 headers()를 사용하지 않음 → 정적 prerender 가능
 
   // API 라우트는 절대 미들웨어에서 처리하지 않음 (동적 API 라우트 문제 해결)
   if (pathname.startsWith('/api/')) {

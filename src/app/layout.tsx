@@ -6,7 +6,6 @@ import { getGlobalData } from '@/lib/data'
 import { Suspense } from 'react'
 import Script from 'next/script'
 import { Toaster } from 'react-hot-toast'
-import { headers } from 'next/headers'
 
 // 폰트는 globals.css의 @import 'pretendard/.../pretendardvariable-dynamic-subset.css'로 로드된다.
 // 브라우저가 unicode-range 매칭 기반으로 실제 사용 글자가 포함된 서브셋만 자동 fetch.
@@ -86,15 +85,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // 개선된 데이터 로딩 - 캐싱된 함수 사용
   const globalData = await getGlobalData()
 
-  // 미들웨어에서 주입한 현재 경로를 읽어 클라이언트 컴포넌트에 전달.
-  // usePathname()이 정적 prerender 시점에 빈 값을 돌려줘 헤더 색상이
-  // 잘못 SSR되는 문제를 방지하기 위한 fallback.
-  const headersList = await headers()
-  const currentPath = headersList.get('x-pathname') || '/'
-  // CSP nonce는 middleware/csp.ts에서 요청별로 발급해 x-nonce 헤더로 전달.
-  // strict-dynamic + 'nonce-X' 정책에서 Next.js 인라인 부트스트랩 스크립트가 신뢰받으려면
-  // 이 nonce를 next/script의 nonce prop에 명시 주입해야 한다.
-  const nonce = headersList.get('x-nonce') || undefined
+  // 정적 prerender 가능하도록 headers() 사용 제거.
+  // - x-pathname fallback은 클라이언트 hydration의 usePathname()이 곧 채움
+  //   (홈 헤더에서 매우 짧게 흰 배경 → 투명으로 전환되는 미세 깜빡임 가능)
+  // - CSP nonce는 정적 페이지에서 요청별 발급 불가 → middleware에서 'unsafe-inline' 정책으로 전환
 
   return (
     <html lang="ko">
@@ -102,7 +96,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <Script
           id="css-script-guard"
           strategy="beforeInteractive"
-          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html: `
 (function(){
@@ -161,7 +154,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               </div>
             }
           >
-            <ConditionalLayout globalData={globalData} currentPath={currentPath}>
+            <ConditionalLayout globalData={globalData}>
               {children}
             </ConditionalLayout>
           </Suspense>

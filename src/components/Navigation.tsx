@@ -11,21 +11,17 @@ import { usePathname, useRouter } from 'next/navigation'
 // 인증 UI는 loading 상태로 시작했다가 마운트 직후 비동기로 채워진다.
 import NotificationDropdown from './NotificationDropdown'
 
-interface NavigationProps {
-  initialPath?: string
-}
-
-const Navigation = ({ initialPath }: NavigationProps = {}) => {
+const Navigation = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   // 상단 고정 헤더 투명/불투명 제어
   const [isAtTop, setIsAtTop] = useState(true)
   const [hasScrollSync, setHasScrollSync] = useState(false)
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
-  // usePathname()은 정적 prerender 시점에 빈 값을 반환할 수 있어,
-  // 부모 layout이 미들웨어 헤더로 전달한 initialPath를 fallback으로 사용.
-  const pathnameFromHook = usePathname()
-  const pathname = pathnameFromHook || initialPath || '/'
+  // 정적 prerender 시점에는 usePathname()이 빈 값을 반환할 수 있다.
+  // 그 경우 isHomePage=false로 떨어져 헤더가 흰 배경으로 SSR되며, hydration 직후
+  // 정확한 pathname으로 갱신되면서 색상도 즉시 정상화된다 (홈에서만 미세 깜빡임).
+  const pathname = usePathname() || ''
   const router = useRouter()
 
   // 홈페이지인지 확인
