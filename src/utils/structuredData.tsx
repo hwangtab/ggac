@@ -223,27 +223,36 @@ export function generateEventStructuredData(project: {
     },
   }
 
+  // Google Search Console에서 organizer/performer의 name·url 누락을
+  // 경고로 잡았던 회귀 — @id 참조만으로는 부족하고 inline name+url 필수.
+  const organizationRef = {
+    '@type': 'Organization',
+    '@id': 'https://ggac.kr/#organization',
+    name: '경기아트콜렉티브 협동조합',
+    url: 'https://ggac.kr',
+  }
+
+  const eventUrl = `https://ggac.kr/archive/${project.slug}`
+
   const eventSchema: any = {
     '@context': 'https://schema.org',
     '@type': 'Event',
     name: project.title,
     description: project.description,
-    url: `https://ggac.kr/archive/${project.slug}`,
+    url: eventUrl,
     image: imageUrl,
     startDate: eventDate,
+    // endDate가 따로 없으면 startDate와 동일하게 둬서 GSC 경고 회피 (단일 일정 이벤트로 표현)
+    endDate: endDate || eventDate,
     eventStatus: 'https://schema.org/EventScheduled',
     eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
     location,
-    organizer: { '@id': 'https://ggac.kr/#organization' },
-    performer: { '@id': 'https://ggac.kr/#organization' },
+    organizer: organizationRef,
+    performer: organizationRef,
     inLanguage: 'ko-KR',
   }
 
-  if (endDate) {
-    eventSchema.endDate = endDate
-  }
-
-  // 티켓팅 정보 추가
+  // 티켓팅 정보가 있으면 그대로 매핑, 없으면 무료 입장(=offers 추천 필드 충족)
   if (project.ticketing && project.ticketing.length > 0) {
     eventSchema.offers = project.ticketing.map((ticket: any) => ({
       '@type': 'Offer',
@@ -254,6 +263,17 @@ export function generateEventStructuredData(project: {
       validFrom: ticket.startDate,
       validThrough: ticket.endDate,
     }))
+  } else {
+    eventSchema.offers = [
+      {
+        '@type': 'Offer',
+        url: eventUrl,
+        price: '0',
+        priceCurrency: 'KRW',
+        availability: 'https://schema.org/InStock',
+        validFrom: eventDate,
+      },
+    ]
   }
 
   return eventSchema
