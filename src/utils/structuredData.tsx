@@ -119,6 +119,9 @@ export function generatePostStructuredData(post: {
   const stripped = (post.content || '').replace(/<[^>]*>/g, '').trim()
   const descriptionText = stripped.substring(0, 150)
   const descriptionSuffix = stripped.length > 150 ? '...' : ''
+  // 한국어 본문은 공백 기준 단어 수가 의미가 약하므로 글자수를 wordCount로 사용.
+  // schema.org Article의 wordCount는 정수만 허용된다.
+  const wordCount = stripped.length
 
   return {
     '@context': 'https://schema.org',
@@ -141,6 +144,7 @@ export function generatePostStructuredData(post: {
       '@id': `https://ggac.kr/board/${post.id}`,
     },
     articleSection: post.category,
+    wordCount,
     inLanguage: 'ko-KR',
     isPartOf: { '@id': 'https://ggac.kr/#website' },
   }

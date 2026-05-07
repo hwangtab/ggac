@@ -41,17 +41,20 @@ async function getBoardPostsForSitemap(): Promise<Array<{ id: string; updated_at
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = getSiteUrl()
+  // 정적 페이지는 빌드 시점을 lastModified로 사용 — ISR 재빌드마다 갱신되어
+  // 검색엔진에 최소한의 freshness 신호를 제공한다.
+  const now = new Date()
 
   const staticPages: MetadataRoute.Sitemap = [
-    { url: baseUrl, changeFrequency: 'weekly', priority: 1.0 },
-    { url: `${baseUrl}/about`, changeFrequency: 'monthly', priority: 0.8 },
-    { url: `${baseUrl}/archive`, changeFrequency: 'weekly', priority: 0.9 },
-    { url: `${baseUrl}/artists`, changeFrequency: 'weekly', priority: 0.9 },
-    { url: `${baseUrl}/connect`, changeFrequency: 'monthly', priority: 0.7 },
-    { url: `${baseUrl}/board`, changeFrequency: 'daily', priority: 0.6 },
-    { url: `${baseUrl}/privacy`, changeFrequency: 'monthly', priority: 0.5 },
-    { url: `${baseUrl}/terms`, changeFrequency: 'monthly', priority: 0.5 },
-    { url: `${baseUrl}/faq`, changeFrequency: 'monthly', priority: 0.7 },
+    { url: baseUrl, lastModified: now, changeFrequency: 'weekly', priority: 1.0 },
+    { url: `${baseUrl}/about`, lastModified: now, changeFrequency: 'monthly', priority: 0.8 },
+    { url: `${baseUrl}/archive`, lastModified: now, changeFrequency: 'weekly', priority: 0.9 },
+    { url: `${baseUrl}/artists`, lastModified: now, changeFrequency: 'weekly', priority: 0.9 },
+    { url: `${baseUrl}/connect`, lastModified: now, changeFrequency: 'monthly', priority: 0.7 },
+    { url: `${baseUrl}/board`, lastModified: now, changeFrequency: 'daily', priority: 0.6 },
+    { url: `${baseUrl}/privacy`, lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
+    { url: `${baseUrl}/terms`, lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
+    { url: `${baseUrl}/faq`, lastModified: now, changeFrequency: 'monthly', priority: 0.7 },
   ]
 
   try {
