@@ -20,7 +20,10 @@ export async function middleware(request: NextRequest) {
 
   // 3. API 및 정적 파일 경로 우회
   const { pathname } = request.nextUrl
-  // x-pathname 주입 제거: layout이 더 이상 headers()를 사용하지 않음 → 정적 prerender 가능
+
+  // 에디터 경로에서 layout이 CSP nonce를 읽을 수 있도록 헤더 전달.
+  // 정적 prerender 경로는 headers() 호출이 없어도 됨.
+  res.headers.set('x-pathname', pathname)
 
   // API 라우트는 절대 미들웨어에서 처리하지 않음 (동적 API 라우트 문제 해결)
   if (pathname.startsWith('/api/')) {

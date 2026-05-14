@@ -4,17 +4,23 @@ import type { NextRequest } from 'next/server'
 /**
  * Configure Strict Content Security Policy (CSP)
  *
- * 현재 정책: script-src/style-src에 'unsafe-inline' 사용. Lighthouse csp-xss 감사 -4점.
+ * 하이브리드 정책:
+ * - 에디터 경로(`/board/write`, `/board/:slug/edit`): 요청별 nonce 발급
+ *   → 'nonce-X' 'strict-dynamic'으로 script-guard 인라인 스크립트 보호
+ * - 그 외 경로: 'unsafe-inline' (정적 prerender 호환)
+ *   → CDN edge 캐시 hit으로 LCP/TTFB 개선
  *
- * Hash 기반 CSP는 시도해 봤으나 Next.js App Router의 streaming RSC 인라인 스크립트가
- * 빌드 ID와 webpack chunk 파일명을 본문에 임베드해 빌드마다 522±10개로 출렁이고,
- * postbuild에서 hash를 추출해도 middleware 번들은 그 전에 만들어지기 때문에 단일
- * 빌드 안에서 일관성 보장 불가. 두-pass 빌드는 가능하지만 비용 대비 4점이라 보류.
- *
- * Real nonce CSP는 layout.tsx의 await headers() 호출이 필요한데, 이는 모든 페이지를
- * dynamic으로 강제해 정적 prerender의 LCP/TTFB 이득을 잃게 됨. 보안 4점 vs 성능 trade-off
- * 에서 성능을 선택.
+ * 왜 에디터만 nonce? 게시판 쓰기는 사용자 입력이 DOM에 삽입되는 경로라
+ * XSS 방어막이 critical. 정적 콘텐츠 페이지는 캐시 이득을 우선.
  */
+function generateNonce(): string {
+  const bytes = new Uint8Array(16)
+  globalThis.crypto.getRandomValues(bytes)
+  let binary = ''
+  for (const b of bytes) binary += String.fromCharCode(b)
+  return btoa(binary)
+}
+
 export function applyCSP(request: NextRequest, response: NextResponse) {
   const isProduction = process.env.NODE_ENV === 'production'
   const envOverride = process.env.NEXT_STRICT_CSP
@@ -28,7 +34,39 @@ export function applyCSP(request: NextRequest, response: NextResponse) {
     const pathname = request.nextUrl.pathname
     const isEditorPath = pathname.startsWith('/board/write') || /\/board\/.+\/edit$/.test(pathname)
 
-    if (!isEditorPath) {
+    if (isEditorPath) {
+      // 에디터 경로: 요청별 nonce 발급 → 인라인 스크립트 보호
+      const nonce = generateNonce()
+      response.headers.set('x-nonce', nonce)
+      request.headers.set('x-nonce', nonce)
+
+      const strictCsp = [
+        "default-src 'self'",
+        `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https: 'unsafe-inline'`,
+        `script-src-elem 'self' 'nonce-${nonce}' 'strict-dynamic' https: 'unsafe-inline'`,
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "font-src 'self' https://fonts.gstatic.com",
+        "img-src 'self' https: blob: data: https://*.supabase.co",
+        "media-src 'self' https://www.youtube.com https://*.supabase.co",
+        "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com",
+        process.env.NODE_ENV === 'development'
+          ? "connect-src 'self' http://localhost:* https://api.supabase.io https://*.supabase.co ws://localhost:* wss://localhost:* wss://*.supabase.co"
+          : "connect-src 'self' https://api.supabase.io https://*.supabase.co wss://*.supabase.co",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'none'",
+        "worker-src 'self' blob:",
+        "manifest-src 'self'",
+        'report-uri /api/security/csp-report',
+        'report-to default',
+        ...(process.env.NODE_ENV === 'production' ? ['upgrade-insecure-requests'] : []),
+      ].join('; ')
+
+      response.headers.set('Content-Security-Policy', strictCsp)
+    } else {
+      // 정적 prerender 경로: nonce 없이 'unsafe-inline' (캐시 호환)
       const strictCsp = [
         "default-src 'self'",
         "script-src 'self' 'unsafe-inline' https://www.youtube.com https://www.google-analytics.com",

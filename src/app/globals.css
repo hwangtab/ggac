@@ -146,11 +146,11 @@ textarea:focus-visible {
     box-shadow: none !important;
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
+    color: #fff !important;
   }
   body:has([data-home-page='true']) #navigation[data-at-top='true'] a,
-  body:has([data-home-page='true']) #navigation[data-at-top='true'] button,
-  body:has([data-home-page='true']) #navigation[data-at-top='true'] span {
-    color: #fff;
+  body:has([data-home-page='true']) #navigation[data-at-top='true'] button {
+    color: #fff !important;
   }
 }
 

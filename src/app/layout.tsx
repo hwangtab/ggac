@@ -6,6 +6,7 @@ import { getGlobalData } from '@/lib/data'
 import { Suspense } from 'react'
 import Script from 'next/script'
 import { Toaster } from 'react-hot-toast'
+import { headers } from 'next/headers'
 
 // 폰트는 globals.css의 @import 'pretendard/.../pretendardvariable-dynamic-subset.css'로 로드된다.
 // 브라우저가 unicode-range 매칭 기반으로 실제 사용 글자가 포함된 서브셋만 자동 fetch.
@@ -85,10 +86,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // 개선된 데이터 로딩 - 캐싱된 함수 사용
   const globalData = await getGlobalData()
 
-  // 정적 prerender 가능하도록 headers() 사용 제거.
-  // - x-pathname fallback은 클라이언트 hydration의 usePathname()이 곧 채움
-  //   (홈 헤더에서 매우 짧게 흰 배경 → 투명으로 전환되는 미세 깜빡임 가능)
-  // - CSP nonce는 정적 페이지에서 요청별 발급 불가 → middleware에서 'unsafe-inline' 정책으로 전환
+  // CSP nonce는 middleware/csp.ts에서 에디터 경로일 때만 x-nonce 헤더로 주입.
+  // layout은 이 헤더가 있으면 Script에 nonce prop 전달, 없으면 undefined.
+  // headers() 호출은 모든 경로에서 발생하므로, layout 전체가 dynamic으로 전환됨.
+  // → 정적 prerender 이득은 getServerData 캐싱으로 일부 보상.
+  const headersList = await headers()
+  const nonce = headersList.get('x-nonce') || undefined
 
   return (
     <html lang="ko">
@@ -96,6 +99,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <Script
           id="css-script-guard"
           strategy="beforeInteractive"
+          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html: `
 (function(){
