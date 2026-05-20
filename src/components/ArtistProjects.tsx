@@ -4,6 +4,8 @@ import Link from 'next/link'
 import OptimizedImage from '@/components/OptimizedImage'
 import { FiCalendar, FiTag, FiExternalLink } from 'react-icons/fi'
 import { getProjectSummary } from '@/utils/projectUtils'
+import { useTranslations, useLocale } from 'next-intl'
+import { localizeArchiveCategory } from '@/constants/categories'
 import type { Project } from '@/types'
 
 interface ArtistProjectsProps {
@@ -17,6 +19,10 @@ export default function ArtistProjects({
   artistName,
   className = '',
 }: ArtistProjectsProps) {
+  const t = useTranslations('artists')
+  const locale = useLocale()
+  const dateLocale = locale === 'en' ? 'en-US' : 'ko-KR'
+
   if (projects.length === 0) {
     return (
       <div className={`text-center py-12 ${className}`}>
@@ -25,11 +31,12 @@ export default function ArtistProjects({
             <div className="text-3xl text-gray-400">🎭</div>
           </div>
           <h3 className="text-xl font-serif font-semibold text-gray-700 mb-2">
-            아직 등록된 프로젝트가 없습니다
+            {t('artistProjects.empty')}
           </h3>
           <p className="text-gray-500 text-sm">
-            {artistName ? `${artistName}이(가)` : '이 아티스트가'} 참여한 프로젝트가 곧 공개될
-            예정입니다.
+            {artistName
+              ? t('artistProjects.comingSoonNamed', { name: artistName })
+              : t('artistProjects.comingSoon')}
           </p>
         </div>
       </div>
@@ -75,7 +82,7 @@ export default function ArtistProjects({
                 <div className="absolute top-4 left-4">
                   <span className="inline-flex items-center gap-1 px-3 py-1 bg-primary-600/90 text-white text-xs font-medium rounded-full backdrop-blur-sm">
                     <FiTag className="w-3 h-3" />
-                    {project.category}
+                    {localizeArchiveCategory(project.category, locale)}
                   </span>
                 </div>
 
@@ -95,7 +102,7 @@ export default function ArtistProjects({
                 {/* 날짜 */}
                 <div className="flex items-center gap-1 text-gray-500 text-sm mb-3">
                   <FiCalendar className="w-4 h-4" />
-                  {new Date(project.publishedDate).toLocaleDateString('ko-KR', {
+                  {new Date(project.publishedDate).toLocaleDateString(dateLocale, {
                     year: 'numeric',
                     month: 'long',
                     day: 'numeric',
@@ -114,7 +121,7 @@ export default function ArtistProjects({
 
                 {/* 더보기 표시 */}
                 <div className="mt-auto flex items-center text-primary-600 text-sm font-medium group-hover:text-primary-700 transition-colors duration-200">
-                  자세히 보기
+                  {t('artistProjects.viewDetail')}
                   <FiExternalLink className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform duration-200" />
                 </div>
               </div>
@@ -130,8 +137,7 @@ export default function ArtistProjects({
       {projects.length > 0 && (
         <div className="text-center mt-8">
           <p className="text-gray-500 text-sm">
-            총 <span className="font-medium text-primary-600">{projects.length}</span>개의
-            프로젝트에 참여
+            {t('artistProjects.totalCount', { count: projects.length })}
           </p>
         </div>
       )}

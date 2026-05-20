@@ -3,7 +3,22 @@
     "loading": "페이지를 불러오는 중...",
     "skipToMain": "메인 콘텐츠로 건너뛰기",
     "skipToNav": "내비게이션으로 건너뛰기",
-    "brandShort": "경기아트콜렉티브"
+    "brandShort": "경기아트콜렉티브",
+    "lightbox": {
+      "dialogLabel": "갤러리 이미지 {current} / {total}",
+      "close": "닫기",
+      "imageAlt": "갤러리 이미지 {current}",
+      "prev": "이전 이미지",
+      "next": "다음 이미지"
+    },
+    "image": {
+      "reload": "이미지 다시 로드",
+      "retry": "재시도"
+    },
+    "loader": {
+      "label": "페이지를 불러오는 중",
+      "sr": "불러오는 중입니다"
+    }
   },
   "nav": {
     "about": "우리의 이야기",
@@ -78,6 +93,13 @@
       "heading": "아티스트 목록을 불러올 수 없습니다",
       "body": "일시적인 오류가 발생했습니다. 다시 시도해주세요.",
       "retry": "다시 시도"
+    },
+    "artistProjects": {
+      "empty": "아직 등록된 프로젝트가 없습니다",
+      "comingSoon": "이 아티스트가 참여한 프로젝트가 곧 공개될 예정입니다.",
+      "comingSoonNamed": "{name}이(가) 참여한 프로젝트가 곧 공개될 예정입니다.",
+      "viewDetail": "자세히 보기",
+      "totalCount": "총 {count}개의 프로젝트에 참여"
     }
   },
   "about": {
@@ -176,6 +198,21 @@
       "navHeading": "다른 프로젝트들도 만나보세요",
       "navBody": "경기아트콜렉티브가 함께 만들어가는 더 많은 프로젝트들을 탐험해보세요.",
       "navCta": "다른 프로젝트 보기"
+    },
+    "ticketing": {
+      "soldOut": "매진",
+      "soldOutDate": "매진 ({date})",
+      "opensOn": "{date} 오픈",
+      "closed": "예매종료",
+      "available": "예매가능",
+      "goToBooking": "예매 링크로 이동",
+      "fallbackPlatform": "예매처",
+      "previewAlt": "{platform} 티켓 미리보기"
+    },
+    "article": {
+      "viewRelated": "관련 프로젝트 보기",
+      "goToArticle": "기사 링크로 이동",
+      "imageAlt": "기사 이미지"
     }
   },
   "auth": {

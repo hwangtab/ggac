@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react'
 import { FiX, FiChevronLeft, FiChevronRight } from 'react-icons/fi'
 import OptimizedImage from './OptimizedImage'
+import { useTranslations } from 'next-intl'
 
 interface LightboxProps {
   images: string[]
@@ -13,6 +14,7 @@ interface LightboxProps {
 }
 
 const Lightbox = ({ images, currentIndex, onClose, onNext, onPrev }: LightboxProps) => {
+  const t = useTranslations('common')
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
 
@@ -62,13 +64,13 @@ const Lightbox = ({ images, currentIndex, onClose, onNext, onPrev }: LightboxPro
       }}
       role="dialog"
       aria-modal="true"
-      aria-label={`갤러리 이미지 ${currentIndex + 1} / ${images.length}`}
+      aria-label={t('lightbox.dialogLabel', { current: currentIndex + 1, total: images.length })}
     >
       {/* Close Button */}
       <button
         ref={closeButtonRef}
         onClick={onClose}
-        aria-label="닫기"
+        aria-label={t('lightbox.close')}
         className="absolute top-4 right-4 text-white/80 hover:text-white transition-colors z-50"
       >
         <FiX size={32} />
@@ -78,7 +80,7 @@ const Lightbox = ({ images, currentIndex, onClose, onNext, onPrev }: LightboxPro
       <div className="relative w-full h-full max-w-4xl max-h-[90vh] flex items-center justify-center px-6">
         <OptimizedImage
           src={images[currentIndex]}
-          alt={`갤러리 이미지 ${currentIndex + 1}`}
+          alt={t('lightbox.imageAlt', { current: currentIndex + 1 })}
           width={1600}
           height={900}
           className="w-full h-auto max-h-[90vh] object-contain mx-auto"
@@ -91,7 +93,7 @@ const Lightbox = ({ images, currentIndex, onClose, onNext, onPrev }: LightboxPro
       {/* Prev Button */}
       <button
         onClick={onPrev}
-        aria-label="이전 이미지"
+        aria-label={t('lightbox.prev')}
         className="absolute left-4 top-1/2 -translate-y-1/2 text-white/80 hover:text-white transition-colors bg-black/30 rounded-full p-2"
       >
         <FiChevronLeft size={32} />
@@ -100,7 +102,7 @@ const Lightbox = ({ images, currentIndex, onClose, onNext, onPrev }: LightboxPro
       {/* Next Button */}
       <button
         onClick={onNext}
-        aria-label="다음 이미지"
+        aria-label={t('lightbox.next')}
         className="absolute right-4 top-1/2 -translate-y-1/2 text-white/80 hover:text-white transition-colors bg-black/30 rounded-full p-2"
       >
         <FiChevronRight size={32} />

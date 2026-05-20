@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useTranslations, useLocale } from 'next-intl'
+import { localizeArchiveCategory } from '@/constants/categories'
 import { Link } from '@/i18n/navigation'
 import dynamic from 'next/dynamic'
 import OptimizedImage from '@/components/OptimizedImage'
@@ -108,7 +109,7 @@ export default function ProjectDetailContent({
 
             <div className="flex items-center justify-center gap-4 mb-6">
               <span className="inline-block px-4 py-2 bg-primary-100 text-primary-700 font-medium rounded-full">
-                {project.category}
+                {localizeArchiveCategory(project.category, locale)}
               </span>
               <span className="text-gray-600">
                 {new Date(project.publishedDate).toLocaleDateString(dateLocale)}

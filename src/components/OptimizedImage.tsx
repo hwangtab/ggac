@@ -2,6 +2,7 @@
 
 import Image from 'next/image'
 import { useState, useEffect, useRef, memo, useCallback } from 'react'
+import { useTranslations } from 'next-intl'
 import type { OptimizedImageProps } from '@/types'
 
 // Next.js 설정과 동기화된 허용 품질 값 파싱
@@ -131,6 +132,7 @@ const OptimizedImage = memo(function OptimizedImage({
   loadTimeoutMs,
   errorTimeoutMs,
 }: OptimizedImageProps) {
+  const t = useTranslations('common')
   const [hasError, setHasError] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [networkQuality, setNetworkQuality] = useState({ quality: 80, priority: false })
@@ -427,9 +429,9 @@ const OptimizedImage = memo(function OptimizedImage({
           <button
             onClick={handleRetry}
             className="text-xs text-primary-500 hover:text-primary-700 underline transition-colors"
-            title="이미지 다시 로드"
+            title={t('image.reload')}
           >
-            재시도
+            {t('image.retry')}
           </button>
         )}
       </div>

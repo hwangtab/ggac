@@ -4,9 +4,9 @@
     "slug": "sabbaha",
     "name": "사바하",
     "category": [
-      "Creator",
-      "Performer",
-      "Producer"
+      "창작자",
+      "연주자",
+      "프로듀서"
     ],
     "profileImage": "/images/artists/choi-hee-chul.webp",
     "oneLiner": "A high-gain doom giant crawled out of the sludge, expressing the pain of twisting fate.",
@@ -47,9 +47,9 @@
     "slug": "themilliways",
     "name": "themilliways (더 밀리웨이스)",
     "category": [
-      "Creator",
-      "Performer",
-      "Producer",
+      "창작자",
+      "연주자",
+      "프로듀서",
       "기타"
     ],
     "profileImage": "https://btugywkltavbogdnhwpu.supabase.co/storage/v1/object/public/artists/artist-004/profile_1758769132265_227fet.webp",
@@ -83,8 +83,8 @@
     "slug": "yoo-dong-hyuk",
     "name": "유동혁",
     "category": [
-      "Creator",
-      "Producer",
+      "창작자",
+      "프로듀서",
       "기타"
     ],
     "profileImage": "/images/artists/yoo-dong-hyuk.webp",
@@ -122,7 +122,7 @@
     "slug": "namsu",
     "name": "남수",
     "category": [
-      "Creator"
+      "창작자"
     ],
     "profileImage": "/images/artists/namsu.webp",
     "oneLiner": "A versatile artist who expands boundaries by combining music, literature, and various art forms.",
@@ -155,9 +155,9 @@
     "slug": "hwang-gyeong-ha",
     "name": "황경하",
     "category": [
-      "Creator",
-      "Producer",
-      "Organizer"
+      "창작자",
+      "프로듀서",
+      "기획자"
     ],
     "profileImage": "https://btugywkltavbogdnhwpu.supabase.co/storage/v1/object/public/artists/artist-008/profile_1758384842577_at2yjn.webp",
     "oneLiner": "An all-around activist who stands in solidarity with the powerless through art that breathes with the field and art that stands with the people.",
@@ -206,9 +206,9 @@
     "slug": "acmein",
     "name": "Zsthyger",
     "category": [
-      "Creator",
-      "Performer",
-      "Producer",
+      "창작자",
+      "연주자",
+      "프로듀서",
       "기타"
     ],
     "profileImage": "/images/artists/acmein.webp",
@@ -251,7 +251,7 @@
     ],
     "profileImage": "/images/artists/janghyunho.webp",
     "category": [
-      "Creator"
+      "창작자"
     ],
     "oneLiner": "Jang Hyun-ho's songs carry a sincere desire to connect the marginalized with ordinary people and to comfort sites of pain.",
     "templateType": "미니멀형",
@@ -263,7 +263,7 @@
     "slug": "anazao",
     "name": "ANAZAO(아나자오)",
     "category": [
-      "Creator"
+      "창작자"
     ],
     "bio": "Unfolding philosophical lyrics in the journey of seeking God.\n\n### Music Genres\n- Hip-Hop",
     "portfolioLinks": [
@@ -296,7 +296,7 @@
     "slug": "heewoo",
     "name": "희우",
     "category": [
-      "Creator"
+      "창작자"
     ],
     "bio": "Heewoo is an unparalleled vocalist and singer-songwriter. Presenting modern music rooted in traditional pansori vocal technique, he has built his own distinctive musical world.\nHeewoo's music is characterized by sublimating the helplessness and unresolved problems he has personally experienced in life into art. His songs are a crossover genre utilizing pansori vocal technique, combining traditional melodies with a modern sensibility and experimental arrangements to convey both depth and novelty simultaneously. In particular, Heewoo's voice expresses deep emotions such as the sorrow of parting in a calm yet restrained manner. Masterfully avoiding the exaggerated vocal embellishments of trot without falling into melodrama, he has a remarkable ability to deliver an aching, visceral pain to the listener. He also reinterprets the sounds of traditional instruments such as daegeum and gayageum in a modern context, evoking a sense of loss and bewilderment that transcends time.\nHeewoo combines the deep soul of traditional music with the innovative elements of contemporary music, active as a distinctive artist drawing attention in the indie music scene.\n\n### Music Genres\n- Folk\n- Pansori",
     "portfolioLinks": null,
@@ -321,7 +321,7 @@
     "slug": "Meridies",
     "name": "메리디에스",
     "category": [
-      "Creator"
+      "창작자"
     ],
     "bio": "Meridies's music — which contains the vague anxiety of ideals and chaotic phrases within tightly woven music — is like a well-crafted blueprint.\n\n### Music Genres\n- Death Metal\n- Symphonic Black Metal",
     "portfolioLinks": [
@@ -345,8 +345,8 @@
     "slug": "pepperman",
     "name": "후추맨",
     "category": [
-      "Creator",
-      "Producer"
+      "창작자",
+      "프로듀서"
     ],
     "profileImage": "/images/artists/pepperman.webp",
     "oneLiner": "The late metal/hardcore music life of a lazy person cursed to never be able to stand boredom",
@@ -375,8 +375,8 @@
     "slug": "blackgoat",
     "name": "흑염소",
     "category": [
-      "Creator",
-      "Performer"
+      "창작자",
+      "연주자"
     ],
     "profileImage": "/images/artists/blackgoat.webp",
     "oneLiner": "An artist who depicts the tragedy of outsiders with a raw and primal sound — cruelly yet beautifully.",
@@ -396,8 +396,8 @@
     "slug": "golbang-lady",
     "name": "골방레이디",
     "category": [
-      "Creator",
-      "Performer"
+      "창작자",
+      "연주자"
     ],
     "profileImage": "/images/artists/golbang-lady.webp",
     "oneLiner": "A lady rooted in the closet, golbang soul, lonely punk",
@@ -417,8 +417,8 @@
     "slug": "harris",
     "name": "해리스",
     "category": [
-      "Creator",
-      "Performer"
+      "창작자",
+      "연주자"
     ],
     "profileImage": "/images/artists/harris.webp",
     "oneLiner": "An artist who wants to become a storyteller singing our stories through the folk music of various countries",

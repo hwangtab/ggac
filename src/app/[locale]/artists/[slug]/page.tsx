@@ -7,6 +7,7 @@ import YouTubeEmbed from '@/components/YouTubeEmbed'
 import ArtistProjects from '@/components/ArtistProjects'
 import { convertUrlsToMarkdownLinks } from '@/utils/markdown'
 import { getArtistSlugs, getArtistBySlug, getArtistProjects, type Artist } from '@/lib/data'
+import { localizeArtistCategory } from '@/constants/categories'
 import { setRequestLocale, getTranslations } from 'next-intl/server'
 import type { Metadata } from 'next'
 import { getSiteUrl, getLocaleAlternates, getOgLocale } from '@/utils/site'
@@ -69,8 +70,14 @@ export async function generateMetadata({ params }: ArtistPageProps): Promise<Met
     }
   }
 
-  const title = `${artist.name} | 경기아트콜렉티브`
-  const description = artist.oneLiner || `경기아트콜렉티브 소속 아티스트 ${artist.name}의 프로필`
+  const isEn = resolvedParams.locale === 'en'
+  const siteNameLabel = isEn ? 'Gyeonggi Art Collective' : '경기아트콜렉티브'
+  const title = `${artist.name} | ${siteNameLabel}`
+  const description =
+    artist.oneLiner ||
+    (isEn
+      ? `Artist ${artist.name} of Gyeonggi Art Collective`
+      : `경기아트콜렉티브 소속 아티스트 ${artist.name}의 프로필`)
   const baseUrl = getBaseUrl()
   const pageUrl = `${baseUrl}/artists/${artist.slug}`
 
@@ -99,14 +106,14 @@ export async function generateMetadata({ params }: ArtistPageProps): Promise<Met
     ],
     authors: [{ name: artist.name }],
     creator: artist.name,
-    publisher: '경기아트콜렉티브 협동조합',
+    publisher: isEn ? 'Gyeonggi Art Collective Cooperative' : '경기아트콜렉티브 협동조합',
 
     // Open Graph 메타데이터
     openGraph: {
       title,
       description,
       url: pageUrl,
-      siteName: '경기아트콜렉티브 협동조합',
+      siteName: isEn ? 'Gyeonggi Art Collective' : '경기아트콜렉티브 협동조합',
       type: 'profile',
       locale: getOgLocale(resolvedParams.locale),
       images: [
@@ -114,7 +121,7 @@ export async function generateMetadata({ params }: ArtistPageProps): Promise<Met
           url: ogImageUrl,
           width: 1200,
           height: 630,
-          alt: `${artist.name} 프로필 사진`,
+          alt: isEn ? `${artist.name} profile photo` : `${artist.name} 프로필 사진`,
         },
       ],
     },
@@ -133,11 +140,11 @@ export async function generateMetadata({ params }: ArtistPageProps): Promise<Met
       'og:image:width': '1200',
       'og:image:height': '630',
       'og:image:type': 'image/jpeg',
-      'og:image:alt': `${artist.name} 프로필 사진`,
+      'og:image:alt': isEn ? `${artist.name} profile photo` : `${artist.name} 프로필 사진`,
 
       // 기본 메타 태그
-      'application-name': '경기아트콜렉티브',
-      'apple-mobile-web-app-title': '경기아트콜렉티브',
+      'application-name': siteNameLabel,
+      'apple-mobile-web-app-title': siteNameLabel,
       'theme-color': '#ffffff',
     },
 
@@ -249,12 +256,12 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
                             key={index}
                             className="inline-block px-4 py-2 bg-primary-100 text-primary-700 font-medium rounded-full"
                           >
-                            {cat}
+                            {localizeArtistCategory(cat, resolvedParams.locale)}
                           </span>
                         ))
                       ) : (
                         <span className="inline-block px-4 py-2 bg-primary-100 text-primary-700 font-medium rounded-full">
-                          {artist.category}
+                          {localizeArtistCategory(artist.category as string, resolvedParams.locale)}
                         </span>
                       )}
                     </div>

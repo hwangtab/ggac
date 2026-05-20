@@ -60,6 +60,40 @@ export const CATEGORIES = {
   },
 } as const
 
+// 영어 표시 라벨 맵 (canonical 한글 값 → 영어 라벨)
+export const ARCHIVE_CATEGORY_LABELS_EN: Record<string, string> = {
+  All: 'All',
+  '음반·음원': 'Music',
+  '공연·전시': 'Concert & Exhibition',
+  '예술교육': 'Arts Education',
+  '지원·용역사업': 'Grants & Services',
+  '행사': 'Event',
+}
+
+export const ARTIST_CATEGORY_LABELS_EN: Record<string, string> = {
+  All: 'All',
+  '기획자': 'Organizer',
+  '사운드 디자이너': 'Sound Designer',
+  '엔지니어': 'Engineer',
+  '연주자': 'Performer',
+  '작곡가': 'Composer',
+  '작사가': 'Lyricist',
+  '창작자': 'Creator',
+  '편곡가': 'Arranger',
+  '프로듀서': 'Producer',
+  '기타': 'Other',
+}
+
+export function localizeArchiveCategory(value: string, locale: string): string {
+  if (locale !== 'en') return value
+  return ARCHIVE_CATEGORY_LABELS_EN[value] ?? value
+}
+
+export function localizeArtistCategory(value: string, locale: string): string {
+  if (locale !== 'en') return value
+  return ARTIST_CATEGORY_LABELS_EN[value] ?? value
+}
+
 // 카테고리 유효성 검사 헬퍼 함수들
 export const isValidArchiveCategory = (category: string): category is ArchiveCategory => {
   return ARCHIVE_CATEGORIES.includes(category as ArchiveCategory)

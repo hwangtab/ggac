@@ -1,5 +1,7 @@
 import BrandLoader from '@/components/BrandLoader'
+import { getTranslations } from 'next-intl/server'
 
-export default function BoardLoading() {
-  return <BrandLoader />
+export default async function BoardLoading() {
+  const t = await getTranslations('common')
+  return <BrandLoader ariaLabel={t('loader.label')} srText={t('loader.sr')} />
 }

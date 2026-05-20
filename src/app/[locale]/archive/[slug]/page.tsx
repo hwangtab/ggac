@@ -142,9 +142,11 @@ export async function generateMetadata({ params }: ProjectPageProps): Promise<Me
   try {
     // 파라미터 검증
     const resolvedParams = await params
+    const isEn = resolvedParams?.locale === 'en'
+
     if (!resolvedParams?.slug) {
       console.error(`[${timestamp}] generateMetadata: Missing slug parameter`)
-      return getDefaultMetadata()
+      return getDefaultMetadata(resolvedParams?.locale)
     }
 
     // 프로젝트 데이터 조회 - 에러 처리 강화
@@ -156,14 +158,14 @@ export async function generateMetadata({ params }: ProjectPageProps): Promise<Me
         `[${timestamp}] generateMetadata: Data loading error for slug "${resolvedParams.slug}":`,
         dataError
       )
-      return getDefaultMetadata()
+      return getDefaultMetadata(resolvedParams.locale)
     }
 
     if (!project) {
       console.warn(
         `[${timestamp}] generateMetadata: Project not found for slug "${resolvedParams.slug}"`
       )
-      return getNotFoundMetadata()
+      return getNotFoundMetadata(resolvedParams.locale)
     }
 
     // 안전한 문자열 처리 - null/undefined 체크 강화
@@ -179,11 +181,12 @@ export async function generateMetadata({ params }: ProjectPageProps): Promise<Me
     }
 
     // 프로젝트 요약 생성 - 에러 처리 강화
-    let projectSummary = '경기아트콜렉티브 프로젝트'
+    const fallbackSummary = isEn ? 'Gyeonggi Art Collective project' : '경기아트콜렉티브 프로젝트'
+    let projectSummary = fallbackSummary
     try {
       projectSummary = sanitizeMetadataString(getProjectSummary(project, 150))
       if (!projectSummary || projectSummary.trim().length === 0) {
-        projectSummary = '경기아트콜렉티브 프로젝트'
+        projectSummary = fallbackSummary
       }
     } catch (summaryError) {
       console.error(`[${timestamp}] generateMetadata: Summary generation error:`, summaryError)
@@ -198,7 +201,7 @@ export async function generateMetadata({ params }: ProjectPageProps): Promise<Me
         title: safeTitle,
         description: projectSummary,
         url: `/archive/${safeSlug}`,
-        siteName: '경기아트콜렉티브 협동조합',
+        siteName: isEn ? 'Gyeonggi Art Collective' : '경기아트콜렉티브 협동조합',
         images: [
           {
             url: ogImageUrl,
@@ -236,65 +239,77 @@ export async function generateMetadata({ params }: ProjectPageProps): Promise<Me
 }
 
 // 기본 메타데이터 반환 함수
-function getDefaultMetadata(): Metadata {
+// (locale 파라미터: generateMetadata에서 resolvedParams 접근 불가한 catch 블록용 기본값 유지)
+function getDefaultMetadata(locale = 'ko'): Metadata {
+  const isEn = locale === 'en'
+  const title = isEn ? 'Projects' : '프로젝트'
+  const description = isEn ? 'Gyeonggi Art Collective project' : '경기아트콜렉티브 프로젝트'
+  const siteName = isEn ? 'Gyeonggi Art Collective' : '경기아트콜렉티브 협동조합'
+  const alt = isEn ? 'Gyeonggi Art Collective' : '경기아트콜렉티브'
   return {
-    title: '프로젝트',
-    description: '경기아트콜렉티브 프로젝트',
+    title,
+    description,
     openGraph: {
-      title: '경기아트콜렉티브 프로젝트',
-      description: '경기아트콜렉티브 프로젝트',
+      title,
+      description,
       url: '/archive',
-      siteName: '경기아트콜렉티브 협동조합',
+      siteName,
       images: [
         {
           url: 'https://ggac.kr/images/logo/gac_og.webp',
           secureUrl: 'https://ggac.kr/images/logo/gac_og.webp',
           width: 1200,
           height: 630,
-          alt: '경기아트콜렉티브',
+          alt,
           type: 'image/webp',
         },
       ],
-      locale: getOgLocale('ko'),
+      locale: getOgLocale(locale),
       type: 'website',
     },
     twitter: {
       card: 'summary_large_image',
-      title: '경기아트콜렉티브 프로젝트',
-      description: '경기아트콜렉티브 프로젝트',
+      title,
+      description,
       images: ['https://ggac.kr/images/logo/gac_og.webp'],
     },
   }
 }
 
 // 프로젝트를 찾을 수 없을 때 메타데이터
-function getNotFoundMetadata(): Metadata {
+function getNotFoundMetadata(locale = 'ko'): Metadata {
+  const isEn = locale === 'en'
+  const description = isEn
+    ? 'The requested project could not be found.'
+    : '요청하신 프로젝트를 찾을 수 없습니다.'
+  const siteName = isEn ? 'Gyeonggi Art Collective' : '경기아트콜렉티브 협동조합'
+  const alt = isEn ? 'Gyeonggi Art Collective' : '경기아트콜렉티브'
   return {
     title: 'Project Not Found',
-    description: '요청하신 프로젝트를 찾을 수 없습니다.',
+    description,
     robots: { index: false, follow: true },
     openGraph: {
       title: 'Project Not Found',
-      description: '요청하신 프로젝트를 찾을 수 없습니다.',
+      description,
       url: '/archive',
-      siteName: '경기아트콜렉티브 협동조합',
+      siteName,
       images: [
         {
           url: 'https://ggac.kr/images/logo/gac_og.webp',
           secureUrl: 'https://ggac.kr/images/logo/gac_og.webp',
           width: 1200,
           height: 630,
-          alt: '경기아트콜렉티브',
+          alt,
           type: 'image/webp',
         },
       ],
-      locale: getOgLocale('ko'),
+      locale: getOgLocale(locale),
       type: 'website',
     },
     twitter: {
       card: 'summary_large_image',
       title: 'Project Not Found',
-      description: '요청하신 프로젝트를 찾을 수 없습니다.',
+      description,
       images: ['https://ggac.kr/images/logo/gac_og.webp'],
     },
   }

@@ -3,9 +3,13 @@
 import { useState, useEffect, useCallback, memo } from 'react'
 import Image from 'next/image'
 import { createImageProxy } from '@/utils/imageValidation'
+import { useTranslations, useLocale } from 'next-intl'
 import type { TicketingInfo, LinkPreview, TicketingCardProps } from '@/types'
 
 const TicketingCard = ({ ticketing }: TicketingCardProps) => {
+  const t = useTranslations('archive')
+  const locale = useLocale()
+  const dateLocale = locale === 'en' ? 'en-US' : 'ko-KR'
   const [preview, setPreview] = useState<LinkPreview | null>(ticketing.preview || null)
   const [isLoading, setIsLoading] = useState(!ticketing.preview)
   const [hasError, setHasError] = useState(false)
@@ -45,9 +49,11 @@ const TicketingCard = ({ ticketing }: TicketingCardProps) => {
   const getStatusText = () => {
     if (!ticketing.available) {
       if (ticketing.soldOutDate) {
-        return `매진 (${new Date(ticketing.soldOutDate).toLocaleDateString('ko-KR')})`
+        return t('ticketing.soldOutDate', {
+          date: new Date(ticketing.soldOutDate).toLocaleDateString(dateLocale),
+        })
       }
-      return '매진'
+      return t('ticketing.soldOut')
     }
 
     if (ticketing.startDate && ticketing.endDate) {
@@ -56,13 +62,13 @@ const TicketingCard = ({ ticketing }: TicketingCardProps) => {
       const end = new Date(ticketing.endDate)
 
       if (now < start) {
-        return `${start.toLocaleDateString('ko-KR')} 오픈`
+        return t('ticketing.opensOn', { date: start.toLocaleDateString(dateLocale) })
       } else if (now > end) {
-        return '예매종료'
+        return t('ticketing.closed')
       }
     }
 
-    return '예매가능'
+    return t('ticketing.available')
   }
 
   if (isLoading) {
@@ -102,7 +108,7 @@ const TicketingCard = ({ ticketing }: TicketingCardProps) => {
                 {getStatusText()}
               </span>
             </div>
-            <p className="text-gray-600 text-sm">예매 링크로 이동</p>
+            <p className="text-gray-600 text-sm">{t('ticketing.goToBooking')}</p>
             <div className="mt-2 text-xs text-gray-500 truncate">
               {new URL(ticketing.url).hostname}
             </div>
@@ -119,7 +125,7 @@ const TicketingCard = ({ ticketing }: TicketingCardProps) => {
           <div className="aspect-video bg-gray-100 relative">
             <Image
               src={createImageProxy(preview.image)}
-              alt={`${preview.title || ticketing.platform} 티켓 미리보기`}
+              alt={t('ticketing.previewAlt', { platform: preview.title || ticketing.platform })}
               fill
               className="object-cover"
               sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
@@ -147,7 +153,7 @@ const TicketingCard = ({ ticketing }: TicketingCardProps) => {
 
                   const textDiv = document.createElement('div')
                   textDiv.className = 'text-primary-600 font-medium'
-                  textDiv.textContent = ticketing.platform || '예매처'
+                  textDiv.textContent = ticketing.platform || t('ticketing.fallbackPlatform')
 
                   centerDiv.appendChild(iconDiv)
                   centerDiv.appendChild(textDiv)

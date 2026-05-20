@@ -1,6 +1,7 @@
 import { Link } from '@/i18n/navigation'
 import OptimizedImage from '@/components/OptimizedImage'
-import { getTranslations } from 'next-intl/server'
+import { getTranslations, getLocale } from 'next-intl/server'
+import { localizeArtistCategory } from '@/constants/categories'
 import type { Artist } from '@/types'
 
 interface ArtistsContentProps {
@@ -20,6 +21,7 @@ const buildCategoryHref = (category: string) => {
 
 const ArtistsContent = async ({ artists, categories, selectedCategory }: ArtistsContentProps) => {
   const t = await getTranslations('artists')
+  const locale = await getLocale()
   const hasArtists = artists.length > 0
 
   return (
@@ -48,7 +50,7 @@ const ArtistsContent = async ({ artists, categories, selectedCategory }: Artists
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
-                {category === 'All' ? t('filter.all') : category}
+                {category === 'All' ? t('filter.all') : localizeArtistCategory(category, locale)}
               </Link>
             ))}
           </div>
@@ -86,24 +88,24 @@ const ArtistsContent = async ({ artists, categories, selectedCategory }: Artists
                                 key={index}
                                 className="inline-block px-3 py-1 bg-gray-100 text-gray-700 text-sm font-medium rounded-full"
                               >
-                                {cat}
+                                {localizeArtistCategory(cat, locale)}
                               </span>
                             ))}
                             {artist.category.length > 3 && (
                               <span
                                 className="inline-block px-3 py-1 bg-gray-200 text-gray-600 text-sm font-medium rounded-full cursor-help relative group/tooltip"
-                                title={artist.category.slice(3).join(', ')}
+                                title={artist.category.slice(3).map(c => localizeArtistCategory(c, locale)).join(', ')}
                               >
                                 {t('moreCount', { count: artist.category.length - 3 })}
                                 <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-3 px-3 py-1.5 bg-gray-800 text-white text-sm rounded-lg opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-normal max-w-sm leading-relaxed text-center z-50">
-                                  {artist.category.slice(3).join(', ')}
+                                  {artist.category.slice(3).map(c => localizeArtistCategory(c, locale)).join(', ')}
                                 </div>
                               </span>
                             )}
                           </>
                         ) : (
                           <span className="inline-block px-3 py-1 bg-gray-100 text-gray-700 text-sm font-medium rounded-full">
-                            {artist.category}
+                            {localizeArtistCategory(artist.category as string, locale)}
                           </span>
                         )}
                       </div>

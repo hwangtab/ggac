@@ -1,7 +1,7 @@
 import { Link } from '@/i18n/navigation'
 import OptimizedImage from '@/components/OptimizedImage'
 import { getProjectSummary } from '@/utils/projectUtils'
-import { ARCHIVE_CATEGORIES } from '@/constants/categories'
+import { ARCHIVE_CATEGORIES, localizeArchiveCategory } from '@/constants/categories'
 import { generatePageNumbers } from '@/utils/pagination'
 import { getTranslations, getLocale } from 'next-intl/server'
 import type { Project } from '@/types'
@@ -92,7 +92,7 @@ const ArchiveContent = async ({
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
-                  {category}
+                  {localizeArchiveCategory(category, locale)}
                 </Link>
               )
             })}
@@ -125,7 +125,7 @@ const ArchiveContent = async ({
                       <div className="p-6 flex-grow flex flex-col">
                         <div className="flex items-center justify-between mb-3">
                           <span className="inline-block px-3 py-1 bg-primary-100 text-primary-700 text-sm font-medium rounded-full">
-                            {project.category}
+                            {localizeArchiveCategory(project.category, locale)}
                           </span>
                           <span className="text-sm text-gray-500">
                             {new Date(project.publishedDate).toLocaleDateString(dateLocale)}

@@ -4,9 +4,11 @@ import { useState, useEffect, useCallback, memo } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { createImageProxy } from '@/utils/imageValidation'
+import { useTranslations } from 'next-intl'
 import type { LinkPreview, ArticleInfo, ArticleCardProps } from '@/types'
 
 const ArticleCard = ({ article }: ArticleCardProps) => {
+  const t = useTranslations('archive')
   // 내부 링크 판별 (상대 경로로 시작하는 경우)
   const isInternalLink = article.url.startsWith('/')
 
@@ -72,7 +74,7 @@ const ArticleCard = ({ article }: ArticleCardProps) => {
           </div>
           <div className="p-4">
             <h4 className="font-semibold text-gray-900 truncate flex-1 mr-2">{article.title}</h4>
-            <p className="text-gray-600 text-sm">관련 프로젝트 보기</p>
+            <p className="text-gray-600 text-sm">{t('article.viewRelated')}</p>
             <div className="mt-2 text-xs text-gray-500">ggac.kr</div>
           </div>
         </Link>
@@ -93,7 +95,7 @@ const ArticleCard = ({ article }: ArticleCardProps) => {
           </div>
           <div className="p-4">
             <h4 className="font-semibold text-gray-900 truncate flex-1 mr-2">{article.title}</h4>
-            <p className="text-gray-600 text-sm">기사 링크로 이동</p>
+            <p className="text-gray-600 text-sm">{t('article.goToArticle')}</p>
             <div className="mt-2 text-xs text-gray-500 truncate">
               {(() => {
                 try {
@@ -116,7 +118,7 @@ const ArticleCard = ({ article }: ArticleCardProps) => {
           <div className="aspect-video bg-gray-100 relative">
             <Image
               src={createImageProxy(preview.image)}
-              alt={preview.title || article.title || '기사 이미지'}
+              alt={preview.title || article.title || t('article.imageAlt')}
               fill
               className="object-cover"
               sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"

@@ -3,7 +3,22 @@
     "loading": "Loading...",
     "skipToMain": "Skip to main content",
     "skipToNav": "Skip to navigation",
-    "brandShort": "Gyeonggi Art Collective"
+    "brandShort": "Gyeonggi Art Collective",
+    "lightbox": {
+      "dialogLabel": "Gallery image {current} / {total}",
+      "close": "Close",
+      "imageAlt": "Gallery image {current}",
+      "prev": "Previous image",
+      "next": "Next image"
+    },
+    "image": {
+      "reload": "Reload image",
+      "retry": "Retry"
+    },
+    "loader": {
+      "label": "Loading page",
+      "sr": "Loading, please wait"
+    }
   },
   "nav": {
     "about": "Our Story",
@@ -78,6 +93,13 @@
       "heading": "Unable to load artist list",
       "body": "A temporary error occurred. Please try again.",
       "retry": "Try Again"
+    },
+    "artistProjects": {
+      "empty": "No projects registered yet",
+      "comingSoon": "This artist's projects will be available soon.",
+      "comingSoonNamed": "{name}'s projects will be available soon.",
+      "viewDetail": "View details",
+      "totalCount": "Participated in {count} projects"
     }
   },
   "about": {
@@ -176,6 +198,21 @@
       "navHeading": "Explore More Projects",
       "navBody": "Discover more projects we create together at Gyeonggi Art Collective.",
       "navCta": "View All Projects"
+    },
+    "ticketing": {
+      "soldOut": "Sold Out",
+      "soldOutDate": "Sold Out ({date})",
+      "opensOn": "Opens {date}",
+      "closed": "Booking Closed",
+      "available": "Available",
+      "goToBooking": "Go to booking page",
+      "fallbackPlatform": "Ticketing",
+      "previewAlt": "{platform} ticket preview"
+    },
+    "article": {
+      "viewRelated": "View related project",
+      "goToArticle": "Go to article",
+      "imageAlt": "Article image"
     }
   },
   "auth": {
