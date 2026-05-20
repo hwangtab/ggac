@@ -1,14 +1,13 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { cspNonce } from './csp-nonce'
 
 /**
- * Configure Strict Content Security Policy (CSP)
+ * Configure Content Security Policy (CSP)
  *
- * 단일 nonce 정책: 서버 시작 시 한 번 nonce 생성 → 모든 경로에서 공유.
- * - layout에서 headers() 불필요 → 정적 prerender 복원
- * - script-src에 'nonce-X' 적용 → 'unsafe-inline' 제거
- * - 서버 재시작 시 nonce 갱신 → 공격 창 제한
+ * 호스트 허용 방식: 'self' + 'unsafe-inline' + https:
+ * - 정적 prerender 호환 (nonce+strict-dynamic은 빌드/Edge 프로세스 분리로 성립 불가)
+ * - Next.js 프레임워크 청크(/_next/static)는 'self'로 허용
+ * - Next.js 인라인 hydration 스크립트는 'unsafe-inline'으로 허용
  */
 export function applyCSP(_request: NextRequest, response: NextResponse) {
   const isProduction = process.env.NODE_ENV === 'production'
@@ -22,8 +21,8 @@ export function applyCSP(_request: NextRequest, response: NextResponse) {
   try {
     const strictCsp = [
       "default-src 'self'",
-      `script-src 'self' 'nonce-${cspNonce}' 'strict-dynamic' https: 'unsafe-inline'`,
-      `script-src-elem 'self' 'nonce-${cspNonce}' 'strict-dynamic' https: 'unsafe-inline'`,
+      "script-src 'self' 'unsafe-inline' https:",
+      "script-src-elem 'self' 'unsafe-inline' https:",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
