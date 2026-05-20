@@ -32,3 +32,26 @@ export function getSiteUrl(): string {
   // 6) 로컬 기본값
   return 'http://localhost:3000'
 }
+
+/**
+ * 페이지 경로와 현재 locale로 hreflang alternates 객체를 생성한다.
+ * path는 '/'로 시작하는 locale-less 경로여야 한다 (예: '/about', '/artists/slug').
+ */
+export function getLocaleAlternates(path: string, locale: string) {
+  const base = getSiteUrl()
+  const koUrl = `${base}${path === '/' ? '' : path}`
+  const enUrl = `${base}/en${path === '/' ? '' : path}`
+  return {
+    canonical: locale === 'en' ? enUrl : koUrl,
+    languages: {
+      'ko-KR': koUrl || base,
+      'en-US': enUrl || `${base}/en`,
+      'x-default': koUrl || base,
+    } as Record<string, string>,
+  }
+}
+
+/** locale 문자열을 OG locale 포맷으로 변환한다. */
+export function getOgLocale(locale: string): string {
+  return locale === 'en' ? 'en_US' : 'ko_KR'
+}

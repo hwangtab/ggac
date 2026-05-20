@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState, useCallback, memo } from 'react'
-import Link from 'next/link'
+import { useTranslations } from 'next-intl'
+import { Link } from '@/i18n/navigation'
 import OptimizedHeroImage from './OptimizedHeroImage'
 import ErrorBoundary from './ErrorBoundary'
 import PerformanceMonitor from './PerformanceMonitor'
@@ -10,6 +11,9 @@ import { useRenderPerformance } from '@/hooks/usePerformanceMonitor'
 import { getErrorTracker } from '@/utils/errorTracking'
 
 const Hero = () => {
+  const t = useTranslations('home')
+  const tc = useTranslations('common')
+
   // glass 카드 진입 애니메이션 제거 — isLoaded 게이팅 때문에 첫 페인트가
   // transparent → glass로 두 번 paint되어 LCP가 헤더 텍스트로 떨어지던 문제 해결.
   // 카드 자체는 첫 프레임에 최종 스타일로 그려지고, h1/button만 showText로 미세하게 fade-in.
@@ -141,7 +145,7 @@ const Hero = () => {
   return (
     <section
       role="banner"
-      aria-label="메인 영역"
+      aria-label={t('hero.ariaMain')}
       className="relative min-h-screen flex items-center justify-center overflow-hidden"
       style={{
         // CSS 컨테인먼트로 렌더링 최적화
@@ -153,7 +157,7 @@ const Hero = () => {
       {/* Layer 1: 배경 이미지 - 최적화된 이미지 컴포넌트 */}
       <div className="absolute inset-0" style={{ zIndex: 1 }}>
         <OptimizedHeroImage
-          alt="경기아트콜렉티브 협동조합 창립총회"
+          alt={t('hero.imageAlt')}
           priority
           style={{
             filter: 'contrast(1.1) brightness(1.05)',
@@ -234,8 +238,8 @@ const Hero = () => {
               lineHeight: 1.2,
             }}
           >
-            <span className="block">틀을 깨는 소리</span>
-            <span className="block">함께 쌓는 무대</span>
+            <span className="block">{t('hero.titleLine1')}</span>
+            <span className="block">{t('hero.titleLine2')}</span>
           </h1>
           {/*
            * LCP 요소 — 진입 애니메이션을 의도적으로 제거.
@@ -255,9 +259,9 @@ const Hero = () => {
               lineHeight: 1.4,
             }}
           >
-            실험과 연대로 새로운 예술 생태계를 만드는
+            {t('hero.subtitle')}
             <br />
-            경기아트콜렉티브
+            {tc('brandShort')}
           </p>
           <div
             className={`flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center ${
@@ -290,7 +294,7 @@ const Hero = () => {
                 `,
               }}
             >
-              우리의 이야기
+              {t('hero.ctaAbout')}
             </Link>
             <Link
               href="/connect"
@@ -310,7 +314,7 @@ const Hero = () => {
                 `,
               }}
             >
-              조합 가입하기
+              {t('hero.ctaJoin')}
             </Link>
           </div>
         </div>

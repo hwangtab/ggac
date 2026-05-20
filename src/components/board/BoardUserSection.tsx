@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/i18n/navigation'
+import { useTranslations } from 'next-intl'
 import { supabase } from '@/lib/supabase/client'
 import type { MemberProfile } from '@/types'
 
 const BoardUserSection = () => {
   const router = useRouter()
+  const t = useTranslations('board')
   const [user, setUser] = useState<User | null>(null)
   const [isMember, setIsMember] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -82,21 +84,20 @@ const BoardUserSection = () => {
       {!user && (
         <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <p className="text-blue-800 mb-2">
-            <strong>안내:</strong> 게시물을 읽어볼 수 있지만, 글 작성과 댓글, 좋아요는 조합원만
-            가능합니다.
+            {t('userSection.guestInfo')}
           </p>
           <div className="flex gap-2">
             <button
               onClick={() => router.push('/login')}
               className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700"
             >
-              로그인
+              {t('userSection.login')}
             </button>
             <button
               onClick={() => router.push('/signup')}
               className="bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700"
             >
-              조합원 가입
+              {t('userSection.join')}
             </button>
           </div>
         </div>
@@ -105,7 +106,7 @@ const BoardUserSection = () => {
       {!isMember && user && (
         <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
           <p className="text-yellow-800">
-            <strong>알림:</strong> 조합원 승인 대기 중입니다. 승인 후 게시글 작성이 가능합니다.
+            {t('userSection.pendingInfo')}
           </p>
         </div>
       )}
@@ -116,7 +117,7 @@ const BoardUserSection = () => {
             onClick={() => router.push('/board/write')}
             className="bg-primary-600 text-white px-6 py-3 rounded-lg hover:bg-primary-700"
           >
-            새 게시글 작성
+            {t('userSection.writeButton')}
           </button>
         </div>
       )}

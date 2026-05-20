@@ -1,18 +1,21 @@
-import { memo } from 'react'
-import Link from 'next/link'
+import { Link } from '@/i18n/navigation'
 import OptimizedImage from '@/components/OptimizedImage'
+import { getTranslations, getLocale } from 'next-intl/server'
 import { getProjectSummary } from '@/utils/projectUtils'
-import type { Project, FeaturedProjectsProps } from '@/types'
+import type { FeaturedProjectsProps } from '@/types'
 
-const FeaturedProjects = ({ projects }: FeaturedProjectsProps) => {
+const FeaturedProjects = async ({ projects }: FeaturedProjectsProps) => {
+  const t = await getTranslations('home')
+  const locale = await getLocale()
+  const dateLocale = locale === 'en' ? 'en-US' : 'ko-KR'
+
   return (
     <section className="py-16 md:py-24 bg-gray-50">
       <div className="tw-container-custom">
         <div className="text-center mb-12">
-          <h2 className="tw-heading-secondary mb-4">최근 활동</h2>
+          <h2 className="tw-heading-secondary mb-4">{t('projects.heading')}</h2>
           <p className="tw-text-body text-gray-600 max-w-2xl mx-auto">
-            우리의 가장 최근 작업들을 만나보세요. 각각의 프로젝트는 협동조합 구성원들의 창의적
-            실험과 협력의 결과입니다.
+            {t('projects.description')}
           </p>
         </div>
 
@@ -33,9 +36,8 @@ const FeaturedProjects = ({ projects }: FeaturedProjectsProps) => {
                       width={800}
                       height={600}
                       className="object-cover w-full h-full"
-                      priority={index === 0} // 첫 번째 이미지만 우선 로딩
+                      priority={index === 0}
                       fallbackText={project.title.slice(0, 3)}
-                      // 1번째: md 이상에서 col-span-2 (전체 폭). 그 외: md 이상 50vw, 모바일 100vw.
                       sizes={
                         index === 0
                           ? '(max-width: 768px) 100vw, (max-width: 1280px) 100vw, 1280px'
@@ -52,7 +54,7 @@ const FeaturedProjects = ({ projects }: FeaturedProjectsProps) => {
                         {project.category}
                       </span>
                       <span className="text-sm text-gray-500">
-                        {new Date(project.publishedDate).toLocaleDateString('ko-KR')}
+                        {new Date(project.publishedDate).toLocaleDateString(dateLocale)}
                       </span>
                     </div>
 
@@ -87,7 +89,7 @@ const FeaturedProjects = ({ projects }: FeaturedProjectsProps) => {
             href="/archive"
             className="tw-btn-primary text-lg px-8 py-4 sm:px-8 sm:py-3 rounded-lg w-full sm:w-auto text-center min-h-[44px] hover:-translate-y-0.5 hover:shadow-lg transition-all duration-300"
           >
-            모든 프로젝트 보기
+            {t('projects.viewAll')}
           </Link>
         </div>
       </div>
@@ -95,4 +97,4 @@ const FeaturedProjects = ({ projects }: FeaturedProjectsProps) => {
   )
 }
 
-export default memo(FeaturedProjects)
+export default FeaturedProjects

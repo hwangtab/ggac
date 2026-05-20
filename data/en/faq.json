@@ -1,0 +1,38 @@
+[
+  {
+    "id": "faq-001",
+    "category": "About the Cooperative",
+    "question": "What is the Gyeonggi Art Collective Cooperative?",
+    "answer": "The Gyeonggi Art Collective Cooperative is a producer cooperative aimed at supporting artists in Gyeonggi Province and revitalizing the cultural arts ecosystem. Through autonomous, self-reliant, and self-governing cooperative activities, we promote the sustainability of artistic creation and contribute to the cultural and artistic development of local communities."
+  },
+  {
+    "id": "faq-002",
+    "category": "Programs & Activities",
+    "question": "What does Gyeonggi Art Collective do?",
+    "answer": "Gyeonggi Art Collective carries out a diverse range of activities including arts support programs, music production and distribution, concert planning and management, cultural arts education, and artist networking and collaboration support. We directly support members' creative activities and grow together with local communities."
+  },
+  {
+    "id": "faq-003",
+    "category": "Membership",
+    "question": "How can I become a member?",
+    "answer": "Any artist, musician, or producer active in Gyeonggi Province is welcome to join. You can submit a membership application through the 'Connect' page on our website, and we will contact you after review. There are various membership types — creator member, producer member, supporting member, and institutional member — so you can participate in the form that suits you best."
+  },
+  {
+    "id": "faq-004",
+    "category": "Collaboration & Support",
+    "question": "How does project collaboration work?",
+    "answer": "We encourage free collaboration among members and support regular networking events and project matching. Various collaboration opportunities — including concert planning, album production, educational programs, and exhibitions — are provided through the cooperative, and members can collaborate freely with each other."
+  },
+  {
+    "id": "faq-005",
+    "category": "Concerts & Events",
+    "question": "Where can I find information about concerts and events?",
+    "answer": "You can check information on past and upcoming concerts, exhibitions, and events in the 'Projects' section of our website. Events requiring ticketing provide booking links on their detail pages, and special news is shared first via our newsletter."
+  },
+  {
+    "id": "faq-006",
+    "category": "Support & Partnerships",
+    "question": "How can I support or partner with the cooperative?",
+    "answer": "You can join as a supporting member, or send a support and partnership inquiry through the 'Connect' page. Companies or institutions looking to collaborate with the cooperative can join as institutional members for organizational-level cooperation."
+  }
+]

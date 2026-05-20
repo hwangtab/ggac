@@ -1,17 +1,18 @@
-import { memo } from 'react'
-import Link from 'next/link'
+import { Link } from '@/i18n/navigation'
 import OptimizedImage from './OptimizedImage'
-import type { Artist, FeaturedArtistsProps } from '@/types'
+import { getTranslations } from 'next-intl/server'
+import type { FeaturedArtistsProps } from '@/types'
 
-const FeaturedArtists = ({ artists }: FeaturedArtistsProps) => {
+const FeaturedArtists = async ({ artists }: FeaturedArtistsProps) => {
+  const t = await getTranslations('home')
+
   return (
     <section className="py-16 md:py-24">
       <div className="tw-container-custom">
         <div className="text-center mb-12">
-          <h2 className="tw-heading-secondary mb-4">함께하는 사람들</h2>
+          <h2 className="tw-heading-secondary mb-4">{t('artists.heading')}</h2>
           <p className="tw-text-body text-gray-600 max-w-2xl mx-auto">
-            서로의 우주가 되어주는 예술가들을 만나보세요. 각자의 고유한 세계관과 창작 철학을 통해
-            새로운 가능성을 탐구합니다.
+            {t('artists.description')}
           </p>
         </div>
 
@@ -51,7 +52,7 @@ const FeaturedArtists = ({ artists }: FeaturedArtistsProps) => {
                               className="inline-block px-3 py-1 bg-gray-200 text-gray-600 text-sm font-medium rounded-full cursor-help relative group/tooltip"
                               title={artist.category.slice(3).join(', ')}
                             >
-                              +{artist.category.length - 3}개
+                              {t('artists.moreCount', { count: artist.category.length - 3 })}
                               <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-3 px-3 py-1.5 bg-gray-800 text-white text-sm rounded-lg opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-normal max-w-sm leading-relaxed text-center z-50">
                                 {artist.category.slice(3).join(', ')}
                               </div>
@@ -82,7 +83,7 @@ const FeaturedArtists = ({ artists }: FeaturedArtistsProps) => {
             href="/artists"
             className="tw-btn-secondary text-lg px-8 py-4 sm:px-8 sm:py-3 rounded-lg w-full sm:w-auto text-center min-h-[44px] hover:-translate-y-0.5 hover:shadow-lg transition-all duration-300"
           >
-            모든 아티스트 보기
+            {t('artists.viewAll')}
           </Link>
         </div>
       </div>
@@ -90,4 +91,4 @@ const FeaturedArtists = ({ artists }: FeaturedArtistsProps) => {
   )
 }
 
-export default memo(FeaturedArtists)
+export default FeaturedArtists

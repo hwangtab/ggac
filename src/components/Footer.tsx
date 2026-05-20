@@ -1,6 +1,9 @@
-import Link from 'next/link'
+'use client'
+
 import Image from 'next/image'
 import { FaInstagram, FaYoutube } from 'react-icons/fa'
+import { useTranslations, useLocale } from 'next-intl'
+import { Link } from '@/i18n/navigation'
 
 interface FooterProps {
   globalData?: {
@@ -24,10 +27,15 @@ interface FooterProps {
 }
 
 const Footer = ({ globalData }: FooterProps) => {
+  const t = useTranslations('footer')
+  const tc = useTranslations('common')
+  const locale = useLocale()
+  const dateLocale = locale === 'en' ? 'en-US' : 'ko-KR'
+
   // 기본값 설정
   const defaultData = {
-    siteName: '경기아트콜렉티브 협동조합',
-    siteDescription: '경계 없는 상상, 함께 만드는 울림',
+    siteName: tc('brandShort'),
+    siteDescription: t('siteDescription'),
     contact: {
       email: 'contact@ggac.kr',
       phone: '0507-1384-3144',
@@ -55,31 +63,31 @@ const Footer = ({ globalData }: FooterProps) => {
               <div className="relative w-8 h-8 brightness-0 invert pointer-events-none">
                 <Image
                   src="/images/logo/gac_logo.webp"
-                  alt="경기아트콜렉티브 협동조합"
+                  alt={tc('brandShort')}
                   fill
                   sizes="32px"
                   className="object-contain"
                 />
               </div>
-              <span className="font-serif font-bold text-xl">경기아트콜렉티브</span>
+              <span className="font-serif font-bold text-xl">{tc('brandShort')}</span>
             </div>
             <p className="text-gray-400 text-sm leading-relaxed">
               {data.siteDescription}
               <br />
-              예술로 숨 쉬고, 협동으로 길을 내는 협동조합입니다.
+              {t('tagline')}
             </p>
           </div>
 
           {/* Quick Links */}
           <div>
-            <h4 className="font-semibold mb-4">바로가기</h4>
+            <h4 className="font-semibold mb-4">{t('quickLinks')}</h4>
             <ul className="space-y-2">
               <li>
                 <Link
                   href="/about"
                   className="text-gray-400 hover:text-white transition-colors duration-200"
                 >
-                  우리의 이야기
+                  {t('about')}
                 </Link>
               </li>
               <li>
@@ -87,7 +95,7 @@ const Footer = ({ globalData }: FooterProps) => {
                   href="/archive"
                   className="text-gray-400 hover:text-white transition-colors duration-200"
                 >
-                  프로젝트
+                  {t('archive')}
                 </Link>
               </li>
               <li>
@@ -95,7 +103,7 @@ const Footer = ({ globalData }: FooterProps) => {
                   href="/artists"
                   className="text-gray-400 hover:text-white transition-colors duration-200"
                 >
-                  함께하는 사람들
+                  {t('artists')}
                 </Link>
               </li>
               <li>
@@ -103,7 +111,7 @@ const Footer = ({ globalData }: FooterProps) => {
                   href="/board"
                   className="text-gray-400 hover:text-white transition-colors duration-200"
                 >
-                  자유게시판
+                  {t('board')}
                 </Link>
               </li>
               <li>
@@ -111,7 +119,7 @@ const Footer = ({ globalData }: FooterProps) => {
                   href="/connect"
                   className="text-gray-400 hover:text-white transition-colors duration-200"
                 >
-                  소통과 참여
+                  {t('connect')}
                 </Link>
               </li>
               <li>
@@ -119,7 +127,7 @@ const Footer = ({ globalData }: FooterProps) => {
                   href="/faq"
                   className="text-gray-400 hover:text-white transition-colors duration-200"
                 >
-                  자주 묻는 질문
+                  {t('faq')}
                 </Link>
               </li>
             </ul>
@@ -127,10 +135,10 @@ const Footer = ({ globalData }: FooterProps) => {
 
           {/* Contact */}
           <div>
-            <h4 className="font-semibold mb-4">연락처</h4>
+            <h4 className="font-semibold mb-4">{t('contact')}</h4>
             <div className="text-gray-400 text-sm space-y-2">
               <p>
-                이메일:
+                {t('email')}:
                 <a
                   href={`mailto:${data.contact.email}`}
                   className="hover:text-white transition-colors duration-200 underline underline-offset-4 hover:underline-offset-6 ml-1"
@@ -139,7 +147,7 @@ const Footer = ({ globalData }: FooterProps) => {
                 </a>
               </p>
               <p>
-                전화:
+                {t('phone')}:
                 <a
                   href={`tel:${data.contact.phone}`}
                   className="hover:text-white transition-colors duration-200 underline underline-offset-4 hover:underline-offset-6 ml-1"
@@ -148,7 +156,7 @@ const Footer = ({ globalData }: FooterProps) => {
                 </a>
               </p>
               <p>
-                주소:
+                {t('address')}:
                 <a
                   href={`https://map.naver.com/v5/search/${encodeURIComponent(data.contact.address)}`}
                   target="_blank"
@@ -187,21 +195,21 @@ const Footer = ({ globalData }: FooterProps) => {
         <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="text-gray-400 text-sm mb-4 md:mb-0">
             <p>
-              설립신고: {new Date(data.businessInfo.establishedDate).toLocaleDateString('ko-KR')} |
-              법인성립: {new Date(data.businessInfo.registrationDate).toLocaleDateString('ko-KR')}
+              {t('established')}: {new Date(data.businessInfo.establishedDate).toLocaleDateString(dateLocale)} |
+              {t('incorporated')}: {new Date(data.businessInfo.registrationDate).toLocaleDateString(dateLocale)}
             </p>
-            <p>사업자등록번호: {data.businessInfo.registrationNumber}</p>
+            <p>{t('businessNumber')}: {data.businessInfo.registrationNumber}</p>
           </div>
           <div className="flex flex-col items-center md:items-end gap-2">
             <div className="flex space-x-4 text-gray-500 text-xs">
               <Link href="/privacy" className="hover:text-gray-300 transition-colors duration-200">
-                개인정보처리방침
+                {t('privacy')}
               </Link>
               <Link href="/terms" className="hover:text-gray-300 transition-colors duration-200">
-                이용약관
+                {t('terms')}
               </Link>
             </div>
-            <p className="text-gray-400 text-sm">© 2025 {data.siteName}. All rights reserved.</p>
+            <p className="text-gray-400 text-sm">© 2025 {tc('brandShort')}. {t('rights')}</p>
           </div>
         </div>
       </div>

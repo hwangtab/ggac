@@ -2,14 +2,14 @@
 
 import { useState, useEffect } from 'react'
 import type { User } from '@supabase/supabase-js'
-
-import Link from 'next/link'
 import Image from 'next/image'
-import { usePathname, useRouter } from 'next/navigation'
+import { useTranslations } from 'next-intl'
+import { Link, usePathname, useRouter } from '@/i18n/navigation'
 
 // Supabase 클라이언트는 dynamic import — 초기 vendors 번들에서 분리해 LCP/FCP 가속.
 // 인증 UI는 loading 상태로 시작했다가 마운트 직후 비동기로 채워진다.
 import NotificationDropdown from './NotificationDropdown'
+import LocaleSwitcher from './LocaleSwitcher'
 
 const Navigation = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -18,11 +18,11 @@ const Navigation = () => {
   const [hasScrollSync, setHasScrollSync] = useState(false)
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
-  // 정적 prerender 시점에는 usePathname()이 빈 값을 반환할 수 있다.
-  // 그 경우 isHomePage=false로 떨어져 헤더가 흰 배경으로 SSR되며, hydration 직후
-  // 정확한 pathname으로 갱신되면서 색상도 즉시 정상화된다 (홈에서만 미세 깜빡임).
+  // i18n usePathname은 locale prefix 없는 경로를 반환한다.
+  // /en 홈에서도 pathname === '/' 로 평가되어 투명 헤더가 올바르게 동작한다.
   const pathname = usePathname() || ''
   const router = useRouter()
+  const t = useTranslations()
 
   // 홈페이지인지 확인
   const isHomePage = pathname === '/'
@@ -129,7 +129,7 @@ const Navigation = () => {
     <nav
       id="navigation"
       role="navigation"
-      aria-label="주요 내비게이션"
+      aria-label={t('nav.mainNav')}
       data-at-top={isAtTop ? 'true' : 'false'}
       className={`fixed top-0 left-0 right-0 z-50 ${
         hasScrollSync ? 'transition-all duration-300' : 'transition-none'
@@ -146,7 +146,7 @@ const Navigation = () => {
             >
               <Image
                 src="/images/logo/gac_logo.webp"
-                alt="경기아트콜렉티브 협동조합"
+                alt={t('common.brandShort')}
                 fill
                 sizes="40px"
                 className="object-contain"
@@ -154,7 +154,7 @@ const Navigation = () => {
               />
             </div>
             <span className={`font-serif font-bold text-xl hidden sm:inline ${textColor}`}>
-              경기아트콜렉티브
+              {t('common.brandShort')}
             </span>
           </Link>
 
@@ -191,13 +191,13 @@ const Navigation = () => {
                       pathname.startsWith('/mypage') ? activeColor : `${textColor} ${hoverColor}`
                     }`}
                   >
-                    마이페이지
+                    {t('nav.mypage')}
                   </Link>
                   <button
                     onClick={handleLogout}
                     className={`font-medium transition-colors duration-300 text-xs lg:text-sm ${textColor} ${hoverColor}`}
                   >
-                    로그아웃
+                    {t('nav.logout')}
                   </button>
                 </>
               ) : (
@@ -208,7 +208,7 @@ const Navigation = () => {
                       pathname === '/login' ? activeColor : `${textColor} ${hoverColor}`
                     }`}
                   >
-                    로그인
+                    {t('nav.login')}
                   </Link>
                   <Link
                     href="/signup"
@@ -220,10 +220,17 @@ const Navigation = () => {
                           : 'bg-primary-600 text-white hover:bg-primary-700'
                     }`}
                   >
-                    조합원 가입
+                    {t('nav.join')}
                   </Link>
                 </>
               )}
+
+              <LocaleSwitcher
+                className={textColor}
+                activeClassName={`font-semibold ${activeColor}`}
+                inactiveClassName={`opacity-60 hover:opacity-100 ${textColor}`}
+                separatorClassName="opacity-30"
+              />
             </div>
           </div>
 
@@ -271,7 +278,6 @@ const Navigation = () => {
             >
               BOARD
             </Link>
-            {/* CONNECT는 모바일 메뉴로만 접근 가능하게 변경 */}
 
             {/* Tablet Auth Section */}
             <div className="flex items-center space-x-1 ml-1 pl-1 border-l border-gray-300/20">
@@ -285,13 +291,13 @@ const Navigation = () => {
                       pathname.startsWith('/mypage') ? activeColor : `${textColor} ${hoverColor}`
                     }`}
                   >
-                    마이페이지
+                    {t('nav.mypage')}
                   </Link>
                   <button
                     onClick={handleLogout}
                     className={`font-medium transition-colors duration-300 text-xs ${textColor} ${hoverColor}`}
                   >
-                    로그아웃
+                    {t('nav.logout')}
                   </button>
                 </>
               ) : (
@@ -302,7 +308,7 @@ const Navigation = () => {
                       pathname === '/login' ? activeColor : `${textColor} ${hoverColor}`
                     }`}
                   >
-                    로그인
+                    {t('nav.login')}
                   </Link>
                   <Link
                     href="/signup"
@@ -314,10 +320,17 @@ const Navigation = () => {
                           : 'bg-primary-600 text-white hover:bg-primary-700'
                     }`}
                   >
-                    가입
+                    {t('nav.joinShort')}
                   </Link>
                 </>
               )}
+
+              <LocaleSwitcher
+                className={textColor}
+                activeClassName={`font-semibold ${activeColor}`}
+                inactiveClassName={`opacity-60 hover:opacity-100 ${textColor}`}
+                separatorClassName="opacity-30"
+              />
             </div>
           </div>
 
@@ -328,9 +341,9 @@ const Navigation = () => {
             className={`md:hidden p-2 rounded-md transition-colors duration-300 ${textColor} ${hoverColor} focus:outline-none focus:ring-2 focus:ring-primary-500`}
             aria-expanded={isMenuOpen}
             aria-controls="mobile-menu"
-            aria-label={isMenuOpen ? '메뉴 닫기' : '메뉴 열기'}
+            aria-label={isMenuOpen ? t('nav.closeMenu') : t('nav.openMenu')}
           >
-            <span className="sr-only">{isMenuOpen ? '메뉴 닫기' : '메뉴 열기'}</span>
+            <span className="sr-only">{isMenuOpen ? t('nav.closeMenu') : t('nav.openMenu')}</span>
             <div className="w-6 h-6 flex flex-col justify-center items-center">
               <span
                 className={`bg-current h-0.5 w-6 transition-all duration-300 ${
@@ -392,7 +405,7 @@ const Navigation = () => {
                           : 'text-gray-700 hover:text-primary-600 hover:bg-gray-50'
                       }`}
                     >
-                      마이페이지
+                      {t('nav.mypage')}
                     </Link>
                     <button
                       onClick={() => {
@@ -401,7 +414,7 @@ const Navigation = () => {
                       }}
                       className="block w-full text-left py-3 px-4 rounded-md transition-colors duration-200 text-gray-700 hover:text-primary-600 hover:bg-gray-50"
                     >
-                      로그아웃
+                      {t('nav.logout')}
                     </button>
                   </>
                 ) : (
@@ -415,7 +428,7 @@ const Navigation = () => {
                           : 'text-gray-700 hover:text-primary-600 hover:bg-gray-50'
                       }`}
                     >
-                      로그인
+                      {t('nav.login')}
                     </Link>
                     <Link
                       href="/signup"
@@ -426,10 +439,20 @@ const Navigation = () => {
                           : 'text-white bg-primary-600 hover:bg-primary-700'
                       }`}
                     >
-                      조합원 가입
+                      {t('nav.join')}
                     </Link>
                   </>
                 )}
+
+                {/* 언어 전환 */}
+                <div className="flex items-center justify-center mt-3 pb-1">
+                  <LocaleSwitcher
+                    className="text-gray-600"
+                    activeClassName="font-semibold text-primary-600"
+                    inactiveClassName="opacity-60 hover:opacity-100 text-gray-600"
+                    separatorClassName="opacity-30 text-gray-600"
+                  />
+                </div>
               </div>
             </div>
           </div>

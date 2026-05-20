@@ -39,6 +39,24 @@ async function getBoardPostsForSitemap(): Promise<Array<{ id: string; updated_at
   }
 }
 
+type SitemapEntry = MetadataRoute.Sitemap[number]
+
+function bilingualEntry(
+  path: string,
+  baseUrl: string,
+  opts: Pick<SitemapEntry, 'lastModified' | 'changeFrequency' | 'priority'>
+): SitemapEntry[] {
+  const koUrl = path === '/' ? baseUrl : `${baseUrl}${path}`
+  const enUrl = path === '/' ? `${baseUrl}/en` : `${baseUrl}/en${path}`
+  const alternates = {
+    languages: { 'ko-KR': koUrl, 'en-US': enUrl, 'x-default': koUrl },
+  }
+  return [
+    { url: koUrl, ...opts, alternates },
+    { url: enUrl, ...opts, alternates },
+  ]
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = getSiteUrl()
   // 정적 페이지는 빌드 시점을 lastModified로 사용 — ISR 재빌드마다 갱신되어
@@ -46,42 +64,46 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date()
 
   const staticPages: MetadataRoute.Sitemap = [
-    { url: baseUrl, lastModified: now, changeFrequency: 'weekly', priority: 1.0 },
-    { url: `${baseUrl}/about`, lastModified: now, changeFrequency: 'monthly', priority: 0.8 },
-    { url: `${baseUrl}/archive`, lastModified: now, changeFrequency: 'weekly', priority: 0.9 },
-    { url: `${baseUrl}/artists`, lastModified: now, changeFrequency: 'weekly', priority: 0.9 },
-    { url: `${baseUrl}/connect`, lastModified: now, changeFrequency: 'monthly', priority: 0.7 },
+    ...bilingualEntry('/', baseUrl, { lastModified: now, changeFrequency: 'weekly', priority: 1.0 }),
+    ...bilingualEntry('/about', baseUrl, { lastModified: now, changeFrequency: 'monthly', priority: 0.8 }),
+    ...bilingualEntry('/archive', baseUrl, { lastModified: now, changeFrequency: 'weekly', priority: 0.9 }),
+    ...bilingualEntry('/artists', baseUrl, { lastModified: now, changeFrequency: 'weekly', priority: 0.9 }),
+    ...bilingualEntry('/connect', baseUrl, { lastModified: now, changeFrequency: 'monthly', priority: 0.7 }),
+    ...bilingualEntry('/faq', baseUrl, { lastModified: now, changeFrequency: 'monthly', priority: 0.7 }),
+    ...bilingualEntry('/privacy', baseUrl, { lastModified: now, changeFrequency: 'monthly', priority: 0.5 }),
+    ...bilingualEntry('/terms', baseUrl, { lastModified: now, changeFrequency: 'monthly', priority: 0.5 }),
+    // board: 회원 전용 / noindex → ko만, alternates 없음
     { url: `${baseUrl}/board`, lastModified: now, changeFrequency: 'daily', priority: 0.6 },
-    { url: `${baseUrl}/privacy`, lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
-    { url: `${baseUrl}/terms`, lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
-    { url: `${baseUrl}/faq`, lastModified: now, changeFrequency: 'monthly', priority: 0.7 },
   ]
 
   try {
     const [artists, projects, boardPosts] = await Promise.all([
-      getArtists(),
-      getProjects(),
+      getArtists('ko'),
+      getProjects('ko'),
       getBoardPostsForSitemap(),
     ])
 
-    const artistPages: MetadataRoute.Sitemap = artists.map(artist => ({
-      url: `${baseUrl}/artists/${artist.slug}`,
-      lastModified: new Date(),
-      changeFrequency: 'monthly',
-      priority: 0.6,
-    }))
+    const artistPages: MetadataRoute.Sitemap = artists.flatMap(artist =>
+      bilingualEntry(`/artists/${artist.slug}`, baseUrl, {
+        lastModified: new Date(),
+        changeFrequency: 'monthly',
+        priority: 0.6,
+      })
+    )
 
-    const projectPages: MetadataRoute.Sitemap = projects.map(project => ({
-      url: `${baseUrl}/archive/${project.slug}`,
-      lastModified: new Date(project.publishedDate),
-      changeFrequency: 'yearly',
-      priority: 0.5,
-    }))
+    const projectPages: MetadataRoute.Sitemap = projects.flatMap(project =>
+      bilingualEntry(`/archive/${project.slug}`, baseUrl, {
+        lastModified: new Date(project.publishedDate),
+        changeFrequency: 'yearly',
+        priority: 0.5,
+      })
+    )
 
+    // board 게시글: ko만 (회원 전용 콘텐츠, en 버전 없음)
     const boardPostPages: MetadataRoute.Sitemap = boardPosts.map(post => ({
       url: `${baseUrl}/board/${post.id}`,
       lastModified: new Date(post.updated_at),
-      changeFrequency: 'monthly',
+      changeFrequency: 'monthly' as const,
       priority: 0.4,
     }))
 

@@ -64,6 +64,12 @@ export interface DatabaseArtist {
   created_at: string
   updated_at: string
 
+  // i18n 영문 필드 (nullable; 없으면 한국어 원본으로 폴백)
+  name_en?: string | null
+  one_liner_en?: string | null
+  bio_en?: string | null
+  template_type_en?: string | null
+
   members?: {
     id: string
     display_name: string
