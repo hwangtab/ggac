@@ -372,7 +372,11 @@ const Navigation = () => {
             role="menu"
             aria-labelledby="mobile-menu-button"
           >
-            <div className="bg-white/95 backdrop-blur-md rounded-lg shadow-lg p-2 border border-gray-200/20">
+            <div className={`rounded-lg shadow-lg p-2 border ${
+              isHomePage && isAtTop
+                ? 'bg-gray-900/95 backdrop-blur-md text-white'
+                : 'bg-white/95 backdrop-blur-md border-gray-200/20'
+            }`}>
               {/* Main Menu Items */}
               {menuItems.map(item => (
                 <Link
@@ -384,8 +388,8 @@ const Navigation = () => {
                   }}
                   className={`block py-3 px-4 rounded-md transition-colors duration-200 ${
                     pathname === item.href
-                      ? 'text-primary-600 bg-primary-50'
-                      : 'text-gray-700 hover:text-primary-600 hover:bg-gray-50'
+                      ? `${activeColor} ${isHomePage && isAtTop ? 'bg-white/10' : 'bg-primary-50'}`
+                      : `${textColor} ${hoverColor} ${isHomePage && isAtTop ? 'hover:bg-white/10' : 'hover:bg-gray-50'}`
                   }`}
                 >
                   {item.label}
@@ -393,7 +397,7 @@ const Navigation = () => {
               ))}
 
               {/* Mobile Auth Section */}
-              <div className="border-t border-gray-200/50 mt-2 pt-2">
+              <div className={`border-t mt-2 pt-2 ${isHomePage && isAtTop ? 'border-white/20' : 'border-gray-200/50'}`}>
                 {loading ? null : user ? (
                   <>
                     <Link
@@ -401,8 +405,8 @@ const Navigation = () => {
                       onClick={() => setIsMenuOpen(false)}
                       className={`block py-3 px-4 rounded-md transition-colors duration-200 ${
                         pathname.startsWith('/mypage')
-                          ? 'text-primary-600 bg-primary-50'
-                          : 'text-gray-700 hover:text-primary-600 hover:bg-gray-50'
+                          ? `${activeColor} ${isHomePage && isAtTop ? 'bg-white/10' : 'bg-primary-50'}`
+                          : `${textColor} ${hoverColor} ${isHomePage && isAtTop ? 'hover:bg-white/10' : 'hover:bg-gray-50'}`
                       }`}
                     >
                       {t('nav.mypage')}
@@ -412,7 +416,7 @@ const Navigation = () => {
                         handleLogout()
                         setIsMenuOpen(false)
                       }}
-                      className="block w-full text-left py-3 px-4 rounded-md transition-colors duration-200 text-gray-700 hover:text-primary-600 hover:bg-gray-50"
+                      className={`block w-full text-left py-3 px-4 rounded-md transition-colors duration-200 ${textColor} ${hoverColor} ${isHomePage && isAtTop ? 'hover:bg-white/10' : 'hover:bg-gray-50'}`}
                     >
                       {t('nav.logout')}
                     </button>
@@ -424,8 +428,8 @@ const Navigation = () => {
                       onClick={() => setIsMenuOpen(false)}
                       className={`block py-3 px-4 rounded-md transition-colors duration-200 ${
                         pathname === '/login'
-                          ? 'text-primary-600 bg-primary-50'
-                          : 'text-gray-700 hover:text-primary-600 hover:bg-gray-50'
+                          ? `${activeColor} ${isHomePage && isAtTop ? 'bg-white/10' : 'bg-primary-50'}`
+                          : `${textColor} ${hoverColor} ${isHomePage && isAtTop ? 'hover:bg-white/10' : 'hover:bg-gray-50'}`
                       }`}
                     >
                       {t('nav.login')}
@@ -433,11 +437,7 @@ const Navigation = () => {
                     <Link
                       href="/signup"
                       onClick={() => setIsMenuOpen(false)}
-                      className={`block py-3 px-4 rounded-md transition-colors duration-200 font-medium ${
-                        pathname === '/signup'
-                          ? 'text-white bg-primary-600'
-                          : 'text-white bg-primary-600 hover:bg-primary-700'
-                      }`}
+                      className={`block py-3 px-4 rounded-md transition-colors duration-200 font-medium text-white bg-primary-600 ${isHomePage && isAtTop ? 'hover:bg-primary-700' : 'hover:bg-primary-700'}`}
                     >
                       {t('nav.join')}
                     </Link>
@@ -447,10 +447,10 @@ const Navigation = () => {
                 {/* 언어 전환 */}
                 <div className="flex items-center justify-center mt-3 pb-1">
                   <LocaleSwitcher
-                    className="text-gray-600"
-                    activeClassName="font-semibold text-primary-600"
-                    inactiveClassName="opacity-60 hover:opacity-100 text-gray-600"
-                    separatorClassName="opacity-30 text-gray-600"
+                    className={isHomePage && isAtTop ? 'text-gray-300' : 'text-gray-600'}
+                    activeClassName={isHomePage && isAtTop ? 'font-semibold text-accent-300' : 'font-semibold text-primary-600'}
+                    inactiveClassName={`${isHomePage && isAtTop ? 'text-gray-300' : 'text-gray-600'} hover:opacity-100`}
+                    separatorClassName={isHomePage && isAtTop ? 'opacity-30 text-gray-300' : 'opacity-30 text-gray-600'}
                   />
                 </div>
               </div>
