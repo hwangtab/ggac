@@ -247,7 +247,7 @@ export default function ProjectDetailContent({
                       </div>
                       <div className="p-4">
                         <div className="text-sm text-primary-600 font-medium mb-2">
-                          {relatedProject.category}
+                          {localizeArchiveCategory(relatedProject.category, locale)}
                         </div>
                         <h4 className="font-semibold text-gray-900 line-clamp-2 mb-2">
                           {relatedProject.title}

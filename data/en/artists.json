@@ -2,7 +2,7 @@
   {
     "id": "artist-001",
     "slug": "sabbaha",
-    "name": "사바하",
+    "name": "Sabbaha",
     "category": [
       "창작자",
       "연주자",
@@ -36,7 +36,7 @@
         "url": "https://www.youtube.com/watch?v=FK7abbU4Lno"
       },
       {
-        "title": "사바하 (2025.04.19 @부산 리얼라이즈",
+        "title": "Sabbaha (2025.04.19 @Busan Realize)",
         "url": "https://www.youtube.com/watch?v=Wp5spc3DpBQ"
       }
     ],
@@ -45,7 +45,7 @@
   {
     "id": "artist-004",
     "slug": "themilliways",
-    "name": "themilliways (더 밀리웨이스)",
+    "name": "themilliways",
     "category": [
       "창작자",
       "연주자",
@@ -58,7 +58,7 @@
     "templateType": "콜라주형",
     "portfolioLinks": [
       {
-        "title": "포트폴리오",
+        "title": "Portfolio",
         "url": "https://themilliways.com"
       },
       {
@@ -81,7 +81,7 @@
   {
     "id": "artist-005",
     "slug": "yoo-dong-hyuk",
-    "name": "유동혁",
+    "name": "Yoo Dong-hyuk",
     "category": [
       "창작자",
       "프로듀서",
@@ -107,11 +107,11 @@
     ],
     "youtubeVideos": [
       {
-        "title": "유동혁 - 반추 (2023.2.4 @물고기는 물이 없으면 죽어요) (라이브)",
+        "title": "Yoo Dong-hyuk - Rumination (2023.2.4 @Fish Die Without Water) (Live)",
         "url": "https://youtu.be/becnxwNb55g?si=2oi4zFpfrhUMcSNp&t=5989"
       },
       {
-        "title": "유동혁 - 반추",
+        "title": "Yoo Dong-hyuk - Rumination",
         "url": "https://www.youtube.com/watch?v=e4x3Oqf-quM"
       }
     ],
@@ -120,7 +120,7 @@
   {
     "id": "artist-007",
     "slug": "namsu",
-    "name": "남수",
+    "name": "Namsu",
     "category": [
       "창작자"
     ],
@@ -140,11 +140,11 @@
     ],
     "youtubeVideos": [
       {
-        "title": "남수 - 그래도 (2024.4.23 @세종호텔 정리해고 철회를 위한 거리기도회)",
+        "title": "Namsu - Even So (2024.4.23 @Street Prayer for Reversal of Sejong Hotel Layoffs)",
         "url": "https://www.youtube.com/watch?v=estA7dtKUS4"
       },
       {
-        "title": "남수 - 꼴찌를 위하여 (2024.6.13 @동서울터미널에서 쫓겨난 상인들과)",
+        "title": "Namsu - For the Last Place (2024.6.13 @With Merchants Expelled from Dongseoul Terminal)",
         "url": "https://www.youtube.com/watch?v=rqZmYu_kvVQ"
       }
     ],
@@ -153,7 +153,7 @@
   {
     "id": "artist-008",
     "slug": "hwang-gyeong-ha",
-    "name": "황경하",
+    "name": "Hwang Gyeong-ha",
     "category": [
       "창작자",
       "프로듀서",
@@ -165,7 +165,7 @@
     "templateType": "콜라주형",
     "portfolioLinks": [
       {
-        "title": "포트폴리오",
+        "title": "Portfolio",
         "url": "https://hwangtab.github.io/home"
       },
       {
@@ -187,15 +187,15 @@
     ],
     "youtubeVideos": [
       {
-        "title": "경하와 세민 - 혼약의 기도 MV",
+        "title": "Gyeong-ha and Se-min - Prayer of Betrothal MV",
         "url": "https://www.youtube.com/watch?v=EsFqpkUfxxE"
       },
       {
-        "title": "황경하 - 눈녹듯 (Official Lyric Video)",
+        "title": "Hwang Gyeong-ha - Like Snow Melting (Official Lyric Video)",
         "url": "https://www.youtube.com/watch?v=WmI2EPjLr0c"
       },
       {
-        "title": "노컨트롤 - 히로시마 (@북조선 펑크 록커 리성웅의 \"활약\")",
+        "title": "No Control - Hiroshima (@North Korean Punk Rocker Lee Seong-ung's \"Activities\")",
         "url": "https://www.youtube.com/watch?v=c4ZyFDny2l8"
       }
     ],
@@ -236,7 +236,7 @@
   {
     "id": "artist-010",
     "slug": "jang-hyun-ho",
-    "name": "장현호",
+    "name": "Jang Hyun-ho",
     "bio": "Singer-songwriter Jang Hyun-ho is the central figure of Gilganeun Band, formed in 2011. He has written nearly all of the band's lyrics and compositions himself, shaping Gilganeun Band's musical direction and message.\nDrawing on the characteristics of a street-style band, he has consistently participated in sites of social struggle, standing in solidarity through song. At countless scenes including the Sewol ferry disaster, the Gangjeong village struggle against the Jeju Naval Base, and the KTX dismissed flight attendants' reinstatement struggle, he has raised social issues through music and played a role in awakening a sensitivity to peace.\nJang Hyun-ho's songs carry a sincere desire to connect the marginalized with ordinary people and to comfort sites of pain. Songs such as '75m Above' and 'We Will Shine Again' illustrate this musical philosophy well. Additionally, 'Seed Song,' included on Gilganeun Band's first full-length album, is the first song he ever wrote — encapsulating the reason the band sings — offering a glimpse into his musical beginnings and deep intentions.\nHe handles vocals and acoustic guitar, and beyond writing and composing for albums, participates in choruses as well, playing a central role across all aspects of music production. The unique sound of Gilganeun Band deeply reflects Jang Hyun-ho's musical individuality.\nJang Hyun-ho is a core singer-songwriter who delivers social messages.\n\n### Music Genres\n- Folk\n- Rock",
     "youtubeVideos": [
       {
@@ -261,7 +261,7 @@
   {
     "id": "artist-011",
     "slug": "anazao",
-    "name": "ANAZAO(아나자오)",
+    "name": "ANAZAO",
     "category": [
       "창작자"
     ],
@@ -294,7 +294,7 @@
   {
     "id": "artist-012",
     "slug": "heewoo",
-    "name": "희우",
+    "name": "Heewoo",
     "category": [
       "창작자"
     ],
@@ -319,7 +319,7 @@
   {
     "id": "artist-013",
     "slug": "Meridies",
-    "name": "메리디에스",
+    "name": "Meridies",
     "category": [
       "창작자"
     ],
@@ -343,14 +343,14 @@
   {
     "id": "artist-014",
     "slug": "pepperman",
-    "name": "후추맨",
+    "name": "Pepperman",
     "category": [
       "창작자",
       "프로듀서"
     ],
     "profileImage": "/images/artists/pepperman.webp",
     "oneLiner": "The late metal/hardcore music life of a lazy person cursed to never be able to stand boredom",
-    "bio": "후추맨 (real name: Yoo Ho-gang) has been active as a metal/hardcore artist since founding UMD (Umandog Metal Corps) in 2024.\n\n### Musical Journey\n\nThrough the metal/hardcore music life of a lazy person cursed to never be able to stand boredom, he is active on various club stages in Seoul and Gyeonggi together with UMD. Continuing collaborations with prominent metal bands such as Sabbaha, Panzerkorps, and Meridies, he is establishing himself as a notable newcomer in the Korean metal scene.\n\n### Key Activities\n\nSince founding UMD in 2024, he has participated in numerous Seoul and Gyeonggi club performances and also took part in the MMC Iron Man Special. He also participated in the 1st installment of '철조망: METAL SYNDICATE NETWORK' held in Suwon with UMD, contributing to the building of the Gyeonggi local metal scene network.\n\nHe is currently forming a separate grindcore band, preparing toward an end-of-year release, and continues to broaden his musical spectrum across more diverse metal genres.\n\n### Music Genres\n- Metal\n- Hardcore\n- Grindcore",
+    "bio": "Pepperman (real name: Yoo Ho-gang) has been active as a metal/hardcore artist since founding UMD (Umandog Metal Corps) in 2024.\n\n### Musical Journey\n\nThrough the metal/hardcore music life of a lazy person cursed to never be able to stand boredom, he is active on various club stages in Seoul and Gyeonggi together with UMD. Continuing collaborations with prominent metal bands such as Sabbaha, Panzerkorps, and Meridies, he is establishing himself as a notable newcomer in the Korean metal scene.\n\n### Key Activities\n\nSince founding UMD in 2024, he has participated in numerous Seoul and Gyeonggi club performances and also took part in the MMC Iron Man Special. He also participated in the 1st installment of '철조망: METAL SYNDICATE NETWORK' held in Suwon with UMD, contributing to the building of the Gyeonggi local metal scene network.\n\nHe is currently forming a separate grindcore band, preparing toward an end-of-year release, and continues to broaden his musical spectrum across more diverse metal genres.\n\n### Music Genres\n- Metal\n- Hardcore\n- Grindcore",
     "templateType": "콜라주형",
     "portfolioLinks": [
       {
@@ -364,7 +364,7 @@
     ],
     "youtubeVideos": [
       {
-        "title": "MMC 아이언맨 스페셜",
+        "title": "MMC Iron Man Special",
         "url": "https://youtu.be/FbNg7qVOJPw?si=ncdsSyb5SziwswmT"
       }
     ],
@@ -373,14 +373,14 @@
   {
     "id": "artist-015",
     "slug": "blackgoat",
-    "name": "흑염소",
+    "name": "Blackgoat",
     "category": [
       "창작자",
       "연주자"
     ],
     "profileImage": "/images/artists/blackgoat.webp",
     "oneLiner": "An artist who depicts the tragedy of outsiders with a raw and primal sound — cruelly yet beautifully.",
-    "bio": "흑염소 is an artist who draws out human instinct and emotion directly through a rough and primal sound, while simultaneously unraveling it with a fervent, aestheticist sensibility reminiscent of a youth manga.\n\n### Musical World\n\nRooted in the influences of punk, garage, and blues, yet not bound to any specific genre. In particular, his music persistently digs into the emotions and tragedies of those standing outside society's boundaries — outsiders who don't belong anywhere — and at times depicts them with a cruelty that is beautiful.\n\n### Artistic Sensibility\n\nWithin his world built of violence and cynicism, strange humor, and a twisted romanticism, 흑염소 reveals unadorned beauty in the most raw manner.\n\n### Music Genres\n- Punk\n- Garage\n- Blues",
+    "bio": "Blackgoat is an artist who draws out human instinct and emotion directly through a rough and primal sound, while simultaneously unraveling it with a fervent, aestheticist sensibility reminiscent of a youth manga.\n\n### Musical World\n\nRooted in the influences of punk, garage, and blues, yet not bound to any specific genre. In particular, his music persistently digs into the emotions and tragedies of those standing outside society's boundaries — outsiders who don't belong anywhere — and at times depicts them with a cruelty that is beautiful.\n\n### Artistic Sensibility\n\nWithin his world built of violence and cynicism, strange humor, and a twisted romanticism, Blackgoat reveals unadorned beauty in the most raw manner.\n\n### Music Genres\n- Punk\n- Garage\n- Blues",
     "templateType": "미니멀형",
     "portfolioLinks": [
       {
@@ -394,14 +394,14 @@
   {
     "id": "artist-016",
     "slug": "golbang-lady",
-    "name": "골방레이디",
+    "name": "Golbang Lady",
     "category": [
       "창작자",
       "연주자"
     ],
     "profileImage": "/images/artists/golbang-lady.webp",
     "oneLiner": "A lady rooted in the closet, golbang soul, lonely punk",
-    "bio": "골방레이디 is an artist who draws out the emotions of the closet with the utmost honesty.\n\n### Musical World\n\nThe rough breath of punk that confronts loneliness head-on, and the sticky emotions of golbang soul blooming within a narrow room, flow simultaneously. She unravels through music the emotions drawn from the most private spaces — not glamorous, but real.\n\n### Keywords\n- Golbang Soul\n- Lonely Punk\n- A Lady Rooted in the Closet",
+    "bio": "Golbang Lady is an artist who draws out the emotions of the closet with the utmost honesty.\n\n### Musical World\n\nThe rough breath of punk that confronts loneliness head-on, and the sticky emotions of golbang soul blooming within a narrow room, flow simultaneously. She unravels through music the emotions drawn from the most private spaces — not glamorous, but real.\n\n### Keywords\n- Golbang Soul\n- Lonely Punk\n- A Lady Rooted in the Closet",
     "templateType": "미니멀형",
     "portfolioLinks": [
       {
@@ -415,7 +415,7 @@
   {
     "id": "artist-017",
     "slug": "harris",
-    "name": "해리스",
+    "name": "Harris",
     "category": [
       "창작자",
       "연주자"
