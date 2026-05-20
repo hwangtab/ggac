@@ -183,7 +183,7 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
   // 아티스트가 참여한 프로젝트들 조회
   const artistProjects = await getArtistProjects(artist.id, resolvedParams.locale)
 
-  const isMinimal = artist.templateType === '미니멀형'
+  const isMinimal = artist.templateType === 'minimal'
   const baseUrl = getBaseUrl()
 
   // 구조화된 데이터 생성 - 유틸리티 함수 사용
