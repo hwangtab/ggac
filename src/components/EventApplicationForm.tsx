@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useTranslations } from 'next-intl'
 import toast from 'react-hot-toast'
 import FormField from '@/components/FormField'
+import { Link } from '@/i18n/navigation'
 
 interface Props {
   eventSlug: string
@@ -80,6 +81,7 @@ export default function EventApplicationForm({ eventSlug }: Props) {
           items_to_sell: form.items_to_sell.trim(),
           links: form.links.trim() || undefined,
           message: form.message.trim() || undefined,
+          privacy_consent: privacyConsent,
         }),
       })
 
@@ -206,23 +208,40 @@ export default function EventApplicationForm({ eventSlug }: Props) {
         />
       </div>
 
-      {/* 개인정보 동의 */}
-      <div className="space-y-1">
-        <label className="flex items-start gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={privacyConsent}
-            onChange={e => {
-              setPrivacyConsent(e.target.checked)
-              if (e.target.checked && errors.privacy) {
-                setErrors(prev => ({ ...prev, privacy: undefined }))
-              }
-            }}
-            className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-          />
-          <span className="text-sm text-gray-700">{t('privacyConsent')}</span>
-        </label>
-        {errors.privacy && <p className="text-sm text-red-600 pl-7">{errors.privacy}</p>}
+      {/* 개인정보 수집·이용 고지 및 동의 */}
+      <div className="space-y-3">
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700 space-y-1.5">
+          <p className="font-semibold text-gray-900">{t('privacyNoticeTitle')}</p>
+          <p>{t('privacyNoticeItems')}</p>
+          <p>{t('privacyNoticePurpose')}</p>
+          <p>{t('privacyNoticeRetention')}</p>
+          <p className="text-gray-500">{t('privacyNoticeRights')}</p>
+          <Link
+            href="/privacy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block mt-1 text-primary-600 hover:text-primary-700 underline underline-offset-4 text-xs"
+          >
+            {t('privacyPolicyLink')} →
+          </Link>
+        </div>
+        <div className="space-y-1">
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={privacyConsent}
+              onChange={e => {
+                setPrivacyConsent(e.target.checked)
+                if (e.target.checked && errors.privacy) {
+                  setErrors(prev => ({ ...prev, privacy: undefined }))
+                }
+              }}
+              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            />
+            <span className="text-sm text-gray-700">{t('privacyConsent')}</span>
+          </label>
+          {errors.privacy && <p className="text-sm text-red-600 pl-7">{errors.privacy}</p>}
+        </div>
       </div>
 
       <button

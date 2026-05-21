@@ -27,6 +27,9 @@ const ApplicationSchema = z.object({
     .max(1000, '1000자 이내로 입력해주세요.'),
   links: z.string().max(500).optional(),
   message: z.string().max(1000).optional(),
+  privacy_consent: z.literal(true, {
+    errorMap: () => ({ message: '개인정보 수집·이용 동의가 필요합니다.' }),
+  }),
 })
 
 export async function POST(request: NextRequest) {
@@ -63,6 +66,8 @@ export async function POST(request: NextRequest) {
       items_to_sell: d.items_to_sell.trim(),
       links: d.links?.trim() || null,
       message: d.message?.trim() || null,
+      privacy_consent: true,
+      privacy_consent_at: new Date().toISOString(),
     }
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL

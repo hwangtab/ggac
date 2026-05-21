@@ -15,6 +15,8 @@ interface EventApplication {
   links: string | null
   message: string | null
   status: 'pending' | 'approved' | 'rejected'
+  privacy_consent: boolean
+  privacy_consent_at: string | null
   created_at: string
   updated_at: string
 }
@@ -265,6 +267,18 @@ export default function EventApplicationsPage() {
                             </dd>
                           </div>
                         )}
+                        <div>
+                          <dt className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                            개인정보 동의
+                          </dt>
+                          <dd className="mt-1 text-sm text-gray-900">
+                            {app.privacy_consent_at
+                              ? new Date(app.privacy_consent_at).toLocaleString('ko-KR')
+                              : app.privacy_consent
+                                ? '동의 (시각 미기록)'
+                                : '—'}
+                          </dd>
+                        </div>
                       </dl>
 
                       {/* 상태 변경 버튼 */}
