@@ -1,7 +1,7 @@
 'use client'
 
 import { ReactNode } from 'react'
-import { FiHome, FiUsers, FiMusic, FiEdit3, FiSettings, FiBarChart, FiLogOut } from 'react-icons/fi'
+import { FiHome, FiUsers, FiMusic, FiEdit3, FiSettings, FiBarChart, FiLogOut, FiClipboard } from 'react-icons/fi'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
@@ -52,6 +52,12 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ title, description, children 
       label: '리포트 및 분석',
       href: '/admin/reports',
       icon: <FiBarChart className="w-5 h-5" />,
+    },
+    {
+      id: 'event-applications',
+      label: '행사 신청 내역',
+      href: '/admin/event-applications',
+      icon: <FiClipboard className="w-5 h-5" />,
     },
     {
       id: 'settings',
