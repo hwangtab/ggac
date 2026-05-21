@@ -1,6 +1,6 @@
 import ArchiveContent from './ArchiveContent'
 import { getProjectsSorted, getArtists } from '@/lib/data'
-import { ARCHIVE_CATEGORIES } from '@/constants/categories'
+import { ARCHIVE_CATEGORIES, localizeArchiveCategory } from '@/constants/categories'
 import {
   generateItemListStructuredData,
   generateBreadcrumbStructuredData,
@@ -105,12 +105,13 @@ export async function generateMetadata({
   }
 }
 
-const filterProjectsByCategory = (projects: Project[], category: ArchiveCategory) => {
+const filterProjectsByCategory = (projects: Project[], category: ArchiveCategory, locale: string) => {
   if (category === 'All') {
     return projects
   }
 
-  return projects.filter(project => project.category === category)
+  const matchValue = locale === 'en' ? localizeArchiveCategory(category, 'en') : category
+  return projects.filter(project => project.category === matchValue)
 }
 
 const ArchivePage = async ({ params, searchParams }: ArchivePageProps) => {
@@ -126,7 +127,7 @@ const ArchivePage = async ({ params, searchParams }: ArchivePageProps) => {
     ? (rawCategory as ArchiveCategory)
     : 'All'
 
-  const filteredProjects = filterProjectsByCategory(projects, selectedCategory)
+  const filteredProjects = filterProjectsByCategory(projects, selectedCategory, locale)
   const totalCount = filteredProjects.length
   const totalPages = Math.max(1, Math.ceil(totalCount / PROJECTS_PER_PAGE))
 

@@ -152,7 +152,7 @@ export async function generateMetadata({ params }: ProjectPageProps): Promise<Me
     // 프로젝트 데이터 조회 - 에러 처리 강화
     let project
     try {
-      project = await getProjectBySlug(resolvedParams.slug)
+      project = await getProjectBySlug(resolvedParams.slug, resolvedParams.locale)
     } catch (dataError) {
       console.error(
         `[${timestamp}] generateMetadata: Data loading error for slug "${resolvedParams.slug}":`,
@@ -351,7 +351,8 @@ const ProjectDetailPage = async ({ params }: ProjectPageProps) => {
     : []
 
   // 구조화된 데이터 생성 - 프로젝트 타입에 따른 스마트 선택
-  const isEvent = project.category === '공연·전시' || project.category === '행사'
+  const EVENT_CATEGORIES = new Set(['공연·전시', '행사', 'Performance & Exhibition', 'Event'])
+  const isEvent = EVENT_CATEGORIES.has(project.category)
 
   const breadcrumbData = generateBreadcrumbStructuredData([
     { name: '홈', url: 'https://ggac.kr' },

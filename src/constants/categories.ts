@@ -64,7 +64,7 @@ export const CATEGORIES = {
 export const ARCHIVE_CATEGORY_LABELS_EN: Record<string, string> = {
   All: 'All',
   '음반·음원': 'Music',
-  '공연·전시': 'Concert & Exhibition',
+  '공연·전시': 'Performance & Exhibition',
   '예술교육': 'Arts Education',
   '지원·용역사업': 'Grants & Services',
   '행사': 'Event',

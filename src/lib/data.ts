@@ -90,6 +90,7 @@ class MemoryEfficientCache<T> {
 let artistCache: MemoryEfficientCache<Artist[]> | null = null
 let projectCache: MemoryEfficientCache<Project[]> | null = null
 let legacyArtistMapPromise: Promise<Map<string, Artist>> | null = null
+let enArtistTextMapPromise: Promise<Map<string, Artist>> | null = null
 
 // 캐시 초기화 함수
 function initCaches() {
@@ -105,6 +106,7 @@ export function invalidateArtistsCache() {
     initCaches()
     artistCache?.clear()
     legacyArtistMapPromise = null
+    enArtistTextMapPromise = null
   } catch (e) {
     // 캐시 무효화 실패는 치명적이지 않음
     log.warn('invalidateArtistsCache failed', e)
@@ -192,6 +194,15 @@ export const getArtistsFromDB = async (locale = 'ko'): Promise<Artist[]> => {
         })
       } catch (fallbackError) {
         log.warn('Failed to apply legacy artist image fallback:', fallbackError)
+      }
+
+      if (locale === 'en') {
+        try {
+          const enMap = await buildEnArtistTextMap()
+          result = result.map(a => overlayEnglishArtistText(a, enMap.get(a.slug) ?? enMap.get(a.id)))
+        } catch (enError) {
+          log.warn('Failed to apply English text overlay:', enError)
+        }
       }
 
       artistCache?.set(cacheKey, result)
@@ -362,6 +373,35 @@ async function getLegacyArtistMap(): Promise<Map<string, Artist>> {
   return legacyArtistMapPromise
 }
 
+async function buildEnArtistTextMap(): Promise<Map<string, Artist>> {
+  if (!enArtistTextMapPromise) {
+    enArtistTextMapPromise = (async () => {
+      const enArtists = await getArtistsFromJSON('en')
+      const map = new Map<string, Artist>()
+      for (const a of enArtists) {
+        if (a.slug) map.set(a.slug, a)
+        if (a.id) map.set(a.id, a)
+      }
+      return map
+    })()
+  }
+  return enArtistTextMapPromise
+}
+
+function overlayEnglishArtistText(artist: Artist, en?: Artist): Artist {
+  if (!en) return artist
+  return {
+    ...artist,
+    name: en.name || artist.name,
+    oneLiner: en.oneLiner ?? artist.oneLiner,
+    bio: en.bio ?? artist.bio,
+    category: en.category ?? artist.category,
+    templateType: (en.templateType ?? artist.templateType) as Artist['templateType'],
+    portfolioLinks: en.portfolioLinks ?? artist.portfolioLinks,
+    youtubeVideos: en.youtubeVideos ?? artist.youtubeVideos,
+  }
+}
+
 function applyProfileImageFallback(artist: Artist, fallback?: Artist): Artist {
   if (!fallback?.profileImage) {
     return artist
@@ -423,6 +463,18 @@ export const getArtistBySlugFromDB = async (slug: string, locale = 'ko'): Promis
         convertedArtist = applyProfileImageFallback(convertedArtist, fallback)
       } catch (fallbackError) {
         log.warn('Failed to apply legacy artist image fallback:', fallbackError)
+      }
+
+      if (locale === 'en') {
+        try {
+          const enMap = await buildEnArtistTextMap()
+          convertedArtist = overlayEnglishArtistText(
+            convertedArtist,
+            enMap.get(convertedArtist.slug) ?? enMap.get(convertedArtist.id)
+          )
+        } catch (enError) {
+          log.warn('Failed to apply English text overlay:', enError)
+        }
       }
 
       return convertedArtist

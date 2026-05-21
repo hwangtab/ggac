@@ -61,7 +61,7 @@ export async function generateMetadata({ params }: ArtistPageProps): Promise<Met
     }
   }
 
-  const artist = await getArtistBySlug(resolvedParams.slug)
+  const artist = await getArtistBySlug(resolvedParams.slug, resolvedParams.locale)
 
   if (!artist) {
     return {
