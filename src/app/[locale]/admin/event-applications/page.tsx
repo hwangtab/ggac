@@ -19,6 +19,11 @@ interface EventApplication {
   updated_at: string
 }
 
+interface EventInfo {
+  slug: string
+  title: string
+}
+
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   pending: { label: '검토 중', color: 'bg-yellow-100 text-yellow-800' },
   approved: { label: '선정', color: 'bg-green-100 text-green-800' },
@@ -27,8 +32,10 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
 
 export default function EventApplicationsPage() {
   const [applications, setApplications] = useState<EventApplication[]>([])
+  const [events, setEvents] = useState<EventInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [eventSlug, setEventSlug] = useState('')
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all')
   const [totalCount, setTotalCount] = useState(0)
   const [updating, setUpdating] = useState<string | null>(null)
@@ -38,7 +45,8 @@ export default function EventApplicationsPage() {
     setLoading(true)
     setError(null)
     try {
-      const params = new URLSearchParams({ event_slug: 'suwon-sound-market-vol-2' })
+      const params = new URLSearchParams()
+      if (eventSlug) params.set('event_slug', eventSlug)
       if (filter !== 'all') params.set('status', filter)
 
       const res = await fetch(`/api/admin/event-applications?${params}`)
@@ -46,12 +54,15 @@ export default function EventApplicationsPage() {
       const json = await res.json()
       setApplications(json.data?.applications ?? [])
       setTotalCount(json.data?.pagination?.totalCount ?? 0)
+      if (json.data?.events?.length) {
+        setEvents(json.data.events)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.')
     } finally {
       setLoading(false)
     }
-  }, [filter])
+  }, [eventSlug, filter])
 
   useEffect(() => {
     fetchApplications()
@@ -74,6 +85,10 @@ export default function EventApplicationsPage() {
     }
   }
 
+  const eventMap = Object.fromEntries(events.map(e => [e.slug, e.title]))
+
+  const selectedEventTitle = eventSlug ? (eventMap[eventSlug] ?? eventSlug) : '전체 행사'
+
   const filterButtons: { key: typeof filter; label: string }[] = [
     { key: 'all', label: `전체 (${totalCount})` },
     { key: 'pending', label: '검토 중' },
@@ -82,7 +97,7 @@ export default function EventApplicationsPage() {
   ]
 
   return (
-    <AdminLayout title="행사 신청 내역" description="제2회 수원 사운드 마켓 공연·판매 신청 내역">
+    <AdminLayout title="행사 신청 내역" description="공연·판매 신청 조회 및 선정 관리">
       <div className="space-y-6">
         {/* 헤더 */}
         <div className="flex items-center justify-between">
@@ -92,7 +107,7 @@ export default function EventApplicationsPage() {
             </div>
             <div>
               <h1 className="text-xl font-semibold text-gray-900">공연·판매 신청 내역</h1>
-              <p className="text-sm text-gray-500">제2회 수원 사운드 마켓</p>
+              <p className="text-sm text-gray-500">{selectedEventTitle}</p>
             </div>
           </div>
           <button
@@ -104,7 +119,33 @@ export default function EventApplicationsPage() {
           </button>
         </div>
 
-        {/* 필터 */}
+        {/* 행사 드롭다운 */}
+        <div className="flex items-center gap-3">
+          <label
+            htmlFor="event-select"
+            className="text-sm font-medium text-gray-700 whitespace-nowrap"
+          >
+            행사
+          </label>
+          <select
+            id="event-select"
+            value={eventSlug}
+            onChange={e => {
+              setEventSlug(e.target.value)
+              setExpanded(null)
+            }}
+            className="px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+          >
+            <option value="">전체 행사</option>
+            {events.map(e => (
+              <option key={e.slug} value={e.slug}>
+                {e.title}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* 상태 필터 */}
         <div className="flex gap-2 flex-wrap">
           {filterButtons.map(({ key, label }) => (
             <button
@@ -142,6 +183,7 @@ export default function EventApplicationsPage() {
             {applications.map(app => {
               const isExpanded = expanded === app.id
               const statusInfo = STATUS_LABELS[app.status]
+              const eventTitle = eventMap[app.event_slug] ?? app.event_slug
               return (
                 <div
                   key={app.id}
@@ -153,7 +195,7 @@ export default function EventApplicationsPage() {
                     onClick={() => setExpanded(isExpanded ? null : app.id)}
                   >
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-3 flex-wrap">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium text-gray-900 truncate">
                           {app.applicant_name}
                         </span>
@@ -162,6 +204,11 @@ export default function EventApplicationsPage() {
                         >
                           {statusInfo.label}
                         </span>
+                        {!eventSlug && (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 truncate max-w-[200px]">
+                            {eventTitle}
+                          </span>
+                        )}
                       </div>
                       <div className="text-sm text-gray-500 mt-0.5 truncate">
                         {app.contact_email}

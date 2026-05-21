@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { requireAdmin } from '@/lib/server/adminAuth'
+import { getProjects } from '@/lib/data'
 import { z } from 'zod'
 
 export const runtime = 'nodejs'
@@ -27,12 +28,16 @@ export async function GET(request: NextRequest) {
   if (eventSlug) query = query.eq('event_slug', eventSlug)
   if (status) query = query.eq('status', status)
 
-  const { data, error, count } = await query
+  const [{ data, error, count }, allProjects] = await Promise.all([query, getProjects()])
 
   if (error) {
     console.error('[admin/event-applications] fetch error:', error)
     return ApiError.internalServerError('신청 내역을 불러오지 못했습니다.').toNextResponse()
   }
+
+  const events = allProjects
+    .filter(p => p.applicationForm?.internal === true)
+    .map(p => ({ slug: p.slug, title: p.title }))
 
   return ApiSuccess.ok(
     {
@@ -43,6 +48,7 @@ export async function GET(request: NextRequest) {
         totalPages: Math.ceil((count ?? 0) / limit),
         hasNext: page * limit < (count ?? 0),
       },
+      events,
     },
     '신청 내역을 불러왔습니다.'
   ).toNextResponse()
