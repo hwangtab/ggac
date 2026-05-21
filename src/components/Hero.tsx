@@ -247,7 +247,7 @@ const Hero = () => {
            * 0.9~1.2초 동안 opacity 0이 유지돼 LCP가 ~2.7s 늦춰지던 회귀 수정.
            */}
           <p
-            className="text-lg sm:text-xl md:text-2xl mb-6 sm:mb-8 max-w-2xl mx-auto leading-relaxed opacity-100"
+            className="text-lg sm:text-xl md:text-2xl mb-6 sm:mb-8 max-w-2xl mx-auto leading-relaxed opacity-100 text-balance"
             style={{
               color: 'rgba(255, 255, 255, 0.92)',
               textShadow: `
