@@ -215,6 +215,34 @@
       "imageAlt": "Article image"
     }
   },
+  "application": {
+    "heading": "Apply Now",
+    "nameLabel": "Applicant / Team Name",
+    "namePlaceholder": "Enter your stage name or team name",
+    "emailLabel": "Email",
+    "emailPlaceholder": "example@email.com",
+    "phoneLabel": "Phone (optional)",
+    "phonePlaceholder": "+82-10-0000-0000",
+    "performanceLabel": "Performance Info / Genre (optional)",
+    "performancePlaceholder": "Briefly describe your genre, instruments, performance style, etc.",
+    "itemsLabel": "Items to Sell",
+    "itemsPlaceholder": "List the instruments / gear / items you want to sell (min. 1 required)",
+    "linksLabel": "Links (optional)",
+    "linksPlaceholder": "Music, video, SNS links, etc.",
+    "messageLabel": "Additional Notes (optional)",
+    "messagePlaceholder": "Anything else you'd like to tell the organizers",
+    "privacyConsent": "I agree to the collection and use of my personal information",
+    "submitButton": "Submit Application",
+    "submittingButton": "Submitting...",
+    "successTitle": "Application Submitted!",
+    "successMessage": "We will contact selected participants individually via the provided contact.",
+    "errorRequired": "Please fill in all required fields.",
+    "errorEmailInvalid": "Please enter a valid email address.",
+    "errorPrivacy": "Please agree to the collection and use of your personal information.",
+    "toastSuccess": "Your application has been submitted!",
+    "toastError": "An error occurred. Please try again later.",
+    "toastTooMany": "Too many requests. Please try again later."
+  },
   "auth": {
     "login": {
       "heading": "Log In",

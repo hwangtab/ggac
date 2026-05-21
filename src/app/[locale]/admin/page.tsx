@@ -2,7 +2,15 @@
 
 import { useState, useEffect, Suspense } from 'react'
 import dynamic from 'next/dynamic'
-import { FiUsers, FiMusic, FiEdit3, FiSettings, FiBarChart, FiShield } from 'react-icons/fi'
+import {
+  FiUsers,
+  FiMusic,
+  FiEdit3,
+  FiSettings,
+  FiBarChart,
+  FiShield,
+  FiClipboard,
+} from 'react-icons/fi'
 import AdminLayout from './components/AdminLayout'
 import DashboardStats from './components/DashboardStats'
 import RecentActivity from './components/RecentActivity'
@@ -76,6 +84,14 @@ export default function AdminDashboard() {
       description: '사이트 설정 및 관리',
       icon: <FiSettings className="w-6 h-6" />,
       href: '/admin/settings',
+      count: null,
+      countLabel: null,
+    },
+    {
+      title: '행사 신청 내역',
+      description: '공연·판매 신청 조회 및 선정 관리',
+      icon: <FiClipboard className="w-6 h-6" />,
+      href: '/admin/event-applications',
       count: null,
       countLabel: null,
     },

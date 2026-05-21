@@ -215,6 +215,34 @@
       "imageAlt": "기사 이미지"
     }
   },
+  "application": {
+    "heading": "신청하기",
+    "nameLabel": "신청자 / 팀명",
+    "namePlaceholder": "활동명 또는 팀명을 입력해주세요",
+    "emailLabel": "이메일",
+    "emailPlaceholder": "example@email.com",
+    "phoneLabel": "연락처 (선택)",
+    "phonePlaceholder": "010-0000-0000",
+    "performanceLabel": "공연 소개 / 장르 (선택)",
+    "performancePlaceholder": "장르, 사용 악기, 공연 스타일 등을 간단히 소개해주세요",
+    "itemsLabel": "판매할 물건",
+    "itemsPlaceholder": "판매하실 악기·장비·물품을 입력해주세요 (최소 1개 이상 필수)",
+    "linksLabel": "링크 (선택)",
+    "linksPlaceholder": "음원, 영상, SNS 등 링크를 입력해주세요",
+    "messageLabel": "기타 요청사항 (선택)",
+    "messagePlaceholder": "운영진에게 전하고 싶은 말이 있다면 입력해주세요",
+    "privacyConsent": "개인정보 수집 및 이용에 동의합니다",
+    "submitButton": "신청하기",
+    "submittingButton": "신청 중...",
+    "successTitle": "신청이 완료되었습니다!",
+    "successMessage": "선정 결과는 입력하신 연락처로 개별 안내드립니다.",
+    "errorRequired": "필수 항목을 모두 입력해주세요.",
+    "errorEmailInvalid": "올바른 이메일 주소를 입력해주세요.",
+    "errorPrivacy": "개인정보 수집 및 이용에 동의해주세요.",
+    "toastSuccess": "신청이 접수되었습니다!",
+    "toastError": "신청 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
+    "toastTooMany": "요청이 너무 많습니다. 잠시 후 다시 시도해주세요."
+  },
   "auth": {
     "login": {
       "heading": "로그인",

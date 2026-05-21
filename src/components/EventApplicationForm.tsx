@@ -1,0 +1,263 @@
+'use client'
+
+import { useState } from 'react'
+import { useTranslations } from 'next-intl'
+import toast from 'react-hot-toast'
+import FormField from '@/components/FormField'
+
+interface Props {
+  eventSlug: string
+}
+
+interface FormState {
+  applicant_name: string
+  contact_email: string
+  contact_phone: string
+  performance_info: string
+  items_to_sell: string
+  links: string
+  message: string
+}
+
+const initialForm: FormState = {
+  applicant_name: '',
+  contact_email: '',
+  contact_phone: '',
+  performance_info: '',
+  items_to_sell: '',
+  links: '',
+  message: '',
+}
+
+export default function EventApplicationForm({ eventSlug }: Props) {
+  const t = useTranslations('application')
+
+  const [form, setForm] = useState<FormState>(initialForm)
+  const [privacyConsent, setPrivacyConsent] = useState(false)
+  const [errors, setErrors] = useState<Partial<Record<keyof FormState | 'privacy', string>>>({})
+  const [loading, setLoading] = useState(false)
+  const [submitted, setSubmitted] = useState(false)
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target
+    setForm(prev => ({ ...prev, [name]: value }))
+    if (errors[name as keyof FormState]) {
+      setErrors(prev => ({ ...prev, [name]: undefined }))
+    }
+  }
+
+  const validate = (): boolean => {
+    const newErrors: typeof errors = {}
+
+    if (!form.applicant_name.trim()) newErrors.applicant_name = t('errorRequired')
+    if (!form.contact_email.trim()) {
+      newErrors.contact_email = t('errorRequired')
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contact_email.trim())) {
+      newErrors.contact_email = t('errorEmailInvalid')
+    }
+    if (!form.items_to_sell.trim()) newErrors.items_to_sell = t('errorRequired')
+    if (!privacyConsent) newErrors.privacy = t('errorPrivacy')
+
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!validate()) return
+
+    setLoading(true)
+    try {
+      const res = await fetch('/api/event-applications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          event_slug: eventSlug,
+          applicant_name: form.applicant_name.trim(),
+          contact_email: form.contact_email.trim(),
+          contact_phone: form.contact_phone.trim() || undefined,
+          performance_info: form.performance_info.trim() || undefined,
+          items_to_sell: form.items_to_sell.trim(),
+          links: form.links.trim() || undefined,
+          message: form.message.trim() || undefined,
+        }),
+      })
+
+      if (res.status === 429) {
+        toast.error(t('toastTooMany'))
+        return
+      }
+
+      if (!res.ok) {
+        toast.error(t('toastError'))
+        return
+      }
+
+      toast.success(t('toastSuccess'))
+      setSubmitted(true)
+    } catch {
+      toast.error(t('toastError'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (submitted) {
+    return (
+      <div className="rounded-xl border border-green-200 bg-green-50 p-8 text-center">
+        <div className="mb-3 text-3xl">✅</div>
+        <h4 className="text-lg font-semibold text-green-800">{t('successTitle')}</h4>
+        <p className="mt-2 text-sm text-green-700">{t('successMessage')}</p>
+      </div>
+    )
+  }
+
+  const textareaClass =
+    'w-full rounded-lg border border-gray-300 px-4 py-3 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all duration-200 resize-none'
+
+  return (
+    <form onSubmit={handleSubmit} noValidate className="space-y-5">
+      <FormField
+        label={t('nameLabel')}
+        name="applicant_name"
+        value={form.applicant_name}
+        onChange={handleChange}
+        placeholder={t('namePlaceholder')}
+        required
+        error={errors.applicant_name}
+        state={errors.applicant_name ? 'error' : 'default'}
+      />
+
+      <FormField
+        label={t('emailLabel')}
+        name="contact_email"
+        type="email"
+        value={form.contact_email}
+        onChange={handleChange}
+        placeholder={t('emailPlaceholder')}
+        required
+        error={errors.contact_email}
+        state={errors.contact_email ? 'error' : 'default'}
+      />
+
+      <FormField
+        label={t('phoneLabel')}
+        name="contact_phone"
+        type="tel"
+        value={form.contact_phone}
+        onChange={handleChange}
+        placeholder={t('phonePlaceholder')}
+      />
+
+      {/* 공연 소개 */}
+      <div className="space-y-2">
+        <label htmlFor="performance_info" className="block text-sm font-medium text-gray-700">
+          {t('performanceLabel')}
+        </label>
+        <textarea
+          id="performance_info"
+          name="performance_info"
+          value={form.performance_info}
+          onChange={handleChange}
+          placeholder={t('performancePlaceholder')}
+          rows={3}
+          className={textareaClass}
+        />
+      </div>
+
+      {/* 판매 물건 */}
+      <div className="space-y-2">
+        <label htmlFor="items_to_sell" className="block text-sm font-medium text-gray-700">
+          {t('itemsLabel')} <span className="text-red-500">*</span>
+        </label>
+        <textarea
+          id="items_to_sell"
+          name="items_to_sell"
+          value={form.items_to_sell}
+          onChange={handleChange}
+          placeholder={t('itemsPlaceholder')}
+          rows={3}
+          className={`${textareaClass} ${errors.items_to_sell ? 'border-red-500 bg-red-50 focus:ring-red-500' : ''}`}
+        />
+        {errors.items_to_sell && <p className="text-sm text-red-600">{errors.items_to_sell}</p>}
+      </div>
+
+      <FormField
+        label={t('linksLabel')}
+        name="links"
+        value={form.links}
+        onChange={handleChange}
+        placeholder={t('linksPlaceholder')}
+      />
+
+      {/* 기타 요청사항 */}
+      <div className="space-y-2">
+        <label htmlFor="message" className="block text-sm font-medium text-gray-700">
+          {t('messageLabel')}
+        </label>
+        <textarea
+          id="message"
+          name="message"
+          value={form.message}
+          onChange={handleChange}
+          placeholder={t('messagePlaceholder')}
+          rows={3}
+          className={textareaClass}
+        />
+      </div>
+
+      {/* 개인정보 동의 */}
+      <div className="space-y-1">
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={privacyConsent}
+            onChange={e => {
+              setPrivacyConsent(e.target.checked)
+              if (e.target.checked && errors.privacy) {
+                setErrors(prev => ({ ...prev, privacy: undefined }))
+              }
+            }}
+            className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+          />
+          <span className="text-sm text-gray-700">{t('privacyConsent')}</span>
+        </label>
+        {errors.privacy && <p className="text-sm text-red-600 pl-7">{errors.privacy}</p>}
+      </div>
+
+      <button
+        type="submit"
+        disabled={loading}
+        className="w-full md:w-auto px-8 py-4 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-400 text-white font-semibold rounded-xl transition-colors duration-200 text-center shadow-lg hover:shadow-xl disabled:cursor-not-allowed"
+      >
+        {loading ? (
+          <span className="flex items-center justify-center gap-2">
+            <svg
+              className="h-4 w-4 animate-spin"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+              />
+            </svg>
+            {t('submittingButton')}
+          </span>
+        ) : (
+          t('submitButton')
+        )}
+      </button>
+    </form>
+  )
+}

@@ -9,6 +9,7 @@ import OptimizedImage from '@/components/OptimizedImage'
 import YouTubeEmbed from '@/components/YouTubeEmbed'
 import TicketingCard from '@/components/TicketingCard'
 import ArticleCard from '@/components/ArticleCard'
+import EventApplicationForm from '@/components/EventApplicationForm'
 
 import { TicketingInfo } from '@/utils/linkPreview'
 import type { Project, Artist } from '@/types'
@@ -201,14 +202,18 @@ export default function ProjectDetailContent({
             {project.applicationForm && (
               <div className="mt-12">
                 <h3 className="tw-heading-tertiary mb-6">{t('detail.applicationHeading')}</h3>
-                <a
-                  href={project.applicationForm.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-block w-full md:w-auto px-8 py-4 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl transition-colors duration-200 text-center shadow-lg hover:shadow-xl"
-                >
-                  {project.applicationForm.title} →
-                </a>
+                {project.applicationForm.internal ? (
+                  <EventApplicationForm eventSlug={project.slug} />
+                ) : (
+                  <a
+                    href={project.applicationForm.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block w-full md:w-auto px-8 py-4 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl transition-colors duration-200 text-center shadow-lg hover:shadow-xl"
+                  >
+                    {project.applicationForm.title} →
+                  </a>
+                )}
               </div>
             )}
 
@@ -298,7 +303,10 @@ export default function ProjectDetailContent({
 
                       <OptimizedImage
                         src={image}
-                        alt={t('detail.galleryImageAlt', { title: project.title, index: index + 1 })}
+                        alt={t('detail.galleryImageAlt', {
+                          title: project.title,
+                          index: index + 1,
+                        })}
                         width={500} // 더 작은 크기로 최적화 (600 → 500)
                         height={500}
                         className={`w-full h-full object-cover transition-all duration-300 ${
@@ -371,9 +379,7 @@ export default function ProjectDetailContent({
           <div className="text-center">
             <div className="max-w-2xl mx-auto mb-8">
               <h3 className="tw-heading-tertiary mb-3">{t('detail.navHeading')}</h3>
-              <p className="text-gray-600">
-                {t('detail.navBody')}
-              </p>
+              <p className="text-gray-600">{t('detail.navBody')}</p>
             </div>
             <Link href="/archive" className="tw-btn-primary">
               {t('detail.navCta')}

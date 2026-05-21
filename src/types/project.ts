@@ -42,7 +42,8 @@ export interface Project {
   artistIds: string[]
   applicationForm?: {
     title: string
-    url: string
+    url?: string
+    internal?: boolean
   }
   ticketing?: TicketingInfo[]
   relatedArticles?: RelatedArticle[]
