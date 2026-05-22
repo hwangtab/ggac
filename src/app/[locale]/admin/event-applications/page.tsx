@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { FiClipboard, FiRefreshCw, FiCheck, FiX, FiClock } from 'react-icons/fi'
+import { FiClipboard, FiRefreshCw, FiCheck, FiX, FiClock, FiEdit2, FiTrash2 } from 'react-icons/fi'
 import AdminLayout from '../components/AdminLayout'
 
 interface EventApplication {
@@ -28,10 +28,38 @@ interface EventInfo {
   title: string
 }
 
+interface EditForm {
+  applicant_name: string
+  contact_email: string
+  contact_phone: string
+  performance_info: string
+  items_to_sell: string
+  links: string
+  message: string
+  participation_type: string
+}
+
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   pending: { label: '검토 중', color: 'bg-yellow-100 text-yellow-800' },
   approved: { label: '선정', color: 'bg-green-100 text-green-800' },
   rejected: { label: '미선정', color: 'bg-red-100 text-red-800' },
+}
+
+const inputClass =
+  'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500'
+const textareaClass = `${inputClass} resize-none`
+
+function toEditForm(app: EventApplication): EditForm {
+  return {
+    applicant_name: app.applicant_name,
+    contact_email: app.contact_email,
+    contact_phone: app.contact_phone ?? '',
+    performance_info: app.performance_info ?? '',
+    items_to_sell: app.items_to_sell,
+    links: app.links ?? '',
+    message: app.message ?? '',
+    participation_type: app.participation_type ?? '',
+  }
 }
 
 export default function EventApplicationsPage() {
@@ -44,6 +72,10 @@ export default function EventApplicationsPage() {
   const [totalCount, setTotalCount] = useState(0)
   const [updating, setUpdating] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
+  const [editTarget, setEditTarget] = useState<EventApplication | null>(null)
+  const [editForm, setEditForm] = useState<EditForm | null>(null)
+  const [editSaving, setEditSaving] = useState(false)
 
   const fetchApplications = useCallback(async () => {
     setLoading(true)
@@ -89,8 +121,80 @@ export default function EventApplicationsPage() {
     }
   }
 
-  const eventMap = Object.fromEntries(events.map(e => [e.slug, e.title]))
+  const deleteApplication = async (id: string, name: string) => {
+    if (!confirm(`"${name}" 신청을 삭제하시겠습니까?\n삭제된 데이터는 복구할 수 없습니다.`)) return
+    setDeleting(id)
+    try {
+      const res = await fetch(`/api/admin/event-applications?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      })
+      if (!res.ok) throw new Error('삭제 실패')
+      setApplications(prev => prev.filter(app => app.id !== id))
+      setTotalCount(prev => prev - 1)
+      if (expanded === id) setExpanded(null)
+    } catch {
+      alert('삭제에 실패했습니다.')
+    } finally {
+      setDeleting(null)
+    }
+  }
 
+  const openEdit = (app: EventApplication) => {
+    setEditTarget(app)
+    setEditForm(toEditForm(app))
+  }
+
+  const closeEdit = () => {
+    setEditTarget(null)
+    setEditForm(null)
+  }
+
+  const saveEdit = async () => {
+    if (!editTarget || !editForm) return
+    setEditSaving(true)
+    try {
+      const res = await fetch('/api/admin/event-applications', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editTarget.id,
+          applicant_name: editForm.applicant_name,
+          contact_email: editForm.contact_email,
+          contact_phone: editForm.contact_phone || null,
+          performance_info: editForm.performance_info || null,
+          items_to_sell: editForm.items_to_sell,
+          links: editForm.links || null,
+          message: editForm.message || null,
+          participation_type: editForm.participation_type || null,
+        }),
+      })
+      if (!res.ok) throw new Error('수정 실패')
+      setApplications(prev =>
+        prev.map(app =>
+          app.id === editTarget.id
+            ? {
+                ...app,
+                applicant_name: editForm.applicant_name,
+                contact_email: editForm.contact_email,
+                contact_phone: editForm.contact_phone || null,
+                performance_info: editForm.performance_info || null,
+                items_to_sell: editForm.items_to_sell,
+                links: editForm.links || null,
+                message: editForm.message || null,
+                participation_type: editForm.participation_type || null,
+              }
+            : app
+        )
+      )
+      closeEdit()
+    } catch {
+      alert('수정에 실패했습니다.')
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
+  const eventMap = Object.fromEntries(events.map(e => [e.slug, e.title]))
   const selectedEventTitle = eventSlug ? (eventMap[eventSlug] ?? eventSlug) : '전체 행사'
 
   const filterButtons: { key: typeof filter; label: string }[] = [
@@ -320,8 +424,8 @@ export default function EventApplicationsPage() {
                         )}
                       </dl>
 
-                      {/* 상태 변경 버튼 */}
-                      <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+                      {/* 상태 변경 + 수정/삭제 버튼 */}
+                      <div className="flex items-center gap-2 pt-2 border-t border-gray-100 flex-wrap">
                         <span className="text-sm text-gray-500 mr-1">상태 변경:</span>
                         <button
                           disabled={updating === app.id || app.status === 'approved'}
@@ -347,6 +451,28 @@ export default function EventApplicationsPage() {
                           <FiX className="w-3 h-3" />
                           미선정
                         </button>
+                        <span className="flex-1" />
+                        <button
+                          onClick={e => {
+                            e.stopPropagation()
+                            openEdit(app)
+                          }}
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+                        >
+                          <FiEdit2 className="w-3 h-3" />
+                          수정
+                        </button>
+                        <button
+                          disabled={deleting === app.id}
+                          onClick={e => {
+                            e.stopPropagation()
+                            deleteApplication(app.id, app.applicant_name)
+                          }}
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <FiTrash2 className="w-3 h-3" />
+                          삭제
+                        </button>
                       </div>
                     </div>
                   )}
@@ -356,6 +482,141 @@ export default function EventApplicationsPage() {
           </div>
         )}
       </div>
+
+      {/* 수정 모달 */}
+      {editTarget && editForm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={e => {
+            if (e.target === e.currentTarget) closeEdit()
+          }}
+        >
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-5 border-b border-gray-200">
+              <h2 className="text-base font-semibold text-gray-900">신청 정보 수정</h2>
+              <button
+                onClick={closeEdit}
+                className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+              >
+                <FiX className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="block text-xs font-medium text-gray-600">
+                    신청자 / 팀명 <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.applicant_name}
+                    onChange={e => setEditForm(f => f && { ...f, applicant_name: e.target.value })}
+                    className={inputClass}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-xs font-medium text-gray-600">
+                    이메일 <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    value={editForm.contact_email}
+                    onChange={e => setEditForm(f => f && { ...f, contact_email: e.target.value })}
+                    className={inputClass}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-xs font-medium text-gray-600">연락처</label>
+                  <input
+                    type="tel"
+                    value={editForm.contact_phone}
+                    onChange={e => setEditForm(f => f && { ...f, contact_phone: e.target.value })}
+                    className={inputClass}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-xs font-medium text-gray-600">링크</label>
+                  <input
+                    type="text"
+                    value={editForm.links}
+                    onChange={e => setEditForm(f => f && { ...f, links: e.target.value })}
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-gray-600">
+                  판매할 물건 <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  rows={3}
+                  value={editForm.items_to_sell}
+                  onChange={e => setEditForm(f => f && { ...f, items_to_sell: e.target.value })}
+                  className={textareaClass}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-gray-600">공연 소개</label>
+                <textarea
+                  rows={3}
+                  value={editForm.performance_info}
+                  onChange={e => setEditForm(f => f && { ...f, performance_info: e.target.value })}
+                  className={textareaClass}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-gray-600">기타 요청사항</label>
+                <textarea
+                  rows={2}
+                  value={editForm.message}
+                  onChange={e => setEditForm(f => f && { ...f, message: e.target.value })}
+                  className={textareaClass}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-gray-600">
+                  참여 분야 (쉼표 구분)
+                </label>
+                <input
+                  type="text"
+                  placeholder="예: booth,performance"
+                  value={editForm.participation_type}
+                  onChange={e =>
+                    setEditForm(f => f && { ...f, participation_type: e.target.value })
+                  }
+                  className={inputClass}
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 p-5 border-t border-gray-200">
+              <button
+                onClick={closeEdit}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={saveEdit}
+                disabled={
+                  editSaving ||
+                  !editForm.applicant_name ||
+                  !editForm.contact_email ||
+                  !editForm.items_to_sell
+                }
+                className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {editSaving ? '저장 중...' : '저장'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AdminLayout>
   )
 }

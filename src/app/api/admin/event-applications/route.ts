@@ -61,6 +61,18 @@ const StatusUpdateSchema = z.object({
   }),
 })
 
+const FieldUpdateSchema = z.object({
+  id: z.string().uuid('유효한 ID가 필요합니다.'),
+  applicant_name: z.string().min(1).max(100),
+  contact_email: z.string().email(),
+  contact_phone: z.string().max(20).optional().nullable(),
+  performance_info: z.string().max(1000).optional().nullable(),
+  items_to_sell: z.string().min(1).max(1000),
+  links: z.string().max(500).optional().nullable(),
+  message: z.string().max(1000).optional().nullable(),
+  participation_type: z.string().max(100).optional().nullable(),
+})
+
 export async function PATCH(request: NextRequest) {
   const auth = await requireAdmin()
   if (auth instanceof NextResponse) return auth
@@ -87,6 +99,60 @@ export async function PATCH(request: NextRequest) {
   return ApiSuccess.ok({ id, status }, '상태가 업데이트되었습니다.').toNextResponse()
 }
 
+export async function PUT(request: NextRequest) {
+  const auth = await requireAdmin()
+  if (auth instanceof NextResponse) return auth
+  const { db } = auth
+
+  const body = await request.json().catch(() => ({}))
+  const parsed = FieldUpdateSchema.safeParse(body)
+  if (!parsed.success) {
+    return ApiError.badRequest('입력 값을 확인해주세요.').toNextResponse()
+  }
+
+  const { id, ...fields } = parsed.data
+  const updateData = {
+    applicant_name: fields.applicant_name.trim(),
+    contact_email: fields.contact_email.trim().toLowerCase(),
+    contact_phone: fields.contact_phone?.trim() || null,
+    performance_info: fields.performance_info?.trim() || null,
+    items_to_sell: fields.items_to_sell.trim(),
+    links: fields.links?.trim() || null,
+    message: fields.message?.trim() || null,
+    participation_type: fields.participation_type?.trim() || null,
+    updated_at: new Date().toISOString(),
+  }
+
+  const { error } = await db.from('event_applications').update(updateData).eq('id', id)
+
+  if (error) {
+    console.error('[admin/event-applications] field update error:', error)
+    return ApiError.internalServerError('수정에 실패했습니다.').toNextResponse()
+  }
+
+  return ApiSuccess.ok({ id }, '신청 정보가 수정되었습니다.').toNextResponse()
+}
+
+export async function DELETE(request: NextRequest) {
+  const auth = await requireAdmin()
+  if (auth instanceof NextResponse) return auth
+  const { db } = auth
+
+  const id = new URL(request.url).searchParams.get('id')
+  if (!id || !/^[0-9a-f-]{36}$/.test(id)) {
+    return ApiError.badRequest('유효한 id 파라미터가 필요합니다.').toNextResponse()
+  }
+
+  const { error } = await db.from('event_applications').delete().eq('id', id)
+
+  if (error) {
+    console.error('[admin/event-applications] delete error:', error)
+    return ApiError.internalServerError('삭제에 실패했습니다.').toNextResponse()
+  }
+
+  return ApiSuccess.ok({ id }, '신청이 삭제되었습니다.').toNextResponse()
+}
+
 export async function POST() {
-  return ApiError.methodNotAllowed('GET 또는 PATCH 요청만 허용됩니다.').toNextResponse()
+  return ApiError.methodNotAllowed('GET, PATCH, PUT, DELETE 요청만 허용됩니다.').toNextResponse()
 }
