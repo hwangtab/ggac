@@ -222,6 +222,44 @@ export default function EventApplicationForm({ eventSlug }: Props) {
         {errors.items_to_sell && <p className="text-sm text-red-600">{errors.items_to_sell}</p>}
       </div>
 
+      {/* 상품 사진 */}
+      <div className="space-y-2">
+        <p className="text-sm font-medium text-gray-700">{t('photoLabel')}</p>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            disabled={photoUploading}
+            onClick={() => fileInputRef.current?.click()}
+            className="px-4 py-2 text-sm border border-gray-300 rounded-lg bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {photoUploading ? t('photoUploading') : t('photoButton')}
+          </button>
+          {photoUrl && (
+            <button
+              type="button"
+              onClick={() => setPhotoUrl('')}
+              className="text-sm text-red-600 hover:text-red-700 underline underline-offset-2"
+            >
+              {t('photoRemove')}
+            </button>
+          )}
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleFileChange}
+        />
+        {photoUrl && (
+          <img
+            src={photoUrl}
+            alt="상품 미리보기"
+            className="mt-2 h-40 w-auto rounded-lg object-cover border border-gray-200"
+          />
+        )}
+      </div>
+
       <FormField
         label={t('linksLabel')}
         name="links"
@@ -274,44 +312,6 @@ export default function EventApplicationForm({ eventSlug }: Props) {
           ))}
         </div>
         {errors.participation && <p className="text-sm text-red-600">{errors.participation}</p>}
-      </div>
-
-      {/* 포트폴리오 사진 */}
-      <div className="space-y-2">
-        <p className="text-sm font-medium text-gray-700">{t('photoLabel')}</p>
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            disabled={photoUploading}
-            onClick={() => fileInputRef.current?.click()}
-            className="px-4 py-2 text-sm border border-gray-300 rounded-lg bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {photoUploading ? t('photoUploading') : t('photoButton')}
-          </button>
-          {photoUrl && (
-            <button
-              type="button"
-              onClick={() => setPhotoUrl('')}
-              className="text-sm text-red-600 hover:text-red-700 underline underline-offset-2"
-            >
-              {t('photoRemove')}
-            </button>
-          )}
-        </div>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={handleFileChange}
-        />
-        {photoUrl && (
-          <img
-            src={photoUrl}
-            alt="포트폴리오 미리보기"
-            className="mt-2 h-40 w-auto rounded-lg object-cover border border-gray-200"
-          />
-        )}
       </div>
 
       {/* 개인정보 수집·이용 고지 및 동의 */}

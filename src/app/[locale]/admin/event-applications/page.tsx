@@ -409,7 +409,7 @@ export default function EventApplicationsPage() {
                         {app.photo_url && (
                           <div className="md:col-span-2">
                             <dt className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                              포트폴리오 사진
+                              상품 사진
                             </dt>
                             <dd className="mt-1">
                               <a href={app.photo_url} target="_blank" rel="noopener noreferrer">
