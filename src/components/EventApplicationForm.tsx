@@ -42,7 +42,7 @@ export default function EventApplicationForm({ eventSlug }: Props) {
   const [photoUploading, setPhotoUploading] = useState(false)
   const [privacyConsent, setPrivacyConsent] = useState(false)
   const [errors, setErrors] = useState<
-    Partial<Record<keyof FormState | 'privacy' | 'participation', string>>
+    Partial<Record<keyof FormState | 'privacy' | 'participation' | 'photo', string>>
   >({})
   const [loading, setLoading] = useState(false)
   const [submitted, setSubmitted] = useState(false)
@@ -74,6 +74,9 @@ export default function EventApplicationForm({ eventSlug }: Props) {
       }
       const json = await res.json()
       setPhotoUrl(json.data?.url ?? '')
+      if (json.data?.url && errors.photo) {
+        setErrors(prev => ({ ...prev, photo: undefined }))
+      }
     } catch {
       toast.error(t('photoError'))
     } finally {
@@ -86,12 +89,16 @@ export default function EventApplicationForm({ eventSlug }: Props) {
     const newErrors: typeof errors = {}
 
     if (!form.applicant_name.trim()) newErrors.applicant_name = t('errorRequired')
-    if (!form.contact_email.trim()) {
-      newErrors.contact_email = t('errorRequired')
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contact_email.trim())) {
+    if (
+      form.contact_email.trim() &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contact_email.trim())
+    ) {
       newErrors.contact_email = t('errorEmailInvalid')
     }
+    if (!form.contact_phone.trim()) newErrors.contact_phone = t('errorRequired')
+    if (!form.performance_info.trim()) newErrors.performance_info = t('errorRequired')
     if (!form.items_to_sell.trim()) newErrors.items_to_sell = t('errorRequired')
+    if (!photoUrl) newErrors.photo = t('errorRequired')
     if (participation.length === 0) newErrors.participation = t('errorParticipation')
     if (!privacyConsent) newErrors.privacy = t('errorPrivacy')
 
@@ -111,14 +118,14 @@ export default function EventApplicationForm({ eventSlug }: Props) {
         body: JSON.stringify({
           event_slug: eventSlug,
           applicant_name: form.applicant_name.trim(),
-          contact_email: form.contact_email.trim(),
-          contact_phone: form.contact_phone.trim() || undefined,
-          performance_info: form.performance_info.trim() || undefined,
+          contact_email: form.contact_email.trim() || undefined,
+          contact_phone: form.contact_phone.trim(),
+          performance_info: form.performance_info.trim(),
           items_to_sell: form.items_to_sell.trim(),
           links: form.links.trim() || undefined,
           message: form.message.trim() || undefined,
           participation_type: participation.join(','),
-          photo_url: photoUrl || undefined,
+          photo_url: photoUrl,
           privacy_consent: privacyConsent,
         }),
       })
@@ -175,7 +182,6 @@ export default function EventApplicationForm({ eventSlug }: Props) {
         value={form.contact_email}
         onChange={handleChange}
         placeholder={t('emailPlaceholder')}
-        required
         error={errors.contact_email}
         state={errors.contact_email ? 'error' : 'default'}
       />
@@ -187,12 +193,15 @@ export default function EventApplicationForm({ eventSlug }: Props) {
         value={form.contact_phone}
         onChange={handleChange}
         placeholder={t('phonePlaceholder')}
+        required
+        error={errors.contact_phone}
+        state={errors.contact_phone ? 'error' : 'default'}
       />
 
       {/* 공연 소개 */}
       <div className="space-y-2">
         <label htmlFor="performance_info" className="block text-sm font-medium text-gray-700">
-          {t('performanceLabel')}
+          {t('performanceLabel')} <span className="text-red-500">*</span>
         </label>
         <textarea
           id="performance_info"
@@ -201,8 +210,11 @@ export default function EventApplicationForm({ eventSlug }: Props) {
           onChange={handleChange}
           placeholder={t('performancePlaceholder')}
           rows={3}
-          className={textareaClass}
+          className={`${textareaClass} ${errors.performance_info ? 'border-red-500 bg-red-50 focus:ring-red-500' : ''}`}
         />
+        {errors.performance_info && (
+          <p className="text-sm text-red-600">{errors.performance_info}</p>
+        )}
       </div>
 
       {/* 판매 물건 */}
@@ -224,7 +236,9 @@ export default function EventApplicationForm({ eventSlug }: Props) {
 
       {/* 상품 사진 */}
       <div className="space-y-2">
-        <p className="text-sm font-medium text-gray-700">{t('photoLabel')}</p>
+        <p className="text-sm font-medium text-gray-700">
+          {t('photoLabel')} <span className="text-red-500">*</span>
+        </p>
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -258,6 +272,7 @@ export default function EventApplicationForm({ eventSlug }: Props) {
             className="mt-2 h-40 w-auto rounded-lg object-cover border border-gray-200"
           />
         )}
+        {errors.photo && <p className="text-sm text-red-600">{errors.photo}</p>}
       </div>
 
       <FormField

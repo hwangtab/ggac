@@ -18,9 +18,14 @@ const ApplicationSchema = z.object({
     .string()
     .min(1, '신청자/팀명은 필수입니다.')
     .max(100, '100자 이내로 입력해주세요.'),
-  contact_email: z.string().email('올바른 이메일 형식을 입력해주세요.'),
-  contact_phone: z.string().max(20).optional(),
-  performance_info: z.string().max(1000).optional(),
+  contact_email: z
+    .string()
+    .refine(v => !v.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim()), {
+      message: '올바른 이메일 형식을 입력해주세요.',
+    })
+    .optional(),
+  contact_phone: z.string().min(1, '연락처는 필수입니다.').max(20),
+  performance_info: z.string().min(1, '공연 소개는 필수입니다.').max(1000),
   items_to_sell: z
     .string()
     .min(1, '판매할 물건은 필수입니다.')
@@ -28,7 +33,7 @@ const ApplicationSchema = z.object({
   links: z.string().max(500).optional(),
   message: z.string().max(1000).optional(),
   participation_type: z.string().min(1, '참여 분야를 선택해주세요.').max(100).optional(),
-  photo_url: z.string().url().max(500).optional(),
+  photo_url: z.string().url('상품 사진을 업로드해주세요.').max(500),
   privacy_consent: z.literal(true, {
     errorMap: () => ({ message: '개인정보 수집·이용 동의가 필요합니다.' }),
   }),
@@ -62,14 +67,14 @@ export async function POST(request: NextRequest) {
     const cleanedData = {
       event_slug: d.event_slug.trim(),
       applicant_name: d.applicant_name.trim(),
-      contact_email: d.contact_email.trim().toLowerCase(),
-      contact_phone: d.contact_phone?.trim() || null,
-      performance_info: d.performance_info?.trim() || null,
+      contact_email: d.contact_email?.trim().toLowerCase() || null,
+      contact_phone: d.contact_phone.trim(),
+      performance_info: d.performance_info.trim(),
       items_to_sell: d.items_to_sell.trim(),
       links: d.links?.trim() || null,
       message: d.message?.trim() || null,
       participation_type: d.participation_type?.trim() || null,
-      photo_url: d.photo_url?.trim() || null,
+      photo_url: d.photo_url.trim(),
       privacy_consent: true,
       privacy_consent_at: new Date().toISOString(),
     }
