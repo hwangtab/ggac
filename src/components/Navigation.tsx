@@ -372,11 +372,13 @@ const Navigation = () => {
             role="menu"
             aria-labelledby="mobile-menu-button"
           >
-            <div className={`rounded-lg shadow-lg p-2 border ${
-              isHomePage && isAtTop
-                ? 'bg-gray-900/95 backdrop-blur-md text-white'
-                : 'bg-white/95 backdrop-blur-md border-gray-200/20'
-            }`}>
+            <div
+              className={`rounded-lg shadow-lg p-2 border ${
+                isHomePage && isAtTop
+                  ? 'bg-gray-900/95 backdrop-blur-md text-white'
+                  : 'bg-white/95 backdrop-blur-md border-gray-200/20'
+              }`}
+            >
               {/* Main Menu Items */}
               {menuItems.map(item => (
                 <Link
@@ -397,7 +399,9 @@ const Navigation = () => {
               ))}
 
               {/* Mobile Auth Section */}
-              <div className={`border-t mt-2 pt-2 ${isHomePage && isAtTop ? 'border-white/20' : 'border-gray-200/50'}`}>
+              <div
+                className={`border-t mt-2 pt-2 ${isHomePage && isAtTop ? 'border-white/20' : 'border-gray-200/50'}`}
+              >
                 {loading ? null : user ? (
                   <>
                     <Link
@@ -448,9 +452,17 @@ const Navigation = () => {
                 <div className="flex items-center justify-center mt-3 pb-1">
                   <LocaleSwitcher
                     className={isHomePage && isAtTop ? 'text-gray-300' : 'text-gray-600'}
-                    activeClassName={isHomePage && isAtTop ? 'font-semibold text-accent-300' : 'font-semibold text-primary-600'}
+                    activeClassName={
+                      isHomePage && isAtTop
+                        ? 'font-semibold text-accent-300'
+                        : 'font-semibold text-primary-600'
+                    }
                     inactiveClassName={`${isHomePage && isAtTop ? 'text-gray-300' : 'text-gray-600'} hover:opacity-100`}
-                    separatorClassName={isHomePage && isAtTop ? 'opacity-30 text-gray-300' : 'opacity-30 text-gray-600'}
+                    separatorClassName={
+                      isHomePage && isAtTop
+                        ? 'opacity-30 text-gray-300'
+                        : 'opacity-30 text-gray-600'
+                    }
                   />
                 </div>
               </div>

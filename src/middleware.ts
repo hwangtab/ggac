@@ -44,7 +44,12 @@ export async function middleware(request: NextRequest) {
   const intlRes = intlMiddleware(request)
 
   // intl이 redirect를 발생시킨 경우(예: /en 경로 정규화) 그대로 반환
-  if (intlRes.status === 301 || intlRes.status === 302 || intlRes.status === 307 || intlRes.status === 308) {
+  if (
+    intlRes.status === 301 ||
+    intlRes.status === 302 ||
+    intlRes.status === 307 ||
+    intlRes.status === 308
+  ) {
     return intlRes
   }
 

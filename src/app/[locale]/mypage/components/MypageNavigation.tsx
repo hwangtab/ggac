@@ -142,7 +142,9 @@ const MypageNavigation: React.FC<MypageNavigationProps> = ({ currentPath }) => {
                       <div className="flex items-center px-3 py-2 text-sm text-gray-400 cursor-not-allowed">
                         {IconComponent && <IconComponent className="w-4 h-4 mr-3" />}
                         <span className="flex-1">{item.label}</span>
-                        <span className="text-xs bg-gray-100 px-2 py-1 rounded">{t('nav.noPermission')}</span>
+                        <span className="text-xs bg-gray-100 px-2 py-1 rounded">
+                          {t('nav.noPermission')}
+                        </span>
                       </div>
                     }
                   >

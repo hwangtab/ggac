@@ -1,7 +1,16 @@
 'use client'
 
 import { ReactNode } from 'react'
-import { FiHome, FiUsers, FiMusic, FiEdit3, FiSettings, FiBarChart, FiLogOut, FiClipboard } from 'react-icons/fi'
+import {
+  FiHome,
+  FiUsers,
+  FiMusic,
+  FiEdit3,
+  FiSettings,
+  FiBarChart,
+  FiLogOut,
+  FiClipboard,
+} from 'react-icons/fi'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 

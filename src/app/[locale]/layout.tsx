@@ -47,7 +47,16 @@ export async function generateMetadata({
     description,
     keywords: isEn
       ? ['Gyeonggi Art Collective', 'cooperative', 'arts', 'Gyeonggi', 'artists', 'collaboration']
-      : ['경기아트콜렉티브', '협동조합', '예술', '창작', '경기도', '아티스트', '예술가', '콜라보레이션'],
+      : [
+          '경기아트콜렉티브',
+          '협동조합',
+          '예술',
+          '창작',
+          '경기도',
+          '아티스트',
+          '예술가',
+          '콜라보레이션',
+        ],
     authors: [{ name: isEn ? 'Gyeonggi Art Collective' : '경기아트콜렉티브' }],
     creator: isEn ? 'Gyeonggi Art Collective' : '경기아트콜렉티브',
     publisher: isEn ? 'Gyeonggi Art Collective' : '경기아트콜렉티브',
@@ -74,7 +83,9 @@ export async function generateMetadata({
     twitter: {
       card: 'summary_large_image',
       title,
-      description: isEn ? 'Sounds that break the mold, resonance we build together.' : '경계 없는 상상, 함께 만드는 울림',
+      description: isEn
+        ? 'Sounds that break the mold, resonance we build together.'
+        : '경계 없는 상상, 함께 만드는 울림',
       images: ['/images/logo/gac_og.webp'],
     },
     icons: {
@@ -113,7 +124,12 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
     <html lang={locale}>
       <body suppressHydrationWarning>
         {/* CSS-script guard: /public/css-guard.js 외부 파일로 분리 (nonce는 self origin 허용) */}
-        <Script id="css-script-guard" strategy="beforeInteractive" src="/css-guard.js" nonce={cspNonce} />
+        <Script
+          id="css-script-guard"
+          strategy="beforeInteractive"
+          src="/css-guard.js"
+          nonce={cspNonce}
+        />
         <NextIntlClientProvider messages={messages} locale={locale}>
           <ErrorBoundary>
             <div className="skip-links">

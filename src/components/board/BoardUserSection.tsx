@@ -83,9 +83,7 @@ const BoardUserSection = () => {
     <div className="space-y-4 mb-6 relative z-10 pointer-events-auto">
       {!user && (
         <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <p className="text-blue-800 mb-2">
-            {t('userSection.guestInfo')}
-          </p>
+          <p className="text-blue-800 mb-2">{t('userSection.guestInfo')}</p>
           <div className="flex gap-2">
             <button
               onClick={() => router.push('/login')}
@@ -105,9 +103,7 @@ const BoardUserSection = () => {
 
       {!isMember && user && (
         <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <p className="text-yellow-800">
-            {t('userSection.pendingInfo')}
-          </p>
+          <p className="text-yellow-800">{t('userSection.pendingInfo')}</p>
         </div>
       )}
 

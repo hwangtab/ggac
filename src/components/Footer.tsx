@@ -195,10 +195,14 @@ const Footer = ({ globalData }: FooterProps) => {
         <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="text-gray-400 text-sm mb-4 md:mb-0">
             <p>
-              {t('established')}: {new Date(data.businessInfo.establishedDate).toLocaleDateString(dateLocale)} |
-              {t('incorporated')}: {new Date(data.businessInfo.registrationDate).toLocaleDateString(dateLocale)}
+              {t('established')}:{' '}
+              {new Date(data.businessInfo.establishedDate).toLocaleDateString(dateLocale)} |
+              {t('incorporated')}:{' '}
+              {new Date(data.businessInfo.registrationDate).toLocaleDateString(dateLocale)}
             </p>
-            <p>{t('businessNumber')}: {data.businessInfo.registrationNumber}</p>
+            <p>
+              {t('businessNumber')}: {data.businessInfo.registrationNumber}
+            </p>
           </div>
           <div className="flex flex-col items-center md:items-end gap-2">
             <div className="flex space-x-4 text-gray-500 text-xs">
@@ -209,7 +213,9 @@ const Footer = ({ globalData }: FooterProps) => {
                 {t('terms')}
               </Link>
             </div>
-            <p className="text-gray-400 text-sm">© 2025 {tc('brandShort')}. {t('rights')}</p>
+            <p className="text-gray-400 text-sm">
+              © 2025 {tc('brandShort')}. {t('rights')}
+            </p>
           </div>
         </div>
       </div>

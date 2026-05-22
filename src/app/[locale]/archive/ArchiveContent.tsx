@@ -68,9 +68,7 @@ const ArchiveContent = async ({
             <br />
             {t('hero.titleLine2')}
           </h1>
-          <p className="tw-text-body text-gray-600 max-w-3xl mx-auto">
-            {t('hero.subtitle')}
-          </p>
+          <p className="tw-text-body text-gray-600 max-w-3xl mx-auto">{t('hero.subtitle')}</p>
         </div>
       </section>
 
@@ -164,7 +162,12 @@ const ArchiveContent = async ({
               {t('pagination.total', { count: totalCount.toLocaleString() })}
               {hasResults && (
                 <span className="ml-1">
-                  {t('pagination.showing', { start: startItem, end: endItem, current: currentPage, total: totalPages })}
+                  {t('pagination.showing', {
+                    start: startItem,
+                    end: endItem,
+                    current: currentPage,
+                    total: totalPages,
+                  })}
                 </span>
               )}
             </div>

@@ -65,23 +65,23 @@ export const ARCHIVE_CATEGORY_LABELS_EN: Record<string, string> = {
   All: 'All',
   '음반·음원': 'Music',
   '공연·전시': 'Performance & Exhibition',
-  '예술교육': 'Arts Education',
+  예술교육: 'Arts Education',
   '지원·용역사업': 'Grants & Services',
-  '행사': 'Event',
+  행사: 'Event',
 }
 
 export const ARTIST_CATEGORY_LABELS_EN: Record<string, string> = {
   All: 'All',
-  '기획자': 'Organizer',
+  기획자: 'Organizer',
   '사운드 디자이너': 'Sound Designer',
-  '엔지니어': 'Engineer',
-  '연주자': 'Performer',
-  '작곡가': 'Composer',
-  '작사가': 'Lyricist',
-  '창작자': 'Creator',
-  '편곡가': 'Arranger',
-  '프로듀서': 'Producer',
-  '기타': 'Other',
+  엔지니어: 'Engineer',
+  연주자: 'Performer',
+  작곡가: 'Composer',
+  작사가: 'Lyricist',
+  창작자: 'Creator',
+  편곡가: 'Arranger',
+  프로듀서: 'Producer',
+  기타: 'Other',
 }
 
 export function localizeArchiveCategory(value: string, locale: string): string {

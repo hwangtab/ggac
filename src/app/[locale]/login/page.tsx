@@ -425,7 +425,9 @@ export default function LoginPage() {
                   />
                 </svg>
               </div>
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">{t('login.alreadyLoggedIn')}</h2>
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">
+                {t('login.alreadyLoggedIn')}
+              </h2>
               <p className="text-gray-600 mb-6">
                 {t('login.alreadyLoggedInBody', {
                   name: currentUser?.profile?.display_name || currentUser?.email || '',

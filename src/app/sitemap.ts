@@ -64,14 +64,46 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date()
 
   const staticPages: MetadataRoute.Sitemap = [
-    ...bilingualEntry('/', baseUrl, { lastModified: now, changeFrequency: 'weekly', priority: 1.0 }),
-    ...bilingualEntry('/about', baseUrl, { lastModified: now, changeFrequency: 'monthly', priority: 0.8 }),
-    ...bilingualEntry('/archive', baseUrl, { lastModified: now, changeFrequency: 'weekly', priority: 0.9 }),
-    ...bilingualEntry('/artists', baseUrl, { lastModified: now, changeFrequency: 'weekly', priority: 0.9 }),
-    ...bilingualEntry('/connect', baseUrl, { lastModified: now, changeFrequency: 'monthly', priority: 0.7 }),
-    ...bilingualEntry('/faq', baseUrl, { lastModified: now, changeFrequency: 'monthly', priority: 0.7 }),
-    ...bilingualEntry('/privacy', baseUrl, { lastModified: now, changeFrequency: 'monthly', priority: 0.5 }),
-    ...bilingualEntry('/terms', baseUrl, { lastModified: now, changeFrequency: 'monthly', priority: 0.5 }),
+    ...bilingualEntry('/', baseUrl, {
+      lastModified: now,
+      changeFrequency: 'weekly',
+      priority: 1.0,
+    }),
+    ...bilingualEntry('/about', baseUrl, {
+      lastModified: now,
+      changeFrequency: 'monthly',
+      priority: 0.8,
+    }),
+    ...bilingualEntry('/archive', baseUrl, {
+      lastModified: now,
+      changeFrequency: 'weekly',
+      priority: 0.9,
+    }),
+    ...bilingualEntry('/artists', baseUrl, {
+      lastModified: now,
+      changeFrequency: 'weekly',
+      priority: 0.9,
+    }),
+    ...bilingualEntry('/connect', baseUrl, {
+      lastModified: now,
+      changeFrequency: 'monthly',
+      priority: 0.7,
+    }),
+    ...bilingualEntry('/faq', baseUrl, {
+      lastModified: now,
+      changeFrequency: 'monthly',
+      priority: 0.7,
+    }),
+    ...bilingualEntry('/privacy', baseUrl, {
+      lastModified: now,
+      changeFrequency: 'monthly',
+      priority: 0.5,
+    }),
+    ...bilingualEntry('/terms', baseUrl, {
+      lastModified: now,
+      changeFrequency: 'monthly',
+      priority: 0.5,
+    }),
     // board: 회원 전용 / noindex → ko만, alternates 없음
     { url: `${baseUrl}/board`, lastModified: now, changeFrequency: 'daily', priority: 0.6 },
   ]

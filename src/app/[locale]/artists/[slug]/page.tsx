@@ -338,10 +338,10 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
                         <div className="w-20 h-20 bg-gradient-to-br from-primary-100 to-accent-100 rounded-full flex items-center justify-center mx-auto mb-4">
                           <div className="text-2xl">🎵</div>
                         </div>
-                        <h3 className="tw-heading-tertiary mb-2">{t('detail.creatorInfoHeading')}</h3>
-                        <p className="text-sm text-gray-600">
-                          {t('detail.creatorInfoBody')}
-                        </p>
+                        <h3 className="tw-heading-tertiary mb-2">
+                          {t('detail.creatorInfoHeading')}
+                        </h3>
+                        <p className="text-sm text-gray-600">{t('detail.creatorInfoBody')}</p>
                       </div>
                     </div>
                   </div>
@@ -469,9 +469,7 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
                 {/* 더 많은 영상이 있을 경우의 안내 */}
                 {artist.youtubeVideos.length > 0 && (
                   <div className="text-center mt-12">
-                    <p className="text-gray-500 text-sm mb-4">
-                      {t('detail.moreVideosNote')}
-                    </p>
+                    <p className="text-gray-500 text-sm mb-4">{t('detail.moreVideosNote')}</p>
                     {/* 포트폴리오 링크 중 YouTube가 있다면 버튼 표시 */}
                     {artist.portfolioLinks?.find(
                       link =>
@@ -532,9 +530,7 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
             <div className="text-center px-4">
               <div className="max-w-2xl mx-auto mb-8">
                 <h3 className="tw-heading-tertiary mb-3">{t('detail.navHeading')}</h3>
-                <p className="text-gray-600">
-                  {t('detail.navBody')}
-                </p>
+                <p className="text-gray-600">{t('detail.navBody')}</p>
               </div>
               <Link href="/artists" className="tw-btn-primary">
                 {t('detail.navCta')}

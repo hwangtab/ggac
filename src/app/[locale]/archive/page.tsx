@@ -105,7 +105,11 @@ export async function generateMetadata({
   }
 }
 
-const filterProjectsByCategory = (projects: Project[], category: ArchiveCategory, locale: string) => {
+const filterProjectsByCategory = (
+  projects: Project[],
+  category: ArchiveCategory,
+  locale: string
+) => {
   if (category === 'All') {
     return projects
   }

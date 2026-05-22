@@ -205,9 +205,7 @@ export async function generateMetadata({ params }: ProjectPageProps): Promise<Me
         images: [
           {
             url: ogImageUrl,
-            secureUrl: ogImageUrl.startsWith('https://')
-              ? ogImageUrl
-              : `${base}${ogImageUrl}`,
+            secureUrl: ogImageUrl.startsWith('https://') ? ogImageUrl : `${base}${ogImageUrl}`,
             width: 1200,
             height: 630,
             alt: safeTitle,

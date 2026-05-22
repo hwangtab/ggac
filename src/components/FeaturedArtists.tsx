@@ -11,9 +11,7 @@ const FeaturedArtists = async ({ artists }: FeaturedArtistsProps) => {
       <div className="tw-container-custom">
         <div className="text-center mb-12">
           <h2 className="tw-heading-secondary mb-4">{t('artists.heading')}</h2>
-          <p className="tw-text-body text-gray-600 max-w-2xl mx-auto">
-            {t('artists.description')}
-          </p>
+          <p className="tw-text-body text-gray-600 max-w-2xl mx-auto">{t('artists.description')}</p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">

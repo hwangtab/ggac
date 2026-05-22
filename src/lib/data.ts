@@ -199,7 +199,9 @@ export const getArtistsFromDB = async (locale = 'ko'): Promise<Artist[]> => {
       if (locale === 'en') {
         try {
           const enMap = await buildEnArtistTextMap()
-          result = result.map(a => overlayEnglishArtistText(a, enMap.get(a.slug) ?? enMap.get(a.id)))
+          result = result.map(a =>
+            overlayEnglishArtistText(a, enMap.get(a.slug) ?? enMap.get(a.id))
+          )
         } catch (enError) {
           log.warn('Failed to apply English text overlay:', enError)
         }
@@ -225,9 +227,10 @@ export const getArtistsFromDB = async (locale = 'ko'): Promise<Artist[]> => {
 
 // JSON 파일에서 아티스트 조회 (백업용)
 export const getArtistsFromJSON = async (locale = 'ko'): Promise<Artist[]> => {
-  const filePath = locale === 'en'
-    ? path.join(process.cwd(), 'data/en/artists.json')
-    : path.join(process.cwd(), 'data/artists.json')
+  const filePath =
+    locale === 'en'
+      ? path.join(process.cwd(), 'data/en/artists.json')
+      : path.join(process.cwd(), 'data/artists.json')
   try {
     const fileContents = await fs.promises.readFile(filePath, 'utf8')
     return JSON.parse(fileContents)
@@ -253,9 +256,10 @@ export const getProjects = cache(async (locale = 'ko'): Promise<Project[]> => {
   const cached = projectCache?.get(cacheKey)
   if (cached) return cached
 
-  const filePath = locale === 'en'
-    ? path.join(process.cwd(), 'data/en/projects.json')
-    : path.join(process.cwd(), 'data/projects.json')
+  const filePath =
+    locale === 'en'
+      ? path.join(process.cwd(), 'data/en/projects.json')
+      : path.join(process.cwd(), 'data/projects.json')
   try {
     const fileContents = await fs.promises.readFile(filePath, 'utf8')
     const result = JSON.parse(fileContents)
@@ -278,9 +282,10 @@ export const getProjects = cache(async (locale = 'ko'): Promise<Project[]> => {
 })
 
 export const getGlobalData = cache(async (locale = 'ko'): Promise<GlobalData> => {
-  const filePath = locale === 'en'
-    ? path.join(process.cwd(), 'data/en/global.json')
-    : path.join(process.cwd(), 'data/global.json')
+  const filePath =
+    locale === 'en'
+      ? path.join(process.cwd(), 'data/en/global.json')
+      : path.join(process.cwd(), 'data/global.json')
   try {
     const fileContents = await fs.promises.readFile(filePath, 'utf8')
     return JSON.parse(fileContents)
@@ -299,9 +304,10 @@ export const getGlobalData = cache(async (locale = 'ko'): Promise<GlobalData> =>
 export type FaqItem = { id: string; category: string; question: string; answer: string }
 
 export const getFaqData = cache(async (locale = 'ko'): Promise<FaqItem[]> => {
-  const filePath = locale === 'en'
-    ? path.join(process.cwd(), 'data/en/faq.json')
-    : path.join(process.cwd(), 'data/faq.json')
+  const filePath =
+    locale === 'en'
+      ? path.join(process.cwd(), 'data/en/faq.json')
+      : path.join(process.cwd(), 'data/faq.json')
   try {
     const fileContents = await fs.promises.readFile(filePath, 'utf8')
     return JSON.parse(fileContents)
@@ -334,7 +340,7 @@ function convertDatabaseArtistToArtist(dbArtist: DatabaseArtist, locale = 'ko'):
   return {
     id: dbArtist.legacy_id,
     slug: dbArtist.slug,
-    name: (useEn && dbArtist.name_en) ? dbArtist.name_en : dbArtist.name,
+    name: useEn && dbArtist.name_en ? dbArtist.name_en : dbArtist.name,
     category: dbArtist.category || [],
     profileImage:
       dbArtist.profile_photo_url ||
@@ -342,9 +348,11 @@ function convertDatabaseArtistToArtist(dbArtist: DatabaseArtist, locale = 'ko'):
       dbArtist.profile_photo_metadata?.variant_urls?.fallback ||
       dbArtist.profile_photo_metadata?.variant_urls?.original ||
       '/images/default-avatar.webp',
-    oneLiner: (useEn && dbArtist.one_liner_en) ? dbArtist.one_liner_en : (dbArtist.one_liner || ''),
-    bio: (useEn && dbArtist.bio_en) ? dbArtist.bio_en : (dbArtist.bio || ''),
-    templateType: ((useEn && dbArtist.template_type_en) ? dbArtist.template_type_en : (dbArtist.template_type || '콜라주형')) as Artist['templateType'],
+    oneLiner: useEn && dbArtist.one_liner_en ? dbArtist.one_liner_en : dbArtist.one_liner || '',
+    bio: useEn && dbArtist.bio_en ? dbArtist.bio_en : dbArtist.bio || '',
+    templateType: (useEn && dbArtist.template_type_en
+      ? dbArtist.template_type_en
+      : dbArtist.template_type || '콜라주형') as Artist['templateType'],
     portfolioLinks: dbArtist.portfolio_links || [],
     youtubeVideos: dbArtist.youtube_videos || [],
     contact: dbArtist.contact || '',
@@ -420,7 +428,10 @@ function applyProfileImageFallback(artist: Artist, fallback?: Artist): Artist {
 }
 
 // Supabase에서 아티스트 조회 (데이터베이스 우선, JSON 파일 백업)
-export const getArtistBySlugFromDB = async (slug: string, locale = 'ko'): Promise<Artist | null> => {
+export const getArtistBySlugFromDB = async (
+  slug: string,
+  locale = 'ko'
+): Promise<Artist | null> => {
   try {
     // 환경 변수 체크 추가
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
@@ -495,10 +506,12 @@ export const getArtistBySlugFromDB = async (slug: string, locale = 'ko'): Promis
 // 기존 함수를 새로운 DB 조회 함수로 교체
 export const getArtistBySlug = getArtistBySlugFromDB
 
-export const getProjectBySlug = cache(async (slug: string, locale = 'ko'): Promise<Project | null> => {
-  const projects = await getProjects(locale)
-  return projects.find(project => project.slug === slug) || null
-})
+export const getProjectBySlug = cache(
+  async (slug: string, locale = 'ko'): Promise<Project | null> => {
+    const projects = await getProjects(locale)
+    return projects.find(project => project.slug === slug) || null
+  }
+)
 
 // 정렬된 프로젝트 가져오기 (최신순)
 export const getProjectsSorted = cache(async (locale = 'ko'): Promise<Project[]> => {
@@ -509,10 +522,12 @@ export const getProjectsSorted = cache(async (locale = 'ko'): Promise<Project[]>
 })
 
 // 특정 프로젝트들 가져오기 (홈페이지용)
-export const getFeaturedProjects = cache(async (limit: number = 3, locale = 'ko'): Promise<Project[]> => {
-  const sortedProjects = await getProjectsSorted(locale)
-  return sortedProjects.slice(0, limit)
-})
+export const getFeaturedProjects = cache(
+  async (limit: number = 3, locale = 'ko'): Promise<Project[]> => {
+    const sortedProjects = await getProjectsSorted(locale)
+    return sortedProjects.slice(0, limit)
+  }
+)
 
 // generateStaticParams를 위한 slug 배열 생성 함수들
 export const getArtistSlugs = cache(async (): Promise<string[]> => {
@@ -543,15 +558,19 @@ export const getArtistNamesById = cache(
 )
 
 // 프로젝트에 참여한 아티스트들 정보 가져오기
-export const getProjectArtists = cache(async (artistIds: string[], locale = 'ko'): Promise<Artist[]> => {
-  const artists = await getArtistsFromDB(locale)
-  return artists.filter(artist => artistIds.includes(artist.id))
-})
+export const getProjectArtists = cache(
+  async (artistIds: string[], locale = 'ko'): Promise<Artist[]> => {
+    const artists = await getArtistsFromDB(locale)
+    return artists.filter(artist => artistIds.includes(artist.id))
+  }
+)
 
 // 특정 아티스트가 참여한 프로젝트들 조회 (최신순 정렬)
-export const getArtistProjects = cache(async (artistId: string, locale = 'ko'): Promise<Project[]> => {
-  const projects = await getProjects(locale)
-  return projects
-    .filter(project => project.artistIds.includes(artistId))
-    .sort((a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime())
-})
+export const getArtistProjects = cache(
+  async (artistId: string, locale = 'ko'): Promise<Project[]> => {
+    const projects = await getProjects(locale)
+    return projects
+      .filter(project => project.artistIds.includes(artistId))
+      .sort((a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime())
+  }
+)

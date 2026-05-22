@@ -73,10 +73,16 @@ const ServerBoardView = async ({
               </Link>
               <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100 text-sm text-gray-500">
                 <div className="flex items-center gap-4">
-                  <span>{t('commentsLabel')} {post.comment_count}</span>
-                  <span>{t('likesLabel')} {post.like_count}</span>
+                  <span>
+                    {t('commentsLabel')} {post.comment_count}
+                  </span>
+                  <span>
+                    {t('likesLabel')} {post.like_count}
+                  </span>
                   {post.attachments_stats.total_attachments > 0 && (
-                    <span>{t('attachmentsLabel')} {post.attachments_stats.total_attachments}</span>
+                    <span>
+                      {t('attachmentsLabel')} {post.attachments_stats.total_attachments}
+                    </span>
                   )}
                 </div>
                 <Link

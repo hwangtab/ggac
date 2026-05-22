@@ -179,7 +179,9 @@ export default function PendingPage() {
                 <div className="ml-3 text-red-700">
                   <h3 className="text-sm font-medium">{t('pending.emailRequiredHeading')}</h3>
                   <div className="mt-2 text-sm space-y-1">
-                    <p><strong>• {t('pending.emailRequired1')}</strong></p>
+                    <p>
+                      <strong>• {t('pending.emailRequired1')}</strong>
+                    </p>
                     <p>
                       • {t('pending.emailRequired2')}{' '}
                       <span className="font-mono text-xs bg-red-100 px-1 rounded">{userEmail}</span>
@@ -209,7 +211,9 @@ export default function PendingPage() {
                 <div className="ml-3 text-green-700">
                   <h3 className="text-sm font-medium">{t('pending.emailVerifiedHeading')}</h3>
                   <div className="mt-2 text-sm space-y-1">
-                    <p><strong>• {t('pending.emailVerified1')}</strong></p>
+                    <p>
+                      <strong>• {t('pending.emailVerified1')}</strong>
+                    </p>
                     <p>• {t('pending.emailVerified2')}</p>
                     <p>• {t('pending.emailVerified3')}</p>
                     <p>• {t('pending.emailVerified4')}</p>

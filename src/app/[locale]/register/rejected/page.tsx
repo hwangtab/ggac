@@ -44,7 +44,9 @@ export default function RejectedPage() {
                 </svg>
               </div>
               <div className="ml-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-3">{t('rejected.reasonHeading')}</h3>
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                  {t('rejected.reasonHeading')}
+                </h3>
                 <div className="text-gray-700 space-y-2">
                   <p>{t('rejected.reasonBody')}</p>
                   <p className="text-sm text-gray-600">{t('rejected.possibleReasons')}</p>
@@ -73,7 +75,9 @@ export default function RejectedPage() {
               </svg>
             </div>
             <div className="ml-3">
-              <h4 className="text-sm font-semibold text-blue-800 mb-2">{t('rejected.nextStepsHeading')}</h4>
+              <h4 className="text-sm font-semibold text-blue-800 mb-2">
+                {t('rejected.nextStepsHeading')}
+              </h4>
               <div className="text-sm text-blue-700 space-y-1">
                 <p>• {t('rejected.nextStep1')}</p>
                 <p>• {t('rejected.nextStep2')}</p>

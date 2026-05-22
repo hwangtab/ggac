@@ -39,9 +39,7 @@ export async function generateMetadata({
     publisher: '경기아트콜렉티브 협동조합',
     alternates: getLocaleAlternates('/connect', locale),
     openGraph: {
-      title: isEn
-        ? 'Connect | Gyeonggi Art Collective'
-        : '소통과 참여 | 경기아트콜렉티브 협동조합',
+      title: isEn ? 'Connect | Gyeonggi Art Collective' : '소통과 참여 | 경기아트콜렉티브 협동조합',
       description: isEn
         ? 'Get in touch with Gyeonggi Art Collective. Join as a member, explore partnership opportunities, or simply say hello.'
         : '경기도 예술가들과 함께하세요. 조합원 가입, 후원, 협업 문의 등 다양한 방법으로 예술 생태계 발전에 참여할 수 있습니다.',
@@ -60,9 +58,7 @@ export async function generateMetadata({
     },
     twitter: {
       card: 'summary_large_image',
-      title: isEn
-        ? 'Connect | Gyeonggi Art Collective'
-        : '소통과 참여 | 경기아트콜렉티브 협동조합',
+      title: isEn ? 'Connect | Gyeonggi Art Collective' : '소통과 참여 | 경기아트콜렉티브 협동조합',
       description: isEn
         ? 'Get in touch with Gyeonggi Art Collective. Join as a member, explore partnership opportunities, or simply say hello.'
         : '당신의 참여로 새로운 물결이 시작됩니다. 경기도 예술가들과 함께하세요.',
@@ -169,9 +165,7 @@ const ConnectPage = async ({ params }: ConnectPageProps) => {
               <br />
               {t('heroTitleLine2')}
             </h1>
-            <p className="tw-text-body text-gray-600 max-w-3xl mx-auto">
-              {t('heroSubtitle')}
-            </p>
+            <p className="tw-text-body text-gray-600 max-w-3xl mx-auto">{t('heroSubtitle')}</p>
           </div>
         </section>
 
@@ -181,9 +175,7 @@ const ConnectPage = async ({ params }: ConnectPageProps) => {
             <div className="max-w-4xl mx-auto">
               <div className="text-center mb-12">
                 <h2 className="tw-heading-secondary mb-4">{t('joinHeading')}</h2>
-                <p className="tw-text-body text-gray-600">
-                  {t('joinSubtitle')}
-                </p>
+                <p className="tw-text-body text-gray-600">{t('joinSubtitle')}</p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
@@ -306,9 +298,7 @@ const ConnectPage = async ({ params }: ConnectPageProps) => {
             <div className="max-w-4xl mx-auto">
               <div className="text-center mb-12">
                 <h2 className="tw-heading-secondary mb-4">{tf('contact')}</h2>
-                <p className="tw-text-body text-gray-600">
-                  {t('contactBody')}
-                </p>
+                <p className="tw-text-body text-gray-600">{t('contactBody')}</p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">

@@ -19,9 +19,7 @@ export default function ArtistsError({
   return (
     <div className="min-h-screen pt-24 md:pt-28 flex items-center justify-center">
       <div className="text-center px-4">
-        <h2 className="text-2xl font-bold text-gray-800 mb-4">
-          {t('error.heading')}
-        </h2>
+        <h2 className="text-2xl font-bold text-gray-800 mb-4">{t('error.heading')}</h2>
         <p className="text-gray-600 mb-6">{t('error.body')}</p>
         <button
           onClick={reset}

@@ -30,9 +30,7 @@ const ArtistsContent = async ({ artists, categories, selectedCategory }: Artists
       <section className="py-16 md:py-24 bg-gradient-to-br from-primary-50 to-accent-50">
         <div className="tw-container-custom text-center">
           <h1 className="tw-heading-primary mb-6">{t('hero.heading')}</h1>
-          <p className="tw-text-body text-gray-600 max-w-3xl mx-auto">
-            {t('hero.subtitle')}
-          </p>
+          <p className="tw-text-body text-gray-600 max-w-3xl mx-auto">{t('hero.subtitle')}</p>
         </div>
       </section>
 
@@ -94,11 +92,17 @@ const ArtistsContent = async ({ artists, categories, selectedCategory }: Artists
                             {artist.category.length > 3 && (
                               <span
                                 className="inline-block px-3 py-1 bg-gray-200 text-gray-600 text-sm font-medium rounded-full cursor-help relative group/tooltip"
-                                title={artist.category.slice(3).map(c => localizeArtistCategory(c, locale)).join(', ')}
+                                title={artist.category
+                                  .slice(3)
+                                  .map(c => localizeArtistCategory(c, locale))
+                                  .join(', ')}
                               >
                                 {t('moreCount', { count: artist.category.length - 3 })}
                                 <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-3 px-3 py-1.5 bg-gray-800 text-white text-sm rounded-lg opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-normal max-w-sm leading-relaxed text-center z-50">
-                                  {artist.category.slice(3).map(c => localizeArtistCategory(c, locale)).join(', ')}
+                                  {artist.category
+                                    .slice(3)
+                                    .map(c => localizeArtistCategory(c, locale))
+                                    .join(', ')}
                                 </div>
                               </span>
                             )}

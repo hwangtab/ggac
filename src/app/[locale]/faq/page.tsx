@@ -35,9 +35,7 @@ export async function generateMetadata({
     ],
     alternates: getLocaleAlternates('/faq', locale),
     openGraph: {
-      title: isEn
-        ? 'FAQ | Gyeonggi Art Collective'
-        : '자주 묻는 질문 | 경기아트콜렉티브 협동조합',
+      title: isEn ? 'FAQ | Gyeonggi Art Collective' : '자주 묻는 질문 | 경기아트콜렉티브 협동조합',
       description: isEn
         ? 'Frequently asked questions about Gyeonggi Art Collective — membership, activities, collaboration, and more.'
         : '경기아트콜렉티브 협동조합에 대해 자주 묻는 질문과 답변',
@@ -56,9 +54,7 @@ export async function generateMetadata({
     },
     twitter: {
       card: 'summary_large_image',
-      title: isEn
-        ? 'FAQ | Gyeonggi Art Collective'
-        : '자주 묻는 질문 | 경기아트콜렉티브 협동조합',
+      title: isEn ? 'FAQ | Gyeonggi Art Collective' : '자주 묻는 질문 | 경기아트콜렉티브 협동조합',
       description: isEn
         ? 'Frequently asked questions about Gyeonggi Art Collective — membership, activities, collaboration, and more.'
         : '경기아트콜렉티브 협동조합에 대해 자주 묻는 질문과 답변',
@@ -116,9 +112,7 @@ export default async function FAQPage({ params }: FAQPageProps) {
               {/* 헤더 */}
               <div className="text-center mb-12">
                 <h1 className="tw-heading-primary mb-4">{t('heading')}</h1>
-                <p className="tw-text-body text-gray-600">
-                  {t('subheading')}
-                </p>
+                <p className="tw-text-body text-gray-600">{t('subheading')}</p>
               </div>
 
               {/* FAQ 섹션별 표시 */}
