@@ -391,7 +391,7 @@ export default function EventApplicationsPage() {
                               참여 분야
                             </dt>
                             <dd className="mt-1 flex flex-wrap gap-1">
-                              {app.participation_type.split(',').map(type => (
+                              {['booth', 'performance'].filter(t => app.participation_type!.split(',').includes(t)).map(type => (
                                 <span
                                   key={type}
                                   className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700"

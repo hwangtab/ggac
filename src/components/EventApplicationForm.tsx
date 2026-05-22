@@ -124,7 +124,7 @@ export default function EventApplicationForm({ eventSlug }: Props) {
           items_to_sell: form.items_to_sell.trim(),
           links: form.links.trim() || undefined,
           message: form.message.trim() || undefined,
-          participation_type: participation.join(','),
+          participation_type: PARTICIPATION_OPTIONS.filter(o => participation.includes(o)).join(','),
           photo_url: photoUrl || undefined,
           privacy_consent: privacyConsent,
         }),
