@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useTranslations } from 'next-intl'
 import toast from 'react-hot-toast'
 import FormField from '@/components/FormField'
@@ -30,20 +30,55 @@ const initialForm: FormState = {
   message: '',
 }
 
+const PARTICIPATION_OPTIONS = ['booth', 'performance'] as const
+type ParticipationOption = (typeof PARTICIPATION_OPTIONS)[number]
+
 export default function EventApplicationForm({ eventSlug }: Props) {
   const t = useTranslations('application')
 
   const [form, setForm] = useState<FormState>(initialForm)
+  const [participation, setParticipation] = useState<ParticipationOption[]>([])
+  const [photoUrl, setPhotoUrl] = useState<string>('')
+  const [photoUploading, setPhotoUploading] = useState(false)
   const [privacyConsent, setPrivacyConsent] = useState(false)
-  const [errors, setErrors] = useState<Partial<Record<keyof FormState | 'privacy', string>>>({})
+  const [errors, setErrors] = useState<
+    Partial<Record<keyof FormState | 'privacy' | 'participation', string>>
+  >({})
   const [loading, setLoading] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
     setForm(prev => ({ ...prev, [name]: value }))
     if (errors[name as keyof FormState]) {
       setErrors(prev => ({ ...prev, [name]: undefined }))
+    }
+  }
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setPhotoUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch(
+        `/api/event-applications/photo?event_slug=${encodeURIComponent(eventSlug)}`,
+        { method: 'POST', body: fd }
+      )
+      if (!res.ok) {
+        toast.error(t('photoError'))
+        return
+      }
+      const json = await res.json()
+      setPhotoUrl(json.data?.url ?? '')
+    } catch {
+      toast.error(t('photoError'))
+    } finally {
+      setPhotoUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
 
@@ -57,6 +92,7 @@ export default function EventApplicationForm({ eventSlug }: Props) {
       newErrors.contact_email = t('errorEmailInvalid')
     }
     if (!form.items_to_sell.trim()) newErrors.items_to_sell = t('errorRequired')
+    if (participation.length === 0) newErrors.participation = t('errorParticipation')
     if (!privacyConsent) newErrors.privacy = t('errorPrivacy')
 
     setErrors(newErrors)
@@ -81,6 +117,8 @@ export default function EventApplicationForm({ eventSlug }: Props) {
           items_to_sell: form.items_to_sell.trim(),
           links: form.links.trim() || undefined,
           message: form.message.trim() || undefined,
+          participation_type: participation.join(','),
+          photo_url: photoUrl || undefined,
           privacy_consent: privacyConsent,
         }),
       })
@@ -206,6 +244,74 @@ export default function EventApplicationForm({ eventSlug }: Props) {
           rows={3}
           className={textareaClass}
         />
+      </div>
+
+      {/* 참여 분야 */}
+      <div className="space-y-2">
+        <p className="text-sm font-medium text-gray-700">
+          {t('participationLabel')} <span className="text-red-500">*</span>
+        </p>
+        <div className="space-y-2">
+          {PARTICIPATION_OPTIONS.map(opt => (
+            <label key={opt} className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={participation.includes(opt)}
+                onChange={e => {
+                  setParticipation(prev =>
+                    e.target.checked ? [...prev, opt] : prev.filter(v => v !== opt)
+                  )
+                  if (e.target.checked && errors.participation) {
+                    setErrors(prev => ({ ...prev, participation: undefined }))
+                  }
+                }}
+                className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              />
+              <span className="text-sm text-gray-700">
+                {opt === 'booth' ? t('participationBooth') : t('participationPerformance')}
+              </span>
+            </label>
+          ))}
+        </div>
+        {errors.participation && <p className="text-sm text-red-600">{errors.participation}</p>}
+      </div>
+
+      {/* 포트폴리오 사진 */}
+      <div className="space-y-2">
+        <p className="text-sm font-medium text-gray-700">{t('photoLabel')}</p>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            disabled={photoUploading}
+            onClick={() => fileInputRef.current?.click()}
+            className="px-4 py-2 text-sm border border-gray-300 rounded-lg bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {photoUploading ? t('photoUploading') : t('photoButton')}
+          </button>
+          {photoUrl && (
+            <button
+              type="button"
+              onClick={() => setPhotoUrl('')}
+              className="text-sm text-red-600 hover:text-red-700 underline underline-offset-2"
+            >
+              {t('photoRemove')}
+            </button>
+          )}
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleFileChange}
+        />
+        {photoUrl && (
+          <img
+            src={photoUrl}
+            alt="포트폴리오 미리보기"
+            className="mt-2 h-40 w-auto rounded-lg object-cover border border-gray-200"
+          />
+        )}
       </div>
 
       {/* 개인정보 수집·이용 고지 및 동의 */}

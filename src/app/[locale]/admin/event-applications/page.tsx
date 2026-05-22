@@ -17,6 +17,8 @@ interface EventApplication {
   status: 'pending' | 'approved' | 'rejected'
   privacy_consent: boolean
   privacy_consent_at: string | null
+  participation_type: string | null
+  photo_url: string | null
   created_at: string
   updated_at: string
 }
@@ -279,6 +281,43 @@ export default function EventApplicationsPage() {
                                 : '—'}
                           </dd>
                         </div>
+                        {app.participation_type && (
+                          <div>
+                            <dt className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                              참여 분야
+                            </dt>
+                            <dd className="mt-1 flex flex-wrap gap-1">
+                              {app.participation_type.split(',').map(type => (
+                                <span
+                                  key={type}
+                                  className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700"
+                                >
+                                  {type === 'booth'
+                                    ? '1부 — 도떼기 시장'
+                                    : type === 'performance'
+                                      ? '2부 — 보따리 옥션'
+                                      : type}
+                                </span>
+                              ))}
+                            </dd>
+                          </div>
+                        )}
+                        {app.photo_url && (
+                          <div className="md:col-span-2">
+                            <dt className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                              포트폴리오 사진
+                            </dt>
+                            <dd className="mt-1">
+                              <a href={app.photo_url} target="_blank" rel="noopener noreferrer">
+                                <img
+                                  src={app.photo_url}
+                                  alt="포트폴리오"
+                                  className="h-40 w-auto rounded-lg object-cover border border-gray-200 hover:opacity-80 transition-opacity"
+                                />
+                              </a>
+                            </dd>
+                          </div>
+                        )}
                       </dl>
 
                       {/* 상태 변경 버튼 */}
