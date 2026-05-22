@@ -33,7 +33,7 @@ const ApplicationSchema = z.object({
   links: z.string().max(500).optional(),
   message: z.string().max(1000).optional(),
   participation_type: z.string().min(1, '참여 분야를 선택해주세요.').max(100).optional(),
-  photo_url: z.string().url('상품 사진을 업로드해주세요.').max(500),
+  photo_url: z.string().url().max(500).optional(),
   privacy_consent: z.literal(true, {
     errorMap: () => ({ message: '개인정보 수집·이용 동의가 필요합니다.' }),
   }),
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
       links: d.links?.trim() || null,
       message: d.message?.trim() || null,
       participation_type: d.participation_type?.trim() || null,
-      photo_url: d.photo_url.trim(),
+      photo_url: d.photo_url?.trim() || null,
       privacy_consent: true,
       privacy_consent_at: new Date().toISOString(),
     }

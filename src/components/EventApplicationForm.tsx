@@ -98,7 +98,7 @@ export default function EventApplicationForm({ eventSlug }: Props) {
     if (!form.contact_phone.trim()) newErrors.contact_phone = t('errorRequired')
     if (!form.performance_info.trim()) newErrors.performance_info = t('errorRequired')
     if (!form.items_to_sell.trim()) newErrors.items_to_sell = t('errorRequired')
-    if (!photoUrl) newErrors.photo = t('errorRequired')
+
     if (participation.length === 0) newErrors.participation = t('errorParticipation')
     if (!privacyConsent) newErrors.privacy = t('errorPrivacy')
 
@@ -125,7 +125,7 @@ export default function EventApplicationForm({ eventSlug }: Props) {
           links: form.links.trim() || undefined,
           message: form.message.trim() || undefined,
           participation_type: participation.join(','),
-          photo_url: photoUrl,
+          photo_url: photoUrl || undefined,
           privacy_consent: privacyConsent,
         }),
       })
@@ -236,9 +236,7 @@ export default function EventApplicationForm({ eventSlug }: Props) {
 
       {/* 상품 사진 */}
       <div className="space-y-2">
-        <p className="text-sm font-medium text-gray-700">
-          {t('photoLabel')} <span className="text-red-500">*</span>
-        </p>
+        <p className="text-sm font-medium text-gray-700">{t('photoLabel')}</p>
         <div className="flex items-center gap-3">
           <button
             type="button"

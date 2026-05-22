@@ -246,7 +246,7 @@
     "participationBooth": "Part 1 — Flea Market (Stall)",
     "participationPerformance": "Part 2 — Bundle Auction (Performance)",
     "errorParticipation": "Please select at least one participation type.",
-    "photoLabel": "Product Photo",
+    "photoLabel": "Product Photo (Optional)",
     "photoButton": "Choose Image",
     "photoUploading": "Uploading...",
     "photoRemove": "Remove",
