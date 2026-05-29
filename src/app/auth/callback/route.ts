@@ -7,13 +7,14 @@ const log = createLogger('auth/callback')
 const maskId = (id?: string | null): string => (id ? `${id.slice(0, 6)}…` : '<unknown>')
 
 // open redirect 방지: 내부 경로 + 허용 목록만 통과
-const ALLOWED_NEXT_PATHS = ['/reset-password']
+const ALLOWED_NEXT_PATHS: readonly string[] = ['/reset-password']
 const resolveSafeNext = (next: string | null): string | null => {
   if (!next) return null
   // 절대 URL / 프로토콜 상대 경로 차단
   if (!next.startsWith('/') || next.startsWith('//')) return null
+  // 쿼리·프래그먼트는 버리고 허용 목록의 순수 경로만 반환 (2차 리다이렉트 주입 방지)
   const pathOnly = next.split('?')[0].split('#')[0]
-  return ALLOWED_NEXT_PATHS.includes(pathOnly) ? next : null
+  return ALLOWED_NEXT_PATHS.includes(pathOnly) ? pathOnly : null
 }
 
 export async function GET(request: NextRequest) {
