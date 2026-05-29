@@ -6,6 +6,16 @@ const log = createLogger('auth/callback')
 
 const maskId = (id?: string | null): string => (id ? `${id.slice(0, 6)}…` : '<unknown>')
 
+// open redirect 방지: 내부 경로 + 허용 목록만 통과
+const ALLOWED_NEXT_PATHS = ['/reset-password']
+const resolveSafeNext = (next: string | null): string | null => {
+  if (!next) return null
+  // 절대 URL / 프로토콜 상대 경로 차단
+  if (!next.startsWith('/') || next.startsWith('//')) return null
+  const pathOnly = next.split('?')[0].split('#')[0]
+  return ALLOWED_NEXT_PATHS.includes(pathOnly) ? next : null
+}
+
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get('code')
@@ -15,6 +25,12 @@ export async function GET(request: NextRequest) {
 
     try {
       await supabase.auth.exchangeCodeForSession(code)
+
+      // 비밀번호 복구 등: next가 허용 경로면 프로필 상태와 무관하게 우선 라우팅
+      const safeNext = resolveSafeNext(requestUrl.searchParams.get('next'))
+      if (safeNext) {
+        return NextResponse.redirect(`${requestUrl.origin}${safeNext}`)
+      }
 
       // 사용자 프로필 확인
       const {
