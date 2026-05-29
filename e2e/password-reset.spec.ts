@@ -20,4 +20,12 @@ test.describe('비밀번호 재설정', () => {
       timeout: 15000,
     })
   })
+
+  test('reset-password 직접 접근 시 만료 안내가 표시된다', async ({ page }) => {
+    await page.goto('/reset-password', { waitUntil: 'domcontentloaded' })
+    await page.waitForLoadState('networkidle')
+    // recovery 세션이 없으므로 만료/유효하지 않음 안내가 보이고 폼은 없다
+    await expect(page.getByText(/만료되었거나 유효하지 않습니다/)).toBeVisible({ timeout: 15000 })
+    await expect(page.locator('input[type="password"]')).toHaveCount(0)
+  })
 })
