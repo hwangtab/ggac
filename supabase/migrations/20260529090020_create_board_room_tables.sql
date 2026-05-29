@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS public.board_meetings (
   location TEXT,
   status TEXT NOT NULL DEFAULT 'polling',  -- 'polling' | 'scheduled' | 'completed'
   vote_deadline TIMESTAMPTZ,               -- 투표 마감(날짜+시각)
-  created_by UUID REFERENCES public.member_profiles(id),
+  created_by UUID REFERENCES public.member_profiles(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS public.board_agendas (
   content TEXT,
   sort_order INT NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'proposed', -- 'proposed' | 'discussed' | 'resolved'
-  proposed_by UUID REFERENCES public.member_profiles(id),
+  proposed_by UUID REFERENCES public.member_profiles(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS public.board_minutes (
   meeting_id UUID NOT NULL UNIQUE REFERENCES public.board_meetings(id) ON DELETE CASCADE,
   content TEXT,
   content_format TEXT,
-  author_id UUID REFERENCES public.member_profiles(id),
+  author_id UUID REFERENCES public.member_profiles(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -75,24 +75,24 @@ CREATE TABLE IF NOT EXISTS public.board_documents (
   category TEXT NOT NULL,                  -- '등록증' | '정관' | '계약' | '기타'
   file_url TEXT NOT NULL,
   file_name TEXT,
-  file_size INT,
+  file_size BIGINT,
   mime_type TEXT,
-  uploaded_by UUID REFERENCES public.member_profiles(id),
+  uploaded_by UUID REFERENCES public.member_profiles(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- CHECK 제약 (idempotent)
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='chk_board_meeting_status') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='chk_board_meeting_status' AND conrelid = 'public.board_meetings'::regclass) THEN
     ALTER TABLE public.board_meetings ADD CONSTRAINT chk_board_meeting_status
       CHECK (status IN ('polling','scheduled','completed'));
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='chk_board_agenda_status') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='chk_board_agenda_status' AND conrelid = 'public.board_agendas'::regclass) THEN
     ALTER TABLE public.board_agendas ADD CONSTRAINT chk_board_agenda_status
       CHECK (status IN ('proposed','discussed','resolved'));
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='chk_board_document_category') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='chk_board_document_category' AND conrelid = 'public.board_documents'::regclass) THEN
     ALTER TABLE public.board_documents ADD CONSTRAINT chk_board_document_category
       CHECK (category IN ('등록증','정관','계약','기타'));
   END IF;
@@ -106,6 +106,8 @@ CREATE INDEX IF NOT EXISTS idx_board_date_votes_option ON public.board_meeting_d
 CREATE INDEX IF NOT EXISTS idx_board_attendees_meeting ON public.board_meeting_attendees (meeting_id);
 CREATE INDEX IF NOT EXISTS idx_board_agendas_meeting ON public.board_agendas (meeting_id, sort_order);
 CREATE INDEX IF NOT EXISTS idx_board_documents_category ON public.board_documents (category, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_board_date_votes_voter ON public.board_meeting_date_votes (voter_id);
+CREATE INDEX IF NOT EXISTS idx_board_attendees_member ON public.board_meeting_attendees (member_id);
 
 -- updated_at 트리거 (기존 public.update_updated_at_column 재사용)
 DO $$
@@ -116,7 +118,7 @@ BEGIN
     'board_agendas','board_minutes'
   ] LOOP
     IF NOT EXISTS (
-      SELECT 1 FROM pg_trigger WHERE tgname = format('update_%s_updated_at', t)
+      SELECT 1 FROM pg_trigger WHERE tgname = format('update_%s_updated_at', t) AND tgrelid = format('public.%s', t)::regclass
     ) THEN
       EXECUTE format(
         'CREATE TRIGGER update_%1$s_updated_at BEFORE UPDATE ON public.%1$s
