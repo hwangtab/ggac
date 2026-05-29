@@ -11,12 +11,15 @@ import { Link, usePathname, useRouter } from '@/i18n/navigation'
 import NotificationDropdown from './NotificationDropdown'
 import LocaleSwitcher from './LocaleSwitcher'
 
+type NavProfile = { is_director: boolean; is_admin: boolean } | null
+
 const Navigation = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   // 상단 고정 헤더 투명/불투명 제어
   const [isAtTop, setIsAtTop] = useState(true)
   const [hasScrollSync, setHasScrollSync] = useState(false)
   const [user, setUser] = useState<User | null>(null)
+  const [navProfile, setNavProfile] = useState<NavProfile>(null)
   const [loading, setLoading] = useState(true)
   // i18n usePathname은 locale prefix 없는 경로를 반환한다.
   // /en 홈에서도 pathname === '/' 로 평가되어 투명 헤더가 올바르게 동작한다.
@@ -26,6 +29,9 @@ const Navigation = () => {
 
   // 홈페이지인지 확인
   const isHomePage = pathname === '/'
+
+  // 이사회 링크 노출 여부 (이사 또는 관리자)
+  const showBoardRoom = !!(navProfile?.is_director || navProfile?.is_admin)
 
   // 간소화된 색상 로직
   const isDark = isHomePage && isAtTop
@@ -71,6 +77,24 @@ const Navigation = () => {
   useEffect(() => {
     let mounted = true
     let unsubscribe: (() => void) | undefined
+
+    const fetchNavProfile = async (supabase: any, userId: string) => {
+      try {
+        const { data } = await supabase
+          .from('member_profiles')
+          .select('is_director, is_admin')
+          .eq('id', userId)
+          .single()
+        if (mounted) {
+          setNavProfile(
+            data ? { is_director: !!data.is_director, is_admin: !!data.is_admin } : null
+          )
+        }
+      } catch {
+        if (mounted) setNavProfile(null)
+      }
+    }
+
     ;(async () => {
       try {
         const { supabase } = await import('@/lib/supabase/client')
@@ -85,8 +109,12 @@ const Navigation = () => {
           if (error) {
             console.error('Session error in Navigation:', error)
             setUser(null)
+            setNavProfile(null)
           } else {
             setUser(session?.user || null)
+            if (session?.user) {
+              await fetchNavProfile(supabase, session.user.id)
+            }
           }
           setLoading(false)
         }
@@ -96,6 +124,11 @@ const Navigation = () => {
         } = supabase.auth.onAuthStateChange((_event, nextSession) => {
           if (mounted) {
             setUser(nextSession?.user || null)
+            if (nextSession?.user) {
+              fetchNavProfile(supabase, nextSession.user.id)
+            } else {
+              setNavProfile(null)
+            }
             setLoading(false)
           }
         })
@@ -104,6 +137,7 @@ const Navigation = () => {
         console.error('Error initializing Supabase in Navigation:', error)
         if (mounted) {
           setUser(null)
+          setNavProfile(null)
           setLoading(false)
         }
       }
@@ -174,6 +208,16 @@ const Navigation = () => {
                   {item.label}
                 </Link>
               ))}
+              {showBoardRoom && (
+                <Link
+                  href="/board-room"
+                  className={`font-medium transition-colors duration-300 ${
+                    pathname.startsWith('/board-room') ? activeColor : `${textColor} ${hoverColor}`
+                  }`}
+                >
+                  {t('nav.boardRoom')}
+                </Link>
+              )}
             </div>
 
             {/* Auth Section */}
@@ -278,6 +322,16 @@ const Navigation = () => {
             >
               BOARD
             </Link>
+            {showBoardRoom && (
+              <Link
+                href="/board-room"
+                className={`font-medium transition-colors duration-300 text-xs ${
+                  pathname.startsWith('/board-room') ? activeColor : `${textColor} ${hoverColor}`
+                }`}
+              >
+                {t('nav.boardRoom')}
+              </Link>
+            )}
 
             {/* Tablet Auth Section */}
             <div className="flex items-center space-x-1 ml-1 pl-1 border-l border-gray-300/20">
@@ -397,6 +451,19 @@ const Navigation = () => {
                   {item.label}
                 </Link>
               ))}
+              {showBoardRoom && (
+                <Link
+                  href="/board-room"
+                  onClick={() => setIsMenuOpen(false)}
+                  className={`block py-3 px-4 rounded-md transition-colors duration-200 ${
+                    pathname.startsWith('/board-room')
+                      ? `${activeColor} ${isHomePage && isAtTop ? 'bg-white/10' : 'bg-primary-50'}`
+                      : `${textColor} ${hoverColor} ${isHomePage && isAtTop ? 'hover:bg-white/10' : 'hover:bg-gray-50'}`
+                  }`}
+                >
+                  {t('nav.boardRoom')}
+                </Link>
+              )}
 
               {/* Mobile Auth Section */}
               <div

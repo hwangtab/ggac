@@ -38,6 +38,8 @@ interface Member {
   registration_status: 'pending' | 'approved' | 'rejected'
   is_active: boolean
   is_admin: boolean
+  is_director: boolean
+  director_title?: string | null
   is_artist: boolean
   artist_id?: string
   monthly_fee?: number
@@ -432,6 +434,34 @@ export default function MembersPage() {
       alert(err instanceof Error ? err.message : '회원 상태 변경에 실패했습니다.')
     } finally {
       setActionLoading(null)
+    }
+  }
+
+  const handleFlagsUpdate = async (
+    memberId: string,
+    flags: { is_director?: boolean; director_title?: string | null }
+  ) => {
+    const response = await fetch('/api/admin/members/flags', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ memberId, ...flags }),
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(errorData.error || '권한 변경에 실패했습니다.')
+    }
+
+    const successData = await response.json()
+
+    // 로컬 상태 즉시 업데이트
+    if (successData.member) {
+      setMembers(prevMembers =>
+        prevMembers.map(m => (m.id === memberId ? { ...m, ...successData.member } : m))
+      )
+      if (selectedMember && selectedMember.id === memberId) {
+        setSelectedMember({ ...selectedMember, ...successData.member })
+      }
     }
   }
 
@@ -911,6 +941,7 @@ export default function MembersPage() {
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
           onAction={handleMemberAction}
+          onFlagsUpdate={handleFlagsUpdate}
           isLoading={actionLoading === selectedMember.id}
         />
       )}

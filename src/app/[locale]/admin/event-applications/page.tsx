@@ -391,18 +391,20 @@ export default function EventApplicationsPage() {
                               참여 분야
                             </dt>
                             <dd className="mt-1 flex flex-wrap gap-1">
-                              {['booth', 'performance'].filter(t => app.participation_type!.split(',').includes(t)).map(type => (
-                                <span
-                                  key={type}
-                                  className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700"
-                                >
-                                  {type === 'booth'
-                                    ? '1부 — 도떼기 시장'
-                                    : type === 'performance'
-                                      ? '2부 — 보따리 옥션'
-                                      : type}
-                                </span>
-                              ))}
+                              {['booth', 'performance']
+                                .filter(t => app.participation_type!.split(',').includes(t))
+                                .map(type => (
+                                  <span
+                                    key={type}
+                                    className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700"
+                                  >
+                                    {type === 'booth'
+                                      ? '1부 — 도떼기 시장'
+                                      : type === 'performance'
+                                        ? '2부 — 보따리 옥션'
+                                        : type}
+                                  </span>
+                                ))}
                             </dd>
                           </div>
                         )}
