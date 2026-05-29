@@ -3,6 +3,9 @@ import { apiGet, apiPost, ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { requireBoardMember, requireBoardAdmin } from '@/lib/server/boardRoomAuth'
 import { notifyDirectors } from '@/lib/server/boardRoomNotify'
 import { BOARD_MEETING_TIME } from '@/constants/boardRoom'
+import { createLogger } from '@/utils/logger'
+
+const log = createLogger('boardRoom/meetings')
 
 export const runtime = 'nodejs'
 
@@ -66,7 +69,12 @@ export async function POST(request: NextRequest) {
       }))
       const { error: oErr } = await db.from('board_meeting_date_options').insert(optionRows)
       if (oErr) {
-        await db.from('board_meetings').delete().eq('id', meeting.id)
+        const { error: cleanupErr } = await db.from('board_meetings').delete().eq('id', meeting.id)
+        if (cleanupErr)
+          log.error('회의 롤백 실패: 고아 회의 발생', {
+            meetingId: meeting.id,
+            error: cleanupErr.message,
+          })
         throw ApiError.internalServerError('후보 날짜 저장에 실패했습니다.')
       }
 

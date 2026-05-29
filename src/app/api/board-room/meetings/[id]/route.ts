@@ -29,36 +29,45 @@ export async function GET(
         .single()
       if (error || !meeting) throw ApiError.notFound('회의를 찾을 수 없습니다.')
 
-      const { data: options } = await db
+      const { data: options, error: optionsErr } = await db
         .from('board_meeting_date_options')
         .select('id, candidate_date')
         .eq('meeting_id', id)
         .order('candidate_date', { ascending: true })
+      if (optionsErr) throw ApiError.internalServerError('후보 날짜를 불러올 수 없습니다.')
 
       const optionIds = (options ?? []).map((o) => o.id)
-      const { data: votes } = optionIds.length
-        ? await db
-            .from('board_meeting_date_votes')
-            .select('option_id, voter_id, is_available')
-            .in('option_id', optionIds)
-        : { data: [] as { option_id: string; voter_id: string; is_available: boolean }[] }
+      let votes: { option_id: string; voter_id: string; is_available: boolean }[]
+      if (optionIds.length > 0) {
+        const { data: votesData, error: votesErr } = await db
+          .from('board_meeting_date_votes')
+          .select('option_id, voter_id, is_available')
+          .in('option_id', optionIds)
+        if (votesErr) throw ApiError.internalServerError('투표 정보를 불러올 수 없습니다.')
+        votes = votesData ?? []
+      } else {
+        votes = []
+      }
 
-      const { data: agendas } = await db
+      const { data: agendas, error: agendasErr } = await db
         .from('board_agendas')
         .select('id, title, content, sort_order, status, proposed_by, created_at')
         .eq('meeting_id', id)
         .order('sort_order', { ascending: true })
+      if (agendasErr) throw ApiError.internalServerError('안건을 불러올 수 없습니다.')
 
-      const { data: minutes } = await db
+      const { data: minutes, error: minutesErr } = await db
         .from('board_minutes')
         .select('id, content, content_format, author_id, updated_at')
         .eq('meeting_id', id)
         .maybeSingle()
+      if (minutesErr) throw ApiError.internalServerError('회의록을 불러올 수 없습니다.')
 
-      const { data: attendees } = await db
+      const { data: attendees, error: attendeesErr } = await db
         .from('board_meeting_attendees')
         .select('member_id, attended')
         .eq('meeting_id', id)
+      if (attendeesErr) throw ApiError.internalServerError('출석 정보를 불러올 수 없습니다.')
 
       const roster = await getDirectorRoster(db)
       const attendedCount = (attendees ?? []).filter((a) => a.attended).length
