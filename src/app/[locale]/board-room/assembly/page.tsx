@@ -1,9 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useTranslations } from 'next-intl'
-import { Link } from '@/i18n/navigation'
-import { BOARD_DOCUMENT_CATEGORIES } from '@/constants/boardRoom'
+import { ASSEMBLY_DOCUMENT_CATEGORY } from '@/constants/boardRoom'
 import DocumentList from '../_components/DocumentList'
 import DocumentUpload from '../_components/DocumentUpload'
 
@@ -19,17 +17,14 @@ interface BoardDocument {
   download_url: string | null
 }
 
-export default function DocumentsPage() {
-  const t = useTranslations('boardRoom.documents')
-
+export default function AssemblyPage() {
   const [documents, setDocuments] = useState<BoardDocument[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activeCategory, setActiveCategory] = useState<string>('') // '' = 전체
   const [currentUserId, setCurrentUserId] = useState<string>('')
   const [isAdmin, setIsAdmin] = useState(false)
 
-  // Session: current user id + admin status
+  // 현재 사용자 id + 관리자 여부
   useEffect(() => {
     let mounted = true
     ;(async () => {
@@ -49,7 +44,7 @@ export default function DocumentsPage() {
           if (mounted) setIsAdmin(!!data?.is_admin)
         }
       } catch {
-        // silently ignore
+        // 무시 — 권한 없으면 삭제/관리 버튼 비노출
       }
     })()
     return () => {
@@ -60,82 +55,47 @@ export default function DocumentsPage() {
   const fetchDocuments = useCallback(async () => {
     setLoading(true)
     try {
-      const url = activeCategory
-        ? `/api/board-room/documents?category=${encodeURIComponent(activeCategory)}`
-        : '/api/board-room/documents'
-      const res = await fetch(url)
+      const res = await fetch(
+        `/api/board-room/documents?category=${encodeURIComponent(ASSEMBLY_DOCUMENT_CATEGORY)}`
+      )
       const json = await res.json()
       if (json.success) {
         setDocuments(json.data.documents || [])
         setError(null)
       } else {
-        setError(json.error || t('error'))
+        setError(json.error || '총회 자료를 불러오지 못했습니다.')
       }
     } catch {
-      setError(t('error'))
+      setError('총회 자료를 불러오지 못했습니다.')
     } finally {
       setLoading(false)
     }
-  }, [activeCategory, t])
+  }, [])
 
   useEffect(() => {
     fetchDocuments()
   }, [fetchDocuments])
 
-  const tabBase =
-    'px-3 py-1.5 rounded-full text-sm font-medium border transition-colors whitespace-nowrap'
-  const tabActive = 'bg-primary-600 text-white border-primary-600'
-  const tabInactive = 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-
   return (
     <div className="mx-auto max-w-4xl pb-16">
-      {/* Back link */}
-      <div className="mb-6">
-        <Link
-          href="/board-room"
-          className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
-        >
-          ← {t('back')}
-        </Link>
-      </div>
+      <h1 className="mb-2 text-2xl font-bold text-gray-900 md:text-3xl">정기총회</h1>
+      <p className="mb-8 text-sm text-gray-500">
+        정기총회 자료집·회의록·감사보고서·거래내역서 등 총회 관련 자료를 보관합니다.
+      </p>
 
-      <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-8">{t('heading')}</h1>
-
-      {/* Upload */}
+      {/* 업로드 (카테고리 '총회' 고정) */}
       <div className="mb-8">
-        <DocumentUpload onUploaded={fetchDocuments} />
+        <DocumentUpload onUploaded={fetchDocuments} fixedCategory={ASSEMBLY_DOCUMENT_CATEGORY} />
       </div>
 
-      {/* Category filter tabs */}
-      <div className="flex flex-wrap gap-2 mb-6">
-        <button
-          type="button"
-          onClick={() => setActiveCategory('')}
-          className={`${tabBase} ${activeCategory === '' ? tabActive : tabInactive}`}
-        >
-          {t('all')}
-        </button>
-        {BOARD_DOCUMENT_CATEGORIES.map(c => (
-          <button
-            key={c}
-            type="button"
-            onClick={() => setActiveCategory(c)}
-            className={`${tabBase} ${activeCategory === c ? tabActive : tabInactive}`}
-          >
-            {c}
-          </button>
-        ))}
-      </div>
-
-      {/* List / states */}
       {loading ? (
         <div className="space-y-3">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="h-20 bg-gray-100 rounded-lg animate-pulse" />
+            <div key={i} className="h-20 animate-pulse rounded-lg bg-gray-100" />
           ))}
         </div>
       ) : error ? (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
           {error}
         </div>
       ) : (

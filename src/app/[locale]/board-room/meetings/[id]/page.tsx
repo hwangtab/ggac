@@ -202,7 +202,7 @@ export default function MeetingDetailPage() {
   // ── Loading skeleton ──────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="pt-24 md:pt-28 container mx-auto px-4 max-w-4xl pb-16">
+      <div className="mx-auto max-w-4xl pb-16">
         <div className="h-5 w-32 bg-gray-200 rounded mb-6 animate-pulse" />
         <div className="h-8 w-2/3 bg-gray-200 rounded mb-4 animate-pulse" />
         <div className="space-y-4">
@@ -217,7 +217,7 @@ export default function MeetingDetailPage() {
   // ── Not found ─────────────────────────────────────────────────────────────
   if (notFound) {
     return (
-      <div className="pt-24 md:pt-28 container mx-auto px-4 max-w-4xl pb-16">
+      <div className="mx-auto max-w-4xl pb-16">
         <div className="bg-gray-50 border border-gray-200 rounded-xl p-10 text-center">
           <p className="text-gray-600 font-medium mb-4">{t('notFound')}</p>
           <Link href="/board-room/meetings" className="text-sm text-primary-600 hover:underline">
@@ -231,7 +231,7 @@ export default function MeetingDetailPage() {
   // ── Error ─────────────────────────────────────────────────────────────────
   if (error || !data) {
     return (
-      <div className="pt-24 md:pt-28 container mx-auto px-4 max-w-4xl pb-16">
+      <div className="mx-auto max-w-4xl pb-16">
         <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm mb-4">
           {error || t('error')}
         </div>
@@ -251,7 +251,7 @@ export default function MeetingDetailPage() {
   const isScheduledOrCompleted = meeting.status === 'scheduled' || meeting.status === 'completed'
 
   return (
-    <div className="pt-24 md:pt-28 container mx-auto px-4 max-w-4xl pb-16">
+    <div className="mx-auto max-w-4xl pb-16">
       {/* Back link */}
       <div className="mb-6">
         <Link

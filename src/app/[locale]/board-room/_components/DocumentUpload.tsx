@@ -6,15 +6,17 @@ import { BOARD_DOCUMENT_CATEGORIES } from '@/constants/boardRoom'
 
 interface DocumentUploadProps {
   onUploaded: () => void
+  /** 주어지면 분류 선택 UI를 숨기고 이 카테고리로 고정 업로드(예: 정기총회 메뉴) */
+  fixedCategory?: string
 }
 
-export default function DocumentUpload({ onUploaded }: DocumentUploadProps) {
+export default function DocumentUpload({ onUploaded, fixedCategory }: DocumentUploadProps) {
   const t = useTranslations('boardRoom.documents')
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
   const [title, setTitle] = useState('')
-  const [category, setCategory] = useState('')
+  const [category, setCategory] = useState(fixedCategory ?? '')
   const [uploading, setUploading] = useState(false)
   const [validationError, setValidationError] = useState<string | null>(null)
   const [apiError, setApiError] = useState<string | null>(null)
@@ -22,7 +24,7 @@ export default function DocumentUpload({ onUploaded }: DocumentUploadProps) {
   const resetForm = () => {
     setFile(null)
     setTitle('')
-    setCategory('')
+    setCategory(fixedCategory ?? '')
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
@@ -107,25 +109,27 @@ export default function DocumentUpload({ onUploaded }: DocumentUploadProps) {
         />
       </div>
 
-      {/* 분류 */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="doc-category">
-          {t('categoryLabel')} <span className="text-red-500">*</span>
-        </label>
-        <select
-          id="doc-category"
-          value={category}
-          onChange={e => setCategory(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm bg-white"
-        >
-          <option value="">{t('categoryPlaceholder')}</option>
-          {BOARD_DOCUMENT_CATEGORIES.map(c => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-      </div>
+      {/* 분류 (fixedCategory가 없을 때만 노출) */}
+      {!fixedCategory && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="doc-category">
+            {t('categoryLabel')} <span className="text-red-500">*</span>
+          </label>
+          <select
+            id="doc-category"
+            value={category}
+            onChange={e => setCategory(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm bg-white"
+          >
+            <option value="">{t('categoryPlaceholder')}</option>
+            {BOARD_DOCUMENT_CATEGORIES.map(c => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {validationError && (
         <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800 text-sm">

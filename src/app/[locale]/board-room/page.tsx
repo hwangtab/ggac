@@ -82,7 +82,7 @@ export default function BoardRoomPage() {
 
   if (loading) {
     return (
-      <div className="pt-24 md:pt-28 container mx-auto px-4 max-w-4xl">
+      <div className="mx-auto max-w-4xl">
         <div className="h-8 w-48 bg-gray-200 rounded mb-8 animate-pulse" />
         <div className="space-y-4">
           {[...Array(3)].map((_, i) => (
@@ -100,7 +100,7 @@ export default function BoardRoomPage() {
   }
 
   return (
-    <div className="pt-24 md:pt-28 container mx-auto px-4 max-w-4xl pb-16">
+    <div className="mx-auto max-w-4xl pb-16">
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-2xl md:text-3xl font-bold text-gray-900">{dash('heading')}</h1>

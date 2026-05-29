@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { apiGet, apiPost, ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { requireBoardMember } from '@/lib/server/boardRoomAuth'
-import { BOARD_DOCUMENT_CATEGORIES } from '@/constants/boardRoom'
+import { ALL_DOCUMENT_CATEGORIES, ASSEMBLY_DOCUMENT_CATEGORY } from '@/constants/boardRoom'
 import { createLogger } from '@/utils/logger'
 
 const log = createLogger('boardRoom/documents')
@@ -50,10 +50,13 @@ export async function GET(request: NextRequest) {
         )
         .order('created_at', { ascending: false })
       if (category) {
-        if (!(BOARD_DOCUMENT_CATEGORIES as readonly string[]).includes(category)) {
+        if (!(ALL_DOCUMENT_CATEGORIES as readonly string[]).includes(category)) {
           throw ApiError.badRequest('잘못된 분류입니다.')
         }
         query = query.eq('category', category)
+      } else {
+        // 일반 서류함 전체 조회에는 정기총회 자료를 제외(별도 '정기총회' 메뉴에서 관리)
+        query = query.neq('category', ASSEMBLY_DOCUMENT_CATEGORY)
       }
       const { data, error } = await query
       if (error) throw ApiError.internalServerError('서류 목록을 불러올 수 없습니다.')
@@ -96,7 +99,7 @@ export async function POST(request: NextRequest) {
 
       // Validate fields
       if (!title) throw ApiError.badRequest('제목을 입력해주세요.')
-      if (!(BOARD_DOCUMENT_CATEGORIES as readonly string[]).includes(category))
+      if (!(ALL_DOCUMENT_CATEGORIES as readonly string[]).includes(category))
         throw ApiError.badRequest('잘못된 분류입니다.')
       if (!file) throw ApiError.badRequest('업로드된 파일이 없습니다.')
       if (file.size > MAX_FILE_SIZE) throw ApiError.badRequest('파일 크기는 최대 50MB입니다.')

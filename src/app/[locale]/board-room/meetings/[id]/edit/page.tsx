@@ -197,7 +197,7 @@ export default function EditMeetingPage() {
   // ── Loading (admin status or meeting still loading) ───────────────────────
   if (isAdmin === null || loading) {
     return (
-      <div className="pt-24 md:pt-28 container mx-auto px-4 max-w-2xl pb-16">
+      <div className="mx-auto max-w-2xl pb-16">
         <div className="h-8 w-40 bg-gray-200 rounded mb-8 animate-pulse" />
         <div className="space-y-4">
           {[...Array(3)].map((_, i) => (
@@ -211,7 +211,7 @@ export default function EditMeetingPage() {
   // ── Not admin ─────────────────────────────────────────────────────────────
   if (!isAdmin) {
     return (
-      <div className="pt-24 md:pt-28 container mx-auto px-4 max-w-2xl pb-16">
+      <div className="mx-auto max-w-2xl pb-16">
         <div className="bg-red-50 border border-red-200 rounded-xl p-8 text-center">
           <p className="text-red-700 font-medium mb-4">{t('forbidden')}</p>
           <Link
@@ -228,7 +228,7 @@ export default function EditMeetingPage() {
   // ── Not found ─────────────────────────────────────────────────────────────
   if (notFound) {
     return (
-      <div className="pt-24 md:pt-28 container mx-auto px-4 max-w-2xl pb-16">
+      <div className="mx-auto max-w-2xl pb-16">
         <div className="bg-gray-50 border border-gray-200 rounded-xl p-10 text-center">
           <p className="text-gray-600 font-medium mb-4">{t('notFound')}</p>
           <Link href="/board-room/meetings" className="text-sm text-primary-600 hover:underline">
@@ -242,7 +242,7 @@ export default function EditMeetingPage() {
   // ── Load error ────────────────────────────────────────────────────────────
   if (loadError || !meeting) {
     return (
-      <div className="pt-24 md:pt-28 container mx-auto px-4 max-w-2xl pb-16">
+      <div className="mx-auto max-w-2xl pb-16">
         <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm mb-4">
           {loadError || t('error')}
         </div>
@@ -259,7 +259,7 @@ export default function EditMeetingPage() {
   const isScheduled = meeting.status === 'scheduled'
 
   return (
-    <div className="pt-24 md:pt-28 container mx-auto px-4 max-w-2xl pb-16">
+    <div className="mx-auto max-w-2xl pb-16">
       <div className="flex items-center gap-3 mb-8">
         <Link
           href={`/board-room/meetings/${meetingId}`}

@@ -85,7 +85,7 @@ export default function MeetingListPage() {
 
   if (loading) {
     return (
-      <div className="pt-24 md:pt-28 container mx-auto px-4 max-w-4xl">
+      <div className="mx-auto max-w-4xl">
         <div className="h-8 w-40 bg-gray-200 rounded mb-8 animate-pulse" />
         <div className="space-y-4">
           {[...Array(4)].map((_, i) => (
@@ -103,7 +103,7 @@ export default function MeetingListPage() {
   }
 
   return (
-    <div className="pt-24 md:pt-28 container mx-auto px-4 max-w-4xl pb-16">
+    <div className="mx-auto max-w-4xl pb-16">
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
           <Link
