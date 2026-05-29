@@ -120,7 +120,9 @@ export default function EditMeetingPage() {
     if (title.trim() !== (meeting.title || '')) body.title = title.trim()
     if (location.trim() !== (meeting.location || '')) body.location = location.trim()
     const newDeadlineIso = voteDeadline ? new Date(voteDeadline).toISOString() : null
-    const oldDeadlineIso = meeting.vote_deadline ? new Date(meeting.vote_deadline).toISOString() : null
+    const oldDeadlineIso = meeting.vote_deadline
+      ? new Date(meeting.vote_deadline).toISOString()
+      : null
     if (newDeadlineIso !== oldDeadlineIso && newDeadlineIso) body.vote_deadline = newDeadlineIso
 
     if (Object.keys(body).length === 0) {
