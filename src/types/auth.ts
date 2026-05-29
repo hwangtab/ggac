@@ -30,6 +30,9 @@ export interface MemberProfile {
   approved_by?: string
   rejected_by?: string
 
+  // 이사회 관련 필드
+  is_director: boolean
+
   // 아티스트 관련 필드
   artist_id?: string | null
   is_artist: boolean

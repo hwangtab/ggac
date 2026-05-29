@@ -25,6 +25,7 @@
     "artists": "함께하는 사람들",
     "archive": "프로젝트",
     "board": "자유게시판",
+    "boardRoom": "이사회",
     "connect": "연락처",
     "mypage": "마이페이지",
     "login": "로그인",
@@ -497,6 +498,11 @@
       "body": "일시적인 오류가 발생했습니다. 다시 시도해주세요.",
       "retry": "다시 시도"
     }
+  },
+  "boardRoom": {
+    "title": "이사회",
+    "meetings": "회의",
+    "documents": "서류함"
   },
   "home": {
     "hero": {

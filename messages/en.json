@@ -25,6 +25,7 @@
     "artists": "Artists",
     "archive": "Projects",
     "board": "Community",
+    "boardRoom": "Board Room",
     "connect": "Contact",
     "mypage": "My Page",
     "login": "Log In",
@@ -497,6 +498,11 @@
       "body": "A temporary error occurred. Please try again.",
       "retry": "Try Again"
     }
+  },
+  "boardRoom": {
+    "title": "Board Room",
+    "meetings": "Meetings",
+    "documents": "Documents"
   },
   "home": {
     "hero": {
