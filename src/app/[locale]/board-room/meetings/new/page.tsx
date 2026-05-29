@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { useTranslations } from 'next-intl'
+import { format, parseISO } from 'date-fns'
 import { Link, useRouter } from '@/i18n/navigation'
-import CandidateDatePicker from '../../_components/CandidateDatePicker'
+import { BOARD_MEETING_TIME } from '@/constants/boardRoom'
+import MeetingCalendar from '../../_components/MeetingCalendar'
 
 export default function NewMeetingPage() {
   const t = useTranslations('boardRoom.newMeeting')
@@ -45,6 +47,36 @@ export default function NewMeetingPage() {
       mounted = false
     }
   }, [])
+
+  const toggleDate = (date: string) => {
+    setCandidateDates(prev =>
+      prev.includes(date) ? prev.filter(d => d !== date) : [...prev, date].sort()
+    )
+  }
+
+  const removeDate = (date: string) => {
+    setCandidateDates(prev => prev.filter(d => d !== date))
+  }
+
+  // Localized "MM월 DD일 (요일) 21:00"
+  const WEEKDAY_LABELS = [
+    t('weekdayShort.sun'),
+    t('weekdayShort.mon'),
+    t('weekdayShort.tue'),
+    t('weekdayShort.wed'),
+    t('weekdayShort.thu'),
+    t('weekdayShort.fri'),
+    t('weekdayShort.sat'),
+  ]
+  const formatChip = (date: string) => {
+    const d = parseISO(date)
+    return t('selectedChip', {
+      month: format(d, 'MM'),
+      day: format(d, 'dd'),
+      weekday: WEEKDAY_LABELS[d.getDay()],
+      time: BOARD_MEETING_TIME,
+    })
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -187,7 +219,35 @@ export default function NewMeetingPage() {
           <label className="block text-sm font-medium text-gray-700 mb-2">
             {t('candidateDatesLabel')} <span className="text-red-500">*</span>
           </label>
-          <CandidateDatePicker dates={candidateDates} onChange={setCandidateDates} />
+          <div className="rounded-xl border border-gray-200 p-3 md:p-4">
+            <MeetingCalendar
+              mode="select"
+              selectedDates={candidateDates}
+              onToggleDate={toggleDate}
+            />
+          </div>
+
+          {/* 선택 요약 */}
+          {candidateDates.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {[...candidateDates].sort().map(date => (
+                <span
+                  key={date}
+                  className="inline-flex items-center gap-1 px-3 py-1 bg-primary-50 text-primary-700 border border-primary-200 rounded-full text-sm"
+                >
+                  {formatChip(date)}
+                  <button
+                    type="button"
+                    onClick={() => removeDate(date)}
+                    className="ml-1 text-primary-400 hover:text-primary-700 transition-colors"
+                    aria-label={t('removeDate', { date })}
+                  >
+                    &times;
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* 유효성 오류 */}

@@ -542,7 +542,52 @@
       "successMessage": "Meeting created successfully.",
       "validationTitle": "Please enter a title.",
       "validationDates": "Please add at least one candidate date.",
-      "validationDeadline": "Please set a vote deadline."
+      "validationDeadline": "Please set a vote deadline.",
+      "selectedChip": "{month}/{day} ({weekday}) {time}",
+      "removeDate": "Remove {date}",
+      "weekdayShort": {
+        "sun": "Sun",
+        "mon": "Mon",
+        "tue": "Tue",
+        "wed": "Wed",
+        "thu": "Thu",
+        "fri": "Fri",
+        "sat": "Sat"
+      }
+    },
+    "calendar": {
+      "prevMonth": "Previous month",
+      "nextMonth": "Next month",
+      "today": "Today",
+      "timeHint": "All candidate times are {time}.",
+      "available": "Yes",
+      "unavailable": "No",
+      "availableCount": "{count}/{total}",
+      "confirmDate": "Confirm",
+      "voteLegend": "Only candidate dates can be voted on. Tap 'Yes/No' on each date to vote.",
+      "votingClosed": "Voting is closed — the deadline has passed.",
+      "voteAvailableAria": "Vote available on {date}",
+      "voteUnavailableAria": "Vote unavailable on {date}",
+      "weekday": {
+        "sun": "Sun",
+        "mon": "Mon",
+        "tue": "Tue",
+        "wed": "Wed",
+        "thu": "Thu",
+        "fri": "Fri",
+        "sat": "Sat"
+      }
+    },
+    "schedule": {
+      "heading": "Schedule Poll",
+      "back": "Board Room",
+      "description": "Vote on candidate dates for meetings currently in the polling stage.",
+      "createMeeting": "Create Meeting",
+      "empty": "No meetings are currently in the polling stage.",
+      "error": "Failed to load meetings.",
+      "deadlineRemaining": "Vote deadline: {date} ({days} days left)",
+      "deadlineToday": "Vote deadline: {date} (closes today)",
+      "deadlinePassed": "Vote deadline: {date} (closed)"
     },
     "editMeeting": {
       "heading": "Edit Meeting",

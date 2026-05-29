@@ -7,7 +7,7 @@ import { Link } from '@/i18n/navigation'
 import { BOARD_MEETING_TIME } from '@/constants/boardRoom'
 import type { BoardMeetingStatus, BoardAgendaStatus } from '@/constants/boardRoom'
 import StatusBadge from '../../_components/StatusBadge'
-import DateVoteGrid from '../../_components/DateVoteGrid'
+import MeetingCalendar from '../../_components/MeetingCalendar'
 import AgendaList from '../../_components/AgendaList'
 import MinutesEditor from '../../_components/MinutesEditor'
 import AttendancePanel from '../../_components/AttendancePanel'
@@ -290,26 +290,20 @@ export default function MeetingDetailPage() {
       {isPolling && (
         <section className="bg-white border border-gray-200 rounded-xl shadow-sm p-6 mb-6">
           <h2 className="text-base font-semibold text-gray-900 mb-4">{t('dateVoteHeading')}</h2>
-          <DateVoteGrid
-            options={options}
-            votes={votes}
-            roster={roster}
-            currentUserId={current_user_id}
-            votingClosed={votingClosed}
-            onVote={handleVote}
-            renderConfirmButton={
-              isAdmin
-                ? option => (
-                    <button
-                      onClick={() => handleConfirmDate(option.candidate_date)}
-                      className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap"
-                    >
-                      {t('confirmDate')}
-                    </button>
-                  )
-                : undefined
-            }
-          />
+          {options.length === 0 ? (
+            <p className="text-sm text-gray-500 italic">{t('noOptions')}</p>
+          ) : (
+            <MeetingCalendar
+              mode="vote"
+              options={options}
+              votes={votes}
+              roster={roster}
+              currentUserId={current_user_id}
+              votingClosed={votingClosed}
+              onVote={handleVote}
+              onConfirm={isAdmin ? handleConfirmDate : undefined}
+            />
+          )}
         </section>
       )}
 

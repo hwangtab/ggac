@@ -542,7 +542,52 @@
       "successMessage": "회의가 생성되었습니다.",
       "validationTitle": "제목을 입력해주세요.",
       "validationDates": "후보 날짜를 1개 이상 추가해주세요.",
-      "validationDeadline": "투표 마감일을 설정해주세요."
+      "validationDeadline": "투표 마감일을 설정해주세요.",
+      "selectedChip": "{month}월 {day}일 ({weekday}) {time}",
+      "removeDate": "{date} 제거",
+      "weekdayShort": {
+        "sun": "일",
+        "mon": "월",
+        "tue": "화",
+        "wed": "수",
+        "thu": "목",
+        "fri": "금",
+        "sat": "토"
+      }
+    },
+    "calendar": {
+      "prevMonth": "이전 달",
+      "nextMonth": "다음 달",
+      "today": "오늘",
+      "timeHint": "모든 후보 시각은 {time}입니다.",
+      "available": "가능",
+      "unavailable": "불가",
+      "availableCount": "{count}/{total}",
+      "confirmDate": "확정",
+      "voteLegend": "후보 날짜만 투표할 수 있습니다. 각 날짜의 '가능/불가'를 눌러 투표하세요.",
+      "votingClosed": "투표 마감일이 지나 더 이상 투표할 수 없습니다.",
+      "voteAvailableAria": "{date} 가능으로 투표",
+      "voteUnavailableAria": "{date} 불가로 투표",
+      "weekday": {
+        "sun": "일",
+        "mon": "월",
+        "tue": "화",
+        "wed": "수",
+        "thu": "목",
+        "fri": "금",
+        "sat": "토"
+      }
+    },
+    "schedule": {
+      "heading": "일정 투표",
+      "back": "이사회",
+      "description": "투표가 진행 중인 회의의 후보 날짜에 가능 여부를 투표하세요.",
+      "createMeeting": "회의 만들기",
+      "empty": "현재 투표 중인 회의가 없습니다.",
+      "error": "회의 목록을 불러오지 못했습니다.",
+      "deadlineRemaining": "투표 마감: {date} ({days}일 남음)",
+      "deadlineToday": "투표 마감: {date} (오늘 마감)",
+      "deadlinePassed": "투표 마감: {date} (마감됨)"
     },
     "editMeeting": {
       "heading": "회의 수정",
