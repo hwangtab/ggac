@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link, useRouter } from '@/i18n/navigation'
 import { useTranslations } from 'next-intl'
 import { supabase } from '@/lib/supabase/client'
@@ -22,24 +22,31 @@ export default function ResetPasswordPage() {
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [loading, setLoading] = useState(false)
+  const [done, setDone] = useState(false)
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState<MessageType>('error')
+  const redirectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
+    let mounted = true
     const check = async () => {
       try {
         const {
           data: { session },
         } = await supabase.auth.getSession()
-        setHasSession(!!session)
+        if (mounted) setHasSession(!!session)
       } catch (err) {
         console.error('getSession error:', err)
-        setHasSession(false)
+        if (mounted) setHasSession(false)
       } finally {
-        setChecking(false)
+        if (mounted) setChecking(false)
       }
     }
     check()
+    return () => {
+      mounted = false
+      if (redirectTimer.current) clearTimeout(redirectTimer.current)
+    }
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -67,7 +74,8 @@ export default function ResetPasswordPage() {
       }
       setMessage(t('resetPassword.msgSuccess'))
       setMessageType('success')
-      setTimeout(() => router.push('/board'), 1500)
+      setDone(true)
+      redirectTimer.current = setTimeout(() => router.push('/board'), 1500)
     } catch (err) {
       console.error('updateUser error:', err)
       setMessage(t('resetPassword.msgError'))
@@ -128,7 +136,7 @@ export default function ResetPasswordPage() {
                     placeholder={t('resetPassword.passwordPlaceholder')}
                     value={password}
                     onChange={e => setPassword(e.target.value)}
-                    disabled={loading}
+                    disabled={loading || done}
                   />
                 </div>
                 <div>
@@ -145,12 +153,12 @@ export default function ResetPasswordPage() {
                     placeholder={t('resetPassword.confirmPlaceholder')}
                     value={confirm}
                     onChange={e => setConfirm(e.target.value)}
-                    disabled={loading}
+                    disabled={loading || done}
                   />
                 </div>
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={loading || done}
                   className="w-full bg-primary-600 hover:bg-primary-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-semibold py-4 px-6 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
                 >
                   {loading ? t('resetPassword.submittingButton') : t('resetPassword.submitButton')}
