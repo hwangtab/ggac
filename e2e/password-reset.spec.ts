@@ -7,6 +7,13 @@ test.describe('비밀번호 재설정', () => {
   test.use({ locale: 'ko-KR' })
 
   test('forgot-password 페이지가 로드되고 이메일 제출 시 안내가 표시된다', async ({ page }) => {
+    // 실제 Supabase recover 엔드포인트를 호출하면 운영 프로젝트의 이메일 발송
+    // rate limit(429)을 소진하므로, 네트워크 요청을 가로채 200으로 응답한다.
+    // 이렇게 해도 폼 제출 → 안내 메시지 노출이라는 검증 의도는 그대로 유지된다.
+    await page.route(/\/auth\/v1\/recover/, route =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
+    )
+
     await page.goto('/forgot-password', { waitUntil: 'domcontentloaded' })
     const email = page.locator('input[type="email"]')
     await expect(email).toBeVisible()
