@@ -18,8 +18,9 @@ export default function ForgotPasswordPage() {
   const t = useTranslations('auth')
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
+  const [submitted, setSubmitted] = useState(false)
   const [message, setMessage] = useState('')
-  const [messageType, setMessageType] = useState<MessageType>('success')
+  const [messageType, setMessageType] = useState<MessageType>('error')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -38,6 +39,8 @@ export default function ForgotPasswordPage() {
       // 이메일 존재 여부를 노출하지 않기 위해 성공/실패 모두 동일 안내
       setMessage(t('forgotPassword.msgSent'))
       setMessageType('success')
+      // 성공 안내 후 재제출을 막아 이메일 발송 남용을 방지
+      setSubmitted(true)
     } catch (err) {
       console.error('resetPasswordForEmail error:', err)
       setMessage(t('forgotPassword.msgError'))
@@ -77,12 +80,12 @@ export default function ForgotPasswordPage() {
                 placeholder={t('forgotPassword.emailPlaceholder')}
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                disabled={loading}
+                disabled={loading || submitted}
               />
             </div>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || submitted}
               className="w-full bg-primary-600 hover:bg-primary-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-semibold py-4 px-6 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
             >
               {loading ? t('forgotPassword.submittingButton') : t('forgotPassword.submitButton')}
