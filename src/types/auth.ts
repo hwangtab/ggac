@@ -128,6 +128,7 @@ export interface MemberStatistics {
   suspendedMembers: number
   artistMembers: number
   adminMembers: number
+  directorMembers: number
   monthlyRegistrations: {
     month: string
     count: number

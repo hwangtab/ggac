@@ -34,6 +34,7 @@ export async function GET(request: NextRequest) {
         is_active,
         is_admin,
         is_artist,
+        is_director,
         is_suspended,
         membership_type,
         profile_completeness_score,
@@ -63,6 +64,7 @@ export async function GET(request: NextRequest) {
     const suspendedMembers = allMembers.filter(m => m.is_suspended).length
     const artistMembers = allMembers.filter(m => m.is_artist).length
     const adminMembers = allMembers.filter(m => m.is_admin).length
+    const directorMembers = allMembers.filter(m => m.is_director).length
 
     // 멤버십 타입별 분포 (이미 로드된 데이터 사용)
     const membershipTypeDistribution = {
@@ -138,6 +140,7 @@ export async function GET(request: NextRequest) {
       suspendedMembers,
       artistMembers,
       adminMembers,
+      directorMembers,
       monthlyRegistrations,
       membershipTypeDistribution,
       averageProfileCompleteness,

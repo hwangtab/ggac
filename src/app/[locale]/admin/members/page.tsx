@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   FiUsers,
+  FiBriefcase,
   FiCheck,
   FiX,
   FiEye,
@@ -520,6 +521,7 @@ export default function MembersPage() {
     suspendedMembers: 0,
     artistMembers: 0,
     adminMembers: 0,
+    directorMembers: 0,
   }
 
   return (
@@ -632,6 +634,18 @@ export default function MembersPage() {
                 </p>
               </div>
               <FiSettings className="w-8 h-8 text-indigo-500" />
+            </div>
+          </div>
+          <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">이사</p>
+                <p className="text-2xl font-bold text-teal-600">
+                  {statsLoading ? '...' : statsData.directorMembers}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">이사회 구성원</p>
+              </div>
+              <FiBriefcase className="w-8 h-8 text-teal-500" />
             </div>
           </div>
           <div className="bg-white rounded-lg border border-gray-200 p-4">
