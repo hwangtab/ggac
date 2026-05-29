@@ -40,8 +40,11 @@ export async function requireBoardMember(): Promise<BoardAuthSuccess | NextRespo
     return NextResponse.json({ error: '프로필 정보를 조회할 수 없습니다.' }, { status: 500 })
   }
 
-  const approved = profile.registration_status === 'approved' && profile.is_active
-  if (!approved || (!profile.is_director && !profile.is_admin)) {
+  if (
+    profile.registration_status !== 'approved' ||
+    !profile.is_active ||
+    (!profile.is_director && !profile.is_admin)
+  ) {
     return NextResponse.json({ error: '이사회 접근 권한이 없습니다.' }, { status: 403 })
   }
 
