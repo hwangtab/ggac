@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { apiDelete, ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { requireBoardMember } from '@/lib/server/boardRoomAuth'
+import { createLogger } from '@/utils/logger'
+
+const log = createLogger('boardRoom/documents')
 
 export const runtime = 'nodejs'
 
@@ -28,10 +31,11 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       // Delete storage object first (log-and-continue on failure to avoid undeletable records)
       const { error: storageErr } = await db.storage.from(BUCKET).remove([doc.file_path])
       if (storageErr) {
-        console.error(
-          `[board-documents] storage 객체 삭제 실패 id=${id} path=${doc.file_path}:`,
-          storageErr.message
-        )
+        log.error('storage 객체 삭제 실패', {
+          id,
+          path: doc.file_path,
+          error: storageErr.message,
+        })
       }
 
       // Delete metadata row

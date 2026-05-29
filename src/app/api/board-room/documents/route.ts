@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { apiGet, apiPost, ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { requireBoardMember } from '@/lib/server/boardRoomAuth'
 import { BOARD_DOCUMENT_CATEGORIES } from '@/constants/boardRoom'
+import { createLogger } from '@/utils/logger'
+
+const log = createLogger('boardRoom/documents')
 
 export const runtime = 'nodejs'
 
@@ -25,7 +28,11 @@ const ALLOWED_MIME_TYPES = new Set([
 
 /** Strip path separators and unusual chars; keep alnum, dash, underscore, dot */
 function sanitizeFileName(name: string): string {
-  return name.replace(/[/\\]/g, '_').replace(/[^a-zA-Z0-9._\-가-힣]/g, '_')
+  const sanitized = name
+    .replace(/[/\\]/g, '_')
+    .replace(/[^a-zA-Z0-9._\-가-힣]/g, '_')
+    .replace(/^\.+/, '')
+  return sanitized || 'file'
 }
 
 export async function GET(request: NextRequest) {
@@ -42,7 +49,10 @@ export async function GET(request: NextRequest) {
           'id, title, category, file_path, file_name, file_size, mime_type, uploaded_by, created_at'
         )
         .order('created_at', { ascending: false })
-      if (category && (BOARD_DOCUMENT_CATEGORIES as readonly string[]).includes(category)) {
+      if (category) {
+        if (!(BOARD_DOCUMENT_CATEGORIES as readonly string[]).includes(category)) {
+          throw ApiError.badRequest('잘못된 분류입니다.')
+        }
         query = query.eq('category', category)
       }
       const { data, error } = await query
@@ -55,10 +65,11 @@ export async function GET(request: NextRequest) {
             .from(BUCKET)
             .createSignedUrl(doc.file_path, 300)
           if (signErr) {
-            console.error(`[board-documents] signed URL 생성 실패 id=${doc.id}:`, signErr.message)
+            log.error('signed URL 생성 실패', { id: doc.id, error: signErr.message })
           }
+          const { file_path, ...rest } = doc
           return {
-            ...doc,
+            ...rest,
             download_url: signedData?.signedUrl ?? null,
           }
         })
@@ -105,7 +116,7 @@ export async function POST(request: NextRequest) {
         upsert: false,
       })
       if (uploadError) {
-        console.error('[board-documents] storage upload 실패:', uploadError.message)
+        log.error('storage upload 실패', { error: uploadError.message })
         throw ApiError.internalServerError('파일 업로드에 실패했습니다.')
       }
 
@@ -128,7 +139,7 @@ export async function POST(request: NextRequest) {
         // Rollback: remove just-uploaded storage object
         const { error: removeErr } = await db.storage.from(BUCKET).remove([storagePath])
         if (removeErr) {
-          console.error('[board-documents] rollback 삭제 실패:', removeErr.message)
+          log.error('rollback 삭제 실패', { error: removeErr.message })
         }
         throw ApiError.internalServerError('서류 등록에 실패했습니다.')
       }
