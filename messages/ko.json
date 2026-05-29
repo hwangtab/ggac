@@ -25,6 +25,7 @@
     "artists": "함께하는 사람들",
     "archive": "프로젝트",
     "board": "자유게시판",
+    "boardRoom": "이사회",
     "connect": "연락처",
     "mypage": "마이페이지",
     "login": "로그인",
@@ -496,6 +497,58 @@
       "heading": "게시판을 불러올 수 없습니다",
       "body": "일시적인 오류가 발생했습니다. 다시 시도해주세요.",
       "retry": "다시 시도"
+    }
+  },
+  "boardRoom": {
+    "title": "이사회",
+    "meetings": "회의",
+    "documents": "서류함",
+    "dashboard": {
+      "heading": "이사회 대시보드",
+      "createMeeting": "회의 만들기",
+      "documentsTitle": "서류함",
+      "documentsDesc": "이사회 관련 서류 및 문서를 열람합니다.",
+      "documentsLink": "서류함 바로가기",
+      "polling": "투표 중",
+      "scheduled": "예정",
+      "completed": "지난 회의",
+      "noPolling": "현재 투표 중인 회의가 없습니다.",
+      "noScheduled": "예정된 회의가 없습니다.",
+      "noCompleted": "지난 회의가 없습니다.",
+      "loading": "불러오는 중...",
+      "error": "회의 목록을 불러오지 못했습니다.",
+      "viewDetail": "상세 보기"
+    },
+    "meetingList": {
+      "heading": "회의 목록",
+      "loading": "불러오는 중...",
+      "error": "회의 목록을 불러오지 못했습니다.",
+      "noMeetings": "회의가 없습니다.",
+      "createMeeting": "회의 만들기"
+    },
+    "newMeeting": {
+      "heading": "새 회의 만들기",
+      "titleLabel": "제목",
+      "titlePlaceholder": "회의 제목을 입력하세요",
+      "locationLabel": "장소 (선택)",
+      "locationPlaceholder": "회의 장소를 입력하세요",
+      "voteDeadlineLabel": "투표 마감일",
+      "candidateDatesLabel": "후보 날짜",
+      "addDate": "추가",
+      "candidateDateHint": "모든 후보 시각은 21:00입니다.",
+      "submit": "회의 생성",
+      "submitting": "생성 중...",
+      "cancel": "취소",
+      "forbidden": "권한이 없습니다. 관리자만 회의를 생성할 수 있습니다.",
+      "successMessage": "회의가 생성되었습니다.",
+      "validationTitle": "제목을 입력해주세요.",
+      "validationDates": "후보 날짜를 1개 이상 추가해주세요.",
+      "validationDeadline": "투표 마감일을 설정해주세요."
+    },
+    "status": {
+      "polling": "투표 중",
+      "scheduled": "예정",
+      "completed": "완료"
     }
   },
   "home": {

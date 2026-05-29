@@ -29,6 +29,8 @@ interface Member {
   registration_status: 'pending' | 'approved' | 'rejected'
   is_active: boolean
   is_admin: boolean
+  is_director: boolean
+  director_title?: string | null
   is_artist: boolean
   artist_id?: string
   monthly_fee?: number
@@ -61,6 +63,7 @@ interface MemberDetailModalProps {
     action: 'approve' | 'reject' | 'deactivate' | 'activate' | 'suspend' | 'unsuspend',
     params?: any
   ) => void
+  onFlagsUpdate?: (memberId: string, flags: { is_director?: boolean; director_title?: string | null }) => Promise<void>
   isLoading: boolean
 }
 
@@ -69,9 +72,13 @@ export default function MemberDetailModal({
   isOpen,
   onClose,
   onAction,
+  onFlagsUpdate,
   isLoading,
 }: MemberDetailModalProps) {
   const [confirmAction, setConfirmAction] = useState<{ action: string; title: string } | null>(null)
+  const [directorChecked, setDirectorChecked] = useState(member.is_director)
+  const [directorTitle, setDirectorTitle] = useState(member.director_title ?? '')
+  const [flagsLoading, setFlagsLoading] = useState(false)
   const dialogRef = useRef<HTMLDivElement>(null)
 
   useDialogA11y({ containerRef: dialogRef, onClose, isOpen })
@@ -84,6 +91,47 @@ export default function MemberDetailModal({
       document.body.style.overflow = previousOverflow
     }
   }, [isOpen])
+
+  // 모달이 열릴 때 이사 상태 동기화
+  useEffect(() => {
+    if (isOpen) {
+      setDirectorChecked(member.is_director)
+      setDirectorTitle(member.director_title ?? '')
+    }
+  }, [isOpen, member.is_director, member.director_title])
+
+  const handleDirectorToggle = async (checked: boolean) => {
+    if (!onFlagsUpdate) return
+    setDirectorChecked(checked)
+    setFlagsLoading(true)
+    try {
+      await onFlagsUpdate(member.id, {
+        is_director: checked,
+        director_title: checked ? (directorTitle || null) : null,
+      })
+    } catch {
+      // 실패 시 원래 상태로 복원
+      setDirectorChecked(!checked)
+    } finally {
+      setFlagsLoading(false)
+    }
+  }
+
+  const handleDirectorTitleSave = async () => {
+    if (!onFlagsUpdate) return
+    setFlagsLoading(true)
+    try {
+      await onFlagsUpdate(member.id, {
+        is_director: directorChecked,
+        director_title: directorTitle || null,
+      })
+    } catch {
+      // 실패 시 마지막으로 저장된 직책으로 복원
+      setDirectorTitle(member.director_title ?? '')
+    } finally {
+      setFlagsLoading(false)
+    }
+  }
 
   if (!isOpen) return null
 
@@ -228,6 +276,11 @@ export default function MemberDetailModal({
                     {member.is_admin && (
                       <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full whitespace-nowrap">
                         관리자
+                      </span>
+                    )}
+                    {member.is_director && (
+                      <span className="px-2 py-1 text-xs font-medium bg-teal-100 text-teal-800 rounded-full whitespace-nowrap">
+                        이사{member.director_title ? ` (${member.director_title})` : ''}
                       </span>
                     )}
                     {member.is_suspended && (
@@ -461,6 +514,40 @@ export default function MemberDetailModal({
                     <span className="text-sm text-gray-600">
                       연결된 아티스트 ID: {member.artist_id}
                     </span>
+                  </div>
+                )}
+                {/* 이사 지정 토글 */}
+                {onFlagsUpdate && (
+                  <div className="col-span-2 border-t border-gray-100 pt-3 mt-1">
+                    <div className="flex items-center gap-3">
+                      <FiShield className="w-4 h-4 text-teal-500 flex-shrink-0" />
+                      <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={directorChecked}
+                          onChange={e => handleDirectorToggle(e.target.checked)}
+                          disabled={flagsLoading || isLoading}
+                          className="rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                        />
+                        <span className="text-sm text-gray-700 font-medium">이사</span>
+                      </label>
+                      {directorChecked && (
+                        <div className="flex items-center gap-2 flex-1">
+                          <input
+                            type="text"
+                            value={directorTitle}
+                            onChange={e => setDirectorTitle(e.target.value)}
+                            onBlur={handleDirectorTitleSave}
+                            placeholder="직책"
+                            disabled={flagsLoading || isLoading}
+                            className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-50"
+                          />
+                        </div>
+                      )}
+                      {flagsLoading && (
+                        <div className="w-4 h-4 border-2 border-teal-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

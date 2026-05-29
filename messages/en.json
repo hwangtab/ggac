@@ -25,6 +25,7 @@
     "artists": "Artists",
     "archive": "Projects",
     "board": "Community",
+    "boardRoom": "Board Room",
     "connect": "Contact",
     "mypage": "My Page",
     "login": "Log In",
@@ -496,6 +497,58 @@
       "heading": "Could not load the board",
       "body": "A temporary error occurred. Please try again.",
       "retry": "Try Again"
+    }
+  },
+  "boardRoom": {
+    "title": "Board Room",
+    "meetings": "Meetings",
+    "documents": "Documents",
+    "dashboard": {
+      "heading": "Board Room Dashboard",
+      "createMeeting": "Create Meeting",
+      "documentsTitle": "Documents",
+      "documentsDesc": "View board-related documents and files.",
+      "documentsLink": "Go to Documents",
+      "polling": "Polling",
+      "scheduled": "Scheduled",
+      "completed": "Past Meetings",
+      "noPolling": "No meetings currently in polling.",
+      "noScheduled": "No scheduled meetings.",
+      "noCompleted": "No past meetings.",
+      "loading": "Loading...",
+      "error": "Failed to load meetings.",
+      "viewDetail": "View Details"
+    },
+    "meetingList": {
+      "heading": "Meeting List",
+      "loading": "Loading...",
+      "error": "Failed to load meetings.",
+      "noMeetings": "No meetings found.",
+      "createMeeting": "Create Meeting"
+    },
+    "newMeeting": {
+      "heading": "Create New Meeting",
+      "titleLabel": "Title",
+      "titlePlaceholder": "Enter meeting title",
+      "locationLabel": "Location (optional)",
+      "locationPlaceholder": "Enter meeting location",
+      "voteDeadlineLabel": "Vote Deadline",
+      "candidateDatesLabel": "Candidate Dates",
+      "addDate": "Add",
+      "candidateDateHint": "All candidate times are 21:00.",
+      "submit": "Create Meeting",
+      "submitting": "Creating...",
+      "cancel": "Cancel",
+      "forbidden": "Access denied. Only admins can create meetings.",
+      "successMessage": "Meeting created successfully.",
+      "validationTitle": "Please enter a title.",
+      "validationDates": "Please add at least one candidate date.",
+      "validationDeadline": "Please set a vote deadline."
+    },
+    "status": {
+      "polling": "Polling",
+      "scheduled": "Scheduled",
+      "completed": "Completed"
     }
   },
   "home": {
