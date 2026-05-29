@@ -63,7 +63,10 @@ interface MemberDetailModalProps {
     action: 'approve' | 'reject' | 'deactivate' | 'activate' | 'suspend' | 'unsuspend',
     params?: any
   ) => void
-  onFlagsUpdate?: (memberId: string, flags: { is_director?: boolean; director_title?: string | null }) => Promise<void>
+  onFlagsUpdate?: (
+    memberId: string,
+    flags: { is_director?: boolean; director_title?: string | null }
+  ) => Promise<void>
   isLoading: boolean
 }
 
@@ -107,7 +110,7 @@ export default function MemberDetailModal({
     try {
       await onFlagsUpdate(member.id, {
         is_director: checked,
-        director_title: checked ? (directorTitle || null) : null,
+        director_title: checked ? directorTitle || null : null,
       })
     } catch {
       // 실패 시 원래 상태로 복원

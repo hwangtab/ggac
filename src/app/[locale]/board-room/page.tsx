@@ -77,9 +77,7 @@ export default function BoardRoomPage() {
   }, [dash])
 
   const pollingMeetings = meetings.filter(m => m.status === 'polling')
-  const scheduledMeetings = meetings.filter(
-    m => m.status === 'scheduled'
-  )
+  const scheduledMeetings = meetings.filter(m => m.status === 'scheduled')
   const completedMeetings = meetings.filter(m => m.status === 'completed')
 
   if (loading) {
@@ -88,7 +86,10 @@ export default function BoardRoomPage() {
         <div className="h-8 w-48 bg-gray-200 rounded mb-8 animate-pulse" />
         <div className="space-y-4">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 animate-pulse">
+            <div
+              key={i}
+              className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 animate-pulse"
+            >
               <div className="h-5 w-24 bg-gray-200 rounded mb-3" />
               <div className="h-6 w-2/3 bg-gray-200 rounded" />
             </div>

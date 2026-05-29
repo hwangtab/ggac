@@ -11,10 +11,7 @@ import { requiredQuorum, isQuorumMet } from '@/lib/boardRoom/quorum'
 
 export const runtime = 'nodejs'
 
-export async function GET(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params
   const auth = await requireBoardMember()
   if (auth instanceof NextResponse) return auth
@@ -36,7 +33,7 @@ export async function GET(
         .order('candidate_date', { ascending: true })
       if (optionsErr) throw ApiError.internalServerError('후보 날짜를 불러올 수 없습니다.')
 
-      const optionIds = (options ?? []).map((o) => o.id)
+      const optionIds = (options ?? []).map(o => o.id)
       let votes: { option_id: string; voter_id: string; is_available: boolean }[]
       if (optionIds.length > 0) {
         const { data: votesData, error: votesErr } = await db
@@ -70,7 +67,7 @@ export async function GET(
       if (attendeesErr) throw ApiError.internalServerError('출석 정보를 불러올 수 없습니다.')
 
       const roster = await getDirectorRoster(db)
-      const attendedCount = (attendees ?? []).filter((a) => a.attended).length
+      const attendedCount = (attendees ?? []).filter(a => a.attended).length
 
       return ApiSuccess.ok({
         meeting,
@@ -95,10 +92,7 @@ export async function GET(
   )
 }
 
-export async function PATCH(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params
   const auth = await requireBoardMember()
   if (auth instanceof NextResponse) return auth
@@ -157,10 +151,7 @@ export async function PATCH(
   )
 }
 
-export async function DELETE(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
+export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params
   const auth = await requireBoardMember()
   if (auth instanceof NextResponse) return auth

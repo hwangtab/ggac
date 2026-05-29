@@ -86,7 +86,9 @@ const Navigation = () => {
           .eq('id', userId)
           .single()
         if (mounted) {
-          setNavProfile(data ? { is_director: !!data.is_director, is_admin: !!data.is_admin } : null)
+          setNavProfile(
+            data ? { is_director: !!data.is_director, is_admin: !!data.is_admin } : null
+          )
         }
       } catch {
         if (mounted) setNavProfile(null)

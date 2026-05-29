@@ -27,7 +27,9 @@ export async function notifyDirectors(db: SupabaseClient, input: NotifyInput): P
         p_type: 'board_notice',
         p_title: input.title,
         p_message: input.message,
-        p_data: input.meetingId ? { meeting_id: input.meetingId, scope: 'board-room' } : { scope: 'board-room' },
+        p_data: input.meetingId
+          ? { meeting_id: input.meetingId, scope: 'board-room' }
+          : { scope: 'board-room' },
         p_related_post_id: null,
         p_related_user_id: null,
         p_expires_at: null,

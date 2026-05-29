@@ -44,7 +44,10 @@ export async function PUT(request: NextRequest) {
         )
       if (error) throw ApiError.internalServerError('투표 저장에 실패했습니다.')
 
-      return ApiSuccess.ok({ option_id: optionId, is_available: isAvailable }, '투표가 저장되었습니다.')
+      return ApiSuccess.ok(
+        { option_id: optionId, is_available: isAvailable },
+        '투표가 저장되었습니다.'
+      )
     },
     '/api/board-room/date-votes',
     { userId: user.id }

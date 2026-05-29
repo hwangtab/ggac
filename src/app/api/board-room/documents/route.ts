@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
 
       // Generate a 5-minute signed URL for each document; degrade gracefully on failure
       const documents = await Promise.all(
-        (data || []).map(async (doc) => {
+        (data || []).map(async doc => {
           const { data: signedData, error: signErr } = await db.storage
             .from(BUCKET)
             .createSignedUrl(doc.file_path, 300)

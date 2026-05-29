@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
         .single()
       if (mErr || !meeting) throw ApiError.internalServerError('회의 생성에 실패했습니다.')
 
-      const optionRows = candidateDates.map((d) => ({
+      const optionRows = candidateDates.map(d => ({
         meeting_id: meeting.id,
         candidate_date: d,
       }))

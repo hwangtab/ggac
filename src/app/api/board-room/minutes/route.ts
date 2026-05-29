@@ -28,7 +28,12 @@ export async function POST(request: NextRequest) {
 
       const { data: minutes, error } = await db
         .from('board_minutes')
-        .insert({ meeting_id: meetingId, content, content_format: contentFormat, author_id: user.id })
+        .insert({
+          meeting_id: meetingId,
+          content,
+          content_format: contentFormat,
+          author_id: user.id,
+        })
         .select('id')
         .single()
       if (error || !minutes) throw ApiError.internalServerError('회의록 생성에 실패했습니다.')

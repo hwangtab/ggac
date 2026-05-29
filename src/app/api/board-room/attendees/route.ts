@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { apiGet, apiPut, ApiSuccess, ApiError } from '@/utils/apiWrapper'
-import { requireBoardMember, requireBoardAdmin, getDirectorRoster } from '@/lib/server/boardRoomAuth'
+import {
+  requireBoardMember,
+  requireBoardAdmin,
+  getDirectorRoster,
+} from '@/lib/server/boardRoomAuth'
 import { requiredQuorum, isQuorumMet } from '@/lib/boardRoom/quorum'
 
 export const runtime = 'nodejs'
@@ -22,7 +26,7 @@ export async function GET(request: NextRequest) {
         .select('member_id, attended')
         .eq('meeting_id', meetingId)
       if (attErr) throw ApiError.internalServerError('출석 정보를 불러올 수 없습니다.')
-      const attendedCount = (attendees ?? []).filter((a) => a.attended).length
+      const attendedCount = (attendees ?? []).filter(a => a.attended).length
       return ApiSuccess.ok({
         roster,
         attendees: attendees ?? [],
@@ -55,8 +59,8 @@ export async function PUT(request: NextRequest) {
         throw ApiError.badRequest('meeting_id와 attendees 배열이 필요합니다.')
       }
       const rows = records
-        .filter((r) => r && typeof r.member_id === 'string')
-        .map((r) => ({
+        .filter(r => r && typeof r.member_id === 'string')
+        .map(r => ({
           meeting_id: meetingId,
           member_id: r.member_id,
           attended: !!r.attended,
