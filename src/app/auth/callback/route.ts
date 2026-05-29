@@ -25,9 +25,15 @@ export async function GET(request: NextRequest) {
     const supabase = await createSupabaseServer()
 
     try {
-      await supabase.auth.exchangeCodeForSession(code)
+      const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
 
-      // 비밀번호 복구 등: next가 허용 경로면 프로필 상태와 무관하게 우선 라우팅
+      // 코드 교환 실패(만료·무효 링크) 시 세션이 없으므로 로그인으로 보낸다.
+      if (exchangeError) {
+        log.warn('Code exchange failed', { message: exchangeError.message })
+        return NextResponse.redirect(`${requestUrl.origin}/login`)
+      }
+
+      // 비밀번호 복구 등: 교환 성공 후 next가 허용 경로면 프로필 상태와 무관하게 우선 라우팅
       const safeNext = resolveSafeNext(requestUrl.searchParams.get('next'))
       if (safeNext) {
         return NextResponse.redirect(`${requestUrl.origin}${safeNext}`)

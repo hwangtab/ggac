@@ -39,6 +39,16 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url, 301)
   }
 
+  // /auth/* 는 [locale] 바깥의 비localized 라우트(예: /auth/callback 콜백 핸들러)다.
+  // next-intl이 /ko/auth/callback 으로 rewrite하면 [locale] 세그먼트에 해당 라우트가
+  // 없어 404가 되므로, next-intl 처리를 건너뛰고 라우트 핸들러로 바로 통과시킨다.
+  // (콜백이 세션을 직접 수립하므로 auth 미들웨어도 불필요. CSP 헤더만 적용.)
+  if (pathname.startsWith('/auth/')) {
+    const authRes = NextResponse.next()
+    applyCSP(request, authRes)
+    return authRes
+  }
+
   // next-intl 미들웨어 실행: locale 감지 + [locale] 라우트 rewrite
   // localePrefix: 'as-needed'이므로 ko(기본)는 prefix 없이, en은 /en/ prefix.
   const intlRes = intlMiddleware(request)
