@@ -287,7 +287,37 @@
       "msgEmailNotVerified": "Email verification required. Please check your inbox.",
       "msgAuthError": "An error occurred while verifying. Please refresh and try again.",
       "msgUnexpectedError": "An unexpected error occurred. Please try again.",
-      "msgLoggedOut": "You have been logged out."
+      "msgLoggedOut": "You have been logged out.",
+      "forgotPasswordLink": "Forgot your password?"
+    },
+    "forgotPassword": {
+      "heading": "Reset password",
+      "subtitle": "Enter your email and we'll send you a reset link.",
+      "emailLabel": "Email",
+      "emailPlaceholder": "example@email.com",
+      "submitButton": "Send reset link",
+      "submittingButton": "Sending...",
+      "backToLogin": "Back to login",
+      "msgSent": "If that email is registered, we've sent a reset link. Please check your inbox.",
+      "msgRateLimited": "Too many requests. Please try again later.",
+      "msgError": "Something went wrong. Please try again later."
+    },
+    "resetPassword": {
+      "heading": "Set new password",
+      "subtitle": "Please enter your new password.",
+      "passwordLabel": "New password",
+      "passwordPlaceholder": "At least 6 characters",
+      "confirmLabel": "Confirm password",
+      "confirmPlaceholder": "Re-enter your password",
+      "submitButton": "Change password",
+      "submittingButton": "Changing...",
+      "checking": "Checking...",
+      "msgInvalidSession": "The reset link is invalid or has expired. Please request a new one.",
+      "requestAgain": "Request a new reset link",
+      "msgTooShort": "Password must be at least 6 characters.",
+      "msgMismatch": "Passwords do not match.",
+      "msgSuccess": "Your password has been changed. Redirecting...",
+      "msgError": "Failed to change password. Please try again."
     },
     "signup": {
       "heading": "Apply for Membership",
