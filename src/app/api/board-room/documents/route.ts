@@ -5,6 +5,29 @@ import { BOARD_DOCUMENT_CATEGORIES } from '@/constants/boardRoom'
 
 export const runtime = 'nodejs'
 
+const BUCKET = 'board-documents'
+const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
+
+const ALLOWED_MIME_TYPES = new Set([
+  'application/pdf',
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/haansofthwp',
+  'application/x-hwp',
+  'text/plain',
+])
+
+/** Strip path separators and unusual chars; keep alnum, dash, underscore, dot */
+function sanitizeFileName(name: string): string {
+  return name.replace(/[/\\]/g, '_').replace(/[^a-zA-Z0-9._\-가-힣]/g, '_')
+}
+
 export async function GET(request: NextRequest) {
   const auth = await requireBoardMember()
   if (auth instanceof NextResponse) return auth
@@ -15,14 +38,33 @@ export async function GET(request: NextRequest) {
     async () => {
       let query = db
         .from('board_documents')
-        .select('id, title, category, file_url, file_name, file_size, mime_type, uploaded_by, created_at')
+        .select(
+          'id, title, category, file_path, file_name, file_size, mime_type, uploaded_by, created_at'
+        )
         .order('created_at', { ascending: false })
       if (category && (BOARD_DOCUMENT_CATEGORIES as readonly string[]).includes(category)) {
         query = query.eq('category', category)
       }
       const { data, error } = await query
       if (error) throw ApiError.internalServerError('서류 목록을 불러올 수 없습니다.')
-      return ApiSuccess.ok({ documents: data })
+
+      // Generate a 5-minute signed URL for each document; degrade gracefully on failure
+      const documents = await Promise.all(
+        (data || []).map(async (doc) => {
+          const { data: signedData, error: signErr } = await db.storage
+            .from(BUCKET)
+            .createSignedUrl(doc.file_path, 300)
+          if (signErr) {
+            console.error(`[board-documents] signed URL 생성 실패 id=${doc.id}:`, signErr.message)
+          }
+          return {
+            ...doc,
+            download_url: signedData?.signedUrl ?? null,
+          }
+        })
+      )
+
+      return ApiSuccess.ok({ documents })
     },
     '/api/board-room/documents',
     { userId: user.id }
@@ -36,28 +78,61 @@ export async function POST(request: NextRequest) {
 
   return apiPost(
     async () => {
-      const body = await request.json()
-      const title: string = (body.title || '').trim()
-      const category: string = body.category
-      const fileUrl: string = body.file_url
-      if (!title) throw ApiError.badRequest('제목을 입력해주세요.')
-      if (!(BOARD_DOCUMENT_CATEGORIES as readonly string[]).includes(category)) throw ApiError.badRequest('잘못된 분류입니다.')
-      if (!fileUrl) throw ApiError.badRequest('업로드된 파일이 없습니다.')
+      const formData = await request.formData()
+      const file = formData.get('file') as File | null
+      const title = ((formData.get('title') as string) || '').trim()
+      const category = (formData.get('category') as string) || ''
 
-      const { data: doc, error } = await db
+      // Validate fields
+      if (!title) throw ApiError.badRequest('제목을 입력해주세요.')
+      if (!(BOARD_DOCUMENT_CATEGORIES as readonly string[]).includes(category))
+        throw ApiError.badRequest('잘못된 분류입니다.')
+      if (!file) throw ApiError.badRequest('업로드된 파일이 없습니다.')
+      if (file.size > MAX_FILE_SIZE) throw ApiError.badRequest('파일 크기는 최대 50MB입니다.')
+      if (!ALLOWED_MIME_TYPES.has(file.type))
+        throw ApiError.badRequest(
+          `지원하지 않는 파일 형식입니다. 허용 형식: PDF, 이미지, Word, Excel, 한글(HWP), 텍스트`
+        )
+
+      // Build safe storage path
+      const safeName = sanitizeFileName(file.name)
+      const storagePath = `${user.id}/${Date.now()}_${safeName}`
+
+      // Upload to private bucket via service-role client
+      const bytes = new Uint8Array(await file.arrayBuffer())
+      const { error: uploadError } = await db.storage.from(BUCKET).upload(storagePath, bytes, {
+        contentType: file.type,
+        upsert: false,
+      })
+      if (uploadError) {
+        console.error('[board-documents] storage upload 실패:', uploadError.message)
+        throw ApiError.internalServerError('파일 업로드에 실패했습니다.')
+      }
+
+      // Insert metadata row
+      const { data: doc, error: insertError } = await db
         .from('board_documents')
         .insert({
           title,
           category,
-          file_url: fileUrl,
-          file_name: body.file_name || null,
-          file_size: body.file_size || null,
-          mime_type: body.mime_type || null,
+          file_path: storagePath,
+          file_name: file.name,
+          file_size: file.size,
+          mime_type: file.type,
           uploaded_by: user.id,
         })
         .select('id')
         .single()
-      if (error || !doc) throw ApiError.internalServerError('서류 등록에 실패했습니다.')
+
+      if (insertError || !doc) {
+        // Rollback: remove just-uploaded storage object
+        const { error: removeErr } = await db.storage.from(BUCKET).remove([storagePath])
+        if (removeErr) {
+          console.error('[board-documents] rollback 삭제 실패:', removeErr.message)
+        }
+        throw ApiError.internalServerError('서류 등록에 실패했습니다.')
+      }
+
       return ApiSuccess.created({ id: doc.id }, '서류가 등록되었습니다.')
     },
     '/api/board-room/documents',
