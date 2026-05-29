@@ -101,7 +101,9 @@ export default function ResetPasswordPage() {
       <div className="max-w-md mx-auto">
         <div className="text-center mb-12">
           <h1 className="tw-heading-secondary mb-4">{t('resetPassword.heading')}</h1>
-          {hasSession && <p className="tw-text-body text-gray-600">{t('resetPassword.subtitle')}</p>}
+          {hasSession && (
+            <p className="tw-text-body text-gray-600">{t('resetPassword.subtitle')}</p>
+          )}
         </div>
 
         {!hasSession ? (
@@ -123,7 +125,10 @@ export default function ResetPasswordPage() {
             <div className="bg-white shadow-xl rounded-2xl overflow-hidden">
               <form onSubmit={handleSubmit} className="p-8 space-y-6">
                 <div>
-                  <label htmlFor="new-password" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label
+                    htmlFor="new-password"
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                  >
                     {t('resetPassword.passwordLabel')}
                   </label>
                   <input
@@ -140,7 +145,10 @@ export default function ResetPasswordPage() {
                   />
                 </div>
                 <div>
-                  <label htmlFor="confirm-password" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label
+                    htmlFor="confirm-password"
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                  >
                     {t('resetPassword.confirmLabel')}
                   </label>
                   <input
