@@ -122,6 +122,7 @@ export default function MemberDetailModal({
     setFlagsLoading(true)
     try {
       await onFlagsUpdate(member.id, {
+        is_director: directorChecked,
         director_title: directorTitle || null,
       })
     } finally {

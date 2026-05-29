@@ -18,11 +18,10 @@ const MemberFlagsSchema = z
     memberId: z.string().uuid('유효하지 않은 멤버 ID입니다.'),
     is_director: z.boolean().optional(),
     director_title: z.string().max(100).nullable().optional(),
-    is_admin: z.boolean().optional(),
   })
   .strict()
-  .refine(data => data.is_director !== undefined || data.is_admin !== undefined, {
-    message: 'is_director 또는 is_admin 중 하나는 반드시 포함되어야 합니다.',
+  .refine(data => data.is_director !== undefined || data.director_title !== undefined, {
+    message: 'is_director 또는 director_title 중 하나는 반드시 포함되어야 합니다.',
   })
 
 // API 라우트를 동적으로 렌더링하도록 강제 설정
@@ -64,7 +63,7 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
-    const { memberId, is_director, director_title, is_admin } = parsed.data
+    const { memberId, is_director, director_title } = parsed.data
 
     // 대상 회원 정보 조회
     const { data: targetMember, error: targetError } = await adminSupabase
@@ -92,10 +91,6 @@ export async function PATCH(request: NextRequest) {
 
     if (director_title === null || typeof director_title === 'string') {
       updateData.director_title = director_title
-    }
-
-    if (typeof is_admin === 'boolean') {
-      updateData.is_admin = is_admin
     }
 
     // 데이터베이스 업데이트
