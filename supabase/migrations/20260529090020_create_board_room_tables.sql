@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS public.board_documents (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   title TEXT NOT NULL,
   category TEXT NOT NULL,                  -- '등록증' | '정관' | '계약' | '기타'
-  file_url TEXT NOT NULL,
+  file_path TEXT NOT NULL,
   file_name TEXT,
   file_size BIGINT,
   mime_type TEXT,
