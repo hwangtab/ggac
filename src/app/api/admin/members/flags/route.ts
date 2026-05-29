@@ -28,7 +28,7 @@ const MemberFlagsSchema = z
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-// PATCH: 회원 플래그(이사/관리자) 업데이트
+// PATCH: 회원 이사 플래그/직책 업데이트
 export async function PATCH(request: NextRequest) {
   try {
     // Rate limiting 적용
@@ -57,9 +57,9 @@ export async function PATCH(request: NextRequest) {
     const parsed = MemberFlagsSchema.safeParse(raw)
     if (!parsed.success) {
       logSecurityEvent('INVALID_MEMBER_ACTION', { issues: parsed.error.flatten() }, 'medium')
-      return NextResponse.json(
-        { error: '유효하지 않은 요청입니다.', details: parsed.error.flatten() },
-        { status: 400 }
+      return createErrorResponse(
+        { success: false, error: '유효하지 않은 요청입니다.', details: parsed.error.flatten() },
+        400
       )
     }
 
@@ -98,7 +98,7 @@ export async function PATCH(request: NextRequest) {
       .from('member_profiles')
       .update(updateData)
       .eq('id', memberId)
-      .select()
+      .select('id, is_director, director_title, updated_at')
       .single()
 
     if (updateError) {

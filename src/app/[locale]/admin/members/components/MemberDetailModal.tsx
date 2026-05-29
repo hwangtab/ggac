@@ -125,6 +125,9 @@ export default function MemberDetailModal({
         is_director: directorChecked,
         director_title: directorTitle || null,
       })
+    } catch {
+      // 실패 시 마지막으로 저장된 직책으로 복원
+      setDirectorTitle(member.director_title ?? '')
     } finally {
       setFlagsLoading(false)
     }
