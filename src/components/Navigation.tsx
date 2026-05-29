@@ -45,8 +45,14 @@ const Navigation = () => {
     { href: '/archive', label: 'PROJECTS' },
     { href: '/artists', label: 'ARTISTS' },
     { href: '/board', label: 'BOARD' },
+    // 이사회: 이사/관리자에게만 노출, 게시판(BOARD) 다음에 배치
+    ...(showBoardRoom ? [{ href: '/board-room', label: 'DIRECTORS' }] : []),
     { href: '/connect', label: 'CONNECT' },
   ]
+
+  // 현재 경로 활성 판정(하위 경로 포함: /board-room/meetings 등에서도 활성)
+  const isItemActive = (href: string) =>
+    pathname === href || (href !== '/' && pathname.startsWith(`${href}/`))
 
   // 스크롤 이벤트: 초기 위치 포함해 즉시 평가
   useEffect(() => {
@@ -202,22 +208,12 @@ const Navigation = () => {
                   href={item.href}
                   prefetch={item.href === '/board'}
                   className={`font-medium transition-colors duration-300 ${
-                    pathname === item.href ? activeColor : `${textColor} ${hoverColor}`
+                    isItemActive(item.href) ? activeColor : `${textColor} ${hoverColor}`
                   }`}
                 >
                   {item.label}
                 </Link>
               ))}
-              {showBoardRoom && (
-                <Link
-                  href="/board-room"
-                  className={`font-medium transition-colors duration-300 ${
-                    pathname.startsWith('/board-room') ? activeColor : `${textColor} ${hoverColor}`
-                  }`}
-                >
-                  {t('nav.boardRoom')}
-                </Link>
-              )}
             </div>
 
             {/* Auth Section */}
@@ -329,7 +325,7 @@ const Navigation = () => {
                   pathname.startsWith('/board-room') ? activeColor : `${textColor} ${hoverColor}`
                 }`}
               >
-                {t('nav.boardRoom')}
+                DIRECTORS
               </Link>
             )}
 
@@ -443,7 +439,7 @@ const Navigation = () => {
                     setIsMenuOpen(false)
                   }}
                   className={`block py-3 px-4 rounded-md transition-colors duration-200 ${
-                    pathname === item.href
+                    isItemActive(item.href)
                       ? `${activeColor} ${isHomePage && isAtTop ? 'bg-white/10' : 'bg-primary-50'}`
                       : `${textColor} ${hoverColor} ${isHomePage && isAtTop ? 'hover:bg-white/10' : 'hover:bg-gray-50'}`
                   }`}
@@ -451,19 +447,6 @@ const Navigation = () => {
                   {item.label}
                 </Link>
               ))}
-              {showBoardRoom && (
-                <Link
-                  href="/board-room"
-                  onClick={() => setIsMenuOpen(false)}
-                  className={`block py-3 px-4 rounded-md transition-colors duration-200 ${
-                    pathname.startsWith('/board-room')
-                      ? `${activeColor} ${isHomePage && isAtTop ? 'bg-white/10' : 'bg-primary-50'}`
-                      : `${textColor} ${hoverColor} ${isHomePage && isAtTop ? 'hover:bg-white/10' : 'hover:bg-gray-50'}`
-                  }`}
-                >
-                  {t('nav.boardRoom')}
-                </Link>
-              )}
 
               {/* Mobile Auth Section */}
               <div
