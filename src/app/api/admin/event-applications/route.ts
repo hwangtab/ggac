@@ -64,10 +64,18 @@ const StatusUpdateSchema = z.object({
 const FieldUpdateSchema = z.object({
   id: z.string().uuid('유효한 ID가 필요합니다.'),
   applicant_name: z.string().min(1).max(100),
-  contact_email: z.string().email(),
+  // 마켓류는 필수지만 워크샵 등에선 미사용 → 빈 값/누락 허용
+  contact_email: z
+    .string()
+    .max(255)
+    .refine(v => !v.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim()), {
+      message: '올바른 이메일 형식을 입력해주세요.',
+    })
+    .optional()
+    .nullable(),
   contact_phone: z.string().max(20).optional().nullable(),
   performance_info: z.string().max(1000).optional().nullable(),
-  items_to_sell: z.string().min(1).max(1000),
+  items_to_sell: z.string().max(1000).optional().nullable(),
   links: z.string().max(500).optional().nullable(),
   message: z.string().max(1000).optional().nullable(),
   participation_type: z.string().max(100).optional().nullable(),
@@ -113,10 +121,10 @@ export async function PUT(request: NextRequest) {
   const { id, ...fields } = parsed.data
   const updateData = {
     applicant_name: fields.applicant_name.trim(),
-    contact_email: fields.contact_email.trim().toLowerCase(),
+    contact_email: fields.contact_email?.trim().toLowerCase() || null,
     contact_phone: fields.contact_phone?.trim() || null,
     performance_info: fields.performance_info?.trim() || null,
-    items_to_sell: fields.items_to_sell.trim(),
+    items_to_sell: fields.items_to_sell?.trim() || null,
     links: fields.links?.trim() || null,
     message: fields.message?.trim() || null,
     participation_type: fields.participation_type?.trim() || null,

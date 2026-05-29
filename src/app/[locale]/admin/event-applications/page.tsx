@@ -3,15 +3,21 @@
 import { useState, useEffect, useCallback } from 'react'
 import { FiClipboard, FiRefreshCw, FiCheck, FiX, FiClock, FiEdit2, FiTrash2 } from 'react-icons/fi'
 import AdminLayout from '../components/AdminLayout'
+import { getEventFormType } from '@/constants/eventApplicationForms'
+
+const MEMBER_LABELS: Record<string, string> = {
+  member: '조합원',
+  non_member: '비조합원',
+}
 
 interface EventApplication {
   id: string
   event_slug: string
   applicant_name: string
-  contact_email: string
+  contact_email: string | null
   contact_phone: string | null
   performance_info: string | null
-  items_to_sell: string
+  items_to_sell: string | null
   links: string | null
   message: string | null
   status: 'pending' | 'approved' | 'rejected'
@@ -52,10 +58,10 @@ const textareaClass = `${inputClass} resize-none`
 function toEditForm(app: EventApplication): EditForm {
   return {
     applicant_name: app.applicant_name,
-    contact_email: app.contact_email,
+    contact_email: app.contact_email ?? '',
     contact_phone: app.contact_phone ?? '',
     performance_info: app.performance_info ?? '',
-    items_to_sell: app.items_to_sell,
+    items_to_sell: app.items_to_sell ?? '',
     links: app.links ?? '',
     message: app.message ?? '',
     participation_type: app.participation_type ?? '',
@@ -196,6 +202,7 @@ export default function EventApplicationsPage() {
 
   const eventMap = Object.fromEntries(events.map(e => [e.slug, e.title]))
   const selectedEventTitle = eventSlug ? (eventMap[eventSlug] ?? eventSlug) : '전체 행사'
+  const editIsWorkshop = editTarget ? getEventFormType(editTarget.event_slug) === 'workshop' : false
 
   const filterButtons: { key: typeof filter; label: string }[] = [
     { key: 'all', label: `전체 (${totalCount})` },
@@ -292,6 +299,7 @@ export default function EventApplicationsPage() {
               const isExpanded = expanded === app.id
               const statusInfo = STATUS_LABELS[app.status]
               const eventTitle = eventMap[app.event_slug] ?? app.event_slug
+              const appIsWorkshop = getEventFormType(app.event_slug) === 'workshop'
               return (
                 <div
                   key={app.id}
@@ -337,40 +345,68 @@ export default function EventApplicationsPage() {
                   {isExpanded && (
                     <div className="border-t border-gray-100 p-4 space-y-4">
                       <dl className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <dt className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                            판매할 물건
-                          </dt>
-                          <dd className="mt-1 text-sm text-gray-900 whitespace-pre-wrap">
-                            {app.items_to_sell}
-                          </dd>
-                        </div>
-                        {app.performance_info && (
-                          <div>
-                            <dt className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                              공연 소개
-                            </dt>
-                            <dd className="mt-1 text-sm text-gray-900 whitespace-pre-wrap">
-                              {app.performance_info}
-                            </dd>
-                          </div>
+                        {appIsWorkshop ? (
+                          <>
+                            <div>
+                              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                                조합원 여부
+                              </dt>
+                              <dd className="mt-1 text-sm text-gray-900">
+                                {app.participation_type
+                                  ? (MEMBER_LABELS[app.participation_type] ??
+                                    app.participation_type)
+                                  : '—'}
+                              </dd>
+                            </div>
+                            {app.message && (
+                              <div className="md:col-span-2">
+                                <dt className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                                  신청 동기 / 듣고 싶은 내용
+                                </dt>
+                                <dd className="mt-1 text-sm text-gray-900 whitespace-pre-wrap">
+                                  {app.message}
+                                </dd>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <div>
+                              <dt className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                                판매할 물건
+                              </dt>
+                              <dd className="mt-1 text-sm text-gray-900 whitespace-pre-wrap">
+                                {app.items_to_sell}
+                              </dd>
+                            </div>
+                            {app.performance_info && (
+                              <div>
+                                <dt className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                                  공연 소개
+                                </dt>
+                                <dd className="mt-1 text-sm text-gray-900 whitespace-pre-wrap">
+                                  {app.performance_info}
+                                </dd>
+                              </div>
+                            )}
+                            {app.message && (
+                              <div className="md:col-span-2">
+                                <dt className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                                  기타 요청사항
+                                </dt>
+                                <dd className="mt-1 text-sm text-gray-900 whitespace-pre-wrap">
+                                  {app.message}
+                                </dd>
+                              </div>
+                            )}
+                          </>
                         )}
-                        {app.links && (
+                        {!appIsWorkshop && app.links && (
                           <div>
                             <dt className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                               링크
                             </dt>
                             <dd className="mt-1 text-sm text-primary-600 break-all">{app.links}</dd>
-                          </div>
-                        )}
-                        {app.message && (
-                          <div className="md:col-span-2">
-                            <dt className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                              기타 요청사항
-                            </dt>
-                            <dd className="mt-1 text-sm text-gray-900 whitespace-pre-wrap">
-                              {app.message}
-                            </dd>
                           </div>
                         )}
                         <div>
@@ -385,7 +421,7 @@ export default function EventApplicationsPage() {
                                 : '—'}
                           </dd>
                         </div>
-                        {app.participation_type && (
+                        {!appIsWorkshop && app.participation_type && (
                           <div>
                             <dt className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                               참여 분야
@@ -537,41 +573,66 @@ export default function EventApplicationsPage() {
                     className={inputClass}
                   />
                 </div>
-                <div className="space-y-1">
-                  <label className="block text-xs font-medium text-gray-600">링크</label>
-                  <input
-                    type="text"
-                    value={editForm.links}
-                    onChange={e => setEditForm(f => f && { ...f, links: e.target.value })}
-                    className={inputClass}
-                  />
-                </div>
+                {editIsWorkshop ? (
+                  <div className="space-y-1">
+                    <label className="block text-xs font-medium text-gray-600">조합원 여부</label>
+                    <select
+                      value={editForm.participation_type}
+                      onChange={e =>
+                        setEditForm(f => f && { ...f, participation_type: e.target.value })
+                      }
+                      className={inputClass}
+                    >
+                      <option value="">선택 안 함</option>
+                      <option value="member">조합원</option>
+                      <option value="non_member">비조합원</option>
+                    </select>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <label className="block text-xs font-medium text-gray-600">링크</label>
+                    <input
+                      type="text"
+                      value={editForm.links}
+                      onChange={e => setEditForm(f => f && { ...f, links: e.target.value })}
+                      className={inputClass}
+                    />
+                  </div>
+                )}
               </div>
+
+              {!editIsWorkshop && (
+                <>
+                  <div className="space-y-1">
+                    <label className="block text-xs font-medium text-gray-600">
+                      판매할 물건 <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={editForm.items_to_sell}
+                      onChange={e => setEditForm(f => f && { ...f, items_to_sell: e.target.value })}
+                      className={textareaClass}
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-xs font-medium text-gray-600">공연 소개</label>
+                    <textarea
+                      rows={3}
+                      value={editForm.performance_info}
+                      onChange={e =>
+                        setEditForm(f => f && { ...f, performance_info: e.target.value })
+                      }
+                      className={textareaClass}
+                    />
+                  </div>
+                </>
+              )}
 
               <div className="space-y-1">
                 <label className="block text-xs font-medium text-gray-600">
-                  판매할 물건 <span className="text-red-500">*</span>
+                  {editIsWorkshop ? '신청 동기 / 듣고 싶은 내용' : '기타 요청사항'}
                 </label>
-                <textarea
-                  rows={3}
-                  value={editForm.items_to_sell}
-                  onChange={e => setEditForm(f => f && { ...f, items_to_sell: e.target.value })}
-                  className={textareaClass}
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-xs font-medium text-gray-600">공연 소개</label>
-                <textarea
-                  rows={3}
-                  value={editForm.performance_info}
-                  onChange={e => setEditForm(f => f && { ...f, performance_info: e.target.value })}
-                  className={textareaClass}
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-xs font-medium text-gray-600">기타 요청사항</label>
                 <textarea
                   rows={2}
                   value={editForm.message}
@@ -580,20 +641,22 @@ export default function EventApplicationsPage() {
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="block text-xs font-medium text-gray-600">
-                  참여 분야 (쉼표 구분)
-                </label>
-                <input
-                  type="text"
-                  placeholder="예: booth,performance"
-                  value={editForm.participation_type}
-                  onChange={e =>
-                    setEditForm(f => f && { ...f, participation_type: e.target.value })
-                  }
-                  className={inputClass}
-                />
-              </div>
+              {!editIsWorkshop && (
+                <div className="space-y-1">
+                  <label className="block text-xs font-medium text-gray-600">
+                    참여 분야 (쉼표 구분)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="예: booth,performance"
+                    value={editForm.participation_type}
+                    onChange={e =>
+                      setEditForm(f => f && { ...f, participation_type: e.target.value })
+                    }
+                    className={inputClass}
+                  />
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end gap-2 p-5 border-t border-gray-200">
@@ -608,8 +671,7 @@ export default function EventApplicationsPage() {
                 disabled={
                   editSaving ||
                   !editForm.applicant_name ||
-                  !editForm.contact_email ||
-                  !editForm.items_to_sell
+                  (!editIsWorkshop && (!editForm.contact_email || !editForm.items_to_sell))
                 }
                 className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >

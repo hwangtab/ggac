@@ -257,7 +257,16 @@
     "errorPrivacy": "Please agree to the collection and use of your personal information.",
     "toastSuccess": "Your application has been submitted!",
     "toastError": "An error occurred. Please try again later.",
-    "toastTooMany": "Too many requests. Please try again later."
+    "toastTooMany": "Too many requests. Please try again later.",
+    "workshopNameLabel": "Applicant Name",
+    "workshopNamePlaceholder": "Enter your name",
+    "workshopMemberLabel": "Cooperative Membership",
+    "workshopMemberYes": "Member",
+    "workshopMemberNo": "Non-member",
+    "workshopMotivationLabel": "Motivation / What You'd Like to Learn (optional)",
+    "workshopMotivationPlaceholder": "Feel free to share topics you'd like covered or your reason for applying",
+    "workshopErrorMember": "Please select your membership status.",
+    "workshopSuccessMessage": "Details will be sent to the contact you provided."
   },
   "auth": {
     "login": {

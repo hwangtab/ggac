@@ -257,7 +257,16 @@
     "errorPrivacy": "개인정보 수집 및 이용에 동의해주세요.",
     "toastSuccess": "신청이 접수되었습니다!",
     "toastError": "신청 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
-    "toastTooMany": "요청이 너무 많습니다. 잠시 후 다시 시도해주세요."
+    "toastTooMany": "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.",
+    "workshopNameLabel": "신청자 이름",
+    "workshopNamePlaceholder": "성함을 입력해주세요",
+    "workshopMemberLabel": "조합원 여부",
+    "workshopMemberYes": "조합원",
+    "workshopMemberNo": "비조합원",
+    "workshopMotivationLabel": "신청 동기 / 듣고 싶은 내용 (선택)",
+    "workshopMotivationPlaceholder": "워크샵에서 다뤄줬으면 하는 주제나 신청 동기를 자유롭게 적어주세요",
+    "workshopErrorMember": "조합원 여부를 선택해주세요.",
+    "workshopSuccessMessage": "자세한 안내는 입력하신 연락처로 드립니다."
   },
   "auth": {
     "login": {

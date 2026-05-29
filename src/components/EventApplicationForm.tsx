@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl'
 import toast from 'react-hot-toast'
 import FormField from '@/components/FormField'
 import { Link } from '@/i18n/navigation'
+import { getEventFormType } from '@/constants/eventApplicationForms'
 
 interface Props {
   eventSlug: string
@@ -33,16 +34,21 @@ const initialForm: FormState = {
 const PARTICIPATION_OPTIONS = ['booth', 'performance'] as const
 type ParticipationOption = (typeof PARTICIPATION_OPTIONS)[number]
 
+const MEMBER_OPTIONS = ['member', 'non_member'] as const
+type MemberOption = (typeof MEMBER_OPTIONS)[number]
+
 export default function EventApplicationForm({ eventSlug }: Props) {
   const t = useTranslations('application')
+  const isWorkshop = getEventFormType(eventSlug) === 'workshop'
 
   const [form, setForm] = useState<FormState>(initialForm)
   const [participation, setParticipation] = useState<ParticipationOption[]>([])
+  const [memberStatus, setMemberStatus] = useState<MemberOption | ''>('')
   const [photoUrl, setPhotoUrl] = useState<string>('')
   const [photoUploading, setPhotoUploading] = useState(false)
   const [privacyConsent, setPrivacyConsent] = useState(false)
   const [errors, setErrors] = useState<
-    Partial<Record<keyof FormState | 'privacy' | 'participation' | 'photo', string>>
+    Partial<Record<keyof FormState | 'privacy' | 'participation' | 'photo' | 'member', string>>
   >({})
   const [loading, setLoading] = useState(false)
   const [submitted, setSubmitted] = useState(false)
@@ -96,10 +102,15 @@ export default function EventApplicationForm({ eventSlug }: Props) {
       newErrors.contact_email = t('errorEmailInvalid')
     }
     if (!form.contact_phone.trim()) newErrors.contact_phone = t('errorRequired')
-    if (!form.performance_info.trim()) newErrors.performance_info = t('errorRequired')
-    if (!form.items_to_sell.trim()) newErrors.items_to_sell = t('errorRequired')
 
-    if (participation.length === 0) newErrors.participation = t('errorParticipation')
+    if (isWorkshop) {
+      if (!memberStatus) newErrors.member = t('workshopErrorMember')
+    } else {
+      if (!form.performance_info.trim()) newErrors.performance_info = t('errorRequired')
+      if (!form.items_to_sell.trim()) newErrors.items_to_sell = t('errorRequired')
+      if (participation.length === 0) newErrors.participation = t('errorParticipation')
+    }
+
     if (!privacyConsent) newErrors.privacy = t('errorPrivacy')
 
     setErrors(newErrors)
@@ -112,24 +123,32 @@ export default function EventApplicationForm({ eventSlug }: Props) {
 
     setLoading(true)
     try {
+      const payload: Record<string, unknown> = {
+        event_slug: eventSlug,
+        applicant_name: form.applicant_name.trim(),
+        contact_email: form.contact_email.trim() || undefined,
+        contact_phone: form.contact_phone.trim(),
+        message: form.message.trim() || undefined,
+        privacy_consent: privacyConsent,
+      }
+
+      if (isWorkshop) {
+        // 조합원 여부는 participation_type 컬럼을 재사용해 저장한다
+        payload.participation_type = memberStatus || undefined
+      } else {
+        payload.performance_info = form.performance_info.trim()
+        payload.items_to_sell = form.items_to_sell.trim()
+        payload.links = form.links.trim() || undefined
+        payload.participation_type = PARTICIPATION_OPTIONS.filter(o =>
+          participation.includes(o)
+        ).join(',')
+        payload.photo_url = photoUrl || undefined
+      }
+
       const res = await fetch('/api/event-applications', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          event_slug: eventSlug,
-          applicant_name: form.applicant_name.trim(),
-          contact_email: form.contact_email.trim() || undefined,
-          contact_phone: form.contact_phone.trim(),
-          performance_info: form.performance_info.trim(),
-          items_to_sell: form.items_to_sell.trim(),
-          links: form.links.trim() || undefined,
-          message: form.message.trim() || undefined,
-          participation_type: PARTICIPATION_OPTIONS.filter(o => participation.includes(o)).join(
-            ','
-          ),
-          photo_url: photoUrl || undefined,
-          privacy_consent: privacyConsent,
-        }),
+        body: JSON.stringify(payload),
       })
 
       if (res.status === 429) {
@@ -156,7 +175,9 @@ export default function EventApplicationForm({ eventSlug }: Props) {
       <div className="rounded-xl border border-green-200 bg-green-50 p-8 text-center">
         <div className="mb-3 text-3xl">✅</div>
         <h4 className="text-lg font-semibold text-green-800">{t('successTitle')}</h4>
-        <p className="mt-2 text-sm text-green-700">{t('successMessage')}</p>
+        <p className="mt-2 text-sm text-green-700">
+          {isWorkshop ? t('workshopSuccessMessage') : t('successMessage')}
+        </p>
       </div>
     )
   }
@@ -167,11 +188,11 @@ export default function EventApplicationForm({ eventSlug }: Props) {
   return (
     <form onSubmit={handleSubmit} noValidate className="space-y-5">
       <FormField
-        label={t('nameLabel')}
+        label={isWorkshop ? t('workshopNameLabel') : t('nameLabel')}
         name="applicant_name"
         value={form.applicant_name}
         onChange={handleChange}
-        placeholder={t('namePlaceholder')}
+        placeholder={isWorkshop ? t('workshopNamePlaceholder') : t('namePlaceholder')}
         required
         error={errors.applicant_name}
         state={errors.applicant_name ? 'error' : 'default'}
@@ -200,134 +221,183 @@ export default function EventApplicationForm({ eventSlug }: Props) {
         state={errors.contact_phone ? 'error' : 'default'}
       />
 
-      {/* 공연 소개 */}
-      <div className="space-y-2">
-        <label htmlFor="performance_info" className="block text-sm font-medium text-gray-700">
-          {t('performanceLabel')} <span className="text-red-500">*</span>
-        </label>
-        <textarea
-          id="performance_info"
-          name="performance_info"
-          value={form.performance_info}
-          onChange={handleChange}
-          placeholder={t('performancePlaceholder')}
-          rows={3}
-          className={`${textareaClass} ${errors.performance_info ? 'border-red-500 bg-red-50 focus:ring-red-500' : ''}`}
-        />
-        {errors.performance_info && (
-          <p className="text-sm text-red-600">{errors.performance_info}</p>
-        )}
-      </div>
+      {isWorkshop ? (
+        <>
+          {/* 조합원 여부 */}
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-gray-700">
+              {t('workshopMemberLabel')} <span className="text-red-500">*</span>
+            </p>
+            <div className="flex flex-wrap gap-3">
+              {MEMBER_OPTIONS.map(opt => (
+                <label key={opt} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="member_status"
+                    checked={memberStatus === opt}
+                    onChange={() => {
+                      setMemberStatus(opt)
+                      if (errors.member) setErrors(prev => ({ ...prev, member: undefined }))
+                    }}
+                    className="h-4 w-4 border-gray-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  <span className="text-sm text-gray-700">
+                    {opt === 'member' ? t('workshopMemberYes') : t('workshopMemberNo')}
+                  </span>
+                </label>
+              ))}
+            </div>
+            {errors.member && <p className="text-sm text-red-600">{errors.member}</p>}
+          </div>
 
-      {/* 판매 물건 */}
-      <div className="space-y-2">
-        <label htmlFor="items_to_sell" className="block text-sm font-medium text-gray-700">
-          {t('itemsLabel')} <span className="text-red-500">*</span>
-        </label>
-        <textarea
-          id="items_to_sell"
-          name="items_to_sell"
-          value={form.items_to_sell}
-          onChange={handleChange}
-          placeholder={t('itemsPlaceholder')}
-          rows={3}
-          className={`${textareaClass} ${errors.items_to_sell ? 'border-red-500 bg-red-50 focus:ring-red-500' : ''}`}
-        />
-        {errors.items_to_sell && <p className="text-sm text-red-600">{errors.items_to_sell}</p>}
-      </div>
-
-      {/* 상품 사진 */}
-      <div className="space-y-2">
-        <p className="text-sm font-medium text-gray-700">{t('photoLabel')}</p>
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            disabled={photoUploading}
-            onClick={() => fileInputRef.current?.click()}
-            className="px-4 py-2 text-sm border border-gray-300 rounded-lg bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {photoUploading ? t('photoUploading') : t('photoButton')}
-          </button>
-          {photoUrl && (
-            <button
-              type="button"
-              onClick={() => setPhotoUrl('')}
-              className="text-sm text-red-600 hover:text-red-700 underline underline-offset-2"
-            >
-              {t('photoRemove')}
-            </button>
-          )}
-        </div>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={handleFileChange}
-        />
-        {photoUrl && (
-          <img
-            src={photoUrl}
-            alt="상품 미리보기"
-            className="mt-2 h-40 w-auto rounded-lg object-cover border border-gray-200"
-          />
-        )}
-        {errors.photo && <p className="text-sm text-red-600">{errors.photo}</p>}
-      </div>
-
-      <FormField
-        label={t('linksLabel')}
-        name="links"
-        value={form.links}
-        onChange={handleChange}
-        placeholder={t('linksPlaceholder')}
-      />
-
-      {/* 기타 요청사항 */}
-      <div className="space-y-2">
-        <label htmlFor="message" className="block text-sm font-medium text-gray-700">
-          {t('messageLabel')}
-        </label>
-        <textarea
-          id="message"
-          name="message"
-          value={form.message}
-          onChange={handleChange}
-          placeholder={t('messagePlaceholder')}
-          rows={3}
-          className={textareaClass}
-        />
-      </div>
-
-      {/* 참여 분야 */}
-      <div className="space-y-2">
-        <p className="text-sm font-medium text-gray-700">
-          {t('participationLabel')} <span className="text-red-500">*</span>
-        </p>
-        <div className="space-y-2">
-          {PARTICIPATION_OPTIONS.map(opt => (
-            <label key={opt} className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={participation.includes(opt)}
-                onChange={e => {
-                  setParticipation(prev =>
-                    e.target.checked ? [...prev, opt] : prev.filter(v => v !== opt)
-                  )
-                  if (e.target.checked && errors.participation) {
-                    setErrors(prev => ({ ...prev, participation: undefined }))
-                  }
-                }}
-                className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-              />
-              <span className="text-sm text-gray-700">
-                {opt === 'booth' ? t('participationBooth') : t('participationPerformance')}
-              </span>
+          {/* 신청 동기 / 듣고 싶은 내용 */}
+          <div className="space-y-2">
+            <label htmlFor="message" className="block text-sm font-medium text-gray-700">
+              {t('workshopMotivationLabel')}
             </label>
-          ))}
-        </div>
-        {errors.participation && <p className="text-sm text-red-600">{errors.participation}</p>}
-      </div>
+            <textarea
+              id="message"
+              name="message"
+              value={form.message}
+              onChange={handleChange}
+              placeholder={t('workshopMotivationPlaceholder')}
+              rows={3}
+              className={textareaClass}
+            />
+          </div>
+        </>
+      ) : (
+        <>
+          {/* 공연 소개 */}
+          <div className="space-y-2">
+            <label htmlFor="performance_info" className="block text-sm font-medium text-gray-700">
+              {t('performanceLabel')} <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              id="performance_info"
+              name="performance_info"
+              value={form.performance_info}
+              onChange={handleChange}
+              placeholder={t('performancePlaceholder')}
+              rows={3}
+              className={`${textareaClass} ${errors.performance_info ? 'border-red-500 bg-red-50 focus:ring-red-500' : ''}`}
+            />
+            {errors.performance_info && (
+              <p className="text-sm text-red-600">{errors.performance_info}</p>
+            )}
+          </div>
+
+          {/* 판매 물건 */}
+          <div className="space-y-2">
+            <label htmlFor="items_to_sell" className="block text-sm font-medium text-gray-700">
+              {t('itemsLabel')} <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              id="items_to_sell"
+              name="items_to_sell"
+              value={form.items_to_sell}
+              onChange={handleChange}
+              placeholder={t('itemsPlaceholder')}
+              rows={3}
+              className={`${textareaClass} ${errors.items_to_sell ? 'border-red-500 bg-red-50 focus:ring-red-500' : ''}`}
+            />
+            {errors.items_to_sell && <p className="text-sm text-red-600">{errors.items_to_sell}</p>}
+          </div>
+
+          {/* 상품 사진 */}
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-gray-700">{t('photoLabel')}</p>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                disabled={photoUploading}
+                onClick={() => fileInputRef.current?.click()}
+                className="px-4 py-2 text-sm border border-gray-300 rounded-lg bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {photoUploading ? t('photoUploading') : t('photoButton')}
+              </button>
+              {photoUrl && (
+                <button
+                  type="button"
+                  onClick={() => setPhotoUrl('')}
+                  className="text-sm text-red-600 hover:text-red-700 underline underline-offset-2"
+                >
+                  {t('photoRemove')}
+                </button>
+              )}
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleFileChange}
+            />
+            {photoUrl && (
+              <img
+                src={photoUrl}
+                alt="상품 미리보기"
+                className="mt-2 h-40 w-auto rounded-lg object-cover border border-gray-200"
+              />
+            )}
+            {errors.photo && <p className="text-sm text-red-600">{errors.photo}</p>}
+          </div>
+
+          <FormField
+            label={t('linksLabel')}
+            name="links"
+            value={form.links}
+            onChange={handleChange}
+            placeholder={t('linksPlaceholder')}
+          />
+
+          {/* 기타 요청사항 */}
+          <div className="space-y-2">
+            <label htmlFor="message" className="block text-sm font-medium text-gray-700">
+              {t('messageLabel')}
+            </label>
+            <textarea
+              id="message"
+              name="message"
+              value={form.message}
+              onChange={handleChange}
+              placeholder={t('messagePlaceholder')}
+              rows={3}
+              className={textareaClass}
+            />
+          </div>
+
+          {/* 참여 분야 */}
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-gray-700">
+              {t('participationLabel')} <span className="text-red-500">*</span>
+            </p>
+            <div className="space-y-2">
+              {PARTICIPATION_OPTIONS.map(opt => (
+                <label key={opt} className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={participation.includes(opt)}
+                    onChange={e => {
+                      setParticipation(prev =>
+                        e.target.checked ? [...prev, opt] : prev.filter(v => v !== opt)
+                      )
+                      if (e.target.checked && errors.participation) {
+                        setErrors(prev => ({ ...prev, participation: undefined }))
+                      }
+                    }}
+                    className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  <span className="text-sm text-gray-700">
+                    {opt === 'booth' ? t('participationBooth') : t('participationPerformance')}
+                  </span>
+                </label>
+              ))}
+            </div>
+            {errors.participation && <p className="text-sm text-red-600">{errors.participation}</p>}
+          </div>
+        </>
+      )}
 
       {/* 개인정보 수집·이용 고지 및 동의 */}
       <div className="space-y-3">

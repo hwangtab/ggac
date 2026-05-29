@@ -25,11 +25,9 @@ const ApplicationSchema = z.object({
     })
     .optional(),
   contact_phone: z.string().min(1, '연락처는 필수입니다.').max(20),
-  performance_info: z.string().min(1, '공연 소개는 필수입니다.').max(1000),
-  items_to_sell: z
-    .string()
-    .min(1, '판매할 물건은 필수입니다.')
-    .max(1000, '1000자 이내로 입력해주세요.'),
+  // 마켓류는 폼에서 필수로 받지만, 워크샵 등 다른 행사 유형은 미사용 → 서버에선 선택 처리
+  performance_info: z.string().max(1000).optional(),
+  items_to_sell: z.string().max(1000, '1000자 이내로 입력해주세요.').optional(),
   links: z.string().max(500).optional(),
   message: z.string().max(1000).optional(),
   participation_type: z.string().min(1, '참여 분야를 선택해주세요.').max(100).optional(),
@@ -69,8 +67,8 @@ export async function POST(request: NextRequest) {
       applicant_name: d.applicant_name.trim(),
       contact_email: d.contact_email?.trim().toLowerCase() || null,
       contact_phone: d.contact_phone.trim(),
-      performance_info: d.performance_info.trim(),
-      items_to_sell: d.items_to_sell.trim(),
+      performance_info: d.performance_info?.trim() || null,
+      items_to_sell: d.items_to_sell?.trim() || null,
       links: d.links?.trim() || null,
       message: d.message?.trim() || null,
       participation_type: d.participation_type?.trim() || null,
