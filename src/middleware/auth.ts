@@ -41,8 +41,12 @@ export async function handleAuth(
   const isBoardWrite = pathname.startsWith('/board/write')
   const isBoardEdit = /\/board\/.+\/edit$/.test(pathname)
   const isBoardProtected = isBoardWrite || isBoardEdit
+  const isBoardRoom = pathname.startsWith('/board-room')
   const isProtectedPage =
-    pathname.startsWith('/admin') || pathname.startsWith('/mypage') || isBoardProtected
+    pathname.startsWith('/admin') ||
+    pathname.startsWith('/mypage') ||
+    isBoardProtected ||
+    isBoardRoom
 
   try {
     // getUser()는 서버에서 JWT를 검증하므로 getSession()보다 안전
@@ -110,7 +114,7 @@ export async function handleAuth(
   try {
     const { data, error } = await supabase
       .from('member_profiles')
-      .select('registration_status, is_active, is_admin, display_name')
+      .select('registration_status, is_active, is_admin, is_director, display_name')
       .eq('id', user.id)
       .single()
 
@@ -278,6 +282,13 @@ export async function handleAuth(
     if (pathname.startsWith('/admin') && !isAdmin) {
       return {
         response: NextResponse.redirect(new URL('/board', request.nextUrl.origin)), // 관리자 아니면 게시판으로
+        shouldContinue: false,
+      }
+    }
+    // 이사회 페이지는 이사 또는 관리자만 접근
+    if (isBoardRoom && !isAdmin && !profile.is_director) {
+      return {
+        response: NextResponse.redirect(new URL('/board', request.nextUrl.origin)),
         shouldContinue: false,
       }
     }
