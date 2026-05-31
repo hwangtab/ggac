@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
-import ReactMarkdown from 'react-markdown'
+import RichTextEditor from '@/components/RichTextEditor'
+import { PostContentRenderer } from '@/components/PostContentRenderer'
 
 interface Minutes {
   id: string
@@ -10,6 +11,18 @@ interface Minutes {
   content_format: string
   author_id: string
   updated_at: string
+}
+
+type EditorFormat = 'html' | 'markdown'
+
+// Quill의 빈 본문(<p><br></p> 등)이나 공백만 있는 입력을 비어 있는 것으로 처리
+function isContentEmpty(value: string): boolean {
+  return (
+    value
+      .replace(/<[^>]*>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .trim().length === 0
+  )
 }
 
 interface MinutesEditorProps {
@@ -31,6 +44,8 @@ export default function MinutesEditor({
 
   const [editing, setEditing] = useState(false)
   const [content, setContent] = useState('')
+  // 신규 수기 작성은 리치에디터(html), 기존 레코드는 저장된 포맷 그대로 편집(무손실)
+  const [format, setFormat] = useState<EditorFormat>('html')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -38,7 +53,7 @@ export default function MinutesEditor({
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!content.trim()) return
+    if (isContentEmpty(content)) return
     setSubmitting(true)
     setError(null)
     try {
@@ -48,7 +63,7 @@ export default function MinutesEditor({
         body: JSON.stringify({
           meeting_id: meetingId,
           content: content.trim(),
-          content_format: 'markdown',
+          content_format: format,
         }),
       })
       const json = await res.json()
@@ -68,7 +83,7 @@ export default function MinutesEditor({
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!minutes || !content.trim()) return
+    if (!minutes || isContentEmpty(content)) return
     setSubmitting(true)
     setError(null)
     try {
@@ -77,7 +92,7 @@ export default function MinutesEditor({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           content: content.trim(),
-          content_format: 'markdown',
+          content_format: format,
         }),
       })
       const json = await res.json()
@@ -97,6 +112,15 @@ export default function MinutesEditor({
 
   const startEdit = () => {
     setContent(minutes?.content || '')
+    // 기존 레코드는 저장된 포맷 그대로 편집(markdown은 textarea, html은 리치에디터)
+    setFormat(minutes?.content_format === 'markdown' ? 'markdown' : 'html')
+    setError(null)
+    setEditing(true)
+  }
+
+  const startCreate = () => {
+    setContent('')
+    setFormat('html') // 신규 수기 작성은 리치에디터
     setError(null)
     setEditing(true)
   }
@@ -121,10 +145,7 @@ export default function MinutesEditor({
           <p className="text-sm text-gray-500">{t('noMinutes')}</p>
           {canEdit && (
             <button
-              onClick={() => {
-                setContent('')
-                setEditing(true)
-              }}
+              onClick={startCreate}
               className="text-sm text-primary-600 hover:underline font-medium"
             >
               + {t('writeMinutes')}
@@ -136,20 +157,31 @@ export default function MinutesEditor({
       {/* Create / Edit form */}
       {editing && (
         <form onSubmit={minutes ? handleUpdate : handleCreate} className="space-y-3">
-          <textarea
-            value={content}
-            onChange={e => setContent(e.target.value)}
-            placeholder={t('minutesPlaceholder')}
-            rows={10}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-y font-mono"
-            autoFocus
-          />
-          <p className="text-xs text-gray-400">{t('minutesMarkdownHint')}</p>
+          {format === 'markdown' ? (
+            <>
+              <textarea
+                value={content}
+                onChange={e => setContent(e.target.value)}
+                placeholder={t('minutesPlaceholder')}
+                rows={10}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-y font-mono"
+                autoFocus
+              />
+              <p className="text-xs text-gray-400">{t('minutesMarkdownHint')}</p>
+            </>
+          ) : (
+            <RichTextEditor
+              value={content}
+              onChange={setContent}
+              placeholder={t('minutesPlaceholder')}
+              disabled={submitting}
+            />
+          )}
           {error && <p className="text-xs text-red-600">{error}</p>}
           <div className="flex gap-2">
             <button
               type="submit"
-              disabled={submitting || !content.trim()}
+              disabled={submitting || isContentEmpty(content)}
               className="px-4 py-1.5 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
             >
               {submitting ? t('saving') : t('saveMinutes')}
@@ -171,9 +203,11 @@ export default function MinutesEditor({
       {/* Render existing minutes */}
       {minutes && !editing && (
         <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
-          <div className="prose prose-sm max-w-none text-gray-800">
-            <ReactMarkdown>{minutes.content}</ReactMarkdown>
-          </div>
+          <PostContentRenderer
+            content={minutes.content}
+            contentFormat={(minutes.content_format as 'plain' | 'html' | 'markdown') || 'markdown'}
+            className="prose prose-sm max-w-none text-gray-800"
+          />
           <p className="text-xs text-gray-400 mt-3">
             {t('minutesLastUpdated')}: {new Date(minutes.updated_at).toLocaleString('ko-KR')}
           </p>
