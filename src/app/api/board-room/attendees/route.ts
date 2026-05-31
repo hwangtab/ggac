@@ -4,6 +4,7 @@ import {
   requireBoardMember,
   requireBoardAdmin,
   getDirectorRoster,
+  getAuditorRoster,
 } from '@/lib/server/boardRoomAuth'
 import { requiredQuorum, isQuorumMet } from '@/lib/boardRoom/quorum'
 
@@ -21,14 +22,19 @@ export async function GET(request: NextRequest) {
   return apiGet(
     async () => {
       const roster = await getDirectorRoster(db)
+      const auditors = await getAuditorRoster(db)
       const { data: attendees, error: attErr } = await db
         .from('board_meeting_attendees')
         .select('member_id, attended')
         .eq('meeting_id', meetingId)
       if (attErr) throw ApiError.internalServerError('출석 정보를 불러올 수 없습니다.')
-      const attendedCount = (attendees ?? []).filter(a => a.attended).length
+      // 정족수는 재적 이사(roster)만으로 산정 — 감사(auditors)는 산입하지 않는다.
+      const attendedCount = (attendees ?? []).filter(
+        a => a.attended && roster.some(r => r.id === a.member_id)
+      ).length
       return ApiSuccess.ok({
         roster,
+        auditors,
         attendees: attendees ?? [],
         quorum: {
           total: roster.length,

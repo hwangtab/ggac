@@ -28,6 +28,7 @@ interface Member {
   is_admin: boolean
   is_director: boolean
   director_title?: string | null
+  is_auditor: boolean
   is_artist: boolean
   artist_id?: string
   monthly_fee?: number
@@ -142,6 +143,11 @@ function MemberCard({ member, onView, onAction, isLoading }: MemberCardProps) {
               {member.is_director && (
                 <span className="px-2 py-1 text-xs font-medium bg-teal-100 text-teal-800 rounded-full">
                   이사{member.director_title ? ` (${member.director_title})` : ''}
+                </span>
+              )}
+              {member.is_auditor && (
+                <span className="px-2 py-1 text-xs font-medium bg-amber-100 text-amber-800 rounded-full">
+                  감사
                 </span>
               )}
               {member.membership_type === 'premium' && (

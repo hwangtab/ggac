@@ -4,6 +4,7 @@ import {
   requireBoardMember,
   requireBoardAdmin,
   getDirectorRoster,
+  getAuditorRoster,
 } from '@/lib/server/boardRoomAuth'
 import { notifyDirectors } from '@/lib/server/boardRoomNotify'
 import { BOARD_MEETING_TIME } from '@/constants/boardRoom'
@@ -67,7 +68,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       if (attendeesErr) throw ApiError.internalServerError('출석 정보를 불러올 수 없습니다.')
 
       const roster = await getDirectorRoster(db)
-      const attendedCount = (attendees ?? []).filter(a => a.attended).length
+      const auditors = await getAuditorRoster(db)
+      // 정족수는 재적 이사(roster)만으로 산정 — 감사(auditors)는 산입하지 않는다.
+      const attendedCount = (attendees ?? []).filter(
+        a => a.attended && roster.some(r => r.id === a.member_id)
+      ).length
 
       return ApiSuccess.ok({
         meeting,
@@ -77,6 +82,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         agendas: agendas ?? [],
         minutes: minutes ?? null,
         roster,
+        auditors,
         attendees: attendees ?? [],
         quorum: {
           total: roster.length,

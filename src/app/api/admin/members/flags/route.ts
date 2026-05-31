@@ -18,11 +18,18 @@ const MemberFlagsSchema = z
     memberId: z.string().uuid('유효하지 않은 멤버 ID입니다.'),
     is_director: z.boolean().optional(),
     director_title: z.string().max(100).nullable().optional(),
+    is_auditor: z.boolean().optional(),
   })
   .strict()
-  .refine(data => data.is_director !== undefined || data.director_title !== undefined, {
-    message: 'is_director 또는 director_title 중 하나는 반드시 포함되어야 합니다.',
-  })
+  .refine(
+    data =>
+      data.is_director !== undefined ||
+      data.director_title !== undefined ||
+      data.is_auditor !== undefined,
+    {
+      message: 'is_director, director_title, is_auditor 중 하나는 반드시 포함되어야 합니다.',
+    }
+  )
 
 // API 라우트를 동적으로 렌더링하도록 강제 설정
 export const runtime = 'nodejs'
@@ -63,7 +70,7 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
-    const { memberId, is_director, director_title } = parsed.data
+    const { memberId, is_director, director_title, is_auditor } = parsed.data
 
     // 대상 회원 정보 조회
     const { data: targetMember, error: targetError } = await adminSupabase
@@ -93,12 +100,16 @@ export async function PATCH(request: NextRequest) {
       updateData.director_title = director_title
     }
 
+    if (typeof is_auditor === 'boolean') {
+      updateData.is_auditor = is_auditor
+    }
+
     // 데이터베이스 업데이트
     const { data: updatedMember, error: updateError } = await adminSupabase
       .from('member_profiles')
       .update(updateData)
       .eq('id', memberId)
-      .select('id, is_director, director_title, updated_at')
+      .select('id, is_director, director_title, is_auditor, updated_at')
       .single()
 
     if (updateError) {

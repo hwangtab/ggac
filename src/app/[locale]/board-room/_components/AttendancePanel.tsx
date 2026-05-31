@@ -23,6 +23,7 @@ interface Quorum {
 
 interface AttendancePanelProps {
   roster: RosterMember[]
+  auditors?: RosterMember[]
   attendees: Attendee[]
   quorum: Quorum
   meetingId: string
@@ -32,6 +33,7 @@ interface AttendancePanelProps {
 
 export default function AttendancePanel({
   roster,
+  auditors = [],
   attendees,
   quorum,
   meetingId,
@@ -44,15 +46,19 @@ export default function AttendancePanel({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // 이사 + 감사 모두 출석 체크 대상 (단, 정족수는 이사만 산정 — 서버에서 처리)
+  const allMembers = [...roster, ...auditors]
+
   // Seed checkboxes from attendees prop whenever it changes
   useEffect(() => {
     const initial: Record<string, boolean> = {}
-    roster.forEach(m => {
+    allMembers.forEach(m => {
       const found = attendees.find(a => a.member_id === m.id)
       initial[m.id] = found ? found.attended : false
     })
     setChecked(initial)
-  }, [roster, attendees])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roster, auditors, attendees])
 
   const handleSave = async () => {
     setSaving(true)
@@ -63,7 +69,7 @@ export default function AttendancePanel({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           meeting_id: meetingId,
-          attendees: roster.map(m => ({ member_id: m.id, attended: !!checked[m.id] })),
+          attendees: allMembers.map(m => ({ member_id: m.id, attended: !!checked[m.id] })),
         }),
       })
       const json = await res.json()
@@ -123,6 +129,32 @@ export default function AttendancePanel({
               </label>
             ))}
           </div>
+          {auditors.length > 0 && (
+            <div className="mb-4">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                {t('auditorsHeading')}
+              </p>
+              <div className="space-y-2">
+                {auditors.map(member => (
+                  <label
+                    key={member.id}
+                    className="flex items-center gap-3 cursor-pointer hover:bg-gray-50 px-2 py-1.5 rounded-lg transition-colors"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={!!checked[member.id]}
+                      onChange={e =>
+                        setChecked(prev => ({ ...prev, [member.id]: e.target.checked }))
+                      }
+                      className="w-4 h-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                    />
+                    <span className="text-sm text-gray-900">{member.display_name}</span>
+                    <span className="text-xs text-amber-600">{t('auditorTag')}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
           {error && <p className="text-xs text-red-600 mb-2">{error}</p>}
           <button
             onClick={handleSave}
@@ -151,6 +183,27 @@ export default function AttendancePanel({
               </div>
             )
           })}
+          {auditors.length > 0 && (
+            <div className="pt-3 mt-2 border-t border-gray-100">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">
+                {t('auditorsHeading')}
+              </p>
+              {auditors.map(member => {
+                const attended = attendees.find(a => a.member_id === member.id)?.attended ?? false
+                return (
+                  <div key={member.id} className="flex items-center gap-2 text-sm py-1">
+                    <span
+                      className={`w-2 h-2 rounded-full ${attended ? 'bg-green-500' : 'bg-gray-300'}`}
+                    />
+                    <span className={attended ? 'text-gray-900' : 'text-gray-400'}>
+                      {member.display_name}
+                    </span>
+                    <span className="text-xs text-amber-600">{t('auditorTag')}</span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>

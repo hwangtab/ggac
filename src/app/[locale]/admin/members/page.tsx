@@ -41,6 +41,7 @@ interface Member {
   is_admin: boolean
   is_director: boolean
   director_title?: string | null
+  is_auditor: boolean
   is_artist: boolean
   artist_id?: string
   monthly_fee?: number
@@ -440,7 +441,7 @@ export default function MembersPage() {
 
   const handleFlagsUpdate = async (
     memberId: string,
-    flags: { is_director?: boolean; director_title?: string | null }
+    flags: { is_director?: boolean; director_title?: string | null; is_auditor?: boolean }
   ) => {
     const response = await fetch('/api/admin/members/flags', {
       method: 'PATCH',

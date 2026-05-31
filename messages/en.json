@@ -701,6 +701,8 @@
       "quorumSummary": "{attended} of {total} present (required {required})",
       "quorumMet": "Quorum met",
       "quorumNotMet": "Quorum not met",
+      "auditorsHeading": "Auditors (excluded from quorum)",
+      "auditorTag": "Auditor",
       "edit": "Edit",
       "save": "Save",
       "saving": "Saving...",

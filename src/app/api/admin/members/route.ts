@@ -89,6 +89,7 @@ export async function GET(request: NextRequest) {
         is_admin,
         is_director,
         director_title,
+        is_auditor,
         is_artist,
         artist_id,
         monthly_fee,

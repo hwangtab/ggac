@@ -79,6 +79,7 @@ interface DetailData {
   agendas: Agenda[]
   minutes: Minutes | null
   roster: RosterMember[]
+  auditors: RosterMember[]
   attendees: Attendee[]
   quorum: Quorum
   current_user_id: string
@@ -242,8 +243,18 @@ export default function MeetingDetailPage() {
     )
   }
 
-  const { meeting, options, votes, agendas, minutes, roster, attendees, quorum, current_user_id } =
-    data
+  const {
+    meeting,
+    options,
+    votes,
+    agendas,
+    minutes,
+    roster,
+    auditors,
+    attendees,
+    quorum,
+    current_user_id,
+  } = data
 
   const votingClosed = meeting.vote_deadline ? new Date(meeting.vote_deadline) < new Date() : false
 
@@ -348,6 +359,7 @@ export default function MeetingDetailPage() {
           <section className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
             <AttendancePanel
               roster={roster}
+              auditors={auditors}
               attendees={attendees}
               quorum={quorum}
               meetingId={meeting.id}

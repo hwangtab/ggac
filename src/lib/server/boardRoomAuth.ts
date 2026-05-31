@@ -9,15 +9,17 @@ export type BoardAuthSuccess = {
   db: SupabaseClient
   user: { id: string }
   isAdmin: boolean
+  isAuditor: boolean
 }
 
 /**
  * 이사회 전용 API 권한 헬퍼.
  * - 미인증: 401
  * - 프로필 조회 실패: 500
- * - (is_director=false AND is_admin=false) / 미승인 / 비활성: 403
+ * - (is_director=false AND is_admin=false AND is_auditor=false) / 미승인 / 비활성: 403
  * - service-role 키 없음: 500
- * 성공 시 service-role db 클라이언트와 user, isAdmin 반환.
+ * 성공 시 service-role db 클라이언트와 user, isAdmin, isAuditor 반환.
+ * 감사(is_auditor)는 감사 업무를 위해 이사회에 접근하나 정족수에는 산입되지 않는다.
  */
 export async function requireBoardMember(): Promise<BoardAuthSuccess | NextResponse> {
   const supabase = await createSupabaseServer()
@@ -32,7 +34,7 @@ export async function requireBoardMember(): Promise<BoardAuthSuccess | NextRespo
 
   const { data: profile, error: profileError } = await supabase
     .from('member_profiles')
-    .select('is_admin, is_director, registration_status, is_active')
+    .select('is_admin, is_director, is_auditor, registration_status, is_active')
     .eq('id', user.id)
     .single()
 
@@ -43,7 +45,7 @@ export async function requireBoardMember(): Promise<BoardAuthSuccess | NextRespo
   if (
     profile.registration_status !== 'approved' ||
     !profile.is_active ||
-    (!profile.is_director && !profile.is_admin)
+    (!profile.is_director && !profile.is_admin && !profile.is_auditor)
   ) {
     return NextResponse.json({ error: '이사회 접근 권한이 없습니다.' }, { status: 403 })
   }
@@ -59,7 +61,7 @@ export async function requireBoardMember(): Promise<BoardAuthSuccess | NextRespo
     auth: { autoRefreshToken: false, persistSession: false },
   })
 
-  return { db, user, isAdmin: !!profile.is_admin }
+  return { db, user, isAdmin: !!profile.is_admin, isAuditor: !!profile.is_auditor }
 }
 
 /** 관리자 전용 동작(회의 생성·확정·출석 체크 등) 가드 */
@@ -70,12 +72,27 @@ export function requireBoardAdmin(auth: BoardAuthSuccess): NextResponse | null {
   return null
 }
 
-/** 재적 이사 명단(승인·활성 + is_director) */
+/** 재적 이사 명단(승인·활성 + is_director). 정족수 산정 기준이 된다. */
 export async function getDirectorRoster(db: SupabaseClient) {
   const { data, error } = await db
     .from('member_profiles')
     .select('id, display_name, director_title')
     .eq('is_director', true)
+    .eq('is_active', true)
+    .eq('registration_status', 'approved')
+  if (error) throw error
+  return data ?? []
+}
+
+/**
+ * 감사 명단(승인·활성 + is_auditor).
+ * 이사회 참석·기록 대상이지만 정족수에는 산입되지 않는다.
+ */
+export async function getAuditorRoster(db: SupabaseClient) {
+  const { data, error } = await db
+    .from('member_profiles')
+    .select('id, display_name, director_title')
+    .eq('is_auditor', true)
     .eq('is_active', true)
     .eq('registration_status', 'approved')
   if (error) throw error

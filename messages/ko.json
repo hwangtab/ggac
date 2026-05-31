@@ -701,6 +701,8 @@
       "quorumSummary": "재적 {total}명 중 {attended}명 참석 (필요 {required}명)",
       "quorumMet": "정족수 충족",
       "quorumNotMet": "정족수 미충족",
+      "auditorsHeading": "감사 (정족수 미산입)",
+      "auditorTag": "감사",
       "edit": "편집",
       "save": "저장",
       "saving": "저장 중...",

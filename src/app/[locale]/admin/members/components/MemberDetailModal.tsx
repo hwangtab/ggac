@@ -31,6 +31,7 @@ interface Member {
   is_admin: boolean
   is_director: boolean
   director_title?: string | null
+  is_auditor: boolean
   is_artist: boolean
   artist_id?: string
   monthly_fee?: number
@@ -65,7 +66,7 @@ interface MemberDetailModalProps {
   ) => void
   onFlagsUpdate?: (
     memberId: string,
-    flags: { is_director?: boolean; director_title?: string | null }
+    flags: { is_director?: boolean; director_title?: string | null; is_auditor?: boolean }
   ) => Promise<void>
   isLoading: boolean
 }
@@ -81,6 +82,7 @@ export default function MemberDetailModal({
   const [confirmAction, setConfirmAction] = useState<{ action: string; title: string } | null>(null)
   const [directorChecked, setDirectorChecked] = useState(member.is_director)
   const [directorTitle, setDirectorTitle] = useState(member.director_title ?? '')
+  const [auditorChecked, setAuditorChecked] = useState(member.is_auditor)
   const [flagsLoading, setFlagsLoading] = useState(false)
   const dialogRef = useRef<HTMLDivElement>(null)
 
@@ -95,13 +97,14 @@ export default function MemberDetailModal({
     }
   }, [isOpen])
 
-  // 모달이 열릴 때 이사 상태 동기화
+  // 모달이 열릴 때 이사/감사 상태 동기화
   useEffect(() => {
     if (isOpen) {
       setDirectorChecked(member.is_director)
       setDirectorTitle(member.director_title ?? '')
+      setAuditorChecked(member.is_auditor)
     }
-  }, [isOpen, member.is_director, member.director_title])
+  }, [isOpen, member.is_director, member.director_title, member.is_auditor])
 
   const handleDirectorToggle = async (checked: boolean) => {
     if (!onFlagsUpdate) return
@@ -131,6 +134,20 @@ export default function MemberDetailModal({
     } catch {
       // 실패 시 마지막으로 저장된 직책으로 복원
       setDirectorTitle(member.director_title ?? '')
+    } finally {
+      setFlagsLoading(false)
+    }
+  }
+
+  const handleAuditorToggle = async (checked: boolean) => {
+    if (!onFlagsUpdate) return
+    setAuditorChecked(checked)
+    setFlagsLoading(true)
+    try {
+      await onFlagsUpdate(member.id, { is_auditor: checked })
+    } catch {
+      // 실패 시 원래 상태로 복원
+      setAuditorChecked(!checked)
     } finally {
       setFlagsLoading(false)
     }
@@ -284,6 +301,11 @@ export default function MemberDetailModal({
                     {member.is_director && (
                       <span className="px-2 py-1 text-xs font-medium bg-teal-100 text-teal-800 rounded-full whitespace-nowrap">
                         이사{member.director_title ? ` (${member.director_title})` : ''}
+                      </span>
+                    )}
+                    {member.is_auditor && (
+                      <span className="px-2 py-1 text-xs font-medium bg-amber-100 text-amber-800 rounded-full whitespace-nowrap">
+                        감사
                       </span>
                     )}
                     {member.is_suspended && (
@@ -550,6 +572,27 @@ export default function MemberDetailModal({
                       {flagsLoading && (
                         <div className="w-4 h-4 border-2 border-teal-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
                       )}
+                    </div>
+                  </div>
+                )}
+                {/* 감사 지정 토글 (이사회 접근 가능하나 정족수에는 산입되지 않음) */}
+                {onFlagsUpdate && (
+                  <div className="col-span-2 border-t border-gray-100 pt-3 mt-1">
+                    <div className="flex items-center gap-3">
+                      <FiShield className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                      <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={auditorChecked}
+                          onChange={e => handleAuditorToggle(e.target.checked)}
+                          disabled={flagsLoading || isLoading}
+                          className="rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                        />
+                        <span className="text-sm text-gray-700 font-medium">감사</span>
+                      </label>
+                      <span className="text-xs text-gray-400">
+                        이사회 접근 가능 · 정족수 미산입
+                      </span>
                     </div>
                   </div>
                 )}

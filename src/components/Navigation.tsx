@@ -11,7 +11,7 @@ import { Link, usePathname, useRouter } from '@/i18n/navigation'
 import NotificationDropdown from './NotificationDropdown'
 import LocaleSwitcher from './LocaleSwitcher'
 
-type NavProfile = { is_director: boolean; is_admin: boolean } | null
+type NavProfile = { is_director: boolean; is_admin: boolean; is_auditor: boolean } | null
 
 const Navigation = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -30,8 +30,12 @@ const Navigation = () => {
   // 홈페이지인지 확인
   const isHomePage = pathname === '/'
 
-  // 이사회 링크 노출 여부 (이사 또는 관리자)
-  const showBoardRoom = !!(navProfile?.is_director || navProfile?.is_admin)
+  // 이사회 링크 노출 여부 (이사 · 관리자 · 감사)
+  const showBoardRoom = !!(
+    navProfile?.is_director ||
+    navProfile?.is_admin ||
+    navProfile?.is_auditor
+  )
 
   // 간소화된 색상 로직
   const isDark = isHomePage && isAtTop
@@ -88,12 +92,18 @@ const Navigation = () => {
       try {
         const { data } = await supabase
           .from('member_profiles')
-          .select('is_director, is_admin')
+          .select('is_director, is_admin, is_auditor')
           .eq('id', userId)
           .single()
         if (mounted) {
           setNavProfile(
-            data ? { is_director: !!data.is_director, is_admin: !!data.is_admin } : null
+            data
+              ? {
+                  is_director: !!data.is_director,
+                  is_admin: !!data.is_admin,
+                  is_auditor: !!data.is_auditor,
+                }
+              : null
           )
         }
       } catch {
