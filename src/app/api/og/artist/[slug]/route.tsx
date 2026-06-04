@@ -1,7 +1,7 @@
 import artistsData from '../../../../../../data/artists.json'
 
 export const dynamic = 'force-dynamic'
-export const runtime = 'edge'
+export const runtime = 'nodejs'
 export const preferredRegion = 'icn1'
 
 export async function GET(_request: Request, { params }: { params: Promise<{ slug: string }> }) {

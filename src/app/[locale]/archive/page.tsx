@@ -41,7 +41,7 @@ export async function generateMetadata({
   const canonical = isEn ? `/en${basePath}` : basePath
 
   return {
-    title: isEn ? 'Projects Archive' : '프로젝트',
+    title: isEn ? 'Projects' : '프로젝트',
     description: isEn
       ? 'Browse all projects, concerts, exhibitions, and events by Gyeonggi Art Collective.'
       : '경기아트콜렉티브가 만들어가는 다양한 창작 프로젝트들입니다. 음반제작, 공연기획, 예술교육, 문화행사 등 우리의 발자취를 확인해보세요.',
@@ -62,9 +62,7 @@ export async function generateMetadata({
     publisher: '경기아트콜렉티브 협동조합',
     alternates: getLocaleAlternates('/archive', locale),
     openGraph: {
-      title: isEn
-        ? 'Projects Archive | Gyeonggi Art Collective'
-        : '프로젝트 | 경기아트콜렉티브 협동조합',
+      title: isEn ? 'Projects | Gyeonggi Art Collective' : '프로젝트 | 경기아트콜렉티브 협동조합',
       description: isEn
         ? 'Browse all projects, concerts, exhibitions, and events by Gyeonggi Art Collective.'
         : '경기아트콜렉티브가 만들어가는 다양한 창작 프로젝트들입니다. 음반제작, 공연기획, 예술교육 등 우리의 발자취를 확인해보세요.',
@@ -75,7 +73,7 @@ export async function generateMetadata({
           url: '/images/logo/gac_og.webp',
           width: 1200,
           height: 630,
-          alt: '경기아트콜렉티브 협동조합 - 프로젝트 아카이브',
+          alt: '경기아트콜렉티브 협동조합 - 프로젝트',
         },
       ],
       locale: getOgLocale(locale),
@@ -83,9 +81,7 @@ export async function generateMetadata({
     },
     twitter: {
       card: 'summary_large_image',
-      title: isEn
-        ? 'Projects Archive | Gyeonggi Art Collective'
-        : '프로젝트 | 경기아트콜렉티브 협동조합',
+      title: isEn ? 'Projects | Gyeonggi Art Collective' : '프로젝트 | 경기아트콜렉티브 협동조합',
       description: isEn
         ? 'Browse all projects, concerts, exhibitions, and events by Gyeonggi Art Collective.'
         : '우리가 만들어가는 다양한 창작 프로젝트들을 만나보세요.',

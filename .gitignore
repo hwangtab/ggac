@@ -24,6 +24,9 @@ docs/
 # playwright MCP session logs — may contain PII/sensitive test data
 .playwright-mcp/
 
+# local Codex agent configuration
+.codex/
+
 # misc
 .DS_Store
 *.pem

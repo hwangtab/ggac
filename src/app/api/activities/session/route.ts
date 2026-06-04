@@ -12,6 +12,17 @@ import { sanitizeInput } from '@/utils/security'
 
 export const dynamic = 'force-dynamic'
 
+async function parseJsonBody(request: NextRequest): Promise<Record<string, unknown> | null> {
+  try {
+    const body = await request.json()
+    return body && typeof body === 'object' && !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : null
+  } catch {
+    return null
+  }
+}
+
 /**
  * 현재 세션 상태 확인
  */
@@ -51,8 +62,14 @@ export async function POST(request: NextRequest) {
         return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
       }
 
-      const body = await request.json()
-      const { action, session_token, metadata = {} } = body
+      const body = await parseJsonBody(request)
+
+      if (!body) {
+        return createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400)
+      }
+
+      const { session_token, metadata = {} } = body
+      const action = typeof body.action === 'string' ? body.action : ''
 
       if (!action || !['start', 'update', 'end'].includes(action)) {
         return NextResponse.json(
@@ -61,23 +78,23 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      if (action === 'start' && !session_token) {
+      if (action === 'start' && typeof session_token !== 'string') {
         return createErrorResponse({ success: false, error: 'session_token이 필요합니다.' }, 400)
       }
-      if (action === 'update' && !body.session_id) {
+      if (action === 'update' && typeof body.session_id !== 'string') {
         return createErrorResponse({ success: false, error: 'session_id가 필요합니다.' }, 400)
       }
 
       // 입력 검증 및 sanitization
-      const sanitizedMetadata =
-        typeof metadata === 'object'
+      const sanitizedMetadata: Record<string, unknown> =
+        metadata && typeof metadata === 'object' && !Array.isArray(metadata)
           ? Object.keys(metadata).reduce(
               (acc, key) => {
                 acc[key] =
                   typeof metadata[key] === 'string' ? sanitizeInput(metadata[key]) : metadata[key]
                 return acc
               },
-              {} as Record<string, any>
+              {} as Record<string, unknown>
             )
           : {}
 
@@ -89,7 +106,12 @@ export async function POST(request: NextRequest) {
       // 세션 관리 함수 호출
       const { data, error } = await supabase.rpc('manage_user_session', {
         p_user_id: user.id,
-        p_session_token: session_token || body.session_id || '',
+        p_session_token:
+          typeof session_token === 'string'
+            ? session_token
+            : typeof body.session_id === 'string'
+              ? body.session_id
+              : '',
         p_action: action,
         p_ip_address: clientIP,
         p_user_agent: userAgent,

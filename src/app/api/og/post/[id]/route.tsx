@@ -5,7 +5,7 @@
  */
 
 export const dynamic = 'force-dynamic'
-export const runtime = 'edge'
+export const runtime = 'nodejs'
 export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'

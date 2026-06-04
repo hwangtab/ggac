@@ -1,4 +1,3 @@
-import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import createIntlMiddleware from 'next-intl/middleware'
@@ -7,6 +6,7 @@ import { applyCSP } from './middleware/csp'
 import { getSystemSettings } from './middleware/settings'
 import { handleAuth } from './middleware/auth'
 import { getMaintenanceResponse } from './middleware/maintenance'
+import { createMiddlewareSupabaseClient } from './middleware/supabase-rest'
 import { routing } from './i18n/routing'
 
 const intlMiddleware = createIntlMiddleware(routing)
@@ -77,21 +77,7 @@ export async function middleware(request: NextRequest) {
     return res
   }
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-          cookiesToSet.forEach(({ name, value, options }) => res.cookies.set(name, value, options))
-        },
-      },
-    }
-  )
+  const supabase = createMiddlewareSupabaseClient(request)
 
   const systemSettings = await getSystemSettings(supabase)
   const authResult = await handleAuth(request, res, supabase, systemSettings)

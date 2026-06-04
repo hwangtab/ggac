@@ -8,7 +8,7 @@
  * 일반 사용자가 호출하면 항상 예외를 던져 유지보수 모드가 무력화되는 문제가 있었다.
  */
 
-import { createClient, SupabaseClient } from '@supabase/supabase-js'
+import { fetchSystemSettingsRows } from './supabase-rest'
 
 interface PublicSystemSettings {
   maintenanceMode: boolean
@@ -20,21 +20,6 @@ interface PublicSystemSettings {
 let settingsCache: PublicSystemSettings | null = null
 const SETTINGS_CACHE_DURATION = 5 * 60 * 1000 // 5분
 
-let serviceRoleClient: SupabaseClient | null = null
-
-function getServiceRoleClient(): SupabaseClient | null {
-  if (serviceRoleClient) return serviceRoleClient
-
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !serviceKey) return null
-
-  serviceRoleClient = createClient(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  })
-  return serviceRoleClient
-}
-
 export async function getSystemSettings(_supabase?: unknown): Promise<PublicSystemSettings | null> {
   // _supabase 인자는 하위 호환성을 위해 유지하되 사용하지 않는다.
   // 일반 사용자도 settings를 읽어야 하므로 service role client를 사용한다.
@@ -44,21 +29,14 @@ export async function getSystemSettings(_supabase?: unknown): Promise<PublicSyst
     return settingsCache
   }
 
-  const admin = getServiceRoleClient()
-  if (!admin) {
-    // service role 미설정 시 안전하게 통과(개발 환경 등)
-    return null
-  }
-
   try {
-    const { data, error } = await admin
-      .from('system_settings')
-      .select('category, setting_key, setting_value')
-      .eq('category', 'site')
-      .in('setting_key', ['maintenance_mode', 'registration_enabled'])
+    const { data, error } = await fetchSystemSettingsRows()
 
     if (error) {
-      console.error('[middleware/settings] Failed to fetch system settings:', error.message)
+      console.error(
+        '[middleware/settings] Failed to fetch system settings:',
+        (error as { message?: string }).message
+      )
       return null
     }
 

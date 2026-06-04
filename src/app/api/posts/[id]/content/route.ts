@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 import { validateUUID } from '@/utils/validation'
 
 export const dynamic = 'force-dynamic'
-export const runtime = 'edge'
+export const runtime = 'nodejs'
 export const preferredRegion = 'icn1'
 
 export async function GET(_req: NextRequest, context: { params: Promise<{ id: string }> }) {

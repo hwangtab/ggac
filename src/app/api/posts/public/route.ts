@@ -9,7 +9,7 @@ const log = createLogger('api/posts/public')
 
 // 동적 라우트로 강제 — `force-dynamic` 가 ISR `revalidate` 와 충돌하므로 후자 제거.
 // 캐시 정책은 응답 헤더(Cache-Control / s-maxage / stale-while-revalidate)에서 직접 관리한다.
-export const runtime = 'edge'
+export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const preferredRegion = 'icn1'
 

@@ -25,14 +25,22 @@ interface CSPReport {
   }
 }
 
+async function parseJsonBody(request: NextRequest): Promise<unknown> {
+  try {
+    return await request.json()
+  } catch {
+    return null
+  }
+}
+
 /**
  * CSP 위반 리포트 수집
  */
 export async function POST(request: NextRequest) {
   try {
-    const report: CSPReport = await request.json()
+    const report = (await parseJsonBody(request)) as CSPReport | null
 
-    if (!report['csp-report']) {
+    if (!report?.['csp-report']) {
       return createErrorResponse({ success: false, error: 'Invalid CSP report format' }, 400)
     }
 

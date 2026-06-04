@@ -7,6 +7,18 @@ import { applyRateLimit, RATE_LIMIT_CONFIGS } from '@/utils/rateLimiter'
  * 사용자 로그아웃 활동 로깅 API
  * POST /api/activities/logout
  */
+
+async function parseJsonBody(request: NextRequest): Promise<Record<string, unknown> | null> {
+  try {
+    const body = await request.json()
+    return body && typeof body === 'object' && !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : null
+  } catch {
+    return null
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     // Rate limiting 적용
@@ -30,8 +42,26 @@ export async function POST(request: NextRequest) {
       return createErrorResponse({ success: false, error: 'Unauthorized' }, 401)
     }
 
-    const body = await request.json()
-    const { sessionToken, metadata = {} } = body
+    const body = await parseJsonBody(request)
+
+    if (!body) {
+      return createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400)
+    }
+
+    const sessionToken =
+      typeof body.sessionToken === 'string'
+        ? body.sessionToken
+        : typeof body.session_id === 'string'
+          ? body.session_id
+          : ''
+    const metadata =
+      body.metadata && typeof body.metadata === 'object' && !Array.isArray(body.metadata)
+        ? body.metadata
+        : {}
+
+    if (!sessionToken) {
+      return createErrorResponse({ success: false, error: 'sessionToken이 필요합니다.' }, 400)
+    }
 
     // IP 주소 및 User-Agent 추출
     const ip =

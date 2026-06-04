@@ -3,6 +3,13 @@ import { createErrorResponse } from '@/utils/apiResponse'
 import { withRateLimit } from '@/utils/rateLimit'
 import { requireAdmin } from '@/lib/server/adminAuth'
 
+type ActivityTrendPoint = {
+  date: string
+  value: number
+  unique_users: number
+  action_type?: string
+}
+
 /**
  * 트렌드 분석 API
  * GET /api/admin/analytics/trends
@@ -66,24 +73,44 @@ export async function GET(request: NextRequest) {
  * 활동 트렌드 분석
  */
 async function getActivityTrends(supabase: any, period: string, weeks: number) {
-  // 주간 활동 통계 사용
+  const startDate = new Date()
+  startDate.setDate(startDate.getDate() - weeks * 7)
+  startDate.setHours(0, 0, 0, 0)
+
+  // 최근 기간의 전체 주간 활동 통계 사용
   const { data: weeklyStats } = await supabase
     .from('weekly_activity_stats')
     .select('*')
+    .gte('week_start', startDate.toISOString())
     .order('week_start', { ascending: true })
-    .limit(weeks)
 
-  const series =
+  const rawSeries: ActivityTrendPoint[] =
     weeklyStats?.map((week: any) => ({
       date: week.week_start,
       value: week.total_count,
       unique_users: week.unique_users,
       action_type: week.action_type,
     })) || []
+
+  const weeklyTotals = rawSeries.reduce<Record<string, ActivityTrendPoint>>((acc, item) => {
+    if (!acc[item.date]) {
+      acc[item.date] = {
+        date: item.date,
+        value: 0,
+        unique_users: 0,
+      }
+    }
+
+    acc[item.date].value += item.value
+    acc[item.date].unique_users = Math.max(acc[item.date].unique_users, item.unique_users || 0)
+    return acc
+  }, {})
+
+  const series: ActivityTrendPoint[] = Object.values(weeklyTotals).slice(-weeks)
   // 데이터가 없으면 그대로 빈 배열 반환(가짜 데이터 생성 안 함)
 
   // 액션 타입별 그룹화
-  const actionTypeGroups = series.reduce((acc: Record<string, any[]>, item: any) => {
+  const actionTypeGroups = rawSeries.reduce((acc: Record<string, any[]>, item: any) => {
     if (!acc[item.action_type]) {
       acc[item.action_type] = []
     }
@@ -93,7 +120,9 @@ async function getActivityTrends(supabase: any, period: string, weeks: number) {
 
   // 전체 트렌드 계산
   const totalTrend =
-    series.length > 0 ? calculateTrendDirection(series.map((s: any) => s.value)) : 'flat'
+    series.length > 0
+      ? calculateTrendDirection(series.map((s: any) => s.value))
+      : { direction: 'stable' as const, percentage: 0, change: 0 }
 
   return {
     series,

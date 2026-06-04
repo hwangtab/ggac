@@ -94,10 +94,9 @@ async function analyzeActivityPatterns(
     query = query.eq('user_id', userId)
   }
 
-  // 테스트 데이터 제외 옵션: metadata.generated !== true
+  // 테스트 데이터 제외 옵션: metadata.generated === true 인 행만 제외
   if (excludeTest) {
-    // PostgREST JSONB field filter
-    query = query.filter('metadata->>generated', 'neq', 'true') as any
+    query = query.not('metadata', 'cs', '{"generated":true}') as any
   }
 
   const { data: hourlyActivity } = await query

@@ -9,7 +9,7 @@ import type { NextRequest } from 'next/server'
  * - Next.js 프레임워크 청크(/_next/static)는 'self'로 허용
  * - Next.js 인라인 hydration 스크립트는 'unsafe-inline'으로 허용
  */
-export function applyCSP(_request: NextRequest, response: NextResponse) {
+export function applyCSP(request: NextRequest, response: NextResponse) {
   const isProduction = process.env.NODE_ENV === 'production'
   const envOverride = process.env.NEXT_STRICT_CSP
   const enableStrictCsp = envOverride !== undefined ? envOverride === 'true' : isProduction
@@ -19,6 +19,9 @@ export function applyCSP(_request: NextRequest, response: NextResponse) {
   }
 
   try {
+    const shouldUpgradeInsecureRequests =
+      process.env.NODE_ENV === 'production' && request.nextUrl.protocol === 'https:'
+
     const strictCsp = [
       "default-src 'self'",
       "script-src 'self' 'unsafe-inline' https:",
@@ -40,7 +43,7 @@ export function applyCSP(_request: NextRequest, response: NextResponse) {
       "manifest-src 'self'",
       'report-uri /api/security/csp-report',
       'report-to default',
-      ...(process.env.NODE_ENV === 'production' ? ['upgrade-insecure-requests'] : []),
+      ...(shouldUpgradeInsecureRequests ? ['upgrade-insecure-requests'] : []),
     ].join('; ')
 
     response.headers.set('Content-Security-Policy', strictCsp)

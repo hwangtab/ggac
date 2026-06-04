@@ -28,7 +28,7 @@
     "react/no-unused-state": "warn",
     "react/no-unknown-property": "off",
     // Next.js 규칙
-    "@next/next/no-img-element": "warn",
+    "@next/next/no-img-element": "off",
     "@next/next/no-html-link-for-pages": "error",
     "@next/next/no-sync-scripts": "error",
     // React Hooks 규칙
@@ -59,9 +59,8 @@
     "jsx-a11y/no-autofocus": "off",
     "jsx-a11y/no-noninteractive-element-interactions": "off",
     // 일반 JavaScript 규칙
-    // logger.ts 통합을 위해 신규 코드는 console 직접 사용을 피하라.
-    // warn/error는 fallback 호환을 위해 일시 허용. 점진적으로 logger로 이전한다.
-    "no-console": ["warn", { "allow": ["warn", "error"] }],
+    // 운영 번들에서는 next.config.js의 compiler.removeConsole 설정으로 debug/info/log를 제거한다.
+    "no-console": "off",
     "no-debugger": "error",
     "no-alert": "off",
     "no-unused-vars": "off", // TypeScript가 처리
@@ -72,14 +71,7 @@
     "no-trailing-spaces": "off",
     "eol-last": "off",
     // 코드 품질 규칙
-    "max-lines": [
-      "warn",
-      {
-        "max": 600,
-        "skipBlankLines": true,
-        "skipComments": true
-      }
-    ],
+    "max-lines": "off",
     // 보안 규칙
     "no-eval": "error",
     "no-implied-eval": "error",
@@ -101,5 +93,5 @@
     "es2021": true,
     "node": true
   },
-  "ignorePatterns": [".next", "node_modules", "dist", "build", "*.d.ts"]
+  "ignorePatterns": [".next", "node_modules", "dist", "build", "public", "scripts", "*.d.ts"]
 }

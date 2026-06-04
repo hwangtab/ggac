@@ -1,10 +1,8 @@
 import type { Metadata } from 'next'
-import '../globals.css'
 import ErrorBoundary from '@/components/ErrorBoundary'
 import ConditionalLayout from '@/components/ConditionalLayout'
 import { getGlobalData } from '@/lib/data'
 import { Suspense } from 'react'
-import Script from 'next/script'
 import { Toaster } from 'react-hot-toast'
 import { NextIntlClientProvider } from 'next-intl'
 import { getMessages, setRequestLocale, getTranslations } from 'next-intl/server'
@@ -122,10 +120,6 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
   return (
     <html lang={locale}>
       <body suppressHydrationWarning>
-        {/* CSS-script guard: /public/css-guard.js 외부 파일로 분리.
-            CSP가 nonce 기반이 아니라 script-src-elem 'self'로 허용하므로 nonce 불필요.
-            (nonce를 부여하면 브라우저가 파싱 후 nonce 속성을 비워 hydration 불일치가 발생함) */}
-        <Script id="css-script-guard" strategy="beforeInteractive" src="/css-guard.js" />
         <NextIntlClientProvider messages={messages} locale={locale}>
           <ErrorBoundary>
             <div className="skip-links">

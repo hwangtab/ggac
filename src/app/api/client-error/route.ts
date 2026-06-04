@@ -7,11 +7,22 @@ const log = createLogger('api/client-error')
 const MAX_FIELD_LENGTH = 4096
 const MAX_MESSAGE_LENGTH = 1024
 
-export async function POST(request: NextRequest) {
+async function parseJsonBody(request: NextRequest): Promise<Record<string, unknown> | null> {
   try {
     const body = await request.json()
+    return body && typeof body === 'object' && !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : null
+  } catch {
+    return null
+  }
+}
 
-    if (!body.message || !body.timestamp) {
+export async function POST(request: NextRequest) {
+  try {
+    const body = await parseJsonBody(request)
+
+    if (!body?.message || !body.timestamp) {
       return ApiError.badRequest('Missing required fields: message, timestamp').toNextResponse()
     }
 

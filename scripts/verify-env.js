@@ -5,11 +5,17 @@
  * Checks if all required environment variables are present and valid
  */
 
+const { loadEnvConfig } = require('@next/env')
+
+loadEnvConfig(process.cwd())
+
 const requiredEnvVars = [
   'NEXT_PUBLIC_SUPABASE_URL',
   'NEXT_PUBLIC_SUPABASE_ANON_KEY',
   'SUPABASE_SERVICE_ROLE_KEY',
 ]
+
+const productionRequiredEnvVars = ['UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN']
 
 const optionalEnvVars = [
   'UPSTASH_REDIS_REST_URL',
@@ -75,8 +81,15 @@ if (process.env.NODE_ENV === 'production') {
   console.log('\n🏭 Production Environment Checks:')
 
   // Check if Redis is configured for production rate limiting
-  if (!process.env.UPSTASH_REDIS_REST_URL) {
-    console.log('⚠️  Redis not configured - rate limiting will use memory fallback')
+  productionRequiredEnvVars.forEach(varName => {
+    if (!process.env[varName]) {
+      console.log(`❌ ${varName}: Missing in production`)
+      hasErrors = true
+    }
+  })
+
+  if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+    console.log('❌ Redis not configured - production rate limiting would use memory fallback')
   }
 
   // Check CSP setting

@@ -9,6 +9,7 @@ const IMAGE_ALLOWED_QUALITIES = [50, 65, 75, 80, 85, 90, 100]
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  allowedDevOrigins: ['127.0.0.1'],
 
   env: {
     NEXT_PUBLIC_IMAGE_ALLOWED_QUALITIES: IMAGE_ALLOWED_QUALITIES.join(','),
@@ -67,6 +68,7 @@ const nextConfig = {
               test: /[\\/]node_modules[\\/](react-quill-new|quill|parchment|quill-delta|fast-diff|lodash\.isequal|lodash\.clonedeep)[\\/]/,
               name: 'quill',
               chunks: 'async',
+              type: 'javascript/auto',
               priority: 30,
               reuseExistingChunk: true,
             },
@@ -75,6 +77,7 @@ const nextConfig = {
               test: /[\\/]node_modules[\\/]react-image-crop[\\/]/,
               name: 'image-crop',
               chunks: 'all',
+              type: 'javascript/auto',
               priority: 30,
               reuseExistingChunk: true,
             },
@@ -84,6 +87,7 @@ const nextConfig = {
               test: /[\\/]node_modules[\\/]dompurify[\\/]/,
               name: 'dompurify',
               chunks: 'all',
+              type: 'javascript/auto',
               priority: 30,
               reuseExistingChunk: true,
             },
@@ -92,12 +96,14 @@ const nextConfig = {
               test: /[\\/]node_modules[\\/](react-markdown|mdast-util-.*|micromark.*|unified|hast-util-.*|unist-util-.*|vfile.*|bail|trough|is-plain-obj|trim-lines|space-separated-tokens|comma-separated-tokens|property-information|html-url-attributes|character-entities.*|decode-named-character-reference|devlop|estree-util-is-identifier-name|extend|longest-streak|markdown-table|zwitch|stringify-entities|ccount|escape-string-regexp)[\\/]/,
               name: 'react-markdown',
               chunks: 'all',
+              type: 'javascript/auto',
               priority: 28,
               reuseExistingChunk: true,
             },
             vendor: {
               test: /[\\/]node_modules[\\/]/,
               name: 'vendors',
+              type: 'javascript/auto',
               priority: 10,
               reuseExistingChunk: true,
             },
@@ -105,6 +111,7 @@ const nextConfig = {
             reactIcons: {
               test: /[\\/]node_modules[\\/]react-icons[\\/]/,
               name: 'react-icons',
+              type: 'javascript/auto',
               priority: 20,
               reuseExistingChunk: true,
             },
@@ -112,6 +119,7 @@ const nextConfig = {
             supabase: {
               test: /[\\/]node_modules[\\/]@supabase[\\/]/,
               name: 'supabase',
+              type: 'javascript/auto',
               priority: 20,
               reuseExistingChunk: true,
             },
@@ -119,6 +127,7 @@ const nextConfig = {
             common: {
               name: 'common',
               minChunks: 2,
+              type: 'javascript/auto',
               priority: 5,
               reuseExistingChunk: true,
             },
@@ -466,8 +475,6 @@ const nextConfig = {
                     // CSP 위반 리포팅
                     'report-uri /api/security/csp-report',
                     'report-to default',
-                    // Remove upgrade-insecure-requests in development to allow HTTP
-                    ...(process.env.NODE_ENV === 'production' ? ['upgrade-insecure-requests'] : []),
                   ].join('; '),
           },
           {

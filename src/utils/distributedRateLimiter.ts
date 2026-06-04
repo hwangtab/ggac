@@ -121,6 +121,7 @@ class UpstashRedisClient {
 class DistributedRateLimiter {
   private redis: UpstashRedisClient | null = null
   private fallbackToMemory: boolean = false
+  private fallbackReported: boolean = false
   private memoryStore: Map<string, { count: number; resetTime: number }> = new Map()
 
   constructor() {
@@ -134,22 +135,30 @@ class DistributedRateLimiter {
       })
     } else {
       this.fallbackToMemory = true
-      const baseMessage =
-        'Upstash Redis 자격 증명이 없어 메모리 기반 폴백으로 동작합니다. ' +
-        '서버리스/분산 환경에서는 인스턴스별로 카운터가 분리되어 rate limit이 무효화됩니다. ' +
-        'UPSTASH_REDIS_REST_URL 및 UPSTASH_REDIS_REST_TOKEN을 설정하세요.'
+    }
+  }
 
-      if (process.env.NODE_ENV === 'production') {
-        // 운영 환경에서는 보안 이벤트로 기록하여 모니터링 채널에서 즉시 인지하도록 함
-        log.error(baseMessage)
-        try {
-          logSecurityEvent('RATE_LIMIT_MEMORY_FALLBACK', { env: 'production' }, 'high')
-        } catch {
-          // logSecurityEvent 자체 실패는 무시 (로그 채널 의존성 회피)
-        }
-      } else {
-        log.warn(baseMessage)
+  private reportMemoryFallbackIfNeeded(): void {
+    if (!this.fallbackToMemory || this.fallbackReported) {
+      return
+    }
+
+    this.fallbackReported = true
+
+    const baseMessage =
+      'Upstash Redis 자격 증명이 없어 메모리 기반 폴백으로 동작합니다. ' +
+      '서버리스/분산 환경에서는 인스턴스별로 카운터가 분리되어 rate limit이 무효화됩니다. ' +
+      'UPSTASH_REDIS_REST_URL 및 UPSTASH_REDIS_REST_TOKEN을 설정하세요.'
+
+    if (process.env.NODE_ENV === 'production') {
+      log.error(baseMessage)
+      try {
+        logSecurityEvent('RATE_LIMIT_MEMORY_FALLBACK', { env: 'production' }, 'high')
+      } catch {
+        // logSecurityEvent 자체 실패는 무시 (로그 채널 의존성 회피)
       }
+    } else {
+      log.warn(baseMessage)
     }
   }
 
@@ -240,6 +249,8 @@ class DistributedRateLimiter {
     } = config
 
     return async (req: NextRequest): Promise<RateLimitResult> => {
+      this.reportMemoryFallbackIfNeeded()
+
       const baseKey = keyGenerator(req)
       const blockKey = `${baseKey}:blocked`
 

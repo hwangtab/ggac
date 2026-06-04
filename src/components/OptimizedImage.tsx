@@ -500,9 +500,6 @@ const OptimizedImage = memo(function OptimizedImage({
         {...imageProps}
         ref={(el: HTMLImageElement | null) => {
           imageRef.current = el
-          if (el && el.complete && el.naturalWidth > 0) {
-            markImageLoaded()
-          }
         }}
         className={`transition-opacity duration-500 ${
           suppressSkeleton || priority ? '' : isLoading ? 'opacity-0' : 'opacity-100'

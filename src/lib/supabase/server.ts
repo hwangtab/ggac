@@ -1,4 +1,4 @@
-import { createServerClient } from '@supabase/ssr'
+import { createServerClient } from '@supabase/ssr/dist/module/createServerClient'
 import { cookies } from 'next/headers'
 import { createLogger } from '@/utils/logger'
 

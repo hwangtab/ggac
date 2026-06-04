@@ -46,7 +46,7 @@ const Navigation = () => {
   const menuItems = [
     { href: '/', label: 'HOME' },
     { href: '/about', label: 'ABOUT' },
-    { href: '/archive', label: 'PROJECTS' },
+    { href: '/archive', label: 'PROJECT' },
     { href: '/artists', label: 'ARTISTS' },
     { href: '/board', label: 'BOARD' },
     // 이사회: 이사/관리자에게만 노출, 게시판(BOARD) 다음에 배치
