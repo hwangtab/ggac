@@ -427,26 +427,5 @@
     "portfolioLinks": [],
     "youtubeVideos": [],
     "contact": null
-  },
-  {
-    "id": "artist-018",
-    "slug": "kim-dong-san",
-    "name": "Kim Dong-san",
-    "category": [
-      "Creator",
-      "Performer"
-    ],
-    "profileImage": "/images/logo/gac_og.webp",
-    "oneLiner": "\"I'll write you a song for a thousand won\" — a composer-for-hire chronicling the landscape of our times in folk blues",
-    "bio": "Kim Dong-san is a singer-songwriter whose musical journey began with **composition-on-call** under the slogan \"I'll write you a song for a thousand won.\" What started as listening to a client's story on the street and improvising a song on the spot gradually deepened into folk blues that records the landscape and the wounds of our time.\n\n### Composition on Call\n\nBelieving that anyone's story can become a song, he has chronicled the lives of the displaced — laid-off workers, merchants pushed out by gentrification, and others who lost their place. For this body of work he is sometimes called \"the Woody Guthrie of Korea.\"\n\n### Kim Dong-san and Blue-Out\n\nTogether with his band Blue-Out (Ryu Jun-cheol on organ, Lee In-woo on bass, Kim Ye-jun on drums), he blends the lyricism of folk with the weighty texture of blues rock. His 2024 single \"Mulgyeol (Wave)\" carries harmonies reminiscent of 1970s CSNY, reflecting on the relationship between technological civilization, nature, community, and art.\n\n### long_player\n\nNear Janganmun in Suwon, he runs 'long_player,' a music space built around LPs and recycling — carrying on a culture of repairing and reusing the discarded, alongside his music. This space is also the stage for Gyeonggi Art Collective's 'Health Concert.'\n\n### Keywords\n- Composition on call (\"a song for a thousand won\")\n- Folk blues\n- The Woody Guthrie of Korea\n- Kim Dong-san and Blue-Out\n- Runs long_player",
-    "templateType": "minimal",
-    "portfolioLinks": [
-      {
-        "title": "Bugs",
-        "url": "https://music.bugs.co.kr/artist/14010579"
-      }
-    ],
-    "youtubeVideos": [],
-    "contact": null
   }
 ]
