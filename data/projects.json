@@ -604,5 +604,23 @@
       "internal": true
     },
     "relatedArticles": []
+  },
+  {
+    "id": "project-025",
+    "slug": "health-concert-2-living-night",
+    "title": "건강열전 2회 「살아있는 자들의 밤」",
+    "category": "공연·전시",
+    "publishedDate": "2026-07-09",
+    "coverImage": "/images/projects/health-concert-2-living-night.webp",
+    "description": "건강열전 2회 「살아있는 자들의 밤」\n\n뮤지션과 관객 모두의 건강을 기원하는 음악 공연 '건강열전'이 두 번째 무대로 돌아옵니다. 노래 이외에도 즐길 거리가 가득하니 편하게 놀러 오세요. ♡\n\n### 공연 정보\n\n- **일시**: 2026년 7월 9일 (목) 저녁 7시 ~ 9시 (시간은 조금 넘어갈 수 있습니다)\n- **장소**: 롱플레이어(long_player) — 경기도 수원시 팔달구 정조로886번길 12\n- **티켓**: 예매 15,000원 / 현매 20,000원\n- **예매 입금 계좌**: 카카오뱅크 3333-13-8787-271 (예금주 유동혁)\n\n### 출연진\n\n**희우** (싱어송라이터)  \n국악과 현대 음악을 잇는 독창적인 소리꾼이자 싱어송라이터입니다.\n\n**유동혁** (펑크포크)  \n펑크에서 출발해 결국 포크에 정착한 펑크포크 싱어송라이터입니다.\n\n**해리스** (싱어송라이터)  \n세계 각국의 민속 음악(Folklore)을 자신의 작업으로 끌어들이는 싱어송라이터입니다.\n\n**김동산** (출장작곡)  \n'출장작곡'을 모토로 활동하는 음악가입니다.",
+    "gallery": null,
+    "videoUrl": null,
+    "artistIds": [
+      "artist-012",
+      "artist-005",
+      "artist-017"
+    ],
+    "ticketing": [],
+    "relatedArticles": []
   }
 ]
