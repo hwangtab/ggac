@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
 import { BOARD_MEETING_TIME } from '@/constants/boardRoom'
 import type { BoardMeetingStatus } from '@/constants/boardRoom'
+import { fetchSessionProfile, isApprovedActiveAdmin } from '@/utils/sessionProfile'
 import StatusBadge from '../_components/StatusBadge'
 
 interface Meeting {
@@ -15,6 +16,13 @@ interface Meeting {
   status: BoardMeetingStatus
   vote_deadline: string | null
   created_at: string
+}
+
+const UNKNOWN_YEAR = 'unknown'
+
+function getMeetingYearKey(createdAt: string): string {
+  const year = new Date(createdAt).getFullYear()
+  return Number.isInteger(year) ? String(year) : UNKNOWN_YEAR
 }
 
 export default function MeetingListPage() {
@@ -29,21 +37,10 @@ export default function MeetingListPage() {
     let mounted = true
     ;(async () => {
       try {
-        const { supabase } = await import('@/lib/supabase/client')
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
-        if (!mounted) return
-        if (session?.user) {
-          const { data } = await supabase
-            .from('member_profiles')
-            .select('is_admin')
-            .eq('id', session.user.id)
-            .single()
-          if (mounted) setIsAdmin(!!data?.is_admin)
-        }
+        const session = await fetchSessionProfile()
+        if (mounted) setIsAdmin(isApprovedActiveAdmin(session.profile))
       } catch {
-        // silently ignore
+        if (mounted) setIsAdmin(false)
       }
     })()
     return () => {
@@ -76,12 +73,16 @@ export default function MeetingListPage() {
 
   // Group meetings by year (newest first)
   const groupedByYear = meetings.reduce<Record<string, Meeting[]>>((acc, m) => {
-    const year = new Date(m.created_at).getFullYear().toString()
+    const year = getMeetingYearKey(m.created_at)
     if (!acc[year]) acc[year] = []
     acc[year].push(m)
     return acc
   }, {})
-  const sortedYears = Object.keys(groupedByYear).sort((a, b) => Number(b) - Number(a))
+  const sortedYears = Object.keys(groupedByYear).sort((a, b) => {
+    if (a === UNKNOWN_YEAR) return 1
+    if (b === UNKNOWN_YEAR) return -1
+    return b.localeCompare(a)
+  })
 
   if (loading) {
     return (
@@ -137,7 +138,7 @@ export default function MeetingListPage() {
           {sortedYears.map(year => (
             <div key={year}>
               <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-widest mb-3">
-                {year}
+                {year === UNKNOWN_YEAR ? '날짜 미상' : year}
               </h2>
               <div className="space-y-3">
                 {groupedByYear[year].map(m => (

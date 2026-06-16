@@ -6,11 +6,10 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
-import type { User } from '@supabase/supabase-js'
-import { getSupabaseClient } from '@/lib/supabase/client'
 import type { PostLikeToggleResponse } from '@/types'
 import { createLogger } from '@/utils/logger'
 import { useMultiLoadingState } from '@/hooks/useLoadingState'
+import { fetchSessionProfile } from '@/utils/sessionProfile'
 
 const log = createLogger('usePostLikes')
 
@@ -41,15 +40,11 @@ export function usePostLikes({
   prefetched = false,
   onLikeChange,
 }: UsePostLikesProps) {
-  const [user, setUser] = useState<User | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
   const [state, setState] = useState<PostLikeState>({
     likeCount: initialLikeCount,
     isLiked: initialIsLiked,
   })
-
-  // Lazily initialize Supabase client and auth session at idle to avoid
-  // impacting initial render on list/detail views.
-  const supabaseRef = useRef<ReturnType<typeof getSupabaseClient> | null>(null)
 
   const scheduleIdle = (fn: () => void) => {
     if (typeof window.requestIdleCallback === 'function') {
@@ -72,42 +67,37 @@ export function usePostLikes({
     },
   })
 
+  const refreshUser = useCallback(async () => {
+    const session = await fetchSessionProfile()
+    setUserId(session.user?.id ?? null)
+    return session.user?.id ?? null
+  }, [])
+
   // 사용자 정보 가져오기
   useEffect(() => {
-    let unsub: (() => void) | null = null
     scheduleIdle(() => {
-      try {
-        if (!supabaseRef.current) supabaseRef.current = getSupabaseClient()
-        const supabase = supabaseRef.current
-        ;(async () => {
-          const {
-            data: { session },
-          } = await supabase!.auth.getSession()
-          setUser(session?.user || null)
-        })()
-        const { data } = supabase!.auth.onAuthStateChange((_event, session) => {
-          setUser(session?.user || null)
-        })
-        unsub = () => data.subscription.unsubscribe()
-      } catch (authInitError) {
+      void refreshUser().catch(authInitError => {
         log.error('auth 초기화 실패:', authInitError)
-      }
+      })
     })
 
-    return () => {
-      try {
-        unsub && unsub()
-      } catch {}
+    const handleFocus = () => {
+      void refreshUser()
     }
-  }, [])
+    window.addEventListener('focus', handleFocus)
+
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [refreshUser])
 
   // 좋아요 상태 초기화 및 조회 - 디바운싱 및 중복 방지 추가
   const fetchLikeStatus = useCallback(
     async (force: boolean = false) => {
-      if (!user || !postId) return
+      if (!userId || !postId) return
 
       // 중복 요청 방지 - 같은 요청이 이미 진행 중이면 무시
-      const fetchKey = `${user.id}-${postId}`
+      const fetchKey = `${userId}-${postId}`
       if (!force && lastFetchRef.current === fetchKey) {
         log.debug('중복 요청 방지:', fetchKey)
         return
@@ -166,18 +156,19 @@ export function usePostLikes({
         }, 2000) // 2초 후 리셋으로 증가하여 중복 요청 방지 강화
       }
     },
-    [multiLoadingState, user?.id, postId]
+    [multiLoadingState, userId, postId]
   )
 
   // 좋아요 토글
   const toggleLike = useCallback(async () => {
     log.debug('toggleLike 시작', {
       postId,
-      hasUser: !!user,
+      hasUser: !!userId,
       isToggling: multiLoadingState.getLoadingState('toggle').isLoading,
     })
 
-    if (!user) {
+    const currentUserId = userId ?? (await refreshUser())
+    if (!currentUserId) {
       setState(prev => ({
         ...prev,
         error: '로그인이 필요합니다.',
@@ -309,7 +300,7 @@ export function usePostLikes({
 
       return false
     }
-  }, [user, postId, onLikeChange, state.isLiked, state.likeCount, multiLoadingState])
+  }, [userId, refreshUser, postId, onLikeChange, state.isLiked, state.likeCount, multiLoadingState])
 
   // 에러 클리어
   const clearError = useCallback(() => {
@@ -318,7 +309,7 @@ export function usePostLikes({
 
   // 사용자 로그인 상태 변경 시 좋아요 상태 조회 - 디바운싱 적용
   useEffect(() => {
-    if (!user || !postId) return
+    if (!userId || !postId) return
 
     // 기본: 서버가 안 줬다면 조회
     let shouldFetch = !prefetched
@@ -348,7 +339,7 @@ export function usePostLikes({
     }, 500)
 
     return () => clearTimeout(debounceTimeout)
-  }, [fetchLikeStatus, user?.id, postId, prefetched, initialIsLiked, initialLikeCount])
+  }, [fetchLikeStatus, userId, postId, prefetched, initialIsLiked, initialLikeCount])
 
   // 컴포넌트 언마운트시 타임아웃 정리
   useEffect(() => {
@@ -374,7 +365,7 @@ export function usePostLikes({
     clearError,
 
     // 유틸
-    canLike: !!user,
+    canLike: !!userId,
     reset: () => multiLoadingState.reset(),
   }
 }

@@ -174,7 +174,6 @@ export default function MembersPage() {
       if (response.ok) {
         const stats = await response.json()
         setMemberStats(stats)
-        console.log('📊 통계 데이터 로드 완료:', stats)
       }
     } catch (error) {
       console.error('📊 통계 데이터 로드 실패:', error)
@@ -295,18 +294,16 @@ export default function MembersPage() {
           limit: '50',
         })
 
-        // 강제 새로고침 시 캐시 무시
+        // 강제 새로고침 시 fetch 캐시를 명시적으로 무시
         const fetchOptions: RequestInit = {
           method: 'GET',
         }
 
         if (forceRefresh) {
-          fetchOptions.cache = 'no-cache'
+          fetchOptions.cache = 'no-store'
           fetchOptions.headers = {
             'Cache-Control': 'no-cache, no-store, must-revalidate',
           }
-          // 타임스탬프 추가하여 캐시 회피
-          params.append('_t', Date.now().toString())
         }
 
         const response = await fetch(`/api/admin/members?${params}`, fetchOptions)
@@ -318,7 +315,6 @@ export default function MembersPage() {
 
         const data: MembersResponse = await response.json()
         setMembers(data.members)
-        console.log('🔄 Members refreshed, count:', data.members.length)
       } catch (err) {
         console.error('Members fetch error:', err)
         setError(
@@ -337,11 +333,9 @@ export default function MembersPage() {
     params?: any
   ) => {
     try {
-      console.log('🚀 Member action started:', { memberId, action, params })
       setActionLoading(memberId)
 
       const requestBody = { memberId, action, ...params }
-      console.log('📤 API request:', requestBody)
 
       const response = await fetch('/api/admin/member-action', {
         method: 'POST',
@@ -351,8 +345,6 @@ export default function MembersPage() {
         body: JSON.stringify(requestBody),
       })
 
-      console.log('📥 API response status:', response.status, response.statusText)
-
       if (!response.ok) {
         let errorMessage = '회원 상태 변경에 실패했습니다.'
 
@@ -361,13 +353,9 @@ export default function MembersPage() {
           const contentType = response.headers.get('content-type')
           if (contentType && contentType.includes('application/json')) {
             const errorData = await response.json()
-            console.error('❌ API error response:', errorData)
             errorMessage = errorData.error || errorMessage
           } else {
             // HTML이나 다른 형태의 응답
-            const textResponse = await response.text()
-            console.error('❌ Non-JSON API error response:', textResponse.substring(0, 500))
-
             if (response.status === 405) {
               errorMessage = 'API 메서드가 지원되지 않습니다. 시스템 관리자에게 문의하세요.'
             } else if (response.status === 404) {
@@ -385,8 +373,6 @@ export default function MembersPage() {
       }
 
       const successData = await response.json()
-      console.log('✅ API success response:', successData)
-      console.log('📊 Updated member data:', successData.member)
 
       // 성공 메시지 표시
       if (successData.message) {
@@ -396,31 +382,18 @@ export default function MembersPage() {
       }
 
       // 성공 시 로컬 상태 즉시 업데이트
-      console.log('🔄 Updating local state immediately...')
       if (successData.member) {
-        console.log(`📝 Updating member ${memberId} in local state:`)
-        console.log('   Old status:', members.find(m => m.id === memberId)?.registration_status)
-        console.log('   New status:', successData.member.registration_status)
-
         setMembers(prevMembers => {
-          const updatedMembers = prevMembers.map(m =>
-            m.id === memberId ? { ...m, ...successData.member } : m
-          )
-          console.log('✅ Local state updated, member count:', updatedMembers.length)
-          return updatedMembers
+          return prevMembers.map(m => (m.id === memberId ? { ...m, ...successData.member } : m))
         })
 
         // 선택된 회원 정보도 즉시 업데이트
         if (selectedMember && selectedMember.id === memberId) {
-          console.log('🔄 Updating selected member info immediately')
           setSelectedMember({ ...selectedMember, ...successData.member })
         }
-      } else {
-        console.warn('⚠️  No member data returned from API')
       }
 
       // 강제 새로고침으로 최신 데이터 확보
-      console.log('🔄 Force refreshing member list...')
       if (useAdvancedFilter && advancedQuery) {
         await executeAdvancedSearch(advancedQuery)
       } else {
@@ -429,10 +402,8 @@ export default function MembersPage() {
 
       // 통계도 새로고침
       await fetchMemberStatsData()
-
-      console.log('✅ Member action completed successfully')
     } catch (err) {
-      console.error('❌ Member action error:', err)
+      console.error('Member action error:', err)
       alert(err instanceof Error ? err.message : '회원 상태 변경에 실패했습니다.')
     } finally {
       setActionLoading(null)

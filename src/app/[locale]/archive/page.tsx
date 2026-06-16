@@ -9,6 +9,7 @@ import {
 } from '@/utils/structuredData'
 import { getSiteUrl, getLocaleAlternates, getOgLocale } from '@/utils/site'
 import { normalizeSingleParam } from '@/utils/searchParams'
+import { parseIntegerParam } from '@/utils/queryParams'
 import { setRequestLocale } from 'next-intl/server'
 import type { ArchiveCategory } from '@/constants/categories'
 import type { Metadata } from 'next'
@@ -35,8 +36,7 @@ export async function generateMetadata({
   const isEn = locale === 'en'
   const base = getSiteUrl()
   const resolvedSearch = (await searchParams) ?? {}
-  const page =
-    Number(Array.isArray(resolvedSearch.page) ? resolvedSearch.page[0] : resolvedSearch.page) || 1
+  const page = parseIntegerParam(normalizeSingleParam(resolvedSearch.page), 1, { min: 1 })
   const basePath = page > 1 ? `/archive?page=${page}` : '/archive'
   const canonical = isEn ? `/en${basePath}` : basePath
 
@@ -131,7 +131,7 @@ const ArchivePage = async ({ params, searchParams }: ArchivePageProps) => {
   const totalCount = filteredProjects.length
   const totalPages = Math.max(1, Math.ceil(totalCount / PROJECTS_PER_PAGE))
 
-  const requestedPage = Number(normalizeSingleParam(resolvedSearch.page)) || 1
+  const requestedPage = parseIntegerParam(normalizeSingleParam(resolvedSearch.page), 1, { min: 1 })
   const currentPage = Math.min(Math.max(1, requestedPage), totalPages)
   const startIndex = (currentPage - 1) * PROJECTS_PER_PAGE
   const paginatedProjects = filteredProjects.slice(startIndex, startIndex + PROJECTS_PER_PAGE)

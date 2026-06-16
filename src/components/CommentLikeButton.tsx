@@ -5,7 +5,7 @@
 
 'use client'
 
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect, useRef } from 'react'
 import { FiHeart } from 'react-icons/fi'
 import { FaHeart } from 'react-icons/fa'
 import { useCommentLikes } from '@/hooks/useCommentLikes'
@@ -37,6 +37,7 @@ const CommentLikeButton: React.FC<CommentLikeButtonProps> = ({
   onLikeChange,
 }) => {
   const [isAnimating, setIsAnimating] = useState(false)
+  const animationTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const { likeCount, isLiked, isLoading, error, toggleLike, clearError, canLike } = useCommentLikes(
     {
@@ -58,10 +59,17 @@ const CommentLikeButton: React.FC<CommentLikeButtonProps> = ({
 
     // 애니메이션 효과
     setIsAnimating(true)
-    setTimeout(() => setIsAnimating(false), 300)
+    if (animationTimeoutRef.current) {
+      clearTimeout(animationTimeoutRef.current)
+    }
+
+    animationTimeoutRef.current = setTimeout(() => {
+      setIsAnimating(false)
+      animationTimeoutRef.current = null
+    }, 300)
 
     // 좋아요 토글
-    const success = await toggleLike()
+    await toggleLike()
 
     // 에러가 있으면 표시
     if (error) {
@@ -69,6 +77,16 @@ const CommentLikeButton: React.FC<CommentLikeButtonProps> = ({
       clearError()
     }
   }, [canLike, isLoading, toggleLike, error, clearError])
+
+  // 컴포넌트 언마운트 시 애니메이션 타이머 정리
+  useEffect(() => {
+    return () => {
+      if (animationTimeoutRef.current) {
+        clearTimeout(animationTimeoutRef.current)
+        animationTimeoutRef.current = null
+      }
+    }
+  }, [])
 
   // 크기별 스타일
   const sizeClasses = {

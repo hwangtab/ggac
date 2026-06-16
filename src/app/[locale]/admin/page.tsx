@@ -15,6 +15,7 @@ import AdminLayout from './components/AdminLayout'
 import DashboardStats from './components/DashboardStats'
 import RecentActivity from './components/RecentActivity'
 import RealTimeActivityMonitor from './components/RealTimeActivityMonitor'
+import { Link } from '@/i18n/navigation'
 
 // 큰 컴포넌트들을 동적 로딩으로 변경
 const ActivityAnalyticsCharts = dynamic(() => import('./components/ActivityAnalyticsCharts'), {
@@ -137,7 +138,7 @@ export default function AdminDashboard() {
           <div className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {quickActions.map((action, index) => (
-                <a
+                <Link
                   key={index}
                   href={action.href}
                   className="flex items-center p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
@@ -155,7 +156,7 @@ export default function AdminDashboard() {
                       <div className="text-xs text-gray-500">{action.countLabel}</div>
                     </div>
                   )}
-                </a>
+                </Link>
               ))}
             </div>
           </div>

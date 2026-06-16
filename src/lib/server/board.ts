@@ -2,7 +2,10 @@ import { cache } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import { createTextPreview } from '@/utils/textUtils'
 import { createLogger } from '@/utils/logger'
+import { parseIntegerParam } from '@/utils/queryParams'
+import { parseBoardCategory } from '@/constants/categories'
 import type { Post, PostAttachmentStats } from '@/types'
+import type { BoardCategory } from '@/constants/categories'
 
 const log = createLogger('fetchBoardPosts')
 
@@ -16,7 +19,7 @@ export type BoardInitialPost = Post & {
 }
 
 export interface BoardListParams {
-  category?: string
+  category?: BoardCategory
   page?: number
   pageSize?: number
 }
@@ -49,6 +52,7 @@ export const fetchBoardPosts = cache(
     pageSize = 15,
   }: BoardListParams): Promise<BoardListResult> => {
     const supabase = getSupabaseServerClient()
+    const safeCategory = parseBoardCategory(category) ?? '전체'
     const safePage = Math.max(1, page)
     const limit = Math.max(1, Math.min(pageSize, 50))
     const start = (safePage - 1) * limit
@@ -73,8 +77,8 @@ export const fetchBoardPosts = cache(
       )
       .not('is_deleted', 'is', true)
 
-    if (category !== '전체') {
-      query = query.eq('category', category)
+    if (safeCategory !== '전체') {
+      query = query.eq('category', safeCategory)
     }
 
     query = query
@@ -170,7 +174,7 @@ export const fetchBoardPosts = cache(
           }
 
           current.total += 1
-          current.totalSize += Number(row.file_size) || 0
+          current.totalSize += parseIntegerParam(String(row.file_size ?? ''), 0, { min: 0 })
           if (type === 'image') current.image += 1
           else if (type === 'document') current.document += 1
           else if (type === 'video') current.video += 1

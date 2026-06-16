@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Link } from '@/i18n/navigation'
-import { useTranslations } from 'next-intl'
+import { useLocale, useTranslations } from 'next-intl'
 import { supabase } from '@/lib/supabase/client'
 
 type MessageType = 'error' | 'warning' | 'success' | 'loading'
@@ -16,6 +16,7 @@ const msgClassMap: Record<MessageType, string> = {
 
 export default function ForgotPasswordPage() {
   const t = useTranslations('auth')
+  const locale = useLocale()
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [submitted, setSubmitted] = useState(false)
@@ -28,7 +29,10 @@ export default function ForgotPasswordPage() {
     setMessage('')
 
     try {
-      const redirectTo = `${window.location.origin}/auth/callback?next=/reset-password`
+      const callbackUrl = new URL('/auth/callback', window.location.origin)
+      callbackUrl.searchParams.set('next', '/reset-password')
+      callbackUrl.searchParams.set('locale', locale)
+      const redirectTo = callbackUrl.toString()
       const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
 
       if (error && (error.message.includes('rate limit') || error.message.includes('429'))) {

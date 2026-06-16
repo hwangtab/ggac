@@ -1,13 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import type { User } from '@supabase/supabase-js'
 import Image from 'next/image'
 import { useTranslations } from 'next-intl'
 import { Link, usePathname, useRouter } from '@/i18n/navigation'
+import { fetchSessionProfile, type VerifiedSessionUser } from '@/utils/sessionProfile'
 
-// Supabase 클라이언트는 dynamic import — 초기 vendors 번들에서 분리해 LCP/FCP 가속.
-// 인증 UI는 loading 상태로 시작했다가 마운트 직후 비동기로 채워진다.
 import NotificationDropdown from './NotificationDropdown'
 import LocaleSwitcher from './LocaleSwitcher'
 
@@ -18,7 +16,7 @@ const Navigation = () => {
   // 상단 고정 헤더 투명/불투명 제어
   const [isAtTop, setIsAtTop] = useState(true)
   const [hasScrollSync, setHasScrollSync] = useState(false)
-  const [user, setUser] = useState<User | null>(null)
+  const [user, setUser] = useState<VerifiedSessionUser | null>(null)
   const [navProfile, setNavProfile] = useState<NavProfile>(null)
   const [loading, setLoading] = useState(true)
   // i18n usePathname은 locale prefix 없는 경로를 반환한다.
@@ -83,95 +81,72 @@ const Navigation = () => {
     }
   }, [pathname, router])
 
-  // 사용자 인증 상태 관리 — Supabase 클라이언트를 dynamic import로 분리
+  // 사용자 인증 상태 관리는 서버 쿠키 세션 API를 단일 진실로 사용한다.
   useEffect(() => {
     let mounted = true
-    let unsubscribe: (() => void) | undefined
 
-    const fetchNavProfile = async (supabase: any, userId: string) => {
+    const loadNavigationSession = async () => {
       try {
-        const { data } = await supabase
-          .from('member_profiles')
-          .select('is_director, is_admin, is_auditor')
-          .eq('id', userId)
-          .single()
+        const session = await fetchSessionProfile()
         if (mounted) {
+          setUser(session.user)
           setNavProfile(
-            data
+            session.profile
               ? {
-                  is_director: !!data.is_director,
-                  is_admin: !!data.is_admin,
-                  is_auditor: !!data.is_auditor,
+                  is_director: !!session.profile.is_director,
+                  is_admin: !!session.profile.is_admin,
+                  is_auditor: !!session.profile.is_auditor,
                 }
               : null
           )
-        }
-      } catch {
-        if (mounted) setNavProfile(null)
-      }
-    }
-
-    ;(async () => {
-      try {
-        const { supabase } = await import('@/lib/supabase/client')
-        if (!mounted) return
-
-        const {
-          data: { session },
-          error,
-        } = await supabase.auth.getSession()
-
-        if (mounted) {
-          if (error) {
-            console.error('Session error in Navigation:', error)
-            setUser(null)
-            setNavProfile(null)
-          } else {
-            setUser(session?.user || null)
-            if (session?.user) {
-              await fetchNavProfile(supabase, session.user.id)
-            }
-          }
           setLoading(false)
         }
-
-        const {
-          data: { subscription },
-        } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-          if (mounted) {
-            setUser(nextSession?.user || null)
-            if (nextSession?.user) {
-              fetchNavProfile(supabase, nextSession.user.id)
-            } else {
-              setNavProfile(null)
-            }
-            setLoading(false)
-          }
-        })
-        unsubscribe = () => subscription.unsubscribe()
-      } catch (error) {
-        console.error('Error initializing Supabase in Navigation:', error)
+      } catch {
         if (mounted) {
           setUser(null)
           setNavProfile(null)
           setLoading(false)
         }
       }
-    })()
+    }
+
+    const refreshWhenVisible = () => {
+      if (!document.hidden) {
+        void loadNavigationSession()
+      }
+    }
+
+    void loadNavigationSession()
+    window.addEventListener('focus', loadNavigationSession)
+    document.addEventListener('visibilitychange', refreshWhenVisible)
 
     return () => {
       mounted = false
-      unsubscribe?.()
+      window.removeEventListener('focus', loadNavigationSession)
+      document.removeEventListener('visibilitychange', refreshWhenVisible)
     }
-  }, [])
+  }, [pathname])
 
   const handleLogout = async () => {
     try {
-      const { supabase } = await import('@/lib/supabase/client')
-      await supabase.auth.signOut()
+      setLoading(true)
+      const response = await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      })
+
+      if (!response.ok) {
+        throw new Error(`Logout failed: ${response.status}`)
+      }
+
+      setUser(null)
+      setNavProfile(null)
+      setIsMenuOpen(false)
       router.push('/')
+      router.refresh()
     } catch (error) {
       console.error('Error signing out:', error)
+      setLoading(false)
     }
   }
 

@@ -30,6 +30,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         { status: 400 }
       )
     }
+    const validCommentId = uuidValidation.sanitized
 
     // 표준 인증 패턴: 쿠키 기반 세션 확인
     const supabase = await createSupabaseServer()
@@ -65,7 +66,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const { data: comment, error: commentError } = await supabase
       .from('comments')
       .select('id')
-      .eq('id', commentId)
+      .eq('id', validCommentId)
       .single()
 
     if (commentError || !comment) {
@@ -74,7 +75,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     // 좋아요 토글 실행
     const { data: result, error: toggleError } = await supabase.rpc('toggle_comment_like', {
-      p_comment_id: commentId,
+      p_comment_id: validCommentId,
       p_user_id: user.id,
     })
 

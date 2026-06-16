@@ -3,10 +3,14 @@
  */
 
 import { NextRequest } from 'next/server'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator } from '@/utils/rateLimiter'
-import { apiGet, ApiSuccess, ApiError, validateApiInput } from '@/utils/apiWrapper'
+import { apiGet, apiPost, ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { fetchBoardPosts } from '@/lib/server/board'
+import { parseIntegerParam } from '@/utils/queryParams'
+import { CATEGORIES, parseBoardCategory } from '@/constants/categories'
+import { parseJsonObjectBody } from '@/utils/requestBody'
 
 export const runtime = 'nodejs'
 export const revalidate = 60
@@ -69,28 +73,23 @@ export async function GET(request: NextRequest) {
       }
 
       const { searchParams } = new URL(request.url)
-      const category = searchParams.get('category') || '전체'
-      const limit = Math.min(parseInt(searchParams.get('limit') || '20', 10), 50)
+      const categoryParam = searchParams.get('category') || '전체'
+      const boardCategory = parseBoardCategory(categoryParam)
+      const limit = parseIntegerParam(searchParams.get('limit'), 20, { min: 1, max: 50 })
       const direction = searchParams.get('direction') || 'next'
       const pageParam = searchParams.get('page')
       const cursorParam = searchParams.get('cursor')
 
-      let page = Number(pageParam || cursorParam || '1')
-      if (!Number.isFinite(page) || page < 1) {
-        page = 1
-      }
+      let page = parseIntegerParam(pageParam ?? cursorParam, 1, { min: 1 })
       if (direction === 'prev') {
         page = Math.max(1, page - 1)
       }
 
-      const allowedCategories = ['전체', '공지', '잡담', '홍보', '건의']
-      validateApiInput(
-        category,
-        (cat): cat is string => allowedCategories.includes(cat),
-        '유효하지 않은 카테고리입니다.'
-      )
+      if (!boardCategory) {
+        throw ApiError.badRequest('유효하지 않은 카테고리입니다.')
+      }
 
-      const boardResult = await fetchBoardPosts({ category, page, pageSize: limit })
+      const boardResult = await fetchBoardPosts({ category: boardCategory, page, pageSize: limit })
       const postIds = boardResult.posts.map(post => post.id)
 
       let userLikedSet = new Set<string>()
@@ -139,7 +138,7 @@ export async function GET(request: NextRequest) {
             : null,
         },
         filters: {
-          category: category === '전체' ? null : category,
+          category: boardCategory === '전체' ? null : boardCategory,
           search: null,
           sort_by: 'created_at',
           sort_order: 'desc',
@@ -147,6 +146,100 @@ export async function GET(request: NextRequest) {
       }
 
       return ApiSuccess.ok(result, '게시글 목록을 불러왔습니다.')
+    },
+    '/api/posts',
+    { userId: userId || undefined }
+  )
+}
+
+export async function POST(request: NextRequest) {
+  const supabase = await createSupabaseServer()
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
+  const userId = user?.id || null
+
+  return apiPost(
+    async () => {
+      const rateLimiter = await applyRateLimit({
+        ...RATE_LIMIT_CONFIGS.GENERAL_API,
+        keyGenerator: createUserKeyGenerator('posts:create'),
+      })
+      const rateLimitResult = await rateLimiter(request)
+      if (!rateLimitResult.success) {
+        throw ApiError.tooManyRequests('너무 많은 요청입니다. 잠시 후 다시 시도해주세요.')
+      }
+
+      if (authError || !user) {
+        throw ApiError.unauthorized('로그인이 필요합니다.')
+      }
+
+      const { data: profile, error: profileError } = await supabase
+        .from('member_profiles')
+        .select('registration_status, is_active')
+        .eq('id', user.id)
+        .single()
+
+      if (profileError || !profile) {
+        throw ApiError.notFound('사용자 정보를 찾을 수 없습니다.')
+      }
+
+      if (profile.registration_status !== 'approved' || !profile.is_active) {
+        throw ApiError.forbidden('승인된 활성 멤버만 게시글을 작성할 수 있습니다.')
+      }
+
+      const body = await parseJsonObjectBody(request)
+      if (!body) {
+        throw ApiError.badRequest('유효한 JSON body가 필요합니다.')
+      }
+
+      const title = typeof body.title === 'string' ? body.title.trim() : ''
+      const content = typeof body.content === 'string' ? body.content : ''
+      const category = parseBoardCategory(body.category)
+
+      if (!title) {
+        throw ApiError.badRequest('제목을 입력해주세요.')
+      }
+
+      if (!content.trim()) {
+        throw ApiError.badRequest('내용을 입력해주세요.')
+      }
+
+      if (!category || category === CATEGORIES.BOARD.ALL) {
+        throw ApiError.badRequest('게시글 카테고리를 선택해주세요.')
+      }
+
+      const isPinned = category === '공지'
+      const { data: post, error: insertError } = await supabase
+        .from('posts')
+        .insert({
+          title,
+          content,
+          content_format: 'html',
+          category,
+          author_id: user.id,
+          is_pinned: isPinned,
+          pinned_at: isPinned ? new Date().toISOString() : null,
+        } as never)
+        .select()
+        .single()
+
+      if (insertError || !post) {
+        throw ApiError.badRequest(insertError?.message || '게시글 작성에 실패했습니다.')
+      }
+
+      try {
+        revalidatePath('/board')
+        revalidatePath('/en/board')
+        revalidateTag('board-post')
+        revalidateTag('board-initial')
+        revalidateTag(`board-${category}`)
+      } catch {
+        // Cache invalidation must not turn a successful database write into a failed create.
+      }
+
+      return ApiSuccess.created(post, '게시글이 작성되었습니다.')
     },
     '/api/posts',
     { userId: userId || undefined }

@@ -37,11 +37,14 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
   const searchParams = new URL(request.url).searchParams
   const userIdFromQuery = searchParams.get('user_id')
-  if (userIdFromQuery && userIdFromQuery !== user.id) {
-    return NextResponse.json(
-      { success: false, error: 'FORBIDDEN', data: { is_liked: false } },
-      { status: 403 }
-    )
+  if (userIdFromQuery) {
+    const userIdValidation = validateUUID(userIdFromQuery, '사용자 ID')
+    if (!userIdValidation.isValid || userIdValidation.sanitized !== user.id) {
+      return NextResponse.json(
+        { success: false, error: 'FORBIDDEN', data: { is_liked: false } },
+        { status: 403 }
+      )
+    }
   }
 
   const { data: likeRecord, error: likeError } = await supabase

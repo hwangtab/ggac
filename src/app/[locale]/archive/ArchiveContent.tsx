@@ -3,6 +3,7 @@ import OptimizedImage from '@/components/OptimizedImage'
 import { getProjectSummary } from '@/utils/projectUtils'
 import { ARCHIVE_CATEGORIES, localizeArchiveCategory } from '@/constants/categories'
 import { generatePageNumbers } from '@/utils/pagination'
+import { toSafeInternalImagePath } from '@/utils/safeUrl'
 import { getTranslations, getLocale } from 'next-intl/server'
 import type { Project } from '@/types'
 
@@ -102,54 +103,58 @@ const ArchiveContent = async ({
         <div className="tw-container-custom">
           {hasResults ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-              {projects.map((project, index) => (
-                <div key={project.id} className="group opacity-100 transition-all duration-300">
-                  <Link href={`/archive/${project.slug}`}>
-                    <div className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2 overflow-hidden h-full flex flex-col">
-                      <div className="relative h-48 overflow-hidden flex-shrink-0">
-                        <OptimizedImage
-                          src={project.coverImage}
-                          alt={project.title}
-                          width={400}
-                          height={280}
-                          className="object-cover w-full h-full"
-                          sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 400px"
-                          priority={isFirstPage && index < 3}
-                          quality={75}
-                        />
-                        <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors duration-300" />
-                      </div>
+              {projects.map((project, index) => {
+                const safeCoverImage = toSafeInternalImagePath(project.coverImage)
 
-                      <div className="p-6 flex-grow flex flex-col">
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="inline-block px-3 py-1 bg-primary-100 text-primary-700 text-sm font-medium rounded-full">
-                            {localizeArchiveCategory(project.category, locale)}
-                          </span>
-                          <span className="text-sm text-gray-500">
-                            {new Date(project.publishedDate).toLocaleDateString(dateLocale)}
-                          </span>
+                return (
+                  <div key={project.id} className="group opacity-100 transition-all duration-300">
+                    <Link href={`/archive/${project.slug}`}>
+                      <div className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2 overflow-hidden h-full flex flex-col">
+                        <div className="relative h-48 overflow-hidden flex-shrink-0">
+                          <OptimizedImage
+                            src={safeCoverImage}
+                            alt={project.title}
+                            width={400}
+                            height={280}
+                            className="object-cover w-full h-full"
+                            sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 400px"
+                            priority={isFirstPage && index < 3}
+                            quality={75}
+                          />
+                          <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors duration-300" />
                         </div>
 
-                        <div className="h-16 mb-2 flex items-start">
-                          <h3 className="text-2xl font-post font-semibold text-gray-700 group-hover:text-primary-600 transition-colors duration-200 line-clamp-2">
-                            {project.title}
-                          </h3>
-                        </div>
+                        <div className="p-6 flex-grow flex flex-col">
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="inline-block px-3 py-1 bg-primary-100 text-primary-700 text-sm font-medium rounded-full">
+                              {localizeArchiveCategory(project.category, locale)}
+                            </span>
+                            <span className="text-sm text-gray-500">
+                              {new Date(project.publishedDate).toLocaleDateString(dateLocale)}
+                            </span>
+                          </div>
 
-                        <p className="text-gray-600 text-sm mb-4 line-clamp-3">
-                          {getProjectSummary(project, 120)}
-                        </p>
+                          <div className="h-16 mb-2 flex items-start">
+                            <h3 className="text-2xl font-post font-semibold text-gray-700 group-hover:text-primary-600 transition-colors duration-200 line-clamp-2">
+                              {project.title}
+                            </h3>
+                          </div>
 
-                        {project.artistIds.length > 0 && (
-                          <p className="text-xs text-gray-500 mt-auto pt-2">
-                            {t('participantsLabel')}: {getArtistNames(project.artistIds)}
+                          <p className="text-gray-600 text-sm mb-4 line-clamp-3">
+                            {getProjectSummary(project, 120)}
                           </p>
-                        )}
+
+                          {project.artistIds.length > 0 && (
+                            <p className="text-xs text-gray-500 mt-auto pt-2">
+                              {t('participantsLabel')}: {getArtistNames(project.artistIds)}
+                            </p>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </Link>
-                </div>
-              ))}
+                    </Link>
+                  </div>
+                )
+              })}
             </div>
           ) : (
             <div className="text-center py-16">

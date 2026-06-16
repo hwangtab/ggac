@@ -7,6 +7,7 @@ import {
   createUserKeyGenerator,
   addRateLimitHeaders,
 } from '@/utils/rateLimiter'
+import { parseIntegerParam } from '@/utils/queryParams'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -32,7 +33,7 @@ export async function GET(request: NextRequest) {
 
     // 쿼리 파라미터 추출
     const { searchParams } = new URL(request.url)
-    const months = Math.min(parseInt(searchParams.get('months') || '12'), 24) // 최대 24개월
+    const months = parseIntegerParam(searchParams.get('months'), 12, { min: 1, max: 24 })
 
     // 날짜 범위 계산
     const endDate = new Date()

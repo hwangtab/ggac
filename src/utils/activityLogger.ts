@@ -3,7 +3,8 @@
  * 사용자 활동을 자동으로 추적하고 기록하는 시스템
  */
 
-import { supabase } from '@/lib/supabase/client'
+import { parseIntegerParam } from '@/utils/queryParams'
+import { fetchSessionProfile } from '@/utils/sessionProfile'
 import type {
   ActivityActionType,
   ActivityTargetType,
@@ -22,10 +23,10 @@ interface ActivityLoggerConfig {
 }
 
 class ActivityLogger {
-  // Use safe Supabase client wrapper instead of direct client creation
   private config: ActivityLoggerConfig
   private sessionId: string | null = null
-  private sessionToken: string | null = null
+  private userId: string | null = null
+  private lastSessionCheckAt = 0
   private pendingLogs: ActivityLogRequest[] = []
   private flushTimer: NodeJS.Timeout | null = null
 
@@ -146,41 +147,48 @@ class ActivityLogger {
   private async initializeSession() {
     try {
       this.secureLog('debug', '세션 초기화 시작')
-
-      const {
-        data: { session },
-        error: sessionError,
-      } = await supabase.auth.getSession()
-
-      if (sessionError) {
-        this.secureLog('error', '세션 조회 오류', sessionError)
-        return
-      }
-
-      if (session?.user) {
-        this.sessionToken = session.access_token
-        this.secureLog('debug', '사용자 세션 확인됨', { userId: session.user.id })
-        await this.startSession(session.user.id)
-      } else {
-        this.secureLog('debug', '인증되지 않은 사용자 - 활동 로깅 비활성화')
-      }
-
-      // 인증 상태 변경 리스너
-      supabase.auth.onAuthStateChange(async (event, session) => {
-        this.secureLog('debug', '인증 상태 변경', { event })
-
-        if (event === 'SIGNED_IN' && session?.user) {
-          this.sessionToken = session.access_token
-          await this.startSession(session.user.id)
-        } else if (event === 'SIGNED_OUT') {
-          await this.endSession()
-          this.sessionToken = null
-          this.sessionId = null
-        }
-      })
+      await this.ensureSession(true)
     } catch (error) {
       this.secureLog('error', '세션 초기화 오류', error)
     }
+  }
+
+  /**
+   * 서버 쿠키 세션을 기준으로 활동 세션을 보장한다.
+   */
+  private async ensureSession(force = false): Promise<boolean> {
+    if (typeof window === 'undefined') return false
+
+    const now = Date.now()
+    if (!force && this.sessionId && now - this.lastSessionCheckAt < 30000) {
+      return true
+    }
+
+    this.lastSessionCheckAt = now
+    const session = await fetchSessionProfile()
+    const nextUserId = session.user?.id ?? null
+
+    if (!nextUserId) {
+      if (this.sessionId) {
+        this.secureLog('debug', '서버 세션 없음 - 활동 추적 세션 로컬 종료', {
+          sessionId: this.sessionId,
+        })
+      } else {
+        this.secureLog('debug', '인증되지 않은 사용자 - 활동 로깅 비활성화')
+      }
+      this.sessionId = null
+      this.userId = null
+      return false
+    }
+
+    if (this.sessionId && this.userId === nextUserId) {
+      return true
+    }
+
+    this.userId = nextUserId
+    this.secureLog('debug', '사용자 세션 확인됨', { userId: nextUserId })
+    await this.startSession()
+    return !!this.sessionId
   }
 
   /**
@@ -202,28 +210,27 @@ class ActivityLogger {
     })
 
     // 페이지 가시성 변경 시 활동 업데이트
-    document.addEventListener('visibilitychange', () => {
-      if (!document.hidden && this.sessionId) {
-        this.updateSessionActivity()
+    document.addEventListener('visibilitychange', async () => {
+      if (!document.hidden && (await this.ensureSession(true))) {
+        await this.updateSessionActivity()
       }
     })
 
     // 주기적으로 세션 활동 업데이트 (기본 90초, 환경변수로 조정)
-    const pingMs = Number(process.env.NEXT_PUBLIC_SESSION_PING_MS || 90000)
-    setInterval(
-      () => {
-        if (!document.hidden && this.sessionId) {
-          this.updateSessionActivity()
-        }
-      },
-      isNaN(pingMs) ? 90000 : pingMs
-    )
+    const pingMs = parseIntegerParam(process.env.NEXT_PUBLIC_SESSION_PING_MS ?? null, 90000, {
+      min: 1000,
+    })
+    setInterval(async () => {
+      if (!document.hidden && (await this.ensureSession())) {
+        await this.updateSessionActivity()
+      }
+    }, pingMs)
   }
 
   /**
    * 세션 시작
    */
-  private async startSession(userId: string) {
+  private async startSession() {
     try {
       const sessionToken = this.generateSessionToken()
       const metadata = {
@@ -237,7 +244,6 @@ class ActivityLogger {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.sessionToken}`,
         },
         credentials: 'include',
         body: JSON.stringify({
@@ -269,7 +275,6 @@ class ActivityLogger {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.sessionToken}`,
         },
         credentials: 'include',
         body: JSON.stringify({
@@ -295,7 +300,6 @@ class ActivityLogger {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.sessionToken}`,
         },
         credentials: 'include',
         body: JSON.stringify({
@@ -316,13 +320,12 @@ class ActivityLogger {
    * 외부에서 세션 활동 갱신을 강제로 트리거 (페이지 전환 등)
    */
   public async heartbeat(extra?: Record<string, any>) {
-    if (!this.sessionId) return
+    if (!(await this.ensureSession(true))) return
     try {
       await fetch('/api/activities/session', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.sessionToken}`,
         },
         credentials: 'include',
         body: JSON.stringify({
@@ -355,7 +358,7 @@ class ActivityLogger {
     }
 
     // 비로그인 사용자는 로깅 시도하지 않음(401 노이즈 방지)
-    if (!this.sessionId || !this.sessionToken) {
+    if (!(await this.ensureSession())) {
       this.secureLog('debug', 'Skipping activity log for anonymous user')
       return true
     }
@@ -443,7 +446,6 @@ class ActivityLogger {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.sessionToken}`,
       },
       credentials: 'include',
       body: JSON.stringify(request),
@@ -467,7 +469,6 @@ class ActivityLogger {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.sessionToken}`,
       },
       credentials: 'include',
       body: JSON.stringify({ logs }),

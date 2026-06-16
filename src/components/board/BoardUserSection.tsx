@@ -1,16 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import type { User } from '@supabase/supabase-js'
 import { useRouter } from '@/i18n/navigation'
 import { useTranslations } from 'next-intl'
-import { supabase } from '@/lib/supabase/client'
-import type { MemberProfile } from '@/types'
 
 const BoardUserSection = () => {
   const router = useRouter()
   const t = useTranslations('board')
-  const [user, setUser] = useState<User | null>(null)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isMember, setIsMember] = useState(false)
   const [loading, setLoading] = useState(true)
 
@@ -19,37 +16,37 @@ const BoardUserSection = () => {
 
     const fetchUserAndProfile = async () => {
       try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
+        const response = await fetch('/api/auth/verify-session', {
+          method: 'GET',
+          credentials: 'include',
+          cache: 'no-store',
+        })
+        const data = (await response.json().catch(() => null)) as {
+          authenticated?: boolean
+          profile?: {
+            registration_status?: string
+            is_active?: boolean
+          } | null
+        } | null
 
         if (!mounted) return
 
-        const currentUser = session?.user || null
-        setUser(currentUser)
+        const authenticated = !!(response.ok && data?.authenticated)
+        setIsAuthenticated(authenticated)
 
-        if (!currentUser) {
+        if (!authenticated || !data?.profile) {
           setIsMember(false)
           setLoading(false)
           return
         }
 
-        const { data: profile } = await supabase
-          .from('member_profiles')
-          .select('registration_status, is_active')
-          .eq('id', currentUser.id)
-          .single()
-
-        if (mounted) {
-          setIsMember(
-            (profile as MemberProfile | null)?.registration_status === 'approved' &&
-              (profile as MemberProfile | null)?.is_active === true
-          )
-          setLoading(false)
-        }
+        setIsMember(
+          data.profile.registration_status === 'approved' && data.profile.is_active === true
+        )
+        setLoading(false)
       } catch {
         if (mounted) {
-          setUser(null)
+          setIsAuthenticated(false)
           setIsMember(false)
           setLoading(false)
         }
@@ -58,20 +55,8 @@ const BoardUserSection = () => {
 
     fetchUserAndProfile()
 
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-      const newUser = session?.user || null
-      setUser(newUser)
-
-      if (!newUser) {
-        setIsMember(false)
-      } else {
-        fetchUserAndProfile()
-      }
-    })
-
     return () => {
       mounted = false
-      authListener?.subscription.unsubscribe()
     }
   }, [])
 
@@ -81,7 +66,7 @@ const BoardUserSection = () => {
 
   return (
     <div className="space-y-4 mb-6 relative z-10 pointer-events-auto">
-      {!user && (
+      {!isAuthenticated && (
         <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <p className="text-blue-800 mb-2">{t('userSection.guestInfo')}</p>
           <div className="flex gap-2">
@@ -101,13 +86,13 @@ const BoardUserSection = () => {
         </div>
       )}
 
-      {!isMember && user && (
+      {!isMember && isAuthenticated && (
         <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
           <p className="text-yellow-800">{t('userSection.pendingInfo')}</p>
         </div>
       )}
 
-      {isMember && user && (
+      {isMember && isAuthenticated && (
         <div>
           <button
             onClick={() => router.push('/board/write')}

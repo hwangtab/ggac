@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createErrorResponse } from '@/utils/apiResponse'
+import { toSafeInternalImagePath } from '@/utils/safeUrl'
 import fs from 'fs'
 import path from 'path'
 
@@ -30,7 +31,7 @@ export async function GET(request: NextRequest) {
       process.env.NODE_ENV === 'production' ? 'https://ggac.kr' : 'http://localhost:3000'
 
     // 프로필 이미지 경로 (JPG 우선)
-    let imagePath = artist.profileImage
+    let imagePath = toSafeInternalImagePath(artist.profileImage)
     if (imagePath.endsWith('.webp')) {
       const jpgPath = imagePath.replace('.webp', '.jpg')
       const jpgFullPath = path.join(process.cwd(), 'public', jpgPath)

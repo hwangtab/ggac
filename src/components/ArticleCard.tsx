@@ -1,31 +1,35 @@
 'use client'
 
 import { useState, useEffect, useCallback, memo } from 'react'
-import Link from 'next/link'
 import Image from 'next/image'
+import { Link } from '@/i18n/navigation'
 import { createImageProxy } from '@/utils/imageValidation'
+import { getSafeHostname, isSafeInternalPath, toSafeHttpUrl } from '@/utils/safeUrl'
 import { useTranslations } from 'next-intl'
 import type { LinkPreview, ArticleInfo, ArticleCardProps } from '@/types'
 
 const ArticleCard = ({ article }: ArticleCardProps) => {
   const t = useTranslations('archive')
-  // 내부 링크 판별 (상대 경로로 시작하는 경우)
-  const isInternalLink = article.url.startsWith('/')
+  const isInternalLink = isSafeInternalPath(article.url)
+  const safeExternalUrl = isInternalLink ? null : toSafeHttpUrl(article.url)
+  const hostname = getSafeHostname(article.url)
 
   const [preview, setPreview] = useState<LinkPreview | null>(article.preview || null)
-  const [isLoading, setIsLoading] = useState(!article.preview && !isInternalLink)
+  const [isLoading, setIsLoading] = useState(
+    !article.preview && !isInternalLink && !!safeExternalUrl
+  )
   const [hasError, setHasError] = useState(false)
 
   const fetchPreview = useCallback(async () => {
     // 내부 링크는 Link Preview API 호출하지 않음
-    if (isInternalLink) {
+    if (isInternalLink || !safeExternalUrl) {
       setIsLoading(false)
       return
     }
 
     try {
       setIsLoading(true)
-      const response = await fetch(`/api/link-preview?url=${encodeURIComponent(article.url)}`)
+      const response = await fetch(`/api/link-preview?url=${encodeURIComponent(safeExternalUrl)}`)
 
       if (response.ok) {
         const previewData = await response.json()
@@ -40,7 +44,7 @@ const ArticleCard = ({ article }: ArticleCardProps) => {
     } finally {
       setIsLoading(false)
     }
-  }, [article.url, isInternalLink])
+  }, [isInternalLink, safeExternalUrl])
 
   useEffect(() => {
     if (!article.preview && article.url) {
@@ -84,36 +88,56 @@ const ArticleCard = ({ article }: ArticleCardProps) => {
 
   // 외부 링크: 에러 또는 미리보기 없음
   if (hasError || !preview) {
+    const content = (
+      <>
+        <div className="aspect-video bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-2xl mb-2">📰</div>
+            <div className="text-blue-600 font-medium">{article.title}</div>
+          </div>
+        </div>
+        <div className="p-4">
+          <h4 className="font-semibold text-gray-900 truncate flex-1 mr-2">{article.title}</h4>
+          <p className="text-gray-600 text-sm">{t('article.goToArticle')}</p>
+          <div className="mt-2 text-xs text-gray-500 truncate">{hostname || 'External Link'}</div>
+        </div>
+      </>
+    )
+
     return (
       <div className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow">
-        <a href={article.url} target="_blank" rel="noopener noreferrer" className="block">
-          <div className="aspect-video bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center">
-            <div className="text-center">
-              <div className="text-2xl mb-2">📰</div>
-              <div className="text-blue-600 font-medium">{article.title}</div>
-            </div>
+        {safeExternalUrl ? (
+          <a href={safeExternalUrl} target="_blank" rel="noopener noreferrer" className="block">
+            {content}
+          </a>
+        ) : (
+          <div className="block">{content}</div>
+        )}
+      </div>
+    )
+  }
+
+  if (!safeExternalUrl) {
+    return (
+      <div className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow">
+        <div className="aspect-video bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-2xl mb-2">📰</div>
+            <div className="text-blue-600 font-medium">{article.title}</div>
           </div>
-          <div className="p-4">
-            <h4 className="font-semibold text-gray-900 truncate flex-1 mr-2">{article.title}</h4>
-            <p className="text-gray-600 text-sm">{t('article.goToArticle')}</p>
-            <div className="mt-2 text-xs text-gray-500 truncate">
-              {(() => {
-                try {
-                  return new URL(article.url).hostname
-                } catch {
-                  return 'External Link'
-                }
-              })()}
-            </div>
-          </div>
-        </a>
+        </div>
+        <div className="p-4">
+          <h4 className="font-semibold text-gray-900 truncate flex-1 mr-2">{article.title}</h4>
+          <p className="text-gray-600 text-sm">{t('article.goToArticle')}</p>
+          <div className="mt-2 text-xs text-gray-500 truncate">External Link</div>
+        </div>
       </div>
     )
   }
 
   return (
     <div className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow">
-      <a href={article.url} target="_blank" rel="noopener noreferrer" className="block">
+      <a href={safeExternalUrl} target="_blank" rel="noopener noreferrer" className="block">
         {preview.image ? (
           <div className="aspect-video bg-gray-100 relative">
             <Image
@@ -163,7 +187,7 @@ const ArticleCard = ({ article }: ArticleCardProps) => {
                   />
                 </div>
               )}
-              <span className="truncate">{preview.siteName || new URL(article.url).hostname}</span>
+              <span className="truncate">{preview.siteName || hostname || 'External Link'}</span>
             </div>
           </div>
         </div>

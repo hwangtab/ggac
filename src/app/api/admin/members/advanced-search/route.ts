@@ -14,6 +14,7 @@ import {
 } from '@/utils/rateLimiter'
 import { validateAdvancedSearchQuery, buildSearchQuery } from '@/utils/advancedFiltering'
 import type { AdvancedSearchQuery, FilteredResult, FieldDefinition } from '@/types'
+import { parseJsonObjectBody } from '@/utils/requestBody'
 
 // 멤버 필드 정의
 const MEMBER_FIELD_DEFINITIONS: FieldDefinition[] = [
@@ -219,7 +220,10 @@ export async function POST(request: NextRequest) {
     const { db } = auth
 
     // 요청 본문 파싱
-    const searchQuery: AdvancedSearchQuery = await request.json()
+    const searchQuery = (await parseJsonObjectBody(request)) as AdvancedSearchQuery | null
+    if (!searchQuery) {
+      return createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400)
+    }
 
     // 쿼리 검증
     const validation = validateAdvancedSearchQuery(searchQuery, MEMBER_FIELD_DEFINITIONS)
@@ -260,10 +264,10 @@ export async function POST(request: NextRequest) {
       ) c ON mp.id = c.author_id
     `
 
-    const allowedSearchFields = ['display_name', 'real_name', 'email', 'phone_number']
+    const allowedFields = MEMBER_FIELD_DEFINITIONS.map(field => field.name)
 
     try {
-      const { sql, params, countSql } = buildSearchQuery(query, baseQuery, allowedSearchFields)
+      const { sql, params, countSql } = buildSearchQuery(query, baseQuery, allowedFields)
 
       // 데이터 조회 쿼리 (추가 필드 포함)
       const dataQuery = sql.replace(

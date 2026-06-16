@@ -5,8 +5,8 @@ import { distributedRateLimiter, DISTRIBUTED_RATE_LIMIT_CONFIGS } from './distri
  * Rate Limiting을 적용하는 고차 함수
  *
  * 분산 rate limiter(Upstash Redis 기반)를 통해 적용한다.
- * UPSTASH_REDIS_REST_URL/TOKEN 미설정 시 인메모리 폴백으로 동작하며,
- * 운영 환경에서는 distributedRateLimiter가 시작 시 경고/보안 이벤트를 출력한다.
+ * UPSTASH_REDIS_REST_URL/TOKEN 미설정 시 개발 환경에서만 인메모리 폴백으로 동작한다.
+ * 운영 환경에서는 rate limit 보호가 무효화되지 않도록 503으로 fail-closed 처리한다.
  */
 export const withRateLimit = (configKey: keyof typeof DISTRIBUTED_RATE_LIMIT_CONFIGS) => {
   return (handler: (request: NextRequest) => Promise<NextResponse>) => {

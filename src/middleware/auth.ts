@@ -4,10 +4,52 @@ import { getRegistrationDisabledHtml } from './templates'
 import { createLogger } from '@/utils/logger'
 
 const log = createLogger('middleware/auth')
+const LOCALES = ['ko', 'en'] as const
+const UUID_PATH_SEGMENT_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const BOARD_EDIT_PATH_REGEX = /^\/board\/([^/]+)\/edit$/
 
 // PII(user.id) 평문 로깅을 막기 위한 마스킹 헬퍼.
 // 처음 6자만 남기고 나머지는 가린다.
 const maskId = (id?: string | null): string => (id ? `${id.slice(0, 6)}…` : '<unknown>')
+
+const stripLocalePrefix = (pathname: string): string => {
+  const segments = pathname.split('/')
+  const maybeLocale = segments[1]
+  if (LOCALES.some(locale => locale === maybeLocale)) {
+    const stripped = `/${segments.slice(2).join('/')}`
+    return stripped === '/' ? '/' : stripped.replace(/\/+$/, '') || '/'
+  }
+  return pathname
+}
+
+const getLocaleRedirectPath = (request: NextRequest, path: string): string => {
+  const segments = request.nextUrl.pathname.split('/')
+  const maybeLocale = segments[1]
+
+  if (maybeLocale === 'en') {
+    return path === '/' ? '/en' : `/en${path}`
+  }
+
+  return path
+}
+
+const redirectToPath = (request: NextRequest, path: string): NextResponse => {
+  return NextResponse.redirect(
+    new URL(getLocaleRedirectPath(request, path), request.nextUrl.origin)
+  )
+}
+
+const redirectToLogin = (request: NextRequest): NextResponse => {
+  const url = new URL(getLocaleRedirectPath(request, '/login'), request.nextUrl.origin)
+  const requestedPath = `${request.nextUrl.pathname}${request.nextUrl.search}`
+  const authPath = stripLocalePrefix(request.nextUrl.pathname)
+
+  if (authPath !== '/login') {
+    url.searchParams.set('redirect', requestedPath)
+  }
+
+  return NextResponse.redirect(url)
+}
 
 export interface AuthResult {
   response?: NextResponse
@@ -23,6 +65,7 @@ export async function handleAuth(
   systemSettings: any
 ): Promise<AuthResult> {
   const { pathname } = request.nextUrl
+  const authPathname = stripLocalePrefix(pathname)
 
   let user = null
   let authError = false
@@ -35,16 +78,19 @@ export async function handleAuth(
 
   // 크리티컬 경로 판단 (게시판 관련 경로, 관리자, 마이페이지)
   const isCriticalPath =
-    pathname.startsWith('/board') || pathname.startsWith('/admin') || pathname.startsWith('/mypage')
+    authPathname.startsWith('/board') ||
+    authPathname.startsWith('/admin') ||
+    authPathname.startsWith('/mypage')
 
   // 게시판 공개 읽기 허용 정책: 쓰기/수정만 보호
-  const isBoardWrite = pathname.startsWith('/board/write')
-  const isBoardEdit = /\/board\/.+\/edit$/.test(pathname)
+  const isBoardWrite = authPathname.startsWith('/board/write')
+  const boardEditMatch = authPathname.match(BOARD_EDIT_PATH_REGEX)
+  const isBoardEdit = Boolean(boardEditMatch && UUID_PATH_SEGMENT_REGEX.test(boardEditMatch[1]))
   const isBoardProtected = isBoardWrite || isBoardEdit
-  const isBoardRoom = pathname.startsWith('/board-room')
+  const isBoardRoom = authPathname.startsWith('/board-room')
   const isProtectedPage =
-    pathname.startsWith('/admin') ||
-    pathname.startsWith('/mypage') ||
+    authPathname.startsWith('/admin') ||
+    authPathname.startsWith('/mypage') ||
     isBoardProtected ||
     isBoardRoom
 
@@ -56,23 +102,20 @@ export async function handleAuth(
     } = await supabase.auth.getUser()
 
     if (userError) {
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`❌ [MIDDLEWARE DEBUG] Auth error (Mobile: ${isMobile}):`, userError.message)
-      }
+      log.debug('Auth error', { isMobile, message: userError.message })
       authError = true
     } else {
       user = authUser || null
       if (process.env.NODE_ENV === 'development' && isCriticalPath) {
-        console.log(
-          `📋 [MIDDLEWARE DEBUG] Auth state for ${pathname} (Mobile: ${isMobile}):`,
-          user ? 'Authenticated' : 'Not authenticated'
-        )
+        log.debug('Auth state', {
+          pathname,
+          isMobile,
+          authenticated: Boolean(user),
+        })
       }
     }
   } catch (error) {
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`💥 [MIDDLEWARE DEBUG] Auth error in middleware (Mobile: ${isMobile}):`, error)
-    }
+    log.debug('Auth error in middleware', { isMobile, error })
     authError = true
   }
 
@@ -80,7 +123,7 @@ export async function handleAuth(
   if (authError) {
     if (isProtectedPage) {
       return {
-        response: NextResponse.redirect(new URL('/login', request.nextUrl.origin)),
+        response: redirectToLogin(request),
         shouldContinue: false,
       }
     }
@@ -90,15 +133,15 @@ export async function handleAuth(
   // 정의된 경로들
   const AUTH_PAGES = ['/login', '/signup']
   const REGISTRATION_PAGES = ['/register/pending', '/register/rejected']
-  const isAuthPage = AUTH_PAGES.includes(pathname)
-  const isRegistrationPage = REGISTRATION_PAGES.includes(pathname)
+  const isAuthPage = AUTH_PAGES.includes(authPathname)
+  const isRegistrationPage = REGISTRATION_PAGES.includes(authPathname)
 
   // 1. 인증되지 않은 사용자 처리
   if (!user) {
     // 보호된 페이지에 접근 시 로그인 페이지로 리다이렉트
     if (isProtectedPage) {
       return {
-        response: NextResponse.redirect(new URL('/login', request.nextUrl.origin)),
+        response: redirectToLogin(request),
         shouldContinue: false,
       }
     }
@@ -121,33 +164,23 @@ export async function handleAuth(
     if (data && !error) {
       profile = data
       if (process.env.NODE_ENV === 'development' && isCriticalPath) {
-        console.log(`✅ [MIDDLEWARE DEBUG] Profile found (Mobile: ${isMobile}):`, {
+        log.debug('Profile found', {
+          isMobile,
           status: profile.registration_status,
           active: profile.is_active,
         })
       }
     } else {
       profileError = error
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`❌ [MIDDLEWARE DEBUG] Profile error (Mobile: ${isMobile}):`, error?.message)
-      }
+      log.debug('Profile error', { isMobile, message: error?.message })
     }
   } catch (error) {
-    if (process.env.NODE_ENV === 'development') {
-      console.log(
-        `💥 [MIDDLEWARE DEBUG] Database error in middleware (Mobile: ${isMobile}):`,
-        error
-      )
-    }
+    log.debug('Database error in middleware', { isMobile, error })
     profileError = error
 
     // 모바일에서는 네트워크 오류 시 더 관대하게 처리
     if (isMobile && !isProtectedPage) {
-      if (process.env.NODE_ENV === 'development') {
-        console.log(
-          '📱 [MIDDLEWARE DEBUG] Mobile device - allowing public page access despite DB error'
-        )
-      }
+      log.debug('Mobile public page allowed despite DB error')
       return { user, shouldContinue: true }
     }
 
@@ -157,7 +190,7 @@ export async function handleAuth(
     }
     // 보호된 페이지는 로그인으로 리다이렉트
     return {
-      response: NextResponse.redirect(new URL('/login', request.nextUrl.origin)),
+      response: redirectToLogin(request),
       shouldContinue: false,
     }
   }
@@ -177,7 +210,7 @@ export async function handleAuth(
     // 보호된 페이지나 기타 페이지에서는 승인 대기 페이지로 리다이렉트
     if (isProtectedPage) {
       return {
-        response: NextResponse.redirect(new URL('/register/pending', request.nextUrl.origin)),
+        response: redirectToPath(request, '/register/pending'),
         shouldContinue: false,
       }
     }
@@ -194,7 +227,7 @@ export async function handleAuth(
   // 2.1. 인증 페이지에 접근 시 리다이렉트
   if (isAuthPage) {
     // 회원 가입 페이지에서 등록이 비활성화되어 있으면 차단
-    if (pathname === '/signup' && systemSettings && !systemSettings.registrationEnabled) {
+    if (authPathname === '/signup' && systemSettings && !systemSettings.registrationEnabled) {
       return {
         response: new NextResponse(getRegistrationDisabledHtml(), {
           status: 403,
@@ -205,40 +238,28 @@ export async function handleAuth(
     }
 
     // 로그인 페이지는 인증된 사용자도 접근 가능하도록 허용 (로그인 페이지에서 자체 처리)
-    if (pathname === '/login') {
+    if (authPathname === '/login') {
       return { user, profile, shouldContinue: true }
     }
 
     // 회원가입 페이지에 대한 기존 리다이렉트 로직
-    if (pathname === '/signup') {
+    if (authPathname === '/signup') {
       if (userStatus === 'approved' && isActive) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log(
-            `🎯 [MIDDLEWARE DEBUG] Redirecting approved user to board from signup (Mobile: ${isMobile})`
-          )
-        }
+        log.debug('Redirecting approved user to board from signup', { isMobile })
         return {
-          response: NextResponse.redirect(new URL('/board', request.nextUrl.origin)),
+          response: redirectToPath(request, '/board'),
           shouldContinue: false,
         }
       } else if (userStatus === 'pending') {
-        if (process.env.NODE_ENV === 'development') {
-          console.log(
-            `⏳ [MIDDLEWARE DEBUG] Redirecting pending user from signup (Mobile: ${isMobile})`
-          )
-        }
+        log.debug('Redirecting pending user from signup', { isMobile })
         return {
-          response: NextResponse.redirect(new URL('/register/pending', request.nextUrl.origin)),
+          response: redirectToPath(request, '/register/pending'),
           shouldContinue: false,
         }
       } else if (userStatus === 'rejected') {
-        if (process.env.NODE_ENV === 'development') {
-          console.log(
-            `❌ [MIDDLEWARE DEBUG] Redirecting rejected user from signup (Mobile: ${isMobile})`
-          )
-        }
+        log.debug('Redirecting rejected user from signup', { isMobile })
         return {
-          response: NextResponse.redirect(new URL('/register/rejected', request.nextUrl.origin)),
+          response: redirectToPath(request, '/register/rejected'),
           shouldContinue: false,
         }
       }
@@ -250,21 +271,23 @@ export async function handleAuth(
 
   // 2.2. 등록 관련 페이지에 접근 시 리다이렉트
   if (isRegistrationPage) {
-    const expectedPath = `/register/${userStatus}`
-    if (pathname !== expectedPath) {
-      // 현재 경로가 사용자의 상태와 다르면 올바른 상태 페이지로 리다이렉트
-      return {
-        response: NextResponse.redirect(new URL(expectedPath, request.nextUrl.origin)),
-        shouldContinue: false,
-      }
-    }
     // 상태가 approved이고 활성화된 경우, 등록 페이지에 있으면 게시판으로
     if (userStatus === 'approved' && isActive) {
       return {
-        response: NextResponse.redirect(new URL('/board', request.nextUrl.origin)),
+        response: redirectToPath(request, '/board'),
         shouldContinue: false,
       }
     }
+
+    const expectedPath = userStatus === 'rejected' ? '/register/rejected' : '/register/pending'
+    if (authPathname !== expectedPath) {
+      // 현재 경로가 사용자의 상태와 다르면 올바른 상태 페이지로 리다이렉트
+      return {
+        response: redirectToPath(request, expectedPath),
+        shouldContinue: false,
+      }
+    }
+
     // 현재 경로가 상태와 일치하면 그대로 진행
     return { user, profile, shouldContinue: true }
   }
@@ -274,21 +297,21 @@ export async function handleAuth(
     if (userStatus !== 'approved' || !isActive) {
       // 승인되지 않거나 비활성화된 사용자는 게시판/관리자 페이지 접근 불가
       return {
-        response: NextResponse.redirect(new URL('/register/pending', request.nextUrl.origin)),
+        response: redirectToPath(request, '/register/pending'),
         shouldContinue: false,
       }
     }
     // 관리자 페이지는 is_admin도 확인
-    if (pathname.startsWith('/admin') && !isAdmin) {
+    if (authPathname.startsWith('/admin') && !isAdmin) {
       return {
-        response: NextResponse.redirect(new URL('/board', request.nextUrl.origin)), // 관리자 아니면 게시판으로
+        response: redirectToPath(request, '/board'), // 관리자 아니면 게시판으로
         shouldContinue: false,
       }
     }
     // 이사회 페이지는 이사 또는 관리자만 접근
     if (isBoardRoom && !isAdmin && !profile.is_director) {
       return {
-        response: NextResponse.redirect(new URL('/board', request.nextUrl.origin)),
+        response: redirectToPath(request, '/board'),
         shouldContinue: false,
       }
     }

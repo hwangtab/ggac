@@ -100,8 +100,8 @@ npm run start
 
 ### 보안/운영
 - 일반 페이지는 강화된 CSP 적용(미들웨어에서 inline script 최소화), 에디터 페이지는 호환을 위해 완화.
-- `/api/link-preview`, `/api/media/upload`에 분산 레이트리밋 적용(Upstash 없으면 메모리 폴백).
-- ⚠️ **프로덕션(Vercel 등 분산/서버리스 환경)에서는 반드시 `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` 을 설정해야 함.** 메모리 폴백은 인스턴스마다 카운터가 분리돼 사실상 rate limit이 무력화된다(서버 시작 시 ERROR 로그로 경고).
+- `/api/link-preview`, `/api/media/upload` 및 공용 rate limiter 경유 API에 분산 레이트리밋 적용.
+- ⚠️ **프로덕션(Vercel 등 분산/서버리스 환경)에서는 반드시 `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` 을 설정해야 함.** 값이 없거나 Redis 호출이 실패하면 per-instance 메모리 카운터로 우회하지 않고 503으로 fail-closed 처리한다. 개발 환경에서만 인메모리 폴백을 허용한다.
 
 ## 페이지 구성
 

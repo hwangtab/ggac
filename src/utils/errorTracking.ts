@@ -189,21 +189,39 @@ class ErrorTracker {
    * 외부 로깅 서비스로 전송
    */
   private async sendToExternalService(errors: ErrorReport[], immediate = false) {
-    // 실제 환경에서는 Sentry, LogRocket, DataDog 등의 서비스 사용
-    console.log('Sending errors to external service:', errors)
-
-    // 예시: fetch를 사용한 로깅 서비스 전송
-    /*
-    try {
-      await fetch('/api/errors', {
+    const requests = errors.map(async error => {
+      const response = await fetch('/api/client-error', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ errors, immediate })
+        keepalive: immediate,
+        body: JSON.stringify({
+          errorId: error.errorId,
+          message: error.message,
+          stack: error.stack,
+          componentStack: `${error.componentName}:${error.errorType}`,
+          timestamp: error.timestamp,
+          url: error.url,
+          sessionId: error.sessionId,
+          buildVersion: error.buildVersion,
+        }),
       })
-    } catch (error) {
-      console.error('Failed to send errors to service:', error)
+      if (!response.ok) {
+        throw new Error(`client-error endpoint rejected report: ${response.status}`)
+      }
+    })
+
+    const results = await Promise.allSettled(requests)
+    if (process.env.NODE_ENV === 'development') {
+      results.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          console.error(
+            'Failed to send client error report:',
+            errors[index]?.errorId,
+            result.reason
+          )
+        }
+      })
     }
-    */
   }
 
   /**

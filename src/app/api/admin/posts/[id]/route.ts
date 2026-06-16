@@ -12,6 +12,8 @@ import {
   createUserKeyGenerator,
   addRateLimitHeaders,
 } from '@/utils/rateLimiter'
+import { parseJsonObjectBody } from '@/utils/requestBody'
+import { validateUUID } from '@/utils/validation'
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const resolvedParams = await context.params
@@ -28,10 +30,18 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const auth = await requireAdmin()
     if (auth instanceof NextResponse) return auth
     const { db } = auth
-    const { id } = resolvedParams
+    const uuidValidation = validateUUID(resolvedParams.id, '게시글 ID')
+    if (!uuidValidation.isValid) {
+      return createErrorResponse({ success: false, error: uuidValidation.errors.join(', ') }, 400)
+    }
+    const postId = uuidValidation.sanitized
 
     // Get action from request body
-    const { action } = await request.json()
+    const body = await parseJsonObjectBody(request)
+    if (!body) {
+      return createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400)
+    }
+    const action = typeof body.action === 'string' ? body.action : ''
 
     if (!action || !['delete', 'restore', 'pin', 'unpin'].includes(action)) {
       return createErrorResponse({ success: false, error: '잘못된 작업입니다.' }, 400)
@@ -41,7 +51,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const { data: post } = await db
       .from('posts')
       .select('id, category, is_deleted, is_pinned')
-      .eq('id', id)
+      .eq('id', postId)
       .single()
 
     if (!post) {
@@ -97,7 +107,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const { data: updatedPost, error: updateError } = await db
       .from('posts')
       .update(updateData)
-      .eq('id', id)
+      .eq('id', postId)
       .select()
       .single()
 

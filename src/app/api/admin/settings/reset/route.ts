@@ -7,6 +7,7 @@ import { applyRateLimit, createUserKeyGenerator, addRateLimitHeaders } from '@/u
 import { logSecurityEvent } from '@/utils/security'
 import { refreshSettingsCache } from '@/utils/systemSettings'
 import { createLogger } from '@/utils/logger'
+import { parseJsonObjectBody } from '@/utils/requestBody'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -262,20 +263,20 @@ export async function POST(request: NextRequest) {
     // 요청 데이터 파싱 + Zod 검증
     let resetType: 'all' | 'category'
     let category: string | null
-    try {
-      const rawJson = await request.json().catch(() => ({}))
-      const parsed = ResetRequestSchema.safeParse(rawJson)
-      if (!parsed.success) {
-        return NextResponse.json(
-          { error: '유효하지 않은 요청입니다.', details: parsed.error.flatten() },
-          { status: 400 }
-        )
-      }
-      resetType = parsed.data.resetType
-      category = parsed.data.category ?? null
-    } catch {
+    const rawJson = await parseJsonObjectBody(request)
+    if (!rawJson) {
       return createErrorResponse({ success: false, error: '유효하지 않은 JSON 본문입니다.' }, 400)
     }
+
+    const parsed = ResetRequestSchema.safeParse(rawJson)
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: '유효하지 않은 요청입니다.', details: parsed.error.flatten() },
+        { status: 400 }
+      )
+    }
+    resetType = parsed.data.resetType
+    category = parsed.data.category ?? null
 
     let settingsToReset = DEFAULT_SETTINGS
 

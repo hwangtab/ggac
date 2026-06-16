@@ -4,6 +4,13 @@ import { Link } from '@/i18n/navigation'
 import { setRequestLocale, getTranslations } from 'next-intl/server'
 import type { Metadata } from 'next'
 import { getSiteUrl, getLocaleAlternates, getOgLocale } from '@/utils/site'
+import {
+  toSafeEmailHref,
+  toSafeHttpUrl,
+  toSafeNaverMapSearchHref,
+  toSafePhoneHref,
+} from '@/utils/safeUrl'
+import { serializeJsonLd } from '@/utils/structuredData'
 
 // ISR 최적화: 연락처 정보는 24시간 캐시
 export const revalidate = 86400
@@ -91,6 +98,11 @@ const ConnectPage = async ({ params }: ConnectPageProps) => {
     getTranslations('connect'),
     getTranslations('footer'),
   ])
+  const safeInstagramUrl = toSafeHttpUrl(globalData.social.instagram)
+  const safeYoutubeUrl = toSafeHttpUrl(globalData.social.youtube)
+  const safeEmailHref = toSafeEmailHref(globalData.contact.email)
+  const safePhoneHref = toSafePhoneHref(globalData.contact.phone)
+  const safeAddressHref = toSafeNaverMapSearchHref(globalData.contact.address)
 
   // JSON-LD 구조화 데이터 - 조직 정보
   const jsonLd = {
@@ -135,7 +147,7 @@ const ConnectPage = async ({ params }: ConnectPageProps) => {
         availableLanguage: 'Korean',
       },
     ],
-    sameAs: [globalData.social.instagram, globalData.social.youtube],
+    sameAs: [safeInstagramUrl, safeYoutubeUrl].filter((url): url is string => Boolean(url)),
     organizationType: '협동조합',
     areaServed: {
       '@type': 'Place',
@@ -153,7 +165,7 @@ const ConnectPage = async ({ params }: ConnectPageProps) => {
       {/* JSON-LD 구조화 데이터 */}
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
       />
 
       <div className="pt-20">
@@ -302,85 +314,111 @@ const ConnectPage = async ({ params }: ConnectPageProps) => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
-                <a
-                  href={`mailto:${globalData.contact.email}`}
-                  className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 group cursor-pointer"
-                >
-                  <div className="w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:bg-primary-200 transition-colors duration-300">
-                    <span className="text-primary-600 font-semibold group-hover:scale-110 transition-transform duration-300">
-                      @
-                    </span>
-                  </div>
-                  <h3 className="font-semibold mb-2 group-hover:text-primary-600 transition-colors duration-300">
-                    {tf('email')}
-                  </h3>
-                  <p className="text-gray-600 text-sm group-hover:text-primary-600 transition-colors duration-300">
-                    {globalData.contact.email}
-                  </p>
-                </a>
+                {safeEmailHref && (
+                  <a
+                    href={safeEmailHref}
+                    className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 group cursor-pointer"
+                  >
+                    <div className="w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:bg-primary-200 transition-colors duration-300">
+                      <span className="text-primary-600 font-semibold group-hover:scale-110 transition-transform duration-300">
+                        @
+                      </span>
+                    </div>
+                    <h3 className="font-semibold mb-2 group-hover:text-primary-600 transition-colors duration-300">
+                      {tf('email')}
+                    </h3>
+                    <p className="text-gray-600 text-sm group-hover:text-primary-600 transition-colors duration-300">
+                      {globalData.contact.email}
+                    </p>
+                  </a>
+                )}
 
-                <a
-                  href={`tel:${globalData.contact.phone}`}
-                  className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 group cursor-pointer"
-                >
-                  <div className="w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:bg-primary-200 transition-colors duration-300">
-                    <span className="text-primary-600 font-semibold group-hover:scale-110 transition-transform duration-300">
-                      📞
-                    </span>
-                  </div>
-                  <h3 className="font-semibold mb-2 group-hover:text-primary-600 transition-colors duration-300">
-                    {tf('phone')}
-                  </h3>
-                  <p className="text-gray-600 text-sm group-hover:text-primary-600 transition-colors duration-300">
-                    {globalData.contact.phone}
-                  </p>
-                </a>
+                {safePhoneHref && (
+                  <a
+                    href={safePhoneHref}
+                    className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 group cursor-pointer"
+                  >
+                    <div className="w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:bg-primary-200 transition-colors duration-300">
+                      <span className="text-primary-600 font-semibold group-hover:scale-110 transition-transform duration-300">
+                        📞
+                      </span>
+                    </div>
+                    <h3 className="font-semibold mb-2 group-hover:text-primary-600 transition-colors duration-300">
+                      {tf('phone')}
+                    </h3>
+                    <p className="text-gray-600 text-sm group-hover:text-primary-600 transition-colors duration-300">
+                      {globalData.contact.phone}
+                    </p>
+                  </a>
+                )}
 
-                <a
-                  href={`https://map.naver.com/v5/search/${encodeURIComponent(globalData.contact.address)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 group cursor-pointer"
+                <div
+                  className={`bg-white rounded-2xl p-6 shadow-lg transition-all duration-300 group ${
+                    safeAddressHref
+                      ? 'hover:shadow-xl transform hover:scale-105 cursor-pointer'
+                      : ''
+                  }`}
                 >
-                  <div className="w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:bg-primary-200 transition-colors duration-300">
-                    <span className="text-primary-600 font-semibold group-hover:scale-110 transition-transform duration-300">
-                      📍
-                    </span>
-                  </div>
-                  <h3 className="font-semibold mb-2 group-hover:text-primary-600 transition-colors duration-300">
-                    {tf('address')}
-                  </h3>
-                  <p className="text-gray-600 text-sm group-hover:text-primary-600 transition-colors duration-300">
-                    {globalData.contact.address}
-                  </p>
-                </a>
+                  {safeAddressHref ? (
+                    <a
+                      href={safeAddressHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block"
+                    >
+                      <div className="w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:bg-primary-200 transition-colors duration-300">
+                        <span className="text-primary-600 font-semibold group-hover:scale-110 transition-transform duration-300">
+                          📍
+                        </span>
+                      </div>
+                      <h3 className="font-semibold mb-2 group-hover:text-primary-600 transition-colors duration-300">
+                        {tf('address')}
+                      </h3>
+                      <p className="text-gray-600 text-sm group-hover:text-primary-600 transition-colors duration-300">
+                        {globalData.contact.address}
+                      </p>
+                    </a>
+                  ) : (
+                    <>
+                      <div className="w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <span className="text-primary-600 font-semibold">📍</span>
+                      </div>
+                      <h3 className="font-semibold mb-2">{tf('address')}</h3>
+                      <p className="text-gray-600 text-sm">{globalData.contact.address}</p>
+                    </>
+                  )}
+                </div>
               </div>
 
               <div className="text-center mt-12">
                 <p className="text-gray-600 mb-6">{t('snsHeading')}</p>
                 <div className="flex justify-center space-x-8">
-                  <a
-                    href={globalData.social.instagram}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex flex-col items-center text-gray-600 hover:text-pink-600 transition-all duration-200 group transform hover:scale-105"
-                  >
-                    <div className="w-12 h-12 bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400 rounded-xl flex items-center justify-center mb-2 group-hover:shadow-lg transition-shadow duration-200">
-                      <FaInstagram className="w-6 h-6 text-white" />
-                    </div>
-                    <span className="text-sm font-medium">Instagram</span>
-                  </a>
-                  <a
-                    href={globalData.social.youtube}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex flex-col items-center text-gray-600 hover:text-red-600 transition-all duration-200 group transform hover:scale-105"
-                  >
-                    <div className="w-12 h-12 bg-red-600 rounded-xl flex items-center justify-center mb-2 group-hover:shadow-lg transition-shadow duration-200">
-                      <FaYoutube className="w-6 h-6 text-white" />
-                    </div>
-                    <span className="text-sm font-medium">YouTube</span>
-                  </a>
+                  {safeInstagramUrl && (
+                    <a
+                      href={safeInstagramUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex flex-col items-center text-gray-600 hover:text-pink-600 transition-all duration-200 group transform hover:scale-105"
+                    >
+                      <div className="w-12 h-12 bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400 rounded-xl flex items-center justify-center mb-2 group-hover:shadow-lg transition-shadow duration-200">
+                        <FaInstagram className="w-6 h-6 text-white" />
+                      </div>
+                      <span className="text-sm font-medium">Instagram</span>
+                    </a>
+                  )}
+                  {safeYoutubeUrl && (
+                    <a
+                      href={safeYoutubeUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex flex-col items-center text-gray-600 hover:text-red-600 transition-all duration-200 group transform hover:scale-105"
+                    >
+                      <div className="w-12 h-12 bg-red-600 rounded-xl flex items-center justify-center mb-2 group-hover:shadow-lg transition-shadow duration-200">
+                        <FaYoutube className="w-6 h-6 text-white" />
+                      </div>
+                      <span className="text-sm font-medium">YouTube</span>
+                    </a>
+                  )}
                 </div>
               </div>
             </div>

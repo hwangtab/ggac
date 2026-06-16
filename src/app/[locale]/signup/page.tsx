@@ -5,15 +5,17 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useRef } from 'react'
 import { useRouter, Link } from '@/i18n/navigation'
-import { useTranslations } from 'next-intl'
+import { useLocale, useTranslations } from 'next-intl'
 import { supabase } from '@/lib/supabase/client'
 import FormField from '@/components/FormField'
+import { parseIntegerParam } from '@/utils/queryParams'
 import { useStablePageLoad } from '@/utils/routeProtection'
 
 type MessageType = 'error' | 'warning' | 'success' | 'loading'
 
 export default function SignupPage() {
   const t = useTranslations('auth')
+  const locale = useLocale()
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -257,17 +259,20 @@ export default function SignupPage() {
     }
 
     try {
+      const callbackUrl = new URL('/auth/callback', window.location.origin)
+      callbackUrl.searchParams.set('locale', locale)
+
       const { data, error } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: callbackUrl.toString(),
           data: {
             display_name: formData.displayName,
             real_name: formData.realName,
             phone_number: formData.phoneNumber,
             birth_date: formData.birthDate,
-            monthly_fee: parseInt(formData.monthlyFee),
+            monthly_fee: parseIntegerParam(formData.monthlyFee, 0, { min: 0 }),
             bank_name: formData.bankName,
             account_number: formData.accountNumber,
             account_holder: formData.accountHolder,

@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { validateUUID } from '@/utils/validation'
 import { createLogger } from '@/utils/logger'
+import { parseIntegerParam } from '@/utils/queryParams'
 
 // `dynamic = 'force-dynamic'` 적용으로 ISR `revalidate`는 의미 없음 — 헤더로 캐시 제어.
 export const dynamic = 'force-dynamic'
@@ -20,6 +21,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.'
     ).toNextResponse()
   }
+  const validPostId = uuidValidation.sanitized
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -47,7 +49,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
         author:member_profiles!posts_author_id_fkey (display_name)
       `
       )
-      .eq('id', postId)
+      .eq('id', validPostId)
       .not('is_deleted', 'is', true)
       .single()
 
@@ -63,14 +65,14 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
         author:member_profiles!comments_author_id_fkey (display_name)
       `
       )
-      .eq('post_id', postId)
+      .eq('post_id', validPostId)
       .order('created_at', { ascending: true })
       .range(0, COMMENTS_PAGE_SIZE - 1)
 
     const attachmentsQuery = supabase
       .from('post_attachments')
       .select('file_url, file_type, file_size, is_primary, created_at')
-      .eq('post_id', postId)
+      .eq('post_id', validPostId)
       .order('created_at', { ascending: true })
 
     const t1 = Date.now()
@@ -105,7 +107,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       return ApiError.notFound('Post not found').toNextResponse()
     }
 
-    const totalSize = attachments.reduce((sum, att) => sum + (Number(att.file_size) || 0), 0)
+    const totalSize = attachments.reduce(
+      (sum, att) => sum + parseIntegerParam(String(att.file_size ?? ''), 0, { min: 0 }),
+      0
+    )
 
     const payload = {
       post: {

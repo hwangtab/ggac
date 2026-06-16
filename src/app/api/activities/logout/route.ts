@@ -2,22 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createErrorResponse } from '@/utils/apiResponse'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { applyRateLimit, RATE_LIMIT_CONFIGS } from '@/utils/rateLimiter'
+import { parseJsonObjectBody } from '@/utils/requestBody'
 
 /**
  * 사용자 로그아웃 활동 로깅 API
  * POST /api/activities/logout
  */
-
-async function parseJsonBody(request: NextRequest): Promise<Record<string, unknown> | null> {
-  try {
-    const body = await request.json()
-    return body && typeof body === 'object' && !Array.isArray(body)
-      ? (body as Record<string, unknown>)
-      : null
-  } catch {
-    return null
-  }
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -42,7 +32,7 @@ export async function POST(request: NextRequest) {
       return createErrorResponse({ success: false, error: 'Unauthorized' }, 401)
     }
 
-    const body = await parseJsonBody(request)
+    const body = await parseJsonObjectBody(request)
 
     if (!body) {
       return createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400)

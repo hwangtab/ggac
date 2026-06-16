@@ -12,6 +12,13 @@ import {
   createUserKeyGenerator,
   addRateLimitHeaders,
 } from '@/utils/rateLimiter'
+import { parseJsonObjectBody } from '@/utils/requestBody'
+import { validateUUID } from '@/utils/validation'
+
+function parseArtistLegacyId(value: string) {
+  const sanitized = value.trim().toLowerCase()
+  return /^artist-\d{3,}$/.test(sanitized) ? sanitized : null
+}
 
 // POST: 아티스트에 멤버 배정
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -32,18 +39,23 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const { db } = auth
 
     // 요청 데이터 파싱
-    const { memberId, role } = await request.json()
-    const artistId = resolvedParams.id
+    const body = await parseJsonObjectBody(request)
+    if (!body) {
+      return createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400)
+    }
+    const rawMemberId = typeof body.memberId === 'string' ? body.memberId : ''
+    const role = typeof body.role === 'string' ? body.role : ''
+    const artistId = parseArtistLegacyId(resolvedParams.id)
 
     // 아티스트 ID 형식 검증 — member_profiles.artist_id는 legacy_id(예: 'artist-015')를 보관한다.
-    const legacyIdPattern = /^artist-\d{3,}$/
-    if (!artistId || !legacyIdPattern.test(artistId)) {
+    if (!artistId) {
       return createErrorResponse({ success: false, error: '유효하지 않은 아티스트 ID입니다.' }, 400)
     }
-    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!memberId || !uuidPattern.test(memberId)) {
+    const memberIdValidation = validateUUID(rawMemberId, '멤버 ID')
+    if (!memberIdValidation.isValid) {
       return createErrorResponse({ success: false, error: '유효하지 않은 멤버 ID입니다.' }, 400)
     }
+    const memberId = memberIdValidation.sanitized
 
     // 아티스트 존재 확인
     const { data: artistExists, error: artistLookupError } = await db

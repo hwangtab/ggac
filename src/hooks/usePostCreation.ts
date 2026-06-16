@@ -1,6 +1,5 @@
 'use client'
 
-import { supabase } from '@/lib/supabase/client'
 import { logPostCreated } from '@/utils/activityLogger'
 import { useLoadingState } from '@/hooks/useLoadingState'
 import { createLogger } from '@/utils/logger'
@@ -21,7 +20,6 @@ interface PostFormData {
 }
 
 export const usePostCreation = ({
-  authorId,
   onNewPost,
   showSuccessRedirect = false,
 }: UsePostCreationProps) => {
@@ -45,30 +43,29 @@ export const usePostCreation = ({
     uploadAttachmentsFn?: (postId: string) => Promise<void>
   ): Promise<string> => {
     return loadingState.executeAsync(async () => {
-      // 1. 게시글 생성 (공지 카테고리인 경우 자동으로 핀 설정)
-      const postData = {
-        title: formData.title,
-        content: formData.content,
-        content_format: 'html', // 항상 HTML 형식 사용
-        category: formData.category,
-        author_id: authorId,
-        ...(formData.category === '공지' && {
-          is_pinned: true,
-          pinned_at: new Date().toISOString(),
+      // 1. 게시글 생성: 작성자/권한/캐시 무효화는 서버 API에서 일관되게 처리
+      const response = await fetch('/api/posts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: formData.title,
+          content: formData.content,
+          category: formData.category,
         }),
+      })
+      const result = (await response.json().catch(() => null)) as {
+        success?: boolean
+        data?: Post
+        error?: string
+        message?: string
+      } | null
+
+      if (!response.ok || !result?.success || !result.data) {
+        throw new Error(result?.error || result?.message || '게시글 작성에 실패했습니다.')
       }
 
-      const { data, error } = await supabase
-        .from('posts')
-        .insert([postData] as never)
-        .select()
-        .single()
-
-      if (error) {
-        throw new Error(error.message)
-      }
-
-      const postId = (data as unknown as Post).id
+      const post = result.data
+      const postId = post.id
 
       // 2. 활동 로깅 (비블로킹: await 제거로 타임아웃 방지)
       logPostCreated(postId, {
@@ -94,7 +91,7 @@ export const usePostCreation = ({
       }
 
       // 4. 성공 처리
-      onNewPost(data as unknown as Post)
+      onNewPost(post)
 
       return postId
     })

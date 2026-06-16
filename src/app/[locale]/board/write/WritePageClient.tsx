@@ -1,6 +1,6 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/i18n/navigation'
 import nextDynamic from 'next/dynamic'
 
 const CreatePostForm = nextDynamic(() => import('@/components/CreatePostForm'), {
@@ -24,7 +24,8 @@ export default function WritePageClient({ userId }: WritePageClientProps) {
   const router = useRouter()
 
   const handlePostCreated = () => {
-    router.push(`/board?refresh=${Date.now()}`)
+    router.push('/board')
+    router.refresh()
   }
 
   return (

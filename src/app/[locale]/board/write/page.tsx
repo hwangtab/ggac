@@ -1,7 +1,7 @@
-import { redirect } from 'next/navigation'
-import { Link } from '@/i18n/navigation'
+import { Link, redirect } from '@/i18n/navigation'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { setRequestLocale, getTranslations } from 'next-intl/server'
+import type { Locale } from '@/i18n/routing'
 import type { MemberProfile } from '@/types'
 import WritePageClient from './WritePageClient'
 
@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
 interface WritePageProps {
-  params: Promise<{ locale: string }>
+  params: Promise<{ locale: Locale }>
 }
 
 export default async function WritePage({ params }: WritePageProps) {
@@ -23,7 +23,13 @@ export default async function WritePage({ params }: WritePageProps) {
   } = await supabase.auth.getUser()
 
   if (!user) {
-    redirect('/login?redirect=/board/write')
+    redirect({
+      href: {
+        pathname: '/login',
+        query: { redirect: '/board/write' },
+      },
+      locale,
+    })
   }
 
   const { data: profile } = await supabase

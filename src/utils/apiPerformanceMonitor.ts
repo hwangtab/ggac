@@ -4,6 +4,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { createLogger } from '@/utils/logger'
+
+const log = createLogger('apiPerformanceMonitor')
 
 // 성능 메트릭 인터페이스
 interface ApiMetrics {
@@ -270,7 +273,7 @@ class ApiPerformanceMonitor {
 
     const removed = initialLength - this.metrics.length
     if (removed > 0) {
-      console.log(`🧹 Cleaned up ${removed} old API metrics`)
+      log.debug('Cleaned up old API metrics', { removed })
     }
   }
 

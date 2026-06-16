@@ -4,11 +4,15 @@ import { createClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
 import { revalidatePath, revalidateTag } from 'next/cache'
-import { updateArtistInJsonFile, commitAndPushJsonChanges } from '@/utils/jsonSync'
 import { invalidateArtistsCache } from '@/lib/data'
+import { parseJsonObjectBody } from '@/utils/requestBody'
+import { isProjectStorageObjectPath, isProjectStoragePublicUrl } from '@/utils/storageUrlValidation'
+import { createLogger } from '@/utils/logger'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
+
+const log = createLogger('api/mypage/artist')
 
 // 아티스트 업데이트 스키마 정의
 const ArtistUpdateSchema = z.object({
@@ -49,6 +53,42 @@ const ArtistUpdateSchema = z.object({
           y: z.number(),
           width: z.number(),
           height: z.number(),
+        })
+        .optional(),
+      variants: z
+        .object({
+          original: z.string(),
+          webp: z.string().optional(),
+          fallback: z.string().optional(),
+        })
+        .optional(),
+      variant_urls: z
+        .object({
+          original: z.string().optional(),
+          webp: z.string().optional(),
+          fallback: z.string().optional(),
+        })
+        .optional(),
+      variant_metadata: z
+        .object({
+          original: z
+            .object({
+              size: z.number().optional(),
+              content_type: z.string().optional(),
+            })
+            .optional(),
+          webp: z
+            .object({
+              size: z.number().optional(),
+              content_type: z.string().optional(),
+            })
+            .optional(),
+          fallback: z
+            .object({
+              size: z.number().optional(),
+              content_type: z.string().optional(),
+            })
+            .optional(),
         })
         .optional(),
     })
@@ -152,7 +192,10 @@ export async function PATCH(request: NextRequest) {
     }
 
     // 요청 데이터 파싱 및 검증
-    const body = await request.json()
+    const body = await parseJsonObjectBody(request)
+    if (!body) {
+      return createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400)
+    }
 
     const validationResult = ArtistUpdateSchema.safeParse(body)
     if (!validationResult.success) {
@@ -218,6 +261,44 @@ export async function PATCH(request: NextRequest) {
           )
         }
       }
+    }
+
+    if (
+      updateData.profile_photo_url &&
+      !isProjectStoragePublicUrl(updateData.profile_photo_url, 'artists', profile.artist_id)
+    ) {
+      return NextResponse.json(
+        { error: '프로필 사진은 전용 업로드로 등록된 Storage URL이어야 합니다.' },
+        { status: 400 }
+      )
+    }
+    const photoVariants = updateData.profile_photo_metadata?.variants
+    const variantPaths = [photoVariants?.original, photoVariants?.webp, photoVariants?.fallback]
+    if (
+      variantPaths.some(
+        variantPath =>
+          typeof variantPath === 'string' &&
+          !isProjectStorageObjectPath(variantPath, profile.artist_id)
+      )
+    ) {
+      return NextResponse.json(
+        { error: '프로필 사진 메타데이터의 Storage 경로가 올바르지 않습니다.' },
+        { status: 400 }
+      )
+    }
+    const variantUrls = updateData.profile_photo_metadata?.variant_urls
+    const variantPublicUrls = [variantUrls?.original, variantUrls?.webp, variantUrls?.fallback]
+    if (
+      variantPublicUrls.some(
+        variantUrl =>
+          typeof variantUrl === 'string' &&
+          !isProjectStoragePublicUrl(variantUrl, 'artists', profile.artist_id)
+      )
+    ) {
+      return NextResponse.json(
+        { error: '프로필 사진 메타데이터의 공개 URL이 올바르지 않습니다.' },
+        { status: 400 }
+      )
     }
 
     // 연락처 정리 (빈 문자열을 null로 변환)
@@ -325,36 +406,11 @@ export async function PATCH(request: NextRequest) {
           console.warn('Archive revalidation skipped:', (e as any)?.message || e)
         }
 
-        console.log(`✅ Successfully invalidated all caches for artist: ${artistForSlug.slug}`)
+        log.debug('Successfully invalidated artist caches', { slug: artistForSlug.slug })
       }
     } catch (cacheError) {
       console.error('Cache invalidation error (non-blocking):', cacheError)
     }
-
-    // JSON 파일 동기화 시도 (백그라운드에서 실행, 실패해도 API 응답에는 영향 없음)
-    // 데이터베이스가 primary source이므로 JSON은 백업/로깅 목적으로만 사용
-    setImmediate(async () => {
-      try {
-        // 아티스트 slug를 사용하여 JSON 파일 업데이트
-        const artistSlug = updatedArtist?.slug
-        if (!artistSlug) {
-          console.warn('Artist slug not found, skipping JSON sync')
-          return
-        }
-
-        const jsonUpdateSuccess = await updateArtistInJsonFile(artistSlug, updateData)
-
-        if (jsonUpdateSuccess) {
-          // Git commit/push는 완전히 백그라운드에서 실행 (응답 시간에 영향 없음)
-          commitAndPushJsonChanges().catch(error => {
-            console.error('Git commit/push failed (background, non-critical):', error)
-          })
-          console.log('JSON backup sync completed')
-        }
-      } catch (error) {
-        console.error('JSON sync error (non-critical, background):', error)
-      }
-    })
 
     return NextResponse.json({
       message: '아티스트 정보가 성공적으로 업데이트되었습니다. 웹사이트에 즉시 반영됩니다.',

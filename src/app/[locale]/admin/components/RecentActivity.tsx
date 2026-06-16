@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { FiUser, FiEdit3, FiMusic, FiClock, FiChevronRight, FiRefreshCw } from 'react-icons/fi'
+import { parseIntegerParam } from '@/utils/queryParams'
 
 interface ActivityItem {
   id: string
@@ -171,7 +172,7 @@ const RecentActivity: React.FC = () => {
         <div className="flex items-center gap-4">
           <select
             value={days}
-            onChange={e => setDays(parseInt(e.target.value))}
+            onChange={e => setDays(parseIntegerParam(e.target.value, 7, { min: 1 }))}
             className="text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
           >
             <option value={1}>최근 1일</option>
@@ -181,7 +182,7 @@ const RecentActivity: React.FC = () => {
           </select>
           <select
             value={limit}
-            onChange={e => setLimit(parseInt(e.target.value))}
+            onChange={e => setLimit(parseIntegerParam(e.target.value, 10, { min: 1 }))}
             className="text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
           >
             <option value={10}>10개씩</option>

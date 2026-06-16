@@ -1,8 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { apiPut, ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { requireBoardMember } from '@/lib/server/boardRoomAuth'
+import { parseJsonObjectBody } from '@/utils/requestBody'
+import { validateUUID } from '@/utils/validation'
 
 export const runtime = 'nodejs'
+
+function validateOptionId(id: string) {
+  const validation = validateUUID(id, '후보 날짜 ID')
+  if (!validation.isValid) {
+    return { error: ApiError.badRequest(validation.errors[0] || '잘못된 후보 날짜 ID 형식입니다.') }
+  }
+  return { id: validation.sanitized }
+}
 
 export async function PUT(request: NextRequest) {
   const auth = await requireBoardMember()
@@ -11,17 +21,22 @@ export async function PUT(request: NextRequest) {
 
   return apiPut(
     async () => {
-      const body = await request.json()
-      const optionId: string = body.option_id
-      const isAvailable: boolean = body.is_available
+      const body = await parseJsonObjectBody(request)
+      if (!body) throw ApiError.badRequest('유효한 JSON body가 필요합니다.')
+
+      const optionId = typeof body.option_id === 'string' ? body.option_id : ''
+      const isAvailable = body.is_available
       if (!optionId || typeof isAvailable !== 'boolean') {
         throw ApiError.badRequest('option_id와 is_available이 필요합니다.')
       }
+      const routeOptionId = validateOptionId(optionId)
+      if (routeOptionId.error) throw routeOptionId.error
+      const sanitizedOptionId = routeOptionId.id
 
       const { data: opt, error: optErr } = await db
         .from('board_meeting_date_options')
         .select('id, meeting_id')
-        .eq('id', optionId)
+        .eq('id', sanitizedOptionId)
         .single()
       if (optErr || !opt) throw ApiError.notFound('후보 날짜를 찾을 수 없습니다.')
 
@@ -39,13 +54,13 @@ export async function PUT(request: NextRequest) {
       const { error } = await db
         .from('board_meeting_date_votes')
         .upsert(
-          { option_id: optionId, voter_id: user.id, is_available: isAvailable },
+          { option_id: sanitizedOptionId, voter_id: user.id, is_available: isAvailable },
           { onConflict: 'option_id,voter_id' }
         )
       if (error) throw ApiError.internalServerError('투표 저장에 실패했습니다.')
 
       return ApiSuccess.ok(
-        { option_id: optionId, is_available: isAvailable },
+        { option_id: sanitizedOptionId, is_available: isAvailable },
         '투표가 저장되었습니다.'
       )
     },

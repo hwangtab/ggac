@@ -1,11 +1,13 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/i18n/navigation'
 import CommentSection from '@/components/CommentSection'
 import PostLikeButton from '@/components/PostLikeButton'
 import PostAttachmentsDisplay from '@/components/PostAttachmentsDisplay'
 import PostContentRenderer from '@/components/PostContentRenderer'
+import { parseIntegerParam } from '@/utils/queryParams'
+import { isProjectStoragePublicUrl } from '@/utils/storageUrlValidation'
 
 interface Post {
   id: string
@@ -82,6 +84,11 @@ export default function PostDetailClient({
       ? { id: initialData.post.author_id, display_name: initialData.author.display_name }
       : { id: initialData.post.author_id, display_name: '알 수 없음' }
   )
+  const safeAuthorProfilePhotoUrl =
+    authorProfile?.profile_photo_url &&
+    isProjectStoragePublicUrl(authorProfile.profile_photo_url, 'artists', authorProfile.id)
+      ? authorProfile.profile_photo_url
+      : null
   const [user, setUser] = useState<any>(initialUser)
   const [isMember, setIsMember] = useState<boolean>(initialUser?.is_member ?? false)
   const [error, setError] = useState<string | null>(null)
@@ -99,7 +106,8 @@ export default function PostDetailClient({
       try {
         const lastViewTime = localStorage.getItem(`post_view_${postId}`)
         const now = Date.now()
-        if (!lastViewTime || now - parseInt(lastViewTime) > 10 * 60 * 1000) {
+        const parsedLastViewTime = lastViewTime ? parseIntegerParam(lastViewTime, 0, { min: 0 }) : 0
+        if (!lastViewTime || now - parsedLastViewTime > 10 * 60 * 1000) {
           const viewResponse = await fetch(`/api/posts/${postId}/view`, {
             method: 'POST',
             headers: {
@@ -294,10 +302,10 @@ export default function PostDetailClient({
 
               <div className="flex items-center space-x-4 text-sm text-gray-600">
                 <div className="flex items-center space-x-2">
-                  {authorProfile?.profile_photo_url ? (
+                  {safeAuthorProfilePhotoUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={authorProfile.profile_photo_url}
+                      src={safeAuthorProfilePhotoUrl}
                       alt={authorProfile.display_name}
                       className="w-8 h-8 rounded-full"
                     />

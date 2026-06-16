@@ -3,6 +3,12 @@ import { apiGet, apiPost, ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { requireBoardMember } from '@/lib/server/boardRoomAuth'
 import { ALL_DOCUMENT_CATEGORIES, ASSEMBLY_DOCUMENT_CATEGORY } from '@/constants/boardRoom'
 import { createLogger } from '@/utils/logger'
+import {
+  hasBinaryNullBytes,
+  hasKnownFileSignature,
+  hasValidFileSignature,
+} from '@/utils/fileUploadValidation'
+import { isSafeBoardDocumentStoragePath } from '@/utils/boardDocumentStoragePath'
 
 const log = createLogger('boardRoom/documents')
 
@@ -64,16 +70,27 @@ export async function GET(request: NextRequest) {
       // Generate a 5-minute signed URL for each document; degrade gracefully on failure
       const documents = await Promise.all(
         (data || []).map(async doc => {
-          const { data: signedData, error: signErr } = await db.storage
-            .from(BUCKET)
-            .createSignedUrl(doc.file_path, 300)
-          if (signErr) {
-            log.error('signed URL 생성 실패', { id: doc.id, error: signErr.message })
+          const safeFilePath = isSafeBoardDocumentStoragePath(doc.file_path, doc.uploaded_by)
+            ? doc.file_path
+            : null
+          let signedData: { signedUrl: string } | null = null
+
+          if (safeFilePath) {
+            const { data: signed, error: signErr } = await db.storage
+              .from(BUCKET)
+              .createSignedUrl(safeFilePath, 300)
+            signedData = signed
+            if (signErr) {
+              log.error('signed URL 생성 실패', { id: doc.id, error: signErr.message })
+            }
+          } else {
+            log.error('안전하지 않은 서류 file_path 서명 건너뜀', { id: doc.id })
           }
+
           const { file_path, ...rest } = doc
           return {
             ...rest,
-            download_url: signedData?.signedUrl ?? null,
+            download_url: safeFilePath && signedData?.signedUrl ? signedData.signedUrl : null,
           }
         })
       )
@@ -113,8 +130,15 @@ export async function POST(request: NextRequest) {
       const storagePath = `${user.id}/${Date.now()}_${safeName}`
 
       // Upload to private bucket via service-role client
-      const bytes = new Uint8Array(await file.arrayBuffer())
-      const { error: uploadError } = await db.storage.from(BUCKET).upload(storagePath, bytes, {
+      const buffer = Buffer.from(await file.arrayBuffer())
+      if (hasKnownFileSignature(file.type) && !hasValidFileSignature(buffer, file.type)) {
+        throw ApiError.badRequest('파일 내용이 선언된 파일 형식과 일치하지 않습니다.')
+      }
+      if (file.type === 'text/plain' && hasBinaryNullBytes(buffer)) {
+        throw ApiError.badRequest('텍스트 파일 내용이 올바르지 않습니다.')
+      }
+
+      const { error: uploadError } = await db.storage.from(BUCKET).upload(storagePath, buffer, {
         contentType: file.type,
         upsert: false,
       })

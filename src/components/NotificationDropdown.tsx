@@ -7,12 +7,13 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import { FiBell, FiCheck, FiTrash2, FiX } from 'react-icons/fi'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/i18n/navigation'
 import { formatDistanceToNow } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import type { Notification, NotificationStats } from '@/types'
 import Portal from './Portal'
 import { createLogger } from '@/utils/logger'
+import { getNotificationRoute } from '@/utils/notificationNavigation'
 
 const log = createLogger('NotificationDropdown')
 
@@ -184,49 +185,7 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
       markAsRead(notification.id)
     }
 
-    let targetRoute: string | null = null
-
-    // 알림 타입에 따른 라우팅 결정
-    switch (notification.type) {
-      case 'post_reply':
-      case 'post_new':
-      case 'post_mention': {
-        // 게시글 관련 알림 - 해당 게시글로 이동
-        const postIdForPost = notification.related_post_id || notification.data?.post_id
-        if (postIdForPost) {
-          targetRoute = `/board/${postIdForPost}`
-        }
-        break
-      }
-
-      case 'system_notice':
-      case 'maintenance': {
-        // 시스템 공지/점검 알림 - 관련 게시글이 있으면 해당 게시글로, 없으면 전체 알림 페이지로
-        const postId = notification.related_post_id || notification.data?.post_id
-        targetRoute = postId ? `/board/${postId}` : '/notifications'
-        break
-      }
-
-      case 'member_approved':
-      case 'member_rejected':
-      case 'artist_approved':
-      case 'artist_rejected':
-        // 회원/아티스트 권한 관련 알림 - 마이페이지로 이동
-        targetRoute = '/mypage'
-        break
-
-      case 'welcome':
-        // 환영 메시지 - 홈페이지로 이동
-        targetRoute = '/'
-        break
-
-      default: {
-        // 기본값: 관련 게시글이 있으면 해당 게시글로, 없으면 전체 알림 페이지로
-        const defaultPostId = notification.related_post_id || notification.data?.post_id
-        targetRoute = defaultPostId ? `/board/${defaultPostId}` : '/notifications'
-        break
-      }
-    }
+    const targetRoute = getNotificationRoute(notification, { fallbackToNotifications: true })
 
     // 라우팅 실행
     if (targetRoute) {

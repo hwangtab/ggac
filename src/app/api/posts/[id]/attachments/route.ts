@@ -15,12 +15,13 @@ import { createClient } from '@supabase/supabase-js'
 import { revalidateTag } from 'next/cache'
 import type { PostAttachmentStats } from '@/types'
 import { createSupabaseServer } from '@/lib/supabase/server'
-import { validateUUID, isValidTempId } from '@/utils/validation'
+import { validateUUID, validateUUIDOrTempId, isValidTempId } from '@/utils/validation'
 import { generateUniqueFileName } from '@/utils/fileNameSanitizer'
 import {
   validateFile,
   FILE_VALIDATION_PROFILES,
   formatValidationErrors,
+  hasValidFileSignature,
 } from '@/utils/fileUploadValidation'
 
 /**
@@ -54,8 +55,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   try {
     const postId = resolvedParams.id
 
-    // UUID 형식 검증
-    const uuidValidation = validateUUID(postId, '게시글 ID')
+    // 임시 게시글 작성 중 첨부 업로드는 temp-{UUID}도 명시적으로 허용한다.
+    const uuidValidation = validateUUIDOrTempId(postId, '게시글 ID')
     if (!uuidValidation.isValid) {
       return NextResponse.json(
         {
@@ -260,7 +261,15 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const uniqueFileName = validation.uniqueFileName || generateUniqueFileName(file.name)
 
     // 파일을 Supabase Storage에 업로드
-    const fileBuffer = await file.arrayBuffer()
+    const fileBuffer = Buffer.from(await file.arrayBuffer())
+    if (!hasValidFileSignature(fileBuffer, file.type)) {
+      return NextResponse.json(
+        {
+          error: '파일 내용이 선언된 파일 형식과 일치하지 않습니다.',
+        },
+        { status: 400 }
+      )
+    }
 
     // 임시 파일과 영구 파일의 경로 구분
     const filePath = isTempId

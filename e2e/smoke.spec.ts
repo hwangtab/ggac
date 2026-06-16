@@ -16,4 +16,41 @@ test.describe('Smoke tests', () => {
     const response = await page.goto('/', { waitUntil: 'domcontentloaded' })
     expect(response?.status()).toBeLessThan(500)
   })
+
+  test('게시판은 잘못된 page 쿼리를 canonical에 반영하지 않는다', async ({ page }) => {
+    const response = await page.goto('/board?page=1.5', { waitUntil: 'domcontentloaded' })
+    expect(response?.status()).toBeLessThan(500)
+
+    const canonical = await page.locator('link[rel="canonical"]').getAttribute('href')
+    expect(canonical).toBeTruthy()
+    const canonicalUrl = new URL(canonical!, page.url())
+    expect(canonicalUrl.pathname).toBe('/board')
+    expect(canonicalUrl.search).toBe('')
+  })
+
+  test('게시글 상세/수정은 잘못된 id를 DB 조회나 로그인 redirect로 넘기지 않는다', async ({
+    page,
+  }) => {
+    const detailResponse = await page.goto('/board/not-a-uuid', {
+      waitUntil: 'domcontentloaded',
+    })
+    expect(detailResponse?.status()).toBeLessThan(500)
+
+    const editResponse = await page.goto('/board/not-a-uuid/edit', {
+      waitUntil: 'domcontentloaded',
+    })
+    expect(editResponse?.status()).toBeLessThan(500)
+    expect(new URL(page.url()).pathname).not.toContain('/login')
+  })
+
+  test('아카이브는 잘못된 page 쿼리를 canonical에 반영하지 않는다', async ({ page }) => {
+    const response = await page.goto('/archive?page=1.5', { waitUntil: 'domcontentloaded' })
+    expect(response?.status()).toBeLessThan(500)
+
+    const canonical = await page.locator('link[rel="canonical"]').getAttribute('href')
+    expect(canonical).toBeTruthy()
+    const canonicalUrl = new URL(canonical!, page.url())
+    expect(['/archive', '/en/archive']).toContain(canonicalUrl.pathname)
+    expect(canonicalUrl.search).toBe('')
+  })
 })

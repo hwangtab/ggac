@@ -1,8 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase/client'
+import { useRouter } from '@/i18n/navigation'
 import RichTextEditor from '@/components/RichTextEditorDynamic'
 
 interface EditablePost {
@@ -29,24 +28,29 @@ export default function EditPageClient({ initialPost }: EditPageClientProps) {
     if (submitting) return
     setSubmitting(true)
 
-    const { error } = await supabase
-      .from('posts')
-      .update({
+    const response = await fetch(`/api/posts/${post.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
         title: post.title,
         content: post.content,
         content_format: useRichEditor ? 'html' : 'plain',
         category: post.category,
-        updated_at: new Date().toISOString(),
-      } as never)
-      .eq('id', post.id)
+      }),
+    })
+    const result = (await response.json().catch(() => null)) as {
+      success?: boolean
+      error?: string
+    } | null
 
     setSubmitting(false)
 
-    if (error) {
-      alert('게시글 수정 중 오류가 발생했습니다.')
+    if (!response.ok || !result?.success) {
+      alert(result?.error || '게시글 수정 중 오류가 발생했습니다.')
     } else {
       alert('게시글이 수정되었습니다.')
       router.push(`/board/${post.id}`)
+      router.refresh()
     }
   }
 

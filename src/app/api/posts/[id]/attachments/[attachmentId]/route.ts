@@ -15,6 +15,41 @@ import { createErrorResponse } from '@/utils/apiResponse'
 import { createClient } from '@supabase/supabase-js'
 import { revalidateTag } from 'next/cache'
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { parseJsonObjectBody } from '@/utils/requestBody'
+import { getProjectStorageObjectPath } from '@/utils/storageUrlValidation'
+import { validateUUID } from '@/utils/validation'
+
+const MAX_ALT_TEXT_LENGTH = 300
+
+function validateAttachmentRouteParams(params: { id: string; attachmentId: string }) {
+  const postIdValidation = validateUUID(params.id, '게시글 ID')
+  if (!postIdValidation.isValid) {
+    return {
+      ok: false as const,
+      response: createErrorResponse(
+        { success: false, error: postIdValidation.errors.join(', ') },
+        400
+      ),
+    }
+  }
+
+  const attachmentIdValidation = validateUUID(params.attachmentId, '첨부파일 ID')
+  if (!attachmentIdValidation.isValid) {
+    return {
+      ok: false as const,
+      response: createErrorResponse(
+        { success: false, error: attachmentIdValidation.errors.join(', ') },
+        400
+      ),
+    }
+  }
+
+  return {
+    ok: true as const,
+    postId: postIdValidation.sanitized,
+    attachmentId: attachmentIdValidation.sanitized,
+  }
+}
 
 // Service Role 클라이언트는 Storage 작업에만 사용
 function getSupabaseAdmin() {
@@ -45,7 +80,9 @@ export async function GET(
       return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
     }
 
-    const { id: postId, attachmentId } = resolvedParams
+    const routeParams = validateAttachmentRouteParams(resolvedParams)
+    if (!routeParams.ok) return routeParams.response
+    const { postId, attachmentId } = routeParams
 
     // 첨부파일 조회
     const { data: attachment, error } = await supabase
@@ -84,9 +121,45 @@ export async function PUT(
       return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
     }
 
-    const { id: postId, attachmentId } = resolvedParams
-    const body = await request.json()
+    const routeParams = validateAttachmentRouteParams(resolvedParams)
+    if (!routeParams.ok) return routeParams.response
+    const { postId, attachmentId } = routeParams
+    const body = await parseJsonObjectBody(request)
+    if (!body) {
+      return createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400)
+    }
     const { alt_text, is_primary, sort_order } = body
+
+    if (
+      alt_text !== undefined &&
+      alt_text !== null &&
+      (typeof alt_text !== 'string' || alt_text.length > MAX_ALT_TEXT_LENGTH)
+    ) {
+      return createErrorResponse(
+        { success: false, error: '대체 텍스트는 300자 이하의 문자열이어야 합니다.' },
+        400
+      )
+    }
+
+    if (is_primary !== undefined && typeof is_primary !== 'boolean') {
+      return createErrorResponse(
+        { success: false, error: '대표 이미지 설정 값은 boolean이어야 합니다.' },
+        400
+      )
+    }
+
+    if (
+      sort_order !== undefined &&
+      (typeof sort_order !== 'number' ||
+        !Number.isInteger(sort_order) ||
+        sort_order < 0 ||
+        sort_order > 10000)
+    ) {
+      return createErrorResponse(
+        { success: false, error: '정렬 순서는 0 이상 10000 이하의 정수여야 합니다.' },
+        400
+      )
+    }
 
     // 첨부파일과 게시글 권한 확인
     const { data: attachment, error: attachmentError } = await supabase
@@ -130,6 +203,7 @@ export async function PUT(
       .from('post_attachments')
       .update(updateData)
       .eq('id', attachmentId)
+      .eq('post_id', postId)
       .select()
       .single()
 
@@ -143,8 +217,8 @@ export async function PUT(
       revalidateTag(`comments-post-${postId}`)
       revalidateTag('board-post')
       revalidateTag(postId)
-      if ((updatedAttachment as any)?.posts?.category) {
-        revalidateTag(`board-${(updatedAttachment as any).posts.category}`)
+      if ((attachment as any)?.posts?.category) {
+        revalidateTag(`board-${(attachment as any).posts.category}`)
         revalidateTag('board-initial')
       }
     } catch {}
@@ -177,7 +251,9 @@ export async function DELETE(
       return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
     }
 
-    const { id: postId, attachmentId } = resolvedParams
+    const routeParams = validateAttachmentRouteParams(resolvedParams)
+    if (!routeParams.ok) return routeParams.response
+    const { postId, attachmentId } = routeParams
 
     // 첨부파일과 게시글 권한 확인
     const { data: attachment, error: attachmentError } = await supabase
@@ -199,12 +275,15 @@ export async function DELETE(
     // 사용자 권한 확인 (작성자 또는 관리자)
     const { data: profile } = await supabase
       .from('member_profiles')
-      .select('is_admin')
+      .select('is_admin, registration_status, is_active')
       .eq('id', user.id)
       .single()
 
     const isAuthor = attachment.posts.author_id === user.id
-    const isAdmin = profile?.is_admin === true
+    const isAdmin =
+      profile?.is_admin === true &&
+      profile.registration_status === 'approved' &&
+      profile.is_active === true
 
     if (!isAuthor && !isAdmin) {
       return createErrorResponse({ success: false, error: '권한이 없습니다.' }, 403)
@@ -213,19 +292,23 @@ export async function DELETE(
     // Storage에서 파일 삭제 (가능한 경우에만)
     try {
       const supabaseAdmin = getSupabaseAdmin()
-      const urlParts = attachment.file_url.split('/')
-      const fileName = urlParts[urlParts.length - 1]
-      if (fileName) {
-        const fullPath = `posts/${postId}/${fileName}`
+      const storagePath = getProjectStorageObjectPath(
+        attachment.file_url,
+        'attachments',
+        `posts/${postId}`
+      )
 
+      if (storagePath) {
         const { error: storageError } = await supabaseAdmin.storage
           .from('attachments')
-          .remove([fullPath])
+          .remove([storagePath])
 
         if (storageError) {
           console.warn('Storage 파일 삭제 오류:', storageError)
           // Storage 삭제 실패해도 DB 레코드는 삭제 진행
         }
+      } else {
+        console.warn('안전하지 않은 첨부파일 Storage URL 삭제 건너뜀:', attachmentId)
       }
     } catch (error) {
       console.warn('Storage 삭제 시도 중 오류:', error)
@@ -237,6 +320,7 @@ export async function DELETE(
       .from('post_attachments')
       .delete()
       .eq('id', attachmentId)
+      .eq('post_id', postId)
 
     if (deleteError) {
       console.error('첨부파일 DB 삭제 오류:', deleteError)

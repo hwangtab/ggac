@@ -18,6 +18,7 @@ import type { MediaFile } from '@/types'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import distLimiter from '@/utils/distributedRateLimiter'
 import { createLogger } from '@/utils/logger'
+import { parseIntegerParam } from '@/utils/queryParams'
 
 const log = createLogger('api/media/upload')
 
@@ -81,6 +82,17 @@ const DEFAULT_ALLOWED_TYPES = [
 
 const WEBP_QUALITY = 82
 const JPEG_QUALITY = 85
+const RESERVED_METADATA_KEYS = new Set([
+  'original_filename',
+  'file_size',
+  'content_type',
+  'uploaded_at',
+  'width',
+  'height',
+  'variants',
+  'variant_urls',
+  'variant_metadata',
+])
 
 // 버킷별 설정
 const BUCKET_CONFIGS = {
@@ -103,15 +115,46 @@ const BUCKET_CONFIGS = {
   },
 }
 
+type AllowedBucket = keyof typeof BUCKET_CONFIGS
+
+function isAllowedBucket(bucket: string): bucket is AllowedBucket {
+  return bucket in BUCKET_CONFIGS
+}
+
+function parseMetadataObject(value: FormDataEntryValue | null): Record<string, unknown> {
+  if (typeof value !== 'string' || !value.trim()) return {}
+
+  try {
+    const parsed = JSON.parse(value)
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {}
+  } catch (error) {
+    log.error('Invalid metadata', error)
+    return {}
+  }
+}
+
+function sanitizeUserMetadata(metadata: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(metadata).filter(([key, value]) => {
+      if (RESERVED_METADATA_KEYS.has(key)) return false
+      return (
+        value === null ||
+        typeof value === 'string' ||
+        typeof value === 'boolean' ||
+        (typeof value === 'number' && Number.isFinite(value))
+      )
+    })
+  )
+}
+
 // 파일 타입 검증
 function validateFile(
   file: File,
-  bucket: string = 'attachments'
+  bucket: AllowedBucket = 'attachments'
 ): { valid: boolean; error?: string } {
-  const config = BUCKET_CONFIGS[bucket as keyof typeof BUCKET_CONFIGS] || {
-    max_file_size: DEFAULT_MAX_FILE_SIZE,
-    allowed_types: DEFAULT_ALLOWED_TYPES,
-  }
+  const config = BUCKET_CONFIGS[bucket]
 
   if (!config.allowed_types.includes(file.type)) {
     return {
@@ -145,18 +188,16 @@ function generateSafeFileName(originalName: string, userId: string): string {
 }
 
 // Storage 경로 생성 및 이미지 변형 경로 계산
-function getBucketPrefix(bucket: string, userId: string) {
+function getBucketPrefix(bucket: AllowedBucket, userId: string) {
   switch (bucket) {
     case 'profiles':
       return `profiles/${userId}`
     case 'attachments':
       return `attachments/${userId}`
-    default:
-      return `general/${userId}`
   }
 }
 
-function generateStoragePaths(bucket: string, userId: string, fileName: string) {
+function generateStoragePaths(bucket: AllowedBucket, userId: string, fileName: string) {
   const safeFileName = generateSafeFileName(fileName, userId)
   const extension = path.extname(safeFileName).toLowerCase()
   const nameWithoutExtension = extension
@@ -391,12 +432,15 @@ export async function POST(request: NextRequest) {
 
     // FormData 파싱
     const formData = await request.formData()
-    const file = formData.get('file') as File
-    const bucket = (formData.get('bucket') as string) || 'attachments'
-    const metadataStr = formData.get('metadata') as string
+    const file = formData.get('file')
+    const bucket = ((formData.get('bucket') as string) || 'attachments').trim()
+    const metadataValue = formData.get('metadata')
 
-    if (!file) {
+    if (!file || !(file instanceof File)) {
       return ApiError.badRequest('파일이 제공되지 않았습니다.').toNextResponse()
+    }
+    if (!isAllowedBucket(bucket)) {
+      return ApiError.badRequest('지원하지 않는 Storage bucket입니다.').toNextResponse()
     }
 
     // 파일 유효성 검사
@@ -405,15 +449,8 @@ export async function POST(request: NextRequest) {
       return ApiError.badRequest(validation.error!).toNextResponse()
     }
 
-    // 사용자 제공 메타데이터 파싱
-    let userMetadata: Record<string, any> = {}
-    if (metadataStr) {
-      try {
-        userMetadata = JSON.parse(metadataStr)
-      } catch (error) {
-        log.error('Invalid metadata', error)
-      }
-    }
+    // 사용자 제공 메타데이터는 서버가 만든 파일 진실값을 덮어쓰지 못한다.
+    const userMetadata = sanitizeUserMetadata(parseMetadataObject(metadataValue))
 
     // Storage 경로 생성
     const storagePaths = generateStoragePaths(bucket, user.id, file.name)
@@ -565,9 +602,12 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url)
-    const bucket = searchParams.get('bucket') || 'attachments'
-    const limit = parseInt(searchParams.get('limit') || '50')
-    const offset = parseInt(searchParams.get('offset') || '0')
+    const bucket = (searchParams.get('bucket') || 'attachments').trim()
+    if (!isAllowedBucket(bucket)) {
+      return ApiError.badRequest('지원하지 않는 Storage bucket입니다.').toNextResponse()
+    }
+    const limit = parseIntegerParam(searchParams.get('limit'), 50, { min: 1, max: 100 })
+    const offset = parseIntegerParam(searchParams.get('offset'), 0, { min: 0 })
 
     // Storage 클라이언트 생성
     let supabaseAdmin

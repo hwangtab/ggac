@@ -8,7 +8,11 @@ import { createErrorResponse } from '@/utils/apiResponse'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
 import { applyRateLimit, RATE_LIMIT_CONFIGS } from '@/utils/rateLimiter'
+import { parseIntegerParam } from '@/utils/queryParams'
 import { validateUUID } from '@/utils/validation'
+import { createLogger, maskId } from '@/utils/logger'
+
+const log = createLogger('api/posts/view')
 
 /**
  * 게시글 조회수 증가 API
@@ -22,7 +26,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     // UUID 형식 검증
     const uuidValidation = validateUUID(postId, '게시글 ID')
     if (!uuidValidation.isValid) {
-      console.log('[API] VIEW UUID 검증 실패:', uuidValidation.errors)
+      log.debug('VIEW UUID validation failed', { postId: maskId(postId) })
       return createErrorResponse(
         { success: false, error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.' },
         400
@@ -96,7 +100,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     // 최근 10분 내 같은 게시글을 본 경우 조회수 증가하지 않음
     if (lastViewTime) {
-      const timeDiff = Date.now() - parseInt(lastViewTime)
+      const timeDiff = Date.now() - parseIntegerParam(lastViewTime, 0, { min: 0 })
       if (timeDiff < 10 * 60 * 1000) {
         // 10분
         return NextResponse.json({
@@ -167,7 +171,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     // UUID 형식 검증
     const uuidValidation = validateUUID(postId, '게시글 ID')
     if (!uuidValidation.isValid) {
-      console.log('[API] VIEW GET UUID 검증 실패:', uuidValidation.errors)
+      log.debug('VIEW GET UUID validation failed', { postId: maskId(postId) })
       return createErrorResponse(
         { success: false, error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.' },
         400

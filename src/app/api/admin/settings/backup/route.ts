@@ -12,6 +12,7 @@ import {
 import { logSecurityEvent } from '@/utils/security'
 import { createLogger, maskId } from '@/utils/logger'
 import { refreshSettingsCache } from '@/utils/systemSettings'
+import { parseJsonObjectBody } from '@/utils/requestBody'
 
 const log = createLogger('admin/settings/backup')
 
@@ -150,7 +151,16 @@ export async function GET(request: NextRequest) {
       'high'
     )
 
-    return createErrorResponse({ success: false, error: '설정 백업 중 오류가 발생했습니다.' }, 500)
+    const isPermissionError = error instanceof Error && error.message.includes('권한')
+    return createErrorResponse(
+      {
+        success: false,
+        error: isPermissionError
+          ? '관리자 권한이 필요합니다.'
+          : '설정 백업 중 오류가 발생했습니다.',
+      },
+      isPermissionError ? 403 : 500
+    )
   }
 }
 
@@ -184,7 +194,11 @@ export async function POST(request: NextRequest) {
     await checkAdminPermission(supabase, user.id)
 
     // 요청 데이터 파싱 + Zod 검증
-    const rawJson = await request.json().catch(() => null)
+    const rawJson = await parseJsonObjectBody(request)
+    if (!rawJson) {
+      return createErrorResponse({ success: false, error: '유효하지 않은 JSON 본문입니다.' }, 400)
+    }
+
     const parsed = RestoreBodySchema.safeParse(rawJson)
     if (!parsed.success) {
       return NextResponse.json(

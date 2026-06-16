@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl'
 import { format, parseISO } from 'date-fns'
 import { Link, useRouter } from '@/i18n/navigation'
 import { BOARD_MEETING_TIME } from '@/constants/boardRoom'
+import { fetchSessionProfile, isApprovedActiveAdmin } from '@/utils/sessionProfile'
 import MeetingCalendar from '../../_components/MeetingCalendar'
 
 export default function NewMeetingPage() {
@@ -24,21 +25,8 @@ export default function NewMeetingPage() {
     let mounted = true
     ;(async () => {
       try {
-        const { supabase } = await import('@/lib/supabase/client')
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
-        if (!mounted) return
-        if (session?.user) {
-          const { data } = await supabase
-            .from('member_profiles')
-            .select('is_admin')
-            .eq('id', session.user.id)
-            .single()
-          if (mounted) setIsAdmin(!!data?.is_admin)
-        } else {
-          if (mounted) setIsAdmin(false)
-        }
+        const session = await fetchSessionProfile()
+        if (mounted) setIsAdmin(isApprovedActiveAdmin(session.profile))
       } catch {
         if (mounted) setIsAdmin(false)
       }

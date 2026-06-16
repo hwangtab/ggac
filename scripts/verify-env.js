@@ -6,6 +6,20 @@
  */
 
 const { loadEnvConfig } = require('@next/env')
+const { execFileSync } = require('child_process')
+const fs = require('fs')
+const os = require('os')
+const path = require('path')
+
+const sourceArg = process.argv.find(arg => arg.startsWith('--source='))
+const envSource = sourceArg ? sourceArg.split('=')[1] : 'local'
+const validSources = new Set(['local', 'vercel'])
+
+if (!validSources.has(envSource)) {
+  console.error(`Unsupported env source: ${envSource}`)
+  console.error('Use --source=local or --source=vercel')
+  process.exit(1)
+}
 
 loadEnvConfig(process.cwd())
 
@@ -16,6 +30,9 @@ const requiredEnvVars = [
 ]
 
 const productionRequiredEnvVars = ['UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN']
+const productionRequiredValues = {
+  NEXT_STRICT_CSP: 'true',
+}
 
 const optionalEnvVars = [
   'UPSTASH_REDIS_REST_URL',
@@ -27,13 +44,67 @@ const optionalEnvVars = [
 ]
 
 console.log('🔍 Environment Variable Verification\n')
+console.log(
+  `📦 Source: ${envSource === 'vercel' ? 'Vercel Production' : 'Local environment files'}`
+)
+
+function parseEnvFile(filePath) {
+  const env = {}
+  const content = fs.readFileSync(filePath, 'utf8')
+
+  content.split(/\r?\n/).forEach(line => {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) return
+
+    const separatorIndex = trimmed.indexOf('=')
+    if (separatorIndex === -1) return
+
+    const key = trimmed.slice(0, separatorIndex).trim()
+    let value = trimmed.slice(separatorIndex + 1).trim()
+
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1)
+    }
+
+    env[key] = value
+  })
+
+  return env
+}
+
+function loadVercelProductionEnv() {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ggac-vercel-env-'))
+  const tempFile = path.join(tempDir, '.env.production.local')
+
+  try {
+    execFileSync('vercel', ['env', 'pull', tempFile, '--environment=production', '--yes'], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+
+    return parseEnvFile(tempFile)
+  } catch (error) {
+    console.error('❌ Failed to pull Vercel production environment variables.')
+    const stderr = error && error.stderr ? String(error.stderr).trim() : ''
+    if (stderr) console.error(stderr)
+    process.exit(1)
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true })
+  }
+}
+
+const env = envSource === 'vercel' ? loadVercelProductionEnv() : process.env
 
 let hasErrors = false
 
 // Check required variables
 console.log('📋 Required Environment Variables:')
 requiredEnvVars.forEach(varName => {
-  const value = process.env[varName]
+  const value = env[varName]
   if (!value) {
     console.log(`❌ ${varName}: Missing`)
     hasErrors = true
@@ -49,7 +120,7 @@ requiredEnvVars.forEach(varName => {
 
 console.log('\n📋 Optional Environment Variables:')
 optionalEnvVars.forEach(varName => {
-  const value = process.env[varName]
+  const value = env[varName]
   if (!value) {
     console.log(`⚠️  ${varName}: Not set (optional)`)
   } else {
@@ -62,8 +133,8 @@ optionalEnvVars.forEach(varName => {
 })
 
 // Validate Supabase URL format
-if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+if (env.NEXT_PUBLIC_SUPABASE_URL) {
+  const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL
   if (!supabaseUrl.startsWith('https://') || !supabaseUrl.includes('.supabase.co')) {
     console.log(
       `❌ NEXT_PUBLIC_SUPABASE_URL: Invalid format (should be https://[project].supabase.co)`
@@ -82,22 +153,24 @@ if (process.env.NODE_ENV === 'production') {
 
   // Check if Redis is configured for production rate limiting
   productionRequiredEnvVars.forEach(varName => {
-    if (!process.env[varName]) {
+    if (!env[varName]) {
       console.log(`❌ ${varName}: Missing in production`)
       hasErrors = true
     }
   })
 
-  if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
-    console.log('❌ Redis not configured - production rate limiting would use memory fallback')
+  if (!env.UPSTASH_REDIS_REST_URL || !env.UPSTASH_REDIS_REST_TOKEN) {
+    console.log('❌ Redis not configured - production rate-limited APIs will fail closed')
   }
 
-  // Check CSP setting
-  if (process.env.NEXT_STRICT_CSP === 'true') {
-    console.log('🔒 Strict CSP enabled')
-  } else {
-    console.log('⚠️  Strict CSP not enabled')
-  }
+  Object.entries(productionRequiredValues).forEach(([varName, expectedValue]) => {
+    if (env[varName] !== expectedValue) {
+      console.log(`❌ ${varName}: Expected "${expectedValue}" in production`)
+      hasErrors = true
+    } else {
+      console.log(`✅ ${varName}: "${expectedValue}"`)
+    }
+  })
 }
 
 console.log('\n' + '='.repeat(50))

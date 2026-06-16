@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import type { SettingWithDefault, SettingCategory } from '@/types/index'
+import { parseIntegerParam } from '@/utils/queryParams'
 
 interface PreferenceSettingsProps {
   settings: SettingWithDefault[]
@@ -229,7 +230,7 @@ export default function PreferenceSettings({ settings, onUpdate }: PreferenceSet
                 onChange={e =>
                   updateSettingValue('auto_save', {
                     ...autoSave,
-                    interval_minutes: parseInt(e.target.value),
+                    interval_minutes: parseIntegerParam(e.target.value, 5, { min: 1 }),
                   })
                 }
                 className="block w-32 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 disabled:opacity-50"

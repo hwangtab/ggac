@@ -2,8 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { apiGet, apiPost, ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { requireBoardMember, requireBoardAdmin } from '@/lib/server/boardRoomAuth'
 import { notifyDirectors } from '@/lib/server/boardRoomNotify'
-import { BOARD_MEETING_TIME } from '@/constants/boardRoom'
+import {
+  BOARD_MEETING_TIME,
+  parseBoardMeetingCandidateDates,
+  parseBoardMeetingDeadline,
+} from '@/constants/boardRoom'
 import { createLogger } from '@/utils/logger'
+import { parseJsonObjectBody } from '@/utils/requestBody'
 
 const log = createLogger('boardRoom/meetings')
 
@@ -37,17 +42,17 @@ export async function POST(request: NextRequest) {
 
   return apiPost(
     async () => {
-      const body = await request.json()
-      const title: string = (body.title || '').trim()
-      const candidateDates: string[] = Array.isArray(body.candidate_dates)
-        ? body.candidate_dates
-        : []
-      const voteDeadline: string | null = body.vote_deadline || null
-      const location: string | null = body.location || null
+      const body = await parseJsonObjectBody(request)
+      if (!body) throw ApiError.badRequest('유효한 JSON body가 필요합니다.')
+
+      const title = typeof body.title === 'string' ? body.title.trim() : ''
+      const candidateDates = parseBoardMeetingCandidateDates(body.candidate_dates)
+      const voteDeadline = parseBoardMeetingDeadline(body.vote_deadline)
+      const location = typeof body.location === 'string' ? body.location.trim() || null : null
 
       if (!title) throw ApiError.badRequest('제목을 입력해주세요.')
-      if (candidateDates.length === 0)
-        throw ApiError.badRequest('후보 날짜를 1개 이상 선택해주세요.')
+      if (!candidateDates)
+        throw ApiError.badRequest('후보 날짜는 YYYY-MM-DD 형식으로 1개 이상 선택해주세요.')
       if (!voteDeadline) throw ApiError.badRequest('투표 마감일을 설정해주세요.')
 
       const { data: meeting, error: mErr } = await db

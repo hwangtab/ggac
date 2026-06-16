@@ -3,6 +3,9 @@ import { createErrorResponse } from '@/utils/apiResponse'
 import { NextRequest, NextResponse } from 'next/server'
 import { withRateLimit } from '@/utils/rateLimit'
 import { sanitizeInput } from '@/utils/security'
+import { parseJsonObjectBody } from '@/utils/requestBody'
+import { parseActivityActionType, parseActivityTargetType } from '@/constants/activity'
+import { validateUUID } from '@/utils/validation'
 import type { ActivityLogRequest } from '@/types'
 
 /**
@@ -21,7 +24,12 @@ export async function POST(request: NextRequest) {
         return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
       }
 
-      const { logs } = (await request.json()) as { logs: ActivityLogRequest[] }
+      const body = await parseJsonObjectBody(request)
+      if (!body) {
+        return createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400)
+      }
+
+      const logs = parseActivityLogArray(body.logs)
 
       if (!Array.isArray(logs) || logs.length === 0) {
         return createErrorResponse({ success: false, error: '유효한 로그 배열이 필요합니다.' }, 400)
@@ -47,10 +55,25 @@ export async function POST(request: NextRequest) {
         const log = logs[i]
 
         try {
-          if (!log.action_type) {
-            errors.push({ index: i, error: 'action_type이 필수입니다.' })
+          const actionType = parseActivityActionType(log.action_type)
+          if (!actionType) {
+            errors.push({ index: i, error: '유효한 action_type이 필요합니다.' })
             continue
           }
+          const targetType = log.target_type ? parseActivityTargetType(log.target_type) : null
+          if (log.target_type && !targetType) {
+            errors.push({ index: i, error: '유효하지 않은 target_type입니다.' })
+            continue
+          }
+          const targetIdValidation = log.target_id ? validateUUID(log.target_id, '대상 ID') : null
+          if (targetIdValidation && !targetIdValidation.isValid) {
+            errors.push({
+              index: i,
+              error: targetIdValidation.errors[0] || '잘못된 대상 ID입니다.',
+            })
+            continue
+          }
+          const targetId = targetIdValidation?.sanitized ?? null
 
           // 입력 검증 및 sanitization
           const sanitizedMetadata =
@@ -69,9 +92,9 @@ export async function POST(request: NextRequest) {
 
           const { data, error } = await supabase.rpc('log_user_activity', {
             p_user_id: user.id,
-            p_action_type: log.action_type,
-            p_target_type: log.target_type || null,
-            p_target_id: log.target_id || null,
+            p_action_type: actionType,
+            p_target_type: targetType,
+            p_target_id: targetId,
             p_metadata: sanitizedMetadata,
             p_ip_address: clientIP,
             p_user_agent: userAgent,
@@ -106,4 +129,25 @@ export async function POST(request: NextRequest) {
       return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
     }
   })(request)
+}
+
+function parseActivityLogArray(value: unknown): ActivityLogRequest[] | null {
+  if (!Array.isArray(value)) return null
+
+  return value.map(item => {
+    const entry =
+      item && typeof item === 'object' && !Array.isArray(item)
+        ? (item as Record<string, unknown>)
+        : {}
+
+    return {
+      action_type: typeof entry.action_type === 'string' ? (entry.action_type as any) : ('' as any),
+      target_type: typeof entry.target_type === 'string' ? (entry.target_type as any) : undefined,
+      target_id: typeof entry.target_id === 'string' ? entry.target_id : undefined,
+      metadata:
+        entry.metadata && typeof entry.metadata === 'object' && !Array.isArray(entry.metadata)
+          ? (entry.metadata as Record<string, any>)
+          : {},
+    }
+  })
 }

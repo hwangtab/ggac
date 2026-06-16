@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl'
 import { differenceInCalendarDays } from 'date-fns'
 import { Link } from '@/i18n/navigation'
 import type { BoardMeetingStatus } from '@/constants/boardRoom'
+import { fetchSessionProfile, isApprovedActiveAdmin } from '@/utils/sessionProfile'
 import StatusBadge from '../_components/StatusBadge'
 
 interface Meeting {
@@ -25,26 +26,14 @@ export default function SchedulePollPage() {
   const [error, setError] = useState<string | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
 
-  // Admin detection (same pattern as other board-room pages)
   useEffect(() => {
     let mounted = true
     ;(async () => {
       try {
-        const { supabase } = await import('@/lib/supabase/client')
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
-        if (!mounted) return
-        if (session?.user) {
-          const { data } = await supabase
-            .from('member_profiles')
-            .select('is_admin')
-            .eq('id', session.user.id)
-            .single()
-          if (mounted) setIsAdmin(!!data?.is_admin)
-        }
+        const session = await fetchSessionProfile()
+        if (mounted) setIsAdmin(isApprovedActiveAdmin(session.profile))
       } catch {
-        // silently ignore
+        if (mounted) setIsAdmin(false)
       }
     })()
     return () => {

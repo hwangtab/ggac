@@ -5,6 +5,8 @@ import DOMPurify from 'dompurify'
 import ReactMarkdown from 'react-markdown'
 import Image from 'next/image'
 import { detectXssPatterns, logSecurityEvent } from '@/utils/security'
+import { createImageProxy } from '@/utils/imageValidation'
+import { isSafeInternalPath, toSafeHttpUrl, toSafeLinkHref } from '@/utils/safeUrl'
 
 interface PostContentRendererProps {
   content: string
@@ -118,12 +120,30 @@ export const PostContentRenderer: React.FC<PostContentRendererProps> = ({
       <div className={`prose max-w-none ${className}`}>
         <ReactMarkdown
           components={{
-            a: ({ node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />,
+            a: ({ node, href, children, ...props }) => {
+              const safeHref = typeof href === 'string' ? toSafeLinkHref(href) : null
+              if (!safeHref) return <span {...props}>{children}</span>
+
+              return (
+                <a href={safeHref} target="_blank" rel="noopener noreferrer" {...props}>
+                  {children}
+                </a>
+              )
+            },
             img: ({ node, src, alt, ...props }) => {
               if (!src || typeof src !== 'string') return null
+              const safeHttpSrc = toSafeHttpUrl(src)
+              const safeSrc = isSafeInternalPath(src)
+                ? src
+                : safeHttpSrc
+                  ? createImageProxy(safeHttpSrc)
+                  : null
+
+              if (!safeSrc) return null
+
               return (
                 <Image
-                  src={src}
+                  src={safeSrc}
                   alt={alt || '이미지'}
                   width={800}
                   height={600}

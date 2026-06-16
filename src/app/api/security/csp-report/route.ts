@@ -9,6 +9,9 @@ export const runtime = 'nodejs'
 import { NextRequest, NextResponse } from 'next/server'
 import { createErrorResponse } from '@/utils/apiResponse'
 import { logSecurityEvent } from '@/utils/security'
+import { createLogger } from '@/utils/logger'
+
+const log = createLogger('api/security/csp-report')
 
 interface CSPReport {
   'csp-report': {
@@ -33,6 +36,20 @@ async function parseJsonBody(request: NextRequest): Promise<unknown> {
   }
 }
 
+function getReportObject(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+}
+
+function sanitizeReportString(value: unknown, maxLength = 1024): string {
+  return typeof value === 'string' ? value.slice(0, maxLength) : ''
+}
+
+function sanitizeReportNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
 /**
  * CSP 위반 리포트 수집
  */
@@ -40,22 +57,24 @@ export async function POST(request: NextRequest) {
   try {
     const report = (await parseJsonBody(request)) as CSPReport | null
 
-    if (!report?.['csp-report']) {
+    const cspReport = getReportObject(report?.['csp-report'])
+    if (!cspReport) {
       return createErrorResponse({ success: false, error: 'Invalid CSP report format' }, 400)
     }
 
-    const cspReport = report['csp-report']
-
     // 민감한 정보 필터링
     const sanitizedReport = {
-      documentUri: cspReport['document-uri']?.replace(/[?#].*$/, ''), // 쿼리 파라미터 제거
-      violatedDirective: cspReport['violated-directive'],
-      effectiveDirective: cspReport['effective-directive'],
-      blockedUri: cspReport['blocked-uri']?.replace(/^data:.*/, 'data:[filtered]'), // data URI 내용 제거
-      disposition: cspReport.disposition,
-      sourceFile: cspReport['source-file']?.replace(/[?#].*$/, ''),
-      lineNumber: cspReport['line-number'],
-      columnNumber: cspReport['column-number'],
+      documentUri: sanitizeReportString(cspReport['document-uri']).replace(/[?#].*$/, ''), // 쿼리 파라미터 제거
+      violatedDirective: sanitizeReportString(cspReport['violated-directive'], 200),
+      effectiveDirective: sanitizeReportString(cspReport['effective-directive'], 200),
+      blockedUri: sanitizeReportString(cspReport['blocked-uri']).replace(
+        /^data:.*/,
+        'data:[filtered]'
+      ), // data URI 내용 제거
+      disposition: sanitizeReportString(cspReport.disposition, 100),
+      sourceFile: sanitizeReportString(cspReport['source-file']).replace(/[?#].*$/, ''),
+      lineNumber: sanitizeReportNumber(cspReport['line-number']),
+      columnNumber: sanitizeReportNumber(cspReport['column-number']),
     }
 
     // 무시할 위반 패턴들 (false positive 제거)
@@ -79,7 +98,7 @@ export async function POST(request: NextRequest) {
     )
 
     if (shouldIgnore) {
-      console.log('[CSP] 무시된 위반 리포트:', sanitizedReport.blockedUri)
+      log.debug('Ignored CSP report', { blockedUri: sanitizedReport.blockedUri })
       return NextResponse.json({ status: 'ignored' })
     }
 
@@ -107,7 +126,8 @@ export async function POST(request: NextRequest) {
       severity
     )
 
-    console.log(`[CSP] ${severity.toUpperCase()} 위반 리포트:`, {
+    log.debug('CSP violation report collected', {
+      severity,
       directive: sanitizedReport.violatedDirective,
       blockedUri: sanitizedReport.blockedUri,
       documentUri: sanitizedReport.documentUri,

@@ -1,6 +1,7 @@
 'use client'
 
 import { FiUsers } from 'react-icons/fi'
+import { parseIntegerParam } from '@/utils/queryParams'
 
 interface CooperativeInfoProps {
   data: {
@@ -16,7 +17,7 @@ const CooperativeInfo: React.FC<CooperativeInfoProps> = ({ data, errors, onChang
   }
 
   const handleFeeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseInt(e.target.value) || 0
+    const value = parseIntegerParam(e.target.value, 0, { min: 0 })
     onChange('monthly_fee', value)
   }
 

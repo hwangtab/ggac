@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/server/adminAuth'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator } from '@/utils/rateLimiter'
+import { parseIntegerParam } from '@/utils/queryParams'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -22,12 +23,12 @@ export async function GET(request: NextRequest) {
   const { db } = auth
 
   const { searchParams } = new URL(request.url)
-  const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 100)
+  const limit = parseIntegerParam(searchParams.get('limit'), 20, { min: 1, max: 100 })
   const includeActivity = searchParams.get('include_activity') === 'true'
-  const intervalMs = Math.min(
-    Math.max(parseInt(searchParams.get('interval') || '15000'), 3000),
-    60000
-  )
+  const intervalMs = parseIntegerParam(searchParams.get('interval'), 15000, {
+    min: 3000,
+    max: 60000,
+  })
 
   const stream = new ReadableStream({
     start(controller) {

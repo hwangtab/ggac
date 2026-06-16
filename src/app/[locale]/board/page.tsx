@@ -2,6 +2,8 @@
 import { Suspense } from 'react'
 import BoardServerData from './BoardServerData'
 import { generateBreadcrumbStructuredData, structuredDataToScript } from '@/utils/structuredData'
+import { parseIntegerParam } from '@/utils/queryParams'
+import { parseBoardCategory } from '@/constants/categories'
 import { setRequestLocale } from 'next-intl/server'
 import type { Metadata } from 'next'
 
@@ -13,7 +15,7 @@ export async function generateMetadata({
   searchParams?: Promise<{ page?: string; category?: string }>
 }): Promise<Metadata> {
   const resolved = (await searchParams) ?? {}
-  const page = Number(resolved.page) || 1
+  const page = parseIntegerParam(resolved.page ?? null, 1, { min: 1 })
   const canonical = page > 1 ? `/board?page=${page}` : '/board'
 
   return {
@@ -81,9 +83,8 @@ const BoardPage = async ({ params, searchParams }: BoardPageProps) => {
   const { locale } = await params
   setRequestLocale(locale)
   const resolved = (await searchParams) ?? {}
-  const category = resolved.category || '전체'
-  const pageParam = parseInt(resolved.page || '1', 10)
-  const page = Number.isFinite(pageParam) && pageParam > 0 ? pageParam : 1
+  const category = parseBoardCategory(resolved.category) ?? '전체'
+  const page = parseIntegerParam(resolved.page ?? null, 1, { min: 1 })
 
   return (
     <>

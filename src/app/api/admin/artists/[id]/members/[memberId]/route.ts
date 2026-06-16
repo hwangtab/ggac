@@ -12,6 +12,12 @@ import {
   createUserKeyGenerator,
   addRateLimitHeaders,
 } from '@/utils/rateLimiter'
+import { validateUUID } from '@/utils/validation'
+
+function parseArtistLegacyId(value: string) {
+  const sanitized = value.trim().toLowerCase()
+  return /^artist-\d{3,}$/.test(sanitized) ? sanitized : null
+}
 
 // DELETE: 아티스트 배정 해제
 export async function DELETE(
@@ -33,18 +39,17 @@ export async function DELETE(
     if (auth instanceof NextResponse) return auth
     const { db } = auth
 
-    const artistId = resolvedParams.id
-    const memberId = resolvedParams.memberId
+    const artistId = parseArtistLegacyId(resolvedParams.id)
+    const memberIdValidation = validateUUID(resolvedParams.memberId, '멤버 ID')
 
     // 아티스트 ID 형식 검증 — member_profiles.artist_id는 legacy_id를 보관한다.
-    const legacyIdPattern = /^artist-\d{3,}$/
-    if (!artistId || !legacyIdPattern.test(artistId)) {
+    if (!artistId) {
       return createErrorResponse({ success: false, error: '유효하지 않은 아티스트 ID입니다.' }, 400)
     }
-    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!memberId || !uuidPattern.test(memberId)) {
+    if (!memberIdValidation.isValid) {
       return createErrorResponse({ success: false, error: '유효하지 않은 멤버 ID입니다.' }, 400)
     }
+    const memberId = memberIdValidation.sanitized
 
     // 대상 멤버 확인
     const { data: targetMember, error: memberError } = await db

@@ -7,6 +7,17 @@ const log = createLogger('api/client-error')
 const MAX_FIELD_LENGTH = 4096
 const MAX_MESSAGE_LENGTH = 1024
 
+function sanitizeClientErrorUrl(value: unknown): string {
+  if (typeof value !== 'string' || !value.trim()) return 'unknown'
+
+  try {
+    const parsed = new URL(value)
+    return `${parsed.origin}${parsed.pathname}`.slice(0, 512)
+  } catch {
+    return 'unknown'
+  }
+}
+
 async function parseJsonBody(request: NextRequest): Promise<Record<string, unknown> | null> {
   try {
     const body = await request.json()
@@ -31,7 +42,7 @@ export async function POST(request: NextRequest) {
     const componentStack = body.componentStack
       ? String(body.componentStack).slice(0, MAX_FIELD_LENGTH)
       : undefined
-    const url = body.url ? String(body.url).slice(0, 512) : 'unknown'
+    const url = sanitizeClientErrorUrl(body.url)
 
     const errorLog = {
       timestamp: body.timestamp,

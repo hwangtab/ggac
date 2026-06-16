@@ -8,6 +8,7 @@ import {
 } from '@/utils/rateLimiter'
 import { logSecurityEvent } from '@/utils/security'
 import { requireAdmin } from '@/lib/server/adminAuth'
+import { parseIntegerParam } from '@/utils/queryParams'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -32,9 +33,9 @@ export async function GET(request: NextRequest) {
 
     // 쿼리 파라미터 추출 및 검증
     const { searchParams } = new URL(request.url)
-    const page = Math.max(1, parseInt(searchParams.get('page') || '1'))
-    const limit = Math.min(50, Math.max(10, parseInt(searchParams.get('limit') || '20')))
-    const days = Math.min(30, Math.max(1, parseInt(searchParams.get('days') || '7')))
+    const page = parseIntegerParam(searchParams.get('page'), 1, { min: 1 })
+    const limit = parseIntegerParam(searchParams.get('limit'), 20, { min: 10, max: 50 })
+    const days = parseIntegerParam(searchParams.get('days'), 7, { min: 1, max: 30 })
 
     // 페이지 번호 검증
     if (page > 1000) {

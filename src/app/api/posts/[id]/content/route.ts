@@ -17,6 +17,7 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ id: st
       { status: 400 }
     )
   }
+  const postId = uuidValidation.sanitized
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -31,7 +32,7 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ id: st
   const { data, error } = await supabase
     .from('posts')
     .select('content, content_format')
-    .eq('id', id)
+    .eq('id', postId)
     .eq('is_deleted', false)
     .single()
 

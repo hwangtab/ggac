@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import type { SettingWithDefault, SettingCategory } from '@/types/index'
+import { parseIntegerParam } from '@/utils/queryParams'
 
 interface SecuritySettingsProps {
   settings: SettingWithDefault[]
@@ -44,7 +45,7 @@ export default function SecuritySettings({ settings, onUpdate }: SecuritySetting
             onChange={e =>
               updateSettingValue('session_timeout', {
                 ...sessionTimeout,
-                minutes: parseInt(e.target.value),
+                minutes: parseIntegerParam(e.target.value, 480, { min: 1 }),
               })
             }
             className="block w-48 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 disabled:opacity-50"

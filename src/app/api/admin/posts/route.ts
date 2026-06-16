@@ -13,6 +13,7 @@ import {
   addRateLimitHeaders,
 } from '@/utils/rateLimiter'
 import { logSecurityEvent } from '@/utils/security'
+import { parseIntegerParam } from '@/utils/queryParams'
 
 export async function GET(request: NextRequest) {
   try {
@@ -35,8 +36,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const filter = searchParams.get('filter') || 'all'
     const searchRaw = searchParams.get('search') || ''
-    const page = parseInt(searchParams.get('page') || '1')
-    const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 100) // 최대 100개 제한
+    const page = parseIntegerParam(searchParams.get('page'), 1, { min: 1, max: 10000 })
+    const limit = parseIntegerParam(searchParams.get('limit'), 20, { min: 1, max: 100 })
     const offset = (page - 1) * limit
 
     // 입력 검증

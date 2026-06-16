@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { FiBarChart, FiTrendingUp, FiUsers, FiClock, FiRefreshCw, FiDownload } from 'react-icons/fi'
+import { parseIntegerParam } from '@/utils/queryParams'
 
 interface PatternAnalysis {
   activityPatterns: {
@@ -369,7 +370,7 @@ const ActivityAnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ userId, days 
                 상위
                 <select
                   value={topK}
-                  onChange={e => setTopK(Number(e.target.value))}
+                  onChange={e => setTopK(parseIntegerParam(e.target.value, 8, { min: 1 }))}
                   className="border rounded px-2 py-1 text-sm"
                 >
                   {[5, 8, 10, 15].map(k => (
@@ -519,7 +520,7 @@ const ActivityAnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ userId, days 
                 윈도우(주)
                 <select
                   value={trendWeeks}
-                  onChange={e => setTrendWeeks(Number(e.target.value))}
+                  onChange={e => setTrendWeeks(parseIntegerParam(e.target.value, 8, { min: 1 }))}
                   className="border rounded px-2 py-1 text-sm"
                 >
                   {[4, 8, 12, 24].map(w => (

@@ -18,6 +18,16 @@ import {
   createUserKeyGenerator,
   addRateLimitHeaders,
 } from '@/utils/rateLimiter'
+import { parseIntegerParam } from '@/utils/queryParams'
+import { parsePerformanceAction } from '@/constants/adminAnalytics'
+
+const MAX_EXPORT_RANGE_MS = 7 * 24 * 60 * 60 * 1000
+
+function parseMetricTimestamp(value: string | null): number | null {
+  if (!value) return null
+  const parsed = Date.parse(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -34,9 +44,17 @@ export async function GET(request: NextRequest) {
     if (auth instanceof NextResponse) return auth
 
     const { searchParams } = new URL(request.url)
-    const action = searchParams.get('action') || 'dashboard'
+    const actionParam = searchParams.get('action') || 'dashboard'
+    const action = parsePerformanceAction(actionParam)
     const endpoint = searchParams.get('endpoint')
-    const timeWindow = parseInt(searchParams.get('timeWindow') || '3600000') // 기본 1시간
+    const timeWindow = parseIntegerParam(searchParams.get('timeWindow'), 3600000, {
+      min: 60000,
+      max: 7 * 24 * 60 * 60 * 1000,
+    })
+
+    if (!action) {
+      return createErrorResponse({ success: false, error: '지원하지 않는 액션입니다.' }, 400)
+    }
 
     let response: NextResponse
 
@@ -84,22 +102,44 @@ export async function GET(request: NextRequest) {
       case 'export': {
         const startTime = searchParams.get('startTime')
         const endTime = searchParams.get('endTime')
+        const parsedStartTime = parseMetricTimestamp(startTime)
+        const parsedEndTime = parseMetricTimestamp(endTime)
 
-        if (!startTime || !endTime) {
+        if (parsedStartTime === null || parsedEndTime === null) {
           return NextResponse.json(
-            { error: 'startTime과 endTime 파라미터가 필요합니다.' },
+            { error: 'startTime과 endTime은 유효한 날짜/시간이어야 합니다.' },
+            { status: 400 }
+          )
+        }
+
+        if (parsedStartTime > parsedEndTime) {
+          return NextResponse.json(
+            { error: 'startTime은 endTime보다 늦을 수 없습니다.' },
+            { status: 400 }
+          )
+        }
+
+        if (parsedEndTime - parsedStartTime > MAX_EXPORT_RANGE_MS) {
+          return NextResponse.json(
+            { error: '내보내기 기간은 7일을 초과할 수 없습니다.' },
             { status: 400 }
           )
         }
 
         try {
-          const exportedMetrics = exportApiMetrics(startTime, endTime, endpoint || undefined)
+          const normalizedStartTime = new Date(parsedStartTime).toISOString()
+          const normalizedEndTime = new Date(parsedEndTime).toISOString()
+          const exportedMetrics = exportApiMetrics(
+            normalizedStartTime,
+            normalizedEndTime,
+            endpoint || undefined
+          )
           response = NextResponse.json({
             success: true,
             data: exportedMetrics,
             count: exportedMetrics.length,
-            startTime,
-            endTime,
+            startTime: normalizedStartTime,
+            endTime: normalizedEndTime,
             endpoint: endpoint || 'all',
             timestamp: new Date().toISOString(),
           })
@@ -112,8 +152,10 @@ export async function GET(request: NextRequest) {
         break
       }
 
-      default:
-        return createErrorResponse({ success: false, error: '지원하지 않는 액션입니다.' }, 400)
+      default: {
+        const exhaustiveCheck: never = action
+        return exhaustiveCheck
+      }
     }
 
     return addRateLimitHeaders(

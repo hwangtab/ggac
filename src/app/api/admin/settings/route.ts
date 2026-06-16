@@ -12,6 +12,7 @@ import {
 import { logSecurityEvent } from '@/utils/security'
 import { refreshSettingsCache } from '@/utils/systemSettings'
 import { createLogger } from '@/utils/logger'
+import { parseJsonObjectBody } from '@/utils/requestBody'
 
 const log = createLogger('admin/settings')
 
@@ -317,20 +318,19 @@ export async function PUT(request: NextRequest) {
     await checkAdminPermission(supabase, user.id)
 
     // 요청 데이터 파싱 + Zod 검증
-    let requestData: z.infer<typeof SystemSettingsUpdateSchema>
-    try {
-      const rawJson = await request.json()
-      const parsed = SystemSettingsUpdateSchema.safeParse(rawJson)
-      if (!parsed.success) {
-        return NextResponse.json(
-          { error: '유효하지 않은 설정 데이터입니다.', details: parsed.error.flatten() },
-          { status: 400 }
-        )
-      }
-      requestData = parsed.data
-    } catch {
+    const rawJson = await parseJsonObjectBody(request)
+    if (!rawJson) {
       return createErrorResponse({ success: false, error: '유효하지 않은 JSON 본문입니다.' }, 400)
     }
+
+    const parsed = SystemSettingsUpdateSchema.safeParse(rawJson)
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: '유효하지 않은 설정 데이터입니다.', details: parsed.error.flatten() },
+        { status: 400 }
+      )
+    }
+    const requestData: z.infer<typeof SystemSettingsUpdateSchema> = parsed.data
 
     // 설정별로 데이터베이스 업데이트
     const updateResults: string[] = []

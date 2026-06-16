@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react'
 import { FiX, FiChevronLeft, FiChevronRight } from 'react-icons/fi'
 import OptimizedImage from './OptimizedImage'
 import { useTranslations } from 'next-intl'
+import { toSafeInternalImagePath } from '@/utils/safeUrl'
 
 interface LightboxProps {
   images: string[]
@@ -17,6 +18,8 @@ const Lightbox = ({ images, currentIndex, onClose, onNext, onPrev }: LightboxPro
   const t = useTranslations('common')
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
+  const safeImages = images.map(image => toSafeInternalImagePath(image))
+  const safeCurrentIndex = Math.min(Math.max(currentIndex, 0), Math.max(safeImages.length - 1, 0))
 
   // Focus close button when modal opens
   useEffect(() => {
@@ -64,7 +67,10 @@ const Lightbox = ({ images, currentIndex, onClose, onNext, onPrev }: LightboxPro
       }}
       role="dialog"
       aria-modal="true"
-      aria-label={t('lightbox.dialogLabel', { current: currentIndex + 1, total: images.length })}
+      aria-label={t('lightbox.dialogLabel', {
+        current: safeCurrentIndex + 1,
+        total: safeImages.length,
+      })}
     >
       {/* Close Button */}
       <button
@@ -79,8 +85,8 @@ const Lightbox = ({ images, currentIndex, onClose, onNext, onPrev }: LightboxPro
       {/* Main Image */}
       <div className="relative w-full h-full max-w-4xl max-h-[90vh] flex items-center justify-center px-6">
         <OptimizedImage
-          src={images[currentIndex]}
-          alt={t('lightbox.imageAlt', { current: currentIndex + 1 })}
+          src={safeImages[safeCurrentIndex]}
+          alt={t('lightbox.imageAlt', { current: safeCurrentIndex + 1 })}
           width={1600}
           height={900}
           className="w-full h-auto max-h-[90vh] object-contain mx-auto"
@@ -114,7 +120,7 @@ const Lightbox = ({ images, currentIndex, onClose, onNext, onPrev }: LightboxPro
         aria-live="polite"
         aria-atomic="true"
       >
-        {currentIndex + 1} / {images.length}
+        {safeCurrentIndex + 1} / {safeImages.length}
       </div>
     </div>
   )

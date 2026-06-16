@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
 import { BOARD_DOCUMENT_CATEGORIES } from '@/constants/boardRoom'
+import { fetchSessionProfile, isApprovedActiveAdmin } from '@/utils/sessionProfile'
 import DocumentList from '../_components/DocumentList'
 import DocumentUpload from '../_components/DocumentUpload'
 
@@ -29,27 +30,20 @@ export default function DocumentsPage() {
   const [currentUserId, setCurrentUserId] = useState<string>('')
   const [isAdmin, setIsAdmin] = useState(false)
 
-  // Session: current user id + admin status
   useEffect(() => {
     let mounted = true
     ;(async () => {
       try {
-        const { supabase } = await import('@/lib/supabase/client')
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
-        if (!mounted) return
-        if (session?.user) {
-          setCurrentUserId(session.user.id)
-          const { data } = await supabase
-            .from('member_profiles')
-            .select('is_admin')
-            .eq('id', session.user.id)
-            .single()
-          if (mounted) setIsAdmin(!!data?.is_admin)
+        const session = await fetchSessionProfile()
+        if (mounted) {
+          setCurrentUserId(session.user?.id ?? '')
+          setIsAdmin(isApprovedActiveAdmin(session.profile))
         }
       } catch {
-        // silently ignore
+        if (mounted) {
+          setCurrentUserId('')
+          setIsAdmin(false)
+        }
       }
     })()
     return () => {

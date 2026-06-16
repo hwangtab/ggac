@@ -6,12 +6,33 @@ import {
   DISTRIBUTED_RATE_LIMIT_CONFIGS,
   createDistributedIPKeyGenerator,
 } from '@/utils/distributedRateLimiter'
+import { isValidEventSlug, normalizeEventSlug } from '@/utils/eventApplicationValidation'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const preferredRegion = 'icn1'
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
+const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
+const EXTENSION_BY_TYPE: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+}
+const MAGIC_BYTE_SIGNATURES: Record<string, number[][]> = {
+  'image/jpeg': [[0xff, 0xd8, 0xff]],
+  'image/png': [[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]],
+  'image/webp': [[0x52, 0x49, 0x46, 0x46]],
+  'image/gif': [[0x47, 0x49, 0x46, 0x38]],
+}
+
+function hasValidImageSignature(buffer: Buffer, mimeType: string): boolean {
+  const signatures = MAGIC_BYTE_SIGNATURES[mimeType]
+  if (!signatures) return false
+
+  return signatures.some(signature => signature.every((byte, index) => buffer[index] === byte))
+}
 
 export async function POST(request: NextRequest) {
   const limiter = await distributedRateLimiter.applyRateLimit({
@@ -27,9 +48,12 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const eventSlug = request.nextUrl.searchParams.get('event_slug')
+    const eventSlug = normalizeEventSlug(request.nextUrl.searchParams.get('event_slug') || '')
     if (!eventSlug) {
       return ApiError.badRequest('event_slug 파라미터가 필요합니다.').toNextResponse()
+    }
+    if (!isValidEventSlug(eventSlug)) {
+      return ApiError.badRequest('event_slug 형식이 올바르지 않습니다.').toNextResponse()
     }
 
     const formData = await request.formData()
@@ -39,7 +63,7 @@ export async function POST(request: NextRequest) {
       return ApiError.badRequest('파일이 없습니다.').toNextResponse()
     }
 
-    if (!file.type.startsWith('image/')) {
+    if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
       return ApiError.badRequest('이미지 파일만 업로드 가능합니다.').toNextResponse()
     }
 
@@ -47,7 +71,13 @@ export async function POST(request: NextRequest) {
       return ApiError.badRequest('파일 크기는 5MB 이하여야 합니다.').toNextResponse()
     }
 
-    const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg'
+    const arrayBuffer = await file.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
+    if (!hasValidImageSignature(buffer, file.type)) {
+      return ApiError.badRequest('이미지 파일 형식이 올바르지 않습니다.').toNextResponse()
+    }
+
+    const ext = EXTENSION_BY_TYPE[file.type]
     const fileName = `${Date.now()}-${crypto.randomUUID()}.${ext}`
     const storagePath = `event-applications/${eventSlug}/${fileName}`
 
@@ -61,10 +91,9 @@ export async function POST(request: NextRequest) {
       auth: { autoRefreshToken: false, persistSession: false },
     })
 
-    const arrayBuffer = await file.arrayBuffer()
     const { error: uploadError } = await db.storage
       .from('attachments')
-      .upload(storagePath, arrayBuffer, {
+      .upload(storagePath, buffer, {
         contentType: file.type,
         upsert: false,
       })

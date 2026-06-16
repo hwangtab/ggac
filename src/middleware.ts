@@ -8,8 +8,10 @@ import { handleAuth } from './middleware/auth'
 import { getMaintenanceResponse } from './middleware/maintenance'
 import { createMiddlewareSupabaseClient } from './middleware/supabase-rest'
 import { routing } from './i18n/routing'
+import { createLogger } from '@/utils/logger'
 
 const intlMiddleware = createIntlMiddleware(routing)
+const log = createLogger('middleware')
 
 function hasSupabaseMiddlewareConfig() {
   return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
@@ -20,9 +22,7 @@ export async function middleware(request: NextRequest) {
 
   // API 라우트는 절대 미들웨어에서 처리하지 않음
   if (pathname.startsWith('/api/')) {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('⚠️ [MIDDLEWARE] API route bypassed:', pathname)
-    }
+    log.debug('API route bypassed', pathname)
     return NextResponse.next()
   }
 
@@ -71,9 +71,7 @@ export async function middleware(request: NextRequest) {
   applyCSP(request, res)
 
   if (!hasSupabaseMiddlewareConfig()) {
-    if (process.env.NODE_ENV === 'development') {
-      console.warn('⚠️ [MIDDLEWARE] Supabase env missing, skipping auth middleware')
-    }
+    log.debug('Supabase env missing, skipping auth middleware')
     return res
   }
 

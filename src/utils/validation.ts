@@ -92,7 +92,6 @@ export const isValidUUIDOrTempId = (value: string): boolean => {
 
 /**
  * UUID 검증 (DatabaseValidationResult 형태로 반환)
- * 임시 ID (temp-{UUID}) 형식도 허용
  */
 export const validateUUID = (uuid: string, paramName: string = 'ID'): UUIDValidationResult => {
   const errors: string[] = []
@@ -112,15 +111,10 @@ export const validateUUID = (uuid: string, paramName: string = 'ID'): UUIDValida
   const trimmed = uuid.trim()
   let idType: 'uuid' | 'temp-id' | 'invalid' = 'invalid'
 
-  // UUID 또는 임시 ID 형식 검증
   if (isValidUUID(trimmed)) {
     idType = 'uuid'
-  } else if (isValidTempId(trimmed)) {
-    idType = 'temp-id'
-    warnings.push(`임시 ID가 사용되었습니다: ${paramName}`)
-    logSecurityEvent('TEMP_ID_USAGE', { tempId: trimmed, paramName }, 'low')
   } else {
-    errors.push(`잘못된 ${paramName} 형식입니다. UUID 또는 임시 ID 형식이어야 합니다.`)
+    errors.push(`잘못된 ${paramName} 형식입니다. UUID 형식이어야 합니다.`)
     logSecurityEvent('INVALID_UUID_OR_TEMP_ID_FORMAT', { uuid: trimmed, paramName }, 'medium')
   }
 
@@ -138,6 +132,43 @@ export const validateUUID = (uuid: string, paramName: string = 'ID'): UUIDValida
     errors: Object.freeze(errors),
     warnings: Object.freeze(warnings),
     idType,
+  } as const
+}
+
+/**
+ * UUID 또는 임시 ID 검증.
+ * 임시 게시글 첨부파일처럼 DB 레코드 생성 전의 명시적 임시 흐름에서만 사용한다.
+ */
+export const validateUUIDOrTempId = (
+  uuid: string,
+  paramName: string = 'ID'
+): UUIDValidationResult => {
+  const uuidValidation = validateUUID(uuid, paramName)
+  if (uuidValidation.isValid) return uuidValidation
+
+  if (typeof uuid !== 'string') return uuidValidation
+
+  const trimmed = uuid.trim()
+  if (!isValidTempId(trimmed)) return uuidValidation
+
+  if (detectXssPatterns(trimmed) || detectSqlInjection(trimmed)) {
+    return {
+      isValid: false,
+      sanitized: trimmed.toLowerCase(),
+      errors: Object.freeze([`${paramName}에 위험한 패턴이 감지되었습니다.`]),
+      warnings: Object.freeze([]),
+      idType: 'invalid',
+    } as const
+  }
+
+  logSecurityEvent('TEMP_ID_USAGE', { tempId: trimmed, paramName }, 'low')
+
+  return {
+    isValid: true,
+    sanitized: trimmed.toLowerCase(),
+    errors: Object.freeze([]),
+    warnings: Object.freeze([`임시 ID가 사용되었습니다: ${paramName}`]),
+    idType: 'temp-id',
   } as const
 }
 

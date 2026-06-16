@@ -1,10 +1,11 @@
 import { fetchBoardPosts } from '@/lib/server/board'
 import BoardPageShell from '@/components/board/BoardPageShell'
+import type { BoardCategory } from '@/constants/categories'
 
 export const revalidate = 60
 
 interface BoardServerDataProps {
-  category?: string
+  category?: BoardCategory
   page?: number
   pageSize?: number
 }

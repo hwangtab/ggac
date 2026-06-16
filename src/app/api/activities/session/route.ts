@@ -3,6 +3,7 @@ import { createErrorResponse } from '@/utils/apiResponse'
 import { NextRequest, NextResponse } from 'next/server'
 import { withRateLimit } from '@/utils/rateLimit'
 import { sanitizeInput } from '@/utils/security'
+import { parseJsonObjectBody } from '@/utils/requestBody'
 
 /**
  * 사용자 세션 관리 API
@@ -11,17 +12,6 @@ import { sanitizeInput } from '@/utils/security'
  */
 
 export const dynamic = 'force-dynamic'
-
-async function parseJsonBody(request: NextRequest): Promise<Record<string, unknown> | null> {
-  try {
-    const body = await request.json()
-    return body && typeof body === 'object' && !Array.isArray(body)
-      ? (body as Record<string, unknown>)
-      : null
-  } catch {
-    return null
-  }
-}
 
 /**
  * 현재 세션 상태 확인
@@ -62,7 +52,7 @@ export async function POST(request: NextRequest) {
         return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
       }
 
-      const body = await parseJsonBody(request)
+      const body = await parseJsonObjectBody(request)
 
       if (!body) {
         return createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400)

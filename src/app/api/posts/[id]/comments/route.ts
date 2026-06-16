@@ -3,6 +3,9 @@ import { createClient } from '@supabase/supabase-js'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { revalidateTag } from 'next/cache'
 import { validateUUID } from '@/utils/validation'
+import { parseIntegerParam } from '@/utils/queryParams'
+import { parseJsonObjectBody } from '@/utils/requestBody'
+import { formatTimestampUuidCursor, parseTimestampUuidCursor } from '@/utils/keysetCursor'
 
 export const dynamic = 'force-dynamic'
 export const preferredRegion = 'icn1'
@@ -16,9 +19,17 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   if (!uuidValidation.isValid) {
     return NextResponse.json({ success: false, error: uuidValidation.errors[0] }, { status: 400 })
   }
+  const postId = uuidValidation.sanitized
   const { searchParams } = new URL(request.url)
-  const limit = Math.min(parseInt(searchParams.get('limit') || '20', 10), PAGE_SIZE_MAX)
+  const limit = parseIntegerParam(searchParams.get('limit'), 20, { min: 1, max: PAGE_SIZE_MAX })
   const cursor = searchParams.get('cursor') || '' // format: encodeURIComponent(`${created_at}|${id}`)
+  const parsedCursor = cursor ? parseTimestampUuidCursor(cursor, '댓글 ID') : null
+  if (cursor && !parsedCursor) {
+    return NextResponse.json(
+      { success: false, error: '유효하지 않은 커서입니다.' },
+      { status: 400 }
+    )
+  }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -43,24 +54,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         author:member_profiles!comments_author_id_fkey (display_name)
       `
       )
-      .eq('post_id', id)
+      .eq('post_id', postId)
       .order('created_at', { ascending: true })
       .order('id', { ascending: true })
 
-    let createdAtCursor: string | null = null
-    let idCursor: string | null = null
-
-    if (cursor) {
-      const parts = decodeURIComponent(cursor).split('|')
-      if (parts.length === 2) {
-        createdAtCursor = parts[0]
-        idCursor = parts[1]
-      }
-    }
-
-    if (createdAtCursor && idCursor) {
+    if (parsedCursor) {
       // Fetch a small superset and filter in memory to emulate (created_at, id) keyset
-      query = query.gte('created_at', createdAtCursor).limit(limit + 5)
+      query = query.gte('created_at', parsedCursor.createdAt).limit(limit + 5)
     } else {
       query = query.limit(limit + 1)
     }
@@ -75,10 +75,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     }
 
     let comments = rows || []
-    if (createdAtCursor && idCursor) {
+    if (parsedCursor) {
       comments = comments.filter(
         (r: any) =>
-          r.created_at > createdAtCursor! || (r.created_at === createdAtCursor && r.id > idCursor!)
+          r.created_at > parsedCursor.createdAt ||
+          (r.created_at === parsedCursor.createdAt && r.id > parsedCursor.id)
       )
     }
 
@@ -88,7 +89,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     let nextCursor: string | null = null
     if (hasNext && comments.length > 0) {
       const last = comments[comments.length - 1]
-      nextCursor = encodeURIComponent(`${last.created_at}|${last.id}`)
+      nextCursor = formatTimestampUuidCursor(last.created_at, last.id)
     }
 
     const normalized = (comments as any[]).map(c => ({
@@ -114,6 +115,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   if (!postIdValidation.isValid) {
     return NextResponse.json({ success: false, error: postIdValidation.errors[0] }, { status: 400 })
   }
+  const validPostId = postIdValidation.sanitized
   try {
     const supabase = await createSupabaseServer()
     const {
@@ -123,7 +125,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     if (!userId)
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
 
-    const body = await request.json().catch(() => ({}))
+    const body = await parseJsonObjectBody(request)
+    if (!body) {
+      return NextResponse.json(
+        { success: false, error: '유효하지 않은 JSON 본문입니다.' },
+        { status: 400 }
+      )
+    }
+
     const content = (body?.content || '').toString().trim()
     if (!content)
       return NextResponse.json({ success: false, error: '내용이 비어있습니다.' }, { status: 400 })
@@ -140,7 +149,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     const { data, error } = await supabase
       .from('comments')
-      .insert([{ post_id: postId, author_id: userId, content }])
+      .insert([{ post_id: validPostId, author_id: userId, content }])
       .select('id, content, author_id, created_at')
       .single()
     if (error) {
@@ -152,10 +161,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     }
 
     try {
-      revalidateTag(`comments-post-${postId}`)
-      revalidateTag(`attachments-post-${postId}`)
+      revalidateTag(`comments-post-${validPostId}`)
+      revalidateTag(`attachments-post-${validPostId}`)
       revalidateTag('board-post')
-      revalidateTag(postId)
+      revalidateTag(validPostId)
     } catch (revalidateError) {
       console.error('[API] 캐시 재검증 실패:', revalidateError)
     }

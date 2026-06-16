@@ -2,6 +2,8 @@
  * 이미지 URL 생성 및 SNS 메타데이터용 이미지 처리 유틸리티
  */
 
+import { toSafeHttpUrl, toSafeInternalImagePath } from './safeUrl'
+
 export interface ImageUrlOptions {
   /** 기본 이미지 경로 (상대 경로 또는 절대 URL) */
   imagePath?: string | null
@@ -68,46 +70,41 @@ export function generateImageUrl(imagePath?: string | null, options: ImageUrlOpt
   // 사용할 이미지 경로 결정 (우선순위: imagePath -> fallbackPaths -> 기본 로고)
   const allPaths = [imagePath, ...fallbackPaths, '/images/logo/gac_og.webp']
   const selectedPath =
-    allPaths.find(path => path && path.trim() !== '') || '/images/logo/gac_og.webp'
+    allPaths
+      .map(path => normalizeImagePath(path))
+      .find((path): path is string => typeof path === 'string' && path.length > 0) ||
+    '/images/logo/gac_og.webp'
 
-  let finalPath = selectedPath
-
-  // 절대 URL인 경우 그대로 사용
-  if (finalPath.startsWith('http')) {
-    return finalPath
+  if (selectedPath.startsWith('http://') || selectedPath.startsWith('https://')) {
+    return selectedPath
   }
 
-  // 상대 경로 처리
-  if (!finalPath.startsWith('/')) {
-    finalPath = `/${finalPath}`
-  }
-
-  // 절대 URL 변환
   if (absolute) {
-    return `${baseUrl.replace(/\/$/, '')}${finalPath}`
+    return `${baseUrl.replace(/\/$/, '')}${selectedPath}`
   }
 
-  return finalPath
+  return selectedPath
+}
+
+function normalizeImagePath(imagePath?: string | null): string | null {
+  if (!imagePath || imagePath.trim() === '') return null
+
+  const trimmed = imagePath.trim()
+  if (/^https?:\/\//i.test(trimmed)) {
+    return toSafeHttpUrl(trimmed)
+  }
+
+  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) {
+    return null
+  }
+
+  const normalized = trimmed.startsWith('/') ? trimmed : `/${trimmed}`
+  return toSafeInternalImagePath(normalized, '') || null
 }
 
 /**
  * 이미지 경로가 유효한지 확인
  */
 export function isValidImagePath(imagePath?: string | null): boolean {
-  if (!imagePath || imagePath.trim() === '') {
-    return false
-  }
-
-  // 절대 URL인 경우
-  if (imagePath.startsWith('http')) {
-    try {
-      new URL(imagePath)
-      return true
-    } catch {
-      return false
-    }
-  }
-
-  // 상대 경로인 경우 기본적으로 유효하다고 가정
-  return true
+  return normalizeImagePath(imagePath) !== null
 }

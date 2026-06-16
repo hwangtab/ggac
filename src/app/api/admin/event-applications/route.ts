@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { requireAdmin } from '@/lib/server/adminAuth'
 import { getProjects } from '@/lib/data'
+import {
+  EVENT_APPLICATION_STATUSES,
+  parseEventApplicationStatus,
+} from '@/utils/eventApplicationStatus'
+import { parseIntegerParam } from '@/utils/queryParams'
+import { parseJsonObjectBody } from '@/utils/requestBody'
+import { isValidEventSlug, normalizeEventSlug } from '@/utils/eventApplicationValidation'
+import { validateUUID } from '@/utils/validation'
 import { z } from 'zod'
 
 export const runtime = 'nodejs'
@@ -14,10 +22,20 @@ export async function GET(request: NextRequest) {
   const { db } = auth
 
   const { searchParams } = new URL(request.url)
-  const eventSlug = searchParams.get('event_slug') || ''
-  const status = searchParams.get('status') || ''
-  const page = Math.max(1, parseInt(searchParams.get('page') || '1'))
+  const eventSlugParam = searchParams.get('event_slug') || ''
+  const eventSlug = normalizeEventSlug(eventSlugParam)
+  const statusParam = searchParams.get('status') || ''
+  const status = statusParam ? parseEventApplicationStatus(statusParam) : null
+  const page = parseIntegerParam(searchParams.get('page'), 1, { min: 1 })
   const limit = 50
+
+  if (eventSlugParam && !isValidEventSlug(eventSlug)) {
+    return ApiError.badRequest('유효한 event_slug 파라미터가 필요합니다.').toNextResponse()
+  }
+
+  if (statusParam && !status) {
+    return ApiError.badRequest('유효한 status 파라미터가 필요합니다.').toNextResponse()
+  }
 
   let query = db
     .from('event_applications')
@@ -56,7 +74,7 @@ export async function GET(request: NextRequest) {
 
 const StatusUpdateSchema = z.object({
   id: z.string().uuid('유효한 ID가 필요합니다.'),
-  status: z.enum(['pending', 'approved', 'rejected'], {
+  status: z.enum(EVENT_APPLICATION_STATUSES, {
     errorMap: () => ({ message: 'pending, approved, rejected 중 하나여야 합니다.' }),
   }),
 })
@@ -86,25 +104,34 @@ export async function PATCH(request: NextRequest) {
   if (auth instanceof NextResponse) return auth
   const { db } = auth
 
-  const body = await request.json().catch(() => ({}))
+  const body = await parseJsonObjectBody(request)
+  if (!body) {
+    return ApiError.badRequest('유효하지 않은 JSON 본문입니다.').toNextResponse()
+  }
+
   const parsed = StatusUpdateSchema.safeParse(body)
   if (!parsed.success) {
     return ApiError.badRequest('id와 유효한 status가 필요합니다.').toNextResponse()
   }
 
   const { id, status } = parsed.data
+  const idValidation = validateUUID(id, '신청 ID')
+  if (!idValidation.isValid) {
+    return ApiError.badRequest('유효한 ID가 필요합니다.').toNextResponse()
+  }
+  const applicationId = idValidation.sanitized
 
   const { error } = await db
     .from('event_applications')
     .update({ status, updated_at: new Date().toISOString() })
-    .eq('id', id)
+    .eq('id', applicationId)
 
   if (error) {
     console.error('[admin/event-applications] update error:', error)
     return ApiError.internalServerError('상태 업데이트에 실패했습니다.').toNextResponse()
   }
 
-  return ApiSuccess.ok({ id, status }, '상태가 업데이트되었습니다.').toNextResponse()
+  return ApiSuccess.ok({ id: applicationId, status }, '상태가 업데이트되었습니다.').toNextResponse()
 }
 
 export async function PUT(request: NextRequest) {
@@ -112,13 +139,22 @@ export async function PUT(request: NextRequest) {
   if (auth instanceof NextResponse) return auth
   const { db } = auth
 
-  const body = await request.json().catch(() => ({}))
+  const body = await parseJsonObjectBody(request)
+  if (!body) {
+    return ApiError.badRequest('유효하지 않은 JSON 본문입니다.').toNextResponse()
+  }
+
   const parsed = FieldUpdateSchema.safeParse(body)
   if (!parsed.success) {
     return ApiError.badRequest('입력 값을 확인해주세요.').toNextResponse()
   }
 
   const { id, ...fields } = parsed.data
+  const idValidation = validateUUID(id, '신청 ID')
+  if (!idValidation.isValid) {
+    return ApiError.badRequest('유효한 ID가 필요합니다.').toNextResponse()
+  }
+  const applicationId = idValidation.sanitized
   const updateData = {
     applicant_name: fields.applicant_name.trim(),
     contact_email: fields.contact_email?.trim().toLowerCase() || null,
@@ -131,14 +167,14 @@ export async function PUT(request: NextRequest) {
     updated_at: new Date().toISOString(),
   }
 
-  const { error } = await db.from('event_applications').update(updateData).eq('id', id)
+  const { error } = await db.from('event_applications').update(updateData).eq('id', applicationId)
 
   if (error) {
     console.error('[admin/event-applications] field update error:', error)
     return ApiError.internalServerError('수정에 실패했습니다.').toNextResponse()
   }
 
-  return ApiSuccess.ok({ id }, '신청 정보가 수정되었습니다.').toNextResponse()
+  return ApiSuccess.ok({ id: applicationId }, '신청 정보가 수정되었습니다.').toNextResponse()
 }
 
 export async function DELETE(request: NextRequest) {
@@ -147,18 +183,20 @@ export async function DELETE(request: NextRequest) {
   const { db } = auth
 
   const id = new URL(request.url).searchParams.get('id')
-  if (!id || !/^[0-9a-f-]{36}$/.test(id)) {
+  const idValidation = validateUUID(id ?? '', '신청 ID')
+  if (!idValidation.isValid) {
     return ApiError.badRequest('유효한 id 파라미터가 필요합니다.').toNextResponse()
   }
+  const applicationId = idValidation.sanitized
 
-  const { error } = await db.from('event_applications').delete().eq('id', id)
+  const { error } = await db.from('event_applications').delete().eq('id', applicationId)
 
   if (error) {
     console.error('[admin/event-applications] delete error:', error)
     return ApiError.internalServerError('삭제에 실패했습니다.').toNextResponse()
   }
 
-  return ApiSuccess.ok({ id }, '신청이 삭제되었습니다.').toNextResponse()
+  return ApiSuccess.ok({ id: applicationId }, '신청이 삭제되었습니다.').toNextResponse()
 }
 
 export async function POST() {

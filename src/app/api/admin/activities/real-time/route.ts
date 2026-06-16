@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createErrorResponse } from '@/utils/apiResponse'
 import { withRateLimit } from '@/utils/rateLimit'
 import { requireAdmin } from '@/lib/server/adminAuth'
+import { parseIntegerParam } from '@/utils/queryParams'
 
 /**
  * 실시간 활성 사용자 조회 API
@@ -15,7 +16,7 @@ export async function GET(request: NextRequest) {
       const { db } = auth
 
       const { searchParams } = new URL(request.url)
-      const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 100)
+      const limit = parseIntegerParam(searchParams.get('limit'), 20, { min: 1, max: 100 })
       const includeActivity = searchParams.get('include_activity') === 'true'
 
       // 실시간 활성 사용자 조회 (active_users_view 사용)

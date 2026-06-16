@@ -2,6 +2,7 @@ import { Link } from '@/i18n/navigation'
 import OptimizedImage from '@/components/OptimizedImage'
 import { getTranslations, getLocale } from 'next-intl/server'
 import { localizeArtistCategory } from '@/constants/categories'
+import { toSafeInternalImagePath } from '@/utils/safeUrl'
 import type { Artist } from '@/types'
 
 interface ArtistsContentProps {
@@ -59,73 +60,77 @@ const ArtistsContent = async ({ artists, categories, selectedCategory }: Artists
       <section className="py-16">
         <div className="tw-container-custom">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-12">
-            {artists.map((artist, index) => (
-              <div key={artist.id} className="group">
-                <Link href={`/artists/${artist.slug}`}>
-                  <div className="text-center transform hover:scale-105 transition-transform duration-300">
-                    {/* Artist Image */}
-                    <div className="relative w-64 h-64 mx-auto mb-4 overflow-hidden rounded-full group-hover:scale-110 transition-transform duration-300">
-                      <OptimizedImage
-                        src={artist.profileImage}
-                        alt={artist.name}
-                        width={320}
-                        height={320}
-                        className="rounded-full object-cover w-full h-full"
-                        sizes="(max-width: 640px) 320px, (max-width: 768px) 256px, 320px"
-                        priority={index < 3} // 첫 3개 아티스트 이미지만 우선 로딩 (모바일 최적화)
-                      />
-                    </div>
+            {artists.map((artist, index) => {
+              const safeProfileImage = toSafeInternalImagePath(artist.profileImage)
 
-                    {/* Artist Info */}
-                    <div>
-                      <div className="mb-2 flex flex-wrap justify-center gap-1">
-                        {Array.isArray(artist.category) ? (
-                          <>
-                            {artist.category.slice(0, 3).map((cat, index) => (
-                              <span
-                                key={index}
-                                className="inline-block px-3 py-1 bg-gray-100 text-gray-700 text-sm font-medium rounded-full"
-                              >
-                                {localizeArtistCategory(cat, locale)}
-                              </span>
-                            ))}
-                            {artist.category.length > 3 && (
-                              <span
-                                className="inline-block px-3 py-1 bg-gray-200 text-gray-600 text-sm font-medium rounded-full cursor-help relative group/tooltip"
-                                title={artist.category
-                                  .slice(3)
-                                  .map(c => localizeArtistCategory(c, locale))
-                                  .join(', ')}
-                              >
-                                {t('moreCount', { count: artist.category.length - 3 })}
-                                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-3 px-3 py-1.5 bg-gray-800 text-white text-sm rounded-lg opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-normal max-w-sm leading-relaxed text-center z-50">
-                                  {artist.category
+              return (
+                <div key={artist.id} className="group">
+                  <Link href={`/artists/${artist.slug}`}>
+                    <div className="text-center transform hover:scale-105 transition-transform duration-300">
+                      {/* Artist Image */}
+                      <div className="relative w-64 h-64 mx-auto mb-4 overflow-hidden rounded-full group-hover:scale-110 transition-transform duration-300">
+                        <OptimizedImage
+                          src={safeProfileImage}
+                          alt={artist.name}
+                          width={320}
+                          height={320}
+                          className="rounded-full object-cover w-full h-full"
+                          sizes="(max-width: 640px) 320px, (max-width: 768px) 256px, 320px"
+                          priority={index < 3} // 첫 3개 아티스트 이미지만 우선 로딩 (모바일 최적화)
+                        />
+                      </div>
+
+                      {/* Artist Info */}
+                      <div>
+                        <div className="mb-2 flex flex-wrap justify-center gap-1">
+                          {Array.isArray(artist.category) ? (
+                            <>
+                              {artist.category.slice(0, 3).map((cat, index) => (
+                                <span
+                                  key={index}
+                                  className="inline-block px-3 py-1 bg-gray-100 text-gray-700 text-sm font-medium rounded-full"
+                                >
+                                  {localizeArtistCategory(cat, locale)}
+                                </span>
+                              ))}
+                              {artist.category.length > 3 && (
+                                <span
+                                  className="inline-block px-3 py-1 bg-gray-200 text-gray-600 text-sm font-medium rounded-full cursor-help relative group/tooltip"
+                                  title={artist.category
                                     .slice(3)
                                     .map(c => localizeArtistCategory(c, locale))
                                     .join(', ')}
-                                </div>
-                              </span>
-                            )}
-                          </>
-                        ) : (
-                          <span className="inline-block px-3 py-1 bg-gray-100 text-gray-700 text-sm font-medium rounded-full">
-                            {localizeArtistCategory(artist.category as string, locale)}
-                          </span>
-                        )}
+                                >
+                                  {t('moreCount', { count: artist.category.length - 3 })}
+                                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-3 px-3 py-1.5 bg-gray-800 text-white text-sm rounded-lg opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-normal max-w-sm leading-relaxed text-center z-50">
+                                    {artist.category
+                                      .slice(3)
+                                      .map(c => localizeArtistCategory(c, locale))
+                                      .join(', ')}
+                                  </div>
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="inline-block px-3 py-1 bg-gray-100 text-gray-700 text-sm font-medium rounded-full">
+                              {localizeArtistCategory(artist.category as string, locale)}
+                            </span>
+                          )}
+                        </div>
+
+                        <h3 className="text-3xl font-post font-semibold mb-2 text-gray-700 group-hover:text-primary-600 transition-colors duration-200">
+                          {artist.name}
+                        </h3>
+
+                        <p className="text-gray-600 text-sm leading-relaxed px-2">
+                          {artist.oneLiner}
+                        </p>
                       </div>
-
-                      <h3 className="text-3xl font-post font-semibold mb-2 text-gray-700 group-hover:text-primary-600 transition-colors duration-200">
-                        {artist.name}
-                      </h3>
-
-                      <p className="text-gray-600 text-sm leading-relaxed px-2">
-                        {artist.oneLiner}
-                      </p>
                     </div>
-                  </div>
-                </Link>
-              </div>
-            ))}
+                  </Link>
+                </div>
+              )
+            })}
           </div>
 
           {!hasArtists && (

@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { fetchBoardPosts } from '@/lib/server/board'
 import { createLogger } from '@/utils/logger'
+import { parseIntegerParam } from '@/utils/queryParams'
+import { parseBoardCategory } from '@/constants/categories'
 
 // `dynamic = 'force-dynamic'` 가 설정되어 있어 페이지 단위 ISR(`revalidate`)은
 // 의미가 없으므로 제거. 캐시 정책은 응답 헤더(`cacheControl`)로 직접 제어한다.
@@ -13,13 +15,18 @@ const log = createLogger('api/board/posts')
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
-  const category = searchParams.get('category') || '전체'
-  const page = Math.max(parseInt(searchParams.get('page') || '1', 10) || 1, 1)
-  const limit = Math.min(parseInt(searchParams.get('limit') || '20', 10) || 20, 50)
+  const categoryParam = searchParams.get('category') || '전체'
+  const boardCategory = parseBoardCategory(categoryParam)
+  const page = parseIntegerParam(searchParams.get('page'), 1, { min: 1 })
+  const limit = parseIntegerParam(searchParams.get('limit'), 20, { min: 1, max: 50 })
   const refresh = searchParams.get('refresh')
 
   try {
-    const result = await fetchBoardPosts({ category, page, pageSize: limit })
+    if (!boardCategory) {
+      return ApiError.badRequest('유효하지 않은 카테고리입니다.').toNextResponse()
+    }
+
+    const result = await fetchBoardPosts({ category: boardCategory, page, pageSize: limit })
     return ApiSuccess.ok({
       posts: result.posts,
       hasNext: result.hasNext,

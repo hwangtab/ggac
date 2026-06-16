@@ -186,9 +186,13 @@ export function buildFilterGroupClause(
 /**
  * 정렬 조건을 SQL ORDER BY 절로 변환
  */
-export function buildOrderByClause(sorts: SortCondition[]): string {
+export function buildOrderByClause(sorts: SortCondition[], allowedFields: string[] = []): string {
   if (!sorts || sorts.length === 0) {
     return ''
+  }
+
+  if (allowedFields.length === 0) {
+    throw new Error('Sort fields require an explicit allowlist')
   }
 
   // 우선순위로 정렬하고 SQL 생성
@@ -198,10 +202,26 @@ export function buildOrderByClause(sorts: SortCondition[]): string {
     if (!isValidFieldName(sort.field)) {
       throw new Error(`Invalid field name in sort: ${sort.field}`)
     }
+    if (!allowedFields.includes(sort.field)) {
+      throw new Error(`Field is not allowed in sort: ${sort.field}`)
+    }
+    if (!['asc', 'desc'].includes(sort.direction)) {
+      throw new Error(`Invalid sort direction: ${sort.direction}`)
+    }
     return `${sort.field} ${sort.direction.toUpperCase()}`
   })
 
   return `ORDER BY ${orderClauses.join(', ')}`
+}
+
+function collectFilterFields(group: FilterGroup): string[] {
+  const fields = Array.isArray(group.conditions)
+    ? group.conditions
+        .map(condition => condition?.field)
+        .filter((field): field is string => typeof field === 'string')
+    : []
+  const nestedFields = Array.isArray(group.groups) ? group.groups.flatMap(collectFilterFields) : []
+  return [...fields, ...nestedFields]
 }
 
 /**
@@ -220,6 +240,17 @@ export function buildSearchQuery(
 
   // 필터 조건 처리
   if (query.filters) {
+    if (allowedFields.length === 0) {
+      throw new Error('Filter fields require an explicit allowlist')
+    }
+
+    const disallowedFields = collectFilterFields(query.filters).filter(
+      field => !allowedFields.includes(field)
+    )
+    if (disallowedFields.length > 0) {
+      throw new Error(`Disallowed filter fields: ${[...new Set(disallowedFields)].join(', ')}`)
+    }
+
     const filterResult = buildFilterGroupClause(query.filters, paramIndex)
     if (filterResult.sql) {
       whereClause = `WHERE ${filterResult.sql}`
@@ -230,9 +261,20 @@ export function buildSearchQuery(
 
   // 전체 텍스트 검색 처리
   if (query.search && query.search.query.trim()) {
-    const searchFields = query.search.fields.filter(
-      field => allowedFields.length === 0 || allowedFields.includes(field)
+    if (allowedFields.length === 0) {
+      throw new Error('Search fields require an explicit allowlist')
+    }
+
+    const disallowedSearchFields = query.search.fields.filter(
+      field => !allowedFields.includes(field)
     )
+    if (disallowedSearchFields.length > 0) {
+      throw new Error(
+        `Disallowed search fields: ${[...new Set(disallowedSearchFields)].join(', ')}`
+      )
+    }
+
+    const searchFields = query.search.fields
 
     if (searchFields.length > 0) {
       const searchConditions = searchFields.map(field => {
@@ -261,12 +303,21 @@ export function buildSearchQuery(
 
   // 정렬 처리
   if (query.sorts && query.sorts.length > 0) {
-    orderByClause = buildOrderByClause(query.sorts)
+    orderByClause = buildOrderByClause(query.sorts, allowedFields)
   }
 
   // 페이지네이션 처리
   if (query.pagination) {
     const { page, limit } = query.pagination
+    if (
+      !Number.isInteger(page) ||
+      page < 1 ||
+      !Number.isInteger(limit) ||
+      limit < 1 ||
+      limit > 1000
+    ) {
+      throw new Error('Invalid pagination values')
+    }
     const offset = (page - 1) * limit
     limitClause = `LIMIT ${limit} OFFSET ${offset}`
   }
@@ -304,7 +355,7 @@ export function convertValue(value: any, type?: string): any {
   switch (type) {
     case 'number':
       const num = Number(value)
-      return isNaN(num) ? null : num
+      return Number.isFinite(num) ? num : null
 
     case 'date':
       const date = new Date(value)
@@ -328,13 +379,22 @@ export function convertValue(value: any, type?: string): any {
  */
 export function validateFilterCondition(
   condition: FilterCondition,
-  fieldDef?: FieldDefinition
+  fieldDef?: FieldDefinition,
+  requireKnownField: boolean = false
 ): { isValid: boolean; errors: string[] } {
   const errors: string[] = []
+
+  if (!condition || typeof condition !== 'object' || Array.isArray(condition)) {
+    return { isValid: false, errors: ['Filter condition must be an object'] }
+  }
 
   // 필드명 검증
   if (!condition.field || !isValidFieldName(condition.field)) {
     errors.push('Invalid field name')
+  }
+
+  if (requireKnownField && !fieldDef) {
+    errors.push(`Field ${condition.field} is not allowed`)
   }
 
   // 연산자 검증
@@ -391,16 +451,24 @@ export function validateFilterGroup(
 ): { isValid: boolean; errors: string[] } {
   const errors: string[] = []
 
+  if (!group || typeof group !== 'object') {
+    return { isValid: false, errors: ['Filter group must be an object'] }
+  }
+
   // 논리 연산자 검증
   if (!group.operator || !['AND', 'OR'].includes(group.operator)) {
     errors.push('Invalid logical operator')
   }
 
   // 조건들 검증
-  if (group.conditions) {
+  if (group.conditions && !Array.isArray(group.conditions)) {
+    errors.push('Filter conditions must be an array')
+  } else if (group.conditions) {
     group.conditions.forEach((condition, index) => {
       const fieldDef = fieldDefs?.find(def => def.name === condition.field)
-      const validation = validateFilterCondition(condition, fieldDef)
+      const validation = fieldDefs
+        ? validateFilterCondition(condition, fieldDef, true)
+        : validateFilterCondition(condition)
 
       if (!validation.isValid) {
         validation.errors.forEach(error => {
@@ -411,7 +479,9 @@ export function validateFilterGroup(
   }
 
   // 중첩 그룹들 검증
-  if (group.groups) {
+  if (group.groups && !Array.isArray(group.groups)) {
+    errors.push('Nested filter groups must be an array')
+  } else if (group.groups) {
     group.groups.forEach((nestedGroup, index) => {
       const validation = validateFilterGroup(nestedGroup, fieldDefs)
 
@@ -425,8 +495,8 @@ export function validateFilterGroup(
 
   // 최소한 하나의 조건이나 그룹이 있어야 함
   if (
-    (!group.conditions || group.conditions.length === 0) &&
-    (!group.groups || group.groups.length === 0)
+    (!Array.isArray(group.conditions) || group.conditions.length === 0) &&
+    (!Array.isArray(group.groups) || group.groups.length === 0)
   ) {
     errors.push('Filter group must have at least one condition or nested group')
   }
@@ -443,6 +513,10 @@ export function validateAdvancedSearchQuery(
 ): { isValid: boolean; errors: string[] } {
   const errors: string[] = []
 
+  if (!query || typeof query !== 'object' || Array.isArray(query)) {
+    return { isValid: false, errors: ['Search query must be an object'] }
+  }
+
   // 필터 검증
   if (query.filters) {
     const validation = validateFilterGroup(query.filters, fieldDefs)
@@ -454,7 +528,9 @@ export function validateAdvancedSearchQuery(
   }
 
   // 정렬 검증
-  if (query.sorts) {
+  if (query.sorts && !Array.isArray(query.sorts)) {
+    errors.push('Sorts must be an array')
+  } else if (query.sorts) {
     query.sorts.forEach((sort, index) => {
       if (!sort.field || !isValidFieldName(sort.field)) {
         errors.push(`Sort ${index + 1}: Invalid field name`)
@@ -465,7 +541,9 @@ export function validateAdvancedSearchQuery(
       }
 
       const fieldDef = fieldDefs?.find(def => def.name === sort.field)
-      if (fieldDef && !fieldDef.sortable) {
+      if (fieldDefs && !fieldDef) {
+        errors.push(`Sort ${index + 1}: Field ${sort.field} is not allowed`)
+      } else if (fieldDef && !fieldDef.sortable) {
         errors.push(`Sort ${index + 1}: Field ${sort.field} is not sortable`)
       }
     })
@@ -473,37 +551,49 @@ export function validateAdvancedSearchQuery(
 
   // 페이지네이션 검증
   if (query.pagination) {
-    const { page, limit } = query.pagination
+    if (typeof query.pagination !== 'object' || Array.isArray(query.pagination)) {
+      errors.push('Pagination must be an object')
+    } else {
+      const { page, limit } = query.pagination
 
-    if (!Number.isInteger(page) || page < 1) {
-      errors.push('Page must be a positive integer')
-    }
+      if (!Number.isInteger(page) || page < 1) {
+        errors.push('Page must be a positive integer')
+      }
 
-    if (!Number.isInteger(limit) || limit < 1 || limit > 1000) {
-      errors.push('Limit must be between 1 and 1000')
+      if (!Number.isInteger(limit) || limit < 1 || limit > 1000) {
+        errors.push('Limit must be between 1 and 1000')
+      }
     }
   }
 
   // 검색 검증
   if (query.search) {
-    if (!query.search.query || typeof query.search.query !== 'string') {
-      errors.push('Search query must be a non-empty string')
-    }
-
-    if (!Array.isArray(query.search.fields) || query.search.fields.length === 0) {
-      errors.push('Search fields must be a non-empty array')
-    }
-
-    query.search.fields.forEach((field, index) => {
-      if (!isValidFieldName(field)) {
-        errors.push(`Search field ${index + 1}: Invalid field name`)
+    if (typeof query.search !== 'object' || Array.isArray(query.search)) {
+      errors.push('Search must be an object')
+    } else {
+      if (!query.search.query || typeof query.search.query !== 'string') {
+        errors.push('Search query must be a non-empty string')
       }
 
-      const fieldDef = fieldDefs?.find(def => def.name === field)
-      if (fieldDef && !fieldDef.searchable) {
-        errors.push(`Search field ${index + 1}: Field ${field} is not searchable`)
+      if (!Array.isArray(query.search.fields) || query.search.fields.length === 0) {
+        errors.push('Search fields must be a non-empty array')
       }
-    })
+
+      if (Array.isArray(query.search.fields)) {
+        query.search.fields.forEach((field, index) => {
+          if (!isValidFieldName(field)) {
+            errors.push(`Search field ${index + 1}: Invalid field name`)
+          }
+
+          const fieldDef = fieldDefs?.find(def => def.name === field)
+          if (fieldDefs && !fieldDef) {
+            errors.push(`Search field ${index + 1}: Field ${field} is not allowed`)
+          } else if (fieldDef && !fieldDef.searchable) {
+            errors.push(`Search field ${index + 1}: Field ${field} is not searchable`)
+          }
+        })
+      }
+    }
   }
 
   return { isValid: errors.length === 0, errors }

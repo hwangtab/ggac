@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createErrorResponse } from '@/utils/apiResponse'
 import { withRateLimit } from '@/utils/rateLimit'
 import { requireAdmin } from '@/lib/server/adminAuth'
+import { parseIntegerParam } from '@/utils/queryParams'
+import { validateUUID } from '@/utils/validation'
 
 /**
  * 활동 패턴 분석 API
@@ -16,7 +18,18 @@ export async function GET(request: NextRequest) {
 
       const { searchParams } = new URL(request.url)
       const userId = searchParams.get('user_id')
-      const days = parseInt(searchParams.get('days') || '30')
+      let sanitizedUserId: string | null = null
+      if (userId) {
+        const userIdValidation = validateUUID(userId, '사용자 ID')
+        if (!userIdValidation.isValid) {
+          return createErrorResponse(
+            { success: false, error: userIdValidation.errors[0] || '잘못된 사용자 ID입니다.' },
+            400
+          )
+        }
+        sanitizedUserId = userIdValidation.sanitized
+      }
+      const days = parseIntegerParam(searchParams.get('days'), 30, { min: 1, max: 365 })
       const analysisType = searchParams.get('type') || 'activity_patterns'
       const excludeTest = searchParams.get('exclude_test') !== 'false' // 기본 true
 
@@ -28,22 +41,27 @@ export async function GET(request: NextRequest) {
       switch (analysisType) {
         case 'activity_patterns':
           // 활동 패턴 분석
-          analysisResult = await analyzeActivityPatterns(db, userId, startDate, excludeTest)
+          analysisResult = await analyzeActivityPatterns(
+            db,
+            sanitizedUserId,
+            startDate,
+            excludeTest
+          )
           break
 
         case 'user_behavior':
           // 사용자 행동 분석
-          analysisResult = await analyzeUserBehavior(db, userId, startDate)
+          analysisResult = await analyzeUserBehavior(db, sanitizedUserId, startDate)
           break
 
         case 'session_analysis':
           // 세션 분석
-          analysisResult = await analyzeSessionPatterns(db, userId, startDate)
+          analysisResult = await analyzeSessionPatterns(db, sanitizedUserId, startDate)
           break
 
         case 'content_engagement':
           // 콘텐츠 참여도 분석
-          analysisResult = await analyzeContentEngagement(db, userId, startDate)
+          analysisResult = await analyzeContentEngagement(db, sanitizedUserId, startDate)
           break
 
         default:
@@ -60,7 +78,7 @@ export async function GET(request: NextRequest) {
           startDate: startDate.toISOString(),
           endDate: new Date().toISOString(),
         },
-        userId,
+        userId: sanitizedUserId,
         ...analysisResult,
         metadata: {
           generatedAt: new Date().toISOString(),

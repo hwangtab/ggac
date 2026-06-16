@@ -5,6 +5,9 @@
 
 import type { SecurityEventType, SecurityEventSeverity, SecurityEventContext } from '@/types'
 
+const SECURITY_EVENT_STRING_LIMIT = 256
+const REDACTED_SECURITY_VALUE = '[redacted]'
+
 // generateSecureUUID/generateTempId/generateSecureToken은 어디서도 import되지 않는
 // dead code였고, 내부의 require('crypto') 때문에 webpack이 crypto-browserify(319KB)를
 // 클라이언트 vendors 청크에 강제 포함시키고 있었음 — 제거.
@@ -69,7 +72,7 @@ export const sanitizeUrl = (url: string): string => {
 
     return url
   } catch (error) {
-    console.warn('Invalid URL format:', url)
+    console.warn('Invalid URL format')
     return '#'
   }
 }
@@ -262,6 +265,80 @@ export const validateUserInput = (
   }
 }
 
+function sanitizeSecurityUrl(value: string): string {
+  try {
+    const parsed = new URL(value)
+    return `${parsed.origin}${parsed.pathname}`.slice(0, SECURITY_EVENT_STRING_LIMIT)
+  } catch {
+    return '[invalid-url]'
+  }
+}
+
+function maskSecurityEmail(value: string): string {
+  const [localPart, domain] = value.split('@')
+  if (!localPart || !domain) return REDACTED_SECURITY_VALUE
+  return `${localPart.slice(0, 2)}***@${domain.slice(0, SECURITY_EVENT_STRING_LIMIT - 6)}`
+}
+
+function maskSecurityString(value: string): string {
+  if (value.length <= 4) return REDACTED_SECURITY_VALUE
+  return `${value.slice(0, 2)}***${value.slice(-2)}`
+}
+
+function sanitizeSecurityEventValue(key: string, value: unknown, depth = 0): unknown {
+  if (depth > 2) return '[nested]'
+
+  if (typeof value === 'string') {
+    const normalizedKey = key.toLowerCase()
+
+    if (
+      normalizedKey.includes('token') ||
+      normalizedKey.includes('secret') ||
+      normalizedKey.includes('cookie') ||
+      normalizedKey.includes('authorization')
+    ) {
+      return REDACTED_SECURITY_VALUE
+    }
+
+    if (normalizedKey.includes('url') || normalizedKey.includes('uri')) {
+      return sanitizeSecurityUrl(value)
+    }
+
+    if (normalizedKey.includes('email')) {
+      return maskSecurityEmail(value)
+    }
+
+    if (normalizedKey.includes('phone')) {
+      return maskSecurityString(value)
+    }
+
+    return value.slice(0, SECURITY_EVENT_STRING_LIMIT)
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .slice(0, 20)
+      .map((item, index) => sanitizeSecurityEventValue(String(index), item, depth + 1))
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([nestedKey, nestedValue]) => [
+        nestedKey,
+        sanitizeSecurityEventValue(nestedKey, nestedValue, depth + 1),
+      ])
+    )
+  }
+
+  return value
+}
+
+function sanitizeSecurityEventDetails(details: SecurityEventContext): SecurityEventContext {
+  return Object.fromEntries(
+    Object.entries(details).map(([key, value]) => [key, sanitizeSecurityEventValue(key, value)])
+  )
+}
+
 /**
  * 로깅을 위한 보안 이벤트 기록
  * 보안 위반 시도를 모니터링하기 위한 로깅
@@ -271,9 +348,11 @@ export const logSecurityEvent = (
   details: SecurityEventContext,
   severity: SecurityEventSeverity = 'medium'
 ): void => {
+  const sanitizedDetails = sanitizeSecurityEventDetails(details)
+
   // 불변 이벤트 컨텍스트 생성
   const immutableDetails: SecurityEventContext = Object.freeze({
-    ...details,
+    ...sanitizedDetails,
     timestamp: new Date().toISOString(),
     severity,
     eventType: event,

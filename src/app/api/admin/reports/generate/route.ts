@@ -2,6 +2,85 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createErrorResponse } from '@/utils/apiResponse'
 import { applyRateLimit, RATE_LIMIT_CONFIGS } from '@/utils/rateLimiter'
 import { requireAdmin } from '@/lib/server/adminAuth'
+import { parseJsonObjectBody } from '@/utils/requestBody'
+import { parseIntegerParam } from '@/utils/queryParams'
+
+const REPORT_TYPES = [
+  'member_activity',
+  'post_engagement',
+  'user_registration',
+  'comprehensive',
+] as const
+type ReportType = (typeof REPORT_TYPES)[number]
+
+type ReportFilters = {
+  includeInactive: boolean
+  minimumActivity: number
+  categories: string[]
+}
+
+const REPORT_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+const MAX_REPORT_RANGE_DAYS = 370
+
+function parseReportType(value: unknown): ReportType | null {
+  if (typeof value !== 'string') return null
+  return REPORT_TYPES.includes(value as ReportType) ? (value as ReportType) : null
+}
+
+function parseReportDay(value: unknown): Date | null {
+  if (typeof value !== 'string' || !REPORT_DATE_PATTERN.test(value)) return null
+
+  const parsed = new Date(`${value}T00:00:00.000Z`)
+  if (!Number.isFinite(parsed.getTime())) return null
+
+  return parsed.toISOString().startsWith(value) ? parsed : null
+}
+
+function parseReportDateRange(value: unknown): { startDate: Date; endDate: Date } | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+
+  const raw = value as Record<string, unknown>
+  const startDate = parseReportDay(raw.start)
+  const endDate = parseReportDay(raw.end)
+  if (!startDate || !endDate || startDate > endDate) return null
+
+  const rangeDays = Math.ceil((endDate.getTime() - startDate.getTime()) / 86_400_000) + 1
+  if (rangeDays > MAX_REPORT_RANGE_DAYS) return null
+
+  startDate.setUTCHours(0, 0, 0, 0)
+  endDate.setUTCHours(23, 59, 59, 999)
+  return { startDate, endDate }
+}
+
+function defaultReportDateRange() {
+  const endDate = new Date()
+  const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+
+  startDate.setUTCHours(0, 0, 0, 0)
+  endDate.setUTCHours(23, 59, 59, 999)
+  return { startDate, endDate }
+}
+
+function parseReportFilters(value: unknown): ReportFilters {
+  const raw =
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {}
+
+  const categories = Array.isArray(raw.categories)
+    ? raw.categories
+        .filter((category): category is string => typeof category === 'string')
+        .map(category => category.trim())
+        .filter(Boolean)
+        .slice(0, 20)
+    : []
+
+  return {
+    includeInactive: raw.includeInactive === true,
+    minimumActivity: parseIntegerParam(String(raw.minimumActivity ?? ''), 0, { min: 0 }),
+    categories,
+  }
+}
 
 /**
  * 멤버 리포트 생성 API
@@ -24,20 +103,27 @@ export async function POST(request: NextRequest) {
     if (auth instanceof NextResponse) return auth
     const { db: serviceSupabase, user } = auth
 
-    const body = await request.json()
-    const { reportType, dateRange, filters } = body
+    const body = await parseJsonObjectBody(request)
+    if (!body) {
+      return createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400)
+    }
+
+    const reportType = parseReportType(body.reportType)
+    if (!reportType) {
+      return createErrorResponse({ success: false, error: 'Invalid report type' }, 400)
+    }
+
+    const parsedDateRange =
+      body.dateRange === undefined ? defaultReportDateRange() : parseReportDateRange(body.dateRange)
+    if (!parsedDateRange) {
+      return createErrorResponse({ success: false, error: 'Invalid date range' }, 400)
+    }
+
+    const { startDate, endDate } = parsedDateRange
+    const filters = parseReportFilters(body.filters)
 
     // 리포트 유형별 데이터 생성 (Service Role 클라이언트 사용)
     let reportData
-    const startDate = dateRange?.start
-      ? new Date(dateRange.start)
-      : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-    const endDate = dateRange?.end ? new Date(dateRange.end) : new Date()
-
-    // 날짜 범위 정확성 보장: 시작일은 00:00:00, 종료일은 23:59:59.999로 설정
-    startDate.setHours(0, 0, 0, 0)
-    endDate.setHours(23, 59, 59, 999)
-
     switch (reportType) {
       case 'member_activity':
         reportData = await generateMemberActivityReport(

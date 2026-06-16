@@ -13,6 +13,7 @@ import { logSecurityEvent } from '@/utils/security'
 import { refreshSettingsCache } from '@/utils/systemSettings'
 import { createLogger, maskId } from '@/utils/logger'
 import { ApiError, ApiSuccess } from '@/utils/apiWrapper'
+import { parseJsonObjectBody } from '@/utils/requestBody'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -55,7 +56,11 @@ export async function POST(request: NextRequest) {
 
     // 요청 데이터 파싱 + Zod 검증
     let cacheType: 'all' | 'settings' | 'middleware' = 'all'
-    const rawJson = await request.json().catch(() => ({}))
+    const rawJson = await parseJsonObjectBody(request)
+    if (!rawJson) {
+      throw ApiError.badRequest('유효한 JSON body가 필요합니다.')
+    }
+
     const parsed = CacheInvalidateSchema.safeParse(rawJson)
     if (!parsed.success) {
       throw ApiError.badRequest('유효하지 않은 캐시 타입입니다.')
@@ -91,6 +96,10 @@ export async function POST(request: NextRequest) {
       rateLimitResult.resetTime
     )
   } catch (error) {
+    if (error instanceof ApiError) {
+      return error.toNextResponse()
+    }
+
     log.error('Admin settings cache invalidation error', error)
     logSecurityEvent(
       'ADMIN_SETTINGS_CACHE_INVALIDATION_ERROR',

@@ -12,6 +12,7 @@ import ArticleCard from '@/components/ArticleCard'
 import EventApplicationForm from '@/components/EventApplicationForm'
 
 import { TicketingInfo } from '@/utils/linkPreview'
+import { toSafeHttpUrl, toSafeInternalImagePath, toSafeLinkHref } from '@/utils/safeUrl'
 import type { Project, Artist } from '@/types'
 
 // Lazy load heavy components
@@ -47,6 +48,13 @@ export default function ProjectDetailContent({
   // 갤러리 로딩 상태 관리
   const [galleryLoadingStates, setGalleryLoadingStates] = useState<{ [key: number]: boolean }>({})
   const [galleryErrorStates, setGalleryErrorStates] = useState<{ [key: number]: boolean }>({})
+  const safeCoverImage = toSafeInternalImagePath(project.coverImage)
+  const safeGalleryImages = project.gallery?.map(image => toSafeInternalImagePath(image)) ?? []
+  const safeVideoUrl = project.videoUrl ? toSafeHttpUrl(project.videoUrl) : null
+  const safeApplicationFormUrl =
+    project.applicationForm && !project.applicationForm.internal
+      ? toSafeHttpUrl(project.applicationForm.url)
+      : null
 
   // 갤러리 전체 로딩 표시 제거
   // 개별 카드에서만 로딩 스켈레톤을 표시하여 무한 로딩 인상 방지
@@ -61,14 +69,14 @@ export default function ProjectDetailContent({
   }
 
   const nextImage = () => {
-    if (project.gallery) {
-      setCurrentImageIndex(prev => (prev === project.gallery!.length - 1 ? 0 : prev + 1))
+    if (safeGalleryImages.length > 0) {
+      setCurrentImageIndex(prev => (prev === safeGalleryImages.length - 1 ? 0 : prev + 1))
     }
   }
 
   const prevImage = () => {
-    if (project.gallery) {
-      setCurrentImageIndex(prev => (prev === 0 ? project.gallery!.length - 1 : prev - 1))
+    if (safeGalleryImages.length > 0) {
+      setCurrentImageIndex(prev => (prev === 0 ? safeGalleryImages.length - 1 : prev - 1))
     }
   }
 
@@ -145,7 +153,7 @@ export default function ProjectDetailContent({
           <div className="max-w-4xl mx-auto">
             <div className="rounded-2xl overflow-hidden shadow-lg">
               <OptimizedImage
-                src={project.coverImage}
+                src={safeCoverImage}
                 alt={project.title}
                 width={800}
                 height={600}
@@ -166,14 +174,22 @@ export default function ProjectDetailContent({
             <div className="prose prose-lg max-w-none">
               <ReactMarkdown
                 components={{
-                  a: ({ node, ...props }) => (
-                    <a
-                      {...props}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-primary-600 hover:text-primary-700 underline underline-offset-4 hover:underline-offset-6"
-                    />
-                  ),
+                  a: ({ node, href, children, ...props }) => {
+                    const safeHref = typeof href === 'string' ? toSafeLinkHref(href) : null
+                    if (!safeHref) return <span {...props}>{children}</span>
+
+                    return (
+                      <a
+                        href={safeHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary-600 hover:text-primary-700 underline underline-offset-4 hover:underline-offset-6"
+                        {...props}
+                      >
+                        {children}
+                      </a>
+                    )
+                  },
                 }}
               >
                 {project.description}
@@ -185,16 +201,18 @@ export default function ProjectDetailContent({
               <div className="mt-12">
                 <h3 className="tw-heading-tertiary mb-6">{t('detail.videoHeading')}</h3>
                 <YouTubeEmbed videoUrl={project.videoUrl} title={project.title} />
-                <div className="mt-4 text-sm text-gray-500">
-                  <a
-                    href={project.videoUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary-600 hover:text-primary-700 underline underline-offset-4 hover:underline-offset-6"
-                  >
-                    {t('detail.videoOpenLabel')}
-                  </a>
-                </div>
+                {safeVideoUrl && (
+                  <div className="mt-4 text-sm text-gray-500">
+                    <a
+                      href={safeVideoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary-600 hover:text-primary-700 underline underline-offset-4 hover:underline-offset-6"
+                    >
+                      {t('detail.videoOpenLabel')}
+                    </a>
+                  </div>
+                )}
               </div>
             )}
 
@@ -204,15 +222,19 @@ export default function ProjectDetailContent({
                 <h3 className="tw-heading-tertiary mb-6">{t('detail.applicationHeading')}</h3>
                 {project.applicationForm.internal ? (
                   <EventApplicationForm eventSlug={project.slug} />
-                ) : (
+                ) : safeApplicationFormUrl ? (
                   <a
-                    href={project.applicationForm.url}
+                    href={safeApplicationFormUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-block w-full md:w-auto px-8 py-4 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl transition-colors duration-200 text-center shadow-lg hover:shadow-xl"
                   >
                     {project.applicationForm.title} →
                   </a>
+                ) : (
+                  <span className="inline-block w-full md:w-auto px-8 py-4 bg-gray-100 text-gray-500 font-semibold rounded-xl text-center">
+                    {project.applicationForm.title}
+                  </span>
                 )}
               </div>
             )}
@@ -234,35 +256,39 @@ export default function ProjectDetailContent({
               <div className="mt-12">
                 <h3 className="tw-heading-tertiary mb-6">{t('detail.relatedProjectsHeading')}</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {relatedProjects.map(relatedProject => (
-                    <Link
-                      key={relatedProject.slug}
-                      href={`/archive/${relatedProject.slug}`}
-                      className="group block border border-gray-200 rounded-2xl overflow-hidden bg-white hover:shadow-lg transition-shadow duration-200"
-                    >
-                      <div className="aspect-video overflow-hidden bg-gray-100">
-                        <OptimizedImage
-                          src={relatedProject.coverImage}
-                          alt={relatedProject.title}
-                          width={640}
-                          height={360}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          fallbackText={relatedProject.title.slice(0, 3)}
-                        />
-                      </div>
-                      <div className="p-4">
-                        <div className="text-sm text-primary-600 font-medium mb-2">
-                          {localizeArchiveCategory(relatedProject.category, locale)}
+                  {relatedProjects.map(relatedProject => {
+                    const safeRelatedCoverImage = toSafeInternalImagePath(relatedProject.coverImage)
+
+                    return (
+                      <Link
+                        key={relatedProject.slug}
+                        href={`/archive/${relatedProject.slug}`}
+                        className="group block border border-gray-200 rounded-2xl overflow-hidden bg-white hover:shadow-lg transition-shadow duration-200"
+                      >
+                        <div className="aspect-video overflow-hidden bg-gray-100">
+                          <OptimizedImage
+                            src={safeRelatedCoverImage}
+                            alt={relatedProject.title}
+                            width={640}
+                            height={360}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            fallbackText={relatedProject.title.slice(0, 3)}
+                          />
                         </div>
-                        <h4 className="font-semibold text-gray-900 line-clamp-2 mb-2">
-                          {relatedProject.title}
-                        </h4>
-                        <p className="text-sm text-gray-500">
-                          {new Date(relatedProject.publishedDate).toLocaleDateString(dateLocale)}
-                        </p>
-                      </div>
-                    </Link>
-                  ))}
+                        <div className="p-4">
+                          <div className="text-sm text-primary-600 font-medium mb-2">
+                            {localizeArchiveCategory(relatedProject.category, locale)}
+                          </div>
+                          <h4 className="font-semibold text-gray-900 line-clamp-2 mb-2">
+                            {relatedProject.title}
+                          </h4>
+                          <p className="text-sm text-gray-500">
+                            {new Date(relatedProject.publishedDate).toLocaleDateString(dateLocale)}
+                          </p>
+                        </div>
+                      </Link>
+                    )
+                  })}
                 </div>
               </div>
             )}
@@ -287,7 +313,7 @@ export default function ProjectDetailContent({
                 {/* 갤러리 전체 로딩 표시는 제거하고, 각 카드 단위 스켈레톤만 유지 */}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {project.gallery.map((image, index) => (
+                  {safeGalleryImages.map((safeGalleryImage, index) => (
                     <div
                       key={index}
                       className="aspect-square rounded-2xl overflow-hidden shadow-lg cursor-pointer group relative bg-gray-100"
@@ -302,7 +328,7 @@ export default function ProjectDetailContent({
                       )}
 
                       <OptimizedImage
-                        src={image}
+                        src={safeGalleryImage}
                         alt={t('detail.galleryImageAlt', {
                           title: project.title,
                           index: index + 1,
@@ -360,9 +386,9 @@ export default function ProjectDetailContent({
             )}
 
             {/* Lightbox */}
-            {lightboxOpen && project.gallery && (
+            {lightboxOpen && safeGalleryImages.length > 0 && (
               <Lightbox
-                images={project.gallery}
+                images={safeGalleryImages}
                 currentIndex={currentImageIndex}
                 onClose={closeLightbox}
                 onNext={nextImage}

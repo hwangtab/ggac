@@ -1,4 +1,5 @@
 import projectsData from '../../../../../../data/projects.json'
+import { toSafeInternalImagePath } from '@/utils/safeUrl'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -9,16 +10,21 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
   try {
     const projects = projectsData as any[]
     const project = projects.find(p => (p.slug || '').toLowerCase() === slug.toLowerCase())
-    let target = '/images/logo/gac_og.webp'
+    let safeTarget = '/images/logo/gac_og.webp'
     if (project) {
-      if (typeof project.coverImage === 'string' && project.coverImage) target = project.coverImage
-      else if (Array.isArray(project.gallery) && project.gallery.length > 0)
-        target = project.gallery[0]
+      safeTarget = toSafeInternalImagePath(project.coverImage)
+      if (
+        safeTarget === '/images/logo/gac_og.webp' &&
+        Array.isArray(project.gallery) &&
+        project.gallery.length > 0
+      ) {
+        safeTarget = toSafeInternalImagePath(project.gallery[0])
+      }
     }
     return new Response(null, {
       status: 302,
       headers: {
-        Location: target,
+        Location: safeTarget,
         'Cache-Control': 'public, max-age=86400',
       },
     })

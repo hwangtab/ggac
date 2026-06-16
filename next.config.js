@@ -45,12 +45,6 @@ const nextConfig = {
         aggregateTimeout: 300,
         ignored: /node_modules/,
       }
-
-      // 개발 환경에서 Supabase 모듈 로딩 안정성 향상
-      config.resolve.alias = {
-        ...config.resolve.alias,
-        '@supabase/supabase-js': require.resolve('@supabase/supabase-js'),
-      }
     }
 
     // 프로덕션 환경에서만 고급 최적화 적용

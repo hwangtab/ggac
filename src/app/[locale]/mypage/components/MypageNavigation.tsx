@@ -5,7 +5,6 @@ import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
 import { FiUser, FiMusic, FiActivity, FiSettings, FiChevronRight } from 'react-icons/fi'
 import { MypageMenuItem } from '@/types'
-import { supabase } from '@/lib/supabase/client'
 import PermissionCheck from './PermissionCheck'
 
 interface MypageNavigationProps {
@@ -21,20 +20,20 @@ const MypageNavigation: React.FC<MypageNavigationProps> = ({ currentPath }) => {
   useEffect(() => {
     const getUser = async () => {
       try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
-        if (session?.user) {
-          setUser(session.user)
+        const response = await fetch('/api/auth/verify-session', {
+          method: 'GET',
+          credentials: 'include',
+          cache: 'no-store',
+        })
+        const data = (await response.json().catch(() => null)) as {
+          authenticated?: boolean
+          user?: unknown
+          profile?: unknown
+        } | null
 
-          // 프로필 정보 가져오기
-          const { data: profileData } = await supabase
-            .from('member_profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .single()
-
-          setProfile(profileData)
+        if (response.ok && data?.authenticated) {
+          setUser(data.user || null)
+          setProfile(data.profile || null)
         }
       } catch (error) {
         console.error('Error fetching user:', error)

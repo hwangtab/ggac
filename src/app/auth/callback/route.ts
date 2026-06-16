@@ -5,6 +5,21 @@ import { createLogger } from '@/utils/logger'
 const log = createLogger('auth/callback')
 
 const maskId = (id?: string | null): string => (id ? `${id.slice(0, 6)}…` : '<unknown>')
+const SUPPORTED_LOCALES = ['ko', 'en'] as const
+type SupportedLocale = (typeof SUPPORTED_LOCALES)[number]
+
+const resolveSafeLocale = (value: string | null): SupportedLocale => {
+  return SUPPORTED_LOCALES.some(locale => locale === value) ? (value as SupportedLocale) : 'ko'
+}
+
+const localizePath = (path: string, locale: SupportedLocale): string => {
+  if (locale !== 'en') return path
+  return path === '/' ? '/en' : `/en${path}`
+}
+
+const redirectToPath = (requestUrl: URL, path: string, locale: SupportedLocale): NextResponse => {
+  return NextResponse.redirect(`${requestUrl.origin}${localizePath(path, locale)}`)
+}
 
 // open redirect 방지: 내부 경로 + 허용 목록만 통과
 const ALLOWED_NEXT_PATHS: readonly string[] = ['/reset-password']
@@ -17,9 +32,18 @@ const resolveSafeNext = (next: string | null): string | null => {
   return ALLOWED_NEXT_PATHS.includes(pathOnly) ? pathOnly : null
 }
 
+const parseOptionalMonthlyFee = (value: unknown): number | null => {
+  const normalized = typeof value === 'string' || typeof value === 'number' ? String(value) : ''
+  if (!/^\d+$/.test(normalized.trim())) return null
+
+  const parsed = Number.parseInt(normalized, 10)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get('code')
+  const locale = resolveSafeLocale(requestUrl.searchParams.get('locale'))
 
   if (code) {
     const supabase = await createSupabaseServer()
@@ -30,13 +54,13 @@ export async function GET(request: NextRequest) {
       // 코드 교환 실패(만료·무효 링크) 시 세션이 없으므로 로그인으로 보낸다.
       if (exchangeError) {
         log.warn('Code exchange failed', { message: exchangeError.message })
-        return NextResponse.redirect(`${requestUrl.origin}/login`)
+        return redirectToPath(requestUrl, '/login', locale)
       }
 
       // 비밀번호 복구 등: 교환 성공 후 next가 허용 경로면 프로필 상태와 무관하게 우선 라우팅
       const safeNext = resolveSafeNext(requestUrl.searchParams.get('next'))
       if (safeNext) {
-        return NextResponse.redirect(`${requestUrl.origin}${safeNext}`)
+        return redirectToPath(requestUrl, safeNext, locale)
       }
 
       // 사용자 프로필 확인
@@ -108,9 +132,7 @@ export async function GET(request: NextRequest) {
               real_name: user.user_metadata?.real_name || null,
               phone_number: user.user_metadata?.phone_number || null,
               birth_date: user.user_metadata?.birth_date || null,
-              monthly_fee: user.user_metadata?.monthly_fee
-                ? parseInt(user.user_metadata.monthly_fee)
-                : null,
+              monthly_fee: parseOptionalMonthlyFee(user.user_metadata?.monthly_fee),
               bank_name: user.user_metadata?.bank_name || null,
               account_number: user.user_metadata?.account_number || null,
               account_holder: user.user_metadata?.account_holder || null,
@@ -129,21 +151,21 @@ export async function GET(request: NextRequest) {
           }
 
           // 승인 대기 페이지로 바로 이동
-          return NextResponse.redirect(`${requestUrl.origin}/register/pending`)
+          return redirectToPath(requestUrl, '/register/pending', locale)
         }
 
         if (profile.registration_status === 'pending') {
           // 승인 대기 중
-          return NextResponse.redirect(`${requestUrl.origin}/register/pending`)
+          return redirectToPath(requestUrl, '/register/pending', locale)
         }
 
         if (profile.registration_status === 'approved' && profile.is_active) {
           // 승인된 조합원 - 게시판으로
-          return NextResponse.redirect(`${requestUrl.origin}/board`)
+          return redirectToPath(requestUrl, '/board', locale)
         }
 
         // 거절되었거나 비활성화된 경우
-        return NextResponse.redirect(`${requestUrl.origin}/register/rejected`)
+        return redirectToPath(requestUrl, '/register/rejected', locale)
       }
     } catch (error) {
       log.error('Auth callback error', error)
@@ -151,5 +173,5 @@ export async function GET(request: NextRequest) {
   }
 
   // 오류 발생 시 로그인 페이지로
-  return NextResponse.redirect(`${requestUrl.origin}/login`)
+  return redirectToPath(requestUrl, '/login', locale)
 }

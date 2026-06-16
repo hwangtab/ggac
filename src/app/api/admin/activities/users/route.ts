@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createErrorResponse } from '@/utils/apiResponse'
 import { withRateLimit } from '@/utils/rateLimit'
 import { requireAdmin } from '@/lib/server/adminAuth'
+import { parseIntegerParam } from '@/utils/queryParams'
+import { validateUUID } from '@/utils/validation'
+import { parseActivityActionType, parseActivityTargetType } from '@/constants/activity'
 
 /**
  * 사용자별 활동 조회 API
@@ -16,11 +19,31 @@ export async function GET(request: NextRequest) {
 
       const { searchParams } = new URL(request.url)
       const userId = searchParams.get('user_id')
-      const page = parseInt(searchParams.get('page') || '1')
-      const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100)
-      const days = parseInt(searchParams.get('days') || '30')
-      const actionType = searchParams.get('action_type')
-      const targetType = searchParams.get('target_type')
+      let sanitizedUserId: string | null = null
+      if (userId) {
+        const userIdValidation = validateUUID(userId, '사용자 ID')
+        if (!userIdValidation.isValid) {
+          return createErrorResponse(
+            { success: false, error: userIdValidation.errors[0] || '잘못된 사용자 ID입니다.' },
+            400
+          )
+        }
+        sanitizedUserId = userIdValidation.sanitized
+      }
+      const page = parseIntegerParam(searchParams.get('page'), 1, { min: 1 })
+      const limit = parseIntegerParam(searchParams.get('limit'), 50, { min: 1, max: 100 })
+      const days = parseIntegerParam(searchParams.get('days'), 30, { min: 1, max: 365 })
+      const actionTypeParam = searchParams.get('action_type')
+      const targetTypeParam = searchParams.get('target_type')
+      const actionType = actionTypeParam ? parseActivityActionType(actionTypeParam) : null
+      const targetType = targetTypeParam ? parseActivityTargetType(targetTypeParam) : null
+
+      if (actionTypeParam && !actionType) {
+        return createErrorResponse({ success: false, error: '잘못된 활동 유형입니다.' }, 400)
+      }
+      if (targetTypeParam && !targetType) {
+        return createErrorResponse({ success: false, error: '잘못된 대상 유형입니다.' }, 400)
+      }
 
       const offset = (page - 1) * limit
       const startDate = new Date()
@@ -53,8 +76,8 @@ export async function GET(request: NextRequest) {
         .range(offset, offset + limit - 1)
 
       // 필터 적용
-      if (userId) {
-        query = query.eq('user_id', userId)
+      if (sanitizedUserId) {
+        query = query.eq('user_id', sanitizedUserId)
       }
       if (actionType) {
         query = query.eq('action_type', actionType)
@@ -89,7 +112,7 @@ export async function GET(request: NextRequest) {
           hasPrev,
         },
         filters: {
-          userId,
+          userId: sanitizedUserId,
           days,
           actionType,
           targetType,

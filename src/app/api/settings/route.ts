@@ -4,13 +4,19 @@ import { z } from 'zod'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { applyRateLimit, RATE_LIMIT_CONFIGS } from '@/utils/rateLimiter'
 import { createLogger } from '@/utils/logger'
+import { isUserSettingKey, parseUserSettingCategory } from '@/constants/userSettings'
+import { parseJsonObjectBody } from '@/utils/requestBody'
 
 const log = createLogger('api/settings')
 
 const SettingValueSchema = z.unknown()
 
 const SingleSettingSchema = z.object({
-  category: z.string().min(1).max(64),
+  category: z
+    .string()
+    .min(1)
+    .max(64)
+    .transform(value => parseUserSettingCategory(value)),
   setting_key: z.string().min(1).max(128),
   setting_value: SettingValueSchema,
 })
@@ -47,7 +53,14 @@ export async function GET(request: NextRequest) {
 
     // URL 파라미터에서 카테고리 필터 확인
     const { searchParams } = new URL(request.url)
-    const category = searchParams.get('category')
+    const categoryParam = searchParams.get('category')
+    const category = categoryParam ? parseUserSettingCategory(categoryParam) : null
+    if (categoryParam && !category) {
+      return createErrorResponse(
+        { success: false, error: '유효하지 않은 설정 카테고리입니다.' },
+        400
+      )
+    }
 
     // 사용자 설정 조회 (기본값 포함)
     let query = supabase.rpc('get_user_settings')
@@ -125,11 +138,9 @@ export async function POST(request: NextRequest) {
       return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
     }
 
-    let body: unknown
-    try {
-      body = await request.json()
-    } catch {
-      return createErrorResponse({ success: false, error: '유효하지 않은 JSON 본문입니다.' }, 400)
+    const body = await parseJsonObjectBody(request)
+    if (!body) {
+      return createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400)
     }
 
     const parsed = SingleSettingSchema.safeParse(body)
@@ -140,6 +151,9 @@ export async function POST(request: NextRequest) {
       )
     }
     const { category, setting_key, setting_value } = parsed.data
+    if (!category || !isUserSettingKey(category, setting_key)) {
+      return createErrorResponse({ success: false, error: '유효하지 않은 설정입니다.' }, 400)
+    }
 
     // 설정 업데이트
     const { data: settingId, error } = await supabase.rpc('upsert_user_setting', {
@@ -190,11 +204,9 @@ export async function PUT(request: NextRequest) {
       return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
     }
 
-    let body: unknown
-    try {
-      body = await request.json()
-    } catch {
-      return createErrorResponse({ success: false, error: '유효하지 않은 JSON 본문입니다.' }, 400)
+    const body = await parseJsonObjectBody(request)
+    if (!body) {
+      return createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400)
     }
 
     const parsed = BulkSettingsSchema.safeParse(body)
@@ -213,6 +225,17 @@ export async function PUT(request: NextRequest) {
     // 각 설정을 순차적으로 업데이트 (Zod로 형식은 이미 검증됨)
     for (const { category, setting_key, setting_value } of settings) {
       try {
+        if (!category || !isUserSettingKey(category, setting_key)) {
+          results.push({
+            category: category ?? 'unknown',
+            setting_key,
+            success: false,
+            error: '유효하지 않은 설정입니다.',
+          })
+          errorCount++
+          continue
+        }
+
         const { data: settingId, error } = await supabase.rpc('upsert_user_setting', {
           p_category: category,
           p_setting_key: setting_key,

@@ -10,6 +10,8 @@ import {
 } from '@/utils/rateLimiter'
 import { logSecurityEvent } from '@/utils/security'
 import { createLogger, maskId } from '@/utils/logger'
+import { parseJsonObjectBody } from '@/utils/requestBody'
+import { validateUUID } from '@/utils/validation'
 
 const log = createLogger('admin/member-action')
 
@@ -26,9 +28,8 @@ const MemberActionSchema = z
   .strict()
   .refine(
     data => {
-      if (data.action !== 'suspend') return true
-      // suspend 액션이 아니면 정지 관련 필드 무시
-      return true
+      if (data.action === 'suspend') return true
+      return data.suspension_reason === undefined && data.suspension_until === undefined
     },
     { message: '정지 액션 외에는 정지 관련 필드를 지정할 수 없습니다.' }
   )
@@ -60,10 +61,8 @@ export async function POST(request: NextRequest) {
     const { db: adminSupabase, user } = auth
 
     // 요청 데이터 파싱 및 Zod 검증
-    let raw: unknown
-    try {
-      raw = await request.json()
-    } catch {
+    const raw = await parseJsonObjectBody(request)
+    if (!raw) {
       return createErrorResponse({ success: false, error: '유효하지 않은 JSON 본문입니다.' }, 400)
     }
 
@@ -76,7 +75,15 @@ export async function POST(request: NextRequest) {
       )
     }
     parsedInput = parsed.data
-    const { memberId, action, suspension_reason, suspension_until } = parsedInput
+    const { action, suspension_reason, suspension_until } = parsedInput
+    const memberIdValidation = validateUUID(parsedInput.memberId, '멤버 ID')
+    if (!memberIdValidation.isValid) {
+      return createErrorResponse(
+        { success: false, error: memberIdValidation.errors[0] || '유효하지 않은 멤버 ID입니다.' },
+        400
+      )
+    }
+    const memberId = memberIdValidation.sanitized
 
     // 대상 회원 정보 조회
     const { data: targetMember, error: targetError } = await adminSupabase

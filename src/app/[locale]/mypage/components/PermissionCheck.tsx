@@ -1,9 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/i18n/navigation'
 import { PermissionCheckProps } from '@/types'
-import { supabase } from '@/lib/supabase/client'
 
 const PermissionCheck: React.FC<PermissionCheckProps> = ({
   children,
@@ -20,31 +19,30 @@ const PermissionCheck: React.FC<PermissionCheckProps> = ({
   useEffect(() => {
     const checkPermission = async () => {
       try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
+        const response = await fetch('/api/auth/verify-session', {
+          method: 'GET',
+          credentials: 'include',
+          cache: 'no-store',
+        })
+        const data = (await response.json().catch(() => null)) as {
+          authenticated?: boolean
+          user?: unknown
+          profile?: any
+        } | null
 
-        if (!session?.user) {
+        if (!response.ok || !data?.authenticated || !data.user) {
           setLoading(false)
           return
         }
 
-        setUser(session.user)
-
-        // 프로필 정보 가져오기
-        const { data: profileData, error } = await supabase
-          .from('member_profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single()
-
-        if (error) {
-          console.error('Profile fetch error:', error)
+        if (!data.profile) {
+          setUser(data.user)
           setLoading(false)
           return
         }
 
-        setProfile(profileData)
+        setUser(data.user)
+        setProfile(data.profile)
 
         // 권한 확인
         let hasAccess = false
@@ -52,21 +50,20 @@ const PermissionCheck: React.FC<PermissionCheckProps> = ({
         switch (requiredPermission) {
           case 'member':
             hasAccess =
-              (profileData as any)?.registration_status === 'approved' &&
-              (profileData as any)?.is_active === true
+              data.profile.registration_status === 'approved' && data.profile.is_active === true
             break
           case 'artist':
             hasAccess =
-              (profileData as any)?.registration_status === 'approved' &&
-              (profileData as any)?.is_active === true &&
-              (profileData as any)?.is_artist === true &&
-              (profileData as any)?.artist_id !== null
+              data.profile.registration_status === 'approved' &&
+              data.profile.is_active === true &&
+              data.profile.is_artist === true &&
+              data.profile.artist_id !== null
             break
           case 'admin':
             hasAccess =
-              (profileData as any)?.registration_status === 'approved' &&
-              (profileData as any)?.is_active === true &&
-              (profileData as any)?.is_admin === true
+              data.profile.registration_status === 'approved' &&
+              data.profile.is_active === true &&
+              data.profile.is_admin === true
             break
         }
 
@@ -84,15 +81,6 @@ const PermissionCheck: React.FC<PermissionCheckProps> = ({
     }
 
     checkPermission()
-
-    // 인증 상태 변경 감지
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(() => {
-      checkPermission()
-    })
-
-    return () => subscription.unsubscribe()
   }, [requiredPermission, redirectTo, router])
 
   if (loading) {

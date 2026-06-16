@@ -15,6 +15,8 @@ import distributedRateLimiter, {
   DISTRIBUTED_RATE_LIMIT_CONFIGS,
   createDistributedUserKeyGenerator,
 } from '@/utils/distributedRateLimiter'
+import { parseIntegerParam } from '@/utils/queryParams'
+import { validateUUID } from '@/utils/validation'
 import type { UserLikedPost } from '@/types'
 
 /**
@@ -43,21 +45,25 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
     }
 
-    const requestedUserId = resolvedParams.id
+    const uuidValidation = validateUUID(resolvedParams.id, '사용자 ID')
+    if (!uuidValidation.isValid) {
+      return createErrorResponse({ success: false, error: uuidValidation.errors.join(', ') }, 400)
+    }
+    const requestedUserId = uuidValidation.sanitized
     const { searchParams } = new URL(request.url)
-    const page = Math.max(1, parseInt(searchParams.get('page') || '1'))
-    const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 100)
+    const page = parseIntegerParam(searchParams.get('page'), 1, { min: 1 })
+    const limit = parseIntegerParam(searchParams.get('limit'), 20, { min: 1, max: 100 })
     const offset = (page - 1) * limit
 
     // 본인 데이터이거나 관리자만 조회 가능
     if (user.id !== requestedUserId) {
       const { data: profile } = await supabase
         .from('member_profiles')
-        .select('is_admin')
+        .select('is_admin, registration_status, is_active')
         .eq('id', user.id)
         .single()
 
-      if (!profile?.is_admin) {
+      if (!profile?.is_admin || profile.registration_status !== 'approved' || !profile.is_active) {
         return createErrorResponse({ success: false, error: '권한이 없습니다.' }, 403)
       }
     }

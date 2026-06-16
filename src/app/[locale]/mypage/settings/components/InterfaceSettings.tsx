@@ -4,6 +4,7 @@ import { useState } from 'react'
 import type { SettingWithDefault, SettingCategory } from '@/types/index'
 import { useRouter, usePathname } from '@/i18n/navigation'
 import { useLocale } from 'next-intl'
+import { parseIntegerParam } from '@/utils/queryParams'
 
 interface InterfaceSettingsProps {
   settings: SettingWithDefault[]
@@ -156,7 +157,7 @@ export default function InterfaceSettings({ settings, onUpdate }: InterfaceSetti
               onChange={e =>
                 updateSettingValue('post_display', {
                   ...postDisplay,
-                  items_per_page: parseInt(e.target.value),
+                  items_per_page: parseIntegerParam(e.target.value, 20, { min: 1 }),
                 })
               }
               className="block w-32 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 disabled:opacity-50"

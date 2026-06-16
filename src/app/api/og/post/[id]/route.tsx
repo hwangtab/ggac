@@ -10,6 +10,11 @@ export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { isProjectStoragePublicUrl } from '@/utils/storageUrlValidation'
+import { validateUUID } from '@/utils/validation'
+import { createLogger, maskId } from '@/utils/logger'
+
+const log = createLogger('api/og/post')
 
 // Service Role 클라이언트 생성
 function getSupabaseAdmin() {
@@ -24,12 +29,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   const resolvedParams = await context.params
 
   try {
-    const postId = resolvedParams.id
-
-    // UUID 형식 기본 검증
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(postId)) {
-      console.log('[OG API] Invalid UUID format:', postId)
+    const postIdValidation = validateUUID(resolvedParams.id, '게시글 ID')
+    if (!postIdValidation.isValid) {
+      log.debug('Invalid UUID format', { postId: maskId(resolvedParams.id) })
       return new Response(null, {
         status: 302,
         headers: {
@@ -38,6 +40,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         },
       })
     }
+    const postId = postIdValidation.sanitized
 
     const supabase = getSupabaseAdmin()
 
@@ -50,7 +53,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       .single()
 
     if (postError || !post) {
-      console.log('[OG API] Post not found:', postId)
+      log.debug('Post not found', { postId: maskId(postId) })
       return new Response(null, {
         status: 302,
         headers: {
@@ -84,7 +87,18 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     // 이미지 첨부파일이 있는 경우 해당 이미지 반환
     if (attachments && attachments.length > 0) {
       const imageUrl = attachments[0].file_url
-      console.log('[OG API] Using post image:', imageUrl)
+      if (!isProjectStoragePublicUrl(imageUrl, 'attachments', 'posts')) {
+        console.warn('[OG API] Unsafe attachment image URL, using default OG image')
+        return new Response(null, {
+          status: 302,
+          headers: {
+            Location: '/images/logo/gac_og.webp',
+            'Cache-Control': 'public, max-age=3600',
+          },
+        })
+      }
+
+      log.debug('Using post image', { postId: maskId(postId) })
 
       return new Response(null, {
         status: 302,
@@ -97,7 +111,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     }
 
     // 이미지가 없는 경우 기본 OG 이미지 반환
-    console.log('[OG API] No image found, using default OG image')
+    log.debug('No image found, using default OG image', { postId: maskId(postId) })
     return new Response(null, {
       status: 302,
       headers: {

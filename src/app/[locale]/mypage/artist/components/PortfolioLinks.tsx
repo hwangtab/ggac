@@ -2,6 +2,7 @@
 
 import { FiLink, FiPlus, FiTrash2, FiExternalLink } from 'react-icons/fi'
 import { PortfolioLink } from '@/types'
+import { toSafeHttpUrl } from '@/utils/safeUrl'
 
 interface PortfolioLinksProps {
   links: PortfolioLink[]
@@ -67,77 +68,85 @@ const PortfolioLinks: React.FC<PortfolioLinksProps> = ({ links, errors, onChange
             </button>
           </div>
         ) : (
-          links.map((link, index) => (
-            <div
-              key={`${link.url || 'new'}-${index}`}
-              className="bg-white border border-gray-200 rounded-lg p-4"
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="text-sm font-medium text-gray-700">링크 #{index + 1}</div>
-                <button
-                  type="button"
-                  onClick={() => removeLink(index)}
-                  className="text-gray-400 hover:text-red-500 transition-colors duration-200"
-                >
-                  <FiTrash2 className="w-4 h-4" />
-                </button>
-              </div>
+          links.map((link, index) => {
+            const safeUrl = toSafeHttpUrl(link.url)
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* 링크 제목 */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">링크 제목</label>
-                  <input
-                    type="text"
-                    value={link.title}
-                    onChange={e => updateLink(index, 'title', e.target.value)}
-                    className={`w-full px-3 py-2 border rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
-                      errors[`portfolio_${index}_title`]
-                        ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
-                        : 'border-gray-300'
-                    }`}
-                    placeholder="예: Instagram, YouTube, 개인 웹사이트"
-                  />
-                  {errors[`portfolio_${index}_title`] && (
-                    <p className="mt-1 text-xs text-red-600">
-                      {errors[`portfolio_${index}_title`]}
-                    </p>
-                  )}
+            return (
+              <div
+                key={`${link.url || 'new'}-${index}`}
+                className="bg-white border border-gray-200 rounded-lg p-4"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="text-sm font-medium text-gray-700">링크 #{index + 1}</div>
+                  <button
+                    type="button"
+                    onClick={() => removeLink(index)}
+                    className="text-gray-400 hover:text-red-500 transition-colors duration-200"
+                  >
+                    <FiTrash2 className="w-4 h-4" />
+                  </button>
                 </div>
 
-                {/* 링크 URL */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">링크 URL</label>
-                  <div className="relative">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* 링크 제목 */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      링크 제목
+                    </label>
                     <input
-                      type="url"
-                      value={link.url}
-                      onChange={e => updateLink(index, 'url', e.target.value)}
-                      className={`w-full px-3 py-2 pr-10 border rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
-                        errors[`portfolio_${index}_url`]
+                      type="text"
+                      value={link.title}
+                      onChange={e => updateLink(index, 'title', e.target.value)}
+                      className={`w-full px-3 py-2 border rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
+                        errors[`portfolio_${index}_title`]
                           ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
                           : 'border-gray-300'
                       }`}
-                      placeholder="https://..."
+                      placeholder="예: Instagram, YouTube, 개인 웹사이트"
                     />
-                    {link.url && (
-                      <a
-                        href={link.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-primary-600"
-                      >
-                        <FiExternalLink className="w-4 h-4" />
-                      </a>
+                    {errors[`portfolio_${index}_title`] && (
+                      <p className="mt-1 text-xs text-red-600">
+                        {errors[`portfolio_${index}_title`]}
+                      </p>
                     )}
                   </div>
-                  {errors[`portfolio_${index}_url`] && (
-                    <p className="mt-1 text-xs text-red-600">{errors[`portfolio_${index}_url`]}</p>
-                  )}
+
+                  {/* 링크 URL */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">링크 URL</label>
+                    <div className="relative">
+                      <input
+                        type="url"
+                        value={link.url}
+                        onChange={e => updateLink(index, 'url', e.target.value)}
+                        className={`w-full px-3 py-2 pr-10 border rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
+                          errors[`portfolio_${index}_url`]
+                            ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
+                            : 'border-gray-300'
+                        }`}
+                        placeholder="https://..."
+                      />
+                      {safeUrl && (
+                        <a
+                          href={safeUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-primary-600"
+                        >
+                          <FiExternalLink className="w-4 h-4" />
+                        </a>
+                      )}
+                    </div>
+                    {errors[`portfolio_${index}_url`] && (
+                      <p className="mt-1 text-xs text-red-600">
+                        {errors[`portfolio_${index}_url`]}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
+            )
+          })
         )}
       </div>
 

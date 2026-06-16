@@ -1,10 +1,14 @@
 import { load } from 'cheerio'
-import dns from 'dns/promises'
 import { getCachedPreviewFromDB, setCachedPreviewToDB } from '@/utils/linkPreviewCache'
+import { parseIntegerParam } from '@/utils/queryParams'
+import { isUnsafeHost } from '@/utils/ssrfProtection'
+import { createLogger } from '@/utils/logger'
 import type { LinkPreview, TicketingInfo } from '@/types'
 
 // 기존에 별도로 정의되어 있던 TicketingInfo를 export로 유지 (하위 호환성)
 export type { LinkPreview, TicketingInfo } from '@/types'
+
+const log = createLogger('linkPreview')
 
 // 간단한 런타임 캐시 (서버 인스턴스 생명주기 내)
 //
@@ -50,59 +54,18 @@ function setCache(url: string, data: LinkPreview) {
   }
 }
 
+function describeUrlForLog(url: string): string {
+  try {
+    const parsed = new URL(url)
+    return `${parsed.protocol}//${parsed.host}`
+  } catch {
+    return '[invalid-url]'
+  }
+}
+
 // ---- SSRF/프리플라이트 보호 설정 ----
 const MAX_HTML_BYTES = 2_000_000 // 2MB 상한
 const ALLOWED_PROTOCOLS = new Set(['http:', 'https:'])
-
-function isPrivateIPv4(ip: string): boolean {
-  // 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8, 169.254.0.0/16
-  const parts = ip.split('.').map(n => parseInt(n, 10))
-  if (parts.length !== 4 || parts.some(n => Number.isNaN(n))) return false
-  const [a, b] = parts
-  if (a === 10) return true
-  if (a === 172 && b >= 16 && b <= 31) return true
-  if (a === 192 && b === 168) return true
-  if (a === 127) return true
-  if (a === 169 && b === 254) return true
-  return false
-}
-
-function isPrivateIPv6(ip: string): boolean {
-  // Loopback ::1, link-local fe80::/10, unique local fc00::/7
-  const lower = ip.toLowerCase()
-  return (
-    lower === '::1' ||
-    lower.startsWith('fe8') || // fe80::/10 covers fe80-fe8f
-    lower.startsWith('fe9') ||
-    lower.startsWith('fea') ||
-    lower.startsWith('feb') ||
-    lower.startsWith('fc') ||
-    lower.startsWith('fd')
-  )
-}
-
-async function isUnsafeHost(hostname: string): Promise<boolean> {
-  try {
-    // 명시적 차단: localhost/ipv6 localhost/0.0.0.0
-    const blockedHostnames = new Set(['localhost', '0.0.0.0'])
-    if (blockedHostnames.has(hostname.toLowerCase())) return true
-
-    const records = await dns.lookup(hostname, { all: true })
-    if (!records || records.length === 0) return true
-    for (const rec of records) {
-      const ip = rec.address
-      if (ip.includes(':')) {
-        if (isPrivateIPv6(ip)) return true
-      } else {
-        if (isPrivateIPv4(ip)) return true
-      }
-    }
-    return false
-  } catch {
-    // DNS 해석 실패 시 보수적으로 차단
-    return true
-  }
-}
 
 async function preflightRequest(
   url: string
@@ -122,6 +85,7 @@ async function preflightRequest(
     try {
       headRes = await fetch(url, {
         method: 'HEAD',
+        redirect: 'manual',
         signal: controller.signal,
         headers: {
           'User-Agent': 'GGAC-LinkPreview/1.0',
@@ -135,9 +99,30 @@ async function preflightRequest(
       clearTimeout(timeout)
     }
 
+    if (headRes && headRes.status >= 300 && headRes.status < 400) {
+      const location = headRes.headers.get('location')
+      if (!location) return { ok: false, reason: 'Redirect with no Location header' }
+
+      let redirectUrl: URL
+      try {
+        redirectUrl = new URL(location, u)
+      } catch {
+        return { ok: false, reason: 'Invalid redirect URL' }
+      }
+
+      if (!ALLOWED_PROTOCOLS.has(redirectUrl.protocol)) {
+        return { ok: false, reason: 'Redirect to unsupported protocol' }
+      }
+      if (await isUnsafeHost(redirectUrl.hostname)) {
+        return { ok: false, reason: 'Redirect to private or unsafe IP' }
+      }
+
+      return { ok: false, reason: 'Redirect not followed' }
+    }
+
     let contentType = headRes?.headers.get('content-type') || undefined
     let contentLength = headRes?.headers.get('content-length')
-      ? parseInt(headRes!.headers.get('content-length') as string, 10)
+      ? parseIntegerParam(headRes.headers.get('content-length'), 0, { min: 0 })
       : undefined
 
     if (contentType && !/text\/html|application\/xhtml\+xml/i.test(contentType)) {
@@ -164,10 +149,10 @@ async function fetchWithRetry(url: string, maxRetries = 3): Promise<Response | n
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`🔄 [LinkPreview] Attempt ${attempt}/${maxRetries} for: ${url}`)
+      log.debug(`Attempt ${attempt}/${maxRetries}`, { url })
 
       const randomUserAgent = userAgents[Math.floor(Math.random() * userAgents.length)]
-      console.log(`👤 [LinkPreview] Using User-Agent: ${randomUserAgent.substring(0, 50)}...`)
+      log.debug('Using User-Agent', { userAgent: randomUserAgent.substring(0, 50) })
 
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 10000) // 10초 타임아웃
@@ -198,14 +183,16 @@ async function fetchWithRetry(url: string, maxRetries = 3): Promise<Response | n
       if (response.status >= 300 && response.status < 400) {
         const location = response.headers.get('location')
         if (!location) {
-          console.warn(`[LinkPreview] Redirect with no Location header for: ${url}`)
+          console.warn('[LinkPreview] Redirect with no Location header', {
+            source: describeUrlForLog(url),
+          })
           return null
         }
         let redirectUrl: URL
         try {
-          redirectUrl = new URL(location)
+          redirectUrl = new URL(location, url)
         } catch {
-          console.warn(`[LinkPreview] Invalid redirect URL: ${location}`)
+          console.warn('[LinkPreview] Invalid redirect URL', { source: describeUrlForLog(url) })
           return null
         }
         if (!ALLOWED_PROTOCOLS.has(redirectUrl.protocol)) {
@@ -217,15 +204,20 @@ async function fetchWithRetry(url: string, maxRetries = 3): Promise<Response | n
           return null
         }
         // Safe redirect — treat as a non-retryable client error (caller should use the redirect URL if needed)
-        console.warn(`[LinkPreview] Redirect not followed for SSRF safety: ${location}`)
+        console.warn('[LinkPreview] Redirect not followed for SSRF safety', {
+          source: describeUrlForLog(url),
+          redirectTarget: describeUrlForLog(redirectUrl.toString()),
+        })
         return null
       }
 
       clearTimeout(timeoutId)
 
-      console.log(
-        `📡 [LinkPreview] Response: ${response.status} ${response.statusText} (attempt ${attempt})`
-      )
+      log.debug('Fetch response received', {
+        status: response.status,
+        statusText: response.statusText,
+        attempt,
+      })
 
       if (response.ok) {
         return response
@@ -243,7 +235,9 @@ async function fetchWithRetry(url: string, maxRetries = 3): Promise<Response | n
         await new Promise(resolve => setTimeout(resolve, delay))
       } else {
         // 클라이언트 오류 (4xx) - 재시도하지 않음
-        console.error(`❌ [LinkPreview] Client error ${response.status} for ${url}, not retrying`)
+        console.error(`❌ [LinkPreview] Client error ${response.status}, not retrying`, {
+          source: describeUrlForLog(url),
+        })
         return null
       }
     } catch (error) {
@@ -255,7 +249,7 @@ async function fetchWithRetry(url: string, maxRetries = 3): Promise<Response | n
 
       // 네트워크 오류 시 점진적 대기
       const delay = 1000 * attempt
-      console.log(`⏳ [LinkPreview] Waiting ${delay}ms before retry...`)
+      log.debug('Waiting before retry', { delay })
       await new Promise(resolve => setTimeout(resolve, delay))
     }
   }
@@ -265,7 +259,7 @@ async function fetchWithRetry(url: string, maxRetries = 3): Promise<Response | n
 
 export async function fetchLinkPreview(url: string): Promise<LinkPreview | null> {
   try {
-    console.log(`🔍 [LinkPreview] Starting fetch for: ${url}`)
+    log.debug('Starting fetch', { url })
     // 캐시 조회 (DB → 메모리 순서)
     const dbCached = await getCachedPreviewFromDB(url)
     if (dbCached) {
@@ -284,7 +278,9 @@ export async function fetchLinkPreview(url: string): Promise<LinkPreview | null>
     const response = await fetchWithRetry(url, 3)
 
     if (!response) {
-      console.error(`❌ [LinkPreview] All retry attempts failed for: ${url}`)
+      console.error('❌ [LinkPreview] All retry attempts failed', {
+        source: describeUrlForLog(url),
+      })
       return null
     }
     // 본 응답의 Content-Type/Length 확인
@@ -294,7 +290,7 @@ export async function fetchLinkPreview(url: string): Promise<LinkPreview | null>
       return null
     }
     const len = response.headers.get('content-length')
-    if (len && parseInt(len, 10) > MAX_HTML_BYTES) {
+    if (len && parseIntegerParam(len, 0, { min: 0 }) > MAX_HTML_BYTES) {
       console.warn(`❌ [LinkPreview] Content too large: ${len}`)
       return null
     }
@@ -412,27 +408,30 @@ export async function fetchLinkPreview(url: string): Promise<LinkPreview | null>
     }
 
     // 상세 로깅
-    console.log(`✅ [LinkPreview] Successfully extracted preview for ${url}:`)
-    console.log(`📄 Title: "${preview.title}"`)
-    console.log(
-      `📝 Description: "${preview.description.substring(0, 100)}${preview.description.length > 100 ? '...' : ''}"`
-    )
-    console.log(`🖼️ Image: ${preview.image || 'none'}`)
-    console.log(`🏷️ Site Name: "${preview.siteName}"`)
-    console.log(`🔗 Favicon: ${preview.favicon || 'none'}`)
+    log.debug('Successfully extracted preview', {
+      url,
+      title: preview.title,
+      description: `${preview.description.substring(0, 100)}${preview.description.length > 100 ? '...' : ''}`,
+      hasImage: Boolean(preview.image),
+      siteName: preview.siteName,
+      hasFavicon: Boolean(preview.favicon),
+    })
 
-    // 이미지가 없는 경우 경고
+    // 이미지가 없는 경우에도 텍스트 preview는 유효하므로 개발 로그로만 남긴다.
     if (!preview.image) {
-      console.warn(`⚠️ [LinkPreview] No image found for ${url}`)
-      console.log(`🔍 [LinkPreview] Available meta tags:`)
+      log.debug('No image found for preview', { source: describeUrlForLog(url) })
+      const availableMetaTags: Record<string, string> = {}
       $('meta[property^="og:"], meta[name^="twitter:"], meta[property^="twitter:"]').each(
         (_, el) => {
           const $el = $(el)
           const property = $el.attr('property') || $el.attr('name')
           const content = $el.attr('content')
-          console.log(`    ${property}: ${content}`)
+          if (property && content) {
+            availableMetaTags[property] = content
+          }
         }
       )
+      log.debug('Available meta tags for preview without image', availableMetaTags)
     }
 
     // 캐시 저장 (메모리 + DB)
@@ -440,7 +439,7 @@ export async function fetchLinkPreview(url: string): Promise<LinkPreview | null>
     setCachedPreviewToDB(url, preview).catch(() => {})
     return preview
   } catch (error) {
-    console.error(`Error fetching link preview for ${url}:`, error)
+    console.error('Error fetching link preview', { source: describeUrlForLog(url), error })
     return null
   }
 }

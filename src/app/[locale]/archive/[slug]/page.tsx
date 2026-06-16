@@ -14,6 +14,8 @@ import { setRequestLocale } from 'next-intl/server'
 import type { Metadata } from 'next'
 import { generateProjectOgImage } from '@/utils/imageUrl'
 import { getSiteUrl, getLocaleAlternates, getOgLocale } from '@/utils/site'
+import { toSafeHttpUrl } from '@/utils/safeUrl'
+import { createLogger } from '@/utils/logger'
 import {
   generateProjectStructuredData,
   generateEventStructuredData,
@@ -27,6 +29,17 @@ interface ProjectPageProps {
     locale: string
     slug: string
   }>
+}
+
+const log = createLogger('archive/project-page')
+
+function describeExternalUrlForLog(url: string): string {
+  try {
+    const parsed = new URL(url)
+    return `${parsed.origin}${parsed.pathname}`
+  } catch {
+    return '[invalid-url]'
+  }
 }
 
 type RelatedProjectItem = Pick<
@@ -62,6 +75,20 @@ function extractInternalArchiveSlugs(project: ProjectType): string[] {
       return slug || null
     })
     .filter((slug): slug is string => Boolean(slug))
+}
+
+function toSecureMetadataImageUrl(value: string, baseUrl: string): string | undefined {
+  const safeUrl = toSafeHttpUrl(value)
+  if (safeUrl) {
+    return safeUrl.startsWith('https://') ? safeUrl : undefined
+  }
+
+  if (value.startsWith('/')) {
+    const safeBase = toSafeHttpUrl(baseUrl) ?? 'https://ggac.kr'
+    return `${safeBase.replace(/\/$/, '')}${value}`
+  }
+
+  return undefined
 }
 
 function buildRelatedProjects(
@@ -193,6 +220,7 @@ export async function generateMetadata({ params }: ProjectPageProps): Promise<Me
     }
 
     const base = getSiteUrl()
+    const secureOgImageUrl = toSecureMetadataImageUrl(ogImageUrl, base)
     const metadata = {
       title: safeTitle,
       description: projectSummary,
@@ -205,7 +233,7 @@ export async function generateMetadata({ params }: ProjectPageProps): Promise<Me
         images: [
           {
             url: ogImageUrl,
-            secureUrl: ogImageUrl.startsWith('https://') ? ogImageUrl : `${base}${ogImageUrl}`,
+            ...(secureOgImageUrl ? { secureUrl: secureOgImageUrl } : {}),
             width: 1200,
             height: 630,
             alt: safeTitle,
@@ -330,9 +358,12 @@ const ProjectDetailPage = async ({ params }: ProjectPageProps) => {
   const relatedProjects = buildRelatedProjects(project, allProjects)
 
   // "관련 기사"는 외부 링크만 표시하고, 내부 /archive 링크는 "연관 게시물"로 분리
-  const externalRelatedArticles = (project.relatedArticles || []).filter(
-    article => !article.url.startsWith('/archive/')
-  )
+  const externalRelatedArticles = (project.relatedArticles || [])
+    .map(article => {
+      const safeUrl = toSafeHttpUrl(article.url)
+      return safeUrl ? { ...article, url: safeUrl } : null
+    })
+    .filter((article): article is NonNullable<typeof article> => Boolean(article))
 
   const articlesWithPreview = externalRelatedArticles
     ? await Promise.all(
@@ -341,7 +372,10 @@ const ProjectDetailPage = async ({ params }: ProjectPageProps) => {
             const preview = await fetchLinkPreview(article.url)
             return { ...article, preview }
           } catch (error) {
-            console.error(`Failed to fetch preview for ${article.url}:`, error)
+            log.error('Failed to fetch article preview', {
+              url: describeExternalUrlForLog(article.url),
+              error,
+            })
             return { ...article, preview: null }
           }
         })

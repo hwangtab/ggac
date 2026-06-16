@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Link from 'next/link'
+import { useLocale } from 'next-intl'
+import { Link } from '@/i18n/navigation'
+import { routing } from '@/i18n/routing'
 import MypageLayout from '../components/MypageLayout'
 import PermissionCheck from '../components/PermissionCheck'
 import { FiActivity, FiMessageCircle, FiEdit3, FiUser, FiCalendar, FiFilter } from 'react-icons/fi'
@@ -32,7 +34,10 @@ interface ActivityResponse {
   pagination: PaginationInfo
 }
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
 export default function ActivityPage() {
+  const locale = useLocale()
   const [activities, setActivities] = useState<Activity[]>([])
   const [pagination, setPagination] = useState<PaginationInfo | null>(null)
   const [loading, setLoading] = useState(true)
@@ -123,12 +128,18 @@ export default function ActivityPage() {
 
   // 활동 링크 생성
   const getActivityLink = (activity: Activity): string | null => {
+    const postId =
+      activity.type === 'comment_created' ? activity.metadata?.postId : activity.entityId
+    if (!postId || !UUID_PATTERN.test(postId)) {
+      return null
+    }
+
     switch (activity.type) {
       case 'post_created':
       case 'post_updated':
-        return `/board/${activity.entityId}`
+        return `/board/${postId}`
       case 'comment_created':
-        return activity.metadata?.postId ? `/board/${activity.metadata.postId}` : null
+        return `/board/${postId}`
       default:
         return null
     }
@@ -138,7 +149,9 @@ export default function ActivityPage() {
   const handleActivityClick = (activity: Activity) => {
     const link = getActivityLink(activity)
     if (link) {
-      window.open(link, '_blank')
+      const localizedLink =
+        locale === routing.defaultLocale ? link : `/${encodeURIComponent(locale)}${link}`
+      window.open(localizedLink, '_blank', 'noopener,noreferrer')
     }
   }
 

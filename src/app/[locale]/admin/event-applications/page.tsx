@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { FiClipboard, FiRefreshCw, FiCheck, FiX, FiClock, FiEdit2, FiTrash2 } from 'react-icons/fi'
 import AdminLayout from '../components/AdminLayout'
 import { getEventFormType } from '@/constants/eventApplicationForms'
+import { toSafeHttpUrl } from '@/utils/safeUrl'
 
 const MEMBER_LABELS: Record<string, string> = {
   member: '조합원',
@@ -300,6 +301,7 @@ export default function EventApplicationsPage() {
               const statusInfo = STATUS_LABELS[app.status]
               const eventTitle = eventMap[app.event_slug] ?? app.event_slug
               const appIsWorkshop = getEventFormType(app.event_slug) === 'workshop'
+              const safePhotoUrl = app.photo_url ? toSafeHttpUrl(app.photo_url) : null
               return (
                 <div
                   key={app.id}
@@ -444,15 +446,15 @@ export default function EventApplicationsPage() {
                             </dd>
                           </div>
                         )}
-                        {app.photo_url && (
+                        {safePhotoUrl && (
                           <div className="md:col-span-2">
                             <dt className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                               상품 사진
                             </dt>
                             <dd className="mt-1">
-                              <a href={app.photo_url} target="_blank" rel="noopener noreferrer">
+                              <a href={safePhotoUrl} target="_blank" rel="noopener noreferrer">
                                 <img
-                                  src={app.photo_url}
+                                  src={safePhotoUrl}
                                   alt="포트폴리오"
                                   className="h-40 w-auto rounded-lg object-cover border border-gray-200 hover:opacity-80 transition-opacity"
                                 />

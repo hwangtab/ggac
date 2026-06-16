@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { apiDelete, ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { requireBoardMember } from '@/lib/server/boardRoomAuth'
 import { createLogger } from '@/utils/logger'
+import { isSafeBoardDocumentStoragePath } from '@/utils/boardDocumentStoragePath'
+import { validateUUID } from '@/utils/validation'
 
 const log = createLogger('boardRoom/documents')
 
@@ -9,8 +11,19 @@ export const runtime = 'nodejs'
 
 const BUCKET = 'board-documents'
 
+function validateDocumentId(id: string) {
+  const validation = validateUUID(id, '서류 ID')
+  if (!validation.isValid) {
+    return { error: ApiError.badRequest(validation.errors[0] || '잘못된 서류 ID 형식입니다.') }
+  }
+  return { id: validation.sanitized }
+}
+
 export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const { id } = await context.params
+  const params = await context.params
+  const routeId = validateDocumentId(params.id)
+  if (routeId.error) return routeId.error.toNextResponse()
+  const id = routeId.id
   const auth = await requireBoardMember()
   if (auth instanceof NextResponse) return auth
   const { db, user, isAdmin } = auth
@@ -29,12 +42,23 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       if (doc.uploaded_by !== user.id && !isAdmin) throw ApiError.forbidden('삭제 권한이 없습니다.')
 
       // Delete storage object first (log-and-continue on failure to avoid undeletable records)
-      const { error: storageErr } = await db.storage.from(BUCKET).remove([doc.file_path])
-      if (storageErr) {
-        log.error('storage 객체 삭제 실패', {
+      const safeFilePath = isSafeBoardDocumentStoragePath(doc.file_path, doc.uploaded_by)
+        ? doc.file_path
+        : null
+
+      if (safeFilePath) {
+        const { error: storageErr } = await db.storage.from(BUCKET).remove([safeFilePath])
+        if (storageErr) {
+          log.error('storage 객체 삭제 실패', {
+            id,
+            path: safeFilePath,
+            error: storageErr.message,
+          })
+        }
+      } else {
+        log.error('안전하지 않은 서류 file_path 삭제 건너뜀', {
           id,
           path: doc.file_path,
-          error: storageErr.message,
         })
       }
 

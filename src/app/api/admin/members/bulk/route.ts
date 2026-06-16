@@ -10,6 +10,8 @@ import {
   addRateLimitHeaders,
 } from '@/utils/rateLimiter'
 import { logSecurityEvent } from '@/utils/security'
+import { parseJsonObjectBody } from '@/utils/requestBody'
+import { validateUUID } from '@/utils/validation'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -33,8 +35,11 @@ export async function POST(request: NextRequest) {
     const { db, user } = auth
 
     // 요청 데이터 파싱 및 검증
-    const requestData = await request.json()
-    const { operation_type, member_ids, parameters = {} }: BulkOperationRequest = requestData
+    const requestData = (await parseJsonObjectBody(request)) as Partial<BulkOperationRequest> | null
+    if (!requestData) {
+      return createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400)
+    }
+    const { operation_type, member_ids, parameters = {} } = requestData
 
     // 기본 데이터 검증
     if (!operation_type || !member_ids || !Array.isArray(member_ids) || member_ids.length === 0) {
@@ -49,14 +54,16 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 멤버 ID 검증 (UUID 형식)
-    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    const invalidIds = member_ids.filter(id => !uuidPattern.test(id))
-    if (invalidIds.length > 0) {
-      return NextResponse.json(
-        { error: '유효하지 않은 멤버 ID가 포함되어 있습니다.' },
-        { status: 400 }
-      )
+    const sanitizedMemberIds: string[] = []
+    for (const memberId of member_ids) {
+      const memberIdValidation = validateUUID(memberId, '멤버 ID')
+      if (!memberIdValidation.isValid) {
+        return NextResponse.json(
+          { error: '유효하지 않은 멤버 ID가 포함되어 있습니다.' },
+          { status: 400 }
+        )
+      }
+      sanitizedMemberIds.push(memberIdValidation.sanitized)
     }
 
     // 작업 타입 검증
@@ -104,7 +111,7 @@ export async function POST(request: NextRequest) {
       .insert({
         operation_type,
         performed_by: user.id,
-        member_ids,
+        member_ids: sanitizedMemberIds,
         parameters,
         status: 'pending',
         created_at: new Date().toISOString(),
@@ -135,7 +142,7 @@ export async function POST(request: NextRequest) {
 
     try {
       // 각 멤버에 대해 작업 수행
-      for (const memberId of member_ids) {
+      for (const memberId of sanitizedMemberIds) {
         try {
           // 멤버 정보 조회
           const { data: targetMember, error: targetError } = await db

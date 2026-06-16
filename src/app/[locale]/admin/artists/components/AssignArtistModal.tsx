@@ -4,6 +4,7 @@ import { useState, useRef } from 'react'
 import { FiX, FiUser, FiUserPlus, FiCheck } from 'react-icons/fi'
 import Image from 'next/image'
 import { useDialogA11y } from '@/hooks/useDialogA11y'
+import { toSafeInternalImagePath } from '@/utils/safeUrl'
 
 interface Artist {
   id: string
@@ -60,6 +61,7 @@ export default function AssignArtistModal({
   useDialogA11y({ containerRef: dialogRef, onClose, isOpen })
 
   if (!isOpen) return null
+  const safeProfileImage = toSafeInternalImagePath(artist.profileImage)
 
   // 현재 아티스트에 이미 배정된 멤버들의 ID 목록
   const assignedMemberIds = artist.assignedMembers?.map(m => m.id) || []
@@ -96,42 +98,44 @@ export default function AssignArtistModal({
         }),
       })
 
-      console.log('Response status:', response.status)
-      console.log('Response headers:', response.headers)
-
       if (!response.ok) {
         // 응답이 비어있는지 확인
         const responseText = await response.text()
-        console.log('Response text:', responseText)
 
         if (!responseText.trim()) {
           throw new Error(`서버 오류 (${response.status}): 빈 응답을 받았습니다.`)
         }
 
+        let errorMessage = `서버 오류 (${response.status})`
         try {
           const errorData = JSON.parse(responseText)
-          throw new Error(errorData.error || `서버 오류 (${response.status})`)
+          if (errorData && typeof errorData.error === 'string') {
+            errorMessage = errorData.error
+          }
         } catch (parseError) {
           console.error('JSON parse error:', parseError)
-          throw new Error(`서버 오류 (${response.status}): ${responseText.substring(0, 100)}`)
+          errorMessage = `서버 오류 (${response.status}): ${responseText.substring(0, 100)}`
         }
+        throw new Error(errorMessage)
       }
 
-      // 성공 응답도 동일하게 처리
       const responseText = await response.text()
       if (!responseText.trim()) {
         throw new Error('서버에서 빈 응답을 받았습니다.')
       }
 
+      let result: { success?: unknown; error?: unknown }
       try {
-        const result = JSON.parse(responseText)
-        if (!result.success) {
-          throw new Error(result.error || '아티스트 배정에 실패했습니다.')
-        }
+        result = JSON.parse(responseText)
       } catch (parseError) {
         console.error('Success response parse error:', parseError)
-        // 성공적인 상태 코드이지만 JSON이 아닌 경우는 성공으로 처리
-        console.log('Treating as success despite parse error')
+        throw new Error('서버 응답 형식이 올바르지 않습니다.')
+      }
+
+      if (!result || typeof result !== 'object' || result.success !== true) {
+        const errorMessage =
+          typeof result?.error === 'string' ? result.error : '아티스트 배정에 실패했습니다.'
+        throw new Error(errorMessage)
       }
 
       onSuccess()
@@ -204,7 +208,7 @@ export default function AssignArtistModal({
             <div className="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
               {artist.profileImage ? (
                 <Image
-                  src={artist.profileImage}
+                  src={safeProfileImage}
                   alt={artist.name}
                   width={64}
                   height={64}

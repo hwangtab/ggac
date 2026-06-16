@@ -4,6 +4,12 @@ import Image from 'next/image'
 import { FaInstagram, FaYoutube } from 'react-icons/fa'
 import { useTranslations, useLocale } from 'next-intl'
 import { Link } from '@/i18n/navigation'
+import {
+  toSafeEmailHref,
+  toSafeHttpUrl,
+  toSafeNaverMapSearchHref,
+  toSafePhoneHref,
+} from '@/utils/safeUrl'
 
 interface FooterProps {
   globalData?: {
@@ -53,6 +59,11 @@ const Footer = ({ globalData }: FooterProps) => {
   }
 
   const data = globalData || defaultData
+  const safeInstagramUrl = toSafeHttpUrl(data.social.instagram)
+  const safeYoutubeUrl = toSafeHttpUrl(data.social.youtube)
+  const safeEmailHref = toSafeEmailHref(data.contact.email)
+  const safePhoneHref = toSafePhoneHref(data.contact.phone)
+  const safeAddressHref = toSafeNaverMapSearchHref(data.contact.address)
   return (
     <footer className="bg-gray-900 text-white py-12">
       <div className="tw-container-custom">
@@ -139,54 +150,70 @@ const Footer = ({ globalData }: FooterProps) => {
             <div className="text-gray-400 text-sm space-y-2">
               <p>
                 {t('email')}:
-                <a
-                  href={`mailto:${data.contact.email}`}
-                  className="hover:text-white transition-colors duration-200 underline underline-offset-4 hover:underline-offset-6 ml-1"
-                >
-                  {data.contact.email}
-                </a>
+                {safeEmailHref ? (
+                  <a
+                    href={safeEmailHref}
+                    className="hover:text-white transition-colors duration-200 underline underline-offset-4 hover:underline-offset-6 ml-1"
+                  >
+                    {data.contact.email}
+                  </a>
+                ) : (
+                  <span className="ml-1">{data.contact.email}</span>
+                )}
               </p>
               <p>
                 {t('phone')}:
-                <a
-                  href={`tel:${data.contact.phone}`}
-                  className="hover:text-white transition-colors duration-200 underline underline-offset-4 hover:underline-offset-6 ml-1"
-                >
-                  {data.contact.phone}
-                </a>
+                {safePhoneHref ? (
+                  <a
+                    href={safePhoneHref}
+                    className="hover:text-white transition-colors duration-200 underline underline-offset-4 hover:underline-offset-6 ml-1"
+                  >
+                    {data.contact.phone}
+                  </a>
+                ) : (
+                  <span className="ml-1">{data.contact.phone}</span>
+                )}
               </p>
               <p>
                 {t('address')}:
-                <a
-                  href={`https://map.naver.com/v5/search/${encodeURIComponent(data.contact.address)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:text-white transition-colors duration-200 underline underline-offset-4 hover:underline-offset-6 ml-1"
-                >
-                  {data.contact.address}
-                </a>
+                {safeAddressHref ? (
+                  <a
+                    href={safeAddressHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-white transition-colors duration-200 underline underline-offset-4 hover:underline-offset-6 ml-1"
+                  >
+                    {data.contact.address}
+                  </a>
+                ) : (
+                  <span className="ml-1">{data.contact.address}</span>
+                )}
               </p>
             </div>
 
             <div className="flex space-x-6 mt-4">
-              <a
-                href={data.social.instagram}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center space-x-2 text-gray-400 hover:text-pink-400 transition-colors duration-200"
-              >
-                <FaInstagram className="w-5 h-5" />
-                <span className="text-sm">Instagram</span>
-              </a>
-              <a
-                href={data.social.youtube}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center space-x-2 text-gray-400 hover:text-red-400 transition-colors duration-200"
-              >
-                <FaYoutube className="w-5 h-5" />
-                <span className="text-sm">YouTube</span>
-              </a>
+              {safeInstagramUrl && (
+                <a
+                  href={safeInstagramUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center space-x-2 text-gray-400 hover:text-pink-400 transition-colors duration-200"
+                >
+                  <FaInstagram className="w-5 h-5" />
+                  <span className="text-sm">Instagram</span>
+                </a>
+              )}
+              {safeYoutubeUrl && (
+                <a
+                  href={safeYoutubeUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center space-x-2 text-gray-400 hover:text-red-400 transition-colors duration-200"
+                >
+                  <FaYoutube className="w-5 h-5" />
+                  <span className="text-sm">YouTube</span>
+                </a>
+              )}
             </div>
           </div>
         </div>

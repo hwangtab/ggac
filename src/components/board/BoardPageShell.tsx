@@ -1,10 +1,11 @@
 import ServerBoardView from './ServerBoardView'
 import type { BoardInitialPost } from '@/lib/server/board'
+import type { BoardCategory } from '@/constants/categories'
 import BoardUserSection from './BoardUserSection'
 
 interface BoardPageShellProps {
   posts: BoardInitialPost[]
-  category: string
+  category: BoardCategory
   pagination: {
     hasNext: boolean
     hasPrev: boolean

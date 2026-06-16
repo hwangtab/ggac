@@ -10,6 +10,8 @@ import {
 } from '@/utils/rateLimiter'
 import { logSecurityEvent } from '@/utils/security'
 import { createLogger, maskId } from '@/utils/logger'
+import { parseJsonObjectBody } from '@/utils/requestBody'
+import { validateUUID } from '@/utils/validation'
 
 const log = createLogger('admin/members/flags')
 
@@ -54,10 +56,8 @@ export async function PATCH(request: NextRequest) {
     const { db: adminSupabase, user } = auth
 
     // 요청 데이터 파싱 및 Zod 검증
-    let raw: unknown
-    try {
-      raw = await request.json()
-    } catch {
+    const raw = await parseJsonObjectBody(request)
+    if (!raw) {
       return createErrorResponse({ success: false, error: '유효하지 않은 JSON 본문입니다.' }, 400)
     }
 
@@ -70,7 +70,15 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
-    const { memberId, is_director, director_title, is_auditor } = parsed.data
+    const { is_director, director_title, is_auditor } = parsed.data
+    const memberIdValidation = validateUUID(parsed.data.memberId, '멤버 ID')
+    if (!memberIdValidation.isValid) {
+      return createErrorResponse(
+        { success: false, error: memberIdValidation.errors[0] || '유효하지 않은 멤버 ID입니다.' },
+        400
+      )
+    }
+    const memberId = memberIdValidation.sanitized
 
     // 대상 회원 정보 조회
     const { data: targetMember, error: targetError } = await adminSupabase

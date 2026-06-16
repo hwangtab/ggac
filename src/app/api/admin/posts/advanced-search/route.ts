@@ -9,6 +9,7 @@ import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator } from '@/ut
 import { validateAdvancedSearchQuery, buildSearchQuery } from '@/utils/advancedFiltering'
 import type { AdvancedSearchQuery, FilteredResult, FieldDefinition } from '@/types'
 import { requireAdmin } from '@/lib/server/adminAuth'
+import { parseJsonObjectBody } from '@/utils/requestBody'
 
 // 게시글 필드 정의
 const POST_FIELD_DEFINITIONS: FieldDefinition[] = [
@@ -117,7 +118,10 @@ export async function POST(request: NextRequest) {
     const { db: supabase } = auth
 
     // 요청 본문 파싱
-    const searchQuery: AdvancedSearchQuery = await request.json()
+    const searchQuery = (await parseJsonObjectBody(request)) as AdvancedSearchQuery | null
+    if (!searchQuery) {
+      return createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400)
+    }
 
     // 쿼리 검증
     const validation = validateAdvancedSearchQuery(searchQuery, POST_FIELD_DEFINITIONS)

@@ -14,6 +14,7 @@ import {
 } from 'react-icons/fi'
 import type { PostAttachment } from '@/types'
 import OptimizedImage from '../OptimizedImage'
+import { isProjectStoragePublicUrl } from '@/utils/storageUrlValidation'
 
 interface AttachmentCardProps {
   attachment: PostAttachment
@@ -76,6 +77,9 @@ export const AttachmentCard: React.FC<AttachmentCardProps> = ({
 }) => {
   const FileIcon = getFileIcon(attachment.file_type)
   const canEdit = showActions && (isAuthor || isAdmin)
+  const safeFileUrl = isProjectStoragePublicUrl(attachment.file_url, 'attachments')
+    ? attachment.file_url
+    : null
 
   if (isEditing && editForm) {
     return (
@@ -135,13 +139,13 @@ export const AttachmentCard: React.FC<AttachmentCardProps> = ({
     <div className="relative bg-white rounded-lg border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
       {/* 파일 내용 */}
       <div className="p-3">
-        {attachment.file_type === 'image' ? (
+        {attachment.file_type === 'image' && safeFileUrl ? (
           <div
             className="aspect-square mb-3 bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform"
             onClick={() => onView?.(attachment)}
           >
             <OptimizedImage
-              src={attachment.file_url}
+              src={safeFileUrl}
               alt={attachment.alt_text || attachment.file_name}
               width={200}
               height={200}
@@ -181,7 +185,7 @@ export const AttachmentCard: React.FC<AttachmentCardProps> = ({
         <div className="px-3 pb-3">
           <div className="flex flex-wrap gap-1">
             {/* 보기 버튼 (이미지만) */}
-            {attachment.file_type === 'image' && (
+            {attachment.file_type === 'image' && safeFileUrl && (
               <button
                 onClick={() => onView?.(attachment)}
                 className="flex items-center px-2 py-1 text-xs text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
@@ -195,6 +199,7 @@ export const AttachmentCard: React.FC<AttachmentCardProps> = ({
             {/* 다운로드 버튼 */}
             <button
               onClick={() => onDownload?.(attachment)}
+              disabled={!safeFileUrl}
               className="flex items-center px-2 py-1 text-xs text-gray-600 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
               title="다운로드"
             >

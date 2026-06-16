@@ -6,14 +6,15 @@
  *   - UPSTASH_REDIS_REST_URL
  *   - UPSTASH_REDIS_REST_TOKEN
  *
- * 환경변수가 없으면 인메모리 폴백으로 동작하며, 이는 서버리스 인스턴스마다
- * 별도의 카운터를 갖게 되어 실질적으로 rate limiting이 무효화됩니다.
- * 운영 환경에서 메모리 폴백이 사용되면 시작 시 반복적으로 경고를 출력합니다.
+ * 환경변수가 없으면 개발 환경에서만 인메모리 폴백으로 동작합니다.
+ * 운영 환경에서는 분산 rate limiting이 비활성화된 상태로 요청을 처리하지 않고
+ * 명시적으로 실패시켜, 서버리스 인스턴스별 카운터로 보호가 무효화되는 상황을 막습니다.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { logSecurityEvent } from './security'
 import { createLogger } from './logger'
+import { parseIntegerParam } from './queryParams'
 
 const log = createLogger('distributedRateLimiter')
 
@@ -138,6 +139,33 @@ class DistributedRateLimiter {
     }
   }
 
+  private isProduction(): boolean {
+    return process.env.NODE_ENV === 'production'
+  }
+
+  private rateLimitUnavailable(windowMs: number, maxRequests: number): RateLimitResult {
+    const resetTime = Date.now() + Math.min(windowMs, 60_000)
+
+    return {
+      success: false,
+      response: NextResponse.json(
+        { error: 'Rate limiting is not configured for production.' },
+        {
+          status: 503,
+          headers: {
+            'Retry-After': '60',
+            'X-RateLimit-Limit': maxRequests.toString(),
+            'X-RateLimit-Remaining': '0',
+            'X-RateLimit-Reset': resetTime.toString(),
+          },
+        }
+      ),
+      remaining: 0,
+      resetTime,
+      totalHits: maxRequests,
+    }
+  }
+
   private reportMemoryFallbackIfNeeded(): void {
     if (!this.fallbackToMemory || this.fallbackReported) {
       return
@@ -197,7 +225,7 @@ class DistributedRateLimiter {
     maxRequests: number
   ): Promise<RateLimitResult> {
     if (!this.redis) {
-      // Redis가 없으면 메모리 폴백으로 처리
+      // 운영 환경은 applyRateLimit 진입부에서 이미 fail-closed 처리된다.
       const result = await this.fallbackMemoryLimit(key, windowMs, maxRequests)
       const remaining = Math.max(0, maxRequests - result.count)
 
@@ -223,6 +251,10 @@ class DistributedRateLimiter {
         totalHits: currentCount,
       }
     } catch (error) {
+      if (this.isProduction()) {
+        throw error
+      }
+
       log.error('Redis rate limiting failed, falling back to memory', error)
 
       // Redis 실패 시 메모리 폴백
@@ -250,6 +282,10 @@ class DistributedRateLimiter {
 
     return async (req: NextRequest): Promise<RateLimitResult> => {
       this.reportMemoryFallbackIfNeeded()
+
+      if (this.isProduction() && (this.fallbackToMemory || !this.redis)) {
+        return this.rateLimitUnavailable(windowMs, maxRequests)
+      }
 
       const baseKey = keyGenerator(req)
       const blockKey = `${baseKey}:blocked`
@@ -400,6 +436,10 @@ class DistributedRateLimiter {
       } catch (error) {
         log.error('Distributed rate limiting error', error)
 
+        if (this.isProduction()) {
+          return this.rateLimitUnavailable(windowMs, maxRequests)
+        }
+
         // 에러 발생 시 허용 (fail-open)
         return {
           success: true,
@@ -444,7 +484,7 @@ class DistributedRateLimiter {
         if (count === null) return null
 
         return {
-          count: parseInt(count),
+          count: parseIntegerParam(count, 0, { min: 0 }),
           ttl: ttl * 1000,
         }
       }

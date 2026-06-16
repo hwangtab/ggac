@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { FiDownload, FiImage, FiFile, FiVideo, FiMusic, FiExternalLink } from 'react-icons/fi'
 import type { PostAttachment } from '@/types'
 import { useDialogA11y } from '@/hooks/useDialogA11y'
+import { isProjectStoragePublicUrl } from '@/utils/storageUrlValidation'
 
 interface PostAttachmentsDisplayProps {
   postId: string
@@ -22,6 +23,10 @@ interface AttachmentWithStats {
     video_count: number
     audio_count: number
   }
+}
+
+type SafePostAttachment = PostAttachment & {
+  safe_file_url: string
 }
 
 const PostAttachmentsDisplay: React.FC<PostAttachmentsDisplayProps> = ({
@@ -131,28 +136,40 @@ const PostAttachmentsDisplay: React.FC<PostAttachmentsDisplayProps> = ({
   }
 
   // 이미지와 기타 파일 분리
-  const images = attachments.filter(att => att.file_type === 'image')
-  const otherFiles = attachments.filter(att => att.file_type !== 'image')
+  const isSafeAttachmentUrl = (url: string) => isProjectStoragePublicUrl(url, 'attachments')
+  const toSafeAttachment = (attachment: PostAttachment): SafePostAttachment | null =>
+    isSafeAttachmentUrl(attachment.file_url)
+      ? { ...attachment, safe_file_url: attachment.file_url }
+      : null
+  const safeAttachments = attachments
+    .map(toSafeAttachment)
+    .filter((attachment): attachment is SafePostAttachment => Boolean(attachment))
+  const safeImages = safeAttachments.filter(att => att.file_type === 'image')
+  const safeOtherFiles = safeAttachments.filter(att => att.file_type !== 'image')
+
+  if (!safeAttachments.length) {
+    return null
+  }
 
   return (
     <div className={`space-y-6 ${className}`}>
       {/* 이미지 갤러리 */}
-      {images.length > 0 && (
+      {safeImages.length > 0 && (
         <div>
           <h3 className="tw-heading-tertiary mb-4 flex items-center">
             <FiImage className="w-5 h-5 mr-2" />
-            이미지 ({images.length})
+            이미지 ({safeImages.length})
           </h3>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {images.map(image => (
+            {safeImages.map(image => (
               <div
                 key={image.id}
                 className="relative group cursor-pointer rounded-lg overflow-hidden bg-gray-100 aspect-square"
                 onClick={() => setSelectedImage(image)}
               >
                 <Image
-                  src={image.file_url}
+                  src={image.safe_file_url}
                   alt={image.alt_text || image.file_name}
                   fill
                   className="object-cover transition-transform group-hover:scale-105"
@@ -177,15 +194,15 @@ const PostAttachmentsDisplay: React.FC<PostAttachmentsDisplayProps> = ({
       )}
 
       {/* 기타 파일들 */}
-      {otherFiles.length > 0 && (
+      {safeOtherFiles.length > 0 && (
         <div>
           <h3 className="tw-heading-tertiary mb-4 flex items-center">
             <FiFile className="w-5 h-5 mr-2" />
-            첨부파일 ({otherFiles.length})
+            첨부파일 ({safeOtherFiles.length})
           </h3>
 
           <div className="space-y-2">
-            {otherFiles.map(file => (
+            {safeOtherFiles.map(file => (
               <div
                 key={file.id}
                 className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border hover:bg-gray-100 transition-colors"
@@ -201,7 +218,7 @@ const PostAttachmentsDisplay: React.FC<PostAttachmentsDisplayProps> = ({
                 </div>
 
                 <a
-                  href={file.file_url}
+                  href={file.safe_file_url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex-shrink-0 ml-4 inline-flex items-center px-3 py-1 text-xs font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
@@ -246,7 +263,7 @@ const PostAttachmentsDisplay: React.FC<PostAttachmentsDisplayProps> = ({
             <div className="relative" onClick={e => e.stopPropagation()}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={selectedImage.file_url}
+                src={toSafeAttachment(selectedImage)?.safe_file_url || ''}
                 alt={selectedImage.alt_text || selectedImage.file_name}
                 className="max-w-full max-h-[80vh] object-contain"
               />

@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link, useRouter } from '@/i18n/navigation'
 import { useTranslations } from 'next-intl'
-import { supabase } from '@/lib/supabase/client'
+import { fetchSessionProfile } from '@/utils/sessionProfile'
 
 type MessageType = 'error' | 'warning' | 'success' | 'loading'
 
@@ -31,12 +31,9 @@ export default function ResetPasswordPage() {
     let mounted = true
     const check = async () => {
       try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
-        if (mounted) setHasSession(!!session)
-      } catch (err) {
-        console.error('getSession error:', err)
+        const session = await fetchSessionProfile()
+        if (mounted) setHasSession(session.authenticated)
+      } catch {
         if (mounted) setHasSession(false)
       } finally {
         if (mounted) setChecking(false)
@@ -66,8 +63,14 @@ export default function ResetPasswordPage() {
 
     setLoading(true)
     try {
-      const { error } = await supabase.auth.updateUser({ password })
-      if (error) {
+      const response = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ password }),
+      })
+
+      if (!response.ok) {
         setMessage(t('resetPassword.msgError'))
         setMessageType('error')
         return
@@ -76,8 +79,7 @@ export default function ResetPasswordPage() {
       setMessageType('success')
       setDone(true)
       redirectTimer.current = setTimeout(() => router.push('/board'), 1500)
-    } catch (err) {
-      console.error('updateUser error:', err)
+    } catch {
       setMessage(t('resetPassword.msgError'))
       setMessageType('error')
     } finally {

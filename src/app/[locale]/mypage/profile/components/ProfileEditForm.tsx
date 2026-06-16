@@ -88,6 +88,8 @@ const ProfileEditForm: React.FC<ProfileEditFormProps> = ({ profile, onUpdate, lo
 
   // 아티스트 데이터 로드
   useEffect(() => {
+    let mounted = true
+
     const fetchArtistData = async () => {
       if (!profile.is_artist || !profile.artist_id) {
         return
@@ -98,16 +100,24 @@ const ProfileEditForm: React.FC<ProfileEditFormProps> = ({ profile, onUpdate, lo
         const response = await fetch('/api/mypage/artist')
         if (response.ok) {
           const data = await response.json()
-          setArtistData(data.artist)
+          if (mounted) {
+            setArtistData(data.artist)
+          }
         }
       } catch (error) {
         console.error('Failed to fetch artist data:', error)
       } finally {
-        setArtistLoading(false)
+        if (mounted) {
+          setArtistLoading(false)
+        }
       }
     }
 
     fetchArtistData()
+
+    return () => {
+      mounted = false
+    }
   }, [profile.is_artist, profile.artist_id])
 
   const handleReset = () => {
@@ -133,6 +143,7 @@ const ProfileEditForm: React.FC<ProfileEditFormProps> = ({ profile, onUpdate, lo
           phone_number: formData.phone_number,
           birth_date: formData.birth_date,
         }}
+        artistId={artistData?.id || null}
         artistPhotoUrl={artistData?.profile_photo_url || null}
         artistPhotoMetadata={artistData?.profile_photo_metadata}
         hasArtistPermission={profile.is_artist && !!profile.artist_id}

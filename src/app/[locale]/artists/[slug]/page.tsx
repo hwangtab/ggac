@@ -13,6 +13,13 @@ import type { Metadata } from 'next'
 import { getSiteUrl, getLocaleAlternates, getOgLocale } from '@/utils/site'
 import { sanitizeJsonLd } from '@/utils/sanitize'
 import {
+  toSafeEmailHref,
+  toSafeHttpUrl,
+  toSafeInternalImagePath,
+  toSafeLinkHref,
+  toSafePhoneHref,
+} from '@/utils/safeUrl'
+import {
   generateArtistStructuredData,
   generateBreadcrumbStructuredData,
   combineStructuredData,
@@ -185,6 +192,19 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
 
   const isMinimal = artist.templateType === 'minimal'
   const baseUrl = getBaseUrl()
+  const safeProfileImage = toSafeInternalImagePath(artist.profileImage)
+  const artistEmailHref = toSafeEmailHref(artist.contact)
+  const artistPhoneHref = toSafePhoneHref(artist.contact)
+  const safePortfolioLinks =
+    artist.portfolioLinks
+      ?.map(link => ({ link, safeUrl: toSafeHttpUrl(link.url) }))
+      .filter((item): item is { link: (typeof artist.portfolioLinks)[number]; safeUrl: string } =>
+        Boolean(item.safeUrl)
+      ) ?? []
+  const youtubeChannelLink = safePortfolioLinks.find(
+    ({ link, safeUrl }) =>
+      link.title.toLowerCase().includes('youtube') || safeUrl.includes('youtube.com')
+  )
 
   // 구조화된 데이터 생성 - 유틸리티 함수 사용
   const artistSchema = generateArtistStructuredData({
@@ -234,7 +254,7 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
                     className={`${isMinimal ? 'w-48 h-48 sm:w-64 sm:h-64 md:w-80 md:h-80 lg:w-96 lg:h-96 max-w-[90vw] max-h-[90vw]' : 'w-48 h-48 sm:w-64 sm:h-64 md:w-80 md:h-80 lg:w-96 lg:h-96 max-w-[40vw] max-h-[40vw]'} overflow-hidden rounded-full relative`}
                   >
                     <OptimizedImage
-                      src={artist.profileImage}
+                      src={safeProfileImage}
                       alt={artist.name}
                       width={400}
                       height={400}
@@ -282,16 +302,16 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
                         {t('detail.contact')}:
                         {!artist.contact || artist.contact === '' ? (
                           <span className="ml-1">{t('detail.contactPrivate')}</span>
-                        ) : artist.contact.includes('@') ? (
+                        ) : artistEmailHref ? (
                           <a
-                            href={`mailto:${artist.contact}`}
+                            href={artistEmailHref}
                             className="hover:text-primary-600 transition-colors duration-200 underline underline-offset-4 hover:underline-offset-6 ml-1"
                           >
                             {artist.contact}
                           </a>
-                        ) : artist.contact.match(/^[0-9\-\s\(\)]+$/) ? (
+                        ) : artistPhoneHref ? (
                           <a
-                            href={`tel:${artist.contact.replace(/[\s\-\(\)]/g, '')}`}
+                            href={artistPhoneHref}
                             className="hover:text-primary-600 transition-colors duration-200 underline underline-offset-4 hover:underline-offset-6 ml-1"
                           >
                             {artist.contact}
@@ -352,14 +372,22 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
                     <div className="prose prose-sm sm:prose-base lg:prose-lg max-w-none">
                       <ReactMarkdown
                         components={{
-                          a: ({ node, ...props }) => (
-                            <a
-                              {...props}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-primary-600 hover:text-primary-700 underline underline-offset-4 hover:underline-offset-6"
-                            />
-                          ),
+                          a: ({ node, href, children, ...props }) => {
+                            const safeHref = typeof href === 'string' ? toSafeLinkHref(href) : null
+                            if (!safeHref) return <span {...props}>{children}</span>
+
+                            return (
+                              <a
+                                href={safeHref}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-primary-600 hover:text-primary-700 underline underline-offset-4 hover:underline-offset-6"
+                                {...props}
+                              >
+                                {children}
+                              </a>
+                            )
+                          },
                         }}
                       >
                         {convertUrlsToMarkdownLinks(artist.bio)}
@@ -373,7 +401,7 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
         </section>
 
         {/* Portfolio Links */}
-        {artist.portfolioLinks && artist.portfolioLinks.length > 0 && (
+        {safePortfolioLinks.length > 0 && (
           <section className="py-12 sm:py-20">
             <div className="tw-container-custom">
               <div className="max-w-6xl mx-auto px-4">
@@ -392,10 +420,10 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
 
                 {/* 포트폴리오 링크들 */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 max-w-6xl mx-auto px-4 pb-4">
-                  {artist.portfolioLinks.map((link, index) => (
+                  {safePortfolioLinks.map(({ link, safeUrl }, index) => (
                     <a
                       key={index}
-                      href={link.url}
+                      href={safeUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="group relative overflow-hidden bg-white/70 backdrop-blur-sm rounded-2xl p-4 sm:p-6 shadow-lg border border-white/20 hover:shadow-2xl hover:scale-105 transition-all duration-300 min-w-0 break-words"
@@ -471,19 +499,9 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
                   <div className="text-center mt-12">
                     <p className="text-gray-500 text-sm mb-4">{t('detail.moreVideosNote')}</p>
                     {/* 포트폴리오 링크 중 YouTube가 있다면 버튼 표시 */}
-                    {artist.portfolioLinks?.find(
-                      link =>
-                        link.title.toLowerCase().includes('youtube') ||
-                        link.url.includes('youtube.com')
-                    ) && (
+                    {youtubeChannelLink && (
                       <a
-                        href={
-                          artist.portfolioLinks.find(
-                            link =>
-                              link.title.toLowerCase().includes('youtube') ||
-                              link.url.includes('youtube.com')
-                          )?.url
-                        }
+                        href={youtubeChannelLink.safeUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-2 px-6 py-3 bg-red-600 text-white rounded-full hover:bg-red-700 transition-colors duration-200 font-medium"

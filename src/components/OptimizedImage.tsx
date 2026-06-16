@@ -4,6 +4,7 @@ import Image from 'next/image'
 import { useState, useEffect, useRef, memo, useCallback } from 'react'
 import { useTranslations } from 'next-intl'
 import type { OptimizedImageProps } from '@/types'
+import { parseIntegerParam } from '@/utils/queryParams'
 
 // Next.js 설정과 동기화된 허용 품질 값 파싱
 const DEFAULT_ALLOWED_QUALITIES = [50, 65, 75, 80, 85, 90, 100]
@@ -16,7 +17,7 @@ function parseAllowedQualities(): number[] {
 
   const parsed = envValue
     .split(',')
-    .map(value => parseInt(value.trim(), 10))
+    .map(value => parseIntegerParam(value, Number.NaN, { min: 1, max: 100 }))
     .filter(value => Number.isFinite(value) && value > 0 && value <= 100)
 
   if (parsed.length === 0) {
@@ -230,9 +231,11 @@ const OptimizedImage = memo(function OptimizedImage({
       if (isSupabaseImage && retryCount < maxRetries) {
         const retryDelay = Math.min(1000 * Math.pow(2, retryCount), 5000) // 지수 백오프, 최대 5초
 
-        console.warn(
-          `[OptimizedImage] Supabase 이미지 재시도 ${retryCount + 1}/${maxRetries}: ${currentSrc}`
-        )
+        if (process.env.NODE_ENV === 'development') {
+          console.warn(
+            `[OptimizedImage] Supabase 이미지 재시도 ${retryCount + 1}/${maxRetries}: ${currentSrc}`
+          )
+        }
 
         retryTimeoutRef.current = setTimeout(() => {
           setRetryCount(prev => prev + 1)
@@ -252,9 +255,11 @@ const OptimizedImage = memo(function OptimizedImage({
       const nextFallback = fallbackQueueRef.current.shift()
 
       if (nextFallback) {
-        console.warn(
-          `[OptimizedImage] 이미지 로딩 실패: ${currentSrc} → 대체 시도: ${nextFallback}`
-        )
+        if (process.env.NODE_ENV === 'development') {
+          console.warn(
+            `[OptimizedImage] 이미지 로딩 실패: ${currentSrc} → 대체 시도: ${nextFallback}`
+          )
+        }
         setCurrentSrc(nextFallback)
         setHasError(false)
         setIsLoading(true)
@@ -262,7 +267,9 @@ const OptimizedImage = memo(function OptimizedImage({
         return
       }
 
-      console.warn(`[OptimizedImage] 모든 이미지 로딩 실패: ${currentSrc}`)
+      if (process.env.NODE_ENV === 'development') {
+        console.warn(`[OptimizedImage] 모든 이미지 로딩 실패: ${currentSrc}`)
+      }
       setHasError(true)
       setIsLoading(false)
       onErrorProp?.()
@@ -295,9 +302,11 @@ const OptimizedImage = memo(function OptimizedImage({
 
     if (resolvedLoadTimeout > 0) {
       loadTimeoutRef.current = setTimeout(() => {
-        console.warn(
-          `[OptimizedImage] 로딩 지연 감지(${resolvedLoadTimeout}ms) → 대체 로직 실행: ${currentSrc}`
-        )
+        if (process.env.NODE_ENV === 'development') {
+          console.warn(
+            `[OptimizedImage] 로딩 지연 감지(${resolvedLoadTimeout}ms) → 대체 로직 실행: ${currentSrc}`
+          )
+        }
         clearLoadAndErrorTimers()
         handleErrorRef.current?.()
       }, resolvedLoadTimeout)
@@ -305,9 +314,11 @@ const OptimizedImage = memo(function OptimizedImage({
 
     if (resolvedErrorTimeout > 0) {
       errorTimeoutRef.current = setTimeout(() => {
-        console.warn(
-          `[OptimizedImage] 최종 타임아웃(${resolvedLoadTimeout + resolvedErrorTimeout}ms) → 에러 전환: ${currentSrc}`
-        )
+        if (process.env.NODE_ENV === 'development') {
+          console.warn(
+            `[OptimizedImage] 최종 타임아웃(${resolvedLoadTimeout + resolvedErrorTimeout}ms) → 에러 전환: ${currentSrc}`
+          )
+        }
         clearLoadAndErrorTimers()
         setHasError(prev => {
           if (!prev) {

@@ -22,6 +22,24 @@ test.describe('이사회(board-room) 접근 제어', () => {
     await expect(page).toHaveURL(/\/login/, { timeout: 15000 })
   })
 
+  test('비로그인 사용자는 게시글 작성 접근 시 로그인 URL에 원래 경로가 보존된다', async ({
+    page,
+  }) => {
+    await page.goto('/board/write', { waitUntil: 'domcontentloaded' })
+    await expect(page).toHaveURL(/\/login/, { timeout: 15000 })
+    const redirectedUrl = new URL(page.url())
+    expect(redirectedUrl.searchParams.get('redirect')).toBe('/board/write')
+  })
+
+  test('비로그인 사용자는 영문 게시글 작성 접근 시에도 보호되고 원래 경로가 보존된다', async ({
+    page,
+  }) => {
+    await page.goto('/en/board/write', { waitUntil: 'domcontentloaded' })
+    await expect(page).toHaveURL(/\/login/, { timeout: 15000 })
+    const redirectedUrl = new URL(page.url())
+    expect(redirectedUrl.searchParams.get('redirect')).toBe('/en/board/write')
+  })
+
   // ---------------------------------------------------------------------------
   // 역할별(일반 회원 / 이사 / 관리자) CRUD·투표·정족수 플로우는 인증된 세션
   // 픽스처가 필요하다. 이 저장소에는 아직 로그인 storageState 픽스처가 없고

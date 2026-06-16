@@ -20,6 +20,7 @@ import {
   validateAllSettings,
   type ValidationError,
 } from '@/utils/settingsValidation'
+import { parseIntegerParam } from '@/utils/queryParams'
 
 interface AdminSettings {
   site: {
@@ -64,9 +65,33 @@ export default function AdminSettingsPage() {
   const [restoreLoading, setRestoreLoading] = useState(false)
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const clearStatusTimer = () => {
+    if (statusTimerRef.current) {
+      clearTimeout(statusTimerRef.current)
+      statusTimerRef.current = null
+    }
+  }
+
+  const scheduleStatusClear = (delayMs: number, options: { clearError?: boolean } = {}) => {
+    const { clearError = true } = options
+    clearStatusTimer()
+    statusTimerRef.current = setTimeout(() => {
+      setSuccess(null)
+      if (clearError) {
+        setError(null)
+      }
+      statusTimerRef.current = null
+    }, delayMs)
+  }
 
   useEffect(() => {
     fetchSettings()
+  }, [])
+
+  useEffect(() => {
+    return clearStatusTimer
   }, [])
 
   const fetchSettings = async () => {
@@ -94,6 +119,7 @@ export default function AdminSettingsPage() {
 
     try {
       setSaving(true)
+      clearStatusTimer()
       setError(null)
       setSuccess(null)
 
@@ -130,13 +156,12 @@ export default function AdminSettingsPage() {
           },
           body: JSON.stringify({ cacheType: 'all' }),
         })
-        console.log('Settings cache invalidated successfully')
       } catch (cacheError) {
         console.warn('Failed to invalidate settings cache:', cacheError)
         // 캐시 무효화 실패는 치명적이지 않으므로 사용자에게는 알리지 않음
       }
 
-      setTimeout(() => setSuccess(null), 3000)
+      scheduleStatusClear(3000, { clearError: false })
     } catch (err) {
       console.error('Settings save error:', err)
       setError(err instanceof Error ? err.message : '설정 저장 중 오류가 발생했습니다.')
@@ -178,7 +203,9 @@ export default function AdminSettingsPage() {
   const downloadBackup = async () => {
     try {
       setBackupLoading(true)
+      clearStatusTimer()
       setError(null)
+      setSuccess(null)
 
       const response = await fetch('/api/admin/settings/backup', {
         method: 'GET',
@@ -200,7 +227,7 @@ export default function AdminSettingsPage() {
       window.URL.revokeObjectURL(url)
 
       setSuccess('백업 파일이 다운로드되었습니다.')
-      setTimeout(() => setSuccess(null), 3000)
+      scheduleStatusClear(3000, { clearError: false })
     } catch (err) {
       console.error('Backup download error:', err)
       setError(err instanceof Error ? err.message : '백업 다운로드 중 오류가 발생했습니다.')
@@ -213,7 +240,9 @@ export default function AdminSettingsPage() {
   const restoreBackup = async (file: File) => {
     try {
       setRestoreLoading(true)
+      clearStatusTimer()
       setError(null)
+      setSuccess(null)
 
       // 파일 읽기
       const fileContent = await new Promise<string>((resolve, reject) => {
@@ -254,10 +283,7 @@ export default function AdminSettingsPage() {
         setError(result.message)
       }
 
-      setTimeout(() => {
-        setSuccess(null)
-        setError(null)
-      }, 5000)
+      scheduleStatusClear(5000)
     } catch (err) {
       console.error('Backup restore error:', err)
       setError(err instanceof Error ? err.message : '백업 복원 중 오류가 발생했습니다.')
@@ -293,7 +319,9 @@ export default function AdminSettingsPage() {
 
     try {
       setRestoreLoading(true)
+      clearStatusTimer()
       setError(null)
+      setSuccess(null)
 
       const response = await fetch('/api/admin/settings/reset', {
         method: 'POST',
@@ -326,7 +354,6 @@ export default function AdminSettingsPage() {
             },
             body: JSON.stringify({ cacheType: 'all' }),
           })
-          console.log('Settings cache invalidated after reset')
         } catch (cacheError) {
           console.warn('Failed to invalidate settings cache after reset:', cacheError)
         }
@@ -334,10 +361,7 @@ export default function AdminSettingsPage() {
         setError(result.message)
       }
 
-      setTimeout(() => {
-        setSuccess(null)
-        setError(null)
-      }, 5000)
+      scheduleStatusClear(5000)
     } catch (err) {
       console.error('Reset to defaults error:', err)
       setError(err instanceof Error ? err.message : '기본값 복원 중 오류가 발생했습니다.')
@@ -535,7 +559,11 @@ export default function AdminSettingsPage() {
                         type="number"
                         value={settings.site.max_members}
                         onChange={e =>
-                          updateSettings('site', 'max_members', parseInt(e.target.value) || 0)
+                          updateSettings(
+                            'site',
+                            'max_members',
+                            parseIntegerParam(e.target.value, 0, { min: 0 })
+                          )
                         }
                         className={getFieldClassName(
                           'site',
@@ -584,7 +612,11 @@ export default function AdminSettingsPage() {
                           type="number"
                           value={settings.email.smtp_port}
                           onChange={e =>
-                            updateSettings('email', 'smtp_port', parseInt(e.target.value) || 0)
+                            updateSettings(
+                              'email',
+                              'smtp_port',
+                              parseIntegerParam(e.target.value, 0, { min: 0 })
+                            )
                           }
                           className={getFieldClassName(
                             'email',
@@ -675,7 +707,7 @@ export default function AdminSettingsPage() {
                           updateSettings(
                             'security',
                             'session_timeout',
-                            parseInt(e.target.value) || 0
+                            parseIntegerParam(e.target.value, 0, { min: 0 })
                           )
                         }
                         className={getFieldClassName(
@@ -702,7 +734,7 @@ export default function AdminSettingsPage() {
                           updateSettings(
                             'security',
                             'max_login_attempts',
-                            parseInt(e.target.value) || 0
+                            parseIntegerParam(e.target.value, 0, { min: 0 })
                           )
                         }
                         className={getFieldClassName(
@@ -729,7 +761,7 @@ export default function AdminSettingsPage() {
                           updateSettings(
                             'security',
                             'password_min_length',
-                            parseInt(e.target.value) || 0
+                            parseIntegerParam(e.target.value, 0, { min: 0 })
                           )
                         }
                         className={getFieldClassName(

@@ -16,6 +16,7 @@ export async function DELETE(
   if (!postIdValidation.isValid) {
     return NextResponse.json({ success: false, error: postIdValidation.errors[0] }, { status: 400 })
   }
+  const validPostId = postIdValidation.sanitized
   const commentIdValidation = validateUUID(commentId, '댓글 ID')
   if (!commentIdValidation.isValid) {
     return NextResponse.json(
@@ -23,6 +24,7 @@ export async function DELETE(
       { status: 400 }
     )
   }
+  const validCommentId = commentIdValidation.sanitized
 
   try {
     const supabase = await createSupabaseServer()
@@ -37,14 +39,19 @@ export async function DELETE(
     const { data: comment } = await supabase
       .from('comments')
       .select('id, author_id')
-      .eq('id', commentId)
+      .eq('id', validCommentId)
+      .eq('post_id', validPostId)
       .maybeSingle()
     if (!comment) return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 })
     if ((comment as any).author_id !== userId) {
       return NextResponse.json({ success: false, error: '권한이 없습니다.' }, { status: 403 })
     }
 
-    const { error } = await supabase.from('comments').delete().eq('id', commentId)
+    const { error } = await supabase
+      .from('comments')
+      .delete()
+      .eq('id', validCommentId)
+      .eq('post_id', validPostId)
     if (error) {
       console.error('[API] 댓글 삭제 실패:', error)
       return NextResponse.json(
@@ -54,10 +61,10 @@ export async function DELETE(
     }
 
     try {
-      revalidateTag(`comments-post-${postId}`)
-      revalidateTag(`attachments-post-${postId}`)
+      revalidateTag(`comments-post-${validPostId}`)
+      revalidateTag(`attachments-post-${validPostId}`)
       revalidateTag('board-post')
-      revalidateTag(postId)
+      revalidateTag(validPostId)
     } catch {}
 
     return NextResponse.json({ success: true })

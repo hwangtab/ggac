@@ -8,6 +8,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { FiBell, FiSend, FiUsers, FiEdit3, FiTrash2, FiPlus } from 'react-icons/fi'
 import type { CreateBulkNotificationRequest, NotificationType } from '@/types'
+import { parseIntegerParam } from '@/utils/queryParams'
 
 interface MemberProfile {
   id: string
@@ -333,7 +334,7 @@ const AdminNotificationsPage = () => {
                 onChange={e =>
                   setNotificationForm(prev => ({
                     ...prev,
-                    expires_hours: parseInt(e.target.value),
+                    expires_hours: parseIntegerParam(e.target.value, 24, { min: 1 }),
                   }))
                 }
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"

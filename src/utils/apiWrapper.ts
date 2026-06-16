@@ -12,6 +12,7 @@ import { NextResponse } from 'next/server'
 import { createErrorHandler, ApiErrorHandler } from '@/utils/errorHandler'
 import { createSuccessResponse, createErrorResponse } from '@/utils/apiResponse'
 import { createLogger, maskId } from '@/utils/logger'
+import { parseIntegerParam } from '@/utils/queryParams'
 
 const log = createLogger('apiWrapper')
 
@@ -427,11 +428,11 @@ export function parsePaginationParams(
   defaultLimit: number = 20,
   maxLimit: number = 100
 ): PaginationParams {
-  const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
-  const limit = Math.min(
-    maxLimit,
-    Math.max(1, parseInt(searchParams.get('limit') || defaultLimit.toString(), 10))
-  )
+  const page = parseIntegerParam(searchParams.get('page'), 1, { min: 1 })
+  const limit = parseIntegerParam(searchParams.get('limit'), defaultLimit, {
+    min: 1,
+    max: maxLimit,
+  })
   const offset = (page - 1) * limit
 
   return { page, limit, offset }
@@ -452,9 +453,10 @@ export function parseSortParams(
 ): SortParams {
   const orderBy = searchParams.get('orderBy') || defaultOrderBy
   const orderDirection = (searchParams.get('orderDirection') || 'desc') as 'asc' | 'desc'
+  const safeFields = allowedFields.length > 0 ? allowedFields : [defaultOrderBy]
 
   // 허용된 필드 검증
-  if (allowedFields.length > 0 && !allowedFields.includes(orderBy)) {
+  if (!safeFields.includes(orderBy)) {
     throw ApiError.badRequest(`정렬 필드 '${orderBy}'는 허용되지 않습니다.`)
   }
 

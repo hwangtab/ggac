@@ -1,18 +1,25 @@
-import { redirect, notFound } from 'next/navigation'
-import Link from 'next/link'
+import { notFound } from 'next/navigation'
+import { Link, redirect } from '@/i18n/navigation'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import type { MemberProfile, Post as PostType } from '@/types'
+import type { Locale } from '@/i18n/routing'
 import EditPageClient from './EditPageClient'
+import { validateUUID } from '@/utils/validation'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
 interface PageProps {
-  params: Promise<{ id: string }>
+  params: Promise<{ locale: Locale; id: string }>
 }
 
 export default async function PostEditPage({ params }: PageProps) {
-  const { id: postId } = await params
+  const { locale, id } = await params
+  const postIdValidation = validateUUID(id, '게시글 ID')
+  if (!postIdValidation.isValid) {
+    notFound()
+  }
+  const postId = postIdValidation.sanitized
   const supabase = await createSupabaseServer()
 
   const {
@@ -20,7 +27,13 @@ export default async function PostEditPage({ params }: PageProps) {
   } = await supabase.auth.getUser()
 
   if (!user) {
-    redirect(`/login?redirect=/board/${postId}/edit`)
+    redirect({
+      href: {
+        pathname: '/login',
+        query: { redirect: `/board/${postId}/edit` },
+      },
+      locale,
+    })
   }
 
   const { data: profile } = await supabase

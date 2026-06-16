@@ -8,7 +8,19 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createErrorResponse } from '@/utils/apiResponse'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator } from '@/utils/rateLimiter'
+import { parseJsonObjectBody } from '@/utils/requestBody'
+import { parseIntegerParam } from '@/utils/queryParams'
+import { validateUUID } from '@/utils/validation'
+import { sanitizeNotificationData } from '@/utils/notificationData'
+import { parseNotificationExpiresAt } from '@/utils/notificationExpiry'
+import { parseNotificationType } from '@/utils/notificationTypes'
 import type { NotificationListResponse, CreateNotificationRequest, Notification } from '@/types'
+
+function validateNotificationId(value: unknown, label: string): string | null {
+  if (typeof value !== 'string') return null
+  const validation = validateUUID(value, label)
+  return validation.isValid ? validation.sanitized : null
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -35,13 +47,13 @@ export async function GET(request: NextRequest) {
 
     // URL 파라미터 추출 및 검증
     const { searchParams } = new URL(request.url)
-    const page = Math.max(1, parseInt(searchParams.get('page') || '1'))
-    const limit = Math.min(50, Math.max(10, parseInt(searchParams.get('limit') || '20')))
-    const type = searchParams.get('type')
+    const page = parseIntegerParam(searchParams.get('page'), 1, { min: 1 })
+    const limit = parseIntegerParam(searchParams.get('limit'), 20, { min: 10, max: 50 })
+    const typeParam = searchParams.get('type')
+    const type = typeParam ? parseNotificationType(typeParam) : null
     const unread_only = searchParams.get('unread_only') === 'true'
 
-    // 입력 검증
-    if (type && (typeof type !== 'string' || type.length > 50)) {
+    if (typeParam && !type) {
       return createErrorResponse({ success: false, error: '잘못된 타입 파라미터입니다.' }, 400)
     }
 
@@ -138,55 +150,67 @@ export async function POST(request: NextRequest) {
     }
 
     // 요청 본문 파싱 및 검증
-    const body: CreateNotificationRequest = await request.json()
+    const body = (await parseJsonObjectBody(request)) as unknown as CreateNotificationRequest | null
+    if (!body) {
+      return createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400)
+    }
 
     // 입력 데이터 검증
-    if (!body.user_id || typeof body.user_id !== 'string' || body.user_id.length > 100) {
+    const userId = validateNotificationId(body.user_id, '사용자 ID')
+    if (!userId) {
       return createErrorResponse({ success: false, error: '사용자 ID가 유효하지 않습니다.' }, 400)
     }
 
-    if (!body.type || typeof body.type !== 'string' || body.type.length > 50) {
+    const notificationType = parseNotificationType(body.type)
+    if (!notificationType) {
       return createErrorResponse({ success: false, error: '알림 유형이 유효하지 않습니다.' }, 400)
     }
 
-    if (!body.title || typeof body.title !== 'string' || body.title.length > 200) {
+    const notificationTitle = typeof body.title === 'string' ? body.title.trim() : ''
+    if (!notificationTitle || notificationTitle.length > 200) {
       return createErrorResponse({ success: false, error: '제목이 유효하지 않습니다.' }, 400)
     }
 
-    if (!body.message || typeof body.message !== 'string' || body.message.length > 1000) {
+    const notificationMessage = typeof body.message === 'string' ? body.message.trim() : ''
+    if (!notificationMessage || notificationMessage.length > 1000) {
       return createErrorResponse({ success: false, error: '메시지가 유효하지 않습니다.' }, 400)
     }
 
-    if (
-      body.related_post_id &&
-      (typeof body.related_post_id !== 'string' || body.related_post_id.length > 100)
-    ) {
+    const relatedPostId = body.related_post_id
+      ? validateNotificationId(body.related_post_id, '관련 게시글 ID')
+      : null
+    if (body.related_post_id && !relatedPostId) {
       return createErrorResponse(
         { success: false, error: '관련 게시글 ID가 유효하지 않습니다.' },
         400
       )
     }
 
-    if (
-      body.related_user_id &&
-      (typeof body.related_user_id !== 'string' || body.related_user_id.length > 100)
-    ) {
+    const relatedUserId = body.related_user_id
+      ? validateNotificationId(body.related_user_id, '관련 사용자 ID')
+      : null
+    if (body.related_user_id && !relatedUserId) {
       return createErrorResponse(
         { success: false, error: '관련 사용자 ID가 유효하지 않습니다.' },
         400
       )
     }
+    const notificationData = sanitizeNotificationData(body.data)
+    const expiresAt = parseNotificationExpiresAt(body.expires_at)
+    if (expiresAt === undefined) {
+      return createErrorResponse({ success: false, error: '만료 시간이 유효하지 않습니다.' }, 400)
+    }
 
     // 알림 생성
     const { data: notification, error } = await supabase.rpc('create_notification', {
-      p_user_id: body.user_id,
-      p_type: body.type,
-      p_title: body.title,
-      p_message: body.message,
-      p_data: body.data || {},
-      p_related_post_id: body.related_post_id || null,
-      p_related_user_id: body.related_user_id || null,
-      p_expires_at: body.expires_at || null,
+      p_user_id: userId,
+      p_type: notificationType,
+      p_title: notificationTitle,
+      p_message: notificationMessage,
+      p_data: notificationData,
+      p_related_post_id: relatedPostId,
+      p_related_user_id: relatedUserId,
+      p_expires_at: expiresAt,
     })
 
     if (error) {

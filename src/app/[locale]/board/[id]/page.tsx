@@ -6,12 +6,19 @@ import { Suspense } from 'react'
 import { generatePostOgImage } from '@/utils/imageUrl'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { setRequestLocale } from 'next-intl/server'
+import { parseIntegerParam } from '@/utils/queryParams'
+import { validateUUID } from '@/utils/validation'
 import {
   generatePostStructuredData,
   generateBreadcrumbStructuredData,
   combineStructuredData,
   structuredDataToScript,
 } from '@/utils/structuredData'
+
+function normalizePostRouteId(id: string): string | null {
+  const validation = validateUUID(id, '게시글 ID')
+  return validation.isValid ? validation.sanitized : null
+}
 
 // 동적 메타데이터 생성
 export async function generateMetadata({
@@ -20,7 +27,14 @@ export async function generateMetadata({
   params: Promise<{ locale: string; id: string }>
 }): Promise<Metadata> {
   const resolvedParams = await params
-  const postId = resolvedParams.id
+  const postId = normalizePostRouteId(resolvedParams.id)
+  if (!postId) {
+    return {
+      title: '게시물을 찾을 수 없습니다',
+      description: '요청하신 게시물을 찾을 수 없습니다.',
+      robots: { index: false, follow: true },
+    }
+  }
 
   try {
     const metadata = await getPostMetadata(postId)
@@ -201,7 +215,10 @@ async function getInitialPostData(
     }
 
     const authorRecord = Array.isArray(post.author) ? post.author[0] : post.author
-    const totalSize = (attachments || []).reduce((sum, att) => sum + (att.file_size || 0), 0)
+    const totalSize = (attachments || []).reduce(
+      (sum, att) => sum + parseIntegerParam(String(att.file_size ?? ''), 0, { min: 0 }),
+      0
+    )
 
     // 인증된 사용자 정보 조회 (쿠키 기반 세션 복원 필요)
     const supabaseServer = await createSupabaseServer()
@@ -263,7 +280,10 @@ export default async function PostDetailPage({
 }) {
   const resolvedParams = await params
   setRequestLocale(resolvedParams.locale)
-  const postId = resolvedParams.id
+  const postId = normalizePostRouteId(resolvedParams.id)
+  if (!postId) {
+    notFound()
+  }
 
   // 데이터 페칭 로직을 페이지 컴포넌트에서 직접 수행
   const [metadata, initialData] = await Promise.all([

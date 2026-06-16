@@ -16,6 +16,7 @@ import distributedRateLimiter, {
   DISTRIBUTED_RATE_LIMIT_CONFIGS,
   createDistributedUserKeyGenerator,
 } from '@/utils/distributedRateLimiter'
+import { validateUUID } from '@/utils/validation'
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const resolvedParams = await context.params
@@ -42,18 +43,15 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
     }
 
-    // ID 검증
-    if (
-      !resolvedParams.id ||
-      typeof resolvedParams.id !== 'string' ||
-      resolvedParams.id.length > 100
-    ) {
-      return createErrorResponse({ success: false, error: '잘못된 알림 ID입니다.' }, 400)
+    const uuidValidation = validateUUID(resolvedParams.id, '알림 ID')
+    if (!uuidValidation.isValid) {
+      return createErrorResponse({ success: false, error: uuidValidation.errors.join(', ') }, 400)
     }
+    const notificationId = uuidValidation.sanitized
 
     // 알림 읽음 처리
     const { data, error } = await supabase.rpc('mark_notification_read', {
-      p_notification_id: resolvedParams.id,
+      p_notification_id: notificationId,
     })
 
     if (error) {
@@ -103,20 +101,17 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
     }
 
-    // ID 검증
-    if (
-      !resolvedParams.id ||
-      typeof resolvedParams.id !== 'string' ||
-      resolvedParams.id.length > 100
-    ) {
-      return createErrorResponse({ success: false, error: '잘못된 알림 ID입니다.' }, 400)
+    const uuidValidation = validateUUID(resolvedParams.id, '알림 ID')
+    if (!uuidValidation.isValid) {
+      return createErrorResponse({ success: false, error: uuidValidation.errors.join(', ') }, 400)
     }
+    const notificationId = uuidValidation.sanitized
 
     // 알림 삭제 (본인 알림만 삭제 가능)
     const { error } = await supabase
       .from('notifications')
       .delete()
-      .eq('id', resolvedParams.id)
+      .eq('id', notificationId)
       .eq('user_id', user.id)
 
     if (error) {

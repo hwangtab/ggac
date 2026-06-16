@@ -111,14 +111,28 @@ export function createCorsResponse<T = unknown>(
 /**
  * 파일 다운로드 응답 생성
  */
+function sanitizeDownloadFilename(filename: string): string {
+  const fallback = 'download'
+  if (typeof filename !== 'string') return fallback
+
+  const sanitized = filename
+    .replace(/[\r\n"]/g, '')
+    .replace(/[\\/]/g, '_')
+    .trim()
+    .slice(0, 180)
+
+  return sanitized || fallback
+}
+
 export function createFileDownloadResponse(
   buffer: Buffer,
   filename: string,
   contentType: string = 'application/octet-stream'
 ) {
+  const safeFilename = sanitizeDownloadFilename(filename)
   const headers = {
     'Content-Type': contentType,
-    'Content-Disposition': `attachment; filename="${filename}"`,
+    'Content-Disposition': `attachment; filename="${safeFilename}"; filename*=UTF-8''${encodeURIComponent(safeFilename)}`,
     'Content-Length': buffer.length.toString(),
     'X-Content-Type-Options': 'nosniff',
   }

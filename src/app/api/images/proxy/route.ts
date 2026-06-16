@@ -3,10 +3,20 @@ import { createImageResponse, createOptionsResponse } from '@/utils/apiResponse'
 import { ApiError } from '@/utils/apiWrapper'
 import { isUnsafeHost } from '@/utils/ssrfProtection'
 import distLimiter from '@/utils/distributedRateLimiter'
+import { parseIntegerParam } from '@/utils/queryParams'
 
 export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
 
 const ALLOWED_PROTOCOLS = new Set(['http:', 'https:'])
+const ALLOWED_IMAGE_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'image/avif',
+])
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024
 
 export async function GET(req: NextRequest) {
   const rateLimiter = await distLimiter.applyRateLimit({
@@ -65,7 +75,7 @@ export async function GET(req: NextRequest) {
       }
       let redirectUrl: URL
       try {
-        redirectUrl = new URL(location)
+        redirectUrl = new URL(location, target)
       } catch {
         return ApiError.badRequest('Invalid redirect URL').toNextResponse()
       }
@@ -82,9 +92,20 @@ export async function GET(req: NextRequest) {
       return ApiError.badRequest(`Upstream error: ${res.status}`).toNextResponse()
     }
 
-    // Derive content type
-    const contentType = res.headers.get('content-type') || 'image/jpeg'
+    const contentType = (res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase()
+    if (!ALLOWED_IMAGE_TYPES.has(contentType)) {
+      return ApiError.badRequest('Upstream response is not a supported image').toNextResponse()
+    }
+
+    const contentLength = parseIntegerParam(res.headers.get('content-length'), 0, { min: 0 })
+    if (contentLength > MAX_IMAGE_BYTES) {
+      return ApiError.badRequest('Upstream image is too large').toNextResponse()
+    }
+
     const buff = Buffer.from(await res.arrayBuffer())
+    if (buff.length > MAX_IMAGE_BYTES) {
+      return ApiError.badRequest('Upstream image is too large').toNextResponse()
+    }
 
     // Cache for 1 day at the CDN/browser level
     return createImageResponse(buff, contentType, {

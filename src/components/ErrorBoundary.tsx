@@ -33,6 +33,13 @@ interface ErrorFallbackProps {
   componentName?: string
 }
 
+const getLocaleAwareHomePath = () => {
+  if (typeof window === 'undefined') return '/'
+
+  const firstSegment = window.location.pathname.split('/').filter(Boolean)[0]
+  return firstSegment === 'ko' || firstSegment === 'en' ? `/${firstSegment}` : '/'
+}
+
 /**
  * 강화된 에러 바운더리 컴포넌트
  * - 에러 추적 및 로깅
@@ -129,9 +136,14 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       buildVersion: process.env.NEXT_PUBLIC_BUILD_VERSION || 'unknown',
     }
 
-    // 실제 로깅 서비스로 전송 (예: Sentry, LogRocket 등)
-    // 여기서는 console.error로 대체
-    console.error('Error logged to service:', errorData)
+    fetch('/api/client-error', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      keepalive: true,
+      body: JSON.stringify(errorData),
+    }).catch(() => {
+      // Error reporting must not trigger another UI failure.
+    })
   }
 
   /**
@@ -154,7 +166,9 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     if (this.state.retryCount < maxRetries && autoRecoveryTime > 0) {
       this.autoRecoveryTimer = setTimeout(() => {
         if (!this.mounted) return
-        console.log(`🔄 Auto-recovery attempt ${this.state.retryCount + 1}/${maxRetries}`)
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`🔄 Auto-recovery attempt ${this.state.retryCount + 1}/${maxRetries}`)
+        }
         this.handleReset()
       }, autoRecoveryTime)
     }
@@ -328,7 +342,7 @@ const DefaultErrorFallback: React.FC<ErrorFallbackProps> = ({
                 페이지 새로고침
               </button>
               <button
-                onClick={() => (window.location.href = '/')}
+                onClick={() => (window.location.href = getLocaleAwareHomePath())}
                 className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors"
               >
                 홈으로 돌아가기

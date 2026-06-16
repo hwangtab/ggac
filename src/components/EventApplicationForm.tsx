@@ -6,6 +6,7 @@ import toast from 'react-hot-toast'
 import FormField from '@/components/FormField'
 import { Link } from '@/i18n/navigation'
 import { getEventFormType } from '@/constants/eventApplicationForms'
+import { isValidEventApplicationPhotoUrl } from '@/utils/eventApplicationValidation'
 
 interface Props {
   eventSlug: string
@@ -79,8 +80,14 @@ export default function EventApplicationForm({ eventSlug }: Props) {
         return
       }
       const json = await res.json()
-      setPhotoUrl(json.data?.url ?? '')
-      if (json.data?.url && errors.photo) {
+      const uploadedPhotoUrl = typeof json.data?.url === 'string' ? json.data.url : ''
+      if (!isValidEventApplicationPhotoUrl(uploadedPhotoUrl)) {
+        toast.error(t('photoError'))
+        return
+      }
+
+      setPhotoUrl(uploadedPhotoUrl)
+      if (errors.photo) {
         setErrors(prev => ({ ...prev, photo: undefined }))
       }
     } catch {
@@ -121,6 +128,7 @@ export default function EventApplicationForm({ eventSlug }: Props) {
     e.preventDefault()
     if (!validate()) return
 
+    const safePhotoUrl = isValidEventApplicationPhotoUrl(photoUrl) ? photoUrl : ''
     setLoading(true)
     try {
       const payload: Record<string, unknown> = {
@@ -142,7 +150,7 @@ export default function EventApplicationForm({ eventSlug }: Props) {
         payload.participation_type = PARTICIPATION_OPTIONS.filter(o =>
           participation.includes(o)
         ).join(',')
-        payload.photo_url = photoUrl || undefined
+        payload.photo_url = safePhotoUrl || undefined
       }
 
       const res = await fetch('/api/event-applications', {
@@ -184,6 +192,7 @@ export default function EventApplicationForm({ eventSlug }: Props) {
 
   const textareaClass =
     'w-full rounded-lg border border-gray-300 px-4 py-3 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all duration-200 resize-none'
+  const safePhotoUrl = isValidEventApplicationPhotoUrl(photoUrl) ? photoUrl : ''
 
   return (
     <form onSubmit={handleSubmit} noValidate className="space-y-5">
@@ -316,7 +325,7 @@ export default function EventApplicationForm({ eventSlug }: Props) {
               >
                 {photoUploading ? t('photoUploading') : t('photoButton')}
               </button>
-              {photoUrl && (
+              {safePhotoUrl && (
                 <button
                   type="button"
                   onClick={() => setPhotoUrl('')}
@@ -333,9 +342,9 @@ export default function EventApplicationForm({ eventSlug }: Props) {
               className="hidden"
               onChange={handleFileChange}
             />
-            {photoUrl && (
+            {safePhotoUrl && (
               <img
-                src={photoUrl}
+                src={safePhotoUrl}
                 alt="상품 미리보기"
                 className="mt-2 h-40 w-auto rounded-lg object-cover border border-gray-200"
               />

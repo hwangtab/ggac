@@ -79,6 +79,8 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
   const previewCanvasRef = useRef<HTMLCanvasElement>(null)
   const cropDialogRef = useRef<HTMLDivElement>(null)
   const cropCloseButtonRef = useRef<HTMLButtonElement>(null)
+  const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const resetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // 크기별 스타일 설정
   const sizeClasses = {
@@ -92,6 +94,18 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
     medium: 'w-5 h-5',
     large: 'w-6 h-6',
   }
+
+  const clearUploadTimers = useCallback(() => {
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current)
+      progressIntervalRef.current = null
+    }
+
+    if (resetTimeoutRef.current) {
+      clearTimeout(resetTimeoutRef.current)
+      resetTimeoutRef.current = null
+    }
+  }, [])
 
   // 파일 유효성 검사
   const validateFile = useCallback((file: File): string | null => {
@@ -387,10 +401,11 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
         progress: 0,
         error: undefined,
       }))
+      clearUploadTimers()
 
       try {
         // 진행률 시뮬레이션
-        const progressInterval = setInterval(() => {
+        progressIntervalRef.current = setInterval(() => {
           setUploadState(prev => ({
             ...prev,
             progress: Math.min(prev.progress + 10, 90),
@@ -400,7 +415,10 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
         // 실제 업로드 (이미지 메타데이터 포함)
         const response = await uploadProfilePhoto(file, cropSettings, imageMetadata)
 
-        clearInterval(progressInterval)
+        if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current)
+          progressIntervalRef.current = null
+        }
 
         setUploadState({
           isUploading: false,
@@ -411,15 +429,21 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
         onUploadComplete?.(response)
 
         // 상태 초기화
-        setTimeout(() => {
+        resetTimeoutRef.current = setTimeout(() => {
           setUploadState({
             isUploading: false,
             progress: 0,
           })
           setSelectedFile(null)
           setShowCropModal(false)
+          resetTimeoutRef.current = null
         }, 1000)
       } catch (error) {
+        if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current)
+          progressIntervalRef.current = null
+        }
+
         console.error('Profile photo upload failed:', error)
 
         const errorMessage = error instanceof Error ? error.message : 'Upload failed'
@@ -433,8 +457,12 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
         onUploadError?.(errorMessage)
       }
     },
-    [uploadProfilePhoto, onUploadComplete, onUploadError]
+    [clearUploadTimers, uploadProfilePhoto, onUploadComplete, onUploadError]
   )
+
+  useEffect(() => {
+    return clearUploadTimers
+  }, [clearUploadTimers])
 
   // 파일 선택 처리
   const handleFileSelect = useCallback(

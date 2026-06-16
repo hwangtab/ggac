@@ -1,9 +1,22 @@
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { createLogger } from '@/utils/logger'
+
+const log = createLogger('api/auth/verify-session')
 
 // Force dynamic rendering to avoid static generation issues with cookies
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+
+function isMissingSessionError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+
+  const authError = error as { name?: string; message?: string }
+  return (
+    authError.name === 'AuthSessionMissingError' ||
+    authError.message?.includes('Auth session missing') === true
+  )
+}
 
 export async function GET() {
   try {
@@ -16,7 +29,18 @@ export async function GET() {
     } = await supabase.auth.getUser()
 
     if (sessionError) {
-      console.error('[VERIFY-SESSION] Session error:', sessionError)
+      if (isMissingSessionError(sessionError)) {
+        log.debug('No session found')
+        return NextResponse.json(
+          {
+            authenticated: false,
+            error: 'No session found',
+          },
+          { status: 401 }
+        )
+      }
+
+      log.warn('Session error', sessionError)
       return NextResponse.json(
         {
           authenticated: false,
@@ -27,7 +51,7 @@ export async function GET() {
     }
 
     if (!user) {
-      console.log('[VERIFY-SESSION] No session found')
+      log.debug('No session found')
       return NextResponse.json(
         {
           authenticated: false,
@@ -40,7 +64,9 @@ export async function GET() {
     // 추가로 member_profiles 확인
     const { data: profile, error: profileError } = await supabase
       .from('member_profiles')
-      .select('registration_status, is_active, display_name')
+      .select(
+        'registration_status, is_active, display_name, is_admin, is_artist, artist_id, is_director, is_auditor'
+      )
       .eq('id', user.id)
       .single()
 
@@ -49,7 +75,11 @@ export async function GET() {
       return NextResponse.json(
         {
           authenticated: true,
-          user: { id: user.id, email: user.email },
+          user: {
+            id: user.id,
+            email: user.email,
+            email_confirmed_at: user.email_confirmed_at,
+          },
           profile: null,
           error: 'Profile not found',
         },
@@ -60,7 +90,11 @@ export async function GET() {
     return NextResponse.json(
       {
         authenticated: true,
-        user: { id: user.id, email: user.email },
+        user: {
+          id: user.id,
+          email: user.email,
+          email_confirmed_at: user.email_confirmed_at,
+        },
         profile: profile,
       },
       { status: 200 }

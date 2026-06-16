@@ -3,29 +3,35 @@
 // 정적 생성 방지 - 인증이 필요한 동적 페이지
 export const dynamic = 'force-dynamic'
 
-import { useState, useEffect } from 'react'
-import { Link } from '@/i18n/navigation'
+import { useState, useEffect, useRef } from 'react'
+import { Link, useRouter } from '@/i18n/navigation'
 import { useTranslations, useLocale } from 'next-intl'
-import { supabase } from '@/lib/supabase/client'
+import { fetchSessionProfile } from '@/utils/sessionProfile'
 
 export default function PendingPage() {
   const t = useTranslations('auth')
   const locale = useLocale()
+  const router = useRouter()
   const dateLocale = locale === 'en' ? 'en-US' : 'ko-KR'
   const [userEmail, setUserEmail] = useState<string>('')
   const [emailVerified, setEmailVerified] = useState<boolean | null>(null)
   const [checkingStatus, setCheckingStatus] = useState(false)
   const [lastChecked, setLastChecked] = useState<Date | null>(null)
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     // 현재 사용자 정보 가져오기
     const getCurrentUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (user) {
-        setUserEmail(user.email || '')
-        setEmailVerified(!!user.email_confirmed_at)
+      const session = await fetchSessionProfile()
+      if (mountedRef.current && session.user) {
+        setUserEmail(session.user.email || '')
+        setEmailVerified(!!session.user.email_confirmed_at)
       }
     }
 
@@ -37,47 +43,48 @@ export default function PendingPage() {
     setLastChecked(new Date())
 
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (!user) {
+      const session = await fetchSessionProfile()
+      if (!mountedRef.current) {
+        return
+      }
+
+      if (!session.user) {
         alert(t('pending.alertLoginRequired'))
         return
       }
 
       // 이메일 인증 상태 업데이트
-      setEmailVerified(!!user.email_confirmed_at)
+      setEmailVerified(!!session.user.email_confirmed_at)
 
-      if (!user.email_confirmed_at) {
+      if (!session.user.email_confirmed_at) {
         alert(t('pending.alertEmailRequired'))
         return
       }
 
-      const { data: profile, error } = await supabase
-        .from('member_profiles')
-        .select('registration_status, is_active')
-        .eq('id', user.id)
-        .single()
+      const profile = session.profile
 
-      if (error) {
-        console.error('프로필 확인 오류:', error)
+      if (!profile) {
         alert(t('pending.alertError'))
         return
       }
 
-      if ((profile as any)?.registration_status === 'approved' && (profile as any)?.is_active) {
+      if (profile.registration_status === 'approved' && profile.is_active) {
         alert(t('pending.alertApproved'))
-        window.location.href = '/board'
-      } else if ((profile as any)?.registration_status === 'rejected') {
+        router.push('/board')
+      } else if (profile.registration_status === 'rejected') {
         alert(t('pending.alertRejected'))
       } else {
         alert(t('pending.alertPending'))
       }
     } catch (error) {
       console.error('상태 확인 오류:', error)
-      alert(t('pending.alertError'))
+      if (mountedRef.current) {
+        alert(t('pending.alertError'))
+      }
     } finally {
-      setCheckingStatus(false)
+      if (mountedRef.current) {
+        setCheckingStatus(false)
+      }
     }
   }
 

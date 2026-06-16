@@ -1,11 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import type { User } from '@supabase/supabase-js'
+import { useState, useEffect, useRef } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useRouter, Link } from '@/i18n/navigation'
 import { useTranslations } from 'next-intl'
 import { supabase } from '@/lib/supabase/client'
 import { useStablePageLoad, useSafeNavigation } from '@/utils/routeProtection'
+import { toSafeInternalRedirectPath } from '@/utils/safeUrl'
+import { fetchSessionProfile, type VerifiedSessionUser } from '@/utils/sessionProfile'
 
 type MessageType = 'error' | 'warning' | 'success' | 'loading'
 
@@ -17,17 +19,26 @@ export default function LoginPage() {
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState<MessageType>('error')
   const [isAlreadyLoggedIn, setIsAlreadyLoggedIn] = useState(false)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [currentUser, setCurrentUser] = useState<
-    (User & { profile?: { display_name?: string } }) | null
+    (VerifiedSessionUser & { profile?: { display_name?: string | null } }) | null
   >(null)
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { isLoading: pageLoading, isReady } = useStablePageLoad('/login')
   const { navigateWithRetry } = useSafeNavigation()
+  const postLoginRedirectPath = toSafeInternalRedirectPath(searchParams.get('redirect'), '/board')
+  const authRedirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const setMsg = (msg: string, type: MessageType) => {
     setMessage(msg)
     setMessageType(type)
+  }
+
+  const clearAuthRedirectTimer = () => {
+    if (authRedirectTimerRef.current) {
+      clearTimeout(authRedirectTimerRef.current)
+      authRedirectTimerRef.current = null
+    }
   }
 
   // 모바일 디바이스 감지 함수 (waitForAuthStateAndRedirect에서 사용)
@@ -54,26 +65,15 @@ export default function LoginPage() {
 
   // 페이지 로드 시 현재 인증 상태 확인
   useEffect(() => {
+    let mounted = true
+
     const checkAuthStatus = async () => {
       try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
+        const session = await fetchSessionProfile()
 
-        if (session?.user) {
+        if (mounted && session.user) {
           setIsAlreadyLoggedIn(true)
-          setCurrentUser(session.user)
-
-          // 사용자 프로필 정보 가져오기
-          const { data: profile } = await supabase
-            .from('member_profiles')
-            .select('registration_status, is_active, display_name')
-            .eq('id', session.user.id)
-            .single()
-
-          if (profile) {
-            setCurrentUser({ ...session.user, profile })
-          }
+          setCurrentUser({ ...session.user, profile: session.profile ?? undefined })
         }
       } catch (error) {
         console.error('인증 상태 확인 중 오류:', error)
@@ -81,71 +81,33 @@ export default function LoginPage() {
     }
 
     checkAuthStatus()
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  useEffect(() => {
+    return clearAuthRedirectTimer
   }, [])
 
   // 안전한 리다이렉트 함수 (모바일 최적화 버전)
   const waitForAuthStateAndRedirect = async () => {
     try {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🔄 [LOGIN DEBUG] Starting auth state confirmation...')
-      }
       setMsg(t('login.msgLoggingIn'), 'loading')
 
       const isMobile = isMobileDeviceForAuth()
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`📱 [LOGIN DEBUG] Mobile device detected: ${isMobile}`)
-      }
 
       // 모바일에서는 더 긴 재시도 로직 (네트워크 불안정성 고려)
-      let session: any = null
-      let profile: any = null
+      let session: Awaited<ReturnType<typeof fetchSessionProfile>> | null = null
       let retries = 0
       const maxRetries = isMobile ? 5 : 3
       const retryDelay = isMobile ? 500 : 200
-      let lastProfileError: any = null
 
       while (retries < maxRetries) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log(
-            `🔄 [LOGIN DEBUG] Session check attempt ${retries + 1}/${maxRetries} (Mobile: ${isMobile})`
-          )
-        }
+        const currentSession = await fetchSessionProfile()
 
-        const {
-          data: { session: currentSession },
-          error: sessionError,
-        } = await supabase.auth.getSession()
-
-        if (currentSession && !sessionError) {
+        if (currentSession.user) {
           session = currentSession
-          // 프로필 확인은 시도하되, 실패하더라도 리다이렉트는 진행 (미들웨어가 최종 판정)
-          try {
-            const { data: currentProfile, error: profileError } = await supabase
-              .from('member_profiles')
-              .select('registration_status, is_active, display_name')
-              .eq('id', currentSession.user.id)
-              .single()
-            if (currentProfile && !profileError) {
-              profile = currentProfile
-              if (process.env.NODE_ENV === 'development') {
-                console.log('✅ [LOGIN DEBUG] Session and profile confirmed')
-              }
-            } else {
-              lastProfileError = profileError
-              if (process.env.NODE_ENV === 'development') {
-                console.log(
-                  '⚠️ [LOGIN DEBUG] Profile fetch failed, will fallback to middleware redirect'
-                )
-              }
-            }
-          } catch (e) {
-            lastProfileError = e
-            if (process.env.NODE_ENV === 'development') {
-              console.log(
-                '⚠️ [LOGIN DEBUG] Profile fetch exception, will fallback to middleware redirect'
-              )
-            }
-          }
           break
         }
 
@@ -157,53 +119,42 @@ export default function LoginPage() {
 
       // 세션이 확인되면, 프로필 여부와 관계없이 우선 라우팅
       if (!session) {
-        if (process.env.NODE_ENV === 'development') {
-          console.error('❌ [LOGIN DEBUG] No session confirmed - falling back to direct navigation')
-        }
         // 세션 확인이 지연되어도 라우팅을 트리거해 미들웨어로 판정 위임
-        navigateWithRetry('/board', isMobile ? 5 : 3)
+        navigateWithRetry(postLoginRedirectPath, isMobile ? 5 : 3)
         return
       }
 
       // 프로필이 있으면 상태에 맞춰 라우팅, 없으면 게시판으로 위임
+      const profile = session.profile
+
       if (profile && profile.registration_status === 'approved' && profile.is_active) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log('🎯 [LOGIN DEBUG] Approved user, redirecting to board...')
-        }
         setMsg(t('login.msgVerified'), 'success')
 
         // 모바일에서의 세션 동기화를 고려한 지연 후 안전한 네비게이션
         const redirectDelay = isMobile ? 800 : 300
-        setTimeout(() => {
-          if (process.env.NODE_ENV === 'development') {
-            console.log('🚀 [LOGIN DEBUG] Redirecting to board with retry...')
-          }
-          navigateWithRetry('/board', isMobile ? 5 : 3)
+        clearAuthRedirectTimer()
+        authRedirectTimerRef.current = setTimeout(() => {
+          navigateWithRetry(postLoginRedirectPath, isMobile ? 5 : 3)
+          authRedirectTimerRef.current = null
         }, redirectDelay)
       } else if (profile && profile.registration_status === 'pending') {
-        console.log('⏳ [LOGIN DEBUG] Pending user, redirecting to pending page...')
         setMsg(t('login.msgPending'), 'loading')
         router.push('/register/pending')
       } else if (profile && profile.registration_status === 'rejected') {
-        console.log('❌ [LOGIN DEBUG] Rejected user, redirecting to rejected page...')
         setMsg(t('login.msgRejected'), 'error')
         router.push('/register/rejected')
       } else {
         // 프로필을 못가져오거나 알 수 없는 상태: 게시판으로 보내고 미들웨어에 판정 위임
-        if (process.env.NODE_ENV === 'development') {
-          console.log(
-            '❓ [LOGIN DEBUG] Profile missing or unknown - navigating to board and delegating to middleware',
-            lastProfileError
-          )
-        }
-        navigateWithRetry('/board', isMobile ? 5 : 3)
+        navigateWithRetry(postLoginRedirectPath, isMobile ? 5 : 3)
       }
     } catch (error) {
-      console.error('💥 [LOGIN DEBUG] Error during auth state confirmation:', error)
+      console.error('로그인 후 인증 상태 확인 중 오류:', error)
       setMsg(t('login.msgAuthError'), 'error')
       // 에러 발생 시 3초 후 홈으로 이동
-      setTimeout(() => {
+      clearAuthRedirectTimer()
+      authRedirectTimerRef.current = setTimeout(() => {
         router.push('/')
+        authRedirectTimerRef.current = null
       }, 3000)
     }
   }
@@ -244,7 +195,7 @@ export default function LoginPage() {
           signal: AbortSignal.timeout(2000), // 2초 타임아웃
           body: JSON.stringify({
             action_type: 'login',
-            target_type: 'auth',
+            target_type: 'system',
             metadata: {
               user_agent: navigator.userAgent,
               timestamp: new Date().toISOString(),
@@ -434,7 +385,10 @@ export default function LoginPage() {
                 })}
               </p>
               <div className="space-y-3">
-                <button onClick={() => router.push('/board')} className="w-full tw-btn-primary">
+                <button
+                  onClick={() => router.push(postLoginRedirectPath)}
+                  className="w-full tw-btn-primary"
+                >
                   {t('login.goToBoard')}
                 </button>
                 <button onClick={() => router.push('/mypage')} className="w-full tw-btn-secondary">

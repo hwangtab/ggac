@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, memo } from 'react'
 import Image from 'next/image'
 import { createImageProxy } from '@/utils/imageValidation'
+import { getSafeHostname, toSafeHttpUrl } from '@/utils/safeUrl'
 import { useTranslations, useLocale } from 'next-intl'
 import type { TicketingInfo, LinkPreview, TicketingCardProps } from '@/types'
 
@@ -10,14 +11,21 @@ const TicketingCard = ({ ticketing }: TicketingCardProps) => {
   const t = useTranslations('archive')
   const locale = useLocale()
   const dateLocale = locale === 'en' ? 'en-US' : 'ko-KR'
+  const safeTicketingUrl = toSafeHttpUrl(ticketing.url)
+  const hostname = getSafeHostname(ticketing.url)
   const [preview, setPreview] = useState<LinkPreview | null>(ticketing.preview || null)
-  const [isLoading, setIsLoading] = useState(!ticketing.preview)
+  const [isLoading, setIsLoading] = useState(!ticketing.preview && !!safeTicketingUrl)
   const [hasError, setHasError] = useState(false)
 
   const fetchPreview = useCallback(async () => {
+    if (!safeTicketingUrl) {
+      setIsLoading(false)
+      return
+    }
+
     try {
       setIsLoading(true)
-      const response = await fetch(`/api/link-preview?url=${encodeURIComponent(ticketing.url)}`)
+      const response = await fetch(`/api/link-preview?url=${encodeURIComponent(safeTicketingUrl)}`)
 
       if (response.ok) {
         const previewData = await response.json()
@@ -32,7 +40,7 @@ const TicketingCard = ({ ticketing }: TicketingCardProps) => {
     } finally {
       setIsLoading(false)
     }
-  }, [ticketing.url])
+  }, [safeTicketingUrl])
 
   useEffect(() => {
     if (!ticketing.preview && ticketing.url) {
@@ -88,39 +96,76 @@ const TicketingCard = ({ ticketing }: TicketingCardProps) => {
   }
 
   if (hasError || !preview) {
+    const content = (
+      <>
+        <div className="aspect-video bg-gradient-to-br from-primary-100 to-accent-100 flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-2xl mb-2">🎫</div>
+            <div className="text-primary-600 font-medium">{ticketing.platform}</div>
+          </div>
+        </div>
+        <div className="p-4">
+          <div className="flex justify-between items-start mb-2">
+            <h4 className="font-semibold text-gray-900 truncate flex-1 mr-2">
+              {ticketing.platform}
+            </h4>
+            <span
+              className={`px-2 py-1 text-xs rounded-full whitespace-nowrap ${getStatusColor()}`}
+            >
+              {getStatusText()}
+            </span>
+          </div>
+          <p className="text-gray-600 text-sm">{t('ticketing.goToBooking')}</p>
+          <div className="mt-2 text-xs text-gray-500 truncate">
+            {hostname || ticketing.platform}
+          </div>
+        </div>
+      </>
+    )
+
     return (
       <div className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow">
-        <a href={ticketing.url} target="_blank" rel="noopener noreferrer" className="block">
-          <div className="aspect-video bg-gradient-to-br from-primary-100 to-accent-100 flex items-center justify-center">
-            <div className="text-center">
-              <div className="text-2xl mb-2">🎫</div>
-              <div className="text-primary-600 font-medium">{ticketing.platform}</div>
-            </div>
+        {safeTicketingUrl ? (
+          <a href={safeTicketingUrl} target="_blank" rel="noopener noreferrer" className="block">
+            {content}
+          </a>
+        ) : (
+          <div className="block">{content}</div>
+        )}
+      </div>
+    )
+  }
+
+  if (!safeTicketingUrl) {
+    return (
+      <div className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow">
+        <div className="aspect-video bg-gradient-to-br from-primary-100 to-accent-100 flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-2xl mb-2">🎫</div>
+            <div className="text-primary-600 font-medium">{ticketing.platform}</div>
           </div>
-          <div className="p-4">
-            <div className="flex justify-between items-start mb-2">
-              <h4 className="font-semibold text-gray-900 truncate flex-1 mr-2">
-                {ticketing.platform}
-              </h4>
-              <span
-                className={`px-2 py-1 text-xs rounded-full whitespace-nowrap ${getStatusColor()}`}
-              >
-                {getStatusText()}
-              </span>
-            </div>
-            <p className="text-gray-600 text-sm">{t('ticketing.goToBooking')}</p>
-            <div className="mt-2 text-xs text-gray-500 truncate">
-              {new URL(ticketing.url).hostname}
-            </div>
+        </div>
+        <div className="p-4">
+          <div className="flex justify-between items-start mb-2">
+            <h4 className="font-semibold text-gray-900 truncate flex-1 mr-2">
+              {ticketing.platform}
+            </h4>
+            <span
+              className={`px-2 py-1 text-xs rounded-full whitespace-nowrap ${getStatusColor()}`}
+            >
+              {getStatusText()}
+            </span>
           </div>
-        </a>
+          <p className="text-gray-600 text-sm">{t('ticketing.goToBooking')}</p>
+          <div className="mt-2 text-xs text-gray-500 truncate">{ticketing.platform}</div>
+        </div>
       </div>
     )
   }
 
   return (
     <div className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow">
-      <a href={ticketing.url} target="_blank" rel="noopener noreferrer" className="block">
+      <a href={safeTicketingUrl} target="_blank" rel="noopener noreferrer" className="block">
         {preview.image ? (
           <div className="aspect-video bg-gray-100 relative">
             <Image
@@ -207,9 +252,7 @@ const TicketingCard = ({ ticketing }: TicketingCardProps) => {
                   />
                 </div>
               )}
-              <span className="truncate">
-                {preview.siteName || new URL(ticketing.url).hostname}
-              </span>
+              <span className="truncate">{preview.siteName || hostname || ticketing.platform}</span>
             </div>
           </div>
         </div>

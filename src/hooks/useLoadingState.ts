@@ -54,11 +54,15 @@ const DEFAULT_OPTIONS: Partial<AsyncOperationOptions> = {
   enableLogging: false,
 }
 
+const isLoadingStateLoggingEnabled = (options: Partial<AsyncOperationOptions>) =>
+  options.enableLogging && process.env.NODE_ENV === 'development'
+
 /**
  * 단일 작업 로딩 상태 관리 훅
  */
 export function useLoadingState(initialOptions?: Partial<AsyncOperationOptions>) {
   const options = useMemo(() => ({ ...DEFAULT_OPTIONS, ...initialOptions }), [initialOptions])
+  const shouldLogLoadingState = options.enableLogging && process.env.NODE_ENV === 'development'
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const [state, setState] = useState<LoadingState>({
@@ -70,45 +74,62 @@ export function useLoadingState(initialOptions?: Partial<AsyncOperationOptions>)
   })
 
   // 로딩 시작
-  const startLoading = useCallback(() => {
-    const startTime = new Date()
+  const startLoading = useCallback(
+    (effectiveOptions: Partial<AsyncOperationOptions> = options) => {
+      const startTime = new Date()
+      const shouldLog =
+        effectiveOptions === options
+          ? shouldLogLoadingState
+          : isLoadingStateLoggingEnabled(effectiveOptions)
 
-    setState(prev => ({
-      ...prev,
-      isLoading: true,
-      error: options.clearErrorOnRetry ? null : prev.error,
-      startTime,
-      duration: null,
-    }))
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+        timeoutRef.current = null
+      }
 
-    // 타임아웃 설정
-    if (options.timeout && options.timeout > 0) {
-      timeoutRef.current = setTimeout(() => {
-        setState(prev => ({
-          ...prev,
-          isLoading: false,
-          error: '요청이 시간 초과되었습니다.',
-          lastUpdated: new Date(),
-          duration: Date.now() - startTime.getTime(),
-        }))
+      setState(prev => ({
+        ...prev,
+        isLoading: true,
+        error: effectiveOptions.clearErrorOnRetry ? null : prev.error,
+        startTime,
+        duration: null,
+      }))
 
-        if (options.enableLogging) {
-          console.warn('[LoadingState] Operation timed out after', options.timeout, 'ms')
-        }
-      }, options.timeout)
-    }
+      // 타임아웃 설정
+      if (effectiveOptions.timeout && effectiveOptions.timeout > 0) {
+        timeoutRef.current = setTimeout(() => {
+          setState(prev => ({
+            ...prev,
+            isLoading: false,
+            error: '요청이 시간 초과되었습니다.',
+            lastUpdated: new Date(),
+            duration: Date.now() - startTime.getTime(),
+          }))
 
-    if (options.enableLogging) {
-      console.log('[LoadingState] Started loading')
-    }
-  }, [options])
+          if (shouldLog) {
+            console.warn('[LoadingState] Operation timed out after', effectiveOptions.timeout, 'ms')
+          }
+        }, effectiveOptions.timeout)
+      }
+
+      if (shouldLog) {
+        console.log('[LoadingState] Started loading')
+      }
+    },
+    [options, shouldLogLoadingState]
+  )
 
   // 로딩 완료 (성공)
   const finishLoading = useCallback(
-    (result?: any) => {
+    (result?: any, effectiveOptions: Partial<AsyncOperationOptions> = options) => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current)
+        timeoutRef.current = null
       }
+      const shouldLog =
+        effectiveOptions === options
+          ? shouldLogLoadingState
+          : isLoadingStateLoggingEnabled(effectiveOptions)
 
       setState(prev => {
         const duration = prev.startTime ? Date.now() - prev.startTime.getTime() : null
@@ -120,32 +141,37 @@ export function useLoadingState(initialOptions?: Partial<AsyncOperationOptions>)
           duration,
         }
 
-        if (options.enableLogging) {
+        if (shouldLog) {
           console.log('[LoadingState] Finished loading in', duration, 'ms')
         }
 
         return newState
       })
 
-      if (options.onSuccess) {
-        options.onSuccess(result)
+      if (effectiveOptions.onSuccess) {
+        effectiveOptions.onSuccess(result)
       }
 
-      if (options.onComplete) {
-        options.onComplete()
+      if (effectiveOptions.onComplete) {
+        effectiveOptions.onComplete()
       }
     },
-    [options]
+    [options, shouldLogLoadingState]
   )
 
   // 로딩 실패
   const failLoading = useCallback(
-    (error: string | Error) => {
+    (error: string | Error, effectiveOptions: Partial<AsyncOperationOptions> = options) => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current)
+        timeoutRef.current = null
       }
 
       const errorMessage = error instanceof Error ? error.message : error
+      const shouldLog =
+        effectiveOptions === options
+          ? shouldLogLoadingState
+          : isLoadingStateLoggingEnabled(effectiveOptions)
 
       setState(prev => {
         const duration = prev.startTime ? Date.now() - prev.startTime.getTime() : null
@@ -157,23 +183,23 @@ export function useLoadingState(initialOptions?: Partial<AsyncOperationOptions>)
           duration,
         }
 
-        if (options.enableLogging) {
+        if (shouldLog) {
           console.error('[LoadingState] Failed after', duration, 'ms:', errorMessage)
         }
 
         return newState
       })
 
-      if (options.onError) {
+      if (effectiveOptions.onError) {
         const errorObj = error instanceof Error ? error : new Error(errorMessage)
-        options.onError(errorObj)
+        effectiveOptions.onError(errorObj)
       }
 
-      if (options.onComplete) {
-        options.onComplete()
+      if (effectiveOptions.onComplete) {
+        effectiveOptions.onComplete()
       }
     },
-    [options]
+    [options, shouldLogLoadingState]
   )
 
   // 에러 상태 초기화
@@ -185,6 +211,7 @@ export function useLoadingState(initialOptions?: Partial<AsyncOperationOptions>)
   const reset = useCallback(() => {
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current)
+      timeoutRef.current = null
     }
 
     setState({
@@ -195,10 +222,10 @@ export function useLoadingState(initialOptions?: Partial<AsyncOperationOptions>)
       duration: null,
     })
 
-    if (options.enableLogging) {
+    if (shouldLogLoadingState) {
       console.log('[LoadingState] Reset state')
     }
-  }, [options])
+  }, [options, shouldLogLoadingState])
 
   // 비동기 작업 래퍼
   const executeAsync = useCallback(
@@ -209,12 +236,12 @@ export function useLoadingState(initialOptions?: Partial<AsyncOperationOptions>)
       const mergedOptions = { ...options, ...operationOptions }
 
       try {
-        startLoading()
+        startLoading(mergedOptions)
         const result = await operation()
-        finishLoading(result)
+        finishLoading(result, mergedOptions)
         return result
       } catch (error) {
-        failLoading(error as Error)
+        failLoading(error as Error, mergedOptions)
         throw error
       }
     },
@@ -226,6 +253,7 @@ export function useLoadingState(initialOptions?: Partial<AsyncOperationOptions>)
     return () => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current)
+        timeoutRef.current = null
       }
     }
   }, [])
@@ -246,6 +274,7 @@ export function useLoadingState(initialOptions?: Partial<AsyncOperationOptions>)
  */
 export function useMultiLoadingState(globalOptions?: Partial<AsyncOperationOptions>) {
   const options = useMemo(() => ({ ...DEFAULT_OPTIONS, ...globalOptions }), [globalOptions])
+  const shouldLogLoadingState = options.enableLogging && process.env.NODE_ENV === 'development'
   const timeoutRefs = useRef<Record<string, NodeJS.Timeout>>({})
 
   const [state, setState] = useState<MultiLoadingState>({
@@ -267,15 +296,19 @@ export function useMultiLoadingState(globalOptions?: Partial<AsyncOperationOptio
 
   // 특정 키의 로딩 시작
   const startLoading = useCallback(
-    (key: string) => {
+    (key: string, effectiveOptions: Partial<AsyncOperationOptions> = options) => {
       const startTime = new Date()
+      const shouldLog =
+        effectiveOptions === options
+          ? shouldLogLoadingState
+          : isLoadingStateLoggingEnabled(effectiveOptions)
 
       setState(prev => {
         const newStates = {
           ...prev.states,
           [key]: {
             isLoading: true,
-            error: options.clearErrorOnRetry ? null : prev.states[key]?.error || null,
+            error: effectiveOptions.clearErrorOnRetry ? null : prev.states[key]?.error || null,
             lastUpdated: null,
             startTime,
             duration: null,
@@ -290,30 +323,34 @@ export function useMultiLoadingState(globalOptions?: Partial<AsyncOperationOptio
       })
 
       // 타임아웃 설정
-      if (options.timeout && options.timeout > 0) {
+      if (effectiveOptions.timeout && effectiveOptions.timeout > 0) {
         if (timeoutRefs.current[key]) {
           clearTimeout(timeoutRefs.current[key])
         }
 
         timeoutRefs.current[key] = setTimeout(() => {
-          failLoading(key, '요청이 시간 초과되었습니다.')
-        }, options.timeout)
+          failLoading(key, '요청이 시간 초과되었습니다.', effectiveOptions)
+        }, effectiveOptions.timeout)
       }
 
-      if (options.enableLogging) {
+      if (shouldLog) {
         console.log(`[MultiLoadingState] Started loading for key: ${key}`)
       }
     },
-    [options, calculateGlobalState]
+    [options, calculateGlobalState, shouldLogLoadingState]
   )
 
   // 특정 키의 로딩 완료
   const finishLoading = useCallback(
-    (key: string, result?: any) => {
+    (key: string, result?: any, effectiveOptions: Partial<AsyncOperationOptions> = options) => {
       if (timeoutRefs.current[key]) {
         clearTimeout(timeoutRefs.current[key])
         delete timeoutRefs.current[key]
       }
+      const shouldLog =
+        effectiveOptions === options
+          ? shouldLogLoadingState
+          : isLoadingStateLoggingEnabled(effectiveOptions)
 
       setState(prev => {
         const currentState = prev.states[key]
@@ -332,7 +369,7 @@ export function useMultiLoadingState(globalOptions?: Partial<AsyncOperationOptio
           },
         }
 
-        if (options.enableLogging) {
+        if (shouldLog) {
           console.log(`[MultiLoadingState] Finished loading for key: ${key} in ${duration}ms`)
         }
 
@@ -343,22 +380,30 @@ export function useMultiLoadingState(globalOptions?: Partial<AsyncOperationOptio
         }
       })
 
-      if (options.onSuccess) {
-        options.onSuccess(result)
+      if (effectiveOptions.onSuccess) {
+        effectiveOptions.onSuccess(result)
       }
     },
-    [options, calculateGlobalState]
+    [options, calculateGlobalState, shouldLogLoadingState]
   )
 
   // 특정 키의 로딩 실패
   const failLoading = useCallback(
-    (key: string, error: string | Error) => {
+    (
+      key: string,
+      error: string | Error,
+      effectiveOptions: Partial<AsyncOperationOptions> = options
+    ) => {
       if (timeoutRefs.current[key]) {
         clearTimeout(timeoutRefs.current[key])
         delete timeoutRefs.current[key]
       }
 
       const errorMessage = error instanceof Error ? error.message : error
+      const shouldLog =
+        effectiveOptions === options
+          ? shouldLogLoadingState
+          : isLoadingStateLoggingEnabled(effectiveOptions)
 
       setState(prev => {
         const currentState = prev.states[key]
@@ -377,7 +422,7 @@ export function useMultiLoadingState(globalOptions?: Partial<AsyncOperationOptio
           },
         }
 
-        if (options.enableLogging) {
+        if (shouldLog) {
           console.error(
             `[MultiLoadingState] Failed loading for key: ${key} after ${duration}ms:`,
             errorMessage
@@ -391,12 +436,12 @@ export function useMultiLoadingState(globalOptions?: Partial<AsyncOperationOptio
         }
       })
 
-      if (options.onError) {
+      if (effectiveOptions.onError) {
         const errorObj = error instanceof Error ? error : new Error(errorMessage)
-        options.onError(errorObj)
+        effectiveOptions.onError(errorObj)
       }
     },
-    [options, calculateGlobalState]
+    [options, calculateGlobalState, shouldLogLoadingState]
   )
 
   // 특정 키의 에러 초기화
@@ -454,11 +499,11 @@ export function useMultiLoadingState(globalOptions?: Partial<AsyncOperationOptio
         })
       }
 
-      if (options.enableLogging) {
+      if (shouldLogLoadingState) {
         console.log(`[MultiLoadingState] Reset ${key ? `key: ${key}` : 'all states'}`)
       }
     },
-    [options, calculateGlobalState]
+    [options, calculateGlobalState, shouldLogLoadingState]
   )
 
   // 비동기 작업 래퍼
@@ -471,12 +516,12 @@ export function useMultiLoadingState(globalOptions?: Partial<AsyncOperationOptio
       const mergedOptions = { ...options, ...operationOptions }
 
       try {
-        startLoading(key)
+        startLoading(key, mergedOptions)
         const result = await operation()
-        finishLoading(key, result)
+        finishLoading(key, result, mergedOptions)
         return result
       } catch (error) {
-        failLoading(key, error as Error)
+        failLoading(key, error as Error, mergedOptions)
         throw error
       }
     },

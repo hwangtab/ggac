@@ -1,8 +1,9 @@
 'use client'
 
 import { memo, ReactNode } from 'react'
-import Link from 'next/link'
+import { Link } from '@/i18n/navigation'
 import OptimizedImage from '@/components/OptimizedImage'
+import { toSafeInternalImagePath } from '@/utils/safeUrl'
 import type { OptimizedImageProps } from '@/types'
 
 export interface BaseCardProps {
@@ -79,6 +80,7 @@ const BaseCard = memo(function BaseCard({
   // 이미지 렌더링
   const renderImage = () => {
     if (!image) return null
+    const safeImageSrc = toSafeInternalImagePath(image.src)
 
     const imageClasses = {
       top: 'w-full h-48',
@@ -91,7 +93,7 @@ const BaseCard = memo(function BaseCard({
         className={`relative overflow-hidden ${imageClasses[imagePosition]} ${imagePosition === 'top' ? 'flex-shrink-0' : ''}`}
       >
         <OptimizedImage
-          src={image.src}
+          src={safeImageSrc}
           alt={image.alt}
           width={image.width || 600}
           height={image.height || 400}

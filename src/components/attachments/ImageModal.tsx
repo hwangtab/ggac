@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { FiX } from 'react-icons/fi'
 import type { PostAttachment } from '@/types'
+import { isProjectStoragePublicUrl } from '@/utils/storageUrlValidation'
 
 interface ImageModalProps {
   attachment: PostAttachment
@@ -13,6 +14,9 @@ export const ImageModal: React.FC<ImageModalProps> = ({ attachment, onClose }) =
   const dialogRef = useRef<HTMLDivElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const [previousFocus, setPreviousFocus] = useState<HTMLElement | null>(null)
+  const safeFileUrl = isProjectStoragePublicUrl(attachment.file_url, 'attachments')
+    ? attachment.file_url
+    : null
 
   useEffect(() => {
     setPreviousFocus(document.activeElement as HTMLElement)
@@ -73,12 +77,18 @@ export const ImageModal: React.FC<ImageModalProps> = ({ attachment, onClose }) =
         >
           <FiX className="w-8 h-8" />
         </button>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={attachment.file_url}
-          alt={attachment.alt_text || attachment.file_name}
-          className="max-w-full max-h-full object-contain"
-        />
+        {safeFileUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={safeFileUrl}
+            alt={attachment.alt_text || attachment.file_name}
+            className="max-w-full max-h-full object-contain"
+          />
+        ) : (
+          <div className="bg-white rounded-lg p-6 text-gray-700">
+            안전하지 않은 첨부파일 URL입니다.
+          </div>
+        )}
         {attachment.alt_text && (
           <div className="absolute bottom-4 left-4 right-4 bg-black bg-opacity-50 text-white p-3 rounded">
             <p className="text-sm">{attachment.alt_text}</p>

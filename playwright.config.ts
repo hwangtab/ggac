@@ -5,8 +5,9 @@ if (process.env.FORCE_COLOR) {
 }
 
 const isCI = !!process.env.CI
-const port = Number(process.env.PLAYWRIGHT_PORT || 3100)
+const port = Number(process.env.PLAYWRIGHT_PORT || 3101)
 const baseURL = `http://127.0.0.1:${port}`
+const reuseExistingServer = process.env.PLAYWRIGHT_REUSE_SERVER === 'true'
 
 export default defineConfig({
   testDir: './e2e',
@@ -33,7 +34,7 @@ export default defineConfig({
   webServer: {
     command: `env -u NO_COLOR PORT=${port} npm run dev`,
     url: `${baseURL}/robots.txt`,
-    reuseExistingServer: !isCI,
+    reuseExistingServer,
     timeout: 120_000,
   },
 })

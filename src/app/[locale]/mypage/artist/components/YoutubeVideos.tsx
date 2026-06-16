@@ -2,6 +2,7 @@
 
 import { FiYoutube, FiPlus, FiTrash2, FiPlay, FiExternalLink } from 'react-icons/fi'
 import { YouTubeVideo } from '@/types'
+import { toSafeHttpUrl } from '@/utils/safeUrl'
 
 interface YoutubeVideosProps {
   videos: YouTubeVideo[]
@@ -75,6 +76,7 @@ const YoutubeVideos: React.FC<YoutubeVideosProps> = ({ videos, errors, onChange 
         ) : (
           videos.map((video, index) => {
             const thumbnailUrl = getYouTubeThumbnail(video.url)
+            const safeUrl = toSafeHttpUrl(video.url)
 
             return (
               <div
@@ -106,9 +108,9 @@ const YoutubeVideos: React.FC<YoutubeVideosProps> = ({ videos, errors, onChange 
                         <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center">
                           <FiPlay className="w-8 h-8 text-white" />
                         </div>
-                        {video.url && (
+                        {safeUrl && (
                           <a
-                            href={video.url}
+                            href={safeUrl}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="absolute top-2 right-2 p-1 bg-black bg-opacity-50 text-white rounded hover:bg-opacity-70"

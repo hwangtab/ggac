@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createErrorResponse } from '@/utils/apiResponse'
 import { withRateLimit } from '@/utils/rateLimit'
 import { requireAdmin } from '@/lib/server/adminAuth'
+import { parseIntegerParam } from '@/utils/queryParams'
+import { parseTrendPeriod, parseTrendType } from '@/constants/adminAnalytics'
+import type { TrendPeriod } from '@/constants/adminAnalytics'
 
 type ActivityTrendPoint = {
   date: string
@@ -22,9 +25,21 @@ export async function GET(request: NextRequest) {
       const { db } = auth
 
       const { searchParams } = new URL(request.url)
-      const period = searchParams.get('period') || 'daily' // daily, weekly, monthly
-      const weeks = parseInt(searchParams.get('weeks') || '8')
-      const trendType = searchParams.get('type') || 'activity' // activity, users, engagement
+      const periodParam = searchParams.get('period') || 'daily'
+      const period = parseTrendPeriod(periodParam)
+      const weeks = parseIntegerParam(searchParams.get('weeks'), 8, { min: 1, max: 104 })
+      const trendTypeParam = searchParams.get('type') || 'activity'
+      const trendType = parseTrendType(trendTypeParam)
+
+      if (!period) {
+        return createErrorResponse({ success: false, error: '지원되지 않는 기간 유형입니다.' }, 400)
+      }
+      if (!trendType) {
+        return createErrorResponse(
+          { success: false, error: '지원되지 않는 트렌드 유형입니다.' },
+          400
+        )
+      }
 
       let trendData: any = {}
 
@@ -45,11 +60,10 @@ export async function GET(request: NextRequest) {
           trendData = await getPerformanceTrends(db, period, weeks)
           break
 
-        default:
-          return createErrorResponse(
-            { success: false, error: '지원되지 않는 트렌드 유형입니다.' },
-            400
-          )
+        default: {
+          const exhaustiveCheck: never = trendType
+          return exhaustiveCheck
+        }
       }
 
       return NextResponse.json({
@@ -72,7 +86,7 @@ export async function GET(request: NextRequest) {
 /**
  * 활동 트렌드 분석
  */
-async function getActivityTrends(supabase: any, period: string, weeks: number) {
+async function getActivityTrends(supabase: any, period: TrendPeriod, weeks: number) {
   const startDate = new Date()
   startDate.setDate(startDate.getDate() - weeks * 7)
   startDate.setHours(0, 0, 0, 0)
@@ -156,7 +170,7 @@ async function getActivityTrends(supabase: any, period: string, weeks: number) {
 /**
  * 사용자 트렌드 분석
  */
-async function getUserTrends(supabase: any, period: string, weeks: number) {
+async function getUserTrends(supabase: any, period: TrendPeriod, weeks: number) {
   const startDate = new Date()
   startDate.setDate(startDate.getDate() - weeks * 7)
 
@@ -226,7 +240,7 @@ async function getUserTrends(supabase: any, period: string, weeks: number) {
 /**
  * 참여도 트렌드 분석
  */
-async function getEngagementTrends(supabase: any, period: string, weeks: number) {
+async function getEngagementTrends(supabase: any, period: TrendPeriod, weeks: number) {
   const startDate = new Date()
   startDate.setDate(startDate.getDate() - weeks * 7)
 
@@ -295,7 +309,7 @@ async function getEngagementTrends(supabase: any, period: string, weeks: number)
 /**
  * 성능 트렌드 분석
  */
-async function getPerformanceTrends(supabase: any, period: string, weeks: number) {
+async function getPerformanceTrends(supabase: any, period: TrendPeriod, weeks: number) {
   const startDate = new Date()
   startDate.setDate(startDate.getDate() - weeks * 7)
 

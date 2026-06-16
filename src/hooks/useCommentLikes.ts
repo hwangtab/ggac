@@ -6,9 +6,8 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import type { User } from '@supabase/supabase-js'
-import { getSupabaseClient } from '@/lib/supabase/client'
 import { useLoadingState } from '@/hooks/useLoadingState'
+import { fetchSessionProfile } from '@/utils/sessionProfile'
 
 interface CommentLikeState {
   /** 좋아요 수 */
@@ -34,13 +33,11 @@ export function useCommentLikes({
   initialIsLiked = false,
   onLikeChange,
 }: UseCommentLikesProps) {
-  const [user, setUser] = useState<User | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
   const [state, setState] = useState<CommentLikeState>({
     likeCount: initialLikeCount,
     isLiked: initialIsLiked,
   })
-
-  const supabase = getSupabaseClient()
 
   // 로딩 상태 관리
   const loadingState = useLoadingState({
@@ -52,30 +49,28 @@ export function useCommentLikes({
     },
   })
 
+  const refreshUser = useCallback(async () => {
+    const session = await fetchSessionProfile()
+    setUserId(session.user?.id ?? null)
+    return session.user?.id ?? null
+  }, [])
+
   // 사용자 정보 가져오기
   useEffect(() => {
-    const getUser = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      setUser(session?.user || null)
+    void refreshUser()
+
+    const handleFocus = () => {
+      void refreshUser()
     }
+    window.addEventListener('focus', handleFocus)
 
-    getUser()
-
-    // 인증 상태 변경 리스너
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      setUser(session?.user || null)
-    })
-
-    return () => subscription.unsubscribe()
-  }, [supabase])
+    return () => window.removeEventListener('focus', handleFocus)
+  }, [refreshUser])
 
   // 좋아요 토글
   const toggleLike = useCallback(async () => {
-    if (!user) {
+    const currentUserId = userId ?? (await refreshUser())
+    if (!currentUserId) {
       loadingState.failLoading('로그인이 필요합니다.')
       return false
     }
@@ -98,19 +93,10 @@ export function useCommentLikes({
     onLikeChange?.(optimisticIsLiked, optimisticCount)
 
     return loadingState.executeAsync(async () => {
-      // 토큰 가져오기
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      if (!session?.access_token) {
-        throw new Error('인증 토큰이 없습니다.')
-      }
-
       const response = await fetch(`/api/comments/${commentId}/like`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
         },
       })
 
@@ -132,7 +118,7 @@ export function useCommentLikes({
 
       return data
     })
-  }, [user, commentId, onLikeChange, supabase, state.isLiked, state.likeCount, loadingState])
+  }, [userId, refreshUser, commentId, onLikeChange, state.isLiked, state.likeCount, loadingState])
 
   // 에러 클리어
   const clearError = useCallback(() => {
@@ -151,7 +137,7 @@ export function useCommentLikes({
     clearError,
 
     // 유틸
-    canLike: !!user,
+    canLike: !!userId,
     reset: loadingState.reset,
   }
 }

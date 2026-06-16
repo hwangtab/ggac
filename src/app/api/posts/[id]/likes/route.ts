@@ -31,6 +31,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         { status: 400 }
       )
     }
+    const validPostId = uuidValidation.sanitized
 
     const supabase = await createSupabaseServer()
     const {
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const { data: post, error: postError } = await supabase
       .from('posts')
       .select('id, like_count')
-      .eq('id', postId)
+      .eq('id', validPostId)
       .single()
 
     if (postError || !post) {
@@ -56,12 +57,12 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const { data: userLike } = await supabase
       .from('post_likes')
       .select('id')
-      .eq('post_id', postId)
+      .eq('post_id', validPostId)
       .eq('user_id', user.id)
       .single()
 
     return NextResponse.json({
-      post_id: postId,
+      post_id: validPostId,
       like_count: post.like_count || 0,
       is_liked: !!userLike,
     })

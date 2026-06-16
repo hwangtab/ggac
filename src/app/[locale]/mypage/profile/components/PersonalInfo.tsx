@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import { FiUser, FiEdit3 } from 'react-icons/fi'
-import Link from 'next/link'
+import { Link } from '@/i18n/navigation'
 import type { ProfilePhotoMetadata } from '@/types'
+import { isProjectStoragePublicUrl } from '@/utils/storageUrlValidation'
 
 interface PersonalInfoProps {
   data: {
@@ -11,6 +12,7 @@ interface PersonalInfoProps {
     phone_number: string
     birth_date: string
   }
+  artistId?: string | null
   artistPhotoUrl?: string | null
   artistPhotoMetadata?: ProfilePhotoMetadata
   hasArtistPermission: boolean
@@ -21,6 +23,7 @@ interface PersonalInfoProps {
 
 const PersonalInfo: React.FC<PersonalInfoProps> = ({
   data,
+  artistId,
   artistPhotoUrl,
   artistPhotoMetadata,
   hasArtistPermission,
@@ -28,6 +31,11 @@ const PersonalInfo: React.FC<PersonalInfoProps> = ({
   onChange,
   readOnlyEmail,
 }) => {
+  const safeArtistPhotoUrl =
+    artistPhotoUrl && artistId && isProjectStoragePublicUrl(artistPhotoUrl, 'artists', artistId)
+      ? artistPhotoUrl
+      : null
+
   return (
     <div className="bg-gray-50 rounded-lg p-6">
       <div className="flex items-center mb-6">
@@ -40,10 +48,10 @@ const PersonalInfo: React.FC<PersonalInfoProps> = ({
         <div className="flex flex-col items-center text-center">
           {/* 프로필 사진 표시 */}
           <div className="relative w-32 h-32 rounded-full overflow-hidden border-2 border-gray-200 bg-gray-100">
-            {artistPhotoUrl ? (
+            {safeArtistPhotoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={artistPhotoUrl}
+                src={safeArtistPhotoUrl}
                 alt={`${data.display_name}의 프로필 사진`}
                 className="w-full h-full object-cover"
               />

@@ -7,13 +7,31 @@ import {
   getAuditorRoster,
 } from '@/lib/server/boardRoomAuth'
 import { notifyDirectors } from '@/lib/server/boardRoomNotify'
-import { BOARD_MEETING_TIME } from '@/constants/boardRoom'
+import {
+  BOARD_MEETING_STATUS,
+  BOARD_MEETING_TIME,
+  parseBoardMeetingDate,
+  parseBoardMeetingDeadline,
+} from '@/constants/boardRoom'
 import { requiredQuorum, isQuorumMet } from '@/lib/boardRoom/quorum'
+import { parseJsonObjectBody } from '@/utils/requestBody'
+import { validateUUID } from '@/utils/validation'
 
 export const runtime = 'nodejs'
 
+function validateMeetingId(id: string) {
+  const validation = validateUUID(id, '회의 ID')
+  if (!validation.isValid) {
+    return { error: ApiError.badRequest(validation.errors[0] || '잘못된 회의 ID 형식입니다.') }
+  }
+  return { id: validation.sanitized }
+}
+
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const { id } = await context.params
+  const params = await context.params
+  const routeId = validateMeetingId(params.id)
+  if (routeId.error) return routeId.error.toNextResponse()
+  const id = routeId.id
   const auth = await requireBoardMember()
   if (auth instanceof NextResponse) return auth
   const { db, user } = auth
@@ -99,7 +117,10 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 }
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const { id } = await context.params
+  const params = await context.params
+  const routeId = validateMeetingId(params.id)
+  if (routeId.error) return routeId.error.toNextResponse()
+  const id = routeId.id
   const auth = await requireBoardMember()
   if (auth instanceof NextResponse) return auth
   const adminGuard = requireBoardAdmin(auth)
@@ -108,29 +129,52 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
   return apiPatch(
     async () => {
-      const body = await request.json()
+      const body = await parseJsonObjectBody(request)
+      if (!body) throw ApiError.badRequest('유효한 JSON body가 필요합니다.')
+
       const update: Record<string, unknown> = {}
 
-      if (typeof body.title === 'string') update.title = body.title.trim()
+      if (typeof body.title === 'string') {
+        const title = body.title.trim()
+        if (!title) throw ApiError.badRequest('제목을 입력해주세요.')
+        update.title = title
+      }
       if (body.location === null || typeof body.location === 'string')
-        update.location = body.location
-      if (body.vote_deadline === null || typeof body.vote_deadline === 'string') {
-        update.vote_deadline = body.vote_deadline
+        update.location = typeof body.location === 'string' ? body.location.trim() || null : null
+      if (body.vote_deadline === null) {
+        update.vote_deadline = null
+      } else if (body.vote_deadline !== undefined) {
+        const voteDeadline = parseBoardMeetingDeadline(body.vote_deadline)
+        if (!voteDeadline) throw ApiError.badRequest('투표 마감일 형식이 올바르지 않습니다.')
+        update.vote_deadline = voteDeadline
       }
 
-      if (body.confirm_date) {
+      const confirmDate = parseBoardMeetingDate(body.confirm_date)
+      if (body.confirm_date !== undefined && !confirmDate) {
+        throw ApiError.badRequest('확정 날짜는 YYYY-MM-DD 형식이어야 합니다.')
+      }
+
+      if (confirmDate) {
         const { data: opt } = await db
           .from('board_meeting_date_options')
           .select('id')
           .eq('meeting_id', id)
-          .eq('candidate_date', body.confirm_date)
+          .eq('candidate_date', confirmDate)
           .maybeSingle()
         if (!opt) throw ApiError.badRequest('후보에 없는 날짜는 확정할 수 없습니다.')
-        update.meeting_date = body.confirm_date
+        update.meeting_date = confirmDate
         update.status = 'scheduled'
       }
 
-      if (body.status === 'completed') update.status = 'completed'
+      if (body.status !== undefined) {
+        if (
+          body.status !== 'completed' ||
+          !(BOARD_MEETING_STATUS as readonly string[]).includes(body.status)
+        ) {
+          throw ApiError.badRequest('잘못된 회의 상태값입니다.')
+        }
+        update.status = 'completed'
+      }
 
       if (Object.keys(update).length === 0) throw ApiError.badRequest('변경할 내용이 없습니다.')
 
@@ -142,10 +186,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         .single()
       if (error || !updated) throw ApiError.internalServerError('회의 수정에 실패했습니다.')
 
-      if (body.confirm_date) {
+      if (confirmDate) {
         await notifyDirectors(db, {
           title: '이사회 일정 확정',
-          message: `'${updated.title}' 회의가 ${body.confirm_date} ${BOARD_MEETING_TIME}로 확정되었습니다.`,
+          message: `'${updated.title}' 회의가 ${confirmDate} ${BOARD_MEETING_TIME}로 확정되었습니다.`,
           meetingId: id,
         })
       }
@@ -158,7 +202,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 }
 
 export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const { id } = await context.params
+  const params = await context.params
+  const routeId = validateMeetingId(params.id)
+  if (routeId.error) return routeId.error.toNextResponse()
+  const id = routeId.id
   const auth = await requireBoardMember()
   if (auth instanceof NextResponse) return auth
   const adminGuard = requireBoardAdmin(auth)

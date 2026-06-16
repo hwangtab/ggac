@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
 import { BOARD_MEETING_TIME } from '@/constants/boardRoom'
 import type { BoardMeetingStatus, BoardAgendaStatus } from '@/constants/boardRoom'
+import { fetchSessionProfile, isApprovedActiveAdmin } from '@/utils/sessionProfile'
 import StatusBadge from '../../_components/StatusBadge'
 import MeetingCalendar from '../../_components/MeetingCalendar'
 import AgendaList from '../../_components/AgendaList'
@@ -98,26 +99,14 @@ export default function MeetingDetailPage() {
   const [notFound, setNotFound] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
 
-  // Admin detection (same pattern as Navigation.tsx)
   useEffect(() => {
     let mounted = true
     ;(async () => {
       try {
-        const { supabase } = await import('@/lib/supabase/client')
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
-        if (!mounted) return
-        if (session?.user) {
-          const { data: profile } = await supabase
-            .from('member_profiles')
-            .select('is_admin')
-            .eq('id', session.user.id)
-            .single()
-          if (mounted) setIsAdmin(!!profile?.is_admin)
-        }
+        const session = await fetchSessionProfile()
+        if (mounted) setIsAdmin(isApprovedActiveAdmin(session.profile))
       } catch {
-        // silently ignore
+        if (mounted) setIsAdmin(false)
       }
     })()
     return () => {

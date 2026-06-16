@@ -10,6 +10,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createErrorResponse } from '@/utils/apiResponse'
 import { createClient } from '@supabase/supabase-js'
 import { timingSafeEqual } from 'crypto'
+import { getProjectStorageObjectPath } from '@/utils/storageUrlValidation'
+import { createLogger } from '@/utils/logger'
+
+const log = createLogger('api/cleanup/temp-attachments')
 
 // Service Role 클라이언트 (RLS 우회 가능)
 function getSupabaseAdmin() {
@@ -46,7 +50,7 @@ export async function POST(request: NextRequest) {
       return createErrorResponse({ success: false, error: 'Unauthorized' }, 401)
     }
 
-    console.log('[CLEANUP] 임시 첨부파일 정리 시작')
+    log.debug('Temporary attachment cleanup started')
 
     const supabaseAdmin = getSupabaseAdmin()
 
@@ -68,32 +72,30 @@ export async function POST(request: NextRequest) {
     }
 
     if (!expiredAttachments || expiredAttachments.length === 0) {
-      console.log('[CLEANUP] 정리할 만료된 임시 첨부파일 없음')
+      log.debug('No expired temporary attachments to clean up')
       return NextResponse.json({
         message: 'No expired temporary attachments to clean up',
         cleaned: 0,
       })
     }
 
-    console.log(`[CLEANUP] ${expiredAttachments.length}개의 만료된 임시 첨부파일 발견`)
+    log.debug('Expired temporary attachments found', { count: expiredAttachments.length })
 
     // 2. Storage에서 파일 삭제
     const filePaths = expiredAttachments
       .map(att => {
-        // URL에서 파일 경로 추출
-        const url = new URL(att.file_url)
-        const pathParts = url.pathname.split('/')
-        // /storage/v1/object/public/attachments/temp/... 형태에서 temp/... 부분 추출
-        const bucketIndex = pathParts.indexOf('attachments')
-        if (bucketIndex !== -1 && bucketIndex < pathParts.length - 1) {
-          return pathParts.slice(bucketIndex + 1).join('/')
+        const path = getProjectStorageObjectPath(att.file_url, 'attachments', 'temp')
+        if (!path) {
+          console.warn('[CLEANUP] 안전하지 않은 임시 첨부파일 URL 건너뜀:', att.id)
+          return null
         }
-        return null
+
+        return path
       })
-      .filter(Boolean) as string[]
+      .filter((path): path is string => path !== null)
 
     if (filePaths.length > 0) {
-      console.log('[CLEANUP] Storage 파일 삭제 시작:', filePaths.length, '개')
+      log.debug('Deleting temporary attachment files from Storage', { count: filePaths.length })
       const { error: storageError } = await supabaseAdmin.storage
         .from('attachments')
         .remove(filePaths)
@@ -102,7 +104,7 @@ export async function POST(request: NextRequest) {
         console.error('[CLEANUP] Storage 파일 삭제 실패:', storageError)
         // 스토리지 삭제 실패해도 계속 진행 (DB 정리는 수행)
       } else {
-        console.log('[CLEANUP] Storage 파일 삭제 완료')
+        log.debug('Temporary attachment Storage deletion completed')
       }
     }
 
@@ -123,7 +125,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log(`[CLEANUP] ${expiredAttachments.length}개의 임시 첨부파일 정리 완료`)
+    log.debug('Temporary attachment cleanup completed', { count: expiredAttachments.length })
 
     // 4. 통계 반환
     return NextResponse.json({

@@ -4,8 +4,18 @@ import { createClient } from '@supabase/supabase-js'
 import { stripHtmlTags } from '@/utils/textUtils'
 import { escapePostgrestValue } from '@/utils/validation'
 import { createLogger } from '@/utils/logger'
+import { parseIntegerParam } from '@/utils/queryParams'
+import { parseBoardCategory } from '@/constants/categories'
+import { formatTimestampUuidCursor, parseTimestampUuidCursor } from '@/utils/keysetCursor'
 
 const log = createLogger('api/posts/public')
+type PublicPostsSortOrder = 'asc' | 'desc'
+
+function parsePublicPostsSortOrder(value: string | null): PublicPostsSortOrder | null {
+  if (!value) return 'desc'
+  const normalized = value.toLowerCase()
+  return normalized === 'asc' || normalized === 'desc' ? normalized : null
+}
 
 // 동적 라우트로 강제 — `force-dynamic` 가 ISR `revalidate` 와 충돌하므로 후자 제거.
 // 캐시 정책은 응답 헤더(Cache-Control / s-maxage / stale-while-revalidate)에서 직접 관리한다.
@@ -25,13 +35,26 @@ export async function GET(request: NextRequest) {
   })
 
   const { searchParams } = request.nextUrl
-  const category = searchParams.get('category') || '전체'
-  const limit = Math.min(parseInt(searchParams.get('limit') || '20', 10) || 20, 50)
+  const categoryParam = searchParams.get('category') || '전체'
+  const boardCategory = parseBoardCategory(categoryParam)
+  const limit = parseIntegerParam(searchParams.get('limit'), 20, { min: 1, max: 50 })
   const cursor = searchParams.get('cursor') // `${encodeURIComponent(created_at)}|${id}`
-  const sortOrder = (searchParams.get('sort') || 'desc').toLowerCase() === 'asc' ? 'asc' : 'desc'
+  const sortOrder = parsePublicPostsSortOrder(searchParams.get('sort'))
   const searchRaw = searchParams.get('search') || ''
 
   try {
+    if (!boardCategory) {
+      return createErrorResponse({ success: false, error: '유효하지 않은 카테고리입니다.' }, 400)
+    }
+    if (!sortOrder) {
+      return createErrorResponse({ success: false, error: '유효하지 않은 정렬 순서입니다.' }, 400)
+    }
+
+    const parsedCursor = cursor ? parseTimestampUuidCursor(cursor, '게시글 ID') : null
+    if (cursor && !parsedCursor) {
+      return createErrorResponse({ success: false, error: '유효하지 않은 커서입니다.' }, 400)
+    }
+
     let query = supabase
       .from('posts')
       .select(
@@ -50,8 +73,8 @@ export async function GET(request: NextRequest) {
       )
       .not('is_deleted', 'is', true)
 
-    if (category !== '전체') {
-      query = query.eq('category', category)
+    if (boardCategory !== '전체') {
+      query = query.eq('category', boardCategory)
     }
 
     if (searchRaw) {
@@ -61,31 +84,29 @@ export async function GET(request: NextRequest) {
         .filter(t => t.length >= 2)
         .slice(0, 3)
       if (tokens.length > 0) {
-        const pattern = tokens.map(t => `title.ilike.%${escapePostgrestValue(t)}%,content.ilike.%${escapePostgrestValue(t)}%`).join(',')
+        const pattern = tokens
+          .map(t => `title.ilike.%${escapePostgrestValue(t)}%,content.ilike.%${escapePostgrestValue(t)}%`)
+          .join(',')
         query = query.or(pattern)
       }
     }
 
     const ascending = sortOrder === 'asc'
-    if (cursor) {
-      const [enc, rawId] = cursor.split('|')
-      const createdAt = enc ? decodeURIComponent(enc) : null
-      const isValidTimestamp = createdAt && /^\d{4}-\d{2}-\d{2}T[\d:.+Z-]+$/.test(createdAt)
-      const isValidUuid = rawId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawId)
-      if (isValidTimestamp && isValidUuid) {
-        if (ascending) {
-          query = query.or(`created_at.gt.${createdAt},and(created_at.eq.${createdAt},id.gt.${rawId})`)
-          query = query.order('created_at', { ascending: true }).order('id', { ascending: true })
-        } else {
-          query = query.or(`created_at.lt.${createdAt},and(created_at.eq.${createdAt},id.lt.${rawId})`)
-          query = query.order('created_at', { ascending: false }).order('id', { ascending: false })
-        }
+    if (parsedCursor) {
+      if (ascending) {
+        query = query.or(
+          `created_at.gt.${parsedCursor.createdAt},and(created_at.eq.${parsedCursor.createdAt},id.gt.${parsedCursor.id})`
+        )
+      } else {
+        query = query.or(
+          `created_at.lt.${parsedCursor.createdAt},and(created_at.eq.${parsedCursor.createdAt},id.lt.${parsedCursor.id})`
+        )
       }
     } else {
       query = query.order('is_pinned', { ascending: false, nullsFirst: false })
-      query = query.order('created_at', { ascending })
-      query = query.order('id', { ascending })
     }
+    query = query.order('created_at', { ascending })
+    query = query.order('id', { ascending })
 
     query = query.limit(limit + 1)
 
@@ -106,7 +127,10 @@ export async function GET(request: NextRequest) {
       .select('post_id, file_type')
       .in('post_id', ids)
 
-    const statsMap = new Map<string, { total: number; image: number; document: number; video: number; audio: number }>()
+    const statsMap = new Map<
+      string,
+      { total: number; image: number; document: number; video: number; audio: number }
+    >()
     ;(attRows || []).forEach((r: any) => {
       const key = r.post_id as string
       const type = (r.file_type as string) || 'document'
@@ -142,15 +166,15 @@ export async function GET(request: NextRequest) {
           image_count: statsMap.get(row.id)?.image || 0,
           document_count: statsMap.get(row.id)?.document || 0,
           video_count: statsMap.get(row.id)?.video || 0,
-          audio_count: statsMap.get(row.id)?.audio || 0
-        }
+          audio_count: statsMap.get(row.id)?.audio || 0,
+        },
       }
     })
 
     let nextCursor: string | null = null
     if (posts.length > 0 && hasNext) {
       const last = posts[posts.length - 1]
-      nextCursor = `${encodeURIComponent(last.created_at)}|${last.id}`
+      nextCursor = formatTimestampUuidCursor(last.created_at, last.id)
     }
 
     return NextResponse.json(
@@ -159,18 +183,21 @@ export async function GET(request: NextRequest) {
         pagination: {
           limit,
           has_next: hasNext,
-          has_prev: !!cursor,
+          has_prev: !!parsedCursor,
           next_cursor: nextCursor,
-          prev_cursor: null
+          prev_cursor: null,
         },
         filters: {
-          category: category === '전체' ? null : category,
+          category: boardCategory === '전체' ? null : boardCategory,
           search: searchRaw || null,
           sort_by: 'created_at',
-          sort_order: sortOrder
-        }
+          sort_order: sortOrder,
+        },
       },
-      { status: 200, headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300' } }
+      {
+        status: 200,
+        headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300' },
+      }
     )
   } catch (e) {
     log.error('게시글 조회 예외 발생', e)

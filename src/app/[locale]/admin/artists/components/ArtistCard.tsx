@@ -3,6 +3,7 @@
 import { FiUser, FiUserPlus, FiMusic, FiExternalLink, FiX } from 'react-icons/fi'
 import OptimizedImage from '@/components/OptimizedImage'
 import { Icon } from '@/components/Icon'
+import { toSafeInternalImagePath } from '@/utils/safeUrl'
 
 interface Artist {
   id: string
@@ -37,6 +38,8 @@ export default function ArtistCard({
   onRemoveAssignment,
   isLoading,
 }: ArtistCardProps) {
+  const safeProfileImage = toSafeInternalImagePath(artist.profileImage)
+
   const getArtistProfileUrl = (slug: string) => {
     return `/artists/${slug}`
   }
@@ -83,7 +86,7 @@ export default function ArtistCard({
           <div className="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
             {artist.profileImage ? (
               <OptimizedImage
-                src={artist.profileImage}
+                src={safeProfileImage}
                 alt={artist.name}
                 width={64}
                 height={64}

@@ -1,10 +1,11 @@
 import { Link } from '@/i18n/navigation'
 import { getTranslations, getLocale } from 'next-intl/server'
 import type { BoardInitialPost } from '@/lib/server/board'
+import type { BoardCategory } from '@/constants/categories'
 
 interface ServerBoardViewProps {
   posts: BoardInitialPost[]
-  category: string
+  category: BoardCategory
   pagination: {
     hasNext: boolean
     hasPrev: boolean
@@ -13,7 +14,7 @@ interface ServerBoardViewProps {
   renderAuthSection?: () => React.ReactNode
 }
 
-const buildBoardUrl = (category: string, page?: number) => {
+const buildBoardUrl = (category: BoardCategory, page?: number) => {
   const params = new URLSearchParams()
   if (category && category !== '전체') {
     params.set('category', category)

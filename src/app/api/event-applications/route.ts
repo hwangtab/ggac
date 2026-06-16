@@ -7,13 +7,25 @@ import {
   DISTRIBUTED_RATE_LIMIT_CONFIGS,
   createDistributedIPKeyGenerator,
 } from '@/utils/distributedRateLimiter'
+import {
+  EVENT_SLUG_PATTERN,
+  isValidEventApplicationPhotoUrl,
+  normalizeEventSlug,
+} from '@/utils/eventApplicationValidation'
+import { parseJsonObjectBody } from '@/utils/requestBody'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const preferredRegion = 'icn1'
 
 const ApplicationSchema = z.object({
-  event_slug: z.string().min(1, '이벤트 슬러그가 필요합니다.'),
+  event_slug: z
+    .string()
+    .min(1, '이벤트 슬러그가 필요합니다.')
+    .transform(normalizeEventSlug)
+    .refine(value => EVENT_SLUG_PATTERN.test(value), {
+      message: '이벤트 슬러그 형식이 올바르지 않습니다.',
+    }),
   applicant_name: z
     .string()
     .min(1, '신청자/팀명은 필수입니다.')
@@ -31,7 +43,15 @@ const ApplicationSchema = z.object({
   links: z.string().max(500).optional(),
   message: z.string().max(1000).optional(),
   participation_type: z.string().min(1, '참여 분야를 선택해주세요.').max(100).optional(),
-  photo_url: z.string().url().max(500).optional(),
+  photo_url: z
+    .string()
+    .trim()
+    .url()
+    .max(500)
+    .refine(isValidEventApplicationPhotoUrl, {
+      message: '업로드된 신청 사진 URL만 사용할 수 있습니다.',
+    })
+    .optional(),
   privacy_consent: z.literal(true, {
     errorMap: () => ({ message: '개인정보 수집·이용 동의가 필요합니다.' }),
   }),
@@ -51,7 +71,11 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = await request.json().catch(() => ({}))
+    const body = await parseJsonObjectBody(request)
+    if (!body) {
+      return ApiError.badRequest('유효하지 않은 JSON 본문입니다.').toNextResponse()
+    }
+
     const parsed = ApplicationSchema.safeParse(body)
     if (!parsed.success) {
       const details = parsed.error.issues.map(e => ({
@@ -63,7 +87,7 @@ export async function POST(request: NextRequest) {
 
     const d = parsed.data
     const cleanedData = {
-      event_slug: d.event_slug.trim(),
+      event_slug: d.event_slug,
       applicant_name: d.applicant_name.trim(),
       contact_email: d.contact_email?.trim().toLowerCase() || null,
       contact_phone: d.contact_phone.trim(),

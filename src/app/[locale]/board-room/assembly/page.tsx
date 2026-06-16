@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { ASSEMBLY_DOCUMENT_CATEGORY } from '@/constants/boardRoom'
+import { fetchSessionProfile, isApprovedActiveAdmin } from '@/utils/sessionProfile'
 import DocumentList from '../_components/DocumentList'
 import DocumentUpload from '../_components/DocumentUpload'
 
@@ -24,27 +25,20 @@ export default function AssemblyPage() {
   const [currentUserId, setCurrentUserId] = useState<string>('')
   const [isAdmin, setIsAdmin] = useState(false)
 
-  // 현재 사용자 id + 관리자 여부
   useEffect(() => {
     let mounted = true
     ;(async () => {
       try {
-        const { supabase } = await import('@/lib/supabase/client')
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
-        if (!mounted) return
-        if (session?.user) {
-          setCurrentUserId(session.user.id)
-          const { data } = await supabase
-            .from('member_profiles')
-            .select('is_admin')
-            .eq('id', session.user.id)
-            .single()
-          if (mounted) setIsAdmin(!!data?.is_admin)
+        const session = await fetchSessionProfile()
+        if (mounted) {
+          setCurrentUserId(session.user?.id ?? '')
+          setIsAdmin(isApprovedActiveAdmin(session.profile))
         }
       } catch {
-        // 무시 — 권한 없으면 삭제/관리 버튼 비노출
+        if (mounted) {
+          setCurrentUserId('')
+          setIsAdmin(false)
+        }
       }
     })()
     return () => {

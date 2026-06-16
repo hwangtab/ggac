@@ -12,6 +12,11 @@ import { revalidatePath, revalidateTag } from 'next/cache'
 import sharp from 'sharp'
 import type { ProfilePhotoUploadResponse, ProfilePhotoMetadata, ImageCropSettings } from '@/types'
 import { invalidateArtistsCache } from '@/lib/data'
+import { hasValidFileSignature } from '@/utils/fileUploadValidation'
+import {
+  getProjectStorageObjectPath,
+  isProjectStorageObjectPath,
+} from '@/utils/storageUrlValidation'
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 const MAX_FILE_SIZE = 5 * 1024 * 1024
@@ -41,6 +46,85 @@ function validateFileSize(file: File): boolean {
   return file.size <= MAX_FILE_SIZE
 }
 
+function parseJsonObject(value: FormDataEntryValue | null): Record<string, unknown> {
+  if (typeof value !== 'string' || !value.trim()) return {}
+
+  try {
+    const parsed = JSON.parse(value)
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {}
+  } catch (error) {
+    console.error('Invalid JSON form field:', error)
+    return {}
+  }
+}
+
+function parseCropSettings(value: FormDataEntryValue | null): ImageCropSettings | undefined {
+  const parsed = parseJsonObject(value)
+  const x = parsed.x
+  const y = parsed.y
+  const width = parsed.width
+  const height = parsed.height
+
+  if (
+    typeof x !== 'number' ||
+    typeof y !== 'number' ||
+    typeof width !== 'number' ||
+    typeof height !== 'number' ||
+    !Number.isFinite(x) ||
+    !Number.isFinite(y) ||
+    !Number.isFinite(width) ||
+    !Number.isFinite(height) ||
+    x < 0 ||
+    y < 0 ||
+    width <= 0 ||
+    height <= 0
+  ) {
+    return undefined
+  }
+
+  const cropSettings: ImageCropSettings = { x, y, width, height }
+  const outputSize = parsed.output_size
+  if (outputSize && typeof outputSize === 'object' && !Array.isArray(outputSize)) {
+    const output = outputSize as Record<string, unknown>
+    if (
+      typeof output.width === 'number' &&
+      typeof output.height === 'number' &&
+      Number.isFinite(output.width) &&
+      Number.isFinite(output.height) &&
+      output.width > 0 &&
+      output.height > 0
+    ) {
+      cropSettings.output_size = {
+        width: output.width,
+        height: output.height,
+      }
+    }
+  }
+  if (typeof parsed.maintain_aspect_ratio === 'boolean') {
+    cropSettings.maintain_aspect_ratio = parsed.maintain_aspect_ratio
+  }
+  if (typeof parsed.aspectRatio === 'number' && Number.isFinite(parsed.aspectRatio)) {
+    cropSettings.aspectRatio = parsed.aspectRatio
+  }
+
+  return cropSettings
+}
+
+async function getImageDimensions(buffer: Buffer): Promise<{ width?: number; height?: number }> {
+  try {
+    const metadata = await sharp(buffer).metadata()
+    return {
+      width: metadata.width,
+      height: metadata.height,
+    }
+  } catch (error) {
+    console.warn('Artist photo dimension extraction failed:', error)
+    return {}
+  }
+}
+
 // Storage 경로 생성 (아티스트용)
 function generateArtistStoragePaths(artistId: string, originalFilename: string) {
   const timestamp = Date.now()
@@ -58,6 +142,22 @@ function generateArtistStoragePaths(artistId: string, originalFilename: string) 
 }
 
 type AdminClient = ReturnType<typeof getSupabaseAdmin>
+
+function collectSafeArtistVariantPaths(
+  metadata: ProfilePhotoMetadata | null | undefined,
+  artistId: string
+): string[] {
+  const variants = metadata?.variants
+  const paths = [variants?.original, variants?.webp, variants?.fallback]
+  return paths.filter((value): value is string => {
+    if (!value) return false
+    const isSafePath = isProjectStorageObjectPath(value, artistId)
+    if (!isSafePath) {
+      console.warn('Unsafe artist photo variant path skipped for cleanup')
+    }
+    return isSafePath
+  })
+}
 
 async function uploadImageWithVariants(
   supabase: AdminClient,
@@ -249,11 +349,10 @@ export async function PUT(request: NextRequest) {
 
     // FormData 파싱
     const formData = await request.formData()
-    const file = formData.get('file') as File
-    const cropSettingsStr = formData.get('crop_settings') as string
-    const metadataStr = formData.get('metadata') as string
+    const file = formData.get('file')
+    const cropSettingsValue = formData.get('crop_settings')
 
-    if (!file) {
+    if (!file || !(file instanceof File)) {
       return NextResponse.json(
         { success: false, error: '파일이 제공되지 않았습니다.' },
         { status: 400 }
@@ -278,25 +377,7 @@ export async function PUT(request: NextRequest) {
       )
     }
 
-    // 크롭 설정 파싱
-    let cropSettings: ImageCropSettings | undefined
-    if (cropSettingsStr) {
-      try {
-        cropSettings = JSON.parse(cropSettingsStr)
-      } catch (error) {
-        console.error('Invalid crop settings:', error)
-      }
-    }
-
-    // 메타데이터 파싱
-    let providedMetadata: Partial<ProfilePhotoMetadata> = {}
-    if (metadataStr) {
-      try {
-        providedMetadata = JSON.parse(metadataStr)
-      } catch (error) {
-        console.error('Invalid metadata:', error)
-      }
-    }
+    const cropSettings = parseCropSettings(cropSettingsValue)
 
     // 기존 아티스트 프로필 사진 조회
     let currentArtistQuery = await supabase
@@ -323,6 +404,13 @@ export async function PUT(request: NextRequest) {
     // Storage 경로 생성
     const storagePaths = generateArtistStoragePaths(profile.artist_id, file.name)
     const fileBuffer = Buffer.from(await file.arrayBuffer())
+    if (!hasValidFileSignature(fileBuffer, file.type)) {
+      return NextResponse.json(
+        { success: false, error: '파일 내용이 선언된 파일 형식과 일치하지 않습니다.' },
+        { status: 400 }
+      )
+    }
+    const imageDimensions = await getImageDimensions(fileBuffer)
 
     const uploadResult = await uploadImageWithVariants(
       supabaseAdmin,
@@ -347,10 +435,8 @@ export async function PUT(request: NextRequest) {
       uploaded_at: new Date().toISOString(),
       processed: true,
       crop_info: cropSettings,
-      // 클라이언트에서 제공된 이미지 크기 정보 사용
-      width: providedMetadata.width,
-      height: providedMetadata.height,
-      ...providedMetadata,
+      width: imageDimensions.width,
+      height: imageDimensions.height,
       variants: variantPaths,
       variant_urls: variantUrls,
       variant_metadata: variantMetadata,
@@ -386,19 +472,19 @@ export async function PUT(request: NextRequest) {
 
     // 기존 아티스트 프로필 사진 삭제 (Storage에서)
     const removalTargets = new Set<string>()
-    if (currentArtist?.profile_photo_metadata?.variants) {
-      const variants = currentArtist.profile_photo_metadata.variants
-      if (variants.original) removalTargets.add(variants.original)
-      if (variants.webp) removalTargets.add(variants.webp)
-      if (variants.fallback) removalTargets.add(variants.fallback)
-    } else if (currentArtist?.profile_photo_url) {
-      try {
-        const url = new URL(currentArtist.profile_photo_url)
-        const pathParts = url.pathname.split('/')
-        const fileName = pathParts[pathParts.length - 1]
-        removalTargets.add(`${profile.artist_id}/${fileName}`)
-      } catch (error) {
-        console.error('Failed to parse previous photo URL for cleanup:', error)
+    collectSafeArtistVariantPaths(currentArtist?.profile_photo_metadata, profile.artist_id).forEach(
+      path => removalTargets.add(path)
+    )
+    if (removalTargets.size === 0 && currentArtist?.profile_photo_url) {
+      const legacyPath = getProjectStorageObjectPath(
+        currentArtist.profile_photo_url,
+        'artists',
+        profile.artist_id
+      )
+      if (legacyPath) {
+        removalTargets.add(legacyPath)
+      } else {
+        console.warn('Unsafe previous artist photo URL skipped for cleanup')
       }
     }
 
@@ -513,18 +599,21 @@ export async function DELETE(request: NextRequest) {
     // Storage에서 파일 삭제
     try {
       const removalTargets = new Set<string>()
-      if (artist.profile_photo_metadata?.variants) {
-        const variants = artist.profile_photo_metadata.variants
-        if (variants.original) removalTargets.add(variants.original)
-        if (variants.webp) removalTargets.add(variants.webp)
-        if (variants.fallback) removalTargets.add(variants.fallback)
-      }
+      collectSafeArtistVariantPaths(artist.profile_photo_metadata, profile.artist_id).forEach(
+        path => removalTargets.add(path)
+      )
 
       if (removalTargets.size === 0) {
-        const url = new URL(artist.profile_photo_url)
-        const pathParts = url.pathname.split('/')
-        const fileName = pathParts[pathParts.length - 1]
-        removalTargets.add(`${profile.artist_id}/${fileName}`)
+        const legacyPath = getProjectStorageObjectPath(
+          artist.profile_photo_url,
+          'artists',
+          profile.artist_id
+        )
+        if (legacyPath) {
+          removalTargets.add(legacyPath)
+        } else {
+          console.warn('Unsafe artist photo URL skipped for cleanup')
+        }
       }
 
       if (removalTargets.size > 0) {

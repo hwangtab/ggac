@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import AdminLayout from '../components/AdminLayout'
 import {
@@ -45,34 +45,30 @@ export default function AdminReportsPage() {
   const [statsLoading, setStatsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [autoRefresh, setAutoRefresh] = useState(false)
+  const mountedRef = useRef(true)
+  const statsRequestSeqRef = useRef(0)
 
   const handleReportGenerated = (report: any) => {
-    setRecentReports([report, ...recentReports.slice(0, 4)]) // 최신 5개까지 유지
+    setRecentReports(prevReports => [report, ...prevReports.slice(0, 4)]) // 최신 5개까지 유지
   }
 
   useEffect(() => {
-    fetchQuickStats()
+    return () => {
+      mountedRef.current = false
+      statsRequestSeqRef.current += 1
+    }
   }, [])
 
-  // 자동 새로고침 효과
-  useEffect(() => {
-    let interval: NodeJS.Timeout | null = null
+  const fetchQuickStats = useCallback(async () => {
+    const requestSeq = ++statsRequestSeqRef.current
+    const shouldApplyStatsResult = () =>
+      mountedRef.current && requestSeq === statsRequestSeqRef.current
 
-    if (autoRefresh) {
-      interval = setInterval(() => {
-        fetchQuickStats()
-      }, 30000) // 30초마다 새로고침
-    }
-
-    return () => {
-      if (interval) {
-        clearInterval(interval)
-      }
-    }
-  }, [autoRefresh])
-
-  const fetchQuickStats = async () => {
     try {
+      if (!mountedRef.current) {
+        return
+      }
+
       setStatsLoading(true)
       setError(null)
 
@@ -92,6 +88,10 @@ export default function AdminReportsPage() {
       const memberStats = await membersResponse.json()
       const trendsData = trendsResponse.ok ? await trendsResponse.json() : null
       const monthlyData = monthlyResponse.ok ? await monthlyResponse.json() : null
+
+      if (!shouldApplyStatsResult()) {
+        return
+      }
 
       // 트렌드 계산
       const calculateChange = (
@@ -168,22 +168,38 @@ export default function AdminReportsPage() {
       ]
 
       setQuickStats(stats)
-
-      // 데이터 소스 정보 로깅 (개발자 콘솔용)
-      console.log('Reports 데이터 소스:', {
-        월별통계: monthlyData ? '✅ 실제 API 데이터' : '❌ 사용 불가',
-        활동트렌드: trendsData ? '✅ 실제 API 데이터' : '❌ 사용 불가',
-        기본통계: '✅ 실제 DB 데이터',
-        회원통계: '✅ 실제 DB 데이터',
-        데이터품질: '100% 실제 데이터',
-      })
     } catch (err) {
-      console.error('Quick stats fetch error:', err)
-      setError(err instanceof Error ? err.message : '통계를 불러오는 중 오류가 발생했습니다.')
+      if (shouldApplyStatsResult()) {
+        console.error('Quick stats fetch error:', err)
+        setError(err instanceof Error ? err.message : '통계를 불러오는 중 오류가 발생했습니다.')
+      }
     } finally {
-      setStatsLoading(false)
+      if (shouldApplyStatsResult()) {
+        setStatsLoading(false)
+      }
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    fetchQuickStats()
+  }, [fetchQuickStats])
+
+  // 자동 새로고침 효과
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null
+
+    if (autoRefresh) {
+      interval = setInterval(() => {
+        fetchQuickStats()
+      }, 30000) // 30초마다 새로고침
+    }
+
+    return () => {
+      if (interval) {
+        clearInterval(interval)
+      }
+    }
+  }, [autoRefresh, fetchQuickStats])
 
   return (
     <AdminLayout title="리포트 및 분석" description="시스템 사용 현황과 통계를 분석합니다.">

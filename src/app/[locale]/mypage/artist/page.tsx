@@ -1,12 +1,12 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/i18n/navigation'
 import MypageLayout from '../components/MypageLayout'
 import PermissionCheck from '../components/PermissionCheck'
 import ArtistEditForm from './components/ArtistEditForm'
-import { supabase } from '@/lib/supabase/client'
 import { DatabaseArtist } from '@/types'
+import { isProjectStoragePublicUrl } from '@/utils/storageUrlValidation'
 
 export default function ArtistPage() {
   const [artist, setArtist] = useState<DatabaseArtist | null>(null)
@@ -18,15 +18,6 @@ export default function ArtistPage() {
 
   const fetchArtist = useCallback(async () => {
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-
-      if (!session?.user) {
-        router.push('/login')
-        return
-      }
-
       // API를 통해 아티스트 정보 조회
       const response = await fetch('/api/mypage/artist', {
         method: 'GET',
@@ -37,6 +28,11 @@ export default function ArtistPage() {
       })
 
       if (!response.ok) {
+        if (response.status === 401) {
+          router.push('/login')
+          return
+        }
+
         const errorData = await response.json()
         throw new Error(errorData.error || '아티스트 정보를 불러오는데 실패했습니다.')
       }
@@ -116,6 +112,10 @@ export default function ArtistPage() {
     artist?.profile_photo_metadata?.variant_urls?.fallback ||
     artist?.profile_photo_metadata?.variant_urls?.original ||
     ''
+  const safePreviewImageForDisplay =
+    artist && isProjectStoragePublicUrl(previewImageForDisplay, 'artists', artist.id)
+      ? previewImageForDisplay
+      : ''
 
   return (
     <PermissionCheck
@@ -176,11 +176,11 @@ export default function ArtistPage() {
             {/* 아티스트 기본 정보 표시 */}
             <div className="bg-gradient-to-r from-primary-50 to-accent-50 rounded-lg p-6 border border-gray-200">
               <div className="flex items-start space-x-4">
-                {previewImageForDisplay && (
+                {safePreviewImageForDisplay && (
                   <div className="flex-shrink-0">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={previewImageForDisplay}
+                      src={safePreviewImageForDisplay}
                       alt={artist.name}
                       className="w-16 h-16 rounded-lg object-cover"
                     />

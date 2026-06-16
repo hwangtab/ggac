@@ -2,8 +2,18 @@ import { NextRequest, NextResponse } from 'next/server'
 import { apiPost, ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { requireBoardMember } from '@/lib/server/boardRoomAuth'
 import { notifyDirectors } from '@/lib/server/boardRoomNotify'
+import { parseJsonObjectBody } from '@/utils/requestBody'
+import { validateUUID } from '@/utils/validation'
 
 export const runtime = 'nodejs'
+
+function validateMeetingId(id: string) {
+  const validation = validateUUID(id, '회의 ID')
+  if (!validation.isValid) {
+    return { error: ApiError.badRequest(validation.errors[0] || '잘못된 회의 ID 형식입니다.') }
+  }
+  return { id: validation.sanitized }
+}
 
 export async function POST(request: NextRequest) {
   const auth = await requireBoardMember()
@@ -12,16 +22,21 @@ export async function POST(request: NextRequest) {
 
   return apiPost(
     async () => {
-      const body = await request.json()
-      const meetingId: string = body.meeting_id
-      const title: string = (body.title || '').trim()
-      const content: string | null = body.content || null
+      const body = await parseJsonObjectBody(request)
+      if (!body) throw ApiError.badRequest('유효한 JSON body가 필요합니다.')
+
+      const meetingId = typeof body.meeting_id === 'string' ? body.meeting_id : ''
+      const title = typeof body.title === 'string' ? body.title.trim() : ''
+      const content = typeof body.content === 'string' ? body.content : null
       if (!meetingId || !title) throw ApiError.badRequest('meeting_id와 제목이 필요합니다.')
+      const routeMeetingId = validateMeetingId(meetingId)
+      if (routeMeetingId.error) throw routeMeetingId.error
+      const sanitizedMeetingId = routeMeetingId.id
 
       const { data: lastRow, error: lastErr } = await db
         .from('board_agendas')
         .select('sort_order')
-        .eq('meeting_id', meetingId)
+        .eq('meeting_id', sanitizedMeetingId)
         .order('sort_order', { ascending: false })
         .limit(1)
         .maybeSingle()
@@ -31,7 +46,7 @@ export async function POST(request: NextRequest) {
       const { data: agenda, error } = await db
         .from('board_agendas')
         .insert({
-          meeting_id: meetingId,
+          meeting_id: sanitizedMeetingId,
           title,
           content,
           sort_order: nextOrder,
@@ -45,12 +60,12 @@ export async function POST(request: NextRequest) {
       const { data: meeting } = await db
         .from('board_meetings')
         .select('title')
-        .eq('id', meetingId)
+        .eq('id', sanitizedMeetingId)
         .single()
       await notifyDirectors(db, {
         title: '새 안건 등록',
         message: `'${meeting?.title ?? '이사회'}'에 새 안건이 등록되었습니다: ${title}`,
-        meetingId,
+        meetingId: sanitizedMeetingId,
       })
 
       return ApiSuccess.created({ id: agenda.id }, '안건이 추가되었습니다.')

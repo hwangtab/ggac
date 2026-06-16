@@ -106,3 +106,7 @@ export const isValidArtistCategory = (category: string): category is ArtistCateg
 export const isValidBoardCategory = (category: string): category is BoardCategory => {
   return BOARD_CATEGORIES.includes(category as BoardCategory)
 }
+
+export const parseBoardCategory = (category: unknown): BoardCategory | null => {
+  return typeof category === 'string' && isValidBoardCategory(category) ? category : null
+}

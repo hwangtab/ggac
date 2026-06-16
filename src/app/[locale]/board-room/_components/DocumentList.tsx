@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
+import { toSafeHttpUrl } from '@/utils/safeUrl'
 
 interface BoardDocument {
   id: string
@@ -74,6 +75,7 @@ export default function DocumentList({
     <div className="space-y-3">
       {documents.map(doc => {
         const canDelete = doc.uploaded_by === currentUserId || isAdmin
+        const safeDownloadUrl = doc.download_url ? toSafeHttpUrl(doc.download_url) : null
         return (
           <div
             key={doc.id}
@@ -94,9 +96,9 @@ export default function DocumentList({
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
-              {doc.download_url ? (
+              {safeDownloadUrl ? (
                 <a
-                  href={doc.download_url}
+                  href={safeDownloadUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="px-3 py-1.5 bg-primary-600 text-white text-xs font-medium rounded-lg hover:bg-primary-700 transition-colors whitespace-nowrap"

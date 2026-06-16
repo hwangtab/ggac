@@ -1,8 +1,29 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { supabase } from '../lib/supabase/client'
+import { useLocale } from 'next-intl'
+import { useRouter } from '@/i18n/navigation'
+import { routing } from '@/i18n/routing'
+
+const isDevelopment = process.env.NODE_ENV === 'development'
+
+const debugRouteProtection = (message: string, ...args: unknown[]) => {
+  if (isDevelopment) {
+    console.log(message, ...args)
+  }
+}
+
+const warnRouteProtection = (message: string, ...args: unknown[]) => {
+  if (isDevelopment) {
+    console.warn(message, ...args)
+  }
+}
+
+const errorRouteProtection = (message: string, ...args: unknown[]) => {
+  if (isDevelopment) {
+    console.error(message, ...args)
+  }
+}
 
 // 모바일 디바이스 감지 유틸리티
 const isMobileDevice = () => {
@@ -32,6 +53,26 @@ const isOnline = () => {
   return window.navigator.onLine
 }
 
+const getLocalizedBrowserPath = (path: string, locale: string) => {
+  if (typeof window === 'undefined') return path
+
+  const parsed = new URL(path, window.location.origin)
+  const segments = parsed.pathname.split('/')
+  const pathLocale = segments[1]
+  const hasLocalePrefix = routing.locales.some(supportedLocale => supportedLocale === pathLocale)
+
+  if (!hasLocalePrefix && locale !== routing.defaultLocale) {
+    parsed.pathname = `/${locale}${parsed.pathname === '/' ? '' : parsed.pathname}`
+  }
+
+  return `${parsed.pathname}${parsed.search}${parsed.hash}`
+}
+
+const getCurrentBrowserPath = () => {
+  if (typeof window === 'undefined') return '/'
+  return `${window.location.pathname}${window.location.search}${window.location.hash}`
+}
+
 // 페이지 로딩 상태를 안정화하는 유틸리티 (모바일 최적화)
 export const useStablePageLoad = (targetPath?: string) => {
   const [isLoading, setIsLoading] = useState(true)
@@ -50,7 +91,7 @@ export const useStablePageLoad = (targetPath?: string) => {
 
         // 모바일에서는 즉시 준비 완료로 설정하여 하얀 화면 문제 방지
         if (isMobile) {
-          console.log('📱 [ROUTE PROTECTION] Mobile detected - immediate ready state')
+          debugRouteProtection('📱 [ROUTE PROTECTION] Mobile detected - immediate ready state')
           if (mounted) {
             setIsLoading(false)
             setIsReady(true)
@@ -68,20 +109,20 @@ export const useStablePageLoad = (targetPath?: string) => {
           if (mounted) {
             setIsLoading(false)
             setIsReady(true)
-            console.log('✅ [ROUTE PROTECTION] Page ready')
+            debugRouteProtection('✅ [ROUTE PROTECTION] Page ready')
           }
         }, 30)
 
         // 안전장치: 최대 3초 후 강제 준비 완료
         fallbackTimer = setTimeout(() => {
           if (mounted) {
-            console.warn('⚠️ [ROUTE PROTECTION] Fallback timeout - forcing ready state')
+            warnRouteProtection('⚠️ [ROUTE PROTECTION] Fallback timeout - forcing ready state')
             setIsLoading(false)
             setIsReady(true)
           }
         }, 3000)
       } catch (error) {
-        console.error('💥 [ROUTE PROTECTION] Error initializing page:', error)
+        errorRouteProtection('💥 [ROUTE PROTECTION] Error initializing page:', error)
         if (mounted) {
           setIsLoading(false)
           setIsReady(true)
@@ -104,6 +145,7 @@ export const useStablePageLoad = (targetPath?: string) => {
 // 네비게이션 안전 래퍼 (모바일 최적화)
 export const useSafeNavigation = () => {
   const router = useRouter()
+  const locale = useLocale()
 
   const navigateSafely = (path: string, delay?: number) => {
     const isMobile = isMobileDevice()
@@ -113,12 +155,12 @@ export const useSafeNavigation = () => {
     const defaultDelay = isMobile ? 300 : 100
     const actualDelay = delay ?? defaultDelay
 
-    console.log(
+    debugRouteProtection(
       `🚀 [SAFE NAVIGATION] Navigating to ${path} (Mobile: ${isMobile}, Delay: ${actualDelay}ms)`
     )
 
     if (!online) {
-      console.warn('🌐 [SAFE NAVIGATION] Offline - navigation may fail')
+      warnRouteProtection('🌐 [SAFE NAVIGATION] Offline - navigation may fail')
     }
 
     // 미들웨어 처리 시간을 고려한 안전한 네비게이션
@@ -126,12 +168,12 @@ export const useSafeNavigation = () => {
       try {
         router.push(path)
       } catch (error) {
-        console.error('❌ [SAFE NAVIGATION] Router.push failed:', error)
+        errorRouteProtection('❌ [SAFE NAVIGATION] Router.push failed:', error)
 
         // 모바일에서는 fallback으로 window.location 사용
         if (isMobile) {
-          console.log('🔄 [SAFE NAVIGATION] Falling back to window.location')
-          window.location.href = path
+          debugRouteProtection('🔄 [SAFE NAVIGATION] Falling back to window.location')
+          window.location.href = getLocalizedBrowserPath(path, locale)
         }
       }
     }, actualDelay)
@@ -143,7 +185,10 @@ export const useSafeNavigation = () => {
 
     const attemptNavigation = () => {
       attempts++
-      console.log(`🔄 [SAFE NAVIGATION] Navigation attempt ${attempts}/${maxRetries} to ${path}`)
+      debugRouteProtection(
+        `🔄 [SAFE NAVIGATION] Navigation attempt ${attempts}/${maxRetries} to ${path}`
+      )
+      const expectedBrowserPath = getLocalizedBrowserPath(path, locale)
 
       try {
         router.push(path)
@@ -151,21 +196,23 @@ export const useSafeNavigation = () => {
         // 성공 확인을 위한 URL 체크
         setTimeout(
           () => {
-            if (window.location.pathname !== path && attempts < maxRetries) {
-              console.log('⚠️ [SAFE NAVIGATION] Navigation seems to have failed, retrying...')
+            if (getCurrentBrowserPath() !== expectedBrowserPath && attempts < maxRetries) {
+              debugRouteProtection(
+                '⚠️ [SAFE NAVIGATION] Navigation seems to have failed, retrying...'
+              )
               attemptNavigation()
             }
           },
           isMobile ? 1000 : 500
         )
       } catch (error) {
-        console.error(`❌ [SAFE NAVIGATION] Attempt ${attempts} failed:`, error)
+        errorRouteProtection(`❌ [SAFE NAVIGATION] Attempt ${attempts} failed:`, error)
 
         if (attempts < maxRetries) {
           setTimeout(attemptNavigation, 1000)
         } else {
-          console.log('🔄 [SAFE NAVIGATION] All attempts failed, using window.location')
-          window.location.href = path
+          debugRouteProtection('🔄 [SAFE NAVIGATION] All attempts failed, using window.location')
+          window.location.href = expectedBrowserPath
         }
       }
     }
@@ -182,7 +229,10 @@ export const useMobileErrorHandler = () => {
     const isMobile = isMobileDevice()
     const online = isOnline()
 
-    console.error(`❌ [MOBILE ERROR] ${context} (Mobile: ${isMobile}, Online: ${online}):`, error)
+    errorRouteProtection(
+      `❌ [MOBILE ERROR] ${context} (Mobile: ${isMobile}, Online: ${online}):`,
+      error
+    )
 
     if (!online) {
       return {

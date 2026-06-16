@@ -6,6 +6,7 @@
 import React from 'react'
 
 import { generateImageUrl } from './imageUrl'
+import { toSafeHttpUrl } from './safeUrl'
 
 // 기본 조직 정보
 const ORGANIZATION_DATA = {
@@ -167,8 +168,8 @@ export function generateArtistStructuredData(artist: {
   })
 
   const sameAs = artist.portfolioLinks
-    ?.map(link => link.url)
-    .filter(url => url && url.startsWith('http'))
+    ?.map(link => toSafeHttpUrl(link.url))
+    .filter((url): url is string => Boolean(url))
 
   return {
     '@context': 'https://schema.org',
@@ -260,7 +261,7 @@ export function generateEventStructuredData(project: {
   if (project.ticketing && project.ticketing.length > 0) {
     eventSchema.offers = project.ticketing.map((ticket: any) => ({
       '@type': 'Offer',
-      url: ticket.url,
+      url: toSafeHttpUrl(ticket.url) ?? eventUrl,
       price: ticket.price || '0',
       priceCurrency: 'KRW',
       availability: ticket.available ? 'https://schema.org/InStock' : 'https://schema.org/SoldOut',
@@ -360,12 +361,21 @@ export function generateFAQStructuredData(
  * @warning Server Component 트리에서만 호출해야 합니다.
  * Client Component에서 호출하면 hydration 오류가 발생할 수 있습니다.
  */
+export function serializeJsonLd(data: object): string {
+  return JSON.stringify(data)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029')
+}
+
 export function structuredDataToScript(data: object): React.ReactElement {
   return (
     <script
       type="application/ld+json"
       dangerouslySetInnerHTML={{
-        __html: JSON.stringify(data, null, 0),
+        __html: serializeJsonLd(data),
       }}
     />
   )
