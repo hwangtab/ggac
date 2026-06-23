@@ -17,10 +17,7 @@ const Hero = () => {
   const t = useTranslations('home')
   const tc = useTranslations('common')
 
-  // glass 카드 진입 애니메이션 제거 — isLoaded 게이팅 때문에 첫 페인트가
-  // transparent → glass로 두 번 paint되어 LCP가 헤더 텍스트로 떨어지던 문제 해결.
-  // 카드 자체는 첫 프레임에 최종 스타일로 그려지고, h1/button만 showText로 미세하게 fade-in.
-  const [showText, setShowText] = useState(false)
+  // h1·서브타이틀은 첫 프레임에 즉시 표시(LCP 보호). 장식 요소(카드·CTA)에만 CSS 진입 애니메이션.
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 })
 
   // 접근성: 사용자의 동작 줄이기 설정 확인
@@ -131,11 +128,6 @@ const Hero = () => {
       getErrorTracker()
     }
 
-    // h1/button 미세 진입만 유지 — 카드 자체는 즉시 paint
-    const timer2 = setTimeout(() => {
-      if (mounted) setShowText(true)
-    }, 300)
-
     // 초기 화면 크기 설정
     updateDimensions()
 
@@ -148,7 +140,6 @@ const Hero = () => {
 
     return () => {
       mounted = false
-      clearTimeout(timer2)
       window.removeEventListener('resize', debouncedResize)
       // debounce 타이머도 정리
       debouncedResize.cancel()
@@ -221,11 +212,11 @@ const Hero = () => {
       {/* Layer 4: 글래스모피즘 텍스트 컨테이너 */}
       <div className="relative text-center text-white px-4" style={{ zIndex: 20 }}>
         <div
-          className="glass-hero-container max-w-6xl mx-auto rounded-3xl
+          className={`glass-hero-container max-w-6xl mx-auto rounded-3xl
             px-6 py-6 sm:px-10 sm:py-8 md:px-12 md:py-9 lg:px-16 lg:py-11
             mx-2 sm:mx-4 md:mx-auto
             rounded-2xl sm:rounded-3xl
-            opacity-100"
+            opacity-100 ${prefersReducedMotion ? '' : 'motion-card-in'}`}
           style={{
             backdropFilter: `blur(var(--glassmorphism-blur, 12px)) saturate(var(--glassmorphism-saturation, 180%))`,
             background: `linear-gradient(
@@ -243,14 +234,9 @@ const Hero = () => {
             transform: 'translate3d(calc(var(--mx) * 6px), calc(var(--my) * 6px), 0)',
           }}
         >
+          {/* LCP 요소 — h1은 첫 프레임부터 즉시 표시(opacity-100 고정, 진입 애니메이션 제외) */}
           <h1
-            className={`tw-heading-primary mb-4 sm:mb-6 ${
-              prefersReducedMotion
-                ? 'opacity-100'
-                : `transition-all duration-600 ease-out delay-200 ${
-                    showText ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
-                  }`
-            }`}
+            className="tw-heading-primary mb-4 sm:mb-6 opacity-100"
             style={{
               color: '#FFFFFF',
               textShadow: `
@@ -289,12 +275,9 @@ const Hero = () => {
           </p>
           <div
             className={`flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center ${
-              prefersReducedMotion
-                ? 'opacity-100'
-                : `transition-all duration-600 ease-out delay-400 ${
-                    showText ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
-                  }`
+              prefersReducedMotion ? 'opacity-100' : 'motion-fade-up'
             }`}
+            style={prefersReducedMotion ? undefined : { ['--motion-delay' as string]: '250ms' }}
           >
             <Link
               href="/about"
