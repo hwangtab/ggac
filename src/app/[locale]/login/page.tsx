@@ -149,11 +149,15 @@ export default function LoginPage() {
       }
 
       if (!session) {
-        // 세션 확인이 지연된 경우: redirect가 있으면 라우팅해 미들웨어로 판정 위임
+        // 세션 read-back에 실패했지만 로그인 자체는 성공한 상태.
+        // redirect가 있으면 라우팅해 미들웨어로 판정을 위임하고,
+        // 없으면 폼에 머무는 dead-end 대신 로그인 성공 카드로 전환해 사용자가 직접 이동하게 한다.
         if (hasExplicitRedirect) {
           navigateWithRetry(explicitRedirectPath, isMobile ? 5 : 3)
         } else {
-          setMsg(t('login.loginSuccess'), 'success')
+          setMessage('')
+          setJustAuthenticated(true)
+          setIsAlreadyLoggedIn(true)
         }
         return
       }

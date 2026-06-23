@@ -17,6 +17,14 @@ function hasSupabaseMiddlewareConfig() {
   return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
 }
 
+// @supabase/ssr가 setAll로 기반 응답(res)에 기록한 갱신 토큰 쿠키를, 미들웨어가 새로
+// 반환하는 응답(리다이렉트·유지보수)에도 복사해 브라우저까지 전달한다. 누락하면 토큰
+// 회전(rotation) 환경에서 갱신이 유실되어 다음 요청에 로그아웃될 수 있다.
+function copyResponseCookies(from: NextResponse, to: NextResponse): NextResponse {
+  from.cookies.getAll().forEach(cookie => to.cookies.set(cookie))
+  return to
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
@@ -96,14 +104,14 @@ export async function middleware(request: NextRequest) {
   const authResult = await handleAuth(request, res, supabase, systemSettings)
 
   if (!authResult.shouldContinue && authResult.response) {
-    return authResult.response
+    return copyResponseCookies(res, authResult.response)
   }
 
   if (systemSettings?.maintenanceMode) {
     const isAdmin = authResult.profile?.is_admin === true
 
     if (!isAdmin) {
-      return getMaintenanceResponse(systemSettings.maintenanceMessage)
+      return copyResponseCookies(res, getMaintenanceResponse(systemSettings.maintenanceMessage))
     }
   }
 
