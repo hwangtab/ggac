@@ -1,3 +1,4 @@
+import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import createIntlMiddleware from 'next-intl/middleware'
@@ -6,7 +7,6 @@ import { applyCSP } from './middleware/csp'
 import { getSystemSettings } from './middleware/settings'
 import { handleAuth } from './middleware/auth'
 import { getMaintenanceResponse } from './middleware/maintenance'
-import { createMiddlewareSupabaseClient } from './middleware/supabase-rest'
 import { routing } from './i18n/routing'
 import { createLogger } from '@/utils/logger'
 
@@ -75,7 +75,22 @@ export async function middleware(request: NextRequest) {
     return res
   }
 
-  const supabase = createMiddlewareSupabaseClient(request)
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll()
+        },
+        setAll(cookiesToSet) {
+          // access token 갱신 시 새 쿠키를 요청·응답 양쪽에 반영해 브라우저까지 전달한다.
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+          cookiesToSet.forEach(({ name, value, options }) => res.cookies.set(name, value, options))
+        },
+      },
+    }
+  )
 
   const systemSettings = await getSystemSettings(supabase)
   const authResult = await handleAuth(request, res, supabase, systemSettings)
