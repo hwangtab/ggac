@@ -26,7 +26,9 @@ export default function LoginPage() {
   const searchParams = useSearchParams()
   const { isLoading: pageLoading, isReady } = useStablePageLoad('/login')
   const { navigateWithRetry } = useSafeNavigation()
-  const postLoginRedirectPath = toSafeInternalRedirectPath(searchParams.get('redirect'), '/board')
+  // redirect 파라미터가 명시된 경우에만 자동 이동한다. 없으면 빈 문자열 → 자동 이동하지 않음.
+  const explicitRedirectPath = toSafeInternalRedirectPath(searchParams.get('redirect'), '')
+  const hasExplicitRedirect = explicitRedirectPath !== ''
   const authRedirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const setMsg = (msg: string, type: MessageType) => {
@@ -117,26 +119,47 @@ export default function LoginPage() {
         }
       }
 
-      // 세션이 확인되면, 프로필 여부와 관계없이 우선 라우팅
+      // redirect 파라미터가 명시된 경우에만 자동 이동하고,
+      // 그렇지 않으면 로그인 완료 상태 화면으로 전환해 이동은 사용자에게 맡긴다.
+      const redirectOrStay = (verifiedSession: Awaited<ReturnType<typeof fetchSessionProfile>>) => {
+        setMsg(t('login.msgVerified'), 'success')
+
+        if (hasExplicitRedirect) {
+          // 사용자가 원래 가려던 페이지로만 자동 이동
+          const redirectDelay = isMobile ? 800 : 300
+          clearAuthRedirectTimer()
+          authRedirectTimerRef.current = setTimeout(() => {
+            navigateWithRetry(explicitRedirectPath, isMobile ? 5 : 3)
+            authRedirectTimerRef.current = null
+          }, redirectDelay)
+          return
+        }
+
+        // 자동 이동 없음: 로그인 완료 상태를 보여주고 이동 버튼을 사용자에게 제공
+        if (verifiedSession?.user) {
+          setIsAlreadyLoggedIn(true)
+          setCurrentUser({
+            ...verifiedSession.user,
+            profile: verifiedSession.profile ?? undefined,
+          })
+        }
+      }
+
       if (!session) {
-        // 세션 확인이 지연되어도 라우팅을 트리거해 미들웨어로 판정 위임
-        navigateWithRetry(postLoginRedirectPath, isMobile ? 5 : 3)
+        // 세션 확인이 지연된 경우: redirect가 있으면 라우팅해 미들웨어로 판정 위임
+        if (hasExplicitRedirect) {
+          navigateWithRetry(explicitRedirectPath, isMobile ? 5 : 3)
+        } else {
+          setMsg(t('login.msgVerified'), 'success')
+        }
         return
       }
 
-      // 프로필이 있으면 상태에 맞춰 라우팅, 없으면 게시판으로 위임
+      // 프로필이 있으면 상태에 맞춰 처리
       const profile = session.profile
 
       if (profile && profile.registration_status === 'approved' && profile.is_active) {
-        setMsg(t('login.msgVerified'), 'success')
-
-        // 모바일에서의 세션 동기화를 고려한 지연 후 안전한 네비게이션
-        const redirectDelay = isMobile ? 800 : 300
-        clearAuthRedirectTimer()
-        authRedirectTimerRef.current = setTimeout(() => {
-          navigateWithRetry(postLoginRedirectPath, isMobile ? 5 : 3)
-          authRedirectTimerRef.current = null
-        }, redirectDelay)
+        redirectOrStay(session)
       } else if (profile && profile.registration_status === 'pending') {
         setMsg(t('login.msgPending'), 'loading')
         router.push('/register/pending')
@@ -144,8 +167,8 @@ export default function LoginPage() {
         setMsg(t('login.msgRejected'), 'error')
         router.push('/register/rejected')
       } else {
-        // 프로필을 못가져오거나 알 수 없는 상태: 게시판으로 보내고 미들웨어에 판정 위임
-        navigateWithRetry(postLoginRedirectPath, isMobile ? 5 : 3)
+        // 프로필이 불명확한 경우에도 자동 이동 없이 동일하게 처리
+        redirectOrStay(session)
       }
     } catch (error) {
       console.error('로그인 후 인증 상태 확인 중 오류:', error)
@@ -386,7 +409,7 @@ export default function LoginPage() {
               </p>
               <div className="space-y-3">
                 <button
-                  onClick={() => router.push(postLoginRedirectPath)}
+                  onClick={() => router.push(hasExplicitRedirect ? explicitRedirectPath : '/board')}
                   className="w-full tw-btn-primary"
                 >
                   {t('login.goToBoard')}

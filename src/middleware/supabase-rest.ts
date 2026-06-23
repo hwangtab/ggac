@@ -20,18 +20,29 @@ type QueryBuilderState = {
 
 const SUPABASE_COOKIE_PATTERN = /^sb-.+-auth-token(?:\.\d+)?$/
 
-function decodeBase64(value: string): string {
-  if (typeof globalThis.atob === 'function') {
-    return globalThis.atob(value)
+function decodeBase64Url(value: string): string {
+  if (typeof globalThis.atob !== 'function') {
+    throw new Error('Base64 decoding is unavailable in this runtime')
   }
 
-  throw new Error('Base64 decoding is unavailable in this runtime')
+  // @supabase/ssr은 세션 쿠키를 base64url(+/ 대신 -_, 패딩 생략)로 직렬화한다.
+  // 표준 base64 디코더인 atob이 받아들이도록 +/ 로 환원하고 패딩을 복원한다.
+  let base64 = value.replace(/-/g, '+').replace(/_/g, '/')
+  const padding = base64.length % 4
+  if (padding) {
+    base64 += '='.repeat(4 - padding)
+  }
+
+  // user 메타데이터의 UTF-8(예: 한글 display_name)을 보존하기 위해 바이트 → UTF-8 디코드.
+  const binary = globalThis.atob(base64)
+  const bytes = Uint8Array.from(binary, char => char.charCodeAt(0))
+  return new TextDecoder().decode(bytes)
 }
 
 function parseAuthCookie(value: string): string | null {
   try {
     const decoded = decodeURIComponent(value)
-    const jsonText = decoded.startsWith('base64-') ? decodeBase64(decoded.slice(7)) : decoded
+    const jsonText = decoded.startsWith('base64-') ? decodeBase64Url(decoded.slice(7)) : decoded
     const parsed = JSON.parse(jsonText)
 
     if (Array.isArray(parsed)) {
