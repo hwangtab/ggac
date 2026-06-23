@@ -13,6 +13,8 @@ export function usePointerParallax(
 
   useEffect(() => {
     if (disabled) return
+    // 터치 기기(coarse pointer)에서는 포인터 시차 비활성 — pointermove가 발화돼도 무시
+    if (window.matchMedia('(pointer: coarse)').matches) return
     const el = ref.current
     if (!el) return
 
