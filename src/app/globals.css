@@ -6,24 +6,47 @@
 @import 'react-image-crop/dist/ReactCrop.css';
 
 /*
- * Pretendard Variable (dynamic-subset, font-display: optional)
+ * Pretendard Variable (dynamic-subset, font-display: swap)
  * 92개 unicode-range 분할 woff2 — 브라우저가 페이지에서 실제 사용된 글자가 포함된
  * 서브셋만 fetch한다. 한국어 일반 문서 기준 ~50~150KB만 다운로드됨.
  *
- * font-display: optional — 100ms 안에 폰트가 안 받아지면 fallback을 그 페이지에
- * 영구 사용. swap 시 발생하던 LCP 지연/CLS/jank 제거. 캐시된 재방문은 즉시 Pretendard.
- * 원본은 node_modules/pretendard/.../pretendardvariable-dynamic-subset.css (display: swap)이며,
- * src/styles/pretendard-dynamic-subset.css는 빌드 타임에 생성된 optional 변형 사본이다.
+ * font-display: swap — 폰트를 받는 즉시 교체해 모든 OS(특히 Pretendard 미설치 윈도우)에서
+ * Pretendard가 보이도록 보장한다. 과거 optional은 윈도우 첫 방문 시 100ms 안에 서브셋을
+ * 못 받으면 fallback(맑은 고딕)을 그 페이지에 영구 고정하는 문제가 있었다(맥은 -apple-system
+ * 자형이 유사해 드러나지 않음). swap 교체 시의 줄높이 변화로 인한 CLS/jank는 아래
+ * 'Pretendard Fallback' 메트릭 매칭 페이스로 제거한다.
+ * src/styles/pretendard-dynamic-subset.css는 원본(node_modules/pretendard,
+ * display: swap)의 사본이며 git에 커밋되어 있다.
  */
 @import '../styles/pretendard-dynamic-subset.css';
 
 /*
+ * Pretendard 메트릭에 맞춘 fallback 페이스.
+ * 시스템 한글 폰트(Apple SD Gothic Neo / 맑은 고딕 등)를 쓰되, 수직 메트릭을
+ * Pretendard(2048 upm 기준 typoAscender 1950 = 95.21%, typoDescender -494 = 24.12%,
+ * lineGap 0)에 강제로 맞춘다. dynamic-subset이 font-display: swap이므로 Pretendard가
+ * 늦게(또는 윈도우 첫 방문에) 로드돼 교체될 때 줄높이 변화로 생기던 CLS/jank를 제거한다.
+ * 윈도우 사용자는 Pretendard를 받기 전에도 동일한 줄 레이아웃을 본 뒤 자형만 교체된다.
+ */
+@font-face {
+  font-family: 'Pretendard Fallback';
+  src:
+    local('Apple SD Gothic Neo'), local('Malgun Gothic'), local('맑은 고딕'), local('Segoe UI'),
+    local('Arial');
+  ascent-override: 95.21%;
+  descent-override: 24.12%;
+  line-gap-override: 0%;
+}
+
+/*
  * 모든 곳에서 'Pretendard Variable' 가족을 쓰되, font-weight 유틸리티
  * (font-bold, font-black 등)로 무게를 조절한다. CSS 변수는 tailwind 호환성을 위해 유지.
+ * 'Pretendard Fallback'을 웹폰트 바로 다음에 두어 로드 전/실패 시에도 동일 메트릭을 유지.
  */
 :root {
   --font-pretendard:
-    'Pretendard Variable', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    'Pretendard Variable', 'Pretendard Fallback', system-ui, -apple-system, BlinkMacSystemFont,
+    'Segoe UI', sans-serif;
   --font-pretendard-black: var(--font-pretendard);
 }
 
