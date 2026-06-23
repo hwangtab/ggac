@@ -3,8 +3,8 @@ import { test, expect } from '@playwright/test'
 test.describe('메인 레이어드 모션', () => {
   test('앰비언트 빛 레이어가 aria-hidden으로 존재한다', async ({ page }) => {
     await page.goto('/', { waitUntil: 'domcontentloaded' })
-    const ambient = page.locator('.ambient-light').first()
-    await expect(ambient).toHaveCount(1)
+    const ambient = page.locator('.ambient-light')
+    await expect(ambient).toHaveCount(2)
     const wrapper = page.locator('[aria-hidden="true"] .ambient-light').first()
     await expect(wrapper).toBeAttached()
   })
