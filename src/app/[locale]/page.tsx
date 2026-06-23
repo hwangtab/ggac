@@ -1,6 +1,7 @@
 import Hero from '@/components/Hero'
 import FeaturedProjects from '@/components/FeaturedProjects'
 import FeaturedArtists from '@/components/FeaturedArtists'
+import ScrollReveal from '@/components/ScrollReveal'
 import { getFeaturedProjects, getArtists } from '@/lib/data'
 import type { Metadata } from 'next'
 import { setRequestLocale } from 'next-intl/server'
@@ -83,8 +84,12 @@ export default async function Home({ params }: HomeProps) {
     <div data-home-page="true">
       {structuredDataToScript(combinedStructuredData)}
       <Hero />
-      <FeaturedProjects projects={featuredProjects} />
-      <FeaturedArtists artists={artists} />
+      <ScrollReveal>
+        <FeaturedProjects projects={featuredProjects} />
+      </ScrollReveal>
+      <ScrollReveal delay={120}>
+        <FeaturedArtists artists={artists} />
+      </ScrollReveal>
     </div>
   )
 }
