@@ -19,6 +19,8 @@ export default function LoginPage() {
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState<MessageType>('error')
   const [isAlreadyLoggedIn, setIsAlreadyLoggedIn] = useState(false)
+  // 방금 로그인에 성공해 머무는 경우와, 이미 로그인된 채 페이지에 진입한 경우를 구분한다.
+  const [justAuthenticated, setJustAuthenticated] = useState(false)
   const [currentUser, setCurrentUser] = useState<
     (VerifiedSessionUser & { profile?: { display_name?: string | null } }) | null
   >(null)
@@ -122,10 +124,9 @@ export default function LoginPage() {
       // redirect 파라미터가 명시된 경우에만 자동 이동하고,
       // 그렇지 않으면 로그인 완료 상태 화면으로 전환해 이동은 사용자에게 맡긴다.
       const redirectOrStay = (verifiedSession: Awaited<ReturnType<typeof fetchSessionProfile>>) => {
-        setMsg(t('login.msgVerified'), 'success')
-
         if (hasExplicitRedirect) {
-          // 사용자가 원래 가려던 페이지로만 자동 이동
+          // 사용자가 원래 가려던 페이지로만 자동 이동 (이동 안내 배너 표시)
+          setMsg(t('login.msgVerified'), 'success')
           const redirectDelay = isMobile ? 800 : 300
           clearAuthRedirectTimer()
           authRedirectTimerRef.current = setTimeout(() => {
@@ -135,8 +136,10 @@ export default function LoginPage() {
           return
         }
 
-        // 자동 이동 없음: 로그인 완료 상태를 보여주고 이동 버튼을 사용자에게 제공
+        // 자동 이동 없음: 이동 안내 배너 없이 로그인 성공 카드로 전환하고 이동은 사용자에게 맡긴다
         if (verifiedSession?.user) {
+          setMessage('')
+          setJustAuthenticated(true)
           setIsAlreadyLoggedIn(true)
           setCurrentUser({
             ...verifiedSession.user,
@@ -150,7 +153,7 @@ export default function LoginPage() {
         if (hasExplicitRedirect) {
           navigateWithRetry(explicitRedirectPath, isMobile ? 5 : 3)
         } else {
-          setMsg(t('login.msgVerified'), 'success')
+          setMsg(t('login.loginSuccess'), 'success')
         }
         return
       }
@@ -400,7 +403,7 @@ export default function LoginPage() {
                 </svg>
               </div>
               <h2 className="text-xl font-semibold text-gray-900 mb-2">
-                {t('login.alreadyLoggedIn')}
+                {justAuthenticated ? t('login.loginSuccess') : t('login.alreadyLoggedIn')}
               </h2>
               <p className="text-gray-600 mb-6">
                 {t('login.alreadyLoggedInBody', {
@@ -421,6 +424,7 @@ export default function LoginPage() {
                   onClick={async () => {
                     await supabase.auth.signOut()
                     setIsAlreadyLoggedIn(false)
+                    setJustAuthenticated(false)
                     setCurrentUser(null)
                     setMsg(t('login.msgLoggedOut'), 'success')
                   }}
