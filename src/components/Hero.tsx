@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, memo } from 'react'
+import { useEffect, useState, useCallback, useRef, memo } from 'react'
 import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
 import OptimizedHeroImage from './OptimizedHeroImage'
@@ -9,6 +9,7 @@ import ErrorBoundary from './ErrorBoundary'
 import PerformanceMonitor from './PerformanceMonitor'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 import { useRenderPerformance } from '@/hooks/usePerformanceMonitor'
+import { usePointerParallax } from '@/hooks/usePointerParallax'
 import { getErrorTracker } from '@/utils/errorTracking'
 
 const Hero = () => {
@@ -26,6 +27,13 @@ const Hero = () => {
 
   // 렌더링 성능 추적
   const renderPerf = useRenderPerformance('Hero')
+
+  // 포인터 시차 설정
+  const sectionRef = useRef<HTMLElement>(null)
+  // 터치/모바일/reduced-motion에서는 포인터 시차 비활성
+  usePointerParallax(sectionRef, {
+    disabled: prefersReducedMotion,
+  })
 
   // 모바일 디바이스 감지
   const isMobileDevice = useCallback(() => {
@@ -145,6 +153,7 @@ const Hero = () => {
 
   return (
     <section
+      ref={sectionRef}
       role="banner"
       aria-label={t('hero.ariaMain')}
       className="relative min-h-screen flex items-center justify-center overflow-hidden"
@@ -220,7 +229,7 @@ const Hero = () => {
               0 2px 16px rgba(0, 0, 0, 0.2),
               inset 0 1px 0 rgba(255, 255, 255, 0.1)
             `,
-            transform: 'translateZ(0)',
+            transform: 'translate3d(calc(var(--mx) * 6px), calc(var(--my) * 6px), 0)',
           }}
         >
           <h1
