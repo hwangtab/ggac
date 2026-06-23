@@ -11,7 +11,7 @@ export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createErrorResponse } from '@/utils/apiResponse'
-import { createClient } from '@supabase/supabase-js'
+import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
 import { revalidateTag } from 'next/cache'
 import type { PostAttachmentStats } from '@/types'
 import { createSupabaseServer } from '@/lib/supabase/server'
@@ -34,17 +34,7 @@ import {
  * Service Role Key는 RLS를 우회하므로, 인증된 사용자의 업로드 작업에만 제한적으로 사용
  */
 function getSupabaseAdmin() {
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    console.error('[SUPABASE ADMIN] SUPABASE_SERVICE_ROLE_KEY가 설정되지 않음')
-    throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured')
-  }
-
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-    console.error('[SUPABASE ADMIN] NEXT_PUBLIC_SUPABASE_URL이 설정되지 않음')
-    throw new Error('NEXT_PUBLIC_SUPABASE_URL is not configured')
-  }
-
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+  return createServiceRoleClient()
 }
 
 /**

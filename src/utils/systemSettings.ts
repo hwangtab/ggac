@@ -1,4 +1,5 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import { createServiceRoleClient, hasServiceRoleEnv } from '@/lib/server/supabaseAdmin'
 
 /**
  * 주의: getSystemSettings는 일반 사용자 요청에서도 호출될 수 있으므로 service role
@@ -12,14 +13,14 @@ let serviceRoleClient: SupabaseClient | null = null
 function getServiceRoleClient(): SupabaseClient | null {
   if (serviceRoleClient) return serviceRoleClient
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !serviceKey) return null
+  if (!hasServiceRoleEnv()) return null
 
-  serviceRoleClient = createClient(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  })
-  return serviceRoleClient
+  try {
+    serviceRoleClient = createServiceRoleClient()
+    return serviceRoleClient
+  } catch {
+    return null
+  }
 }
 
 interface SystemSettingsData {

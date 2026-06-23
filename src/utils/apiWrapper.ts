@@ -397,9 +397,9 @@ export function requireAuth(userId?: string): string {
 }
 
 /**
- * 관리자 권한 검증 래퍼
+ * 관리자 role 문자열 검증 래퍼
  */
-export function requireAdmin(userRole?: string): void {
+export function requireAdminRole(userRole?: string): void {
   if (userRole !== 'admin') {
     throw ApiError.forbidden('관리자 권한이 필요합니다.')
   }

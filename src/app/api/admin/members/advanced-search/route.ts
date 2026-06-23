@@ -11,7 +11,7 @@ import {
   RATE_LIMIT_CONFIGS,
   createUserKeyGenerator,
   addRateLimitHeaders,
-} from '@/utils/rateLimiter'
+} from '@/lib/server/rateLimit'
 import { validateAdvancedSearchQuery, buildSearchQuery } from '@/utils/advancedFiltering'
 import type { AdvancedSearchQuery, FilteredResult, FieldDefinition } from '@/types'
 import { parseJsonObjectBody } from '@/utils/requestBody'

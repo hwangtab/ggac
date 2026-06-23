@@ -11,10 +11,7 @@ export const preferredRegion = 'icn1'
 import { NextRequest, NextResponse } from 'next/server'
 import { createErrorResponse } from '@/utils/apiResponse'
 import { createSupabaseServer } from '@/lib/supabase/server'
-import distributedRateLimiter, {
-  DISTRIBUTED_RATE_LIMIT_CONFIGS,
-  createDistributedUserKeyGenerator,
-} from '@/utils/distributedRateLimiter'
+import { RATE_LIMITS, applyRateLimit, createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { validateUUID } from '@/utils/validation'
 import type { UserLikedPost } from '@/types'
@@ -26,9 +23,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   const resolvedParams = await context.params
   try {
     // 분산 Rate limiting 적용
-    const rateLimiter = await distributedRateLimiter.applyRateLimit({
-      ...DISTRIBUTED_RATE_LIMIT_CONFIGS.GENERAL_API,
-      keyGenerator: createDistributedUserKeyGenerator('user_likes'),
+    const rateLimiter = await applyRateLimit({
+      ...RATE_LIMITS.GENERAL_API,
+      keyGenerator: createUserKeyGenerator('user_likes'),
     })
 
     const rateLimitResult = await rateLimiter(request)

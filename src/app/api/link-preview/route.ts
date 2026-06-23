@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createErrorResponse } from '@/utils/apiResponse'
 import { fetchLinkPreview } from '@/utils/linkPreview'
-import distLimiter from '@/utils/distributedRateLimiter'
+import distLimiter from '@/lib/server/rateLimit'
 import { createSupabaseServer } from '@/lib/supabase/server'
 
 export async function GET(request: NextRequest) {

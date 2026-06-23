@@ -9,7 +9,7 @@ export const runtime = 'nodejs'
 export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
 import { isProjectStoragePublicUrl } from '@/utils/storageUrlValidation'
 import { validateUUID } from '@/utils/validation'
 import { createLogger, maskId } from '@/utils/logger'
@@ -18,11 +18,7 @@ const log = createLogger('api/og/post')
 
 // Service Role 클라이언트 생성
 function getSupabaseAdmin() {
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY || !process.env.NEXT_PUBLIC_SUPABASE_URL) {
-    throw new Error('Supabase configuration missing')
-  }
-
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+  return createServiceRoleClient()
 }
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServer } from '@/lib/supabase/server'
-import { createClient } from '@supabase/supabase-js'
+import { createServiceRoleClient, hasServiceRoleEnv } from '@/lib/server/supabaseAdmin'
 import { z } from 'zod'
 import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
 import { revalidatePath, revalidateTag } from 'next/cache'
@@ -305,14 +305,7 @@ export async function PATCH(request: NextRequest) {
     const contactValue = updateData.contact === '' ? null : updateData.contact
 
     // 아티스트 정보 업데이트 (service-role 우선 사용) + 서버 측 소유자 검증
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    if (!url) {
-      return createErrorResponse({ success: false, error: 'Server configuration error' }, 500)
-    }
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    const db = serviceKey
-      ? createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
-      : supabase
+    const db = hasServiceRoleEnv() ? createServiceRoleClient() : supabase
 
     const { data: ownerCheck, error: ownerError } = await supabase
       .from('member_profiles')

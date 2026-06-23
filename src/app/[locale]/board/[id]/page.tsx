@@ -5,6 +5,7 @@ import PostDetailClient from './PostDetailClient'
 import { Suspense } from 'react'
 import { generatePostOgImage } from '@/utils/imageUrl'
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { getUserLikedCommentIds } from '@/lib/server/commentLikes'
 import { setRequestLocale } from 'next-intl/server'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { validateUUID } from '@/utils/validation'
@@ -246,12 +247,21 @@ async function getInitialPostData(
         }
       }
     }
+    const commentIds = comments.map(comment => String(comment.id)).filter(Boolean)
+    const likedCommentIds = serverUser
+      ? await getUserLikedCommentIds(supabaseServer, serverUser.id, commentIds)
+      : new Set<string>()
+    const commentsWithLikeState = comments.map(comment => ({
+      ...comment,
+      like_count: parseIntegerParam(String(comment.like_count ?? ''), 0, { min: 0 }),
+      is_liked: likedCommentIds.has(String(comment.id)),
+    }))
 
     return {
       post: {
         ...post,
         is_liked: false, // 서버에서는 기본값, 클라이언트에서 업데이트
-        comment_count: (comments || []).length,
+        comment_count: commentsWithLikeState.length,
         attachments_stats: {
           total_attachments: (attachments || []).length,
           total_size: totalSize,
@@ -261,7 +271,7 @@ async function getInitialPostData(
           audio_count: (attachments || []).filter(att => att.file_type === 'audio').length,
         },
       },
-      comments,
+      comments: commentsWithLikeState,
       attachments,
       author: authorRecord ? { display_name: authorRecord.display_name } : null,
       user: userData,

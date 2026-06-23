@@ -1,8 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createErrorResponse } from '@/utils/apiResponse'
-import { applyRateLimit, RATE_LIMIT_CONFIGS } from '@/utils/rateLimiter'
-import { requireAdmin } from '@/lib/server/adminAuth'
-import { parseJsonObjectBody } from '@/utils/requestBody'
+import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { parseIntegerParam } from '@/utils/queryParams'
 
 const REPORT_TYPES = [
@@ -86,27 +84,18 @@ function parseReportFilters(value: unknown): ReportFilters {
  * 멤버 리포트 생성 API
  * POST /api/admin/reports/generate
  */
-export async function POST(request: NextRequest) {
-  try {
-    // Rate limiting 적용
-    const rateLimiter = await applyRateLimit(RATE_LIMIT_CONFIGS.ADMIN_API)
-    const rateLimitResult = await rateLimiter(request)
-
-    if (!rateLimitResult.success) {
-      return (
-        rateLimitResult.response ??
-        createErrorResponse({ success: false, error: '요청이 너무 많습니다.' }, 429)
-      )
-    }
-
-    const auth = await requireAdmin()
-    if (auth instanceof NextResponse) return auth
+export const POST = defineApiRoute<Record<string, unknown>>({
+  method: 'POST',
+  name: 'api/admin/reports/generate',
+  rateLimit: RATE_LIMITS.ADMIN_API,
+  auth: 'admin',
+  body: {
+    invalidResponse: () =>
+      createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400),
+  },
+  errorResponse: () => createErrorResponse({ success: false, error: 'Internal server error' }, 500),
+  handler: async ({ body, auth }) => {
     const { db: serviceSupabase, user } = auth
-
-    const body = await parseJsonObjectBody(request)
-    if (!body) {
-      return createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400)
-    }
 
     const reportType = parseReportType(body.reportType)
     if (!reportType) {
@@ -177,11 +166,8 @@ export async function POST(request: NextRequest) {
         data: reportData.data,
       },
     })
-  } catch (error) {
-    console.error('Report generation error:', error)
-    return createErrorResponse({ success: false, error: 'Internal server error' }, 500)
-  }
-}
+  },
+})
 
 // 멤버 활동 리포트 생성
 async function generateMemberActivityReport(

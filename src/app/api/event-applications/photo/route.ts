@@ -1,11 +1,7 @@
 import { NextRequest } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
-import {
-  distributedRateLimiter,
-  DISTRIBUTED_RATE_LIMIT_CONFIGS,
-  createDistributedIPKeyGenerator,
-} from '@/utils/distributedRateLimiter'
+import { RATE_LIMITS, applyRateLimit, createIPKeyGenerator } from '@/lib/server/rateLimit'
 import { isValidEventSlug, normalizeEventSlug } from '@/utils/eventApplicationValidation'
 
 export const runtime = 'nodejs'
@@ -35,9 +31,9 @@ function hasValidImageSignature(buffer: Buffer, mimeType: string): boolean {
 }
 
 export async function POST(request: NextRequest) {
-  const limiter = await distributedRateLimiter.applyRateLimit({
-    ...DISTRIBUTED_RATE_LIMIT_CONFIGS.POST_CREATION,
-    keyGenerator: createDistributedIPKeyGenerator('event-app-photo'),
+  const limiter = await applyRateLimit({
+    ...RATE_LIMITS.POST_CREATION,
+    keyGenerator: createIPKeyGenerator('event-app-photo'),
     message: '업로드가 너무 빠릅니다. 잠시 후 다시 시도해주세요.',
   })
   const rateLimitResult = await limiter(request)
@@ -81,15 +77,12 @@ export async function POST(request: NextRequest) {
     const fileName = `${Date.now()}-${crypto.randomUUID()}.${ext}`
     const storagePath = `event-applications/${eventSlug}/${fileName}`
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (!supabaseUrl || !serviceKey) {
+    let db
+    try {
+      db = createServiceRoleClient()
+    } catch {
       return ApiError.internalServerError('서버 구성 오류입니다.').toNextResponse()
     }
-
-    const db = createClient(supabaseUrl, serviceKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    })
 
     const { error: uploadError } = await db.storage
       .from('attachments')

@@ -6,8 +6,8 @@ export const preferredRegion = 'icn1'
 import { NextRequest, NextResponse } from 'next/server'
 import { createErrorResponse } from '@/utils/apiResponse'
 import { createSupabaseServer } from '@/lib/supabase/server'
-import { createClient } from '@supabase/supabase-js'
-import { applyRateLimit, RATE_LIMIT_CONFIGS } from '@/utils/rateLimiter'
+import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
+import { applyRateLimit, RATE_LIMIT_CONFIGS } from '@/lib/server/rateLimit'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { validateUUID } from '@/utils/validation'
 import { createLogger, maskId } from '@/utils/logger'
@@ -54,25 +54,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     } = await supabase.auth.getUser()
     const userId = user?.id
 
-    // Service Role 클라이언트 생성 (view count 업데이트용)
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (!serviceRoleKey) {
-      console.error('SUPABASE_SERVICE_ROLE_KEY가 설정되지 않았습니다.')
+    let serviceSupabase
+    try {
+      serviceSupabase = createServiceRoleClient()
+    } catch {
       return createErrorResponse({ success: false, error: 'Server configuration error' }, 500)
     }
-
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    if (!supabaseUrl) {
-      console.error('NEXT_PUBLIC_SUPABASE_URL이 설정되지 않았습니다.')
-      return createErrorResponse({ success: false, error: 'Server configuration error' }, 500)
-    }
-
-    const serviceSupabase = createClient(supabaseUrl, serviceRoleKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    })
 
     // 게시글 존재 여부 및 작성자 확인
     const { data: post, error: postError } = await serviceSupabase

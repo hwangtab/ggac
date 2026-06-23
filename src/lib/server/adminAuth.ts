@@ -1,13 +1,25 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { isApprovedActiveAdmin } from '@/lib/server/authz'
+import { createServiceRoleClient, type ServiceRoleSupabaseClient } from '@/lib/server/supabaseAdmin'
 import { createLogger } from '@/utils/logger'
 
 const log = createLogger('adminAuth')
 
 export type AdminAuthSuccess = {
-  db: SupabaseClient
+  db: ServiceRoleSupabaseClient
   user: { id: string }
+}
+
+type ProfileQueryClient = Pick<ServiceRoleSupabaseClient, 'from'>
+
+function createAdminDbOrResponse(): ServiceRoleSupabaseClient | NextResponse {
+  try {
+    return createServiceRoleClient()
+  } catch {
+    log.error('SUPABASE_SERVICE_ROLE_KEY 또는 NEXT_PUBLIC_SUPABASE_URL이 설정되지 않았습니다.')
+    return NextResponse.json({ error: '서버 구성 오류입니다.' }, { status: 500 })
+  }
 }
 
 /**
@@ -45,21 +57,12 @@ export async function requireAdmin(): Promise<AdminAuthSuccess | NextResponse> {
     return NextResponse.json({ error: '프로필 정보를 조회할 수 없습니다.' }, { status: 500 })
   }
 
-  if (!profile.is_admin || profile.registration_status !== 'approved' || !profile.is_active) {
+  if (!isApprovedActiveAdmin(profile)) {
     return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 })
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-  if (!supabaseUrl || !serviceKey) {
-    log.error('SUPABASE_SERVICE_ROLE_KEY 또는 NEXT_PUBLIC_SUPABASE_URL이 설정되지 않았습니다.')
-    return NextResponse.json({ error: '서버 구성 오류입니다.' }, { status: 500 })
-  }
-
-  const db = createClient(supabaseUrl, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  })
+  const db = createAdminDbOrResponse()
+  if (db instanceof NextResponse) return db
 
   return { db, user }
 }
@@ -68,7 +71,7 @@ export async function requireAdmin(): Promise<AdminAuthSuccess | NextResponse> {
  * settings 라우트들에서 사용하는 throw 방식 헬퍼 (기존 패턴 유지).
  * 새 라우트는 requireAdmin()을 사용할 것.
  */
-export async function checkAdminPermission(supabase: SupabaseClient, userId: string) {
+export async function checkAdminPermission(supabase: ProfileQueryClient, userId: string) {
   const { data: profile, error } = await supabase
     .from('member_profiles')
     .select('is_admin, registration_status, is_active')
@@ -79,7 +82,7 @@ export async function checkAdminPermission(supabase: SupabaseClient, userId: str
     throw new Error('프로필 정보를 조회할 수 없습니다.')
   }
 
-  if (!profile.is_admin || profile.registration_status !== 'approved' || !profile.is_active) {
+  if (!isApprovedActiveAdmin(profile)) {
     throw new Error('관리자 권한이 필요합니다.')
   }
 

@@ -8,7 +8,7 @@ export const runtime = 'nodejs'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createErrorResponse } from '@/utils/apiResponse'
-import { createClient } from '@supabase/supabase-js'
+import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
 import { timingSafeEqual } from 'crypto'
 import { getProjectStorageObjectPath } from '@/utils/storageUrlValidation'
 import { createLogger } from '@/utils/logger'
@@ -17,15 +17,7 @@ const log = createLogger('api/cleanup/temp-attachments')
 
 // Service Role 클라이언트 (RLS 우회 가능)
 function getSupabaseAdmin() {
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured')
-  }
-
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-    throw new Error('NEXT_PUBLIC_SUPABASE_URL is not configured')
-  }
-
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+  return createServiceRoleClient()
 }
 
 /**

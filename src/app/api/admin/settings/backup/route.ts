@@ -8,7 +8,7 @@ import {
   RATE_LIMIT_CONFIGS,
   createUserKeyGenerator,
   addRateLimitHeaders,
-} from '@/utils/rateLimiter'
+} from '@/lib/server/rateLimit'
 import { logSecurityEvent } from '@/utils/security'
 import { createLogger, maskId } from '@/utils/logger'
 import { refreshSettingsCache } from '@/utils/systemSettings'

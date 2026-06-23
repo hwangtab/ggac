@@ -1,29 +1,21 @@
-import { NextRequest, NextResponse } from 'next/server'
 import { createErrorResponse } from '@/utils/apiResponse'
-import { requireAdmin } from '@/lib/server/adminAuth'
-import {
-  applyRateLimit,
-  RATE_LIMIT_CONFIGS,
-  createUserKeyGenerator,
-  addRateLimitHeaders,
-} from '@/utils/rateLimiter'
+import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
+import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
-export async function GET(request: NextRequest) {
-  try {
-    const rateLimiter = await applyRateLimit({
-      ...RATE_LIMIT_CONFIGS.ADMIN_API,
-      keyGenerator: createUserKeyGenerator('admin_posts_stats'),
-    })
-    const rateLimitResult = await rateLimiter(request)
-    if (!rateLimitResult.success && rateLimitResult.response) {
-      return rateLimitResult.response
-    }
-
-    const auth = await requireAdmin()
-    if (auth instanceof NextResponse) return auth
+export const GET = defineApiRoute({
+  method: 'GET',
+  name: 'api/admin/posts/stats',
+  rateLimit: {
+    ...RATE_LIMITS.ADMIN_API,
+    keyGenerator: createUserKeyGenerator('admin_posts_stats'),
+  },
+  rateLimitHeaders: true,
+  auth: 'admin',
+  errorResponse: () => createErrorResponse({ success: false, error: 'Internal server error' }, 500),
+  handler: async ({ auth }) => {
     const { db } = auth
 
     // Get total posts count
@@ -68,15 +60,6 @@ export async function GET(request: NextRequest) {
       categoryStats,
     }
 
-    const response = NextResponse.json(stats)
-    return addRateLimitHeaders(
-      response,
-      RATE_LIMIT_CONFIGS.ADMIN_API.maxRequests,
-      rateLimitResult.remaining,
-      rateLimitResult.resetTime
-    )
-  } catch (error) {
-    console.error('Admin posts stats API error:', error)
-    return createErrorResponse({ success: false, error: 'Internal server error' }, 500)
-  }
-}
+    return stats
+  },
+})

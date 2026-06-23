@@ -11,7 +11,7 @@ import {
   RATE_LIMIT_CONFIGS,
   createUserKeyGenerator,
   addRateLimitHeaders,
-} from '@/utils/rateLimiter'
+} from '@/lib/server/rateLimit'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { validateUUID } from '@/utils/validation'
 

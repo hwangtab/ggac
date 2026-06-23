@@ -1,12 +1,7 @@
 import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
-import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/server/adminAuth'
-import {
-  applyRateLimit,
-  RATE_LIMIT_CONFIGS,
-  createUserKeyGenerator,
-  addRateLimitHeaders,
-} from '@/utils/rateLimiter'
+import { NextResponse } from 'next/server'
+import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
+import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { parseIntegerParam } from '@/utils/queryParams'
 
 export const dynamic = 'force-dynamic'
@@ -16,19 +11,21 @@ export const runtime = 'nodejs'
  * 월별 통계 데이터 조회 API
  * GET /api/admin/stats/monthly
  */
-export async function GET(request: NextRequest) {
-  try {
-    const rateLimiter = await applyRateLimit({
-      ...RATE_LIMIT_CONFIGS.ADMIN_API,
-      keyGenerator: createUserKeyGenerator('admin_stats_monthly'),
-    })
-    const rateLimitResult = await rateLimiter(request)
-    if (!rateLimitResult.success && rateLimitResult.response) {
-      return rateLimitResult.response
-    }
-
-    const auth = await requireAdmin()
-    if (auth instanceof NextResponse) return auth
+export const GET = defineApiRoute({
+  method: 'GET',
+  name: 'api/admin/stats/monthly',
+  rateLimit: {
+    ...RATE_LIMITS.ADMIN_API,
+    keyGenerator: createUserKeyGenerator('admin_stats_monthly'),
+  },
+  rateLimitHeaders: true,
+  auth: 'admin',
+  errorResponse: () =>
+    NextResponse.json(
+      { error: '월별 통계 정보를 조회하는 중 오류가 발생했습니다.' },
+      { status: 500 }
+    ),
+  handler: async ({ request, auth }) => {
     const { db } = auth
 
     // 쿼리 파라미터 추출
@@ -190,7 +187,7 @@ export async function GET(request: NextRequest) {
           }
         : null
 
-    const response = NextResponse.json({
+    return {
       monthlyStats,
       currentMonth: thisMonth,
       previousMonth: lastMonth,
@@ -201,21 +198,9 @@ export async function GET(request: NextRequest) {
         endDate: endDate.toISOString(),
         generatedAt: new Date().toISOString(),
       },
-    })
-    return addRateLimitHeaders(
-      response,
-      RATE_LIMIT_CONFIGS.ADMIN_API.maxRequests,
-      rateLimitResult.remaining,
-      rateLimitResult.resetTime
-    )
-  } catch (error) {
-    console.error('Monthly stats API error:', error)
-    return NextResponse.json(
-      { error: '월별 통계 정보를 조회하는 중 오류가 발생했습니다.' },
-      { status: 500 }
-    )
-  }
-}
+    }
+  },
+})
 
 // OPTIONS: CORS 지원
 export async function OPTIONS() {

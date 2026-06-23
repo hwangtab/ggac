@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { getUserLikedCommentIds } from '@/lib/server/commentLikes'
 import { revalidateTag } from 'next/cache'
 import { validateUUID } from '@/utils/validation'
 import { parseIntegerParam } from '@/utils/queryParams'
@@ -42,6 +43,23 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   })
 
   try {
+    const sessionSupabase = await createSupabaseServer()
+    const {
+      data: { user },
+    } = await sessionSupabase.auth.getUser()
+    const annotateCommentLikeState = async (comments: Array<Record<string, unknown>>) => {
+      const commentIds = comments.map(c => String(c.id)).filter(Boolean)
+      const likedCommentIds = user
+        ? await getUserLikedCommentIds(sessionSupabase, user.id, commentIds)
+        : new Set<string>()
+
+      return comments.map(c => ({
+        ...c,
+        like_count: parseIntegerParam(String(c.like_count ?? ''), 0, { min: 0 }),
+        is_liked: likedCommentIds.has(String(c.id)),
+      }))
+    }
+
     let query = supabase
       .from('comments')
       .select(
@@ -92,10 +110,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       nextCursor = formatTimestampUuidCursor(last.created_at, last.id)
     }
 
-    const normalized = (comments as any[]).map(c => ({
-      ...c,
-      like_count: (c as any).like_count ?? 0,
-    }))
+    const normalized = await annotateCommentLikeState(comments as Array<Record<string, unknown>>)
     return NextResponse.json({
       success: true,
       data: { comments: normalized, has_next: hasNext, next_cursor: nextCursor },

@@ -1,34 +1,37 @@
 import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
-import { NextRequest, NextResponse } from 'next/server'
-import {
-  applyRateLimit,
-  RATE_LIMIT_CONFIGS,
-  createUserKeyGenerator,
-  addRateLimitHeaders,
-} from '@/utils/rateLimiter'
+import { NextResponse } from 'next/server'
+import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
+import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { logSecurityEvent } from '@/utils/security'
-import { requireAdmin } from '@/lib/server/adminAuth'
 import { parseIntegerParam } from '@/utils/queryParams'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
 // GET: 관리자 대시보드 최근 활동 조회 (성능 최적화)
-export async function GET(request: NextRequest) {
-  try {
-    // Rate limiting 적용
-    const rateLimiter = await applyRateLimit({
-      ...RATE_LIMIT_CONFIGS.ADMIN_API,
-      keyGenerator: createUserKeyGenerator('admin_activity'),
-    })
-
-    const rateLimitResult = await rateLimiter(request)
-    if (!rateLimitResult.success && rateLimitResult.response) {
-      return rateLimitResult.response
-    }
-
-    const auth = await requireAdmin()
-    if (auth instanceof NextResponse) return auth
+export const GET = defineApiRoute({
+  method: 'GET',
+  name: 'api/admin/activity',
+  rateLimit: {
+    ...RATE_LIMITS.ADMIN_API,
+    keyGenerator: createUserKeyGenerator('admin_activity'),
+  },
+  rateLimitHeaders: true,
+  auth: 'admin',
+  errorResponse: () => {
+    logSecurityEvent(
+      'ADMIN_ACTIVITY_API_ERROR',
+      {
+        error: '서버 오류가 발생했습니다.',
+      },
+      'medium'
+    )
+    return NextResponse.json(
+      { error: '활동 내역을 조회하는 중 오류가 발생했습니다.' },
+      { status: 500 }
+    )
+  },
+  handler: async ({ request, auth }) => {
     const { db } = auth
 
     // 쿼리 파라미터 추출 및 검증
@@ -140,7 +143,7 @@ export async function GET(request: NextRequest) {
     const totalPages = Math.ceil(totalActivitiesApprox / limit)
     const hasNext = page < totalPages
 
-    const response = NextResponse.json({
+    return {
       activities: paginatedActivities,
       pagination: {
         currentPage: page,
@@ -153,30 +156,9 @@ export async function GET(request: NextRequest) {
         limit,
         generatedAt: new Date().toISOString(),
       },
-    })
-
-    // Rate limit 헤더 추가
-    return addRateLimitHeaders(
-      response,
-      RATE_LIMIT_CONFIGS.ADMIN_API.maxRequests,
-      rateLimitResult.remaining,
-      rateLimitResult.resetTime
-    )
-  } catch (error) {
-    console.error('Admin activity API error:', error)
-    logSecurityEvent(
-      'ADMIN_ACTIVITY_API_ERROR',
-      {
-        error: '서버 오류가 발생했습니다.',
-      },
-      'medium'
-    )
-    return NextResponse.json(
-      { error: '활동 내역을 조회하는 중 오류가 발생했습니다.' },
-      { status: 500 }
-    )
-  }
-}
+    }
+  },
+})
 
 // OPTIONS: CORS 지원
 export async function OPTIONS() {

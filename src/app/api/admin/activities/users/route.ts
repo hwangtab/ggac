@@ -1,7 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createErrorResponse } from '@/utils/apiResponse'
-import { withRateLimit } from '@/utils/rateLimit'
-import { requireAdmin } from '@/lib/server/adminAuth'
+import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { validateUUID } from '@/utils/validation'
 import { parseActivityActionType, parseActivityTargetType } from '@/constants/activity'
@@ -10,50 +9,52 @@ import { parseActivityActionType, parseActivityTargetType } from '@/constants/ac
  * 사용자별 활동 조회 API
  * GET /api/admin/activities/users
  */
-export async function GET(request: NextRequest) {
-  return withRateLimit('ADMIN_API')(async () => {
-    try {
-      const auth = await requireAdmin()
-      if (auth instanceof NextResponse) return auth
-      const { db } = auth
+export const GET = defineApiRoute({
+  method: 'GET',
+  name: 'api/admin/activities/users',
+  rateLimit: RATE_LIMITS.ADMIN_API,
+  auth: 'admin',
+  errorMessage: '서버 오류가 발생했습니다.',
+  handler: async ({ request, auth }) => {
+    const { db } = auth
 
-      const { searchParams } = new URL(request.url)
-      const userId = searchParams.get('user_id')
-      let sanitizedUserId: string | null = null
-      if (userId) {
-        const userIdValidation = validateUUID(userId, '사용자 ID')
-        if (!userIdValidation.isValid) {
-          return createErrorResponse(
-            { success: false, error: userIdValidation.errors[0] || '잘못된 사용자 ID입니다.' },
-            400
-          )
-        }
-        sanitizedUserId = userIdValidation.sanitized
+    const { searchParams } = new URL(request.url)
+    const userId = searchParams.get('user_id')
+    let sanitizedUserId: string | null = null
+    if (userId) {
+      const userIdValidation = validateUUID(userId, '사용자 ID')
+      if (!userIdValidation.isValid) {
+        return createErrorResponse(
+          { success: false, error: userIdValidation.errors[0] || '잘못된 사용자 ID입니다.' },
+          400
+        )
       }
-      const page = parseIntegerParam(searchParams.get('page'), 1, { min: 1 })
-      const limit = parseIntegerParam(searchParams.get('limit'), 50, { min: 1, max: 100 })
-      const days = parseIntegerParam(searchParams.get('days'), 30, { min: 1, max: 365 })
-      const actionTypeParam = searchParams.get('action_type')
-      const targetTypeParam = searchParams.get('target_type')
-      const actionType = actionTypeParam ? parseActivityActionType(actionTypeParam) : null
-      const targetType = targetTypeParam ? parseActivityTargetType(targetTypeParam) : null
+      sanitizedUserId = userIdValidation.sanitized
+    }
+    const page = parseIntegerParam(searchParams.get('page'), 1, { min: 1 })
+    const limit = parseIntegerParam(searchParams.get('limit'), 50, { min: 1, max: 100 })
+    const days = parseIntegerParam(searchParams.get('days'), 30, { min: 1, max: 365 })
+    const actionTypeParam = searchParams.get('action_type')
+    const targetTypeParam = searchParams.get('target_type')
+    const actionType = actionTypeParam ? parseActivityActionType(actionTypeParam) : null
+    const targetType = targetTypeParam ? parseActivityTargetType(targetTypeParam) : null
 
-      if (actionTypeParam && !actionType) {
-        return createErrorResponse({ success: false, error: '잘못된 활동 유형입니다.' }, 400)
-      }
-      if (targetTypeParam && !targetType) {
-        return createErrorResponse({ success: false, error: '잘못된 대상 유형입니다.' }, 400)
-      }
+    if (actionTypeParam && !actionType) {
+      return createErrorResponse({ success: false, error: '잘못된 활동 유형입니다.' }, 400)
+    }
+    if (targetTypeParam && !targetType) {
+      return createErrorResponse({ success: false, error: '잘못된 대상 유형입니다.' }, 400)
+    }
 
-      const offset = (page - 1) * limit
-      const startDate = new Date()
-      startDate.setDate(startDate.getDate() - days)
+    const offset = (page - 1) * limit
+    const startDate = new Date()
+    startDate.setDate(startDate.getDate() - days)
 
-      // 기본 쿼리 구성
-      let query = db
-        .from('user_activities')
-        .select(
-          `
+    // 기본 쿼리 구성
+    let query = db
+      .from('user_activities')
+      .select(
+        `
           id,
           user_id,
           action_type,
@@ -69,63 +70,55 @@ export async function GET(request: NextRequest) {
             email
           )
         `,
-          { count: 'exact' }
-        )
-        .gte('created_at', startDate.toISOString())
-        .order('created_at', { ascending: false })
-        .range(offset, offset + limit - 1)
+        { count: 'exact' }
+      )
+      .gte('created_at', startDate.toISOString())
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1)
 
-      // 필터 적용
-      if (sanitizedUserId) {
-        query = query.eq('user_id', sanitizedUserId)
-      }
-      if (actionType) {
-        query = query.eq('action_type', actionType)
-      }
-      if (targetType) {
-        query = query.eq('target_type', targetType)
-      }
-
-      const { data: activities, error, count } = await query
-
-      if (error) {
-        console.error('활동 조회 오류:', error)
-        return createErrorResponse(
-          { success: false, error: '활동 데이터 조회에 실패했습니다.' },
-          500
-        )
-      }
-
-      const totalCount = count || 0
-      const totalPages = Math.ceil(totalCount / limit)
-      const hasNext = page < totalPages
-      const hasPrev = page > 1
-
-      return NextResponse.json({
-        activities: activities || [],
-        pagination: {
-          currentPage: page,
-          totalPages,
-          totalCount,
-          limit,
-          hasNext,
-          hasPrev,
-        },
-        filters: {
-          userId: sanitizedUserId,
-          days,
-          actionType,
-          targetType,
-        },
-        metadata: {
-          generatedAt: new Date().toISOString(),
-          period: `${days}일`,
-          startDate: startDate.toISOString(),
-        },
-      })
-    } catch (error) {
-      console.error('사용자 활동 API 오류:', error)
-      return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
+    // 필터 적용
+    if (sanitizedUserId) {
+      query = query.eq('user_id', sanitizedUserId)
     }
-  })(request)
-}
+    if (actionType) {
+      query = query.eq('action_type', actionType)
+    }
+    if (targetType) {
+      query = query.eq('target_type', targetType)
+    }
+
+    const { data: activities, error, count } = await query
+
+    if (error) {
+      return createErrorResponse({ success: false, error: '활동 데이터 조회에 실패했습니다.' }, 500)
+    }
+
+    const totalCount = count || 0
+    const totalPages = Math.ceil(totalCount / limit)
+    const hasNext = page < totalPages
+    const hasPrev = page > 1
+
+    return NextResponse.json({
+      activities: activities || [],
+      pagination: {
+        currentPage: page,
+        totalPages,
+        totalCount,
+        limit,
+        hasNext,
+        hasPrev,
+      },
+      filters: {
+        userId: sanitizedUserId,
+        days,
+        actionType,
+        targetType,
+      },
+      metadata: {
+        generatedAt: new Date().toISOString(),
+        period: `${days}일`,
+        startDate: startDate.toISOString(),
+      },
+    })
+  },
+})

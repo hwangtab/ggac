@@ -29,7 +29,10 @@ const requiredEnvVars = [
   'SUPABASE_SERVICE_ROLE_KEY',
 ]
 
-const productionRequiredEnvVars = ['UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN']
+const redisEnvGroups = [
+  ['UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN'],
+  ['KV_REST_API_URL', 'KV_REST_API_TOKEN'],
+]
 const productionRequiredValues = {
   NEXT_STRICT_CSP: 'true',
 }
@@ -37,6 +40,8 @@ const productionRequiredValues = {
 const optionalEnvVars = [
   'UPSTASH_REDIS_REST_URL',
   'UPSTASH_REDIS_REST_TOKEN',
+  'KV_REST_API_URL',
+  'KV_REST_API_TOKEN',
   'NEXT_STRICT_CSP',
   'VERCEL_TOKEN',
   'VERCEL_ORG_ID',
@@ -86,7 +91,10 @@ function loadVercelProductionEnv() {
       stdio: ['ignore', 'pipe', 'pipe'],
     })
 
-    return parseEnvFile(tempFile)
+    const env = parseEnvFile(tempFile)
+    mergeVercelHiddenEnvPresence(env)
+
+    return env
   } catch (error) {
     console.error('❌ Failed to pull Vercel production environment variables.')
     const stderr = error && error.stderr ? String(error.stderr).trim() : ''
@@ -97,9 +105,70 @@ function loadVercelProductionEnv() {
   }
 }
 
+const VERCEL_HIDDEN_VALUE_PRESENT = '__VERCEL_HIDDEN_ENV_VALUE_PRESENT__'
+
+function parseVercelJsonOutput(output) {
+  const jsonStart = output.indexOf('{')
+  const jsonEnd = output.lastIndexOf('}')
+
+  if (jsonStart === -1 || jsonEnd === -1 || jsonEnd < jsonStart) {
+    throw new Error('Vercel CLI did not return JSON output')
+  }
+
+  return JSON.parse(output.slice(jsonStart, jsonEnd + 1))
+}
+
+function mergeVercelHiddenEnvPresence(env) {
+  let parsed
+
+  try {
+    const output = execFileSync('vercel', ['env', 'ls', 'production', '--format=json'], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    parsed = parseVercelJsonOutput(output)
+  } catch {
+    return
+  }
+
+  if (!Array.isArray(parsed.envs)) return
+
+  parsed.envs.forEach(item => {
+    const key = item && typeof item.key === 'string' ? item.key : null
+    const type = item && typeof item.type === 'string' ? item.type : null
+    const targets = Array.isArray(item && item.target) ? item.target : []
+
+    if (!key || !targets.includes('production')) return
+    if (env[key]) return
+
+    if (type === 'sensitive' || type === 'encrypted') {
+      env[key] = VERCEL_HIDDEN_VALUE_PRESENT
+    }
+  })
+}
+
+function formatEnvValue(varName, value) {
+  if (value === VERCEL_HIDDEN_VALUE_PRESENT) {
+    return 'Present (value hidden by Vercel)'
+  }
+
+  return varName.includes('KEY') || varName.includes('TOKEN')
+    ? `${value.substring(0, 8)}...${value.substring(value.length - 4)}`
+    : value
+}
+
 const env = envSource === 'vercel' ? loadVercelProductionEnv() : process.env
 
 let hasErrors = false
+
+function hasCompleteEnvGroup(env, groups) {
+  return groups.some(group => group.every(varName => Boolean(env[varName])))
+}
+
+function getIncompleteEnvGroups(env, groups) {
+  return groups.filter(group => !group.every(varName => Boolean(env[varName])))
+}
 
 // Check required variables
 console.log('📋 Required Environment Variables:')
@@ -110,10 +179,7 @@ requiredEnvVars.forEach(varName => {
     hasErrors = true
   } else {
     // Mask sensitive values for display
-    const displayValue =
-      varName.includes('KEY') || varName.includes('TOKEN')
-        ? `${value.substring(0, 8)}...${value.substring(value.length - 4)}`
-        : value
+    const displayValue = formatEnvValue(varName, value)
     console.log(`✅ ${varName}: ${displayValue}`)
   }
 })
@@ -124,10 +190,7 @@ optionalEnvVars.forEach(varName => {
   if (!value) {
     console.log(`⚠️  ${varName}: Not set (optional)`)
   } else {
-    const displayValue =
-      varName.includes('KEY') || varName.includes('TOKEN')
-        ? `${value.substring(0, 8)}...${value.substring(value.length - 4)}`
-        : value
+    const displayValue = formatEnvValue(varName, value)
     console.log(`✅ ${varName}: ${displayValue}`)
   }
 })
@@ -152,15 +215,17 @@ if (process.env.NODE_ENV === 'production') {
   console.log('\n🏭 Production Environment Checks:')
 
   // Check if Redis is configured for production rate limiting
-  productionRequiredEnvVars.forEach(varName => {
-    if (!env[varName]) {
-      console.log(`❌ ${varName}: Missing in production`)
-      hasErrors = true
-    }
-  })
-
-  if (!env.UPSTASH_REDIS_REST_URL || !env.UPSTASH_REDIS_REST_TOKEN) {
-    console.log('❌ Redis not configured - production rate-limited APIs will fail closed')
+  const hasRedisEnv = hasCompleteEnvGroup(env, redisEnvGroups)
+  if (!hasRedisEnv) {
+    getIncompleteEnvGroups(env, redisEnvGroups).forEach(group => {
+      console.log(`❌ ${group.join(' + ')}: Missing complete Redis env group in production`)
+    })
+    console.log(
+      '❌ Redis not configured - production rate-limited APIs will fail closed. Set either UPSTASH_REDIS_REST_URL/UPSTASH_REDIS_REST_TOKEN or KV_REST_API_URL/KV_REST_API_TOKEN.'
+    )
+    hasErrors = true
+  } else {
+    console.log('✅ Redis REST env group configured for production rate limiting')
   }
 
   Object.entries(productionRequiredValues).forEach(([varName, expectedValue]) => {

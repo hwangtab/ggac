@@ -6,7 +6,7 @@ export const preferredRegion = 'icn1'
 import { NextRequest, NextResponse } from 'next/server'
 import { createErrorResponse } from '@/utils/apiResponse'
 import { createSupabaseServer } from '@/lib/supabase/server'
-import rateLimiterUtils from '@/utils/rateLimiter'
+import rateLimiterUtils from '@/lib/server/rateLimit'
 import { validateUUID } from '@/utils/validation'
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {

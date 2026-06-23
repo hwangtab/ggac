@@ -1,7 +1,7 @@
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { createErrorResponse } from '@/utils/apiResponse'
 import { NextRequest, NextResponse } from 'next/server'
-import { withRateLimit } from '@/utils/rateLimit'
+import { withRateLimit } from '@/lib/server/rateLimit'
 import { sanitizeInput } from '@/utils/security'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { parseActivityActionType, parseActivityTargetType } from '@/constants/activity'

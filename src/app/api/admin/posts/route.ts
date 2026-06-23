@@ -1,35 +1,29 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createErrorResponse } from '@/utils/apiResponse'
-import { requireAdmin } from '@/lib/server/adminAuth'
+import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
+import { validateSearchQuery, escapePostgrestValue } from '@/utils/validation'
+import { createUserKeyGenerator } from '@/lib/server/rateLimit'
+import { logSecurityEvent } from '@/utils/security'
+import { parseIntegerParam } from '@/utils/queryParams'
 
 // API 라우트를 동적으로 렌더링하도록 강제 설정
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-import { validateSearchQuery, escapePostgrestValue } from '@/utils/validation'
-import {
-  applyRateLimit,
-  RATE_LIMIT_CONFIGS,
-  createUserKeyGenerator,
-  addRateLimitHeaders,
-} from '@/utils/rateLimiter'
-import { logSecurityEvent } from '@/utils/security'
-import { parseIntegerParam } from '@/utils/queryParams'
 
-export async function GET(request: NextRequest) {
-  try {
-    // Rate limiting 적용
-    const rateLimiter = await applyRateLimit({
-      ...RATE_LIMIT_CONFIGS.ADMIN_API,
-      keyGenerator: createUserKeyGenerator('admin_posts'),
-    })
-
-    const rateLimitResult = await rateLimiter(request)
-    if (!rateLimitResult.success && rateLimitResult.response) {
-      return rateLimitResult.response
-    }
-
-    const auth = await requireAdmin()
-    if (auth instanceof NextResponse) return auth
+export const GET = defineApiRoute({
+  method: 'GET',
+  name: 'api/admin/posts',
+  rateLimit: {
+    ...RATE_LIMITS.ADMIN_API,
+    keyGenerator: createUserKeyGenerator('admin_posts'),
+  },
+  rateLimitHeaders: true,
+  auth: 'admin',
+  errorResponse: () => {
+    logSecurityEvent('ADMIN_POSTS_API_ERROR', { error: '서버 오류가 발생했습니다.' }, 'medium')
+    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
+  },
+  handler: async ({ request, auth }) => {
     const { db } = auth
 
     // Get query parameters
@@ -176,7 +170,7 @@ export async function GET(request: NextRequest) {
       comment_count: countMap.get(post.id) || 0,
     }))
 
-    const response = NextResponse.json({
+    return {
       posts: postsWithCommentCount,
       pagination: {
         currentPage: page,
@@ -184,18 +178,6 @@ export async function GET(request: NextRequest) {
         totalCount,
         hasNext: page < totalPages,
       },
-    })
-
-    // Rate limit 헤더 추가
-    return addRateLimitHeaders(
-      response,
-      RATE_LIMIT_CONFIGS.ADMIN_API.maxRequests,
-      rateLimitResult.remaining,
-      rateLimitResult.resetTime
-    )
-  } catch (error) {
-    console.error('Admin posts API error:', error)
-    logSecurityEvent('ADMIN_POSTS_API_ERROR', { error: '서버 오류가 발생했습니다.' }, 'medium')
-    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
-  }
-}
+    }
+  },
+})

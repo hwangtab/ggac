@@ -1,7 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createErrorResponse } from '@/utils/apiResponse'
-import { withRateLimit } from '@/utils/rateLimit'
-import { requireAdmin } from '@/lib/server/adminAuth'
+import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { validateUUID } from '@/utils/validation'
 
@@ -9,88 +8,78 @@ import { validateUUID } from '@/utils/validation'
  * 활동 패턴 분석 API
  * GET /api/admin/analytics/patterns
  */
-export async function GET(request: NextRequest) {
-  return withRateLimit('ADMIN_API')(async () => {
-    try {
-      const auth = await requireAdmin()
-      if (auth instanceof NextResponse) return auth
-      const { db } = auth
+export const GET = defineApiRoute({
+  method: 'GET',
+  name: 'api/admin/analytics/patterns',
+  rateLimit: RATE_LIMITS.ADMIN_API,
+  auth: 'admin',
+  errorMessage: '서버 오류가 발생했습니다.',
+  handler: async ({ request, auth }) => {
+    const { db } = auth
 
-      const { searchParams } = new URL(request.url)
-      const userId = searchParams.get('user_id')
-      let sanitizedUserId: string | null = null
-      if (userId) {
-        const userIdValidation = validateUUID(userId, '사용자 ID')
-        if (!userIdValidation.isValid) {
-          return createErrorResponse(
-            { success: false, error: userIdValidation.errors[0] || '잘못된 사용자 ID입니다.' },
-            400
-          )
-        }
-        sanitizedUserId = userIdValidation.sanitized
+    const { searchParams } = new URL(request.url)
+    const userId = searchParams.get('user_id')
+    let sanitizedUserId: string | null = null
+    if (userId) {
+      const userIdValidation = validateUUID(userId, '사용자 ID')
+      if (!userIdValidation.isValid) {
+        return createErrorResponse(
+          { success: false, error: userIdValidation.errors[0] || '잘못된 사용자 ID입니다.' },
+          400
+        )
       }
-      const days = parseIntegerParam(searchParams.get('days'), 30, { min: 1, max: 365 })
-      const analysisType = searchParams.get('type') || 'activity_patterns'
-      const excludeTest = searchParams.get('exclude_test') !== 'false' // 기본 true
-
-      const startDate = new Date()
-      startDate.setDate(startDate.getDate() - days)
-
-      let analysisResult: any = {}
-
-      switch (analysisType) {
-        case 'activity_patterns':
-          // 활동 패턴 분석
-          analysisResult = await analyzeActivityPatterns(
-            db,
-            sanitizedUserId,
-            startDate,
-            excludeTest
-          )
-          break
-
-        case 'user_behavior':
-          // 사용자 행동 분석
-          analysisResult = await analyzeUserBehavior(db, sanitizedUserId, startDate)
-          break
-
-        case 'session_analysis':
-          // 세션 분석
-          analysisResult = await analyzeSessionPatterns(db, sanitizedUserId, startDate)
-          break
-
-        case 'content_engagement':
-          // 콘텐츠 참여도 분석
-          analysisResult = await analyzeContentEngagement(db, sanitizedUserId, startDate)
-          break
-
-        default:
-          return createErrorResponse(
-            { success: false, error: '지원되지 않는 분석 유형입니다.' },
-            400
-          )
-      }
-
-      return NextResponse.json({
-        analysisType,
-        period: {
-          days,
-          startDate: startDate.toISOString(),
-          endDate: new Date().toISOString(),
-        },
-        userId: sanitizedUserId,
-        ...analysisResult,
-        metadata: {
-          generatedAt: new Date().toISOString(),
-          version: '1.0',
-        },
-      })
-    } catch (error) {
-      console.error('패턴 분석 API 오류:', error)
-      return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
+      sanitizedUserId = userIdValidation.sanitized
     }
-  })(request)
-}
+    const days = parseIntegerParam(searchParams.get('days'), 30, { min: 1, max: 365 })
+    const analysisType = searchParams.get('type') || 'activity_patterns'
+    const excludeTest = searchParams.get('exclude_test') !== 'false' // 기본 true
+
+    const startDate = new Date()
+    startDate.setDate(startDate.getDate() - days)
+
+    let analysisResult: any = {}
+
+    switch (analysisType) {
+      case 'activity_patterns':
+        // 활동 패턴 분석
+        analysisResult = await analyzeActivityPatterns(db, sanitizedUserId, startDate, excludeTest)
+        break
+
+      case 'user_behavior':
+        // 사용자 행동 분석
+        analysisResult = await analyzeUserBehavior(db, sanitizedUserId, startDate)
+        break
+
+      case 'session_analysis':
+        // 세션 분석
+        analysisResult = await analyzeSessionPatterns(db, sanitizedUserId, startDate)
+        break
+
+      case 'content_engagement':
+        // 콘텐츠 참여도 분석
+        analysisResult = await analyzeContentEngagement(db, sanitizedUserId, startDate)
+        break
+
+      default:
+        return createErrorResponse({ success: false, error: '지원되지 않는 분석 유형입니다.' }, 400)
+    }
+
+    return NextResponse.json({
+      analysisType,
+      period: {
+        days,
+        startDate: startDate.toISOString(),
+        endDate: new Date().toISOString(),
+      },
+      userId: sanitizedUserId,
+      ...analysisResult,
+      metadata: {
+        generatedAt: new Date().toISOString(),
+        version: '1.0',
+      },
+    })
+  },
+})
 
 /**
  * 활동 패턴 분석

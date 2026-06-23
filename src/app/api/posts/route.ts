@@ -5,7 +5,7 @@
 import { NextRequest } from 'next/server'
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { createSupabaseServer } from '@/lib/supabase/server'
-import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator } from '@/utils/rateLimiter'
+import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { apiGet, apiPost, ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { fetchBoardPosts } from '@/lib/server/board'
 import { parseIntegerParam } from '@/utils/queryParams'

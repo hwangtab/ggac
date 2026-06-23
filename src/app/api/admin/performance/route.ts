@@ -9,15 +9,10 @@ export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
 import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
-import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/server/adminAuth'
+import { NextResponse } from 'next/server'
+import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { getApiStats, getApiHealth, exportApiMetrics } from '@/utils/apiPerformanceMonitor'
-import {
-  applyRateLimit,
-  RATE_LIMIT_CONFIGS,
-  createUserKeyGenerator,
-  addRateLimitHeaders,
-} from '@/utils/rateLimiter'
+import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { parsePerformanceAction } from '@/constants/adminAnalytics'
 
@@ -29,20 +24,18 @@ function parseMetricTimestamp(value: string | null): number | null {
   return Number.isFinite(parsed) ? parsed : null
 }
 
-export async function GET(request: NextRequest) {
-  try {
-    const rateLimiter = await applyRateLimit({
-      ...RATE_LIMIT_CONFIGS.ADMIN_API,
-      keyGenerator: createUserKeyGenerator('admin_performance'),
-    })
-    const rateLimitResult = await rateLimiter(request)
-    if (!rateLimitResult.success && rateLimitResult.response) {
-      return rateLimitResult.response
-    }
-
-    const auth = await requireAdmin()
-    if (auth instanceof NextResponse) return auth
-
+export const GET = defineApiRoute({
+  method: 'GET',
+  name: 'api/admin/performance',
+  rateLimit: {
+    ...RATE_LIMITS.ADMIN_API,
+    keyGenerator: createUserKeyGenerator('admin_performance'),
+  },
+  rateLimitHeaders: true,
+  auth: 'admin',
+  errorResponse: () =>
+    createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500),
+  handler: async ({ request }) => {
     const { searchParams } = new URL(request.url)
     const actionParam = searchParams.get('action') || 'dashboard'
     const action = parsePerformanceAction(actionParam)
@@ -158,17 +151,9 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    return addRateLimitHeaders(
-      response,
-      RATE_LIMIT_CONFIGS.ADMIN_API.maxRequests,
-      rateLimitResult.remaining,
-      rateLimitResult.resetTime
-    )
-  } catch (error) {
-    console.error('API 성능 모니터링 API 오류:', error)
-    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
-  }
-}
+    return response
+  },
+})
 
 // OPTIONS: CORS 지원
 export async function OPTIONS() {

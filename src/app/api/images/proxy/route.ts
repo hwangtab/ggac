@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import { createImageResponse, createOptionsResponse } from '@/utils/apiResponse'
 import { ApiError } from '@/utils/apiWrapper'
 import { isUnsafeHost } from '@/utils/ssrfProtection'
-import distLimiter from '@/utils/distributedRateLimiter'
+import distLimiter from '@/lib/server/rateLimit'
 import { parseIntegerParam } from '@/utils/queryParams'
 
 export const dynamic = 'force-dynamic'

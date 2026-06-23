@@ -2,9 +2,11 @@
  * 분산 Rate Limiting 시스템
  * Redis/Upstash 기반으로 서버리스 환경 최적화
  *
- * ⚠️ 분산 환경(Vercel 등) 운영 시 반드시 다음 환경변수 설정 필요:
+ * ⚠️ 분산 환경(Vercel 등) 운영 시 반드시 다음 환경변수 쌍 중 하나 설정 필요:
  *   - UPSTASH_REDIS_REST_URL
  *   - UPSTASH_REDIS_REST_TOKEN
+ *   - KV_REST_API_URL (Vercel Marketplace Upstash Redis)
+ *   - KV_REST_API_TOKEN (Vercel Marketplace Upstash Redis)
  *
  * 환경변수가 없으면 개발 환경에서만 인메모리 폴백으로 동작합니다.
  * 운영 환경에서는 분산 rate limiting이 비활성화된 상태로 요청을 처리하지 않고
@@ -17,6 +19,15 @@ import { createLogger } from './logger'
 import { parseIntegerParam } from './queryParams'
 
 const log = createLogger('distributedRateLimiter')
+
+function resolveFirstNonEmptyEnv(varNames: string[]): string | undefined {
+  for (const varName of varNames) {
+    const value = process.env[varName]?.trim()
+    if (value) return value
+  }
+
+  return undefined
+}
 
 // Upstash Redis REST API를 위한 인터페이스
 interface UpstashRedisConfig {
@@ -126,8 +137,8 @@ class DistributedRateLimiter {
   private memoryStore: Map<string, { count: number; resetTime: number }> = new Map()
 
   constructor() {
-    const upstashUrl = process.env.UPSTASH_REDIS_REST_URL
-    const upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN
+    const upstashUrl = resolveFirstNonEmptyEnv(['UPSTASH_REDIS_REST_URL', 'KV_REST_API_URL'])
+    const upstashToken = resolveFirstNonEmptyEnv(['UPSTASH_REDIS_REST_TOKEN', 'KV_REST_API_TOKEN'])
 
     if (upstashUrl && upstashToken) {
       this.redis = new UpstashRedisClient({
@@ -176,7 +187,8 @@ class DistributedRateLimiter {
     const baseMessage =
       'Upstash Redis 자격 증명이 없어 메모리 기반 폴백으로 동작합니다. ' +
       '서버리스/분산 환경에서는 인스턴스별로 카운터가 분리되어 rate limit이 무효화됩니다. ' +
-      'UPSTASH_REDIS_REST_URL 및 UPSTASH_REDIS_REST_TOKEN을 설정하세요.'
+      'UPSTASH_REDIS_REST_URL/UPSTASH_REDIS_REST_TOKEN 또는 ' +
+      'KV_REST_API_URL/KV_REST_API_TOKEN을 설정하세요.'
 
     if (process.env.NODE_ENV === 'production') {
       log.error(baseMessage)

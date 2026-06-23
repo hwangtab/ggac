@@ -12,7 +12,7 @@ export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createErrorResponse } from '@/utils/apiResponse'
-import { createClient } from '@supabase/supabase-js'
+import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
 import { revalidateTag } from 'next/cache'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { parseJsonObjectBody } from '@/utils/requestBody'
@@ -53,13 +53,7 @@ function validateAttachmentRouteParams(params: { id: string; attachmentId: strin
 
 // Service Role 클라이언트는 Storage 작업에만 사용
 function getSupabaseAdmin() {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-    throw new Error('NEXT_PUBLIC_SUPABASE_URL is not configured')
-  }
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured')
-  }
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+  return createServiceRoleClient()
 }
 
 /**

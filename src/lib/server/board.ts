@@ -1,5 +1,5 @@
 import { cache } from 'react'
-import { createClient } from '@supabase/supabase-js'
+import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
 import { createTextPreview } from '@/utils/textUtils'
 import { createLogger } from '@/utils/logger'
 import { parseIntegerParam } from '@/utils/queryParams'
@@ -32,17 +32,7 @@ export interface BoardListResult {
 }
 
 const getSupabaseServerClient = () => {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-  if (!url || (!serviceKey && !anonKey)) {
-    throw new Error('Supabase credentials are not configured for server-side board fetch.')
-  }
-
-  return createClient(url, serviceKey || anonKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  })
+  return createServiceRoleClient()
 }
 
 export const fetchBoardPosts = cache(

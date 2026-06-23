@@ -1,7 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createErrorResponse } from '@/utils/apiResponse'
-import { withRateLimit } from '@/utils/rateLimit'
-import { requireAdmin } from '@/lib/server/adminAuth'
+import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { parseTrendPeriod, parseTrendType } from '@/constants/adminAnalytics'
 import type { TrendPeriod } from '@/constants/adminAnalytics'
@@ -17,71 +16,66 @@ type ActivityTrendPoint = {
  * 트렌드 분석 API
  * GET /api/admin/analytics/trends
  */
-export async function GET(request: NextRequest) {
-  return withRateLimit('ADMIN_API')(async () => {
-    try {
-      const auth = await requireAdmin()
-      if (auth instanceof NextResponse) return auth
-      const { db } = auth
+export const GET = defineApiRoute({
+  method: 'GET',
+  name: 'api/admin/analytics/trends',
+  rateLimit: RATE_LIMITS.ADMIN_API,
+  auth: 'admin',
+  errorMessage: '서버 오류가 발생했습니다.',
+  handler: async ({ request, auth }) => {
+    const { db } = auth
 
-      const { searchParams } = new URL(request.url)
-      const periodParam = searchParams.get('period') || 'daily'
-      const period = parseTrendPeriod(periodParam)
-      const weeks = parseIntegerParam(searchParams.get('weeks'), 8, { min: 1, max: 104 })
-      const trendTypeParam = searchParams.get('type') || 'activity'
-      const trendType = parseTrendType(trendTypeParam)
+    const { searchParams } = new URL(request.url)
+    const periodParam = searchParams.get('period') || 'daily'
+    const period = parseTrendPeriod(periodParam)
+    const weeks = parseIntegerParam(searchParams.get('weeks'), 8, { min: 1, max: 104 })
+    const trendTypeParam = searchParams.get('type') || 'activity'
+    const trendType = parseTrendType(trendTypeParam)
 
-      if (!period) {
-        return createErrorResponse({ success: false, error: '지원되지 않는 기간 유형입니다.' }, 400)
-      }
-      if (!trendType) {
-        return createErrorResponse(
-          { success: false, error: '지원되지 않는 트렌드 유형입니다.' },
-          400
-        )
-      }
-
-      let trendData: any = {}
-
-      switch (trendType) {
-        case 'activity':
-          trendData = await getActivityTrends(db, period, weeks)
-          break
-
-        case 'users':
-          trendData = await getUserTrends(db, period, weeks)
-          break
-
-        case 'engagement':
-          trendData = await getEngagementTrends(db, period, weeks)
-          break
-
-        case 'performance':
-          trendData = await getPerformanceTrends(db, period, weeks)
-          break
-
-        default: {
-          const exhaustiveCheck: never = trendType
-          return exhaustiveCheck
-        }
-      }
-
-      return NextResponse.json({
-        trendType,
-        period,
-        weeks,
-        ...trendData,
-        metadata: {
-          generatedAt: new Date().toISOString(),
-          dataPoints: trendData.series?.length || 0,
-        },
-      })
-    } catch (error) {
-      console.error('트렌드 분석 API 오류:', error)
-      return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
+    if (!period) {
+      return createErrorResponse({ success: false, error: '지원되지 않는 기간 유형입니다.' }, 400)
     }
-  })(request)
-}
+    if (!trendType) {
+      return createErrorResponse({ success: false, error: '지원되지 않는 트렌드 유형입니다.' }, 400)
+    }
+
+    let trendData: any = {}
+
+    switch (trendType) {
+      case 'activity':
+        trendData = await getActivityTrends(db, period, weeks)
+        break
+
+      case 'users':
+        trendData = await getUserTrends(db, period, weeks)
+        break
+
+      case 'engagement':
+        trendData = await getEngagementTrends(db, period, weeks)
+        break
+
+      case 'performance':
+        trendData = await getPerformanceTrends(db, period, weeks)
+        break
+
+      default: {
+        const exhaustiveCheck: never = trendType
+        return exhaustiveCheck
+      }
+    }
+
+    return NextResponse.json({
+      trendType,
+      period,
+      weeks,
+      ...trendData,
+      metadata: {
+        generatedAt: new Date().toISOString(),
+        dataPoints: trendData.series?.length || 0,
+      },
+    })
+  },
+})
 
 /**
  * 활동 트렌드 분석

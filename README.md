@@ -91,7 +91,8 @@ npm run start
 - 권장
   - `NEXT_PUBLIC_SITE_URL` (예: Production: https://ggac.kr, Preview: Vercel Preview URL)
   - `NEXT_PUBLIC_DOMAIN`
-  - `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` (있으면 분산 레이트리밋 활성)
+  - `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` 또는 Vercel Marketplace
+    Upstash Redis의 `KV_REST_API_URL`, `KV_REST_API_TOKEN` (있으면 분산 레이트리밋 활성)
 
 ### 링크 프리뷰 캐시
 - 인메모리(1시간) + Supabase 영속 캐시(기본 6시간)를 사용합니다.
@@ -101,7 +102,7 @@ npm run start
 ### 보안/운영
 - 일반 페이지는 강화된 CSP 적용(미들웨어에서 inline script 최소화), 에디터 페이지는 호환을 위해 완화.
 - `/api/link-preview`, `/api/media/upload` 및 공용 rate limiter 경유 API에 분산 레이트리밋 적용.
-- ⚠️ **프로덕션(Vercel 등 분산/서버리스 환경)에서는 반드시 `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` 을 설정해야 함.** 값이 없거나 Redis 호출이 실패하면 per-instance 메모리 카운터로 우회하지 않고 503으로 fail-closed 처리한다. 개발 환경에서만 인메모리 폴백을 허용한다.
+- ⚠️ **프로덕션(Vercel 등 분산/서버리스 환경)에서는 반드시 `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` 또는 Vercel Marketplace Upstash Redis의 `KV_REST_API_URL` / `KV_REST_API_TOKEN` 을 설정해야 함.** 값이 없거나 Redis 호출이 실패하면 per-instance 메모리 카운터로 우회하지 않고 503으로 fail-closed 처리한다. 개발 환경에서만 인메모리 폴백을 허용한다.
 
 ## 페이지 구성
 
@@ -168,7 +169,7 @@ Framer Motion을 사용하여 부드러운 인터랙션 구현
 - 환경변수 확인(Vercel)
   - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`(Preview/Prod)
   - `SUPABASE_SERVICE_ROLE_KEY`(모든 환경, 서버 전용)
-  - 선택: `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_DOMAIN`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`
+  - 선택: `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_DOMAIN`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `KV_REST_API_URL`, `KV_REST_API_TOKEN`
 - 마이그레이션 적용 여부
   - Supabase 콘솔에서 `supabase/migrations/20250904_add_link_previews_cache.sql` 실행 완료 확인
   - 테이블 `public.link_previews` 존재 및 RLS 활성 확인

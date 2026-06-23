@@ -1,30 +1,24 @@
 import { createOptionsResponse } from '@/utils/apiResponse'
-import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/server/adminAuth'
+import { NextResponse } from 'next/server'
+import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
+import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import type { MemberStatistics } from '@/types'
-import {
-  applyRateLimit,
-  RATE_LIMIT_CONFIGS,
-  createUserKeyGenerator,
-  addRateLimitHeaders,
-} from '@/utils/rateLimiter'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
-export async function GET(request: NextRequest) {
-  try {
-    const rateLimiter = await applyRateLimit({
-      ...RATE_LIMIT_CONFIGS.ADMIN_API,
-      keyGenerator: createUserKeyGenerator('admin_members_stats'),
-    })
-    const rateLimitResult = await rateLimiter(request)
-    if (!rateLimitResult.success && rateLimitResult.response) {
-      return rateLimitResult.response
-    }
-
-    const auth = await requireAdmin()
-    if (auth instanceof NextResponse) return auth
+export const GET = defineApiRoute({
+  method: 'GET',
+  name: 'api/admin/members/stats',
+  rateLimit: {
+    ...RATE_LIMITS.ADMIN_API,
+    keyGenerator: createUserKeyGenerator('admin_members_stats'),
+  },
+  rateLimitHeaders: true,
+  auth: 'admin',
+  errorResponse: () =>
+    NextResponse.json({ error: '멤버 통계를 조회하는 중 오류가 발생했습니다.' }, { status: 500 }),
+  handler: async ({ auth }) => {
     const { db } = auth
 
     // 전체 회원 데이터 조회 (복합 상태 계산용)
@@ -147,21 +141,9 @@ export async function GET(request: NextRequest) {
       averageEngagementScore,
     }
 
-    const response = NextResponse.json(stats)
-    return addRateLimitHeaders(
-      response,
-      RATE_LIMIT_CONFIGS.ADMIN_API.maxRequests,
-      rateLimitResult.remaining,
-      rateLimitResult.resetTime
-    )
-  } catch (error) {
-    console.error('Member stats API error:', error)
-    return NextResponse.json(
-      { error: '멤버 통계를 조회하는 중 오류가 발생했습니다.' },
-      { status: 500 }
-    )
-  }
-}
+    return stats
+  },
+})
 
 // OPTIONS: CORS 지원
 export async function OPTIONS() {

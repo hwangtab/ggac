@@ -6,11 +6,11 @@ type SupabaseClient = any
 
 async function getAdminClient(): Promise<SupabaseClient | null> {
   try {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (!url || !serviceKey) return null
-    const { createClient } = await import('@supabase/supabase-js')
-    return createClient(url, serviceKey)
+    const { createServiceRoleClient, hasServiceRoleEnv } = await import(
+      '@/lib/server/supabaseAdmin'
+    )
+    if (!hasServiceRoleEnv()) return null
+    return createServiceRoleClient()
   } catch {
     return null
   }

@@ -1,13 +1,8 @@
 import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
-import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/server/adminAuth'
+import { NextResponse } from 'next/server'
+import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { validateSearchQuery, escapePostgrestValue } from '@/utils/validation'
-import {
-  applyRateLimit,
-  RATE_LIMIT_CONFIGS,
-  createUserKeyGenerator,
-  addRateLimitHeaders,
-} from '@/utils/rateLimiter'
+import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { logSecurityEvent } from '@/utils/security'
 import { parseIntegerParam } from '@/utils/queryParams'
 
@@ -15,21 +10,23 @@ export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
 // GET: 회원 목록 조회
-export async function GET(request: NextRequest) {
-  try {
-    // Rate limiting 적용
-    const rateLimiter = await applyRateLimit({
-      ...RATE_LIMIT_CONFIGS.ADMIN_API,
-      keyGenerator: createUserKeyGenerator('admin_members'),
-    })
-
-    const rateLimitResult = await rateLimiter(request)
-    if (!rateLimitResult.success && rateLimitResult.response) {
-      return rateLimitResult.response
-    }
-
-    const auth = await requireAdmin()
-    if (auth instanceof NextResponse) return auth
+export const GET = defineApiRoute({
+  method: 'GET',
+  name: 'api/admin/members',
+  rateLimit: {
+    ...RATE_LIMITS.ADMIN_API,
+    keyGenerator: createUserKeyGenerator('admin_members'),
+  },
+  rateLimitHeaders: true,
+  auth: 'admin',
+  errorResponse: () => {
+    logSecurityEvent('ADMIN_MEMBERS_API_ERROR', { error: '서버 오류가 발생했습니다.' }, 'medium')
+    return NextResponse.json(
+      { error: '회원 정보를 조회하는 중 오류가 발생했습니다.' },
+      { status: 500 }
+    )
+  },
+  handler: async ({ request, auth }) => {
     const { db } = auth
 
     // 쿼리 파라미터 추출 및 검증
@@ -141,7 +138,7 @@ export async function GET(request: NextRequest) {
     const totalPages = Math.ceil((count || 0) / limit)
     const hasNext = page < totalPages
 
-    const response = NextResponse.json({
+    return {
       members: members || [],
       pagination: {
         currentPage: page,
@@ -149,24 +146,9 @@ export async function GET(request: NextRequest) {
         totalCount: count || 0,
         hasNext,
       },
-    })
-
-    // Rate limit 헤더 추가
-    return addRateLimitHeaders(
-      response,
-      RATE_LIMIT_CONFIGS.ADMIN_API.maxRequests,
-      rateLimitResult.remaining,
-      rateLimitResult.resetTime
-    )
-  } catch (error) {
-    console.error('Admin members API error:', error)
-    logSecurityEvent('ADMIN_MEMBERS_API_ERROR', { error: '서버 오류가 발생했습니다.' }, 'medium')
-    return NextResponse.json(
-      { error: '회원 정보를 조회하는 중 오류가 발생했습니다.' },
-      { status: 500 }
-    )
-  }
-}
+    }
+  },
+})
 
 // OPTIONS: CORS 지원
 export async function OPTIONS() {

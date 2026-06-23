@@ -13,10 +13,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import path from 'path'
 import sharp from 'sharp'
 import { createSupabaseServer } from '@/lib/supabase/server'
-import { createClient } from '@supabase/supabase-js'
+import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
 import type { MediaFile } from '@/types'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
-import distLimiter from '@/utils/distributedRateLimiter'
+import distLimiter from '@/lib/server/rateLimit'
 import { createLogger } from '@/utils/logger'
 import { parseIntegerParam } from '@/utils/queryParams'
 
@@ -24,20 +24,7 @@ const log = createLogger('api/media/upload')
 
 // Service Role 클라이언트는 Storage 작업에만 사용
 function getSupabaseAdmin() {
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured')
-  }
-
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-    throw new Error('NEXT_PUBLIC_SUPABASE_URL is not configured')
-  }
-
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  })
+  return createServiceRoleClient()
 }
 
 // 매직 바이트 시그니처 (서버 사이드 Buffer 기반)

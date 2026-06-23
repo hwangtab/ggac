@@ -4,16 +4,14 @@ export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
 import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
-import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/server/adminAuth'
-import {
-  applyRateLimit,
-  RATE_LIMIT_CONFIGS,
-  createUserKeyGenerator,
-  addRateLimitHeaders,
-} from '@/utils/rateLimiter'
-import { parseJsonObjectBody } from '@/utils/requestBody'
+import { NextResponse } from 'next/server'
+import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
+import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { validateUUID } from '@/utils/validation'
+
+function getRouteParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? (value[0] ?? '') : (value ?? '')
+}
 
 function parseArtistLegacyId(value: string) {
   const sanitized = value.trim().toLowerCase()
@@ -21,31 +19,28 @@ function parseArtistLegacyId(value: string) {
 }
 
 // POST: 아티스트에 멤버 배정
-export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const resolvedParams = await context.params
-
-  try {
-    const rateLimiter = await applyRateLimit({
-      ...RATE_LIMIT_CONFIGS.ADMIN_API,
-      keyGenerator: createUserKeyGenerator('admin_artists_id_members'),
-    })
-    const rateLimitResult = await rateLimiter(request)
-    if (!rateLimitResult.success && rateLimitResult.response) {
-      return rateLimitResult.response
-    }
-
-    const auth = await requireAdmin()
-    if (auth instanceof NextResponse) return auth
+export const POST = defineApiRoute<Record<string, unknown>>({
+  method: 'POST',
+  name: 'api/admin/artists/[id]/members',
+  rateLimit: {
+    ...RATE_LIMITS.ADMIN_API,
+    keyGenerator: createUserKeyGenerator('admin_artists_id_members'),
+  },
+  rateLimitHeaders: true,
+  auth: 'admin',
+  body: {
+    invalidResponse: () =>
+      createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400),
+  },
+  errorResponse: () =>
+    createErrorResponse({ success: false, error: '아티스트 배정 중 오류가 발생했습니다.' }, 500),
+  handler: async ({ params, body, auth }) => {
     const { db } = auth
 
     // 요청 데이터 파싱
-    const body = await parseJsonObjectBody(request)
-    if (!body) {
-      return createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400)
-    }
     const rawMemberId = typeof body.memberId === 'string' ? body.memberId : ''
     const role = typeof body.role === 'string' ? body.role : ''
-    const artistId = parseArtistLegacyId(resolvedParams.id)
+    const artistId = parseArtistLegacyId(getRouteParam(params.id))
 
     // 아티스트 ID 형식 검증 — member_profiles.artist_id는 legacy_id(예: 'artist-015')를 보관한다.
     if (!artistId) {
@@ -114,25 +109,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       return createErrorResponse({ success: false, error: '아티스트 배정에 실패했습니다.' }, 500)
     }
 
-    const response = NextResponse.json({
+    return NextResponse.json({
       success: true,
       message: `${targetMember.display_name}님이 아티스트로 배정되었습니다.`,
       member: updatedMember,
     })
-    return addRateLimitHeaders(
-      response,
-      RATE_LIMIT_CONFIGS.ADMIN_API.maxRequests,
-      rateLimitResult.remaining,
-      rateLimitResult.resetTime
-    )
-  } catch (error) {
-    console.error('Admin artist assignment API error:', error)
-    return createErrorResponse(
-      { success: false, error: '아티스트 배정 중 오류가 발생했습니다.' },
-      500
-    )
-  }
-}
+  },
+})
 
 // OPTIONS: CORS 지원
 export async function OPTIONS() {

@@ -11,11 +11,8 @@ export const preferredRegion = 'icn1'
 import { NextRequest, NextResponse } from 'next/server'
 import { createErrorResponse } from '@/utils/apiResponse'
 import { createSupabaseServer } from '@/lib/supabase/server'
-import { createClient } from '@supabase/supabase-js'
-import distributedRateLimiter, {
-  DISTRIBUTED_RATE_LIMIT_CONFIGS,
-  createDistributedUserKeyGenerator,
-} from '@/utils/distributedRateLimiter'
+import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
+import { RATE_LIMITS, applyRateLimit, createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { validateUUID } from '@/utils/validation'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { revalidatePath, revalidateTag } from 'next/cache'
@@ -39,9 +36,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     }
 
     // 분산 Rate limiting 적용
-    const rateLimiter = await distributedRateLimiter.applyRateLimit({
-      ...DISTRIBUTED_RATE_LIMIT_CONFIGS.GENERAL_API,
-      keyGenerator: createDistributedUserKeyGenerator('post_detail'),
+    const rateLimiter = await applyRateLimit({
+      ...RATE_LIMITS.GENERAL_API,
+      keyGenerator: createUserKeyGenerator('post_detail'),
     })
 
     const rateLimitResult = await rateLimiter(request)
@@ -85,12 +82,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
      */
     const adminClient = (() => {
       try {
-        const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-        const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-        if (!url || !key) return null
-        return createClient(url, key, {
-          auth: { autoRefreshToken: false, persistSession: false },
-        })
+        return createServiceRoleClient()
       } catch {
         return null
       }
@@ -275,9 +267,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
     const validPostId = uuidValidation.sanitized
 
-    const rateLimiter = await distributedRateLimiter.applyRateLimit({
-      ...DISTRIBUTED_RATE_LIMIT_CONFIGS.GENERAL_API,
-      keyGenerator: createDistributedUserKeyGenerator('post_update'),
+    const rateLimiter = await applyRateLimit({
+      ...RATE_LIMITS.GENERAL_API,
+      keyGenerator: createUserKeyGenerator('post_update'),
     })
 
     const rateLimitResult = await rateLimiter(request)

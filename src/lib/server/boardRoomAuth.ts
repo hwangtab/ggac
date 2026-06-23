@@ -1,15 +1,27 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { canAccessBoardRoom, isApprovedActiveAdmin } from '@/lib/server/authz'
+import { createServiceRoleClient, type ServiceRoleSupabaseClient } from '@/lib/server/supabaseAdmin'
 import { createLogger } from '@/utils/logger'
 
 const log = createLogger('boardRoomAuth')
 
 export type BoardAuthSuccess = {
-  db: SupabaseClient
+  db: ServiceRoleSupabaseClient
   user: { id: string }
   isAdmin: boolean
   isAuditor: boolean
+}
+
+type ProfileQueryClient = Pick<ServiceRoleSupabaseClient, 'from'>
+
+function createBoardRoomDbOrResponse(): ServiceRoleSupabaseClient | NextResponse {
+  try {
+    return createServiceRoleClient()
+  } catch {
+    log.error('SUPABASE_SERVICE_ROLE_KEY 또는 URL 미설정')
+    return NextResponse.json({ error: '서버 구성 오류입니다.' }, { status: 500 })
+  }
 }
 
 /**
@@ -42,26 +54,19 @@ export async function requireBoardMember(): Promise<BoardAuthSuccess | NextRespo
     return NextResponse.json({ error: '프로필 정보를 조회할 수 없습니다.' }, { status: 500 })
   }
 
-  if (
-    profile.registration_status !== 'approved' ||
-    !profile.is_active ||
-    (!profile.is_director && !profile.is_admin && !profile.is_auditor)
-  ) {
+  if (!canAccessBoardRoom(profile)) {
     return NextResponse.json({ error: '이사회 접근 권한이 없습니다.' }, { status: 403 })
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!supabaseUrl || !serviceKey) {
-    log.error('SUPABASE_SERVICE_ROLE_KEY 또는 URL 미설정')
-    return NextResponse.json({ error: '서버 구성 오류입니다.' }, { status: 500 })
+  const db = createBoardRoomDbOrResponse()
+  if (db instanceof NextResponse) return db
+
+  return {
+    db,
+    user,
+    isAdmin: isApprovedActiveAdmin(profile),
+    isAuditor: profile.is_auditor === true,
   }
-
-  const db = createClient(supabaseUrl, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  })
-
-  return { db, user, isAdmin: !!profile.is_admin, isAuditor: !!profile.is_auditor }
 }
 
 /** 관리자 전용 동작(회의 생성·확정·출석 체크 등) 가드 */
@@ -73,7 +78,7 @@ export function requireBoardAdmin(auth: BoardAuthSuccess): NextResponse | null {
 }
 
 /** 재적 이사 명단(승인·활성 + is_director). 정족수 산정 기준이 된다. */
-export async function getDirectorRoster(db: SupabaseClient) {
+export async function getDirectorRoster(db: ProfileQueryClient) {
   const { data, error } = await db
     .from('member_profiles')
     .select('id, display_name, director_title')
@@ -88,7 +93,7 @@ export async function getDirectorRoster(db: SupabaseClient) {
  * 감사 명단(승인·활성 + is_auditor).
  * 이사회 참석·기록 대상이지만 정족수에는 산입되지 않는다.
  */
-export async function getAuditorRoster(db: SupabaseClient) {
+export async function getAuditorRoster(db: ProfileQueryClient) {
   const { data, error } = await db
     .from('member_profiles')
     .select('id, display_name, director_title')

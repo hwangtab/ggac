@@ -1,16 +1,10 @@
 import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { requireAdmin } from '@/lib/server/adminAuth'
-import {
-  applyRateLimit,
-  RATE_LIMIT_CONFIGS,
-  createUserKeyGenerator,
-  addRateLimitHeaders,
-} from '@/utils/rateLimiter'
+import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
+import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { logSecurityEvent } from '@/utils/security'
 import { createLogger, maskId } from '@/utils/logger'
-import { parseJsonObjectBody } from '@/utils/requestBody'
 import { validateUUID } from '@/utils/validation'
 
 const log = createLogger('admin/member-action')
@@ -41,229 +35,217 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 // POST: 회원 액션 처리 (단순한 경로로 우회)
-export async function POST(request: NextRequest) {
-  let parsedInput: MemberActionInput | null = null
+export const POST = defineApiRoute<Record<string, unknown>>({
+  method: 'POST',
+  name: 'api/admin/member-action',
+  rateLimit: {
+    ...RATE_LIMITS.ADMIN_API,
+    keyGenerator: createUserKeyGenerator('admin_member_action'),
+  },
+  rateLimitHeaders: true,
+  auth: 'admin',
+  body: {
+    invalidResponse: () =>
+      createErrorResponse({ success: false, error: '유효하지 않은 JSON 본문입니다.' }, 400),
+  },
+  handler: async ({ body, auth }) => {
+    let parsedInput: MemberActionInput | null = null
 
-  try {
-    // Rate limiting 적용
-    const rateLimiter = await applyRateLimit({
-      ...RATE_LIMIT_CONFIGS.ADMIN_API,
-      keyGenerator: createUserKeyGenerator('admin_member_action'),
-    })
+    try {
+      const { db: adminSupabase, user } = auth
 
-    const rateLimitResult = await rateLimiter(request)
-    if (!rateLimitResult.success && rateLimitResult.response) {
-      return rateLimitResult.response
-    }
+      // 요청 데이터 파싱 및 Zod 검증
+      const parsed = MemberActionSchema.safeParse(body)
+      if (!parsed.success) {
+        logSecurityEvent('INVALID_MEMBER_ACTION', { issues: parsed.error.flatten() }, 'medium')
+        return NextResponse.json(
+          { error: '유효하지 않은 요청입니다.', details: parsed.error.flatten() },
+          { status: 400 }
+        )
+      }
+      parsedInput = parsed.data
+      const { action, suspension_reason, suspension_until } = parsedInput
+      const memberIdValidation = validateUUID(parsedInput.memberId, '멤버 ID')
+      if (!memberIdValidation.isValid) {
+        return createErrorResponse(
+          { success: false, error: memberIdValidation.errors[0] || '유효하지 않은 멤버 ID입니다.' },
+          400
+        )
+      }
+      const memberId = memberIdValidation.sanitized
 
-    const auth = await requireAdmin()
-    if (auth instanceof NextResponse) return auth
-    const { db: adminSupabase, user } = auth
+      // 대상 회원 정보 조회
+      const { data: targetMember, error: targetError } = await adminSupabase
+        .from('member_profiles')
+        .select('id, display_name, registration_status, is_active, is_suspended')
+        .eq('id', memberId)
+        .single()
 
-    // 요청 데이터 파싱 및 Zod 검증
-    const raw = await parseJsonObjectBody(request)
-    if (!raw) {
-      return createErrorResponse({ success: false, error: '유효하지 않은 JSON 본문입니다.' }, 400)
-    }
+      if (targetError || !targetMember) {
+        log.error('Target member fetch error', {
+          message: targetError?.message,
+          memberId: maskId(memberId),
+        })
+        return createErrorResponse({ success: false, error: '회원을 찾을 수 없습니다.' }, 404)
+      }
 
-    const parsed = MemberActionSchema.safeParse(raw)
-    if (!parsed.success) {
-      logSecurityEvent('INVALID_MEMBER_ACTION', { issues: parsed.error.flatten() }, 'medium')
-      return NextResponse.json(
-        { error: '유효하지 않은 요청입니다.', details: parsed.error.flatten() },
-        { status: 400 }
+      // 액션에 따른 업데이트 데이터 준비
+      let updateData: any = {}
+
+      switch (action) {
+        case 'approve':
+          if (targetMember.registration_status !== 'pending') {
+            return NextResponse.json(
+              { error: '승인 대기 상태의 회원만 승인할 수 있습니다.' },
+              { status: 400 }
+            )
+          }
+          updateData = {
+            registration_status: 'approved',
+            is_active: true,
+            approved_by: user.id,
+            approved_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }
+          break
+
+        case 'reject':
+          if (targetMember.registration_status !== 'pending') {
+            return NextResponse.json(
+              { error: '승인 대기 상태의 회원만 거부할 수 있습니다.' },
+              { status: 400 }
+            )
+          }
+          updateData = {
+            registration_status: 'rejected',
+            is_active: false,
+            rejected_by: user.id,
+            updated_at: new Date().toISOString(),
+          }
+          break
+
+        case 'activate':
+          if (targetMember.registration_status !== 'approved') {
+            return NextResponse.json(
+              { error: '승인된 회원만 활성화할 수 있습니다.' },
+              { status: 400 }
+            )
+          }
+          updateData = {
+            is_active: true,
+            updated_at: new Date().toISOString(),
+          }
+          break
+
+        case 'deactivate':
+          if (targetMember.registration_status !== 'approved') {
+            return NextResponse.json(
+              { error: '승인된 회원만 비활성화할 수 있습니다.' },
+              { status: 400 }
+            )
+          }
+          updateData = {
+            is_active: false,
+            updated_at: new Date().toISOString(),
+          }
+          break
+
+        case 'suspend':
+          if (targetMember.registration_status !== 'approved') {
+            return createErrorResponse(
+              { success: false, error: '승인된 회원만 정지할 수 있습니다.' },
+              400
+            )
+          }
+          updateData = {
+            is_suspended: true,
+            is_active: false,
+            suspension_reason: suspension_reason || '관리자에 의한 정지',
+            suspension_until: suspension_until || null,
+            updated_at: new Date().toISOString(),
+          }
+          break
+
+        case 'unsuspend':
+          if (!targetMember.is_suspended) {
+            return NextResponse.json(
+              { error: '정지된 회원만 정지해제할 수 있습니다.' },
+              { status: 400 }
+            )
+          }
+          updateData = {
+            is_suspended: false,
+            is_active: true,
+            suspension_reason: null,
+            suspension_until: null,
+            updated_at: new Date().toISOString(),
+          }
+          break
+      }
+
+      // 데이터베이스 업데이트
+      const { data: updatedMember, error: updateError } = await adminSupabase
+        .from('member_profiles')
+        .update(updateData)
+        .eq('id', memberId)
+        .select()
+        .single()
+
+      if (updateError) {
+        log.error('Member update error', {
+          message: updateError.message,
+          memberId: maskId(memberId),
+          action,
+        })
+        return createErrorResponse(
+          { success: false, error: '회원 상태 업데이트에 실패했습니다.' },
+          500
+        )
+      }
+
+      // 성공 응답
+      const actionMessages: Record<string, string> = {
+        approve: '승인',
+        reject: '거부',
+        activate: '활성화',
+        deactivate: '비활성화',
+        suspend: '정지',
+        unsuspend: '정지해제',
+      }
+
+      // 보안 이벤트 로깅 — PII(원본 ID/표시명) 평문 노출 회피
+      logSecurityEvent(
+        'MEMBER_STATUS_CHANGED',
+        {
+          memberId: maskId(memberId),
+          action,
+          adminId: maskId(user.id),
+        },
+        'medium'
       )
-    }
-    parsedInput = parsed.data
-    const { action, suspension_reason, suspension_until } = parsedInput
-    const memberIdValidation = validateUUID(parsedInput.memberId, '멤버 ID')
-    if (!memberIdValidation.isValid) {
-      return createErrorResponse(
-        { success: false, error: memberIdValidation.errors[0] || '유효하지 않은 멤버 ID입니다.' },
-        400
+
+      return NextResponse.json({
+        success: true,
+        message: `${targetMember.display_name}님이 ${actionMessages[action]}되었습니다.`,
+        member: updatedMember,
+      })
+    } catch (error) {
+      log.error('Admin member action API error', error)
+      logSecurityEvent(
+        'ADMIN_MEMBER_ACTION_ERROR',
+        {
+          error: error instanceof Error ? error.message : 'Unknown error',
+          action: parsedInput?.action,
+        },
+        'high'
       )
-    }
-    const memberId = memberIdValidation.sanitized
-
-    // 대상 회원 정보 조회
-    const { data: targetMember, error: targetError } = await adminSupabase
-      .from('member_profiles')
-      .select('id, display_name, registration_status, is_active, is_suspended')
-      .eq('id', memberId)
-      .single()
-
-    if (targetError || !targetMember) {
-      log.error('Target member fetch error', {
-        message: targetError?.message,
-        memberId: maskId(memberId),
-      })
-      return createErrorResponse({ success: false, error: '회원을 찾을 수 없습니다.' }, 404)
-    }
-
-    // 액션에 따른 업데이트 데이터 준비
-    let updateData: any = {}
-
-    switch (action) {
-      case 'approve':
-        if (targetMember.registration_status !== 'pending') {
-          return NextResponse.json(
-            { error: '승인 대기 상태의 회원만 승인할 수 있습니다.' },
-            { status: 400 }
-          )
-        }
-        updateData = {
-          registration_status: 'approved',
-          is_active: true,
-          approved_by: user.id,
-          approved_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }
-        break
-
-      case 'reject':
-        if (targetMember.registration_status !== 'pending') {
-          return NextResponse.json(
-            { error: '승인 대기 상태의 회원만 거부할 수 있습니다.' },
-            { status: 400 }
-          )
-        }
-        updateData = {
-          registration_status: 'rejected',
-          is_active: false,
-          rejected_by: user.id,
-          updated_at: new Date().toISOString(),
-        }
-        break
-
-      case 'activate':
-        if (targetMember.registration_status !== 'approved') {
-          return NextResponse.json(
-            { error: '승인된 회원만 활성화할 수 있습니다.' },
-            { status: 400 }
-          )
-        }
-        updateData = {
-          is_active: true,
-          updated_at: new Date().toISOString(),
-        }
-        break
-
-      case 'deactivate':
-        if (targetMember.registration_status !== 'approved') {
-          return NextResponse.json(
-            { error: '승인된 회원만 비활성화할 수 있습니다.' },
-            { status: 400 }
-          )
-        }
-        updateData = {
-          is_active: false,
-          updated_at: new Date().toISOString(),
-        }
-        break
-
-      case 'suspend':
-        if (targetMember.registration_status !== 'approved') {
-          return createErrorResponse(
-            { success: false, error: '승인된 회원만 정지할 수 있습니다.' },
-            400
-          )
-        }
-        updateData = {
-          is_suspended: true,
-          is_active: false,
-          suspension_reason: suspension_reason || '관리자에 의한 정지',
-          suspension_until: suspension_until || null,
-          updated_at: new Date().toISOString(),
-        }
-        break
-
-      case 'unsuspend':
-        if (!targetMember.is_suspended) {
-          return NextResponse.json(
-            { error: '정지된 회원만 정지해제할 수 있습니다.' },
-            { status: 400 }
-          )
-        }
-        updateData = {
-          is_suspended: false,
-          is_active: true,
-          suspension_reason: null,
-          suspension_until: null,
-          updated_at: new Date().toISOString(),
-        }
-        break
-    }
-
-    // 데이터베이스 업데이트
-    const { data: updatedMember, error: updateError } = await adminSupabase
-      .from('member_profiles')
-      .update(updateData)
-      .eq('id', memberId)
-      .select()
-      .single()
-
-    if (updateError) {
-      log.error('Member update error', {
-        message: updateError.message,
-        memberId: maskId(memberId),
-        action,
-      })
       return createErrorResponse(
-        { success: false, error: '회원 상태 업데이트에 실패했습니다.' },
+        { success: false, error: '회원 상태 변경 중 오류가 발생했습니다.' },
         500
       )
     }
-
-    // 성공 응답
-    const actionMessages: Record<string, string> = {
-      approve: '승인',
-      reject: '거부',
-      activate: '활성화',
-      deactivate: '비활성화',
-      suspend: '정지',
-      unsuspend: '정지해제',
-    }
-
-    // 보안 이벤트 로깅 — PII(원본 ID/표시명) 평문 노출 회피
-    logSecurityEvent(
-      'MEMBER_STATUS_CHANGED',
-      {
-        memberId: maskId(memberId),
-        action,
-        adminId: maskId(user.id),
-      },
-      'medium'
-    )
-
-    const response = NextResponse.json({
-      success: true,
-      message: `${targetMember.display_name}님이 ${actionMessages[action]}되었습니다.`,
-      member: updatedMember,
-    })
-
-    // Rate limit 헤더 추가
-    return addRateLimitHeaders(
-      response,
-      RATE_LIMIT_CONFIGS.ADMIN_API.maxRequests,
-      rateLimitResult.remaining,
-      rateLimitResult.resetTime
-    )
-  } catch (error) {
-    log.error('Admin member action API error', error)
-    logSecurityEvent(
-      'ADMIN_MEMBER_ACTION_ERROR',
-      {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        action: parsedInput?.action,
-      },
-      'high'
-    )
-    return createErrorResponse(
-      { success: false, error: '회원 상태 변경 중 오류가 발생했습니다.' },
-      500
-    )
-  }
-}
+  },
+})
 
 // OPTIONS: CORS 지원
 export async function OPTIONS() {
