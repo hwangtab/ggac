@@ -10,6 +10,7 @@ import PerformanceMonitor from './PerformanceMonitor'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 import { useRenderPerformance } from '@/hooks/usePerformanceMonitor'
 import { usePointerParallax } from '@/hooks/usePointerParallax'
+import { useScrollParallax } from '@/hooks/useScrollParallax'
 import { getErrorTracker } from '@/utils/errorTracking'
 
 const Hero = () => {
@@ -24,6 +25,9 @@ const Hero = () => {
 
   // 접근성: 사용자의 동작 줄이기 설정 확인
   const prefersReducedMotion = usePrefersReducedMotion()
+
+  // 스크롤 진행도 — 패럴랙스 배경 및 인디케이터 opacity 제어
+  const scrollProgress = useScrollParallax({ disabled: prefersReducedMotion })
 
   // 렌더링 성능 추적
   const renderPerf = useRenderPerformance('Hero')
@@ -165,7 +169,14 @@ const Hero = () => {
       }}
     >
       {/* Layer 1: 배경 이미지 - 최적화된 이미지 컴포넌트 */}
-      <div className="absolute inset-0" style={{ zIndex: 1 }}>
+      <div
+        className="absolute inset-0"
+        style={{
+          zIndex: 1,
+          transform: 'translate3d(0, calc(var(--scroll-y) * 0.3), 0)',
+          willChange: 'transform',
+        }}
+      >
         <OptimizedHeroImage
           alt={t('hero.imageAlt')}
           priority
@@ -337,6 +348,7 @@ const Hero = () => {
         className={`absolute bottom-8 left-0 right-0 flex justify-center text-white ${
           prefersReducedMotion ? '' : 'animate-bounce'
         }`}
+        style={{ opacity: Math.max(0, 1 - scrollProgress * 2) }}
       >
         <div className="w-6 h-10 border-2 border-white rounded-full flex justify-center">
           <div
