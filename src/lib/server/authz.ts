@@ -1,6 +1,4 @@
 import { createSupabaseServer } from '@/lib/supabase/server'
-import { createServiceRoleClient, type ServiceRoleSupabaseClient } from '@/lib/server/supabaseAdmin'
-import { ApiError } from '@/utils/apiWrapper'
 
 export interface SessionUser {
   id: string
@@ -24,17 +22,6 @@ export interface SessionContext {
   profileError?: unknown
 }
 
-export interface AdminContext {
-  db: ServiceRoleSupabaseClient
-  user: { id: string }
-  profile: ProfileLike
-}
-
-export interface BoardMemberContext extends AdminContext {
-  isAdmin: boolean
-  isAuditor: boolean
-}
-
 export function isApprovedActive(profile: ProfileLike | null): boolean {
   return profile?.registration_status === 'approved' && profile.is_active === true
 }
@@ -50,6 +37,11 @@ export function canAccessBoardRoom(profile: ProfileLike | null): boolean {
   )
 }
 
+/**
+ * 현재 요청의 세션 사용자와 member_profiles 프로필을 한 번에 조회한다.
+ * 인증/권한 헬퍼(adminAuth, boardRoomAuth)가 이 단일 소스를 재사용해
+ * getUser → 프로필 조회 시퀀스를 중복하지 않도록 한다.
+ */
 export async function getSessionContext(): Promise<SessionContext> {
   const supabase = await createSupabaseServer()
 
@@ -82,65 +74,5 @@ export async function getSessionContext(): Promise<SessionContext> {
     },
     profile: profile ?? null,
     profileError,
-  }
-}
-
-function createServiceRoleClientOrApiError(): ServiceRoleSupabaseClient {
-  try {
-    return createServiceRoleClient()
-  } catch {
-    throw ApiError.internalServerError('서버 구성 오류입니다.')
-  }
-}
-
-export async function requireAdminContext(): Promise<AdminContext> {
-  const session = await getSessionContext()
-
-  if (!session.authenticated || !session.user) {
-    throw ApiError.unauthorized('인증이 필요합니다.')
-  }
-
-  if (session.profileError || !session.profile) {
-    throw ApiError.internalServerError('프로필 정보를 조회할 수 없습니다.')
-  }
-
-  if (!isApprovedActiveAdmin(session.profile)) {
-    throw ApiError.forbidden('관리자 권한이 필요합니다.')
-  }
-
-  return {
-    db: createServiceRoleClientOrApiError(),
-    user: { id: session.user.id },
-    profile: session.profile,
-  }
-}
-
-export async function requireBoardMemberContext(): Promise<BoardMemberContext> {
-  const session = await getSessionContext()
-
-  if (!session.authenticated || !session.user) {
-    throw ApiError.unauthorized('인증이 필요합니다.')
-  }
-
-  if (session.profileError || !session.profile) {
-    throw ApiError.internalServerError('프로필 정보를 조회할 수 없습니다.')
-  }
-
-  if (!canAccessBoardRoom(session.profile)) {
-    throw ApiError.forbidden('이사회 접근 권한이 없습니다.')
-  }
-
-  return {
-    db: createServiceRoleClientOrApiError(),
-    user: { id: session.user.id },
-    profile: session.profile,
-    isAdmin: isApprovedActiveAdmin(session.profile),
-    isAuditor: session.profile.is_auditor === true,
-  }
-}
-
-export function requireBoardAdminContext(context: BoardMemberContext): void {
-  if (!context.isAdmin) {
-    throw ApiError.forbidden('관리자 권한이 필요합니다.')
   }
 }

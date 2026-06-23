@@ -15,18 +15,17 @@ const edgeRuntimeFiles = appFiles.filter(file => {
   return /export\s+const\s+runtime\s*=\s*['"]edge['"]/.test(source)
 })
 
-const middlewareFiles = globSync('src/middleware{.ts,/**/*.ts}', {
-  cwd: root,
-  exclude: ['**/node_modules/**', '**/.next/**'],
-})
-const middlewareSupabaseImports = middlewareFiles.filter(file => {
-  const source = readFileSync(join(root, file), 'utf8')
-  return /from\s+['"]@supabase\//.test(source)
-})
 const authMiddlewarePath = join(root, 'src/middleware/auth.ts')
 const authMiddlewareSource = readFileSync(authMiddlewarePath, 'utf8')
 const rootMiddlewarePath = join(root, 'src/middleware.ts')
 const rootMiddlewareSource = readFileSync(rootMiddlewarePath, 'utf8')
+// 미들웨어는 @supabase/ssr createServerClient + 쿠키 setAll로 세션을 검증하고
+// access token 만료 시 자동 갱신해야 한다(수동 REST 파서로 회귀하면 갱신이 사라진다).
+const middlewareUsesStandardSupabaseSession =
+  /from\s+['"]@supabase\/ssr['"]/.test(rootMiddlewareSource) &&
+  /createServerClient/.test(rootMiddlewareSource) &&
+  /setAll/.test(rootMiddlewareSource) &&
+  /res\.cookies\.set/.test(rootMiddlewareSource)
 const authCallbackPath = join(root, 'src/app/auth/callback/route.ts')
 const authCallbackSource = readFileSync(authCallbackPath, 'utf8')
 const authVerifySessionPath = join(root, 'src/app/api/auth/verify-session/route.ts')
@@ -281,13 +280,13 @@ const loginPageCleansAuthRedirectTimers =
   /useEffect\(\(\) => \{\s*return clearAuthRedirectTimer\s*\}, \[\]\)/.test(loginPageSource) &&
   /let mounted = true[\s\S]*?if \(mounted && session\.user\)/.test(loginPageSource) &&
   /return \(\) => \{\s*mounted = false\s*\}/.test(loginPageSource) &&
-  /authRedirectTimerRef\.current = setTimeout\(\(\) => \{\s*navigateWithRetry\(postLoginRedirectPath/.test(
+  /authRedirectTimerRef\.current = setTimeout\(\(\) => \{\s*navigateWithRetry\(explicitRedirectPath/.test(
     loginPageSource
   ) &&
   /authRedirectTimerRef\.current = setTimeout\(\(\) => \{\s*router\.push\(['"]\/['"]\)/.test(
     loginPageSource
   ) &&
-  !/^\s*setTimeout\(\(\) => \{\s*(?:navigateWithRetry\(postLoginRedirectPath|router\.push\(['"]\/['"]\))/m.test(
+  !/^\s*setTimeout\(\(\) => \{\s*(?:navigateWithRetry\(explicitRedirectPath|router\.push\(['"]\/['"]\))/m.test(
     loginPageSource
   )
 const registerPendingGuardsSessionFetchUnmount =
@@ -342,13 +341,14 @@ const hasSharedOperationalBoundaryHelpers =
   /export function isApprovedActive/.test(authzSource) &&
   /export function isApprovedActiveAdmin/.test(authzSource) &&
   /export function canAccessBoardRoom/.test(authzSource) &&
-  /export async function requireAdminContext/.test(authzSource) &&
-  /export async function requireBoardMemberContext/.test(authzSource)
+  /export async function getSessionContext/.test(authzSource)
 const existingAuthHelpersUseSharedOperationalBoundaries =
   /from\s+['"]@\/lib\/server\/supabaseAdmin['"]/.test(adminAuthBoundarySource) &&
   /from\s+['"]@\/lib\/server\/authz['"]/.test(adminAuthBoundarySource) &&
   /createServiceRoleClient/.test(adminAuthBoundarySource) &&
   /isApprovedActiveAdmin/.test(adminAuthBoundarySource) &&
+  /getSessionContext/.test(adminAuthBoundarySource) &&
+  !/createSupabaseServer/.test(adminAuthBoundarySource) &&
   !/from\s+['"]@supabase\/supabase-js['"]/.test(adminAuthBoundarySource) &&
   !/createClient\(/.test(adminAuthBoundarySource) &&
   /from\s+['"]@\/lib\/server\/supabaseAdmin['"]/.test(boardRoomAuthBoundarySource) &&
@@ -356,6 +356,8 @@ const existingAuthHelpersUseSharedOperationalBoundaries =
   /createServiceRoleClient/.test(boardRoomAuthBoundarySource) &&
   /canAccessBoardRoom/.test(boardRoomAuthBoundarySource) &&
   /isApprovedActiveAdmin/.test(boardRoomAuthBoundarySource) &&
+  /getSessionContext/.test(boardRoomAuthBoundarySource) &&
+  !/createSupabaseServer/.test(boardRoomAuthBoundarySource) &&
   !/from\s+['"]@supabase\/supabase-js['"]/.test(boardRoomAuthBoundarySource) &&
   !/createClient\(/.test(boardRoomAuthBoundarySource)
 const serverRateLimitPath = join(root, 'src/lib/server/rateLimit.ts')
@@ -2082,8 +2084,8 @@ const preservesSafeLoginRedirects =
   /useSearchParams/.test(loginPageSource) &&
   /toSafeInternalRedirectPath/.test(loginPageSource) &&
   /searchParams\.get\(['"]redirect['"]\)/.test(loginPageSource) &&
-  /postLoginRedirectPath/.test(loginPageSource) &&
-  /navigateWithRetry\(postLoginRedirectPath/.test(loginPageSource)
+  /explicitRedirectPath/.test(loginPageSource) &&
+  /navigateWithRetry\(explicitRedirectPath/.test(loginPageSource)
 const avoidsClientOperationalConsoleNoise =
   !/console\.log\(/.test(loginPageSource) &&
   !/\[LOGIN DEBUG\]/.test(loginPageSource) &&
@@ -2607,11 +2609,12 @@ if (!validateUUIDRejectsTempIds) {
   )
 }
 
-if (middlewareSupabaseImports.length > 0) {
+if (!middlewareUsesStandardSupabaseSession) {
   failures.push(
-    `Middleware imports Supabase packages directly:\n${middlewareSupabaseImports
-      .map(file => `- ${file}`)
-      .join('\n')}`
+    `Middleware must use @supabase/ssr createServerClient with cookie setAll for automatic session token refresh: ${relative(
+      root,
+      rootMiddlewarePath
+    )}`
   )
 }
 

@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createSupabaseServer } from '@/lib/supabase/server'
-import { canAccessBoardRoom, isApprovedActiveAdmin } from '@/lib/server/authz'
+import { canAccessBoardRoom, getSessionContext, isApprovedActiveAdmin } from '@/lib/server/authz'
 import { createServiceRoleClient, type ServiceRoleSupabaseClient } from '@/lib/server/supabaseAdmin'
 import { createLogger } from '@/utils/logger'
 
@@ -34,27 +33,17 @@ function createBoardRoomDbOrResponse(): ServiceRoleSupabaseClient | NextResponse
  * 감사(is_auditor)는 감사 업무를 위해 이사회에 접근하나 정족수에는 산입되지 않는다.
  */
 export async function requireBoardMember(): Promise<BoardAuthSuccess | NextResponse> {
-  const supabase = await createSupabaseServer()
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
+  const session = await getSessionContext()
 
-  if (authError || !user) {
+  if (!session.authenticated || !session.user) {
     return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
   }
 
-  const { data: profile, error: profileError } = await supabase
-    .from('member_profiles')
-    .select('is_admin, is_director, is_auditor, registration_status, is_active')
-    .eq('id', user.id)
-    .single()
-
-  if (profileError || !profile) {
+  if (session.profileError || !session.profile) {
     return NextResponse.json({ error: '프로필 정보를 조회할 수 없습니다.' }, { status: 500 })
   }
 
-  if (!canAccessBoardRoom(profile)) {
+  if (!canAccessBoardRoom(session.profile)) {
     return NextResponse.json({ error: '이사회 접근 권한이 없습니다.' }, { status: 403 })
   }
 
@@ -63,9 +52,9 @@ export async function requireBoardMember(): Promise<BoardAuthSuccess | NextRespo
 
   return {
     db,
-    user,
-    isAdmin: isApprovedActiveAdmin(profile),
-    isAuditor: profile.is_auditor === true,
+    user: { id: session.user.id },
+    isAdmin: isApprovedActiveAdmin(session.profile),
+    isAuditor: session.profile.is_auditor === true,
   }
 }
 

@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createSupabaseServer } from '@/lib/supabase/server'
-import { isApprovedActiveAdmin } from '@/lib/server/authz'
+import { getSessionContext, isApprovedActiveAdmin } from '@/lib/server/authz'
 import { createServiceRoleClient, type ServiceRoleSupabaseClient } from '@/lib/server/supabaseAdmin'
 import { createLogger } from '@/utils/logger'
 
@@ -36,35 +35,24 @@ function createAdminDbOrResponse(): ServiceRoleSupabaseClient | NextResponse {
  *   const { db } = auth
  */
 export async function requireAdmin(): Promise<AdminAuthSuccess | NextResponse> {
-  const supabase = await createSupabaseServer()
+  const session = await getSessionContext()
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
+  if (!session.authenticated || !session.user) {
     return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
   }
 
-  const { data: profile, error: profileError } = await supabase
-    .from('member_profiles')
-    .select('is_admin, registration_status, is_active')
-    .eq('id', user.id)
-    .single()
-
-  if (profileError || !profile) {
+  if (session.profileError || !session.profile) {
     return NextResponse.json({ error: '프로필 정보를 조회할 수 없습니다.' }, { status: 500 })
   }
 
-  if (!isApprovedActiveAdmin(profile)) {
+  if (!isApprovedActiveAdmin(session.profile)) {
     return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 })
   }
 
   const db = createAdminDbOrResponse()
   if (db instanceof NextResponse) return db
 
-  return { db, user }
+  return { db, user: { id: session.user.id } }
 }
 
 /**
