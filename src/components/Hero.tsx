@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, memo } from 'react'
 import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
 import OptimizedHeroImage from './OptimizedHeroImage'
+import AmbientLight from './AmbientLight'
 import ErrorBoundary from './ErrorBoundary'
 import PerformanceMonitor from './PerformanceMonitor'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
@@ -165,6 +166,9 @@ const Hero = () => {
           }}
         />
       </div>
+
+      {/* Layer 1.5: 상시 앰비언트 빛 레이어 */}
+      <AmbientLight />
 
       {/* Layer 2: 전체 다크 오버레이 - 명도 대비 강화 */}
       <div

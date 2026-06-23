@@ -939,6 +939,16 @@ input[type='date'] {
   animation: drift 28s ease-in-out infinite alternate;
 }
 
+/* 모바일에서 두 번째 빛 레이어 숨김 + 강도 축소 */
+@media (max-width: 768px) {
+  .ambient-light-secondary {
+    display: none;
+  }
+  .ambient-light {
+    opacity: 0.6;
+  }
+}
+
 /* 전역 접근성 가드 — 이 패키지의 모든 모션 정지 */
 @media (prefers-reduced-motion: reduce) {
   .motion-fade-up,
