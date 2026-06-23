@@ -880,6 +880,81 @@ input[type='date'] {
   line-height: normal !important;
 }
 
+/* ===== 메인 레이어드 모션 패키지 ===== */
+:root {
+  --mx: 0;
+  --my: 0;
+  --scroll-y: 0px;
+}
+
+/* 진입 등장 — 장식 요소 전용 (LCP 텍스트엔 적용 금지) */
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.motion-fade-up {
+  opacity: 0;
+  animation: fadeUp 0.6s ease-out forwards;
+  animation-delay: var(--motion-delay, 0ms);
+}
+
+/* 글래스 카드 컨테이너 1회 미세 scale-in (내부 LCP 텍스트는 즉시 paint됨) */
+@keyframes cardIn {
+  from {
+    transform: scale(0.98);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+.motion-card-in {
+  animation: cardIn 0.7s ease-out both;
+}
+
+/* 상시 앰비언트 — 빛 레이어 드리프트 */
+.ambient-light {
+  position: absolute;
+  inset: -10%;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  will-change: transform;
+  /* 포인터 시차(±10px) — transform만 */
+  transform: translate3d(calc(var(--mx) * 10px), calc(var(--my) * 10px), 0);
+}
+@keyframes drift {
+  0% {
+    transform: translate3d(calc(var(--mx) * 10px), calc(var(--my) * 10px), 0) scale(1);
+  }
+  100% {
+    transform: translate3d(calc(var(--mx) * 10px + 4%), calc(var(--my) * 10px - 3%), 0) scale(1.08);
+  }
+}
+.ambient-drift {
+  animation: drift 28s ease-in-out infinite alternate;
+}
+
+/* 전역 접근성 가드 — 이 패키지의 모든 모션 정지 */
+@media (prefers-reduced-motion: reduce) {
+  .motion-fade-up,
+  .motion-card-in,
+  .ambient-drift {
+    animation: none !important;
+  }
+  .motion-fade-up {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .ambient-light {
+    transform: none !important;
+  }
+}
+
 /* Prevent native iOS date picker from having its own background/border */
 input[type='date']::-webkit-date-and-time-value {
   text-align: left;
