@@ -9,6 +9,17 @@ test.describe('메인 레이어드 모션', () => {
     await expect(wrapper).toBeAttached()
   })
 
+  test('앰비언트 빛 레이어가 다크 오버레이 위에 배치된다(가려지지 않음)', async ({ page }) => {
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    // 빛 레이어 부모의 z-index가 히어로의 어둠 오버레이(다크 오버레이 z10,
+    // 중앙 radial z15)보다 커야 빛이 화면에 더해져 보인다.
+    const z = await page
+      .locator('.ambient-light')
+      .first()
+      .evaluate(el => Number(getComputedStyle(el.parentElement).zIndex))
+    expect(z).toBeGreaterThan(15)
+  })
+
   test('reduced-motion에서 앰비언트 애니메이션이 정지한다', async ({ browser }) => {
     const context = await browser.newContext({ reducedMotion: 'reduce' })
     const page = await context.newPage()

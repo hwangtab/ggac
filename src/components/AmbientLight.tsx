@@ -1,18 +1,21 @@
 /**
  * 상시 앰비언트 빛 레이어.
- * 배경 이미지와 글래스 카드 사이(z-index 5~9)에 삽입되어 천천히 드리프트한다.
+ * 히어로의 어둠 오버레이(다크 오버레이 z10, 중앙 radial z15) "위", 텍스트 카드(z20)
+ * "아래"인 z-index 16에 배치한다. 어둠 레이어보다 아래에 두면 mix-blend:screen이
+ * 위에 칠해지는 검정을 막지 못해 빛이 묻히므로, 반드시 어둠 위에 올려 화면에 더해지게 한다.
  * transform/opacity만 사용(GPU compositing). prefers-reduced-motion에서 정지.
  * 모바일에서는 두 번째 레이어를 CSS로 숨겨 GPU 부하를 낮춘다.
+ * 빛은 화면 가장자리(좌상단·우하단)에 치우쳐 있어 중앙 텍스트 가독성에 영향이 적다.
  */
 const AmbientLight = () => {
   return (
-    <div className="absolute inset-0" style={{ zIndex: 5 }} aria-hidden="true">
+    <div className="absolute inset-0" style={{ zIndex: 16 }} aria-hidden="true">
       {/* 레이어 1 — 따뜻한 빛, 좌상단 */}
       <div
         className="ambient-light ambient-drift"
         style={{
           background:
-            'radial-gradient(40% 40% at 35% 30%, rgba(255, 214, 170, 0.28) 0%, rgba(255, 214, 170, 0) 70%)',
+            'radial-gradient(40% 40% at 35% 30%, rgba(255, 214, 170, 0.42) 0%, rgba(255, 214, 170, 0) 70%)',
           animationDuration: '28s',
         }}
       />
@@ -21,7 +24,7 @@ const AmbientLight = () => {
         className="ambient-light ambient-drift ambient-light-secondary"
         style={{
           background:
-            'radial-gradient(45% 45% at 70% 75%, rgba(150, 190, 255, 0.22) 0%, rgba(150, 190, 255, 0) 70%)',
+            'radial-gradient(45% 45% at 70% 75%, rgba(150, 190, 255, 0.34) 0%, rgba(150, 190, 255, 0) 70%)',
           animationDuration: '36s',
           animationDirection: 'alternate-reverse',
         }}
