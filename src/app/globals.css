@@ -962,6 +962,8 @@ input[type='date'] {
   }
   .ambient-light {
     transform: none !important;
+    /* reduced-motion 사용자에게 불필요한 compositor 레이어 메모리 비용 제거 */
+    will-change: auto;
   }
 }
 
