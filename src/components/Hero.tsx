@@ -210,13 +210,23 @@ const Hero = () => {
       />
 
       {/* Layer 4: 글래스모피즘 텍스트 컨테이너 */}
-      <div className="relative text-center text-white px-4" style={{ zIndex: 20 }}>
+      {/*
+       * 진입 scale-in(motion-card-in)은 부모에 적용한다. 카드 자체에 두면
+       * cardIn 애니메이션의 transform(scale)이 카드 마우스 시차 인라인 transform을
+       * 덮어써(애니메이션 > 인라인 우선순위) 시차가 무력화되므로 transform 소스를 분리.
+       */}
+      <div
+        className={`relative text-center text-white px-4 ${
+          prefersReducedMotion ? '' : 'motion-card-in'
+        }`}
+        style={{ zIndex: 20 }}
+      >
         <div
-          className={`glass-hero-container max-w-6xl mx-auto rounded-3xl
+          className="glass-hero-container max-w-6xl mx-auto rounded-3xl
             px-6 py-6 sm:px-10 sm:py-8 md:px-12 md:py-9 lg:px-16 lg:py-11
             mx-2 sm:mx-4 md:mx-auto
             rounded-2xl sm:rounded-3xl
-            opacity-100 ${prefersReducedMotion ? '' : 'motion-card-in'}`}
+            opacity-100"
           style={{
             backdropFilter: `blur(var(--glassmorphism-blur, 12px)) saturate(var(--glassmorphism-saturation, 180%))`,
             background: `linear-gradient(
@@ -231,7 +241,7 @@ const Hero = () => {
               0 2px 16px rgba(0, 0, 0, 0.2),
               inset 0 1px 0 rgba(255, 255, 255, 0.1)
             `,
-            transform: 'translate3d(calc(var(--mx) * 6px), calc(var(--my) * 6px), 0)',
+            transform: 'translate3d(calc(var(--mx) * 10px), calc(var(--my) * 10px), 0)',
           }}
         >
           {/* LCP 요소 — h1은 첫 프레임부터 즉시 표시(opacity-100 고정, 진입 애니메이션 제외) */}
