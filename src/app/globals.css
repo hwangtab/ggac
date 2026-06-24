@@ -943,19 +943,26 @@ input[type='date'] {
 /* 상시 앰비언트 — 빛 레이어 드리프트 */
 .ambient-light {
   position: absolute;
-  inset: -10%;
+  /* 시차(±100px) + drift(4%/scale 1.08)로 이동해도 항상 화면을 덮도록 넉넉한 여백.
+     여백이 부족하면 빛 레이어가 한쪽으로 밀리며 반대쪽 가장자리에 빈 띠(세로줄)가 생긴다. */
+  inset: -240px;
+  /* 전역 `* { max-width: 100% }`가 inset 음수 확장을 막아 레이어가 화면을 못 덮으면
+     가장자리에 hard edge(세로줄)가 생기므로 이 레이어에서만 제약을 해제한다. */
+  max-width: none;
+  max-height: none;
   pointer-events: none;
   mix-blend-mode: screen;
   will-change: transform;
-  /* 포인터 시차(±20px) — transform만 */
-  transform: translate3d(calc(var(--mx) * 20px), calc(var(--my) * 20px), 0);
+  /* 포인터 시차(±100px) — transform만 */
+  transform: translate3d(calc(var(--mx) * 100px), calc(var(--my) * 100px), 0);
 }
 @keyframes drift {
   0% {
-    transform: translate3d(calc(var(--mx) * 20px), calc(var(--my) * 20px), 0) scale(1);
+    transform: translate3d(calc(var(--mx) * 100px), calc(var(--my) * 100px), 0) scale(1);
   }
   100% {
-    transform: translate3d(calc(var(--mx) * 20px + 4%), calc(var(--my) * 20px - 3%), 0) scale(1.08);
+    transform: translate3d(calc(var(--mx) * 100px + 4%), calc(var(--my) * 100px - 3%), 0)
+      scale(1.08);
   }
 }
 .ambient-drift {
