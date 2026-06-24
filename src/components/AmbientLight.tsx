@@ -15,7 +15,7 @@ const AmbientLight = () => {
         className="ambient-light ambient-drift"
         style={{
           background:
-            'radial-gradient(40% 40% at 35% 30%, rgba(255, 214, 170, 0.42) 0%, rgba(255, 214, 170, 0) 70%)',
+            'radial-gradient(50% 50% at 32% 28%, rgba(255, 200, 150, 0.65) 0%, rgba(255, 200, 150, 0) 72%)',
           animationDuration: '28s',
         }}
       />
@@ -24,7 +24,7 @@ const AmbientLight = () => {
         className="ambient-light ambient-drift ambient-light-secondary"
         style={{
           background:
-            'radial-gradient(45% 45% at 70% 75%, rgba(150, 190, 255, 0.34) 0%, rgba(150, 190, 255, 0) 70%)',
+            'radial-gradient(55% 55% at 72% 76%, rgba(140, 180, 255, 0.55) 0%, rgba(140, 180, 255, 0) 72%)',
           animationDuration: '36s',
           animationDirection: 'alternate-reverse',
         }}

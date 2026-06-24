@@ -947,15 +947,15 @@ input[type='date'] {
   pointer-events: none;
   mix-blend-mode: screen;
   will-change: transform;
-  /* 포인터 시차(±10px) — transform만 */
-  transform: translate3d(calc(var(--mx) * 10px), calc(var(--my) * 10px), 0);
+  /* 포인터 시차(±20px) — transform만 */
+  transform: translate3d(calc(var(--mx) * 20px), calc(var(--my) * 20px), 0);
 }
 @keyframes drift {
   0% {
-    transform: translate3d(calc(var(--mx) * 10px), calc(var(--my) * 10px), 0) scale(1);
+    transform: translate3d(calc(var(--mx) * 20px), calc(var(--my) * 20px), 0) scale(1);
   }
   100% {
-    transform: translate3d(calc(var(--mx) * 10px + 4%), calc(var(--my) * 10px - 3%), 0) scale(1.08);
+    transform: translate3d(calc(var(--mx) * 20px + 4%), calc(var(--my) * 20px - 3%), 0) scale(1.08);
   }
 }
 .ambient-drift {

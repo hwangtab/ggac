@@ -241,7 +241,7 @@ const Hero = () => {
               0 2px 16px rgba(0, 0, 0, 0.2),
               inset 0 1px 0 rgba(255, 255, 255, 0.1)
             `,
-            transform: 'translate3d(calc(var(--mx) * 10px), calc(var(--my) * 10px), 0)',
+            transform: 'translate3d(calc(var(--mx) * 20px), calc(var(--my) * 20px), 0)',
           }}
         >
           {/* LCP 요소 — h1은 첫 프레임부터 즉시 표시(opacity-100 고정, 진입 애니메이션 제외) */}
