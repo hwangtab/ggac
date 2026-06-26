@@ -157,7 +157,7 @@ export async function handleAuth(
   try {
     const { data, error } = await supabase
       .from('member_profiles')
-      .select('registration_status, is_active, is_admin, is_director, display_name')
+      .select('registration_status, is_active, is_admin, is_director, is_auditor, display_name')
       .eq('id', user.id)
       .single()
 
@@ -308,8 +308,8 @@ export async function handleAuth(
         shouldContinue: false,
       }
     }
-    // 이사회 페이지는 이사 또는 관리자만 접근
-    if (isBoardRoom && !isAdmin && !profile.is_director) {
+    // 이사회 페이지는 이사·관리자·감사만 접근 (API canAccessBoardRoom과 동일 기준)
+    if (isBoardRoom && !isAdmin && !profile.is_director && !profile.is_auditor) {
       return {
         response: redirectToPath(request, '/board'),
         shouldContinue: false,
