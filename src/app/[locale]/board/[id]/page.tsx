@@ -229,9 +229,12 @@ async function getInitialPostData(
 
     let userData: UserData | null = null
     if (serverUser) {
+      // profile_photo_url 컬럼은 artists 테이블에만 존재한다. member_profiles에서
+      // select하면 PostgREST 42703 에러로 조회가 실패해 로그인 사용자가 비회원으로
+      // 취급되므로 제외한다.
       const { data: profile } = await supabaseAdmin
         .from('member_profiles')
-        .select('display_name, profile_photo_url, registration_status, is_active, is_admin')
+        .select('display_name, registration_status, is_active, is_admin')
         .eq('id', serverUser.id)
         .single()
 
@@ -239,7 +242,7 @@ async function getInitialPostData(
         userData = {
           id: serverUser.id,
           display_name: (profile as any).display_name || '알 수 없음',
-          profile_photo_url: (profile as any).profile_photo_url,
+          profile_photo_url: undefined,
           is_member:
             (profile as any).registration_status === 'approved' &&
             (profile as any).is_active === true,

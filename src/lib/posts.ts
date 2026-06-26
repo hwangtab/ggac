@@ -80,10 +80,11 @@ export async function getPostAuthor(authorId: string): Promise<AuthorProfile | n
   try {
     const supabase = getSupabaseAdmin()
 
-    // member_profiles에서 직접 조회 (public_profiles 뷰에는 profile_photo_url이 없음)
+    // member_profiles 조회. profile_photo_url 컬럼은 artists 테이블에만 존재하므로
+    // 여기서 select하면 PostgREST 42703 에러로 조회 전체가 실패한다. 제외한다.
     const { data: profile, error } = await supabase
       .from('member_profiles')
-      .select('id, display_name, profile_photo_url')
+      .select('id, display_name')
       .eq('id', authorId)
       .maybeSingle()
 
