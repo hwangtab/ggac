@@ -4,7 +4,7 @@ import { useState, useRef } from 'react'
 import { FiX, FiUser, FiUserPlus, FiCheck } from 'react-icons/fi'
 import Image from 'next/image'
 import { useDialogA11y } from '@/hooks/useDialogA11y'
-import { toSafeInternalImagePath } from '@/utils/safeUrl'
+import { toSafeImageSrc } from '@/utils/safeUrl'
 
 interface Artist {
   id: string
@@ -61,7 +61,7 @@ export default function AssignArtistModal({
   useDialogA11y({ containerRef: dialogRef, onClose, isOpen })
 
   if (!isOpen) return null
-  const safeProfileImage = toSafeInternalImagePath(artist.profileImage)
+  const safeProfileImage = toSafeImageSrc(artist.profileImage)
 
   // 현재 아티스트에 이미 배정된 멤버들의 ID 목록
   const assignedMemberIds = artist.assignedMembers?.map(m => m.id) || []

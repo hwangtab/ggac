@@ -15,7 +15,7 @@ import { sanitizeJsonLd } from '@/utils/sanitize'
 import {
   toSafeEmailHref,
   toSafeHttpUrl,
-  toSafeInternalImagePath,
+  toSafeImageSrc,
   toSafeLinkHref,
   toSafePhoneHref,
 } from '@/utils/safeUrl'
@@ -192,7 +192,7 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
 
   const isMinimal = artist.templateType === 'minimal'
   const baseUrl = getBaseUrl()
-  const safeProfileImage = toSafeInternalImagePath(artist.profileImage)
+  const safeProfileImage = toSafeImageSrc(artist.profileImage)
   const artistEmailHref = toSafeEmailHref(artist.contact)
   const artistPhoneHref = toSafePhoneHref(artist.contact)
   const safePortfolioLinks =
