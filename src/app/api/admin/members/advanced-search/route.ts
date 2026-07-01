@@ -3,18 +3,12 @@
  * 복합 필터링, 정렬, 전체 텍스트 검색을 지원하는 고급 검색 기능
  */
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createErrorResponse } from '@/utils/apiResponse'
-import { requireAdmin } from '@/lib/server/adminAuth'
-import {
-  applyRateLimit,
-  RATE_LIMIT_CONFIGS,
-  createUserKeyGenerator,
-  addRateLimitHeaders,
-} from '@/lib/server/rateLimit'
+import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
+import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { validateAdvancedSearchQuery, buildSearchQuery } from '@/utils/advancedFiltering'
 import type { AdvancedSearchQuery, FilteredResult, FieldDefinition } from '@/types'
-import { parseJsonObjectBody } from '@/utils/requestBody'
 
 // 멤버 필드 정의
 const MEMBER_FIELD_DEFINITIONS: FieldDefinition[] = [
@@ -203,27 +197,25 @@ const MEMBER_FIELD_DEFINITIONS: FieldDefinition[] = [
   },
 ]
 
-export async function POST(request: NextRequest) {
-  try {
-    // Rate limiting 적용
-    const rateLimiter = await applyRateLimit({
-      ...RATE_LIMIT_CONFIGS.ADMIN_API,
-      keyGenerator: createUserKeyGenerator('members_advanced_search'),
-    })
-    const rateLimitResult = await rateLimiter(request)
-    if (!rateLimitResult.success) {
-      return rateLimitResult.response
-    }
-
-    const auth = await requireAdmin()
-    if (auth instanceof NextResponse) return auth
+export const POST = defineApiRoute<AdvancedSearchQuery>({
+  method: 'POST',
+  name: 'api/admin/members/advanced-search',
+  rateLimit: {
+    ...RATE_LIMITS.ADMIN_API,
+    keyGenerator: createUserKeyGenerator('members_advanced_search'),
+  },
+  rateLimitHeaders: true,
+  auth: 'admin',
+  body: {
+    invalidResponse: () =>
+      createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400),
+  },
+  errorResponse: error => {
+    console.error('고급 검색 API 오류:', error)
+    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
+  },
+  handler: async ({ body: searchQuery, auth }) => {
     const { db } = auth
-
-    // 요청 본문 파싱
-    const searchQuery = (await parseJsonObjectBody(request)) as AdvancedSearchQuery | null
-    if (!searchQuery) {
-      return createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400)
-    }
 
     // 쿼리 검증
     const validation = validateAdvancedSearchQuery(searchQuery, MEMBER_FIELD_DEFINITIONS)
@@ -325,13 +317,7 @@ export async function POST(request: NextRequest) {
         applied_sorts: query.sorts || [],
       }
 
-      const response = NextResponse.json(result)
-      return addRateLimitHeaders(
-        response,
-        RATE_LIMIT_CONFIGS.ADMIN_API.maxRequests,
-        rateLimitResult.remaining,
-        rateLimitResult.resetTime
-      )
+      return NextResponse.json(result)
     } catch (queryError) {
       console.error('쿼리 실행 오류:', queryError)
       return createErrorResponse(
@@ -339,41 +325,28 @@ export async function POST(request: NextRequest) {
         500
       )
     }
-  } catch (error) {
-    console.error('고급 검색 API 오류:', error)
-    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
-  }
-}
+  },
+})
 
 // 필드 정의 조회 API
-export async function GET(request: NextRequest) {
-  try {
-    // Rate limiting 적용
-    const rateLimiter = await applyRateLimit({
-      ...RATE_LIMIT_CONFIGS.ADMIN_API,
-      keyGenerator: createUserKeyGenerator('members_advanced_search'),
-    })
-    const rateLimitResult = await rateLimiter(request)
-    if (!rateLimitResult.success) {
-      return rateLimitResult.response
-    }
-
-    const auth = await requireAdmin()
-    if (auth instanceof NextResponse) return auth
-
-    const response = NextResponse.json({
+export const GET = defineApiRoute({
+  method: 'GET',
+  name: 'api/admin/members/advanced-search.fields',
+  rateLimit: {
+    ...RATE_LIMITS.ADMIN_API,
+    keyGenerator: createUserKeyGenerator('members_advanced_search'),
+  },
+  rateLimitHeaders: true,
+  auth: 'admin',
+  errorResponse: error => {
+    console.error('필드 정의 조회 오류:', error)
+    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
+  },
+  handler: async () => {
+    return NextResponse.json({
       fields: MEMBER_FIELD_DEFINITIONS,
       target: 'members',
       description: '멤버 고급 검색을 위한 필드 정의',
     })
-    return addRateLimitHeaders(
-      response,
-      RATE_LIMIT_CONFIGS.ADMIN_API.maxRequests,
-      rateLimitResult.remaining,
-      rateLimitResult.resetTime
-    )
-  } catch (error) {
-    console.error('필드 정의 조회 오류:', error)
-    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
-  }
-}
+  },
+})

@@ -368,6 +368,10 @@ const serverApiRoutePath = join(root, 'src/lib/server/apiRoute.ts')
 const serverApiRouteSource = existsSync(serverApiRoutePath)
   ? readFileSync(serverApiRoutePath, 'utf8')
   : ''
+const serverStreamRoutePath = join(root, 'src/lib/server/streamRoute.ts')
+const serverStreamRouteSource = existsSync(serverStreamRoutePath)
+  ? readFileSync(serverStreamRoutePath, 'utf8')
+  : ''
 const apiRouteFiles = globSync('src/app/api/**/route.@(ts|tsx)', {
   cwd: root,
   exclude: ['**/node_modules/**', '**/.next/**'],
@@ -409,6 +413,13 @@ const hasSharedJsonApiRouteWrapper =
   /ApiError/.test(serverApiRouteSource) &&
   /handler:\s*\([\s\S]*?ctx:\s*ApiRouteContext/.test(serverApiRouteSource) &&
   /result instanceof NextResponse/.test(serverApiRouteSource)
+const hasSharedStreamRouteWrapper =
+  /export function defineStreamRoute/.test(serverStreamRouteSource) &&
+  /applyRouteRateLimit/.test(serverStreamRouteSource) &&
+  /requireAdmin/.test(serverStreamRouteSource) &&
+  /handler:\s*\([\s\S]*?ctx:\s*StreamRouteContext/.test(serverStreamRouteSource) &&
+  !/addRateLimitHeaders/.test(serverStreamRouteSource) &&
+  !/parseJsonObjectBody/.test(serverStreamRouteSource)
 
 const rateLimiterPath = join(root, 'src/utils/distributedRateLimiter.ts')
 const rateLimiterSource = readFileSync(rateLimiterPath, 'utf8')
@@ -620,8 +631,8 @@ const legacyOgImageSource = readFileSync(legacyOgImagePath, 'utf8')
 const imagesApiPath = join(root, 'src/app/api/images/route.ts')
 const imagesApiSource = readFileSync(imagesApiPath, 'utf8')
 const validatesStaticOgImageRedirects =
-  /toSafeInternalImagePath/.test(artistOgImageSource) &&
-  /toSafeInternalImagePath\(artist\?\.profileImage/.test(artistOgImageSource) &&
+  /toSafeArtistImageSrc/.test(artistOgImageSource) &&
+  /toSafeArtistImageSrc\(artist\?\.profileImage/.test(artistOgImageSource) &&
   /toSafeInternalImagePath/.test(projectOgImageSource) &&
   /toSafeInternalImagePath\(project\.coverImage/.test(projectOgImageSource) &&
   /toSafeInternalImagePath\(project\.gallery\[0\]/.test(projectOgImageSource) &&
@@ -714,6 +725,18 @@ const adminPostDetailSource = readFileSync(adminPostDetailPath, 'utf8')
 const validatesAdminPostRouteId =
   /validateUUID\(resolvedParams\.id,\s*['"]게시글 ID['"]\)/.test(adminPostDetailSource) &&
   /\.eq\(['"]id['"],\s*postId\)/.test(adminPostDetailSource)
+const adminPostActionUsesSharedApiRoute =
+  /from\s+['"]@\/lib\/server\/apiRoute['"]/.test(adminPostDetailSource) &&
+  /export const PATCH = defineApiRoute/.test(adminPostDetailSource) &&
+  /auth:\s*['"]admin['"]/.test(adminPostDetailSource) &&
+  /rateLimit:\s*\{\s*\.\.\.RATE_LIMITS\.ADMIN_API/.test(adminPostDetailSource) &&
+  /createUserKeyGenerator\(['"]admin_posts_action['"]\)/.test(adminPostDetailSource) &&
+  /rateLimitHeaders:\s*true/.test(adminPostDetailSource) &&
+  /body:\s*\{[\s\S]*?invalidResponse/.test(adminPostDetailSource) &&
+  !/parseJsonObjectBody/.test(adminPostDetailSource) &&
+  !/applyRateLimit\(/.test(adminPostDetailSource) &&
+  !/addRateLimitHeaders/.test(adminPostDetailSource) &&
+  !/requireAdmin\(\)/.test(adminPostDetailSource)
 const notificationDetailPath = join(root, 'src/app/api/notifications/[id]/route.ts')
 const notificationDetailSource = readFileSync(notificationDetailPath, 'utf8')
 const notificationsPath = join(root, 'src/app/api/notifications/route.ts')
@@ -1380,12 +1403,36 @@ const adminArtistsMembersPath = join(root, 'src/app/api/admin/artists/members/ro
 const adminArtistsMembersSource = readFileSync(adminArtistsMembersPath, 'utf8')
 const adminMembersPath = join(root, 'src/app/api/admin/members/route.ts')
 const adminMembersSource = readFileSync(adminMembersPath, 'utf8')
+const adminMembersAdvancedSearchPath = join(
+  root,
+  'src/app/api/admin/members/advanced-search/route.ts'
+)
+const adminMembersAdvancedSearchSource = readFileSync(adminMembersAdvancedSearchPath, 'utf8')
+const settingsAdminAuthPath = join(root, 'src/lib/server/settingsAdminAuth.ts')
+const settingsAdminAuthSource = existsSync(settingsAdminAuthPath)
+  ? readFileSync(settingsAdminAuthPath, 'utf8')
+  : ''
+const adminSettingsApiPath = join(root, 'src/app/api/admin/settings/route.ts')
+const adminSettingsApiSource = readFileSync(adminSettingsApiPath, 'utf8')
+const adminSettingsBackupApiPath = join(root, 'src/app/api/admin/settings/backup/route.ts')
+const adminSettingsBackupApiSource = readFileSync(adminSettingsBackupApiPath, 'utf8')
+const adminSettingsCacheApiPath = join(root, 'src/app/api/admin/settings/cache/route.ts')
+const adminSettingsCacheApiSource = readFileSync(adminSettingsCacheApiPath, 'utf8')
+const adminSettingsResetApiPath = join(root, 'src/app/api/admin/settings/reset/route.ts')
+const adminSettingsResetApiSource = readFileSync(adminSettingsResetApiPath, 'utf8')
 const adminPostsPath = join(root, 'src/app/api/admin/posts/route.ts')
 const adminPostsSource = readFileSync(adminPostsPath, 'utf8')
+const adminPostsAdvancedSearchPath = join(root, 'src/app/api/admin/posts/advanced-search/route.ts')
+const adminPostsAdvancedSearchSource = readFileSync(adminPostsAdvancedSearchPath, 'utf8')
 const adminReportsGeneratePath = join(root, 'src/app/api/admin/reports/generate/route.ts')
 const adminReportsGenerateSource = readFileSync(adminReportsGeneratePath, 'utf8')
 const adminActivitiesRealTimePath = join(root, 'src/app/api/admin/activities/real-time/route.ts')
 const adminActivitiesRealTimeSource = readFileSync(adminActivitiesRealTimePath, 'utf8')
+const adminActivitiesRealTimeStreamPath = join(
+  root,
+  'src/app/api/admin/activities/real-time/stream/route.ts'
+)
+const adminActivitiesRealTimeStreamSource = readFileSync(adminActivitiesRealTimeStreamPath, 'utf8')
 const apiPerformanceMonitorPath = join(root, 'src/utils/apiPerformanceMonitor.ts')
 const apiPerformanceMonitorSource = readFileSync(apiPerformanceMonitorPath, 'utf8')
 const adminAnalyticsConstantsPath = join(root, 'src/constants/adminAnalytics.ts')
@@ -1550,6 +1597,135 @@ const adminListingRoutesUseSharedApiRoute = adminListingRouteSources.every(
     !/addRateLimitHeaders/.test(source) &&
     !/requireAdmin\(\)/.test(source)
 )
+const adminPostsAdvancedSearchUsesSharedApiRoute =
+  /from\s+['"]@\/lib\/server\/apiRoute['"]/.test(adminPostsAdvancedSearchSource) &&
+  /export const POST = defineApiRoute/.test(adminPostsAdvancedSearchSource) &&
+  /export const GET = defineApiRoute/.test(adminPostsAdvancedSearchSource) &&
+  (adminPostsAdvancedSearchSource.match(/auth:\s*['"]admin['"]/g) ?? []).length >= 2 &&
+  /rateLimit:\s*\{\s*\.\.\.RATE_LIMITS\.ADMIN_API/.test(adminPostsAdvancedSearchSource) &&
+  /createUserKeyGenerator\(['"]posts_advanced_search['"]\)/.test(adminPostsAdvancedSearchSource) &&
+  /body:\s*\{[\s\S]*?invalidResponse/.test(adminPostsAdvancedSearchSource) &&
+  !/parseJsonObjectBody/.test(adminPostsAdvancedSearchSource) &&
+  !/applyRateLimit\(/.test(adminPostsAdvancedSearchSource) &&
+  !/requireAdmin\(\)/.test(adminPostsAdvancedSearchSource)
+const adminMembersAdvancedSearchUsesSharedApiRoute =
+  /from\s+['"]@\/lib\/server\/apiRoute['"]/.test(adminMembersAdvancedSearchSource) &&
+  /export const POST = defineApiRoute/.test(adminMembersAdvancedSearchSource) &&
+  /export const GET = defineApiRoute/.test(adminMembersAdvancedSearchSource) &&
+  (adminMembersAdvancedSearchSource.match(/auth:\s*['"]admin['"]/g) ?? []).length >= 2 &&
+  /rateLimit:\s*\{\s*\.\.\.RATE_LIMITS\.ADMIN_API/.test(adminMembersAdvancedSearchSource) &&
+  /createUserKeyGenerator\(['"]members_advanced_search['"]\)/.test(
+    adminMembersAdvancedSearchSource
+  ) &&
+  (adminMembersAdvancedSearchSource.match(/rateLimitHeaders:\s*true/g) ?? []).length >= 2 &&
+  /body:\s*\{[\s\S]*?invalidResponse/.test(adminMembersAdvancedSearchSource) &&
+  !/parseJsonObjectBody/.test(adminMembersAdvancedSearchSource) &&
+  !/applyRateLimit\(/.test(adminMembersAdvancedSearchSource) &&
+  !/addRateLimitHeaders/.test(adminMembersAdvancedSearchSource) &&
+  !/requireAdmin\(\)/.test(adminMembersAdvancedSearchSource)
+const adminMembersBulkUsesSharedApiRoute =
+  /from\s+['"]@\/lib\/server\/apiRoute['"]/.test(adminMembersBulkApiSource) &&
+  /export const POST = defineApiRoute/.test(adminMembersBulkApiSource) &&
+  /export const GET = defineApiRoute/.test(adminMembersBulkApiSource) &&
+  (adminMembersBulkApiSource.match(/auth:\s*['"]admin['"]/g) ?? []).length >= 2 &&
+  /rateLimit:\s*\{\s*\.\.\.RATE_LIMITS\.BULK_OPERATIONS/.test(adminMembersBulkApiSource) &&
+  /createUserKeyGenerator\(['"]bulk_operations['"]\)/.test(adminMembersBulkApiSource) &&
+  /rateLimit:\s*\{\s*\.\.\.RATE_LIMITS\.ADMIN_API/.test(adminMembersBulkApiSource) &&
+  /createUserKeyGenerator\(['"]admin_members_bulk_status['"]\)/.test(adminMembersBulkApiSource) &&
+  (adminMembersBulkApiSource.match(/rateLimitHeaders:\s*true/g) ?? []).length >= 2 &&
+  /body:\s*\{[\s\S]*?invalidResponse/.test(adminMembersBulkApiSource) &&
+  !/parseJsonObjectBody/.test(adminMembersBulkApiSource) &&
+  !/applyRateLimit\(/.test(adminMembersBulkApiSource) &&
+  !/addRateLimitHeaders/.test(adminMembersBulkApiSource) &&
+  !/requireAdmin\(\)/.test(adminMembersBulkApiSource)
+const hasSettingsAdminAuthResolver =
+  /export type SettingsAdminAuth/.test(settingsAdminAuthSource) &&
+  /export function createSettingsAdminAuth/.test(settingsAdminAuthSource) &&
+  /createSupabaseServer/.test(settingsAdminAuthSource) &&
+  /checkAdminPermission/.test(settingsAdminAuthSource) &&
+  /createErrorResponse\(\{\s*success:\s*false,\s*error:\s*['"]인증이 필요합니다\./.test(
+    settingsAdminAuthSource
+  )
+// `export const <METHOD> = defineApiRoute(<...>)` 한 블록을 괄호 균형으로 잘라낸다.
+// 파일 전체가 아니라 메서드별 설정 객체 단위로 auth/rateLimitHeaders를 검증하기 위함.
+const extractDefineApiRouteBlock = (source, method) => {
+  const marker = new RegExp(`export const ${method}\\s*=\\s*defineApiRoute`)
+  const match = marker.exec(source)
+  if (!match) return null
+
+  // 제네릭(`<Record<string, unknown>>`)은 괄호를 포함하지 않으므로 defineApiRoute
+  // 뒤 첫 여는 괄호가 곧 호출 인자 시작이다. 여기서부터 괄호 균형으로 블록을 잘라낸다.
+  const parenIdx = source.indexOf('(', match.index + match[0].length)
+  if (parenIdx === -1) return null
+
+  let depth = 0
+  for (let i = parenIdx; i < source.length; i++) {
+    const ch = source[i]
+    if (ch === '(') {
+      depth++
+    } else if (ch === ')') {
+      depth--
+      if (depth === 0) {
+        return source.slice(match.index, i + 1)
+      }
+    }
+  }
+  return null
+}
+const adminSettingsRouteSources = [
+  {
+    path: adminSettingsApiPath,
+    source: adminSettingsApiSource,
+    methods: ['GET', 'PUT'],
+    keys: ['admin_settings_get', 'admin_settings_update'],
+  },
+  {
+    path: adminSettingsBackupApiPath,
+    source: adminSettingsBackupApiSource,
+    methods: ['GET', 'POST'],
+    keys: ['admin_settings_backup', 'admin_settings_restore'],
+  },
+  {
+    path: adminSettingsCacheApiPath,
+    source: adminSettingsCacheApiSource,
+    methods: ['GET', 'POST'],
+    keys: ['admin_settings_cache_status', 'admin_settings_cache_invalidate'],
+  },
+  {
+    path: adminSettingsResetApiPath,
+    source: adminSettingsResetApiSource,
+    methods: ['POST'],
+    keys: ['admin_settings_reset'],
+  },
+]
+const adminSettingsRoutesUseSharedBoundary =
+  hasSettingsAdminAuthResolver &&
+  adminSettingsRouteSources.every(({ source, methods, keys }) => {
+    if (
+      !/from\s+['"]@\/lib\/server\/apiRoute['"]/.test(source) ||
+      !/from\s+['"]@\/lib\/server\/settingsAdminAuth['"]/.test(source) ||
+      !keys.every(key => new RegExp(`createUserKeyGenerator\\(['"]${key}['"]\\)`).test(source)) ||
+      /parseJsonObjectBody/.test(source) ||
+      /applyRateLimit\(/.test(source) ||
+      /addRateLimitHeaders/.test(source) ||
+      /createSupabaseServer/.test(source) ||
+      /checkAdminPermission/.test(source)
+    ) {
+      return false
+    }
+
+    // 메서드별(defineApiRoute 블록별)로 공유 auth·rate limit 헤더를 강제한다.
+    // 파일 어딘가에 한 번만 있으면 통과하던 예전 방식은 GET만 보호되고 POST가
+    // bare/누락돼도 통과할 수 있었다.
+    return methods.every(method => {
+      const block = extractDefineApiRouteBlock(source, method)
+      return (
+        block !== null &&
+        /auth:\s*createSettingsAdminAuth\(/.test(block) &&
+        /rateLimitHeaders:\s*true/.test(block)
+      )
+    })
+  })
 const adminStandaloneRoutesUseSharedApiRoute =
   /from\s+['"]@\/lib\/server\/apiRoute['"]/.test(adminPerformanceSource) &&
   /export const GET = defineApiRoute/.test(adminPerformanceSource) &&
@@ -1574,6 +1750,19 @@ const adminStandaloneRoutesUseSharedApiRoute =
   !/parseJsonObjectBody/.test(adminReportsGenerateSource) &&
   !/applyRateLimit\(/.test(adminReportsGenerateSource) &&
   !/requireAdmin\(\)/.test(adminReportsGenerateSource)
+const adminRealtimeStreamUsesSharedStreamRoute =
+  hasSharedStreamRouteWrapper &&
+  /from\s+['"]@\/lib\/server\/streamRoute['"]/.test(adminActivitiesRealTimeStreamSource) &&
+  /export const GET = defineStreamRoute/.test(adminActivitiesRealTimeStreamSource) &&
+  /auth:\s*['"]admin['"]/.test(adminActivitiesRealTimeStreamSource) &&
+  /rateLimit:\s*\{\s*\.\.\.RATE_LIMITS\.ADMIN_API/.test(adminActivitiesRealTimeStreamSource) &&
+  /createUserKeyGenerator\(['"]admin_realtime_stream['"]\)/.test(
+    adminActivitiesRealTimeStreamSource
+  ) &&
+  !/applyRateLimit\(/.test(adminActivitiesRealTimeStreamSource) &&
+  !/RATE_LIMIT_CONFIGS/.test(adminActivitiesRealTimeStreamSource) &&
+  !/requireAdmin\(\)/.test(adminActivitiesRealTimeStreamSource) &&
+  !/addRateLimitHeaders/.test(adminActivitiesRealTimeStreamSource)
 const adminEventApplicationsUsesSharedApiRoute =
   /from\s+['"]@\/lib\/server\/apiRoute['"]/.test(adminEventApplicationsApiSource) &&
   /export const GET = defineApiRoute/.test(adminEventApplicationsApiSource) &&
@@ -1972,8 +2161,8 @@ const protectsPublicImageSourcesFromUnsafeUrls =
     featuredProjectsSource
   ) &&
   !/src=\{project\.coverImage\}/.test(featuredProjectsSource) &&
-  /toSafeInternalImagePath/.test(featuredArtistsSource) &&
-  /const\s+safeProfileImage\s*=\s*toSafeInternalImagePath\(artist\.profileImage\)/.test(
+  /toSafeArtistImageSrc/.test(featuredArtistsSource) &&
+  /const\s+safeProfileImage\s*=\s*toSafeArtistImageSrc\(artist\.profileImage\)/.test(
     featuredArtistsSource
   ) &&
   !/src=\{artist\.profileImage\}/.test(featuredArtistsSource) &&
@@ -1985,12 +2174,12 @@ const protectsPublicImageSourcesFromUnsafeUrls =
   /toSafeInternalImagePath/.test(baseCardSource) &&
   /const\s+safeImageSrc\s*=\s*toSafeInternalImagePath\(image\.src\)/.test(baseCardSource) &&
   !/src=\{image\.src\}/.test(baseCardSource) &&
-  /toSafeInternalImagePath/.test(artistsContentSource) &&
-  /const\s+safeProfileImage\s*=\s*toSafeInternalImagePath\(artist\.profileImage\)/.test(
+  /toSafeArtistImageSrc/.test(artistsContentSource) &&
+  /const\s+safeProfileImage\s*=\s*toSafeArtistImageSrc\(artist\.profileImage\)/.test(
     artistsContentSource
   ) &&
   !/src=\{artist\.profileImage\}/.test(artistsContentSource) &&
-  /toSafeInternalImagePath/.test(artistProfilePageSource) &&
+  /toSafeArtistImageSrc/.test(artistProfilePageSource) &&
   /safeProfileImage/.test(artistProfilePageSource) &&
   !/src=\{artist\.profileImage\}/.test(artistProfilePageSource) &&
   /toSafeInternalImagePath/.test(archiveContentSource) &&
@@ -1998,13 +2187,13 @@ const protectsPublicImageSourcesFromUnsafeUrls =
     archiveContentSource
   ) &&
   !/src=\{project\.coverImage\}/.test(archiveContentSource) &&
-  /toSafeInternalImagePath/.test(adminArtistCardSource) &&
-  /const\s+safeProfileImage\s*=\s*toSafeInternalImagePath\(artist\.profileImage\)/.test(
+  /toSafeArtistImageSrc/.test(adminArtistCardSource) &&
+  /const\s+safeProfileImage\s*=\s*toSafeArtistImageSrc\(artist\.profileImage\)/.test(
     adminArtistCardSource
   ) &&
   !/src=\{artist\.profileImage\}/.test(adminArtistCardSource) &&
-  /toSafeInternalImagePath/.test(adminAssignArtistModalSource) &&
-  /const\s+safeProfileImage\s*=\s*toSafeInternalImagePath\(artist\.profileImage\)/.test(
+  /toSafeArtistImageSrc/.test(adminAssignArtistModalSource) &&
+  /const\s+safeProfileImage\s*=\s*toSafeArtistImageSrc\(artist\.profileImage\)/.test(
     adminAssignArtistModalSource
   ) &&
   !/src=\{artist\.profileImage\}/.test(adminAssignArtistModalSource) &&
@@ -2516,6 +2705,41 @@ if (!adminListingRoutesUseSharedApiRoute) {
   )
 }
 
+if (!adminPostsAdvancedSearchUsesSharedApiRoute) {
+  failures.push(
+    `Admin posts advanced-search route should use the shared API route assembly boundary while preserving its search payload validation and per-route rate-limit key: ${relative(
+      root,
+      adminPostsAdvancedSearchPath
+    )}`
+  )
+}
+
+if (!adminMembersAdvancedSearchUsesSharedApiRoute) {
+  failures.push(
+    `Admin members advanced-search route should use the shared API route assembly boundary while preserving its search payload validation, per-route rate-limit key, and success headers: ${relative(
+      root,
+      adminMembersAdvancedSearchPath
+    )}`
+  )
+}
+
+if (!adminMembersBulkUsesSharedApiRoute) {
+  failures.push(
+    `Admin members bulk route should use the shared API route assembly boundary while preserving distinct bulk/status rate-limit policies, body parsing, and success headers: ${relative(
+      root,
+      adminMembersBulkApiPath
+    )}`
+  )
+}
+
+if (!adminSettingsRoutesUseSharedBoundary) {
+  failures.push(
+    `Admin settings routes should share a settings-specific Supabase auth resolver and the JSON API route assembly boundary instead of hand-wiring auth, rate limits, and JSON parsing:\n${adminSettingsRouteSources
+      .map(({ path }) => `- ${relative(root, path)}`)
+      .join('\n')}\n- ${relative(root, settingsAdminAuthPath)}`
+  )
+}
+
 if (!adminStandaloneRoutesUseSharedApiRoute) {
   failures.push(
     `Admin performance, real-time activity, and report-generation routes should use the shared API route assembly boundary while preserving route-specific rate-limit/header/body behavior:\n- ${relative(
@@ -2525,6 +2749,15 @@ if (!adminStandaloneRoutesUseSharedApiRoute) {
       root,
       adminReportsGeneratePath
     )}`
+  )
+}
+
+if (!adminRealtimeStreamUsesSharedStreamRoute) {
+  failures.push(
+    `Admin real-time SSE stream should use a stream-specific route assembly boundary for auth and rate limiting without adding JSON route headers:\n- ${relative(
+      root,
+      adminActivitiesRealTimeStreamPath
+    )}\n- ${relative(root, serverStreamRoutePath)}`
   )
 }
 
@@ -2967,6 +3200,15 @@ if (!validatesPostAttachmentRenderUrls) {
 if (!validatesAdminPostRouteId) {
   failures.push(
     `Admin post actions must validate the route post id before lookup/update: ${relative(
+      root,
+      adminPostDetailPath
+    )}`
+  )
+}
+
+if (!adminPostActionUsesSharedApiRoute) {
+  failures.push(
+    `Admin post action route should use the shared API route assembly boundary while preserving its per-route rate-limit key, body parsing, and response headers: ${relative(
       root,
       adminPostDetailPath
     )}`

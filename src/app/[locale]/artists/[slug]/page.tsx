@@ -13,9 +13,9 @@ import type { Metadata } from 'next'
 import { getSiteUrl, getLocaleAlternates, getOgLocale } from '@/utils/site'
 import { sanitizeJsonLd } from '@/utils/sanitize'
 import {
+  toSafeArtistImageSrc,
   toSafeEmailHref,
   toSafeHttpUrl,
-  toSafeImageSrc,
   toSafeLinkHref,
   toSafePhoneHref,
 } from '@/utils/safeUrl'
@@ -88,14 +88,19 @@ export async function generateMetadata({ params }: ArtistPageProps): Promise<Met
   const baseUrl = getBaseUrl()
   const pageUrl = `${baseUrl}/artists/${artist.slug}`
 
-  // OG 이미지 결정 로직 — 절대 URL은 그대로 사용, 상대 경로만 baseUrl prefix.
-  // KakaoTalk 등 일부 플랫폼이 webp를 인식하지 못해 jpg 컴패니언으로 치환한다.
-  // og:image:type 이 image/jpeg 이므로 폴백 경로도 .jpg 로 통일한다.
+  // OG 이미지 결정 로직 — 화면 렌더링과 동일한 안전 경계(toSafeArtistImageSrc)를 거친다.
+  // 신뢰 경로(내부 경로·artists 버킷 URL)만 통과하므로 임의 외부 URL이 OG에 새지 않는다.
+  // 내부 정적 경로는 빌드시 `.jpg` 컴패니언이 함께 생성되므로, KakaoTalk 등 webp 미인식
+  // 플랫폼을 위해 `.webp`→`.jpg`로 치환한다. 반면 Supabase Storage 업로드본의 JPEG 변형은
+  // `*.fallback.jpg` 경로라 단순 확장자 치환으로는 존재하지 않는 객체(404)를 가리키게 되므로,
+  // 절대 URL(업로드본)은 실제 저장된 객체를 그대로 서빙한다.
   const buildOgImageUrl = () => {
-    const source = artist.profileImage || '/images/logo/gac_og.webp'
+    const source = toSafeArtistImageSrc(artist.profileImage)
     const isAbsolute = /^https?:\/\//i.test(source)
-    const raw = isAbsolute ? source : `${baseUrl}${source}`
-    return raw.replace(/\.webp(\?.*)?$/i, '.jpg$1')
+    if (isAbsolute) {
+      return source
+    }
+    return `${baseUrl}${source}`.replace(/\.webp(\?.*)?$/i, '.jpg$1')
   }
 
   const ogImageUrl = buildOgImageUrl()
@@ -192,7 +197,7 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
 
   const isMinimal = artist.templateType === 'minimal'
   const baseUrl = getBaseUrl()
-  const safeProfileImage = toSafeImageSrc(artist.profileImage)
+  const safeProfileImage = toSafeArtistImageSrc(artist.profileImage)
   const artistEmailHref = toSafeEmailHref(artist.contact)
   const artistPhoneHref = toSafePhoneHref(artist.contact)
   const safePortfolioLinks =
@@ -212,7 +217,8 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
     slug: resolvedParams.slug,
     bio: artist.oneLiner,
     categories: Array.isArray(artist.category) ? artist.category : [artist.category],
-    profilePhotoUrl: artist.profileImage,
+    // 화면·OG와 동일한 안전 경계를 통과한 값만 JSON-LD image로 노출한다.
+    profilePhotoUrl: safeProfileImage,
     portfolioLinks: artist.portfolioLinks,
   })
 

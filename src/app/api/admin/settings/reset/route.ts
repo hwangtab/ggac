@@ -1,13 +1,12 @@
 import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { createSupabaseServer } from '@/lib/supabase/server'
-import { checkAdminPermission } from '@/lib/server/adminAuth'
-import { applyRateLimit, createUserKeyGenerator, addRateLimitHeaders } from '@/lib/server/rateLimit'
+import { defineApiRoute } from '@/lib/server/apiRoute'
+import { createSettingsAdminAuth } from '@/lib/server/settingsAdminAuth'
+import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { logSecurityEvent } from '@/utils/security'
 import { refreshSettingsCache } from '@/utils/systemSettings'
 import { createLogger } from '@/utils/logger'
-import { parseJsonObjectBody } from '@/utils/requestBody'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -232,43 +231,47 @@ const DEFAULT_SETTINGS = [
 ]
 
 // POST: 모든 설정을 기본값으로 복원
-export async function POST(request: NextRequest) {
-  try {
-    // Rate limiting 적용 (매우 엄격하게)
-    const rateLimiter = await applyRateLimit({
-      maxRequests: 1, // 1시간에 1번만
-      windowMs: 60 * 60 * 1000, // 1시간
-      keyGenerator: createUserKeyGenerator('admin_settings_reset'),
-    })
+export const POST = defineApiRoute<Record<string, unknown>>({
+  method: 'POST',
+  name: 'api/admin/settings/reset',
+  rateLimit: {
+    maxRequests: 1,
+    windowMs: 60 * 60 * 1000,
+    keyGenerator: createUserKeyGenerator('admin_settings_reset'),
+  },
+  rateLimitHeaders: true,
+  auth: createSettingsAdminAuth(),
+  body: {
+    invalidResponse: () =>
+      createErrorResponse({ success: false, error: '유효하지 않은 JSON 본문입니다.' }, 400),
+  },
+  errorResponse: error => {
+    log.error('Admin settings reset error', error)
+    logSecurityEvent(
+      'ADMIN_SETTINGS_RESET_ERROR',
+      {
+        error: '서버 오류가 발생했습니다.',
+      },
+      'high'
+    )
 
-    const rateLimitResult = await rateLimiter(request)
-    if (!rateLimitResult.success && rateLimitResult.response) {
-      return rateLimitResult.response
-    }
-
-    const supabase = await createSupabaseServer()
-
-    // 사용자 인증 및 관리자 권한 확인
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
-    }
-
-    await checkAdminPermission(supabase, user.id)
-
-    // 요청 데이터 파싱 + Zod 검증
+    const isPermissionError = error instanceof Error && error.message.includes('권한')
+    return NextResponse.json(
+      {
+        error: isPermissionError
+          ? '관리자 권한이 필요합니다.'
+          : '설정 초기화 중 오류가 발생했습니다.',
+      },
+      { status: isPermissionError ? 403 : 500 }
+    )
+  },
+  handler: async ({ body, auth }) => {
+    const supabase = auth.db
+    const { user } = auth
     let resetType: 'all' | 'category'
     let category: string | null
-    const rawJson = await parseJsonObjectBody(request)
-    if (!rawJson) {
-      return createErrorResponse({ success: false, error: '유효하지 않은 JSON 본문입니다.' }, 400)
-    }
 
-    const parsed = ResetRequestSchema.safeParse(rawJson)
+    const parsed = ResetRequestSchema.safeParse(body)
     if (!parsed.success) {
       return NextResponse.json(
         { error: '유효하지 않은 요청입니다.', details: parsed.error.flatten() },
@@ -334,7 +337,7 @@ export async function POST(request: NextRequest) {
       'high'
     ) // 기본값 복원은 높은 보안 등급
 
-    const response = NextResponse.json({
+    return NextResponse.json({
       success: errorResults.length === 0,
       message:
         errorResults.length === 0
@@ -347,35 +350,8 @@ export async function POST(request: NextRequest) {
         errors: errorResults,
       },
     })
-
-    // Rate limit 헤더 추가
-    return addRateLimitHeaders(
-      response,
-      1, // 복원 제한 수
-      rateLimitResult.remaining,
-      rateLimitResult.resetTime
-    )
-  } catch (error) {
-    log.error('Admin settings reset error', error)
-    logSecurityEvent(
-      'ADMIN_SETTINGS_RESET_ERROR',
-      {
-        error: '서버 오류가 발생했습니다.',
-      },
-      'high'
-    )
-
-    const isPermissionError = error instanceof Error && error.message.includes('권한')
-    return NextResponse.json(
-      {
-        error: isPermissionError
-          ? '관리자 권한이 필요합니다.'
-          : '설정 초기화 중 오류가 발생했습니다.',
-      },
-      { status: isPermissionError ? 403 : 500 }
-    )
-  }
-}
+  },
+})
 
 // OPTIONS: CORS 지원
 export async function OPTIONS() {

@@ -1,3 +1,5 @@
+import { isProjectStoragePublicUrl } from './storageUrlValidation'
+
 export function isSafeInternalPath(value: string): boolean {
   return value.startsWith('/') && !value.startsWith('//')
 }
@@ -24,20 +26,22 @@ export function toSafeInternalImagePath(value: unknown, fallback = '/images/logo
   }
 }
 
-// 프로필/아티스트 이미지가 저장되는 신뢰 가능한 외부 호스트.
-// Supabase Storage public URL은 마이페이지 업로드 경로이므로 허용한다.
-const TRUSTED_IMAGE_HOST_PATTERNS = [/(^|\.)supabase\.co$/i]
-
 /**
- * 이미지 src로 안전하게 사용할 값으로 정규화한다.
- * - 내부 경로(`/images/...`): 기존 toSafeInternalImagePath 검증 적용
- * - 신뢰 호스트(Supabase Storage 등)의 https URL: 그대로 허용
- * - 그 외(외부 임의 URL, 잘못된 값): fallback(기본 로고)
+ * 아티스트 프로필 이미지 src로 안전하게 사용할 값으로 정규화한다.
+ * - 내부 경로(`/images/...`): toSafeInternalImagePath 검증 적용
+ * - 우리 Supabase 프로젝트의 `artists` 버킷 public URL: 그대로 허용
+ *   (마이페이지 업로드 사진이 저장되는 유일한 신뢰 경로)
+ * - 그 외(임의 외부 URL, 다른 프로젝트/버킷, 잘못된 값): fallback(기본 로고)
  *
- * toSafeInternalImagePath가 내부 경로만 허용해 Storage 업로드 이미지를 막던 문제를
- * 보완하되, 임의 외부 호스트는 여전히 차단해 SSRF/피싱 표면을 넓히지 않는다.
+ * `*.supabase.co` 전체를 허용하던 예전 방식과 달리 origin이
+ * NEXT_PUBLIC_SUPABASE_URL과 일치하고 경로가 `artists` 버킷일 때만 통과시켜
+ * SSRF/피싱 표면을 넓히지 않으면서도 업로드 사진 표시 회귀를 막는다.
+ * 화면 렌더링·OG 메타데이터·JSON-LD가 모두 이 helper를 공유해 경계를 통일한다.
  */
-export function toSafeImageSrc(value: unknown, fallback = '/images/logo/gac_og.webp'): string {
+export function toSafeArtistImageSrc(
+  value: unknown,
+  fallback = '/images/logo/gac_og.webp'
+): string {
   if (typeof value !== 'string') return fallback
 
   const trimmed = value.trim()
@@ -45,16 +49,8 @@ export function toSafeImageSrc(value: unknown, fallback = '/images/logo/gac_og.w
     return toSafeInternalImagePath(trimmed, fallback)
   }
 
-  try {
-    const parsed = new URL(trimmed)
-    if (
-      parsed.protocol === 'https:' &&
-      TRUSTED_IMAGE_HOST_PATTERNS.some(pattern => pattern.test(parsed.hostname))
-    ) {
-      return parsed.toString()
-    }
-  } catch {
-    return fallback
+  if (isProjectStoragePublicUrl(trimmed, 'artists')) {
+    return trimmed
   }
 
   return fallback

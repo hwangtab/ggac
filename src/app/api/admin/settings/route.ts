@@ -1,18 +1,12 @@
 import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { createSupabaseServer } from '@/lib/supabase/server'
-import { checkAdminPermission } from '@/lib/server/adminAuth'
-import {
-  applyRateLimit,
-  RATE_LIMIT_CONFIGS,
-  createUserKeyGenerator,
-  addRateLimitHeaders,
-} from '@/lib/server/rateLimit'
+import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
+import { createSettingsAdminAuth } from '@/lib/server/settingsAdminAuth'
+import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { logSecurityEvent } from '@/utils/security'
 import { refreshSettingsCache } from '@/utils/systemSettings'
 import { createLogger } from '@/utils/logger'
-import { parseJsonObjectBody } from '@/utils/requestBody'
 
 const log = createLogger('admin/settings')
 
@@ -165,37 +159,37 @@ const SETTING_MAPPINGS = {
 }
 
 // GET: 관리자 설정 조회
-export async function GET(request: NextRequest) {
-  try {
-    // Rate limiting 적용
-    const rateLimiter = await applyRateLimit({
-      ...RATE_LIMIT_CONFIGS.ADMIN_API,
-      keyGenerator: createUserKeyGenerator('admin_settings_get'),
-    })
+export const GET = defineApiRoute({
+  method: 'GET',
+  name: 'api/admin/settings',
+  rateLimit: {
+    ...RATE_LIMITS.ADMIN_API,
+    keyGenerator: createUserKeyGenerator('admin_settings_get'),
+  },
+  rateLimitHeaders: true,
+  auth: createSettingsAdminAuth(),
+  errorResponse: error => {
+    log.error('Admin settings GET error', error)
+    logSecurityEvent(
+      'ADMIN_SETTINGS_ACCESS_ERROR',
+      {
+        error: '서버 오류가 발생했습니다.',
+      },
+      'medium'
+    )
 
-    const rateLimitResult = await rateLimiter(request)
-    if (!rateLimitResult.success && rateLimitResult.response) {
-      return rateLimitResult.response
-    }
-
-    const supabase = await createSupabaseServer()
-
-    // 사용자 인증 확인
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
-    }
-
-    // 관리자 권한 확인
-    try {
-      await checkAdminPermission(supabase, user.id)
-    } catch (permError) {
-      throw permError
-    }
+    const isPermissionError = error instanceof Error && error.message.includes('권한')
+    return NextResponse.json(
+      {
+        error: isPermissionError
+          ? '관리자 권한이 필요합니다.'
+          : '설정 조회 중 오류가 발생했습니다.',
+      },
+      { status: isPermissionError ? 403 : 500 }
+    )
+  },
+  handler: async ({ auth }) => {
+    const supabase = auth.db
 
     // 데이터베이스에서 시스템 설정 조회
     const { data: initialSettingsData, error: settingsError } = await supabase.rpc(
@@ -257,23 +251,32 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const response = NextResponse.json(settings)
+    return NextResponse.json(settings)
+  },
+})
 
-    // Rate limit 헤더 추가
-    return addRateLimitHeaders(
-      response,
-      RATE_LIMIT_CONFIGS.ADMIN_API.maxRequests,
-      rateLimitResult.remaining,
-      rateLimitResult.resetTime
-    )
-  } catch (error) {
-    log.error('Admin settings GET error', error)
+// PUT: 관리자 설정 업데이트
+export const PUT = defineApiRoute<Record<string, unknown>>({
+  method: 'PUT',
+  name: 'api/admin/settings',
+  rateLimit: {
+    ...RATE_LIMITS.ADMIN_API,
+    keyGenerator: createUserKeyGenerator('admin_settings_update'),
+  },
+  rateLimitHeaders: true,
+  auth: createSettingsAdminAuth(),
+  body: {
+    invalidResponse: () =>
+      createErrorResponse({ success: false, error: '유효하지 않은 JSON 본문입니다.' }, 400),
+  },
+  errorResponse: error => {
+    log.error('Admin settings PUT error', error)
     logSecurityEvent(
-      'ADMIN_SETTINGS_ACCESS_ERROR',
+      'ADMIN_SETTINGS_UPDATE_ERROR',
       {
         error: '서버 오류가 발생했습니다.',
       },
-      'medium'
+      'high'
     )
 
     const isPermissionError = error instanceof Error && error.message.includes('권한')
@@ -281,49 +284,16 @@ export async function GET(request: NextRequest) {
       {
         error: isPermissionError
           ? '관리자 권한이 필요합니다.'
-          : '설정 조회 중 오류가 발생했습니다.',
+          : '설정 업데이트 중 오류가 발생했습니다.',
       },
       { status: isPermissionError ? 403 : 500 }
     )
-  }
-}
+  },
+  handler: async ({ body, auth }) => {
+    const supabase = auth.db
+    const { user } = auth
 
-// PUT: 관리자 설정 업데이트
-export async function PUT(request: NextRequest) {
-  try {
-    // Rate limiting 적용
-    const rateLimiter = await applyRateLimit({
-      ...RATE_LIMIT_CONFIGS.ADMIN_API,
-      keyGenerator: createUserKeyGenerator('admin_settings_update'),
-    })
-
-    const rateLimitResult = await rateLimiter(request)
-    if (!rateLimitResult.success && rateLimitResult.response) {
-      return rateLimitResult.response
-    }
-
-    const supabase = await createSupabaseServer()
-
-    // 사용자 인증 확인
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
-    }
-
-    // 관리자 권한 확인
-    await checkAdminPermission(supabase, user.id)
-
-    // 요청 데이터 파싱 + Zod 검증
-    const rawJson = await parseJsonObjectBody(request)
-    if (!rawJson) {
-      return createErrorResponse({ success: false, error: '유효하지 않은 JSON 본문입니다.' }, 400)
-    }
-
-    const parsed = SystemSettingsUpdateSchema.safeParse(rawJson)
+    const parsed = SystemSettingsUpdateSchema.safeParse(body)
     if (!parsed.success) {
       return NextResponse.json(
         { error: '유효하지 않은 설정 데이터입니다.', details: parsed.error.flatten() },
@@ -496,7 +466,7 @@ export async function PUT(request: NextRequest) {
       'medium'
     )
 
-    const response = NextResponse.json({
+    return NextResponse.json({
       success: errorResults.length === 0,
       message:
         errorResults.length === 0
@@ -507,35 +477,8 @@ export async function PUT(request: NextRequest) {
         errors: errorResults,
       },
     })
-
-    // Rate limit 헤더 추가
-    return addRateLimitHeaders(
-      response,
-      RATE_LIMIT_CONFIGS.ADMIN_API.maxRequests,
-      rateLimitResult.remaining,
-      rateLimitResult.resetTime
-    )
-  } catch (error) {
-    log.error('Admin settings PUT error', error)
-    logSecurityEvent(
-      'ADMIN_SETTINGS_UPDATE_ERROR',
-      {
-        error: '서버 오류가 발생했습니다.',
-      },
-      'high'
-    )
-
-    const isPermissionError = error instanceof Error && error.message.includes('권한')
-    return NextResponse.json(
-      {
-        error: isPermissionError
-          ? '관리자 권한이 필요합니다.'
-          : '설정 업데이트 중 오류가 발생했습니다.',
-      },
-      { status: isPermissionError ? 403 : 500 }
-    )
-  }
-}
+  },
+})
 
 // OPTIONS: CORS 지원
 export async function OPTIONS() {

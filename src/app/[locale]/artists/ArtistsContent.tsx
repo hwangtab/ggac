@@ -2,7 +2,7 @@ import { Link } from '@/i18n/navigation'
 import OptimizedImage from '@/components/OptimizedImage'
 import { getTranslations, getLocale } from 'next-intl/server'
 import { localizeArtistCategory } from '@/constants/categories'
-import { toSafeImageSrc } from '@/utils/safeUrl'
+import { toSafeArtistImageSrc } from '@/utils/safeUrl'
 import type { Artist } from '@/types'
 
 interface ArtistsContentProps {
@@ -61,7 +61,7 @@ const ArtistsContent = async ({ artists, categories, selectedCategory }: Artists
         <div className="tw-container-custom">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-12">
             {artists.map((artist, index) => {
-              const safeProfileImage = toSafeImageSrc(artist.profileImage)
+              const safeProfileImage = toSafeArtistImageSrc(artist.profileImage)
 
               return (
                 <div key={artist.id} className="group">

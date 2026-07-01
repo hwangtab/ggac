@@ -3,44 +3,41 @@ export const runtime = 'nodejs'
 export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createErrorResponse } from '@/utils/apiResponse'
-import { requireAdmin } from '@/lib/server/adminAuth'
-import {
-  applyRateLimit,
-  RATE_LIMIT_CONFIGS,
-  createUserKeyGenerator,
-  addRateLimitHeaders,
-} from '@/lib/server/rateLimit'
-import { parseJsonObjectBody } from '@/utils/requestBody'
+import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
+import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { validateUUID } from '@/utils/validation'
 
-export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const resolvedParams = await context.params
-  try {
-    const rateLimiter = await applyRateLimit({
-      ...RATE_LIMIT_CONFIGS.ADMIN_API,
-      keyGenerator: createUserKeyGenerator('admin_posts_action'),
-    })
-    const rateLimitResult = await rateLimiter(request)
-    if (!rateLimitResult.success && rateLimitResult.response) {
-      return rateLimitResult.response
-    }
+type PostActionBody = Record<string, unknown>
 
-    const auth = await requireAdmin()
-    if (auth instanceof NextResponse) return auth
+export const PATCH = defineApiRoute<PostActionBody>({
+  method: 'PATCH',
+  name: 'api/admin/posts/[id]',
+  rateLimit: {
+    ...RATE_LIMITS.ADMIN_API,
+    keyGenerator: createUserKeyGenerator('admin_posts_action'),
+  },
+  rateLimitHeaders: true,
+  auth: 'admin',
+  body: {
+    invalidResponse: () =>
+      createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400),
+  },
+  errorResponse: error => {
+    console.error('Admin posts [ID] - API error:', error)
+    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
+  },
+  handler: async ({ params, body, auth }) => {
+    const resolvedParams = { id: typeof params.id === 'string' ? params.id : '' }
     const { db } = auth
+
     const uuidValidation = validateUUID(resolvedParams.id, '게시글 ID')
     if (!uuidValidation.isValid) {
       return createErrorResponse({ success: false, error: uuidValidation.errors.join(', ') }, 400)
     }
     const postId = uuidValidation.sanitized
 
-    // Get action from request body
-    const body = await parseJsonObjectBody(request)
-    if (!body) {
-      return createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400)
-    }
     const action = typeof body.action === 'string' ? body.action : ''
 
     if (!action || !['delete', 'restore', 'pin', 'unpin'].includes(action)) {
@@ -125,19 +122,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
             ? '고정'
             : '고정 해제'
 
-    const response = NextResponse.json({
+    return NextResponse.json({
       success: true,
       post: updatedPost,
       message: `게시글 ${actionMessage}가 완료되었습니다.`,
     })
-    return addRateLimitHeaders(
-      response,
-      RATE_LIMIT_CONFIGS.ADMIN_API.maxRequests,
-      rateLimitResult.remaining,
-      rateLimitResult.resetTime
-    )
-  } catch (error) {
-    console.error('Admin posts [ID] - API error:', error)
-    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
-  }
-}
+  },
+})

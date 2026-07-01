@@ -1,7 +1,7 @@
 import { Link } from '@/i18n/navigation'
 import OptimizedImage from './OptimizedImage'
 import { getTranslations } from 'next-intl/server'
-import { toSafeImageSrc } from '@/utils/safeUrl'
+import { toSafeArtistImageSrc } from '@/utils/safeUrl'
 import type { FeaturedArtistsProps } from '@/types'
 
 const FeaturedArtists = async ({ artists }: FeaturedArtistsProps) => {
@@ -17,7 +17,7 @@ const FeaturedArtists = async ({ artists }: FeaturedArtistsProps) => {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
           {artists.map(artist => {
-            const safeProfileImage = toSafeImageSrc(artist.profileImage)
+            const safeProfileImage = toSafeArtistImageSrc(artist.profileImage)
 
             return (
               <div key={artist.id} className="group">

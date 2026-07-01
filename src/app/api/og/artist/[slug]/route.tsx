@@ -1,5 +1,5 @@
 import artistsData from '../../../../../../data/artists.json'
-import { toSafeInternalImagePath } from '@/utils/safeUrl'
+import { toSafeArtistImageSrc } from '@/utils/safeUrl'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -10,7 +10,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
   try {
     const artists = artistsData as any[]
     const artist = artists.find(a => (a.slug || '').toLowerCase() === slug.toLowerCase())
-    const safeTarget = toSafeInternalImagePath(artist?.profileImage)
+    const safeTarget = toSafeArtistImageSrc(artist?.profileImage)
     return new Response(null, {
       status: 302,
       headers: {

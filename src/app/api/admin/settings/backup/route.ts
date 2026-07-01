@@ -1,18 +1,12 @@
 import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { createSupabaseServer } from '@/lib/supabase/server'
-import { checkAdminPermission } from '@/lib/server/adminAuth'
-import {
-  applyRateLimit,
-  RATE_LIMIT_CONFIGS,
-  createUserKeyGenerator,
-  addRateLimitHeaders,
-} from '@/lib/server/rateLimit'
+import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
+import { createSettingsAdminAuth } from '@/lib/server/settingsAdminAuth'
+import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { logSecurityEvent } from '@/utils/security'
 import { createLogger, maskId } from '@/utils/logger'
 import { refreshSettingsCache } from '@/utils/systemSettings'
-import { parseJsonObjectBody } from '@/utils/requestBody'
 
 const log = createLogger('admin/settings/backup')
 
@@ -38,36 +32,39 @@ export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
 // GET: 설정 백업 파일 생성 및 다운로드
-export async function GET(request: NextRequest) {
-  try {
-    // Rate limiting 적용
-    const rateLimiter = await applyRateLimit({
-      ...RATE_LIMIT_CONFIGS.ADMIN_API,
-      keyGenerator: createUserKeyGenerator('admin_settings_backup'),
-    })
+export const GET = defineApiRoute({
+  method: 'GET',
+  name: 'api/admin/settings/backup',
+  rateLimit: {
+    ...RATE_LIMITS.ADMIN_API,
+    keyGenerator: createUserKeyGenerator('admin_settings_backup'),
+  },
+  rateLimitHeaders: true,
+  auth: createSettingsAdminAuth(),
+  errorResponse: error => {
+    log.error('Admin settings backup error', error)
+    logSecurityEvent(
+      'ADMIN_SETTINGS_BACKUP_ERROR',
+      {
+        error: '서버 오류가 발생했습니다.',
+      },
+      'high'
+    )
 
-    const rateLimitResult = await rateLimiter(request)
-    if (!rateLimitResult.success && rateLimitResult.response) {
-      return rateLimitResult.response
-    }
-
-    const supabase = await createSupabaseServer()
-
-    // 사용자 인증 및 관리자 권한 확인
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
-    }
-
-    try {
-      await checkAdminPermission(supabase, user.id)
-    } catch (permError) {
-      throw permError
-    }
+    const isPermissionError = error instanceof Error && error.message.includes('권한')
+    return createErrorResponse(
+      {
+        success: false,
+        error: isPermissionError
+          ? '관리자 권한이 필요합니다.'
+          : '설정 백업 중 오류가 발생했습니다.',
+      },
+      isPermissionError ? 403 : 500
+    )
+  },
+  handler: async ({ auth }) => {
+    const supabase = auth.db
+    const { user } = auth
 
     // 모든 시스템 설정 조회 (민감한 정보 포함 — 응답 전 마스킹됨)
     const { data: initialSettingsData, error: settingsError } = await supabase.rpc(
@@ -126,25 +123,35 @@ export async function GET(request: NextRequest) {
       'medium'
     )
 
-    const response = new NextResponse(JSON.stringify(backupData, null, 2), {
+    return new NextResponse(JSON.stringify(backupData, null, 2), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
         'Content-Disposition': `attachment; filename="ggac-settings-backup-${new Date().toISOString().split('T')[0]}.json"`,
       },
     })
+  },
+})
 
-    // Rate limit 헤더 추가
-    return addRateLimitHeaders(
-      response,
-      RATE_LIMIT_CONFIGS.ADMIN_API.maxRequests,
-      rateLimitResult.remaining,
-      rateLimitResult.resetTime
-    )
-  } catch (error) {
-    log.error('Admin settings backup error', error)
+// POST: 백업 파일에서 설정 복원
+export const POST = defineApiRoute<Record<string, unknown>>({
+  method: 'POST',
+  name: 'api/admin/settings/backup',
+  rateLimit: {
+    maxRequests: 3,
+    windowMs: 60 * 60 * 1000,
+    keyGenerator: createUserKeyGenerator('admin_settings_restore'),
+  },
+  rateLimitHeaders: true,
+  auth: createSettingsAdminAuth(),
+  body: {
+    invalidResponse: () =>
+      createErrorResponse({ success: false, error: '유효하지 않은 JSON 본문입니다.' }, 400),
+  },
+  errorResponse: error => {
+    console.error('Admin settings restore error:', error)
     logSecurityEvent(
-      'ADMIN_SETTINGS_BACKUP_ERROR',
+      'ADMIN_SETTINGS_RESTORE_ERROR',
       {
         error: '서버 오류가 발생했습니다.',
       },
@@ -152,54 +159,20 @@ export async function GET(request: NextRequest) {
     )
 
     const isPermissionError = error instanceof Error && error.message.includes('권한')
-    return createErrorResponse(
+    return NextResponse.json(
       {
-        success: false,
         error: isPermissionError
           ? '관리자 권한이 필요합니다.'
-          : '설정 백업 중 오류가 발생했습니다.',
+          : '설정 복원 중 오류가 발생했습니다.',
       },
-      isPermissionError ? 403 : 500
+      { status: isPermissionError ? 403 : 500 }
     )
-  }
-}
+  },
+  handler: async ({ body, auth }) => {
+    const supabase = auth.db
+    const { user } = auth
 
-// POST: 백업 파일에서 설정 복원
-export async function POST(request: NextRequest) {
-  try {
-    // Rate limiting 적용 (더 엄격한 제한)
-    const rateLimiter = await applyRateLimit({
-      maxRequests: 3, // 복원은 더 제한적으로
-      windowMs: 60 * 60 * 1000, // 1시간
-      keyGenerator: createUserKeyGenerator('admin_settings_restore'),
-    })
-
-    const rateLimitResult = await rateLimiter(request)
-    if (!rateLimitResult.success && rateLimitResult.response) {
-      return rateLimitResult.response
-    }
-
-    const supabase = await createSupabaseServer()
-
-    // 사용자 인증 및 관리자 권한 확인
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
-    }
-
-    await checkAdminPermission(supabase, user.id)
-
-    // 요청 데이터 파싱 + Zod 검증
-    const rawJson = await parseJsonObjectBody(request)
-    if (!rawJson) {
-      return createErrorResponse({ success: false, error: '유효하지 않은 JSON 본문입니다.' }, 400)
-    }
-
-    const parsed = RestoreBodySchema.safeParse(rawJson)
+    const parsed = RestoreBodySchema.safeParse(body)
     if (!parsed.success) {
       return NextResponse.json(
         {
@@ -274,7 +247,7 @@ export async function POST(request: NextRequest) {
       'high'
     ) // 복원은 높은 보안 등급
 
-    const response = NextResponse.json({
+    return NextResponse.json({
       success: errorResults.length === 0,
       message:
         errorResults.length === 0
@@ -286,35 +259,8 @@ export async function POST(request: NextRequest) {
         backupInfo: metadata,
       },
     })
-
-    // Rate limit 헤더 추가
-    return addRateLimitHeaders(
-      response,
-      3, // 복원 제한 수
-      rateLimitResult.remaining,
-      rateLimitResult.resetTime
-    )
-  } catch (error) {
-    console.error('Admin settings restore error:', error)
-    logSecurityEvent(
-      'ADMIN_SETTINGS_RESTORE_ERROR',
-      {
-        error: '서버 오류가 발생했습니다.',
-      },
-      'high'
-    )
-
-    const isPermissionError = error instanceof Error && error.message.includes('권한')
-    return NextResponse.json(
-      {
-        error: isPermissionError
-          ? '관리자 권한이 필요합니다.'
-          : '설정 복원 중 오류가 발생했습니다.',
-      },
-      { status: isPermissionError ? 403 : 500 }
-    )
-  }
-}
+  },
+})
 
 // OPTIONS: CORS 지원
 export async function OPTIONS() {

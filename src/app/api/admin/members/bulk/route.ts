@@ -1,44 +1,46 @@
 import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
-import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/server/adminAuth'
+import { NextResponse } from 'next/server'
+import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import type { BulkOperationRequest } from '@/types'
 import { validateFormData } from '@/utils/validation'
-import {
-  applyRateLimit,
-  RATE_LIMIT_CONFIGS,
-  createUserKeyGenerator,
-  addRateLimitHeaders,
-} from '@/lib/server/rateLimit'
+import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { logSecurityEvent } from '@/utils/security'
-import { parseJsonObjectBody } from '@/utils/requestBody'
 import { validateUUID } from '@/utils/validation'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
 // POST: 대량 멤버 작업 수행
-export async function POST(request: NextRequest) {
-  try {
-    // Rate limiting 적용 (대량 작업은 엄격하게 제한)
-    const rateLimiter = await applyRateLimit({
-      ...RATE_LIMIT_CONFIGS.BULK_OPERATIONS,
-      keyGenerator: createUserKeyGenerator('bulk_operations'),
-    })
-
-    const rateLimitResult = await rateLimiter(request)
-    if (!rateLimitResult.success && rateLimitResult.response) {
-      return rateLimitResult.response
-    }
-
-    const auth = await requireAdmin()
-    if (auth instanceof NextResponse) return auth
+export const POST = defineApiRoute<Partial<BulkOperationRequest>>({
+  method: 'POST',
+  name: 'api/admin/members/bulk',
+  rateLimit: {
+    ...RATE_LIMITS.BULK_OPERATIONS,
+    keyGenerator: createUserKeyGenerator('bulk_operations'),
+  },
+  rateLimitHeaders: true,
+  auth: 'admin',
+  body: {
+    invalidResponse: () =>
+      createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400),
+  },
+  errorResponse: error => {
+    console.error('Bulk members API error:', error)
+    logSecurityEvent(
+      'BULK_OPERATION_ERROR',
+      {
+        error: '서버 오류가 발생했습니다.',
+      },
+      'high'
+    )
+    return createErrorResponse(
+      { success: false, error: '대량 작업 처리 중 오류가 발생했습니다.' },
+      500
+    )
+  },
+  handler: async ({ body: requestData, auth }) => {
     const { db, user } = auth
 
-    // 요청 데이터 파싱 및 검증
-    const requestData = (await parseJsonObjectBody(request)) as Partial<BulkOperationRequest> | null
-    if (!requestData) {
-      return createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400)
-    }
     const { operation_type, member_ids, parameters = {} } = requestData
 
     // 기본 데이터 검증
@@ -310,7 +312,7 @@ export async function POST(request: NextRequest) {
         'medium'
       )
 
-      const response = NextResponse.json({
+      return NextResponse.json({
         success: true,
         operation_id: bulkOperation.id,
         summary: {
@@ -320,14 +322,6 @@ export async function POST(request: NextRequest) {
         },
         results,
       })
-
-      // Rate limit 헤더 추가
-      return addRateLimitHeaders(
-        response,
-        RATE_LIMIT_CONFIGS.BULK_OPERATIONS.maxRequests,
-        rateLimitResult.remaining,
-        rateLimitResult.resetTime
-      )
     } catch (operationError) {
       console.error('Bulk operation error:', operationError)
 
@@ -351,36 +345,27 @@ export async function POST(request: NextRequest) {
         500
       )
     }
-  } catch (error) {
-    console.error('Bulk members API error:', error)
-    logSecurityEvent(
-      'BULK_OPERATION_ERROR',
-      {
-        error: '서버 오류가 발생했습니다.',
-      },
-      'high'
-    )
-    return createErrorResponse(
-      { success: false, error: '대량 작업 처리 중 오류가 발생했습니다.' },
-      500
-    )
-  }
-}
+  },
+})
 
 // GET: 대량 작업 상태 조회
-export async function GET(request: NextRequest) {
-  try {
-    const rateLimiter = await applyRateLimit({
-      ...RATE_LIMIT_CONFIGS.ADMIN_API,
-      keyGenerator: createUserKeyGenerator('admin_members_bulk_status'),
-    })
-    const rateLimitResult = await rateLimiter(request)
-    if (!rateLimitResult.success && rateLimitResult.response) {
-      return rateLimitResult.response
-    }
-
-    const auth = await requireAdmin()
-    if (auth instanceof NextResponse) return auth
+export const GET = defineApiRoute({
+  method: 'GET',
+  name: 'api/admin/members/bulk',
+  rateLimit: {
+    ...RATE_LIMITS.ADMIN_API,
+    keyGenerator: createUserKeyGenerator('admin_members_bulk_status'),
+  },
+  rateLimitHeaders: true,
+  auth: 'admin',
+  errorResponse: error => {
+    console.error('Bulk operations list API error:', error)
+    return NextResponse.json(
+      { error: '대량 작업 이력을 조회하는 중 오류가 발생했습니다.' },
+      { status: 500 }
+    )
+  },
+  handler: async ({ auth }) => {
     const { db } = auth
 
     // 대량 작업 이력 조회
@@ -415,23 +400,11 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const response = NextResponse.json({
+    return NextResponse.json({
       operations: operations || [],
     })
-    return addRateLimitHeaders(
-      response,
-      RATE_LIMIT_CONFIGS.ADMIN_API.maxRequests,
-      rateLimitResult.remaining,
-      rateLimitResult.resetTime
-    )
-  } catch (error) {
-    console.error('Bulk operations list API error:', error)
-    return NextResponse.json(
-      { error: '대량 작업 이력을 조회하는 중 오류가 발생했습니다.' },
-      { status: 500 }
-    )
-  }
-}
+  },
+})
 
 // OPTIONS: CORS 지원
 export async function OPTIONS() {
