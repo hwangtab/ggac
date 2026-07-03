@@ -191,6 +191,10 @@ export function extractCallsFromSource(source, filePath) {
     // (Array.from → skip 노이즈, Buffer.from('hello') → 유령 테이블 방지)
     const receiver = source.slice(0, match.index).match(/([A-Za-z_$][\w$]*)\s*$/)
     if (receiver && BUILTIN_FROM_RECEIVERS.has(receiver[1])) continue
+    // Supabase Storage 버킷 접근(.storage.from(...))은 DB 스키마 계약 대상이 아님
+    // — usage도 skip도 남기지 않는다 (리터럴 버킷명이 만들던 유령 테이블 오탐과
+    //   동적 버킷명이 만들던 '동적 테이블명' skip 노이즈를 동시에 제거)
+    if (receiver && receiver[1] === 'storage') continue
     const line = lineOf(source, match.index)
     const { calls } = scanChain(source, match.index)
     const fromCall = calls[0]

@@ -114,6 +114,20 @@ test('extractCallsFromSource: spread 페이로드는 키 수집과 함께 skip�
   assert.match(skips[0].reason, /spread/)
 })
 
+test('extractCallsFromSource: storage 버킷 접근은 usage도 skip도 남기지 않는다', () => {
+  const src = `await supabaseAdmin.storage.from('attachments').upload(path, file)`
+  const { usages, skips } = extractCallsFromSource(src, 'test.ts')
+  assert.equal(usages.length, 0)
+  assert.equal(skips.length, 0)
+})
+
+test('extractCallsFromSource: 동적 버킷명의 storage 접근도 skip 노이즈를 만들지 않는다', () => {
+  const src = `await db.storage.from(bucketName).remove([p])`
+  const { usages, skips } = extractCallsFromSource(src, 'test.ts')
+  assert.equal(usages.length, 0)
+  assert.equal(skips.length, 0)
+})
+
 test('extractCallsFromSource: 동적 테이블명은 skip에 기록한다', () => {
   const { usages, skips } = extractCallsFromSource(
     `await supabase.from(tableName).select('*')`,
