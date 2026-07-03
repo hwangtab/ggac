@@ -132,7 +132,9 @@ function extractObjectKeys(argText) {
   const trimmed = argText.trim()
   if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return null
   const keys = []
-  let depth = 0
+  // 여는 괄호를 대칭으로 스택에 쌓는다 — 배열 값이 닫힐 때 depth가
+  // 언더플로우해 이후 최상위 키가 무음 탈락하던 회귀를 막는다
+  const stack = []
   let quote = null
   let expectKey = false
   for (let i = 0; i < trimmed.length; i++) {
@@ -143,13 +145,22 @@ function extractObjectKeys(argText) {
       continue
     }
     if (ch === "'" || ch === '"' || ch === '`') { quote = ch; continue }
-    if (ch === '{') { depth++; expectKey = true; continue }
-    if (ch === '}' || ch === ']' || ch === '(') { if (ch !== '(') depth--; continue }
+    if (ch === '{' || ch === '[' || ch === '(') {
+      stack.push(ch)
+      if (ch === '{') expectKey = true
+      continue
+    }
+    if (ch === '}' || ch === ']' || ch === ')') { stack.pop(); continue }
     if (ch === ',') { expectKey = true; continue }
     if (expectKey && /[A-Za-z_]/.test(ch)) {
-      // depth 1(최상위 객체)의 키만 컬럼 후보다 — 중첩 객체 키는 값의 일부
       const m = trimmed.slice(i).match(/^([A-Za-z_]\w*)\s*:/)
-      if (m && depth === 1) keys.push(m[1])
+      // 페이로드 최상위 객체의 키만 컬럼 후보다: 직접 감싸는 오프너가
+      // 객체이고, 그 객체가 페이로드 자체(스택 ['{'])이거나 최상위 배열
+      // 바로 안의 요소(스택 ['[', '{'])인 경우 — 중첩 객체 키는 값의 일부
+      const inTopLevelObject =
+        stack[stack.length - 1] === '{' &&
+        (stack.length === 1 || (stack.length === 2 && stack[0] === '['))
+      if (m && inTopLevelObject) keys.push(m[1])
       expectKey = false
     }
   }

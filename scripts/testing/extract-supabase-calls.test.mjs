@@ -74,6 +74,21 @@ test('extractCallsFromSource: write 옵션 인자의 키는 컬럼으로 세지 
   assert.equal(skips.length, 0)
 })
 
+test('extractCallsFromSource: 배열 값 뒤의 최상위 키가 탈락하지 않는다', () => {
+  const src = `await supabase.from('posts').insert({ tags: [1, 2], title: 'x' })`
+  const { usages, skips } = extractCallsFromSource(src, 'test.ts')
+  const posts = usages.find(u => u.table === 'posts')
+  assert.deepEqual(posts.columns.sort(), ['tags', 'title'])
+  assert.equal(skips.length, 0)
+})
+
+test('extractCallsFromSource: 배열 페이로드 객체의 키는 배열 값 뒤에도 수집한다', () => {
+  const src = `await supabase.from('posts').insert([{ a: [1], b: 2 }])`
+  const { usages } = extractCallsFromSource(src, 'test.ts')
+  const posts = usages.find(u => u.table === 'posts')
+  assert.deepEqual(posts.columns.sort(), ['a', 'b'])
+})
+
 test('extractCallsFromSource: 동적 테이블명은 skip에 기록한다', () => {
   const { usages, skips } = extractCallsFromSource(
     `await supabase.from(tableName).select('*')`,
