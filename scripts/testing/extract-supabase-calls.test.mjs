@@ -89,6 +89,31 @@ test('extractCallsFromSource: 배열 페이로드 객체의 키는 배열 값 �
   assert.deepEqual(posts.columns.sort(), ['a', 'b'])
 })
 
+test('extractCallsFromSource: shorthand 프로퍼티도 컬럼 키로 인정한다', () => {
+  const src = `await supabase.from('posts').insert({ title, content, category: 'news' })`
+  const { usages, skips } = extractCallsFromSource(src, 'test.ts')
+  const posts = usages.find(u => u.table === 'posts')
+  assert.deepEqual(posts.columns.sort(), ['category', 'content', 'title'])
+  assert.equal(skips.length, 0)
+})
+
+test('extractCallsFromSource: update 페이로드의 shorthand도 수집한다', () => {
+  const src = `await supabase.from('posts').update({ id: 1, name })`
+  const { usages, skips } = extractCallsFromSource(src, 'test.ts')
+  const posts = usages.find(u => u.table === 'posts')
+  assert.deepEqual(posts.columns.sort(), ['id', 'name'])
+  assert.equal(skips.length, 0)
+})
+
+test('extractCallsFromSource: spread 페이로드는 키 수집과 함께 skip을 기록한다', () => {
+  const src = `await supabase.from('posts').insert({ ...base, title })`
+  const { usages, skips } = extractCallsFromSource(src, 'test.ts')
+  const posts = usages.find(u => u.table === 'posts')
+  assert.deepEqual(posts.columns, ['title'])
+  assert.equal(skips.length, 1)
+  assert.match(skips[0].reason, /spread/)
+})
+
 test('extractCallsFromSource: 동적 테이블명은 skip에 기록한다', () => {
   const { usages, skips } = extractCallsFromSource(
     `await supabase.from(tableName).select('*')`,

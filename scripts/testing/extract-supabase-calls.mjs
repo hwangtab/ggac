@@ -127,14 +127,22 @@ function firstTopLevelArg(argText) {
   return argText
 }
 
-// 객체 리터럴 최상위 키를 수집한다. 리터럴이 아니면 null.
+// 객체 리터럴 최상위 키를 수집한다. 리터럴이 아니면 null,
+// 아니면 { keys, hasSpread } — 최상위 ...spread가 있으면 키를 다 알 수
+// 없으므로 hasSpread로 알려 호출부가 skip을 기록하게 한다.
 function extractObjectKeys(argText) {
   const trimmed = argText.trim()
   if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return null
   const keys = []
+  let hasSpread = false
   // 여는 괄호를 대칭으로 스택에 쌓는다 — 배열 값이 닫힐 때 depth가
   // 언더플로우해 이후 최상위 키가 무음 탈락하던 회귀를 막는다
   const stack = []
+  // 페이로드 최상위 객체 안인가: 직접 감싸는 오프너가 객체이고, 그 객체가
+  // 페이로드 자체(스택 ['{'])이거나 최상위 배열 바로 안의 요소(['[', '{'])
+  const inTopLevelObject = () =>
+    stack[stack.length - 1] === '{' &&
+    (stack.length === 1 || (stack.length === 2 && stack[0] === '['))
   let quote = null
   let expectKey = false
   for (let i = 0; i < trimmed.length; i++) {
@@ -152,19 +160,22 @@ function extractObjectKeys(argText) {
     }
     if (ch === '}' || ch === ']' || ch === ')') { stack.pop(); continue }
     if (ch === ',') { expectKey = true; continue }
+    if (expectKey && ch === '.' && trimmed.startsWith('...', i)) {
+      // 최상위 ...spread — 어떤 키가 들어오는지 정적으로 알 수 없다
+      if (inTopLevelObject()) hasSpread = true
+      expectKey = false
+      i += 2
+      continue
+    }
     if (expectKey && /[A-Za-z_]/.test(ch)) {
-      const m = trimmed.slice(i).match(/^([A-Za-z_]\w*)\s*:/)
-      // 페이로드 최상위 객체의 키만 컬럼 후보다: 직접 감싸는 오프너가
-      // 객체이고, 그 객체가 페이로드 자체(스택 ['{'])이거나 최상위 배열
-      // 바로 안의 요소(스택 ['[', '{'])인 경우 — 중첩 객체 키는 값의 일부
-      const inTopLevelObject =
-        stack[stack.length - 1] === '{' &&
-        (stack.length === 1 || (stack.length === 2 && stack[0] === '['))
-      if (m && inTopLevelObject) keys.push(m[1])
+      // key: value의 키(뒤가 ':') 또는 shorthand(뒤가 ','/'}' — 식별자
+      // 자체가 컬럼명)만 인정한다. 값 위치 식별자는 expectKey가 아니므로 제외.
+      const m = trimmed.slice(i).match(/^([A-Za-z_]\w*)\s*([:,}])/)
+      if (m && inTopLevelObject()) keys.push(m[1])
       expectKey = false
     }
   }
-  return keys
+  return { keys, hasSpread }
 }
 
 function lineOf(source, index) {
@@ -205,10 +216,20 @@ export function extractCallsFromSource(source, filePath) {
       } else if (WRITE_METHODS.has(call.method)) {
         // 옵션 인자({ onConflict: ... } 등)의 키가 컬럼으로 새지 않도록
         // 최상위 콤마에서 잘라 첫 번째 인자(페이로드)만 검사한다
-        const keys = extractObjectKeys(firstTopLevelArg(call.args))
-        if (keys === null) {
+        const extracted = extractObjectKeys(firstTopLevelArg(call.args))
+        if (extracted === null) {
           skips.push({ file: filePath, line, reason: `동적 ${call.method} 페이로드: ${table}` })
-        } else keys.forEach(k => columns.add(k))
+        } else {
+          extracted.keys.forEach(k => columns.add(k))
+          if (extracted.hasSpread) {
+            // spread 뒤에 숨은 키는 알 수 없다 — 수집한 키는 살리되 skip으로 보고
+            skips.push({
+              file: filePath,
+              line,
+              reason: `동적 ${call.method} 페이로드(spread 포함): ${table}`,
+            })
+          }
+        }
       }
     }
     usages.push({ file: filePath, line, table, columns: [...columns].sort(), relations })
