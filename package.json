@@ -16,6 +16,7 @@
     "test:runtime-risks": "node scripts/testing/assert-runtime-risks.mjs",
     "test:unit": "node --test scripts/testing/*.test.mjs",
     "schema:snapshot": "node scripts/testing/refresh-schema-snapshot.mjs",
+    "test:schema-contract": "node scripts/testing/check-schema-contract.mjs",
     "audit:security": "npm audit --audit-level high",
     "env:check": "node scripts/verify-env.js",
     "env:check:production": "NODE_ENV=production node scripts/verify-env.js",

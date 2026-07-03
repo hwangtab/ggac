@@ -1,0 +1,8 @@
+{
+  "tables": ["public_profiles"],
+  "columns": {},
+  "rpcs": [],
+  "notes": {
+    "public_profiles": "member_profiles의 안전 노출용 VIEW (supabase/migrations/20250711090010_create_public_profiles_view.sql). PostgREST OpenAPI 스냅샷이 이 뷰를 포함하지 않아 발생하는 오탐 — 실재하며 authenticated에 SELECT 권한이 부여된 정상 관계다."
+  }
+}
