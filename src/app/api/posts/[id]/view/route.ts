@@ -119,7 +119,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
           action_type: 'page_viewed',
           target_type: 'post',
           target_id: validPostId,
-          details: {
+          metadata: {
             post_title: post.title,
             view_count: newViewCount,
           },
