@@ -53,6 +53,27 @@ test('extractCallsFromSource: from 체인에서 테이블·컬럼 사용을 수�
   assert.equal(skips.length, 0)
 })
 
+test('extractCallsFromSource: JS 내장 생성자의 from은 무시한다', () => {
+  const src = `
+    const arr = Array.from(items)
+    const buf = Buffer.from('hello')
+    await supabase.from('posts').select('id')
+  `
+  const { usages, skips } = extractCallsFromSource(src, 'test.ts')
+  // Array.from(items) → skip 노이즈 금지, Buffer.from('hello') → 유령 테이블 금지
+  assert.equal(skips.length, 0)
+  assert.equal(usages.length, 1)
+  assert.equal(usages[0].table, 'posts')
+})
+
+test('extractCallsFromSource: write 옵션 인자의 키는 컬럼으로 세지 않는다', () => {
+  const src = `await supabase.from('posts').upsert({ id: 1, meta: { a: 1 } }, { onConflict: 'id' })`
+  const { usages, skips } = extractCallsFromSource(src, 'test.ts')
+  const posts = usages.find(u => u.table === 'posts')
+  assert.deepEqual(posts.columns.sort(), ['id', 'meta'])
+  assert.equal(skips.length, 0)
+})
+
 test('extractCallsFromSource: 동적 테이블명은 skip에 기록한다', () => {
   const { usages, skips } = extractCallsFromSource(
     `await supabase.from(tableName).select('*')`,
