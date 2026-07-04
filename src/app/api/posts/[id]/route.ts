@@ -9,7 +9,7 @@ export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createErrorResponse } from '@/utils/apiResponse'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
 import { RATE_LIMITS, applyRateLimit, createUserKeyGenerator } from '@/lib/server/rateLimit'
@@ -29,10 +29,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     // UUID 형식 검증
     const uuidValidation = validateUUID(postId, '게시글 ID')
     if (!uuidValidation.isValid) {
-      return NextResponse.json(
-        { error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.' },
-        { status: 400 }
-      )
+      return ApiError.badRequest(
+        uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.'
+      ).toNextResponse()
     }
 
     // 분산 Rate limiting 적용
@@ -128,12 +127,12 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     timings.post_ms = Date.now() - postStart
     if (postError || !post) {
       console.error(`[API] 게시글 조회 실패 - ID: ${validPostId}`, postError)
-      return createErrorResponse({ success: false, error: '게시글을 찾을 수 없습니다.' }, 404)
+      return ApiError.notFound('게시글을 찾을 수 없습니다.').toNextResponse()
     }
 
     // 삭제된 게시글 접근 권한 확인
     if (post.is_deleted && !(isAdmin || (userId && post.author_id === userId))) {
-      return createErrorResponse({ success: false, error: '삭제된 게시글입니다.' }, 404)
+      return ApiError.notFound('삭제된 게시글입니다.').toNextResponse()
     }
 
     // 현재 사용자의 좋아요 상태 확인(선택)
@@ -241,10 +240,10 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       ;(timings as any).total_ms = total
       return NextResponse.json({ post: responseData, _timings: timings })
     }
-    return NextResponse.json({ post: responseData })
+    return ApiSuccess.ok({ post: responseData }).toNextResponse()
   } catch (error) {
     console.error('게시글 상세 API 오류:', error)
-    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
+    return ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse()
   }
 }
 
@@ -259,10 +258,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   try {
     const uuidValidation = validateUUID(postId, '게시글 ID')
     if (!uuidValidation.isValid) {
-      return NextResponse.json(
-        { error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.' },
-        { status: 400 }
-      )
+      return ApiError.badRequest(
+        uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.'
+      ).toNextResponse()
     }
 
     const validPostId = uuidValidation.sanitized
@@ -283,7 +281,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     } = await supabase.auth.getUser()
 
     if (!user) {
-      return createErrorResponse({ success: false, error: '로그인이 필요합니다.' }, 401)
+      return ApiError.unauthorized('로그인이 필요합니다.').toNextResponse()
     }
 
     const { data: profile } = await supabase
@@ -304,15 +302,12 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     )
 
     if (!isApprovedMember) {
-      return createErrorResponse(
-        { success: false, error: '승인된 활성 멤버만 게시글을 수정할 수 있습니다.' },
-        403
-      )
+      return ApiError.forbidden('승인된 활성 멤버만 게시글을 수정할 수 있습니다.').toNextResponse()
     }
 
     const body = await parseJsonObjectBody(request)
     if (!body) {
-      return createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400)
+      return ApiError.badRequest('유효한 JSON body가 필요합니다.').toNextResponse()
     }
 
     const title = typeof body.title === 'string' ? body.title.trim() : ''
@@ -322,19 +317,19 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const category = parseBoardCategory(body.category)
 
     if (!title) {
-      return createErrorResponse({ success: false, error: '제목을 입력해주세요.' }, 400)
+      return ApiError.badRequest('제목을 입력해주세요.').toNextResponse()
     }
 
     if (!content.trim()) {
-      return createErrorResponse({ success: false, error: '내용을 입력해주세요.' }, 400)
+      return ApiError.badRequest('내용을 입력해주세요.').toNextResponse()
     }
 
     if (!category || category === CATEGORIES.BOARD.ALL) {
-      return createErrorResponse({ success: false, error: '게시글 카테고리를 선택해주세요.' }, 400)
+      return ApiError.badRequest('게시글 카테고리를 선택해주세요.').toNextResponse()
     }
 
     if (!contentFormat) {
-      return createErrorResponse({ success: false, error: '본문 형식이 올바르지 않습니다.' }, 400)
+      return ApiError.badRequest('본문 형식이 올바르지 않습니다.').toNextResponse()
     }
 
     const { data: post, error: postError } = await supabase
@@ -344,15 +339,15 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       .single()
 
     if (postError || !post) {
-      return createErrorResponse({ success: false, error: '게시글을 찾을 수 없습니다.' }, 404)
+      return ApiError.notFound('게시글을 찾을 수 없습니다.').toNextResponse()
     }
 
     if (post.is_deleted) {
-      return createErrorResponse({ success: false, error: '삭제된 게시글입니다.' }, 404)
+      return ApiError.notFound('삭제된 게시글입니다.').toNextResponse()
     }
 
     if (post.author_id !== user.id && !isAdmin) {
-      return createErrorResponse({ success: false, error: '게시글을 수정할 권한이 없습니다.' }, 403)
+      return ApiError.forbidden('게시글을 수정할 권한이 없습니다.').toNextResponse()
     }
 
     const shouldPin = category === '공지'
@@ -372,7 +367,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       .single()
 
     if (updateError || !updatedPost) {
-      return createErrorResponse({ success: false, error: '게시글 수정에 실패했습니다.' }, 500)
+      return ApiError.internalServerError('게시글 수정에 실패했습니다.').toNextResponse()
     }
 
     try {
@@ -389,10 +384,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       // 캐시 무효화 실패는 DB 수정 성공을 실패로 바꾸지 않는다.
     }
 
-    return NextResponse.json({ success: true, post: updatedPost })
+    return ApiSuccess.ok({ post: updatedPost }).toNextResponse()
   } catch (error) {
     console.error('게시글 수정 API 오류:', error)
-    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
+    return ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse()
   }
 }
 
@@ -408,10 +403,9 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     // UUID 형식 검증
     const uuidValidation = validateUUID(postId, '게시글 ID')
     if (!uuidValidation.isValid) {
-      return NextResponse.json(
-        { error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.' },
-        { status: 400 }
-      )
+      return ApiError.badRequest(
+        uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.'
+      ).toNextResponse()
     }
 
     const validPostId = uuidValidation.sanitized
@@ -424,7 +418,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     } = await supabase.auth.getUser()
 
     if (!user) {
-      return createErrorResponse({ success: false, error: '로그인이 필요합니다.' }, 401)
+      return ApiError.unauthorized('로그인이 필요합니다.').toNextResponse()
     }
 
     // 관리자 여부 확인
@@ -444,16 +438,16 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       .single()
 
     if (postError || !post) {
-      return createErrorResponse({ success: false, error: '게시글을 찾을 수 없습니다.' }, 404)
+      return ApiError.notFound('게시글을 찾을 수 없습니다.').toNextResponse()
     }
 
     if (post.is_deleted) {
-      return createErrorResponse({ success: false, error: '이미 삭제된 게시글입니다.' }, 404)
+      return ApiError.notFound('이미 삭제된 게시글입니다.').toNextResponse()
     }
 
     // 작성자 본인 또는 관리자만 삭제 가능
     if (post.author_id !== user.id && !isAdmin) {
-      return createErrorResponse({ success: false, error: '게시글을 삭제할 권한이 없습니다.' }, 403)
+      return ApiError.forbidden('게시글을 삭제할 권한이 없습니다.').toNextResponse()
     }
 
     // 소프트 삭제 수행
@@ -464,7 +458,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
 
     if (updateError) {
       console.error('[API] 게시글 삭제 실패:', updateError)
-      return createErrorResponse({ success: false, error: '게시글 삭제에 실패했습니다.' }, 500)
+      return ApiError.internalServerError('게시글 삭제에 실패했습니다.').toNextResponse()
     }
 
     // 캐시 무효화
@@ -479,9 +473,9 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       // 캐시 무효화 실패는 무시
     }
 
-    return NextResponse.json({ message: '게시글이 삭제되었습니다.' })
+    return ApiSuccess.ok({ message: '게시글이 삭제되었습니다.' }).toNextResponse()
   } catch (error) {
     console.error('게시글 삭제 API 오류:', error)
-    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
+    return ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse()
   }
 }

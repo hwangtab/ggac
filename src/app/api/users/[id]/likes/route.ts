@@ -8,8 +8,8 @@ export const runtime = 'nodejs'
 export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
-import { NextRequest, NextResponse } from 'next/server'
-import { createErrorResponse } from '@/utils/apiResponse'
+import { NextRequest } from 'next/server'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { RATE_LIMITS, applyRateLimit, createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { parseIntegerParam } from '@/utils/queryParams'
@@ -39,12 +39,12 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     } = await supabase.auth.getUser()
 
     if (!user) {
-      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
+      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
     }
 
     const uuidValidation = validateUUID(resolvedParams.id, '사용자 ID')
     if (!uuidValidation.isValid) {
-      return createErrorResponse({ success: false, error: uuidValidation.errors.join(', ') }, 400)
+      return ApiError.badRequest(uuidValidation.errors.join(', ')).toNextResponse()
     }
     const requestedUserId = uuidValidation.sanitized
     const { searchParams } = new URL(request.url)
@@ -61,7 +61,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         .single()
 
       if (!profile?.is_admin || profile.registration_status !== 'approved' || !profile.is_active) {
-        return createErrorResponse({ success: false, error: '권한이 없습니다.' }, 403)
+        return ApiError.forbidden('권한이 없습니다.').toNextResponse()
       }
     }
 
@@ -74,10 +74,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
     if (likesError) {
       console.error('좋아요 목록 조회 오류:', likesError)
-      return createErrorResponse(
-        { success: false, error: '좋아요 목록을 조회할 수 없습니다.' },
-        500
-      )
+      return ApiError.internalServerError('좋아요 목록을 조회할 수 없습니다.').toNextResponse()
     }
 
     // 총 좋아요 수 조회
@@ -88,13 +85,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
     if (countError) {
       console.error('좋아요 수 조회 오류:', countError)
-      return createErrorResponse({ success: false, error: '좋아요 수를 조회할 수 없습니다.' }, 500)
+      return ApiError.internalServerError('좋아요 수를 조회할 수 없습니다.').toNextResponse()
     }
 
     const total = totalCount || 0
     const totalPages = Math.ceil(total / limit)
 
-    return NextResponse.json({
+    return ApiSuccess.ok({
       liked_posts: likedPosts || [],
       pagination: {
         current_page: page,
@@ -104,9 +101,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         has_next: page < totalPages,
         has_prev: page > 1,
       },
-    })
+    }).toNextResponse()
   } catch (error) {
     console.error('사용자 좋아요 목록 API 오류:', error)
-    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
+    return ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse()
   }
 }

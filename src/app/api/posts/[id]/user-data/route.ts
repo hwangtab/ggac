@@ -7,7 +7,8 @@ export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 export const maxDuration = 30
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { validateUUID } from '@/utils/validation'
 
@@ -17,10 +18,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
   const validation = validateUUID(postId, '게시글 ID')
   if (!validation.isValid) {
-    return NextResponse.json(
-      { success: false, error: validation.errors[0] || '잘못된 게시글 ID입니다.' },
-      { status: 400 }
-    )
+    return ApiError.badRequest(validation.errors[0] || '잘못된 게시글 ID입니다.').toNextResponse()
   }
 
   const supabase = await createSupabaseServer()
@@ -29,10 +27,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   } = await supabase.auth.getUser()
 
   if (!user) {
-    return NextResponse.json(
-      { success: false, error: 'UNAUTHORIZED', data: { is_liked: false } },
-      { status: 401 }
-    )
+    return ApiError.unauthorized('UNAUTHORIZED').toNextResponse()
   }
 
   const searchParams = new URL(request.url).searchParams
@@ -40,10 +35,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   if (userIdFromQuery) {
     const userIdValidation = validateUUID(userIdFromQuery, '사용자 ID')
     if (!userIdValidation.isValid || userIdValidation.sanitized !== user.id) {
-      return NextResponse.json(
-        { success: false, error: 'FORBIDDEN', data: { is_liked: false } },
-        { status: 403 }
-      )
+      return ApiError.forbidden('FORBIDDEN').toNextResponse()
     }
   }
 
@@ -56,13 +48,10 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
   if (likeError) {
     console.error('[API user-data] like lookup failed:', likeError)
-    return NextResponse.json({ success: false, error: 'LIKE_LOOKUP_FAILED' }, { status: 500 })
+    return ApiError.internalServerError('LIKE_LOOKUP_FAILED').toNextResponse()
   }
 
-  return NextResponse.json({
-    success: true,
-    data: {
-      is_liked: !!likeRecord,
-    },
-  })
+  return ApiSuccess.ok({
+    is_liked: !!likeRecord,
+  }).toNextResponse()
 }
