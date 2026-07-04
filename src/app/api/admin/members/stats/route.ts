@@ -2,6 +2,7 @@ import { createOptionsResponse } from '@/utils/apiResponse'
 import { NextResponse } from 'next/server'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
+import { ApiSuccess } from '@/utils/apiWrapper'
 import type { MemberStatistics } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -141,7 +142,7 @@ export const GET = defineApiRoute({
       averageEngagementScore,
     }
 
-    return stats
+    return ApiSuccess.ok(stats)
   },
 })
 

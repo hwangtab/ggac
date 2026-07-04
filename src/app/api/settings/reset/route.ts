@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createErrorResponse } from '@/utils/apiResponse'
+import { NextRequest } from 'next/server'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { z } from 'zod'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { rateLimit } from '@/lib/server/rateLimit'
@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
   try {
     const rateLimitResult = await rateLimit(request, 'GENERAL_API')
     if (!rateLimitResult.success) {
-      return createErrorResponse({ success: false, error: 'Too many requests' }, 429)
+      return ApiError.tooManyRequests('Too many requests').toNextResponse()
     }
 
     const supabase = await createSupabaseServer()
@@ -33,38 +33,29 @@ export async function POST(request: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser()
     if (!user) {
-      return createErrorResponse({ success: false, error: 'Unauthorized' }, 401)
+      return ApiError.unauthorized('Unauthorized').toNextResponse()
     }
 
     const rawJson = await parseJsonObjectBody(request)
     if (!rawJson) {
-      return createErrorResponse({ success: false, error: '유효하지 않은 JSON 본문입니다.' }, 400)
+      return ApiError.badRequest('유효하지 않은 JSON 본문입니다.').toNextResponse()
     }
 
     const parsed = ResetBodySchema.safeParse(rawJson)
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: '유효하지 않은 요청입니다.', details: parsed.error.flatten() },
-        { status: 400 }
-      )
+      return ApiError.badRequest('유효하지 않은 요청입니다.').toNextResponse()
     }
     const category = parsed.data.category ? parseUserSettingCategory(parsed.data.category) : null
     const setting_key = parsed.data.setting_key || null
 
     if (parsed.data.category && !category) {
-      return createErrorResponse(
-        { success: false, error: '유효하지 않은 설정 카테고리입니다.' },
-        400
-      )
+      return ApiError.badRequest('유효하지 않은 설정 카테고리입니다.').toNextResponse()
     }
     if (setting_key && !category) {
-      return createErrorResponse(
-        { success: false, error: '설정 키를 초기화하려면 카테고리가 필요합니다.' },
-        400
-      )
+      return ApiError.badRequest('설정 키를 초기화하려면 카테고리가 필요합니다.').toNextResponse()
     }
     if (category && setting_key && !isUserSettingKey(category, setting_key)) {
-      return createErrorResponse({ success: false, error: '유효하지 않은 설정입니다.' }, 400)
+      return ApiError.badRequest('유효하지 않은 설정입니다.').toNextResponse()
     }
 
     const { data: deletedCount, error } = await supabase.rpc('reset_user_settings', {
@@ -74,7 +65,7 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       log.error('Settings reset error', error)
-      return createErrorResponse({ success: false, error: '설정 초기화에 실패했습니다.' }, 400)
+      return ApiError.badRequest('설정 초기화에 실패했습니다.').toNextResponse()
     }
 
     let message = ''
@@ -86,13 +77,9 @@ export async function POST(request: NextRequest) {
       message = 'All settings reset to default'
     }
 
-    return NextResponse.json({
-      success: true,
-      deleted_count: deletedCount,
-      message,
-    })
+    return ApiSuccess.ok({ deleted_count: deletedCount }, message).toNextResponse()
   } catch (error) {
     log.error('Settings reset API error', error)
-    return createErrorResponse({ success: false, error: 'Internal server error' }, 500)
+    return ApiError.internalServerError('Internal server error').toNextResponse()
   }
 }

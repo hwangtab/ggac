@@ -91,6 +91,7 @@ export async function handleAuth(
   const isProtectedPage =
     authPathname.startsWith('/admin') ||
     authPathname.startsWith('/mypage') ||
+    authPathname.startsWith('/notifications') ||
     isBoardProtected ||
     isBoardRoom
 

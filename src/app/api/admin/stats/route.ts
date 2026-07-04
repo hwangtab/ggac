@@ -2,6 +2,7 @@ import { createOptionsResponse } from '@/utils/apiResponse'
 import { NextResponse } from 'next/server'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
+import { ApiSuccess } from '@/utils/apiWrapper'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -44,7 +45,7 @@ export const GET = defineApiRoute({
       activeArtists,
     }
 
-    return stats
+    return ApiSuccess.ok(stats)
   },
 })
 

@@ -1,6 +1,6 @@
-import { NextResponse } from 'next/server'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { createLogger } from '@/utils/logger'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 
 const log = createLogger('api/auth/logout')
 
@@ -14,12 +14,12 @@ export async function POST() {
 
     if (error) {
       log.warn('Logout failed', { message: error.message })
-      return NextResponse.json({ error: 'Logout failed' }, { status: 500 })
+      return ApiError.internalServerError('Logout failed').toNextResponse()
     }
 
-    return NextResponse.json({ success: true })
+    return ApiSuccess.ok({}).toNextResponse()
   } catch (error) {
     log.error('Unexpected logout error', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return ApiError.internalServerError('Internal server error').toNextResponse()
   }
 }

@@ -1,6 +1,6 @@
 import { createSupabaseServer } from '@/lib/supabase/server'
-import { createErrorResponse } from '@/utils/apiResponse'
-import { NextRequest, NextResponse } from 'next/server'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
+import { NextRequest } from 'next/server'
 import { withRateLimit } from '@/lib/server/rateLimit'
 import { sanitizeInput } from '@/utils/security'
 import { parseJsonObjectBody } from '@/utils/requestBody'
@@ -21,36 +21,29 @@ export async function POST(request: NextRequest) {
       } = await supabase.auth.getUser()
 
       if (!user) {
-        return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
+        return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
       }
 
       const body = parseActivityLogBody(await parseJsonObjectBody(request))
       if (!body) {
-        return createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400)
+        return ApiError.badRequest('유효한 JSON body가 필요합니다.').toNextResponse()
       }
 
       const { action_type, target_type = null, target_id = null, metadata = {} } = body
 
       const actionType = parseActivityActionType(action_type)
       if (!actionType) {
-        return createErrorResponse(
-          { success: false, error: '유효한 action_type이 필요합니다.' },
-          400
-        )
+        return ApiError.badRequest('유효한 action_type이 필요합니다.').toNextResponse()
       }
       const targetType = target_type ? parseActivityTargetType(target_type) : null
       if (target_type && !targetType) {
-        return createErrorResponse(
-          { success: false, error: '유효하지 않은 target_type입니다.' },
-          400
-        )
+        return ApiError.badRequest('유효하지 않은 target_type입니다.').toNextResponse()
       }
       const targetIdValidation = target_id ? validateUUID(target_id, '대상 ID') : null
       if (targetIdValidation && !targetIdValidation.isValid) {
-        return createErrorResponse(
-          { success: false, error: targetIdValidation.errors[0] || '잘못된 대상 ID입니다.' },
-          400
-        )
+        return ApiError.badRequest(
+          targetIdValidation.errors[0] || '잘못된 대상 ID입니다.'
+        ).toNextResponse()
       }
       const targetId = targetIdValidation?.sanitized ?? null
 
@@ -86,17 +79,16 @@ export async function POST(request: NextRequest) {
 
       if (error) {
         console.error('활동 로그 저장 오류:', error)
-        return createErrorResponse({ success: false, error: '활동 로그 저장에 실패했습니다.' }, 500)
+        return ApiError.internalServerError('활동 로그 저장에 실패했습니다.').toNextResponse()
       }
 
-      return NextResponse.json({
-        success: true,
+      return ApiSuccess.ok({
         activity_id: data,
         timestamp: new Date().toISOString(),
-      })
+      }).toNextResponse()
     } catch (error) {
       console.error('활동 로그 API 오류:', error)
-      return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
+      return ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse()
     }
   })(request)
 }

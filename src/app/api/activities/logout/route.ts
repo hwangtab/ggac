@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createErrorResponse } from '@/utils/apiResponse'
+import { NextRequest } from 'next/server'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { applyRateLimit, RATE_LIMIT_CONFIGS } from '@/lib/server/rateLimit'
 import { parseJsonObjectBody } from '@/utils/requestBody'
@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     if (!rateLimitResult.success) {
       return (
         rateLimitResult.response ??
-        createErrorResponse({ success: false, error: '요청이 너무 많습니다.' }, 429)
+        ApiError.tooManyRequests('요청이 너무 많습니다.').toNextResponse()
       )
     }
 
@@ -29,13 +29,13 @@ export async function POST(request: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser()
     if (!user) {
-      return createErrorResponse({ success: false, error: 'Unauthorized' }, 401)
+      return ApiError.unauthorized('Unauthorized').toNextResponse()
     }
 
     const body = await parseJsonObjectBody(request)
 
     if (!body) {
-      return createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400)
+      return ApiError.badRequest('유효한 JSON body가 필요합니다.').toNextResponse()
     }
 
     const sessionToken =
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
         : {}
 
     if (!sessionToken) {
-      return createErrorResponse({ success: false, error: 'sessionToken이 필요합니다.' }, 400)
+      return ApiError.badRequest('sessionToken이 필요합니다.').toNextResponse()
     }
 
     // IP 주소 및 User-Agent 추출
@@ -76,16 +76,15 @@ export async function POST(request: NextRequest) {
 
     if (sessionError) {
       console.error('Session management error:', sessionError)
-      return createErrorResponse({ success: false, error: 'Failed to manage session' }, 500)
+      return ApiError.internalServerError('Failed to manage session').toNextResponse()
     }
 
-    return NextResponse.json({
-      success: true,
-      sessionId: sessionResult,
-      message: 'Logout activity logged successfully',
-    })
+    return ApiSuccess.ok(
+      { sessionId: sessionResult },
+      'Logout activity logged successfully'
+    ).toNextResponse()
   } catch (error) {
     console.error('Logout logging error:', error)
-    return createErrorResponse({ success: false, error: 'Internal server error' }, 500)
+    return ApiError.internalServerError('Internal server error').toNextResponse()
   }
 }

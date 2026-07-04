@@ -54,7 +54,14 @@ test.describe('보호 페이지 리다이렉트 (비인증)', () => {
 
   // 미들웨어(src/middleware/auth.ts)가 isProtectedPage 로 분류해 비로그인
   // 사용자를 /login 으로 리다이렉트하는 경로들. 인증 세션이 없어도 결정적이다.
-  const guardedPaths = ['/mypage', '/mypage/profile', '/mypage/settings', '/en/mypage']
+  const guardedPaths = [
+    '/mypage',
+    '/mypage/profile',
+    '/mypage/settings',
+    '/en/mypage',
+    '/notifications',
+    '/en/notifications',
+  ]
 
   for (const path of guardedPaths) {
     test(`비로그인 사용자는 ${path} 접근 시 로그인으로 리다이렉트된다`, async ({ page }) => {
@@ -68,6 +75,13 @@ test.describe('보호 페이지 리다이렉트 (비인증)', () => {
     await expect(page).toHaveURL(/\/login/, { timeout: 15000 })
     const redirectedUrl = new URL(page.url())
     expect(redirectedUrl.searchParams.get('redirect')).toBe('/mypage/profile')
+  })
+
+  test('알림 페이지 리다이렉트는 원래 경로를 redirect 쿼리에 보존한다', async ({ page }) => {
+    await page.goto('/notifications', { waitUntil: 'domcontentloaded' })
+    await expect(page).toHaveURL(/\/login/, { timeout: 15000 })
+    const redirectedUrl = new URL(page.url())
+    expect(redirectedUrl.searchParams.get('redirect')).toBe('/notifications')
   })
 })
 

@@ -6,8 +6,8 @@
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
-import { NextRequest, NextResponse } from 'next/server'
-import { createErrorResponse } from '@/utils/apiResponse'
+import { NextRequest } from 'next/server'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { logSecurityEvent } from '@/utils/security'
 import { createLogger } from '@/utils/logger'
 
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
 
     const cspReport = getReportObject(report?.['csp-report'])
     if (!cspReport) {
-      return createErrorResponse({ success: false, error: 'Invalid CSP report format' }, 400)
+      return ApiError.badRequest('Invalid CSP report format').toNextResponse()
     }
 
     // 민감한 정보 필터링
@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
 
     if (shouldIgnore) {
       log.debug('Ignored CSP report', { blockedUri: sanitizedReport.blockedUri })
-      return NextResponse.json({ status: 'ignored' })
+      return ApiSuccess.ok({ status: 'ignored' }).toNextResponse()
     }
 
     // 심각도 판단
@@ -151,9 +151,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ status: 'received' })
+    return ApiSuccess.ok({ status: 'received' }).toNextResponse()
   } catch (error) {
     console.error('[CSP] 리포트 처리 중 오류:', error)
-    return createErrorResponse({ success: false, error: 'Internal server error' }, 500)
+    return ApiError.internalServerError('Internal server error').toNextResponse()
   }
 }

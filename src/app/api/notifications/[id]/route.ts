@@ -9,8 +9,8 @@ export const runtime = 'nodejs'
 export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
-import { NextRequest, NextResponse } from 'next/server'
-import { createErrorResponse } from '@/utils/apiResponse'
+import { NextRequest } from 'next/server'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { RATE_LIMITS, applyRateLimit, createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { validateUUID } from '@/utils/validation'
@@ -37,12 +37,12 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       error: authError,
     } = await supabase.auth.getUser()
     if (authError || !user) {
-      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
+      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
     }
 
     const uuidValidation = validateUUID(resolvedParams.id, '알림 ID')
     if (!uuidValidation.isValid) {
-      return createErrorResponse({ success: false, error: uuidValidation.errors.join(', ') }, 400)
+      return ApiError.badRequest(uuidValidation.errors.join(', ')).toNextResponse()
     }
     const notificationId = uuidValidation.sanitized
 
@@ -53,23 +53,17 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
     if (error) {
       console.error('알림 읽음 처리 오류:', error)
-      return createErrorResponse({ success: false, error: '알림을 읽음 처리할 수 없습니다.' }, 500)
+      return ApiError.internalServerError('알림을 읽음 처리할 수 없습니다.').toNextResponse()
     }
 
     if (!data) {
-      return createErrorResponse(
-        { success: false, error: '알림을 찾을 수 없거나 권한이 없습니다.' },
-        404
-      )
+      return ApiError.notFound('알림을 찾을 수 없거나 권한이 없습니다.').toNextResponse()
     }
 
-    return NextResponse.json({
-      success: true,
-      message: '알림이 읽음 처리되었습니다.',
-    })
+    return ApiSuccess.ok({}, '알림이 읽음 처리되었습니다.').toNextResponse()
   } catch (error) {
     console.error('알림 읽음 처리 API 오류:', error)
-    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
+    return ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse()
   }
 }
 
@@ -95,12 +89,12 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       error: authError,
     } = await supabase.auth.getUser()
     if (authError || !user) {
-      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
+      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
     }
 
     const uuidValidation = validateUUID(resolvedParams.id, '알림 ID')
     if (!uuidValidation.isValid) {
-      return createErrorResponse({ success: false, error: uuidValidation.errors.join(', ') }, 400)
+      return ApiError.badRequest(uuidValidation.errors.join(', ')).toNextResponse()
     }
     const notificationId = uuidValidation.sanitized
 
@@ -113,15 +107,12 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
 
     if (error) {
       console.error('알림 삭제 오류:', error)
-      return createErrorResponse({ success: false, error: '알림을 삭제할 수 없습니다.' }, 500)
+      return ApiError.internalServerError('알림을 삭제할 수 없습니다.').toNextResponse()
     }
 
-    return NextResponse.json({
-      success: true,
-      message: '알림이 삭제되었습니다.',
-    })
+    return ApiSuccess.ok({}, '알림이 삭제되었습니다.').toNextResponse()
   } catch (error) {
     console.error('알림 삭제 API 오류:', error)
-    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
+    return ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse()
   }
 }

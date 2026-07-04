@@ -77,8 +77,8 @@ export default function ReportGenerator({ onReportGenerated }: ReportGeneratorPr
       const data = await response.json()
 
       if (data.success) {
-        setGeneratedReport(data.report)
-        onReportGenerated?.(data.report)
+        setGeneratedReport(data.data.report)
+        onReportGenerated?.(data.data.report)
       } else {
         throw new Error(data.error || '리포트 생성에 실패했습니다.')
       }
