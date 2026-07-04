@@ -6,7 +6,7 @@ import MypageLayout from '../components/MypageLayout'
 import PermissionCheck from '../components/PermissionCheck'
 import ArtistEditForm from './components/ArtistEditForm'
 import { DatabaseArtist } from '@/types'
-import { isProjectStoragePublicUrl } from '@/utils/storageUrlValidation'
+import { toSafeArtistImageSrc } from '@/utils/safeUrl'
 
 export default function ArtistPage() {
   const [artist, setArtist] = useState<DatabaseArtist | null>(null)
@@ -112,10 +112,9 @@ export default function ArtistPage() {
     artist?.profile_photo_metadata?.variant_urls?.fallback ||
     artist?.profile_photo_metadata?.variant_urls?.original ||
     ''
-  const safePreviewImageForDisplay =
-    artist && isProjectStoragePublicUrl(previewImageForDisplay, 'artists', artist.id)
-      ? previewImageForDisplay
-      : ''
+  // 다른 아티스트 이미지 지점과 동일하게 공유 안전 헬퍼로 경계를 통일한다.
+  // fallback을 빈 문자열로 주어 "업로드 사진 없음"은 빈 상태로 두는 현 동작을 보존한다.
+  const safePreviewImageForDisplay = toSafeArtistImageSrc(previewImageForDisplay, '')
 
   return (
     <PermissionCheck
