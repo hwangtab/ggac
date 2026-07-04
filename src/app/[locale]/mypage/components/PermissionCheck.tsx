@@ -24,11 +24,15 @@ const PermissionCheck: React.FC<PermissionCheckProps> = ({
           credentials: 'include',
           cache: 'no-store',
         })
-        const data = (await response.json().catch(() => null)) as {
-          authenticated?: boolean
-          user?: unknown
-          profile?: any
+        // 표준 응답 래퍼: { success, data: { authenticated, user, profile } }
+        const json = (await response.json().catch(() => null)) as {
+          data?: {
+            authenticated?: boolean
+            user?: unknown
+            profile?: any
+          }
         } | null
+        const data = json?.data
 
         if (!response.ok || !data?.authenticated || !data.user) {
           setLoading(false)

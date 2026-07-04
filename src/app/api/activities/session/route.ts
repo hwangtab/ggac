@@ -1,6 +1,6 @@
 import { createSupabaseServer } from '@/lib/supabase/server'
-import { createErrorResponse } from '@/utils/apiResponse'
-import { NextRequest, NextResponse } from 'next/server'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
+import { NextRequest } from 'next/server'
 import { withRateLimit } from '@/lib/server/rateLimit'
 import { sanitizeInput } from '@/utils/security'
 import { parseJsonObjectBody } from '@/utils/requestBody'
@@ -26,17 +26,17 @@ export async function GET(request: NextRequest) {
       } = await supabase.auth.getUser()
 
       if (error) {
-        return createErrorResponse({ success: false, error: '세션 확인 실패' }, 500)
+        return ApiError.internalServerError('세션 확인 실패').toNextResponse()
       }
 
-      return NextResponse.json({
+      return ApiSuccess.ok({
         authenticated: !!user,
         user_id: user?.id || null,
         expires_at: null,
-      })
+      }).toNextResponse()
     } catch (error) {
       console.error('세션 GET API 오류:', error)
-      return createErrorResponse({ success: false, error: '서버 오류' }, 500)
+      return ApiError.internalServerError('서버 오류').toNextResponse()
     }
   })(request)
 }
@@ -49,30 +49,29 @@ export async function POST(request: NextRequest) {
       } = await supabase.auth.getUser()
 
       if (!user) {
-        return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
+        return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
       }
 
       const body = await parseJsonObjectBody(request)
 
       if (!body) {
-        return createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400)
+        return ApiError.badRequest('유효한 JSON body가 필요합니다.').toNextResponse()
       }
 
       const { session_token, metadata = {} } = body
       const action = typeof body.action === 'string' ? body.action : ''
 
       if (!action || !['start', 'update', 'end'].includes(action)) {
-        return NextResponse.json(
-          { error: '유효한 action이 필요합니다. (start, update, end)' },
-          { status: 400 }
-        )
+        return ApiError.badRequest(
+          '유효한 action이 필요합니다. (start, update, end)'
+        ).toNextResponse()
       }
 
       if (action === 'start' && typeof session_token !== 'string') {
-        return createErrorResponse({ success: false, error: 'session_token이 필요합니다.' }, 400)
+        return ApiError.badRequest('session_token이 필요합니다.').toNextResponse()
       }
       if (action === 'update' && typeof body.session_id !== 'string') {
-        return createErrorResponse({ success: false, error: 'session_id가 필요합니다.' }, 400)
+        return ApiError.badRequest('session_id가 필요합니다.').toNextResponse()
       }
 
       // 입력 검증 및 sanitization
@@ -110,23 +109,22 @@ export async function POST(request: NextRequest) {
 
       if (error) {
         console.error('세션 관리 오류:', error)
-        return createErrorResponse({ success: false, error: '세션 관리에 실패했습니다.' }, 500)
+        return ApiError.internalServerError('세션 관리에 실패했습니다.').toNextResponse()
       }
 
-      const response: any = {
-        success: true,
+      const payload: Record<string, unknown> = {
         action,
         timestamp: new Date().toISOString(),
       }
 
       if (action === 'start') {
-        response.session_id = data
+        payload.session_id = data
       }
 
-      return NextResponse.json(response)
+      return ApiSuccess.ok(payload).toNextResponse()
     } catch (error) {
       console.error('세션 API 오류:', error)
-      return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
+      return ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse()
     }
   })(request)
 }

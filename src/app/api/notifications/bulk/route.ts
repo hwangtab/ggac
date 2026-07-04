@@ -4,8 +4,8 @@
  * PATCH: 모든 알림 읽음 처리
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { createErrorResponse } from '@/utils/apiResponse'
+import { NextRequest } from 'next/server'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { parseJsonObjectBody } from '@/utils/requestBody'
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
       error: authError,
     } = await supabase.auth.getUser()
     if (authError || !user) {
-      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
+      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
     }
 
     const { data: profile } = await supabase
@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (!profile?.is_admin || profile.registration_status !== 'approved' || !profile.is_active) {
-      return createErrorResponse({ success: false, error: '관리자 권한이 필요합니다.' }, 403)
+      return ApiError.forbidden('관리자 권한이 필요합니다.').toNextResponse()
     }
 
     // 요청 본문 파싱 및 검증
@@ -60,56 +60,48 @@ export async function POST(request: NextRequest) {
       request
     )) as unknown as CreateBulkNotificationRequest | null
     if (!body) {
-      return createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400)
+      return ApiError.badRequest('유효한 JSON body가 필요합니다.').toNextResponse()
     }
 
     // 입력 데이터 검증
     if (!Array.isArray(body.user_ids) || body.user_ids.length === 0) {
-      return createErrorResponse({ success: false, error: '사용자 ID 배열이 필요합니다.' }, 400)
+      return ApiError.badRequest('사용자 ID 배열이 필요합니다.').toNextResponse()
     }
 
     const notificationType = parseNotificationType(body.type)
     if (!notificationType) {
-      return createErrorResponse({ success: false, error: '알림 유형이 유효하지 않습니다.' }, 400)
+      return ApiError.badRequest('알림 유형이 유효하지 않습니다.').toNextResponse()
     }
 
     const notificationTitle = typeof body.title === 'string' ? body.title.trim() : ''
     if (!notificationTitle || notificationTitle.length > 200) {
-      return createErrorResponse({ success: false, error: '제목이 유효하지 않습니다.' }, 400)
+      return ApiError.badRequest('제목이 유효하지 않습니다.').toNextResponse()
     }
 
     const notificationMessage = typeof body.message === 'string' ? body.message.trim() : ''
     if (!notificationMessage || notificationMessage.length > 1000) {
-      return createErrorResponse({ success: false, error: '메시지가 유효하지 않습니다.' }, 400)
+      return ApiError.badRequest('메시지가 유효하지 않습니다.').toNextResponse()
     }
 
     // 사용자 ID 배열 길이 제한
     if (body.user_ids.length > 1000) {
-      return NextResponse.json(
-        {
-          error: '한 번에 최대 1000명까지만 알림을 보낼 수 있습니다.',
-        },
-        { status: 400 }
-      )
+      return ApiError.badRequest(
+        '한 번에 최대 1000명까지만 알림을 보낼 수 있습니다.'
+      ).toNextResponse()
     }
 
     const userIds: string[] = []
     for (const rawUserId of body.user_ids) {
       const userId = validateBulkUserId(rawUserId)
       if (!userId) {
-        return NextResponse.json(
-          {
-            error: '잘못된 사용자 ID가 포함되어 있습니다.',
-          },
-          { status: 400 }
-        )
+        return ApiError.badRequest('잘못된 사용자 ID가 포함되어 있습니다.').toNextResponse()
       }
       userIds.push(userId)
     }
     const notificationData = sanitizeNotificationData(body.data)
     const expiresAt = parseNotificationExpiresAt(body.expires_at)
     if (expiresAt === undefined) {
-      return createErrorResponse({ success: false, error: '만료 시간이 유효하지 않습니다.' }, 400)
+      return ApiError.badRequest('만료 시간이 유효하지 않습니다.').toNextResponse()
     }
 
     // 대량 알림 생성
@@ -124,17 +116,16 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error('대량 알림 생성 오류:', error)
-      return createErrorResponse({ success: false, error: '알림을 생성할 수 없습니다.' }, 500)
+      return ApiError.internalServerError('알림을 생성할 수 없습니다.').toNextResponse()
     }
 
-    return NextResponse.json({
-      success: true,
-      created_count: createdCount,
-      message: `${createdCount}개의 알림이 성공적으로 생성되었습니다.`,
-    })
+    return ApiSuccess.ok(
+      { created_count: createdCount },
+      `${createdCount}개의 알림이 성공적으로 생성되었습니다.`
+    ).toNextResponse()
   } catch (error) {
     console.error('대량 알림 생성 API 오류:', error)
-    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
+    return ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse()
   }
 }
 
@@ -158,7 +149,7 @@ export async function PATCH(request: NextRequest) {
       error: authError,
     } = await supabase.auth.getUser()
     if (authError || !user) {
-      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
+      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
     }
 
     // 모든 알림 읽음 처리
@@ -166,16 +157,15 @@ export async function PATCH(request: NextRequest) {
 
     if (error) {
       console.error('모든 알림 읽음 처리 오류:', error)
-      return createErrorResponse({ success: false, error: '알림을 읽음 처리할 수 없습니다.' }, 500)
+      return ApiError.internalServerError('알림을 읽음 처리할 수 없습니다.').toNextResponse()
     }
 
-    return NextResponse.json({
-      success: true,
-      updated_count: updatedCount,
-      message: `${updatedCount}개의 알림이 읽음 처리되었습니다.`,
-    })
+    return ApiSuccess.ok(
+      { updated_count: updatedCount },
+      `${updatedCount}개의 알림이 읽음 처리되었습니다.`
+    ).toNextResponse()
   } catch (error) {
     console.error('모든 알림 읽음 처리 API 오류:', error)
-    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
+    return ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse()
   }
 }

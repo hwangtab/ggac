@@ -21,13 +21,17 @@ const BoardUserSection = () => {
           credentials: 'include',
           cache: 'no-store',
         })
-        const data = (await response.json().catch(() => null)) as {
-          authenticated?: boolean
-          profile?: {
-            registration_status?: string
-            is_active?: boolean
-          } | null
+        // 표준 응답 래퍼: { success, data: { authenticated, profile } }
+        const json = (await response.json().catch(() => null)) as {
+          data?: {
+            authenticated?: boolean
+            profile?: {
+              registration_status?: string
+              is_active?: boolean
+            } | null
+          }
         } | null
+        const data = json?.data
 
         if (!mounted) return
 

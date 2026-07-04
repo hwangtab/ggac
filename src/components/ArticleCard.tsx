@@ -32,8 +32,9 @@ const ArticleCard = ({ article }: ArticleCardProps) => {
       const response = await fetch(`/api/link-preview?url=${encodeURIComponent(safeExternalUrl)}`)
 
       if (response.ok) {
-        const previewData = await response.json()
-        setPreview(previewData)
+        // 표준 응답 래퍼: { success, data: LinkPreview }
+        const json = await response.json()
+        setPreview(json.data)
       } else {
         console.error('Failed to fetch preview:', response.status)
         setHasError(true)

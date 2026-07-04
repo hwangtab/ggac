@@ -3,8 +3,8 @@
  * GET: 사용자 알림 통계 조회
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { createErrorResponse } from '@/utils/apiResponse'
+import { NextRequest } from 'next/server'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator } from '@/lib/server/rateLimit'
 import type { NotificationStats } from '@/types'
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
       error: authError,
     } = await supabase.auth.getUser()
     if (authError || !user) {
-      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
+      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
     }
 
     // 알림 통계 조회
@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
     if (error && error.code !== 'PGRST116') {
       // 데이터가 없는 경우는 에러가 아님
       console.error('알림 통계 조회 오류:', error)
-      return createErrorResponse({ success: false, error: '통계를 불러올 수 없습니다.' }, 500)
+      return ApiError.internalServerError('통계를 불러올 수 없습니다.').toNextResponse()
     }
 
     // 데이터가 없는 경우 기본값 반환
@@ -57,9 +57,9 @@ export async function GET(request: NextRequest) {
       latest_notification_at: null,
     }
 
-    return NextResponse.json(stats || defaultStats)
+    return ApiSuccess.ok(stats || defaultStats).toNextResponse()
   } catch (error) {
     console.error('알림 통계 API 오류:', error)
-    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
+    return ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse()
   }
 }

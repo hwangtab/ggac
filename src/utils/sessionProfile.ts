@@ -28,7 +28,11 @@ export async function fetchSessionProfile(): Promise<VerifiedSession> {
     cache: 'no-store',
   })
 
-  const data = (await response.json().catch(() => null)) as Partial<VerifiedSession> | null
+  // 표준 응답 래퍼: { success, data: VerifiedSession }
+  const json = (await response.json().catch(() => null)) as {
+    data?: Partial<VerifiedSession>
+  } | null
+  const data = json?.data
 
   if (!response.ok || !data?.authenticated) {
     return {

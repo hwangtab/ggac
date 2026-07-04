@@ -80,7 +80,9 @@ export default function ActivityPage() {
         throw new Error(errorData.error || '활동 내역을 불러오는 중 오류가 발생했습니다.')
       }
 
-      const data: ActivityResponse = await response.json()
+      // 표준 응답 래퍼: { success, data: ActivityResponse }
+      const json = await response.json()
+      const data: ActivityResponse = json.data
 
       if (append) {
         setActivities(prev => [...prev, ...data.activities])

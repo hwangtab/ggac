@@ -113,6 +113,8 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // NOTE: 표준 래퍼 전환으로 success는 배치가 부분 실패해도 항상 true다.
+      // 개별 로그의 실패 여부는 data.failed(개수)와 data.errors(항목별)로 확인해야 한다.
       return ApiSuccess.ok({
         processed: results.length,
         failed: errors.length,
