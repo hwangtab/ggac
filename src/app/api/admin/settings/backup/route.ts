@@ -1,4 +1,4 @@
-import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
+import { createOptionsResponse } from '@/utils/apiResponse'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
@@ -53,15 +53,9 @@ export const GET = defineApiRoute({
     )
 
     const isPermissionError = error instanceof Error && error.message.includes('권한')
-    return createErrorResponse(
-      {
-        success: false,
-        error: isPermissionError
-          ? '관리자 권한이 필요합니다.'
-          : '설정 백업 중 오류가 발생했습니다.',
-      },
-      isPermissionError ? 403 : 500
-    )
+    return isPermissionError
+      ? ApiError.forbidden('관리자 권한이 필요합니다.').toNextResponse()
+      : ApiError.internalServerError('설정 백업 중 오류가 발생했습니다.').toNextResponse()
   },
   handler: async ({ auth }) => {
     const supabase = auth.db
@@ -146,8 +140,7 @@ export const POST = defineApiRoute<Record<string, unknown>>({
   rateLimitHeaders: true,
   auth: createSettingsAdminAuth(),
   body: {
-    invalidResponse: () =>
-      createErrorResponse({ success: false, error: '유효하지 않은 JSON 본문입니다.' }, 400),
+    invalidResponse: () => ApiError.badRequest('유효하지 않은 JSON 본문입니다.').toNextResponse(),
   },
   errorResponse: error => {
     console.error('Admin settings restore error:', error)

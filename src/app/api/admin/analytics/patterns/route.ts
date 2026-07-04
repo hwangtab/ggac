@@ -1,6 +1,5 @@
-import { createErrorResponse } from '@/utils/apiResponse'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
-import { ApiSuccess } from '@/utils/apiWrapper'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { validateUUID } from '@/utils/validation'
 
@@ -23,10 +22,9 @@ export const GET = defineApiRoute({
     if (userId) {
       const userIdValidation = validateUUID(userId, '사용자 ID')
       if (!userIdValidation.isValid) {
-        return createErrorResponse(
-          { success: false, error: userIdValidation.errors[0] || '잘못된 사용자 ID입니다.' },
-          400
-        )
+        return ApiError.badRequest(
+          userIdValidation.errors[0] || '잘못된 사용자 ID입니다.'
+        ).toNextResponse()
       }
       sanitizedUserId = userIdValidation.sanitized
     }
@@ -61,7 +59,7 @@ export const GET = defineApiRoute({
         break
 
       default:
-        return createErrorResponse({ success: false, error: '지원되지 않는 분석 유형입니다.' }, 400)
+        return ApiError.badRequest('지원되지 않는 분석 유형입니다.').toNextResponse()
     }
 
     return ApiSuccess.ok({

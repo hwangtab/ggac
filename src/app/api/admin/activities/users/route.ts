@@ -1,5 +1,4 @@
-import { createErrorResponse } from '@/utils/apiResponse'
-import { ApiSuccess } from '@/utils/apiWrapper'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { validateUUID } from '@/utils/validation'
@@ -24,10 +23,9 @@ export const GET = defineApiRoute({
     if (userId) {
       const userIdValidation = validateUUID(userId, '사용자 ID')
       if (!userIdValidation.isValid) {
-        return createErrorResponse(
-          { success: false, error: userIdValidation.errors[0] || '잘못된 사용자 ID입니다.' },
-          400
-        )
+        return ApiError.badRequest(
+          userIdValidation.errors[0] || '잘못된 사용자 ID입니다.'
+        ).toNextResponse()
       }
       sanitizedUserId = userIdValidation.sanitized
     }
@@ -40,10 +38,10 @@ export const GET = defineApiRoute({
     const targetType = targetTypeParam ? parseActivityTargetType(targetTypeParam) : null
 
     if (actionTypeParam && !actionType) {
-      return createErrorResponse({ success: false, error: '잘못된 활동 유형입니다.' }, 400)
+      return ApiError.badRequest('잘못된 활동 유형입니다.').toNextResponse()
     }
     if (targetTypeParam && !targetType) {
-      return createErrorResponse({ success: false, error: '잘못된 대상 유형입니다.' }, 400)
+      return ApiError.badRequest('잘못된 대상 유형입니다.').toNextResponse()
     }
 
     const offset = (page - 1) * limit
@@ -90,7 +88,7 @@ export const GET = defineApiRoute({
     const { data: activities, error, count } = await query
 
     if (error) {
-      return createErrorResponse({ success: false, error: '활동 데이터 조회에 실패했습니다.' }, 500)
+      return ApiError.internalServerError('활동 데이터 조회에 실패했습니다.').toNextResponse()
     }
 
     const totalCount = count || 0

@@ -1,8 +1,8 @@
-import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
+import { createOptionsResponse } from '@/utils/apiResponse'
 import { NextResponse } from 'next/server'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
-import { ApiSuccess } from '@/utils/apiWrapper'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { logSecurityEvent } from '@/utils/security'
 import { parseIntegerParam } from '@/utils/queryParams'
 
@@ -43,7 +43,7 @@ export const GET = defineApiRoute({
 
     // 페이지 번호 검증
     if (page > 1000) {
-      return createErrorResponse({ success: false, error: '유효하지 않은 페이지 번호입니다.' }, 400)
+      return ApiError.badRequest('유효하지 않은 페이지 번호입니다.').toNextResponse()
     }
 
     const offset = (page - 1) * limit
