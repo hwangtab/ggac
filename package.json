@@ -30,7 +30,8 @@
     "vercel:deploy": "vercel --prod",
     "vercel:preview": "vercel",
     "deploy": "curl -X POST https://ggac.kr/api/webhook/deploy-hook",
-    "deploy:notify": "node scripts/deploy-notify.js"
+    "deploy:notify": "node scripts/utils/deployment/deploy-notify.js",
+    "deploy:smoke": "node scripts/utils/deployment/smoke-check.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.2",
