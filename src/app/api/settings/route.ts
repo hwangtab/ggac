@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createErrorResponse } from '@/utils/apiResponse'
+import { NextRequest } from 'next/server'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { z } from 'zod'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { applyRateLimit, RATE_LIMIT_CONFIGS } from '@/lib/server/rateLimit'
@@ -35,10 +35,9 @@ export async function GET(request: NextRequest) {
     const rateLimiter = await applyRateLimit(RATE_LIMIT_CONFIGS.GENERAL_API)
     const rateLimitResult = await rateLimiter(request)
     if (!rateLimitResult.success) {
-      return NextResponse.json(
-        { error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' },
-        { status: 429 }
-      )
+      return ApiError.tooManyRequests(
+        '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.'
+      ).toNextResponse()
     }
 
     const supabase = await createSupabaseServer()
@@ -48,7 +47,7 @@ export async function GET(request: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser()
     if (!user) {
-      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
+      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
     }
 
     // URL 파라미터에서 카테고리 필터 확인
@@ -56,10 +55,7 @@ export async function GET(request: NextRequest) {
     const categoryParam = searchParams.get('category')
     const category = categoryParam ? parseUserSettingCategory(categoryParam) : null
     if (categoryParam && !category) {
-      return createErrorResponse(
-        { success: false, error: '유효하지 않은 설정 카테고리입니다.' },
-        400
-      )
+      return ApiError.badRequest('유효하지 않은 설정 카테고리입니다.').toNextResponse()
     }
 
     // 사용자 설정 조회 (기본값 포함)
@@ -71,23 +67,22 @@ export async function GET(request: NextRequest) {
 
       if (error) {
         log.error('Settings fetch error:', error)
-        return createErrorResponse({ success: false, error: 'Failed to fetch settings' }, 500)
+        return ApiError.internalServerError('Failed to fetch settings').toNextResponse()
       }
 
       const filteredSettings =
         allSettings?.filter((setting: any) => setting.category === category) || []
 
-      return NextResponse.json({
-        success: true,
+      return ApiSuccess.ok({
         settings: filteredSettings,
         category: category,
-      })
+      }).toNextResponse()
     } else {
       const { data: settings, error } = await query
 
       if (error) {
         log.error('Settings fetch error:', error)
-        return createErrorResponse({ success: false, error: 'Failed to fetch settings' }, 500)
+        return ApiError.internalServerError('Failed to fetch settings').toNextResponse()
       }
 
       // 카테고리별로 그룹화
@@ -100,15 +95,14 @@ export async function GET(request: NextRequest) {
           return acc
         }, {}) || {}
 
-      return NextResponse.json({
-        success: true,
+      return ApiSuccess.ok({
         settings: groupedSettings,
         total: settings?.length || 0,
-      })
+      }).toNextResponse()
     }
   } catch (error) {
     log.error('Settings API error:', error)
-    return createErrorResponse({ success: false, error: 'Internal server error' }, 500)
+    return ApiError.internalServerError('Internal server error').toNextResponse()
   }
 }
 
@@ -122,10 +116,9 @@ export async function POST(request: NextRequest) {
     const rateLimiter = await applyRateLimit(RATE_LIMIT_CONFIGS.GENERAL_API)
     const rateLimitResult = await rateLimiter(request)
     if (!rateLimitResult.success) {
-      return NextResponse.json(
-        { error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' },
-        { status: 429 }
-      )
+      return ApiError.tooManyRequests(
+        '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.'
+      ).toNextResponse()
     }
 
     const supabase = await createSupabaseServer()
@@ -135,24 +128,21 @@ export async function POST(request: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser()
     if (!user) {
-      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
+      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
     }
 
     const body = await parseJsonObjectBody(request)
     if (!body) {
-      return createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400)
+      return ApiError.badRequest('유효한 JSON body가 필요합니다.').toNextResponse()
     }
 
     const parsed = SingleSettingSchema.safeParse(body)
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: '유효하지 않은 설정 데이터입니다.', details: parsed.error.flatten() },
-        { status: 400 }
-      )
+      return ApiError.badRequest('유효하지 않은 설정 데이터입니다.').toNextResponse()
     }
     const { category, setting_key, setting_value } = parsed.data
     if (!category || !isUserSettingKey(category, setting_key)) {
-      return createErrorResponse({ success: false, error: '유효하지 않은 설정입니다.' }, 400)
+      return ApiError.badRequest('유효하지 않은 설정입니다.').toNextResponse()
     }
 
     // 설정 업데이트
@@ -164,17 +154,13 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       log.error('Setting update error:', error)
-      return createErrorResponse({ success: false, error: '설정 업데이트에 실패했습니다.' }, 400)
+      return ApiError.badRequest('설정 업데이트에 실패했습니다.').toNextResponse()
     }
 
-    return NextResponse.json({
-      success: true,
-      setting_id: settingId,
-      message: 'Setting updated successfully',
-    })
+    return ApiSuccess.ok({ setting_id: settingId }, 'Setting updated successfully').toNextResponse()
   } catch (error) {
     log.error('Settings update API error:', error)
-    return createErrorResponse({ success: false, error: 'Internal server error' }, 500)
+    return ApiError.internalServerError('Internal server error').toNextResponse()
   }
 }
 
@@ -188,10 +174,9 @@ export async function PUT(request: NextRequest) {
     const rateLimiter = await applyRateLimit(RATE_LIMIT_CONFIGS.GENERAL_API)
     const rateLimitResult = await rateLimiter(request)
     if (!rateLimitResult.success) {
-      return NextResponse.json(
-        { error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' },
-        { status: 429 }
-      )
+      return ApiError.tooManyRequests(
+        '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.'
+      ).toNextResponse()
     }
 
     const supabase = await createSupabaseServer()
@@ -201,20 +186,17 @@ export async function PUT(request: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser()
     if (!user) {
-      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
+      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
     }
 
     const body = await parseJsonObjectBody(request)
     if (!body) {
-      return createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400)
+      return ApiError.badRequest('유효한 JSON body가 필요합니다.').toNextResponse()
     }
 
     const parsed = BulkSettingsSchema.safeParse(body)
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: '유효하지 않은 설정 데이터입니다.', details: parsed.error.flatten() },
-        { status: 400 }
-      )
+      return ApiError.badRequest('유효하지 않은 설정 데이터입니다.').toNextResponse()
     }
     const { settings } = parsed.data
 
@@ -272,17 +254,16 @@ export async function PUT(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({
-      success: successCount > 0,
+    return ApiSuccess.ok({
       results,
       summary: {
         total: settings.length,
         success: successCount,
         errors: errorCount,
       },
-    })
+    }).toNextResponse()
   } catch (error) {
     log.error('Bulk settings update API error:', error)
-    return createErrorResponse({ success: false, error: 'Internal server error' }, 500)
+    return ApiError.internalServerError('Internal server error').toNextResponse()
   }
 }

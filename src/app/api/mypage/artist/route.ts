@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { createServiceRoleClient, hasServiceRoleEnv } from '@/lib/server/supabaseAdmin'
 import { z } from 'zod'
-import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
+import { createOptionsResponse } from '@/utils/apiResponse'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { invalidateArtistsCache } from '@/lib/data'
 import { parseJsonObjectBody } from '@/utils/requestBody'
@@ -124,7 +125,7 @@ export async function GET(request: NextRequest) {
     } = await supabase.auth.getUser()
 
     if (authError || !user) {
-      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
+      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
     }
 
     // 사용자의 프로필 정보 조회 (아티스트 ID 확인)
@@ -136,22 +137,16 @@ export async function GET(request: NextRequest) {
 
     if (profileError) {
       console.error('Profile fetch error:', profileError)
-      return createErrorResponse(
-        { success: false, error: '프로필 정보를 조회할 수 없습니다.' },
-        500
-      )
+      return ApiError.internalServerError('프로필 정보를 조회할 수 없습니다.').toNextResponse()
     }
 
     // 아티스트 권한 확인
     if (!profile.is_artist || !profile.artist_id) {
-      return createErrorResponse({ success: false, error: '아티스트 권한이 없습니다.' }, 403)
+      return ApiError.forbidden('아티스트 권한이 없습니다.').toNextResponse()
     }
 
     if (profile.registration_status !== 'approved' || !profile.is_active) {
-      return createErrorResponse(
-        { success: false, error: '승인된 멤버만 접근할 수 있습니다.' },
-        403
-      )
+      return ApiError.forbidden('승인된 멤버만 접근할 수 있습니다.').toNextResponse()
     }
 
     // 아티스트 정보 조회
@@ -163,16 +158,13 @@ export async function GET(request: NextRequest) {
 
     if (artistError) {
       console.error('Artist fetch error:', artistError)
-      return createErrorResponse(
-        { success: false, error: '아티스트 정보를 조회할 수 없습니다.' },
-        500
-      )
+      return ApiError.internalServerError('아티스트 정보를 조회할 수 없습니다.').toNextResponse()
     }
 
-    return NextResponse.json({ artist })
+    return ApiSuccess.ok({ artist }).toNextResponse()
   } catch (error) {
     console.error('Artist GET error:', error)
-    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
+    return ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse()
   }
 }
 
@@ -188,26 +180,18 @@ export async function PATCH(request: NextRequest) {
     } = await supabase.auth.getUser()
 
     if (authError || !user) {
-      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
+      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
     }
 
     // 요청 데이터 파싱 및 검증
     const body = await parseJsonObjectBody(request)
     if (!body) {
-      return createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400)
+      return ApiError.badRequest('유효한 JSON body가 필요합니다.').toNextResponse()
     }
 
     const validationResult = ArtistUpdateSchema.safeParse(body)
     if (!validationResult.success) {
-      const errors = validationResult.error.issues.map(err => ({
-        field: err.path.join('.'),
-        message: err.message,
-      }))
-
-      return NextResponse.json(
-        { error: '입력 데이터가 올바르지 않습니다.', details: errors },
-        { status: 400 }
-      )
+      return ApiError.badRequest('입력 데이터가 올바르지 않습니다.').toNextResponse()
     }
 
     const updateData = validationResult.data
@@ -221,32 +205,25 @@ export async function PATCH(request: NextRequest) {
 
     if (profileError) {
       console.error('Profile fetch error:', profileError)
-      return createErrorResponse(
-        { success: false, error: '프로필 정보를 조회할 수 없습니다.' },
-        500
-      )
+      return ApiError.internalServerError('프로필 정보를 조회할 수 없습니다.').toNextResponse()
     }
 
     // 아티스트 권한 확인
     if (!profile.is_artist || !profile.artist_id) {
-      return createErrorResponse({ success: false, error: '아티스트 권한이 없습니다.' }, 403)
+      return ApiError.forbidden('아티스트 권한이 없습니다.').toNextResponse()
     }
 
     if (profile.registration_status !== 'approved' || !profile.is_active) {
-      return createErrorResponse(
-        { success: false, error: '승인된 멤버만 접근할 수 있습니다.' },
-        403
-      )
+      return ApiError.forbidden('승인된 멤버만 접근할 수 있습니다.').toNextResponse()
     }
 
     // 포트폴리오 링크 유효성 검사
     if (updateData.portfolio_links) {
       for (const link of updateData.portfolio_links) {
         if (link.url && !/^https?:\/\/.+/.test(link.url)) {
-          return NextResponse.json(
-            { error: '포트폴리오 링크는 올바른 URL 형식이어야 합니다.' },
-            { status: 400 }
-          )
+          return ApiError.badRequest(
+            '포트폴리오 링크는 올바른 URL 형식이어야 합니다.'
+          ).toNextResponse()
         }
       }
     }
@@ -255,10 +232,9 @@ export async function PATCH(request: NextRequest) {
     if (updateData.youtube_videos) {
       for (const video of updateData.youtube_videos) {
         if (video.url && !/^https?:\/\/(www\.)?(youtube\.com|youtu\.be)\/.+/.test(video.url)) {
-          return NextResponse.json(
-            { error: '유튜브 동영상은 올바른 YouTube URL이어야 합니다.' },
-            { status: 400 }
-          )
+          return ApiError.badRequest(
+            '유튜브 동영상은 올바른 YouTube URL이어야 합니다.'
+          ).toNextResponse()
         }
       }
     }
@@ -267,10 +243,9 @@ export async function PATCH(request: NextRequest) {
       updateData.profile_photo_url &&
       !isProjectStoragePublicUrl(updateData.profile_photo_url, 'artists', profile.artist_id)
     ) {
-      return NextResponse.json(
-        { error: '프로필 사진은 전용 업로드로 등록된 Storage URL이어야 합니다.' },
-        { status: 400 }
-      )
+      return ApiError.badRequest(
+        '프로필 사진은 전용 업로드로 등록된 Storage URL이어야 합니다.'
+      ).toNextResponse()
     }
     const photoVariants = updateData.profile_photo_metadata?.variants
     const variantPaths = [photoVariants?.original, photoVariants?.webp, photoVariants?.fallback]
@@ -281,10 +256,9 @@ export async function PATCH(request: NextRequest) {
           !isProjectStorageObjectPath(variantPath, profile.artist_id)
       )
     ) {
-      return NextResponse.json(
-        { error: '프로필 사진 메타데이터의 Storage 경로가 올바르지 않습니다.' },
-        { status: 400 }
-      )
+      return ApiError.badRequest(
+        '프로필 사진 메타데이터의 Storage 경로가 올바르지 않습니다.'
+      ).toNextResponse()
     }
     const variantUrls = updateData.profile_photo_metadata?.variant_urls
     const variantPublicUrls = [variantUrls?.original, variantUrls?.webp, variantUrls?.fallback]
@@ -295,10 +269,9 @@ export async function PATCH(request: NextRequest) {
           !isProjectStoragePublicUrl(variantUrl, 'artists', profile.artist_id)
       )
     ) {
-      return NextResponse.json(
-        { error: '프로필 사진 메타데이터의 공개 URL이 올바르지 않습니다.' },
-        { status: 400 }
-      )
+      return ApiError.badRequest(
+        '프로필 사진 메타데이터의 공개 URL이 올바르지 않습니다.'
+      ).toNextResponse()
     }
 
     // 연락처 정리 (빈 문자열을 null로 변환)
@@ -321,10 +294,7 @@ export async function PATCH(request: NextRequest) {
       !ownerCheck.is_active ||
       ownerCheck.registration_status !== 'approved'
     ) {
-      return NextResponse.json(
-        { error: '아티스트 권한이 없거나 비활성 상태입니다.' },
-        { status: 403 }
-      )
+      return ApiError.forbidden('아티스트 권한이 없거나 비활성 상태입니다.').toNextResponse()
     }
 
     const { data: updatedArtist, error: updateError } = await db
@@ -348,10 +318,7 @@ export async function PATCH(request: NextRequest) {
 
     if (updateError) {
       console.error('Artist update error:', updateError)
-      return NextResponse.json(
-        { error: '아티스트 정보 업데이트에 실패했습니다.', details: updateError.message },
-        { status: 500 }
-      )
+      return ApiError.internalServerError('아티스트 정보 업데이트에 실패했습니다.').toNextResponse()
     }
 
     // 🚀 즉시 캐시 무효화 - 웹사이트에 실시간 반영
@@ -405,13 +372,13 @@ export async function PATCH(request: NextRequest) {
       console.error('Cache invalidation error (non-blocking):', cacheError)
     }
 
-    return NextResponse.json({
-      message: '아티스트 정보가 성공적으로 업데이트되었습니다. 웹사이트에 즉시 반영됩니다.',
-      artist: updatedArtist,
-    })
+    return ApiSuccess.ok(
+      { artist: updatedArtist },
+      '아티스트 정보가 성공적으로 업데이트되었습니다. 웹사이트에 즉시 반영됩니다.'
+    ).toNextResponse()
   } catch (error) {
     console.error('Artist PATCH error:', error)
-    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
+    return ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse()
   }
 }
 

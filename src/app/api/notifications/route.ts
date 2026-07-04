@@ -4,8 +4,8 @@
  * POST: 새 알림 생성 (관리자 전용)
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { createErrorResponse } from '@/utils/apiResponse'
+import { NextRequest } from 'next/server'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { parseJsonObjectBody } from '@/utils/requestBody'
@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
       error: authError,
     } = await supabase.auth.getUser()
     if (authError || !user) {
-      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
+      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
     }
 
     // URL 파라미터 추출 및 검증
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
     const unread_only = searchParams.get('unread_only') === 'true'
 
     if (typeParam && !type) {
-      return createErrorResponse({ success: false, error: '잘못된 타입 파라미터입니다.' }, 400)
+      return ApiError.badRequest('잘못된 타입 파라미터입니다.').toNextResponse()
     }
 
     const offset = (page - 1) * limit
@@ -82,7 +82,7 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('알림 조회 오류:', error)
-      return createErrorResponse({ success: false, error: '알림을 불러올 수 없습니다.' }, 500)
+      return ApiError.internalServerError('알림을 불러올 수 없습니다.').toNextResponse()
     }
 
     // 미읽은 알림 수 조회
@@ -108,10 +108,10 @@ export async function GET(request: NextRequest) {
       },
     }
 
-    return NextResponse.json(response)
+    return ApiSuccess.ok(response).toNextResponse()
   } catch (error) {
     console.error('알림 API 오류:', error)
-    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
+    return ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse()
   }
 }
 
@@ -136,7 +136,7 @@ export async function POST(request: NextRequest) {
       error: authError,
     } = await supabase.auth.getUser()
     if (authError || !user) {
-      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
+      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
     }
 
     const { data: profile } = await supabase
@@ -146,59 +146,53 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (!profile?.is_admin || profile.registration_status !== 'approved' || !profile.is_active) {
-      return createErrorResponse({ success: false, error: '관리자 권한이 필요합니다.' }, 403)
+      return ApiError.forbidden('관리자 권한이 필요합니다.').toNextResponse()
     }
 
     // 요청 본문 파싱 및 검증
     const body = (await parseJsonObjectBody(request)) as unknown as CreateNotificationRequest | null
     if (!body) {
-      return createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400)
+      return ApiError.badRequest('유효한 JSON body가 필요합니다.').toNextResponse()
     }
 
     // 입력 데이터 검증
     const userId = validateNotificationId(body.user_id, '사용자 ID')
     if (!userId) {
-      return createErrorResponse({ success: false, error: '사용자 ID가 유효하지 않습니다.' }, 400)
+      return ApiError.badRequest('사용자 ID가 유효하지 않습니다.').toNextResponse()
     }
 
     const notificationType = parseNotificationType(body.type)
     if (!notificationType) {
-      return createErrorResponse({ success: false, error: '알림 유형이 유효하지 않습니다.' }, 400)
+      return ApiError.badRequest('알림 유형이 유효하지 않습니다.').toNextResponse()
     }
 
     const notificationTitle = typeof body.title === 'string' ? body.title.trim() : ''
     if (!notificationTitle || notificationTitle.length > 200) {
-      return createErrorResponse({ success: false, error: '제목이 유효하지 않습니다.' }, 400)
+      return ApiError.badRequest('제목이 유효하지 않습니다.').toNextResponse()
     }
 
     const notificationMessage = typeof body.message === 'string' ? body.message.trim() : ''
     if (!notificationMessage || notificationMessage.length > 1000) {
-      return createErrorResponse({ success: false, error: '메시지가 유효하지 않습니다.' }, 400)
+      return ApiError.badRequest('메시지가 유효하지 않습니다.').toNextResponse()
     }
 
     const relatedPostId = body.related_post_id
       ? validateNotificationId(body.related_post_id, '관련 게시글 ID')
       : null
     if (body.related_post_id && !relatedPostId) {
-      return createErrorResponse(
-        { success: false, error: '관련 게시글 ID가 유효하지 않습니다.' },
-        400
-      )
+      return ApiError.badRequest('관련 게시글 ID가 유효하지 않습니다.').toNextResponse()
     }
 
     const relatedUserId = body.related_user_id
       ? validateNotificationId(body.related_user_id, '관련 사용자 ID')
       : null
     if (body.related_user_id && !relatedUserId) {
-      return createErrorResponse(
-        { success: false, error: '관련 사용자 ID가 유효하지 않습니다.' },
-        400
-      )
+      return ApiError.badRequest('관련 사용자 ID가 유효하지 않습니다.').toNextResponse()
     }
     const notificationData = sanitizeNotificationData(body.data)
     const expiresAt = parseNotificationExpiresAt(body.expires_at)
     if (expiresAt === undefined) {
-      return createErrorResponse({ success: false, error: '만료 시간이 유효하지 않습니다.' }, 400)
+      return ApiError.badRequest('만료 시간이 유효하지 않습니다.').toNextResponse()
     }
 
     // 알림 생성
@@ -215,16 +209,15 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error('알림 생성 오류:', error)
-      return createErrorResponse({ success: false, error: '알림을 생성할 수 없습니다.' }, 500)
+      return ApiError.internalServerError('알림을 생성할 수 없습니다.').toNextResponse()
     }
 
-    return NextResponse.json({
-      success: true,
-      notification_id: notification,
-      message: '알림이 성공적으로 생성되었습니다.',
-    })
+    return ApiSuccess.ok(
+      { notification_id: notification },
+      '알림이 성공적으로 생성되었습니다.'
+    ).toNextResponse()
   } catch (error) {
     console.error('알림 생성 API 오류:', error)
-    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
+    return ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse()
   }
 }

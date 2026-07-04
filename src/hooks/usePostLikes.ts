@@ -136,7 +136,9 @@ export function usePostLikes({
           throw new Error(errorMessage)
         }
 
-        const data = await response.json()
+        const json = await response.json()
+        // 표준 응답 래퍼: { success, data: { like_count, is_liked } }
+        const data = json?.data ?? {}
         log.debug('GET 데이터:', data)
 
         setState(prev => ({
@@ -255,7 +257,9 @@ export function usePostLikes({
         throw new Error(errorMessage)
       }
 
-      const successData: PostLikeToggleResponse = await response.json()
+      const successJson = await response.json()
+      // 표준 응답 래퍼: { success, data: { liked, like_count, message } }
+      const successData: PostLikeToggleResponse = successJson?.data
       log.debug('POST 성공:', successData)
 
       // 상태 업데이트
