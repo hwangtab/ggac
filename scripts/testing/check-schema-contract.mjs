@@ -21,7 +21,9 @@ export function checkContract(usages, snapshot, allowlist) {
     for (const col of columns) {
       if (!known.includes(col) && !allowed.has(col)) {
         violations.push({
-          file: usage.file, line: usage.line, kind: 'column',
+          file: usage.file,
+          line: usage.line,
+          kind: 'column',
           detail: `${table}.${col} — 스냅샷에 없는 컬럼`,
         })
       }
@@ -32,7 +34,9 @@ export function checkContract(usages, snapshot, allowlist) {
     if (usage.rpc) {
       if (!snapshot.rpcs.includes(usage.rpc) && !allowRpcs.has(usage.rpc)) {
         violations.push({
-          file: usage.file, line: usage.line, kind: 'rpc',
+          file: usage.file,
+          line: usage.line,
+          kind: 'rpc',
           detail: `rpc ${usage.rpc} — 스냅샷에 없는 함수`,
         })
       }
@@ -40,7 +44,9 @@ export function checkContract(usages, snapshot, allowlist) {
     }
     if (!(usage.table in snapshot.tables) && !allowTables.has(usage.table)) {
       violations.push({
-        file: usage.file, line: usage.line, kind: 'table',
+        file: usage.file,
+        line: usage.line,
+        kind: 'table',
         detail: `${usage.table} — 스냅샷에 없는 테이블`,
       })
       continue
@@ -90,6 +96,11 @@ async function main() {
   if (violations.length) {
     console.error(`\n스키마 계약 위반 ${violations.length}건:`)
     for (const v of violations) console.error(`  ✗ ${v.file}:${v.line} [${v.kind}] ${v.detail}`)
+    if (snapshot.generatedAt) {
+      console.error(
+        `\n스냅샷 생성: ${snapshot.generatedAt} — DB 스키마 변경 후 \`npm run schema:snapshot\`을 실행했는지 확인하세요.`
+      )
+    }
     process.exit(1)
   }
   console.log('\n스키마 계약 위반 없음 ✓')

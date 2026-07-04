@@ -92,8 +92,20 @@ export function parseSelectColumns(argText) {
 
 // 컬럼명을 첫 인자로 받는 필터·정렬 메서드
 const COLUMN_ARG_METHODS = new Set([
-  'eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'like', 'ilike', 'is', 'in',
-  'contains', 'containedBy', 'order', 'textSearch',
+  'eq',
+  'neq',
+  'gt',
+  'gte',
+  'lt',
+  'lte',
+  'like',
+  'ilike',
+  'is',
+  'in',
+  'contains',
+  'containedBy',
+  'order',
+  'textSearch',
 ])
 const WRITE_METHODS = new Set(['insert', 'update', 'upsert'])
 
@@ -101,10 +113,23 @@ const WRITE_METHODS = new Set(['insert', 'update', 'upsert'])
 // denylist인 이유: supabase 클라이언트 변수명은 다양해 allowlist는 누락을
 // 만들지만, 내장 생성자는 확실히 supabase가 아니다.
 const BUILTIN_FROM_RECEIVERS = new Set([
-  'Array', 'Buffer', 'Object', 'Promise', 'Set', 'Map', 'String',
-  'Uint8Array', 'Int8Array', 'Uint16Array', 'Int16Array',
-  'Uint32Array', 'Int32Array', 'Float32Array', 'Float64Array',
-  'BigInt64Array', 'BigUint64Array',
+  'Array',
+  'Buffer',
+  'Object',
+  'Promise',
+  'Set',
+  'Map',
+  'String',
+  'Uint8Array',
+  'Int8Array',
+  'Uint16Array',
+  'Int16Array',
+  'Uint32Array',
+  'Int32Array',
+  'Float32Array',
+  'Float64Array',
+  'BigInt64Array',
+  'BigUint64Array',
 ])
 
 // 최상위(depth 0) 콤마 기준으로 첫 번째 인자 텍스트만 잘라낸다.
@@ -152,14 +177,23 @@ function extractObjectKeys(argText) {
       else if (ch === quote) quote = null
       continue
     }
-    if (ch === "'" || ch === '"' || ch === '`') { quote = ch; continue }
+    if (ch === "'" || ch === '"' || ch === '`') {
+      quote = ch
+      continue
+    }
     if (ch === '{' || ch === '[' || ch === '(') {
       stack.push(ch)
       if (ch === '{') expectKey = true
       continue
     }
-    if (ch === '}' || ch === ']' || ch === ')') { stack.pop(); continue }
-    if (ch === ',') { expectKey = true; continue }
+    if (ch === '}' || ch === ']' || ch === ')') {
+      stack.pop()
+      continue
+    }
+    if (ch === ',') {
+      expectKey = true
+      continue
+    }
     if (expectKey && ch === '.' && trimmed.startsWith('...', i)) {
       // 최상위 ...spread — 어떤 키가 들어오는지 정적으로 알 수 없다
       if (inTopLevelObject()) hasSpread = true
@@ -182,11 +216,82 @@ function lineOf(source, index) {
   return source.slice(0, index).split('\n').length
 }
 
+// 주석·문자열 리터럴을 같은 길이의 공백(개행은 개행 유지)으로 치환한다.
+// 목적: 주석 `// supabase.from('x')`·문자열 `"from('x')"` 안의 호출 패턴이
+// .from()/.rpc() 매칭을 유발하지 못하게 프리패스한다. 문자 오프셋과 줄 수를
+// 보존하므로, 이 결과로 찾은 match.index는 원본 source에서 그대로 유효하다
+// (실제 인자 추출은 원본 source를 슬라이스한다 — 진짜 호출의 리터럴 인자 보존).
+export function stripCommentsAndStrings(source) {
+  let out = ''
+  let i = 0
+  const n = source.length
+  while (i < n) {
+    const ch = source[i]
+    const next = source[i + 1]
+    // 라인 주석
+    if (ch === '/' && next === '/') {
+      while (i < n && source[i] !== '\n') {
+        out += ' '
+        i++
+      }
+      continue
+    }
+    // 블록 주석
+    if (ch === '/' && next === '*') {
+      while (i < n && !(source[i] === '*' && source[i + 1] === '/')) {
+        out += source[i] === '\n' ? '\n' : ' '
+        i++
+      }
+      if (i < n) {
+        out += ' '
+        i++
+      } // '*'
+      if (i < n) {
+        out += ' '
+        i++
+      } // '/'
+      continue
+    }
+    // 문자열/템플릿 리터럴
+    if (ch === "'" || ch === '"' || ch === '`') {
+      const quote = ch
+      out += ' ' // 여는 따옴표
+      i++
+      while (i < n) {
+        const c = source[i]
+        if (c === '\\') {
+          out += ' '
+          i++
+          if (i < n) {
+            out += source[i] === '\n' ? '\n' : ' '
+            i++
+          }
+          continue
+        }
+        if (c === quote) {
+          out += ' '
+          i++
+          break
+        }
+        out += c === '\n' ? '\n' : ' '
+        i++
+      }
+      continue
+    }
+    out += ch
+    i++
+  }
+  return out
+}
+
 export function extractCallsFromSource(source, filePath) {
   const usages = []
   const skips = []
+  // 주석·문자열을 공백으로 지운 프리패스 소스에서 호출 위치만 찾는다.
+  // 오프셋이 보존되므로 인자·수신 객체·라인 계산은 원본 source로 수행한다.
+  const scan = stripCommentsAndStrings(source)
   // .from(...) 체인
-  for (const match of source.matchAll(/\.\s*from\s*\(/g)) {
+  for (const match of scan.matchAll(/\.\s*from\s*\(/g)) {
     // 수신 객체가 JS 내장 생성자면 supabase 호출이 아니므로 무시한다
     // (Array.from → skip 노이즈, Buffer.from('hello') → 유령 테이블 방지)
     const receiver = source.slice(0, match.index).match(/([A-Za-z_$][\w$]*)\s*$/)
@@ -201,7 +306,11 @@ export function extractCallsFromSource(source, filePath) {
     if (!fromCall) continue
     const table = literalString(fromCall.args)
     if (table === null) {
-      skips.push({ file: filePath, line, reason: `동적 테이블명: from(${fromCall.args.slice(0, 40)})` })
+      skips.push({
+        file: filePath,
+        line,
+        reason: `동적 테이블명: from(${fromCall.args.slice(0, 40)})`,
+      })
       continue
     }
     const columns = new Set()
@@ -239,12 +348,17 @@ export function extractCallsFromSource(source, filePath) {
     usages.push({ file: filePath, line, table, columns: [...columns].sort(), relations })
   }
   // .rpc(...) 호출
-  for (const match of source.matchAll(/\.\s*rpc\s*\(/g)) {
+  for (const match of scan.matchAll(/\.\s*rpc\s*\(/g)) {
     const line = lineOf(source, match.index)
     const openIndex = match.index + match[0].length - 1
     const closeIndex = findMatchingParen(source, openIndex)
     if (closeIndex === -1) continue
-    const fnName = literalString(source.slice(openIndex + 1, closeIndex).split(',')[0].trim())
+    const fnName = literalString(
+      source
+        .slice(openIndex + 1, closeIndex)
+        .split(',')[0]
+        .trim()
+    )
     if (fnName === null) {
       skips.push({ file: filePath, line, reason: '동적 RPC 이름' })
       continue

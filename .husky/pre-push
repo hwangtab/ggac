@@ -1,0 +1,7 @@
+echo "🔍 Running pre-push checks..."
+
+# 스키마 계약 검사: 없는 컬럼·테이블·RPC 참조를 push 전에 차단
+echo "🔍 Checking schema contract..."
+npm run test:schema-contract
+
+echo "✅ Pre-push checks completed!"
