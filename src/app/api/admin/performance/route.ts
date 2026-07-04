@@ -9,7 +9,7 @@ export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
 import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
-import { NextResponse } from 'next/server'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { getApiStats, getApiHealth, exportApiMetrics } from '@/utils/apiPerformanceMonitor'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
@@ -24,7 +24,7 @@ function parseMetricTimestamp(value: string | null): number | null {
   return Number.isFinite(parsed) ? parsed : null
 }
 
-export const GET = defineApiRoute({
+export const GET = defineApiRoute<undefined, unknown, unknown>({
   method: 'GET',
   name: 'api/admin/performance',
   rateLimit: {
@@ -46,50 +46,27 @@ export const GET = defineApiRoute({
     })
 
     if (!action) {
-      return createErrorResponse({ success: false, error: '지원하지 않는 액션입니다.' }, 400)
+      throw ApiError.badRequest('지원하지 않는 액션입니다.')
     }
-
-    let response: NextResponse
 
     switch (action) {
       case 'dashboard': {
         const dashboardData = getApiStats(undefined, timeWindow)
-        response = NextResponse.json({
-          success: true,
-          data: dashboardData,
-          timeWindow,
-          timestamp: new Date().toISOString(),
-        })
-        break
+        return ApiSuccess.ok({ stats: dashboardData, timeWindow })
       }
 
       case 'endpoint': {
         if (!endpoint) {
-          return createErrorResponse(
-            { success: false, error: 'endpoint 파라미터가 필요합니다.' },
-            400
-          )
+          throw ApiError.badRequest('endpoint 파라미터가 필요합니다.')
         }
 
         const endpointStats = getApiStats(endpoint, timeWindow)
-        response = NextResponse.json({
-          success: true,
-          data: endpointStats,
-          endpoint,
-          timeWindow,
-          timestamp: new Date().toISOString(),
-        })
-        break
+        return ApiSuccess.ok({ stats: endpointStats, endpoint, timeWindow })
       }
 
       case 'health': {
         const healthData = getApiHealth()
-        response = NextResponse.json({
-          success: true,
-          data: healthData,
-          timestamp: new Date().toISOString(),
-        })
-        break
+        return ApiSuccess.ok({ health: healthData })
       }
 
       case 'export': {
@@ -99,50 +76,31 @@ export const GET = defineApiRoute({
         const parsedEndTime = parseMetricTimestamp(endTime)
 
         if (parsedStartTime === null || parsedEndTime === null) {
-          return NextResponse.json(
-            { error: 'startTime과 endTime은 유효한 날짜/시간이어야 합니다.' },
-            { status: 400 }
-          )
+          throw ApiError.badRequest('startTime과 endTime은 유효한 날짜/시간이어야 합니다.')
         }
 
         if (parsedStartTime > parsedEndTime) {
-          return NextResponse.json(
-            { error: 'startTime은 endTime보다 늦을 수 없습니다.' },
-            { status: 400 }
-          )
+          throw ApiError.badRequest('startTime은 endTime보다 늦을 수 없습니다.')
         }
 
         if (parsedEndTime - parsedStartTime > MAX_EXPORT_RANGE_MS) {
-          return NextResponse.json(
-            { error: '내보내기 기간은 7일을 초과할 수 없습니다.' },
-            { status: 400 }
-          )
+          throw ApiError.badRequest('내보내기 기간은 7일을 초과할 수 없습니다.')
         }
 
-        try {
-          const normalizedStartTime = new Date(parsedStartTime).toISOString()
-          const normalizedEndTime = new Date(parsedEndTime).toISOString()
-          const exportedMetrics = exportApiMetrics(
-            normalizedStartTime,
-            normalizedEndTime,
-            endpoint || undefined
-          )
-          response = NextResponse.json({
-            success: true,
-            data: exportedMetrics,
-            count: exportedMetrics.length,
-            startTime: normalizedStartTime,
-            endTime: normalizedEndTime,
-            endpoint: endpoint || 'all',
-            timestamp: new Date().toISOString(),
-          })
-        } catch {
-          return NextResponse.json(
-            { error: '메트릭 내보내기 중 오류가 발생했습니다.' },
-            { status: 500 }
-          )
-        }
-        break
+        const normalizedStartTime = new Date(parsedStartTime).toISOString()
+        const normalizedEndTime = new Date(parsedEndTime).toISOString()
+        const exportedMetrics = exportApiMetrics(
+          normalizedStartTime,
+          normalizedEndTime,
+          endpoint || undefined
+        )
+        return ApiSuccess.ok({
+          metrics: exportedMetrics,
+          count: exportedMetrics.length,
+          startTime: normalizedStartTime,
+          endTime: normalizedEndTime,
+          endpoint: endpoint || 'all',
+        })
       }
 
       default: {
@@ -150,8 +108,6 @@ export const GET = defineApiRoute({
         return exhaustiveCheck
       }
     }
-
-    return response
   },
 })
 

@@ -1,4 +1,5 @@
 import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
@@ -251,7 +252,7 @@ export const GET = defineApiRoute({
       }
     }
 
-    return NextResponse.json(settings)
+    return ApiSuccess.ok(settings)
   },
 })
 
@@ -295,10 +296,7 @@ export const PUT = defineApiRoute<Record<string, unknown>>({
 
     const parsed = SystemSettingsUpdateSchema.safeParse(body)
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: '유효하지 않은 설정 데이터입니다.', details: parsed.error.flatten() },
-        { status: 400 }
-      )
+      throw ApiError.badRequest('유효하지 않은 설정 데이터입니다.')
     }
     const requestData: z.infer<typeof SystemSettingsUpdateSchema> = parsed.data
 
@@ -466,17 +464,15 @@ export const PUT = defineApiRoute<Record<string, unknown>>({
       'medium'
     )
 
-    return NextResponse.json({
-      success: errorResults.length === 0,
-      message:
-        errorResults.length === 0
-          ? '설정이 성공적으로 업데이트되었습니다.'
-          : `일부 설정 업데이트에 실패했습니다. 성공: ${updateResults.length}, 실패: ${errorResults.length}`,
-      details: {
+    return ApiSuccess.ok(
+      {
         updated: updateResults,
         errors: errorResults,
       },
-    })
+      errorResults.length === 0
+        ? '설정이 성공적으로 업데이트되었습니다.'
+        : `일부 설정 업데이트에 실패했습니다. 성공: ${updateResults.length}, 실패: ${errorResults.length}`
+    )
   },
 })
 
