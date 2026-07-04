@@ -54,7 +54,8 @@ const PostAttachmentsDisplay: React.FC<PostAttachmentsDisplayProps> = ({
           throw new Error('첨부파일을 불러올 수 없습니다.')
         }
 
-        const data: AttachmentWithStats = await response.json()
+        const json = await response.json()
+        const data: AttachmentWithStats = json?.data ?? json
         setAttachments(data.attachments || [])
       } catch (err) {
         console.error('첨부파일 조회 오류:', err)

@@ -3,8 +3,8 @@ export const runtime = 'nodejs'
 export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
-import { NextRequest, NextResponse } from 'next/server'
-import { createErrorResponse } from '@/utils/apiResponse'
+import { NextRequest } from 'next/server'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import rateLimiterUtils from '@/lib/server/rateLimit'
 import { validateUUID } from '@/utils/validation'
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const rateLimiter = await rateLimiterUtils.applyRateLimit(rateLimitConfig)
     const rateLimitResult = await rateLimiter(request)
     if (!rateLimitResult.success) {
-      return createErrorResponse({ success: false, error: '요청이 너무 많습니다.' }, 429)
+      return ApiError.tooManyRequests('요청이 너무 많습니다.').toNextResponse()
     }
 
     const commentId = resolvedParams.id
@@ -25,10 +25,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     // UUID 형식 검증
     const uuidValidation = validateUUID(commentId, '댓글 ID')
     if (!uuidValidation.isValid) {
-      return NextResponse.json(
-        { error: uuidValidation.errors[0] || '잘못된 댓글 ID 형식입니다.' },
-        { status: 400 }
-      )
+      return ApiError.badRequest(
+        uuidValidation.errors[0] || '잘못된 댓글 ID 형식입니다.'
+      ).toNextResponse()
     }
     const validCommentId = uuidValidation.sanitized
 
@@ -40,7 +39,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     } = await supabase.auth.getUser()
 
     if (authError || !user) {
-      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
+      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
     }
 
     // 사용자가 승인된 회원인지 확인
@@ -56,10 +55,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       profile.registration_status !== 'approved' ||
       !profile.is_active
     ) {
-      return NextResponse.json(
-        { error: '승인된 회원만 댓글에 좋아요를 누를 수 있습니다.' },
-        { status: 403 }
-      )
+      return ApiError.forbidden('승인된 회원만 댓글에 좋아요를 누를 수 있습니다.').toNextResponse()
     }
 
     // 댓글이 존재하는지 확인
@@ -70,7 +66,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       .single()
 
     if (commentError || !comment) {
-      return createErrorResponse({ success: false, error: '댓글을 찾을 수 없습니다.' }, 404)
+      return ApiError.notFound('댓글을 찾을 수 없습니다.').toNextResponse()
     }
 
     // 좋아요 토글 실행
@@ -81,27 +77,20 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     if (toggleError) {
       console.error('댓글 좋아요 토글 오류:', toggleError)
-      return createErrorResponse(
-        { success: false, error: '좋아요 처리 중 오류가 발생했습니다.' },
-        500
-      )
+      return ApiError.internalServerError('좋아요 처리 중 오류가 발생했습니다.').toNextResponse()
     }
 
     const likeResult = result?.[0]
     if (!likeResult) {
-      return createErrorResponse(
-        { success: false, error: '좋아요 처리 결과를 받을 수 없습니다.' },
-        500
-      )
+      return ApiError.internalServerError('좋아요 처리 결과를 받을 수 없습니다.').toNextResponse()
     }
 
-    return NextResponse.json({
-      success: true,
+    return ApiSuccess.ok({
       liked: likeResult.liked,
       like_count: likeResult.like_count,
-    })
+    }).toNextResponse()
   } catch (error) {
     console.error('댓글 좋아요 API 오류:', error)
-    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
+    return ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse()
   }
 }

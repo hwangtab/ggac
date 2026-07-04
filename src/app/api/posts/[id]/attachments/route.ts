@@ -9,8 +9,8 @@ export const runtime = 'nodejs'
 export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
-import { NextRequest, NextResponse } from 'next/server'
-import { createErrorResponse } from '@/utils/apiResponse'
+import { NextRequest } from 'next/server'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
 import { revalidateTag } from 'next/cache'
 import type { PostAttachmentStats } from '@/types'
@@ -48,12 +48,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     // 임시 게시글 작성 중 첨부 업로드는 temp-{UUID}도 명시적으로 허용한다.
     const uuidValidation = validateUUIDOrTempId(postId, '게시글 ID')
     if (!uuidValidation.isValid) {
-      return NextResponse.json(
-        {
-          error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.',
-        },
-        { status: 400 }
-      )
+      return ApiError.badRequest(
+        uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.'
+      ).toNextResponse()
     }
 
     const validPostId = uuidValidation.sanitized
@@ -71,7 +68,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       .single()
 
     if (postError || !post) {
-      return createErrorResponse({ success: false, error: '게시글을 찾을 수 없습니다.' }, 404)
+      return ApiError.notFound('게시글을 찾을 수 없습니다.').toNextResponse()
     }
 
     // 첨부파일 목록 조회
@@ -83,7 +80,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
     if (attachmentsError) {
       console.error('첨부파일 조회 오류:', attachmentsError)
-      return createErrorResponse({ success: false, error: '첨부파일을 조회할 수 없습니다.' }, 500)
+      return ApiError.internalServerError('첨부파일을 조회할 수 없습니다.').toNextResponse()
     }
 
     // 첨부파일 통계 계산 (클라이언트 사이드에서)
@@ -96,13 +93,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       audio_count: attachments?.filter(att => att.file_type === 'audio').length || 0,
     }
 
-    return NextResponse.json({
+    return ApiSuccess.ok({
       attachments: attachments || [],
       stats,
-    })
+    }).toNextResponse()
   } catch (error) {
     console.error('첨부파일 조회 API 오류:', error)
-    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
+    return ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse()
   }
 }
 
@@ -118,12 +115,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const uuidValidation = validateUUID(postId, '게시글 ID')
     if (!uuidValidation.isValid) {
       console.error('[UPLOAD API] UUID 검증 실패:', uuidValidation.errors)
-      return NextResponse.json(
-        {
-          error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.',
-        },
-        { status: 400 }
-      )
+      return ApiError.badRequest(
+        uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.'
+      ).toNextResponse()
     }
 
     const supabase = await createSupabaseServer()
@@ -134,7 +128,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     if (!user) {
       console.error('[UPLOAD API] 인증 실패 - 세션 없음')
-      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
+      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
     }
 
     const validPostId = uuidValidation.sanitized
@@ -151,15 +145,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
       if (postError || !postData) {
         console.error('[UPLOAD API] 게시글 조회 실패:', postError)
-        return createErrorResponse({ success: false, error: '게시글을 찾을 수 없습니다.' }, 404)
+        return ApiError.notFound('게시글을 찾을 수 없습니다.').toNextResponse()
       }
 
       if (postData.author_id !== user.id) {
         console.error('[UPLOAD API] 권한 없음 - 작성자가 아님')
-        return NextResponse.json(
-          { error: '게시글 작성자만 첨부파일을 업로드할 수 있습니다.' },
-          { status: 403 }
-        )
+        return ApiError.forbidden(
+          '게시글 작성자만 첨부파일을 업로드할 수 있습니다.'
+        ).toNextResponse()
       }
 
       post = postData
@@ -173,19 +166,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     if (!file || file.size === 0) {
       console.error('[UPLOAD API] 파일이 없음')
-      return createErrorResponse({ success: false, error: '파일이 선택되지 않았습니다.' }, 400)
+      return ApiError.badRequest('파일이 선택되지 않았습니다.').toNextResponse()
     }
 
     // 공통 파일 검증 로직 사용
     const validation = validateFile(file, FILE_VALIDATION_PROFILES.POST_ATTACHMENTS, [], user.id)
 
     if (!validation.isValid) {
-      return NextResponse.json(
-        {
-          error: formatValidationErrors(validation.errors),
-        },
-        { status: 400 }
-      )
+      return ApiError.badRequest(formatValidationErrors(validation.errors)).toNextResponse()
     }
 
     // 파일 타입 추출 (검증에서 이미 확인됨)
@@ -200,10 +188,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
       if (existingError) {
         console.error('기존 첨부파일 조회 오류:', existingError)
-        return createErrorResponse(
-          { success: false, error: '첨부파일 제한 확인에 실패했습니다.' },
-          500
-        )
+        return ApiError.internalServerError('첨부파일 제한 확인에 실패했습니다.').toNextResponse()
       }
 
       const currentCount = existingAttachments?.length || 0
@@ -215,21 +200,15 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
       // 제한 확인
       if (currentCount >= (config.maxFiles || 10)) {
-        return NextResponse.json(
-          {
-            error: `첨부파일 개수 제한을 초과했습니다. (최대 ${config.maxFiles}개)`,
-          },
-          { status: 400 }
-        )
+        return ApiError.badRequest(
+          `첨부파일 개수 제한을 초과했습니다. (최대 ${config.maxFiles}개)`
+        ).toNextResponse()
       }
 
       if (config.maxTotalSize && currentTotalSize + file.size > config.maxTotalSize) {
-        return NextResponse.json(
-          {
-            error: `첨부파일 총 크기 제한을 초과했습니다. (최대 ${config.maxTotalSize / 1024 / 1024}MB)`,
-          },
-          { status: 400 }
-        )
+        return ApiError.badRequest(
+          `첨부파일 총 크기 제한을 초과했습니다. (최대 ${config.maxTotalSize / 1024 / 1024}MB)`
+        ).toNextResponse()
       }
     }
 
@@ -239,12 +218,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       supabaseAdmin = getSupabaseAdmin()
     } catch (error) {
       console.error('[UPLOAD API] Supabase Admin 클라이언트 생성 오류:', error)
-      return NextResponse.json(
-        {
-          error: 'Storage 서비스를 사용할 수 없습니다. 관리자에게 문의하세요.',
-        },
-        { status: 503 }
-      )
+      return ApiError.serviceUnavailable(
+        'Storage 서비스를 사용할 수 없습니다. 관리자에게 문의하세요.'
+      ).toNextResponse()
     }
 
     // 파일명 정제 및 고유 파일명 생성 (공통 검증에서 이미 생성됨)
@@ -253,12 +229,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     // 파일을 Supabase Storage에 업로드
     const fileBuffer = Buffer.from(await file.arrayBuffer())
     if (!hasValidFileSignature(fileBuffer, file.type)) {
-      return NextResponse.json(
-        {
-          error: '파일 내용이 선언된 파일 형식과 일치하지 않습니다.',
-        },
-        { status: 400 }
-      )
+      return ApiError.badRequest(
+        '파일 내용이 선언된 파일 형식과 일치하지 않습니다.'
+      ).toNextResponse()
     }
 
     // 임시 파일과 영구 파일의 경로 구분
@@ -281,20 +254,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
       // Storage bucket이 없는 경우 특별한 메시지
       if (uploadError.message?.includes('bucket') || uploadError.message?.includes('not found')) {
-        return NextResponse.json(
-          {
-            error:
-              'Storage가 설정되지 않았습니다. 관리자가 Supabase Storage bucket을 생성해야 합니다.',
-          },
-          { status: 503 }
-        )
+        return ApiError.serviceUnavailable(
+          'Storage가 설정되지 않았습니다. 관리자가 Supabase Storage bucket을 생성해야 합니다.'
+        ).toNextResponse()
       }
-      return NextResponse.json(
-        {
-          error: '파일 업로드에 실패했습니다.',
-        },
-        { status: 500 }
-      )
+      return ApiError.internalServerError('파일 업로드에 실패했습니다.').toNextResponse()
     }
 
     // 업로드된 파일의 공개 URL 생성
@@ -348,12 +312,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
           console.error('[UPLOAD API] 파일 롤백 실패:', rollbackError)
         }
 
-        return NextResponse.json(
-          {
-            error: '첨부파일 정보 저장에 실패했습니다.',
-          },
-          { status: 500 }
-        )
+        return ApiError.internalServerError('첨부파일 정보 저장에 실패했습니다.').toNextResponse()
       }
 
       try {
@@ -367,10 +326,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         }
       } catch {}
 
-      return NextResponse.json({
-        message: '첨부파일이 성공적으로 업로드되었습니다.',
-        attachment,
-      })
+      return ApiSuccess.ok(
+        { attachment },
+        '첨부파일이 성공적으로 업로드되었습니다.'
+      ).toNextResponse()
     } else {
       // 임시 파일의 경우 임시 첨부파일로 데이터베이스에 저장
 
@@ -408,21 +367,18 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
           console.error('[UPLOAD API] 임시 파일 롤백 실패:', rollbackError)
         }
 
-        return NextResponse.json(
-          {
-            error: '임시 이미지 저장에 실패했습니다.',
-          },
-          { status: 500 }
-        )
+        return ApiError.internalServerError('임시 이미지 저장에 실패했습니다.').toNextResponse()
       }
 
-      return NextResponse.json({
-        message: '임시 이미지가 성공적으로 업로드되었습니다.',
-        url: urlData.publicUrl,
-        attachment: tempAttachment,
-        tempId: validPostId,
-        expiresAt: expiresAt.toISOString(),
-      })
+      return ApiSuccess.ok(
+        {
+          url: urlData.publicUrl,
+          attachment: tempAttachment,
+          tempId: validPostId,
+          expiresAt: expiresAt.toISOString(),
+        },
+        '임시 이미지가 성공적으로 업로드되었습니다.'
+      ).toNextResponse()
     }
   } catch (error) {
     console.error('[UPLOAD API] 예외 발생:', {
@@ -430,11 +386,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       message: error instanceof Error ? error.message : '알 수 없는 오류',
       stack: error instanceof Error ? error.stack : undefined,
     })
-    return NextResponse.json(
-      {
-        error: '서버 오류가 발생했습니다.',
-      },
-      { status: 500 }
-    )
+    return ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse()
   }
 }

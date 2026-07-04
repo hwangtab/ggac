@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { revalidateTag } from 'next/cache'
 import { validateUUID } from '@/utils/validation'
@@ -14,15 +15,12 @@ export async function DELETE(
 
   const postIdValidation = validateUUID(postId, '게시글 ID')
   if (!postIdValidation.isValid) {
-    return NextResponse.json({ success: false, error: postIdValidation.errors[0] }, { status: 400 })
+    return ApiError.badRequest(postIdValidation.errors[0]).toNextResponse()
   }
   const validPostId = postIdValidation.sanitized
   const commentIdValidation = validateUUID(commentId, '댓글 ID')
   if (!commentIdValidation.isValid) {
-    return NextResponse.json(
-      { success: false, error: commentIdValidation.errors[0] },
-      { status: 400 }
-    )
+    return ApiError.badRequest(commentIdValidation.errors[0]).toNextResponse()
   }
   const validCommentId = commentIdValidation.sanitized
 
@@ -32,8 +30,7 @@ export async function DELETE(
       data: { user },
     } = await supabase.auth.getUser()
     const userId = user?.id
-    if (!userId)
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+    if (!userId) return ApiError.unauthorized('Unauthorized').toNextResponse()
 
     // Verify ownership (or admin if needed)
     const { data: comment } = await supabase
@@ -42,9 +39,9 @@ export async function DELETE(
       .eq('id', validCommentId)
       .eq('post_id', validPostId)
       .maybeSingle()
-    if (!comment) return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 })
+    if (!comment) return ApiError.notFound('Not found').toNextResponse()
     if ((comment as any).author_id !== userId) {
-      return NextResponse.json({ success: false, error: '권한이 없습니다.' }, { status: 403 })
+      return ApiError.forbidden('권한이 없습니다.').toNextResponse()
     }
 
     const { error } = await supabase
@@ -54,10 +51,7 @@ export async function DELETE(
       .eq('post_id', validPostId)
     if (error) {
       console.error('[API] 댓글 삭제 실패:', error)
-      return NextResponse.json(
-        { success: false, error: '댓글 삭제에 실패했습니다.' },
-        { status: 500 }
-      )
+      return ApiError.internalServerError('댓글 삭제에 실패했습니다.').toNextResponse()
     }
 
     try {
@@ -67,12 +61,9 @@ export async function DELETE(
       revalidateTag(validPostId)
     } catch {}
 
-    return NextResponse.json({ success: true })
+    return ApiSuccess.ok(null).toNextResponse()
   } catch (e: any) {
     console.error('[API] 댓글 삭제 예외 발생:', e)
-    return NextResponse.json(
-      { success: false, error: '요청 처리에 실패했습니다.' },
-      { status: 500 }
-    )
+    return ApiError.internalServerError('요청 처리에 실패했습니다.').toNextResponse()
   }
 }
