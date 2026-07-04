@@ -1,10 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { getUserLikedCommentIds } from '@/lib/server/commentLikes'
 import { validateUUID } from '@/utils/validation'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { formatTimestampUuidCursor, parseTimestampUuidCursor } from '@/utils/keysetCursor'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -17,10 +18,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
   const uuidValidation = validateUUID(id, '게시글 ID')
   if (!uuidValidation.isValid) {
-    return NextResponse.json(
-      { success: false, error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.' },
-      { status: 400 }
-    )
+    return ApiError.badRequest(
+      uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.'
+    ).toNextResponse()
   }
   const postId = uuidValidation.sanitized
 
@@ -29,16 +29,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   const cursor = searchParams.get('cursor') || ''
   const parsedCursor = cursor ? parseTimestampUuidCursor(cursor, '댓글 ID') : null
   if (cursor && !parsedCursor) {
-    return NextResponse.json(
-      { success: false, error: '유효하지 않은 커서입니다.' },
-      { status: 400 }
-    )
+    return ApiError.badRequest('유효하지 않은 커서입니다.').toNextResponse()
   }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!url || !anonKey) {
-    return NextResponse.json({ success: false, error: 'Supabase not configured' }, { status: 500 })
+    return ApiError.internalServerError('Supabase not configured').toNextResponse()
   }
 
   const supabase = createClient(url, anonKey, {
@@ -81,10 +78,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
           nextCursor = formatTimestampUuidCursor(last.created_at, last.id)
         }
         const normalized = await annotateCommentLikeState(comments)
-        return NextResponse.json({
-          success: true,
-          data: { comments: normalized, has_next: hasNext, next_cursor: nextCursor },
-        })
+        return ApiSuccess.ok({
+          comments: normalized,
+          has_next: hasNext,
+          next_cursor: nextCursor,
+        }).toNextResponse()
       }
     } catch {}
 
@@ -112,10 +110,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const { data: rows, error } = await query
     if (error) {
       console.error('[API] 댓글 조회 실패:', error)
-      return NextResponse.json(
-        { success: false, error: '댓글을 불러오는 데 실패했습니다.' },
-        { status: 500 }
-      )
+      return ApiError.internalServerError('댓글을 불러오는 데 실패했습니다.').toNextResponse()
     }
 
     let comments = rows || []
@@ -137,15 +132,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     }
 
     const normalized = await annotateCommentLikeState(comments as Array<Record<string, unknown>>)
-    return NextResponse.json({
-      success: true,
-      data: { comments: normalized, has_next: hasNext, next_cursor: nextCursor },
-    })
+    return ApiSuccess.ok({
+      comments: normalized,
+      has_next: hasNext,
+      next_cursor: nextCursor,
+    }).toNextResponse()
   } catch (e: any) {
     console.error('[API] 댓글 조회 예외 발생:', e)
-    return NextResponse.json(
-      { success: false, error: '요청 처리에 실패했습니다.' },
-      { status: 500 }
-    )
+    return ApiError.internalServerError('요청 처리에 실패했습니다.').toNextResponse()
   }
 }

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { getUserLikedCommentIds } from '@/lib/server/commentLikes'
@@ -7,6 +7,7 @@ import { validateUUID } from '@/utils/validation'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { formatTimestampUuidCursor, parseTimestampUuidCursor } from '@/utils/keysetCursor'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 
 export const dynamic = 'force-dynamic'
 export const preferredRegion = 'icn1'
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
   const uuidValidation = validateUUID(id, '게시글 ID')
   if (!uuidValidation.isValid) {
-    return NextResponse.json({ success: false, error: uuidValidation.errors[0] }, { status: 400 })
+    return ApiError.badRequest(uuidValidation.errors[0]).toNextResponse()
   }
   const postId = uuidValidation.sanitized
   const { searchParams } = new URL(request.url)
@@ -26,16 +27,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   const cursor = searchParams.get('cursor') || '' // format: encodeURIComponent(`${created_at}|${id}`)
   const parsedCursor = cursor ? parseTimestampUuidCursor(cursor, '댓글 ID') : null
   if (cursor && !parsedCursor) {
-    return NextResponse.json(
-      { success: false, error: '유효하지 않은 커서입니다.' },
-      { status: 400 }
-    )
+    return ApiError.badRequest('유효하지 않은 커서입니다.').toNextResponse()
   }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!url || !anonKey) {
-    return NextResponse.json({ success: false, error: 'Supabase not configured' }, { status: 500 })
+    return ApiError.internalServerError('Supabase not configured').toNextResponse()
   }
 
   const supabase = createClient(url, anonKey, {
@@ -86,10 +84,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const { data: rows, error } = await query
     if (error) {
       console.error('[API] 댓글 조회 오류:', error)
-      return NextResponse.json(
-        { success: false, error: '댓글 조회에 실패했습니다.' },
-        { status: 500 }
-      )
+      return ApiError.internalServerError('댓글 조회에 실패했습니다.').toNextResponse()
     }
 
     let comments = rows || []
@@ -111,16 +106,14 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     }
 
     const normalized = await annotateCommentLikeState(comments as Array<Record<string, unknown>>)
-    return NextResponse.json({
-      success: true,
-      data: { comments: normalized, has_next: hasNext, next_cursor: nextCursor },
-    })
+    return ApiSuccess.ok({
+      comments: normalized,
+      has_next: hasNext,
+      next_cursor: nextCursor,
+    }).toNextResponse()
   } catch (e) {
     console.error('[API] 댓글 GET 오류:', e)
-    return NextResponse.json(
-      { success: false, error: '서버 오류가 발생했습니다.' },
-      { status: 500 }
-    )
+    return ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse()
   }
 }
 
@@ -128,7 +121,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   const { id: postId } = await context.params
   const postIdValidation = validateUUID(postId, '게시글 ID')
   if (!postIdValidation.isValid) {
-    return NextResponse.json({ success: false, error: postIdValidation.errors[0] }, { status: 400 })
+    return ApiError.badRequest(postIdValidation.errors[0]).toNextResponse()
   }
   const validPostId = postIdValidation.sanitized
   try {
@@ -137,20 +130,15 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       data: { user },
     } = await supabase.auth.getUser()
     const userId = user?.id
-    if (!userId)
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+    if (!userId) return ApiError.unauthorized('Unauthorized').toNextResponse()
 
     const body = await parseJsonObjectBody(request)
     if (!body) {
-      return NextResponse.json(
-        { success: false, error: '유효하지 않은 JSON 본문입니다.' },
-        { status: 400 }
-      )
+      return ApiError.badRequest('유효하지 않은 JSON 본문입니다.').toNextResponse()
     }
 
     const content = (body?.content || '').toString().trim()
-    if (!content)
-      return NextResponse.json({ success: false, error: '내용이 비어있습니다.' }, { status: 400 })
+    if (!content) return ApiError.badRequest('내용이 비어있습니다.').toNextResponse()
 
     const { data: profile } = await supabase
       .from('member_profiles')
@@ -159,8 +147,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       .maybeSingle()
     const isMember =
       !!profile && (profile as any).registration_status === 'approved' && (profile as any).is_active
-    if (!isMember)
-      return NextResponse.json({ success: false, error: '권한이 없습니다.' }, { status: 403 })
+    if (!isMember) return ApiError.forbidden('권한이 없습니다.').toNextResponse()
 
     const { data, error } = await supabase
       .from('comments')
@@ -169,10 +156,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       .single()
     if (error) {
       console.error('[API] 댓글 작성 오류:', error)
-      return NextResponse.json(
-        { success: false, error: '댓글 작성에 실패했습니다.' },
-        { status: 500 }
-      )
+      return ApiError.internalServerError('댓글 작성에 실패했습니다.').toNextResponse()
     }
 
     try {
@@ -184,12 +168,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       console.error('[API] 캐시 재검증 실패:', revalidateError)
     }
 
-    return NextResponse.json({ success: true, data })
+    return ApiSuccess.ok(data).toNextResponse()
   } catch (e) {
     console.error('[API] 댓글 POST 오류:', e)
-    return NextResponse.json(
-      { success: false, error: '서버 오류가 발생했습니다.' },
-      { status: 500 }
-    )
+    return ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse()
   }
 }

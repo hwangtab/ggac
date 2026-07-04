@@ -173,17 +173,24 @@ src/
 
 ### API Response Format
 
-All API routes should use standardized responses from `@/utils/apiResponse`:
+**표준(정본)**: 신규·전환 API 라우트는 `@/utils/apiWrapper`의 클래스형
+`ApiSuccess` / `ApiError`를 사용한다. 함수형 헬퍼(`@/utils/apiResponse`의
+`createSuccessResponse` / `createErrorResponse`)는 `apiWrapper` 내부 구현과
+레거시 하위호환용이며, 신규 코드에서 직접 호출하지 않는다.
+
+성공 응답 본문은 `{ success: true, data, message?, meta }` 형태로 표준화된다
+(클래스형은 항상 `data` 키 아래에 페이로드를 감싼다). 라우트를 전환할 때는 소비
+클라이언트가 기대하는 응답 스키마(예: `res.data.xxx`)를 반드시 보존한다.
 
 ```typescript
-import { ApiSuccess, ApiError } from '@/utils/apiResponse'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 
 // Success responses
 return ApiSuccess.ok(data, 'Optional success message').toNextResponse()
 return ApiSuccess.created(data, 'Resource created').toNextResponse()
 return ApiSuccess.noContent('Operation completed').toNextResponse()
 
-// Error responses
+// Error responses (withApiWrapper 안에서는 throw, 그 밖에서는 return .toNextResponse())
 throw ApiError.badRequest('Invalid input')
 throw ApiError.unauthorized('Login required')
 throw ApiError.forbidden('Access denied')
