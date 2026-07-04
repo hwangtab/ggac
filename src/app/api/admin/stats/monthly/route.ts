@@ -2,6 +2,7 @@ import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
 import { NextResponse } from 'next/server'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
+import { ApiSuccess } from '@/utils/apiWrapper'
 import { parseIntegerParam } from '@/utils/queryParams'
 
 export const dynamic = 'force-dynamic'
@@ -187,7 +188,7 @@ export const GET = defineApiRoute({
           }
         : null
 
-    return {
+    return ApiSuccess.ok({
       monthlyStats,
       currentMonth: thisMonth,
       previousMonth: lastMonth,
@@ -198,7 +199,7 @@ export const GET = defineApiRoute({
         endDate: endDate.toISOString(),
         generatedAt: new Date().toISOString(),
       },
-    }
+    })
   },
 })
 

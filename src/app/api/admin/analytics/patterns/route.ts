@@ -1,6 +1,6 @@
-import { NextResponse } from 'next/server'
 import { createErrorResponse } from '@/utils/apiResponse'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
+import { ApiSuccess } from '@/utils/apiWrapper'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { validateUUID } from '@/utils/validation'
 
@@ -64,7 +64,7 @@ export const GET = defineApiRoute({
         return createErrorResponse({ success: false, error: '지원되지 않는 분석 유형입니다.' }, 400)
     }
 
-    return NextResponse.json({
+    return ApiSuccess.ok({
       analysisType,
       period: {
         days,

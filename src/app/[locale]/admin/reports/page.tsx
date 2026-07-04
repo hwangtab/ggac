@@ -84,10 +84,10 @@ export default function AdminReportsPage() {
         throw new Error('통계 데이터를 가져오는데 실패했습니다.')
       }
 
-      const basicStats = await statsResponse.json()
-      const memberStats = await membersResponse.json()
-      const trendsData = trendsResponse.ok ? await trendsResponse.json() : null
-      const monthlyData = monthlyResponse.ok ? await monthlyResponse.json() : null
+      const basicStats = (await statsResponse.json()).data
+      const memberStats = (await membersResponse.json()).data
+      const trendsData = trendsResponse.ok ? (await trendsResponse.json()).data : null
+      const monthlyData = monthlyResponse.ok ? (await monthlyResponse.json()).data : null
 
       if (!shouldApplyStatsResult()) {
         return

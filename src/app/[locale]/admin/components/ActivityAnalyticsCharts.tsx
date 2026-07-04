@@ -74,7 +74,7 @@ const ActivityAnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ userId, days 
         throw new Error('패턴 데이터 조회 실패')
       }
       const patternResult = await patternResponse.json()
-      setPatternData(patternResult)
+      setPatternData(patternResult.data)
 
       // 트렌드 분석 데이터
       const trendParams = new URLSearchParams({
@@ -88,7 +88,7 @@ const ActivityAnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ userId, days 
         throw new Error('트렌드 데이터 조회 실패')
       }
       const trendResult = await trendResponse.json()
-      setTrendData(trendResult)
+      setTrendData(trendResult.data)
     } catch (err) {
       console.error('분석 데이터 조회 오류:', err)
       setError(err instanceof Error ? err.message : '데이터 조회에 실패했습니다.')

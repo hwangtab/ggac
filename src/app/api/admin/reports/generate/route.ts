@@ -1,6 +1,6 @@
-import { NextResponse } from 'next/server'
 import { createErrorResponse } from '@/utils/apiResponse'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
+import { ApiSuccess } from '@/utils/apiWrapper'
 import { parseIntegerParam } from '@/utils/queryParams'
 
 const REPORT_TYPES = [
@@ -159,8 +159,7 @@ export const POST = defineApiRoute<Record<string, unknown>>({
       summary: reportData.summary,
     }
 
-    return NextResponse.json({
-      success: true,
+    return ApiSuccess.ok({
       report: {
         metadata: reportMetadata,
         data: reportData.data,

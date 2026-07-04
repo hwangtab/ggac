@@ -55,7 +55,8 @@ const RecentActivity: React.FC = () => {
 
         const response = await fetch(`/api/admin/activity?${params}`)
         if (response.ok) {
-          const data: ActivityResponse = await response.json()
+          const json = await response.json()
+          const data: ActivityResponse = json.data
           setActivities(data.activities || [])
           setPagination(data.pagination)
         } else {

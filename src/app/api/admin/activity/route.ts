@@ -2,6 +2,7 @@ import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
 import { NextResponse } from 'next/server'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
+import { ApiSuccess } from '@/utils/apiWrapper'
 import { logSecurityEvent } from '@/utils/security'
 import { parseIntegerParam } from '@/utils/queryParams'
 
@@ -143,7 +144,7 @@ export const GET = defineApiRoute({
     const totalPages = Math.ceil(totalActivitiesApprox / limit)
     const hasNext = page < totalPages
 
-    return {
+    return ApiSuccess.ok({
       activities: paginatedActivities,
       pagination: {
         currentPage: page,
@@ -156,7 +157,7 @@ export const GET = defineApiRoute({
         limit,
         generatedAt: new Date().toISOString(),
       },
-    }
+    })
   },
 })
 

@@ -1,6 +1,6 @@
-import { NextResponse } from 'next/server'
 import { createErrorResponse } from '@/utils/apiResponse'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
+import { ApiSuccess } from '@/utils/apiWrapper'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { parseTrendPeriod, parseTrendType } from '@/constants/adminAnalytics'
 import type { TrendPeriod } from '@/constants/adminAnalytics'
@@ -64,7 +64,7 @@ export const GET = defineApiRoute({
       }
     }
 
-    return NextResponse.json({
+    return ApiSuccess.ok({
       trendType,
       period,
       weeks,

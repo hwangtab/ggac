@@ -173,7 +173,7 @@ export default function MembersPage() {
       const response = await fetch('/api/admin/members/stats')
       if (response.ok) {
         const stats = await response.json()
-        setMemberStats(stats)
+        setMemberStats(stats.data)
       }
     } catch (error) {
       console.error('📊 통계 데이터 로드 실패:', error)
@@ -188,7 +188,7 @@ export default function MembersPage() {
       const response = await fetch('/api/admin/members/stats')
       if (response.ok) {
         const stats = await response.json()
-        setMemberStats(stats)
+        setMemberStats(stats.data)
         setShowStatsModal(true)
       }
     } catch (error) {
