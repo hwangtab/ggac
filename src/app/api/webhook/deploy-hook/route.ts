@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createErrorResponse } from '@/utils/apiResponse'
+import { NextRequest } from 'next/server'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { timingSafeEqual } from 'crypto'
 
 // 보호: DEPLOY_HOOK_SECRET 헤더 검증 (프로덕션에서는 필수)
@@ -28,15 +28,12 @@ function validateSecret(req: NextRequest): boolean {
 
 export async function POST(req: NextRequest) {
   if (!validateSecret(req)) {
-    return createErrorResponse({ success: false, error: 'Unauthorized' }, 401)
+    return ApiError.unauthorized('Unauthorized').toNextResponse()
   }
 
   const vercelDeployUrl = process.env.VERCEL_DEPLOY_HOOK_URL
   if (!vercelDeployUrl) {
-    return createErrorResponse(
-      { success: false, error: 'VERCEL_DEPLOY_HOOK_URL is not configured' },
-      500
-    )
+    return ApiError.internalServerError('VERCEL_DEPLOY_HOOK_URL is not configured').toNextResponse()
   }
 
   try {
@@ -48,13 +45,13 @@ export async function POST(req: NextRequest) {
     if (!res.ok) {
       const text = await res.text().catch(() => '')
       console.error('[API] Deploy trigger failed:', res.status, text)
-      return createErrorResponse({ success: false, error: 'Deploy trigger failed' }, 500)
+      return ApiError.internalServerError('Deploy trigger failed').toNextResponse()
     }
 
-    return NextResponse.json({ message: 'Deploy triggered' })
+    return ApiSuccess.ok({ message: 'Deploy triggered' }).toNextResponse()
   } catch (error) {
     console.error('[API] 배포 훅 오류:', error)
-    return createErrorResponse({ success: false, error: 'Internal server error' }, 500)
+    return ApiError.internalServerError('Internal server error').toNextResponse()
   }
 }
 

@@ -1,6 +1,6 @@
 import { createSupabaseServer } from '@/lib/supabase/server'
-import { createErrorResponse } from '@/utils/apiResponse'
-import { NextRequest, NextResponse } from 'next/server'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
+import { NextRequest } from 'next/server'
 import { withRateLimit } from '@/lib/server/rateLimit'
 import { sanitizeInput } from '@/utils/security'
 import { parseJsonObjectBody } from '@/utils/requestBody'
@@ -21,25 +21,22 @@ export async function POST(request: NextRequest) {
       } = await supabase.auth.getUser()
 
       if (!user) {
-        return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
+        return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
       }
 
       const body = await parseJsonObjectBody(request)
       if (!body) {
-        return createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400)
+        return ApiError.badRequest('유효한 JSON body가 필요합니다.').toNextResponse()
       }
 
       const logs = parseActivityLogArray(body.logs)
 
       if (!Array.isArray(logs) || logs.length === 0) {
-        return createErrorResponse({ success: false, error: '유효한 로그 배열이 필요합니다.' }, 400)
+        return ApiError.badRequest('유효한 로그 배열이 필요합니다.').toNextResponse()
       }
 
       if (logs.length > 100) {
-        return NextResponse.json(
-          { error: '배치 크기는 100개를 초과할 수 없습니다.' },
-          { status: 400 }
-        )
+        return ApiError.badRequest('배치 크기는 100개를 초과할 수 없습니다.').toNextResponse()
       }
 
       // 클라이언트 정보 수집
@@ -116,17 +113,16 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      return NextResponse.json({
-        success: errors.length === 0,
+      return ApiSuccess.ok({
         processed: results.length,
         failed: errors.length,
         results,
         errors,
         timestamp: new Date().toISOString(),
-      })
+      }).toNextResponse()
     } catch (error) {
       console.error('배치 로그 API 오류:', error)
-      return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
+      return ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse()
     }
   })(request)
 }
