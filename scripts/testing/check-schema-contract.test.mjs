@@ -22,7 +22,10 @@ test('없는 테이블·컬럼·RPC를 위반으로 보고한다', () => {
 test('관계 임베딩의 컬럼도 대상 테이블 기준으로 검사한다', () => {
   const usages = [
     {
-      file: 'a.ts', line: 1, table: 'posts', columns: ['id'],
+      file: 'a.ts',
+      line: 1,
+      table: 'posts',
+      columns: ['id'],
       relations: [{ name: 'users', columns: ['name', 'ghost_col'] }],
     },
   ]
@@ -34,7 +37,10 @@ test('관계 임베딩의 컬럼도 대상 테이블 기준으로 검사한다',
 test('스냅샷에 없는 관계명은 위반이 아니라 통과시킨다 (FK 별칭 가능성)', () => {
   const usages = [
     {
-      file: 'a.ts', line: 1, table: 'posts', columns: [],
+      file: 'a.ts',
+      line: 1,
+      table: 'posts',
+      columns: [],
       relations: [{ name: 'author', columns: ['whatever'] }],
     },
   ]
