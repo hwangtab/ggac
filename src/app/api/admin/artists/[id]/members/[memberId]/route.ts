@@ -3,8 +3,8 @@ export const runtime = 'nodejs'
 export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
-import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
-import { NextResponse } from 'next/server'
+import { createOptionsResponse } from '@/utils/apiResponse'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { validateUUID } from '@/utils/validation'
@@ -29,7 +29,7 @@ export const DELETE = defineApiRoute({
   rateLimitHeaders: true,
   auth: 'admin',
   errorResponse: () =>
-    NextResponse.json({ error: '아티스트 배정 해제 중 오류가 발생했습니다.' }, { status: 500 }),
+    ApiError.internalServerError('아티스트 배정 해제 중 오류가 발생했습니다.').toNextResponse(),
   handler: async ({ params, auth }) => {
     const { db } = auth
 
@@ -38,10 +38,10 @@ export const DELETE = defineApiRoute({
 
     // 아티스트 ID 형식 검증 — member_profiles.artist_id는 legacy_id를 보관한다.
     if (!artistId) {
-      return createErrorResponse({ success: false, error: '유효하지 않은 아티스트 ID입니다.' }, 400)
+      return ApiError.badRequest('유효하지 않은 아티스트 ID입니다.').toNextResponse()
     }
     if (!memberIdValidation.isValid) {
-      return createErrorResponse({ success: false, error: '유효하지 않은 멤버 ID입니다.' }, 400)
+      return ApiError.badRequest('유효하지 않은 멤버 ID입니다.').toNextResponse()
     }
     const memberId = memberIdValidation.sanitized
 
@@ -53,15 +53,12 @@ export const DELETE = defineApiRoute({
       .single()
 
     if (memberError || !targetMember) {
-      return createErrorResponse({ success: false, error: '멤버를 찾을 수 없습니다.' }, 404)
+      return ApiError.notFound('멤버를 찾을 수 없습니다.').toNextResponse()
     }
 
     // 해당 아티스트에 배정된 멤버인지 확인
     if (targetMember.artist_id !== artistId) {
-      return NextResponse.json(
-        { error: '해당 아티스트에 배정된 멤버가 아닙니다.' },
-        { status: 400 }
-      )
+      return ApiError.badRequest('해당 아티스트에 배정된 멤버가 아닙니다.').toNextResponse()
     }
 
     // 아티스트 배정 해제
@@ -79,17 +76,13 @@ export const DELETE = defineApiRoute({
 
     if (updateError) {
       console.error('Member update error:', updateError)
-      return createErrorResponse(
-        { success: false, error: '아티스트 배정 해제에 실패했습니다.' },
-        500
-      )
+      return ApiError.internalServerError('아티스트 배정 해제에 실패했습니다.').toNextResponse()
     }
 
-    return NextResponse.json({
-      success: true,
-      message: `${targetMember.display_name}님의 아티스트 배정이 해제되었습니다.`,
-      member: updatedMember,
-    })
+    return ApiSuccess.ok(
+      { member: updatedMember },
+      `${targetMember.display_name}님의 아티스트 배정이 해제되었습니다.`
+    )
   },
 })
 

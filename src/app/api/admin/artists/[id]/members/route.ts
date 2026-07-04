@@ -3,8 +3,8 @@ export const runtime = 'nodejs'
 export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
-import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
-import { NextResponse } from 'next/server'
+import { createOptionsResponse } from '@/utils/apiResponse'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { validateUUID } from '@/utils/validation'
@@ -29,11 +29,10 @@ export const POST = defineApiRoute<Record<string, unknown>>({
   rateLimitHeaders: true,
   auth: 'admin',
   body: {
-    invalidResponse: () =>
-      createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400),
+    invalidResponse: () => ApiError.badRequest('유효한 JSON body가 필요합니다.').toNextResponse(),
   },
   errorResponse: () =>
-    createErrorResponse({ success: false, error: '아티스트 배정 중 오류가 발생했습니다.' }, 500),
+    ApiError.internalServerError('아티스트 배정 중 오류가 발생했습니다.').toNextResponse(),
   handler: async ({ params, body, auth }) => {
     const { db } = auth
 
@@ -44,11 +43,11 @@ export const POST = defineApiRoute<Record<string, unknown>>({
 
     // 아티스트 ID 형식 검증 — member_profiles.artist_id는 legacy_id(예: 'artist-015')를 보관한다.
     if (!artistId) {
-      return createErrorResponse({ success: false, error: '유효하지 않은 아티스트 ID입니다.' }, 400)
+      return ApiError.badRequest('유효하지 않은 아티스트 ID입니다.').toNextResponse()
     }
     const memberIdValidation = validateUUID(rawMemberId, '멤버 ID')
     if (!memberIdValidation.isValid) {
-      return createErrorResponse({ success: false, error: '유효하지 않은 멤버 ID입니다.' }, 400)
+      return ApiError.badRequest('유효하지 않은 멤버 ID입니다.').toNextResponse()
     }
     const memberId = memberIdValidation.sanitized
 
@@ -59,15 +58,15 @@ export const POST = defineApiRoute<Record<string, unknown>>({
       .eq('legacy_id', artistId)
       .maybeSingle()
     if (artistLookupError || !artistExists) {
-      return createErrorResponse({ success: false, error: '아티스트를 찾을 수 없습니다.' }, 404)
+      return ApiError.notFound('아티스트를 찾을 수 없습니다.').toNextResponse()
     }
 
     if (!role) {
-      return createErrorResponse({ success: false, error: '역할이 필요합니다.' }, 400)
+      return ApiError.badRequest('역할이 필요합니다.').toNextResponse()
     }
 
     if (!['owner', 'manager', 'collaborator'].includes(role)) {
-      return createErrorResponse({ success: false, error: '유효하지 않은 역할입니다.' }, 400)
+      return ApiError.badRequest('유효하지 않은 역할입니다.').toNextResponse()
     }
 
     // 대상 멤버 확인
@@ -80,15 +79,12 @@ export const POST = defineApiRoute<Record<string, unknown>>({
       .single()
 
     if (memberError || !targetMember) {
-      return createErrorResponse({ success: false, error: '멤버를 찾을 수 없습니다.' }, 404)
+      return ApiError.notFound('멤버를 찾을 수 없습니다.').toNextResponse()
     }
 
     // 이미 다른 아티스트에 배정되어 있는지 확인
     if (targetMember.artist_id && targetMember.artist_id !== artistId) {
-      return NextResponse.json(
-        { error: '이미 다른 아티스트에 배정된 멤버입니다.' },
-        { status: 400 }
-      )
+      return ApiError.badRequest('이미 다른 아티스트에 배정된 멤버입니다.').toNextResponse()
     }
 
     // 아티스트 배정 업데이트
@@ -106,14 +102,13 @@ export const POST = defineApiRoute<Record<string, unknown>>({
 
     if (updateError) {
       console.error('Member update error:', updateError)
-      return createErrorResponse({ success: false, error: '아티스트 배정에 실패했습니다.' }, 500)
+      return ApiError.internalServerError('아티스트 배정에 실패했습니다.').toNextResponse()
     }
 
-    return NextResponse.json({
-      success: true,
-      message: `${targetMember.display_name}님이 아티스트로 배정되었습니다.`,
-      member: updatedMember,
-    })
+    return ApiSuccess.ok(
+      { member: updatedMember },
+      `${targetMember.display_name}님이 아티스트로 배정되었습니다.`
+    )
   },
 })
 

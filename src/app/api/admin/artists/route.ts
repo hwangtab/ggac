@@ -1,5 +1,5 @@
 import { createOptionsResponse } from '@/utils/apiResponse'
-import { NextResponse } from 'next/server'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { getArtists } from '@/lib/data'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
@@ -18,10 +18,9 @@ export const GET = defineApiRoute({
   rateLimitHeaders: true,
   auth: 'admin',
   errorResponse: () =>
-    NextResponse.json(
-      { error: '아티스트 정보를 조회하는 중 오류가 발생했습니다.' },
-      { status: 500 }
-    ),
+    ApiError.internalServerError(
+      '아티스트 정보를 조회하는 중 오류가 발생했습니다.'
+    ).toNextResponse(),
   handler: async ({ auth }) => {
     const { db } = auth
 
@@ -53,9 +52,7 @@ export const GET = defineApiRoute({
       })
     )
 
-    return {
-      artists: artistsWithMembers,
-    }
+    return ApiSuccess.ok({ artists: artistsWithMembers })
   },
 })
 

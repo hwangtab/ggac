@@ -78,8 +78,8 @@ export default function ArtistsPage() {
       const artistsData = await artistsResponse.json()
       const membersData = await membersResponse.json()
 
-      setArtists(artistsData.artists)
-      setMembers(membersData.members)
+      setArtists(artistsData.data.artists)
+      setMembers(membersData.data.members)
     } catch (err) {
       console.error('Data fetch error:', err)
       setError(err instanceof Error ? err.message : '데이터를 불러오는 중 오류가 발생했습니다.')
