@@ -9,8 +9,10 @@ on:
 
 jobs:
   smoke:
-    # 배포가 성공 상태일 때만 실행
-    if: github.event.deployment_status.state == 'success'
+    # 프로덕션 배포가 성공 상태일 때만 실행. Vercel은 Preview 배포에도
+    # deployment_status를 emit하므로 environment로 프로덕션만 걸러낸다
+    # (Preview에 배포 보호가 켜져 있으면 401로 스모크가 거짓 실패한다).
+    if: github.event.deployment_status.state == 'success' && github.event.deployment_status.environment == 'Production'
     runs-on: ubuntu-latest
     name: Smoke Check (production)
     steps:
