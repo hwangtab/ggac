@@ -1,5 +1,5 @@
-import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
-import { NextResponse } from 'next/server'
+import { createOptionsResponse } from '@/utils/apiResponse'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { validateSearchQuery, escapePostgrestValue } from '@/utils/validation'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
@@ -21,10 +21,9 @@ export const GET = defineApiRoute({
   auth: 'admin',
   errorResponse: () => {
     logSecurityEvent('ADMIN_MEMBERS_API_ERROR', { error: '서버 오류가 발생했습니다.' }, 'medium')
-    return NextResponse.json(
-      { error: '회원 정보를 조회하는 중 오류가 발생했습니다.' },
-      { status: 500 }
-    )
+    return ApiError.internalServerError(
+      '회원 정보를 조회하는 중 오류가 발생했습니다.'
+    ).toNextResponse()
   },
   handler: async ({ request, auth }) => {
     const { db } = auth
@@ -50,26 +49,20 @@ export const GET = defineApiRoute({
           },
           'medium'
         )
-        return NextResponse.json(
-          {
-            error: '유효하지 않은 검색어입니다.',
-            details: searchValidation.errors,
-          },
-          { status: 400 }
-        )
+        return ApiError.badRequest('유효하지 않은 검색어입니다.').toNextResponse()
       }
       search = searchValidation.sanitized
     }
 
     // 페이지 번호 검증
     if (page < 1 || page > 10000) {
-      return createErrorResponse({ success: false, error: '유효하지 않은 페이지 번호입니다.' }, 400)
+      return ApiError.badRequest('유효하지 않은 페이지 번호입니다.').toNextResponse()
     }
 
     // 필터 값 검증
     const allowedFilters = ['all', 'pending', 'approved', 'rejected']
     if (!allowedFilters.includes(filter)) {
-      return createErrorResponse({ success: false, error: '유효하지 않은 필터입니다.' }, 400)
+      return ApiError.badRequest('유효하지 않은 필터입니다.').toNextResponse()
     }
 
     // 기본 쿼리 구성 (서비스 롤 클라이언트로 RLS 우회)
@@ -128,17 +121,16 @@ export const GET = defineApiRoute({
 
     if (membersError) {
       console.error('Members fetch error:', membersError)
-      return NextResponse.json(
-        { error: '회원 정보를 조회하는 중 오류가 발생했습니다.' },
-        { status: 500 }
-      )
+      return ApiError.internalServerError(
+        '회원 정보를 조회하는 중 오류가 발생했습니다.'
+      ).toNextResponse()
     }
 
     // 페이지네이션 정보 계산
     const totalPages = Math.ceil((count || 0) / limit)
     const hasNext = page < totalPages
 
-    return {
+    return ApiSuccess.ok({
       members: members || [],
       pagination: {
         currentPage: page,
@@ -146,7 +138,7 @@ export const GET = defineApiRoute({
         totalCount: count || 0,
         hasNext,
       },
-    }
+    })
   },
 })
 

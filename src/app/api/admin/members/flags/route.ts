@@ -1,5 +1,5 @@
-import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
-import { NextResponse } from 'next/server'
+import { createOptionsResponse } from '@/utils/apiResponse'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { z } from 'zod'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
@@ -42,8 +42,7 @@ export const PATCH = defineApiRoute<Record<string, unknown>>({
   rateLimitHeaders: true,
   auth: 'admin',
   body: {
-    invalidResponse: () =>
-      createErrorResponse({ success: false, error: '유효하지 않은 JSON 본문입니다.' }, 400),
+    invalidResponse: () => ApiError.badRequest('유효하지 않은 JSON 본문입니다.').toNextResponse(),
   },
   handler: async ({ body, auth }) => {
     try {
@@ -53,19 +52,15 @@ export const PATCH = defineApiRoute<Record<string, unknown>>({
       const parsed = MemberFlagsSchema.safeParse(body)
       if (!parsed.success) {
         logSecurityEvent('INVALID_MEMBER_ACTION', { issues: parsed.error.flatten() }, 'medium')
-        return createErrorResponse(
-          { success: false, error: '유효하지 않은 요청입니다.', details: parsed.error.flatten() },
-          400
-        )
+        return ApiError.badRequest('유효하지 않은 요청입니다.').toNextResponse()
       }
 
       const { is_director, director_title, is_auditor } = parsed.data
       const memberIdValidation = validateUUID(parsed.data.memberId, '멤버 ID')
       if (!memberIdValidation.isValid) {
-        return createErrorResponse(
-          { success: false, error: memberIdValidation.errors[0] || '유효하지 않은 멤버 ID입니다.' },
-          400
-        )
+        return ApiError.badRequest(
+          memberIdValidation.errors[0] || '유효하지 않은 멤버 ID입니다.'
+        ).toNextResponse()
       }
       const memberId = memberIdValidation.sanitized
 
@@ -81,7 +76,7 @@ export const PATCH = defineApiRoute<Record<string, unknown>>({
           message: targetError?.message,
           memberId: maskId(memberId),
         })
-        return createErrorResponse({ success: false, error: '회원을 찾을 수 없습니다.' }, 404)
+        return ApiError.notFound('회원을 찾을 수 없습니다.').toNextResponse()
       }
 
       // 업데이트 데이터 구성 (허용된 필드만)
@@ -114,10 +109,7 @@ export const PATCH = defineApiRoute<Record<string, unknown>>({
           message: updateError.message,
           memberId: maskId(memberId),
         })
-        return createErrorResponse(
-          { success: false, error: '회원 플래그 업데이트에 실패했습니다.' },
-          500
-        )
+        return ApiError.internalServerError('회원 플래그 업데이트에 실패했습니다.').toNextResponse()
       }
 
       // 보안 이벤트 로깅
@@ -131,11 +123,10 @@ export const PATCH = defineApiRoute<Record<string, unknown>>({
         'medium'
       )
 
-      return NextResponse.json({
-        success: true,
-        message: `${targetMember.display_name}님의 권한이 업데이트되었습니다.`,
-        member: updatedMember,
-      })
+      return ApiSuccess.ok(
+        { member: updatedMember },
+        `${targetMember.display_name}님의 권한이 업데이트되었습니다.`
+      )
     } catch (error) {
       log.error('Admin member flags API error', error)
       logSecurityEvent(
@@ -145,10 +136,7 @@ export const PATCH = defineApiRoute<Record<string, unknown>>({
         },
         'high'
       )
-      return createErrorResponse(
-        { success: false, error: '회원 권한 변경 중 오류가 발생했습니다.' },
-        500
-      )
+      return ApiError.internalServerError('회원 권한 변경 중 오류가 발생했습니다.').toNextResponse()
     }
   },
 })
