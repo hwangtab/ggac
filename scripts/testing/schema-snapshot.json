@@ -1,6 +1,6 @@
 {
   "source": "postgrest-openapi",
-  "generatedAt": "2026-07-03T12:48:48.185Z",
+  "generatedAt": "2026-07-04T03:45:52.829Z",
   "tables": {
     "user_settings": ["category", "created_at", "id", "setting_key", "setting_value", "updated_at", "user_id"],
     "board_agendas": [
@@ -260,7 +260,7 @@
       "updated_at",
       "youtube_videos"
     ],
-    "comments": ["author_id", "content", "created_at", "id", "post_id", "updated_at"],
+    "comments": ["author_id", "content", "created_at", "id", "like_count", "post_id", "updated_at"],
     "board_meeting_date_options": ["candidate_date", "id", "meeting_id"],
     "user_sessions": [
       "id",
