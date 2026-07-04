@@ -40,6 +40,12 @@ jobs:
       - name: Check Prettier formatting
         run: npx prettier --check .
 
+      # 스키마 계약 검사는 node:fs globSync(Node 22+)를 쓰므로 22.x에서만 실행.
+      # 스냅샷 JSON을 대조하므로 DB 접속은 불필요.
+      - name: Check schema contract
+        if: matrix.node-version == '22.x'
+        run: npm run test:schema-contract
+
   build:
     runs-on: ubuntu-latest
     name: Build Test

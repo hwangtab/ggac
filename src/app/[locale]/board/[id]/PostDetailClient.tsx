@@ -7,7 +7,7 @@ import PostLikeButton from '@/components/PostLikeButton'
 import PostAttachmentsDisplay from '@/components/PostAttachmentsDisplay'
 import PostContentRenderer from '@/components/PostContentRenderer'
 import { parseIntegerParam } from '@/utils/queryParams'
-import { isProjectStoragePublicUrl } from '@/utils/storageUrlValidation'
+import { toSafeArtistImageSrc } from '@/utils/safeUrl'
 
 interface Post {
   id: string
@@ -84,11 +84,11 @@ export default function PostDetailClient({
       ? { id: initialData.post.author_id, display_name: initialData.author.display_name }
       : { id: initialData.post.author_id, display_name: '알 수 없음' }
   )
-  const safeAuthorProfilePhotoUrl =
-    authorProfile?.profile_photo_url &&
-    isProjectStoragePublicUrl(authorProfile.profile_photo_url, 'artists', authorProfile.id)
-      ? authorProfile.profile_photo_url
-      : null
+  // 작성자 아바타는 member_profiles 조인에서 오며 사진 소스(profile_photo_url)가
+  // 실리지 않으므로 현재는 항상 이니셜만 표시된다. 사진 소스가 유입될 때를 대비해
+  // 저수준 검증을 직접 호출하는 대신 공유 안전 헬퍼로 경계를 통일한다.
+  // fallback=''로 소스가 없으면 빈값 → 이니셜 표시(현 동작 보존).
+  const safeAuthorProfilePhotoUrl = toSafeArtistImageSrc(authorProfile?.profile_photo_url, '')
   const [user, setUser] = useState<any>(initialUser)
   const [isMember, setIsMember] = useState<boolean>(initialUser?.is_member ?? false)
   const [error, setError] = useState<string | null>(null)

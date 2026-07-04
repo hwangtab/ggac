@@ -128,6 +128,50 @@ test('extractCallsFromSource: 동적 버킷명의 storage 접근도 skip 노이�
   assert.equal(skips.length, 0)
 })
 
+test('extractCallsFromSource: 라인 주석 안의 from 호출은 usage를 만들지 않는다', () => {
+  const src = `
+    // supabase.from('ghost_table').select('id')
+    await supabase.from('posts').select('id')
+  `
+  const { usages, skips } = extractCallsFromSource(src, 'test.ts')
+  assert.equal(usages.length, 1)
+  assert.equal(usages[0].table, 'posts')
+  assert.equal(skips.length, 0)
+})
+
+test('extractCallsFromSource: 블록 주석 안의 from 호출은 usage를 만들지 않는다', () => {
+  const src = `
+    /* supabase.from('ghost_table').select('id') */
+    await supabase.from('posts').select('id')
+  `
+  const { usages, skips } = extractCallsFromSource(src, 'test.ts')
+  assert.equal(usages.length, 1)
+  assert.equal(usages[0].table, 'posts')
+  assert.equal(skips.length, 0)
+})
+
+test('extractCallsFromSource: 문자열 리터럴 안의 from 호출은 usage를 만들지 않는다', () => {
+  const src = `
+    const doc = "supabase.from('ghost').select('id')"
+    await supabase.from('posts').select('id')
+  `
+  const { usages, skips } = extractCallsFromSource(src, 'test.ts')
+  assert.equal(usages.length, 1)
+  assert.equal(usages[0].table, 'posts')
+  assert.equal(skips.length, 0)
+})
+
+test('extractCallsFromSource: 주석 프리패스가 실제 호출의 라인 번호를 보존한다', () => {
+  const src = [
+    "// supabase.from('ghost').select('id')", // line 1
+    'const x = 1', // line 2
+    "await supabase.from('posts').select('id')", // line 3
+  ].join('\n')
+  const { usages } = extractCallsFromSource(src, 'test.ts')
+  assert.equal(usages.length, 1)
+  assert.equal(usages[0].line, 3)
+})
+
 test('extractCallsFromSource: 동적 테이블명은 skip에 기록한다', () => {
   const { usages, skips } = extractCallsFromSource(
     `await supabase.from(tableName).select('*')`,
