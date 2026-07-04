@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createErrorResponse } from '@/utils/apiResponse'
+import { NextRequest } from 'next/server'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createClient } from '@supabase/supabase-js'
 import { stripHtmlTags } from '@/utils/textUtils'
 import { escapePostgrestValue } from '@/utils/validation'
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!url || !anonKey) {
-    return createErrorResponse({ success: false, error: 'Supabase not configured' }, 500)
+    return ApiError.internalServerError('Supabase not configured').toNextResponse()
   }
 
   const supabase = createClient(url, anonKey, {
@@ -44,15 +44,15 @@ export async function GET(request: NextRequest) {
 
   try {
     if (!boardCategory) {
-      return createErrorResponse({ success: false, error: '유효하지 않은 카테고리입니다.' }, 400)
+      return ApiError.badRequest('유효하지 않은 카테고리입니다.').toNextResponse()
     }
     if (!sortOrder) {
-      return createErrorResponse({ success: false, error: '유효하지 않은 정렬 순서입니다.' }, 400)
+      return ApiError.badRequest('유효하지 않은 정렬 순서입니다.').toNextResponse()
     }
 
     const parsedCursor = cursor ? parseTimestampUuidCursor(cursor, '게시글 ID') : null
     if (cursor && !parsedCursor) {
-      return createErrorResponse({ success: false, error: '유효하지 않은 커서입니다.' }, 400)
+      return ApiError.badRequest('유효하지 않은 커서입니다.').toNextResponse()
     }
 
     let query = supabase
@@ -113,7 +113,7 @@ export async function GET(request: NextRequest) {
     const { data, error } = await query
     if (error) {
       log.error('게시글 조회 실패', { message: error.message })
-      return createErrorResponse({ success: false, error: '게시글을 불러오는 데 실패했습니다.' }, 500)
+      return ApiError.internalServerError('게시글을 불러오는 데 실패했습니다.').toNextResponse()
     }
 
     let actual = data || []
@@ -177,30 +177,26 @@ export async function GET(request: NextRequest) {
       nextCursor = formatTimestampUuidCursor(last.created_at, last.id)
     }
 
-    return NextResponse.json(
-      {
-        posts,
-        pagination: {
-          limit,
-          has_next: hasNext,
-          has_prev: !!parsedCursor,
-          next_cursor: nextCursor,
-          prev_cursor: null,
-        },
-        filters: {
-          category: boardCategory === '전체' ? null : boardCategory,
-          search: searchRaw || null,
-          sort_by: 'created_at',
-          sort_order: sortOrder,
-        },
+    return ApiSuccess.ok({
+      posts,
+      pagination: {
+        limit,
+        has_next: hasNext,
+        has_prev: !!parsedCursor,
+        next_cursor: nextCursor,
+        prev_cursor: null,
       },
-      {
-        status: 200,
-        headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300' },
-      }
-    )
+      filters: {
+        category: boardCategory === '전체' ? null : boardCategory,
+        search: searchRaw || null,
+        sort_by: 'created_at',
+        sort_order: sortOrder,
+      },
+    }).toNextResponse({
+      cacheControl: 'public, s-maxage=60, stale-while-revalidate=300',
+    })
   } catch (e) {
     log.error('게시글 조회 예외 발생', e)
-    return createErrorResponse({ success: false, error: '요청 처리에 실패했습니다.' }, 500)
+    return ApiError.internalServerError('요청 처리에 실패했습니다.').toNextResponse()
   }
 }

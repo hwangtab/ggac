@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createErrorResponse } from '@/utils/apiResponse'
+import { NextRequest } from 'next/server'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createClient } from '@supabase/supabase-js'
 import { validateUUID } from '@/utils/validation'
 
@@ -12,17 +12,16 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ id: st
 
   const uuidValidation = validateUUID(id, '게시글 ID')
   if (!uuidValidation.isValid) {
-    return NextResponse.json(
-      { error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.' },
-      { status: 400 }
-    )
+    return ApiError.badRequest(
+      uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.'
+    ).toNextResponse()
   }
   const postId = uuidValidation.sanitized
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!url || !anonKey) {
-    return createErrorResponse({ success: false, error: 'Supabase not configured' }, 500)
+    return ApiError.internalServerError('Supabase not configured').toNextResponse()
   }
 
   const supabase = createClient(url, anonKey, {
@@ -38,10 +37,10 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ id: st
 
   if (error || !data) {
     if (error) console.error('[API] 게시글 내용 조회 실패:', error)
-    return createErrorResponse({ success: false, error: '게시글을 찾을 수 없습니다.' }, 404)
+    return ApiError.notFound('게시글을 찾을 수 없습니다.').toNextResponse()
   }
-  return NextResponse.json({
+  return ApiSuccess.ok({
     content: (data as any).content || '',
     content_format: (data as any).content_format || 'plain',
-  })
+  }).toNextResponse()
 }

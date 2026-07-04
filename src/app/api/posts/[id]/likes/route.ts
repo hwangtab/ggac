@@ -9,8 +9,8 @@ export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 export const maxDuration = 30
 
-import { NextRequest, NextResponse } from 'next/server'
-import { createErrorResponse } from '@/utils/apiResponse'
+import { NextRequest } from 'next/server'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import type { PostLikeToggleResponse } from '@/types'
 import { validateUUID } from '@/utils/validation'
@@ -26,10 +26,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     // UUID 형식 검증
     const uuidValidation = validateUUID(postId, '게시글 ID')
     if (!uuidValidation.isValid) {
-      return NextResponse.json(
-        { error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.' },
-        { status: 400 }
-      )
+      return ApiError.badRequest(
+        uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.'
+      ).toNextResponse()
     }
     const validPostId = uuidValidation.sanitized
 
@@ -39,7 +38,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     } = await supabase.auth.getUser()
 
     if (!user) {
-      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
+      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
     }
 
     // 게시글 존재 확인
@@ -50,7 +49,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       .single()
 
     if (postError || !post) {
-      return createErrorResponse({ success: false, error: '게시글을 찾을 수 없습니다.' }, 404)
+      return ApiError.notFound('게시글을 찾을 수 없습니다.').toNextResponse()
     }
 
     // 현재 사용자의 좋아요 여부 확인
@@ -61,14 +60,14 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       .eq('user_id', user.id)
       .single()
 
-    return NextResponse.json({
+    return ApiSuccess.ok({
       post_id: validPostId,
       like_count: post.like_count || 0,
       is_liked: !!userLike,
-    })
+    }).toNextResponse()
   } catch (error) {
     console.error('[API] GET /likes 오류:', error)
-    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
+    return ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse()
   }
 }
 
@@ -83,10 +82,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     // UUID 형식 검증
     const uuidValidation = validateUUID(postId, '게시글 ID')
     if (!uuidValidation.isValid) {
-      return NextResponse.json(
-        { error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.' },
-        { status: 400 }
-      )
+      return ApiError.badRequest(
+        uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.'
+      ).toNextResponse()
     }
 
     const supabase = await createSupabaseServer()
@@ -95,7 +93,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     } = await supabase.auth.getUser()
 
     if (!user) {
-      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
+      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
     }
 
     // 사용자 승인 상태 확인
@@ -107,14 +105,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     if (profileError) {
       console.error('[API] 프로필 조회 오류:', profileError)
-      return createErrorResponse({ success: false, error: '회원 정보를 확인할 수 없습니다.' }, 500)
+      return ApiError.internalServerError('회원 정보를 확인할 수 없습니다.').toNextResponse()
     }
 
     if (!profile || profile.registration_status !== 'approved' || !profile.is_active) {
-      return createErrorResponse(
-        { success: false, error: '승인된 회원만 좋아요를 할 수 있습니다.' },
-        403
-      )
+      return ApiError.forbidden('승인된 회원만 좋아요를 할 수 있습니다.').toNextResponse()
     }
 
     // 게시글 존재 확인
@@ -125,14 +120,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       .single()
 
     if (postError || !post) {
-      return createErrorResponse({ success: false, error: '게시글을 찾을 수 없습니다.' }, 404)
+      return ApiError.notFound('게시글을 찾을 수 없습니다.').toNextResponse()
     }
 
     if (post.is_deleted) {
-      return NextResponse.json(
-        { error: '삭제된 게시글에는 좋아요를 할 수 없습니다.' },
-        { status: 400 }
-      )
+      return ApiError.badRequest('삭제된 게시글에는 좋아요를 할 수 없습니다.').toNextResponse()
     }
 
     // 좋아요 토글 실행
@@ -143,16 +135,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     if (toggleError) {
       console.error('[API] toggle_post_like RPC 오류:', toggleError)
-      return createErrorResponse({ success: false, error: '좋아요 처리에 실패했습니다.' }, 500)
+      return ApiError.internalServerError('좋아요 처리에 실패했습니다.').toNextResponse()
     }
 
     const result = toggleResult?.[0]
     if (!result) {
       console.error('[API] toggle_post_like RPC 결과 없음')
-      return createErrorResponse(
-        { success: false, error: '좋아요 처리 결과를 확인할 수 없습니다.' },
-        500
-      )
+      return ApiError.internalServerError('좋아요 처리 결과를 확인할 수 없습니다.').toNextResponse()
     }
 
     // 활동 로깅
@@ -172,15 +161,15 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       // 로깅 실패가 좋아요 기능을 방해하지 않도록 함
     }
 
-    const response: PostLikeToggleResponse = {
+    const payload: PostLikeToggleResponse = {
       liked: result.liked,
       like_count: result.like_count,
       message: result.liked ? '좋아요를 추가했습니다.' : '좋아요를 취소했습니다.',
     }
 
-    return NextResponse.json(response)
+    return ApiSuccess.ok(payload).toNextResponse()
   } catch (error) {
     console.error('[API] POST /likes 오류:', error)
-    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
+    return ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse()
   }
 }

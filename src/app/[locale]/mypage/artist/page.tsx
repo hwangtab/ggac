@@ -37,8 +37,9 @@ export default function ArtistPage() {
         throw new Error(errorData.error || '아티스트 정보를 불러오는데 실패했습니다.')
       }
 
-      const data = await response.json()
-      setArtist(data.artist)
+      // 표준 응답 래퍼: { success, data: { artist } }
+      const json = await response.json()
+      setArtist(json.data?.artist)
     } catch (error: any) {
       console.error('Error fetching artist:', error)
       setError(error.message || '아티스트 정보를 불러오는데 실패했습니다.')
@@ -73,10 +74,11 @@ export default function ArtistPage() {
         throw new Error(errorData.error || '아티스트 프로필 업데이트에 실패했습니다.')
       }
 
-      const data = await response.json()
+      // 표준 응답 래퍼: { success, data: { artist } }
+      const json = await response.json()
 
       // 업데이트된 아티스트 정보로 상태 업데이트
-      setArtist(data.artist)
+      setArtist(json.data?.artist)
 
       setSuccessMessage('아티스트 프로필이 성공적으로 업데이트되었습니다.')
     } catch (error: any) {

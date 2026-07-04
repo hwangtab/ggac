@@ -110,7 +110,9 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
     try {
       const response = await fetch('/api/notifications?limit=10')
       if (response.ok) {
-        const data = await response.json()
+        // 표준 응답 래퍼: { success, data: NotificationListResponse }
+        const json = await response.json()
+        const data = json.data
         setNotifications(data.notifications)
       }
     } catch (error) {

@@ -99,9 +99,10 @@ const ProfileEditForm: React.FC<ProfileEditFormProps> = ({ profile, onUpdate, lo
       try {
         const response = await fetch('/api/mypage/artist')
         if (response.ok) {
-          const data = await response.json()
+          // 표준 응답 래퍼: { success, data: { artist } }
+          const json = await response.json()
           if (mounted) {
-            setArtistData(data.artist)
+            setArtistData(json.data?.artist)
           }
         }
       } catch (error) {

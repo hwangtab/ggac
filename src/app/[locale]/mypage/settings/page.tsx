@@ -77,10 +77,11 @@ export default function MypageSettingsPage() {
         throw new Error(`HTTP error! status: ${response.status}`)
       }
 
+      // 표준 응답 래퍼: { success, data: { settings, total } }
       const data = await response.json()
 
       if (data.success) {
-        setSettings(data.settings)
+        setSettings(data.data.settings)
       } else {
         console.error('Failed to fetch settings:', data.error)
       }

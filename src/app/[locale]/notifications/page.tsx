@@ -54,7 +54,9 @@ const NotificationsPage = () => {
 
         const response = await fetch(`/api/notifications?${params}`)
         if (response.ok) {
-          const data: NotificationListResponse = await response.json()
+          // 표준 응답 래퍼: { success, data: NotificationListResponse }
+          const json = await response.json()
+          const data: NotificationListResponse = json.data
           setNotifications(data.notifications)
           setTotalPages(data.pagination.total_pages)
           setCurrentPage(page)

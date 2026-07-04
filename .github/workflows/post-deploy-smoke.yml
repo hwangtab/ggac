@@ -1,0 +1,34 @@
+name: Post-Deploy Smoke Check
+
+# Vercel Git 연동이 생성하는 GitHub Deployment의 상태가 success가 되면 실행된다.
+# git-push 자동배포는 CI(build)가 끝난 뒤 Vercel이 빌드하므로, 실제 배포 완료
+# 시점(=deployment_status success)에 라이브 URL을 상대로 스모크 헬스체크를 돈다.
+# 실패해도 배포를 되돌리지는 않지만(이미 배포됨), 회귀를 즉시 가시화한다.
+on:
+  deployment_status:
+
+jobs:
+  smoke:
+    # 프로덕션 배포가 성공 상태일 때만 실행. Vercel은 Preview 배포에도
+    # deployment_status를 emit하므로 environment로 프로덕션만 걸러낸다
+    # (Preview에 배포 보호가 켜져 있으면 401로 스모크가 거짓 실패한다).
+    if: github.event.deployment_status.state == 'success' && github.event.deployment_status.environment == 'Production'
+    runs-on: ubuntu-latest
+    name: Smoke Check (production)
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+
+      - name: Run smoke check against deployed URL
+        env:
+          # Vercel이 채워주는 배포 URL. 없으면 프로덕션 도메인으로 폴백.
+          DEPLOY_URL: ${{ github.event.deployment_status.environment_url }}
+        run: |
+          BASE="${DEPLOY_URL:-https://ggac.kr}"
+          echo "Running smoke check against: $BASE"
+          node scripts/utils/deployment/smoke-check.mjs "$BASE"
