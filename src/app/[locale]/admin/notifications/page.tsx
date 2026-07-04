@@ -58,8 +58,8 @@ const AdminNotificationsPage = () => {
     try {
       const response = await fetch('/api/admin/members')
       if (response.ok) {
-        const data = await response.json()
-        setMembers(data.members)
+        const payload = await response.json()
+        setMembers(payload.data.members)
       }
     } catch (error) {
       console.error('멤버 목록 조회 실패:', error)
@@ -128,7 +128,7 @@ const AdminNotificationsPage = () => {
 
       if (response.ok) {
         const result = await response.json()
-        alert(`${result.created_count}개의 알림이 성공적으로 발송되었습니다.`)
+        alert(`${result.data.created_count}개의 알림이 성공적으로 발송되었습니다.`)
 
         // 폼 초기화
         setNotificationForm({

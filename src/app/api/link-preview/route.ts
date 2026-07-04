@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createErrorResponse } from '@/utils/apiResponse'
+import { NextRequest } from 'next/server'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { fetchLinkPreview } from '@/utils/linkPreview'
 import distLimiter from '@/lib/server/rateLimit'
 import { createSupabaseServer } from '@/lib/supabase/server'
@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) {
-    return createErrorResponse({ success: false, error: '로그인이 필요합니다.' }, 401)
+    return ApiError.unauthorized('로그인이 필요합니다.').toNextResponse()
   }
 
   // 분산 레이트리밋 (Upstash 있으면 Redis, 없으면 메모리)
@@ -27,27 +27,27 @@ export async function GET(request: NextRequest) {
   const url = searchParams.get('url')
 
   if (!url) {
-    return createErrorResponse({ success: false, error: 'URL parameter is required' }, 400)
+    return ApiError.badRequest('URL parameter is required').toNextResponse()
   }
 
   try {
     // 프로토콜 및 형식 1차 검증 (세부 SSRF 검사는 유틸 내부에서 수행)
     const parsed = new URL(url)
     if (!['http:', 'https:'].includes(parsed.protocol)) {
-      return createErrorResponse({ success: false, error: 'Only http/https are allowed' }, 400)
+      return ApiError.badRequest('Only http/https are allowed').toNextResponse()
     }
   } catch {
-    return createErrorResponse({ success: false, error: 'Invalid URL format' }, 400)
+    return ApiError.badRequest('Invalid URL format').toNextResponse()
   }
 
   try {
     const preview = await fetchLinkPreview(url)
 
     if (!preview) {
-      return createErrorResponse({ success: false, error: 'Failed to fetch link preview' }, 404)
+      return ApiError.notFound('Failed to fetch link preview').toNextResponse()
     }
 
-    const res = NextResponse.json(preview)
+    const res = ApiSuccess.ok(preview).toNextResponse()
     return distLimiter.addRateLimitHeaders(
       res,
       distLimiter.CONFIGS.SEARCH_API.maxRequests,
@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
     )
   } catch (error) {
     console.error('Link preview API error:', error)
-    return createErrorResponse({ success: false, error: 'Internal server error' }, 500)
+    return ApiError.internalServerError('Internal server error').toNextResponse()
   }
 }
 

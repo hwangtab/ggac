@@ -1,6 +1,6 @@
-import { createErrorResponse } from '@/utils/apiResponse'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -14,7 +14,7 @@ export const GET = defineApiRoute({
   },
   rateLimitHeaders: true,
   auth: 'admin',
-  errorResponse: () => createErrorResponse({ success: false, error: 'Internal server error' }, 500),
+  errorResponse: () => ApiError.internalServerError('Internal server error').toNextResponse(),
   handler: async ({ auth }) => {
     const { db } = auth
 
@@ -60,6 +60,6 @@ export const GET = defineApiRoute({
       categoryStats,
     }
 
-    return stats
+    return ApiSuccess.ok(stats)
   },
 })

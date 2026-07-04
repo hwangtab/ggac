@@ -1,4 +1,5 @@
 import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { defineApiRoute } from '@/lib/server/apiRoute'
@@ -273,10 +274,7 @@ export const POST = defineApiRoute<Record<string, unknown>>({
 
     const parsed = ResetRequestSchema.safeParse(body)
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: '유효하지 않은 요청입니다.', details: parsed.error.flatten() },
-        { status: 400 }
-      )
+      throw ApiError.badRequest('유효하지 않은 요청입니다.')
     }
     resetType = parsed.data.resetType
     category = parsed.data.category ?? null
@@ -288,7 +286,7 @@ export const POST = defineApiRoute<Record<string, unknown>>({
       settingsToReset = DEFAULT_SETTINGS.filter(setting => setting.category === category)
 
       if (settingsToReset.length === 0) {
-        return createErrorResponse({ success: false, error: '유효하지 않은 카테고리입니다.' }, 400)
+        throw ApiError.badRequest('유효하지 않은 카테고리입니다.')
       }
     }
 
@@ -337,19 +335,17 @@ export const POST = defineApiRoute<Record<string, unknown>>({
       'high'
     ) // 기본값 복원은 높은 보안 등급
 
-    return NextResponse.json({
-      success: errorResults.length === 0,
-      message:
-        errorResults.length === 0
-          ? `${resetType === 'all' ? '모든' : category} 설정이 성공적으로 기본값으로 복원되었습니다.`
-          : `일부 설정 복원에 실패했습니다. 성공: ${resetResults.length}, 실패: ${errorResults.length}`,
-      details: {
+    return ApiSuccess.ok(
+      {
         resetType,
         category,
         reset: resetResults,
         errors: errorResults,
       },
-    })
+      errorResults.length === 0
+        ? `${resetType === 'all' ? '모든' : category} 설정이 성공적으로 기본값으로 복원되었습니다.`
+        : `일부 설정 복원에 실패했습니다. 성공: ${resetResults.length}, 실패: ${errorResults.length}`
+    )
   },
 })
 

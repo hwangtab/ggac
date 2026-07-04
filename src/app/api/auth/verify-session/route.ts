@@ -1,5 +1,5 @@
 import { createSupabaseServer } from '@/lib/supabase/server'
-import { NextResponse } from 'next/server'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
 
 const log = createLogger('api/auth/verify-session')
@@ -31,34 +31,16 @@ export async function GET() {
     if (sessionError) {
       if (isMissingSessionError(sessionError)) {
         log.debug('No session found')
-        return NextResponse.json(
-          {
-            authenticated: false,
-            error: 'No session found',
-          },
-          { status: 401 }
-        )
+        return ApiError.unauthorized('No session found').toNextResponse()
       }
 
       log.warn('Session error', sessionError)
-      return NextResponse.json(
-        {
-          authenticated: false,
-          error: 'Session error',
-        },
-        { status: 401 }
-      )
+      return ApiError.unauthorized('Session error').toNextResponse()
     }
 
     if (!user) {
       log.debug('No session found')
-      return NextResponse.json(
-        {
-          authenticated: false,
-          error: 'No session found',
-        },
-        { status: 401 }
-      )
+      return ApiError.unauthorized('No session found').toNextResponse()
     }
 
     // 추가로 member_profiles 확인
@@ -72,41 +54,28 @@ export async function GET() {
 
     if (profileError) {
       console.error('[VERIFY-SESSION] Profile error:', profileError)
-      return NextResponse.json(
-        {
-          authenticated: true,
-          user: {
-            id: user.id,
-            email: user.email,
-            email_confirmed_at: user.email_confirmed_at,
-          },
-          profile: null,
-          error: 'Profile not found',
-        },
-        { status: 200 }
-      )
-    }
-
-    return NextResponse.json(
-      {
+      return ApiSuccess.ok({
         authenticated: true,
         user: {
           id: user.id,
           email: user.email,
           email_confirmed_at: user.email_confirmed_at,
         },
-        profile: profile,
+        profile: null,
+      }).toNextResponse()
+    }
+
+    return ApiSuccess.ok({
+      authenticated: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        email_confirmed_at: user.email_confirmed_at,
       },
-      { status: 200 }
-    )
+      profile: profile,
+    }).toNextResponse()
   } catch (error) {
     console.error('[VERIFY-SESSION] Unexpected error:', error)
-    return NextResponse.json(
-      {
-        authenticated: false,
-        error: 'Internal server error',
-      },
-      { status: 500 }
-    )
+    return ApiError.internalServerError('Internal server error').toNextResponse()
   }
 }

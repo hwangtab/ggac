@@ -3,8 +3,8 @@ export const runtime = 'nodejs'
 export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
-import { NextRequest, NextResponse } from 'next/server'
-import { createErrorResponse } from '@/utils/apiResponse'
+import { NextRequest } from 'next/server'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
 import { applyRateLimit, RATE_LIMIT_CONFIGS } from '@/lib/server/rateLimit'
@@ -27,10 +27,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const uuidValidation = validateUUID(postId, '게시글 ID')
     if (!uuidValidation.isValid) {
       log.debug('VIEW UUID validation failed', { postId: maskId(postId) })
-      return createErrorResponse(
-        { success: false, error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.' },
-        400
-      )
+      return ApiError.badRequest(
+        uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.'
+      ).toNextResponse()
     }
 
     // Rate limiting 적용
@@ -40,7 +39,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     if (!rateLimitResult.success) {
       return (
         rateLimitResult.response ??
-        createErrorResponse({ success: false, error: '요청이 너무 많습니다.' }, 429)
+        ApiError.tooManyRequests('요청이 너무 많습니다.').toNextResponse()
       )
     }
 
@@ -58,7 +57,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     try {
       serviceSupabase = createServiceRoleClient()
     } catch {
-      return createErrorResponse({ success: false, error: 'Server configuration error' }, 500)
+      return ApiError.internalServerError('Server configuration error').toNextResponse()
     }
 
     // 게시글 존재 여부 및 작성자 확인
@@ -70,16 +69,15 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       .single()
 
     if (postError || !post) {
-      return createErrorResponse({ success: false, error: 'Post not found' }, 404)
+      return ApiError.notFound('Post not found').toNextResponse()
     }
 
     // 작성자 본인은 조회수 증가시키지 않음
     if (userId && post.author_id === userId) {
-      return NextResponse.json({
-        success: true,
-        view_count: post.view_count,
-        message: 'Author view - count not incremented',
-      })
+      return ApiSuccess.ok(
+        { view_count: post.view_count },
+        'Author view - count not incremented'
+      ).toNextResponse()
     }
 
     // 중복 조회 방지를 위한 세션 체크
@@ -90,11 +88,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       const timeDiff = Date.now() - parseIntegerParam(lastViewTime, 0, { min: 0 })
       if (timeDiff < 10 * 60 * 1000) {
         // 10분
-        return NextResponse.json({
-          success: true,
-          view_count: post.view_count,
-          message: 'Recent view - count not incremented',
-        })
+        return ApiSuccess.ok(
+          { view_count: post.view_count },
+          'Recent view - count not incremented'
+        ).toNextResponse()
       }
     }
 
@@ -106,7 +103,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     if (incrementError) {
       console.error('조회수 증가 오류:', incrementError)
-      return createErrorResponse({ success: false, error: 'Failed to increment view count' }, 500)
+      return ApiError.internalServerError('Failed to increment view count').toNextResponse()
     }
 
     const newViewCount = result || post.view_count + 1
@@ -131,18 +128,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     }
 
     // 응답에 조회 시간 포함 (클라이언트에서 중복 방지용)
-    const response = NextResponse.json({
-      success: true,
-      view_count: newViewCount,
-      message: 'View count incremented',
+    return ApiSuccess.ok({ view_count: newViewCount }, 'View count incremented').toNextResponse({
+      extraHeaders: { 'x-view-time': Date.now().toString() },
     })
-
-    response.headers.set('x-view-time', Date.now().toString())
-
-    return response
   } catch (error) {
     console.error('게시글 조회 추적 오류:', error)
-    return createErrorResponse({ success: false, error: 'Internal server error' }, 500)
+    return ApiError.internalServerError('Internal server error').toNextResponse()
   }
 }
 
@@ -159,10 +150,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const uuidValidation = validateUUID(postId, '게시글 ID')
     if (!uuidValidation.isValid) {
       log.debug('VIEW GET UUID validation failed', { postId: maskId(postId) })
-      return createErrorResponse(
-        { success: false, error: uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.' },
-        400
-      )
+      return ApiError.badRequest(
+        uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.'
+      ).toNextResponse()
     }
 
     const validPostId = uuidValidation.sanitized
@@ -178,15 +168,12 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       .single()
 
     if (error || !post) {
-      return createErrorResponse({ success: false, error: 'Post not found' }, 404)
+      return ApiError.notFound('Post not found').toNextResponse()
     }
 
-    return NextResponse.json({
-      success: true,
-      view_count: post.view_count || 0,
-    })
+    return ApiSuccess.ok({ view_count: post.view_count || 0 }).toNextResponse()
   } catch (error) {
     console.error('게시글 조회수 조회 오류:', error)
-    return createErrorResponse({ success: false, error: 'Internal server error' }, 500)
+    return ApiError.internalServerError('Internal server error').toNextResponse()
   }
 }

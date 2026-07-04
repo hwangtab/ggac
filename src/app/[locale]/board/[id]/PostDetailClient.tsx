@@ -117,7 +117,8 @@ export default function PostDetailClient({
           })
           if (viewResponse.ok) {
             const viewData = await viewResponse.json()
-            setPost(prev => (prev ? { ...prev, view_count: viewData.view_count } : prev))
+            const nextViewCount = viewData?.data?.view_count
+            setPost(prev => (prev ? { ...prev, view_count: nextViewCount } : prev))
             localStorage.setItem(`post_view_${postId}`, now.toString())
           }
         }

@@ -3,11 +3,10 @@ export const runtime = 'nodejs'
 export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
-import { NextResponse } from 'next/server'
-import { createErrorResponse } from '@/utils/apiResponse'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { validateUUID } from '@/utils/validation'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 
 type PostActionBody = Record<string, unknown>
 
@@ -21,12 +20,11 @@ export const PATCH = defineApiRoute<PostActionBody>({
   rateLimitHeaders: true,
   auth: 'admin',
   body: {
-    invalidResponse: () =>
-      createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400),
+    invalidResponse: () => ApiError.badRequest('유효한 JSON body가 필요합니다.').toNextResponse(),
   },
   errorResponse: error => {
     console.error('Admin posts [ID] - API error:', error)
-    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
+    return ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse()
   },
   handler: async ({ params, body, auth }) => {
     const resolvedParams = { id: typeof params.id === 'string' ? params.id : '' }
@@ -34,14 +32,14 @@ export const PATCH = defineApiRoute<PostActionBody>({
 
     const uuidValidation = validateUUID(resolvedParams.id, '게시글 ID')
     if (!uuidValidation.isValid) {
-      return createErrorResponse({ success: false, error: uuidValidation.errors.join(', ') }, 400)
+      return ApiError.badRequest(uuidValidation.errors.join(', ')).toNextResponse()
     }
     const postId = uuidValidation.sanitized
 
     const action = typeof body.action === 'string' ? body.action : ''
 
     if (!action || !['delete', 'restore', 'pin', 'unpin'].includes(action)) {
-      return createErrorResponse({ success: false, error: '잘못된 작업입니다.' }, 400)
+      return ApiError.badRequest('잘못된 작업입니다.').toNextResponse()
     }
 
     // Get the post to check if it exists
@@ -52,7 +50,7 @@ export const PATCH = defineApiRoute<PostActionBody>({
       .single()
 
     if (!post) {
-      return createErrorResponse({ success: false, error: '게시글을 찾을 수 없습니다.' }, 404)
+      return ApiError.notFound('게시글을 찾을 수 없습니다.').toNextResponse()
     }
 
     // Prepare update data based on action
@@ -61,27 +59,24 @@ export const PATCH = defineApiRoute<PostActionBody>({
     switch (action) {
       case 'delete':
         if (post.is_deleted) {
-          return createErrorResponse({ success: false, error: '이미 삭제된 게시글입니다.' }, 400)
+          return ApiError.badRequest('이미 삭제된 게시글입니다.').toNextResponse()
         }
         updateData = { is_deleted: true }
         break
 
       case 'restore':
         if (!post.is_deleted) {
-          return createErrorResponse({ success: false, error: '삭제되지 않은 게시글입니다.' }, 400)
+          return ApiError.badRequest('삭제되지 않은 게시글입니다.').toNextResponse()
         }
         updateData = { is_deleted: false }
         break
 
       case 'pin':
         if (post.category !== '공지') {
-          return createErrorResponse(
-            { success: false, error: '공지사항만 고정할 수 있습니다.' },
-            400
-          )
+          return ApiError.badRequest('공지사항만 고정할 수 있습니다.').toNextResponse()
         }
         if (post.is_pinned) {
-          return createErrorResponse({ success: false, error: '이미 고정된 게시글입니다.' }, 400)
+          return ApiError.badRequest('이미 고정된 게시글입니다.').toNextResponse()
         }
         updateData = {
           is_pinned: true,
@@ -91,7 +86,7 @@ export const PATCH = defineApiRoute<PostActionBody>({
 
       case 'unpin':
         if (!post.is_pinned) {
-          return createErrorResponse({ success: false, error: '고정되지 않은 게시글입니다.' }, 400)
+          return ApiError.badRequest('고정되지 않은 게시글입니다.').toNextResponse()
         }
         updateData = {
           is_pinned: false,
@@ -110,7 +105,7 @@ export const PATCH = defineApiRoute<PostActionBody>({
 
     if (updateError) {
       console.error('Admin posts [ID] - Post update error:', updateError)
-      return createErrorResponse({ success: false, error: '게시글 업데이트에 실패했습니다.' }, 500)
+      return ApiError.internalServerError('게시글 업데이트에 실패했습니다.').toNextResponse()
     }
 
     const actionMessage =
@@ -122,10 +117,6 @@ export const PATCH = defineApiRoute<PostActionBody>({
             ? '고정'
             : '고정 해제'
 
-    return NextResponse.json({
-      success: true,
-      post: updatedPost,
-      message: `게시글 ${actionMessage}가 완료되었습니다.`,
-    })
+    return ApiSuccess.ok({ post: updatedPost }, `게시글 ${actionMessage}가 완료되었습니다.`)
   },
 })

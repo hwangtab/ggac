@@ -10,8 +10,8 @@ export const runtime = 'nodejs'
 export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
-import { NextRequest, NextResponse } from 'next/server'
-import { createErrorResponse } from '@/utils/apiResponse'
+import { NextRequest } from 'next/server'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
 import { revalidateTag } from 'next/cache'
 import { createSupabaseServer } from '@/lib/supabase/server'
@@ -26,10 +26,7 @@ function validateAttachmentRouteParams(params: { id: string; attachmentId: strin
   if (!postIdValidation.isValid) {
     return {
       ok: false as const,
-      response: createErrorResponse(
-        { success: false, error: postIdValidation.errors.join(', ') },
-        400
-      ),
+      response: ApiError.badRequest(postIdValidation.errors.join(', ')).toNextResponse(),
     }
   }
 
@@ -37,10 +34,7 @@ function validateAttachmentRouteParams(params: { id: string; attachmentId: strin
   if (!attachmentIdValidation.isValid) {
     return {
       ok: false as const,
-      response: createErrorResponse(
-        { success: false, error: attachmentIdValidation.errors.join(', ') },
-        400
-      ),
+      response: ApiError.badRequest(attachmentIdValidation.errors.join(', ')).toNextResponse(),
     }
   }
 
@@ -71,7 +65,7 @@ export async function GET(
     } = await supabase.auth.getUser()
 
     if (!user) {
-      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
+      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
     }
 
     const routeParams = validateAttachmentRouteParams(resolvedParams)
@@ -87,13 +81,13 @@ export async function GET(
       .single()
 
     if (error || !attachment) {
-      return createErrorResponse({ success: false, error: '첨부파일을 찾을 수 없습니다.' }, 404)
+      return ApiError.notFound('첨부파일을 찾을 수 없습니다.').toNextResponse()
     }
 
-    return NextResponse.json({ attachment })
+    return ApiSuccess.ok({ attachment }).toNextResponse()
   } catch (error) {
     console.error('첨부파일 조회 API 오류:', error)
-    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
+    return ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse()
   }
 }
 
@@ -112,7 +106,7 @@ export async function PUT(
     } = await supabase.auth.getUser()
 
     if (!user) {
-      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
+      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
     }
 
     const routeParams = validateAttachmentRouteParams(resolvedParams)
@@ -120,7 +114,7 @@ export async function PUT(
     const { postId, attachmentId } = routeParams
     const body = await parseJsonObjectBody(request)
     if (!body) {
-      return createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400)
+      return ApiError.badRequest('유효한 JSON body가 필요합니다.').toNextResponse()
     }
     const { alt_text, is_primary, sort_order } = body
 
@@ -129,17 +123,11 @@ export async function PUT(
       alt_text !== null &&
       (typeof alt_text !== 'string' || alt_text.length > MAX_ALT_TEXT_LENGTH)
     ) {
-      return createErrorResponse(
-        { success: false, error: '대체 텍스트는 300자 이하의 문자열이어야 합니다.' },
-        400
-      )
+      return ApiError.badRequest('대체 텍스트는 300자 이하의 문자열이어야 합니다.').toNextResponse()
     }
 
     if (is_primary !== undefined && typeof is_primary !== 'boolean') {
-      return createErrorResponse(
-        { success: false, error: '대표 이미지 설정 값은 boolean이어야 합니다.' },
-        400
-      )
+      return ApiError.badRequest('대표 이미지 설정 값은 boolean이어야 합니다.').toNextResponse()
     }
 
     if (
@@ -149,10 +137,9 @@ export async function PUT(
         sort_order < 0 ||
         sort_order > 10000)
     ) {
-      return createErrorResponse(
-        { success: false, error: '정렬 순서는 0 이상 10000 이하의 정수여야 합니다.' },
-        400
-      )
+      return ApiError.badRequest(
+        '정렬 순서는 0 이상 10000 이하의 정수여야 합니다.'
+      ).toNextResponse()
     }
 
     // 첨부파일과 게시글 권한 확인
@@ -169,11 +156,11 @@ export async function PUT(
       .single()
 
     if (attachmentError || !attachment) {
-      return createErrorResponse({ success: false, error: '첨부파일을 찾을 수 없습니다.' }, 404)
+      return ApiError.notFound('첨부파일을 찾을 수 없습니다.').toNextResponse()
     }
 
     if (attachment.posts.author_id !== user.id) {
-      return createErrorResponse({ success: false, error: '권한이 없습니다.' }, 403)
+      return ApiError.forbidden('권한이 없습니다.').toNextResponse()
     }
 
     // 대표 이미지로 설정하는 경우 기존 대표 이미지 해제
@@ -203,7 +190,7 @@ export async function PUT(
 
     if (updateError) {
       console.error('첨부파일 수정 오류:', updateError)
-      return createErrorResponse({ success: false, error: '첨부파일 수정에 실패했습니다.' }, 500)
+      return ApiError.internalServerError('첨부파일 수정에 실패했습니다.').toNextResponse()
     }
 
     try {
@@ -217,13 +204,13 @@ export async function PUT(
       }
     } catch {}
 
-    return NextResponse.json({
-      message: '첨부파일이 성공적으로 수정되었습니다.',
-      attachment: updatedAttachment,
-    })
+    return ApiSuccess.ok(
+      { attachment: updatedAttachment },
+      '첨부파일이 성공적으로 수정되었습니다.'
+    ).toNextResponse()
   } catch (error) {
     console.error('첨부파일 수정 API 오류:', error)
-    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
+    return ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse()
   }
 }
 
@@ -242,7 +229,7 @@ export async function DELETE(
     } = await supabase.auth.getUser()
 
     if (!user) {
-      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
+      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
     }
 
     const routeParams = validateAttachmentRouteParams(resolvedParams)
@@ -263,7 +250,7 @@ export async function DELETE(
       .single()
 
     if (attachmentError || !attachment) {
-      return createErrorResponse({ success: false, error: '첨부파일을 찾을 수 없습니다.' }, 404)
+      return ApiError.notFound('첨부파일을 찾을 수 없습니다.').toNextResponse()
     }
 
     // 사용자 권한 확인 (작성자 또는 관리자)
@@ -280,7 +267,7 @@ export async function DELETE(
       profile.is_active === true
 
     if (!isAuthor && !isAdmin) {
-      return createErrorResponse({ success: false, error: '권한이 없습니다.' }, 403)
+      return ApiError.forbidden('권한이 없습니다.').toNextResponse()
     }
 
     // Storage에서 파일 삭제 (가능한 경우에만)
@@ -318,7 +305,7 @@ export async function DELETE(
 
     if (deleteError) {
       console.error('첨부파일 DB 삭제 오류:', deleteError)
-      return createErrorResponse({ success: false, error: '첨부파일 삭제에 실패했습니다.' }, 500)
+      return ApiError.internalServerError('첨부파일 삭제에 실패했습니다.').toNextResponse()
     }
 
     try {
@@ -332,11 +319,9 @@ export async function DELETE(
       }
     } catch {}
 
-    return NextResponse.json({
-      message: '첨부파일이 성공적으로 삭제되었습니다.',
-    })
+    return ApiSuccess.ok(null, '첨부파일이 성공적으로 삭제되었습니다.').toNextResponse()
   } catch (error) {
     console.error('첨부파일 삭제 API 오류:', error)
-    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
+    return ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse()
   }
 }

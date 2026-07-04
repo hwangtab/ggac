@@ -25,11 +25,15 @@ const MypageNavigation: React.FC<MypageNavigationProps> = ({ currentPath }) => {
           credentials: 'include',
           cache: 'no-store',
         })
-        const data = (await response.json().catch(() => null)) as {
-          authenticated?: boolean
-          user?: unknown
-          profile?: unknown
+        // 표준 응답 래퍼: { success, data: { authenticated, user, profile } }
+        const json = (await response.json().catch(() => null)) as {
+          data?: {
+            authenticated?: boolean
+            user?: unknown
+            profile?: unknown
+          }
         } | null
+        const data = json?.data
 
         if (response.ok && data?.authenticated) {
           setUser(data.user || null)

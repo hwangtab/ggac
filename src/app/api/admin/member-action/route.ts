@@ -1,5 +1,5 @@
-import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
-import { NextResponse } from 'next/server'
+import { createOptionsResponse } from '@/utils/apiResponse'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { z } from 'zod'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
@@ -45,8 +45,7 @@ export const POST = defineApiRoute<Record<string, unknown>>({
   rateLimitHeaders: true,
   auth: 'admin',
   body: {
-    invalidResponse: () =>
-      createErrorResponse({ success: false, error: '유효하지 않은 JSON 본문입니다.' }, 400),
+    invalidResponse: () => ApiError.badRequest('유효하지 않은 JSON 본문입니다.').toNextResponse(),
   },
   handler: async ({ body, auth }) => {
     let parsedInput: MemberActionInput | null = null
@@ -58,19 +57,15 @@ export const POST = defineApiRoute<Record<string, unknown>>({
       const parsed = MemberActionSchema.safeParse(body)
       if (!parsed.success) {
         logSecurityEvent('INVALID_MEMBER_ACTION', { issues: parsed.error.flatten() }, 'medium')
-        return NextResponse.json(
-          { error: '유효하지 않은 요청입니다.', details: parsed.error.flatten() },
-          { status: 400 }
-        )
+        return ApiError.badRequest('유효하지 않은 요청입니다.').toNextResponse()
       }
       parsedInput = parsed.data
       const { action, suspension_reason, suspension_until } = parsedInput
       const memberIdValidation = validateUUID(parsedInput.memberId, '멤버 ID')
       if (!memberIdValidation.isValid) {
-        return createErrorResponse(
-          { success: false, error: memberIdValidation.errors[0] || '유효하지 않은 멤버 ID입니다.' },
-          400
-        )
+        return ApiError.badRequest(
+          memberIdValidation.errors[0] || '유효하지 않은 멤버 ID입니다.'
+        ).toNextResponse()
       }
       const memberId = memberIdValidation.sanitized
 
@@ -86,7 +81,7 @@ export const POST = defineApiRoute<Record<string, unknown>>({
           message: targetError?.message,
           memberId: maskId(memberId),
         })
-        return createErrorResponse({ success: false, error: '회원을 찾을 수 없습니다.' }, 404)
+        return ApiError.notFound('회원을 찾을 수 없습니다.').toNextResponse()
       }
 
       // 액션에 따른 업데이트 데이터 준비
@@ -95,10 +90,9 @@ export const POST = defineApiRoute<Record<string, unknown>>({
       switch (action) {
         case 'approve':
           if (targetMember.registration_status !== 'pending') {
-            return NextResponse.json(
-              { error: '승인 대기 상태의 회원만 승인할 수 있습니다.' },
-              { status: 400 }
-            )
+            return ApiError.badRequest(
+              '승인 대기 상태의 회원만 승인할 수 있습니다.'
+            ).toNextResponse()
           }
           updateData = {
             registration_status: 'approved',
@@ -111,10 +105,9 @@ export const POST = defineApiRoute<Record<string, unknown>>({
 
         case 'reject':
           if (targetMember.registration_status !== 'pending') {
-            return NextResponse.json(
-              { error: '승인 대기 상태의 회원만 거부할 수 있습니다.' },
-              { status: 400 }
-            )
+            return ApiError.badRequest(
+              '승인 대기 상태의 회원만 거부할 수 있습니다.'
+            ).toNextResponse()
           }
           updateData = {
             registration_status: 'rejected',
@@ -126,10 +119,7 @@ export const POST = defineApiRoute<Record<string, unknown>>({
 
         case 'activate':
           if (targetMember.registration_status !== 'approved') {
-            return NextResponse.json(
-              { error: '승인된 회원만 활성화할 수 있습니다.' },
-              { status: 400 }
-            )
+            return ApiError.badRequest('승인된 회원만 활성화할 수 있습니다.').toNextResponse()
           }
           updateData = {
             is_active: true,
@@ -139,10 +129,7 @@ export const POST = defineApiRoute<Record<string, unknown>>({
 
         case 'deactivate':
           if (targetMember.registration_status !== 'approved') {
-            return NextResponse.json(
-              { error: '승인된 회원만 비활성화할 수 있습니다.' },
-              { status: 400 }
-            )
+            return ApiError.badRequest('승인된 회원만 비활성화할 수 있습니다.').toNextResponse()
           }
           updateData = {
             is_active: false,
@@ -152,10 +139,7 @@ export const POST = defineApiRoute<Record<string, unknown>>({
 
         case 'suspend':
           if (targetMember.registration_status !== 'approved') {
-            return createErrorResponse(
-              { success: false, error: '승인된 회원만 정지할 수 있습니다.' },
-              400
-            )
+            return ApiError.badRequest('승인된 회원만 정지할 수 있습니다.').toNextResponse()
           }
           updateData = {
             is_suspended: true,
@@ -168,10 +152,7 @@ export const POST = defineApiRoute<Record<string, unknown>>({
 
         case 'unsuspend':
           if (!targetMember.is_suspended) {
-            return NextResponse.json(
-              { error: '정지된 회원만 정지해제할 수 있습니다.' },
-              { status: 400 }
-            )
+            return ApiError.badRequest('정지된 회원만 정지해제할 수 있습니다.').toNextResponse()
           }
           updateData = {
             is_suspended: false,
@@ -197,10 +178,7 @@ export const POST = defineApiRoute<Record<string, unknown>>({
           memberId: maskId(memberId),
           action,
         })
-        return createErrorResponse(
-          { success: false, error: '회원 상태 업데이트에 실패했습니다.' },
-          500
-        )
+        return ApiError.internalServerError('회원 상태 업데이트에 실패했습니다.').toNextResponse()
       }
 
       // 성공 응답
@@ -224,11 +202,10 @@ export const POST = defineApiRoute<Record<string, unknown>>({
         'medium'
       )
 
-      return NextResponse.json({
-        success: true,
-        message: `${targetMember.display_name}님이 ${actionMessages[action]}되었습니다.`,
-        member: updatedMember,
-      })
+      return ApiSuccess.ok(
+        { member: updatedMember },
+        `${targetMember.display_name}님이 ${actionMessages[action]}되었습니다.`
+      )
     } catch (error) {
       log.error('Admin member action API error', error)
       logSecurityEvent(
@@ -239,10 +216,7 @@ export const POST = defineApiRoute<Record<string, unknown>>({
         },
         'high'
       )
-      return createErrorResponse(
-        { success: false, error: '회원 상태 변경 중 오류가 발생했습니다.' },
-        500
-      )
+      return ApiError.internalServerError('회원 상태 변경 중 오류가 발생했습니다.').toNextResponse()
     }
   },
 })

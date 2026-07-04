@@ -88,10 +88,11 @@ export const useAttachmentActions = ({
           throw new Error(result.error || '수정에 실패했습니다.')
         }
 
-        onAttachmentUpdate(result.attachment)
+        const updatedAttachment = result?.data?.attachment
+        onAttachmentUpdate(updatedAttachment)
         setEditingAttachment(null)
 
-        return result.attachment
+        return updatedAttachment
       })
     },
     [postId, editForm, onAttachmentUpdate, multiLoadingState]

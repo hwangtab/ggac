@@ -1,4 +1,5 @@
 import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
@@ -174,22 +175,13 @@ export const POST = defineApiRoute<Record<string, unknown>>({
 
     const parsed = RestoreBodySchema.safeParse(body)
     if (!parsed.success) {
-      return NextResponse.json(
-        {
-          error: '유효하지 않은 백업 파일입니다.',
-          issues: parsed.error.issues.map(i => ({ path: i.path, message: i.message })),
-        },
-        { status: 400 }
-      )
+      throw ApiError.badRequest('유효하지 않은 백업 파일입니다.')
     }
     const { settings: backupSettings, metadata } = parsed.data
 
     // 백업 파일 메타데이터 검증
     if (metadata.version !== '1.0') {
-      return createErrorResponse(
-        { success: false, error: '지원하지 않는 백업 파일 버전입니다.' },
-        400
-      )
+      throw ApiError.badRequest('지원하지 않는 백업 파일 버전입니다.')
     }
 
     // 설정 복원 실행
@@ -247,18 +239,16 @@ export const POST = defineApiRoute<Record<string, unknown>>({
       'high'
     ) // 복원은 높은 보안 등급
 
-    return NextResponse.json({
-      success: errorResults.length === 0,
-      message:
-        errorResults.length === 0
-          ? '설정이 성공적으로 복원되었습니다.'
-          : `일부 설정 복원에 실패했습니다. 성공: ${restoreResults.length}, 실패: ${errorResults.length}`,
-      details: {
+    return ApiSuccess.ok(
+      {
         restored: restoreResults,
         errors: errorResults,
         backupInfo: metadata,
       },
-    })
+      errorResults.length === 0
+        ? '설정이 성공적으로 복원되었습니다.'
+        : `일부 설정 복원에 실패했습니다. 성공: ${restoreResults.length}, 실패: ${errorResults.length}`
+    )
   },
 })
 

@@ -94,8 +94,9 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
     try {
       const response = await fetch('/api/notifications/stats')
       if (response.ok) {
-        const data = await response.json()
-        setStats(data)
+        // 표준 응답 래퍼: { success, data: NotificationStats }
+        const json = await response.json()
+        setStats(json.data)
       }
     } catch (error) {
       console.error('알림 통계 조회 실패:', error)

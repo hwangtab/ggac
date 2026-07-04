@@ -254,8 +254,9 @@ class ActivityLogger {
       })
 
       if (response.ok) {
-        const data = await response.json()
-        this.sessionId = data.session_id
+        // 표준 응답 래퍼: { success, data: { action, timestamp, session_id } }
+        const json = await response.json()
+        this.sessionId = json.data?.session_id
 
         this.secureLog('debug', '활동 추적 세션 시작', { sessionId: this.sessionId })
       }

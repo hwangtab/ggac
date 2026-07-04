@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server'
 import { createErrorResponse } from '@/utils/apiResponse'
+import { ApiSuccess } from '@/utils/apiWrapper'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { validateUUID } from '@/utils/validation'
@@ -98,7 +98,7 @@ export const GET = defineApiRoute({
     const hasNext = page < totalPages
     const hasPrev = page > 1
 
-    return NextResponse.json({
+    return ApiSuccess.ok({
       activities: activities || [],
       pagination: {
         currentPage: page,

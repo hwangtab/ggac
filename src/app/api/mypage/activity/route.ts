@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createErrorResponse } from '@/utils/apiResponse'
+import { NextRequest } from 'next/server'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { z } from 'zod'
 
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
     } = await supabase.auth.getUser()
 
     if (authError || !user) {
-      return createErrorResponse({ success: false, error: '인증이 필요합니다.' }, 401)
+      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
     }
 
     // 사용자 프로필 확인 (승인된 멤버인지 체크)
@@ -66,17 +66,11 @@ export async function GET(request: NextRequest) {
 
     if (profileError) {
       console.error('Profile fetch error:', profileError)
-      return createErrorResponse(
-        { success: false, error: '프로필 정보를 가져올 수 없습니다.' },
-        500
-      )
+      return ApiError.internalServerError('프로필 정보를 가져올 수 없습니다.').toNextResponse()
     }
 
     if (!profile || profile.registration_status !== 'approved' || !profile.is_active) {
-      return NextResponse.json(
-        { error: '승인된 멤버만 활동 내역을 조회할 수 있습니다.' },
-        { status: 403 }
-      )
+      return ApiError.forbidden('승인된 멤버만 활동 내역을 조회할 수 있습니다.').toNextResponse()
     }
 
     // 쿼리 파라미터 검증
@@ -88,10 +82,7 @@ export async function GET(request: NextRequest) {
     })
 
     if (!queryResult.success) {
-      return NextResponse.json(
-        { error: '잘못된 쿼리 파라미터입니다.', details: queryResult.error.issues },
-        { status: 400 }
-      )
+      return ApiError.badRequest('잘못된 쿼리 파라미터입니다.').toNextResponse()
     }
 
     const { filter, page, limit } = queryResult.data
@@ -208,12 +199,11 @@ export async function GET(request: NextRequest) {
       pagination,
     }
 
-    return NextResponse.json(response)
+    return ApiSuccess.ok(response).toNextResponse()
   } catch (error) {
     console.error('Activity API error:', error)
-    return NextResponse.json(
-      { error: '활동 내역을 조회하는 중 오류가 발생했습니다.' },
-      { status: 500 }
-    )
+    return ApiError.internalServerError(
+      '활동 내역을 조회하는 중 오류가 발생했습니다.'
+    ).toNextResponse()
   }
 }

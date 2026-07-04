@@ -1,5 +1,5 @@
-import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
-import { NextResponse } from 'next/server'
+import { createOptionsResponse } from '@/utils/apiResponse'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import type { BulkOperationRequest } from '@/types'
 import { validateFormData } from '@/utils/validation'
@@ -21,8 +21,7 @@ export const POST = defineApiRoute<Partial<BulkOperationRequest>>({
   rateLimitHeaders: true,
   auth: 'admin',
   body: {
-    invalidResponse: () =>
-      createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400),
+    invalidResponse: () => ApiError.badRequest('유효한 JSON body가 필요합니다.').toNextResponse(),
   },
   errorResponse: error => {
     console.error('Bulk members API error:', error)
@@ -33,10 +32,7 @@ export const POST = defineApiRoute<Partial<BulkOperationRequest>>({
       },
       'high'
     )
-    return createErrorResponse(
-      { success: false, error: '대량 작업 처리 중 오류가 발생했습니다.' },
-      500
-    )
+    return ApiError.internalServerError('대량 작업 처리 중 오류가 발생했습니다.').toNextResponse()
   },
   handler: async ({ body: requestData, auth }) => {
     const { db, user } = auth
@@ -45,25 +41,19 @@ export const POST = defineApiRoute<Partial<BulkOperationRequest>>({
 
     // 기본 데이터 검증
     if (!operation_type || !member_ids || !Array.isArray(member_ids) || member_ids.length === 0) {
-      return createErrorResponse({ success: false, error: '유효하지 않은 요청 데이터입니다.' }, 400)
+      return ApiError.badRequest('유효하지 않은 요청 데이터입니다.').toNextResponse()
     }
 
     // 대량 작업 수량 제한
     if (member_ids.length > 100) {
-      return NextResponse.json(
-        { error: '한 번에 최대 100명까지만 처리할 수 있습니다.' },
-        { status: 400 }
-      )
+      return ApiError.badRequest('한 번에 최대 100명까지만 처리할 수 있습니다.').toNextResponse()
     }
 
     const sanitizedMemberIds: string[] = []
     for (const memberId of member_ids) {
       const memberIdValidation = validateUUID(memberId, '멤버 ID')
       if (!memberIdValidation.isValid) {
-        return NextResponse.json(
-          { error: '유효하지 않은 멤버 ID가 포함되어 있습니다.' },
-          { status: 400 }
-        )
+        return ApiError.badRequest('유효하지 않은 멤버 ID가 포함되어 있습니다.').toNextResponse()
       }
       sanitizedMemberIds.push(memberIdValidation.sanitized)
     }
@@ -78,7 +68,7 @@ export const POST = defineApiRoute<Partial<BulkOperationRequest>>({
     ]
     if (!allowedOperations.includes(operation_type)) {
       logSecurityEvent('INVALID_BULK_OPERATION', { operation_type, member_ids }, 'high')
-      return createErrorResponse({ success: false, error: '유효하지 않은 작업 타입입니다.' }, 400)
+      return ApiError.badRequest('유효하지 않은 작업 타입입니다.').toNextResponse()
     }
 
     // 정지 관련 데이터 검증
@@ -89,20 +79,14 @@ export const POST = defineApiRoute<Partial<BulkOperationRequest>>({
           { suspension_reason: 'content' }
         )
         if (!reasonValidation.isValid) {
-          return createErrorResponse(
-            { success: false, error: '유효하지 않은 정지 사유입니다.' },
-            400
-          )
+          return ApiError.badRequest('유효하지 않은 정지 사유입니다.').toNextResponse()
         }
       }
 
       if (parameters.suspension_until) {
         const datePattern = /^\d{4}-\d{2}-\d{2}$/
         if (!datePattern.test(parameters.suspension_until)) {
-          return createErrorResponse(
-            { success: false, error: '유효하지 않은 날짜 형식입니다.' },
-            400
-          )
+          return ApiError.badRequest('유효하지 않은 날짜 형식입니다.').toNextResponse()
         }
       }
     }
@@ -123,10 +107,7 @@ export const POST = defineApiRoute<Partial<BulkOperationRequest>>({
 
     if (bulkError) {
       console.error('Bulk operation log error:', bulkError)
-      return createErrorResponse(
-        { success: false, error: '대량 작업 로그 생성에 실패했습니다.' },
-        500
-      )
+      return ApiError.internalServerError('대량 작업 로그 생성에 실패했습니다.').toNextResponse()
     }
 
     // 작업 시작 표시
@@ -312,8 +293,7 @@ export const POST = defineApiRoute<Partial<BulkOperationRequest>>({
         'medium'
       )
 
-      return NextResponse.json({
-        success: true,
+      return ApiSuccess.ok({
         operation_id: bulkOperation.id,
         summary: {
           total: member_ids.length,
@@ -340,10 +320,7 @@ export const POST = defineApiRoute<Partial<BulkOperationRequest>>({
         })
         .eq('id', bulkOperation.id)
 
-      return createErrorResponse(
-        { success: false, error: '대량 작업 처리 중 오류가 발생했습니다.' },
-        500
-      )
+      return ApiError.internalServerError('대량 작업 처리 중 오류가 발생했습니다.').toNextResponse()
     }
   },
 })
@@ -360,10 +337,9 @@ export const GET = defineApiRoute({
   auth: 'admin',
   errorResponse: error => {
     console.error('Bulk operations list API error:', error)
-    return NextResponse.json(
-      { error: '대량 작업 이력을 조회하는 중 오류가 발생했습니다.' },
-      { status: 500 }
-    )
+    return ApiError.internalServerError(
+      '대량 작업 이력을 조회하는 중 오류가 발생했습니다.'
+    ).toNextResponse()
   },
   handler: async ({ auth }) => {
     const { db } = auth
@@ -394,13 +370,10 @@ export const GET = defineApiRoute({
 
     if (operationsError) {
       console.error('Operations fetch error:', operationsError)
-      return createErrorResponse(
-        { success: false, error: '대량 작업 이력을 조회할 수 없습니다.' },
-        500
-      )
+      return ApiError.internalServerError('대량 작업 이력을 조회할 수 없습니다.').toNextResponse()
     }
 
-    return NextResponse.json({
+    return ApiSuccess.ok({
       operations: operations || [],
     })
   },

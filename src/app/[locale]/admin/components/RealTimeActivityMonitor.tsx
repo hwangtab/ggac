@@ -80,7 +80,9 @@ const RealTimeActivityMonitor: React.FC<RealTimeActivityMonitorProps> = ({
       }
 
       const newData = await response.json()
-      setData(newData)
+      // 폴링 응답은 표준 래퍼(ApiSuccess) 형식: 실제 payload는 data 안에 있다.
+      // SSE 스트림(/stream)은 raw 형식을 그대로 보내므로 언래핑하지 않는다.
+      setData(newData.data)
       setLastUpdated(new Date())
       setError(null)
     } catch (err) {

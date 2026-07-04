@@ -104,8 +104,8 @@ export default function AdminSettingsPage() {
         throw new Error('설정 정보를 불러오는 중 오류가 발생했습니다.')
       }
 
-      const data = await response.json()
-      setSettings(data)
+      const json = await response.json()
+      setSettings(json.data)
     } catch (err) {
       console.error('Settings fetch error:', err)
       setError(err instanceof Error ? err.message : '설정 정보를 불러오는 중 오류가 발생했습니다.')
@@ -275,7 +275,7 @@ export default function AdminSettingsPage() {
 
       const result = await response.json()
 
-      if (result.success) {
+      if (result.data?.errors?.length === 0) {
         setSuccess(result.message)
         // 설정 새로고침
         await fetchSettings()
@@ -340,7 +340,7 @@ export default function AdminSettingsPage() {
 
       const result = await response.json()
 
-      if (result.success) {
+      if (result.data?.errors?.length === 0) {
         setSuccess(result.message)
         // 설정 새로고침
         await fetchSettings()

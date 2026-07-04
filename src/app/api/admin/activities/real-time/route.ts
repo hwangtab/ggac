@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server'
 import { createErrorResponse } from '@/utils/apiResponse'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { parseIntegerParam } from '@/utils/queryParams'
 
@@ -29,10 +29,7 @@ export const GET = defineApiRoute({
 
     if (activeError) {
       console.error('활성 사용자 조회 오류:', activeError)
-      return NextResponse.json(
-        { error: '활성 사용자 데이터 조회에 실패했습니다.' },
-        { status: 500 }
-      )
+      throw ApiError.internalServerError('활성 사용자 데이터 조회에 실패했습니다.')
     }
 
     let recentActivity = []
@@ -65,7 +62,7 @@ export const GET = defineApiRoute({
         return acc
       }, {}) || {}
 
-    return NextResponse.json({
+    return ApiSuccess.ok({
       activeUsers: activeUsers || [],
       recentActivity,
       statistics: {

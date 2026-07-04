@@ -106,15 +106,18 @@ export function useCommentLikes({
         throw new Error(data.error || '좋아요 처리에 실패했습니다.')
       }
 
+      const likeCount = data?.data?.like_count
+      const liked = data?.data?.liked
+
       // 실제 상태로 업데이트
       setState(prev => ({
         ...prev,
-        likeCount: data.like_count,
-        isLiked: data.liked,
+        likeCount,
+        isLiked: liked,
       }))
 
       // 최종 콜백 호출
-      onLikeChange?.(data.liked, data.like_count)
+      onLikeChange?.(liked, likeCount)
 
       return data
     })

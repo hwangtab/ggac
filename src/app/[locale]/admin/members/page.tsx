@@ -122,8 +122,8 @@ export default function MembersPage() {
     try {
       const response = await fetch('/api/admin/members/advanced-search')
       if (response.ok) {
-        const data = await response.json()
-        setFieldDefinitions(data.fields)
+        const payload = await response.json()
+        setFieldDefinitions(payload.data.fields)
       }
     } catch (error) {
       console.error('필드 정의 조회 실패:', error)
@@ -155,7 +155,8 @@ export default function MembersPage() {
         throw new Error('고급 검색 중 오류가 발생했습니다.')
       }
 
-      const result: FilteredResult = await response.json()
+      const payload = await response.json()
+      const result: FilteredResult = payload.data
       setAdvancedResult(result)
       setMembers(result.data)
     } catch (err) {
@@ -239,7 +240,8 @@ export default function MembersPage() {
         throw new Error(errorData.error || '대량 작업에 실패했습니다.')
       }
 
-      const result = await response.json()
+      const payload = await response.json()
+      const result = payload.data
       alert(
         `작업이 완료되었습니다. 성공: ${result.summary.success}건, 실패: ${result.summary.errors}건`
       )
@@ -313,7 +315,8 @@ export default function MembersPage() {
           throw new Error(errorData.error || '회원 정보를 불러오는 중 오류가 발생했습니다.')
         }
 
-        const data: MembersResponse = await response.json()
+        const payload = await response.json()
+        const data: MembersResponse = payload.data
         setMembers(data.members)
       } catch (err) {
         console.error('Members fetch error:', err)
@@ -382,14 +385,15 @@ export default function MembersPage() {
       }
 
       // 성공 시 로컬 상태 즉시 업데이트
-      if (successData.member) {
+      const updatedMember = successData.data?.member
+      if (updatedMember) {
         setMembers(prevMembers => {
-          return prevMembers.map(m => (m.id === memberId ? { ...m, ...successData.member } : m))
+          return prevMembers.map(m => (m.id === memberId ? { ...m, ...updatedMember } : m))
         })
 
         // 선택된 회원 정보도 즉시 업데이트
         if (selectedMember && selectedMember.id === memberId) {
-          setSelectedMember({ ...selectedMember, ...successData.member })
+          setSelectedMember({ ...selectedMember, ...updatedMember })
         }
       }
 
@@ -426,14 +430,15 @@ export default function MembersPage() {
     }
 
     const successData = await response.json()
+    const updatedMember = successData.data?.member
 
     // 로컬 상태 즉시 업데이트
-    if (successData.member) {
+    if (updatedMember) {
       setMembers(prevMembers =>
-        prevMembers.map(m => (m.id === memberId ? { ...m, ...successData.member } : m))
+        prevMembers.map(m => (m.id === memberId ? { ...m, ...updatedMember } : m))
       )
       if (selectedMember && selectedMember.id === memberId) {
-        setSelectedMember({ ...selectedMember, ...successData.member })
+        setSelectedMember({ ...selectedMember, ...updatedMember })
       }
     }
   }
