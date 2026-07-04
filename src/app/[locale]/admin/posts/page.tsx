@@ -75,8 +75,8 @@ export default function PostsPage() {
     try {
       const response = await fetch('/api/admin/posts/advanced-search')
       if (response.ok) {
-        const data = await response.json()
-        setFieldDefinitions(data.fields)
+        const payload = await response.json()
+        setFieldDefinitions(payload.data.fields)
       }
     } catch (error) {
       console.error('필드 정의 조회 실패:', error)
@@ -109,7 +109,8 @@ export default function PostsPage() {
           throw new Error('고급 검색 중 오류가 발생했습니다.')
         }
 
-        const result: FilteredResult = await response.json()
+        const searchPayload = await response.json()
+        const result: FilteredResult = searchPayload.data
         setAdvancedResult(result)
         setPosts(result.data)
         setTotalPages(result.pagination.total_pages)
@@ -117,7 +118,8 @@ export default function PostsPage() {
         // 통계는 별도 조회
         const statsResponse = await fetch('/api/admin/posts/stats')
         if (statsResponse.ok) {
-          const statsData: PostStats = await statsResponse.json()
+          const statsPayload = await statsResponse.json()
+          const statsData: PostStats = statsPayload.data
           setStats(statsData)
         }
       } catch (err) {
@@ -151,8 +153,10 @@ export default function PostsPage() {
         throw new Error('데이터를 불러오는 중 오류가 발생했습니다.')
       }
 
-      const postsData: PostsResponse = await postsResponse.json()
-      const statsData: PostStats = await statsResponse.json()
+      const postsPayload = await postsResponse.json()
+      const statsPayload = await statsResponse.json()
+      const postsData: PostsResponse = postsPayload.data
+      const statsData: PostStats = statsPayload.data
 
       setPosts(postsData.posts)
       setStats(statsData)

@@ -3,12 +3,11 @@
  * 복합 필터링, 정렬, 전체 텍스트 검색을 지원하는 고급 검색 기능
  */
 
-import { NextResponse } from 'next/server'
-import { createErrorResponse } from '@/utils/apiResponse'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { validateAdvancedSearchQuery, buildSearchQuery } from '@/utils/advancedFiltering'
 import type { AdvancedSearchQuery, FilteredResult, FieldDefinition } from '@/types'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 
 // 게시글 필드 정의
 const POST_FIELD_DEFINITIONS: FieldDefinition[] = [
@@ -109,12 +108,11 @@ export const POST = defineApiRoute<AdvancedSearchQuery>({
   },
   auth: 'admin',
   body: {
-    invalidResponse: () =>
-      createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400),
+    invalidResponse: () => ApiError.badRequest('유효한 JSON body가 필요합니다.').toNextResponse(),
   },
   errorResponse: error => {
     console.error('고급 검색 API 오류:', error)
-    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
+    return ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse()
   },
   handler: async ({ body: searchQuery, auth }) => {
     const { db: supabase } = auth
@@ -122,13 +120,7 @@ export const POST = defineApiRoute<AdvancedSearchQuery>({
     // 쿼리 검증
     const validation = validateAdvancedSearchQuery(searchQuery, POST_FIELD_DEFINITIONS)
     if (!validation.isValid) {
-      return NextResponse.json(
-        {
-          error: '잘못된 검색 쿼리입니다.',
-          details: validation.errors,
-        },
-        { status: 400 }
-      )
+      return ApiError.badRequest('잘못된 검색 쿼리입니다.').toNextResponse()
     }
 
     // 기본값 설정
@@ -194,12 +186,12 @@ export const POST = defineApiRoute<AdvancedSearchQuery>({
 
       if (dataResult.error) {
         console.error('데이터 조회 오류:', dataResult.error)
-        return createErrorResponse({ success: false, error: '검색 중 오류가 발생했습니다.' }, 500)
+        return ApiError.internalServerError('검색 중 오류가 발생했습니다.').toNextResponse()
       }
 
       if (countResult.error) {
         console.error('카운트 조회 오류:', countResult.error)
-        return createErrorResponse({ success: false, error: '검색 중 오류가 발생했습니다.' }, 500)
+        return ApiError.internalServerError('검색 중 오류가 발생했습니다.').toNextResponse()
       }
 
       const posts = dataResult.data || []
@@ -221,16 +213,10 @@ export const POST = defineApiRoute<AdvancedSearchQuery>({
         applied_sorts: query.sorts || [],
       }
 
-      return NextResponse.json(result)
+      return ApiSuccess.ok(result)
     } catch (queryError) {
       console.error('쿼리 실행 오류:', queryError)
-      return NextResponse.json(
-        {
-          error: '검색 쿼리 실행 중 오류가 발생했습니다.',
-          details: '쿼리 실행에 실패했습니다.',
-        },
-        { status: 500 }
-      )
+      return ApiError.internalServerError('검색 쿼리 실행 중 오류가 발생했습니다.').toNextResponse()
     }
   },
 })
@@ -246,10 +232,10 @@ export const GET = defineApiRoute({
   auth: 'admin',
   errorResponse: error => {
     console.error('필드 정의 조회 오류:', error)
-    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
+    return ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse()
   },
   handler: async () => {
-    return NextResponse.json({
+    return ApiSuccess.ok({
       fields: POST_FIELD_DEFINITIONS,
       target: 'posts',
       description: '게시글 고급 검색을 위한 필드 정의',

@@ -1,10 +1,9 @@
-import { NextResponse } from 'next/server'
-import { createErrorResponse } from '@/utils/apiResponse'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { validateSearchQuery, escapePostgrestValue } from '@/utils/validation'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { logSecurityEvent } from '@/utils/security'
 import { parseIntegerParam } from '@/utils/queryParams'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 
 // API 라우트를 동적으로 렌더링하도록 강제 설정
 export const runtime = 'nodejs'
@@ -21,7 +20,7 @@ export const GET = defineApiRoute({
   auth: 'admin',
   errorResponse: () => {
     logSecurityEvent('ADMIN_POSTS_API_ERROR', { error: '서버 오류가 발생했습니다.' }, 'medium')
-    return createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500)
+    return ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse()
   },
   handler: async ({ request, auth }) => {
     const { db } = auth
@@ -47,26 +46,20 @@ export const GET = defineApiRoute({
           },
           'medium'
         )
-        return NextResponse.json(
-          {
-            error: '유효하지 않은 검색어입니다.',
-            details: searchValidation.errors,
-          },
-          { status: 400 }
-        )
+        return ApiError.badRequest('유효하지 않은 검색어입니다.').toNextResponse()
       }
       search = searchValidation.sanitized
     }
 
     // 페이지 번호 검증
     if (page < 1 || page > 10000) {
-      return createErrorResponse({ success: false, error: '유효하지 않은 페이지 번호입니다.' }, 400)
+      return ApiError.badRequest('유효하지 않은 페이지 번호입니다.').toNextResponse()
     }
 
     // 필터 값 검증
     const allowedFilters = ['all', 'deleted', 'pinned', '공지', '잡담', '홍보', '건의']
     if (!allowedFilters.includes(filter)) {
-      return createErrorResponse({ success: false, error: '유효하지 않은 필터입니다.' }, 400)
+      return ApiError.badRequest('유효하지 않은 필터입니다.').toNextResponse()
     }
 
     // Build query based on filter
@@ -117,10 +110,9 @@ export const GET = defineApiRoute({
 
     if (postsError) {
       console.error('Posts fetch error:', postsError)
-      return NextResponse.json(
-        { error: '게시글을 조회하는 중 오류가 발생했습니다.' },
-        { status: 500 }
-      )
+      return ApiError.internalServerError(
+        '게시글을 조회하는 중 오류가 발생했습니다.'
+      ).toNextResponse()
     }
 
     // Get total count for pagination
@@ -143,10 +135,9 @@ export const GET = defineApiRoute({
 
     if (countError) {
       console.error('Count fetch error:', countError)
-      return NextResponse.json(
-        { error: '게시글 수를 조회하는 중 오류가 발생했습니다.' },
-        { status: 500 }
-      )
+      return ApiError.internalServerError(
+        '게시글 수를 조회하는 중 오류가 발생했습니다.'
+      ).toNextResponse()
     }
 
     const totalCount = count || 0
@@ -170,7 +161,7 @@ export const GET = defineApiRoute({
       comment_count: countMap.get(post.id) || 0,
     }))
 
-    return {
+    return ApiSuccess.ok({
       posts: postsWithCommentCount,
       pagination: {
         currentPage: page,
@@ -178,6 +169,6 @@ export const GET = defineApiRoute({
         totalCount,
         hasNext: page < totalPages,
       },
-    }
+    })
   },
 })
