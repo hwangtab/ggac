@@ -18,6 +18,11 @@
     "loader": {
       "label": "Loading page",
       "sr": "Loading, please wait"
+    },
+    "error": {
+      "heading": "Something went wrong",
+      "body": "A temporary error occurred. Please try again.",
+      "retry": "Try Again"
     }
   },
   "nav": {
@@ -512,6 +517,11 @@
   "boardRoom": {
     "title": "Board Room",
     "meetings": "Meetings",
+    "error": {
+      "heading": "Could not load the board room",
+      "body": "A temporary error occurred. Please try again.",
+      "retry": "Try Again"
+    },
     "dashboard": {
       "heading": "Board Room Dashboard",
       "createMeeting": "Create Meeting",

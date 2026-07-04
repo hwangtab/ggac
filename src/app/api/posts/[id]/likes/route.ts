@@ -162,10 +162,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         p_action_type: result.liked ? 'like_added' : 'like_removed',
         p_target_type: 'post',
         p_target_id: uuidValidation.sanitized,
-        p_details: JSON.stringify({
+        p_metadata: {
           post_title: post.title,
           action: result.liked ? 'add' : 'remove',
-        }),
+        },
       })
     } catch (logError) {
       console.error('좋아요 활동 로깅 실패:', logError)

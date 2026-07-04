@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useMemo } from 'react'
-import DOMPurify from 'dompurify'
+import DOMPurify from 'isomorphic-dompurify'
 import ReactMarkdown from 'react-markdown'
 import Image from 'next/image'
 import { detectXssPatterns, logSecurityEvent } from '@/utils/security'

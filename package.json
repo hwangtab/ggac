@@ -14,6 +14,9 @@
     "test:e2e": "rm -rf .next node_modules/.cache/webpack && env -u NO_COLOR playwright test",
     "test:e2e:ui": "rm -rf .next node_modules/.cache/webpack && env -u NO_COLOR playwright test --ui",
     "test:runtime-risks": "node scripts/testing/assert-runtime-risks.mjs",
+    "test:unit": "node --test scripts/testing/*.test.mjs",
+    "schema:snapshot": "node scripts/testing/refresh-schema-snapshot.mjs",
+    "test:schema-contract": "node scripts/testing/check-schema-contract.mjs",
     "audit:security": "npm audit --audit-level high",
     "env:check": "node scripts/verify-env.js",
     "env:check:production": "NODE_ENV=production node scripts/verify-env.js",
@@ -35,6 +38,7 @@
     "cheerio": "1.0.0-rc.12",
     "date-fns": "^4.1.0",
     "dompurify": "^3.3.3",
+    "isomorphic-dompurify": "^3.18.0",
     "lucide-react": "^0.536.0",
     "next": "^15.5.19",
     "next-intl": "^4.12.0",
@@ -102,5 +106,8 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "engines": {
+    "node": ">=22.13"
   }
 }
