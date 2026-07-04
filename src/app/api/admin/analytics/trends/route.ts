@@ -1,6 +1,5 @@
-import { createErrorResponse } from '@/utils/apiResponse'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
-import { ApiSuccess } from '@/utils/apiWrapper'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { parseTrendPeriod, parseTrendType } from '@/constants/adminAnalytics'
 import type { TrendPeriod } from '@/constants/adminAnalytics'
@@ -33,10 +32,10 @@ export const GET = defineApiRoute({
     const trendType = parseTrendType(trendTypeParam)
 
     if (!period) {
-      return createErrorResponse({ success: false, error: '지원되지 않는 기간 유형입니다.' }, 400)
+      return ApiError.badRequest('지원되지 않는 기간 유형입니다.').toNextResponse()
     }
     if (!trendType) {
-      return createErrorResponse({ success: false, error: '지원되지 않는 트렌드 유형입니다.' }, 400)
+      return ApiError.badRequest('지원되지 않는 트렌드 유형입니다.').toNextResponse()
     }
 
     let trendData: any = {}

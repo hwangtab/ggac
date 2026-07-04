@@ -1,8 +1,8 @@
-import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
+import { createOptionsResponse } from '@/utils/apiResponse'
 import { NextResponse } from 'next/server'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
-import { ApiSuccess } from '@/utils/apiWrapper'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { parseIntegerParam } from '@/utils/queryParams'
 
 export const dynamic = 'force-dynamic'
@@ -47,7 +47,7 @@ export const GET = defineApiRoute({
 
     if (memberError) {
       console.error('Member stats error:', memberError)
-      return createErrorResponse({ success: false, error: '회원 통계 조회 실패' }, 500)
+      return ApiError.internalServerError('회원 통계 조회 실패').toNextResponse()
     }
 
     // 월별 게시글 통계
@@ -60,7 +60,7 @@ export const GET = defineApiRoute({
 
     if (postError) {
       console.error('Post stats error:', postError)
-      return createErrorResponse({ success: false, error: '게시글 통계 조회 실패' }, 500)
+      return ApiError.internalServerError('게시글 통계 조회 실패').toNextResponse()
     }
 
     // 월별 활동 통계
@@ -72,7 +72,7 @@ export const GET = defineApiRoute({
 
     if (activityError) {
       console.error('Activity stats error:', activityError)
-      return createErrorResponse({ success: false, error: '활동 통계 조회 실패' }, 500)
+      return ApiError.internalServerError('활동 통계 조회 실패').toNextResponse()
     }
 
     // 월별 데이터 그룹화

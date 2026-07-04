@@ -1,4 +1,4 @@
-import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
+import { createOptionsResponse } from '@/utils/apiResponse'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
@@ -267,8 +267,7 @@ export const PUT = defineApiRoute<Record<string, unknown>>({
   rateLimitHeaders: true,
   auth: createSettingsAdminAuth(),
   body: {
-    invalidResponse: () =>
-      createErrorResponse({ success: false, error: '유효하지 않은 JSON 본문입니다.' }, 400),
+    invalidResponse: () => ApiError.badRequest('유효하지 않은 JSON 본문입니다.').toNextResponse(),
   },
   errorResponse: error => {
     log.error('Admin settings PUT error', error)

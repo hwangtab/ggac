@@ -1,6 +1,5 @@
-import { createErrorResponse } from '@/utils/apiResponse'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
-import { ApiSuccess } from '@/utils/apiWrapper'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { parseIntegerParam } from '@/utils/queryParams'
 
 const REPORT_TYPES = [
@@ -90,22 +89,21 @@ export const POST = defineApiRoute<Record<string, unknown>>({
   rateLimit: RATE_LIMITS.ADMIN_API,
   auth: 'admin',
   body: {
-    invalidResponse: () =>
-      createErrorResponse({ success: false, error: '유효한 JSON body가 필요합니다.' }, 400),
+    invalidResponse: () => ApiError.badRequest('유효한 JSON body가 필요합니다.').toNextResponse(),
   },
-  errorResponse: () => createErrorResponse({ success: false, error: 'Internal server error' }, 500),
+  errorResponse: () => ApiError.internalServerError('Internal server error').toNextResponse(),
   handler: async ({ body, auth }) => {
     const { db: serviceSupabase, user } = auth
 
     const reportType = parseReportType(body.reportType)
     if (!reportType) {
-      return createErrorResponse({ success: false, error: 'Invalid report type' }, 400)
+      return ApiError.badRequest('Invalid report type').toNextResponse()
     }
 
     const parsedDateRange =
       body.dateRange === undefined ? defaultReportDateRange() : parseReportDateRange(body.dateRange)
     if (!parsedDateRange) {
-      return createErrorResponse({ success: false, error: 'Invalid date range' }, 400)
+      return ApiError.badRequest('Invalid date range').toNextResponse()
     }
 
     const { startDate, endDate } = parsedDateRange
@@ -142,7 +140,7 @@ export const POST = defineApiRoute<Record<string, unknown>>({
         reportData = await generateComprehensiveReport(serviceSupabase, startDate, endDate, filters)
         break
       default:
-        return createErrorResponse({ success: false, error: 'Invalid report type' }, 400)
+        return ApiError.badRequest('Invalid report type').toNextResponse()
     }
 
     // 리포트 메타데이터 생성

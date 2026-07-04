@@ -8,7 +8,7 @@ export const runtime = 'nodejs'
 export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
-import { createOptionsResponse, createErrorResponse } from '@/utils/apiResponse'
+import { createOptionsResponse } from '@/utils/apiResponse'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { getApiStats, getApiHealth, exportApiMetrics } from '@/utils/apiPerformanceMonitor'
@@ -33,8 +33,7 @@ export const GET = defineApiRoute<undefined, unknown, unknown>({
   },
   rateLimitHeaders: true,
   auth: 'admin',
-  errorResponse: () =>
-    createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500),
+  errorResponse: () => ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse(),
   handler: async ({ request }) => {
     const { searchParams } = new URL(request.url)
     const actionParam = searchParams.get('action') || 'dashboard'

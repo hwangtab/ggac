@@ -1,4 +1,3 @@
-import { createErrorResponse } from '@/utils/apiResponse'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { parseIntegerParam } from '@/utils/queryParams'
@@ -12,8 +11,7 @@ export const GET = defineApiRoute({
   name: 'api/admin/activities/real-time',
   rateLimit: RATE_LIMITS.ADMIN_API,
   auth: 'admin',
-  errorResponse: () =>
-    createErrorResponse({ success: false, error: '서버 오류가 발생했습니다.' }, 500),
+  errorResponse: () => ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse(),
   handler: async ({ request, auth }) => {
     const { db } = auth
 
