@@ -126,7 +126,10 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
           <link> 태그는 컴포넌트 트리 어디에 렌더해도 Next.js가 <head>로 호이스트한다. */}
       {supabaseOrigin && (
         <>
-          <link rel="preconnect" href={supabaseOrigin} crossOrigin="anonymous" />
+          {/* Supabase Storage 이미지는 일반 <img>로 crossorigin 없이(non-CORS) 로드된다.
+              브라우저는 CORS/비-CORS 커넥션 풀을 분리하므로, preconnect도 crossorigin
+              없이 두어야 이미지 요청이 예열된 커넥션(TCP+TLS)을 재사용한다. */}
+          <link rel="preconnect" href={supabaseOrigin} />
           <link rel="dns-prefetch" href={supabaseOrigin} />
         </>
       )}

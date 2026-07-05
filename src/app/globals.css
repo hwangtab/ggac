@@ -855,15 +855,18 @@ textarea:focus-visible {
     height: auto;
   }
 
-  /* 공간 예약은 컨테이너가 본문 이미지보다 항상 좁은 모바일에서만 적용한다.
-     .prose 컨테이너 폭 ≈ 뷰포트 − 176px → ≤640px 뷰포트에서 컨테이너 ≤560px.
-     실측상 본문 이미지 natural width는 모두 ≥570px이라 이 구간에서 width:100%는
+  /* 공간 예약은 게시글 본문(.post-content-body: board·board-room 게시 본문)에만,
+     그리고 컨테이너가 본문 이미지보다 항상 좁은 모바일에서만 적용한다.
+     전역 .prose(아티스트 bio·프로젝트 설명 등)에는 걸지 않는다 — 그쪽 인라인
+     이미지(로고·아이콘)는 컨테이너보다 작아 width:100%가 확대를 유발할 수 있다.
+     .post-content-body 컨테이너 폭 ≈ 뷰포트 − 176px → ≤640px 뷰포트에서 ≤560px.
+     실측상 게시 본문 이미지 natural width는 모두 ≥570px이라 이 구간에서 width:100%는
      순수 축소(확대 없음)다. aspect-ratio의 `auto` 키워드로 로드 후엔 자연 비율이
      사용되어 최종 렌더는 그대로다(시각 변화 없음). 데스크톱(≥641px)은 컨테이너가
-     이미지보다 넓어질 수 있어 width:100%가 확대를 유발하므로 예약을 걸지 않고
-     자연 크기로 렌더한다(확대 회귀 방지 우선). width/height가 있는 이미지는 제외. */
+     이미지보다 넓어질 수 있어 예약을 걸지 않고 자연 크기로 렌더한다(확대 회귀 방지).
+     width/height가 있는 이미지는 제외. */
   @media (max-width: 640px) {
-    .prose img:not([width]):not([height]) {
+    .post-content-body img:not([width]):not([height]) {
       width: 100%;
       aspect-ratio: auto 3 / 2;
     }
