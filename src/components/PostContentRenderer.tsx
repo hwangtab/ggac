@@ -109,7 +109,7 @@ export const PostContentRenderer: React.FC<PostContentRendererProps> = ({
   if (contentFormat === 'html') {
     return (
       <div
-        className={`post-content-body prose max-w-none ${className}`}
+        className={`prose max-w-none ${className}`}
         dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
       />
     )
@@ -117,7 +117,7 @@ export const PostContentRenderer: React.FC<PostContentRendererProps> = ({
 
   if (contentFormat === 'markdown') {
     return (
-      <div className={`post-content-body prose max-w-none ${className}`}>
+      <div className={`prose max-w-none ${className}`}>
         <ReactMarkdown
           components={{
             a: ({ node, href, children, ...props }) => {
@@ -163,7 +163,7 @@ export const PostContentRenderer: React.FC<PostContentRendererProps> = ({
   // Fallback for 'plain' text
   return (
     <div
-      className={`post-content-body prose max-w-none whitespace-pre-wrap text-gray-800 leading-relaxed ${className}`}
+      className={`prose max-w-none whitespace-pre-wrap text-gray-800 leading-relaxed ${className}`}
     >
       {content}
     </div>
