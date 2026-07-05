@@ -64,8 +64,31 @@ const BoardUserSection = () => {
     }
   }, [])
 
+  // CLS: 로딩 중 자리 예약. 인증 상태를 확인하는 동안 null을 반환하면
+  // 로드 후 인증 섹션이 채워지며 아래 게시글 목록을 밀어낸다(레이아웃 이동).
+  // 실제 게스트 박스와 동일한 번역 문자열을 text-transparent로 렌더해
+  // 뷰포트별 줄바꿈까지 동일하게 재현 → 높이가 자동으로 일치해 이동이 없다.
+  // 최종 렌더(로드 완료 후)는 기존과 동일하다.
   if (loading) {
-    return null
+    return (
+      <div
+        className="space-y-4 mb-6 relative z-10"
+        aria-hidden="true"
+        data-testid="board-auth-skeleton"
+      >
+        <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg animate-pulse">
+          <p className="text-transparent select-none mb-2">{t('userSection.guestInfo')}</p>
+          <div className="flex gap-2">
+            <span className="bg-gray-200 text-transparent select-none px-4 py-2 rounded text-sm">
+              {t('userSection.login')}
+            </span>
+            <span className="bg-gray-200 text-transparent select-none px-4 py-2 rounded text-sm">
+              {t('userSection.join')}
+            </span>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (

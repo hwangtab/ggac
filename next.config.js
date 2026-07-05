@@ -117,14 +117,14 @@ const nextConfig = {
               priority: 20,
               reuseExistingChunk: true,
             },
-            // 공통 컴포넌트 번들
-            common: {
-              name: 'common',
-              minChunks: 2,
-              type: 'javascript/auto',
-              priority: 5,
-              reuseExistingChunk: true,
-            },
+            // 공통 컴포넌트 번들(common cacheGroup)은 제거했다.
+            // minChunks:2 + chunks:'all'이 앱 전역에서 2개 이상 청크가 쓰는 모든
+            // 모듈을 단일 common.js로 병합하는데, OptimizedImage·ErrorBoundary 같은
+            // 준-전역 유틸이 포함돼 모든 페이지가 이 청크를 로드했다. 그 결과 board-room·
+            // admin·mypage·에디터 전용 컴포넌트(약 48kB)까지 홈·게시판·아티스트 등
+            // 공개 페이지 초기 번들에 함께 새어 들어갔다(unused-javascript).
+            // 이 커스텀 그룹을 제거하면 webpack 기본 default cacheGroup이 공유 코드를
+            // 라우트 그룹 단위로만 스코프해, 전 라우트 First Load JS가 19~28kB 감소한다.
           },
         },
       }

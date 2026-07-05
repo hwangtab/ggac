@@ -55,3 +55,18 @@ export function getLocaleAlternates(path: string, locale: string) {
 export function getOgLocale(locale: string): string {
   return locale === 'en' ? 'en_US' : 'ko_KR'
 }
+
+/**
+ * 아티스트·첨부 이미지가 로드되는 Supabase Storage origin(scheme+host)을 반환한다.
+ * resource hint(preconnect/dns-prefetch)용 — 경로(/storage/v1/...)는 제외한 origin만 필요.
+ * 환경변수가 없거나 유효한 URL이 아니면 null (호출부에서 힌트 생략).
+ */
+export function getSupabaseOrigin(): string | null {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!url) return null
+  try {
+    return new URL(url).origin
+  } catch {
+    return null
+  }
+}

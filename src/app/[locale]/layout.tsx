@@ -7,7 +7,7 @@ import { Toaster } from 'react-hot-toast'
 import { NextIntlClientProvider } from 'next-intl'
 import { getMessages, setRequestLocale, getTranslations } from 'next-intl/server'
 import { routing } from '@/i18n/routing'
-import { getSiteUrl, getLocaleAlternates, getOgLocale } from '@/utils/site'
+import { getSiteUrl, getLocaleAlternates, getOgLocale, getSupabaseOrigin } from '@/utils/site'
 
 export function generateStaticParams() {
   return routing.locales.map(locale => ({ locale }))
@@ -117,8 +117,22 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
     getTranslations({ locale, namespace: 'common' }),
   ])
 
+  const supabaseOrigin = getSupabaseOrigin()
+
   return (
     <html lang={locale}>
+      {/* 아티스트·첨부 이미지가 Supabase Storage(*.supabase.co)에서 로드되므로
+          연결 지연을 줄여 이미지 LCP를 개선한다. Metadata API가 커버하지 않는
+          <link> 태그는 컴포넌트 트리 어디에 렌더해도 Next.js가 <head>로 호이스트한다. */}
+      {supabaseOrigin && (
+        <>
+          {/* Supabase Storage 이미지는 일반 <img>로 crossorigin 없이(non-CORS) 로드된다.
+              브라우저는 CORS/비-CORS 커넥션 풀을 분리하므로, preconnect도 crossorigin
+              없이 두어야 이미지 요청이 예열된 커넥션(TCP+TLS)을 재사용한다. */}
+          <link rel="preconnect" href={supabaseOrigin} />
+          <link rel="dns-prefetch" href={supabaseOrigin} />
+        </>
+      )}
       <body suppressHydrationWarning>
         <NextIntlClientProvider messages={messages} locale={locale}>
           <ErrorBoundary>
