@@ -844,6 +844,24 @@ textarea:focus-visible {
     content: '';
     display: block;
   }
+
+  /* CLS: 리치텍스트 본문 이미지 공간 예약.
+     Quill이 주입한 <img>는 width/height가 없어(sanitize는 원본에 있을 때만 보존)
+     로드 시 0 높이 → 실제 높이로 커지며 아래 콘텐츠(댓글 등)를 밀어낸다.
+     aspect-ratio의 `auto` 키워드 덕분에 이미지가 로드되면 자연 비율이 사용되어
+     최종 렌더는 그대로이고(시각 변화 없음), 로드 전에는 폴백 비율(3/2)로
+     높이를 미리 확보해 레이아웃 이동을 막는다. width/height가 이미 있는
+     이미지는 건드리지 않는다. */
+  .prose img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+  }
+
+  .prose img:not([width]):not([height]) {
+    width: 100%;
+    aspect-ratio: auto 3 / 2;
+  }
 }
 
 /* ── Mobile Safari date input fixes ── */
