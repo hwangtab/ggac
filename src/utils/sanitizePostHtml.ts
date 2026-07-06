@@ -67,7 +67,9 @@ export function sanitizePostHtml(html: string): string {
     // (markdown 경로는 이미 동일 처리 — html 경로도 동등하게 맞춘다).
     transformTags: {
       a: (tagName, attribs) => {
-        if (attribs.target === '_blank') {
+        // target 키워드는 브라우저가 ASCII 대소문자 무시로 매칭하므로(_BLANK도 새 탭),
+        // 대소문자 무시 비교로 우회를 막는다.
+        if (typeof attribs.target === 'string' && attribs.target.toLowerCase() === '_blank') {
           attribs.rel = 'noopener noreferrer'
         }
         return { tagName, attribs }
