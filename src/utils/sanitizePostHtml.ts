@@ -57,11 +57,22 @@ export function sanitizePostHtml(html: string): string {
     ],
     allowedAttributes: {
       '*': ['class', 'title', 'data-list', 'data-indent', 'data-checked'],
-      a: ['href', 'target'],
+      // rel은 target=_blank 링크에 아래 transformTags가 주입한다.
+      a: ['href', 'target', 'rel'],
       img: ['src', 'alt', 'width', 'height'],
     },
     allowedSchemes: ['http', 'https', 'ftp', 'mailto', 'tel', 'callto', 'sms'],
     allowProtocolRelative: true,
+    // target=_blank 링크에 rel="noopener noreferrer"를 강제해 reverse tabnabbing을 방어한다
+    // (markdown 경로는 이미 동일 처리 — html 경로도 동등하게 맞춘다).
+    transformTags: {
+      a: (tagName, attribs) => {
+        if (attribs.target === '_blank') {
+          attribs.rel = 'noopener noreferrer'
+        }
+        return { tagName, attribs }
+      },
+    },
     // 허용되지 않은 태그는 제거하되 텍스트 내용은 보존(DOMPurify KEEP_CONTENT 대응).
     // script/style/textarea/option 등 nonTextTags의 내부 내용은 기본값대로 함께 제거된다.
     disallowedTagsMode: 'discard',
