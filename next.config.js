@@ -75,11 +75,12 @@ const nextConfig = {
               priority: 30,
               reuseExistingChunk: true,
             },
-            // DOMPurify — board/[id] PostContentRenderer에서만 사용 (정적 import).
+            // sanitize-html(+파서 의존성) — board/[id] PostContentRenderer에서만 사용.
             // 별도 chunk로 분리해 메인 vendors에서 빼고 board 페이지 진입 시점에만 로드.
-            dompurify: {
-              test: /[\\/]node_modules[\\/]dompurify[\\/]/,
-              name: 'dompurify',
+            // (기존 dompurify 그룹 대체 — isomorphic-dompurify/jsdom은 SSR ERR_REQUIRE_ESM으로 제거됨)
+            sanitizeHtml: {
+              test: /[\\/]node_modules[\\/](sanitize-html|htmlparser2|dom-serializer|domhandler|domutils|parse-srcset|deepmerge|is-plain-object|postcss|entities)[\\/]/,
+              name: 'sanitize-html',
               chunks: 'all',
               type: 'javascript/auto',
               priority: 30,

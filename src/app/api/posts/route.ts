@@ -11,6 +11,7 @@ import { fetchBoardPosts } from '@/lib/server/board'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { CATEGORIES, parseBoardCategory } from '@/constants/categories'
 import { parseJsonObjectBody } from '@/utils/requestBody'
+import { annotateImageDimensionsSafe } from '@/utils/imageDimensions'
 
 export const runtime = 'nodejs'
 export const revalidate = 60
@@ -211,11 +212,13 @@ export async function POST(request: NextRequest) {
       }
 
       const isPinned = category === '공지'
+      // content_format은 항상 'html' → 저장 전 본문 이미지 크기 주입(CLS 방지). 절대 throw 안 함.
+      const contentToSave = await annotateImageDimensionsSafe(content)
       const { data: post, error: insertError } = await supabase
         .from('posts')
         .insert({
           title,
-          content,
+          content: contentToSave,
           content_format: 'html',
           category,
           author_id: user.id,

@@ -1,10 +1,10 @@
 'use client'
 
 import React, { useMemo } from 'react'
-import DOMPurify from 'isomorphic-dompurify'
 import ReactMarkdown from 'react-markdown'
 import Image from 'next/image'
 import { detectXssPatterns, logSecurityEvent } from '@/utils/security'
+import { sanitizePostHtml } from '@/utils/sanitizePostHtml'
 import { createImageProxy } from '@/utils/imageValidation'
 import { isSafeInternalPath, toSafeHttpUrl, toSafeLinkHref } from '@/utils/safeUrl'
 
@@ -36,59 +36,7 @@ export const PostContentRenderer: React.FC<PostContentRendererProps> = ({
       return '<p>[보안상의 이유로 콘텐츠가 차단되었습니다.]</p>'
     }
 
-    const sanitized = DOMPurify.sanitize(content, {
-      ALLOWED_TAGS: [
-        'p',
-        'br',
-        'strong',
-        'em',
-        'u',
-        's',
-        'a',
-        'ul',
-        'ol',
-        'li',
-        'blockquote',
-        'h1',
-        'h2',
-        'h3',
-        'h4',
-        'h5',
-        'h6',
-        'img',
-        'table',
-        'thead',
-        'tbody',
-        'tr',
-        'td',
-        'th',
-        'div',
-        'span',
-      ],
-      ALLOWED_ATTR: ['href', 'target', 'src', 'alt', 'width', 'height', 'class', 'title'],
-      ALLOWED_URI_REGEXP:
-        /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
-      KEEP_CONTENT: true,
-      RETURN_DOM_FRAGMENT: false,
-      SANITIZE_DOM: true,
-      SANITIZE_NAMED_PROPS: true,
-      FORBID_ATTR: [
-        'style',
-        'onerror',
-        'onload',
-        'onclick',
-        'onmouseover',
-        'onfocus',
-        'onblur',
-        'onchange',
-        'onsubmit',
-      ],
-      FORBID_TAGS: ['script', 'object', 'embed', 'form', 'input', 'style', 'iframe', 'frame'],
-      ALLOW_ARIA_ATTR: false,
-      ALLOW_DATA_ATTR: true,
-      ALLOW_UNKNOWN_PROTOCOLS: false,
-      ADD_ATTR: ['data-list', 'data-indent', 'data-checked'],
-    })
+    const sanitized = sanitizePostHtml(content)
 
     const normalized = normalizeBlankParagraphs(sanitized)
 

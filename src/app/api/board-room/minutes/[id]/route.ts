@@ -4,6 +4,7 @@ import { requireBoardMember } from '@/lib/server/boardRoomAuth'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { validateUUID } from '@/utils/validation'
 import { parseContentFormat } from '@/constants/contentFormat'
+import { annotateImageDimensionsSafe } from '@/utils/imageDimensions'
 
 export const runtime = 'nodejs'
 
@@ -40,14 +41,40 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       if (!body) throw ApiError.badRequest('유효한 JSON body가 필요합니다.')
 
       const update: Record<string, unknown> = {}
-      if (typeof body.content === 'string') update.content = body.content
+
+      // 포맷을 먼저 확정(요청에 있으면 검증). content 주석 여부 판단에도 재사용한다.
+      let bodyContentFormat: string | null = null
       if (body.content_format !== undefined) {
-        const contentFormat = parseContentFormat(body.content_format)
-        if (!contentFormat) {
+        bodyContentFormat = parseContentFormat(body.content_format)
+        if (!bodyContentFormat) {
           throw ApiError.badRequest('content_format은 plain, html, markdown 중 하나여야 합니다.')
         }
-        update.content_format = contentFormat
+        update.content_format = bodyContentFormat
       }
+
+      if (typeof body.content === 'string') {
+        // content와 format은 독립적으로 수정될 수 있다. "유효 포맷"이 html일 때만 이미지
+        // 크기를 주입한다. 이번 요청에 포맷이 없으면 기존 행의 content_format을 확인한다.
+        let effectiveFormat: string | null = bodyContentFormat
+        if (effectiveFormat === null) {
+          try {
+            const { data: existing } = await db
+              .from('board_minutes')
+              .select('content_format')
+              .eq('id', id)
+              .single()
+            effectiveFormat = (existing?.content_format as string | undefined) ?? null
+          } catch {
+            // 베스트-에포트: 기존 포맷 조회 실패 시 원본 그대로 저장(저장은 절대 실패 안 함).
+            effectiveFormat = null
+          }
+        }
+        update.content =
+          effectiveFormat === 'html'
+            ? await annotateImageDimensionsSafe(body.content)
+            : body.content
+      }
+
       if (Object.keys(update).length === 0) throw ApiError.badRequest('변경할 내용이 없습니다.')
 
       const { error } = await db.from('board_minutes').update(update).eq('id', id)
