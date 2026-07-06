@@ -117,6 +117,8 @@ const grand = {
   updated: 0,
   failed: 0,
 }
+// 어느 한 테이블이라도 스캔이 중간에 끊겼는지(집계 신뢰 불가 여부).
+let anyScanIncomplete = false
 
 for (const table of TABLES) {
   console.log(`\n### table: ${table}`)
@@ -130,18 +132,26 @@ for (const table of TABLES) {
     updated: 0,
     failed: 0,
   }
+  // 페이지 조회(range) 자체가 실패하면 스캔이 중간에 끊긴다. 이때 이 테이블의
+  // 집계(스캔/변경/이미지/정규화 수치)는 전부 과소집계이므로, row-level 실패
+  // (t.failed)와는 별개로 "스캔 미완료" 플래그로 명확히 구분해 표시한다.
+  let scanIncomplete = false
+  let scanFailedAt = -1
   const changeSamples = []
   const normSamples = []
 
   for (;;) {
     const { data, error } = await db
       .from(table)
-      .select('id, content, content_format')
+      .select('id, content')
       .eq('content_format', 'html')
       .order('id', { ascending: true })
       .range(from, from + PAGE_SIZE - 1)
     if (error) {
       console.error(`  [${table}] 조회 실패 @range(${from}):`, error.message)
+      scanIncomplete = true
+      scanFailedAt = from
+      anyScanIncomplete = true
       break
     }
     if (!data || data.length === 0) break
@@ -206,8 +216,16 @@ for (const table of TABLES) {
     `  - 정규화 부작용 행(round-trip 기준선 ≠ 원본): ${t.normalized}` +
       ` (그중 실제 써질 변경 행: ${t.normalizedChanged})`
   )
-  if (APPLY) console.log(`  - updated: ${t.updated}, failed: ${t.failed}`)
-  else if (t.failed) console.log(`  - failed(처리/조회 오류): ${t.failed}`)
+  // row-level 실패(개별 행 처리 또는 update 오류)만 t.failed에 집계된다.
+  if (APPLY) console.log(`  - updated: ${t.updated}, 행 실패(처리/update): ${t.failed}`)
+  else if (t.failed) console.log(`  - 행 실패(처리 오류): ${t.failed}`)
+  // 스캔 자체가 끊겼으면(=조회 실패) 위 수치가 전부 불완전함을 눈에 띄게 경고한다.
+  if (scanIncomplete) {
+    console.log(
+      `  ⚠ 스캔 미완료 — range(${scanFailedAt})에서 조회 실패로 중단됨.` +
+        ` 이 테이블 수치(스캔/변경/이미지/정규화)는 불완전(신뢰 불가).`
+    )
+  }
 
   if (normSamples.length) {
     console.log(`  · 정규화 델타 샘플(속성 추가 없이 재직렬화만 했을 때의 차이):`)
@@ -238,11 +256,20 @@ console.log(`\n${'='.repeat(64)}`)
 console.log(
   `총계 — 스캔:${grand.scanned} 변경:${grand.changed} 이미지:${grand.imgs} ` +
     `정규화부작용:${grand.normalized}(써질행중:${grand.normalizedChanged})` +
-    (APPLY ? ` updated:${grand.updated} failed:${grand.failed}` : '')
+    (APPLY ? ` updated:${grand.updated} 행실패:${grand.failed}` : '')
 )
+if (anyScanIncomplete) {
+  console.log(
+    '⚠ 스캔 미완료 테이블이 있음 — 위 총계는 불완전(신뢰 불가).' +
+      ' 조회 실패를 해결하고 재실행할 것. (Task 4 승인 근거로 쓰지 말 것)'
+  )
+}
 console.log(
   APPLY
     ? '완료(APPLY).'
     : '완료(DRY-RUN, 쓰기 없음). 검토 후 --apply로 실제 적용.'
 )
 console.log('='.repeat(64))
+
+// 스캔이 하나라도 미완료면 수치가 권위 있지 않음을 종료코드로도 드러낸다.
+if (anyScanIncomplete) process.exitCode = 1
