@@ -72,6 +72,27 @@ test('data-list/data-indent/data-checked 보존 (Quill)', () => {
   assert.match(out, /data-checked="true"/)
 })
 
+// '*'(전역) 속성과 태그별 속성의 병합(merge) 시맨틱 고정.
+// div/span은 태그별 속성목록이 없어 어느 시맨틱(merge/override)이든 class를 유지하므로
+// 회귀를 못 잡는다. a·img처럼 태그별 목록이 있는 태그에서 '*'의 class/title도 함께
+// 살아남는지 단언 → 만약 override 시맨틱으로 바뀌면 Quill class가 조용히 사라지며 실패한다.
+test("a: 태그별(href/target)과 '*'(class/title) 속성이 함께 병합 보존", () => {
+  const out = sanitizePostHtml('<a href="https://x.com" class="ql-link" title="t">x</a>')
+  assert.match(out, /href="https:\/\/x\.com"/)
+  assert.match(out, /class="ql-link"/)
+  assert.match(out, /title="t"/)
+})
+
+test("img: 태그별(src/width/height)과 '*'(class) 속성이 함께 병합 보존", () => {
+  const out = sanitizePostHtml(
+    '<img src="https://proj.supabase.co/a.jpg" class="ql-img" width="800" height="600">'
+  )
+  assert.match(out, /src="https:\/\/proj\.supabase\.co\/a\.jpg"/)
+  assert.match(out, /class="ql-img"/)
+  assert.match(out, /width="800"/)
+  assert.match(out, /height="600"/)
+})
+
 // --- XSS 벡터 차단 ---
 
 test('<script> 완전 제거 (내용 포함)', () => {
@@ -100,9 +121,19 @@ test('vbscript: href 무력화', () => {
   assert.match(out, />x</)
 })
 
-test('data:text/html src 차단', () => {
+test('data:text/html src 차단 (src 속성 자체가 제거됨)', () => {
   const out = sanitizePostHtml('<img src="data:text/html,<script>alert(1)</script>">')
   assert.doesNotMatch(out, /data:text\/html/i)
+  // 문자열만 사라지는 게 아니라 src 속성 자체가 드롭되어야 한다(다른 src로 남으면 안 됨).
+  assert.doesNotMatch(out, /src=/i)
+})
+
+test('img src="javascript:..." 완전 차단 (src 속성 드롭)', () => {
+  // 최고위험 벡터: 허용 스킴이 아니면 sanitize-html이 src 속성을 통째로 제거한다(<img />).
+  const out = sanitizePostHtml('<img src="javascript:alert(1)">')
+  assert.doesNotMatch(out, /javascript:/i)
+  assert.doesNotMatch(out, /alert\(1\)/)
+  assert.doesNotMatch(out, /src=/i)
 })
 
 test('iframe/object/embed/form/input/frame/style 태그 제거', () => {
