@@ -18,6 +18,7 @@ import { parseIntegerParam } from '@/utils/queryParams'
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { CATEGORIES, parseBoardCategory } from '@/constants/categories'
 import { parseJsonObjectBody } from '@/utils/requestBody'
+import { annotateImageDimensionsSafe } from '@/utils/imageDimensions'
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const resolvedParams = await context.params
@@ -351,11 +352,14 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     }
 
     const shouldPin = category === '공지'
+    // html 본문일 때만 저장 전 이미지 크기 주입(CLS 방지). Safe 래퍼는 절대 throw 안 함.
+    const contentToSave =
+      contentFormat === 'html' ? await annotateImageDimensionsSafe(content) : content
     const { data: updatedPost, error: updateError } = await supabase
       .from('posts')
       .update({
         title,
-        content,
+        content: contentToSave,
         content_format: contentFormat,
         category,
         is_pinned: shouldPin,

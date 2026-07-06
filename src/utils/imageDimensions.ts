@@ -88,3 +88,36 @@ export async function annotateImageDimensions(
     return html
   }
 }
+
+/**
+ * 저장 경로에서 호출하는 단일 진입점.
+ *
+ * `annotateImageDimensions`는 이미지마다 서버측 fetch+sharp를 수행하므로(이미지당 5s
+ * 타임아웃·동시성 4), 이미지가 많은 글은 저장에 수 초가 더 걸릴 수 있다. 이 래퍼는
+ * 전체 시간 예산(`budgetMs`, 기본 8s)을 두어 저장 지연을 상한으로 캡하고, 타임아웃이나
+ * 어떤 예외에도 **원본 html을 그대로 반환**한다(저장은 절대 실패하지 않는다).
+ *
+ * `_annotate`는 테스트 전용 주입 훅이다(래퍼 자체의 예산/무예외 계약을 격리 검증).
+ * 운영 코드에서는 넘기지 않으며, 그때는 실 리졸버를 쓰는 `annotateImageDimensions`가 쓰인다.
+ */
+export async function annotateImageDimensionsSafe(
+  html: string,
+  opts: { budgetMs?: number; _annotate?: (html: string) => Promise<string> } = {}
+): Promise<string> {
+  const budgetMs = opts.budgetMs ?? 8000
+  const annotate = opts._annotate ?? annotateImageDimensions
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      annotate(html),
+      new Promise<string>(resolve => {
+        timer = setTimeout(() => resolve(html), budgetMs)
+      }),
+    ])
+  } catch {
+    return html
+  } finally {
+    // 승자가 정해지면 남은 타이머를 정리한다(테스트에서 프로세스가 붙잡히지 않도록).
+    if (timer) clearTimeout(timer)
+  }
+}

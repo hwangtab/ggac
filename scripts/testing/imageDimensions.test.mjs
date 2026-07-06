@@ -3,7 +3,9 @@ import assert from 'node:assert/strict'
 
 // 테스트는 우리 Supabase origin을 알아야 isSupabaseImageUrl이 매칭된다
 process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://proj.supabase.co'
-const { annotateImageDimensions } = await import('../../src/utils/imageDimensions.ts')
+const { annotateImageDimensions, annotateImageDimensionsSafe } = await import(
+  '../../src/utils/imageDimensions.ts'
+)
 
 const SB = 'https://proj.supabase.co/storage/v1/object/public/board/a.jpg'
 // 주입 가능한 stub resolver로 fetch/sharp 없이 순수 변환 검증
@@ -113,4 +115,44 @@ test('resolver가 특정 src에서 throw해도 나머지는 주입되고 유틸�
   assert.ok(out.includes(`<img src="${C}" width="50" height="60">`), 'C annotated')
   // throw한 이미지는 크기 없이 그대로 남는다
   assert.ok(out.includes(`<img src="${BOOM}">`), 'BOOM left unsized')
+})
+
+// --- annotateImageDimensionsSafe: 저장 경로 단일 진입점(예산·무예외 계약) ---
+// 래퍼 자체의 두 성질만 격리 검증한다: (1) 예산 초과·예외 시 원본 반환, (2) 절대 throw 안 함.
+// 실 리졸버(fetch+sharp) 없이 검증하려고 테스트 전용 훅 `_annotate`를 주입한다.
+
+test('Safe: 적격 이미지가 없으면 원본을 (실 리졸버 경로로) 그대로 빠르게 반환', async () => {
+  const html = `<p>hi</p><img src="https://other.com/x.jpg">`
+  const out = await annotateImageDimensionsSafe(html)
+  assert.equal(out, html)
+})
+
+test('Safe: 깨진 html에도 throw하지 않고 문자열을 반환', async () => {
+  const html = `<img src="<<<broken" <p>unclosed <<>`
+  const out = await annotateImageDimensionsSafe(html)
+  assert.equal(typeof out, 'string')
+})
+
+test('Safe: 예산(budgetMs) 초과 시 원본 반환(느린 annotate 주입)', async () => {
+  const html = `<p>content</p><img src="${SB}">`
+  const slow = () => new Promise(() => {}) // 절대 resolve 안 함
+  const start = Date.now()
+  const out = await annotateImageDimensionsSafe(html, { budgetMs: 30, _annotate: slow })
+  assert.equal(out, html)
+  assert.ok(Date.now() - start < 2000, '예산 안에서 반환(느린 annotate를 기다리지 않음)')
+})
+
+test('Safe: annotate가 reject해도 throw 없이 원본 반환', async () => {
+  const html = `<p>x</p><img src="${SB}">`
+  const boom = () => Promise.reject(new Error('boom'))
+  const out = await annotateImageDimensionsSafe(html, { _annotate: boom })
+  assert.equal(out, html)
+})
+
+test('Safe: 예산 내에 resolve되면 annotate 결과를 반환(happy path)', async () => {
+  const html = `<img src="${SB}">`
+  const fast = async h => h.replace('<img', '<img width="800" height="600"')
+  const out = await annotateImageDimensionsSafe(html, { budgetMs: 5000, _annotate: fast })
+  assert.match(out, /width="800"/)
+  assert.match(out, /height="600"/)
 })

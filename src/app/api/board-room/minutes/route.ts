@@ -5,6 +5,7 @@ import { notifyDirectors } from '@/lib/server/boardRoomNotify'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { validateUUID } from '@/utils/validation'
 import { parseContentFormat } from '@/constants/contentFormat'
+import { annotateImageDimensionsSafe } from '@/utils/imageDimensions'
 
 export const runtime = 'nodejs'
 
@@ -48,11 +49,15 @@ export async function POST(request: NextRequest) {
       if (existErr) throw ApiError.internalServerError('회의록 조회에 실패했습니다.')
       if (existing) throw ApiError.conflict('이미 회의록이 존재합니다.')
 
+      // html 본문일 때만 저장 전 이미지 크기 주입(CLS 방지). Safe 래퍼는 절대 throw 안 함.
+      const contentToSave =
+        contentFormat === 'html' ? await annotateImageDimensionsSafe(content) : content
+
       const { data: minutes, error } = await db
         .from('board_minutes')
         .insert({
           meeting_id: sanitizedMeetingId,
-          content,
+          content: contentToSave,
           content_format: contentFormat,
           author_id: user.id,
         })
