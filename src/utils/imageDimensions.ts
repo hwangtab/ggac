@@ -1,0 +1,82 @@
+import * as cheerio from 'cheerio'
+import sharp from 'sharp'
+
+export type ImageDim = { width: number; height: number }
+
+/**
+ * 아티스트·첨부 이미지가 로드되는 Supabase Storage origin(scheme+host)을 반환한다.
+ *
+ * NOTE: `@/utils/site`의 `getSupabaseOrigin`과 동일한 로직을 의도적으로 인라인한다.
+ * 이 유틸은 `node --test`(타입 스트리핑)로 직접 import되어 단위 테스트되는데,
+ * node ESM 리졸버는 `@/*` 경로 별칭을 해석하지 못한다(ERR_MODULE_NOT_FOUND).
+ * 동작(NEXT_PUBLIC_SUPABASE_URL → origin)은 site.ts와 바이트 단위로 동일하다.
+ */
+function getSupabaseOrigin(): string | null {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!url) return null
+  try {
+    return new URL(url).origin
+  } catch {
+    return null
+  }
+}
+
+export function isSupabaseImageUrl(src: string): boolean {
+  const origin = getSupabaseOrigin()
+  if (!origin) return false
+  try {
+    return new URL(src).origin === origin
+  } catch {
+    return false
+  }
+}
+
+export async function resolveImageDimensions(src: string): Promise<ImageDim | null> {
+  try {
+    const res = await fetch(src, { signal: AbortSignal.timeout(5000) })
+    if (!res.ok) return null
+    const buf = Buffer.from(await res.arrayBuffer())
+    const meta = await sharp(buf).metadata()
+    if (!meta.width || !meta.height) return null
+    return { width: meta.width, height: meta.height }
+  } catch {
+    return null
+  }
+}
+
+export async function annotateImageDimensions(
+  html: string,
+  resolve: (src: string) => Promise<ImageDim | null> = resolveImageDimensions,
+  opts: { concurrency?: number } = {}
+): Promise<string> {
+  try {
+    // 프래그먼트로 로드해 html/body 래핑을 피한다(구조 보존)
+    const $ = cheerio.load(html, null, false)
+    const targets = $('img')
+      .toArray()
+      .filter(el => {
+        const $el = $(el)
+        if ($el.attr('width') != null || $el.attr('height') != null) return false
+        const src = $el.attr('src')
+        return !!src && isSupabaseImageUrl(src)
+      })
+    if (targets.length === 0) return html
+    const concurrency = opts.concurrency ?? 4
+    for (let i = 0; i < targets.length; i += concurrency) {
+      await Promise.all(
+        targets.slice(i, i + concurrency).map(async el => {
+          const $el = $(el)
+          const dim = await resolve($el.attr('src') as string)
+          if (dim) {
+            $el.attr('width', String(dim.width))
+            $el.attr('height', String(dim.height))
+          }
+        })
+      )
+    }
+    return $.html()
+  } catch {
+    // best-effort: 어떤 HTML 입력에도 throw하지 않는다(파싱 실패 시 원본 유지)
+    return html
+  }
+}
