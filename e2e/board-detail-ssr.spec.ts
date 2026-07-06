@@ -2,9 +2,11 @@ import { test, expect } from '@playwright/test'
 
 // 로컬 전용 스모크(운영 Supabase 연결 필요).
 //
-// 회귀 방지: PostContentRenderer 가 브라우저 전용 dompurify 를 SSR 경로에서
-// 호출해 content_format='html' 인 게시글 상세가 SSR 500 으로 크래시하던
-// 버그(운영 420건)를 isomorphic-dompurify 로 근본 수정했다.
+// 회귀 방지: content_format='html' 게시글 상세의 SSR sanitize 이력.
+// (1) 브라우저 전용 dompurify를 SSR에서 호출해 500 크래시(운영 420건) →
+// (2) isomorphic-dompurify 전환으로 500은 멈췄으나 jsdom이 Vercel SSR에서
+//     ERR_REQUIRE_ESM으로 throw → 본문이 조용히 CSR로 복구(CLS/LCP 저하) →
+// (3) sanitize-html(순수 JS, jsdom 없음)로 교체해 SSR sanitize를 근본 복구했다.
 //
 // 버그는 html 포맷 글에서만 재현되고 plain/markdown 은 크래시하지 않으므로,
 // 첫 글 하나만 확인하면 그 글이 plain/markdown 일 때 버그가 있어도 통과한다.
