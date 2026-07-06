@@ -66,7 +66,15 @@ export async function annotateImageDimensions(
       await Promise.all(
         targets.slice(i, i + concurrency).map(async el => {
           const $el = $(el)
-          const dim = await resolve($el.attr('src') as string)
+          // per-image best-effort: 리졸버가 (return-null 계약을 어기고) throw해도
+          // 그 이미지만 스킵한다. 예외가 바깥 catch까지 전파되면 같은 호출에서 이미
+          // 다른 이미지에 적용한 width/height까지 통째로 버려지므로 여기서 삼킨다.
+          let dim: ImageDim | null = null
+          try {
+            dim = await resolve($el.attr('src') as string)
+          } catch {
+            dim = null
+          }
           if (dim) {
             $el.attr('width', String(dim.width))
             $el.attr('height', String(dim.height))

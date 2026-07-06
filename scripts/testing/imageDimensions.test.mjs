@@ -46,3 +46,71 @@ test('img 없으면 원본 그대로', async () => {
   const html = `<p>no image</p>`
   assert.equal(await annotateImageDimensions(html, stub), html)
 })
+
+// --- 라운드트립 회귀(엔티티 보존) ---
+test('필수 엔티티(&amp; &lt; &gt;)는 텍스트 노드에서 그대로 보존', async () => {
+  const html = `<p>a &amp; b &lt;x&gt;</p><img src="${SB}">`
+  const out = await annotateImageDimensions(html, stub)
+  assert.match(out, /a &amp; b &lt;x&gt;/)
+})
+
+// pinned cheerio round-trip behavior — cosmetic, visually identical; see util NOTE.
+// cheerio(parse5)는 텍스트 노드의 &quot;/&apos;를 리터럴 "/'로 직렬화한다.
+// 렌더 결과는 동일(무해)하지만, 미래에 이 동작이 바뀌면 여기서 실패하도록 고정한다.
+test('텍스트 노드의 &quot;/&apos;는 리터럴 따옴표로 정규화(고정된 동작)', async () => {
+  const html = `<p>&quot;q&quot; &apos;a&apos;</p><img src="${SB}">`
+  const out = await annotateImageDimensions(html, stub)
+  assert.match(out, /<p>"q" 'a'<\/p>/)
+  assert.doesNotMatch(out, /&quot;/)
+  assert.doesNotMatch(out, /&apos;/)
+})
+
+// --- 동시성 배치 루프 커버리지 ---
+test('한 호출의 여러 Supabase 이미지 모두 주입(배치 루프)', async () => {
+  const n = 5
+  const srcs = Array.from(
+    { length: n },
+    (_, i) => `https://proj.supabase.co/storage/v1/object/public/board/img${i}.jpg`
+  )
+  const many = async src =>
+    srcs.includes(src) ? { width: 100 + srcs.indexOf(src), height: 200 } : null
+  const html = srcs.map(s => `<p><img src="${s}"></p>`).join('')
+  const out = await annotateImageDimensions(html, many)
+  for (let i = 0; i < n; i++) {
+    assert.ok(
+      out.includes(`<img src="${srcs[i]}" width="${100 + i}" height="200">`),
+      `img${i} annotated`
+    )
+  }
+})
+
+test('커스텀 concurrency(2)에서도 모든 이미지 주입', async () => {
+  const n = 5
+  const srcs = Array.from(
+    { length: n },
+    (_, i) => `https://proj.supabase.co/storage/v1/object/public/board/c${i}.jpg`
+  )
+  const many = async src => (srcs.includes(src) ? { width: 300, height: 400 } : null)
+  const html = srcs.map(s => `<p><img src="${s}"></p>`).join('')
+  const out = await annotateImageDimensions(html, many, { concurrency: 2 })
+  for (const s of srcs) {
+    assert.ok(out.includes(`<img src="${s}" width="300" height="400">`), `${s} annotated`)
+  }
+})
+
+// --- resolver 하드닝 ---
+test('resolver가 특정 src에서 throw해도 나머지는 주입되고 유틸은 throw 안 함', async () => {
+  const A = 'https://proj.supabase.co/storage/v1/object/public/board/ok1.jpg'
+  const BOOM = 'https://proj.supabase.co/storage/v1/object/public/board/boom.jpg'
+  const C = 'https://proj.supabase.co/storage/v1/object/public/board/ok2.jpg'
+  const throwing = async src => {
+    if (src === BOOM) throw new Error('resolver blew up')
+    return { width: 50, height: 60 }
+  }
+  const html = `<img src="${A}"><img src="${BOOM}"><img src="${C}">`
+  const out = await annotateImageDimensions(html, throwing)
+  assert.ok(out.includes(`<img src="${A}" width="50" height="60">`), 'A annotated')
+  assert.ok(out.includes(`<img src="${C}" width="50" height="60">`), 'C annotated')
+  // throw한 이미지는 크기 없이 그대로 남는다
+  assert.ok(out.includes(`<img src="${BOOM}">`), 'BOOM left unsized')
+})
