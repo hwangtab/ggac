@@ -200,3 +200,21 @@ test('mailto/tel 스킴 href 허용', () => {
 test('빈 문자열은 빈 문자열', () => {
   assert.equal(sanitizePostHtml(''), '')
 })
+
+// --- reverse tabnabbing 방어 (target=_blank → rel 강제) ---
+
+test('target="_blank" 링크에 rel="noopener noreferrer" 자동 주입', () => {
+  const out = sanitizePostHtml('<a href="https://x.com" target="_blank">x</a>')
+  assert.match(out, /target="_blank"/)
+  assert.match(out, /rel="noopener noreferrer"/)
+})
+
+test('target 없는 링크에는 rel을 넣지 않음', () => {
+  const out = sanitizePostHtml('<a href="https://x.com">x</a>')
+  assert.doesNotMatch(out, /rel=/)
+})
+
+test('target="_BLANK"(대문자)도 rel 주입 — 대소문자 우회 방지', () => {
+  const out = sanitizePostHtml('<a href="https://x.com" target="_BLANK">x</a>')
+  assert.match(out, /rel="noopener noreferrer"/)
+})

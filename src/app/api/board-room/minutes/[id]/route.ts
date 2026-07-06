@@ -17,9 +17,17 @@ function validateMinutesId(id: string) {
 }
 
 async function loadMinutesAuthor(db: any, id: string) {
-  const { data, error } = await db.from('board_minutes').select('author_id').eq('id', id).single()
+  // author_id와 content_format을 한 번에 읽어, 아래 PATCH가 포맷 재조회 없이 재사용한다.
+  const { data, error } = await db
+    .from('board_minutes')
+    .select('author_id, content_format')
+    .eq('id', id)
+    .single()
   if (error) return { error }
-  return { author: data?.author_id as string | undefined }
+  return {
+    author: data?.author_id as string | undefined,
+    contentFormat: (data?.content_format as string | undefined) ?? null,
+  }
 }
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -33,7 +41,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
   return apiPatch(
     async () => {
-      const { author, error: authorErr } = await loadMinutesAuthor(db, id)
+      const {
+        author,
+        contentFormat: existingContentFormat,
+        error: authorErr,
+      } = await loadMinutesAuthor(db, id)
       if (authorErr || author === undefined) throw ApiError.notFound('회의록을 찾을 수 없습니다.')
       if (author !== user.id && !isAdmin) throw ApiError.forbidden('편집 권한이 없습니다.')
 
@@ -54,21 +66,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
       if (typeof body.content === 'string') {
         // content와 format은 독립적으로 수정될 수 있다. "유효 포맷"이 html일 때만 이미지
-        // 크기를 주입한다. 이번 요청에 포맷이 없으면 기존 행의 content_format을 확인한다.
-        let effectiveFormat: string | null = bodyContentFormat
-        if (effectiveFormat === null) {
-          try {
-            const { data: existing } = await db
-              .from('board_minutes')
-              .select('content_format')
-              .eq('id', id)
-              .single()
-            effectiveFormat = (existing?.content_format as string | undefined) ?? null
-          } catch {
-            // 베스트-에포트: 기존 포맷 조회 실패 시 원본 그대로 저장(저장은 절대 실패 안 함).
-            effectiveFormat = null
-          }
-        }
+        // 크기를 주입한다. 이번 요청에 포맷이 없으면 위 loadMinutesAuthor가 이미 읽어둔
+        // 기존 행의 content_format을 재사용한다(추가 조회 없음).
+        const effectiveFormat: string | null = bodyContentFormat ?? existingContentFormat
         update.content =
           effectiveFormat === 'html'
             ? await annotateImageDimensionsSafe(body.content)
