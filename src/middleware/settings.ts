@@ -17,8 +17,14 @@ interface PublicSystemSettings {
   timestamp: number
 }
 
+// 캐시는 Edge isolate 단위라 인스턴스 간 전파가 없다. 관리자가 유지보수 모드를
+// 토글했을 때 최대 이 시간만큼 반영이 늦을 수 있으므로 짧게 유지한다
+// (조회는 2.5s 타임아웃의 경량 REST 1회 — 60초당 1회면 부담 없음).
+// 조회 실패 시에는 null을 반환해 유지보수 모드가 꺼진 것처럼 동작한다(fail-open).
+// 이는 의도된 정책이다: settings 장애가 사이트 전체 차단(fail-closed)으로
+// 번지는 것보다 유지보수 안내가 늦는 쪽이 낫다.
 let settingsCache: PublicSystemSettings | null = null
-const SETTINGS_CACHE_DURATION = 5 * 60 * 1000 // 5분
+const SETTINGS_CACHE_DURATION = 60 * 1000 // 60초
 
 export async function getSystemSettings(_supabase?: unknown): Promise<PublicSystemSettings | null> {
   // _supabase 인자는 하위 호환성을 위해 유지하되 사용하지 않는다.
@@ -67,9 +73,6 @@ export async function getSystemSettings(_supabase?: unknown): Promise<PublicSyst
   }
 }
 
-/**
- * 캐시 무효화 (관리자가 설정 변경 시 호출)
- */
-export function invalidateSettingsCache() {
-  settingsCache = null
-}
+// 참고: 과거의 invalidateSettingsCache export는 어떤 코드도 호출하지 않는 dead
+// export였고, 설정 변경 API(Node 런타임)가 호출해도 Edge 미들웨어의 isolate
+// 메모리에는 전파될 수 없어 제거했다. 전파는 위 TTL(60초)이 담당한다.

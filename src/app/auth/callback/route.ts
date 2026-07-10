@@ -1,5 +1,5 @@
 import { createSupabaseServer } from '@/lib/supabase/server'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { createLogger } from '@/utils/logger'
 
 const log = createLogger('auth/callback')
@@ -49,7 +49,8 @@ export async function GET(request: NextRequest) {
     const supabase = await createSupabaseServer()
 
     try {
-      const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
+      const { data: exchangeData, error: exchangeError } =
+        await supabase.auth.exchangeCodeForSession(code)
 
       // 코드 교환 실패(만료·무효 링크) 시 세션이 없으므로 로그인으로 보낸다.
       if (exchangeError) {
@@ -63,56 +64,57 @@ export async function GET(request: NextRequest) {
         return redirectToPath(requestUrl, safeNext, locale)
       }
 
-      // 사용자 프로필 확인
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
+      // exchangeCodeForSession이 세션과 user를 함께 반환하므로 getUser() 재왕복은
+      // 불필요하다(전수감사 인증 M-3 — GoTrue 왕복 1개 제거).
+      const user = exchangeData?.user ?? exchangeData?.session?.user ?? null
 
       if (user) {
-        // 로그인 활동 로깅
-        try {
-          const ip =
-            request.headers.get('x-forwarded-for')?.split(',')[0] ||
-            request.headers.get('x-real-ip') ||
-            '127.0.0.1'
-          const userAgent = request.headers.get('user-agent') || 'Unknown'
+        // 로그인 활동 로깅 — RPC 2건이 리다이렉트를 블로킹하지 않도록 응답 후
+        // 실행한다(after). 실패해도 로그인 흐름에는 영향 없다.
+        const ip =
+          request.headers.get('x-forwarded-for')?.split(',')[0] ||
+          request.headers.get('x-real-ip') ||
+          '127.0.0.1'
+        const userAgent = request.headers.get('user-agent') || 'Unknown'
+        const sessionToken = `session_${user.id}_${Date.now()}`
+        const callbackUrl = requestUrl.toString()
 
-          // 1. 세션 시작 기록
-          const sessionToken = `session_${user.id}_${Date.now()}`
-          await supabase.rpc('manage_user_session', {
-            p_user_id: user.id,
-            p_session_token: sessionToken,
-            p_action: 'start',
-            p_ip_address: ip,
-            p_user_agent: userAgent,
-            p_metadata: {
-              login_method: 'oauth',
-              callback_url: requestUrl.toString(),
-              timestamp: new Date().toISOString(),
-            },
-          })
+        after(async () => {
+          try {
+            await supabase.rpc('manage_user_session', {
+              p_user_id: user.id,
+              p_session_token: sessionToken,
+              p_action: 'start',
+              p_ip_address: ip,
+              p_user_agent: userAgent,
+              p_metadata: {
+                login_method: 'oauth',
+                callback_url: callbackUrl,
+                timestamp: new Date().toISOString(),
+              },
+            })
 
-          // 2. 로그인 활동 기록 (리포트용)
-          await supabase.rpc('log_user_activity', {
-            p_user_id: user.id,
-            p_action_type: 'login',
-            p_target_type: 'system',
-            p_target_id: null,
-            p_metadata: {
-              login_method: 'oauth',
-              callback_url: requestUrl.toString(),
-              session_token: sessionToken,
-              timestamp: new Date().toISOString(),
-            },
-            p_ip_address: ip,
-            p_user_agent: userAgent,
-            p_session_id: sessionToken,
-          })
+            await supabase.rpc('log_user_activity', {
+              p_user_id: user.id,
+              p_action_type: 'login',
+              p_target_type: 'system',
+              p_target_id: null,
+              p_metadata: {
+                login_method: 'oauth',
+                callback_url: callbackUrl,
+                session_token: sessionToken,
+                timestamp: new Date().toISOString(),
+              },
+              p_ip_address: ip,
+              p_user_agent: userAgent,
+              p_session_id: sessionToken,
+            })
 
-          log.info('로그인 활동 기록됨', { userId: maskId(user.id) })
-        } catch (activityError) {
-          log.error('Login activity logging failed', activityError)
-        }
+            log.info('로그인 활동 기록됨', { userId: maskId(user.id) })
+          } catch (activityError) {
+            log.error('Login activity logging failed', activityError)
+          }
+        })
 
         const { data: profile } = await supabase
           .from('member_profiles')
