@@ -221,7 +221,11 @@ class ActivityLogger {
       min: 1000,
     })
     setInterval(async () => {
-      if (!document.hidden && (await this.ensureSession())) {
+      // 미인증 방문자는 갱신할 활동 세션이 없으므로 tick마다 세션 재확인(네트워크)을
+      // 하지 않는다. 로그인 전환은 페이지 전환(page_view)·탭 복귀(visibilitychange)·
+      // heartbeat 경로의 ensureSession이 감지해 세션을 다시 세운다.
+      if (document.hidden || !this.sessionId) return
+      if (await this.ensureSession()) {
         await this.updateSessionActivity()
       }
     }, pingMs)

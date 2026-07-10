@@ -6,6 +6,7 @@ import { Link } from '@/i18n/navigation'
 import { FiUser, FiMusic, FiActivity, FiSettings, FiChevronRight } from 'react-icons/fi'
 import { MypageMenuItem } from '@/types'
 import PermissionCheck from './PermissionCheck'
+import { fetchSessionProfile } from '@/utils/sessionProfile'
 
 interface MypageNavigationProps {
   currentPath: string
@@ -20,22 +21,10 @@ const MypageNavigation: React.FC<MypageNavigationProps> = ({ currentPath }) => {
   useEffect(() => {
     const getUser = async () => {
       try {
-        const response = await fetch('/api/auth/verify-session', {
-          method: 'GET',
-          credentials: 'include',
-          cache: 'no-store',
-        })
-        // 표준 응답 래퍼: { success, data: { authenticated, user, profile } }
-        const json = (await response.json().catch(() => null)) as {
-          data?: {
-            authenticated?: boolean
-            user?: unknown
-            profile?: unknown
-          }
-        } | null
-        const data = json?.data
+        // 공용 세션 조회(모듈 캐시 + in-flight dedupe) — PermissionCheck와 요청을 공유한다.
+        const data = await fetchSessionProfile()
 
-        if (response.ok && data?.authenticated) {
+        if (data.authenticated) {
           setUser(data.user || null)
           setProfile(data.profile || null)
         }

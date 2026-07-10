@@ -87,6 +87,13 @@ export async function middleware(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      // 미들웨어는 모든 페이지 요청 경로다. Supabase Auth가 행이면 사이트 전체가
+      // 미들웨어 타임아웃까지 블로킹되므로 요청 상한을 짧게 둔다(초과 시 auth 실패
+      // 경로로 처리되어 공개 페이지는 통과, 보호 페이지는 로그인으로 유도).
+      global: {
+        fetch: (input: RequestInfo | URL, init?: RequestInit) =>
+          fetch(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(3000) }),
+      },
       cookies: {
         getAll() {
           return request.cookies.getAll()

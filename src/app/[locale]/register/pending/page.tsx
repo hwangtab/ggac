@@ -43,7 +43,8 @@ export default function PendingPage() {
     setLastChecked(new Date())
 
     try {
-      const session = await fetchSessionProfile()
+      // 사용자가 승인 상태 재확인을 명시적으로 요청한 경우이므로 캐시를 우회한다
+      const session = await fetchSessionProfile({ force: true })
       if (!mountedRef.current) {
         return
       }

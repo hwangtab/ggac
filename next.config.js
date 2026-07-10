@@ -11,6 +11,13 @@ const nextConfig = {
   reactStrictMode: true,
   allowedDevOrigins: ['127.0.0.1'],
 
+  // data/*.json은 src/lib/data.ts가 process.cwd() 기반 동적 경로로 fs 읽기하므로
+  // Vercel output file tracing이 추적하지 못해 서버리스 번들(/var/task)에서 누락된다.
+  // (sitemap.xml의 artists/projects ENOENT 5개월 — 전 라우트에 명시 포함으로 해소)
+  outputFileTracingIncludes: {
+    '/**': ['./data/**/*'],
+  },
+
   env: {
     NEXT_PUBLIC_IMAGE_ALLOWED_QUALITIES: IMAGE_ALLOWED_QUALITIES.join(','),
   },

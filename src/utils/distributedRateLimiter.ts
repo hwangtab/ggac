@@ -71,6 +71,9 @@ class UpstashRedisClient {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(command),
+      // rate limit 확인은 모든 보호 라우트의 고정 선행 비용이다. Upstash가 행이면
+      // 51개 라우트가 함수 타임아웃까지 매달리므로 짧은 상한 후 에러 경로로 넘긴다.
+      signal: AbortSignal.timeout(2000),
     })
 
     if (!response.ok) {

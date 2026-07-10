@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from '@/i18n/navigation'
 import { useTranslations } from 'next-intl'
+import { fetchSessionProfile } from '@/utils/sessionProfile'
 
 const BoardUserSection = () => {
   const router = useRouter()
@@ -16,29 +17,15 @@ const BoardUserSection = () => {
 
     const fetchUserAndProfile = async () => {
       try {
-        const response = await fetch('/api/auth/verify-session', {
-          method: 'GET',
-          credentials: 'include',
-          cache: 'no-store',
-        })
-        // 표준 응답 래퍼: { success, data: { authenticated, profile } }
-        const json = (await response.json().catch(() => null)) as {
-          data?: {
-            authenticated?: boolean
-            profile?: {
-              registration_status?: string
-              is_active?: boolean
-            } | null
-          }
-        } | null
-        const data = json?.data
+        // 공용 세션 조회(모듈 캐시 + in-flight dedupe) — Navigation·활동 추적과 요청을 공유한다.
+        const data = await fetchSessionProfile()
 
         if (!mounted) return
 
-        const authenticated = !!(response.ok && data?.authenticated)
+        const authenticated = data.authenticated
         setIsAuthenticated(authenticated)
 
-        if (!authenticated || !data?.profile) {
+        if (!authenticated || !data.profile) {
           setIsMember(false)
           setLoading(false)
           return
