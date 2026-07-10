@@ -108,7 +108,8 @@ export default function LoginPage() {
       const retryDelay = isMobile ? 500 : 200
 
       while (retries < maxRetries) {
-        const currentSession = await fetchSessionProfile()
+        // 로그인 직후 확인 — 로그인 전의 미인증 캐시(30초 TTL)를 읽으면 안 되므로 강제 재검증
+        const currentSession = await fetchSessionProfile({ force: true })
 
         if (currentSession.user) {
           session = currentSession

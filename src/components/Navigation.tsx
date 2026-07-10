@@ -4,7 +4,11 @@ import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { useTranslations } from 'next-intl'
 import { Link, usePathname, useRouter } from '@/i18n/navigation'
-import { fetchSessionProfile, type VerifiedSessionUser } from '@/utils/sessionProfile'
+import {
+  clearSessionProfileCache,
+  fetchSessionProfile,
+  type VerifiedSessionUser,
+} from '@/utils/sessionProfile'
 
 import NotificationDropdown from './NotificationDropdown'
 import LocaleSwitcher from './LocaleSwitcher'
@@ -139,6 +143,9 @@ const Navigation = () => {
         throw new Error(`Logout failed: ${response.status}`)
       }
 
+      // 세션 캐시를 비워 다른 소비자(활동 추적·좋아요 훅)가 30초간 낡은
+      // 인증 상태를 읽지 않게 한다.
+      clearSessionProfileCache()
       setUser(null)
       setNavProfile(null)
       setIsMenuOpen(false)

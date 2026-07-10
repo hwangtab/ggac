@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from '@/i18n/navigation'
 import { PermissionCheckProps } from '@/types'
+import { fetchSessionProfile } from '@/utils/sessionProfile'
 
 const PermissionCheck: React.FC<PermissionCheckProps> = ({
   children,
@@ -19,22 +20,11 @@ const PermissionCheck: React.FC<PermissionCheckProps> = ({
   useEffect(() => {
     const checkPermission = async () => {
       try {
-        const response = await fetch('/api/auth/verify-session', {
-          method: 'GET',
-          credentials: 'include',
-          cache: 'no-store',
-        })
-        // 표준 응답 래퍼: { success, data: { authenticated, user, profile } }
-        const json = (await response.json().catch(() => null)) as {
-          data?: {
-            authenticated?: boolean
-            user?: unknown
-            profile?: any
-          }
-        } | null
-        const data = json?.data
+        // 공용 세션 조회(모듈 캐시 + in-flight dedupe)를 사용해 같은 페이지의
+        // 다른 소비자(MypageNavigation 등)와 네트워크 요청을 공유한다.
+        const data = await fetchSessionProfile()
 
-        if (!response.ok || !data?.authenticated || !data.user) {
+        if (!data.authenticated || !data.user) {
           setLoading(false)
           return
         }
