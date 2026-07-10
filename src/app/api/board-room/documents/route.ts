@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { apiGet, apiPost, ApiSuccess, ApiError } from '@/utils/apiWrapper'
+import { rateLimit } from '@/lib/server/rateLimit'
 import { requireBoardMember } from '@/lib/server/boardRoomAuth'
 import { ALL_DOCUMENT_CATEGORIES, ASSEMBLY_DOCUMENT_CATEGORY } from '@/constants/boardRoom'
 import { createLogger } from '@/utils/logger'
@@ -103,6 +104,12 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // 문서 업로드 남용 방지 (전수감사 안정성 M-4)
+  const rl = await rateLimit(request, 'FILE_UPLOAD')
+  if (!rl.success) {
+    return rl.response ?? ApiError.tooManyRequests('요청이 너무 많습니다.').toNextResponse()
+  }
+
   const auth = await requireBoardMember()
   if (auth instanceof NextResponse) return auth
   const { db, user } = auth

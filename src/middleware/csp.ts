@@ -24,7 +24,13 @@ export function applyCSP(request: NextRequest, response: NextResponse) {
 
     const strictCsp = [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' https:",
+      // dev에서 NEXT_STRICT_CSP=true로 strict CSP를 검증할 때도 Next dev 런타임
+      // (eval 기반 HMR/react-refresh)이 죽지 않도록 'unsafe-eval'을 dev에만 허용.
+      // 이것이 빠지면 dev에서 모든 페이지의 하이드레이션이 통째로 실패한다
+      // (connect-src의 dev 분기와 동일한 패턴, CLAUDE.md 문서와 일치).
+      process.env.NODE_ENV === 'development'
+        ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:"
+        : "script-src 'self' 'unsafe-inline' https:",
       "script-src-elem 'self' 'unsafe-inline' https:",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com",

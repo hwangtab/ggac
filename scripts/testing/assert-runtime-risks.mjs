@@ -941,9 +941,12 @@ const validatesBoardCategoryFilters =
   ) &&
   /parseBoardCategory\(categoryParam\)/.test(publicPostsApiSource) &&
   /const boardCategory = parseBoardCategory\(categoryParam\)/.test(publicPostsApiSource) &&
-  /createErrorResponse\(\{\s*success:\s*false,\s*error:\s*['"]유효하지 않은 카테고리입니다\.['"]\s*\},\s*400\)/.test(
+  // 44dd34b에서 레거시 createErrorResponse가 표준 ApiError(CLAUDE.md 정본)로
+  // 전환됨 — 레거시 헬퍼 재유입도 함께 차단
+  /return ApiError\.badRequest\(['"]유효하지 않은 카테고리입니다\.['"]\)\.toNextResponse\(\)/.test(
     publicPostsApiSource
   ) &&
+  !/createErrorResponse/.test(publicPostsApiSource) &&
   !/const allowedCategories = \[['"]전체['"],\s*['"]공지['"],\s*['"]잡담['"],\s*['"]홍보['"],\s*['"]건의['"]\]/.test(
     boardListPostsApiSource
   ) &&
@@ -1352,9 +1355,13 @@ const parsesAttachmentSizesSafely =
     boardDetailPageSource
   ) &&
   !/att\.file_size\s*\|\|\s*0/.test(boardDetailPageSource)
+// 아티스트 사진 경계는 공유 헬퍼 toSafeArtistImageSrc(내부에서 artists 버킷의
+// isProjectStoragePublicUrl 검증)로 통일됐다(커밋 0c32462). 검사도 헬퍼 사용과
+// 헬퍼 자체의 버킷 경계를 함께 고정한다. PersonalInfo는 진짜 artist_id 스코프
+// 저수준 검증을 유지하므로 기존 조건 유지.
 const validatesRenderedArtistProfilePhotoUrls =
-  /isProjectStoragePublicUrl/.test(postDetailClientSource) &&
-  /const\s+safeAuthorProfilePhotoUrl\s*=[\s\S]*?isProjectStoragePublicUrl\([\s\S]*?authorProfile\.profile_photo_url,[\s\S]*?['"]artists['"],[\s\S]*?authorProfile\.id[\s\S]*?\)/.test(
+  /toSafeArtistImageSrc/.test(postDetailClientSource) &&
+  /const\s+safeAuthorProfilePhotoUrl\s*=\s*toSafeArtistImageSrc\(authorProfile\?\.profile_photo_url,\s*['"]['"]\)/.test(
     postDetailClientSource
   ) &&
   !/src=\{authorProfile\.profile_photo_url\}/.test(postDetailClientSource) &&
@@ -1366,13 +1373,16 @@ const validatesRenderedArtistProfilePhotoUrls =
   !/src=\{artistPhotoUrl\}/.test(mypageProfilePersonalInfoSource) &&
   /artistId=\{artistData\?\.id \|\| null\}/.test(mypageProfileEditFormSource) &&
   /safePreviewImageForDisplay/.test(mypageArtistPageSource) &&
-  /isProjectStoragePublicUrl\(previewImageForDisplay,\s*['"]artists['"],\s*artist\.id\)/.test(
+  /const\s+safePreviewImageForDisplay\s*=\s*toSafeArtistImageSrc\(previewImageForDisplay,\s*['"]['"]\)/.test(
     mypageArtistPageSource
   ) &&
-  !/src=\{previewImageForDisplay\}/.test(mypageArtistPageSource)
+  !/src=\{previewImageForDisplay\}/.test(mypageArtistPageSource) &&
+  /isProjectStoragePublicUrl\(trimmed,\s*['"]artists['"]\)/.test(safeUrlSource)
 const profileEditFormGuardsArtistFetchUnmount =
   /let mounted = true/.test(mypageProfileEditFormSource) &&
-  /if \(mounted\) \{\s*setArtistData\(data\.artist\)\s*\}/.test(mypageProfileEditFormSource) &&
+  // 표준 응답 래퍼 전환(f358383)으로 페이로드 접근이 json.data?.artist로 바뀜 —
+  // 검사 의도는 "언마운트 가드 안에서만 setState"이므로 대입값에는 느슨하게 결합
+  /if \(mounted\) \{\s*setArtistData\([^)]*\)\s*\}/.test(mypageProfileEditFormSource) &&
   /if \(mounted\) \{\s*setArtistLoading\(false\)\s*\}/.test(mypageProfileEditFormSource) &&
   /return \(\) => \{\s*mounted = false\s*\}/.test(mypageProfileEditFormSource)
 const validatesAdvancedFilterFiniteNumbers =
@@ -1941,7 +1951,12 @@ const validatesBoardRoomMinutesContentFormat =
   /parseContentFormat\(body\.content_format\)/.test(boardRoomMinutesSource) &&
   /content_format:\s*contentFormat/.test(boardRoomMinutesSource) &&
   /parseContentFormat\(body\.content_format\)/.test(boardRoomMinutesDetailSource) &&
-  /update\.content_format = contentFormat/.test(boardRoomMinutesDetailSource) &&
+  // c39679f에서 요청 포맷/유효 포맷 구분을 위해 지역 변수가 bodyContentFormat으로
+  // 개명됨 — "allowlist 검증값만 대입" 결선을 함께 고정
+  /bodyContentFormat = parseContentFormat\(body\.content_format\)/.test(
+    boardRoomMinutesDetailSource
+  ) &&
+  /update\.content_format = bodyContentFormat/.test(boardRoomMinutesDetailSource) &&
   !/update\.content_format = body\.content_format/.test(boardRoomMinutesDetailSource) &&
   !/content_format:\s*body\.content_format/.test(boardRoomMinutesSource)
 const validatesBoardRoomMeetingDateInputs =

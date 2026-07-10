@@ -8,6 +8,7 @@ import { parseIntegerParam } from '@/utils/queryParams'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { formatTimestampUuidCursor, parseTimestampUuidCursor } from '@/utils/keysetCursor'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
+import { rateLimit } from '@/lib/server/rateLimit'
 
 export const dynamic = 'force-dynamic'
 export const preferredRegion = 'icn1'
@@ -118,6 +119,12 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 }
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  // 댓글 작성은 승인 회원 계정 하나로 무한 반복이 가능하던 공백(전수감사 안정성 M-4)
+  const rl = await rateLimit(request, 'POST_CREATION')
+  if (!rl.success) {
+    return rl.response ?? ApiError.tooManyRequests('요청이 너무 많습니다.').toNextResponse()
+  }
+
   const { id: postId } = await context.params
   const postIdValidation = validateUUID(postId, '게시글 ID')
   if (!postIdValidation.isValid) {

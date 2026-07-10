@@ -11,6 +11,7 @@ export const preferredRegion = 'icn1'
 
 import { NextRequest } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
+import { rateLimit } from '@/lib/server/rateLimit'
 import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
 import { revalidateTag } from 'next/cache'
 import type { PostAttachmentStats } from '@/types'
@@ -107,6 +108,12 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
  * 첨부파일 업로드
  */
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  // 업로드 무한 반복 시 Storage 비용·DB 부하 방지 (전수감사 안정성 M-4)
+  const rl = await rateLimit(request, 'FILE_UPLOAD')
+  if (!rl.success) {
+    return rl.response ?? ApiError.tooManyRequests('요청이 너무 많습니다.').toNextResponse()
+  }
+
   const resolvedParams = await context.params
   try {
     const postId = resolvedParams.id

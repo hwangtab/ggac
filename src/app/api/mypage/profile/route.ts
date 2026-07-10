@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { ApiError, ApiSuccess, apiGet, apiPatch } from '@/utils/apiWrapper'
+import { rateLimit } from '@/lib/server/rateLimit'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { parseIntegerParam } from '@/utils/queryParams'
 
@@ -103,6 +104,12 @@ export async function GET() {
 }
 
 export async function PATCH(request: NextRequest) {
+  // 프로필 갱신 남용 방지 (전수감사 안정성 M-4)
+  const rl = await rateLimit(request, 'GENERAL_API')
+  if (!rl.success) {
+    return rl.response ?? ApiError.tooManyRequests('요청이 너무 많습니다.').toNextResponse()
+  }
+
   return apiPatch(async () => {
     const { supabase, user } = await requireApprovedProfile()
     const body = await parseJsonObjectBody(request)
