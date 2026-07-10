@@ -80,18 +80,18 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
      *
      * TODO: RLS 정책 정리 후 adminClient 사용 제거 검토
      */
-    const adminClient = (() => {
-      try {
-        return createServiceRoleClient()
-      } catch {
-        return null
-      }
-    })()
-
     // 읽기 전용 DB 클라이언트 선택
-    // - 로그인 사용자: createRouteHandlerClient (사용자별 데이터 접근)
-    // - 비로그인 사용자: adminClient (공개 데이터만 읽기)
-    const db = userId ? supabase : adminClient || supabase
+    // - 로그인 사용자: 세션 클라이언트 (사용자별 데이터 접근)
+    // - 비로그인 사용자: service role (공개 데이터만 읽기) — 필요할 때만 생성
+    const db = userId
+      ? supabase
+      : (() => {
+          try {
+            return createServiceRoleClient()
+          } catch {
+            return supabase
+          }
+        })()
     const { searchParams } = new URL(request.url)
     const includeComments = searchParams.get('include_comments') !== 'false' // 기본적으로 포함
     const includeAttachments = searchParams.get('include_attachments') !== 'false' // 기본적으로 포함
@@ -136,55 +136,59 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       return ApiError.notFound('삭제된 게시글입니다.').toNextResponse()
     }
 
-    // 현재 사용자의 좋아요 상태 확인(선택)
-    let isLiked = false
-    const likeStart = Date.now()
-    if (userId) {
-      const { data: userLike } = await supabase
-        .from('post_likes')
-        .select('id')
-        .eq('post_id', validPostId)
-        .eq('user_id', userId)
-        .maybeSingle()
-      isLiked = !!userLike
-    }
-    timings.user_like_ms = Date.now() - likeStart
+    // 게시글 확인 후의 조회 4개(내 좋아요·댓글 수·댓글 목록·첨부)는 상호 독립이므로
+    // 병렬 실행한다 — 기존에는 전부 순차라 왕복 지연이 단계 수만큼 누적됐다
+    // (전수감사 API High 1). 사용자별 댓글 좋아요만 댓글 목록에 의존해 후행.
+    const parallelStart = Date.now()
+    const [userLikeResult, commentCountResult, commentsResult, attachmentsResult] =
+      await Promise.all([
+        userId
+          ? supabase
+              .from('post_likes')
+              .select('id')
+              .eq('post_id', validPostId)
+              .eq('user_id', userId)
+              .maybeSingle()
+          : Promise.resolve({ data: null }),
+        db.from('comments').select('id', { count: 'exact', head: true }).eq('post_id', validPostId),
+        includeComments
+          ? db
+              .from('comments')
+              .select(
+                `
+                id,
+                content,
+                author_id,
+                created_at,
+                like_count,
+                author:member_profiles!comments_author_id_fkey (
+                  display_name
+                )
+              `
+              )
+              .eq('post_id', validPostId)
+              .order('created_at', { ascending: true })
+              .range(commentsOffset, commentsOffset + commentsLimit - 1)
+          : Promise.resolve({ data: null, error: null }),
+        includeAttachments
+          ? db
+              .from('post_attachments')
+              .select('*')
+              .eq('post_id', validPostId)
+              .order('sort_order', { ascending: true })
+          : Promise.resolve({ data: null, error: null }),
+      ])
+    timings.parallel_reads_ms = Date.now() - parallelStart
 
-    // 댓글 수 조회
-    const countStart = Date.now()
-    const { count: commentCount } = await db
-      .from('comments')
-      .select('id', { count: 'exact', head: true })
-      .eq('post_id', validPostId)
-    timings.comment_count_ms = Date.now() - countStart
+    const isLiked = !!userLikeResult.data
+    const commentCount = commentCountResult.count ?? 0
 
-    // 댓글 목록 조회 (요청 시)
     let comments: any[] = []
     if (includeComments) {
-      const commentsStart = Date.now()
-      const { data: commentsData, error: commentsError } = await db
-        .from('comments')
-        .select(
-          `
-          id,
-          content,
-          author_id,
-          created_at,
-          like_count,
-          author:member_profiles!comments_author_id_fkey (
-            display_name
-          )
-        `
-        )
-        .eq('post_id', validPostId)
-        .order('created_at', { ascending: true })
-        .range(commentsOffset, commentsOffset + commentsLimit - 1)
-
-      timings.comments_ms = Date.now() - commentsStart
-      if (commentsError) {
-        console.error('댓글 조회 오류:', commentsError)
+      if (commentsResult.error) {
+        console.error('댓글 조회 오류:', commentsResult.error)
       } else {
-        comments = commentsData || []
+        comments = commentsResult.data || []
         // 사용자별 좋아요만 확인(카운트는 comments.like_count 사용)
         const ids = comments.map((c: any) => c.id)
         let userLikedSet: Set<string> | null = null
@@ -206,21 +210,12 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       }
     }
 
-    // 첨부파일 목록 조회 (요청 시)
     let attachments: any[] = []
     if (includeAttachments) {
-      const attStart = Date.now()
-      const { data: attachmentsData, error: attachmentsError } = await db
-        .from('post_attachments')
-        .select('*')
-        .eq('post_id', validPostId)
-        .order('sort_order', { ascending: true })
-      timings.attachments_ms = Date.now() - attStart
-
-      if (attachmentsError) {
-        console.error('첨부파일 조회 오류:', attachmentsError)
+      if (attachmentsResult.error) {
+        console.error('첨부파일 조회 오류:', attachmentsResult.error)
       } else {
-        attachments = attachmentsData || []
+        attachments = attachmentsResult.data || []
       }
     }
 

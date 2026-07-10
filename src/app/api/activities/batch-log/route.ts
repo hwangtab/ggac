@@ -44,72 +44,79 @@ export async function POST(request: NextRequest) {
         request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '127.0.0.1'
       const userAgent = request.headers.get('user-agent') || 'Unknown'
 
-      const results = []
-      const errors = []
+      const results: Array<{ index: number }> = []
+      const errors: Array<{ index: number; error: string }> = []
 
-      // 각 로그를 순차적으로 처리
+      // 검증은 항목별로 수행하되, 유효한 로그는 배열 RPC 1회로 일괄 기록한다.
+      // 기존에는 로그당 log_user_activity RPC를 순차 호출해 최대 100 왕복이었다
+      // (전수감사 API Medium 9 — "배치" 엔드포인트의 목적 무력화).
+      const validEntries: Array<{ index: number; payload: Record<string, unknown> }> = []
+
       for (let i = 0; i < logs.length; i++) {
         const log = logs[i]
 
-        try {
-          const actionType = parseActivityActionType(log.action_type)
-          if (!actionType) {
-            errors.push({ index: i, error: '유효한 action_type이 필요합니다.' })
-            continue
-          }
-          const targetType = log.target_type ? parseActivityTargetType(log.target_type) : null
-          if (log.target_type && !targetType) {
-            errors.push({ index: i, error: '유효하지 않은 target_type입니다.' })
-            continue
-          }
-          const targetIdValidation = log.target_id ? validateUUID(log.target_id, '대상 ID') : null
-          if (targetIdValidation && !targetIdValidation.isValid) {
-            errors.push({
-              index: i,
-              error: targetIdValidation.errors[0] || '잘못된 대상 ID입니다.',
-            })
-            continue
-          }
-          const targetId = targetIdValidation?.sanitized ?? null
-
-          // 입력 검증 및 sanitization
-          const sanitizedMetadata =
-            typeof log.metadata === 'object' && log.metadata
-              ? Object.keys(log.metadata).reduce(
-                  (acc, key) => {
-                    acc[key] =
-                      typeof log.metadata![key] === 'string'
-                        ? sanitizeInput(log.metadata![key])
-                        : log.metadata![key]
-                    return acc
-                  },
-                  {} as Record<string, any>
-                )
-              : {}
-
-          const { data, error } = await supabase.rpc('log_user_activity', {
-            p_user_id: user.id,
-            p_action_type: actionType,
-            p_target_type: targetType,
-            p_target_id: targetId,
-            p_metadata: sanitizedMetadata,
-            p_ip_address: clientIP,
-            p_user_agent: userAgent,
-            p_session_id: sanitizedMetadata.session_id || null,
-          })
-
-          if (error) {
-            console.error(`[API] 활동 로그 기록 실패 (index: ${i}):`, error)
-            errors.push({ index: i, error: '활동 로그 기록에 실패했습니다.' })
-          } else {
-            results.push({ index: i, activity_id: data })
-          }
-        } catch (error) {
-          console.error(`[API] 활동 로그 기록 예외 발생 (index: ${i}):`, error)
+        const actionType = parseActivityActionType(log.action_type)
+        if (!actionType) {
+          errors.push({ index: i, error: '유효한 action_type이 필요합니다.' })
+          continue
+        }
+        const targetType = log.target_type ? parseActivityTargetType(log.target_type) : null
+        if (log.target_type && !targetType) {
+          errors.push({ index: i, error: '유효하지 않은 target_type입니다.' })
+          continue
+        }
+        const targetIdValidation = log.target_id ? validateUUID(log.target_id, '대상 ID') : null
+        if (targetIdValidation && !targetIdValidation.isValid) {
           errors.push({
             index: i,
-            error: '활동 로그 기록에 실패했습니다.',
+            error: targetIdValidation.errors[0] || '잘못된 대상 ID입니다.',
           })
+          continue
+        }
+        const targetId = targetIdValidation?.sanitized ?? null
+
+        // 입력 검증 및 sanitization
+        const sanitizedMetadata =
+          typeof log.metadata === 'object' && log.metadata
+            ? Object.keys(log.metadata).reduce(
+                (acc, key) => {
+                  acc[key] =
+                    typeof log.metadata![key] === 'string'
+                      ? sanitizeInput(log.metadata![key])
+                      : log.metadata![key]
+                  return acc
+                },
+                {} as Record<string, any>
+              )
+            : {}
+
+        validEntries.push({
+          index: i,
+          payload: {
+            action_type: actionType,
+            target_type: targetType,
+            target_id: targetId,
+            metadata: sanitizedMetadata,
+            session_id: sanitizedMetadata.session_id || null,
+          },
+        })
+      }
+
+      if (validEntries.length > 0) {
+        const { error } = await supabase.rpc('log_user_activities_batch', {
+          p_user_id: user.id,
+          p_logs: validEntries.map(entry => entry.payload),
+          p_ip_address: clientIP,
+          p_user_agent: userAgent,
+        })
+
+        if (error) {
+          console.error('[API] 활동 로그 배치 기록 실패:', error)
+          validEntries.forEach(entry =>
+            errors.push({ index: entry.index, error: '활동 로그 기록에 실패했습니다.' })
+          )
+        } else {
+          validEntries.forEach(entry => results.push({ index: entry.index }))
         }
       }
 

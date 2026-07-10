@@ -35,6 +35,10 @@ const getSupabaseServerClient = () => {
   return createServiceRoleClient()
 }
 
+// board_posts_with_stats 뷰(마이그레이션 20260710210000) 1쿼리로 목록을 만든다.
+// 과거에는 posts 전본문 + 첨부/댓글/좋아요 전행(4쿼리)을 가져와 JS에서 집계했는데,
+// 이것이 post_likes seq scan 18.6만 회와 게시글당 수십 KB 본문 전송의 원인이었다
+// (2026-07 전수감사 API High 2·3). preview는 뷰의 content_head(앞 2000자)로 생성.
 export const fetchBoardPosts = cache(
   async ({
     category = '전체',
@@ -44,28 +48,16 @@ export const fetchBoardPosts = cache(
     const supabase = getSupabaseServerClient()
     const safeCategory = parseBoardCategory(category) ?? '전체'
     const safePage = Math.max(1, page)
-    const limit = Math.max(1, Math.min(pageSize, 50))
+    // 목록 정적화(Phase 1) 후 서버는 전량을 한 번에 렌더하므로 상한을 넉넉히 둔다
+    const limit = Math.max(1, Math.min(pageSize, 200))
     const start = (safePage - 1) * limit
     const end = start + limit
 
     let query = supabase
-      .from('posts')
+      .from('board_posts_with_stats')
       .select(
-        `
-        id,
-        title,
-        content,
-        category,
-        author_id,
-        created_at,
-        updated_at,
-        is_pinned,
-        author:member_profiles!posts_author_id_fkey (
-          display_name
-        )
-      `
+        'id, title, category, author_id, created_at, updated_at, is_pinned, content_head, like_count, author_display_name, comment_count, total_attachments, total_size, image_count, document_count, video_count, audio_count'
       )
-      .not('is_deleted', 'is', true)
 
     if (safeCategory !== '전체') {
       query = query.eq('category', safeCategory)
@@ -84,16 +76,16 @@ export const fetchBoardPosts = cache(
       return { posts: [], hasNext: false, hasPrev: safePage > 1, currentPage: safePage }
     }
 
-    const posts = data || []
-    const hasNext = posts.length > limit
+    const rows = data || []
+    const hasNext = rows.length > limit
 
     if (hasNext) {
-      posts.pop()
+      rows.pop()
     }
 
-    const basePosts: BoardInitialPost[] = posts.map(row => {
-      const rawAuthor = Array.isArray(row.author) ? row.author[0] : row.author
-      const preview = createTextPreview(row.content || '', 150)
+    const posts: BoardInitialPost[] = rows.map(row => {
+      const preview = createTextPreview(row.content_head || '', 150)
+      const imageCount = parseIntegerParam(String(row.image_count ?? ''), 0, { min: 0 })
 
       return {
         id: row.id,
@@ -104,117 +96,31 @@ export const fetchBoardPosts = cache(
         created_at: row.created_at,
         updated_at: row.updated_at,
         is_pinned: row.is_pinned,
-        author: rawAuthor?.display_name
+        author: row.author_display_name
           ? {
               name: '',
               email: '',
-              display_name: rawAuthor.display_name,
+              display_name: row.author_display_name,
             }
           : undefined,
         content_preview: preview.text,
-        preview_has_images: preview.hasImages,
-        preview_image_count: preview.imageCount,
-        comment_count: 0,
-        like_count: 0,
+        preview_has_images: imageCount > 0 || preview.hasImages,
+        preview_image_count: imageCount > 0 ? imageCount : preview.imageCount,
+        comment_count: parseIntegerParam(String(row.comment_count ?? ''), 0, { min: 0 }),
+        like_count: parseIntegerParam(String(row.like_count ?? ''), 0, { min: 0 }),
         attachments_stats: {
-          total_attachments: 0,
-          total_size: 0,
-          image_count: 0,
-          document_count: 0,
-          video_count: 0,
-          audio_count: 0,
+          total_attachments: parseIntegerParam(String(row.total_attachments ?? ''), 0, { min: 0 }),
+          total_size: parseIntegerParam(String(row.total_size ?? ''), 0, { min: 0 }),
+          image_count: imageCount,
+          document_count: parseIntegerParam(String(row.document_count ?? ''), 0, { min: 0 }),
+          video_count: parseIntegerParam(String(row.video_count ?? ''), 0, { min: 0 }),
+          audio_count: parseIntegerParam(String(row.audio_count ?? ''), 0, { min: 0 }),
         } satisfies PostAttachmentStats,
       }
     })
 
-    const postIds = basePosts.map(post => post.id)
-    if (postIds.length) {
-      const [attachmentResult, commentResult, likeResult] = await Promise.all([
-        supabase
-          .from('post_attachments')
-          .select('post_id, file_type, file_size')
-          .in('post_id', postIds),
-        supabase.from('comments').select('post_id').in('post_id', postIds),
-        supabase.from('post_likes').select('post_id').in('post_id', postIds),
-      ])
-
-      if (!attachmentResult.error && attachmentResult.data) {
-        const statsMap = new Map<
-          string,
-          {
-            total: number
-            totalSize: number
-            image: number
-            document: number
-            video: number
-            audio: number
-          }
-        >()
-
-        attachmentResult.data.forEach(row => {
-          const key = String(row.post_id)
-          const type = (row.file_type as string) || 'other'
-          const current = statsMap.get(key) || {
-            total: 0,
-            totalSize: 0,
-            image: 0,
-            document: 0,
-            video: 0,
-            audio: 0,
-          }
-
-          current.total += 1
-          current.totalSize += parseIntegerParam(String(row.file_size ?? ''), 0, { min: 0 })
-          if (type === 'image') current.image += 1
-          else if (type === 'document') current.document += 1
-          else if (type === 'video') current.video += 1
-          else if (type === 'audio') current.audio += 1
-
-          statsMap.set(key, current)
-        })
-
-        basePosts.forEach(post => {
-          const stats = statsMap.get(String(post.id))
-          if (stats) {
-            post.attachments_stats = {
-              total_attachments: stats.total,
-              total_size: stats.totalSize,
-              image_count: stats.image,
-              document_count: stats.document,
-              video_count: stats.video,
-              audio_count: stats.audio,
-            }
-            post.preview_has_images = stats.image > 0
-            post.preview_image_count = stats.image
-          }
-        })
-      }
-
-      if (!commentResult.error && commentResult.data) {
-        const commentCountMap = new Map<string, number>()
-        commentResult.data.forEach(row => {
-          const key = String(row.post_id)
-          commentCountMap.set(key, (commentCountMap.get(key) || 0) + 1)
-        })
-        basePosts.forEach(post => {
-          post.comment_count = commentCountMap.get(post.id) ?? 0
-        })
-      }
-
-      if (!likeResult.error && likeResult.data) {
-        const likeCountMap = new Map<string, number>()
-        likeResult.data.forEach(row => {
-          const key = String(row.post_id)
-          likeCountMap.set(key, (likeCountMap.get(key) || 0) + 1)
-        })
-        basePosts.forEach(post => {
-          post.like_count = likeCountMap.get(post.id) ?? 0
-        })
-      }
-    }
-
     return {
-      posts: basePosts,
+      posts,
       hasNext,
       hasPrev: safePage > 1,
       currentPage: safePage,

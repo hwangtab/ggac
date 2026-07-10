@@ -27,14 +27,18 @@ const buildCategoryHref = (category: string) => {
 // 서버에서 searchParams를 읽으면 페이지 전체가 동적 렌더링으로 전환되어
 // ISR(revalidate)이 사문화되므로(2026-07 전수감사 P3), 서버는 전체 아티스트를
 // 정적으로 렌더하고 필터·선택 상태만 여기서 URL 쿼리로 파생한다.
-// 데이터 규모(아티스트 십수 명)상 전량 전달이 서버 필터보다 오히려 효율적이다.
-const ArtistsContent = ({ artists, categories }: ArtistsContentProps) => {
+//
+// 프레젠테이션(ArtistsView)과 searchParams 브리지(기본 export)를 분리한 이유:
+// useSearchParams 컴포넌트는 정적 프리렌더에서 Suspense 경계까지 CSR bailout
+// 되어 초기 HTML에서 목록이 빠진다(SEO·첫 페인트 손실). page.tsx가 Suspense
+// fallback으로 기본 상태(All)의 ArtistsView를 렌더해 콘텐츠를 포함시킨다.
+export const ArtistsView = ({
+  artists,
+  categories,
+  selectedCategory,
+}: ArtistsContentProps & { selectedCategory: string }) => {
   const t = useTranslations('artists')
   const locale = useLocale()
-  const searchParams = useSearchParams()
-
-  const rawCategory = searchParams.get('category')
-  const selectedCategory = rawCategory && categories.includes(rawCategory) ? rawCategory : 'All'
 
   const filteredArtists = useMemo(
     () =>
@@ -167,6 +171,17 @@ const ArtistsContent = ({ artists, categories }: ArtistsContentProps) => {
         </div>
       </section>
     </div>
+  )
+}
+
+// searchParams 브리지 — URL 쿼리에서 선택 카테고리를 파생해 뷰에 넘긴다.
+const ArtistsContent = ({ artists, categories }: ArtistsContentProps) => {
+  const searchParams = useSearchParams()
+  const rawCategory = searchParams.get('category')
+  const selectedCategory = rawCategory && categories.includes(rawCategory) ? rawCategory : 'All'
+
+  return (
+    <ArtistsView artists={artists} categories={categories} selectedCategory={selectedCategory} />
   )
 }
 

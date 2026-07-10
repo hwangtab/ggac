@@ -9,6 +9,14 @@ import { parseIntegerParam } from '@/utils/queryParams'
 import type { BoardInitialPost } from '@/lib/server/board'
 import type { BoardCategory } from '@/constants/categories'
 
+interface BoardListViewProps {
+  posts: BoardInitialPost[]
+  pageSize: number
+  category: BoardCategory
+  requestedPage: number
+  authSection?: React.ReactNode
+}
+
 interface ServerBoardViewProps {
   posts: BoardInitialPost[]
   pageSize: number
@@ -31,14 +39,23 @@ const buildBoardUrl = (category: BoardCategory, page?: number) => {
 // 서버가 searchParams를 읽으면 /board 전체가 동적 렌더링으로 전환되어
 // ISR(revalidate=60)이 사문화되므로(전수감사 P3), 서버는 전체 게시글을
 // ISR로 렌더하고 여기서 allowlist(parseBoardCategory) 검증 후 필터·슬라이스한다.
-const ServerBoardView = ({ posts, pageSize, authSection }: ServerBoardViewProps) => {
+//
+// 구조가 둘로 나뉜 이유: useSearchParams를 쓰는 컴포넌트는 정적 프리렌더에서
+// 가장 가까운 Suspense 경계까지 CSR bailout되어 초기 HTML에서 목록이 통째로
+// 빠진다(SEO·첫 페인트 손실). 그래서 파생만 하는 브리지(ServerBoardView)와
+// searchParams를 모르는 프레젠테이션(BoardListView)을 분리하고, Suspense
+// fallback에 기본 상태(전체·1페이지)의 BoardListView를 렌더해 프리렌더 HTML에
+// 목록 콘텐츠를 포함시킨다.
+export const BoardListView = ({
+  posts,
+  pageSize,
+  category,
+  requestedPage,
+  authSection,
+}: BoardListViewProps) => {
   const t = useTranslations('board')
   const locale = useLocale()
-  const searchParams = useSearchParams()
   const dateLocale = locale === 'en' ? 'en-US' : 'ko-KR'
-
-  const category = parseBoardCategory(searchParams.get('category') ?? undefined) ?? '전체'
-  const requestedPage = parseIntegerParam(searchParams.get('page'), 1, { min: 1 })
 
   const filteredPosts = useMemo(
     () => (category === '전체' ? posts : posts.filter(post => post.category === category)),
@@ -153,6 +170,23 @@ const ServerBoardView = ({ posts, pageSize, authSection }: ServerBoardViewProps)
         </div>
       </div>
     </div>
+  )
+}
+
+// searchParams 브리지 — URL 쿼리를 파생해 프레젠테이션 뷰에 넘긴다.
+const ServerBoardView = ({ posts, pageSize, authSection }: ServerBoardViewProps) => {
+  const searchParams = useSearchParams()
+  const category = parseBoardCategory(searchParams.get('category') ?? undefined) ?? '전체'
+  const requestedPage = parseIntegerParam(searchParams.get('page'), 1, { min: 1 })
+
+  return (
+    <BoardListView
+      posts={posts}
+      pageSize={pageSize}
+      category={category}
+      requestedPage={requestedPage}
+      authSection={authSection}
+    />
   )
 }
 

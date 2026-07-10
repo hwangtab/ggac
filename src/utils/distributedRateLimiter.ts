@@ -130,6 +130,52 @@ class UpstashRedisClient {
     const result = await this.execute(['EVAL', script, '1', key, windowSeconds.toString()])
     return { value: result[0], ttl: result[1] }
   }
+
+  // rate limit 검사 전체(차단 확인 → 증가+만료 → 임계 초과 시 자동 차단)를
+  // 단일 EVAL로 수행한다. 기존에는 EXISTS + EVAL(+TTL/SETEX)로 요청당 REST
+  // 왕복이 2~3회였다(전수감사 API Medium 8 — 전 보호 라우트의 고정 선행 비용).
+  async checkAndConsume(
+    key: string,
+    blockKey: string,
+    windowSeconds: number,
+    maxRequests: number,
+    blockSeconds: number
+  ): Promise<{ blocked: boolean; count: number; ttlSeconds: number; autoBlocked: boolean }> {
+    const script = `
+      local blockTtl = redis.call('TTL', KEYS[2])
+      if blockTtl > 0 then
+        return {1, 0, blockTtl, 0}
+      end
+      local current = redis.call('INCR', KEYS[1])
+      if current == 1 then
+        redis.call('EXPIRE', KEYS[1], ARGV[1])
+      end
+      local ttl = redis.call('TTL', KEYS[1])
+      local autoBlocked = 0
+      if current > tonumber(ARGV[2]) * 2 then
+        redis.call('SETEX', KEYS[2], ARGV[3], 'blocked')
+        autoBlocked = 1
+      end
+      return {0, current, ttl, autoBlocked}
+    `
+
+    const result = await this.execute([
+      'EVAL',
+      script,
+      '2',
+      key,
+      blockKey,
+      windowSeconds.toString(),
+      maxRequests.toString(),
+      blockSeconds.toString(),
+    ])
+    return {
+      blocked: result[0] === 1,
+      count: result[1],
+      ttlSeconds: result[2],
+      autoBlocked: result[3] === 1,
+    }
+  }
 }
 
 // 분산 Rate Limiter 클래스
@@ -203,6 +249,30 @@ class DistributedRateLimiter {
     } else {
       log.warn(baseMessage)
     }
+  }
+
+  // Upstash 미설정/장애 시 메서드별 등급 대응: 읽기(GET/HEAD)는 rate limit이
+  // 정작 보호할 upstream보다 가용성이 중요하므로 허용(fail-open)하되 high
+  // 보안 로그를 남기고, 쓰기·업로드는 남용 방지를 위해 기존대로 503
+  // (fail-closed)을 유지한다 — 기존에는 Upstash 순단 한 번에 보호 라우트
+  // 51개가 읽기까지 일제히 503이었다(전수감사 안정성 High 1).
+  private degradeByMethod(
+    req: NextRequest,
+    windowMs: number,
+    maxRequests: number,
+    reason: 'unconfigured' | 'redis_error'
+  ): RateLimitResult {
+    const method = req.method.toUpperCase()
+    if (method === 'GET' || method === 'HEAD') {
+      logSecurityEvent('RATE_LIMIT_DEGRADED_FAIL_OPEN', { url: req.url, method, reason }, 'high')
+      return {
+        success: true,
+        remaining: maxRequests,
+        resetTime: Date.now() + windowMs,
+        totalHits: 0,
+      }
+    }
+    return this.rateLimitUnavailable(windowMs, maxRequests)
   }
 
   // 기본 키 생성 함수 (IP 주소 기반)
@@ -299,24 +369,96 @@ class DistributedRateLimiter {
       this.reportMemoryFallbackIfNeeded()
 
       if (this.isProduction() && (this.fallbackToMemory || !this.redis)) {
-        return this.rateLimitUnavailable(windowMs, maxRequests)
+        return this.degradeByMethod(req, windowMs, maxRequests, 'unconfigured')
       }
 
       const baseKey = keyGenerator(req)
       const blockKey = `${baseKey}:blocked`
 
       try {
-        // 차단 상태 확인
-        const isBlocked =
-          this.fallbackToMemory || !this.redis
-            ? this.memoryStore.has(blockKey)
-            : await this.redis.exists(blockKey)
+        // Redis 경로: 차단 확인→증가→자동 차단을 단일 Lua 1왕복으로 수행
+        if (this.redis && !this.fallbackToMemory) {
+          const windowSeconds = Math.ceil(windowMs / 1000)
+          const blockSeconds = Math.ceil(blockDuration / 1000)
+          const check = await this.redis.checkAndConsume(
+            baseKey,
+            blockKey,
+            windowSeconds,
+            maxRequests,
+            blockSeconds
+          )
+
+          if (check.blocked) {
+            const ttl = check.ttlSeconds * 1000
+            logSecurityEvent(
+              'RATE_LIMIT_BLOCKED_ACCESS',
+              { key: baseKey, url: req.url, remainingBlockTime: ttl },
+              'medium'
+            )
+
+            return {
+              success: false,
+              response: NextResponse.json(
+                { error: 'Access temporarily blocked due to suspicious activity' },
+                {
+                  status: 429,
+                  headers: {
+                    'Retry-After': Math.ceil(ttl / 1000).toString(),
+                    'X-RateLimit-Limit': maxRequests.toString(),
+                    'X-RateLimit-Remaining': '0',
+                    'X-RateLimit-Reset': (Date.now() + ttl).toString(),
+                  },
+                }
+              ),
+              remaining: 0,
+              resetTime: Date.now() + ttl,
+              totalHits: maxRequests + 1,
+            }
+          }
+
+          if (check.autoBlocked) {
+            logSecurityEvent('RATE_LIMIT_AUTO_BLOCK', { key: baseKey, url: req.url }, 'high')
+          }
+
+          const resetTime = Date.now() + Math.max(0, check.ttlSeconds) * 1000
+          const remaining = Math.max(0, maxRequests - check.count)
+          const success = check.count <= maxRequests
+
+          if (!success) {
+            logSecurityEvent(
+              'RATE_LIMIT_EXCEEDED',
+              { key: baseKey, count: check.count, maxRequests, url: req.url },
+              'medium'
+            )
+
+            return {
+              success: false,
+              response: NextResponse.json(
+                { error: message },
+                {
+                  status: 429,
+                  headers: {
+                    'Retry-After': Math.ceil((resetTime - Date.now()) / 1000).toString(),
+                    'X-RateLimit-Limit': maxRequests.toString(),
+                    'X-RateLimit-Remaining': remaining.toString(),
+                    'X-RateLimit-Reset': resetTime.toString(),
+                  },
+                }
+              ),
+              remaining,
+              resetTime,
+              totalHits: check.count,
+            }
+          }
+
+          return { success: true, remaining, resetTime, totalHits: check.count }
+        }
+
+        // 메모리 폴백 경로 (개발/미설정 환경)
+        const isBlocked = this.memoryStore.has(blockKey)
 
         if (isBlocked) {
-          const ttl =
-            this.fallbackToMemory || !this.redis
-              ? Math.max(0, (this.memoryStore.get(blockKey)?.resetTime || 0) - Date.now())
-              : (await this.redis.ttl(blockKey)) * 1000
+          const ttl = Math.max(0, (this.memoryStore.get(blockKey)?.resetTime || 0) - Date.now())
 
           logSecurityEvent(
             'RATE_LIMIT_BLOCKED_ACCESS',
@@ -348,8 +490,7 @@ class DistributedRateLimiter {
           }
         }
 
-        // Rate limiting 실행
-        if (this.fallbackToMemory || !this.redis) {
+        {
           const result = await this.fallbackMemoryLimit(baseKey, windowMs, maxRequests)
           const remaining = Math.max(0, maxRequests - result.count)
           const success = result.count <= maxRequests
@@ -400,59 +541,12 @@ class DistributedRateLimiter {
             resetTime: result.resetTime,
             totalHits: result.count,
           }
-        } else {
-          // Redis 기반 결과 처리
-          const result = await this.redisRateLimit(baseKey, windowMs, maxRequests)
-
-          if (!('success' in result)) {
-            throw new Error('Invalid result from Redis rate limiter')
-          }
-
-          if (result.totalHits > maxRequests * 2) {
-            const blockSeconds = Math.ceil(blockDuration / 1000)
-            if (this.redis) {
-              await this.redis.setex(blockKey, blockSeconds, 'blocked')
-            }
-
-            logSecurityEvent('RATE_LIMIT_AUTO_BLOCK', { key: baseKey, url: req.url }, 'high')
-          }
-
-          if (!result.success) {
-            logSecurityEvent(
-              'RATE_LIMIT_EXCEEDED',
-              {
-                key: baseKey,
-                count: result.totalHits,
-                maxRequests,
-                url: req.url,
-              },
-              'medium'
-            )
-
-            return {
-              ...result,
-              response: NextResponse.json(
-                { error: message },
-                {
-                  status: 429,
-                  headers: {
-                    'Retry-After': Math.ceil((result.resetTime - Date.now()) / 1000).toString(),
-                    'X-RateLimit-Limit': maxRequests.toString(),
-                    'X-RateLimit-Remaining': result.remaining.toString(),
-                    'X-RateLimit-Reset': result.resetTime.toString(),
-                  },
-                }
-              ),
-            }
-          }
-
-          return result
         }
       } catch (error) {
         log.error('Distributed rate limiting error', error)
 
         if (this.isProduction()) {
-          return this.rateLimitUnavailable(windowMs, maxRequests)
+          return this.degradeByMethod(req, windowMs, maxRequests, 'redis_error')
         }
 
         // 에러 발생 시 허용 (fail-open)

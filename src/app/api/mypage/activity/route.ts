@@ -93,14 +93,46 @@ export async function GET(request: NextRequest) {
     const activities: Activity[] = []
     let totalCount = 0
 
+    // 소스별 최대 로드 행 수 — 기존에는 무제한 전량 로드라 활동 많은 사용자에서
+    // 응답 크기·시간이 무한 증가했다(전수감사 API Medium 12). 게시글 수정 활동의
+    // 시간 역전(updated_at) 때문에 정확한 페이지 컷오프가 어려워, 정확성을
+    // 보존하면서 폭주만 막는 캡으로 둔다(초과분은 오래된 활동부터 목록에서 제외).
+    const SOURCE_ROW_CAP = 500
+
+    // 게시글/댓글 활동은 상호 독립이므로 병렬 조회한다(기존 순차).
+    const [postsResult, commentsResult] = await Promise.all([
+      filter === 'all' || filter === 'posts'
+        ? supabase
+            .from('posts')
+            .select('id, title, category, created_at, updated_at')
+            .eq('author_id', userId)
+            .eq('is_deleted', false)
+            .order('created_at', { ascending: false })
+            .limit(SOURCE_ROW_CAP)
+        : Promise.resolve({ data: null, error: null }),
+      filter === 'all' || filter === 'comments'
+        ? supabase
+            .from('comments')
+            .select(
+              `
+              id,
+              created_at,
+              posts:post_id (
+                id,
+                title,
+                category
+              )
+            `
+            )
+            .eq('author_id', userId)
+            .order('created_at', { ascending: false })
+            .limit(SOURCE_ROW_CAP)
+        : Promise.resolve({ data: null, error: null }),
+    ])
+
     // 게시글 활동 조회 (filter가 'all' 또는 'posts'인 경우)
     if (filter === 'all' || filter === 'posts') {
-      const { data: posts, error: postsError } = await supabase
-        .from('posts')
-        .select('id, title, category, created_at, updated_at')
-        .eq('author_id', userId)
-        .eq('is_deleted', false)
-        .order('created_at', { ascending: false })
+      const { data: posts, error: postsError } = postsResult
 
       if (postsError) {
         console.error('Posts fetch error:', postsError)
@@ -137,21 +169,7 @@ export async function GET(request: NextRequest) {
 
     // 댓글 활동 조회 (filter가 'all' 또는 'comments'인 경우)
     if (filter === 'all' || filter === 'comments') {
-      const { data: comments, error: commentsError } = await supabase
-        .from('comments')
-        .select(
-          `
-          id,
-          created_at,
-          posts:post_id (
-            id,
-            title,
-            category
-          )
-        `
-        )
-        .eq('author_id', userId)
-        .order('created_at', { ascending: false })
+      const { data: comments, error: commentsError } = commentsResult
 
       if (commentsError) {
         console.error('Comments fetch error:', commentsError)
