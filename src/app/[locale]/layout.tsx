@@ -145,25 +145,13 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
               </a>
             </div>
 
-            <Suspense
-              fallback={
-                <div
-                  className="min-h-screen flex items-center justify-center"
-                  role="status"
-                  aria-live="polite"
-                >
-                  <div className="text-center">
-                    <div
-                      className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-4"
-                      aria-hidden="true"
-                    ></div>
-                    <p className="text-gray-600">{t('loading')}</p>
-                  </div>
-                </div>
-              }
-            >
-              <ConditionalLayout globalData={globalData}>{children}</ConditionalLayout>
-            </Suspense>
+            {/* 주의: 여기(루트 레이아웃)에 children을 감싸는 Suspense를 두면 모든
+                페이지에 스트리밍 경계가 생겨 응답이 200으로 먼저 flush되고,
+                이후의 notFound()가 404 상태코드를 반환할 수 없게 된다(soft-404 —
+                미존재 게시글이 200+안내문으로 응답돼 검색엔진 soft 404 분류 대상,
+                2026-07 전수감사 백로그). useSearchParams를 쓰는 컴포넌트의 경계는
+                각 페이지가 자체 Suspense로 감당한다. */}
+            <ConditionalLayout globalData={globalData}>{children}</ConditionalLayout>
 
             <Toaster
               position="top-right"
