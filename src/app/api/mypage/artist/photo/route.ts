@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { rateLimit } from '@/lib/server/rateLimit'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
 import { revalidatePath, revalidateTag } from 'next/cache'
@@ -268,6 +269,12 @@ async function uploadImageWithVariants(
  * PUT: 아티스트 프로필 사진 업로드/변경
  */
 export async function PUT(request: NextRequest) {
+  // sharp 변환을 동반하는 업로드 — 무한 반복 시 CPU·Storage 소모 방지 (전수감사 M-4)
+  const rl = await rateLimit(request, 'FILE_UPLOAD')
+  if (!rl.success) {
+    return rl.response ?? NextResponse.json({ error: '요청이 너무 많습니다.' }, { status: 429 })
+  }
+
   try {
     const supabase = await createSupabaseServer()
     let supabaseAdmin: AdminClient

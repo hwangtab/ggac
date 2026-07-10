@@ -11,6 +11,7 @@ export const maxDuration = 30
 
 import { NextRequest } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
+import { rateLimit } from '@/lib/server/rateLimit'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import type { PostLikeToggleResponse } from '@/types'
 import { validateUUID } from '@/utils/validation'
@@ -75,6 +76,12 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
  * 게시글 좋아요 토글 (추가/제거)
  */
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  // 좋아요 토글 무한 반복 방지 (전수감사 안정성 M-4)
+  const rl = await rateLimit(request, 'GENERAL_API')
+  if (!rl.success) {
+    return rl.response ?? ApiError.tooManyRequests('요청이 너무 많습니다.').toNextResponse()
+  }
+
   try {
     const resolvedParams = await context.params
     const postId = resolvedParams.id
