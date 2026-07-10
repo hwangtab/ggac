@@ -4,8 +4,6 @@ import { getPostMetadata } from '@/lib/posts'
 import PostDetailClient from './PostDetailClient'
 import { Suspense } from 'react'
 import { generatePostOgImage } from '@/utils/imageUrl'
-import { createSupabaseServer } from '@/lib/supabase/server'
-import { getUserLikedCommentIds } from '@/lib/server/commentLikes'
 import { setRequestLocale } from 'next-intl/server'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { validateUUID } from '@/utils/validation'
@@ -112,6 +110,32 @@ export async function generateMetadata({
 // ISR 설정 - 게시글 상세 페이지 60초 캐시
 export const revalidate = 60
 
+// 동적 세그먼트 라우트는 generateStaticParams가 없으면 ISR이 아니라 완전 동적으로
+// 취급된다(revalidate 선언이 무효). 최근 게시글은 빌드 시 프리렌더하고 나머지는
+// 첫 요청 시 생성·캐시(on-demand ISR)한다. 실패 시 빈 배열이어도 on-demand ISR은 유효.
+export async function generateStaticParams() {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return []
+  }
+  try {
+    const { createClient } = await import('@supabase/supabase-js')
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    )
+    const { data } = await supabase
+      .from('posts')
+      .select('id')
+      .not('is_deleted', 'is', true)
+      .order('created_at', { ascending: false })
+      .limit(30)
+    return (data ?? []).map(row => ({ id: String(row.id) }))
+  } catch {
+    return []
+  }
+}
+
 interface InitialPostData {
   post: any
   comments: any[]
@@ -211,8 +235,14 @@ async function getInitialPostData(
         : []
 
     if (postError || !post) {
+      // 진짜 미존재(PGRST116: single()이 0행)만 null(→404). 그 외(DB 순단·타임아웃
+      // 등)는 throw해 error.tsx(재시도)로 보낸다 — 장애를 404로 오표시하면 멀쩡한
+      // 글이 영구 소실처럼 보이고 검색엔진이 404를 수집한다(전수감사 안정성 H3).
+      if (!postError || (postError as { code?: string }).code === 'PGRST116') {
+        return null
+      }
       console.error('서버 게시글 조회 오류:', postError)
-      return null
+      throw new Error(`게시글 조회 실패: ${postError.message ?? 'unknown'}`)
     }
 
     const authorRecord = Array.isArray(post.author) ? post.author[0] : post.author
@@ -221,43 +251,14 @@ async function getInitialPostData(
       0
     )
 
-    // 인증된 사용자 정보 조회 (쿠키 기반 세션 복원 필요)
-    const supabaseServer = await createSupabaseServer()
-    const {
-      data: { user: serverUser },
-    } = await supabaseServer.auth.getUser()
-
-    let userData: UserData | null = null
-    if (serverUser) {
-      // profile_photo_url 컬럼은 artists 테이블에만 존재한다. member_profiles에서
-      // select하면 PostgREST 42703 에러로 조회가 실패해 로그인 사용자가 비회원으로
-      // 취급되므로 제외한다.
-      const { data: profile } = await supabaseAdmin
-        .from('member_profiles')
-        .select('display_name, registration_status, is_active, is_admin')
-        .eq('id', serverUser.id)
-        .single()
-
-      if (profile) {
-        userData = {
-          id: serverUser.id,
-          display_name: (profile as any).display_name || '알 수 없음',
-          profile_photo_url: undefined,
-          is_member:
-            (profile as any).registration_status === 'approved' &&
-            (profile as any).is_active === true,
-          is_admin: (profile as any).is_admin === true,
-        }
-      }
-    }
-    const commentIds = comments.map(comment => String(comment.id)).filter(Boolean)
-    const likedCommentIds = serverUser
-      ? await getUserLikedCommentIds(supabaseServer, serverUser.id, commentIds)
-      : new Set<string>()
+    // 사용자 상태(로그인 여부·is_liked)는 이 함수에서 조회하지 않는다.
+    // cookies() 기반 세션 조회가 하나라도 섞이면 라우트 전체가 동적 렌더링으로
+    // 전환되어 ISR(revalidate=60)이 사문화된다(전수감사 P2). 개인화는
+    // PostDetailClient가 fetchSessionProfile·기존 likes 훅으로 복원한다.
     const commentsWithLikeState = comments.map(comment => ({
       ...comment,
       like_count: parseIntegerParam(String(comment.like_count ?? ''), 0, { min: 0 }),
-      is_liked: likedCommentIds.has(String(comment.id)),
+      is_liked: false, // 클라이언트(useCommentLikes)가 마운트 후 복원
     }))
 
     return {
@@ -277,11 +278,12 @@ async function getInitialPostData(
       comments: commentsWithLikeState,
       attachments,
       author: authorRecord ? { display_name: authorRecord.display_name } : null,
-      user: userData,
+      user: null,
     }
   } catch (error) {
+    // 장애를 404로 오표시하지 않도록 그대로 전파 → error.tsx(재시도)로 처리
     console.error('초기 게시글 데이터 조회 실패:', error)
-    return null
+    throw error
   }
 }
 

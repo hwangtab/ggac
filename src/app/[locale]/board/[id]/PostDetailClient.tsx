@@ -8,6 +8,7 @@ import PostAttachmentsDisplay from '@/components/PostAttachmentsDisplay'
 import PostContentRenderer from '@/components/PostContentRenderer'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { toSafeArtistImageSrc } from '@/utils/safeUrl'
+import { fetchSessionProfile } from '@/utils/sessionProfile'
 
 interface Post {
   id: string
@@ -95,12 +96,32 @@ export default function PostDetailClient({
   const router = useRouter()
 
   useEffect(() => {
-    // 서버에서 전달받은 사용자 정보 사용
+    let mounted = true
+
     if (initialUser) {
+      // (레거시 경로) 서버가 사용자 정보를 내려준 경우 그대로 사용
       setUser(initialUser)
       setIsMember(initialUser.is_member)
+    } else {
+      // 서버 셸은 ISR 캐시를 위해 개인화를 포함하지 않는다(전수감사 P2).
+      // 세션 복원은 공용 fetchSessionProfile(30초 캐시 + in-flight dedupe)을
+      // 사용하므로 같은 페이지의 Navigation 호출과 네트워크 요청이 합쳐진다.
+      fetchSessionProfile()
+        .then(session => {
+          if (!mounted || !session.authenticated || !session.user) return
+          const profile = session.profile
+          setUser({
+            id: session.user.id,
+            display_name: profile?.display_name || '알 수 없음',
+            is_member: profile?.registration_status === 'approved' && profile?.is_active === true,
+            is_admin: profile?.is_admin === true,
+          })
+          setIsMember(profile?.registration_status === 'approved' && profile?.is_active === true)
+        })
+        .catch(() => {
+          // 미로그인/실패 시 비로그인 상태 유지
+        })
     }
-    // initialUser가 null인 경우: 미로그인 상태 그대로 유지
 
     const incrementViewCount = async () => {
       try {
@@ -128,7 +149,11 @@ export default function PostDetailClient({
     }
 
     incrementViewCount()
-  }, [postId])
+
+    return () => {
+      mounted = false
+    }
+  }, [postId, initialUser])
 
   // 댓글 더보기 로드
   const loadMoreComments = async () => {

@@ -3,6 +3,7 @@
  * generateMetadata 및 Server Component에서 사용
  */
 
+import { cache } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import type { PostAttachment } from '@/types'
 import { createLogger, maskId } from '@/utils/logger'
@@ -244,7 +245,9 @@ function generatePostKeywords(post: any, author: any): string[] {
   return [...new Set(keywords)].slice(0, 10)
 }
 
-export async function getPostMetadata(postId: string) {
+// React cache(): 같은 요청에서 generateMetadata와 페이지 본문이 각각 호출해도
+// DB 조회(3쿼리)는 1회만 실행된다(전수감사 P2 — 중복 호출로 왕복 2배이던 회귀 방지).
+export const getPostMetadata = cache(async (postId: string) => {
   try {
     // 직접 DB 조회로 단순화하여 데이터 일관성 확보
     const post = await getPostById(postId)
@@ -269,4 +272,4 @@ export async function getPostMetadata(postId: string) {
     log.error('Error fetching post metadata:', error)
     return null
   }
-}
+})
