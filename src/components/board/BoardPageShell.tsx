@@ -1,27 +1,15 @@
 import ServerBoardView from './ServerBoardView'
 import type { BoardInitialPost } from '@/lib/server/board'
-import type { BoardCategory } from '@/constants/categories'
 import BoardUserSection from './BoardUserSection'
 
 interface BoardPageShellProps {
   posts: BoardInitialPost[]
-  category: BoardCategory
-  pagination: {
-    hasNext: boolean
-    hasPrev: boolean
-    currentPage: number
-  }
+  pageSize: number
 }
 
-const BoardPageShell = ({ posts, category, pagination }: BoardPageShellProps) => {
-  return (
-    <ServerBoardView
-      posts={posts}
-      category={category}
-      pagination={pagination}
-      renderAuthSection={() => <BoardUserSection />}
-    />
-  )
+const BoardPageShell = ({ posts, pageSize }: BoardPageShellProps) => {
+  // 클라이언트 컴포넌트에는 함수 prop을 직렬화할 수 없으므로 ReactNode 슬롯으로 전달
+  return <ServerBoardView posts={posts} pageSize={pageSize} authSection={<BoardUserSection />} />
 }
 
 export default BoardPageShell

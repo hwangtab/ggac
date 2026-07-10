@@ -915,10 +915,14 @@ const validatesBoardCategoryFilters =
   /export const parseBoardCategory/.test(boardCategoriesSource) &&
   /parseBoardCategory\(category\) \?\? ['"]전체['"]/.test(serverBoardSource) &&
   /query = query\.eq\(['"]category['"],\s*safeCategory\)/.test(serverBoardSource) &&
-  /parseBoardCategory\(resolved\.category\) \?\? ['"]전체['"]/.test(boardCategoryPageSource) &&
-  /category\?: BoardCategory/.test(boardServerDataSource) &&
-  /category: BoardCategory/.test(boardPageShellSource) &&
-  /category: BoardCategory/.test(serverBoardViewSource) &&
+  // 카테고리 필터는 클라이언트(ServerBoardView)로 이관됨 — searchParams 값을
+  // 반드시 parseBoardCategory allowlist로 검증한 뒤 사용해야 한다. 서버 파일에
+  // await searchParams가 다시 생기면 /board ISR이 사문화되므로 함께 금지한다.
+  /parseBoardCategory\(searchParams\.get\(['"]category['"]\)[\s\S]{0,40}?\) \?\? ['"]전체['"]/.test(
+    serverBoardViewSource
+  ) &&
+  !/await searchParams/.test(boardCategoryPageSource) &&
+  !/await searchParams/.test(boardServerDataSource) &&
   /parseBoardCategory\(categoryParam\)/.test(boardPostsApiSource) &&
   /const boardCategory = parseBoardCategory\(categoryParam\)/.test(boardPostsApiSource) &&
   /ApiError\.badRequest\(['"]유효하지 않은 카테고리입니다\.['"]\)/.test(boardPostsApiSource) &&
@@ -1198,18 +1202,25 @@ const postsApiParsesPaginationSafely =
     postsApiSource
   ) &&
   !/Number\(pageParam\s*\|\|\s*cursorParam/.test(postsApiSource)
+// ?page= 파싱은 목록 정적화(전수감사 P3)로 클라이언트 뷰로 이관됨 — 이관된
+// 컴포넌트가 parseIntegerParam을 쓰고, 서버 페이지는 searchParams를 다시
+// 읽지 않아야 한다(await searchParams가 생기면 ISR이 다시 사문화된다).
+const serverBoardViewEarlyPath = join(root, 'src/components/board/ServerBoardView.tsx')
+const serverBoardViewEarlySource = readFileSync(serverBoardViewEarlyPath, 'utf8')
+const archiveContentEarlyPath = join(root, 'src/app/[locale]/archive/ArchiveContent.tsx')
+const archiveContentEarlySource = readFileSync(archiveContentEarlyPath, 'utf8')
 const boardPageParsesSearchParamsSafely =
-  /parseIntegerParam\(resolved\.page\s*\?\?\s*null,\s*1,\s*\{\s*min:\s*1\s*\}\)/.test(
-    boardPageSource
+  /parseIntegerParam\(searchParams\.get\(['"]page['"]\),\s*1,\s*\{\s*min:\s*1\s*\}\)/.test(
+    serverBoardViewEarlySource
   ) &&
-  !/parseInt\(resolved\.page/.test(boardPageSource) &&
-  !/Number\(resolved\.page\)/.test(boardPageSource)
+  !/parseInt\(/.test(serverBoardViewEarlySource) &&
+  !/await searchParams/.test(boardPageSource)
 const archivePageParsesSearchParamsSafely =
-  /parseIntegerParam\(normalizeSingleParam\(resolvedSearch\.page\),\s*1,\s*\{\s*min:\s*1\s*\}\)/.test(
-    archivePageSource
+  /parseIntegerParam\(searchParams\.get\(['"]page['"]\),\s*1,\s*\{\s*min:\s*1\s*\}\)/.test(
+    archiveContentEarlySource
   ) &&
-  !/Number\(Array\.isArray\(resolvedSearch\.page\)/.test(archivePageSource) &&
-  !/Number\(normalizeSingleParam\(resolvedSearch\.page\)\)/.test(archivePageSource)
+  !/parseInt\(/.test(archiveContentEarlySource) &&
+  !/await searchParams/.test(archivePageSource)
 const parsesMemberFeeInputsSafely =
   /parseIntegerParam/.test(signupPageSource) &&
   /monthly_fee:\s*parseIntegerParam\(formData\.monthlyFee,\s*0,\s*\{\s*min:\s*0\s*\}\)/.test(
