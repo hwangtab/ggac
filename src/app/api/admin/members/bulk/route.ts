@@ -124,126 +124,106 @@ export const POST = defineApiRoute<Partial<BulkOperationRequest>>({
     const results: any[] = []
 
     try {
-      // 각 멤버에 대해 작업 수행
+      // 벌크를 실제 벌크로 수행한다: 일괄 조회 1회 → 메모리 검증 → 대상 일괄
+      // 업데이트 1회. 기존에는 멤버당 select+update를 순차 실행해 최대 100명이면
+      // 202 왕복(수십 초·함수 타임아웃 위험)이었다(전수감사 API High 5).
+      // updateData는 작업 타입별로 모든 대상에 동일하므로 일괄 update가 가능하다.
+      const { data: targetMembers, error: targetsError } = await db
+        .from('member_profiles')
+        .select('id, display_name, registration_status, is_active, is_suspended')
+        .in('id', sanitizedMemberIds)
+
+      if (targetsError) {
+        throw targetsError
+      }
+
+      const memberById = new Map((targetMembers || []).map(member => [String(member.id), member]))
+
+      // 작업 타입별 자격 조건과 업데이트 데이터 (모든 대상 공통)
+      const eligibility: Record<string, { status: string; message: string }> = {
+        bulk_approve: { status: 'pending', message: '승인 대기 상태의 회원만 승인할 수 있습니다.' },
+        bulk_reject: { status: 'pending', message: '승인 대기 상태의 회원만 거부할 수 있습니다.' },
+        bulk_activate: { status: 'approved', message: '승인된 회원만 활성화할 수 있습니다.' },
+        bulk_deactivate: { status: 'approved', message: '승인된 회원만 비활성화할 수 있습니다.' },
+        bulk_suspend: { status: 'approved', message: '승인된 회원만 정지할 수 있습니다.' },
+      }
+      const requiredStatus = eligibility[operation_type]?.status
+      const ineligibleMessage = eligibility[operation_type]?.message ?? '처리할 수 없는 작업입니다.'
+
+      const nowIso = new Date().toISOString()
+      const updateDataByType: Record<string, Record<string, unknown>> = {
+        bulk_approve: {
+          registration_status: 'approved',
+          is_active: true,
+          approved_by: user.id,
+          approved_at: nowIso,
+          updated_at: nowIso,
+        },
+        bulk_reject: {
+          registration_status: 'rejected',
+          is_active: false,
+          rejected_by: user.id,
+          updated_at: nowIso,
+        },
+        bulk_activate: {
+          is_active: true,
+          is_suspended: false,
+          suspension_reason: null,
+          suspension_until: null,
+          updated_at: nowIso,
+        },
+        bulk_deactivate: {
+          is_active: false,
+          updated_at: nowIso,
+        },
+        bulk_suspend: {
+          is_suspended: true,
+          is_active: false,
+          suspension_reason: parameters.suspension_reason || '관리자에 의한 대량 정지',
+          suspension_until: parameters.suspension_until || null,
+          updated_at: nowIso,
+        },
+      }
+      const updateData = updateDataByType[operation_type]
+
+      const eligibleIds: string[] = []
       for (const memberId of sanitizedMemberIds) {
-        try {
-          // 멤버 정보 조회
-          const { data: targetMember, error: targetError } = await db
-            .from('member_profiles')
-            .select('id, display_name, registration_status, is_active, is_suspended')
-            .eq('id', memberId)
-            .single()
+        const targetMember = memberById.get(String(memberId))
+        if (!targetMember) {
+          errorCount++
+          results.push({
+            member_id: memberId,
+            success: false,
+            error: '회원을 찾을 수 없습니다.',
+          })
+          continue
+        }
+        if (targetMember.registration_status !== requiredStatus) {
+          errorCount++
+          results.push({
+            member_id: memberId,
+            member_name: targetMember.display_name,
+            success: false,
+            error: ineligibleMessage,
+          })
+          continue
+        }
+        eligibleIds.push(memberId)
+      }
 
-          if (targetError || !targetMember) {
-            errorCount++
-            results.push({
-              member_id: memberId,
-              success: false,
-              error: '회원을 찾을 수 없습니다.',
-            })
-            continue
-          }
+      if (eligibleIds.length > 0 && updateData) {
+        const { error: updateError } = await db
+          .from('member_profiles')
+          .update(updateData)
+          .in('id', eligibleIds)
 
-          // 작업 타입에 따른 업데이트 데이터 준비
-          let updateData: any = {}
-          let canPerform = true
-          let errorMessage = ''
-
-          switch (operation_type) {
-            case 'bulk_approve':
-              if (targetMember.registration_status !== 'pending') {
-                canPerform = false
-                errorMessage = '승인 대기 상태의 회원만 승인할 수 있습니다.'
-              } else {
-                updateData = {
-                  registration_status: 'approved',
-                  is_active: true,
-                  approved_by: user.id,
-                  approved_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString(),
-                }
-              }
-              break
-
-            case 'bulk_reject':
-              if (targetMember.registration_status !== 'pending') {
-                canPerform = false
-                errorMessage = '승인 대기 상태의 회원만 거부할 수 있습니다.'
-              } else {
-                updateData = {
-                  registration_status: 'rejected',
-                  is_active: false,
-                  rejected_by: user.id,
-                  updated_at: new Date().toISOString(),
-                }
-              }
-              break
-
-            case 'bulk_activate':
-              if (targetMember.registration_status !== 'approved') {
-                canPerform = false
-                errorMessage = '승인된 회원만 활성화할 수 있습니다.'
-              } else {
-                updateData = {
-                  is_active: true,
-                  is_suspended: false,
-                  suspension_reason: null,
-                  suspension_until: null,
-                  updated_at: new Date().toISOString(),
-                }
-              }
-              break
-
-            case 'bulk_deactivate':
-              if (targetMember.registration_status !== 'approved') {
-                canPerform = false
-                errorMessage = '승인된 회원만 비활성화할 수 있습니다.'
-              } else {
-                updateData = {
-                  is_active: false,
-                  updated_at: new Date().toISOString(),
-                }
-              }
-              break
-
-            case 'bulk_suspend':
-              if (targetMember.registration_status !== 'approved') {
-                canPerform = false
-                errorMessage = '승인된 회원만 정지할 수 있습니다.'
-              } else {
-                updateData = {
-                  is_suspended: true,
-                  is_active: false,
-                  suspension_reason: parameters.suspension_reason || '관리자에 의한 대량 정지',
-                  suspension_until: parameters.suspension_until || null,
-                  updated_at: new Date().toISOString(),
-                }
-              }
-              break
-          }
-
-          if (!canPerform) {
-            errorCount++
-            results.push({
-              member_id: memberId,
-              member_name: targetMember.display_name,
-              success: false,
-              error: errorMessage,
-            })
-            continue
-          }
-
-          // 업데이트 수행
-          const { error: updateError } = await db
-            .from('member_profiles')
-            .update(updateData)
-            .eq('id', memberId)
-
+        for (const memberId of eligibleIds) {
+          const targetMember = memberById.get(String(memberId))
           if (updateError) {
             errorCount++
             results.push({
               member_id: memberId,
-              member_name: targetMember.display_name,
+              member_name: targetMember?.display_name,
               success: false,
               error: '데이터베이스 업데이트에 실패했습니다.',
             })
@@ -251,17 +231,10 @@ export const POST = defineApiRoute<Partial<BulkOperationRequest>>({
             successCount++
             results.push({
               member_id: memberId,
-              member_name: targetMember.display_name,
+              member_name: targetMember?.display_name,
               success: true,
             })
           }
-        } catch (memberError) {
-          errorCount++
-          results.push({
-            member_id: memberId,
-            success: false,
-            error: '처리 중 오류가 발생했습니다.',
-          })
         }
       }
 

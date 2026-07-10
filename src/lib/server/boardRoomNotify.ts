@@ -20,21 +20,19 @@ export async function notifyDirectors(db: SupabaseClient, input: NotifyInput): P
     return
   }
 
-  await Promise.all(
-    roster.map(async ({ id }) => {
-      const { error } = await db.rpc('create_notification', {
-        p_user_id: id,
-        p_type: 'board_notice',
-        p_title: input.title,
-        p_message: input.message,
-        p_data: input.meetingId
-          ? { meeting_id: input.meetingId, scope: 'board-room' }
-          : { scope: 'board-room' },
-        p_related_post_id: null,
-        p_related_user_id: null,
-        p_expires_at: null,
-      })
-      if (error) log.error('이사 알림 발송 실패', { userId: id.slice(0, 6), error: error.message })
-    })
-  )
+  if (roster.length === 0) return
+
+  // 이사당 create_notification RPC를 N회 호출하던 것을 기존 벌크 RPC 1회로
+  // 대체한다(전수감사 API Low 22 — create_bulk_notification이 이미 존재).
+  const { error } = await db.rpc('create_bulk_notification', {
+    p_user_ids: roster.map(({ id }) => id),
+    p_type: 'board_notice',
+    p_title: input.title,
+    p_message: input.message,
+    p_data: input.meetingId
+      ? { meeting_id: input.meetingId, scope: 'board-room' }
+      : { scope: 'board-room' },
+    p_expires_at: null,
+  })
+  if (error) log.error('이사 알림 일괄 발송 실패', { count: roster.length, error: error.message })
 }
