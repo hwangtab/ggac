@@ -151,6 +151,24 @@ export async function handleAuth(
   }
 
   // 2. 인증된 사용자 처리
+  //
+  // profile(member_profiles) 조회는 실제로 필요한 요청에서만 수행한다:
+  //  - 보호 경로: 승인 상태·admin·이사회 권한 판정 (2.3)
+  //  - 인증/등록 페이지: 상태별 리다이렉트 분기 (2.1, 2.2)
+  //  - 유지보수 모드 ON: 관리자 예외 판별 (middleware.ts)
+  // 그 외(로그인 사용자의 홈·아티스트·게시판 열람 등 공개 페이지)는 조회를
+  // 건너뛴다 — 기존에는 모든 인증 요청에서 조회해 전 페이지 TTFB에 DB 왕복
+  // 1개가 고정 가산됐다(전수감사 인증 H-1). RSC prefetch에도 동일하게 적용된다.
+  const isAuthOrRegistrationPage =
+    ['/login', '/signup'].includes(authPathname) ||
+    ['/register/pending', '/register/rejected'].includes(authPathname)
+  const needsProfile =
+    isProtectedPage || isAuthOrRegistrationPage || Boolean(systemSettings?.maintenanceMode)
+
+  if (!needsProfile) {
+    return { user, shouldContinue: true }
+  }
+
   // member_profiles 정보 가져오기 (단순화된 조회)
   let profile = null
   let profileError = null
