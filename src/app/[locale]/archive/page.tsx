@@ -1,5 +1,5 @@
 import { Suspense } from 'react'
-import ArchiveContent from './ArchiveContent'
+import ArchiveContent, { ArchiveView } from './ArchiveContent'
 import { getProjectsSorted, getArtists } from '@/lib/data'
 import {
   generateItemListStructuredData,
@@ -125,7 +125,18 @@ const ArchivePage = async ({ params }: ArchivePageProps) => {
   return (
     <>
       {structuredDataToScript(jsonLd)}
-      <Suspense fallback={null}>
+      {/* fallback을 기본 상태(All·1페이지) 뷰로 렌더해 프리렌더 HTML에 목록을 포함시킨다 */}
+      <Suspense
+        fallback={
+          <ArchiveView
+            projects={projects}
+            pageSize={PROJECTS_PER_PAGE}
+            artistNameMap={artistNameMap}
+            selectedCategory="All"
+            requestedPage={1}
+          />
+        }
+      >
         <ArchiveContent
           projects={projects}
           pageSize={PROJECTS_PER_PAGE}

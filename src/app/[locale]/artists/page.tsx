@@ -1,5 +1,5 @@
 import { Suspense } from 'react'
-import ArtistsContent from './ArtistsContent'
+import ArtistsContent, { ArtistsView } from './ArtistsContent'
 import { getArtists } from '@/lib/data'
 import {
   generateItemListStructuredData,
@@ -128,7 +128,11 @@ const ArtistsPage = async ({ params }: ArtistsPageProps) => {
   return (
     <>
       {structuredDataToScript(jsonLd)}
-      <Suspense fallback={null}>
+      {/* fallback을 기본 상태(All) 뷰로 렌더해 프리렌더 HTML에 목록 콘텐츠를 포함시킨다
+          (useSearchParams CSR bailout이 이 경계까지 비우는 것 보완) */}
+      <Suspense
+        fallback={<ArtistsView artists={artists} categories={categories} selectedCategory="All" />}
+      >
         <ArtistsContent artists={artists} categories={categories} />
       </Suspense>
     </>

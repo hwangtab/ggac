@@ -39,17 +39,21 @@ const buildArchiveHref = (page: number, category: string) => {
 // 카테고리(?category=)·페이지(?page=) 파생을 클라이언트에서 처리한다.
 // 서버에서 searchParams를 읽으면 페이지가 동적 렌더링으로 전환되어 ISR이
 // 사문화되므로(전수감사 P3) 서버는 전체 프로젝트를 정적으로 렌더한다.
-// 프로젝트 수십 건 규모라 전량 전달·클라 필터가 서버 왕복보다 효율적이다.
-const ArchiveContent = ({ projects, pageSize, artistNameMap }: ArchiveContentProps) => {
+//
+// 프레젠테이션(ArchiveView)과 searchParams 브리지(기본 export)를 분리한 이유:
+// useSearchParams 컴포넌트는 정적 프리렌더에서 Suspense 경계까지 CSR bailout
+// 되어 초기 HTML에서 목록이 빠진다. page.tsx가 Suspense fallback으로 기본
+// 상태(All·1페이지)의 ArchiveView를 렌더해 콘텐츠를 포함시킨다.
+export const ArchiveView = ({
+  projects,
+  pageSize,
+  artistNameMap,
+  selectedCategory,
+  requestedPage,
+}: ArchiveContentProps & { selectedCategory: string; requestedPage: number }) => {
   const t = useTranslations('archive')
   const locale = useLocale()
-  const searchParams = useSearchParams()
   const dateLocale = locale === 'en' ? 'en-US' : 'ko-KR'
-
-  const rawCategory = searchParams.get('category')
-  const selectedCategory: string = ARCHIVE_CATEGORIES.includes(rawCategory as ArchiveCategory)
-    ? (rawCategory as ArchiveCategory)
-    : 'All'
 
   const filteredProjects = useMemo(() => {
     if (selectedCategory === 'All') return projects
@@ -63,7 +67,6 @@ const ArchiveContent = ({ projects, pageSize, artistNameMap }: ArchiveContentPro
 
   const totalCount = filteredProjects.length
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
-  const requestedPage = parseIntegerParam(searchParams.get('page'), 1, { min: 1 })
   const currentPage = Math.min(Math.max(1, requestedPage), totalPages)
   const startIndex = (currentPage - 1) * pageSize
   const paginatedProjects = filteredProjects.slice(startIndex, startIndex + pageSize)
@@ -267,6 +270,26 @@ const ArchiveContent = ({ projects, pageSize, artistNameMap }: ArchiveContentPro
         </div>
       </section>
     </div>
+  )
+}
+
+// searchParams 브리지 — URL 쿼리에서 카테고리·페이지를 파생해 뷰에 넘긴다.
+const ArchiveContent = ({ projects, pageSize, artistNameMap }: ArchiveContentProps) => {
+  const searchParams = useSearchParams()
+  const rawCategory = searchParams.get('category')
+  const selectedCategory: string = ARCHIVE_CATEGORIES.includes(rawCategory as ArchiveCategory)
+    ? (rawCategory as ArchiveCategory)
+    : 'All'
+  const requestedPage = parseIntegerParam(searchParams.get('page'), 1, { min: 1 })
+
+  return (
+    <ArchiveView
+      projects={projects}
+      pageSize={pageSize}
+      artistNameMap={artistNameMap}
+      selectedCategory={selectedCategory}
+      requestedPage={requestedPage}
+    />
   )
 }
 
