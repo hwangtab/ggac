@@ -459,6 +459,10 @@ const supportsVercelMarketplaceUpstashEnv =
   /KV_REST_API_URL/.test(verifyEnvSource) &&
   /KV_REST_API_TOKEN/.test(verifyEnvSource) &&
   /hasCompleteEnvGroup\(env,\s*redisEnvGroups\)/.test(verifyEnvSource)
+// 정책(2026-07 전수감사 Phase 3): Upstash 미설정/장애 시 쓰기(POST 등)는 503
+// fail-closed를 유지하되, 읽기(GET/HEAD)만 degradeByMethod가 fail-open+high
+// 보안 로그로 완화한다. 쓰기 fail-closed 경로(rateLimitUnavailable 503)와
+// 등급 분기 존재를 함께 검증한다.
 const productionRateLimiterFailsClosed =
   /private isProduction\(\): boolean/.test(rateLimiterSource) &&
   /private rateLimitUnavailable\(windowMs: number,\s*maxRequests: number\): RateLimitResult/.test(
@@ -470,7 +474,11 @@ const productionRateLimiterFailsClosed =
     rateLimiterSource
   ) &&
   /if \(this\.isProduction\(\)\) \{\s*throw error\s*\}/.test(rateLimiterSource) &&
-  /if \(this\.isProduction\(\)\) \{\s*return this\.rateLimitUnavailable\(windowMs,\s*maxRequests\)\s*\}/.test(
+  /private degradeByMethod\(/.test(rateLimiterSource) &&
+  /method === ['"]GET['"] \|\| method === ['"]HEAD['"]/.test(rateLimiterSource) &&
+  /RATE_LIMIT_DEGRADED_FAIL_OPEN/.test(rateLimiterSource) &&
+  /return this\.rateLimitUnavailable\(windowMs,\s*maxRequests\)/.test(rateLimiterSource) &&
+  /if \(this\.isProduction\(\)\) \{\s*return this\.degradeByMethod\(req,\s*windowMs,\s*maxRequests,\s*['"]redis_error['"]\)\s*\}/.test(
     rateLimiterSource
   )
 const productionRateLimiterDocsFailClosed =
@@ -1332,11 +1340,13 @@ const parsesAttachmentSizesSafely =
     boardPostDetailSource
   ) &&
   !/Number\(att\.file_size\)/.test(boardPostDetailSource) &&
+  // 목록은 board_posts_with_stats 뷰(Phase 3)로 집계가 DB로 이전됨 — 뷰 집계값
+  // (total_size 등)을 그대로 더하지 않고 parseIntegerParam으로 정규화하는지 검증
   /parseIntegerParam/.test(serverBoardSource) &&
-  /parseIntegerParam\(String\(row\.file_size\s*\?\?\s*['"]['"]\),\s*0,\s*\{\s*min:\s*0\s*\}\)/.test(
+  /parseIntegerParam\(String\(row\.total_size\s*\?\?\s*['"]['"]\),\s*0,\s*\{\s*min:\s*0\s*\}\)/.test(
     serverBoardSource
   ) &&
-  !/Number\(row\.file_size\)/.test(serverBoardSource) &&
+  !/Number\(row\.(?:file_size|total_size)\)/.test(serverBoardSource) &&
   /parseIntegerParam/.test(boardDetailPageSource) &&
   /parseIntegerParam\(String\(att\.file_size\s*\?\?\s*['"]['"]\),\s*0,\s*\{\s*min:\s*0\s*\}\)/.test(
     boardDetailPageSource
@@ -1850,9 +1860,12 @@ const validatesActivityLogTypes =
   /parseActivityActionType\(log\.action_type\)/.test(activityBatchLogSource) &&
   /parseActivityTargetType\(log\.target_type\)/.test(activityBatchLogSource) &&
   /validateUUID\(log\.target_id,\s*['"]대상 ID['"]\)/.test(activityBatchLogSource) &&
-  /p_action_type:\s*actionType/.test(activityBatchLogSource) &&
-  /p_target_type:\s*targetType/.test(activityBatchLogSource) &&
-  /p_target_id:\s*targetId/.test(activityBatchLogSource) &&
+  // 배치는 log_user_activities_batch(배열 RPC, Phase 3)로 일괄 기록 — 검증된
+  // 값(actionType/targetType/targetId)만 payload에 실리는지 확인
+  /rpc\(['"]log_user_activities_batch['"]/.test(activityBatchLogSource) &&
+  /action_type:\s*actionType/.test(activityBatchLogSource) &&
+  /target_type:\s*targetType/.test(activityBatchLogSource) &&
+  /target_id:\s*targetId/.test(activityBatchLogSource) &&
   /target_type:\s*['"]system['"]/.test(loginPageSource) &&
   !/target_type:\s*['"]auth['"]/.test(loginPageSource) &&
   !/p_action_type:\s*action_type/.test(activityLogSource) &&
