@@ -1,6 +1,10 @@
+'use client'
+
+import { useMemo } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Link } from '@/i18n/navigation'
 import OptimizedImage from '@/components/OptimizedImage'
-import { getTranslations, getLocale } from 'next-intl/server'
+import { useTranslations, useLocale } from 'next-intl'
 import { localizeArtistCategory } from '@/constants/categories'
 import { toSafeArtistImageSrc } from '@/utils/safeUrl'
 import type { Artist } from '@/types'
@@ -8,7 +12,6 @@ import type { Artist } from '@/types'
 interface ArtistsContentProps {
   artists: Artist[]
   categories: string[]
-  selectedCategory: string
 }
 
 const buildCategoryHref = (category: string) => {
@@ -20,10 +23,32 @@ const buildCategoryHref = (category: string) => {
   return query ? `/artists?${query}` : '/artists'
 }
 
-const ArtistsContent = async ({ artists, categories, selectedCategory }: ArtistsContentProps) => {
-  const t = await getTranslations('artists')
-  const locale = await getLocale()
-  const hasArtists = artists.length > 0
+// 카테고리 필터를 클라이언트(useSearchParams)에서 처리한다.
+// 서버에서 searchParams를 읽으면 페이지 전체가 동적 렌더링으로 전환되어
+// ISR(revalidate)이 사문화되므로(2026-07 전수감사 P3), 서버는 전체 아티스트를
+// 정적으로 렌더하고 필터·선택 상태만 여기서 URL 쿼리로 파생한다.
+// 데이터 규모(아티스트 십수 명)상 전량 전달이 서버 필터보다 오히려 효율적이다.
+const ArtistsContent = ({ artists, categories }: ArtistsContentProps) => {
+  const t = useTranslations('artists')
+  const locale = useLocale()
+  const searchParams = useSearchParams()
+
+  const rawCategory = searchParams.get('category')
+  const selectedCategory = rawCategory && categories.includes(rawCategory) ? rawCategory : 'All'
+
+  const filteredArtists = useMemo(
+    () =>
+      selectedCategory === 'All'
+        ? artists
+        : artists.filter(artist =>
+            Array.isArray(artist.category)
+              ? artist.category.includes(selectedCategory)
+              : artist.category === selectedCategory
+          ),
+    [artists, selectedCategory]
+  )
+
+  const hasArtists = filteredArtists.length > 0
 
   return (
     <div className="pt-20">
@@ -43,6 +68,7 @@ const ArtistsContent = async ({ artists, categories, selectedCategory }: Artists
               <Link
                 key={category}
                 href={buildCategoryHref(category)}
+                scroll={false}
                 className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
                   selectedCategory === category
                     ? 'bg-primary-600 text-white'
@@ -60,7 +86,7 @@ const ArtistsContent = async ({ artists, categories, selectedCategory }: Artists
       <section className="py-16">
         <div className="tw-container-custom">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-12">
-            {artists.map((artist, index) => {
+            {filteredArtists.map((artist, index) => {
               const safeProfileImage = toSafeArtistImageSrc(artist.profileImage)
 
               return (

@@ -915,10 +915,14 @@ const validatesBoardCategoryFilters =
   /export const parseBoardCategory/.test(boardCategoriesSource) &&
   /parseBoardCategory\(category\) \?\? ['"]전체['"]/.test(serverBoardSource) &&
   /query = query\.eq\(['"]category['"],\s*safeCategory\)/.test(serverBoardSource) &&
-  /parseBoardCategory\(resolved\.category\) \?\? ['"]전체['"]/.test(boardCategoryPageSource) &&
-  /category\?: BoardCategory/.test(boardServerDataSource) &&
-  /category: BoardCategory/.test(boardPageShellSource) &&
-  /category: BoardCategory/.test(serverBoardViewSource) &&
+  // 카테고리 필터는 클라이언트(ServerBoardView)로 이관됨 — searchParams 값을
+  // 반드시 parseBoardCategory allowlist로 검증한 뒤 사용해야 한다. 서버 파일에
+  // await searchParams가 다시 생기면 /board ISR이 사문화되므로 함께 금지한다.
+  /parseBoardCategory\(searchParams\.get\(['"]category['"]\)[\s\S]{0,40}?\) \?\? ['"]전체['"]/.test(
+    serverBoardViewSource
+  ) &&
+  !/await searchParams/.test(boardCategoryPageSource) &&
+  !/await searchParams/.test(boardServerDataSource) &&
   /parseBoardCategory\(categoryParam\)/.test(boardPostsApiSource) &&
   /const boardCategory = parseBoardCategory\(categoryParam\)/.test(boardPostsApiSource) &&
   /ApiError\.badRequest\(['"]유효하지 않은 카테고리입니다\.['"]\)/.test(boardPostsApiSource) &&
@@ -977,10 +981,14 @@ const annotatesAuthenticatedCommentLikeState =
   /export async function getUserLikedCommentIds/.test(commentLikesHelperSource) &&
   /\.from\(['"]comment_likes['"]\)/.test(commentLikesHelperSource) &&
   /\.eq\(['"]user_id['"],\s*userId\)/.test(commentLikesHelperSource) &&
-  /getUserLikedCommentIds\(supabaseServer,\s*serverUser\.id,\s*commentIds\)/.test(
-    boardDetailPageSource
-  ) &&
-  /is_liked:\s*likedCommentIds\.has\(String\(comment\.id\)\)/.test(boardDetailPageSource) &&
+  // 상세 페이지 SSR 셸은 ISR 캐시를 위해 개인화(세션 기반 is_liked)를 포함하지
+  // 않는다(전수감사 P2) — 서버는 is_liked:false로 내려주고 복원은 클라이언트
+  // (useCommentLikes의 likedSet)가 담당한다. 셸에 세션 조회가 다시 들어오면
+  // 라우트가 동적으로 전환되므로 금지 가드를 함께 둔다.
+  /is_liked:\s*false/.test(boardDetailPageSource) &&
+  !/getUserLikedCommentIds\(/.test(boardDetailPageSource) &&
+  !/createSupabaseServer/.test(boardDetailPageSource) &&
+  // 인증 사용자 대상 댓글 목록 API는 계속 서버에서 like 상태를 주석한다
   /getUserLikedCommentIds\(sessionSupabase,\s*user\.id,\s*commentIds\)/.test(commentsApiSource) &&
   /getUserLikedCommentIds\(sessionSupabase,\s*user\.id,\s*commentIds\)/.test(
     commentsListApiSource
@@ -1198,18 +1206,25 @@ const postsApiParsesPaginationSafely =
     postsApiSource
   ) &&
   !/Number\(pageParam\s*\|\|\s*cursorParam/.test(postsApiSource)
+// ?page= 파싱은 목록 정적화(전수감사 P3)로 클라이언트 뷰로 이관됨 — 이관된
+// 컴포넌트가 parseIntegerParam을 쓰고, 서버 페이지는 searchParams를 다시
+// 읽지 않아야 한다(await searchParams가 생기면 ISR이 다시 사문화된다).
+const serverBoardViewEarlyPath = join(root, 'src/components/board/ServerBoardView.tsx')
+const serverBoardViewEarlySource = readFileSync(serverBoardViewEarlyPath, 'utf8')
+const archiveContentEarlyPath = join(root, 'src/app/[locale]/archive/ArchiveContent.tsx')
+const archiveContentEarlySource = readFileSync(archiveContentEarlyPath, 'utf8')
 const boardPageParsesSearchParamsSafely =
-  /parseIntegerParam\(resolved\.page\s*\?\?\s*null,\s*1,\s*\{\s*min:\s*1\s*\}\)/.test(
-    boardPageSource
+  /parseIntegerParam\(searchParams\.get\(['"]page['"]\),\s*1,\s*\{\s*min:\s*1\s*\}\)/.test(
+    serverBoardViewEarlySource
   ) &&
-  !/parseInt\(resolved\.page/.test(boardPageSource) &&
-  !/Number\(resolved\.page\)/.test(boardPageSource)
+  !/parseInt\(/.test(serverBoardViewEarlySource) &&
+  !/await searchParams/.test(boardPageSource)
 const archivePageParsesSearchParamsSafely =
-  /parseIntegerParam\(normalizeSingleParam\(resolvedSearch\.page\),\s*1,\s*\{\s*min:\s*1\s*\}\)/.test(
-    archivePageSource
+  /parseIntegerParam\(searchParams\.get\(['"]page['"]\),\s*1,\s*\{\s*min:\s*1\s*\}\)/.test(
+    archiveContentEarlySource
   ) &&
-  !/Number\(Array\.isArray\(resolvedSearch\.page\)/.test(archivePageSource) &&
-  !/Number\(normalizeSingleParam\(resolvedSearch\.page\)\)/.test(archivePageSource)
+  !/parseInt\(/.test(archiveContentEarlySource) &&
+  !/await searchParams/.test(archivePageSource)
 const parsesMemberFeeInputsSafely =
   /parseIntegerParam/.test(signupPageSource) &&
   /monthly_fee:\s*parseIntegerParam\(formData\.monthlyFee,\s*0,\s*\{\s*min:\s*0\s*\}\)/.test(

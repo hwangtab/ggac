@@ -4,113 +4,20 @@ import { cache } from 'react'
 import { createLogger } from '@/utils/logger'
 
 const log = createLogger('data')
-// Note: avoid React cache for artists to ensure tag-based revalidation works reliably
 
-// 메모리 효율을 위한 고급 캐시 관리
-interface CacheEntry<T> {
-  data: T
-  timestamp: number
-  hits: number
-}
-
-/**
- * In-memory cache with TTL and simple LRU-style eviction.
- *
- * The cache stores up to `maxSize` entries. When an entry is older than
- * `maxAge` milliseconds it will be removed on access. If the cache exceeds
- * `maxSize`, the least frequently accessed entry is evicted.
- */
-class MemoryEfficientCache<T> {
-  private cache = new Map<string, CacheEntry<T>>()
-  private maxSize = 100 // 최대 캐시 항목 수
-  private maxAge = 300000 // 5분 TTL
-
-  /**
-   * Retrieve a value from cache.
-   * @param key - Cache key
-   * @returns Cached value or `null` if missing/expired
-   */
-  get(key: string): T | null {
-    const entry = this.cache.get(key)
-    if (!entry) return null
-
-    // TTL 체크
-    if (Date.now() - entry.timestamp > this.maxAge) {
-      this.cache.delete(key)
-      return null
-    }
-
-    // 히트 카운트 증가
-    entry.hits++
-    return entry.data
-  }
-
-  /**
-   * Store data in the cache.
-   * @param key - Cache key
-   * @param data - Value to cache
-   */
-  set(key: string, data: T): void {
-    // 캐시 크기 관리 - LRU 기반 제거
-    if (this.cache.size >= this.maxSize) {
-      this.evictLeastUsed()
-    }
-
-    this.cache.set(key, {
-      data,
-      timestamp: Date.now(),
-      hits: 0,
-    })
-  }
-
-  /** Remove the least frequently used entry from the cache. */
-  private evictLeastUsed(): void {
-    let leastUsedKey = ''
-    let leastHits = Infinity
-
-    for (const [key, entry] of this.cache.entries()) {
-      if (entry.hits < leastHits) {
-        leastHits = entry.hits
-        leastUsedKey = key
-      }
-    }
-
-    if (leastUsedKey) {
-      this.cache.delete(leastUsedKey)
-    }
-  }
-
-  /** Clear all cached entries. */
-  clear(): void {
-    this.cache.clear()
-  }
-}
-
-// 전역 캐시 인스턴스 - 런타임에만 생성
-let artistCache: MemoryEfficientCache<Artist[]> | null = null
-let projectCache: MemoryEfficientCache<Project[]> | null = null
+// 캐시 전략(단일화): Supabase 조회는 Next 데이터 캐시(fetch revalidate+tags:['artists'])가
+// 유일한 인스턴스 간 캐시이고, React cache()는 같은 요청/렌더 내 중복 호출만 메모한다.
+// 과거의 모듈 레벨 인메모리 TTL 캐시(MemoryEfficientCache)는 revalidateTag('artists')로
+// 무효화되지 않아 관리자 수정 후 최대 5분 stale을 만들고, 빌드 워커 간 상태 공유로
+// 프리렌더 결과를 비결정적으로 만들어 제거했다(2026-07 전수감사 P4).
 let legacyArtistMapPromise: Promise<Map<string, Artist>> | null = null
 let enArtistTextMapPromise: Promise<Map<string, Artist>> | null = null
 
-// 캐시 초기화 함수
-function initCaches() {
-  if (typeof window === 'undefined' && !artistCache) {
-    artistCache = new MemoryEfficientCache<Artist[]>()
-    projectCache = new MemoryEfficientCache<Project[]>()
-  }
-}
-
-// 외부에서 아티스트 캐시를 무효화할 수 있도록 헬퍼를 노출
+// 외부에서 아티스트 관련 모듈 상태를 무효화할 수 있도록 헬퍼를 노출.
+// Next 데이터 캐시는 호출부의 revalidateTag('artists')가 담당한다.
 export function invalidateArtistsCache() {
-  try {
-    initCaches()
-    artistCache?.clear()
-    legacyArtistMapPromise = null
-    enArtistTextMapPromise = null
-  } catch (e) {
-    // 캐시 무효화 실패는 치명적이지 않음
-    log.warn('invalidateArtistsCache failed', e)
-  }
+  legacyArtistMapPromise = null
+  enArtistTextMapPromise = null
 }
 // 중앙화된 타입 시스템에서 임포트
 import type { Artist, Project, GlobalData, DatabaseArtist } from '@/types'
@@ -142,20 +49,13 @@ const DEFAULT_GLOBAL_DATA: GlobalData = {
 
 // Supabase에서 전체 아티스트 목록 조회 (데이터베이스 우선, JSON 파일 백업)
 // locale은 DB 없이 JSON 폴백 경로에서만 적용됨 (DB _en 컬럼은 Phase 5에서 추가)
-export const getArtistsFromDB = async (locale = 'ko'): Promise<Artist[]> => {
-  initCaches()
-
-  // 고급 캐시에서 먼저 확인
-  const cacheKey = `artists:${locale}`
-  const cached = artistCache?.get(cacheKey)
-  if (cached) return cached
+// React cache(): 같은 렌더에서 여러 컴포넌트가 호출해도 1회만 실행.
+export const getArtistsFromDB = cache(async (locale = 'ko'): Promise<Artist[]> => {
   try {
     // 환경 변수 체크 추가
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
       log.warn('Supabase environment variables not available, falling back to JSON')
-      const fallbackResult = await getArtistsFromJSON(locale)
-      artistCache?.set(cacheKey, fallbackResult)
-      return fallbackResult
+      return await getArtistsFromJSON(locale)
     }
 
     // 정적 생성 시점에서도 접근 가능하도록 createClient 사용
@@ -207,23 +107,18 @@ export const getArtistsFromDB = async (locale = 'ko'): Promise<Artist[]> => {
         }
       }
 
-      artistCache?.set(cacheKey, result)
       return result
     }
 
     // 데이터베이스에 데이터가 없으면 JSON 파일에서 조회 (백업)
-    const fallbackResult = await getArtistsFromJSON(locale)
-    artistCache?.set(cacheKey, fallbackResult)
-    return fallbackResult
+    return await getArtistsFromJSON(locale)
   } catch (error) {
     log.error('Error fetching artists from database:', error)
 
     // 오류 발생 시 JSON 파일에서 조회 (백업)
-    const errorFallbackResult = await getArtistsFromJSON(locale)
-    artistCache?.set(cacheKey, errorFallbackResult)
-    return errorFallbackResult
+    return await getArtistsFromJSON(locale)
   }
-}
+})
 
 // JSON 파일에서 아티스트 조회 (백업용)
 export const getArtistsFromJSON = async (locale = 'ko'): Promise<Artist[]> => {
@@ -250,34 +145,22 @@ export const getArtistsFromJSON = async (locale = 'ko'): Promise<Artist[]> => {
 export const getArtists = getArtistsFromDB
 
 export const getProjects = cache(async (locale = 'ko'): Promise<Project[]> => {
-  initCaches()
-
-  const cacheKey = `projects:${locale}`
-  const cached = projectCache?.get(cacheKey)
-  if (cached) return cached
-
   const filePath =
     locale === 'en'
       ? path.join(process.cwd(), 'data/en/projects.json')
       : path.join(process.cwd(), 'data/projects.json')
   try {
     const fileContents = await fs.promises.readFile(filePath, 'utf8')
-    const result = JSON.parse(fileContents)
-    projectCache?.set(cacheKey, result)
-    return result
+    return JSON.parse(fileContents)
   } catch (error) {
     if (locale === 'en') {
       try {
         const fallback = path.join(process.cwd(), 'data/projects.json')
-        const result = JSON.parse(await fs.promises.readFile(fallback, 'utf8'))
-        projectCache?.set(cacheKey, result)
-        return result
+        return JSON.parse(await fs.promises.readFile(fallback, 'utf8'))
       } catch {}
     }
     log.error('Error loading projects data:', error)
-    const emptyResult: Project[] = []
-    projectCache?.set(cacheKey, emptyResult)
-    return emptyResult
+    return []
   }
 })
 
@@ -323,16 +206,9 @@ export const getFaqData = cache(async (locale = 'ko'): Promise<FaqItem[]> => {
   }
 })
 
-// ISR 최적화를 위한 revalidate 설정
-//
-// 주의: 본 모듈에는 두 계층의 TTL이 의도적으로 다르게 설정되어 있다.
-//   - fetch level: 3600초 (1시간) — Supabase 호출 캐시. 아티스트 데이터가 자주 갱신되지 않으나,
-//     관리자 수정 시 revalidateTag('artists')로 즉시 무효화 가능하므로 1시간으로 두어
-//     stale 데이터 노출 시간을 짧게 유지한다.
-//   - page/module level: 86400초 (24시간) — 전역(Global) 설정/JSON은 사실상 변경이 거의 없으므로
-//     ISR로 길게 캐시한다. 여기 값과 fetch level 값이 다른 것은 각각이 다른 데이터에 적용되기
-//     때문이며, 의도된 차이다.
-export const revalidate = 86400
+// 참고: 과거 이 파일에 있던 `export const revalidate = 86400`은 라우트 세그먼트
+// 파일이 아니어서 아무 효과가 없는 죽은 선언이라 제거했다. Supabase 조회의 TTL은
+// getArtistsFromDB 내부 fetch의 revalidate(3600)+tags(['artists'])가 담당한다.
 
 // DatabaseArtist를 Artist 타입으로 변환 — locale='en'이면 _en 컬럼 우선, 없으면 한국어 폴백
 function convertDatabaseArtistToArtist(dbArtist: DatabaseArtist, locale = 'ko'): Artist {
@@ -376,6 +252,10 @@ async function getLegacyArtistMap(): Promise<Map<string, Artist>> {
 
       return map
     })()
+    // 실패한 promise가 모듈 캐시에 고착되어 이후 호출까지 전부 실패로 만드는 것 방지
+    legacyArtistMapPromise.catch(() => {
+      legacyArtistMapPromise = null
+    })
   }
 
   return legacyArtistMapPromise
@@ -392,6 +272,9 @@ async function buildEnArtistTextMap(): Promise<Map<string, Artist>> {
       }
       return map
     })()
+    enArtistTextMapPromise.catch(() => {
+      enArtistTextMapPromise = null
+    })
   }
   return enArtistTextMapPromise
 }
@@ -428,80 +311,79 @@ function applyProfileImageFallback(artist: Artist, fallback?: Artist): Artist {
 }
 
 // Supabase에서 아티스트 조회 (데이터베이스 우선, JSON 파일 백업)
-export const getArtistBySlugFromDB = async (
-  slug: string,
-  locale = 'ko'
-): Promise<Artist | null> => {
-  try {
-    // 환경 변수 체크 추가
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-      log.warn('Supabase environment variables not available, falling back to JSON')
+export const getArtistBySlugFromDB = cache(
+  async (slug: string, locale = 'ko'): Promise<Artist | null> => {
+    try {
+      // 환경 변수 체크 추가
+      if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+        log.warn('Supabase environment variables not available, falling back to JSON')
+        const artists = await getArtistsFromJSON(locale)
+        return artists.find(artist => artist.slug === slug) || null
+      }
+
+      // 정적 생성 시점에서도 접근 가능하도록 createClient 사용
+      const { createClient } = await import('@supabase/supabase-js')
+      const revalidateValue = 3600
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+        {
+          global: {
+            fetch: (input: RequestInfo | URL, init?: RequestInit) => {
+              return fetch(input, {
+                ...init,
+                next: { revalidate: revalidateValue, tags: ['artists'] },
+              })
+            },
+          },
+        }
+      )
+
+      // 데이터베이스에서 아티스트 조회
+      const { data: dbArtist, error } = await supabase
+        .from('artists')
+        .select('*')
+        .eq('slug', slug)
+        .single()
+
+      if (!error && dbArtist) {
+        let convertedArtist = convertDatabaseArtistToArtist(dbArtist, locale)
+
+        try {
+          const legacyMap = await getLegacyArtistMap()
+          const fallback = legacyMap.get(convertedArtist.slug) || legacyMap.get(convertedArtist.id)
+          convertedArtist = applyProfileImageFallback(convertedArtist, fallback)
+        } catch (fallbackError) {
+          log.warn('Failed to apply legacy artist image fallback:', fallbackError)
+        }
+
+        if (locale === 'en') {
+          try {
+            const enMap = await buildEnArtistTextMap()
+            convertedArtist = overlayEnglishArtistText(
+              convertedArtist,
+              enMap.get(convertedArtist.slug) ?? enMap.get(convertedArtist.id)
+            )
+          } catch (enError) {
+            log.warn('Failed to apply English text overlay:', enError)
+          }
+        }
+
+        return convertedArtist
+      }
+
+      // 데이터베이스에 없으면 JSON 파일에서 조회 (백업)
+      const artists = await getArtistsFromJSON(locale)
+      return artists.find(artist => artist.slug === slug) || null
+    } catch (error) {
+      log.error('Error fetching artist from database:', error)
+
+      // 오류 발생 시 JSON 파일에서 조회 (백업)
       const artists = await getArtistsFromJSON(locale)
       return artists.find(artist => artist.slug === slug) || null
     }
-
-    // 정적 생성 시점에서도 접근 가능하도록 createClient 사용
-    const { createClient } = await import('@supabase/supabase-js')
-    const revalidateValue = 3600
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      {
-        global: {
-          fetch: (input: RequestInfo | URL, init?: RequestInit) => {
-            return fetch(input, {
-              ...init,
-              next: { revalidate: revalidateValue, tags: ['artists'] },
-            })
-          },
-        },
-      }
-    )
-
-    // 데이터베이스에서 아티스트 조회
-    const { data: dbArtist, error } = await supabase
-      .from('artists')
-      .select('*')
-      .eq('slug', slug)
-      .single()
-
-    if (!error && dbArtist) {
-      let convertedArtist = convertDatabaseArtistToArtist(dbArtist, locale)
-
-      try {
-        const legacyMap = await getLegacyArtistMap()
-        const fallback = legacyMap.get(convertedArtist.slug) || legacyMap.get(convertedArtist.id)
-        convertedArtist = applyProfileImageFallback(convertedArtist, fallback)
-      } catch (fallbackError) {
-        log.warn('Failed to apply legacy artist image fallback:', fallbackError)
-      }
-
-      if (locale === 'en') {
-        try {
-          const enMap = await buildEnArtistTextMap()
-          convertedArtist = overlayEnglishArtistText(
-            convertedArtist,
-            enMap.get(convertedArtist.slug) ?? enMap.get(convertedArtist.id)
-          )
-        } catch (enError) {
-          log.warn('Failed to apply English text overlay:', enError)
-        }
-      }
-
-      return convertedArtist
-    }
-
-    // 데이터베이스에 없으면 JSON 파일에서 조회 (백업)
-    const artists = await getArtistsFromJSON(locale)
-    return artists.find(artist => artist.slug === slug) || null
-  } catch (error) {
-    log.error('Error fetching artist from database:', error)
-
-    // 오류 발생 시 JSON 파일에서 조회 (백업)
-    const artists = await getArtistsFromJSON(locale)
-    return artists.find(artist => artist.slug === slug) || null
   }
-}
+)
 
 // 기존 함수를 새로운 DB 조회 함수로 교체
 export const getArtistBySlug = getArtistBySlugFromDB

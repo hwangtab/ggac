@@ -1,22 +1,16 @@
-// 하이브리드 렌더링: 서버 컴포넌트 + 클라이언트 하이드레이션
+// 하이브리드 렌더링: 서버 컴포넌트(ISR) + 클라이언트 필터·하이드레이션
 import { Suspense } from 'react'
 import BoardServerData from './BoardServerData'
 import { generateBreadcrumbStructuredData, structuredDataToScript } from '@/utils/structuredData'
-import { parseIntegerParam } from '@/utils/queryParams'
-import { parseBoardCategory } from '@/constants/categories'
 import { setRequestLocale } from 'next-intl/server'
 import type { Metadata } from 'next'
 
 export const revalidate = 60
 
-export async function generateMetadata({
-  searchParams,
-}: {
-  searchParams?: Promise<{ page?: string; category?: string }>
-}): Promise<Metadata> {
-  const resolved = (await searchParams) ?? {}
-  const page = parseIntegerParam(resolved.page ?? null, 1, { min: 1 })
-  const canonical = page > 1 ? `/board?page=${page}` : '/board'
+export async function generateMetadata(): Promise<Metadata> {
+  // 페이지네이션(?page=)은 클라이언트로 이관됨 — generateMetadata에서 searchParams를
+  // 읽으면 라우트가 동적 렌더링으로 전환되므로 canonical은 목록 루트로 고정한다.
+  const canonical = '/board'
 
   return {
     title: '자유게시판',
@@ -66,10 +60,6 @@ export async function generateMetadata({
 
 interface BoardPageProps {
   params: Promise<{ locale: string }>
-  searchParams?: Promise<{
-    category?: string
-    page?: string
-  }>
 }
 
 const boardBreadcrumbJsonLd = structuredDataToScript(
@@ -79,12 +69,12 @@ const boardBreadcrumbJsonLd = structuredDataToScript(
   ])
 )
 
-const BoardPage = async ({ params, searchParams }: BoardPageProps) => {
+// 카테고리·페이지(?category=, ?page=)는 ServerBoardView(클라이언트)가
+// parseBoardCategory allowlist로 검증해 파생한다. 서버에서 searchParams를
+// 읽으면 /board가 동적 렌더링으로 전환되어 revalidate=60이 사문화된다(전수감사 P3).
+const BoardPage = async ({ params }: BoardPageProps) => {
   const { locale } = await params
   setRequestLocale(locale)
-  const resolved = (await searchParams) ?? {}
-  const category = parseBoardCategory(resolved.category) ?? '전체'
-  const page = parseIntegerParam(resolved.page ?? null, 1, { min: 1 })
 
   return (
     <>
@@ -106,7 +96,7 @@ const BoardPage = async ({ params, searchParams }: BoardPageProps) => {
             </div>
           }
         >
-          <BoardServerData category={category} page={page} pageSize={15} />
+          <BoardServerData pageSize={15} />
         </Suspense>
       </div>
     </>
