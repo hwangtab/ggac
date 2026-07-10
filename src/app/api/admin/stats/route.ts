@@ -22,19 +22,25 @@ export const GET = defineApiRoute({
   handler: async ({ auth }) => {
     const { db } = auth
 
-    const [membersResult, postsResult, artistsResult] = await Promise.all([
-      db.from('member_profiles').select('registration_status', { count: 'exact' }),
-      db.from('posts').select('*', { count: 'exact' }).eq('is_deleted', false),
+    // count만 필요하므로 head:true로 행 전송을 없앤다 — 기존에는 posts 전체
+    // (본문 포함)와 아티스트 프로필 전행을 실제로 전송하면서 count만 사용해
+    // 대시보드 진입마다 수 MB를 옮겼다(전수감사 API High 4).
+    const [membersResult, pendingResult, postsResult, artistsResult] = await Promise.all([
+      db.from('member_profiles').select('id', { count: 'exact', head: true }),
       db
         .from('member_profiles')
-        .select('*', { count: 'exact' })
+        .select('id', { count: 'exact', head: true })
+        .eq('registration_status', 'pending'),
+      db.from('posts').select('id', { count: 'exact', head: true }).eq('is_deleted', false),
+      db
+        .from('member_profiles')
+        .select('id', { count: 'exact', head: true })
         .eq('is_artist', true)
         .eq('is_active', true),
     ])
 
     const totalMembers = membersResult.count || 0
-    const pendingMembers =
-      membersResult.data?.filter(member => member.registration_status === 'pending').length || 0
+    const pendingMembers = pendingResult.count || 0
     const totalPosts = postsResult.count || 0
     const activeArtists = artistsResult.count || 0
 
