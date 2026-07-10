@@ -417,68 +417,11 @@ const nextConfig = {
             key: 'Strict-Transport-Security',
             value: 'max-age=31536000; includeSubDomains; preload',
           },
-          {
-            key: 'Content-Security-Policy',
-            value:
-              process.env.NODE_ENV === 'development'
-                ? // 개발 환경에서 완화된 CSP - CSS MIME 타입 오류 방지
-                  [
-                    "default-src 'self'",
-                    "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-                    "script-src-elem 'self' 'unsafe-inline' 'unsafe-eval'",
-                    "style-src 'self' 'unsafe-inline'",
-                    "style-src-elem 'self' 'unsafe-inline'",
-                    "img-src 'self' data: https: blob:",
-                    "connect-src 'self' http://localhost:* https: ws://localhost:* wss://localhost:* https://*.supabase.co wss://*.supabase.co",
-                    "font-src 'self' data:",
-                    "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com",
-                    "object-src 'none'",
-                    "base-uri 'self'",
-                    "worker-src 'self' blob:",
-                    "manifest-src 'self'",
-                  ].join('; ')
-                : [
-                    "default-src 'self'",
-                    // 일반 HTML 라우트는 src/middleware/csp.ts에서 요청별 nonce + strict-dynamic
-                    // CSP를 우선 주입한다. 이 정적 헤더는 fallback이며, 미들웨어가 CSP 적용을
-                    // 건너뛰는 에디터 경로(board/write, board/[id]/edit)에 한해 적용된다.
-                    // 에디터는 react-quill의 인라인 스크립트 호환을 위해 'unsafe-inline' 유지.
-                    "script-src 'self' 'unsafe-inline'" +
-                      (process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : '') +
-                      ' https://www.youtube.com https://www.google-analytics.com',
-                    // 스크립트 요소별 세밀한 제어 - CSS 파일을 script로 처리하지 않도록 명시적 제외
-                    "script-src-elem 'self' 'unsafe-inline'" +
-                      (process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : '') +
-                      ' https://www.youtube.com https://www.google-analytics.com',
-                    // 스타일 정책
-                    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-                    "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com",
-                    // 폰트 정책
-                    "font-src 'self' https://fonts.gstatic.com",
-                    // 이미지 정책 - data: URI 추가 (Next.js Image blur 지원), Supabase storage 추가
-                    "img-src 'self' https: blob: data: https://*.supabase.co",
-                    // 미디어 정책
-                    "media-src 'self' https://www.youtube.com https://*.supabase.co",
-                    // 프레임 정책
-                    "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com",
-                    // 연결 정책
-                    process.env.NODE_ENV === 'development'
-                      ? "connect-src 'self' http://localhost:* https://api.supabase.io https://*.supabase.co ws://localhost:* wss://localhost:* wss://*.supabase.co"
-                      : "connect-src 'self' https://api.supabase.io https://*.supabase.co wss://*.supabase.co",
-                    // 객체 및 기타 보안 정책
-                    "object-src 'none'",
-                    "base-uri 'self'",
-                    "form-action 'self'",
-                    "frame-ancestors 'none'",
-                    // 워커 및 매니페스트 정책
-                    "worker-src 'self' blob:",
-                    "manifest-src 'self'",
-                    // 플러그인 차단은 object-src 'none'으로 처리 (plugin-types는 deprecated)
-                    // CSP 위반 리포팅
-                    'report-uri /api/security/csp-report',
-                    'report-to default',
-                  ].join('; '),
-          },
+          // Content-Security-Policy는 src/middleware/csp.ts가 단일 소스다.
+          // 모든 HTML 응답이 미들웨어를 거치므로(matcher 제외 대상은 정적 자산·API뿐)
+          // 여기 정적 CSP는 실제로 어떤 응답에도 도달하지 않는 죽은 정의였고,
+          // 두 정의가 서로 달라 드리프트 위험만 있어 제거했다(전수감사 인증 M-6).
+          // 아래 Report-To 헤더는 미들웨어 CSP의 report-to 지시어가 참조하므로 유지.
           {
             key: 'Report-To',
             value: JSON.stringify({
