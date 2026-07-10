@@ -233,8 +233,11 @@ const activityLoggerAvoidsBearerTokenForwarding =
   !/Authorization:\s*`Bearer/.test(activityLoggerEarlySource) &&
   !/sessionToken:\s*string\s*\|\s*null/.test(activityLoggerEarlySource)
 const mypagePermissionUsesServerSessionTruth =
-  /fetch\(['"]\/api\/auth\/verify-session['"]/.test(mypagePermissionCheckSource) &&
-  /fetch\(['"]\/api\/auth\/verify-session['"]/.test(mypageNavigationSource) &&
+  // 공용 fetchSessionProfile(내부적으로 verify-session 호출·모듈 캐시 공유) 또는 직접 fetch 둘 다 인정
+  (/fetchSessionProfile/.test(mypagePermissionCheckSource) ||
+    /fetch\(['"]\/api\/auth\/verify-session['"]/.test(mypagePermissionCheckSource)) &&
+  (/fetchSessionProfile/.test(mypageNavigationSource) ||
+    /fetch\(['"]\/api\/auth\/verify-session['"]/.test(mypageNavigationSource)) &&
   /is_admin/.test(authVerifySessionSource) &&
   /is_artist/.test(authVerifySessionSource) &&
   /artist_id/.test(authVerifySessionSource) &&
@@ -243,7 +246,8 @@ const mypagePermissionUsesServerSessionTruth =
   !/from\(['"]member_profiles['"]\)/.test(mypagePermissionCheckSource) &&
   !/from\(['"]member_profiles['"]\)/.test(mypageNavigationSource)
 const boardUserSectionUsesServerSessionTruth =
-  /fetch\(['"]\/api\/auth\/verify-session['"]/.test(boardUserSectionSource) &&
+  (/fetchSessionProfile/.test(boardUserSectionSource) ||
+    /fetch\(['"]\/api\/auth\/verify-session['"]/.test(boardUserSectionSource)) &&
   !/from\s+['"]@\/lib\/supabase\/client['"]/.test(boardUserSectionSource) &&
   !/from\(['"]member_profiles['"]\)/.test(boardUserSectionSource) &&
   !/getSession\(\)/.test(boardUserSectionSource) &&
