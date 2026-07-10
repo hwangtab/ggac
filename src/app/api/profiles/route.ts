@@ -1,14 +1,7 @@
 import { NextRequest } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { isValidUUID } from '@/utils/validation'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
-
-function getSupabaseClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  if (!url || !anonKey) throw new Error('Supabase configuration missing')
-  return createClient(url, anonKey, { auth: { autoRefreshToken: false, persistSession: false } })
-}
+import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
 
 export async function GET(req: NextRequest) {
   try {
@@ -32,25 +25,14 @@ export async function GET(req: NextRequest) {
       return ApiError.badRequest('유효하지 않은 ID 형식이 포함되어 있습니다.').toNextResponse()
     }
 
-    const supabase = getSupabaseClient()
-
-    // Try public view first, then fallback to member_profiles
-    let profiles: Array<{ id: string; display_name: string }> = []
-    let error: any = null
-
-    const tryView = await supabase.from('public_profiles').select('id, display_name').in('id', ids)
-
-    if (tryView.error) {
-      // Fallback to member_profiles if view doesn't exist
-      const tryTable = await supabase
-        .from('member_profiles')
-        .select('id, display_name')
-        .in('id', ids)
-      error = tryTable.error
-      profiles = (tryTable.data as any) || []
-    } else {
-      profiles = (tryView.data as any) || []
-    }
+    // 공개 표시명 조회는 service role로 직접 수행한다(select는 id,display_name으로 제한).
+    // 과거에는 SECURITY DEFINER 뷰(public_profiles)로 RLS를 우회했는데, 이는 advisor
+    // ERROR 대상이라 뷰를 security_invoker로 전환하고 서버 권한 조회로 대체했다.
+    const supabase = createServiceRoleClient()
+    const { data, error } = await supabase
+      .from('member_profiles')
+      .select('id, display_name')
+      .in('id', ids)
 
     if (error) {
       console.error('[API] 프로필 조회 실패:', error)
@@ -59,7 +41,7 @@ export async function GET(req: NextRequest) {
       ).toNextResponse()
     }
 
-    return ApiSuccess.ok(profiles).toNextResponse()
+    return ApiSuccess.ok(data || []).toNextResponse()
   } catch (e: any) {
     console.error('[API] 프로필 조회 예외 발생:', e)
     return ApiError.internalServerError('요청 처리에 실패했습니다.').toNextResponse()
