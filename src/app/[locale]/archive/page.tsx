@@ -1,6 +1,6 @@
+import { Suspense } from 'react'
 import ArchiveContent from './ArchiveContent'
 import { getProjectsSorted, getArtists } from '@/lib/data'
-import { ARCHIVE_CATEGORIES, localizeArchiveCategory } from '@/constants/categories'
 import {
   generateItemListStructuredData,
   generateBreadcrumbStructuredData,
@@ -8,18 +8,13 @@ import {
   structuredDataToScript,
 } from '@/utils/structuredData'
 import { getSiteUrl, getLocaleAlternates, getOgLocale } from '@/utils/site'
-import { normalizeSingleParam } from '@/utils/searchParams'
-import { parseIntegerParam } from '@/utils/queryParams'
 import { setRequestLocale } from 'next-intl/server'
-import type { ArchiveCategory } from '@/constants/categories'
 import type { Metadata } from 'next'
-import type { Project } from '@/types'
 
 const PROJECTS_PER_PAGE = 9
 
 type ArchivePageProps = {
   params: Promise<{ locale: string }>
-  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>
 }
 
 // ISR 최적화: 프로젝트는 6시간 캐시 (상대적으로 자주 업데이트)
@@ -27,18 +22,14 @@ export const revalidate = 21600
 
 export async function generateMetadata({
   params,
-  searchParams,
 }: {
   params: Promise<{ locale: string }>
-  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>
 }): Promise<Metadata> {
   const { locale } = await params
   const isEn = locale === 'en'
   const base = getSiteUrl()
-  const resolvedSearch = (await searchParams) ?? {}
-  const page = parseIntegerParam(normalizeSingleParam(resolvedSearch.page), 1, { min: 1 })
-  const basePath = page > 1 ? `/archive?page=${page}` : '/archive'
-  const canonical = isEn ? `/en${basePath}` : basePath
+  // 페이지네이션은 클라이언트(?page=)로 이관됨 — canonical은 목록 루트로 고정
+  const canonical = isEn ? '/en/archive' : '/archive'
 
   return {
     title: isEn ? 'Projects' : '프로젝트',
@@ -101,51 +92,21 @@ export async function generateMetadata({
   }
 }
 
-const filterProjectsByCategory = (
-  projects: Project[],
-  category: ArchiveCategory,
-  locale: string
-) => {
-  if (category === 'All') {
-    return projects
-  }
-
-  const matchValue = locale === 'en' ? localizeArchiveCategory(category, 'en') : category
-  return projects.filter(project => project.category === matchValue)
-}
-
-const ArchivePage = async ({ params, searchParams }: ArchivePageProps) => {
+// 카테고리·페이지 필터(?category=, ?page=)는 ArchiveContent(클라이언트)가
+// useSearchParams로 처리한다. 서버에서 searchParams를 읽으면 페이지가 동적
+// 렌더링으로 전환되어 위 revalidate가 사문화되므로(전수감사 P3) 서버는
+// 전체 프로젝트·아티스트 이름 맵만 정적으로 렌더한다.
+const ArchivePage = async ({ params }: ArchivePageProps) => {
   const { locale } = await params
   setRequestLocale(locale)
-  const resolvedSearch = (await searchParams) ?? {}
 
-  const projects = await getProjectsSorted(locale)
-  const artists = await getArtists(locale)
+  const [projects, artists] = await Promise.all([getProjectsSorted(locale), getArtists(locale)])
 
-  const rawCategory = normalizeSingleParam(resolvedSearch.category)
-  const selectedCategory = ARCHIVE_CATEGORIES.includes(rawCategory as ArchiveCategory)
-    ? (rawCategory as ArchiveCategory)
-    : 'All'
-
-  const filteredProjects = filterProjectsByCategory(projects, selectedCategory, locale)
-  const totalCount = filteredProjects.length
-  const totalPages = Math.max(1, Math.ceil(totalCount / PROJECTS_PER_PAGE))
-
-  const requestedPage = parseIntegerParam(normalizeSingleParam(resolvedSearch.page), 1, { min: 1 })
-  const currentPage = Math.min(Math.max(1, requestedPage), totalPages)
-  const startIndex = (currentPage - 1) * PROJECTS_PER_PAGE
-  const paginatedProjects = filteredProjects.slice(startIndex, startIndex + PROJECTS_PER_PAGE)
-
-  const artistIds = new Set<string>()
-  paginatedProjects.forEach(project => {
-    project.artistIds.forEach(id => artistIds.add(id))
-  })
-
+  // 클라이언트가 어떤 페이지를 보든 참여자 이름을 표시할 수 있도록 전체 맵 전달
+  // (아티스트 십수 명 규모 — 페이로드 수백 바이트)
   const artistNameMap: Record<string, string> = {}
   artists.forEach(artist => {
-    if (artistIds.has(artist.id)) {
-      artistNameMap[artist.id] = artist.name
-    }
+    artistNameMap[artist.id] = artist.name
   })
 
   const jsonLd = combineStructuredData([
@@ -164,13 +125,13 @@ const ArchivePage = async ({ params, searchParams }: ArchivePageProps) => {
   return (
     <>
       {structuredDataToScript(jsonLd)}
-      <ArchiveContent
-        projects={paginatedProjects}
-        selectedCategory={selectedCategory}
-        pagination={{ currentPage, totalPages, totalCount }}
-        pageSize={PROJECTS_PER_PAGE}
-        artistNameMap={artistNameMap}
-      />
+      <Suspense fallback={null}>
+        <ArchiveContent
+          projects={projects}
+          pageSize={PROJECTS_PER_PAGE}
+          artistNameMap={artistNameMap}
+        />
+      </Suspense>
     </>
   )
 }
