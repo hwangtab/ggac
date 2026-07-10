@@ -91,7 +91,12 @@ async function preflightRequest(
           'User-Agent': 'GGAC-LinkPreview/1.0',
           Accept: 'text/html,application/xhtml+xml',
         },
-        cache: 'no-store',
+        // cache:'no-store' 금지 — ISR 페이지(archive/[slug] revalidate=3600) 렌더 중
+        // 이 preflight가 실행되면 정적→동적 전환 충돌(app-static-to-dynamic-error)로
+        // 해당 요청이 500이 된다(5개월간 380건). 본문 GET과 동일하게 revalidate 캐시 사용.
+        next: {
+          revalidate: process.env.NODE_ENV === 'development' ? 60 : 3600,
+        },
       })
     } catch {
       // 일부 서버는 HEAD 미지원 → 본 요청에서 검사
