@@ -23,6 +23,9 @@ export async function fetchSystemSettingsRows() {
         apikey: serviceKey,
         Authorization: `Bearer ${serviceKey}`,
       },
+      // 이 fetch는 미들웨어에서 모든 페이지 요청 경로에 놓이므로, Supabase가 행이면
+      // 사이트 전체가 미들웨어 타임아웃까지 블로킹된다. 짧은 상한 후 캐시/폴백에 맡긴다.
+      signal: AbortSignal.timeout(2500),
     })
 
     if (!response.ok) {
