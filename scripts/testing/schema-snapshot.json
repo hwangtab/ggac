@@ -1,6 +1,6 @@
 {
   "source": "postgrest-openapi",
-  "generatedAt": "2026-07-04T03:45:52.829Z",
+  "generatedAt": "2026-07-10T07:14:58.338Z",
   "tables": {
     "user_settings": ["category", "created_at", "id", "setting_key", "setting_value", "updated_at", "user_id"],
     "board_agendas": [
@@ -149,6 +149,7 @@
     ],
     "link_previews": ["created_at", "data", "last_fetched", "ttl_seconds", "updated_at", "url"],
     "posts_performance_indexes": ["indexdef", "indexname", "schemaname", "tablename"],
+    "public_profiles": ["display_name", "id"],
     "comment_likes": ["comment_id", "created_at", "id", "user_id"],
     "user_settings_summary": [
       "interface_settings",
