@@ -981,10 +981,14 @@ const annotatesAuthenticatedCommentLikeState =
   /export async function getUserLikedCommentIds/.test(commentLikesHelperSource) &&
   /\.from\(['"]comment_likes['"]\)/.test(commentLikesHelperSource) &&
   /\.eq\(['"]user_id['"],\s*userId\)/.test(commentLikesHelperSource) &&
-  /getUserLikedCommentIds\(supabaseServer,\s*serverUser\.id,\s*commentIds\)/.test(
-    boardDetailPageSource
-  ) &&
-  /is_liked:\s*likedCommentIds\.has\(String\(comment\.id\)\)/.test(boardDetailPageSource) &&
+  // 상세 페이지 SSR 셸은 ISR 캐시를 위해 개인화(세션 기반 is_liked)를 포함하지
+  // 않는다(전수감사 P2) — 서버는 is_liked:false로 내려주고 복원은 클라이언트
+  // (useCommentLikes의 likedSet)가 담당한다. 셸에 세션 조회가 다시 들어오면
+  // 라우트가 동적으로 전환되므로 금지 가드를 함께 둔다.
+  /is_liked:\s*false/.test(boardDetailPageSource) &&
+  !/getUserLikedCommentIds\(/.test(boardDetailPageSource) &&
+  !/createSupabaseServer/.test(boardDetailPageSource) &&
+  // 인증 사용자 대상 댓글 목록 API는 계속 서버에서 like 상태를 주석한다
   /getUserLikedCommentIds\(sessionSupabase,\s*user\.id,\s*commentIds\)/.test(commentsApiSource) &&
   /getUserLikedCommentIds\(sessionSupabase,\s*user\.id,\s*commentIds\)/.test(
     commentsListApiSource
