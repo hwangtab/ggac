@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import ArtistsContent from './ArtistsContent'
 import { getArtists } from '@/lib/data'
 import {
@@ -7,7 +8,6 @@ import {
   structuredDataToScript,
 } from '@/utils/structuredData'
 import { getSiteUrl, getLocaleAlternates, getOgLocale } from '@/utils/site'
-import { normalizeSingleParam } from '@/utils/searchParams'
 import { setRequestLocale } from 'next-intl/server'
 import type { Metadata } from 'next'
 
@@ -90,13 +90,14 @@ export async function generateMetadata({
 
 type ArtistsPageProps = {
   params: Promise<{ locale: string }>
-  searchParams?: Promise<{ category?: string | string[] }>
 }
 
-const ArtistsPage = async ({ params, searchParams }: ArtistsPageProps) => {
+// 카테고리 필터(?category=)는 ArtistsContent(클라이언트)가 useSearchParams로 처리한다.
+// 서버에서 searchParams를 읽으면 페이지가 동적 렌더링으로 전환되어 위 revalidate가
+// 사문화되므로(전수감사 P3) 서버는 전체 데이터만 정적으로 렌더한다.
+const ArtistsPage = async ({ params }: ArtistsPageProps) => {
   const { locale } = await params
   setRequestLocale(locale)
-  const resolvedSearch = (await searchParams) ?? {}
   const artists = await getArtists(locale)
 
   const categoriesSet = new Set<string>()
@@ -110,18 +111,6 @@ const ArtistsPage = async ({ params, searchParams }: ArtistsPageProps) => {
 
   const sortedCategories = Array.from(categoriesSet).sort((a, b) => a.localeCompare(b, 'ko'))
   const categories = ['All', ...sortedCategories]
-
-  const rawCategory = normalizeSingleParam(resolvedSearch.category)
-  const selectedCategory = rawCategory && categories.includes(rawCategory) ? rawCategory : 'All'
-
-  const filteredArtists =
-    selectedCategory === 'All'
-      ? artists
-      : artists.filter(artist =>
-          Array.isArray(artist.category)
-            ? artist.category.includes(selectedCategory)
-            : artist.category === selectedCategory
-        )
 
   const jsonLd = combineStructuredData([
     generateItemListStructuredData(
@@ -139,11 +128,9 @@ const ArtistsPage = async ({ params, searchParams }: ArtistsPageProps) => {
   return (
     <>
       {structuredDataToScript(jsonLd)}
-      <ArtistsContent
-        artists={filteredArtists}
-        categories={categories}
-        selectedCategory={selectedCategory}
-      />
+      <Suspense fallback={null}>
+        <ArtistsContent artists={artists} categories={categories} />
+      </Suspense>
     </>
   )
 }
