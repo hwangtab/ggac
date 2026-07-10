@@ -1,6 +1,6 @@
 {
   "source": "postgrest-openapi",
-  "generatedAt": "2026-07-10T07:14:58.338Z",
+  "generatedAt": "2026-07-10T11:27:46.363Z",
   "tables": {
     "user_settings": ["category", "created_at", "id", "setting_key", "setting_value", "updated_at", "user_id"],
     "board_agendas": [
@@ -64,6 +64,25 @@
       "results",
       "started_at",
       "status"
+    ],
+    "board_posts_with_stats": [
+      "audio_count",
+      "author_display_name",
+      "author_id",
+      "category",
+      "comment_count",
+      "content_head",
+      "created_at",
+      "document_count",
+      "id",
+      "image_count",
+      "is_pinned",
+      "like_count",
+      "title",
+      "total_attachments",
+      "total_size",
+      "updated_at",
+      "video_count"
     ],
     "member_status_history": [
       "action",
@@ -365,6 +384,7 @@
     "increment_post_view_count",
     "is_active_member",
     "is_admin_user",
+    "log_user_activities_batch",
     "log_user_activity",
     "make_first_admin",
     "manage_user_session",
