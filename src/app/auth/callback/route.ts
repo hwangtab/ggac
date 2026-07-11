@@ -81,7 +81,12 @@ export async function GET(request: NextRequest) {
 
         after(async () => {
           try {
-            await supabase.rpc('manage_user_session', {
+            // manage_user_session 내부에서 유효 uuid(user_sessions.id)로 login 활동을
+            // 이미 기록하므로, 이 명시적 log_user_activity는 callback_url 메타데이터
+            // 부착이 목적이다. p_session_id는 uuid 컬럼이라 비-uuid sessionToken을
+            // 넘기면 매번 22P02로 조용히 실패했다(코드리뷰 CONFIRMED). null을 넘기고
+            // rpc의 error 반환값을 검사해 성공 로그를 실제 성공에만 게이트한다.
+            const { error: sessionError } = await supabase.rpc('manage_user_session', {
               p_user_id: user.id,
               p_session_token: sessionToken,
               p_action: 'start',
@@ -93,8 +98,9 @@ export async function GET(request: NextRequest) {
                 timestamp: new Date().toISOString(),
               },
             })
+            if (sessionError) log.warn('세션 시작 기록 실패', { message: sessionError.message })
 
-            await supabase.rpc('log_user_activity', {
+            const { error: activityError } = await supabase.rpc('log_user_activity', {
               p_user_id: user.id,
               p_action_type: 'login',
               p_target_type: 'system',
@@ -107,12 +113,16 @@ export async function GET(request: NextRequest) {
               },
               p_ip_address: ip,
               p_user_agent: userAgent,
-              p_session_id: sessionToken,
+              p_session_id: null, // was: sessionToken (비-uuid → 22P02)
             })
 
-            log.info('로그인 활동 기록됨', { userId: maskId(user.id) })
-          } catch (activityError) {
-            log.error('Login activity logging failed', activityError)
+            if (activityError) {
+              log.warn('Login activity logging failed', { message: activityError.message })
+            } else {
+              log.info('로그인 활동 기록됨', { userId: maskId(user.id) })
+            }
+          } catch (unexpectedError) {
+            log.error('Login activity logging failed', unexpectedError)
           }
         })
 
