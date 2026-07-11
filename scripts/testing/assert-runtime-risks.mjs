@@ -473,7 +473,6 @@ const productionRateLimiterFailsClosed =
   /this\.isProduction\(\) && \(this\.fallbackToMemory \|\| !this\.redis\)/.test(
     rateLimiterSource
   ) &&
-  /if \(this\.isProduction\(\)\) \{\s*throw error\s*\}/.test(rateLimiterSource) &&
   /private degradeByMethod\(/.test(rateLimiterSource) &&
   /method === ['"]GET['"] \|\| method === ['"]HEAD['"]/.test(rateLimiterSource) &&
   /RATE_LIMIT_DEGRADED_FAIL_OPEN/.test(rateLimiterSource) &&
@@ -488,7 +487,9 @@ const productionRateLimiterDocsFailClosed =
   /운영 환경에서는 rate limit 보호가 무효화되지 않도록 503으로 fail-closed 처리한다/.test(
     rateLimitWrapperSource
   ) &&
-  /운영 환경은 applyRateLimit 진입부에서 이미 fail-closed 처리된다/.test(rateLimiterSource) &&
+  /쓰기·업로드는 남용 방지를 위해 기존대로 503\s*\n\s*\/\/ \(fail-closed\)을 유지한다/.test(
+    rateLimiterSource
+  ) &&
   /503으로 fail-closed 처리한다/.test(readmeSource) &&
   /개발 환경에서만 인메모리 폴백을 허용한다/.test(readmeSource) &&
   /rate-limited API 가 503 으로 fail-closed 됩니다/.test(deploymentGuideSource) &&
@@ -988,17 +989,30 @@ const commentLikesHelperPath = join(root, 'src/lib/server/commentLikes.ts')
 const commentLikesHelperSource = existsSync(commentLikesHelperPath)
   ? readFileSync(commentLikesHelperPath, 'utf8')
   : ''
+const commentSectionPath = join(root, 'src/components/CommentSection.tsx')
+const commentSectionSource = existsSync(commentSectionPath)
+  ? readFileSync(commentSectionPath, 'utf8')
+  : ''
 const annotatesAuthenticatedCommentLikeState =
   /export async function getUserLikedCommentIds/.test(commentLikesHelperSource) &&
   /\.from\(['"]comment_likes['"]\)/.test(commentLikesHelperSource) &&
   /\.eq\(['"]user_id['"],\s*userId\)/.test(commentLikesHelperSource) &&
   // 상세 페이지 SSR 셸은 ISR 캐시를 위해 개인화(세션 기반 is_liked)를 포함하지
-  // 않는다(전수감사 P2) — 서버는 is_liked:false로 내려주고 복원은 클라이언트
-  // (useCommentLikes의 likedSet)가 담당한다. 셸에 세션 조회가 다시 들어오면
-  // 라우트가 동적으로 전환되므로 금지 가드를 함께 둔다.
+  // 않는다(전수감사 P2) — 서버는 is_liked:false로 내려주고, 복원은 클라이언트
+  // CommentSection이 로그인 사용자(currentUserId)에 한해 comment_likes를 배치
+  // 조회해 담당한다. 셸에 세션 조회가 다시 들어오면 라우트가 동적으로 전환되므로
+  // 금지 가드를 함께 둔다.
   /is_liked:\s*false/.test(boardDetailPageSource) &&
   !/getUserLikedCommentIds\(/.test(boardDetailPageSource) &&
   !/createSupabaseServer/.test(boardDetailPageSource) &&
+  // 클라이언트 복원 경로가 실재하는지 검증 — 이게 없으면 초기 댓글이 항상 빈 하트로
+  // 표시되고 재클릭 시 기존 좋아요가 삭제된다(코드리뷰 CONFIRMED). currentUserId가
+  // 채워졌을 때 comment_likes를 조회해 liked인 것만 is_liked:true로 병합해야 한다.
+  /if \(!currentUserId \|\| initialComments\.length === 0\) return/.test(commentSectionSource) &&
+  /\.from\(['"]comment_likes['"]\)[\s\S]{0,120}?\.eq\(['"]user_id['"],\s*currentUserId\)/.test(
+    commentSectionSource
+  ) &&
+  /is_liked:\s*true/.test(commentSectionSource) &&
   // 인증 사용자 대상 댓글 목록 API는 계속 서버에서 like 상태를 주석한다
   /getUserLikedCommentIds\(sessionSupabase,\s*user\.id,\s*commentIds\)/.test(commentsApiSource) &&
   /getUserLikedCommentIds\(sessionSupabase,\s*user\.id,\s*commentIds\)/.test(

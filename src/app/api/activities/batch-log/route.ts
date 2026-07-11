@@ -90,6 +90,15 @@ export async function POST(request: NextRequest) {
               )
             : {}
 
+        // session_id는 RPC에서 uuid로 캐스팅된다. 배치는 단일 INSERT...SELECT라
+        // 한 건의 비-uuid session_id가 22P02로 배치 전체(유효한 나머지 포함)를
+        // 롤백시킨다(코드리뷰 — target_id처럼 건별 검증해 격리). 무효값은 null로.
+        const rawSessionId = sanitizedMetadata.session_id
+        const sessionId =
+          typeof rawSessionId === 'string' && validateUUID(rawSessionId, '세션 ID').isValid
+            ? rawSessionId
+            : null
+
         validEntries.push({
           index: i,
           payload: {
@@ -97,7 +106,7 @@ export async function POST(request: NextRequest) {
             target_type: targetType,
             target_id: targetId,
             metadata: sanitizedMetadata,
-            session_id: sanitizedMetadata.session_id || null,
+            session_id: sessionId,
           },
         })
       }

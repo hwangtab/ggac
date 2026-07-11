@@ -417,11 +417,41 @@ const nextConfig = {
             key: 'Strict-Transport-Security',
             value: 'max-age=31536000; includeSubDomains; preload',
           },
-          // Content-Security-Policy는 src/middleware/csp.ts가 단일 소스다.
-          // 모든 HTML 응답이 미들웨어를 거치므로(matcher 제외 대상은 정적 자산·API뿐)
-          // 여기 정적 CSP는 실제로 어떤 응답에도 도달하지 않는 죽은 정의였고,
-          // 두 정의가 서로 달라 드리프트 위험만 있어 제거했다(전수감사 인증 M-6).
-          // 아래 Report-To 헤더는 미들웨어 CSP의 report-to 지시어가 참조하므로 유지.
+          // Content-Security-Policy: 정상 HTML 응답은 src/middleware/csp.ts가
+          // 요청별로 주입하며 이 정적 헤더를 덮어쓴다. 이 정적 CSP는 미들웨어를
+          // 거치지 않는 경로(점(.) 포함 경로의 HTML 404 등)를 위한 백스톱이다.
+          // (미들웨어가 직접 생성하는 유지보수/가입중단 HTML은 middleware.ts의
+          // copyResponseCookies가 CSP를 전파해 커버한다.)
+          // ⚠️ 내용을 바꿀 때는 src/middleware/csp.ts의 프로덕션 CSP와 함께 동기화할 것.
+          {
+            key: 'Content-Security-Policy',
+            value: [
+              "default-src 'self'",
+              // dev에서는 Next dev 런타임(eval 기반 HMR)이 죽지 않도록 'unsafe-eval'
+              // 허용 — 이 정적 헤더는 미들웨어가 CSP를 붙이지 않는 경로에도 적용되므로,
+              // 여기서 프로덕션 CSP만 두면 정상 dev(NEXT_STRICT_CSP 미설정)의 하이드레이션이
+              // 통째로 죽는다. src/middleware/csp.ts의 dev 분기와 동일 패턴.
+              process.env.NODE_ENV === 'development'
+                ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:"
+                : "script-src 'self' 'unsafe-inline' https:",
+              "script-src-elem 'self' 'unsafe-inline' https:",
+              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+              "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com",
+              "font-src 'self' https://fonts.gstatic.com",
+              "img-src 'self' https: blob: data: https://*.supabase.co",
+              "media-src 'self' https://www.youtube.com https://*.supabase.co",
+              "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com",
+              "connect-src 'self' https://api.supabase.io https://*.supabase.co wss://*.supabase.co",
+              "object-src 'none'",
+              "base-uri 'self'",
+              "form-action 'self'",
+              "frame-ancestors 'none'",
+              "worker-src 'self' blob:",
+              "manifest-src 'self'",
+              'report-uri /api/security/csp-report',
+              'report-to default',
+            ].join('; '),
+          },
           {
             key: 'Report-To',
             value: JSON.stringify({

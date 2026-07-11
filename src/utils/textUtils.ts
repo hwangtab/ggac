@@ -13,8 +13,12 @@ export const stripHtmlTags = (html: string): string => {
     return String(html)
   }
 
-  // HTML 태그 제거
-  const withoutTags = html.replace(/<[^>]*>/g, '')
+  // HTML 태그 제거. 두 번째 replace는 닫는 '>'가 없는 후행 미완결 태그를 지운다 —
+  // 목록 미리보기는 뷰의 left(content, 2000)로 본문을 자르는데, 그 경계가 태그
+  // (특히 긴 base64 data URI가 든 <img>) 중간을 자르면 '<img src="data:...' 같은
+  // 원시 조각이 미리보기에 노출되기 때문이다(코드리뷰 — 첫 replace는 미완결 태그를
+  // 제거하지 못함).
+  const withoutTags = html.replace(/<[^>]*>/g, '').replace(/<[^>]*$/, '')
 
   // HTML 엔티티 디코딩
   const decoded = withoutTags

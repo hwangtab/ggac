@@ -3,6 +3,16 @@
  * 시스템 점검 및 회원가입 중단 등의 상황에서 보여줄 정적 HTML 템플릿
  */
 
+// message는 관리자가 설정한 유지보수 안내로 신뢰 경계 밖에서 올 수 있고, 이 HTML은
+// 미들웨어가 직접 반환해 CSP 백스톱이 상대적으로 얕으므로 삽입 전 HTML 이스케이프한다.
+const escapeHtml = (value: string): string =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+
 export const getMaintenanceHtml = (message: string) => `
 <!DOCTYPE html>
 <html lang="ko">
@@ -65,7 +75,7 @@ export const getMaintenanceHtml = (message: string) => `
   <div class="container">
     <div class="icon">🛠️</div>
     <h1>시스템 점검 중</h1>
-    <p>${message}</p>
+    <p>${escapeHtml(message)}</p>
     <button class="retry-btn" onclick="window.location.reload()">새로고침</button>
   </div>
 </body>

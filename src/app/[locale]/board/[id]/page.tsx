@@ -241,6 +241,15 @@ async function getInitialPostData(
       if (!postError || (postError as { code?: string }).code === 'PGRST116') {
         return null
       }
+      // 단, 빌드 페이즈에서는 throw가 generateStaticParams로 프리렌더되는 최근 30개
+      // 페이지의 프리렌더 실패 → next build 전체 실패로 번진다(코드리뷰 CONFIRMED).
+      // 빌드 중 DB 순단 시엔 해당 글만 스킵(null→on-demand ISR로 미룸)하고, 런타임
+      // 장애만 error.tsx로 보낸다. dynamicParams(기본 true)로 미프리렌더 경로는
+      // 첫 요청 시 생성되며 그때의 throw는 정상적으로 error.tsx로 간다.
+      if (process.env.NEXT_PHASE === 'phase-production-build') {
+        console.warn('빌드 중 게시글 조회 실패 — 프리렌더 스킵:', postError?.message)
+        return null
+      }
       console.error('서버 게시글 조회 오류:', postError)
       throw new Error(`게시글 조회 실패: ${postError.message ?? 'unknown'}`)
     }
@@ -281,7 +290,12 @@ async function getInitialPostData(
       user: null,
     }
   } catch (error) {
-    // 장애를 404로 오표시하지 않도록 그대로 전파 → error.tsx(재시도)로 처리
+    // 빌드 페이즈에서는 프리렌더 실패가 배포를 막으므로 해당 글만 스킵(위 주석 참조)
+    if (process.env.NEXT_PHASE === 'phase-production-build') {
+      console.warn('빌드 중 초기 게시글 데이터 조회 실패 — 프리렌더 스킵:', error)
+      return null
+    }
+    // 런타임 장애는 404로 오표시하지 않도록 그대로 전파 → error.tsx(재시도)로 처리
     console.error('초기 게시글 데이터 조회 실패:', error)
     throw error
   }
