@@ -22,6 +22,14 @@ function hasSupabaseMiddlewareConfig() {
 // 회전(rotation) 환경에서 갱신이 유실되어 다음 요청에 로그아웃될 수 있다.
 function copyResponseCookies(from: NextResponse, to: NextResponse): NextResponse {
   from.cookies.getAll().forEach(cookie => to.cookies.set(cookie))
+  // 미들웨어가 새로 반환하는 응답(리다이렉트·유지보수 503·가입중단 403 HTML)은
+  // applyCSP를 직접 거치지 않는다. 이미 CSP가 적용된 기반 응답(res)의 헤더를
+  // 복사해 CSP 없는 HTML이 새지 않게 한다(코드리뷰 CONFIRMED — next.config의
+  // 정적 CSP 제거로 이 응답들의 커버가 사라졌던 회귀 보강).
+  const csp = from.headers.get('content-security-policy')
+  if (csp && !to.headers.has('content-security-policy')) {
+    to.headers.set('content-security-policy', csp)
+  }
   return to
 }
 
