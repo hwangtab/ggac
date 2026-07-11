@@ -38,6 +38,11 @@ const SESSION_CACHE_TTL_MS = 30_000
 let cachedSession: VerifiedSession | null = null
 let cachedAt = 0
 let inflight: Promise<VerifiedSession> | null = null
+// 세대(epoch) 토큰: force 호출·로그아웃이 이 값을 올려 이전 in-flight 요청을
+// stale로 만든다. 없으면 "마지막 settle 승리"라, 로그인 직전 시작된 비강제
+// 요청(미인증)이 force 요청(인증)보다 늦게 resolve할 때 낡은 상태가 캐시를
+// 덮어쓰고, 로그아웃 후 in-flight 요청이 인증 상태를 되살린다(코드리뷰 CONFIRMED).
+let epoch = 0
 
 async function requestSessionProfile(): Promise<VerifiedSession> {
   const response = await fetch('/api/auth/verify-session', {
@@ -75,23 +80,31 @@ export async function fetchSessionProfile(
     }
   }
 
-  inflight = requestSessionProfile()
+  const myEpoch = ++epoch
+  const p: Promise<VerifiedSession> = requestSessionProfile()
     .then(session => {
-      cachedSession = session
-      cachedAt = Date.now()
+      // 내가 최신 세대일 때만 캐시에 반영 — 이후 세대(force·로그아웃·재호출)가
+      // 시작됐다면 이 결과는 stale이므로 캐시를 덮어쓰지 않는다.
+      if (myEpoch === epoch) {
+        cachedSession = session
+        cachedAt = Date.now()
+      }
       return session
     })
     .catch(() => {
-      // 네트워크 실패는 캐시하지 않고 미인증으로 처리 — 다음 호출이 재시도한다.
-      cachedSession = null
-      cachedAt = 0
+      if (myEpoch === epoch) {
+        cachedSession = null
+        cachedAt = 0
+      }
       return EMPTY_SESSION
     })
     .finally(() => {
-      inflight = null
+      // 내가 건 in-flight일 때만 해제 — 다른 세대가 이미 새 요청을 걸었으면 건드리지 않는다.
+      if (inflight === p) inflight = null
     })
 
-  return inflight
+  inflight = p
+  return p
 }
 
 /** 로그인/로그아웃 등 인증 상태 전환 직후 호출 — 캐시를 무시하고 재검증한다. */
@@ -101,8 +114,11 @@ export function refreshSessionProfile(): Promise<VerifiedSession> {
 
 /** 로그아웃 처리 직후 즉시 미인증 상태를 반영하고 싶을 때 사용한다. */
 export function clearSessionProfileCache(): void {
+  // epoch를 올려 in-flight 요청이 로그아웃 이후 인증 상태를 재캐시하지 못하게 한다.
+  epoch++
   cachedSession = null
   cachedAt = 0
+  inflight = null
 }
 
 export function isApprovedActiveAdmin(profile: VerifiedSessionProfile | null): boolean {
