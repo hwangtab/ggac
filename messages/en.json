@@ -70,7 +70,9 @@
       "heading": "Becoming Each Other's Universe",
       "subtitle": "Gyeonggi Art Collective is not an island of isolated artists, but a connected universe where each person becomes a source of inspiration and support for another. Come meet our fellow artists, each shining with their own light."
     },
-    "filter": { "all": "All" },
+    "filter": {
+      "all": "All"
+    },
     "moreCount": "+{count} more",
     "emptyState": "No artists found in this category.",
     "detail": {
@@ -512,7 +514,9 @@
       "heading": "Could not load the board",
       "body": "A temporary error occurred. Please try again.",
       "retry": "Try Again"
-    }
+    },
+    "empty": "No posts yet.",
+    "loadError": "Failed to load posts. Please try again shortly."
   },
   "boardRoom": {
     "title": "Board Room",
