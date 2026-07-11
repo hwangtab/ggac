@@ -134,22 +134,47 @@ const CommentSection: React.FC<CommentSectionProps> = ({
   }, [comments])
 
   useEffect(() => {
-    if (initialComments && initialComments.length >= 0) {
-      // 초기 데이터가 제공되면 네트워크 요청 생략
-      setComments(initialComments)
-      // 초기 댓글에 포함된 작성자명을 우선 매핑하여 즉시 표시
-      const initialMap: Record<string, string> = {}
-      ;(initialComments as any[]).forEach(c => {
-        const name = c?.author?.display_name || c?.author?.name
-        if (name) initialMap[c.author_id] = name
-      })
-      if (Object.keys(initialMap).length > 0) {
-        setProfiles(prev => ({ ...prev, ...initialMap }))
-      }
+    if (!initialComments) {
+      // 초기 데이터가 없을 때만 전체 네트워크 조회(좋아요 상태 포함)
+      fetchComments()
       return
     }
-    fetchComments()
-  }, [postId, fetchComments, initialComments])
+
+    // 초기 데이터가 제공되면 전체 조회는 생략하되, 작성자명을 즉시 매핑
+    setComments(initialComments)
+    const initialMap: Record<string, string> = {}
+    ;(initialComments as any[]).forEach(c => {
+      const name = c?.author?.display_name || c?.author?.name
+      if (name) initialMap[c.author_id] = name
+    })
+    if (Object.keys(initialMap).length > 0) {
+      setProfiles(prev => ({ ...prev, ...initialMap }))
+    }
+
+    // 상세 페이지 서버 셸은 ISR 캐시를 위해 is_liked를 채우지 않고 내려준다
+    // (is_liked:false). 그래서 로그인 사용자에 한해 초기 댓글의 좋아요 상태를
+    // 여기서 배치 조회해 병합한다 — 이게 없으면 이미 좋아요한 댓글이 빈 하트로
+    // 표시되고, 다시 누르면 토글 RPC가 기존 좋아요를 삭제해 버린다.
+    // currentUserId는 PostDetailClient가 세션 복원 후 채우므로 그 시점에 effect가
+    // 재실행된다. liked인 것만 true로 덮어써 loadMore append분과 낙관적 토글을
+    // 훼손하지 않는다.
+    if (!currentUserId || initialComments.length === 0) return
+    let cancelled = false
+    ;(async () => {
+      const ids = (initialComments as any[]).map(c => c.id)
+      const { data: liked } = await supabase
+        .from('comment_likes')
+        .select('comment_id')
+        .eq('user_id', currentUserId)
+        .in('comment_id', ids)
+      if (cancelled || !liked?.length) return
+      const likedSet = new Set((liked as any[]).map(r => r.comment_id))
+      setComments(prev => prev.map(c => (likedSet.has(c.id) ? { ...c, is_liked: true } : c)))
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [postId, fetchComments, initialComments, currentUserId])
 
   useEffect(() => {
     if (comments.length > 0) {
