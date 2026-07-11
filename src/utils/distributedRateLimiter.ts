@@ -88,47 +88,12 @@ class UpstashRedisClient {
     return await this.execute(['GET', key])
   }
 
-  async setex(key: string, seconds: number, value: string): Promise<string> {
-    return await this.execute(['SETEX', key, seconds.toString(), value])
-  }
-
-  async incr(key: string): Promise<number> {
-    return await this.execute(['INCR', key])
-  }
-
-  async expire(key: string, seconds: number): Promise<number> {
-    return await this.execute(['EXPIRE', key, seconds.toString()])
-  }
-
   async ttl(key: string): Promise<number> {
     return await this.execute(['TTL', key])
   }
 
   async del(key: string): Promise<number> {
     return await this.execute(['DEL', key])
-  }
-
-  async exists(key: string): Promise<number> {
-    return await this.execute(['EXISTS', key])
-  }
-
-  // 복합 명령어 - 원자적 증가 및 만료 시간 설정
-  async incrWithExpiry(
-    key: string,
-    windowSeconds: number
-  ): Promise<{ value: number; ttl: number }> {
-    // MULTI 트랜잭션으로 원자적 실행
-    const script = `
-      local current = redis.call('INCR', KEYS[1])
-      if current == 1 then
-        redis.call('EXPIRE', KEYS[1], ARGV[1])
-      end
-      local ttl = redis.call('TTL', KEYS[1])
-      return {current, ttl}
-    `
-
-    const result = await this.execute(['EVAL', script, '1', key, windowSeconds.toString()])
-    return { value: result[0], ttl: result[1] }
   }
 
   // rate limit 검사 전체(차단 확인 → 증가+만료 → 임계 초과 시 자동 차단)를
@@ -303,57 +268,10 @@ class DistributedRateLimiter {
     return existing
   }
 
-  // Redis 기반 Rate Limiting
-  private async redisRateLimit(
-    key: string,
-    windowMs: number,
-    maxRequests: number
-  ): Promise<RateLimitResult> {
-    if (!this.redis) {
-      // 운영 환경은 applyRateLimit 진입부에서 이미 fail-closed 처리된다.
-      const result = await this.fallbackMemoryLimit(key, windowMs, maxRequests)
-      const remaining = Math.max(0, maxRequests - result.count)
-
-      return {
-        success: result.count <= maxRequests,
-        remaining,
-        resetTime: result.resetTime,
-        totalHits: result.count,
-      }
-    }
-
-    try {
-      const windowSeconds = Math.ceil(windowMs / 1000)
-      const { value: currentCount, ttl } = await this.redis.incrWithExpiry(key, windowSeconds)
-
-      const resetTime = Date.now() + ttl * 1000
-      const remaining = Math.max(0, maxRequests - currentCount)
-
-      return {
-        success: currentCount <= maxRequests,
-        remaining,
-        resetTime,
-        totalHits: currentCount,
-      }
-    } catch (error) {
-      if (this.isProduction()) {
-        throw error
-      }
-
-      log.error('Redis rate limiting failed, falling back to memory', error)
-
-      // Redis 실패 시 메모리 폴백
-      const result = await this.fallbackMemoryLimit(key, windowMs, maxRequests)
-      const remaining = Math.max(0, maxRequests - result.count)
-
-      return {
-        success: result.count <= maxRequests,
-        remaining,
-        resetTime: result.resetTime,
-        totalHits: result.count,
-      }
-    }
-  }
+  // 참고: 구 redisRateLimit(+incrWithExpiry/setex/exists/incr/expire)은 제거됐다.
+  // Redis 경로는 applyRateLimit에서 checkAndConsume(단일 Lua)로 일원화됐고, 구
+  // 경로는 호출자가 없는 죽은 코드이면서 blockKey 차단 확인이 없어 부활 시
+  // 차단·자동차단이 무력화되는 함정이었다(코드리뷰 CONFIRMED).
 
   // Rate Limit 적용 함수
   async applyRateLimit(config: DistributedRateLimitConfig) {
