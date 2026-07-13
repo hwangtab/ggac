@@ -1,6 +1,6 @@
 {
   "source": "postgrest-openapi",
-  "generatedAt": "2026-07-10T13:53:58.420Z",
+  "generatedAt": "2026-07-13T03:42:37.488Z",
   "tables": {
     "user_settings": ["category", "created_at", "id", "setting_key", "setting_value", "updated_at", "user_id"],
     "board_agendas": [
