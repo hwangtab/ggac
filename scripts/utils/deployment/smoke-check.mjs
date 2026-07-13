@@ -56,17 +56,33 @@ async function checkEndpoint({ path, expect, contract }) {
       try {
         body = await res.json()
       } catch {
-        return { path, ok: false, reason: `기대 ${expect.label} 만족(${res.status})이나 health 응답이 JSON이 아님` }
+        return {
+          path,
+          ok: false,
+          reason: `기대 ${expect.label} 만족(${res.status})이나 health 응답이 JSON이 아님`,
+        }
       }
       if (!body || body.success !== true || !body.data || typeof body.data.status !== 'string') {
-        return { path, ok: false, reason: `status ${res.status}이나 health 계약 불일치: ${JSON.stringify(body)}` }
+        return {
+          path,
+          ok: false,
+          reason: `status ${res.status}이나 health 계약 불일치: ${JSON.stringify(body)}`,
+        }
       }
-      return { path, ok: true, reason: `status ${res.status} (기대 ${expect.label}), health=${body.data.status}, db=${body.data.db}` }
+      return {
+        path,
+        ok: true,
+        reason: `status ${res.status} (기대 ${expect.label}), health=${body.data.status}, db=${body.data.db}`,
+      }
     }
 
     return { path, ok: true, reason: `status ${res.status} (기대 ${expect.label})` }
   } catch (err) {
-    return { path, ok: false, reason: err?.name === 'AbortError' ? 'timeout' : String(err?.message || err) }
+    return {
+      path,
+      ok: false,
+      reason: err?.name === 'AbortError' ? 'timeout' : String(err?.message || err),
+    }
   } finally {
     clearTimeout(timer)
   }

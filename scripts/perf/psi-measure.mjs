@@ -51,8 +51,12 @@ async function runPsi(url, strategy) {
 function runLighthouse(url, strategy) {
   const out = join(tmpdir(), `lh-${Date.now()}-${Math.random().toString(36).slice(2)}.json`)
   const args = [
-    '--yes', 'lighthouse', url,
-    '--only-categories=performance', '--output=json', '--quiet',
+    '--yes',
+    'lighthouse',
+    url,
+    '--only-categories=performance',
+    '--output=json',
+    '--quiet',
     `--output-path=${out}`,
     '--chrome-flags=--headless=new --no-sandbox',
   ]
@@ -61,7 +65,9 @@ function runLighthouse(url, strategy) {
     execFileSync('npx', args, { stdio: 'ignore', timeout: 180000 })
     return JSON.parse(readFileSync(out, 'utf8'))
   } finally {
-    try { rmSync(out, { force: true }) } catch {}
+    try {
+      rmSync(out, { force: true })
+    } catch {}
   }
 }
 
@@ -69,7 +75,10 @@ async function main() {
   const argv = process.argv.slice(2)
   const forceLh = argv.includes('--lighthouse')
   const [url, strategy = 'mobile'] = argv.filter(x => !x.startsWith('--'))
-  if (!url) { console.error('usage: psi-measure.mjs <url> <mobile|desktop> [--lighthouse]'); process.exit(1) }
+  if (!url) {
+    console.error('usage: psi-measure.mjs <url> <mobile|desktop> [--lighthouse]')
+    process.exit(1)
+  }
 
   let lhr, source
   if (forceLh) {

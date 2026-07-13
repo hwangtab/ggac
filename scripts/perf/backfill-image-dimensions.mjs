@@ -89,9 +89,7 @@ function firstDiffSnippet(a, b, ctx = 70) {
   const slice = s => {
     const end = Math.min(s.length, i + ctx)
     return (
-      (start > 0 ? '…' : '') +
-      s.slice(start, end).replace(/\n/g, '⏎') +
-      (end < s.length ? '…' : '')
+      (start > 0 ? '…' : '') + s.slice(start, end).replace(/\n/g, '⏎') + (end < s.length ? '…' : '')
     )
   }
   return { a: slice(a), b: slice(b) }
@@ -264,11 +262,7 @@ if (anyScanIncomplete) {
       ' 조회 실패를 해결하고 재실행할 것. (Task 4 승인 근거로 쓰지 말 것)'
   )
 }
-console.log(
-  APPLY
-    ? '완료(APPLY).'
-    : '완료(DRY-RUN, 쓰기 없음). 검토 후 --apply로 실제 적용.'
-)
+console.log(APPLY ? '완료(APPLY).' : '완료(DRY-RUN, 쓰기 없음). 검토 후 --apply로 실제 적용.')
 console.log('='.repeat(64))
 
 // 스캔이 하나라도 미완료면 수치가 권위 있지 않음을 종료코드로도 드러낸다.

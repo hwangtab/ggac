@@ -42,8 +42,7 @@ test('대형 이미지 width="2048" 값 그대로 보존 (실제 게시글 회�
 })
 
 test('표(table/thead/tbody/tr/td/th) 보존', () => {
-  const html =
-    '<table><thead><tr><th>H</th></tr></thead><tbody><tr><td>C</td></tr></tbody></table>'
+  const html = '<table><thead><tr><th>H</th></tr></thead><tbody><tr><td>C</td></tr></tbody></table>'
   const out = sanitizePostHtml(html)
   for (const tag of ['table', 'thead', 'tbody', 'tr', 'th', 'td']) {
     assert.match(out, new RegExp(`<${tag}`), `${tag} 보존`)
@@ -56,7 +55,20 @@ test('목록(ul/ol/li)·blockquote·h1~h6·div·span·class 보존', () => {
     '<h1>1</h1><h2>2</h2><h3>3</h3><h4>4</h4><h5>5</h5><h6>6</h6>' +
     '<div class="wrap"><span class="hl">s</span></div>'
   const out = sanitizePostHtml(html)
-  for (const tag of ['ul', 'ol', 'li', 'blockquote', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'div', 'span']) {
+  for (const tag of [
+    'ul',
+    'ol',
+    'li',
+    'blockquote',
+    'h1',
+    'h2',
+    'h3',
+    'h4',
+    'h5',
+    'h6',
+    'div',
+    'span',
+  ]) {
     assert.match(out, new RegExp(`<${tag}`), `${tag} 보존`)
   }
   assert.match(out, /class="wrap"/)
@@ -64,8 +76,7 @@ test('목록(ul/ol/li)·blockquote·h1~h6·div·span·class 보존', () => {
 })
 
 test('data-list/data-indent/data-checked 보존 (Quill)', () => {
-  const html =
-    '<ol><li data-list="bullet" data-indent="1" data-checked="true">x</li></ol>'
+  const html = '<ol><li data-list="bullet" data-indent="1" data-checked="true">x</li></ol>'
   const out = sanitizePostHtml(html)
   assert.match(out, /data-list="bullet"/)
   assert.match(out, /data-indent="1"/)
