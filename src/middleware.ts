@@ -123,7 +123,23 @@ export async function middleware(request: NextRequest) {
   }
 
   if (systemSettings?.maintenanceMode) {
-    const isAdmin = authResult.profile?.is_admin === true
+    let isAdmin = authResult.profile?.is_admin === true
+
+    // 유지보수 화이트리스트는 미들웨어 신원이 유일한 종단 게이트다 — 이 503은 여기서
+    // 끝나고 하류 API/RSC의 getUser 재검증이 구제하지 않는다. handleAuth는 getClaims()로
+    // 토큰을 로컬 검증하므로 전역 로그아웃·비밀번호 변경으로 취소된 세션을 액세스 토큰
+    // 만료(기본 1h)까지 감지하지 못한다. 우회를 허용하기 직전에만 서버로 1회 재검증해
+    // 취소된 관리자 세션이 유지보수 벽을 넘지 못하게 한다. 유지보수는 드물고 저트래픽이라
+    // 왕복 비용은 무시할 만하며, 평시(유지보수 OFF) 경로에는 이 왕복이 없다.
+    if (isAdmin) {
+      const {
+        data: { user: freshUser },
+        error: reverifyError,
+      } = await supabase.auth.getUser()
+      if (reverifyError || !freshUser) {
+        isAdmin = false
+      }
+    }
 
     if (!isAdmin) {
       return copyResponseCookies(res, getMaintenanceResponse(systemSettings.maintenanceMessage))

@@ -26,6 +26,15 @@ const middlewareUsesStandardSupabaseSession =
   /createServerClient/.test(rootMiddlewareSource) &&
   /setAll/.test(rootMiddlewareSource) &&
   /res\.cookies\.set/.test(rootMiddlewareSource)
+// 미들웨어 인증(handleAuth)은 getClaims()로 액세스 토큰을 로컬 검증한다(프로젝트가 비대칭
+// ES256 서명 키로 전환된 것이 전제 — 2026-07-13 rotate 완료). getUser()로 되돌리면 요청마다
+// GoTrue 왕복이 조용히 부활하므로 정적으로 고정한다. 트레이드오프: 로컬 검증은 auth 레벨
+// 세션 취소(전역 로그아웃·비번 변경·밴)를 토큰 만료까지 못 본다 — 데이터·변형 표면은 하류
+// getUser()가, 유지보수 관리자 예외는 middleware.ts의 getUser() 재검증이 봉쇄한다.
+// (이 가드는 handleAuth가 있는 auth.ts만 스캔하므로 middleware.ts의 getUser()와 무관하다.)
+const middlewareVerifiesJwtLocally =
+  /supabase\.auth\.getClaims\(\)/.test(authMiddlewareSource) &&
+  !/supabase\.auth\.getUser\(\)/.test(authMiddlewareSource)
 const authCallbackPath = join(root, 'src/app/auth/callback/route.ts')
 const authCallbackSource = readFileSync(authCallbackPath, 'utf8')
 const authVerifySessionPath = join(root, 'src/app/api/auth/verify-session/route.ts')
@@ -2908,6 +2917,15 @@ if (!middlewareUsesStandardSupabaseSession) {
     `Middleware must use @supabase/ssr createServerClient with cookie setAll for automatic session token refresh: ${relative(
       root,
       rootMiddlewarePath
+    )}`
+  )
+}
+
+if (!middlewareVerifiesJwtLocally) {
+  failures.push(
+    `Middleware auth must verify the access token locally via supabase.auth.getClaims() — getUser() adds a GoTrue round trip to every request: ${relative(
+      root,
+      authMiddlewarePath
     )}`
   )
 }

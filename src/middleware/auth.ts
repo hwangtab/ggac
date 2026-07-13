@@ -96,17 +96,32 @@ export async function handleAuth(
     isBoardRoom
 
   try {
-    // getUser()는 서버에서 JWT를 검증하므로 getSession()보다 안전
-    const {
-      data: { user: authUser },
-      error: userError,
-    } = await supabase.auth.getUser()
+    // getClaims()는 액세스 토큰을 WebCrypto로 로컬 검증한다 — getUser()와 달리 GoTrue
+    // 서버로 왕복하지 않으므로 미들웨어를 타는 모든 요청에서 네트워크 왕복 1회가 사라진다.
+    // (프로젝트가 비대칭 서명 키(ES256)로 전환된 것이 전제 — 2026-07-13 rotate 완료.)
+    //
+    // 안전성 근거:
+    //  - 내부적으로 getSession()을 먼저 호출하므로 만료 임박 토큰 갱신·쿠키 재기록
+    //    동작은 getUser()와 동일하게 유지된다(@supabase/ssr 미들웨어 패턴의 전제).
+    //  - 로테이션 이전에 발급된 HS256 토큰이나 WebCrypto 미가용 환경에서는 라이브러리가
+    //    자동으로 서버 검증(getUser)으로 폴백하므로 전환기에도 깨지지 않는다.
+    //  - 로컬 검증은 신원만 확정한다. 승인/활성/admin 같은 권한은 보호 경로에서 매번
+    //    member_profiles를 새로 읽어 판정하므로, member_profiles 기반 비활성화·삭제·거부는
+    //    토큰 만료를 기다리지 않고 그 조회에서 즉시 걸린다.
+    //  - 반면 auth 레벨 세션 취소(전역 로그아웃·비밀번호 변경·밴)는 로컬 검증이 보지
+    //    못해 액세스 토큰 만료까지 반영되지 않는다. 다만 실제 데이터·변형 표면은 전부
+    //    API 라우트·서버 페이지가 getUser()로 재검증하므로 그 경로는 봉쇄된다. 하류가
+    //    구제하지 않는 유일한 지점(유지보수 관리자 예외)만 middleware.ts에서 getUser()로
+    //    별도 재검증한다.
+    const { data, error: claimsError } = await supabase.auth.getClaims()
 
-    if (userError) {
-      log.debug('Auth error', { isMobile, message: userError.message })
+    if (claimsError) {
+      log.debug('Auth error', { isMobile, message: claimsError.message })
       authError = true
     } else {
-      user = authUser || null
+      // 세션이 없으면 data가 null이다(에러가 아니라 익명 방문자).
+      const claims = data?.claims
+      user = claims?.sub ? { id: claims.sub, email: claims.email ?? null } : null
       if (process.env.NODE_ENV === 'development' && isCriticalPath) {
         log.debug('Auth state', {
           pathname,
