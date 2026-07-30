@@ -636,5 +636,23 @@
       "artist-004"
     ],
     "relatedArticles": []
+  },
+  {
+    "id": "project-027",
+    "slug": "imsorry-imsound",
+    "title": "IMSORRY IMSOUND 아임소리",
+    "category": "공연·전시",
+    "publishedDate": "2026-07-25",
+    "coverImage": "/images/projects/imsorry-imsound.webp",
+    "description": "IMSORRY IMSOUND 아임소리\n\n수원 D.O.T.에서 열린 라이브 공연 'IMSORRY IMSOUND(아임소리)'입니다. 사이키델릭·개러지·익스페리멘털을 넘나드는 다섯 팀이 한 무대에 올랐습니다.\n\n### 공연 정보\n\n- **일시**: 2026년 7월 25일 (토) 18:00 오픈 / 18:30 시작\n- **장소**: D.O.T. — 경기도 수원시 팔달구 화서문로 34-1 지하\n- **티켓**: 예매 10,000원 / 현매 20,000원\n\n### 출연진\n\n**희우와 사토 유키에**  \n국악과 현대 음악을 잇는 소리꾼 희우, 그리고 한국에서 오랫동안 활동해 온 일본인 기타리스트 사토 유키에의 듀오 무대입니다.\n\n**themilliways (더 밀리웨이스)**  \n사이키델릭한 질감과 즉흥을 오가는 밴드입니다.\n\n**Sabbaha (사바하)**  \n둠·슬러지 사운드를 기반으로 하는 밴드입니다.\n\n**MELKI**\n\n**괄**",
+    "gallery": null,
+    "videoUrl": null,
+    "artistIds": [
+      "artist-012",
+      "artist-004",
+      "artist-001"
+    ],
+    "ticketing": null,
+    "relatedArticles": []
   }
 ]

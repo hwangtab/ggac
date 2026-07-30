@@ -636,5 +636,23 @@
       "artist-004"
     ],
     "relatedArticles": []
+  },
+  {
+    "id": "project-027",
+    "slug": "imsorry-imsound",
+    "title": "IMSORRY IMSOUND",
+    "category": "Performance & Exhibition",
+    "publishedDate": "2026-07-25",
+    "coverImage": "/images/projects/imsorry-imsound.webp",
+    "description": "IMSORRY IMSOUND\n\nA live show at D.O.T. in Suwon. Five acts moving between psychedelic, garage, and experimental sounds shared one stage.\n\n### Show Info\n\n- **Date**: Saturday, July 25, 2026 · Doors 6:00 PM / Start 6:30 PM\n- **Venue**: D.O.T. — B1, 34-1 Hwaseomun-ro, Paldal-gu, Suwon, Gyeonggi\n- **Tickets**: 10,000 KRW advance / 20,000 KRW at the door\n\n### Lineup\n\n**Hee-woo & Sato Yukie**  \nA duo set from Hee-woo, a vocalist bridging Korean traditional music and contemporary sounds, and Sato Yukie, the Japanese guitarist who has played in Korea for decades.\n\n**themilliways**  \nA band moving between psychedelic textures and improvisation.\n\n**Sabbaha**  \nA band rooted in doom and sludge.\n\n**MELKI**\n\n**Gwal**",
+    "gallery": null,
+    "videoUrl": null,
+    "artistIds": [
+      "artist-012",
+      "artist-004",
+      "artist-001"
+    ],
+    "ticketing": null,
+    "relatedArticles": []
   }
 ]
