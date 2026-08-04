@@ -38,6 +38,8 @@ export interface Project {
   id: string
   slug: string
   title: string
+  /** 답변-우선 소개 리드(정의 문장→특징). 상세 본문 맨 앞에 렌더. */
+  lead?: string
   category: string
   publishedDate: string
   /** 실제 공연일(ISO YYYY-MM-DD). 예매 시작일(ticketing.startDate)과 구분되는 이벤트 날짜. */

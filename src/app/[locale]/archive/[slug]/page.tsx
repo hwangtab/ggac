@@ -396,7 +396,8 @@ const ProjectDetailPage = async ({ params }: ProjectPageProps) => {
   const projectSchema = isEvent
     ? generateEventStructuredData({
         title: project.title,
-        description: project.description,
+        // 스키마 description은 답변-우선 리드를 우선 사용(없으면 본문) — AI 인용 추출성 강화.
+        description: project.lead || project.description,
         slug: project.slug,
         publishedDate: project.publishedDate,
         eventDate: project.eventDate,
@@ -414,7 +415,7 @@ const ProjectDetailPage = async ({ params }: ProjectPageProps) => {
       })
     : generateProjectStructuredData({
         title: project.title,
-        description: project.description,
+        description: project.lead || project.description,
         slug: project.slug,
         coverImage: project.coverImage,
         gallery: project.gallery,
