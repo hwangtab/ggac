@@ -11,8 +11,11 @@ const FeaturedArtists = async ({ artists }: FeaturedArtistsProps) => {
   const t = await getTranslations('home')
 
   return (
-    <section className="py-16 text-white md:py-24">
-      <div className="tw-container-custom">
+    <section className="relative overflow-hidden py-16 text-white md:py-24">
+      {/* 히어로 밖에서도 질감이 이어지도록 — 접힘선 아래라 LCP 후보가 아니다 */}
+      <div className="section-grain" aria-hidden="true" />
+      <div className="section-grain section-grain-coarse" aria-hidden="true" />
+      <div className="relative z-10 tw-container-custom">
         {/* 킥커 행 */}
         <div className="flex items-center gap-3 sm:gap-4">
           <h2 className="text-[11px] font-medium uppercase tracking-[0.28em] text-white/65">

@@ -11,6 +11,8 @@ test.describe('히어로 포스터 — 구조와 접근성', () => {
 
     await expect(page.locator('.hero-wash')).toHaveCount(2)
     await expect(page.locator('.hero-grain')).toHaveCount(2)
+    // 히어로 밖 섹션에도 같은 질감이 이어진다.
+    await expect(page.locator('.section-grain')).toHaveCount(4)
     await expect(page.locator('[aria-hidden="true"] .hero-spotlight')).toBeAttached()
 
     // banner는 사이트 헤더용 최상위 랜드마크다. main 안에 두면 스펙 위반이고,
