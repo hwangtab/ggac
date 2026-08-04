@@ -218,11 +218,23 @@ export const getFaqData = cache(async (locale = 'ko'): Promise<FaqItem[]> => {
 // 이름은 DB가 원천이라 로딩 시 정규화하면 목록·상세·OG·스키마 소비처가 일괄 통일된다.
 export function normalizeArtistName(name: string): string {
   if (!name) return name
-  return name
+  // 1) 괄호 앞뒤 공백을 한 칸으로 정규화
+  const spaced = name
     .replace(/(\S)\s*\(/g, '$1 (')
     .replace(/\(\s+/g, '(')
     .replace(/\s+\)/g, ')')
     .trim()
+  // 2) 표기 구조를 '영어 (한글)'로 통일 — 한글이 앞이고 괄호 안이 영어면 뒤집는다.
+  //    예: '후추맨 (Pepperman)' → 'Pepperman (후추맨)'. 영어가 앞인 경우(Sabbaha (사바하))는 유지.
+  const m = spaced.match(/^(.+?) \((.+?)\)$/)
+  if (m) {
+    const [, outer, inner] = m
+    const hasHangul = (s: string) => /[가-힣]/.test(s)
+    if (hasHangul(outer) && !hasHangul(inner) && /[A-Za-z]/.test(inner)) {
+      return `${inner} (${outer})`
+    }
+  }
+  return spaced
 }
 
 function convertDatabaseArtistToArtist(dbArtist: DatabaseArtist, locale = 'ko'): Artist {
