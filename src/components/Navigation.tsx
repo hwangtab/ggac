@@ -249,11 +249,11 @@ const Navigation = () => {
                   <Link
                     href="/signup"
                     className={`font-medium transition-colors duration-300 text-xs lg:text-sm px-2 lg:px-3 py-1 rounded-md ${
+                      // 앰버 위의 글자는 반드시 검정이다. 테마 오버라이드에 기대지 않고
+                      // 여기서 확정한다(홈처럼 내비가 투명한 상태에서도 동일하게 유지).
                       pathname === '/signup'
-                        ? 'bg-primary-600 text-white'
-                        : isDark
-                          ? 'bg-accent-300 text-gray-900 hover:bg-accent-400'
-                          : 'bg-primary-600 text-white hover:bg-primary-700'
+                        ? 'bg-accent-400 !text-black'
+                        : 'bg-accent-300 !text-black hover:bg-accent-400'
                     }`}
                   >
                     {t('nav.join')}
@@ -359,11 +359,11 @@ const Navigation = () => {
                   <Link
                     href="/signup"
                     className={`font-medium transition-colors duration-300 text-xs px-2 py-1 rounded-md ${
+                      // 앰버 위의 글자는 반드시 검정이다. 테마 오버라이드에 기대지 않고
+                      // 여기서 확정한다(홈처럼 내비가 투명한 상태에서도 동일하게 유지).
                       pathname === '/signup'
-                        ? 'bg-primary-600 text-white'
-                        : isDark
-                          ? 'bg-accent-300 text-gray-900 hover:bg-accent-400'
-                          : 'bg-primary-600 text-white hover:bg-primary-700'
+                        ? 'bg-accent-400 !text-black'
+                        : 'bg-accent-300 !text-black hover:bg-accent-400'
                     }`}
                   >
                     {t('nav.joinShort')}

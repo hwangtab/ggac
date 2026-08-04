@@ -171,8 +171,16 @@ textarea:focus-visible {
     backdrop-filter: none !important;
     color: #fff !important;
   }
-  body:has([data-home-page='true']) #navigation[data-at-top='true'] a,
-  body:has([data-home-page='true']) #navigation[data-at-top='true'] button {
+  /*
+   * 앰버 칩(가입 버튼)은 제외한다. 이 규칙이 모든 링크를 흰색으로 강제하는 바람에
+   * 밝은 배경 위에 흰 글자가 얹혀 대비가 1.7:1까지 떨어졌다.
+   */
+  body:has([data-home-page='true'])
+    #navigation[data-at-top='true']
+    a:not([class*='bg-accent-']):not([class*='bg-white']),
+  body:has([data-home-page='true'])
+    #navigation[data-at-top='true']
+    button:not([class*='bg-accent-']):not([class*='bg-white']) {
     color: #fff !important;
   }
 }
@@ -958,9 +966,91 @@ body {
 [data-poster].bg-gray-900 {
   background-color: var(--poster-bg);
 }
-/* 안내·경고용 색조 배경은 아주 옅은 흰 면 + 색은 글자와 보더로만 남긴다 */
-[data-poster] [class*='bg-primary-'],
-[data-poster] [class*='bg-accent-'],
+/* 중간 회색 면(뱃지·보조 버튼 등)은 살짝 뜬 면으로 */
+[data-poster] [class*='bg-gray-3'],
+[data-poster] [class*='bg-gray-4'],
+[data-poster] [class*='bg-gray-5'] {
+  background-color: var(--poster-surface-2);
+}
+[data-poster] [class*='bg-gray-6'],
+[data-poster] [class*='bg-gray-7'] {
+  background-color: rgba(255, 255, 255, 0.14);
+}
+/*
+ * 검은 글자는 흰 면 위에 있을 때만 의도다. 포스터 테마에서 그 면이 어두워지면
+ * 글자가 사라지므로, 예외 표시가 없는 한 밝은 글자로 되돌린다.
+ */
+[data-poster] .text-black:not([data-poster-keep]) {
+  color: var(--poster-text);
+}
+[data-poster] [data-poster-keep] .text-black,
+[data-poster] [data-poster-keep].text-black,
+[data-poster] [data-poster-keep] * {
+  color: #000000;
+}
+/*
+ * 브랜드색 배경 처리. 계단을 정확히 구분해야 한다 — `[class*='bg-primary-5']`처럼
+ * 부분 일치를 쓰면 `bg-primary-50`(옅은 톤)까지 잡혀 흰 버튼이 돼버린다.
+ *
+ * 글자색에 !important를 쓰는 이유: 이 블록은 '면' 섹션이라 아래 '글자' 섹션의
+ * .text-gray-* 재매핑보다 먼저 온다. 특정도가 같아 순서로 지는데, 브랜드색 위의
+ * 글자는 반드시 어두워야 하므로 우선순위를 명시한다.
+ */
+
+/* 옅은 계단(50~200): 안내 상자 배경 — 아주 옅은 흰 면으로 눌러 다크에 맞춘다 */
+[data-poster] [class*='bg-primary-50'],
+[data-poster] [class*='bg-primary-100'],
+[data-poster] [class*='bg-primary-200'],
+[data-poster] [class*='bg-accent-50'],
+[data-poster] [class*='bg-accent-100'],
+[data-poster] [class*='bg-accent-200'] {
+  background-color: rgba(255, 255, 255, 0.07);
+}
+
+/* 중간 계단(300~400): 앰버는 포스터 팔레트라 색을 살리고 글자만 어둡게 */
+[data-poster] [class*='bg-primary-300'],
+[data-poster] [class*='bg-primary-400'],
+[data-poster] [class*='bg-accent-300'],
+[data-poster] [class*='bg-accent-400'] {
+  color: #000000 !important;
+}
+[data-poster] [class*='bg-primary-300'] *,
+[data-poster] [class*='bg-primary-400'] *,
+[data-poster] [class*='bg-accent-300'] *,
+[data-poster] [class*='bg-accent-400'] * {
+  color: #000000 !important;
+}
+
+/* 강한 계단(500~900): 주 액션 버튼 — 히어로 CTA와 같은 흰 버튼으로 */
+[data-poster] [class*='bg-primary-500'],
+[data-poster] [class*='bg-primary-600'],
+[data-poster] [class*='bg-primary-700'],
+[data-poster] [class*='bg-primary-800'],
+[data-poster] [class*='bg-primary-900'],
+[data-poster] [class*='bg-accent-500'],
+[data-poster] [class*='bg-accent-600'],
+[data-poster] [class*='bg-accent-700'] {
+  background-color: #ffffff;
+  color: #000000 !important;
+}
+[data-poster] [class*='bg-primary-500'] *,
+[data-poster] [class*='bg-primary-600'] *,
+[data-poster] [class*='bg-primary-700'] *,
+[data-poster] [class*='bg-primary-800'] *,
+[data-poster] [class*='bg-primary-900'] *,
+[data-poster] [class*='bg-accent-500'] *,
+[data-poster] [class*='bg-accent-600'] *,
+[data-poster] [class*='bg-accent-700'] * {
+  color: #000000 !important;
+}
+[data-poster] [class*='bg-primary-600']:hover,
+[data-poster] [class*='bg-primary-700']:hover,
+[data-poster] [class*='bg-accent-500']:hover,
+[data-poster] [class*='bg-accent-600']:hover {
+  background-color: rgba(255, 255, 255, 0.85);
+}
+
+/* 그 밖의 안내·경고 색조 배경 */
 [data-poster] [class*='bg-blue-'],
 [data-poster] [class*='bg-green-'],
 [data-poster] [class*='bg-amber-'],
@@ -973,6 +1063,7 @@ body {
 [data-poster] [class*='bg-purple-'] {
   background-color: rgba(255, 255, 255, 0.07);
 }
+
 /* 밝은 그라데이션 배경은 포스터에 맞지 않는다 */
 [data-poster] [class*='bg-gradient-to'] {
   background-image: none;
