@@ -126,14 +126,16 @@ export const getArtistsFromJSON = async (locale = 'ko'): Promise<Artist[]> => {
     locale === 'en'
       ? path.join(process.cwd(), 'data/en/artists.json')
       : path.join(process.cwd(), 'data/artists.json')
+  const normalizeNames = (list: Artist[]): Artist[] =>
+    list.map(a => ({ ...a, name: normalizeArtistName(a.name) }))
   try {
     const fileContents = await fs.promises.readFile(filePath, 'utf8')
-    return JSON.parse(fileContents)
+    return normalizeNames(JSON.parse(fileContents))
   } catch (error) {
     if (locale === 'en') {
       try {
         const fallback = path.join(process.cwd(), 'data/artists.json')
-        return JSON.parse(await fs.promises.readFile(fallback, 'utf8'))
+        return normalizeNames(JSON.parse(await fs.promises.readFile(fallback, 'utf8')))
       } catch {}
     }
     log.error('Error loading artists data from JSON:', error)
@@ -211,12 +213,24 @@ export const getFaqData = cache(async (locale = 'ko'): Promise<FaqItem[]> => {
 // getArtistsFromDB 내부 fetch의 revalidate(3600)+tags(['artists'])가 담당한다.
 
 // DatabaseArtist를 Artist 타입으로 변환 — locale='en'이면 _en 컬럼 우선, 없으면 한국어 폴백
+// 아티스트 표기명의 괄호 앞 공백을 한 칸으로 통일한다(언어 순서 등 원본 표기는 유지).
+// 예: '후추맨(Pepperman)' → '후추맨 (Pepperman)', 'ANAZAO(아나자오)' → 'ANAZAO (아나자오)'.
+// 이름은 DB가 원천이라 로딩 시 정규화하면 목록·상세·OG·스키마 소비처가 일괄 통일된다.
+export function normalizeArtistName(name: string): string {
+  if (!name) return name
+  return name
+    .replace(/(\S)\s*\(/g, '$1 (')
+    .replace(/\(\s+/g, '(')
+    .replace(/\s+\)/g, ')')
+    .trim()
+}
+
 function convertDatabaseArtistToArtist(dbArtist: DatabaseArtist, locale = 'ko'): Artist {
   const useEn = locale === 'en'
   return {
     id: dbArtist.legacy_id,
     slug: dbArtist.slug,
-    name: useEn && dbArtist.name_en ? dbArtist.name_en : dbArtist.name,
+    name: normalizeArtistName(useEn && dbArtist.name_en ? dbArtist.name_en : dbArtist.name),
     category: dbArtist.category || [],
     // DB에는 장르·리드 컬럼이 없으므로 undefined로 두고, legacy JSON 오버레이로 채운다.
     genres: dbArtist.genres ?? undefined,
@@ -286,7 +300,7 @@ function overlayEnglishArtistText(artist: Artist, en?: Artist): Artist {
   if (!en) return artist
   return {
     ...artist,
-    name: en.name || artist.name,
+    name: normalizeArtistName(en.name || artist.name),
     oneLiner: en.oneLiner ?? artist.oneLiner,
     bio: en.bio ?? artist.bio,
     category: en.category ?? artist.category,
