@@ -27,11 +27,8 @@ const FeaturedProjects = async ({ projects }: FeaturedProjectsProps) => {
   const locale = await getLocale()
 
   return (
-    <section className="relative overflow-hidden py-16 text-white md:py-24">
-      {/* 히어로 밖에서도 질감이 이어지도록 — 접힘선 아래라 LCP 후보가 아니다 */}
-      <div className="section-grain" aria-hidden="true" />
-      <div className="section-grain section-grain-coarse" aria-hidden="true" />
-      <div className="relative z-10 tw-container-custom">
+    <section className="py-16 text-white md:py-24">
+      <div className="tw-container-custom">
         {/* 킥커 행 — 히어로 하단 밴드와 같은 문법 */}
         <div className="flex items-center gap-3 sm:gap-4">
           <h2 className="text-[11px] font-medium uppercase tracking-[0.28em] text-white/65">
