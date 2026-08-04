@@ -1262,6 +1262,103 @@ body {
   background-color: rgba(255, 255, 255, 0.25);
 }
 
+/* ===== 다크 테마 사각지대 보정 =====
+ * 페이지 마크업이 아니라 브라우저 UI·포털·에디터처럼 유틸리티 재매핑이
+ * 닿지 않는 표면들. 정적 렌더 스윕으로는 잡히지 않아 따로 확인해야 했다.
+ */
+
+/*
+ * 포털 루트 — createPortal은 document.body 밑에 붙어 [data-poster] 범위를
+ * 벗어난다(알림 드롭다운). 테마를 여기에도 켠다.
+ * 토스트(react-hot-toast)는 레이아웃에서 이미 다크로 지정돼 있어 제외.
+ */
+#portal-root {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+/* 스크롤바 — 밝은 회색 트랙이 다크 사이트 위에서 계속 빛나고 있었다 */
+::-webkit-scrollbar-track {
+  background: #101014;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.22);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.38);
+}
+/* Firefox */
+html {
+  scrollbar-color: rgba(255, 255, 255, 0.22) #101014;
+}
+
+/* 선택 영역 — 포스터 팔레트(앰버)로 */
+::selection {
+  background-color: #fbd9a5;
+  color: #000000;
+}
+
+/*
+ * 자동완성 — 크롬은 -webkit-autofill에 밝은 배경을 강제로 칠한다.
+ * background-color로는 덮이지 않아 inset box-shadow로 가린다.
+ * 로그인·가입 폼을 쓰는 모든 조합원이 겪는 문제였다.
+ */
+[data-poster] input:-webkit-autofill,
+[data-poster] input:-webkit-autofill:hover,
+[data-poster] input:-webkit-autofill:focus,
+[data-poster] textarea:-webkit-autofill,
+[data-poster] select:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px #16161b inset !important;
+  box-shadow: 0 0 0 1000px #16161b inset !important;
+  -webkit-text-fill-color: rgba(255, 255, 255, 0.92) !important;
+  caret-color: rgba(255, 255, 255, 0.92);
+}
+
+/*
+ * Quill 에디터(글쓰기·수정) — 자체 스타일시트가 흰 배경을 전제로 한다.
+ * 인증이 필요한 화면이라 렌더 스윕에 잡히지 않았다.
+ */
+[data-poster] .quill-editor-container .ql-toolbar,
+[data-poster] .quill-editor-container .ql-container {
+  background-color: #101014;
+  border-color: rgba(255, 255, 255, 0.15);
+}
+[data-poster] .quill-editor-container .ql-editor {
+  background-color: #101014;
+  color: rgba(255, 255, 255, 0.92);
+}
+[data-poster] .quill-editor-container .ql-editor.ql-blank::before {
+  color: rgba(255, 255, 255, 0.4);
+}
+/* 툴바 아이콘은 검은 선으로 그려져 있어 반전이 필요하다 */
+[data-poster] .quill-editor-container .ql-toolbar .ql-stroke {
+  stroke: rgba(255, 255, 255, 0.75);
+}
+[data-poster] .quill-editor-container .ql-toolbar .ql-fill {
+  fill: rgba(255, 255, 255, 0.75);
+}
+[data-poster] .quill-editor-container .ql-toolbar .ql-picker-label,
+[data-poster] .quill-editor-container .ql-toolbar .ql-picker-item {
+  color: rgba(255, 255, 255, 0.75);
+}
+[data-poster] .quill-editor-container .ql-toolbar .ql-picker-options {
+  background-color: #16161b;
+  border-color: rgba(255, 255, 255, 0.15);
+}
+[data-poster] .quill-editor-container .ql-toolbar button:hover .ql-stroke,
+[data-poster] .quill-editor-container .ql-toolbar button.ql-active .ql-stroke {
+  stroke: #ffffff;
+}
+[data-poster] .quill-editor-container .ql-toolbar button:hover .ql-fill,
+[data-poster] .quill-editor-container .ql-toolbar button.ql-active .ql-fill {
+  fill: #ffffff;
+}
+/* 업로드 상태 바도 밝은 그라데이션이다 */
+[data-poster] .upload-status-bar {
+  background: #16161b;
+  border-color: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.85);
+}
+
 /* ===== 히어로 포스터 모션 패키지 ===== */
 :root {
   --mx: 0;

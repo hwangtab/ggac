@@ -18,6 +18,8 @@ export const viewport = {
   initialScale: 1,
   maximumScale: 5,
   userScalable: true,
+  // 모바일 브라우저 크롬(주소창)까지 다크로. 없으면 사이트만 검고 위쪽 띠가 밝다.
+  themeColor: '#08080a',
 }
 
 export async function generateMetadata({

@@ -7,8 +7,9 @@ export default function manifest(): MetadataRoute.Manifest {
     description: '경계 없는 상상, 함께 만드는 울림',
     start_url: '/',
     display: 'standalone',
-    background_color: '#ffffff',
-    theme_color: '#0ea5e9',
+    // 사이트 전체가 다크 포스터 테마다. 스플래시·브라우저 크롬도 맞춘다.
+    background_color: '#08080a',
+    theme_color: '#08080a',
     icons: [
       {
         src: '/images/logo/gac_logo.webp',
