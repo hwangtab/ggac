@@ -1,352 +1,213 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef, memo } from 'react'
+import { useEffect, useRef, memo } from 'react'
 import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
-import OptimizedHeroImage from './OptimizedHeroImage'
-import AmbientLight from './AmbientLight'
-import ErrorBoundary from './ErrorBoundary'
+import HeroFilmstrip from './HeroFilmstrip'
 import PerformanceMonitor from './PerformanceMonitor'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
-import { useRenderPerformance } from '@/hooks/usePerformanceMonitor'
 import { usePointerParallax } from '@/hooks/usePointerParallax'
-import { useScrollParallax } from '@/hooks/useScrollParallax'
 import { getErrorTracker } from '@/utils/errorTracking'
+import type { Artist } from '@/types/artist'
 
-const Hero = () => {
-  const t = useTranslations('home')
+interface HeroProps {
+  artists: Artist[]
+}
+
+/**
+ * grid-cols-1(= minmax(0, 1fr))이 필수다. 기본 auto 열은 max-content로 부풀기 때문에
+ * 하단 마퀴 트랙(수천 px)이 열 너비를 결정해버리고, 그러면 타이포 블록이 화면 밖으로
+ * 밀려난다. 트랙을 감싼 overflow-hidden은 내재 크기 기여를 줄여주지 않는다.
+ */
+const SECTION_CLASS =
+  'relative grid min-h-[100svh] grid-cols-1 grid-rows-[1fr_auto] overflow-hidden bg-[#08080a] text-white'
+
+/**
+ * 공연 포스터 문법의 풀블리드 히어로.
+ *
+ * 모션 규칙 두 가지를 지킨다.
+ * 1. LCP인 h1 첫 줄은 opacity·clip 없이 transform만 움직인다. 첫 프레임부터
+ *    완전히 보이므로 진입 애니메이션이 LCP를 밀지 않는다.
+ * 2. 포인터에 반응하는 것은 빛뿐이다. 콘텐츠(제목·CTA·카드)는 마우스를 따라
+ *    움직이지 않는다.
+ *
+ * reduced-motion 대응은 전부 globals.css의 미디어 쿼리 가드가 담당한다.
+ * 클래스를 조건부로 붙이지 않으므로 하이드레이션 불일치가 생기지 않는다.
+ */
+const Hero = ({ artists }: HeroProps) => {
+  const t = useTranslations('home.hero')
   const tc = useTranslations('common')
-
-  // h1·서브타이틀은 첫 프레임에 즉시 표시(LCP 보호). 장식 요소(카드·CTA)에만 CSS 진입 애니메이션.
-  const [dimensions, setDimensions] = useState({ width: 0, height: 0 })
-
-  // 접근성: 사용자의 동작 줄이기 설정 확인
   const prefersReducedMotion = usePrefersReducedMotion()
-
-  // 스크롤 진행도 — 패럴랙스 배경 및 인디케이터 opacity 제어
-  const scrollProgress = useScrollParallax({ disabled: prefersReducedMotion })
-
-  // 렌더링 성능 추적
-  const renderPerf = useRenderPerformance('Hero')
-
-  // 포인터 시차(--mx/--my) — 앰비언트 빛 레이어 전용. 콘텐츠 카드는 고정.
   const sectionRef = useRef<HTMLElement>(null)
-  // 터치/모바일/reduced-motion에서는 포인터 시차 비활성
-  usePointerParallax(sectionRef, {
-    disabled: prefersReducedMotion,
-  })
 
-  // 모바일 디바이스 감지
-  const isMobileDevice = useCallback(() => {
-    return (
-      /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-      window.innerWidth <= 768 ||
-      'ontouchstart' in window
-    )
-  }, [])
-
-  // 렌더링 최적화: CSS 변수를 직접 DOM에 설정하여 리플로우 최소화
-  const updateCSSProperties = useCallback(
-    (width: number, height: number) => {
-      const root = document.documentElement
-      const isMobile = isMobileDevice()
-
-      // CSS 속성 값들을 미리 계산
-      const cssProperties = new Map<string, string>()
-
-      // 반응형 그라데이션 크기
-      if (width > 1200) {
-        cssProperties.set('--gradient-size', '1200px 750px')
-        cssProperties.set('--gradient-alpha-start', '0.85')
-        cssProperties.set('--gradient-alpha-mid', '0.65')
-      } else if (width > 768) {
-        cssProperties.set('--gradient-size', '900px 600px')
-        cssProperties.set('--gradient-alpha-start', '0.85')
-        cssProperties.set('--gradient-alpha-mid', '0.65')
-      } else {
-        cssProperties.set('--gradient-size', '500px 400px')
-        cssProperties.set('--gradient-alpha-start', '0.90')
-        cssProperties.set('--gradient-alpha-mid', '0.70')
-      }
-
-      // 모바일에서 블러 효과 최적화 (GPU 부하 감소)
-      if (isMobile) {
-        cssProperties.set('--glassmorphism-blur', width > 768 ? '8px' : '4px')
-        cssProperties.set('--glassmorphism-saturation', '150%')
-        cssProperties.set('--glassmorphism-bg-alpha', width > 768 ? '0.18' : '0.22')
-      } else {
-        cssProperties.set('--glassmorphism-blur', width > 768 ? '12px' : '8px')
-        cssProperties.set('--glassmorphism-saturation', width > 768 ? '180%' : '160%')
-        cssProperties.set('--glassmorphism-bg-alpha', width > 768 ? '0.12' : '0.15')
-      }
-
-      // requestAnimationFrame으로 배치 처리하여 리플로우 최소화
-      requestAnimationFrame(() => {
-        cssProperties.forEach((value, property) => {
-          root.style.setProperty(property, value)
-        })
-      })
-    },
-    [isMobileDevice]
-  )
-
-  // Safari 모바일 뷰포트 호환성을 위한 안전한 차원 측정
-  const getSafeViewportDimensions = useCallback(() => {
-    const isSafariMobile = /iPad|iPhone|iPod/.test(navigator.userAgent)
-
-    if (isSafariMobile && window.visualViewport) {
-      return {
-        width: window.visualViewport.width,
-        height: window.visualViewport.height,
-      }
-    }
-
-    return {
-      width: window.innerWidth,
-      height: window.innerHeight,
-    }
-  }, [])
-
-  // 화면 크기 업데이트 - debounce로 성능 최적화
-  const updateDimensions = useCallback(() => {
-    const { width, height } = getSafeViewportDimensions()
-
-    // 동일한 크기라면 업데이트 스킵
-    if (dimensions.width === width && dimensions.height === height) {
-      return
-    }
-
-    setDimensions({ width, height })
-    updateCSSProperties(width, height)
-  }, [getSafeViewportDimensions, updateCSSProperties, dimensions.width, dimensions.height])
+  // --mx/--my만 갱신한다. 이 값을 쓰는 건 스포트라이트 레이어 하나뿐.
+  usePointerParallax(sectionRef, { disabled: prefersReducedMotion })
 
   useEffect(() => {
-    let mounted = true
-
-    // 에러 추적 시스템 초기화
-    if (typeof window !== 'undefined') {
-      getErrorTracker()
-    }
-
-    // 초기 화면 크기 설정
-    updateDimensions()
-
-    // 리사이즈 이벤트 리스너 - debounce 함수 내부에서 mounted 체크
-    const debouncedResize = debounce(() => {
-      if (mounted) updateDimensions()
-    }, 250)
-
-    window.addEventListener('resize', debouncedResize, { passive: true })
-
-    return () => {
-      mounted = false
-      window.removeEventListener('resize', debouncedResize)
-      // debounce 타이머도 정리
-      debouncedResize.cancel()
-    }
-  }, [updateDimensions])
+    getErrorTracker()
+  }, [])
 
   return (
     <section
       ref={sectionRef}
       role="banner"
-      aria-label={t('hero.ariaMain')}
-      className="relative min-h-screen flex items-center justify-center overflow-hidden"
-      style={{
-        // CSS 컨테인먼트로 렌더링 최적화
-        contain: 'layout style paint',
-        // 불필요한 willChange 제거
-        willChange: 'auto',
-      }}
+      aria-label={t('ariaMain')}
+      className={SECTION_CLASS}
+      style={{ contain: 'layout style paint' }}
     >
-      {/* Layer 1: 배경 이미지 - 최적화된 이미지 컴포넌트 */}
-      <div
-        className="absolute inset-0"
-        style={{
-          zIndex: 1,
-          transform: 'translate3d(0, calc(var(--scroll-y) * 0.3), 0)',
-          willChange: 'transform',
-        }}
-      >
-        <OptimizedHeroImage
-          alt={t('hero.imageAlt')}
-          priority
+      {/* 장식 레이어 — 전부 transform/opacity만 사용 */}
+      <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+        <div
+          className="hero-wash"
           style={{
-            filter: 'contrast(1.1) brightness(1.05)',
-            // willChange 제거 - OptimizedHeroImage에서 관리
+            background:
+              'radial-gradient(42% 42% at 26% 24%, rgba(243, 133, 11, 0.17) 0%, rgba(243, 133, 11, 0) 70%)',
+          }}
+        />
+        <div
+          className="hero-wash"
+          style={
+            {
+              background:
+                'radial-gradient(46% 46% at 76% 74%, rgba(14, 165, 233, 0.18) 0%, rgba(14, 165, 233, 0) 72%)',
+              ['--wash-duration' as string]: '46s',
+              animationDirection: 'alternate-reverse',
+            } as React.CSSProperties
+          }
+        />
+        <div className="hero-spotlight" />
+        <div className="hero-grain" />
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              'radial-gradient(125% 95% at 50% 38%, transparent 28%, rgba(0, 0, 0, 0.62) 100%)',
           }}
         />
       </div>
 
-      {/* Layer 1.5: 상시 앰비언트 빛 레이어 */}
-      <AmbientLight />
-
-      {/* Layer 2: 전체 다크 오버레이 - 명도 대비 강화 */}
+      {/* 타이포 블록 */}
       <div
-        className="absolute inset-0"
+        className="relative z-10 flex flex-col justify-center px-5 sm:px-8 lg:px-12"
         style={{
-          zIndex: 10,
-          background:
-            'linear-gradient(135deg, rgba(0, 0, 0, 0.6) 0%, rgba(0, 0, 0, 0.5) 50%, rgba(0, 0, 0, 0.6) 100%)',
-          // 정적 오버레이이므로 GPU 최적화 불필요
+          // 낮은 노트북 창(720p 이하)에서도 하단 필름스트립이 접히지 않도록 수직
+          // 리듬 전체를 화면 높이에 연동한다. 상단 여백은 고정 헤더(약 80px)를 비운다.
+          paddingTop: 'clamp(4.5rem, 11vh, 7rem)',
+          paddingBottom: 'clamp(1rem, 2.5vh, 2rem)',
         }}
-      />
-
-      {/* Layer 3: 중앙 집중형 그라데이션 오버레이 - CSS 커스텀 프로퍼티 활용 */}
-      <div
-        className="absolute inset-0"
-        style={{
-          zIndex: 15,
-          background: `radial-gradient(
-            ellipse var(--gradient-size, 900px 600px) at center,
-            rgba(0, 0, 0, var(--gradient-alpha-start, 0.85)) 0%,
-            rgba(0, 0, 0, var(--gradient-alpha-mid, 0.65)) 30%,
-            rgba(0, 0, 0, 0.4) 60%,
-            rgba(0, 0, 0, 0.2) 80%,
-            transparent 100%
-          )`,
-          // 정적 그라데이션이므로 GPU 최적화 불필요
-        }}
-      />
-
-      {/* Layer 4: 글래스모피즘 텍스트 컨테이너 — 콘텐츠(제목·CTA)는 포인터 시차 없이 고정 */}
-      <div
-        className={`relative text-center text-white px-4 ${
-          prefersReducedMotion ? '' : 'motion-card-in'
-        }`}
-        style={{ zIndex: 20 }}
       >
-        <div
-          className="glass-hero-container max-w-6xl mx-auto rounded-3xl
-            px-6 py-6 sm:px-10 sm:py-8 md:px-12 md:py-9 lg:px-16 lg:py-11
-            mx-2 sm:mx-4 md:mx-auto
-            rounded-2xl sm:rounded-3xl
-            opacity-100"
-          style={{
-            backdropFilter: `blur(var(--glassmorphism-blur, 12px)) saturate(var(--glassmorphism-saturation, 180%))`,
-            background: `linear-gradient(
-              135deg,
-              rgba(255, 255, 255, var(--glassmorphism-bg-alpha, 0.12)) 0%,
-              rgba(255, 255, 255, calc(var(--glassmorphism-bg-alpha, 0.12) * 0.67)) 50%,
-              rgba(255, 255, 255, calc(var(--glassmorphism-bg-alpha, 0.12) * 0.42)) 100%
-            )`,
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            boxShadow: `
-              0 8px 32px rgba(0, 0, 0, 0.3),
-              0 2px 16px rgba(0, 0, 0, 0.2),
-              inset 0 1px 0 rgba(255, 255, 255, 0.1)
-            `,
-          }}
-        >
-          {/* LCP 요소 — h1은 첫 프레임부터 즉시 표시(opacity-100 고정, 진입 애니메이션 제외) */}
-          <h1
-            className="tw-heading-primary mb-4 sm:mb-6 opacity-100"
-            style={{
-              color: '#FFFFFF',
-              textShadow: `
-                0 3px 6px rgba(0, 0, 0, 0.8),
-                0 1px 3px rgba(0, 0, 0, 0.7)
-              `,
-              fontWeight: 700,
-              letterSpacing: '-0.02em',
-              lineHeight: 1.2,
-            }}
-          >
-            <span className="block">{t('hero.titleLine1')}</span>
-            <span className="block">{t('hero.titleLine2')}</span>
-          </h1>
+        <div className="relative mx-auto w-full max-w-[1400px]">
           {/*
-           * LCP 요소 — 진입 애니메이션을 의도적으로 제거.
-           * 기존 delay-300 duration-600 + showText 시퀀스 때문에 hydration 직후
-           * 0.9~1.2초 동안 opacity 0이 유지돼 LCP가 ~2.7s 늦춰지던 회귀 수정.
-           */}
-          <p
-            className="text-lg sm:text-xl md:text-2xl mb-6 sm:mb-8 max-w-2xl mx-auto leading-relaxed opacity-100 text-balance"
+            포스터의 크레딧 블록 — 왼쪽 정렬 제목이 남기는 오른쪽 여백을 채운다.
+            제목이 가장 넓어지는 지점에서도 겹치지 않도록 lg 이상에서만 노출.
+          */}
+          <ul className="absolute right-0 top-1/2 hidden -translate-y-1/2 space-y-2.5 text-right text-[11px] uppercase tracking-[0.26em] text-white/30 lg:block">
+            {(t.raw('disciplines') as string[]).map(discipline => (
+              <li key={discipline}>{discipline}</li>
+            ))}
+          </ul>
+
+          <div className="motion-fade-up flex items-center gap-3 sm:gap-4">
+            <span className="text-[10px] font-medium uppercase tracking-[0.3em] text-white/50 sm:text-xs sm:tracking-[0.34em]">
+              {t('kicker')}
+            </span>
+            <span className="h-px w-8 bg-white/25 sm:w-16" />
+            <span className="text-[10px] uppercase tracking-[0.3em] text-white/35 sm:text-xs sm:tracking-[0.34em]">
+              {t('est')}
+            </span>
+          </div>
+
+          <h1
             style={{
-              color: 'rgba(255, 255, 255, 0.92)',
-              textShadow: `
-                0 2px 4px rgba(0, 0, 0, 0.7),
-                0 1px 3px rgba(0, 0, 0, 0.6)
-              `,
-              fontWeight: 400,
-              letterSpacing: '-0.01em',
-              lineHeight: 1.4,
+              fontWeight: 900,
+              lineHeight: 0.94,
+              letterSpacing: '-0.045em',
+              // vw만 쓰면 넓고 낮은 창에서 제목이 화면을 넘긴다. vh로 상한을 건다.
+              fontSize: 'clamp(2.25rem, min(9.5vw, 11vh), 8rem)',
+              marginTop: 'clamp(0.75rem, 2.5vh, 1.75rem)',
             }}
           >
-            {t('hero.subtitle')}
+            {/* LCP 줄 — 즉시 페인트되고 위치만 정착한다 */}
+            <span className="hero-line-settle block">{t('titleLine1')}</span>
+            {/* 아웃라인 줄 — 마스크 리빌. LCP 후보가 아니라 클리핑해도 안전하다. */}
+            <span
+              className="hero-mask"
+              style={{ ['--motion-delay' as string]: '120ms' } as React.CSSProperties}
+            >
+              <span
+                style={{
+                  WebkitTextStroke: '0.013em rgba(255, 255, 255, 0.78)',
+                  color: 'rgba(255, 255, 255, 0.07)',
+                }}
+              >
+                {t('titleLine2')}
+              </span>
+            </span>
+          </h1>
+
+          <p
+            className="motion-fade-up max-w-2xl text-[15px] leading-relaxed text-white/70 sm:text-lg"
+            style={
+              {
+                ['--motion-delay' as string]: '380ms',
+                marginTop: 'clamp(1rem, 3.5vh, 2rem)',
+              } as React.CSSProperties
+            }
+          >
+            {t('subtitle')}
             <br />
-            {tc('brandShort')}
+            <span className="text-white/45">{tc('brandShort')}</span>
           </p>
+
           <div
-            className={`flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center ${
-              prefersReducedMotion ? 'opacity-100' : 'motion-fade-up'
-            }`}
-            style={prefersReducedMotion ? undefined : { ['--motion-delay' as string]: '250ms' }}
+            className="motion-fade-up flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:gap-4"
+            style={
+              {
+                ['--motion-delay' as string]: '480ms',
+                marginTop: 'clamp(1.25rem, 4vh, 2.5rem)',
+              } as React.CSSProperties
+            }
           >
             <Link
               href="/about"
-              className={`btn-glass-primary px-8 py-4 sm:px-8 sm:py-3 rounded-xl font-medium text-base sm:text-base w-full sm:w-auto text-center min-h-[44px] flex items-center justify-center ${
-                prefersReducedMotion
-                  ? 'hover:brightness-110'
-                  : 'transition-all duration-300 hover:-translate-y-0.5 hover:shadow-2xl hover:brightness-110'
-              }`}
-              style={{
-                background: `linear-gradient(
-                  135deg,
-                  rgba(255, 255, 255, 0.25) 0%,
-                  rgba(255, 255, 255, 0.15) 100%
-                )`,
-                backdropFilter: 'blur(8px)',
-                border: '1px solid rgba(255, 255, 255, 0.3)',
-                color: 'white',
-                boxShadow: `
-                  0 4px 16px rgba(0, 0, 0, 0.2),
-                  inset 0 1px 0 rgba(255, 255, 255, 0.2)
-                `,
-              }}
+              className="group inline-flex min-h-[48px] items-center justify-center gap-2 bg-white px-8 text-sm font-semibold tracking-tight text-black transition-colors duration-300 hover:bg-white/85 sm:min-h-[56px]"
             >
-              {t('hero.ctaAbout')}
+              {t('ctaAbout')}
+              <span
+                aria-hidden="true"
+                className="transition-transform duration-300 group-hover:translate-x-1"
+              >
+                →
+              </span>
             </Link>
             <Link
               href="/connect"
-              className={`btn-glass-secondary px-8 py-4 sm:px-8 sm:py-3 rounded-xl font-medium text-base sm:text-base w-full sm:w-auto text-center min-h-[44px] flex items-center justify-center ${
-                prefersReducedMotion
-                  ? 'hover:bg-white/10 hover:border-white/60'
-                  : 'transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/10 hover:border-white/60'
-              }`}
-              style={{
-                background: 'transparent',
-                backdropFilter: 'blur(4px)',
-                border: '2px solid rgba(255, 255, 255, 0.4)',
-                color: 'rgba(255, 255, 255, 0.9)',
-                boxShadow: `
-                  0 4px 16px rgba(0, 0, 0, 0.15),
-                  inset 0 1px 0 rgba(255, 255, 255, 0.1)
-                `,
-              }}
+              className="inline-flex min-h-[48px] items-center justify-center border border-white/30 px-8 text-sm font-semibold tracking-tight text-white/90 transition-colors duration-300 hover:border-white/70 hover:bg-white/5 sm:min-h-[56px]"
             >
-              {t('hero.ctaJoin')}
+              {t('ctaJoin')}
             </Link>
+            <span className="ml-auto hidden items-center gap-3 text-[10px] uppercase tracking-[0.3em] text-white/35 sm:flex">
+              {t('scrollLabel')}
+              <span className="h-px w-8 bg-white/25" />
+              <span aria-hidden="true">↓</span>
+            </span>
           </div>
         </div>
       </div>
 
+      {/* 하단 밴드 — 이름 티커 + 사진 필름스트립 */}
       <div
-        className={`absolute bottom-8 left-0 right-0 flex justify-center text-white ${
-          prefersReducedMotion ? '' : 'animate-bounce'
-        }`}
-        style={{ opacity: Math.max(0, 1 - scrollProgress * 2) }}
+        className="motion-fade-up relative z-10 min-w-0"
+        style={
+          {
+            ['--motion-delay' as string]: '300ms',
+            paddingBottom: 'clamp(1rem, 2.5vh, 1.75rem)',
+          } as React.CSSProperties
+        }
       >
-        <div className="w-6 h-10 border-2 border-white rounded-full flex justify-center">
-          <div
-            className={`w-1 h-3 bg-white rounded-full mt-2 ${
-              prefersReducedMotion ? '' : 'animate-pulse'
-            }`}
-          />
-        </div>
+        <HeroFilmstrip artists={artists} />
       </div>
 
-      {/* 성능 모니터 - 개발 환경에서만 표시 */}
       <PerformanceMonitor
         position="top-right"
         mode="compact"
@@ -355,31 +216,6 @@ const Hero = () => {
       />
     </section>
   )
-}
-
-// 유틸리티 함수 - 취소 기능이 있는 debounce
-function debounce<T extends (...args: any[]) => any>(
-  func: T,
-  delay: number
-): T & { cancel: () => void } {
-  let timeoutId: NodeJS.Timeout | null = null
-
-  const debounced = ((...args: any[]) => {
-    if (timeoutId) clearTimeout(timeoutId)
-    timeoutId = setTimeout(() => {
-      timeoutId = null
-      func(...args)
-    }, delay)
-  }) as T & { cancel: () => void }
-
-  debounced.cancel = () => {
-    if (timeoutId) {
-      clearTimeout(timeoutId)
-      timeoutId = null
-    }
-  }
-
-  return debounced
 }
 
 export default memo(Hero)

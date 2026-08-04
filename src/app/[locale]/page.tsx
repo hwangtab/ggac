@@ -97,7 +97,7 @@ export default async function Home({ params }: HomeProps) {
   return (
     <div data-home-page="true">
       {structuredDataToScript(combinedStructuredData)}
-      <Hero />
+      <Hero artists={artists} />
       <ScrollReveal>
         <FeaturedProjects projects={featuredProjects} />
       </ScrollReveal>

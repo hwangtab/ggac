@@ -733,7 +733,13 @@
       "ariaMain": "메인 영역",
       "imageAlt": "경기아트콜렉티브 협동조합 창립총회",
       "ctaAbout": "우리의 이야기",
-      "ctaJoin": "조합 가입하기"
+      "ctaJoin": "조합 가입하기",
+      "kicker": "GYEONGGI ART COLLECTIVE",
+      "est": "EST. 2025",
+      "rosterLabel": "지금 함께하는 사람들",
+      "rosterAria": "조합원 아티스트",
+      "scrollLabel": "스크롤",
+      "disciplines": ["둠메탈", "펑크", "실험음악", "즉흥음악"]
     },
     "projects": {
       "heading": "최근 활동",

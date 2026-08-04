@@ -903,96 +903,217 @@ input[type='date'] {
   line-height: normal !important;
 }
 
-/* ===== 메인 레이어드 모션 패키지 ===== */
+/* ===== 히어로 포스터 모션 패키지 ===== */
 :root {
   --mx: 0;
   --my: 0;
   --scroll-y: 0px;
 }
 
-/* 진입 등장 — 장식 요소 전용 (LCP 텍스트엔 적용 금지) */
+/*
+ * 진입 등장 — 장식 요소 전용. LCP 텍스트에는 절대 적용하지 않는다.
+ * ScrollReveal도 이 클래스를 공유한다.
+ */
 @keyframes fadeUp {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translate3d(0, 14px, 0);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translate3d(0, 0, 0);
   }
 }
 .motion-fade-up {
   opacity: 0;
-  animation: fadeUp 0.6s ease-out forwards;
+  animation: fadeUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   animation-delay: var(--motion-delay, 0ms);
 }
 
-/* 글래스 카드 컨테이너 1회 미세 scale-in (내부 LCP 텍스트는 즉시 paint됨) */
-@keyframes cardIn {
+/*
+ * LCP 라인 전용 — opacity도 clip도 쓰지 않고 transform만 움직인다.
+ * 첫 프레임부터 완전히 보이므로 LCP가 페인트 시점에 확정된다.
+ * (opacity 0 또는 클리핑으로 시작하면 애니메이션이 끝날 때까지 LCP가 밀린다.)
+ */
+@keyframes heroLineSettle {
   from {
-    transform: scale(0.98);
+    transform: translate3d(0, 0.14em, 0);
   }
   to {
-    transform: scale(1);
+    transform: translate3d(0, 0, 0);
   }
 }
-.motion-card-in {
-  animation: cardIn 0.7s ease-out both;
+.hero-line-settle {
+  animation: heroLineSettle 0.75s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-/* 상시 앰비언트 — 빛 레이어 드리프트 */
-.ambient-light {
+/* 마스크 리빌 — 부모가 잘라내고 자식이 밑에서 올라온다. LCP 후보에는 쓰지 말 것. */
+.hero-mask {
+  display: block;
+  overflow: hidden;
+  /* 아웃라인 글자의 stroke와 한글 디센더가 잘리지 않도록 아래쪽 여유 */
+  padding-bottom: 0.12em;
+  margin-bottom: -0.12em;
+}
+@keyframes heroMaskRise {
+  from {
+    transform: translate3d(0, 110%, 0);
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+  }
+}
+.hero-mask > * {
+  display: block;
+  animation: heroMaskRise 0.85s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: var(--motion-delay, 0ms);
+}
+
+/*
+ * 무한 마퀴 — 동일한 목록 2벌을 이어붙이고 -50%까지 이동하면 이음매가 없다.
+ * 전역 `* { max-width: 100% }`가 max-content 트랙을 잘라 마퀴를 망가뜨리므로
+ * 이 트랙에서만 제약을 해제한다.
+ */
+.hero-marquee-viewport {
+  overflow-x: hidden;
+}
+.hero-marquee {
+  display: flex;
+  width: max-content;
+  max-width: none;
+  will-change: transform;
+  animation: heroMarquee var(--marquee-duration, 60s) linear infinite;
+  animation-direction: var(--marquee-direction, normal);
+}
+@keyframes heroMarquee {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+/* 카드를 클릭·탭 이동할 수 있도록 hover/focus 시 정지 */
+.hero-marquee-viewport:hover .hero-marquee,
+.hero-marquee-viewport:focus-within .hero-marquee {
+  animation-play-state: paused;
+}
+
+/* 필름 프레임 — 기본은 흑백, 가리키면 색이 돌아온다 */
+.hero-frame {
+  filter: grayscale(1) contrast(1.08) brightness(0.76);
+  transition:
+    filter 0.45s ease,
+    transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.hero-frame:hover,
+.hero-frame:focus-visible {
+  filter: grayscale(0) contrast(1) brightness(1);
+  transform: translate3d(0, -6px, 0);
+}
+
+/* 필름 그레인 — transform만 계단식으로 흔들어 리페인트 없이 아날로그 질감을 만든다 */
+.hero-grain {
   position: absolute;
-  /* 시차(±100px) + drift(4%/scale 1.08)로 이동해도 항상 화면을 덮도록 넉넉한 여백.
-     여백이 부족하면 빛 레이어가 한쪽으로 밀리며 반대쪽 가장자리에 빈 띠(세로줄)가 생긴다. */
-  inset: -240px;
-  /* 전역 `* { max-width: 100% }`가 inset 음수 확장을 막아 레이어가 화면을 못 덮으면
-     가장자리에 hard edge(세로줄)가 생기므로 이 레이어에서만 제약을 해제한다. */
+  inset: -60px;
   max-width: none;
   max-height: none;
   pointer-events: none;
+  /* 거의 검은 바탕에서는 overlay/soft-light가 거의 보이지 않는다. screen으로 밝은
+     입자만 더해야 필름 질감이 실제로 드러난다. */
+  opacity: 0.07;
   mix-blend-mode: screen;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23grain)'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
   will-change: transform;
-  /* 포인터 시차(±100px) — transform만 */
-  transform: translate3d(calc(var(--mx) * 100px), calc(var(--my) * 100px), 0);
+  animation: heroGrain 0.8s steps(6) infinite;
 }
-@keyframes drift {
-  0% {
-    transform: translate3d(calc(var(--mx) * 100px), calc(var(--my) * 100px), 0) scale(1);
+@keyframes heroGrain {
+  from {
+    transform: translate3d(0, 0, 0);
   }
-  100% {
-    transform: translate3d(calc(var(--mx) * 100px + 4%), calc(var(--my) * 100px - 3%), 0)
-      scale(1.08);
+  to {
+    transform: translate3d(-18px, -14px, 0);
   }
-}
-.ambient-drift {
-  animation: drift 28s ease-in-out infinite alternate;
 }
 
-/* 모바일에서 두 번째 빛 레이어 숨김 + 강도 축소 */
-@media (max-width: 768px) {
-  .ambient-light-secondary {
-    display: none;
+/* 배경 빛 워시 — 아주 느린 드리프트 */
+.hero-wash {
+  position: absolute;
+  inset: -30%;
+  max-width: none;
+  max-height: none;
+  pointer-events: none;
+  will-change: transform;
+  animation: heroWash var(--wash-duration, 34s) ease-in-out infinite alternate;
+}
+@keyframes heroWash {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
   }
-  .ambient-light {
-    opacity: 0.6;
+  to {
+    transform: translate3d(3%, -2.5%, 0) scale(1.12);
   }
+}
+
+/*
+ * 포인터 스포트라이트 — 콘텐츠는 움직이지 않고 빛만 커서를 따라간다.
+ * 그라데이션 위치가 아니라 고정 크기 레이어의 transform을 움직여 합성 단계에서만
+ * 처리되게 한다(매 프레임 전체 리페인트 방지).
+ */
+.hero-spotlight {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 76vmax;
+  height: 76vmax;
+  max-width: none;
+  max-height: none;
+  margin-left: -38vmax;
+  margin-top: -38vmax;
+  pointer-events: none;
+  background: radial-gradient(
+    closest-side,
+    rgba(255, 255, 255, 0.07) 0%,
+    rgba(255, 255, 255, 0.02) 45%,
+    transparent 70%
+  );
+  transform: translate3d(calc(var(--mx) * 50vw), calc(var(--my) * 50vh), 0);
+  will-change: transform;
 }
 
 /* 전역 접근성 가드 — 이 패키지의 모든 모션 정지 */
 @media (prefers-reduced-motion: reduce) {
   .motion-fade-up,
-  .motion-card-in,
-  .ambient-drift {
+  .hero-line-settle,
+  .hero-mask > *,
+  .hero-marquee,
+  .hero-grain,
+  .hero-wash {
     animation: none !important;
   }
   .motion-fade-up {
     opacity: 1 !important;
     transform: none !important;
   }
-  .ambient-light {
+  .hero-line-settle,
+  .hero-mask > * {
     transform: none !important;
-    /* reduced-motion 사용자에게 불필요한 compositor 레이어 메모리 비용 제거 */
+  }
+  .hero-frame {
+    transition: none;
+  }
+  .hero-spotlight {
+    display: none;
+  }
+  /* 마퀴가 멈추면 가로 스크롤로 나머지 카드에 접근할 수 있어야 한다 */
+  .hero-marquee-viewport {
+    overflow-x: auto;
+  }
+  /* reduced-motion 사용자에게 불필요한 compositor 레이어 메모리 비용 제거 */
+  .hero-marquee,
+  .hero-grain,
+  .hero-wash {
     will-change: auto;
   }
 }
