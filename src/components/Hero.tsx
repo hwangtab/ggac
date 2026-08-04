@@ -29,7 +29,7 @@ const Hero = () => {
   // 렌더링 성능 추적
   const renderPerf = useRenderPerformance('Hero')
 
-  // 포인터 시차 설정
+  // 포인터 시차(--mx/--my) — 앰비언트 빛 레이어 전용. 콘텐츠 카드는 고정.
   const sectionRef = useRef<HTMLElement>(null)
   // 터치/모바일/reduced-motion에서는 포인터 시차 비활성
   usePointerParallax(sectionRef, {
@@ -209,12 +209,7 @@ const Hero = () => {
         }}
       />
 
-      {/* Layer 4: 글래스모피즘 텍스트 컨테이너 */}
-      {/*
-       * 진입 scale-in(motion-card-in)은 부모에 적용한다. 카드 자체에 두면
-       * cardIn 애니메이션의 transform(scale)이 카드 마우스 시차 인라인 transform을
-       * 덮어써(애니메이션 > 인라인 우선순위) 시차가 무력화되므로 transform 소스를 분리.
-       */}
+      {/* Layer 4: 글래스모피즘 텍스트 컨테이너 — 콘텐츠(제목·CTA)는 포인터 시차 없이 고정 */}
       <div
         className={`relative text-center text-white px-4 ${
           prefersReducedMotion ? '' : 'motion-card-in'
@@ -241,7 +236,6 @@ const Hero = () => {
               0 2px 16px rgba(0, 0, 0, 0.2),
               inset 0 1px 0 rgba(255, 255, 255, 0.1)
             `,
-            transform: 'translate3d(calc(var(--mx) * 20px), calc(var(--my) * 20px), 0)',
           }}
         >
           {/* LCP 요소 — h1은 첫 프레임부터 즉시 표시(opacity-100 고정, 진입 애니메이션 제외) */}
