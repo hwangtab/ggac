@@ -67,8 +67,8 @@
   },
   "artists": {
     "hero": {
-      "heading": "Becoming Each Other's Universe",
-      "subtitle": "Gyeonggi Art Collective is not an island of isolated artists, but a connected universe where each person becomes a source of inspiration and support for another. Come meet our fellow artists, each shining with their own light."
+      "heading": "These are the people",
+      "subtitle": "Members work on their own and build each other’s shows together. Here is who they are."
     },
     "filter": {
       "all": "All"
@@ -81,20 +81,20 @@
       "contactPrivate": "Private",
       "bioHeadingMinimal": "About the Artist",
       "bioHeadingFull": "Creative World",
-      "bioDescription": "Explore {name}'s creative philosophy and artistic journey.",
+      "bioDescription": "A record of what {name} has been working on.",
       "creatorInfoHeading": "Creator Info",
-      "creatorInfoBody": "Understand the artist's world through their background and experience.",
+      "creatorInfoBody": "The background the work came out of.",
       "portfolioHeading": "Portfolio & Social",
-      "portfolioDescription": "Explore {name}'s various platforms and works in more detail.",
+      "portfolioDescription": "You can find {name} on other platforms too.",
       "portfolioLinkLabel": "Visit external platform",
-      "videosHeading": "Works in Motion",
-      "videosDescription": "Experience {name}'s musical world firsthand. Each video captures the artist's unique sensibility and creative philosophy.",
+      "videosHeading": "Video",
+      "videosDescription": "Performances and work by {name}, kept on video.",
       "moreVideosNote": "More videos are available on the artist's individual channel.",
       "youtubeChannelCta": "Visit YouTube Channel",
       "projectsHeading": "Projects",
-      "projectsDescription": "Explore the diverse projects {name} has participated in with Gyeonggi Art Collective.",
-      "navHeading": "Meet Other Artists",
-      "navBody": "Explore the worlds of more artists who are part of Gyeonggi Art Collective.",
+      "projectsDescription": "Gyeonggi Art Collective projects {name} took part in.",
+      "navHeading": "Other members",
+      "navBody": "There are more of us than this one.",
       "navCta": "View All Artists"
     },
     "error": {
@@ -112,9 +112,9 @@
   },
   "about": {
     "hero": {
-      "titleLine1": "We Breathe through Art,",
-      "titleLine2": "and Forge Our Path through Cooperation",
-      "subtitle": "In every studio, stage, and workshop across Gyeonggi-do, there are artists who shine with their own unique light. We join hands so that light may not flicker alone, so the creative journey may not grow weary."
+      "titleLine1": "Artists in Gyeonggi got together",
+      "titleLine2": "and started a cooperative",
+      "subtitle": "People work alone in studios and on stages across Gyeonggi. It is hard to keep that up alone, so we gathered to back each other."
     },
     "mission": {
       "heading": "Our Purpose",
@@ -142,11 +142,11 @@
     }
   },
   "connect": {
-    "heroTitleLine1": "Your Participation",
-    "heroTitleLine2": "Starts a New Wave",
-    "heroSubtitle": "Come create new possibilities in art with Gyeonggi Art Collective. We welcome all who wish to join us as fellow members or support our work.",
-    "joinHeading": "Flow with Us?",
-    "joinSubtitle": "We want to be with artists, planners, and all who share our purpose and are based in Gyeonggi-do.",
+    "heroTitleLine1": "Looking for people",
+    "heroTitleLine2": "to work with us",
+    "heroSubtitle": "You can join as a member and work with us, or support us from the side. Either way, get in touch.",
+    "joinHeading": "To join us",
+    "joinSubtitle": "Artists and organizers working in Gyeonggi, and anyone who thinks this work is needed.",
     "qualTitle": "Eligibility",
     "qual1Title": "Gyeonggi-based Artists",
     "qual1Body": "Artists of all disciplines who live or work in Gyeonggi-do",
@@ -154,7 +154,7 @@
     "qual2Body": "Professionals engaged in cultural arts planning, production, or management",
     "qual3Title": "Enthusiastic Supporters",
     "qual3Body": "Anyone who agrees with our mission and wishes to contribute to the development of the arts ecosystem",
-    "qualFooter": "We welcome artists, planners, and all who love the arts.",
+    "qualFooter": "Artist or organizer — if it fits, it fits.",
     "commitTitle": "Commitment",
     "commit1Title": "Share Capital",
     "commit1Body": "A minimum investment of 1 share (₩10,000) is required to become a member. Your share becomes the cooperative's capital and is refunded upon withdrawal per our articles of incorporation.",
@@ -162,24 +162,24 @@
     "commit2Body": "A monthly membership fee of ₩10,000 is required to support cooperative operations. (Subject to adjustment by board resolution)",
     "commitFooter": "We build a sustainable community that grows together through active member participation — a process of mutual cooperation through which each member's talents and values are fully expressed.",
     "joinCta": "Become a Member",
-    "supportHeading": "Water the Seeds of Art",
-    "supportBody": "Even without becoming a member, you can contribute to the growth of Gyeonggi's arts ecosystem through sponsorship. Your interest and support means the world to our artists.",
+    "supportHeading": "Support is an option",
+    "supportBody": "You can back arts activity in Gyeonggi through support without becoming a member. That attention goes a long way for artists.",
     "supportCta": "Cultivate the Arts (Inquire about Sponsorship)",
-    "contactBody": "If you have questions or would like to talk in more detail, please reach out anytime.",
-    "snsHeading": "Find Us on Social Media"
+    "contactBody": "If you have a question, get in touch.",
+    "snsHeading": "We are on social too"
   },
   "faq": {
     "heading": "Frequently Asked Questions",
-    "subheading": "Find answers to common questions about Gyeonggi Art Collective",
-    "ctaTitle": "Still have questions?",
-    "ctaBody": "If you didn't find your answer, feel free to reach out anytime.",
+    "subheading": "Questions that come up often about Gyeonggi Art Collective",
+    "ctaTitle": "If your question is not here",
+    "ctaBody": "Ask us directly and we will answer",
     "ctaButton": "Contact Us"
   },
   "archive": {
     "hero": {
-      "titleLine1": "Projects We Create",
-      "titleLine2": "Together",
-      "subtitle": "From works in progress to completed pieces, this is where we share our creative journey. Each project embodies the passion of our artists and the spirit of cooperation."
+      "titleLine1": "What we have",
+      "titleLine2": "put together",
+      "subtitle": "From ongoing work to finished work, collected here. Each entry says what we did and how."
     },
     "participantsLabel": "Participants",
     "emptyState": "No projects found in this category.",
@@ -203,8 +203,8 @@
       "galleryImageAlt": "{title} - Image {index}",
       "galleryClickHint": "Click to enlarge",
       "galleryRetry": "Try again",
-      "navHeading": "Explore More Projects",
-      "navBody": "Discover more projects we create together at Gyeonggi Art Collective.",
+      "navHeading": "Other projects",
+      "navBody": "There are other things the collective has done.",
       "navCta": "View All Projects"
     },
     "ticketing": {
@@ -488,7 +488,7 @@
   },
   "board": {
     "heading": "Member Board",
-    "subtitle": "A space for Gyeonggi Art Collective Cooperative members to connect.",
+    "subtitle": "A board for members.",
     "commentsLabel": "Comments",
     "likesLabel": "Likes",
     "attachmentsLabel": "Files",
