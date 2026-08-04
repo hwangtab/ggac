@@ -148,9 +148,9 @@ export const ArtistsView = ({
                           )}
                         </div>
 
-                        <h3 className="text-3xl font-post font-semibold mb-2 text-gray-700 group-hover:text-primary-600 transition-colors duration-200">
+                        <h2 className="text-3xl font-post font-semibold mb-2 text-gray-700 group-hover:text-primary-600 transition-colors duration-200">
                           {artist.name}
-                        </h3>
+                        </h2>
 
                         <p className="text-gray-600 text-sm leading-relaxed px-2">
                           {artist.oneLiner}

@@ -34,7 +34,10 @@ export default function ConditionalLayout({ children, globalData }: ConditionalL
   return (
     <ActivityTracker>
       <div className="min-h-screen flex flex-col">
-        <Navigation />
+        {/* 상단 내비를 banner 랜드마크(header)로 감싼다 — main 밖 최상위 위치. */}
+        <header>
+          <Navigation />
+        </header>
         <main id="main-content" className="flex-1 flex flex-col">
           {children}
         </main>
