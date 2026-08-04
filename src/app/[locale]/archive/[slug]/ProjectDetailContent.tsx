@@ -102,7 +102,7 @@ export default function ProjectDetailContent({
   // onLoadStart는 사용하지 않음: 뷰포트 밖 이미지까지 로딩 중으로 처리되어 전체 로딩이 지속되는 문제 방지
 
   return (
-    <div className="pt-20 bg-gradient-to-b from-primary-50 via-accent-50 to-gray-200 min-h-screen">
+    <article className="pt-20 bg-gradient-to-b from-primary-50 via-accent-50 to-gray-200 min-h-screen">
       {/* Header */}
       <section className="py-16 md:py-24">
         <div className="tw-container-custom">
@@ -413,6 +413,6 @@ export default function ProjectDetailContent({
           </div>
         </div>
       </section>
-    </div>
+    </article>
   )
 }

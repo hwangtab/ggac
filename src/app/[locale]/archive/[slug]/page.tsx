@@ -228,7 +228,8 @@ export async function generateMetadata({ params }: ProjectPageProps): Promise<Me
       openGraph: {
         title: safeTitle,
         description: projectSummary,
-        url: `/archive/${safeSlug}`,
+        // og:url도 로케일 프리픽스 반영(canonical과 언어 일치). en은 /en 경로.
+        url: isEn ? `/en/archive/${safeSlug}` : `/archive/${safeSlug}`,
         siteName: isEn ? 'Gyeonggi Art Collective' : '경기아트콜렉티브 협동조합',
         images: [
           {

@@ -86,7 +86,10 @@ export async function generateMetadata({ params }: ArtistPageProps): Promise<Met
       ? `Artist ${artist.name} of Gyeonggi Art Collective`
       : `경기아트콜렉티브 소속 아티스트 ${artist.name}의 프로필`)
   const baseUrl = getBaseUrl()
-  const pageUrl = `${baseUrl}/artists/${artist.slug}`
+  // og:url도 로케일 프리픽스를 반영(canonical과 언어 일치). en은 /en 경로.
+  const pageUrl = isEn
+    ? `${baseUrl}/en/artists/${artist.slug}`
+    : `${baseUrl}/artists/${artist.slug}`
 
   // OG 이미지 결정 로직 — 화면 렌더링과 동일한 안전 경계(toSafeArtistImageSrc)를 거친다.
   // 신뢰 경로(내부 경로·artists 버킷 URL)만 통과하므로 임의 외부 URL이 OG에 새지 않는다.
@@ -238,7 +241,7 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
       {/* JSON-LD 구조화 데이터 */}
       {structuredDataToScript(jsonLd)}
 
-      <div className="pt-20 bg-gradient-to-b from-primary-50 via-accent-50 to-gray-200 min-h-screen">
+      <article className="pt-20 bg-gradient-to-b from-primary-50 via-accent-50 to-gray-200 min-h-screen">
         {/* Header */}
         <section className="py-16 md:py-24">
           <div className="tw-container-custom">
@@ -563,7 +566,7 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
             </div>
           </div>
         </section>
-      </div>
+      </article>
     </>
   )
 }

@@ -434,7 +434,7 @@ const OptimizedImage = memo(function OptimizedImage({
         style={{ width: fill ? '100%' : width, height: fill ? '100%' : height }}
       >
         <span className="text-primary-600 font-medium text-center px-4 text-xl font-sans">
-          {fallbackText || alt.slice(0, 3)}
+          {fallbackText || alt?.slice(0, 3) || ''}
         </span>
         {src?.includes('supabase.co') && (
           <button
