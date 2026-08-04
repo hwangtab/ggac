@@ -218,7 +218,8 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
   const artistSchema = generateArtistStructuredData({
     name: artist.name,
     slug: resolvedParams.slug,
-    bio: artist.oneLiner,
+    // 스키마 description은 답변-우선 리드를 우선 사용(없으면 oneLiner) — AI 인용 추출성 강화.
+    bio: artist.lead || artist.oneLiner,
     // schema.org genre는 음악 장르 필드 — 역할(category) 대신 genres를 넘긴다.
     genres: artist.genres,
     // 화면·OG와 동일한 안전 경계를 통과한 값만 JSON-LD image로 노출한다.
@@ -380,6 +381,12 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
                 <div className={`${isMinimal ? '' : 'lg:col-span-2'}`}>
                   <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-4 sm:p-6 lg:p-8 shadow-lg border border-white/20">
                     <div className="prose prose-sm sm:prose-base lg:prose-lg max-w-none">
+                      {/* 답변-우선 리드: 정의 문장→구체 디테일. AI 추출·요약이 먼저 집는 자리. */}
+                      {artist.lead && (
+                        <p className="!mt-0 mb-6 pb-6 border-b border-primary-100 text-gray-800 font-medium text-lg leading-relaxed">
+                          {artist.lead}
+                        </p>
+                      )}
                       <ReactMarkdown
                         components={{
                           a: ({ node, href, children, ...props }) => {
