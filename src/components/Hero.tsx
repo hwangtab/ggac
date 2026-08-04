@@ -1,18 +1,28 @@
 'use client'
 
 import { useEffect, useRef, memo } from 'react'
+import dynamic from 'next/dynamic'
 import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
 import HeroFilmstrip from './HeroFilmstrip'
-import PerformanceMonitor from './PerformanceMonitor'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 import { usePointerParallax } from '@/hooks/usePointerParallax'
+import { useOffscreenPause } from '@/hooks/useOffscreenPause'
 import { getErrorTracker } from '@/utils/errorTracking'
 import type { Artist } from '@/types/artist'
 
 interface HeroProps {
   artists: Artist[]
 }
+
+/**
+ * 개발 전용 오버레이. 정적 import로 두면 런타임에 렌더되지 않아도 코드가
+ * 프로덕션 청크에 실린다. NODE_ENV 분기는 빌드 시 상수로 접혀 dead code가 된다.
+ */
+const PerformanceMonitor =
+  process.env.NODE_ENV === 'development'
+    ? dynamic(() => import('./PerformanceMonitor'), { ssr: false })
+    : null
 
 /**
  * grid-cols-1(= minmax(0, 1fr))이 필수다. 기본 auto 열은 max-content로 부풀기 때문에
@@ -26,8 +36,10 @@ const SECTION_CLASS =
  * 공연 포스터 문법의 풀블리드 히어로.
  *
  * 모션 규칙 두 가지를 지킨다.
- * 1. LCP인 h1 첫 줄은 opacity·clip 없이 transform만 움직인다. 첫 프레임부터
- *    완전히 보이므로 진입 애니메이션이 LCP를 밀지 않는다.
+ * 1. **히어로 안의 모든 진입 애니메이션은 transform 전용이다.** opacity로 시작하면
+ *    그 요소가 LCP로 뽑히는 순간 LCP가 애니메이션 길이만큼 밀린다. 어떤 요소가
+ *    LCP가 될지는 뷰포트 폭에 따라 바뀌므로(폰에서는 h1이 아니라 부제가 가장 크다)
+ *    "이 요소는 LCP가 아닐 것"이라는 가정을 아예 두지 않는다.
  * 2. 포인터에 반응하는 것은 빛뿐이다. 콘텐츠(제목·CTA·카드)는 마우스를 따라
  *    움직이지 않는다.
  *
@@ -40,18 +52,35 @@ const Hero = ({ artists }: HeroProps) => {
   const prefersReducedMotion = usePrefersReducedMotion()
   const sectionRef = useRef<HTMLElement>(null)
 
-  // --mx/--my만 갱신한다. 이 값을 쓰는 건 스포트라이트 레이어 하나뿐.
+  // --mx/--my는 섹션 요소에만 쓴다. documentElement에 쓰면 상속형 커스텀
+  // 프로퍼티라 문서 전체 스타일 재계산을 유발한다(실측 215배 비쌈).
   usePointerParallax(sectionRef, { disabled: prefersReducedMotion })
+
+  // 히어로가 화면을 벗어나면 장식 애니메이션을 멈춘다. CSS 애니메이션은 화면 밖으로
+  // 나가도 스스로 멈추지 않아 배터리·GPU를 계속 먹는다.
+  useOffscreenPause(sectionRef)
 
   useEffect(() => {
     getErrorTracker()
   }, [])
 
+  const titleLine1 = t('titleLine1')
+  const titleLine2 = t('titleLine2')
+
+  // 제목 글자 수로 상한을 하나 더 건다. vw·vh만으로는 한국어 7자 기준에 맞춰진
+  // 상한이 영문 25자에서 무력해져 제목이 네 줄로 접히고 히어로가 화면을 넘긴다.
+  const longestLine = Math.max(titleLine1.length, titleLine2.length, 1)
+  const titleFontSize = `clamp(2rem, min(9.5vw, 11vh, ${(145 / longestLine).toFixed(2)}vw), 8rem)`
+
+  const rawDisciplines = t.raw('disciplines')
+  // 로케일이 키를 빠뜨리면 use-intl은 throw 대신 키 문자열을 돌려준다. 가드가 없으면
+  // .map에서 TypeError가 나고 SSR이 통째로 죽는다(클라이언트 에러 바운더리는 못 잡는다).
+  const disciplines = Array.isArray(rawDisciplines) ? (rawDisciplines as string[]) : []
+
   return (
     <section
       ref={sectionRef}
-      role="banner"
-      aria-label={t('ariaMain')}
+      aria-labelledby="hero-title"
       className={SECTION_CLASS}
       style={{ contain: 'layout style paint' }}
     >
@@ -77,11 +106,12 @@ const Hero = ({ artists }: HeroProps) => {
         />
         <div className="hero-spotlight" />
         <div className="hero-grain" />
+        <div className="hero-grain hero-grain-coarse" />
         <div
           className="absolute inset-0"
           style={{
             background:
-              'radial-gradient(125% 95% at 50% 38%, transparent 28%, rgba(0, 0, 0, 0.62) 100%)',
+              'radial-gradient(125% 95% at 50% 38%, transparent 28%, rgba(0, 0, 0, 0.6) 100%)',
           }}
         />
       </div>
@@ -92,128 +122,126 @@ const Hero = ({ artists }: HeroProps) => {
         style={{
           // 낮은 노트북 창(720p 이하)에서도 하단 필름스트립이 접히지 않도록 수직
           // 리듬 전체를 화면 높이에 연동한다. 상단 여백은 고정 헤더(약 80px)를 비운다.
-          paddingTop: 'clamp(4.5rem, 11vh, 7rem)',
-          paddingBottom: 'clamp(1rem, 2.5vh, 2rem)',
+          paddingTop: 'clamp(3.25rem, 11vh, 7rem)',
+          paddingBottom: 'clamp(0.75rem, 2.5vh, 2rem)',
         }}
       >
-        <div className="relative mx-auto w-full max-w-[1400px]">
+        <div className="mx-auto flex w-full max-w-[1400px] items-center gap-10">
+          <div className="min-w-0 flex-1">
+            <div className="hero-rise flex items-center gap-3 sm:gap-4">
+              <span className="text-[11px] font-medium uppercase tracking-[0.3em] text-white/70 sm:text-xs sm:tracking-[0.34em]">
+                {t('kicker')}
+              </span>
+              <span className="h-px w-8 bg-white/35 sm:w-16" />
+              <span className="text-[11px] uppercase tracking-[0.3em] text-white/60 sm:text-xs sm:tracking-[0.34em]">
+                {t('est')}
+              </span>
+            </div>
+
+            <h1
+              id="hero-title"
+              style={{
+                fontWeight: 900,
+                lineHeight: 0.94,
+                letterSpacing: '-0.045em',
+                fontSize: titleFontSize,
+                marginTop: 'clamp(0.5rem, 2.5vh, 1.75rem)',
+              }}
+            >
+              <span className="hero-rise block">{titleLine1}</span>
+              {/* 아웃라인 줄 — 마스크 리빌. LCP 후보가 아니라 클리핑해도 안전하다. */}
+              <span
+                className="hero-mask"
+                style={{ ['--motion-delay' as string]: '120ms' } as React.CSSProperties}
+              >
+                <span className="hero-outline-text">{titleLine2}</span>
+              </span>
+            </h1>
+
+            <p
+              className="hero-rise max-w-2xl text-[15px] leading-snug text-white/80 sm:text-lg sm:leading-relaxed"
+              style={
+                {
+                  ['--motion-delay' as string]: '180ms',
+                  marginTop: 'clamp(0.75rem, 3.5vh, 2rem)',
+                } as React.CSSProperties
+              }
+            >
+              {t('subtitle')}
+              <br />
+              <span className="text-white/65">{tc('brandShort')}</span>
+            </p>
+
+            <div
+              className="hero-rise flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:gap-4"
+              style={
+                {
+                  ['--motion-delay' as string]: '260ms',
+                  marginTop: 'clamp(0.9rem, 4vh, 2.5rem)',
+                } as React.CSSProperties
+              }
+            >
+              <Link
+                href="/about"
+                className="group inline-flex min-h-[48px] items-center justify-center gap-2 bg-white px-8 text-sm font-semibold tracking-tight text-black transition-colors duration-300 hover:bg-white/85 sm:min-h-[56px]"
+              >
+                {t('ctaAbout')}
+                <span
+                  aria-hidden="true"
+                  className="transition-transform duration-300 group-hover:translate-x-1"
+                >
+                  →
+                </span>
+              </Link>
+              <Link
+                href="/connect"
+                className="inline-flex min-h-[48px] items-center justify-center border border-white/50 px-8 text-sm font-semibold tracking-tight text-white transition-colors duration-300 hover:border-white hover:bg-white/10 sm:min-h-[56px]"
+              >
+                {t('ctaJoin')}
+              </Link>
+              <span className="ml-auto hidden items-center gap-3 text-[11px] uppercase tracking-[0.3em] text-white/60 sm:flex">
+                {t('scrollLabel')}
+                <span className="h-px w-8 bg-white/35" />
+                <span aria-hidden="true">↓</span>
+              </span>
+            </div>
+          </div>
+
           {/*
-            포스터의 크레딧 블록 — 왼쪽 정렬 제목이 남기는 오른쪽 여백을 채운다.
-            제목이 가장 넓어지는 지점에서도 겹치지 않도록 lg 이상에서만 노출.
+            포스터의 크레딧 블록. 절대 배치로 두면 영문처럼 제목이 길어질 때 글자
+            위에 그대로 얹힌다. 흐름 안의 컬럼으로 두어 겹침이 구조적으로 불가능하게 한다.
           */}
-          <ul className="absolute right-0 top-1/2 hidden -translate-y-1/2 space-y-2.5 text-right text-[11px] uppercase tracking-[0.26em] text-white/30 lg:block">
-            {(t.raw('disciplines') as string[]).map(discipline => (
-              <li key={discipline}>{discipline}</li>
-            ))}
-          </ul>
-
-          <div className="motion-fade-up flex items-center gap-3 sm:gap-4">
-            <span className="text-[10px] font-medium uppercase tracking-[0.3em] text-white/50 sm:text-xs sm:tracking-[0.34em]">
-              {t('kicker')}
-            </span>
-            <span className="h-px w-8 bg-white/25 sm:w-16" />
-            <span className="text-[10px] uppercase tracking-[0.3em] text-white/35 sm:text-xs sm:tracking-[0.34em]">
-              {t('est')}
-            </span>
-          </div>
-
-          <h1
-            style={{
-              fontWeight: 900,
-              lineHeight: 0.94,
-              letterSpacing: '-0.045em',
-              // vw만 쓰면 넓고 낮은 창에서 제목이 화면을 넘긴다. vh로 상한을 건다.
-              fontSize: 'clamp(2.25rem, min(9.5vw, 11vh), 8rem)',
-              marginTop: 'clamp(0.75rem, 2.5vh, 1.75rem)',
-            }}
-          >
-            {/* LCP 줄 — 즉시 페인트되고 위치만 정착한다 */}
-            <span className="hero-line-settle block">{t('titleLine1')}</span>
-            {/* 아웃라인 줄 — 마스크 리빌. LCP 후보가 아니라 클리핑해도 안전하다. */}
-            <span
-              className="hero-mask"
-              style={{ ['--motion-delay' as string]: '120ms' } as React.CSSProperties}
-            >
-              <span
-                style={{
-                  WebkitTextStroke: '0.013em rgba(255, 255, 255, 0.78)',
-                  color: 'rgba(255, 255, 255, 0.07)',
-                }}
-              >
-                {t('titleLine2')}
-              </span>
-            </span>
-          </h1>
-
-          <p
-            className="motion-fade-up max-w-2xl text-[15px] leading-relaxed text-white/70 sm:text-lg"
-            style={
-              {
-                ['--motion-delay' as string]: '380ms',
-                marginTop: 'clamp(1rem, 3.5vh, 2rem)',
-              } as React.CSSProperties
-            }
-          >
-            {t('subtitle')}
-            <br />
-            <span className="text-white/45">{tc('brandShort')}</span>
-          </p>
-
-          <div
-            className="motion-fade-up flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:gap-4"
-            style={
-              {
-                ['--motion-delay' as string]: '480ms',
-                marginTop: 'clamp(1.25rem, 4vh, 2.5rem)',
-              } as React.CSSProperties
-            }
-          >
-            <Link
-              href="/about"
-              className="group inline-flex min-h-[48px] items-center justify-center gap-2 bg-white px-8 text-sm font-semibold tracking-tight text-black transition-colors duration-300 hover:bg-white/85 sm:min-h-[56px]"
-            >
-              {t('ctaAbout')}
-              <span
-                aria-hidden="true"
-                className="transition-transform duration-300 group-hover:translate-x-1"
-              >
-                →
-              </span>
-            </Link>
-            <Link
-              href="/connect"
-              className="inline-flex min-h-[48px] items-center justify-center border border-white/30 px-8 text-sm font-semibold tracking-tight text-white/90 transition-colors duration-300 hover:border-white/70 hover:bg-white/5 sm:min-h-[56px]"
-            >
-              {t('ctaJoin')}
-            </Link>
-            <span className="ml-auto hidden items-center gap-3 text-[10px] uppercase tracking-[0.3em] text-white/35 sm:flex">
-              {t('scrollLabel')}
-              <span className="h-px w-8 bg-white/25" />
-              <span aria-hidden="true">↓</span>
-            </span>
-          </div>
+          {disciplines.length > 0 && (
+            <ul className="hero-rise hidden shrink-0 space-y-2.5 text-right text-[11px] uppercase tracking-[0.26em] text-white/60 lg:block">
+              {disciplines.map(discipline => (
+                <li key={discipline}>{discipline}</li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
 
-      {/* 하단 밴드 — 이름 티커 + 사진 필름스트립 */}
+      {/* 하단 밴드 — 이름 티커 + 사진 필름스트립. 살짝 기울여 포스터의 거친 결을 준다. */}
       <div
-        className="motion-fade-up relative z-10 min-w-0"
+        className="hero-rise hero-band relative z-10 min-w-0"
         style={
           {
-            ['--motion-delay' as string]: '300ms',
-            paddingBottom: 'clamp(1rem, 2.5vh, 1.75rem)',
+            ['--motion-delay' as string]: '340ms',
+            paddingBottom: 'clamp(0.75rem, 2.5vh, 1.75rem)',
           } as React.CSSProperties
         }
       >
         <HeroFilmstrip artists={artists} />
       </div>
 
-      <PerformanceMonitor
-        position="top-right"
-        mode="compact"
-        devOnly={true}
-        showOnlyWhenLowPerf={false}
-      />
+      {PerformanceMonitor && (
+        <PerformanceMonitor
+          position="top-right"
+          mode="compact"
+          devOnly={true}
+          showOnlyWhenLowPerf={false}
+        />
+      )}
     </section>
   )
 }

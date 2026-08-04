@@ -730,8 +730,6 @@
       "titleLine1": "Sounds That Break the Mold",
       "titleLine2": "A Stage We Build Together",
       "subtitle": "Building a new arts ecosystem through experimentation and solidarity",
-      "ariaMain": "Main section",
-      "imageAlt": "Gyeonggi Art Collective Cooperative founding assembly",
       "ctaAbout": "Our Story",
       "ctaJoin": "Join the Cooperative",
       "kicker": "GYEONGGI ART COLLECTIVE",
@@ -739,7 +737,9 @@
       "rosterLabel": "The people we create with",
       "rosterAria": "Member artists",
       "scrollLabel": "SCROLL",
-      "disciplines": ["Doom Metal", "Punk", "Experimental", "Improvisation"]
+      "disciplines": ["Doom Metal", "Punk", "Experimental", "Improvisation"],
+      "pauseMotion": "Pause motion",
+      "playMotion": "Resume motion"
     },
     "projects": {
       "heading": "Recent Work",

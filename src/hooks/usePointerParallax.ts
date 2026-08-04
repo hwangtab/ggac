@@ -7,6 +7,12 @@ import { useEffect } from 'react'
  * transform만 갱신하므로 레이아웃/페인트 비용 없음. rAF 쓰로틀.
  * disabled(터치/모바일/reduced-motion)면 아무 것도 하지 않는다.
  *
+ * 변수는 **대상 요소에만** 쓴다. documentElement에 쓰면 상속형 커스텀 프로퍼티라
+ * Blink가 문서 전체 스타일을 무효화한다 — 이 변수를 읽는 요소가 단 하나뿐이어도
+ * 그렇다. 노드 687개짜리 홈에서 실측한 1회 비용은 요소 직접 쓰기 0.014ms 대
+ * documentElement 2.95ms로 약 215배 차이였고, 60fps에서 초당 177ms를 태운다.
+ * 값은 상속되므로 후손(.hero-spotlight)은 그대로 읽는다.
+ *
  * 성능 최적화: getBoundingClientRect를 매 pointermove마다 호출하지 않고
  * rect를 캐시한다. resize/scroll(passive) 이벤트에서만 rect를 갱신해
  * 강제 레이아웃 읽기(layout thrashing)를 최소화한다.
@@ -24,7 +30,6 @@ export function usePointerParallax(
     const el = ref.current
     if (!el) return
 
-    const root = document.documentElement
     let frame = 0
     let nextX = 0
     let nextY = 0
@@ -42,8 +47,8 @@ export function usePointerParallax(
 
     const apply = () => {
       frame = 0
-      root.style.setProperty('--mx', String(nextX))
-      root.style.setProperty('--my', String(nextY))
+      el.style.setProperty('--mx', String(nextX))
+      el.style.setProperty('--my', String(nextY))
     }
 
     const onMove = (e: PointerEvent) => {
@@ -60,8 +65,8 @@ export function usePointerParallax(
       window.removeEventListener('resize', updateRect)
       window.removeEventListener('scroll', updateRect)
       if (frame) cancelAnimationFrame(frame)
-      root.style.setProperty('--mx', '0')
-      root.style.setProperty('--my', '0')
+      el.style.removeProperty('--mx')
+      el.style.removeProperty('--my')
     }
   }, [ref, disabled])
 }
