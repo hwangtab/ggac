@@ -6,6 +6,8 @@ export interface Artist {
   slug: string
   name: string
   category: string | string[]
+  /** 음악 장르 태그 (예: ['둠메탈','드론']). category(역할)와 구분되는 구조화 필드. */
+  genres?: string[]
   profileImage: string
   oneLiner: string
   bio: string
@@ -53,6 +55,7 @@ export interface DatabaseArtist {
   slug: string
   name: string
   category: string[]
+  genres?: string[] | null
   profile_photo_url: string | null
   profile_photo_metadata?: ProfilePhotoMetadata
   one_liner: string

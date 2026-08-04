@@ -158,7 +158,8 @@ export function generateArtistStructuredData(artist: {
   name: string
   slug: string
   bio?: string
-  categories?: string[]
+  /** 음악 장르 태그. schema.org의 genre는 음악 장르를 기대하므로 역할(category)이 아닌 이 값을 사용한다. */
+  genres?: string[]
   profilePhotoUrl?: string | null
   portfolioLinks?: Array<{ title: string; url: string }> | null
 }): object {
@@ -182,7 +183,8 @@ export function generateArtistStructuredData(artist: {
     jobTitle: '아티스트',
     worksFor: { '@id': 'https://ggac.kr/#organization' },
     memberOf: { '@id': 'https://ggac.kr/#organization' },
-    genre: artist.categories?.join(', '),
+    // 장르가 없으면 필드 자체를 생략(역할값을 장르로 내보내던 오염 제거).
+    ...(artist.genres && artist.genres.length > 0 ? { genre: artist.genres } : {}),
     inLanguage: 'ko-KR',
     ...(sameAs && sameAs.length > 0 ? { sameAs } : {}),
   }
@@ -196,6 +198,9 @@ export function generateEventStructuredData(project: {
   description: string
   slug: string
   publishedDate: string
+  eventDate?: string
+  venue?: { name: string; address?: string }
+  cancelled?: boolean
   coverImage?: string | null
   gallery?: string[]
   artistIds?: string[]
@@ -214,19 +219,37 @@ export function generateEventStructuredData(project: {
     forSocialSharing: true,
   })
 
-  // 티켓팅 시작일 또는 발행일을 이벤트 날짜로 사용
-  const eventDate = project.ticketing?.[0]?.startDate || project.publishedDate
-  const endDate = project.ticketing?.[0]?.endDate
+  // 실제 공연일(eventDate) 우선 — 없으면 예매 시작일·발행일로 폴백.
+  const eventDate = project.eventDate || project.ticketing?.[0]?.startDate || project.publishedDate
+  // 공연일이 명시되면 단일 일정 이벤트이므로 endDate도 공연일과 동일하게 둔다.
+  const endDate = project.eventDate
+    ? project.eventDate
+    : project.ticketing?.[0]?.endDate || eventDate
 
-  const location = {
-    '@type': 'Place',
-    name: '경기도',
-    address: {
-      '@type': 'PostalAddress',
-      addressRegion: '경기도',
-      addressCountry: 'KR',
-    },
-  }
+  // 공연장이 있으면 Place로, 없으면 지역(경기도)으로 폴백.
+  const location = project.venue
+    ? {
+        '@type': 'Place',
+        name: project.venue.name,
+        ...(project.venue.address
+          ? {
+              address: {
+                '@type': 'PostalAddress',
+                streetAddress: project.venue.address,
+                addressCountry: 'KR',
+              },
+            }
+          : {}),
+      }
+    : {
+        '@type': 'Place',
+        name: '경기도',
+        address: {
+          '@type': 'PostalAddress',
+          addressRegion: '경기도',
+          addressCountry: 'KR',
+        },
+      }
 
   // Google Search Console에서 organizer/performer의 name·url 누락을
   // 경고로 잡았던 회귀 — @id 참조만으로는 부족하고 inline name+url 필수.
@@ -249,7 +272,9 @@ export function generateEventStructuredData(project: {
     startDate: eventDate,
     // endDate가 따로 없으면 startDate와 동일하게 둬서 GSC 경고 회피 (단일 일정 이벤트로 표현)
     endDate: endDate || eventDate,
-    eventStatus: 'https://schema.org/EventScheduled',
+    eventStatus: project.cancelled
+      ? 'https://schema.org/EventCancelled'
+      : 'https://schema.org/EventScheduled',
     eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
     location,
     organizer: organizationRef,

@@ -5,6 +5,7 @@ import ScrollReveal from '@/components/ScrollReveal'
 import { getFeaturedProjects, getArtists } from '@/lib/data'
 import type { Metadata } from 'next'
 import { setRequestLocale } from 'next-intl/server'
+import { getLocaleAlternates, getOgLocale } from '@/utils/site'
 import {
   generateWebsiteStructuredData,
   generateOrganizationStructuredData,
@@ -12,56 +13,69 @@ import {
   combineStructuredData,
 } from '@/utils/structuredData'
 
-export const metadata: Metadata = {
-  title: {
-    absolute: '경기아트콜렉티브 협동조합 - 경계 없는 상상, 함께 만드는 울림',
-  },
-  description:
-    '예술로 숨 쉬고, 협동으로 길을 내는 협동조합입니다. 다양한 장르의 아티스트들이 함께 만들어가는 창작 공동체로, 음악, 미술, 영상, 공연 등 모든 예술 분야에서 활동하며 서로의 영감을 나누고 새로운 가능성을 탐구합니다.',
-  keywords: [
-    '경기아트콜렉티브',
-    '협동조합',
-    '예술',
-    '아티스트',
-    '음악',
-    '미술',
-    '공연',
-    '창작',
-    '협업',
-    '경기도',
-    '수원',
-  ],
-  alternates: {
-    canonical: '/',
-    languages: { 'ko-KR': '/' },
-  },
-  openGraph: {
-    title: '경기아트콜렉티브 협동조합',
-    description:
-      '경계 없는 상상, 함께 만드는 울림. 예술로 숨 쉬고, 협동으로 길을 내는 협동조합입니다.',
-    url: '/',
-    siteName: '경기아트콜렉티브 협동조합',
-    locale: 'ko_KR',
-    type: 'website',
-    images: [
-      {
-        url: '/images/logo/gac_og.webp',
-        width: 1200,
-        height: 630,
-        alt: '경기아트콜렉티브 협동조합',
-      },
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>
+}): Promise<Metadata> {
+  const { locale } = await params
+  const isEn = locale === 'en'
+
+  const title = isEn
+    ? 'Gyeonggi Art Collective — Korean Indie Music Cooperative'
+    : '경기아트콜렉티브 협동조합 — 경기 인디 뮤지션·밴드 커뮤니티'
+  const description = isEn
+    ? 'A cooperative of indie musicians and bands from Gyeonggi, Korea — doom metal, punk, and experimental music beyond the mainstream, with self-produced live shows.'
+    : '경기도 인디 뮤지션·밴드가 만든 생산자 협동조합. 둠메탈·펑크·실험음악 등 상업 무대 바깥의 음악을 만들고, 철조망·건강열전 같은 공연을 직접 기획합니다.'
+  const ogDescription = isEn
+    ? 'Korean indie music cooperative — doom metal, punk, and experimental music, with self-produced live shows.'
+    : '둠메탈·펑크·실험음악을 만들고 직접 공연을 기획하는 경기도 인디 뮤지션·밴드 협동조합.'
+
+  return {
+    title: { absolute: title },
+    description,
+    keywords: [
+      '경기아트콜렉티브',
+      '인디음악',
+      '인디밴드',
+      '언더그라운드',
+      '둠메탈',
+      '메탈공연',
+      '펑크',
+      '실험음악',
+      '뮤지션',
+      '라이브공연',
+      '경기도',
+      '수원',
     ],
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: '경기아트콜렉티브 협동조합',
-    description:
-      '경계 없는 상상, 함께 만드는 울림. 예술로 숨 쉬고, 협동으로 길을 내는 협동조합입니다.',
-  },
-  robots: {
-    index: true,
-    follow: true,
-  },
+    alternates: getLocaleAlternates('/', locale),
+    openGraph: {
+      title,
+      description: ogDescription,
+      url: getLocaleAlternates('/', locale).canonical,
+      siteName: isEn ? 'Gyeonggi Art Collective' : '경기아트콜렉티브 협동조합',
+      locale: getOgLocale(locale),
+      type: 'website',
+      images: [
+        {
+          url: '/images/logo/gac_og.webp',
+          width: 1200,
+          height: 630,
+          alt: isEn ? 'Gyeonggi Art Collective' : '경기아트콜렉티브 협동조합',
+        },
+      ],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description: ogDescription,
+      images: ['/images/logo/gac_og.webp'],
+    },
+    robots: {
+      index: true,
+      follow: true,
+    },
+  }
 }
 
 interface HomeProps {

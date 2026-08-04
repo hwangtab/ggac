@@ -37,21 +37,6 @@ const ARTIST_ORDER = [
   'acmein',
 ]
 
-// bio의 "### 음악 장르" 블록에 합쳐질 추가 장르. bio에 블록이 없는 아티스트는 이것만 쓴다.
-// 팬이 실제로 검색하는 단어(드론·슬러지 등)가 bio 태그에 빠져 있을 때 여기서 보강한다.
-const GENRE_EXTRA = {
-  sabbaha: ['둠메탈', '드론', '슬러지'],
-  themilliways: ['앰비언트', '포스트록'],
-  'yoo-dong-hyuk': ['펑크록', '펑크포크'],
-  'golbang-lady': ['펑크', '소울'],
-}
-
-// 장르로 규정되지 않는 활동(다원예술·기획). 경고 없이 oneLiner만 노출한다.
-const NO_GENRE = new Set(['namsu', 'hwang-gyeong-ha', 'acmein'])
-
-// 특정 아티스트에게만 붙는 초niche 태그는 요약문 키워드에서 뺀다(개별 라인에는 그대로 남는다).
-const SUMMARY_GENRE_EXCLUDE = new Set(['사이비 오컬트 둠드론'])
-
 // 영문 표기 병기 — LLM이 영어 질의에서도 같은 엔티티로 인식하도록.
 const ALIASES = {
   sabbaha: 'Sabbaha',
@@ -143,21 +128,9 @@ function normalizeLinkTitle(title) {
   return map[title] ?? title
 }
 
+// 장르는 data/artists.json의 genres 필드가 단일 원천(스키마·페이지와 동일 소스).
 function getGenres(artist) {
-  const block = (artist.bio ?? '').match(/###\s*음악 장르\s*\n((?:\s*-\s*.+\n?)+)/)
-  const fromBio = block
-    ? block[1]
-        .split('\n')
-        .map(line => line.replace(/^\s*-\s*/, '').trim())
-        .filter(Boolean)
-    : []
-  const genres = [...new Set([...fromBio, ...(GENRE_EXTRA[artist.slug] ?? [])])]
-  if (!genres.length && !NO_GENRE.has(artist.slug)) {
-    warnings.push(
-      `장르 정보 없음: ${artist.name} (${artist.slug}) — bio에 "### 음악 장르" 블록을 넣거나 GENRE_EXTRA/NO_GENRE에 추가하세요.`
-    )
-  }
-  return genres
+  return Array.isArray(artist.genres) ? artist.genres : []
 }
 
 function getLinks(artist) {
@@ -232,9 +205,7 @@ function build() {
     )
   }
 
-  const genreKeywords = [...new Set(ordered.flatMap(getGenres))]
-    .filter(g => !SUMMARY_GENRE_EXCLUDE.has(g))
-    .slice(0, 16)
+  const genreKeywords = [...new Set(ordered.flatMap(getGenres))].slice(0, 16)
   const updated = latestUpdate(projects)
   const { contact, social, businessInfo } = global
   const established = businessInfo.establishedDate.replace(

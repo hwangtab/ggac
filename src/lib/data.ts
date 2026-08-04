@@ -90,7 +90,7 @@ export const getArtistsFromDB = cache(async (locale = 'ko'): Promise<Artist[]> =
         const legacyMap = await getLegacyArtistMap()
         result = result.map(artist => {
           const fallback = legacyMap.get(artist.slug) || legacyMap.get(artist.id)
-          return applyProfileImageFallback(artist, fallback)
+          return applyLegacyArtistFallback(artist, fallback)
         })
       } catch (fallbackError) {
         log.warn('Failed to apply legacy artist image fallback:', fallbackError)
@@ -218,6 +218,8 @@ function convertDatabaseArtistToArtist(dbArtist: DatabaseArtist, locale = 'ko'):
     slug: dbArtist.slug,
     name: useEn && dbArtist.name_en ? dbArtist.name_en : dbArtist.name,
     category: dbArtist.category || [],
+    // DB에는 장르 컬럼이 없으므로 undefined로 두고, legacy JSON 오버레이로 채운다.
+    genres: dbArtist.genres ?? undefined,
     profileImage:
       dbArtist.profile_photo_url ||
       dbArtist.profile_photo_metadata?.variant_urls?.webp ||
@@ -287,6 +289,7 @@ function overlayEnglishArtistText(artist: Artist, en?: Artist): Artist {
     oneLiner: en.oneLiner ?? artist.oneLiner,
     bio: en.bio ?? artist.bio,
     category: en.category ?? artist.category,
+    genres: en.genres ?? artist.genres,
     templateType: (en.templateType ?? artist.templateType) as Artist['templateType'],
     portfolioLinks: en.portfolioLinks ?? artist.portfolioLinks,
     youtubeVideos: en.youtubeVideos ?? artist.youtubeVideos,
@@ -308,6 +311,18 @@ function applyProfileImageFallback(artist: Artist, fallback?: Artist): Artist {
     ...artist,
     profileImage: fallback.profileImage,
   }
+}
+
+// DB 아티스트에 legacy JSON(data/artists.json)의 보강 필드를 오버레이한다.
+// 음악 장르는 DB에 컬럼이 없어 JSON을 단일 원천으로 삼는다(genres 비어 있으면 채움).
+// 프로필 이미지 폴백과 함께 두 조회 경로(목록·단일)에서 공통 적용한다.
+function applyLegacyArtistFallback(artist: Artist, fallback?: Artist): Artist {
+  const withImage = applyProfileImageFallback(artist, fallback)
+  const needsGenres = !withImage.genres || withImage.genres.length === 0
+  if (needsGenres && fallback?.genres && fallback.genres.length > 0) {
+    return { ...withImage, genres: fallback.genres }
+  }
+  return withImage
 }
 
 // Supabase에서 아티스트 조회 (데이터베이스 우선, JSON 파일 백업)
@@ -352,7 +367,7 @@ export const getArtistBySlugFromDB = cache(
         try {
           const legacyMap = await getLegacyArtistMap()
           const fallback = legacyMap.get(convertedArtist.slug) || legacyMap.get(convertedArtist.id)
-          convertedArtist = applyProfileImageFallback(convertedArtist, fallback)
+          convertedArtist = applyLegacyArtistFallback(convertedArtist, fallback)
         } catch (fallbackError) {
           log.warn('Failed to apply legacy artist image fallback:', fallbackError)
         }

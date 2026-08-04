@@ -29,12 +29,23 @@ export interface ArticleInfo {
   preview?: LinkPreview
 }
 
+export interface EventVenue {
+  name: string
+  address?: string
+}
+
 export interface Project {
   id: string
   slug: string
   title: string
   category: string
   publishedDate: string
+  /** 실제 공연일(ISO YYYY-MM-DD). 예매 시작일(ticketing.startDate)과 구분되는 이벤트 날짜. */
+  eventDate?: string
+  /** 공연장. 없으면 지역(경기도)으로 폴백. */
+  venue?: EventVenue
+  /** 취소된 공연이면 true (schema eventStatus를 EventCancelled로). */
+  cancelled?: boolean
   coverImage: string
   description: string
   gallery?: string[]

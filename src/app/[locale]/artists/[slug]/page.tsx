@@ -216,7 +216,8 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
     name: artist.name,
     slug: resolvedParams.slug,
     bio: artist.oneLiner,
-    categories: Array.isArray(artist.category) ? artist.category : [artist.category],
+    // schema.org genre는 음악 장르 필드 — 역할(category) 대신 genres를 넘긴다.
+    genres: artist.genres,
     // 화면·OG와 동일한 안전 경계를 통과한 값만 JSON-LD image로 노출한다.
     profilePhotoUrl: safeProfileImage,
     portfolioLinks: artist.portfolioLinks,

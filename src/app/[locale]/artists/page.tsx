@@ -23,21 +23,21 @@ export async function generateMetadata({
   const isEn = locale === 'en'
   const base = getSiteUrl()
   return {
-    title: isEn ? 'Our Artists' : '함께하는 사람들',
+    title: isEn ? 'Our Artists — Indie Musicians & Bands' : '소속 아티스트 — 인디 뮤지션·밴드',
     description: isEn
-      ? 'Meet the artists, musicians, and producers who form Gyeonggi Art Collective.'
-      : '경기도를 기반으로 활동하는 다양한 분야의 예술가들을 만나보세요. 음악, 시각예술, 공연예술 등 각자의 고유한 색깔로 창작하는 우리 조합원들을 소개합니다.',
+      ? 'Meet the indie musicians and bands of Gyeonggi Art Collective — doom metal, punk, folk, hip-hop, and experimental music.'
+      : '경기아트콜렉티브 소속 인디 뮤지션·밴드를 만나보세요. 둠메탈·펑크·포크·힙합·실험음악까지, 상업 무대 바깥에서 자기 색깔로 창작하는 아티스트들입니다.',
     keywords: [
-      '경기도예술가',
-      '아티스트',
+      '인디뮤지션',
+      '인디밴드',
+      '언더그라운드밴드',
+      '둠메탈밴드',
+      '펑크밴드',
+      '경기도뮤지션',
+      '수원밴드',
+      '아티스트소개',
       '음악가',
-      '시각예술가',
-      '공연예술가',
-      '창작자',
-      '협동조합원',
-      '예술가소개',
-      '작가',
-      '뮤지션',
+      '싱어송라이터',
       '기획자',
     ],
     authors: [{ name: '경기아트콜렉티브 협동조합' }],
@@ -46,11 +46,11 @@ export async function generateMetadata({
     alternates: getLocaleAlternates('/artists', locale),
     openGraph: {
       title: isEn
-        ? 'Our Artists | Gyeonggi Art Collective'
-        : '함께하는 사람들 | 경기아트콜렉티브 협동조합',
+        ? 'Indie Musicians & Bands | Gyeonggi Art Collective'
+        : '소속 아티스트 — 인디 뮤지션·밴드 | 경기아트콜렉티브',
       description: isEn
-        ? 'Meet the artists, musicians, and producers who form Gyeonggi Art Collective.'
-        : '경기도를 기반으로 활동하는 다양한 분야의 예술가들을 만나보세요. 서로의 우주가 되어 함께 성장하는 창작자들입니다.',
+        ? 'Meet the indie musicians and bands of Gyeonggi Art Collective — doom metal, punk, folk, and experimental music.'
+        : '둠메탈·펑크·포크·실험음악까지, 경기아트콜렉티브 소속 인디 뮤지션·밴드를 만나보세요.',
       url: isEn ? `${base}/en/artists` : `${base}/artists`,
       siteName: isEn ? 'Gyeonggi Art Collective' : '경기아트콜렉티브 협동조합',
       images: [
@@ -67,11 +67,11 @@ export async function generateMetadata({
     twitter: {
       card: 'summary_large_image',
       title: isEn
-        ? 'Our Artists | Gyeonggi Art Collective'
-        : '함께하는 사람들 | 경기아트콜렉티브 협동조합',
+        ? 'Indie Musicians & Bands | Gyeonggi Art Collective'
+        : '소속 아티스트 — 인디 뮤지션·밴드 | 경기아트콜렉티브',
       description: isEn
-        ? 'Meet the artists, musicians, and producers who form Gyeonggi Art Collective.'
-        : '서로의 우주가 되어 함께 성장하는 경기도 예술가들을 만나보세요.',
+        ? 'Meet the indie musicians and bands of Gyeonggi Art Collective.'
+        : '둠메탈·펑크·포크·실험음악, 경기아트콜렉티브 소속 인디 뮤지션·밴드.',
       images: ['/images/logo/gac_og.webp'],
     },
     robots: {

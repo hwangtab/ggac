@@ -94,6 +94,11 @@
     "title": "Barbed Wire: METAL SYNDICATE NETWORK",
     "category": "Performance & Exhibition",
     "publishedDate": "2025-07-13",
+    "eventDate": "2025-07-13",
+    "venue": {
+      "name": "DOT",
+      "address": "수원시 팔달구 화서문로 34-1 지하1층"
+    },
     "coverImage": "/images/projects/msn.webp",
     "description": "A new wave of the Suwon underground metal scene — 'Barbed Wire: METAL SYNDICATE NETWORK' — is coming.\n\nFive prominent metal bands based in Seoul and Gyeonggi will gather in one place to deliver an intense musical experience that captures the present and future of Korea's metal scene.\n\nThe title 'Barbed Wire' symbolizes more than a physical boundary — it represents the resilient spirit of a metal community that supports and stands in solidarity with one another even amid hardship. Through the subtitle 'METAL / SYNDICATE / NETWORK,' this event aims to foster organized solidarity among independent metal artists sharing a common regional base, rather than chasing any particular genre trend.\n\n### Schedule\n\nSunday, July 13, 2025, 18:00\n\n### Venue\n\nDOT (B1F, 34-1 Hwaseomun-ro, Paldal-gu, Suwon)",
     "gallery": null,
@@ -129,6 +134,10 @@
     "title": "PantyPort Rock Festival",
     "category": "Performance & Exhibition",
     "publishedDate": "2025-08-02",
+    "eventDate": "2025-08-02",
+    "venue": {
+      "name": "신촌 인피니티클럽"
+    },
     "coverImage": "/images/projects/PantyPort-Rock-Festival.webp",
     "description": "On the day Pentaport Rock Festival opens its gates, for the musicians who weren't invited to Penta and the audience who can't go —\n\n An underground rock festival in the basement, PantyPort, opens.\n\n### Venue\n\nSinchon Infinity Club\n\n### Lineup\n\n- Bron\n- Melki\n- Gobchang\n- Lee Hyojun\n- The Pictures\n- Jisu\n- Mooii\n- Sabbaha\n- Qeruigomoo\n- Moon, Night and Stars",
     "gallery": null,
@@ -153,6 +162,11 @@
     "title": "HYPER_NO_SIS",
     "category": "Performance & Exhibition",
     "publishedDate": "2025-08-17",
+    "eventDate": "2025-08-17",
+    "venue": {
+      "name": "D.O.T",
+      "address": "수원 행궁동"
+    },
     "coverImage": "/images/projects/hypernosis.webp",
     "description": "Come witness the moment new music is born as three singer-songwriters and one electronic musician meet.\n\n### Participating Artists\n\n**Jisu** [@jisu.music](https://www.instagram.com/jisu.music)  \nJISU writes with her whole heart. She is an artist who writes about all kinds of emotions, and an artist who pours heart and soul into crafting lyrics and music.\n\n**Summertigers** [@jang.summer.tigers](https://www.instagram.com/jang.summer.tigers)  \n\"A person born on August 19th\"\n\n**Dos Chillos** [@yahoyahodan](https://www.instagram.com/yahoyahodan)  \nSymptom: breathtaking / Prescription: manual therapy with fists\n\n**Soyeon** [@mis_aaaa00](https://www.instagram.com/mis_aaaa00)\n\n### Concert Information\n\n**Date**: 2025.08.17 (Sun) Doors 18:00 / Start 18:30  \n**Venue**: D.O.T / Suwon Haenggung-dong [@d.o.t_kr](https://www.instagram.com/d.o.t_kr)  \n**Price**: Advance 15,000 KRW / Door 20,000 KRW  \n**Discount**: 5,000 KRW discount for Gyeonggi Art Collective Cooperative members on advance tickets [@ggartcollective](https://www.instagram.com/ggartcollective)  \n**Organized by**: Yahoyahodan [@yahoyahodan](https://www.instagram.com/yahoyahodan)",
     "gallery": null,
@@ -177,6 +191,11 @@
     "title": "CURSEWAVE+LOWFREQUENCY 11 : MONOLITH & OBELISK",
     "category": "Performance & Exhibition",
     "publishedDate": "2025-08-30",
+    "eventDate": "2025-08-30",
+    "venue": {
+      "name": "닻올림",
+      "address": "서울 마포구 와우산로 29"
+    },
     "coverImage": "/images/projects/cursewave11.webp",
     "description": "A monolith built from sound  \nAn obelisk that crumbles under a curse\n\n### Participating Artists\n\n**HUMAN INFRASTRUCTURE** [@infraphysics](https://www.instagram.com/infraphysics), [@infrawang](https://www.instagram.com/infrawang)\n\n**TOHAL KYNA** [@tohal_kyna](https://www.instagram.com/tohal_kyna)\n\n**GOBCHANG** [@gobchangnoise](https://www.instagram.com/gobchangnoise)\n\n**NAHUA** [@nahuamx](https://www.instagram.com/nahuamx)\n\n**SABBAHA** [@sabbaha_kr](https://www.instagram.com/sabbaha_kr)\n\n### Concert Information\n\n**Date**: 2025.08.30 Doors 18:00 / Start 18:30  \n**Venue**: Dotolim [@DOTOLIM](https://www.instagram.com/dotolim) (29 Wausan-ro)  \n**Price**: Advance 30,000 KRW / Door 35,000 KRW  \n**Discount**: 5,000 KRW discount for Gyeonggi Art Collective Cooperative members on advance tickets  \n**Organized by**: Yahoyahodan [@yahoyahodan](https://www.instagram.com/yahoyahodan)",
     "gallery": null,
@@ -246,6 +265,12 @@
     "title": "Health Concert (健康列傳) (Cancelled due to health reasons)",
     "category": "Performance & Exhibition",
     "publishedDate": "2025-09-18",
+    "eventDate": "2025-09-18",
+    "venue": {
+      "name": "롱플레이어",
+      "address": "수원시 팔달구"
+    },
+    "cancelled": true,
     "coverImage": "/images/projects/health.webp",
     "description": "(Cancelled due to health reasons)\n\nA special music concert, 'Health Concert (健康列傳),' had been scheduled for Thursday, September 18th at 7 PM at 'Longplayer,' a vintage LP bar and café in Paldal-gu, Suwon, but was cancelled due to health issues.\n\nThe title 'Health Concert' carries the meaning that artists of diverse musical colors gather to wish the hearts and bodies of the audience good health. The subtitle 'Play long the long play' expressed the intent to deliver music with a lingering resonance like an LP record, inspired by the character of the venue, Longplayer.\n\n### Artist Introductions\n\n**Heewoo**\nA singer-songwriter with a distinctive style that incorporates traditional pansori vocal techniques into contemporary music. Combining the deep emotional expression of pansori with modern arrangements, Heewoo presents music that bridges tradition and the present day. His music, which reinterprets the sounds of traditional instruments such as daegeum and gayageum in a modern context, delivers emotion that transcends time.\n\n**Yoo Dong-hyuk**\nA musician who began with punk rock and forged a unique genre called punk-folk. Through life's turning points, he works through his experiences of loss and wandering with an acoustic guitar, conveying a rough yet warm sensibility. The years of struggle and pain are woven throughout his music.\n\n**themilliways**\nA solo project by musician Ju Jintae, pursuing experimental soundscapes rooted in ambient and post-rock. Having begun composing in the early 2000s and standing in solidarity with various social movements, he has continued original work at the intersection of music and media, drawing on his experience as a content producer at Seo Taiji Company. Following a terminal lung cancer diagnosis in 2017 and a period of recovery, he made his solo debut in 2021, and his music carries profound messages exploring existence and the inner self.\n\n**Yamagata Tweakster**\nA unique performance artist who calls himself a 'Mutugayo People's Entertainer.' Active in the Hongdae area since 2008, he communicates with audiences through Hanba's performances combining dance and song to dance music. Beyond club performances, he actively delivers social messages through music by standing in solidarity at various protest sites.\n\n### Concert Information\n\n- **Date**: Thursday, September 18, 2025, 7 PM\n- **Venue**: Longplayer, Suwon (Vintage LP bar/café)\n- **Admission**: Advance/Door 15,000 KRW (includes drink discount)\n- **Discount**: 5,000 KRW discount for Gyeonggi Art Collective members\n\n### Venue\n\nLongplayer, where the concert was to take place, is a space where music and analog culture can be enjoyed through records, cameras, and drip coffee. Known for a culture of repairing and reusing things that become discarded over time, it is a special place where anyone can come, listen to the records of their choice, and summon memories through music-related memorabilia.\n\nThe stage of healing and comfort offered by four groups of artists who have each walked their own musical journeys was expected to bring musical wellness to many this autumn.",
     "gallery": null,
@@ -277,6 +302,11 @@
     "title": "Barbed Wire 2nd Wave: METAL SYNDICATE NETWORK 2TERNAL",
     "category": "Performance & Exhibition",
     "publishedDate": "2025-09-06",
+    "eventDate": "2025-09-06",
+    "venue": {
+      "name": "수원 앨리웨이 탭하우스",
+      "address": "팔달구 정조로 751-11, 4층"
+    },
     "coverImage": "/images/projects/metalsyndicatenetwork2.webp",
     "description": "An alliance of steel, a chain of destruction — the endless second wave of Barbed Wire lands in Suwon. The 2nd installment of the Gyeonggi local metal series 'Barbed Wire: METAL SYNDICATE NETWORK' unfolds at Alleyway Taphouse.\n\n### Concert Information\n- **Date**: 2025.09.06 (Sat)  \n  OPEN 20:00 / FIRE 20:30\n- **Venue**: Suwon Alleyway Taphouse (4F, 751-11 Jeongjo-ro, Paldal-gu)  \n  [@alleywaytaphouse](https://www.instagram.com/alleywaytaphouse)\n- **Series**: Continuing the Gyeonggi local metal network from the inaugural [D.O.T.](https://www.instagram.com/d.o.t_kr)\n- **Admission**: Free entry, pay to leave\n\n### Lineup\n- Adults of Bodom\n- WeRockenStein — [@werockenstein_official](https://www.instagram.com/werockenstein_official)\n- Metisse — [@band_metisse](https://www.instagram.com/band_metisse)\n- Sabbaha — [@sabbaha_kr](https://www.instagram.com/sabbaha_kr)\n- PanzerKorps\n\n---\n\n### EN\nCHEOL-JO-MANG 2ND WAVE — METAL SYNDICATE NETWORK 2TERNAL  \nForged in iron. Linked by destruction.  \nCoordinates: Alleyway Taphouse Suwon ([@alleywaytaphouse](https://www.instagram.com/alleywaytaphouse))  \n4F, 751-11 Jeongjo-ro, Paldal-gu, Suwon-si, Gyeonggi-do  \nOperation Start: 2025.09.06 (Sat) — OPEN 20:00 / FIRE 20:30\n\n",
     "gallery": null,
@@ -299,6 +329,11 @@
     "title": "Ancestral Exorcism Public Service 祖上退魔 公共役務",
     "category": "Performance & Exhibition",
     "publishedDate": "2025-10-05",
+    "eventDate": "2025-10-05",
+    "venue": {
+      "name": "무대륙",
+      "address": "마포구 토정로5길 12 지하"
+    },
     "coverImage": "/images/projects/ancestral-exorcism-public-service.webp",
     "description": "An experimental indie concert by 6 acts that dismantles the shackles of tradition and custom through music. A therapeutic musical experience that liberates you from the unconscious dominion of ancestors.\n\nTo: Audience members  \nRe: Notice of the Ancestral Exorcism Public Service Concert\n\nWishing you good health.\n\nWe hereby inform you of the following comprehensive genre indie music concert for your review and reference.\n\n- Details Below -\n\nConcert Name: Ancestral Exorcism Public Service\n\n### Artistic Intent\nWe live in the present, worrying about an uncertain future, and sometimes falling into depression. Yet the past is absolutely certain, and we can never escape its shackles.\n\nAncestors remain in our bloodlines, endlessly binding us to ethnicity and cultural tradition, dominating our unconscious. The ceremonies of praise, rites, and ancestral rites dedicated to ancestors — the unconscious rulers bearing the name of ancestry — sometimes reinforce systems under the guise of Confucian culture, and sometimes become mirrors that project our vain desires.\n\nThe Ancestral Exorcism Public Service provides music that shatters these mirrors and forcibly dismantles these systems. Through this service — which the state and society cannot provide — audiences either heal memories of suffering bound to ancestors and roots, or participate in a ritual that exorcises the very concept of ancestry itself.\n\n### Concert Information\n- **Venue**: Mudaeryuk (B1F, 12 Tojeong-ro 5-gil, Mapo-gu)\n- **Date**: Sunday, October 5, 2025, Doors 18:00 / Start 18:30\n\n### Lineup\n- Eunhae @eh_x3x\n- Zsthyger @Zsthyger\n- Qeruigomoo @qeruigomoo\n- Porabim @porabim.2067\n- Warped Savior @warpedsaviorband\n- Sabbaha @sabbaha.kr\n\n### Info\n- **Supported by**: Gyeonggi Art Collective Cooperative\n- **Admission**: Advance 25,000 KRW / Door 30,000 KRW (5,000 KRW discount for GGAC members on advance tickets)\n- **Booking**: See profile link\n\n",
     "gallery": null,
@@ -329,6 +364,11 @@
     "title": "SATANIC RITUAL & PERVERSIONS VOL. II",
     "category": "Performance & Exhibition",
     "publishedDate": "2025-11-01",
+    "eventDate": "2025-11-01",
+    "venue": {
+      "name": "A.C.S.",
+      "address": "중구 수표로6길 10 지하"
+    },
     "coverImage": "/images/projects/halloween2025_C.webp",
     "description": "SATANIC RITUAL & PERVERSIONS VOL. II\nOVIJABOARD SVRFERS\n\nA dark classroom. Old paper. Rusty coins. And fingers.\nThe chant begins. We call you forth. And the message arrives.\nHate them. The nails grow. Blood flows. Blood flows. Blood flows.\n\nA dark room. Old papers. Faded coins. And fingers.\nChant the spell. Summon you forth. And receive the message.\nHate them. Spread the nails. Blood flows. Blood flows. Blood flows.\n\n### Concert Information\n\n**Date**: 2025.11.1 (Sat) OPEN 18:00 START 18:30\n**Venue**: B1F, 10 Supyo-ro 6-gil, Jung-gu. A.C.S. @_a_c_s___\n**Admission**: Door ONLY 30,000 KRW, 20,000 KRW with Halloween costume\n\n### Cast\n\nStarring;\nSabbaha / Nahua / Isher / Reasco\nViridian / G.I.O.K. / Melki / Ondea\n\n### EN\n\nJung-gu, Supyoro 6-gil 10, Basement A.C.S. @a_c_s__\nNovember 1, 2025 (Sat) OPEN 18:00 START 18:30\nDoor only: 30,000 KRW | With Halloween costume: 20,000 KRW\n\n### Disclaimer\n\nAll performances, characters, and rituals presented in this show are fictional.\nAny resemblance to real religious beliefs or ceremonies is purely coincidental or symbolic.\nThis event is an artistic performance, not an actual religious ritual.",
     "gallery": null,
@@ -345,6 +385,11 @@
     "title": "Suwon Sound Market - Play and Sell Instruments",
     "category": "Performance & Exhibition",
     "publishedDate": "2025-11-23",
+    "eventDate": "2025-11-23",
+    "venue": {
+      "name": "DOT",
+      "address": "수원시 팔달구 화서문로 34-1 지하1층"
+    },
     "coverImage": "/images/projects/soundmarket2.webp",
     "description": "### Suwon Sound Market\n\n**Play, sell your gear, and go home with cash**\n\nSell your noise. Find a new owner for your gear. A Sunday afternoon that helps fuel Suwon's underground economy.\n\n### Event Overview\n\n**Date**: Sunday, November 23, 2025, 16:00–19:00  \n**Venue**: [DOT (B1F, 34-1 Hwaseomun-ro, Paldal-gu, Suwon)](https://map.naver.com/p/search/Hwaseomun-ro%2034-1%20Paldal-gu%20Suwon)\n**Performances**: 10–12 acts (10–15 min per act including setup)  \n**Admission**: Advance 10,000 KRW, Members free\n\n### What This Event Is\n\n- Perform with the instrument you want to sell, then auction it off on the spot  \n- Not just instruments — records, merch, even your homemade pickled goods welcome  \n- Audience can browse and bargain while acts are performing  \n- Chaotic, fun, and extreme  \n- It's an auction, so you won't know what it sells for until the day  \n- 100% of sales revenue is yours\n\n### Required Condition\n\nAt least 1 item to sell is mandatory  \n(Not just instruments — feel free to sell your dad's old ginseng liquor or your homemade doenjang)\n\n### What You Can Sell\n\n- Instruments (guitar, bass, drums, keyboards, wind instruments, strings, etc.)\n- Audio equipment (amps, effects pedals, mixers, mics, cables, stands)\n- Hardware (synthesizers, MIDI controllers, drum machines, loopers, etc.)\n- Software (DAW licenses, plugins, sample packs)\n- Records (self-released CDs, vinyl, cassettes)\n- Merchandise (posters, t-shirts, stickers, etc.)\n- Other creative works (art, handmade items, etc.)\n- Session/lesson coupons (you can sell yourself)\n- Broken junk gear (extreme junk corner)\n- Dad's ginseng liquor\n- Homemade doenjang\n- Literally anything goes\n\n### Current Lineup\n\n- Dosuchiryo\n- Hwang Gukjang\n- The Milliways\n- RB\n- Heewoo\n- Yoo Dong-hyuk\n- ZSTHYGER\n- The Projectors\n- and more+++\n\n### Notes\n\n- Strict time limit per act (15 minutes)\n- Please minimize setup time\n- Bring your items on the day\n- Items may not sell at auction (recommended to set low minimum price)\n- No returns (no going back after purchase)\n\n### Application Info\n\n**Deadline**: Early November 2025  \n**Selection**: Based on interesting performances and items for sale  \n**Notification**: Selected acts will be contacted individually via the provided contact information  \n**Group Chat**: A group chat for participants will be created after selection.",
     "gallery": null,
@@ -378,6 +423,11 @@
     "title": "Punk-Folk & Blues: Yoo Dong-hyuk x Kim Dongsan and the Blueighbors",
     "category": "Performance & Exhibition",
     "publishedDate": "2025-11-09",
+    "eventDate": "2025-11-09",
+    "venue": {
+      "name": "라이브 클럽 도트(d.o.t)",
+      "address": "경기도 수원시 팔달구 행궁동"
+    },
     "coverImage": "/images/projects/yoo.webp",
     "description": "### Concert Introduction\n\n\"Punk isn't dead — it just became folk.\" On Sunday night, November 9th, at the live club d.o.t in Haenggung-dong, Suwon, singer-songwriter **Yoo Dong-hyuk** — who has evolved into punk-folk — sits face to face with **Kim Dongsan and the Blueighbors**, a blues collective standing on the side of life. Come witness the moment the sharp energy of punk, the lyricism of folk, and the warm consolation of blues intersect on one stage.\n\n### Performers\n\n- Yoo Dong-hyuk — A 'punk-folk' artist formerly of punk rock band 'Yokai Ingan,' now singing about people's lives through an acoustic guitar after loss\n- Kim Dongsan and the Blueighbors — A band where composer-for-hire Kim Dongsan unfolds the stories of neighbors through blues\n\n### Concert Information\n\n- Date: Sunday, November 9, 2025, 7 PM / Doors open 18:30\n- Venue: Live Club d.o.t in Haenggung-dong, Paldal-gu, Suwon, Gyeonggi-do\n- Tickets: Advance 15,000 KRW / Door 20,000 KRW\n\n### Ticketing Info\n\nAdvance tickets are available via DM to d.o.t's Instagram account. As this is a small intimate venue, early sellout is expected — please act quickly. A night where punk's directness meets the comfort of blues, filled by the sincerity of two musicians who have walked different paths on a deepening autumn night.",
     "gallery": null,
@@ -454,6 +504,11 @@
     "title": "Health Concert 2026",
     "category": "Performance & Exhibition",
     "publishedDate": "2026-03-01",
+    "eventDate": "2026-03-01",
+    "venue": {
+      "name": "롱플레이어",
+      "address": "경기도 수원시 팔달구 정조로886번길 12"
+    },
     "coverImage": "/images/projects/health-2026.webp",
     "description": "A concert in 2026, the Year of the Red Horse, wishing good health to musicians and audiences alike.\n\n### Concert Information\n\n- **Date**: Sunday, March 1, 2026, starting at 6:00 PM\n- **Venue**: Longplayer (12 Jeongjo-ro 886beon-gil, Paldal-gu, Suwon, Gyeonggi-do)\n- **Tickets**: Advance 15,000 KRW / Door 20,000 KRW\n- **Advance Ticket Period**: January 26, 2026 to February 21, 2026\n\n### Invited Musicians\n\n**Heewoo**  \nA singer-songwriter who uses Korean traditional music and piano to weave together Eastern and Western harmonies in telling their own story.\n\n**Yoo Dong-hyuk**  \nA singer-songwriter who spent a long time in punk music, then discovered a folk that was bigger than punk, fell in love with folk, and ultimately ended up doing punk through folk.\n\n**Yamagata Tweakster**  \nA musician that anyone interested in indie music must hear. A feast of melancholy emotions and a unique sense of rhythm that won't let your body stop moving, combined with socially charged lyrics that keep raising philosophical questions.\n\n### Directions\n\nExit Suwon Station through Exit 7, take bus No. 13 from the bus stop near AK Department Store, and get off at the **Jangan Gate / Suwon Traditional Culture Center** stop. Walk 10 to 15 steps in the direction the bus was traveling and you'll see an alley on your right — Longplayer is in that alley.",
     "gallery": null,
@@ -480,6 +535,11 @@
     "title": "SR&P Vol. III: MEA CULPA",
     "category": "Performance & Exhibition",
     "publishedDate": "2026-02-28",
+    "eventDate": "2026-02-28",
+    "venue": {
+      "name": "무대륙",
+      "address": "서울특별시 마포구 토정로5길 12 지하1층"
+    },
     "coverImage": "/images/projects/srp-vol3-mea-culpa.webp",
     "description": "### SR&P Vol. III: MEA CULPA\n\nSATANIC RITUAL & PERVERSION VOL. III\n\nRed noise crushes the eyeballs.\nA shredded confession, a rupturing taboo.\nA rusted dagger lodged in the seat of a dead god.\nScreams become melody and wounds become paintings.\nYou are invited to the communion of a fallen body.\n\nThrough my fault, through my fault, through my most grievous fault.\n\nSurrender your body to the vibrations of the abyss.\nSalvation has been annihilated within this noise.\n\n### LINE UP\n\n- Forbidden403Error (Matrix)\n- Dagger Wound (USA)\n- Lucy Valentine\n- K-Supermotel\n- Sabbaha\n\n### INFO\n\n- **Venue**: Mudaeryuk (B1F, 12 Tojeong-ro 5-gil, Mapo-gu, Seoul)\n- **Date**: 2026. 02. 28. (Sat)\n- **Open/Start**: Open 18:00 / Start 18:30\n- **Running Time**: 4 hours 30 minutes\n- **Admission**: Advance 20,000 KRW / Door 30,000 KRW\n- **Naver Booking listed price**: 15,000 to 20,000 KRW\n- **Age Rating**: Ages 18 and over (born before 2009, birthday already passed)\n\n### Audience Advisory\n\n1. This performance is rated for ages 18 and over.\n2. This performance includes high-volume sound that may cause discomfort. Disposable earplugs are available at the entrance for your hearing protection — please feel free to use them.\n3. This performance includes intense physical expression, S&M-style staging, and scenes of bleeding as part of the live performance. Those sensitive to visual stimulation are advised to use caution.\n4. For the smooth running of the performance and the safety of all audience members, please refrain from unannounced disruptive behavior and any conduct that may cause discomfort to others.",
     "gallery": null,
@@ -504,6 +564,11 @@
     "title": "Barbed Wire III: METAL SYNDICATE NETWORK III",
     "category": "Performance & Exhibition",
     "publishedDate": "2026-01-11",
+    "eventDate": "2026-01-11",
+    "venue": {
+      "name": "DOT",
+      "address": "수원시 팔달구 화서문로 34-1, B1F"
+    },
     "coverImage": "/images/projects/PF_PF282396_251230_130025.webp",
     "description": "The raw energy of the locals intertwines like a web to create a great wave. Barbed Wire, now in its third installment, aims to become a solid network binding the metal music of Gyeonggi and Seoul.\n\nYou don't need to know metal. The moment you descend underground, the vibrations enveloping your entire body and a strange sense of liberation will overwhelm you. Break down genre boundaries, join this thrilling solidarity where everyone becomes one and goes wild. The hottest Sunday night you've never experienced is waiting.\n\n### Concert Information\n\n- **Concert Name**: Barbed Wire III METAL SYNDICATE NETWORK III\n- **Date**: Sunday, January 11, 2026, Doors 18:00 / Start 18:30\n- **Venue**: DOT (B1F, 34-1 Hwaseomun-ro, Paldal-gu, Suwon)\n- **Tickets**: Advance 20,000 KRW / Door 30,000 KRW / 5,000 KRW discount for Gyeonggi Art Collective members\n- **Organized by**: Yahoyahodan\n- **Supported by**: Gyeonggi Art Collective Cooperative\n\n### Lineup\n\n- Sabbaha\n- Nahua\n- Nu.M.D.\n- Deadwire\n\n### Archive Notice\n\nThis page is an archive record of the performance that concluded on January 11, 2026.",
     "gallery": null,
@@ -529,6 +594,10 @@
     "title": "Barbed Wire IV",
     "category": "Performance & Exhibition",
     "publishedDate": "2026-04-11",
+    "eventDate": "2026-04-11",
+    "venue": {
+      "name": "앨리웨이탭하우스"
+    },
     "coverImage": "/images/projects/metal-syndicate-network-iv.webp",
     "description": "The 4th installment of Barbed Wire, a metal concert series serving as a small brush fire to revitalize the Seoul-Gyeonggi grassroots metal scene. Let's smash, unite, and shake hands. In an alliance of iron.\n\n### Line-up\n\n- Liberalia — [@liberalia_korea](https://www.instagram.com/liberalia_korea)\n- Panzerkorps — [@panzerkorps2025](https://www.instagram.com/panzerkorps2025)\n- Meridies — [@mrdstlt](https://www.instagram.com/mrdstlt)\n- Sabbaha — [@sabbaha_kr](https://www.instagram.com/sabbaha_kr)\n\n### Concert Information\n\n- **Venue**: Alleyway Taphouse [@alleywaytaphouse](https://www.instagram.com/alleywaytaphouse)\n- **Address**: 4F, 751-11 Jeongjo-ro, Paldal-gu, Suwon\n- **Date**: 2026. 04. 11. (Sat) Starting at 8 PM\n- **Admission**: Free entry\n- **Note**: Drinking encouraged, pay to leave\n\n### Artistic Intent\n\nThis concert was planned to create a venue where local metal bands from Seoul and Gyeonggi support each other's stages and directly engage with audiences. Barbed Wire aims for a network that increases the density of solidarity rather than genre-based exclusivity, and this 4th installment is also expected to bring both strong bonds and new encounters centered on Suwon.",
     "gallery": null,
@@ -577,6 +646,11 @@
     "title": "Suwon Sound Market Vol.2 — Play and Sell Instruments",
     "category": "Performance & Exhibition",
     "publishedDate": "2026-06-21",
+    "eventDate": "2026-06-21",
+    "venue": {
+      "name": "DOT",
+      "address": "수원시 팔달구 화서문로 34-1 지하1층"
+    },
     "coverImage": "/images/projects/suwon-sound-market-vol-2.webp",
     "description": "🎸 Suwon Sound Market Vol.2: \"Polish It, Tighten It, Oil It Up!\"\n\nThere are few things in this world that don't taste good when chewed — and even fewer objects that don't make a sound when hit.\n\nStrike someone's back with a back-scratcher and you'll hear a satisfying thwack. Hurl a stainless tumbler from the district office onto the floor and a clear tone rings out. What matters is how hard you hit it and how far you throw it.\n\nBack-scratchers, tumblers, whatever mysterious object you have — bring it. On this day, polish it with care, tighten every bolt, and oil it up before you arrive.\n\nGyeonggi Art Collective has prepared a marketplace for those who've lost their touch — where instruments (or things that will soon be treated as instruments) are shared, loud conversations are had, lubricant is consumed, and every kind of sound is exchanged.\n\n## 🛠️ When & Where?\n\n📅 **Date:** Sunday, June 21, 2026 · 14:00–19:00\n\n📍 **Venue:** [DOT](https://naver.me/x7GFCg6V) (B1F, 34-1 Hwaseomun-ro, Paldal-gu, Suwon)\n\n💰 **Admission:** Free for everyone!\n\n## ⚙️ How Does It Work?\n\n**[Part 1] Flea Market (14:00~17:00)**\n\nStalls line up selling things that make sounds — or things that will soon become instruments. Workshops happen. Enjoy the air conditioning at your leisure.\n\n**[Part 2] Bundle Auction (17:00~19:00)**\n\nMusicians from near and far take the stage. Watch acts complete their setup, PR, performance, item showcase, and self-auction — all within 15 minutes.\n\n## ⚠️ Requirements for Sellers & Musicians\n\n**Part 1 participants** get a 3-hour stall. Run a lesson or workshop, sell coffee or dumplings, or just sit and stare at your open laptop — as long as it's interesting, you're in. No booth fee.\n\n**Part 2 participants** get 15 minutes. (Setup included!) Use it for a performance, auction, self-promotion, feats of skill — go wild! No participation fee.\n\nYou **must bring at least 1 item** to sell — tangible or intangible, goods or labor. It's genuinely hard to find objects that don't make a sound when hit. At Vol.1 we had milk, leftover coffee beans, accessories, and people selling themselves as servants.\n\n**10% Solidarity:** We collect 10% of on-site sales as a voluntary contribution. This goes toward the after-party, staff appreciation, and general cleanup.\n\n## 📦 What Can You Sell?\n\n- **Things that already make sounds (or will):** guitars, effects pedals, mics, cables, instrument-shaped toys, green tea bags, nail clippers, fresh-baked cookies…\n- **Things that help sounds happen indirectly:** DAW licenses, sample packs, WD-40 for broken mixers…\n- **Things that help the humans who make sounds:** guitar lesson coupons, carpool passes, restaurant guides, Tylenol, moral support… (all forms of labor welcome)\n- **Anything else you can justify!**\n\n## 🚨 Notes\n\n- Part 2 acts get **15 minutes** per team. **Setup included!**\n- There's no guarantee your items will sell. Set prices low and bring a reasonable amount. (Items priced under ₩10,000 tend to move.)\n- No refunds or returns after purchase or sale.",
     "gallery": null,
@@ -611,6 +685,11 @@
     "title": "Health Concert Vol.2 — Night of the Living",
     "category": "Performance & Exhibition",
     "publishedDate": "2026-07-09",
+    "eventDate": "2026-07-09",
+    "venue": {
+      "name": "롱플레이어",
+      "address": "경기도 수원시 팔달구 정조로886번길 12"
+    },
     "coverImage": "/images/projects/health-concert-2-living-night.webp",
     "description": "Health Concert Vol.2 — \"Night of the Living\"\n\n'Health Concert,' a music night wishing good health for both musicians and audience, returns for its second stage. There's plenty to enjoy beyond the music, so come hang out. ♡\n\n### Concert Info\n\n- **Date**: Thursday, July 9, 2026 · 7:00–9:00 PM (may run a little over)\n- **Venue**: long_player — 12 Jeongjo-ro 886beon-gil, Paldal-gu, Suwon, Gyeonggi\n- **Tickets**: Advance ₩15,000 / Door ₩20,000\n- **Advance payment**: KakaoBank 3333-13-8787-271 (account holder: Yoo Dong-hyuk)\n\n### Lineup\n\n**Heewoo** (singer-songwriter)  \nA distinctive vocalist and singer-songwriter bridging Korean traditional and contemporary music.\n\n**Yoo Dong-hyuk** (punk-folk)  \nA singer-songwriter who started in punk and ultimately settled into folk.\n\n**Harris** (singer-songwriter)  \nA singer-songwriter who weaves folklore traditions from around the world into his own work.\n\n**Kim Dong-san** (composer-for-hire)  \nA singer-songwriter who began with composition-on-call (\"I'll write you a song for a thousand won\") and went on to chronicle the stories of the times — laid-off workers, displaced merchants — in folk blues. He performs with his band Blue-Out and runs the venue long_player.",
     "gallery": null,
@@ -643,6 +722,11 @@
     "title": "IMSORRY IMSOUND",
     "category": "Performance & Exhibition",
     "publishedDate": "2026-07-25",
+    "eventDate": "2026-07-25",
+    "venue": {
+      "name": "D.O.T.",
+      "address": "경기도 수원시 팔달구 화서문로 34-1 지하"
+    },
     "coverImage": "/images/projects/imsorry-imsound.webp",
     "description": "IMSORRY IMSOUND\n\nA live show at D.O.T. in Suwon. Five acts moving between psychedelic, garage, and experimental sounds shared one stage.\n\n### Show Info\n\n- **Date**: Saturday, July 25, 2026 · Doors 6:00 PM / Start 6:30 PM\n- **Venue**: D.O.T. — B1, 34-1 Hwaseomun-ro, Paldal-gu, Suwon, Gyeonggi\n- **Tickets**: 10,000 KRW advance / 20,000 KRW at the door\n\n### Lineup\n\n**Hee-woo & Sato Yukie**  \nA duo set from Hee-woo, a vocalist bridging Korean traditional music and contemporary sounds, and Sato Yukie, the Japanese guitarist who has played in Korea for decades.\n\n**themilliways**  \nA band moving between psychedelic textures and improvisation.\n\n**Sabbaha**  \nA band rooted in doom and sludge.\n\n**MELKI**\n\n**Gwal**",
     "gallery": null,

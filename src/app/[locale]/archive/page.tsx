@@ -32,31 +32,33 @@ export async function generateMetadata({
   const canonical = isEn ? '/en/archive' : '/archive'
 
   return {
-    title: isEn ? 'Projects' : '프로젝트',
+    title: isEn ? 'Concerts & Live Archive' : '공연·라이브 아카이브 (메탈·펑크·실험음악)',
     description: isEn
-      ? 'Browse all projects, concerts, exhibitions, and events by Gyeonggi Art Collective.'
-      : '경기아트콜렉티브가 만들어가는 다양한 창작 프로젝트들입니다. 음반제작, 공연기획, 예술교육, 문화행사 등 우리의 발자취를 확인해보세요.',
+      ? 'Concerts, live shows, and events by Gyeonggi Art Collective — the METAL SYNDICATE NETWORK series, indie and underground gigs across Gyeonggi and Seoul.'
+      : '경기아트콜렉티브가 직접 기획한 공연·라이브 아카이브입니다. 철조망(METAL SYNDICATE NETWORK)·건강열전·수원 사운드 마켓 등 서울·경기 언더그라운드 인디 공연을 확인해보세요.',
     keywords: [
-      '프로젝트',
-      '음반제작',
+      '인디공연',
+      '언더그라운드공연',
+      '메탈공연',
+      '펑크공연',
+      '라이브공연',
+      '수원공연',
+      '경기도공연',
+      '철조망',
       '공연기획',
-      '예술교육',
-      '문화행사',
-      '협업작품',
-      '창작프로젝트',
-      '예술작품',
-      '콘텐츠',
-      '기획사업',
+      '실험음악',
     ],
     authors: [{ name: '경기아트콜렉티브 협동조합' }],
     creator: '경기아트콜렉티브 협동조합',
     publisher: '경기아트콜렉티브 협동조합',
     alternates: getLocaleAlternates('/archive', locale),
     openGraph: {
-      title: isEn ? 'Projects | Gyeonggi Art Collective' : '프로젝트 | 경기아트콜렉티브 협동조합',
+      title: isEn
+        ? 'Concerts & Live Archive | Gyeonggi Art Collective'
+        : '공연·라이브 아카이브 | 경기아트콜렉티브 협동조합',
       description: isEn
-        ? 'Browse all projects, concerts, exhibitions, and events by Gyeonggi Art Collective.'
-        : '경기아트콜렉티브가 만들어가는 다양한 창작 프로젝트들입니다. 음반제작, 공연기획, 예술교육 등 우리의 발자취를 확인해보세요.',
+        ? 'Concerts and live shows by Gyeonggi Art Collective — the METAL SYNDICATE NETWORK series and underground indie gigs.'
+        : '철조망·건강열전·수원 사운드 마켓 등 경기아트콜렉티브가 직접 기획한 서울·경기 언더그라운드 인디 공연 아카이브.',
       url: `${base}${canonical}`,
       siteName: isEn ? 'Gyeonggi Art Collective' : '경기아트콜렉티브 협동조합',
       images: [
@@ -72,10 +74,12 @@ export async function generateMetadata({
     },
     twitter: {
       card: 'summary_large_image',
-      title: isEn ? 'Projects | Gyeonggi Art Collective' : '프로젝트 | 경기아트콜렉티브 협동조합',
+      title: isEn
+        ? 'Concerts & Live Archive | Gyeonggi Art Collective'
+        : '공연·라이브 아카이브 | 경기아트콜렉티브 협동조합',
       description: isEn
-        ? 'Browse all projects, concerts, exhibitions, and events by Gyeonggi Art Collective.'
-        : '우리가 만들어가는 다양한 창작 프로젝트들을 만나보세요.',
+        ? 'Concerts and underground indie gigs by Gyeonggi Art Collective.'
+        : '철조망·건강열전 등 경기아트콜렉티브가 직접 기획한 언더그라운드 인디 공연.',
       images: ['/images/logo/gac_og.webp'],
     },
     robots: {
