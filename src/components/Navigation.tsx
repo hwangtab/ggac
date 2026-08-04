@@ -39,8 +39,8 @@ const Navigation = () => {
     navProfile?.is_auditor
   )
 
-  // 간소화된 색상 로직 — 홈은 페이지 전체가 다크 포스터라 스크롤 후에도 다크 유지
-  const isDark = isHomePage
+  // 사이트 전체가 다크 포스터 테마다. 내비도 항상 다크로 유지한다.
+  const isDark = true
   const textColor = isDark ? 'text-white' : 'text-gray-700'
   const activeColor = isDark ? 'text-accent-300' : 'text-primary-600'
   const hoverColor = isDark ? 'hover:text-accent-300' : 'hover:text-primary-600'
@@ -166,11 +166,9 @@ const Navigation = () => {
       className={`fixed top-0 left-0 right-0 z-50 ${
         hasScrollSync ? 'transition-all duration-300' : 'transition-none'
       } ${
-        isHomePage
-          ? isAtTop
-            ? 'bg-transparent'
-            : 'bg-[#08080a]/85 backdrop-blur-md border-b border-white/10'
-          : 'bg-white/90 backdrop-blur-md shadow-sm'
+        isAtTop && isHomePage
+          ? 'bg-transparent'
+          : 'bg-[#08080a]/85 backdrop-blur-md border-b border-white/10'
       }`}
     >
       <div className="tw-container-custom">
@@ -421,11 +419,7 @@ const Navigation = () => {
             aria-labelledby="mobile-menu-button"
           >
             <div
-              className={`rounded-lg shadow-lg p-2 border ${
-                isHomePage
-                  ? 'bg-gray-900/95 backdrop-blur-md text-white'
-                  : 'bg-white/95 backdrop-blur-md border-gray-200/20'
-              }`}
+              className={`rounded-lg shadow-lg p-2 border ${'bg-[#08080a]/95 backdrop-blur-md text-white'}`}
             >
               {/* Main Menu Items */}
               {menuItems.map(item => (
@@ -438,8 +432,8 @@ const Navigation = () => {
                   }}
                   className={`block py-3 px-4 rounded-md transition-colors duration-200 ${
                     isItemActive(item.href)
-                      ? `${activeColor} ${isHomePage ? 'bg-white/10' : 'bg-primary-50'}`
-                      : `${textColor} ${hoverColor} ${isHomePage ? 'hover:bg-white/10' : 'hover:bg-gray-50'}`
+                      ? `${activeColor} ${'bg-white/10'}`
+                      : `${textColor} ${hoverColor} ${'hover:bg-white/10'}`
                   }`}
                 >
                   {item.label}
@@ -447,9 +441,7 @@ const Navigation = () => {
               ))}
 
               {/* Mobile Auth Section */}
-              <div
-                className={`border-t mt-2 pt-2 ${isHomePage ? 'border-white/20' : 'border-gray-200/50'}`}
-              >
+              <div className={`border-t mt-2 pt-2 ${'border-white/20'}`}>
                 {loading ? null : user ? (
                   <>
                     <Link
@@ -457,8 +449,8 @@ const Navigation = () => {
                       onClick={() => setIsMenuOpen(false)}
                       className={`block py-3 px-4 rounded-md transition-colors duration-200 ${
                         pathname.startsWith('/mypage')
-                          ? `${activeColor} ${isHomePage ? 'bg-white/10' : 'bg-primary-50'}`
-                          : `${textColor} ${hoverColor} ${isHomePage ? 'hover:bg-white/10' : 'hover:bg-gray-50'}`
+                          ? `${activeColor} ${'bg-white/10'}`
+                          : `${textColor} ${hoverColor} ${'hover:bg-white/10'}`
                       }`}
                     >
                       {t('nav.mypage')}
@@ -468,7 +460,7 @@ const Navigation = () => {
                         handleLogout()
                         setIsMenuOpen(false)
                       }}
-                      className={`block w-full text-left py-3 px-4 rounded-md transition-colors duration-200 ${textColor} ${hoverColor} ${isHomePage ? 'hover:bg-white/10' : 'hover:bg-gray-50'}`}
+                      className={`block w-full text-left py-3 px-4 rounded-md transition-colors duration-200 ${textColor} ${hoverColor} ${'hover:bg-white/10'}`}
                     >
                       {t('nav.logout')}
                     </button>
@@ -480,8 +472,8 @@ const Navigation = () => {
                       onClick={() => setIsMenuOpen(false)}
                       className={`block py-3 px-4 rounded-md transition-colors duration-200 ${
                         pathname === '/login'
-                          ? `${activeColor} ${isHomePage ? 'bg-white/10' : 'bg-primary-50'}`
-                          : `${textColor} ${hoverColor} ${isHomePage ? 'hover:bg-white/10' : 'hover:bg-gray-50'}`
+                          ? `${activeColor} ${'bg-white/10'}`
+                          : `${textColor} ${hoverColor} ${'hover:bg-white/10'}`
                       }`}
                     >
                       {t('nav.login')}

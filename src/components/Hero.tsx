@@ -183,6 +183,8 @@ const Hero = ({ artists }: HeroProps) => {
             >
               <Link
                 href="/about"
+                // 흰 배경이 의도인 주 CTA — 포스터 테마 재매핑에서 제외한다
+                data-poster-keep
                 className="group inline-flex min-h-[48px] items-center justify-center gap-2 bg-white px-8 text-sm font-semibold tracking-tight text-black transition-colors duration-300 hover:bg-white/85 sm:min-h-[56px]"
               >
                 {t('ctaAbout')}

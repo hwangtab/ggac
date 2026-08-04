@@ -903,6 +903,274 @@ input[type='date'] {
   line-height: normal !important;
 }
 
+/*
+ * 사이트 전체가 다크이므로 body도 맞춘다. 이게 없으면 오버스크롤(맥 러버밴딩)이나
+ * 콘텐츠가 화면보다 짧을 때 흰 바탕이 드러난다.
+ */
+body {
+  background-color: #08080a;
+}
+
+/* ===== 포스터 테마 (다크) =====
+ *
+ * 히어로에서 확립한 디자인 언어를 사이트 전체로 확장한다. 이 코드베이스는
+ * 밝은 테마 유틸리티(bg-white·text-gray-*·border-gray-*)를 약 2,000곳에서
+ * 직접 쓰고 있어 호출부를 하나씩 고치는 것은 현실적이지 않다. 대신 페이지
+ * 루트에 `data-poster`를 달면 그 안의 유틸리티를 다크 대응값으로 재매핑한다.
+ *
+ * 원칙 세 가지:
+ * 1. 면은 어둡게, 글자는 밝게 — 대비는 전부 AA(4.5:1) 이상으로 잡는다.
+ * 2. 포스터에는 그림자와 둥근 모서리가 없다. 헤어라인 보더로 면을 구분한다.
+ * 3. 흰 배경이 의도인 요소(주 CTA 등)는 `data-poster-keep`으로 예외 처리한다.
+ */
+[data-poster] {
+  --poster-bg: #08080a;
+  --poster-surface: #101014;
+  --poster-surface-2: #16161b;
+  --poster-line: rgba(255, 255, 255, 0.15);
+  --poster-line-strong: rgba(255, 255, 255, 0.3);
+  --poster-text: rgba(255, 255, 255, 0.92);
+  --poster-text-2: rgba(255, 255, 255, 0.72);
+  --poster-text-3: rgba(255, 255, 255, 0.55);
+
+  background-color: var(--poster-bg);
+  color: var(--poster-text-2);
+}
+
+/* --- 면 ---
+ * 자손 셀렉터만 쓰면 `data-poster`가 달린 요소 자신은 재매핑되지 않는다.
+ * `[class*=]`로 bg-white/70 같은 불투명도 변형까지 함께 잡는다.
+ */
+[data-poster] [class*='bg-white']:not([data-poster-keep]),
+[data-poster][class*='bg-white']:not([data-poster-keep]),
+[data-poster] .bg-gray-50:not([data-poster-keep]),
+[data-poster].bg-gray-50:not([data-poster-keep]) {
+  background-color: var(--poster-surface);
+}
+[data-poster] .bg-gray-100:not([data-poster-keep]),
+[data-poster] .bg-gray-200:not([data-poster-keep]),
+[data-poster].bg-gray-100:not([data-poster-keep]) {
+  background-color: var(--poster-surface-2);
+}
+/* 이미 어두운 면(푸터 등)은 포스터의 근사 블랙으로 맞춘다 */
+[data-poster] .bg-gray-800,
+[data-poster] .bg-gray-900,
+[data-poster].bg-gray-900 {
+  background-color: var(--poster-bg);
+}
+/* 안내·경고용 색조 배경은 아주 옅은 흰 면 + 색은 글자와 보더로만 남긴다 */
+[data-poster] [class*='bg-primary-'],
+[data-poster] [class*='bg-accent-'],
+[data-poster] [class*='bg-blue-'],
+[data-poster] [class*='bg-green-'],
+[data-poster] [class*='bg-amber-'],
+[data-poster] [class*='bg-yellow-'],
+[data-poster] [class*='bg-red-'],
+[data-poster] [class*='bg-indigo-'],
+[data-poster] [class*='bg-orange-'],
+[data-poster] [class*='bg-teal-'],
+[data-poster] [class*='bg-pink-'],
+[data-poster] [class*='bg-purple-'] {
+  background-color: rgba(255, 255, 255, 0.07);
+}
+/* 밝은 그라데이션 배경은 포스터에 맞지 않는다 */
+[data-poster] [class*='bg-gradient-to'] {
+  background-image: none;
+}
+
+/* --- 글자 --- */
+[data-poster] .text-gray-900,
+[data-poster] .text-gray-800 {
+  color: var(--poster-text);
+}
+[data-poster] .text-gray-700,
+[data-poster] .text-gray-600 {
+  color: var(--poster-text-2);
+}
+[data-poster] .text-gray-500,
+[data-poster] .text-gray-400,
+[data-poster] .text-gray-300 {
+  color: var(--poster-text-3);
+}
+/*
+ * 포스터 언어는 단색이다. 밝은 테마에서 파란 제목이던 것을 그대로 밝은 파랑으로
+ * 올리면 히어로의 흑백+앰버 팔레트와 어긋난다. 제목은 흰색, 강조만 앰버로 둔다.
+ */
+[data-poster] .text-primary-900,
+[data-poster] .text-primary-800,
+[data-poster] .text-primary-700,
+[data-poster] .text-primary-600 {
+  color: var(--poster-text);
+}
+[data-poster] .text-accent-700,
+[data-poster] .text-accent-600,
+[data-poster] .text-accent-500 {
+  color: #fbd9a5;
+}
+/* 안내·경고 텍스트 — 색상을 유지하되 다크 위에서 읽히는 밝기로 */
+[data-poster] [class*='text-blue-'],
+[data-poster] [class*='text-indigo-'] {
+  color: #93c5fd;
+}
+[data-poster] [class*='text-green-'],
+[data-poster] [class*='text-emerald-'] {
+  color: #86efac;
+}
+[data-poster] [class*='text-red-'],
+[data-poster] [class*='text-rose-'] {
+  color: #fca5a5;
+}
+[data-poster] [class*='text-amber-'],
+[data-poster] [class*='text-yellow-'],
+[data-poster] [class*='text-orange-'] {
+  color: #fcd34d;
+}
+/* 링크 hover 등에서 파랑이 남지 않도록 */
+[data-poster] .hover\:text-primary-600:hover,
+[data-poster] .hover\:text-primary-700:hover {
+  color: #ffffff;
+}
+
+/* --- 선 --- */
+[data-poster] [class*='border-gray-'],
+[data-poster] [class*='border-blue-'],
+[data-poster] [class*='border-green-'],
+[data-poster] [class*='border-red-'],
+[data-poster] [class*='border-amber-'],
+[data-poster] [class*='border-yellow-'],
+[data-poster] [class*='border-primary-'],
+[data-poster] [class*='border-accent-'] {
+  border-color: var(--poster-line);
+}
+[data-poster] .divide-gray-100 > * + *,
+[data-poster] .divide-gray-200 > * + * {
+  border-color: var(--poster-line);
+}
+
+/* --- 포스터에는 그림자가 없다 --- */
+[data-poster] .shadow-sm,
+[data-poster] .shadow,
+[data-poster] .shadow-md,
+[data-poster] .shadow-lg,
+[data-poster] .shadow-xl,
+[data-poster] .shadow-2xl {
+  box-shadow: none;
+}
+/* 그림자로 구분하던 면은 헤어라인으로 대신 구분한다 */
+[data-poster] .shadow-md:not([data-poster-keep]),
+[data-poster] .shadow-lg:not([data-poster-keep]),
+[data-poster] .shadow-xl:not([data-poster-keep]) {
+  border: 1px solid var(--poster-line);
+}
+
+/* --- 모서리를 각지게 --- */
+[data-poster] .rounded-2xl,
+[data-poster] .rounded-xl,
+[data-poster] .rounded-lg {
+  border-radius: 2px;
+}
+
+/* --- 입력 요소 --- */
+[data-poster] input:not([type='checkbox']):not([type='radio']),
+[data-poster] textarea,
+[data-poster] select {
+  background-color: var(--poster-surface-2);
+  border-color: var(--poster-line);
+  color: var(--poster-text);
+}
+[data-poster] input::placeholder,
+[data-poster] textarea::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+/*
+ * 날짜 입력은 위쪽에서 `background-color: white !important`로 고정돼 있다
+ * (브라우저 기본 피커 배경 제거용). 포스터 테마에서는 그걸 되돌린다.
+ */
+[data-poster] input[type='date'] {
+  background-color: var(--poster-surface-2) !important;
+  color: var(--poster-text);
+}
+[data-poster] input[type='date']::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
+
+/* --- 공용 프리미티브(tailwind.config의 tw-*) ---
+ * @apply로 컴파일된 클래스라 속성 셀렉터로는 잡히지 않는다. 따로 재정의한다.
+ */
+[data-poster] .tw-btn-primary {
+  background-color: #ffffff;
+  color: #000000;
+  border-radius: 2px;
+}
+[data-poster] .tw-btn-primary:hover {
+  background-color: rgba(255, 255, 255, 0.85);
+}
+[data-poster] .tw-btn-secondary,
+[data-poster] .tw-btn-accent {
+  background-color: transparent;
+  border: 1px solid var(--poster-line-strong);
+  color: var(--poster-text);
+  border-radius: 2px;
+}
+[data-poster] .tw-btn-secondary:hover,
+[data-poster] .tw-btn-accent:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.7);
+}
+[data-poster] .tw-badge-primary,
+[data-poster] .tw-badge-secondary,
+[data-poster] .tw-badge-accent {
+  background-color: rgba(255, 255, 255, 0.08);
+  color: var(--poster-text-2);
+  border-radius: 2px;
+}
+[data-poster] .tw-heading-primary,
+[data-poster] .tw-heading-secondary,
+[data-poster] .tw-heading-tertiary,
+[data-poster] .tw-heading-quaternary {
+  color: var(--poster-text);
+}
+[data-poster] .tw-loading-skeleton {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+/* --- 긴 글(약관·개인정보처리방침 등) --- */
+[data-poster] .prose,
+[data-poster] .prose p,
+[data-poster] .prose li,
+[data-poster] .prose td {
+  color: var(--poster-text-2);
+}
+[data-poster] .prose h1,
+[data-poster] .prose h2,
+[data-poster] .prose h3,
+[data-poster] .prose h4,
+[data-poster] .prose strong {
+  color: var(--poster-text);
+}
+[data-poster] .prose a {
+  color: #fbd9a5;
+}
+
+/* --- 섹션 킥커: 홈의 헤어라인 행 문법을 다른 페이지에서도 쓴다 --- */
+.poster-kicker {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.poster-kicker > .poster-kicker-label {
+  font-size: 11px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.65);
+  white-space: nowrap;
+}
+.poster-kicker > .poster-kicker-rule {
+  height: 1px;
+  flex: 1 1 0%;
+  background-color: rgba(255, 255, 255, 0.25);
+}
+
 /* ===== 히어로 포스터 모션 패키지 ===== */
 :root {
   --mx: 0;

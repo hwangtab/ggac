@@ -23,7 +23,7 @@ export default function ConditionalLayout({ children, globalData }: ConditionalL
     // 관리자 페이지에서는 Navigation과 Footer 없이 children만 렌더링
     return (
       <ActivityTracker>
-        <main id="main-content" className="min-h-screen">
+        <main id="main-content" className="min-h-screen" data-poster>
           {children}
         </main>
       </ActivityTracker>
@@ -33,7 +33,11 @@ export default function ConditionalLayout({ children, globalData }: ConditionalL
   // 일반 페이지에서는 기존 레이아웃 사용
   return (
     <ActivityTracker>
-      <div className="min-h-screen flex flex-col">
+      {/*
+        포스터 테마는 여기 한 곳에서 켠다. 페이지마다 붙이면 루트가 아닌 내부
+        컴포넌트에 잘못 달리기 쉽고(실제로 /terms가 그랬다) 새 라우트가 빠진다.
+      */}
+      <div className="min-h-screen flex flex-col bg-[#08080a]" data-poster>
         {/* 상단 내비를 banner 랜드마크(header)로 감싼다 — main 밖 최상위 위치. */}
         <header>
           <Navigation />
