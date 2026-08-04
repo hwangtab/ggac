@@ -172,19 +172,23 @@ export function generateArtistStructuredData(artist: {
     ?.map(link => toSafeHttpUrl(link.url))
     .filter((url): url is string => Boolean(url))
 
+  // 음악 장르가 있으면 음악가로 보고 MusicGroup으로 표기(AI 엔티티 인식 강화).
+  // MusicGroup은 솔로·밴드 모두 포괄한다. 장르가 없는 비음악 활동가는 Person 유지.
+  const isMusicGroup = !!(artist.genres && artist.genres.length > 0)
+
   return {
     '@context': 'https://schema.org',
-    '@type': 'Person',
+    '@type': isMusicGroup ? 'MusicGroup' : 'Person',
     '@id': `https://ggac.kr/artists/${artist.slug}#person`,
     name: artist.name,
     description: artist.bio,
     url: `https://ggac.kr/artists/${artist.slug}`,
     image: imageUrl,
-    jobTitle: '아티스트',
-    worksFor: { '@id': 'https://ggac.kr/#organization' },
     memberOf: { '@id': 'https://ggac.kr/#organization' },
-    // 장르가 없으면 필드 자체를 생략(역할값을 장르로 내보내던 오염 제거).
-    ...(artist.genres && artist.genres.length > 0 ? { genre: artist.genres } : {}),
+    // MusicGroup에는 genre를, Person에는 jobTitle/worksFor를 부여(타입별 유효 속성).
+    ...(isMusicGroup
+      ? { genre: artist.genres }
+      : { jobTitle: '아티스트', worksFor: { '@id': 'https://ggac.kr/#organization' } }),
     inLanguage: 'ko-KR',
     ...(sameAs && sameAs.length > 0 ? { sameAs } : {}),
   }
@@ -204,6 +208,8 @@ export function generateEventStructuredData(project: {
   coverImage?: string | null
   gallery?: string[]
   artistIds?: string[]
+  /** 참여 아티스트 — MusicEvent.performer로 연결(엔티티 그래프 강화). */
+  performers?: Array<{ name: string; url: string }>
   ticketing?: Array<{
     platform: string
     url: string
@@ -262,9 +268,16 @@ export function generateEventStructuredData(project: {
 
   const eventUrl = `https://ggac.kr/archive/${project.slug}`
 
+  // 음악 공연이므로 MusicEvent로 승격(AI 답변엔진의 공연·음악 질의 매칭 강화).
+  // 참여 아티스트가 있으면 performer로 연결, 없으면 주최 조합으로 폴백.
+  const performer =
+    project.performers && project.performers.length > 0
+      ? project.performers.map(p => ({ '@type': 'MusicGroup', name: p.name, url: p.url }))
+      : organizationRef
+
   const eventSchema: any = {
     '@context': 'https://schema.org',
-    '@type': 'Event',
+    '@type': 'MusicEvent',
     name: project.title,
     description: project.description,
     url: eventUrl,
@@ -278,7 +291,7 @@ export function generateEventStructuredData(project: {
     eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
     location,
     organizer: organizationRef,
-    performer: organizationRef,
+    performer,
     inLanguage: 'ko-KR',
   }
 

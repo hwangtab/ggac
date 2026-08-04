@@ -34,5 +34,41 @@
     "category": "Support & Partnerships",
     "question": "How can I support or partner with the cooperative?",
     "answer": "You can join as a supporting member, or send a support and partnership inquiry through the 'Connect' page. Companies or institutions looking to collaborate with the cooperative can join as institutional members for organizational-level cooperation."
+  },
+  {
+    "id": "faq-007",
+    "category": "About the Artists",
+    "question": "Which artists are part of Gyeonggi Art Collective?",
+    "answer": "The collective is home to a range of indie musicians and bands, including doom metal duo Sabbaha, death and symphonic black metal band Meridies, hardcore/grindcore act Pepperman, punk/garage/blues artist Blackgoat, punk-folk singer-songwriter Yoo Dong-hyuk, pansori-based Heewoo, and hip-hop artist ANAZAO. See the full roster on the ‘Artists’ page (/en/artists)."
+  },
+  {
+    "id": "faq-008",
+    "category": "About the Music",
+    "question": "What genres of music does the collective play?",
+    "answer": "From extreme metal — doom, drone, sludge, death metal, symphonic black metal, hardcore, grindcore — to punk, garage, blues, punk-folk, ambient, post-rock, hip-hop, and pansori crossover, the collective spans underground and experimental music beyond the mainstream."
+  },
+  {
+    "id": "faq-009",
+    "category": "Attending Shows",
+    "question": "Where can I see the shows live?",
+    "answer": "Shows are mostly held at live clubs in Suwon (DOT, Alleyway Taphouse, Long Player) and Seoul (Mudaeryuk, Dotolim). Upcoming and past shows are listed in the ‘Projects’ archive (/en/archive), and the fastest announcements come via Instagram (@ggartcollective)."
+  },
+  {
+    "id": "faq-010",
+    "category": "Attending Shows",
+    "question": "What are the signature concert series?",
+    "answer": "The collective self-produces series such as METAL SYNDICATE NETWORK (connecting the Seoul–Gyeonggi underground metal scene), Health Concert, the extreme/experimental party SATANIC RITUAL & PERVERSIONS, and the Suwon Sound Market."
+  },
+  {
+    "id": "faq-011",
+    "category": "Attending Shows",
+    "question": "How much do shows cost? Are they free?",
+    "answer": "It varies by show. Some are free, while others require advance booking or door tickets. Entry details and booking links are provided on each show’s detail page."
+  },
+  {
+    "id": "faq-012",
+    "category": "About the Music",
+    "question": "Where can I listen to the artists’ music?",
+    "answer": "Each artist’s detail page links out to Bandcamp, YouTube, Instagram, and more. For example, Sabbaha and Meridies have music on Bandcamp."
   }
 ]

@@ -405,6 +405,10 @@ const ProjectDetailPage = async ({ params }: ProjectPageProps) => {
         coverImage: project.coverImage,
         gallery: project.gallery,
         artistIds: project.artistIds,
+        performers: participatingArtists.map(a => ({
+          name: a.name,
+          url: `https://ggac.kr/artists/${a.slug}`,
+        })),
         ticketing: project.ticketing,
         category: project.category,
       })
