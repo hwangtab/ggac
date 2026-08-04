@@ -95,7 +95,8 @@ export default async function Home({ params }: HomeProps) {
   const combinedStructuredData = combineStructuredData([websiteData, organizationData])
 
   return (
-    <div data-home-page="true">
+    // 홈은 히어로의 포스터 문법을 페이지 끝(다크 푸터)까지 이어간다
+    <div data-home-page="true" className="bg-[#08080a]">
       {structuredDataToScript(combinedStructuredData)}
       <Hero artists={artists} />
       <ScrollReveal>

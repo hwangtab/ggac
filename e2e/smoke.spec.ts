@@ -8,8 +8,9 @@ test.describe('Smoke tests', () => {
 
   test('헤더 네비게이션 링크가 존재한다', async ({ page }) => {
     await page.goto('/', { waitUntil: 'domcontentloaded' })
-    const nav = page.locator('nav, header')
-    await expect(nav.first()).toBeVisible()
+    // 내비는 fixed라서 이를 감싼 <header>는 높이 0이다. 랜드마크 래퍼가 아니라
+    // 실제 내비게이션의 가시성을 검사해야 한다.
+    await expect(page.locator('nav#navigation')).toBeVisible()
   })
 
   test('메인 페이지가 500 에러 없이 응답한다', async ({ page }) => {

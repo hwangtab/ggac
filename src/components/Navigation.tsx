@@ -39,8 +39,8 @@ const Navigation = () => {
     navProfile?.is_auditor
   )
 
-  // 간소화된 색상 로직
-  const isDark = isHomePage && isAtTop
+  // 간소화된 색상 로직 — 홈은 페이지 전체가 다크 포스터라 스크롤 후에도 다크 유지
+  const isDark = isHomePage
   const textColor = isDark ? 'text-white' : 'text-gray-700'
   const activeColor = isDark ? 'text-accent-300' : 'text-primary-600'
   const hoverColor = isDark ? 'hover:text-accent-300' : 'hover:text-primary-600'
@@ -165,7 +165,13 @@ const Navigation = () => {
       data-at-top={isAtTop ? 'true' : 'false'}
       className={`fixed top-0 left-0 right-0 z-50 ${
         hasScrollSync ? 'transition-all duration-300' : 'transition-none'
-      } ${isHomePage && isAtTop ? 'bg-transparent' : 'bg-white/90 backdrop-blur-md shadow-sm'}`}
+      } ${
+        isHomePage
+          ? isAtTop
+            ? 'bg-transparent'
+            : 'bg-[#08080a]/85 backdrop-blur-md border-b border-white/10'
+          : 'bg-white/90 backdrop-blur-md shadow-sm'
+      }`}
     >
       <div className="tw-container-custom">
         <div className="flex items-center justify-between h-16 md:h-20 overflow-x-hidden">
@@ -416,7 +422,7 @@ const Navigation = () => {
           >
             <div
               className={`rounded-lg shadow-lg p-2 border ${
-                isHomePage && isAtTop
+                isHomePage
                   ? 'bg-gray-900/95 backdrop-blur-md text-white'
                   : 'bg-white/95 backdrop-blur-md border-gray-200/20'
               }`}
@@ -432,8 +438,8 @@ const Navigation = () => {
                   }}
                   className={`block py-3 px-4 rounded-md transition-colors duration-200 ${
                     isItemActive(item.href)
-                      ? `${activeColor} ${isHomePage && isAtTop ? 'bg-white/10' : 'bg-primary-50'}`
-                      : `${textColor} ${hoverColor} ${isHomePage && isAtTop ? 'hover:bg-white/10' : 'hover:bg-gray-50'}`
+                      ? `${activeColor} ${isHomePage ? 'bg-white/10' : 'bg-primary-50'}`
+                      : `${textColor} ${hoverColor} ${isHomePage ? 'hover:bg-white/10' : 'hover:bg-gray-50'}`
                   }`}
                 >
                   {item.label}
@@ -442,7 +448,7 @@ const Navigation = () => {
 
               {/* Mobile Auth Section */}
               <div
-                className={`border-t mt-2 pt-2 ${isHomePage && isAtTop ? 'border-white/20' : 'border-gray-200/50'}`}
+                className={`border-t mt-2 pt-2 ${isHomePage ? 'border-white/20' : 'border-gray-200/50'}`}
               >
                 {loading ? null : user ? (
                   <>
@@ -451,8 +457,8 @@ const Navigation = () => {
                       onClick={() => setIsMenuOpen(false)}
                       className={`block py-3 px-4 rounded-md transition-colors duration-200 ${
                         pathname.startsWith('/mypage')
-                          ? `${activeColor} ${isHomePage && isAtTop ? 'bg-white/10' : 'bg-primary-50'}`
-                          : `${textColor} ${hoverColor} ${isHomePage && isAtTop ? 'hover:bg-white/10' : 'hover:bg-gray-50'}`
+                          ? `${activeColor} ${isHomePage ? 'bg-white/10' : 'bg-primary-50'}`
+                          : `${textColor} ${hoverColor} ${isHomePage ? 'hover:bg-white/10' : 'hover:bg-gray-50'}`
                       }`}
                     >
                       {t('nav.mypage')}
@@ -462,7 +468,7 @@ const Navigation = () => {
                         handleLogout()
                         setIsMenuOpen(false)
                       }}
-                      className={`block w-full text-left py-3 px-4 rounded-md transition-colors duration-200 ${textColor} ${hoverColor} ${isHomePage && isAtTop ? 'hover:bg-white/10' : 'hover:bg-gray-50'}`}
+                      className={`block w-full text-left py-3 px-4 rounded-md transition-colors duration-200 ${textColor} ${hoverColor} ${isHomePage ? 'hover:bg-white/10' : 'hover:bg-gray-50'}`}
                     >
                       {t('nav.logout')}
                     </button>
@@ -474,8 +480,8 @@ const Navigation = () => {
                       onClick={() => setIsMenuOpen(false)}
                       className={`block py-3 px-4 rounded-md transition-colors duration-200 ${
                         pathname === '/login'
-                          ? `${activeColor} ${isHomePage && isAtTop ? 'bg-white/10' : 'bg-primary-50'}`
-                          : `${textColor} ${hoverColor} ${isHomePage && isAtTop ? 'hover:bg-white/10' : 'hover:bg-gray-50'}`
+                          ? `${activeColor} ${isHomePage ? 'bg-white/10' : 'bg-primary-50'}`
+                          : `${textColor} ${hoverColor} ${isHomePage ? 'hover:bg-white/10' : 'hover:bg-gray-50'}`
                       }`}
                     >
                       {t('nav.login')}
@@ -483,7 +489,7 @@ const Navigation = () => {
                     <Link
                       href="/signup"
                       onClick={() => setIsMenuOpen(false)}
-                      className={`block py-3 px-4 rounded-md transition-colors duration-200 font-medium text-white bg-primary-600 ${isHomePage && isAtTop ? 'hover:bg-primary-700' : 'hover:bg-primary-700'}`}
+                      className={`block py-3 px-4 rounded-md transition-colors duration-200 font-medium text-white bg-primary-600 ${isHomePage ? 'hover:bg-primary-700' : 'hover:bg-primary-700'}`}
                     >
                       {t('nav.join')}
                     </Link>
@@ -493,17 +499,15 @@ const Navigation = () => {
                 {/* 언어 전환 */}
                 <div className="flex items-center justify-center mt-3 pb-1">
                   <LocaleSwitcher
-                    className={isHomePage && isAtTop ? 'text-gray-300' : 'text-gray-600'}
+                    className={isHomePage ? 'text-gray-300' : 'text-gray-600'}
                     activeClassName={
-                      isHomePage && isAtTop
+                      isHomePage
                         ? 'font-semibold text-accent-300'
                         : 'font-semibold text-primary-600'
                     }
-                    inactiveClassName={`${isHomePage && isAtTop ? 'text-gray-300' : 'text-gray-600'} hover:opacity-100`}
+                    inactiveClassName={`${isHomePage ? 'text-gray-300' : 'text-gray-600'} hover:opacity-100`}
                     separatorClassName={
-                      isHomePage && isAtTop
-                        ? 'opacity-30 text-gray-300'
-                        : 'opacity-30 text-gray-600'
+                      isHomePage ? 'opacity-30 text-gray-300' : 'opacity-30 text-gray-600'
                     }
                   />
                 </div>
