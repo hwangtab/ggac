@@ -30,7 +30,6 @@ const DEFAULT_GLOBAL_DATA: GlobalData = {
   siteName: '경기아트콜렉티브 협동조합',
   siteDescription: '서울 밖에서 시끄러워집니다',
   joinFormUrl: '',
-  supportFormUrl: '',
   contact: {
     email: 'contact@ggac.kr',
     phone: '',

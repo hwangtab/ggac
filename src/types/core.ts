@@ -2,7 +2,6 @@ export interface GlobalData {
   siteName: string
   siteDescription: string
   joinFormUrl: string
-  supportFormUrl: string
   contact: ContactInfo
   social: SocialInfo
   businessInfo: BusinessInfo
