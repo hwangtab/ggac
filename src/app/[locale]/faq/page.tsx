@@ -23,7 +23,7 @@ export async function generateMetadata({
     title: isEn ? 'FAQ' : '자주 묻는 질문',
     description: isEn
       ? 'Frequently asked questions about Gyeonggi Art Collective — membership, activities, collaboration, and more.'
-      : '경기아트콜렉티브 협동조합에 대해 자주 묻는 질문과 답변입니다. 조합 가입, 활동, 협업, 후원 등에 대한 정보를 확인하세요.',
+      : '경기아트콜렉티브 협동조합에 대해 자주 묻는 질문과 답변입니다. 조합 가입, 활동, 협업 등에 대한 정보를 확인하세요.',
     keywords: [
       'FAQ',
       '자주 묻는 질문',

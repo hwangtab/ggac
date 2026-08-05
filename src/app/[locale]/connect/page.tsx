@@ -29,11 +29,10 @@ export async function generateMetadata({
     title: isEn ? 'Connect' : '소통과 참여',
     description: isEn
       ? 'Get in touch with Gyeonggi Art Collective. Join as a member, explore partnership opportunities, or simply say hello.'
-      : '경기도 예술가들과 함께하세요. 조합원 가입, 후원, 협업 문의 등 다양한 방법으로 예술 생태계 발전에 참여할 수 있습니다.',
+      : '경기도에서 활동하는 예술가·기획자를 찾습니다. 조합원 가입과 협업 문의를 받습니다.',
     keywords: [
       '조합원가입',
       '예술가모집',
-      '후원',
       '협업',
       '문화예술지원',
       '경기도예술',
@@ -51,7 +50,7 @@ export async function generateMetadata({
       title: isEn ? 'Connect | Gyeonggi Art Collective' : '소통과 참여 | 경기아트콜렉티브 협동조합',
       description: isEn
         ? 'Get in touch with Gyeonggi Art Collective. Join as a member, explore partnership opportunities, or simply say hello.'
-        : '경기도 예술가들과 함께하세요. 조합원 가입, 후원, 협업 문의 등 다양한 방법으로 예술 생태계 발전에 참여할 수 있습니다.',
+        : '경기도에서 활동하는 예술가·기획자를 찾습니다. 조합원 가입과 협업 문의를 받습니다.',
       url: isEn ? `${base}/en/connect` : `${base}/connect`,
       siteName: isEn ? 'Gyeonggi Art Collective' : '경기아트콜렉티브 협동조합',
       images: [
@@ -266,27 +265,6 @@ const ConnectPage = async ({ params }: ConnectPageProps) => {
               <div className="text-center">
                 <JoinCta />
               </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Support Section */}
-        <section className="py-16 md:py-24 bg-gray-50">
-          <div className="tw-container-custom">
-            <div className="max-w-4xl mx-auto text-center">
-              <h2 className="tw-heading-secondary mb-6">{t('supportHeading')}</h2>
-              <p className="tw-text-body text-gray-600 mb-8 max-w-2xl mx-auto">
-                {t('supportBody')}
-              </p>
-
-              <a
-                href="https://docs.google.com/forms/d/e/1FAIpQLScicp159Y6DgYJv2N-x4DGigsLWiOCLf6jl-meRSfXfuMahAQ/viewform?usp=header"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="tw-btn-secondary text-lg px-8 py-4 sm:px-8 sm:py-3 rounded-lg w-full sm:w-auto text-center min-h-[44px] hover:-translate-y-0.5 hover:shadow-lg transition-all duration-300"
-              >
-                {t('supportCta')}
-              </a>
             </div>
           </div>
         </section>

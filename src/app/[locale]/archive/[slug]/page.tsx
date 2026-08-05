@@ -209,13 +209,17 @@ export async function generateMetadata({ params }: ProjectPageProps): Promise<Me
       console.error(`[${timestamp}] generateMetadata: Image generation error:`, imageError)
     }
 
-    // 프로젝트 요약 생성 - 에러 처리 강화
-    const fallbackSummary = isEn ? 'Gyeonggi Art Collective project' : '경기아트콜렉티브 프로젝트'
-    let projectSummary = fallbackSummary
+    // 프로젝트 요약(메타·OG 설명) 생성.
+    // 본문이 있으면 그 요약을, 비어 있으면(신규 공연 등) 답변-우선 리드를 사용한다.
+    // getProjectSummary는 lead를 모르므로, 본문이 없을 때 제네릭으로 떨어지는 것을 막는다.
+    const genericSummary = isEn ? 'Gyeonggi Art Collective project' : '경기아트콜렉티브 프로젝트'
+    const leadSummary = project.lead || deriveProjectLead(project, resolvedParams.locale)
+    let projectSummary = leadSummary || genericSummary
     try {
-      projectSummary = sanitizeMetadataString(getProjectSummary(project, 150))
-      if (!projectSummary || projectSummary.trim().length === 0) {
-        projectSummary = fallbackSummary
+      const fromBody = sanitizeMetadataString(getProjectSummary(project, 150))
+      // 실제 본문에서 뽑힌 요약(제네릭·빈값이 아닌 경우)만 우선 사용.
+      if (fromBody && fromBody.trim() && fromBody !== genericSummary) {
+        projectSummary = fromBody
       }
     } catch (summaryError) {
       console.error(`[${timestamp}] generateMetadata: Summary generation error:`, summaryError)
