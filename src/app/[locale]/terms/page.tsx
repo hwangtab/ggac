@@ -15,7 +15,7 @@ export async function generateMetadata({
     title: isEn ? 'Terms of Use' : '이용약관',
     description: isEn
       ? 'Terms of Use for the Gyeonggi Art Collective website.'
-      : '경기아트콜렉티브 협동조합 웹사이트 이용약관을 확인하세요. 서비스 이용 시 준수해야 할 규정과 조건들을 안내합니다.',
+      : '경기아트콜렉티브 협동조합 웹사이트 이용약관입니다. 서비스를 쓸 때 지켜야 할 조건을 적어 뒀습니다.',
     keywords: ['이용약관', '서비스 약관', '경기아트콜렉티브', '협동조합', '웹사이트 이용규정'],
     alternates: getLocaleAlternates('/terms', locale),
     openGraph: {
@@ -24,7 +24,7 @@ export async function generateMetadata({
         : '이용약관 - 경기아트콜렉티브 협동조합',
       description: isEn
         ? 'Terms of Use for the Gyeonggi Art Collective website.'
-        : '경기아트콜렉티브 협동조합 웹사이트 이용약관을 확인하세요.',
+        : '경기아트콜렉티브 협동조합 웹사이트 이용약관입니다.',
       url: isEn ? `${base}/en/terms` : `${base}/terms`,
       siteName: isEn ? 'Gyeonggi Art Collective' : '경기아트콜렉티브 협동조합',
       type: 'website',

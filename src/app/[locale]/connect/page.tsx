@@ -26,9 +26,9 @@ export async function generateMetadata({
   const isEn = locale === 'en'
   const base = getSiteUrl()
   return {
-    title: isEn ? 'Connect' : '소통과 참여',
+    title: isEn ? 'Join & Collaborate' : '조합원 가입·협업 문의',
     description: isEn
-      ? 'Get in touch with Gyeonggi Art Collective. Join as a member, explore partnership opportunities, or simply say hello.'
+      ? 'We are looking for artists and organizers working in Gyeonggi. Membership and collaboration inquiries welcome.'
       : '경기도에서 활동하는 예술가·기획자를 찾습니다. 조합원 가입과 협업 문의를 받습니다.',
     keywords: [
       '조합원가입',
@@ -47,9 +47,11 @@ export async function generateMetadata({
     publisher: '경기아트콜렉티브 협동조합',
     alternates: getLocaleAlternates('/connect', locale),
     openGraph: {
-      title: isEn ? 'Connect | Gyeonggi Art Collective' : '소통과 참여 | 경기아트콜렉티브 협동조합',
+      title: isEn
+        ? 'Join & Collaborate | Gyeonggi Art Collective'
+        : '조합원 가입·협업 문의 | 경기아트콜렉티브 협동조합',
       description: isEn
-        ? 'Get in touch with Gyeonggi Art Collective. Join as a member, explore partnership opportunities, or simply say hello.'
+        ? 'We are looking for artists and organizers working in Gyeonggi. Membership and collaboration inquiries welcome.'
         : '경기도에서 활동하는 예술가·기획자를 찾습니다. 조합원 가입과 협업 문의를 받습니다.',
       url: isEn ? `${base}/en/connect` : `${base}/connect`,
       siteName: isEn ? 'Gyeonggi Art Collective' : '경기아트콜렉티브 협동조합',
@@ -58,7 +60,7 @@ export async function generateMetadata({
           url: '/images/logo/gac_og.webp',
           width: 1200,
           height: 630,
-          alt: '경기아트콜렉티브 협동조합 - 소통과 참여',
+          alt: '경기아트콜렉티브 협동조합 — 조합원 가입·협업 문의',
         },
       ],
       locale: getOgLocale(locale),
@@ -66,9 +68,11 @@ export async function generateMetadata({
     },
     twitter: {
       card: 'summary_large_image',
-      title: isEn ? 'Connect | Gyeonggi Art Collective' : '소통과 참여 | 경기아트콜렉티브 협동조합',
+      title: isEn
+        ? 'Join & Collaborate | Gyeonggi Art Collective'
+        : '조합원 가입·협업 문의 | 경기아트콜렉티브 협동조합',
       description: isEn
-        ? 'Get in touch with Gyeonggi Art Collective. Join as a member, explore partnership opportunities, or simply say hello.'
+        ? 'We are looking for artists and organizers working in Gyeonggi. Membership and collaboration inquiries welcome.'
         : '당신의 참여로 새로운 물결이 시작됩니다. 경기도 예술가들과 함께하세요.',
       images: ['/images/logo/gac_og.webp'],
     },

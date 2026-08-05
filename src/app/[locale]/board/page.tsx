@@ -7,41 +7,54 @@ import type { Metadata } from 'next'
 
 export const revalidate = 60
 
-export async function generateMetadata(): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>
+}): Promise<Metadata> {
   // 페이지네이션(?page=)은 클라이언트로 이관됨 — generateMetadata에서 searchParams를
   // 읽으면 라우트가 동적 렌더링으로 전환되므로 canonical은 목록 루트로 고정한다.
-  const canonical = '/board'
+  const { locale } = await params
+  const isEn = locale === 'en'
+  const canonical = isEn ? '/en/board' : '/board'
+  // 로케일 분기가 없어 /en/board가 한국어 제목·설명을 그대로 내보내고 있었다.
+  const siteName = isEn ? 'Gyeonggi Art Collective' : '경기아트콜렉티브 협동조합'
+  const title = isEn ? 'Members Board' : '조합원 게시판'
+  const description = isEn
+    ? 'The board our members write on. Announcements and news from our activities go up here.'
+    : '조합원들이 쓰는 게시판입니다. 공지와 활동 소식이 여기 올라옵니다.'
 
   return {
-    title: '자유게시판',
-    description:
-      '경기아트콜렉티브 협동조합 조합원들의 이야기, 공지, 활동 소식을 나누는 공간입니다.',
-    keywords: ['자유게시판', '경기아트콜렉티브', '공지', '활동소식', '협동조합게시판'],
-    authors: [{ name: '경기아트콜렉티브 협동조합' }],
+    title,
+    description,
+    keywords: isEn
+      ? ['members board', 'Gyeonggi Art Collective', 'announcements', 'cooperative']
+      : ['조합원 게시판', '자유게시판', '경기아트콜렉티브', '공지', '활동소식', '협동조합게시판'],
+    authors: [{ name: siteName }],
     alternates: {
       canonical,
-      languages: { 'ko-KR': canonical },
+      languages: { 'ko-KR': '/board', 'en-US': '/en/board' },
     },
     openGraph: {
-      title: '자유게시판 | 경기아트콜렉티브 협동조합',
-      description: '경기아트콜렉티브 협동조합 조합원들의 이야기와 활동 소식을 나눕니다.',
+      title: `${title} | ${siteName}`,
+      description,
       url: canonical,
-      siteName: '경기아트콜렉티브 협동조합',
+      siteName,
       images: [
         {
           url: '/images/logo/gac_og.webp',
           width: 1200,
           height: 630,
-          alt: '경기아트콜렉티브 협동조합',
+          alt: siteName,
         },
       ],
-      locale: 'ko_KR',
+      locale: isEn ? 'en_US' : 'ko_KR',
       type: 'website',
     },
     twitter: {
       card: 'summary_large_image',
-      title: '자유게시판 | 경기아트콜렉티브 협동조합',
-      description: '경기아트콜렉티브 협동조합 조합원들의 이야기와 활동 소식을 나눕니다.',
+      title: `${title} | ${siteName}`,
+      description,
       images: ['/images/logo/gac_og.webp'],
     },
     robots: {
@@ -65,7 +78,7 @@ interface BoardPageProps {
 const boardBreadcrumbJsonLd = structuredDataToScript(
   generateBreadcrumbStructuredData([
     { name: '홈', url: 'https://ggac.kr' },
-    { name: '자유게시판', url: 'https://ggac.kr/board' },
+    { name: '조합원 게시판', url: 'https://ggac.kr/board' },
   ])
 )
 

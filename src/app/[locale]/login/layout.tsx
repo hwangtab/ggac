@@ -2,7 +2,9 @@ import { Suspense } from 'react'
 import { NOINDEX_METADATA } from '@/constants/seo'
 import type { ReactNode } from 'react'
 
-export const metadata = NOINDEX_METADATA
+// 탭 제목이 사이트명만 나와 여러 탭을 띄웠을 때 구분되지 않았다.
+// 색인은 그대로 막는다.
+export const metadata = { ...NOINDEX_METADATA, title: '로그인' }
 
 // 로그인 페이지(클라이언트)가 useSearchParams(?redirect=)를 사용하므로 자체
 // Suspense 경계가 필요하다. 과거에는 [locale]/layout.tsx의 전역 Suspense가

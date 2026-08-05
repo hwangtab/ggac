@@ -15,7 +15,7 @@ export async function generateMetadata({
     title: isEn ? 'Privacy Policy' : '개인정보처리방침',
     description: isEn
       ? 'Privacy Policy for the Gyeonggi Art Collective website.'
-      : '경기아트콜렉티브 협동조합의 개인정보처리방침을 확인하세요. 개인정보 수집, 이용, 보관, 파기에 관한 정책을 안내합니다.',
+      : '경기아트콜렉티브 협동조합의 개인정보처리방침입니다. 개인정보를 어떻게 모으고 쓰고 보관하고 지우는지 적어 뒀습니다.',
     keywords: ['개인정보처리방침', '개인정보보호', '경기아트콜렉티브', '협동조합', '개인정보 정책'],
     alternates: getLocaleAlternates('/privacy', locale),
     openGraph: {
@@ -24,7 +24,7 @@ export async function generateMetadata({
         : '개인정보처리방침 - 경기아트콜렉티브 협동조합',
       description: isEn
         ? 'Privacy Policy for the Gyeonggi Art Collective website.'
-        : '경기아트콜렉티브 협동조합의 개인정보처리방침을 확인하세요.',
+        : '경기아트콜렉티브 협동조합의 개인정보처리방침입니다.',
       url: isEn ? `${base}/en/privacy` : `${base}/privacy`,
       siteName: isEn ? 'Gyeonggi Art Collective' : '경기아트콜렉티브 협동조합',
       type: 'website',
