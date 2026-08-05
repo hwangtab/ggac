@@ -42,6 +42,17 @@ const askYesNo = async (q, def = 'n') => {
   const a = (await ask(`${q} (y/n)`, def)).toLowerCase()
   return a === 'y' || a === 'yes'
 }
+// YYYY-MM-DD 형식만 허용(재프롬프트). optional이면 빈칸 허용.
+// 형식이 어긋나면 예정/지난 문자열 비교와 자동 리드의 날짜 파싱이 조용히 깨진다.
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+const askDate = async (q, def = '', { optional = false } = {}) => {
+  for (;;) {
+    const a = await ask(q, def)
+    if (!a && optional) return ''
+    if (DATE_RE.test(a)) return a
+    output.write(`  ⚠️  YYYY-MM-DD 형식으로 입력하세요 (예: 2026-09-15)${optional ? ', 없으면 빈칸' : ''}.\n`)
+  }
+}
 
 function nextId(list) {
   const max = list.reduce((m, p) => {
@@ -62,7 +73,11 @@ function slugify(s) {
 
 async function main() {
   const ko = JSON.parse(readFileSync(KO_PATH, 'utf8'))
-  const en = existsSync(EN_PATH) ? JSON.parse(readFileSync(EN_PATH, 'utf8')) : ko
+  // en 파일이 없으면 ko를 '복제'해서 쓴다 — 같은 배열을 참조하면 en 항목이 ko에도
+  // 중복 push되는 버그가 생긴다.
+  const en = existsSync(EN_PATH)
+    ? JSON.parse(readFileSync(EN_PATH, 'utf8'))
+    : JSON.parse(JSON.stringify(ko))
 
   console.log('\n🎸 새 공연·행사 추가 (SEO 필드 스캐폴드)\n')
 
@@ -84,18 +99,27 @@ async function main() {
   const catKey = (await ask('선택', '1')) === '2' ? '2' : '1'
   const category = CATEGORY[catKey]
 
-  const today = new Date().toISOString().slice(0, 10)
-  const publishedDate = await ask('발행일(공지일) YYYY-MM-DD', today)
+  // KST 기준 오늘(예정/지난 판정과 동일 기준).
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date())
+  const publishedDate = await askDate('발행일(공지일) YYYY-MM-DD', today)
 
   let eventDate = ''
   let venue = null
   let hostedByGgac = false
   if (catKey === '1') {
-    eventDate = await ask('공연일 YYYY-MM-DD (없으면 빈칸)')
+    eventDate = await askDate('공연일 YYYY-MM-DD (없으면 빈칸)', '', { optional: true })
     const venueName = await ask('공연장 이름 (없으면 빈칸)')
     if (venueName) {
-      const venueAddr = await ask('공연장 주소 (없으면 빈칸)')
+      // 예정 공연(미래 eventDate)은 주소가 있어야 Google 이벤트 리치결과 자격을 얻는다.
+      const addrRequired = Boolean(eventDate && eventDate >= today)
+      if (addrRequired) {
+        output.write('  ℹ️  예정 공연은 주소가 있어야 Google 이벤트 리치결과에 노출됩니다.\n')
+      }
+      const venueAddr = await ask('공연장 주소' + (addrRequired ? ' (권장)' : ' (없으면 빈칸)'))
       venue = venueAddr ? { name: venueName, address: venueAddr } : { name: venueName }
+      if (addrRequired && !venueAddr) {
+        output.write('  ⚠️  주소 없이 진행합니다 — 나중에 venue.address를 채우면 좋습니다.\n')
+      }
     }
     hostedByGgac = await askYesNo('경기아트콜렉티브 기획 공연인가?', 'y')
   }

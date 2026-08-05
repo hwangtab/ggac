@@ -125,15 +125,22 @@ export default function ProjectDetailContent({
             </div>
 
             <div className="flex flex-wrap items-center justify-center gap-3 mb-6">
-              {project.eventDate && (
-                <span
-                  className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${
-                    isUpcoming ? 'bg-primary-600 text-white' : 'bg-gray-200 text-gray-600'
-                  }`}
-                >
-                  {isUpcoming ? (isEn ? 'Upcoming' : '예정') : isEn ? 'Past' : '지난 공연'}
-                </span>
-              )}
+              {project.eventDate &&
+                (() => {
+                  // 취소 > 예정 > 지난 순으로 판정(취소된 미래 공연이 '지난'으로 표시되던 오류 수정).
+                  const [badgeClass, badgeLabel] = project.cancelled
+                    ? ['bg-red-100 text-red-700', isEn ? 'Cancelled' : '취소']
+                    : isUpcoming
+                      ? ['bg-primary-600 text-white', isEn ? 'Upcoming' : '예정']
+                      : ['bg-gray-200 text-gray-600', isEn ? 'Past' : '지난 공연']
+                  return (
+                    <span
+                      className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${badgeClass}`}
+                    >
+                      {badgeLabel}
+                    </span>
+                  )
+                })()}
               <span className="inline-block px-4 py-2 bg-primary-100 text-primary-700 font-medium rounded-full">
                 {localizeArchiveCategory(project.category, locale)}
               </span>

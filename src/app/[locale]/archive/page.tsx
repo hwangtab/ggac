@@ -8,6 +8,7 @@ import {
   structuredDataToScript,
 } from '@/utils/structuredData'
 import { getSiteUrl, getLocaleAlternates, getOgLocale } from '@/utils/site'
+import { todaySeoul } from '@/utils/date'
 import { setRequestLocale } from 'next-intl/server'
 import type { Metadata } from 'next'
 
@@ -110,7 +111,7 @@ const ArchivePage = async ({ params }: ArchivePageProps) => {
   // 불일치를 내지 않도록). ISR(revalidate)로 '오늘'이 주기적으로 갱신된다.
   // 미래 공연일(eventDate)이 있고 취소되지 않은 공연을 '예정'으로, eventDate
   // 오름차순 정렬해 상단에 노출한다. 나머지는 기존 발행일 역순 아카이브.
-  const todayStr = new Date().toISOString().slice(0, 10)
+  const todayStr = todaySeoul()
   const isUpcoming = (p: (typeof allProjects)[number]) =>
     !!p.eventDate && !p.cancelled && p.eventDate >= todayStr
   const upcomingProjects = allProjects

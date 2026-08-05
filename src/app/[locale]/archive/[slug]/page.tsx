@@ -9,6 +9,7 @@ import {
   type Project as ProjectType,
 } from '@/lib/data'
 import { deriveProjectLead } from '@/utils/projectLead'
+import { todaySeoul } from '@/utils/date'
 import { fetchLinkPreview } from '@/utils/linkPreview'
 import { getProjectSummary } from '@/utils/projectUtils'
 import { setRequestLocale } from 'next-intl/server'
@@ -394,12 +395,21 @@ const ProjectDetailPage = async ({ params }: ProjectPageProps) => {
     { name: project.title, url: `https://ggac.kr/archive/${project.slug}` },
   ])
 
+  // 예정/지난 판정은 서버에서(클라이언트 날짜 재계산 → 하이드레이션 불일치 방지).
+  // KST 기준 — UTC로 계산하면 공연이 끝난 뒤에도 최대 9시간 '예정'으로 잔류한다.
+  const todayStr = todaySeoul()
+  const isUpcoming = Boolean(
+    project.eventDate && !project.cancelled && project.eventDate >= todayStr
+  )
+
   const projectSchema = isEvent
     ? generateEventStructuredData({
         title: project.title,
         // 스키마 description은 답변-우선 리드 우선(수동 없으면 자동 생성, 그다음 본문).
         description:
-          project.lead || deriveProjectLead(project, resolvedParams.locale) || project.description,
+          project.lead ||
+          deriveProjectLead(project, resolvedParams.locale, { isUpcoming }) ||
+          project.description,
         slug: project.slug,
         publishedDate: project.publishedDate,
         eventDate: project.eventDate,
@@ -418,7 +428,9 @@ const ProjectDetailPage = async ({ params }: ProjectPageProps) => {
     : generateProjectStructuredData({
         title: project.title,
         description:
-          project.lead || deriveProjectLead(project, resolvedParams.locale) || project.description,
+          project.lead ||
+          deriveProjectLead(project, resolvedParams.locale, { isUpcoming }) ||
+          project.description,
         slug: project.slug,
         coverImage: project.coverImage,
         gallery: project.gallery,
@@ -426,12 +438,6 @@ const ProjectDetailPage = async ({ params }: ProjectPageProps) => {
       })
 
   const structuredData = combineStructuredData([projectSchema, breadcrumbData])
-
-  // 예정/지난 판정은 서버에서(클라이언트 날짜 재계산 → 하이드레이션 불일치 방지).
-  const todayStr = new Date().toISOString().slice(0, 10)
-  const isUpcoming = Boolean(
-    project.eventDate && !project.cancelled && project.eventDate >= todayStr
-  )
 
   return (
     <>
