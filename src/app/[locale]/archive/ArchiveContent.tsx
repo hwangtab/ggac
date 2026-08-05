@@ -14,6 +14,17 @@ import type { ArchiveCategory } from '@/constants/categories'
 import type { Project } from '@/types'
 import PageHero from '@/components/PageHero'
 
+/** 2026-07-25 → 2026.07.25 — 홈 카드와 같은 포스터 날짜 스탬프 표기 */
+function toStamp(value: string, locale: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  if (locale === 'en') {
+    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+  }
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}.${pad(date.getMonth() + 1)}.${pad(date.getDate())}`
+}
+
 interface ArchiveContentProps {
   projects: Project[]
   pageSize: number
@@ -54,7 +65,6 @@ export const ArchiveView = ({
 }: ArchiveContentProps & { selectedCategory: string; requestedPage: number }) => {
   const t = useTranslations('archive')
   const locale = useLocale()
-  const dateLocale = locale === 'en' ? 'en-US' : 'ko-KR'
 
   const filteredProjects = useMemo(() => {
     if (selectedCategory === 'All') return projects
@@ -147,19 +157,19 @@ export const ArchiveView = ({
 
                         <div className="p-6 flex-grow flex flex-col">
                           <div className="flex items-center justify-between mb-3">
-                            <span className="inline-block px-3 py-1 bg-primary-100 text-primary-700 text-sm font-medium rounded-full">
-                              {localizeArchiveCategory(project.category, locale)}
+                            {/* 홈 카드와 같은 포스터 스탬프 표기 — 같은 아홉 건이
+                                두 곳에서 다른 형식으로 나오던 불일치를 없앤다 */}
+                            <span className="text-[11px] uppercase tracking-[0.2em] text-white/70">
+                              [{localizeArchiveCategory(project.category, locale)}]
                             </span>
-                            <span className="text-sm text-gray-500">
-                              {new Date(project.publishedDate).toLocaleDateString(dateLocale)}
+                            <span className="text-[11px] tabular-nums tracking-[0.12em] text-white/60">
+                              {toStamp(project.publishedDate, locale)}
                             </span>
                           </div>
 
-                          <div className="h-16 mb-2 flex items-start">
-                            <h2 className="text-2xl font-post font-semibold text-gray-700 group-hover:text-primary-600 transition-colors duration-200 line-clamp-2">
-                              {project.title}
-                            </h2>
-                          </div>
+                          <h2 className="font-post mb-2 line-clamp-2 text-2xl font-bold leading-tight text-white transition-colors duration-200">
+                            {project.title}
+                          </h2>
 
                           <p className="text-gray-600 text-sm mb-4 line-clamp-3">
                             {getProjectSummary(project, 120)}
