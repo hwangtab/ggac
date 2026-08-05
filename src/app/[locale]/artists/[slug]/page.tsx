@@ -84,7 +84,7 @@ export async function generateMetadata({ params }: ArtistPageProps): Promise<Met
     artist.oneLiner ||
     (isEn
       ? `Artist ${artist.name} of Gyeonggi Art Collective`
-      : `경기아트콜렉티브 소속 아티스트 ${artist.name}의 프로필`)
+      : `경기아트콜렉티브와 함께하는 ${artist.name}의 프로필입니다.`)
   const baseUrl = getBaseUrl()
   // og:url도 로케일 프리픽스를 반영(canonical과 언어 일치). en은 /en 경로.
   const pageUrl = isEn
