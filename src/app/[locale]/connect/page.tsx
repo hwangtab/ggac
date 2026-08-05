@@ -182,15 +182,27 @@ const ConnectPage = async ({ params }: ConnectPageProps) => {
         <section className="py-16 md:py-24">
           <div className="tw-container-custom">
             <div className="max-w-4xl mx-auto">
-              <div className="text-center mb-12">
-                <h2 className="tw-heading-secondary mb-4">{t('joinHeading')}</h2>
-                <p className="tw-text-body text-gray-600">{t('joinSubtitle')}</p>
+              {/* 홈 섹션·PageHero와 같은 문법: 킥커 → 헤어라인 → 왼쪽 정렬 제목 → 부제.
+                  이 페이지만 가운데 정렬 제목을 써서 같은 사이트로 읽히지 않았다. */}
+              <div className="mb-10">
+                <div className="flex items-center gap-3 sm:gap-4">
+                  <p className="text-[11px] font-medium uppercase tracking-[0.28em] text-white/65">
+                    JOIN
+                  </p>
+                  <span aria-hidden="true" className="h-px flex-1 bg-white/25" />
+                </div>
+                <h2 className="font-post mt-6 text-3xl font-bold leading-tight tracking-tight sm:text-4xl">
+                  {t('joinHeading')}
+                </h2>
+                <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-white/70 sm:text-base">
+                  {t('joinSubtitle')}
+                </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
                 {/* 자격 */}
-                <div className="block bg-white rounded-2xl p-8 shadow-lg h-full">
-                  <h3 className="text-3xl font-serif font-semibold mb-6 text-center text-primary-600 transition-colors duration-300">
+                <div className="h-full border border-white/15 p-8">
+                  <h3 className="font-post mb-6 text-2xl font-bold tracking-tight">
                     {t('qualTitle')}
                   </h3>
                   <div className="space-y-6">
@@ -222,16 +234,14 @@ const ConnectPage = async ({ params }: ConnectPageProps) => {
                       </p>
                     </div>
                   </div>
-                  <div className="mt-8 pt-6 border-t border-gray-100">
-                    <p className="text-sm text-gray-500 text-center group-hover:text-primary-600 transition-colors duration-300">
-                      {t('qualFooter')}
-                    </p>
+                  <div className="mt-8 border-t border-white/15 pt-6">
+                    <p className="text-sm text-gray-500">{t('qualFooter')}</p>
                   </div>
                 </div>
 
                 {/* 약속 */}
-                <div className="block bg-white rounded-2xl p-8 shadow-lg h-full">
-                  <h3 className="text-3xl font-serif font-semibold mb-6 text-center text-primary-600 transition-colors duration-300">
+                <div className="h-full border border-white/15 p-8">
+                  <h3 className="font-post mb-6 text-2xl font-bold tracking-tight">
                     {t('commitTitle')}
                   </h3>
                   <div className="space-y-6">
@@ -254,10 +264,8 @@ const ConnectPage = async ({ params }: ConnectPageProps) => {
                       </p>
                     </div>
                   </div>
-                  <div className="mt-8 pt-6 border-t border-gray-100">
-                    <p className="text-sm text-gray-500 text-center leading-relaxed group-hover:text-accent-600 transition-colors duration-300">
-                      {t('commitFooter')}
-                    </p>
+                  <div className="mt-8 border-t border-white/15 pt-6">
+                    <p className="text-sm leading-relaxed text-gray-500">{t('commitFooter')}</p>
                   </div>
                 </div>
               </div>
@@ -273,97 +281,94 @@ const ConnectPage = async ({ params }: ConnectPageProps) => {
         <section className="py-16 md:py-24">
           <div className="tw-container-custom">
             <div className="max-w-4xl mx-auto">
-              <div className="text-center mb-12">
-                <h2 className="tw-heading-secondary mb-4">{tf('contact')}</h2>
-                <p className="tw-text-body text-gray-600">{t('contactBody')}</p>
+              {/* 홈 섹션·PageHero와 같은 문법: 킥커 → 헤어라인 → 왼쪽 정렬 제목 → 부제.
+                  이 페이지만 가운데 정렬 제목을 써서 같은 사이트로 읽히지 않았다. */}
+              <div className="mb-10">
+                <div className="flex items-center gap-3 sm:gap-4">
+                  <p className="text-[11px] font-medium uppercase tracking-[0.28em] text-white/65">
+                    CONTACT
+                  </p>
+                  <span aria-hidden="true" className="h-px flex-1 bg-white/25" />
+                </div>
+                <h2 className="font-post mt-6 text-3xl font-bold leading-tight tracking-tight sm:text-4xl">
+                  {tf('contact')}
+                </h2>
+                <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-white/70 sm:text-base">
+                  {t('contactBody')}
+                </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
+              {/*
+                연락처 카드 셋은 같은 문법을 쓴다: 대문자 라벨 → 항목명 → 값.
+                이메일만 원형 배지에 @ 글리프가 남아 TEL·MAP과 어긋났고,
+                라운드·그림자·hover 확대도 포스터 언어(직각 + 헤어라인)와 맞지 않았다.
+              */}
+              <div className="grid grid-cols-1 gap-6 text-center md:grid-cols-3">
                 {safeEmailHref && (
                   <a
                     href={safeEmailHref}
-                    className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 group cursor-pointer"
+                    className="group border border-white/15 p-6 transition-colors duration-300 hover:border-white/50"
                   >
-                    <div className="w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:bg-primary-200 transition-colors duration-300">
-                      <span className="text-primary-600 font-semibold group-hover:scale-110 transition-transform duration-300">
-                        @
-                      </span>
-                    </div>
-                    <h3 className="font-semibold mb-2 group-hover:text-primary-600 transition-colors duration-300">
-                      {tf('email')}
-                    </h3>
-                    <p className="text-gray-600 text-sm group-hover:text-primary-600 transition-colors duration-300">
-                      {globalData.contact.email}
+                    <p className="mb-4 text-[11px] uppercase tracking-[0.28em] text-white/55">
+                      MAIL
                     </p>
+                    <h3 className="mb-2 font-semibold">{tf('email')}</h3>
+                    <p className="text-sm text-gray-600">{globalData.contact.email}</p>
                   </a>
                 )}
 
                 {safePhoneHref && (
                   <a
                     href={safePhoneHref}
-                    className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 group cursor-pointer"
+                    className="group border border-white/15 p-6 transition-colors duration-300 hover:border-white/50"
                   >
-                    <p className="mx-auto mb-4 text-[11px] uppercase tracking-[0.28em] text-white/55">
+                    <p className="mb-4 text-[11px] uppercase tracking-[0.28em] text-white/55">
                       TEL
                     </p>
-                    <h3 className="font-semibold mb-2 group-hover:text-primary-600 transition-colors duration-300">
-                      {tf('phone')}
-                    </h3>
-                    <p className="text-gray-600 text-sm group-hover:text-primary-600 transition-colors duration-300">
-                      {globalData.contact.phone}
-                    </p>
+                    <h3 className="mb-2 font-semibold">{tf('phone')}</h3>
+                    <p className="text-sm text-gray-600">{globalData.contact.phone}</p>
                   </a>
                 )}
 
-                <div
-                  className={`bg-white rounded-2xl p-6 shadow-lg transition-all duration-300 group ${
-                    safeAddressHref
-                      ? 'hover:shadow-xl transform hover:scale-105 cursor-pointer'
-                      : ''
-                  }`}
-                >
-                  {safeAddressHref ? (
-                    <a
-                      href={safeAddressHref}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block"
-                    >
-                      <p className="mx-auto mb-4 text-[11px] uppercase tracking-[0.28em] text-white/55">
-                        MAP
-                      </p>
-                      <h3 className="font-semibold mb-2 group-hover:text-primary-600 transition-colors duration-300">
-                        {tf('address')}
-                      </h3>
-                      <p className="text-gray-600 text-sm group-hover:text-primary-600 transition-colors duration-300">
-                        {globalData.contact.address}
-                      </p>
-                    </a>
-                  ) : (
-                    <>
-                      <p className="mx-auto mb-4 text-[11px] uppercase tracking-[0.28em] text-white/55">
-                        MAP
-                      </p>
-                      <h3 className="font-semibold mb-2">{tf('address')}</h3>
-                      <p className="text-gray-600 text-sm">{globalData.contact.address}</p>
-                    </>
-                  )}
-                </div>
+                {safeAddressHref ? (
+                  <a
+                    href={safeAddressHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group border border-white/15 p-6 transition-colors duration-300 hover:border-white/50"
+                  >
+                    <p className="mb-4 text-[11px] uppercase tracking-[0.28em] text-white/55">
+                      MAP
+                    </p>
+                    <h3 className="mb-2 font-semibold">{tf('address')}</h3>
+                    <p className="text-sm text-gray-600">{globalData.contact.address}</p>
+                  </a>
+                ) : (
+                  <div className="border border-white/15 p-6">
+                    <p className="mb-4 text-[11px] uppercase tracking-[0.28em] text-white/55">
+                      MAP
+                    </p>
+                    <h3 className="mb-2 font-semibold">{tf('address')}</h3>
+                    <p className="text-sm text-gray-600">{globalData.contact.address}</p>
+                  </div>
+                )}
               </div>
 
-              <div className="text-center mt-12">
-                <p className="text-gray-600 mb-6">{t('snsHeading')}</p>
-                <div className="flex justify-center space-x-8">
+              <div className="mt-12">
+                {/* 킥커의 대문자·넓은 자간은 라틴 문자용이다. 한글에 그대로 걸면
+                    "S N S에도  있습니다"처럼 낱자가 벌어진다. */}
+                <p className="mb-6 text-sm text-white/60">{t('snsHeading')}</p>
+                <div className="flex space-x-8">
                   {safeInstagramUrl && (
                     <a
                       href={safeInstagramUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex flex-col items-center text-gray-600 hover:text-pink-600 transition-all duration-200 group transform hover:scale-105"
+                      className="flex flex-col items-center text-white/60 transition-colors duration-200 group hover:text-white"
                     >
-                      <div className="w-12 h-12 bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400 rounded-xl flex items-center justify-center mb-2 group-hover:shadow-lg transition-shadow duration-200">
-                        <FaInstagram className="w-6 h-6 text-white" />
-                      </div>
+                      <span className="mb-2 flex h-12 w-12 items-center justify-center border border-white/15 transition-colors duration-200 group-hover:border-white/50">
+                        <FaInstagram className="h-5 w-5" aria-hidden="true" />
+                      </span>
                       <span className="text-sm font-medium">Instagram</span>
                     </a>
                   )}
@@ -372,11 +377,11 @@ const ConnectPage = async ({ params }: ConnectPageProps) => {
                       href={safeYoutubeUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex flex-col items-center text-gray-600 hover:text-red-600 transition-all duration-200 group transform hover:scale-105"
+                      className="flex flex-col items-center text-white/60 transition-colors duration-200 group hover:text-white"
                     >
-                      <div className="w-12 h-12 bg-red-600 rounded-xl flex items-center justify-center mb-2 group-hover:shadow-lg transition-shadow duration-200">
-                        <FaYoutube className="w-6 h-6 text-white" />
-                      </div>
+                      <span className="mb-2 flex h-12 w-12 items-center justify-center border border-white/15 transition-colors duration-200 group-hover:border-white/50">
+                        <FaYoutube className="h-5 w-5" aria-hidden="true" />
+                      </span>
                       <span className="text-sm font-medium">YouTube</span>
                     </a>
                   )}

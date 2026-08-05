@@ -213,7 +213,13 @@ export async function generateMetadata({ params }: ProjectPageProps): Promise<Me
     // 본문이 있으면 그 요약을, 비어 있으면(신규 공연 등) 답변-우선 리드를 사용한다.
     // getProjectSummary는 lead를 모르므로, 본문이 없을 때 제네릭으로 떨어지는 것을 막는다.
     const genericSummary = isEn ? 'Gyeonggi Art Collective project' : '경기아트콜렉티브 프로젝트'
-    const leadSummary = project.lead || deriveProjectLead(project, resolvedParams.locale)
+    // 파생 리드의 시제를 본문·스키마와 일치시키려 메타에서도 예정 여부를 판정한다(KST).
+    const metaIsUpcoming = Boolean(
+      project.eventDate && !project.cancelled && project.eventDate >= todaySeoul()
+    )
+    const leadSummary =
+      project.lead ||
+      deriveProjectLead(project, resolvedParams.locale, { isUpcoming: metaIsUpcoming })
     let projectSummary = leadSummary || genericSummary
     try {
       const fromBody = sanitizeMetadataString(getProjectSummary(project, 150))
