@@ -8,6 +8,7 @@ import { useTranslations, useLocale } from 'next-intl'
 import { localizeArtistCategory } from '@/constants/categories'
 import { toSafeArtistImageSrc } from '@/utils/safeUrl'
 import type { Artist } from '@/types'
+import PageHero from '@/components/PageHero'
 
 interface ArtistsContentProps {
   artists: Artist[]
@@ -57,15 +58,10 @@ export const ArtistsView = ({
   return (
     <div className="pt-20">
       {/* Hero Section */}
-      <section className="py-16 md:py-24 bg-gradient-to-br from-primary-50 to-accent-50">
-        <div className="tw-container-custom text-center">
-          <h1 className="tw-heading-primary mb-6">{t('hero.heading')}</h1>
-          <p className="tw-text-body text-gray-600 max-w-3xl mx-auto">{t('hero.subtitle')}</p>
-        </div>
-      </section>
+      <PageHero kicker="ARTISTS" titleLine1={t('hero.heading')} subtitle={t('hero.subtitle')} />
 
       {/* Filter Section */}
-      <section className="py-8 bg-white sticky top-16 z-40 border-b">
+      <section className="sticky top-20 z-40 border-b border-white/15 bg-[#08080a]/95 py-6 backdrop-blur-sm">
         <div className="tw-container-custom">
           <div className="flex justify-center gap-2 flex-wrap">
             {categories.map(category => (
@@ -73,10 +69,10 @@ export const ArtistsView = ({
                 key={category}
                 href={buildCategoryHref(category)}
                 scroll={false}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+                className={`border px-4 py-2 text-[11px] uppercase tracking-[0.16em] transition-colors duration-200 ${
                   selectedCategory === category
-                    ? 'bg-primary-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    ? 'border-white text-white'
+                    : 'border-white/20 text-white/55 hover:border-white/50 hover:text-white'
                 }`}
               >
                 {category === 'All' ? t('filter.all') : localizeArtistCategory(category, locale)}

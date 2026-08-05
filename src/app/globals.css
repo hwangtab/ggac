@@ -335,13 +335,15 @@ textarea:focus-visible {
   html {
     scroll-behavior: smooth;
     max-width: 100vw;
-    overflow-x: hidden;
+    /* hidden은 body를 스크롤 컨테이너로 만들어 position:sticky를 무력화한다.
+       clip은 같은 가로 클리핑을 하면서 스크롤 컨테이너를 만들지 않는다. */
+    overflow-x: clip;
   }
 
   body {
     @apply font-sans text-gray-900 bg-white;
     max-width: 100vw;
-    overflow-x: hidden;
+    overflow-x: clip;
     word-break: keep-all;
     overflow-wrap: break-word;
     hyphens: none;
@@ -1253,8 +1255,25 @@ body {
 /* --- 모서리를 각지게 --- */
 [data-poster] .rounded-2xl,
 [data-poster] .rounded-xl,
-[data-poster] .rounded-lg {
+[data-poster] .rounded-lg,
+[data-poster] .rounded-md,
+[data-poster] .rounded,
+[data-poster] .rounded-full {
   border-radius: 2px;
+}
+
+/* 사진은 홈·히어로와 같은 흑백 처리로 통일한다. 같은 인물·같은 표지가
+   홈에서는 흑백 직사각형, /artists·/archive에서는 원색 원형으로 나오던
+   불일치를 없앤다. hover에서만 색이 돌아온다. */
+[data-poster] .tw-card img,
+[data-poster] article img,
+[data-poster] a img {
+  filter: grayscale(1) contrast(1.15);
+  transition: filter 0.4s ease;
+}
+[data-poster] a:hover img,
+[data-poster] .group:hover img {
+  filter: none;
 }
 
 /* 비활성 컨트롤 — 브랜드색 배경 규칙이 그대로 남아 활성 버튼과 구별되지 않았다 */
@@ -1707,15 +1726,45 @@ html {
 }
 
 /* 인쇄 — 배경 그래픽이 꺼지면 흰 바탕에 흰 글자가 되어 제목이 사라진다 */
+/*
+ * 인쇄 — 브라우저는 기본적으로 배경색을 찍지 않는다. 다크 테마는 배경으로
+ * 어둠을, 글자로 흰색을 쓰므로 그대로 두면 흰 종이에 흰 글씨가 되어 인쇄물이
+ * 통째로 빈 종이가 된다(실측: 판독 가능한 잉크 비율 43% → 0.1%).
+ * 인쇄 시에는 테마 전체를 검은 글자 / 흰 배경으로 되돌린다.
+ */
 @media print {
+  /*
+   * 다크 테마를 그대로 인쇄하면 흰 종이에 흰 글씨가 남아 빈 종이가 나온다
+   * (실측: 판독 가능한 잉크 비율 43% → 0.1%).
+   *
+   * 색을 하나씩 되돌리는 방식은 실패했다. 테마 안에 !important 규칙이 많고
+   * `#navigation[data-at-top] a` 같은 고특정도 규칙이 있어, 전역 재정의가
+   * 특정도에서 계속 진다. 대신 배경을 실제로 인쇄시킨 뒤 문서 전체를 반전한다.
+   * 특정도와 무관하게 동작하고, 어두운 배경이 흰 종이로 뒤집히므로 잉크도 적게 쓴다.
+   * 사진만 한 번 더 반전해 원래 색으로 되돌린다.
+   */
+  html {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    background: #08080a;
+  }
+  body {
+    filter: invert(1) hue-rotate(180deg);
+  }
+  img,
+  video,
+  svg image,
+  [style*='background-image'] {
+    filter: invert(1) hue-rotate(180deg);
+  }
   .hero-outline-text {
     -webkit-text-stroke: 0;
-    color: #000;
   }
   .hero-grain,
   .hero-wash,
-  .hero-spotlight {
-    display: none;
+  .hero-spotlight,
+  .hero-band {
+    display: none !important;
   }
 }
 

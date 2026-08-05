@@ -55,8 +55,8 @@
     "email": "Email",
     "phone": "Phone",
     "address": "Address",
-    "tagline": "A cooperative breathing through art and forging paths through collaboration.",
-    "siteDescription": "Imagination without boundaries, resonance we create together.",
+    "tagline": "We make music in Gyeonggi and put on our own shows.",
+    "siteDescription": "Getting loud outside Seoul",
     "established": "Established",
     "incorporated": "Incorporated",
     "businessNumber": "Business Reg. No.",
@@ -94,7 +94,7 @@
       "projectsHeading": "Projects",
       "projectsDescription": "Gyeonggi Art Collective projects {name} took part in.",
       "navHeading": "Other members",
-      "navBody": "There are more of us than this one.",
+      "navBody": "There are more of us than just this one.",
       "navCta": "View All Artists"
     },
     "error": {
@@ -142,8 +142,8 @@
     }
   },
   "connect": {
-    "heroTitleLine1": "Looking for people",
-    "heroTitleLine2": "to work with us",
+    "heroTitleLine1": "Members or supporters",
+    "heroTitleLine2": "we are looking for both",
     "heroSubtitle": "You can join as a member and work with us, or support us from the side. Either way, get in touch.",
     "joinHeading": "To join us",
     "joinSubtitle": "Artists and organizers working in Gyeonggi, and anyone who thinks this work is needed.",
@@ -154,7 +154,7 @@
     "qual2Body": "Professionals engaged in cultural arts planning, production, or management",
     "qual3Title": "Enthusiastic Supporters",
     "qual3Body": "Anyone who agrees with our mission and wishes to contribute to the development of the arts ecosystem",
-    "qualFooter": "Artist or organizer — if it fits, it fits.",
+    "qualFooter": "Artist, organizer, or just someone who thinks this should exist.",
     "commitTitle": "Commitment",
     "commit1Title": "Share Capital",
     "commit1Body": "A minimum investment of 1 share (₩10,000) is required to become a member. Your share becomes the cooperative's capital and is refunded upon withdrawal per our articles of incorporation.",
@@ -165,7 +165,7 @@
     "supportHeading": "Support is an option",
     "supportBody": "You can back arts activity in Gyeonggi through support without becoming a member. That attention goes a long way for artists.",
     "supportCta": "Cultivate the Arts (Inquire about Sponsorship)",
-    "contactBody": "If you have a question, get in touch.",
+    "contactBody": "Anything else, just ask.",
     "snsHeading": "We are on social too"
   },
   "faq": {
@@ -743,12 +743,12 @@
     },
     "projects": {
       "heading": "Recent Work",
-      "description": "Explore our most recent works. Each project is the result of creative experimentation and collaboration among cooperative members.",
+      "description": "Shows and records, the things we have put together. Most of it planned and made by members.",
       "viewAll": "View All Projects"
     },
     "artists": {
       "heading": "The People We Create With",
-      "description": "Meet the artists who become each other's universe. Through their unique worldviews and creative philosophies, they explore new possibilities together.",
+      "description": "Different places, different work — we ended up here. A line each on what they do.",
       "moreCount": "+{count} more",
       "viewAll": "View All Artists"
     }

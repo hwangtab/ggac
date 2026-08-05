@@ -58,7 +58,7 @@ const FeaturedArtists = async ({ artists }: FeaturedArtistsProps) => {
                 >
                   <span
                     aria-hidden="true"
-                    className="tabular-nums text-[11px] text-white/45 transition-colors duration-200 group-hover:text-white/80 sm:text-xs"
+                    className="tabular-nums text-[11px] text-white/55 transition-colors duration-200 group-hover:text-white/85 sm:text-xs"
                   >
                     {String(index + 1).padStart(2, '0')}
                   </span>

@@ -11,6 +11,7 @@ import {
 } from '@/utils/structuredData'
 import { getSiteUrl, getLocaleAlternates, getOgLocale } from '@/utils/site'
 import type { Metadata } from 'next'
+import PageHero from '@/components/PageHero'
 
 // ISR 최적화: 정적 콘텐츠는 24시간 캐시
 export const revalidate = 86400
@@ -176,16 +177,12 @@ const AboutPage = async ({ params }: AboutPageProps) => {
       {structuredDataToScript(jsonLd)}
       <div className="pt-20">
         {/* Hero Section */}
-        <section className="py-16 md:py-24 bg-gradient-to-br from-primary-50 to-accent-50">
-          <div className="tw-container-custom text-center">
-            <h1 className="tw-heading-primary mb-6">
-              {t('hero.titleLine1')}
-              <br />
-              {t('hero.titleLine2')}
-            </h1>
-            <p className="tw-text-body text-gray-600 max-w-3xl mx-auto">{t('hero.subtitle')}</p>
-          </div>
-        </section>
+        <PageHero
+          kicker="ABOUT"
+          titleLine1={t('hero.titleLine1')}
+          titleLine2={t('hero.titleLine2')}
+          subtitle={t('hero.subtitle')}
+        />
 
         {/* Mission Section */}
         <section className="py-16 md:py-24">

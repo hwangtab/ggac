@@ -11,6 +11,7 @@ import {
   toSafePhoneHref,
 } from '@/utils/safeUrl'
 import { serializeJsonLd } from '@/utils/structuredData'
+import PageHero from '@/components/PageHero'
 
 // ISR 최적화: 연락처 정보는 24시간 캐시
 export const revalidate = 86400
@@ -170,16 +171,12 @@ const ConnectPage = async ({ params }: ConnectPageProps) => {
 
       <div className="pt-20">
         {/* Hero Section */}
-        <section className="py-16 md:py-24 bg-gradient-to-br from-primary-50 to-accent-50">
-          <div className="tw-container-custom text-center">
-            <h1 className="tw-heading-primary mb-6">
-              {t('heroTitleLine1')}
-              <br />
-              {t('heroTitleLine2')}
-            </h1>
-            <p className="tw-text-body text-gray-600 max-w-3xl mx-auto">{t('heroSubtitle')}</p>
-          </div>
-        </section>
+        <PageHero
+          kicker="CONNECT"
+          titleLine1={t('heroTitleLine1')}
+          titleLine2={t('heroTitleLine2')}
+          subtitle={t('heroSubtitle')}
+        />
 
         {/* Join Section */}
         <section className="py-16 md:py-24">

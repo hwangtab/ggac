@@ -19,26 +19,26 @@ test.describe('히어로 포스터 — 구조와 접근성', () => {
     await expect(hero(page)).toHaveAttribute('aria-labelledby', 'hero-title')
   })
 
-  test('채움용 카드는 접근성 트리와 탭 순서 양쪽에서 빠진다', async ({ page }) => {
+  test('사진 스트립 전체가 접근성 트리와 탭 순서에서 빠진다', async ({ page }) => {
     await page.goto('/', { waitUntil: 'domcontentloaded' })
 
+    // 밴드가 112% 폭으로 음수 x까지 밀려 있어 첫 카드에 포커스가 들어가면
+    // 포커스 링이 화면 밖에 그려진다. 스트립은 장식이고, 같은 13팀은 아래
+    // 아티스트 인덱스에 전부 링크로 노출된다.
     const strip = page.locator('.hero-marquee').last()
-    const exposed = strip.locator('li:not([aria-hidden="true"]) a')
-    const filler = strip.locator('li[aria-hidden="true"] a')
-
-    await expect(exposed.first()).toHaveAttribute('href', /\/artists\//)
+    await expect(strip).toHaveAttribute('aria-hidden', 'true')
 
     // aria-hidden만으로는 부족하다. tabIndex가 빠지면 스크린리더가 못 읽는 링크에
-    // 키보드 포커스가 들어가는 최악의 조합이 된다 — 이전 테스트는 이걸 놓쳤다.
-    const tabIndexes = await filler.evaluateAll(nodes =>
-      nodes.map(node => node.getAttribute('tabindex'))
-    )
+    // 키보드 포커스가 들어가는 최악의 조합이 된다.
+    const tabIndexes = await strip
+      .locator('a')
+      .evaluateAll(nodes => nodes.map(node => node.getAttribute('tabindex')))
+    expect(tabIndexes.length).toBeGreaterThan(0)
     expect(tabIndexes.every(value => value === '-1')).toBe(true)
 
-    // 노출 목록 안에 같은 아티스트가 두 번 들어가면 안 된다(이음매 중복 회귀).
-    const hrefs = await exposed.evaluateAll(nodes => nodes.map(node => node.getAttribute('href')))
-    expect(hrefs.length).toBeGreaterThan(0)
-    expect(new Set(hrefs).size).toBe(hrefs.length)
+    // 접근 가능한 경로는 남아 있어야 한다 — 아래 인덱스가 그 역할을 한다.
+    const index = page.locator('section:not([aria-labelledby="hero-title"]) a[href*="/artists/"]')
+    expect(await index.count()).toBeGreaterThan(0)
   })
 
   test('자동 움직임에 명시적 정지 컨트롤이 있다 (WCAG 2.2.2)', async ({ page }) => {
@@ -99,7 +99,9 @@ test.describe('히어로 포스터 — 마퀴', () => {
     await page.waitForTimeout(900)
 
     const viewport = page.locator('.hero-marquee-viewport--scrollable')
-    await viewport.locator('li:not([aria-hidden="true"]) a').last().focus()
+    // 스트립 링크는 탭 순서 밖이지만 프로그램적 포커스는 여전히 들어갈 수 있고,
+    // 그때 컨테이너가 스크롤되면 되돌릴 방법이 없다.
+    await viewport.locator('a').last().focus()
     await page.waitForTimeout(200)
 
     // 포커스가 밴드를 벗어나면 원위치로 돌아와야 한다. 스크롤바가 없는 컨테이너라

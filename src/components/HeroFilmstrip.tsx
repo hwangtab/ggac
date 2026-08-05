@@ -203,32 +203,31 @@ const HeroFilmstrip = ({ artists }: HeroFilmstripProps) => {
         className="hero-marquee-viewport hero-marquee-viewport--scrollable mt-2 py-3 sm:mt-4"
       >
         {/*
-          role="list"는 중복이 아니다. Tailwind preflight가 ul에 list-style: none을
-          걸고, WebKit(Safari/VoiceOver)은 그런 목록의 list 역할을 제거해버린다.
-          역할이 사라지면 aria-label도 함께 버려져 "조합원 아티스트 14개 항목" 대신
-          문맥 없는 링크 나열이 된다.
+          사진 스트립은 전체를 장식으로 둔다.
+
+          밴드가 112% 폭에 margin-left:-6%라 첫 카드는 구조적으로 음수 x에 놓인다
+          (1440px에서 x=-158..-26). 여기에 탭 포커스가 들어가면 포커스 링이 화면
+          밖에 그려지는데, transform으로 밀린 요소라 브라우저가 스크롤해 보여줄
+          방법도 없다(WCAG 2.4.7/2.4.11 위반).
+
+          같은 13팀은 바로 아래 아티스트 인덱스에 이름·한 줄 소개·역할과 함께
+          전부 링크로 노출된다. 스트립을 접근성 트리에서 빼도 잃는 정보가 없고,
+          같은 링크가 두 번 읽히던 중복도 사라진다. 정지 버튼은 이 바깥에 있어
+          WCAG 2.2.2 컨트롤은 그대로 유지된다.
         */}
-        {/* eslint-disable-next-line jsx-a11y/no-redundant-roles */}
         <ul
           ref={stripTrackRef}
-          role="list"
+          aria-hidden="true"
           className="hero-marquee items-start"
           style={{ ['--marquee-duration' as string]: '64s' } as React.CSSProperties}
-          aria-label={t('rosterAria')}
         >
           {stripUnits.map((_, unit) =>
             frames.map((frame, index) => {
-              // 첫 회분만 실제 목록이고 나머지는 시각적 채움이다.
-              const isFiller = unit > 0
               return (
-                <li
-                  key={`${unit}-${frame.slug}-${index}`}
-                  className="shrink-0 px-[3px] sm:px-1"
-                  aria-hidden={isFiller || undefined}
-                >
+                <li key={`${unit}-${frame.slug}-${index}`} className="shrink-0 px-[3px] sm:px-1">
                   <Link
                     href={`/artists/${frame.slug}`}
-                    tabIndex={isFiller ? -1 : undefined}
+                    tabIndex={-1}
                     className="hero-frame block"
                     // 카드도 화면 높이에 연동한다. 폭만 보면 낮은 창에서 스트립이 화면을 넘긴다.
                     style={{ width: 'clamp(66px, min(10.5vw, 16vh), 132px)' }}

@@ -223,17 +223,24 @@ const Hero = ({ artists }: HeroProps) => {
         </div>
       </div>
 
-      {/* 하단 밴드 — 이름 티커 + 사진 필름스트립. 살짝 기울여 포스터의 거친 결을 준다. */}
-      <div
-        className="hero-rise hero-band relative z-10 min-w-0"
-        style={
-          {
-            ['--motion-delay' as string]: '340ms',
-            paddingBottom: 'clamp(0.75rem, 2.5vh, 1.75rem)',
-          } as React.CSSProperties
-        }
-      >
-        <HeroFilmstrip artists={artists} />
+      {/*
+        하단 밴드 — 이름 티커 + 사진 필름스트립. 살짝 기울여 포스터의 거친 결을 준다.
+        기울기와 진입 애니메이션은 반드시 다른 요소에 걸어야 한다. 둘 다 transform을
+        쓰는데 CSS 애니메이션이 일반 선언을 이기므로, 한 요소에 함께 두면 rotate가
+        조용히 버려진다(기울기가 한 번도 렌더된 적 없던 원인).
+      */}
+      <div className="hero-band relative z-10 min-w-0">
+        <div
+          className="hero-rise"
+          style={
+            {
+              ['--motion-delay' as string]: '340ms',
+              paddingBottom: 'clamp(0.75rem, 2.5vh, 1.75rem)',
+            } as React.CSSProperties
+          }
+        >
+          <HeroFilmstrip artists={artists} />
+        </div>
       </div>
 
       {PerformanceMonitor && (
