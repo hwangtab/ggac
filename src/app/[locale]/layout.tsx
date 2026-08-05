@@ -33,8 +33,8 @@ export async function generateMetadata({
 
   const title = isEn ? 'Gyeonggi Art Collective' : '경기아트콜렉티브 협동조합'
   const description = isEn
-    ? 'Sounds that break the mold, resonance we build together. Gyeonggi Art Collective — breathing through art, forging a path through cooperation.'
-    : '경계 없는 상상, 함께 만드는 울림. 예술로 숨 쉬고, 협동으로 길을 내는 경기아트콜렉티브입니다.'
+    ? 'A cooperative of indie musicians and bands from Gyeonggi, Korea — doom metal, punk, and experimental music, with self-produced live shows.'
+    : '경기도 인디 뮤지션·밴드가 만든 생산자 협동조합. 둠메탈·펑크·실험음악을 만들고 공연을 직접 기획합니다.'
   const siteName = isEn ? 'Gyeonggi Art Collective' : '경기아트콜렉티브 협동조합'
   const alternates = getLocaleAlternates('/', locale)
 
@@ -72,8 +72,8 @@ export async function generateMetadata({
           width: 1200,
           height: 630,
           alt: isEn
-            ? 'Gyeonggi Art Collective — sounds that break the mold'
-            : '경기아트콜렉티브 - 경계 없는 상상, 함께 만드는 울림',
+            ? 'Gyeonggi Art Collective — getting loud outside seoul'
+            : '경기아트콜렉티브 협동조합 — 서울 밖에서 시끄러워집니다',
         },
       ],
       locale: getOgLocale(locale),
@@ -82,9 +82,7 @@ export async function generateMetadata({
     twitter: {
       card: 'summary_large_image',
       title,
-      description: isEn
-        ? 'Sounds that break the mold, resonance we build together.'
-        : '경계 없는 상상, 함께 만드는 울림',
+      description: isEn ? 'Getting loud outside Seoul' : '서울 밖에서 시끄러워집니다',
       images: ['/images/logo/gac_og.webp'],
     },
     icons: {

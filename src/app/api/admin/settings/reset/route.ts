@@ -48,7 +48,7 @@ const DEFAULT_SETTINGS = [
   {
     category: 'site',
     setting_key: 'site_description',
-    setting_value: { value: '경계 없는 상상, 함께 만드는 울림' },
+    setting_value: { value: '서울 밖에서 시끄러워집니다' },
     description: '사이트 설명',
     is_sensitive: false,
   },

@@ -28,7 +28,7 @@ export type { Artist, Project, GlobalData } from '@/types'
 // 에러 처리를 위한 기본값들
 const DEFAULT_GLOBAL_DATA: GlobalData = {
   siteName: '경기아트콜렉티브 협동조합',
-  siteDescription: '경계 없는 상상, 함께 만드는 울림',
+  siteDescription: '서울 밖에서 시끄러워집니다',
   joinFormUrl: '',
   supportFormUrl: '',
   contact: {

@@ -15,7 +15,8 @@ const ORGANIZATION_DATA = {
   name: '경기아트콜렉티브 협동조합',
   alternateName: 'Gyeonggi Art Collective',
   legalName: '경기아트콜렉티브 협동조합',
-  description: '예술로 숨 쉬고, 협동으로 길을 내는 협동조합입니다.',
+  description:
+    '경기도 인디 뮤지션·밴드가 만든 생산자 협동조합. 둠메탈·펑크·실험음악을 만들고 공연을 직접 기획합니다.',
   url: 'https://ggac.kr',
   logo: 'https://ggac.kr/images/logo/gac_og.webp',
   foundingDate: '2025-05-01',
@@ -56,7 +57,7 @@ export function generateWebsiteStructuredData(): object {
     name: '경기아트콜렉티브 협동조합',
     url: 'https://ggac.kr',
     description:
-      '경계 없는 상상, 함께 만드는 울림. 예술로 숨 쉬고, 협동으로 길을 내는 협동조합입니다.',
+      '경기도 인디 뮤지션·밴드가 만든 생산자 협동조합. 둠메탈·펑크·실험음악을 만들고 공연을 직접 기획합니다.',
     inLanguage: 'ko-KR',
     publisher: { '@id': 'https://ggac.kr/#organization' },
   }

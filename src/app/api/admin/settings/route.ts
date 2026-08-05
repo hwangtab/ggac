@@ -106,7 +106,7 @@ const SETTING_MAPPINGS = {
     },
     site_description: {
       key: 'site_description',
-      transform: (value: any) => value?.value || '경계 없는 상상, 함께 만드는 울림',
+      transform: (value: any) => value?.value || '서울 밖에서 시끄러워집니다',
     },
     max_members: { key: 'max_members', transform: (value: any) => value?.value || 1000 },
   },

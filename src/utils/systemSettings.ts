@@ -132,7 +132,7 @@ function getDefaultSettings(): SystemSettingsData {
       maintenance_mode: { enabled: false, message: '' },
       registration_enabled: { enabled: true, require_approval: true },
       site_title: { value: '경기아트콜렉티브' },
-      site_description: { value: '경계 없는 상상, 함께 만드는 울림' },
+      site_description: { value: '서울 밖에서 시끄러워집니다' },
       max_members: { value: 1000, current_count: 0 },
       contact_info: {
         email: 'contact@ggac.kr',
@@ -427,7 +427,7 @@ export async function getSiteInfo() {
   if (!settings?.site) {
     return {
       title: '경기아트콜렉티브',
-      description: '경계 없는 상상, 함께 만드는 울림',
+      description: '서울 밖에서 시끄러워집니다',
       contact: {
         email: 'contact@ggac.kr',
         phone: '0507-1384-3144',
@@ -438,7 +438,7 @@ export async function getSiteInfo() {
 
   return {
     title: settings.site.site_title?.value || '경기아트콜렉티브',
-    description: settings.site.site_description?.value || '경계 없는 상상, 함께 만드는 울림',
+    description: settings.site.site_description?.value || '서울 밖에서 시끄러워집니다',
     contact: settings.site.contact_info || {
       email: 'contact@ggac.kr',
       phone: '0507-1384-3144',

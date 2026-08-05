@@ -335,11 +335,9 @@ const ConnectPage = async ({ params }: ConnectPageProps) => {
                     href={safePhoneHref}
                     className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 group cursor-pointer"
                   >
-                    <div className="w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:bg-primary-200 transition-colors duration-300">
-                      <span className="text-primary-600 font-semibold group-hover:scale-110 transition-transform duration-300">
-                        📞
-                      </span>
-                    </div>
+                    <p className="mx-auto mb-4 text-[11px] uppercase tracking-[0.28em] text-white/55">
+                      TEL
+                    </p>
                     <h3 className="font-semibold mb-2 group-hover:text-primary-600 transition-colors duration-300">
                       {tf('phone')}
                     </h3>
@@ -363,11 +361,9 @@ const ConnectPage = async ({ params }: ConnectPageProps) => {
                       rel="noopener noreferrer"
                       className="block"
                     >
-                      <div className="w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:bg-primary-200 transition-colors duration-300">
-                        <span className="text-primary-600 font-semibold group-hover:scale-110 transition-transform duration-300">
-                          📍
-                        </span>
-                      </div>
+                      <p className="mx-auto mb-4 text-[11px] uppercase tracking-[0.28em] text-white/55">
+                        MAP
+                      </p>
                       <h3 className="font-semibold mb-2 group-hover:text-primary-600 transition-colors duration-300">
                         {tf('address')}
                       </h3>
@@ -377,9 +373,9 @@ const ConnectPage = async ({ params }: ConnectPageProps) => {
                     </a>
                   ) : (
                     <>
-                      <div className="w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <span className="text-primary-600 font-semibold">📍</span>
-                      </div>
+                      <p className="mx-auto mb-4 text-[11px] uppercase tracking-[0.28em] text-white/55">
+                        MAP
+                      </p>
                       <h3 className="font-semibold mb-2">{tf('address')}</h3>
                       <p className="text-gray-600 text-sm">{globalData.contact.address}</p>
                     </>

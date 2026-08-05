@@ -132,6 +132,23 @@ export function extractMeaningfulSummary(
  * 프로젝트의 요약을 가져오는 함수
  * 커스텀 summary가 있으면 우선 사용, 없으면 스마트 추출
  */
+/**
+ * 카드 요약·메타데이터에서 이모지를 걷어낸다.
+ *
+ * 게시물 본문(description)은 조합원이 직접 쓴 원문이라 그대로 두지만, 그
+ * 첫 줄이 카드 요약과 og:description으로 그대로 올라오면서 🪩🎸📦 같은
+ * 글자가 포스터 타이포그래피 자리에 박혔다. 본문에서는 살리고 요약에서만 뺀다.
+ */
+function stripDisplayEmoji(value: string): string {
+  return value
+    .replace(
+      /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}]/gu,
+      ''
+    )
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
 export function getProjectSummary(
   project: { title: string; description: string; summary?: string },
   maxLength: number = 120
@@ -148,14 +165,13 @@ export function getProjectSummary(
 
     // 커스텀 summary가 있으면 우선 사용
     if (safeSummary) {
-      return safeSummary.length <= maxLength
-        ? safeSummary
-        : safeSummary.substring(0, maxLength) + '...'
+      const clean = stripDisplayEmoji(safeSummary)
+      return clean.length <= maxLength ? clean : clean.substring(0, maxLength) + '...'
     }
 
     // 없으면 스마트 추출
     const extracted = extractMeaningfulSummary(safeDescription, safeTitle, maxLength)
-    return extracted || '경기아트콜렉티브 프로젝트'
+    return stripDisplayEmoji(extracted) || '경기아트콜렉티브 프로젝트'
   } catch (error) {
     console.error('Error in getProjectSummary:', error)
     return '경기아트콜렉티브 프로젝트'

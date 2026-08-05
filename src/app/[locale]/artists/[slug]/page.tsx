@@ -201,6 +201,14 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
   const isMinimal = artist.templateType === 'minimal'
   const baseUrl = getBaseUrl()
   const safeProfileImage = toSafeArtistImageSrc(artist.profileImage)
+
+  const allRoles = Array.isArray(artist.category) ? artist.category : [artist.category]
+  const roleLabel =
+    allRoles
+      .slice(0, 3)
+      .map(cat => localizeArtistCategory(cat as string, resolvedParams.locale))
+      .join(' · ') + (allRoles.length > 3 ? ` +${allRoles.length - 3}` : '')
+
   const artistEmailHref = toSafeEmailHref(artist.contact)
   const artistPhoneHref = toSafePhoneHref(artist.contact)
   const safePortfolioLinks =
@@ -278,32 +286,22 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
 
                 {/* Basic Info */}
                 <div>
-                  {/* 카테고리 태그 */}
-                  <div className={`mb-4 ${isMinimal ? 'text-center' : 'category-tags-left'}`}>
-                    <div className={`flex flex-wrap gap-2 ${isMinimal ? 'justify-center' : ''}`}>
-                      {Array.isArray(artist.category) ? (
-                        artist.category.map((cat, index) => (
-                          <span
-                            key={index}
-                            className="inline-block px-4 py-2 bg-primary-100 text-primary-700 font-medium rounded-full"
-                          >
-                            {localizeArtistCategory(cat, resolvedParams.locale)}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="inline-block px-4 py-2 bg-primary-100 text-primary-700 font-medium rounded-full">
-                          {localizeArtistCategory(artist.category as string, resolvedParams.locale)}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
                   <div className={`${isMinimal ? 'text-center' : ''}`}>
                     <h1
                       className={`${isMinimal ? 'tw-heading-secondary' : 'tw-heading-primary'} mb-4`}
                     >
                       {artist.name}
                     </h1>
+
+                    {/*
+                      역할은 이름 아래에 한 줄로 둔다. 이전에는 알약 태그로 이름
+                      위에 놓여, 역할이 10개인 조합원의 경우 세 줄짜리 태그 뭉치가
+                      제목보다 먼저 읽혔다. 홈 인덱스가 이미 3개 + 나머지 개수로
+                      줄이고 있는데 상세만 무제한이라 서로 모순되기도 했다.
+                    */}
+                    <p className="mb-4 text-[11px] uppercase tracking-[0.2em] text-white/60">
+                      {roleLabel}
+                    </p>
 
                     <p className="tw-text-body text-gray-600 mb-6">{artist.oneLiner}</p>
 

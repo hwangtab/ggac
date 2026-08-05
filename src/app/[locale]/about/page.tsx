@@ -28,7 +28,7 @@ export async function generateMetadata({
     title: isEn ? 'Our Story' : '우리의 이야기',
     description: isEn
       ? 'Gyeonggi Art Collective traces its journey from founding assembly to present — a timeline of events, performances, and collaborations.'
-      : '경기도를 기반으로 활동하는 예술가들이 모여 설립한 생산자 협동조합. 예술로 숨 쉬고, 협동으로 길을 내어 지속가능한 창작 생태계를 만들어갑니다.',
+      : '경기도 인디 뮤지션·밴드가 모여 만든 생산자 협동조합. 창립총회부터 지금까지 벌인 공연과 작업을 시간순으로 적어 뒀습니다.',
     keywords: [
       '경기아트콜렉티브',
       '협동조합',
@@ -53,7 +53,7 @@ export async function generateMetadata({
         : '우리의 이야기 | 경기아트콜렉티브 협동조합',
       description: isEn
         ? 'Gyeonggi Art Collective traces its journey from founding assembly to present — a timeline of events, performances, and collaborations.'
-        : '경기도를 기반으로 활동하는 예술가들이 모여 설립한 생산자 협동조합. 예술로 숨 쉬고, 협동으로 길을 내어 지속가능한 창작 생태계를 만들어갑니다.',
+        : '경기도 인디 뮤지션·밴드가 모여 만든 생산자 협동조합. 창립총회부터 지금까지 벌인 공연과 작업을 시간순으로 적어 뒀습니다.',
       url: isEn ? `${base}/en/about` : `${base}/about`,
       siteName: isEn ? 'Gyeonggi Art Collective' : '경기아트콜렉티브 협동조합',
       images: [
@@ -74,7 +74,7 @@ export async function generateMetadata({
         : '우리의 이야기 | 경기아트콜렉티브 협동조합',
       description: isEn
         ? 'Gyeonggi Art Collective traces its journey from founding assembly to present — a timeline of events, performances, and collaborations.'
-        : '예술로 숨 쉬고, 협동으로 길을 내어 지속가능한 창작 생태계를 만들어갑니다.',
+        : '경기도 인디 뮤지션·밴드가 모여 만든 생산자 협동조합. 창립총회부터 지금까지 벌인 공연과 작업을 시간순으로 적어 뒀습니다.',
       images: ['/images/logo/gac_og.webp'],
     },
     robots: {

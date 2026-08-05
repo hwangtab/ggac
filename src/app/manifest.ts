@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: '경기아트콜렉티브 협동조합',
     short_name: 'GAC',
-    description: '경계 없는 상상, 함께 만드는 울림',
+    description: '서울 밖에서 시끄러워집니다',
     start_url: '/',
     display: 'standalone',
     // 사이트 전체가 다크 포스터 테마다. 스플래시·브라우저 크롬도 맞춘다.
