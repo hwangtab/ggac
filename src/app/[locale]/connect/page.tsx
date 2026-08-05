@@ -12,6 +12,7 @@ import {
 } from '@/utils/safeUrl'
 import { serializeJsonLd } from '@/utils/structuredData'
 import PageHero from '@/components/PageHero'
+import JoinCta from '@/components/JoinCta'
 
 // ISR 최적화: 연락처 정보는 24시간 캐시
 export const revalidate = 86400
@@ -189,11 +190,8 @@ const ConnectPage = async ({ params }: ConnectPageProps) => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
                 {/* 자격 */}
-                <Link
-                  href="/signup"
-                  className="block bg-white rounded-2xl p-8 shadow-lg h-full hover:shadow-xl transform hover:scale-105 transition-all duration-300 group cursor-pointer"
-                >
-                  <h3 className="text-3xl font-serif font-semibold mb-6 text-center text-primary-600 group-hover:text-primary-700 transition-colors duration-300">
+                <div className="block bg-white rounded-2xl p-8 shadow-lg h-full">
+                  <h3 className="text-3xl font-serif font-semibold mb-6 text-center text-primary-600 transition-colors duration-300">
                     {t('qualTitle')}
                   </h3>
                   <div className="space-y-6">
@@ -230,14 +228,11 @@ const ConnectPage = async ({ params }: ConnectPageProps) => {
                       {t('qualFooter')}
                     </p>
                   </div>
-                </Link>
+                </div>
 
                 {/* 약속 */}
-                <Link
-                  href="/signup"
-                  className="block bg-white rounded-2xl p-8 shadow-lg h-full hover:shadow-xl transform hover:scale-105 transition-all duration-300 group cursor-pointer"
-                >
-                  <h3 className="text-3xl font-serif font-semibold mb-6 text-center text-accent-600 group-hover:text-accent-700 transition-colors duration-300">
+                <div className="block bg-white rounded-2xl p-8 shadow-lg h-full">
+                  <h3 className="text-3xl font-serif font-semibold mb-6 text-center text-primary-600 transition-colors duration-300">
                     {t('commitTitle')}
                   </h3>
                   <div className="space-y-6">
@@ -265,16 +260,11 @@ const ConnectPage = async ({ params }: ConnectPageProps) => {
                       {t('commitFooter')}
                     </p>
                   </div>
-                </Link>
+                </div>
               </div>
 
               <div className="text-center">
-                <Link
-                  href="/signup"
-                  className="tw-btn-primary text-lg px-8 py-4 sm:px-8 sm:py-3 rounded-lg w-full sm:w-auto inline-block text-center min-h-[44px] hover:-translate-y-0.5 hover:shadow-lg transition-all duration-300"
-                >
-                  {t('joinCta')}
-                </Link>
+                <JoinCta />
               </div>
             </div>
           </div>

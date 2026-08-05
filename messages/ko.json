@@ -166,7 +166,13 @@
     "supportBody": "조합원이 되지 않아도 후원으로 경기 지역 예술 활동을 거들 수 있습니다. 그 관심이 예술가들에게 힘이 됩니다.",
     "supportCta": "예술 생태계 가꾸기 (후원 문의하기)",
     "contactBody": "그 밖에 궁금한 점은 언제든 물어보세요.",
-    "snsHeading": "SNS에도 있습니다"
+    "snsHeading": "SNS에도 있습니다",
+    "alreadyMember": "이미 조합원이십니다.",
+    "alreadyMemberCta": "게시판으로",
+    "applicationPending": "가입 신청을 검토하고 있습니다.",
+    "applicationPendingCta": "신청 상태 보기",
+    "applicationRejected": "지난 가입 신청은 승인되지 않았습니다.",
+    "applicationRejectedCta": "자세히 보기"
   },
   "faq": {
     "heading": "자주 묻는 질문",

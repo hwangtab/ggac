@@ -166,7 +166,13 @@
     "supportBody": "You can back arts activity in Gyeonggi through support without becoming a member. That attention goes a long way for artists.",
     "supportCta": "Cultivate the Arts (Inquire about Sponsorship)",
     "contactBody": "Anything else, just ask.",
-    "snsHeading": "We are on social too"
+    "snsHeading": "We are on social too",
+    "alreadyMember": "You are already a member.",
+    "alreadyMemberCta": "Go to the board",
+    "applicationPending": "Your application is under review.",
+    "applicationPendingCta": "Check status",
+    "applicationRejected": "Your previous application was not approved.",
+    "applicationRejectedCta": "See details"
   },
   "faq": {
     "heading": "Frequently Asked Questions",
