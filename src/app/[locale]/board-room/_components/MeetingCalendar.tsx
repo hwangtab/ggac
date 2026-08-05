@@ -116,7 +116,7 @@ export default function MeetingCalendar(props: MeetingCalendarProps) {
           ‹
         </button>
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold text-gray-900">{format(visibleMonth, 'yyyy.MM')}</h3>
+          <h2 className="text-sm font-semibold text-gray-900">{format(visibleMonth, 'yyyy.MM')}</h2>
           <button
             type="button"
             onClick={goToday}

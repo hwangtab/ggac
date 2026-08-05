@@ -93,7 +93,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ title, description, children 
               <FiBarChart className="w-5 h-5 text-white" />
             </div>
             <div className="ml-3">
-              <h1 className="text-lg font-semibold text-gray-900">관리자 패널</h1>
+              <p className="text-lg font-semibold text-gray-900">관리자 패널</p>
               <p className="text-xs text-gray-500">GGAC Admin</p>
             </div>
           </div>

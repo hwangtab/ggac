@@ -222,7 +222,7 @@ export default function EventApplicationsPage() {
               <FiClipboard className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-xl font-semibold text-gray-900">공연·판매 신청 내역</h1>
+              <h2 className="text-xl font-semibold text-gray-900">공연·판매 신청 내역</h2>
               <p className="text-sm text-gray-500">{selectedEventTitle}</p>
             </div>
           </div>

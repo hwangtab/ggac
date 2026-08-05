@@ -176,7 +176,7 @@ const PortfolioLinks: React.FC<PortfolioLinksProps> = ({ links, errors, onChange
       </div>
 
       <p className="mt-4 text-xs text-gray-500">
-        💡 팁: 링크는 아티스트 프로필 페이지에서 방문자들이 쉽게 접근할 수 있도록 표시됩니다.
+        팁: 링크는 아티스트 프로필 페이지에서 방문자들이 쉽게 접근할 수 있도록 표시됩니다.
       </p>
     </div>
   )

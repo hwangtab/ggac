@@ -210,7 +210,7 @@ const YoutubeVideos: React.FC<YoutubeVideosProps> = ({ videos, errors, onChange 
       </div>
 
       <p className="mt-4 text-xs text-gray-500">
-        💡 팁: 동영상은 아티스트 프로필 페이지에서 임베드 형태로 표시되어 바로 재생할 수 있습니다.
+        팁: 동영상은 아티스트 프로필 페이지에서 임베드 형태로 표시되어 바로 재생할 수 있습니다.
       </p>
     </div>
   )

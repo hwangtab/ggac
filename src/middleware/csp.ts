@@ -35,11 +35,16 @@ export function applyCSP(request: NextRequest, response: NextResponse) {
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
-      "img-src 'self' https: blob: data: https://*.supabase.co",
-      "media-src 'self' https://www.youtube.com https://*.supabase.co",
+      // 로컬 스택의 Storage는 http://127.0.0.1:54321에서 서빙된다
+      process.env.NODE_ENV === 'development'
+        ? "img-src 'self' https: http://localhost:* http://127.0.0.1:* blob: data: https://*.supabase.co"
+        : "img-src 'self' https: blob: data: https://*.supabase.co",
+      process.env.NODE_ENV === 'development'
+        ? "media-src 'self' http://localhost:* http://127.0.0.1:* https://www.youtube.com https://*.supabase.co"
+        : "media-src 'self' https://www.youtube.com https://*.supabase.co",
       "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com",
       process.env.NODE_ENV === 'development'
-        ? "connect-src 'self' http://localhost:* https://api.supabase.io https://*.supabase.co ws://localhost:* wss://localhost:* wss://*.supabase.co"
+        ? "connect-src 'self' http://localhost:* http://127.0.0.1:* https://api.supabase.io https://*.supabase.co ws://localhost:* ws://127.0.0.1:* wss://localhost:* wss://127.0.0.1:* wss://*.supabase.co"
         : "connect-src 'self' https://api.supabase.io https://*.supabase.co wss://*.supabase.co",
       "object-src 'none'",
       "base-uri 'self'",

@@ -111,7 +111,7 @@ export default async function MypagePage({ params }: { params: Promise<{ locale:
         </div>
 
         <div className="mt-8 bg-gradient-to-r from-primary-50 to-accent-50 rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">{t('helpHeading')}</h3>
+          <h2 className="text-lg font-semibold text-gray-900 mb-2">{t('helpHeading')}</h2>
           <div className="text-sm text-gray-600 space-y-2">
             <p>• {t('helpProfile')}</p>
             <p>• {t('helpArtist')}</p>

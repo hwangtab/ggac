@@ -324,7 +324,7 @@ export default function PostsPage() {
 
         {/* 카테고리별 통계 */}
         <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">카테고리별 통계</h3>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">카테고리별 통계</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {Object.entries(stats.categoryStats).map(([category, count]) => (
               <div key={category} className="text-center">

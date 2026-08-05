@@ -278,7 +278,7 @@ export default function ActivityPage() {
               <div className="flex items-center">
                 <FiActivity className="w-5 h-5 text-red-600 mr-3" />
                 <div>
-                  <h3 className="text-red-800 font-semibold">오류가 발생했습니다</h3>
+                  <h2 className="text-red-800 font-semibold">오류가 발생했습니다</h2>
                   <p className="text-red-700 text-sm mt-1">{error}</p>
                 </div>
               </div>
@@ -309,7 +309,7 @@ export default function ActivityPage() {
               // 빈 상태
               <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
                 <FiActivity className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">활동 내역이 없습니다</h3>
+                <h2 className="text-lg font-semibold text-gray-900 mb-2">활동 내역이 없습니다</h2>
                 <p className="text-gray-600 mb-6">
                   {filter === 'all'
                     ? '아직 활동 기록이 없습니다. 게시글을 작성하거나 댓글을 남겨보세요.'

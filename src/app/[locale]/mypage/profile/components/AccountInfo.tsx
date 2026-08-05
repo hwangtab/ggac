@@ -109,7 +109,7 @@ const AccountInfo: React.FC<AccountInfoProps> = ({ data, errors, onChange }) => 
         <div className="md:col-span-1">
           <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
             <div className="text-sm text-blue-800">
-              <p className="font-medium mb-2">💡 계좌 정보 안내</p>
+              <p className="font-medium mb-2">계좌 정보 안내</p>
               <ul className="space-y-1 text-xs">
                 <li>• 조합비 자동이체를 위한 정보입니다.</li>
                 <li>• 선택사항이며, 나중에 입력하셔도 됩니다.</li>

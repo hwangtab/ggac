@@ -107,7 +107,7 @@ const ActivityAnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ userId, days 
 
     return (
       <div className="space-y-2">
-        <h4 className="text-sm font-medium text-gray-700">시간대별 활동 분뺄</h4>
+        <h3 className="text-sm font-medium text-gray-700">시간대별 활동 분뺄</h3>
         <div className="grid grid-cols-12 gap-1 h-32">
           {hours.map(hour => {
             const count = hourlyData[hour] || 0
@@ -142,7 +142,7 @@ const ActivityAnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ userId, days 
 
     return (
       <div className="space-y-2">
-        <h4 className="text-sm font-medium text-gray-700">요일별 활동 분뺄</h4>
+        <h3 className="text-sm font-medium text-gray-700">요일별 활동 분뺄</h3>
         <div className="grid grid-cols-7 gap-2 h-32">
           {dayNames.map((dayName, index) => {
             const count = dayData[index] || 0
@@ -188,7 +188,7 @@ const ActivityAnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ userId, days 
 
     return (
       <div className="space-y-2">
-        <h4 className="text-sm font-medium text-gray-700">활동 유형별 분뺄</h4>
+        <h3 className="text-sm font-medium text-gray-700">활동 유형별 분뺄</h3>
         <div className="space-y-2">
           {sortedActions.map(([actionType, count]) => {
             const width = (count / maxValue) * 100
@@ -224,7 +224,7 @@ const ActivityAnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ userId, days 
 
     return (
       <div className="space-y-2">
-        <h4 className="text-sm font-medium text-gray-700">주간 활동 트렌드</h4>
+        <h3 className="text-sm font-medium text-gray-700">주간 활동 트렌드</h3>
         <div className="grid grid-cols-8 gap-1 h-32">
           {series.map((item, index) => {
             const height = Math.max((item.value / maxValue) * 100, 2)
@@ -404,7 +404,7 @@ const ActivityAnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ userId, days 
               <div className="bg-gray-50 rounded-lg p-4 mb-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="text-sm font-medium text-gray-900 mb-2">데이터 소스</h4>
+                    <h3 className="text-sm font-medium text-gray-900 mb-2">데이터 소스</h3>
                     <div className="flex items-center gap-4">
                       <div className="flex items-center gap-2">
                         <div className="w-3 h-3 bg-green-500 rounded-full"></div>

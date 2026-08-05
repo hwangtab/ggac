@@ -245,7 +245,7 @@ const AdminNotificationsPage = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* 알림 발송 폼 */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">알림 발송</h3>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">알림 발송</h2>
 
             {/* 알림 유형 */}
             <div className="mb-4">
@@ -435,7 +435,7 @@ const AdminNotificationsPage = () => {
       ) : (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-gray-900">알림 템플릿</h3>
+            <h2 className="text-lg font-semibold text-gray-900">알림 템플릿</h2>
             <button className="flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700">
               <FiPlus className="w-4 h-4 mr-2" />새 템플릿
             </button>

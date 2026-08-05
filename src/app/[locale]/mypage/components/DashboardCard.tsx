@@ -43,7 +43,7 @@ const DashboardCard: React.FC<DashboardCardProps> = ({
           <div className="flex items-center space-x-3">
             {icon}
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+              <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
               {badge && (
                 <span className="inline-block mt-1 px-2 py-1 text-xs bg-accent-100 text-accent-700 rounded">
                   {badge}

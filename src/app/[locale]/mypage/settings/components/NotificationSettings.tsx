@@ -247,7 +247,7 @@ export default function NotificationSettings({ settings, onUpdate }: Notificatio
       {/* 안내 메시지 */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <div className="text-sm text-blue-800">
-          <p className="font-medium mb-1">💡 알림 설정 안내</p>
+          <p className="font-medium mb-1">알림 설정 안내</p>
           <ul className="list-disc list-inside space-y-1">
             <li>이메일 알림은 등록된 이메일 주소로 전송됩니다</li>
             <li>웹 푸시 알림을 받으려면 브라우저에서 알림 권한을 허용해야 합니다</li>

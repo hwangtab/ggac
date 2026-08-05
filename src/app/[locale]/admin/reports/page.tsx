@@ -385,7 +385,7 @@ export default function AdminReportsPage() {
                 </p>
               </div>
               <div className="mt-4 text-sm text-blue-700">
-                💡 <strong>팁:</strong> 리포트를 정기적으로 생성하여 시간에 따른 변화를 추적하세요.
+                <strong>팁:</strong> 리포트를 정기적으로 생성하여 시간에 따른 변화를 추적하세요.
               </div>
             </div>
           </div>
