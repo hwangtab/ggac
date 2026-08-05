@@ -45,12 +45,20 @@ const askYesNo = async (q, def = 'n') => {
 // YYYY-MM-DD 형식만 허용(재프롬프트). optional이면 빈칸 허용.
 // 형식이 어긋나면 예정/지난 문자열 비교와 자동 리드의 날짜 파싱이 조용히 깨진다.
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+const isRealDate = s => {
+  const [Y, M, D] = s.split('-').map(Number)
+  const dt = new Date(Y, M - 1, D)
+  return dt.getFullYear() === Y && dt.getMonth() === M - 1 && dt.getDate() === D
+}
 const askDate = async (q, def = '', { optional = false } = {}) => {
   for (;;) {
     const a = await ask(q, def)
     if (!a && optional) return ''
-    if (DATE_RE.test(a)) return a
-    output.write(`  ⚠️  YYYY-MM-DD 형식으로 입력하세요 (예: 2026-09-15)${optional ? ', 없으면 빈칸' : ''}.\n`)
+    // 형식 + 실재 날짜(13월·32일 등 배제) 둘 다 검증 — 문자열 비교·리드 파싱이 깨지지 않게.
+    if (DATE_RE.test(a) && isRealDate(a)) return a
+    output.write(
+      `  ⚠️  올바른 날짜를 YYYY-MM-DD로 입력하세요 (예: 2026-09-15)${optional ? ', 없으면 빈칸' : ''}.\n`
+    )
   }
 }
 
