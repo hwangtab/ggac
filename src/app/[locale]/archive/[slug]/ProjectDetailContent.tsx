@@ -12,6 +12,7 @@ import ArticleCard from '@/components/ArticleCard'
 import EventApplicationForm from '@/components/EventApplicationForm'
 
 import { deriveProjectLead } from '@/utils/projectLead'
+import { parseLocalDate } from '@/utils/date'
 import { TicketingInfo } from '@/utils/linkPreview'
 import { toSafeHttpUrl, toSafeInternalImagePath, toSafeLinkHref } from '@/utils/safeUrl'
 import type { Project, Artist } from '@/types'
@@ -145,7 +146,7 @@ export default function ProjectDetailContent({
                 {localizeArchiveCategory(project.category, locale)}
               </span>
               <span className="text-gray-600">
-                {new Date(displayDate).toLocaleDateString(dateLocale)}
+                {parseLocalDate(displayDate).toLocaleDateString(dateLocale)}
               </span>
             </div>
 
@@ -316,7 +317,9 @@ export default function ProjectDetailContent({
                             {relatedProject.title}
                           </h3>
                           <p className="text-sm text-gray-500">
-                            {new Date(relatedProject.publishedDate).toLocaleDateString(dateLocale)}
+                            {parseLocalDate(relatedProject.publishedDate).toLocaleDateString(
+                              dateLocale
+                            )}
                           </p>
                         </div>
                       </Link>

@@ -3,11 +3,12 @@ import OptimizedImage from '@/components/OptimizedImage'
 import { getTranslations, getLocale } from 'next-intl/server'
 import { getProjectSummary } from '@/utils/projectUtils'
 import { toSafeInternalImagePath } from '@/utils/safeUrl'
+import { parseLocalDate } from '@/utils/date'
 import type { FeaturedProjectsProps } from '@/types'
 
 /** 2026-07-25 → 2026.07.25 — 포스터의 날짜 스탬프 표기 */
 function toStamp(value: string, locale: string): string {
-  const date = new Date(value)
+  const date = parseLocalDate(value)
   if (Number.isNaN(date.getTime())) return value
   if (locale === 'en') {
     return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })

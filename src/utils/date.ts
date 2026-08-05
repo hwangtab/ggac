@@ -7,3 +7,13 @@
 export function todaySeoul(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date())
 }
+
+/**
+ * 'YYYY-MM-DD' 같은 날짜-only 문자열을 로컬 타임존 기준 Date로 파싱한다.
+ * new Date('2026-09-30')은 UTC 자정으로 해석돼, UTC보다 뒤진 지역(미주 등)에서
+ * 날짜가 하루 일찍 표시되는 오차가 난다. 날짜-only는 로컬 자정으로 파싱해 이를 막는다.
+ * 시각이 포함된 문자열은 그대로 파싱한다.
+ */
+export function parseLocalDate(value: string): Date {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(value + 'T00:00:00') : new Date(value)
+}

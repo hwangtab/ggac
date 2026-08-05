@@ -8,6 +8,7 @@ import { getProjectSummary } from '@/utils/projectUtils'
 import { ARCHIVE_CATEGORIES, localizeArchiveCategory } from '@/constants/categories'
 import { generatePageNumbers } from '@/utils/pagination'
 import { toSafeInternalImagePath } from '@/utils/safeUrl'
+import { parseLocalDate } from '@/utils/date'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { useTranslations, useLocale } from 'next-intl'
 import type { ArchiveCategory } from '@/constants/categories'
@@ -16,7 +17,7 @@ import PageHero from '@/components/PageHero'
 
 /** 2026-07-25 → 2026.07.25 — 홈 카드와 같은 포스터 날짜 스탬프 표기 */
 function toStamp(value: string, locale: string): string {
-  const date = new Date(value)
+  const date = parseLocalDate(value)
   if (Number.isNaN(date.getTime())) return value
   if (locale === 'en') {
     return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
