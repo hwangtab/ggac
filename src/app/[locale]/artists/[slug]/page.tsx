@@ -364,9 +364,9 @@ const ArtistDetailPage = async ({ params }: ArtistPageProps) => {
                   <div className="lg:col-span-1">
                     <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-white/20">
                       <div className="text-center">
-                        <div className="w-20 h-20 bg-gradient-to-br from-primary-100 to-accent-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                          <div className="text-2xl">🎵</div>
-                        </div>
+                        <p className="mx-auto mb-4 text-[11px] uppercase tracking-[0.28em] text-white/55">
+                          CREATOR
+                        </p>
                         <h3 className="tw-heading-tertiary mb-2">
                           {t('detail.creatorInfoHeading')}
                         </h3>

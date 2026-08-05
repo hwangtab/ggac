@@ -73,12 +73,12 @@ const ArticleCard = ({ article }: ArticleCardProps) => {
         <Link href={article.url} className="block">
           <div className="aspect-video bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center">
             <div className="text-center">
-              <div className="text-2xl mb-2">🔗</div>
+              <p className="mb-2 text-[11px] uppercase tracking-[0.28em] text-white/55">LINK</p>
               <div className="text-purple-600 font-medium">{article.title}</div>
             </div>
           </div>
           <div className="p-4">
-            <h4 className="font-semibold text-gray-900 truncate flex-1 mr-2">{article.title}</h4>
+            <h3 className="font-semibold text-gray-900 truncate flex-1 mr-2">{article.title}</h3>
             <p className="text-gray-600 text-sm">{t('article.viewRelated')}</p>
             <div className="mt-2 text-xs text-gray-500">ggac.kr</div>
           </div>
@@ -93,12 +93,12 @@ const ArticleCard = ({ article }: ArticleCardProps) => {
       <>
         <div className="aspect-video bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center">
           <div className="text-center">
-            <div className="text-2xl mb-2">📰</div>
+            <p className="mb-2 text-[11px] uppercase tracking-[0.28em] text-white/55">ARTICLE</p>
             <div className="text-blue-600 font-medium">{article.title}</div>
           </div>
         </div>
         <div className="p-4">
-          <h4 className="font-semibold text-gray-900 truncate flex-1 mr-2">{article.title}</h4>
+          <h3 className="font-semibold text-gray-900 truncate flex-1 mr-2">{article.title}</h3>
           <p className="text-gray-600 text-sm">{t('article.goToArticle')}</p>
           <div className="mt-2 text-xs text-gray-500 truncate">{hostname || 'External Link'}</div>
         </div>
@@ -123,12 +123,12 @@ const ArticleCard = ({ article }: ArticleCardProps) => {
       <div className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow">
         <div className="aspect-video bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center">
           <div className="text-center">
-            <div className="text-2xl mb-2">📰</div>
+            <p className="mb-2 text-[11px] uppercase tracking-[0.28em] text-white/55">ARTICLE</p>
             <div className="text-blue-600 font-medium">{article.title}</div>
           </div>
         </div>
         <div className="p-4">
-          <h4 className="font-semibold text-gray-900 truncate flex-1 mr-2">{article.title}</h4>
+          <h3 className="font-semibold text-gray-900 truncate flex-1 mr-2">{article.title}</h3>
           <p className="text-gray-600 text-sm">{t('article.goToArticle')}</p>
           <div className="mt-2 text-xs text-gray-500 truncate">External Link</div>
         </div>
@@ -156,16 +156,16 @@ const ArticleCard = ({ article }: ArticleCardProps) => {
         ) : (
           <div className="aspect-video bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center">
             <div className="text-center">
-              <div className="text-2xl mb-2">📰</div>
+              <p className="mb-2 text-[11px] uppercase tracking-[0.28em] text-white/55">ARTICLE</p>
               <div className="text-blue-600 font-medium">{preview.siteName || article.title}</div>
             </div>
           </div>
         )}
 
         <div className="p-4">
-          <h4 className="font-semibold text-gray-900 line-clamp-2 flex-1 mr-2">
+          <h3 className="font-semibold text-gray-900 line-clamp-2 flex-1 mr-2">
             {preview.title || article.title}
-          </h4>
+          </h3>
 
           {preview.description && (
             <p className="text-gray-600 text-sm line-clamp-2 mb-2">{preview.description}</p>

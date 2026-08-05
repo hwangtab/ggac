@@ -7,6 +7,7 @@ import { detectXssPatterns, logSecurityEvent } from '@/utils/security'
 import { sanitizePostHtml } from '@/utils/sanitizePostHtml'
 import { createImageProxy } from '@/utils/imageValidation'
 import { isSafeInternalPath, toSafeHttpUrl, toSafeLinkHref } from '@/utils/safeUrl'
+import { shiftMarkdownHeadings } from '@/utils/markdownHeadings'
 
 interface PostContentRendererProps {
   content: string
@@ -102,7 +103,7 @@ export const PostContentRenderer: React.FC<PostContentRendererProps> = ({
             },
           }}
         >
-          {content}
+          {shiftMarkdownHeadings(content)}
         </ReactMarkdown>
       </div>
     )

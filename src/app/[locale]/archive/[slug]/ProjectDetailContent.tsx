@@ -15,6 +15,7 @@ import { deriveProjectLead } from '@/utils/projectLead'
 import { TicketingInfo } from '@/utils/linkPreview'
 import { toSafeHttpUrl, toSafeInternalImagePath, toSafeLinkHref } from '@/utils/safeUrl'
 import type { Project, Artist } from '@/types'
+import { shiftMarkdownHeadings } from '@/utils/markdownHeadings'
 
 // Lazy load heavy components
 const ReactMarkdown = dynamic(() => import('react-markdown'), {
@@ -217,14 +218,14 @@ export default function ProjectDetailContent({
                   },
                 }}
               >
-                {project.description}
+                {shiftMarkdownHeadings(project.description)}
               </ReactMarkdown>
             </div>
 
             {/* Video */}
             {project.videoUrl && (
               <div className="mt-12">
-                <h3 className="tw-heading-tertiary mb-6">{t('detail.videoHeading')}</h3>
+                <h2 className="tw-heading-tertiary mb-6">{t('detail.videoHeading')}</h2>
                 <YouTubeEmbed videoUrl={project.videoUrl} title={project.title} />
                 {safeVideoUrl && (
                   <div className="mt-4 text-sm text-gray-500">
@@ -244,7 +245,7 @@ export default function ProjectDetailContent({
             {/* Application Form */}
             {project.applicationForm && (
               <div className="mt-12">
-                <h3 className="tw-heading-tertiary mb-6">{t('detail.applicationHeading')}</h3>
+                <h2 className="tw-heading-tertiary mb-6">{t('detail.applicationHeading')}</h2>
                 {project.applicationForm.internal ? (
                   <EventApplicationForm eventSlug={project.slug} />
                 ) : safeApplicationFormUrl ? (
@@ -267,7 +268,7 @@ export default function ProjectDetailContent({
             {/* Ticketing */}
             {project.ticketing && project.ticketing.length > 0 && (
               <div className="mt-12">
-                <h3 className="tw-heading-tertiary mb-6">{t('detail.ticketingHeading')}</h3>
+                <h2 className="tw-heading-tertiary mb-6">{t('detail.ticketingHeading')}</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {project.ticketing.map((ticket, index) => (
                     <TicketingCard key={index} ticketing={ticket as TicketingInfo} />
@@ -279,7 +280,7 @@ export default function ProjectDetailContent({
             {/* Related Projects */}
             {relatedProjects.length > 0 && (
               <div className="mt-12">
-                <h3 className="tw-heading-tertiary mb-6">{t('detail.relatedProjectsHeading')}</h3>
+                <h2 className="tw-heading-tertiary mb-6">{t('detail.relatedProjectsHeading')}</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {relatedProjects.map(relatedProject => {
                     const safeRelatedCoverImage = toSafeInternalImagePath(relatedProject.coverImage)
@@ -304,9 +305,9 @@ export default function ProjectDetailContent({
                           <div className="text-sm text-primary-600 font-medium mb-2">
                             {localizeArchiveCategory(relatedProject.category, locale)}
                           </div>
-                          <h4 className="font-semibold text-gray-900 line-clamp-2 mb-2">
+                          <h3 className="font-semibold text-gray-900 line-clamp-2 mb-2">
                             {relatedProject.title}
-                          </h4>
+                          </h3>
                           <p className="text-sm text-gray-500">
                             {new Date(relatedProject.publishedDate).toLocaleDateString(dateLocale)}
                           </p>
@@ -321,7 +322,7 @@ export default function ProjectDetailContent({
             {/* Related Articles */}
             {project.relatedArticles && project.relatedArticles.length > 0 && (
               <div className="mt-12">
-                <h3 className="tw-heading-tertiary mb-6">{t('detail.relatedArticlesHeading')}</h3>
+                <h2 className="tw-heading-tertiary mb-6">{t('detail.relatedArticlesHeading')}</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {project.relatedArticles.map((article, index) => (
                     <ArticleCard key={index} article={article} />
@@ -333,7 +334,7 @@ export default function ProjectDetailContent({
             {/* Gallery */}
             {project.gallery && project.gallery.length > 0 && (
               <div className="mt-12">
-                <h3 className="tw-heading-tertiary mb-6">{t('detail.galleryHeading')}</h3>
+                <h2 className="tw-heading-tertiary mb-6">{t('detail.galleryHeading')}</h2>
 
                 {/* 갤러리 전체 로딩 표시는 제거하고, 각 카드 단위 스켈레톤만 유지 */}
 
@@ -429,7 +430,7 @@ export default function ProjectDetailContent({
         <div className="tw-container-custom">
           <div className="text-center">
             <div className="max-w-2xl mx-auto mb-8">
-              <h3 className="tw-heading-tertiary mb-3">{t('detail.navHeading')}</h3>
+              <h2 className="tw-heading-tertiary mb-3">{t('detail.navHeading')}</h2>
               <p className="text-gray-600">{t('detail.navBody')}</p>
             </div>
             <Link href="/archive" className="tw-btn-primary">

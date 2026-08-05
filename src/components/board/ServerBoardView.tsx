@@ -8,6 +8,7 @@ import { parseBoardCategory } from '@/constants/categories'
 import { parseIntegerParam } from '@/utils/queryParams'
 import type { BoardInitialPost } from '@/lib/server/board'
 import type { BoardCategory } from '@/constants/categories'
+import PageHero from '@/components/PageHero'
 
 interface BoardListViewProps {
   /** 첫 페이지(전체 카테고리) SSR 데이터 — 초기 진입 시 그대로 렌더 */
@@ -144,12 +145,13 @@ export const BoardListView = ({
 
   return (
     <div className="min-h-screen bg-gray-50 pt-20 md:pt-24">
+      {/*
+        목록 상단이 h2였다. 페이지에 h1이 하나도 없어 스크린리더 사용자가
+        문서 제목을 못 잡고, 다른 페이지가 모두 PageHero의 h1로 시작하는데
+        게시판만 위계와 생김새가 달랐다.
+      */}
+      <PageHero kicker="BOARD" titleLine1={t('heading')} subtitle={t('subtitle')} />
       <div className="container mx-auto px-4 pt-8 pb-16">
-        <div className="mb-8">
-          <h2 className="tw-heading-secondary mb-2">{t('heading')}</h2>
-          <p className="text-gray-600">{t('subtitle')}</p>
-        </div>
-
         {authSection}
 
         {loadError ? (
@@ -176,9 +178,9 @@ export const BoardListView = ({
                   </span>
                 </div>
                 <Link href={`/board/${post.id}`} className="block group">
-                  <h3 className="text-2xl font-post font-semibold text-gray-700 group-hover:text-primary-600 transition-colors">
+                  <h2 className="text-2xl font-post font-semibold text-gray-700 group-hover:text-primary-600 transition-colors">
                     {post.title}
-                  </h3>
+                  </h2>
                   <p className="text-gray-600 mt-3 line-clamp-3">{post.content_preview}</p>
                 </Link>
                 <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100 text-sm text-gray-500">

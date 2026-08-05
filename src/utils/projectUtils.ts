@@ -140,13 +140,17 @@ export function extractMeaningfulSummary(
  * 글자가 포스터 타이포그래피 자리에 박혔다. 본문에서는 살리고 요약에서만 뺀다.
  */
 function stripDisplayEmoji(value: string): string {
-  return value
-    .replace(
-      /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}]/gu,
-      ''
-    )
-    .replace(/\s{2,}/g, ' ')
-    .trim()
+  return (
+    value
+      // 코드포인트 범위로 자르면 → ⇒ ✓ ★ ← ⚙ ♡ 같은 타이포 기호까지 함께
+      // 사라진다(실제 본문 4건에 ✓·⚙·♡가 쓰이고 있다). 컬러 이모지로
+      // 렌더되는 것만 정확히 고른다: 기본 이모지 표현이거나 VS16이 붙은 것.
+      .replace(/\p{Emoji_Presentation}|\p{Extended_Pictographic}\u{FE0F}/gu, '')
+      // ZWJ 시퀀스(🏄‍♂️ 등)를 지운 뒤 남는 결합 문자 잔여물 정리
+      .replace(/[\u{200D}\u{FE0F}\u{1F3FB}-\u{1F3FF}]/gu, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim()
+  )
 }
 
 export function getProjectSummary(

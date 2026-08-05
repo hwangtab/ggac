@@ -336,13 +336,17 @@ textarea:focus-visible {
     scroll-behavior: smooth;
     max-width: 100vw;
     /* hidden은 body를 스크롤 컨테이너로 만들어 position:sticky를 무력화한다.
-       clip은 같은 가로 클리핑을 하면서 스크롤 컨테이너를 만들지 않는다. */
+       clip은 같은 가로 클리핑을 하면서 스크롤 컨테이너를 만들지 않는다.
+       overflow: clip은 Safari 16(2022-09)부터라, 그 이전 브라우저가 선언을
+       통째로 버리고 가로 스크롤이 생기지 않도록 hidden을 먼저 둔다. */
+    overflow-x: hidden;
     overflow-x: clip;
   }
 
   body {
     @apply font-sans text-gray-900 bg-white;
     max-width: 100vw;
+    overflow-x: hidden;
     overflow-x: clip;
     word-break: keep-all;
     overflow-wrap: break-word;
@@ -1190,6 +1194,27 @@ body {
 [data-poster] [class*=' text-emerald-'] {
   color: #86efac;
 }
+/* 관리자 화면 전용 색조 — 조합원 카드·배지에서 쓰인다. 배경만 어두워지고
+   글자는 짙은 보라·청록으로 남아 대비가 무너지던 사각지대였다. */
+[data-poster] [class^='text-purple-'],
+[data-poster] [class*=' text-purple-'],
+[data-poster] [class^='text-violet-'],
+[data-poster] [class*=' text-violet-'],
+[data-poster] [class^='text-pink-'],
+[data-poster] [class*=' text-pink-'],
+[data-poster] [class^='text-fuchsia-'],
+[data-poster] [class*=' text-fuchsia-'] {
+  color: #e9d5ff;
+}
+[data-poster] [class^='text-teal-'],
+[data-poster] [class*=' text-teal-'],
+[data-poster] [class^='text-cyan-'],
+[data-poster] [class*=' text-cyan-'],
+[data-poster] [class^='text-sky-'],
+[data-poster] [class*=' text-sky-'] {
+  color: #99f6e4;
+}
+
 [data-poster] [class^='text-red-'],
 [data-poster] [class*=' text-red-'],
 [data-poster] [class^='text-rose-'],
@@ -1215,6 +1240,12 @@ body {
 
 /* --- 선 --- */
 [data-poster] [class*=' border-gray-'],
+[data-poster] [class^='border-purple-'],
+[data-poster] [class*=' border-purple-'],
+[data-poster] [class^='border-teal-'],
+[data-poster] [class*=' border-teal-'],
+[data-poster] [class^='border-indigo-'],
+[data-poster] [class*=' border-indigo-'],
 [data-poster] [class^='border-blue-'],
 [data-poster] [class*=' border-blue-'],
 [data-poster] [class^='border-green-'],
@@ -1258,7 +1289,9 @@ body {
 [data-poster] .rounded-lg,
 [data-poster] .rounded-md,
 [data-poster] .rounded,
-[data-poster] .rounded-full {
+/* 스피너는 제외한다 — 원형이 아니면 회전이 '도는' 것으로 안 읽히고
+   네모가 덜컹거리는 것처럼 보인다(관리자·마이페이지 등 29곳). */
+[data-poster] .rounded-full:not(.animate-spin) {
   border-radius: 2px;
 }
 
@@ -1358,6 +1391,12 @@ body {
 [data-poster] .prose td {
   color: var(--poster-text-2);
 }
+/* em은 tailwind.config의 typography 커스텀에서 #bd5608(주황)로 고정돼 있어
+   다크 배경에서 4.29:1로 기준에 미달했다. 기울임만으로 충분히 구분된다. */
+[data-poster] .prose em {
+  color: rgba(255, 255, 255, 0.92);
+}
+
 [data-poster] .prose h1,
 [data-poster] .prose h2,
 [data-poster] .prose h3,

@@ -101,15 +101,15 @@ const TicketingCard = ({ ticketing }: TicketingCardProps) => {
       <>
         <div className="aspect-video bg-gradient-to-br from-primary-100 to-accent-100 flex items-center justify-center">
           <div className="text-center">
-            <div className="text-2xl mb-2">🎫</div>
+            <p className="mb-2 text-[11px] uppercase tracking-[0.28em] text-white/55">TICKET</p>
             <div className="text-primary-600 font-medium">{ticketing.platform}</div>
           </div>
         </div>
         <div className="p-4">
           <div className="flex justify-between items-start mb-2">
-            <h4 className="font-semibold text-gray-900 truncate flex-1 mr-2">
+            <h3 className="font-semibold text-gray-900 truncate flex-1 mr-2">
               {ticketing.platform}
-            </h4>
+            </h3>
             <span
               className={`px-2 py-1 text-xs rounded-full whitespace-nowrap ${getStatusColor()}`}
             >
@@ -142,15 +142,15 @@ const TicketingCard = ({ ticketing }: TicketingCardProps) => {
       <div className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-shadow">
         <div className="aspect-video bg-gradient-to-br from-primary-100 to-accent-100 flex items-center justify-center">
           <div className="text-center">
-            <div className="text-2xl mb-2">🎫</div>
+            <p className="mb-2 text-[11px] uppercase tracking-[0.28em] text-white/55">TICKET</p>
             <div className="text-primary-600 font-medium">{ticketing.platform}</div>
           </div>
         </div>
         <div className="p-4">
           <div className="flex justify-between items-start mb-2">
-            <h4 className="font-semibold text-gray-900 truncate flex-1 mr-2">
+            <h3 className="font-semibold text-gray-900 truncate flex-1 mr-2">
               {ticketing.platform}
-            </h4>
+            </h3>
             <span
               className={`px-2 py-1 text-xs rounded-full whitespace-nowrap ${getStatusColor()}`}
             >
@@ -195,7 +195,7 @@ const TicketingCard = ({ ticketing }: TicketingCardProps) => {
 
                   const iconDiv = document.createElement('div')
                   iconDiv.className = 'text-2xl mb-2'
-                  iconDiv.textContent = '🎫'
+                  iconDiv.textContent = 'TICKET'
 
                   const textDiv = document.createElement('div')
                   textDiv.className = 'text-primary-600 font-medium'
@@ -212,7 +212,7 @@ const TicketingCard = ({ ticketing }: TicketingCardProps) => {
         ) : (
           <div className="aspect-video bg-gradient-to-br from-primary-100 to-accent-100 flex items-center justify-center">
             <div className="text-center">
-              <div className="text-2xl mb-2">🎫</div>
+              <p className="mb-2 text-[11px] uppercase tracking-[0.28em] text-white/55">TICKET</p>
               <div className="text-primary-600 font-medium">
                 {preview.siteName || ticketing.platform}
               </div>
@@ -222,9 +222,9 @@ const TicketingCard = ({ ticketing }: TicketingCardProps) => {
 
         <div className="p-4">
           <div className="flex justify-between items-start mb-2">
-            <h4 className="font-semibold text-gray-900 line-clamp-2 flex-1 mr-2">
+            <h3 className="font-semibold text-gray-900 line-clamp-2 flex-1 mr-2">
               {preview.title || ticketing.platform}
-            </h4>
+            </h3>
             <span
               className={`px-2 py-1 text-xs rounded-full whitespace-nowrap ${getStatusColor()}`}
             >

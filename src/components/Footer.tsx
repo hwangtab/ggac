@@ -91,7 +91,7 @@ const Footer = ({ globalData }: FooterProps) => {
 
           {/* Quick Links */}
           <div>
-            <h3 className="font-semibold mb-4">{t('quickLinks')}</h3>
+            <h2 className="font-semibold mb-4">{t('quickLinks')}</h2>
             <ul className="space-y-2">
               <li>
                 <Link
@@ -146,7 +146,7 @@ const Footer = ({ globalData }: FooterProps) => {
 
           {/* Contact */}
           <div>
-            <h3 className="font-semibold mb-4">{t('contact')}</h3>
+            <h2 className="font-semibold mb-4">{t('contact')}</h2>
             <div className="text-gray-400 text-sm space-y-2">
               <p>
                 {t('email')}:

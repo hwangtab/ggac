@@ -29,7 +29,7 @@ export default function ArtistProjects({
       <div className={`text-center py-12 ${className}`}>
         <div className="max-w-md mx-auto">
           <div className="w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mx-auto mb-6">
-            <div className="text-3xl text-gray-400">🎭</div>
+            <p className="text-[11px] uppercase tracking-[0.28em] text-white/55">PROJECT</p>
           </div>
           <h3 className="text-xl font-serif font-semibold text-gray-700 mb-2">
             {t('artistProjects.empty')}

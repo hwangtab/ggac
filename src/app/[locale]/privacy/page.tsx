@@ -106,7 +106,7 @@ function PrivacyContentEn() {
         </p>
         <div className="space-y-4">
           <div className="bg-blue-50 p-4 rounded-lg">
-            <h4 className="font-semibold text-gray-900 mb-2">Required</h4>
+            <h3 className="font-semibold text-gray-900 mb-2">Required</h3>
             <ul className="list-disc pl-6 text-gray-700 space-y-1">
               <li>Email address, password</li>
               <li>Legal name, display name</li>
@@ -115,7 +115,7 @@ function PrivacyContentEn() {
             </ul>
           </div>
           <div className="bg-green-50 p-4 rounded-lg">
-            <h4 className="font-semibold text-gray-900 mb-2">Automatically Collected</h4>
+            <h3 className="font-semibold text-gray-900 mb-2">Automatically Collected</h3>
             <ul className="list-disc pl-6 text-gray-700 space-y-1">
               <li>IP address, cookies, access logs</li>
               <li>Service usage records, abuse records</li>
@@ -289,7 +289,7 @@ export default async function PrivacyPage({ params }: PrivacyPageProps) {
 
                   <div className="space-y-4">
                     <div className="bg-blue-50 p-4 rounded-lg">
-                      <h4 className="font-semibold text-gray-900 mb-2">필수항목</h4>
+                      <h3 className="font-semibold text-gray-900 mb-2">필수항목</h3>
                       <ul className="list-disc pl-6 text-gray-700 space-y-1">
                         <li>이메일 주소, 비밀번호</li>
                         <li>실명, 표시명</li>
@@ -299,7 +299,7 @@ export default async function PrivacyPage({ params }: PrivacyPageProps) {
                     </div>
 
                     <div className="bg-green-50 p-4 rounded-lg">
-                      <h4 className="font-semibold text-gray-900 mb-2">자동 수집 항목</h4>
+                      <h3 className="font-semibold text-gray-900 mb-2">자동 수집 항목</h3>
                       <ul className="list-disc pl-6 text-gray-700 space-y-1">
                         <li>접속 IP 정보, 쿠키, 접속 기록</li>
                         <li>서비스 이용 기록, 불량 이용 기록</li>
