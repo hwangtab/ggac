@@ -25,6 +25,7 @@
     "images:verify": "node scripts/utils/image-processing/update-image-references.js --check && node scripts/utils/image-processing/verify-webp.js",
     "storage:ensure-webp": "node scripts/utils/storage/ensure-supabase-webp.js",
     "llms:generate": "node scripts/utils/content/generate-llms-txt.mjs",
+    "new:show": "node scripts/utils/content/new-show.mjs",
     "llms:check": "node scripts/utils/content/generate-llms-txt.mjs --check",
     "prepare": "husky",
     "vercel:build": "npm run images:optimize && npm run images:verify && npm run llms:generate && next build",

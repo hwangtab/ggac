@@ -8,6 +8,7 @@ import {
   getProjectsSorted,
   type Project as ProjectType,
 } from '@/lib/data'
+import { deriveProjectLead } from '@/utils/projectLead'
 import { fetchLinkPreview } from '@/utils/linkPreview'
 import { getProjectSummary } from '@/utils/projectUtils'
 import { setRequestLocale } from 'next-intl/server'
@@ -396,8 +397,9 @@ const ProjectDetailPage = async ({ params }: ProjectPageProps) => {
   const projectSchema = isEvent
     ? generateEventStructuredData({
         title: project.title,
-        // 스키마 description은 답변-우선 리드를 우선 사용(없으면 본문) — AI 인용 추출성 강화.
-        description: project.lead || project.description,
+        // 스키마 description은 답변-우선 리드 우선(수동 없으면 자동 생성, 그다음 본문).
+        description:
+          project.lead || deriveProjectLead(project, resolvedParams.locale) || project.description,
         slug: project.slug,
         publishedDate: project.publishedDate,
         eventDate: project.eventDate,
@@ -415,7 +417,8 @@ const ProjectDetailPage = async ({ params }: ProjectPageProps) => {
       })
     : generateProjectStructuredData({
         title: project.title,
-        description: project.lead || project.description,
+        description:
+          project.lead || deriveProjectLead(project, resolvedParams.locale) || project.description,
         slug: project.slug,
         coverImage: project.coverImage,
         gallery: project.gallery,

@@ -48,6 +48,8 @@ export interface Project {
   venue?: EventVenue
   /** 취소된 공연이면 true (schema eventStatus를 EventCancelled로). */
   cancelled?: boolean
+  /** 경기아트콜렉티브 기획 공연이면 true(참여 공연은 false/미지정). 자동 리드의 주최 표현에 사용. */
+  hostedByGgac?: boolean
   coverImage: string
   description: string
   gallery?: string[]

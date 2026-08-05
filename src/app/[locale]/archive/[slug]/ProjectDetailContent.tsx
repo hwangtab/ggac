@@ -11,6 +11,7 @@ import TicketingCard from '@/components/TicketingCard'
 import ArticleCard from '@/components/ArticleCard'
 import EventApplicationForm from '@/components/EventApplicationForm'
 
+import { deriveProjectLead } from '@/utils/projectLead'
 import { TicketingInfo } from '@/utils/linkPreview'
 import { toSafeHttpUrl, toSafeInternalImagePath, toSafeLinkHref } from '@/utils/safeUrl'
 import type { Project, Artist } from '@/types'
@@ -187,12 +188,15 @@ export default function ProjectDetailContent({
         <div className="tw-container-custom">
           <div className="max-w-4xl mx-auto">
             <div className="prose prose-lg max-w-none">
-              {/* 답변-우선 리드: 정의 문장→특징. AI 추출·요약이 먼저 집는 자리. */}
-              {project.lead && (
-                <p className="!mt-0 mb-6 pb-6 border-b border-primary-100 text-gray-800 font-medium text-lg leading-relaxed">
-                  {project.lead}
-                </p>
-              )}
+              {/* 답변-우선 리드: 정의 문장→특징. 수동 리드가 없으면 필드에서 자동 생성. */}
+              {(() => {
+                const lead = project.lead || deriveProjectLead(project, locale, { isUpcoming })
+                return lead ? (
+                  <p className="!mt-0 mb-6 pb-6 border-b border-primary-100 text-gray-800 font-medium text-lg leading-relaxed">
+                    {lead}
+                  </p>
+                ) : null
+              })()}
               <ReactMarkdown
                 components={{
                   a: ({ node, href, children, ...props }) => {
