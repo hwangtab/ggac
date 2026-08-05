@@ -949,8 +949,15 @@ body {
  * 자손 셀렉터만 쓰면 `data-poster`가 달린 요소 자신은 재매핑되지 않는다.
  * `[class*=]`로 bg-white/70 같은 불투명도 변형까지 함께 잡는다.
  */
-[data-poster] [class*='bg-white']:not([data-poster-keep]),
-[data-poster][class*='bg-white']:not([data-poster-keep]),
+[data-poster] [class^='bg-white']:not([data-poster-keep]),
+
+/* --- 면 ---
+ * 자손 셀렉터만 쓰면 `data-poster`가 달린 요소 자신은 재매핑되지 않는다.
+ * `[class*=]`로 bg-white/70 같은 불투명도 변형까지 함께 잡는다.
+ */
+[data-poster] [class*=' bg-white']:not([data-poster-keep]),
+[data-poster][class^='bg-white']:not([data-poster-keep]),
+[data-poster][class*=' bg-white']:not([data-poster-keep]),
 [data-poster] .bg-gray-50:not([data-poster-keep]),
 [data-poster].bg-gray-50:not([data-poster-keep]) {
   background-color: var(--poster-surface);
@@ -967,13 +974,19 @@ body {
   background-color: var(--poster-bg);
 }
 /* 중간 회색 면(뱃지·보조 버튼 등)은 살짝 뜬 면으로 */
-[data-poster] [class*='bg-gray-3'],
-[data-poster] [class*='bg-gray-4'],
-[data-poster] [class*='bg-gray-5'] {
+[data-poster] [class^='bg-gray-3'],
+/* 중간 회색 면(뱃지·보조 버튼 등)은 살짝 뜬 면으로 */
+[data-poster] [class*=' bg-gray-3'],
+[data-poster] [class^='bg-gray-4'],
+[data-poster] [class*=' bg-gray-4'],
+[data-poster] [class^='bg-gray-5'] ,
+[data-poster] [class*=' bg-gray-5'] {
   background-color: var(--poster-surface-2);
 }
-[data-poster] [class*='bg-gray-6'],
-[data-poster] [class*='bg-gray-7'] {
+[data-poster] [class^='bg-gray-6'],
+[data-poster] [class*=' bg-gray-6'],
+[data-poster] [class^='bg-gray-7'],
+[data-poster] [class*=' bg-gray-7'] {
   background-color: rgba(255, 255, 255, 0.14);
 }
 /*
@@ -998,74 +1011,137 @@ body {
  */
 
 /* 옅은 계단(50~200): 안내 상자 배경 — 아주 옅은 흰 면으로 눌러 다크에 맞춘다 */
-[data-poster] [class*='bg-primary-50'],
-[data-poster] [class*='bg-primary-100'],
-[data-poster] [class*='bg-primary-200'],
-[data-poster] [class*='bg-accent-50'],
-[data-poster] [class*='bg-accent-100'],
-[data-poster] [class*='bg-accent-200'] {
+[data-poster] [class^='bg-primary-50'],
+/*
+ * 브랜드색 배경 처리. 계단을 정확히 구분해야 한다 — `[class*='bg-primary-5']`처럼
+ * 부분 일치를 쓰면 `bg-primary-50`(옅은 톤)까지 잡혀 흰 버튼이 돼버린다.
+ *
+ * 글자색에 !important를 쓰는 이유: 이 블록은 '면' 섹션이라 아래 '글자' 섹션의
+ * .text-gray-* 재매핑보다 먼저 온다. 특정도가 같아 순서로 지는데, 브랜드색 위의
+ * 글자는 반드시 어두워야 하므로 우선순위를 명시한다.
+ */
+
+/* 옅은 계단(50~200): 안내 상자 배경 — 아주 옅은 흰 면으로 눌러 다크에 맞춘다 */
+[data-poster] [class*=' bg-primary-50'],
+[data-poster] [class^='bg-primary-100'],
+[data-poster] [class*=' bg-primary-100'],
+[data-poster] [class^='bg-primary-200'],
+[data-poster] [class*=' bg-primary-200'],
+[data-poster] [class^='bg-accent-50'],
+[data-poster] [class*=' bg-accent-50'],
+[data-poster] [class^='bg-accent-100'],
+[data-poster] [class*=' bg-accent-100'],
+[data-poster] [class^='bg-accent-200'] ,
+[data-poster] [class*=' bg-accent-200'] {
   background-color: rgba(255, 255, 255, 0.07);
 }
 
 /* 중간 계단(300~400): 앰버는 포스터 팔레트라 색을 살리고 글자만 어둡게 */
-[data-poster] [class*='bg-primary-300'],
-[data-poster] [class*='bg-primary-400'],
-[data-poster] [class*='bg-accent-300'],
-[data-poster] [class*='bg-accent-400'] {
+[data-poster] [class^='bg-primary-300'],
+
+/* 중간 계단(300~400): 앰버는 포스터 팔레트라 색을 살리고 글자만 어둡게 */
+[data-poster] [class*=' bg-primary-300'],
+[data-poster] [class^='bg-primary-400'],
+[data-poster] [class*=' bg-primary-400'],
+[data-poster] [class^='bg-accent-300'],
+[data-poster] [class*=' bg-accent-300'],
+[data-poster] [class^='bg-accent-400'] ,
+[data-poster] [class*=' bg-accent-400'] {
   color: #000000 !important;
 }
-[data-poster] [class*='bg-primary-300'] *,
-[data-poster] [class*='bg-primary-400'] *,
-[data-poster] [class*='bg-accent-300'] *,
-[data-poster] [class*='bg-accent-400'] * {
+[data-poster] [class^='bg-primary-300'] *,
+[data-poster] [class*=' bg-primary-300'] *,
+[data-poster] [class^='bg-primary-400'] *,
+[data-poster] [class*=' bg-primary-400'] *,
+[data-poster] [class^='bg-accent-300'] *,
+[data-poster] [class*=' bg-accent-300'] *,
+[data-poster] [class^='bg-accent-400'] *,
+[data-poster] [class*=' bg-accent-400'] * {
   color: #000000 !important;
 }
 
 /* 강한 계단(500~900): 주 액션 버튼 — 히어로 CTA와 같은 흰 버튼으로 */
-[data-poster] [class*='bg-primary-500'],
-[data-poster] [class*='bg-primary-600'],
-[data-poster] [class*='bg-primary-700'],
-[data-poster] [class*='bg-primary-800'],
-[data-poster] [class*='bg-primary-900'],
-[data-poster] [class*='bg-accent-500'],
-[data-poster] [class*='bg-accent-600'],
-[data-poster] [class*='bg-accent-700'] {
+[data-poster] [class^='bg-primary-500'],
+
+/* 강한 계단(500~900): 주 액션 버튼 — 히어로 CTA와 같은 흰 버튼으로 */
+[data-poster] [class*=' bg-primary-500'],
+[data-poster] [class^='bg-primary-600'],
+[data-poster] [class*=' bg-primary-600'],
+[data-poster] [class^='bg-primary-700'],
+[data-poster] [class*=' bg-primary-700'],
+[data-poster] [class^='bg-primary-800'],
+[data-poster] [class*=' bg-primary-800'],
+[data-poster] [class^='bg-primary-900'],
+[data-poster] [class*=' bg-primary-900'],
+[data-poster] [class^='bg-accent-500'],
+[data-poster] [class*=' bg-accent-500'],
+[data-poster] [class^='bg-accent-600'],
+[data-poster] [class*=' bg-accent-600'],
+[data-poster] [class^='bg-accent-700'] ,
+[data-poster] [class*=' bg-accent-700'] {
   background-color: #ffffff;
   color: #000000 !important;
 }
-[data-poster] [class*='bg-primary-500'] *,
-[data-poster] [class*='bg-primary-600'] *,
-[data-poster] [class*='bg-primary-700'] *,
-[data-poster] [class*='bg-primary-800'] *,
-[data-poster] [class*='bg-primary-900'] *,
-[data-poster] [class*='bg-accent-500'] *,
-[data-poster] [class*='bg-accent-600'] *,
-[data-poster] [class*='bg-accent-700'] * {
+[data-poster] [class^='bg-primary-500'] *,
+[data-poster] [class*=' bg-primary-500'] *,
+[data-poster] [class^='bg-primary-600'] *,
+[data-poster] [class*=' bg-primary-600'] *,
+[data-poster] [class^='bg-primary-700'] *,
+[data-poster] [class*=' bg-primary-700'] *,
+[data-poster] [class^='bg-primary-800'] *,
+[data-poster] [class*=' bg-primary-800'] *,
+[data-poster] [class^='bg-primary-900'] *,
+[data-poster] [class*=' bg-primary-900'] *,
+[data-poster] [class^='bg-accent-500'] *,
+[data-poster] [class*=' bg-accent-500'] *,
+[data-poster] [class^='bg-accent-600'] *,
+[data-poster] [class*=' bg-accent-600'] *,
+[data-poster] [class^='bg-accent-700'] *,
+[data-poster] [class*=' bg-accent-700'] * {
   color: #000000 !important;
 }
-[data-poster] [class*='bg-primary-600']:hover,
-[data-poster] [class*='bg-primary-700']:hover,
-[data-poster] [class*='bg-accent-500']:hover,
-[data-poster] [class*='bg-accent-600']:hover {
+[data-poster] [class^='bg-primary-600']:hover,
+[data-poster] [class*=' bg-primary-600']:hover,
+[data-poster] [class^='bg-primary-700']:hover,
+[data-poster] [class*=' bg-primary-700']:hover,
+[data-poster] [class^='bg-accent-500']:hover,
+[data-poster] [class*=' bg-accent-500']:hover,
+[data-poster] [class^='bg-accent-600']:hover,
+[data-poster] [class*=' bg-accent-600']:hover {
   background-color: rgba(255, 255, 255, 0.85);
 }
 
 /* 그 밖의 안내·경고 색조 배경 */
-[data-poster] [class*='bg-blue-'],
-[data-poster] [class*='bg-green-'],
-[data-poster] [class*='bg-amber-'],
-[data-poster] [class*='bg-yellow-'],
-[data-poster] [class*='bg-red-'],
-[data-poster] [class*='bg-indigo-'],
-[data-poster] [class*='bg-orange-'],
-[data-poster] [class*='bg-teal-'],
-[data-poster] [class*='bg-pink-'],
-[data-poster] [class*='bg-purple-'] {
+[data-poster] [class^='bg-blue-'],
+
+/* 그 밖의 안내·경고 색조 배경 */
+[data-poster] [class*=' bg-blue-'],
+[data-poster] [class^='bg-green-'],
+[data-poster] [class*=' bg-green-'],
+[data-poster] [class^='bg-amber-'],
+[data-poster] [class*=' bg-amber-'],
+[data-poster] [class^='bg-yellow-'],
+[data-poster] [class*=' bg-yellow-'],
+[data-poster] [class^='bg-red-'],
+[data-poster] [class*=' bg-red-'],
+[data-poster] [class^='bg-indigo-'],
+[data-poster] [class*=' bg-indigo-'],
+[data-poster] [class^='bg-orange-'],
+[data-poster] [class*=' bg-orange-'],
+[data-poster] [class^='bg-teal-'],
+[data-poster] [class*=' bg-teal-'],
+[data-poster] [class^='bg-pink-'],
+[data-poster] [class*=' bg-pink-'],
+[data-poster] [class^='bg-purple-'] ,
+[data-poster] [class*=' bg-purple-'] {
   background-color: rgba(255, 255, 255, 0.07);
 }
 
 /* 밝은 그라데이션 배경은 포스터에 맞지 않는다 */
-[data-poster] [class*='bg-gradient-to'] {
+[data-poster] [class^='bg-gradient-to'] ,
+
+/* 밝은 그라데이션 배경은 포스터에 맞지 않는다 */
+[data-poster] [class*=' bg-gradient-to'] {
   background-image: none;
 }
 
@@ -1099,21 +1175,31 @@ body {
   color: #fbd9a5;
 }
 /* 안내·경고 텍스트 — 색상을 유지하되 다크 위에서 읽히는 밝기로 */
-[data-poster] [class*='text-blue-'],
-[data-poster] [class*='text-indigo-'] {
+[data-poster] [class^='text-blue-'],
+/* 안내·경고 텍스트 — 색상을 유지하되 다크 위에서 읽히는 밝기로 */
+[data-poster] [class*=' text-blue-'],
+[data-poster] [class^='text-indigo-'] ,
+[data-poster] [class*=' text-indigo-'] {
   color: #93c5fd;
 }
-[data-poster] [class*='text-green-'],
-[data-poster] [class*='text-emerald-'] {
+[data-poster] [class^='text-green-'],
+[data-poster] [class*=' text-green-'],
+[data-poster] [class^='text-emerald-'],
+[data-poster] [class*=' text-emerald-'] {
   color: #86efac;
 }
-[data-poster] [class*='text-red-'],
-[data-poster] [class*='text-rose-'] {
+[data-poster] [class^='text-red-'],
+[data-poster] [class*=' text-red-'],
+[data-poster] [class^='text-rose-'],
+[data-poster] [class*=' text-rose-'] {
   color: #fca5a5;
 }
-[data-poster] [class*='text-amber-'],
-[data-poster] [class*='text-yellow-'],
-[data-poster] [class*='text-orange-'] {
+[data-poster] [class^='text-amber-'],
+[data-poster] [class*=' text-amber-'],
+[data-poster] [class^='text-yellow-'],
+[data-poster] [class*=' text-yellow-'],
+[data-poster] [class^='text-orange-'],
+[data-poster] [class*=' text-orange-'] {
   color: #fcd34d;
 }
 /* 링크 hover 등에서 파랑이 남지 않도록 */
@@ -1123,14 +1209,24 @@ body {
 }
 
 /* --- 선 --- */
-[data-poster] [class*='border-gray-'],
-[data-poster] [class*='border-blue-'],
-[data-poster] [class*='border-green-'],
-[data-poster] [class*='border-red-'],
-[data-poster] [class*='border-amber-'],
-[data-poster] [class*='border-yellow-'],
-[data-poster] [class*='border-primary-'],
-[data-poster] [class*='border-accent-'] {
+[data-poster] [class^='border-gray-'],
+
+/* --- 선 --- */
+[data-poster] [class*=' border-gray-'],
+[data-poster] [class^='border-blue-'],
+[data-poster] [class*=' border-blue-'],
+[data-poster] [class^='border-green-'],
+[data-poster] [class*=' border-green-'],
+[data-poster] [class^='border-red-'],
+[data-poster] [class*=' border-red-'],
+[data-poster] [class^='border-amber-'],
+[data-poster] [class*=' border-amber-'],
+[data-poster] [class^='border-yellow-'],
+[data-poster] [class*=' border-yellow-'],
+[data-poster] [class^='border-primary-'],
+[data-poster] [class*=' border-primary-'],
+[data-poster] [class^='border-accent-'] ,
+[data-poster] [class*=' border-accent-'] {
   border-color: var(--poster-line);
 }
 [data-poster] .divide-gray-100 > * + *,
@@ -1159,6 +1255,17 @@ body {
 [data-poster] .rounded-xl,
 [data-poster] .rounded-lg {
   border-radius: 2px;
+}
+
+/* 비활성 컨트롤 — 브랜드색 배경 규칙이 그대로 남아 활성 버튼과 구별되지 않았다 */
+[data-poster] button:disabled,
+[data-poster] a[aria-disabled='true'],
+[data-poster] input:disabled,
+[data-poster] select:disabled,
+[data-poster] textarea:disabled {
+  background-color: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.45) !important;
+  cursor: not-allowed;
 }
 
 /* --- 입력 요소 --- */

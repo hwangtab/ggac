@@ -33,6 +33,11 @@ module.exports = {
           900: '#7c3a0f',
         },
       },
+      // Tailwind 기본 보더색은 gray-200이라 색 지정 없는 `border` 클래스가
+      // 다크 배경 위에서 밝은 회색 선으로 남는다. 헤어라인으로 바꾼다.
+      borderColor: {
+        DEFAULT: 'rgba(255, 255, 255, 0.15)',
+      },
       fontFamily: {
         sans: ['var(--font-pretendard)', 'system-ui', 'sans-serif'],
         post: ['var(--font-pretendard-black)', 'sans-serif'],
