@@ -41,7 +41,7 @@ const ORGANIZATION_DATA = {
   },
   knowsAbout: ['음악 제작', '공연 기획', '시각예술', '예술교육', '문화예술 행사', '아티스트 협업'],
   sameAs: [
-    'https://www.instagram.com/ggartcollective',
+    'https://www.instagram.com/ggackr',
     'https://www.youtube.com/@%EA%B2%BD%EC%95%84%EC%BD%9C',
   ],
 }
