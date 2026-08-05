@@ -424,6 +424,12 @@ const ProjectDetailPage = async ({ params }: ProjectPageProps) => {
 
   const structuredData = combineStructuredData([projectSchema, breadcrumbData])
 
+  // 예정/지난 판정은 서버에서(클라이언트 날짜 재계산 → 하이드레이션 불일치 방지).
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const isUpcoming = Boolean(
+    project.eventDate && !project.cancelled && project.eventDate >= todayStr
+  )
+
   return (
     <>
       {structuredDataToScript(structuredData)}
@@ -432,6 +438,7 @@ const ProjectDetailPage = async ({ params }: ProjectPageProps) => {
           project={{ ...project, relatedArticles: articlesWithPreview }}
           participatingArtists={participatingArtists}
           relatedProjects={relatedProjects}
+          isUpcoming={isUpcoming}
         />
       </ErrorBoundary>
     </>

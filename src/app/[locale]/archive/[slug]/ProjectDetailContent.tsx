@@ -30,16 +30,22 @@ interface ProjectDetailContentProps {
   relatedProjects: Array<
     Pick<Project, 'slug' | 'title' | 'coverImage' | 'publishedDate' | 'category'>
   >
+  /** 예정 공연 여부(서버 판정). 상세 상단에 예정/지난 뱃지 표기. */
+  isUpcoming?: boolean
 }
 
 export default function ProjectDetailContent({
   project,
   participatingArtists,
   relatedProjects,
+  isUpcoming = false,
 }: ProjectDetailContentProps) {
   const t = useTranslations('archive')
   const locale = useLocale()
   const dateLocale = locale === 'en' ? 'en-US' : 'ko-KR'
+  const isEn = locale === 'en'
+  // 공연일이 있으면 그 날짜를, 없으면 발행일을 상단에 표시.
+  const displayDate = project.eventDate || project.publishedDate
 
   // 라이트박스 상태 관리
   const [lightboxOpen, setLightboxOpen] = useState(false)
@@ -116,12 +122,21 @@ export default function ProjectDetailContent({
               </Link>
             </div>
 
-            <div className="flex items-center justify-center gap-4 mb-6">
+            <div className="flex flex-wrap items-center justify-center gap-3 mb-6">
+              {project.eventDate && (
+                <span
+                  className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${
+                    isUpcoming ? 'bg-primary-600 text-white' : 'bg-gray-200 text-gray-600'
+                  }`}
+                >
+                  {isUpcoming ? (isEn ? 'Upcoming' : '예정') : isEn ? 'Past' : '지난 공연'}
+                </span>
+              )}
               <span className="inline-block px-4 py-2 bg-primary-100 text-primary-700 font-medium rounded-full">
                 {localizeArchiveCategory(project.category, locale)}
               </span>
               <span className="text-gray-600">
-                {new Date(project.publishedDate).toLocaleDateString(dateLocale)}
+                {new Date(displayDate).toLocaleDateString(dateLocale)}
               </span>
             </div>
 

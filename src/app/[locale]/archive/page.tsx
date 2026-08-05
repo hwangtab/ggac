@@ -104,7 +104,19 @@ const ArchivePage = async ({ params }: ArchivePageProps) => {
   const { locale } = await params
   setRequestLocale(locale)
 
-  const [projects, artists] = await Promise.all([getProjectsSorted(locale), getArtists(locale)])
+  const [allProjects, artists] = await Promise.all([getProjectsSorted(locale), getArtists(locale)])
+
+  // 예정/지난 분리는 서버에서 수행한다(클라이언트가 날짜를 재계산해 하이드레이션
+  // 불일치를 내지 않도록). ISR(revalidate)로 '오늘'이 주기적으로 갱신된다.
+  // 미래 공연일(eventDate)이 있고 취소되지 않은 공연을 '예정'으로, eventDate
+  // 오름차순 정렬해 상단에 노출한다. 나머지는 기존 발행일 역순 아카이브.
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const isUpcoming = (p: (typeof allProjects)[number]) =>
+    !!p.eventDate && !p.cancelled && p.eventDate >= todayStr
+  const upcomingProjects = allProjects
+    .filter(isUpcoming)
+    .sort((a, b) => (a.eventDate! < b.eventDate! ? -1 : 1))
+  const projects = allProjects.filter(p => !isUpcoming(p))
 
   // 클라이언트가 어떤 페이지를 보든 참여자 이름을 표시할 수 있도록 전체 맵 전달
   // (아티스트 십수 명 규모 — 페이로드 수백 바이트)
@@ -115,7 +127,7 @@ const ArchivePage = async ({ params }: ArchivePageProps) => {
 
   const jsonLd = combineStructuredData([
     generateItemListStructuredData(
-      projects.map(project => ({
+      allProjects.map(project => ({
         name: project.title,
         url: `https://ggac.kr/archive/${project.slug}`,
       }))
@@ -134,6 +146,7 @@ const ArchivePage = async ({ params }: ArchivePageProps) => {
         fallback={
           <ArchiveView
             projects={projects}
+            upcomingProjects={upcomingProjects}
             pageSize={PROJECTS_PER_PAGE}
             artistNameMap={artistNameMap}
             selectedCategory="All"
@@ -143,6 +156,7 @@ const ArchivePage = async ({ params }: ArchivePageProps) => {
       >
         <ArchiveContent
           projects={projects}
+          upcomingProjects={upcomingProjects}
           pageSize={PROJECTS_PER_PAGE}
           artistNameMap={artistNameMap}
         />
