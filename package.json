@@ -37,6 +37,8 @@
     "deploy:smoke": "node scripts/utils/deployment/smoke-check.mjs",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
+    "db:push:local": "TURSO_DATABASE_URL=file:local.db drizzle-kit push --force",
+    "db:parity": "node scripts/turso/run-parity-check.mjs",
     "test:turso": "node --test scripts/testing/turso-*.test.mjs"
   },
   "dependencies": {
