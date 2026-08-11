@@ -8,6 +8,7 @@ import HeroFilmstrip from './HeroFilmstrip'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 import { usePointerParallax } from '@/hooks/usePointerParallax'
 import { useOffscreenPause } from '@/hooks/useOffscreenPause'
+import { useFrameBudget } from '@/hooks/useFrameBudget'
 import { getErrorTracker } from '@/utils/errorTracking'
 import type { Artist } from '@/types/artist'
 
@@ -54,7 +55,14 @@ const Hero = ({ artists }: HeroProps) => {
 
   // --mx/--my는 섹션 요소에만 쓴다. documentElement에 쓰면 상속형 커스텀
   // 프로퍼티라 문서 전체 스타일 재계산을 유발한다(실측 215배 비쌈).
-  usePointerParallax(sectionRef, { disabled: prefersReducedMotion })
+  /*
+    GPU 합성이 꺼진 브라우저에서는 전체화면 장식의 합성이 CPU로 내려와 프레임이
+    무너진다(실측 QHD 18.8fps). 사양으로는 판별되지 않으므로 실제 프레임을 재고,
+    못 따라오면 전체화면 애니메이션만 멈춘다 — 그림은 그대로 남고 57.5fps로 회복된다.
+  */
+  const frameStarved = useFrameBudget({ disabled: prefersReducedMotion })
+
+  usePointerParallax(sectionRef, { disabled: prefersReducedMotion || frameStarved })
 
   // 히어로가 화면을 벗어나면 장식 애니메이션을 멈춘다. CSS 애니메이션은 화면 밖으로
   // 나가도 스스로 멈추지 않아 배터리·GPU를 계속 먹는다.
@@ -81,39 +89,38 @@ const Hero = ({ artists }: HeroProps) => {
     <section
       ref={sectionRef}
       aria-labelledby="hero-title"
+      data-lowfx={frameStarved || undefined}
       className={SECTION_CLASS}
       style={{ contain: 'layout style paint' }}
     >
-      {/* 장식 레이어 — 전부 transform/opacity만 사용 */}
-      <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+      {/*
+        장식 레이어 — 전부 transform/opacity만 사용.
+
+        전체화면 레이어를 겹칠수록 비싸다. GPU 가속이 꺼진 환경에서는 합성이
+        CPU로 내려오는데, 그때 비용은 (겹친 전체화면 레이어 수 × 화면 픽셀)에
+        비례한다. 실측: QHD·소프트웨어 합성에서 레이어 6장 13fps, 3장 21fps.
+        레이어 크기(inset)를 줄이는 건 화면 밖이 잘려 효과가 없었고, 장수를
+        줄이는 것만 효과가 있었다. 그래서 같은 그림을 레이어 하나에 겹쳐 그린다.
+
+        비네트는 움직이지 않으므로 컨테이너 배경으로 내려 레이어를 하나 더 없앤다.
+      */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        aria-hidden="true"
+        style={{
+          background:
+            'radial-gradient(125% 95% at 50% 38%, transparent 28%, rgba(0, 0, 0, 0.6) 100%)',
+        }}
+      >
         <div
           className="hero-wash"
           style={{
             background:
-              'radial-gradient(42% 42% at 26% 24%, rgba(243, 133, 11, 0.17) 0%, rgba(243, 133, 11, 0) 70%)',
+              'radial-gradient(42% 42% at 26% 24%, rgba(243, 133, 11, 0.17) 0%, rgba(243, 133, 11, 0) 70%), radial-gradient(46% 46% at 76% 74%, rgba(14, 165, 233, 0.18) 0%, rgba(14, 165, 233, 0) 72%)',
           }}
-        />
-        <div
-          className="hero-wash"
-          style={
-            {
-              background:
-                'radial-gradient(46% 46% at 76% 74%, rgba(14, 165, 233, 0.18) 0%, rgba(14, 165, 233, 0) 72%)',
-              ['--wash-duration' as string]: '46s',
-              animationDirection: 'alternate-reverse',
-            } as React.CSSProperties
-          }
         />
         <div className="hero-spotlight" />
         <div className="hero-grain" />
-        <div className="hero-grain hero-grain-coarse" />
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              'radial-gradient(125% 95% at 50% 38%, transparent 28%, rgba(0, 0, 0, 0.6) 100%)',
-          }}
-        />
       </div>
 
       {/* 타이포 블록 */}

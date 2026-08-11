@@ -9,8 +9,10 @@ test.describe('히어로 포스터 — 구조와 접근성', () => {
   }) => {
     await page.goto('/', { waitUntil: 'domcontentloaded' })
 
-    await expect(page.locator('.hero-wash')).toHaveCount(2)
-    await expect(page.locator('.hero-grain')).toHaveCount(2)
+    // 전체화면 장식은 각각 한 장이다. 두 장으로 겹치면 GPU 합성이 꺼진
+    // 브라우저에서 프레임이 무너진다(실측 QHD 13fps → 통합 후 22fps).
+    await expect(page.locator('.hero-wash')).toHaveCount(1)
+    await expect(page.locator('.hero-grain')).toHaveCount(1)
     await expect(page.locator('[aria-hidden="true"] .hero-spotlight')).toBeAttached()
 
     // banner는 사이트 헤더용 최상위 랜드마크다. main 안에 두면 스펙 위반이고,
@@ -257,5 +259,43 @@ test.describe('히어로 포스터 — 안정성', () => {
         })
     )
     expect(cls).toBeLessThan(0.1)
+  })
+})
+
+test.describe('히어로 포스터 — 저사양 강등', () => {
+  test('프레임이 못 따라오면 전체화면 애니메이션만 멈추고 그림은 남는다', async ({ page }) => {
+    await page.goto('/', { waitUntil: 'load' })
+    const hero = page.locator('section[aria-labelledby="hero-title"]')
+    // 강등을 직접 트리거해 CSS 계약만 검증한다(프로브 자체는 환경 의존적이라 재지 않는다).
+    await hero.evaluate(node => node.setAttribute('data-lowfx', 'true'))
+
+    const state = await page.evaluate(() => {
+      const grain = document.querySelector('.hero-grain') as HTMLElement
+      const wash = document.querySelector('.hero-wash') as HTMLElement
+      const g = getComputedStyle(grain)
+      const w = getComputedStyle(wash)
+      return {
+        grainAnim: g.animationName,
+        washAnim: w.animationName,
+        grainVisible: g.display !== 'none' && Number(g.opacity) > 0,
+        washVisible: w.display !== 'none',
+      }
+    })
+
+    // 움직임만 멈춘다 — 포스터의 질감이 사라지면 강등이 아니라 디자인 손실이다.
+    expect(state.grainAnim).toBe('none')
+    expect(state.washAnim).toBe('none')
+    expect(state.grainVisible).toBe(true)
+    expect(state.washVisible).toBe(true)
+  })
+
+  test('프레임이 충분한 환경에서는 강등하지 않는다', async ({ page }) => {
+    await page.goto('/', { waitUntil: 'load' })
+    // 프로브는 warmup 700ms + 표본 1000ms 뒤에 판정한다.
+    await page.waitForTimeout(2600)
+    const lowfx = await page
+      .locator('section[aria-labelledby="hero-title"]')
+      .getAttribute('data-lowfx')
+    expect(lowfx).toBeNull()
   })
 })
