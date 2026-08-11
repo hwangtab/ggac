@@ -49,7 +49,6 @@ const SECTION_CLASS =
  */
 const Hero = ({ artists }: HeroProps) => {
   const t = useTranslations('home.hero')
-  const tc = useTranslations('common')
   const prefersReducedMotion = usePrefersReducedMotion()
   const sectionRef = useRef<HTMLElement>(null)
 
@@ -174,9 +173,11 @@ const Hero = ({ artists }: HeroProps) => {
                 } as React.CSSProperties
               }
             >
+              {/*
+                "~하는 / 경기아트콜렉티브"는 표어 틀이었다. 부제를 문장으로 바꾸면서
+                조직명 줄은 걷어낸다 — 바로 위 킥커가 이미 GYEONGGI ART COLLECTIVE다.
+              */}
               {t('subtitle')}
-              <br />
-              <span className="text-white/65">{tc('brandShort')}</span>
             </p>
 
             <div
