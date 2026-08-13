@@ -39,7 +39,8 @@
     "db:push": "drizzle-kit push",
     "db:push:local": "TURSO_DATABASE_URL=file:local.db drizzle-kit push --force",
     "db:parity": "node scripts/turso/run-parity-check.mjs",
-    "test:turso": "node --test scripts/testing/turso-*.test.mjs"
+    "test:turso": "node --test scripts/testing/turso-*.test.mjs",
+    "turso:verify": "npm run type-check && npm run db:push:local && npm run db:parity && node --experimental-strip-types --test scripts/testing/turso-*.test.mjs"
   },
   "dependencies": {
     "@libsql/client": "^0.17.4",
