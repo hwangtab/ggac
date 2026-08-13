@@ -33,17 +33,25 @@ jobs:
           # 실제로 동작하는 것은 sqlite3 스타일 `.dump` shell 명령이며, 정확히
           # 같은 형식(PRAGMA/BEGIN TRANSACTION/CREATE.../COMMIT)을 만든다.
           turso db shell ggac-prod .dump > "ggac-prod-${STAMP}.sql"
-          gzip "ggac-prod-${STAMP}.sql"
-          echo "DUMP_FILE=ggac-prod-${STAMP}.sql.gz" >> "$GITHUB_ENV"
+          echo "DUMP_SQL=ggac-prod-${STAMP}.sql" >> "$GITHUB_ENV"
 
-      - name: 덤프가 비어 있지 않은지 확인
+      - name: 덤프가 실제 SQL 덤프인지 확인
         run: |
-          SIZE=$(stat -c%s "$DUMP_FILE")
+          SIZE=$(stat -c%s "$DUMP_SQL")
           echo "덤프 크기: ${SIZE} bytes"
           if [ "$SIZE" -lt 1024 ]; then
             echo "덤프가 1KB 미만이다. 백업 실패로 간주한다."
             exit 1
           fi
+          # 존재하지 않는 서브커맨드를 잘못 불러 CLI 도움말 텍스트가 그대로
+          # 저장되는 사고(발견 경위는 scripts/turso/README.md 참고)를 다시
+          # 겪지 않도록, 크기뿐 아니라 실제 SQL 덤프 내용인지도 확인한다.
+          if ! grep -q '^CREATE TABLE' "$DUMP_SQL"; then
+            echo "덤프에 CREATE TABLE 구문이 없다. SQL 덤프가 아닌 것으로 보고 실패 처리한다."
+            exit 1
+          fi
+          gzip "$DUMP_SQL"
+          echo "DUMP_FILE=${DUMP_SQL}.gz" >> "$GITHUB_ENV"
 
       - name: 백업 스크립트 의존성 설치
         run: npm ci --omit=dev --ignore-scripts

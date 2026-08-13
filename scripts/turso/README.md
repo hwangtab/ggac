@@ -19,8 +19,14 @@
 turso db shell ggac-prod                 # 대화형 셸
 turso db show ggac-prod                  # URL·리전 확인
 turso db tokens create ggac-prod         # 새 토큰 발급
-turso db dump ggac-prod > backup.sql     # 덤프
+turso db shell ggac-prod .dump > backup.sql  # 덤프
 ```
+
+⚠️ `turso db dump`는 이 CLI(v1.0.31 기준)에 존재하지 않는 서브커맨드다.
+실행해도 종료 코드는 0이고, 대신 `turso db --help`의 도움말 텍스트가
+표준출력으로 찍혀 그대로 "덤프 파일"에 저장된다 — 에러 없이 조용히
+쓰레기 파일을 만든다는 뜻이다. 반드시 위의 `turso db shell ggac-prod .dump`
+형태를 쓴다. (Task 10에서 발견: `.superpowers/sdd/2026-08-11-turso-stage0-foundation/task-10-report.md`)
 
 ## 주의
 - `drizzle-kit push --force`는 스키마 차이를 확인 없이 반영한다. 운영에는

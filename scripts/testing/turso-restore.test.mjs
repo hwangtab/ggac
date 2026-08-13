@@ -59,3 +59,38 @@ test('트랜잭션 구문이 섞인 덤프도 처리한다', async () => {
     for (const p of [dumpPath, dbPath]) if (existsSync(p)) rmSync(p)
   }
 })
+
+test('문자열 리터럴 안에 세미콜론이 있어도 안 잘린다', async () => {
+  const dumpPath = '.tmp-restore-semicolon.sql'
+  const dbPath = '.tmp-restore-semicolon.db'
+  for (const p of [dumpPath, dbPath]) if (existsSync(p)) rmSync(p)
+
+  // 실제 이 사이트가 저장하는 값과 같은 모양: 한글 소개글 중간에 세미콜론이
+  // 들어가고, contact 필드는 세미콜론으로 구분된 다중 URL을 담는다.
+  const bio = '경기아트콜렉티브 협동조합 소속; 다원예술 활동가로 무대·전시를 오간다.'
+  const contact = 'https://instagram.com/ggackr;https://ggac.kr/artists/kim'
+
+  writeFileSync(
+    dumpPath,
+    [
+      'PRAGMA foreign_keys=OFF;',
+      'BEGIN TRANSACTION;',
+      'CREATE TABLE artists (id TEXT PRIMARY KEY, bio TEXT NOT NULL, contact TEXT NOT NULL);',
+      `INSERT INTO artists VALUES ('a1', '${bio}', '${contact}');`,
+      'COMMIT;',
+    ].join('\n')
+  )
+
+  await restoreFromDump(dumpPath, `file:${dbPath}`)
+
+  const client = createClient({ url: `file:${dbPath}` })
+  try {
+    const result = await client.execute('SELECT bio, contact FROM artists WHERE id = ?', ['a1'])
+    assert.equal(result.rows.length, 1)
+    assert.equal(result.rows[0].bio, bio)
+    assert.equal(result.rows[0].contact, contact)
+  } finally {
+    client.close()
+    for (const p of [dumpPath, dbPath]) if (existsSync(p)) rmSync(p)
+  }
+})
