@@ -85,3 +85,44 @@ export function logicalPathFromUrl(
 
   return logical
 }
+
+export type ProviderName = 'blob' | 'supabase'
+
+export type SettledDeleteResult = {
+  provider: ProviderName
+  result: PromiseSettledResult<unknown>
+}
+
+export type DeleteEverywhereClassification = {
+  /** 실패한 제공자 전부 — 이유를 알 수 없는 채로 조용히 넘어가면 안 된다. */
+  toLog: { provider: ProviderName; reason: unknown }[]
+  shouldThrow: boolean
+}
+
+/**
+ * deletePublicObjectEverywhere의 순수 판정부.
+ *
+ * 두 SDK 모두 "없는 객체"에서는 에러를 던지지 않는다 — Vercel Blob의
+ * del()은 멱등이고, Supabase storage-js의 remove()는 없는 키에도
+ * { error: null }을 준다. 그래서 reject는 메시지가 뭐든 전부 진짜 실패다.
+ * "not found"류 메시지를 걸러내던 예전 정규식은 실제로는 절대 안 맞는
+ * 케이스를 걸러내려다, 잘못된 토큰이 만드는 "This store does not exist."
+ * 같은 진짜 실패까지 조용히 삼켜버렸다 — 그래서 삭제했다.
+ *
+ * 규칙은 그만큼 단순해진다: 하나라도 실패하면 로그에 남기고, 전부
+ * 실패했을 때만 throw한다. 한쪽만 실패해도 호출은 성공으로 치되(기존
+ * 전환기 관용은 유지), 실패 사실은 반드시 로그로 보인다.
+ */
+export function classifyDeleteEverywhereResults(
+  results: SettledDeleteResult[]
+): DeleteEverywhereClassification {
+  const rejected = results.filter(r => r.result.status === 'rejected')
+  const toLog = rejected.map(r => ({
+    provider: r.provider,
+    reason: (r.result as PromiseRejectedResult).reason,
+  }))
+  return {
+    toLog,
+    shouldThrow: results.length > 0 && rejected.length === results.length,
+  }
+}

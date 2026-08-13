@@ -1,5 +1,11 @@
 import { deleteObject, getPublicUrl, putObject } from './blob'
-import { currentProvider, isBlobPublicUrl, logicalPathFromUrl, splitBucketPath } from './paths'
+import {
+  classifyDeleteEverywhereResults,
+  currentProvider,
+  isBlobPublicUrl,
+  logicalPathFromUrl,
+  splitBucketPath,
+} from './paths'
 import { deleteSupabaseObject, putSupabaseObject, supabasePublicUrl } from './supabase'
 
 export type { StorageProvider } from './paths'
@@ -24,25 +30,30 @@ export async function deletePublicObject(pathname: string): Promise<void> {
 }
 
 /**
- * 전환기 전용. 어느 제공자에 있든 지운다. 없는 객체는 성공으로 친다.
- * 한쪽만 실패해도 그 사유를 남긴다 — 조용한 부분 실패를 막기 위해.
+ * 전환기 전용. 어느 제공자에 있든 지운다.
+ *
+ * 두 SDK 모두 없는 객체에서 에러를 던지지 않으므로(Blob del은 멱등,
+ * Supabase remove는 없는 키/버킷에도 성공), reject는 전부 진짜 실패로
+ * 취급한다 — classifyDeleteEverywhereResults 참고. 한쪽만 실패해도
+ * 호출 자체는 성공으로 치되, 그 실패는 반드시 로그에 남긴다. 둘 다
+ * 실패했을 때만 throw한다.
  */
 export async function deletePublicObjectEverywhere(pathname: string): Promise<void> {
   const { bucket, key } = splitBucketPath(pathname)
-  const results = await Promise.allSettled([
+  const [blobResult, supabaseResult] = await Promise.allSettled([
     deleteObject('public', pathname),
     deleteSupabaseObject(bucket, key),
   ])
 
-  const realFailures = results.filter(
-    r => r.status === 'rejected' && !/not.?found|does not exist/i.test(String(r.reason))
-  )
-  for (const f of realFailures) {
-    console.warn(
-      `[storage] 부분 삭제 실패 ${pathname}: ${String((f as PromiseRejectedResult).reason)}`
-    )
+  const { toLog, shouldThrow } = classifyDeleteEverywhereResults([
+    { provider: 'blob', result: blobResult },
+    { provider: 'supabase', result: supabaseResult },
+  ])
+
+  for (const { provider, reason } of toLog) {
+    console.warn(`[storage] ${provider} 삭제 실패 ${pathname}: ${String(reason)}`)
   }
-  if (realFailures.length === results.length) {
+  if (shouldThrow) {
     throw new Error(`삭제 실패: ${pathname}`)
   }
 }
