@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { FiDownload, FiImage, FiFile, FiVideo, FiMusic, FiExternalLink } from 'react-icons/fi'
 import type { PostAttachment } from '@/types'
 import { useDialogA11y } from '@/hooks/useDialogA11y'
+import { isBlobPublicUrl } from '@/lib/storage/paths'
 import { isProjectStoragePublicUrl } from '@/utils/storageUrlValidation'
 
 interface PostAttachmentsDisplayProps {
@@ -137,7 +138,8 @@ const PostAttachmentsDisplay: React.FC<PostAttachmentsDisplayProps> = ({
   }
 
   // 이미지와 기타 파일 분리
-  const isSafeAttachmentUrl = (url: string) => isProjectStoragePublicUrl(url, 'attachments')
+  const isSafeAttachmentUrl = (url: string) =>
+    isProjectStoragePublicUrl(url, 'attachments') || isBlobPublicUrl(url)
   const toSafeAttachment = (attachment: PostAttachment): SafePostAttachment | null =>
     isSafeAttachmentUrl(attachment.file_url)
       ? { ...attachment, safe_file_url: attachment.file_url }

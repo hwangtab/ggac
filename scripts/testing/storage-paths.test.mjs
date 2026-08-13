@@ -4,8 +4,15 @@ import assert from 'node:assert/strict'
 process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://btugywkltavbogdnhwpu.supabase.co'
 process.env.BLOB_PUBLIC_BASE_URL = 'https://examplestore.public.blob.vercel-storage.com'
 
-const { currentProvider, splitBucketPath, logicalPathFromUrl, classifyDeleteEverywhereResults } =
-  await import('../../src/lib/storage/paths.ts')
+const {
+  currentProvider,
+  splitBucketPath,
+  logicalPathFromUrl,
+  classifyDeleteEverywhereResults,
+  isBlobPublicUrl,
+} = await import('../../src/lib/storage/paths.ts')
+
+const BLOB_BASE = 'https://examplestore.public.blob.vercel-storage.com'
 
 function fulfilled(provider) {
   return { provider, result: { status: 'fulfilled', value: undefined } }
@@ -127,6 +134,25 @@ test('everywhere 삭제: 둘 다 실패하면 둘 다 로그되고 throw한다',
     { provider: 'supabase', reason: supabaseReason },
   ])
   assert.equal(shouldThrow, true)
+})
+
+test('Blob 공개 URL을 인식한다', () => {
+  assert.equal(isBlobPublicUrl(`${BLOB_BASE}/artists/a.webp`), true)
+  assert.equal(isBlobPublicUrl(`${BLOB_BASE}/attachments/posts/p1/a.webp`), true)
+})
+
+test('Blob 판정: 접미사 위조·다른 호스트·상대 경로·빈 문자열을 거부한다', () => {
+  assert.equal(isBlobPublicUrl(`${BLOB_BASE}.evil.com/a`), false)
+  assert.equal(isBlobPublicUrl('https://evil.com/a'), false)
+  assert.equal(isBlobPublicUrl('artists/a.webp'), false)
+  assert.equal(isBlobPublicUrl(''), false)
+})
+
+test('Blob 판정: BLOB_PUBLIC_BASE_URL이 없으면 항상 false다', () => {
+  const saved = process.env.BLOB_PUBLIC_BASE_URL
+  delete process.env.BLOB_PUBLIC_BASE_URL
+  assert.equal(isBlobPublicUrl(`${BLOB_BASE}/artists/a.webp`), false)
+  process.env.BLOB_PUBLIC_BASE_URL = saved
 })
 
 test('everywhere 삭제: "does not exist" 메시지도 진짜 실패로 친다 (회귀 테스트)', () => {

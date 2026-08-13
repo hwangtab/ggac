@@ -483,6 +483,14 @@ const nextConfig = {
         port: '',
         pathname: '/storage/v1/object/public/**',
       },
+      // Vercel Blob 공개 저장소 (전환기: 실제 호스트만 허용, 와일드카드 금지 —
+      // *.public.blob.vercel-storage.com은 다른 Vercel 고객의 공개 저장소까지 허용한다)
+      {
+        protocol: 'https',
+        hostname: 'r8qnr9c7mestxusj.public.blob.vercel-storage.com',
+        port: '',
+        pathname: '/**',
+      },
       // YouTube 썸네일 도메인
       {
         protocol: 'https',

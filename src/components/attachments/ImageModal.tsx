@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { FiX } from 'react-icons/fi'
 import type { PostAttachment } from '@/types'
+import { isBlobPublicUrl } from '@/lib/storage/paths'
 import { isProjectStoragePublicUrl } from '@/utils/storageUrlValidation'
 
 interface ImageModalProps {
@@ -14,9 +15,11 @@ export const ImageModal: React.FC<ImageModalProps> = ({ attachment, onClose }) =
   const dialogRef = useRef<HTMLDivElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const [previousFocus, setPreviousFocus] = useState<HTMLElement | null>(null)
-  const safeFileUrl = isProjectStoragePublicUrl(attachment.file_url, 'attachments')
-    ? attachment.file_url
-    : null
+  const safeFileUrl =
+    isProjectStoragePublicUrl(attachment.file_url, 'attachments') ||
+    isBlobPublicUrl(attachment.file_url)
+      ? attachment.file_url
+      : null
 
   useEffect(() => {
     setPreviousFocus(document.activeElement as HTMLElement)

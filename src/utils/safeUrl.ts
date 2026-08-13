@@ -1,3 +1,4 @@
+import { isBlobPublicUrl } from '@/lib/storage/paths'
 import { isProjectStoragePublicUrl } from './storageUrlValidation'
 
 export function isSafeInternalPath(value: string): boolean {
@@ -49,7 +50,9 @@ export function toSafeArtistImageSrc(
     return toSafeInternalImagePath(trimmed, fallback)
   }
 
-  if (isProjectStoragePublicUrl(trimmed, 'artists')) {
+  // 전환기에는 양쪽을 모두 허용한다. Supabase URL은 재작성 전까지 유효하고
+  // Blob URL은 재작성 후부터 나타난다.
+  if (isProjectStoragePublicUrl(trimmed, 'artists') || isBlobPublicUrl(trimmed)) {
     return trimmed
   }
 

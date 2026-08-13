@@ -10,6 +10,7 @@ export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
+import { isBlobPublicUrl } from '@/lib/storage/paths'
 import { isProjectStoragePublicUrl } from '@/utils/storageUrlValidation'
 import { validateUUID } from '@/utils/validation'
 import { createLogger, maskId } from '@/utils/logger'
@@ -83,7 +84,10 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     // 이미지 첨부파일이 있는 경우 해당 이미지 반환
     if (attachments && attachments.length > 0) {
       const imageUrl = attachments[0].file_url
-      if (!isProjectStoragePublicUrl(imageUrl, 'attachments', 'posts')) {
+      if (
+        !isProjectStoragePublicUrl(imageUrl, 'attachments', 'posts') &&
+        !isBlobPublicUrl(imageUrl)
+      ) {
         console.warn('[OG API] Unsafe attachment image URL, using default OG image')
         return new Response(null, {
           status: 302,
