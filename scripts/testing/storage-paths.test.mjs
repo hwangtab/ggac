@@ -10,6 +10,7 @@ const {
   logicalPathFromUrl,
   classifyDeleteEverywhereResults,
   isBlobPublicUrl,
+  resolveOverwrite,
 } = await import('../../src/lib/storage/paths.ts')
 
 const BLOB_BASE = 'https://examplestore.public.blob.vercel-storage.com'
@@ -153,6 +154,24 @@ test('Blob 판정: BLOB_PUBLIC_BASE_URL이 없으면 항상 false다', () => {
   delete process.env.BLOB_PUBLIC_BASE_URL
   assert.equal(isBlobPublicUrl(`${BLOB_BASE}/artists/a.webp`), false)
   process.env.BLOB_PUBLIC_BASE_URL = saved
+})
+
+test('resolveOverwrite: opts가 없으면 false — 덮어쓰기 금지가 기본이다', () => {
+  assert.equal(resolveOverwrite(), false)
+  assert.equal(resolveOverwrite(undefined), false)
+  assert.equal(resolveOverwrite({}), false)
+})
+
+test('resolveOverwrite: overwrite가 명시적으로 true일 때만 true를 돌려준다', () => {
+  assert.equal(resolveOverwrite({ overwrite: true }), true)
+  assert.equal(resolveOverwrite({ overwrite: false }), false)
+})
+
+test('resolveOverwrite: true가 아닌 값은 전부 false로 취급한다 (엄격한 === true 비교)', () => {
+  // 회귀 방지: ?? 대신 === true를 쓴 이유 — truthy/falsy 강제 변환에 기대지 않고
+  // "명시적으로 true"만 덮어쓰기를 허용한다는 걸 타입 실수로부터도 지킨다.
+  assert.equal(resolveOverwrite({ overwrite: undefined }), false)
+  assert.equal(resolveOverwrite({ overwrite: 1 }), false)
 })
 
 test('everywhere 삭제: "does not exist" 메시지도 진짜 실패로 친다 (회귀 테스트)', () => {

@@ -5,6 +5,24 @@ export function currentProvider(): StorageProvider {
   return process.env.STORAGE_PROVIDER === 'blob' ? 'blob' : 'supabase'
 }
 
+export type PutPublicObjectOptions = {
+  /**
+   * 같은 경로에 이미 객체가 있어도 덮어쓸지. 기본은 false — 있으면 업로드가
+   * 실패한다. Supabase storage-js의 upload() 기본값(upsert: false)과
+   * @vercel/blob put()의 allowOverwrite 옵션(명시하지 않으면 실패) 둘 다
+   * "조용한 덮어쓰기 금지"가 기본이므로, 여기서도 그 기본을 그대로 따른다.
+   * 정말로 덮어써야 하는 호출부만 명시적으로 { overwrite: true }를 넘겨야 한다.
+   */
+  overwrite?: boolean
+}
+
+/** putPublicObject 옵션에서 실제 overwrite 여부를 뽑는다. opts 자체가 없거나
+ * overwrite가 없으면 false — "덮어쓰기 금지"가 기본이라는 점을 여기 한 곳에서만
+ * 결정한다. */
+export function resolveOverwrite(opts?: PutPublicObjectOptions): boolean {
+  return opts?.overwrite === true
+}
+
 export function splitBucketPath(pathname: string): { bucket: string; key: string } {
   if (typeof pathname !== 'string' || !pathname || pathname.startsWith('/')) {
     throw new Error(`invalid pathname: ${JSON.stringify(pathname)}`)

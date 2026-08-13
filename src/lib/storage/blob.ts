@@ -25,7 +25,11 @@ export async function putObject(
   store: StoreKind,
   pathname: string,
   body: Buffer,
-  contentType: string
+  contentType: string,
+  // 이 함수를 provider.ts 밖에서 직접 부르는 기존 호출부(스모크 테스트)를
+  // 깨지 않기 위해 기본값은 기존 하드코딩 그대로 true를 유지한다.
+  // provider.ts의 putPublicObject는 이 기본값에 기대지 않고 매번 명시적으로 값을 넘긴다.
+  allowOverwrite: boolean = true
 ): Promise<{ url: string; pathname: string }> {
   const blob = await put(pathname, body, {
     access: store,
@@ -33,8 +37,7 @@ export async function putObject(
     token: tokenFor(store),
     // 경로를 우리가 결정하므로 무작위 접미사를 붙이지 않는다.
     addRandomSuffix: false,
-    // 같은 경로 재업로드(사진 교체)를 허용한다.
-    allowOverwrite: true,
+    allowOverwrite,
   })
 
   return { url: blob.url, pathname: blob.pathname }

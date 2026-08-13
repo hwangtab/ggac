@@ -4,11 +4,13 @@ import {
   currentProvider,
   isBlobPublicUrl,
   logicalPathFromUrl,
+  resolveOverwrite,
   splitBucketPath,
+  type PutPublicObjectOptions,
 } from './paths'
 import { deleteSupabaseObject, putSupabaseObject, supabasePublicUrl } from './supabase'
 
-export type { StorageProvider } from './paths'
+export type { StorageProvider, PutPublicObjectOptions } from './paths'
 // 순수 경로/판정 함수는 여기서 재export한다 — 이후 태스크의 라우트 코드는
 // @/lib/storage/provider 하나만 import하면 되도록.
 export { currentProvider, isBlobPublicUrl, logicalPathFromUrl, splitBucketPath }
@@ -16,11 +18,15 @@ export { currentProvider, isBlobPublicUrl, logicalPathFromUrl, splitBucketPath }
 export async function putPublicObject(
   pathname: string,
   body: Buffer,
-  contentType: string
+  contentType: string,
+  opts?: PutPublicObjectOptions
 ): Promise<{ url: string; pathname: string }> {
-  if (currentProvider() === 'blob') return putObject('public', pathname, body, contentType)
+  const overwrite = resolveOverwrite(opts)
+  if (currentProvider() === 'blob') {
+    return putObject('public', pathname, body, contentType, overwrite)
+  }
   const { bucket, key } = splitBucketPath(pathname)
-  return putSupabaseObject(bucket, key, body, contentType)
+  return putSupabaseObject(bucket, key, body, contentType, overwrite)
 }
 
 export async function deletePublicObject(pathname: string): Promise<void> {
