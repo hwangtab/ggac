@@ -50,6 +50,14 @@ jobs:
             echo "덤프에 CREATE TABLE 구문이 없다. SQL 덤프가 아닌 것으로 보고 실패 처리한다."
             exit 1
           fi
+          # CREATE TABLE 검사만으로는 스트림 중간에 잘린 덤프를 걸러내지 못한다
+          # (앞부분에 CREATE TABLE이 있으면 통과해버린다). sqlite .dump는 항상
+          # COMMIT;으로 끝나므로 마지막 줄을 추가로 검사한다.
+          LAST_LINE=$(tail -n 1 "$DUMP_SQL")
+          if [ "$LAST_LINE" != "COMMIT;" ]; then
+            echo "덤프의 마지막 줄이 COMMIT;이 아니다(실제: '${LAST_LINE}'). 스트림 중간에 잘린 것으로 보고 실패 처리한다."
+            exit 1
+          fi
           gzip "$DUMP_SQL"
           echo "DUMP_FILE=${DUMP_SQL}.gz" >> "$GITHUB_ENV"
 

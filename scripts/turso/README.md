@@ -36,3 +36,43 @@ turso db shell ggac-prod .dump > backup.sql  # 덤프
   `~/.zshrc`에 있으나 모든 셸이 이를 읽어오지는 않는다).
 - 그룹/리전 제약(1개 그룹, `--location` 금지)은 위 "DB" 절 참고 — `ggac-prod`
   뿐 아니라 앞으로 이 계정에서 DB를 추가로 만들 때도 동일하게 적용된다.
+
+⚠️ **`ggac-prod`에는 `__drizzle_migrations` 베이스라인이 없다.** 이 DB의
+스키마는 `drizzle-kit push`로 만들어졌고, push는 `__drizzle_migrations`
+북키핑 테이블을 전혀 기록하지 않는다. 그런데 이 브랜치는
+`src/db/migrations/0000_dizzy_krista_starr.sql`을 커밋하고 있고, 그 파일은
+26개 테이블 전부에 대한 `CREATE TABLE`을 담고 있다. 따라서 `ggac-prod`를
+베이스라인 처리하지 않은 채로 `drizzle-kit migrate`를 그대로 실행하면
+`0000`을 처음부터 적용하려 시도해 "table already exists" 에러로 실패한다.
+`migrate`를 처음 실행하기 전에 반드시 `0000`의 해시로 `ggac-prod`의
+`__drizzle_migrations` 원장을 베이스라인 처리해야 한다 — 다만 구체적인
+베이스라인 명령은 아직 검증하지 않았으므로 여기 적지 않는다. 단계 2에서
+`migrate`를 실행하기 전에 반드시 이 절차부터 확인할 것.
+
+## 단계 2로 넘기는 제약
+
+RLS 정책 → 앱 계층 검사의 전체 58행 매핑은
+`docs/superpowers/specs/2026-08-13-rls-mapping.md`에 있다. `docs/`는
+저장소 관례상 gitignore 대상이라 이 파일은 로컬에만 존재하고 커밋되지
+않는다 — 새로 클론한 환경에는 없다. 아래 두 가지는 그 문서에서 단계 2
+구현자가 반드시 알아야 할 제약만 뽑아 여기(추적되는 파일)에 옮겨 적은
+것이다.
+
+1. **`post_attachments`** — Postgres의 `{anon}` 대상 SELECT 정책
+   `"Anyone can view attachments"`는 `qual = true`, 즉 필터가 전혀 없다.
+   그래서 익명 호출자가 다른 사용자의 `is_temporary = true` 임시 업로드까지
+   조회할 수 있다. `/api/posts/[id]/attachments` GET은 현재 이 부분을
+   라이브 RLS에 의존해 막고 있다(사실상 막지 못하고 있다는 뜻이기도 하다).
+   앱 계층이 RLS를 대체할 때는 이 DB의 리터럴 동작을 그대로 베끼지 말고,
+   익명 사용자에게 보이는 범위를 `is_temporary = false`로 **의도적으로
+   좁혀서** 구현해야 한다.
+
+2. **`posts`** — SELECT에 역할 범위가 다른 정책 두 개가 있다: `{anon}`
+   대상의 `"Anyone can view posts"`(`is_deleted = false`)와,
+   `{authenticated}` 대상의 `"Approved members can view posts"`(승인+활성).
+   `{anon}` 스코프 정책은 `authenticated` 역할 연결에는 적용되지 않으므로,
+   로그인은 했지만 아직 승인되지 않은 회원은 두 정책 어느 쪽으로도
+   구제받지 못해 **로그아웃 상태 방문자보다 더 적게 보는** 역전이 생긴다.
+   단계 2는 두 정책을 하나의 통합 규칙으로 대체하게 되는데, 이 비대칭을
+   모르고 우연히 없애는 게 아니라 어떤 동작을 택할지 의도적으로 결정해야
+   한다.
