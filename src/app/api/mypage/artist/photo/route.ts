@@ -552,6 +552,24 @@ export async function DELETE(request: NextRequest) {
   try {
     const supabase = await createSupabaseServer()
 
+    // 자격 증명으로 Service Role 클라이언트를 만들 수 있는지 삭제 작업 전에
+    // 미리 검증한다 — 실패 시 즉시 500으로 응답한다. (결과 자체를 변수에
+    // 담아두진 않는다: 아래 스토리지 삭제는 deletePublicObjectEverywhere가
+    // 내부적으로 자체 클라이언트를 만들어 쓰므로 이 클라이언트를 재사용하지
+    // 않는다 — 그 재사용 부분만 죽은 코드였고, 사전 검증이라는 동작은
+    // 그대로 유지한다. 이 검증이 없으면 Supabase 자격 증명만 깨진 상태에서
+    // Blob 쪽 삭제가 멱등하게 "성공"해 shouldThrow가 false로 떨어지고,
+    // 실제 파일은 남았는데 200 성공 응답이 나가는 시나리오가 생긴다.)
+    try {
+      getSupabaseAdmin()
+    } catch (error) {
+      console.error('Failed to initialise Supabase admin client:', error)
+      return NextResponse.json(
+        { success: false, error: '서버 설정 오류로 인해 삭제를 진행할 수 없습니다.' },
+        { status: 500 }
+      )
+    }
+
     // 사용자 인증 확인
     const {
       data: { user },
