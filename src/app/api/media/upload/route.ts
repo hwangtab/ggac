@@ -19,6 +19,7 @@ import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import distLimiter from '@/lib/server/rateLimit'
 import { createLogger } from '@/utils/logger'
 import { parseIntegerParam } from '@/utils/queryParams'
+import { putPublicObject } from '@/lib/storage/provider'
 
 const log = createLogger('api/media/upload')
 
@@ -256,23 +257,7 @@ interface StorageUploadResult {
   }
 }
 
-async function uploadFileToStorage(
-  supabaseAdmin: ReturnType<typeof getSupabaseAdmin>,
-  bucket: string,
-  filePath: string,
-  buffer: Buffer,
-  contentType: string,
-  upsert: boolean = false
-) {
-  return supabaseAdmin.storage.from(bucket).upload(filePath, buffer, {
-    cacheControl: '3600',
-    upsert,
-    contentType,
-  })
-}
-
 async function uploadImageWithVariants(
-  supabaseAdmin: ReturnType<typeof getSupabaseAdmin>,
   bucket: string,
   paths: ReturnType<typeof generateStoragePaths>,
   originalBuffer: Buffer,
@@ -287,23 +272,17 @@ async function uploadImageWithVariants(
     },
   }
 
-  const { error: originalUploadError } = await uploadFileToStorage(
-    supabaseAdmin,
-    bucket,
-    paths.originalPath,
-    originalBuffer,
-    originalContentType,
-    false
-  )
-
-  if (originalUploadError) {
-    throw new Error(`원본 파일 업로드 실패: ${originalUploadError.message}`)
+  try {
+    const { url } = await putPublicObject(
+      `${bucket}/${paths.originalPath}`,
+      originalBuffer,
+      originalContentType
+    )
+    result.original.url = url
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`원본 파일 업로드 실패: ${message}`)
   }
-
-  const { data: originalUrlData } = supabaseAdmin.storage
-    .from(bucket)
-    .getPublicUrl(paths.originalPath)
-  result.original.url = originalUrlData?.publicUrl || ''
 
   // GIF는 Sharp 변환 시 애니메이션이 손실될 수 있으므로 변환 생략
   const shouldGenerateVariants =
@@ -315,25 +294,16 @@ async function uploadImageWithVariants(
 
   // WebP 변환
   const webpBuffer = await sharp(originalBuffer).webp({ quality: WEBP_QUALITY }).toBuffer()
-  const { error: webpUploadError } = await uploadFileToStorage(
-    supabaseAdmin,
-    bucket,
-    paths.webpPath,
-    webpBuffer,
-    'image/webp',
-    true
-  )
-
-  if (!webpUploadError) {
-    const { data: webpUrlData } = supabaseAdmin.storage.from(bucket).getPublicUrl(paths.webpPath)
+  try {
+    const { url } = await putPublicObject(`${bucket}/${paths.webpPath}`, webpBuffer, 'image/webp')
     result.webp = {
       path: paths.webpPath,
-      url: webpUrlData?.publicUrl || '',
+      url,
       size: webpBuffer.length,
       contentType: 'image/webp',
     }
-  } else {
-    log.warn('WebP 변환 업로드 실패', webpUploadError)
+  } catch (error) {
+    log.warn('WebP 변환 업로드 실패', error)
   }
 
   // JPG 폴백 생성 (원본이 이미 JPEG라면 재사용)
@@ -349,27 +319,20 @@ async function uploadImageWithVariants(
   }
 
   const jpegBuffer = await sharp(originalBuffer).jpeg({ quality: JPEG_QUALITY }).toBuffer()
-  const { error: jpegUploadError } = await uploadFileToStorage(
-    supabaseAdmin,
-    bucket,
-    paths.fallbackPath,
-    jpegBuffer,
-    'image/jpeg',
-    true
-  )
-
-  if (!jpegUploadError) {
-    const { data: jpegUrlData } = supabaseAdmin.storage
-      .from(bucket)
-      .getPublicUrl(paths.fallbackPath)
+  try {
+    const { url } = await putPublicObject(
+      `${bucket}/${paths.fallbackPath}`,
+      jpegBuffer,
+      'image/jpeg'
+    )
     result.fallback = {
       path: paths.fallbackPath,
-      url: jpegUrlData?.publicUrl || '',
+      url,
       size: jpegBuffer.length,
       contentType: 'image/jpeg',
     }
-  } else {
-    log.warn('JPEG 폴백 업로드 실패', jpegUploadError)
+  } catch (error) {
+    log.warn('JPEG 폴백 업로드 실패', error)
   }
 
   return result
@@ -442,10 +405,10 @@ export async function POST(request: NextRequest) {
     // Storage 경로 생성
     const storagePaths = generateStoragePaths(bucket, user.id, file.name)
 
-    // Storage 클라이언트 생성 및 파일 업로드
-    let supabaseAdmin
+    // Storage 자격 증명 확인 (putPublicObject가 내부적으로 다시 만들지만,
+    // 여기서 먼저 확인해 설정 오류를 구분된 응답으로 돌려준다)
     try {
-      supabaseAdmin = getSupabaseAdmin()
+      getSupabaseAdmin()
     } catch (error) {
       log.error('Supabase Admin 클라이언트 생성 오류', error)
       return ApiError.serviceUnavailable(
@@ -464,13 +427,7 @@ export async function POST(request: NextRequest) {
 
     let uploadResult: StorageUploadResult
     try {
-      uploadResult = await uploadImageWithVariants(
-        supabaseAdmin,
-        bucket,
-        storagePaths,
-        fileBuffer,
-        file.type
-      )
+      uploadResult = await uploadImageWithVariants(bucket, storagePaths, fileBuffer, file.type)
     } catch (error: unknown) {
       log.error('Storage upload error', error)
       const message = error instanceof Error ? error.message : ''

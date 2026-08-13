@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { rateLimit } from '@/lib/server/rateLimit'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
+import { putPublicObject } from '@/lib/storage/provider'
 import { revalidatePath, revalidateTag } from 'next/cache'
 import sharp from 'sharp'
 import type { ProfilePhotoUploadResponse, ProfilePhotoMetadata, ImageCropSettings } from '@/types'
@@ -152,7 +153,6 @@ function collectSafeArtistVariantPaths(
 }
 
 async function uploadImageWithVariants(
-  supabase: AdminClient,
   bucket: string,
   paths: ReturnType<typeof generateArtistStoragePaths>,
   originalBuffer: Buffer,
@@ -169,16 +169,15 @@ async function uploadImageWithVariants(
     },
   }
 
-  const { error: originalUploadError } = await supabase.storage
-    .from(bucket)
-    .upload(paths.originalPath, originalBuffer, {
-      cacheControl: '3600',
-      upsert: false,
-      contentType,
-    })
-
-  if (originalUploadError) {
-    console.error('Artist photo original upload failed:', originalUploadError)
+  try {
+    const { url } = await putPublicObject(
+      `${bucket}/${paths.originalPath}`,
+      originalBuffer,
+      contentType
+    )
+    variantUrls.original = url
+  } catch (error) {
+    console.error('Artist photo original upload failed:', error)
     return {
       success: false,
       error: '프로필 사진 업로드 중 오류가 발생했습니다.',
@@ -188,32 +187,23 @@ async function uploadImageWithVariants(
     }
   }
 
-  variantUrls.original = supabase.storage
-    .from(bucket)
-    .getPublicUrl(paths.originalPath).data?.publicUrl
-
   if (!contentType.includes('gif')) {
     try {
       const webpBuffer = await sharp(originalBuffer).webp({ quality: WEBP_QUALITY }).toBuffer()
-      const { error: webpError } = await supabase.storage
-        .from(bucket)
-        .upload(paths.webpPath, webpBuffer, {
-          cacheControl: '3600',
-          upsert: true,
-          contentType: 'image/webp',
-        })
-
-      if (!webpError) {
+      try {
+        const { url } = await putPublicObject(
+          `${bucket}/${paths.webpPath}`,
+          webpBuffer,
+          'image/webp'
+        )
         variantPaths.webp = paths.webpPath
-        variantUrls.webp = supabase.storage
-          .from(bucket)
-          .getPublicUrl(paths.webpPath).data?.publicUrl
+        variantUrls.webp = url
         variantMetadata.webp = {
           size: webpBuffer.length,
           content_type: 'image/webp',
         }
-      } else {
-        console.warn('Artist photo WebP upload failed:', webpError)
+      } catch (error) {
+        console.warn('Artist photo WebP upload failed:', error)
       }
     } catch (error) {
       console.warn('Artist photo WebP conversion failed:', error)
@@ -232,25 +222,20 @@ async function uploadImageWithVariants(
   } else {
     try {
       const jpegBuffer = await sharp(originalBuffer).jpeg({ quality: JPEG_QUALITY }).toBuffer()
-      const { error: fallbackError } = await supabase.storage
-        .from(bucket)
-        .upload(paths.fallbackPath, jpegBuffer, {
-          cacheControl: '3600',
-          upsert: true,
-          contentType: 'image/jpeg',
-        })
-
-      if (!fallbackError) {
+      try {
+        const { url } = await putPublicObject(
+          `${bucket}/${paths.fallbackPath}`,
+          jpegBuffer,
+          'image/jpeg'
+        )
         variantPaths.fallback = paths.fallbackPath
-        variantUrls.fallback = supabase.storage
-          .from(bucket)
-          .getPublicUrl(paths.fallbackPath).data?.publicUrl
+        variantUrls.fallback = url
         variantMetadata.fallback = {
           size: jpegBuffer.length,
           content_type: 'image/jpeg',
         }
-      } else {
-        console.warn('Artist photo JPEG fallback upload failed:', fallbackError)
+      } catch (error) {
+        console.warn('Artist photo JPEG fallback upload failed:', error)
       }
     } catch (error) {
       console.warn('Artist photo JPEG conversion failed:', error)
@@ -411,7 +396,6 @@ export async function PUT(request: NextRequest) {
     const imageDimensions = await getImageDimensions(fileBuffer)
 
     const uploadResult = await uploadImageWithVariants(
-      supabaseAdmin,
       'artists',
       storagePaths,
       fileBuffer,

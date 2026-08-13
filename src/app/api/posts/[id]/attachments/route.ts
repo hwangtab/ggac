@@ -13,6 +13,7 @@ import { NextRequest } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { rateLimit } from '@/lib/server/rateLimit'
 import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
+import { putPublicObject } from '@/lib/storage/provider'
 import { revalidateTag } from 'next/cache'
 import type { PostAttachmentStats } from '@/types'
 import { createSupabaseServer } from '@/lib/supabase/server'
@@ -246,30 +247,22 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       ? `temp/${validPostId}/${uniqueFileName}`
       : `posts/${validPostId}/${uniqueFileName}`
 
-    const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
-      .from('attachments')
-      .upload(filePath, fileBuffer, {
-        contentType: file.type,
-        upsert: false,
-      })
-
-    if (uploadError) {
-      console.error('[UPLOAD API] Storage 업로드 실패:', {
-        error: uploadError,
-        message: uploadError.message,
-      })
+    let fileUrl: string
+    try {
+      const { url } = await putPublicObject(`attachments/${filePath}`, fileBuffer, file.type)
+      fileUrl = url
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.error('[UPLOAD API] Storage 업로드 실패:', { error, message })
 
       // Storage bucket이 없는 경우 특별한 메시지
-      if (uploadError.message?.includes('bucket') || uploadError.message?.includes('not found')) {
+      if (message.includes('bucket') || message.includes('not found')) {
         return ApiError.serviceUnavailable(
           'Storage가 설정되지 않았습니다. 관리자가 Supabase Storage bucket을 생성해야 합니다.'
         ).toNextResponse()
       }
       return ApiError.internalServerError('파일 업로드에 실패했습니다.').toNextResponse()
     }
-
-    // 업로드된 파일의 공개 URL 생성
-    const { data: urlData } = supabaseAdmin.storage.from('attachments').getPublicUrl(filePath)
 
     // 임시 파일이 아닌 경우에만 데이터베이스 저장
     if (!isTempId) {
@@ -290,7 +283,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       const attachmentData = {
         post_id: validPostId,
         file_name: file.name,
-        file_url: urlData.publicUrl,
+        file_url: fileUrl,
         file_type: fileType,
         file_size: file.size,
         mime_type: file.type,
@@ -347,7 +340,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       const tempAttachmentData = {
         post_id: validPostId, // 임시 ID
         file_name: file.name,
-        file_url: urlData.publicUrl,
+        file_url: fileUrl,
         file_type: fileType,
         file_size: file.size,
         mime_type: file.type,
@@ -379,7 +372,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
       return ApiSuccess.ok(
         {
-          url: urlData.publicUrl,
+          url: fileUrl,
           attachment: tempAttachment,
           tempId: validPostId,
           expiresAt: expiresAt.toISOString(),

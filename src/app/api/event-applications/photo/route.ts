@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
+import { putPublicObject } from '@/lib/storage/provider'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { RATE_LIMITS, applyRateLimit, createIPKeyGenerator } from '@/lib/server/rateLimit'
 import { isValidEventSlug, normalizeEventSlug } from '@/utils/eventApplicationValidation'
@@ -77,28 +78,22 @@ export async function POST(request: NextRequest) {
     const fileName = `${Date.now()}-${crypto.randomUUID()}.${ext}`
     const storagePath = `event-applications/${eventSlug}/${fileName}`
 
-    let db
     try {
-      db = createServiceRoleClient()
+      createServiceRoleClient()
     } catch {
       return ApiError.internalServerError('서버 구성 오류입니다.').toNextResponse()
     }
 
-    const { error: uploadError } = await db.storage
-      .from('attachments')
-      .upload(storagePath, buffer, {
-        contentType: file.type,
-        upsert: false,
-      })
-
-    if (uploadError) {
-      console.error('[event-app-photo] upload error:', uploadError)
+    let uploadedUrl: string
+    try {
+      const { url } = await putPublicObject(`attachments/${storagePath}`, buffer, file.type)
+      uploadedUrl = url
+    } catch (error) {
+      console.error('[event-app-photo] upload error:', error)
       return ApiError.internalServerError('파일 업로드 중 오류가 발생했습니다.').toNextResponse()
     }
 
-    const { data: publicUrlData } = db.storage.from('attachments').getPublicUrl(storagePath)
-
-    return ApiSuccess.ok({ url: publicUrlData.publicUrl }, '업로드 완료').toNextResponse()
+    return ApiSuccess.ok({ url: uploadedUrl }, '업로드 완료').toNextResponse()
   } catch {
     return ApiError.internalServerError('파일 업로드 중 오류가 발생했습니다.').toNextResponse()
   }
