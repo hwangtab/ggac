@@ -9,17 +9,19 @@ import { NextRequest, NextResponse } from 'next/server'
 import { rateLimit } from '@/lib/server/rateLimit'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
-import { putPublicObject } from '@/lib/storage/provider'
+import {
+  putPublicObject,
+  deletePublicObject,
+  deletePublicObjectEverywhere,
+  logicalPathFromUrl,
+} from '@/lib/storage/provider'
 import { buildVariantPathSuffixes } from '@/lib/storage/paths'
 import { revalidatePath, revalidateTag } from 'next/cache'
 import sharp from 'sharp'
 import type { ProfilePhotoUploadResponse, ProfilePhotoMetadata, ImageCropSettings } from '@/types'
 import { invalidateArtistsCache } from '@/lib/data'
 import { hasValidFileSignature } from '@/utils/fileUploadValidation'
-import {
-  getProjectStorageObjectPath,
-  isProjectStorageObjectPath,
-} from '@/utils/storageUrlValidation'
+import { isProjectStorageObjectPath } from '@/utils/storageUrlValidation'
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 const MAX_FILE_SIZE = 5 * 1024 * 1024
@@ -451,13 +453,27 @@ export async function PUT(request: NextRequest) {
     if (updateError) {
       console.error('Database update error:', updateError)
 
-      // 실패 시 업로드된 파일 삭제
-      const toRemove = [variantPaths.original, variantPaths.webp, variantPaths.fallback].filter(
-        (value): value is string => Boolean(value)
+      // 실패 시 업로드된 파일 삭제 — 방금 이 요청에서 현재 제공자로 올린
+      // 파일을 되돌리는 롤백이므로 단일 제공자 삭제로 충분하다. 다만
+      // .webp 업로드는 originalPath === webpPath가 될 수 있어(Task 4에서
+      // 확인된 buildVariantPathSuffixes의 성질) Set으로 중복 경로를 제거한다.
+      const toRemove = Array.from(
+        new Set(
+          [variantPaths.original, variantPaths.webp, variantPaths.fallback].filter(
+            (value): value is string => Boolean(value)
+          )
+        )
       )
 
       if (toRemove.length > 0) {
-        await supabaseAdmin.storage.from('artists').remove(toRemove)
+        const rollbackResults = await Promise.allSettled(
+          toRemove.map(path => deletePublicObject(`artists/${path}`))
+        )
+        for (const result of rollbackResults) {
+          if (result.status === 'rejected') {
+            console.error('Failed to roll back uploaded artist photo variant:', result.reason)
+          }
+        }
       }
 
       return NextResponse.json(
@@ -466,29 +482,36 @@ export async function PUT(request: NextRequest) {
       )
     }
 
-    // 기존 아티스트 프로필 사진 삭제 (Storage에서)
+    // 기존 아티스트 프로필 사진 삭제 (Storage에서) — 전환기에는 이전 파일이
+    // 어느 제공자에 있는지 알 수 없으므로 양쪽 다 지운다.
+    // removalTargets는 버킷을 포함한 논리 경로(`artists/...`)로 통일한다 —
+    // logicalPathFromUrl이 이미 그 형태를 돌려주므로, collectSafeArtistVariantPaths가
+    // 주는 버킷 상대 경로 쪽에 `artists/`를 붙여 맞춘다.
     const removalTargets = new Set<string>()
     collectSafeArtistVariantPaths(currentArtist?.profile_photo_metadata, profile.artist_id).forEach(
-      path => removalTargets.add(path)
+      path => removalTargets.add(`artists/${path}`)
     )
     if (removalTargets.size === 0 && currentArtist?.profile_photo_url) {
-      const legacyPath = getProjectStorageObjectPath(
+      const legacyLogical = logicalPathFromUrl(
         currentArtist.profile_photo_url,
         'artists',
         profile.artist_id
       )
-      if (legacyPath) {
-        removalTargets.add(legacyPath)
+      if (legacyLogical) {
+        removalTargets.add(legacyLogical)
       } else {
         console.warn('Unsafe previous artist photo URL skipped for cleanup')
       }
     }
 
     if (removalTargets.size > 0) {
-      try {
-        await supabaseAdmin.storage.from('artists').remove(Array.from(removalTargets))
-      } catch (error) {
-        console.error('Failed to delete previous artist photo variants:', error)
+      const results = await Promise.allSettled(
+        Array.from(removalTargets).map(logical => deletePublicObjectEverywhere(logical))
+      )
+      for (const result of results) {
+        if (result.status === 'rejected') {
+          console.error('Failed to delete previous artist photo variants:', result.reason)
+        }
       }
     }
 
@@ -528,16 +551,6 @@ export async function PUT(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const supabase = await createSupabaseServer()
-    let supabaseAdmin: AdminClient
-    try {
-      supabaseAdmin = getSupabaseAdmin()
-    } catch (error) {
-      console.error('Failed to initialise Supabase admin client:', error)
-      return NextResponse.json(
-        { success: false, error: '서버 설정 오류로 인해 삭제를 진행할 수 없습니다.' },
-        { status: 500 }
-      )
-    }
 
     // 사용자 인증 확인
     const {
@@ -592,33 +605,36 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
-    // Storage에서 파일 삭제
+    // Storage에서 파일 삭제 — 전환기에는 이전 파일이 어느 제공자에 있는지
+    // 알 수 없으므로 양쪽 다 지운다.
+    // removalTargets는 버킷을 포함한 논리 경로(`artists/...`)로 통일한다.
     try {
       const removalTargets = new Set<string>()
       collectSafeArtistVariantPaths(artist.profile_photo_metadata, profile.artist_id).forEach(
-        path => removalTargets.add(path)
+        path => removalTargets.add(`artists/${path}`)
       )
 
       if (removalTargets.size === 0) {
-        const legacyPath = getProjectStorageObjectPath(
+        const legacyLogical = logicalPathFromUrl(
           artist.profile_photo_url,
           'artists',
           profile.artist_id
         )
-        if (legacyPath) {
-          removalTargets.add(legacyPath)
+        if (legacyLogical) {
+          removalTargets.add(legacyLogical)
         } else {
           console.warn('Unsafe artist photo URL skipped for cleanup')
         }
       }
 
       if (removalTargets.size > 0) {
-        const { error: deleteError } = await supabaseAdmin.storage
-          .from('artists')
-          .remove(Array.from(removalTargets))
-
-        if (deleteError) {
-          console.error('Storage delete error:', deleteError)
+        const results = await Promise.allSettled(
+          Array.from(removalTargets).map(logical => deletePublicObjectEverywhere(logical))
+        )
+        for (const result of results) {
+          if (result.status === 'rejected') {
+            console.error('Storage delete error:', result.reason)
+          }
         }
       }
     } catch (error) {

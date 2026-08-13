@@ -12,11 +12,10 @@ export const preferredRegion = 'icn1'
 
 import { NextRequest } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
-import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
 import { revalidateTag } from 'next/cache'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { parseJsonObjectBody } from '@/utils/requestBody'
-import { getProjectStorageObjectPath } from '@/utils/storageUrlValidation'
+import { deletePublicObjectEverywhere, logicalPathFromUrl } from '@/lib/storage/provider'
 import { validateUUID } from '@/utils/validation'
 
 const MAX_ALT_TEXT_LENGTH = 300
@@ -43,11 +42,6 @@ function validateAttachmentRouteParams(params: { id: string; attachmentId: strin
     postId: postIdValidation.sanitized,
     attachmentId: attachmentIdValidation.sanitized,
   }
-}
-
-// Service Role 클라이언트는 Storage 작업에만 사용
-function getSupabaseAdmin() {
-  return createServiceRoleClient()
 }
 
 /**
@@ -270,24 +264,15 @@ export async function DELETE(
       return ApiError.forbidden('권한이 없습니다.').toNextResponse()
     }
 
-    // Storage에서 파일 삭제 (가능한 경우에만)
+    // Storage에서 파일 삭제 (가능한 경우에만) — 전환기에는 이 첨부파일이
+    // 어느 제공자에 있는지 알 수 없으므로 양쪽 다 지운다. 버킷·접두사
+    // 봉쇄(attachments 버킷, posts/<postId> 하위)는 logicalPathFromUrl이
+    // 그대로 유지한다.
     try {
-      const supabaseAdmin = getSupabaseAdmin()
-      const storagePath = getProjectStorageObjectPath(
-        attachment.file_url,
-        'attachments',
-        `posts/${postId}`
-      )
+      const logical = logicalPathFromUrl(attachment.file_url, 'attachments', `posts/${postId}`)
 
-      if (storagePath) {
-        const { error: storageError } = await supabaseAdmin.storage
-          .from('attachments')
-          .remove([storagePath])
-
-        if (storageError) {
-          console.warn('Storage 파일 삭제 오류:', storageError)
-          // Storage 삭제 실패해도 DB 레코드는 삭제 진행
-        }
+      if (logical) {
+        await deletePublicObjectEverywhere(logical)
       } else {
         console.warn('안전하지 않은 첨부파일 Storage URL 삭제 건너뜀:', attachmentId)
       }

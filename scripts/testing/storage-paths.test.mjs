@@ -219,6 +219,33 @@ test('buildVariantPathSuffixes: media/upload 호출 패턴을 그대로 재현�
   assert.equal(suffixes.originalPath, suffixes.webpPath)
 })
 
+test('경로 형태 통일: logicalPathFromUrl 결과는 버킷 상대 경로에 버킷 접두사를 붙인 것과 문자열이 같다', () => {
+  // mypage/artist/photo route.ts가 기대는 불변식: collectSafeArtistVariantPaths가
+  // 돌려주는 버킷 상대 경로(`<artistId>/xxx.webp`)에 `artists/`를 붙인 문자열이,
+  // profile_photo_url을 logicalPathFromUrl로 되돌린 논리 경로와 정확히 같은
+  // 모양이어야 한다 — 두 형태를 한 Set에 안전하게 섞을 수 있는 근거.
+  const bucketRelative = 'artist-001/profile_1755000000000_ab12.webp'
+  const url = `https://btugywkltavbogdnhwpu.supabase.co/storage/v1/object/public/artists/${bucketRelative}`
+  const logical = logicalPathFromUrl(url, 'artists', 'artist-001')
+  assert.equal(logical, `artists/${bucketRelative}`)
+})
+
+test('중복 경로 제거: .webp 업로드로 원본·webp 변형 경로가 같은 문자열이 되면 Set이 하나로 합친다', () => {
+  // Task 4에서 확인된 성질(buildVariantPathSuffixes) 그대로 재현 — .webp 입력이면
+  // originalPath === webpPath다. 롤백/삭제 대상 목록을 만들 때 Set으로 담아야
+  // 같은 객체를 두 번 세거나 두 번 지우려 하지 않는다.
+  const suffixes = buildVariantPathSuffixes(
+    'artist-001',
+    'profile_1755000000000_ab12.webp',
+    'profile_1755000000000_ab12'
+  )
+  const toRemove = Array.from(
+    new Set([suffixes.originalPath, suffixes.webpPath, suffixes.fallbackPath].filter(Boolean))
+  )
+  assert.deepEqual(toRemove, [suffixes.originalPath, suffixes.fallbackPath])
+  assert.equal(toRemove.length, 2)
+})
+
 test('everywhere 삭제: "does not exist" 메시지도 진짜 실패로 친다 (회귀 테스트)', () => {
   // BlobStoreNotFoundError의 실제 메시지. 예전 정규식(/not.?found|does not exist/i)은
   // 이 문자열을 "없는 객체"로 오인해 조용히 삼켰다 — 잘못된 토큰/스토어 설정이라는

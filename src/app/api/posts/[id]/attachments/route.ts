@@ -12,8 +12,7 @@ export const preferredRegion = 'icn1'
 import { NextRequest } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { rateLimit } from '@/lib/server/rateLimit'
-import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
-import { putPublicObject } from '@/lib/storage/provider'
+import { putPublicObject, deletePublicObject } from '@/lib/storage/provider'
 import { revalidateTag } from 'next/cache'
 import type { PostAttachmentStats } from '@/types'
 import { createSupabaseServer } from '@/lib/supabase/server'
@@ -25,19 +24,6 @@ import {
   formatValidationErrors,
   hasValidFileSignature,
 } from '@/utils/fileUploadValidation'
-
-/**
- * Service Role 클라이언트 생성 (POST 업로드 전용)
- *
- * 주의: 이 함수는 POST 엔드포인트에서만 사용됩니다.
- * - 용도: Storage 버킷에 파일을 업로드하기 위한 권한 필요
- * - GET 엔드포인트: createRouteHandlerClient 사용 (RLS 정책 적용)
- *
- * Service Role Key는 RLS를 우회하므로, 인증된 사용자의 업로드 작업에만 제한적으로 사용
- */
-function getSupabaseAdmin() {
-  return createServiceRoleClient()
-}
 
 /**
  * 첨부파일 목록 조회
@@ -220,17 +206,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       }
     }
 
-    // Storage 클라이언트 생성 및 파일 업로드
-    let supabaseAdmin
-    try {
-      supabaseAdmin = getSupabaseAdmin()
-    } catch (error) {
-      console.error('[UPLOAD API] Supabase Admin 클라이언트 생성 오류:', error)
-      return ApiError.serviceUnavailable(
-        'Storage 서비스를 사용할 수 없습니다. 관리자에게 문의하세요.'
-      ).toNextResponse()
-    }
-
     // 파일명 정제 및 고유 파일명 생성 (공통 검증에서 이미 생성됨)
     const uniqueFileName = validation.uniqueFileName || generateUniqueFileName(file.name)
 
@@ -305,9 +280,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
           details: dbError.details,
         })
 
-        // 업로드된 파일 삭제 (롤백)
+        // 업로드된 파일 삭제 (롤백) — 방금 이 요청에서 현재 제공자로
+        // 올린 파일을 되돌리는 것이므로 단일 제공자 삭제로 충분하다.
         try {
-          await supabaseAdmin.storage.from('attachments').remove([filePath])
+          await deletePublicObject(`attachments/${filePath}`)
         } catch (rollbackError) {
           console.error('[UPLOAD API] 파일 롤백 실패:', rollbackError)
         }
@@ -360,9 +336,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       if (tempDbError) {
         console.error('[UPLOAD API] 임시 첨부파일 저장 실패:', tempDbError)
 
-        // 실패 시 업로드된 파일 삭제
+        // 실패 시 업로드된 파일 삭제 — 방금 이 요청에서 현재 제공자로
+        // 올린 파일을 되돌리는 것이므로 단일 제공자 삭제로 충분하다.
         try {
-          await supabaseAdmin.storage.from('attachments').remove([filePath])
+          await deletePublicObject(`attachments/${filePath}`)
         } catch (rollbackError) {
           console.error('[UPLOAD API] 임시 파일 롤백 실패:', rollbackError)
         }
