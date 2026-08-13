@@ -73,10 +73,17 @@ export function splitBucketPath(pathname: string): { bucket: string; key: string
 /**
  * Vercel Blob 공개 저장소의 URL인지 판정한다. origin을 정확히 대조하므로
  * 접미사 위조(`...vercel-storage.com.evil.com`)와 userinfo 트릭에 견딘다.
- * BLOB_PUBLIC_BASE_URL이 없으면 항상 false다.
+ * NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL이 없으면 항상 false다.
+ *
+ * `NEXT_PUBLIC_` 접두사가 붙는 이유: 이 판정 결과에 기대는 렌더 게이트 다수가
+ * 'use client' 컴포넌트(PostAttachmentsDisplay, AttachmentCard, ImageModal,
+ * useAttachmentActions, PersonalInfo, toSafeArtistImageSrc 호출부)에서 돈다.
+ * 접두사가 없는 이름은 Next.js가 클라이언트 번들에 인라인하지 않아 브라우저에서
+ * 이 함수가 항상 false를 반환했다 — 서버 렌더는 정상이던 것과 어긋나 하이드레이션
+ * 불일치를 냈다(최종 리뷰 Finding 1).
  */
 export function isBlobPublicUrl(value: string): boolean {
-  const base = process.env.BLOB_PUBLIC_BASE_URL
+  const base = process.env.NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL
   if (!base || typeof value !== 'string' || !value) return false
 
   try {

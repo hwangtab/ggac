@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
 process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://btugywkltavbogdnhwpu.supabase.co'
-process.env.BLOB_PUBLIC_BASE_URL = 'https://examplestore.public.blob.vercel-storage.com'
+process.env.NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL = 'https://examplestore.public.blob.vercel-storage.com'
 
 const {
   currentProvider,
@@ -150,11 +150,11 @@ test('Blob 판정: 접미사 위조·다른 호스트·상대 경로·빈 문자
   assert.equal(isBlobPublicUrl(''), false)
 })
 
-test('Blob 판정: BLOB_PUBLIC_BASE_URL이 없으면 항상 false다', () => {
-  const saved = process.env.BLOB_PUBLIC_BASE_URL
-  delete process.env.BLOB_PUBLIC_BASE_URL
+test('Blob 판정: NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL이 없으면 항상 false다', () => {
+  const saved = process.env.NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL
+  delete process.env.NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL
   assert.equal(isBlobPublicUrl(`${BLOB_BASE}/artists/a.webp`), false)
-  process.env.BLOB_PUBLIC_BASE_URL = saved
+  process.env.NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL = saved
 })
 
 test('resolveOverwrite: opts가 없으면 false — 덮어쓰기 금지가 기본이다', () => {

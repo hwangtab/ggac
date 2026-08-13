@@ -7,7 +7,8 @@ import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { invalidateArtistsCache } from '@/lib/data'
 import { parseJsonObjectBody } from '@/utils/requestBody'
-import { isProjectStorageObjectPath, isProjectStoragePublicUrl } from '@/utils/storageUrlValidation'
+import { isProjectStorageObjectPath } from '@/utils/storageUrlValidation'
+import { logicalPathFromUrl } from '@/lib/storage/paths'
 import { createLogger } from '@/utils/logger'
 
 export const dynamic = 'force-dynamic'
@@ -241,7 +242,7 @@ export async function PATCH(request: NextRequest) {
 
     if (
       updateData.profile_photo_url &&
-      !isProjectStoragePublicUrl(updateData.profile_photo_url, 'artists', profile.artist_id)
+      logicalPathFromUrl(updateData.profile_photo_url, 'artists', profile.artist_id) === null
     ) {
       return ApiError.badRequest(
         '프로필 사진은 전용 업로드로 등록된 Storage URL이어야 합니다.'
@@ -266,7 +267,7 @@ export async function PATCH(request: NextRequest) {
       variantPublicUrls.some(
         variantUrl =>
           typeof variantUrl === 'string' &&
-          !isProjectStoragePublicUrl(variantUrl, 'artists', profile.artist_id)
+          logicalPathFromUrl(variantUrl, 'artists', profile.artist_id) === null
       )
     ) {
       return ApiError.badRequest(

@@ -3,10 +3,29 @@ import { createClient } from '@supabase/supabase-js'
 
 const PUBLIC_MARKER = '/storage/v1/object/public/'
 
+/**
+ * value가 NEXT_PUBLIC_SUPABASE_URL과 origin이 같은 URL인지 확인한다.
+ * (최종 리뷰 Finding 5) rewriteUrl은 원래 `/storage/v1/object/public/`
+ * 부분 문자열만 보고 재작성했다 — posts.content는 조합원이 직접 쓰는 HTML이라
+ * 쓰기 시점에 host allowlist가 없으므로, 이 부분 문자열을 포함한 외부 URL을
+ * 심어 놓으면 재작성이 그 외부 URL을 우리 Blob 호스트로 조용히 바꿔치기할 수
+ * 있었다. origin을 우리 Supabase 프로젝트와 정확히 대조해 막는다.
+ */
+function isTrustedSupabaseUrl(value) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!supabaseUrl) return false
+  try {
+    return new URL(value).origin === new URL(supabaseUrl).origin
+  } catch {
+    return false
+  }
+}
+
 export function rewriteUrl(value, blobBase) {
   if (typeof value !== 'string' || !value) return value
   const idx = value.indexOf(PUBLIC_MARKER)
   if (idx === -1) return value
+  if (!isTrustedSupabaseUrl(value)) return value
   const logical = value.slice(idx + PUBLIC_MARKER.length)
   if (!logical) return value
   return `${blobBase.replace(/\/$/, '')}/${logical}`
@@ -139,8 +158,8 @@ export function planArtistPhotoUpdate(row, blobBase) {
 
 if (process.argv[1]?.endsWith('rewrite-db-urls.mjs')) {
   const dryRun = process.argv.includes('--dry-run')
-  const blobBase = process.env.BLOB_PUBLIC_BASE_URL
-  if (!blobBase) throw new Error('BLOB_PUBLIC_BASE_URL이 필요하다')
+  const blobBase = process.env.NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL
+  if (!blobBase) throw new Error('NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL이 필요하다')
 
   const s = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,

@@ -4,6 +4,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://btugywkltavbogdnhwpu.supabase.co'
+
 const {
   rewriteUrl,
   rewriteAllInText,
@@ -42,6 +44,24 @@ test('이미 Blob URL이면 그대로 (멱등)', () => {
   assert.equal(rewriteUrl(`${BASE}/artists/a.webp`, BASE), `${BASE}/artists/a.webp`)
 })
 
+test('다른 호스트에 같은 경로 세그먼트가 있어도 건드리지 않는다 (Finding 5: host 미검증 회귀)', () => {
+  // posts.content는 host allowlist 없이 조합원이 직접 쓰는 HTML이다. 부분
+  // 문자열(/storage/v1/object/public/)만 보고 재작성하면, 이 문자열을 포함한
+  // 외부 URL을 심어놓았을 때 우리 Blob 호스트로 조용히 바꿔치기당한다.
+  const foreign = 'https://evil.example.com/storage/v1/object/public/attachments/a.webp'
+  assert.equal(rewriteUrl(foreign, BASE), foreign)
+})
+
+test('NEXT_PUBLIC_SUPABASE_URL이 없으면 아무것도 재작성하지 않는다 (안전한 기본값)', () => {
+  const saved = process.env.NEXT_PUBLIC_SUPABASE_URL
+  delete process.env.NEXT_PUBLIC_SUPABASE_URL
+  try {
+    assert.equal(rewriteUrl(`${SUPA}/artists/a-001/p.webp`, BASE), `${SUPA}/artists/a-001/p.webp`)
+  } finally {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = saved
+  }
+})
+
 test('본문 안의 여러 URL을 모두 바꾼다', () => {
   const html = `<img src="${SUPA}/attachments/a.webp"><p>글</p><img src="${SUPA}/attachments/b.png">`
   const out = rewriteAllInText(html, BASE)
@@ -73,6 +93,15 @@ test('마크다운 링크와 문장부호를 삼키지 않는다', () => {
 test('대상이 없으면 원문 그대로', () => {
   const html = '<p>세미콜론; 포함 본문</p>'
   assert.equal(rewriteAllInText(html, BASE), html)
+})
+
+test('본문에 낀 다른 호스트 URL은 우리 Supabase URL만 바뀌고 나머지는 그대로 (Finding 5)', () => {
+  const foreign = 'https://evil.example.com/storage/v1/object/public/attachments/b.webp'
+  const html = `<img src="${SUPA}/attachments/a.webp"><img src="${foreign}">`
+  const out = rewriteAllInText(html, BASE)
+  assert.equal(out.includes(`${BASE}/attachments/a.webp`), true)
+  assert.equal(out.includes(foreign), true)
+  assert.equal(out.includes(`${BASE}/attachments/b.webp`), false)
 })
 
 // ---------------------------------------------------------------------------

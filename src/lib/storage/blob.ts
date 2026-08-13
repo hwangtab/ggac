@@ -49,7 +49,7 @@ export async function deleteObject(store: StoreKind, pathname: string): Promise<
 
 /** 공개 저장소 전용. 브라우저가 직접 가져간다. */
 export function getPublicUrl(pathname: string): string {
-  return `${requireEnv('BLOB_PUBLIC_BASE_URL').replace(/\/$/, '')}/${pathname}`
+  return `${requireEnv('NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL').replace(/\/$/, '')}/${pathname}`
 }
 
 /**
