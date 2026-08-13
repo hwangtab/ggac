@@ -10,8 +10,7 @@ import { NextRequest } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
 import { timingSafeEqual } from 'crypto'
-import { getProjectStorageObjectPath } from '@/utils/storageUrlValidation'
-import { deletePublicObjectEverywhere } from '@/lib/storage/provider'
+import { deletePublicObjectEverywhere, logicalPathFromUrl } from '@/lib/storage/provider'
 import { createLogger } from '@/utils/logger'
 
 const log = createLogger('api/cleanup/temp-attachments')
@@ -72,7 +71,7 @@ export async function POST(request: NextRequest) {
     // 2. Storage에서 파일 삭제
     const filePaths = expiredAttachments
       .map(att => {
-        const path = getProjectStorageObjectPath(att.file_url, 'attachments', 'temp')
+        const path = logicalPathFromUrl(att.file_url, 'attachments', 'temp')
         if (!path) {
           console.warn('[CLEANUP] 안전하지 않은 임시 첨부파일 URL 건너뜀:', att.id)
           return null
@@ -84,15 +83,15 @@ export async function POST(request: NextRequest) {
 
     if (filePaths.length > 0) {
       log.debug('Deleting temporary attachment files from Storage', { count: filePaths.length })
-      // filePaths의 각 항목은 getProjectStorageObjectPath가 돌려준 버킷 상대
-      // 경로('temp/...', 버킷 없음)다. deletePublicObjectEverywhere는 버킷을
-      // 포함한 논리 경로를 기대하므로 'attachments/'를 붙여야 한다 — 그대로
-      // 넘기면 'temp'가 버킷으로 잘못 파싱되어 실제 객체는 지워지지 않는다.
+      // filePaths의 각 항목은 logicalPathFromUrl이 돌려준, 버킷을 포함한
+      // 논리 경로('attachments/temp/...')다 — deletePublicObjectEverywhere가
+      // 그대로 기대하는 형태라 추가 접두사 없이 곧장 넘긴다. logicalPathFromUrl은
+      // Supabase·Blob 두 origin을 다 이해하므로, 향후 file_url이 Blob URL로
+      // 재작성돼도 이 확인이 계속 통과한다(getProjectStorageObjectPath였다면
+      // Supabase origin만 인정해 그 시점부터 이 정리가 조용히 멈췄을 것).
       // 전환기에는 이 임시 파일이 어느 제공자에 있는지 알 수 없으므로 양쪽
       // 다 지우되, 개별 실패로 전체 정리가 막히지 않도록 실패만 로그에 남긴다.
-      const results = await Promise.allSettled(
-        filePaths.map(p => deletePublicObjectEverywhere(`attachments/${p}`))
-      )
+      const results = await Promise.allSettled(filePaths.map(p => deletePublicObjectEverywhere(p)))
       for (const r of results) {
         if (r.status === 'rejected') {
           log.warn('임시 첨부 삭제 실패', { reason: String(r.reason) })

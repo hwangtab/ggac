@@ -12,6 +12,7 @@ export const preferredRegion = 'icn1'
 import { NextRequest } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { rateLimit } from '@/lib/server/rateLimit'
+import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
 import { putPublicObject, deletePublicObject } from '@/lib/storage/provider'
 import { revalidateTag } from 'next/cache'
 import type { PostAttachmentStats } from '@/types'
@@ -24,6 +25,19 @@ import {
   formatValidationErrors,
   hasValidFileSignature,
 } from '@/utils/fileUploadValidation'
+
+/**
+ * Service Role 클라이언트 생성 (POST 업로드 전용)
+ *
+ * 주의: 이 함수는 POST 엔드포인트에서만 사용됩니다.
+ * - 용도: Storage 버킷에 파일을 업로드하기 위한 권한 필요
+ * - GET 엔드포인트: createRouteHandlerClient 사용 (RLS 정책 적용)
+ *
+ * Service Role Key는 RLS를 우회하므로, 인증된 사용자의 업로드 작업에만 제한적으로 사용
+ */
+function getSupabaseAdmin() {
+  return createServiceRoleClient()
+}
 
 /**
  * 첨부파일 목록 조회
@@ -204,6 +218,22 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
           `첨부파일 총 크기 제한을 초과했습니다. (최대 ${config.maxTotalSize / 1024 / 1024}MB)`
         ).toNextResponse()
       }
+    }
+
+    // Storage 클라이언트 생성 및 파일 업로드
+    // 자격 증명으로 Service Role 클라이언트를 만들 수 있는지 업로드 전에
+    // 미리 검증한다 — 실패 시 구체적이고 조치 가능한 메시지로 즉시 응답한다.
+    // (결과 자체를 변수에 담아두진 않는다: 아래 롤백 지점들은 이제
+    // deletePublicObject로 현재 제공자를 따라가므로 이 클라이언트를 다시
+    // 쓰지 않는다 — 그 재사용 부분만 죽은 코드였고, 사전 검증이라는 동작은
+    // 그대로 유지한다.)
+    try {
+      getSupabaseAdmin()
+    } catch (error) {
+      console.error('[UPLOAD API] Supabase Admin 클라이언트 생성 오류:', error)
+      return ApiError.serviceUnavailable(
+        'Storage 서비스를 사용할 수 없습니다. 관리자에게 문의하세요.'
+      ).toNextResponse()
     }
 
     // 파일명 정제 및 고유 파일명 생성 (공통 검증에서 이미 생성됨)
