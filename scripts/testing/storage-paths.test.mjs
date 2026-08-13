@@ -11,6 +11,7 @@ const {
   classifyDeleteEverywhereResults,
   isBlobPublicUrl,
   resolveOverwrite,
+  buildVariantPathSuffixes,
 } = await import('../../src/lib/storage/paths.ts')
 
 const BLOB_BASE = 'https://examplestore.public.blob.vercel-storage.com'
@@ -172,6 +173,50 @@ test('resolveOverwrite: true가 아닌 값은 전부 false로 취급한다 (엄�
   // "명시적으로 true"만 덮어쓰기를 허용한다는 걸 타입 실수로부터도 지킨다.
   assert.equal(resolveOverwrite({ overwrite: undefined }), false)
   assert.equal(resolveOverwrite({ overwrite: 1 }), false)
+})
+
+test('buildVariantPathSuffixes: 입력이 .webp면 originalPath와 webpPath가 같은 문자열이다 (구조적 성질, 회귀 고정)', () => {
+  // media/upload와 mypage/artist/photo 둘 다 이 함수로 세 경로를 조립한다.
+  // 원본 파일명이 이미 .webp로 끝나면 webp 변형 경로가 원본 경로와 정확히
+  // 겹친다 — 그래서 두 라우트의 webp 변형 업로드는 putPublicObject(...,
+  // { overwrite: true })를 명시적으로 써야 한다(원본 업로드가 먼저 그
+  // 경로를 차지하므로). 이 테스트는 그 전제 자체를 고정한다 — 나중에
+  // 명명 규칙이 바뀌어 이 성질이 사라지거나(=overwrite:true가 불필요해지거나)
+  // 다른 곳에서도 겹치게 되면 여기서 드러나야 한다.
+  const suffixes = buildVariantPathSuffixes(
+    'artist-001',
+    'profile_1755000000000_ab12.webp',
+    'profile_1755000000000_ab12'
+  )
+  assert.equal(suffixes.originalPath, 'artist-001/profile_1755000000000_ab12.webp')
+  assert.equal(suffixes.webpPath, 'artist-001/profile_1755000000000_ab12.webp')
+  assert.equal(suffixes.originalPath, suffixes.webpPath)
+  // fallback 경로는 항상 별개다 — .fallback.jpg 접미사가 붙으므로.
+  assert.notEqual(suffixes.fallbackPath, suffixes.originalPath)
+})
+
+test('buildVariantPathSuffixes: jpg/png/jpeg 입력은 원본·webp·폴백 세 경로가 전부 다르다', () => {
+  for (const [originalFileName, ext] of [
+    ['profile_1755000000000_ab12.jpg', 'jpg'],
+    ['profile_1755000000000_ab12.png', 'png'],
+    ['profile_1755000000000_ab12.jpeg', 'jpeg'],
+  ]) {
+    const nameWithoutExtension = 'profile_1755000000000_ab12'
+    const suffixes = buildVariantPathSuffixes('artist-001', originalFileName, nameWithoutExtension)
+    assert.notEqual(suffixes.originalPath, suffixes.webpPath, `충돌하면 안 됨: ${ext}`)
+    assert.notEqual(suffixes.originalPath, suffixes.fallbackPath, `충돌하면 안 됨: ${ext}`)
+    assert.notEqual(suffixes.webpPath, suffixes.fallbackPath, `충돌하면 안 됨: ${ext}`)
+  }
+})
+
+test('buildVariantPathSuffixes: media/upload 호출 패턴을 그대로 재현해도 .webp 입력은 충돌한다', () => {
+  // generateStoragePaths(media/upload/route.ts)가 실제로 넘기는 인자 형태를
+  // 그대로 재현한다 — basePrefix, safeFileName(확장자 포함), nameWithoutExtension.
+  const basePrefix = 'attachments/user-123'
+  const safeFileName = 'user-123_1755000000000_ab12_photo.webp'
+  const nameWithoutExtension = 'user-123_1755000000000_ab12_photo'
+  const suffixes = buildVariantPathSuffixes(basePrefix, safeFileName, nameWithoutExtension)
+  assert.equal(suffixes.originalPath, suffixes.webpPath)
 })
 
 test('everywhere 삭제: "does not exist" 메시지도 진짜 실패로 친다 (회귀 테스트)', () => {

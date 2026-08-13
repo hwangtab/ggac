@@ -23,6 +23,42 @@ export function resolveOverwrite(opts?: PutPublicObjectOptions): boolean {
   return opts?.overwrite === true
 }
 
+export type VariantPathSuffixes = {
+  originalPath: string
+  webpPath: string
+  fallbackPath: string
+}
+
+/**
+ * 베이스 경로(prefix) 아래에 원본 파일명 + webp/JPEG 폴백 변형 3종의 경로를
+ * 만든다. `media/upload`와 `mypage/artist/photo` 두 라우트가 이 명명 규칙을
+ * 그대로 공유한다 — 확장자 판별 방식은 라우트마다 다르므로(하나는
+ * `path.extname`, 하나는 `split('.').pop()`) `nameWithoutExtension`은 항상
+ * 호출부가 계산해서 넘긴다. 이 함수는 세 경로 문자열을 조립하는 마지막
+ * 단계만 담당한다.
+ *
+ * **구조적 성질**: `originalFileName`이 이미 `.webp`로 끝나면
+ * `originalPath === webpPath`가 된다 — 버그가 아니라 이 명명 규칙 자체의
+ * 성질이다(webp 변형 경로도 결국 `${basePrefix}/${nameWithoutExtension}.webp`이고,
+ * 원본이 이미 webp라면 원본 경로도 정확히 그 문자열이기 때문). 그래서 이 두
+ * 라우트의 webp/JPEG 폴백 변형 업로드는 `putPublicObject(..., { overwrite: true })`를
+ * 명시적으로 넘겨야 한다 — 원본 업로드가 먼저 그 경로를 차지한 뒤, 변형
+ * 업로드가 같은 경로에 재기록해야 하기 때문이다. 원본 업로드 자체는 계속
+ * 기본값(`overwrite: false`)을 쓴다 — 그 경로가 이미 차 있으면 정말로
+ * 실패해야 하는 쓰기다.
+ */
+export function buildVariantPathSuffixes(
+  basePrefix: string,
+  originalFileName: string,
+  nameWithoutExtension: string
+): VariantPathSuffixes {
+  return {
+    originalPath: `${basePrefix}/${originalFileName}`,
+    webpPath: `${basePrefix}/${nameWithoutExtension}.webp`,
+    fallbackPath: `${basePrefix}/${nameWithoutExtension}.fallback.jpg`,
+  }
+}
+
 export function splitBucketPath(pathname: string): { bucket: string; key: string } {
   if (typeof pathname !== 'string' || !pathname || pathname.startsWith('/')) {
     throw new Error(`invalid pathname: ${JSON.stringify(pathname)}`)

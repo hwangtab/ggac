@@ -20,6 +20,7 @@ import distLimiter from '@/lib/server/rateLimit'
 import { createLogger } from '@/utils/logger'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { putPublicObject } from '@/lib/storage/provider'
+import { buildVariantPathSuffixes } from '@/lib/storage/paths'
 
 const log = createLogger('api/media/upload')
 
@@ -193,10 +194,11 @@ function generateStoragePaths(bucket: AllowedBucket, userId: string, fileName: s
     : safeFileName
 
   const basePrefix = getBucketPrefix(bucket, userId)
-
-  const originalPath = `${basePrefix}/${safeFileName}`
-  const webpPath = `${basePrefix}/${nameWithoutExtension}.webp`
-  const fallbackPath = `${basePrefix}/${nameWithoutExtension}.fallback.jpg`
+  const { originalPath, webpPath, fallbackPath } = buildVariantPathSuffixes(
+    basePrefix,
+    safeFileName,
+    nameWithoutExtension
+  )
 
   return {
     originalPath,
@@ -295,7 +297,13 @@ async function uploadImageWithVariants(
   // WebP 변환
   const webpBuffer = await sharp(originalBuffer).webp({ quality: WEBP_QUALITY }).toBuffer()
   try {
-    const { url } = await putPublicObject(`${bucket}/${paths.webpPath}`, webpBuffer, 'image/webp')
+    // 입력이 이미 .webp면 webpPath === paths.originalPath다(같은 명명 규칙
+    // 때문 — buildVariantPathSuffixes 참고). 원본 업로드가 이미 그 경로를
+    // 차지했으므로 여기서는 overwrite:true가 필수다. 원본 업로드는 계속
+    // 기본값(false)을 쓴다.
+    const { url } = await putPublicObject(`${bucket}/${paths.webpPath}`, webpBuffer, 'image/webp', {
+      overwrite: true,
+    })
     result.webp = {
       path: paths.webpPath,
       url,
@@ -320,10 +328,14 @@ async function uploadImageWithVariants(
 
   const jpegBuffer = await sharp(originalBuffer).jpeg({ quality: JPEG_QUALITY }).toBuffer()
   try {
+    // fallbackPath는 원본과 절대 같은 문자열이 될 수 없다(항상 .fallback.jpg가
+    // 붙으므로) — 그래도 media/upload가 upsert:true로 재업로드를 허용해 온
+    // 기존 동작을 그대로 유지한다(같은 요청을 재시도하는 경우 등).
     const { url } = await putPublicObject(
       `${bucket}/${paths.fallbackPath}`,
       jpegBuffer,
-      'image/jpeg'
+      'image/jpeg',
+      { overwrite: true }
     )
     result.fallback = {
       path: paths.fallbackPath,

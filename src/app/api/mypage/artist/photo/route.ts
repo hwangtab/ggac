@@ -10,6 +10,7 @@ import { rateLimit } from '@/lib/server/rateLimit'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
 import { putPublicObject } from '@/lib/storage/provider'
+import { buildVariantPathSuffixes } from '@/lib/storage/paths'
 import { revalidatePath, revalidateTag } from 'next/cache'
 import sharp from 'sharp'
 import type { ProfilePhotoUploadResponse, ProfilePhotoMetadata, ImageCropSettings } from '@/types'
@@ -124,12 +125,16 @@ function generateArtistStoragePaths(artistId: string, originalFilename: string) 
   const randomId = Math.random().toString(36).substring(2, 8)
   const extension = (originalFilename.split('.').pop() || 'jpg').toLowerCase()
   const baseName = `profile_${timestamp}_${randomId}`
-  const basePath = `${artistId}/${baseName}`
+  const { originalPath, webpPath, fallbackPath } = buildVariantPathSuffixes(
+    artistId,
+    `${baseName}.${extension}`,
+    baseName
+  )
 
   return {
-    originalPath: `${basePath}.${extension}`,
-    webpPath: `${basePath}.webp`,
-    fallbackPath: `${basePath}.fallback.jpg`,
+    originalPath,
+    webpPath,
+    fallbackPath,
     extension,
   }
 }
@@ -191,10 +196,15 @@ async function uploadImageWithVariants(
     try {
       const webpBuffer = await sharp(originalBuffer).webp({ quality: WEBP_QUALITY }).toBuffer()
       try {
+        // 입력이 이미 .webp면 webpPath === paths.originalPath다(같은 명명
+        // 규칙 때문 — buildVariantPathSuffixes 참고). 원본 업로드가 이미 그
+        // 경로를 차지했으므로 여기서는 overwrite:true가 필수다. 원본
+        // 업로드는 계속 기본값(false)을 쓴다.
         const { url } = await putPublicObject(
           `${bucket}/${paths.webpPath}`,
           webpBuffer,
-          'image/webp'
+          'image/webp',
+          { overwrite: true }
         )
         variantPaths.webp = paths.webpPath
         variantUrls.webp = url
@@ -223,10 +233,14 @@ async function uploadImageWithVariants(
     try {
       const jpegBuffer = await sharp(originalBuffer).jpeg({ quality: JPEG_QUALITY }).toBuffer()
       try {
+        // fallbackPath는 항상 .fallback.jpg가 붙어 원본/webp와 겹치지 않지만,
+        // 이 라우트가 원래 upsert:true로 재업로드를 허용해 온 동작을 그대로
+        // 유지한다.
         const { url } = await putPublicObject(
           `${bucket}/${paths.fallbackPath}`,
           jpegBuffer,
-          'image/jpeg'
+          'image/jpeg',
+          { overwrite: true }
         )
         variantPaths.fallback = paths.fallbackPath
         variantUrls.fallback = url
