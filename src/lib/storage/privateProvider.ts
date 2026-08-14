@@ -1,7 +1,12 @@
-import { deleteObject, getPrivateObject, putObject } from './blob'
+import { deleteObject, getPrivateObject, hasPrivateBlobStore, putObject } from './blob'
 import { blobPathForBoardDocument, supabaseLocationForBoardDocument } from './boardDocuments'
-import { currentProvider } from './paths'
-import { deleteSupabaseObject, downloadSupabaseObject, putSupabaseObject } from './supabase'
+import { classifyDeleteEverywhereResults, currentProvider } from './paths'
+import {
+  deleteSupabaseObject,
+  downloadSupabaseObject,
+  hasSupabaseServiceRole,
+  putSupabaseObject,
+} from './supabase'
 
 export type BoardDocumentStream = {
   statusCode: number
@@ -43,17 +48,19 @@ export async function deleteBoardDocumentEverywhere(filePath: string): Promise<v
     deleteSupabaseObject(bucket, key),
   ])
 
-  const failures: string[] = []
-  if (blobResult.status === 'rejected') {
-    failures.push('blob')
-    console.warn(`[storage] blob 삭제 실패 ${blobPath}: ${String(blobResult.reason)}`)
-  }
-  if (supabaseResult.status === 'rejected') {
-    failures.push('supabase')
-    console.warn(`[storage] supabase 삭제 실패 ${bucket}/${key}: ${String(supabaseResult.reason)}`)
-  }
+  // 판정은 공개 쪽 deletePublicObjectEverywhere와 같은 헬퍼를 쓴다. 직접
+  // `failures.length === 2`로 세면 제공자가 늘거나 규칙이 바뀔 때 두 삭제 경로가
+  // 소리 없이 갈라진다.
+  const { toLog, shouldThrow } = classifyDeleteEverywhereResults([
+    { provider: 'blob', result: blobResult },
+    { provider: 'supabase', result: supabaseResult },
+  ])
 
-  if (failures.length === 2) {
+  for (const { provider, reason } of toLog) {
+    const target = provider === 'blob' ? blobPath : `${bucket}/${key}`
+    console.warn(`[storage] ${provider} 삭제 실패 ${target}: ${String(reason)}`)
+  }
+  if (shouldThrow) {
     throw new Error(`이사회 문서 삭제 실패: ${filePath}`)
   }
 }
@@ -62,6 +69,14 @@ export async function deleteBoardDocumentEverywhere(filePath: string): Promise<v
  * 읽기는 양쪽을 본다. 복사와 제공자 전환 사이, 그리고 롤백 상황에서 객체가
  * 한쪽에만 있을 수 있는데 읽기는 부작용이 없으므로 폴백이 안전하다.
  * 현재 제공자를 먼저 보고, 없으면 반대쪽을 한 번 더 본다.
+ *
+ * 폴백은 반대쪽이 설정돼 있을 때만 시도한다. 전환 전(Blob 토큰 없음)이나 롤백
+ * 후(service-role 키 없음)에는 반대쪽이 비어 있는 게 정상인데, 그대로 부르면
+ * requireEnv/requireServerEnv가 던져서 "없는 문서" 요청이 404가 아니라 환경변수
+ * 이름이 담긴 500으로 나간다.
+ *
+ * 반면 선택된 제공자(첫 번째 조회)는 감싸지 않는다 — 그쪽이 설정돼 있지 않다면
+ * 조용히 404로 덮지 말고 그대로 드러나야 하는 운영 사고다.
  */
 export async function getBoardDocumentStream(
   filePath: string,
@@ -72,12 +87,13 @@ export async function getBoardDocumentStream(
   if (provider === 'blob') {
     const result = await getPrivateObject(blobPathForBoardDocument(filePath), ifNoneMatch)
     if (result) return { ...result, etag: result.etag ?? null }
-    return fromSupabase(filePath)
+    return hasSupabaseServiceRole() ? fromSupabase(filePath) : null
   }
 
   const supabaseResult = await fromSupabase(filePath)
   if (supabaseResult) return supabaseResult
 
+  if (!hasPrivateBlobStore()) return null
   const result = await getPrivateObject(blobPathForBoardDocument(filePath), ifNoneMatch)
   return result ? { ...result, etag: result.etag ?? null } : null
 }

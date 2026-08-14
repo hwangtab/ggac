@@ -1,5 +1,19 @@
 import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
 
+/**
+ * Supabase Storage에 service-role로 접근할 수 있는지. 교차 제공자 폴백 전용이다.
+ *
+ * createServiceRoleClient()는 두 값이 없으면 requireServerEnv로 던진다. 선택된
+ * 제공자라면 그게 맞지만, 폴백 경로에서는 설정이 없는 게 정상이므로 부르기 전에
+ * 걸러야 없는 문서가 404 대신 500으로 나가지 않는다.
+ * (requireServerEnv와 같은 trim 기준을 쓴다.)
+ */
+export function hasSupabaseServiceRole(): boolean {
+  return Boolean(
+    process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() && process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
+  )
+}
+
 export async function putSupabaseObject(
   bucket: string,
   key: string,
