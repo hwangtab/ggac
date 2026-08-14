@@ -596,12 +596,17 @@ const boardDocumentsPath = join(root, 'src/app/api/board-room/documents/route.ts
 const boardDocumentsSource = readFileSync(boardDocumentsPath, 'utf8')
 const boardDocumentDetailPath = join(root, 'src/app/api/board-room/documents/[id]/route.ts')
 const boardDocumentDetailSource = readFileSync(boardDocumentDetailPath, 'utf8')
-const boardDocumentStoragePathPath = join(root, 'src/utils/boardDocumentStoragePath.ts')
-const boardDocumentStoragePathSource = existsSync(boardDocumentStoragePathPath)
-  ? readFileSync(boardDocumentStoragePathPath, 'utf8')
+const boardDocumentDownloadPath = join(
+  root,
+  'src/app/api/board-room/documents/[id]/download/route.ts'
+)
+const boardDocumentDownloadSource = existsSync(boardDocumentDownloadPath)
+  ? readFileSync(boardDocumentDownloadPath, 'utf8')
   : ''
-// 봉쇄 판정의 실제 구현부. `@/utils/boardDocumentStoragePath`는 남은 호출부를 위한
-// deprecated 래퍼일 뿐이고, 판정은 이 순수 모듈이 한다.
+// 봉쇄 판정의 실제 구현부. `@/utils/boardDocumentStoragePath`(옛
+// `isSafeBoardDocumentStoragePath`)는 이제 어떤 라우트도 import하지 않는 죽은
+// 코드라 이 검사식은 더 이상 참조하지 않는다 — 소유권을 경로 문자열과 결합해
+// 시드 문서 14건을 막던 옛 버전이고, 파일 자체를 지울지는 별도 판단 대상이다.
 const boardDocumentsLibPath = join(root, 'src/lib/storage/boardDocuments.ts')
 const boardDocumentsLibSource = existsSync(boardDocumentsLibPath)
   ? readFileSync(boardDocumentsLibPath, 'utf8')
@@ -618,6 +623,31 @@ const verifiesBoardDocumentSignature =
 // 소유권은 DB 컬럼(`doc.uploaded_by`)으로, 봉쇄는 경로 문자열로 나눠 검사한다.
 // 이 검사식은 그 분리를 고정한다 — 봉쇄가 느슨해지거나 소유권 검사가 사라지면
 // 둘 다 실패해야 한다.
+//
+// 목록 API는 더 이상 서명 URL을 만들지 않는다 — 발급된 서명 URL은 만료 전까지
+// 권한을 잃은 사람에게도 유효했다. 대신 만료 없는 내부 프록시 경로만 내려주고,
+// 그 다운로드 라우트가 매 요청마다 `requireBoardMember()`로 권한을 다시 검사한다.
+// 목록 응답이 `file_path`를 그대로 흘리는 회귀도 이 검사식이 고정한다 — 저장소
+// 경로가 클라이언트로 새 나가면 봉쇄를 우회할 필요도 없이 저장소 레이아웃이
+// 그대로 노출된다.
+const boardDocumentDownloadAuthIndex = boardDocumentDownloadSource.indexOf('requireBoardMember()')
+const boardDocumentDownloadQueryIndex = boardDocumentDownloadSource.indexOf(
+  ".from('board_documents')"
+)
+const boardDocumentDownloadChecksAuthBeforeQuery =
+  boardDocumentDownloadAuthIndex !== -1 &&
+  boardDocumentDownloadQueryIndex !== -1 &&
+  boardDocumentDownloadAuthIndex < boardDocumentDownloadQueryIndex
+const boardDocumentDownloadSafetyIndex = boardDocumentDownloadSource.indexOf(
+  'isSafeBoardDocumentFilePath(doc.file_path)'
+)
+const boardDocumentDownloadStreamIndex = boardDocumentDownloadSource.indexOf(
+  'getBoardDocumentStream(doc.file_path'
+)
+const boardDocumentDownloadChecksPathBeforeStream =
+  boardDocumentDownloadSafetyIndex !== -1 &&
+  boardDocumentDownloadStreamIndex !== -1 &&
+  boardDocumentDownloadSafetyIndex < boardDocumentDownloadStreamIndex
 const validatesBoardDocumentStoragePaths =
   // (1) 봉쇄: `<owner>/<filename>` 두 세그먼트만 허용하고 이탈 벡터를 모두 막는다.
   /export function isSafeBoardDocumentFilePath/.test(boardDocumentsLibSource) &&
@@ -627,19 +657,25 @@ const validatesBoardDocumentStoragePaths =
   /decodeURIComponent\(filePath\)/.test(boardDocumentsLibSource) &&
   /decoded !== filePath/.test(boardDocumentsLibSource) &&
   /segment === '\.' \|\| segment === '\.\.'/.test(boardDocumentsLibSource) &&
-  // (2) 목록 라우트: 봉쇄를 통과한 경로로만 서명 URL을 만든다.
-  /isSafeBoardDocumentStoragePath\(doc\.file_path,\s*doc\.uploaded_by\)/.test(
+  // (2) 목록 라우트: 응답에 file_path를 내려주지 않고, 만료 없는 내부 프록시
+  //     경로만 돌려준다. 예전의 300초 서명 URL이 되살아나면 실패해야 한다.
+  /const \{ file_path, \.\.\.rest \} = doc/.test(boardDocumentsSource) &&
+  /download_url:\s*`\/api\/board-room\/documents\/\$\{doc\.id\}\/download`/.test(
     boardDocumentsSource
   ) &&
-  /download_url:\s*safeFilePath && signedData\?\.signedUrl/.test(boardDocumentsSource) &&
-  // (3) 삭제 라우트: 소유권은 DB 컬럼으로 검사하고(관리자만 예외),
-  //     Storage remove는 봉쇄를 통과한 값으로만 부른다.
+  !/signedUrl/.test(boardDocumentsSource) &&
+  // (3) 다운로드 라우트: 권한 검사가 DB 조회보다 먼저고, DB에서 온 file_path를
+  //     봉쇄 판정에 다시 통과시킨 뒤에만 스트리밍한다.
+  boardDocumentDownloadChecksAuthBeforeQuery &&
+  boardDocumentDownloadChecksPathBeforeStream &&
+  // (4) 삭제 라우트: 소유권은 DB 컬럼으로 검사하고(관리자만 예외), 봉쇄는
+  //     `isSafeBoardDocumentFilePath`로, 실제 삭제는 양쪽 제공자를 다 지우는
+  //     `deleteBoardDocumentEverywhere`로만 한다. Supabase Storage의
+  //     `.remove([...])` 직접 호출이 되살아나면 실패해야 한다.
   /doc\.uploaded_by !== user\.id && !isAdmin/.test(boardDocumentDetailSource) &&
-  /isSafeBoardDocumentStoragePath\(doc\.file_path,\s*doc\.uploaded_by\)/.test(
-    boardDocumentDetailSource
-  ) &&
-  /\.remove\(\[safeFilePath\]\)/.test(boardDocumentDetailSource) &&
-  /\.remove\(\[doc\.file_path\]\)/.test(boardDocumentDetailSource) === false
+  /isSafeBoardDocumentFilePath\(doc\.file_path\)/.test(boardDocumentDetailSource) &&
+  /deleteBoardDocumentEverywhere\(doc\.file_path\)/.test(boardDocumentDetailSource) &&
+  !/\.remove\(\[/.test(boardDocumentDetailSource)
 
 // 비공개 저장소의 제공자 분기 계층. 아직 라우트에 연결되지 않았지만(전환 단계용
 // 선행 코드) 연결 시점에 드러날 두 결함을 미리 고정한다.
@@ -3263,10 +3299,13 @@ if (!verifiesBoardDocumentSignature) {
 
 if (!validatesBoardDocumentStoragePaths) {
   failures.push(
-    `Board document signed URLs and deletes must validate DB file_path values against the uploader-owned Storage object path shape:\n- ${relative(
+    `Board document list/download/delete routes must keep path containment and ownership checks separated and wired to the provider layer:\n- ${relative(
       root,
       boardDocumentsPath
-    )}\n- ${relative(root, boardDocumentDetailPath)}\n- ${relative(root, boardDocumentStoragePathPath)}`
+    )}\n- ${relative(root, boardDocumentDetailPath)}\n- ${relative(
+      root,
+      boardDocumentDownloadPath
+    )}\n- ${relative(root, boardDocumentsLibPath)}`
   )
 }
 
