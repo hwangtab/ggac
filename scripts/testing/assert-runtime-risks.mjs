@@ -569,11 +569,14 @@ const directGetUserAllowlist = [
   },
   { file: 'src/app/api/posts/[id]/comments-list/route.ts' },
   { file: 'src/app/api/posts/[id]/view/route.ts' },
-  // requireUser()로 인증 게이트는 이미 걸었다. email_confirmed_at이 헬퍼 반환
-  // 타입에 없어 응답 본문 보존을 위해 한 번 더 조회한다(Task 3 판단, 리뷰 승인됨).
-  // requireUser() 존재는 verifySessionTreatsMissingSessionAsNormal이 이미
-  // 고정하고 있지만, 여기서도 재확인해 둔다(방어적 중복).
-  { file: 'src/app/api/auth/verify-session/route.ts', mustAlsoCall: [/requireUser\(\)/] },
+  // auth/verify-session/route.ts는 여기 없다: UserAuthSuccess에
+  // email_confirmed_at이 추가되면서(최종 리뷰 반영) 이 라우트가 직접 부르던
+  // 두 번째 supabase.auth.getUser()가 사라졌다 — 이제 이 파일에는 raw
+  // getUser( 호출이 전혀 없으므로 이 allowlist에 있을 이유가 없다(있어도
+  // 없어도 게이트 결과는 같지만, allowlist는 "raw getUser가 이 파일에 있어도
+  // 된다"는 뜻이라 실제로 없는 파일을 올려두면 그 자체가 오해를 부른다).
+  // requireUser() 호출 존재는 verifySessionTreatsMissingSessionAsNormal과
+  // requiredAuthHelperCallCounts(아래) 둘이 고정한다.
   // 인증 흐름 자체를 구현하는 라우트 — 비밀번호 재설정은 단계 2b(Better Auth
   // 전환)에서 통째로 바뀔 예정이라 이번 수렴 대상에서 제외한다.
   { file: 'src/app/api/auth/reset-password/route.ts' },

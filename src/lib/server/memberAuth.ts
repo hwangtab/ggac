@@ -8,12 +8,12 @@ import { createLogger } from '@/utils/logger'
 const log = createLogger('memberAuth')
 
 export type UserAuthSuccess = {
-  user: { id: string; email?: string | null }
+  user: { id: string; email?: string | null; email_confirmed_at?: string | null }
 }
 
 export type MemberAuthSuccess = {
   db: ServiceRoleSupabaseClient
-  user: { id: string; email?: string | null }
+  user: { id: string; email?: string | null; email_confirmed_at?: string | null }
   profile: ProfileLike | null
 }
 
@@ -57,7 +57,13 @@ export async function requireUser(): Promise<UserAuthSuccess | NextResponse> {
     return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
   }
 
-  return { user: { id: session.user!.id, email: session.user!.email } }
+  return {
+    user: {
+      id: session.user!.id,
+      email: session.user!.email,
+      email_confirmed_at: session.user!.email_confirmed_at,
+    },
+  }
 }
 
 /**
@@ -93,7 +99,11 @@ export async function requireActiveMember(): Promise<MemberAuthSuccess | NextRes
 
   return {
     db,
-    user: { id: session.user!.id, email: session.user!.email },
+    user: {
+      id: session.user!.id,
+      email: session.user!.email,
+      email_confirmed_at: session.user!.email_confirmed_at,
+    },
     profile: session.profile,
   }
 }

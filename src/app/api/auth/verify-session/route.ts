@@ -15,13 +15,15 @@ export async function GET() {
 
     const supabase = await createSupabaseServer()
 
-    // requireUser()는 id/email만 돌려준다. 이 라우트의 성공 응답 본문은
-    // email_confirmed_at도 포함해야 하므로(동작 불변 원칙) 한 번 더 조회한다.
-    const {
-      data: { user: fullUser },
-    } = await supabase.auth.getUser()
-
-    // 추가로 member_profiles 확인
+    // email_confirmed_at은 requireUser()가 SessionContext에서 그대로 넘겨준다
+    // (authz.ts의 getSessionContext가 이미 auth.getUser()로 채운 값). 이 값을
+    // 따로 다시 조회하려고 supabase.auth.getUser()를 한 번 더 부르지 않는다 —
+    // 그 왕복이 이 라우트를 4회 왕복으로 만들던 원인이었다(memberAuth.ts 리뷰).
+    //
+    // member_profiles는 여기서 다시 조회한다. requireUser()는 승인 대기
+    // 사용자도 통과시켜야 해서 프로필을 반환하지 않도록 설계됐고(요구되는 컬럼
+    // 집합도 getSessionContext 내부 조회보다 넓다 — display_name·is_artist·
+    // artist_id까지 필요), 그래서 이 중복은 없애지 않는다.
     const { data: profile, error: profileError } = await supabase
       .from('member_profiles')
       .select(
@@ -36,8 +38,8 @@ export async function GET() {
         authenticated: true,
         user: {
           id: user.id,
-          email: fullUser?.email ?? user.email,
-          email_confirmed_at: fullUser?.email_confirmed_at,
+          email: user.email,
+          email_confirmed_at: user.email_confirmed_at,
         },
         profile: null,
       }).toNextResponse()
@@ -47,8 +49,8 @@ export async function GET() {
       authenticated: true,
       user: {
         id: user.id,
-        email: fullUser?.email ?? user.email,
-        email_confirmed_at: fullUser?.email_confirmed_at,
+        email: user.email,
+        email_confirmed_at: user.email_confirmed_at,
       },
       profile: profile,
     }).toNextResponse()
