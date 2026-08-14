@@ -18,6 +18,32 @@ function stripComments(source) {
   return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
 }
 
+/**
+ * 주석에 더해 `import` 문 줄도 걷어낸 소스. "실제 코드에 이 로직이 있고, A가
+ * B보다 먼저 나오는가"를 검사할 때 쓴다.
+ *
+ * `stripComments`만으로는 두 가지가 새 나간다.
+ *
+ * 1. import 문. 순서 검사(`indexOf` 비교)에서 `import { requireBoardMember }
+ *    from '...'` 같은 줄이 실제 호출부보다 거의 항상 먼저 나오므로, "인증이
+ *    조회보다 먼저"를 확인하려던 검사가 최상단 import 줄에 걸려 무조건
+ *    참이 돼버린다.
+ * 2. 주석으로 지워진 실제 로직. 인가 조건문 같은 코드를 `//`로 통째로
+ *    주석 처리해도 그 줄의 텍스트는 여전히 소스에 남아 있어서, 원본
+ *    소스를 그대로 정규식으로 훑는 존재 검사는 "주석 처리됐다"는 사실을
+ *    구분하지 못한다. `stripComments`가 그 줄 자체를 지워야 이 문제가
+ *    없어진다.
+ *
+ * URL 문자열의 `//`(`stripComments`가 이미 `:` 앞뒤로 보호)는 그대로 살아있고,
+ * import가 아닌 일반 코드 줄은 건드리지 않는다.
+ */
+function stripCommentsAndImports(source) {
+  return stripComments(source)
+    .split('\n')
+    .filter(line => !/^\s*import\b/.test(line))
+    .join('\n')
+}
+
 const nextConfigPath = join(root, 'next.config.js')
 const nextConfigSource = readFileSync(nextConfigPath, 'utf8')
 const appFiles = globSync('src/app/**/{route,page,layout}.@(ts|tsx)', {
@@ -630,18 +656,28 @@ const verifiesBoardDocumentSignature =
 // 목록 응답이 `file_path`를 그대로 흘리는 회귀도 이 검사식이 고정한다 — 저장소
 // 경로가 클라이언트로 새 나가면 봉쇄를 우회할 필요도 없이 저장소 레이아웃이
 // 그대로 노출된다.
-const boardDocumentDownloadAuthIndex = boardDocumentDownloadSource.indexOf('requireBoardMember()')
-const boardDocumentDownloadQueryIndex = boardDocumentDownloadSource.indexOf(
+//
+// 아래 (2)~(4)는 원본이 아니라 `stripCommentsAndImports`를 거친 코드를 본다.
+// import 문·JSDoc 주석에 같은 식별자가 먼저 등장해 순서 검사를 무력화하거나
+// (예: import 줄이 항상 실제 호출보다 앞이라 "인증이 조회보다 먼저"가 무조건
+// 참이 됨), 주석 처리로 지운 실제 로직의 텍스트가 원본 소스에는 그대로 남아
+// 있어 존재 검사를 속이는(예: 인가 조건문을 `//`로 지워도 문자열은 남는다)
+// 두 실패 모드를 막기 위해서다.
+const boardDocumentsCode = stripCommentsAndImports(boardDocumentsSource)
+const boardDocumentDetailCode = stripCommentsAndImports(boardDocumentDetailSource)
+const boardDocumentDownloadCode = stripCommentsAndImports(boardDocumentDownloadSource)
+const boardDocumentDownloadAuthIndex = boardDocumentDownloadCode.indexOf('requireBoardMember()')
+const boardDocumentDownloadQueryIndex = boardDocumentDownloadCode.indexOf(
   ".from('board_documents')"
 )
 const boardDocumentDownloadChecksAuthBeforeQuery =
   boardDocumentDownloadAuthIndex !== -1 &&
   boardDocumentDownloadQueryIndex !== -1 &&
   boardDocumentDownloadAuthIndex < boardDocumentDownloadQueryIndex
-const boardDocumentDownloadSafetyIndex = boardDocumentDownloadSource.indexOf(
+const boardDocumentDownloadSafetyIndex = boardDocumentDownloadCode.indexOf(
   'isSafeBoardDocumentFilePath(doc.file_path)'
 )
-const boardDocumentDownloadStreamIndex = boardDocumentDownloadSource.indexOf(
+const boardDocumentDownloadStreamIndex = boardDocumentDownloadCode.indexOf(
   'getBoardDocumentStream(doc.file_path'
 )
 const boardDocumentDownloadChecksPathBeforeStream =
@@ -659,11 +695,11 @@ const validatesBoardDocumentStoragePaths =
   /segment === '\.' \|\| segment === '\.\.'/.test(boardDocumentsLibSource) &&
   // (2) 목록 라우트: 응답에 file_path를 내려주지 않고, 만료 없는 내부 프록시
   //     경로만 돌려준다. 예전의 300초 서명 URL이 되살아나면 실패해야 한다.
-  /const \{ file_path, \.\.\.rest \} = doc/.test(boardDocumentsSource) &&
+  /const \{ file_path, \.\.\.rest \} = doc/.test(boardDocumentsCode) &&
   /download_url:\s*`\/api\/board-room\/documents\/\$\{doc\.id\}\/download`/.test(
-    boardDocumentsSource
+    boardDocumentsCode
   ) &&
-  !/signedUrl/.test(boardDocumentsSource) &&
+  !/signedUrl/.test(boardDocumentsCode) &&
   // (3) 다운로드 라우트: 권한 검사가 DB 조회보다 먼저고, DB에서 온 file_path를
   //     봉쇄 판정에 다시 통과시킨 뒤에만 스트리밍한다.
   boardDocumentDownloadChecksAuthBeforeQuery &&
@@ -672,10 +708,10 @@ const validatesBoardDocumentStoragePaths =
   //     `isSafeBoardDocumentFilePath`로, 실제 삭제는 양쪽 제공자를 다 지우는
   //     `deleteBoardDocumentEverywhere`로만 한다. Supabase Storage의
   //     `.remove([...])` 직접 호출이 되살아나면 실패해야 한다.
-  /doc\.uploaded_by !== user\.id && !isAdmin/.test(boardDocumentDetailSource) &&
-  /isSafeBoardDocumentFilePath\(doc\.file_path\)/.test(boardDocumentDetailSource) &&
-  /deleteBoardDocumentEverywhere\(doc\.file_path\)/.test(boardDocumentDetailSource) &&
-  !/\.remove\(\[/.test(boardDocumentDetailSource)
+  /doc\.uploaded_by !== user\.id && !isAdmin/.test(boardDocumentDetailCode) &&
+  /isSafeBoardDocumentFilePath\(doc\.file_path\)/.test(boardDocumentDetailCode) &&
+  /deleteBoardDocumentEverywhere\(doc\.file_path\)/.test(boardDocumentDetailCode) &&
+  !/\.remove\(\[/.test(boardDocumentDetailCode)
 
 // 비공개 저장소의 제공자 분기 계층. 아직 라우트에 연결되지 않았지만(전환 단계용
 // 선행 코드) 연결 시점에 드러날 두 결함을 미리 고정한다.
