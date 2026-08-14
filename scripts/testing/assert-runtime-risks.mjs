@@ -55,6 +55,66 @@ function stripCommentsAndImports(source) {
     .join('\n')
 }
 
+/**
+ * 문자열 리터럴('...', "...", `...`)의 내용을 걷어낸 소스. "실제 호출부가
+ * stripped 코드에 있는가"를 보는 양의 단정(예: `mustAlsoCall`,
+ * `/requireActiveMember\(\)/.test(...)`)은 `stripCommentsAndImports`만으로는
+ * 막을 수 없는 구멍이 있다 — 문자열 리터럴은 그대로 남기 때문에
+ * `const decoy = "requireUser()"` 한 줄로 실제 호출을 지우고도 양의 단정을
+ * 가짜로 만족시킬 수 있다(Task 5 3라운드 리뷰에서 실증됨). 이 함수는 작은
+ * 따옴표·큰따옴표·백틱 세 종류의 내용을 전부 지운다.
+ *
+ * 정규식/문자 스캔으로 JS 문자열을 완벽히 파싱하는 건 사실상 불가능하다
+ * (예: 백틱 템플릿 리터럴의 `${...}` 보간식이 다시 백틱을 포함할 수 있고,
+ * 이스케이프 처리도 얽힌다). 여기서는 "가짜 호출부 문자열로 게이트를
+ * 속인다" 각도만 막으면 충분하다고 보고, 백틱은 `${...}` 내부까지 통째로
+ * 하나의 리터럴 구간으로 다룬다(그 안에 실제 코드가 있어도 함께 지워진다).
+ * 이 저장소에서 requireUser()/requireActiveMember() 같은 호출이 템플릿
+ * 보간식 안에서만 등장하는 사례는 없다(grep으로 확인).
+ *
+ * 문자열을 완전히 삭제하지 않고 공백 한 칸으로 치환하는 이유: 문자열
+ * 앞뒤의 코드 토큰이 따옴표 삭제로 인해 우연히 이어 붙어(예:
+ * `foo("") + bar` → `foo + bar`가 아니라 `foobar`처럼) 새로운 거짓 매치를
+ * 만들 가능성을 차단하기 위해서다.
+ *
+ * 주의: 이 함수가 지운 문자열 내용을 검사하는 기존 부정 단정(예:
+ * verify-session의 `!/console\.error\(['"]\[VERIFY-SESSION\] Session
+ * error:/`처럼 메시지 문구 자체를 찾는 검사)에는 이 함수를 적용하면 안
+ * 된다 — 그 검사가 찾는 문자열 내용까지 함께 사라져서 검사가 항상
+ * 통과하는 쪽으로(즉 실패를 놓치는 쪽으로) 조용히 무력화된다. 그런
+ * 검사는 `stripCommentsAndImports`까지만 거친 원래 코드를 계속 써야
+ * 한다.
+ */
+function stripStringLiterals(source) {
+  let out = ''
+  let i = 0
+  const n = source.length
+  while (i < n) {
+    const ch = source[i]
+    if (ch === "'" || ch === '"' || ch === '`') {
+      const quote = ch
+      let j = i + 1
+      while (j < n) {
+        if (source[j] === '\\') {
+          j += 2
+          continue
+        }
+        if (source[j] === quote) {
+          j += 1
+          break
+        }
+        j += 1
+      }
+      i = j
+      out += ' '
+      continue
+    }
+    out += ch
+    i += 1
+  }
+  return out
+}
+
 const nextConfigPath = join(root, 'next.config.js')
 const nextConfigSource = readFileSync(nextConfigPath, 'utf8')
 const appFiles = globSync('src/app/**/{route,page,layout}.@(ts|tsx)', {
@@ -93,7 +153,14 @@ const authVerifySessionPath = join(root, 'src/app/api/auth/verify-session/route.
 const authVerifySessionSource = readFileSync(authVerifySessionPath, 'utf8')
 // 주석/옛 식별자 잔재로 인한 거짓 긍정을 막기 위해, "실제 코드에 이 로직이 있는가"를
 // 보는 부정/존재 검사는 이 stripped 버전을 쓴다(assert-runtime-risks 반복 회귀 이력).
+// 이 변수는 문자열 리터럴 내용까지 검사하는 부정 단정(console.error 메시지 문구)이
+// 의존하므로 stripStringLiterals는 적용하지 않는다 — 아래 authVerifySessionCallSites가
+// 그 역할(양의 단정 전용, 문자열 리터럴 디코이 면역)을 대신한다.
 const authVerifySessionCode = stripCommentsAndImports(authVerifySessionSource)
+// requireUser()/instanceof NextResponse 같은 "호출부가 실제로 있는가" 양의 단정
+// 전용. 문자열 리터럴도 걷어내 `const decoy = "requireUser()"` 같은 가짜
+// 호출부로 게이트를 속이지 못하게 한다.
+const authVerifySessionCallSites = stripStringLiterals(authVerifySessionCode)
 const securityPath = join(root, 'src/utils/security.ts')
 const securitySource = readFileSync(securityPath, 'utf8')
 const signupPagePath = join(root, 'src/app/[locale]/signup/page.tsx')
@@ -114,7 +181,9 @@ const authMypageArtistPagePath = join(root, 'src/app/[locale]/mypage/artist/page
 const authMypageArtistPageSource = readFileSync(authMypageArtistPagePath, 'utf8')
 const postsApiPath = join(root, 'src/app/api/posts/route.ts')
 const postsApiSource = readFileSync(postsApiPath, 'utf8')
-const postsApiCode = stripCommentsAndImports(postsApiSource)
+// requireActiveMember() 존재만 보는 양의 단정 전용이라(문자열 내용을 검사하는
+// 부정 단정 없음) 문자열 리터럴까지 걷어내 디코이 문자열 면역을 확보한다.
+const postsApiCode = stripStringLiterals(stripCommentsAndImports(postsApiSource))
 const postDetailApiPath = join(root, 'src/app/api/posts/[id]/route.ts')
 const postDetailApiSource = readFileSync(postDetailApiPath, 'utf8')
 const usePostCreationPath = join(root, 'src/hooks/usePostCreation.ts')
@@ -129,7 +198,9 @@ const mypageProfileApiPath = join(root, 'src/app/api/mypage/profile/route.ts')
 const mypageProfileApiSource = existsSync(mypageProfileApiPath)
   ? readFileSync(mypageProfileApiPath, 'utf8')
   : ''
-const mypageProfileApiCode = stripCommentsAndImports(mypageProfileApiSource)
+// requireActiveMember() 존재만 보는 양의 단정 전용이라(문자열 내용을 검사하는
+// 부정 단정 없음) 문자열 리터럴까지 걷어내 디코이 문자열 면역을 확보한다.
+const mypageProfileApiCode = stripStringLiterals(stripCommentsAndImports(mypageProfileApiSource))
 const useCommentLikesPath = join(root, 'src/hooks/useCommentLikes.ts')
 const useCommentLikesSource = readFileSync(useCommentLikesPath, 'utf8')
 const usePostLikesPath = join(root, 'src/hooks/usePostLikes.ts')
@@ -342,8 +413,11 @@ const navigationUsesServerSessionTruth =
 // 예전처럼 라우트 안에서 직접 AuthSessionMissingError를 판별하며
 // console.error를 남기는 방식으로 되돌아가지 않았는지를 본다.
 const verifySessionTreatsMissingSessionAsNormal =
-  /requireUser\(\)/.test(authVerifySessionCode) &&
-  /auth instanceof NextResponse/.test(authVerifySessionCode) &&
+  // 호출부 존재는 문자열 리터럴까지 걷어낸 authVerifySessionCallSites로 본다
+  // (디코이 문자열 면역). 아래 console.error 부정 단정은 메시지 문구 자체를
+  // 찾아야 하므로 문자열이 남아 있는 authVerifySessionCode를 그대로 쓴다.
+  /requireUser\(\)/.test(authVerifySessionCallSites) &&
+  /auth instanceof NextResponse/.test(authVerifySessionCallSites) &&
   !/console\.error\(['"]\[VERIFY-SESSION\] Session error:/.test(authVerifySessionCode)
 const authClientPagesUseServerSessionTruth =
   /fetchSessionProfile/.test(loginPageSource) &&
@@ -517,15 +591,20 @@ const directGetUserAllowlist = [
 ]
 const directGetUserOffenders = apiRouteFiles.filter(file => {
   const source = readFileSync(join(root, file), 'utf8')
-  const code = stripCommentsAndImports(source)
+  // mustAlsoCall은 "호출부가 실제로 있는가"만 보는 양의 단정이라, 문자열
+  // 리터럴까지 걷어낸 코드로 검사해야 `const decoy = "requireUser()"` 같은
+  // 가짜 호출부 문자열로 속지 않는다(Task 5 3라운드 리뷰에서 실증됨). 이
+  // 지역 변수는 다른 곳에서 재사용되지 않으므로 문자열을 완전히 걷어내도
+  // 안전하다.
+  const code = stripStringLiterals(stripCommentsAndImports(source))
   const allowEntry = directGetUserAllowlist.find(entry => entry.file === file)
   if (!allowEntry) {
     return /getUser\(/.test(code)
   }
   // 허용된 파일이라도 mustAlsoCall로 짝지은 헬퍼 호출이 사라졌으면(옛 raw
-  // getUser 패턴으로 되돌아갔거나, 인증 블록 자체가 통째로 삭제됐으면)
-  // 여전히 실패시킨다 — "파일 단위 허용"이 "그 파일의 강제 검사가 사라져도
-  // 된다"는 뜻이 되지 않게 하기 위해서다.
+  // getUser 패턴으로 되돌아갔거나, 인증 블록 자체가 통째로 삭제됐거나,
+  // 문자열 리터럴 디코이로 대체됐으면) 여전히 실패시킨다 — "파일 단위 허용"이
+  // "그 파일의 강제 검사가 사라져도 된다"는 뜻이 되지 않게 하기 위해서다.
   const missingRequiredCall = (allowEntry.mustAlsoCall || []).some(pattern => !pattern.test(code))
   return missingRequiredCall
 })
