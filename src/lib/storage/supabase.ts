@@ -26,3 +26,17 @@ export function supabasePublicUrl(bucket: string, key: string): string {
   const { data } = createServiceRoleClient().storage.from(bucket).getPublicUrl(key)
   return data.publicUrl
 }
+
+/**
+ * 비공개 버킷에서 객체를 내려받는다. 서명 URL을 만들지 않고 service-role
+ * 클라이언트로 바이트를 직접 받는다 — 라우트가 이미 권한을 검사한 뒤 부른다.
+ * 없는 객체면 null을 돌려준다.
+ */
+export async function downloadSupabaseObject(
+  bucket: string,
+  key: string
+): Promise<{ body: Blob; contentType: string } | null> {
+  const { data, error } = await createServiceRoleClient().storage.from(bucket).download(key)
+  if (error || !data) return null
+  return { body: data, contentType: data.type || 'application/octet-stream' }
+}

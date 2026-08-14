@@ -105,3 +105,33 @@ test('Content-Disposition: 파일명이 비어도 기본값을 쓴다', () => {
   assert.match(contentDispositionAttachment(''), /filename="download"/)
   assert.match(contentDispositionAttachment(null), /filename="download"/)
 })
+
+// --- 제공자 계층 경로 조립 ---
+
+test('제공자 계층에 넘길 Blob 경로는 항상 접두어 안에 있다', () => {
+  const cases = [
+    'seed/doc_0.pdf',
+    'seed/doc_13.png',
+    'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/1_a.pdf',
+  ]
+  for (const filePath of cases) {
+    const p = blobPathForBoardDocument(filePath)
+    assert.ok(p.startsWith('board-documents/'), `접두어 이탈: ${p}`)
+    assert.ok(!p.includes('/../'), `상위 이동 포함: ${p}`)
+    assert.ok(!p.startsWith('board-documents/backups'), `백업 영역 침범: ${p}`)
+  }
+})
+
+test('백업 경로를 file_path로 위장해도 실제 백업 객체에 닿지 못한다', () => {
+  // `backups/20260813.sql.gz`는 세그먼트가 2개라 봉쇄 판정 자체는 통과한다.
+  // 그러나 접두어가 붙어 `board-documents/backups/...`가 되므로 실제 백업 객체
+  // (`backups/20260813.sql.gz`)와는 다른 경로다 — 닿지 못한다.
+  assert.equal(
+    blobPathForBoardDocument('backups/20260813.sql.gz'),
+    'board-documents/backups/20260813.sql.gz'
+  )
+  // 접두어를 벗어나려고 상위 이동을 섞은 형태는 봉쇄에서 막힌다.
+  for (const evil of ['../backups/20260813.sql.gz', 'board-documents/../backups/x.sql.gz']) {
+    assert.throws(() => blobPathForBoardDocument(evil), /안전하지 않은/, `통과됨: ${evil}`)
+  }
+})
