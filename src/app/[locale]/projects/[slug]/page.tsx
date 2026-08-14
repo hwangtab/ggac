@@ -33,7 +33,7 @@ interface ProjectPageProps {
   }>
 }
 
-const log = createLogger('archive/project-page')
+const log = createLogger('projects/project-page')
 
 function describeExternalUrlForLog(url: string): string {
   try {
@@ -67,13 +67,13 @@ function extractSeriesKeys(project: ProjectType): string[] {
   ).map(rule => rule.key)
 }
 
-function extractInternalArchiveSlugs(project: ProjectType): string[] {
+function extractInternalProjectSlugs(project: ProjectType): string[] {
   if (!project.relatedArticles) return []
 
   return project.relatedArticles
     .map(article => {
-      if (!article.url.startsWith('/archive/')) return null
-      const slug = article.url.replace('/archive/', '').split(/[?#]/)[0]?.trim()
+      if (!article.url.startsWith('/projects/')) return null
+      const slug = article.url.replace('/projects/', '').split(/[?#]/)[0]?.trim()
       return slug || null
     })
     .filter((slug): slug is string => Boolean(slug))
@@ -98,7 +98,7 @@ function buildRelatedProjects(
   allProjects: ProjectType[]
 ): RelatedProjectItem[] {
   const currentSeriesKeys = new Set(extractSeriesKeys(currentProject))
-  const internalSlugs = new Set(extractInternalArchiveSlugs(currentProject))
+  const internalSlugs = new Set(extractInternalProjectSlugs(currentProject))
   const relatedMap = new Map<string, RelatedProjectItem>()
 
   if (currentSeriesKeys.size === 0 && internalSlugs.size === 0) return []
@@ -146,7 +146,7 @@ export async function generateStaticParams() {
     const slugs = await getProjectSlugs()
     return slugs.map(slug => ({ slug }))
   } catch (error) {
-    console.warn('Failed to generate static params for archive:', error)
+    console.warn('Failed to generate static params for projects:', error)
     // 빌드 시점에서 환경 변수가 없을 때 빈 배열 반환
     return []
   }
@@ -236,12 +236,12 @@ export async function generateMetadata({ params }: ProjectPageProps): Promise<Me
     const metadata = {
       title: safeTitle,
       description: projectSummary,
-      alternates: getLocaleAlternates(`/archive/${safeSlug}`, resolvedParams.locale),
+      alternates: getLocaleAlternates(`/projects/${safeSlug}`, resolvedParams.locale),
       openGraph: {
         title: safeTitle,
         description: projectSummary,
         // og:url도 로케일 프리픽스 반영(canonical과 언어 일치). en은 /en 경로.
-        url: isEn ? `/en/archive/${safeSlug}` : `/archive/${safeSlug}`,
+        url: isEn ? `/en/projects/${safeSlug}` : `/projects/${safeSlug}`,
         siteName: isEn ? 'Gyeonggi Art Collective' : '경기아트콜렉티브 협동조합',
         images: [
           {
@@ -291,7 +291,7 @@ function getDefaultMetadata(locale = 'ko'): Metadata {
     openGraph: {
       title,
       description,
-      url: '/archive',
+      url: '/projects',
       siteName,
       images: [
         {
@@ -330,7 +330,7 @@ function getNotFoundMetadata(locale = 'ko'): Metadata {
     openGraph: {
       title: 'Project Not Found',
       description,
-      url: '/archive',
+      url: '/projects',
       siteName,
       images: [
         {
@@ -370,7 +370,7 @@ const ProjectDetailPage = async ({ params }: ProjectPageProps) => {
   const allProjects = await getProjectsSorted(resolvedParams.locale)
   const relatedProjects = buildRelatedProjects(project, allProjects)
 
-  // "관련 기사"는 외부 링크만 표시하고, 내부 /archive 링크는 "연관 게시물"로 분리
+  // "관련 기사"는 외부 링크만 표시하고, 내부 /projects 링크는 "연관 게시물"로 분리
   const externalRelatedArticles = (project.relatedArticles || [])
     .map(article => {
       const safeUrl = toSafeHttpUrl(article.url)
@@ -401,8 +401,8 @@ const ProjectDetailPage = async ({ params }: ProjectPageProps) => {
 
   const breadcrumbData = generateBreadcrumbStructuredData([
     { name: '홈', url: 'https://ggac.kr' },
-    { name: '프로젝트', url: 'https://ggac.kr/archive' },
-    { name: project.title, url: `https://ggac.kr/archive/${project.slug}` },
+    { name: '프로젝트', url: 'https://ggac.kr/projects' },
+    { name: project.title, url: `https://ggac.kr/projects/${project.slug}` },
   ])
 
   // 예정/지난 판정은 서버에서(클라이언트 날짜 재계산 → 하이드레이션 불일치 방지).

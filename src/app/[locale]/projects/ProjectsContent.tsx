@@ -5,13 +5,13 @@ import { useSearchParams } from 'next/navigation'
 import { Link } from '@/i18n/navigation'
 import OptimizedImage from '@/components/OptimizedImage'
 import { getProjectSummary } from '@/utils/projectUtils'
-import { ARCHIVE_CATEGORIES, localizeArchiveCategory } from '@/constants/categories'
+import { PROJECT_CATEGORIES, localizeProjectCategory } from '@/constants/categories'
 import { generatePageNumbers } from '@/utils/pagination'
 import { toSafeInternalImagePath } from '@/utils/safeUrl'
 import { parseLocalDate } from '@/utils/date'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { useTranslations, useLocale } from 'next-intl'
-import type { ArchiveCategory } from '@/constants/categories'
+import type { ProjectCategory } from '@/constants/categories'
 import type { Project } from '@/types'
 import PageHero from '@/components/PageHero'
 
@@ -26,7 +26,7 @@ function toStamp(value: string, locale: string): string {
   return `${date.getFullYear()}.${pad(date.getMonth() + 1)}.${pad(date.getDate())}`
 }
 
-interface ArchiveContentProps {
+interface ProjectsContentProps {
   projects: Project[]
   /** 예정 공연(미래 eventDate·미취소, 서버에서 분리·정렬). 상단에 별도 노출. */
   upcomingProjects?: Project[]
@@ -34,9 +34,9 @@ interface ArchiveContentProps {
   artistNameMap: Record<string, string>
 }
 
-const ARCHIVE_BASE_PATH = '/archive'
+const PROJECTS_BASE_PATH = '/projects'
 
-const buildArchiveHref = (page: number, category: string) => {
+const buildProjectsHref = (page: number, category: string) => {
   const params = new URLSearchParams()
 
   if (page > 1) {
@@ -48,26 +48,26 @@ const buildArchiveHref = (page: number, category: string) => {
   }
 
   const query = params.toString()
-  return query ? `${ARCHIVE_BASE_PATH}?${query}` : ARCHIVE_BASE_PATH
+  return query ? `${PROJECTS_BASE_PATH}?${query}` : PROJECTS_BASE_PATH
 }
 
 // 카테고리(?category=)·페이지(?page=) 파생을 클라이언트에서 처리한다.
 // 서버에서 searchParams를 읽으면 페이지가 동적 렌더링으로 전환되어 ISR이
 // 사문화되므로(전수감사 P3) 서버는 전체 프로젝트를 정적으로 렌더한다.
 //
-// 프레젠테이션(ArchiveView)과 searchParams 브리지(기본 export)를 분리한 이유:
+// 프레젠테이션(ProjectsView)과 searchParams 브리지(기본 export)를 분리한 이유:
 // useSearchParams 컴포넌트는 정적 프리렌더에서 Suspense 경계까지 CSR bailout
 // 되어 초기 HTML에서 목록이 빠진다. page.tsx가 Suspense fallback으로 기본
-// 상태(All·1페이지)의 ArchiveView를 렌더해 콘텐츠를 포함시킨다.
-export const ArchiveView = ({
+// 상태(All·1페이지)의 ProjectsView를 렌더해 콘텐츠를 포함시킨다.
+export const ProjectsView = ({
   projects,
   upcomingProjects = [],
   pageSize,
   artistNameMap,
   selectedCategory,
   requestedPage,
-}: ArchiveContentProps & { selectedCategory: string; requestedPage: number }) => {
-  const t = useTranslations('archive')
+}: ProjectsContentProps & { selectedCategory: string; requestedPage: number }) => {
+  const t = useTranslations('projects')
   const locale = useLocale()
   const isEn = locale === 'en'
 
@@ -76,7 +76,7 @@ export const ArchiveView = ({
     // 프로젝트 데이터의 category 값은 locale별 표기를 따르므로 동일 규칙으로 매칭
     const matchValue =
       locale === 'en'
-        ? localizeArchiveCategory(selectedCategory as ArchiveCategory, 'en')
+        ? localizeProjectCategory(selectedCategory as ProjectCategory, 'en')
         : selectedCategory
     return projects.filter(project => project.category === matchValue)
   }, [projects, selectedCategory, locale])
@@ -103,7 +103,7 @@ export const ArchiveView = ({
   return (
     <div className="pt-20">
       <PageHero
-        kicker="ARCHIVE"
+        kicker="PROJECTS"
         titleLine1={t('hero.titleLine1')}
         titleLine2={t('hero.titleLine2')}
         subtitle={t('hero.subtitle')}
@@ -119,7 +119,7 @@ export const ArchiveView = ({
               {upcomingProjects.map(project => (
                 <Link
                   key={project.id}
-                  href={`/archive/${project.slug}`}
+                  href={`/projects/${project.slug}`}
                   className="group flex items-center gap-4 border border-white/15 bg-white/[0.03] p-4 transition-colors duration-200 hover:border-white/40"
                 >
                   <div className="flex-shrink-0 text-center">
@@ -148,9 +148,9 @@ export const ArchiveView = ({
       <section className="sticky top-20 z-40 border-b border-white/15 bg-[#08080a]/95 py-6 backdrop-blur-sm">
         <div className="tw-container-custom">
           <div className="flex flex-wrap justify-center gap-2">
-            {ARCHIVE_CATEGORIES.map(category => {
+            {PROJECT_CATEGORIES.map(category => {
               const isActive = category === selectedCategory
-              const href = buildArchiveHref(1, category)
+              const href = buildProjectsHref(1, category)
 
               return (
                 <Link
@@ -163,7 +163,7 @@ export const ArchiveView = ({
                       : 'border-white/20 text-white/55 hover:border-white/50 hover:text-white'
                   }`}
                 >
-                  {localizeArchiveCategory(category, locale)}
+                  {localizeProjectCategory(category, locale)}
                 </Link>
               )
             })}
@@ -180,7 +180,7 @@ export const ArchiveView = ({
 
                 return (
                   <div key={project.id} className="group opacity-100 transition-all duration-300">
-                    <Link href={`/archive/${project.slug}`}>
+                    <Link href={`/projects/${project.slug}`}>
                       <div className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2 overflow-hidden h-full flex flex-col">
                         <div className="relative h-48 overflow-hidden flex-shrink-0">
                           <OptimizedImage
@@ -201,7 +201,7 @@ export const ArchiveView = ({
                             {/* 홈 카드와 같은 포스터 스탬프 표기 — 같은 아홉 건이
                                 두 곳에서 다른 형식으로 나오던 불일치를 없앤다 */}
                             <span className="text-[11px] uppercase tracking-[0.2em] text-white/70">
-                              [{localizeArchiveCategory(project.category, locale)}]
+                              [{localizeProjectCategory(project.category, locale)}]
                             </span>
                             <span className="text-[11px] tabular-nums tracking-[0.12em] text-white/60">
                               {toStamp(project.publishedDate, locale)}
@@ -254,7 +254,7 @@ export const ArchiveView = ({
                 <div className="flex items-center space-x-1">
                   {currentPage > 1 ? (
                     <Link
-                      href={buildArchiveHref(currentPage - 1, selectedCategory)}
+                      href={buildProjectsHref(currentPage - 1, selectedCategory)}
                       scroll={false}
                       className="px-3 py-2 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 hover:text-primary-600 border border-gray-300 transition-colors duration-200"
                     >
@@ -277,7 +277,7 @@ export const ArchiveView = ({
                       ) : (
                         <Link
                           key={page}
-                          href={buildArchiveHref(page, selectedCategory)}
+                          href={buildProjectsHref(page, selectedCategory)}
                           scroll={false}
                           aria-current={page === currentPage ? 'page' : undefined}
                           className={`px-3 py-2 text-sm font-medium rounded-lg border transition-colors duration-200 ${
@@ -298,7 +298,7 @@ export const ArchiveView = ({
 
                   {currentPage < totalPages ? (
                     <Link
-                      href={buildArchiveHref(currentPage + 1, selectedCategory)}
+                      href={buildProjectsHref(currentPage + 1, selectedCategory)}
                       scroll={false}
                       className="px-3 py-2 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 hover:text-primary-600 border border-gray-300 transition-colors duration-200"
                     >
@@ -322,21 +322,21 @@ export const ArchiveView = ({
 }
 
 // searchParams 브리지 — URL 쿼리에서 카테고리·페이지를 파생해 뷰에 넘긴다.
-const ArchiveContent = ({
+const ProjectsContent = ({
   projects,
   upcomingProjects,
   pageSize,
   artistNameMap,
-}: ArchiveContentProps) => {
+}: ProjectsContentProps) => {
   const searchParams = useSearchParams()
   const rawCategory = searchParams.get('category')
-  const selectedCategory: string = ARCHIVE_CATEGORIES.includes(rawCategory as ArchiveCategory)
-    ? (rawCategory as ArchiveCategory)
+  const selectedCategory: string = PROJECT_CATEGORIES.includes(rawCategory as ProjectCategory)
+    ? (rawCategory as ProjectCategory)
     : 'All'
   const requestedPage = parseIntegerParam(searchParams.get('page'), 1, { min: 1 })
 
   return (
-    <ArchiveView
+    <ProjectsView
       projects={projects}
       upcomingProjects={upcomingProjects}
       pageSize={pageSize}
@@ -347,4 +347,4 @@ const ArchiveContent = ({
   )
 }
 
-export default ArchiveContent
+export default ProjectsContent

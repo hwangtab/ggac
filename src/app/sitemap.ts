@@ -74,7 +74,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'monthly',
       priority: 0.8,
     }),
-    ...bilingualEntry('/archive', baseUrl, {
+    ...bilingualEntry('/projects', baseUrl, {
       lastModified: now,
       changeFrequency: 'weekly',
       priority: 0.9,
@@ -124,7 +124,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     )
 
     const projectPages: MetadataRoute.Sitemap = projects.flatMap(project =>
-      bilingualEntry(`/archive/${project.slug}`, baseUrl, {
+      bilingualEntry(`/projects/${project.slug}`, baseUrl, {
         lastModified: new Date(project.publishedDate),
         changeFrequency: 'yearly',
         priority: 0.5,

@@ -28,7 +28,7 @@
   "nav": {
     "about": "Our Story",
     "artists": "Artists",
-    "archive": "Projects",
+    "projects": "Projects",
     "board": "Community",
     "boardRoom": "Board Room",
     "connect": "Contact",
@@ -44,7 +44,7 @@
   "footer": {
     "about": "Our Story",
     "artists": "Artists",
-    "archive": "Projects",
+    "projects": "Projects",
     "board": "Community",
     "connect": "Contact",
     "faq": "FAQ",
@@ -178,11 +178,11 @@
     "ctaBody": "Ask us directly and we will answer",
     "ctaButton": "Contact Us"
   },
-  "archive": {
+  "projects": {
     "hero": {
-      "titleLine1": "What we have",
-      "titleLine2": "put together",
-      "subtitle": "From ongoing work to finished work, collected here. Each entry says what we did and how."
+      "titleLine1": "What we are",
+      "titleLine2": "putting together",
+      "subtitle": "Upcoming shows, work in progress, and finished records — all collected here. Each entry says what we do and how."
     },
     "participantsLabel": "Participants",
     "emptyState": "No projects found in this category.",

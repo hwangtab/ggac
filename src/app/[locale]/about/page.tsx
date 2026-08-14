@@ -280,7 +280,7 @@ const AboutPage = async ({ params }: AboutPageProps) => {
                         <h3 className="text-lg font-semibold mb-2">
                           {event.type === 'project' && 'slug' in event ? (
                             <Link
-                              href={`/archive/${event.slug}`}
+                              href={`/projects/${event.slug}`}
                               className="hover:text-primary-600 transition-colors duration-200"
                             >
                               {event.title}

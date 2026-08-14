@@ -3,6 +3,21 @@ import { globSync } from 'node:fs'
 import { join, relative } from 'node:path'
 
 const root = process.cwd()
+
+/**
+ * 주석을 걷어낸 소스. "이 패턴이 없어야 한다" 류의 부정 검사에 쓴다.
+ *
+ * 이 파일의 검사는 소스를 정규식으로 훑기 때문에, 금지 패턴을 설명하는 주석이
+ * 그 자체로 검사에 걸린다("`failures.length === 2`로 세지 말 것" 같은 주석).
+ * 반대로 이관된 옛 함수 이름을 남긴 주석이 긍정 검사를 거짓 통과시키기도 한다.
+ * 부정 검사는 실제 코드만 봐야 한다.
+ *
+ * URL의 `//`를 자르지 않도록 앞 문자가 `:`인 경우는 건드리지 않는다.
+ */
+function stripComments(source) {
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
+}
+
 const nextConfigPath = join(root, 'next.config.js')
 const nextConfigSource = readFileSync(nextConfigPath, 'utf8')
 const appFiles = globSync('src/app/**/{route,page,layout}.@(ts|tsx)', {
@@ -183,7 +198,14 @@ const postsApiCreatesPostsWithServerAuthAndInvalidatesBoard =
   /registration_status/.test(postsApiSource) &&
   /is_active/.test(postsApiSource) &&
   /author_id:\s*user\.id/.test(postsApiSource) &&
-  /revalidatePath\(['"]\/board['"]\)/.test(postsApiSource) &&
+  // 게시판 목록 무효화는 `revalidatePath('/board')` 직접 호출에서
+  // getBoardListRevalidationPaths() 순회로 바뀌었다. next-intl이 ko를 내부적으로
+  // `/ko/board`로 rewrite하기 때문에 접두사 없는 `/board` 한 번으로는 ko 페이지가
+  // 무효화되지 않았다(@/lib/revalidationPaths 주석 참고). 옛 형태로 되돌아가면
+  // 그 버그가 재발하므로, 헬퍼 경유를 강제하고 직접 호출은 금지한다.
+  /getBoardListRevalidationPaths\(\)/.test(postsApiSource) &&
+  /revalidatePath\(boardPath\)/.test(postsApiSource) &&
+  !/revalidatePath\(['"]\/board['"]\)/.test(postsApiSource) &&
   /revalidateTag\(['"]board-post['"]\)/.test(postsApiSource) &&
   /revalidateTag\(['"]board-initial['"]\)/.test(postsApiSource)
 const postEditUsesServerApi =
@@ -578,36 +600,99 @@ const boardDocumentStoragePathPath = join(root, 'src/utils/boardDocumentStorageP
 const boardDocumentStoragePathSource = existsSync(boardDocumentStoragePathPath)
   ? readFileSync(boardDocumentStoragePathPath, 'utf8')
   : ''
+// 봉쇄 판정의 실제 구현부. `@/utils/boardDocumentStoragePath`는 남은 호출부를 위한
+// deprecated 래퍼일 뿐이고, 판정은 이 순수 모듈이 한다.
+const boardDocumentsLibPath = join(root, 'src/lib/storage/boardDocuments.ts')
+const boardDocumentsLibSource = existsSync(boardDocumentsLibPath)
+  ? readFileSync(boardDocumentsLibPath, 'utf8')
+  : ''
 const verifiesBoardDocumentSignature =
   /hasKnownFileSignature/.test(boardDocumentsSource) &&
   /hasValidFileSignature/.test(boardDocumentsSource) &&
   /hasBinaryNullBytes/.test(boardDocumentsSource)
+// 이사회 문서는 조합 DB 덤프(`backups/`)와 같은 비공개 저장소에 살기 때문에
+// 경로가 새면 회원 명부까지 노출된다. 다만 봉쇄와 소유권은 별개의 관심사다.
+//
+// 예전 판정은 `file_path`가 `uploaded_by`로 시작할 것을 요구했는데, 시드 문서
+// 14건은 `uploaded_by = NULL`이라 전부 막혀 다운로드가 두 달간 죽었다. 그래서
+// 소유권은 DB 컬럼(`doc.uploaded_by`)으로, 봉쇄는 경로 문자열로 나눠 검사한다.
+// 이 검사식은 그 분리를 고정한다 — 봉쇄가 느슨해지거나 소유권 검사가 사라지면
+// 둘 다 실패해야 한다.
 const validatesBoardDocumentStoragePaths =
-  /isSafeBoardDocumentStoragePath/.test(boardDocumentStoragePathSource) &&
-  /filePath\.startsWith\(`\$\{ownerId\}\/`\)/.test(boardDocumentStoragePathSource) &&
-  /fileName\.includes\(['"]\/['"]\)/.test(boardDocumentStoragePathSource) &&
+  // (1) 봉쇄: `<owner>/<filename>` 두 세그먼트만 허용하고 이탈 벡터를 모두 막는다.
+  /export function isSafeBoardDocumentFilePath/.test(boardDocumentsLibSource) &&
+  /segments\.length !== 2/.test(boardDocumentsLibSource) &&
+  /filePath\.includes\('\\\\'\)/.test(boardDocumentsLibSource) &&
+  /filePath\.startsWith\('\/'\)/.test(boardDocumentsLibSource) &&
+  /decodeURIComponent\(filePath\)/.test(boardDocumentsLibSource) &&
+  /decoded !== filePath/.test(boardDocumentsLibSource) &&
+  /segment === '\.' \|\| segment === '\.\.'/.test(boardDocumentsLibSource) &&
+  // (2) 목록 라우트: 봉쇄를 통과한 경로로만 서명 URL을 만든다.
   /isSafeBoardDocumentStoragePath\(doc\.file_path,\s*doc\.uploaded_by\)/.test(
     boardDocumentsSource
   ) &&
   /download_url:\s*safeFilePath && signedData\?\.signedUrl/.test(boardDocumentsSource) &&
+  // (3) 삭제 라우트: 소유권은 DB 컬럼으로 검사하고(관리자만 예외),
+  //     Storage remove는 봉쇄를 통과한 값으로만 부른다.
+  /doc\.uploaded_by !== user\.id && !isAdmin/.test(boardDocumentDetailSource) &&
   /isSafeBoardDocumentStoragePath\(doc\.file_path,\s*doc\.uploaded_by\)/.test(
     boardDocumentDetailSource
   ) &&
+  /\.remove\(\[safeFilePath\]\)/.test(boardDocumentDetailSource) &&
   /\.remove\(\[doc\.file_path\]\)/.test(boardDocumentDetailSource) === false
+
+// 비공개 저장소의 제공자 분기 계층. 아직 라우트에 연결되지 않았지만(전환 단계용
+// 선행 코드) 연결 시점에 드러날 두 결함을 미리 고정한다.
+//
+// privateProvider.ts는 `./blob` 같은 확장자 없는 로컬 import를 쓰므로 node --test의
+// 타입 스트리핑으로 로드할 수 없다. 그래서 단위 테스트 대신 여기서 정적으로 본다.
+const privateProviderPath = join(root, 'src/lib/storage/privateProvider.ts')
+const privateProviderSource = existsSync(privateProviderPath)
+  ? readFileSync(privateProviderPath, 'utf8')
+  : ''
+const blobLibSource = readFileSync(join(root, 'src/lib/storage/blob.ts'), 'utf8')
+const supabaseLibSource = readFileSync(join(root, 'src/lib/storage/supabase.ts'), 'utf8')
+const boardDocumentProviderFallbackIsSafe =
+  // (1) 설정 판정 함수는 env 이름을 소유한 모듈에 있어야 한다(이름 드리프트 방지).
+  /export function hasPrivateBlobStore/.test(blobLibSource) &&
+  /PRIVATE_BLOB_READ_WRITE_TOKEN/.test(blobLibSource) &&
+  /export function hasSupabaseServiceRole/.test(supabaseLibSource) &&
+  /SUPABASE_SERVICE_ROLE_KEY/.test(supabaseLibSource) &&
+  // (2) 교차 제공자 폴백은 반대쪽이 설정됐을 때만 시도한다. 감싸지 않으면
+  //     requireEnv가 던져서, 없는 문서 요청이 404가 아니라 환경변수 이름이 담긴
+  //     500으로 나간다(전환 전·롤백 후에는 반대쪽이 비어 있는 게 정상이다).
+  /hasSupabaseServiceRole\(\)\s*\?\s*fromSupabase\(filePath\)\s*:\s*null/.test(
+    privateProviderSource
+  ) &&
+  /if \(!hasPrivateBlobStore\(\)\) return null/.test(privateProviderSource) &&
+  // (3) 삭제 판정은 공개 쪽과 같은 헬퍼를 쓴다. 직접 세면 두 경로가 갈라진다.
+  /classifyDeleteEverywhereResults\(\[/.test(privateProviderSource) &&
+  !/failures\.length === 2/.test(stripComments(privateProviderSource))
 const artistPhotoPath = join(root, 'src/app/api/mypage/artist/photo/route.ts')
 const artistPhotoSource = readFileSync(artistPhotoPath, 'utf8')
 const verifiesArtistPhotoSignature =
   /hasValidFileSignature/.test(artistPhotoSource) && /file instanceof File/.test(artistPhotoSource)
+// 삭제 대상 경로는 반드시 봉쇄를 통과한 값이어야 한다. 검사 없이 URL을 파싱해
+// 지우면 남의 아티스트 사진이나 버킷 밖 객체를 지울 수 있다.
+//
+// 판정 함수는 getProjectStorageObjectPath(Supabase 전용)에서
+// logicalPathFromUrl(Blob·Supabase 양쪽)로 옮겨졌다. 스토리지 제공자를 blob으로
+// 전환하면서 Supabase URL만 이해하던 옛 함수로는 Blob URL이 전부 null이 되어
+// 정리가 조용히 건너뛰어졌기 때문이다. 봉쇄 의미(버킷 + 접두사 일치, 아니면 null)는
+// 동일하다 — @/lib/storage/paths 참고.
 const validatesArtistPhotoCleanupStoragePaths =
   /collectSafeArtistVariantPaths/.test(artistPhotoSource) &&
   /isProjectStorageObjectPath\(value,\s*artistId\)/.test(artistPhotoSource) &&
-  /getProjectStorageObjectPath/.test(artistPhotoSource) &&
-  /getProjectStorageObjectPath\(\s*currentArtist\.profile_photo_url,\s*['"]artists['"],\s*profile\.artist_id\s*\)/.test(
+  /logicalPathFromUrl/.test(artistPhotoSource) &&
+  /logicalPathFromUrl\(\s*currentArtist\.profile_photo_url,\s*['"]artists['"],\s*profile\.artist_id\s*\)/.test(
     artistPhotoSource
   ) &&
-  /getProjectStorageObjectPath\(\s*artist\.profile_photo_url,\s*['"]artists['"],\s*profile\.artist_id\s*\)/.test(
+  /logicalPathFromUrl\(\s*artist\.profile_photo_url,\s*['"]artists['"],\s*profile\.artist_id\s*\)/.test(
     artistPhotoSource
   ) &&
+  // 봉쇄에 걸린 URL은 지우지 않고 넘어간다(조용히 raw 값으로 지우면 안 된다).
+  /Unsafe previous artist photo URL skipped for cleanup/.test(artistPhotoSource) &&
+  /Unsafe artist photo URL skipped for cleanup/.test(artistPhotoSource) &&
   !/const\s+url\s*=\s*new URL\(currentArtist\.profile_photo_url\)/.test(artistPhotoSource) &&
   !/const\s+url\s*=\s*new URL\(artist\.profile_photo_url\)/.test(artistPhotoSource)
 const artistProfilePath = join(root, 'src/app/api/mypage/artist/route.ts')
@@ -615,7 +700,14 @@ const artistProfileSource = readFileSync(artistProfilePath, 'utf8')
 const jsonSyncPath = join(root, 'src/utils/jsonSync.ts')
 const jsonSyncSource = existsSync(jsonSyncPath) ? readFileSync(jsonSyncPath, 'utf8') : ''
 const validatesArtistProfilePhotoStorageUrl =
-  /isProjectStoragePublicUrl/.test(artistProfileSource) &&
+  // isProjectStoragePublicUrl(Supabase 전용) → logicalPathFromUrl(...) === null 비교로
+  // 이관. Blob URL도 같은 봉쇄를 받게 하려는 변경이다.
+  /logicalPathFromUrl\(updateData\.profile_photo_url,\s*['"]artists['"],\s*profile\.artist_id\)\s*===\s*null/.test(
+    artistProfileSource
+  ) &&
+  /logicalPathFromUrl\(variantUrl,\s*['"]artists['"],\s*profile\.artist_id\)\s*===\s*null/.test(
+    artistProfileSource
+  ) &&
   /isProjectStorageObjectPath/.test(artistProfileSource) &&
   /profile_photo_url/.test(artistProfileSource) &&
   /전용 업로드로 등록된 Storage URL/.test(artistProfileSource) &&
@@ -718,12 +810,17 @@ const validatesAttachmentDeleteAdminStatus =
   /profile\?\.is_admin === true[\s\S]*?profile\.registration_status === ['"]approved['"][\s\S]*?profile\.is_active === true/.test(
     postAttachmentDetailSource
   )
+// 첨부 삭제도 같은 이관을 거쳤다(getProjectStorageObjectPath → logicalPathFromUrl,
+// supabase .remove() → deletePublicObjectEverywhere). 봉쇄 대상은 그대로
+// `attachments` 버킷의 `posts/<postId>` 하위다.
 const validatesAttachmentDeleteStoragePath =
-  /getProjectStorageObjectPath/.test(postAttachmentDetailSource) &&
-  /getProjectStorageObjectPath\(\s*attachment\.file_url,\s*['"]attachments['"],\s*`posts\/\$\{postId\}`\s*\)/.test(
+  /logicalPathFromUrl/.test(postAttachmentDetailSource) &&
+  /logicalPathFromUrl\(\s*attachment\.file_url,\s*['"]attachments['"],\s*`posts\/\$\{postId\}`\s*\)/.test(
     postAttachmentDetailSource
   ) &&
-  /\.remove\(\[storagePath\]\)/.test(postAttachmentDetailSource) &&
+  /deletePublicObjectEverywhere\(logical\)/.test(postAttachmentDetailSource) &&
+  // 봉쇄에 걸리면 지우지 않고 건너뛴다.
+  /안전하지 않은 첨부파일 Storage URL 삭제 건너뜀/.test(postAttachmentDetailSource) &&
   !/attachment\.file_url\.split\(['"]\/['"]\)/.test(postAttachmentDetailSource)
 const validatesPostAttachmentRenderUrls =
   /isProjectStoragePublicUrl/.test(postAttachmentsDisplaySource) &&
@@ -1148,8 +1245,8 @@ const activityLoggerPath = join(root, 'src/utils/activityLogger.ts')
 const activityLoggerSource = readFileSync(activityLoggerPath, 'utf8')
 const boardPagePath = join(root, 'src/app/[locale]/board/page.tsx')
 const boardPageSource = readFileSync(boardPagePath, 'utf8')
-const archivePagePath = join(root, 'src/app/[locale]/archive/page.tsx')
-const archivePageSource = readFileSync(archivePagePath, 'utf8')
+const projectsPagePath = join(root, 'src/app/[locale]/projects/page.tsx')
+const projectsPageSource = readFileSync(projectsPagePath, 'utf8')
 const cooperativeInfoPath = join(
   root,
   'src/app/[locale]/mypage/profile/components/CooperativeInfo.tsx'
@@ -1245,20 +1342,20 @@ const postsApiParsesPaginationSafely =
 // 읽지 않아야 한다(await searchParams가 생기면 ISR이 다시 사문화된다).
 const serverBoardViewEarlyPath = join(root, 'src/components/board/ServerBoardView.tsx')
 const serverBoardViewEarlySource = readFileSync(serverBoardViewEarlyPath, 'utf8')
-const archiveContentEarlyPath = join(root, 'src/app/[locale]/archive/ArchiveContent.tsx')
-const archiveContentEarlySource = readFileSync(archiveContentEarlyPath, 'utf8')
+const projectsContentEarlyPath = join(root, 'src/app/[locale]/projects/ProjectsContent.tsx')
+const projectsContentEarlySource = readFileSync(projectsContentEarlyPath, 'utf8')
 const boardPageParsesSearchParamsSafely =
   /parseIntegerParam\(searchParams\.get\(['"]page['"]\),\s*1,\s*\{\s*min:\s*1\s*\}\)/.test(
     serverBoardViewEarlySource
   ) &&
   !/parseInt\(/.test(serverBoardViewEarlySource) &&
   !/await searchParams/.test(boardPageSource)
-const archivePageParsesSearchParamsSafely =
+const projectsPageParsesSearchParamsSafely =
   /parseIntegerParam\(searchParams\.get\(['"]page['"]\),\s*1,\s*\{\s*min:\s*1\s*\}\)/.test(
-    archiveContentEarlySource
+    projectsContentEarlySource
   ) &&
-  !/parseInt\(/.test(archiveContentEarlySource) &&
-  !/await searchParams/.test(archivePageSource)
+  !/parseInt\(/.test(projectsContentEarlySource) &&
+  !/await searchParams/.test(projectsPageSource)
 const parsesMemberFeeInputsSafely =
   /parseIntegerParam/.test(signupPageSource) &&
   /monthly_fee:\s*parseIntegerParam\(formData\.monthlyFee,\s*0,\s*\{\s*min:\s*0\s*\}\)/.test(
@@ -2053,6 +2150,10 @@ const featuredProjectsPath = join(root, 'src/components/FeaturedProjects.tsx')
 const featuredProjectsSource = readFileSync(featuredProjectsPath, 'utf8')
 const featuredArtistsPath = join(root, 'src/components/FeaturedArtists.tsx')
 const featuredArtistsSource = readFileSync(featuredArtistsPath, 'utf8')
+// 홈의 아티스트 사진은 FeaturedArtists(타이포 인덱스로 재설계되어 사진이 없다)가
+// 아니라 히어로 필름스트립이 렌더한다. 정화 지점도 그쪽으로 옮겨졌다.
+const heroFilmstripPath = join(root, 'src/components/HeroFilmstrip.tsx')
+const heroFilmstripSource = readFileSync(heroFilmstripPath, 'utf8')
 const artistProjectsPath = join(root, 'src/components/ArtistProjects.tsx')
 const artistProjectsSource = readFileSync(artistProjectsPath, 'utf8')
 const baseCardPath = join(root, 'src/components/common/BaseCard.tsx')
@@ -2061,8 +2162,8 @@ const lightboxPath = join(root, 'src/components/Lightbox.tsx')
 const lightboxSource = readFileSync(lightboxPath, 'utf8')
 const optimizedImagePath = join(root, 'src/components/OptimizedImage.tsx')
 const optimizedImageSource = readFileSync(optimizedImagePath, 'utf8')
-const archiveContentPath = join(root, 'src/app/[locale]/archive/ArchiveContent.tsx')
-const archiveContentSource = readFileSync(archiveContentPath, 'utf8')
+const projectsContentPath = join(root, 'src/app/[locale]/projects/ProjectsContent.tsx')
+const projectsContentSource = readFileSync(projectsContentPath, 'utf8')
 const adminArtistCardPath = join(root, 'src/app/[locale]/admin/artists/components/ArtistCard.tsx')
 const adminArtistCardSource = readFileSync(adminArtistCardPath, 'utf8')
 const adminAssignArtistModalPath = join(
@@ -2083,9 +2184,9 @@ const portfolioLinksPath = join(
 const portfolioLinksSource = readFileSync(portfolioLinksPath, 'utf8')
 const youtubeVideosPath = join(root, 'src/app/[locale]/mypage/artist/components/YoutubeVideos.tsx')
 const youtubeVideosSource = readFileSync(youtubeVideosPath, 'utf8')
-const projectDetailPath = join(root, 'src/app/[locale]/archive/[slug]/ProjectDetailContent.tsx')
+const projectDetailPath = join(root, 'src/app/[locale]/projects/[slug]/ProjectDetailContent.tsx')
 const projectDetailSource = readFileSync(projectDetailPath, 'utf8')
-const projectDetailPagePath = join(root, 'src/app/[locale]/archive/[slug]/page.tsx')
+const projectDetailPagePath = join(root, 'src/app/[locale]/projects/[slug]/page.tsx')
 const projectDetailPageSource = readFileSync(projectDetailPagePath, 'utf8')
 const adminLayoutPath = join(root, 'src/app/[locale]/admin/components/AdminLayout.tsx')
 const adminLayoutSource = readFileSync(adminLayoutPath, 'utf8')
@@ -2214,7 +2315,7 @@ const filtersRelatedArticlesToSafeExternalUrls =
   /safeUrl\s*\?\s*\{\s*\.\.\.article,\s*url:\s*safeUrl\s*\}\s*:\s*null/.test(
     projectDetailPageSource
   ) &&
-  !/article\s*=>\s*!article\.url\.startsWith\(['"]\/archive\/['"]\)/.test(projectDetailPageSource)
+  !/article\s*=>\s*!article\.url\.startsWith\(['"]\/projects\/['"]\)/.test(projectDetailPageSource)
 const protectsMarkdownUrlsFromUnsafeRendering =
   /toSafeLinkHref/.test(postContentRendererSource) &&
   /createImageProxy/.test(postContentRendererSource) &&
@@ -2231,10 +2332,13 @@ const protectsPublicImageSourcesFromUnsafeUrls =
     featuredProjectsSource
   ) &&
   !/src=\{project\.coverImage\}/.test(featuredProjectsSource) &&
-  /toSafeArtistImageSrc/.test(featuredArtistsSource) &&
-  /const\s+safeProfileImage\s*=\s*toSafeArtistImageSrc\(artist\.profileImage\)/.test(
-    featuredArtistsSource
-  ) &&
+  // 히어로 필름스트립이 홈의 아티스트 사진을 렌더한다. profileImage는 내부 경로와
+  // Storage URL이 섞여 있어 정화 없이 넘기면 외부 URL이 그대로 <img>에 실린다.
+  /toSafeArtistImageSrc/.test(heroFilmstripSource) &&
+  /src:\s*toSafeArtistImageSrc\(artist\.profileImage\)/.test(heroFilmstripSource) &&
+  !/src:\s*artist\.profileImage/.test(heroFilmstripSource) &&
+  // FeaturedArtists는 사진 없는 타이포 인덱스다. 사진이 되돌아오면 정화를 거쳐야
+  // 하므로 raw src가 생기는지 계속 감시한다.
   !/src=\{artist\.profileImage\}/.test(featuredArtistsSource) &&
   /toSafeInternalImagePath/.test(artistProjectsSource) &&
   /const\s+safeCoverImage\s*=\s*toSafeInternalImagePath\(project\.coverImage\)/.test(
@@ -2252,11 +2356,11 @@ const protectsPublicImageSourcesFromUnsafeUrls =
   /toSafeArtistImageSrc/.test(artistProfilePageSource) &&
   /safeProfileImage/.test(artistProfilePageSource) &&
   !/src=\{artist\.profileImage\}/.test(artistProfilePageSource) &&
-  /toSafeInternalImagePath/.test(archiveContentSource) &&
+  /toSafeInternalImagePath/.test(projectsContentSource) &&
   /const\s+safeCoverImage\s*=\s*toSafeInternalImagePath\(project\.coverImage\)/.test(
-    archiveContentSource
+    projectsContentSource
   ) &&
-  !/src=\{project\.coverImage\}/.test(archiveContentSource) &&
+  !/src=\{project\.coverImage\}/.test(projectsContentSource) &&
   /toSafeArtistImageSrc/.test(adminArtistCardSource) &&
   /const\s+safeProfileImage\s*=\s*toSafeArtistImageSrc\(artist\.profileImage\)/.test(
     adminArtistCardSource
@@ -2483,8 +2587,8 @@ const redactsSecurityEventDetails =
   /\.\.\.sanitizedDetails/.test(securitySource) &&
   !/\.\.\.details,\s*\n\s*timestamp/.test(securitySource) &&
   !/Invalid URL format:['"],\s*url/.test(securitySource)
-const avoidsArchivePreviewRawUrlLogs =
-  /createLogger\(['"]archive\/project-page['"]\)/.test(projectDetailPageSource) &&
+const avoidsProjectPreviewRawUrlLogs =
+  /createLogger\(['"]projects\/project-page['"]\)/.test(projectDetailPageSource) &&
   /function describeExternalUrlForLog/.test(projectDetailPageSource) &&
   /parsed\.origin/.test(projectDetailPageSource) &&
   /parsed\.pathname/.test(projectDetailPageSource) &&
@@ -2612,9 +2716,10 @@ const sanitizesUploadMetadata =
   /height:\s*imageDimensions\.height/.test(artistPhotoSource) &&
   !/providedMetadata\s*=\s*JSON\.parse/.test(artistPhotoSource) &&
   !/\.\.\.providedMetadata/.test(artistPhotoSource)
+// 만료된 임시 첨부 정리도 logicalPathFromUrl로 이관됐다. 봉쇄에 걸린 URL 하나가
+// 전체 정리를 중단시키면 안 되므로, null을 걸러내고 나머지는 계속 지운다.
 const cleanupSkipsUnsafeTempAttachmentUrls =
-  /getProjectStorageObjectPath/.test(cleanupTempAttachmentsSource) &&
-  /getProjectStorageObjectPath\(att\.file_url,\s*['"]attachments['"],\s*['"]temp['"]\)/.test(
+  /logicalPathFromUrl\(att\.file_url,\s*['"]attachments['"],\s*['"]temp['"]\)/.test(
     cleanupTempAttachmentsSource
   ) &&
   /filter\(\(path\):\s*path is string => path !== null\)/.test(cleanupTempAttachmentsSource) &&
@@ -3165,6 +3270,15 @@ if (!validatesBoardDocumentStoragePaths) {
   )
 }
 
+if (!boardDocumentProviderFallbackIsSafe) {
+  failures.push(
+    `Board document cross-provider read fallback must be gated on the other provider being configured (otherwise a missing document 500s with an env var name instead of 404), and its delete classification must reuse classifyDeleteEverywhereResults:\n- ${relative(
+      root,
+      privateProviderPath
+    )}`
+  )
+}
+
 if (!verifiesArtistPhotoSignature) {
   failures.push(
     `Artist photo uploads must verify image signatures before processing: ${relative(
@@ -3423,11 +3537,11 @@ if (!boardPageParsesSearchParamsSafely) {
   )
 }
 
-if (!archivePageParsesSearchParamsSafely) {
+if (!projectsPageParsesSearchParamsSafely) {
   failures.push(
-    `Archive page search params must use parseIntegerParam so malformed page values do not leak into pagination or canonical metadata: ${relative(
+    `Projects page search params must use parseIntegerParam so malformed page values do not leak into pagination or canonical metadata: ${relative(
       root,
-      archivePagePath
+      projectsPagePath
     )}`
   )
 }
@@ -3756,7 +3870,7 @@ if (!protectsExternalCardsFromUnsafeUrls) {
 
 if (!filtersRelatedArticlesToSafeExternalUrls) {
   failures.push(
-    `Archive project related-article data must normalize to safe external http(s) URLs before ArticleCard receives it: ${relative(
+    `Projects page related-article data must normalize to safe external http(s) URLs before ArticleCard receives it: ${relative(
       root,
       projectDetailPagePath
     )}`
@@ -3777,10 +3891,13 @@ if (!protectsPublicImageSourcesFromUnsafeUrls) {
     `Public card, artist, and project image sources must use safe internal image paths before reaching OptimizedImage:\n- ${relative(
       root,
       featuredProjectsPath
-    )}\n- ${relative(root, featuredArtistsPath)}\n- ${relative(
+    )}\n- ${relative(root, heroFilmstripPath)}\n- ${relative(
       root,
-      artistProjectsPath
-    )}\n- ${relative(root, baseCardPath)}\n- ${relative(root, archiveContentPath)}\n- ${relative(
+      featuredArtistsPath
+    )}\n- ${relative(root, artistProjectsPath)}\n- ${relative(
+      root,
+      baseCardPath
+    )}\n- ${relative(root, projectsContentPath)}\n- ${relative(
       root,
       adminArtistCardPath
     )}\n- ${relative(root, adminAssignArtistModalPath)}\n- ${relative(
@@ -3804,7 +3921,7 @@ if (!preservesAdminArtistAssignmentApiErrors) {
 
 if (!protectsProfileAndOperationalLinksFromUnsafeUrls) {
   failures.push(
-    `Profile, archive, admin, and board-room download links must sanitize href/src URL values before rendering:\n- ${relative(
+    `Profile, projects, admin, and board-room download links must sanitize href/src URL values before rendering:\n- ${relative(
       root,
       artistProfilePagePath
     )}\n- ${relative(root, portfolioLinksPath)}\n- ${relative(
@@ -4074,9 +4191,9 @@ if (!redactsSecurityEventDetails) {
   )
 }
 
-if (!avoidsArchivePreviewRawUrlLogs) {
+if (!avoidsProjectPreviewRawUrlLogs) {
   failures.push(
-    `Archive project article preview failures must not log raw external URLs with query strings or fragments: ${relative(
+    `Projects page article preview failures must not log raw external URLs with query strings or fragments: ${relative(
       root,
       projectDetailPagePath
     )}`

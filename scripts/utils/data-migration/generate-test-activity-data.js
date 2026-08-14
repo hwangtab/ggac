@@ -35,7 +35,7 @@ const ACTIVITY_TYPES = [
 const PAGE_PATHS = [
   '/',
   '/about',
-  '/archive',
+  '/projects',
   '/artists',
   '/connect',
   '/board',

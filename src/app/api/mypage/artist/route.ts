@@ -8,8 +8,8 @@ import { revalidatePath, revalidateTag } from 'next/cache'
 import { invalidateArtistsCache } from '@/lib/data'
 import {
   getArtistCoreRevalidationPaths,
-  getArchiveListRevalidationPaths,
-  getArchiveProjectRevalidationPaths,
+  getProjectListRevalidationPaths,
+  getProjectDetailRevalidationPaths,
 } from '@/lib/revalidationPaths'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { isProjectStorageObjectPath } from '@/utils/storageUrlValidation'
@@ -349,7 +349,7 @@ export async function PATCH(request: NextRequest) {
         // 인메모리 캐시 강제 무효화 (즉시 최신 데이터 반영)
         invalidateArtistsCache()
 
-        // 아티스트가 포함된 프로젝트 상세 페이지들도 함께 무효화 (아카이브)
+        // 아티스트가 포함된 프로젝트 상세 페이지들도 함께 무효화
         try {
           const fs = await import('fs')
           const path = await import('path')
@@ -361,17 +361,17 @@ export async function PATCH(request: NextRequest) {
           )
           for (const p of affected) {
             if (p?.slug) {
-              for (const archivePath of getArchiveProjectRevalidationPaths(p.slug)) {
-                revalidatePath(archivePath)
+              for (const projectPath of getProjectDetailRevalidationPaths(p.slug)) {
+                revalidatePath(projectPath)
               }
             }
           }
           // 목록 페이지도 함께
-          for (const archiveListPath of getArchiveListRevalidationPaths()) {
-            revalidatePath(archiveListPath)
+          for (const projectsListPath of getProjectListRevalidationPaths()) {
+            revalidatePath(projectsListPath)
           }
         } catch (e) {
-          console.warn('Archive revalidation skipped:', (e as any)?.message || e)
+          console.warn('Projects revalidation skipped:', (e as any)?.message || e)
         }
 
         log.debug('Successfully invalidated artist caches', { slug: artistForSlug.slug })

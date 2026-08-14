@@ -5,7 +5,7 @@ import OptimizedImage from '@/components/OptimizedImage'
 import { FiCalendar, FiTag, FiExternalLink } from 'react-icons/fi'
 import { getProjectSummary } from '@/utils/projectUtils'
 import { useTranslations, useLocale } from 'next-intl'
-import { localizeArchiveCategory } from '@/constants/categories'
+import { localizeProjectCategory } from '@/constants/categories'
 import { toSafeInternalImagePath } from '@/utils/safeUrl'
 import type { Project } from '@/types'
 
@@ -63,7 +63,7 @@ export default function ArtistProjects({
           const safeCoverImage = toSafeInternalImagePath(project.coverImage)
 
           return (
-            <Link key={project.id} href={`/archive/${project.slug}`} className="group block">
+            <Link key={project.id} href={`/projects/${project.slug}`} className="group block">
               <article
                 className="bg-white/70 backdrop-blur-sm rounded-2xl overflow-hidden shadow-lg border border-white/20 hover:shadow-2xl hover:scale-105 transition-all duration-300 h-full flex flex-col"
                 style={{
@@ -86,7 +86,7 @@ export default function ArtistProjects({
                   <div className="absolute top-4 left-4">
                     <span className="inline-flex items-center gap-1 px-3 py-1 bg-primary-600/90 text-white text-xs font-medium rounded-full backdrop-blur-sm">
                       <FiTag className="w-3 h-3" />
-                      {localizeArchiveCategory(project.category, locale)}
+                      {localizeProjectCategory(project.category, locale)}
                     </span>
                   </div>
 

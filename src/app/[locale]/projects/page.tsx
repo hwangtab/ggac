@@ -1,5 +1,5 @@
 import { Suspense } from 'react'
-import ArchiveContent, { ArchiveView } from './ArchiveContent'
+import ProjectsContent, { ProjectsView } from './ProjectsContent'
 import { getProjectsSorted, getArtists } from '@/lib/data'
 import {
   generateItemListStructuredData,
@@ -14,7 +14,7 @@ import type { Metadata } from 'next'
 
 const PROJECTS_PER_PAGE = 9
 
-type ArchivePageProps = {
+type ProjectsPageProps = {
   params: Promise<{ locale: string }>
 }
 
@@ -30,13 +30,15 @@ export async function generateMetadata({
   const isEn = locale === 'en'
   const base = getSiteUrl()
   // 페이지네이션은 클라이언트(?page=)로 이관됨 — canonical은 목록 루트로 고정
-  const canonical = isEn ? '/en/archive' : '/archive'
+  const canonical = isEn ? '/en/projects' : '/projects'
 
   return {
-    title: isEn ? 'Concerts & Live Archive' : '공연·라이브 아카이브 (메탈·펑크·실험음악)',
+    title: isEn
+      ? 'Projects — Upcoming & Past Shows'
+      : '프로젝트 — 예정·지난 공연 (메탈·펑크·실험음악)',
     description: isEn
-      ? 'Concerts, live shows, and events by Gyeonggi Art Collective — the METAL SYNDICATE NETWORK series, indie and underground gigs across Gyeonggi and Seoul.'
-      : '경기아트콜렉티브가 직접 기획한 공연·라이브 아카이브입니다. 철조망(METAL SYNDICATE NETWORK)·건강열전·수원 사운드 마켓 등 서울·경기 언더그라운드 인디 공연을 확인해보세요.',
+      ? 'Projects by Gyeonggi Art Collective — upcoming and past concerts, live shows, and events including the METAL SYNDICATE NETWORK series and underground gigs across Gyeonggi and Seoul.'
+      : '경기아트콜렉티브가 직접 기획한 프로젝트입니다. 철조망(METAL SYNDICATE NETWORK)·건강열전·수원 사운드 마켓 등 예정 공연부터 지난 공연까지 서울·경기 언더그라운드 인디 공연을 확인해보세요.',
     keywords: [
       '인디공연',
       '언더그라운드공연',
@@ -45,6 +47,7 @@ export async function generateMetadata({
       '라이브공연',
       '수원공연',
       '경기도공연',
+      '예정공연',
       '철조망',
       '공연기획',
       '실험음악',
@@ -52,14 +55,12 @@ export async function generateMetadata({
     authors: [{ name: '경기아트콜렉티브 협동조합' }],
     creator: '경기아트콜렉티브 협동조합',
     publisher: '경기아트콜렉티브 협동조합',
-    alternates: getLocaleAlternates('/archive', locale),
+    alternates: getLocaleAlternates('/projects', locale),
     openGraph: {
-      title: isEn
-        ? 'Concerts & Live Archive | Gyeonggi Art Collective'
-        : '공연·라이브 아카이브 | 경기아트콜렉티브 협동조합',
+      title: isEn ? 'Projects | Gyeonggi Art Collective' : '프로젝트 | 경기아트콜렉티브 협동조합',
       description: isEn
-        ? 'Concerts and live shows by Gyeonggi Art Collective — the METAL SYNDICATE NETWORK series and underground indie gigs.'
-        : '철조망·건강열전·수원 사운드 마켓 등 경기아트콜렉티브가 직접 기획한 서울·경기 언더그라운드 인디 공연 아카이브.',
+        ? 'Upcoming and past concerts by Gyeonggi Art Collective — the METAL SYNDICATE NETWORK series and underground indie gigs.'
+        : '철조망·건강열전·수원 사운드 마켓 등 경기아트콜렉티브가 직접 기획한 서울·경기 언더그라운드 인디 공연. 예정 공연도 여기서 확인하세요.',
       url: `${base}${canonical}`,
       siteName: isEn ? 'Gyeonggi Art Collective' : '경기아트콜렉티브 협동조합',
       images: [
@@ -75,12 +76,10 @@ export async function generateMetadata({
     },
     twitter: {
       card: 'summary_large_image',
-      title: isEn
-        ? 'Concerts & Live Archive | Gyeonggi Art Collective'
-        : '공연·라이브 아카이브 | 경기아트콜렉티브 협동조합',
+      title: isEn ? 'Projects | Gyeonggi Art Collective' : '프로젝트 | 경기아트콜렉티브 협동조합',
       description: isEn
-        ? 'Concerts and underground indie gigs by Gyeonggi Art Collective.'
-        : '철조망·건강열전 등 경기아트콜렉티브가 직접 기획한 언더그라운드 인디 공연.',
+        ? 'Upcoming and past underground indie gigs by Gyeonggi Art Collective.'
+        : '철조망·건강열전 등 경기아트콜렉티브가 직접 기획한 언더그라운드 인디 공연. 예정 공연 포함.',
       images: ['/images/logo/gac_og.webp'],
     },
     robots: {
@@ -97,11 +96,11 @@ export async function generateMetadata({
   }
 }
 
-// 카테고리·페이지 필터(?category=, ?page=)는 ArchiveContent(클라이언트)가
+// 카테고리·페이지 필터(?category=, ?page=)는 ProjectsContent(클라이언트)가
 // useSearchParams로 처리한다. 서버에서 searchParams를 읽으면 페이지가 동적
 // 렌더링으로 전환되어 위 revalidate가 사문화되므로(전수감사 P3) 서버는
 // 전체 프로젝트·아티스트 이름 맵만 정적으로 렌더한다.
-const ArchivePage = async ({ params }: ArchivePageProps) => {
+const ProjectsPage = async ({ params }: ProjectsPageProps) => {
   const { locale } = await params
   setRequestLocale(locale)
 
@@ -110,7 +109,7 @@ const ArchivePage = async ({ params }: ArchivePageProps) => {
   // 예정/지난 분리는 서버에서 수행한다(클라이언트가 날짜를 재계산해 하이드레이션
   // 불일치를 내지 않도록). ISR(revalidate)로 '오늘'이 주기적으로 갱신된다.
   // 미래 공연일(eventDate)이 있고 취소되지 않은 공연을 '예정'으로, eventDate
-  // 오름차순 정렬해 상단에 노출한다. 나머지는 기존 발행일 역순 아카이브.
+  // 오름차순 정렬해 상단에 노출한다. 나머지는 기존 발행일 역순으로 둔다.
   const todayStr = todaySeoul()
   const isUpcoming = (p: (typeof allProjects)[number]) =>
     !!p.eventDate && !p.cancelled && p.eventDate >= todayStr
@@ -130,12 +129,12 @@ const ArchivePage = async ({ params }: ArchivePageProps) => {
     generateItemListStructuredData(
       allProjects.map(project => ({
         name: project.title,
-        url: `https://ggac.kr/archive/${project.slug}`,
+        url: `https://ggac.kr/projects/${project.slug}`,
       }))
     ),
     generateBreadcrumbStructuredData([
       { name: '홈', url: 'https://ggac.kr' },
-      { name: '프로젝트', url: 'https://ggac.kr/archive' },
+      { name: '프로젝트', url: 'https://ggac.kr/projects' },
     ]),
   ])
 
@@ -145,7 +144,7 @@ const ArchivePage = async ({ params }: ArchivePageProps) => {
       {/* fallback을 기본 상태(All·1페이지) 뷰로 렌더해 프리렌더 HTML에 목록을 포함시킨다 */}
       <Suspense
         fallback={
-          <ArchiveView
+          <ProjectsView
             projects={projects}
             upcomingProjects={upcomingProjects}
             pageSize={PROJECTS_PER_PAGE}
@@ -155,7 +154,7 @@ const ArchivePage = async ({ params }: ArchivePageProps) => {
           />
         }
       >
-        <ArchiveContent
+        <ProjectsContent
           projects={projects}
           upcomingProjects={upcomingProjects}
           pageSize={PROJECTS_PER_PAGE}
@@ -166,4 +165,4 @@ const ArchivePage = async ({ params }: ArchivePageProps) => {
   )
 }
 
-export default ArchivePage
+export default ProjectsPage

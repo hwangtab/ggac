@@ -8,7 +8,7 @@ import { useTranslations, useLocale } from 'next-intl'
 import type { TicketingInfo, LinkPreview, TicketingCardProps } from '@/types'
 
 const TicketingCard = ({ ticketing }: TicketingCardProps) => {
-  const t = useTranslations('archive')
+  const t = useTranslations('projects')
   const locale = useLocale()
   const dateLocale = locale === 'en' ? 'en-US' : 'ko-KR'
   const safeTicketingUrl = toSafeHttpUrl(ticketing.url)

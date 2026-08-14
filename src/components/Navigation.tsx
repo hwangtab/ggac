@@ -48,7 +48,7 @@ const Navigation = () => {
   const menuItems = [
     { href: '/', label: 'HOME' },
     { href: '/about', label: 'ABOUT' },
-    { href: '/archive', label: 'PROJECT' },
+    { href: '/projects', label: 'PROJECT' },
     { href: '/artists', label: 'ARTISTS' },
     { href: '/board', label: 'BOARD' },
     // 이사회: 이사/관리자에게만 노출, 게시판(BOARD) 다음에 배치
@@ -290,9 +290,9 @@ const Navigation = () => {
               ABOUT
             </Link>
             <Link
-              href="/archive"
+              href="/projects"
               className={`font-medium transition-colors duration-300 text-xs ${
-                pathname === '/archive' ? activeColor : `${textColor} ${hoverColor}`
+                pathname === '/projects' ? activeColor : `${textColor} ${hoverColor}`
               }`}
             >
               PROJECT

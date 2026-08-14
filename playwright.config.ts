@@ -19,6 +19,13 @@ export default defineConfig({
 
   use: {
     baseURL,
+    // 브라우저 로케일을 ko-KR로 고정한다. next-intl은 localePrefix가 'as-needed'라
+    // Accept-Language로 로케일을 협상하는데(`/` → 307 `/en`), Playwright 크로미움의
+    // 기본값은 en-US라서 테스트가 실행 머신의 언어 설정에 좌우됐다. 그 결과 홈
+    // 제목·canonical이 영문 로케일로 나와 기본 로케일(ko)을 전제한 단정이 깨졌다.
+    // 여기서 고정해야 어느 머신에서 돌리든 같은 결과가 나오고, `['/', '/en']`을
+    // 순회하는 테스트가 실제로 두 로케일을 검사하게 된다.
+    locale: 'ko-KR',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',

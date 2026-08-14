@@ -28,7 +28,7 @@
   "nav": {
     "about": "우리의 이야기",
     "artists": "함께하는 사람들",
-    "archive": "프로젝트",
+    "projects": "프로젝트",
     "board": "자유게시판",
     "boardRoom": "이사회",
     "connect": "연락처",
@@ -44,7 +44,7 @@
   "footer": {
     "about": "우리의 이야기",
     "artists": "함께하는 사람들",
-    "archive": "프로젝트",
+    "projects": "프로젝트",
     "board": "자유게시판",
     "connect": "연락처",
     "faq": "자주 묻는 질문",
@@ -178,11 +178,11 @@
     "ctaBody": "직접 물어보시면 답을 드리겠습니다",
     "ctaButton": "문의하기"
   },
-  "archive": {
+  "projects": {
     "hero": {
-      "titleLine1": "우리가 벌여온",
+      "titleLine1": "우리가 벌이는",
       "titleLine2": "프로젝트들",
-      "subtitle": "진행 중인 것부터 끝난 것까지 여기에 모읍니다. 각각 무엇을 어떻게 했는지 적어두었습니다."
+      "subtitle": "앞으로 할 공연부터 진행 중인 일, 이미 끝난 기록까지 여기에 모읍니다. 각각 무엇을 어떻게 하는지 적어둡니다."
     },
     "participantsLabel": "참여",
     "emptyState": "해당 카테고리에 프로젝트가 없습니다.",

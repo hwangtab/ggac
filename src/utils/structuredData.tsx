@@ -83,10 +83,10 @@ export function generateProjectStructuredData(project: {
   return {
     '@context': 'https://schema.org',
     '@type': 'CreativeWork',
-    '@id': `https://ggac.kr/archive/${project.slug}#work`,
+    '@id': `https://ggac.kr/projects/${project.slug}#work`,
     name: project.title,
     description: project.description,
-    url: `https://ggac.kr/archive/${project.slug}`,
+    url: `https://ggac.kr/projects/${project.slug}`,
     image: imageUrl,
     creator: { '@id': 'https://ggac.kr/#organization' },
     publisher: { '@id': 'https://ggac.kr/#organization' },
@@ -267,7 +267,7 @@ export function generateEventStructuredData(project: {
     url: 'https://ggac.kr',
   }
 
-  const eventUrl = `https://ggac.kr/archive/${project.slug}`
+  const eventUrl = `https://ggac.kr/projects/${project.slug}`
 
   // 음악 공연이므로 MusicEvent로 승격(AI 답변엔진의 공연·음악 질의 매칭 강화).
   // 참여 아티스트가 있으면 performer로 연결, 없으면 주최 조합으로 폴백.

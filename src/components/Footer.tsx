@@ -103,10 +103,10 @@ const Footer = ({ globalData }: FooterProps) => {
               </li>
               <li>
                 <Link
-                  href="/archive"
+                  href="/projects"
                   className="text-gray-400 hover:text-white transition-colors duration-200"
                 >
-                  {t('archive')}
+                  {t('projects')}
                 </Link>
               </li>
               <li>

@@ -9,7 +9,7 @@ import { useTranslations } from 'next-intl'
 import type { LinkPreview, ArticleInfo, ArticleCardProps } from '@/types'
 
 const ArticleCard = ({ article }: ArticleCardProps) => {
-  const t = useTranslations('archive')
+  const t = useTranslations('projects')
   const isInternalLink = isSafeInternalPath(article.url)
   const safeExternalUrl = isInternalLink ? null : toSafeHttpUrl(article.url)
   const hostname = getSafeHostname(article.url)
