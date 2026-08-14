@@ -18,6 +18,13 @@ const SUPABASE_BUCKET = 'board-documents'
 const MAX_FILE_PATH_LENGTH = 512
 
 /**
+ * 업로더 UUID 판정. `src/utils/validation.ts`의 `UUID_REGEX`와 같은 형태지만
+ * 이 파일은 로컬 import가 0개여야 하므로(파일 상단 주석 참고) 정규식을 여기
+ * 직접 둔다 — import 하나가 `node --test`의 타입 스트리핑 로드를 깨뜨린다.
+ */
+const UUID_SEGMENT_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
  * `<owner>/<filename>` 두 세그먼트만 허용한다. `owner`는 업로더 UUID이거나
  * 시드 문서의 `seed`다.
  *
@@ -26,6 +33,11 @@ const MAX_FILE_PATH_LENGTH = 512
  * 시드 문서 14건이 전부 막혀 다운로드가 두 달간 죽어 있었다. 소유권 검사는
  * 경로 문자열이 아니라 DB 행(`uploaded_by` 컬럼)이 할 일이므로 분리했다.
  * 여기서는 "저장소 밖으로 나가지 않는가"만 본다.
+ *
+ * 첫 세그먼트를 UUID 또는 리터럴 `seed`로 강제한다. `?`·`#`가 섞인 세그먼트
+ * (`..?`, `..#` 등)는 세그먼트 개수만 보면 2개라 예전엔 통과했는데, 이 제약이
+ * 그 부류를 전부 걸러낸다 — `..?`는 UUID도 `seed`도 아니다. `backups/...`
+ * 같은 백업 영역 위장도 같은 이유로 걸러진다.
  */
 export function isSafeBoardDocumentFilePath(filePath: unknown): boolean {
   if (typeof filePath !== 'string') return false
@@ -41,6 +53,13 @@ export function isSafeBoardDocumentFilePath(filePath: unknown): boolean {
   // 절대 경로와 프로토콜 상대 경로.
   if (filePath.startsWith('/')) return false
   if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(filePath)) return false
+
+  // `?`·`#`는 URL 파서가 경로를 끊는 지점이다. `@vercel/blob`의
+  // `constructBlobUrl`이 인코딩 없이 문자열을 보간하므로, 이 문자가 섞이면
+  // 문자열 수준 검사를 통과한 값이 URL 수준에서 다른 경로로 해석될 수 있다.
+  // 아래 첫 세그먼트 UUID/seed 강제만으로도 실제 이탈은 막히지만, 방어적으로
+  // 어떤 위치에서도 통째로 거부한다.
+  if (filePath.includes('?') || filePath.includes('#')) return false
 
   // 퍼센트 인코딩을 통한 이탈. 디코딩이 실패하면(잘린 %) 그것도 거부한다.
   let decoded: string
@@ -60,6 +79,9 @@ export function isSafeBoardDocumentFilePath(filePath: unknown): boolean {
     if (!segment) return false
     if (segment === '.' || segment === '..') return false
   }
+
+  const [owner] = segments
+  if (owner !== 'seed' && !UUID_SEGMENT_REGEX.test(owner)) return false
 
   return true
 }

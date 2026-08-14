@@ -107,31 +107,53 @@ test('Content-Disposition: 파일명이 비어도 기본값을 쓴다', () => {
 })
 
 // --- 제공자 계층 경로 조립 ---
+//
+// 아래 두 테스트는 조립된 문자열이 아니라, 실제 요청에 쓰이는 것과 같은
+// WHATWG URL 파서로 정규화한 뒤의 pathname을 검사한다. `blobPathForBoardDocument`가
+// 항상 `board-documents/` 접두어를 문자열로 붙이는 이상 `p.startsWith(...)` 같은
+// 문자열 단언은 구현상 자명하게 참이라 아무것도 지키지 못한다 — `..?`·`..#`처럼
+// 세그먼트 수만 2개인 값이 문자열 조립에서는 접두어 안에 있는 것처럼 보여도, 실제
+// `@vercel/blob`이 이 문자열을 URL에 보간할 때는 `?`·`#`에서 경로가 끊기고 `..`가
+// 접혀 `board-documents/` 밖으로(심하면 `/`까지) 나갈 수 있다(리뷰에서 실측).
+// `isSafeBoardDocumentFilePath`가 이제 첫 세그먼트를 UUID/`seed`로 강제하므로
+// 이런 입력은 애초에 `assertSafe`에서 막혀 `blobPathForBoardDocument` 자체가 던진다.
+function blobRequestPathname(filePath) {
+  return new URL(
+    'https://store.private.blob.vercel-storage.com/' + blobPathForBoardDocument(filePath)
+  ).pathname
+}
 
-test('제공자 계층에 넘길 Blob 경로는 항상 접두어 안에 있다', () => {
+test('제공자 계층에 넘길 Blob 경로는 URL 정규화 후에도 접두어 안에 있다', () => {
   const cases = [
     'seed/doc_0.pdf',
     'seed/doc_13.png',
     'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/1_a.pdf',
   ]
   for (const filePath of cases) {
-    const p = blobPathForBoardDocument(filePath)
-    assert.ok(p.startsWith('board-documents/'), `접두어 이탈: ${p}`)
-    assert.ok(!p.includes('/../'), `상위 이동 포함: ${p}`)
-    assert.ok(!p.startsWith('board-documents/backups'), `백업 영역 침범: ${p}`)
+    const pathname = blobRequestPathname(filePath)
+    assert.ok(pathname.startsWith('/board-documents/'), `접두어 이탈: ${filePath} → ${pathname}`)
+    assert.ok(!pathname.startsWith('/board-documents/backups'), `백업 영역 침범: ${pathname}`)
   }
 })
 
-test('백업 경로를 file_path로 위장해도 실제 백업 객체에 닿지 못한다', () => {
-  // `backups/20260813.sql.gz`는 세그먼트가 2개라 봉쇄 판정 자체는 통과한다.
-  // 그러나 접두어가 붙어 `board-documents/backups/...`가 되므로 실제 백업 객체
-  // (`backups/20260813.sql.gz`)와는 다른 경로다 — 닿지 못한다.
-  assert.equal(
-    blobPathForBoardDocument('backups/20260813.sql.gz'),
-    'board-documents/backups/20260813.sql.gz'
-  )
-  // 접두어를 벗어나려고 상위 이동을 섞은 형태는 봉쇄에서 막힌다.
-  for (const evil of ['../backups/20260813.sql.gz', 'board-documents/../backups/x.sql.gz']) {
+test('세그먼트 수만 2개인 이탈 시도(.., ?, #)는 봉쇄에서 막힌다', () => {
+  // `..?/x.pdf`, `..#/x.pdf`는 split('/').length === 2라 옛 봉쇄를 통과했었고,
+  // WHATWG URL 파서가 `?`·`#`에서 경로를 끊고 `..`를 접어 실제 요청 경로가
+  // `/`가 됐다(리뷰 실측). 첫 세그먼트 UUID/`seed` 강제로 애초에 막힌다.
+  for (const evil of ['..?/x.pdf', '..#/x.pdf', 'notauuid/x.pdf']) {
+    assert.throws(() => blobPathForBoardDocument(evil), /안전하지 않은/, `통과됨: ${evil}`)
+  }
+})
+
+test('백업 경로를 file_path로 위장해도 봉쇄에서 막힌다', () => {
+  // `backups/20260813.sql.gz`는 세그먼트가 2개라 예전엔 봉쇄 판정만으로는
+  // 통과했고(접두어 조립이 갈라놓는 게 유일한 방어선이었다), 이제는 첫
+  // 세그먼트가 UUID도 `seed`도 아니라서 애초에 봉쇄에서 막힌다.
+  for (const evil of [
+    'backups/20260813.sql.gz',
+    '../backups/20260813.sql.gz',
+    'board-documents/../backups/x.sql.gz',
+  ]) {
     assert.throws(() => blobPathForBoardDocument(evil), /안전하지 않은/, `통과됨: ${evil}`)
   }
 })

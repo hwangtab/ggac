@@ -640,10 +640,10 @@ const boardDocumentDownloadPath = join(
 const boardDocumentDownloadSource = existsSync(boardDocumentDownloadPath)
   ? readFileSync(boardDocumentDownloadPath, 'utf8')
   : ''
-// 봉쇄 판정의 실제 구현부. `@/utils/boardDocumentStoragePath`(옛
-// `isSafeBoardDocumentStoragePath`)는 이제 어떤 라우트도 import하지 않는 죽은
-// 코드라 이 검사식은 더 이상 참조하지 않는다 — 소유권을 경로 문자열과 결합해
-// 시드 문서 14건을 막던 옛 버전이고, 파일 자체를 지울지는 별도 판단 대상이다.
+// 봉쇄 판정의 실제 구현부. 예전 `@/utils/boardDocumentStoragePath`
+// (`isSafeBoardDocumentStoragePath`)는 소유권을 경로 문자열과 결합해 시드
+// 문서 14건을 막던 deprecated 래퍼였고, 참조가 0건으로 확인돼 파일 자체를
+// 지웠다 — 이 검사식은 처음부터 그 파일을 참조하지 않았다.
 const boardDocumentsLibPath = join(root, 'src/lib/storage/boardDocuments.ts')
 const boardDocumentsLibSource = existsSync(boardDocumentsLibPath)
   ? readFileSync(boardDocumentsLibPath, 'utf8')
@@ -743,22 +743,42 @@ const privateProviderSource = existsSync(privateProviderPath)
   : ''
 const blobLibSource = readFileSync(join(root, 'src/lib/storage/blob.ts'), 'utf8')
 const supabaseLibSource = readFileSync(join(root, 'src/lib/storage/supabase.ts'), 'utf8')
+// (2)~(4)와 같은 이유로 원본이 아니라 stripCommentsAndImports를 거친 코드를
+// 본다. 원본 소스를 그대로 훑으면, 실제 로직을 `//`로 주석 처리해도 같은 줄
+// (또는 주변 JSDoc)에 남은 텍스트가 정규식에 그대로 걸려 죽은 채로 통과한다 —
+// `privateProvider.ts`의 `if (!hasPrivateBlobStore()) return null`을 주석
+// 처리해도 이전에는 게이트가 초록불이었다(리뷰 실측).
+const blobLibCode = stripCommentsAndImports(blobLibSource)
+const supabaseLibCode = stripCommentsAndImports(supabaseLibSource)
+const privateProviderCode = stripCommentsAndImports(privateProviderSource)
+// (1)의 토큰 존재 검사는 파일 전체가 아니라 각 함수의 본문만 본다. 파일 전체를
+// 보면 `PRIVATE_BLOB_READ_WRITE_TOKEN`이 `tokenFor()` 등 다른 함수에도 등장해서,
+// `hasPrivateBlobStore`의 본문을 주석 처리해 항상 `return`이 비어도(undefined,
+// falsy) 그 리터럴이 파일 어딘가에 남아 있으면 검사가 속는다.
+const hasPrivateBlobStoreBody =
+  blobLibCode.match(/export function hasPrivateBlobStore\(\):\s*boolean\s*\{[\s\S]*?\n\}/)?.[0] ??
+  ''
+const hasSupabaseServiceRoleBody =
+  supabaseLibCode.match(
+    /export function hasSupabaseServiceRole\(\):\s*boolean\s*\{[\s\S]*?\n\}/
+  )?.[0] ?? ''
 const boardDocumentProviderFallbackIsSafe =
-  // (1) 설정 판정 함수는 env 이름을 소유한 모듈에 있어야 한다(이름 드리프트 방지).
-  /export function hasPrivateBlobStore/.test(blobLibSource) &&
-  /PRIVATE_BLOB_READ_WRITE_TOKEN/.test(blobLibSource) &&
-  /export function hasSupabaseServiceRole/.test(supabaseLibSource) &&
-  /SUPABASE_SERVICE_ROLE_KEY/.test(supabaseLibSource) &&
+  // (1) 설정 판정 함수는 env 이름을 소유한 모듈에, 그 이름을 실제로 참조하는
+  //     본문과 함께 있어야 한다(이름 드리프트 방지 + 본문 무력화 방지).
+  /export function hasPrivateBlobStore/.test(blobLibCode) &&
+  /PRIVATE_BLOB_READ_WRITE_TOKEN/.test(hasPrivateBlobStoreBody) &&
+  /export function hasSupabaseServiceRole/.test(supabaseLibCode) &&
+  /SUPABASE_SERVICE_ROLE_KEY/.test(hasSupabaseServiceRoleBody) &&
   // (2) 교차 제공자 폴백은 반대쪽이 설정됐을 때만 시도한다. 감싸지 않으면
   //     requireEnv가 던져서, 없는 문서 요청이 404가 아니라 환경변수 이름이 담긴
   //     500으로 나간다(전환 전·롤백 후에는 반대쪽이 비어 있는 게 정상이다).
   /hasSupabaseServiceRole\(\)\s*\?\s*fromSupabase\(filePath\)\s*:\s*null/.test(
-    privateProviderSource
+    privateProviderCode
   ) &&
-  /if \(!hasPrivateBlobStore\(\)\) return null/.test(privateProviderSource) &&
+  /if \(!hasPrivateBlobStore\(\)\) return null/.test(privateProviderCode) &&
   // (3) 삭제 판정은 공개 쪽과 같은 헬퍼를 쓴다. 직접 세면 두 경로가 갈라진다.
-  /classifyDeleteEverywhereResults\(\[/.test(privateProviderSource) &&
-  !/failures\.length === 2/.test(stripComments(privateProviderSource))
+  /classifyDeleteEverywhereResults\(\[/.test(privateProviderCode) &&
+  !/failures\.length === 2/.test(privateProviderCode)
 const artistPhotoPath = join(root, 'src/app/api/mypage/artist/photo/route.ts')
 const artistPhotoSource = readFileSync(artistPhotoPath, 'utf8')
 const verifiesArtistPhotoSignature =
