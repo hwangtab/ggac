@@ -36,6 +36,17 @@ function stripComments(source) {
  *
  * URL 문자열의 `//`(`stripComments`가 이미 `:` 앞뒤로 보호)는 그대로 살아있고,
  * import가 아닌 일반 코드 줄은 건드리지 않는다.
+ *
+ * 알려진 한계: import 줄 제거는 `^\s*import\b`로 시작하는 줄 하나만 지운다.
+ * 여러 줄로 접힌 import(`import {\n  a,\n  b,\n} from '...'`)는 첫 줄만
+ * 지워지고 나머지 식별자 줄(`  a,`, `  b,`, `} from '...'`)은 그대로 남는다.
+ * 지금 이 파일의 모든 board-document 검사는 괄호·인자까지 포함한 완전한
+ * 호출 문자열(`requireBoardMember()`, `isSafeBoardDocumentFilePath(doc.file_path)`
+ * 등)만 찾으므로 이 잔여물에 걸리지 않지만, 앞으로 여기 bare identifier(예:
+ * 그냥 `isSafeBoardDocumentFilePath`)로 존재를 검사하는 코드를 추가하면 여러
+ * 줄 import의 잔여 줄이 거짓 양성을 만들 수 있다. 그런 검사를 추가할 때는
+ * 반드시 완전한 호출 형태로 매칭하거나, 이 필터를 여러 줄 import까지 지우도록
+ * 먼저 고칠 것.
  */
 function stripCommentsAndImports(source) {
   return stripComments(source)
@@ -637,6 +648,14 @@ const boardDocumentsLibPath = join(root, 'src/lib/storage/boardDocuments.ts')
 const boardDocumentsLibSource = existsSync(boardDocumentsLibPath)
   ? readFileSync(boardDocumentsLibPath, 'utf8')
   : ''
+// 이 파일은 JSDoc이 유난히 많고, 그 JSDoc이 옛 함수 이름(`isSafeBoardDocumentStoragePath`)이나
+// 설계 배경을 산문으로 설명한다. 아래 (1) 검사가 raw 소스를 그대로 보면, 실제
+// 봉쇄 로직(세그먼트 수·이탈 벡터 검사)을 `//`로 주석 처리해도 그 옆 JSDoc이나
+// 다른 줄에 우연히 같은 리터럴이 남아 있을 때 죽은 채로 통과할 수 있다 —
+// 라우트 쪽 (2)~(4)를 고칠 때 이미 겪은 것과 같은 함정이다. 이 파일은 스스로
+// "로컬 import가 하나도 없어야 한다"고 선언하므로 `stripCommentsAndImports`의
+// import 제거 부분은 실질적으로 no-op이지만, 헬퍼를 통일해서 쓴다.
+const boardDocumentsLibCode = stripCommentsAndImports(boardDocumentsLibSource)
 const verifiesBoardDocumentSignature =
   /hasKnownFileSignature/.test(boardDocumentsSource) &&
   /hasValidFileSignature/.test(boardDocumentsSource) &&
@@ -686,13 +705,13 @@ const boardDocumentDownloadChecksPathBeforeStream =
   boardDocumentDownloadSafetyIndex < boardDocumentDownloadStreamIndex
 const validatesBoardDocumentStoragePaths =
   // (1) 봉쇄: `<owner>/<filename>` 두 세그먼트만 허용하고 이탈 벡터를 모두 막는다.
-  /export function isSafeBoardDocumentFilePath/.test(boardDocumentsLibSource) &&
-  /segments\.length !== 2/.test(boardDocumentsLibSource) &&
-  /filePath\.includes\('\\\\'\)/.test(boardDocumentsLibSource) &&
-  /filePath\.startsWith\('\/'\)/.test(boardDocumentsLibSource) &&
-  /decodeURIComponent\(filePath\)/.test(boardDocumentsLibSource) &&
-  /decoded !== filePath/.test(boardDocumentsLibSource) &&
-  /segment === '\.' \|\| segment === '\.\.'/.test(boardDocumentsLibSource) &&
+  /export function isSafeBoardDocumentFilePath/.test(boardDocumentsLibCode) &&
+  /segments\.length !== 2/.test(boardDocumentsLibCode) &&
+  /filePath\.includes\('\\\\'\)/.test(boardDocumentsLibCode) &&
+  /filePath\.startsWith\('\/'\)/.test(boardDocumentsLibCode) &&
+  /decodeURIComponent\(filePath\)/.test(boardDocumentsLibCode) &&
+  /decoded !== filePath/.test(boardDocumentsLibCode) &&
+  /segment === '\.' \|\| segment === '\.\.'/.test(boardDocumentsLibCode) &&
   // (2) 목록 라우트: 응답에 file_path를 내려주지 않고, 만료 없는 내부 프록시
   //     경로만 돌려준다. 예전의 300초 서명 URL이 되살아나면 실패해야 한다.
   /const \{ file_path, \.\.\.rest \} = doc/.test(boardDocumentsCode) &&
