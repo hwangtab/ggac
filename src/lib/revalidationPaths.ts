@@ -1,6 +1,6 @@
 /**
- * 아티스트 프로필/사진 변경 시 Next.js 전체 라우트 캐시(Full Route Cache)에서
- * 무효화해야 하는 실제 렌더 경로 목록을 계산한다.
+ * 콘텐츠 변경 시 Next.js 전체 라우트 캐시(Full Route Cache)에서 무효화해야 하는
+ * 실제 렌더 경로 목록을 계산한다.
  *
  * 배경: `next-intl`의 `localePrefix: 'as-needed'` 설정 때문에 기본 로케일(ko)은
  * 사용자에게 보이는 URL에 접두사가 없다(`/artists`). 그러나 `src/middleware.ts`의
@@ -22,11 +22,11 @@
  * `revalidatePath(path)`(type 인자 없이 호출)는 렌더된 페이지의 "실제 요청 경로
  * (rewrite 이후 url.pathname)"에서 파생된 태그 하나에만 정확히 일치한다 —
  * 라우트 패턴(`/[locale]/artists`)이 아니라 로케일이 이미 대입된 구체 경로여야
- * 매칭된다. 따라서 로케일마다 별도로 호출해야 두 로케일 모두 무효화되며, 이는
- * 게시판(board) 라우트(`src/app/api/posts/route.ts`)가 이미 쓰고 있는 방식과
- * 같은 원리다(다만 board는 ko 기본 페이지의 실제 내부 rewrite 경로를 쓰지 않고
- * `/board`를 그대로 쓰고 있어 board 쪽도 같은 함정을 안고 있을 수 있다 —
- * 이번 수정 범위 밖이라 별도로 보고한다).
+ * 매칭된다. 따라서 로케일마다 별도로 호출해야 두 로케일 모두 무효화된다.
+ *
+ * 게시판(board) 라우트도 원래 `/board`와 `/en/board`를 호출하고 있어 ko 게시판이
+ * 한 번도 무효화되지 않는 같은 결함을 안고 있었다. 그래서 이 모듈은 아티스트
+ * 전용이 아니라 로케일 접두사가 붙는 모든 경로의 공통 계산기다.
  *
  * 이 파일의 함수들은 부수효과 없이 "무효화할 경로 목록"만 계산하는 순수 함수다.
  * 실제 `revalidatePath` 호출은 호출부(API 라우트)에서 이 목록을 순회하며 수행한다.
@@ -70,4 +70,18 @@ export function getArchiveListRevalidationPaths(): string[] {
  */
 export function getArchiveProjectRevalidationPaths(projectSlug: string): string[] {
   return withLocales([`/archive/${projectSlug}`])
+}
+
+/** 게시글 작성/삭제 등으로 목록이 바뀔 때 무효화할 게시판 목록 경로. */
+export function getBoardListRevalidationPaths(): string[] {
+  return withLocales(['/board'])
+}
+
+/**
+ * 게시글 수정 시 무효화할 경로 — 목록과 해당 글 상세를 함께 반환한다.
+ * 목록도 포함하는 이유는 제목·카테고리·고정 여부가 목록 렌더에 그대로 쓰이기
+ * 때문이다.
+ */
+export function getBoardPostRevalidationPaths(postId: string | number): string[] {
+  return withLocales(['/board', `/board/${postId}`])
 }

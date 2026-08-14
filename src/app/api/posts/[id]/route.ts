@@ -19,6 +19,7 @@ import { revalidatePath, revalidateTag } from 'next/cache'
 import { CATEGORIES, parseBoardCategory } from '@/constants/categories'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { annotateImageDimensionsSafe } from '@/utils/imageDimensions'
+import { getBoardPostRevalidationPaths } from '@/lib/revalidationPaths'
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const resolvedParams = await context.params
@@ -370,10 +371,12 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     }
 
     try {
-      revalidatePath('/board')
-      revalidatePath('/en/board')
-      revalidatePath(`/board/${validPostId}`)
-      revalidatePath(`/en/board/${validPostId}`)
+      // ko는 URL에 접두사가 없지만 렌더는 내부 rewrite된 `/ko/board...`에서
+      // 일어나므로 `/board`로는 무효화되지 않는다. 자세한 배경은
+      // @/lib/revalidationPaths 참고.
+      for (const boardPath of getBoardPostRevalidationPaths(validPostId)) {
+        revalidatePath(boardPath)
+      }
       revalidateTag(`post-${validPostId}`)
       revalidateTag('board-post')
       revalidateTag('board-initial')
@@ -462,6 +465,13 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
 
     // 캐시 무효화
     try {
+      // 삭제는 원래 태그 무효화만 했는데, 이 저장소에서 `board-*`/`post-*` 태그를
+      // 부착하는 fetch가 하나도 없어서(유일한 태그는 data.ts의 'artists') 사실상
+      // 아무것도 무효화하지 않았다. 목록·상세 경로를 직접 무효화해 삭제된 글이
+      // 캐시에 남지 않게 한다. 로케일 접두사 처리는 @/lib/revalidationPaths 참고.
+      for (const boardPath of getBoardPostRevalidationPaths(validPostId)) {
+        revalidatePath(boardPath)
+      }
       revalidateTag(`post-${validPostId}`)
       revalidateTag('board-post')
       if (post.category) {

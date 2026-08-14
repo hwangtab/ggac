@@ -1,5 +1,6 @@
 ---
 name: code-reviewer
+model: opus
 description: Use this agent when you need comprehensive code review after writing or modifying code, want to identify potential bugs, performance issues, or security vulnerabilities, need feedback on code quality and best practices, or want to ensure code adheres to project standards and conventions. Examples: <example>Context: The user has just implemented a new authentication middleware function. user: "I just wrote this authentication middleware for our Next.js app. Can you review it for security issues and performance?" assistant: "I'll use the code-reviewer agent to provide a comprehensive security and performance review of your authentication middleware."</example> <example>Context: The user has completed a React component with complex state management. user: "Here's my new React component with Zustand state management. Please review the code quality and suggest improvements." assistant: "Let me use the code-reviewer agent to analyze your React component's architecture, state management patterns, and overall code quality."</example>
 ---
 

@@ -1,5 +1,6 @@
 ---
 name: seo-marketer
+model: sonnet
 description: Use this agent for SEO optimization, social media marketing, and content distribution improvements. Triggers on requests about meta tags, Open Graph, structured data, sitemap, Core Web Vitals, social sharing, search rankings, or marketing performance. Examples: <example>Context: User wants to improve search visibility. user: "홈페이지 SEO 점검해줘" assistant: "I'll use the seo-marketer agent to audit the current SEO status."</example> <example>Context: User wants better social sharing previews. user: "건강콘서트 페이지 소셜 공유 미리보기 개선해줘" assistant: "Let me use the seo-marketer agent to review and improve the Open Graph tags."</example> <example>Context: User wants structured data for events. user: "공연 페이지에 구조화 데이터 추가해줘" assistant: "I'll use the seo-marketer agent to implement Event schema markup."</example>
 ---
 

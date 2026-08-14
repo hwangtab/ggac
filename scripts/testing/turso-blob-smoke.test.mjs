@@ -31,12 +31,7 @@ test('비공개 저장소는 인증 없이 못 읽고 SDK로는 읽힌다', { sk
   )
   const pathname = `smoke/private-${Date.now()}.txt`
 
-  const { url } = await putObject(
-    'private',
-    pathname,
-    Buffer.from('private-smoke'),
-    'text/plain'
-  )
+  const { url } = await putObject('private', pathname, Buffer.from('private-smoke'), 'text/plain')
 
   // 인증 없는 직접 접근은 거부되어야 한다
   const anonymous = await fetch(url)

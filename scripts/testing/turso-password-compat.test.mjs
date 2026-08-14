@@ -19,10 +19,7 @@ test('bcrypt 해시를 식별한다', () => {
 
 test('Supabase가 만든 bcrypt 해시를 검증한다', async () => {
   const supabaseStyleHash = bcrypt.hashSync('correct-horse', 10)
-  assert.equal(
-    await verifyPassword({ hash: supabaseStyleHash, password: 'correct-horse' }),
-    true
-  )
+  assert.equal(await verifyPassword({ hash: supabaseStyleHash, password: 'correct-horse' }), true)
   assert.equal(await verifyPassword({ hash: supabaseStyleHash, password: 'wrong' }), false)
 })
 
@@ -94,14 +91,8 @@ test('scrypt 해시의 저장값이 hex가 아니면 false', async () => {
 })
 
 test('scheme을 알아볼 수 없는 문자열은 false', async () => {
-  assert.equal(
-    await verifyPassword({ hash: 'not-a-hash-at-all', password: 'whatever' }),
-    false
-  )
-  assert.equal(
-    await verifyPassword({ hash: 'md5:deadbeef', password: 'whatever' }),
-    false
-  )
+  assert.equal(await verifyPassword({ hash: 'not-a-hash-at-all', password: 'whatever' }), false)
+  assert.equal(await verifyPassword({ hash: 'md5:deadbeef', password: 'whatever' }), false)
 })
 
 // --- 저장된 비용 파라미터를 그대로 신뢰해 검증한다 ---
@@ -121,9 +112,6 @@ test('저장된 해시의 비용 파라미터가 현재 기본값과 달라도 �
   const legacyHash = `scrypt:${oldN}:${oldR}:${oldP}:${salt}:${derived.toString('hex')}`
 
   assert.equal(isBcryptHash(legacyHash), false)
-  assert.equal(
-    await verifyPassword({ hash: legacyHash, password: 'legacy-cost-password' }),
-    true
-  )
+  assert.equal(await verifyPassword({ hash: legacyHash, password: 'legacy-cost-password' }), true)
   assert.equal(await verifyPassword({ hash: legacyHash, password: 'wrong' }), false)
 })

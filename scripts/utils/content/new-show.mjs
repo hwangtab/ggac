@@ -24,8 +24,8 @@ const KO_PATH = path.join(ROOT, 'data', 'projects.json')
 const EN_PATH = path.join(ROOT, 'data', 'en', 'projects.json')
 
 const CATEGORY = {
-  '1': { ko: '공연·전시', en: 'Performance & Exhibition' },
-  '2': { ko: '행사', en: 'Event' },
+  1: { ko: '공연·전시', en: 'Performance & Exhibition' },
+  2: { ko: '행사', en: 'Event' },
 }
 
 // async 이터레이터 기반 입력 — TTY(대화형)·파이프(스크립트/CI) 모두 안정 동작.
@@ -168,7 +168,9 @@ async function main() {
   console.log('  5. lead — 비워두면 필드에서 자동 생성. 손으로 덮어쓰려면 추가')
   console.log('\n  포맷 정리: npx prettier --write data/projects.json data/en/projects.json')
   if (eventDate && eventDate >= today) {
-    console.log(`\n  🔔 미래 공연일(${eventDate}) — 배포되면 /archive '예정 공연'에 자동 노출됩니다.`)
+    console.log(
+      `\n  🔔 미래 공연일(${eventDate}) — 배포되면 /archive '예정 공연'에 자동 노출됩니다.`
+    )
   }
 }
 

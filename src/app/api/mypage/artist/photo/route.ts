@@ -20,7 +20,7 @@ import { revalidatePath, revalidateTag } from 'next/cache'
 import sharp from 'sharp'
 import type { ProfilePhotoUploadResponse, ProfilePhotoMetadata, ImageCropSettings } from '@/types'
 import { invalidateArtistsCache } from '@/lib/data'
-import { getArtistCoreRevalidationPaths } from '@/lib/artistRevalidation'
+import { getArtistCoreRevalidationPaths } from '@/lib/revalidationPaths'
 import { hasValidFileSignature } from '@/utils/fileUploadValidation'
 import { isProjectStorageObjectPath } from '@/utils/storageUrlValidation'
 
@@ -527,7 +527,7 @@ export async function PUT(request: NextRequest) {
     // 캐시 무효화 — ko(내부 rewrite 경로 `/ko/...`)와 en(`/en/...`) 두 로케일
     // 경로를 모두 무효화한다. 홈은 FeaturedArtists 섹션에서 아티스트 사진을
     // 보여주므로 함께 무효화 대상에 포함한다. 자세한 배경은
-    // @/lib/artistRevalidation 참고.
+    // @/lib/revalidationPaths 참고.
     try {
       revalidateTag('artists')
       for (const revalidationPath of getArtistCoreRevalidationPaths(currentArtist?.slug)) {
@@ -682,7 +682,7 @@ export async function DELETE(request: NextRequest) {
 
     // ko(내부 rewrite 경로 `/ko/...`)와 en(`/en/...`) 두 로케일 경로를 모두
     // 무효화한다. 홈은 FeaturedArtists 섹션에서 아티스트 사진을 보여주므로
-    // 함께 무효화한다. 자세한 배경은 @/lib/artistRevalidation 참고.
+    // 함께 무효화한다. 자세한 배경은 @/lib/revalidationPaths 참고.
     try {
       revalidateTag('artists')
       for (const revalidationPath of getArtistCoreRevalidationPaths(artist.slug)) {

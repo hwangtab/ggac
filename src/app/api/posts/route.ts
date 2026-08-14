@@ -12,6 +12,7 @@ import { parseIntegerParam } from '@/utils/queryParams'
 import { CATEGORIES, parseBoardCategory } from '@/constants/categories'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { annotateImageDimensionsSafe } from '@/utils/imageDimensions'
+import { getBoardListRevalidationPaths } from '@/lib/revalidationPaths'
 
 export const runtime = 'nodejs'
 export const revalidate = 60
@@ -233,8 +234,12 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        revalidatePath('/board')
-        revalidatePath('/en/board')
+        // ko는 URL에 접두사가 없지만 렌더는 내부 rewrite된 `/ko/board`에서
+        // 일어나므로 `/board`로는 무효화되지 않는다. 자세한 배경은
+        // @/lib/revalidationPaths 참고.
+        for (const boardPath of getBoardListRevalidationPaths()) {
+          revalidatePath(boardPath)
+        }
         revalidateTag('board-post')
         revalidateTag('board-initial')
         revalidateTag(`board-${category}`)

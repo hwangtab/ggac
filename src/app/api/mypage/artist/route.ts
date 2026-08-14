@@ -10,7 +10,7 @@ import {
   getArtistCoreRevalidationPaths,
   getArchiveListRevalidationPaths,
   getArchiveProjectRevalidationPaths,
-} from '@/lib/artistRevalidation'
+} from '@/lib/revalidationPaths'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { isProjectStorageObjectPath } from '@/utils/storageUrlValidation'
 import { logicalPathFromUrl } from '@/lib/storage/paths'
@@ -340,7 +340,7 @@ export async function PATCH(request: NextRequest) {
         // 관련된 모든 페이지의 캐시 무효화 (즉시 반영) — ko(내부 rewrite 경로
         // `/ko/...`)와 en(`/en/...`) 두 로케일 경로를 모두 무효화해야 한다.
         // revalidatePath는 렌더된 실제 경로에만 정확히 매칭되므로 로케일별로
-        // 각각 호출이 필요하다. 자세한 배경은 @/lib/artistRevalidation 참고.
+        // 각각 호출이 필요하다. 자세한 배경은 @/lib/revalidationPaths 참고.
         for (const revalidationPath of getArtistCoreRevalidationPaths(artistForSlug.slug)) {
           revalidatePath(revalidationPath)
         }
