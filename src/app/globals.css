@@ -1229,10 +1229,125 @@ body {
 [data-poster] [class*=' text-orange-'] {
   color: #fcd34d;
 }
+/* --- hover 변형 ---
+ *
+ * 위쪽 재매핑은 전부 `[class*=' bg-gray-5']` 같은 속성 셀렉터다. 그런데
+ * Tailwind가 `hover:bg-gray-50`을 내보낼 때 class 문자열은 `hover:bg-gray-50`이라
+ * `bg-gray-5` 앞이 공백이 아니라 `:`다. 즉 위 규칙 중 어느 것도 걸리지 않는다.
+ *
+ * 그래서 정적 상태만 다크로 바뀌고 hover에서만 밝은 테마 값이 되살아났다.
+ * 알림 드롭다운에서 행에 커서를 올리면 배경이 #f9fafb로 돌아가는데 글자는
+ * 이미 흰색으로 재매핑돼 있어 내용이 통째로 사라졌다.
+ *
+ * hover는 "강조"이므로 면은 쉬는 상태보다 한 단계 밝게, 글자는 한 단계 더
+ * 밝게 올린다. 회귀는 scripts/testing/posterHoverContrast.test.mjs가 잡는다.
+ */
+
+/* 중립 면 — 투명하거나 어두운 면 위에서의 부상.
+ * 색조 면의 쉬는 상태가 이미 0.07이므로 그보다 확실히 위여야 한다.
+ * 안 그러면 미읽음 알림처럼 색조 배경을 깐 행에서 hover가 느껴지지 않는다. */
+[data-poster] .hover\:bg-gray-50:hover,
+[data-poster] .hover\:bg-gray-100:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+}
+[data-poster] .hover\:bg-gray-200:hover,
+[data-poster] .hover\:bg-gray-300:hover {
+  background-color: rgba(255, 255, 255, 0.18);
+}
+
+/* 색조 면 — 쉬는 상태(rgba(255,255,255,0.07))보다 한 단계 위로 */
+[data-poster] .hover\:bg-blue-50:hover,
+[data-poster] .hover\:bg-blue-100:hover,
+[data-poster] .hover\:bg-green-50:hover,
+[data-poster] .hover\:bg-green-100:hover,
+[data-poster] .hover\:bg-red-50:hover,
+[data-poster] .hover\:bg-red-100:hover,
+[data-poster] .hover\:bg-orange-50:hover,
+[data-poster] .hover\:bg-yellow-50:hover,
+[data-poster] .hover\:bg-amber-50:hover,
+[data-poster] .hover\:bg-indigo-50:hover,
+[data-poster] .hover\:bg-purple-50:hover,
+[data-poster] .hover\:bg-teal-50:hover,
+[data-poster] .hover\:bg-pink-50:hover,
+[data-poster] .hover\:bg-primary-50:hover,
+[data-poster] .hover\:bg-primary-100:hover,
+[data-poster] .hover\:bg-accent-50:hover,
+[data-poster] .hover\:bg-accent-100:hover {
+  background-color: rgba(255, 255, 255, 0.14);
+}
+[data-poster] .hover\:bg-blue-200:hover,
+[data-poster] .hover\:bg-green-200:hover,
+[data-poster] .hover\:bg-red-200:hover,
+[data-poster] .hover\:bg-orange-200:hover,
+[data-poster] .hover\:bg-yellow-200:hover,
+[data-poster] .hover\:bg-primary-200:hover,
+[data-poster] .hover\:bg-accent-200:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+/* 글자 — 어두운 계단은 다크 면에서 그대로 사라진다 */
+[data-poster] .hover\:text-gray-600:hover,
+[data-poster] .hover\:text-gray-700:hover,
+[data-poster] .hover\:text-gray-800:hover,
+[data-poster] .hover\:text-gray-900:hover {
+  color: var(--poster-text);
+}
 /* 링크 hover 등에서 파랑이 남지 않도록 */
 [data-poster] .hover\:text-primary-600:hover,
-[data-poster] .hover\:text-primary-700:hover {
+[data-poster] .hover\:text-primary-700:hover,
+[data-poster] .hover\:text-primary-800:hover,
+[data-poster] .hover\:text-primary-900:hover,
+[data-poster] .group:hover .group-hover\:text-primary-600,
+[data-poster] .group:hover .group-hover\:text-primary-700 {
   color: #ffffff;
+}
+[data-poster] .hover\:text-accent-600:hover,
+[data-poster] .hover\:text-accent-700:hover,
+[data-poster] .group:hover .group-hover\:text-accent-600 {
+  color: #ffe9c4;
+}
+[data-poster] .hover\:text-red-600:hover,
+[data-poster] .hover\:text-red-700:hover,
+[data-poster] .hover\:text-red-800:hover,
+[data-poster] .hover\:text-rose-600:hover,
+[data-poster] .hover\:text-rose-700:hover {
+  color: #fecaca;
+}
+[data-poster] .hover\:text-green-600:hover,
+[data-poster] .hover\:text-green-700:hover,
+[data-poster] .hover\:text-green-800:hover,
+[data-poster] .hover\:text-emerald-600:hover,
+[data-poster] .hover\:text-emerald-700:hover {
+  color: #bbf7d0;
+}
+[data-poster] .hover\:text-blue-600:hover,
+[data-poster] .hover\:text-blue-700:hover,
+[data-poster] .hover\:text-blue-800:hover,
+[data-poster] .hover\:text-indigo-600:hover,
+[data-poster] .hover\:text-indigo-700:hover {
+  color: #bfdbfe;
+}
+[data-poster] .hover\:text-orange-600:hover,
+[data-poster] .hover\:text-orange-700:hover,
+[data-poster] .hover\:text-amber-600:hover,
+[data-poster] .hover\:text-amber-700:hover,
+[data-poster] .hover\:text-yellow-600:hover,
+[data-poster] .hover\:text-yellow-700:hover {
+  color: #fde68a;
+}
+[data-poster] .hover\:text-purple-600:hover,
+[data-poster] .hover\:text-purple-700:hover,
+[data-poster] .hover\:text-violet-600:hover,
+[data-poster] .hover\:text-pink-600:hover,
+[data-poster] .hover\:text-pink-700:hover {
+  color: #f0d9ff;
+}
+[data-poster] .hover\:text-teal-600:hover,
+[data-poster] .hover\:text-teal-700:hover,
+[data-poster] .hover\:text-cyan-600:hover,
+[data-poster] .hover\:text-sky-600:hover,
+[data-poster] .hover\:text-sky-700:hover {
+  color: #ccfbf1;
 }
 
 /* --- 선 --- */
