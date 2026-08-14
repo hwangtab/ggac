@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
-import { put, list } from '@vercel/blob'
+import { put, list, get } from '@vercel/blob'
 
 // src/lib/storage/boardDocuments.ts의 BOARD_DOCUMENT_PREFIX와 같은 값이다.
 // 이 스크립트는 .mjs라 .ts를 import할 수 없어 문자열을 중복한다. 한쪽을 바꾸면
@@ -54,6 +54,14 @@ async function downloadOne(supabase, filePath) {
   const { data, error } = await supabase.storage.from(BUCKET).download(filePath)
   if (error || !data) throw new Error(`다운로드 실패 ${filePath}: ${error?.message ?? 'no data'}`)
   return Buffer.from(await data.arrayBuffer())
+}
+
+async function streamToBuffer(stream) {
+  const chunks = []
+  for await (const chunk of stream) {
+    chunks.push(chunk)
+  }
+  return Buffer.concat(chunks)
 }
 
 export async function copyAll({ dryRun = false } = {}) {
@@ -112,27 +120,31 @@ export async function verifyAll() {
   const token = requireEnv('PRIVATE_BLOB_READ_WRITE_TOKEN')
 
   const objects = await listBucketObjects(supabase)
-  const { blobs } = await list({ token, prefix: `${PREFIX}/`, limit: 1000 })
-  const byPath = new Map(blobs.map(b => [b.pathname, b]))
 
   let mismatch = 0
   for (const object of objects) {
     const target = `${PREFIX}/${object.filePath}`
-    const blob = byPath.get(target)
-    if (!blob) {
-      console.error(`  없음 ${target}`)
-      mismatch++
-      continue
-    }
 
     const sourceBuffer = await downloadOne(supabase, object.filePath)
-    const response = await fetch(blob.downloadUrl ?? blob.url)
-    if (!response.ok) {
-      console.error(`  Blob 읽기 실패 ${target}: HTTP ${response.status}`)
+
+    // list()가 돌려주는 blob.downloadUrl은 서명이 없는 URL이라 비공개
+    // 저장소에서는 맨 fetch로 읽으면 401/403이 난다(인증 헤더가 없으므로).
+    // @vercel/blob의 get()은 authorization: Bearer <token> 헤더를 내부에서
+    // 붙여서 요청하므로, 인증·URL 구성이 SDK 버전에 따라 바뀌어도 이 쪽이
+    // 따라간다. src/lib/storage/blob.ts의 getPrivateObject도 같은 이유로
+    // fetch가 아니라 get()을 쓴다.
+    const result = await get(target, { access: 'private', token })
+    if (!result) {
+      console.error(`  Blob에 없음 ${target}`)
       mismatch++
       continue
     }
-    const targetBuffer = Buffer.from(await response.arrayBuffer())
+    if (!result.stream) {
+      console.error(`  Blob 읽기 실패 ${target}: 스트림 없음(statusCode ${result.statusCode})`)
+      mismatch++
+      continue
+    }
+    const targetBuffer = await streamToBuffer(result.stream)
 
     const sourceHash = sha256(sourceBuffer)
     const targetHash = sha256(targetBuffer)
