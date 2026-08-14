@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useTranslations, useLocale } from 'next-intl'
-import { localizeArchiveCategory } from '@/constants/categories'
+import { localizeProjectCategory } from '@/constants/categories'
 import { Link } from '@/i18n/navigation'
 import dynamic from 'next/dynamic'
 import OptimizedImage from '@/components/OptimizedImage'
@@ -43,7 +43,7 @@ export default function ProjectDetailContent({
   relatedProjects,
   isUpcoming = false,
 }: ProjectDetailContentProps) {
-  const t = useTranslations('archive')
+  const t = useTranslations('projects')
   const locale = useLocale()
   const dateLocale = locale === 'en' ? 'en-US' : 'ko-KR'
   const isEn = locale === 'en'
@@ -118,7 +118,7 @@ export default function ProjectDetailContent({
           <div className="max-w-4xl mx-auto text-center">
             <div className="mb-6">
               <Link
-                href="/archive"
+                href="/projects"
                 className="inline-flex items-center text-primary-600 hover:text-primary-700 transition-colors duration-200"
               >
                 {t('detail.backLink')}
@@ -143,7 +143,7 @@ export default function ProjectDetailContent({
                   )
                 })()}
               <span className="inline-block px-4 py-2 bg-primary-100 text-primary-700 font-medium rounded-full">
-                {localizeArchiveCategory(project.category, locale)}
+                {localizeProjectCategory(project.category, locale)}
               </span>
               <span className="text-gray-600">
                 {parseLocalDate(displayDate).toLocaleDateString(dateLocale)}
@@ -296,7 +296,7 @@ export default function ProjectDetailContent({
                     return (
                       <Link
                         key={relatedProject.slug}
-                        href={`/archive/${relatedProject.slug}`}
+                        href={`/projects/${relatedProject.slug}`}
                         className="group block border border-gray-200 rounded-2xl overflow-hidden bg-white hover:shadow-lg transition-shadow duration-200"
                       >
                         <div className="aspect-video overflow-hidden bg-gray-100">
@@ -311,7 +311,7 @@ export default function ProjectDetailContent({
                         </div>
                         <div className="p-4">
                           <div className="text-sm text-primary-600 font-medium mb-2">
-                            {localizeArchiveCategory(relatedProject.category, locale)}
+                            {localizeProjectCategory(relatedProject.category, locale)}
                           </div>
                           <h3 className="font-semibold text-gray-900 line-clamp-2 mb-2">
                             {relatedProject.title}
@@ -443,7 +443,7 @@ export default function ProjectDetailContent({
               <h2 className="tw-heading-tertiary mb-3">{t('detail.navHeading')}</h2>
               <p className="text-gray-600">{t('detail.navBody')}</p>
             </div>
-            <Link href="/archive" className="tw-btn-primary">
+            <Link href="/projects" className="tw-btn-primary">
               {t('detail.navCta')}
             </Link>
           </div>

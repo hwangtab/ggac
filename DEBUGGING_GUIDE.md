@@ -66,10 +66,10 @@ fetch('/api/client-error', {
 
 ```bash
 # 터미널에서 실행
-curl -I "https://ggac.kr/archive/satanic-ritual-perversions-vol-ii"
+curl -I "https://ggac.kr/projects/satanic-ritual-perversions-vol-ii"
 
 # HTML 헤더 확인
-curl -s "https://ggac.kr/archive/satanic-ritual-perversions-vol-ii" | head -50
+curl -s "https://ggac.kr/projects/satanic-ritual-perversions-vol-ii" | head -50
 ```
 
 ## 5. 캐시 문제 해결

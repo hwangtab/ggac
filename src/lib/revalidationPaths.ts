@@ -59,17 +59,17 @@ export function getArtistCoreRevalidationPaths(slug?: string | null): string[] {
   return withLocales(routes)
 }
 
-/** 아카이브 목록 페이지 무효화 경로. */
-export function getArchiveListRevalidationPaths(): string[] {
-  return withLocales(['/archive'])
+/** 프로젝트 목록 페이지 무효화 경로. */
+export function getProjectListRevalidationPaths(): string[] {
+  return withLocales(['/projects'])
 }
 
 /**
- * 아티스트가 참여한 특정 아카이브 프로젝트 상세 페이지 무효화 경로.
+ * 아티스트가 참여한 특정 프로젝트 상세 페이지 무효화 경로.
  * 프로젝트 slug 하나에 대해 두 로케일 경로를 모두 반환한다.
  */
-export function getArchiveProjectRevalidationPaths(projectSlug: string): string[] {
-  return withLocales([`/archive/${projectSlug}`])
+export function getProjectDetailRevalidationPaths(projectSlug: string): string[] {
+  return withLocales([`/projects/${projectSlug}`])
 }
 
 /** 게시글 작성/삭제 등으로 목록이 바뀔 때 무효화할 게시판 목록 경로. */

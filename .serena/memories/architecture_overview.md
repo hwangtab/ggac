@@ -8,7 +8,7 @@ src/
 │   ├── api/               # API 라우트
 │   ├── admin/             # 관리자 페이지
 │   ├── artists/           # 아티스트 페이지
-│   ├── archive/           # 활동 기록
+│   ├── projects/          # 예정·지난 프로젝트
 │   ├── about/             # 조합 소개
 │   ├── connect/           # 연락 및 참여
 │   ├── mypage/            # 마이페이지

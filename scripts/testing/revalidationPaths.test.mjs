@@ -3,8 +3,8 @@ import assert from 'node:assert/strict'
 
 const {
   getArtistCoreRevalidationPaths,
-  getArchiveListRevalidationPaths,
-  getArchiveProjectRevalidationPaths,
+  getProjectListRevalidationPaths,
+  getProjectDetailRevalidationPaths,
   getBoardListRevalidationPaths,
   getBoardPostRevalidationPaths,
 } = await import('../../src/lib/revalidationPaths.ts')
@@ -42,14 +42,14 @@ test('아티스트 핵심 경로: slug가 null/빈 문자열이면 상세 경로
   assert.deepEqual(getArtistCoreRevalidationPaths(''), ['/ko', '/ko/artists', '/en', '/en/artists'])
 })
 
-test('아카이브 목록 경로: 두 로케일 모두 반환하고 트레일링 슬래시 없음', () => {
-  assert.deepEqual(getArchiveListRevalidationPaths(), ['/ko/archive', '/en/archive'])
+test('프로젝트 목록 경로: 두 로케일 모두 반환하고 트레일링 슬래시 없음', () => {
+  assert.deepEqual(getProjectListRevalidationPaths(), ['/ko/projects', '/en/projects'])
 })
 
-test('아카이브 프로젝트 상세 경로: 두 로케일 모두 반환', () => {
-  assert.deepEqual(getArchiveProjectRevalidationPaths('project-1'), [
-    '/ko/archive/project-1',
-    '/en/archive/project-1',
+test('프로젝트 상세 경로: 두 로케일 모두 반환', () => {
+  assert.deepEqual(getProjectDetailRevalidationPaths('project-1'), [
+    '/ko/projects/project-1',
+    '/en/projects/project-1',
   ])
 })
 

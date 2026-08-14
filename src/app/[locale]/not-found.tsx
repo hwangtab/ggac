@@ -35,10 +35,10 @@ export default function NotFound() {
           홈으로
         </Link>
         <Link
-          href="/archive"
+          href="/projects"
           className="inline-flex min-h-[48px] items-center justify-center border border-white/50 px-8 text-sm font-semibold transition-colors duration-200 hover:border-white hover:bg-white/10"
         >
-          아카이브 보기
+          프로젝트 보기
         </Link>
       </div>
     </div>

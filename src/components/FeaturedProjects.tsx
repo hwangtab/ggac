@@ -40,7 +40,7 @@ const FeaturedProjects = async ({ projects }: FeaturedProjectsProps) => {
           </span>
           <span className="h-px flex-1 bg-white/25" />
           <Link
-            href="/archive"
+            href="/projects"
             className="hidden items-center gap-2 text-[11px] uppercase tracking-[0.24em] text-white/60 transition-colors duration-200 hover:text-white sm:inline-flex"
           >
             {t('projects.viewAll')}
@@ -60,7 +60,7 @@ const FeaturedProjects = async ({ projects }: FeaturedProjectsProps) => {
             return (
               <Link
                 key={project.id}
-                href={`/archive/${project.slug}`}
+                href={`/projects/${project.slug}`}
                 className={`group block border border-white/15 transition-colors duration-300 hover:border-white/50 ${
                   index === 0 ? 'md:col-span-2' : ''
                 }`}
@@ -119,7 +119,7 @@ const FeaturedProjects = async ({ projects }: FeaturedProjectsProps) => {
         {/* 모바일용 전체 보기 — 데스크톱은 킥커 행의 링크가 담당 */}
         <div className="mt-10 sm:hidden">
           <Link
-            href="/archive"
+            href="/projects"
             className="inline-flex min-h-[48px] w-full items-center justify-center border border-white/50 px-8 text-sm font-semibold tracking-tight text-white transition-colors duration-300 hover:border-white hover:bg-white/10"
           >
             {t('projects.viewAll')}

@@ -108,7 +108,7 @@ function TermsContentEn() {
         </p>
         <ul className="list-disc pl-6 text-gray-700 space-y-2">
           <li>Information about the Cooperative and its affiliated artists</li>
-          <li>Project and artwork archive service</li>
+          <li>Project and artwork information service</li>
           <li>Community board for communication among members</li>
           <li>Other services determined by the Cooperative</li>
         </ul>
@@ -248,7 +248,7 @@ export default async function TermsPage({ params }: TermsPageProps) {
                   </p>
                   <ul className="list-disc pl-6 text-gray-700 space-y-2">
                     <li>조합 및 소속 아티스트 정보 제공</li>
-                    <li>프로젝트 및 작품 아카이브 서비스</li>
+                    <li>프로젝트 및 작품 정보 제공 서비스</li>
                     <li>조합원 간 소통을 위한 게시판 서비스</li>
                     <li>기타 조합이 정하는 서비스</li>
                   </ul>

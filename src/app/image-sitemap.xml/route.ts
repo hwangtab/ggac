@@ -50,7 +50,7 @@ export async function GET() {
         .join('\n')
 
       entries.push(`  <url>
-    <loc>${escapeXml(`${baseUrl}/archive/${project.slug}`)}</loc>
+    <loc>${escapeXml(`${baseUrl}/projects/${project.slug}`)}</loc>
 ${imageXml}
   </url>`)
     }

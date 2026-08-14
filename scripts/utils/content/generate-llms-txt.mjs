@@ -236,25 +236,25 @@ function build() {
     '',
     ...SERIES.map(s => {
       const sequels = s.sequels
-        .map(([label, slug]) => `[${label}](${SITE}/archive/${slug})`)
+        .map(([label, slug]) => `[${label}](${SITE}/projects/${slug})`)
         .join(' / ')
-      return `- [${s.name}](${SITE}/archive/${s.lead}) - ${s.description}${sequels ? `. ${sequels}` : ''}`
+      return `- [${s.name}](${SITE}/projects/${s.lead}) - ${s.description}${sequels ? `. ${sequels}` : ''}`
     }),
     '',
     '## 주요 공연·프로젝트',
     '',
     ...FEATURED.map(([slug, description]) => {
       const project = projects.find(p => p.slug === slug)
-      return `- [${cleanTitle(project.title)}](${SITE}/archive/${slug}) - ${description}`
+      return `- [${cleanTitle(project.title)}](${SITE}/projects/${slug}) - ${description}`
     }),
     '',
-    `전체 아카이브: [프로젝트](${SITE}/archive)`,
+    `전체 목록: [프로젝트](${SITE}/projects)`,
     '',
     '## 사이트',
     '',
     `- [홈](${SITE}/) - 메인 페이지`,
     `- [함께하는 사람들](${SITE}/artists) - 소속 아티스트 프로필 전체`,
-    `- [프로젝트](${SITE}/archive) - 공연·전시·행사 아카이브`,
+    `- [프로젝트](${SITE}/projects) - 예정·지난 공연, 전시, 행사`,
     `- [우리의 이야기](${SITE}/about) - 조합 소개, 설립 목적, 연혁`,
     `- [소통과 참여](${SITE}/connect) - 조합원 가입, 후원, 공연 협업 및 섭외 문의`,
     `- [자유게시판](${SITE}/board) - 커뮤니티 게시판`,

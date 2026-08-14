@@ -169,7 +169,7 @@ async function main() {
   console.log('\n  포맷 정리: npx prettier --write data/projects.json data/en/projects.json')
   if (eventDate && eventDate >= today) {
     console.log(
-      `\n  🔔 미래 공연일(${eventDate}) — 배포되면 /archive '예정 공연'에 자동 노출됩니다.`
+      `\n  🔔 미래 공연일(${eventDate}) — 배포되면 /projects '예정 공연'에 자동 노출됩니다.`
     )
   }
 }

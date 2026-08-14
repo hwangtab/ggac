@@ -2,14 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { apiDelete, ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { requireBoardMember } from '@/lib/server/boardRoomAuth'
 import { createLogger } from '@/utils/logger'
-import { isSafeBoardDocumentStoragePath } from '@/utils/boardDocumentStoragePath'
+import { isSafeBoardDocumentFilePath } from '@/lib/storage/boardDocuments'
+import { deleteBoardDocumentEverywhere } from '@/lib/storage/privateProvider'
 import { validateUUID } from '@/utils/validation'
 
 const log = createLogger('boardRoom/documents')
 
 export const runtime = 'nodejs'
-
-const BUCKET = 'board-documents'
 
 function validateDocumentId(id: string) {
   const validation = validateUUID(id, '서류 ID')
@@ -41,18 +40,19 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       // Authorization: uploader or admin only
       if (doc.uploaded_by !== user.id && !isAdmin) throw ApiError.forbidden('삭제 권한이 없습니다.')
 
-      // Delete storage object first (log-and-continue on failure to avoid undeletable records)
-      const safeFilePath = isSafeBoardDocumentStoragePath(doc.file_path, doc.uploaded_by)
-        ? doc.file_path
-        : null
-
-      if (safeFilePath) {
-        const { error: storageErr } = await db.storage.from(BUCKET).remove([safeFilePath])
-        if (storageErr) {
+      // 저장소 객체를 먼저 지운다. 실패해도 메타데이터 행 삭제는 진행한다 —
+      // 지울 수 없는 레코드가 남는 쪽이 더 나쁘다.
+      //
+      // 양쪽 제공자에서 지우는 이유: 복사본이 Supabase와 Blob 양쪽에 남아 있는
+      // 전환기라, 한쪽만 지우면 롤백 후 삭제한 문서가 되살아난다.
+      if (isSafeBoardDocumentFilePath(doc.file_path)) {
+        try {
+          await deleteBoardDocumentEverywhere(doc.file_path)
+        } catch (storageErr) {
           log.error('storage 객체 삭제 실패', {
             id,
-            path: safeFilePath,
-            error: storageErr.message,
+            path: doc.file_path,
+            error: storageErr instanceof Error ? storageErr.message : String(storageErr),
           })
         }
       } else {

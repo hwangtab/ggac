@@ -3,8 +3,8 @@
  * 언어별로 구분하여 사용자 경험 일관성 유지
  */
 
-// 아카이브 프로젝트 카테고리 (공개, 국제적 - 영문 All 사용)
-export const ARCHIVE_CATEGORIES = [
+// 프로젝트 카테고리 (공개, 국제적 - 영문 All 사용)
+export const PROJECT_CATEGORIES = [
   'All',
   '음반·음원',
   '공연·전시',
@@ -13,7 +13,7 @@ export const ARCHIVE_CATEGORIES = [
   '행사',
 ] as const
 
-export type ArchiveCategory = (typeof ARCHIVE_CATEGORIES)[number]
+export type ProjectCategory = (typeof PROJECT_CATEGORIES)[number]
 
 // 아티스트 카테고리 (공개, 국제적 - 영문 All 사용)
 export const ARTIST_CATEGORIES = [
@@ -46,9 +46,9 @@ export const BOARD_CATEGORY_STYLES = {
 
 // 카테고리 그룹 통합 (타입 안정성을 위해)
 export const CATEGORIES = {
-  ARCHIVE: {
+  PROJECTS: {
     ALL: 'All' as const,
-    ITEMS: ARCHIVE_CATEGORIES.slice(1), // 'All'을 제외한 실제 카테고리들
+    ITEMS: PROJECT_CATEGORIES.slice(1), // 'All'을 제외한 실제 카테고리들
   },
   ARTISTS: {
     ALL: 'All' as const,
@@ -61,7 +61,7 @@ export const CATEGORIES = {
 } as const
 
 // 영어 표시 라벨 맵 (canonical 한글 값 → 영어 라벨)
-export const ARCHIVE_CATEGORY_LABELS_EN: Record<string, string> = {
+export const PROJECT_CATEGORY_LABELS_EN: Record<string, string> = {
   All: 'All',
   '음반·음원': 'Music',
   '공연·전시': 'Performance & Exhibition',
@@ -84,9 +84,9 @@ export const ARTIST_CATEGORY_LABELS_EN: Record<string, string> = {
   기타: 'Other',
 }
 
-export function localizeArchiveCategory(value: string, locale: string): string {
+export function localizeProjectCategory(value: string, locale: string): string {
   if (locale !== 'en') return value
-  return ARCHIVE_CATEGORY_LABELS_EN[value] ?? value
+  return PROJECT_CATEGORY_LABELS_EN[value] ?? value
 }
 
 export function localizeArtistCategory(value: string, locale: string): string {
@@ -95,8 +95,8 @@ export function localizeArtistCategory(value: string, locale: string): string {
 }
 
 // 카테고리 유효성 검사 헬퍼 함수들
-export const isValidArchiveCategory = (category: string): category is ArchiveCategory => {
-  return ARCHIVE_CATEGORIES.includes(category as ArchiveCategory)
+export const isValidProjectCategory = (category: string): category is ProjectCategory => {
+  return PROJECT_CATEGORIES.includes(category as ProjectCategory)
 }
 
 export const isValidArtistCategory = (category: string): category is ArtistCategory => {

@@ -240,6 +240,25 @@ const nextConfig = {
   poweredByHeader: false,
   compress: true,
 
+  // 구 `/archive` 경로 영구 이전 → `/projects`.
+  // 이 페이지는 지난 기록만이 아니라 예정 공연도 싣기 때문에 '아카이브'라는 이름이
+  // 실제 내용과 맞지 않았다. 검색엔진에 이미 색인된 URL과 외부에서 걸린 링크가
+  // 살아 있으므로 308(permanent)로 넘겨 랭킹을 새 경로에 승계시킨다.
+  //
+  // 순서 주의: next.config의 redirects는 미들웨어(next-intl locale rewrite)보다
+  // 먼저 평가된다(Next.js 라우팅 파이프라인: headers → redirects → middleware).
+  // 따라서 `/archive/foo`는 여기서 `/projects/foo`로 바뀐 뒤 미들웨어가
+  // `/ko/projects/foo`로 rewrite한다. ko는 localePrefix가 'as-needed'라 URL에
+  // 접두사가 없고, en만 `/en` 접두사를 쓰므로 두 형태를 모두 등록한다.
+  async redirects() {
+    return [
+      { source: '/archive', destination: '/projects', permanent: true },
+      { source: '/archive/:slug', destination: '/projects/:slug', permanent: true },
+      { source: '/en/archive', destination: '/en/projects', permanent: true },
+      { source: '/en/archive/:slug', destination: '/en/projects/:slug', permanent: true },
+    ]
+  },
+
   // Enhanced security headers (keep simple for static assets)
   async headers() {
     return [

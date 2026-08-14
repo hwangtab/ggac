@@ -21,6 +21,19 @@ function tokenFor(store: StoreKind): string {
     : requireEnv('PRIVATE_BLOB_READ_WRITE_TOKEN')
 }
 
+/**
+ * 비공개 Blob 저장소가 설정돼 있는지. 교차 제공자 폴백 전용이다.
+ *
+ * 선택된 제공자가 설정돼 있지 않으면 그건 운영 사고이므로 requireEnv가 그대로
+ * 던져야 한다. 반면 "반대쪽 제공자에도 있나" 확인하는 폴백에서는 설정이 없는 게
+ * 정상 상태(전환 전/롤백 후)다. 그때 requireEnv가 던지면 없는 문서 요청이
+ * 404가 아니라 환경변수 이름이 담긴 500으로 나가므로, 폴백은 이 판정으로
+ * 먼저 걸러야 한다.
+ */
+export function hasPrivateBlobStore(): boolean {
+  return Boolean(process.env.PRIVATE_BLOB_READ_WRITE_TOKEN?.trim())
+}
+
 export async function putObject(
   store: StoreKind,
   pathname: string,

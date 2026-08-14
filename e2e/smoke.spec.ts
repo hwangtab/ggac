@@ -44,14 +44,14 @@ test.describe('Smoke tests', () => {
     expect(new URL(page.url()).pathname).not.toContain('/login')
   })
 
-  test('아카이브는 잘못된 page 쿼리를 canonical에 반영하지 않는다', async ({ page }) => {
-    const response = await page.goto('/archive?page=1.5', { waitUntil: 'domcontentloaded' })
+  test('프로젝트 목록은 잘못된 page 쿼리를 canonical에 반영하지 않는다', async ({ page }) => {
+    const response = await page.goto('/projects?page=1.5', { waitUntil: 'domcontentloaded' })
     expect(response?.status()).toBeLessThan(500)
 
     const canonical = await page.locator('link[rel="canonical"]').getAttribute('href')
     expect(canonical).toBeTruthy()
     const canonicalUrl = new URL(canonical!, page.url())
-    expect(['/archive', '/en/archive']).toContain(canonicalUrl.pathname)
+    expect(['/projects', '/en/projects']).toContain(canonicalUrl.pathname)
     expect(canonicalUrl.search).toBe('')
   })
 })

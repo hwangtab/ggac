@@ -9,13 +9,12 @@ import {
   hasKnownFileSignature,
   hasValidFileSignature,
 } from '@/utils/fileUploadValidation'
-import { isSafeBoardDocumentStoragePath } from '@/utils/boardDocumentStoragePath'
+import { deleteBoardDocumentEverywhere, putBoardDocument } from '@/lib/storage/privateProvider'
 
 const log = createLogger('boardRoom/documents')
 
 export const runtime = 'nodejs'
 
-const BUCKET = 'board-documents'
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
 
 const ALLOWED_MIME_TYPES = new Set([
@@ -68,33 +67,17 @@ export async function GET(request: NextRequest) {
       const { data, error } = await query
       if (error) throw ApiError.internalServerError('서류 목록을 불러올 수 없습니다.')
 
-      // Generate a 5-minute signed URL for each document; degrade gracefully on failure
-      const documents = await Promise.all(
-        (data || []).map(async doc => {
-          const safeFilePath = isSafeBoardDocumentStoragePath(doc.file_path, doc.uploaded_by)
-            ? doc.file_path
-            : null
-          let signedData: { signedUrl: string } | null = null
-
-          if (safeFilePath) {
-            const { data: signed, error: signErr } = await db.storage
-              .from(BUCKET)
-              .createSignedUrl(safeFilePath, 300)
-            signedData = signed
-            if (signErr) {
-              log.error('signed URL 생성 실패', { id: doc.id, error: signErr.message })
-            }
-          } else {
-            log.error('안전하지 않은 서류 file_path 서명 건너뜀', { id: doc.id })
-          }
-
-          const { file_path, ...rest } = doc
-          return {
-            ...rest,
-            download_url: safeFilePath && signedData?.signedUrl ? signedData.signedUrl : null,
-          }
-        })
-      )
+      // 서명 URL을 만들지 않는다. 만료되지 않는 내부 경로만 내려주고, 권한은
+      // 다운로드 시점에 매번 검사한다. 이 변경으로 uploaded_by가 NULL인 시드
+      // 문서 14건의 다운로드도 함께 되살아난다 — 예전 경로 가드가 file_path와
+      // uploaded_by의 접두어 일치를 요구해 전부 막고 있었다.
+      const documents = (data || []).map(doc => {
+        const { file_path, ...rest } = doc
+        return {
+          ...rest,
+          download_url: `/api/board-room/documents/${doc.id}/download`,
+        }
+      })
 
       return ApiSuccess.ok({ documents })
     },
@@ -145,12 +128,12 @@ export async function POST(request: NextRequest) {
         throw ApiError.badRequest('텍스트 파일 내용이 올바르지 않습니다.')
       }
 
-      const { error: uploadError } = await db.storage.from(BUCKET).upload(storagePath, buffer, {
-        contentType: file.type,
-        upsert: false,
-      })
-      if (uploadError) {
-        log.error('storage upload 실패', { error: uploadError.message })
+      try {
+        await putBoardDocument(storagePath, buffer, file.type)
+      } catch (uploadError) {
+        log.error('storage upload 실패', {
+          error: uploadError instanceof Error ? uploadError.message : String(uploadError),
+        })
         throw ApiError.internalServerError('파일 업로드에 실패했습니다.')
       }
 
@@ -171,9 +154,12 @@ export async function POST(request: NextRequest) {
 
       if (insertError || !doc) {
         // Rollback: remove just-uploaded storage object
-        const { error: removeErr } = await db.storage.from(BUCKET).remove([storagePath])
-        if (removeErr) {
-          log.error('rollback 삭제 실패', { error: removeErr.message })
+        try {
+          await deleteBoardDocumentEverywhere(storagePath)
+        } catch (removeErr) {
+          log.error('rollback 삭제 실패', {
+            error: removeErr instanceof Error ? removeErr.message : String(removeErr),
+          })
         }
         throw ApiError.internalServerError('서류 등록에 실패했습니다.')
       }

@@ -26,28 +26,28 @@
 
 ## 공연 기획 시리즈
 
-- [철조망: METAL SYNDICATE NETWORK](https://ggac.kr/archive/metal-syndicate-network) - 서울·경기 풀뿌리 메탈 씬을 결속하는 언더그라운드 메탈 공연 시리즈. [2회 2TERNAL](https://ggac.kr/archive/metal-syndicate-network-2ternal) / [3회](https://ggac.kr/archive/metal-syndicate-network-iii) / [4회](https://ggac.kr/archive/metal-syndicate-network-iv)
-- [건강열전 (健康列傳)](https://ggac.kr/archive/health-concert-2026) - 뮤지션과 관객의 건강을 기원하는 공연. [2회 「살아있는 자들의 밤」](https://ggac.kr/archive/health-concert-2-living-night)
-- [SATANIC RITUAL & PERVERSIONS](https://ggac.kr/archive/satanic-ritual-perversions-vol-ii) - 익스트림·실험음악 파티 시리즈. [Vol. III: MEA CULPA](https://ggac.kr/archive/satanic-ritual-perversions-vol-iii-mea-culpa)
-- [수원 사운드 마켓](https://ggac.kr/archive/suwon-sound-market) - 공연하고 악기 파는 뮤지션 장터. [제2회](https://ggac.kr/archive/suwon-sound-market-vol-2)
+- [철조망: METAL SYNDICATE NETWORK](https://ggac.kr/projects/metal-syndicate-network) - 서울·경기 풀뿌리 메탈 씬을 결속하는 언더그라운드 메탈 공연 시리즈. [2회 2TERNAL](https://ggac.kr/projects/metal-syndicate-network-2ternal) / [3회](https://ggac.kr/projects/metal-syndicate-network-iii) / [4회](https://ggac.kr/projects/metal-syndicate-network-iv)
+- [건강열전 (健康列傳)](https://ggac.kr/projects/health-concert-2026) - 뮤지션과 관객의 건강을 기원하는 공연. [2회 「살아있는 자들의 밤」](https://ggac.kr/projects/health-concert-2-living-night)
+- [SATANIC RITUAL & PERVERSIONS](https://ggac.kr/projects/satanic-ritual-perversions-vol-ii) - 익스트림·실험음악 파티 시리즈. [Vol. III: MEA CULPA](https://ggac.kr/projects/satanic-ritual-perversions-vol-iii-mea-culpa)
+- [수원 사운드 마켓](https://ggac.kr/projects/suwon-sound-market) - 공연하고 악기 파는 뮤지션 장터. [제2회](https://ggac.kr/projects/suwon-sound-market-vol-2)
 
 ## 주요 공연·프로젝트
 
-- [PantyPort Rock Festival](https://ggac.kr/archive/PantyPort-Rock-Festival) - 펜타포트에 초대받지 못한 뮤지션과 관객을 위한 지하 언더그라운드 락 페스티벌
-- [조상퇴마 공공서비스 祖上退魔 公共役務](https://ggac.kr/archive/ancestral-exorcism-public-service) - 전통과 관습의 굴레를 음악으로 해체하는 6팀의 실험적 인디 공연
-- [CURSEWAVE+LOWFREQUENCY 11 : MONOLITH & OBELISK](https://ggac.kr/archive/cursewave-lowfrequency-11) - 드론·둠 계열 합동 공연
-- [HYPER_NO_SIS](https://ggac.kr/archive/hyper-no-sis) - 싱어송라이터 3인과 전자음악가 1인의 협업 무대
-- [펑크포크 & 블루스: 유동혁 X 김동산과 블루이웃](https://ggac.kr/archive/punkfolk-blues-dot-2025) - 수원 행궁동 라이브 클럽 도트 공연
-- [홈레코딩 믹싱 워크샵](https://ggac.kr/archive/home-recording-mixing-workshop) - 조합 음향인이 진행하는 믹싱 교육 프로그램
-- [북가좌 레코드마켓 참여](https://ggac.kr/archive/bukgajwa-record-market) - 레코드 마켓 부스 운영
+- [PantyPort Rock Festival](https://ggac.kr/projects/PantyPort-Rock-Festival) - 펜타포트에 초대받지 못한 뮤지션과 관객을 위한 지하 언더그라운드 락 페스티벌
+- [조상퇴마 공공서비스 祖上退魔 公共役務](https://ggac.kr/projects/ancestral-exorcism-public-service) - 전통과 관습의 굴레를 음악으로 해체하는 6팀의 실험적 인디 공연
+- [CURSEWAVE+LOWFREQUENCY 11 : MONOLITH & OBELISK](https://ggac.kr/projects/cursewave-lowfrequency-11) - 드론·둠 계열 합동 공연
+- [HYPER_NO_SIS](https://ggac.kr/projects/hyper-no-sis) - 싱어송라이터 3인과 전자음악가 1인의 협업 무대
+- [펑크포크 & 블루스: 유동혁 X 김동산과 블루이웃](https://ggac.kr/projects/punkfolk-blues-dot-2025) - 수원 행궁동 라이브 클럽 도트 공연
+- [홈레코딩 믹싱 워크샵](https://ggac.kr/projects/home-recording-mixing-workshop) - 조합 음향인이 진행하는 믹싱 교육 프로그램
+- [북가좌 레코드마켓 참여](https://ggac.kr/projects/bukgajwa-record-market) - 레코드 마켓 부스 운영
 
-전체 아카이브: [프로젝트](https://ggac.kr/archive)
+전체 목록: [프로젝트](https://ggac.kr/projects)
 
 ## 사이트
 
 - [홈](https://ggac.kr/) - 메인 페이지
 - [함께하는 사람들](https://ggac.kr/artists) - 소속 아티스트 프로필 전체
-- [프로젝트](https://ggac.kr/archive) - 공연·전시·행사 아카이브
+- [프로젝트](https://ggac.kr/projects) - 예정·지난 공연, 전시, 행사
 - [우리의 이야기](https://ggac.kr/about) - 조합 소개, 설립 목적, 연혁
 - [소통과 참여](https://ggac.kr/connect) - 조합원 가입, 후원, 공연 협업 및 섭외 문의
 - [자유게시판](https://ggac.kr/board) - 커뮤니티 게시판
