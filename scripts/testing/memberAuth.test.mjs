@@ -50,8 +50,18 @@ test('requireUser 판정: 인증되면 ok', () => {
 })
 
 test('requireUser 판정: 프로필이 없어도 ok — 승인 대기자도 통과해야 한다', () => {
+  // classifySessionForUser는 profile/profileError를 아예 보지 않는다. 프로필
+  // 조회가 실패한 경우(profile: null + profileError 존재 — handle_new_user
+  // 트리거가 INSERT 실패를 삼켜서 실제로 발생할 수 있는 상태, 최종 리뷰 확인)
+  // 까지 입력에 넣어야 "이름이 약속하는 검증"이 성립한다. 바로 앞 테스트와
+  // 입력이 같으면 이 테스트가 실제로는 아무것도 추가로 증명하지 못한다.
   assert.equal(
-    classifySessionForUser({ authenticated: true, user: { id: 'u1' }, profile: null }),
+    classifySessionForUser({
+      authenticated: true,
+      user: { id: 'u1' },
+      profile: null,
+      profileError: { message: 'profile lookup failed' },
+    }),
     'ok'
   )
 })
@@ -81,6 +91,15 @@ test('requireActiveMember 판정: 승인+활성이면 ok', () => {
 test('requireActiveMember 판정: 미인증이면 unauthenticated', () => {
   assert.equal(
     classifySessionForMember({ authenticated: false, user: null, profile: null }),
+    'unauthenticated'
+  )
+  // classifySessionForUser 쪽 테스트(위)는 authenticated:true + user:null인
+  // 모순 상태까지 덮지만, 이 테스트는 그동안 authenticated:false만 덮고 있었다
+  // — `if (!session.authenticated || !session.user)`의 두 조건 중 뒤쪽
+  // 분기가 실제로 unauthenticated로 이어지는지 이 테스트만으로는 증명하지
+  // 못했다.
+  assert.equal(
+    classifySessionForMember({ authenticated: true, user: null, profile: null }),
     'unauthenticated'
   )
 })
