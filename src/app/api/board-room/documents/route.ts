@@ -9,12 +9,12 @@ import {
   hasKnownFileSignature,
   hasValidFileSignature,
 } from '@/utils/fileUploadValidation'
+import { deleteBoardDocumentEverywhere, putBoardDocument } from '@/lib/storage/privateProvider'
 
 const log = createLogger('boardRoom/documents')
 
 export const runtime = 'nodejs'
 
-const BUCKET = 'board-documents'
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
 
 const ALLOWED_MIME_TYPES = new Set([
@@ -128,12 +128,12 @@ export async function POST(request: NextRequest) {
         throw ApiError.badRequest('텍스트 파일 내용이 올바르지 않습니다.')
       }
 
-      const { error: uploadError } = await db.storage.from(BUCKET).upload(storagePath, buffer, {
-        contentType: file.type,
-        upsert: false,
-      })
-      if (uploadError) {
-        log.error('storage upload 실패', { error: uploadError.message })
+      try {
+        await putBoardDocument(storagePath, buffer, file.type)
+      } catch (uploadError) {
+        log.error('storage upload 실패', {
+          error: uploadError instanceof Error ? uploadError.message : String(uploadError),
+        })
         throw ApiError.internalServerError('파일 업로드에 실패했습니다.')
       }
 
@@ -154,9 +154,12 @@ export async function POST(request: NextRequest) {
 
       if (insertError || !doc) {
         // Rollback: remove just-uploaded storage object
-        const { error: removeErr } = await db.storage.from(BUCKET).remove([storagePath])
-        if (removeErr) {
-          log.error('rollback 삭제 실패', { error: removeErr.message })
+        try {
+          await deleteBoardDocumentEverywhere(storagePath)
+        } catch (removeErr) {
+          log.error('rollback 삭제 실패', {
+            error: removeErr instanceof Error ? removeErr.message : String(removeErr),
+          })
         }
         throw ApiError.internalServerError('서류 등록에 실패했습니다.')
       }
