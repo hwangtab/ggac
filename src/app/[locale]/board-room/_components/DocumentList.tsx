@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
-import { toSafeHttpUrl } from '@/utils/safeUrl'
+import { isSafeInternalPath } from '@/utils/safeUrl'
 
 interface BoardDocument {
   id: string
@@ -75,7 +75,10 @@ export default function DocumentList({
     <div className="space-y-3">
       {documents.map(doc => {
         const canDelete = doc.uploaded_by === currentUserId || isAdmin
-        const safeDownloadUrl = doc.download_url ? toSafeHttpUrl(doc.download_url) : null
+        // download_url은 이제 우리 API의 내부 경로다(`/api/board-room/...`).
+        // toSafeHttpUrl은 절대 URL만 받으므로 내부 경로 검사기를 쓴다.
+        const safeDownloadUrl =
+          doc.download_url && isSafeInternalPath(doc.download_url) ? doc.download_url : null
         return (
           <div
             key={doc.id}
