@@ -48,6 +48,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const supabase = await createSupabaseServer()
 
     // 사용자 세션 확인 (선택사항 - 비로그인 사용자도 조회 가능)
+    // 로그인 여부에 따라 작성자 본인 조회 제외·활동 로그 기록 등을 얹는
+    // 선택적 조회다. 비로그인도 조회수를 증가시킬 수 있어야 하므로
+    // requireUser로 바꾸지 않는다.
     const {
       data: { user },
     } = await supabase.auth.getUser()

@@ -10,13 +10,14 @@ export const runtime = 'nodejs'
 export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { revalidateTag } from 'next/cache'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { deletePublicObjectEverywhere, logicalPathFromUrl } from '@/lib/storage/provider'
 import { validateUUID } from '@/utils/validation'
+import { requireUser } from '@/lib/server/memberAuth'
 
 const MAX_ALT_TEXT_LENGTH = 300
 
@@ -54,13 +55,10 @@ export async function GET(
   const resolvedParams = await context.params
   try {
     const supabase = await createSupabaseServer()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
 
-    if (!user) {
-      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
-    }
+    // 첨부파일 조회는 로그인만 확인한다.
+    const auth = await requireUser()
+    if (auth instanceof NextResponse) return auth
 
     const routeParams = validateAttachmentRouteParams(resolvedParams)
     if (!routeParams.ok) return routeParams.response
@@ -95,13 +93,12 @@ export async function PUT(
   const resolvedParams = await context.params
   try {
     const supabase = await createSupabaseServer()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
 
-    if (!user) {
-      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
-    }
+    // 첨부파일 수정은 로그인만 확인한다(승인 여부는 보지 않음). 작성자
+    // 소유권 확인은 아래에서 별도로 한다.
+    const auth = await requireUser()
+    if (auth instanceof NextResponse) return auth
+    const { user } = auth
 
     const routeParams = validateAttachmentRouteParams(resolvedParams)
     if (!routeParams.ok) return routeParams.response
@@ -218,13 +215,12 @@ export async function DELETE(
   const resolvedParams = await context.params
   try {
     const supabase = await createSupabaseServer()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
 
-    if (!user) {
-      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
-    }
+    // 첨부파일 삭제는 로그인만 확인한다(승인 여부는 보지 않음). 작성자
+    // 또는 관리자 권한 확인은 아래에서 별도로 한다.
+    const auth = await requireUser()
+    if (auth instanceof NextResponse) return auth
+    const { user } = auth
 
     const routeParams = validateAttachmentRouteParams(resolvedParams)
     if (!routeParams.ok) return routeParams.response

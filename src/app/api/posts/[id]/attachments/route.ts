@@ -9,9 +9,10 @@ export const runtime = 'nodejs'
 export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { rateLimit } from '@/lib/server/rateLimit'
+import { requireUser } from '@/lib/server/memberAuth'
 import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
 import { putPublicObject, deletePublicObject } from '@/lib/storage/provider'
 import { revalidateTag } from 'next/cache'
@@ -130,14 +131,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     const supabase = await createSupabaseServer()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      console.error('[UPLOAD API] 인증 실패 - 세션 없음')
-      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
-    }
+    // 첨부파일 업로드는 로그인만 확인한다(승인 여부는 보지 않음). 작성자
+    // 소유권 확인은 아래에서 별도로 한다.
+    const auth = await requireUser()
+    if (auth instanceof NextResponse) return auth
+    const { user } = auth
 
     const validPostId = uuidValidation.sanitized
     const isTempId = isValidTempId(validPostId)

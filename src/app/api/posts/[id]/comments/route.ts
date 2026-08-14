@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { getUserLikedCommentIds } from '@/lib/server/commentLikes'
@@ -9,6 +9,7 @@ import { parseJsonObjectBody } from '@/utils/requestBody'
 import { formatTimestampUuidCursor, parseTimestampUuidCursor } from '@/utils/keysetCursor'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { rateLimit } from '@/lib/server/rateLimit'
+import { requireActiveMember } from '@/lib/server/memberAuth'
 
 export const dynamic = 'force-dynamic'
 export const preferredRegion = 'icn1'
@@ -43,6 +44,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
   try {
     const sessionSupabase = await createSupabaseServer()
+    // 로그인 여부에 따라 개인화 데이터(댓글 좋아요 여부)를 얹는 선택적
+    // 조회다. 비로그인도 댓글 목록을 읽을 수 있어야 하므로 requireUser로
+    // 바꾸지 않는다.
     const {
       data: { user },
     } = await sessionSupabase.auth.getUser()
@@ -133,11 +137,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   const validPostId = postIdValidation.sanitized
   try {
     const supabase = await createSupabaseServer()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    const userId = user?.id
-    if (!userId) return ApiError.unauthorized('Unauthorized').toNextResponse()
+
+    // 댓글 작성은 로그인 + 승인된 활성 멤버만 가능한 강제 검사였다.
+    const auth = await requireActiveMember()
+    if (auth instanceof NextResponse) return auth
+    const { user } = auth
+    const userId = user.id
 
     const body = await parseJsonObjectBody(request)
     if (!body) {
@@ -146,15 +151,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     const content = (body?.content || '').toString().trim()
     if (!content) return ApiError.badRequest('내용이 비어있습니다.').toNextResponse()
-
-    const { data: profile } = await supabase
-      .from('member_profiles')
-      .select('registration_status, is_active')
-      .eq('id', userId)
-      .maybeSingle()
-    const isMember =
-      !!profile && (profile as any).registration_status === 'approved' && (profile as any).is_active
-    if (!isMember) return ApiError.forbidden('권한이 없습니다.').toNextResponse()
 
     const { data, error } = await supabase
       .from('comments')

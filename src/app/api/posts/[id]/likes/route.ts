@@ -9,12 +9,13 @@ export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 export const maxDuration = 30
 
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { rateLimit } from '@/lib/server/rateLimit'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import type { PostLikeToggleResponse } from '@/types'
 import { validateUUID } from '@/utils/validation'
+import { requireUser, requireActiveMember } from '@/lib/server/memberAuth'
 
 /**
  * 게시글 좋아요 정보 조회
@@ -34,13 +35,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const validPostId = uuidValidation.sanitized
 
     const supabase = await createSupabaseServer()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
 
-    if (!user) {
-      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
-    }
+    // 좋아요 조회는 로그인만 확인한다(승인 여부는 보지 않음).
+    const auth = await requireUser()
+    if (auth instanceof NextResponse) return auth
+    const { user } = auth
 
     // 게시글 존재 확인
     const { data: post, error: postError } = await supabase
@@ -95,29 +94,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     }
 
     const supabase = await createSupabaseServer()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
 
-    if (!user) {
-      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
-    }
-
-    // 사용자 승인 상태 확인
-    const { data: profile, error: profileError } = await supabase
-      .from('member_profiles')
-      .select('registration_status, is_active')
-      .eq('id', user.id)
-      .single()
-
-    if (profileError) {
-      console.error('[API] 프로필 조회 오류:', profileError)
-      return ApiError.internalServerError('회원 정보를 확인할 수 없습니다.').toNextResponse()
-    }
-
-    if (!profile || profile.registration_status !== 'approved' || !profile.is_active) {
-      return ApiError.forbidden('승인된 회원만 좋아요를 할 수 있습니다.').toNextResponse()
-    }
+    // 좋아요 토글은 로그인 + 승인된 활성 멤버만 가능한 강제 검사였다.
+    const auth = await requireActiveMember()
+    if (auth instanceof NextResponse) return auth
+    const { user } = auth
 
     // 게시글 존재 확인
     const { data: post, error: postError } = await supabase

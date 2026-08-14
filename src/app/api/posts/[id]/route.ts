@@ -20,6 +20,7 @@ import { CATEGORIES, parseBoardCategory } from '@/constants/categories'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { annotateImageDimensionsSafe } from '@/utils/imageDimensions'
 import { getBoardPostRevalidationPaths } from '@/lib/revalidationPaths'
+import { requireUser, requireActiveMember } from '@/lib/server/memberAuth'
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const resolvedParams = await context.params
@@ -48,6 +49,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     }
 
     const supabase = await createSupabaseServer()
+    // 로그인 여부에 따라 개인화 데이터(내 좋아요·삭제글 접근 등)를 얹는
+    // 선택적 조회다. 비로그인도 게시글 상세를 읽을 수 있어야 하므로
+    // requireUser로 바꾸지 않는다.
     // 세션은 선택 사항(공개 열람 허용), 사용자 ID가 있으면 is_liked 등 계산에 사용
     const {
       data: { user },
@@ -273,34 +277,13 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     }
 
     const supabase = await createSupabaseServer()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
 
-    if (!user) {
-      return ApiError.unauthorized('로그인이 필요합니다.').toNextResponse()
-    }
+    // 게시글 수정은 로그인 + 승인된 활성 멤버만 가능한 강제 검사였다.
+    const auth = await requireActiveMember()
+    if (auth instanceof NextResponse) return auth
+    const { user, profile } = auth
 
-    const { data: profile } = await supabase
-      .from('member_profiles')
-      .select('is_admin, registration_status, is_active')
-      .eq('id', user.id)
-      .single()
-
-    const isAdmin = !!(
-      profile?.is_admin &&
-      profile.registration_status === 'approved' &&
-      profile.is_active
-    )
-    const isApprovedMember = !!(
-      profile &&
-      profile.registration_status === 'approved' &&
-      profile.is_active
-    )
-
-    if (!isApprovedMember) {
-      return ApiError.forbidden('승인된 활성 멤버만 게시글을 수정할 수 있습니다.').toNextResponse()
-    }
+    const isAdmin = profile?.is_admin === true
 
     const body = await parseJsonObjectBody(request)
     if (!body) {
@@ -414,14 +397,11 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
 
     const supabase = await createSupabaseServer()
 
-    // 사용자 인증 확인
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return ApiError.unauthorized('로그인이 필요합니다.').toNextResponse()
-    }
+    // 게시글 삭제는 로그인만 확인한다(승인 여부는 보지 않음). 소유자/관리자
+    // 판정은 아래에서 별도로 한다.
+    const auth = await requireUser()
+    if (auth instanceof NextResponse) return auth
+    const { user } = auth
 
     // 관리자 여부 확인
     let isAdmin = false

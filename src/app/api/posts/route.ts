@@ -2,11 +2,12 @@
  * 게시글 목록 조회 API - 단순 페이지 기반
  */
 
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { apiGet, apiPost, ApiSuccess, ApiError } from '@/utils/apiWrapper'
+import { requireActiveMember } from '@/lib/server/memberAuth'
 import { fetchBoardPosts } from '@/lib/server/board'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { CATEGORIES, parseBoardCategory } from '@/constants/categories'
@@ -58,6 +59,8 @@ interface PostListResponse {
 
 export async function GET(request: NextRequest) {
   const supabase = await createSupabaseServer()
+  // 로그인 여부에 따라 개인화 데이터(내 좋아요 여부)를 얹는 선택적 조회다.
+  // 비로그인도 게시글 목록을 읽을 수 있어야 하므로 requireUser로 바꾸지 않는다.
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -156,41 +159,26 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const supabase = await createSupabaseServer()
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-  const userId = user?.id || null
+
+  // 레이트리밋은 원래도 인증 확인보다 먼저 검사했다 — 순서를 그대로 유지한다.
+  const rateLimiter = await applyRateLimit({
+    ...RATE_LIMIT_CONFIGS.GENERAL_API,
+    keyGenerator: createUserKeyGenerator('posts:create'),
+  })
+  const rateLimitResult = await rateLimiter(request)
+  if (!rateLimitResult.success) {
+    return ApiError.tooManyRequests(
+      '너무 많은 요청입니다. 잠시 후 다시 시도해주세요.'
+    ).toNextResponse()
+  }
+
+  // 게시글 작성은 로그인 + 승인된 활성 멤버만 가능한 강제 검사였다.
+  const auth = await requireActiveMember()
+  if (auth instanceof NextResponse) return auth
+  const { user } = auth
 
   return apiPost(
     async () => {
-      const rateLimiter = await applyRateLimit({
-        ...RATE_LIMIT_CONFIGS.GENERAL_API,
-        keyGenerator: createUserKeyGenerator('posts:create'),
-      })
-      const rateLimitResult = await rateLimiter(request)
-      if (!rateLimitResult.success) {
-        throw ApiError.tooManyRequests('너무 많은 요청입니다. 잠시 후 다시 시도해주세요.')
-      }
-
-      if (authError || !user) {
-        throw ApiError.unauthorized('로그인이 필요합니다.')
-      }
-
-      const { data: profile, error: profileError } = await supabase
-        .from('member_profiles')
-        .select('registration_status, is_active')
-        .eq('id', user.id)
-        .single()
-
-      if (profileError || !profile) {
-        throw ApiError.notFound('사용자 정보를 찾을 수 없습니다.')
-      }
-
-      if (profile.registration_status !== 'approved' || !profile.is_active) {
-        throw ApiError.forbidden('승인된 활성 멤버만 게시글을 작성할 수 있습니다.')
-      }
-
       const body = await parseJsonObjectBody(request)
       if (!body) {
         throw ApiError.badRequest('유효한 JSON body가 필요합니다.')
@@ -250,6 +238,6 @@ export async function POST(request: NextRequest) {
       return ApiSuccess.created(post, '게시글이 작성되었습니다.')
     },
     '/api/posts',
-    { userId: userId || undefined }
+    { userId: user.id }
   )
 }

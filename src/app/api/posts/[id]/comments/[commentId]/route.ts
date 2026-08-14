@@ -1,8 +1,9 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { revalidateTag } from 'next/cache'
 import { validateUUID } from '@/utils/validation'
+import { requireUser } from '@/lib/server/memberAuth'
 
 export const dynamic = 'force-dynamic'
 export const preferredRegion = 'icn1'
@@ -26,11 +27,13 @@ export async function DELETE(
 
   try {
     const supabase = await createSupabaseServer()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    const userId = user?.id
-    if (!userId) return ApiError.unauthorized('Unauthorized').toNextResponse()
+
+    // 댓글 삭제는 로그인만 확인한다(승인 여부는 보지 않음). 소유자 판정은
+    // 아래에서 별도로 한다.
+    const auth = await requireUser()
+    if (auth instanceof NextResponse) return auth
+    const { user } = auth
+    const userId = user.id
 
     // Verify ownership (or admin if needed)
     const { data: comment } = await supabase

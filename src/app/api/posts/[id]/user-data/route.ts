@@ -7,10 +7,11 @@ export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 export const maxDuration = 30
 
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { validateUUID } from '@/utils/validation'
+import { requireUser } from '@/lib/server/memberAuth'
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const resolvedParams = await context.params
@@ -22,13 +23,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   }
 
   const supabase = await createSupabaseServer()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
 
-  if (!user) {
-    return ApiError.unauthorized('UNAUTHORIZED').toNextResponse()
-  }
+  // 사용자 맞춤 데이터(내 좋아요 여부) 조회는 로그인만 확인한다.
+  const auth = await requireUser()
+  if (auth instanceof NextResponse) return auth
+  const { user } = auth
 
   const searchParams = new URL(request.url).searchParams
   const userIdFromQuery = searchParams.get('user_id')
