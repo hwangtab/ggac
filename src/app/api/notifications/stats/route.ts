@@ -3,11 +3,12 @@
  * GET: 사용자 알림 통계 조회
  */
 
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator } from '@/lib/server/rateLimit'
 import type { NotificationStats } from '@/types'
+import { requireUser } from '@/lib/server/memberAuth'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -24,16 +25,12 @@ export async function GET(request: NextRequest) {
       return rateLimitResult.response
     }
 
-    const supabase = await createSupabaseServer()
-
     // 사용자 인증 확인
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
-    }
+    const auth = await requireUser()
+    if (auth instanceof NextResponse) return auth
+    const { user } = auth
+
+    const supabase = await createSupabaseServer()
 
     // 알림 통계 조회
     const { data: stats, error } = await supabase

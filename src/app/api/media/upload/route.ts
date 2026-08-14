@@ -12,7 +12,6 @@ export const preferredRegion = 'icn1'
 import { NextRequest, NextResponse } from 'next/server'
 import path from 'path'
 import sharp from 'sharp'
-import { createSupabaseServer } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
 import type { MediaFile } from '@/types'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
@@ -21,6 +20,7 @@ import { createLogger } from '@/utils/logger'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { putPublicObject } from '@/lib/storage/provider'
 import { buildVariantPathSuffixes } from '@/lib/storage/paths'
+import { requireUser, requireActiveMember } from '@/lib/server/memberAuth'
 
 const log = createLogger('api/media/upload')
 
@@ -365,32 +365,10 @@ export async function POST(request: NextRequest) {
       return limit.response
     }
 
-    const supabase = await createSupabaseServer()
-
-    // 사용자 인증 확인
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return ApiError.unauthorized('로그인이 필요합니다.').toNextResponse()
-    }
-
-    // 사용자 상태 확인 (승인된 멤버만)
-    const { data: profile, error: profileError } = await supabase
-      .from('member_profiles')
-      .select('registration_status, is_active')
-      .eq('id', user.id)
-      .single()
-
-    if (profileError || !profile) {
-      return ApiError.notFound('사용자 정보를 찾을 수 없습니다.').toNextResponse()
-    }
-
-    if (profile.registration_status !== 'approved' || !profile.is_active) {
-      return ApiError.forbidden('승인된 활성 멤버만 파일을 업로드할 수 있습니다.').toNextResponse()
-    }
+    // 사용자 인증 확인 (승인된 활성 멤버만 업로드 가능)
+    const auth = await requireActiveMember()
+    if (auth instanceof NextResponse) return auth
+    const { user } = auth
 
     // FormData 파싱
     const formData = await request.formData()
@@ -545,17 +523,10 @@ export async function GET(request: NextRequest) {
     if (!gLimit.success && gLimit.response) {
       return gLimit.response
     }
-    const supabase = await createSupabaseServer()
-
-    // 사용자 인증 확인
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return ApiError.unauthorized('로그인이 필요합니다.').toNextResponse()
-    }
+    // 사용자 인증 확인 (목록 조회는 로그인만 확인하고 승인 여부는 보지 않는다)
+    const auth = await requireUser()
+    if (auth instanceof NextResponse) return auth
+    const { user } = auth
 
     const { searchParams } = new URL(request.url)
     const bucket = (searchParams.get('bucket') || 'attachments').trim()

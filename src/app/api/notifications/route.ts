@@ -4,13 +4,14 @@
  * POST: 새 알림 생성 (관리자 전용)
  */
 
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { validateUUID } from '@/utils/validation'
+import { requireUser } from '@/lib/server/memberAuth'
 import { sanitizeNotificationData } from '@/utils/notificationData'
 import { parseNotificationExpiresAt } from '@/utils/notificationExpiry'
 import { parseNotificationType } from '@/utils/notificationTypes'
@@ -34,16 +35,12 @@ export async function GET(request: NextRequest) {
       return rateLimitResult.response
     }
 
-    const supabase = await createSupabaseServer()
-
     // 사용자 인증 확인
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
-    }
+    const auth = await requireUser()
+    if (auth instanceof NextResponse) return auth
+    const { user } = auth
+
+    const supabase = await createSupabaseServer()
 
     // URL 파라미터 추출 및 검증
     const { searchParams } = new URL(request.url)

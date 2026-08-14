@@ -1,18 +1,13 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { fetchLinkPreview } from '@/utils/linkPreview'
 import distLimiter from '@/lib/server/rateLimit'
-import { createSupabaseServer } from '@/lib/supabase/server'
+import { requireUser } from '@/lib/server/memberAuth'
 
 export async function GET(request: NextRequest) {
   // 인증 확인 — 로그인한 사용자만 링크 프리뷰 요청 가능
-  const supabase = await createSupabaseServer()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) {
-    return ApiError.unauthorized('로그인이 필요합니다.').toNextResponse()
-  }
+  const auth = await requireUser()
+  if (auth instanceof NextResponse) return auth
 
   // 분산 레이트리밋 (Upstash 있으면 Redis, 없으면 메모리)
   const limiter = await distLimiter.applyRateLimit({

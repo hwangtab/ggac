@@ -1,7 +1,8 @@
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { withRateLimit } from '@/lib/server/rateLimit'
+import { requireUser } from '@/lib/server/memberAuth'
 import { sanitizeInput } from '@/utils/security'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { parseActivityActionType, parseActivityTargetType } from '@/constants/activity'
@@ -15,14 +16,11 @@ import type { ActivityLogRequest } from '@/types'
 export async function POST(request: NextRequest) {
   return withRateLimit('GENERAL_API')(async () => {
     try {
-      const supabase = await createSupabaseServer()
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
+      const auth = await requireUser()
+      if (auth instanceof NextResponse) return auth
+      const { user } = auth
 
-      if (!user) {
-        return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
-      }
+      const supabase = await createSupabaseServer()
 
       const body = parseActivityLogBody(await parseJsonObjectBody(request))
       if (!body) {

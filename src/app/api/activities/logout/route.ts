@@ -1,8 +1,9 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { applyRateLimit, RATE_LIMIT_CONFIGS } from '@/lib/server/rateLimit'
 import { parseJsonObjectBody } from '@/utils/requestBody'
+import { requireUser } from '@/lib/server/memberAuth'
 
 /**
  * 사용자 로그아웃 활동 로깅 API
@@ -22,15 +23,12 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const supabase = await createSupabaseServer()
-
     // 인증 확인
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) {
-      return ApiError.unauthorized('Unauthorized').toNextResponse()
-    }
+    const auth = await requireUser()
+    if (auth instanceof NextResponse) return auth
+    const { user } = auth
+
+    const supabase = await createSupabaseServer()
 
     const body = await parseJsonObjectBody(request)
 

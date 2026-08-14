@@ -1,9 +1,10 @@
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { withRateLimit } from '@/lib/server/rateLimit'
 import { sanitizeInput } from '@/utils/security'
 import { parseJsonObjectBody } from '@/utils/requestBody'
+import { requireUser } from '@/lib/server/memberAuth'
 
 /**
  * 사용자 세션 관리 API
@@ -20,6 +21,8 @@ export async function GET(request: NextRequest) {
   return withRateLimit('GENERAL_API')(async () => {
     try {
       const supabase = await createSupabaseServer()
+      // 이 엔드포인트의 목적 자체가 "로그인 상태 여부"를 반환하는 것이라
+      // 401로 강제 차단하지 않는 선택적 조회다. requireUser()로 바꾸지 않는다.
       const {
         data: { user },
         error,
@@ -43,14 +46,11 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   return withRateLimit('GENERAL_API')(async () => {
     try {
-      const supabase = await createSupabaseServer()
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
+      const auth = await requireUser()
+      if (auth instanceof NextResponse) return auth
+      const { user } = auth
 
-      if (!user) {
-        return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
-      }
+      const supabase = await createSupabaseServer()
 
       const body = await parseJsonObjectBody(request)
 

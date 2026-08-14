@@ -9,11 +9,12 @@ export const runtime = 'nodejs'
 export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { RATE_LIMITS, applyRateLimit, createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { validateUUID } from '@/utils/validation'
+import { requireUser } from '@/lib/server/memberAuth'
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const resolvedParams = await context.params
@@ -29,16 +30,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       return rateLimitResult.response
     }
 
-    const supabase = await createSupabaseServer()
-
     // 사용자 인증 확인
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
-    }
+    const auth = await requireUser()
+    if (auth instanceof NextResponse) return auth
+
+    const supabase = await createSupabaseServer()
 
     const uuidValidation = validateUUID(resolvedParams.id, '알림 ID')
     if (!uuidValidation.isValid) {
@@ -81,16 +77,12 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       return rateLimitResult.response
     }
 
-    const supabase = await createSupabaseServer()
-
     // 사용자 인증 확인
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
-    }
+    const auth = await requireUser()
+    if (auth instanceof NextResponse) return auth
+    const { user } = auth
+
+    const supabase = await createSupabaseServer()
 
     const uuidValidation = validateUUID(resolvedParams.id, '알림 ID')
     if (!uuidValidation.isValid) {

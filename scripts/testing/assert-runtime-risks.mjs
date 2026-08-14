@@ -91,6 +91,9 @@ const authCallbackPath = join(root, 'src/app/auth/callback/route.ts')
 const authCallbackSource = readFileSync(authCallbackPath, 'utf8')
 const authVerifySessionPath = join(root, 'src/app/api/auth/verify-session/route.ts')
 const authVerifySessionSource = readFileSync(authVerifySessionPath, 'utf8')
+// 주석/옛 식별자 잔재로 인한 거짓 긍정을 막기 위해, "실제 코드에 이 로직이 있는가"를
+// 보는 부정/존재 검사는 이 stripped 버전을 쓴다(assert-runtime-risks 반복 회귀 이력).
+const authVerifySessionCode = stripCommentsAndImports(authVerifySessionSource)
 const securityPath = join(root, 'src/utils/security.ts')
 const securitySource = readFileSync(securityPath, 'utf8')
 const signupPagePath = join(root, 'src/app/[locale]/signup/page.tsx')
@@ -111,6 +114,7 @@ const authMypageArtistPagePath = join(root, 'src/app/[locale]/mypage/artist/page
 const authMypageArtistPageSource = readFileSync(authMypageArtistPagePath, 'utf8')
 const postsApiPath = join(root, 'src/app/api/posts/route.ts')
 const postsApiSource = readFileSync(postsApiPath, 'utf8')
+const postsApiCode = stripCommentsAndImports(postsApiSource)
 const postDetailApiPath = join(root, 'src/app/api/posts/[id]/route.ts')
 const postDetailApiSource = readFileSync(postDetailApiPath, 'utf8')
 const usePostCreationPath = join(root, 'src/hooks/usePostCreation.ts')
@@ -125,6 +129,7 @@ const mypageProfileApiPath = join(root, 'src/app/api/mypage/profile/route.ts')
 const mypageProfileApiSource = existsSync(mypageProfileApiPath)
   ? readFileSync(mypageProfileApiPath, 'utf8')
   : ''
+const mypageProfileApiCode = stripCommentsAndImports(mypageProfileApiSource)
 const useCommentLikesPath = join(root, 'src/hooks/useCommentLikes.ts')
 const useCommentLikesSource = readFileSync(useCommentLikesPath, 'utf8')
 const usePostLikesPath = join(root, 'src/hooks/usePostLikes.ts')
@@ -232,8 +237,10 @@ const postsApiCreatesPostsWithServerAuthAndInvalidatesBoard =
   /export async function POST/.test(postsApiSource) &&
   /parseJsonObjectBody/.test(postsApiSource) &&
   /parseBoardCategory/.test(postsApiSource) &&
-  /registration_status/.test(postsApiSource) &&
-  /is_active/.test(postsApiSource) &&
+  // 로그인 + 승인된 활성 멤버 검사는 requireActiveMember()로 수렴됐다(Task 3/5).
+  // registration_status/is_active 리터럴은 이제 이 파일이 아니라
+  // memberAuth.ts 안에 있으므로, 그 리터럴 대신 호출부 자체를 검사한다.
+  /requireActiveMember\(\)/.test(postsApiCode) &&
   /author_id:\s*user\.id/.test(postsApiSource) &&
   // 게시판 목록 무효화는 `revalidatePath('/board')` 직접 호출에서
   // getBoardListRevalidationPaths() 순회로 바뀌었다. next-intl이 ko를 내부적으로
@@ -268,8 +275,10 @@ const profileApiRestrictsSelfUpdates =
   /export async function GET/.test(mypageProfileApiSource) &&
   /export async function PATCH/.test(mypageProfileApiSource) &&
   /parseJsonObjectBody/.test(mypageProfileApiSource) &&
-  /registration_status/.test(mypageProfileApiSource) &&
-  /is_active/.test(mypageProfileApiSource) &&
+  // 로그인 + 승인된 활성 멤버 검사는 requireActiveMember()로 수렴됐다(Task 3/5).
+  // registration_status/is_active 리터럴은 이제 이 파일이 아니라 memberAuth.ts
+  // 안에 있으므로, 그 리터럴 대신 호출부 자체를 검사한다.
+  /requireActiveMember\(\)/.test(mypageProfileApiCode) &&
   /\.eq\(['"]id['"],\s*user\.id\)/.test(mypageProfileApiSource) &&
   /const updateData/.test(mypageProfileApiSource) &&
   !/is_admin/.test(mypageProfileApiSource) &&
@@ -328,11 +337,14 @@ const navigationUsesServerSessionTruth =
   !/import\(['"]@\/lib\/supabase\/client['"]\)/.test(navigationSource) &&
   !/getSession\(\)/.test(navigationSource) &&
   !/onAuthStateChange/.test(navigationSource)
+// 미인증 세션 판정은 requireUser() → getSessionContext()로 이관됐다(Task 3).
+// getSessionContext()는 세션이 없어도 에러를 로깅하지 않고 401만 돌려주므로,
+// 예전처럼 라우트 안에서 직접 AuthSessionMissingError를 판별하며
+// console.error를 남기는 방식으로 되돌아가지 않았는지를 본다.
 const verifySessionTreatsMissingSessionAsNormal =
-  /isMissingSessionError/.test(authVerifySessionSource) &&
-  /AuthSessionMissingError/.test(authVerifySessionSource) &&
-  /log\.debug\(['"]No session found['"]\)/.test(authVerifySessionSource) &&
-  !/console\.error\(['"]\[VERIFY-SESSION\] Session error:/.test(authVerifySessionSource)
+  /requireUser\(\)/.test(authVerifySessionCode) &&
+  /auth instanceof NextResponse/.test(authVerifySessionCode) &&
+  !/console\.error\(['"]\[VERIFY-SESSION\] Session error:/.test(authVerifySessionCode)
 const authClientPagesUseServerSessionTruth =
   /fetchSessionProfile/.test(loginPageSource) &&
   /fetchSessionProfile/.test(authRegisterPendingPageSource) &&
@@ -447,6 +459,42 @@ const serverStreamRouteSource = existsSync(serverStreamRoutePath)
 const apiRouteFiles = globSync('src/app/api/**/route.@(ts|tsx)', {
   cwd: root,
   exclude: ['**/node_modules/**', '**/.next/**'],
+})
+// 인증 강제 검사는 requireUser()/requireActiveMember()(@/lib/server/memberAuth)로
+// 수렴됐다(Task 3~5). 이 목록에 없는 라우트에서 `auth.getUser()` 직접 호출이
+// 되살아나면(예: 헬퍼 도입 전 패턴으로 새 라우트를 베껴 쓰는 경우) 실패한다.
+// 각 항목에는 왜 허용되는지 이유를 한 줄 주석으로 단다. 이 검사식은 과거
+// 세 번 연속 "초록불인데 아무것도 안 지키는" 상태로 발견됐던 전례가 있어서
+// stripCommentsAndImports를 반드시 거친 코드만 본다 — 주석·import 문에 남은
+// 문자열로 거짓 양성/거짓 통과가 나지 않게 하기 위해서다.
+const directGetUserAllowlist = [
+  // 비로그인 방문자도 게시판을 읽어야 하는 선택적 조회(Task 4가 의도적으로 남김).
+  'src/app/api/posts/route.ts',
+  'src/app/api/posts/[id]/route.ts',
+  'src/app/api/posts/[id]/comments/route.ts',
+  'src/app/api/posts/[id]/comments-list/route.ts',
+  'src/app/api/posts/[id]/view/route.ts',
+  // requireUser()로 인증 게이트는 이미 걸었다. email_confirmed_at이 헬퍼 반환
+  // 타입에 없어 응답 본문 보존을 위해 한 번 더 조회한다(Task 3 판단, 리뷰 승인됨).
+  'src/app/api/auth/verify-session/route.ts',
+  // 인증 흐름 자체를 구현하는 라우트 — 비밀번호 재설정은 단계 2b(Better Auth
+  // 전환)에서 통째로 바뀔 예정이라 이번 수렴 대상에서 제외한다.
+  'src/app/api/auth/reset-password/route.ts',
+  // 세션 상태 자체를 반환하는 조회용 엔드포인트. 401로 막지 않고
+  // authenticated:boolean만 돌려주는 선택적 조회라 강제 게이트 대상이 아니다.
+  'src/app/api/activities/session/route.ts',
+  // 관리자 권한 확인 — 이 태스크의 범위 밖(admin 검사는 별도 adminAuth 경로로
+  // 수렴 대상, 손대지 말라는 지시에 따라 보고만 함). 같은 파일의 로그인-only
+  // 핸들러(GET/PATCH)는 이미 requireUser()로 수렴했고, 남은 auth.getUser()는
+  // 전부 관리자 확인 분기다.
+  'src/app/api/notifications/route.ts',
+  'src/app/api/notifications/bulk/route.ts',
+]
+const directGetUserOffenders = apiRouteFiles.filter(file => {
+  if (directGetUserAllowlist.includes(file)) return false
+  const source = readFileSync(join(root, file), 'utf8')
+  const code = stripCommentsAndImports(source)
+  return /\.auth\.getUser\(\)/.test(code)
 })
 const apiRoutesUsingLegacyRateLimitImports = apiRouteFiles.filter(file => {
   const source = readFileSync(join(root, file), 'utf8')
@@ -2791,8 +2839,10 @@ const avoidsServerOperationalConsoleLogs =
   /createLogger\(['"]api\/security\/csp-report['"]\)/.test(cspReportSource) &&
   /log\.debug\(['"]Ignored CSP report['"]/.test(cspReportSource) &&
   !/console\.log\(/.test(cspReportSource) &&
-  /createLogger\(['"]api\/auth\/verify-session['"]\)/.test(authVerifySessionSource) &&
-  !/console\.log\(/.test(authVerifySessionSource) &&
+  // verify-session은 Task 3에서 createLogger를 걷어냈다(1개 → 0개, 인증 헬퍼
+  // 수렴 과정에서 로거 의존을 없앰). 나머지 6개 파일은 이 브랜치에서 미변경이라
+  // createLogger 존재 요구를 그대로 두지만, 이 파일만 "console.log가 없다"만 본다.
+  !/console\.log\(/.test(authVerifySessionCode) &&
   /createLogger\(['"]api\/og\/post['"]\)/.test(postOgImageSource) &&
   /maskId/.test(postOgImageSource) &&
   !/console\.log\(/.test(postOgImageSource) &&
@@ -4383,6 +4433,14 @@ if (adminMutationJsonBypasses.length > 0) {
 if (unsafeBlankWindowOpeners.length > 0) {
   failures.push(
     `window.open(..., '_blank') must include noopener,noreferrer features:\n${unsafeBlankWindowOpeners
+      .map(file => `- ${file}`)
+      .join('\n')}`
+  )
+}
+
+if (directGetUserOffenders.length > 0) {
+  failures.push(
+    `API routes must authenticate via requireUser()/requireActiveMember() from @/lib/server/memberAuth instead of calling auth.getUser() directly (file not in directGetUserAllowlist):\n${directGetUserOffenders
       .map(file => `- ${file}`)
       .join('\n')}`
   )

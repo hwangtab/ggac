@@ -4,12 +4,13 @@
  * PATCH: 모든 알림 읽음 처리
  */
 
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { validateUUID } from '@/utils/validation'
+import { requireUser } from '@/lib/server/memberAuth'
 import { sanitizeNotificationData } from '@/utils/notificationData'
 import { parseNotificationExpiresAt } from '@/utils/notificationExpiry'
 import { parseNotificationType } from '@/utils/notificationTypes'
@@ -141,16 +142,11 @@ export async function PATCH(request: NextRequest) {
       return rateLimitResult.response
     }
 
-    const supabase = await createSupabaseServer()
-
     // 사용자 인증 확인
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
-    }
+    const auth = await requireUser()
+    if (auth instanceof NextResponse) return auth
+
+    const supabase = await createSupabaseServer()
 
     // 모든 알림 읽음 처리
     const { data: updatedCount, error } = await supabase.rpc('mark_all_notifications_read')
