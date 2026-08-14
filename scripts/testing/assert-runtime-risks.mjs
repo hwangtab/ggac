@@ -461,40 +461,73 @@ const apiRouteFiles = globSync('src/app/api/**/route.@(ts|tsx)', {
   exclude: ['**/node_modules/**', '**/.next/**'],
 })
 // 인증 강제 검사는 requireUser()/requireActiveMember()(@/lib/server/memberAuth)로
-// 수렴됐다(Task 3~5). 이 목록에 없는 라우트에서 `auth.getUser()` 직접 호출이
+// 수렴됐다(Task 3~5). 이 목록에 없는 라우트에서 `getUser(` 직접 호출이
 // 되살아나면(예: 헬퍼 도입 전 패턴으로 새 라우트를 베껴 쓰는 경우) 실패한다.
 // 각 항목에는 왜 허용되는지 이유를 한 줄 주석으로 단다. 이 검사식은 과거
 // 세 번 연속 "초록불인데 아무것도 안 지키는" 상태로 발견됐던 전례가 있어서
 // stripCommentsAndImports를 반드시 거친 코드만 본다 — 주석·import 문에 남은
 // 문자열로 거짓 양성/거짓 통과가 나지 않게 하기 위해서다.
+//
+// 허용은 파일 단위지만, 같은 파일 안에 강제 인증을 요구하는 다른 핸들러가
+// 있으면(예: PATCH는 requireActiveMember, GET은 선택적 getUser) 파일을
+// 통째로 면제하는 순간 그 강제 핸들러도 보호 밖으로 나간다(Task 5 리뷰
+// Critical 1·2). 그래서 그런 파일에는 `mustAlsoCall`로 "그래도 이 헬퍼
+// 호출은 파일 어딘가에 반드시 있어야 한다"는 양의 단정을 짝지어 둔다 —
+// 헬퍼 호출 자체가 통째로 삭제되면(주석만 남기고 지우는 것 포함) 이 양의
+// 단정이 깨져서 여전히 실패한다.
 const directGetUserAllowlist = [
   // 비로그인 방문자도 게시판을 읽어야 하는 선택적 조회(Task 4가 의도적으로 남김).
-  'src/app/api/posts/route.ts',
-  'src/app/api/posts/[id]/route.ts',
-  'src/app/api/posts/[id]/comments/route.ts',
-  'src/app/api/posts/[id]/comments-list/route.ts',
-  'src/app/api/posts/[id]/view/route.ts',
+  // posts/route.ts POST의 requireActiveMember() 요구는 복구1 검사
+  // (postsApiCreatesPostsWithServerAuthAndInvalidatesBoard)가 별도로 고정한다.
+  { file: 'src/app/api/posts/route.ts' },
+  // PATCH는 requireActiveMember(), DELETE는 requireUser() — 강제 검사 2개가
+  // 같은 파일의 선택적 조회(GET)와 섞여 있어 파일 면제만으로는 둘 다
+  // 보호 밖이 된다. 둘 다 반드시 있어야 한다고 단정한다.
+  {
+    file: 'src/app/api/posts/[id]/route.ts',
+    mustAlsoCall: [/requireActiveMember\(\)/, /requireUser\(\)/],
+  },
+  // POST(댓글 작성)는 requireActiveMember() — 같은 파일의 GET(선택적 조회)
+  // 때문에 파일 면제만으로는 POST의 강제 검사가 보호 밖이 된다.
+  {
+    file: 'src/app/api/posts/[id]/comments/route.ts',
+    mustAlsoCall: [/requireActiveMember\(\)/],
+  },
+  { file: 'src/app/api/posts/[id]/comments-list/route.ts' },
+  { file: 'src/app/api/posts/[id]/view/route.ts' },
   // requireUser()로 인증 게이트는 이미 걸었다. email_confirmed_at이 헬퍼 반환
   // 타입에 없어 응답 본문 보존을 위해 한 번 더 조회한다(Task 3 판단, 리뷰 승인됨).
-  'src/app/api/auth/verify-session/route.ts',
+  // requireUser() 존재는 verifySessionTreatsMissingSessionAsNormal이 이미
+  // 고정하고 있지만, 여기서도 재확인해 둔다(방어적 중복).
+  { file: 'src/app/api/auth/verify-session/route.ts', mustAlsoCall: [/requireUser\(\)/] },
   // 인증 흐름 자체를 구현하는 라우트 — 비밀번호 재설정은 단계 2b(Better Auth
   // 전환)에서 통째로 바뀔 예정이라 이번 수렴 대상에서 제외한다.
-  'src/app/api/auth/reset-password/route.ts',
-  // 세션 상태 자체를 반환하는 조회용 엔드포인트. 401로 막지 않고
-  // authenticated:boolean만 돌려주는 선택적 조회라 강제 게이트 대상이 아니다.
-  'src/app/api/activities/session/route.ts',
-  // 관리자 권한 확인 — 이 태스크의 범위 밖(admin 검사는 별도 adminAuth 경로로
-  // 수렴 대상, 손대지 말라는 지시에 따라 보고만 함). 같은 파일의 로그인-only
-  // 핸들러(GET/PATCH)는 이미 requireUser()로 수렴했고, 남은 auth.getUser()는
-  // 전부 관리자 확인 분기다.
-  'src/app/api/notifications/route.ts',
-  'src/app/api/notifications/bulk/route.ts',
+  { file: 'src/app/api/auth/reset-password/route.ts' },
+  // GET은 401 없이 authenticated:boolean만 돌려주는 선택적 조회라 강제 게이트
+  // 대상이 아니지만, POST(세션 시작/갱신/종료)는 requireUser()가 강제다.
+  // 파일 면제만으로는 POST의 강제 검사가 보호 밖이 된다.
+  { file: 'src/app/api/activities/session/route.ts', mustAlsoCall: [/requireUser\(\)/] },
+  // 관리자 권한 확인(POST)은 이 태스크의 범위 밖(admin 검사는 별도 adminAuth
+  // 경로로 수렴 대상, 손대지 말라는 지시에 따라 보고만 함) — 그 분기는
+  // getUser(를 직접 쓴 채로 남는다. 다만 같은 파일의 로그인-only 핸들러
+  // (notifications: GET, bulk: PATCH)는 이번에 requireUser()로 수렴했으므로
+  // 그 호출이 파일에서 사라지면 여전히 실패해야 한다.
+  { file: 'src/app/api/notifications/route.ts', mustAlsoCall: [/requireUser\(\)/] },
+  { file: 'src/app/api/notifications/bulk/route.ts', mustAlsoCall: [/requireUser\(\)/] },
 ]
 const directGetUserOffenders = apiRouteFiles.filter(file => {
-  if (directGetUserAllowlist.includes(file)) return false
   const source = readFileSync(join(root, file), 'utf8')
   const code = stripCommentsAndImports(source)
-  return /\.auth\.getUser\(\)/.test(code)
+  const allowEntry = directGetUserAllowlist.find(entry => entry.file === file)
+  if (!allowEntry) {
+    return /getUser\(/.test(code)
+  }
+  // 허용된 파일이라도 mustAlsoCall로 짝지은 헬퍼 호출이 사라졌으면(옛 raw
+  // getUser 패턴으로 되돌아갔거나, 인증 블록 자체가 통째로 삭제됐으면)
+  // 여전히 실패시킨다 — "파일 단위 허용"이 "그 파일의 강제 검사가 사라져도
+  // 된다"는 뜻이 되지 않게 하기 위해서다.
+  const missingRequiredCall = (allowEntry.mustAlsoCall || []).some(pattern => !pattern.test(code))
+  return missingRequiredCall
 })
 const apiRoutesUsingLegacyRateLimitImports = apiRouteFiles.filter(file => {
   const source = readFileSync(join(root, file), 'utf8')
@@ -4440,7 +4473,7 @@ if (unsafeBlankWindowOpeners.length > 0) {
 
 if (directGetUserOffenders.length > 0) {
   failures.push(
-    `API routes must authenticate via requireUser()/requireActiveMember() from @/lib/server/memberAuth instead of calling auth.getUser() directly (file not in directGetUserAllowlist):\n${directGetUserOffenders
+    `API routes must authenticate via requireUser()/requireActiveMember() from @/lib/server/memberAuth instead of calling getUser(...) directly (file not in directGetUserAllowlist, or missing the mustAlsoCall helper that list requires for that file):\n${directGetUserOffenders
       .map(file => `- ${file}`)
       .join('\n')}`
   )
