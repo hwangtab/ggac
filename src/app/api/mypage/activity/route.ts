@@ -1,6 +1,7 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { requireActiveMember } from '@/lib/server/memberAuth'
 import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
@@ -45,33 +46,11 @@ const ActivityQuerySchema = z.object({
 // GET: 현재 사용자의 활동 내역 조회
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireActiveMember()
+    if (auth instanceof NextResponse) return auth
+    const { user } = auth
+
     const supabase = await createSupabaseServer()
-
-    // 사용자 인증 확인
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
-    }
-
-    // 사용자 프로필 확인 (승인된 멤버인지 체크)
-    const { data: profile, error: profileError } = await supabase
-      .from('member_profiles')
-      .select('registration_status, is_active')
-      .eq('id', user.id)
-      .single()
-
-    if (profileError) {
-      console.error('Profile fetch error:', profileError)
-      return ApiError.internalServerError('프로필 정보를 가져올 수 없습니다.').toNextResponse()
-    }
-
-    if (!profile || profile.registration_status !== 'approved' || !profile.is_active) {
-      return ApiError.forbidden('승인된 멤버만 활동 내역을 조회할 수 있습니다.').toNextResponse()
-    }
 
     // 쿼리 파라미터 검증
     const { searchParams } = new URL(request.url)

@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { z } from 'zod'
 import { createSupabaseServer } from '@/lib/supabase/server'
@@ -6,6 +6,7 @@ import { rateLimit } from '@/lib/server/rateLimit'
 import { createLogger } from '@/utils/logger'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { isUserSettingKey, parseUserSettingCategory } from '@/constants/userSettings'
+import { requireUser } from '@/lib/server/memberAuth'
 
 const log = createLogger('api/settings/reset')
 
@@ -27,14 +28,11 @@ export async function POST(request: NextRequest) {
       return ApiError.tooManyRequests('Too many requests').toNextResponse()
     }
 
-    const supabase = await createSupabaseServer()
+    const auth = await requireUser()
+    if (auth instanceof NextResponse) return auth
+    const { user } = auth
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) {
-      return ApiError.unauthorized('Unauthorized').toNextResponse()
-    }
+    const supabase = await createSupabaseServer()
 
     const rawJson = await parseJsonObjectBody(request)
     if (!rawJson) {

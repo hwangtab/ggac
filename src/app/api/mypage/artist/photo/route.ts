@@ -23,6 +23,7 @@ import { invalidateArtistsCache } from '@/lib/data'
 import { getArtistCoreRevalidationPaths } from '@/lib/revalidationPaths'
 import { hasValidFileSignature } from '@/utils/fileUploadValidation'
 import { isProjectStorageObjectPath } from '@/utils/storageUrlValidation'
+import { requireUser, requireActiveMember } from '@/lib/server/memberAuth'
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 const MAX_FILE_SIZE = 5 * 1024 * 1024
@@ -290,15 +291,10 @@ export async function PUT(request: NextRequest) {
       )
     }
 
-    // 사용자 인증 확인
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return NextResponse.json({ success: false, error: '로그인이 필요합니다.' }, { status: 401 })
-    }
+    // 사용자 인증 확인 (로그인 + 승인된 활성 조합원)
+    const auth = await requireActiveMember()
+    if (auth instanceof NextResponse) return auth
+    const { user } = auth
 
     // 사용자의 아티스트 권한 확인
     let profileQuery = await supabase
@@ -333,16 +329,6 @@ export async function PUT(request: NextRequest) {
     if (!profile.is_artist || !profile.artist_id) {
       return NextResponse.json(
         { success: false, error: '아티스트 권한이 없습니다.' },
-        { status: 403 }
-      )
-    }
-
-    if (profile.registration_status !== 'approved' || !profile.is_active) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: '승인된 활성 멤버만 아티스트 프로필 사진을 업로드할 수 있습니다.',
-        },
         { status: 403 }
       )
     }
@@ -574,14 +560,9 @@ export async function DELETE(request: NextRequest) {
     }
 
     // 사용자 인증 확인
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return NextResponse.json({ success: false, error: '로그인이 필요합니다.' }, { status: 401 })
-    }
+    const auth = await requireUser()
+    if (auth instanceof NextResponse) return auth
+    const { user } = auth
 
     // 사용자의 아티스트 권한 확인
     const { data: profile, error: profileError } = await supabase
@@ -714,14 +695,9 @@ export async function GET(request: NextRequest) {
     const supabase = await createSupabaseServer()
 
     // 사용자 인증 확인
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return NextResponse.json({ success: false, error: '로그인이 필요합니다.' }, { status: 401 })
-    }
+    const auth = await requireUser()
+    if (auth instanceof NextResponse) return auth
+    const { user } = auth
 
     // 사용자의 아티스트 권한 확인
     const { data: profile, error: profileError } = await supabase

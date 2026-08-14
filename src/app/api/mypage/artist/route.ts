@@ -1,9 +1,10 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { createServiceRoleClient, hasServiceRoleEnv } from '@/lib/server/supabaseAdmin'
 import { z } from 'zod'
 import { createOptionsResponse } from '@/utils/apiResponse'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
+import { requireActiveMember } from '@/lib/server/memberAuth'
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { invalidateArtistsCache } from '@/lib/data'
 import {
@@ -122,17 +123,11 @@ const ArtistUpdateSchema = z.object({
 // GET: 현재 사용자의 아티스트 정보 조회
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireActiveMember()
+    if (auth instanceof NextResponse) return auth
+    const { user } = auth
+
     const supabase = await createSupabaseServer()
-
-    // 사용자 인증 확인
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
-    }
 
     // 사용자의 프로필 정보 조회 (아티스트 ID 확인)
     const { data: profile, error: profileError } = await supabase
@@ -149,10 +144,6 @@ export async function GET(request: NextRequest) {
     // 아티스트 권한 확인
     if (!profile.is_artist || !profile.artist_id) {
       return ApiError.forbidden('아티스트 권한이 없습니다.').toNextResponse()
-    }
-
-    if (profile.registration_status !== 'approved' || !profile.is_active) {
-      return ApiError.forbidden('승인된 멤버만 접근할 수 있습니다.').toNextResponse()
     }
 
     // 아티스트 정보 조회
@@ -177,17 +168,11 @@ export async function GET(request: NextRequest) {
 // PATCH: 아티스트 정보 업데이트
 export async function PATCH(request: NextRequest) {
   try {
+    const auth = await requireActiveMember()
+    if (auth instanceof NextResponse) return auth
+    const { user } = auth
+
     const supabase = await createSupabaseServer()
-
-    // 사용자 인증 확인
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
-    }
 
     // 요청 데이터 파싱 및 검증
     const body = await parseJsonObjectBody(request)
@@ -217,10 +202,6 @@ export async function PATCH(request: NextRequest) {
     // 아티스트 권한 확인
     if (!profile.is_artist || !profile.artist_id) {
       return ApiError.forbidden('아티스트 권한이 없습니다.').toNextResponse()
-    }
-
-    if (profile.registration_status !== 'approved' || !profile.is_active) {
-      return ApiError.forbidden('승인된 멤버만 접근할 수 있습니다.').toNextResponse()
     }
 
     // 포트폴리오 링크 유효성 검사

@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { z } from 'zod'
 import { createSupabaseServer } from '@/lib/supabase/server'
@@ -6,6 +6,7 @@ import { applyRateLimit, RATE_LIMIT_CONFIGS } from '@/lib/server/rateLimit'
 import { createLogger } from '@/utils/logger'
 import { isUserSettingKey, parseUserSettingCategory } from '@/constants/userSettings'
 import { parseJsonObjectBody } from '@/utils/requestBody'
+import { requireUser } from '@/lib/server/memberAuth'
 
 const log = createLogger('api/settings')
 
@@ -40,15 +41,11 @@ export async function GET(request: NextRequest) {
       ).toNextResponse()
     }
 
-    const supabase = await createSupabaseServer()
+    const auth = await requireUser()
+    if (auth instanceof NextResponse) return auth
+    const { user } = auth
 
-    // 인증 확인
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) {
-      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
-    }
+    const supabase = await createSupabaseServer()
 
     // URL 파라미터에서 카테고리 필터 확인
     const { searchParams } = new URL(request.url)
@@ -121,15 +118,11 @@ export async function POST(request: NextRequest) {
       ).toNextResponse()
     }
 
-    const supabase = await createSupabaseServer()
+    const auth = await requireUser()
+    if (auth instanceof NextResponse) return auth
+    const { user } = auth
 
-    // 인증 확인
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) {
-      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
-    }
+    const supabase = await createSupabaseServer()
 
     const body = await parseJsonObjectBody(request)
     if (!body) {
@@ -179,15 +172,11 @@ export async function PUT(request: NextRequest) {
       ).toNextResponse()
     }
 
-    const supabase = await createSupabaseServer()
+    const auth = await requireUser()
+    if (auth instanceof NextResponse) return auth
+    const { user } = auth
 
-    // 인증 확인
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) {
-      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
-    }
+    const supabase = await createSupabaseServer()
 
     const body = await parseJsonObjectBody(request)
     if (!body) {

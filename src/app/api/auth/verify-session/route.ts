@@ -1,47 +1,25 @@
+import { NextResponse } from 'next/server'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
-import { createLogger } from '@/utils/logger'
-
-const log = createLogger('api/auth/verify-session')
+import { requireUser } from '@/lib/server/memberAuth'
 
 // Force dynamic rendering to avoid static generation issues with cookies
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-function isMissingSessionError(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false
-
-  const authError = error as { name?: string; message?: string }
-  return (
-    authError.name === 'AuthSessionMissingError' ||
-    authError.message?.includes('Auth session missing') === true
-  )
-}
-
 export async function GET() {
   try {
+    const auth = await requireUser()
+    if (auth instanceof NextResponse) return auth
+    const { user } = auth
+
     const supabase = await createSupabaseServer()
 
-    // 세션 확인
+    // requireUser()는 id/email만 돌려준다. 이 라우트의 성공 응답 본문은
+    // email_confirmed_at도 포함해야 하므로(동작 불변 원칙) 한 번 더 조회한다.
     const {
-      data: { user },
-      error: sessionError,
+      data: { user: fullUser },
     } = await supabase.auth.getUser()
-
-    if (sessionError) {
-      if (isMissingSessionError(sessionError)) {
-        log.debug('No session found')
-        return ApiError.unauthorized('No session found').toNextResponse()
-      }
-
-      log.warn('Session error', sessionError)
-      return ApiError.unauthorized('Session error').toNextResponse()
-    }
-
-    if (!user) {
-      log.debug('No session found')
-      return ApiError.unauthorized('No session found').toNextResponse()
-    }
 
     // 추가로 member_profiles 확인
     const { data: profile, error: profileError } = await supabase
@@ -58,8 +36,8 @@ export async function GET() {
         authenticated: true,
         user: {
           id: user.id,
-          email: user.email,
-          email_confirmed_at: user.email_confirmed_at,
+          email: fullUser?.email ?? user.email,
+          email_confirmed_at: fullUser?.email_confirmed_at,
         },
         profile: null,
       }).toNextResponse()
@@ -69,8 +47,8 @@ export async function GET() {
       authenticated: true,
       user: {
         id: user.id,
-        email: user.email,
-        email_confirmed_at: user.email_confirmed_at,
+        email: fullUser?.email ?? user.email,
+        email_confirmed_at: fullUser?.email_confirmed_at,
       },
       profile: profile,
     }).toNextResponse()

@@ -8,12 +8,13 @@ export const runtime = 'nodejs'
 export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { RATE_LIMITS, applyRateLimit, createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { validateUUID } from '@/utils/validation'
+import { requireUser } from '@/lib/server/memberAuth'
 import type { UserLikedPost } from '@/types'
 
 /**
@@ -33,14 +34,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       return rateLimitResult.response
     }
 
-    const supabase = await createSupabaseServer()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    const auth = await requireUser()
+    if (auth instanceof NextResponse) return auth
+    const { user } = auth
 
-    if (!user) {
-      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
-    }
+    const supabase = await createSupabaseServer()
 
     const uuidValidation = validateUUID(resolvedParams.id, '사용자 ID')
     if (!uuidValidation.isValid) {

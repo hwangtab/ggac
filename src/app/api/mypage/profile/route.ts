@@ -1,9 +1,10 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { ApiError, ApiSuccess, apiGet, apiPatch } from '@/utils/apiWrapper'
 import { rateLimit } from '@/lib/server/rateLimit'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { parseIntegerParam } from '@/utils/queryParams'
+import { requireActiveMember } from '@/lib/server/memberAuth'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -69,36 +70,23 @@ function assertValidProfileBody(body: Record<string, unknown>) {
   return updateData
 }
 
-async function requireApprovedProfile() {
-  const supabase = await createSupabaseServer()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    throw ApiError.unauthorized('로그인이 필요합니다.')
-  }
-
-  const { data: profile, error } = await supabase
-    .from('member_profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single()
-
-  if (error || !profile) {
-    throw ApiError.notFound('프로필을 찾을 수 없습니다.')
-  }
-
-  if (profile.registration_status !== 'approved' || profile.is_active !== true) {
-    throw ApiError.forbidden('승인된 활성 조합원만 프로필을 수정할 수 있습니다.')
-  }
-
-  return { supabase, user, profile }
-}
-
 export async function GET() {
+  const auth = await requireActiveMember()
+  if (auth instanceof NextResponse) return auth
+  const { user } = auth
+
   return apiGet(async () => {
-    const { profile } = await requireApprovedProfile()
+    const supabase = await createSupabaseServer()
+    const { data: profile, error } = await supabase
+      .from('member_profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single()
+
+    if (error || !profile) {
+      throw ApiError.internalServerError('프로필 정보를 조회할 수 없습니다.')
+    }
+
     return ApiSuccess.ok({ profile }, '프로필을 불러왔습니다.')
   }, '/api/mypage/profile')
 }
@@ -110,8 +98,12 @@ export async function PATCH(request: NextRequest) {
     return rl.response ?? ApiError.tooManyRequests('요청이 너무 많습니다.').toNextResponse()
   }
 
+  const auth = await requireActiveMember()
+  if (auth instanceof NextResponse) return auth
+  const { user } = auth
+
   return apiPatch(async () => {
-    const { supabase, user } = await requireApprovedProfile()
+    const supabase = await createSupabaseServer()
     const body = await parseJsonObjectBody(request)
 
     if (!body) {
