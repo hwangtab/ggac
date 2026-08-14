@@ -608,6 +608,159 @@ const directGetUserOffenders = apiRouteFiles.filter(file => {
   const missingRequiredCall = (allowEntry.mustAlsoCall || []).some(pattern => !pattern.test(code))
   return missingRequiredCall
 })
+// directGetUserAllowlist(위)는 "raw getUser() 직접 호출이 이 파일에 있어도
+// 되는가"만 본다. 그 allowlist에 없는(=raw getUser()가 전혀 없는) 파일에서
+// 강제 인증 블록이 통째로 삭제되면, `getUser(` 스캔에는 아무것도 안 걸려서
+// directGetUserOffenders가 침묵한다 — 최종 리뷰에서 27개 memberAuth 소비
+// 파일 중 19개가 이 구멍에 해당한다고 확인됨(media/upload, settings,
+// activities/log 등 인증 블록 통째 삭제 실측으로 재현).
+//
+// 아래 매니페스트는 `@/lib/server/memberAuth`를 import하는 모든
+// src/app/api/**/route.ts에 대해 "이 헬퍼가 최소 몇 번 호출돼야 하는가"를
+// 파일별로 고정한다. 현재 게이트 상태를 자동 스냅샷한 것이 아니라, 각 파일을
+// 직접 읽어 핸들러 단위로 실제 호출을 확인한 값이다(2026-08-14). 개수까지
+// 세는 이유: 같은 헬퍼를 여러 핸들러가 부르는 파일(예: settings/route.ts의
+// GET·POST·PUT 전부 requireUser())에서 그중 하나만 지워지는 것도 잡기
+// 위해서다 — "존재"만 보면 나머지 호출 하나가 살아있는 것만으로 통과해버린다.
+// 최소 개수(min) 비교라 새 핸들러 추가로 호출이 늘어나는 것은 실패시키지
+// 않는다(그런 변경은 이 매니페스트를 갱신할 유인이 없어도 게이트가 거짓
+// 실패하지 않아야 하므로).
+//
+// posts/[id]/route.ts · posts/[id]/comments/route.ts · notifications/route.ts ·
+// notifications/bulk/route.ts · activities/session/route.ts는 이미 위
+// directGetUserAllowlist의 mustAlsoCall이 "호출부 존재"를 고정하고 있어서
+// (raw getUser()도 같은 파일에 있는 5개 파일이라 이미 저 메커니즘을 타야
+// 한다) 여기 다시 넣지 않는다 — 같은 보증을 두 구조로 중복시키지 않기
+// 위해서다. posts/route.ts·mypage/profile/route.ts도 각각
+// postsApiCreatesPostsWithServerAuthAndInvalidatesBoard·
+// profileApiRestrictsSelfUpdates가 requireActiveMember() 존재를 고정하지만,
+// 그 두 단정은 "존재"만 볼 뿐 mypage/profile/route.ts처럼 같은 헬퍼를 두 번
+// (GET·PATCH) 부르는 파일에서 "몇 번"까지는 못 본다 — 그래서 이 매니페스트에
+// 넣어 개수까지 고정한다(중복이 아니라 보강).
+const requiredAuthHelperCallCounts = [
+  {
+    file: 'src/app/api/activities/batch-log/route.ts',
+    calls: [{ pattern: /requireUser\(\)/g, min: 1 }],
+  },
+  { file: 'src/app/api/activities/log/route.ts', calls: [{ pattern: /requireUser\(\)/g, min: 1 }] },
+  {
+    file: 'src/app/api/activities/logout/route.ts',
+    calls: [{ pattern: /requireUser\(\)/g, min: 1 }],
+  },
+  {
+    file: 'src/app/api/auth/verify-session/route.ts',
+    calls: [{ pattern: /requireUser\(\)/g, min: 1 }],
+  },
+  {
+    file: 'src/app/api/comments/[id]/like/route.ts',
+    calls: [{ pattern: /requireActiveMember\(\)/g, min: 1 }],
+  },
+  { file: 'src/app/api/link-preview/route.ts', calls: [{ pattern: /requireUser\(\)/g, min: 1 }] },
+  {
+    // POST(업로드)는 requireActiveMember(), GET(목록)은 requireUser() — 서로 다른
+    // 헬퍼를 요구하므로 POST가 requireUser()로 강등돼도(파일에 requireUser()
+    // 자체는 여전히 있다) requireActiveMember() 개수가 부족해져 걸린다.
+    file: 'src/app/api/media/upload/route.ts',
+    calls: [
+      { pattern: /requireActiveMember\(\)/g, min: 1 },
+      { pattern: /requireUser\(\)/g, min: 1 },
+    ],
+  },
+  {
+    file: 'src/app/api/mypage/activity/route.ts',
+    calls: [{ pattern: /requireActiveMember\(\)/g, min: 1 }],
+  },
+  {
+    // PUT은 requireActiveMember(), DELETE·GET 둘 다 requireUser().
+    file: 'src/app/api/mypage/artist/photo/route.ts',
+    calls: [
+      { pattern: /requireActiveMember\(\)/g, min: 1 },
+      { pattern: /requireUser\(\)/g, min: 2 },
+    ],
+  },
+  {
+    // GET·PATCH 둘 다 requireActiveMember().
+    file: 'src/app/api/mypage/artist/route.ts',
+    calls: [{ pattern: /requireActiveMember\(\)/g, min: 2 }],
+  },
+  {
+    // GET·PATCH 둘 다 requireActiveMember() — profileApiRestrictsSelfUpdates가
+    // 존재는 이미 고정하지만 개수(2)까지는 안 본다.
+    file: 'src/app/api/mypage/profile/route.ts',
+    calls: [{ pattern: /requireActiveMember\(\)/g, min: 2 }],
+  },
+  {
+    // PATCH·DELETE 둘 다 requireUser().
+    file: 'src/app/api/notifications/[id]/route.ts',
+    calls: [{ pattern: /requireUser\(\)/g, min: 2 }],
+  },
+  {
+    file: 'src/app/api/notifications/stats/route.ts',
+    calls: [{ pattern: /requireUser\(\)/g, min: 1 }],
+  },
+  {
+    // GET·PUT·DELETE 전부 requireUser().
+    file: 'src/app/api/posts/[id]/attachments/[attachmentId]/route.ts',
+    calls: [{ pattern: /requireUser\(\)/g, min: 3 }],
+  },
+  {
+    file: 'src/app/api/posts/[id]/attachments/route.ts',
+    calls: [{ pattern: /requireUser\(\)/g, min: 1 }],
+  },
+  {
+    file: 'src/app/api/posts/[id]/comments/[commentId]/route.ts',
+    calls: [{ pattern: /requireUser\(\)/g, min: 1 }],
+  },
+  {
+    // GET은 requireUser(), POST(좋아요)는 requireActiveMember().
+    file: 'src/app/api/posts/[id]/likes/route.ts',
+    calls: [
+      { pattern: /requireUser\(\)/g, min: 1 },
+      { pattern: /requireActiveMember\(\)/g, min: 1 },
+    ],
+  },
+  {
+    file: 'src/app/api/posts/[id]/user-data/route.ts',
+    calls: [{ pattern: /requireUser\(\)/g, min: 1 }],
+  },
+  {
+    // postsApiCreatesPostsWithServerAuthAndInvalidatesBoard가 존재는 고정하지만
+    // 이 파일은 호출이 1번뿐이라 개수 단정을 추가해도 보강 효과는 없다 —
+    // 다른 파일과 같은 매니페스트 형태로 통일해 두는 목적.
+    file: 'src/app/api/posts/route.ts',
+    calls: [{ pattern: /requireActiveMember\(\)/g, min: 1 }],
+  },
+  { file: 'src/app/api/settings/reset/route.ts', calls: [{ pattern: /requireUser\(\)/g, min: 1 }] },
+  {
+    // GET·POST·PUT 전부 requireUser() — 사용자가 직접 재현한 구멍(1+/4-, 잔존 2).
+    file: 'src/app/api/settings/route.ts',
+    calls: [{ pattern: /requireUser\(\)/g, min: 3 }],
+  },
+  {
+    file: 'src/app/api/users/[id]/likes/route.ts',
+    calls: [{ pattern: /requireUser\(\)/g, min: 1 }],
+  },
+]
+const requiredAuthHelperCallViolations = requiredAuthHelperCallCounts.flatMap(({ file, calls }) => {
+  const fullPath = join(root, file)
+  if (!existsSync(fullPath)) {
+    return [`${file}: 파일이 없습니다 — requiredAuthHelperCallCounts 매니페스트를 정리하세요.`]
+  }
+  const source = readFileSync(fullPath, 'utf8')
+  // 존재 검사이므로(개수 카운트도 "얼마나 있는가"라 mustAlsoCall과 동일한 성격)
+  // 문자열 리터럴 디코이(`const decoy = "requireUser()"`)에 속지 않도록
+  // stripStringLiterals까지 거친 코드로 센다.
+  const code = stripStringLiterals(stripCommentsAndImports(source))
+  return calls
+    .filter(({ pattern, min }) => {
+      const count = (code.match(pattern) || []).length
+      return count < min
+    })
+    .map(({ pattern, min }) => {
+      const count = (code.match(pattern) || []).length
+      return `${file}: ${pattern} 최소 ${min}회 필요, 실제 ${count}회`
+    })
+})
 const apiRoutesUsingLegacyRateLimitImports = apiRouteFiles.filter(file => {
   const source = readFileSync(join(root, file), 'utf8')
   return /from\s+['"]@\/utils\/(?:distributedRateLimiter|rateLimiter|rateLimit)['"]/.test(source)
@@ -4554,6 +4707,14 @@ if (directGetUserOffenders.length > 0) {
   failures.push(
     `API routes must authenticate via requireUser()/requireActiveMember() from @/lib/server/memberAuth instead of calling getUser(...) directly (file not in directGetUserAllowlist, or missing the mustAlsoCall helper that list requires for that file):\n${directGetUserOffenders
       .map(file => `- ${file}`)
+      .join('\n')}`
+  )
+}
+
+if (requiredAuthHelperCallViolations.length > 0) {
+  failures.push(
+    `API routes importing @/lib/server/memberAuth must keep calling requireUser()/requireActiveMember() the expected number of times per requiredAuthHelperCallCounts (an auth block was deleted, downgraded to a weaker helper, or replaced with a string-literal decoy):\n${requiredAuthHelperCallViolations
+      .map(entry => `- ${entry}`)
       .join('\n')}`
   )
 }
