@@ -76,3 +76,49 @@ RLS 정책 → 앱 계층 검사의 전체 58행 매핑은
    단계 2는 두 정책을 하나의 통합 규칙으로 대체하게 되는데, 이 비대칭을
    모르고 우연히 없애는 게 아니라 어떤 동작을 택할지 의도적으로 결정해야
    한다.
+
+---
+
+## 단계 1a — 공개 스토리지 전환 기록 (2026-08-14 완료)
+
+Supabase Storage의 공개 버킷 3개(`artists`, `posts`, `attachments`)를 Vercel
+Blob 공개 저장소로 옮기고, DB에 저장돼 있던 URL을 재작성했다. 조합원이 새로
+올리는 파일은 이제 Blob으로 간다.
+
+### 되돌리는 방법
+
+DB의 URL만 백업 시점 값으로 되돌린다. **Supabase 원본 객체는 지우지 않았으므로
+이 복원만으로 옛 URL이 다시 살아난다.**
+
+```bash
+set -a; source .env.local; set +a
+BACKUP_DIR="$HOME/ggac-url-backup/2026-08-14T01-45-11-393Z" \
+  node scripts/storage/restore-db-urls.mjs --dry-run   # 먼저 확인
+BACKUP_DIR="$HOME/ggac-url-backup/2026-08-14T01-45-11-393Z" \
+  node scripts/storage/restore-db-urls.mjs
+```
+
+`BACKUP_DIR`은 **JSON 4개가 직접 들어 있는 디렉터리**다(재작성 스크립트의
+`BACKUP_DIR`은 그 상위 베이스 디렉터리라는 점에서 다르다). 백업에는 재작성
+직전의 `artists` / `posts` / `post_attachments` / `event_applications` 값이
+들어 있다.
+
+복원과 함께 신규 업로드도 Supabase로 되돌리려면 `STORAGE_PROVIDER`를 지우고
+재배포한다:
+
+```bash
+vercel env rm STORAGE_PROVIDER production
+git commit --allow-empty -m "chore(storage): 제공자 롤백 반영" && git push origin main
+```
+
+### 주의 — 복원은 시점 되돌리기다
+
+복원은 백업 시점 값을 무조건 덮어쓴다. 재작성 이후 정상적으로 바뀐 값(예: 그
+사이 교체된 사진)도 함께 되돌아간다. 사고 대응용으로는 맞지만, 시간이 꽤
+지난 뒤에 쓰려면 먼저 현재 값을 따로 떠두는 편이 안전하다.
+
+### Supabase 원본을 지워도 되는 시점
+
+단계 1b(이사회 문서)까지 끝나고 운영에서 한동안 문제가 없다고 확인된 뒤,
+Supabase 프로젝트 자체를 삭제할 때 함께 사라진다. 그 전에 개별 객체를 미리
+지우면 위의 복원 경로가 무력해지므로 지우지 않는다.
