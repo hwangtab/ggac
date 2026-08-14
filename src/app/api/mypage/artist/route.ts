@@ -6,6 +6,11 @@ import { createOptionsResponse } from '@/utils/apiResponse'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { invalidateArtistsCache } from '@/lib/data'
+import {
+  getArtistCoreRevalidationPaths,
+  getArchiveListRevalidationPaths,
+  getArchiveProjectRevalidationPaths,
+} from '@/lib/artistRevalidation'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { isProjectStorageObjectPath } from '@/utils/storageUrlValidation'
 import { logicalPathFromUrl } from '@/lib/storage/paths'
@@ -332,17 +337,17 @@ export async function PATCH(request: NextRequest) {
         .single()
 
       if (artistForSlug?.slug) {
-        // 관련된 모든 페이지의 캐시 무효화 (즉시 반영)
-        revalidatePath(`/artists/${artistForSlug.slug}`) // 개별 아티스트 페이지
-        revalidatePath('/artists') // 아티스트 목록 페이지
-        revalidatePath('/') // 메인 페이지 (featured artists)
+        // 관련된 모든 페이지의 캐시 무효화 (즉시 반영) — ko(내부 rewrite 경로
+        // `/ko/...`)와 en(`/en/...`) 두 로케일 경로를 모두 무효화해야 한다.
+        // revalidatePath는 렌더된 실제 경로에만 정확히 매칭되므로 로케일별로
+        // 각각 호출이 필요하다. 자세한 배경은 @/lib/artistRevalidation 참고.
+        for (const revalidationPath of getArtistCoreRevalidationPaths(artistForSlug.slug)) {
+          revalidatePath(revalidationPath)
+        }
         revalidateTag('artists') // 아티스트 관련 모든 캐시
 
         // 인메모리 캐시 강제 무효화 (즉시 최신 데이터 반영)
         invalidateArtistsCache()
-
-        // Next.js 라우터 캐시도 강제로 무효화 (추가 보험)
-        revalidatePath(`/artists/${artistForSlug.slug}`, 'page')
 
         // 아티스트가 포함된 프로젝트 상세 페이지들도 함께 무효화 (아카이브)
         try {
@@ -356,13 +361,15 @@ export async function PATCH(request: NextRequest) {
           )
           for (const p of affected) {
             if (p?.slug) {
-              revalidatePath(`/archive/${p.slug}`)
-              // 페이지 캐시도 명시적 무효화
-              revalidatePath(`/archive/${p.slug}`, 'page')
+              for (const archivePath of getArchiveProjectRevalidationPaths(p.slug)) {
+                revalidatePath(archivePath)
+              }
             }
           }
           // 목록 페이지도 함께
-          revalidatePath('/archive')
+          for (const archiveListPath of getArchiveListRevalidationPaths()) {
+            revalidatePath(archiveListPath)
+          }
         } catch (e) {
           console.warn('Archive revalidation skipped:', (e as any)?.message || e)
         }
