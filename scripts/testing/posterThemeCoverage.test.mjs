@@ -132,3 +132,65 @@ test('밝은 배경·어두운 글자 규칙은 포스터 대응을 갖는다', 
       `의도된 예외라면 이유와 함께 ALLOWLIST에 추가한다.`
   )
 })
+
+/**
+ * 고대비 모드
+ *
+ * 이전 구현은 `(prefers-contrast: high)`를 물었다. 표준값은
+ * no-preference|more|less|custom이라 `high`는 크로미움에서 매칭되지 않아
+ * 블록 전체가 죽어 있었다. 게다가 내용이 밝은 테마 전제여서, 만약 매칭됐다면
+ * !important로 흰 배경을 깔아 다크 테마의 글자를 지웠을 것이다.
+ * 두 실수 모두 조용히 일어나므로 여기서 막는다.
+ */
+
+function contrastBlocks(css) {
+  const out = []
+  const re = /@media[^{]*prefers-contrast[^{]*\{/g
+  for (const m of css.matchAll(re)) {
+    // 중괄호 깊이를 세어 블록 끝을 찾는다
+    let depth = 1
+    let i = m.index + m[0].length
+    for (; i < css.length && depth > 0; i++) {
+      if (css[i] === '{') depth++
+      else if (css[i] === '}') depth--
+    }
+    out.push({ query: m[0], body: css.slice(m.index + m[0].length, i - 1), start: m.index })
+  }
+  return out
+}
+
+test('고대비 질의가 표준값 more를 포함한다', () => {
+  const blocks = contrastBlocks(readFileSync(GLOBALS, 'utf8'))
+  assert.notEqual(blocks.length, 0, 'prefers-contrast 블록이 사라졌다')
+  for (const b of blocks) {
+    assert.match(
+      b.query,
+      /prefers-contrast:\s*more/,
+      `표준값 more가 없어 크로미움에서 매칭되지 않는다: ${b.query.trim()}`
+    )
+  }
+})
+
+test('고대비 블록이 포스터 토큰 정의보다 뒤에 온다', () => {
+  const css = readFileSync(GLOBALS, 'utf8')
+  const tokenAt = css.indexOf('--poster-text:')
+  assert.notEqual(tokenAt, -1, '--poster-text 정의를 찾지 못했다')
+  for (const b of contrastBlocks(css)) {
+    assert.ok(b.start > tokenAt, '고대비 블록이 토큰 정의보다 앞에 있어 재정의가 기본값에 덮인다')
+  }
+})
+
+test('고대비 블록이 다크 테마에 밝은 배경을 강제하지 않는다', () => {
+  const offenders = []
+  for (const b of contrastBlocks(readFileSync(GLOBALS, 'utf8'))) {
+    for (const r of parseRules(b.body)) {
+      const bg = lightBackground(r.body)
+      if (bg) offenders.push(`${r.sel} → ${bg}`)
+    }
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    `고대비 모드가 밝은 면을 깔면 흰 글자가 사라진다:\n  ${offenders.join('\n  ')}`
+  )
+})
