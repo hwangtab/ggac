@@ -27,6 +27,13 @@ const requiredEnvVars = [
   'NEXT_PUBLIC_SUPABASE_URL',
   'NEXT_PUBLIC_SUPABASE_ANON_KEY',
   'SUPABASE_SERVICE_ROLE_KEY',
+  // Better Auth 배선(feat/turso-stage2b1)이 src/db/client.ts를 통해 모듈
+  // 스코프에서 Turso에 연결한다. 이 셋이 없으면 캐치올 라우트를 빌드타임에
+  // 수집하는 순간 "Failed to collect page data for /api/auth/[...all]"로
+  // 빌드가 죽는다(2026-08-18 최종 리뷰 Critical, 실측 재현됨) — 폴백이 없다.
+  'TURSO_DATABASE_URL',
+  'TURSO_AUTH_TOKEN',
+  'BETTER_AUTH_SECRET',
 ]
 
 const redisEnvGroups = [
@@ -46,6 +53,14 @@ const optionalEnvVars = [
   'VERCEL_TOKEN',
   'VERCEL_ORG_ID',
   'VERCEL_PROJECT_ID',
+  // 서로 폴백 관계(src/lib/auth/server.ts의
+  // `BETTER_AUTH_URL || NEXT_PUBLIC_SITE_URL`)라 빌드를 깨지 않는다. 둘 다
+  // 없으면 baseURL이 undefined가 돼 /api/auth/* 호출이 500이 되지만(2026-08-18
+  // 최종 리뷰 실측: unhandledRejection을 next-server가 삼켜 서버 자체는
+  // 생존, 다른 라우트 무영향), 지금은 어느 화면도 이 경로를 안 불러 무해하다
+  // — 그래서 필수가 아니라 권장으로만 둔다.
+  'BETTER_AUTH_URL',
+  'NEXT_PUBLIC_SITE_URL',
 ]
 
 console.log('🔍 Environment Variable Verification\n')

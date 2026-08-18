@@ -90,14 +90,17 @@ async function main() {
     const signUp = await fetch(`${BASE}/api/auth/sign-up/email`, {
       method: 'POST',
       // Origin 헤더: 브라우저는 상태 변경 요청에 이 헤더를 자동으로 붙이지만
-      // Node의 fetch(undici)는 그러지 않는다 — 대신 스펙에 따라 아무것도
-      // 안 보내는 게 아니라 문자열 "null"을 값으로 채워 보낸다. Better
-      // Auth의 CSRF 미들웨어(node_modules/better-auth/dist/api/middlewares/
-      // origin-check.mjs의 formCsrfMiddleware → validateOrigin)는 sign-up/
-      // sign-in 라우트에 걸려 있고, Origin이 비어 있거나 문자열 "null"이면
-      // 403 MISSING_OR_NULL_ORIGIN으로 거부한다. 브라우저가 보내는 것과
-      // 같은 값(BASE)을 명시해야 실제 가입 흐름을 충실히 재현한다 — 지우지
-      // 마라.
+      // Node의 fetch(undici)는 **헤더 자체를 아예 보내지 않는다**
+      // (headers.has('origin') === false — 문자열 "null"을 채우는 게
+      // 아니다). 그런데 undici는 상태 변경 요청에 Sec-Fetch-Mode: cors를
+      // 자동으로 붙이고, Better Auth의 CSRF 미들웨어
+      // (node_modules/better-auth/dist/api/middlewares/origin-check.mjs의
+      // validateFormCsrf, 135-141행)가 그 헤더를 보고 forceValidate=true로
+      // validateOrigin을 강제 호출한다. 그 안(107행)에서 Origin이 빈
+      // 문자열이면 `!originHeader` 분기를 타 403 MISSING_OR_NULL_ORIGIN을
+      // 던진다. sign-up/email이 이 미들웨어를 use: [formCsrfMiddleware]로
+      // 물고 있다(sign-up.mjs:25). 브라우저가 보내는 것과 같은 값(BASE)을
+      // 명시해야 실제 가입 흐름을 충실히 재현한다 — 지우지 마라.
       headers: { 'Content-Type': 'application/json', Origin: BASE },
       body: JSON.stringify({ email, password, name: '배선 점검' }),
     })
@@ -105,6 +108,24 @@ async function main() {
     console.log('   HTTP', signUp.status)
     if (!signUp.ok) {
       console.error('   본문:', signUpBody.slice(0, 300))
+      // 2b-2까지는 src/lib/auth/server.ts가 emailAndPassword.disableSignUp
+      // 을 켜둔다(공개 가입 API를 조합원 승인 화면 없이 열어두지 않기
+      // 위함). 그 상태에서는 CSRF 통과 후 핸들러가 항상 400
+      // EMAIL_PASSWORD_SIGN_UP_DISABLED를 반환한다
+      // (node_modules/better-auth/dist/api/routes/sign-up.mjs:144) — 이건
+      // 배선이 깨졌다는 신호가 아니라 의도된 상태다. 배선 자체(세션 쿠키·
+      // account 해시·member_profiles 훅)를 끝까지 확인하려면 로컬에서만
+      // server.ts의 disableSignUp 줄을 일시적으로 지우거나 false로 바꾼
+      // 뒤 재실행하고, 확인 후 반드시 되돌려라.
+      if (signUp.status === 400 && signUpBody.includes('EMAIL_PASSWORD_SIGN_UP_DISABLED')) {
+        console.log(
+          '\n가입이 2b-2까지 의도적으로 닫혀 있다(disableSignUp: true, src/lib/auth/server.ts).'
+        )
+        console.log(
+          '배선 자체를 끝까지 확인하려면 로컬에서만 disableSignUp을 일시적으로 끄고 재실행하라.'
+        )
+        return
+      }
       throw new Error('가입 실패 — 배선이 안 됐다')
     }
 

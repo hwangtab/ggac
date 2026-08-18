@@ -55,6 +55,29 @@ function maskEmailForLog(email: string): string {
 }
 
 /**
+ * 로그에 안전하게 남길 수 있는 에러 메시지를 고른다.
+ *
+ * drizzle의 `DrizzleQueryError#message`는 `Failed query: ...\nparams: ...`
+ * 형태로 **쿼리 바인딩 파라미터 전체**를 담는다 — member_profiles INSERT
+ * 실패 시 email·display_name(실명일 수 있다) 등 개인정보가 그대로 로그에
+ * 찍힌다는 뜻이다. 반면 `error.cause`는 DB 드라이버가 던진 원인 오류만
+ * 담는다(예: `SQLITE_CONSTRAINT: UNIQUE constraint failed:
+ * member_profiles.email`) — 원인 파악에는 충분하고 파라미터는 없다.
+ *
+ * `cause`가 없는 일반 `Error`도 있으므로(예: 순수 JS 예외) 그 경우엔
+ * `error.message`로 안전하게 폴백한다.
+ */
+function safeErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    if (error.cause instanceof Error) {
+      return error.cause.message
+    }
+    return error.message
+  }
+  return String(error)
+}
+
+/**
  * `sendAuthEmail`을 감싸 실패를 로그에 남기고 다시 던진다.
  * 다시 던지는 이유는 `sendAuthEmail`의 "실패하면 던진다" 계약을 이 훅
  * 레벨에서도 유지하기 위해서다 — 상위(Better Auth)가 그 예외를 삼키더라도,
@@ -78,6 +101,29 @@ export const auth = betterAuth({
   database: drizzleAdapter(db, { provider: 'sqlite' }),
   emailAndPassword: {
     enabled: true,
+    // 2b-2(화면 배선)까지 공개 가입을 막는다. 옵션명은
+    // node_modules/@better-auth/core/dist/types/init-options.d.mts의
+    // `emailAndPassword.disableSignUp?: boolean`에서 확인했다.
+    //
+    // 왜 막는가: 이 브랜치는 "배선"만 하는 단계라 화면 4개 중 어느 것도 아직
+    // Better Auth 가입을 호출하지 않는다. 그런데 Vercel에
+    // TURSO_*·BETTER_AUTH_SECRET이 채워지는 순간
+    // POST /api/auth/sign-up/email이 인증 없이 누구에게나 열려, 임의
+    // 이메일로 user+account+member_profiles(pending) 행이 생기고
+    // noreply@ggac.kr에서 실제 메일이 나간다. 방어막인 Better Auth 기본
+    // rate limit은 storage: "memory"라 서버리스 인스턴스별로 흩어져
+    // 사실상 무방비고(이 저장소 CLAUDE.md가 자체 리미터에 금지한 바로 그
+    // 폴백 형태), 그렇게 생긴 행은 Supabase를 읽는 관리자 승인 화면에
+    // 안 보여 조용히 쌓이며 2b-2 이관 데이터를 오염시킨다.
+    //
+    // 2b-2에서 반드시 할 일: 가입 화면을 Better Auth에 연결하는 커밋에서
+    // 이 줄을 지우거나 false로 바꿔라. 그 전까지 disableSignUp이 켜진
+    // 채로는 sign-up/email 라우트가 항상 400
+    // EMAIL_PASSWORD_SIGN_UP_DISABLED를 반환한다(node_modules/better-auth/
+    // dist/api/routes/sign-up.mjs:144) — "가입이 안 된다"는 버그가 아니라
+    // 의도된 상태다. scripts/auth/verify-wiring.mjs도 이 상태를 감지해
+    // 안내만 하고 실패로 취급하지 않는다.
+    disableSignUp: true,
     minPasswordLength: 8,
     password: {
       hash: hashPassword,
@@ -138,7 +184,7 @@ export const auth = betterAuth({
             logger.error(
               '[auth] 가입 후 member_profiles 생성 실패:',
               maskId(user.id),
-              error instanceof Error ? error.message : String(error)
+              safeErrorMessage(error)
             )
           }
         },
