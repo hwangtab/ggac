@@ -41,7 +41,14 @@ export const memberProfiles = sqliteTable(
     membershipType: text('membership_type').notNull().default('regular'),
     engagementScore: integer('engagement_score').notNull().default(0),
     isMember: integer('is_member', { mode: 'boolean' }).notNull().default(true),
-    /** Postgres에서도 uuid가 아니라 text다. artists.id를 가리키지만 FK는 없었다. */
+    /**
+     * Postgres에서도 uuid가 아니라 text다. **`artists.id`가 아니라
+     * `artists.legacy_id`를 담는다** — 실측(2026-08-18) 결과 값이 있는 15행은
+     * 전부 `artist-014` 같은 legacy_id였고, 그중 `artist-002`·`artist-003`·
+     * `artist-017` 3건은 대상 아티스트가 없다(끊어진 참조). 조인하는 코드는
+     * 없고 admin/members/components/MemberDetailModal.tsx가 문자열을 그대로
+     * 화면에 찍는 것이 전부다. 이관도 원문 그대로 옮긴다.
+     */
     artistId: text('artist_id'),
     isArtist: integer('is_artist', { mode: 'boolean' }).notNull().default(false),
     artistRole: text('artist_role').notNull().default('owner'),
