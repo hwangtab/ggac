@@ -74,6 +74,11 @@ async function cleanup(db) {
 
 async function main() {
   assertLocalBaseUrl(BASE)
+  // WIRING_BASE_URL을 안 주면 기본값(localhost:3000)을 조용히 친다 — 그
+  // 포트에 이미 다른(옛 코드가 돌던) 서버가 떠 있으면 실제로는 그 서버를
+  // 상대로 검증이 돌고, 실패해도 "왜 안 되지"만 남는다. 무엇을 치는지
+  // 시작할 때 한 줄 찍어 이 함정을 눈에 보이게 한다.
+  console.log('대상 서버:', BASE)
 
   const db = createClient({
     url: requireEnv('TURSO_DATABASE_URL'),
@@ -84,7 +89,16 @@ async function main() {
     console.log('1) 가입 시도:', email)
     const signUp = await fetch(`${BASE}/api/auth/sign-up/email`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      // Origin 헤더: 브라우저는 상태 변경 요청에 이 헤더를 자동으로 붙이지만
+      // Node의 fetch(undici)는 그러지 않는다 — 대신 스펙에 따라 아무것도
+      // 안 보내는 게 아니라 문자열 "null"을 값으로 채워 보낸다. Better
+      // Auth의 CSRF 미들웨어(node_modules/better-auth/dist/api/middlewares/
+      // origin-check.mjs의 formCsrfMiddleware → validateOrigin)는 sign-up/
+      // sign-in 라우트에 걸려 있고, Origin이 비어 있거나 문자열 "null"이면
+      // 403 MISSING_OR_NULL_ORIGIN으로 거부한다. 브라우저가 보내는 것과
+      // 같은 값(BASE)을 명시해야 실제 가입 흐름을 충실히 재현한다 — 지우지
+      // 마라.
+      headers: { 'Content-Type': 'application/json', Origin: BASE },
       body: JSON.stringify({ email, password, name: '배선 점검' }),
     })
     const signUpBody = await signUp.text()
