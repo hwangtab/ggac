@@ -1522,6 +1522,36 @@ body {
 [data-poster] .prose a {
   color: #fbd9a5;
 }
+/*
+ * typography 플러그인이 element별로 색을 직접 지정하는 요소들. 부모 `.prose`에
+ * 색을 걸어도 직접 지정 규칙이 이기므로 상속으로는 덮이지 않는다. h5·h6·code·
+ * blockquote·th·dt·kbd가 여기 해당하고, 다크 배경에서 1.13:1로 완전히 사라졌다.
+ * 게시글 본문은 공개 화면이라 인용문·표 머리글이 있는 글이 그대로 안 보였다.
+ */
+[data-poster] .prose h5,
+[data-poster] .prose h6,
+[data-poster] .prose code,
+[data-poster] .prose blockquote,
+[data-poster] .prose th,
+[data-poster] .prose dt,
+[data-poster] .prose kbd {
+  color: var(--poster-text);
+}
+[data-poster] .prose figcaption,
+[data-poster] .prose dd {
+  color: var(--poster-text-3);
+}
+/* 코드 조각은 면을 살짝 띄워 본문과 구분한다 */
+[data-poster] .prose code {
+  background-color: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  padding: 0.1em 0.3em;
+}
+/* pre 안의 code는 이미 어두운 면 위에 있으므로 면을 겹치지 않는다 */
+[data-poster] .prose pre code {
+  background-color: transparent;
+  padding: 0;
+}
 
 /* --- 섹션 킥커: 홈의 헤어라인 행 문법을 다른 페이지에서도 쓴다 --- */
 .poster-kicker {
@@ -1632,10 +1662,44 @@ html {
 [data-poster] .quill-editor-container .ql-toolbar button.ql-active .ql-fill {
   fill: #ffffff;
 }
+/*
+ * 에디터 본문의 코드 블록·인라인 코드는 자체 스타일시트가 #f3f4f6(밝은 회색)을
+ * 깐다. 포스터에서 본문 글자는 흰색으로 재매핑되므로 1.09:1로 사라졌다.
+ */
+[data-poster] .quill-editor-container .ql-editor pre,
+[data-poster] .quill-editor-container .ql-editor code {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: var(--poster-text);
+}
+/* 링크·인용문은 밝은 테마 기준 색이라 다크에서 3.7:1 / 3.9:1로 기준 미달이었다 */
+[data-poster] .quill-editor-container .ql-editor a {
+  color: #fbd9a5;
+}
+[data-poster] .quill-editor-container .ql-editor a:hover {
+  color: #ffffff;
+}
+[data-poster] .quill-editor-container .ql-editor blockquote {
+  color: var(--poster-text-2);
+}
+/*
+ * 아래 둘은 지금도 포스터 규칙이 소스 순서로 이기고 있지만, 순서에 기대면
+ * 규칙을 옮기는 순간 조용히 깨진다. 명시적으로 못 박는다.
+ */
+[data-poster] .quill-editor-container .ql-toolbar button:hover,
+[data-poster] .quill-editor-container .ql-toolbar button.ql-active {
+  color: #ffffff;
+}
+[data-poster] .quill-editor-container.disabled .ql-editor {
+  background-color: #101014;
+}
 /* 업로드 상태 바도 밝은 그라데이션이다 */
 [data-poster] .upload-status-bar {
   background: #16161b;
   border-color: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.85);
+}
+/* 진행 문구는 밝은 테마 기준 파랑(#1976d2)이라 다크에서 3.92:1이었다 */
+[data-poster] .upload-text {
   color: rgba(255, 255, 255, 0.85);
 }
 
