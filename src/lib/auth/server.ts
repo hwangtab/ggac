@@ -4,6 +4,7 @@ import { nextCookies } from 'better-auth/next-js'
 
 import { db } from '@/db/client'
 
+import { sendAuthEmail } from './email'
 import { hashPassword, verifyPassword } from './password'
 
 export const auth = betterAuth({
@@ -18,8 +19,13 @@ export const auth = betterAuth({
       verify: verifyPassword,
     },
     sendResetPassword: async ({ user, url }) => {
-      // 단계 2에서 Resend 연동으로 교체한다. 지금은 연결되지 않은 스캐폴드다.
-      console.warn(`[auth] 비밀번호 재설정 링크 미발송 (단계 0): ${user.email} ${url}`)
+      await sendAuthEmail('recovery', user.email, url)
+    },
+  },
+  emailVerification: {
+    sendOnSignUp: true,
+    sendVerificationEmail: async ({ user, url }) => {
+      await sendAuthEmail('confirmation', user.email, url)
     },
   },
   session: {

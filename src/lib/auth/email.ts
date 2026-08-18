@@ -52,3 +52,41 @@ export function renderAuthEmail(
   }
   return { subject, html: bodyFor(kind, escapeHtml(url)) }
 }
+
+const RESEND_ENDPOINT = 'https://api.resend.com/emails'
+const FROM = '경기아트콜렉티브 <noreply@ggac.kr>'
+
+/**
+ * Resend HTTP API로 인증 메일을 보낸다.
+ *
+ * SMTP(465)가 아니라 HTTP를 쓰는 이유: 서버리스 함수는 연결을 유지하지 못해
+ * 콜드 스타트마다 TLS 핸드셰이크를 새로 한다. 발신 도메인·발신자는 지금
+ * Supabase가 쓰는 것과 같다(noreply@ggac.kr).
+ *
+ * 실패하면 던진다. 호출부(Better Auth 훅)가 그걸 어떻게 다룰지 정한다 —
+ * 조용히 삼키면 "메일이 안 왔다"는 문의를 원인 없이 받게 된다.
+ */
+export async function sendAuthEmail(kind: AuthEmailKind, to: string, url: string): Promise<void> {
+  const apiKey = process.env.RESEND_API_KEY
+  if (!apiKey) {
+    throw new Error('RESEND_API_KEY가 설정되지 않았습니다.')
+  }
+
+  const { subject, html } = renderAuthEmail(kind, url)
+
+  const response = await fetch(RESEND_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ from: FROM, to: [to], subject, html }),
+    signal: AbortSignal.timeout(10_000),
+  })
+
+  if (!response.ok) {
+    // 본문에 API 키가 들어가지 않는다 — 상태 코드와 Resend의 오류 메시지만 남긴다.
+    const detail = await response.text().catch(() => '')
+    throw new Error(`Resend 발송 실패 (${response.status}): ${detail.slice(0, 200)}`)
+  }
+}
