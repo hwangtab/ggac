@@ -194,3 +194,54 @@ test('고대비 블록이 다크 테마에 밝은 배경을 강제하지 않는�
     `고대비 모드가 밝은 면을 깔면 흰 글자가 사라진다:\n  ${offenders.join('\n  ')}`
   )
 })
+
+/**
+ * 홈 내비의 흰 글자 강제 규칙
+ *
+ * 홈 최상단에서는 헤더가 투명해지므로 링크를 흰 글자로 강제한다. 그런데 포스터
+ * 테마는 일부 버튼을 흰 면 + 검은 글자로 칠한다. 두 규칙이 같은 요소에 걸리면
+ * 흰 면에 흰 글자가 되어 사라진다.
+ *
+ * 실제로 모바일 메뉴의 `bg-primary-600` 가입 버튼이 1:1로 사라져 있었다.
+ * 예외 목록에 bg-accent-·bg-white만 있고 bg-primary-가 빠져 있었기 때문이다.
+ * 홈 최상단에서 메뉴를 열어야만 나오는 조합이라 렌더 스윕에도 잡히지 않았다.
+ *
+ * 불변식: 포스터가 검은 글자를 지정한 클래스는 내비 규칙에서 제외되어야 한다.
+ */
+test('홈 내비 규칙이 포스터의 검은 글자 요소를 모두 제외한다', () => {
+  const css = readFileSync(GLOBALS, 'utf8')
+
+  // 포스터가 `color: #000000`을 지정하는 대상 클래스를 모은다
+  const darkTextClasses = new Set()
+  for (const r of parseRules(css)) {
+    if (!r.sel.includes('[data-poster]')) continue
+    if (!/color:\s*#000000/i.test(r.body)) continue
+    for (const m of r.sel.matchAll(/\[class[\^*]=['"]\s?(bg-[a-z]+-[0-9]+)['"]\]/g)) {
+      darkTextClasses.add(m[1])
+    }
+  }
+  assert.notEqual(darkTextClasses.size, 0, '포스터의 검은 글자 규칙을 찾지 못했다')
+
+  // 내비 규칙의 :not() 제외 목록
+  const navRule = parseRules(css).find(
+    r => r.sel.includes('data-at-top') && /color:\s*#fff/i.test(r.body) && r.sel.includes(':not(')
+  )
+  assert.ok(navRule, '홈 내비의 흰 글자 강제 규칙을 찾지 못했다')
+
+  // 쉼표로 묶인 셀렉터를 개별로 본다. 한 덩어리로 보면 a쪽 제외가 빠져도
+  // button쪽에서 발견해 통과해버린다.
+  const unguarded = []
+  for (const part of navRule.sel.split(',').map(x => x.trim())) {
+    if (!part.includes(':not(')) continue
+    const exclusions = [...part.matchAll(/:not\(\[class\*=['"]([^'"]+)['"]\]\)/g)].map(m => m[1])
+    for (const cls of darkTextClasses) {
+      if (!exclusions.some(ex => cls.startsWith(ex))) unguarded.push(`${cls} ← ${part.slice(-60)}`)
+    }
+  }
+
+  assert.deepEqual(
+    unguarded.sort(),
+    [],
+    `포스터가 검은 글자로 칠하는데 내비가 흰 글자로 덮어쓴다(흰 면에 흰 글자):\n  ${unguarded.join('\n  ')}`
+  )
+})

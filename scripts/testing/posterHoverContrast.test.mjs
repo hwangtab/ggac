@@ -58,10 +58,11 @@ function collectRiskyHoverUtilities() {
         property === 'bg' ? LIGHT_BG_SHADES.has(shade) : DARK_TEXT_SHADES.has(shade)
       if (!risky_shade) continue
 
-      // `/50` 같은 불투명도 변형은 기본형과 같은 규칙으로 덮인다
-      const base = utility.replace(/\/[0-9]+$/, '')
-      if (!risky.has(base)) risky.set(base, new Set())
-      risky.get(base).add(file)
+      // 불투명도 수식자는 벗기지 않는다. Tailwind는 `hover:bg-primary-50/50`을
+      // `.hover\:bg-primary-50\/50`이라는 별개 클래스로 내보내므로,
+      // `.hover\:bg-primary-50`을 덮어도 이쪽은 덮이지 않는다. FAQ 아코디언이 그랬다.
+      if (!risky.has(utility)) risky.set(utility, new Set())
+      risky.get(utility).add(file)
     }
   }
   return risky
@@ -75,8 +76,11 @@ function collectPosterHoverOverrides(css) {
   const posterRules = css.match(/\[data-poster\][^{}]*\{[^}]*\}/g) ?? []
   for (const rule of posterRules) {
     const selector = rule.slice(0, rule.indexOf('{'))
-    for (const match of selector.matchAll(/\.((?:group-)?hover)\\:([a-z]+-[a-z]+-[0-9]+)/g)) {
-      covered.add(`${match[1]}:${match[2]}`)
+    // 셀렉터의 이스케이프(`\\/`)를 벗겨 소스 표기(`/50`)와 맞춘다
+    for (const match of selector.matchAll(
+      /\.((?:group-)?hover)\\:([a-z]+-[a-z]+-[0-9]+(?:\\\/[0-9]+)?)/g
+    )) {
+      covered.add(`${match[1]}:${match[2].replace(/\\/g, '')}`)
     }
   }
   return covered
