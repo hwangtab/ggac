@@ -8,6 +8,7 @@ import {
   buildUpsert,
   loadIdentity,
   verifyIdentity,
+  parseArgs,
 } from '../migrate/identity.mjs'
 import {
   toArtistRow,
@@ -111,6 +112,49 @@ test('허용목록에 적힌 컬럼은 비워도 통과한다', async () => {
     () => assertColumnCoverage(client, 'account', toAccountRow(AUTH_USER), []),
     /access_token/
   )
+})
+
+test('행이 여럿일 때 두 번째 행에 컬럼이 빠지면 커버리지 검사가 던진다 (Finding 1)', async () => {
+  const good = toMemberProfileRow(PG_PROFILE)
+  // monthly_fee는 nullable 컬럼이라 DB의 NOT NULL 제약이 대신 잡아주지
+  // 않는다 — 이 케이스를 잡아낼 수 있는 건 컬럼 커버리지 게이트뿐이다.
+  const bad = toMemberProfileRow({ ...PG_PROFILE, id: 'u2', email: 'b@x.kr' })
+  delete bad.monthly_fee
+  await assert.rejects(
+    () =>
+      loadIdentity({
+        client,
+        artists: [],
+        users: [],
+        accounts: [],
+        profiles: [good, bad],
+      }),
+    /monthly_fee/
+  )
+  // 두 번째 행에서 실패했으므로 member_profiles에는 아무것도 남지 않는다
+  // (커버리지 검사가 batch insert보다 먼저 일어난다).
+  const r = await client.execute('select count(*) c from member_profiles')
+  assert.equal(r.rows[0].c, 0)
+})
+
+test('parseArgs: --dump 뒤에 값이 없으면 usage 에러를 던진다 (Finding 2)', () => {
+  assert.throws(() => parseArgs(['--dump']), /usage/)
+})
+
+test('parseArgs: --dump 다음 값이 다른 플래그면(값을 삼킨 경우) usage 에러를 던진다 (Finding 2)', () => {
+  assert.throws(() => parseArgs(['--dump', '--apply']), /usage/)
+})
+
+test('parseArgs: --dump 자체가 없으면 usage 에러를 던진다 (Finding 2)', () => {
+  assert.throws(() => parseArgs(['--apply']), /usage/)
+})
+
+test('parseArgs: 정상 인자는 dumpPath와 apply를 그대로 돌려준다', () => {
+  assert.deepEqual(parseArgs(['--dump', 'auth.sql']), { dumpPath: 'auth.sql', apply: false })
+  assert.deepEqual(parseArgs(['--dump', 'auth.sql', '--apply']), {
+    dumpPath: 'auth.sql',
+    apply: true,
+  })
 })
 
 test('적재하면 네 테이블이 채워지고 값이 보존된다', async () => {

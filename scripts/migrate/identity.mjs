@@ -31,19 +31,16 @@ const LOAD_ORDER = [
   ['member_profiles', 'profiles'],
 ]
 
-/**
- * 매핑이 대상 테이블의 컬럼을 전부 덮는지 실제 DB에 물어 확인한다.
- *
- * 소스 텍스트를 훑는 정적 검사는 주석 처리·문자열 리터럴에 속고, 스키마가
- * 바뀌면 조용히 낡는다. PRAGMA는 지금 이 DB의 진짜 컬럼 목록을 준다.
- * 누락은 "조용히 NULL"로만 드러나고 7개 필드가 전부 nullable이라 제약
- * 위반으로도 안 잡히므로, 여기서 막지 못하면 아무 데서도 못 막는다.
- */
-export async function assertColumnCoverage(client, table, row, allowlist = []) {
+/** `table`의 실제 컬럼 목록을 PRAGMA로 얻는다. 테이블이 없으면 던진다. */
+async function fetchDbColumns(client, table) {
   const info = await client.execute(`PRAGMA table_info("${table}")`)
   const dbCols = info.rows.map(r => String(r.name))
   if (dbCols.length === 0) throw new Error(`테이블이 없다: ${table}`)
+  return dbCols
+}
 
+/** 이미 가져온 컬럼 목록(dbCols)을 기준으로 행 하나를 검사한다. */
+function checkRowCoverage(table, dbCols, row, allowlist) {
   const mapped = new Set(Object.keys(row))
   const allowed = new Set(allowlist)
 
@@ -55,6 +52,40 @@ export async function assertColumnCoverage(client, table, row, allowlist = []) {
   const unknown = [...mapped].filter(c => !dbCols.includes(c))
   if (unknown.length > 0) {
     throw new Error(`${table}: 테이블에 없는 키 ${unknown.join(', ')}`)
+  }
+}
+
+/**
+ * 매핑이 대상 테이블의 컬럼을 전부 덮는지 실제 DB에 물어 확인한다.
+ *
+ * 소스 텍스트를 훑는 정적 검사는 주석 처리·문자열 리터럴에 속고, 스키마가
+ * 바뀌면 조용히 낡는다. PRAGMA는 지금 이 DB의 진짜 컬럼 목록을 준다.
+ * 누락은 "조용히 NULL"로만 드러나고 7개 필드가 전부 nullable이라 제약
+ * 위반으로도 안 잡히므로, 여기서 막지 못하면 아무 데서도 못 막는다.
+ *
+ * 행 하나만 검사한다 — 기존 테스트가 이 시그니처로 직접 호출하기 때문에
+ * 그대로 둔다. 여러 행을 검사할 때는 아래 assertAllRowsColumnCoverage를
+ * 쓴다(PRAGMA를 행마다 다시 부르지 않도록).
+ */
+export async function assertColumnCoverage(client, table, row, allowlist = []) {
+  const dbCols = await fetchDbColumns(client, table)
+  checkRowCoverage(table, dbCols, row, allowlist)
+}
+
+/**
+ * rows 전체에 대해 컬럼 커버리지를 검사한다. PRAGMA는 테이블당 한 번만
+ * 부르고 그 결과를 모든 행에 재사용한다.
+ *
+ * 이전에는 loadIdentity와 CLI dry-run이 rows[0]만 검사했다 — 매퍼가 고정된
+ * 키 집합의 객체 리터럴을 내는 오늘은 도달 불가능한 구멍이지만, 이 게이트의
+ * 존재 이유가 "미래의 실수로 컬럼이 빠져도 잡아낸다"이므로 index 0에서
+ * 멈추면 그 약속을 지키지 못한다.
+ */
+async function assertAllRowsColumnCoverage(client, table, rows, allowlist = []) {
+  if (rows.length === 0) return
+  const dbCols = await fetchDbColumns(client, table)
+  for (const row of rows) {
+    checkRowCoverage(table, dbCols, row, allowlist)
   }
 }
 
@@ -79,9 +110,7 @@ export async function loadIdentity({ client, artists, users, accounts, profiles 
 
   for (const [table, key] of LOAD_ORDER) {
     const rows = byName[key]
-    if (rows.length > 0) {
-      await assertColumnCoverage(client, table, rows[0], INTENTIONALLY_DEFAULTED[table] ?? [])
-    }
+    await assertAllRowsColumnCoverage(client, table, rows, INTENTIONALLY_DEFAULTED[table] ?? [])
     // 테이블 단위 트랜잭션. FK 순서를 지키려면 테이블끼리는 나눠야 한다.
     await client.batch(rows.map(r => buildUpsert(table, r)), 'write')
     counts[table] = rows.length
@@ -148,18 +177,51 @@ async function fetchAll(table) {
   const url = requireEnv('NEXT_PUBLIC_SUPABASE_URL')
   const key = requireEnv('SUPABASE_SERVICE_ROLE_KEY')
   const res = await fetch(`${url}/rest/v1/${table}?select=*`, {
-    headers: { apikey: key, Authorization: `Bearer ${key}` },
+    headers: { apikey: key, Authorization: `Bearer ${key}`, Prefer: 'count=exact' },
   })
   if (!res.ok) throw new Error(`${table} 조회 실패: ${res.status}`)
-  return res.json()
+  const rows = await res.json()
+
+  // PostgREST가 count=exact일 때 Content-Range: 0-18/19 형태로 총 행수를
+  // 알려준다. 서버 쪽 row limit에 걸리면 200 상태로 짧은 배열만 오는데,
+  // 이때 응답 길이와 총량이 어긋나므로 여기서 잡지 못하면 회원이 조용히
+  // 누락된 채로 이관된다 — member_profiles는 auth.users 같은 교차검증
+  // 대상이 없어 이 검사가 유일한 안전망이다.
+  const contentRange = res.headers.get('content-range')
+  const total = contentRange ? Number(contentRange.split('/')[1]) : NaN
+  if (!Number.isFinite(total) || total !== rows.length) {
+    throw new Error(
+      `${table}: PostgREST 응답이 ${rows.length}행인데 총량은 ${
+        contentRange ?? '알 수 없음'
+      } — 잘렸을 수 있다`
+    )
+  }
+
+  return rows
+}
+
+/**
+ * CLI 인자를 해석한다. `--dump` 다음에 값이 없거나, 그 값이 `--`로
+ * 시작하면(다음 플래그를 삼킨 경우) usage 에러를 던진다.
+ * 예: `--dump --apply`는 "--apply"를 파일 경로로 오인해 나중에
+ * 알아보기 힘든 ENOENT로 죽는다 — 여기서 미리 막는다.
+ */
+export function parseArgs(argv) {
+  const dumpIndex = argv.indexOf('--dump')
+  const dumpPath = dumpIndex === -1 ? undefined : argv[dumpIndex + 1]
+  const apply = argv.includes('--apply')
+  if (dumpIndex === -1 || !dumpPath || dumpPath.startsWith('--')) {
+    throw new Error('usage: node scripts/migrate/identity.mjs --dump <auth.sql> [--apply]')
+  }
+  return { dumpPath, apply }
 }
 
 async function main() {
-  const args = process.argv.slice(2)
-  const dumpPath = args[args.indexOf('--dump') + 1]
-  const apply = args.includes('--apply')
-  if (!args.includes('--dump') || !dumpPath) {
-    console.error('usage: node scripts/migrate/identity.mjs --dump <auth.sql> [--apply]')
+  let dumpPath, apply
+  try {
+    ;({ dumpPath, apply } = parseArgs(process.argv.slice(2)))
+  } catch (err) {
+    console.error(err.message)
     process.exit(1)
   }
 
@@ -203,9 +265,7 @@ async function main() {
     if (!apply) {
       for (const [table, key] of LOAD_ORDER) {
         const rows = payload[key]
-        if (rows.length > 0) {
-          await assertColumnCoverage(client, table, rows[0], INTENTIONALLY_DEFAULTED[table] ?? [])
-        }
+        await assertAllRowsColumnCoverage(client, table, rows, INTENTIONALLY_DEFAULTED[table] ?? [])
         const cur = await client.execute(`SELECT count(*) c FROM "${table}"`)
         console.log(`  ${table}: 현재 ${cur.rows[0].c}행 → 적재하면 ${rows.length}행`)
       }
