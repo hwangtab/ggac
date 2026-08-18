@@ -1,5 +1,6 @@
 import { cache } from 'react'
-import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
+import { unstable_noStore as noStore } from 'next/cache'
+import { createServiceRoleClient, hasServiceRoleEnv } from '@/lib/server/supabaseAdmin'
 import { createTextPreview } from '@/utils/textUtils'
 import { createLogger } from '@/utils/logger'
 import { parseIntegerParam } from '@/utils/queryParams'
@@ -29,6 +30,17 @@ export interface BoardListResult {
   hasNext: boolean
   hasPrev: boolean
   currentPage: number
+  /**
+   * true면 SUPABASE_SERVICE_ROLE_KEY 미설정으로 실제 DB 조회를 건너뛰고 빈 목록을
+   * 반환했다는 뜻이다(정상 쿼리가 실패해 빈 배열이 된 경우와 구분하기 위한 필드 —
+   * 그 경우는 이 필드가 없다). 정적 프리렌더(board/page.tsx)는 이 빈 결과를 그대로
+   * 써도 되지만(noStore()로 캐시되지 않게 막혀 있다), API 라우트
+   * (/api/board/posts, /api/posts)는 반드시 이 값을 보고 하드 실패(503)로 되돌려야
+   * 한다 — 그러지 않으면 빈 목록이 200으로 CDN에 캐시되어(/api/board/posts는
+   * s-maxage=60) 키가 복구된 뒤에도 stale-while-revalidate만큼 더 빈 화면이
+   * 서빙된다.
+   */
+  degraded?: boolean
 }
 
 const getSupabaseServerClient = () => {
@@ -45,9 +57,49 @@ export const fetchBoardPosts = cache(
     page = 1,
     pageSize = 15,
   }: BoardListParams): Promise<BoardListResult> => {
-    const supabase = getSupabaseServerClient()
     const safeCategory = parseBoardCategory(category) ?? '전체'
     const safePage = Math.max(1, page)
+
+    // SUPABASE_SERVICE_ROLE_KEY가 없는 환경(예: 전권 키를 두지 않는 public 저장소의
+    // CI 빌드)에서는 이 함수가 무조건 service role 클라이언트를 요구하므로 프리렌더
+    // 시점에 throw해 빌드 전체가 죽는다. 운영(Vercel)에는 키가 항상 있어야 하므로
+    // 이 분기는 정상 운영에서는 절대 타지 않아야 한다 — 탄다면 그 자체가 설정
+    // 오류이므로 조용히 넘기지 않고 error로 남긴다.
+    //
+    // 주의(중요): log.error는 반드시 noStore() 호출보다 앞에 둔다. next build의
+    // 정적 프리렌더 경로(prerender-legacy)에서 noStore()는 markCurrentScopeAsDynamic을
+    // 거쳐 그 자리에서 DynamicServerError를 throw해 렌더를 즉시 중단시키므로, 뒤에
+    // 오는 문장(log.error 포함)은 프리렌더 중에는 절대 실행되지 않는다 — 실행 순서를
+    // 바꾸면 이 로그가 다시 조용히 사라진다.
+    //
+    // noStore()로 이 렌더를 동적 렌더링으로 전환해, 키가 없어 얻은 빈 결과가
+    // revalidate=60 ISR 스냅샷으로 굳어 운영에 그대로 서빙되는 경로를 원천 차단한다
+    // (키가 있는 정상 경로는 이 분기를 타지 않으므로 ISR이 그대로 유지된다). 단,
+    // 두 가지 함정이 있다: ① board/page.tsx에 `export const dynamic = 'force-static'`을
+    // 추가하면 unstable-no-store.js의 forceStatic 분기에서 noStore()가 조용히
+    // no-op되어 이 가드가 무력화되고 빈 배열이 정적 페이지로 그대로 구워진다 —
+    // 절대 추가하지 말 것. ② Next의 cacheComponents/dynamicIO(Next 16 방향)로
+    // 전환하면 unstable_noStore()가 no-op이 되므로, 그때는 connection()
+    // (next/server)으로 바꿔야 같은 보장이 유지된다.
+    //
+    // API 라우트(/api/board/posts, /api/posts)는 이 분기의 반환값(degraded: true)을
+    // 반드시 확인해 하드 실패(503)로 되돌려야 한다 — noStore()는 페이지 프리렌더만
+    // 보호하며, API Route Handler는 이미 동적이라 noStore()가 아무 효과가 없다.
+    if (!hasServiceRoleEnv()) {
+      log.error(
+        'SUPABASE_SERVICE_ROLE_KEY(또는 NEXT_PUBLIC_SUPABASE_URL)가 설정되지 않아 게시판 조회를 건너뜁니다. 운영 환경이라면 환경변수 설정을 확인하세요.'
+      )
+      noStore()
+      return {
+        posts: [],
+        hasNext: false,
+        hasPrev: safePage > 1,
+        currentPage: safePage,
+        degraded: true,
+      }
+    }
+
+    const supabase = getSupabaseServerClient()
     // 목록 정적화(Phase 1) 후 서버는 전량을 한 번에 렌더하므로 상한을 넉넉히 둔다
     const limit = Math.max(1, Math.min(pageSize, 200))
     const start = (safePage - 1) * limit

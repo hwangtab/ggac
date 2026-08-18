@@ -27,6 +27,20 @@ export async function GET(req: NextRequest) {
     }
 
     const result = await fetchBoardPosts({ category: boardCategory, page, pageSize: limit })
+
+    // degraded === true는 쿼리가 실패한 게 아니라 SUPABASE_SERVICE_ROLE_KEY가 없어
+    // fetchBoardPosts가 DB 조회 자체를 건너뛴 경우다(src/lib/server/board.ts 참고).
+    // 이 라우트는 s-maxage=60으로 응답을 CDN에 캐시하므로, 그냥 200 빈 목록을
+    // 내려버리면 빈 게시판이 최소 60초, stale-while-revalidate까지 합치면 최대
+    // 300초 더 굳어서 서빙된다. ApiError.toNextResponse()는 항상
+    // private, no-store를 강제하므로 이 응답은 캐시되지 않는다.
+    if (result.degraded) {
+      log.error('service role 키 미설정으로 게시판 조회 불가 — 200 대신 503으로 응답합니다')
+      return ApiError.serviceUnavailable(
+        '게시판 서비스를 일시적으로 사용할 수 없습니다.'
+      ).toNextResponse()
+    }
+
     return ApiSuccess.ok({
       posts: result.posts,
       hasNext: result.hasNext,
