@@ -62,3 +62,6 @@ test-results/
 
 # Turso 로컬 개발 DB (drizzle-kit push가 생성)
 local.db
+
+# 격리 워크트리 (superpowers:using-git-worktrees)
+.worktrees/
