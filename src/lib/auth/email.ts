@@ -65,6 +65,15 @@ const FROM = '경기아트콜렉티브 <noreply@ggac.kr>'
  *
  * 실패하면 던진다. 호출부(Better Auth 훅)가 그걸 어떻게 다룰지 정한다 —
  * 조용히 삼키면 "메일이 안 왔다"는 문의를 원인 없이 받게 된다.
+ *
+ * 주의: 이 함수를 호출하는 두 훅(`emailAndPassword.sendResetPassword`,
+ * `emailVerification.sendVerificationEmail`)은 Better Auth 내부에서
+ * `runInBackgroundOrAwait()`로 실행된다. 이 래퍼는 프라미스가 reject되면
+ * catch해서 자체 로그만 남기고 재던지지 않는다
+ * (`node_modules/better-auth/dist/context/create-context.mjs`) — 즉 여기서
+ * 던진 예외는 가입/재설정 API 응답까지 절대 전파되지 않는다. "던지니까 상위
+ * 어딘가에서 처리되겠지"라고 가정하지 말 것. 실패 관측은 호출부(`server.ts`)가
+ * 남기는 로그에 전적으로 의존한다.
  */
 export async function sendAuthEmail(kind: AuthEmailKind, to: string, url: string): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY
