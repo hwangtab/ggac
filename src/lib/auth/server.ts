@@ -3,10 +3,12 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { nextCookies } from 'better-auth/next-js'
 
 import { db } from '@/db/client'
+import { memberProfiles } from '@/db/schema/identity'
 import { logger } from '@/utils/logger'
 
 import { type AuthEmailKind, sendAuthEmail } from './email'
 import { hashPassword, verifyPassword } from './password'
+import { buildMemberProfileRow } from './profileHook'
 
 /**
  * Vercel 로그에서 grep하기 위한 고정 접두어.
@@ -72,6 +74,49 @@ export const auth = betterAuth({
   session: {
     expiresIn: 60 * 60 * 24 * 7,
     updateAge: 60 * 60 * 24,
+  },
+  databaseHooks: {
+    user: {
+      create: {
+        after: async user => {
+          try {
+            // buildMemberProfileRow는 Postgres 컬럼명(snake_case)의 키를 돌려준다.
+            // memberProfiles(Drizzle 스키마)는 JS 필드명(camelCase)으로 값을 받는다
+            // (컬럼명 자체는 스키마 정의에서 이미 snake_case로 매핑돼 있다). 두 키
+            // 체계가 달라 그대로 넘기면 displayName 등이 채워지지 않고 NOT NULL
+            // 제약으로 INSERT가 실패한다 — 여기서 명시적으로 옮겨 담는다.
+            const profile = buildMemberProfileRow({
+              id: user.id,
+              email: user.email,
+              name: user.name,
+            })
+            await db
+              .insert(memberProfiles)
+              .values({
+                id: profile.id,
+                email: profile.email,
+                displayName: profile.display_name,
+                registrationStatus: profile.registration_status,
+                isActive: profile.is_active,
+                isAdmin: profile.is_admin,
+                isDirector: profile.is_director,
+                isAuditor: profile.is_auditor,
+              } as typeof memberProfiles.$inferInsert)
+              .onConflictDoNothing()
+          } catch (error) {
+            // Postgres 트리거(handle_new_user)는 이 실패를 EXCEPTION WHEN OTHERS로
+            // 삼켜서 프로필 없는 사용자를 조용히 만들었다. 여기서는 로그로 드러낸다
+            // — 다만 가입 자체를 실패시키지는 않는다. 계정은 이미 만들어졌고,
+            // 프로필은 관리자가 복구할 수 있다.
+            logger.error(
+              '[auth] 가입 후 member_profiles 생성 실패:',
+              user.id,
+              error instanceof Error ? error.message : String(error)
+            )
+          }
+        },
+      },
+    },
   },
   plugins: [nextCookies()],
 })
