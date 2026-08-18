@@ -14,7 +14,7 @@
     "test:e2e": "rm -rf .next node_modules/.cache/webpack && env -u NO_COLOR playwright test",
     "test:e2e:ui": "rm -rf .next node_modules/.cache/webpack && env -u NO_COLOR playwright test --ui",
     "test:runtime-risks": "node scripts/testing/assert-runtime-risks.mjs",
-    "test:unit": "node --test scripts/testing/*.test.mjs",
+    "test:unit": "node --experimental-strip-types --test scripts/testing/*.test.mjs",
     "schema:snapshot": "node scripts/testing/refresh-schema-snapshot.mjs",
     "test:schema-contract": "node scripts/testing/check-schema-contract.mjs",
     "audit:security": "npm audit --audit-level high",

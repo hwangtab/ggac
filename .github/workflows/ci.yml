@@ -46,6 +46,20 @@ jobs:
         if: matrix.node-version == '22.x'
         run: npm run test:schema-contract
 
+      # 런타임 리스크 정적 게이트: 인증 경계·경로 봉쇄·SSRF 방어 등 보안 불변식이
+      # 회귀하지 않는지 소스를 정적으로 검사한다. Node 버전 제약은 없지만 20.x에서도
+      # 중복 실행할 이유가 없으므로 스키마 계약 검사와 동일하게 22.x에서만 실행한다.
+      - name: Check runtime risk gate
+        if: matrix.node-version == '22.x'
+        run: npm run test:runtime-risks
+
+      # 단위 테스트는 src/**/*.ts를 직접 import한다(타입 스트리핑 필요). 20.x에는
+      # 타입 스트리핑이 없고, 22.x는 --experimental-strip-types 플래그가 필요하다
+      # (플래그는 test:unit 스크립트에 있음). 그래서 22.x에서만 실행한다.
+      - name: Run unit tests
+        if: matrix.node-version == '22.x'
+        run: npm run test:unit
+
   build:
     runs-on: ubuntu-latest
     name: Build Test

@@ -4,4 +4,12 @@ echo "🔍 Running pre-push checks..."
 echo "🔍 Checking schema contract..."
 npm run test:schema-contract
 
+# 런타임 리스크 게이트: 인증 경계·경로 봉쇄·SSRF 방어 등 보안 불변식 회귀를 push 전에 차단
+echo "🔍 Checking runtime risk gate..."
+npm run test:runtime-risks
+
+# 단위 테스트
+echo "🔍 Running unit tests..."
+npm run test:unit
+
 echo "✅ Pre-push checks completed!"

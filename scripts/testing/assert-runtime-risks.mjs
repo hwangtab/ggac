@@ -819,8 +819,14 @@ const verifyEnvPath = join(root, 'scripts/verify-env.js')
 const verifyEnvSource = readFileSync(verifyEnvPath, 'utf8')
 const readmePath = join(root, 'README.md')
 const readmeSource = readFileSync(readmePath, 'utf8')
+// docs/ 는 .gitignore 대상(총회·이사회 회의록 등 민감 내용 포함)이라 CI 체크아웃에는
+// 파일이 없다. 없다고 크래시하면 안 되지만, 조용히 통과시켜서도 안 된다 — 파일이 없을
+// 때는 이 문서 관련 검사만 명시적으로 건너뛰고(SKIPPED 로그), 나머지 검사는 정상 실행한다.
 const deploymentGuidePath = join(root, 'docs/deployment-guide.md')
-const deploymentGuideSource = readFileSync(deploymentGuidePath, 'utf8')
+const deploymentGuideAvailable = existsSync(deploymentGuidePath)
+const deploymentGuideSource = deploymentGuideAvailable
+  ? readFileSync(deploymentGuidePath, 'utf8')
+  : ''
 const constructorMatch = rateLimiterSource.match(
   /constructor\s*\(\)\s*\{[\s\S]*?\n\s{2}\}\n\n\s{2}private reportMemoryFallbackIfNeeded/
 )
@@ -876,9 +882,13 @@ const productionRateLimiterDocsFailClosed =
   ) &&
   /503으로 fail-closed 처리한다/.test(readmeSource) &&
   /개발 환경에서만 인메모리 폴백을 허용한다/.test(readmeSource) &&
-  /rate-limited API 가 503 으로 fail-closed 됩니다/.test(deploymentGuideSource) &&
-  !/Upstash 없으면 메모리 폴백/.test(readmeSource) &&
-  !/미설정 시 메모리 기반 폴백으로 동작/.test(deploymentGuideSource)
+  !/Upstash 없으면 메모리 폴백/.test(readmeSource)
+// docs/deployment-guide.md 는 미추적 파일이라 CI에는 없을 수 있다. 있을 때만 문구를
+// 검증하고, 없으면 이 조건은 통과 취급(스킵)한다 — 아래 SKIPPED 로그가 그 사실을 밝힌다.
+const productionRateLimiterDeploymentGuideDocsFailClosed =
+  !deploymentGuideAvailable ||
+  (/rate-limited API 가 503 으로 fail-closed 됩니다/.test(deploymentGuideSource) &&
+    !/미설정 시 메모리 기반 폴백으로 동작/.test(deploymentGuideSource))
 const legacyRateLimitWrappersDelegateToServerFacade =
   /from\s+['"]@\/lib\/server\/rateLimit['"]/.test(rateLimiterCompatSource) &&
   /from\s+['"]@\/lib\/server\/rateLimit['"]/.test(rateLimitWrapperSource) &&
@@ -3220,7 +3230,13 @@ if (!productionRateLimiterFailsClosed) {
   )
 }
 
-if (!productionRateLimiterDocsFailClosed) {
+if (!deploymentGuideAvailable) {
+  console.warn(
+    `SKIPPED: ${relative(root, deploymentGuidePath)} not found (docs/ is gitignored and untracked, so CI checkouts don't have it) — deployment-guide fail-closed wording check skipped; other runtime risk checks still ran.`
+  )
+}
+
+if (!productionRateLimiterDocsFailClosed || !productionRateLimiterDeploymentGuideDocsFailClosed) {
   failures.push(
     `Rate limiter wrappers and production docs must describe the same fail-closed behavior as the runtime implementation:\n- ${relative(
       root,
