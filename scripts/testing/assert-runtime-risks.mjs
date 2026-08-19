@@ -2143,6 +2143,13 @@ const validatesUserSettingsAllowlists =
   (userSettingsApiSource.match(/onConflict:\s*['"]user_id,category,setting_key['"]/g) ?? [])
     .length >= 2 &&
   /parseUserSettingCategory\(parsed\.data\.category\)/.test(userSettingsResetApiSource) &&
+  // 초기화 경로도 RPC(reset_user_settings)의 auth.uid() 의존을 없애고 직접
+  // DELETE로 옮겼다(단계 2b-4). 세션 사용자로 스코프하는 필터가 이 삭제의
+  // 유일한 방어선이다 — 빠지면 카테고리만 맞는 전 사용자의 설정이 지워진다.
+  // 이 경로는 E2E가 덮지 않으므로 정적 검사가 유일한 그물이다.
+  /\.from\(['"]user_settings['"]\)\s*\.delete\(\)\s*\.eq\(['"]user_id['"],\s*user\.id\)/.test(
+    userSettingsResetApiSource
+  ) &&
   /if\s*\(parsed\.data\.category && !category\)/.test(userSettingsResetApiSource) &&
   /if\s*\(setting_key && !category\)/.test(userSettingsResetApiSource) &&
   /isUserSettingKey\(category,\s*setting_key\)/.test(userSettingsResetApiSource) &&
