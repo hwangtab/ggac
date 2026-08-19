@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 사용자 설정 조회 (기본값 포함)
-    let query = supabase.rpc('get_user_settings')
+    let query = supabase.rpc('get_user_settings', { p_user_id: user.id })
 
     if (category) {
       // 카테고리별 필터링은 클라이언트에서 처리 (RPC 함수 한계)
@@ -138,12 +138,21 @@ export async function POST(request: NextRequest) {
       return ApiError.badRequest('유효하지 않은 설정입니다.').toNextResponse()
     }
 
-    // 설정 업데이트
-    const { data: settingId, error } = await supabase.rpc('upsert_user_setting', {
-      p_category: category,
-      p_setting_key: setting_key,
-      p_setting_value: setting_value,
-    })
+    // 설정 업데이트 (RPC의 auth.uid() 의존을 없애고 세션 사용자 id를 앱 계층에서 직접 넘긴다)
+    const { data: upserted, error } = await supabase
+      .from('user_settings')
+      .upsert(
+        {
+          user_id: user.id,
+          category,
+          setting_key,
+          setting_value,
+        } as never,
+        { onConflict: 'user_id,category,setting_key' }
+      )
+      .select('id')
+      .single()
+    const settingId = (upserted as { id?: string } | null)?.id ?? null
 
     if (error) {
       log.error('Setting update error:', error)
@@ -207,11 +216,20 @@ export async function PUT(request: NextRequest) {
           continue
         }
 
-        const { data: settingId, error } = await supabase.rpc('upsert_user_setting', {
-          p_category: category,
-          p_setting_key: setting_key,
-          p_setting_value: setting_value,
-        })
+        const { data: upserted, error } = await supabase
+          .from('user_settings')
+          .upsert(
+            {
+              user_id: user.id,
+              category,
+              setting_key,
+              setting_value,
+            } as never,
+            { onConflict: 'user_id,category,setting_key' }
+          )
+          .select('id')
+          .single()
+        const settingId = (upserted as { id?: string } | null)?.id ?? null
 
         if (error) {
           log.error('Bulk setting update error:', error)

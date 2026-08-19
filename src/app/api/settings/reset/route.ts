@@ -56,10 +56,14 @@ export async function POST(request: NextRequest) {
       return ApiError.badRequest('유효하지 않은 설정입니다.').toNextResponse()
     }
 
-    const { data: deletedCount, error } = await supabase.rpc('reset_user_settings', {
-      p_category: category || null,
-      p_setting_key: setting_key || null,
-    })
+    // RPC의 auth.uid() 의존을 없애고 세션 사용자 id를 앱 계층에서 직접 넘긴다.
+    let deleteQuery = supabase.from('user_settings').delete().eq('user_id', user.id)
+    if (category) deleteQuery = deleteQuery.eq('category', category)
+    if (setting_key) deleteQuery = deleteQuery.eq('setting_key', setting_key)
+
+    // 삭제된 개수를 돌려주던 RPC의 반환 계약을 보존한다.
+    const { data: deletedRows, error } = await deleteQuery.select('id')
+    const deletedCount = deletedRows?.length ?? 0
 
     if (error) {
       log.error('Settings reset error', error)

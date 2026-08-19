@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { getSessionContext, isApprovedActive } from '@/lib/server/authz'
 import type { ProfileLike, SessionContext } from '@/lib/server/authz'
+import { readSessionUser, type SessionUser } from '@/lib/server/session'
 import { createServiceRoleClient, type ServiceRoleSupabaseClient } from '@/lib/server/supabaseAdmin'
 import { createLogger } from '@/utils/logger'
 
@@ -106,4 +107,18 @@ export async function requireActiveMember(): Promise<MemberAuthSuccess | NextRes
     },
     profile: session.profile,
   }
+}
+
+/**
+ * 로그인했으면 사용자를, 아니면 `null`을 돌려준다. **차단하지 않는다.**
+ *
+ * 게시판 목록·댓글 목록처럼 비로그인 방문자도 읽을 수 있어야 하는 라우트가
+ * "내 좋아요 여부" 같은 개인화 데이터를 얹을 때 쓴다. 이런 곳에
+ * `requireUser()`를 쓰면 비로그인 방문자가 401을 받아 게시판이 닫힌다.
+ *
+ * 프로필은 조회하지 않는다 — 이 경로들은 승인 여부를 따지지 않고, `/api/posts`
+ * GET은 게시판 목록의 hot path라 쿼리를 하나 더 얹으면 안 된다.
+ */
+export async function getOptionalUser(): Promise<SessionUser | null> {
+  return readSessionUser()
 }

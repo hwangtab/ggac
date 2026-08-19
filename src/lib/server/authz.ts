@@ -1,10 +1,8 @@
+import { readSessionUser } from '@/lib/server/session'
+import type { SessionUser } from '@/lib/server/session'
 import { createSupabaseServer } from '@/lib/supabase/server'
 
-export interface SessionUser {
-  id: string
-  email?: string | null
-  email_confirmed_at?: string | null
-}
+export type { SessionUser }
 
 export interface ProfileLike {
   is_admin?: boolean | null
@@ -43,22 +41,17 @@ export function canAccessBoardRoom(profile: ProfileLike | null): boolean {
  * getUser → 프로필 조회 시퀀스를 중복하지 않도록 한다.
  */
 export async function getSessionContext(): Promise<SessionContext> {
-  const supabase = await createSupabaseServer()
+  const user = await readSessionUser()
 
-  const {
-    data: { user },
-    error: sessionError,
-  } = await supabase.auth.getUser()
-
-  if (sessionError || !user) {
+  if (!user) {
     return {
       authenticated: false,
       user: null,
       profile: null,
-      sessionError,
     }
   }
 
+  const supabase = await createSupabaseServer()
   const { data: profile, error: profileError } = await supabase
     .from('member_profiles')
     .select('is_admin, is_director, is_auditor, registration_status, is_active')
@@ -67,11 +60,7 @@ export async function getSessionContext(): Promise<SessionContext> {
 
   return {
     authenticated: true,
-    user: {
-      id: user.id,
-      email: user.email,
-      email_confirmed_at: user.email_confirmed_at,
-    },
+    user,
     profile: profile ?? null,
     profileError,
   }

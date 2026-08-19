@@ -550,25 +550,6 @@ const apiRouteFiles = globSync('src/app/api/**/route.@(ts|tsx)', {
 // 헬퍼 호출 자체가 통째로 삭제되면(주석만 남기고 지우는 것 포함) 이 양의
 // 단정이 깨져서 여전히 실패한다.
 const directGetUserAllowlist = [
-  // 비로그인 방문자도 게시판을 읽어야 하는 선택적 조회(Task 4가 의도적으로 남김).
-  // posts/route.ts POST의 requireActiveMember() 요구는 복구1 검사
-  // (postsApiCreatesPostsWithServerAuthAndInvalidatesBoard)가 별도로 고정한다.
-  { file: 'src/app/api/posts/route.ts' },
-  // PATCH는 requireActiveMember(), DELETE는 requireUser() — 강제 검사 2개가
-  // 같은 파일의 선택적 조회(GET)와 섞여 있어 파일 면제만으로는 둘 다
-  // 보호 밖이 된다. 둘 다 반드시 있어야 한다고 단정한다.
-  {
-    file: 'src/app/api/posts/[id]/route.ts',
-    mustAlsoCall: [/requireActiveMember\(\)/, /requireUser\(\)/],
-  },
-  // POST(댓글 작성)는 requireActiveMember() — 같은 파일의 GET(선택적 조회)
-  // 때문에 파일 면제만으로는 POST의 강제 검사가 보호 밖이 된다.
-  {
-    file: 'src/app/api/posts/[id]/comments/route.ts',
-    mustAlsoCall: [/requireActiveMember\(\)/],
-  },
-  { file: 'src/app/api/posts/[id]/comments-list/route.ts' },
-  { file: 'src/app/api/posts/[id]/view/route.ts' },
   // auth/verify-session/route.ts는 여기 없다: UserAuthSuccess에
   // email_confirmed_at이 추가되면서(최종 리뷰 반영) 이 라우트가 직접 부르던
   // 두 번째 supabase.auth.getUser()가 사라졌다 — 이제 이 파일에는 raw
@@ -577,20 +558,30 @@ const directGetUserAllowlist = [
   // 된다"는 뜻이라 실제로 없는 파일을 올려두면 그 자체가 오해를 부른다).
   // requireUser() 호출 존재는 verifySessionTreatsMissingSessionAsNormal과
   // requiredAuthHelperCallCounts(아래) 둘이 고정한다.
+  //
+  // 단계 2b-4(Task 2)에서 posts/route.ts · posts/[id]/route.ts ·
+  // posts/[id]/comments/route.ts · posts/[id]/comments-list/route.ts ·
+  // posts/[id]/view/route.ts · notifications/route.ts ·
+  // notifications/bulk/route.ts를 getOptionalUser()/requireUser()로
+  // 수렴시켰다 — 이 7개 파일에는 이제 raw getUser( 호출이 전혀 없으므로
+  // 같은 이유로 여기서 지운다(auth/verify-session/route.ts와 동일 논리).
+  // 강제 핸들러(POST/PATCH/DELETE)가 여전히
+  // requireActiveMember()/requireUser()를 부르는지는 이 allowlist가 아니라
+  // requiredAuthHelperCallCounts(아래)가 파일별 개수까지 고정한다 — 파일이
+  // 이 목록에서 빠지면 mustAlsoCall 보호도 함께 사라지므로, 그 보호를
+  // requiredAuthHelperCallCounts로 옮겨 심었다(존재만이 아니라 개수까지).
   // 인증 흐름 자체를 구현하는 라우트 — 비밀번호 재설정은 단계 2b(Better Auth
   // 전환)에서 통째로 바뀔 예정이라 이번 수렴 대상에서 제외한다.
   { file: 'src/app/api/auth/reset-password/route.ts' },
   // GET은 401 없이 authenticated:boolean만 돌려주는 선택적 조회라 강제 게이트
   // 대상이 아니지만, POST(세션 시작/갱신/종료)는 requireUser()가 강제다.
-  // 파일 면제만으로는 POST의 강제 검사가 보호 밖이 된다.
+  // 파일 면제만으로는 POST의 강제 검사가 보호 밖이 된다. 이 파일은 단계
+  // 2b-4(Task 2) 범위에서 의도적으로 제외했다 — GET의 오류 분기가 500을
+  // 반환하는데(`ApiError.internalServerError('세션 확인 실패')`)
+  // getOptionalUser()/readSessionUser()는 오류를 null로 삼켜 그 분기가
+  // 사라진다(동작 변경). raw getUser( 호출이 남아 있으므로 allowlist에도
+  // 남는다.
   { file: 'src/app/api/activities/session/route.ts', mustAlsoCall: [/requireUser\(\)/] },
-  // 관리자 권한 확인(POST)은 이 태스크의 범위 밖(admin 검사는 별도 adminAuth
-  // 경로로 수렴 대상, 손대지 말라는 지시에 따라 보고만 함) — 그 분기는
-  // getUser(를 직접 쓴 채로 남는다. 다만 같은 파일의 로그인-only 핸들러
-  // (notifications: GET, bulk: PATCH)는 이번에 requireUser()로 수렴했으므로
-  // 그 호출이 파일에서 사라지면 여전히 실패해야 한다.
-  { file: 'src/app/api/notifications/route.ts', mustAlsoCall: [/requireUser\(\)/] },
-  { file: 'src/app/api/notifications/bulk/route.ts', mustAlsoCall: [/requireUser\(\)/] },
 ]
 const directGetUserOffenders = apiRouteFiles.filter(file => {
   const source = readFileSync(join(root, file), 'utf8')
@@ -629,17 +620,24 @@ const directGetUserOffenders = apiRouteFiles.filter(file => {
 // 않는다(그런 변경은 이 매니페스트를 갱신할 유인이 없어도 게이트가 거짓
 // 실패하지 않아야 하므로).
 //
-// posts/[id]/route.ts · posts/[id]/comments/route.ts · notifications/route.ts ·
-// notifications/bulk/route.ts · activities/session/route.ts는 이미 위
-// directGetUserAllowlist의 mustAlsoCall이 "호출부 존재"를 고정하고 있어서
-// (raw getUser()도 같은 파일에 있는 5개 파일이라 이미 저 메커니즘을 타야
-// 한다) 여기 다시 넣지 않는다 — 같은 보증을 두 구조로 중복시키지 않기
-// 위해서다. posts/route.ts·mypage/profile/route.ts도 각각
+// activities/session/route.ts는 이미 위 directGetUserAllowlist의
+// mustAlsoCall이 "호출부 존재"를 고정하고 있어서(raw getUser()가 아직 이
+// 파일에 남아 있어 저 메커니즘을 타야 한다) 여기 다시 넣지 않는다 — 같은
+// 보증을 두 구조로 중복시키지 않기 위해서다. posts/route.ts·
+// mypage/profile/route.ts도 각각
 // postsApiCreatesPostsWithServerAuthAndInvalidatesBoard·
 // profileApiRestrictsSelfUpdates가 requireActiveMember() 존재를 고정하지만,
 // 그 두 단정은 "존재"만 볼 뿐 mypage/profile/route.ts처럼 같은 헬퍼를 두 번
 // (GET·PATCH) 부르는 파일에서 "몇 번"까지는 못 본다 — 그래서 이 매니페스트에
-// 넣어 개수까지 고정한다(중복이 아니라 보강).
+// 넣어 개수까지 고정한다(중복이 아니라 보강). posts/route.ts는 raw
+// getUser()가 사라졌지만 존재 단정은 이미 있으므로 개수(1)만 통일해 둔다.
+//
+// 단계 2b-4(Task 2)에서 posts/[id]/route.ts · posts/[id]/comments/route.ts ·
+// notifications/route.ts · notifications/bulk/route.ts의 raw getUser()가
+// getOptionalUser()/requireUser()로 수렴돼 사라지면서, 그 파일들을 위의
+// directGetUserAllowlist에서도 지웠다 — mustAlsoCall이 지키던 "강제 핸들러가
+// 여전히 헬퍼를 부르는가" 보증이 함께 사라지므로, 그 보증을 여기로 옮겨
+// 개수까지 고정한다.
 const requiredAuthHelperCallCounts = [
   {
     file: 'src/app/api/activities/batch-log/route.ts',
@@ -698,6 +696,22 @@ const requiredAuthHelperCallCounts = [
     calls: [{ pattern: /requireUser\(\)/g, min: 2 }],
   },
   {
+    // POST(대량 생성, 관리자 권한 확인의 로그인 검사)·PATCH(모두 읽음)
+    // 둘 다 requireUser(). PATCH는 원래부터 requireUser()였고, POST의
+    // getUser()+수동 401 분기를 단계 2b-4(Task 2)에서 requireUser()로
+    // 수렴시켰다 — 그 뒤의 is_admin 프로필 확인(403)은 그대로 둔다.
+    file: 'src/app/api/notifications/bulk/route.ts',
+    calls: [{ pattern: /requireUser\(\)/g, min: 2 }],
+  },
+  {
+    // GET·POST(대량 생성, 관리자 권한 확인의 로그인 검사) 둘 다 requireUser().
+    // GET은 원래부터 requireUser()였고, POST의 getUser()+수동 401 분기를
+    // 단계 2b-4(Task 2)에서 requireUser()로 수렴시켰다 — 그 뒤의 is_admin
+    // 프로필 확인(403)은 그대로 둔다.
+    file: 'src/app/api/notifications/route.ts',
+    calls: [{ pattern: /requireUser\(\)/g, min: 2 }],
+  },
+  {
     file: 'src/app/api/notifications/stats/route.ts',
     calls: [{ pattern: /requireUser\(\)/g, min: 1 }],
   },
@@ -709,6 +723,12 @@ const requiredAuthHelperCallCounts = [
   {
     file: 'src/app/api/posts/[id]/attachments/route.ts',
     calls: [{ pattern: /requireUser\(\)/g, min: 1 }],
+  },
+  {
+    // POST(댓글 작성)는 requireActiveMember() — GET(선택적 조회)은 단계
+    // 2b-4(Task 2)에서 getOptionalUser()로 수렴됐다.
+    file: 'src/app/api/posts/[id]/comments/route.ts',
+    calls: [{ pattern: /requireActiveMember\(\)/g, min: 1 }],
   },
   {
     file: 'src/app/api/posts/[id]/comments/[commentId]/route.ts',
@@ -723,13 +743,23 @@ const requiredAuthHelperCallCounts = [
     ],
   },
   {
+    // PATCH는 requireActiveMember(), DELETE는 requireUser() — GET(선택적
+    // 조회)은 단계 2b-4(Task 2)에서 getOptionalUser()로 수렴됐다.
+    file: 'src/app/api/posts/[id]/route.ts',
+    calls: [
+      { pattern: /requireActiveMember\(\)/g, min: 1 },
+      { pattern: /requireUser\(\)/g, min: 1 },
+    ],
+  },
+  {
     file: 'src/app/api/posts/[id]/user-data/route.ts',
     calls: [{ pattern: /requireUser\(\)/g, min: 1 }],
   },
   {
     // postsApiCreatesPostsWithServerAuthAndInvalidatesBoard가 존재는 고정하지만
     // 이 파일은 호출이 1번뿐이라 개수 단정을 추가해도 보강 효과는 없다 —
-    // 다른 파일과 같은 매니페스트 형태로 통일해 두는 목적.
+    // 다른 파일과 같은 매니페스트 형태로 통일해 두는 목적. GET(선택적
+    // 조회)은 단계 2b-4(Task 2)에서 getOptionalUser()로 수렴됐다.
     file: 'src/app/api/posts/route.ts',
     calls: [{ pattern: /requireActiveMember\(\)/g, min: 1 }],
   },
@@ -1325,8 +1355,12 @@ const adminArtistMemberApiSource = readFileSync(adminArtistMemberApiPath, 'utf8'
 const validatesNotificationRouteId =
   (notificationDetailSource.match(/validateUUID\(resolvedParams\.id,\s*['"]알림 ID['"]\)/g) ?? [])
     .length >= 2 &&
-  /p_notification_id:\s*notificationId/.test(notificationDetailSource) &&
-  /\.eq\(['"]id['"],\s*notificationId\)/.test(notificationDetailSource)
+  // RPC(mark_notification_read)의 auth.uid() 의존을 없애고 앱 계층 직접 쿼리로
+  // 옮긴 뒤(단계 2b-4)에는, PATCH/DELETE 둘 다 라우트 id와 세션 사용자 id로
+  // 동시에 스코프하는지를 직접 확인한다 — RPC 호출 여부가 아니라 실제 소유권
+  // 필터의 존재가 불변식이다.
+  (notificationDetailSource.match(/\.eq\(['"]id['"],\s*notificationId\)/g) ?? []).length >= 2 &&
+  (notificationDetailSource.match(/\.eq\(['"]user_id['"],\s*user\.id\)/g) ?? []).length >= 2
 const validatesNotificationMutationIds =
   /validateUUID/.test(notificationsSource) &&
   /parseNotificationType\(typeParam\)/.test(notificationsSource) &&
@@ -2101,9 +2135,21 @@ const validatesUserSettingsAllowlists =
   !/request\.json\(\)/.test(userSettingsApiSource) &&
   /if\s*\(categoryParam && !category\)/.test(userSettingsApiSource) &&
   /isUserSettingKey\(category,\s*setting_key\)/.test(userSettingsApiSource) &&
-  /p_category:\s*category/.test(userSettingsApiSource) &&
-  /p_setting_key:\s*setting_key/.test(userSettingsApiSource) &&
+  // RPC(upsert_user_setting)의 auth.uid() 의존을 없애고 앱 계층 직접
+  // upsert로 옮긴 뒤(단계 2b-4)에는, 검증된 category/setting_key가 항상
+  // 세션 사용자 id로 스코프된 쓰기(POST 단건 + PUT 벌크 각 1회, 총 2회)로
+  // 이어지는지를 직접 확인한다.
+  (userSettingsApiSource.match(/user_id:\s*user\.id,/g) ?? []).length >= 2 &&
+  (userSettingsApiSource.match(/onConflict:\s*['"]user_id,category,setting_key['"]/g) ?? [])
+    .length >= 2 &&
   /parseUserSettingCategory\(parsed\.data\.category\)/.test(userSettingsResetApiSource) &&
+  // 초기화 경로도 RPC(reset_user_settings)의 auth.uid() 의존을 없애고 직접
+  // DELETE로 옮겼다(단계 2b-4). 세션 사용자로 스코프하는 필터가 이 삭제의
+  // 유일한 방어선이다 — 빠지면 카테고리만 맞는 전 사용자의 설정이 지워진다.
+  // 이 경로는 E2E가 덮지 않으므로 정적 검사가 유일한 그물이다.
+  /\.from\(['"]user_settings['"]\)\s*\.delete\(\)\s*\.eq\(['"]user_id['"],\s*user\.id\)/.test(
+    userSettingsResetApiSource
+  ) &&
   /if\s*\(parsed\.data\.category && !category\)/.test(userSettingsResetApiSource) &&
   /if\s*\(setting_key && !category\)/.test(userSettingsResetApiSource) &&
   /isUserSettingKey\(category,\s*setting_key\)/.test(userSettingsResetApiSource) &&

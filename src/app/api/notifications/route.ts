@@ -128,13 +128,9 @@ export async function POST(request: NextRequest) {
     const supabase = await createSupabaseServer()
 
     // 관리자 권한 확인
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
-    }
+    const auth = await requireUser()
+    if (auth instanceof NextResponse) return auth
+    const { user } = auth
 
     const { data: profile } = await supabase
       .from('member_profiles')

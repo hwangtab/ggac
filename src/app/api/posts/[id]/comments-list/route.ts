@@ -6,6 +6,7 @@ import { validateUUID } from '@/utils/validation'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { formatTimestampUuidCursor, parseTimestampUuidCursor } from '@/utils/keysetCursor'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
+import { getOptionalUser } from '@/lib/server/memberAuth'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -45,9 +46,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   // 로그인 여부에 따라 개인화 데이터(댓글 좋아요 여부)를 얹는 선택적
   // 조회다. 비로그인도 댓글 목록을 읽을 수 있어야 하므로 requireUser로
   // 바꾸지 않는다.
-  const {
-    data: { user },
-  } = await sessionSupabase.auth.getUser()
+  const user = await getOptionalUser()
 
   const annotateCommentLikeState = async (comments: Array<Record<string, unknown>>) => {
     const commentIds = comments.map(c => String(c.id)).filter(Boolean)

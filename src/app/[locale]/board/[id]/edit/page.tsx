@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { Link, redirect } from '@/i18n/navigation'
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { readSessionUser } from '@/lib/server/session'
 import type { MemberProfile, Post as PostType } from '@/types'
 import type { Locale } from '@/i18n/routing'
 import EditPageClient from './EditPageClient'
@@ -22,9 +23,7 @@ export default async function PostEditPage({ params }: PageProps) {
   const postId = postIdValidation.sanitized
   const supabase = await createSupabaseServer()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const user = await readSessionUser()
 
   if (!user) {
     redirect({

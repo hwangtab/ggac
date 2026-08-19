@@ -242,10 +242,10 @@ node scripts/testing/rls-toggle.mjs on
 
 이 스위트는 게시글·댓글·알림·마이페이지 프로필 10개 엔드포인트만
 건드린다. 운영 RLS 정책 58개 중 이 스위트가 실제로 경계를 단정하는 것은
-9개뿐이다. 나머지는 코드를 읽어 동등한 검사를 확인했지만 테스트는 없거나
-(28개), 테스트도 코드상 동등 검사도 없다(21개, `user_settings`·
-`notifications` UPDATE처럼 여전히 DB RPC 내부의 `auth.uid()`에 의존하는
-경우 포함). 행 단위 판정과 근거는
+9개였다(단계 2b-3 시점). **단계 2b-4에서 3개가 추가로 승격돼 12개가 됐다** —
+아래 「단계 2b-4: 신원 경로 일원화 판정」 참고. 나머지는 코드를 읽어 동등한
+검사를 확인했지만 테스트는 없거나(28개), 테스트도 코드상 동등 검사도
+없다(18개). 행 단위 판정과 근거는
 `docs/superpowers/specs/2026-08-13-rls-mapping.md`에 있다(커밋되지 않으므로
 로컬에서만 볼 수 있다).
 
@@ -256,26 +256,40 @@ RLS 정책만 보면 놓친다. **Postgres 함수 본문 안에서 `auth.uid()`�
 함수 안에 있어서, 라우트를 아무리 읽어도 보이지 않는다. 전환 후 `auth.uid()`가
 NULL이 되면 두 가지로 갈린다.
 
-**(1) 즉시 깨지는 것 — 사용자 id를 넘길 방법이 없다.**
+**(1) 즉시 깨지는 것 — 사용자 id를 넘길 방법이 없다. → 단계 2b-4에서 4건 모두
+해소.**
 
-| 함수 | 시그니처 | 호출부 |
-|---|---|---|
-| `mark_notification_read` | `(p_notification_id uuid)` | `api/notifications/[id]/route.ts:46` |
-| `upsert_user_setting` | `(p_category, p_setting_key, p_setting_value)` | `api/settings/route.ts:142,210` |
-| `reset_user_settings` | `(p_category DEFAULT NULL, p_setting_key DEFAULT NULL)` | `api/settings/reset/route.ts:59` |
-| `get_user_settings` | `(p_user_id uuid DEFAULT NULL)` | `api/settings/route.ts:59` — **인자 없이 호출**해서 `auth.uid()`로 떨어진다 |
+| 함수 | 시그니처 | 호출부 | 상태 (2026-08-19, 단계 2b-4) |
+|---|---|---|---|
+| `mark_notification_read` | `(p_notification_id uuid)` | `api/notifications/[id]/route.ts:46` | **해소** — RPC 호출을 제거하고 `.from('notifications').update(...).eq('id', id).eq('user_id', user.id).is('read_at', null)` 직접 UPDATE로 교체 |
+| `upsert_user_setting` | `(p_category, p_setting_key, p_setting_value)` | `api/settings/route.ts:142,210` | **해소** — RPC 호출을 제거하고 `.from('user_settings').upsert({user_id: user.id, ...}, {onConflict:'user_id,category,setting_key'})` 직접 UPSERT로 교체. 부수 발견: 이 RPC는 PL/pgSQL 지역 변수 `user_id`가 컬럼명과 겹쳐 `ON CONFLICT (user_id,...)`가 42702(column reference ambiguous)로 항상 실패하던, `auth.uid()`와 무관한 선행 버그였다 — 아래 참고 |
+| `reset_user_settings` | `(p_category DEFAULT NULL, p_setting_key DEFAULT NULL)` | `api/settings/reset/route.ts:59` | **해소** — RPC 호출을 제거하고 `.from('user_settings').delete().eq('user_id', user.id)`(category/setting_key 조건부 체이닝) 직접 DELETE로 교체. 이 RPC도 동일한 `user_id` 변수-컬럼 충돌로 `WHERE user_id = user_id`가 42702였다 — 게다가 이 버그가 해소된 채로 그대로 실행됐다면 조건 없이 호출 시 **전체 사용자의 설정을 삭제**했을 것이다 |
+| `get_user_settings` | `(p_user_id uuid DEFAULT NULL)` | `api/settings/route.ts:59` — **인자 없이 호출**해서 `auth.uid()`로 떨어진다 | **해소** — 호출부에서 `{ p_user_id: user.id }`를 명시적으로 넘기도록 수정(RPC 자체는 유지) |
 
-앞의 셋은 함수 시그니처를 고쳐야 하고, `get_user_settings`는 호출부에서
-`{ p_user_id: user.id }`를 넘기면 된다.
+RPC 함수 본문 자체는 DDL 변경 금지 지시로 고치지 않았다 — DB에는 여전히 깨진
+채로 남아 있다. 다른 어딘가에서 이 RPC들을 계속 호출한다면(현재 grep으로는
+없음을 확인) 동일하게 실패한다.
 
-**(2) 조용히 검사가 사라지는 것 — id는 넘기지만 `auth.uid()`로 대조한다.**
+**부수 발견 — `user_settings` 저장 기능은 운영에서 한 번도 동작한 적이
+없었다.** `upsert_user_setting`·`reset_user_settings`의 컬럼-변수 충돌
+버그는 이번 `auth.uid()` 전환과 무관하게 처음부터 있었다. 운영
+`user_settings`가 0행인 이유는 `auth.uid()` 문제가 아니라 이 버그였다 —
+누구도 설정을 저장한 적이 없는 게 아니라, 저장을 시도할 때마다 항상 실패해
+왔다. 이번 교체로 처음으로 정상 동작하게 됐다(로컬 스택에서 저장 단건·벌크·
+초기화 전 구간 왕복 확인).
+
+**(2) 조용히 검사가 사라지는 것 — id는 넘기지만 `auth.uid()`로 대조한다.
+단계 2b-4는 조사만 했다, 아직 미해결이다.**
 
 `toggle_post_like`·`toggle_comment_like`·`log_user_activity` 등은 본문에
 `IF auth.uid() IS NOT NULL AND auth.uid() <> p_user_id THEN <거부>` 형태의 가드가
 있다. 전환 후에는 첫 조건이 거짓이 되어 **가드를 건너뛰고 그대로 실행된다.**
 동작은 계속하지만 "남의 id를 넘겨 대신 좋아요를 누르는" 것을 막던 방어가
 사라진다는 뜻이다. 호출부가 항상 세션 사용자의 id를 넘기는지 라우트별로 확인해야
-한다.
+한다. 단계 2b-4가 `grep -rn "p_user_id" src/app/api/` 전수 조사로 impersonation
+구멍은 없음을 확인했지만(세션 id를 직접 쓰거나, 클라이언트가 대상 id를 넘기는
+3곳은 모두 관리자/본인 게이트가 앱 계층에 별도로 있음), **이 가드 자체가
+사라지는 문제는 여전히 해결되지 않았다** — 단계 2b-5의 몫이다.
 
 조사 명령(로컬 스택 기준):
 
@@ -285,3 +299,52 @@ docker exec supabase_db_ggac psql -U postgres -At -c "
   where n.nspname='public' and p.prokind='f'
     and pg_get_functiondef(p.oid) like '%auth.uid()%' order by 1"
 ```
+
+### 단계 2b-4: 신원 경로 일원화 판정 (2026-08-19)
+
+인증 컷오버를 실행하지는 않고 준비만 했다. 네 가지를 확정했다.
+
+1. **`readSessionUser()`가 서버 라우트의 단일 세션 읽기 창구가 됐다.**
+   `supabase.auth.getUser()` 직접 호출은 17곳에서 이 함수(및 함께 도입한
+   퍼널)와, 의도적으로 이번 단계에서 이월한 5곳으로 줄었다: `src/middleware.ts`,
+   `src/middleware/auth.ts`, `src/components/CommentSection.tsx`,
+   `src/app/api/auth/verify-session/route.ts`,
+   `src/app/api/auth/reset-password/route.ts`. 정적 게이트의
+   `directGetUserAllowlist`도 9건에서 2건으로 줄었다. **17곳이 5곳으로 준
+   것이지 1곳이 된 게 아니다** — 이 5곳은 단계 2b-5가 마저 처리해야 한다.
+2. **RPC 내부 `auth.uid()` 의존 4건 해소** — 위 표 참고. 그 과정에서
+   `upsert_user_setting`·`reset_user_settings`가 애초에 컬럼-변수 충돌로
+   깨져 있었다는 것과, 설정 저장 기능이 운영에서 한 번도 동작한 적이
+   없었다는 것을 실측으로 확인했다.
+3. **RLS 정책 8건("살아 있는데 미검증")에 대한 엔드포인트 조사와, 도달
+   가능한 3건의 E2E 승격.** `docs/superpowers/specs/2026-08-13-rls-mapping.md`
+   집계가 `E2E로 증명됨 9 / 앱 계층 확인(테스트 없음) 28 / 미검증 21`에서
+   **`E2E로 증명됨 12 / 앱 계층 확인(테스트 없음) 28 / 미검증 18`**로
+   바뀌었다(전체 58). 새로 승격된 3건: notifications UPDATE(정책 34,
+   본인 알림만), post_attachments SELECT anon(정책 36, 무조건 공개),
+   user_settings ALL(정책 58, GET+POST 경로만). 나머지 5건(정책
+   15/26/29/37/56)은 검증할 앱 호출부 자체가 없다 — 댓글 수정 PATCH
+   라우트가 없고(정책 15), 본인 임시 첨부 조회 GET이 없고(정책 37, `temp_session`은
+   업로드 경로에만 쓰임), `member_profiles` INSERT 정책 두 건(정책 26/29)은
+   단계 2b-5가 통째로 다시 짤 가입 흐름 전용이고, `user_activities` 본인
+   조회(정책 56)는 관리자 전용 엔드포인트만 존재한다. 미검증 18건 전체
+   목록과 사유는 매핑표에 있다(gitignore 대상이라 새로 클론한 환경에는
+   없다 — 이 문단이 그 요약이다).
+4. **판별력을 실측으로 확인했다.** 정책 34를 지키는
+   `.eq('user_id', user.id)` 필터를 `src/app/api/notifications/[id]/route.ts`에서
+   실제로 지우고 RLS OFF로 `npm run test:e2e:authz`를 돌리니 "남의 알림
+   읽음 처리는 404 + 찾을 수 없음이다" 테스트가 `Expected: 404, Received:
+   200`으로 실패했다. 필터를 복원하니 다시 22/22 통과했고, 연속 재실행에도
+   같은 결과라 순서 의존 결함도 아니었다.
+
+**RLS ON 상태로 초록인 것은 증거가 아니다 — 다시 말한다.** 이 단계도 앞선
+단계(2b-3)와 같은 원칙을 그대로 따랐다: 판정은 **RLS OFF** 실행
+기준이며, RLS ON 실행은 앱 코드가 정상 동작하는지 보는 회귀 스모크일
+뿐이다. RLS ON 상태로 통과한다고 해서 앱 계층이 그 경계를 스스로 지킨다는
+뜻이 아니다 — DB가 대신 막아주고 있을 수 있다(정책 34가 정확히 그 사례였다,
+위 4번 참고). 이 단계를 끝낸 뒤에도 로컬 스택의 RLS는 30개 테이블 전부
+켠 채로 남겨 두었다.
+
+**가드가 조용히 사라지는 RPC 부류는 여전히 남아 있다.** 위 (2)절 그대로 —
+`toggle_post_like` 등은 이번 단계에서 고치지 않았고, 조사(impersonation 구멍
+없음 확인)만 했다. 단계 2b-5가 실제로 처리해야 한다.

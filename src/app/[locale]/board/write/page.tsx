@@ -1,5 +1,6 @@
 import { Link, redirect } from '@/i18n/navigation'
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { readSessionUser } from '@/lib/server/session'
 import { setRequestLocale, getTranslations } from 'next-intl/server'
 import type { Locale } from '@/i18n/routing'
 import type { MemberProfile } from '@/types'
@@ -18,9 +19,7 @@ export default async function WritePage({ params }: WritePageProps) {
   const t = await getTranslations('board')
 
   const supabase = await createSupabaseServer()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const user = await readSessionUser()
 
   if (!user) {
     redirect({
