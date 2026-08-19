@@ -248,3 +248,40 @@ node scripts/testing/rls-toggle.mjs on
 경우 포함). 행 단위 판정과 근거는
 `docs/superpowers/specs/2026-08-13-rls-mapping.md`에 있다(커밋되지 않으므로
 로컬에서만 볼 수 있다).
+
+### RLS 밖의 `auth.uid()` 의존 — 단계 2b-4 차단 항목
+
+RLS 정책만 보면 놓친다. **Postgres 함수 본문 안에서 `auth.uid()`를 부르는 RPC가
+20개 있고, 그중 13개를 앱이 실제로 호출한다.** 신원 판단이 앱 코드가 아니라 DB
+함수 안에 있어서, 라우트를 아무리 읽어도 보이지 않는다. 전환 후 `auth.uid()`가
+NULL이 되면 두 가지로 갈린다.
+
+**(1) 즉시 깨지는 것 — 사용자 id를 넘길 방법이 없다.**
+
+| 함수 | 시그니처 | 호출부 |
+|---|---|---|
+| `mark_notification_read` | `(p_notification_id uuid)` | `api/notifications/[id]/route.ts:46` |
+| `upsert_user_setting` | `(p_category, p_setting_key, p_setting_value)` | `api/settings/route.ts:142,210` |
+| `reset_user_settings` | `(p_category DEFAULT NULL, p_setting_key DEFAULT NULL)` | `api/settings/reset/route.ts:59` |
+| `get_user_settings` | `(p_user_id uuid DEFAULT NULL)` | `api/settings/route.ts:59` — **인자 없이 호출**해서 `auth.uid()`로 떨어진다 |
+
+앞의 셋은 함수 시그니처를 고쳐야 하고, `get_user_settings`는 호출부에서
+`{ p_user_id: user.id }`를 넘기면 된다.
+
+**(2) 조용히 검사가 사라지는 것 — id는 넘기지만 `auth.uid()`로 대조한다.**
+
+`toggle_post_like`·`toggle_comment_like`·`log_user_activity` 등은 본문에
+`IF auth.uid() IS NOT NULL AND auth.uid() <> p_user_id THEN <거부>` 형태의 가드가
+있다. 전환 후에는 첫 조건이 거짓이 되어 **가드를 건너뛰고 그대로 실행된다.**
+동작은 계속하지만 "남의 id를 넘겨 대신 좋아요를 누르는" 것을 막던 방어가
+사라진다는 뜻이다. 호출부가 항상 세션 사용자의 id를 넘기는지 라우트별로 확인해야
+한다.
+
+조사 명령(로컬 스택 기준):
+
+```bash
+docker exec supabase_db_ggac psql -U postgres -At -c "
+  select p.proname from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+  where n.nspname='public' and p.prokind='f'
+    and pg_get_functiondef(p.oid) like '%auth.uid()%' order by 1"
+```
