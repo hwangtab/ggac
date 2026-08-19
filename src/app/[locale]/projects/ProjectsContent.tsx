@@ -28,8 +28,6 @@ function toStamp(value: string, locale: string): string {
 
 interface ProjectsContentProps {
   projects: Project[]
-  /** 예정 공연(미래 eventDate·미취소, 서버에서 분리·정렬). 상단에 별도 노출. */
-  upcomingProjects?: Project[]
   pageSize: number
   artistNameMap: Record<string, string>
 }
@@ -61,7 +59,6 @@ const buildProjectsHref = (page: number, category: string) => {
 // 상태(All·1페이지)의 ProjectsView를 렌더해 콘텐츠를 포함시킨다.
 export const ProjectsView = ({
   projects,
-  upcomingProjects = [],
   pageSize,
   artistNameMap,
   selectedCategory,
@@ -69,7 +66,6 @@ export const ProjectsView = ({
 }: ProjectsContentProps & { selectedCategory: string; requestedPage: number }) => {
   const t = useTranslations('projects')
   const locale = useLocale()
-  const isEn = locale === 'en'
 
   const filteredProjects = useMemo(() => {
     if (selectedCategory === 'All') return projects
@@ -108,42 +104,6 @@ export const ProjectsView = ({
         titleLine2={t('hero.titleLine2')}
         subtitle={t('hero.subtitle')}
       />
-
-      {upcomingProjects.length > 0 && (
-        <section className="border-b border-white/15 py-12">
-          <div className="tw-container-custom">
-            <h2 className="mb-6 text-[11px] uppercase tracking-[0.24em] text-white/70">
-              {isEn ? 'Upcoming Shows' : '예정 공연'}
-            </h2>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {upcomingProjects.map(project => (
-                <Link
-                  key={project.id}
-                  href={`/projects/${project.slug}`}
-                  className="group flex items-center gap-4 border border-white/15 bg-white/[0.03] p-4 transition-colors duration-200 hover:border-white/40"
-                >
-                  <div className="flex-shrink-0 text-center">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-primary-400">
-                      {isEn ? 'Upcoming' : '예정'}
-                    </div>
-                    <div className="mt-1 text-sm tabular-nums tracking-[0.08em] text-white/85">
-                      {project.eventDate ? toStamp(project.eventDate, locale) : ''}
-                    </div>
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="font-post line-clamp-2 text-base font-bold leading-tight text-white">
-                      {project.title}
-                    </h3>
-                    {project.venue?.name && (
-                      <p className="mt-1 truncate text-xs text-white/55">{project.venue.name}</p>
-                    )}
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
 
       <section className="sticky top-20 z-40 border-b border-white/15 bg-[#08080a]/95 py-6 backdrop-blur-sm">
         <div className="tw-container-custom">
@@ -322,12 +282,7 @@ export const ProjectsView = ({
 }
 
 // searchParams 브리지 — URL 쿼리에서 카테고리·페이지를 파생해 뷰에 넘긴다.
-const ProjectsContent = ({
-  projects,
-  upcomingProjects,
-  pageSize,
-  artistNameMap,
-}: ProjectsContentProps) => {
+const ProjectsContent = ({ projects, pageSize, artistNameMap }: ProjectsContentProps) => {
   const searchParams = useSearchParams()
   const rawCategory = searchParams.get('category')
   const selectedCategory: string = PROJECT_CATEGORIES.includes(rawCategory as ProjectCategory)
@@ -338,7 +293,6 @@ const ProjectsContent = ({
   return (
     <ProjectsView
       projects={projects}
-      upcomingProjects={upcomingProjects}
       pageSize={pageSize}
       artistNameMap={artistNameMap}
       selectedCategory={selectedCategory}
