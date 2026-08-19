@@ -73,6 +73,14 @@ test.describe('알림 읽음 처리는 본인 알림만 (정책 34)', () => {
       // 스코프한 뒤 매치 행이 없으면 앱이 명시적으로 404를 던진다
       // (src/app/api/notifications/[id]/route.ts) — RLS가 감추는 게 아니라
       // 앱이 user_id로 걸러서 막는 것이지만, 응답 모양 자체는 "없다"로 온다.
+      //
+      // 먼저 read_at을 NULL로 되돌려야 이 단정이 매 실행마다 의미를 가진다.
+      // 되돌리지 않으면 이전 실행(본인 세션 테스트)이 이미 읽음 처리해 둔
+      // 상태가 남아 .is('read_at', null) 조건 자체가 매치를 실패시키고,
+      // user_id 검사가 아예 없어도 이 테스트는 늘 404로 통과해버린다 —
+      // 인가 검증이 아니라 상태 우연에 기대는 거짓 양성이 된다.
+      await resetNotificationUnread(fixtures.notificationId)
+
       const res = await request.patch(`/api/notifications/${fixtures.notificationId}`)
       expect(res.status()).toBe(404)
       expect((await res.json()).error).toContain('찾을 수 없거나 권한이 없습니다')
