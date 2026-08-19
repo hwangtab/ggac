@@ -7,7 +7,7 @@ import { revalidatePath, revalidateTag } from 'next/cache'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { apiGet, apiPost, ApiSuccess, ApiError } from '@/utils/apiWrapper'
-import { requireActiveMember } from '@/lib/server/memberAuth'
+import { requireActiveMember, getOptionalUser } from '@/lib/server/memberAuth'
 import { fetchBoardPosts } from '@/lib/server/board'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { CATEGORIES, parseBoardCategory } from '@/constants/categories'
@@ -61,9 +61,7 @@ export async function GET(request: NextRequest) {
   const supabase = await createSupabaseServer()
   // 로그인 여부에 따라 개인화 데이터(내 좋아요 여부)를 얹는 선택적 조회다.
   // 비로그인도 게시글 목록을 읽을 수 있어야 하므로 requireUser로 바꾸지 않는다.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const user = await getOptionalUser()
   const userId = user?.id || null
 
   return apiGet(

@@ -20,7 +20,7 @@ import { CATEGORIES, parseBoardCategory } from '@/constants/categories'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { annotateImageDimensionsSafe } from '@/utils/imageDimensions'
 import { getBoardPostRevalidationPaths } from '@/lib/revalidationPaths'
-import { requireUser, requireActiveMember } from '@/lib/server/memberAuth'
+import { requireUser, requireActiveMember, getOptionalUser } from '@/lib/server/memberAuth'
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const resolvedParams = await context.params
@@ -53,9 +53,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     // 선택적 조회다. 비로그인도 게시글 상세를 읽을 수 있어야 하므로
     // requireUser로 바꾸지 않는다.
     // 세션은 선택 사항(공개 열람 허용), 사용자 ID가 있으면 is_liked 등 계산에 사용
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    const user = await getOptionalUser()
     const userId = user?.id || null
     let isAdmin = false
     if (userId) {
