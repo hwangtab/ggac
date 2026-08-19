@@ -35,18 +35,22 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
-      testIgnore: /authz-(setup|ownership|personal)/,
+      testIgnore: /authz-(setup|ownership|personal|remaining)/,
     },
+    // authz 계열은 로컬 Supabase 스택이 있어야 도는 로컬 전용 프로젝트다(CI는 돌리지 않는다).
+    // channel: 'chrome'으로 개발자 머신에 이미 설치된 Chrome을 쓴다 — Playwright 번들
+    // 브라우저(약 150MB)를 따로 받지 않아도 권한 경계 증명을 재현할 수 있게 하려는 것이다.
+    // CI가 실행하는 위 `chromium` 프로젝트는 번들 브라우저를 그대로 쓴다.
     {
       name: 'authz-setup',
       testMatch: /authz\.setup\.ts/,
-      use: { ...devices['Desktop Chrome'] },
+      use: { ...devices['Desktop Chrome'], channel: 'chrome' },
     },
     {
       name: 'authz',
-      testMatch: /authz-(ownership|personal)\.spec\.ts/,
+      testMatch: /authz-(ownership|personal|remaining)\.spec\.ts/,
       dependencies: ['authz-setup'],
-      use: { ...devices['Desktop Chrome'] },
+      use: { ...devices['Desktop Chrome'], channel: 'chrome' },
     },
   ],
 
