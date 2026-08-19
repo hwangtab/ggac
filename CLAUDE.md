@@ -67,6 +67,24 @@ Use these CLIs directly for env sync, migration work, and deployment inspection
 rather than spinning up one-off scripts. For destructive operations (e.g.,
 `db push` to production, `env rm`), confirm with the user first.
 
+### Browser Tooling: Aside vs Chrome DevTools MCP
+
+브라우저 작업은 두 MCP의 역할을 나눠 쓴다. 경쟁 관계가 아니라 **인터랙션은
+Aside, 계측은 Chrome DevTools** 담당이다.
+
+- **Aside** (`mcp__aside__repl`): 다단계 인터랙션·폼 시나리오·스크래핑·관리자
+  화면 등 로그인 필요한 페이지 검증, Playwright E2E 셀렉터 프로토타이핑.
+  사용자의 실제 브라우저 세션(운영 사이트 로그인 상태 포함)에 붙고, Playwright
+  호환 API를 영속 JS 스코프에서 실행하므로 한 호출에 여러 단계를 묶는다. 단,
+  `page.route`가 없어 네트워크 계측은 불가.
+- **Chrome DevTools** (`mcp__chrome-devtools__*`): 네트워크 요청 목록·상세 분석,
+  콘솔 메시지 수집(CSP 위반 확인), 성능 트레이스(LCP/CLS), lighthouse 감사, 힙
+  스냅샷, 기기/네트워크 에뮬레이션. 성능 측정 전 CSS 200 가드 같은 네트워크
+  검증도 이쪽.
+
+참고: 설치된 aside는 Aside Browser 제품(`~/.local/bin/aside`)이며,
+github.com/egozverev/aside(ICLR 논문)와는 무관하다.
+
 ### Post-Task Checklist
 
 After completing any development task:
