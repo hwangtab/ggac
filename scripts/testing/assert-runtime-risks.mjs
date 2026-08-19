@@ -1355,8 +1355,12 @@ const adminArtistMemberApiSource = readFileSync(adminArtistMemberApiPath, 'utf8'
 const validatesNotificationRouteId =
   (notificationDetailSource.match(/validateUUID\(resolvedParams\.id,\s*['"]알림 ID['"]\)/g) ?? [])
     .length >= 2 &&
-  /p_notification_id:\s*notificationId/.test(notificationDetailSource) &&
-  /\.eq\(['"]id['"],\s*notificationId\)/.test(notificationDetailSource)
+  // RPC(mark_notification_read)의 auth.uid() 의존을 없애고 앱 계층 직접 쿼리로
+  // 옮긴 뒤(단계 2b-4)에는, PATCH/DELETE 둘 다 라우트 id와 세션 사용자 id로
+  // 동시에 스코프하는지를 직접 확인한다 — RPC 호출 여부가 아니라 실제 소유권
+  // 필터의 존재가 불변식이다.
+  (notificationDetailSource.match(/\.eq\(['"]id['"],\s*notificationId\)/g) ?? []).length >= 2 &&
+  (notificationDetailSource.match(/\.eq\(['"]user_id['"],\s*user\.id\)/g) ?? []).length >= 2
 const validatesNotificationMutationIds =
   /validateUUID/.test(notificationsSource) &&
   /parseNotificationType\(typeParam\)/.test(notificationsSource) &&
@@ -2131,8 +2135,13 @@ const validatesUserSettingsAllowlists =
   !/request\.json\(\)/.test(userSettingsApiSource) &&
   /if\s*\(categoryParam && !category\)/.test(userSettingsApiSource) &&
   /isUserSettingKey\(category,\s*setting_key\)/.test(userSettingsApiSource) &&
-  /p_category:\s*category/.test(userSettingsApiSource) &&
-  /p_setting_key:\s*setting_key/.test(userSettingsApiSource) &&
+  // RPC(upsert_user_setting)의 auth.uid() 의존을 없애고 앱 계층 직접
+  // upsert로 옮긴 뒤(단계 2b-4)에는, 검증된 category/setting_key가 항상
+  // 세션 사용자 id로 스코프된 쓰기(POST 단건 + PUT 벌크 각 1회, 총 2회)로
+  // 이어지는지를 직접 확인한다.
+  (userSettingsApiSource.match(/user_id:\s*user\.id,/g) ?? []).length >= 2 &&
+  (userSettingsApiSource.match(/onConflict:\s*['"]user_id,category,setting_key['"]/g) ?? [])
+    .length >= 2 &&
   /parseUserSettingCategory\(parsed\.data\.category\)/.test(userSettingsResetApiSource) &&
   /if\s*\(parsed\.data\.category && !category\)/.test(userSettingsResetApiSource) &&
   /if\s*\(setting_key && !category\)/.test(userSettingsResetApiSource) &&
