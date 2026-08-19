@@ -13,6 +13,12 @@
  *
  * 안전장치: 접속 대상 호스트가 127.0.0.1/localhost가 아니면 즉시 거부한다.
  * 이 가드가 없으면 한 번의 실수로 운영 RLS가 꺼진다.
+ *
+ * 실행 경로: psql은 호스트가 아니라 로컬 Supabase 스택의 Postgres 컨테이너
+ * 안에서 `docker exec`로 실행한다. 호스트에 psql이 설치돼 있을 필요가 없고,
+ * 컨테이너 이름은 로컬 스택 밖(운영)을 가리킬 수 없으므로 로컬 전용
+ * 보장이 구조적으로 더 강해진다. 컨테이너 이름은 `E2E_DB_CONTAINER`로
+ * 바꿀 수 있고 기본값은 `supabase_db_ggac`다.
  */
 
 import { execFileSync } from 'node:child_process'
@@ -20,6 +26,7 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 
 const STATE_FILE = 'scripts/testing/.rls-state.json'
 const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '::1'])
+const DB_CONTAINER = process.env.E2E_DB_CONTAINER || 'supabase_db_ggac'
 
 function localDbUrl() {
   const url = process.env.E2E_DATABASE_URL
@@ -36,12 +43,32 @@ function localDbUrl() {
   return url
 }
 
-/** psql을 한 번 실행하고 표준출력을 돌려준다. 결과는 탭 구분, 헤더 없음. */
+/**
+ * psql을 로컬 Postgres 컨테이너 안에서 한 번 실행하고 표준출력을 돌려준다.
+ * 결과는 탭 구분, 헤더 없음. url은 로컬 여부를 확인하는 가드로만 쓰이고,
+ * 실제 접속은 컨테이너 안의 `postgres` 슈퍼유저로 이뤄진다(컨테이너 자체가
+ * 이미 로컬 스택이므로 URL을 그대로 넘길 필요가 없다).
+ */
 function psql(url, sql) {
-  return execFileSync('psql', [url, '-At', '-F', '\t', '-c', sql], {
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
+  try {
+    return execFileSync(
+      'docker',
+      ['exec', DB_CONTAINER, 'psql', '-U', 'postgres', '-At', '-F', '\t', '-c', sql],
+      {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }
+    )
+  } catch (err) {
+    if (err.code === 'ENOENT' || /No such container/.test(err.stderr ?? '')) {
+      throw new Error(
+        `로컬 Postgres 컨테이너(${DB_CONTAINER})에 접속할 수 없다. ` +
+          'docker가 설치돼 있고 로컬 Supabase 스택이 실행 중인지 확인해라 ' +
+          '(예: supabase start).'
+      )
+    }
+    throw err
+  }
 }
 
 /** 지금 RLS가 켜져 있는 public 테이블 목록. */
