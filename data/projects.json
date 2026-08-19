@@ -764,5 +764,52 @@
     ],
     "ticketing": null,
     "relatedArticles": []
+  },
+  {
+    "id": "project-028",
+    "slug": "metal-syndicate-network-v",
+    "title": "METAL SYNDICATE NETWORK V 철조망 V",
+    "lead": "〈METAL SYNDICATE NETWORK V 철조망 V〉는 2026년 8월 29일 수원 D.O.T에서 열리는 경기·서울 메탈 정기공연 '철조망'의 다섯 번째 무대입니다. 유자철선처럼 엮인 메탈 친구들의 리프로 당신의 고막을 그라인더처럼 갈아낼 공연입니다.",
+    "category": "공연·전시",
+    "publishedDate": "2026-08-19",
+    "eventDate": "2026-08-29",
+    "venue": {
+      "name": "D.O.T",
+      "address": "수원 화서문로 34-1, 지하 1층"
+    },
+    "coverImage": "/images/projects/metal-syndicate-network-v.webp",
+    "description": "경기/서울 메탈 정기공연 철조망의 다섯 번째 시간. 유자철선처럼 엮인 메탈 친구들의 리프로 당신의 고막을 그라인더처럼 갈아낼 공연입니다.\n\n### 공연 정보\n\n- **공연명**: METAL SYNDICATE NETWORK V 철조망 V\n- **일시**: 2026년 8월 29일 (토) 입장 18:00 / 시작 18:30\n- **장소**: D.O.T [@d.o.t_kr](https://www.instagram.com/d.o.t_kr) — 수원 화서문로 34-1, 지하 1층\n- **티켓**: 예매 15,000원 / 현매 20,000원\n\n### 라인업\n\n- 人類滅亡計画 — [@human_extinction_project](https://www.instagram.com/human_extinction_project)\n- SABBAHA — [@sabbaha_kr](https://www.instagram.com/sabbaha_kr)\n- HEDONIAC — [@project_hedoniac](https://www.instagram.com/project_hedoniac)\n- NAIITE — [@naiite.grind](https://www.instagram.com/naiite.grind)\n- Doguul — [@doguul666](https://www.instagram.com/doguul666)\n- PanzerKorps — [@panzerkorps2025](https://www.instagram.com/panzerkorps2025)",
+    "gallery": null,
+    "videoUrl": null,
+    "artistIds": [
+      "artist-001"
+    ],
+    "ticketing": [
+      {
+        "platform": "네이버 예약",
+        "url": "https://booking.naver.com/booking/5/bizes/1442738/items/7955233/?preview=1&startDateTime=2026-08-29T00%3A00%3A00%2B09%3A00",
+        "available": true,
+        "price": "15000",
+        "endDate": "2026-08-29"
+      }
+    ],
+    "relatedArticles": [
+      {
+        "title": "철조망: METAL SYNDICATE NETWORK",
+        "url": "/projects/metal-syndicate-network"
+      },
+      {
+        "title": "철조망 2회: METAL SYNDICATE NETWORK 2TERNAL",
+        "url": "/projects/metal-syndicate-network-2ternal"
+      },
+      {
+        "title": "철조망 III: METAL SYNDICATE NETWORK III",
+        "url": "/projects/metal-syndicate-network-iii"
+      },
+      {
+        "title": "철조망 IV",
+        "url": "/projects/metal-syndicate-network-iv"
+      }
+    ]
   }
 ]

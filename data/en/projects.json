@@ -765,5 +765,52 @@
     ],
     "ticketing": null,
     "relatedArticles": []
+  },
+  {
+    "id": "project-028",
+    "slug": "metal-syndicate-network-v",
+    "title": "METAL SYNDICATE NETWORK V (Barbed Wire V)",
+    "lead": "METAL SYNDICATE NETWORK V (철조망 V) is the fifth edition of the Gyeonggi–Seoul metal concert series Barbed Wire, held at D.O.T in Suwon on August 29, 2026 — riffs from metal friends entangled like razor wire, ready to grind your eardrums.",
+    "category": "Performance & Exhibition",
+    "publishedDate": "2026-08-19",
+    "eventDate": "2026-08-29",
+    "venue": {
+      "name": "D.O.T",
+      "address": "B1F, 34-1 Hwaseomun-ro, Suwon"
+    },
+    "coverImage": "/images/projects/metal-syndicate-network-v.webp",
+    "description": "The fifth edition of Barbed Wire, the regular Gyeonggi/Seoul metal concert series. Riffs from metal friends entangled like razor wire will grind your eardrums like a grinder.\n\n### Concert Information\n\n- **Title**: METAL SYNDICATE NETWORK V (Barbed Wire V)\n- **Date**: August 29, 2026 (Sat) — Doors 18:00 / Start 18:30\n- **Venue**: D.O.T [@d.o.t_kr](https://www.instagram.com/d.o.t_kr) — B1F, 34-1 Hwaseomun-ro, Suwon\n- **Tickets**: Advance 15,000 KRW / At the door 20,000 KRW\n\n### Line-up\n\n- 人類滅亡計画 (Human Extinction Project) — [@human_extinction_project](https://www.instagram.com/human_extinction_project)\n- SABBAHA — [@sabbaha_kr](https://www.instagram.com/sabbaha_kr)\n- HEDONIAC — [@project_hedoniac](https://www.instagram.com/project_hedoniac)\n- NAIITE — [@naiite.grind](https://www.instagram.com/naiite.grind)\n- Doguul — [@doguul666](https://www.instagram.com/doguul666)\n- PanzerKorps — [@panzerkorps2025](https://www.instagram.com/panzerkorps2025)",
+    "gallery": null,
+    "videoUrl": null,
+    "artistIds": [
+      "artist-001"
+    ],
+    "ticketing": [
+      {
+        "platform": "Naver Booking",
+        "url": "https://booking.naver.com/booking/5/bizes/1442738/items/7955233/?preview=1&startDateTime=2026-08-29T00%3A00%3A00%2B09%3A00",
+        "available": true,
+        "price": "15000",
+        "endDate": "2026-08-29"
+      }
+    ],
+    "relatedArticles": [
+      {
+        "title": "METAL SYNDICATE NETWORK",
+        "url": "/en/projects/metal-syndicate-network"
+      },
+      {
+        "title": "METAL SYNDICATE NETWORK 2TERNAL",
+        "url": "/en/projects/metal-syndicate-network-2ternal"
+      },
+      {
+        "title": "METAL SYNDICATE NETWORK III",
+        "url": "/en/projects/metal-syndicate-network-iii"
+      },
+      {
+        "title": "Barbed Wire IV",
+        "url": "/en/projects/metal-syndicate-network-iv"
+      }
+    ]
   }
 ]
