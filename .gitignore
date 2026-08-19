@@ -65,3 +65,12 @@ local.db
 
 # 격리 워크트리 (superpowers:using-git-worktrees)
 .worktrees/
+
+# RLS 토글 스크립트의 로컬 산출물 (rls-toggle.mjs가 생성)
+scripts/testing/.rls-state.json
+
+# 권한 경계 E2E 픽스처 산출물 (seed-authz-fixtures.mjs가 생성, 로컬 전용 UUID)
+e2e/.authz-fixtures.json
+
+# 권한 경계 E2E 로그인 세션 (authz.setup.ts가 storageState로 저장, 실제 쿠키 포함)
+e2e/.auth/

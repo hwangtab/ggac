@@ -122,3 +122,166 @@ git commit --allow-empty -m "chore(storage): 제공자 롤백 반영" && git pus
 단계 1b(이사회 문서)까지 끝나고 운영에서 한동안 문제가 없다고 확인된 뒤,
 Supabase 프로젝트 자체를 삭제할 때 함께 사라진다. 그 전에 개별 객체를 미리
 지우면 위의 복원 경로가 무력해지므로 지우지 않는다.
+
+## 권한 경계 검증 (단계 2b-3)
+
+인증을 Supabase에서 옮기면 Supabase 쿠키 세션이 사라지고 `auth.uid()`가
+NULL이 된다 — 운영 RLS 정책 58개 중 52개가 그 함수에 의존하므로 전부
+거짓이 된다. "앱 계층이 스스로 같은 접근 판정을 내리는가"는 **RLS를 끈
+상태**로 권한 E2E를 돌려야만 판정할 수 있다. **RLS가 켜진 채로 초록인 것은
+증거가 아니다** — 실측으로 확인했다: `src/app/api/notifications/route.ts`의
+`.eq('user_id', user.id)` 필터를 지우고 RLS ON으로 돌리면 스위트가 여전히
+18/18 통과한다(RLS가 조용히 대신 막아준다). 같은 결함을 RLS OFF로 돌리면
+그제서야 실패한다. 그래서 판정은 항상 RLS OFF 실행 기준이다.
+
+전체 58개 정책 대 앱 계층 검사 1:1 매핑표는
+`docs/superpowers/specs/2026-08-13-rls-mapping.md`에 있다(`docs/`는
+gitignore 대상이라 이 저장소에는 커밋되지 않는다 — 새로 클론한 환경에는
+없다). 아래는 그 표를 다시 만드는 절차다.
+
+### 1. 로컬 스택을 띄운다
+
+로컬 Supabase는 `supabase/migrations`를 그대로 두면 `supabase start`가
+드리프트로 실패한다(운영이 `applied` 마킹과 실제 DDL이 어긋나 있다 — 위
+"Supabase 마이그레이션 드리프트" 항목 참고). 그래서 마이그레이션을 잠깐
+치우고 운영 스키마를 직접 주입한다. 포트는 Supabase 기본값
+(API 54321 / DB 54322)을 그대로 쓴다 — `supabase/config.toml`을 건드릴
+필요가 없다(포트가 이미 비어 있다는 전제 — 충돌하면 별도 포트 이동이
+필요하며, 그 경우에만 config.toml을 고치고 **끝나면 반드시 원복한다**).
+
+```bash
+# 드리프트 우회: 마이그레이션을 잠시 다른 곳으로 옮기고 빈 상태로 기동
+mv supabase/migrations /tmp/ggac-migrations-parked
+mkdir -p supabase/migrations
+supabase start
+
+# 운영 스키마를 읽기 전용으로 덤프해 로컬 컨테이너에 주입
+supabase db dump --linked -f /tmp/ggac-schema.sql
+docker cp /tmp/ggac-schema.sql supabase_db_ggac:/tmp/schema.sql
+docker exec supabase_db_ggac psql -U postgres -f /tmp/schema.sql
+```
+
+확인:
+
+```bash
+export E2E_DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+node scripts/testing/rls-toggle.mjs status
+```
+
+기대값: `RLS 켜진 테이블: 30개` — 운영과 정확히 같은 수여야 한다. 다르면
+스키마 주입이 불완전한 것이므로 멈추고 원인을 확인한다(정책 개수도 58개와
+일치해야 한다).
+
+끝나면(작업이 완전히 끝난 뒤): `supabase stop`, 그리고
+`rm -rf supabase/migrations && mv /tmp/ggac-migrations-parked
+supabase/migrations`로 원복한다. 포트를 옮겼다면 `config.toml`도 543xx로
+되돌린다.
+
+### 2. 픽스처를 시드한다
+
+```bash
+node scripts/testing/seed-authz-fixtures.mjs
+```
+
+`admin`/`owner`/`other`/`pending` 네 계정(GoTrue admin API로 생성)과 글 1·
+댓글 1·알림 1·좋아요 1을 채우는 멱등 스크립트다. 두 번 돌려도 행이 늘지
+않는다. 로컬이 아닌 호스트(`E2E_SUPABASE_URL`의 호스트가
+127.0.0.1/localhost/::1이 아닌 경우)에는 거부하고 exit 1로 죽는다 — 운영에
+잘못 시드되는 사고를 막는 가드다. 결과는 `e2e/.authz-fixtures.json`
+(gitignore 대상)에 남고, E2E 스펙은 이 파일을 읽어 계정 id·글 id 등을
+얻는다.
+
+RLS를 끄고 켜는 스크립트는 `scripts/testing/rls-toggle.mjs`다:
+
+```bash
+node scripts/testing/rls-toggle.mjs status   # 현재 RLS 켜진 테이블 수
+node scripts/testing/rls-toggle.mjs off      # 30개 전부 끈다 (판정용)
+node scripts/testing/rls-toggle.mjs on       # 복원
+```
+
+`off`/`on` 모두 `docker exec <컨테이너> psql`로 실행되며(호스트에 psql 설치
+불필요), `E2E_DATABASE_URL`의 호스트·Docker 엔드포인트·컨테이너의
+`com.supabase.cli.project` 라벨 셋 다 로컬임을 확인해야만 동작한다 — 셋 중
+하나라도 아니면 ALTER TABLE 이전에 거부한다. 컨테이너명은
+`E2E_DB_CONTAINER`로 바꿀 수 있다(기본값 `supabase_db_ggac`).
+
+### 3. 권한 E2E를 돌린다
+
+```bash
+export E2E_SUPABASE_URL="http://127.0.0.1:54321"
+export E2E_SUPABASE_ANON_KEY="<supabase status의 anon key>"
+export E2E_SUPABASE_SERVICE_ROLE_KEY="<supabase status의 service_role key>"
+export E2E_DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+
+npm run test:e2e:authz
+```
+
+필요한 환경변수는 이 넷뿐이다. `npm run test:e2e:authz`는
+`playwright test --project=authz`의 별칭이며, `authz-setup` 프로젝트(4개
+계정 로그인 → `e2e/.auth/*.json` storageState 저장)에 의존한 뒤
+`e2e/authz-ownership.spec.ts`·`e2e/authz-personal.spec.ts`(총 18개 테스트)를
+돈다. Playwright의 `webServer`가 이 네 환경변수를 `npm run dev`에 그대로
+주입하므로, `.env.local`(운영 Supabase를 가리킴)보다 우선한다 — 빠뜨리면
+`assertLocalSupabase()` 가드가 즉시 예외를 던진다.
+
+**판정 절차:**
+
+```bash
+node scripts/testing/rls-toggle.mjs off
+npm run test:e2e:authz    # 이 결과가 판정이다
+node scripts/testing/rls-toggle.mjs on
+```
+
+**RLS OFF에서 18/18 통과해야 "앱 계층이 스스로 접근을 판정한다"고 말할 수
+있다. RLS ON 상태로 돌려서 나온 통과는 증거가 아니다** — 위에서 실측한
+대로, RLS가 조용히 대신 막아주는 사례가 실제로 있었다(알림 목록 필터
+제거). RLS ON 실행은 앱 코드가 정상적으로 동작하는지 확인하는 회귀
+스모크 정도로만 취급한다.
+
+### 4. 커버리지의 한계
+
+이 스위트는 게시글·댓글·알림·마이페이지 프로필 10개 엔드포인트만
+건드린다. 운영 RLS 정책 58개 중 이 스위트가 실제로 경계를 단정하는 것은
+9개뿐이다. 나머지는 코드를 읽어 동등한 검사를 확인했지만 테스트는 없거나
+(28개), 테스트도 코드상 동등 검사도 없다(21개, `user_settings`·
+`notifications` UPDATE처럼 여전히 DB RPC 내부의 `auth.uid()`에 의존하는
+경우 포함). 행 단위 판정과 근거는
+`docs/superpowers/specs/2026-08-13-rls-mapping.md`에 있다(커밋되지 않으므로
+로컬에서만 볼 수 있다).
+
+### RLS 밖의 `auth.uid()` 의존 — 단계 2b-4 차단 항목
+
+RLS 정책만 보면 놓친다. **Postgres 함수 본문 안에서 `auth.uid()`를 부르는 RPC가
+20개 있고, 그중 13개를 앱이 실제로 호출한다.** 신원 판단이 앱 코드가 아니라 DB
+함수 안에 있어서, 라우트를 아무리 읽어도 보이지 않는다. 전환 후 `auth.uid()`가
+NULL이 되면 두 가지로 갈린다.
+
+**(1) 즉시 깨지는 것 — 사용자 id를 넘길 방법이 없다.**
+
+| 함수 | 시그니처 | 호출부 |
+|---|---|---|
+| `mark_notification_read` | `(p_notification_id uuid)` | `api/notifications/[id]/route.ts:46` |
+| `upsert_user_setting` | `(p_category, p_setting_key, p_setting_value)` | `api/settings/route.ts:142,210` |
+| `reset_user_settings` | `(p_category DEFAULT NULL, p_setting_key DEFAULT NULL)` | `api/settings/reset/route.ts:59` |
+| `get_user_settings` | `(p_user_id uuid DEFAULT NULL)` | `api/settings/route.ts:59` — **인자 없이 호출**해서 `auth.uid()`로 떨어진다 |
+
+앞의 셋은 함수 시그니처를 고쳐야 하고, `get_user_settings`는 호출부에서
+`{ p_user_id: user.id }`를 넘기면 된다.
+
+**(2) 조용히 검사가 사라지는 것 — id는 넘기지만 `auth.uid()`로 대조한다.**
+
+`toggle_post_like`·`toggle_comment_like`·`log_user_activity` 등은 본문에
+`IF auth.uid() IS NOT NULL AND auth.uid() <> p_user_id THEN <거부>` 형태의 가드가
+있다. 전환 후에는 첫 조건이 거짓이 되어 **가드를 건너뛰고 그대로 실행된다.**
+동작은 계속하지만 "남의 id를 넘겨 대신 좋아요를 누르는" 것을 막던 방어가
+사라진다는 뜻이다. 호출부가 항상 세션 사용자의 id를 넘기는지 라우트별로 확인해야
+한다.
+
+조사 명령(로컬 스택 기준):
+
+```bash
+docker exec supabase_db_ggac psql -U postgres -At -c "
+  select p.proname from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+  where n.nspname='public' and p.prokind='f'
+    and pg_get_functiondef(p.oid) like '%auth.uid()%' order by 1"
+```
