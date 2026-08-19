@@ -106,7 +106,9 @@ export function parseInsertRows(sql, schema, table) {
       break
     }
 
-    rows.push(Object.fromEntries(cols.map((c, j) => [c, values[j] === undefined ? null : values[j]])))
+    rows.push(
+      Object.fromEntries(cols.map((c, j) => [c, values[j] === undefined ? null : values[j]]))
+    )
 
     while (i < sql.length && /\s/.test(sql[i])) i++
     if (sql[i] === ',') {
@@ -134,7 +136,10 @@ export function pgTimestampToMs(value) {
 
   let normalized = String(value).trim().replace(' ', 'T')
   // `+00` → `+00:00`, `-0930` → `-09:30`. 이미 콜론이 있으면 그대로 둔다.
-  normalized = normalized.replace(/([+-])(\d{2})(\d{2})?$/, (_m, sign, hh, mm) => `${sign}${hh}:${mm ?? '00'}`)
+  normalized = normalized.replace(
+    /([+-])(\d{2})(\d{2})?$/,
+    (_m, sign, hh, mm) => `${sign}${hh}:${mm ?? '00'}`
+  )
 
   const ms = Date.parse(normalized)
   if (Number.isNaN(ms)) {

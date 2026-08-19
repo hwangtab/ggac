@@ -112,7 +112,10 @@ export async function loadIdentity({ client, artists, users, accounts, profiles 
     const rows = byName[key]
     await assertAllRowsColumnCoverage(client, table, rows, INTENTIONALLY_DEFAULTED[table] ?? [])
     // 테이블 단위 트랜잭션. FK 순서를 지키려면 테이블끼리는 나눠야 한다.
-    await client.batch(rows.map(r => buildUpsert(table, r)), 'write')
+    await client.batch(
+      rows.map(r => buildUpsert(table, r)),
+      'write'
+    )
     counts[table] = rows.length
   }
 

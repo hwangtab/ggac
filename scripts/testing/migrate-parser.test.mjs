@@ -42,7 +42,7 @@ test('따옴표 안의 쉼표와 괄호가 값을 자르지 않는다', () => {
   assert.equal(rows[1].raw_meta, '{"note":"쉼표, 그리고 (괄호)"}')
 })
 
-test("두 겹 작은따옴표를 한 겹으로 푼다", () => {
+test('두 겹 작은따옴표를 한 겹으로 푼다', () => {
   const rows = parseInsertRows(SQL, 'auth', 'users')
   assert.equal(rows[2].raw_meta, '{"q":"작은따옴표 \' 포함"}')
 })
