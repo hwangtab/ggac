@@ -35,14 +35,45 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+      testIgnore: /authz-(setup|ownership|personal)/,
+    },
+    {
+      name: 'authz-setup',
+      testMatch: /authz\.setup\.ts/,
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'authz',
+      testMatch: /authz-(ownership|personal)\.spec\.ts/,
+      dependencies: ['authz-setup'],
+      use: { ...devices['Desktop Chrome'] },
     },
   ],
 
   webServer: {
+    // 권한 E2E는 로컬 Supabase 스택을 가리켜야 한다(운영에 글을 쓰면 안 된다).
+    // Next.js는 부모 프로세스가 넘긴 환경변수를 .env.local보다 우선한다 —
+    // E2E_SUPABASE_* 가 설정돼 있으면 그것으로 덮어쓴다.
+    //
     // NEXT_STRICT_CSP를 명시적으로 꺼서 E2E가 로컬 .env.local의 CSP 실험 상태에
     // 좌우되지 않게 한다 — strict CSP가 dev에 켜져 있으면 하이드레이션 의존
     // 테스트(password-reset 등)가 환경 요인으로 실패한다.
-    command: `env -u NO_COLOR NEXT_STRICT_CSP=false PORT=${port} npm run dev`,
+    command: [
+      'env -u NO_COLOR NEXT_STRICT_CSP=false',
+      `PORT=${port}`,
+      process.env.E2E_SUPABASE_URL
+        ? `NEXT_PUBLIC_SUPABASE_URL=${process.env.E2E_SUPABASE_URL}`
+        : '',
+      process.env.E2E_SUPABASE_ANON_KEY
+        ? `NEXT_PUBLIC_SUPABASE_ANON_KEY=${process.env.E2E_SUPABASE_ANON_KEY}`
+        : '',
+      process.env.E2E_SUPABASE_SERVICE_ROLE_KEY
+        ? `SUPABASE_SERVICE_ROLE_KEY=${process.env.E2E_SUPABASE_SERVICE_ROLE_KEY}`
+        : '',
+      'npm run dev',
+    ]
+      .filter(Boolean)
+      .join(' '),
     url: `${baseURL}/robots.txt`,
     reuseExistingServer,
     timeout: 120_000,
