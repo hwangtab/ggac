@@ -33,6 +33,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     // 사용자 인증 확인
     const auth = await requireUser()
     if (auth instanceof NextResponse) return auth
+    const { user } = auth
 
     const supabase = await createSupabaseServer()
 
@@ -43,9 +44,16 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const notificationId = uuidValidation.sanitized
 
     // 알림 읽음 처리
-    const { data, error } = await supabase.rpc('mark_notification_read', {
-      p_notification_id: notificationId,
-    })
+    // RPC의 auth.uid() 의존을 없애고 세션 사용자 id를 앱 계층에서 직접 넘긴다.
+    // 기존 RPC와 동일하게 이미 읽은 알림은 대상에서 제외한다(read_at IS NULL).
+    const { data, error } = await supabase
+      .from('notifications')
+      .update({ read_at: new Date().toISOString() } as never)
+      .eq('id', notificationId)
+      .eq('user_id', user.id)
+      .is('read_at', null)
+      .select()
+      .maybeSingle()
 
     if (error) {
       console.error('알림 읽음 처리 오류:', error)
