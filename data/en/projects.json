@@ -779,11 +779,12 @@
       "address": "B1F, 34-1 Hwaseomun-ro, Suwon"
     },
     "coverImage": "/images/projects/metal-syndicate-network-v.webp",
-    "description": "The fifth edition of Barbed Wire, the regular Gyeonggi/Seoul metal concert series. Riffs from metal friends entangled like razor wire will grind your eardrums like a grinder.\n\n### Concert Information\n\n- **Title**: METAL SYNDICATE NETWORK V (Barbed Wire V)\n- **Date**: August 29, 2026 (Sat) — Doors 18:00 / Start 18:30\n- **Venue**: D.O.T [@d.o.t_kr](https://www.instagram.com/d.o.t_kr) — B1F, 34-1 Hwaseomun-ro, Suwon\n- **Tickets**: Advance 15,000 KRW / At the door 20,000 KRW\n\n### Line-up\n\n- 人類滅亡計画 (Human Extinction Project) — [@human_extinction_project](https://www.instagram.com/human_extinction_project)\n- SABBAHA — [@sabbaha_kr](https://www.instagram.com/sabbaha_kr)\n- HEDONIAC — [@project_hedoniac](https://www.instagram.com/project_hedoniac)\n- NAIITE — [@naiite.grind](https://www.instagram.com/naiite.grind)\n- Doguul — [@doguul666](https://www.instagram.com/doguul666)\n- PanzerKorps — [@panzerkorps2025](https://www.instagram.com/panzerkorps2025)",
+    "description": "The fifth edition of Barbed Wire, the regular Gyeonggi/Seoul metal concert series. Riffs from metal friends entangled like razor wire will grind your eardrums like a grinder.\n\n### Concert Information\n\n- **Title**: METAL SYNDICATE NETWORK V (Barbed Wire V)\n- **Date**: August 29, 2026 (Sat) — Doors 18:00 / Start 18:30\n- **Venue**: D.O.T [@d.o.t_kr](https://www.instagram.com/d.o.t_kr) — B1F, 34-1 Hwaseomun-ro, Suwon\n- **Tickets**: Advance 15,000 KRW / At the door 20,000 KRW\n\n### Line-up\n\n- 人類滅亡計画 (Human Extinction Project) — [@human_extinction_project](https://www.instagram.com/human_extinction_project)\n- SABBAHA — [@sabbaha_kr](https://www.instagram.com/sabbaha_kr)\n- HEDONIAC — [@project_hedoniac](https://www.instagram.com/project_hedoniac)\n- NAIITE (Pepperman) — [@naiite.grind](https://www.instagram.com/naiite.grind)\n- Doguul — [@doguul666](https://www.instagram.com/doguul666)\n- PanzerKorps — [@panzerkorps2025](https://www.instagram.com/panzerkorps2025)",
     "gallery": null,
     "videoUrl": null,
     "artistIds": [
-      "artist-001"
+      "artist-001",
+      "artist-014"
     ],
     "ticketing": [
       {
