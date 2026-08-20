@@ -405,7 +405,8 @@ Better Auth가 가입 시 조용히 버리는 조합원 필드 7개(주소·전�
   `forgot-password/page.tsx`(114줄) · `reset-password/page.tsx`(183줄)
 - `src/lib/server/session.ts`의 `readSessionUser()` — Better Auth 세션을
   읽도록 교체
-- `src/middleware/auth.ts:116`의 `getClaims()`와 `src/middleware.ts:138`의
+- `src/middleware/auth.ts:117`의 `getClaims()`와 `src/middleware.ts`의 **두 곳**(`:127` 유지보수
+  관리자 재검증, `:214`)의
   `getUser()` — 둘 다 Better Auth의 `getCookieCache` 계열로 교체
 - `/auth/callback`(189줄) — Better Auth 인증 후 착지 지점으로 축소
 - `api/auth/{logout,reset-password,verify-session}` 세 라우트
@@ -447,6 +448,18 @@ node scripts/migrate/identity.mjs --dump <스크래치패드>/auth.sql --apply  
 **롤백:** 직전 커밋으로 되돌리고 재배포한다. **Turso의 `user` /
 `account` / `session` 테이블은 절대 지우지 않는다** — 이관된 bcrypt
 해시가 그 안에 있고, 다시 만들 방법이 재이관 절차 자체이기 때문이다.
+
+### matcher 확장으로 달라진 것
+
+`api`를 matcher에서 빼지 않게 되면서 **모든 `/api/*` 요청이 미들웨어를 거친다.**
+유지보수가 꺼져 있으면 설정·세션 조회를 건너뛰고 즉시 통과하지만, 미들웨어에 진입하는
+고정 비용(실측 약 5~7ms)은 모든 API에 붙는다.
+
+그리고 유지보수 중에는 예외 목록(`/api/auth/*`, 정확히 `/api/health`)에 없는 API가
+전부 503이다. **`/api/webhook/deploy-hook`도 여기 포함된다** — 비밀 헤더로 인증하고
+Supabase 세션과 무관하지만 예외가 아니다. 이 저장소는 배포를 `git push`로 하므로
+(CLAUDE.md·운영 메모 참고) 실질 영향은 낮다고 판단해 예외에 넣지 않았다. 유지보수 중에
+이 웹훅이 필요해지면 그때 예외 목록에 추가할 것 — 예외는 최소 집합으로 유지한다.
 
 ### 여전히 미해결 — 정직하게 적는다
 
