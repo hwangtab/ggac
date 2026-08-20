@@ -2,8 +2,6 @@ import { NextRequest } from 'next/server'
 import { toNextJsHandler } from 'better-auth/next-js'
 
 import { auth } from '@/lib/auth/server'
-import { getSystemSettings } from '@/middleware/settings'
-import { applyRateLimit, RATE_LIMIT_CONFIGS, createIPKeyGenerator } from '@/lib/server/rateLimit'
 import { ApiError } from '@/utils/apiWrapper'
 
 export const runtime = 'nodejs'
@@ -36,48 +34,47 @@ function isSignUpEmailPath(request: NextRequest): boolean {
 }
 
 /**
- * `sign-up/email` 경로에 자체 레이트리밋과 `registration_enabled` 검사를 건다.
+ * `sign-up/email`을 HTTP로 직접 때리면 무조건 거부한다.
  *
- * 단계 2b-6에서 `disableSignUp: true`(`src/lib/auth/server.ts`)를 지우는
- * 순간 `POST /api/auth/sign-up/email`이 인증 없이 공개된다. 이 라우트에는
- * Better Auth 기본 레이트리밋(storage: 'memory', 서버리스 인스턴스별로
- * 흩어져 분산 환경에서 사실상 무방비)만 있고 `registration_enabled` 검사는
- * 아예 없다. `/api/member-signup`(우리 자체 가입 라우트)에는 둘 다 있지만,
- * Better Auth의 기본 라우트를 직접 때리면 그 검사를 모두 건너뛰어 7개
- * 조합원 필드가 없는 반쪽 프로필이 생긴다.
+ * 수정 라운드 1(조율자 실측): 레이트리밋(분당 10회)만으로는 막지 못했다 —
+ * 그 한도 안에서 `POST /api/auth/sign-up/email`을 직접 세 번 때리면 세
+ * 계정이 그대로 생겼고, `member_profiles`에는 `real_name`·`monthly_fee`
+ * 등 7개 조합원 필드가 전부 빈 채로 들어갔다(이 엔드포인트는
+ * `user.additionalFields`에 없는 body 키를 조용히 버린다 —
+ * `/api/member-signup`의 파일 상단 주석 참고). 레이트리밋은 속도만
+ * 늦출 뿐 막지 못하므로, 아예 열지 않는 쪽으로 바꿨다.
  *
- * **선택: `hooks.before`가 아니라 이 catch-all의 POST를 감싼다.** 이유:
- * `hooks.before`는 Better Auth 엔드포인트 컨텍스트에 걸리므로,
- * `/api/member-signup`(`src/app/api/member-signup/route.ts`)이 HTTP 요청을
- * 거치지 않고 `auth.api.signUpEmail()`을 서버 안에서 직접 호출하는 경로에도
- * 함께 걸린다. 그 라우트는 이미 자체 레이트리밋(IP 기준)과
- * `registration_enabled` 검사를 먼저 마친 뒤 `signUpEmail`을 부르므로,
- * `hooks.before`가 같은 엔드포인트에 다시 걸리면 (1) 검사가 이중으로
- * 실행되고 (2) 프로그래매틱 호출에는 원본 `NextRequest`가 없어 IP 기반
- * 레이트리밋 키 생성이 실패하거나 엉뚱한 키로 떨어질 위험이 있다. 이
- * 라우트의 POST만 감싸면 **HTTP로 직접 이 경로를 때리는 요청만** 걸러지고,
- * 서버 내부에서 `auth.api`를 직접 부르는 `/api/member-signup` 흐름은
- * 전혀 건드리지 않는다 — 두 경로가 겹치지 않아 검증하기도 더 쉽다.
+ * **이 경로를 완전히 막아도 안전한 이유**: 이 앱에서 실제로 가입을
+ * 완료시키는 두 경로 중 어느 쪽도 이 URL을 거치지 않는다.
+ * - `src/app/[locale]/signup/page.tsx:260`은 `/api/member-signup`으로
+ *   `fetch`한다 (`grep -rn "authClient.signUp" src/` → 0건, HTTP로
+ *   `signUpEmail`을 호출하는 화면이 아예 없다).
+ * - `/api/member-signup`(`src/app/api/member-signup/route.ts:169`)은
+ *   `auth.api.signUpEmail()`을 **서버 프로세스 안에서 직접** 호출한다 —
+ *   Better Auth가 내부적으로 같은 엔드포인트 로직을 실행하긴 하지만,
+ *   그 호출은 이 `route.ts` 파일의 HTTP 핸들러를 거치지 않는다(Next.js
+ *   라우팅 계층을 우회한 함수 호출이다). 그래서 여기서 HTTP 요청을
+ *   막아도 `/api/member-signup`의 가입 흐름은 전혀 건드리지 않는다 —
+ *   그 라우트의 레이트리밋·`registration_enabled` 검사는 원래 자리
+ *   그대로 살아 있다(파일 상단 1)·2) 참고).
+ *
+ * **다음에 이 블록을 보는 사람에게**: "가입이 안 되는 버그"로 보고
+ * 이 차단을 지우거나 우회하지 말 것. 이 URL로 들어오는 요청은 전부
+ * 잘못된 경로(직접 API 호출, 오래된 북마크, 스캐너)이고, 정상적인 가입은
+ * `/api/member-signup`을 통해서만 이뤄진다.
+ *
+ * **상태 코드는 403으로 고른다.** 존재 자체를 숨기는 404보다, "여긴 안
+ * 되지만 가입은 가능하다"는 뜻을 명확히 전달하는 편이 낫다고 판단했다 —
+ * 이 경로에 우연히 닿은(예: 오래된 클라이언트 코드, 스크립트) 사람이 "가입
+ * 기능이 없다"고 오해하지 않고 `/signup`으로 갈 방법을 응답 메시지에서
+ * 바로 읽을 수 있어야 한다. 429(레이트리밋)나 400(입력 오류)은 "다시
+ * 시도하면 될 것 같다"는 오해를 주므로 쓰지 않는다.
  */
 export async function POST(request: NextRequest) {
   if (isSignUpEmailPath(request)) {
-    const rateLimiter = await applyRateLimit({
-      ...RATE_LIMIT_CONFIGS.AUTH_API,
-      keyGenerator: createIPKeyGenerator('better-auth-sign-up-email'),
-      message: '가입 시도가 너무 많습니다. 잠시 후 다시 시도해주세요.',
-    })
-    const rateLimitResult = await rateLimiter(request)
-    if (!rateLimitResult.success) {
-      return ApiError.tooManyRequests(
-        '가입 시도가 너무 많습니다. 잠시 후 다시 시도해주세요.'
-      ).toNextResponse()
-    }
-
-    // fail-open: 조회 실패 시 null → 가입을 막지 않는다(member-signup과 동일 정책).
-    const settings = await getSystemSettings()
-    if (settings && !settings.registrationEnabled) {
-      return ApiError.forbidden('현재 신규 가입이 제한되어 있습니다.').toNextResponse()
-    }
+    return ApiError.forbidden(
+      '이 주소로는 가입할 수 없습니다. 가입 페이지(/signup)를 이용해 주세요.'
+    ).toNextResponse()
   }
 
   return betterAuthPOST(request)

@@ -4848,24 +4848,36 @@ const authServerSource = readFileSync(authServerPath, 'utf8')
 const authServerStripped = stripComments(authServerSource)
 if (/disableSignUp:\s*true/.test(authServerStripped)) {
   failures.push(
-    `src/lib/auth/server.ts must not keep disableSignUp: true — stage 2b-6 (Task 4) deliberately opened public sign-up, protected instead by src/app/api/auth/[...all]/route.ts's POST wrapper (rate limit + registration_enabled check on the sign-up/email path): ${relative(
+    `src/lib/auth/server.ts must not keep disableSignUp: true — stage 2b-6 (Task 4) deliberately opened public sign-up, protected instead by src/app/api/auth/[...all]/route.ts's POST wrapper (outright rejection of the sign-up/email path — /api/member-signup is the only real sign-up route): ${relative(
       root,
       authServerPath
     )}`
   )
 }
-// disableSignUp을 지운 대신 catch-all 라우트가 sign-up/email 경로를 감싼다 —
-// 그 방어막 자체가 조용히 사라지지 않도록 감싸는 코드가 남아 있는지도 고정한다.
+// disableSignUp을 지운 대신 catch-all 라우트가 sign-up/email 경로를 완전히
+// 막는다(수정 라운드 1: 조율자가 레이트리밋만으로는 세 계정이 그대로
+// 생기는 것을 실측해, 통과시키지 않고 아예 거부하는 쪽으로 바꿨다). 그
+// 방어막 자체가 조용히 사라지거나 다시 "느슨한 허용"으로 되돌아가지
+// 않도록 두 가지를 고정한다: (1) sign-up/email 분기가 여전히 존재하고
+// 그 안에서 명시적으로 거부 응답을 돌려준다, (2) 그 분기가
+// Better Auth 핸들러(betterAuthPOST)로 위임하는 코드를 포함하지 않는다 —
+// 위임 호출이 남아 있으면 거부가 장식일 뿐 실제로는 통과시킨다는 뜻이다.
 const authCatchAllPath = join(root, 'src/app/api/auth/[...all]/route.ts')
 const authCatchAllSource = readFileSync(authCatchAllPath, 'utf8')
 const authCatchAllStripped = stripStringLiterals(stripCommentsAndImports(authCatchAllSource))
-const authCatchAllGuardsSignUp =
+const signUpEmailBlockMatch = authCatchAllStripped.match(
+  /if \(isSignUpEmailPath\(request\)\) \{([\s\S]*?)\n  \}/
+)
+const signUpEmailBlockBody = signUpEmailBlockMatch?.[1] ?? ''
+const authCatchAllRejectsSignUpOutright =
   /isSignUpEmailPath\(/.test(authCatchAllStripped) &&
-  /applyRateLimit\(/.test(authCatchAllStripped) &&
-  /registrationEnabled/.test(authCatchAllStripped)
-if (!authCatchAllGuardsSignUp) {
+  signUpEmailBlockMatch !== null &&
+  /ApiError\.forbidden\(/.test(signUpEmailBlockBody) &&
+  /return/.test(signUpEmailBlockBody) &&
+  !/betterAuthPOST\(/.test(signUpEmailBlockBody)
+if (!authCatchAllRejectsSignUpOutright) {
   failures.push(
-    `src/app/api/auth/[...all]/route.ts must guard the sign-up/email path with its own rate limit and a registration_enabled check now that disableSignUp is gone — Better Auth's built-in rate limit is an in-memory fallback that this codebase forbids for distributed deployments: ${relative(
+    `src/app/api/auth/[...all]/route.ts must reject POST requests to the sign-up/email path outright (ApiError.forbidden, no delegation to betterAuthPOST) now that disableSignUp is gone — rate-limiting alone was proven insufficient (three accounts with blank membership fields were created within the rate limit window): ${relative(
       root,
       authCatchAllPath
     )}`
