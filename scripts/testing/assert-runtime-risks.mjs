@@ -4784,6 +4784,52 @@ if (requiredAuthHelperCallViolations.length > 0) {
   )
 }
 
+// 단계 2b-5: 자체 가입 라우트(/api/member-signup)의 불변식.
+// stripStringLiterals까지 거친 소스로 본다 — 문자열 리터럴("applyRateLimit" 같은
+// 가짜 흔적)로 이 검사를 속이지 못하게 하기 위해서다.
+const memberSignupRoutePath = join(root, 'src/app/api/member-signup/route.ts')
+const memberSignupRouteRawSource = readFileSync(memberSignupRoutePath, 'utf8')
+const memberSignupRouteSource = stripStringLiterals(
+  stripCommentsAndImports(memberSignupRouteRawSource)
+)
+const memberSignupRouteCallsRateLimit = /applyRateLimit\(/.test(memberSignupRouteSource)
+// body.registration_status(옵셔널 체이닝 포함)·body['registration_status']·
+// body["registration_status"] 어느 형태로도 클라이언트 body에서 registration_status를
+// 읽으면 안 된다. stripStringLiterals가 문자열 리터럴 내용을 지우므로 대괄호 표기의
+// 키 이름도 실제 코드에서 읽는 경우만 걸린다(주석·문자열 안의 언급은 이미 지워졌다).
+const memberSignupRouteTrustsClientRegistrationStatus =
+  /body\??\.\s*registration_status/.test(memberSignupRouteSource) ||
+  /body\s*\[\s*registration_status\s*\]/.test(memberSignupRouteSource)
+
+if (!memberSignupRouteCallsRateLimit) {
+  failures.push(
+    `Member signup route must call applyRateLimit — it is an unauthenticated public endpoint: ${relative(
+      root,
+      memberSignupRoutePath
+    )}`
+  )
+}
+
+if (memberSignupRouteTrustsClientRegistrationStatus) {
+  failures.push(
+    `Member signup route must never read registration_status from the client request body — new members are always pending/inactive: ${relative(
+      root,
+      memberSignupRoutePath
+    )}`
+  )
+}
+
+const authServerPath = join(root, 'src/lib/auth/server.ts')
+const authServerSource = readFileSync(authServerPath, 'utf8')
+if (!/disableSignUp:\s*true/.test(stripComments(authServerSource))) {
+  failures.push(
+    `src/lib/auth/server.ts must keep disableSignUp: true until stage 2b-6 deliberately removes it (public sign-up must stay closed until the screens are wired): ${relative(
+      root,
+      authServerPath
+    )}`
+  )
+}
+
 if (failures.length > 0) {
   console.error(failures.join('\n\n'))
   process.exit(1)

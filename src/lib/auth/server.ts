@@ -106,6 +106,23 @@ export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_SITE_URL,
   secret: process.env.BETTER_AUTH_SECRET,
   database: drizzleAdapter(db, { provider: 'sqlite' }),
+  // 단계 2b-5 실측(member-signup 라우트로 실제 `POST /sign-up/email`을 처음
+  // 왕복시켜 발견): 기본 `generateId()`(@better-auth/core/dist/utils/id.mjs)는
+  // 32자 영숫자 문자열을 만든다 — UUID가 아니다. 그런데 이 id는 그대로
+  // (1) Supabase Auth Admin API의 `auth.users.id`(uuid, GoTrue가 v4 형식을
+  // 강제)와 (2) `member_profiles.id`(uuid 컬럼, `auth.users(id)` FK)에 쓰인다.
+  // 지정 없이 두면 가입 훅의 `ensureSupabaseAuthShadowUser`가 매번
+  // "ID must conform to the uuid v4 format"로 실패하고, 뒤이은 프로필
+  // upsert도 `22P02 invalid input syntax for type uuid`로 실패한다 — 계정만
+  // 생기고 Supabase 쪽엔 아무 것도 안 남는 조용한 실패다.
+  // `generateId: 'uuid'`는 sqlite 어댑터에서 `crypto.randomUUID()`로 대체된다
+  // (get-id-field.mjs 실측). Turso 쪽 id 컬럼은 전부 `text('id')`라 포맷
+  // 제약이 없어 안전하다(`src/db/schema/auth.ts`).
+  advanced: {
+    database: {
+      generateId: 'uuid',
+    },
+  },
   emailAndPassword: {
     enabled: true,
     // 2b-2(화면 배선)까지 공개 가입을 막는다. 옵션명은
