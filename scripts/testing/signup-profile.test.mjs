@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { buildSignupProfileRow } from '../../src/lib/auth/signupProfile.ts'
+import { buildSignupProfileRow, isValidBirthDate } from '../../src/lib/auth/signupProfile.ts'
 
 const INPUT = {
   id: '00000000-0000-4000-8000-000000000abc',
@@ -51,4 +51,24 @@ test('선택 필드가 없으면 null이지 undefined가 아니다', () => {
 
 test('표시명이 없으면 던진다', () => {
   assert.throws(() => buildSignupProfileRow({ id: INPUT.id, email: INPUT.email }), /표시명/)
+})
+
+test('생년월일 검증: 올바른 형식은 통과한다', () => {
+  assert.equal(isValidBirthDate('1990-03-15'), true)
+  assert.equal(isValidBirthDate('2000-02-29'), true) // 윤년
+})
+
+test('생년월일 검증: 형식이 틀리면 거짓이다', () => {
+  assert.equal(isValidBirthDate('1990/03/15'), false)
+  assert.equal(isValidBirthDate('90-03-15'), false)
+  assert.equal(isValidBirthDate('1990-3-15'), false)
+  assert.equal(isValidBirthDate('not-a-date'), false)
+  assert.equal(isValidBirthDate(''), false)
+})
+
+test('생년월일 검증: 형식은 맞지만 존재하지 않는 날짜는 거짓이다', () => {
+  assert.equal(isValidBirthDate('1990-02-31'), false) // 2월엔 31일이 없다
+  assert.equal(isValidBirthDate('1990-02-30'), false)
+  assert.equal(isValidBirthDate('1990-13-01'), false) // 13월은 없다
+  assert.equal(isValidBirthDate('2001-02-29'), false) // 2001년은 윤년이 아니다
 })

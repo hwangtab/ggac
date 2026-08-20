@@ -21,10 +21,9 @@
  */
 
 import { NextRequest } from 'next/server'
-import { APIError } from 'better-auth'
 
 import { auth } from '@/lib/auth/server'
-import { buildSignupProfileRow } from '@/lib/auth/signupProfile'
+import { buildSignupProfileRow, isValidBirthDate } from '@/lib/auth/signupProfile'
 import { safeErrorMessage } from '@/lib/auth/errorMessage'
 import { getSystemSettings } from '@/middleware/settings'
 import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
@@ -44,6 +43,57 @@ export const dynamic = 'force-dynamic'
 // DB가 23514로 거부한다 — 여기서 미리 걸러 500 대신 400을 준다.
 const MONTHLY_FEE_MIN = 10000
 const MONTHLY_FEE_MAX = 50000
+
+/**
+ * `auth.api.signUpEmail`이 던지는 better-call `APIError`/`ValidationError`는
+ * 둘 다 `{ statusCode, body?: { code?, message? } }` 모양이다(둘이 같은
+ * `APIError`를 상속하는 게 아니라 나란히 `InternalAPIError`를 상속하므로
+ * `instanceof APIError`로는 `ValidationError`를 못 잡는다 —
+ * node_modules/better-call/dist/error.mjs 실측). 그래서 타입 대신 모양으로
+ * 판별한다.
+ */
+function isBetterAuthApiError(
+  error: unknown
+): error is { statusCode: number; message?: string; body?: { code?: string; message?: string } } {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'statusCode' in error &&
+    typeof (error as { statusCode: unknown }).statusCode === 'number'
+  )
+}
+
+/**
+ * Better Auth 에러의 `code`(안정적인 식별자 — node_modules/@better-auth/core/
+ * dist/error/codes.mjs가 정의하는 문자열 키)를 한글 안내 문구로 매핑한다.
+ * 메시지 문자열(`error.message`)로 매칭하지 않는다 — 버전이 바뀌면 조용히
+ * 깨진다. 여기 없는 code는 GENERIC_SIGN_UP_ERROR_MESSAGE로 폴백하되, 원문은
+ * (매핑 여부와 무관하게) 항상 로그에 남긴다 — 진단 정보를 버리지 않는다.
+ *
+ * USER_ALREADY_EXISTS류는 단순히 "이미 가입된 이메일입니다"로 끝내지 않는다
+ * — 이 라우트가 만드는 계정은 프로필 upsert가 실패해도(202 경로) 그대로
+ * 존재하므로, 재가입을 시도하는 사람은 프로필이 깨진 채로 방치된 자기 계정을
+ * 다시 만들려는 것일 수 있다. 202 경로와 같은 톤으로 사무국 문의를 안내한다.
+ */
+const SIGN_UP_ERROR_MESSAGES: Record<string, string> = {
+  EMAIL_PASSWORD_SIGN_UP_DISABLED: '지금은 신규 가입을 받지 않습니다. 잠시 후 다시 시도해 주세요.',
+  USER_ALREADY_EXISTS:
+    '이미 가입된 이메일입니다. 이전 가입 시도가 끝까지 완료되지 않았을 수 있으니, 같은 이메일로 다시 가입하지 마시고 사무국으로 문의해 주세요.',
+  USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL:
+    '이미 가입된 이메일입니다. 이전 가입 시도가 끝까지 완료되지 않았을 수 있으니, 같은 이메일로 다시 가입하지 마시고 사무국으로 문의해 주세요.',
+  INVALID_EMAIL: '이메일 형식이 올바르지 않습니다.',
+  INVALID_PASSWORD: '비밀번호를 다시 확인해 주세요.',
+  PASSWORD_TOO_SHORT: '비밀번호가 너무 짧습니다. 8자 이상 입력해 주세요.',
+  PASSWORD_TOO_LONG: '비밀번호가 너무 깁니다.',
+  FAILED_TO_CREATE_USER:
+    '가입 처리 중 문제가 발생했습니다. 잠시 후 다시 시도하거나 사무국으로 문의해 주세요.',
+  FAILED_TO_CREATE_SESSION:
+    '계정은 생성되었지만 로그인 세션을 만드는 데 실패했습니다. 로그인 페이지에서 다시 로그인해 주세요.',
+  VALIDATION_ERROR: '입력값을 다시 확인해 주세요.',
+}
+
+const GENERIC_SIGN_UP_ERROR_MESSAGE =
+  '가입 처리 중 문제가 발생했습니다. 잠시 후 다시 시도하거나 사무국으로 문의해 주세요.'
 
 export async function POST(request: NextRequest) {
   try {
@@ -97,6 +147,20 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // birth_date는 실측(signupProfile.ts 참고)으로 nullable date 컬럼이라
+    // 값이 없는 것 자체는 허용한다. 값이 있는데 형식이 틀리거나 존재하지 않는
+    // 날짜(예: 2/31)면, 그걸 그대로 DB에 넘겨 500 계열로 실패시키는 대신
+    // 여기서 400으로 걸러 어떤 필드가 문제인지 알려준다 — DB 실패로 뭉개면
+    // 오타 하나가 "프로필 저장 실패, 사무국 문의"(202)로 확대된다.
+    const birthDateRaw = body.birth_date
+    if (birthDateRaw !== undefined && birthDateRaw !== null && birthDateRaw !== '') {
+      if (typeof birthDateRaw !== 'string' || !isValidBirthDate(birthDateRaw)) {
+        return HttpApiError.badRequest(
+          '생년월일 형식이 올바르지 않습니다. YYYY-MM-DD 형식으로, 실제 존재하는 날짜를 입력해 주세요.'
+        ).toNextResponse()
+      }
+    }
+
     // 4) Better Auth 가입. returnHeaders로 Set-Cookie를 받아야 가입 직후
     // 로그인 상태로 응답할 수 있다(node_modules/better-call/dist/endpoint.mjs 실측).
     let signUpHeaders: Headers
@@ -109,15 +173,16 @@ export async function POST(request: NextRequest) {
       signUpHeaders = result.headers
       signedUpUser = result.response.user
     } catch (error) {
-      if (error instanceof APIError) {
+      if (isBetterAuthApiError(error)) {
         const statusCode = typeof error.statusCode === 'number' ? error.statusCode : 400
-        const message =
-          (error.body && typeof error.body === 'object' && 'message' in error.body
-            ? String((error.body as { message?: unknown }).message)
-            : undefined) ||
-          error.message ||
-          '가입에 실패했습니다.'
-        return new HttpApiError(message, statusCode).toNextResponse()
+        const code = error.body?.code
+        // 원문(영문)은 매핑 성공 여부와 무관하게 항상 로그에 남긴다 — 진단
+        // 정보를 버리지 않는다. 화면에는 code로 찾은 한글 문구만 내려간다.
+        const originalMessage = error.body?.message || error.message || String(error)
+        log.warn(`[member-signup] signUpEmail 실패 code=${code ?? '(none)'}:`, originalMessage)
+        const koreanMessage =
+          (code && SIGN_UP_ERROR_MESSAGES[code]) || GENERIC_SIGN_UP_ERROR_MESSAGE
+        return new HttpApiError(koreanMessage, statusCode).toNextResponse()
       }
       log.error('[member-signup] signUpEmail 실패:', safeErrorMessage(error))
       return HttpApiError.internalServerError('가입 처리 중 오류가 발생했습니다.').toNextResponse()
@@ -170,6 +235,12 @@ export async function POST(request: NextRequest) {
     //   쓰지 않는다 — 프로필이 없으니 승인할 대상 자체가 없다. 재가입 시도는
     //   이메일 중복으로 막히므로(이 라우트 4단계) 재가입을 권하지 않고 사무국
     //   문의로 안내한다.
+    //
+    // 이 응답을 소비하는 쪽(단계 2b-6 화면)에 남기는 메모: `ApiSuccess`는
+    // `success`를 항상 `true`로 고정한다(`src/utils/apiWrapper.ts`) — 공유
+    // 래퍼를 이번 범위에서 고치지 않기로 했으므로, 202 응답도 `success: true`로
+    // 나간다. 즉 `res.ok`나 `body.success`만 보고 "가입이 완료됐다"고 판단하면
+    // 안 되고, 반드시 `data.profileSaved`를 읽어야 두 결과를 구분할 수 있다.
     const response = profileSaved
       ? ApiSuccess.created(
           { id: signedUpUser.id, email: signedUpUser.email, profileSaved: true },

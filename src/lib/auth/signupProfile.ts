@@ -46,6 +46,36 @@ function integer(value: unknown): number | null {
   return Number.isInteger(n) ? n : null
 }
 
+const BIRTH_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/
+
+/**
+ * `member_profiles.birth_date`는 실측(2026-08-19)으로 확인한 `date` 컬럼이다
+ * — nullable, 타입 외 CHECK 없음. 하지만 형식이 틀리거나 존재하지 않는
+ * 날짜(예: '1990-02-31')를 그대로 라우트가 Postgres에 넘기면 DB가 거부하고,
+ * 그 실패는 프로필 upsert 실패 경로(202 "사무국 문의")로 뭉뚱그려진다 — 5초면
+ * 고칠 수 있는 오타를 인프라 장애처럼 보이게 만든다. 그래서 라우트가
+ * `signUpEmail`을 부르기 전에 이 함수로 걸러 400을 준다.
+ *
+ * 'YYYY-MM-DD' 형식만 받는다(이 파일의 `text()`가 다루는 값과 동일 표현).
+ * 자릿수가 맞는 잘못된 날짜(윤년 아닌 해의 2/29, 2/30, 2/31 등)를 걸러내려면
+ * 단순 정규식으로는 부족하다 — `Date`로 만든 뒤 다시 읽어 원래 입력과
+ * 일치하는지 대조한다(`new Date(1990, 1, 31)`은 조용히 3/3으로 굴러간다).
+ * 값이 없다는 것 자체는 이 함수가 판단하지 않는다 — 호출부가 빈 값 허용
+ * 여부를 결정한다(이 라우트는 컬럼이 nullable이므로 빈 값을 허용한다).
+ */
+export function isValidBirthDate(value: string): boolean {
+  const match = BIRTH_DATE_PATTERN.exec(value)
+  if (!match) return false
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  if (month < 1 || month > 12 || day < 1 || day > 31) return false
+  const date = new Date(Date.UTC(year, month - 1, day))
+  return (
+    date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+  )
+}
+
 export function buildSignupProfileRow(input: SignupProfileInput): Record<string, unknown> {
   const displayName = text(input.display_name)
   if (!displayName) {
