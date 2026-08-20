@@ -35,7 +35,7 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
-      testIgnore: /authz-(setup|ownership|personal|remaining)/,
+      testIgnore: /authz-(setup|ownership|personal|remaining|maintenance)/,
     },
     // authz 계열은 로컬 Supabase 스택이 있어야 도는 로컬 전용 프로젝트다(CI는 돌리지 않는다).
     // channel: 'chrome'으로 개발자 머신에 이미 설치된 Chrome을 쓴다 — Playwright 번들
@@ -48,7 +48,7 @@ export default defineConfig({
     },
     {
       name: 'authz',
-      testMatch: /authz-(ownership|personal|remaining)\.spec\.ts/,
+      testMatch: /authz-(ownership|personal|remaining|maintenance)\.spec\.ts/,
       dependencies: ['authz-setup'],
       use: { ...devices['Desktop Chrome'], channel: 'chrome' },
     },
