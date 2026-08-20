@@ -114,6 +114,16 @@ export async function handleAuth(
     const session = await readMiddlewareSession(request)
 
     // 세션이 없으면 session이 null이다(에러가 아니라 익명 방문자).
+    //
+    // email이 항상 null인 이유: 미들웨어는 신원 판정에 id만 쓰고,
+    // `readMiddlewareSession`은 쿠키 캐시 경로에서 왕복 없이 id만 돌려주도록
+    // 설계됐다(email까지 필요하면 매번 서버 왕복이 필요해진다). 옛 getClaims()
+    // 경로는 토큰에 담긴 email을 함께 넘겼지만, 이 반환값(`authResult.user`)을
+    // 읽는 소비자는 현재 없다(2026-08-20 확인: middleware.ts는 profile·
+    // shouldContinue·response만 읽는다).
+    // **email이 필요해지면 여기서 채우지 말고 프로필 조회(`fetchMemberProfileForMiddleware`)
+    // 를 쓰라** — 그쪽은 이미 서비스롤로 member_profiles를 읽는다. 여기에 왕복을
+    // 더하면 모든 요청이 느려진다.
     user = session?.id ? { id: session.id, email: null } : null
     if (process.env.NODE_ENV === 'development' && isCriticalPath) {
       log.debug('Auth state', {
