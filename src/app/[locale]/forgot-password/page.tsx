@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import { Link } from '@/i18n/navigation'
-import { useLocale, useTranslations } from 'next-intl'
-import { supabase } from '@/lib/supabase/client'
+import { useTranslations } from 'next-intl'
+import { authClient } from '@/lib/auth/client'
 
 type MessageType = 'error' | 'warning' | 'success' | 'loading'
 
@@ -16,7 +16,6 @@ const msgClassMap: Record<MessageType, string> = {
 
 export default function ForgotPasswordPage() {
   const t = useTranslations('auth')
-  const locale = useLocale()
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [submitted, setSubmitted] = useState(false)
@@ -29,24 +28,22 @@ export default function ForgotPasswordPage() {
     setMessage('')
 
     try {
-      const callbackUrl = new URL('/auth/callback', window.location.origin)
-      callbackUrl.searchParams.set('next', '/reset-password')
-      callbackUrl.searchParams.set('locale', locale)
-      const redirectTo = callbackUrl.toString()
-      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
+      const { error } = await authClient.requestPasswordReset({ email })
 
-      if (error && (error.message.includes('rate limit') || error.message.includes('429'))) {
+      if (error && error.status === 429) {
         setMessage(t('forgotPassword.msgRateLimited'))
         setMessageType('warning')
         return
       }
       // 이메일 존재 여부를 노출하지 않기 위해 성공/실패 모두 동일 안내
+      // (Better Auth의 request-password-reset도 같은 이유로 사용자 존재 여부와
+      // 무관하게 항상 성공을 반환한다 — password.mjs 실측)
       setMessage(t('forgotPassword.msgSent'))
       setMessageType('success')
       // 성공 안내 후 재제출을 막아 이메일 발송 남용을 방지
       setSubmitted(true)
     } catch (err) {
-      console.error('resetPasswordForEmail error:', err)
+      console.error('requestPasswordReset error:', err)
       setMessage(t('forgotPassword.msgError'))
       setMessageType('error')
     } finally {
