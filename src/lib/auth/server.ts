@@ -7,6 +7,7 @@ import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
 import { logger, maskId } from '@/utils/logger'
 
 import { type AuthEmailKind, sendAuthEmail } from './email'
+import { safeErrorMessage } from './errorMessage'
 import { hashPassword, verifyPassword } from './password'
 import { buildMemberProfileRow } from './profileHook'
 
@@ -30,29 +31,6 @@ function maskEmailForLog(email: string): string {
   const [localPart, domain] = email.split('@')
   if (!localPart || !domain) return '***'
   return `${localPart.slice(0, 2)}***@${domain}`
-}
-
-/**
- * 로그에 안전하게 남길 수 있는 에러 메시지를 고른다.
- *
- * drizzle의 `DrizzleQueryError#message`는 `Failed query: ...\nparams: ...`
- * 형태로 **쿼리 바인딩 파라미터 전체**를 담는다 — member_profiles INSERT
- * 실패 시 email·display_name(실명일 수 있다) 등 개인정보가 그대로 로그에
- * 찍힌다는 뜻이다. 반면 `error.cause`는 DB 드라이버가 던진 원인 오류만
- * 담는다(예: `SQLITE_CONSTRAINT: UNIQUE constraint failed:
- * member_profiles.email`) — 원인 파악에는 충분하고 파라미터는 없다.
- *
- * `cause`가 없는 일반 `Error`도 있으므로(예: 순수 JS 예외) 그 경우엔
- * `error.message`로 안전하게 폴백한다.
- */
-function safeErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    if (error.cause instanceof Error) {
-      return error.cause.message
-    }
-    return error.message
-  }
-  return String(error)
 }
 
 /**
