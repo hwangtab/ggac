@@ -1,3 +1,5 @@
+import { headers } from 'next/headers'
+import { auth } from '@/lib/auth/server'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { NextRequest, NextResponse } from 'next/server'
@@ -20,21 +22,21 @@ export const dynamic = 'force-dynamic'
 export async function GET(request: NextRequest) {
   return withRateLimit('GENERAL_API')(async () => {
     try {
-      const supabase = await createSupabaseServer()
       // 이 엔드포인트의 목적 자체가 "로그인 상태 여부"를 반환하는 것이라
       // 401로 강제 차단하지 않는 선택적 조회다. requireUser()로 바꾸지 않는다.
-      const {
-        data: { user },
-        error,
-      } = await supabase.auth.getUser()
-
-      if (error) {
-        return ApiError.internalServerError('세션 확인 실패').toNextResponse()
-      }
+      //
+      // `readSessionUser()`(session.ts)는 의도적으로 모든 예외를 삼켜 null로
+      // 뭉갠다 — "세션 없음"과 "조회 오류"를 구분할 필요가 없는 소비자를 위한
+      // 계약이다. 이 라우트는 그 두 결과를 구분해야 하므로(세션 없음=200,
+      // 오류=500 — 단계 2b-4가 이 파일을 헬퍼 전환에서 일부러 뺀 이유),
+      // `readSessionUser()`를 거치지 않고 Better Auth의 `getSession`을 직접
+      // 부른다. 세션이 없으면 `null`을 반환하고, 조회 자체가 실패하면(DB 장애
+      // 등) 예외를 던진다 — 아래 catch가 그 예외만 500으로 매핑한다.
+      const session = await auth.api.getSession({ headers: await headers() })
 
       return ApiSuccess.ok({
-        authenticated: !!user,
-        user_id: user?.id || null,
+        authenticated: !!session?.user,
+        user_id: session?.user?.id || null,
         expires_at: null,
       }).toNextResponse()
     } catch (error) {
