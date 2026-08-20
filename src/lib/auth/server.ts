@@ -125,29 +125,20 @@ export const auth = betterAuth({
   },
   emailAndPassword: {
     enabled: true,
-    // 2b-2(화면 배선)까지 공개 가입을 막는다. 옵션명은
-    // node_modules/@better-auth/core/dist/types/init-options.d.mts의
-    // `emailAndPassword.disableSignUp?: boolean`에서 확인했다.
+    // 단계 2b-6(Task 4)에서 공개 가입을 연다. `disableSignUp: true`가 켜져
+    // 있던 동안은 `POST /api/auth/sign-up/email`이 항상 400
+    // EMAIL_PASSWORD_SIGN_UP_DISABLED를 반환했다(node_modules/better-auth/
+    // dist/api/routes/sign-up.mjs:144).
     //
-    // 왜 막는가: 이 브랜치는 "배선"만 하는 단계라 화면 4개 중 어느 것도 아직
-    // Better Auth 가입을 호출하지 않는다. 그런데 Vercel에
-    // TURSO_*·BETTER_AUTH_SECRET이 채워지는 순간
-    // POST /api/auth/sign-up/email이 인증 없이 누구에게나 열려, 임의
-    // 이메일로 user+account+member_profiles(pending) 행이 생기고
-    // noreply@ggac.kr에서 실제 메일이 나간다. 방어막인 Better Auth 기본
+    // 그 줄을 지운 순간 이 라우트가 인증 없이 공개된다. Better Auth 기본
     // rate limit은 storage: "memory"라 서버리스 인스턴스별로 흩어져
-    // 사실상 무방비고(이 저장소 CLAUDE.md가 자체 리미터에 금지한 바로 그
-    // 폴백 형태), 그렇게 생긴 행은 Supabase를 읽는 관리자 승인 화면에
-    // 안 보여 조용히 쌓이며 2b-2 이관 데이터를 오염시킨다.
-    //
-    // 2b-2에서 반드시 할 일: 가입 화면을 Better Auth에 연결하는 커밋에서
-    // 이 줄을 지우거나 false로 바꿔라. 그 전까지 disableSignUp이 켜진
-    // 채로는 sign-up/email 라우트가 항상 400
-    // EMAIL_PASSWORD_SIGN_UP_DISABLED를 반환한다(node_modules/better-auth/
-    // dist/api/routes/sign-up.mjs:144) — "가입이 안 된다"는 버그가 아니라
-    // 의도된 상태다. scripts/auth/verify-wiring.mjs도 이 상태를 감지해
-    // 안내만 하고 실패로 취급하지 않는다.
-    disableSignUp: true,
+    // 분산 환경에서 사실상 무방비이고(이 저장소 CLAUDE.md가 자체 리미터에
+    // 금지한 바로 그 폴백 형태), `registration_enabled` 검사도 없어 관리자가
+    // 신규 가입을 잠가도 이 라우트로는 계속 계정이 생긴다. 그래서 catch-all
+    // 라우트(`src/app/api/auth/[...all]/route.ts`)의 POST가 `sign-up/email`
+    // 경로에 한해 자체 레이트리밋과 `registration_enabled` 검사를 앞단에
+    // 건다 — 그 파일의 주석에 왜 `hooks.before`가 아니라 이 방식을 골랐는지
+    // 적어뒀다.
     minPasswordLength: 8,
     password: {
       hash: hashPassword,

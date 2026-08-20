@@ -80,6 +80,24 @@ export default defineConfig({
       process.env.E2E_SUPABASE_SERVICE_ROLE_KEY
         ? `SUPABASE_SERVICE_ROLE_KEY=${process.env.E2E_SUPABASE_SERVICE_ROLE_KEY}`
         : '',
+      // 단계 2b-6(Task 4): 로그인이 Better Auth로 넘어가면서 두 가지가 더
+      // 필요해졌다.
+      // (1) TURSO_DATABASE_URL — 없으면 .env.local의 운영 Turso를 그대로
+      //     가리킨다. E2E_TURSO_DATABASE_URL(로컬 파일 DB)이 설정돼 있을
+      //     때만 덮어쓴다 — 실수로 운영에 authz 테스트 계정을 만드는 사고를
+      //     이 스크립트 안에서 구조적으로 막는다.
+      // (2) BETTER_AUTH_URL — Better Auth는 요청의 Origin 헤더를 이 값과
+      //     정확히 비교해 다르면 403 INVALID_ORIGIN을 던진다(실측:
+      //     `[Better Auth]: Invalid origin: http://127.0.0.1:3101`).
+      //     `.env.local`의 값(`http://localhost:3000`)은 이 프로젝트가 쓰는
+      //     고정 E2E 포트(3101)와 호스트 표기(127.0.0.1 vs localhost) 둘 다
+      //     달라 authz-setup의 로그인 자체가 항상 실패했다 — 여기서
+      //     `baseURL`로 맞춘다.
+      process.env.E2E_TURSO_DATABASE_URL
+        ? `TURSO_DATABASE_URL=${process.env.E2E_TURSO_DATABASE_URL}`
+        : '',
+      `BETTER_AUTH_URL=${baseURL}`,
+      `NEXT_PUBLIC_SITE_URL=${baseURL}`,
       'npm run dev',
     ]
       .filter(Boolean)
