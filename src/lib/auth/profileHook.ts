@@ -31,5 +31,11 @@ export function buildMemberProfileRow(input: {
     is_admin: false,
     is_director: false,
     is_auditor: false,
+    // is_member 컬럼의 DB 기본값은 true라 생략해도 결과는 같지만, 같은 테이블을
+    // 쓰는 `signupProfile.ts`의 `buildSignupProfileRow`가 이 컬럼을 명시적으로
+    // 적는다 — 두 빌더가 같은 컬럼 집합에 합의하도록 여기도 명시한다. 한쪽만
+    // 명시하면 "여긴 왜 빠졌지"라는 의문과, DB 기본값이 나중에 바뀌었을 때
+    // 두 빌더가 조용히 갈라질 여지를 함께 남긴다.
+    is_member: true,
   }
 }

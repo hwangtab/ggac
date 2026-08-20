@@ -126,6 +126,10 @@ export async function POST(request: NextRequest) {
     // 5) 프로필 업서트(7필드 포함, 서비스롤) — Task 3의 databaseHooks.user.create.after
     // 훅이 이미 만든 pending/비활성 기본 행을 여기서 덮어쓴다. 실패해도 계정은 이미
     // 만들어졌으므로 가입 자체를 실패시키지 않고 로그로만 드러낸다(기존 훅의 정책과 동일).
+    // `profileSaved`로 결과를 들고 있다가 6)에서 응답 문구·상태 코드를 가른다 —
+    // 실패했는데도 "승인 후 이용하실 수 있습니다"라고 말하면, 저장되지 않은
+    // 프로필에 대해 있지도 않을 승인을 기다리라고 회원을 오도하게 된다.
+    let profileSaved = true
     try {
       const profile = buildSignupProfileRow({
         id: signedUpUser.id,
@@ -145,6 +149,7 @@ export async function POST(request: NextRequest) {
         .upsert(profile as never, { onConflict: 'id' })
       if (error) throw error
     } catch (error) {
+      profileSaved = false
       log.error(
         '[member-signup] 가입 후 member_profiles 업서트 실패:',
         maskId(signedUpUser.id),
@@ -152,11 +157,28 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 6) Set-Cookie를 응답에 그대로 실어 가입 직후 로그인 상태로 만든다.
-    const response = ApiSuccess.created(
-      { id: signedUpUser.id, email: signedUpUser.email },
-      '가입이 완료되었습니다. 승인 후 이용하실 수 있습니다.'
-    ).toNextResponse()
+    // 6) 두 경우 모두 Set-Cookie는 그대로 응답에 싣는다 — Better Auth 계정과
+    // 세션은 실제로 만들어졌으므로 로그인 상태 자체는 유효하다. 계정을 만들어
+    // 놓고 로그인은 안 되게 하면 재가입을 유도해 이메일 중복 계정만 늘린다.
+    //
+    // 상태 코드는 프로필 저장 성공 여부로 가른다.
+    // - profileSaved: 201 Created — 계정과 조합원 신청 정보가 둘 다 갖춰졌다.
+    // - !profileSaved: 202 Accepted — "요청은 받아들여졌지만 처리가 끝나지
+    //   않았다"는 HTTP 표준 의미 그대로 딱 들어맞는다. 계정(리소스) 자체는
+    //   실제로 생겼으니 4xx로 감쌀 수 없고(거짓 실패), 신청 정보는 저장되지
+    //   않았으니 201로 감쌀 수도 없다(거짓 성공). 문구에도 "승인"이라는 말을
+    //   쓰지 않는다 — 프로필이 없으니 승인할 대상 자체가 없다. 재가입 시도는
+    //   이메일 중복으로 막히므로(이 라우트 4단계) 재가입을 권하지 않고 사무국
+    //   문의로 안내한다.
+    const response = profileSaved
+      ? ApiSuccess.created(
+          { id: signedUpUser.id, email: signedUpUser.email, profileSaved: true },
+          '가입이 완료되었습니다. 승인 후 이용하실 수 있습니다.'
+        ).toNextResponse()
+      : ApiSuccess.accepted(
+          { id: signedUpUser.id, email: signedUpUser.email, profileSaved: false },
+          '계정은 생성되었지만 조합원 정보 등록에 실패했습니다. 같은 이메일로 다시 가입하지 마시고, 사무국으로 문의해 주세요.'
+        ).toNextResponse()
     signUpHeaders.forEach((value, key) => {
       if (key.toLowerCase() === 'set-cookie') {
         response.headers.append('set-cookie', value)

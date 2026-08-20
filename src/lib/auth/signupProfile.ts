@@ -65,10 +65,15 @@ export function buildSignupProfileRow(input: SignupProfileInput): Record<string,
     bank_name: text(input.bank_name),
     account_number: text(input.account_number),
     account_holder: text(input.account_holder),
-    // 아래 넷은 클라이언트 입력을 절대 반영하지 않는다.
+    // 아래는 전부 클라이언트 입력을 절대 반영하지 않는다. `profileHook.ts`의
+    // `buildMemberProfileRow`(가입 훅의 기본 프로필)와 같은 컬럼 집합에 맞춘다
+    // — 두 빌더가 같은 테이블에 부분적으로 다른 컬럼만 쓰면 한쪽만 고쳤을 때
+    // 드리프트가 생긴다.
     registration_status: 'pending',
     is_active: false,
     is_admin: false,
     is_member: true,
+    is_director: false,
+    is_auditor: false,
   }
 }
