@@ -7,9 +7,11 @@ import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
 import { logger, maskId } from '@/utils/logger'
 
 import { type AuthEmailKind, sendAuthEmail } from './email'
+import { resolveEmailLinkBaseUrl } from './emailBaseUrl'
 import { safeErrorMessage } from './errorMessage'
 import { hashPassword, verifyPassword } from './password'
 import { buildMemberProfileRow } from './profileHook'
+import { isBenignShadowUserRetryError } from './shadowUserGuard'
 
 /**
  * Vercel 로그에서 grep하기 위한 고정 접두어.
@@ -54,26 +56,11 @@ function maskEmailForLog(email: string): string {
  *
  * 멱등이어야 한다 — 훅 재시도나 이중 실행에서 실패하면 안 된다. 우리 호출은
  * 항상 같은 Better Auth 사용자의 같은 id+email로만 재시도된다(id가 같은데
- * email이 다른 값으로 재시도되는 경우는 없다). 이 정확한 모양으로 실측
- * 확인(로컬 GoTrue v2.188.1, curl로 raw HTTP·SDK 양쪽 확인):
- *   - id·email이 완전히 같은 재시도 → 422
- *     `{"code":422,"error_code":"email_exists","msg":"..."}`, SDK에서는
- *     `error.code === 'email_exists'`, `error.status === 422`.
- *   - id는 같고 email만 다른 경우(우리는 이 모양으로 호출하지 않지만
- *     확인차 시도) → 이 GoTrue 버전은 이걸 검증 단계에서 안 걸러 raw
- *     Postgres 23505(`users_pkey` 위반)가 그대로 500으로 샌다 — 4xx가
- *     아니라 진짜 실패로 던져진다.
- *   - 이메일 형식이 잘못된 경우(무관한 검증 실패의 예) → 400
- *     `{"code":400,"error_code":"validation_failed","msg":"..."}`.
- * `@supabase/auth-js`의 `ErrorCode` 타입에는 `user_already_exists`도
- * 존재하지만, 이 호출 모양(명시적 id를 주는 admin.createUser)에서는
- * 재현되지 않았다 — 다른 경로(예: id 없이 만드는 일반 가입) 전용으로 보인다.
- *
- * 그래서 `error.code === 'email_exists'`만 "이미 준비돼 있다"는 뜻으로 성공
- * 처리한다. status만으로 4xx를 뭉뚱그리면 이메일 형식 오류 같은 진짜 검증
- * 실패도 조용히 삼켜버려서, 뒤이은 프로필 upsert가 FK 위반으로 실패했을 때
- * 로그가 진짜 원인이 아니라 엉뚱한 FK를 가리키게 된다 — 그 외 모든 에러(다른
- * 4xx, 5xx, 네트워크 실패 등)는 그대로 던져 훅의 기존 catch로 넘긴다.
+ * email이 다른 값으로 재시도되는 경우는 없다). "이미 준비돼 있다"는 뜻의
+ * 무해한 재시도인지 판정하는 로직은 `isBenignShadowUserRetryError`
+ * (`./shadowUserGuard`)로 뺐다 — 그 판정 근거(GoTrue 실측 결과)도 그 파일에
+ * 있다. 그 외 모든 에러(다른 4xx, 5xx, 네트워크 실패 등)는 그대로 던져 훅의
+ * 기존 catch로 넘긴다.
  */
 async function ensureSupabaseAuthShadowUser(id: string, email: string): Promise<void> {
   const admin = createServiceRoleClient()
@@ -83,36 +70,8 @@ async function ensureSupabaseAuthShadowUser(id: string, email: string): Promise<
     email_confirm: true,
   })
   if (!error) return
-  if (error.code === 'email_exists') return
+  if (isBenignShadowUserRetryError(error)) return
   throw error
-}
-
-/**
- * 인증 메일에 넣을 링크의 도메인 기준(base URL)을 고른다. 없으면 던진다.
- *
- * 예전 코드는 `NEXT_PUBLIC_SITE_URL || BETTER_AUTH_URL || ''`로, 둘 다
- * 없으면 빈 문자열로 조용히 폴백했다 — 그러면 메일에
- * `href="/reset-password?token=..."`처럼 스킴·호스트 없는 상대 경로가 그대로
- * 나간다. 받은 편지함에서는 열리지 않는 링크인데도 아무 로그가 안 남는다 —
- * "메일이 안 나감"보다 나쁘다(회원은 링크를 봤는데 왜 안 되는지 알 방법이
- * 없다). 이제는 여기서 던져 훅의 `[auth]` 로그 경로로 드러낸다.
- *
- * 주의: 이 우선순위(`NEXT_PUBLIC_SITE_URL` 우선)는 아래 `betterAuth({
- * baseURL: ... })`의 우선순위(`BETTER_AUTH_URL` 우선)와 **반대**다. 두 값이
- * 다르게 설정된 환경(드물지만 가능)에서는 Better Auth 자신의 baseURL과
- * 메일에 박히는 도메인이 서로 다른 호스트를 가리킬 수 있다는 뜻이다. Better
- * Auth는 그 상황에서도 정상 부팅되므로 여기서 따로 던지지 않으면 아무도
- * 눈치채지 못한다 — 리뷰에서 지적된 비대칭이라 순서를 바꾸지 않고 그대로
- * 기록만 남긴다(둘 다 명시적으로 설정되면 일치시키는 편이 더 안전하다).
- */
-function resolveEmailLinkBaseUrl(): string {
-  const base = process.env.NEXT_PUBLIC_SITE_URL || process.env.BETTER_AUTH_URL
-  if (!base) {
-    throw new Error(
-      'NEXT_PUBLIC_SITE_URL과 BETTER_AUTH_URL이 둘 다 비어 있어 인증 메일 링크의 도메인을 만들 수 없습니다.'
-    )
-  }
-  return base
 }
 
 /**
