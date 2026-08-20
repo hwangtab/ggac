@@ -202,7 +202,24 @@ export async function handleAuth(
       }
     }
   } catch (error) {
+    log.debug('Database error in middleware', { isMobile, error })
     profileError = error
+
+    // 모바일에서는 네트워크 오류 시 더 관대하게 처리
+    if (isMobile && !isProtectedPage) {
+      log.debug('Mobile public page allowed despite DB error')
+      return { user, shouldContinue: true }
+    }
+
+    // 데이터베이스 에러 시 기본적으로 공개 페이지는 허용
+    if (!isProtectedPage) {
+      return { user, shouldContinue: true }
+    }
+    // 보호된 페이지는 로그인으로 리다이렉트
+    return {
+      response: redirectToLogin(request),
+      shouldContinue: false,
+    }
   }
 
   // 프로필이 없거나 에러 발생 시 (조합원 가입 플로우 문제일 수 있음)
