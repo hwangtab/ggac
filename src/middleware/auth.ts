@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { getRegistrationDisabledHtml } from './templates'
 import { createLogger } from '@/utils/logger'
+import { fetchMemberProfileForMiddleware } from './profile'
 
 const log = createLogger('middleware/auth')
 const LOCALES = ['ko', 'en'] as const
@@ -189,13 +190,8 @@ export async function handleAuth(
   let profileError = null
 
   try {
-    const { data, error } = await supabase
-      .from('member_profiles')
-      .select('registration_status, is_active, is_admin, is_director, is_auditor, display_name')
-      .eq('id', user.id)
-      .single()
-
-    if (data && !error) {
+    const data = await fetchMemberProfileForMiddleware(user.id)
+    if (data) {
       profile = data
       if (process.env.NODE_ENV === 'development' && isCriticalPath) {
         log.debug('Profile found', {
@@ -204,9 +200,6 @@ export async function handleAuth(
           active: profile.is_active,
         })
       }
-    } else {
-      profileError = error
-      log.debug('Profile error', { isMobile, message: error?.message })
     }
   } catch (error) {
     log.debug('Database error in middleware', { isMobile, error })

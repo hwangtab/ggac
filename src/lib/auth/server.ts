@@ -3,34 +3,15 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { nextCookies } from 'better-auth/next-js'
 
 import { db } from '@/db/client'
-import { memberProfiles, REGISTRATION_STATUS } from '@/db/schema/identity'
+import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
 import { logger, maskId } from '@/utils/logger'
 
 import { type AuthEmailKind, sendAuthEmail } from './email'
+import { resolveEmailLinkBaseUrl } from './emailBaseUrl'
+import { safeErrorMessage } from './errorMessage'
 import { hashPassword, verifyPassword } from './password'
 import { buildMemberProfileRow } from './profileHook'
-
-/**
- * `buildMemberProfileRow`가 돌려주는 형태를 좁힌 타입.
- *
- * `buildMemberProfileRow`의 시그니처는 `Record<string, unknown>`이라, 만약
- * `as typeof memberProfiles.$inferInsert`로 곧장 캐스트하면 그 캐스트가 타입
- * 체크를 무조건 통과시켜버려서 매핑 필드를 실수로 빠뜨려도(예: displayName
- * 누락) 컴파일러가 못 잡는다 — 실제로 최초 구현에서 이 캐스트가 snake_case↔
- * camelCase 키 불일치 버그를 가려버렸다. 여기서 한 번 좁혀두면, 아래
- * `db.insert(memberProfiles).values({...})`는 캐스트 없이 구조적으로 검사되고
- * 필드 누락은 TS2769로 즉시 드러난다.
- */
-type MemberProfileRow = {
-  id: string
-  email: string
-  display_name: string
-  registration_status: (typeof REGISTRATION_STATUS)[number]
-  is_active: boolean
-  is_admin: boolean
-  is_director: boolean
-  is_auditor: boolean
-}
+import { isBenignShadowUserRetryError } from './shadowUserGuard'
 
 /**
  * Vercel 로그에서 grep하기 위한 고정 접두어.
@@ -55,26 +36,42 @@ function maskEmailForLog(email: string): string {
 }
 
 /**
- * 로그에 안전하게 남길 수 있는 에러 메시지를 고른다.
+ * `auth.users`에 같은 id의 껍데기 행을 만든다(없으면).
  *
- * drizzle의 `DrizzleQueryError#message`는 `Failed query: ...\nparams: ...`
- * 형태로 **쿼리 바인딩 파라미터 전체**를 담는다 — member_profiles INSERT
- * 실패 시 email·display_name(실명일 수 있다) 등 개인정보가 그대로 로그에
- * 찍힌다는 뜻이다. 반면 `error.cause`는 DB 드라이버가 던진 원인 오류만
- * 담는다(예: `SQLITE_CONSTRAINT: UNIQUE constraint failed:
- * member_profiles.email`) — 원인 파악에는 충분하고 파라미터는 없다.
+ * public 스키마의 FK 13개(`member_profiles.id`·`.approved_by`,
+ * `comment_likes`, `post_likes`, `notifications.user_id`/`.related_user_id`,
+ * `user_activities`, `user_sessions`, `daily_activity_stats`, `profiles.id`,
+ * `system_settings.updated_by`, `system_settings_history.changed_by`)가
+ * `auth.users(id)`를 참조한다. Better Auth(Turso)가 만드는 사용자 id는
+ * Supabase `auth.users`에 존재하지 않으므로, 프로필 upsert보다 먼저 같은
+ * id의 행을 여기 만들어둬야 그 FK들을 통과한다.
  *
- * `cause`가 없는 일반 `Error`도 있으므로(예: 순수 JS 예외) 그 경우엔
- * `error.message`로 안전하게 폴백한다.
+ * 이 행은 비밀번호도 세션도 없는 참조 무결성 전용 껍데기다 — Better Auth가
+ * 인증을 전담한다. 다만 Supabase Auth 자체의 복구(recovery) 엔드포인트는
+ * Supabase Auth를 걷어내기 전까지 이 행에 대해 계속 살아 있다. 컷오버 이후
+ * Supabase 세션은 이 앱의 어떤 것도 인증하지 못하므로 실질 영향은 낮지만,
+ * "이메일 확인·비밀번호 없음" 상태가 계속 안전하려면 최종 단계에서 Supabase
+ * Auth를 실제로 폐기해야 한다 — 콘텐츠 이관이 끝나 Supabase를 걷어내면 이
+ * 껍데기도 함께 사라진다.
+ *
+ * 멱등이어야 한다 — 훅 재시도나 이중 실행에서 실패하면 안 된다. 우리 호출은
+ * 항상 같은 Better Auth 사용자의 같은 id+email로만 재시도된다(id가 같은데
+ * email이 다른 값으로 재시도되는 경우는 없다). "이미 준비돼 있다"는 뜻의
+ * 무해한 재시도인지 판정하는 로직은 `isBenignShadowUserRetryError`
+ * (`./shadowUserGuard`)로 뺐다 — 그 판정 근거(GoTrue 실측 결과)도 그 파일에
+ * 있다. 그 외 모든 에러(다른 4xx, 5xx, 네트워크 실패 등)는 그대로 던져 훅의
+ * 기존 catch로 넘긴다.
  */
-function safeErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    if (error.cause instanceof Error) {
-      return error.cause.message
-    }
-    return error.message
-  }
-  return String(error)
+async function ensureSupabaseAuthShadowUser(id: string, email: string): Promise<void> {
+  const admin = createServiceRoleClient()
+  const { error } = await admin.auth.admin.createUser({
+    id,
+    email,
+    email_confirm: true,
+  })
+  if (!error) return
+  if (isBenignShadowUserRetryError(error)) return
+  throw error
 }
 
 /**
@@ -82,9 +79,19 @@ function safeErrorMessage(error: unknown): string {
  * 다시 던지는 이유는 `sendAuthEmail`의 "실패하면 던진다" 계약을 이 훅
  * 레벨에서도 유지하기 위해서다 — 상위(Better Auth)가 그 예외를 삼키더라도,
  * 우리가 로그로 남긴 사실 자체는 삼켜지지 않는다.
+ *
+ * `url`을 문자열이 아니라 `buildUrl` 콜백으로 받는다 — `resolveEmailLinkBaseUrl()`
+ * 같은 URL 조립 자체가 던질 수 있는 경우까지 이 try 안에서 잡아 같은
+ * `[auth][email]` 로그로 남기기 위해서다. 조립 실패를 호출부에서 미리
+ * 처리해버리면 이 함수의 catch를 거치지 않아 로그가 하나도 안 남는다.
  */
-async function sendAuthEmailLogged(kind: AuthEmailKind, to: string, url: string): Promise<void> {
+async function sendAuthEmailLogged(
+  kind: AuthEmailKind,
+  to: string,
+  buildUrl: () => string
+): Promise<void> {
   try {
+    const url = buildUrl()
     await sendAuthEmail(kind, to, url)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
@@ -99,6 +106,23 @@ export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_SITE_URL,
   secret: process.env.BETTER_AUTH_SECRET,
   database: drizzleAdapter(db, { provider: 'sqlite' }),
+  // 단계 2b-5 실측(member-signup 라우트로 실제 `POST /sign-up/email`을 처음
+  // 왕복시켜 발견): 기본 `generateId()`(@better-auth/core/dist/utils/id.mjs)는
+  // 32자 영숫자 문자열을 만든다 — UUID가 아니다. 그런데 이 id는 그대로
+  // (1) Supabase Auth Admin API의 `auth.users.id`(uuid, GoTrue가 v4 형식을
+  // 강제)와 (2) `member_profiles.id`(uuid 컬럼, `auth.users(id)` FK)에 쓰인다.
+  // 지정 없이 두면 가입 훅의 `ensureSupabaseAuthShadowUser`가 매번
+  // "ID must conform to the uuid v4 format"로 실패하고, 뒤이은 프로필
+  // upsert도 `22P02 invalid input syntax for type uuid`로 실패한다 — 계정만
+  // 생기고 Supabase 쪽엔 아무 것도 안 남는 조용한 실패다.
+  // `generateId: 'uuid'`는 sqlite 어댑터에서 `crypto.randomUUID()`로 대체된다
+  // (get-id-field.mjs 실측). Turso 쪽 id 컬럼은 전부 `text('id')`라 포맷
+  // 제약이 없어 안전하다(`src/db/schema/auth.ts`).
+  advanced: {
+    database: {
+      generateId: 'uuid',
+    },
+  },
   emailAndPassword: {
     enabled: true,
     // 2b-2(화면 배선)까지 공개 가입을 막는다. 옵션명은
@@ -129,53 +153,61 @@ export const auth = betterAuth({
       hash: hashPassword,
       verify: verifyPassword,
     },
-    sendResetPassword: async ({ user, url }) => {
-      await sendAuthEmailLogged('recovery', user.email, url)
+    sendResetPassword: async ({ user, token }) => {
+      // BA가 주는 url은 `${baseURL}/reset-password/${token}` 형태이고 baseURL은
+      // `/api/auth`를 포함한다 — 우리 화면(`/[locale]/reset-password`)과 다르다.
+      // token을 받아 우리가 직접 만든다(실측: password.mjs:80-86이 token을 넘긴다).
+      await sendAuthEmailLogged('recovery', user.email, () => {
+        const base = resolveEmailLinkBaseUrl()
+        return `${base}/reset-password?token=${token}`
+      })
     },
   },
   emailVerification: {
     sendOnSignUp: true,
-    sendVerificationEmail: async ({ user, url }) => {
-      await sendAuthEmailLogged('confirmation', user.email, url)
+    sendVerificationEmail: async ({ user, token }) => {
+      // callbackURL이 없으면 /verify-email이 리다이렉트 대신 JSON을 반환한다
+      // (실측: email-verification.mjs:314-319). 확인 후 착지할 곳을 명시한다.
+      const callback = encodeURIComponent('/auth/callback')
+      await sendAuthEmailLogged('confirmation', user.email, () => {
+        const base = resolveEmailLinkBaseUrl()
+        return `${base}/api/auth/verify-email?token=${token}&callbackURL=${callback}`
+      })
     },
   },
   session: {
     expiresIn: 60 * 60 * 24 * 7,
     updateAge: 60 * 60 * 24,
+    // 단계 2b-6의 미들웨어가 요청마다 세션을 읽는다. getCookieCache는 이 옵션이
+    // 켜져 있을 때만 동작하고, 켜져 있으면 DB 왕복 없이 세션을 준다.
+    cookieCache: { enabled: true, maxAge: 5 * 60 },
   },
   databaseHooks: {
     user: {
       create: {
         after: async user => {
           try {
-            // buildMemberProfileRow는 Postgres 컬럼명(snake_case)의 키를 돌려준다.
-            // memberProfiles(Drizzle 스키마)는 JS 필드명(camelCase)으로 값을 받는다
-            // (컬럼명 자체는 스키마 정의에서 이미 snake_case로 매핑돼 있다). 두 키
-            // 체계가 달라 그대로 넘기면 displayName 등이 채워지지 않고 NOT NULL
-            // 제약으로 INSERT가 실패한다 — 여기서 명시적으로 옮겨 담는다.
+            // (1) FK 13개가 auth.users를 가리키므로, 같은 id의 껍데기를 먼저
+            // 만든다. 비밀번호도 세션도 없다 — 오직 참조 무결성을 위한 행이다.
+            // 재시도로 이미 있으면(GoTrue error.code === 'email_exists') 성공
+            // 처리하고, 그 외 실패(진짜 검증 실패 등)는 그대로 던진다.
+            await ensureSupabaseAuthShadowUser(user.id, user.email)
+
+            // (2) buildMemberProfileRow는 Postgres 컬럼명(snake_case)의 키를
+            // 돌려준다. 승인 화면(admin/members)이 Supabase의 member_profiles를
+            // 읽으므로(콘텐츠 이관 전까지 Supabase가 권위), 여기서도 Supabase에
+            // 직접 업서트한다 — Turso에 쓰면 새 가입자가 관리자에게 안 보인다.
+            // 그 다음에야 이 upsert가 FK를 통과한다.
             const profile = buildMemberProfileRow({
               id: user.id,
               email: user.email,
               name: user.name,
-            }) as MemberProfileRow
-            await db
-              .insert(memberProfiles)
-              .values({
-                id: profile.id,
-                email: profile.email,
-                displayName: profile.display_name,
-                registrationStatus: profile.registration_status,
-                isActive: profile.is_active,
-                isAdmin: profile.is_admin,
-                isDirector: profile.is_director,
-                isAuditor: profile.is_auditor,
-              })
-              // id 충돌만 무시한다(2b-2 이관 후 훅 재실행 시 중복 방어 목적).
-              // target을 안 주면 SQLite는 PK뿐 아니라 email UNIQUE 인덱스
-              // (member_profiles_email_idx) 충돌까지 통째로 삼켜버려서, 트리거가
-              // 만들던 바로 그 "프로필 없는 사용자"를 예외도 로그도 없이
-              // 재현한다 — 그래서 target을 id로 못박는다.
-              .onConflictDoNothing({ target: memberProfiles.id })
+            })
+            const admin = createServiceRoleClient()
+            const { error } = await admin
+              .from('member_profiles')
+              .upsert(profile as never, { onConflict: 'id' })
+            if (error) throw error
           } catch (error) {
             // Postgres 트리거(handle_new_user)는 이 실패를 EXCEPTION WHEN OTHERS로
             // 삼켜서 프로필 없는 사용자를 조용히 만들었다. 여기서는 로그로 드러낸다

@@ -24,7 +24,14 @@ interface PublicSystemSettings {
 // 이는 의도된 정책이다: settings 장애가 사이트 전체 차단(fail-closed)으로
 // 번지는 것보다 유지보수 안내가 늦는 쪽이 낫다.
 let settingsCache: PublicSystemSettings | null = null
-const SETTINGS_CACHE_DURATION = 60 * 1000 // 60초
+
+// 기본 60초. 테스트 환경에서만 0으로 낮춰 설정 변경이 즉시 반영되게 한다
+// (E2E는 유지보수 모드를 켜고 끄며 미들웨어의 반응을 검증한다).
+// 운영에서는 절대 설정하지 않는다 — 요청마다 system_settings를 읽게 된다.
+const SETTINGS_CACHE_DURATION = (() => {
+  const raw = Number(process.env.SETTINGS_CACHE_TTL_MS)
+  return Number.isFinite(raw) && raw >= 0 ? raw : 60 * 1000
+})()
 
 export async function getSystemSettings(_supabase?: unknown): Promise<PublicSystemSettings | null> {
   // _supabase 인자는 하위 호환성을 위해 유지하되 사용하지 않는다.

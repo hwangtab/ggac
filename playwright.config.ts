@@ -35,7 +35,7 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
-      testIgnore: /authz-(setup|ownership|personal|remaining)/,
+      testIgnore: /authz-(setup|ownership|personal|remaining|maintenance)/,
     },
     // authz 계열은 로컬 Supabase 스택이 있어야 도는 로컬 전용 프로젝트다(CI는 돌리지 않는다).
     // channel: 'chrome'으로 개발자 머신에 이미 설치된 Chrome을 쓴다 — Playwright 번들
@@ -48,7 +48,7 @@ export default defineConfig({
     },
     {
       name: 'authz',
-      testMatch: /authz-(ownership|personal|remaining)\.spec\.ts/,
+      testMatch: /authz-(ownership|personal|remaining|maintenance)\.spec\.ts/,
       dependencies: ['authz-setup'],
       use: { ...devices['Desktop Chrome'], channel: 'chrome' },
     },
@@ -64,6 +64,12 @@ export default defineConfig({
     // 테스트(password-reset 등)가 환경 요인으로 실패한다.
     command: [
       'env -u NO_COLOR NEXT_STRICT_CSP=false',
+      // 미들웨어의 system_settings 캐시(기본 60초 TTL)를 E2E 서버에서만 0으로
+      // 낮춘다. authz-maintenance.spec.ts가 DB를 직접 PATCH해 유지보수 모드를
+      // 켜고 끄는데, 캐시가 살아 있으면 authz-setup의 로그인 내비게이션이 먼저
+      // 채운 값(꺼짐)이 최대 60초간 그대로 남아 방금 켠 유지보수가 반영되지
+      // 않는 것처럼 보인다. 운영 빌드/배포 커맨드에는 이 변수를 넣지 않는다.
+      'SETTINGS_CACHE_TTL_MS=0',
       `PORT=${port}`,
       process.env.E2E_SUPABASE_URL
         ? `NEXT_PUBLIC_SUPABASE_URL=${process.env.E2E_SUPABASE_URL}`

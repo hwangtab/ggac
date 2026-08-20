@@ -17,6 +17,58 @@ function hasSupabaseMiddlewareConfig() {
   return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
 }
 
+// 유지보수 모드가 켜져 있어도 항상 통과해야 하는 최소 집합.
+// 막으면 관리자 판정 자체가 불가능해지거나(로그인·세션 확인) 배포 스모크 체크가
+// 항상 실패한다(`.github/workflows/post-deploy-smoke.yml` → scripts/utils/deployment/smoke-check.mjs
+// → GET /api/health).
+/**
+ * 유지보수 모드에서도 열어두는 경로.
+ *
+ * 두 종류를 구분한다:
+ * - `EXACT`는 정확히 그 경로만 통과한다. 접두사로 두면 `/api/health`가
+ *   `/api/healthcheck`·`/api/health-report` 같은 **미래에 생길** 라우트까지
+ *   조용히 동결에서 빼준다 — 예외는 최소 집합이어야 하므로 세그먼트에 못박는다.
+ * - `PREFIX`는 하위 경로가 실제로 있는 것만 둔다. `/api/auth/`는
+ *   `[...all]` 캐치올이라 하위 경로 전체가 인증 흐름이다.
+ */
+const MAINTENANCE_EXEMPT_EXACT = ['/api/health']
+const MAINTENANCE_EXEMPT_PREFIXES = ['/api/auth/']
+
+function isMaintenanceExempt(pathname: string): boolean {
+  return (
+    MAINTENANCE_EXEMPT_EXACT.includes(pathname) ||
+    MAINTENANCE_EXEMPT_PREFIXES.some(p => pathname.startsWith(p))
+  )
+}
+
+// 페이지 경로와 API 경로가 공유하는 @supabase/ssr 서버 클라이언트 생성 로직.
+// 쿠키를 요청·응답(res) 양쪽에 반영해 access token 갱신이 브라우저까지 전달되게 한다.
+function createMiddlewareSupabaseClient(request: NextRequest, res: NextResponse) {
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      // 미들웨어는 모든 페이지/API 요청 경로다. Supabase Auth가 행이면 사이트 전체가
+      // 미들웨어 타임아웃까지 블로킹되므로 요청 상한을 짧게 둔다(초과 시 auth 실패
+      // 경로로 처리되어 공개 페이지는 통과, 보호 페이지는 로그인으로 유도).
+      global: {
+        fetch: (input: RequestInfo | URL, init?: RequestInit) =>
+          fetch(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(3000) }),
+      },
+      cookies: {
+        getAll() {
+          return request.cookies.getAll()
+        },
+        setAll(cookiesToSet) {
+          // access token 갱신 시 새 쿠키를 요청·응답 양쪽에 반영해 브라우저까지 전달한다.
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+          cookiesToSet.forEach(({ name, value, options }) => res.cookies.set(name, value, options))
+        },
+      },
+    }
+  )
+}
+
 // @supabase/ssr가 setAll로 기반 응답(res)에 기록한 갱신 토큰 쿠키를, 미들웨어가 새로
 // 반환하는 응답(리다이렉트·유지보수)에도 복사해 브라우저까지 전달한다. 누락하면 토큰
 // 회전(rotation) 환경에서 갱신이 유실되어 다음 요청에 로그아웃될 수 있다.
@@ -36,10 +88,56 @@ function copyResponseCookies(from: NextResponse, to: NextResponse): NextResponse
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // API 라우트는 절대 미들웨어에서 처리하지 않음
+  // API 라우트: 페이지 파이프라인(next-intl rewrite·CSP·handleAuth 리다이렉트)은
+  // 타지 않는다. 유지보수 판정만 전담한다.
   if (pathname.startsWith('/api/')) {
-    log.debug('API route bypassed', pathname)
-    return NextResponse.next()
+    // 로그인·세션 확인(/api/auth/*)과 헬스체크(/api/health)는 유지보수 여부와
+    // 무관하게 항상 통과한다 — 막으면 관리자가 스스로를 유지보수 벽에 가둔다.
+    if (isMaintenanceExempt(pathname)) {
+      return NextResponse.next()
+    }
+
+    if (!hasSupabaseMiddlewareConfig()) {
+      return NextResponse.next()
+    }
+
+    const systemSettings = await getSystemSettings()
+
+    // 유지보수가 꺼져 있으면(평시) 세션을 읽지 않고 즉시 통과한다 — matcher
+    // 확장 이전과 같은 동작·비용을 유지한다. settingsCache가 60초 TTL이라
+    // 이 조회는 대부분 캐시 히트다.
+    if (!systemSettings?.maintenanceMode) {
+      return NextResponse.next()
+    }
+
+    // 유지보수 ON: 관리자만 통과시킨다. 판정을 위해서만 세션을 읽는다 — 유지보수는
+    // 드물고 저트래픽이라 이 왕복 비용은 무시할 만하다(평시 경로에는 없다).
+    const res = NextResponse.next()
+    const supabase = createMiddlewareSupabaseClient(request, res)
+    const authResult = await handleAuth(request, res, supabase, systemSettings)
+    let isAdmin = authResult.profile?.is_admin === true
+
+    // 페이지 경로와 동일한 근거: getClaims()의 로컬 검증은 전역 로그아웃·비밀번호
+    // 변경으로 취소된 세션을 액세스 토큰 만료까지 감지하지 못한다. 우회를 허용하기
+    // 직전에만 서버로 1회 재검증한다.
+    if (isAdmin) {
+      const {
+        data: { user: freshUser },
+        error: reverifyError,
+      } = await supabase.auth.getUser()
+      if (reverifyError || !freshUser) {
+        isAdmin = false
+      }
+    }
+
+    if (!isAdmin) {
+      return copyResponseCookies(
+        res,
+        getMaintenanceResponse(systemSettings.maintenanceMessage, { isApi: true })
+      )
+    }
+
+    return res
   }
 
   // 정적 파일 및 Next.js 내부 경로 패스
@@ -91,29 +189,7 @@ export async function middleware(request: NextRequest) {
     return res
   }
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      // 미들웨어는 모든 페이지 요청 경로다. Supabase Auth가 행이면 사이트 전체가
-      // 미들웨어 타임아웃까지 블로킹되므로 요청 상한을 짧게 둔다(초과 시 auth 실패
-      // 경로로 처리되어 공개 페이지는 통과, 보호 페이지는 로그인으로 유도).
-      global: {
-        fetch: (input: RequestInfo | URL, init?: RequestInit) =>
-          fetch(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(3000) }),
-      },
-      cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
-        setAll(cookiesToSet) {
-          // access token 갱신 시 새 쿠키를 요청·응답 양쪽에 반영해 브라우저까지 전달한다.
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-          cookiesToSet.forEach(({ name, value, options }) => res.cookies.set(name, value, options))
-        },
-      },
-    }
-  )
+  const supabase = createMiddlewareSupabaseClient(request, res)
 
   const systemSettings = await getSystemSettings(supabase)
   const authResult = await handleAuth(request, res, supabase, systemSettings)
@@ -151,6 +227,9 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|woff|woff2|ttf|ico)$).*)',
+    // `api`를 더 이상 제외하지 않는다 — 유지보수 모드가 API 쓰기를 막아야
+    // 단계 2b-6의 쓰기 동결이 의미를 갖는다. 대신 미들웨어 본문에서
+    // MAINTENANCE_EXEMPT_PREFIXES로 인증·헬스체크를 통과시킨다.
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|woff|woff2|ttf|ico)$).*)',
   ],
 }
