@@ -56,6 +56,38 @@ function safeErrorMessage(error: unknown): string {
 }
 
 /**
+ * `auth.users`에 같은 id의 껍데기 행을 만든다(없으면).
+ *
+ * public 스키마의 FK 13개(`member_profiles.id`·`.approved_by`,
+ * `comment_likes`, `post_likes`, `notifications.user_id`/`.related_user_id`,
+ * `user_activities`, `user_sessions`, `daily_activity_stats`, `profiles.id`,
+ * `system_settings.updated_by`, `system_settings_history.changed_by`)가
+ * `auth.users(id)`를 참조한다. Better Auth(Turso)가 만드는 사용자 id는
+ * Supabase `auth.users`에 존재하지 않으므로, 프로필 upsert보다 먼저 같은
+ * id의 행을 여기 만들어둬야 그 FK들을 통과한다. 비밀번호도 세션도 만들지
+ * 않는다 — Better Auth가 인증을 전담하고, 이 행은 오직 참조 무결성을 위해서만
+ * 존재한다. 콘텐츠 이관이 끝나 Supabase를 걷어내면 이 껍데기도 함께 사라진다.
+ *
+ * 멱등이어야 한다 — 훅 재시도나 이중 실행에서 실패하면 안 된다. GoTrue
+ * Admin `createUser`는 id·email이 이미 있으면 4xx(예: `422 email_exists`)를
+ * 준다(실측 확인) — 그건 "이미 준비돼 있다"는 뜻이니 성공으로 친다. 4xx가
+ * 아닌 에러(네트워크 실패, 5xx 등)는 진짜 실패이므로 그대로 던져 훅의 기존
+ * catch로 넘긴다.
+ */
+async function ensureSupabaseAuthShadowUser(id: string, email: string): Promise<void> {
+  const admin = createServiceRoleClient()
+  const { error } = await admin.auth.admin.createUser({
+    id,
+    email,
+    email_confirm: true,
+  })
+  if (!error) return
+  const status = (error as { status?: number }).status
+  if (typeof status === 'number' && status >= 400 && status < 500) return
+  throw error
+}
+
+/**
  * `sendAuthEmail`을 감싸 실패를 로그에 남기고 다시 던진다.
  * 다시 던지는 이유는 `sendAuthEmail`의 "실패하면 던진다" 계약을 이 훅
  * 레벨에서도 유지하기 위해서다 — 상위(Better Auth)가 그 예외를 삼키더라도,
@@ -141,10 +173,16 @@ export const auth = betterAuth({
       create: {
         after: async user => {
           try {
-            // buildMemberProfileRow는 Postgres 컬럼명(snake_case)의 키를 돌려준다.
-            // 승인 화면(admin/members)이 Supabase의 member_profiles를 읽으므로
-            // (콘텐츠 이관 전까지 Supabase가 권위), 여기서도 Supabase에 직접
-            // 업서트한다 — Turso에 쓰면 새 가입자가 관리자에게 보이지 않는다.
+            // (1) FK 13개가 auth.users를 가리키므로, 같은 id의 껍데기를 먼저
+            // 만든다. 비밀번호도 세션도 없다 — 오직 참조 무결성을 위한 행이다.
+            // 이미 있으면(재시도 등) 4xx가 오는데 그건 성공으로 친다.
+            await ensureSupabaseAuthShadowUser(user.id, user.email)
+
+            // (2) buildMemberProfileRow는 Postgres 컬럼명(snake_case)의 키를
+            // 돌려준다. 승인 화면(admin/members)이 Supabase의 member_profiles를
+            // 읽으므로(콘텐츠 이관 전까지 Supabase가 권위), 여기서도 Supabase에
+            // 직접 업서트한다 — Turso에 쓰면 새 가입자가 관리자에게 안 보인다.
+            // 그 다음에야 이 upsert가 FK를 통과한다.
             const profile = buildMemberProfileRow({
               id: user.id,
               email: user.email,
