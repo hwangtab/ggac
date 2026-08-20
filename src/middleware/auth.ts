@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { getRegistrationDisabledHtml } from './templates'
 import { createLogger } from '@/utils/logger'
+import { fetchMemberProfileForMiddleware } from './profile'
 
 const log = createLogger('middleware/auth')
 const LOCALES = ['ko', 'en'] as const
@@ -189,13 +190,8 @@ export async function handleAuth(
   let profileError = null
 
   try {
-    const { data, error } = await supabase
-      .from('member_profiles')
-      .select('registration_status, is_active, is_admin, is_director, is_auditor, display_name')
-      .eq('id', user.id)
-      .single()
-
-    if (data && !error) {
+    const data = await fetchMemberProfileForMiddleware(user.id)
+    if (data) {
       profile = data
       if (process.env.NODE_ENV === 'development' && isCriticalPath) {
         log.debug('Profile found', {
@@ -204,29 +200,9 @@ export async function handleAuth(
           active: profile.is_active,
         })
       }
-    } else {
-      profileError = error
-      log.debug('Profile error', { isMobile, message: error?.message })
     }
   } catch (error) {
-    log.debug('Database error in middleware', { isMobile, error })
     profileError = error
-
-    // 모바일에서는 네트워크 오류 시 더 관대하게 처리
-    if (isMobile && !isProtectedPage) {
-      log.debug('Mobile public page allowed despite DB error')
-      return { user, shouldContinue: true }
-    }
-
-    // 데이터베이스 에러 시 기본적으로 공개 페이지는 허용
-    if (!isProtectedPage) {
-      return { user, shouldContinue: true }
-    }
-    // 보호된 페이지는 로그인으로 리다이렉트
-    return {
-      response: redirectToLogin(request),
-      shouldContinue: false,
-    }
   }
 
   // 프로필이 없거나 에러 발생 시 (조합원 가입 플로우 문제일 수 있음)
