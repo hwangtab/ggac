@@ -5,8 +5,7 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useRef } from 'react'
 import { useRouter, Link } from '@/i18n/navigation'
-import { useLocale, useTranslations } from 'next-intl'
-import { supabase } from '@/lib/supabase/client'
+import { useTranslations } from 'next-intl'
 import FormField from '@/components/FormField'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { useStablePageLoad } from '@/utils/routeProtection'
@@ -15,7 +14,6 @@ type MessageType = 'error' | 'warning' | 'success' | 'loading'
 
 export default function SignupPage() {
   const t = useTranslations('auth')
-  const locale = useLocale()
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -78,7 +76,7 @@ export default function SignupPage() {
         if (value.trim() === '') {
           error = ''
           state = 'default'
-        } else if (value.length < 6) {
+        } else if (value.length < 8) {
           error = t('signup.validationPasswordLength')
           state = 'error'
         } else {
@@ -259,56 +257,56 @@ export default function SignupPage() {
     }
 
     try {
-      const callbackUrl = new URL('/auth/callback', window.location.origin)
-      callbackUrl.searchParams.set('locale', locale)
-
-      const { data, error } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-        options: {
-          emailRedirectTo: callbackUrl.toString(),
-          data: {
-            display_name: formData.displayName,
-            real_name: formData.realName,
-            phone_number: formData.phoneNumber,
-            birth_date: formData.birthDate,
-            monthly_fee: parseIntegerParam(formData.monthlyFee, 0, { min: 0 }),
-            bank_name: formData.bankName,
-            account_number: formData.accountNumber,
-            account_holder: formData.accountHolder,
-          },
-        },
+      const response = await fetch('/api/member-signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+          display_name: formData.displayName,
+          real_name: formData.realName,
+          phone_number: formData.phoneNumber,
+          birth_date: formData.birthDate,
+          monthly_fee: parseIntegerParam(formData.monthlyFee, 0, { min: 0 }),
+          bank_name: formData.bankName,
+          account_number: formData.accountNumber,
+          account_holder: formData.accountHolder,
+        }),
       })
 
-      if (error) {
-        if (error.message.includes('rate limit') || error.message.includes('429')) {
+      const body = (await response.json().catch(() => null)) as {
+        success?: boolean
+        message?: string
+        error?: string
+        data?: { profileSaved?: boolean }
+      } | null
+
+      if (!response.ok || body?.success !== true) {
+        if (response.status === 429) {
           setMsg(t('signup.msgRateLimited'), 'warning')
-        } else if (
-          error.message.includes('already registered') ||
-          error.message.includes('User already registered')
-        ) {
-          setMsg(t('signup.msgAlreadyRegistered'), 'error')
-        } else if (
-          error.message.includes('invalid email') ||
-          error.message.includes('Invalid email')
-        ) {
-          setMsg(t('signup.msgInvalidEmail'), 'error')
-        } else if (error.message.includes('weak password') || error.message.includes('Password')) {
-          setMsg(t('signup.msgWeakPassword'), 'error')
-        } else if (error.message.includes('signup disabled')) {
-          setMsg(t('signup.msgSignupDisabled'), 'error')
         } else {
-          setMsg(`${t('signup.msgUnexpectedError')}: ${error.message}`, 'error')
+          setMsg(body?.error || t('signup.msgUnexpectedError'), 'error')
         }
-        console.error('Signup error details:', error)
-      } else if (data.user) {
-        // 성공 시 바로 안내 페이지로 리다이렉트
-        setMsg(t('signup.msgSuccess'), 'success')
-        // 미들웨어 처리 시간 확보
-        await new Promise(resolve => setTimeout(resolve, 200))
-        router.push('/register/pending')
+        console.error('Signup error details:', body)
+        return
       }
+
+      // ApiSuccess는 success를 항상 true로 고정한다 — 202(profileSaved:false)도
+      // 여기까지 온다. 반드시 profileSaved를 확인해야 "가입 완료·승인 대기"를
+      // 저장되지 않은 신청에 대해 잘못 안내하지 않는다.
+      if (body?.data?.profileSaved === false) {
+        setMsg(body.message || t('signup.msgUnexpectedError'), 'error')
+        return
+      }
+
+      // 성공 시 바로 안내 페이지로 리다이렉트
+      setMsg(body?.message || t('signup.msgSuccess'), 'success')
+      // 미들웨어 처리 시간 확보
+      await new Promise(resolve => setTimeout(resolve, 200))
+      router.push('/register/pending')
     } catch (error) {
+      console.error('Signup error:', error)
       setMsg(t('signup.msgUnexpectedError'), 'error')
     } finally {
       setLoading(false)
