@@ -348,3 +348,124 @@ docker exec supabase_db_ggac psql -U postgres -At -c "
 **가드가 조용히 사라지는 RPC 부류는 여전히 남아 있다.** 위 (2)절 그대로 —
 `toggle_post_like` 등은 이번 단계에서 고치지 않았고, 조사(impersonation 구멍
 없음 확인)만 했다. 단계 2b-5가 실제로 처리해야 한다.
+
+## 단계 2b-5 — 전환 준비 기록 (2026-08-19/20 완료)
+
+이 단계는 **인증 컷오버를 준비만 하고 실행하지 않았다.** 신원이 어디서
+오는지(Supabase 세션 vs Better Auth 세션)는 아직 바꾸지 않았고, 컷오버 당일
+바뀌는 지점만 미리 옮겨 놓았다. 넷을 미리 고쳤고, 각각 컷오버 **당일이
+아니라 지금** 고쳐야 했던 이유가 있다.
+
+### 1. 미들웨어 프로필 조회를 서비스롤로
+
+미들웨어가 조합원 프로필을 읽을 때 쿠키 기반 anon 클라이언트를 썼다 — 즉
+RLS가 그대로 걸렸다. 컷오버 후에는 `auth.uid()`가 NULL이 되고, RLS는
+행을 감추지 에러를 내지 않는다. 그러면 승인된 조합원 19명 전원이 조용히
+`/register/pending`으로 튕겨나가는데, 로그에는 아무것도 안 남는다 — 에러가
+아니라 "행이 없다"로 보이기 때문이다. 이 결함은 컷오버 당일 트래픽으로만
+드러났을 것이다. 지금 서비스롤로 옮겨야 컷오버 이전에 발견하고 고칠 수
+있다. 헬퍼는 "행 없음"에 `null`을 돌려주고 조회 실패에는 던지도록 만들어
+기존 3갈래 동작(공개 페이지 통과, 보호 페이지는 `/login`)을 그대로
+보존한다.
+
+### 2. 유지보수 모드가 API도 막게
+
+미들웨어 matcher가 `api`를 제외하고 있었다 — "쓰기 동결"을 걸어도 아무것도
+얼지 않았다. 컷오버는 반드시 쓰기 동결 구간(유지보수 켜기 → 배포 → 검증 →
+끄기)을 거치므로, 그 동결이 실제로 동결인지는 컷오버 이전에 검증해야
+한다. `/api/auth/*`와 정확히 `/api/health`만 열어 둔다 — 관리자가 스스로를
+잠그지 않게, 그리고 배포 스모크 체크가 계속 돌게 하기 위해서다.
+`/api/health` 지연은 콜드 스타트 이후 약 25ms → 26~33ms로 늘었다(matcher
+확장으로 미들웨어 진입 비용이 붙었다).
+
+### 3. Better Auth 설정을 실제 데이터 흐름에 맞춤
+
+가입 훅이 Turso에 프로필을 썼는데 관리자 승인 화면은 Supabase를 읽고
+있었다 — 컷오버 후 신규 가입자는 승인 화면에 아예 나타나지 않았을
+것이다. 지금 Supabase에 쓰도록 고쳤고, **`auth.users`를 참조하는 FK가
+13개**라는 사실이 드러나 그림자 `auth.users` 행을 먼저 만들도록
+했다. `session.cookieCache`를 켜서 다음 단계 미들웨어가 쓸 수 있게 했다.
+재설정·인증 메일은 콜백이 받는 `token`으로 자체 URL을 구성한다.
+
+### 4. 7개 필드를 나르는 자체 가입 라우트
+
+Better Auth가 가입 시 조용히 버리는 조합원 필드 7개(주소·전화번호·회비
+등)를 나르는 커스텀 라우트를 추가했다. 운영에서는 여전히 닫혀 있다
+(`disableSignUp: true` 유지) — 정상 경로 검증은 로컬에서만 끝났고, 운영
+첫 실행은 단계 2b-6이다.
+
+### 단계 2b-6의 원자적 변경 목록
+
+아래는 **한 번에 함께 배포해야 하는** 변경이다. 신원의 출처가 Supabase
+세션에서 Better Auth 세션으로 바뀌는 지점을 하나라도 빠뜨리면, 나머지는
+새 신원을 보고 이것만 옛 신원을 봐서 로그인은 되는데 글은 못 쓰는 식의
+불일치가 생긴다. 부분 배포가 없다.
+
+- 화면 4개: `login/page.tsx`(550줄) · `signup/page.tsx`(685줄) ·
+  `forgot-password/page.tsx`(114줄) · `reset-password/page.tsx`(183줄)
+- `src/lib/server/session.ts`의 `readSessionUser()` — Better Auth 세션을
+  읽도록 교체
+- `src/middleware/auth.ts:116`의 `getClaims()`와 `src/middleware.ts:138`의
+  `getUser()` — 둘 다 Better Auth의 `getCookieCache` 계열로 교체
+- `/auth/callback`(189줄) — Better Auth 인증 후 착지 지점으로 축소
+- `api/auth/{logout,reset-password,verify-session}` 세 라우트
+- `src/components/CommentSection.tsx`의 직접 `getUser()` 호출
+- `src/app/api/activities/session/route.ts`의 세션 읽기 — **500 분기를
+  보존한 채로** 교체(이 분기가 없으면 세션 조회 실패가 조용히 성공으로
+  보인다)
+- `disableSignUp: true` 제거 — 자체 가입 라우트가 처음으로 운영 트래픽을
+  받는다
+- `createSupabaseServer()`를 서비스롤로 전환 — **위 항목이 전부 끝나
+  `.auth.*`를 부르는 소비자가 0이 된 뒤에만** 한다. 순서를 뒤집으면 아직
+  안 옮긴 소비자가 인증 없는 서비스롤 클라이언트로 동작한다.
+
+### 전환 당일 재이관이 필요하다
+
+Turso에는 조합원 19명이 들어 있다. 운영 Supabase는 현재 21명이다 — 두
+명이 2026-08-19에 새로 가입했다. `scripts/migrate/identity.mjs`는
+`ON CONFLICT("id") DO UPDATE`로 쓰기 때문에 멱등이다. 그래서 절차는
+간단하다: 컷오버 직전에 다시 실행한다.
+
+```bash
+supabase db dump --schema auth --data-only -f <스크래치패드>/auth.sql
+node scripts/migrate/identity.mjs --dump <스크래치패드>/auth.sql            # dry-run으로 먼저 확인
+node scripts/migrate/identity.mjs --dump <스크래치패드>/auth.sql --apply    # 실제 반영
+```
+
+`<auth.sql>`은 bcrypt 해시와 개인정보를 담으므로 저장소 밖(스크래치패드)에
+두고 작업 후 지운다.
+
+### 컷오버 순서
+
+1. 유지보수 모드 켜기 (`system_settings.maintenance_mode.enabled = true`) —
+   위 2번 항목 덕분에 이제 API 쓰기까지 실제로 얼어붙는다
+2. 재이관 실행 (위 절차)
+3. 배포
+4. 검증 (로그인 4계정 왕복, 권한 E2E, 헬스체크)
+5. 유지보수 모드 끄기
+
+**롤백:** 직전 커밋으로 되돌리고 재배포한다. **Turso의 `user` /
+`account` / `session` 테이블은 절대 지우지 않는다** — 이관된 bcrypt
+해시가 그 안에 있고, 다시 만들 방법이 재이관 절차 자체이기 때문이다.
+
+### 여전히 미해결 — 정직하게 적는다
+
+- `toggle_post_like` · `toggle_comment_like` · `log_user_activity` 안의
+  `auth.uid() <> p_user_id` 가드가 컷오버 후 **조용히 무력화**된다(위
+  "RLS 밖의 `auth.uid()` 의존" 절 참고). impersonation 구멍은 없다고
+  확인했지만, 가드 자체가 없어지는 문제는 미해결이다.
+- 그림자 `auth.users` 행이 프로필 없이 남는 경우(가입 훅이 두 쓰기 사이에
+  죽는 경우)를 보여주는 관리자 화면이 없다.
+- `reset-password/page.tsx`는 아직 Supabase의 링크 모양을 전제로 하고,
+  이 단계에서 손본 이메일은 `?token=` 모양의 URL을 만든다. 화면이 그
+  파라미터를 읽지 않는다 — 단계 2b-6이 화면을 옮길 때 함께 고쳐야 한다.
+
+### 경고 — `npm run dev`는 운영 Turso를 본다
+
+`.env.local`의 `TURSO_DATABASE_URL`은 로컬이 아니라 **운영 Turso**를
+가리킨다. 로컬 Supabase로 테스트하려고 `NEXT_PUBLIC_SUPABASE_URL`만
+로컬로 덮어쓰면, Better Auth 가입 훅은 여전히 운영 Turso에 쓴다. 실제로
+2026-08-20에 이 사고가 났다 — 테스트 계정 6개가 운영 Turso에
+만들어졌고, 발견 후 `user`/`account`/`member_profiles`에서 지워
+19/19/19를 복원했다. 로컬로 가입 흐름을 시험할 때는
+`TURSO_DATABASE_URL`도 반드시 함께 덮어쓴다.
