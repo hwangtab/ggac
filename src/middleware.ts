@@ -21,10 +21,24 @@ function hasSupabaseMiddlewareConfig() {
 // 막으면 관리자 판정 자체가 불가능해지거나(로그인·세션 확인) 배포 스모크 체크가
 // 항상 실패한다(`.github/workflows/post-deploy-smoke.yml` → scripts/utils/deployment/smoke-check.mjs
 // → GET /api/health).
-const MAINTENANCE_EXEMPT_PREFIXES = ['/api/auth/', '/api/health']
+/**
+ * 유지보수 모드에서도 열어두는 경로.
+ *
+ * 두 종류를 구분한다:
+ * - `EXACT`는 정확히 그 경로만 통과한다. 접두사로 두면 `/api/health`가
+ *   `/api/healthcheck`·`/api/health-report` 같은 **미래에 생길** 라우트까지
+ *   조용히 동결에서 빼준다 — 예외는 최소 집합이어야 하므로 세그먼트에 못박는다.
+ * - `PREFIX`는 하위 경로가 실제로 있는 것만 둔다. `/api/auth/`는
+ *   `[...all]` 캐치올이라 하위 경로 전체가 인증 흐름이다.
+ */
+const MAINTENANCE_EXEMPT_EXACT = ['/api/health']
+const MAINTENANCE_EXEMPT_PREFIXES = ['/api/auth/']
 
 function isMaintenanceExempt(pathname: string): boolean {
-  return MAINTENANCE_EXEMPT_PREFIXES.some(p => pathname === p || pathname.startsWith(p))
+  return (
+    MAINTENANCE_EXEMPT_EXACT.includes(pathname) ||
+    MAINTENANCE_EXEMPT_PREFIXES.some(p => pathname.startsWith(p))
+  )
 }
 
 // 페이지 경로와 API 경로가 공유하는 @supabase/ssr 서버 클라이언트 생성 로직.
