@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Link, useRouter } from '@/i18n/navigation'
 import { useTranslations } from 'next-intl'
-import { fetchSessionProfile } from '@/utils/sessionProfile'
+import { authClient } from '@/lib/auth/client'
 
 type MessageType = 'error' | 'warning' | 'success' | 'loading'
 
@@ -17,8 +18,11 @@ const msgClassMap: Record<MessageType, string> = {
 export default function ResetPasswordPage() {
   const t = useTranslations('auth')
   const router = useRouter()
-  const [checking, setChecking] = useState(true)
-  const [hasSession, setHasSession] = useState(false)
+  const searchParams = useSearchParams()
+  // Better Auth의 재설정 링크는 `${base}/reset-password?token=...` 형태다
+  // (server.ts의 sendResetPassword 참고). 쿠키 세션이 아니라 이 토큰으로
+  // 본인 확인을 한다 — 링크에 토큰이 없으면 재설정을 시도할 수 없다.
+  const token = searchParams.get('token')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [loading, setLoading] = useState(false)
@@ -28,20 +32,7 @@ export default function ResetPasswordPage() {
   const redirectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    let mounted = true
-    const check = async () => {
-      try {
-        const session = await fetchSessionProfile()
-        if (mounted) setHasSession(session.authenticated)
-      } catch {
-        if (mounted) setHasSession(false)
-      } finally {
-        if (mounted) setChecking(false)
-      }
-    }
-    check()
     return () => {
-      mounted = false
       if (redirectTimer.current) clearTimeout(redirectTimer.current)
     }
   }, [])
@@ -50,7 +41,13 @@ export default function ResetPasswordPage() {
     e.preventDefault()
     setMessage('')
 
-    if (password.length < 6) {
+    if (!token) {
+      setMessage(t('resetPassword.msgInvalidSession'))
+      setMessageType('error')
+      return
+    }
+
+    if (password.length < 8) {
       setMessage(t('resetPassword.msgTooShort'))
       setMessageType('error')
       return
@@ -63,23 +60,33 @@ export default function ResetPasswordPage() {
 
     setLoading(true)
     try {
-      const response = await fetch('/api/auth/reset-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ password }),
-      })
+      const { error } = await authClient.resetPassword({ newPassword: password, token })
 
-      if (!response.ok) {
-        setMessage(t('resetPassword.msgError'))
-        setMessageType('error')
+      if (error) {
+        if (error.status === 429) {
+          setMessage(t('resetPassword.msgRateLimited'))
+          setMessageType('warning')
+        } else if (error.code === 'INVALID_TOKEN') {
+          // 토큰이 없거나, 이미 쓰였거나, 만료됨 — 셋 다 같은 code로 온다
+          // (node_modules/better-auth/dist/api/routes/password.mjs 실측).
+          setMessage(t('resetPassword.msgInvalidSession'))
+          setMessageType('error')
+        } else {
+          setMessage(t('resetPassword.msgError'))
+          setMessageType('error')
+        }
+        console.error('Reset password error:', error)
         return
       }
+
       setMessage(t('resetPassword.msgSuccess'))
       setMessageType('success')
       setDone(true)
-      redirectTimer.current = setTimeout(() => router.push('/board'), 1500)
-    } catch {
+      // Better Auth의 토큰 기반 재설정은 세션을 만들지 않는다 — 로그인 화면으로
+      // 보내 새 비밀번호로 다시 로그인하게 한다.
+      redirectTimer.current = setTimeout(() => router.push('/login'), 1500)
+    } catch (err) {
+      console.error('Reset password unexpected error:', err)
       setMessage(t('resetPassword.msgError'))
       setMessageType('error')
     } finally {
@@ -87,28 +94,15 @@ export default function ResetPasswordPage() {
     }
   }
 
-  if (checking) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 pt-32 md:pt-40 pb-12 px-4 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">{t('resetPassword.checking')}</p>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 pt-32 md:pt-40 pb-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md mx-auto">
         <div className="text-center mb-12">
           <h1 className="tw-heading-secondary mb-4">{t('resetPassword.heading')}</h1>
-          {hasSession && (
-            <p className="tw-text-body text-gray-600">{t('resetPassword.subtitle')}</p>
-          )}
+          {token && <p className="tw-text-body text-gray-600">{t('resetPassword.subtitle')}</p>}
         </div>
 
-        {!hasSession ? (
+        {!token ? (
           <div className="bg-white shadow-xl rounded-2xl overflow-hidden p-8 text-center">
             <div className={`mb-6 p-4 rounded-xl ${msgClassMap.error}`}>
               <div className="text-sm leading-relaxed">{t('resetPassword.msgInvalidSession')}</div>
