@@ -138,14 +138,18 @@ const middlewareUsesStandardSupabaseSession =
   /createServerClient/.test(rootMiddlewareSource) &&
   /setAll/.test(rootMiddlewareSource) &&
   /res\.cookies\.set/.test(rootMiddlewareSource)
-// 미들웨어 인증(handleAuth)은 getClaims()로 액세스 토큰을 로컬 검증한다(프로젝트가 비대칭
-// ES256 서명 키로 전환된 것이 전제 — 2026-07-13 rotate 완료). getUser()로 되돌리면 요청마다
-// GoTrue 왕복이 조용히 부활하므로 정적으로 고정한다. 트레이드오프: 로컬 검증은 auth 레벨
-// 세션 취소(전역 로그아웃·비번 변경·밴)를 토큰 만료까지 못 본다 — 데이터·변형 표면은 하류
-// getUser()가, 유지보수 관리자 예외는 middleware.ts의 getUser() 재검증이 봉쇄한다.
-// (이 가드는 handleAuth가 있는 auth.ts만 스캔하므로 middleware.ts의 getUser()와 무관하다.)
+// 미들웨어 인증(handleAuth)은 단계 2b-6부터 Better Auth의 쿠키 캐시로 신원을
+// 판정한다(`readMiddlewareSession`, src/middleware/session.ts) — 캐시가 있으면
+// DB/GoTrue 왕복 없이 판정하고, 캐시가 만료됐을 때만 서버에 왕복한다. auth.ts가
+// Supabase의 getClaims()/getUser()를 직접 부르면(구 방식으로 되돌아가면) 매
+// 요청마다 GoTrue 왕복이 조용히 부활하므로 정적으로 고정한다. 트레이드오프는
+// 옛 로컬 검증과 동일하다: auth 레벨 세션 취소(전역 로그아웃·비번 변경·밴)는
+// 캐시 만료(5분)까지 못 본다 — 데이터·변형 표면은 하류 getSession()이, 유지보수
+// 관리자 예외는 middleware.ts의 재검증(verifySessionFresh)이 봉쇄한다.
+// (이 가드는 handleAuth가 있는 auth.ts만 스캔하므로 middleware.ts의 재검증과 무관하다.)
 const middlewareVerifiesJwtLocally =
-  /supabase\.auth\.getClaims\(\)/.test(authMiddlewareSource) &&
+  /readMiddlewareSession/.test(authMiddlewareSource) &&
+  !/supabase\.auth\.getClaims\(\)/.test(authMiddlewareSource) &&
   !/supabase\.auth\.getUser\(\)/.test(authMiddlewareSource)
 const authCallbackPath = join(root, 'src/app/auth/callback/route.ts')
 const authCallbackSource = readFileSync(authCallbackPath, 'utf8')
@@ -3519,7 +3523,7 @@ if (!middlewareUsesStandardSupabaseSession) {
 
 if (!middlewareVerifiesJwtLocally) {
   failures.push(
-    `Middleware auth must verify the access token locally via supabase.auth.getClaims() — getUser() adds a GoTrue round trip to every request: ${relative(
+    `Middleware auth must resolve identity via readMiddlewareSession() (Better Auth cookie cache) and must not call Supabase's getClaims()/getUser() directly — those add a network round trip to every request: ${relative(
       root,
       authMiddlewarePath
     )}`
