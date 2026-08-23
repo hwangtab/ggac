@@ -482,3 +482,37 @@ Supabase 세션과 무관하지만 예외가 아니다. 이 저장소는 배포�
 만들어졌고, 발견 후 `user`/`account`/`member_profiles`에서 지워
 19/19/19를 복원했다. 로컬로 가입 흐름을 시험할 때는
 `TURSO_DATABASE_URL`도 반드시 함께 덮어쓴다.
+
+## 단계 2b-6 — 인증 전환 실행 기록 (2026-08-23 완료)
+
+**이 시점부터 로그인·가입의 권위는 Better Auth(Turso)다.** Supabase Auth는
+`auth.users` 껍데기 행(FK 13개용)만 남고 이 앱의 어떤 것도 인증하지 않는다.
+
+전환 순서(실제 실행 순):
+
+1. 유지보수 모드 ON → 페이지·쓰기 API 503, `/api/health`·`/api/auth/*`만 열림.
+   `POST /api/posts`가 503인 것으로 쓰기 동결을 실측 확인했다.
+2. `supabase db dump --schema auth --data-only` → `node scripts/migrate/identity.mjs
+   --dump <path>`(dry-run)로 23/23/23/13을 확인한 뒤 `--apply`.
+   적재 결과 user 23 / account 23(bcrypt 23) / member_profiles 23 / artists 13,
+   필드 대조 검증 통과.
+3. `git push origin main` (병합 커밋 `fb552c0`).
+4. 유지보수 OFF 후 프로덕션 실측:
+   - 가입 `POST /api/member-signup` 201, `profileSaved: true`, id가 UUID
+   - 로그인 `POST /api/auth/sign-in/email` 200 (Turso 인증)
+   - `/api/auth/verify-session`이 user + Supabase 프로필을 함께 반환
+   - 미승인 계정의 `/mypage` → `/register/pending` (승인 게이트 동작)
+   - 이사 승격 계정으로 `/board-room` 서류 **9건 전부** 다운로드 200,
+     바이트 수 일치, `filename*=UTF-8''` 유지 — 미들웨어 매처에서 `api`
+     제외를 없앤 변경이 다운로드 응답을 깨지 않음을 확인
+   - 같은 계정의 `/admin/members`는 307 → `/board` (관리자 경계 유지)
+5. 점검용 계정 2개(`cutover-check@`, `cutover-board@`)는 Turso·Supabase 양쪽에서
+   삭제했다. 최종 상태 23/23/23/13, session 0, `%@test.local` 0건.
+
+**주의:** 재이관은 멱등이지만 원본이 Supabase다. 회원이 늘어난 뒤 다시 돌릴
+일이 있으면 반드시 dry-run 건수를 먼저 확인한다. 인증 덤프에는 bcrypt 해시와
+개인정보가 들어 있으므로 `mktemp -d` 안에서만 다루고 즉시 지운다.
+
+**남은 일:** 채팅에 노출된 Resend API 키 교체. `toggle_post_like` 등
+`auth.uid()` 의존 RPC 3개는 전환 후 조용히 무력화된 상태이고, 콘텐츠 이관
+단계에서 함께 걷어낸다.
