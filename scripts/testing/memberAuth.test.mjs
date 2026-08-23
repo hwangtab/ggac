@@ -9,13 +9,25 @@ import { register } from 'node:module'
 // 없는 패키지의 확장자 없는 서브패스는 Node ESM이 자동으로 `.js`를 붙여주지
 // 않는다(CJS `require`와 달리). 이 프로젝트의 기존 `*.test.mjs`들은 이런
 // 프레임워크 의존 모듈을 아예 피해서 이 문제를 만난 적이 없었다.
-// 여기서만 쓰는 리졸브 훅으로 두 가지만 보정한다: `@/` 접두어를 `src/`로
-// 매핑, 그리고 확장자 없는 리졸브 실패 시 `.js`를 한 번 더 시도. `node --test`는
-// 파일마다 별도 프로세스로 격리해 실행하므로(기본 동작) 이 훅은 다른
-// 테스트 파일에 영향을 주지 않는다.
+//
+// 단계 2b-6에서 `memberAuth.ts` → `@/lib/server/session` → `@/lib/auth/server`
+// → `@/db/client`로 이어지는 체인이 새로 생겼고, 그 체인은 확장자 없는 상대
+// 경로 import(`./schema`가 가리키는 `./schema/index.ts`, `./identity`가
+// 가리키는 `./identity.ts`)를 여럿 문다. Next.js의 웹팩 리졸버는 이런 확장자
+// 생략·디렉터리 import를 자동 보정하지만 Node의 네이티브 ESM 리졸버는 그렇지
+// 않아 `ERR_MODULE_NOT_FOUND`/`ERR_UNSUPPORTED_DIR_IMPORT`로 죽는다 — 게다가
+// 상대 경로 specifier는 원래의 `.js` 폴백(바깥 specifier 전용) 대상도 아니었다.
+// 그래서 실패 시 후보 확장자를 순서대로 시도하는 방식으로 바꾼다: 원본 실패
+// 후 `.ts` → `.js` → `/index.ts` 순으로 재시도하고, 전부 실패하면 원래
+// 에러를 던진다(에러를 삼키지 않는다 — 진짜 존재하지 않는 모듈은 여전히
+// 실패해야 한다).
+//
+// 여기서만 쓰는 리졸브 훅이다. `node --test`는 파일마다 별도 프로세스로
+// 격리해 실행하므로(기본 동작) 이 훅은 다른 테스트 파일에 영향을 주지 않는다.
 const projectRootUrl = new URL('../../', import.meta.url).href
 const resolveHookSource = `
 const ROOT = ${JSON.stringify(projectRootUrl)}
+const FALLBACK_SUFFIXES = ['.ts', '.js', '/index.ts']
 
 export async function resolve(specifier, context, nextResolve) {
   if (specifier.startsWith('@/')) {
@@ -24,9 +36,16 @@ export async function resolve(specifier, context, nextResolve) {
   try {
     return await nextResolve(specifier, context)
   } catch (err) {
-    const isBareSpecifier = !specifier.startsWith('.') && !specifier.startsWith('/') && !specifier.startsWith('node:')
-    if (err && err.code === 'ERR_MODULE_NOT_FOUND' && !specifier.endsWith('.js') && isBareSpecifier) {
-      return await nextResolve(specifier + '.js', context)
+    const isResolutionError =
+      err && (err.code === 'ERR_MODULE_NOT_FOUND' || err.code === 'ERR_UNSUPPORTED_DIR_IMPORT')
+    if (isResolutionError && !specifier.endsWith('.ts') && !specifier.endsWith('.js')) {
+      for (const suffix of FALLBACK_SUFFIXES) {
+        try {
+          return await nextResolve(specifier + suffix, context)
+        } catch {
+          // 다음 후보 확장자로 계속 시도한다.
+        }
+      }
     }
     throw err
   }

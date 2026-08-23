@@ -9,6 +9,7 @@ import { handleAuth } from './middleware/auth'
 import { getMaintenanceResponse } from './middleware/maintenance'
 import { routing } from './i18n/routing'
 import { createLogger } from '@/utils/logger'
+import { verifySessionFresh } from './middleware/session'
 
 const intlMiddleware = createIntlMiddleware(routing)
 const log = createLogger('middleware')
@@ -114,18 +115,16 @@ export async function middleware(request: NextRequest) {
     // 드물고 저트래픽이라 이 왕복 비용은 무시할 만하다(평시 경로에는 없다).
     const res = NextResponse.next()
     const supabase = createMiddlewareSupabaseClient(request, res)
-    const authResult = await handleAuth(request, res, supabase, systemSettings)
+    const authResult = await handleAuth(request, res, systemSettings)
     let isAdmin = authResult.profile?.is_admin === true
 
-    // 페이지 경로와 동일한 근거: getClaims()의 로컬 검증은 전역 로그아웃·비밀번호
-    // 변경으로 취소된 세션을 액세스 토큰 만료까지 감지하지 못한다. 우회를 허용하기
-    // 직전에만 서버로 1회 재검증한다.
+    // 페이지 경로와 동일한 근거: readMiddlewareSession()의 쿠키 캐시 판정은 전역
+    // 로그아웃·비밀번호 변경으로 취소된 세션을 캐시 만료(최대 5분)까지 감지하지
+    // 못한다. 우회를 허용하기 직전에만 verifySessionFresh()로 DB를 왕복해
+    // 1회 재검증한다.
     if (isAdmin) {
-      const {
-        data: { user: freshUser },
-        error: reverifyError,
-      } = await supabase.auth.getUser()
-      if (reverifyError || !freshUser) {
+      const freshSession = await verifySessionFresh(request)
+      if (!freshSession) {
         isAdmin = false
       }
     }
@@ -192,7 +191,7 @@ export async function middleware(request: NextRequest) {
   const supabase = createMiddlewareSupabaseClient(request, res)
 
   const systemSettings = await getSystemSettings(supabase)
-  const authResult = await handleAuth(request, res, supabase, systemSettings)
+  const authResult = await handleAuth(request, res, systemSettings)
 
   if (!authResult.shouldContinue && authResult.response) {
     return copyResponseCookies(res, authResult.response)
@@ -202,17 +201,15 @@ export async function middleware(request: NextRequest) {
     let isAdmin = authResult.profile?.is_admin === true
 
     // 유지보수 화이트리스트는 미들웨어 신원이 유일한 종단 게이트다 — 이 503은 여기서
-    // 끝나고 하류 API/RSC의 getUser 재검증이 구제하지 않는다. handleAuth는 getClaims()로
-    // 토큰을 로컬 검증하므로 전역 로그아웃·비밀번호 변경으로 취소된 세션을 액세스 토큰
-    // 만료(기본 1h)까지 감지하지 못한다. 우회를 허용하기 직전에만 서버로 1회 재검증해
-    // 취소된 관리자 세션이 유지보수 벽을 넘지 못하게 한다. 유지보수는 드물고 저트래픽이라
-    // 왕복 비용은 무시할 만하며, 평시(유지보수 OFF) 경로에는 이 왕복이 없다.
+    // 끝나고 하류 API/RSC의 getSession 재검증이 구제하지 않는다. handleAuth는
+    // readMiddlewareSession()의 쿠키 캐시로 신원을 판정하므로 전역 로그아웃·비밀번호
+    // 변경으로 취소된 세션을 캐시 만료(최대 5분)까지 감지하지 못한다. 우회를 허용하기
+    // 직전에만 verifySessionFresh()로 DB를 왕복해 1회 재검증해 취소된 관리자
+    // 세션이 유지보수 벽을 넘지 못하게 한다. 유지보수는 드물고 저트래픽이라 왕복
+    // 비용은 무시할 만하며, 평시(유지보수 OFF) 경로에는 이 왕복이 없다.
     if (isAdmin) {
-      const {
-        data: { user: freshUser },
-        error: reverifyError,
-      } = await supabase.auth.getUser()
-      if (reverifyError || !freshUser) {
+      const freshSession = await verifySessionFresh(request)
+      if (!freshSession) {
         isAdmin = false
       }
     }

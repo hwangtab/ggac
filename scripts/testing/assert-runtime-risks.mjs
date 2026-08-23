@@ -138,14 +138,18 @@ const middlewareUsesStandardSupabaseSession =
   /createServerClient/.test(rootMiddlewareSource) &&
   /setAll/.test(rootMiddlewareSource) &&
   /res\.cookies\.set/.test(rootMiddlewareSource)
-// 미들웨어 인증(handleAuth)은 getClaims()로 액세스 토큰을 로컬 검증한다(프로젝트가 비대칭
-// ES256 서명 키로 전환된 것이 전제 — 2026-07-13 rotate 완료). getUser()로 되돌리면 요청마다
-// GoTrue 왕복이 조용히 부활하므로 정적으로 고정한다. 트레이드오프: 로컬 검증은 auth 레벨
-// 세션 취소(전역 로그아웃·비번 변경·밴)를 토큰 만료까지 못 본다 — 데이터·변형 표면은 하류
-// getUser()가, 유지보수 관리자 예외는 middleware.ts의 getUser() 재검증이 봉쇄한다.
-// (이 가드는 handleAuth가 있는 auth.ts만 스캔하므로 middleware.ts의 getUser()와 무관하다.)
+// 미들웨어 인증(handleAuth)은 단계 2b-6부터 Better Auth의 쿠키 캐시로 신원을
+// 판정한다(`readMiddlewareSession`, src/middleware/session.ts) — 캐시가 있으면
+// DB/GoTrue 왕복 없이 판정하고, 캐시가 만료됐을 때만 서버에 왕복한다. auth.ts가
+// Supabase의 getClaims()/getUser()를 직접 부르면(구 방식으로 되돌아가면) 매
+// 요청마다 GoTrue 왕복이 조용히 부활하므로 정적으로 고정한다. 트레이드오프는
+// 옛 로컬 검증과 동일하다: auth 레벨 세션 취소(전역 로그아웃·비번 변경·밴)는
+// 캐시 만료(5분)까지 못 본다 — 데이터·변형 표면은 하류 getSession()이, 유지보수
+// 관리자 예외는 middleware.ts의 재검증(verifySessionFresh)이 봉쇄한다.
+// (이 가드는 handleAuth가 있는 auth.ts만 스캔하므로 middleware.ts의 재검증과 무관하다.)
 const middlewareVerifiesJwtLocally =
-  /supabase\.auth\.getClaims\(\)/.test(authMiddlewareSource) &&
+  /readMiddlewareSession/.test(authMiddlewareSource) &&
+  !/supabase\.auth\.getClaims\(\)/.test(authMiddlewareSource) &&
   !/supabase\.auth\.getUser\(\)/.test(authMiddlewareSource)
 const authCallbackPath = join(root, 'src/app/auth/callback/route.ts')
 const authCallbackSource = readFileSync(authCallbackPath, 'utf8')
@@ -165,14 +169,13 @@ const securityPath = join(root, 'src/utils/security.ts')
 const securitySource = readFileSync(securityPath, 'utf8')
 const signupPagePath = join(root, 'src/app/[locale]/signup/page.tsx')
 const signupPageSource = readFileSync(signupPagePath, 'utf8')
-const forgotPasswordPagePath = join(root, 'src/app/[locale]/forgot-password/page.tsx')
-const forgotPasswordPageSource = readFileSync(forgotPasswordPagePath, 'utf8')
+const signupProfilePath = join(root, 'src/lib/auth/signupProfile.ts')
+const signupProfileSource = readFileSync(signupProfilePath, 'utf8')
 const resetPasswordPagePath = join(root, 'src/app/[locale]/reset-password/page.tsx')
 const resetPasswordPageSource = readFileSync(resetPasswordPagePath, 'utf8')
-const authResetPasswordApiPath = join(root, 'src/app/api/auth/reset-password/route.ts')
-const authResetPasswordApiSource = existsSync(authResetPasswordApiPath)
-  ? readFileSync(authResetPasswordApiPath, 'utf8')
-  : ''
+// src/app/api/auth/reset-password/route.ts(구 Supabase 기반 라우트)는 단계
+// 2b-6에서 삭제됐다 — Better Auth catch-all(`[...all]/route.ts`)이 같은 경로를
+// 대신 받는다. 더 이상 별도로 읽지 않는다.
 const loginPagePath = join(root, 'src/app/[locale]/login/page.tsx')
 const loginPageSource = readFileSync(loginPagePath, 'utf8')
 const authRegisterPendingPagePath = join(root, 'src/app/[locale]/register/pending/page.tsx')
@@ -267,31 +270,44 @@ const middlewareRedirectsApprovedRegistrationPagesToBoard =
   !/NextResponse\.redirect\(new URL\(['"]\/(?:board|register\/pending|register\/rejected)['"],\s*request\.nextUrl\.origin\)\)/.test(
     authMiddlewareSource
   )
+// 단계 2b-5/2b-6(Task 3가 실제로 옮김, Task 4가 게이트를 맞춤): `member_profiles`
+// 생성이 `src/app/auth/callback/route.ts`(옛 Supabase OAuth 콜백)에서 Better
+// Auth `databaseHooks.user.create.after`(가입 훅) + `/api/member-signup`(자체
+// 가입 라우트)로 옮겨갔다. monthly_fee의 NaN 방지 로직도 함께
+// `src/lib/auth/signupProfile.ts`의 `integer()` 헬퍼로 옮겨갔다 — 콜백
+// 라우트는 이제 monthly_fee를 전혀 다루지 않는다.
 const authCallbackParsesMonthlyFeeSafely =
-  /parseOptionalMonthlyFee/.test(authCallbackSource) &&
-  /Number\.isFinite/.test(authCallbackSource) &&
-  /monthly_fee:\s*parseOptionalMonthlyFee\(user\.user_metadata\?\.monthly_fee\)/.test(
+  !/monthly_fee/.test(authCallbackSource) &&
+  /function integer\(value: unknown\): number \| null \{/.test(signupProfileSource) &&
+  /Number\.isInteger\(n\) \? n : null/.test(signupProfileSource) &&
+  /monthly_fee:\s*integer\(input\.monthly_fee\)/.test(signupProfileSource)
+// 단계 2b-6(Task 2가 실제로 변경, Task 4가 게이트를 맞춤): signup/forgot-password
+// 화면은 더 이상 Supabase `emailRedirectTo`/`resetPasswordForEmail`을 호출하지
+// 않는다 — Better Auth가 서버에서 이메일을 직접 보낸다(`sendAuthEmailLogged`,
+// `src/lib/auth/server.ts`). 그 서버측 이메일 링크(`resolveEmailLinkBaseUrl()`
+// 기반)는 로케일 파라미터를 붙이지 않으므로, 이메일 인증/재설정 링크를 밟은
+// 사용자는 항상 기본 로케일(ko)로 착지한다 — Task 2가 의식적으로 받아들인
+// 트레이드오프(task-2-report.md "emailRedirectTo/locale 조립을 지웠다" 참고)이지
+// Task 4의 범위가 아니다. 여기서는 콜백 라우트 자신이 여전히 안전하게
+// 동작하는지만 고정한다: 신뢰할 수 없는 `locale`/`next` 쿼리 파라미터를 받아도
+// 허용 목록 밖 값은 안전한 기본값(ko, 로그인 페이지)으로 떨어진다(오픈 리다이렉트
+// 방지).
+const authCallbackSafelyDefaultsUntrustedLocaleAndNext =
+  /resolveSafeLocale/.test(authCallbackSource) &&
+  /SUPPORTED_LOCALES\.some\(locale => locale === value\) \? \(value as SupportedLocale\) : 'ko'/.test(
     authCallbackSource
   ) &&
-  !/monthly_fee:\s*user\.user_metadata\?\.monthly_fee[\s\S]*?parseInt/.test(authCallbackSource)
-const authCallbackPreservesEmailFlowLocale =
-  /resolveSafeLocale/.test(authCallbackSource) &&
   /localizePath/.test(authCallbackSource) &&
+  /resolveSafeNext/.test(authCallbackSource) &&
   /ALLOWED_NEXT_PATHS:\s*readonly\s*string\[\]\s*=\s*\[['"]\/reset-password['"]\]/.test(
     authCallbackSource
   ) &&
+  /ALLOWED_NEXT_PATHS\.includes\(pathOnly\) \? pathOnly : null/.test(authCallbackSource) &&
   /redirectToPath\(requestUrl,\s*safeNext,\s*locale\)/.test(authCallbackSource) &&
   /redirectToPath\(requestUrl,\s*['"]\/register\/pending['"],\s*locale\)/.test(
     authCallbackSource
   ) &&
   /redirectToPath\(requestUrl,\s*['"]\/board['"],\s*locale\)/.test(authCallbackSource) &&
-  /callbackUrl\.searchParams\.set\(['"]locale['"],\s*locale\)/.test(signupPageSource) &&
-  /emailRedirectTo:\s*callbackUrl\.toString\(\)/.test(signupPageSource) &&
-  /callbackUrl\.searchParams\.set\(['"]locale['"],\s*locale\)/.test(forgotPasswordPageSource) &&
-  /callbackUrl\.searchParams\.set\(['"]next['"],\s*['"]\/reset-password['"]\)/.test(
-    forgotPasswordPageSource
-  ) &&
-  /resetPasswordForEmail\(email,\s*\{\s*redirectTo\s*\}\)/.test(forgotPasswordPageSource) &&
   !/NextResponse\.redirect\(`\$\{requestUrl\.origin\}\/(?:login|register\/pending|register\/rejected|board|reset-password)`\)/.test(
     authCallbackSource
   )
@@ -456,12 +472,20 @@ const registerPendingGuardsSessionFetchUnmount =
   /if \(mountedRef\.current\) \{\s*setCheckingStatus\(false\)\s*\}/.test(
     authRegisterPendingPageSource
   )
+// 단계 2b-6(Task 2 커밋이 실제 변경, Task 4가 게이트를 맞춤): 재설정은 더 이상
+// 쿠키 세션(`fetchSessionProfile`)이나 자체 API 라우트
+// (`src/app/api/auth/reset-password/route.ts`, 삭제됨)로 본인을 확인하지 않는다.
+// Better Auth 재설정 링크(`${base}/reset-password?token=...`, `server.ts`의
+// `sendResetPassword`)의 `token` 쿼리 파라미터로 본인을 확인하고,
+// `authClient.resetPassword({ newPassword, token })`(catch-all
+// 라우트 경유)로 서버에 반영한다.
 const resetPasswordUsesServerSessionTruth =
-  /fetchSessionProfile/.test(resetPasswordPageSource) &&
-  /fetch\(['"]\/api\/auth\/reset-password['"]/.test(resetPasswordPageSource) &&
-  /export async function POST/.test(authResetPasswordApiSource) &&
-  /parseJsonObjectBody/.test(authResetPasswordApiSource) &&
-  /updateUser\(\{\s*password/.test(authResetPasswordApiSource) &&
+  /useSearchParams\(\)/.test(resetPasswordPageSource) &&
+  /searchParams\.get\(['"]token['"]\)/.test(resetPasswordPageSource) &&
+  /authClient\.resetPassword\(\{\s*newPassword:\s*password,\s*token\s*\}\)/.test(
+    resetPasswordPageSource
+  ) &&
+  !/fetchSessionProfile/.test(resetPasswordPageSource) &&
   !/from\s+['"]@\/lib\/supabase\/client['"]/.test(resetPasswordPageSource) &&
   !/getSession\(\)/.test(resetPasswordPageSource) &&
   !/supabase\.auth\.updateUser/.test(resetPasswordPageSource)
@@ -3519,7 +3543,7 @@ if (!middlewareUsesStandardSupabaseSession) {
 
 if (!middlewareVerifiesJwtLocally) {
   failures.push(
-    `Middleware auth must verify the access token locally via supabase.auth.getClaims() — getUser() adds a GoTrue round trip to every request: ${relative(
+    `Middleware auth must resolve identity via readMiddlewareSession() (Better Auth cookie cache) and must not call Supabase's getClaims()/getUser() directly — those add a network round trip to every request: ${relative(
       root,
       authMiddlewarePath
     )}`
@@ -3666,10 +3690,10 @@ if (!authClientPagesUseServerSessionTruth) {
 
 if (!resetPasswordUsesServerSessionTruth) {
   failures.push(
-    `Reset-password must validate the recovery cookie session and update the password through server APIs instead of browser Supabase getSession/updateUser state:\n- ${relative(
+    `Reset-password must confirm identity via the Better Auth reset token (?token=) and submit through authClient.resetPassword() instead of a cookie session or browser Supabase getSession/updateUser: ${relative(
       root,
       resetPasswordPagePath
-    )}\n- ${relative(root, authResetPasswordApiPath)}`
+    )}`
   )
 }
 
@@ -3709,19 +3733,19 @@ if (!existingAuthHelpersUseSharedOperationalBoundaries) {
 
 if (!authCallbackParsesMonthlyFeeSafely) {
   failures.push(
-    `Auth callback profile creation must sanitize monthly_fee metadata so NaN cannot be inserted: ${relative(
+    `member_profiles creation must sanitize monthly_fee so NaN cannot be inserted, via signupProfile.ts's integer() helper — auth/callback/route.ts must not handle monthly_fee at all (that responsibility moved to Better Auth's sign-up hook/route):\n- ${relative(
       root,
       authCallbackPath
-    )}`
+    )}\n- ${relative(root, signupProfilePath)}`
   )
 }
 
-if (!authCallbackPreservesEmailFlowLocale) {
+if (!authCallbackSafelyDefaultsUntrustedLocaleAndNext) {
   failures.push(
-    `Auth email callbacks must carry and validate the active locale so signup and password-reset links return users to the matching localized flow:\n- ${relative(
+    `Auth callback must safely default untrusted locale/next query params (resolveSafeLocale/resolveSafeNext) so it cannot become an open redirect: ${relative(
       root,
       authCallbackPath
-    )}\n- ${relative(root, signupPagePath)}\n- ${relative(root, forgotPasswordPagePath)}`
+    )}`
   )
 }
 
@@ -4821,12 +4845,122 @@ if (memberSignupRouteTrustsClientRegistrationStatus) {
 
 const authServerPath = join(root, 'src/lib/auth/server.ts')
 const authServerSource = readFileSync(authServerPath, 'utf8')
-if (!/disableSignUp:\s*true/.test(stripComments(authServerSource))) {
+const authServerStripped = stripComments(authServerSource)
+if (/disableSignUp:\s*true/.test(authServerStripped)) {
   failures.push(
-    `src/lib/auth/server.ts must keep disableSignUp: true until stage 2b-6 deliberately removes it (public sign-up must stay closed until the screens are wired): ${relative(
+    `src/lib/auth/server.ts must not keep disableSignUp: true — stage 2b-6 (Task 4) deliberately opened public sign-up, protected instead by src/app/api/auth/[...all]/route.ts's POST wrapper (outright rejection of the sign-up/email path — /api/member-signup is the only real sign-up route): ${relative(
       root,
       authServerPath
     )}`
+  )
+}
+// disableSignUp을 지운 대신 catch-all 라우트가 sign-up/email 경로를 완전히
+// 막는다(수정 라운드 1: 조율자가 레이트리밋만으로는 세 계정이 그대로
+// 생기는 것을 실측해, 통과시키지 않고 아예 거부하는 쪽으로 바꿨다). 그
+// 방어막 자체가 조용히 사라지거나 다시 "느슨한 허용"으로 되돌아가지
+// 않도록 두 가지를 고정한다: (1) sign-up/email 분기가 여전히 존재하고
+// 그 안에서 명시적으로 거부 응답을 돌려준다, (2) 그 분기가
+// Better Auth 핸들러(betterAuthPOST)로 위임하는 코드를 포함하지 않는다 —
+// 위임 호출이 남아 있으면 거부가 장식일 뿐 실제로는 통과시킨다는 뜻이다.
+const authCatchAllPath = join(root, 'src/app/api/auth/[...all]/route.ts')
+const authCatchAllSource = readFileSync(authCatchAllPath, 'utf8')
+const authCatchAllStripped = stripStringLiterals(stripCommentsAndImports(authCatchAllSource))
+const signUpEmailBlockMatch = authCatchAllStripped.match(
+  /if \(isSignUpEmailPath\(request\)\) \{([\s\S]*?)\n  \}/
+)
+const signUpEmailBlockBody = signUpEmailBlockMatch?.[1] ?? ''
+const authCatchAllRejectsSignUpOutright =
+  /isSignUpEmailPath\(/.test(authCatchAllStripped) &&
+  signUpEmailBlockMatch !== null &&
+  /ApiError\.forbidden\(/.test(signUpEmailBlockBody) &&
+  /return/.test(signUpEmailBlockBody) &&
+  !/betterAuthPOST\(/.test(signUpEmailBlockBody)
+if (!authCatchAllRejectsSignUpOutright) {
+  failures.push(
+    `src/app/api/auth/[...all]/route.ts must reject POST requests to the sign-up/email path outright (ApiError.forbidden, no delegation to betterAuthPOST) now that disableSignUp is gone — rate-limiting alone was proven insufficient (three accounts with blank membership fields were created within the rate limit window): ${relative(
+      root,
+      authCatchAllPath
+    )}`
+  )
+}
+
+// 단계 2b-6(Task 4): createSupabaseServer()가 anon 키+쿠키 클라이언트에서
+// 서비스롤 클라이언트로 바뀌었다. Better Auth 세션에는 Supabase 쿠키가 없어,
+// anon 키로 돌아가면 RLS가 모든 행을 가려 getSessionContext()의
+// `profile: null` 회귀가 재발한다.
+const supabaseServerPath = join(root, 'src/lib/supabase/server.ts')
+const supabaseServerSource = readFileSync(supabaseServerPath, 'utf8')
+const supabaseServerStripped = stripComments(supabaseServerSource)
+const supabaseServerUsesServiceRole = /SUPABASE_SERVICE_ROLE_KEY/.test(supabaseServerStripped)
+const supabaseServerUsesAnonKey = /NEXT_PUBLIC_SUPABASE_ANON_KEY/.test(supabaseServerStripped)
+if (!supabaseServerUsesServiceRole || supabaseServerUsesAnonKey) {
+  failures.push(
+    `src/lib/supabase/server.ts's createSupabaseServer() must be built from SUPABASE_SERVICE_ROLE_KEY only (not NEXT_PUBLIC_SUPABASE_ANON_KEY) — an anon-key client can never see RLS-protected rows for a Better Auth session, which carries no Supabase cookie: ${relative(
+      root,
+      supabaseServerPath
+    )}`
+  )
+}
+
+// 단계 2b-6(Task 4): Supabase Auth 세션 API(.auth.getUser 등) 호출이 src/
+// 어디에도 남아 있으면 안 된다 — 인증은 Better Auth로 전부 옮겨졌다(단계
+// 2b-3~2b-6). `.auth.admin.*`(서비스롤 Admin API로 shadow user를 만드는
+// `src/lib/auth/server.ts`의 정당한 호출)는 부정 lookahead로 제외한다.
+const supabaseAuthSessionCallPattern =
+  /\.auth\.(?!admin\.)(getUser|getSession|getClaims|signOut|signInWithPassword|signInWithOtp|signUp|onAuthStateChange|refreshSession|exchangeCodeForSession|updateUser|resetPasswordForEmail|verifyOtp)\s*\(/
+const srcAllFiles = globSync('src/**/*.@(ts|tsx)', {
+  cwd: root,
+  exclude: ['**/node_modules/**', '**/.next/**'],
+})
+const supabaseAuthSessionCallOffenders = srcAllFiles.filter(file => {
+  const source = readFileSync(join(root, file), 'utf8')
+  return supabaseAuthSessionCallPattern.test(stripComments(source))
+})
+if (supabaseAuthSessionCallOffenders.length > 0) {
+  failures.push(
+    `Supabase Auth session API calls (.auth.getUser/.auth.getSession/etc.) must not exist anywhere in src/ — session identity must come from @/lib/server/session's readSessionUser() (or @/lib/server/memberAuth's requireUser/requireActiveMember), never from a Supabase client directly:\n${supabaseAuthSessionCallOffenders
+      .map(file => `- ${file}`)
+      .join('\n')}`
+  )
+}
+
+// 단계 2b-6(Task 4) 함정 6: RPC에 p_user_id를 넘기는 호출부는 요청 본문이
+// 아니라 세션 사용자 id(user.id)를 넘겨야 한다. createSupabaseServer()가
+// 서비스롤이 된 지금 Supabase RLS는 이 쿼리들을 전혀 막지 않고, RPC 함수
+// 본문 안의 auth.uid() 기반 가드도 Better Auth 세션 아래에서는 항상 NULL을
+// 봐서 무력하다(단계 2b-4 기록) — "본인 것만 건드린다"는 보장이 이제 전적으로
+// 호출부가 user.id를 넘기는가에 달려 있다. 아래는 "타인의 user_id를 의도적으로
+// 다루는" 정당한 예외다(관리자 조회, 공개 좋아요 목록, 관리자가 만드는 알림,
+// 이사회 알림 로스터) — 그 외 파일에서 p_user_id(s)가 user.id가 아닌 다른
+// 토큰(특히 body.* 같은 클라이언트 입력)을 받으면 게이트가 막는다.
+const arbitraryTargetUserIdAllowlist = [
+  'src/app/api/admin/analytics/patterns/route.ts',
+  'src/app/api/users/[id]/likes/route.ts',
+  'src/app/api/notifications/route.ts',
+  'src/app/api/notifications/bulk/route.ts',
+  'src/lib/server/boardRoomNotify.ts',
+]
+const rpcUserIdScanFiles = srcAllFiles.filter(
+  file => !arbitraryTargetUserIdAllowlist.includes(file)
+)
+const rpcUserIdViolations = []
+for (const file of rpcUserIdScanFiles) {
+  const raw = readFileSync(join(root, file), 'utf8')
+  const stripped = stripStringLiterals(stripCommentsAndImports(raw))
+  for (const match of stripped.matchAll(/p_user_ids?\s*:\s*([^,}\n]+)/g)) {
+    const token = match[1].trim()
+    if (token !== 'user.id') {
+      rpcUserIdViolations.push(
+        `${file}: 세션 사용자 id(user.id)가 아닌 '${token}'을 p_user_id(s)로 넘깁니다`
+      )
+    }
+  }
+}
+if (rpcUserIdViolations.length > 0) {
+  failures.push(
+    `RPC calls passing p_user_id/p_user_ids must use the session user's own id (user.id from requireUser()/readSessionUser()), never a client-supplied or otherwise-sourced value — files intentionally targeting another user's id belong in arbitraryTargetUserIdAllowlist instead:\n${rpcUserIdViolations
+      .map(v => `- ${v}`)
+      .join('\n')}`
   )
 }
 

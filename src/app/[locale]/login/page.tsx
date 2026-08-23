@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useRouter, Link } from '@/i18n/navigation'
 import { useTranslations } from 'next-intl'
-import { supabase } from '@/lib/supabase/client'
+import { authClient } from '@/lib/auth/client'
 import { useStablePageLoad, useSafeNavigation } from '@/utils/routeProtection'
 import { toSafeInternalRedirectPath } from '@/utils/safeUrl'
 import { fetchSessionProfile, type VerifiedSessionUser } from '@/utils/sessionProfile'
@@ -196,12 +196,12 @@ export default function LoginPage() {
     setMessage('')
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+      const { data, error } = await authClient.signIn.email({ email, password })
 
       if (error) {
-        if (error.message.includes('rate limit') || error.message.includes('429')) {
+        if (error.status === 429) {
           setMsg(t('login.msgRateLimited'), 'warning')
-        } else if (error.message.includes('Invalid login credentials')) {
+        } else if (error.code === 'INVALID_EMAIL_OR_PASSWORD') {
           setMsg(t('login.msgInvalidCredentials'), 'error')
         } else {
           setMsg(t('login.msgLoginError'), 'error')
@@ -212,9 +212,9 @@ export default function LoginPage() {
 
       if (data.user) {
         // 이메일 인증 확인
-        if (!data.user.email_confirmed_at) {
+        if (!data.user.emailVerified) {
           setMsg(t('login.msgEmailNotVerified'), 'error')
-          await supabase.auth.signOut()
+          await authClient.signOut()
           return
         }
 
@@ -427,7 +427,7 @@ export default function LoginPage() {
                 </button>
                 <button
                   onClick={async () => {
-                    await supabase.auth.signOut()
+                    await authClient.signOut()
                     setIsAlreadyLoggedIn(false)
                     setJustAuthenticated(false)
                     setCurrentUser(null)

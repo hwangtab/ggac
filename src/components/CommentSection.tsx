@@ -50,10 +50,12 @@ const CommentSection: React.FC<CommentSectionProps> = ({
 
   const fetchComments = useCallback(async () => {
     try {
-      // 현재 로그인한 사용자 확인
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
+      // 현재 로그인한 사용자 확인 — Better Auth 세션은 서버(PostDetailClient)가
+      // 이미 판독해 `currentUserId`로 내려준다. Supabase에는 이 세션이 없으므로
+      // (Better Auth 쿠키와 무관) 브라우저에서 다시 물어볼 수 없다. `comments`·
+      // `comment_likes`의 익명 SELECT(`USING (true)`)는 세션과 무관하게 계속
+      // 읽히므로, 신원만 이 prop으로 바꾼다.
+      const user = currentUserId ? { id: currentUserId } : null
 
       const { data, error } = await supabase
         .from('comments')
@@ -111,7 +113,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({
     } catch (error) {
       console.error('Error fetching comments with likes:', error)
     }
-  }, [postId])
+  }, [postId, currentUserId])
 
   const fetchProfiles = useCallback(async () => {
     const authorIds = Array.from(new Set(comments.map(comment => comment.author_id)))
