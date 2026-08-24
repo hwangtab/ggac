@@ -35,7 +35,7 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
-      testIgnore: /authz-(setup|ownership|personal|remaining|maintenance)/,
+      testIgnore: /authz[.-]/,
     },
     // authz 계열은 로컬 Supabase 스택이 있어야 도는 로컬 전용 프로젝트다(CI는 돌리지 않는다).
     // channel: 'chrome'으로 개발자 머신에 이미 설치된 Chrome을 쓴다 — Playwright 번들
@@ -50,6 +50,16 @@ export default defineConfig({
       name: 'authz',
       testMatch: /authz-(ownership|personal|remaining|maintenance)\.spec\.ts/,
       dependencies: ['authz-setup'],
+      use: { ...devices['Desktop Chrome'], channel: 'chrome' },
+    },
+    // authz-boundaries는 로그인 상태(storageState)를 쓰지 않는 비인증 경계 스펙이라
+    // authz-setup 의존이 없다. authz 프로젝트가 만들어지기 전에 추가된 파일이라
+    // testMatch에서 누락돼 번들 브라우저를 쓰는 chromium 프로젝트로 떨어져 있었고,
+    // 그 결과 번들 브라우저가 없는 머신에서 7개 테스트가 통째로 실행되지 못했다.
+    // 형제들과 같이 시스템 Chrome을 쓴다(다운로드 0). CI는 smoke.spec.ts만 돌린다.
+    {
+      name: 'authz-public',
+      testMatch: /authz-boundaries\.spec\.ts/,
       use: { ...devices['Desktop Chrome'], channel: 'chrome' },
     },
   ],
