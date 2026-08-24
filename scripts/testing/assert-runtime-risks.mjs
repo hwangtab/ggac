@@ -1775,11 +1775,15 @@ const validatesPostRouteIdsUseSanitizedUuid =
     /getPostById\(postId,/.test(postContentApiSource)) &&
   !/\.eq\(['"]id['"],\s*id\)/.test(postContentApiSource) &&
   /const validPostId = uuidValidation\.sanitized/.test(boardPostDetailSource) &&
-  // 단계 2c: 위와 같은 이유(getPostById(validPostId, ...)로 전환) — 댓글/첨부
-  // 조회는 아직 Supabase라 .eq('post_id', validPostId)는 그대로 유지된다.
+  // 단계 2c 후속(Task 6 확장): 위와 같은 이유(getPostById(validPostId, ...)로
+  // 전환) — 댓글·첨부 조회도 `.eq('post_id', validPostId)`에서
+  // listCommentsKeyset(validPostId, ...)/listAttachments(validPostId, ...)로
+  // 옮겼다. 옛 Supabase 패턴도 계속 허용한다.
   (/\.eq\(['"]id['"],\s*validPostId\)/.test(boardPostDetailSource) ||
     /getPostById\(validPostId,/.test(boardPostDetailSource)) &&
-  /\.eq\(['"]post_id['"],\s*validPostId\)/.test(boardPostDetailSource) &&
+  (/\.eq\(['"]post_id['"],\s*validPostId\)/.test(boardPostDetailSource) ||
+    (/listCommentsKeyset\(validPostId,/.test(boardPostDetailSource) &&
+      /listAttachments\(validPostId,/.test(boardPostDetailSource))) &&
   !/\.eq\(['"]id['"],\s*postId\)/.test(boardPostDetailSource) &&
   /const postId = uuidValidation\.sanitized/.test(commentsApiSource) &&
   // 단계 2c(Task 6): 댓글 목록 조회를 Supabase `.eq('post_id', postId)`에서
@@ -1810,12 +1814,14 @@ const validatesPostRouteIdsUseSanitizedUuid =
     /isPostLikedByUser\(validPostId,/.test(postLikesApiSource)) &&
   /post_id:\s*validPostId/.test(postLikesApiSource) &&
   /const postId = postIdValidation\.sanitized/.test(postOgImageSource) &&
-  // 단계 2c: posts 존재 확인을 Supabase `.eq('id', postId)`에서 Turso 쿼리
-  // 계층 getPostById(postId, ...)로 옮겼다 — 첨부(post_attachments) 조회는
-  // 아직 Supabase라 .eq('post_id', postId)는 그대로 유지된다.
+  // 단계 2c(Task 6 확장): posts 존재 확인을 Supabase `.eq('id', postId)`에서
+  // Turso 쿼리 계층 getPostById(postId, ...)로, 첨부(post_attachments) 조회도
+  // `.eq('post_id', postId)`에서 listImageAttachments(postId)로 옮겼다 — 옛
+  // Supabase 패턴도 계속 허용해 두 형태 모두 통과시킨다.
   (/\.eq\(['"]id['"],\s*postId\)/.test(postOgImageSource) ||
     /getPostById\(postId,/.test(postOgImageSource)) &&
-  /\.eq\(['"]post_id['"],\s*postId\)/.test(postOgImageSource) &&
+  (/\.eq\(['"]post_id['"],\s*postId\)/.test(postOgImageSource) ||
+    /listImageAttachments\(postId\)/.test(postOgImageSource)) &&
   /const userIdValidation = validateUUID\(userIdFromQuery,\s*['"]사용자 ID['"]\)/.test(
     postUserDataApiSource
   ) &&
@@ -1843,6 +1849,40 @@ const validatesPostRouteIdsUseSanitizedUuid =
   (/p_comment_id:\s*validCommentId/.test(commentLikeApiSource) ||
     /toggleCommentLike\(validCommentId,/.test(commentLikeApiSource)) &&
   !/p_comment_id:\s*commentId/.test(commentLikeApiSource)
+
+// 단계 2c 후속(Task 6 확장, 코드리뷰 지적 대응): 컷오버 후 "새 댓글·좋아요·
+// 첨부가 화면에 안 보인다" 버그 — 본문은 Turso에서 오는데 comments/
+// post_likes/comment_likes/post_attachments 표시 경로 6곳이 아직 얼어붙은
+// Supabase 스냅샷을 읽고 있었다. 그 6개 파일을 이번 라운드에서 전부
+// Turso로 옮겼다 — 위 `validatesPostRouteIdsUseSanitizedUuid`처럼 "옛
+// Supabase 패턴 OR 새 쿼리 계층"으로 넓히는 대신, 이 6개 파일에 한해서는
+// **Supabase 클라이언트 생성·호출 자체가 완전히 사라져야 한다**는 강한
+// 음성 단정을 건다 — 다른 관심사(알림·활동로그처럼 계속 Supabase가 권위인
+// 것)가 이 파일들엔 없어서, 부분 전환을 허용할 이유가 없다(다른 전환
+// 라운드의 파일들과 다른 지점 — 그쪽은 아직 남은 관심사가 있어 OR를
+// 유지한다). 이렇게 강하게 걸어야 "새 쿼리 계층 호출을 지우고 옛
+// Supabase 호출로 되돌리는" 회귀를 확실히 잡는다(OR 형태였다면 새 호출만
+// 지워도 옛 패턴 쪽이 여전히 없으니 통과하지 않지만, 옛 패턴을 다시
+// 추가하면서 새 호출을 남겨두는 절반짜리 되돌림은 OR로는 못 잡는다).
+const libPostsPath = join(root, 'src/lib/posts.ts')
+const libPostsSource = readFileSync(libPostsPath, 'utf8')
+const displayPathsFullyOnTurso = [
+  { path: postDetailPath, source: postDetailSource },
+  { path: boardPostDetailPath, source: boardPostDetailSource },
+  { path: boardDetailPagePath, source: boardDetailPageSource },
+  { path: publicPostsApiPath, source: publicPostsApiSource },
+  { path: postOgImagePath, source: postOgImageSource },
+  { path: libPostsPath, source: libPostsSource },
+]
+const staleSupabaseReadPattern =
+  /createSupabaseServer|createServiceRoleClient|@supabase\/supabase-js|from\(\s*['"](?:comments|post_likes|comment_likes|post_attachments)['"]\s*\)/
+// 주석만 걷어내고 import 줄은 남긴다(stripComments, stripCommentsAndImports
+// 아님) — 이 검사는 정확히 "Supabase import가 되살아났는가"를 잡아야 하는데,
+// stripCommentsAndImports는 import 줄 자체를 지워버려 그 신호를 없앤다.
+const staleSupabaseReadOffenders = displayPathsFullyOnTurso.filter(({ source }) =>
+  staleSupabaseReadPattern.test(stripComments(source))
+)
+
 const imageProxyPath = join(root, 'src/app/api/images/proxy/route.ts')
 const imageProxySource = readFileSync(imageProxyPath, 'utf8')
 const postViewPath = join(root, 'src/app/api/posts/[id]/view/route.ts')
@@ -4704,6 +4744,14 @@ if (!validatesPostRouteIdsUseSanitizedUuid) {
       root,
       postUserDataApiPath
     )}\n- ${relative(root, commentLikeApiPath)}`
+  )
+}
+
+if (staleSupabaseReadOffenders.length > 0) {
+  failures.push(
+    `Display paths for comments/post_likes/comment_likes/post_attachments must read exclusively from the Turso query layer — no remaining Supabase client creation or table reads for these tables (post-cutover, new comments/likes/attachments must render immediately, not a frozen Supabase snapshot):\n${staleSupabaseReadOffenders
+      .map(({ path }) => `- ${relative(root, path)}`)
+      .join('\n')}`
   )
 }
 

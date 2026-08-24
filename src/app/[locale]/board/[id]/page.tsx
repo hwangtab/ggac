@@ -15,6 +15,7 @@ import {
 } from '@/utils/structuredData'
 import { listPosts, getPostById } from '@/db/queries/posts'
 import { listCommentsKeyset } from '@/db/queries/comments'
+import { listAttachments } from '@/db/queries/attachments'
 
 function normalizePostRouteId(id: string): string | null {
   const validation = validateUUID(id, '게시글 ID')
@@ -153,60 +154,32 @@ interface UserData {
 async function getInitialPostData(
   postId: string
 ): Promise<(InitialPostData & { user: UserData | null }) | null> {
-  // Service role 클라이언트 생성 (서버에서만 사용)
-  const { createClient } = await import('@supabase/supabase-js')
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-  if (!url) {
-    console.error('NEXT_PUBLIC_SUPABASE_URL이 설정되지 않았습니다')
-    return null
-  }
-
-  const supabaseAdmin = key
-    ? createClient(url, key, {
-        auth: { autoRefreshToken: false, persistSession: false },
-      })
-    : createClient(url, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '', {
-        auth: { autoRefreshToken: false, persistSession: false },
-      })
-
   try {
-    // 게시글(+저자)·댓글은 Turso에서, 첨부는 아직 Supabase가 권위라 그대로
-    // 병렬 실행한다 — 첨부 쿼리 모듈 전환은 Task 8(board_posts_with_stats
-    // 뷰) 몫이다. 단계 2c(Task 6)에서 댓글(commentsQuery)을
-    // listCommentsKeyset(Turso)으로 옮겼다 — 정렬(created_at asc)·개수(20)는
-    // 그대로다.
-    const attachmentsQuery = supabaseAdmin
-      .from('post_attachments')
-      .select('*')
-      .eq('post_id', postId)
-      .order('created_at', { ascending: true })
-
+    // 단계 2c 후속(Task 6 확장): 게시글(+저자)·댓글에 이어 첨부도
+    // Supabase에서 Turso 쿼리 계층으로 옮겼다 — 셋 다 이제 Turso다. 댓글·
+    // 첨부 조회 실패는(예: 순단) 게시글 자체는 계속 렌더하고 각각 빈
+    // 배열로 대체한다 — 게시글 조회 실패(아래 postResult)만 error.tsx로
+    // 보내는 정책과 일관된다.
     let post: Awaited<ReturnType<typeof getPostById>> = null
     let postFetchError: unknown = null
-    const [postResult, commentsRaw, { data: attachmentsRaw }] = await Promise.all([
+    const [postResult, commentsRaw, attachmentsRaw] = await Promise.all([
       getPostById(postId, { includeDeleted: false })
         .then(result => ({ data: result, error: null as unknown }))
         .catch(error => ({ data: null, error })),
-      // 댓글 조회 실패는(예: 순단) 옛 Supabase 경로가 그랬듯 게시글 자체는
-      // 계속 렌더하고 댓글만 빈 배열로 대체한다 — 게시글 조회 실패(위
-      // postResult)만 error.tsx로 보내는 정책과 일관된다.
       listCommentsKeyset(postId, { limit: 20 }).catch(error => {
         console.error('초기 댓글 조회 실패 — 빈 배열로 대체:', error)
         return [] as Awaited<ReturnType<typeof listCommentsKeyset>>
       }),
-      attachmentsQuery,
+      listAttachments(postId, { orderBy: 'created_at' }).catch(error => {
+        console.error('초기 첨부 조회 실패 — 빈 배열로 대체:', error)
+        return [] as Awaited<ReturnType<typeof listAttachments>>
+      }),
     ])
     post = postResult.data
     postFetchError = postResult.error
 
     const comments = commentsRaw
-    const attachments = Array.isArray(attachmentsRaw)
-      ? attachmentsRaw
-      : attachmentsRaw
-        ? [attachmentsRaw]
-        : []
+    const attachments = attachmentsRaw
 
     if (!post) {
       // 진짜 미존재(getPostById가 null)만 404로 보낸다. 조회 자체가

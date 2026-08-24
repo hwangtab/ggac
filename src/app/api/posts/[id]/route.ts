@@ -10,8 +10,6 @@ export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
-import { createSupabaseServer } from '@/lib/supabase/server'
-import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
 import { RATE_LIMITS, applyRateLimit, createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { validateUUID } from '@/utils/validation'
 import { parseIntegerParam } from '@/utils/queryParams'
@@ -23,6 +21,9 @@ import { getBoardPostRevalidationPaths } from '@/lib/revalidationPaths'
 import { requireUser, requireActiveMember, getOptionalUser } from '@/lib/server/memberAuth'
 import { getPostById, updatePost, softDeletePost } from '@/db/queries/posts'
 import { getProfileById } from '@/db/queries/profiles'
+import { countComments, listCommentsByOffset } from '@/db/queries/comments'
+import { getLikedCommentIds, isPostLikedByUser } from '@/db/queries/likes'
+import { listAttachments } from '@/db/queries/attachments'
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const resolvedParams = await context.params
@@ -50,7 +51,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       return rateLimitResult.response
     }
 
-    const supabase = await createSupabaseServer()
     // 로그인 여부에 따라 개인화 데이터(내 좋아요·삭제글 접근 등)를 얹는
     // 선택적 조회다. 비로그인도 게시글 상세를 읽을 수 있어야 하므로
     // requireUser로 바꾸지 않는다.
@@ -67,34 +67,10 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
     const validPostId = uuidValidation.sanitized
 
-    /**
-     * Service Role 클라이언트 사용 의도 (읽기 전용)
-     *
-     * 목적: 비로그인 사용자도 공개 게시글을 조회할 수 있도록 RLS 우회
-     *
-     * 설계 배경:
-     * - RLS 정책이 엄격하게 설정된 환경에서, 익명 사용자는 공개 게시글도 읽지 못할 수 있음
-     * - 서버 사이드에서 Service Role Key를 사용해 공개 데이터 읽기를 보장
-     *
-     * 보안 고려사항:
-     * - 읽기 전용으로만 사용 (쓰기 작업 없음)
-     * - 사용자별 데이터(좋아요 등)는 여전히 createRouteHandlerClient 사용
-     * - 대안: RLS 정책을 "공개 게시글은 익명 읽기 허용"으로 수정하는 것이 더 바람직함
-     *
-     * TODO: RLS 정책 정리 후 adminClient 사용 제거 검토
-     */
-    // 읽기 전용 DB 클라이언트 선택
-    // - 로그인 사용자: 세션 클라이언트 (사용자별 데이터 접근)
-    // - 비로그인 사용자: service role (공개 데이터만 읽기) — 필요할 때만 생성
-    const db = userId
-      ? supabase
-      : (() => {
-          try {
-            return createServiceRoleClient()
-          } catch {
-            return supabase
-          }
-        })()
+    // 단계 2c 후속(Task 6 확장): comments/post_likes/comment_likes/
+    // post_attachments가 전부 Turso로 옮겨가면서, 익명 사용자를 위해 RLS를
+    // 우회하던 Service Role 클라이언트가 더 이상 필요 없다 — Turso 쿼리
+    // 계층에는 RLS 자체가 없다(권한 판정은 이 라우트가 위에서 이미 했다).
     const { searchParams } = new URL(request.url)
     const includeComments = searchParams.get('include_comments') !== 'false' // 기본적으로 포함
     const includeAttachments = searchParams.get('include_attachments') !== 'false' // 기본적으로 포함
@@ -155,84 +131,69 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     // 게시글 확인 후의 조회 4개(내 좋아요·댓글 수·댓글 목록·첨부)는 상호 독립이므로
     // 병렬 실행한다 — 기존에는 전부 순차라 왕복 지연이 단계 수만큼 누적됐다
     // (전수감사 API High 1). 사용자별 댓글 좋아요만 댓글 목록에 의존해 후행.
+    //
+    // 단계 2c 후속(Task 6 확장): 4개 전부 Supabase에서 Turso 쿼리 계층으로
+    // 옮겼다(isPostLikedByUser/countComments/listCommentsByOffset/
+    // listAttachments). 옛 Supabase 클라이언트는 쿼리가 실패해도 throw하지
+    // 않고 `{data, error}`로 반환해 "한 필드 조회가 실패해도 게시글 자체는
+    // 계속 뜬다"는 성질이 있었다 — Turso 쿼리 계층 함수는 실패 시 throw하므로
+    // (이 저장소의 일관된 원칙), 그 성질을 유지하려면 각 호출을 개별
+    // `.catch()`로 감싸 안전한 기본값(false/0/빈 배열)으로 흡수해야 한다.
+    // 게시글 조회(위 postStart 블록)만 여전히 그 자체의 try/catch로 진짜
+    // 실패를 구분한다 — 나머지 4개는 부가 정보라 실패해도 상세 페이지
+    // 전체를 죽이면 안 된다.
     const parallelStart = Date.now()
-    const [userLikeResult, commentCountResult, commentsResult, attachmentsResult] =
-      await Promise.all([
-        userId
-          ? supabase
-              .from('post_likes')
-              .select('id')
-              .eq('post_id', validPostId)
-              .eq('user_id', userId)
-              .maybeSingle()
-          : Promise.resolve({ data: null }),
-        db.from('comments').select('id', { count: 'exact', head: true }).eq('post_id', validPostId),
-        includeComments
-          ? db
-              .from('comments')
-              .select(
-                `
-                id,
-                content,
-                author_id,
-                created_at,
-                like_count,
-                author:member_profiles!comments_author_id_fkey (
-                  display_name
-                )
-              `
-              )
-              .eq('post_id', validPostId)
-              .order('created_at', { ascending: true })
-              .range(commentsOffset, commentsOffset + commentsLimit - 1)
-          : Promise.resolve({ data: null, error: null }),
-        includeAttachments
-          ? db
-              .from('post_attachments')
-              .select('*')
-              .eq('post_id', validPostId)
-              .order('sort_order', { ascending: true })
-          : Promise.resolve({ data: null, error: null }),
-      ])
+    const [isLiked, commentCount, rawComments, attachments] = await Promise.all([
+      userId
+        ? isPostLikedByUser(validPostId, userId).catch(error => {
+            console.error('좋아요 조회 오류:', error)
+            return false
+          })
+        : Promise.resolve(false),
+      countComments(validPostId).catch(error => {
+        console.error('댓글 수 조회 오류:', error)
+        return 0
+      }),
+      includeComments
+        ? listCommentsByOffset(validPostId, {
+            limit: commentsLimit,
+            offset: commentsOffset,
+          }).catch(error => {
+            console.error('댓글 조회 오류:', error)
+            return [] as Awaited<ReturnType<typeof listCommentsByOffset>>
+          })
+        : Promise.resolve([] as Awaited<ReturnType<typeof listCommentsByOffset>>),
+      includeAttachments
+        ? listAttachments(validPostId).catch(error => {
+            console.error('첨부파일 조회 오류:', error)
+            return [] as Awaited<ReturnType<typeof listAttachments>>
+          })
+        : Promise.resolve([] as Awaited<ReturnType<typeof listAttachments>>),
+    ])
     timings.parallel_reads_ms = Date.now() - parallelStart
-
-    const isLiked = !!userLikeResult.data
-    const commentCount = commentCountResult.count ?? 0
 
     let comments: any[] = []
     if (includeComments) {
-      if (commentsResult.error) {
-        console.error('댓글 조회 오류:', commentsResult.error)
-      } else {
-        comments = commentsResult.data || []
-        // 사용자별 좋아요만 확인(카운트는 comments.like_count 사용)
-        const ids = comments.map((c: any) => c.id)
-        let userLikedSet: Set<string> | null = null
-        if (userId && ids.length > 0) {
-          const userLikesStart = Date.now()
-          const { data: userLiked } = await supabase
-            .from('comment_likes')
-            .select('comment_id')
-            .in('comment_id', ids)
-            .eq('user_id', userId)
-          userLikedSet = new Set((userLiked || []).map((x: any) => x.comment_id))
-          timings.comment_likes_user_ms = Date.now() - userLikesStart
-        }
-        comments = comments.map((c: any) => ({
-          ...c,
-          like_count: (c as any).like_count ?? 0,
-          is_liked: userLikedSet ? userLikedSet.has(c.id) : false,
-        }))
+      // 사용자별 좋아요만 확인(카운트는 comments.like_count 사용)
+      const ids = rawComments.map(c => c.id)
+      let userLikedSet: Set<string> | null = null
+      if (userId && ids.length > 0) {
+        const userLikesStart = Date.now()
+        userLikedSet = await getLikedCommentIds(userId, ids).catch(error => {
+          console.error('댓글 좋아요 조회 오류:', error)
+          return new Set<string>()
+        })
+        timings.comment_likes_user_ms = Date.now() - userLikesStart
       }
-    }
-
-    let attachments: any[] = []
-    if (includeAttachments) {
-      if (attachmentsResult.error) {
-        console.error('첨부파일 조회 오류:', attachmentsResult.error)
-      } else {
-        attachments = attachmentsResult.data || []
-      }
+      comments = rawComments.map(c => ({
+        id: c.id,
+        content: c.content,
+        author_id: c.author_id,
+        created_at: c.created_at,
+        like_count: c.like_count ?? 0,
+        author: c.author,
+        is_liked: userLikedSet ? userLikedSet.has(c.id) : false,
+      }))
     }
 
     // 응답 데이터 구성

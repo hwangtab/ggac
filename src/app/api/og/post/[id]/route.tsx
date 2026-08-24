@@ -9,19 +9,14 @@ export const runtime = 'nodejs'
 export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
 import { isBlobPublicUrl } from '@/lib/storage/paths'
 import { isProjectStoragePublicUrl } from '@/utils/storageUrlValidation'
 import { validateUUID } from '@/utils/validation'
 import { createLogger, maskId } from '@/utils/logger'
 import { getPostById } from '@/db/queries/posts'
+import { listImageAttachments } from '@/db/queries/attachments'
 
 const log = createLogger('api/og/post')
-
-// Service Role 클라이언트 생성
-function getSupabaseAdmin() {
-  return createServiceRoleClient()
-}
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const resolvedParams = await context.params
@@ -40,10 +35,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     }
     const postId = postIdValidation.sanitized
 
-    const supabase = getSupabaseAdmin()
-
-    // 게시물 존재 확인 (공개 정책에 따라 삭제되지 않은 게시물만). posts는
-    // 이제 Turso가 권위다 — 첨부(post_attachments)는 아직 Supabase.
+    // 게시물 존재 확인 (공개 정책에 따라 삭제되지 않은 게시물만). posts·
+    // 첨부(post_attachments) 둘 다 이제 Turso가 권위다(단계 2c 후속, Task 6
+    // 확장).
     let post: Awaited<ReturnType<typeof getPostById>> = null
     try {
       post = await getPostById(postId, { includeDeleted: false })
@@ -62,17 +56,12 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       })
     }
 
-    // 게시물의 첫 번째 이미지 첨부파일 조회
-    const { data: attachments, error: attachmentError } = await supabase
-      .from('post_attachments')
-      .select('file_url, is_primary')
-      .eq('post_id', postId)
-      .eq('file_type', 'image')
-      .order('is_primary', { ascending: false }) // 대표 이미지 우선
-      .order('created_at', { ascending: true }) // 그 다음 업로드 순서
-      .limit(1)
-
-    if (attachmentError) {
+    // 게시물의 첫 번째 이미지 첨부파일 조회 — is_primary 우선, 그다음
+    // created_at 오름차순(listImageAttachments가 그 순서를 보장한다).
+    let attachments: Awaited<ReturnType<typeof listImageAttachments>> = []
+    try {
+      attachments = await listImageAttachments(postId)
+    } catch (attachmentError) {
       console.error('[OG API] Attachment query error:', attachmentError)
       return new Response(null, {
         status: 302,

@@ -4,24 +4,13 @@
  */
 
 import { cache } from 'react'
-import { createClient } from '@supabase/supabase-js'
 import type { PostAttachment } from '@/types'
 import { createLogger, maskId } from '@/utils/logger'
 import { getPostById as getPostByIdFromDb } from '@/db/queries/posts'
 import { getProfileById } from '@/db/queries/profiles'
+import { listImageAttachments } from '@/db/queries/attachments'
 
 const log = createLogger('Posts')
-
-// Service Role 클라이언트 생성
-function getSupabaseAdmin() {
-  const hasUrl = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL)
-  const hasSrv = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY)
-  if (!hasUrl || !hasSrv) {
-    log.error('Missing env for service client', { hasUrl, hasSrv })
-    throw new Error('Supabase configuration missing for server-side post queries')
-  }
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-}
 
 // 게시물 상세 정보 인터페이스
 export interface PostDetail {
@@ -103,25 +92,17 @@ export async function getPostAuthor(authorId: string): Promise<AuthorProfile | n
 
 /**
  * 게시물의 첨부 이미지 목록 조회
+ *
+ * Turso 전환(단계 2c 후속, Task 6 확장): `post_attachments`도 이제 Turso가
+ * 권위다. `listImageAttachments`가 `is_primary` 우선·`created_at` 오름차순
+ * 정렬과 `file_type = 'image'` 필터를 그대로 재현한다.
  */
 export async function getPostImages(postId: string): Promise<PostAttachment[]> {
   try {
-    const supabase = getSupabaseAdmin()
-
-    const { data: images, error } = await supabase
-      .from('post_attachments')
-      .select('*')
-      .eq('post_id', postId)
-      .eq('file_type', 'image')
-      .order('is_primary', { ascending: false }) // 대표 이미지 우선
-      .order('created_at', { ascending: true }) // 그 다음 업로드 순서
-
-    if (error) {
-      log.error('Error fetching images:', error)
-      return []
-    }
-
-    return images || []
+    // listImageAttachments가 이미 file_type = 'image'로 필터링하므로 여기서
+    // 캐스팅한다 — PostAttachmentRow.file_type은 넓은 string, PostAttachment는
+    // 리터럴 유니온이라 타입만 좁혀준다(런타임 값은 항상 'image').
+    return (await listImageAttachments(postId)) as PostAttachment[]
   } catch (error) {
     log.error('Error fetching post images:', error)
     return []

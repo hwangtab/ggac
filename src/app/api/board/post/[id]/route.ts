@@ -1,10 +1,11 @@
 import { NextRequest } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { validateUUID } from '@/utils/validation'
 import { createLogger } from '@/utils/logger'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { getPostById } from '@/db/queries/posts'
+import { listCommentsKeyset } from '@/db/queries/comments'
+import { listAttachments } from '@/db/queries/attachments'
 
 // `dynamic = 'force-dynamic'` 적용으로 ISR `revalidate`는 의미 없음 — 헤더로 캐시 제어.
 export const dynamic = 'force-dynamic'
@@ -24,66 +25,36 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   }
   const validPostId = uuidValidation.sanitized
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  if (!url || !anonKey) {
-    log.error('Supabase 환경변수 누락', { hasUrl: Boolean(url), hasAnonKey: Boolean(anonKey) })
-    return ApiError.internalServerError('Supabase credentials not configured').toNextResponse()
-  }
-
-  const supabase = createClient(url, anonKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  })
-
   try {
     const timings: Record<string, number> = {}
     const t0 = Date.now()
 
     const COMMENTS_PAGE_SIZE = 20
-    const commentsQuery = supabase
-      .from('comments')
-      .select(
-        `
-        id,
-        content,
-        author_id,
-        created_at,
-        author:member_profiles!comments_author_id_fkey (display_name)
-      `
-      )
-      .eq('post_id', validPostId)
-      .order('created_at', { ascending: true })
-      .range(0, COMMENTS_PAGE_SIZE - 1)
-
-    const attachmentsQuery = supabase
-      .from('post_attachments')
-      .select('file_url, file_type, file_size, is_primary, created_at')
-      .eq('post_id', validPostId)
-      .order('created_at', { ascending: true })
 
     const t1 = Date.now()
-    // posts/member_profiles(저자) 조회는 Turso(getPostById)로, 댓글/첨부는
-    // 아직 Supabase가 권위라 그대로 병렬 실행한다. 조회 실패 원인은 삼켜
-    // 버리지 않고 postFetchError에 남겨 아래 404 로그에서 사유를 구분한다
-    // (없음/삭제됨과 DB 조회 자체 실패를 분간할 수 있어야 장애 분류가 된다).
+    // 단계 2c 후속(Task 6 확장): posts/member_profiles(저자) 조회에 이어
+    // 댓글·첨부도 Supabase에서 Turso 쿼리 계층으로 옮겼다 — 이제 셋 다
+    // Turso다. 조회 실패 원인은 삼켜버리지 않고 postFetchError에 남겨 아래
+    // 404 로그에서 사유를 구분한다(없음/삭제됨과 DB 조회 자체 실패를 분간할
+    // 수 있어야 장애 분류가 된다). 댓글·첨부 실패는 게시글 조회와 독립적으로
+    // 흡수해(빈 배열) 부가 정보 실패가 상세 조회 전체를 막지 않게 한다 —
+    // 옛 Supabase 클라이언트가 `{data, error}`로 에러를 삼키던 성질과 같다.
     let postFetchError: unknown = null
-    const [fullPost, commentsRes, attachmentsRes] = await Promise.all([
+    const [fullPost, commentsRaw, attachmentsRaw] = await Promise.all([
       getPostById(validPostId, { includeDeleted: false }).catch(error => {
         postFetchError = error
         return null
       }),
-      commentsQuery,
-      attachmentsQuery,
+      listCommentsKeyset(validPostId, { limit: COMMENTS_PAGE_SIZE }).catch(error => {
+        log.error('댓글 조회 실패', error)
+        return [] as Awaited<ReturnType<typeof listCommentsKeyset>>
+      }),
+      listAttachments(validPostId, { orderBy: 'created_at' }).catch(error => {
+        log.error('첨부파일 조회 실패', error)
+        return [] as Awaited<ReturnType<typeof listAttachments>>
+      }),
     ])
     const t2 = Date.now()
-
-    interface AttachmentRow {
-      file_url: string
-      file_type: string
-      file_size: number | string | null
-      is_primary: boolean | null
-      created_at: string
-    }
 
     const post = fullPost
       ? {
@@ -95,8 +66,17 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
           author: { display_name: fullPost.author.display_name },
         }
       : null
-    const comments = (commentsRes.data as unknown[]) || []
-    const attachments = (attachmentsRes.data as AttachmentRow[]) || []
+    const comments = commentsRaw
+    // 기존 select 컬럼 집합(file_url/file_type/file_size/is_primary/
+    // created_at)과 정확히 맞춘다 — listAttachments는 PostAttachmentRow
+    // 전체(15컬럼)를 돌려주는 상위집합이라 명시 투영이 필요하다.
+    const attachments = attachmentsRaw.map(att => ({
+      file_url: att.file_url,
+      file_type: att.file_type,
+      file_size: att.file_size,
+      is_primary: att.is_primary,
+      created_at: att.created_at,
+    }))
 
     timings.queue_ms = t1 - t0
     timings.query_ms = t2 - t1

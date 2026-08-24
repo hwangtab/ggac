@@ -1,12 +1,12 @@
 import { NextRequest } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
-import { createClient } from '@supabase/supabase-js'
 import { stripHtmlTags } from '@/utils/textUtils'
 import { createLogger } from '@/utils/logger'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { parseBoardCategory } from '@/constants/categories'
 import { formatTimestampUuidCursor, parseTimestampUuidCursor } from '@/utils/keysetCursor'
 import { listPostsKeyset } from '@/db/queries/posts'
+import { listAttachmentsByPostIds } from '@/db/queries/attachments'
 
 const log = createLogger('api/posts/public')
 type PublicPostsSortOrder = 'asc' | 'desc'
@@ -24,18 +24,6 @@ export const dynamic = 'force-dynamic'
 export const preferredRegion = 'icn1'
 
 export async function GET(request: NextRequest) {
-  // post_attachments(첨부) 통계 조회는 아직 Supabase가 권위다(범위 밖) —
-  // posts/member_profiles 조회만 Turso(listPostsKeyset)로 옮긴다.
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  if (!url || !anonKey) {
-    return ApiError.internalServerError('Supabase not configured').toNextResponse()
-  }
-
-  const supabase = createClient(url, anonKey, {
-    auth: { autoRefreshToken: false, persistSession: false }
-  })
-
   const { searchParams } = request.nextUrl
   const categoryParam = searchParams.get('category') || '전체'
   const boardCategory = parseBoardCategory(categoryParam)
@@ -76,19 +64,23 @@ export async function GET(request: NextRequest) {
 
     const ids = actual.map(p => p.id)
 
-    // Attachments stats (counts)
-    const { data: attRows } = await supabase
-      .from('post_attachments')
-      .select('post_id, file_type')
-      .in('post_id', ids)
+    // Attachments stats (counts) — 단계 2c 후속(Task 6 확장): 게시글 여러
+    // 건의 첨부를 한 쿼리(inArray)로 배치 조회한다(게시글마다 쿼리하지
+    // 않는다). 조회 실패는 옛 Supabase 클라이언트가 그랬듯 삼켜서
+    // 통계를 전부 0으로 흡수한다 — 첨부 통계 실패가 게시글 목록 전체를
+    // 막으면 안 된다.
+    const attRows = await listAttachmentsByPostIds(ids).catch(error => {
+      log.error('첨부 통계 조회 실패', { message: (error as Error)?.message })
+      return [] as Awaited<ReturnType<typeof listAttachmentsByPostIds>>
+    })
 
     const statsMap = new Map<
       string,
       { total: number; image: number; document: number; video: number; audio: number }
     >()
-    ;(attRows || []).forEach((r: any) => {
-      const key = r.post_id as string
-      const type = (r.file_type as string) || 'document'
+    attRows.forEach(r => {
+      const key = r.post_id
+      const type = r.file_type || 'document'
       const curr = statsMap.get(key) || { total: 0, image: 0, document: 0, video: 0, audio: 0 }
       curr.total += 1
       if (type === 'image') curr.image += 1
