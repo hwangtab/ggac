@@ -4,7 +4,7 @@ import { readFileSync, rmSync } from 'node:fs'
 import { createClient } from '@libsql/client'
 
 /**
- * 단계 2c: 회원 관리·마이페이지 라우트 12개를 `src/db/queries/profiles.ts`
+ * 단계 2c: 회원 관리·마이페이지 라우트 13개를 `src/db/queries/profiles.ts`
  * (Turso)로 전환한 것을 검증한다.
  *
  * 라우트는 전부 `defineApiRoute({ auth: 'admin', ... })` 또는
@@ -13,7 +13,7 @@ import { createClient } from '@libsql/client'
  * `node --test`에서 GET/POST 핸들러를 직접 호출할 수 없다 — task-3b가
  * `verify-session`/`auth/callback`에서 마주친 것과 같은 제약이다. 그래서
  * 이 파일도 그 선례를 따른다:
- *   1) 소스 패턴 가드 — 12개 파일이 더 이상 member_profiles를 직접
+ *   1) 소스 패턴 가드 — 13개 파일이 더 이상 member_profiles를 직접
  *      조회/갱신하지 않고 쿼리 계층 함수를 쓰는지.
  *   2) 라우트 안의 변환 로직(자격 필터링·배치 갱신·응답 투영)을 실제
  *      SQLite로 그대로 재현해 검증 — 라우트 파일에서 그 로직을 그대로
@@ -61,6 +61,7 @@ const ROUTE_FILES = {
   adminArtists: 'src/app/api/admin/artists/route.ts',
   adminArtistsMembers: 'src/app/api/admin/artists/members/route.ts',
   adminArtistUnassign: 'src/app/api/admin/artists/[id]/members/[memberId]/route.ts',
+  adminArtistAssign: 'src/app/api/admin/artists/[id]/members/route.ts',
   adminMemberAction: 'src/app/api/admin/member-action/route.ts',
   adminMembersList: 'src/app/api/admin/members/route.ts',
   adminMembersStats: 'src/app/api/admin/members/stats/route.ts',
@@ -73,7 +74,7 @@ const ROUTE_FILES = {
 
 // ---------------------------------------------------------------- 소스 가드: member_profiles 직접 접근이 남아있지 않다
 
-test('12개 라우트 모두 member_profiles를 직접 조회/갱신하지 않는다 (주석 제외)', () => {
+test('13개 라우트 모두 member_profiles를 직접 조회/갱신하지 않는다 (주석 제외)', () => {
   for (const file of Object.values(ROUTE_FILES)) {
     const src = readFileSync(file, 'utf8')
     assert.doesNotMatch(
@@ -84,7 +85,7 @@ test('12개 라우트 모두 member_profiles를 직접 조회/갱신하지 않�
   }
 })
 
-test('12개 라우트 모두 src/db/queries/profiles(쿼리 계층)를 임포트한다', () => {
+test('13개 라우트 모두 src/db/queries/profiles(쿼리 계층)를 임포트한다', () => {
   for (const file of Object.values(ROUTE_FILES)) {
     const src = readFileSync(file, 'utf8')
     assert.match(
@@ -102,6 +103,34 @@ test('admin/members/bulk와 notifications/bulk는 member_bulk_operations/create_
   const notifSrc = readFileSync(ROUTE_FILES.notificationsBulk, 'utf8')
   assert.match(notifSrc, /rpc\(\s*['"]create_bulk_notification['"]/)
   assert.match(notifSrc, /createSupabaseServer/)
+})
+
+// ---------------------------------------------------------------- 아티스트 배정(POST)의 범위 정정: member_profiles만 Turso로, artists는 Supabase 그대로
+//
+// 이 파일은 애초 12개 목록에서 "artists 테이블과 조인한다"는 이유로 빠졌지만,
+// 그 판단이 놓친 사실이 있었다 — 이 파일이 member_profiles에 **쓴다**는
+// 것. 해제(DELETE, [memberId]/route.ts)는 이미 Turso로 전환됐는데 배정
+// (POST, 이 파일)이 계속 Supabase에 쓰면 배정은 무효, 해제만 유효한
+// 반쪽짜리 상태가 된다 — 그래서 이 파일도 member_profiles만 전환한다.
+// artists 테이블 조회(존재 확인)는 Supabase 그대로 남긴다(아직 그쪽이
+// 권위).
+
+test('admin/artists/[id]/members(배정 POST)는 artists 테이블 조회를 Supabase에 그대로 남긴다', () => {
+  const src = readFileSync(ROUTE_FILES.adminArtistAssign, 'utf8')
+  assert.match(src, /\.from\(\s*['"]artists['"]\s*\)/, 'artists 조회는 여전히 Supabase여야 한다')
+  assert.match(src, /getProfileById\(memberId\)/)
+  assert.match(src, /updateProfile\(memberId,/)
+})
+
+// ---------------------------------------------------------------- 소스 가드(필수 부정 대조 대상): 배정(POST)이 updateProfile 호출을 잃으면 안 된다
+
+test('admin/artists/[id]/members POST는 member_profiles 갱신을 updateProfile(Turso)로 실제로 수행한다(단순 조회만 하고 끝나지 않는다)', () => {
+  const src = readFileSync(ROUTE_FILES.adminArtistAssign, 'utf8')
+  assert.match(
+    src,
+    /await updateProfile\(memberId,\s*\{[\s\S]*?artist_id:\s*artistId[\s\S]*?\}\)/,
+    'updateProfile(memberId, { artist_id: artistId, ... }) 호출이 있어야 한다'
+  )
 })
 
 // ---------------------------------------------------------------- 소스 가드 1(필수 부정 대조 대상): admin/members/bulk는 배치를 쓴다
@@ -460,4 +489,141 @@ test('/api/profiles 로직 재현: 존재하는 id만 {id, display_name}으로 �
 
   assert.equal(data.length, 2)
   assert.deepEqual(new Set(data.map(d => d.id)), new Set(['pub-1', 'pub-2']))
+})
+
+// ---------------------------------------------------------------- 실제 SQLite: 아티스트 배정(POST) — 조정 지시 대응
+//
+// 코디네이터가 지목한 문제: 해제(DELETE)는 Turso에 쓰는데 배정(POST)이
+// Supabase에 계속 쓰면 배정은 무효, 해제만 유효한 반쪽짜리 상태가 된다.
+// 아래 두 테스트는 (a) 배정이 실제로 Turso에 반영되는지, (b) 배정과
+// 해제가 정말로 같은 저장소를 공유하는지(한쪽이 쓴 걸 다른 쪽이 읽고 또
+// 쓸 수 있는지)를 실제 파일 DB로 검증한다.
+
+test('아티스트 배정 로직 재현: updateProfile(memberId, {...})이 Turso에 실제로 반영된다', async () => {
+  const { upsertProfile, getProfileById, updateProfile } = await loadFreshProfilesModule()
+  const id = 'assign-1'
+  await upsertProfile(
+    makeProfile({
+      id,
+      email: 'assign-1@test.local',
+      registration_status: 'approved',
+      is_active: true,
+      is_artist: false,
+      artist_id: null,
+    })
+  )
+
+  // POST 핸들러와 동일한 시퀀스: 조회 → 자격/중복배정 검사 → 갱신 → 재조회.
+  const before = await getProfileById(id)
+  assert.equal(before.registration_status, 'approved')
+  assert.equal(before.is_active, true)
+  assert.ok(!before.artist_id || before.artist_id === 'artist-030', '중복 배정 아님')
+
+  await updateProfile(id, {
+    artist_id: 'artist-030',
+    artist_role: 'manager',
+    is_artist: true,
+  })
+
+  const after = await getProfileById(id)
+  assert.equal(after.artist_id, 'artist-030')
+  assert.equal(after.artist_role, 'manager')
+  assert.equal(after.is_artist, true)
+})
+
+test('부정 대조: updateProfile 호출을 건너뛰면(조회만 하고 갱신 없이 끝나면) 배정이 반영되지 않는다', async () => {
+  const { upsertProfile, getProfileById } = await loadFreshProfilesModule()
+  const id = 'assign-2-noop'
+  await upsertProfile(
+    makeProfile({
+      id,
+      email: 'assign-2-noop@test.local',
+      registration_status: 'approved',
+      is_active: true,
+      is_artist: false,
+      artist_id: null,
+    })
+  )
+
+  // updateProfile을 호출하지 않고 조회만 하면(예전 회귀를 흉내낸 것) —
+  // 배정이 반영되지 않았음을 확인해, 위 테스트의 assert가 "무조건
+  // 통과"하는 공허한 단언이 아님을 증명한다.
+  const after = await getProfileById(id)
+  assert.notEqual(after.artist_id, 'artist-030')
+  assert.equal(after.is_artist, false)
+})
+
+test('배정(POST)과 해제(DELETE)는 같은 저장소(Turso)에 쓴다 — 배정 → 해제 왕복이 매번 반영된다', async () => {
+  const { upsertProfile, getProfileById, updateProfile } = await loadFreshProfilesModule()
+  const id = 'assign-roundtrip-1'
+  await upsertProfile(
+    makeProfile({
+      id,
+      email: 'assign-roundtrip-1@test.local',
+      registration_status: 'approved',
+      is_active: true,
+      is_artist: false,
+      artist_id: null,
+    })
+  )
+
+  // 1) 배정(POST 로직) — admin/artists/[id]/members/route.ts.
+  await updateProfile(id, {
+    artist_id: 'artist-031',
+    artist_role: 'owner',
+    is_artist: true,
+  })
+  const afterAssign = await getProfileById(id)
+  assert.equal(afterAssign.artist_id, 'artist-031')
+  assert.equal(afterAssign.is_artist, true)
+
+  // 2) 해제(DELETE 로직) — admin/artists/[id]/members/[memberId]/route.ts.
+  // artist_role은 patch에서 뺀다(Turso NOT NULL 회피, 앞선 커밋과 동일 이유).
+  await updateProfile(id, {
+    artist_id: null,
+    is_artist: false,
+  })
+  const afterUnassign = await getProfileById(id)
+  assert.equal(afterUnassign.artist_id, null)
+  assert.equal(afterUnassign.is_artist, false)
+
+  // 3) 재배정도 같은 저장소에서 계속 반영되는지(왕복이 한 번으로 끝나는
+  // 우연이 아님을 확인).
+  await updateProfile(id, {
+    artist_id: 'artist-032',
+    artist_role: 'collaborator',
+    is_artist: true,
+  })
+  const afterReassign = await getProfileById(id)
+  assert.equal(afterReassign.artist_id, 'artist-032')
+  assert.equal(afterReassign.artist_role, 'collaborator')
+  assert.equal(afterReassign.is_artist, true)
+})
+
+test('아티스트 배정 로직 재현: 이미 다른 아티스트에 배정된 멤버는 재배정 자격 검사에서 걸린다(코드가 아니라 값으로 확인)', async () => {
+  const { upsertProfile, getProfileById } = await loadFreshProfilesModule()
+  const id = 'assign-conflict-1'
+  await upsertProfile(
+    makeProfile({
+      id,
+      email: 'assign-conflict-1@test.local',
+      registration_status: 'approved',
+      is_active: true,
+      is_artist: true,
+      artist_id: 'artist-040',
+      artist_role: 'owner',
+    })
+  )
+
+  const targetMember = await getProfileById(id)
+  const newArtistId = 'artist-041'
+  // POST 핸들러의 조건과 동일: artist_id가 있고 새 artistId와 다르면 충돌.
+  const isConflict = Boolean(targetMember.artist_id && targetMember.artist_id !== newArtistId)
+  assert.equal(isConflict, true)
+
+  // 같은 아티스트로 "재배정"(멱등)은 충돌이 아니어야 한다.
+  const isConflictSameArtist = Boolean(
+    targetMember.artist_id && targetMember.artist_id !== 'artist-040'
+  )
+  assert.equal(isConflictSameArtist, false)
 })
