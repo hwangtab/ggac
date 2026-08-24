@@ -14,6 +14,7 @@ import { requireUser } from '@/lib/server/memberAuth'
 import { sanitizeNotificationData } from '@/utils/notificationData'
 import { parseNotificationExpiresAt } from '@/utils/notificationExpiry'
 import { parseNotificationType } from '@/utils/notificationTypes'
+import { markAllNotificationsRead } from '@/lib/server/notificationsWrite'
 import type { CreateBulkNotificationRequest } from '@/types'
 
 function validateBulkUserId(value: unknown): string | null {
@@ -141,13 +142,21 @@ export async function PATCH(request: NextRequest) {
     // 사용자 인증 확인
     const auth = await requireUser()
     if (auth instanceof NextResponse) return auth
+    const { user } = auth
 
     const supabase = await createSupabaseServer()
 
     // 모든 알림 읽음 처리
-    const { data: updatedCount, error } = await supabase.rpc('mark_all_notifications_read')
-
-    if (error) {
+    //
+    // 원래는 mark_all_notifications_read() RPC였다. 그 함수는
+    // `WHERE user_id = auth.uid()` 하나로만 대상을 골랐는데, 서비스롤 클라이언트
+    // 전환 이후 auth.uid()가 항상 NULL이라 늘 0건을 갱신하고 성공으로 응답했다
+    // (운영 재현 완료). 세션에서 확인한 user.id를 직접 조건으로 쓴다.
+    let updatedCount: number
+    try {
+      const { updatedIds } = await markAllNotificationsRead(supabase, user.id)
+      updatedCount = updatedIds.length
+    } catch (error) {
       console.error('모든 알림 읽음 처리 오류:', error)
       return ApiError.internalServerError('알림을 읽음 처리할 수 없습니다.').toNextResponse()
     }

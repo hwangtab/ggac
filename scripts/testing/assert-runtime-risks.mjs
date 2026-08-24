@@ -1353,6 +1353,8 @@ const notificationsPath = join(root, 'src/app/api/notifications/route.ts')
 const notificationsSource = readFileSync(notificationsPath, 'utf8')
 const bulkNotificationsPath = join(root, 'src/app/api/notifications/bulk/route.ts')
 const bulkNotificationsSource = readFileSync(bulkNotificationsPath, 'utf8')
+const notificationsWritePath = join(root, 'src/lib/server/notificationsWrite.ts')
+const notificationsWriteSource = readFileSync(notificationsWritePath, 'utf8')
 const notificationDataPath = join(root, 'src/utils/notificationData.ts')
 const notificationDataSource = readFileSync(notificationDataPath, 'utf8')
 const notificationExpiryPath = join(root, 'src/utils/notificationExpiry.ts')
@@ -1385,6 +1387,18 @@ const validatesNotificationRouteId =
   // 필터의 존재가 불변식이다.
   (notificationDetailSource.match(/\.eq\(['"]id['"],\s*notificationId\)/g) ?? []).length >= 2 &&
   (notificationDetailSource.match(/\.eq\(['"]user_id['"],\s*user\.id\)/g) ?? []).length >= 2
+// mark_all_notifications_read RPC(auth.uid() 의존)를 걷어내면서(단계 2b-5 회귀
+// 수정) 소유권 필터는 src/lib/server/notificationsWrite.ts의
+// markAllNotificationsRead로 옮겨졌다. validatesNotificationRouteId가 라우트
+// 레벨에서 그러듯, 여기서도 "RPC 호출 여부가 아니라 실제 소유권 필터의 존재가
+// 불변식"을 그대로 적용한다 — 누가 이 모듈을 리팩터링하며 필터를 잃어도
+// 정적으로 잡는다. 이 파일의 독스트링 자체가 `.eq('user_id', userId)`를
+// 설명 예시로 인용하므로, 주석을 살려둔 채 실제 줄만 지워도 검사가 속지
+// 않도록 stripComments로 주석을 걷어낸 소스만 본다.
+const notificationsWriteStripped = stripComments(notificationsWriteSource)
+const enforcesNotificationOwnershipFilter =
+  /\.eq\(['"]user_id['"],\s*userId\)/.test(notificationsWriteStripped) &&
+  /\.is\(['"]read_at['"],\s*null\)/.test(notificationsWriteStripped)
 const validatesNotificationMutationIds =
   /validateUUID/.test(notificationsSource) &&
   /parseNotificationType\(typeParam\)/.test(notificationsSource) &&
@@ -3931,6 +3945,15 @@ if (!validatesNotificationRouteId) {
     `Notification item actions must validate the route notification id before RPC/delete: ${relative(
       root,
       notificationDetailPath
+    )}`
+  )
+}
+
+if (!enforcesNotificationOwnershipFilter) {
+  failures.push(
+    `markAllNotificationsRead must scope its update to the calling user's own notifications via .eq('user_id', userId) (and only unread rows via .is('read_at', null)) — this is the only defense against reading/marking other users' notifications: ${relative(
+      root,
+      notificationsWritePath
     )}`
   )
 }

@@ -8,6 +8,7 @@ import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { logSecurityEvent } from '@/utils/security'
 import { refreshSettingsCache } from '@/utils/systemSettings'
 import { createLogger } from '@/utils/logger'
+import { updateSystemSetting } from '@/lib/server/systemSettingsWrite'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -295,23 +296,15 @@ export const POST = defineApiRoute<Record<string, unknown>>({
 
     for (const setting of settingsToReset) {
       try {
-        const { error: updateError } = await supabase.rpc('update_system_setting', {
-          p_category: setting.category,
-          p_setting_key: setting.setting_key,
-          p_setting_value: setting.setting_value,
+        await updateSystemSetting(supabase, {
+          category: setting.category,
+          settingKey: setting.setting_key,
+          settingValue: setting.setting_value,
+          actorId: user.id,
         })
-
-        if (updateError) {
-          log.error(
-            `Setting reset error for ${setting.category}.${setting.setting_key}`,
-            updateError
-          )
-          errorResults.push(`${setting.category}.${setting.setting_key}`)
-        } else {
-          resetResults.push(`${setting.category}.${setting.setting_key}`)
-        }
-      } catch (err) {
-        log.error('Setting reset exception', err)
+        resetResults.push(`${setting.category}.${setting.setting_key}`)
+      } catch (updateError) {
+        log.error(`Setting reset error for ${setting.category}.${setting.setting_key}`, updateError)
         errorResults.push(`${setting.category}.${setting.setting_key}`)
       }
     }
