@@ -1,10 +1,16 @@
 /**
- * `posts` 쿼리 계층 (Turso/Drizzle). 읽기 전용 — 쓰기(작성/수정/삭제)는
- * Task 5(`게시글 쓰기 + 첨부 전환`)의 몫이다.
+ * `posts` 쿼리 계층 (Turso/Drizzle). 읽기 + 쓰기(작성/수정/소프트삭제/조회수).
  *
  * 이 모듈은 **권한을 모른다.** 인증·인가 판정을 하지 않고, `NextResponse`를
  * 만들지 않고, `next/headers`를 임포트하지 않는다. 권한 판정은 호출부(라우트)의
  * 몫이고, 이 모듈의 모든 함수는 이미 검증된 인자만 받는다.
+ *
+ * **트리거 재현(Task 5):** Postgres `update_posts_updated_at` 트리거는 SQLite에
+ * 없다 — `posts.updatedAt`이 스키마 단(`src/db/schema/_shared.ts`의
+ * `updatedAt()`)에서 `$onUpdate(() => new Date())`를 이미 갖고 있어(Task 3의
+ * `member_profiles.updatedAt`과 같은 컬럼 팩토리), `updatePost`가 `.set()`을
+ * 호출할 때마다 Drizzle이 자동으로 현재 시각을 채운다 — 이 모듈은 `updated_at`을
+ * 직접 계산하지 않는다.
  *
  * 응답 형태(`PostWithAuthor`)는 snake_case다 — `src/db/queries/profiles.ts`와
  * 같은 이유(CLAUDE.md, strict: false라 키가 바뀌면 화면이 조용히 빈다).
@@ -27,7 +33,7 @@ import { db } from '../client.ts'
 import { posts } from '../schema/index.ts'
 
 import { getProfilesByIds } from './profiles.ts'
-import { toIso } from './_helpers.ts'
+import { toCamelCase, toIso } from './_helpers.ts'
 
 /** API 응답에 쓰이는 snake_case 정규화 형태. `posts` 컬럼 전부 + author 임베드. */
 export interface PostFields {
@@ -278,4 +284,122 @@ export async function listPostsKeyset(
   const sliced = hasNext ? rows.slice(0, filter.limit) : rows
   const withAuthors = await attachAuthors(sliced.map(rowToPost))
   return { rows: withAuthors, hasNext }
+}
+
+// -------------------------------------------------------------------------
+// 쓰기 (Task 5)
+// -------------------------------------------------------------------------
+
+/** timestamp_ms 컬럼 중 ISO 문자열로 주고받는 것(snake_case 키 기준). */
+const POST_TIMESTAMP_FIELDS = new Set(['pinned_at', 'created_at', 'updated_at'])
+
+/**
+ * snake_case 쓰기 입력 → Drizzle `.values()`/`.set()`용 camelCase 객체.
+ * `src/db/queries/profiles.ts`의 `toWriteRow`와 같은 패턴.
+ */
+function toWriteRow(row: Record<string, unknown>): Record<string, unknown> {
+  const converted: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(row)) {
+    if (POST_TIMESTAMP_FIELDS.has(key) && typeof value === 'string') {
+      converted[key] = new Date(value)
+    } else {
+      converted[key] = value
+    }
+  }
+  return toCamelCase(converted)
+}
+
+export interface CreatePostInput {
+  title: string
+  content: string
+  content_format: string
+  category: string
+  author_id: string
+  /** 기본 `false`. */
+  is_pinned?: boolean
+  /** ISO 문자열 또는 `null`. 생략하면 `null`. */
+  pinned_at?: string | null
+}
+
+/**
+ * 게시글을 생성한다. `id`/`created_at`/`updated_at`/`like_count`/`view_count`는
+ * DB 기본값에 맡긴다(`src/db/schema/content.ts`의 `posts` 정의). 반환값은
+ * `author` 임베드 없이 `posts` 컬럼만 담는다 — 기존 Supabase
+ * `.insert(...).select().single()`도 저자 조인을 하지 않았고, 유일한 호출부
+ * (`usePostCreation.ts`)는 `post.id`만 읽는다.
+ * @throws DB 쓰기가 실패하면 그대로 던진다(삼키지 않는다).
+ */
+export async function createPost(input: CreatePostInput): Promise<PostFields> {
+  const values = toWriteRow({
+    title: input.title,
+    content: input.content,
+    content_format: input.content_format,
+    category: input.category,
+    author_id: input.author_id,
+    is_pinned: input.is_pinned ?? false,
+    pinned_at: input.pinned_at ?? null,
+  }) as typeof posts.$inferInsert
+  const [row] = await db.insert(posts).values(values).returning()
+  return rowToPost(row)
+}
+
+export type PostPatch = Partial<{
+  title: string
+  content: string
+  content_format: string
+  category: string
+  is_pinned: boolean
+  /** ISO 문자열 또는 `null`. */
+  pinned_at: string | null
+}>
+
+/**
+ * 게시글 일부 컬럼을 갱신한다(제목/본문/카테고리/고정 여부). `updated_at`은
+ * patch에 넣어도 무시한다 — 스키마의 `$onUpdate` 훅이 `.set()` 호출마다
+ * 자동으로 채운다(Postgres `update_posts_updated_at` 트리거의 대체, 위 모듈
+ * 설명 참고). patch가 빈 객체면 쿼리를 실행하지 않고 현재 행을 그대로
+ * 돌려준다(갱신할 것이 없다 — `updateProfile`과 달리 여기서는 `null`이 아니라
+ * 호출부가 항상 갱신 결과를 응답에 그대로 실어야 해서 조회까지 해서 돌려준다).
+ * @returns 행이 없으면 `null`. 조회/쓰기 자체가 실패하면 throw한다.
+ */
+export async function updatePost(id: string, patch: PostPatch): Promise<PostFields | null> {
+  const values = toWriteRow(patch as Record<string, unknown>)
+  if (Object.keys(values).length === 0) {
+    const rows = await db.select().from(posts).where(eq(posts.id, id)).limit(1)
+    return rows[0] ? rowToPost(rows[0]) : null
+  }
+  const rows = await db
+    .update(posts)
+    .set(values as Partial<typeof posts.$inferInsert>)
+    .where(eq(posts.id, id))
+    .returning()
+  return rows[0] ? rowToPost(rows[0]) : null
+}
+
+/**
+ * 게시글을 소프트 삭제한다(`is_deleted = true`). 하드 삭제가 아니다 — 기존
+ * `/api/posts/[id]` DELETE의 `.update({ is_deleted: true })`와 동일한 방식을
+ * 그대로 옮긴 것이다. 행이 실제로 존재하는지는 호출부가 이미
+ * `getPostById`로 확인했다고 가정한다(기존 라우트 동작과 동일 — 이 함수
+ * 자체는 영향받은 행 수를 확인하지 않는다).
+ */
+export async function softDeletePost(id: string): Promise<void> {
+  await db.update(posts).set({ isDeleted: true }).where(eq(posts.id, id))
+}
+
+/**
+ * 조회수를 1 증가시킨다. **`UPDATE posts SET view_count = view_count + 1
+ * WHERE id = ? ` 한 문장**으로 끝낸다 — 읽고(view_count 조회) 더해서
+ * 쓰는(별도 UPDATE) 왕복을 만들지 않는다. 동시 조회 요청 사이에서 증가분이
+ * 유실되지 않는 이유가 바로 이 원자적 UPDATE다(`view_count = view_count + 1`은
+ * SQLite가 행 단위로 직렬화해 실행한다).
+ * @returns 갱신 후 view_count. 행이 없으면 `null`.
+ */
+export async function incrementViewCount(id: string): Promise<number | null> {
+  const rows = await db
+    .update(posts)
+    .set({ viewCount: sql`${posts.viewCount} + 1` })
+    .where(eq(posts.id, id))
+    .returning({ viewCount: posts.viewCount })
+  return rows[0] ? rows[0].viewCount : null
 }
