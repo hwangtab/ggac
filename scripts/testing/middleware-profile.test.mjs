@@ -1,4 +1,4 @@
-import { test, before, after } from 'node:test'
+import { test, before, after, mock } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, rmSync } from 'node:fs'
 import { createClient } from '@libsql/client'
@@ -141,4 +141,31 @@ test('행이 있으면 6개 컬럼만 담아 반환한다', async () => {
     is_auditor: false,
     display_name: '미들웨어테스트',
   })
+})
+
+/**
+ * 이전 Supabase REST 구현에는 `AbortSignal.timeout(FETCH_TIMEOUT_MS)`가
+ * 있었다 — Turso 전환 과정에서 조용히 사라지면 "3초 후 로그인 페이지로
+ * 우아하게"가 "Vercel Edge 실행 시간 제한까지 무기한 대기 → 하드킬(504)"로
+ * 퇴보한다. 실제로 3초를 기다리지 않기 위해 `node:test`의 `mock.timers`로
+ * `setTimeout`을 가짜 시계로 바꾸고, 절대 resolve하지 않는 `fetchProfile`을
+ * 두 번째 인자로 주입한다(운영 호출부는 이 인자를 넘기지 않고 기본값
+ * `getProfileById`를 쓴다 — 프로덕션 동작은 바뀌지 않는다).
+ */
+test('타임아웃(FETCH_TIMEOUT_MS=3000ms) 안에 응답하지 않으면 던진다', async () => {
+  const { fetchMemberProfileForMiddleware } = await loadFreshProfileModule()
+  const neverResolves = () => new Promise(() => {})
+
+  mock.timers.enable({ apis: ['setTimeout'] })
+  try {
+    const promise = fetchMemberProfileForMiddleware(
+      '33333333-3333-3333-3333-333333333333',
+      neverResolves
+    )
+    const assertion = assert.rejects(() => promise, /3000ms/)
+    mock.timers.tick(3000)
+    await assertion
+  } finally {
+    mock.timers.reset()
+  }
 })

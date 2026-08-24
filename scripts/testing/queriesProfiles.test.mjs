@@ -165,7 +165,8 @@ test('getProfilesByIds 구현은 db.select를 정확히 한 번만 호출하고 
     /getProfileById\(/,
     '배치 조회가 단건 조회 함수를 id별로 호출하면 N+1이다'
   )
-  const selectCalls = body.match(/db\.select\(/g) ?? []
+  // db와 .select( 사이에 개행이 껴도(prettier가 체인을 쪼개면) 잡히도록 공백류 허용.
+  const selectCalls = body.match(/db\s*\.select\(/g) ?? []
   assert.equal(selectCalls.length, 1, 'db.select 호출이 정확히 한 번이어야 한다(쿼리 한 번)')
 })
 
@@ -264,4 +265,83 @@ test('updateProfile: 빈 patch는 쿼리를 실행하지 않는다(호출 자체
 
   const after = await getProfileById(id)
   assert.deepEqual(after, before)
+})
+
+test('updateProfilesByIds: 여러 id를 한 번에 갱신하고 갱신된 id 목록을 돌려준다(관리자 대량 승인용)', async () => {
+  const { upsertProfile, updateProfilesByIds, getProfilesByIds } = await loadFreshProfilesModule()
+  const ids = ['bulk-1', 'bulk-2', 'bulk-3']
+  for (const id of ids) {
+    await upsertProfile(makeProfile({ id, email: `${id}@test.local`, display_name: id }))
+  }
+
+  const missingId = 'bulk-missing'
+  const nowIso = new Date().toISOString()
+  const updated = await updateProfilesByIds([...ids, missingId], {
+    registration_status: 'approved',
+    is_active: true,
+    approved_at: nowIso,
+    approved_by: 'admin-bulk',
+  })
+
+  // 존재하지 않는 id는 갱신 대상에서 빠진다 — 실제로 갱신된 id만 돌아온다.
+  assert.deepEqual([...updated].sort(), ids)
+
+  const rows = await getProfilesByIds(ids)
+  for (const id of ids) {
+    const row = rows.get(id)
+    assert.equal(row.registration_status, 'approved')
+    assert.equal(row.is_active, true)
+    assert.equal(row.approved_by, 'admin-bulk')
+    assert.equal(row.approved_at, nowIso)
+  }
+})
+
+test('updateProfilesByIds: updated_at을 갱신한다(트리거 없음 — 코드가 해야 한다)', async () => {
+  const { upsertProfile, updateProfilesByIds, getProfilesByIds } = await loadFreshProfilesModule()
+  const ids = ['bulk-ts-1', 'bulk-ts-2']
+  for (const id of ids) {
+    await upsertProfile(makeProfile({ id, email: `${id}@test.local` }))
+  }
+  const before = await getProfilesByIds(ids)
+
+  await new Promise(resolve => setTimeout(resolve, 5))
+  await updateProfilesByIds(ids, { is_active: true })
+
+  const after = await getProfilesByIds(ids)
+  for (const id of ids) {
+    assert.ok(
+      Date.parse(after.get(id).updated_at) > Date.parse(before.get(id).updated_at),
+      `${id}의 updated_at이 갱신되지 않았다`
+    )
+  }
+})
+
+test('updateProfilesByIds: 빈 id 배열은 쿼리를 실행하지 않고 빈 배열을 돌려준다', async () => {
+  const original = process.env.TURSO_DATABASE_URL
+  process.env.TURSO_DATABASE_URL = 'file:/definitely-nonexistent-dir-ggac-2c/broken.db'
+  try {
+    const { updateProfilesByIds } = await loadFreshProfilesModule()
+    const result = await updateProfilesByIds([], { is_active: true })
+    assert.deepEqual(result, [])
+  } finally {
+    process.env.TURSO_DATABASE_URL = original
+  }
+})
+
+test('updateProfilesByIds 구현은 db.update를 정확히 한 번만 호출하고 inArray를 쓴다 (소스 가드 — N+1 회귀 방지)', () => {
+  const src = readFileSync('src/db/queries/profiles.ts', 'utf8')
+  const match = src.match(/export async function updateProfilesByIds\([\s\S]*?\n\}\n/)
+  assert.ok(match, 'updateProfilesByIds 함수 본문을 찾지 못했다')
+  const body = match[0]
+
+  assert.match(body, /inArray\(/, '배치 갱신은 inArray를 써야 한다')
+  assert.doesNotMatch(
+    body,
+    /updateProfile\(/,
+    '배치 갱신이 단건 갱신 함수를 id별로 호출하면 N+1이다'
+  )
+  // prettier가 체인을 여러 줄로 쪼개면 `db`와 `.update(` 사이에 개행이 낀다
+  // (`await db\n    .update(...)`) — 공백류를 허용해야 실제 포맷과 맞는다.
+  const updateCalls = body.match(/db\s*\.update\(/g) ?? []
+  assert.equal(updateCalls.length, 1, 'db.update 호출이 정확히 한 번이어야 한다(쿼리 한 번)')
 })

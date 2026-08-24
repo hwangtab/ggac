@@ -256,3 +256,36 @@ export async function updateProfile(id: string, patch: ProfilePatch): Promise<vo
     .set(values as Partial<typeof memberProfiles.$inferInsert>)
     .where(eq(memberProfiles.id, id))
 }
+
+/**
+ * 여러 id에 같은 patch를 한 번에 적용한다 — 관리자 대량 승인/거부/정지처럼
+ * "여러 회원에게 똑같은 변경을 가한다"는 작업 전용이다. `inArray` + **단일
+ * UPDATE**로 끝낸다. id마다 `updateProfile`을 순차 호출하면
+ * `src/app/api/admin/members/bulk/route.ts`가 전수감사(API High 5)에서 이미
+ * 한 번 고친 N+1(멤버당 select+update 순차 실행)이 되살아난다 — 이 함수는
+ * 그 회귀를 막으려고 존재한다.
+ *
+ * `ids`가 빈 배열이면 쿼리를 실행하지 않고 즉시 빈 배열을 돌려준다 —
+ * `getProfilesByIds`와 같은 이유(Drizzle의 `inArray`는 빈 배열에서 무효
+ * SQL을 만든다). patch가 빈 객체(`updated_at`만 있어도 무시되므로 사실상
+ * 빈 객체)면 마찬가지로 쿼리 없이 빈 배열을 돌려준다.
+ *
+ * `updated_at`은 patch에 넘겨도 무시한다 — `updateProfile`과 동일하게
+ * 스키마의 `$onUpdate` 훅이 `.set()` 호출마다 자동으로 채운다.
+ *
+ * @returns 실제로 갱신된 행의 id 목록(`RETURNING id`). `ids`에 포함됐지만
+ * 존재하지 않는 id는 결과에서 빠진다 — 호출부가 "몇 명이 실제로 바뀌었는지"
+ * 응답에 담을 때 이 배열의 길이/내용을 쓰면 된다.
+ */
+export async function updateProfilesByIds(ids: string[], patch: ProfilePatch): Promise<string[]> {
+  if (ids.length === 0) return []
+  const { updated_at: _ignoredUpdatedAt, ...rest } = patch as Record<string, unknown>
+  const values = toWriteRow(rest)
+  if (Object.keys(values).length === 0) return []
+  const rows = await db
+    .update(memberProfiles)
+    .set(values as Partial<typeof memberProfiles.$inferInsert>)
+    .where(inArray(memberProfiles.id, ids))
+    .returning({ id: memberProfiles.id })
+  return rows.map(row => row.id)
+}
