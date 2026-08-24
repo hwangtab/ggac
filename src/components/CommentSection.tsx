@@ -27,6 +27,17 @@ async function fetchCommentsFromApi(postId: string): Promise<CommentWithLikes[]>
     throw new Error(`댓글 조회 실패: ${res.status}`)
   }
   const json = await res.json()
+  // 리뷰 대응(3차): 무제한 조회이던 것이 COMMENT_FETCH_LIMIT(100)으로 상한이
+  // 생겼다 — 101번째 댓글부터는 이 호출이 조용히 빠뜨린다(초기 전체 조회
+  // 경로에서는 그 댓글 자체가, 좋아요 상태 병합 경로에서는 그 댓글의 is_liked
+  // 갱신이). 서버가 내려주는 has_next로 실제로 잘렸는지 확인해 개발자가 알
+  // 수 있게 로그만 남긴다 — 회원 23명 규모에선 실질적으로 안 일어나지만,
+  // 조용히 사라지는 것보다는 낫다.
+  if (json?.data?.has_next) {
+    console.warn(
+      `[CommentSection] 댓글이 ${COMMENT_FETCH_LIMIT}건을 넘어 일부만 불러왔습니다(postId=${postId}). ${COMMENT_FETCH_LIMIT + 1}번째 이후 댓글은 좋아요 상태 병합 또는 초기 목록에서 빠질 수 있습니다.`
+    )
+  }
   return (json?.data?.comments as CommentWithLikes[] | undefined) || []
 }
 
@@ -122,24 +133,41 @@ const CommentSection: React.FC<CommentSectionProps> = ({
     // 여기서 서버(comments-list API)에서 다시 조회해 병합한다 — 이게 없으면
     // 이미 좋아요한 댓글이 빈 하트로 표시되고, 다시 누르면 토글 RPC가 기존
     // 좋아요를 삭제해 버린다. currentUserId는 PostDetailClient가 세션 복원
-    // 후 채우므로 그 시점에 effect가 재실행된다. 서버가 계산한 is_liked를
-    // id로 매칭해 그대로 덮어써 loadMore append분과 낙관적 토글을 훼손하지
-    // 않는다.
+    // 후 채우므로 그 시점에 effect가 재실행된다.
+    //
+    // 리뷰 대응(3차): liked인 것만 `true`로 덮어쓴다(옛 Supabase 구현과 동일
+    // 방향) — like_count는 건드리지 않는다. SSR이 이미 정확한 like_count를
+    // 내려주고(Task 6에서 재계산 방식으로 고쳐 항상 정확하다), 이 병합은
+    // ISR 캐시가 생략한 is_liked만 채우는 게 목적이다. 양방향으로 덮으면
+    // (is_liked/like_count를 이 fetch 시점의 스냅샷으로 무조건 교체) 이
+    // 요청이 늦게 도착했을 때 그 사이 사용자가 낙관적으로 누른 좋아요를
+    // 되돌려버린다 — 이 fetch는 요청 시작 시점의 낡은 스냅샷이라, 사용자의
+    // 방금 클릭보다 먼저 만들어졌을 수 있기 때문이다. `true`만 덮는 단방향
+    // 갱신은 이미 좋아요한 댓글을 놓치지 않는 목적은 그대로 달성하면서
+    // 이 역전을 만들지 않는다(false로는 절대 덮지 않으므로 낙관적 토글이
+    // 방금 true로 바꾼 값을 이 fetch가 되돌릴 수 없다).
+    //
+    // 남은 비효율(의도적으로 손대지 않음): is_liked만 필요한데 댓글 본문
+    // 전체(최대 100건)를 다시 받는다 — 옛 Supabase 구현은 comment_likes의
+    // id만 골라 받는 경량 조회였다. 전용 경량 엔드포인트(예: comment id
+    // 배열 → 좋아요한 id 집합만 반환)를 새로 만들면 해결되지만, 새 공개
+    // API 라우트 하나(인증·레이트리밋 배선 포함)를 추가하는 일이라 이번
+    // 리뷰 라운드의 Minor 항목 범위를 넘는다고 판단했다 — "댓글 더보기"마다
+    // 재실행되는 게 아니라 이 effect는 postId/currentUserId가 바뀔 때만
+    // 도는데, initialComments가 바뀌어도 이 effect의 의존성 배열엔
+    // initialComments가 들어있어 loadMore로 댓글이 늘어날 때마다도 다시
+    // 실행된다는 점은 사실이다(회원 23명 커뮤니티 규모에서 댓글 최대
+    // 100건 재조회의 실제 비용은 낮다고 보지만, 트래픽이 커지면 재검토
+    // 대상).
     if (!currentUserId || initialComments.length === 0) return
     let cancelled = false
     ;(async () => {
       try {
         const rows = await fetchCommentsFromApi(postId)
         if (cancelled || rows.length === 0) return
-        const likeStateById = new Map(rows.map(row => [row.id, row]))
-        setComments(prev =>
-          prev.map(c => {
-            const hydrated = likeStateById.get(c.id)
-            return hydrated
-              ? { ...c, is_liked: hydrated.is_liked, like_count: hydrated.like_count }
-              : c
-          })
-        )
+        const likedIds = new Set(rows.filter(row => row.is_liked).map(row => row.id))
+        if (likedIds.size === 0) return
+        setComments(prev => prev.map(c => (likedIds.has(c.id) ? { ...c, is_liked: true } : c)))
       } catch (error) {
         // 네트워크 오류는 무시 — is_liked:false로 남고, 실제로 좋아요한
         // 댓글을 다시 누르면 서버가 진짜 상태로 토글해 자연 복구된다.

@@ -165,6 +165,43 @@ test('togglePostLike: 5회 반복 토글해도 like_count가 실제 post_likes �
   }
 })
 
+test('togglePostLike: 저장된 like_count가 실제 행 수와 어긋나 있어도(트리거 드리프트 재현) 토글 한 번으로 진짜 값으로 교정한다(행위 테스트)', async () => {
+  const { togglePostLike } = await loadFreshLikesModule()
+  const postId = await seedPost()
+  const liker = await seedProfile({ display_name: '오염테스트좋아요누른사람' })
+
+  // 저장된 값을 일부러 오염시킨다(운영에서 실제로 있었던 트리거 드리프트
+  // 재현) — 실제 post_likes 행은 0개인데 posts.like_count는 99로 심는다.
+  // 증감 구현(likeCount + 1)이면 오염된 99에 얹혀 100을 반환/저장한다 —
+  // 재계산(COUNT) 구현만 실제 행 수(1)로 되돌린다. 소스 가드
+  // (/likeCount:\s*sql`[^`]*\+\s*1/)는 SQL 리터럴 증감만 잡고
+  // `.set({ likeCount: prev + 1 })` 같은 JS 계산 증감은 못 잡는다 — 이
+  // 테스트가 구현 형태와 무관하게 실제 동작으로 이 계약을 고정한다.
+  await setupClient.execute({
+    sql: 'UPDATE posts SET like_count = 99 WHERE id = ?',
+    args: [postId],
+  })
+
+  const result = await togglePostLike(postId, liker)
+  const actualRows = await countPostLikesRaw(postId)
+  assert.equal(actualRows, 1, '토글 후 실제 post_likes 행은 1개여야 한다')
+  assert.equal(
+    result.like_count,
+    1,
+    '반환값이 실제 행 수(1)와 같아야 한다 — 증감 구현이면 100을 반환해 이 단언이 실패한다'
+  )
+
+  const stored = await setupClient.execute({
+    sql: 'SELECT like_count FROM posts WHERE id = ?',
+    args: [postId],
+  })
+  assert.equal(
+    Number(stored.rows[0].like_count),
+    1,
+    'DB에 저장된 like_count도 실제 행 수와 일치해야 한다(반환값만 맞고 저장값은 오염된 채로 남는 회귀까지 잡는다)'
+  )
+})
+
 test('togglePostLike: 서로 다른 사용자의 좋아요는 독립적으로 누적된다', async () => {
   const { togglePostLike } = await loadFreshLikesModule()
   const postId = await seedPost()
@@ -262,6 +299,42 @@ test('toggleCommentLike: 다른 댓글의 좋아요 수에 영향을 주지 않�
   const resultB = await toggleCommentLike(commentB, seededLikerId)
   assert.equal(resultB.like_count, 1)
   assert.equal(await countCommentLikesRaw(commentA), 1)
+})
+
+test('toggleCommentLike: 저장된 like_count가 실제 행 수와 어긋나 있어도(원본 Postgres가 실제로 드리프트를 남기던 케이스) 토글 한 번으로 진짜 값으로 교정한다(행위 테스트)', async () => {
+  const { toggleCommentLike } = await loadFreshLikesModule()
+  const postId = await seedPost()
+  const commentId = await seedComment(postId)
+  const liker = await seedProfile({ display_name: '댓글오염테스트좋아요누른사람' })
+
+  // comment_likes는 원본 Postgres 트리거(update_comment_like_count)가 실제로
+  // 드리프트를 남기던 테이블이다(운영에서 20260703210026_restore_comments_
+  // like_count.sql로 컬럼·트리거·백필을 교정한 이력이 있다) — 그 시나리오를
+  // 오염된 저장값으로 재현한다. 실제 comment_likes 행은 0개인데
+  // comments.like_count는 99로 심는다.
+  await setupClient.execute({
+    sql: 'UPDATE comments SET like_count = 99 WHERE id = ?',
+    args: [commentId],
+  })
+
+  const result = await toggleCommentLike(commentId, liker)
+  const actualRows = await countCommentLikesRaw(commentId)
+  assert.equal(actualRows, 1, '토글 후 실제 comment_likes 행은 1개여야 한다')
+  assert.equal(
+    result.like_count,
+    1,
+    '반환값이 실제 행 수(1)와 같아야 한다 — 증감 구현이면 100을 반환해 이 단언이 실패한다'
+  )
+
+  const stored = await setupClient.execute({
+    sql: 'SELECT like_count FROM comments WHERE id = ?',
+    args: [commentId],
+  })
+  assert.equal(
+    Number(stored.rows[0].like_count),
+    1,
+    'DB에 저장된 like_count도 실제 행 수와 일치해야 한다'
+  )
 })
 
 // --------------------------------------------------- 소스 가드: 증감(+1/-1) 금지

@@ -127,7 +127,22 @@ export async function GET(request: NextRequest) {
       // Turso 쿼리 계층(getLikedPostIds, 배치 inArray)으로 옮겼다 — 게시글마다
       // 쿼리하지 않는다. postIds가 비면 getLikedPostIds가 쿼리 없이 즉시 빈
       // Set을 돌려준다.
-      const userLikedSet = userId ? await getLikedPostIds(userId, postIds) : new Set<string>()
+      //
+      // 리뷰 대응(2차): getLikedPostIds는 이 저장소의 다른 쿼리 계층 함수처럼
+      // 실패 시 throw한다 — 옛 Supabase 클라이언트는 조회 실패를 `{data,
+      // error}`로 삼켜서 "목록은 뜨고 하트만 안 채워진다"였는데, throw를
+      // 그대로 두면 apiGet 래퍼가 이 예외를 500으로 바꿔 게시판 목록
+      // 전체가 사라진다(로그인 사용자만 — 비로그인은 이 조회 자체를 안
+      // 탄다). 같은 diff의 나머지 6개 파일이 전부 `.catch()`로 이 흡수
+      // 성질을 보존했는데 여기만 빠뜨렸었다 — `.catch()`로 감싸 빈
+      // Set으로 흡수한다(하트만 안 채워지는 게 목록이 통째로 사라지는
+      // 것보다 낫다).
+      const userLikedSet = userId
+        ? await getLikedPostIds(userId, postIds).catch(error => {
+            console.error('[API] 게시판 목록 좋아요 조회 실패 — 하트 없이 계속 진행:', error)
+            return new Set<string>()
+          })
+        : new Set<string>()
 
       const posts: PostData[] = boardResult.posts.map(post => ({
         id: post.id,

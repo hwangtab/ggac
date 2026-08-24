@@ -1897,6 +1897,51 @@ const validatesPostsListLikedSetUsesTurso =
   /getLikedPostIds\(userId,\s*postIds\)/.test(boardListPostsApiSource) &&
   !/\.from\(\s*['"]post_likes['"]\s*\)/.test(stripComments(boardListPostsApiSource))
 
+// 코드리뷰 3차 대응: 위 `staleSupabaseReadOffenders`(displayPathsFullyOnTurso)는
+// 경로 6개를 하드코딩한 목록이라 "내일 누가 새 표시 경로를 만들어 Supabase에서
+// comments/post_likes/comment_likes/post_attachments를 읽어도" 게이트가
+// 침묵한다 — 그 목록에 없으니까. 화이트리스트로 뒤집는다: src/app·src/lib·
+// src/components 전체를 훑어 이 4개 테이블을 Supabase 스타일(`.from('테이블명')`,
+// 문자열 리터럴 — Drizzle의 `.from(comments)`처럼 식별자를 쓰는 쿼리 계층
+// 파일과 구분된다)로 참조하는 파일 집합을 구하고, 그 집합이 "지금 알려진
+// 예외"와 **정확히 일치**해야 한다고 단언한다. 신규 파일이 자동으로 걸리고,
+// Task 8이 예외 3개를 마저 옮기면 이 배열이 빈 배열이 되면서 계약이 저절로
+// 강해진다(그때는 아래 배열도 함께 비워야 가드가 유지된다).
+//
+// CommentSection.tsx는 이 라운드에서 Supabase 참조가 0이 됐지만 위
+// `displayPathsFullyOnTurso`(파일 6개 하드코딩) 목록엔 원래 없었다 — 대신
+// 살아있는 OR 가드(`annotatesAuthenticatedCommentLikeState`)의 옛 가지가
+// "브라우저에서 comment_likes를 직접 읽는 코드를 되살려도" 계속 통과시킨다.
+// 이 저장소 전체를 훑는 아래 검사는 src/components도 포함하므로,
+// CommentSection.tsx가 다시 `supabase.from('comment_likes')`를 쓰면 예외
+// 목록에 없는 새 파일로 걸린다 — 별도 가드를 추가하지 않고 이 반전만으로
+// 해결된다.
+const knownRemainingSupabaseReadsOfCommentsLikesAttachments = [
+  'src/app/api/admin/posts/route.ts',
+  'src/app/api/admin/reports/generate/route.ts',
+  'src/app/api/mypage/activity/route.ts',
+]
+const commentsLikesAttachmentsScanFiles = globSync('src/{app,lib,components}/**/*.@(ts|tsx)', {
+  cwd: root,
+  exclude: ['**/node_modules/**', '**/.next/**'],
+}).sort()
+const supabaseCommentsLikesAttachmentsTablePattern =
+  /from\(\s*['"](?:comments|post_likes|comment_likes|post_attachments)['"]\s*\)/
+const actualSupabaseReadsOfCommentsLikesAttachments = commentsLikesAttachmentsScanFiles.filter(
+  file =>
+    supabaseCommentsLikesAttachmentsTablePattern.test(
+      stripComments(readFileSync(join(root, file), 'utf8'))
+    )
+)
+const sortedKnownExceptions = [...knownRemainingSupabaseReadsOfCommentsLikesAttachments].sort()
+const commentsLikesAttachmentsWhitelistMatches =
+  actualSupabaseReadsOfCommentsLikesAttachments.join('\n') === sortedKnownExceptions.join('\n')
+const unexpectedCommentsLikesAttachmentsReaders =
+  actualSupabaseReadsOfCommentsLikesAttachments.filter(f => !sortedKnownExceptions.includes(f))
+const missingExpectedCommentsLikesAttachmentsReaders = sortedKnownExceptions.filter(
+  f => !actualSupabaseReadsOfCommentsLikesAttachments.includes(f)
+)
+
 const imageProxyPath = join(root, 'src/app/api/images/proxy/route.ts')
 const imageProxySource = readFileSync(imageProxyPath, 'utf8')
 const postViewPath = join(root, 'src/app/api/posts/[id]/view/route.ts')
@@ -4775,6 +4820,22 @@ if (!validatesPostsListLikedSetUsesTurso) {
       root,
       boardListPostsApiPath
     )}`
+  )
+}
+
+if (!commentsLikesAttachmentsWhitelistMatches) {
+  failures.push(
+    `Files reading comments/post_likes/comment_likes/post_attachments via Supabase-style .from('table') must exactly match the known-exception whitelist (everything else must read via the Turso query layer). ` +
+      (unexpectedCommentsLikesAttachmentsReaders.length > 0
+        ? `Unexpected new reader(s) not in the whitelist:\n${unexpectedCommentsLikesAttachmentsReaders
+            .map(f => `- ${f}`)
+            .join('\n')}\n`
+        : '') +
+      (missingExpectedCommentsLikesAttachmentsReaders.length > 0
+        ? `Whitelisted file(s) no longer reading these tables from Supabase — narrow knownRemainingSupabaseReadsOfCommentsLikesAttachments in this file to match (the contract just got stronger, which is good, but the exception list must be kept in sync):\n${missingExpectedCommentsLikesAttachmentsReaders
+            .map(f => `- ${f}`)
+            .join('\n')}`
+        : '')
   )
 }
 
