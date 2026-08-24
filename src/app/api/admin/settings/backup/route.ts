@@ -8,6 +8,7 @@ import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { logSecurityEvent } from '@/utils/security'
 import { createLogger, maskId } from '@/utils/logger'
 import { refreshSettingsCache } from '@/utils/systemSettings'
+import { updateSystemSetting } from '@/lib/server/systemSettingsWrite'
 
 const log = createLogger('admin/settings/backup')
 
@@ -197,17 +198,17 @@ export const POST = defineApiRoute<Record<string, unknown>>({
         }
 
         // 데이터베이스 업데이트
-        const { error: updateError } = await supabase.rpc('update_system_setting', {
-          p_category: category,
-          p_setting_key: setting_key,
-          p_setting_value: setting_value,
-        })
-
-        if (updateError) {
+        try {
+          await updateSystemSetting(supabase, {
+            category,
+            settingKey: setting_key,
+            settingValue: setting_value,
+            actorId: user.id,
+          })
+          restoreResults.push(`${category}.${setting_key}`)
+        } catch (updateError) {
           console.error(`Setting restore error for ${category}.${setting_key}:`, updateError)
           errorResults.push(`${category}.${setting_key}`)
-        } else {
-          restoreResults.push(`${category}.${setting_key}`)
         }
       } catch (err) {
         console.error(`Setting restore exception:`, err)
