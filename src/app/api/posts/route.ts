@@ -23,6 +23,7 @@ import { CATEGORIES, parseBoardCategory } from '@/constants/categories'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { annotateImageDimensionsSafe } from '@/utils/imageDimensions'
 import { getBoardListRevalidationPaths } from '@/lib/revalidationPaths'
+import { createPost } from '@/db/queries/posts'
 
 export const runtime = 'nodejs'
 export const revalidate = 60
@@ -176,8 +177,6 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const supabase = await createSupabaseServer()
-
   // 레이트리밋은 원래도 인증 확인보다 먼저 검사했다 — 순서를 그대로 유지한다.
   const rateLimiter = await applyRateLimit({
     ...RATE_LIMIT_CONFIGS.GENERAL_API,
@@ -221,9 +220,14 @@ export async function POST(request: NextRequest) {
       const isPinned = category === '공지'
       // content_format은 항상 'html' → 저장 전 본문 이미지 크기 주입(CLS 방지). 절대 throw 안 함.
       const contentToSave = await annotateImageDimensionsSafe(content)
-      const { data: post, error: insertError } = await supabase
-        .from('posts')
-        .insert({
+      // 단계 2c(Task 5): posts INSERT를 Supabase에서 Turso 쿼리 계층
+      // createPost(Turso)로 옮겼다. 응답 스키마는 동일 — 기존 Supabase
+      // `.insert(...).select().single()`도 author 임베드 없이 posts 컬럼만
+      // 돌려줬고(호출부 usePostCreation.ts는 post.id만 읽는다), createPost도
+      // 마찬가지다. 삽입 실패 시 기존과 같은 400(badRequest)으로 응답한다.
+      let post
+      try {
+        post = await createPost({
           title,
           content: contentToSave,
           content_format: 'html',
@@ -231,12 +235,11 @@ export async function POST(request: NextRequest) {
           author_id: user.id,
           is_pinned: isPinned,
           pinned_at: isPinned ? new Date().toISOString() : null,
-        } as never)
-        .select()
-        .single()
-
-      if (insertError || !post) {
-        throw ApiError.badRequest(insertError?.message || '게시글 작성에 실패했습니다.')
+        })
+      } catch (insertError) {
+        throw ApiError.badRequest(
+          insertError instanceof Error ? insertError.message : '게시글 작성에 실패했습니다.'
+        )
       }
 
       try {

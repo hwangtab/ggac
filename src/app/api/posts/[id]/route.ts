@@ -21,7 +21,7 @@ import { parseJsonObjectBody } from '@/utils/requestBody'
 import { annotateImageDimensionsSafe } from '@/utils/imageDimensions'
 import { getBoardPostRevalidationPaths } from '@/lib/revalidationPaths'
 import { requireUser, requireActiveMember, getOptionalUser } from '@/lib/server/memberAuth'
-import { getPostById } from '@/db/queries/posts'
+import { getPostById, updatePost, softDeletePost } from '@/db/queries/posts'
 import { getProfileById } from '@/db/queries/profiles'
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -287,8 +287,6 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       return rateLimitResult.response
     }
 
-    const supabase = await createSupabaseServer()
-
     // 게시글 수정은 로그인 + 승인된 활성 멤버만 가능한 강제 검사였다.
     const auth = await requireActiveMember()
     if (auth instanceof NextResponse) return auth
@@ -323,13 +321,13 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       return ApiError.badRequest('본문 형식이 올바르지 않습니다.').toNextResponse()
     }
 
-    const { data: post, error: postError } = await supabase
-      .from('posts')
-      .select('id, author_id, category, is_deleted, is_pinned, pinned_at')
-      .eq('id', validPostId)
-      .single()
+    // 단계 2c(Task 5): posts 조회를 Supabase `.eq('id', validPostId)`에서 Turso
+    // 쿼리 계층 getPostById(validPostId, { includeDeleted: true })로 옮겼다 —
+    // is_deleted 필터 없이 조회한 뒤 애플리케이션에서 분기하던 기존 동작(GET
+    // 핸들러가 이미 Task 4에서 옮긴 것과 같은 패턴)을 그대로 재현한다.
+    const post = await getPostById(validPostId, { includeDeleted: true })
 
-    if (postError || !post) {
+    if (!post) {
       return ApiError.notFound('게시글을 찾을 수 없습니다.').toNextResponse()
     }
 
@@ -345,22 +343,27 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     // html 본문일 때만 저장 전 이미지 크기 주입(CLS 방지). Safe 래퍼는 절대 throw 안 함.
     const contentToSave =
       contentFormat === 'html' ? await annotateImageDimensionsSafe(content) : content
-    const { data: updatedPost, error: updateError } = await supabase
-      .from('posts')
-      .update({
+    // updated_at은 더 이상 여기서 직접 계산하지 않는다 — Postgres
+    // update_posts_updated_at 트리거가 SQLite에는 없어서, posts 스키마의
+    // $onUpdate 훅(src/db/schema/_shared.ts)이 updatePost의 .set() 호출마다
+    // 자동으로 현재 시각을 채운다(트리거 재현, Task 3 member_profiles와 동일
+    // 메커니즘).
+    let updatedPost
+    try {
+      updatedPost = await updatePost(validPostId, {
         title,
         content: contentToSave,
         content_format: contentFormat,
         category,
         is_pinned: shouldPin,
         pinned_at: shouldPin ? post.pinned_at || new Date().toISOString() : null,
-        updated_at: new Date().toISOString(),
-      } as never)
-      .eq('id', validPostId)
-      .select()
-      .single()
+      })
+    } catch (updateError) {
+      console.error('[API] 게시글 수정 실패:', updateError)
+      updatedPost = null
+    }
 
-    if (updateError || !updatedPost) {
+    if (!updatedPost) {
       return ApiError.internalServerError('게시글 수정에 실패했습니다.').toNextResponse()
     }
 
@@ -406,31 +409,27 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
 
     const validPostId = uuidValidation.sanitized
 
-    const supabase = await createSupabaseServer()
-
     // 게시글 삭제는 로그인만 확인한다(승인 여부는 보지 않음). 소유자/관리자
     // 판정은 아래에서 별도로 한다.
     const auth = await requireUser()
     if (auth instanceof NextResponse) return auth
     const { user } = auth
 
-    // 관리자 여부 확인
+    // 관리자 여부 확인. 단계 2c(Task 5): member_profiles 조회를 Supabase
+    // `.eq('id', user.id)`에서 Turso 쿼리 계층 getProfileById(user.id)로
+    // 옮겼다 — 조건식(is_admin && registration_status==='approved' &&
+    // is_active) 자체는 문자 그대로 보존.
     let isAdmin = false
-    const { data: prof } = await supabase
-      .from('member_profiles')
-      .select('is_admin, registration_status, is_active')
-      .eq('id', user.id)
-      .single()
+    const prof = await getProfileById(user.id).catch(() => null)
     isAdmin = !!(prof?.is_admin && prof.registration_status === 'approved' && prof.is_active)
 
-    // 게시글 조회 및 소유자 확인
-    const { data: post, error: postError } = await supabase
-      .from('posts')
-      .select('id, author_id, category, is_deleted')
-      .eq('id', validPostId)
-      .single()
+    // 게시글 조회 및 소유자 확인. 단계 2c(Task 5): posts 조회를 Supabase
+    // `.eq('id', validPostId)`에서 Turso 쿼리 계층 getPostById(validPostId,
+    // { includeDeleted: true })로 옮겼다 — is_deleted 필터 없이 조회한 뒤
+    // 아래에서 직접 분기하는 기존 동작을 그대로 재현한다.
+    const post = await getPostById(validPostId, { includeDeleted: true })
 
-    if (postError || !post) {
+    if (!post) {
       return ApiError.notFound('게시글을 찾을 수 없습니다.').toNextResponse()
     }
 
@@ -443,13 +442,13 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       return ApiError.forbidden('게시글을 삭제할 권한이 없습니다.').toNextResponse()
     }
 
-    // 소프트 삭제 수행
-    const { error: updateError } = await supabase
-      .from('posts')
-      .update({ is_deleted: true })
-      .eq('id', validPostId)
-
-    if (updateError) {
+    // 소프트 삭제 수행. 단계 2c(Task 5): Supabase
+    // `.update({ is_deleted: true }).eq('id', validPostId)`에서 Turso 쿼리
+    // 계층 softDeletePost(validPostId)로 옮겼다 — 여전히 소프트 삭제다(하드
+    // 삭제로 바뀌지 않았다).
+    try {
+      await softDeletePost(validPostId)
+    } catch (updateError) {
       console.error('[API] 게시글 삭제 실패:', updateError)
       return ApiError.internalServerError('게시글 삭제에 실패했습니다.').toNextResponse()
     }

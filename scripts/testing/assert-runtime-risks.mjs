@@ -1287,6 +1287,13 @@ const imageModalPath = join(root, 'src/components/attachments/ImageModal.tsx')
 const imageModalSource = readFileSync(imageModalPath, 'utf8')
 const attachmentActionsPath = join(root, 'src/hooks/useAttachmentActions.ts')
 const attachmentActionsSource = readFileSync(attachmentActionsPath, 'utf8')
+// 단계 2c(Task 5): PUT의 갱신을 Supabase
+// `.update(updateData).eq('id', attachmentId).eq('post_id', postId)`에서
+// Turso 쿼리 계층 updateAttachment(attachmentId, postId, patch)로, DELETE의
+// 삭제를 Supabase `.from('post_attachments').delete().eq('id',
+// attachmentId).eq('post_id', postId)`에서 removeAttachment(attachmentId,
+// postId)로 옮겼다 — 둘 다 인자 순서(attachmentId, postId)로 같은 스코프를
+// 강제한다. 옛 Supabase 패턴도 계속 허용해 두 형태 모두 통과시킨다.
 const validatesAttachmentMetadataUpdate =
   /validateUUID\(params\.id,\s*['"]게시글 ID['"]\)/.test(postAttachmentDetailSource) &&
   /validateUUID\(params\.attachmentId,\s*['"]첨부파일 ID['"]\)/.test(postAttachmentDetailSource) &&
@@ -1294,16 +1301,24 @@ const validatesAttachmentMetadataUpdate =
   /typeof alt_text !== ['"]string['"]/.test(postAttachmentDetailSource) &&
   /typeof is_primary !== ['"]boolean['"]/.test(postAttachmentDetailSource) &&
   /Number\.isInteger\(sort_order\)/.test(postAttachmentDetailSource) &&
-  /\.update\(updateData\)[\s\S]*?\.eq\(['"]id['"],\s*attachmentId\)[\s\S]*?\.eq\(['"]post_id['"],\s*postId\)/.test(
+  (/\.update\(updateData\)[\s\S]*?\.eq\(['"]id['"],\s*attachmentId\)[\s\S]*?\.eq\(['"]post_id['"],\s*postId\)/.test(
     postAttachmentDetailSource
-  ) &&
-  /from\(['"]post_attachments['"]\)[\s\S]*?\.delete\(\)[\s\S]*?\.eq\(['"]id['"],\s*attachmentId\)[\s\S]*?\.eq\(['"]post_id['"],\s*postId\)/.test(
+  ) ||
+    /updateAttachment\(attachmentId,\s*postId,\s*patch\)/.test(postAttachmentDetailSource)) &&
+  (/from\(['"]post_attachments['"]\)[\s\S]*?\.delete\(\)[\s\S]*?\.eq\(['"]id['"],\s*attachmentId\)[\s\S]*?\.eq\(['"]post_id['"],\s*postId\)/.test(
     postAttachmentDetailSource
-  )
+  ) ||
+    /removeAttachment\(attachmentId,\s*postId\)/.test(postAttachmentDetailSource))
+// 단계 2c(Task 5): DELETE의 관리자 판정을 Supabase
+// `.select('is_admin, registration_status, is_active').eq('id', user.id)`
+// 에서 Turso 쿼리 계층 getProfileById(user.id)로 옮겼다. 조건식
+// (profile?.is_admin === true && ... === 'approved' && ... === true)
+// 리터럴은 그대로다 — 옛 Supabase select 리터럴도 계속 허용한다.
 const validatesAttachmentDeleteAdminStatus =
-  /select\(['"]is_admin,\s*registration_status,\s*is_active['"]\)/.test(
+  (/select\(['"]is_admin,\s*registration_status,\s*is_active['"]\)/.test(
     postAttachmentDetailSource
-  ) &&
+  ) ||
+    /getProfileById\(user\.id\)/.test(postAttachmentDetailSource)) &&
   /profile\?\.is_admin === true[\s\S]*?profile\.registration_status === ['"]approved['"][\s\S]*?profile\.is_active === true/.test(
     postAttachmentDetailSource
   )
@@ -1777,8 +1792,15 @@ const mypageProfileEditFormPath = join(
 const mypageProfileEditFormSource = readFileSync(mypageProfileEditFormPath, 'utf8')
 const mypageArtistPagePath = join(root, 'src/app/[locale]/mypage/artist/page.tsx')
 const mypageArtistPageSource = readFileSync(mypageArtistPagePath, 'utf8')
+// 단계 2c(Task 5): DELETE 핸들러의 관리자 판정을 Supabase
+// `.select('is_admin, registration_status, is_active').eq('id', user.id)`에서
+// Turso 쿼리 계층 getProfileById(user.id)로 옮겼다(GET 핸들러는 Task 4에서
+// 이미 같은 전환을 마쳤다). 조건식(prof?.is_admin && ... === 'approved' &&
+// prof.is_active) 리터럴은 두 핸들러 모두 그대로다 — 옛 Supabase select
+// 리터럴도 계속 허용해 두 형태 모두 통과시킨다.
 const validatesPostDetailAdminStatus =
-  /select\(['"]is_admin,\s*registration_status,\s*is_active['"]\)/.test(postDetailSource) &&
+  (/select\(['"]is_admin,\s*registration_status,\s*is_active['"]\)/.test(postDetailSource) ||
+    /getProfileById\(user\.id\)/.test(postDetailSource)) &&
   /prof\?\.is_admin && prof\.registration_status === ['"]approved['"] && prof\.is_active/.test(
     postDetailSource
   )
