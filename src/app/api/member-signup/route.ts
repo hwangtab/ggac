@@ -9,7 +9,7 @@
  * `signUpEmail`을 호출한 뒤 프로필을 직접 업서트한다.
  *
  * 순서: 레이트리밋 → registration_enabled 확인 → 입력 검증 →
- * `auth.api.signUpEmail`(Set-Cookie 확보) → 프로필 업서트(서비스롤) →
+ * `auth.api.signUpEmail`(Set-Cookie 확보) → 프로필 업서트(Turso) →
  * 응답에 Set-Cookie 전달.
  *
  * `disableSignUp: true`(`src/lib/auth/server.ts`)가 켜져 있는 한
@@ -26,7 +26,7 @@ import { auth } from '@/lib/auth/server'
 import { buildSignupProfileRow, isValidBirthDate } from '@/lib/auth/signupProfile'
 import { safeErrorMessage } from '@/lib/auth/errorMessage'
 import { getSystemSettings } from '@/middleware/settings'
-import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
+import { upsertProfile, type UpsertProfileInput } from '@/db/queries/profiles'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createIPKeyGenerator } from '@/lib/server/rateLimit'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { ApiSuccess, ApiError as HttpApiError } from '@/utils/apiWrapper'
@@ -188,7 +188,7 @@ export async function POST(request: NextRequest) {
       return HttpApiError.internalServerError('가입 처리 중 오류가 발생했습니다.').toNextResponse()
     }
 
-    // 5) 프로필 업서트(7필드 포함, 서비스롤) — Task 3의 databaseHooks.user.create.after
+    // 5) 프로필 업서트(7필드 포함, Turso) — databaseHooks.user.create.after
     // 훅이 이미 만든 pending/비활성 기본 행을 여기서 덮어쓴다. 실패해도 계정은 이미
     // 만들어졌으므로 가입 자체를 실패시키지 않고 로그로만 드러낸다(기존 훅의 정책과 동일).
     // `profileSaved`로 결과를 들고 있다가 6)에서 응답 문구·상태 코드를 가른다 —
@@ -208,11 +208,7 @@ export async function POST(request: NextRequest) {
         account_number: body.account_number,
         account_holder: body.account_holder,
       })
-      const admin = createServiceRoleClient()
-      const { error } = await admin
-        .from('member_profiles')
-        .upsert(profile as never, { onConflict: 'id' })
-      if (error) throw error
+      await upsertProfile(profile as unknown as UpsertProfileInput)
     } catch (error) {
       profileSaved = false
       log.error(

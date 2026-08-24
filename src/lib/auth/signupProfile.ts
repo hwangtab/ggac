@@ -1,10 +1,12 @@
 /**
- * 가입 폼 입력 → Supabase `member_profiles` 행.
+ * 가입 폼 입력 → `member_profiles` 행.
  *
  * 키는 **snake_case**다. 단계 2b-1에서 이 프로젝트는 정확히 이 지점에서
  * 한 번 데였다 — snake_case를 돌려주는 함수의 결과를 camelCase를 기대하는
- * ORM에 넘겨 `NOT NULL constraint failed`가 났다. 여기서는 Supabase REST에
- * 그대로 넘기므로 snake_case가 맞다.
+ * ORM에 넘겨 `NOT NULL constraint failed`가 났다. 단계 2c부터는
+ * `src/db/queries/profiles.ts`의 `upsertProfile`(Turso)에 넘긴다 — 그 함수가
+ * snake_case 입력을 받아 내부에서 camelCase로 변환하므로 여기서는 여전히
+ * snake_case를 유지한다.
  *
  * 클라이언트가 보낸 `registration_status`·`is_admin` 따위는 **읽지 않는다.**
  * 신규 가입자는 무조건 승인 대기·비활성이다.

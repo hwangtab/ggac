@@ -3,6 +3,7 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { nextCookies } from 'better-auth/next-js'
 
 import { db } from '@/db/client'
+import { upsertProfile, type UpsertProfileInput } from '@/db/queries/profiles'
 import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
 import { logger, maskId } from '@/utils/logger'
 
@@ -184,21 +185,23 @@ export const auth = betterAuth({
             // 처리하고, 그 외 실패(진짜 검증 실패 등)는 그대로 던진다.
             await ensureSupabaseAuthShadowUser(user.id, user.email)
 
-            // (2) buildMemberProfileRow는 Postgres 컬럼명(snake_case)의 키를
-            // 돌려준다. 승인 화면(admin/members)이 Supabase의 member_profiles를
-            // 읽으므로(콘텐츠 이관 전까지 Supabase가 권위), 여기서도 Supabase에
-            // 직접 업서트한다 — Turso에 쓰면 새 가입자가 관리자에게 안 보인다.
-            // 그 다음에야 이 upsert가 FK를 통과한다.
+            // (2) buildMemberProfileRow는 snake_case 키를 돌려준다
+            // (`src/db/queries/profiles.ts`의 `upsertProfile`이 기대하는 입력
+            // 모양과 같다). 단계 2c(Task 3)부터 프로필의 권위는 Turso다 —
+            // 여기서 Turso에 직접 업서트한다. **주의**: `/admin/members` 등
+            // 나머지 `member_profiles` 라우트는 Task 3의 후속 작업(Step 7)이
+            // 전환하기 전까지 여전히 Supabase를 읽는다 — 그 전환이 끝나기
+            // 전에는 이 훅으로 가입한 신규 회원이 승인 화면에 보이지 않는다
+            // (읽는 DB와 쓰는 DB가 갈렸으므로 당연한 과도기 증상이지 이 훅의
+            // 결함이 아니다). Supabase 쪽 껍데기 행(위 1번)은 여전히 만든다 —
+            // 다른 테이블(user_activities 등)의 FK가 아직 auth.users를
+            // 가리키기 때문이다(단계 4에서 함께 걷어낸다).
             const profile = buildMemberProfileRow({
               id: user.id,
               email: user.email,
               name: user.name,
             })
-            const admin = createServiceRoleClient()
-            const { error } = await admin
-              .from('member_profiles')
-              .upsert(profile as never, { onConflict: 'id' })
-            if (error) throw error
+            await upsertProfile(profile as unknown as UpsertProfileInput)
           } catch (error) {
             // Postgres 트리거(handle_new_user)는 이 실패를 EXCEPTION WHEN OTHERS로
             // 삼켜서 프로필 없는 사용자를 조용히 만들었다. 여기서는 로그로 드러낸다
