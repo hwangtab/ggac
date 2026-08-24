@@ -14,6 +14,7 @@ import {
   structuredDataToScript,
 } from '@/utils/structuredData'
 import { listPosts, getPostById } from '@/db/queries/posts'
+import { listCommentsKeyset } from '@/db/queries/comments'
 
 function normalizePostRouteId(id: string): string | null {
   const validation = validateUUID(id, '게시글 ID')
@@ -171,27 +172,11 @@ async function getInitialPostData(
       })
 
   try {
-    // 게시글(+저자)은 Turso(getPostById)에서, 댓글·첨부는 아직 Supabase가
-    // 권위라 그대로 병렬 실행한다 — 이 함수 하나가 두 DB를 읽는 과도기
-    // 상태다(댓글 쿼리 모듈 전환은 Task 6, 브리프가 명시적으로 허용한 형태).
-    const commentsQuery = supabaseAdmin
-      .from('comments')
-      .select(
-        `
-        id,
-        content,
-        author_id,
-        created_at,
-        like_count,
-        author:member_profiles!comments_author_id_fkey (
-          display_name
-        )
-      `
-      )
-      .eq('post_id', postId)
-      .order('created_at', { ascending: true })
-      .limit(20)
-
+    // 게시글(+저자)·댓글은 Turso에서, 첨부는 아직 Supabase가 권위라 그대로
+    // 병렬 실행한다 — 첨부 쿼리 모듈 전환은 Task 8(board_posts_with_stats
+    // 뷰) 몫이다. 단계 2c(Task 6)에서 댓글(commentsQuery)을
+    // listCommentsKeyset(Turso)으로 옮겼다 — 정렬(created_at asc)·개수(20)는
+    // 그대로다.
     const attachmentsQuery = supabaseAdmin
       .from('post_attachments')
       .select('*')
@@ -200,17 +185,23 @@ async function getInitialPostData(
 
     let post: Awaited<ReturnType<typeof getPostById>> = null
     let postFetchError: unknown = null
-    const [postResult, { data: commentsRaw }, { data: attachmentsRaw }] = await Promise.all([
+    const [postResult, commentsRaw, { data: attachmentsRaw }] = await Promise.all([
       getPostById(postId, { includeDeleted: false })
         .then(result => ({ data: result, error: null as unknown }))
         .catch(error => ({ data: null, error })),
-      commentsQuery,
+      // 댓글 조회 실패는(예: 순단) 옛 Supabase 경로가 그랬듯 게시글 자체는
+      // 계속 렌더하고 댓글만 빈 배열로 대체한다 — 게시글 조회 실패(위
+      // postResult)만 error.tsx로 보내는 정책과 일관된다.
+      listCommentsKeyset(postId, { limit: 20 }).catch(error => {
+        console.error('초기 댓글 조회 실패 — 빈 배열로 대체:', error)
+        return [] as Awaited<ReturnType<typeof listCommentsKeyset>>
+      }),
       attachmentsQuery,
     ])
     post = postResult.data
     postFetchError = postResult.error
 
-    const comments = Array.isArray(commentsRaw) ? commentsRaw : commentsRaw ? [commentsRaw] : []
+    const comments = commentsRaw
     const attachments = Array.isArray(attachmentsRaw)
       ? attachmentsRaw
       : attachmentsRaw

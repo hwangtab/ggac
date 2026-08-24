@@ -1267,13 +1267,20 @@ const validatesImagesApiPublicPathBoundary =
   !/application\/octet-stream/.test(imagesApiSource)
 const commentDeletePath = join(root, 'src/app/api/posts/[id]/comments/[commentId]/route.ts')
 const commentDeleteSource = readFileSync(commentDeletePath, 'utf8')
+// 단계 2c(Task 6): 소유권 조회·삭제 둘 다 Supabase `.eq('id',
+// validCommentId).eq('post_id', validPostId)`에서 Turso 쿼리 계층
+// getCommentById(validCommentId, validPostId)/deleteComment(validCommentId,
+// validPostId)로 옮겼다(둘 다 두 인자로 이중 스코프를 강제) — 옛 Supabase
+// 패턴도 계속 허용한다.
 const scopesCommentDeleteToPost =
-  /from\(['"]comments['"]\)[\s\S]*?\.select\(['"]id, author_id['"]\)[\s\S]*?\.eq\(['"]id['"],\s*validCommentId\)[\s\S]*?\.eq\(['"]post_id['"],\s*validPostId\)/.test(
+  (/from\(['"]comments['"]\)[\s\S]*?\.select\(['"]id, author_id['"]\)[\s\S]*?\.eq\(['"]id['"],\s*validCommentId\)[\s\S]*?\.eq\(['"]post_id['"],\s*validPostId\)/.test(
     commentDeleteSource
-  ) &&
-  /from\(['"]comments['"]\)[\s\S]*?\.delete\(\)[\s\S]*?\.eq\(['"]id['"],\s*validCommentId\)[\s\S]*?\.eq\(['"]post_id['"],\s*validPostId\)/.test(
+  ) ||
+    /getCommentById\(validCommentId,\s*validPostId\)/.test(commentDeleteSource)) &&
+  (/from\(['"]comments['"]\)[\s\S]*?\.delete\(\)[\s\S]*?\.eq\(['"]id['"],\s*validCommentId\)[\s\S]*?\.eq\(['"]post_id['"],\s*validPostId\)/.test(
     commentDeleteSource
-  )
+  ) ||
+    /deleteComment\(validCommentId,\s*validPostId\)/.test(commentDeleteSource))
 const postAttachmentDetailPath = join(
   root,
   'src/app/api/posts/[id]/attachments/[attachmentId]/route.ts'
@@ -1511,12 +1518,20 @@ const validatesEventApplicationDeleteId =
   !/\.delete\(\)\.eq\(['"]id['"],\s*id\)/.test(adminEventApplicationsApiSource)
 const userLikesPath = join(root, 'src/app/api/users/[id]/likes/route.ts')
 const userLikesSource = readFileSync(userLikesPath, 'utf8')
+// 단계 2c(Task 6): get_user_likes RPC 호출(`p_user_id: requestedUserId`)과
+// post_likes 총 개수 Supabase 카운트(`.eq('user_id', requestedUserId)`)를
+// Turso 쿼리 계층 listUserLikes(requestedUserId, ...)/
+// countUserLikes(requestedUserId)로 옮겼다 — 옛 Supabase/RPC 패턴도 계속
+// 허용해 두 형태 모두 통과시킨다(Task 3/4/5가 세운 관례).
 const validatesUserLikesRouteId =
   /validateUUID\(resolvedParams\.id,\s*['"]사용자 ID['"]\)/.test(userLikesSource) &&
-  /p_user_id:\s*requestedUserId/.test(userLikesSource) &&
-  /\.eq\(['"]user_id['"],\s*requestedUserId\)/.test(userLikesSource)
+  (/p_user_id:\s*requestedUserId/.test(userLikesSource) ||
+    /listUserLikes\(requestedUserId,/.test(userLikesSource)) &&
+  (/\.eq\(['"]user_id['"],\s*requestedUserId\)/.test(userLikesSource) ||
+    /countUserLikes\(requestedUserId\)/.test(userLikesSource))
 const validatesUserLikesAdminStatus =
-  /select\(['"]is_admin,\s*registration_status,\s*is_active['"]\)/.test(userLikesSource) &&
+  (/select\(['"]is_admin,\s*registration_status,\s*is_active['"]\)/.test(userLikesSource) ||
+    /getProfileById\(user\.id\)/.test(userLikesSource)) &&
   /profile\.registration_status !== ['"]approved['"][\s\S]*?!profile\.is_active/.test(
     userLikesSource
   )
@@ -1637,8 +1652,13 @@ const validatesCommentCursors =
   /if\s*\(cursor && !parsedCursor\)/.test(commentsListApiSource) &&
   /formatTimestampUuidCursor\(last\.created_at,\s*last\.id\)/.test(commentsApiSource) &&
   /formatTimestampUuidCursor\(last\.created_at,\s*last\.id\)/.test(commentsListApiSource) &&
-  /p_created_at:\s*parsedCursor\?\.createdAt \?\? null/.test(commentsListApiSource) &&
-  /p_id:\s*parsedCursor\?\.id \?\? null/.test(commentsListApiSource) &&
+  // 단계 2c(Task 6): get_post_comments_keyset RPC 파라미터
+  // (p_created_at/p_id)를 listCommentsKeyset(Turso)의 createdAt/id 인자로
+  // 옮겼다 — 옛 RPC 패턴도 계속 허용해 두 형태 모두 통과시킨다.
+  (/p_created_at:\s*parsedCursor\?\.createdAt \?\? null/.test(commentsListApiSource) ||
+    /createdAt:\s*parsedCursor\?\.createdAt \?\? null/.test(commentsListApiSource)) &&
+  (/p_id:\s*parsedCursor\?\.id \?\? null/.test(commentsListApiSource) ||
+    /id:\s*parsedCursor\?\.id \?\? null/.test(commentsListApiSource)) &&
   !/decodeURIComponent\(cursor\)/.test(commentsApiSource) &&
   !/decodeURIComponent\(cursor\)/.test(commentsListApiSource)
 const commentLikesHelperPath = join(root, 'src/lib/server/commentLikes.ts')
@@ -1649,13 +1669,24 @@ const commentSectionPath = join(root, 'src/components/CommentSection.tsx')
 const commentSectionSource = existsSync(commentSectionPath)
   ? readFileSync(commentSectionPath, 'utf8')
   : ''
+const likesQueriesPath = join(root, 'src/db/queries/likes.ts')
+const likesQueriesSource = existsSync(likesQueriesPath)
+  ? readFileSync(likesQueriesPath, 'utf8')
+  : ''
+// 단계 2c(Task 6): comment_likes 배치 조회를 Supabase에서 Turso 쿼리
+// 계층(getLikedCommentIds, src/db/queries/likes.ts)으로 옮겼다 —
+// commentLikes.ts는 이제 그 함수를 감싸기만 하고, CommentSection도 브라우저에서
+// 테이블을 직접 읽는 대신 comments-list API를 다시 호출한다. 옛 Supabase
+// 리터럴도 계속 허용해 두 형태 모두 통과시킨다(Task 3/4/5가 세운 관례).
 const annotatesAuthenticatedCommentLikeState =
   /export async function getUserLikedCommentIds/.test(commentLikesHelperSource) &&
-  /\.from\(['"]comment_likes['"]\)/.test(commentLikesHelperSource) &&
-  /\.eq\(['"]user_id['"],\s*userId\)/.test(commentLikesHelperSource) &&
+  ((/\.from\(['"]comment_likes['"]\)/.test(commentLikesHelperSource) &&
+    /\.eq\(['"]user_id['"],\s*userId\)/.test(commentLikesHelperSource)) ||
+    (/getLikedCommentIds\(userId,\s*commentIds\)/.test(commentLikesHelperSource) &&
+      /eq\(commentLikes\.userId,\s*userId\)/.test(likesQueriesSource))) &&
   // 상세 페이지 SSR 셸은 ISR 캐시를 위해 개인화(세션 기반 is_liked)를 포함하지
   // 않는다(전수감사 P2) — 서버는 is_liked:false로 내려주고, 복원은 클라이언트
-  // CommentSection이 로그인 사용자(currentUserId)에 한해 comment_likes를 배치
+  // CommentSection이 로그인 사용자(currentUserId)에 한해 좋아요 상태를 다시
   // 조회해 담당한다. 셸에 세션 조회가 다시 들어오면 라우트가 동적으로 전환되므로
   // 금지 가드를 함께 둔다.
   /is_liked:\s*false/.test(boardDetailPageSource) &&
@@ -1663,17 +1694,26 @@ const annotatesAuthenticatedCommentLikeState =
   !/createSupabaseServer/.test(boardDetailPageSource) &&
   // 클라이언트 복원 경로가 실재하는지 검증 — 이게 없으면 초기 댓글이 항상 빈 하트로
   // 표시되고 재클릭 시 기존 좋아요가 삭제된다(코드리뷰 CONFIRMED). currentUserId가
-  // 채워졌을 때 comment_likes를 조회해 liked인 것만 is_liked:true로 병합해야 한다.
+  // 채워졌을 때 좋아요 상태를 다시 받아 is_liked를 병합해야 한다. 단계 2c:
+  // 브라우저에서 comment_likes 테이블을 직접 읽던 옛 방식을 comments-list API
+  // 재호출(fetchCommentsFromApi)로 옮겼다.
   /if \(!currentUserId \|\| initialComments\.length === 0\) return/.test(commentSectionSource) &&
-  /\.from\(['"]comment_likes['"]\)[\s\S]{0,120}?\.eq\(['"]user_id['"],\s*currentUserId\)/.test(
+  (/\.from\(['"]comment_likes['"]\)[\s\S]{0,120}?\.eq\(['"]user_id['"],\s*currentUserId\)/.test(
     commentSectionSource
-  ) &&
-  /is_liked:\s*true/.test(commentSectionSource) &&
-  // 인증 사용자 대상 댓글 목록 API는 계속 서버에서 like 상태를 주석한다
-  /getUserLikedCommentIds\(sessionSupabase,\s*user\.id,\s*commentIds\)/.test(commentsApiSource) &&
-  /getUserLikedCommentIds\(sessionSupabase,\s*user\.id,\s*commentIds\)/.test(
+  ) ||
+    /fetchCommentsFromApi\(postId\)/.test(commentSectionSource)) &&
+  (/is_liked:\s*true/.test(commentSectionSource) ||
+    /is_liked:\s*hydrated\.is_liked/.test(commentSectionSource)) &&
+  // 인증 사용자 대상 댓글 목록 API는 계속 서버에서 like 상태를 주석한다 —
+  // 단계 2c에서 getUserLikedCommentIds가 SupabaseClient 인자를 받지 않게
+  // 바뀌었다(commentLikes.ts가 이제 Turso를 직접 부르므로 세션 클라이언트를
+  // 넘길 필요가 없다).
+  (/getUserLikedCommentIds\(sessionSupabase,\s*user\.id,\s*commentIds\)/.test(commentsApiSource) ||
+    /getUserLikedCommentIds\(user\.id,\s*commentIds\)/.test(commentsApiSource)) &&
+  (/getUserLikedCommentIds\(sessionSupabase,\s*user\.id,\s*commentIds\)/.test(
     commentsListApiSource
-  ) &&
+  ) ||
+    /getUserLikedCommentIds\(user\.id,\s*commentIds\)/.test(commentsListApiSource)) &&
   /is_liked:\s*likedCommentIds\.has\(String\(c\.id\)\)/.test(commentsApiSource) &&
   /is_liked:\s*likedCommentIds\.has\(String\(c\.id\)\)/.test(commentsListApiSource)
 const validatesPostRouteIdsUseSanitizedUuid =
@@ -1742,17 +1782,32 @@ const validatesPostRouteIdsUseSanitizedUuid =
   /\.eq\(['"]post_id['"],\s*validPostId\)/.test(boardPostDetailSource) &&
   !/\.eq\(['"]id['"],\s*postId\)/.test(boardPostDetailSource) &&
   /const postId = uuidValidation\.sanitized/.test(commentsApiSource) &&
-  /\.eq\(['"]post_id['"],\s*postId\)/.test(commentsApiSource) &&
+  // 단계 2c(Task 6): 댓글 목록 조회를 Supabase `.eq('post_id', postId)`에서
+  // Turso 쿼리 계층 listCommentsKeyset(postId, ...)로 옮겼다 — 옛 Supabase
+  // 패턴도 계속 허용해 두 형태 모두 통과시킨다.
+  (/\.eq\(['"]post_id['"],\s*postId\)/.test(commentsApiSource) ||
+    /listCommentsKeyset\(postId,/.test(commentsApiSource)) &&
   /const validPostId = postIdValidation\.sanitized/.test(commentsApiSource) &&
   /post_id:\s*validPostId/.test(commentsApiSource) &&
   !/post_id:\s*postId/.test(commentsApiSource) &&
   /const postId = uuidValidation\.sanitized/.test(commentsListApiSource) &&
-  /p_post_id:\s*postId/.test(commentsListApiSource) &&
-  /\.eq\(['"]post_id['"],\s*postId\)/.test(commentsListApiSource) &&
+  // 단계 2c: get_post_comments_keyset RPC 시도 + 수동 Supabase 폴백
+  // 이중 경로를 listCommentsKeyset(Turso) 단일 경로로 대체했다 — 옛
+  // RPC/Supabase 패턴도 계속 허용한다.
+  (/p_post_id:\s*postId/.test(commentsListApiSource) ||
+    /listCommentsKeyset\(postId,/.test(commentsListApiSource)) &&
+  (/\.eq\(['"]post_id['"],\s*postId\)/.test(commentsListApiSource) ||
+    /listCommentsKeyset\(postId,/.test(commentsListApiSource)) &&
   !/p_post_id:\s*id/.test(commentsListApiSource) &&
   /const validPostId = uuidValidation\.sanitized/.test(postLikesApiSource) &&
-  /\.eq\(['"]id['"],\s*validPostId\)/.test(postLikesApiSource) &&
-  /\.eq\(['"]post_id['"],\s*validPostId\)/.test(postLikesApiSource) &&
+  // 단계 2c: 게시글 존재 확인을 Supabase `.eq('id', validPostId)`에서 Turso
+  // 쿼리 계층 getPostById(validPostId, ...)로, 좋아요 여부 확인을
+  // `.eq('post_id', validPostId)`에서 isPostLikedByUser(validPostId, ...)로
+  // 옮겼다 — 옛 Supabase 패턴도 계속 허용한다.
+  (/\.eq\(['"]id['"],\s*validPostId\)/.test(postLikesApiSource) ||
+    /getPostById\(validPostId,/.test(postLikesApiSource)) &&
+  (/\.eq\(['"]post_id['"],\s*validPostId\)/.test(postLikesApiSource) ||
+    /isPostLikedByUser\(validPostId,/.test(postLikesApiSource)) &&
   /post_id:\s*validPostId/.test(postLikesApiSource) &&
   /const postId = postIdValidation\.sanitized/.test(postOgImageSource) &&
   // 단계 2c: posts 존재 확인을 Supabase `.eq('id', postId)`에서 Turso 쿼리
@@ -1767,12 +1822,26 @@ const validatesPostRouteIdsUseSanitizedUuid =
   /userIdValidation\.sanitized !== user\.id/.test(postUserDataApiSource) &&
   /const validPostId = postIdValidation\.sanitized/.test(commentDeleteSource) &&
   /const validCommentId = commentIdValidation\.sanitized/.test(commentDeleteSource) &&
-  /\.eq\(['"]id['"],\s*validCommentId\)/.test(commentDeleteSource) &&
-  /\.eq\(['"]post_id['"],\s*validPostId\)/.test(commentDeleteSource) &&
+  // 단계 2c: 소유권 확인(`.eq('id', validCommentId).eq('post_id',
+  // validPostId)`)과 삭제(같은 이중 스코프)를 Turso 쿼리 계층
+  // getCommentById(validCommentId, validPostId)/
+  // deleteComment(validCommentId, validPostId)로 옮겼다 — 옛 Supabase
+  // 패턴도 계속 허용한다.
+  (/\.eq\(['"]id['"],\s*validCommentId\)/.test(commentDeleteSource) ||
+    /getCommentById\(validCommentId,\s*validPostId\)/.test(commentDeleteSource)) &&
+  (/\.eq\(['"]post_id['"],\s*validPostId\)/.test(commentDeleteSource) ||
+    /getCommentById\(validCommentId,\s*validPostId\)/.test(commentDeleteSource) ||
+    /deleteComment\(validCommentId,\s*validPostId\)/.test(commentDeleteSource)) &&
   !/\.eq\(['"]id['"],\s*commentId\)/.test(commentDeleteSource) &&
   /const validCommentId = uuidValidation\.sanitized/.test(commentLikeApiSource) &&
-  /\.eq\(['"]id['"],\s*validCommentId\)/.test(commentLikeApiSource) &&
-  /p_comment_id:\s*validCommentId/.test(commentLikeApiSource) &&
+  // 단계 2c: 댓글 존재 확인을 Supabase `.eq('id', validCommentId)`에서
+  // getCommentById(validCommentId)로, toggle_comment_like RPC를
+  // toggleCommentLike(validCommentId, ...)로 옮겼다 — 옛 Supabase/RPC
+  // 패턴도 계속 허용한다.
+  (/\.eq\(['"]id['"],\s*validCommentId\)/.test(commentLikeApiSource) ||
+    /getCommentById\(validCommentId\)/.test(commentLikeApiSource)) &&
+  (/p_comment_id:\s*validCommentId/.test(commentLikeApiSource) ||
+    /toggleCommentLike\(validCommentId,/.test(commentLikeApiSource)) &&
   !/p_comment_id:\s*commentId/.test(commentLikeApiSource)
 const imageProxyPath = join(root, 'src/app/api/images/proxy/route.ts')
 const imageProxySource = readFileSync(imageProxyPath, 'utf8')

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-import { createSupabaseServer } from '@/lib/supabase/server'
+import { createComment, listCommentsKeyset } from '@/db/queries/comments'
 import { getUserLikedCommentIds } from '@/lib/server/commentLikes'
 import { revalidateTag } from 'next/cache'
 import { validateUUID } from '@/utils/validation'
@@ -32,18 +31,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     return ApiError.badRequest('유효하지 않은 커서입니다.').toNextResponse()
   }
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  if (!url || !anonKey) {
-    return ApiError.internalServerError('Supabase not configured').toNextResponse()
-  }
-
-  const supabase = createClient(url, anonKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  })
-
   try {
-    const sessionSupabase = await createSupabaseServer()
     // 로그인 여부에 따라 개인화 데이터(댓글 좋아요 여부)를 얹는 선택적
     // 조회다. 비로그인도 댓글 목록을 읽을 수 있어야 하므로 requireUser로
     // 바꾸지 않는다.
@@ -51,7 +39,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const annotateCommentLikeState = async (comments: Array<Record<string, unknown>>) => {
       const commentIds = comments.map(c => String(c.id)).filter(Boolean)
       const likedCommentIds = user
-        ? await getUserLikedCommentIds(sessionSupabase, user.id, commentIds)
+        ? await getUserLikedCommentIds(user.id, commentIds)
         : new Set<string>()
 
       return comments.map(c => ({
@@ -61,54 +49,34 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       }))
     }
 
-    let query = supabase
-      .from('comments')
-      .select(
-        `
-        id,
-        content,
-        author_id,
-        created_at,
-        like_count,
-        author:member_profiles!comments_author_id_fkey (display_name)
-      `
-      )
-      .eq('post_id', postId)
-      .order('created_at', { ascending: true })
-      .order('id', { ascending: true })
+    // 단계 2c(Task 6): get_post_comments_keyset RPC + 수동 Supabase 폴백을
+    // listCommentsKeyset(Turso)로 대체 — 정렬(created_at asc, id asc)과 커서
+    // 조건((created_at > c) OR (created_at = c AND id > i))을 그대로 옮긴다.
+    const rows = await listCommentsKeyset(postId, {
+      createdAt: parsedCursor?.createdAt ?? null,
+      id: parsedCursor?.id ?? null,
+      limit: limit + 1,
+    })
 
-    if (parsedCursor) {
-      // Fetch a small superset and filter in memory to emulate (created_at, id) keyset
-      query = query.gte('created_at', parsedCursor.createdAt).limit(limit + 5)
-    } else {
-      query = query.limit(limit + 1)
-    }
-
-    const { data: rows, error } = await query
-    if (error) {
-      console.error('[API] 댓글 조회 오류:', error)
-      return ApiError.internalServerError('댓글 조회에 실패했습니다.').toNextResponse()
-    }
-
-    let comments = rows || []
-    if (parsedCursor) {
-      comments = comments.filter(
-        (r: any) =>
-          r.created_at > parsedCursor.createdAt ||
-          (r.created_at === parsedCursor.createdAt && r.id > parsedCursor.id)
-      )
-    }
+    let comments: Array<Record<string, unknown>> = rows.map(row => ({
+      id: row.id,
+      content: row.content,
+      author_id: row.author_id,
+      created_at: row.created_at,
+      like_count: row.like_count,
+      author: row.author,
+    }))
 
     const hasNext = comments.length > limit
     if (hasNext) comments = comments.slice(0, limit)
 
     let nextCursor: string | null = null
     if (hasNext && comments.length > 0) {
-      const last = comments[comments.length - 1]
+      const last = comments[comments.length - 1] as { created_at: string; id: string }
       nextCursor = formatTimestampUuidCursor(last.created_at, last.id)
     }
 
-    const normalized = await annotateCommentLikeState(comments as Array<Record<string, unknown>>)
+    const normalized = await annotateCommentLikeState(comments)
     return ApiSuccess.ok({
       comments: normalized,
       has_next: hasNext,
@@ -134,8 +102,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   }
   const validPostId = postIdValidation.sanitized
   try {
-    const supabase = await createSupabaseServer()
-
     // 댓글 작성은 로그인 + 승인된 활성 멤버만 가능한 강제 검사였다.
     const auth = await requireActiveMember()
     if (auth instanceof NextResponse) return auth
@@ -150,14 +116,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const content = (body?.content || '').toString().trim()
     if (!content) return ApiError.badRequest('내용이 비어있습니다.').toNextResponse()
 
-    const { data, error } = await supabase
-      .from('comments')
-      .insert([{ post_id: validPostId, author_id: userId, content }])
-      .select('id, content, author_id, created_at')
-      .single()
-    if (error) {
-      console.error('[API] 댓글 작성 오류:', error)
-      return ApiError.internalServerError('댓글 작성에 실패했습니다.').toNextResponse()
+    const created = await createComment({ post_id: validPostId, author_id: userId, content })
+    const data = {
+      id: created.id,
+      content: created.content,
+      author_id: created.author_id,
+      created_at: created.created_at,
     }
 
     try {

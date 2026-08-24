@@ -159,6 +159,19 @@ test('getCommentById: id + post_id로 스코프된 단건 조회, 없으면 null
   assert.equal(notFound, null)
 })
 
+test('getCommentById: post_id를 생략하면 id만으로 조회한다(좋아요 라우트가 쓰는 형태)', async () => {
+  const { createComment, getCommentById } = await loadFreshCommentsModule()
+  const postId = await seedPost()
+  const created = await createComment({ post_id: postId, author_id: seededAuthorId, content: 'x' })
+
+  const found = await getCommentById(created.id)
+  assert.ok(found)
+  assert.equal(found.id, created.id)
+
+  const notFound = await getCommentById('00000000-0000-4000-8000-000000000000')
+  assert.equal(notFound, null)
+})
+
 // ---------------------------------------------------------------- deleteComment
 
 test('deleteComment: id + post_id로 삭제한다(하드 삭제)', async () => {

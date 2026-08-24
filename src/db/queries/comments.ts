@@ -88,16 +88,22 @@ async function attachCommentAuthors(rows: CommentRow[]): Promise<CommentWithAuth
 }
 
 /**
- * id + post_id로 댓글 한 건을 조회한다(소유 게시글 스코프 강제) — 삭제
- * 라우트의 소유권 확인(`comment.author_id !== user.id`)이 쓴다. 저자 임베드
- * 없이 원시 컬럼만 반환한다(기존 `.select('id, author_id').maybeSingle()`와
- * 같은 최소 조회).
+ * id로 댓글 한 건을 조회한다. `postId`를 넘기면 그 게시글 소속인지도 함께
+ * 확인한다(스코프 강제) — 삭제 라우트의 소유권 확인
+ * (`comment.author_id !== user.id`)이 이 형태로 쓴다. `postId`를 생략하면
+ * id만으로 조회한다 — 좋아요 라우트(`/api/comments/[id]/like`)처럼 URL에
+ * postId가 없는 호출부가 쓴다(기존 `.select('id').eq('id', validCommentId)
+ * .single()`과 동일 스코프). 저자 임베드 없이 원시 컬럼만 반환한다.
  */
-export async function getCommentById(id: string, postId: string): Promise<CommentRow | null> {
+export async function getCommentById(id: string, postId?: string): Promise<CommentRow | null> {
+  const conditions: SQL[] = [eq(comments.id, id)]
+  if (postId) {
+    conditions.push(eq(comments.postId, postId))
+  }
   const rows = await db
     .select()
     .from(comments)
-    .where(and(eq(comments.id, id), eq(comments.postId, postId)))
+    .where(and(...conditions))
     .limit(1)
   return rows[0] ? rowToComment(rows[0]) : null
 }

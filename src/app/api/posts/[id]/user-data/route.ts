@@ -9,7 +9,7 @@ export const maxDuration = 30
 
 import { NextRequest, NextResponse } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
-import { createSupabaseServer } from '@/lib/supabase/server'
+import { isPostLikedByUser } from '@/db/queries/likes'
 import { validateUUID } from '@/utils/validation'
 import { requireUser } from '@/lib/server/memberAuth'
 
@@ -21,8 +21,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   if (!validation.isValid) {
     return ApiError.badRequest(validation.errors[0] || '잘못된 게시글 ID입니다.').toNextResponse()
   }
-
-  const supabase = await createSupabaseServer()
 
   // 사용자 맞춤 데이터(내 좋아요 여부) 조회는 로그인만 확인한다.
   const auth = await requireUser()
@@ -38,19 +36,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     }
   }
 
-  const { data: likeRecord, error: likeError } = await supabase
-    .from('post_likes')
-    .select('id')
-    .eq('post_id', validation.sanitized)
-    .eq('user_id', user.id)
-    .maybeSingle()
-
-  if (likeError) {
+  try {
+    const isLiked = await isPostLikedByUser(validation.sanitized, user.id)
+    return ApiSuccess.ok({
+      is_liked: isLiked,
+    }).toNextResponse()
+  } catch (likeError) {
     console.error('[API user-data] like lookup failed:', likeError)
     return ApiError.internalServerError('LIKE_LOOKUP_FAILED').toNextResponse()
   }
-
-  return ApiSuccess.ok({
-    is_liked: !!likeRecord,
-  }).toNextResponse()
 }

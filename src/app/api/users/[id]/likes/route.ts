@@ -10,12 +10,12 @@ export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
-import { createSupabaseServer } from '@/lib/supabase/server'
+import { countUserLikes, listUserLikes } from '@/db/queries/likes'
+import { getProfileById } from '@/db/queries/profiles'
 import { RATE_LIMITS, applyRateLimit, createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { validateUUID } from '@/utils/validation'
 import { requireUser } from '@/lib/server/memberAuth'
-import type { UserLikedPost } from '@/types'
 
 /**
  * 사용자 좋아요 목록 조회
@@ -38,8 +38,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     if (auth instanceof NextResponse) return auth
     const { user } = auth
 
-    const supabase = await createSupabaseServer()
-
     const uuidValidation = validateUUID(resolvedParams.id, '사용자 ID')
     if (!uuidValidation.isValid) {
       return ApiError.badRequest(uuidValidation.errors.join(', ')).toNextResponse()
@@ -52,41 +50,31 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
     // 본인 데이터이거나 관리자만 조회 가능
     if (user.id !== requestedUserId) {
-      const { data: profile } = await supabase
-        .from('member_profiles')
-        .select('is_admin, registration_status, is_active')
-        .eq('id', user.id)
-        .single()
+      const profile = await getProfileById(user.id)
 
       if (!profile?.is_admin || profile.registration_status !== 'approved' || !profile.is_active) {
         return ApiError.forbidden('권한이 없습니다.').toNextResponse()
       }
     }
 
-    // 사용자가 좋아요한 게시글 목록 조회
-    const { data: likedPosts, error: likesError } = await supabase.rpc('get_user_likes', {
-      p_user_id: requestedUserId,
-      p_limit: limit,
-      p_offset: offset,
-    })
-
-    if (likesError) {
+    // 사용자가 좋아요한 게시글 목록 조회 — get_user_likes RPC 대체
+    let likedPosts
+    try {
+      likedPosts = await listUserLikes(requestedUserId, { limit, offset })
+    } catch (likesError) {
       console.error('좋아요 목록 조회 오류:', likesError)
       return ApiError.internalServerError('좋아요 목록을 조회할 수 없습니다.').toNextResponse()
     }
 
     // 총 좋아요 수 조회
-    const { count: totalCount, error: countError } = await supabase
-      .from('post_likes')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', requestedUserId)
-
-    if (countError) {
+    let total: number
+    try {
+      total = await countUserLikes(requestedUserId)
+    } catch (countError) {
       console.error('좋아요 수 조회 오류:', countError)
       return ApiError.internalServerError('좋아요 수를 조회할 수 없습니다.').toNextResponse()
     }
 
-    const total = totalCount || 0
     const totalPages = Math.ceil(total / limit)
 
     return ApiSuccess.ok({
