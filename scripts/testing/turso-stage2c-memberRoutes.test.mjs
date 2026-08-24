@@ -98,13 +98,23 @@ test('15개 라우트 모두 src/db/queries/profiles(쿼리 계층)를 임포트
   }
 })
 
-test('admin/members/bulk와 notifications/bulk는 member_bulk_operations/create_bulk_notification 등 다른 Supabase 접근을 그대로 유지한다', () => {
+test('admin/members/bulk는 member_bulk_operations 등 다른 Supabase 접근을 그대로 유지한다', () => {
   const bulkSrc = readFileSync(ROUTE_FILES.adminMembersBulk, 'utf8')
   assert.match(bulkSrc, /\.from\(\s*['"]member_bulk_operations['"]\s*\)/)
+})
 
+// 단계 2c Task 7: notifications/bulk는 이 스위트가 처음 작성됐을 때(회원
+// 라우트 전환 라운드)는 create_bulk_notification RPC + createSupabaseServer를
+// 그대로 유지하는 게 범위 밖이었다. Task 7이 알림을 Turso로 전환하면서
+// notifications/bulk도 함께 전환됐다 — 이제는 그 반대(RPC/Supabase 클라이언트가
+// 남아있지 않다)를 검증한다.
+test('notifications/bulk는 더 이상 create_bulk_notification RPC나 createSupabaseServer를 쓰지 않는다(Task 7에서 Turso로 전환)', () => {
   const notifSrc = readFileSync(ROUTE_FILES.notificationsBulk, 'utf8')
-  assert.match(notifSrc, /rpc\(\s*['"]create_bulk_notification['"]/)
-  assert.match(notifSrc, /createSupabaseServer/)
+  assert.doesNotMatch(notifSrc, /rpc\(\s*['"]create_bulk_notification['"]/)
+  assert.doesNotMatch(notifSrc, /createSupabaseServer/)
+  assert.match(notifSrc, /from\s+['"]@\/db\/queries\/notifications['"]/)
+  assert.match(notifSrc, /createBulkNotifications\(/)
+  assert.match(notifSrc, /markAllNotificationsRead\(/)
 })
 
 // ---------------------------------------------------------------- 아티스트 배정(POST)의 범위 정정: member_profiles만 Turso로, artists는 Supabase 그대로

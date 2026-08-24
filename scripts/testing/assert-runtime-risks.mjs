@@ -1381,7 +1381,10 @@ const notificationsPath = join(root, 'src/app/api/notifications/route.ts')
 const notificationsSource = readFileSync(notificationsPath, 'utf8')
 const bulkNotificationsPath = join(root, 'src/app/api/notifications/bulk/route.ts')
 const bulkNotificationsSource = readFileSync(bulkNotificationsPath, 'utf8')
-const notificationsWritePath = join(root, 'src/lib/server/notificationsWrite.ts')
+// 단계 2c(Task 7): markAllNotificationsRead가 src/lib/server/notificationsWrite.ts
+// (Supabase 앱 계층 UPDATE)에서 src/db/queries/notifications.ts(Turso 쿼리
+// 계층)로 옮겨갔다 — 소유권 필터 강제도 이 새 위치를 가리키도록 함께 옮긴다.
+const notificationsWritePath = join(root, 'src/db/queries/notifications.ts')
 const notificationsWriteSource = readFileSync(notificationsWritePath, 'utf8')
 const notificationDataPath = join(root, 'src/utils/notificationData.ts')
 const notificationDataSource = readFileSync(notificationDataPath, 'utf8')
@@ -1410,72 +1413,88 @@ const validatesNotificationRouteId =
   (notificationDetailSource.match(/validateUUID\(resolvedParams\.id,\s*['"]알림 ID['"]\)/g) ?? [])
     .length >= 2 &&
   // RPC(mark_notification_read)의 auth.uid() 의존을 없애고 앱 계층 직접 쿼리로
-  // 옮긴 뒤(단계 2b-4)에는, PATCH/DELETE 둘 다 라우트 id와 세션 사용자 id로
-  // 동시에 스코프하는지를 직접 확인한다 — RPC 호출 여부가 아니라 실제 소유권
-  // 필터의 존재가 불변식이다.
-  (notificationDetailSource.match(/\.eq\(['"]id['"],\s*notificationId\)/g) ?? []).length >= 2 &&
-  (notificationDetailSource.match(/\.eq\(['"]user_id['"],\s*user\.id\)/g) ?? []).length >= 2
+  // 옮긴 뒤(단계 2b-4), 다시 단계 2c(Task 7)에서 Turso 쿼리 계층
+  // (markNotificationRead/deleteNotification)으로 옮겼다. PATCH/DELETE 둘 다
+  // 라우트 id와 세션 사용자 id를 **같은 인자 순서로** 넘겨 동시에 스코프하는지
+  // 직접 확인한다 — 호출 형태가 아니라 실제 소유권 필터의 존재가 불변식이다.
+  (notificationDetailSource.match(/\(notificationId,\s*user\.id\)/g) ?? []).length >= 2
 // mark_all_notifications_read RPC(auth.uid() 의존)를 걷어내면서(단계 2b-5 회귀
-// 수정) 소유권 필터는 src/lib/server/notificationsWrite.ts의
-// markAllNotificationsRead로 옮겨졌다. validatesNotificationRouteId가 라우트
-// 레벨에서 그러듯, 여기서도 "RPC 호출 여부가 아니라 실제 소유권 필터의 존재가
-// 불변식"을 그대로 적용한다 — 누가 이 모듈을 리팩터링하며 필터를 잃어도
-// 정적으로 잡는다. 이 파일의 독스트링 자체가 `.eq('user_id', userId)`를
-// 설명 예시로 인용하므로, 주석을 살려둔 채 실제 줄만 지워도 검사가 속지
-// 않도록 stripComments로 주석을 걷어낸 소스만 본다.
+// 수정) 소유권 필터는 처음엔 src/lib/server/notificationsWrite.ts로, 단계
+// 2c(Task 7)에서 다시 src/db/queries/notifications.ts의
+// markAllNotificationsRead로 옮겨졌다(Drizzle/Turso). validatesNotificationRouteId가
+// 라우트 레벨에서 그러듯, 여기서도 "RPC/Supabase 호출 여부가 아니라 실제
+// 소유권 필터의 존재가 불변식"을 그대로 적용한다 — 누가 이 모듈을 리팩터링하며
+// 필터를 잃어도 정적으로 잡는다. `markAllNotificationsRead` 함수 본문만
+// 추출해서 본다 — 파일 전체에는 listNotifications 등 다른 함수의
+// `eq(notifications.userId, ...)` 호출도 섞여 있어, 파일 전체 검사로는 이
+// 특정 함수에서 필터가 빠져도 다른 함수의 매치로 통과해버릴 수 있다. 이
+// 파일의 독스트링 자체가 `eq(notifications.userId, userId)`를 설명 예시로
+// 인용하므로, 주석을 살려둔 채 실제 줄만 지워도 검사가 속지 않도록
+// stripComments로 주석을 걷어낸 소스만 본다.
 const notificationsWriteStripped = stripComments(notificationsWriteSource)
+const markAllNotificationsReadBodyMatch = notificationsWriteStripped.match(
+  /export async function markAllNotificationsRead\([\s\S]*?\n\}\n/
+)
+const markAllNotificationsReadBody = markAllNotificationsReadBodyMatch
+  ? markAllNotificationsReadBodyMatch[0]
+  : ''
 const enforcesNotificationOwnershipFilter =
-  /\.eq\(['"]user_id['"],\s*userId\)/.test(notificationsWriteStripped) &&
-  /\.is\(['"]read_at['"],\s*null\)/.test(notificationsWriteStripped)
+  /eq\(notifications\.userId,\s*userId\)/.test(markAllNotificationsReadBody) &&
+  /isNull\(notifications\.readAt\)/.test(markAllNotificationsReadBody)
+// create_notification/create_bulk_notification RPC 호출을 단계 2c(Task 7)에서
+// Turso 쿼리 계층(createNotification/createBulkNotifications)으로 옮기면서
+// `p_xxx:` RPC 파라미터 이름이 사라졌다 — 이제는 라우트가 검증된 변수를
+// 새 함수의 snake_case 필드로 그대로 넘기는지를 확인한다("검증된 변수만
+// 넘긴다"는 불변식은 이름이 바뀌어도 동일하게 강제해야 한다).
 const validatesNotificationMutationIds =
   /validateUUID/.test(notificationsSource) &&
   /parseNotificationType\(typeParam\)/.test(notificationsSource) &&
   /parseNotificationType\(body\.type\)/.test(notificationsSource) &&
-  /p_type:\s*notificationType/.test(notificationsSource) &&
+  /type:\s*notificationType/.test(notificationsSource) &&
   !/body\.type\.length\s*>\s*50/.test(notificationsSource) &&
   /validateNotificationId\(body\.user_id,\s*['"]사용자 ID['"]\)/.test(notificationsSource) &&
-  /p_user_id:\s*userId/.test(notificationsSource) &&
-  /p_related_post_id:\s*relatedPostId/.test(notificationsSource) &&
-  /p_related_user_id:\s*relatedUserId/.test(notificationsSource) &&
+  /user_id:\s*userId/.test(notificationsSource) &&
+  /related_post_id:\s*relatedPostId/.test(notificationsSource) &&
+  /related_user_id:\s*relatedUserId/.test(notificationsSource) &&
   /sanitizeNotificationData\(body\.data\)/.test(notificationsSource) &&
-  /p_data:\s*notificationData/.test(notificationsSource) &&
+  /data:\s*notificationData/.test(notificationsSource) &&
   /parseNotificationExpiresAt\(body\.expires_at\)/.test(notificationsSource) &&
-  /p_expires_at:\s*expiresAt/.test(notificationsSource) &&
+  /expires_at:\s*expiresAt/.test(notificationsSource) &&
   /const notificationTitle = typeof body\.title === ['"]string['"] \? body\.title\.trim\(\) : ['"]['"]/.test(
     notificationsSource
   ) &&
-  /p_title:\s*notificationTitle/.test(notificationsSource) &&
+  /title:\s*notificationTitle/.test(notificationsSource) &&
   /const notificationMessage = typeof body\.message === ['"]string['"] \? body\.message\.trim\(\) : ['"]['"]/.test(
     notificationsSource
   ) &&
-  /p_message:\s*notificationMessage/.test(notificationsSource) &&
-  !/p_data:\s*body\.data\s*\|\|\s*\{\}/.test(notificationsSource) &&
-  !/p_expires_at:\s*body\.expires_at\s*\|\|\s*null/.test(notificationsSource) &&
-  !/p_title:\s*body\.title/.test(notificationsSource) &&
-  !/p_message:\s*body\.message/.test(notificationsSource) &&
+  /message:\s*notificationMessage/.test(notificationsSource) &&
+  !/data:\s*body\.data/.test(notificationsSource) &&
+  !/expires_at:\s*body\.expires_at/.test(notificationsSource) &&
+  !/title:\s*body\.title/.test(notificationsSource) &&
+  !/message:\s*body\.message/.test(notificationsSource) &&
   /validateUUID/.test(bulkNotificationsSource) &&
   /parseNotificationType\(body\.type\)/.test(bulkNotificationsSource) &&
-  /p_type:\s*notificationType/.test(bulkNotificationsSource) &&
+  /type:\s*notificationType/.test(bulkNotificationsSource) &&
   !/body\.type\.length\s*>\s*50/.test(bulkNotificationsSource) &&
   /const\s+userIds:\s*string\[\] = \[\]/.test(bulkNotificationsSource) &&
   /userIds\.push\(userId\)/.test(bulkNotificationsSource) &&
-  /p_user_ids:\s*userIds/.test(bulkNotificationsSource) &&
+  /user_ids:\s*userIds/.test(bulkNotificationsSource) &&
   /sanitizeNotificationData\(body\.data\)/.test(bulkNotificationsSource) &&
-  /p_data:\s*notificationData/.test(bulkNotificationsSource) &&
+  /data:\s*notificationData/.test(bulkNotificationsSource) &&
   /parseNotificationExpiresAt\(body\.expires_at\)/.test(bulkNotificationsSource) &&
-  /p_expires_at:\s*expiresAt/.test(bulkNotificationsSource) &&
+  /expires_at:\s*expiresAt/.test(bulkNotificationsSource) &&
   /const notificationTitle = typeof body\.title === ['"]string['"] \? body\.title\.trim\(\) : ['"]['"]/.test(
     bulkNotificationsSource
   ) &&
-  /p_title:\s*notificationTitle/.test(bulkNotificationsSource) &&
+  /title:\s*notificationTitle/.test(bulkNotificationsSource) &&
   /const notificationMessage = typeof body\.message === ['"]string['"] \? body\.message\.trim\(\) : ['"]['"]/.test(
     bulkNotificationsSource
   ) &&
-  /p_message:\s*notificationMessage/.test(bulkNotificationsSource) &&
-  !/p_data:\s*body\.data\s*\|\|\s*\{\}/.test(bulkNotificationsSource) &&
-  !/p_expires_at:\s*body\.expires_at\s*\|\|\s*null/.test(bulkNotificationsSource) &&
-  !/p_title:\s*body\.title/.test(bulkNotificationsSource) &&
-  !/p_message:\s*body\.message/.test(bulkNotificationsSource) &&
+  /message:\s*notificationMessage/.test(bulkNotificationsSource) &&
+  !/data:\s*body\.data/.test(bulkNotificationsSource) &&
+  !/expires_at:\s*body\.expires_at/.test(bulkNotificationsSource) &&
+  !/title:\s*body\.title/.test(bulkNotificationsSource) &&
+  !/message:\s*body\.message/.test(bulkNotificationsSource) &&
   /RESERVED_NOTIFICATION_DATA_KEYS/.test(notificationDataSource) &&
   /['"]post_id['"]/.test(notificationDataSource) &&
   /['"]related_post_id['"]/.test(notificationDataSource) &&
@@ -1940,6 +1959,36 @@ const unexpectedCommentsLikesAttachmentsReaders =
   actualSupabaseReadsOfCommentsLikesAttachments.filter(f => !sortedKnownExceptions.includes(f))
 const missingExpectedCommentsLikesAttachmentsReaders = sortedKnownExceptions.filter(
   f => !actualSupabaseReadsOfCommentsLikesAttachments.includes(f)
+)
+
+// 단계 2c(Task 7): 알림도 Turso 권위로 전환하면서 comments/post_likes/
+// comment_likes/post_attachments(위)와 같은 형태의 화이트리스트 반전 가드를
+// notifications/notification_stats에도 세운다. Task 7이 전환을 마친 시점
+// 기준으로 src/{app,lib,components} 전체를 훑어 이 두 테이블/뷰를 Supabase
+// 스타일(`.from('테이블명')`, 문자열 리터럴)로 읽는 파일이 하나도 없음을
+// 직접 확인했다(`grep -rn "from(['\"]notifications['\"])"` 등으로 실측,
+// 아래 known-exception 배열이 빈 배열인 이유) — comments/post_likes 라운드와
+// 달리 Task 8로 넘길 알려진 예외가 없다. 신규 파일이 이 테이블을 Supabase로
+// 다시 읽기 시작하면 즉시 걸린다(화이트리스트가 비어 있으므로 "예외 없음"이
+// 곧 "발견되는 즉시 실패"다).
+const knownRemainingSupabaseReadsOfNotifications = []
+const notificationsScanFiles = globSync('src/{app,lib,components}/**/*.@(ts|tsx)', {
+  cwd: root,
+  exclude: ['**/node_modules/**', '**/.next/**'],
+}).sort()
+const supabaseNotificationsTablePattern =
+  /from\(\s*['"](?:notifications|notification_stats)['"]\s*\)/
+const actualSupabaseReadsOfNotifications = notificationsScanFiles.filter(file =>
+  supabaseNotificationsTablePattern.test(stripComments(readFileSync(join(root, file), 'utf8')))
+)
+const sortedKnownNotificationExceptions = [...knownRemainingSupabaseReadsOfNotifications].sort()
+const notificationsWhitelistMatches =
+  actualSupabaseReadsOfNotifications.join('\n') === sortedKnownNotificationExceptions.join('\n')
+const unexpectedNotificationsReaders = actualSupabaseReadsOfNotifications.filter(
+  f => !sortedKnownNotificationExceptions.includes(f)
+)
+const missingExpectedNotificationsReaders = sortedKnownNotificationExceptions.filter(
+  f => !actualSupabaseReadsOfNotifications.includes(f)
 )
 
 const imageProxyPath = join(root, 'src/app/api/images/proxy/route.ts')
@@ -4189,7 +4238,7 @@ if (!validatesNotificationRouteId) {
 
 if (!enforcesNotificationOwnershipFilter) {
   failures.push(
-    `markAllNotificationsRead must scope its update to the calling user's own notifications via .eq('user_id', userId) (and only unread rows via .is('read_at', null)) — this is the only defense against reading/marking other users' notifications: ${relative(
+    `markAllNotificationsRead must scope its update to the calling user's own notifications via eq(notifications.userId, userId) (and only unread rows via isNull(notifications.readAt)) — this is the only defense against reading/marking other users' notifications: ${relative(
       root,
       notificationsWritePath
     )}`
@@ -4833,6 +4882,22 @@ if (!commentsLikesAttachmentsWhitelistMatches) {
         : '') +
       (missingExpectedCommentsLikesAttachmentsReaders.length > 0
         ? `Whitelisted file(s) no longer reading these tables from Supabase — narrow knownRemainingSupabaseReadsOfCommentsLikesAttachments in this file to match (the contract just got stronger, which is good, but the exception list must be kept in sync):\n${missingExpectedCommentsLikesAttachmentsReaders
+            .map(f => `- ${f}`)
+            .join('\n')}`
+        : '')
+  )
+}
+
+if (!notificationsWhitelistMatches) {
+  failures.push(
+    `Files reading notifications/notification_stats via Supabase-style .from('table') must exactly match the known-exception whitelist (currently empty — notifications is fully Turso-authoritative post-Task-7, so any match here is unexpected). ` +
+      (unexpectedNotificationsReaders.length > 0
+        ? `Unexpected new reader(s) not in the whitelist:\n${unexpectedNotificationsReaders
+            .map(f => `- ${f}`)
+            .join('\n')}\n`
+        : '') +
+      (missingExpectedNotificationsReaders.length > 0
+        ? `Whitelisted file(s) no longer reading these tables from Supabase — narrow knownRemainingSupabaseReadsOfNotifications in this file to match:\n${missingExpectedNotificationsReaders
             .map(f => `- ${f}`)
             .join('\n')}`
         : '')
