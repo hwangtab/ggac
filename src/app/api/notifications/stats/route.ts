@@ -5,10 +5,9 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
-import { createSupabaseServer } from '@/lib/supabase/server'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator } from '@/lib/server/rateLimit'
-import type { NotificationStats } from '@/types'
 import { requireUser } from '@/lib/server/memberAuth'
+import { getNotificationStats } from '@/db/queries/notifications'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -30,31 +29,19 @@ export async function GET(request: NextRequest) {
     if (auth instanceof NextResponse) return auth
     const { user } = auth
 
-    const supabase = await createSupabaseServer()
-
-    // 알림 통계 조회
-    const { data: stats, error } = await supabase
-      .from('notification_stats')
-      .select('*')
-      .eq('user_id', user.id)
-      .single()
-
-    if (error && error.code !== 'PGRST116') {
-      // 데이터가 없는 경우는 에러가 아님
+    // 알림 통계 조회. notification_stats 뷰(GROUP BY user_id) 대체 —
+    // 알림이 하나도 없는 사용자도 0으로 채운 통계 객체를 항상 돌려준다(뷰가
+    // 행 자체를 안 돌려주던 경우의 기존 기본값 대체 로직과 최종 응답이
+    // 동일하다).
+    let stats: Awaited<ReturnType<typeof getNotificationStats>>
+    try {
+      stats = await getNotificationStats(user.id)
+    } catch (error) {
       console.error('알림 통계 조회 오류:', error)
       return ApiError.internalServerError('통계를 불러올 수 없습니다.').toNextResponse()
     }
 
-    // 데이터가 없는 경우 기본값 반환
-    const defaultStats: NotificationStats = {
-      user_id: user.id,
-      total_notifications: 0,
-      unread_count: 0,
-      read_count: 0,
-      latest_notification_at: null,
-    }
-
-    return ApiSuccess.ok(stats || defaultStats).toNextResponse()
+    return ApiSuccess.ok(stats).toNextResponse()
   } catch (error) {
     console.error('알림 통계 API 오류:', error)
     return ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse()

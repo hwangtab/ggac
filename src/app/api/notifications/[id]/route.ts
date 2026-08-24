@@ -11,10 +11,10 @@ export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
-import { createSupabaseServer } from '@/lib/supabase/server'
 import { RATE_LIMITS, applyRateLimit, createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { validateUUID } from '@/utils/validation'
 import { requireUser } from '@/lib/server/memberAuth'
+import { markNotificationRead, deleteNotification } from '@/db/queries/notifications'
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const resolvedParams = await context.params
@@ -35,8 +35,6 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     if (auth instanceof NextResponse) return auth
     const { user } = auth
 
-    const supabase = await createSupabaseServer()
-
     const uuidValidation = validateUUID(resolvedParams.id, '알림 ID')
     if (!uuidValidation.isValid) {
       return ApiError.badRequest(uuidValidation.errors.join(', ')).toNextResponse()
@@ -44,23 +42,18 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const notificationId = uuidValidation.sanitized
 
     // 알림 읽음 처리
-    // RPC의 auth.uid() 의존을 없애고 세션 사용자 id를 앱 계층에서 직접 넘긴다.
-    // 기존 RPC와 동일하게 이미 읽은 알림은 대상에서 제외한다(read_at IS NULL).
-    const { data, error } = await supabase
-      .from('notifications')
-      .update({ read_at: new Date().toISOString() } as never)
-      .eq('id', notificationId)
-      .eq('user_id', user.id)
-      .is('read_at', null)
-      .select()
-      .maybeSingle()
-
-    if (error) {
+    // RPC(mark_notification_read)의 auth.uid() 의존을 없애고 세션 사용자 id를
+    // 앱 계층(Turso 쿼리 계층)에서 직접 넘긴다. 기존과 동일하게 이미 읽은
+    // 알림은 대상에서 제외한다(read_at IS NULL, markNotificationRead 내부).
+    let updated: Awaited<ReturnType<typeof markNotificationRead>>
+    try {
+      updated = await markNotificationRead(notificationId, user.id)
+    } catch (error) {
       console.error('알림 읽음 처리 오류:', error)
       return ApiError.internalServerError('알림을 읽음 처리할 수 없습니다.').toNextResponse()
     }
 
-    if (!data) {
+    if (!updated) {
       return ApiError.notFound('알림을 찾을 수 없거나 권한이 없습니다.').toNextResponse()
     }
 
@@ -90,8 +83,6 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     if (auth instanceof NextResponse) return auth
     const { user } = auth
 
-    const supabase = await createSupabaseServer()
-
     const uuidValidation = validateUUID(resolvedParams.id, '알림 ID')
     if (!uuidValidation.isValid) {
       return ApiError.badRequest(uuidValidation.errors.join(', ')).toNextResponse()
@@ -99,13 +90,9 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     const notificationId = uuidValidation.sanitized
 
     // 알림 삭제 (본인 알림만 삭제 가능)
-    const { error } = await supabase
-      .from('notifications')
-      .delete()
-      .eq('id', notificationId)
-      .eq('user_id', user.id)
-
-    if (error) {
+    try {
+      await deleteNotification(notificationId, user.id)
+    } catch (error) {
       console.error('알림 삭제 오류:', error)
       return ApiError.internalServerError('알림을 삭제할 수 없습니다.').toNextResponse()
     }
