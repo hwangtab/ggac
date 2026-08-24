@@ -23,7 +23,7 @@
  * 넘긴 `sort_order`(0이나 falsy가 아닌 값)는 그대로 존중한다.
  */
 
-import { and, asc, eq, lt, ne, sql, type SQL } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, lt, ne, sql, type SQL } from 'drizzle-orm'
 
 import { db } from '../client.ts'
 import { postAttachments, posts } from '../schema/index.ts'
@@ -130,13 +130,57 @@ export async function addAttachment(input: AddAttachmentInput): Promise<PostAtta
   return rowToAttachment(row)
 }
 
-/** `post_id`로 첨부파일 목록을 `sort_order` 오름차순으로 조회한다. */
-export async function listAttachments(postId: string): Promise<PostAttachmentRow[]> {
+/**
+ * `post_id`로 첨부파일 목록을 조회한다. 기본 정렬은 `sort_order` 오름차순
+ * (업로드/수정 API의 기존 동작). `opts.orderBy: 'created_at'`을 넘기면
+ * `created_at` 오름차순으로 정렬한다 — 단계 2c(Task 6 후속): 게시글 상세
+ * 표시 경로(`board/post/[id]/route.ts`, `board/[id]/page.tsx`)가 옛
+ * Supabase 쿼리에서 `.order('created_at', {ascending:true})`를 썼던 것을
+ * 그대로 재현하기 위함이다.
+ */
+export async function listAttachments(
+  postId: string,
+  opts?: { orderBy?: 'sort_order' | 'created_at' }
+): Promise<PostAttachmentRow[]> {
+  const orderBy = opts?.orderBy ?? 'sort_order'
   const rows = await db
     .select()
     .from(postAttachments)
     .where(eq(postAttachments.postId, postId))
-    .orderBy(asc(postAttachments.sortOrder))
+    .orderBy(
+      orderBy === 'created_at' ? asc(postAttachments.createdAt) : asc(postAttachments.sortOrder)
+    )
+  return rows.map(rowToAttachment)
+}
+
+/**
+ * 여러 게시글의 첨부파일을 **한 쿼리**(`inArray`)로 조회한다 — 게시글
+ * 목록에서 첨부 통계를 낼 때 게시글마다 쿼리하지 않는다(N+1 방지).
+ * `postIds`가 비면 쿼리 없이 즉시 빈 배열. 정렬 보장 없음(호출부가 JS에서
+ * `post_id`별로 그룹핑해 쓴다 — `src/app/api/posts/public/route.ts`).
+ */
+export async function listAttachmentsByPostIds(postIds: string[]): Promise<PostAttachmentRow[]> {
+  if (postIds.length === 0) return []
+  const rows = await db
+    .select()
+    .from(postAttachments)
+    .where(inArray(postAttachments.postId, postIds))
+  return rows.map(rowToAttachment)
+}
+
+/**
+ * 게시글의 이미지 첨부만 `is_primary` 우선, 그다음 `created_at` 오름차순으로
+ * 조회한다 — 대표 이미지(OG 이미지, 썸네일)를 고를 때 쓴다
+ * (`src/app/api/og/post/[id]/route.tsx`, `src/lib/posts.ts`의
+ * `getPostImages`/`getPostThumbnail`). 첫 번째 원소가 곧 "표시용 대표
+ * 이미지"다.
+ */
+export async function listImageAttachments(postId: string): Promise<PostAttachmentRow[]> {
+  const rows = await db
+    .select()
+    .from(postAttachments)
+    .where(and(eq(postAttachments.postId, postId), eq(postAttachments.fileType, 'image')))
+    .orderBy(desc(postAttachments.isPrimary), asc(postAttachments.createdAt))
   return rows.map(rowToAttachment)
 }
 

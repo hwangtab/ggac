@@ -299,3 +299,82 @@ test('listCommentsKeyset 구현은 getProfilesByIds(배치)를 쓴다 — 댓글
     '댓글마다 순차적으로 getProfileById를 부르면 N+1이다'
   )
 })
+
+// ---------------------------------------------------------------- listCommentsByOffset
+
+test('listCommentsByOffset: created_at 오름차순 + id 타이브레이크로 정렬하고 limit/offset을 지킨다', async () => {
+  const { createComment, listCommentsByOffset } = await loadFreshCommentsModule()
+  const postId = await seedPost()
+  const c1 = await createComment({ post_id: postId, author_id: seededAuthorId, content: '1' })
+  await new Promise(resolve => setTimeout(resolve, 5))
+  const c2 = await createComment({ post_id: postId, author_id: seededAuthorId, content: '2' })
+  await new Promise(resolve => setTimeout(resolve, 5))
+  const c3 = await createComment({ post_id: postId, author_id: seededAuthorId, content: '3' })
+
+  const page1 = await listCommentsByOffset(postId, { limit: 2, offset: 0 })
+  assert.deepEqual(
+    page1.map(r => r.id),
+    [c1.id, c2.id]
+  )
+  const page2 = await listCommentsByOffset(postId, { limit: 2, offset: 2 })
+  assert.deepEqual(
+    page2.map(r => r.id),
+    [c3.id]
+  )
+
+  assert.ok(
+    page1.every(r => r.author && r.author.display_name === '댓글테스트작성자'),
+    '저자 임베드가 있어야 한다'
+  )
+})
+
+test('listCommentsByOffset: created_at이 동일해도 id로 안정적인 순서를 보장한다', async () => {
+  const { listCommentsByOffset } = await loadFreshCommentsModule()
+  const postId = await seedPost()
+  const fixedMs = Date.parse('2026-04-01T00:00:00.000Z')
+  for (const id of ['off-tie-a', 'off-tie-b', 'off-tie-c']) {
+    await setupClient.execute({
+      sql: `INSERT INTO comments (id, post_id, author_id, content, created_at, updated_at, like_count)
+            VALUES (?, ?, ?, ?, ?, ?, 0)`,
+      args: [id, postId, seededAuthorId, id, fixedMs, fixedMs],
+    })
+  }
+  const rows = await listCommentsByOffset(postId, { limit: 10, offset: 0 })
+  assert.deepEqual(
+    rows.map(r => r.id),
+    ['off-tie-a', 'off-tie-b', 'off-tie-c']
+  )
+})
+
+test('listCommentsByOffset: 다른 게시글의 댓글은 섞이지 않는다', async () => {
+  const { createComment, listCommentsByOffset } = await loadFreshCommentsModule()
+  const postId = await seedPost()
+  const otherPostId = await seedPost()
+  await createComment({ post_id: otherPostId, author_id: seededAuthorId, content: '다른 글' })
+  const rows = await listCommentsByOffset(postId, { limit: 10, offset: 0 })
+  assert.deepEqual(rows, [])
+})
+
+// ---------------------------------------------------------------- countComments
+
+test('countComments: post_id로 댓글 총 개수를 센다', async () => {
+  const { createComment, countComments } = await loadFreshCommentsModule()
+  const postId = await seedPost()
+  assert.equal(await countComments(postId), 0)
+  await createComment({ post_id: postId, author_id: seededAuthorId, content: '1' })
+  await createComment({ post_id: postId, author_id: seededAuthorId, content: '2' })
+  assert.equal(await countComments(postId), 2)
+})
+
+test('countComments 구현은 단일 집계 쿼리다 — 행을 다 가져와 세지 않는다 (소스 가드)', () => {
+  const src = readFileSync('src/db/queries/comments.ts', 'utf8')
+  const match = src.match(/export async function countComments\([\s\S]*?\n\}\n/)
+  assert.ok(match, 'countComments 함수 본문을 찾지 못했다')
+  const body = match[0]
+  assert.match(body, /count\(\)/, 'count() 집계 헬퍼를 써야 한다')
+  assert.doesNotMatch(
+    body,
+    /\.length/,
+    '행 배열의 .length로 세면 안 된다 — count(*) 집계 쿼리를 써야 한다'
+  )
+})

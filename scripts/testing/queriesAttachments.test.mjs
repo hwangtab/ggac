@@ -466,3 +466,119 @@ test('listTemporaryAttachments: is_temporary=true인 행만 돌려준다(만료 
   assert.ok(ids.includes(temp.id))
   assert.ok(rows.every(r => r.is_temporary === true))
 })
+
+// ---------------------------------------------------------------- listAttachments(orderBy)
+
+test('listAttachments: orderBy 생략 시 sort_order 오름차순(기존 동작 그대로)', async () => {
+  const { addAttachment, listAttachments } = await loadFreshAttachmentsModule()
+  const postId = await seedPost()
+  const c = await addAttachment(fileInput({ post_id: postId, file_name: 'c.png', sort_order: 3 }))
+  const a = await addAttachment(fileInput({ post_id: postId, file_name: 'a.png', sort_order: 1 }))
+  const b = await addAttachment(fileInput({ post_id: postId, file_name: 'b.png', sort_order: 2 }))
+
+  const rows = await listAttachments(postId)
+  assert.deepEqual(
+    rows.map(r => r.id),
+    [a.id, b.id, c.id]
+  )
+})
+
+test("listAttachments: orderBy:'created_at'을 넘기면 sort_order와 무관하게 업로드 순서로 정렬한다", async () => {
+  const { addAttachment, listAttachments } = await loadFreshAttachmentsModule()
+  const postId = await seedPost()
+  // sort_order는 일부러 created_at 순서와 반대로 준다 — 정렬 기준이 실제로
+  // 바뀌었는지(sort_order를 무시하고 created_at을 쓰는지) 구분하기 위해서다.
+  const first = await addAttachment(
+    fileInput({ post_id: postId, file_name: 'first.png', sort_order: 99 })
+  )
+  const second = await addAttachment(
+    fileInput({ post_id: postId, file_name: 'second.png', sort_order: 1 })
+  )
+
+  const bySortOrder = await listAttachments(postId)
+  assert.deepEqual(
+    bySortOrder.map(r => r.id),
+    [second.id, first.id],
+    'orderBy 생략 시 sort_order(1 < 99) 기준이어야 한다'
+  )
+
+  const byCreatedAt = await listAttachments(postId, { orderBy: 'created_at' })
+  assert.deepEqual(
+    byCreatedAt.map(r => r.id),
+    [first.id, second.id],
+    "orderBy:'created_at'이면 업로드 순서(first가 먼저)여야 한다"
+  )
+})
+
+// ---------------------------------------------------------------- listAttachmentsByPostIds
+
+test('listAttachmentsByPostIds: 여러 게시글의 첨부를 한 쿼리로 배치 조회한다(N+1 아님)', async () => {
+  const { addAttachment, listAttachmentsByPostIds } = await loadFreshAttachmentsModule()
+  const postA = await seedPost()
+  const postB = await seedPost()
+  const postC = await seedPost()
+  await addAttachment(fileInput({ post_id: postA, file_name: 'a1.png' }))
+  await addAttachment(fileInput({ post_id: postA, file_name: 'a2.png' }))
+  await addAttachment(fileInput({ post_id: postB, file_name: 'b1.png' }))
+  // postC는 첨부 없음 — 결과에 postC 관련 행이 없어야 한다.
+
+  const rows = await listAttachmentsByPostIds([postA, postB, postC])
+  const byPost = new Map()
+  for (const r of rows) {
+    byPost.set(r.post_id, (byPost.get(r.post_id) || 0) + 1)
+  }
+  assert.equal(byPost.get(postA), 2)
+  assert.equal(byPost.get(postB), 1)
+  assert.equal(byPost.has(postC), false)
+})
+
+test('listAttachmentsByPostIds: postIds가 비어있으면 쿼리 없이 즉시 빈 배열을 돌려준다', async () => {
+  const original = process.env.TURSO_DATABASE_URL
+  process.env.TURSO_DATABASE_URL = 'file:/definitely-nonexistent-dir-ggac-2c/broken.db'
+  try {
+    const { listAttachmentsByPostIds } = await loadFreshAttachmentsModule()
+    const result = await listAttachmentsByPostIds([])
+    assert.deepEqual(result, [])
+  } finally {
+    process.env.TURSO_DATABASE_URL = original
+  }
+})
+
+// ---------------------------------------------------------------- listImageAttachments
+
+test('listImageAttachments: is_primary 우선, 그다음 created_at 오름차순으로 이미지만 돌려준다', async () => {
+  const { addAttachment, listImageAttachments } = await loadFreshAttachmentsModule()
+  const postId = await seedPost()
+  await addAttachment(
+    fileInput({
+      post_id: postId,
+      file_name: 'doc.pdf',
+      file_type: 'document',
+      mime_type: 'application/pdf',
+    })
+  )
+  const olderImage = await addAttachment(
+    fileInput({ post_id: postId, file_name: 'older.png', file_type: 'image' })
+  )
+  const primaryImage = await addAttachment(
+    fileInput({ post_id: postId, file_name: 'primary.png', file_type: 'image', is_primary: true })
+  )
+
+  const rows = await listImageAttachments(postId)
+  assert.deepEqual(
+    rows.map(r => r.id),
+    [primaryImage.id, olderImage.id],
+    '대표 이미지가 먼저, 그다음 업로드 순서여야 하고 문서는 빠져야 한다'
+  )
+  assert.ok(rows.every(r => r.file_type === 'image'))
+})
+
+test('listImageAttachments: 이미지 첨부가 없으면 빈 배열을 돌려준다', async () => {
+  const { addAttachment, listImageAttachments } = await loadFreshAttachmentsModule()
+  const postId = await seedPost()
+  await addAttachment(
+    fileInput({ post_id: postId, file_type: 'document', mime_type: 'application/pdf' })
+  )
+  const rows = await listImageAttachments(postId)
+  assert.deepEqual(rows, [])
+})

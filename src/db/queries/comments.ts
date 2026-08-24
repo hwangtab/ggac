@@ -29,7 +29,7 @@
  * `toggleCommentLike`이 담당한다.
  */
 
-import { and, asc, eq, gt, or, type SQL } from 'drizzle-orm'
+import { and, asc, count, eq, gt, or, type SQL } from 'drizzle-orm'
 
 import { db } from '../client.ts'
 import { comments } from '../schema/index.ts'
@@ -180,4 +180,44 @@ export async function listCommentsKeyset(
     .limit(filter.limit)
 
   return attachCommentAuthors(rows.map(rowToComment))
+}
+
+export interface ListCommentsByOffsetFilter {
+  limit: number
+  offset: number
+}
+
+/**
+ * 오프셋 기반 댓글 목록 — `/api/posts/[id]/route.ts`가 `limit`/`offset` 쿼리
+ * 파라미터로 임의 페이지에 바로 접근할 때 쓴다(keyset은 이전 페이지의 커서가
+ * 있어야 다음 페이지로 갈 수 있어 이 용례에 맞지 않는다). 정렬은
+ * `created_at asc`(원본 Supabase `.order('created_at', {ascending:true})`와
+ * 동일) + `id asc` 타이브레이크(원본엔 없던 결정론성 보강 — `created_at`이
+ * 동률인 댓글 사이의 순서를 페이지 호출마다 안정적으로 고정한다,
+ * `listPostsKeyset`이 이미 쓰는 것과 같은 패턴). 항상 저자를 배치로 붙인다.
+ */
+export async function listCommentsByOffset(
+  postId: string,
+  filter: ListCommentsByOffsetFilter
+): Promise<CommentWithAuthor[]> {
+  const rows = await db
+    .select()
+    .from(comments)
+    .where(eq(comments.postId, postId))
+    .orderBy(asc(comments.createdAt), asc(comments.id))
+    .limit(filter.limit)
+    .offset(filter.offset)
+
+  return attachCommentAuthors(rows.map(rowToComment))
+}
+
+/** `post_id`로 댓글 총 개수를 센다 — 기존 Supabase `.select('id', {count:
+ * 'exact', head: true})`와 같은 의미(행을 다 가져와 세지 않는다, 단일 집계
+ * 쿼리). */
+export async function countComments(postId: string): Promise<number> {
+  const [{ value }] = await db
+    .select({ value: count() })
+    .from(comments)
+    .where(eq(comments.postId, postId))
+  return value
 }
