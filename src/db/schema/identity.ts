@@ -1,6 +1,6 @@
 import { integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
-import { createdAt, updatedAt, uuidPk } from './_shared'
+import { createdAt, updatedAt, uuidPk } from './_shared.ts'
 
 export const REGISTRATION_STATUS = ['pending', 'approved', 'rejected'] as const
 

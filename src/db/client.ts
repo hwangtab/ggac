@@ -1,7 +1,7 @@
 import { createClient, type Client } from '@libsql/client'
 import { drizzle, type LibSQLDatabase } from 'drizzle-orm/libsql'
 
-import * as schema from './schema'
+import * as schema from './schema/index.ts'
 
 type Db = LibSQLDatabase<typeof schema>
 

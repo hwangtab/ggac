@@ -75,6 +75,10 @@ scripts/testing/.content-loader-test.db
 scripts/testing/.content-loader-test.db-*
 scripts/testing/.migrate-loader-test.db
 scripts/testing/.migrate-loader-test.db-*
+scripts/testing/.queries-profiles-test.db
+scripts/testing/.queries-profiles-test.db-*
+scripts/testing/.middleware-profile-test.db
+scripts/testing/.middleware-profile-test.db-*
 
 # 권한 경계 E2E 픽스처 산출물 (seed-authz-fixtures.mjs가 생성, 로컬 전용 UUID)
 e2e/.authz-fixtures.json
