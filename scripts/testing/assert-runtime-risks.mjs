@@ -366,7 +366,13 @@ const profileApiRestrictsSelfUpdates =
   // registration_status/is_active 리터럴은 이제 이 파일이 아니라 memberAuth.ts
   // 안에 있으므로, 그 리터럴 대신 호출부 자체를 검사한다.
   /requireActiveMember\(\)/.test(mypageProfileApiCode) &&
-  /\.eq\(['"]id['"],\s*user\.id\)/.test(mypageProfileApiSource) &&
+  // 단계 2c: member_profiles 조회/갱신을 Supabase `.eq('id', user.id)`에서
+  // Turso 쿼리 계층 getProfileById(user.id)/updateProfile(user.id, ...)로
+  // 옮겼다 — 둘 다 여전히 user.id로만 스코프된다. 옛 Supabase 패턴도 계속
+  // 허용한다.
+  (/\.eq\(['"]id['"],\s*user\.id\)/.test(mypageProfileApiSource) ||
+    (/getProfileById\(user\.id\)/.test(mypageProfileApiSource) &&
+      /updateProfile\(user\.id,/.test(mypageProfileApiSource))) &&
   /const updateData/.test(mypageProfileApiSource) &&
   !/is_admin/.test(mypageProfileApiSource) &&
   !/registration_status:\s*body/.test(mypageProfileApiSource) &&
@@ -1648,7 +1654,12 @@ const validatesPostRouteIdsUseSanitizedUuid =
     adminMemberActionApiSource
   ) &&
   /const memberId = memberIdValidation\.sanitized/.test(adminMemberActionApiSource) &&
-  /\.eq\(['"]id['"],\s*memberId\)/.test(adminMemberActionApiSource) &&
+  // 단계 2c: member_profiles 조회/갱신을 Supabase `.eq('id', memberId)`에서
+  // Turso 쿼리 계층 getProfileById(memberId)/updateProfile(memberId, ...)로
+  // 옮겼다 — 옛 Supabase 패턴도 계속 허용해 두 형태 모두 통과시킨다.
+  (/\.eq\(['"]id['"],\s*memberId\)/.test(adminMemberActionApiSource) ||
+    (/getProfileById\(memberId\)/.test(adminMemberActionApiSource) &&
+      /updateProfile\(memberId,/.test(adminMemberActionApiSource))) &&
   /data\.action === ['"]suspend['"]/.test(adminMemberActionApiSource) &&
   /data\.suspension_reason === undefined && data\.suspension_until === undefined/.test(
     adminMemberActionApiSource
@@ -1657,7 +1668,10 @@ const validatesPostRouteIdsUseSanitizedUuid =
     adminMemberFlagsApiSource
   ) &&
   /const memberId = memberIdValidation\.sanitized/.test(adminMemberFlagsApiSource) &&
-  /\.eq\(['"]id['"],\s*memberId\)/.test(adminMemberFlagsApiSource) &&
+  // 단계 2c: 위와 같은 이유(getProfileById/updateProfile로 전환).
+  (/\.eq\(['"]id['"],\s*memberId\)/.test(adminMemberFlagsApiSource) ||
+    (/getProfileById\(memberId\)/.test(adminMemberFlagsApiSource) &&
+      /updateProfile\(memberId,/.test(adminMemberFlagsApiSource))) &&
   /const sanitizedMemberIds:\s*string\[\] = \[\]/.test(adminMembersBulkApiSource) &&
   /sanitizedMemberIds\.push\(memberIdValidation\.sanitized\)/.test(adminMembersBulkApiSource) &&
   /member_ids:\s*sanitizedMemberIds/.test(adminMembersBulkApiSource) &&
@@ -1674,7 +1688,10 @@ const validatesPostRouteIdsUseSanitizedUuid =
     adminArtistMemberApiSource
   ) &&
   /const memberId = memberIdValidation\.sanitized/.test(adminArtistMemberApiSource) &&
-  /\.eq\(['"]id['"],\s*memberId\)/.test(adminArtistMemberApiSource) &&
+  // 단계 2c: 위와 같은 이유(getProfileById/updateProfile로 전환).
+  (/\.eq\(['"]id['"],\s*memberId\)/.test(adminArtistMemberApiSource) ||
+    (/getProfileById\(memberId\)/.test(adminArtistMemberApiSource) &&
+      /updateProfile\(memberId,/.test(adminArtistMemberApiSource))) &&
   /const postId = uuidValidation\.sanitized/.test(postContentApiSource) &&
   /\.eq\(['"]id['"],\s*postId\)/.test(postContentApiSource) &&
   !/\.eq\(['"]id['"],\s*id\)/.test(postContentApiSource) &&

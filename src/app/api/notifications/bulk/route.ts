@@ -16,6 +16,7 @@ import { parseNotificationExpiresAt } from '@/utils/notificationExpiry'
 import { parseNotificationType } from '@/utils/notificationTypes'
 import { markAllNotificationsRead } from '@/lib/server/notificationsWrite'
 import type { CreateBulkNotificationRequest } from '@/types'
+import { getProfileById } from '@/db/queries/profiles'
 
 function validateBulkUserId(value: unknown): string | null {
   if (typeof value !== 'string') return null
@@ -38,16 +39,19 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createSupabaseServer()
 
-    // 관리자 권한 확인
+    // 관리자 권한 확인. 조회 자체가 실패해도(연결 오류 등) 이전 Supabase
+    // 쿼리가 error를 검사하지 않고 `!profile`로만 판정하던 것과 동일하게
+    // fail-closed 403으로 수렴시킨다(500으로 승격하지 않음).
     const auth = await requireUser()
     if (auth instanceof NextResponse) return auth
     const { user } = auth
 
-    const { data: profile } = await supabase
-      .from('member_profiles')
-      .select('is_admin, registration_status, is_active')
-      .eq('id', user.id)
-      .single()
+    let profile: Awaited<ReturnType<typeof getProfileById>>
+    try {
+      profile = await getProfileById(user.id)
+    } catch {
+      profile = null
+    }
 
     if (!profile?.is_admin || profile.registration_status !== 'approved' || !profile.is_active) {
       return ApiError.forbidden('관리자 권한이 필요합니다.').toNextResponse()

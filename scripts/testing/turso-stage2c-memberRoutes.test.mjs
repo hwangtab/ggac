@@ -1,0 +1,463 @@
+import { test, before, after } from 'node:test'
+import assert from 'node:assert/strict'
+import { readFileSync, rmSync } from 'node:fs'
+import { createClient } from '@libsql/client'
+
+/**
+ * 단계 2c: 회원 관리·마이페이지 라우트 12개를 `src/db/queries/profiles.ts`
+ * (Turso)로 전환한 것을 검증한다.
+ *
+ * 라우트는 전부 `defineApiRoute({ auth: 'admin', ... })` 또는
+ * `requireActiveMember()`/`requireUser()`를 거치는데, 둘 다 결국
+ * `next/headers`(`readSessionUser`) 요청 스코프에 묶여 있어 플레인
+ * `node --test`에서 GET/POST 핸들러를 직접 호출할 수 없다 — task-3b가
+ * `verify-session`/`auth/callback`에서 마주친 것과 같은 제약이다. 그래서
+ * 이 파일도 그 선례를 따른다:
+ *   1) 소스 패턴 가드 — 12개 파일이 더 이상 member_profiles를 직접
+ *      조회/갱신하지 않고 쿼리 계층 함수를 쓰는지.
+ *   2) 라우트 안의 변환 로직(자격 필터링·배치 갱신·응답 투영)을 실제
+ *      SQLite로 그대로 재현해 검증 — 라우트 파일에서 그 로직을 그대로
+ *      가져와 실행한다(핸들러 함수 자체를 호출하는 게 아니라 동일한
+ *      쿼리 계층 호출 시퀀스를 재현한다).
+ */
+
+const DB_PATH = 'scripts/testing/.stage2c-member-routes-test.db'
+const PROFILES_MODULE_URL = new URL('../../src/db/queries/profiles.ts', import.meta.url)
+
+async function loadFreshProfilesModule() {
+  return import(`${PROFILES_MODULE_URL.href}?t=${Date.now()}-${Math.random()}`)
+}
+
+let setupClient
+
+before(async () => {
+  for (const suffix of ['', '-wal', '-shm']) rmSync(`${DB_PATH}${suffix}`, { force: true })
+  setupClient = createClient({ url: `file:${DB_PATH}` })
+  await setupClient.executeMultiple(
+    readFileSync('src/db/migrations/0000_dizzy_krista_starr.sql', 'utf8')
+  )
+})
+
+after(() => {
+  setupClient?.close()
+  for (const suffix of ['', '-wal', '-shm']) rmSync(`${DB_PATH}${suffix}`, { force: true })
+})
+
+process.env.TURSO_DATABASE_URL = `file:${DB_PATH}`
+
+function makeProfile(overrides = {}) {
+  return {
+    id: overrides.id,
+    email: overrides.email,
+    display_name: overrides.display_name ?? '테스트회원',
+    registration_status: overrides.registration_status ?? 'pending',
+    is_active: overrides.is_active ?? false,
+    ...overrides,
+  }
+}
+
+const ROUTE_FILES = {
+  boardWrite: 'src/app/[locale]/board/write/page.tsx',
+  adminArtists: 'src/app/api/admin/artists/route.ts',
+  adminArtistsMembers: 'src/app/api/admin/artists/members/route.ts',
+  adminArtistUnassign: 'src/app/api/admin/artists/[id]/members/[memberId]/route.ts',
+  adminMemberAction: 'src/app/api/admin/member-action/route.ts',
+  adminMembersList: 'src/app/api/admin/members/route.ts',
+  adminMembersStats: 'src/app/api/admin/members/stats/route.ts',
+  adminMembersFlags: 'src/app/api/admin/members/flags/route.ts',
+  adminMembersBulk: 'src/app/api/admin/members/bulk/route.ts',
+  mypageProfile: 'src/app/api/mypage/profile/route.ts',
+  profiles: 'src/app/api/profiles/route.ts',
+  notificationsBulk: 'src/app/api/notifications/bulk/route.ts',
+}
+
+// ---------------------------------------------------------------- 소스 가드: member_profiles 직접 접근이 남아있지 않다
+
+test('12개 라우트 모두 member_profiles를 직접 조회/갱신하지 않는다 (주석 제외)', () => {
+  for (const file of Object.values(ROUTE_FILES)) {
+    const src = readFileSync(file, 'utf8')
+    assert.doesNotMatch(
+      src,
+      /\.from\(\s*['"]member_profiles['"]\s*\)/,
+      `${file}에 member_profiles 직접 접근이 남아있다`
+    )
+  }
+})
+
+test('12개 라우트 모두 src/db/queries/profiles(쿼리 계층)를 임포트한다', () => {
+  for (const file of Object.values(ROUTE_FILES)) {
+    const src = readFileSync(file, 'utf8')
+    assert.match(
+      src,
+      /from\s+['"]@\/db\/queries\/profiles['"]/,
+      `${file}이 쿼리 계층을 임포트하지 않는다`
+    )
+  }
+})
+
+test('admin/members/bulk와 notifications/bulk는 member_bulk_operations/create_bulk_notification 등 다른 Supabase 접근을 그대로 유지한다', () => {
+  const bulkSrc = readFileSync(ROUTE_FILES.adminMembersBulk, 'utf8')
+  assert.match(bulkSrc, /\.from\(\s*['"]member_bulk_operations['"]\s*\)/)
+
+  const notifSrc = readFileSync(ROUTE_FILES.notificationsBulk, 'utf8')
+  assert.match(notifSrc, /rpc\(\s*['"]create_bulk_notification['"]/)
+  assert.match(notifSrc, /createSupabaseServer/)
+})
+
+// ---------------------------------------------------------------- 소스 가드 1(필수 부정 대조 대상): admin/members/bulk는 배치를 쓴다
+//
+// 이 가드가 실제로 회귀를 잡는지는 테스트 파일 자체가 소스를 고쳐가며
+// 증명하지 않는다(상시 실행되는 테스트 스위트가 실제 라우트 파일을 매번
+// 수정했다 복원하는 것은 취약하다 — task-3b 선례도 이 방식을 쓰지 않았다).
+// 대신 개발 중 수동으로 1회 재현했다: `updateProfilesByIds(eligibleIds,
+// updateData)` 호출을 `for (const id of eligibleIds) { await
+// updateProfile(id, updateData) }` 루프로 바꾼 뒤 이 테스트를 실행하면
+// 아래 두 단언이 즉시 실패한다(배치 함수 부재 매치 실패 + 단건 호출 매치
+// 성공하지 않음). 원복 후 재실행하면 통과한다 — 결과는 보고서에 기록.
+test('admin/members/bulk POST는 updateProfilesByIds(배치)를 쓰고 id별 순차 updateProfile 호출은 쓰지 않는다', () => {
+  const src = readFileSync(ROUTE_FILES.adminMembersBulk, 'utf8')
+  assert.match(src, /updatedIds = await updateProfilesByIds\(eligibleIds, updateData\)/)
+  assert.doesNotMatch(
+    src,
+    /\bawait updateProfile\(/,
+    '단건 updateProfile 호출이 있으면 안 된다 — updateProfilesByIds만 써야 한다'
+  )
+})
+
+// ---------------------------------------------------------------- 소스 가드 2(필수 부정 대조 대상): admin/members 목록 필터/정렬 보존
+//
+// 마찬가지로 개발 중 수동으로 1회 재현했다: `status: filter === 'all' ?
+// undefined : (filter as RegistrationStatus)`와 `search: search ||
+// undefined` 두 줄을 지운 뒤 이 테스트를 실행하면 아래 단언이 즉시
+// 실패한다. 원복 후 재실행하면 통과한다 — 결과는 보고서에 기록.
+test('admin/members 목록은 filter/search를 listProfiles 인자로 그대로 전달한다(하드코딩하지 않는다)', () => {
+  const src = readFileSync(ROUTE_FILES.adminMembersList, 'utf8')
+  assert.match(src, /status: filter === 'all' \? undefined : \(filter as RegistrationStatus\)/)
+  assert.match(src, /search: search \|\| undefined/)
+  assert.match(src, /limit,\s*\n\s*offset,/)
+})
+
+test('admin/members 목록 라우트는 listProfiles가 고정하는 created_at 내림차순 정렬을 스스로 뒤집지 않는다 (별도 .sort()/.reverse() 없음)', () => {
+  const src = readFileSync(ROUTE_FILES.adminMembersList, 'utf8')
+  assert.doesNotMatch(src, /\.sort\(/, 'listProfiles의 정렬을 재정의하는 코드가 없어야 한다')
+  assert.doesNotMatch(src, /\.reverse\(/)
+})
+
+test('admin/artists/members 목록 라우트는 이름 오름차순으로 명시적으로 재정렬한다 (listProfiles 기본 정렬을 그대로 노출하지 않음)', () => {
+  const src = readFileSync(ROUTE_FILES.adminArtistsMembers, 'utf8')
+  assert.match(src, /localeCompare\(b\.display_name, 'ko'\)/)
+})
+
+// ---------------------------------------------------------------- 실제 SQLite: admin/members 목록 필터·정렬 동작
+
+test('admin/members 목록 로직 재현: status=approved + search로 필터링하고 created_at 내림차순을 유지한다', async () => {
+  const { upsertProfile, listProfiles } = await loadFreshProfilesModule()
+  await upsertProfile(
+    makeProfile({
+      id: 'list-1',
+      email: 'list-1@test.local',
+      display_name: '김철수',
+      registration_status: 'approved',
+    })
+  )
+  await new Promise(r => setTimeout(r, 5))
+  await upsertProfile(
+    makeProfile({
+      id: 'list-2',
+      email: 'list-2@test.local',
+      display_name: '김영희',
+      registration_status: 'approved',
+    })
+  )
+  await upsertProfile(
+    makeProfile({
+      id: 'list-3',
+      email: 'list-3@test.local',
+      display_name: '박민수',
+      registration_status: 'pending',
+    })
+  )
+
+  // 라우트가 filter='approved', search='김'일 때 넘기는 것과 동일한 인자.
+  const { rows, total } = await listProfiles({
+    status: 'approved',
+    search: '김',
+    limit: 50,
+    offset: 0,
+  })
+
+  assert.equal(total, 2)
+  assert.deepEqual(
+    rows.map(r => r.id),
+    ['list-2', 'list-1'],
+    'created_at 내림차순(최신 가입 먼저)이어야 한다'
+  )
+})
+
+// ---------------------------------------------------------------- 실제 SQLite: 아티스트 배정 해제(artist_role NOT NULL 회피)
+
+test('아티스트 배정 해제 로직 재현: artist_role을 null로 쓰지 않고도 배정 해제가 성공한다 (Turso 스키마 NOT NULL 회피)', async () => {
+  const { upsertProfile, getProfileById, updateProfile } = await loadFreshProfilesModule()
+  const id = 'unassign-1'
+  await upsertProfile(
+    makeProfile({
+      id,
+      email: 'unassign-1@test.local',
+      registration_status: 'approved',
+      is_active: true,
+      artist_id: 'artist-014',
+      is_artist: true,
+      artist_role: 'manager',
+    })
+  )
+
+  // DELETE 라우트가 실제로 호출하는 것과 동일 — artist_role은 patch에 넣지 않는다.
+  await assert.doesNotReject(() =>
+    updateProfile(id, {
+      artist_id: null,
+      is_artist: false,
+    })
+  )
+
+  const updated = await getProfileById(id)
+  assert.equal(updated.artist_id, null)
+  assert.equal(updated.is_artist, false)
+  // artist_role은 이전 값을 그대로 보존한다(스키마가 NOT NULL이라 null로
+  // 못 쓴다 — is_artist/artist_id만으로 "미배정"을 판정하는 모든 소비자에
+  // 영향 없음, 재배정 시 새 role을 명시적으로 덮어씀).
+  assert.equal(updated.artist_role, 'manager')
+})
+
+test('대조: 배정 해제 시 artist_role까지 null로 쓰면(원래 Supabase 동작을 그대로 재현하면) NOT NULL 제약으로 던진다', async () => {
+  const { upsertProfile, updateProfile } = await loadFreshProfilesModule()
+  const id = 'unassign-2'
+  await upsertProfile(
+    makeProfile({
+      id,
+      email: 'unassign-2@test.local',
+      registration_status: 'approved',
+      is_active: true,
+      artist_id: 'artist-015',
+      is_artist: true,
+      artist_role: 'owner',
+    })
+  )
+
+  // profiles.ts의 ProfilePatch 타입은 artist_role을 non-null string으로
+  // 선언해 이 호출 자체를 컴파일 타임에도 막지만(TS), 이 파일은 plain
+  // node --test(.mjs)라 타입 검사를 거치지 않는다 — 런타임으로 실제
+  // SQLite NOT NULL 제약이 막는지 직접 확인한다.
+  await assert.rejects(
+    () =>
+      updateProfile(id, {
+        artist_id: null,
+        is_artist: false,
+        artist_role: null,
+      }),
+    'artist_role은 NOT NULL이라 null을 쓰면 제약 위반으로 던져야 한다 — 이게 바로 라우트가 artist_role을 patch에서 뺀 이유다'
+  )
+})
+
+// ---------------------------------------------------------------- 실제 SQLite: admin/artists 목록의 메모리 필터 로직 재현
+
+test('admin/artists 목록 로직 재현: artist_id/is_artist/is_active 조합으로 아티스트별 배정 멤버를 정확히 나눈다', async () => {
+  const { upsertProfile, listProfiles } = await loadFreshProfilesModule()
+  await upsertProfile(
+    makeProfile({
+      id: 'artist-member-1',
+      email: 'am1@test.local',
+      registration_status: 'approved',
+      is_active: true,
+      artist_id: 'artist-020',
+      is_artist: true,
+      artist_role: 'owner',
+    })
+  )
+  await upsertProfile(
+    makeProfile({
+      id: 'artist-member-2-inactive',
+      email: 'am2@test.local',
+      registration_status: 'approved',
+      is_active: false, // 비활성 — assignedMembers에서 빠져야 한다
+      artist_id: 'artist-020',
+      is_artist: true,
+      artist_role: 'manager',
+    })
+  )
+  await upsertProfile(
+    makeProfile({
+      id: 'artist-member-3-not-artist',
+      email: 'am3@test.local',
+      registration_status: 'approved',
+      is_active: true,
+      artist_id: 'artist-020',
+      is_artist: false, // is_artist=false — assignedMembers에서 빠져야 한다
+      artist_role: 'owner',
+    })
+  )
+  await upsertProfile(
+    makeProfile({
+      id: 'artist-member-4-other-artist',
+      email: 'am4@test.local',
+      registration_status: 'approved',
+      is_active: true,
+      artist_id: 'artist-021', // 다른 아티스트 — artist-020 목록에서 빠져야 한다
+      is_artist: true,
+      artist_role: 'collaborator',
+    })
+  )
+
+  const { rows: allProfiles } = await listProfiles({ limit: 10000, offset: 0 })
+
+  // admin/artists/route.ts GET 핸들러와 동일한 필터.
+  const assignedMembers = allProfiles.filter(
+    p => p.artist_id === 'artist-020' && p.is_artist && p.is_active
+  )
+
+  assert.deepEqual(
+    assignedMembers.map(m => m.id),
+    ['artist-member-1']
+  )
+})
+
+// ---------------------------------------------------------------- 실제 SQLite: notifications/bulk 관리자 체크 fail-closed
+
+test('notifications/bulk 관리자 체크 로직 재현: is_admin/approved/is_active 세 조건 중 하나만 어긋나도 거부된다', async () => {
+  const { upsertProfile, getProfileById } = await loadFreshProfilesModule()
+
+  const cases = [
+    {
+      id: 'nb-admin-ok',
+      is_admin: true,
+      registration_status: 'approved',
+      is_active: true,
+      expect: true,
+    },
+    {
+      id: 'nb-not-admin',
+      is_admin: false,
+      registration_status: 'approved',
+      is_active: true,
+      expect: false,
+    },
+    {
+      id: 'nb-pending',
+      is_admin: true,
+      registration_status: 'pending',
+      is_active: true,
+      expect: false,
+    },
+    {
+      id: 'nb-inactive',
+      is_admin: true,
+      registration_status: 'approved',
+      is_active: false,
+      expect: false,
+    },
+  ]
+
+  for (const c of cases) {
+    await upsertProfile(
+      makeProfile({
+        id: c.id,
+        email: `${c.id}@test.local`,
+        registration_status: c.registration_status,
+        is_active: c.is_active,
+        is_admin: c.is_admin,
+      })
+    )
+  }
+
+  for (const c of cases) {
+    const profile = await getProfileById(c.id)
+    const allowed = Boolean(
+      profile?.is_admin && profile.registration_status === 'approved' && profile.is_active
+    )
+    assert.equal(allowed, c.expect, `${c.id}의 판정이 기대와 다르다`)
+  }
+
+  // 프로필이 아예 없는 경우(조회 실패로 취급) — forbidden으로 fail-closed.
+  const missing = await getProfileById('nb-does-not-exist')
+  const allowedForMissing = Boolean(
+    missing?.is_admin && missing?.registration_status === 'approved' && missing?.is_active
+  )
+  assert.equal(allowedForMissing, false)
+})
+
+// ---------------------------------------------------------------- 실제 SQLite: admin/members/bulk 자격 필터링 + 배치 갱신 + 부분 실패 매핑
+
+test('admin/members/bulk POST 로직 재현: 자격 없는 대상은 건너뛰고 자격 있는 대상만 배치 갱신한다', async () => {
+  const { upsertProfile, getProfileById, getProfilesByIds, updateProfilesByIds } =
+    await loadFreshProfilesModule()
+  await upsertProfile(
+    makeProfile({ id: 'bulk-pending-1', email: 'bp1@test.local', registration_status: 'pending' })
+  )
+  await upsertProfile(
+    makeProfile({ id: 'bulk-pending-2', email: 'bp2@test.local', registration_status: 'pending' })
+  )
+  await upsertProfile(
+    makeProfile({
+      id: 'bulk-already-approved',
+      email: 'bp3@test.local',
+      registration_status: 'approved', // bulk_approve 대상 아님(자격 없음)
+    })
+  )
+
+  const targetIds = ['bulk-pending-1', 'bulk-pending-2', 'bulk-already-approved', 'bulk-missing']
+
+  // admin/members/bulk/route.ts POST와 동일한 시퀀스.
+  const memberById = await getProfilesByIds(targetIds)
+  const requiredStatus = 'pending'
+  const nowIso = new Date().toISOString()
+  const updateData = {
+    registration_status: 'approved',
+    is_active: true,
+    approved_by: 'admin-1',
+    approved_at: nowIso,
+  }
+
+  const eligibleIds = []
+  const results = []
+  for (const memberId of targetIds) {
+    const targetMember = memberById.get(memberId)
+    if (!targetMember) {
+      results.push({ member_id: memberId, success: false, error: 'not_found' })
+      continue
+    }
+    if (targetMember.registration_status !== requiredStatus) {
+      results.push({ member_id: memberId, success: false, error: 'ineligible' })
+      continue
+    }
+    eligibleIds.push(memberId)
+  }
+
+  assert.deepEqual(eligibleIds, ['bulk-pending-1', 'bulk-pending-2'])
+  assert.deepEqual(
+    results.map(r => r.member_id),
+    ['bulk-already-approved', 'bulk-missing']
+  )
+
+  const updatedIds = await updateProfilesByIds(eligibleIds, updateData)
+  assert.deepEqual(updatedIds.sort(), ['bulk-pending-1', 'bulk-pending-2'])
+
+  for (const id of eligibleIds) {
+    const row = await getProfileById(id)
+    assert.equal(row.registration_status, 'approved')
+    assert.equal(row.is_active, true)
+    assert.equal(row.approved_by, 'admin-1')
+  }
+})
+
+// ---------------------------------------------------------------- 실제 SQLite: /api/profiles 배치 조회 (표시명만)
+
+test('/api/profiles 로직 재현: 존재하는 id만 {id, display_name}으로 돌려주고 순서/누락은 에러가 아니다', async () => {
+  const { upsertProfile, getProfilesByIds } = await loadFreshProfilesModule()
+  await upsertProfile(makeProfile({ id: 'pub-1', email: 'pub1@test.local', display_name: '공개1' }))
+  await upsertProfile(makeProfile({ id: 'pub-2', email: 'pub2@test.local', display_name: '공개2' }))
+
+  const profiles = await getProfilesByIds(['pub-1', 'pub-does-not-exist', 'pub-2'])
+  const data = Array.from(profiles.values()).map(p => ({ id: p.id, display_name: p.display_name }))
+
+  assert.equal(data.length, 2)
+  assert.deepEqual(new Set(data.map(d => d.id)), new Set(['pub-1', 'pub-2']))
+})
