@@ -6,6 +6,7 @@ import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { logSecurityEvent } from '@/utils/security'
 import { createLogger, maskId } from '@/utils/logger'
 import { validateUUID } from '@/utils/validation'
+import { getProfileById, updateProfile, type ProfilePatch } from '@/db/queries/profiles'
 
 const log = createLogger('admin/member-action')
 
@@ -51,7 +52,7 @@ export const POST = defineApiRoute<Record<string, unknown>>({
     let parsedInput: MemberActionInput | null = null
 
     try {
-      const { db: adminSupabase, user } = auth
+      const { user } = auth
 
       // 요청 데이터 파싱 및 Zod 검증
       const parsed = MemberActionSchema.safeParse(body)
@@ -70,22 +71,27 @@ export const POST = defineApiRoute<Record<string, unknown>>({
       const memberId = memberIdValidation.sanitized
 
       // 대상 회원 정보 조회
-      const { data: targetMember, error: targetError } = await adminSupabase
-        .from('member_profiles')
-        .select('id, display_name, registration_status, is_active, is_suspended')
-        .eq('id', memberId)
-        .single()
-
-      if (targetError || !targetMember) {
+      let targetMember: Awaited<ReturnType<typeof getProfileById>>
+      try {
+        targetMember = await getProfileById(memberId)
+      } catch (error) {
         log.error('Target member fetch error', {
-          message: targetError?.message,
+          message: error instanceof Error ? error.message : String(error),
+          memberId: maskId(memberId),
+        })
+        return ApiError.notFound('회원을 찾을 수 없습니다.').toNextResponse()
+      }
+
+      if (!targetMember) {
+        log.error('Target member fetch error', {
+          message: 'not found',
           memberId: maskId(memberId),
         })
         return ApiError.notFound('회원을 찾을 수 없습니다.').toNextResponse()
       }
 
       // 액션에 따른 업데이트 데이터 준비
-      let updateData: any = {}
+      let updateData: ProfilePatch = {}
 
       switch (action) {
         case 'approve':
@@ -99,7 +105,6 @@ export const POST = defineApiRoute<Record<string, unknown>>({
             is_active: true,
             approved_by: user.id,
             approved_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
           }
           break
 
@@ -113,7 +118,6 @@ export const POST = defineApiRoute<Record<string, unknown>>({
             registration_status: 'rejected',
             is_active: false,
             rejected_by: user.id,
-            updated_at: new Date().toISOString(),
           }
           break
 
@@ -123,7 +127,6 @@ export const POST = defineApiRoute<Record<string, unknown>>({
           }
           updateData = {
             is_active: true,
-            updated_at: new Date().toISOString(),
           }
           break
 
@@ -133,7 +136,6 @@ export const POST = defineApiRoute<Record<string, unknown>>({
           }
           updateData = {
             is_active: false,
-            updated_at: new Date().toISOString(),
           }
           break
 
@@ -146,7 +148,6 @@ export const POST = defineApiRoute<Record<string, unknown>>({
             is_active: false,
             suspension_reason: suspension_reason || '관리자에 의한 정지',
             suspension_until: suspension_until || null,
-            updated_at: new Date().toISOString(),
           }
           break
 
@@ -159,22 +160,18 @@ export const POST = defineApiRoute<Record<string, unknown>>({
             is_active: true,
             suspension_reason: null,
             suspension_until: null,
-            updated_at: new Date().toISOString(),
           }
           break
       }
 
       // 데이터베이스 업데이트
-      const { data: updatedMember, error: updateError } = await adminSupabase
-        .from('member_profiles')
-        .update(updateData)
-        .eq('id', memberId)
-        .select()
-        .single()
-
-      if (updateError) {
+      let updatedMember: Awaited<ReturnType<typeof getProfileById>>
+      try {
+        await updateProfile(memberId, updateData)
+        updatedMember = await getProfileById(memberId)
+      } catch (error) {
         log.error('Member update error', {
-          message: updateError.message,
+          message: error instanceof Error ? error.message : String(error),
           memberId: maskId(memberId),
           action,
         })

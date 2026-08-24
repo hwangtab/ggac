@@ -6,6 +6,7 @@ import { validateFormData } from '@/utils/validation'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { logSecurityEvent } from '@/utils/security'
 import { validateUUID } from '@/utils/validation'
+import { getProfilesByIds, updateProfilesByIds, type ProfilePatch } from '@/db/queries/profiles'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -124,20 +125,12 @@ export const POST = defineApiRoute<Partial<BulkOperationRequest>>({
     const results: any[] = []
 
     try {
-      // 벌크를 실제 벌크로 수행한다: 일괄 조회 1회 → 메모리 검증 → 대상 일괄
-      // 업데이트 1회. 기존에는 멤버당 select+update를 순차 실행해 최대 100명이면
-      // 202 왕복(수십 초·함수 타임아웃 위험)이었다(전수감사 API High 5).
-      // updateData는 작업 타입별로 모든 대상에 동일하므로 일괄 update가 가능하다.
-      const { data: targetMembers, error: targetsError } = await db
-        .from('member_profiles')
-        .select('id, display_name, registration_status, is_active, is_suspended')
-        .in('id', sanitizedMemberIds)
-
-      if (targetsError) {
-        throw targetsError
-      }
-
-      const memberById = new Map((targetMembers || []).map(member => [String(member.id), member]))
+      // 벌크를 실제 벌크로 수행한다: 일괄 조회 1회(getProfilesByIds/inArray) →
+      // 메모리 검증 → 대상 일괄 업데이트 1회(updateProfilesByIds/inArray).
+      // 기존에는 멤버당 select+update를 순차 실행해 최대 100명이면 202
+      // 왕복(수십 초·함수 타임아웃 위험)이었다(전수감사 API High 5) — 이 두
+      // 함수는 그 회귀를 막으려고 쿼리 계층에 마련됐다(id별 루프 금지).
+      const memberById = await getProfilesByIds(sanitizedMemberIds)
 
       // 작업 타입별 자격 조건과 업데이트 데이터 (모든 대상 공통)
       const eligibility: Record<string, { status: string; message: string }> = {
@@ -151,37 +144,32 @@ export const POST = defineApiRoute<Partial<BulkOperationRequest>>({
       const ineligibleMessage = eligibility[operation_type]?.message ?? '처리할 수 없는 작업입니다.'
 
       const nowIso = new Date().toISOString()
-      const updateDataByType: Record<string, Record<string, unknown>> = {
+      const updateDataByType: Record<string, ProfilePatch> = {
         bulk_approve: {
           registration_status: 'approved',
           is_active: true,
           approved_by: user.id,
           approved_at: nowIso,
-          updated_at: nowIso,
         },
         bulk_reject: {
           registration_status: 'rejected',
           is_active: false,
           rejected_by: user.id,
-          updated_at: nowIso,
         },
         bulk_activate: {
           is_active: true,
           is_suspended: false,
           suspension_reason: null,
           suspension_until: null,
-          updated_at: nowIso,
         },
         bulk_deactivate: {
           is_active: false,
-          updated_at: nowIso,
         },
         bulk_suspend: {
           is_suspended: true,
           is_active: false,
           suspension_reason: parameters.suspension_reason || '관리자에 의한 대량 정지',
           suspension_until: parameters.suspension_until || null,
-          updated_at: nowIso,
         },
       }
       const updateData = updateDataByType[operation_type]
@@ -212,14 +200,18 @@ export const POST = defineApiRoute<Partial<BulkOperationRequest>>({
       }
 
       if (eligibleIds.length > 0 && updateData) {
-        const { error: updateError } = await db
-          .from('member_profiles')
-          .update(updateData)
-          .in('id', eligibleIds)
+        let updatedIds: string[] = []
+        let batchUpdateFailed = false
+        try {
+          updatedIds = await updateProfilesByIds(eligibleIds, updateData)
+        } catch {
+          batchUpdateFailed = true
+        }
+        const updatedIdSet = new Set(updatedIds)
 
         for (const memberId of eligibleIds) {
           const targetMember = memberById.get(String(memberId))
-          if (updateError) {
+          if (batchUpdateFailed || !updatedIdSet.has(memberId)) {
             errorCount++
             results.push({
               member_id: memberId,
@@ -317,7 +309,11 @@ export const GET = defineApiRoute({
   handler: async ({ auth }) => {
     const { db } = auth
 
-    // 대량 작업 이력 조회
+    // 대량 작업 이력 조회. `performed_by_member`는 이전엔 Supabase FK 임베드
+    // (member_profiles!performed_by)로 한 쿼리에 조인됐지만, 프로필 권위가
+    // Turso로 옮겨진 뒤로는 두 단계로 나눠야 한다 — DB를 건넌 조인은 만들지
+    // 않고, 이력 조회(Supabase) 뒤 수행자 id들을 한 번에(getProfilesByIds)
+    // 배치 조회해 메모리에서 붙인다(id별 루프 금지).
     const { data: operations, error: operationsError } = await db
       .from('member_bulk_operations')
       .select(
@@ -332,10 +328,7 @@ export const GET = defineApiRoute({
         started_at,
         completed_at,
         error_message,
-        performed_by_member:member_profiles!performed_by (
-          display_name,
-          email
-        )
+        performed_by
       `
       )
       .order('created_at', { ascending: false })
@@ -346,8 +339,34 @@ export const GET = defineApiRoute({
       return ApiError.internalServerError('대량 작업 이력을 조회할 수 없습니다.').toNextResponse()
     }
 
+    const rows = operations || []
+    const performerIds = Array.from(
+      new Set(rows.map(op => op.performed_by).filter((id): id is string => Boolean(id)))
+    )
+
+    let performerById: Map<string, { display_name: string; email: string }> = new Map()
+    try {
+      const profiles = await getProfilesByIds(performerIds)
+      performerById = new Map(
+        Array.from(profiles.values()).map(profile => [
+          profile.id,
+          { display_name: profile.display_name, email: profile.email },
+        ])
+      )
+    } catch (error) {
+      // 수행자 표시 정보는 부가 정보다 — 조회 실패로 이력 자체를 못 보여주면
+      // 안 되므로, 실패 시 performed_by_member는 null로 두고 나머지는 그대로
+      // 응답한다.
+      console.error('Performed-by profile fetch error:', error)
+    }
+
+    const operationsWithPerformer = rows.map(({ performed_by, ...operation }) => ({
+      ...operation,
+      performed_by_member: performed_by ? (performerById.get(performed_by) ?? null) : null,
+    }))
+
     return ApiSuccess.ok({
-      operations: operations || [],
+      operations: operationsWithPerformer,
     })
   },
 })
