@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { isValidUUID } from '@/utils/validation'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
-import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
+import { getProfilesByIds } from '@/db/queries/profiles'
 
 export async function GET(req: NextRequest) {
   try {
@@ -25,23 +25,25 @@ export async function GET(req: NextRequest) {
       return ApiError.badRequest('유효하지 않은 ID 형식이 포함되어 있습니다.').toNextResponse()
     }
 
-    // 공개 표시명 조회는 service role로 직접 수행한다(select는 id,display_name으로 제한).
-    // 과거에는 SECURITY DEFINER 뷰(public_profiles)로 RLS를 우회했는데, 이는 advisor
-    // ERROR 대상이라 뷰를 security_invoker로 전환하고 서버 권한 조회로 대체했다.
-    const supabase = createServiceRoleClient()
-    const { data, error } = await supabase
-      .from('member_profiles')
-      .select('id, display_name')
-      .in('id', ids)
-
-    if (error) {
+    // 공개 표시명 조회. 프로필 권위는 Turso다 — getProfilesByIds는 쿼리
+    // 한 번(inArray)으로 배치 조회하고, 존재하지 않는 id는 그냥 빠진다
+    // (에러 아님, 이전 Supabase `.in()`과 동일한 동작).
+    let profiles: Map<string, { id: string; display_name: string }>
+    try {
+      profiles = await getProfilesByIds(ids)
+    } catch (error) {
       console.error('[API] 프로필 조회 실패:', error)
       return ApiError.internalServerError(
         '프로필 정보를 불러오는 데 실패했습니다.'
       ).toNextResponse()
     }
 
-    return ApiSuccess.ok(data || []).toNextResponse()
+    const data = Array.from(profiles.values()).map(profile => ({
+      id: profile.id,
+      display_name: profile.display_name,
+    }))
+
+    return ApiSuccess.ok(data).toNextResponse()
   } catch (e: any) {
     console.error('[API] 프로필 조회 예외 발생:', e)
     return ApiError.internalServerError('요청 처리에 실패했습니다.').toNextResponse()

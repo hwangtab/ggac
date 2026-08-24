@@ -2,6 +2,7 @@ import { createOptionsResponse } from '@/utils/apiResponse'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
+import { listProfiles } from '@/db/queries/profiles'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -18,23 +19,32 @@ export const GET = defineApiRoute({
   auth: 'admin',
   errorResponse: () =>
     ApiError.internalServerError('멤버 정보를 조회하는 중 오류가 발생했습니다.').toNextResponse(),
-  handler: async ({ auth }) => {
-    const { db } = auth
-
+  handler: async () => {
     // 승인된 모든 멤버 조회 (아티스트 권한 부여 대상)
-    const { data: members, error: membersError } = await db
-      .from('member_profiles')
-      .select('id, display_name, email, is_artist, artist_id, artist_role')
-      .eq('registration_status', 'approved')
-      .eq('is_active', true)
-      .order('display_name', { ascending: true })
-
-    if (membersError) {
-      console.error('Members fetch error:', membersError)
+    let rows: Awaited<ReturnType<typeof listProfiles>>['rows']
+    try {
+      ;({ rows } = await listProfiles({ status: 'approved', limit: 10000, offset: 0 }))
+    } catch (error) {
+      console.error('Members fetch error:', error)
       throw ApiError.internalServerError('멤버 정보를 조회하는 중 오류가 발생했습니다.')
     }
 
-    return ApiSuccess.ok({ members: members || [] })
+    // 정렬은 기존 `.order('display_name', { ascending: true })`와 동일하게
+    // 이름 오름차순으로 고정한다 — listProfiles 자체는 created_at 내림차순만
+    // 지원한다(getDirectorRoster/getAuditorRoster와 같은 패턴).
+    const members = rows
+      .filter(row => row.is_active)
+      .sort((a, b) => a.display_name.localeCompare(b.display_name, 'ko'))
+      .map(row => ({
+        id: row.id,
+        display_name: row.display_name,
+        email: row.email,
+        is_artist: row.is_artist,
+        artist_id: row.artist_id,
+        artist_role: row.artist_role,
+      }))
+
+    return ApiSuccess.ok({ members })
   },
 })
 
