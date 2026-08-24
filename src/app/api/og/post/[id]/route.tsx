@@ -14,6 +14,7 @@ import { isBlobPublicUrl } from '@/lib/storage/paths'
 import { isProjectStoragePublicUrl } from '@/utils/storageUrlValidation'
 import { validateUUID } from '@/utils/validation'
 import { createLogger, maskId } from '@/utils/logger'
+import { getPostById } from '@/db/queries/posts'
 
 const log = createLogger('api/og/post')
 
@@ -41,15 +42,16 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
     const supabase = getSupabaseAdmin()
 
-    // 게시물 존재 확인 (공개 정책에 따라 삭제되지 않은 게시물만)
-    const { data: post, error: postError } = await supabase
-      .from('posts')
-      .select('id, title')
-      .eq('id', postId)
-      .eq('is_deleted', false)
-      .single()
+    // 게시물 존재 확인 (공개 정책에 따라 삭제되지 않은 게시물만). posts는
+    // 이제 Turso가 권위다 — 첨부(post_attachments)는 아직 Supabase.
+    let post: Awaited<ReturnType<typeof getPostById>> = null
+    try {
+      post = await getPostById(postId, { includeDeleted: false })
+    } catch (postFetchError) {
+      log.debug('Post fetch failed', { postId: maskId(postId), error: postFetchError })
+    }
 
-    if (postError || !post) {
+    if (!post) {
       log.debug('Post not found', { postId: maskId(postId) })
       return new Response(null, {
         status: 302,

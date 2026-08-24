@@ -1525,6 +1525,11 @@ const publicPostsApiPath = join(root, 'src/app/api/posts/public/route.ts')
 const publicPostsApiSource = readFileSync(publicPostsApiPath, 'utf8')
 const keysetCursorPath = join(root, 'src/utils/keysetCursor.ts')
 const keysetCursorSource = readFileSync(keysetCursorPath, 'utf8')
+// 단계 2c(Task 4): posts/member_profiles가 Turso로 옮겨가며 정렬 로직도
+// src/app/api/posts/public/route.ts에서 src/db/queries/posts.ts의
+// listPostsKeyset()으로 이동했다.
+const postsQueriesPath = join(root, 'src/db/queries/posts.ts')
+const postsQueriesSource = readFileSync(postsQueriesPath, 'utf8')
 const boardDetailPagePath = join(root, 'src/app/[locale]/board/[id]/page.tsx')
 const boardDetailPageSource = readFileSync(boardDetailPagePath, 'utf8')
 const commentsApiPath = join(root, 'src/app/api/posts/[id]/comments/route.ts')
@@ -1585,8 +1590,13 @@ const validatesPublicPostsCursor =
   ) &&
   /if\s*\(cursor && !parsedCursor\)/.test(publicPostsApiSource) &&
   /if\s*\(!sortOrder\)/.test(publicPostsApiSource) &&
-  /query = query\.order\(['"]created_at['"],\s*\{\s*ascending\s*\}\)/.test(publicPostsApiSource) &&
-  /query = query\.order\(['"]id['"],\s*\{\s*ascending\s*\}\)/.test(publicPostsApiSource) &&
+  // 단계 2c: 정렬(created_at/id, ascending 방향)을 직접 .order() 체이닝하던
+  // 코드가 listPostsKeyset(Turso)으로 옮겨갔다. 라우트는 sortOrder를 그대로
+  // 전달만 하고, 결정론적 created_at/id 타이브레이크 정렬 자체는
+  // src/db/queries/posts.ts에서 보장한다(둘 다 확인).
+  /listPostsKeyset\(\{[\s\S]*?sortOrder,[\s\S]*?\}\)/.test(publicPostsApiSource) &&
+  /ascending \? asc\(posts\.createdAt\) : desc\(posts\.createdAt\)/.test(postsQueriesSource) &&
+  /ascending \? asc\(posts\.id\) : desc\(posts\.id\)/.test(postsQueriesSource) &&
   /has_prev:\s*!!parsedCursor/.test(publicPostsApiSource) &&
   !/const sortOrder = \(searchParams\.get\(['"]sort['"]\) \|\| ['"]desc['"]\)\.toLowerCase\(\) === ['"]asc['"] \? ['"]asc['"] : ['"]desc['"]/.test(
     publicPostsApiSource
@@ -1693,10 +1703,17 @@ const validatesPostRouteIdsUseSanitizedUuid =
     (/getProfileById\(memberId\)/.test(adminArtistMemberApiSource) &&
       /updateProfile\(memberId,/.test(adminArtistMemberApiSource))) &&
   /const postId = uuidValidation\.sanitized/.test(postContentApiSource) &&
-  /\.eq\(['"]id['"],\s*postId\)/.test(postContentApiSource) &&
+  // 단계 2c: posts 조회를 Supabase `.eq('id', postId)`에서 Turso 쿼리 계층
+  // getPostById(postId, ...)로 옮겼다 — 옛 Supabase 패턴도 계속 허용해 두
+  // 형태 모두 통과시킨다.
+  (/\.eq\(['"]id['"],\s*postId\)/.test(postContentApiSource) ||
+    /getPostById\(postId,/.test(postContentApiSource)) &&
   !/\.eq\(['"]id['"],\s*id\)/.test(postContentApiSource) &&
   /const validPostId = uuidValidation\.sanitized/.test(boardPostDetailSource) &&
-  /\.eq\(['"]id['"],\s*validPostId\)/.test(boardPostDetailSource) &&
+  // 단계 2c: 위와 같은 이유(getPostById(validPostId, ...)로 전환) — 댓글/첨부
+  // 조회는 아직 Supabase라 .eq('post_id', validPostId)는 그대로 유지된다.
+  (/\.eq\(['"]id['"],\s*validPostId\)/.test(boardPostDetailSource) ||
+    /getPostById\(validPostId,/.test(boardPostDetailSource)) &&
   /\.eq\(['"]post_id['"],\s*validPostId\)/.test(boardPostDetailSource) &&
   !/\.eq\(['"]id['"],\s*postId\)/.test(boardPostDetailSource) &&
   /const postId = uuidValidation\.sanitized/.test(commentsApiSource) &&
@@ -1713,7 +1730,11 @@ const validatesPostRouteIdsUseSanitizedUuid =
   /\.eq\(['"]post_id['"],\s*validPostId\)/.test(postLikesApiSource) &&
   /post_id:\s*validPostId/.test(postLikesApiSource) &&
   /const postId = postIdValidation\.sanitized/.test(postOgImageSource) &&
-  /\.eq\(['"]id['"],\s*postId\)/.test(postOgImageSource) &&
+  // 단계 2c: posts 존재 확인을 Supabase `.eq('id', postId)`에서 Turso 쿼리
+  // 계층 getPostById(postId, ...)로 옮겼다 — 첨부(post_attachments) 조회는
+  // 아직 Supabase라 .eq('post_id', postId)는 그대로 유지된다.
+  (/\.eq\(['"]id['"],\s*postId\)/.test(postOgImageSource) ||
+    /getPostById\(postId,/.test(postOgImageSource)) &&
   /\.eq\(['"]post_id['"],\s*postId\)/.test(postOgImageSource) &&
   /const userIdValidation = validateUUID\(userIdFromQuery,\s*['"]사용자 ID['"]\)/.test(
     postUserDataApiSource

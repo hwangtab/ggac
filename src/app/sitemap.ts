@@ -1,31 +1,34 @@
 import { MetadataRoute } from 'next'
-import { createClient } from '@supabase/supabase-js'
 import { getArtists, getProjects } from '@/lib/data'
 import { getSiteUrl } from '@/utils/site'
+import { listPosts } from '@/db/queries/posts'
 
+// posts는 이제 Turso가 권위다. `listPosts`는 카테고리 단일값 필터(포함)만
+// 지원하고 "잡담 제외"는 지원하지 않으므로, 카테고리 필터 없이 최신
+// `updated_at` 순으로 최대 1000건을 가져온 뒤 잡담 제외·본문 길이 필터는
+// 기존과 동일하게 메모리에서 적용한다. 회원 23명 규모에서 전체 게시글 수가
+// 1000건을 넘을 가능성은 낮아, DB 레벨 제외 대신 메모리 필터로도 실질적으로
+// 동일한 결과를 낸다(정확히 1000건 근처에서 "잡담이 상위를 차지해 결과가
+// 1000건 미만이 되는" 이론적 경계 사례만 남는다 — 현재 규모에서는 무시 가능).
+//
+// `listPosts`는 `src/db/client.ts`의 지연 생성 Proxy를 통해 `TURSO_DATABASE_URL`
+// 없이는 실제 쿼리 시점에 던진다(모듈 로드 자체는 안전) — 이 함수의 try/catch가
+// 그 경우를 빈 배열로 흡수해 `next build`의 사이트맵 프리렌더가 죽지 않게 한다.
 async function getBoardPostsForSitemap(): Promise<Array<{ id: string; updated_at: string }>> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !key) return []
-
   try {
-    const supabase = createClient(url, key, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    })
     // 색인 가치가 있는 게시글만 sitemap에 포함:
     // - 잡담 카테고리 제외 (개인적 단상 위주)
     // - 본문 길이 200자 이상 (thin content 방지)
     // page.tsx의 noindex 정책과 동기화하여 GSC 신호 일관성 확보.
-    const { data, error } = await supabase
-      .from('posts')
-      .select('id, updated_at, content, category')
-      .eq('is_deleted', false)
-      .neq('category', '잡담')
-      .order('updated_at', { ascending: false })
-      .limit(1000)
+    const { rows } = await listPosts({
+      page: 1,
+      limit: 1000,
+      sort: 'updated_at_desc',
+      includeDeleted: false,
+    })
 
-    if (error || !data) return []
-    return data
+    return rows
+      .filter(post => post.category !== '잡담')
       .filter(post => {
         const text = (post.content || '')
           .replace(/<[^>]*>/g, '')

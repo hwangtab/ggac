@@ -2,11 +2,11 @@ import { NextRequest } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createClient } from '@supabase/supabase-js'
 import { stripHtmlTags } from '@/utils/textUtils'
-import { escapePostgrestValue } from '@/utils/validation'
 import { createLogger } from '@/utils/logger'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { parseBoardCategory } from '@/constants/categories'
 import { formatTimestampUuidCursor, parseTimestampUuidCursor } from '@/utils/keysetCursor'
+import { listPostsKeyset } from '@/db/queries/posts'
 
 const log = createLogger('api/posts/public')
 type PublicPostsSortOrder = 'asc' | 'desc'
@@ -24,6 +24,8 @@ export const dynamic = 'force-dynamic'
 export const preferredRegion = 'icn1'
 
 export async function GET(request: NextRequest) {
+  // post_attachments(첨부) 통계 조회는 아직 Supabase가 권위다(범위 밖) —
+  // posts/member_profiles 조회만 Turso(listPostsKeyset)로 옮긴다.
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!url || !anonKey) {
@@ -55,71 +57,24 @@ export async function GET(request: NextRequest) {
       return ApiError.badRequest('유효하지 않은 커서입니다.').toNextResponse()
     }
 
-    let query = supabase
-      .from('posts')
-      .select(
-        `
-        id,
-        title,
-        content,
-        category,
-        author_id,
-        created_at,
-        updated_at,
-        is_pinned,
-        like_count,
-        author:member_profiles!posts_author_id_fkey (display_name)
-      `
-      )
-      .not('is_deleted', 'is', true)
-
-    if (boardCategory !== '전체') {
-      query = query.eq('category', boardCategory)
-    }
-
-    if (searchRaw) {
-      const tokens = searchRaw
-        .split(/\s+/)
-        .map(t => t.trim())
-        .filter(t => t.length >= 2)
-        .slice(0, 3)
-      if (tokens.length > 0) {
-        const pattern = tokens
-          .map(t => `title.ilike.%${escapePostgrestValue(t)}%,content.ilike.%${escapePostgrestValue(t)}%`)
-          .join(',')
-        query = query.or(pattern)
-      }
-    }
-
-    const ascending = sortOrder === 'asc'
-    if (parsedCursor) {
-      if (ascending) {
-        query = query.or(
-          `created_at.gt.${parsedCursor.createdAt},and(created_at.eq.${parsedCursor.createdAt},id.gt.${parsedCursor.id})`
-        )
-      } else {
-        query = query.or(
-          `created_at.lt.${parsedCursor.createdAt},and(created_at.eq.${parsedCursor.createdAt},id.lt.${parsedCursor.id})`
-        )
-      }
-    } else {
-      query = query.order('is_pinned', { ascending: false, nullsFirst: false })
-    }
-    query = query.order('created_at', { ascending })
-    query = query.order('id', { ascending })
-
-    query = query.limit(limit + 1)
-
-    const { data, error } = await query
-    if (error) {
-      log.error('게시글 조회 실패', { message: error.message })
+    let actual: Awaited<ReturnType<typeof listPostsKeyset>>['rows']
+    let hasNext: boolean
+    try {
+      const result = await listPostsKeyset({
+        category: boardCategory,
+        search: searchRaw || undefined,
+        cursor: parsedCursor,
+        sortOrder,
+        limit,
+      })
+      actual = result.rows
+      hasNext = result.hasNext
+    } catch (dbError) {
+      log.error('게시글 조회 실패', { message: (dbError as Error)?.message })
       return ApiError.internalServerError('게시글을 불러오는 데 실패했습니다.').toNextResponse()
     }
 
-    let actual = data || []
-    const hasNext = actual.length > limit
-    if (hasNext) actual = actual.slice(0, limit)
-    const ids = actual.map((p: any) => p.id)
+    const ids = actual.map(p => p.id)
 
     // Attachments stats (counts)
     const { data: attRows } = await supabase
@@ -143,7 +98,7 @@ export async function GET(request: NextRequest) {
       statsMap.set(key, curr)
     })
 
-    const posts = actual.map((row: any) => {
+    const posts = actual.map(row => {
       const clean = stripHtmlTags(row.content || '')
       const preview = clean.length > 150 ? `${clean.substring(0, 150)}...` : clean
       return {
@@ -156,7 +111,7 @@ export async function GET(request: NextRequest) {
         updated_at: row.updated_at,
         is_pinned: row.is_pinned,
         like_count: row.like_count || 0,
-        author: { display_name: row.author?.display_name },
+        author: { display_name: row.author.display_name },
         content_preview: preview,
         preview_has_images: (statsMap.get(row.id)?.image || 0) > 0,
         preview_image_count: statsMap.get(row.id)?.image || 0,

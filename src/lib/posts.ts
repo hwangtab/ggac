@@ -7,6 +7,8 @@ import { cache } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import type { PostAttachment } from '@/types'
 import { createLogger, maskId } from '@/utils/logger'
+import { getPostById as getPostByIdFromDb } from '@/db/queries/posts'
+import { getProfileById } from '@/db/queries/profiles'
 
 const log = createLogger('Posts')
 
@@ -44,6 +46,10 @@ export interface AuthorProfile {
 /**
  * 게시물 상세 정보 조회 (서버 사이드)
  * 공개 정책에 따라 삭제되지 않은 게시물만 조회
+ *
+ * Turso 전환: `posts`는 이제 Turso가 권위다. `getPostByIdFromDb`의 null/throw
+ * 계약(행 없으면 null, 조회 자체 실패면 throw)을 이 함수의 기존 try/catch가
+ * 그대로 흡수한다 — 최종 결과(에러도 not-found도 전부 null)는 이전과 동일.
  */
 export async function getPostById(postId: string): Promise<PostDetail | null> {
   try {
@@ -53,17 +59,10 @@ export async function getPostById(postId: string): Promise<PostDetail | null> {
       return null
     }
 
-    const supabase = getSupabaseAdmin()
+    const post = await getPostByIdFromDb(postId, { includeDeleted: false })
 
-    const { data: post, error } = await supabase
-      .from('posts')
-      .select('*')
-      .eq('id', postId)
-      .not('is_deleted', 'is', true)
-      .single()
-
-    if (error || !post) {
-      log.debug('Post not found:', maskId(postId), error?.message)
+    if (!post) {
+      log.debug('Post not found:', maskId(postId))
       return null
     }
 
@@ -76,28 +75,23 @@ export async function getPostById(postId: string): Promise<PostDetail | null> {
 
 /**
  * 게시물의 작성자 프로필 조회
+ *
+ * Turso 전환: `member_profiles`는 이제 Turso가 권위다. 프로필을 못 찾거나
+ * 조회 자체가 실패하면 기존과 동일하게 "알 수 없는 사용자" 폴백을 돌려준다.
  */
 export async function getPostAuthor(authorId: string): Promise<AuthorProfile | null> {
   try {
-    const supabase = getSupabaseAdmin()
-
-    // member_profiles 조회. profile_photo_url 컬럼은 artists 테이블에만 존재하므로
-    // 여기서 select하면 PostgREST 42703 에러로 조회 전체가 실패한다. 제외한다.
-    const { data: profile, error } = await supabase
-      .from('member_profiles')
-      .select('id, display_name')
-      .eq('id', authorId)
-      .maybeSingle()
+    const profile = await getProfileById(authorId)
 
     if (!profile) {
-      log.debug('Author profile not found:', maskId(authorId), error?.message)
+      log.debug('Author profile not found:', maskId(authorId))
       return {
         id: authorId,
         display_name: '알 수 없는 사용자',
       }
     }
 
-    return profile as AuthorProfile
+    return { id: profile.id, display_name: profile.display_name }
   } catch (error) {
     log.error('Error fetching author:', error)
     return {

@@ -4,6 +4,7 @@ import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { validateUUID } from '@/utils/validation'
 import { createLogger } from '@/utils/logger'
 import { parseIntegerParam } from '@/utils/queryParams'
+import { getPostById } from '@/db/queries/posts'
 
 // `dynamic = 'force-dynamic'` 적용으로 ISR `revalidate`는 의미 없음 — 헤더로 캐시 제어.
 export const dynamic = 'force-dynamic'
@@ -37,21 +38,6 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   try {
     const timings: Record<string, number> = {}
     const t0 = Date.now()
-    const postQuery = supabase
-      .from('posts')
-      .select(
-        `
-        id,
-        title,
-        category,
-        author_id,
-        created_at,
-        author:member_profiles!posts_author_id_fkey (display_name)
-      `
-      )
-      .eq('id', validPostId)
-      .not('is_deleted', 'is', true)
-      .single()
 
     const COMMENTS_PAGE_SIZE = 20
     const commentsQuery = supabase
@@ -76,8 +62,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       .order('created_at', { ascending: true })
 
     const t1 = Date.now()
-    const [postRes, commentsRes, attachmentsRes] = await Promise.all([
-      postQuery,
+    // posts/member_profiles(저자) 조회는 Turso(getPostById)로, 댓글/첨부는
+    // 아직 Supabase가 권위라 그대로 병렬 실행한다.
+    const [fullPost, commentsRes, attachmentsRes] = await Promise.all([
+      getPostById(validPostId, { includeDeleted: false }).catch(() => null),
       commentsQuery,
       attachmentsQuery,
     ])
@@ -91,16 +79,24 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       created_at: string
     }
 
-    const { data: post, error: postError } = postRes
+    const post = fullPost
+      ? {
+          id: fullPost.id,
+          title: fullPost.title,
+          category: fullPost.category,
+          author_id: fullPost.author_id,
+          created_at: fullPost.created_at,
+          author: { display_name: fullPost.author.display_name },
+        }
+      : null
     const comments = (commentsRes.data as unknown[]) || []
     const attachments = (attachmentsRes.data as AttachmentRow[]) || []
 
     timings.queue_ms = t1 - t0
     timings.query_ms = t2 - t1
 
-    if (postError || !post) {
+    if (!post) {
       log.warn('게시글 조회 실패 또는 없음', {
-        postError: postError?.message,
         commentsCount: comments.length,
         attachmentsCount: attachments.length,
       })

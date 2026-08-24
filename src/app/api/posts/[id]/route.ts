@@ -21,6 +21,8 @@ import { parseJsonObjectBody } from '@/utils/requestBody'
 import { annotateImageDimensionsSafe } from '@/utils/imageDimensions'
 import { getBoardPostRevalidationPaths } from '@/lib/revalidationPaths'
 import { requireUser, requireActiveMember, getOptionalUser } from '@/lib/server/memberAuth'
+import { getPostById } from '@/db/queries/posts'
+import { getProfileById } from '@/db/queries/profiles'
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const resolvedParams = await context.params
@@ -57,11 +59,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const userId = user?.id || null
     let isAdmin = false
     if (userId) {
-      const { data: prof } = await supabase
-        .from('member_profiles')
-        .select('is_admin, registration_status, is_active')
-        .eq('id', userId)
-        .single()
+      // member_profiles는 이제 Turso가 권위다. 조회 실패는 이전 `.single()`
+      // 실패와 같은 최종 결과(관리자 아님, fail-closed)로 흡수한다.
+      const prof = await getProfileById(userId).catch(() => null)
       isAdmin = !!(prof?.is_admin && prof.registration_status === 'approved' && prof.is_active)
     }
 
@@ -102,35 +102,48 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const commentsLimit = parseIntegerParam(searchParams.get('limit'), 30, { min: 1, max: 100 })
     const commentsOffset = parseIntegerParam(searchParams.get('offset'), 0, { min: 0 })
 
-    // 게시글 기본 정보 조회
+    // 게시글 기본 정보 조회. is_deleted 필터 없이(includeDeleted: true) 가져와
+    // 아래에서 직접 삭제글 접근 권한을 판정한다 — 기존 PostgREST 쿼리도
+    // is_deleted 조건 없이 조회한 뒤 애플리케이션에서 분기했다.
     const postStart = Date.now()
-    const { data: post, error: postError } = await db
-      .from('posts')
-      .select(
-        `
-        id,
-        title,
-        content,
-        content_format,
-        category,
-        author_id,
-        created_at,
-        updated_at,
-        is_deleted,
-        is_pinned,
-        like_count,
-        author:member_profiles!posts_author_id_fkey (
-          display_name,
-          email
-        )
-      `
-      )
-      .eq('id', validPostId)
-      .single()
+    let post: {
+      id: string
+      title: string
+      content: string
+      content_format: string
+      category: string
+      author_id: string
+      created_at: string
+      updated_at: string
+      is_deleted: boolean
+      is_pinned: boolean
+      like_count: number
+      author: { display_name: string; email: string }
+    } | null = null
+    try {
+      const fullPost = await getPostById(validPostId, { includeDeleted: true })
+      if (fullPost) {
+        post = {
+          id: fullPost.id,
+          title: fullPost.title,
+          content: fullPost.content,
+          content_format: fullPost.content_format,
+          category: fullPost.category,
+          author_id: fullPost.author_id,
+          created_at: fullPost.created_at,
+          updated_at: fullPost.updated_at,
+          is_deleted: fullPost.is_deleted,
+          is_pinned: fullPost.is_pinned,
+          like_count: fullPost.like_count,
+          author: { display_name: fullPost.author.display_name, email: fullPost.author.email },
+        }
+      }
+    } catch (postFetchError) {
+      console.error(`[API] 게시글 조회 실패 - ID: ${validPostId}`, postFetchError)
+    }
 
     timings.post_ms = Date.now() - postStart
-    if (postError || !post) {
-      console.error(`[API] 게시글 조회 실패 - ID: ${validPostId}`, postError)
+    if (!post) {
       return ApiError.notFound('게시글을 찾을 수 없습니다.').toNextResponse()
     }
 

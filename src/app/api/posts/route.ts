@@ -1,5 +1,14 @@
 /**
  * 게시글 목록 조회 API - 단순 페이지 기반
+ *
+ * Turso 전환 메모(Task 4): 이 파일의 GET은 `posts`/`member_profiles`를 직접
+ * 조회하지 않는다 — `fetchBoardPosts`(`@/lib/server/board`)에 위임하고,
+ * 그 함수는 Postgres 뷰 `board_posts_with_stats`(댓글·좋아요·첨부 집계까지
+ * 한 번에 조인)를 읽는다. 그 뷰 대체는 Task 8(`board_posts_with_stats` 뷰
+ * 대체)의 몫으로 명시적으로 미뤄져 있어(2026-08-24-turso-stage2c-profiles-
+ * content/task-8-brief.md, reference-views.md) 이 파일은 의도적으로
+ * 손대지 않았다. `post_likes` 조회(사용자 좋아요 표시)는 좋아요 범위라
+ * Task 6까지 그대로 Supabase에 남는다.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
