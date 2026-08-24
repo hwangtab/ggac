@@ -1424,23 +1424,40 @@ const validatesNotificationRouteId =
 // markAllNotificationsRead로 옮겨졌다(Drizzle/Turso). validatesNotificationRouteId가
 // 라우트 레벨에서 그러듯, 여기서도 "RPC/Supabase 호출 여부가 아니라 실제
 // 소유권 필터의 존재가 불변식"을 그대로 적용한다 — 누가 이 모듈을 리팩터링하며
-// 필터를 잃어도 정적으로 잡는다. `markAllNotificationsRead` 함수 본문만
-// 추출해서 본다 — 파일 전체에는 listNotifications 등 다른 함수의
-// `eq(notifications.userId, ...)` 호출도 섞여 있어, 파일 전체 검사로는 이
-// 특정 함수에서 필터가 빠져도 다른 함수의 매치로 통과해버릴 수 있다. 이
-// 파일의 독스트링 자체가 `eq(notifications.userId, userId)`를 설명 예시로
-// 인용하므로, 주석을 살려둔 채 실제 줄만 지워도 검사가 속지 않도록
-// stripComments로 주석을 걷어낸 소스만 본다.
+// 필터를 잃어도 정적으로 잡는다. **mutator 함수 본문만** 추출해서 본다 —
+// 파일 전체에는 listNotifications 등 다른 함수의 `eq(notifications.userId,
+// ...)` 호출도 섞여 있어, 파일 전체 검사로는 특정 함수에서 필터가 빠져도
+// 다른 함수의 매치로 통과해버릴 수 있다. 이 파일의 독스트링 자체가
+// `eq(notifications.userId, userId)`를 설명 예시로 인용하므로, 주석을
+// 살려둔 채 실제 줄만 지워도 검사가 속지 않도록 stripComments로 주석을
+// 걷어낸 소스만 본다.
+//
+// markAllNotificationsRead뿐 아니라 markNotificationRead·deleteNotification도
+// 각자 소유권 필터(eq(notifications.userId, ...))를 갖는 별도의
+// mutator다 — 셋 중 하나만 검사하면 나머지 둘의 필터 소실은 행위
+// 테스트로만 잡히고 정적 가드는 침묵한다. 그래서 세 함수 전부 같은
+// 본문 추출 방식으로 검사한다.
+function extractFunctionBody(source, functionName) {
+  const match = source.match(
+    new RegExp(`export async function ${functionName}\\([\\s\\S]*?\\n\\}\\n`)
+  )
+  return match ? match[0] : ''
+}
 const notificationsWriteStripped = stripComments(notificationsWriteSource)
-const markAllNotificationsReadBodyMatch = notificationsWriteStripped.match(
-  /export async function markAllNotificationsRead\([\s\S]*?\n\}\n/
+const markAllNotificationsReadBody = extractFunctionBody(
+  notificationsWriteStripped,
+  'markAllNotificationsRead'
 )
-const markAllNotificationsReadBody = markAllNotificationsReadBodyMatch
-  ? markAllNotificationsReadBodyMatch[0]
-  : ''
+const markNotificationReadBody = extractFunctionBody(
+  notificationsWriteStripped,
+  'markNotificationRead'
+)
+const deleteNotificationBody = extractFunctionBody(notificationsWriteStripped, 'deleteNotification')
 const enforcesNotificationOwnershipFilter =
   /eq\(notifications\.userId,\s*userId\)/.test(markAllNotificationsReadBody) &&
-  /isNull\(notifications\.readAt\)/.test(markAllNotificationsReadBody)
+  /isNull\(notifications\.readAt\)/.test(markAllNotificationsReadBody) &&
+  /eq\(notifications\.userId,\s*userId\)/.test(markNotificationReadBody) &&
+  /eq\(notifications\.userId,\s*userId\)/.test(deleteNotificationBody)
 // create_notification/create_bulk_notification RPC 호출을 단계 2c(Task 7)에서
 // Turso 쿼리 계층(createNotification/createBulkNotifications)으로 옮기면서
 // `p_xxx:` RPC 파라미터 이름이 사라졌다 — 이제는 라우트가 검증된 변수를
@@ -4238,7 +4255,7 @@ if (!validatesNotificationRouteId) {
 
 if (!enforcesNotificationOwnershipFilter) {
   failures.push(
-    `markAllNotificationsRead must scope its update to the calling user's own notifications via eq(notifications.userId, userId) (and only unread rows via isNull(notifications.readAt)) — this is the only defense against reading/marking other users' notifications: ${relative(
+    `markAllNotificationsRead/markNotificationRead/deleteNotification must each scope to the calling user's own notifications via eq(notifications.userId, userId) (markAllNotificationsRead additionally only unread rows via isNull(notifications.readAt)) — this is the only defense against reading/marking/deleting other users' notifications: ${relative(
       root,
       notificationsWritePath
     )}`

@@ -91,7 +91,7 @@ async function seedNotification(overrides = {}) {
       args: [overrides.readAt.getTime(), id],
     })
   }
-  return { id, userId }
+  return { id, userId, readAt: overrides.readAt ?? null }
 }
 
 async function getNotificationRaw(id) {
@@ -465,7 +465,7 @@ test('markAllNotificationsRead는 그 사용자의 안 읽은 알림만 읽음 �
   const alreadyRow = await getNotificationRaw(already.id)
   assert.equal(
     Number(alreadyRow.read_at),
-    already.readAt?.getTime?.() ?? Number(alreadyRow.read_at),
+    already.readAt.getTime(),
     '이미 읽은 것의 시각은 바뀌면 안 된다'
   )
 })
