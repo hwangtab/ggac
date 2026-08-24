@@ -34,8 +34,15 @@ export interface MiddlewareProfile {
  *
  * 값은 이전 구현에서 그대로 가져왔다(왜 3초인지 아는 사람이 정한 값이므로
  * 바꾸지 않는다).
+ *
+ * `src/lib/server/authz.ts`의 `resolveSessionProfile`도 이 값을 그대로
+ * 재사용한다(단계 2c 리뷰 라운드 1) — `getSessionContext()`는 인증된 거의
+ * 모든 API 요청에서 실행되고, 게시글·좋아요·댓글 라우트는
+ * `export const maxDuration = 30`이라 Turso가 멎으면 요청 하나가 최대 30초
+ * 함수를 붙잡아 동시성을 소진시킬 수 있다. 미들웨어와 같은 이유·같은
+ * 값이라 export해서 공유한다.
  */
-const FETCH_TIMEOUT_MS = 3000
+export const FETCH_TIMEOUT_MS = 3000
 
 /**
  * `promise`가 `ms` 안에 끝나지 않으면 던진다. **삼키지 않는다** — 타임아웃도
@@ -45,7 +52,7 @@ const FETCH_TIMEOUT_MS = 3000
  * `getProfileById`는 취소 가능한 API를 노출하지 않는다), 그 결과는 여기서
  * 버려진다 — 호출부는 이미 던져진 타임아웃 에러로 넘어간 뒤이기 때문이다.
  */
-function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+export function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(message)), ms)
     promise.then(

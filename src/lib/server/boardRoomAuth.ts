@@ -75,6 +75,21 @@ export function requireBoardAdmin(auth: BoardAuthSuccess): NextResponse | null {
  */
 const APPROVED_ROSTER_PAGE_LIMIT = 10000
 
+type RosterRow = { id: string; display_name: string; director_title: string | null }
+
+/**
+ * 명단을 이름 오름차순으로 고정한다(리뷰 라운드 1 Minor 3). 전환 전
+ * Supabase 쿼리에는 `ORDER BY`가 없어 정렬 순서가 보장된 적이 없었지만,
+ * 지금은 `listProfiles`가 `created_at DESC`를 강제해서 아무 정렬도 안 하면
+ * 이사회 명단이 "가입 최신순"으로 보이게 된다 — 정족수 확인용으로 사람이
+ * 읽는 명단이라 이름순이 자연스럽다. 명시적으로 정렬한다는 사실 자체가
+ * 중요해서 별도 함수로 뺐다(호출부에서 `.map(...)` 뒤에 슬쩍 끼워 넣으면
+ * 다음에 지워지기 쉽다).
+ */
+function sortByDisplayNameAsc(rows: RosterRow[]): RosterRow[] {
+  return [...rows].sort((a, b) => a.display_name.localeCompare(b.display_name, 'ko'))
+}
+
 /** 재적 이사 명단(승인·활성 + is_director). 정족수 산정 기준이 된다.
  *
  * 첫 인자(`_db`)는 더 이상 프로필 조회에 쓰이지 않는다 — 프로필의 권위는
@@ -88,13 +103,15 @@ export async function getDirectorRoster(_db: ProfileQueryClient) {
     limit: APPROVED_ROSTER_PAGE_LIMIT,
     offset: 0,
   })
-  return rows
-    .filter(row => row.is_director && row.is_active)
-    .map(row => ({
-      id: row.id,
-      display_name: row.display_name,
-      director_title: row.director_title,
-    }))
+  return sortByDisplayNameAsc(
+    rows
+      .filter(row => row.is_director && row.is_active)
+      .map(row => ({
+        id: row.id,
+        display_name: row.display_name,
+        director_title: row.director_title,
+      }))
+  )
 }
 
 /**
@@ -109,11 +126,13 @@ export async function getAuditorRoster(_db: ProfileQueryClient) {
     limit: APPROVED_ROSTER_PAGE_LIMIT,
     offset: 0,
   })
-  return rows
-    .filter(row => row.is_auditor && row.is_active)
-    .map(row => ({
-      id: row.id,
-      display_name: row.display_name,
-      director_title: row.director_title,
-    }))
+  return sortByDisplayNameAsc(
+    rows
+      .filter(row => row.is_auditor && row.is_active)
+      .map(row => ({
+        id: row.id,
+        display_name: row.display_name,
+        director_title: row.director_title,
+      }))
+  )
 }

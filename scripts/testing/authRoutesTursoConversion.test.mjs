@@ -54,8 +54,20 @@ test('verify-session: 프로필 조회 실패(throw)를 삼켜 profile: null(200
   const getHandlerMatch = verifySessionSource.match(/export async function GET\(\)[\s\S]*/)
   assert.ok(getHandlerMatch, 'GET 핸들러를 찾지 못했다')
   const body = getHandlerMatch[0]
-  assert.match(body, /try\s*\{\s*\n\s*profile = await getProfileById\(user\.id\)/)
-  assert.match(body, /catch\s*\(error\)\s*\{/)
+  // getProfileById 호출을 감싸는 "안쪽" try/catch 자체를 하나의 블록으로
+  // 붙잡는다 — 단순히 `catch (error) {`만 찾으면 라우트 바깥쪽(전체) catch
+  // (`} catch (error) { ... internalServerError ... }`, 71행)에도 매치돼서
+  // 안쪽 catch가 통째로 사라져도 아무것도 못 잡는다(리뷰 라운드 1 Minor 1
+  // 지적). 이 블록 매칭은 try 시작부터 그 catch의 닫는 중괄호까지를 통째로
+  // 요구하므로, 안쪽 catch가 사라지면(= getProfileById가 감싸이지 않은 채
+  // 그대로 호출되면) 매치 자체가 실패한다.
+  const profileLookupBlock = body.match(
+    /try \{\s*\n\s*profile = await getProfileById\(user\.id\)\s*\n\s*\} catch \(error\) \{[\s\S]*?\n\s{4}\}\n/
+  )
+  assert.ok(
+    profileLookupBlock,
+    'getProfileById(user.id)를 감싸는 try { ... } catch (error) { ... } 블록을 찾지 못했다'
+  )
   // 바깥쪽(라우트 전체) try/catch가 이 실패를 삼켜 500으로 승격시키지 않는지
   // 확인 — getProfileById 실패는 안쪽 try/catch에서 잡혀야 하고, 그 결과
   // ApiSuccess.ok(...profile: null)로 응답해야 한다(기존 동작 보존).
@@ -97,15 +109,19 @@ test('auth/callback: 프로필 조회 실패(throw)를 삼켜 /register/pending�
   )
 })
 
-test('auth/callback: registration_status 세 분기(pending/approved+active/그 외)가 그대로 유지된다', () => {
-  assert.match(authCallbackSource, /profile\.registration_status === ['"]pending['"]/)
-  assert.match(
-    authCallbackSource,
-    /profile\.registration_status === ['"]approved['"] && profile\.is_active/
+test('auth/callback: registration_status 세 분기가 각각 정확한 목적지와 짝지어져 있다(분기↔목적지 순서 고정)', () => {
+  // 토큰이 파일 어딘가에 각자 있는지만 보면(예: pending 존재 + /board 존재)
+  // "pending을 /board로 잘못 잇는" 가장 위험한 회귀(승인 대기 회원이
+  // 게시판에 들어감)를 놓친다(리뷰 라운드 1 Minor 2 지적). 아래는 조건문의
+  // 여는 중괄호부터 그 조건이 실제로 리턴하는 redirectToPath까지를 한
+  // 블록으로 묶어 짝을 고정하고, 세 분기가 정확히 이 순서(pending →
+  // approved+active → 그 외)로 이어지는지까지 하나의 정규식으로 검사한다.
+  const branchChain = authCallbackSource.match(
+    /if \(profile\.registration_status === ['"]pending['"]\) \{[\s\S]*?redirectToPath\(requestUrl,\s*['"]\/register\/pending['"],\s*locale\)\s*\n\s*\}\s*\n\s*\n\s*if \(profile\.registration_status === ['"]approved['"] && profile\.is_active\) \{[\s\S]*?redirectToPath\(requestUrl,\s*['"]\/board['"],\s*locale\)\s*\n\s*\}\s*\n[\s\S]*?redirectToPath\(requestUrl,\s*['"]\/register\/rejected['"],\s*locale\)/
   )
-  assert.match(authCallbackSource, /redirectToPath\(requestUrl,\s*['"]\/board['"],\s*locale\)/)
-  assert.match(
-    authCallbackSource,
-    /redirectToPath\(requestUrl,\s*['"]\/register\/rejected['"],\s*locale\)/
+  assert.ok(
+    branchChain,
+    'registration_status 분기와 목적지가 짝을 이루지 않는다 — pending→/register/pending, ' +
+      'approved+active→/board, 그 외→/register/rejected 순서와 짝을 확인하라'
   )
 })

@@ -1,4 +1,4 @@
-import { test, before, after } from 'node:test'
+import { test, before, after, mock } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, rmSync } from 'node:fs'
 import { register } from 'node:module'
@@ -183,6 +183,53 @@ test('resolveSessionProfile: 조회 자체가 실패하면(throw) profile: null 
   assert.equal(result.profileError, boom)
 })
 
+test('resolveSessionProfile: 33개 컬럼 중 5개만 남기고 계좌번호·실명 등 민감 컬럼은 투영에서 빠진다 (리뷰 라운드 1 Important)', async () => {
+  const { upsertProfile } = await loadFreshProfilesModule()
+  const { resolveSessionProfile } = await import('../../src/lib/server/authz.ts')
+  const id = 'authz-sensitive-1'
+  await upsertProfile(
+    makeProfile({
+      id,
+      email: 'authz-sensitive-1@test.local',
+      registration_status: 'approved',
+      is_active: true,
+      is_admin: true,
+      real_name: '홍길동',
+      account_number: '110-123-456789',
+      bank_name: '국민은행',
+      phone_number: '010-1234-5678',
+      birth_date: '1990-01-01',
+    })
+  )
+
+  const result = await resolveSessionProfile(id)
+  assert.ok(result.profile)
+  assert.deepEqual(Object.keys(result.profile).sort(), [
+    'is_active',
+    'is_admin',
+    'is_auditor',
+    'is_director',
+    'registration_status',
+  ])
+  // 존재 확인이 아니라 부재 확인이 핵심이다 — 다섯 개 화이트리스트 밖의
+  // 어떤 키도(특히 계좌번호·실명) 세션 프로필에 실리면 안 된다.
+  for (const sensitiveKey of [
+    'account_number',
+    'bank_name',
+    'real_name',
+    'phone_number',
+    'birth_date',
+    'email',
+    'monthly_fee',
+  ]) {
+    assert.equal(
+      Object.prototype.hasOwnProperty.call(result.profile, sensitiveKey),
+      false,
+      `${sensitiveKey}가 세션 프로필에 남아있으면 안 된다`
+    )
+  }
+})
+
 test('resolveSessionProfile 구현에 try/catch(fail-closed) 가드가 있다 (소스 가드)', () => {
   // 이 가드를 실제로 걷어냈을 때 바로 위 fail-closed 런타임 테스트가
   // 실패하는지는 부정 대조로 별도 확인했다(작업 보고서 참고) — try/catch를
@@ -194,6 +241,43 @@ test('resolveSessionProfile 구현에 try/catch(fail-closed) 가드가 있다 (�
   const body = match[0]
   assert.match(body, /try\s*\{/, 'try 블록이 있어야 한다')
   assert.match(body, /catch\s*\(profileError\)/, 'catch(profileError)가 있어야 한다')
+})
+
+/**
+ * 리뷰 라운드 1 Minor 4: `getSessionContext()`는 인증된 거의 모든 API
+ * 요청에서 실행되고, 게시글·좋아요·댓글 라우트는 `maxDuration = 30`이라
+ * Turso가 멎으면 요청 하나가 최대 30초 함수를 붙잡는다.
+ * `middleware/profile.ts`의 `withTimeout`/`FETCH_TIMEOUT_MS`(3초)를 재사용해
+ * 감쌌다 — 실제로 3초를 기다리지 않기 위해 `mock.timers`로 가짜 시계를 쓰고,
+ * 절대 resolve하지 않는 `fetchProfile`을 주입한다(운영 호출부는 이 인자를
+ * 넘기지 않고 기본값 `getProfileById`를 쓴다 — 프로덕션 동작은 바뀌지 않는다).
+ *
+ * 타임아웃은 `profileError`로 떨어져야 한다(예외를 삼켜 `profile: null`만
+ * 만들면 "조회 실패"라는 사실 자체가 사라진다 — memberAuth.ts/
+ * boardRoomAuth.ts/adminAuth.ts가 `profileError`를 차단 조건으로 함께 본다).
+ */
+test('resolveSessionProfile: 타임아웃(FETCH_TIMEOUT_MS=3000ms) 안에 응답하지 않으면 profileError로 떨어진다 (삼켜서 이유 없이 profile:null만 만들지 않는다)', async () => {
+  const { resolveSessionProfile } = await import('../../src/lib/server/authz.ts')
+  const neverResolves = () => new Promise(() => {})
+
+  mock.timers.enable({ apis: ['setTimeout'] })
+  try {
+    const promise = resolveSessionProfile('any-id', neverResolves)
+    mock.timers.tick(3000)
+    const result = await promise
+    assert.equal(result.profile, null)
+    assert.ok(result.profileError, 'profileError가 채워져야 한다(삼키면 안 된다)')
+    assert.match(String(result.profileError.message), /3000ms/)
+  } finally {
+    mock.timers.reset()
+  }
+})
+
+test('resolveSessionProfile 구현이 middleware/profile.ts의 withTimeout/FETCH_TIMEOUT_MS를 재사용한다 (소스 가드)', () => {
+  const src = readFileSync('src/lib/server/authz.ts', 'utf8')
+  assert.match(src, /from\s+['"]@\/middleware\/profile['"]/)
+  assert.match(src, /withTimeout/)
+  assert.match(src, /FETCH_TIMEOUT_MS/)
 })
 
 // ================================================================== adminAuth.ts: checkAdminPermission
@@ -339,6 +423,55 @@ test('getDirectorRoster: 승인·활성·is_director인 회원만 담는다', as
   assert.deepEqual(ids, ['director-ok-1'])
   assert.equal(roster[0].display_name, '이사1')
   assert.equal(roster[0].director_title, '이사장')
+})
+
+/**
+ * 리뷰 라운드 1 Minor 3: 전환 전 Supabase 쿼리에는 `ORDER BY`가 없었지만,
+ * 지금 `listProfiles`는 `created_at DESC`를 강제한다. 아무 정렬도 안 하면
+ * 이사회 명단이 "가입 최신순"(입력 순서의 역순)으로 보이게 되므로,
+ * `getDirectorRoster`/`getAuditorRoster`가 이름 오름차순으로 다시 정렬하는지
+ * 확인한다 — 일부러 이름의 가나다 순서와 삽입 순서를 어긋나게 심는다
+ * ('다이사' → '가이사' → '나이사' 순으로 삽입하면 `created_at DESC`로는
+ * 나이사·가이사·다이사 순으로 나온다 — 이름순도 아니고 삽입 역순도 우연히
+ * 일치하지 않는 배열이라 정렬이 실제로 동작해야만 기대값이 맞는다).
+ */
+test('getDirectorRoster: 이름(display_name) 오름차순으로 정렬된다 — 가입순(created_at DESC)이 아니다', async () => {
+  const { upsertProfile } = await loadFreshProfilesModule()
+  const { getDirectorRoster } = await import('../../src/lib/server/boardRoomAuth.ts')
+
+  for (const [id, name] of [
+    ['sort-director-da', '다이사'],
+    ['sort-director-ga', '가이사'],
+    ['sort-director-na', '나이사'],
+  ]) {
+    await upsertProfile(
+      makeProfile({
+        id,
+        email: `${id}@test.local`,
+        display_name: name,
+        registration_status: 'approved',
+        is_active: true,
+        is_director: true,
+      })
+    )
+  }
+
+  const roster = await getDirectorRoster({})
+  const sortTargetNames = roster
+    .map(row => row.display_name)
+    .filter(name => name.endsWith('이사') && ['가이사', '나이사', '다이사'].includes(name))
+  assert.deepEqual(sortTargetNames, ['가이사', '나이사', '다이사'])
+})
+
+test('getDirectorRoster/getAuditorRoster는 sortByDisplayNameAsc로 명시적으로 정렬한다 (소스 가드)', () => {
+  const src = readFileSync('src/lib/server/boardRoomAuth.ts', 'utf8')
+  const directorMatch = src.match(/export async function getDirectorRoster\([\s\S]*?\n\}\n/)
+  const auditorMatch = src.match(/export async function getAuditorRoster\([\s\S]*?\n\}\n/)
+  assert.ok(directorMatch, 'getDirectorRoster 함수 본문을 찾지 못했다')
+  assert.ok(auditorMatch, 'getAuditorRoster 함수 본문을 찾지 못했다')
+  for (const body of [directorMatch[0], auditorMatch[0]]) {
+    assert.match(body, /sortByDisplayNameAsc\(/)
+  }
 })
 
 test('getAuditorRoster: 승인·활성·is_auditor인 회원만 담는다', async () => {
