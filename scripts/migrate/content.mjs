@@ -29,8 +29,6 @@ import {
 } from './lib/contentMapping.mjs'
 import { buildUpsert, parseArgs } from './identity.mjs'
 
-export { parseArgs }
-
 /**
  * FK 의존 순서. member_profiles가 posts.author_id 등 나머지 전부의
  * 대상이고, posts가 comments·post_likes·post_attachments의 대상이며,
@@ -56,7 +54,7 @@ const LIKE_COUNT_SOURCES = {
  * payload 안의 FK 참조 전부. key는 payload 객체의 키, sqlTable은 실제
  * Turso 테이블명(보고용), parentKey는 부모 id 집합을 찾을 payload 키다.
  */
-const REFERENCE_CHECKS = [
+export const REFERENCE_CHECKS = [
   { key: 'posts', sqlTable: 'posts', column: 'author_id', parentKey: 'profiles' },
   { key: 'comments', sqlTable: 'comments', column: 'post_id', parentKey: 'posts' },
   { key: 'comments', sqlTable: 'comments', column: 'author_id', parentKey: 'profiles' },
@@ -110,6 +108,69 @@ export function excludeOrphans(payload, orphans) {
     out[key] = payload[key].filter(r => !skipIds.has(r.id))
   }
   return out
+}
+
+/**
+ * 실측(2026-08-24)으로 확인된 FK 고아는 딱 두 종류뿐이다:
+ * post_likes.post_id, comment_likes.comment_id. 둘 다 "이미 지워진
+ * 게시글/댓글에 달렸던 좋아요"라 어디에도 표시되지 않는 죽은 데이터다 —
+ * like_count 재계산이 실제 존재하는 post_likes/comment_likes 행만 세므로
+ * 이 좋아요는 어떤 카운트에도 잡히지 않고, 좋아요를 누른 게시글/댓글 자체가
+ * 없으니 취소할 화면도 없다. 이 두 종류만 사람이 확인한 뒤
+ * --drop-known-orphan-likes로 명시적으로 버릴 수 있다.
+ *
+ * 이 목록 밖의 고아(예: member_profiles 누락으로 posts.author_id가
+ * 끊기는 경우)는 성격이 다르다 — 회원 한 명이 덤프에서 빠지면 그 사람의
+ * 게시글·댓글·알림 전체가 조용히 사라질 수 있다. 그런 고아는 플래그와
+ * 무관하게 항상 중단한다.
+ */
+const KNOWN_ORPHAN_ALLOWLIST = [
+  { key: 'postLikes', column: 'post_id' },
+  { key: 'commentLikes', column: 'comment_id' },
+]
+
+function isKnownOrphan(o) {
+  return KNOWN_ORPHAN_ALLOWLIST.some(a => a.key === o.key && a.column === o.column)
+}
+
+/**
+ * findOrphans + 허용 목록 정책 + 제외 후 캐스케이드 재검사를 한 번에
+ * 처리한다. CLI(main)와 테스트가 같은 로직을 쓴다.
+ *
+ * 반환:
+ *   { ok: true,  payload, orphans, skipped }                     — 진행 가능
+ *   { ok: false, reason: 'unknown_orphans', orphans, unknown }    — 허용 목록 밖 고아, 플래그 무관 중단
+ *   { ok: false, reason: 'known_orphans_need_flag', orphans }     — 알려진 고아뿐이지만 플래그 없음
+ *   { ok: false, reason: 'residual_after_exclude', orphans, residual } — 제외 후에도 고아가 남음(캐스케이드 안전망)
+ */
+export function resolveOrphans(payload, { dropKnownOrphanLikes }) {
+  const orphans = findOrphans(payload)
+  if (orphans.length === 0) {
+    return { ok: true, payload, orphans: [], skipped: 0 }
+  }
+
+  const unknown = orphans.filter(o => !isKnownOrphan(o))
+  if (unknown.length > 0) {
+    return { ok: false, reason: 'unknown_orphans', orphans, unknown }
+  }
+
+  if (!dropKnownOrphanLikes) {
+    return { ok: false, reason: 'known_orphans_need_flag', orphans }
+  }
+
+  const filtered = excludeOrphans(payload, orphans)
+  // 캐스케이드 안전망: 제외가 다른 고아를 만들어내지 않았는지 다시 확인한다.
+  // 지금 허용 목록은 자식이 없는 leaf 테이블(post_likes/comment_likes)만
+  // 담고 있어 이 경로가 실제로 걸릴 일은 없지만, 허용 목록이 앞으로
+  // 넓어져도 조용히 반쪽 적재로 이어지지 않게 막는다. 여기서 또 지우는
+  // 방향(캐스케이드)으로 가지 않고 중단한다 — 데이터를 더 지우는 자동화는
+  // 위험하다.
+  const residual = findOrphans(filtered)
+  if (residual.length > 0) {
+    return { ok: false, reason: 'residual_after_exclude', orphans, residual }
+  }
+
+  return { ok: true, payload: filtered, orphans, skipped: orphans.length }
 }
 
 /** `table`의 실제 컬럼 목록을 PRAGMA로 얻는다. 테이블이 없으면 던진다. */
@@ -270,6 +331,36 @@ function requireEnv(name) {
   return value
 }
 
+/**
+ * `--expect table=N,table=N,...` 파싱. 없으면 null(하드 게이트를 건너뛴다는
+ * 뜻 — 로컬 실험까지 막지는 않는다). 있는데 형식이 틀리면 던진다.
+ */
+export function parseExpect(argv) {
+  const idx = argv.indexOf('--expect')
+  if (idx === -1) return null
+  const raw = argv[idx + 1]
+  if (!raw || raw.startsWith('--')) {
+    throw new Error('usage: --expect table=N,table=N,...')
+  }
+  const out = {}
+  for (const pair of raw.split(',')) {
+    const [table, n] = pair.split('=')
+    if (!table || n === undefined || !/^\d+$/.test(n)) {
+      throw new Error(`--expect 형식이 잘못됐다: "${pair}" (table=N 형태여야 한다)`)
+    }
+    out[table] = Number(n)
+  }
+  return out
+}
+
+/** orphans/unknown/residual 목록을 컬럼명·행id만으로 출력한다(값은 안 찍는다 — UUID뿐이라 안전). */
+function logOrphanList(label, list) {
+  console.log(`\n${label} ${list.length}건:`)
+  for (const o of list) {
+    console.log(`  ${o.table} id=${o.id} ${o.column} -> 없는 ${o.missing}`)
+  }
+}
+
 async function main() {
   let dumpPath, apply
   try {
@@ -278,7 +369,15 @@ async function main() {
     console.error(err.message)
     process.exit(1)
   }
-  const skipOrphans = process.argv.includes('--skip-orphans')
+  const dropKnownOrphanLikes = process.argv.includes('--drop-known-orphan-likes')
+
+  let expect
+  try {
+    expect = parseExpect(process.argv.slice(2))
+  } catch (err) {
+    console.error(err.message)
+    process.exit(1)
+  }
 
   const sql = readFileSync(dumpPath, 'utf8')
 
@@ -290,6 +389,43 @@ async function main() {
   const pgPostAttachments = parseInsertRows(sql, 'public', 'post_attachments')
   const pgNotifications = parseInsertRows(sql, 'public', 'notifications')
 
+  const parsedCounts = {
+    member_profiles: pgProfiles.length,
+    posts: pgPosts.length,
+    comments: pgComments.length,
+    post_likes: pgPostLikes.length,
+    comment_likes: pgCommentLikes.length,
+    post_attachments: pgPostAttachments.length,
+    notifications: pgNotifications.length,
+  }
+
+  console.log(
+    `원본: member_profiles ${parsedCounts.member_profiles} / posts ${parsedCounts.posts} / ` +
+      `comments ${parsedCounts.comments} / post_likes ${parsedCounts.post_likes} / ` +
+      `comment_likes ${parsedCounts.comment_likes} / post_attachments ${parsedCounts.post_attachments} / ` +
+      `notifications ${parsedCounts.notifications}`
+  )
+
+  // 건수 하드 게이트(지시 9번 "추측으로 진행하지 마라"). --expect가 있으면
+  // 사람이 미리 실측한 건수와 파싱 결과를 기계적으로 대조한다. 사람이 눈으로
+  // 세는 것에만 의존하면 다른 세션이 같은 스크립트를 --expect 없이 돌렸을 때
+  // 조용히 잘못된 덤프로 진행할 수 있다. --expect가 없으면(로컬 실험 등)
+  // 경고만 내고 막지는 않는다.
+  if (expect) {
+    const countMismatches = Object.entries(expect).filter(([t, n]) => parsedCounts[t] !== n)
+    if (countMismatches.length > 0) {
+      console.error('\n--expect와 파싱 건수가 다르다:')
+      for (const [t, n] of countMismatches) {
+        console.error(`  ${t}: 기대 ${n}, 실제 ${parsedCounts[t] ?? '(알 수 없는 테이블)'}`)
+      }
+      process.exitCode = 1
+      return
+    }
+    console.log('--expect 건수와 일치한다.')
+  } else {
+    console.log('\n경고: --expect 없이 실행했다 — 파싱 건수를 사람이 직접 확인해야 한다.')
+  }
+
   let payload = {
     profiles: pgProfiles.map(toMemberProfileRow),
     posts: pgPosts.map(toPostRow),
@@ -300,37 +436,53 @@ async function main() {
     notifications: pgNotifications.map(toNotificationRow),
   }
 
-  console.log(
-    `원본: member_profiles ${pgProfiles.length} / posts ${pgPosts.length} / ` +
-      `comments ${pgComments.length} / post_likes ${pgPostLikes.length} / ` +
-      `comment_likes ${pgCommentLikes.length} / post_attachments ${pgPostAttachments.length} / ` +
-      `notifications ${pgNotifications.length}`
-  )
-
   // 부모 행이 이미 지워진 FK — Postgres에 ON DELETE CASCADE가 선언돼 있으니
-  // 정상이라면 있을 수 없다(마이그레이션 드리프트 의심). SQLite는 FK를
-  // 실제로 강제하므로 그대로 넣으면 배치 전체가 SQLITE_CONSTRAINT로 죽는다.
-  // 여기서 먼저 찾아 무엇을 걸렀는지 밝힌다.
-  const orphans = findOrphans(payload)
-  if (orphans.length > 0) {
-    console.log(
-      `\n부모 행이 없는 FK ${orphans.length}건을 찾았다 (원본 데이터 문제, 이 스크립트의 결함이 아니다):`
-    )
-    for (const o of orphans) {
-      console.log(`  ${o.table} id=${o.id} ${o.column} -> 없는 ${o.missing}`)
-    }
-    if (!skipOrphans) {
-      console.log(
-        '\n--skip-orphans 없이는 진행하지 않는다. 원인을 먼저 확인하거나' +
-          ' (Postgres에서 FK가 실제로 걸려 있는지) --skip-orphans로 이 행들을' +
-          ' 제외하고 진행할지 판단해라.'
+  // 정상이라면 있을 수 없다(마이그레이션 드리프트 확인됨:
+  // 20250719090060_create_post_likes_table.sql:7·
+  // 20250724090050_create_comment_likes_table.sql:7이 선언하는 CASCADE가
+  // 운영에는 걸려 있지 않다). SQLite는 FK를 실제로 강제하므로 그대로 넣으면
+  // 배치 전체가 SQLITE_CONSTRAINT로 죽는다. resolveOrphans가 허용 목록
+  // 밖의 고아는 플래그와 무관하게 막고, 허용 목록 안(post_likes.post_id·
+  // comment_likes.comment_id)만 --drop-known-orphan-likes로 제외한다.
+  const resolved = resolveOrphans(payload, { dropKnownOrphanLikes })
+  if (!resolved.ok) {
+    if (resolved.reason === 'unknown_orphans') {
+      logOrphanList(
+        '허용 목록 밖의 FK 고아를 찾았다 — 플래그와 무관하게 중단한다',
+        resolved.orphans
       )
-      if (apply) process.exitCode = 1
-      return
+      console.log(
+        '\n허용 목록(post_likes.post_id, comment_likes.comment_id) 밖의 고아는 ' +
+          '--drop-known-orphan-likes로도 건너뛸 수 없다. 원인을 먼저 확인해라 — ' +
+          '예를 들어 member_profiles가 덤프에서 누락되면 그 회원의 게시글·댓글·' +
+          '알림이 통째로 사라질 수 있다.'
+      )
+    } else if (resolved.reason === 'known_orphans_need_flag') {
+      logOrphanList(
+        '부모 행이 없는 FK를 찾았다 (원본 데이터 문제, 이 스크립트의 결함이 아니다)',
+        resolved.orphans
+      )
+      console.log(
+        '\n전부 허용 목록 안(post_likes.post_id, comment_likes.comment_id)이다. ' +
+          '--drop-known-orphan-likes 없이는 진행하지 않는다. 원인을 먼저 확인하거나' +
+          '(Postgres에서 FK가 실제로 걸려 있는지) 플래그로 이 좋아요들을 버릴지 판단해라.'
+      )
+    } else if (resolved.reason === 'residual_after_exclude') {
+      logOrphanList('제외 대상', resolved.orphans)
+      logOrphanList(
+        '허용 목록 행을 제외했는데도 FK 고아가 남았다 (캐스케이드 안전망 발동) — 중단한다',
+        resolved.residual
+      )
     }
-    payload = excludeOrphans(payload, orphans)
-    console.log(`--skip-orphans: 위 ${orphans.length}건을 제외하고 진행한다.`)
+    process.exitCode = 1
+    return
   }
+  if (resolved.skipped > 0) {
+    console.log(
+      `\n--drop-known-orphan-likes: 알려진 좋아요 고아 ${resolved.skipped}건을 제외하고 진행한다.`
+    )
+  }
+  payload = resolved.payload
 
   const client = createClient({
     url: requireEnv('TURSO_DATABASE_URL'),

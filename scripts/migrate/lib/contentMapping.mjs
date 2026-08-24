@@ -13,13 +13,21 @@ import { toMemberProfileRow } from './identityMapping.mjs'
  * Postgres 덤프의 boolean.
  * `supabase db dump --data-only`(v2.84.2)는 `true`/`false` 리터럴을 낸다
  * (COPY 형식의 `t`/`f`가 아니다 — 실제 덤프로 확인함). PostgREST 등 다른
- * 경로로 들어올 수 있는 `t`/`f`·`1`도 함께 받아 identityMapping.mjs의
+ * 경로로 들어올 수 있는 `t`/`f`·`1`/`0`도 함께 받아 identityMapping.mjs의
  * bool()과 동일한 관용도를 유지한다.
+ *
+ * 알려진 토큰 밖이면(toInt처럼) 조용히 0으로 떨어뜨리지 않고 던진다. 덤프
+ * 표기가 바뀌었는데 여기서 침묵하면 is_deleted가 전부 0이 되어 지워진
+ * 게시글이 되살아나거나, is_admin이 전부 0이 되어 관리자가 전원 권한을
+ * 잃는다 — 둘 다 verifyContent가 원본과 "일치"로 보고 통과시킨다(매핑
+ * 자체가 검증 기준이라 매핑이 틀리면 검증도 같이 틀린다).
  */
 export const toBool = v => {
   if (v === null || v === undefined) return null
   if (typeof v === 'boolean') return v ? 1 : 0
-  return v === 'true' || v === 't' || v === '1' || v === 1 ? 1 : 0
+  if (v === 'true' || v === 't' || v === '1' || v === 1) return 1
+  if (v === 'false' || v === 'f' || v === '0' || v === 0) return 0
+  throw new Error(`boolean으로 해석할 수 없다: ${JSON.stringify(v)}`)
 }
 
 /** NOT NULL boolean 컬럼용 — null이면 기본값을 쓴다. */
