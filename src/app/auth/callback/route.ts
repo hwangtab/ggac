@@ -1,5 +1,6 @@
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { readSessionUser } from '@/lib/server/session'
+import { getProfileById } from '@/db/queries/profiles'
 import { NextRequest, NextResponse, after } from 'next/server'
 import { createLogger } from '@/utils/logger'
 
@@ -114,11 +115,24 @@ export async function GET(request: NextRequest) {
         }
       })
 
-      const { data: profile } = await supabase
-        .from('member_profiles')
-        .select('registration_status, is_active')
-        .eq('id', user.id)
-        .single()
+      // 프로필의 권위는 Turso다(getProfileById). 이전 Supabase `.single()` 호출은
+      // error를 검사하지 않고 `data: profile`만 봤다 — 즉 "행 없음"과 "조회
+      // 자체가 실패함"을 구분하지 않고 둘 다 profile이 비어 아래 `!profile`
+      // 분기(/register/pending)로 흘렀다. 여기서도 같은 결과가 되도록 조회
+      // 실패를 삼켜 null로 합친다 — 이 라우트는 인가 경계가 아니라 로그인
+      // 직후 목적지를 고르는 리다이렉트일 뿐이고(실제 승인·활성 검사는
+      // requireActiveMember/requireAdmin/requireBoardMember가 매 API 요청마다
+      // 다시 한다), /register/pending은 게시판·관리자 권한을 주지 않는
+      // 안전한 목적지라 fail-closed 원칙에 어긋나지 않는다.
+      let profile: Awaited<ReturnType<typeof getProfileById>> = null
+      try {
+        profile = await getProfileById(user.id)
+      } catch (profileLookupError) {
+        log.warn('Profile lookup failed', {
+          userId: maskId(user.id),
+          message: (profileLookupError as Error)?.message,
+        })
+      }
 
       if (!profile) {
         // Better Auth 가입 훅(databaseHooks.user.create.after)이 프로필을
