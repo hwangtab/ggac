@@ -10,7 +10,7 @@ const SQL = `SET session_replication_role = replica;
 --
 
 INSERT INTO "auth"."users" ("id", "email", "encrypted_password", "email_confirmed_at", "raw_meta") VALUES
-\t('a1', 'a@x.kr', '$2a$10$abc', '2025-07-06 13:25:49.927557+00', '{"name":"황경하"}'),
+\t('a1', 'a@x.kr', '$2a$10$abc', '2025-07-06 13:25:49.927557+00', '{"name":"홍길동"}'),
 \t('b2', 'b@x.kr', '$2a$10$def', NULL, '{"note":"쉼표, 그리고 (괄호)"}'),
 \t('c3', 'c@x.kr', '$2a$10$ghi', '2025-07-06 13:25:49+00', '{"q":"작은따옴표 '' 포함"}'),
 \t('d4', 'd@x.kr', '$2a$10$jkl', NULL, E'{"path":"a\\\\\\\\b"}');
