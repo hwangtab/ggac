@@ -340,6 +340,60 @@ test('getLikedCommentIds: commentIds가 비어있으면 쿼리 없이 즉시 빈
   }
 })
 
+// ---------------------------------------------------------------- getLikedPostIds
+
+test('getLikedPostIds: 여러 게시글 중 해당 사용자가 좋아요한 것만 배치로 돌려준다(게시판 목록 표시용)', async () => {
+  const { togglePostLike, getLikedPostIds } = await loadFreshLikesModule()
+  const liker = await seedProfile({ display_name: '목록좋아요테스트' })
+  const p1 = await seedPost()
+  const p2 = await seedPost()
+  const p3 = await seedPost()
+
+  await togglePostLike(p1, liker)
+  await togglePostLike(p3, liker)
+
+  const liked = await getLikedPostIds(liker, [p1, p2, p3])
+  assert.deepEqual([...liked].sort(), [p1, p3].sort())
+})
+
+test('getLikedPostIds: 방금 좋아요한 게시글이 즉시 집합에 포함된다(컷오버 후 목록 하트 표시 회귀 방지)', async () => {
+  const { togglePostLike, getLikedPostIds } = await loadFreshLikesModule()
+  const liker = await seedProfile({ display_name: '즉시반영테스트' })
+  const postId = await seedPost()
+
+  const before = await getLikedPostIds(liker, [postId])
+  assert.equal(before.has(postId), false)
+
+  await togglePostLike(postId, liker)
+
+  const after = await getLikedPostIds(liker, [postId])
+  assert.equal(after.has(postId), true, '방금 누른 좋아요가 배치 조회에 즉시 나타나야 한다')
+})
+
+test('getLikedPostIds: postIds가 비어있으면 쿼리 없이 즉시 빈 Set을 돌려준다', async () => {
+  const original = process.env.TURSO_DATABASE_URL
+  process.env.TURSO_DATABASE_URL = 'file:/definitely-nonexistent-dir-ggac-2c/broken.db'
+  try {
+    const { getLikedPostIds } = await loadFreshLikesModule()
+    const result = await getLikedPostIds('any-user', [])
+    assert.deepEqual(result, new Set())
+  } finally {
+    process.env.TURSO_DATABASE_URL = original
+  }
+})
+
+test('getLikedPostIds: userId가 비어있으면 쿼리 없이 즉시 빈 Set을 돌려준다', async () => {
+  const original = process.env.TURSO_DATABASE_URL
+  process.env.TURSO_DATABASE_URL = 'file:/definitely-nonexistent-dir-ggac-2c/broken.db'
+  try {
+    const { getLikedPostIds } = await loadFreshLikesModule()
+    const result = await getLikedPostIds('', ['any-post'])
+    assert.deepEqual(result, new Set())
+  } finally {
+    process.env.TURSO_DATABASE_URL = original
+  }
+})
+
 // ---------------------------------------------------------------- listUserLikes
 
 test('listUserLikes: 반환 필드명(post_id/post_title/post_category/post_author_name/liked_at)을 그대로 유지한다', async () => {

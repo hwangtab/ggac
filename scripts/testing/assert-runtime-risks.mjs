@@ -1883,6 +1883,20 @@ const staleSupabaseReadOffenders = displayPathsFullyOnTurso.filter(({ source }) 
   staleSupabaseReadPattern.test(stripComments(source))
 )
 
+// 코디네이터 코드리뷰(2차): `src/app/api/posts/route.ts` GET은
+// `board_posts_with_stats` 뷰(Task 8 몫, 여전히 Supabase)를 읽는
+// fetchBoardPosts에 위임하므로 `staleSupabaseReadOffenders`(위, "이 파일엔
+// Supabase 참조가 0이어야 한다")에는 넣지 않는다 — 이 파일 자체가
+// `createSupabaseServer`를 더는 직접 호출하지 않지만, 뷰 때문에 완전
+// Supabase-free를 계약하기엔 이르다. 대신 "사용자가 좋아요한 게시글" 표시
+// (`post_likes` 조회)만 좁게 검사한다 — 컷오버 후 새 좋아요가 게시판
+// 목록에서 하트로 안 보이던 버그(상세 페이지는 Turso를 봐서 눌린 것으로
+// 보이는데 목록은 얼어붙은 Supabase 스냅샷을 봐서 안 눌린 것으로 보이는
+// 엇갈림)의 재발을 막는다.
+const validatesPostsListLikedSetUsesTurso =
+  /getLikedPostIds\(userId,\s*postIds\)/.test(boardListPostsApiSource) &&
+  !/\.from\(\s*['"]post_likes['"]\s*\)/.test(stripComments(boardListPostsApiSource))
+
 const imageProxyPath = join(root, 'src/app/api/images/proxy/route.ts')
 const imageProxySource = readFileSync(imageProxyPath, 'utf8')
 const postViewPath = join(root, 'src/app/api/posts/[id]/view/route.ts')
@@ -4752,6 +4766,15 @@ if (staleSupabaseReadOffenders.length > 0) {
     `Display paths for comments/post_likes/comment_likes/post_attachments must read exclusively from the Turso query layer — no remaining Supabase client creation or table reads for these tables (post-cutover, new comments/likes/attachments must render immediately, not a frozen Supabase snapshot):\n${staleSupabaseReadOffenders
       .map(({ path }) => `- ${relative(root, path)}`)
       .join('\n')}`
+  )
+}
+
+if (!validatesPostsListLikedSetUsesTurso) {
+  failures.push(
+    `Board post-list "liked by me" set must read from Turso (getLikedPostIds) and must not reintroduce a raw Supabase post_likes read — new likes must show as hearted in the list immediately after cutover: ${relative(
+      root,
+      boardListPostsApiPath
+    )}`
   )
 }
 

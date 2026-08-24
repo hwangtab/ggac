@@ -156,6 +156,28 @@ export async function getLikedCommentIds(
   return new Set(rows.map(r => r.commentId))
 }
 
+/**
+ * 여러 게시글 id 중 `userId`가 좋아요한 것들의 id 집합을 **한 쿼리**로
+ * 돌려준다(N+1 아님, `inArray`) — `getLikedCommentIds`의 게시글판.
+ * `postIds`가 비면 쿼리 없이 즉시 빈 Set(`inArray`에 빈 배열을 넘기면 SQLite
+ * 방언에서 유효하지 않은 SQL이 되므로 이 저장소의 다른 배치 함수와 같은
+ * 규칙으로 가드한다). `src/app/api/posts/route.ts` GET이 게시판 목록에서
+ * "내가 좋아요한 글" 표시(`userLikedSet`)에 쓴다(기존
+ * `.from('post_likes').select('post_id').eq('user_id',...).in('post_id',
+ * postIds)` 대체).
+ */
+export async function getLikedPostIds(userId: string, postIds: string[]): Promise<Set<string>> {
+  const uniqueIds = [...new Set(postIds.filter(Boolean))]
+  if (!userId || uniqueIds.length === 0) {
+    return new Set()
+  }
+  const rows = await db
+    .select({ postId: postLikes.postId })
+    .from(postLikes)
+    .where(and(eq(postLikes.userId, userId), inArray(postLikes.postId, uniqueIds)))
+  return new Set(rows.map(r => r.postId))
+}
+
 /** API 응답에 쓰이는 snake_case 정규화 형태. `get_user_likes` RPC와 같은 필드명
  * — 브리프가 그대로 유지하라고 명시한다(`src/types/board.ts`의 `UserLikedPost`와
  * 동일한 모양). */

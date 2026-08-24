@@ -7,13 +7,21 @@
  * 한 번에 조인)를 읽는다. 그 뷰 대체는 Task 8(`board_posts_with_stats` 뷰
  * 대체)의 몫으로 명시적으로 미뤄져 있어(2026-08-24-turso-stage2c-profiles-
  * content/task-8-brief.md, reference-views.md) 이 파일은 의도적으로
- * 손대지 않았다. `post_likes` 조회(사용자 좋아요 표시)는 좋아요 범위라
- * Task 6까지 그대로 Supabase에 남는다.
+ * 손대지 않았다 — `board_posts_with_stats` 뷰 읽기는 `src/lib/server/board.ts`
+ * 안에 있고, 그 파일이 Supabase 클라이언트를 계속 쓴다(이 파일 자체가
+ * 직접 쓰지는 않는다).
+ *
+ * 단계 2c 후속(Task 6 코드리뷰 대응): "사용자가 좋아요한 게시글" 표시
+ * (`userLikedSet`)만은 뷰와 무관한 별개 조회였다 — 컷오버 후 새로 누른
+ * 좋아요가 목록에서 하트로 안 보이는 버그(Turso에는 기록되는데 이 조회가
+ * 얼어붙은 Supabase 스냅샷을 봤다)로 실제로 드러나, `getLikedPostIds`(Turso
+ * 쿼리 계층, `src/db/queries/likes.ts`)로 옮겼다. `board_posts_with_stats`
+ * 뷰 자체는 여전히 손대지 않는다.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { revalidatePath, revalidateTag } from 'next/cache'
-import { createSupabaseServer } from '@/lib/supabase/server'
+import { getLikedPostIds } from '@/db/queries/likes'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { apiGet, apiPost, ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { requireActiveMember, getOptionalUser } from '@/lib/server/memberAuth'
@@ -68,7 +76,6 @@ interface PostListResponse {
 }
 
 export async function GET(request: NextRequest) {
-  const supabase = await createSupabaseServer()
   // 로그인 여부에 따라 개인화 데이터(내 좋아요 여부)를 얹는 선택적 조회다.
   // 비로그인도 게시글 목록을 읽을 수 있어야 하므로 requireUser로 바꾸지 않는다.
   const user = await getOptionalUser()
@@ -116,17 +123,11 @@ export async function GET(request: NextRequest) {
 
       const postIds = boardResult.posts.map(post => post.id)
 
-      let userLikedSet = new Set<string>()
-      if (userId && postIds.length > 0) {
-        const { data: likedRows } = await supabase
-          .from('post_likes')
-          .select('post_id')
-          .eq('user_id', userId)
-          .in('post_id', postIds)
-        if (likedRows) {
-          userLikedSet = new Set(likedRows.map(row => row.post_id))
-        }
-      }
+      // 단계 2c 후속(Task 6 코드리뷰 대응): post_likes 조회를 Supabase에서
+      // Turso 쿼리 계층(getLikedPostIds, 배치 inArray)으로 옮겼다 — 게시글마다
+      // 쿼리하지 않는다. postIds가 비면 getLikedPostIds가 쿼리 없이 즉시 빈
+      // Set을 돌려준다.
+      const userLikedSet = userId ? await getLikedPostIds(userId, postIds) : new Set<string>()
 
       const posts: PostData[] = boardResult.posts.map(post => ({
         id: post.id,
