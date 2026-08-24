@@ -80,4 +80,21 @@ describe('updateSystemSetting', () => {
       SettingNotFoundError
     )
   })
+
+  it('category와 setting_key로 대상을 정확히 좁힌다 — 같은 카테고리의 다른 키까지 건드리지 않는다', async () => {
+    const { calls, client } = stubAdmin({ data: [{ id: 'row-1' }], error: null })
+    await updateSystemSetting(client, {
+      category: 'site',
+      settingKey: 'maintenance_mode',
+      settingValue: { enabled: true },
+      actorId: 'admin-1',
+    })
+    const eqCalls = calls.filter(c => c.op === 'eq')
+    const eqCategory = eqCalls.find(c => c.column === 'category')
+    const eqSettingKey = eqCalls.find(c => c.column === 'setting_key')
+    assert.ok(eqCategory, 'category 필터가 쿼리에 있어야 한다')
+    assert.equal(eqCategory.value, 'site')
+    assert.ok(eqSettingKey, 'setting_key 필터가 쿼리에 있어야 한다')
+    assert.equal(eqSettingKey.value, 'maintenance_mode')
+  })
 })

@@ -51,6 +51,18 @@ describe('markAllNotificationsRead', () => {
     assert.equal(eqUserId.value, 'user-1')
   })
 
+  it('read_at에 실제 타임스탬프 문자열을 쓴다 — null이나 빈 값이 아니라', async () => {
+    const { calls, client } = stubClient({ data: [{ id: 'n-1' }], error: null })
+    await markAllNotificationsRead(client, 'user-1')
+    const update = calls.find(c => c.op === 'update')
+    assert.ok(update, 'update 호출이 있어야 한다')
+    assert.equal(typeof update.payload.read_at, 'string')
+    assert.ok(
+      !Number.isNaN(Date.parse(update.payload.read_at)),
+      'read_at은 파싱 가능한 ISO 타임스탬프여야 한다'
+    )
+  })
+
   it('read_at이 이미 채워진 알림은 건드리지 않는다(is read_at null 필터)', async () => {
     const { calls, client } = stubClient({ data: [], error: null })
     await markAllNotificationsRead(client, 'user-1')
