@@ -63,9 +63,15 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
     const t1 = Date.now()
     // posts/member_profiles(저자) 조회는 Turso(getPostById)로, 댓글/첨부는
-    // 아직 Supabase가 권위라 그대로 병렬 실행한다.
+    // 아직 Supabase가 권위라 그대로 병렬 실행한다. 조회 실패 원인은 삼켜
+    // 버리지 않고 postFetchError에 남겨 아래 404 로그에서 사유를 구분한다
+    // (없음/삭제됨과 DB 조회 자체 실패를 분간할 수 있어야 장애 분류가 된다).
+    let postFetchError: unknown = null
     const [fullPost, commentsRes, attachmentsRes] = await Promise.all([
-      getPostById(validPostId, { includeDeleted: false }).catch(() => null),
+      getPostById(validPostId, { includeDeleted: false }).catch(error => {
+        postFetchError = error
+        return null
+      }),
       commentsQuery,
       attachmentsQuery,
     ])
@@ -97,6 +103,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
     if (!post) {
       log.warn('게시글 조회 실패 또는 없음', {
+        postFetchError: postFetchError instanceof Error ? postFetchError.message : postFetchError,
         commentsCount: comments.length,
         attachmentsCount: attachments.length,
       })

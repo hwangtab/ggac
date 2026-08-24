@@ -1595,8 +1595,18 @@ const validatesPublicPostsCursor =
   // 전달만 하고, 결정론적 created_at/id 타이브레이크 정렬 자체는
   // src/db/queries/posts.ts에서 보장한다(둘 다 확인).
   /listPostsKeyset\(\{[\s\S]*?sortOrder,[\s\S]*?\}\)/.test(publicPostsApiSource) &&
-  /ascending \? asc\(posts\.createdAt\) : desc\(posts\.createdAt\)/.test(postsQueriesSource) &&
-  /ascending \? asc\(posts\.id\) : desc\(posts\.id\)/.test(postsQueriesSource) &&
+  // 좁힌 단언: 삼항이 파일 어딘가(예: 죽은 변수)에 있는 것만으로는 통과하지
+  // 않는다 — 실제로 orderByClauses.push(...) 안에서 쓰이고, 그 배열이
+  // .orderBy(...orderByClauses)로 쿼리에 실제 반영돼야 한다(리뷰 대응: 예전
+  // orderByClauses.push(...) 줄을 지우고 삼항만 죽은 코드로 남겨도 통과하던
+  // 허점을 막는다).
+  /orderByClauses\.push\(ascending \? asc\(posts\.createdAt\) : desc\(posts\.createdAt\)\)/.test(
+    postsQueriesSource
+  ) &&
+  /orderByClauses\.push\(ascending \? asc\(posts\.id\) : desc\(posts\.id\)\)/.test(
+    postsQueriesSource
+  ) &&
+  /\.orderBy\(\.\.\.orderByClauses\)/.test(postsQueriesSource) &&
   /has_prev:\s*!!parsedCursor/.test(publicPostsApiSource) &&
   !/const sortOrder = \(searchParams\.get\(['"]sort['"]\) \|\| ['"]desc['"]\)\.toLowerCase\(\) === ['"]asc['"] \? ['"]asc['"] : ['"]desc['"]/.test(
     publicPostsApiSource

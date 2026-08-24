@@ -121,7 +121,6 @@ test('getPostById: author를 PostgREST 임베드와 같은 모양(id, display_na
   assert.equal(post.id, postId)
   assert.equal(post.title, '단건 조회 테스트')
   assert.equal(typeof post.author, 'object')
-  assert.equal(post.author, post.author) // 존재 확인(널 아님)
   assert.ok(post.author, 'author는 null이면 안 된다 — post.author.display_name에서 죽는다')
   assert.equal(post.author.id, seededAuthorId)
   assert.equal(post.author.display_name, '테스트회원')
@@ -366,4 +365,98 @@ test('listPostsKeyset: is_deleted=true인 글은 검색·목록에서 빠진다'
   const ids = rows.map(r => r.id)
   assert.ok(!ids.includes(deletedId))
   assert.ok(ids.includes(aliveId))
+})
+
+test('listPostsKeyset: sortOrder=asc는 커서 없는 첫 페이지에서도 created_at 오름차순을 지킨다', async () => {
+  const { listPostsKeyset } = await loadFreshPostsModule()
+  const cat = `오름차순테스트-${Date.now()}`
+  // 전부 is_pinned: false — pinned 우선 정렬(cursor null일 때 적용)이 개입할
+  // 여지를 없애 순수하게 created_at asc/desc 방향만 검증한다.
+  const oldest = await insertPost({ category: cat, createdAtMs: 1000 })
+  const middle = await insertPost({ category: cat, createdAtMs: 2000 })
+  const newest = await insertPost({ category: cat, createdAtMs: 3000 })
+
+  const { rows: ascRows } = await listPostsKeyset({
+    category: cat,
+    sortOrder: 'asc',
+    limit: 20,
+    cursor: null,
+  })
+  assert.deepEqual(
+    ascRows.map(r => r.id),
+    [oldest, middle, newest],
+    'sortOrder: asc는 오래된 글부터(created_at 오름차순) 나와야 한다'
+  )
+
+  // 대조: 같은 데이터를 desc로 요청하면 정반대 순서여야 한다 — asc 테스트가
+  // "우연히 통과"가 아니라 방향을 실제로 구분하고 있음을 증명한다.
+  const { rows: descRows } = await listPostsKeyset({
+    category: cat,
+    sortOrder: 'desc',
+    limit: 20,
+    cursor: null,
+  })
+  assert.deepEqual(
+    descRows.map(r => r.id),
+    [newest, middle, oldest],
+    'sortOrder: desc는 최신 글부터 나와야 한다'
+  )
+})
+
+test('listPostsKeyset: created_at이 동일한 글들은 id로 타이브레이크하고, 커서 페이지네이션이 겹치거나 빠뜨리지 않는다', async () => {
+  const { listPostsKeyset } = await loadFreshPostsModule()
+  const cat = `타이브레이크테스트-${Date.now()}`
+  const sameCreatedAtMs = 7777
+  // id를 명시해 사전식 순서를 고정한다(insertPost 기본 id는 순번이라
+  // 'post-9' < 'post-10'처럼 사전식 비교가 직관과 어긋나 타이브레이크
+  // 단언이 흔들릴 수 있다).
+  const idA = `${cat}-a`
+  const idB = `${cat}-b`
+  const idC = `${cat}-c`
+  await insertPost({ id: idC, category: cat, createdAtMs: sameCreatedAtMs })
+  await insertPost({ id: idA, category: cat, createdAtMs: sameCreatedAtMs })
+  await insertPost({ id: idB, category: cat, createdAtMs: sameCreatedAtMs })
+
+  // 커서 없는 첫 페이지: created_at이 전부 같으므로 id 내림차순(desc)만으로
+  // 정렬돼야 한다 — 곧 idC, idB, idA 순.
+  const firstPage = await listPostsKeyset({
+    category: cat,
+    sortOrder: 'desc',
+    limit: 2,
+    cursor: null,
+  })
+  assert.deepEqual(
+    firstPage.rows.map(r => r.id),
+    [idC, idB],
+    'created_at이 같으면 id 내림차순으로 타이브레이크해야 한다'
+  )
+  assert.equal(firstPage.hasNext, true)
+
+  // 커서(마지막 행의 created_at/id)로 다음 페이지를 요청 — 겹치지도(idB 재출현)
+  // 빠뜨리지도(idA 누락) 않아야 한다.
+  const lastOfFirstPage = firstPage.rows[firstPage.rows.length - 1]
+  const secondPage = await listPostsKeyset({
+    category: cat,
+    sortOrder: 'desc',
+    limit: 2,
+    cursor: {
+      createdAt: lastOfFirstPage.created_at,
+      id: lastOfFirstPage.id,
+    },
+  })
+  assert.deepEqual(
+    secondPage.rows.map(r => r.id),
+    [idA],
+    '두 번째 페이지는 idA 하나만 와야 한다 — idB 중복도, idA 누락도 아니다'
+  )
+  assert.equal(secondPage.hasNext, false)
+
+  // 두 페이지를 합치면 겹침·누락 없이 정확히 3건이어야 한다.
+  const combined = [...firstPage.rows, ...secondPage.rows].map(r => r.id)
+  assert.deepEqual(new Set(combined).size, 3, '두 페이지 합쳐 중복이 없어야 한다')
+  assert.deepEqual(
+    [...combined].sort(),
+    [idA, idB, idC].sort(),
+    '세 글 모두 정확히 한 번씩 나와야 한다'
+  )
 })
