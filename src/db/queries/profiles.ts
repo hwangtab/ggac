@@ -81,6 +81,19 @@ export type UpsertProfileInput = ProfileWriteInput & {
 
 export type ProfilePatch = Omit<ProfileWriteInput, 'id'>
 
+/**
+ * `listProfiles`에 상태/불리언 필터가 없어 "전체를 한 번에 받아 메모리에서
+ * 거른다" 패턴을 쓰는 호출부(admin/artists 목록, admin/artists/members
+ * 목록, admin/members/stats)가 공유하는 상한. 회원 23명 기준으로는 사실상
+ * "전체 조회"를 흉내내지만, **실제 회원 수가 이 값을 넘으면 나머지는
+ * 조용히 잘린다** — 에러가 나지 않는다. 이 값을 늘려야 할 정도로 회원이
+ * 늘면(코멘트 관례상 "수천 명대"), `listProfiles`에 필요한 필터(예:
+ * `is_artist`/`is_active`)를 추가하는 편이 낫다. (`src/lib/server/
+ * boardRoomAuth.ts`의 `APPROVED_ROSTER_PAGE_LIMIT`는 같은 값을 쓰지만
+ * Task 3b가 만든 독립 상수라 이번엔 건드리지 않았다.)
+ */
+export const ALL_PROFILES_LIMIT = 10000
+
 export interface ListProfilesFilter {
   /** 생략하면 전체 상태를 대상으로 한다. */
   status?: RegistrationStatus

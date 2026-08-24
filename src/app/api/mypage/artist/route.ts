@@ -16,6 +16,7 @@ import { parseJsonObjectBody } from '@/utils/requestBody'
 import { isProjectStorageObjectPath } from '@/utils/storageUrlValidation'
 import { logicalPathFromUrl } from '@/lib/storage/paths'
 import { createLogger } from '@/utils/logger'
+import { getProfileById } from '@/db/queries/profiles'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -129,15 +130,17 @@ export async function GET(request: NextRequest) {
 
     const supabase = await createSupabaseServer()
 
-    // 사용자의 프로필 정보 조회 (아티스트 ID 확인)
-    const { data: profile, error: profileError } = await supabase
-      .from('member_profiles')
-      .select('artist_id, is_artist, registration_status, is_active')
-      .eq('id', user.id)
-      .single()
-
-    if (profileError) {
-      console.error('Profile fetch error:', profileError)
+    // 사용자의 프로필 정보 조회 (아티스트 ID 확인). 프로필 권위는 Turso다 —
+    // artists 테이블 조회는 그대로 Supabase에 남긴다(아직 그쪽이 권위).
+    let profile: Awaited<ReturnType<typeof getProfileById>>
+    try {
+      profile = await getProfileById(user.id)
+    } catch (error) {
+      console.error('Profile fetch error:', error)
+      return ApiError.internalServerError('프로필 정보를 조회할 수 없습니다.').toNextResponse()
+    }
+    if (!profile) {
+      console.error('Profile fetch error: not found')
       return ApiError.internalServerError('프로필 정보를 조회할 수 없습니다.').toNextResponse()
     }
 
@@ -187,15 +190,16 @@ export async function PATCH(request: NextRequest) {
 
     const updateData = validationResult.data
 
-    // 사용자의 프로필 정보 조회 (아티스트 ID 확인)
-    const { data: profile, error: profileError } = await supabase
-      .from('member_profiles')
-      .select('artist_id, is_artist, registration_status, is_active')
-      .eq('id', user.id)
-      .single()
-
-    if (profileError) {
-      console.error('Profile fetch error:', profileError)
+    // 사용자의 프로필 정보 조회 (아티스트 ID 확인). 프로필 권위는 Turso다.
+    let profile: Awaited<ReturnType<typeof getProfileById>>
+    try {
+      profile = await getProfileById(user.id)
+    } catch (error) {
+      console.error('Profile fetch error:', error)
+      return ApiError.internalServerError('프로필 정보를 조회할 수 없습니다.').toNextResponse()
+    }
+    if (!profile) {
+      console.error('Profile fetch error: not found')
       return ApiError.internalServerError('프로필 정보를 조회할 수 없습니다.').toNextResponse()
     }
 
@@ -267,16 +271,20 @@ export async function PATCH(request: NextRequest) {
     // 아티스트 정보 업데이트 (service-role 우선 사용) + 서버 측 소유자 검증
     const db = hasServiceRoleEnv() ? createServiceRoleClient() : supabase
 
-    const { data: ownerCheck, error: ownerError } = await supabase
-      .from('member_profiles')
-      .select('id, artist_id, is_artist, is_active, registration_status')
-      .eq('id', user.id)
-      .eq('artist_id', profile.artist_id)
-      .single()
+    // 이전엔 `.eq('id', user.id).eq('artist_id', profile.artist_id)`로 두
+    // 조건을 DB에서 걸렀지만, getProfileById는 id 하나만 받으므로 조회 후
+    // artist_id 일치를 코드에서 검사한다(동일한 최종 판정).
+    let ownerCheck: Awaited<ReturnType<typeof getProfileById>>
+    try {
+      ownerCheck = await getProfileById(user.id)
+    } catch (error) {
+      console.error('Owner check fetch error:', error)
+      ownerCheck = null
+    }
 
     if (
-      ownerError ||
       !ownerCheck ||
+      ownerCheck.artist_id !== profile.artist_id ||
       !ownerCheck.is_artist ||
       !ownerCheck.is_active ||
       ownerCheck.registration_status !== 'approved'

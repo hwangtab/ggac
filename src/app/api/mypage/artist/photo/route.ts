@@ -24,6 +24,7 @@ import { getArtistCoreRevalidationPaths } from '@/lib/revalidationPaths'
 import { hasValidFileSignature } from '@/utils/fileUploadValidation'
 import { isProjectStorageObjectPath } from '@/utils/storageUrlValidation'
 import { requireUser, requireActiveMember } from '@/lib/server/memberAuth'
+import { getProfileById } from '@/db/queries/profiles'
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 const MAX_FILE_SIZE = 5 * 1024 * 1024
@@ -296,27 +297,16 @@ export async function PUT(request: NextRequest) {
     if (auth instanceof NextResponse) return auth
     const { user } = auth
 
-    // 사용자의 아티스트 권한 확인
-    let profileQuery = await supabase
-      .from('member_profiles')
-      .select('artist_id, is_artist, registration_status, is_active')
-      .eq('id', user.id)
-      .maybeSingle()
-
-    if (!profileQuery.data) {
-      const adminResult = await supabaseAdmin
-        .from('member_profiles')
-        .select('artist_id, is_artist, registration_status, is_active')
-        .eq('id', user.id)
-        .maybeSingle()
-      if (adminResult.error) {
-        console.error('Admin profile lookup error:', adminResult.error)
-      } else {
-        profileQuery = adminResult
-      }
+    // 사용자의 아티스트 권한 확인. 프로필 권위는 Turso다 — 이전엔 일반
+    // 클라이언트로 조회해 비었으면 service-role로 재시도하는 이중 경로였지만
+    // (Supabase RLS 우회 대비), Turso는 RLS 개념이 없어 단일 조회로 충분하다.
+    let profile: Awaited<ReturnType<typeof getProfileById>>
+    try {
+      profile = await getProfileById(user.id)
+    } catch (error) {
+      console.error('Profile lookup error:', error)
+      profile = null
     }
-
-    const profile = profileQuery.data
 
     if (!profile) {
       return NextResponse.json(
@@ -564,14 +554,16 @@ export async function DELETE(request: NextRequest) {
     if (auth instanceof NextResponse) return auth
     const { user } = auth
 
-    // 사용자의 아티스트 권한 확인
-    const { data: profile, error: profileError } = await supabase
-      .from('member_profiles')
-      .select('artist_id, is_artist, registration_status, is_active')
-      .eq('id', user.id)
-      .single()
+    // 사용자의 아티스트 권한 확인. 프로필 권위는 Turso다.
+    let profile: Awaited<ReturnType<typeof getProfileById>>
+    try {
+      profile = await getProfileById(user.id)
+    } catch (error) {
+      console.error('Profile lookup error:', error)
+      profile = null
+    }
 
-    if (profileError || !profile) {
+    if (!profile) {
       return NextResponse.json(
         { success: false, error: '사용자 정보를 찾을 수 없습니다.' },
         { status: 404 }
@@ -699,14 +691,16 @@ export async function GET(request: NextRequest) {
     if (auth instanceof NextResponse) return auth
     const { user } = auth
 
-    // 사용자의 아티스트 권한 확인
-    const { data: profile, error: profileError } = await supabase
-      .from('member_profiles')
-      .select('artist_id, is_artist')
-      .eq('id', user.id)
-      .single()
+    // 사용자의 아티스트 권한 확인. 프로필 권위는 Turso다.
+    let profile: Awaited<ReturnType<typeof getProfileById>>
+    try {
+      profile = await getProfileById(user.id)
+    } catch (error) {
+      console.error('Profile lookup error:', error)
+      profile = null
+    }
 
-    if (profileError || !profile) {
+    if (!profile) {
       return NextResponse.json(
         { success: false, error: '사용자 정보를 찾을 수 없습니다.' },
         { status: 404 }

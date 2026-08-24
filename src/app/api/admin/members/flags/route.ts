@@ -133,7 +133,10 @@ export const PATCH = defineApiRoute<Record<string, unknown>>({
         'MEMBER_STATUS_CHANGED',
         {
           memberId: maskId(memberId),
-          changes: Object.keys(updateData).filter(k => k !== 'updated_at'),
+          // updateData는 이제 updated_at을 아예 담지 않는다(쿼리 계층이
+          // 자동으로 채운다) — 예전엔 여기서 걸러냈지만 지금은 걸러낼 게
+          // 없어 그대로 키 목록을 쓴다.
+          changes: Object.keys(updateData),
           adminId: maskId(user.id),
         },
         'medium'

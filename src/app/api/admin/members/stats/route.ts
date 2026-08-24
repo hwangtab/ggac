@@ -4,7 +4,7 @@ import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { ApiSuccess } from '@/utils/apiWrapper'
 import type { MemberStatistics } from '@/types'
-import { listProfiles } from '@/db/queries/profiles'
+import { listProfiles, ALL_PROFILES_LIMIT } from '@/db/queries/profiles'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -27,7 +27,7 @@ export const GET = defineApiRoute({
     // 전체를 한 번에 받는다(회원 23명, getDirectorRoster와 같은 패턴).
     let allMembers: Awaited<ReturnType<typeof listProfiles>>['rows']
     try {
-      ;({ rows: allMembers } = await listProfiles({ limit: 10000, offset: 0 }))
+      ;({ rows: allMembers } = await listProfiles({ limit: ALL_PROFILES_LIMIT, offset: 0 }))
     } catch (error) {
       console.error('Members stats fetch error:', error)
       return NextResponse.json(

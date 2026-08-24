@@ -2,7 +2,7 @@ import { createOptionsResponse } from '@/utils/apiResponse'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
-import { listProfiles } from '@/db/queries/profiles'
+import { listProfiles, ALL_PROFILES_LIMIT } from '@/db/queries/profiles'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -23,7 +23,7 @@ export const GET = defineApiRoute({
     // 승인된 모든 멤버 조회 (아티스트 권한 부여 대상)
     let rows: Awaited<ReturnType<typeof listProfiles>>['rows']
     try {
-      ;({ rows } = await listProfiles({ status: 'approved', limit: 10000, offset: 0 }))
+      ;({ rows } = await listProfiles({ status: 'approved', limit: ALL_PROFILES_LIMIT, offset: 0 }))
     } catch (error) {
       console.error('Members fetch error:', error)
       throw ApiError.internalServerError('멤버 정보를 조회하는 중 오류가 발생했습니다.')

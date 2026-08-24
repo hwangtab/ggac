@@ -4,7 +4,7 @@ import { readFileSync, rmSync } from 'node:fs'
 import { createClient } from '@libsql/client'
 
 /**
- * 단계 2c: 회원 관리·마이페이지 라우트 13개를 `src/db/queries/profiles.ts`
+ * 단계 2c: 회원 관리·마이페이지 라우트 15개를 `src/db/queries/profiles.ts`
  * (Turso)로 전환한 것을 검증한다.
  *
  * 라우트는 전부 `defineApiRoute({ auth: 'admin', ... })` 또는
@@ -13,7 +13,7 @@ import { createClient } from '@libsql/client'
  * `node --test`에서 GET/POST 핸들러를 직접 호출할 수 없다 — task-3b가
  * `verify-session`/`auth/callback`에서 마주친 것과 같은 제약이다. 그래서
  * 이 파일도 그 선례를 따른다:
- *   1) 소스 패턴 가드 — 13개 파일이 더 이상 member_profiles를 직접
+ *   1) 소스 패턴 가드 — 15개 파일이 더 이상 member_profiles를 직접
  *      조회/갱신하지 않고 쿼리 계층 함수를 쓰는지.
  *   2) 라우트 안의 변환 로직(자격 필터링·배치 갱신·응답 투영)을 실제
  *      SQLite로 그대로 재현해 검증 — 라우트 파일에서 그 로직을 그대로
@@ -68,13 +68,15 @@ const ROUTE_FILES = {
   adminMembersFlags: 'src/app/api/admin/members/flags/route.ts',
   adminMembersBulk: 'src/app/api/admin/members/bulk/route.ts',
   mypageProfile: 'src/app/api/mypage/profile/route.ts',
+  mypageArtist: 'src/app/api/mypage/artist/route.ts',
+  mypageArtistPhoto: 'src/app/api/mypage/artist/photo/route.ts',
   profiles: 'src/app/api/profiles/route.ts',
   notificationsBulk: 'src/app/api/notifications/bulk/route.ts',
 }
 
 // ---------------------------------------------------------------- 소스 가드: member_profiles 직접 접근이 남아있지 않다
 
-test('13개 라우트 모두 member_profiles를 직접 조회/갱신하지 않는다 (주석 제외)', () => {
+test('15개 라우트 모두 member_profiles를 직접 조회/갱신하지 않는다 (주석 제외)', () => {
   for (const file of Object.values(ROUTE_FILES)) {
     const src = readFileSync(file, 'utf8')
     assert.doesNotMatch(
@@ -85,7 +87,7 @@ test('13개 라우트 모두 member_profiles를 직접 조회/갱신하지 않�
   }
 })
 
-test('13개 라우트 모두 src/db/queries/profiles(쿼리 계층)를 임포트한다', () => {
+test('15개 라우트 모두 src/db/queries/profiles(쿼리 계층)를 임포트한다', () => {
   for (const file of Object.values(ROUTE_FILES)) {
     const src = readFileSync(file, 'utf8')
     assert.match(
@@ -175,6 +177,109 @@ test('admin/members 목록 라우트는 listProfiles가 고정하는 created_at 
 test('admin/artists/members 목록 라우트는 이름 오름차순으로 명시적으로 재정렬한다 (listProfiles 기본 정렬을 그대로 노출하지 않음)', () => {
   const src = readFileSync(ROUTE_FILES.adminArtistsMembers, 'utf8')
   assert.match(src, /localeCompare\(b\.display_name, 'ko'\)/)
+})
+
+// ---------------------------------------------------------------- 응답 키 집합 고정 (리뷰 라운드 2 Minor 4)
+//
+// strict: false라 키가 하나 빠져도 타입 검사가 못 잡고 관리자 화면이
+// 조용히 빈다 — 이 두 곳(29키/5키 응답 투영)이 그 위험의 핵심이라고
+// 리뷰에서 지목됐다. 소스에서 실제 객체 리터럴을 추출해 키 "집합"을
+// 고정한다(문자열 매치가 아니라 Object.keys 비교라 순서 무관·누락/추가
+// 둘 다 잡는다).
+//
+// 개발 중 수동으로 부정 대조했다: 각 파일에서 키 한 줄(admin/members는
+// `rejected_by: row.rejected_by,`, flags는 `updated_at:
+// updatedProfile.updated_at,`)을 지운 뒤 재실행 → 아래 두 단언이 즉시
+// 실패함을 확인. 원복 후 재실행하면 통과 — 결과는 보고서에 기록.
+
+function extractObjectLiteralKeys(source, startMarker) {
+  const startIndex = source.indexOf(startMarker)
+  if (startIndex === -1) {
+    throw new Error(`시작 마커를 찾지 못했다: ${startMarker}`)
+  }
+  // startMarker 뒤 첫 '{'부터 괄호 깊이를 세어 대응하는 '}'까지를 잘라낸다.
+  const braceStart = source.indexOf('{', startIndex)
+  let depth = 0
+  let endIndex = -1
+  for (let i = braceStart; i < source.length; i++) {
+    if (source[i] === '{') depth++
+    else if (source[i] === '}') {
+      depth--
+      if (depth === 0) {
+        endIndex = i
+        break
+      }
+    }
+  }
+  if (endIndex === -1) {
+    throw new Error(`객체 리터럴의 닫는 괄호를 찾지 못했다: ${startMarker}`)
+  }
+  const body = source.slice(braceStart + 1, endIndex)
+  // `key: expr,` 형태의 최상위 키만 뽑는다(중첩 객체는 없는 두 대상 파일
+  // 기준으로 충분 — 값 표현식(row.xxx / updatedProfile.xxx)까지는 안 본다).
+  const keys = [...body.matchAll(/^\s*([A-Za-z_][A-Za-z0-9_]*):/gm)].map(m => m[1])
+  if (keys.length === 0) {
+    throw new Error(`객체 리터럴에서 키를 하나도 못 뽑았다: ${startMarker}`)
+  }
+  return keys
+}
+
+test('admin/members 목록 응답은 정확히 29개 필드로 좁힌다 (Member 인터페이스와 1:1, 키 하나라도 빠지면 실패)', () => {
+  const src = readFileSync(ROUTE_FILES.adminMembersList, 'utf8')
+  const keys = extractObjectLiteralKeys(src, 'const members = rows.map(row => (')
+
+  const expected = [
+    'id',
+    'display_name',
+    'email',
+    'phone_number',
+    'real_name',
+    'created_at',
+    'updated_at',
+    'registration_status',
+    'is_active',
+    'is_admin',
+    'is_director',
+    'director_title',
+    'is_auditor',
+    'is_artist',
+    'artist_id',
+    'monthly_fee',
+    'bank_name',
+    'account_number',
+    'account_holder',
+    'last_login_at',
+    'is_suspended',
+    'suspension_reason',
+    'suspension_until',
+    'profile_completeness_score',
+    'verification_status',
+    'membership_type',
+    'engagement_score',
+    'approved_by',
+    'rejected_by',
+  ]
+
+  assert.equal(expected.length, 29, '기대 키 목록 자체가 29개여야 한다(오타 방지)')
+  assert.deepEqual(
+    keys.sort(),
+    [...expected].sort(),
+    'admin/members 응답 키 집합이 admin/members/page.tsx의 Member 인터페이스(29개)와 어긋난다'
+  )
+})
+
+test('admin/members/flags 응답은 정확히 5개 필드로 좁힌다 (id, is_director, director_title, is_auditor, updated_at)', () => {
+  const src = readFileSync(ROUTE_FILES.adminMembersFlags, 'utf8')
+  const keys = extractObjectLiteralKeys(src, 'const updatedMember = updatedProfile && ')
+
+  const expected = ['id', 'is_director', 'director_title', 'is_auditor', 'updated_at']
+
+  assert.equal(expected.length, 5, '기대 키 목록 자체가 5개여야 한다(오타 방지)')
+  assert.deepEqual(
+    keys.sort(),
+    [...expected].sort(),
+    "admin/members/flags 응답 키 집합이 이전 select('id, is_director, director_title, is_auditor, updated_at')와 어긋난다"
+  )
 })
 
 // ---------------------------------------------------------------- 실제 SQLite: admin/members 목록 필터·정렬 동작
@@ -626,4 +731,132 @@ test('아티스트 배정 로직 재현: 이미 다른 아티스트에 배정된
     targetMember.artist_id && targetMember.artist_id !== 'artist-040'
   )
   assert.equal(isConflictSameArtist, false)
+})
+
+// ---------------------------------------------------------------- 마이페이지 아티스트 읽기 범위 정정 (리뷰 라운드 2 최우선)
+//
+// 원래 12개 목록에 mypage/artist 두 파일이 빠졌던 것도 배정(POST)과 같은
+// 유형의 범위 설정 실수였다 — 이 두 파일은 member_profiles를 **읽기만**
+// 하지만(쓰기 없음), 그 낡은 Supabase 값으로 "이 회원이 아티스트인가"를
+// 판정한다. 배정은 이미 Turso에 쓰는데 이 두 파일이 계속 Supabase를 읽으면
+// 관리자가 방금 배정한 회원이 마이페이지에서 자기 아티스트 페이지를
+// 못 본다. artists 테이블 자체는 그대로 Supabase에 남긴다(아직 그쪽이
+// 권위).
+
+test('mypage/artist, mypage/artist/photo는 artists 테이블 조회를 Supabase에 그대로 남긴다', () => {
+  for (const file of [ROUTE_FILES.mypageArtist, ROUTE_FILES.mypageArtistPhoto]) {
+    const src = readFileSync(file, 'utf8')
+    assert.match(
+      src,
+      /\.from\(\s*['"]artists['"]\s*\)/,
+      `${file}: artists 조회는 Supabase여야 한다`
+    )
+    assert.match(
+      src,
+      /getProfileById\(user\.id\)/,
+      `${file}: 프로필 조회는 getProfileById(user.id)여야 한다`
+    )
+  }
+})
+
+// ---------------------------------------------------------------- 소스 가드(필수 부정 대조 대상): 마이페이지가 getProfileById로 판정해야 한다
+//
+// 개발 중 수동으로 1회 재현했다: mypage/artist/route.ts GET의
+// `profile = await getProfileById(user.id)` 호출을 옛 Supabase
+// `.from('member_profiles')...` 조회로 되돌린 뒤 이 테스트를 실행하면
+// 아래 단언이 즉시 실패한다(정규식이 더 이상 매치되지 않음). 원복 후
+// 재실행하면 통과 — 결과는 보고서에 기록.
+
+test('mypage/artist GET/PATCH, mypage/artist/photo PUT/DELETE/GET 전부 getProfileById로 아티스트 권한을 판정한다', () => {
+  const artistSrc = readFileSync(ROUTE_FILES.mypageArtist, 'utf8')
+  // GET + PATCH 두 번 + PATCH 안의 ownerCheck까지 총 3회.
+  const artistCalls = [...artistSrc.matchAll(/getProfileById\(user\.id\)/g)]
+  assert.ok(
+    artistCalls.length >= 3,
+    `mypage/artist에 getProfileById(user.id) 호출이 3번 이상 있어야 한다(실제 ${artistCalls.length}번)`
+  )
+
+  const photoSrc = readFileSync(ROUTE_FILES.mypageArtistPhoto, 'utf8')
+  // PUT + DELETE + GET 세 핸들러 각각 한 번씩.
+  const photoCalls = [...photoSrc.matchAll(/getProfileById\(user\.id\)/g)]
+  assert.ok(
+    photoCalls.length >= 3,
+    `mypage/artist/photo에 getProfileById(user.id) 호출이 3번 이상 있어야 한다(실제 ${photoCalls.length}번)`
+  )
+})
+
+// ---------------------------------------------------------------- 실제 SQLite: 배정 직후 마이페이지가 아티스트를 인식하는지
+
+test('마이페이지 아티스트 권한 판정 로직 재현: 관리자가 배정하면 같은 조회로 곧바로 인식된다', async () => {
+  const { upsertProfile, getProfileById, updateProfile } = await loadFreshProfilesModule()
+  const id = 'mypage-artist-1'
+  await upsertProfile(
+    makeProfile({
+      id,
+      email: 'mypage-artist-1@test.local',
+      registration_status: 'approved',
+      is_active: true,
+      is_artist: false,
+      artist_id: null,
+    })
+  )
+
+  // 배정 전: mypage/artist GET과 동일한 조건 — 아직 아티스트가 아니다.
+  const before = await getProfileById(id)
+  const beforeForbidden = !before.is_artist || !before.artist_id
+  assert.equal(beforeForbidden, true, '배정 전에는 마이페이지 접근이 막혀야 한다')
+
+  // 관리자 배정 라우트와 동일한 시퀀스(updateProfile).
+  await updateProfile(id, {
+    artist_id: 'artist-050',
+    artist_role: 'owner',
+    is_artist: true,
+  })
+
+  // 배정 직후: 같은 프로필 조회 함수(getProfileById)로 곧바로 인식돼야
+  // 한다 — 마이페이지와 관리자 배정이 같은 저장소를 보기 때문이다.
+  const after = await getProfileById(id)
+  const afterForbidden = !after.is_artist || !after.artist_id
+  assert.equal(afterForbidden, false, '배정 직후에는 마이페이지가 아티스트를 인식해야 한다')
+  assert.equal(after.artist_id, 'artist-050')
+})
+
+test('부정 대조: 마이페이지가 Turso 대신 낡은 값(배정 전 스냅샷)을 계속 보면 배정 후에도 계속 막힌다', async () => {
+  const { upsertProfile, getProfileById, updateProfile } = await loadFreshProfilesModule()
+  const id = 'mypage-artist-stale-1'
+  await upsertProfile(
+    makeProfile({
+      id,
+      email: 'mypage-artist-stale-1@test.local',
+      registration_status: 'approved',
+      is_active: true,
+      is_artist: false,
+      artist_id: null,
+    })
+  )
+
+  // "Supabase에서 읽는" 옛 라우트를 흉내낸다 — 배정 전에 한 번 조회해
+  // 스냅샷을 캐시해 둔 뒤, Turso 쪽에 배정이 반영돼도 그 스냅샷만 계속
+  // 참조한다(리뷰가 지목한 정확히 그 버그 재현).
+  const staleSnapshot = await getProfileById(id)
+
+  await updateProfile(id, {
+    artist_id: 'artist-051',
+    artist_role: 'owner',
+    is_artist: true,
+  })
+
+  // 낡은 스냅샷 기준 판정 — 여전히 막혀 있다(버그 재현).
+  const staleForbidden = !staleSnapshot.is_artist || !staleSnapshot.artist_id
+  assert.equal(
+    staleForbidden,
+    true,
+    '낡은 스냅샷을 계속 보면 배정 후에도 계속 막혀야 한다(회귀 재현)'
+  )
+
+  // 실제 라우트가 매 요청마다 새로 조회하는지(getProfileById(id) 재호출)로
+  // 위 회귀와 대조한다 — 새로 조회하면 통과해야 한다.
+  const fresh = await getProfileById(id)
+  const freshForbidden = !fresh.is_artist || !fresh.artist_id
+  assert.equal(freshForbidden, false, '매 요청마다 새로 조회하면 배정이 곧바로 반영돼야 한다')
 })
