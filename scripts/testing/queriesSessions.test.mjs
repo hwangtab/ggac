@@ -247,13 +247,19 @@ test('manageUserSession(end): 활동 기록이 실패해도 세션 쓰기는 이
     action: 'start',
   })
 
-  // end는 session_token으로만 세션을 찾는다(user_id는 활동 기록에만 쓰인다) —
-  // 존재하지 않는 user_id를 넘기면 세션 UPDATE는 성공하지만
-  // logUserActivity(user_id: ghost)는 FK 위반으로 실패한다. 이 경로가
-  // "세션 작업은 성공, 활동 기록만 실패"를 목(mock) 없이 실제 DB로 재현한다.
+  // "세션 쓰기는 성공, 활동 기록만 실패"를 목(mock) 없이 실제 DB로 재현한다.
+  //
+  // 예전에는 남의 세션을 `user_id: 'ghost-user-nope'`로 종료시켜(토큰만으로
+  // 매칭되던 시절) 활동 기록만 FK 위반으로 깨뜨렸다. 그 경로는 최종 리뷰
+  // A-5에서 막혔다(교차 사용자 세션 쓰기 차단) — 이제 남의 user_id로는
+  // 세션 UPDATE 자체가 0행이라 이 시나리오를 만들 수 없다.
+  //
+  // 대신 직렬화 불가능한 metadata(BigInt)를 넘긴다. `end`의 UPDATE는
+  // `is_active`/`logout_at`만 `.set()`하므로 metadata를 건드리지 않아 그대로
+  // 성공하고, `logUserActivity`는 그 metadata를 JSON 컬럼에 실으려다 던진다.
   const errors = []
   const result = await manageUserSession(
-    { user_id: 'ghost-user-nope', session_token: 'tok-mismatch', action: 'end' },
+    { user_id: owner, session_token: 'tok-mismatch', action: 'end', metadata: { n: 10n } },
     err => errors.push(err)
   )
 
@@ -265,13 +271,14 @@ test('manageUserSession(end): 활동 기록이 실패해도 세션 쓰기는 이
   const combined = `${errors[0]?.message ?? ''} ${errors[0]?.cause?.message ?? ''}`
   assert.match(
     combined,
-    /FOREIGN KEY|FOREIGNKEY/,
-    '전달된 오류는 실제 FK 위반이어야 한다(조용히 다른 걸로 대체되면 안 된다)'
+    /BigInt/,
+    '전달된 오류는 실제로 발생한 그 오류여야 한다(조용히 다른 걸로 대체되면 안 된다)'
   )
 
-  // 로그아웃 활동 자체는 트랜잭션 롤백으로 남지 않는다(logUserActivity는
-  // user_activities+daily_activity_stats를 한 트랜잭션으로 묶는다).
-  assert.equal(await countActivitiesRaw('ghost-user-nope', 'logout'), 0)
+  // 로그아웃 활동 자체는 남지 않는다(logUserActivity는
+  // user_activities+daily_activity_stats를 한 배치로 묶고, 그 배치에
+  // 도달하기 전에 던졌다).
+  assert.equal(await countActivitiesRaw(owner, 'logout'), 0)
 })
 
 test('manageUserSession: onWriteError를 넘기지 않아도 세션 작업 자체는 여전히 성공한다(기본값은 조용한 무시)', async () => {
@@ -283,12 +290,108 @@ test('manageUserSession: onWriteError를 넘기지 않아도 세션 작업 자�
     action: 'start',
   })
 
+  // 위 테스트와 같은 실패 주입(BigInt metadata) — 콜백을 넘기지 않았을 뿐이다.
   const result = await manageUserSession({
-    user_id: 'ghost-user-nope',
+    user_id: owner,
     session_token: 'tok-noop-cb',
     action: 'end',
+    metadata: { n: 10n },
   })
   assert.equal(result, sessionId)
+})
+
+// ------------------------------------------- 교차 사용자 세션 쓰기 차단 (최종 리뷰 A-5)
+//
+// 세션 토큰은 OAuth 경로에서 `session_${user.id}_${Date.now()}` 모양이고
+// user id는 게시판에 공개돼 있다 — 즉 남의 토큰은 **추측 가능**하다. RLS가
+// 사라진 지금 이 where절이 유일한 경계라, 아래 세 단정이 그 경계를 값으로
+// 고정한다.
+
+test('manageUserSession(update): 남의 세션 토큰으로는 metadata를 덮어쓸 수 없다(0행 매칭 → null)', async () => {
+  const { manageUserSession } = await loadFreshSessionsModule()
+  const victim = await seedProfile()
+  const attacker = await seedProfile()
+  const sessionId = await manageUserSession({
+    user_id: victim,
+    session_token: 'tok-crossuser-update',
+    action: 'start',
+    metadata: { page: '/mypage' },
+  })
+
+  const result = await manageUserSession({
+    user_id: attacker,
+    session_token: 'tok-crossuser-update',
+    action: 'update',
+    metadata: { page: '/hacked' },
+  })
+
+  assert.equal(result, null, '남의 세션은 매칭되지 않아야 한다')
+  const row = await getSessionRaw(sessionId)
+  assert.equal(row.metadata, '{"page":"/mypage"}', '피해자 metadata가 그대로 남아야 한다')
+  assert.equal(row.is_active, 1)
+})
+
+test('manageUserSession(end): 남의 세션 토큰으로는 세션을 종료시킬 수 없다(활동 피드에 교차 조합 행도 남지 않는다)', async () => {
+  const { manageUserSession } = await loadFreshSessionsModule()
+  const victim = await seedProfile()
+  const attacker = await seedProfile()
+  const sessionId = await manageUserSession({
+    user_id: victim,
+    session_token: 'tok-crossuser-end',
+    action: 'start',
+  })
+
+  const result = await manageUserSession({
+    user_id: attacker,
+    session_token: 'tok-crossuser-end',
+    action: 'end',
+  })
+
+  assert.equal(result, null, '남의 세션은 매칭되지 않아야 한다')
+  const row = await getSessionRaw(sessionId)
+  assert.equal(row.is_active, 1, '피해자 세션이 살아 있어야 한다')
+  assert.equal(row.logout_at, null)
+
+  // 원본 RPC와 동일하게 "매칭 없음"이어도 로그아웃 활동은 기록된다. 다만
+  // 그 행의 session_id는 NULL이어야 한다 — 예전에는 여기에
+  // **공격자 user_id + 피해자 session_id** 조합이 남았다.
+  const logoutRows = await setupClient.execute({
+    sql: 'SELECT session_id FROM user_activities WHERE user_id = ? AND action_type = ?',
+    args: [attacker, 'logout'],
+  })
+  assert.equal(logoutRows.rows.length, 1)
+  assert.equal(
+    logoutRows.rows[0].session_id,
+    null,
+    '피해자 session_id가 공격자 활동 행에 실리면 안 된다'
+  )
+})
+
+test('부정 대조: 같은 사용자 자신의 세션은 update/end 모두 그대로 동작한다(경계가 정상 경로를 막지 않는다)', async () => {
+  const { manageUserSession } = await loadFreshSessionsModule()
+  const owner = await seedProfile()
+  const sessionId = await manageUserSession({
+    user_id: owner,
+    session_token: 'tok-self-roundtrip',
+    action: 'start',
+  })
+
+  const updated = await manageUserSession({
+    user_id: owner,
+    session_token: 'tok-self-roundtrip',
+    action: 'update',
+    metadata: { page: '/board' },
+  })
+  assert.equal(updated, sessionId)
+  assert.equal((await getSessionRaw(sessionId)).metadata, '{"page":"/board"}')
+
+  const ended = await manageUserSession({
+    user_id: owner,
+    session_token: 'tok-self-roundtrip',
+    action: 'end',
+  })
+  assert.equal(ended, sessionId)
+  assert.equal((await getSessionRaw(sessionId)).is_active, 0)
 })
 
 // ------------------------------------------------------------- listActiveUsers

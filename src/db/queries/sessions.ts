@@ -142,14 +142,37 @@ async function startSession(
   return sessionId
 }
 
+/**
+ * **`user_id`가 where에 함께 들어가는 이유(교차 사용자 쓰기 차단).**
+ *
+ * 원본 `manage_user_session` RPC도 `update`/`end`를 `session_token`만으로
+ * 매칭했다 — 즉 이건 이식 회귀가 아니라 원본의 결함을 그대로 옮겨온
+ * 자리다. 그래도 여기서 좁힌다: 이 브랜치에서 OAuth 경로의 세션 토큰은
+ * `session_${user.id}_${Date.now()}` 모양이고 user id는 게시판에 그대로
+ * 공개돼 있어 **추측 가능한 토큰 공간**이다. 토큰만으로 매칭하면 아무
+ * 로그인 사용자나 남의 세션 `metadata`를 덮어쓰고(`update`), 남의 세션을
+ * 강제 종료하며(`end`), 그 결과로 **공격자 user_id + 피해자 session_id**
+ * 조합의 logout 행이 활동 피드에 남는다(리뷰어가 파일 DB로 실증).
+ *
+ * `user_id`를 함께 걸면 남의 세션은 0행 매칭이 되어 `null`을 반환한다 —
+ * "매칭되는 활성 세션 없음"과 같은 경로라 정상 동작에는 변화가 없다
+ * (자기 세션은 user_id도 당연히 일치한다).
+ */
 async function updateSession(
+  userId: string,
   sessionToken: string,
   metadata: Record<string, unknown>
 ): Promise<string | null> {
   const [row] = await db
     .update(userSessions)
     .set({ lastActivity: new Date(), metadata })
-    .where(and(eq(userSessions.sessionToken, sessionToken), eq(userSessions.isActive, true)))
+    .where(
+      and(
+        eq(userSessions.sessionToken, sessionToken),
+        eq(userSessions.userId, userId),
+        eq(userSessions.isActive, true)
+      )
+    )
     .returning({ id: userSessions.id })
   return row?.id ?? null
 }
@@ -161,15 +184,24 @@ async function endSession(
   const [row] = await db
     .update(userSessions)
     .set({ isActive: false, logoutAt: new Date() })
-    .where(and(eq(userSessions.sessionToken, input.session_token), eq(userSessions.isActive, true)))
+    .where(
+      and(
+        eq(userSessions.sessionToken, input.session_token),
+        // updateSession의 주석 참고 — 토큰만으로 매칭하면 남의 세션을
+        // 강제 종료할 수 있다. 자기 세션은 user_id도 일치하므로 정상
+        // 경로에는 변화가 없다.
+        eq(userSessions.userId, input.user_id),
+        eq(userSessions.isActive, true)
+      )
+    )
     .returning({ id: userSessions.id })
   const sessionId = row?.id ?? null
 
   // 원본 RPC는 매칭되는 활성 세션이 없어도(session_id가 NULL이어도)
   // 로그아웃 활동을 무조건 기록했다 — 그대로 재현한다. 세션 종료 자체는
   // 이미 끝났으므로(위 UPDATE), 활동 기록 실패는 삼키지 않고 알린 뒤
-  // sessionId를 그대로 반환한다. (UPDATE는 session_token으로만 매칭하고
-  // user_id 컬럼을 건드리지 않으므로, 여기서는 FK 위반이 나지 않는다 —
+  // sessionId를 그대로 반환한다. (UPDATE는 user_id를 where에서 읽기만 하고
+  // `.set()`으로 쓰지는 않으므로, 여기서는 FK 위반이 나지 않는다 —
   // startSession과 달리 별도 분기가 필요 없다.)
   try {
     await logUserActivity({
@@ -224,7 +256,8 @@ export async function manageUserSession(
   }
 
   if (input.action === 'start') return startSession(normalized, onWriteError)
-  if (input.action === 'update') return updateSession(normalized.session_token, normalized.metadata)
+  if (input.action === 'update')
+    return updateSession(normalized.user_id, normalized.session_token, normalized.metadata)
   if (input.action === 'end') return endSession(normalized, onWriteError)
   return null
 }
