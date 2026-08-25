@@ -1,6 +1,7 @@
 {
-  "capturedAt": "2026-08-11",
-  "source": "supabase project btugywkltavbogdnhwpu",
+  "capturedAt": "2026-08-26",
+  "source": "supabase project btugywkltavbogdnhwpu (2026-08-11 캡처) + 단계 4 Task 1·3에서 이관 대상으로 되살린 3개 표",
+  "note": "system_settings_history·user_sessions·daily_activity_stats는 2026-08-11 캡처 시점에 \"버린다\"고 판정해 droppedTables에 있었으나, 단계 4에서 전량 이관하기로 사용자가 결정해 Turso 스키마(0001_neat_exiles.sql)에 들어왔다. 컬럼 목록의 근거는 supabase/migrations/20250719090020_create_activity_tracking_system.sql · 20250721090010_create_system_settings.sql의 CREATE TABLE과, 운영 덤프에서 읽은 컬럼을 단언하는 scripts/migrate/lib/stage4Mapping.mjs다(stage4.mjs가 \"덤프 컬럼 ⊆ 매퍼 키\"를 강제한다). 이 3개를 옮기지 않으면 db:parity가 \"예상 밖 테이블\" 3건으로 항상 실패해, 진짜 편차와 JSON 인코딩 위반이 그 잡음에 묻힌다.",
   "tables": {
     "member_profiles": [
       "id",
@@ -200,16 +201,37 @@
       "started_at",
       "completed_at",
       "error_message"
-    ]
+    ],
+    "system_settings_history": [
+      "id",
+      "setting_id",
+      "category",
+      "setting_key",
+      "old_value",
+      "new_value",
+      "changed_by",
+      "changed_at",
+      "change_reason"
+    ],
+    "user_sessions": [
+      "id",
+      "user_id",
+      "session_token",
+      "last_activity",
+      "is_active",
+      "ip_address",
+      "user_agent",
+      "login_at",
+      "logout_at",
+      "metadata"
+    ],
+    "daily_activity_stats": ["id", "activity_date", "user_id", "action_type", "count", "last_updated"]
   },
   "droppedTables": [
     "profiles",
-    "system_settings_history",
     "member_profiles_normalize_log",
     "error_logs",
     "member_login_history",
-    "member_status_history",
-    "user_sessions",
-    "daily_activity_stats"
+    "member_status_history"
   ]
 }
