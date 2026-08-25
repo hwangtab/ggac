@@ -519,3 +519,78 @@ Supabase 세션과 무관하지만 예외가 아니다. 이 저장소는 배포�
 **남은 일:** 채팅에 노출된 Resend API 키 교체. `toggle_post_like` 등
 `auth.uid()` 의존 RPC 3개는 전환 후 조용히 무력화된 상태이고, 콘텐츠 이관
 단계에서 함께 걷어낸다.
+
+---
+
+## 단계 4 Task 6a — 이사회 스키마 제약 회복 (`0002_restore_board_constraints.sql`)
+
+전환 초기 스키마(`0000`)가 Postgres 원본
+(`supabase/migrations/20260529090020_create_board_room_tables.sql`)과 어긋난
+제약 7개를 되돌린다. 정본 비교표와 근거는 `src/db/schema/board.ts` 상단 주석,
+증명은 `scripts/testing/boardSchemaConstraints.test.mjs`에 있다.
+
+| 제약 | 원본(Postgres) | 0000(Turso) | 0002 |
+|---|---|---|---|
+| `board_minutes.meeting_id` | UNIQUE | (없음) | UNIQUE 인덱스 복원 |
+| `board_meetings.created_by` | SET NULL | NO ACTION | SET NULL |
+| `board_agendas.proposed_by` | SET NULL | NO ACTION | SET NULL |
+| `board_minutes.author_id` | SET NULL | NO ACTION | SET NULL |
+| `board_documents.uploaded_by` | SET NULL | NO ACTION | SET NULL |
+| `board_meeting_attendees.member_id` | NO ACTION | **cascade** | NO ACTION |
+| `board_meeting_date_votes.voter_id` | NO ACTION | **cascade** | NO ACTION |
+
+### ⚠ 적용 방법 — `drizzle-kit migrate`로 적용하지 말 것
+
+SQLite는 `ALTER TABLE`로 제약을 못 바꾸므로 0002는 표 6개를 재작성한다.
+재작성은 `PRAGMA foreign_keys=OFF` 상태여야 한다 — **켜진 채로 하면
+`DROP TABLE board_meetings`가 자식 표(안건·회의록·출석·후보일자·투표)를
+cascade로 전부 지운다.** 로컬 파일 DB에서 실측했다(`drizzle-kit generate`
+생성물 원문이 정확히 그 상태였고, 각 1행씩 심어 두고 돌리자 5개 표가 전부
+0행이 됐다). PRAGMA는 트랜잭션 안에서 조용히 무시되므로, 스크립트를 자체
+트랜잭션으로 감싸는 마이그레이터로 적용하면 그 참사가 그대로 재현된다.
+
+적용은 스크립트를 통째로 실행하는 경로로만 한다:
+
+```bash
+set -a; source .env.local; set +a   # 운영에 적용할 때만
+node -e "import('@libsql/client').then(async m => {
+  const fs = await import('node:fs')
+  const c = m.createClient({ url: process.env.TURSO_DATABASE_URL, authToken: process.env.TURSO_AUTH_TOKEN })
+  await c.executeMultiple(fs.readFileSync('src/db/migrations/0002_restore_board_constraints.sql','utf8'))
+  console.log('applied'); c.close()
+})"
+```
+
+### 적용 전 확인 (둘 다 0행이어야 한다)
+
+```sql
+-- ① 중복 회의록이 있으면 UNIQUE 인덱스 생성이 실패해 전체가 롤백된다
+SELECT meeting_id, count(*) FROM board_minutes GROUP BY meeting_id HAVING count(*) > 1;
+-- ② 0000이 만든 것 말고 다른 인덱스·트리거가 board_* 에 붙어 있으면
+--    재작성에 딸려 사라진다. 기대값은 아래 세 줄뿐이다(0002 적용 후 기준).
+SELECT type, name FROM sqlite_master WHERE tbl_name LIKE 'board_%' AND sql IS NOT NULL AND type <> 'table';
+```
+
+### 적용 후 확인
+
+```sql
+PRAGMA foreign_key_check;                                  -- 0행
+SELECT count(*) FROM board_meeting_attendees;              -- 적용 전 값과 같아야 한다
+SELECT count(*) FROM board_meeting_date_votes;             -- 〃
+SELECT "table", "from", "on_delete" FROM pragma_foreign_key_list('board_meeting_attendees');
+SELECT name FROM sqlite_master WHERE name LIKE '__new_%' OR name LIKE '__migration_assert%';  -- 0행
+```
+
+행 수 검증은 마이그레이션 안에도 들어 있다: `__migration_assert_0002`는
+`CHECK (ok = 1)` 하나뿐인 표이고, 표마다 재작성 전후 행 수가 같은지·마지막에
+FK 위반이 0인지를 여기에 INSERT해 확인한다. 어긋나면 CHECK 위반으로
+트랜잭션 전체가 롤백된다(변이 테스트로 실제로 무는 것을 확인했다).
+
+### 운영에 미치는 동작 변화
+
+`board_meeting_attendees`·`board_meeting_date_votes`가 NO ACTION으로 돌아가
+**출석·투표 기록이 남아 있는 회원은 `member_profiles`에서 바로 지울 수 없다**
+(FK 에러). 이게 Postgres 원본의 동작이고, 출석은 정족수 계산의 원천이라
+의도된 것이다. 탈퇴 회원을 실제로 지워야 하면 출석·투표 기록을 어떻게 할지
+먼저 정한 뒤 그 행부터 처리한다. 앱에는 회원 삭제 경로가 없으므로(코드에
+`member_profiles` DELETE 0곳) 화면 동작에는 영향이 없다.
