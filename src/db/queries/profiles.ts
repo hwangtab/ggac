@@ -16,6 +16,7 @@
  */
 
 import { and, asc, desc, eq, gte, inArray, like, lte, or, sql, type SQL } from 'drizzle-orm'
+import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
 
 import { db } from '../client.ts'
 import { memberProfiles } from '../schema/index.ts'
@@ -480,9 +481,64 @@ export async function listRecentProfilesForActivity(
 }
 
 /**
+ * 충돌(같은 id로 다시 upsertProfile을 호출) 시 절대 갱신하지 않는 컬럼
+ * (camelCase, Drizzle 필드명 기준). 전부 "누가 무엇을 할 수 있는가"를 뜻하는
+ * 컬럼이다 — 이 함수가 대체한 원본 Postgres 트리거
+ * (`supabase/migrations/20250108090010_fix_signup_flow.sql:53-65`)의
+ * `ON CONFLICT ... DO UPDATE SET`도 이 컬럼들을 넣지 않았다.
+ *
+ * 지금 있는 호출부(가입 훅, `/api/member-signup`)는 항상 새 id로만 호출해
+ * 이 분기에 닿지 않는다. 하지만 재이관·재가입·관리자 복구 헬퍼가 생기는
+ * 순간 살아난다 — `buildSignupProfileRow`/`buildMemberProfileRow`는 이
+ * 컬럼들에 항상 `pending`/`false`를 명시적으로 채우므로, 여기서 막지
+ * 않으면 기존 id와 충돌한 승인된 관리자·이사·감사가 재가입 한 번으로
+ * 권한과 승인 상태를 잃는다. Turso에는 PITR이 없어 복구할 수 없다.
+ */
+const CONFLICT_PROTECTED_FIELDS: ReadonlySet<string> = new Set([
+  'registrationStatus',
+  'isActive',
+  'isAdmin',
+  'isDirector',
+  'isAuditor',
+])
+
+/**
+ * `values`로부터 onConflictDoUpdate용 `set` 객체를 만든다.
+ *
+ * - `id`와 `CONFLICT_PROTECTED_FIELDS`는 아예 넣지 않는다 — SET 절에 없는
+ *   컬럼은 충돌 시 원래 값 그대로 남는다(id는 어차피 충돌 기준이라 바뀔 일이
+ *   없지만, 명시적으로 빼서 의도를 분명히 한다).
+ * - 나머지 컬럼은 `COALESCE(excluded.col, member_profiles.col)`로 감싼다.
+ *   `buildSignupProfileRow`/`buildMemberProfileRow`는 미입력 필드에
+ *   `undefined`가 아니라 명시적 `null`을 쓰므로, Drizzle 기본 동작(`set:
+ *   values`)처럼 그 값을 그대로 썼다가는 재이관 등에서 기존 값(전화번호·
+ *   계좌번호 등)이 null로 덮인다. COALESCE는 새 값이 null일 때만 기존 값을
+ *   지키고, 실제로 값이 오면(예: 정정) 그 값으로 갱신한다 — 원본 트리거의
+ *   `COALESCE(EXCLUDED.x, member_profiles.x)`와 같은 의미다.
+ */
+function buildConflictSet(values: Record<string, unknown>): Record<string, SQL> {
+  const columns = memberProfiles as unknown as Record<string, AnySQLiteColumn>
+  const set: Record<string, SQL> = {}
+  for (const key of Object.keys(values)) {
+    if (key === 'id') continue
+    if (CONFLICT_PROTECTED_FIELDS.has(key)) continue
+    const column = columns[key]
+    if (!column) continue
+    set[key] = sql`coalesce(excluded.${sql.identifier(column.name)}, ${column})`
+  }
+  return set
+}
+
+/**
  * 프로필을 생성하거나(id 미존재) 갱신한다(id 존재).
  * 가입 훅·member-signup 라우트가 쓴다. `id`/`email`/`display_name`은 필수,
  * 나머지 컬럼은 DB 기본값(pending/비활성 등)에 맡길 수 있다.
+ *
+ * id가 충돌하면(재이관·재가입·관리자 복구 등) `registration_status`·
+ * `is_active`·`is_admin`·`is_director`·`is_auditor`는 갱신하지 않고, 나머지
+ * 컬럼은 새 값이 null이 아닐 때만 갱신한다(`buildConflictSet` 참조) — 신규
+ * 생성(id 미존재) 경로는 이 분기와 무관하게 항상 `values`를 그대로 insert한다.
+ *
  * @throws DB 쓰기가 실패하면 그대로 던진다(삼키지 않는다) — 호출부가
  * 실패를 어떻게 다룰지(예: member-signup의 202 분기) 결정한다.
  */
@@ -491,7 +547,7 @@ export async function upsertProfile(row: UpsertProfileInput): Promise<void> {
   await db
     .insert(memberProfiles)
     .values(values)
-    .onConflictDoUpdate({ target: memberProfiles.id, set: values })
+    .onConflictDoUpdate({ target: memberProfiles.id, set: buildConflictSet(values) })
 }
 
 /**

@@ -116,24 +116,105 @@ test('upsertProfile로 생성한 행을 getProfileById가 snake_case + ISO 타�
   assert.ok(!Number.isNaN(Date.parse(row.created_at)))
 })
 
-test('upsertProfile: 같은 id로 다시 부르면 갱신한다(onConflictDoUpdate)', async () => {
+test('upsertProfile: 같은 id로 다시 부르면 일반 컬럼(display_name)은 새 값으로 갱신한다(onConflictDoUpdate)', async () => {
   const { upsertProfile, getProfileById } = await loadFreshProfilesModule()
   const id = 'p-002'
   await upsertProfile(makeProfile({ id, email: 'p002@test.local', display_name: '갱신전' }))
-  await upsertProfile(
-    makeProfile({
-      id,
-      email: 'p002@test.local',
-      display_name: '갱신후',
-      registration_status: 'approved',
-      is_active: true,
-    })
-  )
+  await upsertProfile(makeProfile({ id, email: 'p002@test.local', display_name: '갱신후' }))
 
   const row = await getProfileById(id)
   assert.equal(row.display_name, '갱신후')
+})
+
+// ---------------------------------------------------------------- upsertProfile 충돌 규칙 (9pre 수정 3)
+//
+// 원본 Postgres 트리거(supabase/migrations/20250108090010_fix_signup_flow.sql:
+// 53-65)는 registration_status·is_active·is_admin을 ON CONFLICT UPDATE에 넣지
+// 않았다. buildSignupProfileRow/buildMemberProfileRow가 항상 pending/false를
+// 명시적으로 채우므로, 이 보호가 없으면 재이관·재가입·관리자 복구 등으로 기존
+// id와 충돌한 순간 승인된 관리자가 pending·비활성으로 강등되고 권한과
+// 계좌번호를 잃는다 — Turso에는 PITR이 없어 복구 불가다. 아래 테스트가 그
+// 보호를 못박는다.
+
+test('upsertProfile 충돌: registration_status·is_admin·계좌번호가 있는 승인된 관리자에게 최소 필드만 담아 다시 호출해도 그대로 남는다', async () => {
+  const { upsertProfile, getProfileById } = await loadFreshProfilesModule()
+  const id = 'p-admin-conflict'
+
+  // 1) 승인된 관리자 프로필을 먼저 만든다(계좌번호 포함).
+  await upsertProfile(
+    makeProfile({
+      id,
+      email: 'admin-conflict@test.local',
+      display_name: '기존 관리자',
+      registration_status: 'approved',
+      is_active: true,
+      is_admin: true,
+      account_number: '110-123-456789',
+    })
+  )
+
+  // 2) 재이관/재가입/관리자 복구 헬퍼를 흉내낸 최소 필드 호출 — 미입력
+  // 필드는 buildSignupProfileRow/buildMemberProfileRow처럼 명시적 null이다.
+  await upsertProfile({
+    id,
+    email: 'admin-conflict@test.local',
+    display_name: '재가입 시도',
+    registration_status: 'pending',
+    is_active: false,
+    is_admin: false,
+    account_number: null,
+  })
+
+  const row = await getProfileById(id)
+  // 권한·승인 상태 컬럼은 새 값(pending/false)이 왔어도 그대로 남아야 한다.
   assert.equal(row.registration_status, 'approved')
   assert.equal(row.is_active, true)
+  assert.equal(row.is_admin, true)
+  // 나머지 컬럼은 COALESCE 의미 — 새 값이 null이면 기존 값을 지킨다.
+  assert.equal(row.account_number, '110-123-456789')
+  // 새 값이 null이 아니면(display_name) 실제로 갱신된다.
+  assert.equal(row.display_name, '재가입 시도')
+})
+
+test('upsertProfile 충돌: is_director·is_auditor도 보호 대상이다', async () => {
+  const { upsertProfile, getProfileById } = await loadFreshProfilesModule()
+  const id = 'p-director-conflict'
+
+  await upsertProfile(
+    makeProfile({
+      id,
+      email: 'director-conflict@test.local',
+      display_name: '기존 이사',
+      is_director: true,
+      is_auditor: true,
+    })
+  )
+
+  await upsertProfile({
+    id,
+    email: 'director-conflict@test.local',
+    display_name: '기존 이사',
+    is_director: false,
+    is_auditor: false,
+  })
+
+  const row = await getProfileById(id)
+  assert.equal(row.is_director, true)
+  assert.equal(row.is_auditor, true)
+})
+
+test('부정 대조: buildConflictSet에서 보호 컬럼 제외를 지우면 위 보호 테스트가 실패한다(보호가 실제로 이 코드에서 온다는 증거)', async () => {
+  // upsertProfile은 buildConflictSet(values)를 통해 CONFLICT_PROTECTED_FIELDS를
+  // 뺀 set 객체를 onConflictDoUpdate에 넘긴다. 소스에서 그 보호 목록이 실제로
+  // 존재하고 다섯 컬럼을 모두 담고 있는지 직접 확인한다 — 이 목록이 비면(또는
+  // 컬럼이 빠지면) 위 두 통합 테스트가 즉시 실패로 잡아낸다는 것을 문서화한다.
+  const src = readFileSync('src/db/queries/profiles.ts', 'utf8')
+  const match = src.match(/const CONFLICT_PROTECTED_FIELDS[\s\S]*?\n\]\)/)
+  assert.ok(match, 'CONFLICT_PROTECTED_FIELDS 정의를 찾지 못했다')
+  const body = match[0]
+  for (const field of ['registrationStatus', 'isActive', 'isAdmin', 'isDirector', 'isAuditor']) {
+    assert.match(body, new RegExp(field), `${field}이 보호 목록에 있어야 한다`)
+  }
 })
 
 test('getProfilesByIds: 쿼리 한 번으로 여러 프로필을 가져오고, 존재하지 않는 id는 결과에서 빠진다', async () => {
