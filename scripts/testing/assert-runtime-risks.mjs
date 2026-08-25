@@ -1074,14 +1074,10 @@ const boardDocumentDownloadCode = stripCommentsAndImports(boardDocumentDownloadS
 const boardDocumentDownloadAuthIndex = boardDocumentDownloadCode.indexOf('requireBoardMember()')
 // Task 4: board_documents 권위가 Turso로 옮겨지며 이 라우트의 조회가
 // Supabase `.from('board_documents')`에서 쿼리 계층 호출
-// `getDocumentForDownload(id)`(src/db/queries/board.ts)로 바뀌었다 — 옛
-// Supabase 패턴도 계속 허용해 두 형태 모두 통과시킨다(다른 board-room
-// 전환 지점들과 같은 관례, 예: scopesCommentDeleteToPost).
-const boardDocumentDownloadQueryIndex = (() => {
-  const legacy = boardDocumentDownloadCode.indexOf(".from('board_documents')")
-  if (legacy !== -1) return legacy
-  return boardDocumentDownloadCode.indexOf('getDocumentForDownload(')
-})()
+// `getDocumentForDownload(id)`(src/db/queries/board.ts)로 바뀌었다. 이
+// 라우트에는 Supabase 호출이 한 줄도 남지 않았으므로 옛 패턴 분기는 죽은
+// 코드였다 — 새 호출만 본다(리뷰 1회차 Important 1).
+const boardDocumentDownloadQueryIndex = boardDocumentDownloadCode.indexOf('getDocumentForDownload(')
 const boardDocumentDownloadChecksAuthBeforeQuery =
   boardDocumentDownloadAuthIndex !== -1 &&
   boardDocumentDownloadQueryIndex !== -1 &&
@@ -1537,8 +1533,9 @@ const validatesNotificationMutationIds =
 // Task 4: event_applications 권위가 Turso로 옮겨지며 이 라우트의 GET/DELETE가
 // Supabase `query.eq(...)`/`.delete().eq(...)`에서 쿼리 계층 호출
 // `listEventApplications({...})`/`deleteEventApplication(applicationId)`
-// (src/db/queries/misc.ts)로 바뀌었다 — 옛 Supabase 패턴도 계속 허용해 두
-// 형태 모두 통과시킨다(Task 3/4/5가 세운 관례, validatesUserLikesRouteId 참고).
+// (src/db/queries/misc.ts)로 바뀌었다. 이 라우트에는 Supabase 호출이 한 줄도
+// 남지 않았으므로 옛 패턴 분기는 죽은 코드였다 — 새 호출부에 고정한다
+// (리뷰 1회차 Important 1).
 const validatesEventApplicationStatusAllowlist =
   /EVENT_APPLICATION_STATUSES\s*=\s*\[['"]pending['"],\s*['"]approved['"],\s*['"]rejected['"]\]\s+as const/.test(
     eventApplicationStatusSource
@@ -1546,8 +1543,7 @@ const validatesEventApplicationStatusAllowlist =
   /parseEventApplicationStatus/.test(eventApplicationStatusSource) &&
   /parseEventApplicationStatus\(statusParam\)/.test(adminEventApplicationsApiSource) &&
   /if\s*\(statusParam && !status\)/.test(adminEventApplicationsApiSource) &&
-  (/query = query\.eq\(['"]status['"],\s*status\)/.test(adminEventApplicationsApiSource) ||
-    /listEventApplications\(\{[\s\S]*?status,/.test(adminEventApplicationsApiSource)) &&
+  /listEventApplications\(\{[^)]*?\bstatus,/.test(adminEventApplicationsApiSource) &&
   /z\.enum\(EVENT_APPLICATION_STATUSES/.test(adminEventApplicationsApiSource) &&
   !/const status = searchParams\.get\(['"]status['"]\) \|\| ['"]['"]/.test(
     adminEventApplicationsApiSource
@@ -1563,16 +1559,14 @@ const validatesAdminEventApplicationSlug =
   /if\s*\(eventSlugParam && !isValidEventSlug\(eventSlug\)\)/.test(
     adminEventApplicationsApiSource
   ) &&
-  (/query = query\.eq\(['"]event_slug['"],\s*eventSlug\)/.test(adminEventApplicationsApiSource) ||
-    /listEventApplications\(\{[\s\S]*?eventSlug:\s*eventSlug \|\| null,/.test(
-      adminEventApplicationsApiSource
-    )) &&
+  /listEventApplications\(\{[^)]*?eventSlug:\s*eventSlug \|\| null,/.test(
+    adminEventApplicationsApiSource
+  ) &&
   !/query = query\.eq\(['"]event_slug['"],\s*eventSlugParam\)/.test(adminEventApplicationsApiSource)
 const validatesEventApplicationDeleteId =
   /validateUUID\(id \?\? ['"]['"],\s*['"]신청 ID['"]\)/.test(adminEventApplicationsApiSource) &&
   /const applicationId = idValidation\.sanitized/.test(adminEventApplicationsApiSource) &&
-  (/\.delete\(\)\.eq\(['"]id['"],\s*applicationId\)/.test(adminEventApplicationsApiSource) ||
-    /deleteEventApplication\(applicationId\)/.test(adminEventApplicationsApiSource)) &&
+  /deleteEventApplication\(applicationId\)/.test(adminEventApplicationsApiSource) &&
   /ApiSuccess\.ok\(\{\s*id:\s*applicationId\s*\}/.test(adminEventApplicationsApiSource) &&
   !/\^\[0-9a-f-\]\{36\}\$/.test(adminEventApplicationsApiSource) &&
   !/\.delete\(\)\.eq\(['"]id['"],\s*id\)/.test(adminEventApplicationsApiSource)
@@ -1787,19 +1781,12 @@ const validatesPostRouteIdsUseSanitizedUuid =
   // Supabase `.update({...}).eq('id', applicationId)`에서 쿼리 계층 호출
   // `updateEventApplicationStatus(applicationId, status)`/
   // `updateEventApplicationFields(applicationId, updateData)`
-  // (src/db/queries/misc.ts)로 바뀌었다 — 옛 Supabase 패턴도 계속 허용한다.
-  (/\.update\(\{ status,[\s\S]*?\.eq\(['"]id['"],\s*applicationId\)/.test(
+  // (src/db/queries/misc.ts)로 바뀌었다. 이 라우트에는 Supabase 호출이 한 줄도
+  // 남지 않았으므로 옛 패턴 분기는 죽은 코드였다(리뷰 1회차 Important 1).
+  /updateEventApplicationStatus\(applicationId,\s*status\)/.test(adminEventApplicationsApiSource) &&
+  /updateEventApplicationFields\(applicationId,\s*updateData\)/.test(
     adminEventApplicationsApiSource
-  ) ||
-    /updateEventApplicationStatus\(applicationId,\s*status\)/.test(
-      adminEventApplicationsApiSource
-    )) &&
-  (/\.update\(updateData\)\.eq\(['"]id['"],\s*applicationId\)/.test(
-    adminEventApplicationsApiSource
-  ) ||
-    /updateEventApplicationFields\(applicationId,\s*updateData\)/.test(
-      adminEventApplicationsApiSource
-    )) &&
+  ) &&
   !/\.update\(\{ status,[\s\S]*?\.eq\(['"]id['"],\s*id\)/.test(adminEventApplicationsApiSource) &&
   /const memberIdValidation = validateUUID\(parsedInput\.memberId,\s*['"]멤버 ID['"]\)/.test(
     adminMemberActionApiSource
@@ -1834,10 +1821,10 @@ const validatesPostRouteIdsUseSanitizedUuid =
   /const memberId = memberIdValidation\.sanitized/.test(adminArtistMembersApiSource) &&
   // Task 4: artists 권위가 Turso로 옮겨지며 존재 확인이 Supabase
   // `.eq('legacy_id', artistId)`에서 쿼리 계층 호출
-  // `getArtistByLegacyId(artistId)`(src/db/queries/artists.ts)로 바뀌었다 —
-  // 옛 Supabase 패턴도 계속 허용한다.
-  (/\.eq\(['"]legacy_id['"],\s*artistId\)/.test(adminArtistMembersApiSource) ||
-    /getArtistByLegacyId\(artistId\)/.test(adminArtistMembersApiSource)) &&
+  // `getArtistByLegacyId(artistId)`(src/db/queries/artists.ts)로 바뀌었다.
+  // 이 라우트에는 Supabase 호출이 한 줄도 남지 않았으므로 옛 패턴 분기는
+  // 죽은 코드였다(리뷰 1회차 Important 1).
+  /getArtistByLegacyId\(artistId\)/.test(adminArtistMembersApiSource) &&
   /artist_id:\s*artistId/.test(adminArtistMembersApiSource) &&
   /function parseArtistLegacyId/.test(adminArtistMemberApiSource) &&
   /const artistId = parseArtistLegacyId\(getRouteParam\(params\.id\)\)/.test(
@@ -2545,23 +2532,19 @@ const validatesUserSettingsAllowlists =
   // Task 4: user_settings 권위가 Turso로 옮겨지며 이 두 쓰기가 Supabase
   // `.from('user_settings').upsert({user_id:user.id,...}, {onConflict:
   // '...'})`에서 쿼리 계층 호출 `upsertUserSetting({userId: user.id, ...})`
-  // (src/db/queries/settings.ts)로 바뀌었다 — 옛 Supabase 패턴도 계속
-  // 허용해 두 형태 모두 통과시킨다.
-  ((userSettingsApiSource.match(/user_id:\s*user\.id,/g) ?? []).length >= 2 ||
-    (userSettingsApiSource.match(/userId:\s*user\.id,/g) ?? []).length >= 2) &&
-  ((userSettingsApiSource.match(/onConflict:\s*['"]user_id,category,setting_key['"]/g) ?? [])
-    .length >= 2 ||
-    (userSettingsApiSource.match(/upsertUserSetting\(\{/g) ?? []).length >= 2) &&
+  // (src/db/queries/settings.ts)로 바뀌었다. 이 라우트에는 Supabase 호출이
+  // 한 줄도 남지 않았으므로 옛 패턴 분기는 죽은 코드였다 — 두 쓰기 각각이
+  // 세션 사용자 id로 스코프되는지를 호출부에 고정한다(리뷰 1회차 Important 1).
+  (userSettingsApiSource.match(/upsertUserSetting\(\{\s*userId:\s*user\.id,/g) ?? []).length >= 2 &&
   /parseUserSettingCategory\(parsed\.data\.category\)/.test(userSettingsResetApiSource) &&
   // 초기화 경로도 RPC(reset_user_settings)의 auth.uid() 의존을 없애고 직접
   // DELETE로 옮겼다(단계 2b-4). 세션 사용자로 스코프하는 필터가 이 삭제의
   // 유일한 방어선이다 — 빠지면 카테고리만 맞는 전 사용자의 설정이 지워진다.
   // 이 경로는 E2E가 덮지 않으므로 정적 검사가 유일한 그물이다. Task 4:
-  // resetUserSettings({userId: user.id, ...})(쿼리 계층) 형태도 허용한다.
-  (/\.from\(['"]user_settings['"]\)\s*\.delete\(\)\s*\.eq\(['"]user_id['"],\s*user\.id\)/.test(
-    userSettingsResetApiSource
-  ) ||
-    /resetUserSettings\(\{\s*userId:\s*user\.id,/.test(userSettingsResetApiSource)) &&
+  // 쿼리 계층 resetUserSettings({userId: user.id, ...})로 옮겼고 이 라우트에는
+  // Supabase 호출이 한 줄도 남지 않았다 — 옛 패턴 분기는 죽은 코드였다
+  // (리뷰 1회차 Important 1).
+  /resetUserSettings\(\{\s*userId:\s*user\.id,/.test(userSettingsResetApiSource) &&
   /if\s*\(parsed\.data\.category && !category\)/.test(userSettingsResetApiSource) &&
   /if\s*\(setting_key && !category\)/.test(userSettingsResetApiSource) &&
   /isUserSettingKey\(category,\s*setting_key\)/.test(userSettingsResetApiSource) &&
@@ -2962,17 +2945,17 @@ const contentFormatConstantsSource = readFileSync(contentFormatConstantsPath, 'u
 // `listMeetingAttendees(sanitizedMeetingId)`(src/db/queries/board.ts)로,
 // PUT의 쓰기가 행마다 `meeting_id: sanitizedMeetingId`를 싣던 것에서
 // `upsertMeetingAttendees(sanitizedMeetingId, rows)`(첫 인자로 스코프)로
-// 바뀌었다 — 옛 Supabase 패턴도 계속 허용해 두 형태 모두 통과시킨다.
+// 바뀌었다. 이 라우트에는 Supabase 호출이 한 줄도 남지 않았고, 옛
+// `meeting_id: sanitizedMeetingId` 패턴은 이제 응답 본문에만 남아 DB 쓰기를
+// 전혀 고정하지 못한다 — 새 호출부에만 고정한다(리뷰 1회차 Important 1).
 const validatesBoardRoomAttendeesMeetingId =
   /validateUUID/.test(boardRoomAttendeesSource) &&
   /validateMeetingId/.test(boardRoomAttendeesSource) &&
   /validateMemberId/.test(boardRoomAttendeesSource) &&
   /const\s+routeMeetingId\s*=\s*validateMeetingId\(meetingId\)/.test(boardRoomAttendeesSource) &&
   /const\s+sanitizedMeetingId\s*=\s*routeMeetingId\.id/.test(boardRoomAttendeesSource) &&
-  (/\.eq\(['"]meeting_id['"],\s*sanitizedMeetingId\)/.test(boardRoomAttendeesSource) ||
-    /listMeetingAttendees\(sanitizedMeetingId\)/.test(boardRoomAttendeesSource)) &&
-  (/meeting_id:\s*sanitizedMeetingId/.test(boardRoomAttendeesSource) ||
-    /upsertMeetingAttendees\(sanitizedMeetingId,/.test(boardRoomAttendeesSource)) &&
+  /listMeetingAttendees\(sanitizedMeetingId\)/.test(boardRoomAttendeesSource) &&
+  /upsertMeetingAttendees\(sanitizedMeetingId,/.test(boardRoomAttendeesSource) &&
   /const\s+memberId\s*=\s*validateMemberId\(r\.member_id\)/.test(boardRoomAttendeesSource) &&
   /member_id:\s*memberId\.id/.test(boardRoomAttendeesSource)
 // Task 4: board_minutes 권위가 Turso로 옮겨지며 이 두 라우트가
@@ -3018,11 +3001,10 @@ const validatesBoardRoomMeetingDateInputs =
   // 에서 쿼리 계층 호출 `getDateOptionByMeetingAndDate(id, confirmDate)`
   // (src/db/queries/board.ts)로, 갱신 필드가 `update.meeting_date =
   // confirmDate`에서 `update.meetingDate = confirmDate`(camelCase)로
-  // 바뀌었다 — 옛 Supabase 패턴도 계속 허용해 두 형태 모두 통과시킨다.
-  (/\.eq\(['"]candidate_date['"],\s*confirmDate\)/.test(boardRoomMeetingDetailSource) ||
-    /getDateOptionByMeetingAndDate\(id,\s*confirmDate\)/.test(boardRoomMeetingDetailSource)) &&
-  (/update\.meeting_date = confirmDate/.test(boardRoomMeetingDetailSource) ||
-    /update\.meetingDate = confirmDate/.test(boardRoomMeetingDetailSource)) &&
+  // 바뀌었다. 이 라우트에는 Supabase 호출이 한 줄도 남지 않았으므로 옛 패턴
+  // 분기는 죽은 코드였다(리뷰 1회차 Important 1).
+  /getDateOptionByMeetingAndDate\(id,\s*confirmDate\)/.test(boardRoomMeetingDetailSource) &&
+  /update\.meetingDate = confirmDate/.test(boardRoomMeetingDetailSource) &&
   /body\.status !== undefined/.test(boardRoomMeetingDetailSource) &&
   /BOARD_MEETING_STATUS/.test(boardRoomMeetingDetailSource) &&
   !/filter\(\(date\): date is string => typeof date === ['"]string['"]\)/.test(
@@ -3032,81 +3014,61 @@ const validatesBoardRoomMeetingDateInputs =
   !/\.eq\(['"]candidate_date['"],\s*body\.confirm_date\)/.test(boardRoomMeetingDetailSource)
 // Task 4: board_agendas 권위가 Turso로 옮겨지며 갱신 필드가
 // `update.sort_order = sortOrder`에서 `update.sortOrder = sortOrder`
-// (camelCase, src/db/queries/board.ts의 updateAgenda 시그니처)로 바뀌었다 —
-// 옛 표기도 계속 허용한다.
+// (camelCase, src/db/queries/board.ts의 updateAgenda 시그니처)로 바뀌었다.
+// 이 라우트에는 Supabase 호출이 한 줄도 남지 않았으므로 옛 표기 분기는 죽은
+// 코드였다(리뷰 1회차 Important 1). 음의 검사만 두 표기를 함께 막는다.
 const validatesBoardRoomAgendaSortOrder =
   /parseBoardAgendaSortOrder/.test(boardRoomConstantsSource) &&
   /Number\.isInteger\(value\)/.test(boardRoomConstantsSource) &&
   /MAX_BOARD_AGENDA_SORT_ORDER/.test(boardRoomConstantsSource) &&
   /parseBoardAgendaSortOrder\(body\.sort_order\)/.test(boardRoomAgendaDetailSource) &&
-  (/update\.sort_order = sortOrder/.test(boardRoomAgendaDetailSource) ||
-    /update\.sortOrder = sortOrder/.test(boardRoomAgendaDetailSource)) &&
+  /update\.sortOrder = sortOrder/.test(boardRoomAgendaDetailSource) &&
   !/update\.sort_order = body\.sort_order/.test(boardRoomAgendaDetailSource) &&
   !/update\.sortOrder = body\.sort_order/.test(boardRoomAgendaDetailSource)
 // Task 4: 세 라우트 모두 board_agendas/board_minutes/board_meeting_date_options
 // 권위가 Turso로 옮겨지며 Supabase 오브젝트 리터럴(`meeting_id:
 // sanitizedMeetingId`)·`.eq(...)` 조회가 쿼리 계층 함수 호출
-// (src/db/queries/board.ts)로 바뀌었다 — 각 항목에 새 호출 패턴을
-// `newDbColumnPattern`/`newLookupPattern`으로 병기해 옛 Supabase 패턴과
-// 새 쿼리 계층 호출 패턴 중 하나만 있어도 통과시킨다. 두 경우 모두
-// "검증된 sanitized 값만 DB 경계에 쓰인다"는 성질은 동일하게 지킨다.
+// (src/db/queries/board.ts)로 바뀌었다. 세 라우트에 Supabase 호출은 한 줄도
+// 남지 않았고, 옛 `option_id: sanitizedOptionId` 같은 표기는 이제 응답 본문에만
+// 남아 DB 경계를 전혀 고정하지 못한다 — 새 호출부(`dbWritePattern`/
+// `lookupPattern`)에만 고정한다(리뷰 1회차 Important 1). "검증된 sanitized
+// 값만 DB 경계에 쓰인다"는 성질은 그대로 지킨다.
 const boardRoomCreateRouteIdChecks = [
   {
     path: 'src/app/api/board-room/agendas/route.ts',
     idLabel: '회의 ID',
     rawName: 'meetingId',
     sanitizedName: 'sanitizedMeetingId',
-    dbColumn: 'meeting_id',
-    newDbColumnPattern: /meetingId:\s*sanitizedMeetingId/,
-    newLookupPattern: /getLastAgendaSortOrder\(sanitizedMeetingId\)/,
+    dbWritePattern: /createAgenda\(\{[^)]*?meetingId:\s*sanitizedMeetingId/,
+    lookupPattern: /getLastAgendaSortOrder\(sanitizedMeetingId\)/,
   },
   {
     path: 'src/app/api/board-room/minutes/route.ts',
     idLabel: '회의 ID',
     rawName: 'meetingId',
     sanitizedName: 'sanitizedMeetingId',
-    dbColumn: 'meeting_id',
-    newDbColumnPattern: /meetingId:\s*sanitizedMeetingId/,
-    newLookupPattern: /getMinutesIdByMeetingId\(sanitizedMeetingId\)/,
+    dbWritePattern: /createMinutes\(\{[^)]*?meetingId:\s*sanitizedMeetingId/,
+    lookupPattern: /getMinutesIdByMeetingId\(sanitizedMeetingId\)/,
   },
   {
     path: 'src/app/api/board-room/date-votes/route.ts',
     idLabel: '후보 날짜 ID',
     rawName: 'optionId',
     sanitizedName: 'sanitizedOptionId',
-    dbColumn: 'option_id',
-    lookupColumn: 'id',
-    newDbColumnPattern: /upsertDateVote\(sanitizedOptionId,/,
-    newLookupPattern: /getDateOptionMeetingId\(sanitizedOptionId\)/,
+    dbWritePattern: /upsertDateVote\(sanitizedOptionId,/,
+    lookupPattern: /getDateOptionMeetingId\(sanitizedOptionId\)/,
   },
-].filter(
-  ({
-    path: routePath,
-    idLabel,
-    rawName,
-    sanitizedName,
-    dbColumn,
-    lookupColumn,
-    newDbColumnPattern,
-    newLookupPattern,
-  }) => {
-    const source = readFileSync(join(root, routePath), 'utf8')
-    const expectedLookupColumn = lookupColumn ?? dbColumn
-    const hasDbColumnUsage =
-      new RegExp(`${dbColumn}:\\s*${sanitizedName}`).test(source) || newDbColumnPattern.test(source)
-    const hasLookupUsage =
-      new RegExp(`\\.eq\\(['"]${expectedLookupColumn}['"],\\s*${sanitizedName}\\)`).test(source) ||
-      newLookupPattern.test(source)
-    return !(
-      /validateUUID/.test(source) &&
-      source.includes(idLabel) &&
-      new RegExp(`validate[A-Za-z]+Id\\(${rawName}\\)`).test(source) &&
-      new RegExp(`const\\s+${sanitizedName}\\s*=`).test(source) &&
-      hasDbColumnUsage &&
-      hasLookupUsage
-    )
-  }
-)
+].filter(({ path: routePath, idLabel, rawName, sanitizedName, dbWritePattern, lookupPattern }) => {
+  const source = readFileSync(join(root, routePath), 'utf8')
+  return !(
+    /validateUUID/.test(source) &&
+    source.includes(idLabel) &&
+    new RegExp(`validate[A-Za-z]+Id\\(${rawName}\\)`).test(source) &&
+    new RegExp(`const\\s+${sanitizedName}\\s*=`).test(source) &&
+    dbWritePattern.test(source) &&
+    lookupPattern.test(source)
+  )
+})
 const articleCardPath = join(root, 'src/components/ArticleCard.tsx')
 const articleCardSource = readFileSync(articleCardPath, 'utf8')
 const ticketingCardPath = join(root, 'src/components/TicketingCard.tsx')
