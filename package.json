@@ -12,7 +12,7 @@
     "format:check": "prettier --check .",
     "type-check": "tsc --noEmit",
     "test:e2e": "rm -rf .next node_modules/.cache/webpack && env -u NO_COLOR playwright test",
-    "test:e2e:authz": "playwright test --project=authz",
+    "test:e2e:authz": "playwright test --project=authz --project=authz-public",
     "test:e2e:ui": "rm -rf .next node_modules/.cache/webpack && env -u NO_COLOR playwright test --ui",
     "test:runtime-risks": "node scripts/testing/assert-runtime-risks.mjs",
     "test:unit": "node --experimental-strip-types --test scripts/testing/*.test.mjs",
