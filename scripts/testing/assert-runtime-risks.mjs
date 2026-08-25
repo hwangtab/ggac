@@ -1,22 +1,9 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { globSync } from 'node:fs'
 import { join, relative } from 'node:path'
+import { stripComments } from './strip-comments.mjs'
 
 const root = process.cwd()
-
-/**
- * 주석을 걷어낸 소스. "이 패턴이 없어야 한다" 류의 부정 검사에 쓴다.
- *
- * 이 파일의 검사는 소스를 정규식으로 훑기 때문에, 금지 패턴을 설명하는 주석이
- * 그 자체로 검사에 걸린다("`failures.length === 2`로 세지 말 것" 같은 주석).
- * 반대로 이관된 옛 함수 이름을 남긴 주석이 긍정 검사를 거짓 통과시키기도 한다.
- * 부정 검사는 실제 코드만 봐야 한다.
- *
- * URL의 `//`를 자르지 않도록 앞 문자가 `:`인 경우는 건드리지 않는다.
- */
-function stripComments(source) {
-  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
-}
 
 /**
  * 주석에 더해 `import` 문 줄도 걷어낸 소스. "실제 코드에 이 로직이 있고, A가
