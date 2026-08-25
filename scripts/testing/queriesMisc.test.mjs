@@ -3,6 +3,14 @@ import assert from 'node:assert/strict'
 import { readFileSync, rmSync } from 'node:fs'
 import { createClient } from '@libsql/client'
 
+// 라우트가 쓰는 바로 그 계약을 그대로 import한다 — 베껴 쓰지 않는다
+// (단계 4 리뷰 1회차 Important 5).
+import {
+  MEMBER_SEARCH_ALLOWED_FIELDS,
+  MEMBER_SEARCH_BASE_QUERY,
+  buildMemberSearchDataQuery,
+} from '../../src/constants/memberSearchFields.ts'
+
 /**
  * `src/db/queries/misc.ts`를 실제 SQLite 파일 DB로 검증한다. 패턴은
  * `scripts/testing/queriesActivities.test.mjs`(단계 4 Task 3)와 동일.
@@ -287,59 +295,86 @@ test('failBulkOperation: status=failed, error_message 기록', async () => {
 
 // -------------------------------------------------------------- execute_advanced_search RPC 대체
 
-const MEMBER_FIELD_NAMES = [
-  'display_name',
-  'real_name',
-  'email',
-  'registration_status',
-  'is_artist',
-  'is_admin',
-  'is_active',
-  'phone_number',
-  'membership_type',
-  'artist_id',
-  'artist_role',
-  'created_at',
-  'updated_at',
-  'last_login_at',
-  'suspension_until',
-]
-
-const SEARCH_BASE_QUERY = `
-  member_profiles mp
-  LEFT JOIN (SELECT legacy_id, name, slug FROM artists) a ON mp.artist_id = a.legacy_id
-  LEFT JOIN (
-    SELECT author_id, COUNT(*) as post_count
-    FROM posts
-    WHERE is_deleted = 0
-    GROUP BY author_id
-  ) p ON mp.id = p.author_id
-  LEFT JOIN (
-    SELECT author_id, COUNT(*) as comment_count
-    FROM comments
-    GROUP BY author_id
-  ) c ON mp.id = c.author_id
-`
-
+/**
+ * 라우트 핸들러가 `buildSearchQuery` → `buildMemberSearchDataQuery`로 하는 일과
+ * **같은 함수·같은 상수**로 SQL을 만든다. 예전에는 이 함수가 라우트의
+ * 화이트리스트·FROM 절·조회 컬럼을 통째로 베껴 자기 사본을 먹였다 — 그래서
+ * 라우트의 화이트리스트를 지우거나 넓혀도 아래 테스트들이 전부 통과했다
+ * (리뷰 1회차 Important 5). 그 화이트리스트가 정렬 컬럼명 인젝션의 유일한
+ * 방어선이다.
+ */
 function buildDataAndCountSql(query) {
   return async () => {
     const { buildSearchQuery } = await loadFilteringModule()
-    const { sql, params, countSql } = buildSearchQuery(query, SEARCH_BASE_QUERY, MEMBER_FIELD_NAMES)
-    const dataQuery = sql.replace(
-      'SELECT * FROM',
-      `SELECT
-        mp.id, mp.display_name, mp.real_name, mp.email, mp.phone_number,
-        mp.registration_status, mp.is_artist, mp.is_admin, mp.is_active,
-        mp.membership_type, mp.artist_id, mp.artist_role,
-        mp.created_at, mp.updated_at, mp.last_login_at, mp.suspension_until,
-        a.name as artist_name, a.slug as artist_slug,
-        COALESCE(p.post_count, 0) as post_count,
-        COALESCE(c.comment_count, 0) as comment_count
-      FROM`
+    const { sql, params, countSql } = buildSearchQuery(
+      query,
+      MEMBER_SEARCH_BASE_QUERY,
+      MEMBER_SEARCH_ALLOWED_FIELDS
     )
-    return { dataQuery, countSql, params }
+    return { dataQuery: buildMemberSearchDataQuery(sql), countSql, params }
   }
 }
+
+/**
+ * 화이트리스트 자체를 고정한다. 위 테스트들은 화이트리스트를 **쓰기만** 하므로
+ * 필드가 하나 더 늘어도 그대로 통과한다 — 늘어난 컬럼명이 정렬 절에 그대로
+ * 박히는 게 이 경로의 사고다. 목록을 정확히 단언해 넓힘·삭제 양쪽을 잡는다.
+ */
+test('멤버 검색 화이트리스트가 정확히 이 15개 컬럼이다(넓히거나 지우면 실패한다)', () => {
+  assert.deepEqual(MEMBER_SEARCH_ALLOWED_FIELDS, [
+    'display_name',
+    'real_name',
+    'email',
+    'registration_status',
+    'is_artist',
+    'is_admin',
+    'is_active',
+    'phone_number',
+    'membership_type',
+    'artist_id',
+    'artist_role',
+    'created_at',
+    'updated_at',
+    'last_login_at',
+    'suspension_until',
+  ])
+})
+
+test('라우트가 이 계약을 그대로 쓴다(자기 사본을 다시 만들면 실패한다)', () => {
+  // 위 두 테스트가 검증하는 게 "라우트의 계약"이려면, 라우트가 이 모듈을
+  // 실제로 써야 한다. 라우트 파일은 `@/` 별칭 때문에 node 테스트 러너가
+  // import할 수 없으므로 여기서만 소스로 확인한다.
+  const routeSource = readFileSync('src/app/api/admin/members/advanced-search/route.ts', 'utf8')
+  assert.match(routeSource, /from '@\/constants\/memberSearchFields'/)
+  assert.match(
+    routeSource,
+    /buildSearchQuery\(\s*query,\s*MEMBER_SEARCH_BASE_QUERY,\s*MEMBER_SEARCH_ALLOWED_FIELDS\s*\)/
+  )
+  assert.match(routeSource, /buildMemberSearchDataQuery\(sql\)/)
+  assert.doesNotMatch(
+    routeSource,
+    /const MEMBER_FIELD_DEFINITIONS|const allowedFields|const baseQuery/,
+    '라우트가 화이트리스트/FROM 절 사본을 다시 들고 있으면 이 파일의 테스트는 계약을 검증하지 못한다'
+  )
+})
+
+test('화이트리스트에 없는 컬럼으로 정렬하려 하면 buildSearchQuery가 거부한다', async () => {
+  const { buildSearchQuery } = await loadFilteringModule()
+  assert.throws(
+    () =>
+      buildSearchQuery(
+        {
+          filters: { operator: 'AND', conditions: [] },
+          sorts: [{ field: 'mp.password_hash', direction: 'asc', priority: 0 }],
+          pagination: { page: 1, limit: 20 },
+        },
+        MEMBER_SEARCH_BASE_QUERY,
+        MEMBER_SEARCH_ALLOWED_FIELDS
+      ),
+    /Field is not allowed in sort/,
+    '정렬 컬럼명은 SQL에 그대로 박힌다 — 화이트리스트가 유일한 방어선이다'
+  )
+})
 
 test('executeMemberAdvancedSearch: equals 필터(is_admin=true)가 정확히 걸린다', async () => {
   await seedProfile({ display_name: '관리자A', is_admin: true })
