@@ -41,7 +41,19 @@ export async function notifyNewComment(input: NotifyNewCommentInput): Promise<vo
     })
     return
   }
-  if (!post) return
+  // 댓글 라우트는 게시글 존재 여부를 검사하지 않는다(post_id는 FK로만
+  // 강제된다) — 삭제된 글(getPostById 기본 includeDeleted:false)이나
+  // 이미 지워진 글에 댓글이 달리면 여기 걸린다. 다른 실패 경로엔 전부
+  // log.error가 있는데 이 경로만 조용히 넘어가면 "알림이 흔적 없이
+  // 사라진다"는, 이 작업이 애초에 고치려던 문제를 그대로 재현하게 된다
+  // (코드리뷰 대응) — throw할 정도의 오류는 아니라 warn으로 남긴다.
+  if (!post) {
+    log.warn('게시글을 찾지 못해 댓글 알림을 건너뛴다(삭제된 글일 수 있다)', {
+      postId,
+      commentId,
+    })
+    return
+  }
 
   // 자기 글에 자기가 단 댓글은 알림을 보내지 않는다(원본 트리거의
   // `post_author_id != NEW.author_id` 조건).

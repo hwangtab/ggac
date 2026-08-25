@@ -1,7 +1,7 @@
 // 상대경로 + 명시적 확장자로 임포트한다 — commentNotify.ts와 같은 이유
 // (plain `node --test`에서 `@/` 별칭이 풀리지 않는다).
 import { createNotification, createBulkNotifications } from '../../db/queries/notifications.ts'
-import { createLogger } from '../../utils/logger.ts'
+import { createLogger, maskId } from '../../utils/logger.ts'
 
 const log = createLogger('memberStatusNotify')
 
@@ -43,7 +43,10 @@ export async function notifyMemberApproved(memberId: string): Promise<void> {
       expires_at: daysFromNow(90),
     })
   } catch (e) {
-    log.error('회원 승인 알림 발송 실패', { memberId, error: (e as Error).message })
+    log.error('회원 승인 알림 발송 실패', {
+      memberId: maskId(memberId),
+      error: (e as Error).message,
+    })
   }
 }
 
@@ -61,7 +64,10 @@ export async function notifyMemberRejected(memberId: string): Promise<void> {
       expires_at: daysFromNow(30),
     })
   } catch (e) {
-    log.error('회원 거부 알림 발송 실패', { memberId, error: (e as Error).message })
+    log.error('회원 거부 알림 발송 실패', {
+      memberId: maskId(memberId),
+      error: (e as Error).message,
+    })
   }
 }
 
@@ -79,7 +85,10 @@ export async function notifyArtistApproved(memberId: string): Promise<void> {
       expires_at: daysFromNow(90),
     })
   } catch (e) {
-    log.error('아티스트 승인 알림 발송 실패', { memberId, error: (e as Error).message })
+    log.error('아티스트 승인 알림 발송 실패', {
+      memberId: maskId(memberId),
+      error: (e as Error).message,
+    })
   }
 }
 

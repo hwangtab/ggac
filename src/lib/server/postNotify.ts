@@ -1,16 +1,12 @@
 // 상대경로 + 명시적 확장자로 임포트한다 — commentNotify.ts와 같은 이유
 // (plain `node --test`에서 `@/` 별칭이 풀리지 않는다).
-import { listProfiles } from '../../db/queries/profiles.ts'
+import { listProfiles, ALL_PROFILES_LIMIT } from '../../db/queries/profiles.ts'
 import { createBulkNotifications } from '../../db/queries/notifications.ts'
 import { createLogger } from '../../utils/logger.ts'
 
 const log = createLogger('postNotify')
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000
-
-// `src/lib/server/boardRoomAuth.ts`의 `APPROVED_ROSTER_PAGE_LIMIT`와 같은 이유
-// — "전체 승인 회원" 로스터를 페이지네이션 없이 한 번에 담는다.
-const APPROVED_MEMBERS_PAGE_LIMIT = 10000
 
 export type NotifyNewPostInput = {
   postId: string
@@ -40,7 +36,7 @@ export async function notifyNewPost(input: NotifyNewPostInput): Promise<void> {
   try {
     const { rows } = await listProfiles({
       status: 'approved',
-      limit: APPROVED_MEMBERS_PAGE_LIMIT,
+      limit: ALL_PROFILES_LIMIT,
       offset: 0,
     })
     recipientIds = rows.map(row => row.id)

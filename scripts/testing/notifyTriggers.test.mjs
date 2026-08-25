@@ -21,6 +21,26 @@ import { createClient } from '@libsql/client'
  * 로직은 소스 가드로 검증한다.
  */
 
+// 소스 정규식으로 "이 호출이 있다/없다/어디보다 먼저다"를 검사하기 전에
+// 주석을 걷어낸다 — 관례는 `scripts/testing/assert-runtime-risks.mjs`의
+// `stripComments`/`stripCommentsAndImports`(코드리뷰 대응: 그 파일이 이미
+// 겪은 "호출을 `//`로 주석 처리해도 원본 소스 그대로 훑으면 거짓 통과한다"
+// 문제를 여기서도 그대로 마주쳤다). 그 파일은 독립 스크립트라 export가
+// 없어 동일 구현을 그대로 복제한다. URL의 `//`를 자르지 않도록 앞 문자가
+// `:`인 경우는 건드리지 않는다.
+function stripComments(source) {
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
+}
+
+// 순서 비교(`indexOf` 두 값 비교)에 쓰는 소스. import 문 줄까지 걷어내
+// import 위치가 실제 호출 순서 비교에 끼어드는 것을 막는다.
+function stripCommentsAndImports(source) {
+  return stripComments(source)
+    .split('\n')
+    .filter(line => !/^\s*import\b/.test(line))
+    .join('\n')
+}
+
 const DB_PATH = 'scripts/testing/.notify-triggers-test.db'
 
 const MODULE_URLS = {
@@ -369,24 +389,43 @@ test('notifyMembersApprovedBatch/notifyMembersRejectedBatch는 createBulkNotific
 // ==================================================================
 
 test('부정 대조(구조): member-action route의 approve 분기는 pending 상태 검사를 통과해야만 notifyMemberApproved에 도달한다', () => {
-  const src = readFileSync('src/app/api/admin/member-action/route.ts', 'utf8')
+  const raw = readFileSync('src/app/api/admin/member-action/route.ts', 'utf8')
+  const src = stripCommentsAndImports(raw)
 
-  const approveCaseMatch = src.match(
-    /case 'approve':[\s\S]*?if \(targetMember\.registration_status !== 'pending'\)[\s\S]*?return ApiError\.badRequest/
+  // 코드리뷰 대응(I-2): 원래 `[\s\S]*?`가 파일 전체를 넘나들어서, approve
+  // 분기의 pending 검사를 통째로 지워도 뒤쪽 reject 분기의 동일한 검사에
+  // 걸려 거짓 통과했다(리뷰어가 실제로 이 변조로 확인함). `case 'approve':`
+  // 부터 **다음 case까지**로 매칭 범위를 잘라 그 안에서만 검사한다.
+  const approveBlockMatch = src.match(/case 'approve':[\s\S]*?(?=case 'reject':)/)
+  assert.ok(approveBlockMatch, "approve 분기(case 'approve': ~ case 'reject': 앞)를 찾지 못했다")
+  const approveBlock = approveBlockMatch[0]
+  const approveBlockIndex = src.indexOf(approveBlock)
+  assert.ok(approveBlockIndex >= 0)
+
+  const pendingCheckMatch = approveBlock.match(
+    /if \(targetMember\.registration_status !== 'pending'\)[\s\S]*?return ApiError\.badRequest/
   )
   assert.ok(
-    approveCaseMatch,
-    "approve 분기에 '이미 approved면 400' 사전 검사가 있어야 한다 — 없으면 재승인 시에도 알림이 나간다"
+    pendingCheckMatch,
+    "approve 분기 안에 '이미 approved면 400' 사전 검사가 있어야 한다 — 없으면 재승인 시에도 알림이 나간다. " +
+      'memberStatusNotify.notifyMemberApproved는 전이 여부를 스스로 재검사하지 않으므로(모듈 설계), 이 검사가 유일한 방어선이다.'
   )
+  const guardIndex = approveBlockIndex + pendingCheckMatch.index
 
-  const guardIndex = src.indexOf(approveCaseMatch[0])
+  // 코드리뷰 대응(M-1): `indexOf`가 못 찾으면 -1을 반환한다. `notifyIndex >
+  // updateIndex` 비교만 하면 함수명이 바뀌어 updateIndex가 -1이 될 때도
+  // "찾은 notifyIndex(>=0) > -1"이 항상 참이라 거짓 통과한다(리뷰어가 실제로
+  // updateProfile 이름을 바꿔 확인함). 비교 전에 각 인덱스가 실제로 발견됐는지
+  // 먼저 단정한다.
+  const updateIndex = src.indexOf('await updateProfile(memberId, updateData)')
+  assert.ok(updateIndex >= 0, 'updateProfile(memberId, updateData) 호출을 찾지 못했다')
   const notifyIndex = src.indexOf('await notifyMemberApproved(memberId)')
+  assert.ok(notifyIndex >= 0, 'notifyMemberApproved(memberId) 호출을 찾지 못했다')
+
   assert.ok(
     notifyIndex > guardIndex,
-    'notifyMemberApproved 호출은 pending 검사보다 뒤에 있어야 한다'
+    'notifyMemberApproved 호출은 approve 분기의 pending 검사보다 뒤에 있어야 한다'
   )
-
-  const updateIndex = src.indexOf('await updateProfile(memberId, updateData)')
   assert.ok(notifyIndex > updateIndex, 'notifyMemberApproved 호출은 DB 업데이트 성공 이후여야 한다')
 })
 
@@ -407,7 +446,9 @@ test('부정 대조(구조): member-action route의 reject 분기도 동일한 �
 })
 
 test('부정 대조(구조): artist 배정 route는 wasArtist(기존 is_artist)가 false일 때만 notifyArtistApproved를 부른다', () => {
-  const src = readFileSync('src/app/api/admin/artists/[id]/members/route.ts', 'utf8')
+  const raw = readFileSync('src/app/api/admin/artists/[id]/members/route.ts', 'utf8')
+  const src = stripCommentsAndImports(raw)
+
   assert.match(
     src,
     /const wasArtist = targetMember\.is_artist/,
@@ -415,8 +456,24 @@ test('부정 대조(구조): artist 배정 route는 wasArtist(기존 is_artist)�
   )
   assert.match(
     src,
-    /if \(!wasArtist\) \{\s*\n\s*await notifyArtistApproved\(memberId\)/,
+    /if \(!wasArtist\) \{\s*await notifyArtistApproved\(memberId\)/,
     'notifyArtistApproved는 wasArtist가 false일 때만 불려야 한다 — 이미 아티스트인 회원 재배정 시 알림이 가면 안 된다'
+  )
+
+  // 코드리뷰 대응(M-2): 위 두 단정만으로는 알림 블록을 updateProfile try
+  // *앞*으로 옮겨도 통과한다(리뷰어가 실제로 이 변조로 확인함) — 그러면
+  // 배정이 500으로 실패해도 회원은 "아티스트 권한이 승인되었습니다"를
+  // 받는다. catch 블록 안의 실패 메시지(고유 마커)보다 notify 호출이
+  // 뒤에 있는지로 "updateProfile의 try/catch를 실제로 통과한 뒤에만
+  // 실행된다"는 실행 순서를 확인한다.
+  const catchMarkerIndex = src.indexOf("'아티스트 배정에 실패했습니다.'")
+  assert.ok(catchMarkerIndex >= 0, 'updateProfile catch 블록의 실패 메시지를 찾지 못했다')
+  const notifyIndex = src.indexOf('await notifyArtistApproved(memberId)')
+  assert.ok(notifyIndex >= 0, 'notifyArtistApproved(memberId) 호출을 찾지 못했다')
+  assert.ok(
+    notifyIndex > catchMarkerIndex,
+    'notifyArtistApproved 호출은 updateProfile try/catch 블록보다 뒤에 있어야 한다 — ' +
+      '앞에 있으면 DB 업데이트가 실패해도(500 응답) 알림이 나간다'
   )
 })
 
@@ -434,12 +491,71 @@ test('부정 대조(구조): bulk route는 실제로 업데이트된 id(updatedI
   )
 })
 
-test('comments/posts route는 notifyNewComment/notifyNewPost를 import해서 쓴다 (배선 가드)', () => {
-  const commentsRoute = readFileSync('src/app/api/posts/[id]/comments/route.ts', 'utf8')
-  assert.match(commentsRoute, /import \{ notifyNewComment \} from '@\/lib\/server\/commentNotify'/)
-  assert.match(commentsRoute, /await notifyNewComment\(/)
+// 코드리뷰 대응(I-1): 원래 이 테스트는 주석 포함 원본 소스를 그대로 정규식
+// 매칭했다 — 호출을 `//`로 주석 처리해도, 혹은 인자를 엉뚱한 값으로
+// 바꿔치기해도 거짓 통과했다(리뷰어가 두 변조 모두 실제로 확인함). 아래는
+// (1) 주석 제거 후 매칭, (2) 인자 3개를 정확한 값으로 단언, (3) 실제 생성
+// 호출(createComment/createPost)보다 뒤에 있는지 순서 단언, 셋을 모두
+// 만족한다.
 
-  const postsRoute = readFileSync('src/app/api/posts/route.ts', 'utf8')
-  assert.match(postsRoute, /import \{ notifyNewPost \} from '@\/lib\/server\/postNotify'/)
-  assert.match(postsRoute, /await notifyNewPost\(/)
+test('comments route는 notifyNewComment를 createComment 성공 이후, 올바른 인자로 부른다 (배선 가드)', () => {
+  const raw = readFileSync('src/app/api/posts/[id]/comments/route.ts', 'utf8')
+  const commentsOnly = stripComments(raw)
+  const code = stripCommentsAndImports(raw)
+
+  assert.match(
+    commentsOnly,
+    /import \{ notifyNewComment \} from '@\/lib\/server\/commentNotify'/,
+    'notifyNewComment를 import해야 한다'
+  )
+
+  const createIndex = code.indexOf('await createComment({')
+  assert.ok(createIndex >= 0, 'createComment 호출을 찾지 못했다')
+
+  const notifyCallMatch = code.match(/await notifyNewComment\(\{([\s\S]*?)\}\)/)
+  assert.ok(
+    notifyCallMatch,
+    'notifyNewComment 호출을 찾지 못했다 — 주석 처리됐거나 삭제됐을 수 있다'
+  )
+  const notifyIndex = code.indexOf(notifyCallMatch[0])
+  assert.ok(notifyIndex > createIndex, 'notifyNewComment 호출은 createComment 성공 이후여야 한다')
+
+  const args = notifyCallMatch[1]
+  assert.match(args, /postId:\s*validPostId/, 'postId 인자가 검증된 게시글 id가 아니다')
+  assert.match(args, /commentId:\s*created\.id/, 'commentId 인자가 방금 만든 댓글의 id가 아니다')
+  assert.match(
+    args,
+    /commentAuthorId:\s*userId/,
+    'commentAuthorId 인자가 실제 댓글 작성자가 아니다 — 엉뚱한 사람에게 알림이 갈 수 있다'
+  )
+})
+
+test('posts route는 notifyNewPost를 createPost 성공 이후, 올바른 인자로 부른다 (배선 가드)', () => {
+  const raw = readFileSync('src/app/api/posts/route.ts', 'utf8')
+  const postsOnly = stripComments(raw)
+  const code = stripCommentsAndImports(raw)
+
+  assert.match(
+    postsOnly,
+    /import \{ notifyNewPost \} from '@\/lib\/server\/postNotify'/,
+    'notifyNewPost를 import해야 한다'
+  )
+
+  const createIndex = code.indexOf('await createPost({')
+  assert.ok(createIndex >= 0, 'createPost 호출을 찾지 못했다')
+
+  const notifyCallMatch = code.match(/await notifyNewPost\(\{([\s\S]*?)\}\)/)
+  assert.ok(notifyCallMatch, 'notifyNewPost 호출을 찾지 못했다 — 주석 처리됐거나 삭제됐을 수 있다')
+  const notifyIndex = code.indexOf(notifyCallMatch[0])
+  assert.ok(notifyIndex > createIndex, 'notifyNewPost 호출은 createPost 성공 이후여야 한다')
+
+  const args = notifyCallMatch[1]
+  assert.match(args, /postId:\s*post\.id/, 'postId 인자가 방금 만든 게시글의 id가 아니다')
+  assert.match(args, /authorId:\s*post\.author_id/, 'authorId 인자가 게시글 작성자가 아니다')
+  assert.match(args, /title:\s*post\.title/, 'title 인자가 게시글 제목이 아니다')
+  assert.match(
+    args,
+    /category:\s*post\.category/,
+    'category 인자가 게시글 카테고리가 아니다 — 공지 여부 판정이 틀어질 수 있다'
+  )
 })
