@@ -63,7 +63,7 @@ test.describe('알림은 본인 것이 보인다', () => {
 test.describe('마이페이지 프로필은 본인 것만 수정된다', () => {
   test.use({ storageState: storageStatePath('other') })
 
-  test('프로필 수정은 자기 행에만 적용된다', async ({ request }) => {
+  test('프로필 수정은 자기 행에만 적용된다', async ({ request, baseURL }) => {
     // 실측: assertValidProfileBody(src/app/api/mypage/profile/route.ts)는
     // display_name과 phone_number를 둘 다 필수로 요구한다(부분 PATCH가 아니라
     // 전체 필드 검증). 브리프대로 display_name만 보내면 "전화번호는 필수입니다"
@@ -82,11 +82,32 @@ test.describe('마이페이지 프로필은 본인 것만 수정된다', () => {
     })
     expect(res.status()).toBe(200)
 
-    // A의 표시명이 그대로인지 확인한다 — 라우트가 user.id로 where를 걸지 않으면
-    // 여기서 드러난다.
+    // 요청자 자신의 행에는 새 값이 들었다.
     const mine = await request.get('/api/mypage/profile')
     const body = await mine.json()
     expect(body.data?.display_name ?? body.data?.profile?.display_name).toBe('authz-other-변경됨')
+
+    // **경계는 이 아래에 있다.** 위 단정은 B가 자기 행을 다시 읽은 것뿐이라
+    // `updateProfile()`의 `.where(eq(id))`를 통째로 지워 **회원 전원의 프로필을
+    // 덮어쓰게** 만들어도 그대로 통과한다(리뷰어가 실증: 실행 후 회원 4명의
+    // display_name이 전부 `authz-other-변경됨`이 됐는데도 스위트는 초록이었다).
+    // 남의 행이 안 바뀌었다는 것은 **남의 세션으로 읽어야** 드러난다 —
+    // 같은 파일의 알림 테스트가 이미 쓰는 패턴이다.
+    const ownerContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('owner'),
+    })
+    try {
+      const theirs = await ownerContext.get('/api/mypage/profile')
+      expect(theirs.status()).toBe(200)
+      const theirsBody = await theirs.json()
+      expect(
+        theirsBody.data?.display_name ?? theirsBody.data?.profile?.display_name,
+        'B의 PATCH가 A의 행까지 덮어썼다 — 프로필 수정에 소유자 where가 걸려 있지 않다'
+      ).toBe('authz-owner')
+    } finally {
+      await ownerContext.dispose()
+    }
   })
 })
 
