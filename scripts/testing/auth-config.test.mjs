@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 
 const src = readFileSync('src/lib/auth/server.ts', 'utf8')
 
@@ -76,12 +77,42 @@ test('member_profiles 그림자 행은 id·email·display_name만 채운다(권�
   assert.doesNotMatch(body, /\.select\(/, '그림자 행 함수가 스스로 읽으면 이중 권위가 된다')
 })
 
-test('member_profiles 그림자 행 함수를 소스 전체 어디서도 읽지 않는다(이중 권위 방지)', () => {
-  // 함수 정의부(위 테스트가 이미 .select( 없음을 확인) 밖에서도 이
-  // 함수의 호출 결과를 select에 연결하는 코드가 없어야 한다 — 파일 전체에서
-  // "ensureSupabaseMemberProfileShadowRow" 뒤에 .select(가 바로 이어지는
-  // 패턴이 없는지 확인한다.
+test('server.ts 안에서는(함수 정의부 밖에서도) 이 그림자 행 호출 결과를 읽지 않는다', () => {
+  // 이 테스트의 검증 범위는 server.ts 하나뿐이다(위 `src`가 이 파일
+  // 내용으로만 좁혀져 있다) — 함수 정의부(위 테스트가 이미 .select( 없음을
+  // 확인) 밖에서도 이 함수의 호출 결과를 select에 연결하는 코드가 없어야
+  // 한다. 저장소 전체에 대한 "아무도 안 읽는다" 보장은 아래
+  // '저장소 전체에서 참조되지 않는다' 테스트가 별도로 맡는다.
   assert.doesNotMatch(src, /ensureSupabaseMemberProfileShadowRow\([^)]*\)\s*\.select\(/)
+})
+
+test('member_profiles 그림자 행 함수는 저장소 전체에서 정의부·호출부(server.ts)와 테스트 파일 밖에서 참조되지 않는다', () => {
+  // 코드리뷰 9pre-2 대응: 위 두 테스트는 server.ts 소스 문자열(`src`)만
+  // 본다 — "저장소 어디도 읽지 않는다"고 주장하려면 실제로 저장소 전체를
+  // 훑어야 한다. 이 함수는 export되지 않은 비공개 함수라 다른 파일이
+  // import할 수 없고, 따라서 이 이름이 나타나는 위치는 구조적으로
+  // (1) server.ts의 정의부, (2) server.ts의 호출부, (3) 이 이름을 언급하는
+  // 테스트 파일들뿐이어야 한다 — 그 밖의 파일에 나타나면 누군가 이름을
+  // 복사해 별도 조회 경로를 만들었다는 뜻이므로 실패로 잡는다.
+  //
+  // `git grep`을 쓴다 — node_modules·.next 등은 .gitignore로 이미
+  // 빠지므로 별도 제외 목록이 필요 없다.
+  const output = execFileSync(
+    'git',
+    ['grep', '-n', '--fixed-strings', 'ensureSupabaseMemberProfileShadowRow'],
+    { encoding: 'utf8' }
+  )
+  const lines = output.trim().split('\n').filter(Boolean)
+  const unexpectedFiles = new Set(
+    lines
+      .map(line => line.split(':')[0])
+      .filter(file => file !== 'src/lib/auth/server.ts' && !file.startsWith('scripts/testing/'))
+  )
+  assert.deepEqual(
+    [...unexpectedFiles],
+    [],
+    `ensureSupabaseMemberProfileShadowRow가 예상 밖 파일에서 참조된다: ${[...unexpectedFiles].join(', ')}`
+  )
 })
 
 test('member_profiles 그림자 행 실패는 가입 훅의 기존 catch로 삼켜진다(가입 자체를 막지 않는다)', () => {

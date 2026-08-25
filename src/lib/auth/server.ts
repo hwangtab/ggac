@@ -227,11 +227,23 @@ export const auth = betterAuth({
     user: {
       create: {
         after: async user => {
+          // Supabase 껍데기 행 둘(auth.users·member_profiles)은 비권위다 —
+          // 오직 참조 무결성(FK 13개, board_* 표)을 위한 것이고, 프로필의
+          // 실제 권위는 아래 두 번째 블록의 Turso upsertProfile이다. 이
+          // 둘을 별도 try/catch로 격리한다 — 예전에는 한 try 블록 안에
+          // 순서대로 있어서 Supabase 쪽 실패(예: 일시적 503, 서비스 롤 키
+          // 회전)가 그 뒤의 Turso upsertProfile 실행 자체를 막았다. 실제
+          // 피해는 없었다(`/api/member-signup`이 자기 자신의 업서트를
+          // 별도로 한다) — 하지만 비권위 부산물의 실패가 권위 쓰기를
+          // 막는 순서는 거꾸로다(코드리뷰 9pre-2 대응). 지금은 Supabase
+          // 쪽이 통째로 실패해도 Turso 업서트는 항상 시도된다.
           try {
             // (1) FK 13개가 auth.users를 가리키므로, 같은 id의 껍데기를 먼저
             // 만든다. 비밀번호도 세션도 없다 — 오직 참조 무결성을 위한 행이다.
             // 재시도로 이미 있으면(GoTrue error.code === 'email_exists') 성공
-            // 처리하고, 그 외 실패(진짜 검증 실패 등)는 그대로 던진다.
+            // 처리하고, 그 외 실패(진짜 검증 실패 등)는 그대로 던진다(아래
+            // catch가 로그로 드러낸다 — 던지되 이 훅 자체를 실패시키지는
+            // 않는다).
             await ensureSupabaseAuthShadowUser(user.id, user.email)
 
             // (1.5) board_* 표(board_meeting_date_votes.voter_id 등)가 아직
@@ -239,11 +251,18 @@ export const auth = betterAuth({
             // 가입자는 Turso에만 프로필이 생기므로, 이 껍데기가 없으면 그
             // 사람이 이사회 서재에서 뭔가 쓰려 할 때 23503으로 막힌다 — 권위
             // 사본이 아니라 FK 통과 전용이다(자세한 이유는
-            // ensureSupabaseMemberProfileShadowRow 문서 참조). auth.users
-            // 껍데기(위 1번)와 마찬가지로 실패해도 가입 자체는 막지 않는다 —
-            // 아래 catch가 로그로 드러낸다.
+            // ensureSupabaseMemberProfileShadowRow 문서 참조).
             await ensureSupabaseMemberProfileShadowRow(user.id, user.email, user.name)
+          } catch (error) {
+            logger.error(
+              '[auth] Supabase 그림자 행(auth.users/member_profiles 껍데기) 생성 실패 — ' +
+                '비권위 부산물이라 Turso 프로필 upsert는 계속 진행한다:',
+              maskId(user.id),
+              safeErrorMessage(error)
+            )
+          }
 
+          try {
             // (2) buildMemberProfileRow는 snake_case 키를 돌려준다
             // (`src/db/queries/profiles.ts`의 `upsertProfile`이 기대하는 입력
             // 모양과 같다). 단계 2c(Task 3)부터 프로필의 권위는 Turso다 —
@@ -252,9 +271,7 @@ export const auth = betterAuth({
             // 전환하기 전까지 여전히 Supabase를 읽는다 — 그 전환이 끝나기
             // 전에는 이 훅으로 가입한 신규 회원이 승인 화면에 보이지 않는다
             // (읽는 DB와 쓰는 DB가 갈렸으므로 당연한 과도기 증상이지 이 훅의
-            // 결함이 아니다). Supabase 쪽 껍데기 행(위 1번)은 여전히 만든다 —
-            // 다른 테이블(user_activities 등)의 FK가 아직 auth.users를
-            // 가리키기 때문이다(단계 4에서 함께 걷어낸다).
+            // 결함이 아니다).
             const profile = buildMemberProfileRow({
               id: user.id,
               email: user.email,
