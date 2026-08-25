@@ -6,6 +6,80 @@ import { stripComments } from './strip-comments.mjs'
 const root = process.cwd()
 
 /**
+ * 소스 파일을 읽되 **`.ts`/`.tsx`는 주석을 걷어내고** 돌려준다.
+ *
+ * 이 파일의 검사는 대부분 정규식으로 소스를 훑는다. 원본을 그대로 훑으면
+ * 인가 조건문을 `//`로 통째로 주석 처리해도 그 줄의 **텍스트는 그대로 남아**
+ * 양의 단정이 거짓 통과한다 — 리뷰어가 `posts/[id]` 소유권 게이트 두 개를
+ * 지우고 주석에 같은 문자열만 남겨 실증한 실패 모드다. 예전에는 `stripComments`가
+ * 234개 읽기 지점 중 26개(약 11%)에만 붙어 있었고, 나머지 208개는 전부 그
+ * 실패 모드에 노출돼 있었다.
+ *
+ * 그래서 읽기 자체를 안전한 기본값으로 바꾼다. 개별 검사가 "주석을 걷어낼지"
+ * 를 매번 기억해야 하는 구조에서는 다음 사람이 반드시 잊는다.
+ *
+ * `.ts`/`.tsx`가 아닌 파일(.md·.json·설정 파일)은 그대로 돌려준다 —
+ * `stripComments`는 TypeScript 파서 기반이라 그런 파일에서는 fail-closed로
+ * 던진다. 문자열·템플릿·정규식 리터럴은 보호되고 길이·위치도 보존되므로,
+ * 메시지 문구를 찾는 부정 단정이나 `indexOf` 순서 비교는 영향을 받지 않는다.
+ */
+function readSourceAt(path) {
+  const text = readFileSync(path, 'utf8')
+  return /\.tsx?$/.test(String(path)) ? stripComments(text) : text
+}
+
+/**
+ * 주석을 **걷어내지 않은** 원본. 검사 대상이 코드가 아니라 **주석·문서 문구
+ * 자체**일 때만 쓴다(예: rate limiter 래퍼가 "운영에서는 503으로 fail-closed"를
+ * 설명하고 있는가). 그 계약은 사람이 읽는 설명이므로 주석을 지우면 검사할 게
+ * 남지 않는다.
+ *
+ * **코드 로직을 보는 검사에는 절대 쓰지 마라** — 인가 조건문을 주석 처리해도
+ * 텍스트가 남아 통과하는 실패 모드가 정확히 이 함수로 돌아온다. 아래
+ * `readRawSourceAt` 호출부는 전부 문구 검사 전용이고, 이 파일 자기검사
+ * (rawSourceReadSites)가 그 개수를 못박는다.
+ */
+function readRawSourceAt(path) {
+  return readFileSync(path, 'utf8')
+}
+
+// ---------------------------------------------------------------------------
+// 자기검사: 이 파일의 **모든** 소스 읽기가 주석을 걷어내는가.
+//
+// 예전에는 `stripComments`가 234개 읽기 지점 중 26개(약 11%)에만 붙어 있었다.
+// 나머지 208개는 "인가 조건문을 주석 처리하고 텍스트만 남기면 양의 단정이
+// 통과한다"는 실패 모드에 그대로 노출돼 있었고, 리뷰어가 `posts/[id]`의
+// 소유권 게이트 두 개로 그걸 실증했다.
+//
+// 이제 읽기는 `readSourceAt`(안전한 기본값) 하나로 모았고, 주석 문구 자체가
+// 계약인 검사만 `readRawSourceAt`으로 예외 처리한다. 이 자기검사가 그 구조를
+// 못박는다 — 새 `readFileSync` 직접 호출이나 이름 없는 raw 읽기가 들어오면
+// 여기서 막힌다. 목록이 아니라 **구조**를 고정하므로, 다음 사람이 읽기 지점을
+// 늘려도 자동으로 안전한 쪽에 놓인다.
+const guardSelfSource = stripComments(
+  readRawSourceAt(join(root, 'scripts/testing/assert-runtime-risks.mjs'))
+)
+// 원본 `readFileSync` 직접 호출은 위 두 리더의 본문 안에만 있어야 한다.
+const RAW_READ_FILE_CALL_SITES = 2
+const rawReadFileCallSites = (guardSelfSource.match(/readFileSync\(/g) ?? []).length
+// `readRawSourceAt`으로 읽는 변수는 아래 셋뿐이다(전부 rate limiter 문구 검사).
+// 자기 소스 읽기는 변수 대입이 아니라 `stripComments(...)` 인자라 여기 안 걸린다.
+const ALLOWED_RAW_SOURCE_BINDINGS = [
+  'rateLimiterCompatDocSource',
+  'rateLimitWrapperDocSource',
+  'rateLimiterDocSource',
+]
+const rawSourceBindings = [...guardSelfSource.matchAll(/const (\w+) = readRawSourceAt\(/g)].map(
+  match => match[1]
+)
+const unexpectedRawSourceBindings = rawSourceBindings.filter(
+  name => !ALLOWED_RAW_SOURCE_BINDINGS.includes(name)
+)
+const missingRawSourceBindings = ALLOWED_RAW_SOURCE_BINDINGS.filter(
+  name => !rawSourceBindings.includes(name)
+)
+
+/**
  * 주석에 더해 `import` 문 줄도 걷어낸 소스. "실제 코드에 이 로직이 있고, A가
  * B보다 먼저 나오는가"를 검사할 때 쓴다.
  *
@@ -195,14 +269,14 @@ const appFilesExpected = walkFiles('src/app', name => /^(route|page|layout)\.tsx
 const appFilesMissed = missingFrom(appFiles, appFilesExpected)
 
 const edgeRuntimeFiles = appFiles.filter(file => {
-  const source = readFileSync(join(root, file), 'utf8')
+  const source = readSourceAt(join(root, file))
   return /export\s+const\s+runtime\s*=\s*['"]edge['"]/.test(source)
 })
 
 const authMiddlewarePath = join(root, 'src/middleware/auth.ts')
-const authMiddlewareSource = readFileSync(authMiddlewarePath, 'utf8')
+const authMiddlewareSource = readSourceAt(authMiddlewarePath)
 const rootMiddlewarePath = join(root, 'src/middleware.ts')
-const rootMiddlewareSource = readFileSync(rootMiddlewarePath, 'utf8')
+const rootMiddlewareSource = readSourceAt(rootMiddlewarePath)
 // 단계 4 Task 5: 미들웨어에서 Supabase 클라이언트가 완전히 사라졌다. 신원은
 // Better Auth 쿠키(readMiddlewareSession/verifySessionFresh)로만 판정한다.
 //
@@ -254,9 +328,9 @@ const middlewareUsesBetterAuthSessionOnly =
 // 그 스캔 안에 있으므로 사본을 남기지 않는다.
 const middlewareVerifiesJwtLocally = /readMiddlewareSession/.test(authMiddlewareSource)
 const authCallbackPath = join(root, 'src/app/auth/callback/route.ts')
-const authCallbackSource = readFileSync(authCallbackPath, 'utf8')
+const authCallbackSource = readSourceAt(authCallbackPath)
 const authVerifySessionPath = join(root, 'src/app/api/auth/verify-session/route.ts')
-const authVerifySessionSource = readFileSync(authVerifySessionPath, 'utf8')
+const authVerifySessionSource = readSourceAt(authVerifySessionPath)
 // 주석/옛 식별자 잔재로 인한 거짓 긍정을 막기 위해, "실제 코드에 이 로직이 있는가"를
 // 보는 부정/존재 검사는 이 stripped 버전을 쓴다(assert-runtime-risks 반복 회귀 이력).
 // 이 변수는 문자열 리터럴 내용까지 검사하는 부정 단정(console.error 메시지 문구)이
@@ -268,61 +342,61 @@ const authVerifySessionCode = stripCommentsAndImports(authVerifySessionSource)
 // 호출부로 게이트를 속이지 못하게 한다.
 const authVerifySessionCallSites = stripStringLiterals(authVerifySessionCode)
 const securityPath = join(root, 'src/utils/security.ts')
-const securitySource = readFileSync(securityPath, 'utf8')
+const securitySource = readSourceAt(securityPath)
 const signupPagePath = join(root, 'src/app/[locale]/signup/page.tsx')
-const signupPageSource = readFileSync(signupPagePath, 'utf8')
+const signupPageSource = readSourceAt(signupPagePath)
 const signupProfilePath = join(root, 'src/lib/auth/signupProfile.ts')
-const signupProfileSource = readFileSync(signupProfilePath, 'utf8')
+const signupProfileSource = readSourceAt(signupProfilePath)
 const resetPasswordPagePath = join(root, 'src/app/[locale]/reset-password/page.tsx')
-const resetPasswordPageSource = readFileSync(resetPasswordPagePath, 'utf8')
+const resetPasswordPageSource = readSourceAt(resetPasswordPagePath)
 // src/app/api/auth/reset-password/route.ts(구 Supabase 기반 라우트)는 단계
 // 2b-6에서 삭제됐다 — Better Auth catch-all(`[...all]/route.ts`)이 같은 경로를
 // 대신 받는다. 더 이상 별도로 읽지 않는다.
 const loginPagePath = join(root, 'src/app/[locale]/login/page.tsx')
-const loginPageSource = readFileSync(loginPagePath, 'utf8')
+const loginPageSource = readSourceAt(loginPagePath)
 const authRegisterPendingPagePath = join(root, 'src/app/[locale]/register/pending/page.tsx')
-const authRegisterPendingPageSource = readFileSync(authRegisterPendingPagePath, 'utf8')
+const authRegisterPendingPageSource = readSourceAt(authRegisterPendingPagePath)
 const authMypageArtistPagePath = join(root, 'src/app/[locale]/mypage/artist/page.tsx')
-const authMypageArtistPageSource = readFileSync(authMypageArtistPagePath, 'utf8')
+const authMypageArtistPageSource = readSourceAt(authMypageArtistPagePath)
 const postsApiPath = join(root, 'src/app/api/posts/route.ts')
-const postsApiSource = readFileSync(postsApiPath, 'utf8')
+const postsApiSource = readSourceAt(postsApiPath)
 // requireActiveMember() 존재만 보는 양의 단정 전용이라(문자열 내용을 검사하는
 // 부정 단정 없음) 문자열 리터럴까지 걷어내 디코이 문자열 면역을 확보한다.
 const postsApiCode = stripStringLiterals(stripCommentsAndImports(postsApiSource))
 const postDetailApiPath = join(root, 'src/app/api/posts/[id]/route.ts')
-const postDetailApiSource = readFileSync(postDetailApiPath, 'utf8')
+const postDetailApiSource = readSourceAt(postDetailApiPath)
 const usePostCreationPath = join(root, 'src/hooks/usePostCreation.ts')
-const usePostCreationSource = readFileSync(usePostCreationPath, 'utf8')
+const usePostCreationSource = readSourceAt(usePostCreationPath)
 const writePageClientPath = join(root, 'src/app/[locale]/board/write/WritePageClient.tsx')
-const writePageClientSource = readFileSync(writePageClientPath, 'utf8')
+const writePageClientSource = readSourceAt(writePageClientPath)
 const editPageClientPath = join(root, 'src/app/[locale]/board/[id]/edit/EditPageClient.tsx')
-const editPageClientSource = readFileSync(editPageClientPath, 'utf8')
+const editPageClientSource = readSourceAt(editPageClientPath)
 const mypageProfilePagePath = join(root, 'src/app/[locale]/mypage/profile/page.tsx')
-const mypageProfilePageSource = readFileSync(mypageProfilePagePath, 'utf8')
+const mypageProfilePageSource = readSourceAt(mypageProfilePagePath)
 const mypageProfileApiPath = join(root, 'src/app/api/mypage/profile/route.ts')
 const mypageProfileApiSource = existsSync(mypageProfileApiPath)
-  ? stripComments(readFileSync(mypageProfileApiPath, 'utf8'))
+  ? readSourceAt(mypageProfileApiPath)
   : ''
 // requireActiveMember() 존재만 보는 양의 단정 전용이라(문자열 내용을 검사하는
 // 부정 단정 없음) 문자열 리터럴까지 걷어내 디코이 문자열 면역을 확보한다.
 const mypageProfileApiCode = stripStringLiterals(stripCommentsAndImports(mypageProfileApiSource))
 const useCommentLikesPath = join(root, 'src/hooks/useCommentLikes.ts')
-const useCommentLikesSource = readFileSync(useCommentLikesPath, 'utf8')
+const useCommentLikesSource = readSourceAt(useCommentLikesPath)
 const usePostLikesPath = join(root, 'src/hooks/usePostLikes.ts')
-const usePostLikesSource = readFileSync(usePostLikesPath, 'utf8')
+const usePostLikesSource = readSourceAt(usePostLikesPath)
 const activityLoggerEarlyPath = join(root, 'src/utils/activityLogger.ts')
-const activityLoggerEarlySource = readFileSync(activityLoggerEarlyPath, 'utf8')
+const activityLoggerEarlySource = readSourceAt(activityLoggerEarlyPath)
 const mypagePermissionCheckPath = join(
   root,
   'src/app/[locale]/mypage/components/PermissionCheck.tsx'
 )
-const mypagePermissionCheckSource = readFileSync(mypagePermissionCheckPath, 'utf8')
+const mypagePermissionCheckSource = readSourceAt(mypagePermissionCheckPath)
 const mypageNavigationPath = join(root, 'src/app/[locale]/mypage/components/MypageNavigation.tsx')
-const mypageNavigationSource = readFileSync(mypageNavigationPath, 'utf8')
+const mypageNavigationSource = readSourceAt(mypageNavigationPath)
 const boardUserSectionPath = join(root, 'src/components/board/BoardUserSection.tsx')
-const boardUserSectionSource = readFileSync(boardUserSectionPath, 'utf8')
+const boardUserSectionSource = readSourceAt(boardUserSectionPath)
 const navigationPath = join(root, 'src/components/Navigation.tsx')
-const navigationSource = readFileSync(navigationPath, 'utf8')
+const navigationSource = readSourceAt(navigationPath)
 const boardRoomClientPagePaths = [
   'src/app/[locale]/board-room/page.tsx',
   'src/app/[locale]/board-room/documents/page.tsx',
@@ -335,7 +409,7 @@ const boardRoomClientPagePaths = [
 ]
 const boardRoomClientPageSources = boardRoomClientPagePaths.map(routePath => ({
   path: join(root, routePath),
-  source: readFileSync(join(root, routePath), 'utf8'),
+  source: readSourceAt(join(root, routePath)),
 }))
 const middlewarePreservesProtectedLoginRedirects =
   /stripLocalePrefix/.test(authMiddlewareSource) &&
@@ -589,13 +663,13 @@ const boardRoomClientPagesUseServerSessionTruth = boardRoomClientPageSources.eve
 )
 
 const serverEnvPath = join(root, 'src/lib/server/env.ts')
-const serverEnvSource = existsSync(serverEnvPath) ? readFileSync(serverEnvPath, 'utf8') : ''
+const serverEnvSource = existsSync(serverEnvPath) ? readSourceAt(serverEnvPath) : ''
 const authzPath = join(root, 'src/lib/server/authz.ts')
-const authzSource = existsSync(authzPath) ? readFileSync(authzPath, 'utf8') : ''
+const authzSource = existsSync(authzPath) ? readSourceAt(authzPath) : ''
 const adminAuthPathForBoundary = join(root, 'src/lib/server/adminAuth.ts')
-const adminAuthBoundarySource = readFileSync(adminAuthPathForBoundary, 'utf8')
+const adminAuthBoundarySource = readSourceAt(adminAuthPathForBoundary)
 const boardRoomAuthPathForBoundary = join(root, 'src/lib/server/boardRoomAuth.ts')
-const boardRoomAuthBoundarySource = readFileSync(boardRoomAuthPathForBoundary, 'utf8')
+const boardRoomAuthBoundarySource = readSourceAt(boardRoomAuthPathForBoundary)
 const hasSharedOperationalBoundaryHelpers =
   /export type EnvGroupStatus/.test(serverEnvSource) &&
   /export function resolveFirstCompleteEnvGroup/.test(serverEnvSource) &&
@@ -627,17 +701,244 @@ const existingAuthHelpersUseSharedOperationalBoundaries =
   /listProfiles/.test(boardRoomAuthBoundarySource) &&
   /export type BoardAuthSuccess = \{\s*\n\s*user:/.test(boardRoomAuthBoundarySource) &&
   !/createClient\(/.test(boardRoomAuthBoundarySource)
+
+// ---------------------------------------------------------------------------
+// 인가 판정 **본문**을 못박는다 — 호출부만 보면 헬퍼를 느슨하게 고쳤을 때
+// 아무도 모른다.
+//
+// 이 이전의 핵심 전제는 "Postgres RLS가 사라졌으니 이제 앱 코드가 유일한
+// 경계"다. 그런데 그 경계를 지켜야 할 가드는 지금까지 **호출부만** 못박고
+// 헬퍼 본문은 아무도 안 봤다. 리뷰어 실증:
+//
+// - `checkAdminPermission`의 `isApprovedActiveAdmin` 검사를 지우면
+//   `auth: 'admin'`·`createSettingsAdminAuth()` 라우트 전부가 아무 로그인
+//   사용자에게 열리는데 가드는 초록불이었다.
+// - `requireActiveMember`를 `requireUser`로 퇴화시키면 매니페스트의 27개
+//   파일 전부가 미승인·정지 계정을 받는데 역시 초록불이었다.
+//
+// 그래서 판정 함수 **본문의 분기 모양**(조건 + 그 조건이 실제로 막는 응답)을
+// 고정한다. 조건식이 존재하는지가 아니라 **그 조건으로 분기하는지**를 본다 —
+// 식만 남기고 `return`을 지우는 것도 잡힌다.
+//
+// 검사는 전부 주석을 걷어낸 판본(readSourceAt)에서 돌아간다. 주석에 같은
+// 문자열만 남기는 방식은 통하지 않는다.
+
+/**
+ * `code`에서 이름이 `name`인 함수 선언의 본문(중괄호 블록)을 잘라낸다.
+ * `export function` / `export async function` / `function` 세 형태를 받는다.
+ * 시그니처 괄호 안에 중괄호가 들어갈 수 있어(구조 분해 인자·객체 타입)
+ * 괄호 균형을 먼저 맞춘 뒤 여는 중괄호를 찾는다.
+ */
+function extractNamedFunctionBody(code, name) {
+  const marker = new RegExp(`(?:export\\s+)?(?:async\\s+)?function\\s+${name}\\s*\\(`)
+  const match = marker.exec(code)
+  if (!match) return null
+
+  let i = code.indexOf('(', match.index)
+  let depth = 0
+  for (; i < code.length; i += 1) {
+    if (code[i] === '(') depth += 1
+    else if (code[i] === ')') {
+      depth -= 1
+      if (depth === 0) break
+    }
+  }
+  const braceStart = code.indexOf('{', i)
+  if (braceStart === -1) return null
+
+  depth = 0
+  for (let j = braceStart; j < code.length; j += 1) {
+    if (code[j] === '{') depth += 1
+    else if (code[j] === '}') {
+      depth -= 1
+      if (depth === 0) return code.slice(braceStart, j + 1)
+    }
+  }
+  return null
+}
+
+const memberAuthPath = join(root, 'src/lib/server/memberAuth.ts')
+const memberAuthSource = readSourceAt(memberAuthPath)
+
+/**
+ * 각 항목: 판정 함수 하나와, 그 본문이 반드시 담아야 하는 분기들.
+ * `what`은 실패 메시지에 그대로 실린다 — "무엇이 사라졌는가"가 바로 보이도록.
+ */
+const AUTHORIZATION_HELPER_CONTRACTS = [
+  {
+    file: 'src/lib/server/authz.ts',
+    source: authzSource,
+    name: 'isApprovedActive',
+    requirements: [
+      {
+        what: '승인 상태와 활성 여부를 함께 본다',
+        pattern:
+          /return profile\?\.registration_status === ['"]approved['"] && profile\.is_active === true/,
+      },
+    ],
+  },
+  {
+    file: 'src/lib/server/authz.ts',
+    source: authzSource,
+    name: 'isApprovedActiveAdmin',
+    requirements: [
+      {
+        what: '관리자 플래그만이 아니라 승인·활성까지 함께 본다',
+        pattern: /return isApprovedActive\(profile\) && profile\?\.is_admin === true/,
+      },
+    ],
+  },
+  {
+    file: 'src/lib/server/authz.ts',
+    source: authzSource,
+    name: 'canAccessBoardRoom',
+    requirements: [
+      { what: '승인·활성을 먼저 본다', pattern: /isApprovedActive\(profile\) &&/ },
+      {
+        what: '이사·관리자·감사 중 하나여야 한다',
+        pattern:
+          /profile\?\.is_director === true \|\| profile\?\.is_admin === true \|\| profile\?\.is_auditor === true/,
+      },
+    ],
+  },
+  {
+    file: 'src/lib/server/adminAuth.ts',
+    source: adminAuthBoundarySource,
+    name: 'requireAdmin',
+    requirements: [
+      {
+        what: '미인증이면 401로 막는다',
+        pattern:
+          /if \(!session\.authenticated \|\| !session\.user\) \{[\s\S]*?status: 401[\s\S]*?\}/,
+      },
+      {
+        what: '프로필 조회 실패면 500으로 막는다',
+        pattern:
+          /if \(session\.profileError \|\| !session\.profile\) \{[\s\S]*?status: 500[\s\S]*?\}/,
+      },
+      {
+        what: '승인·활성 관리자가 아니면 403으로 막는다',
+        pattern:
+          /if \(!isApprovedActiveAdmin\(session\.profile\)\) \{[\s\S]*?status: 403[\s\S]*?\}/,
+      },
+    ],
+  },
+  {
+    file: 'src/lib/server/adminAuth.ts',
+    source: adminAuthBoundarySource,
+    name: 'checkAdminPermission',
+    requirements: [
+      { what: '프로필 행이 없으면 던진다', pattern: /if \(!profile\) \{\s*throw new Error\(/ },
+      {
+        what: '승인·활성 관리자가 아니면 던진다',
+        pattern: /if \(!isApprovedActiveAdmin\(profile\)\) \{\s*throw new Error\(/,
+      },
+    ],
+  },
+  {
+    file: 'src/lib/server/memberAuth.ts',
+    source: memberAuthSource,
+    name: 'classifySessionForMember',
+    requirements: [
+      {
+        what: '미인증을 구분한다',
+        pattern:
+          /if \(!session\.authenticated \|\| !session\.user\) return ['"]unauthenticated['"]/,
+      },
+      {
+        what: '프로필 조회 실패를 구분한다',
+        pattern: /if \(session\.profileError \|\| !session\.profile\) return ['"]profile-error['"]/,
+      },
+      {
+        what: '미승인·비활성을 구분한다',
+        pattern: /if \(!isApprovedActive\(session\.profile\)\) return ['"]not-approved['"]/,
+      },
+    ],
+  },
+  {
+    file: 'src/lib/server/memberAuth.ts',
+    source: memberAuthSource,
+    name: 'requireActiveMember',
+    requirements: [
+      {
+        what: '판정을 classifySessionForMember에 위임한다',
+        pattern: /const verdict = classifySessionForMember\(session\)/,
+      },
+      {
+        what: '미인증이면 401로 막는다',
+        pattern: /if \(verdict === ['"]unauthenticated['"]\) \{[\s\S]*?status: 401[\s\S]*?\}/,
+      },
+      {
+        what: '프로필 조회 실패면 500으로 막는다',
+        pattern: /if \(verdict === ['"]profile-error['"]\) \{[\s\S]*?status: 500[\s\S]*?\}/,
+      },
+      {
+        what: '미승인·비활성이면 403으로 막는다(requireUser로 퇴화하지 않는다)',
+        pattern: /if \(verdict === ['"]not-approved['"]\) \{[\s\S]*?status: 403[\s\S]*?\}/,
+      },
+    ],
+  },
+  {
+    file: 'src/lib/server/boardRoomAuth.ts',
+    source: boardRoomAuthBoundarySource,
+    name: 'requireBoardMember',
+    requirements: [
+      {
+        what: '미인증이면 401로 막는다',
+        pattern:
+          /if \(!session\.authenticated \|\| !session\.user\) \{[\s\S]*?status: 401[\s\S]*?\}/,
+      },
+      {
+        what: '프로필 조회 실패면 500으로 막는다',
+        pattern:
+          /if \(session\.profileError \|\| !session\.profile\) \{[\s\S]*?status: 500[\s\S]*?\}/,
+      },
+      {
+        what: '이사회 접근 권한이 없으면 403으로 막는다',
+        pattern: /if \(!canAccessBoardRoom\(session\.profile\)\) \{[\s\S]*?status: 403[\s\S]*?\}/,
+      },
+    ],
+  },
+  {
+    file: 'src/lib/server/boardRoomAuth.ts',
+    source: boardRoomAuthBoundarySource,
+    name: 'requireBoardAdmin',
+    requirements: [
+      {
+        what: '관리자가 아니면 403으로 막는다',
+        pattern: /if \(!auth\.isAdmin\) \{[\s\S]*?status: 403[\s\S]*?\}/,
+      },
+    ],
+  },
+]
+
+const authorizationHelperBodyViolations = []
+for (const contract of AUTHORIZATION_HELPER_CONTRACTS) {
+  const body = extractNamedFunctionBody(contract.source, contract.name)
+  if (body === null) {
+    authorizationHelperBodyViolations.push(
+      `${contract.file}: ${contract.name}() 본문을 찾지 못했습니다 — 함수가 사라졌거나 선언 모양이 바뀌었습니다(가드 고장으로 취급합니다)`
+    )
+    continue
+  }
+  for (const requirement of contract.requirements) {
+    if (!requirement.pattern.test(body)) {
+      authorizationHelperBodyViolations.push(
+        `${contract.file}: ${contract.name}() 본문에 "${requirement.what}" 분기가 없습니다`
+      )
+    }
+  }
+}
+
 const serverRateLimitPath = join(root, 'src/lib/server/rateLimit.ts')
 const serverRateLimitSource = existsSync(serverRateLimitPath)
-  ? readFileSync(serverRateLimitPath, 'utf8')
+  ? readSourceAt(serverRateLimitPath)
   : ''
 const serverApiRoutePath = join(root, 'src/lib/server/apiRoute.ts')
-const serverApiRouteSource = existsSync(serverApiRoutePath)
-  ? readFileSync(serverApiRoutePath, 'utf8')
-  : ''
+const serverApiRouteSource = existsSync(serverApiRoutePath) ? readSourceAt(serverApiRoutePath) : ''
 const serverStreamRoutePath = join(root, 'src/lib/server/streamRoute.ts')
 const serverStreamRouteSource = existsSync(serverStreamRoutePath)
-  ? readFileSync(serverStreamRoutePath, 'utf8')
+  ? readSourceAt(serverStreamRoutePath)
   : ''
 const apiRouteFiles = globSync('src/app/api/**/route.@(ts|tsx)', {
   cwd: root,
@@ -728,7 +1029,7 @@ function extractExportedFunctionBody(code, method) {
 
 const ungatedPrivilegedHandlers = []
 for (const file of privilegedRouteFiles) {
-  const raw = readFileSync(join(root, file), 'utf8')
+  const raw = readSourceAt(join(root, file))
   // 주석·import를 걷어낸 코드로 본다 — 주석에 남은 `auth: 'admin'`이나
   // 주석 처리된 `requireBoardMember()`로 통과하면 안 된다.
   const code = stripCommentsAndImports(raw)
@@ -858,7 +1159,7 @@ const directGetUserAllowlist = [
   { file: 'src/app/api/activities/session/route.ts', mustAlsoCall: [/requireUser\(\)/] },
 ]
 const directGetUserOffenders = apiRouteFiles.filter(file => {
-  const source = readFileSync(join(root, file), 'utf8')
+  const source = readSourceAt(join(root, file))
   // mustAlsoCall은 "호출부가 실제로 있는가"만 보는 양의 단정이라, 문자열
   // 리터럴까지 걷어낸 코드로 검사해야 `const decoy = "requireUser()"` 같은
   // 가짜 호출부 문자열로 속지 않는다(Task 5 3라운드 리뷰에서 실증됨). 이
@@ -1053,7 +1354,7 @@ const requiredAuthHelperCallViolations = requiredAuthHelperCallCounts.flatMap(({
   if (!existsSync(fullPath)) {
     return [`${file}: 파일이 없습니다 — requiredAuthHelperCallCounts 매니페스트를 정리하세요.`]
   }
-  const source = readFileSync(fullPath, 'utf8')
+  const source = readSourceAt(fullPath)
   // 존재 검사이므로(개수 카운트도 "얼마나 있는가"라 mustAlsoCall과 동일한 성격)
   // 문자열 리터럴 디코이(`const decoy = "requireUser()"`)에 속지 않도록
   // stripStringLiterals까지 거친 코드로 센다.
@@ -1069,11 +1370,11 @@ const requiredAuthHelperCallViolations = requiredAuthHelperCallCounts.flatMap(({
     })
 })
 const apiRoutesUsingLegacyRateLimitImports = apiRouteFiles.filter(file => {
-  const source = readFileSync(join(root, file), 'utf8')
+  const source = readSourceAt(join(root, file))
   return /from\s+['"]@\/utils\/(?:distributedRateLimiter|rateLimiter|rateLimit)['"]/.test(source)
 })
 const apiRoutesUsingDistributedRateLimitSymbols = apiRouteFiles.filter(file => {
-  const source = readFileSync(join(root, file), 'utf8')
+  const source = readSourceAt(join(root, file))
   return /distributedRateLimiter|DISTRIBUTED_RATE_LIMIT_CONFIGS|createDistributed(?:User|IP|Route)KeyGenerator|addDistributedRateLimitHeaders/.test(
     source
   )
@@ -1106,23 +1407,21 @@ const hasSharedStreamRouteWrapper =
   !/parseJsonObjectBody/.test(serverStreamRouteSource)
 
 const rateLimiterPath = join(root, 'src/utils/distributedRateLimiter.ts')
-const rateLimiterSource = readFileSync(rateLimiterPath, 'utf8')
+const rateLimiterSource = readSourceAt(rateLimiterPath)
 const rateLimiterCompatPath = join(root, 'src/utils/rateLimiter.ts')
-const rateLimiterCompatSource = readFileSync(rateLimiterCompatPath, 'utf8')
+const rateLimiterCompatSource = readSourceAt(rateLimiterCompatPath)
 const rateLimitWrapperPath = join(root, 'src/utils/rateLimit.ts')
-const rateLimitWrapperSource = readFileSync(rateLimitWrapperPath, 'utf8')
+const rateLimitWrapperSource = readSourceAt(rateLimitWrapperPath)
 const verifyEnvPath = join(root, 'scripts/verify-env.js')
-const verifyEnvSource = readFileSync(verifyEnvPath, 'utf8')
+const verifyEnvSource = readSourceAt(verifyEnvPath)
 const readmePath = join(root, 'README.md')
-const readmeSource = readFileSync(readmePath, 'utf8')
+const readmeSource = readSourceAt(readmePath)
 // docs/ 는 .gitignore 대상(총회·이사회 회의록 등 민감 내용 포함)이라 CI 체크아웃에는
 // 파일이 없다. 없다고 크래시하면 안 되지만, 조용히 통과시켜서도 안 된다 — 파일이 없을
 // 때는 이 문서 관련 검사만 명시적으로 건너뛰고(SKIPPED 로그), 나머지 검사는 정상 실행한다.
 const deploymentGuidePath = join(root, 'docs/deployment-guide.md')
 const deploymentGuideAvailable = existsSync(deploymentGuidePath)
-const deploymentGuideSource = deploymentGuideAvailable
-  ? readFileSync(deploymentGuidePath, 'utf8')
-  : ''
+const deploymentGuideSource = deploymentGuideAvailable ? readSourceAt(deploymentGuidePath) : ''
 const constructorMatch = rateLimiterSource.match(
   /constructor\s*\(\)\s*\{[\s\S]*?\n\s{2}\}\n\n\s{2}private reportMemoryFallbackIfNeeded/
 )
@@ -1166,15 +1465,21 @@ const productionRateLimiterFailsClosed =
   /if \(this\.isProduction\(\)\) \{\s*return this\.degradeByMethod\(req,\s*windowMs,\s*maxRequests,\s*['"]redis_error['"]\)\s*\}/.test(
     rateLimiterSource
   )
+// 아래 세 검사는 **주석 문구 자체**가 계약이다(운영에서 503 fail-closed임을
+// 코드 옆에 설명해 두는 것). 주석을 걷어낸 판본에는 검사할 문구가 남지 않으므로
+// 이 검사에 한해 원본을 읽는다 — 로직 검사는 계속 stripped 판본을 쓴다.
+const rateLimiterCompatDocSource = readRawSourceAt(rateLimiterCompatPath)
+const rateLimitWrapperDocSource = readRawSourceAt(rateLimitWrapperPath)
+const rateLimiterDocSource = readRawSourceAt(rateLimiterPath)
 const productionRateLimiterDocsFailClosed =
   /운영 환경에서는 rate limit 보호가 무효화되지 않도록 503으로 fail-closed 처리합니다/.test(
-    rateLimiterCompatSource
+    rateLimiterCompatDocSource
   ) &&
   /운영 환경에서는 rate limit 보호가 무효화되지 않도록 503으로 fail-closed 처리한다/.test(
-    rateLimitWrapperSource
+    rateLimitWrapperDocSource
   ) &&
   /쓰기·업로드는 남용 방지를 위해 기존대로 503\s*\n\s*\/\/ \(fail-closed\)을 유지한다/.test(
-    rateLimiterSource
+    rateLimiterDocSource
   ) &&
   /503으로 fail-closed 처리한다/.test(readmeSource) &&
   /개발 환경에서만 인메모리 폴백을 허용한다/.test(readmeSource) &&
@@ -1193,9 +1498,9 @@ const legacyRateLimitWrappersDelegateToServerFacade =
   !/distributedRateLimiter\.applyRateLimit/.test(rateLimitWrapperSource) &&
   !/distributedRateLimiterConfig\.applyRateLimit/.test(rateLimiterCompatSource)
 const linkPreviewPath = join(root, 'src/utils/linkPreview.ts')
-const linkPreviewSource = readFileSync(linkPreviewPath, 'utf8')
+const linkPreviewSource = readSourceAt(linkPreviewPath)
 const ssrfProtectionPath = join(root, 'src/utils/ssrfProtection.ts')
-const ssrfProtectionSource = readFileSync(ssrfProtectionPath, 'utf8')
+const ssrfProtectionSource = readSourceAt(ssrfProtectionPath)
 const preventsLinkPreviewPreflightRedirects =
   /method:\s*['"]HEAD['"][\s\S]*?redirect:\s*['"]manual['"]/.test(linkPreviewSource) &&
   /new URL\(location,\s*u\)/.test(linkPreviewSource) &&
@@ -1233,16 +1538,20 @@ const ssrfProtectionHandlesLiteralIpsStrictly =
   /a === 0/.test(ssrfProtectionSource) &&
   /a >= 224/.test(ssrfProtectionSource)
 const validationPath = join(root, 'src/utils/validation.ts')
-const validationSource = readFileSync(validationPath, 'utf8')
+const validationSource = readSourceAt(validationPath)
+// 예전에는 다음 JSDoc(`\n}\n\n/**`)까지를 잘라 썼는데, 그 종결자는 **주석**이라
+// 주석을 걷어낸 판본에서는 매치 자체가 실패했다(그러면 빈 문자열이 되어 아래
+// 부정 단정이 공허하게 통과한다). 함수 닫는 중괄호까지만 자른다 — `\b`가
+// `validateUUIDOrTempId`를 걸러낸다.
 const validateUUIDSource =
-  validationSource.match(/export const validateUUID[\s\S]*?\n\}\n\n\/\*\*/)?.[0] ?? ''
+  validationSource.match(/export const validateUUID\b[\s\S]*?\n\}\n/)?.[0] ?? ''
 const validateUUIDRejectsTempIds =
   /export const validateUUIDOrTempId/.test(validationSource) &&
   !/isValidTempId/.test(validateUUIDSource) &&
   /잘못된 \$\{paramName\} 형식입니다\. UUID 형식이어야 합니다\./.test(validateUUIDSource)
 
 const postAttachmentsPath = join(root, 'src/app/api/posts/[id]/attachments/route.ts')
-const postAttachmentsSource = readFileSync(postAttachmentsPath, 'utf8')
+const postAttachmentsSource = readSourceAt(postAttachmentsPath)
 const verifiesAttachmentSignature =
   /hasValidFileSignature/.test(postAttachmentsSource) &&
   /Buffer\.from\(await file\.arrayBuffer\(\)\)/.test(postAttachmentsSource)
@@ -1252,15 +1561,15 @@ const preservesTemporaryPostAttachmentUploads =
     postAttachmentsSource
   )
 const boardDocumentsPath = join(root, 'src/app/api/board-room/documents/route.ts')
-const boardDocumentsSource = readFileSync(boardDocumentsPath, 'utf8')
+const boardDocumentsSource = readSourceAt(boardDocumentsPath)
 const boardDocumentDetailPath = join(root, 'src/app/api/board-room/documents/[id]/route.ts')
-const boardDocumentDetailSource = readFileSync(boardDocumentDetailPath, 'utf8')
+const boardDocumentDetailSource = readSourceAt(boardDocumentDetailPath)
 const boardDocumentDownloadPath = join(
   root,
   'src/app/api/board-room/documents/[id]/download/route.ts'
 )
 const boardDocumentDownloadSource = existsSync(boardDocumentDownloadPath)
-  ? readFileSync(boardDocumentDownloadPath, 'utf8')
+  ? readSourceAt(boardDocumentDownloadPath)
   : ''
 // 봉쇄 판정의 실제 구현부. 예전 `@/utils/boardDocumentStoragePath`
 // (`isSafeBoardDocumentStoragePath`)는 소유권을 경로 문자열과 결합해 시드
@@ -1268,7 +1577,7 @@ const boardDocumentDownloadSource = existsSync(boardDocumentDownloadPath)
 // 지웠다 — 이 검사식은 처음부터 그 파일을 참조하지 않았다.
 const boardDocumentsLibPath = join(root, 'src/lib/storage/boardDocuments.ts')
 const boardDocumentsLibSource = existsSync(boardDocumentsLibPath)
-  ? readFileSync(boardDocumentsLibPath, 'utf8')
+  ? readSourceAt(boardDocumentsLibPath)
   : ''
 // 이 파일은 JSDoc이 유난히 많고, 그 JSDoc이 옛 함수 이름(`isSafeBoardDocumentStoragePath`)이나
 // 설계 배경을 산문으로 설명한다. 아래 (1) 검사가 raw 소스를 그대로 보면, 실제
@@ -1365,9 +1674,9 @@ const validatesBoardDocumentStoragePaths =
 // 타입 스트리핑으로 로드할 수 없다. 그래서 단위 테스트 대신 여기서 정적으로 본다.
 const privateProviderPath = join(root, 'src/lib/storage/privateProvider.ts')
 const privateProviderSource = existsSync(privateProviderPath)
-  ? readFileSync(privateProviderPath, 'utf8')
+  ? readSourceAt(privateProviderPath)
   : ''
-const blobLibSource = readFileSync(join(root, 'src/lib/storage/blob.ts'), 'utf8')
+const blobLibSource = readSourceAt(join(root, 'src/lib/storage/blob.ts'))
 // (2)~(4)와 같은 이유로 원본이 아니라 stripCommentsAndImports를 거친 코드를
 // 본다. 원본 소스를 그대로 훑으면, 실제 로직을 `//`로 주석 처리해도 같은 줄
 // (또는 주변 JSDoc)에 남은 텍스트가 정규식에 그대로 걸려 죽은 채로 통과한다 —
@@ -1409,7 +1718,7 @@ const boardDocumentPrivateStorageIsBlobOnly =
   !/[Ss]upabase/.test(privateProviderCode) &&
   !/classifyDeleteEverywhereResults/.test(privateProviderCode)
 const artistPhotoPath = join(root, 'src/app/api/mypage/artist/photo/route.ts')
-const artistPhotoSource = readFileSync(artistPhotoPath, 'utf8')
+const artistPhotoSource = readSourceAt(artistPhotoPath)
 const verifiesArtistPhotoSignature =
   /hasValidFileSignature/.test(artistPhotoSource) && /file instanceof File/.test(artistPhotoSource)
 // 삭제 대상 경로는 반드시 봉쇄를 통과한 값이어야 한다. 검사 없이 URL을 파싱해
@@ -1436,9 +1745,9 @@ const validatesArtistPhotoCleanupStoragePaths =
   !/const\s+url\s*=\s*new URL\(currentArtist\.profile_photo_url\)/.test(artistPhotoSource) &&
   !/const\s+url\s*=\s*new URL\(artist\.profile_photo_url\)/.test(artistPhotoSource)
 const artistProfilePath = join(root, 'src/app/api/mypage/artist/route.ts')
-const artistProfileSource = readFileSync(artistProfilePath, 'utf8')
+const artistProfileSource = readSourceAt(artistProfilePath)
 const jsonSyncPath = join(root, 'src/utils/jsonSync.ts')
-const jsonSyncSource = existsSync(jsonSyncPath) ? readFileSync(jsonSyncPath, 'utf8') : ''
+const jsonSyncSource = existsSync(jsonSyncPath) ? readSourceAt(jsonSyncPath) : ''
 const validatesArtistProfilePhotoStorageUrl =
   // isProjectStoragePublicUrl(Supabase 전용) → logicalPathFromUrl(...) === null 비교로
   // 이관. Blob URL도 같은 봉쇄를 받게 하려는 변경이다.
@@ -1466,9 +1775,9 @@ const preventsArtistProfileServerGitSideEffects =
   !/git (?:add|commit|push)/.test(jsonSyncSource) &&
   !/commitAndPushJsonChanges/.test(jsonSyncSource)
 const postOgImagePath = join(root, 'src/app/api/og/post/[id]/route.tsx')
-const postOgImageSource = stripComments(readFileSync(postOgImagePath, 'utf8'))
+const postOgImageSource = readSourceAt(postOgImagePath)
 const postUserDataApiPath = join(root, 'src/app/api/posts/[id]/user-data/route.ts')
-const postUserDataApiSource = readFileSync(postUserDataApiPath, 'utf8')
+const postUserDataApiSource = readSourceAt(postUserDataApiPath)
 const validatesPostOgAttachmentStorageUrl =
   /isProjectStoragePublicUrl/.test(postOgImageSource) &&
   // 단계 4 Task 6b: 첨부 조회가 목록(attachments[0])에서 단건
@@ -1480,13 +1789,13 @@ const validatesPostOgAttachmentStorageUrl =
   ) &&
   /unsafe attachment image URL/i.test(postOgImageSource)
 const artistOgImagePath = join(root, 'src/app/api/og/artist/[slug]/route.tsx')
-const artistOgImageSource = readFileSync(artistOgImagePath, 'utf8')
+const artistOgImageSource = readSourceAt(artistOgImagePath)
 const projectOgImagePath = join(root, 'src/app/api/og/project/[slug]/route.tsx')
-const projectOgImageSource = readFileSync(projectOgImagePath, 'utf8')
+const projectOgImageSource = readSourceAt(projectOgImagePath)
 const legacyOgImagePath = join(root, 'src/app/api/og-image/route.ts')
-const legacyOgImageSource = readFileSync(legacyOgImagePath, 'utf8')
+const legacyOgImageSource = readSourceAt(legacyOgImagePath)
 const imagesApiPath = join(root, 'src/app/api/images/route.ts')
-const imagesApiSource = readFileSync(imagesApiPath, 'utf8')
+const imagesApiSource = readSourceAt(imagesApiPath)
 const validatesStaticOgImageRedirects =
   /toSafeArtistImageSrc/.test(artistOgImageSource) &&
   /toSafeArtistImageSrc\(artist\?\.profileImage/.test(artistOgImageSource) &&
@@ -1512,7 +1821,7 @@ const validatesImagesApiPublicPathBoundary =
   !/resolved(?:Head)?\.startsWith\(publicPath\)/.test(imagesApiSource) &&
   !/application\/octet-stream/.test(imagesApiSource)
 const commentDeletePath = join(root, 'src/app/api/posts/[id]/comments/[commentId]/route.ts')
-const commentDeleteSource = stripComments(readFileSync(commentDeletePath, 'utf8'))
+const commentDeleteSource = readSourceAt(commentDeletePath)
 // 단계 2c(Task 6): 소유권 조회·삭제 둘 다 Supabase `.eq('id',
 // validCommentId).eq('post_id', validPostId)`에서 Turso 쿼리 계층
 // getCommentById(validCommentId, validPostId)/deleteComment(validCommentId,
@@ -1524,15 +1833,15 @@ const postAttachmentDetailPath = join(
   root,
   'src/app/api/posts/[id]/attachments/[attachmentId]/route.ts'
 )
-const postAttachmentDetailSource = stripComments(readFileSync(postAttachmentDetailPath, 'utf8'))
+const postAttachmentDetailSource = readSourceAt(postAttachmentDetailPath)
 const postAttachmentsDisplayPath = join(root, 'src/components/PostAttachmentsDisplay.tsx')
-const postAttachmentsDisplaySource = readFileSync(postAttachmentsDisplayPath, 'utf8')
+const postAttachmentsDisplaySource = readSourceAt(postAttachmentsDisplayPath)
 const attachmentCardPath = join(root, 'src/components/attachments/AttachmentCard.tsx')
-const attachmentCardSource = readFileSync(attachmentCardPath, 'utf8')
+const attachmentCardSource = readSourceAt(attachmentCardPath)
 const imageModalPath = join(root, 'src/components/attachments/ImageModal.tsx')
-const imageModalSource = readFileSync(imageModalPath, 'utf8')
+const imageModalSource = readSourceAt(imageModalPath)
 const attachmentActionsPath = join(root, 'src/hooks/useAttachmentActions.ts')
-const attachmentActionsSource = readFileSync(attachmentActionsPath, 'utf8')
+const attachmentActionsSource = readSourceAt(attachmentActionsPath)
 // 단계 2c(Task 5): PUT의 갱신을 Supabase
 // `.update(updateData).eq('id', attachmentId).eq('post_id', postId)`에서
 // Turso 쿼리 계층 updateAttachment(attachmentId, postId, patch)로, DELETE의
@@ -1589,7 +1898,7 @@ const validatesPostAttachmentRenderUrls =
   /safeFileUrl/.test(attachmentActionsSource) &&
   !/link\.href\s*=\s*attachment\.file_url/.test(attachmentActionsSource)
 const adminPostDetailPath = join(root, 'src/app/api/admin/posts/[id]/route.ts')
-const adminPostDetailSource = readFileSync(adminPostDetailPath, 'utf8')
+const adminPostDetailSource = readSourceAt(adminPostDetailPath)
 // Task 8: 이 라우트의 posts 조회/갱신이 Supabase `.eq('id', postId)`에서
 // Turso 쿼리 계층(getPostById(postId, ...)/updatePost(postId, ...))으로
 // 옮겨갔다 — Drizzle의 eq()는 항상 파라미터 바인딩이라 안전성 성질은
@@ -1613,39 +1922,39 @@ const adminPostActionUsesSharedApiRoute =
   !/addRateLimitHeaders/.test(adminPostDetailSource) &&
   !/requireAdmin\(\)/.test(adminPostDetailSource)
 const notificationDetailPath = join(root, 'src/app/api/notifications/[id]/route.ts')
-const notificationDetailSource = readFileSync(notificationDetailPath, 'utf8')
+const notificationDetailSource = readSourceAt(notificationDetailPath)
 const notificationsPath = join(root, 'src/app/api/notifications/route.ts')
-const notificationsSource = readFileSync(notificationsPath, 'utf8')
+const notificationsSource = readSourceAt(notificationsPath)
 const bulkNotificationsPath = join(root, 'src/app/api/notifications/bulk/route.ts')
-const bulkNotificationsSource = readFileSync(bulkNotificationsPath, 'utf8')
+const bulkNotificationsSource = readSourceAt(bulkNotificationsPath)
 // 단계 2c(Task 7): markAllNotificationsRead가 src/lib/server/notificationsWrite.ts
 // (Supabase 앱 계층 UPDATE)에서 src/db/queries/notifications.ts(Turso 쿼리
 // 계층)로 옮겨갔다 — 소유권 필터 강제도 이 새 위치를 가리키도록 함께 옮긴다.
 const notificationsWritePath = join(root, 'src/db/queries/notifications.ts')
-const notificationsWriteSource = readFileSync(notificationsWritePath, 'utf8')
+const notificationsWriteSource = readSourceAt(notificationsWritePath)
 const notificationDataPath = join(root, 'src/utils/notificationData.ts')
-const notificationDataSource = readFileSync(notificationDataPath, 'utf8')
+const notificationDataSource = readSourceAt(notificationDataPath)
 const notificationExpiryPath = join(root, 'src/utils/notificationExpiry.ts')
-const notificationExpirySource = readFileSync(notificationExpiryPath, 'utf8')
+const notificationExpirySource = readSourceAt(notificationExpiryPath)
 const notificationTypesPath = join(root, 'src/utils/notificationTypes.ts')
-const notificationTypesSource = readFileSync(notificationTypesPath, 'utf8')
+const notificationTypesSource = readSourceAt(notificationTypesPath)
 const eventApplicationStatusPath = join(root, 'src/utils/eventApplicationStatus.ts')
-const eventApplicationStatusSource = readFileSync(eventApplicationStatusPath, 'utf8')
+const eventApplicationStatusSource = readSourceAt(eventApplicationStatusPath)
 const adminEventApplicationsApiPath = join(root, 'src/app/api/admin/event-applications/route.ts')
-const adminEventApplicationsApiSource = readFileSync(adminEventApplicationsApiPath, 'utf8')
+const adminEventApplicationsApiSource = readSourceAt(adminEventApplicationsApiPath)
 const adminMemberActionApiPath = join(root, 'src/app/api/admin/member-action/route.ts')
-const adminMemberActionApiSource = stripComments(readFileSync(adminMemberActionApiPath, 'utf8'))
+const adminMemberActionApiSource = readSourceAt(adminMemberActionApiPath)
 const adminMemberFlagsApiPath = join(root, 'src/app/api/admin/members/flags/route.ts')
-const adminMemberFlagsApiSource = stripComments(readFileSync(adminMemberFlagsApiPath, 'utf8'))
+const adminMemberFlagsApiSource = readSourceAt(adminMemberFlagsApiPath)
 const adminMembersBulkApiPath = join(root, 'src/app/api/admin/members/bulk/route.ts')
-const adminMembersBulkApiSource = readFileSync(adminMembersBulkApiPath, 'utf8')
+const adminMembersBulkApiSource = readSourceAt(adminMembersBulkApiPath)
 const adminArtistMembersApiPath = join(root, 'src/app/api/admin/artists/[id]/members/route.ts')
-const adminArtistMembersApiSource = readFileSync(adminArtistMembersApiPath, 'utf8')
+const adminArtistMembersApiSource = readSourceAt(adminArtistMembersApiPath)
 const adminArtistMemberApiPath = join(
   root,
   'src/app/api/admin/artists/[id]/members/[memberId]/route.ts'
 )
-const adminArtistMemberApiSource = stripComments(readFileSync(adminArtistMemberApiPath, 'utf8'))
+const adminArtistMemberApiSource = readSourceAt(adminArtistMemberApiPath)
 const validatesNotificationRouteId =
   (notificationDetailSource.match(/validateUUID\(resolvedParams\.id,\s*['"]알림 ID['"]\)/g) ?? [])
     .length >= 2 &&
@@ -1798,11 +2107,7 @@ const validatesEventApplicationDeleteId =
   !/\^\[0-9a-f-\]\{36\}\$/.test(adminEventApplicationsApiSource) &&
   !/\.delete\(\)\.eq\(['"]id['"],\s*id\)/.test(adminEventApplicationsApiSource)
 const userLikesPath = join(root, 'src/app/api/users/[id]/likes/route.ts')
-const userLikesSource = stripComments(readFileSync(userLikesPath, 'utf8'))
-// 509행의 `authzSource`는 주석을 걷어내지 않은 원본이다. 아래 단정은 판정
-// 함수의 **본문**을 보므로, 주석만 남겨도 통과하는 사고를 막으려면 걷어낸
-// 판본이 필요하다(이 저장소가 단계 4 Task 5에서 실제로 겪은 실패 모드다).
-const authzCodeOnly = stripComments(readFileSync(authzPath, 'utf8'))
+const userLikesSource = readSourceAt(userLikesPath)
 // 단계 2c(Task 6): get_user_likes RPC 호출(`p_user_id: requestedUserId`)과
 // post_likes 총 개수 Supabase 카운트(`.eq('user_id', requestedUserId)`)를
 // Turso 쿼리 계층 listUserLikes(requestedUserId, ...)/
@@ -1818,57 +2123,115 @@ const validatesUserLikesRouteId =
 // 승인·활성까지 함께 봐야 한다.** 그래서 라우트가 그 함수를 부르는지에 더해
 // 그 함수 자체가 세 조건을 다 보는지까지 본다(위임만 확인하면 판정 함수를
 // 느슨하게 고쳤을 때 이 가드가 조용히 무력해진다).
+//
+// 판정 함수 **본문**(isApprovedActive/isApprovedActiveAdmin이 세 조건을 다
+// 보는가)은 이제 위쪽 AUTHORIZATION_HELPER_CONTRACTS가 한 곳에서 고정한다 —
+// 그 계약은 이 라우트만의 것이 아니라 저장소 전체의 것이라, 같은 사실을 두
+// 곳에서 단정하면 어느 쪽이 정본인지 알 수 없게 된다. 여기 남는 것은 이
+// 라우트의 호출부 계약뿐이다.
 const validatesUserLikesAdminStatus =
   /getProfileAuthzFields\(user\.id\)/.test(userLikesSource) &&
   /isApprovedActiveAdmin\(profile\)/.test(userLikesSource) &&
-  !/getProfileById\(/.test(userLikesSource) &&
-  /export function isApprovedActive\(profile: ProfileLike \| null\): boolean \{\s*return profile\?\.registration_status === ['"]approved['"] && profile\.is_active === true\s*\}/.test(
-    authzCodeOnly
-  ) &&
-  /export function isApprovedActiveAdmin\(profile: ProfileLike \| null\): boolean \{\s*return isApprovedActive\(profile\) && profile\?\.is_admin === true\s*\}/.test(
-    authzCodeOnly
-  )
+  !/getProfileById\(/.test(userLikesSource)
 const postDetailPath = join(root, 'src/app/api/posts/[id]/route.ts')
-const postDetailSource = stripComments(readFileSync(postDetailPath, 'utf8'))
+const postDetailSource = readSourceAt(postDetailPath)
+
+// ---------------------------------------------------------------------------
+// 소유권 게이트는 "식이 존재하는가"가 아니라 "그 식으로 **분기**하는가"를 본다.
+//
+// 리뷰어 실증: 첨부 삭제의 `if (!isAuthor && !isAdmin) return forbidden` 세
+// 줄을 통째로 지워도 이 파일은 exit 0이었다 — 아무 로그인 사용자나 남의
+// 게시글 첨부를 지울 수 있게 만들어도 초록불이라는 뜻이다. 게시글 수정·삭제,
+// 댓글 삭제도 같은 방식으로 뚫렸고, `posts/[id]`는 두 게이트를 지우고 **주석에
+// 같은 문자열만 남겨도** 통과했다(그 각도는 이제 readSourceAt이 막는다).
+//
+// 그래서 조건식과 그 조건이 실제로 내리는 거부 응답을 한 덩어리로 못박고,
+// **개수**까지 센다 — 두 곳 중 한 곳만 지우는 것도 잡아야 한다.
+const OWNERSHIP_GATE_CONTRACTS = [
+  {
+    file: 'src/app/api/posts/[id]/route.ts',
+    source: postDetailSource,
+    what: '작성자 본인 또는 관리자만 수정·삭제(PATCH·DELETE 두 곳)',
+    pattern: /if \(post\.author_id !== user\.id && !isAdmin\) \{\s*return ApiError\.forbidden\(/g,
+    expected: 2,
+  },
+  {
+    file: 'src/app/api/posts/[id]/route.ts',
+    source: postDetailSource,
+    what: '관리자 판정에 승인·활성까지 함께 본다(DELETE)',
+    pattern:
+      /isAdmin = !!\(prof\?\.is_admin && prof\.registration_status === ['"]approved['"] && prof\.is_active\)/g,
+    expected: 2,
+  },
+  {
+    file: 'src/app/api/posts/[id]/comments/[commentId]/route.ts',
+    source: commentDeleteSource,
+    what: '댓글 작성자 본인만 삭제',
+    pattern: /if \(comment\.author_id !== userId\) \{\s*return ApiError\.forbidden\(/g,
+    expected: 1,
+  },
+  {
+    file: 'src/app/api/posts/[id]/attachments/[attachmentId]/route.ts',
+    source: postAttachmentDetailSource,
+    what: '첨부 삭제는 게시글 작성자 또는 관리자만',
+    pattern: /if \(!isAuthor && !isAdmin\) \{\s*return ApiError\.forbidden\(/g,
+    expected: 1,
+  },
+  {
+    file: 'src/app/api/posts/[id]/attachments/[attachmentId]/route.ts',
+    source: postAttachmentDetailSource,
+    what: '작성자 판정을 첨부가 달린 게시글의 author_id로 한다',
+    pattern: /const isAuthor = attachment\.posts\.author_id === user\.id/g,
+    expected: 1,
+  },
+]
+
+const ownershipGateViolations = OWNERSHIP_GATE_CONTRACTS.flatMap(contract => {
+  const found = (contract.source.match(contract.pattern) ?? []).length
+  return found === contract.expected
+    ? []
+    : [`${contract.file}: ${contract.what} — ${contract.expected}곳이어야 하는데 ${found}곳입니다`]
+})
+
 const boardPostDetailPath = join(root, 'src/app/api/board/post/[id]/route.ts')
-const boardPostDetailSource = stripComments(readFileSync(boardPostDetailPath, 'utf8'))
+const boardPostDetailSource = readSourceAt(boardPostDetailPath)
 const serverBoardPath = join(root, 'src/lib/server/board.ts')
-const serverBoardSource = readFileSync(serverBoardPath, 'utf8')
+const serverBoardSource = readSourceAt(serverBoardPath)
 const boardCategoriesPath = join(root, 'src/constants/categories.ts')
-const boardCategoriesSource = readFileSync(boardCategoriesPath, 'utf8')
+const boardCategoriesSource = readSourceAt(boardCategoriesPath)
 const boardCategoryPagePath = join(root, 'src/app/[locale]/board/page.tsx')
-const boardCategoryPageSource = readFileSync(boardCategoryPagePath, 'utf8')
+const boardCategoryPageSource = readSourceAt(boardCategoryPagePath)
 const boardServerDataPath = join(root, 'src/app/[locale]/board/BoardServerData.tsx')
-const boardServerDataSource = readFileSync(boardServerDataPath, 'utf8')
+const boardServerDataSource = readSourceAt(boardServerDataPath)
 const boardPostsApiPath = join(root, 'src/app/api/board/posts/route.ts')
-const boardPostsApiSource = readFileSync(boardPostsApiPath, 'utf8')
+const boardPostsApiSource = readSourceAt(boardPostsApiPath)
 const boardListPostsApiPath = join(root, 'src/app/api/posts/route.ts')
-const boardListPostsApiSource = readFileSync(boardListPostsApiPath, 'utf8')
+const boardListPostsApiSource = readSourceAt(boardListPostsApiPath)
 const publicPostsApiPath = join(root, 'src/app/api/posts/public/route.ts')
-const publicPostsApiSource = readFileSync(publicPostsApiPath, 'utf8')
+const publicPostsApiSource = readSourceAt(publicPostsApiPath)
 const keysetCursorPath = join(root, 'src/utils/keysetCursor.ts')
-const keysetCursorSource = readFileSync(keysetCursorPath, 'utf8')
+const keysetCursorSource = readSourceAt(keysetCursorPath)
 // 단계 2c(Task 4): posts/member_profiles가 Turso로 옮겨가며 정렬 로직도
 // src/app/api/posts/public/route.ts에서 src/db/queries/posts.ts의
 // listPostsKeyset()으로 이동했다.
 const postsQueriesPath = join(root, 'src/db/queries/posts.ts')
-const postsQueriesSource = readFileSync(postsQueriesPath, 'utf8')
+const postsQueriesSource = readSourceAt(postsQueriesPath)
 const boardDetailPagePath = join(root, 'src/app/[locale]/board/[id]/page.tsx')
-const boardDetailPageSource = readFileSync(boardDetailPagePath, 'utf8')
+const boardDetailPageSource = readSourceAt(boardDetailPagePath)
 const commentsApiPath = join(root, 'src/app/api/posts/[id]/comments/route.ts')
-const commentsApiSource = stripComments(readFileSync(commentsApiPath, 'utf8'))
+const commentsApiSource = readSourceAt(commentsApiPath)
 const commentsListApiPath = join(root, 'src/app/api/posts/[id]/comments-list/route.ts')
-const commentsListApiSource = stripComments(readFileSync(commentsListApiPath, 'utf8'))
+const commentsListApiSource = readSourceAt(commentsListApiPath)
 const postContentApiPath = join(root, 'src/app/api/posts/[id]/content/route.ts')
-const postContentApiSource = stripComments(readFileSync(postContentApiPath, 'utf8'))
+const postContentApiSource = readSourceAt(postContentApiPath)
 const postLikesApiPath = join(root, 'src/app/api/posts/[id]/likes/route.ts')
-const postLikesApiSource = stripComments(readFileSync(postLikesApiPath, 'utf8'))
+const postLikesApiSource = readSourceAt(postLikesApiPath)
 const commentLikeApiPath = join(root, 'src/app/api/comments/[id]/like/route.ts')
-const commentLikeApiSource = stripComments(readFileSync(commentLikeApiPath, 'utf8'))
+const commentLikeApiSource = readSourceAt(commentLikeApiPath)
 const boardPageShellPath = join(root, 'src/components/board/BoardPageShell.tsx')
-const boardPageShellSource = readFileSync(boardPageShellPath, 'utf8')
+const boardPageShellSource = readSourceAt(boardPageShellPath)
 const serverBoardViewPath = join(root, 'src/components/board/ServerBoardView.tsx')
-const serverBoardViewSource = readFileSync(serverBoardViewPath, 'utf8')
+const serverBoardViewSource = readSourceAt(serverBoardViewPath)
 const validatesBoardCategoryFilters =
   /export const parseBoardCategory/.test(boardCategoriesSource) &&
   /parseBoardCategory\(category\) \?\? ['"]전체['"]/.test(serverBoardSource) &&
@@ -1960,13 +2323,9 @@ const validatesCommentCursors =
   !/decodeURIComponent\(cursor\)/.test(commentsApiSource) &&
   !/decodeURIComponent\(cursor\)/.test(commentsListApiSource)
 const commentSectionPath = join(root, 'src/components/CommentSection.tsx')
-const commentSectionSource = existsSync(commentSectionPath)
-  ? stripComments(readFileSync(commentSectionPath, 'utf8'))
-  : ''
+const commentSectionSource = existsSync(commentSectionPath) ? readSourceAt(commentSectionPath) : ''
 const likesQueriesPath = join(root, 'src/db/queries/likes.ts')
-const likesQueriesSource = existsSync(likesQueriesPath)
-  ? stripComments(readFileSync(likesQueriesPath, 'utf8'))
-  : ''
+const likesQueriesSource = existsSync(likesQueriesPath) ? readSourceAt(likesQueriesPath) : ''
 // 단계 2c(Task 6): comment_likes 배치 조회를 Supabase에서 Turso 쿼리
 // 계층(getLikedCommentIds, src/db/queries/likes.ts)으로 옮겼다. CommentSection도
 // 브라우저에서 테이블을 직접 읽는 대신 comments-list API를 다시 호출한다.
@@ -2193,7 +2552,7 @@ const srcAllFiles = globSync('src/**/*.@(ts|tsx)', {
 // 호출 모양을 그대로 적어둔 곳이 여럿), 원본을 훑으면 그 설명글이 전부 위반으로
 // 잡힌다. 반대로 문자열 리터럴은 남긴다: (3)의 REST 경로가 리터럴 안에 있다.
 const supabaseAccessOffenders = srcAllFiles.filter(file =>
-  supabaseAccessPattern.test(stripComments(readFileSync(join(root, file), 'utf8')))
+  supabaseAccessPattern.test(readSourceAt(join(root, file)))
 )
 // 자기검사 ①: 정규식이 실제로 무는가. 각 항목은 이 저장소에서 실제로 지운
 // 코드의 모양이다.
@@ -2291,23 +2650,23 @@ const supabaseAccessOverreach = supabaseAccessFalsePositiveSamples.filter(sample
 )
 
 const imageProxyPath = join(root, 'src/app/api/images/proxy/route.ts')
-const imageProxySource = readFileSync(imageProxyPath, 'utf8')
+const imageProxySource = readSourceAt(imageProxyPath)
 const postViewPath = join(root, 'src/app/api/posts/[id]/view/route.ts')
-const postViewSource = readFileSync(postViewPath, 'utf8')
+const postViewSource = readSourceAt(postViewPath)
 const postDetailClientPath = join(root, 'src/app/[locale]/board/[id]/PostDetailClient.tsx')
-const postDetailClientSource = readFileSync(postDetailClientPath, 'utf8')
+const postDetailClientSource = readSourceAt(postDetailClientPath)
 const mypageProfilePersonalInfoPath = join(
   root,
   'src/app/[locale]/mypage/profile/components/PersonalInfo.tsx'
 )
-const mypageProfilePersonalInfoSource = readFileSync(mypageProfilePersonalInfoPath, 'utf8')
+const mypageProfilePersonalInfoSource = readSourceAt(mypageProfilePersonalInfoPath)
 const mypageProfileEditFormPath = join(
   root,
   'src/app/[locale]/mypage/profile/components/ProfileEditForm.tsx'
 )
-const mypageProfileEditFormSource = readFileSync(mypageProfileEditFormPath, 'utf8')
+const mypageProfileEditFormSource = readSourceAt(mypageProfileEditFormPath)
 const mypageArtistPagePath = join(root, 'src/app/[locale]/mypage/artist/page.tsx')
-const mypageArtistPageSource = readFileSync(mypageArtistPagePath, 'utf8')
+const mypageArtistPageSource = readSourceAt(mypageArtistPagePath)
 // 단계 2c(Task 5): DELETE 핸들러의 관리자 판정을 Supabase
 // `.select('is_admin, registration_status, is_active').eq('id', user.id)`에서
 // Turso 쿼리 계층 getProfileById(user.id)로 옮겼다(GET 핸들러는 Task 4에서
@@ -2319,36 +2678,36 @@ const validatesPostDetailAdminStatus =
     postDetailSource
   )
 const apiWrapperPath = join(root, 'src/utils/apiWrapper.ts')
-const apiWrapperSource = readFileSync(apiWrapperPath, 'utf8')
+const apiWrapperSource = readSourceAt(apiWrapperPath)
 const apiResponsePath = join(root, 'src/utils/apiResponse.ts')
-const apiResponseSource = readFileSync(apiResponsePath, 'utf8')
+const apiResponseSource = readSourceAt(apiResponsePath)
 const queryParamsPath = join(root, 'src/utils/queryParams.ts')
-const queryParamsSource = readFileSync(queryParamsPath, 'utf8')
+const queryParamsSource = readSourceAt(queryParamsPath)
 const safeUrlPath = join(root, 'src/utils/safeUrl.ts')
-const safeUrlSource = readFileSync(safeUrlPath, 'utf8')
+const safeUrlSource = readSourceAt(safeUrlPath)
 const imageUrlPath = join(root, 'src/utils/imageUrl.ts')
-const imageUrlSource = readFileSync(imageUrlPath, 'utf8')
+const imageUrlSource = readSourceAt(imageUrlPath)
 const cspReportPath = join(root, 'src/app/api/security/csp-report/route.ts')
-const cspReportSource = readFileSync(cspReportPath, 'utf8')
+const cspReportSource = readSourceAt(cspReportPath)
 const structuredDataPath = join(root, 'src/utils/structuredData.tsx')
-const structuredDataSource = readFileSync(structuredDataPath, 'utf8')
+const structuredDataSource = readSourceAt(structuredDataPath)
 const advancedFilteringPath = join(root, 'src/utils/advancedFiltering.ts')
-const advancedFilteringSource = readFileSync(advancedFilteringPath, 'utf8')
+const advancedFilteringSource = readSourceAt(advancedFilteringPath)
 const activityLoggerPath = join(root, 'src/utils/activityLogger.ts')
-const activityLoggerSource = readFileSync(activityLoggerPath, 'utf8')
+const activityLoggerSource = readSourceAt(activityLoggerPath)
 const boardPagePath = join(root, 'src/app/[locale]/board/page.tsx')
-const boardPageSource = readFileSync(boardPagePath, 'utf8')
+const boardPageSource = readSourceAt(boardPagePath)
 const projectsPagePath = join(root, 'src/app/[locale]/projects/page.tsx')
-const projectsPageSource = readFileSync(projectsPagePath, 'utf8')
+const projectsPageSource = readSourceAt(projectsPagePath)
 const cooperativeInfoPath = join(
   root,
   'src/app/[locale]/mypage/profile/components/CooperativeInfo.tsx'
 )
-const cooperativeInfoSource = readFileSync(cooperativeInfoPath, 'utf8')
+const cooperativeInfoSource = readSourceAt(cooperativeInfoPath)
 const adminSettingsPagePath = join(root, 'src/app/[locale]/admin/settings/page.tsx')
-const adminSettingsPageSource = readFileSync(adminSettingsPagePath, 'utf8')
+const adminSettingsPageSource = readSourceAt(adminSettingsPagePath)
 const adminMembersPagePath = join(root, 'src/app/[locale]/admin/members/page.tsx')
-const adminMembersPageSource = readFileSync(adminMembersPagePath, 'utf8')
+const adminMembersPageSource = readSourceAt(adminMembersPagePath)
 const adminMembersRefreshAvoidsUrlCachebuster =
   /(?:cache:\s*|fetchOptions\.cache\s*=\s*)['"]no-store['"]/.test(adminMembersPageSource) &&
   /Cache-Control['"]?\s*:\s*['"]no-cache, no-store, must-revalidate['"]/.test(
@@ -2357,33 +2716,33 @@ const adminMembersRefreshAvoidsUrlCachebuster =
   !/params\.append\(['"]_t['"]/.test(adminMembersPageSource) &&
   !/_t['"]?,\s*Date\.now\(\)/.test(adminMembersPageSource)
 const adminNotificationsPagePath = join(root, 'src/app/[locale]/admin/notifications/page.tsx')
-const adminNotificationsPageSource = readFileSync(adminNotificationsPagePath, 'utf8')
+const adminNotificationsPageSource = readSourceAt(adminNotificationsPagePath)
 const adminReportGeneratorPath = join(root, 'src/app/[locale]/admin/components/ReportGenerator.tsx')
-const adminReportGeneratorSource = readFileSync(adminReportGeneratorPath, 'utf8')
+const adminReportGeneratorSource = readSourceAt(adminReportGeneratorPath)
 const adminReportGenerateApiPath = join(root, 'src/app/api/admin/reports/generate/route.ts')
-const adminReportGenerateApiSource = readFileSync(adminReportGenerateApiPath, 'utf8')
+const adminReportGenerateApiSource = readSourceAt(adminReportGenerateApiPath)
 const recentActivityPath = join(root, 'src/app/[locale]/admin/components/RecentActivity.tsx')
-const recentActivitySource = readFileSync(recentActivityPath, 'utf8')
+const recentActivitySource = readSourceAt(recentActivityPath)
 const activityAnalyticsChartsPath = join(
   root,
   'src/app/[locale]/admin/components/ActivityAnalyticsCharts.tsx'
 )
-const activityAnalyticsChartsSource = readFileSync(activityAnalyticsChartsPath, 'utf8')
+const activityAnalyticsChartsSource = readSourceAt(activityAnalyticsChartsPath)
 const mypageSecuritySettingsPath = join(
   root,
   'src/app/[locale]/mypage/settings/components/SecuritySettings.tsx'
 )
-const mypageSecuritySettingsSource = readFileSync(mypageSecuritySettingsPath, 'utf8')
+const mypageSecuritySettingsSource = readSourceAt(mypageSecuritySettingsPath)
 const mypagePreferenceSettingsPath = join(
   root,
   'src/app/[locale]/mypage/settings/components/PreferenceSettings.tsx'
 )
-const mypagePreferenceSettingsSource = readFileSync(mypagePreferenceSettingsPath, 'utf8')
+const mypagePreferenceSettingsSource = readSourceAt(mypagePreferenceSettingsPath)
 const mypageInterfaceSettingsPath = join(
   root,
   'src/app/[locale]/mypage/settings/components/InterfaceSettings.tsx'
 )
-const mypageInterfaceSettingsSource = readFileSync(mypageInterfaceSettingsPath, 'utf8')
+const mypageInterfaceSettingsSource = readSourceAt(mypageInterfaceSettingsPath)
 const parsesApiWrapperPaginationSafely =
   /parseIntegerParam\(searchParams\.get\(['"]page['"]\),\s*1,\s*\{\s*min:\s*1\s*\}\)/.test(
     apiWrapperSource
@@ -2434,9 +2793,9 @@ const postsApiParsesPaginationSafely =
 // 컴포넌트가 parseIntegerParam을 쓰고, 서버 페이지는 searchParams를 다시
 // 읽지 않아야 한다(await searchParams가 생기면 ISR이 다시 사문화된다).
 const serverBoardViewEarlyPath = join(root, 'src/components/board/ServerBoardView.tsx')
-const serverBoardViewEarlySource = readFileSync(serverBoardViewEarlyPath, 'utf8')
+const serverBoardViewEarlySource = readSourceAt(serverBoardViewEarlyPath)
 const projectsContentEarlyPath = join(root, 'src/app/[locale]/projects/ProjectsContent.tsx')
-const projectsContentEarlySource = readFileSync(projectsContentEarlyPath, 'utf8')
+const projectsContentEarlySource = readSourceAt(projectsContentEarlyPath)
 const boardPageParsesSearchParamsSafely =
   /parseIntegerParam\(searchParams\.get\(['"]page['"]\),\s*1,\s*\{\s*min:\s*1\s*\}\)/.test(
     serverBoardViewEarlySource
@@ -2628,75 +2987,75 @@ const authRedirectBlocklistHandlesLocalePrefixes =
     safeUrlSource
   )
 const adminActivitiesUsersPath = join(root, 'src/app/api/admin/activities/users/route.ts')
-const adminActivitiesUsersSource = readFileSync(adminActivitiesUsersPath, 'utf8')
+const adminActivitiesUsersSource = readSourceAt(adminActivitiesUsersPath)
 const activityLogPath = join(root, 'src/app/api/activities/log/route.ts')
-const activityLogSource = readFileSync(activityLogPath, 'utf8')
+const activityLogSource = readSourceAt(activityLogPath)
 const activityBatchLogPath = join(root, 'src/app/api/activities/batch-log/route.ts')
-const activityBatchLogSource = readFileSync(activityBatchLogPath, 'utf8')
+const activityBatchLogSource = readSourceAt(activityBatchLogPath)
 const adminAnalyticsPatternsPath = join(root, 'src/app/api/admin/analytics/patterns/route.ts')
-const adminAnalyticsPatternsSource = readFileSync(adminAnalyticsPatternsPath, 'utf8')
+const adminAnalyticsPatternsSource = readSourceAt(adminAnalyticsPatternsPath)
 const adminAnalyticsTrendsPath = join(root, 'src/app/api/admin/analytics/trends/route.ts')
-const adminAnalyticsTrendsSource = readFileSync(adminAnalyticsTrendsPath, 'utf8')
+const adminAnalyticsTrendsSource = readSourceAt(adminAnalyticsTrendsPath)
 const adminPerformancePath = join(root, 'src/app/api/admin/performance/route.ts')
-const adminPerformanceSource = readFileSync(adminPerformancePath, 'utf8')
+const adminPerformanceSource = readSourceAt(adminPerformancePath)
 const adminStatsPath = join(root, 'src/app/api/admin/stats/route.ts')
-const adminStatsSource = readFileSync(adminStatsPath, 'utf8')
+const adminStatsSource = readSourceAt(adminStatsPath)
 const adminStatsMonthlyPath = join(root, 'src/app/api/admin/stats/monthly/route.ts')
-const adminStatsMonthlySource = readFileSync(adminStatsMonthlyPath, 'utf8')
+const adminStatsMonthlySource = readSourceAt(adminStatsMonthlyPath)
 const adminMembersStatsPath = join(root, 'src/app/api/admin/members/stats/route.ts')
-const adminMembersStatsSource = readFileSync(adminMembersStatsPath, 'utf8')
+const adminMembersStatsSource = readSourceAt(adminMembersStatsPath)
 const adminPostsStatsPath = join(root, 'src/app/api/admin/posts/stats/route.ts')
-const adminPostsStatsSource = readFileSync(adminPostsStatsPath, 'utf8')
+const adminPostsStatsSource = readSourceAt(adminPostsStatsPath)
 const adminActivityPath = join(root, 'src/app/api/admin/activity/route.ts')
-const adminActivitySource = readFileSync(adminActivityPath, 'utf8')
+const adminActivitySource = readSourceAt(adminActivityPath)
 const adminArtistsPath = join(root, 'src/app/api/admin/artists/route.ts')
-const adminArtistsSource = readFileSync(adminArtistsPath, 'utf8')
+const adminArtistsSource = readSourceAt(adminArtistsPath)
 const adminArtistsMembersPath = join(root, 'src/app/api/admin/artists/members/route.ts')
-const adminArtistsMembersSource = readFileSync(adminArtistsMembersPath, 'utf8')
+const adminArtistsMembersSource = readSourceAt(adminArtistsMembersPath)
 const adminMembersPath = join(root, 'src/app/api/admin/members/route.ts')
-const adminMembersSource = readFileSync(adminMembersPath, 'utf8')
+const adminMembersSource = readSourceAt(adminMembersPath)
 const adminMembersAdvancedSearchPath = join(
   root,
   'src/app/api/admin/members/advanced-search/route.ts'
 )
-const adminMembersAdvancedSearchSource = readFileSync(adminMembersAdvancedSearchPath, 'utf8')
+const adminMembersAdvancedSearchSource = readSourceAt(adminMembersAdvancedSearchPath)
 const settingsAdminAuthPath = join(root, 'src/lib/server/settingsAdminAuth.ts')
 const settingsAdminAuthSource = existsSync(settingsAdminAuthPath)
-  ? readFileSync(settingsAdminAuthPath, 'utf8')
+  ? readSourceAt(settingsAdminAuthPath)
   : ''
 const adminSettingsApiPath = join(root, 'src/app/api/admin/settings/route.ts')
-const adminSettingsApiSource = readFileSync(adminSettingsApiPath, 'utf8')
+const adminSettingsApiSource = readSourceAt(adminSettingsApiPath)
 const adminSettingsBackupApiPath = join(root, 'src/app/api/admin/settings/backup/route.ts')
-const adminSettingsBackupApiSource = readFileSync(adminSettingsBackupApiPath, 'utf8')
+const adminSettingsBackupApiSource = readSourceAt(adminSettingsBackupApiPath)
 const adminSettingsCacheApiPath = join(root, 'src/app/api/admin/settings/cache/route.ts')
-const adminSettingsCacheApiSource = readFileSync(adminSettingsCacheApiPath, 'utf8')
+const adminSettingsCacheApiSource = readSourceAt(adminSettingsCacheApiPath)
 const adminSettingsResetApiPath = join(root, 'src/app/api/admin/settings/reset/route.ts')
-const adminSettingsResetApiSource = readFileSync(adminSettingsResetApiPath, 'utf8')
+const adminSettingsResetApiSource = readSourceAt(adminSettingsResetApiPath)
 const adminPostsPath = join(root, 'src/app/api/admin/posts/route.ts')
-const adminPostsSource = readFileSync(adminPostsPath, 'utf8')
+const adminPostsSource = readSourceAt(adminPostsPath)
 const adminPostsAdvancedSearchPath = join(root, 'src/app/api/admin/posts/advanced-search/route.ts')
-const adminPostsAdvancedSearchSource = readFileSync(adminPostsAdvancedSearchPath, 'utf8')
+const adminPostsAdvancedSearchSource = readSourceAt(adminPostsAdvancedSearchPath)
 const adminReportsGeneratePath = join(root, 'src/app/api/admin/reports/generate/route.ts')
-const adminReportsGenerateSource = readFileSync(adminReportsGeneratePath, 'utf8')
+const adminReportsGenerateSource = readSourceAt(adminReportsGeneratePath)
 const adminActivitiesRealTimePath = join(root, 'src/app/api/admin/activities/real-time/route.ts')
-const adminActivitiesRealTimeSource = readFileSync(adminActivitiesRealTimePath, 'utf8')
+const adminActivitiesRealTimeSource = readSourceAt(adminActivitiesRealTimePath)
 const adminActivitiesRealTimeStreamPath = join(
   root,
   'src/app/api/admin/activities/real-time/stream/route.ts'
 )
-const adminActivitiesRealTimeStreamSource = readFileSync(adminActivitiesRealTimeStreamPath, 'utf8')
+const adminActivitiesRealTimeStreamSource = readSourceAt(adminActivitiesRealTimeStreamPath)
 const apiPerformanceMonitorPath = join(root, 'src/utils/apiPerformanceMonitor.ts')
-const apiPerformanceMonitorSource = readFileSync(apiPerformanceMonitorPath, 'utf8')
+const apiPerformanceMonitorSource = readSourceAt(apiPerformanceMonitorPath)
 const adminAnalyticsConstantsPath = join(root, 'src/constants/adminAnalytics.ts')
-const adminAnalyticsConstantsSource = readFileSync(adminAnalyticsConstantsPath, 'utf8')
+const adminAnalyticsConstantsSource = readSourceAt(adminAnalyticsConstantsPath)
 const userSettingsConstantsPath = join(root, 'src/constants/userSettings.ts')
-const userSettingsConstantsSource = readFileSync(userSettingsConstantsPath, 'utf8')
+const userSettingsConstantsSource = readSourceAt(userSettingsConstantsPath)
 const userSettingsApiPath = join(root, 'src/app/api/settings/route.ts')
-const userSettingsApiSource = readFileSync(userSettingsApiPath, 'utf8')
+const userSettingsApiSource = readSourceAt(userSettingsApiPath)
 const userSettingsResetApiPath = join(root, 'src/app/api/settings/reset/route.ts')
-const userSettingsResetApiSource = readFileSync(userSettingsResetApiPath, 'utf8')
+const userSettingsResetApiSource = readSourceAt(userSettingsResetApiPath)
 const activityConstantsPath = join(root, 'src/constants/activity.ts')
-const activityConstantsSource = readFileSync(activityConstantsPath, 'utf8')
+const activityConstantsSource = readSourceAt(activityConstantsPath)
 // 단계 4(활동로그·세션 Turso 전환)에서 admin/activities/users와
 // admin/analytics/patterns가 수동 Supabase 쿼리 빌더(`query.eq(...)`)를
 // Turso 쿼리 계층 호출(`listActivitiesWithProfile({ userId, ... })`/
@@ -3165,7 +3524,7 @@ const boardRoomDynamicRouteChecks = [
     methods: ['DELETE'],
   },
 ].filter(({ path: routePath, label, methods }) => {
-  const source = readFileSync(join(root, routePath), 'utf8')
+  const source = readSourceAt(join(root, routePath))
   return !(
     /validateUUID/.test(source) &&
     source.includes(label) &&
@@ -3177,21 +3536,21 @@ const boardRoomDynamicRouteChecks = [
   )
 })
 const boardRoomAttendeesPath = join(root, 'src/app/api/board-room/attendees/route.ts')
-const boardRoomAttendeesSource = readFileSync(boardRoomAttendeesPath, 'utf8')
+const boardRoomAttendeesSource = readSourceAt(boardRoomAttendeesPath)
 const boardRoomConstantsPath = join(root, 'src/constants/boardRoom.ts')
-const boardRoomConstantsSource = readFileSync(boardRoomConstantsPath, 'utf8')
+const boardRoomConstantsSource = readSourceAt(boardRoomConstantsPath)
 const boardRoomMeetingsPath = join(root, 'src/app/api/board-room/meetings/route.ts')
-const boardRoomMeetingsSource = readFileSync(boardRoomMeetingsPath, 'utf8')
+const boardRoomMeetingsSource = readSourceAt(boardRoomMeetingsPath)
 const boardRoomMeetingDetailPath = join(root, 'src/app/api/board-room/meetings/[id]/route.ts')
-const boardRoomMeetingDetailSource = readFileSync(boardRoomMeetingDetailPath, 'utf8')
+const boardRoomMeetingDetailSource = readSourceAt(boardRoomMeetingDetailPath)
 const boardRoomAgendaDetailPath = join(root, 'src/app/api/board-room/agendas/[id]/route.ts')
-const boardRoomAgendaDetailSource = readFileSync(boardRoomAgendaDetailPath, 'utf8')
+const boardRoomAgendaDetailSource = readSourceAt(boardRoomAgendaDetailPath)
 const boardRoomMinutesPath = join(root, 'src/app/api/board-room/minutes/route.ts')
-const boardRoomMinutesSource = readFileSync(boardRoomMinutesPath, 'utf8')
+const boardRoomMinutesSource = readSourceAt(boardRoomMinutesPath)
 const boardRoomMinutesDetailPath = join(root, 'src/app/api/board-room/minutes/[id]/route.ts')
-const boardRoomMinutesDetailSource = readFileSync(boardRoomMinutesDetailPath, 'utf8')
+const boardRoomMinutesDetailSource = readSourceAt(boardRoomMinutesDetailPath)
 const contentFormatConstantsPath = join(root, 'src/constants/contentFormat.ts')
-const contentFormatConstantsSource = readFileSync(contentFormatConstantsPath, 'utf8')
+const contentFormatConstantsSource = readSourceAt(contentFormatConstantsPath)
 // Task 4: board_meeting_attendees 권위가 Turso로 옮겨지며 GET의 조회가
 // Supabase `.eq('meeting_id', sanitizedMeetingId)`에서 쿼리 계층 호출
 // `listMeetingAttendees(sanitizedMeetingId)`(src/db/queries/board.ts)로,
@@ -3313,7 +3672,7 @@ const boardRoomCreateRouteIdChecks = [
     lookupPattern: /getDateOptionMeetingId\(sanitizedOptionId\)/,
   },
 ].filter(({ path: routePath, idLabel, rawName, sanitizedName, dbWritePattern, lookupPattern }) => {
-  const source = readFileSync(join(root, routePath), 'utf8')
+  const source = readSourceAt(join(root, routePath))
   return !(
     /validateUUID/.test(source) &&
     source.includes(idLabel) &&
@@ -3324,57 +3683,57 @@ const boardRoomCreateRouteIdChecks = [
   )
 })
 const articleCardPath = join(root, 'src/components/ArticleCard.tsx')
-const articleCardSource = readFileSync(articleCardPath, 'utf8')
+const articleCardSource = readSourceAt(articleCardPath)
 const ticketingCardPath = join(root, 'src/components/TicketingCard.tsx')
-const ticketingCardSource = readFileSync(ticketingCardPath, 'utf8')
+const ticketingCardSource = readSourceAt(ticketingCardPath)
 const featuredProjectsPath = join(root, 'src/components/FeaturedProjects.tsx')
-const featuredProjectsSource = readFileSync(featuredProjectsPath, 'utf8')
+const featuredProjectsSource = readSourceAt(featuredProjectsPath)
 const featuredArtistsPath = join(root, 'src/components/FeaturedArtists.tsx')
-const featuredArtistsSource = readFileSync(featuredArtistsPath, 'utf8')
+const featuredArtistsSource = readSourceAt(featuredArtistsPath)
 // 홈의 아티스트 사진은 FeaturedArtists(타이포 인덱스로 재설계되어 사진이 없다)가
 // 아니라 히어로 필름스트립이 렌더한다. 정화 지점도 그쪽으로 옮겨졌다.
 const heroFilmstripPath = join(root, 'src/components/HeroFilmstrip.tsx')
-const heroFilmstripSource = readFileSync(heroFilmstripPath, 'utf8')
+const heroFilmstripSource = readSourceAt(heroFilmstripPath)
 const artistProjectsPath = join(root, 'src/components/ArtistProjects.tsx')
-const artistProjectsSource = readFileSync(artistProjectsPath, 'utf8')
+const artistProjectsSource = readSourceAt(artistProjectsPath)
 const baseCardPath = join(root, 'src/components/common/BaseCard.tsx')
-const baseCardSource = readFileSync(baseCardPath, 'utf8')
+const baseCardSource = readSourceAt(baseCardPath)
 const lightboxPath = join(root, 'src/components/Lightbox.tsx')
-const lightboxSource = readFileSync(lightboxPath, 'utf8')
+const lightboxSource = readSourceAt(lightboxPath)
 const optimizedImagePath = join(root, 'src/components/OptimizedImage.tsx')
-const optimizedImageSource = readFileSync(optimizedImagePath, 'utf8')
+const optimizedImageSource = readSourceAt(optimizedImagePath)
 const projectsContentPath = join(root, 'src/app/[locale]/projects/ProjectsContent.tsx')
-const projectsContentSource = readFileSync(projectsContentPath, 'utf8')
+const projectsContentSource = readSourceAt(projectsContentPath)
 const adminArtistCardPath = join(root, 'src/app/[locale]/admin/artists/components/ArtistCard.tsx')
-const adminArtistCardSource = readFileSync(adminArtistCardPath, 'utf8')
+const adminArtistCardSource = readSourceAt(adminArtistCardPath)
 const adminAssignArtistModalPath = join(
   root,
   'src/app/[locale]/admin/artists/components/AssignArtistModal.tsx'
 )
-const adminAssignArtistModalSource = readFileSync(adminAssignArtistModalPath, 'utf8')
+const adminAssignArtistModalSource = readSourceAt(adminAssignArtistModalPath)
 const postContentRendererPath = join(root, 'src/components/PostContentRenderer.tsx')
-const postContentRendererSource = readFileSync(postContentRendererPath, 'utf8')
+const postContentRendererSource = readSourceAt(postContentRendererPath)
 const artistProfilePagePath = join(root, 'src/app/[locale]/artists/[slug]/page.tsx')
-const artistProfilePageSource = readFileSync(artistProfilePagePath, 'utf8')
+const artistProfilePageSource = readSourceAt(artistProfilePagePath)
 const artistsContentPath = join(root, 'src/app/[locale]/artists/ArtistsContent.tsx')
-const artistsContentSource = readFileSync(artistsContentPath, 'utf8')
+const artistsContentSource = readSourceAt(artistsContentPath)
 const portfolioLinksPath = join(
   root,
   'src/app/[locale]/mypage/artist/components/PortfolioLinks.tsx'
 )
-const portfolioLinksSource = readFileSync(portfolioLinksPath, 'utf8')
+const portfolioLinksSource = readSourceAt(portfolioLinksPath)
 const youtubeVideosPath = join(root, 'src/app/[locale]/mypage/artist/components/YoutubeVideos.tsx')
-const youtubeVideosSource = readFileSync(youtubeVideosPath, 'utf8')
+const youtubeVideosSource = readSourceAt(youtubeVideosPath)
 const projectDetailPath = join(root, 'src/app/[locale]/projects/[slug]/ProjectDetailContent.tsx')
-const projectDetailSource = readFileSync(projectDetailPath, 'utf8')
+const projectDetailSource = readSourceAt(projectDetailPath)
 const projectDetailPagePath = join(root, 'src/app/[locale]/projects/[slug]/page.tsx')
-const projectDetailPageSource = readFileSync(projectDetailPagePath, 'utf8')
+const projectDetailPageSource = readSourceAt(projectDetailPagePath)
 const adminLayoutPath = join(root, 'src/app/[locale]/admin/components/AdminLayout.tsx')
-const adminLayoutSource = readFileSync(adminLayoutPath, 'utf8')
+const adminLayoutSource = readSourceAt(adminLayoutPath)
 const adminDashboardPath = join(root, 'src/app/[locale]/admin/page.tsx')
-const adminDashboardSource = readFileSync(adminDashboardPath, 'utf8')
+const adminDashboardSource = readSourceAt(adminDashboardPath)
 const boardEditPagePath = join(root, 'src/app/[locale]/board/[id]/edit/page.tsx')
-const boardEditPageSource = readFileSync(boardEditPagePath, 'utf8')
+const boardEditPageSource = readSourceAt(boardEditPagePath)
 const validatesBoardRouteIdsBeforeDataAccess =
   /function normalizePostRouteId/.test(boardDetailPageSource) &&
   /validateUUID\(id,\s*['"]게시글 ID['"]\)/.test(boardDetailPageSource) &&
@@ -3385,45 +3744,45 @@ const validatesBoardRouteIdsBeforeDataAccess =
   /const postId = postIdValidation\.sanitized/.test(boardEditPageSource) &&
   !/query: \{ redirect: `\/board\/\$\{id\}\/edit` \}/.test(boardEditPageSource)
 const boardWritePagePath = join(root, 'src/app/[locale]/board/write/page.tsx')
-const boardWritePageSource = readFileSync(boardWritePagePath, 'utf8')
+const boardWritePageSource = readSourceAt(boardWritePagePath)
 const activityPagePath = join(root, 'src/app/[locale]/mypage/activity/page.tsx')
-const activityPageSource = readFileSync(activityPagePath, 'utf8')
+const activityPageSource = readSourceAt(activityPagePath)
 const registerPendingPagePath = join(root, 'src/app/[locale]/register/pending/page.tsx')
-const registerPendingPageSource = readFileSync(registerPendingPagePath, 'utf8')
+const registerPendingPageSource = readSourceAt(registerPendingPagePath)
 const errorBoundaryPath = join(root, 'src/components/ErrorBoundary.tsx')
-const errorBoundarySource = readFileSync(errorBoundaryPath, 'utf8')
+const errorBoundarySource = readSourceAt(errorBoundaryPath)
 const errorTrackingPath = join(root, 'src/utils/errorTracking.ts')
-const errorTrackingSource = readFileSync(errorTrackingPath, 'utf8')
+const errorTrackingSource = readSourceAt(errorTrackingPath)
 const clientErrorApiPath = join(root, 'src/app/api/client-error/route.ts')
-const clientErrorApiSource = readFileSync(clientErrorApiPath, 'utf8')
+const clientErrorApiSource = readSourceAt(clientErrorApiPath)
 const routeProtectionPath = join(root, 'src/utils/routeProtection.ts')
-const routeProtectionSource = readFileSync(routeProtectionPath, 'utf8')
+const routeProtectionSource = readSourceAt(routeProtectionPath)
 const loadingStatePath = join(root, 'src/hooks/useLoadingState.ts')
-const loadingStateSource = readFileSync(loadingStatePath, 'utf8')
+const loadingStateSource = readSourceAt(loadingStatePath)
 const commentLikeButtonPath = join(root, 'src/components/CommentLikeButton.tsx')
-const commentLikeButtonSource = readFileSync(commentLikeButtonPath, 'utf8')
+const commentLikeButtonSource = readSourceAt(commentLikeButtonPath)
 const profilePhotoUploaderPath = join(root, 'src/components/ProfilePhotoUploader.tsx')
-const profilePhotoUploaderSource = readFileSync(profilePhotoUploaderPath, 'utf8')
+const profilePhotoUploaderSource = readSourceAt(profilePhotoUploaderPath)
 const notificationNavigationPath = join(root, 'src/utils/notificationNavigation.ts')
-const notificationNavigationSource = readFileSync(notificationNavigationPath, 'utf8')
+const notificationNavigationSource = readSourceAt(notificationNavigationPath)
 const notificationDropdownPath = join(root, 'src/components/NotificationDropdown.tsx')
-const notificationDropdownSource = readFileSync(notificationDropdownPath, 'utf8')
+const notificationDropdownSource = readSourceAt(notificationDropdownPath)
 const notificationsPagePath = join(root, 'src/app/[locale]/notifications/page.tsx')
-const notificationsPageSource = readFileSync(notificationsPagePath, 'utf8')
+const notificationsPageSource = readSourceAt(notificationsPagePath)
 const adminReportsPagePath = join(root, 'src/app/[locale]/admin/reports/page.tsx')
-const adminReportsPageSource = readFileSync(adminReportsPagePath, 'utf8')
+const adminReportsPageSource = readSourceAt(adminReportsPagePath)
 const eventApplicationsPagePath = join(root, 'src/app/[locale]/admin/event-applications/page.tsx')
-const eventApplicationsPageSource = readFileSync(eventApplicationsPagePath, 'utf8')
+const eventApplicationsPageSource = readSourceAt(eventApplicationsPagePath)
 const boardDocumentListPath = join(root, 'src/app/[locale]/board-room/_components/DocumentList.tsx')
-const boardDocumentListSource = readFileSync(boardDocumentListPath, 'utf8')
+const boardDocumentListSource = readSourceAt(boardDocumentListPath)
 const footerPath = join(root, 'src/components/Footer.tsx')
-const footerSource = readFileSync(footerPath, 'utf8')
+const footerSource = readSourceAt(footerPath)
 const connectPagePath = join(root, 'src/app/[locale]/connect/page.tsx')
-const connectPageSource = readFileSync(connectPagePath, 'utf8')
+const connectPageSource = readSourceAt(connectPagePath)
 const eventApplicationFormPath = join(root, 'src/components/EventApplicationForm.tsx')
-const eventApplicationFormSource = readFileSync(eventApplicationFormPath, 'utf8')
+const eventApplicationFormSource = readSourceAt(eventApplicationFormPath)
 const boardRoomMeetingsPagePath = join(root, 'src/app/[locale]/board-room/meetings/page.tsx')
-const boardRoomMeetingsPageSource = readFileSync(boardRoomMeetingsPagePath, 'utf8')
+const boardRoomMeetingsPageSource = readSourceAt(boardRoomMeetingsPagePath)
 const localizedNavigationFiles = [
   ...globSync('src/app/[[]locale[]]/**/*.tsx', {
     cwd: root,
@@ -3435,11 +3794,11 @@ const localizedNavigationFiles = [
   }),
 ]
 const nonLocalizedNextLinkImports = localizedNavigationFiles.filter(file => {
-  const source = readFileSync(join(root, file), 'utf8')
+  const source = readSourceAt(join(root, file))
   return /from\s+['"]next\/link['"]/.test(source)
 })
 const nonLocalizedUseRouterImports = localizedNavigationFiles.filter(file => {
-  const source = readFileSync(join(root, file), 'utf8')
+  const source = readSourceAt(join(root, file))
   return (
     /from\s+['"]next\/navigation['"]/.test(source) &&
     /import\s+\{[^}]*\buseRouter\b[^}]*\}\s+from\s+['"]next\/navigation['"]/.test(source)
@@ -3853,9 +4212,9 @@ const sortsBoardRoomMeetingYearsSafely =
   /날짜 미상/.test(boardRoomMeetingsPageSource) &&
   !/Number\(b\)\s*-\s*Number\(a\)/.test(boardRoomMeetingsPageSource)
 const mediaUploadPath = join(root, 'src/app/api/media/upload/route.ts')
-const mediaUploadSource = readFileSync(mediaUploadPath, 'utf8')
+const mediaUploadSource = readSourceAt(mediaUploadPath)
 const cleanupTempAttachmentsPath = join(root, 'src/app/api/cleanup/temp-attachments/route.ts')
-const cleanupTempAttachmentsSource = readFileSync(cleanupTempAttachmentsPath, 'utf8')
+const cleanupTempAttachmentsSource = readSourceAt(cleanupTempAttachmentsPath)
 const avoidsServerOperationalConsoleLogs =
   /createLogger\(['"]api\/security\/csp-report['"]\)/.test(cspReportSource) &&
   /log\.debug\(['"]Ignored CSP report['"]/.test(cspReportSource) &&
@@ -3907,25 +4266,25 @@ const cleanupSkipsUnsafeTempAttachmentUrls =
   /filter\(\(path\):\s*path is string => path !== null\)/.test(cleanupTempAttachmentsSource) &&
   !/const\s+url\s*=\s*new URL\(att\.file_url\)/.test(cleanupTempAttachmentsSource)
 const unsafeSearchParamIntegerParsers = appFiles.filter(file => {
-  const source = readFileSync(join(root, file), 'utf8')
+  const source = readSourceAt(join(root, file))
   return (
     /parseInt\s*\([^)]*searchParams/.test(source) ||
     /Number\.parseInt\s*\([^)]*searchParams/.test(source)
   )
 })
 const jsonBodyEmptyObjectFallbacks = appFiles.filter(file => {
-  const source = readFileSync(join(root, file), 'utf8')
+  const source = readSourceAt(join(root, file))
   return /request\.json\(\)\.catch\(\s*\(\)\s*=>\s*\(\{\}\)\s*\)/.test(source)
 })
 const adminMutationJsonBypasses = globSync('src/app/api/admin/**/route.ts', {
   cwd: root,
   exclude: ['**/node_modules/**', '**/.next/**'],
 }).filter(file => {
-  const source = readFileSync(join(root, file), 'utf8')
+  const source = readSourceAt(join(root, file))
   return /request\.json\(\)/.test(source) && !/parseJsonObjectBody/.test(source)
 })
 const unsafeBlankWindowOpeners = appFiles.filter(file => {
-  const source = readFileSync(join(root, file), 'utf8')
+  const source = readSourceAt(join(root, file))
   return /window\.open\([^)]*,\s*['"]_blank['"]\s*\)/.test(source)
 })
 
@@ -5274,6 +5633,42 @@ if (appFilesMissed.length > 0) {
   )
 }
 
+if (ownershipGateViolations.length > 0) {
+  failures.push(
+    `Ownership gates must exist as branches that actually deny — the condition plus the response it returns, in the expected number of places. Checking only that the expression appears somewhere let a reviewer delete the attachment-delete gate outright (any logged-in user could then delete another member's attachments) while this file still exited 0:\n${ownershipGateViolations
+      .map(entry => `- ${entry}`)
+      .join('\n')}`
+  )
+}
+
+if (authorizationHelperBodyViolations.length > 0) {
+  failures.push(
+    `Authorization helper bodies must keep their deny branches — pinning only the call sites lets someone loosen the helper itself and every caller opens at once (checkAdminPermission gates every auth: 'admin' route; requireActiveMember gates 27 files). Postgres RLS is gone, so these bodies are the boundary. Missing branch(es):\n${authorizationHelperBodyViolations
+      .map(entry => `- ${entry}`)
+      .join('\n')}`
+  )
+}
+
+if (rawReadFileCallSites !== RAW_READ_FILE_CALL_SITES) {
+  failures.push(
+    `This guard file must read every source through readSourceAt() (comments stripped) — it found ${rawReadFileCallSites} direct file-read call(s) instead of the expected ${RAW_READ_FILE_CALL_SITES} (the bodies of readSourceAt and readRawSourceAt). A raw read means an authorization check can be commented out while its text still satisfies a positive assertion; that is exactly how the posts/[id] ownership gates passed after being deleted.`
+  )
+}
+
+if (unexpectedRawSourceBindings.length > 0 || missingRawSourceBindings.length > 0) {
+  failures.push(
+    `readRawSourceAt() is only for assertions whose contract is the comment/doc wording itself (the rate limiter fail-closed notes). Any other use puts a check back on comment text.${
+      unexpectedRawSourceBindings.length > 0
+        ? `\nUnexpected raw source binding(s):\n${unexpectedRawSourceBindings.map(name => `- ${name}`).join('\n')}`
+        : ''
+    }${
+      missingRawSourceBindings.length > 0
+        ? `\nExpected raw source binding(s) that disappeared (update ALLOWED_RAW_SOURCE_BINDINGS deliberately):\n${missingRawSourceBindings.map(name => `- ${name}`).join('\n')}`
+        : ''
+    }`
+  )
+}
+
 if (privilegedRouteFiles.length < PRIVILEGED_ROUTE_FILES_MIN) {
   failures.push(
     `The privileged-route scan (src/app/api/admin, src/app/api/board-room) covered only ${privilegedRouteFiles.length} file(s) (expected at least ${PRIVILEGED_ROUTE_FILES_MIN}). This scan is what forces every admin/board-room handler to declare an auth gate; an empty scan silently exempts all of them.`
@@ -5596,7 +5991,7 @@ if (requiredAuthHelperCallViolations.length > 0) {
 // stripStringLiterals까지 거친 소스로 본다 — 문자열 리터럴("applyRateLimit" 같은
 // 가짜 흔적)로 이 검사를 속이지 못하게 하기 위해서다.
 const memberSignupRoutePath = join(root, 'src/app/api/member-signup/route.ts')
-const memberSignupRouteRawSource = readFileSync(memberSignupRoutePath, 'utf8')
+const memberSignupRouteRawSource = readSourceAt(memberSignupRoutePath)
 const memberSignupRouteSource = stripStringLiterals(
   stripCommentsAndImports(memberSignupRouteRawSource)
 )
@@ -5628,7 +6023,7 @@ if (memberSignupRouteTrustsClientRegistrationStatus) {
 }
 
 const authServerPath = join(root, 'src/lib/auth/server.ts')
-const authServerSource = readFileSync(authServerPath, 'utf8')
+const authServerSource = readSourceAt(authServerPath)
 const authServerStripped = stripComments(authServerSource)
 if (/disableSignUp:\s*true/.test(authServerStripped)) {
   failures.push(
@@ -5647,7 +6042,7 @@ if (/disableSignUp:\s*true/.test(authServerStripped)) {
 // Better Auth 핸들러(betterAuthPOST)로 위임하는 코드를 포함하지 않는다 —
 // 위임 호출이 남아 있으면 거부가 장식일 뿐 실제로는 통과시킨다는 뜻이다.
 const authCatchAllPath = join(root, 'src/app/api/auth/[...all]/route.ts')
-const authCatchAllSource = readFileSync(authCatchAllPath, 'utf8')
+const authCatchAllSource = readSourceAt(authCatchAllPath)
 const authCatchAllStripped = stripStringLiterals(stripCommentsAndImports(authCatchAllSource))
 const signUpEmailBlockMatch = authCatchAllStripped.match(
   /if \(isSignUpEmailPath\(request\)\) \{([\s\S]*?)\n  \}/
@@ -5682,7 +6077,7 @@ const supabaseAuthSessionCallPattern =
 // 만든다). 하한·서브트리 하한·미커버 서브트리 자기검사가 그 한 목록에 걸려
 // 있으므로, 글롭이 좁아지면 이 가드와 아래 RPC 가드도 함께 실패한다.
 const supabaseAuthSessionCallOffenders = srcAllFiles.filter(file => {
-  const source = readFileSync(join(root, file), 'utf8')
+  const source = readSourceAt(join(root, file))
   return supabaseAuthSessionCallPattern.test(stripComments(source))
 })
 if (supabaseAuthSessionCallOffenders.length > 0) {
@@ -5714,7 +6109,7 @@ const rpcUserIdScanFiles = srcAllFiles.filter(
 )
 const rpcUserIdViolations = []
 for (const file of rpcUserIdScanFiles) {
-  const raw = readFileSync(join(root, file), 'utf8')
+  const raw = readSourceAt(join(root, file))
   const stripped = stripStringLiterals(stripCommentsAndImports(raw))
   for (const match of stripped.matchAll(/p_user_ids?\s*:\s*([^,}\n]+)/g)) {
     const token = match[1].trim()
