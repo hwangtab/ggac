@@ -481,47 +481,74 @@ export async function listRecentProfilesForActivity(
 }
 
 /**
- * 충돌(같은 id로 다시 upsertProfile을 호출) 시 절대 갱신하지 않는 컬럼
- * (camelCase, Drizzle 필드명 기준). 전부 "누가 무엇을 할 수 있는가"를 뜻하는
- * 컬럼이다 — 이 함수가 대체한 원본 Postgres 트리거
- * (`supabase/migrations/20250108090010_fix_signup_flow.sql:53-65`)의
- * `ON CONFLICT ... DO UPDATE SET`도 이 컬럼들을 넣지 않았다.
+ * 충돌(같은 id로 다시 upsertProfile을 호출) 시 새 값으로 갱신을 **허용하는**
+ * 컬럼의 화이트리스트(camelCase, Drizzle 필드명 기준). 여기 없는 컬럼은
+ * SET 절에 아예 들어가지 않아 원래 값 그대로 남는다.
+ *
+ * 이 함수가 대체한 원본 Postgres 트리거
+ * (`supabase/migrations/20250108090010_fix_signup_flow.sql:53-65`)가
+ * `ON CONFLICT ... DO UPDATE SET`에 실제로 열거한 컬럼과 정확히 같다 —
+ * `email`·`display_name`·`real_name`·`phone_number`·`birth_date`·
+ * `monthly_fee`·`bank_name`·`account_number`·`account_holder`(트리거는
+ * `email`만 무조건 덮어쓰고 나머지는 `COALESCE`를 썼다; 이 함수는 아래
+ * `buildConflictSet`에서 전부 `COALESCE`로 통일한다 — 의미 차이는 없다,
+ * `email`은 두 upsertProfile 호출부 모두 매번 같은 값을 넘긴다).
+ *
+ * **왜 블랙리스트가 아니라 화이트리스트인가.** 이전 구현은
+ * "`registration_status`·`is_active`·`is_admin`·`is_director`·`is_auditor`만
+ * 빼고 전부 갱신"이었다(블랙리스트). 코드리뷰(9pre-2 Important 2)가 그
+ * 구멍을 실측으로 지적했다 — `is_member`는 `buildMemberProfileRow`
+ * (`profileHook.ts:39`)와 `buildSignupProfileRow`(`signupProfile.ts:107`)
+ * 둘 다 항상 `true`를 명시적으로 쓰므로 블랙리스트에 없으면 매번 `true`로
+ * 덮인다. 오늘은 `is_member=false`를 쓰는 코드가 없어 무해하지만, 앞으로
+ * `src/lib/auth/`의 빌더에 컬럼이 추가될 때마다 `src/db/queries/`의 보호
+ * 목록도 같이 고쳐야 하는데 두 파일이 갱신될 이유가 서로 달라 드리프트를
+ * 아무도 못 잡는다 — 블랙리스트의 기본값은 "새 컬럼은 갱신된다"라 위험한
+ * 쪽으로 열려 있다.
+ *
+ * 화이트리스트는 기본값이 반대다 — 새 컬럼이 추가돼도 여기 넣지 않는 한
+ * 충돌 시 갱신되지 않는다. 최악의 실패 모드가 "갱신 누락"(데이터가 낡은
+ * 채로 남음, 다음 배포에서 화이트리스트를 넓히면 바로 고쳐짐)으로 바뀐다
+ * — "권한·승인 상태 유출"(Turso에 PITR이 없어 복구 불가)보다 훨씬 싼
+ * 실패다. 이 표의 위험 비대칭성 때문에 기본값을 안전한 쪽으로 뒤집었다.
  *
  * 지금 있는 호출부(가입 훅, `/api/member-signup`)는 항상 새 id로만 호출해
  * 이 분기에 닿지 않는다. 하지만 재이관·재가입·관리자 복구 헬퍼가 생기는
- * 순간 살아난다 — `buildSignupProfileRow`/`buildMemberProfileRow`는 이
- * 컬럼들에 항상 `pending`/`false`를 명시적으로 채우므로, 여기서 막지
- * 않으면 기존 id와 충돌한 승인된 관리자·이사·감사가 재가입 한 번으로
- * 권한과 승인 상태를 잃는다. Turso에는 PITR이 없어 복구할 수 없다.
+ * 순간 살아난다.
  */
-const CONFLICT_PROTECTED_FIELDS: ReadonlySet<string> = new Set([
-  'registrationStatus',
-  'isActive',
-  'isAdmin',
-  'isDirector',
-  'isAuditor',
+const CONFLICT_UPDATABLE_FIELDS: ReadonlySet<string> = new Set([
+  'email',
+  'displayName',
+  'realName',
+  'phoneNumber',
+  'birthDate',
+  'monthlyFee',
+  'bankName',
+  'accountNumber',
+  'accountHolder',
 ])
 
 /**
  * `values`로부터 onConflictDoUpdate용 `set` 객체를 만든다.
  *
- * - `id`와 `CONFLICT_PROTECTED_FIELDS`는 아예 넣지 않는다 — SET 절에 없는
- *   컬럼은 충돌 시 원래 값 그대로 남는다(id는 어차피 충돌 기준이라 바뀔 일이
- *   없지만, 명시적으로 빼서 의도를 분명히 한다).
- * - 나머지 컬럼은 `COALESCE(excluded.col, member_profiles.col)`로 감싼다.
- *   `buildSignupProfileRow`/`buildMemberProfileRow`는 미입력 필드에
- *   `undefined`가 아니라 명시적 `null`을 쓰므로, Drizzle 기본 동작(`set:
- *   values`)처럼 그 값을 그대로 썼다가는 재이관 등에서 기존 값(전화번호·
- *   계좌번호 등)이 null로 덮인다. COALESCE는 새 값이 null일 때만 기존 값을
- *   지키고, 실제로 값이 오면(예: 정정) 그 값으로 갱신한다 — 원본 트리거의
- *   `COALESCE(EXCLUDED.x, member_profiles.x)`와 같은 의미다.
+ * - `CONFLICT_UPDATABLE_FIELDS`에 있는 컬럼만 SET 절에 넣는다. 그 밖의
+ *   모든 키(`id`, 권한·승인 상태 컬럼, `is_member`, 그리고 앞으로 추가될
+ *   무엇이든)는 화이트리스트 밖이라 자동으로 제외된다 — SET 절에 없는
+ *   컬럼은 충돌 시 원래 값 그대로 남는다.
+ * - 화이트리스트 안 컬럼은 `COALESCE(excluded.col, member_profiles.col)`로
+ *   감싼다. `buildSignupProfileRow`/`buildMemberProfileRow`는 미입력
+ *   필드에 `undefined`가 아니라 명시적 `null`을 쓰므로, Drizzle 기본
+ *   동작(`set: values`)처럼 그 값을 그대로 썼다가는 재이관 등에서 기존
+ *   값(전화번호·계좌번호 등)이 null로 덮인다. COALESCE는 새 값이 null일
+ *   때만 기존 값을 지키고, 실제로 값이 오면(예: 정정) 그 값으로 갱신한다
+ *   — 원본 트리거의 `COALESCE(EXCLUDED.x, member_profiles.x)`와 같은
+ *   의미다.
  */
 function buildConflictSet(values: Record<string, unknown>): Record<string, SQL> {
   const columns = memberProfiles as unknown as Record<string, AnySQLiteColumn>
   const set: Record<string, SQL> = {}
   for (const key of Object.keys(values)) {
-    if (key === 'id') continue
-    if (CONFLICT_PROTECTED_FIELDS.has(key)) continue
+    if (!CONFLICT_UPDATABLE_FIELDS.has(key)) continue
     const column = columns[key]
     if (!column) continue
     set[key] = sql`coalesce(excluded.${sql.identifier(column.name)}, ${column})`
@@ -534,10 +561,11 @@ function buildConflictSet(values: Record<string, unknown>): Record<string, SQL> 
  * 가입 훅·member-signup 라우트가 쓴다. `id`/`email`/`display_name`은 필수,
  * 나머지 컬럼은 DB 기본값(pending/비활성 등)에 맡길 수 있다.
  *
- * id가 충돌하면(재이관·재가입·관리자 복구 등) `registration_status`·
- * `is_active`·`is_admin`·`is_director`·`is_auditor`는 갱신하지 않고, 나머지
- * 컬럼은 새 값이 null이 아닐 때만 갱신한다(`buildConflictSet` 참조) — 신규
- * 생성(id 미존재) 경로는 이 분기와 무관하게 항상 `values`를 그대로 insert한다.
+ * id가 충돌하면(재이관·재가입·관리자 복구 등) `CONFLICT_UPDATABLE_FIELDS`
+ * 화이트리스트 안 컬럼(연락처·계좌 정보 등 "데이터" 컬럼)만 새 값이 null이
+ * 아닐 때 갱신하고, 그 밖의 모든 컬럼(권한·승인 상태 포함)은 화이트리스트
+ * 밖이라 갱신하지 않는다(`buildConflictSet` 참조) — 신규 생성(id 미존재)
+ * 경로는 이 분기와 무관하게 항상 `values`를 그대로 insert한다.
  *
  * @throws DB 쓰기가 실패하면 그대로 던진다(삼키지 않는다) — 호출부가
  * 실패를 어떻게 다룰지(예: member-signup의 202 분기) 결정한다.

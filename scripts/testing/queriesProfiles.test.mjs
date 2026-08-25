@@ -203,17 +203,75 @@ test('upsertProfile 충돌: is_director·is_auditor도 보호 대상이다', asy
   assert.equal(row.is_auditor, true)
 })
 
-test('부정 대조: buildConflictSet에서 보호 컬럼 제외를 지우면 위 보호 테스트가 실패한다(보호가 실제로 이 코드에서 온다는 증거)', async () => {
-  // upsertProfile은 buildConflictSet(values)를 통해 CONFLICT_PROTECTED_FIELDS를
-  // 뺀 set 객체를 onConflictDoUpdate에 넘긴다. 소스에서 그 보호 목록이 실제로
-  // 존재하고 다섯 컬럼을 모두 담고 있는지 직접 확인한다 — 이 목록이 비면(또는
-  // 컬럼이 빠지면) 위 두 통합 테스트가 즉시 실패로 잡아낸다는 것을 문서화한다.
+// 코드리뷰 9pre-2 Important 2 대응: buildConflictSet은 블랙리스트(권한
+// 컬럼만 나열해 빼는 방식)가 아니라 화이트리스트(갱신을 허용할 "데이터"
+// 컬럼만 나열)다. 블랙리스트였던 이전 구현은 is_member가 무방비였다 —
+// 두 빌더(buildMemberProfileRow/buildSignupProfileRow)가 항상 is_member:
+// true를 명시적으로 써서 매번 덮였다. 화이트리스트는 "앞으로 빌더에
+// 추가되는 컬럼"도 기본이 보호(갱신 안 함)이므로, 그 시나리오를 실제
+// 컬럼(is_member·artist_id — 둘 다 화이트리스트 밖)으로 재현한다.
+test('upsertProfile 충돌: 화이트리스트 밖 컬럼(is_member·artist_id)은 "새로 추가된 컬럼"을 흉내내도 자동으로 보호된다', async () => {
+  const { upsertProfile, getProfileById } = await loadFreshProfilesModule()
+  const id = 'p-whitelist-miss'
+
+  await upsertProfile(
+    makeProfile({
+      id,
+      email: 'whitelist-miss@test.local',
+      display_name: '기존 회원',
+      is_member: true,
+      artist_id: null,
+    })
+  )
+
+  // 미래에 buildSignupProfileRow 같은 빌더가 is_member/artist_id를 새로
+  // 채워 보내는 상황을 흉내낸다 — 화이트리스트에 없으므로 값이 와도 무시돼야
+  // 한다(값이 있어도 반영되면 위험한 컬럼이 조용히 뚫린 것).
+  await upsertProfile({
+    id,
+    email: 'whitelist-miss@test.local',
+    display_name: '기존 회원',
+    is_member: false,
+    artist_id: 'artist-999',
+  })
+
+  const row = await getProfileById(id)
+  assert.equal(row.is_member, true, 'is_member는 화이트리스트 밖이라 그대로 남아야 한다')
+  assert.equal(row.artist_id, null, 'artist_id도 화이트리스트 밖이라 그대로 남아야 한다')
+})
+
+test('부정 대조: buildConflictSet에서 보호(화이트리스트 제외) 로직을 지우면 위 보호 테스트가 실패한다(보호가 실제로 이 코드에서 온다는 증거)', async () => {
+  // upsertProfile은 buildConflictSet(values)를 통해 CONFLICT_UPDATABLE_FIELDS
+  // 화이트리스트 안 컬럼만 set 객체에 넣어 onConflictDoUpdate에 넘긴다.
+  // 소스에서 그 화이트리스트가 실제로 존재하고 "데이터" 컬럼 9개만
+  // 담고 있는지(권한·is_member는 없는지) 직접 확인한다 — 이 목록이 넓어지면
+  // 위 보호 테스트들이 즉시 실패로 잡아낸다는 것을 문서화한다.
   const src = readFileSync('src/db/queries/profiles.ts', 'utf8')
-  const match = src.match(/const CONFLICT_PROTECTED_FIELDS[\s\S]*?\n\]\)/)
-  assert.ok(match, 'CONFLICT_PROTECTED_FIELDS 정의를 찾지 못했다')
+  const match = src.match(/const CONFLICT_UPDATABLE_FIELDS[\s\S]*?\n\]\)/)
+  assert.ok(match, 'CONFLICT_UPDATABLE_FIELDS 정의를 찾지 못했다')
   const body = match[0]
-  for (const field of ['registrationStatus', 'isActive', 'isAdmin', 'isDirector', 'isAuditor']) {
-    assert.match(body, new RegExp(field), `${field}이 보호 목록에 있어야 한다`)
+  for (const field of [
+    'email',
+    'displayName',
+    'realName',
+    'phoneNumber',
+    'birthDate',
+    'monthlyFee',
+    'bankName',
+    'accountNumber',
+    'accountHolder',
+  ]) {
+    assert.match(body, new RegExp(field), `${field}은 화이트리스트에 있어야 한다`)
+  }
+  for (const field of [
+    'registrationStatus',
+    'isActive',
+    'isAdmin',
+    'isDirector',
+    'isAuditor',
+    'isMember',
+  ]) {
+    assert.doesNotMatch(body, new RegExp(`'${field}'`), `${field}은 화이트리스트에 있으면 안 된다`)
   }
 })
 
