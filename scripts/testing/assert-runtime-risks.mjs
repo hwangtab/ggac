@@ -139,10 +139,18 @@ function stripCommentsAndImports(source) {
  * 이 저장소에서 requireUser()/requireActiveMember() 같은 호출이 템플릿
  * 보간식 안에서만 등장하는 사례는 없다(grep으로 확인).
  *
- * 문자열을 완전히 삭제하지 않고 공백 한 칸으로 치환하는 이유: 문자열
- * 앞뒤의 코드 토큰이 따옴표 삭제로 인해 우연히 이어 붙어(예:
- * `foo("") + bar` → `foo + bar`가 아니라 `foobar`처럼) 새로운 거짓 매치를
- * 만들 가능성을 차단하기 위해서다.
+ * 문자열을 완전히 삭제하지 않고 공백으로 치환하는 이유: 문자열 앞뒤의 코드
+ * 토큰이 따옴표 삭제로 인해 우연히 이어 붙어(예: `foo("") + bar` →
+ * `foo + bar`가 아니라 `foobar`처럼) 새로운 거짓 매치를 만들 가능성을
+ * 차단하기 위해서다.
+ *
+ * **길이·위치를 보존한다**(`stripComments`와 같은 성질): 리터럴 자리를 같은
+ * 길이의 공백으로 채우고 줄바꿈은 남긴다. 그래서 원본과 출력의 인덱스가
+ * 1:1이고, "문자열이 아닌 진짜 코드에서 이 토큰이 몇 번째 글자에 있는가"를
+ * 찾아 **원본 쪽을 같은 위치에서 잘라낼 수 있다**. 특권 라우트 가드가
+ * `auth:` 키의 위치를 문자열 제거판에서 찾고 값은 원본에서 읽는 데
+ * 이 성질을 쓴다(최종 회차 C-3) — 예전처럼 공백 한 칸으로 뭉개면 두 판본의
+ * 인덱스가 어긋나 그 방식이 성립하지 않는다.
  *
  * 주의: 이 함수가 지운 문자열 내용을 검사하는 기존 부정 단정(예:
  * verify-session의 `!/console\.error\(['"]\[VERIFY-SESSION\] Session
@@ -172,8 +180,12 @@ function stripStringLiterals(source) {
         }
         j += 1
       }
+      // `j`는 이스케이프(`\\` 뒤 두 칸 건너뛰기) 때문에 소스 끝을 넘어설 수
+      // 있다 — 길이 보존이 깨지지 않게 복사 범위를 소스 길이로 자른다.
+      for (let k = i, end = Math.min(j, n); k < end; k += 1) {
+        out += source[k] === '\n' || source[k] === '\r' ? source[k] : ' '
+      }
       i = j
-      out += ' '
       continue
     }
     out += ch
@@ -1190,12 +1202,31 @@ for (const file of privilegedRouteFiles) {
         )
         continue
       }
-      // `auth` 키의 존재는 문자열을 걷어낸 판본에서 본다.
-      if (!/\bauth:\s*/.test(blockNoStrings)) {
+      // `auth` 키의 **존재와 위치**는 둘 다 문자열을 걷어낸 판본에서 본다.
+      //
+      // 최종 회차 C-3: 예전에는 존재만 걷어낸 판본에서 보고 **값 추출은
+      // 문자열이 살아 있는 `block`**에서 첫 `\bauth:` 매치로 했다. 그래서
+      // 진짜 키보다 앞에 놓인 문자열 리터럴 하나로 그대로 뚫렸다 —
+      // `name: "auth: 'admin'"`을 `auth: 'public'` 위에 적으면 값 추출이
+      // 그 디코이를 읽어 특권 트리 라우트가 공개로 열린 채 통과했다
+      // (리뷰어 실증). 보고서에 적혔던 "디코이 문자열 면역"은 존재 검사에만
+      // 해당하는 말이었고, 값 검사에는 해당되지 않았다.
+      //
+      // 이제 진짜 `auth:` 키의 **오프셋**을 문자열 제거판에서 찾고, 값은
+      // 원본 블록의 같은 오프셋부터 읽는다(`stripStringLiterals`가 길이·위치를
+      // 보존하므로 두 판본의 인덱스가 1:1이다). 값 비교에는 따옴표가 필요해서
+      // 원본에서 읽어야 하지만, **어디서부터 읽을지는 문자열이 정하지 못한다.**
+      //
+      // 공백 건너뛰기는 **원본 블록에서** 한다. 문자열 제거판에서 `\s*`까지
+      // 함께 매치하면 방금 공백으로 바뀐 리터럴 자리를 그대로 먹어 치워
+      // 값의 시작점을 지나쳐 버린다(실측: 41개 특권 라우트가 전부 "auth 값이
+      // 아닙니다"로 오탐).
+      const authKeyMatch = /\bauth:/.exec(blockNoStrings)
+      if (!authKeyMatch) {
         ungatedPrivilegedHandlers.push(`${file}: export const ${method} — auth 선언이 없습니다`)
         continue
       }
-      const value = /\bauth:\s*([\s\S]*)$/.exec(block)?.[1] ?? ''
+      const value = block.slice(authKeyMatch.index + authKeyMatch[0].length).replace(/^[\s]*/, '')
       if (!PRIVILEGED_AUTH_VALUES.some(pattern => pattern.test(value))) {
         ungatedPrivilegedHandlers.push(
           `${file}: export const ${method} — auth 값이 'admin'·'board-member'·createSettingsAdminAuth() 중 하나가 아닙니다`
