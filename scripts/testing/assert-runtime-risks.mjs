@@ -521,10 +521,6 @@ const boardRoomClientPagesUseServerSessionTruth = boardRoomClientPageSources.eve
 
 const serverEnvPath = join(root, 'src/lib/server/env.ts')
 const serverEnvSource = existsSync(serverEnvPath) ? readFileSync(serverEnvPath, 'utf8') : ''
-const supabaseAdminPath = join(root, 'src/lib/server/supabaseAdmin.ts')
-const supabaseAdminSource = existsSync(supabaseAdminPath)
-  ? readFileSync(supabaseAdminPath, 'utf8')
-  : ''
 const authzPath = join(root, 'src/lib/server/authz.ts')
 const authzSource = existsSync(authzPath) ? readFileSync(authzPath, 'utf8') : ''
 const adminAuthPathForBoundary = join(root, 'src/lib/server/adminAuth.ts')
@@ -536,10 +532,6 @@ const hasSharedOperationalBoundaryHelpers =
   /export function resolveFirstCompleteEnvGroup/.test(serverEnvSource) &&
   /export function requireServerEnv/.test(serverEnvSource) &&
   /export function getRedisRateLimitEnv/.test(serverEnvSource) &&
-  /export function createServiceRoleClient/.test(supabaseAdminSource) &&
-  /requireServerEnv\(['"]NEXT_PUBLIC_SUPABASE_URL['"]\)/.test(supabaseAdminSource) &&
-  /requireServerEnv\(['"]SUPABASE_SERVICE_ROLE_KEY['"]\)/.test(supabaseAdminSource) &&
-  !/serviceKey \|\| anonKey/.test(supabaseAdminSource) &&
   /export function isApprovedActive/.test(authzSource) &&
   /export function isApprovedActiveAdmin/.test(authzSource) &&
   /export function canAccessBoardRoom/.test(authzSource) &&
@@ -4193,10 +4185,10 @@ if (!boardRoomClientPagesUseServerSessionTruth) {
 
 if (!hasSharedOperationalBoundaryHelpers) {
   failures.push(
-    `Server operational boundaries must expose shared env, service-role Supabase, and authz helpers before more route refactors:\n- ${relative(
+    `Server operational boundaries must expose shared env and authz helpers before more route refactors:\n- ${relative(
       root,
       serverEnvPath
-    )}\n- ${relative(root, supabaseAdminPath)}\n- ${relative(root, authzPath)}`
+    )}\n- ${relative(root, authzPath)}`
   )
 }
 
@@ -5430,10 +5422,14 @@ if (!authCatchAllRejectsSignUpOutright) {
 
 // 단계 2b-6(Task 4): Supabase Auth 세션 API(.auth.getUser 등) 호출이 src/
 // 어디에도 남아 있으면 안 된다 — 인증은 Better Auth로 전부 옮겨졌다(단계
-// 2b-3~2b-6). `.auth.admin.*`(서비스롤 Admin API로 shadow user를 만드는
-// `src/lib/auth/server.ts`의 정당한 호출)는 부정 lookahead로 제외한다.
+// 2b-3~2b-6).
+//
+// 단계 4 Task 5: 예전에는 `.auth.admin.*`을 부정 lookahead로 제외했다 —
+// `src/lib/auth/server.ts`가 서비스롤 Admin API로 Supabase `auth.users`
+// 그림자 행을 만들었기 때문이다. 그 호출이 사라졌으므로 예외도 걷어낸다.
+// `admin`을 목록에 함께 넣어, Admin API 호출이 되살아나도 걸리게 한다.
 const supabaseAuthSessionCallPattern =
-  /\.auth\.(?!admin\.)(getUser|getSession|getClaims|signOut|signInWithPassword|signInWithOtp|signUp|onAuthStateChange|refreshSession|exchangeCodeForSession|updateUser|resetPasswordForEmail|verifyOtp)\s*\(/
+  /\.auth\.(?:admin\b|(?:getUser|getSession|getClaims|signOut|signInWithPassword|signInWithOtp|signUp|onAuthStateChange|refreshSession|exchangeCodeForSession|updateUser|resetPasswordForEmail|verifyOtp)\s*\()/
 const srcAllFiles = globSync('src/**/*.@(ts|tsx)', {
   cwd: root,
   exclude: ['**/node_modules/**', '**/.next/**'],
