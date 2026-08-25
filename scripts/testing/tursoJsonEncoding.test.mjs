@@ -118,3 +118,60 @@ test('부정 대조: JSON이지만 배열이 아닌 값(문자열·객체)도 �
 
   await client.execute("DELETE FROM artists WHERE slug IN ('json-string', 'json-object')")
 })
+
+/**
+ * 최종 리뷰 B "함께 고칠 것" — 예전 계약 목록의 근거 주석은 `artists.category`가
+ * Postgres 배열에서 온 **유일한** 컬럼이라고 적었는데 틀렸다.
+ * `member_bulk_operations.member_ids`도 원본이 `UUID[]`다. 매퍼는 올바르게
+ * 처리하지만(`stage4Mapping.mjs:306`) 안전망이 그 컬럼을 안 덮고 있었다.
+ */
+test('계약 목록에 member_bulk_operations.member_ids가 있다(원본이 UUID[]인 두 번째 컬럼)', () => {
+  assert.ok(
+    JSON_ARRAY_COLUMN_CONTRACTS.some(
+      c => c.table === 'member_bulk_operations' && c.column === 'member_ids'
+    ),
+    'member_ids가 빠지면 그 컬럼의 배열 리터럴 오염을 아무도 못 잡는다'
+  )
+})
+
+test('부정 대조: member_bulk_operations.member_ids의 배열 리터럴도 실제로 잡는다', async () => {
+  const now = Date.now()
+  const okId = crypto.randomUUID()
+  const badId = crypto.randomUUID()
+
+  // performed_by는 NOT NULL + member_profiles FK다. 실행자 한 명을 먼저 심는다.
+  const actorId = crypto.randomUUID()
+  await client.execute({
+    sql: `INSERT INTO member_profiles (id, display_name, email, created_at, updated_at)
+          VALUES (?, '실행자', ?, ?, ?)`,
+    args: [actorId, `${actorId}@example.test`, now, now],
+  })
+
+  const insertBulkOp = (id, memberIds) =>
+    client.execute({
+      sql: `INSERT INTO member_bulk_operations (id, operation_type, performed_by, member_ids, status, created_at)
+            VALUES (?, 'approve', ?, ?, 'pending', ?)`,
+      args: [id, actorId, memberIds, now],
+    })
+
+  await insertBulkOp(okId, JSON.stringify([crypto.randomUUID()]))
+  assert.deepEqual(
+    await findJsonEncodingViolations(client),
+    [],
+    '정상 JSON 배열만 있으면 위반이 없어야 한다'
+  )
+
+  await insertBulkOp(badId, `{${crypto.randomUUID()},${crypto.randomUUID()}}`)
+  const violations = await findJsonEncodingViolations(client)
+  assert.equal(violations.length, 1)
+  assert.equal(violations[0].table, 'member_bulk_operations')
+  assert.equal(violations[0].column, 'member_ids')
+  assert.equal(violations[0].label, badId)
+
+  await client.execute({
+    sql: 'DELETE FROM member_bulk_operations WHERE id IN (?, ?)',
+    args: [okId, badId],
+  })
+  await client.execute({ sql: 'DELETE FROM member_profiles WHERE id = ?', args: [actorId] })
+  assert.deepEqual(await findJsonEncodingViolations(client), [])
+})

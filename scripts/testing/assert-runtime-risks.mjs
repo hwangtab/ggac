@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { globSync } from 'node:fs'
 import { join, relative } from 'node:path'
@@ -62,12 +63,17 @@ const guardSelfSource = stripComments(
 // 원본 `readFileSync` 직접 호출은 위 두 리더의 본문 안에만 있어야 한다.
 const RAW_READ_FILE_CALL_SITES = 2
 const rawReadFileCallSites = (guardSelfSource.match(/readFileSync\(/g) ?? []).length
-// `readRawSourceAt`으로 읽는 변수는 아래 셋뿐이다(전부 rate limiter 문구 검사).
+// `readRawSourceAt`으로 읽는 변수는 아래 넷뿐이다.
+// 앞의 셋은 rate limiter 문구 검사이고, `credentialScanSource`는 하드코딩
+// 자격 증명 스캔이다 — 후자가 주석을 걷어내면 안 되는 이유는 명확하다:
+// **주석 안에 박힌 키도 커밋된 키다.** 여기에 `readSourceAt`을 쓰면
+// `// const key = 'eyJ...'` 형태가 통째로 사라져 가드가 조용히 통과한다.
 // 자기 소스 읽기는 변수 대입이 아니라 `stripComments(...)` 인자라 여기 안 걸린다.
 const ALLOWED_RAW_SOURCE_BINDINGS = [
   'rateLimiterCompatDocSource',
   'rateLimitWrapperDocSource',
   'rateLimiterDocSource',
+  'credentialScanSource',
 ]
 const rawSourceBindings = [...guardSelfSource.matchAll(/const (\w+) = readRawSourceAt\(/g)].map(
   match => match[1]
@@ -6126,6 +6132,103 @@ if (rpcUserIdViolations.length > 0) {
       .map(v => `- ${v}`)
       .join('\n')}`
   )
+}
+
+// ---------------------------------------------------------------------------
+// 하드코딩 자격 증명 가드 (최종 리뷰 B "함께 고칠 것")
+//
+// 수정 A에서 `service_role` 키가 그대로 박힌 파일 3개를 저장소에서 지웠다.
+// 이 저장소는 **공개**이므로 같은 일이 한 번 더 일어나면 그걸로 끝이다 —
+// 그리고 그런 파일은 언제나 "임시 진단 스크립트"라는 얼굴로 들어온다.
+//
+// 그래서 값이 아니라 **모양**으로 잡는다. 이 가드 안에는 어떤 키 값도 없고,
+// 앞으로도 넣으면 안 된다(가드 자체가 유출 경로가 된다). 자기 자신도 스캔
+// 대상에 포함되므로, 여기에 실제 키를 적으면 그 순간 이 검사가 스스로 막는다.
+//
+// 대상은 **git이 추적하는 파일 전부**다(`git ls-files`). 소스 확장자만
+// 훑으면 정확히 그 밖(설정·픽스처·캐시 파일)으로 새 나가는 것을 못 잡는다 —
+// 실제로 이 가드를 처음 켰을 때 걸린 넷 중 하나는 편집기 심볼 캐시
+// (`.serena/cache/*.pkl`, 28MB 바이너리)였다. 추적 대상만 보므로 gitignore된
+// `.env.local` 같은 로컬 비밀 파일은 애초에 스캔하지 않는다(거짓 실패 없음).
+const CREDENTIAL_SHAPES = [
+  {
+    label: 'JWT(Supabase anon/service_role 키와 Turso 인증 토큰이 전부 이 모양이다)',
+    // header.payload.signature — 헤더가 `{"` 로 시작하는 base64url이라 항상 `eyJ`다.
+    pattern: /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g,
+  },
+  {
+    label: 'Vercel Blob 읽기/쓰기 토큰',
+    pattern: /\bvercel_blob_rw_[A-Za-z0-9]{16,}/g,
+  },
+  {
+    label: 'Supabase 신형 API 키(sb_secret_/sb_publishable_)',
+    pattern: /\bsb_(?:secret|publishable)_[A-Za-z0-9_-]{16,}/g,
+  },
+  {
+    label: 'Resend API 키',
+    pattern: /\bre_[A-Za-z0-9]{8,}_[A-Za-z0-9]{16,}/g,
+  },
+  {
+    label: 'OpenAI/Anthropic 계열 비밀 키',
+    pattern: /\b(?:sk-ant-|sk-proj-|sk-)[A-Za-z0-9_-]{24,}/g,
+  },
+]
+
+// 스캔에서 빼는 것: git 자체 메타데이터와 잠금 파일(무결성 해시가 길어 오탐
+// 여지만 늘리고, 사람이 값을 적어 넣는 파일이 아니다).
+const CREDENTIAL_SCAN_SKIP = [/^\.git\//, /(^|\/)package-lock\.json$/, /(^|\/)yarn\.lock$/]
+
+let trackedFiles = null
+try {
+  trackedFiles = execFileSync('git', ['ls-files', '-z'], {
+    cwd: root,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+  })
+    .split('\0')
+    .filter(Boolean)
+} catch {
+  trackedFiles = null
+}
+
+if (trackedFiles === null) {
+  console.warn(
+    'SKIPPED: `git ls-files`를 실행할 수 없어(비-git 체크아웃) 하드코딩 자격 증명 스캔을 건너뜁니다 — 다른 검사는 그대로 돌았습니다.'
+  )
+} else {
+  // 주석을 걷어내지 않는다 — 주석 안에 박힌 키도 커밋된 키다.
+  const findCredentialShape = file => {
+    const credentialScanSource = readRawSourceAt(join(root, file))
+    for (const shape of CREDENTIAL_SHAPES) {
+      shape.pattern.lastIndex = 0
+      const match = shape.pattern.exec(credentialScanSource)
+      if (match) return { shape, match: match[0] }
+    }
+    return null
+  }
+
+  const credentialHits = []
+  for (const file of trackedFiles) {
+    if (CREDENTIAL_SCAN_SKIP.some(rx => rx.test(file))) continue
+    let found = null
+    try {
+      found = findCredentialShape(file)
+    } catch {
+      continue // 심볼릭 링크 깨짐 등 — 읽을 수 없으면 스캔 대상이 아니다.
+    }
+    if (!found) continue
+    // 발견한 값 자체는 절대 출력하지 않는다(로그가 새 유출 경로가 된다).
+    // 어떤 모양이 어느 파일에서 나왔는지, 그리고 앞 6자만 알려 준다.
+    credentialHits.push(`${file}: ${found.shape.label} (…${found.match.slice(0, 6)}… 로 시작)`)
+  }
+
+  if (credentialHits.length > 0) {
+    failures.push(
+      `Hardcoded credentials must never be committed — this repository is public. Move the value to an environment variable (and rotate the exposed credential):\n${credentialHits
+        .map(hit => `- ${hit}`)
+        .join('\n')}`
+    )
+  }
 }
 
 if (failures.length > 0) {

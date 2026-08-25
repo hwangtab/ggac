@@ -18,12 +18,23 @@
  */
 
 /**
- * `mode: 'json'`으로 읽으면서 JSON 배열이어야 하는 컬럼들.
- * `src/db/schema/identity.ts`의 `artists.category`가 Postgres `text[]`에서
- * 옮겨온 유일한 컬럼이다(나머지 JSON 컬럼은 원본이 jsonb라 인코딩이 보존된다).
+ * `mode: 'json'`으로 읽으면서 JSON 배열이어야 하는 컬럼들 —
+ * **Postgres 배열 타입에서 옮겨온 컬럼 전부**다(나머지 JSON 컬럼은 원본이
+ * jsonb라 인코딩이 보존된다).
+ *
+ * ⚠ 예전 이 주석은 `artists.category`가 "유일한 컬럼"이라고 적었는데 **틀렸다**
+ * (최종 리뷰 B "함께 고칠 것"). `member_bulk_operations.member_ids`도 원본이
+ * `UUID[]`다(`scripts/migrate/lib/stage4Mapping.mjs:306`이 `pgArrayToJsonText`로
+ * 변환한다) — 매퍼는 올바르게 처리하지만 **안전망이 그 컬럼을 안 덮고 있었다.**
+ * 그래서 매퍼를 우회한 경로(손으로 넣은 행, 부분 재이관, 옛 덤프 복원)로 배열
+ * 리터럴이 들어오면 아무도 못 잡았다. 증상은 `artists.category`와 같다:
+ * Drizzle `mode:'json'` 디코딩이 그 표 조회 **전체**를 던진다.
+ *
+ * 새 컬럼을 `mode: 'json'` + Postgres 배열 원본으로 추가하면 여기에도 추가할 것.
  */
 export const JSON_ARRAY_COLUMN_CONTRACTS = [
   { table: 'artists', column: 'category', labelColumn: 'slug' },
+  { table: 'member_bulk_operations', column: 'member_ids', labelColumn: 'id' },
 ]
 
 /**
