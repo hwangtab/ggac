@@ -138,6 +138,34 @@ export const ACCOUNTS = [
     password: 'Authz!Pend2026',
     profile: { is_admin: false, registration_status: 'pending', is_active: false },
   },
+  // 이사 경계(`e2e/authz-roles.spec.ts`)의 **허용 쪽**. 관리자가 아니라
+  // `is_director`만으로 이사회에 들어갈 수 있어야 `canAccessBoardRoom`이
+  // 실제로 이사 판정을 하는지 증명된다 — admin 계정으로 확인하면
+  // `is_admin` 분기만 타서 이사 판정은 여전히 검사되지 않는다.
+  {
+    key: 'director',
+    id: '00000000-0000-4000-8000-00000000b005',
+    email: 'authz-director@test.local',
+    password: 'Authz!Direct2026',
+    profile: {
+      is_admin: false,
+      registration_status: 'approved',
+      is_active: true,
+      is_director: true,
+      director_title: '이사',
+    },
+  },
+  // 관리자 전용 **쓰기** 경계(회원 승인)의 대상. `pending` 계정을 그대로
+  // 쓰면 `authz-ownership.spec.ts`의 "미승인 조합원" 단정 2건이 기대하는
+  // 상태를 이 스펙이 승인해버려 무너뜨린다 — 그래서 승인당해도 되는 계정을
+  // 따로 둔다. 로그인 대상이 아니므로 `e2e/authz.setup.ts`에는 없다.
+  {
+    key: 'approvalTarget',
+    id: '00000000-0000-4000-8000-00000000b006',
+    email: 'authz-approval-target@test.local',
+    password: 'Authz!Target2026',
+    profile: { is_admin: false, registration_status: 'pending', is_active: false },
+  },
 ]
 
 /**
@@ -193,6 +221,16 @@ async function main() {
   const MAINTENANCE_SETTING_ID = '00000000-0000-4000-8000-00000000a004'
   const REGISTRATION_SETTING_ID = '00000000-0000-4000-8000-00000000a005'
 
+  // `isDeleted: false`가 여기 있어야 시드가 **복구 수단**이 된다. 이 스크립트는
+  // 스스로 "멱등이다 — 실패한 실행을 그대로 다시 돌려 복구할 수 있어야 한다"고
+  // 적고 있지만, 이 키가 빠져 있으면 `onConflictDoUpdate`의 set에도 들어가지
+  // 않아 소프트 삭제된 픽스처 글(`is_deleted = 1`)이 되돌아오지 않았다.
+  // 삭제 인가 검사에 회귀가 생기면 스위트가 픽스처 글을 실제로 지우는데,
+  // 하필 **그 회귀를 수정하고 검증하려는 순간**(컷오버 직전) 시드를 다시
+  // 돌려도 소유권·첨부 스펙이 "403 기대 → 404" 같은 엉뚱한 메시지로 계속
+  // 빨간불이라 원인이 앱에 있는 것처럼 보였다. 손으로 UPDATE해야만 풀렸다.
+  // (`posts`에는 deleted_at/deleted_by 계열 컬럼이 없다 — 소프트 삭제 상태는
+  // 이 한 컬럼이 전부다: `src/db/schema/content.ts`.)
   const postValues = {
     id: POST_ID,
     title: 'authz 픽스처 글',
@@ -201,6 +239,7 @@ async function main() {
     category: '잡담',
     authorId: ids.owner,
     isPinned: false,
+    isDeleted: false,
   }
   await db
     .insert(tursoPosts)

@@ -3,7 +3,17 @@ import { readFileSync } from 'node:fs'
 const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '::1'])
 
 export type Fixtures = {
-  users: Record<'admin' | 'owner' | 'other' | 'pending', string>
+  users: Record<
+    // 로그인 상태(storageState)를 만드는 계정 — `e2e/authz.setup.ts`와 짝이다.
+    | 'admin'
+    | 'owner'
+    | 'other'
+    | 'pending'
+    | 'director'
+    // 로그인하지 않는 계정: 관리자 전용 쓰기 경계(회원 승인)의 **대상**이다.
+    | 'approvalTarget',
+    string
+  >
   postId: string
   commentId: string
   notificationId: string

@@ -7,6 +7,9 @@ const ACCOUNTS = [
   { role: 'owner', email: 'authz-owner@test.local', password: 'Authz!Owner2026' },
   { role: 'other', email: 'authz-other@test.local', password: 'Authz!Other2026' },
   { role: 'pending', email: 'authz-pending@test.local', password: 'Authz!Pend2026' },
+  // 관리자가 아닌 이사. 이사회 경계(`authz-roles.spec.ts`)의 허용 쪽이다 —
+  // 계정 정의는 `scripts/testing/seed-authz-fixtures.mjs`의 ACCOUNTS와 짝이다.
+  { role: 'director', email: 'authz-director@test.local', password: 'Authz!Direct2026' },
 ]
 
 for (const account of ACCOUNTS) {
