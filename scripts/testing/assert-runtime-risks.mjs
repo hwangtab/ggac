@@ -1892,10 +1892,13 @@ const validatesPostsListLikedSetUsesTurso =
 //
 // **fail-open 방지가 이 가드의 절반이다.** 검사 대상 목록이 비면 offenders도
 // 자동으로 비어 통과한다 — 글롭 패턴이 깨지거나 디렉터리가 옮겨가면 가드가
-// 조용히 죽는다는 뜻이다. 그래서 두 가지를 함께 단언한다:
+// 조용히 죽는다는 뜻이다. 그래서 네 가지를 함께 단언한다:
 //   · 스캔한 파일 수가 하한을 넘는가(글롭이 살아 있는가)
+//   · 서브트리별 하한을 넘는가(디렉터리 하나가 통째로 빠지지 않았는가)
+//   · 하한표가 스캔된 서브트리를 전부 덮는가(하한 없는 사각지대가 없는가)
 //   · 패턴이 알려진 양성 표본을 실제로 무는가(정규식이 눈멀지 않았는가)
-// 두 자기검사는 저장소 상태와 무관하게 매 실행마다 돈다.
+// 이 자기검사들은 저장소 상태와 무관하게 매 실행마다 돌고, 아래에서 만드는
+// 파일 목록은 저장소 전수 가드 3종이 공유하므로 셋 모두를 함께 지킨다.
 const supabaseAccessPattern = new RegExp(
   [
     // (1) SDK·내부 클라이언트 모듈
@@ -1914,14 +1917,19 @@ const supabaseAccessPattern = new RegExp(
     String.raw`/rest/v1/`,
   ].join('|')
 )
-const supabaseAccessScanFiles = globSync('src/**/*.@(ts|tsx)', {
+// 저장소 전수 가드 3종(Supabase 접근·Supabase Auth 세션 호출·RPC p_user_id)이
+// **모두 이 한 목록**을 본다. 예전에는 같은 글롭이 두 번(여기와 파일 끝
+// `srcAllFiles`) 따로 적혀 있었고, 하한 장치를 이쪽에만 달았더니 다른 쪽 글롭을
+// 좁히는 것만으로 세션 가드·RPC 가드가 통째로 눈머는 구멍이 남았다(수정 2회차).
+// 목록이 하나면 하한도 하나뿐이라 "한쪽만 고치는" 실수가 원천적으로 불가능하다.
+const srcAllFiles = globSync('src/**/*.@(ts|tsx)', {
   cwd: root,
   exclude: ['**/node_modules/**', '**/.next/**'],
 }).sort()
 // 주석은 걷어낸다 — 이 저장소는 전환 과정을 주석으로 많이 남겼고(옛 Supabase
 // 호출 모양을 그대로 적어둔 곳이 여럿), 원본을 훑으면 그 설명글이 전부 위반으로
 // 잡힌다. 반대로 문자열 리터럴은 남긴다: (3)의 REST 경로가 리터럴 안에 있다.
-const supabaseAccessOffenders = supabaseAccessScanFiles.filter(file =>
+const supabaseAccessOffenders = srcAllFiles.filter(file =>
   supabaseAccessPattern.test(stripComments(readFileSync(join(root, file), 'utf8')))
 )
 // 자기검사 ①: 정규식이 실제로 무는가. 각 항목은 이 저장소에서 실제로 지운
@@ -1950,28 +1958,53 @@ const supabaseAccessPatternBlindSpots = supabaseAccessSentinels.filter(
 // 그래서 서브트리별 하한을 함께 둔다. 전체 수는 파일이 늘면 자연히 여유가
 // 생기지만, 서브트리별 하한은 "그 자리가 비는 것"을 직접 잡는다.
 //
-// 숫자는 현재 개수(주석)의 대략 65~75%다. 대량 삭제가 아니라 "그 서브트리가
+// 숫자는 현재 개수(주석)의 대략 63~75%다. 대량 삭제가 아니라 "그 서브트리가
 // 스캔에서 빠졌다"를 잡는 것이 목적이므로 정상적인 파일 정리로는 걸리지 않고,
 // 디렉터리 하나가 통째로 빠지면 걸린다. 실제로 파일을 많이 지웠다면 이 숫자를
 // **의도적으로** 낮추는 커밋이 남아야 한다.
-const SUPABASE_ACCESS_SCAN_MIN_FILES = 380 // 현재 410
-const SUPABASE_ACCESS_SCAN_SUBTREE_MINIMUMS = {
+const SRC_SCAN_MIN_FILES = 380 // 현재 410
+const SRC_SCAN_SUBTREE_MINIMUMS = {
   'src/app/': 150, // 현재 206
   'src/components/': 32, // 현재 50
   'src/utils/': 32, // 현재 49
   'src/lib/': 22, // 현재 34
   'src/db/': 14, // 현재 21
   'src/hooks/': 10, // 현재 16
+  'src/types/': 9, // 현재 14
+  'src/constants/': 6, // 현재 9
   'src/middleware/': 4, // 현재 7
+  'src/i18n/': 2, // 현재 3
 }
-const supabaseAccessScanSubtreeShortfalls = Object.entries(
-  SUPABASE_ACCESS_SCAN_SUBTREE_MINIMUMS
-).flatMap(([prefix, minimum]) => {
-  const count = supabaseAccessScanFiles.filter(file => file.startsWith(prefix)).length
-  return count < minimum
-    ? [`${prefix} — ${count} file(s) scanned, expected at least ${minimum}`]
-    : []
-})
+const srcScanSubtreeShortfalls = Object.entries(SRC_SCAN_SUBTREE_MINIMUMS).flatMap(
+  ([prefix, minimum]) => {
+    const count = srcAllFiles.filter(file => file.startsWith(prefix)).length
+    return count < minimum
+      ? [`${prefix} — ${count} file(s) scanned, expected at least ${minimum}`]
+      : []
+  }
+)
+// 자기검사 ②-b: 하한표가 src/ 아래 **모든** 서브트리를 덮는가.
+//
+// 위의 표는 손으로 적은 목록이라, 표에 없는 디렉터리는 통째로 스캔에서 빠져도
+// 전체 하한만 넘기면 통과한다 — 수정 2회차 이전의 `src/types`(14)·
+// `src/constants`(9)·`src/i18n`(3)이 정확히 그랬다(셋을 다 빼도 384 ≥ 380).
+// 그래서 표를 손으로 채우는 대신 **스캔 결과에서 서브트리 목록을 뽑아** 표가
+// 그걸 전부 덮는지 확인한다. 새 디렉터리가 생기면 하한을 적으라고 여기서 막힌다.
+// (표를 통째로 비워도 이 검사가 전부 미커버로 걸린다 — 빈 표가 조용히
+// 통과하는 fail-open이 생기지 않는다. 반대로 스캔 자체가 비면 여기서는 아무것도
+// 안 걸리지만, 그 경우는 전체 하한과 서브트리 하한이 먼저 문다.)
+// `src/middleware.ts`처럼 src/ 바로 아래 놓인 파일은 서브트리가 아니라서 제외한다
+// (그 파일은 전용 가드가 따로 문다).
+const srcScanUncoveredSubtrees = [
+  ...new Set(
+    srcAllFiles
+      .map(file => file.split('/'))
+      .filter(segments => segments.length > 2)
+      .map(segments => `${segments[0]}/${segments[1]}/`)
+  ),
+]
+  .filter(prefix => !(prefix in SRC_SCAN_SUBTREE_MINIMUMS))
+  .sort()
 // 자기검사 ③: 패턴이 Drizzle 쿼리 계층(식별자 `.from(comments)`)이나 전환
 // 기록 주석을 오탐하면, 아무도 이 가드를 못 지켜 결국 예외 목록이 생긴다.
 const supabaseAccessFalsePositiveSamples = [
@@ -4972,16 +5005,24 @@ if (supabaseAccessOverreach.length > 0) {
   )
 }
 
-if (supabaseAccessScanFiles.length < SUPABASE_ACCESS_SCAN_MIN_FILES) {
+if (srcAllFiles.length < SRC_SCAN_MIN_FILES) {
   failures.push(
-    `The Supabase-access guard scanned only ${supabaseAccessScanFiles.length} file(s) under src/ (expected at least ${SUPABASE_ACCESS_SCAN_MIN_FILES}). An empty or near-empty scan passes vacuously, so treat it as a broken guard rather than a clean repository.`
+    `The repository-wide src/ scan (shared by the Supabase-access, Supabase Auth session-call, and RPC p_user_id guards) covered only ${srcAllFiles.length} file(s) (expected at least ${SRC_SCAN_MIN_FILES}). An empty or near-empty scan passes vacuously, so treat it as a broken guard rather than a clean repository.`
   )
 }
 
-if (supabaseAccessScanSubtreeShortfalls.length > 0) {
+if (srcScanSubtreeShortfalls.length > 0) {
   failures.push(
-    `The Supabase-access guard skipped whole src/ subtrees. A total-count floor alone cannot catch this: src/app on its own is larger than the old floor, so a glob that narrowed to src/app/** would still have "passed" while silently skipping every directory the deleted Supabase clients used to live in. Subtree(s) below their floor:\n${supabaseAccessScanSubtreeShortfalls
+    `The repository-wide src/ scan skipped whole subtrees, blinding the Supabase-access, Supabase Auth session-call, and RPC p_user_id guards there. A total-count floor alone cannot catch this: src/app on its own is larger than the old floor, so a glob that narrowed to src/app/** would still have "passed" while silently skipping every directory the deleted Supabase clients used to live in. Subtree(s) below their floor:\n${srcScanSubtreeShortfalls
       .map(line => `- ${line}`)
+      .join('\n')}`
+  )
+}
+
+if (srcScanUncoveredSubtrees.length > 0) {
+  failures.push(
+    `SRC_SCAN_SUBTREE_MINIMUMS has no floor for src/ subtree(s) that the scan currently covers. Without a floor, those directories can drop out of the scan entirely and still pass on the total count alone (src/types + src/constants + src/i18n were exactly that hole). Add a floor of roughly two thirds of the current file count for each:\n${srcScanUncoveredSubtrees
+      .map(prefix => `- ${prefix}`)
       .join('\n')}`
   )
 }
@@ -5335,10 +5376,9 @@ if (!authCatchAllRejectsSignUpOutright) {
 // `admin`을 목록에 함께 넣어, Admin API 호출이 되살아나도 걸리게 한다.
 const supabaseAuthSessionCallPattern =
   /\.auth\.(?:admin\b|(?:getUser|getSession|getClaims|signOut|signInWithPassword|signInWithOtp|signUp|onAuthStateChange|refreshSession|exchangeCodeForSession|updateUser|resetPasswordForEmail|verifyOtp)\s*\()/
-const srcAllFiles = globSync('src/**/*.@(ts|tsx)', {
-  cwd: root,
-  exclude: ['**/node_modules/**', '**/.next/**'],
-})
+// `srcAllFiles`는 Supabase 접근 가드와 **같은 목록**이다(위쪽에서 한 번만
+// 만든다). 하한·서브트리 하한·미커버 서브트리 자기검사가 그 한 목록에 걸려
+// 있으므로, 글롭이 좁아지면 이 가드와 아래 RPC 가드도 함께 실패한다.
 const supabaseAuthSessionCallOffenders = srcAllFiles.filter(file => {
   const source = readFileSync(join(root, file), 'utf8')
   return supabaseAuthSessionCallPattern.test(stripComments(source))
