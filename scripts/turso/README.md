@@ -182,17 +182,29 @@ TURSO_DATABASE_URL=http://127.0.0.1:8901 \
   node --experimental-strip-types scripts/testing/seed-authz-fixtures.mjs
 ```
 
-`admin`/`owner`/`other`/`pending` 네 계정(Better Auth `user`/`account` +
-`member_profiles`)과 글 1·댓글 1·알림 1·좋아요 1, 그리고 **`system_settings`
-2행**(`site/maintenance_mode`, `site/registration_enabled`)과
-`default_settings` 16행을 채우는 멱등 스크립트다. 두 번 돌려도 행이 늘지
-않는다(id가 전부 고정값이다).
+계정 **6개**(Better Auth `user`/`account` + `member_profiles`)와 글 1·댓글
+1·알림 1·좋아요 1, 그리고 **`system_settings` 2행**(`site/maintenance_mode`,
+`site/registration_enabled`)과 `default_settings` 16행을 채우는 멱등
+스크립트다. 두 번 돌려도 행이 늘지 않는다(id가 전부 고정값이다).
+
+| 계정             | 역할                                    | 로그인 |
+| ---------------- | --------------------------------------- | ------ |
+| `admin`          | 관리자(승인·활성)                       | O      |
+| `owner`          | 승인된 일반 조합원 — 픽스처 글의 작성자 | O      |
+| `other`          | 승인된 일반 조합원 — "남"               | O      |
+| `pending`        | 미승인                                  | O      |
+| `director`       | 관리자가 **아닌** 이사                  | O      |
+| `approvalTarget` | 관리자 승인 액션의 대상(미승인)         | X      |
 
 - `system_settings`가 없으면 `authz-maintenance.spec.ts`의 UPDATE가 0행에
   적용돼 유지보수 모드가 아예 켜지지 않는다. 스펙은 `rowsAffected`를 확인해
   그 상태를 통과가 아니라 실패로 만든다.
 - `default_settings`가 없으면 `getUserSettings`(default_settings를 왼쪽
   테이블로 조인)가 항상 빈 목록을 돌려줘 정책 58 스펙이 깨진다.
+- 픽스처 글은 `is_deleted = false`로 **되돌려진다**. 삭제 인가에 회귀가
+  생기면 스위트가 그 글을 실제로 소프트 삭제하는데, 이 값이 upsert에 없으면
+  시드를 다시 돌려도 복구되지 않아 **수정을 검증하려는 바로 그 순간**
+  소유권·첨부 스펙이 앱 탓처럼 보이는 엉뚱한 메시지로 계속 빨간불이 된다.
 
 대상이 로컬 Turso가 아니면 아무것도 쓰기 전에 거부한다 —
 `e2e/helpers/authState.ts`의 `assertLocalTurso()`가 허용하는 형태는 `file:...`
@@ -218,24 +230,45 @@ npm run test:e2e:authz
 그 값을 `process.env.TURSO_DATABASE_URL`로 옮겨 심고 dev 서버에도 같은 값을
 넘긴다 — 셸에 운영 `TURSO_DATABASE_URL`이 export돼 있어도 그 값으로는 절대
 돌지 않고, e2e 전용 변수를 의도적으로 지정해야만 돈다. `TURSO_AUTH_TOKEN`도
-함께 지운다(로컬 `turso dev`는 토큰을 요구하지 않는다).
+함께 지운다(로컬 `turso dev`는 토큰을 요구하지 않는다). 로컬 엔드포인트인지는
+**옮겨 심는 그 자리에서** 판정한다 — 원격 URL을 주면 dev 서버가 뜨기 전에
+config 로드가 죽는다(실측: `libsql://ggac-prod…`·`https://ggac-prod…` 둘 다
+`playwright.config.ts`에서 거부).
 
-`npm run test:e2e:authz`는 `playwright test --project=authz`의 별칭이며,
-`authz-setup` 프로젝트(4개 계정 로그인 → `e2e/.auth/*.json` storageState
-저장)에 의존한 뒤 `authz-maintenance`·`authz-ownership`·`authz-personal`·
-`authz-remaining` 4개 스펙(총 23개 테스트, setup 4개 포함 27개)을 돈다.
+`npm run test:e2e:authz`는
+`playwright test --project=authz --project=authz-public`의 별칭이다. 두
+프로젝트를 다 도는 이유: `authz-boundaries.spec.ts`(비인증 401·보호 페이지
+리다이렉트·API 계약)가 `authz-public`에 있어서, `--project=authz`만 돌리면
+**컷오버 게이트인 이 명령 하나가 그 17건을 통째로 빼먹는다.**
 
-**실측 기준선(2026-08-26, Task 6c):** 27 passed.
+- `authz-setup`(5개 계정 로그인 → `e2e/.auth/*.json` storageState 저장) 5건
+- `authz`: `authz-maintenance`·`authz-ownership`·`authz-personal`·
+  `authz-remaining`·`authz-roles` 5개 스펙 26건
+- `authz-public`: `authz-boundaries` 17건
+
+**실측 기준선(2026-08-26, Task 6c 수정 1회차):** 48 passed.
 
 `PUBLIC_BLOB_READ_WRITE_TOKEN`을 빼면 정책 36 테스트가 "토큰이 없으면 업로드
 준비 단계를 통과할 수 없다"로 **명시적으로 실패한다**(조용히 건너뛰지
-않는다). 나머지 26건은 토큰 없이도 돈다.
+않는다). 나머지 47건은 토큰 없이도 돈다.
+
+`authz-roles.spec.ts`는 **관리자 경계**와 **이사 경계** 전용이다. 두 경계는
+각각 대표 엔드포인트 하나씩만 보되 **짝지어 단정한다**(금지된 세션 403 +
+허용된 세션 성공) — 금지 쪽만 보면 게이트가 "전부 막기"로 퇴화해 관리자
+화면이 통째로 죽어도 초록불이기 때문이다. 관리자 게이트는 구현이 두 벌
+(`requireAdmin()`과 `checkAdminPermission()`)이라 쓰기·읽기를 각각 다른
+구현에서 골랐다.
 
 
 ### 4. 커버리지의 한계
 
-이 스위트는 게시글·댓글·알림·마이페이지 프로필 10개 엔드포인트만
-건드린다. 운영 RLS 정책 58개 중 이 스위트가 실제로 경계를 단정하는 것은
+이 스위트는 게시글·댓글·알림·마이페이지 프로필 10개 엔드포인트에 더해
+관리자·이사 경계의 **대표 3개**(`/api/admin/member-action`,
+`/api/admin/settings`, `/api/board-room/documents`)를 건드린다. 관리자
+경계는 `/api/admin/*` 12개 디렉터리 중 두 라우트만 보는 셈이지만, 목적은
+전수 커버리지가 아니라 **게이트 두 구현이 살아 있는지**다 — 그 게이트가
+죽으면 나머지 라우트도 함께 열린다. 운영 RLS 정책 58개 중 이 스위트가
+실제로 경계를 단정하는 것은
 9개였다(단계 2b-3 시점). **단계 2b-4에서 3개가 추가로 승격돼 12개가 됐다** —
 아래 「단계 2b-4: 신원 경로 일원화 판정」 참고. 나머지는 코드를 읽어 동등한
 검사를 확인했지만 테스트는 없거나(28개), 테스트도 코드상 동등 검사도
