@@ -103,13 +103,16 @@ BACKUP_DIR="$HOME/ggac-url-backup/2026-08-14T01-45-11-393Z" \
 직전의 `artists` / `posts` / `post_attachments` / `event_applications` 값이
 들어 있다.
 
-복원과 함께 신규 업로드도 Supabase로 되돌리려면 `STORAGE_PROVIDER`를 지우고
-재배포한다:
-
-```bash
-vercel env rm STORAGE_PROVIDER production
-git commit --allow-empty -m "chore(storage): 제공자 롤백 반영" && git push origin main
-```
+> **⚠ 단계 4 Task 5에서 이 탈출구가 사라졌다.** 예전에는 `STORAGE_PROVIDER`를
+> 지우면 신규 업로드가 다시 Supabase Storage로 갔다. 이제 코드에 제공자 분기
+> 자체가 없다(`src/lib/storage/provider.ts`는 Vercel Blob만 부른다) — 환경변수를
+> 지워도 아무 효과가 없고, Supabase 클라이언트가 저장소에 0개라 되살릴 수도 없다.
+>
+> 위 URL 복원은 **이미 저장된 URL을 백업 시점 값으로 되돌리는 것**이라 여전히
+> 동작한다(옛 Supabase 객체를 지우지 않았으므로 그 URL은 계속 열린다). 다만
+> **복원 이후 새로 올라오는 파일은 계속 Blob에 쌓인다.** 신규 업로드까지
+> Supabase로 되돌려야 하는 상황이라면 배포 자체를 Task 5 이전 커밋으로
+> 되돌리는 수밖에 없다.
 
 ### 주의 — 복원은 시점 되돌리기다
 
