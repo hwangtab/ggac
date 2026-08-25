@@ -27,12 +27,14 @@
  * `post.author.display_name`에서 그대로 죽는다.
  */
 
-import { and, asc, desc, eq, gt, like, lt, or, sql, type SQL } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, inArray, like, lt, or, sql, type SQL } from 'drizzle-orm'
 
 import { db } from '../client.ts'
 import { posts } from '../schema/index.ts'
 
 import { getProfilesByIds } from './profiles.ts'
+import { countCommentsByPostIds } from './comments.ts'
+import { getAttachmentStatsByPostIds } from './attachments.ts'
 import { toCamelCase, toIso } from './_helpers.ts'
 
 /** API 응답에 쓰이는 snake_case 정규화 형태. `posts` 컬럼 전부 + author 임베드. */
@@ -284,6 +286,437 @@ export async function listPostsKeyset(
   const sliced = hasNext ? rows.slice(0, filter.limit) : rows
   const withAuthors = await attachAuthors(sliced.map(rowToPost))
   return { rows: withAuthors, hasNext }
+}
+
+// -------------------------------------------------------------------------
+// board_posts_with_stats 뷰 대체 (Task 8)
+// -------------------------------------------------------------------------
+
+/** `board_posts_with_stats` 뷰(reference-views.md)와 같은 키 이름·같은 모양.
+ * 소비 코드(`src/lib/server/board.ts`)가 이 키를 그대로 읽는다. */
+export interface BoardPostStatsRow {
+  id: string
+  title: string
+  category: string
+  author_id: string
+  created_at: string
+  updated_at: string
+  is_pinned: boolean
+  content_head: string
+  like_count: number
+  author_display_name: string | null
+  comment_count: number
+  total_attachments: number
+  total_size: number
+  image_count: number
+  document_count: number
+  video_count: number
+  audio_count: number
+}
+
+export interface ListBoardPostsWithStatsFilter {
+  /** 생략하거나 '전체'면 카테고리 필터 없음. */
+  category?: string
+  /** 0부터 시작. */
+  offset: number
+  limit: number
+}
+
+/**
+ * `board_posts_with_stats` 뷰(reference-views.md) 대체. 원본 뷰가 한 SELECT로
+ * 하던 조인·집계를, **게시글 1쿼리 + 저자 배치 1쿼리 + 댓글수 배치 1쿼리 +
+ * 첨부통계 배치 1쿼리 = 총 4쿼리**로 옮긴다(게시글 수에 비례해 늘지 않는다).
+ * Postgres `left(content, 2000)`는 SQLite `substr(content, 1, 2000)`으로
+ * 옮긴다(reference-views.md). 정렬은 뷰 소비처(`src/lib/server/board.ts`)의
+ * 기존 `.order('is_pinned', desc).order('created_at', desc).order('id', desc)`와
+ * 동일하게 `is_pinned DESC, created_at DESC, id DESC`.
+ *
+ * `limit`개를 넘겨 요청하면 내부에서 `limit + 1`행을 가져와 `hasNext`를
+ * 판정한다(호출부가 별도로 +1 페이지를 요청할 필요가 없다) — 기존
+ * `fetchBoardPosts`가 Supabase `.range(start, end)`(end = start + limit,
+ * inclusive라 사실상 limit+1행)로 하던 것과 같은 판정 방식.
+ */
+export async function listBoardPostsWithStats(
+  filter: ListBoardPostsWithStatsFilter
+): Promise<{ rows: BoardPostStatsRow[]; hasNext: boolean }> {
+  const conditions: SQL[] = [eq(posts.isDeleted, false)]
+  if (filter.category && filter.category !== '전체') {
+    conditions.push(eq(posts.category, filter.category))
+  }
+
+  const rows = await db
+    .select({
+      id: posts.id,
+      title: posts.title,
+      category: posts.category,
+      authorId: posts.authorId,
+      createdAt: posts.createdAt,
+      updatedAt: posts.updatedAt,
+      isPinned: posts.isPinned,
+      contentHead: sql<string>`substr(${posts.content}, 1, 2000)`,
+      likeCount: posts.likeCount,
+    })
+    .from(posts)
+    .where(and(...conditions))
+    .orderBy(desc(posts.isPinned), desc(posts.createdAt), desc(posts.id))
+    .limit(filter.limit + 1)
+    .offset(filter.offset)
+
+  const hasNext = rows.length > filter.limit
+  const sliced = hasNext ? rows.slice(0, filter.limit) : rows
+
+  const postIds = sliced.map(row => row.id)
+  const authorIds = [...new Set(sliced.map(row => row.authorId))]
+  const [profiles, commentCounts, attachmentStats] = await Promise.all([
+    getProfilesByIds(authorIds),
+    countCommentsByPostIds(postIds),
+    getAttachmentStatsByPostIds(postIds),
+  ])
+
+  const boardRows: BoardPostStatsRow[] = sliced.map(row => {
+    const profile = profiles.get(row.authorId)
+    const stats = attachmentStats.get(row.id)
+    return {
+      id: row.id,
+      title: row.title,
+      category: row.category,
+      author_id: row.authorId,
+      created_at: toIso(row.createdAt) as string,
+      updated_at: toIso(row.updatedAt) as string,
+      is_pinned: row.isPinned,
+      content_head: row.contentHead,
+      like_count: row.likeCount,
+      author_display_name: profile?.display_name ?? null,
+      comment_count: commentCounts.get(row.id) ?? 0,
+      total_attachments: stats?.total_attachments ?? 0,
+      total_size: stats?.total_size ?? 0,
+      image_count: stats?.image_count ?? 0,
+      document_count: stats?.document_count ?? 0,
+      video_count: stats?.video_count ?? 0,
+      audio_count: stats?.audio_count ?? 0,
+    }
+  })
+
+  return { rows: boardRows, hasNext }
+}
+
+// -------------------------------------------------------------------------
+// 관리자 고급 검색 (Task 8) — 존재하지 않는 search_posts_advanced /
+// count_posts_advanced RPC 대체
+// -------------------------------------------------------------------------
+
+export type AdvancedSearchSortField =
+  | 'title'
+  | 'category'
+  | 'created_at'
+  | 'updated_at'
+  | 'comment_count'
+export type AdvancedSearchSortDirection = 'asc' | 'desc'
+
+export interface SearchPostsAdvancedFilter {
+  /** `/api/admin/posts/advanced-search`가 이미 파싱해둔 단순 필터
+   * (`category`/`is_pinned`/`is_deleted`의 `equals`만). */
+  simpleFilters?: Record<string, unknown>
+  /** title/content LIKE 검색어. 비었으면 검색 조건 없음. */
+  searchText?: string
+  /** 검색 대상 필드. `title`·`content`만 인식 — 그 외 값은 무시한다. */
+  searchFields?: string[]
+  sortField?: AdvancedSearchSortField
+  sortDirection?: AdvancedSearchSortDirection
+  page: number
+  limit: number
+}
+
+/** 관리자 게시글 화면(`/admin/posts` "고급 검색")이 쓰는 응답 행 모양. 원본
+ * 죽은 RPC(`search_posts_advanced`)가 존재하지 않아 실제 반환 모양을 확인할
+ * 수 없었으므로, 이 저장소의 다른 게시글 목록 응답과 같은 관례
+ * (`PostWithAuthor` + `comment_count`)로 정한다. */
+export type AdvancedSearchPostRow = PostWithAuthor & { comment_count: number }
+
+function buildAdvancedSearchConditions(filter: SearchPostsAdvancedFilter): SQL[] {
+  const conditions: SQL[] = []
+
+  const simple = filter.simpleFilters ?? {}
+  if (typeof simple.category === 'string' && simple.category) {
+    conditions.push(eq(posts.category, simple.category))
+  }
+  if (typeof simple.is_pinned === 'boolean') {
+    conditions.push(eq(posts.isPinned, simple.is_pinned))
+  }
+  if (typeof simple.is_deleted === 'boolean') {
+    conditions.push(eq(posts.isDeleted, simple.is_deleted))
+  } else {
+    // 원본 필드 정의(POST_FIELD_DEFINITIONS)는 is_deleted를 필터 가능 필드로
+    // 노출하지만, 관리자 화면이 명시적으로 고르지 않으면 삭제된 글까지
+    // 뒤섞여 나오면 안 된다 — admin/posts(기본 목록) 라우트와 같은 기본값
+    // (삭제되지 않은 글만).
+    conditions.push(eq(posts.isDeleted, false))
+  }
+
+  const searchText = filter.searchText?.trim()
+  if (searchText) {
+    const fields = new Set(filter.searchFields ?? ['title', 'content'])
+    const needle = `%${searchText}%`
+    const textConditions: SQL[] = []
+    if (fields.has('title')) textConditions.push(like(posts.title, needle))
+    if (fields.has('content')) textConditions.push(like(posts.content, needle))
+    if (textConditions.length > 0) {
+      conditions.push(or(...textConditions) as SQL)
+    }
+  }
+
+  return conditions
+}
+
+/**
+ * 관리자 게시글 "고급 검색"(`/api/admin/posts/advanced-search`)이 부르던
+ * 없는 RPC `search_posts_advanced`의 대체. 전문검색(tsvector)이 아니라 `LIKE`
+ * 기반이면 충분하다(원래 함수도 존재하지 않았고, 자매 함수
+ * `execute_advanced_search`도 tsvector를 쓰지 않는다). `comment_count` 정렬은
+ * DB에서 정렬할 수 없으므로(집계가 별도 쿼리) `sortField === 'comment_count'`면
+ * `created_at desc`로 가져온 뒤 댓글 수를 붙이고 **JS에서 안정 정렬**한다 —
+ * 게시글 총량이 23명 커뮤니티 규모라 실용적으로 문제없다.
+ *
+ * @remarks `total`은 `count(*) over()` 윈도우 함수로 계산한다 — `listPosts`와
+ * 같은 경계 조건이다: `offset >= total`이면 이 페이지에 행이 0개라 `total`도
+ * 0으로 떨어진다(실제 총 개수가 0이 아니어도). 관리자 게시글 목록처럼
+ * 페이지네이션 UI가 `total`을 표시하는 호출부는 이 경계를 반드시 고려해야
+ * 한다 — 이 함수의 호출부(advanced-search 라우트)는 마지막 페이지 초과 접근을
+ * 별도 count 쿼리로 보정한다(라우트 코드 참고).
+ */
+export async function searchPostsAdvanced(
+  filter: SearchPostsAdvancedFilter
+): Promise<{ rows: AdvancedSearchPostRow[]; total: number }> {
+  const conditions = buildAdvancedSearchConditions(filter)
+  const where = conditions.length > 0 ? and(...conditions) : undefined
+
+  const sortField = filter.sortField ?? 'created_at'
+  const sortDirection = filter.sortDirection ?? 'desc'
+  const dbSortField = sortField === 'comment_count' ? 'created_at' : sortField
+  const dbSortColumn =
+    dbSortField === 'title'
+      ? posts.title
+      : dbSortField === 'category'
+        ? posts.category
+        : dbSortField === 'updated_at'
+          ? posts.updatedAt
+          : posts.createdAt
+  const orderBy = sortDirection === 'asc' ? asc(dbSortColumn) : desc(dbSortColumn)
+
+  const offset = Math.max(0, (filter.page - 1) * filter.limit)
+
+  const rows = await db
+    .select({
+      id: posts.id,
+      title: posts.title,
+      content: posts.content,
+      contentFormat: posts.contentFormat,
+      category: posts.category,
+      authorId: posts.authorId,
+      createdAt: posts.createdAt,
+      updatedAt: posts.updatedAt,
+      isDeleted: posts.isDeleted,
+      isPinned: posts.isPinned,
+      pinnedAt: posts.pinnedAt,
+      likeCount: posts.likeCount,
+      viewCount: posts.viewCount,
+      totalCount: sql<number>`count(*) over()`,
+    })
+    .from(posts)
+    .where(where)
+    .orderBy(orderBy)
+    .limit(filter.limit)
+    .offset(offset)
+
+  const total = rows[0] ? Number(rows[0].totalCount) : 0
+  const postIds = rows.map(row => row.id)
+  const [withAuthors, commentCounts] = await Promise.all([
+    attachAuthors(rows.map(rowToPost)),
+    countCommentsByPostIds(postIds),
+  ])
+
+  let result: AdvancedSearchPostRow[] = withAuthors.map(row => ({
+    ...row,
+    comment_count: commentCounts.get(row.id) ?? 0,
+  }))
+
+  if (sortField === 'comment_count') {
+    result = [...result].sort((a, b) =>
+      sortDirection === 'asc'
+        ? a.comment_count - b.comment_count
+        : b.comment_count - a.comment_count
+    )
+  }
+
+  return { rows: result, total }
+}
+
+/**
+ * `searchPostsAdvanced`와 같은 필터 조건으로 총 개수만 센다(행은 가져오지
+ * 않는다) — 관리자 "고급 검색" 페이지네이션 UI가 마지막 페이지를 넘어간
+ * 요청에서도 정확한 총 개수를 보여줘야 할 때 쓴다(`listPosts.total`의
+ * `count(*) over()` 경계 조건 우회 — 위 함수 설명 참고).
+ */
+export async function countPostsAdvanced(
+  filter: Pick<SearchPostsAdvancedFilter, 'simpleFilters' | 'searchText' | 'searchFields'>
+): Promise<number> {
+  const conditions = buildAdvancedSearchConditions(filter as SearchPostsAdvancedFilter)
+  const where = conditions.length > 0 ? and(...conditions) : undefined
+  const [{ value }] = await db
+    .select({ value: sql<number>`count(*)` })
+    .from(posts)
+    .where(where)
+  return Number(value)
+}
+
+// -------------------------------------------------------------------------
+// 관리자 게시글 기본 목록 (Task 8) — `/api/admin/posts` GET 대체
+// -------------------------------------------------------------------------
+
+export type AdminPostListFilter = 'all' | 'deleted' | 'pinned' | string
+
+export interface ListPostsForAdminFilter {
+  /** 'all'|'deleted'|'pinned'|카테고리명. 기존 라우트와 동일한 의미 —
+   * 'deleted'만 `is_deleted=true`로 좁히고, 'all'·'pinned'·카테고리는
+   * `is_deleted`를 전혀 필터링하지 않는다(삭제된 글도 섞여 나온다 — 관리자
+   * 화면의 기존 동작을 그대로 보존한다. `searchPostsAdvanced`의 "기본은
+   * 비삭제만"과는 의도적으로 다르다). */
+  filter: AdminPostListFilter
+  /** title/content LIKE 검색어(escapePostgrestValue로 이미 새니타이즈된 값을
+   * 그대로 받는다 — 이 함수는 새니타이징하지 않는다). */
+  search?: string
+  page: number
+  limit: number
+}
+
+/**
+ * `/api/admin/posts` GET이 쓰던 Supabase 쿼리(필터+검색+페이지네이션+댓글수
+ * N+1 아님 배치)를 그대로 옮긴다. **정확한 총 개수가 필요하므로**(관리자
+ * 페이지네이션 UI가 `total`을 표시 — task-8-brief의 "listPosts.total 경계"
+ * 경고 대상) `count(*) over()` 대신 별도 COUNT 쿼리를 쓴다. 게시글 1쿼리 +
+ * COUNT 1쿼리 + 저자 배치 1쿼리 + 댓글수 배치 1쿼리 = 총 4쿼리.
+ */
+export async function listPostsForAdmin(
+  filter: ListPostsForAdminFilter
+): Promise<{ rows: AdvancedSearchPostRow[]; total: number }> {
+  const conditions: SQL[] = []
+  if (filter.filter === 'deleted') {
+    conditions.push(eq(posts.isDeleted, true))
+  } else if (filter.filter === 'pinned') {
+    conditions.push(eq(posts.isPinned, true))
+  } else if (filter.filter !== 'all') {
+    conditions.push(eq(posts.category, filter.filter))
+  }
+
+  const search = filter.search?.trim()
+  if (search) {
+    const needle = `%${search}%`
+    conditions.push(or(like(posts.title, needle), like(posts.content, needle)) as SQL)
+  }
+
+  const where = conditions.length > 0 ? and(...conditions) : undefined
+  const offset = Math.max(0, (filter.page - 1) * filter.limit)
+
+  const [rows, [{ value: total }]] = await Promise.all([
+    db
+      .select()
+      .from(posts)
+      .where(where)
+      .orderBy(desc(posts.createdAt))
+      .limit(filter.limit)
+      .offset(offset),
+    db
+      .select({ value: sql<number>`count(*)` })
+      .from(posts)
+      .where(where),
+  ])
+
+  const postIds = rows.map(row => row.id)
+  const [withAuthors, commentCounts] = await Promise.all([
+    attachAuthors(rows.map(rowToPost)),
+    countCommentsByPostIds(postIds),
+  ])
+
+  const result: AdvancedSearchPostRow[] = withAuthors.map(row => ({
+    ...row,
+    comment_count: commentCounts.get(row.id) ?? 0,
+  }))
+
+  return { rows: result, total: Number(total) }
+}
+
+export interface AdminPostStats {
+  totalPosts: number
+  totalDeleted: number
+  totalPinned: number
+  categoryStats: Record<string, number>
+}
+
+/**
+ * `/api/admin/posts/stats` GET이 쓰던 4개 Supabase count 쿼리(전체/삭제/고정/
+ * 카테고리별)를 옮긴다. 카테고리별 집계는 원본이 `is_deleted=false`인 행
+ * 전체를 내려받아 JS에서 세던 것을, `GROUP BY category` 단일 쿼리로 바꾼다
+ * (전수감사 지적 없이도 이 라운드에서 자연히 N+1을 줄인 것 — 원래도 N+1은
+ * 아니었지만 전행 다운로드였다). 총 4쿼리(개수는 늘지 않는다, 병렬 실행).
+ */
+export async function getAdminPostStats(): Promise<AdminPostStats> {
+  const [totalRow, deletedRow, pinnedRow, categoryRows] = await Promise.all([
+    db.select({ value: sql<number>`count(*)` }).from(posts),
+    db
+      .select({ value: sql<number>`count(*)` })
+      .from(posts)
+      .where(eq(posts.isDeleted, true)),
+    db
+      .select({ value: sql<number>`count(*)` })
+      .from(posts)
+      .where(eq(posts.isPinned, true)),
+    db
+      .select({ category: posts.category, value: sql<number>`count(*)` })
+      .from(posts)
+      .where(eq(posts.isDeleted, false))
+      .groupBy(posts.category),
+  ])
+
+  const categoryStats: Record<string, number> = { 공지: 0, 잡담: 0, 홍보: 0, 건의: 0 }
+  for (const row of categoryRows) {
+    if (row.category in categoryStats) {
+      categoryStats[row.category] = Number(row.value)
+    }
+  }
+
+  return {
+    totalPosts: Number(totalRow[0]?.value ?? 0),
+    totalDeleted: Number(deletedRow[0]?.value ?? 0),
+    totalPinned: Number(pinnedRow[0]?.value ?? 0),
+    categoryStats,
+  }
+}
+
+/**
+ * `/api/admin/activity`가 "최근 게시글 활동"에 쓰는 조회를 옮긴다. 기존
+ * Supabase `.gte('created_at', cutoffDate).eq('is_deleted', false)
+ * .order('created_at', {ascending:false}).limit(n)`과 동일 조건.
+ */
+export async function listRecentPostsForActivity(
+  since: Date,
+  limit: number
+): Promise<PostWithAuthor[]> {
+  const rows = await db
+    .select()
+    .from(posts)
+    .where(and(gt(posts.createdAt, since), eq(posts.isDeleted, false)))
+    .orderBy(desc(posts.createdAt))
+    .limit(limit)
+  return attachAuthors(rows.map(rowToPost))
+}
+
+/** `/api/admin/stats` 대시보드의 "전체 게시글 수(삭제 제외)" count. */
+export async function countActivePosts(): Promise<number> {
+  const [{ value }] = await db
+    .select({ value: sql<number>`count(*)` })
+    .from(posts)
+    .where(eq(posts.isDeleted, false))
+  return Number(value)
 }
 
 // -------------------------------------------------------------------------

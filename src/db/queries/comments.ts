@@ -29,7 +29,7 @@
  * `toggleCommentLike`이 담당한다.
  */
 
-import { and, asc, count, eq, gt, or, type SQL } from 'drizzle-orm'
+import { and, asc, count, eq, gt, inArray, or, type SQL } from 'drizzle-orm'
 
 import { db } from '../client.ts'
 import { comments } from '../schema/index.ts'
@@ -220,4 +220,21 @@ export async function countComments(postId: string): Promise<number> {
     .from(comments)
     .where(eq(comments.postId, postId))
   return value
+}
+
+/**
+ * 여러 게시글의 댓글 수를 **한 쿼리**(`GROUP BY post_id`)로 센다 — 게시판
+ * 목록·관리자 게시글 목록에서 게시글마다 쿼리하지 않는다(N+1 방지). `postIds`가
+ * 비면 쿼리 없이 즉시 빈 Map. 댓글이 0개인 게시글은 이 Map에 키 자체가 없다 —
+ * 호출부가 `map.get(id) ?? 0`으로 기본값을 채운다(`board_posts_with_stats` 뷰가
+ * `LEFT JOIN`으로 0을 주던 것과 동일한 최종 결과).
+ */
+export async function countCommentsByPostIds(postIds: string[]): Promise<Map<string, number>> {
+  if (postIds.length === 0) return new Map()
+  const rows = await db
+    .select({ postId: comments.postId, value: count() })
+    .from(comments)
+    .where(inArray(comments.postId, postIds))
+    .groupBy(comments.postId)
+  return new Map(rows.map(row => [row.postId, row.value]))
 }

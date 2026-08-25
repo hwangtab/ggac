@@ -1,6 +1,7 @@
 import { cache } from 'react'
 import { unstable_noStore as noStore } from 'next/cache'
-import { createServiceRoleClient, hasServiceRoleEnv } from '@/lib/server/supabaseAdmin'
+import { hasTursoEnv } from '@/db/client'
+import { listBoardPostsWithStats } from '@/db/queries/posts'
 import { createTextPreview } from '@/utils/textUtils'
 import { createLogger } from '@/utils/logger'
 import { parseIntegerParam } from '@/utils/queryParams'
@@ -43,14 +44,14 @@ export interface BoardListResult {
   degraded?: boolean
 }
 
-const getSupabaseServerClient = () => {
-  return createServiceRoleClient()
-}
-
-// board_posts_with_stats 뷰(마이그레이션 20260710210000) 1쿼리로 목록을 만든다.
-// 과거에는 posts 전본문 + 첨부/댓글/좋아요 전행(4쿼리)을 가져와 JS에서 집계했는데,
-// 이것이 post_likes seq scan 18.6만 회와 게시글당 수십 KB 본문 전송의 원인이었다
-// (2026-07 전수감사 API High 2·3). preview는 뷰의 content_head(앞 2000자)로 생성.
+// board_posts_with_stats 뷰(마이그레이션 20260710210000)를 Task 8에서
+// `src/db/queries/posts.ts`의 `listBoardPostsWithStats`(Turso/Drizzle)로
+// 대체했다 — posts는 단계 3c부터 Turso가 권위이므로, 이 뷰를 계속 Supabase에서
+// 읽으면 컷오버 후 새 회원의 글이 "알 수 없음" 저자로 뜬다(Supabase
+// member_profiles가 더는 갱신되지 않는다). 응답 모양(BoardInitialPost)과
+// 정렬(is_pinned desc, created_at desc, id desc)은 그대로 보존한다. preview는
+// content_head(앞 2000자)로 생성 — 이 부분도 원래 뷰와 동일한 절단 방식
+// (Postgres left(content,2000) → SQLite substr(content,1,2000)).
 export const fetchBoardPosts = cache(
   async ({
     category = '전체',
@@ -60,10 +61,10 @@ export const fetchBoardPosts = cache(
     const safeCategory = parseBoardCategory(category) ?? '전체'
     const safePage = Math.max(1, page)
 
-    // SUPABASE_SERVICE_ROLE_KEY가 없는 환경(예: 전권 키를 두지 않는 public 저장소의
-    // CI 빌드)에서는 이 함수가 무조건 service role 클라이언트를 요구하므로 프리렌더
-    // 시점에 throw해 빌드 전체가 죽는다. 운영(Vercel)에는 키가 항상 있어야 하므로
-    // 이 분기는 정상 운영에서는 절대 타지 않아야 한다 — 탄다면 그 자체가 설정
+    // TURSO_DATABASE_URL이 없는 운영 환경(예: 시크릿이 없는 CI 빌드)에서는
+    // db/client.ts의 assertProductionCredentials가 실제 쿼리 시점에 throw해
+    // 빌드 전체가 죽는다. 운영(Vercel)에는 변수가 항상 있어야 하므로 이
+    // 분기는 정상 운영에서는 절대 타지 않아야 한다 — 탄다면 그 자체가 설정
     // 오류이므로 조용히 넘기지 않고 error로 남긴다.
     //
     // 주의(중요): log.error는 반드시 noStore() 호출보다 앞에 둔다. next build의
@@ -74,7 +75,7 @@ export const fetchBoardPosts = cache(
     //
     // noStore()로 이 렌더를 동적 렌더링으로 전환해, 키가 없어 얻은 빈 결과가
     // revalidate=60 ISR 스냅샷으로 굳어 운영에 그대로 서빙되는 경로를 원천 차단한다
-    // (키가 있는 정상 경로는 이 분기를 타지 않으므로 ISR이 그대로 유지된다). 단,
+    // (변수가 있는 정상 경로는 이 분기를 타지 않으므로 ISR이 그대로 유지된다). 단,
     // 두 가지 함정이 있다: ① board/page.tsx에 `export const dynamic = 'force-static'`을
     // 추가하면 unstable-no-store.js의 forceStatic 분기에서 noStore()가 조용히
     // no-op되어 이 가드가 무력화되고 빈 배열이 정적 페이지로 그대로 구워진다 —
@@ -85,9 +86,9 @@ export const fetchBoardPosts = cache(
     // API 라우트(/api/board/posts, /api/posts)는 이 분기의 반환값(degraded: true)을
     // 반드시 확인해 하드 실패(503)로 되돌려야 한다 — noStore()는 페이지 프리렌더만
     // 보호하며, API Route Handler는 이미 동적이라 noStore()가 아무 효과가 없다.
-    if (!hasServiceRoleEnv()) {
+    if (!hasTursoEnv()) {
       log.error(
-        'SUPABASE_SERVICE_ROLE_KEY(또는 NEXT_PUBLIC_SUPABASE_URL)가 설정되지 않아 게시판 조회를 건너뜁니다. 운영 환경이라면 환경변수 설정을 확인하세요.'
+        'TURSO_DATABASE_URL이 설정되지 않아 게시판 조회를 건너뜁니다. 운영 환경이라면 환경변수 설정을 확인하세요.'
       )
       noStore()
       return {
@@ -99,41 +100,19 @@ export const fetchBoardPosts = cache(
       }
     }
 
-    const supabase = getSupabaseServerClient()
     // 목록 정적화(Phase 1) 후 서버는 전량을 한 번에 렌더하므로 상한을 넉넉히 둔다
     const limit = Math.max(1, Math.min(pageSize, 200))
-    const start = (safePage - 1) * limit
-    const end = start + limit
+    const offset = (safePage - 1) * limit
 
-    let query = supabase
-      .from('board_posts_with_stats')
-      .select(
-        'id, title, category, author_id, created_at, updated_at, is_pinned, content_head, like_count, author_display_name, comment_count, total_attachments, total_size, image_count, document_count, video_count, audio_count'
-      )
-
-    if (safeCategory !== '전체') {
-      query = query.eq('category', safeCategory)
-    }
-
-    query = query
-      .order('is_pinned', { ascending: false, nullsFirst: false })
-      .order('created_at', { ascending: false })
-      .order('id', { ascending: false })
-      .range(start, end)
-
-    const { data, error } = await query
-
-    if (error) {
-      log.error('Failed to load posts:', error.message)
+    let statsResult
+    try {
+      statsResult = await listBoardPostsWithStats({ category: safeCategory, offset, limit })
+    } catch (error) {
+      log.error('Failed to load posts:', error instanceof Error ? error.message : error)
       return { posts: [], hasNext: false, hasPrev: safePage > 1, currentPage: safePage }
     }
 
-    const rows = data || []
-    const hasNext = rows.length > limit
-
-    if (hasNext) {
-      rows.pop()
-    }
+    const { rows, hasNext } = statsResult
 
     const posts: BoardInitialPost[] = rows.map(row => {
       const preview = createTextPreview(row.content_head || '', 150)

@@ -230,6 +230,56 @@ export async function getAttachmentWithPost(
   }
 }
 
+export interface PostAttachmentStatsRow {
+  total_attachments: number
+  total_size: number
+  image_count: number
+  document_count: number
+  video_count: number
+  audio_count: number
+}
+
+/**
+ * 여러 게시글의 첨부파일 집계(`board_posts_with_stats` 뷰의 LATERAL 서브쿼리
+ * 대체, Task 8)를 **한 쿼리**(`GROUP BY post_id`)로 낸다 — 게시글마다 조회하지
+ * 않는다(N+1 방지). Postgres 뷰의 `a.is_temporary IS NOT TRUE` 조건은 SQLite로
+ * 옮기면 `isTemporary = false`와 같다(컬럼이 `NOT NULL DEFAULT false`라 NULL이
+ * 존재할 수 없다 — reference-views.md의 `IS NOT TRUE` 주의사항은 nullable 컬럼
+ * 얘기이고, 이 컬럼은 아니다). `postIds`가 비면 쿼리 없이 즉시 빈 Map. 첨부가
+ * 없는(또는 전부 임시인) 게시글은 이 Map에 키가 없다 — 호출부가 0으로 채운다.
+ */
+export async function getAttachmentStatsByPostIds(
+  postIds: string[]
+): Promise<Map<string, PostAttachmentStatsRow>> {
+  if (postIds.length === 0) return new Map()
+  const rows = await db
+    .select({
+      postId: postAttachments.postId,
+      totalAttachments: sql<number>`count(*)`,
+      totalSize: sql<number | null>`sum(${postAttachments.fileSize})`,
+      imageCount: sql<number>`sum(case when ${postAttachments.fileType} = 'image' then 1 else 0 end)`,
+      documentCount: sql<number>`sum(case when ${postAttachments.fileType} = 'document' then 1 else 0 end)`,
+      videoCount: sql<number>`sum(case when ${postAttachments.fileType} = 'video' then 1 else 0 end)`,
+      audioCount: sql<number>`sum(case when ${postAttachments.fileType} = 'audio' then 1 else 0 end)`,
+    })
+    .from(postAttachments)
+    .where(and(inArray(postAttachments.postId, postIds), eq(postAttachments.isTemporary, false)))
+    .groupBy(postAttachments.postId)
+  return new Map(
+    rows.map(row => [
+      row.postId,
+      {
+        total_attachments: Number(row.totalAttachments),
+        total_size: Number(row.totalSize ?? 0),
+        image_count: Number(row.imageCount),
+        document_count: Number(row.documentCount),
+        video_count: Number(row.videoCount),
+        audio_count: Number(row.audioCount),
+      },
+    ])
+  )
+}
+
 /**
  * 첨부파일 업로드 제한 확인에 쓰는 집계(개수 + 총 용량). 단일 쿼리 —
  * 게시글마다 전체 행을 내려받아 JS에서 합산하지 않는다.
