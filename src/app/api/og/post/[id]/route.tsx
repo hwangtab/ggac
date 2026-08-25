@@ -14,7 +14,7 @@ import { isProjectStoragePublicUrl } from '@/utils/storageUrlValidation'
 import { validateUUID } from '@/utils/validation'
 import { createLogger, maskId } from '@/utils/logger'
 import { getPostById } from '@/db/queries/posts'
-import { listImageAttachments } from '@/db/queries/attachments'
+import { getPrimaryImageAttachment } from '@/db/queries/attachments'
 
 const log = createLogger('api/og/post')
 
@@ -56,11 +56,12 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       })
     }
 
-    // 게시물의 첫 번째 이미지 첨부파일 조회 — is_primary 우선, 그다음
-    // created_at 오름차순(listImageAttachments가 그 순서를 보장한다).
-    let attachments: Awaited<ReturnType<typeof listImageAttachments>> = []
+    // 게시물의 대표 이미지 첨부 한 건 — is_primary 우선, 그다음 created_at
+    // 오름차순(getPrimaryImageAttachment가 그 순서에서 LIMIT 1을 건다).
+    // 이 라우트는 [0]만 쓰므로 목록 전체를 실어 올 이유가 없다.
+    let attachment: Awaited<ReturnType<typeof getPrimaryImageAttachment>> = null
     try {
-      attachments = await listImageAttachments(postId)
+      attachment = await getPrimaryImageAttachment(postId)
     } catch (attachmentError) {
       console.error('[OG API] Attachment query error:', attachmentError)
       return new Response(null, {
@@ -73,8 +74,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     }
 
     // 이미지 첨부파일이 있는 경우 해당 이미지 반환
-    if (attachments && attachments.length > 0) {
-      const imageUrl = attachments[0].file_url
+    if (attachment) {
+      const imageUrl = attachment.file_url
       if (
         !isProjectStoragePublicUrl(imageUrl, 'attachments', 'posts') &&
         !isBlobPublicUrl(imageUrl)

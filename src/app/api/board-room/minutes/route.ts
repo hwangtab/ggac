@@ -6,7 +6,12 @@ import { parseJsonObjectBody } from '@/utils/requestBody'
 import { validateUUID } from '@/utils/validation'
 import { parseContentFormat } from '@/constants/contentFormat'
 import { annotateImageDimensionsSafe } from '@/utils/imageDimensions'
-import { createMinutes, getMeetingTitle, getMinutesIdByMeetingId } from '@/db/queries/board'
+import {
+  createMinutes,
+  getMeetingTitle,
+  getMinutesIdByMeetingId,
+  isDuplicateMinutesError,
+} from '@/db/queries/board'
 
 export const runtime = 'nodejs'
 
@@ -62,7 +67,16 @@ export async function POST(request: NextRequest) {
           contentFormat,
           authorId: user.id,
         })
-      } catch {
+      } catch (createError) {
+        // 위 `getMinutesIdByMeetingId` 검사와 이 INSERT 사이에 다른 이사가
+        // 같은 회의의 회의록을 먼저 올리면 `board_minutes.meeting_id` UNIQUE에
+        // 걸린다(단계 4 Task 6a가 그 제약을 복원하면서 드러났다 — 그전에는
+        // 중복이 조용히 들어갔다). 원인을 삼키고 500을 주면, 이사는 "서버
+        // 오류"를 보고 다시 시도하게 된다. 사실은 이미 회의록이 있는 것이므로
+        // 위 사전 검사와 **같은 409**로 답한다.
+        if (isDuplicateMinutesError(createError)) {
+          throw ApiError.conflict('이미 회의록이 존재합니다.')
+        }
         throw ApiError.internalServerError('회의록 생성에 실패했습니다.')
       }
 

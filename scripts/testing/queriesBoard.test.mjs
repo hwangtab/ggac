@@ -1,6 +1,6 @@
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
-import { rmSync } from 'node:fs'
+import { readFileSync, rmSync } from 'node:fs'
 import { createClient } from '@libsql/client'
 
 import { applyMigrations } from './apply-migrations.mjs'
@@ -363,6 +363,83 @@ test('createMinutes → getMinutesIdByMeetingId(중복 방지) → getMinutesByM
   assert.equal(fetched.content, '내용')
   assert.equal(fetched.content_format, 'markdown')
   assert.equal(fetched.author_id, creator)
+})
+
+// 단계 4 Task 6b: 같은 회의에 회의록을 두 번 올리는 경쟁(사전 검사와 INSERT
+// 사이에 다른 이사가 먼저 올린 경우)이 500이 아니라 409로 나가야 한다.
+// 라우트가 그 판단에 쓰는 판별 함수를 실제 제약 위반으로 검증한다.
+test('isDuplicateMinutesError: 실제 meeting_id UNIQUE 위반을 잡는다', async () => {
+  const creator = await seedProfile()
+  const { createMeeting, createMinutes, isDuplicateMinutesError } = await loadFreshBoardModule()
+  const meeting = await createMeeting({
+    title: '중복회의록회의',
+    location: null,
+    voteDeadline: new Date(),
+    createdBy: creator,
+  })
+  await createMinutes({
+    meetingId: meeting.id,
+    content: '먼저 올린 회의록',
+    contentFormat: 'markdown',
+    authorId: creator,
+  })
+
+  let caught
+  await assert.rejects(
+    () =>
+      createMinutes({
+        meetingId: meeting.id,
+        content: '나중에 올린 회의록',
+        contentFormat: 'markdown',
+        authorId: creator,
+      }),
+    error => {
+      caught = error
+      return true
+    }
+  )
+  assert.equal(isDuplicateMinutesError(caught), true)
+})
+
+test('isDuplicateMinutesError: 다른 종류의 실패는 잡지 않는다(499를 409로 둔갑시키지 않는다)', async () => {
+  const { createMinutes, isDuplicateMinutesError } = await loadFreshBoardModule()
+
+  // ① 없는 회의 id — FK 위반이지 중복이 아니다.
+  let fkError
+  await assert.rejects(
+    () =>
+      createMinutes({
+        meetingId: 'no-such-meeting',
+        content: '내용',
+        contentFormat: 'markdown',
+        authorId: null,
+      }),
+    error => {
+      fkError = error
+      return true
+    }
+  )
+  assert.equal(isDuplicateMinutesError(fkError), false)
+
+  // ② 다른 표의 UNIQUE 위반 — 메시지 앞부분("UNIQUE constraint failed")만
+  // 보는 구현이면 여기서 통과해 버린다.
+  assert.equal(
+    isDuplicateMinutesError(
+      new Error('SQLITE_CONSTRAINT: UNIQUE constraint failed: member_profiles.email')
+    ),
+    false
+  )
+  assert.equal(isDuplicateMinutesError(new Error('연결이 끊겼습니다')), false)
+  assert.equal(isDuplicateMinutesError(null), false)
+})
+
+test('회의록 생성 라우트가 중복 위반을 409로 매핑한다 (소스 가드)', () => {
+  const route = readFileSync('src/app/api/board-room/minutes/route.ts', 'utf8')
+  // 판별 함수만 만들어 두고 라우트가 안 쓰면 사용자는 여전히 500을 본다.
+  assert.match(route, /isDuplicateMinutesError\(createError\)/)
+  assert.match(route, /ApiError\.conflict\('이미 회의록이 존재합니다\.'\)/)
+  // 원인을 통째로 버리던 옛 형태(`} catch {`)로 되돌아가면 매핑이 사라진다.
+  assert.doesNotMatch(route, /minutes = await createMinutes\([\s\S]*?\}\)\n\s*\} catch \{/)
 })
 
 test('getMinutesAuthorAndFormat: author_id가 NULL인 고아 회의록도 정확히 구분한다(null vs 행없음)', async () => {

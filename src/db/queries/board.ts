@@ -458,6 +458,24 @@ export interface CreateMinutesInput {
 }
 
 /** `/api/board-room/minutes` POST. */
+/**
+ * `error`가 `board_minutes.meeting_id` UNIQUE 위반인지 판별한다.
+ *
+ * 판별은 메시지 기반이다 — libsql은 제약 위반을 `SQLITE_CONSTRAINT: UNIQUE
+ * constraint failed: board_minutes.meeting_id` 문자열로 알린다(실측:
+ * `scripts/testing/boardSchemaConstraints.test.mjs`가 같은 문자열로 단정한다).
+ * `src/db/queries/sessions.ts`의 `isForeignKeyViolation`과 같은 방식이다.
+ *
+ * **컬럼명까지 본다.** `UNIQUE constraint failed`만 보면 앞으로
+ * `board_minutes`에 다른 유니크 제약이 생겼을 때 그 위반까지 "이미 회의록이
+ * 있습니다"로 둔갑한다.
+ */
+export function isDuplicateMinutesError(error: unknown): boolean {
+  const err = error as { message?: string; cause?: { message?: string } }
+  const combined = `${err?.message ?? ''} ${err?.cause?.message ?? ''}`
+  return /UNIQUE constraint failed:\s*board_minutes\.meeting_id/.test(combined)
+}
+
 export async function createMinutes(input: CreateMinutesInput): Promise<{ id: string }> {
   const [row] = await db
     .insert(boardMinutes)

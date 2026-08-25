@@ -181,6 +181,43 @@ export async function getProfileById(id: string): Promise<ProfileRow | null> {
 }
 
 /**
+ * 권한 판정에 필요한 세 컬럼만 조회한다.
+ *
+ * `getProfileById`는 33개 컬럼 전부(계좌번호·실명·전화번호·생년월일 같은
+ * 민감 컬럼 포함)를 실어 온다. "이 사람이 승인된 활성 관리자인가"만 알면
+ * 되는 호출부가 그 함수를 쓰면, 필요 없는 개인정보를 요청마다 프로세스 안으로
+ * 끌어들이고 그 객체가 응답에 실릴 여지를 만든다 — `src/lib/server/authz.ts`의
+ * `toSessionProfileFields`가 같은 이유로 세션 컨텍스트를 좁혀 놓았다.
+ *
+ * 반환 모양은 `authz.ts`의 `ProfileLike` 부분집합이라
+ * `isApprovedActiveAdmin()`에 그대로 넘길 수 있다.
+ *
+ * @returns 행이 없으면 `null`.
+ */
+export async function getProfileAuthzFields(id: string): Promise<{
+  is_admin: boolean
+  registration_status: RegistrationStatus
+  is_active: boolean
+} | null> {
+  const rows = await db
+    .select({
+      isAdmin: memberProfiles.isAdmin,
+      registrationStatus: memberProfiles.registrationStatus,
+      isActive: memberProfiles.isActive,
+    })
+    .from(memberProfiles)
+    .where(eq(memberProfiles.id, id))
+    .limit(1)
+  const row = rows[0]
+  if (!row) return null
+  return {
+    is_admin: row.isAdmin,
+    registration_status: row.registrationStatus,
+    is_active: row.isActive,
+  }
+}
+
+/**
  * 여러 id의 프로필을 **쿼리 한 번**으로 조회한다. 게시글·댓글 목록에서
  * 저자 정보를 채울 때 N+1을 피하려고 쓴다.
  *

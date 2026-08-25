@@ -548,21 +548,29 @@ test('listUserLikes: limit/offset으로 페이지네이션한다', async () => {
 
 // ------------------------------------------------------------- countUserLikes
 
-test('countUserLikes: 삭제 여부와 무관하게 post_likes 총 행 수를 센다(원본 count 쿼리와 같은 스코프)', async () => {
-  const { togglePostLike, countUserLikes } = await loadFreshLikesModule()
+// 단계 4 Task 6b: countUserLikes의 스코프를 listUserLikes에 맞췄다(동작 변경).
+// 그전에는 삭제된 글의 좋아요까지 세어, `/api/users/[id]/likes` 한 응답 안에서
+// 목록과 total_count가 서로 다른 기준을 말했다 — total_pages가 부풀어 빈
+// 마지막 페이지가 생기고, 회원은 볼 수 없는 글까지 포함한 숫자를 봤다.
+test('countUserLikes: 삭제된 게시글의 좋아요는 세지 않는다(listUserLikes와 같은 스코프)', async () => {
+  const { togglePostLike, countUserLikes, listUserLikes } = await loadFreshLikesModule()
   const { softDeletePost } = await loadFreshPostsModule()
   const liker = await seedProfile({ display_name: '카운트테스트' })
   const alivePost = await seedPost()
   const deletedPost = await seedPost()
   await togglePostLike(alivePost, liker)
   await togglePostLike(deletedPost, liker)
+  assert.equal(await countUserLikes(liker), 2, '삭제 전에는 둘 다 세어야 한다')
+
   await softDeletePost(deletedPost)
 
-  const total = await countUserLikes(liker)
+  assert.equal(await countUserLikes(liker), 1)
+  // 이 테스트의 요점은 숫자 1이 아니라 **두 함수가 같은 답을 낸다**는 것이다.
+  const rows = await listUserLikes(liker, { limit: 100, offset: 0 })
   assert.equal(
-    total,
-    2,
-    'countUserLikes는 is_deleted 필터를 적용하지 않는 원본 동작을 그대로 유지해야 한다'
+    await countUserLikes(liker),
+    rows.length,
+    '총계와 목록이 갈리면 total_pages가 어긋나 빈 페이지가 생긴다'
   )
 })
 

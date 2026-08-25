@@ -1226,7 +1226,10 @@ const postUserDataApiPath = join(root, 'src/app/api/posts/[id]/user-data/route.t
 const postUserDataApiSource = readFileSync(postUserDataApiPath, 'utf8')
 const validatesPostOgAttachmentStorageUrl =
   /isProjectStoragePublicUrl/.test(postOgImageSource) &&
-  /attachments\[0\]\.file_url/.test(postOgImageSource) &&
+  // 단계 4 Task 6b: 첨부 조회가 목록(attachments[0])에서 단건
+  // (getPrimaryImageAttachment → attachment)으로 바뀌었다. 지키려는 것은
+  // 그대로다 — 리다이렉트 URL이 첨부 행에서 오고 아래 검증을 거친다는 것.
+  /const imageUrl = attachment\.file_url/.test(postOgImageSource) &&
   /isProjectStoragePublicUrl\(imageUrl,\s*['"]attachments['"],\s*['"]posts['"]\)/.test(
     postOgImageSource
   ) &&
@@ -1551,6 +1554,10 @@ const validatesEventApplicationDeleteId =
   !/\.delete\(\)\.eq\(['"]id['"],\s*id\)/.test(adminEventApplicationsApiSource)
 const userLikesPath = join(root, 'src/app/api/users/[id]/likes/route.ts')
 const userLikesSource = stripComments(readFileSync(userLikesPath, 'utf8'))
+// 509행의 `authzSource`는 주석을 걷어내지 않은 원본이다. 아래 단정은 판정
+// 함수의 **본문**을 보므로, 주석만 남겨도 통과하는 사고를 막으려면 걷어낸
+// 판본이 필요하다(이 저장소가 단계 4 Task 5에서 실제로 겪은 실패 모드다).
+const authzCodeOnly = stripComments(readFileSync(authzPath, 'utf8'))
 // 단계 2c(Task 6): get_user_likes RPC 호출(`p_user_id: requestedUserId`)과
 // post_likes 총 개수 Supabase 카운트(`.eq('user_id', requestedUserId)`)를
 // Turso 쿼리 계층 listUserLikes(requestedUserId, ...)/
@@ -1559,10 +1566,22 @@ const validatesUserLikesRouteId =
   /validateUUID\(resolvedParams\.id,\s*['"]사용자 ID['"]\)/.test(userLikesSource) &&
   /listUserLikes\(requestedUserId,/.test(userLikesSource) &&
   /countUserLikes\(requestedUserId\)/.test(userLikesSource)
+// 단계 4 Task 6b: 권한 판정에 필요한 컬럼이 셋(is_admin/registration_status/
+// is_active)뿐인데 getProfileById가 33개 컬럼(계좌번호·실명 포함)을 실어 왔다.
+// 좁은 조회(getProfileAuthzFields)와 공용 판정 함수(isApprovedActiveAdmin)로
+// 옮겼다 — 지키려는 것은 그대로다: **관리자 플래그만으로는 통과하면 안 되고,
+// 승인·활성까지 함께 봐야 한다.** 그래서 라우트가 그 함수를 부르는지에 더해
+// 그 함수 자체가 세 조건을 다 보는지까지 본다(위임만 확인하면 판정 함수를
+// 느슨하게 고쳤을 때 이 가드가 조용히 무력해진다).
 const validatesUserLikesAdminStatus =
-  /getProfileById\(user\.id\)/.test(userLikesSource) &&
-  /profile\.registration_status !== ['"]approved['"][\s\S]*?!profile\.is_active/.test(
-    userLikesSource
+  /getProfileAuthzFields\(user\.id\)/.test(userLikesSource) &&
+  /isApprovedActiveAdmin\(profile\)/.test(userLikesSource) &&
+  !/getProfileById\(/.test(userLikesSource) &&
+  /export function isApprovedActive\(profile: ProfileLike \| null\): boolean \{\s*return profile\?\.registration_status === ['"]approved['"] && profile\.is_active === true\s*\}/.test(
+    authzCodeOnly
+  ) &&
+  /export function isApprovedActiveAdmin\(profile: ProfileLike \| null\): boolean \{\s*return isApprovedActive\(profile\) && profile\?\.is_admin === true\s*\}/.test(
+    authzCodeOnly
   )
 const postDetailPath = join(root, 'src/app/api/posts/[id]/route.ts')
 const postDetailSource = stripComments(readFileSync(postDetailPath, 'utf8'))
@@ -1695,10 +1714,6 @@ const validatesCommentCursors =
   /(?<![\w])id:\s*parsedCursor\?\.id \?\? null/.test(commentsListApiSource) &&
   !/decodeURIComponent\(cursor\)/.test(commentsApiSource) &&
   !/decodeURIComponent\(cursor\)/.test(commentsListApiSource)
-const commentLikesHelperPath = join(root, 'src/lib/server/commentLikes.ts')
-const commentLikesHelperSource = existsSync(commentLikesHelperPath)
-  ? stripComments(readFileSync(commentLikesHelperPath, 'utf8'))
-  : ''
 const commentSectionPath = join(root, 'src/components/CommentSection.tsx')
 const commentSectionSource = existsSync(commentSectionPath)
   ? stripComments(readFileSync(commentSectionPath, 'utf8'))
@@ -1708,12 +1723,13 @@ const likesQueriesSource = existsSync(likesQueriesPath)
   ? stripComments(readFileSync(likesQueriesPath, 'utf8'))
   : ''
 // 단계 2c(Task 6): comment_likes 배치 조회를 Supabase에서 Turso 쿼리
-// 계층(getLikedCommentIds, src/db/queries/likes.ts)으로 옮겼다 —
-// commentLikes.ts는 이제 그 함수를 감싸기만 하고, CommentSection도 브라우저에서
-// 테이블을 직접 읽는 대신 comments-list API를 다시 호출한다.
+// 계층(getLikedCommentIds, src/db/queries/likes.ts)으로 옮겼다. CommentSection도
+// 브라우저에서 테이블을 직접 읽는 대신 comments-list API를 다시 호출한다.
+// 단계 4 Task 6b: 그 사이에 있던 통과 래퍼(src/lib/server/commentLikes.ts의
+// getUserLikedCommentIds)를 지우고 라우트가 쿼리 계층을 직접 부른다 — 아래
+// 라우트 쪽 단정이 그 호출을 그대로 못박으므로 가드가 느슨해지지 않는다.
 const annotatesAuthenticatedCommentLikeState =
-  /export async function getUserLikedCommentIds/.test(commentLikesHelperSource) &&
-  /getLikedCommentIds\(userId,\s*commentIds\)/.test(commentLikesHelperSource) &&
+  !existsSync(join(root, 'src/lib/server/commentLikes.ts')) &&
   /eq\(commentLikes\.userId,\s*userId\)/.test(likesQueriesSource) &&
   // 상세 페이지 SSR 셸은 ISR 캐시를 위해 개인화(세션 기반 is_liked)를 포함하지
   // 않는다(전수감사 P2) — 서버는 is_liked:false로 내려주고, 복원은 클라이언트
@@ -1731,12 +1747,12 @@ const annotatesAuthenticatedCommentLikeState =
   /if \(!currentUserId \|\| initialComments\.length === 0\) return/.test(commentSectionSource) &&
   /fetchCommentsFromApi\(postId\)/.test(commentSectionSource) &&
   /is_liked:\s*true/.test(commentSectionSource) &&
-  // 인증 사용자 대상 댓글 목록 API는 계속 서버에서 like 상태를 주석한다 —
-  // 단계 2c에서 getUserLikedCommentIds가 SupabaseClient 인자를 받지 않게
-  // 바뀌었다(commentLikes.ts가 이제 Turso를 직접 부르므로 세션 클라이언트를
-  // 넘길 필요가 없다).
-  /getUserLikedCommentIds\(user\.id,\s*commentIds\)/.test(commentsApiSource) &&
-  /getUserLikedCommentIds\(user\.id,\s*commentIds\)/.test(commentsListApiSource) &&
+  // 인증 사용자 대상 댓글 목록 API는 계속 서버에서 like 상태를 주석한다.
+  // 단계 4 Task 6b: 호출 대상이 래퍼가 아니라 쿼리 계층 함수 자체다.
+  /getLikedCommentIds\(user\.id,\s*commentIds\)/.test(commentsApiSource) &&
+  /getLikedCommentIds\(user\.id,\s*commentIds\)/.test(commentsListApiSource) &&
+  !/getUserLikedCommentIds\(/.test(commentsApiSource) &&
+  !/getUserLikedCommentIds\(/.test(commentsListApiSource) &&
   /is_liked:\s*likedCommentIds\.has\(String\(c\.id\)\)/.test(commentsApiSource) &&
   /is_liked:\s*likedCommentIds\.has\(String\(c\.id\)\)/.test(commentsListApiSource)
 const validatesPostRouteIdsUseSanitizedUuid =
@@ -1833,9 +1849,12 @@ const validatesPostRouteIdsUseSanitizedUuid =
   /const postId = postIdValidation\.sanitized/.test(postOgImageSource) &&
   // 단계 2c(Task 6 확장): posts 존재 확인을 Supabase `.eq('id', postId)`에서
   // Turso 쿼리 계층 getPostById(postId, ...)로, 첨부(post_attachments) 조회도
-  // `.eq('post_id', postId)`에서 listImageAttachments(postId)로 옮겼다.
+  // `.eq('post_id', postId)`에서 옮겼다. 단계 4 Task 6b: 첨부 조회는
+  // listImageAttachments(전체)가 아니라 getPrimaryImageAttachment(LIMIT 1)를
+  // 쓴다 — 이 라우트는 첫 한 건만 쓰는데 목록 전체를 실어 오고 있었다.
   /getPostById\(postId,/.test(postOgImageSource) &&
-  /listImageAttachments\(postId\)/.test(postOgImageSource) &&
+  /getPrimaryImageAttachment\(postId\)/.test(postOgImageSource) &&
+  !/listImageAttachments\(/.test(postOgImageSource) &&
   /const userIdValidation = validateUUID\(userIdFromQuery,\s*['"]사용자 ID['"]\)/.test(
     postUserDataApiSource
   ) &&

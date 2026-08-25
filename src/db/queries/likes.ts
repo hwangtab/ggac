@@ -138,8 +138,18 @@ export async function isPostLikedByUser(postId: string, userId: string): Promise
 
 /**
  * 여러 댓글 id 중 `userId`가 좋아요한 것들의 id 집합을 **한 쿼리**로 돌려준다
- * (N+1 아님, `inArray`). `commentIds`가 비면 쿼리 없이 즉시 빈 Set —
- * `src/lib/server/commentLikes.ts`의 `getUserLikedCommentIds`가 이 함수를 감싼다.
+ * (N+1 아님, `inArray`). `commentIds`가 비면 쿼리 없이 즉시 빈 Set.
+ *
+ * 댓글 목록 라우트(`/api/posts/[id]/comments`, `.../comments-list`)가 직접
+ * 부른다. 단계 2c에는 `src/lib/server/commentLikes.ts`의
+ * `getUserLikedCommentIds`가 이 함수를 그대로 위임하는 래퍼로 남아 있었는데,
+ * `SupabaseClient` 인자를 걷어낸 뒤로는 이름만 바꿔 넘기는 일 말고는 하는 일이
+ * 없어 단계 4 Task 6b에서 지웠다.
+ *
+ * **조회 실패는 삼키지 않는다.** 옛 Supabase 구현은 `error`를 무시하고 빈
+ * `Set`을 돌려줘 "좋아요 상태 없이 조용히 200"이 됐다. 이 함수는 이 저장소의
+ * 다른 쿼리 함수와 같은 계약을 따라 그대로 throw하고, 호출부의 try/catch가
+ * 500으로 드러낸다.
  */
 export async function getLikedCommentIds(
   userId: string,
@@ -230,18 +240,27 @@ export async function listUserLikes(
 }
 
 /**
- * 사용자가 좋아요한 게시글 **총 개수**(삭제 여부 무관). 기존
- * `/api/users/[id]/likes`의 `.from('post_likes').select('id', {count:'exact',
- * head:true}).eq('user_id', requestedUserId)`와 정확히 같은 스코프다 — `posts`와
- * 조인하지 않고 `is_deleted` 필터도 적용하지 않는다(원본이 그랬다: `total`은
- * 목록에 실제로 표시되는 행 수와 다를 수 있다 — 좋아요한 글이 나중에 삭제되면
- * `listUserLikes`의 반환 행 수는 줄지만 이 총 개수는 그대로다. 기존 동작을
- * 그대로 옮긴 것이지 이 함수가 새로 만든 불일치가 아니다).
+ * 사용자가 좋아요한 게시글 **총 개수**. `listUserLikes`와 **같은 스코프**다 —
+ * 삭제되지 않은 게시글(`posts.is_deleted = false`)만 센다.
+ *
+ * **단계 4 Task 6b에서 동작이 바뀌었다.** 그전까지 이 함수는 `posts`와 조인하지
+ * 않고 `post_likes` 행을 전부 셌다(옛 Supabase 코드의
+ * `.from('post_likes').select('id', {count:'exact', head:true})`를 그대로 옮긴
+ * 결과다). 그래서 `/api/users/[id]/likes` 한 응답 안에서 목록(`liked_posts`,
+ * 삭제 글 제외)과 총계(`pagination.total_count`, 삭제 글 포함)가 서로 다른
+ * 기준을 말했다 — `total_pages`가 부풀어 마지막 페이지가 빈 채로 생기고,
+ * 회원에게는 자기가 볼 수 없는 글까지 포함한 숫자가 나갔다.
+ *
+ * 그 불일치는 설계가 아니라 사고다. 원본 Postgres `get_user_likes` RPC는
+ * `p.is_deleted = false`로 조인했고, 총계만 그 RPC를 거치지 않는 **별개**
+ * 쿼리였다. 두 쿼리가 같은 화면의 두 숫자를 만들면서 조건이 갈렸을 뿐,
+ * "총계는 삭제 글도 세자"고 정한 곳은 어디에도 없다. 목록에 맞춘다.
  */
 export async function countUserLikes(userId: string): Promise<number> {
   const [{ value }] = await db
     .select({ value: count() })
     .from(postLikes)
-    .where(eq(postLikes.userId, userId))
+    .innerJoin(posts, eq(postLikes.postId, posts.id))
+    .where(and(eq(postLikes.userId, userId), eq(posts.isDeleted, false)))
   return value
 }

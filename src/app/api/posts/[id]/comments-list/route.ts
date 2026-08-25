@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { listCommentsKeyset } from '@/db/queries/comments'
-import { getUserLikedCommentIds } from '@/lib/server/commentLikes'
+import { getLikedCommentIds } from '@/db/queries/likes'
 import { validateUUID } from '@/utils/validation'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { formatTimestampUuidCursor, parseTimestampUuidCursor } from '@/utils/keysetCursor'
@@ -39,9 +39,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
   const annotateCommentLikeState = async (comments: Array<Record<string, unknown>>) => {
     const commentIds = comments.map(c => String(c.id)).filter(Boolean)
-    const likedCommentIds = user
-      ? await getUserLikedCommentIds(user.id, commentIds)
-      : new Set<string>()
+    const likedCommentIds = user ? await getLikedCommentIds(user.id, commentIds) : new Set<string>()
 
     return comments.map(c => ({
       ...c,
