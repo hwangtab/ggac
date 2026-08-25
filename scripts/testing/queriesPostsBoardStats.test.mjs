@@ -225,7 +225,64 @@ test('searchPostsAdvanced: is_pinned/category 단순 필터가 함께 적용된�
   assert.equal(rows[0].is_pinned, true)
 })
 
-test('searchPostsAdvanced: comment_count 정렬은 배치 집계 후 JS에서 정렬한다', async () => {
+/**
+ * 코드리뷰 Important 1 대응: 관리자 화면의 boolean 필터 에디터
+ * (`src/components/filters/FilterConditionEditor.tsx`)는 `<option
+ * value="true">예</option>`처럼 **문자열** `'true'`/`'false'`를 보낸다 —
+ * JS boolean이 아니다. 라우트가 이 값을 그대로 `simpleFilters.is_pinned`에
+ * 실어 넘기므로, 쿼리 계층이 `typeof === 'boolean'`만 검사하면 이 문자열은
+ * 항상 걸러져 필터가 조용히 사라진다(에러 없이 "전체 결과"가 나온다). UI가
+ * 실제로 보내는 형태(문자열)로 필터가 걸리는지 확인한다.
+ */
+test('searchPostsAdvanced: is_pinned가 문자열 "true"/"false"로 와도(UI가 실제로 보내는 형태) 필터가 걸린다', async () => {
+  const { searchPostsAdvanced } = await loadFreshPostsModule()
+  const category = `문자열불리언테스트-${++seedCounter}`
+  const pinnedId = await seedPost({ category, title: '고정2', is_pinned: true })
+  const normalId = await seedPost({ category, title: '일반2', is_pinned: false })
+
+  const pinnedOnly = await searchPostsAdvanced({
+    simpleFilters: { category, is_pinned: 'true' },
+    page: 1,
+    limit: 20,
+  })
+  assert.equal(pinnedOnly.total, 1, '문자열 "true"도 is_pinned=true로 정확히 좁혀야 한다')
+  assert.equal(pinnedOnly.rows[0].id, pinnedId)
+
+  const unpinnedOnly = await searchPostsAdvanced({
+    simpleFilters: { category, is_pinned: 'false' },
+    page: 1,
+    limit: 20,
+  })
+  assert.equal(unpinnedOnly.total, 1, '문자열 "false"도 is_pinned=false로 정확히 좁혀야 한다')
+  assert.equal(unpinnedOnly.rows[0].id, normalId)
+
+  // 부정 대조: 필터를 아예 안 걸면(빈 문자열/미지정) 두 건 다 나와야 한다 —
+  // "필터가 항상 걸린다"가 아니라 "값이 있을 때만 걸린다"는 것을 함께 확인.
+  const noFilter = await searchPostsAdvanced({
+    simpleFilters: { category, is_pinned: '' },
+    page: 1,
+    limit: 20,
+  })
+  assert.equal(noFilter.total, 2, '빈 문자열은 필터 미지정으로 취급해야 한다')
+})
+
+test('searchPostsAdvanced: is_deleted가 문자열 "true"로 와도 삭제된 글만 좁힌다', async () => {
+  const { searchPostsAdvanced, softDeletePost } = await loadFreshPostsModule()
+  const category = `삭제문자열불리언테스트-${++seedCounter}`
+  await seedPost({ category, title: '활성유지' })
+  const deletedId = await seedPost({ category, title: '삭제예정' })
+  await softDeletePost(deletedId)
+
+  const { rows, total } = await searchPostsAdvanced({
+    simpleFilters: { category, is_deleted: 'true' },
+    page: 1,
+    limit: 20,
+  })
+  assert.equal(total, 1)
+  assert.equal(rows[0].id, deletedId)
+})
+
+test('searchPostsAdvanced: comment_count 정렬(단일 페이지)이 실제 댓글 수 내림차순이다', async () => {
   const { searchPostsAdvanced } = await loadFreshPostsModule()
   const { createComment } = await loadFreshCommentsModule()
   const category = `댓글정렬테스트-${++seedCounter}`
@@ -247,6 +304,120 @@ test('searchPostsAdvanced: comment_count 정렬은 배치 집계 후 JS에서 �
   assert.equal(rows[0].comment_count, 3)
   assert.equal(rows[1].id, fewId)
   assert.equal(rows[1].comment_count, 1)
+})
+
+/**
+ * 코드리뷰 Important 2 대응: 옛 구현은 DB에서 `created_at desc LIMIT n`으로
+ * 한 페이지만 뽑은 뒤 그 페이지 안에서만 댓글 수로 재정렬했다 — 전역 정렬이
+ * 아니라 페이지 국소 정렬이었다. 게시글 수가 `limit`을 넘으면 2페이지에
+ * 1페이지보다 댓글이 많은 글이 나올 수 있었다. 이 테스트는 댓글 수가
+ * created_at 순서와 **일부러 무관하게** 되도록 심어서, 그 결함이 있었다면
+ * 반드시 걸리게 만든다 — 페이지 크기(2)보다 많은 게시글(5)을 심고 전 구간에
+ * 걸친 정렬을 확인한다.
+ */
+test('searchPostsAdvanced: comment_count 정렬은 페이지를 넘어 전역적으로 정확하다(다중 페이지 회귀)', async () => {
+  const { searchPostsAdvanced } = await loadFreshPostsModule()
+  const { createComment } = await loadFreshCommentsModule()
+  const category = `댓글정렬다중페이지테스트-${++seedCounter}`
+
+  // 작성 순서(=created_at 오름차순)와 댓글 수를 일부러 어긋나게 심는다.
+  const plan = [
+    { title: 'post-0', commentCount: 1 },
+    { title: 'post-1', commentCount: 5 },
+    { title: 'post-2', commentCount: 2 },
+    { title: 'post-3', commentCount: 4 },
+    { title: 'post-4', commentCount: 0 },
+  ]
+  const postIds = []
+  for (const item of plan) {
+    const id = await seedPost({ category, title: item.title })
+    for (let i = 0; i < item.commentCount; i++) {
+      await createComment({ post_id: id, author_id: authorId, content: `c${i}` })
+    }
+    postIds.push(id)
+  }
+  const [id0, id1, id2, id3, id4] = postIds
+  // 기대하는 전역 내림차순: post-1(5) > post-3(4) > post-2(2) > post-0(1) > post-4(0)
+  const expectedOrder = [id1, id3, id2, id0, id4]
+
+  const limit = 2
+  const page1 = await searchPostsAdvanced({
+    simpleFilters: { category },
+    sortField: 'comment_count',
+    sortDirection: 'desc',
+    page: 1,
+    limit,
+  })
+  const page2 = await searchPostsAdvanced({
+    simpleFilters: { category },
+    sortField: 'comment_count',
+    sortDirection: 'desc',
+    page: 2,
+    limit,
+  })
+  const page3 = await searchPostsAdvanced({
+    simpleFilters: { category },
+    sortField: 'comment_count',
+    sortDirection: 'desc',
+    page: 3,
+    limit,
+  })
+
+  assert.deepEqual(
+    page1.rows.map(r => r.id),
+    expectedOrder.slice(0, 2),
+    '1페이지: 전역 1~2위(post-1, post-3)여야 한다'
+  )
+  assert.deepEqual(
+    page2.rows.map(r => r.id),
+    expectedOrder.slice(2, 4),
+    '2페이지: 전역 3~4위(post-2, post-0)여야 한다 — 페이지 국소 정렬이었다면 여기서 순서가 틀어진다'
+  )
+  assert.deepEqual(
+    page3.rows.map(r => r.id),
+    expectedOrder.slice(4, 5),
+    '3페이지: 전역 5위(post-4)'
+  )
+
+  // 페이지 경계를 넘는 단조성 직접 확인: 1페이지 최솟값 >= 2페이지 최댓값 >= 3페이지 최댓값.
+  const page1Min = Math.min(...page1.rows.map(r => r.comment_count))
+  const page2Max = Math.max(...page2.rows.map(r => r.comment_count))
+  const page2Min = Math.min(...page2.rows.map(r => r.comment_count))
+  const page3Max = Math.max(...page3.rows.map(r => r.comment_count))
+  assert.ok(
+    page1Min >= page2Max,
+    `1페이지 최소 댓글수(${page1Min})는 2페이지 최대 댓글수(${page2Max})보다 크거나 같아야 한다`
+  )
+  assert.ok(
+    page2Min >= page3Max,
+    `2페이지 최소 댓글수(${page2Min})는 3페이지 최대 댓글수(${page3Max})보다 크거나 같아야 한다`
+  )
+})
+
+test('searchPostsAdvanced: comment_count 오름차순 정렬도 전역적으로 정확하다', async () => {
+  const { searchPostsAdvanced } = await loadFreshPostsModule()
+  const { createComment } = await loadFreshCommentsModule()
+  const category = `댓글정렬오름차순테스트-${++seedCounter}`
+
+  const zeroId = await seedPost({ category, title: 'zero' })
+  const threeId = await seedPost({ category, title: 'three' })
+  const oneId = await seedPost({ category, title: 'one' })
+  for (let i = 0; i < 3; i++) {
+    await createComment({ post_id: threeId, author_id: authorId, content: `c${i}` })
+  }
+  await createComment({ post_id: oneId, author_id: authorId, content: 'c0' })
+
+  const { rows } = await searchPostsAdvanced({
+    simpleFilters: { category },
+    sortField: 'comment_count',
+    sortDirection: 'asc',
+    page: 1,
+    limit: 20,
+  })
+  assert.deepEqual(
+    rows.map(r => r.id),
+    [zeroId, oneId, threeId]
+  )
 })
 
 test('searchPostsAdvanced: 기본은 삭제된 글을 제외한다', async () => {

@@ -30,7 +30,7 @@
 import { and, asc, desc, eq, gt, gte, inArray, like, lt, lte, or, sql, type SQL } from 'drizzle-orm'
 
 import { db } from '../client.ts'
-import { posts } from '../schema/index.ts'
+import { comments, posts } from '../schema/index.ts'
 
 import { getProfilesByIds } from './profiles.ts'
 import { countCommentsByPostIds } from './comments.ts'
@@ -433,6 +433,26 @@ export interface SearchPostsAdvancedFilter {
  * (`PostWithAuthor` + `comment_count`)로 정한다. */
 export type AdvancedSearchPostRow = PostWithAuthor & { comment_count: number }
 
+/**
+ * `simpleFilters`의 boolean 필드(`is_pinned`/`is_deleted`) 값을 정규화한다.
+ * 코드리뷰 지적(Important 1): `FilterCondition.value`는 `any`이고, UI의
+ * boolean 필드 에디터(`src/components/filters/FilterConditionEditor.tsx`의
+ * `<select><option value="true">예</option>...`)는 `e.target.value`를 그대로
+ * 싣는다 — 즉 실제로 오는 값은 JS boolean이 아니라 문자열 `'true'`/`'false'`다.
+ * `typeof value === 'boolean'`만 검사하면 이 문자열이 항상 걸러져 조건이
+ * 조용히 사라진다(고정 여부를 골라도 전체가 나오는데 에러가 없다). 이
+ * 라우트는 한 번도 동작한 적이 없어 "기존 동작 보존"을 주장할 수 없다 —
+ * 이 커밋이 처음으로 계약을 정한다. `'true'`/`'false'` 문자열과 실제
+ * boolean을 모두 받아들이고, 그 외(빈 문자열 `''`(select의 "선택하세요"
+ * 기본값 포함)·`undefined`·다른 타입)는 "필터 미지정"으로 처리한다.
+ */
+function normalizeBooleanFilterValue(value: unknown): boolean | undefined {
+  if (typeof value === 'boolean') return value
+  if (value === 'true') return true
+  if (value === 'false') return false
+  return undefined
+}
+
 function buildAdvancedSearchConditions(filter: SearchPostsAdvancedFilter): SQL[] {
   const conditions: SQL[] = []
 
@@ -440,11 +460,13 @@ function buildAdvancedSearchConditions(filter: SearchPostsAdvancedFilter): SQL[]
   if (typeof simple.category === 'string' && simple.category) {
     conditions.push(eq(posts.category, simple.category))
   }
-  if (typeof simple.is_pinned === 'boolean') {
-    conditions.push(eq(posts.isPinned, simple.is_pinned))
+  const isPinnedFilter = normalizeBooleanFilterValue(simple.is_pinned)
+  if (isPinnedFilter !== undefined) {
+    conditions.push(eq(posts.isPinned, isPinnedFilter))
   }
-  if (typeof simple.is_deleted === 'boolean') {
-    conditions.push(eq(posts.isDeleted, simple.is_deleted))
+  const isDeletedFilter = normalizeBooleanFilterValue(simple.is_deleted)
+  if (isDeletedFilter !== undefined) {
+    conditions.push(eq(posts.isDeleted, isDeletedFilter))
   } else {
     // 원본 필드 정의(POST_FIELD_DEFINITIONS)는 is_deleted를 필터 가능 필드로
     // 노출하지만, 관리자 화면이 명시적으로 고르지 않으면 삭제된 글까지
@@ -472,10 +494,19 @@ function buildAdvancedSearchConditions(filter: SearchPostsAdvancedFilter): SQL[]
  * 관리자 게시글 "고급 검색"(`/api/admin/posts/advanced-search`)이 부르던
  * 없는 RPC `search_posts_advanced`의 대체. 전문검색(tsvector)이 아니라 `LIKE`
  * 기반이면 충분하다(원래 함수도 존재하지 않았고, 자매 함수
- * `execute_advanced_search`도 tsvector를 쓰지 않는다). `comment_count` 정렬은
- * DB에서 정렬할 수 없으므로(집계가 별도 쿼리) `sortField === 'comment_count'`면
- * `created_at desc`로 가져온 뒤 댓글 수를 붙이고 **JS에서 안정 정렬**한다 —
- * 게시글 총량이 23명 커뮤니티 규모라 실용적으로 문제없다.
+ * `execute_advanced_search`도 tsvector를 쓰지 않는다).
+ *
+ * **`comment_count` 정렬(코드리뷰 Important 2 수정):** 처음에는 "DB에서
+ * 정렬할 수 없다"고 판단해 페이지 안 20행만 JS로 재정렬했는데, 이건
+ * **페이지 국소적** 정렬이라 전역 정렬이 아니었다(2페이지에 1페이지보다
+ * 댓글이 많은 글이 나오는 등, 게시글 수가 `limit`을 넘는 순간부터 항상
+ * 틀렸다). SQLite는 상관 서브쿼리를 `ORDER BY`에 직접 쓸 수 있어
+ * `(select count(*) from comments where comments.post_id = posts.id)`를
+ * `sql` 템플릿으로 만들어 `orderBy`에 넘긴다 — DB가 전체 행을 대상으로
+ * 정렬한 뒤 `LIMIT`/`OFFSET`을 적용하므로 페이지 경계가 없다. 응답에 실을
+ * `comment_count` 값 자체는 여전히 `countCommentsByPostIds` 배치 조회로
+ * 채운다(이 서브쿼리는 정렬에만 쓰고, 값 조회에는 기존 배치 경로를 그대로
+ * 쓴다 — 중복 계산이지만 이 페이지 크기(최대 100)에서는 무시할 만하다).
  *
  * @remarks `total`은 `count(*) over()` 윈도우 함수로 계산한다 — `listPosts`와
  * 같은 경계 조건이다: `offset >= total`이면 이 페이지에 행이 0개라 `total`도
@@ -492,16 +523,22 @@ export async function searchPostsAdvanced(
 
   const sortField = filter.sortField ?? 'created_at'
   const sortDirection = filter.sortDirection ?? 'desc'
-  const dbSortField = sortField === 'comment_count' ? 'created_at' : sortField
-  const dbSortColumn =
-    dbSortField === 'title'
-      ? posts.title
-      : dbSortField === 'category'
-        ? posts.category
-        : dbSortField === 'updated_at'
-          ? posts.updatedAt
-          : posts.createdAt
-  const orderBy = sortDirection === 'asc' ? asc(dbSortColumn) : desc(dbSortColumn)
+
+  let orderBy: SQL
+  if (sortField === 'comment_count') {
+    const commentCountExpr = sql`(select count(*) from ${comments} where ${comments.postId} = ${posts.id})`
+    orderBy = sortDirection === 'asc' ? asc(commentCountExpr) : desc(commentCountExpr)
+  } else {
+    const dbSortColumn =
+      sortField === 'title'
+        ? posts.title
+        : sortField === 'category'
+          ? posts.category
+          : sortField === 'updated_at'
+            ? posts.updatedAt
+            : posts.createdAt
+    orderBy = sortDirection === 'asc' ? asc(dbSortColumn) : desc(dbSortColumn)
+  }
 
   const offset = Math.max(0, (filter.page - 1) * filter.limit)
 
@@ -535,18 +572,12 @@ export async function searchPostsAdvanced(
     countCommentsByPostIds(postIds),
   ])
 
-  let result: AdvancedSearchPostRow[] = withAuthors.map(row => ({
+  // DB가 이미 정렬 순서대로 rows를 돌려줬으므로(comment_count 정렬 포함),
+  // withAuthors의 순서를 그대로 보존한다 — JS 재정렬은 하지 않는다.
+  const result: AdvancedSearchPostRow[] = withAuthors.map(row => ({
     ...row,
     comment_count: commentCounts.get(row.id) ?? 0,
   }))
-
-  if (sortField === 'comment_count') {
-    result = [...result].sort((a, b) =>
-      sortDirection === 'asc'
-        ? a.comment_count - b.comment_count
-        : b.comment_count - a.comment_count
-    )
-  }
 
   return { rows: result, total }
 }
@@ -582,8 +613,12 @@ export interface ListPostsForAdminFilter {
    * 화면의 기존 동작을 그대로 보존한다. `searchPostsAdvanced`의 "기본은
    * 비삭제만"과는 의도적으로 다르다). */
   filter: AdminPostListFilter
-  /** title/content LIKE 검색어(escapePostgrestValue로 이미 새니타이즈된 값을
-   * 그대로 받는다 — 이 함수는 새니타이징하지 않는다). */
+  /** title/content LIKE 검색어. 호출부(`admin/posts/route.ts`)가 이미
+   * `validateSearchQuery`로 검증·새니타이즈한 `sanitized` 값을 넘긴다 — 이
+   * 함수 자체는 새니타이징하지 않는다. `like()`는 Drizzle 파라미터 바인딩을
+   * 쓰므로 SQL 인젝션 걱정은 없다(옛 PostgREST `escapePostgrestValue`는
+   * Supabase `.or()` 문자열 조합용이었고, 이 커밋에서 그 호출 자체가
+   * 사라졌다 — 이 주석이 예전엔 그걸 계속 쓴다고 잘못 말하고 있었다). */
   search?: string
   page: number
   limit: number
