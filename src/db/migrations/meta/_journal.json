@@ -15,6 +15,13 @@
       "when": 1787640223914,
       "tag": "0001_neat_exiles",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1787674292937,
+      "tag": "0002_restore_board_constraints",
+      "breakpoints": true
     }
   ]
 }
