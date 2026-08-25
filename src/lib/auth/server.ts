@@ -12,7 +12,7 @@ import { resolveEmailLinkBaseUrl } from './emailBaseUrl'
 import { safeErrorMessage } from './errorMessage'
 import { hashPassword, verifyPassword } from './password'
 import { buildMemberProfileRow } from './profileHook'
-import { isBenignShadowUserRetryError } from './shadowUserGuard'
+import { isBenignShadowProfileRetryError, isBenignShadowUserRetryError } from './shadowUserGuard'
 
 /**
  * Vercel 로그에서 grep하기 위한 고정 접두어.
@@ -72,6 +72,55 @@ async function ensureSupabaseAuthShadowUser(id: string, email: string): Promise<
   })
   if (!error) return
   if (isBenignShadowUserRetryError(error)) return
+  throw error
+}
+
+/**
+ * `member_profiles`에 같은 id의 참조 무결성 전용 최소 행을 만든다(없으면).
+ *
+ * 단계 2c(Task 3)부터 회원 프로필의 권위는 Turso다 — 이 함수가 Supabase
+ * `member_profiles`에 만드는 행은 **권위 사본이 아니다.** 승인 상태·활성
+ * 여부·관리자/이사/감사 권한 같은 실제 값은 전부 Turso에만 있다. 그런데
+ * Supabase 쪽에는 아직 이 표를 FK로 참조하는 표가 남아 있다 —
+ * `board_meeting_date_votes.voter_id`·`board_meeting_attendees.member_id`
+ * (둘 다 NOT NULL)·`board_meetings.created_by`·`board_agendas.proposed_by`·
+ * `board_minutes.author_id`·`board_documents.uploaded_by`·
+ * `member_bulk_operations.performed_by`. 컷오버 이후 가입한 사람은 Turso
+ * `member_profiles`에만 행이 생기므로, 그 사람이 이사회 서재에서 아무거나
+ * 쓰려고 하면 이 FK들이 23503으로 막는다(admin/members/bulk 로그처럼 로그
+ * INSERT가 먼저 실행되는 곳은 승인 자체가 막힌다). 기존 회원은 이관 때
+ * 양쪽에 이미 행이 있어 이 문제를 겪지 않는다 — 그래서 겉보기에는 "한 사람만
+ * 겪는 랜덤 500"으로 보인다.
+ *
+ * `ensureSupabaseAuthShadowUser`와 같은 그림자 행 패턴이다(이미 단계 2b-5가
+ * FK 13개 때문에 승인한 방식) — 되돌릴 수 있고, 단계 4~5에서 board_* 표를
+ * Turso로 옮기며 Supabase를 걷어낼 때 이 호출도 함께 사라진다.
+ *
+ * NOT NULL 컬럼(`id`·`email`·`display_name`)만 채운다.
+ * `registration_status`·`is_active`·`is_admin`은 DB 기본값(pending/false)에
+ * 맡긴다 — 여기서 값을 채우면 이 행이 그 컬럼들의 또 다른 진실 출처처럼
+ * 보이게 된다. **이 행을 어디서도 읽지 마라** — 읽는 코드가 생기면 그게
+ * 이중 권위다.
+ *
+ * 멱등이어야 한다 — 훅 재시도나 이중 실행에서 실패하면 안 된다. 우리 호출은
+ * `ensureSupabaseAuthShadowUser`와 마찬가지로 항상 같은 id+email로만
+ * 재시도된다. "이미 준비돼 있다"는 뜻의 무해한 재시도인지 판정하는 로직은
+ * `isBenignShadowProfileRetryError`(`./shadowUserGuard`)로 뺐다(PostgREST
+ * 고유 제약 위반 23505 실측 근거도 그 파일에 있다). 그 외 모든 에러는 그대로
+ * 던져 훅의 기존 catch로 넘긴다.
+ */
+async function ensureSupabaseMemberProfileShadowRow(
+  id: string,
+  email: string,
+  name: string | null | undefined
+): Promise<void> {
+  const admin = createServiceRoleClient()
+  const trimmedName = typeof name === 'string' ? name.trim() : ''
+  const { error } = await admin
+    .from('member_profiles')
+    .insert({ id, email, display_name: trimmedName || email })
+  if (!error) return
+  if (isBenignShadowProfileRetryError(error)) return
   throw error
 }
 
@@ -184,6 +233,16 @@ export const auth = betterAuth({
             // 재시도로 이미 있으면(GoTrue error.code === 'email_exists') 성공
             // 처리하고, 그 외 실패(진짜 검증 실패 등)는 그대로 던진다.
             await ensureSupabaseAuthShadowUser(user.id, user.email)
+
+            // (1.5) board_* 표(board_meeting_date_votes.voter_id 등)가 아직
+            // Supabase member_profiles(id)를 FK로 참조한다. 컷오버 이후
+            // 가입자는 Turso에만 프로필이 생기므로, 이 껍데기가 없으면 그
+            // 사람이 이사회 서재에서 뭔가 쓰려 할 때 23503으로 막힌다 — 권위
+            // 사본이 아니라 FK 통과 전용이다(자세한 이유는
+            // ensureSupabaseMemberProfileShadowRow 문서 참조). auth.users
+            // 껍데기(위 1번)와 마찬가지로 실패해도 가입 자체는 막지 않는다 —
+            // 아래 catch가 로그로 드러낸다.
+            await ensureSupabaseMemberProfileShadowRow(user.id, user.email, user.name)
 
             // (2) buildMemberProfileRow는 snake_case 키를 돌려준다
             // (`src/db/queries/profiles.ts`의 `upsertProfile`이 기대하는 입력
