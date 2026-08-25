@@ -27,8 +27,10 @@ export function migrationFiles() {
  *
  * `executeMultiple`을 쓰는 이유: 0002는 `PRAGMA foreign_keys=OFF`로 표
  * 재작성을 감싸는데, 트랜잭션 안에서 실행되는 마이그레이터(drizzle-kit
- * migrate 등)에서는 그 PRAGMA가 조용히 무시된다. 스크립트로 통째로
- * 실행해야 파일이 선언한 대로 동작한다.
+ * migrate 등)에서는 그 PRAGMA가 무시된다. 다만 그때 데이터가 날아가지는
+ * 않는다 — 스크립트의 `BEGIN`이 `cannot start a transaction within a
+ * transaction`으로 먼저 실패해 전체가 롤백된다(실측). 스크립트로 통째로
+ * 실행해야 파일이 선언한 대로 **적용**된다.
  */
 export async function applyMigrations(client) {
   for (const file of migrationFiles()) {

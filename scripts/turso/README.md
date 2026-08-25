@@ -546,10 +546,23 @@ SQLite는 `ALTER TABLE`로 제약을 못 바꾸므로 0002는 표 6개를 재작
 `DROP TABLE board_meetings`가 자식 표(안건·회의록·출석·후보일자·투표)를
 cascade로 전부 지운다.** 로컬 파일 DB에서 실측했다(`drizzle-kit generate`
 생성물 원문이 정확히 그 상태였고, 각 1행씩 심어 두고 돌리자 5개 표가 전부
-0행이 됐다). PRAGMA는 트랜잭션 안에서 조용히 무시되므로, 스크립트를 자체
-트랜잭션으로 감싸는 마이그레이터로 적용하면 그 참사가 그대로 재현된다.
+0행이 됐다).
 
-적용은 스크립트를 통째로 실행하는 경로로만 한다:
+**`drizzle-kit migrate`로 쳤을 때 실제로 일어나는 일(실측 확인):** 참사는
+재현되지 **않는다.** PRAGMA가 트랜잭션 안에서 무시되는 것은 맞지만, 그 전에
+스크립트의 `BEGIN;`이 `cannot start a transaction within a transaction`으로
+즉시 실패해 전체가 롤백된다. 7개 표 행 수 그대로, `__drizzle_migrations`
+그대로, 임시 표 0. 게다가 `ggac-prod`에는 `__drizzle_migrations` 베이스라인이
+없어 `migrate`는 0000에서 먼저 죽는다.
+
+> **컷오버 중에 exit 1을 봤다면 아무 일도 일어나지 않은 것이다.** 덤프 복원
+> 같은 복구 작업에 들어가지 말고, 아래 지정 경로로 다시 적용하면 된다.
+> (`BEGIN`은 원자성 장치이면서 동시에 이 오적용을 막는 **우연한 차단
+> 장치**다. "트랜잭션은 마이그레이터가 걸어 주니 빼자"는 정리를 하면 그
+> 차단이 사라진다 — 같은 경고를 SQL 헤더 주석에도 남겼고, 성질이 사라지면
+> 깨지도록 `boardSchemaConstraints.test.mjs`에 테스트로 박아 뒀다.)
+
+그래도 적용은 스크립트를 통째로 실행하는 경로로만 한다:
 
 ```bash
 set -a; source .env.local; set +a   # 운영에 적용할 때만
@@ -561,13 +574,20 @@ node -e "import('@libsql/client').then(async m => {
 })"
 ```
 
-### 적용 전 확인 (둘 다 0행이어야 한다)
+### 적용 전 확인 (①②는 0행, ③은 인덱스 2개뿐)
 
 ```sql
 -- ① 중복 회의록이 있으면 UNIQUE 인덱스 생성이 실패해 전체가 롤백된다
 SELECT meeting_id, count(*) FROM board_minutes GROUP BY meeting_id HAVING count(*) > 1;
--- ② 0000이 만든 것 말고 다른 인덱스·트리거가 board_* 에 붙어 있으면
---    재작성에 딸려 사라진다. 기대값은 아래 세 줄뿐이다(0002 적용 후 기준).
+-- ② 기존 고아 행이 하나라도 있으면 0002의 마지막 단언이 전체를 롤백한다.
+--    이 저장소의 복원 경로는 FK를 끈 채로 적재하므로(turso-restore) 고아가
+--    존재할 수 있는 DB다. 컷오버 도중 실패로 알게 되지 말고 여기서 먼저 본다.
+PRAGMA foreign_key_check;
+-- ③ 0000이 만든 것 말고 다른 인덱스·트리거가 board_* 에 붙어 있으면
+--    재작성에 딸려 사라진다. 적용 전 기대값은 0000이 만든 유니크 인덱스
+--    2개뿐이다(board_meeting_attendees_meeting_member_idx,
+--    board_meeting_date_votes_option_voter_idx). 적용 후에는
+--    board_minutes_meeting_id_idx가 더해져 3개가 된다.
 SELECT type, name FROM sqlite_master WHERE tbl_name LIKE 'board_%' AND sql IS NOT NULL AND type <> 'table';
 ```
 
@@ -581,10 +601,27 @@ SELECT "table", "from", "on_delete" FROM pragma_foreign_key_list('board_meeting_
 SELECT name FROM sqlite_master WHERE name LIKE '__new_%' OR name LIKE '__migration_assert%';  -- 0행
 ```
 
-행 수 검증은 마이그레이션 안에도 들어 있다: `__migration_assert_0002`는
-`CHECK (ok = 1)` 하나뿐인 표이고, 표마다 재작성 전후 행 수가 같은지·마지막에
-FK 위반이 0인지를 여기에 INSERT해 확인한다. 어긋나면 CHECK 위반으로
-트랜잭션 전체가 롤백된다(변이 테스트로 실제로 무는 것을 확인했다).
+검증은 마이그레이션 안에도 들어 있다: `__migration_assert_0002`는
+`CHECK (ok = 1)` 하나뿐인 표이고, **첫 DROP 전에 FK가 실제로 꺼졌는지**·표마다
+재작성 전후 행 수가 같은지·마지막에 FK 위반이 0인지를 여기에 INSERT해
+확인한다. 어긋나면 CHECK 위반으로 트랜잭션 전체가 롤백된다(변이 테스트로 셋 다
+실제로 무는 것을 확인했다).
+
+> **FK 확인이 왜 따로 있나.** 행 수 단언은 표마다 자기 `DROP` 직전에 걸려
+> 있어서, 뒤에 오는 `DROP TABLE board_meetings`가 **이미 재작성을 마친 앞
+> 표들을** cascade로 비우는 형태의 사고를 하나도 잡지 못한다(앞 단언은 이미
+> 통과, 뒤 단언은 `0 = 0`, `PRAGMA foreign_key_check`도 고아가 아니라 행 자체가
+> 없으므로 0행). 실측: `PRAGMA foreign_keys=OFF`를 무력화하면 **에러 없이
+> 커밋되고 5개 표가 비었다.** FK 단언을 넣은 뒤 같은 시나리오는
+> `CHECK constraint failed: ok` → 전체 롤백 → 7개 표 전부 그대로가 된다.
+> 즉 이 스크립트가 안전한 근거가 "PRAGMA가 먹었기를 바란다"에서 단언으로
+> 바뀌었다. 운영 Turso가 PRAGMA를 어떻게 다루든 조용한 데이터 소실은 없다.
+
+**⚠ 실패했을 때 커넥션에 `foreign_keys=OFF`가 남는다.** 마지막
+`PRAGMA foreign_keys=ON;`은 스크립트가 성공했을 때만 실행된다. 위의 일회성
+node 스크립트는 곧바로 커넥션을 닫으니 무해하지만, `turso db shell` 같은
+대화형 세션에서 실패하면 **같은 세션의 이후 DML이 FK 없이 돈다.** 실패한
+세션은 닫거나 `PRAGMA foreign_keys=ON;`을 직접 실행한 뒤 쓴다.
 
 ### 운영에 미치는 동작 변화
 
