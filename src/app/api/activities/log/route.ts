@@ -61,6 +61,16 @@ export async function POST(request: NextRequest) {
         request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '127.0.0.1'
       const userAgent = request.headers.get('user-agent') || 'Unknown'
 
+      // session_id는 uuid 컬럼이라 검증 없이 넘기면 쓰레기 문자열이 그대로
+      // 저장된다(옛 RPC 시절엔 uuid 캐스팅 실패로 500이었다 — 지금은 조용히
+      // 저장되는 게 더 나쁘다). batch-log/route.ts와 같은 방식으로 맞춘다
+      // (코드리뷰 지적 — 두 라우트의 session_id 검증이 비대칭이었다).
+      const rawSessionId = sanitizedMetadata.session_id
+      const sessionId =
+        typeof rawSessionId === 'string' && validateUUID(rawSessionId, '세션 ID').isValid
+          ? rawSessionId
+          : null
+
       // 데이터베이스에 활동 로그 기록 — 단계 4: log_user_activity RPC를
       // Turso 쿼리 계층(logUserActivity)으로 대체했다. 이 라우트 자체가
       // "활동 기록"이 본 작업이므로(activities.ts 모듈 설명의 "본 작업을
@@ -76,7 +86,7 @@ export async function POST(request: NextRequest) {
           metadata: sanitizedMetadata,
           ip_address: clientIP,
           user_agent: userAgent,
-          session_id: (sanitizedMetadata.session_id as string | undefined) || null,
+          session_id: sessionId,
         })
       } catch (error) {
         console.error('활동 로그 저장 오류:', error)

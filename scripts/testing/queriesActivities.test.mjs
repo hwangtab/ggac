@@ -276,6 +276,28 @@ test('listActivities: actionTypes 필터가 적용된다', async () => {
   assert.ok(rows.every(r => ['post_created', 'comment_created'].includes(r.action_type)))
 })
 
+test('listActivities: endDate는 원본 admin/reports/generate의 .lte와 동일하게 그 시각을 포함한다(배타적 lt가 아니다)', async () => {
+  const { logUserActivity, listActivities } = await loadFreshActivitiesModule()
+  const user = await seedProfile()
+  const id = await logUserActivity({ user_id: user, action_type: 'post_updated' })
+
+  const raw = await setupClient.execute({
+    sql: 'SELECT created_at FROM user_activities WHERE id = ?',
+    args: [id],
+  })
+  const createdAt = new Date(Number(raw.rows[0].created_at))
+
+  const rows = await listActivities({
+    userId: user,
+    startDate: new Date(createdAt.getTime() - 60_000),
+    endDate: createdAt,
+  })
+  assert.ok(
+    rows.some(r => r.id === id),
+    'endDate와 정확히 같은 시각의 활동은 포함돼야 한다(lte, 원본과 동일)'
+  )
+})
+
 // ------------------------------------------------------------- listActivitiesWithProfile
 
 test('listActivitiesWithProfile: member_profiles를 임베드하고 total을 별도 COUNT로 반환한다', async () => {

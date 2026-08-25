@@ -97,8 +97,12 @@ export async function POST(request: NextRequest) {
 
       // 세션 관리 함수 호출 — 단계 4: manage_user_session RPC를 Turso 쿼리
       // 계층(manageUserSession)으로 대체했다. 활동 기록(로그인/로그아웃)만
-      // 실패한 경우는 onActivityLogError로 로그를 남기고 세션 결과는 그대로
-      // 응답한다(sessions.ts 모듈 설명, 브리프 필수 조건 1번).
+      // 실패한 경우는 onWriteError로 로그를 남기고 세션 결과는 그대로
+      // 응답한다(sessions.ts 모듈 설명, 브리프 필수 조건 1번). action이
+      // 'start'인데 프로필이 아직 없는 사용자면(가입 훅이 upsertProfile
+      // 실패를 삼키는 경로, sessions.ts 모듈 설명 참고) data가 null이 되고
+      // 아래에서 session_id: null로 응답한다 — 500이 아니다(코드리뷰 지적,
+      // 새로 생긴 회귀 수정).
       let data: string | null
       try {
         data = await manageUserSession(

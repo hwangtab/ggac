@@ -10,7 +10,7 @@ import { createClient } from '@libsql/client'
  * 핵심 대조:
  * - `manageUserSession`이 활동 기록(로그인/로그아웃) 실패에도 세션 쓰기
  *   결과를 그대로 반환하는가(본 작업을 막지 않는가), 그리고 그 실패가
- *   `onActivityLogError`로 전달되는가(조용히 삼키지 않는가) — 브리프 필수
+ *   `onWriteError`로 전달되는가(조용히 삼키지 않는가) — 브리프 필수
  *   조건 1번.
  * - `active_users_view` 대체(`listActiveUsers`)가 원본의 INNER JOIN 문제
  *   (신규 회원이 실시간 접속자 패널에서 사라지는 문제)를 재현하지 않는가.
@@ -129,16 +129,41 @@ test('manageUserSession(start): 기존 활성 세션을 종료하고 새 세션�
   assert.equal(secondRow.is_active, 1, '새 세션만 활성이어야 한다')
 })
 
-test('manageUserSession(start): 존재하지 않는 user_id는 FK 위반으로 거부된다(세션도 활동도 남지 않는다)', async () => {
+test('manageUserSession(start): 프로필이 없는 사용자(FK 위반)는 던지지 않고 null을 반환하며 onWriteError로 알린다(세션 핑이 500으로 죽지 않는다 — 코드리뷰가 지적한 회귀 수정)', async () => {
   const { manageUserSession } = await loadFreshSessionsModule()
-  await assert.rejects(() =>
-    manageUserSession({ user_id: 'ghost-user-nope', session_token: 'tok-ghost', action: 'start' })
+  const errors = []
+  const result = await manageUserSession(
+    { user_id: 'ghost-user-nope', session_token: 'tok-ghost', action: 'start' },
+    err => errors.push(err)
   )
-  const result = await setupClient.execute({
+  assert.equal(result, null, '세션 핑 API가 500 대신 조용히 null을 반환해야 한다')
+  assert.equal(errors.length, 1, 'FK 위반이 onWriteError로 정확히 한 번 전달돼야 한다')
+  const combined = `${errors[0]?.message ?? ''} ${errors[0]?.cause?.message ?? ''}`
+  assert.match(combined, /FOREIGN KEY|FOREIGNKEY/, '전달된 오류는 실제 FK 위반이어야 한다')
+
+  const sessionResult = await setupClient.execute({
     sql: 'SELECT COUNT(*) AS c FROM user_sessions WHERE session_token = ?',
     args: ['tok-ghost'],
   })
-  assert.equal(Number(result.rows[0].c), 0)
+  assert.equal(Number(sessionResult.rows[0].c), 0, '세션 행이 생기면 안 된다')
+  const activityResult = await setupClient.execute({
+    sql: "SELECT COUNT(*) AS c FROM user_activities WHERE user_id = 'ghost-user-nope'",
+  })
+  assert.equal(
+    Number(activityResult.rows[0].c),
+    0,
+    '로그인 활동도 같은 FK로 막히므로 남으면 안 된다'
+  )
+})
+
+test('manageUserSession(start): onWriteError 없이 프로필 없는 사용자로 호출해도 던지지 않는다(기본값은 조용한 무시)', async () => {
+  const { manageUserSession } = await loadFreshSessionsModule()
+  const result = await manageUserSession({
+    user_id: 'ghost-user-nope-2',
+    session_token: 'tok-ghost-2',
+    action: 'start',
+  })
+  assert.equal(result, null)
 })
 
 // ------------------------------------------------------------- manageUserSession: update
@@ -212,9 +237,9 @@ test('manageUserSession(end): 매칭되는 활성 세션이 없어도 null을 �
   )
 })
 
-// ------------------------------------------- onActivityLogError: 부정 대조(본 작업 안 막힘)
+// ------------------------------------------- onWriteError: 부정 대조(본 작업 안 막힘)
 
-test('manageUserSession(end): 활동 기록이 실패해도 세션 쓰기는 이미 성공했고, 실패는 onActivityLogError로 전달된다(삼키지 않는다)', async () => {
+test('manageUserSession(end): 활동 기록이 실패해도 세션 쓰기는 이미 성공했고, 실패는 onWriteError로 전달된다(삼키지 않는다)', async () => {
   const { manageUserSession } = await loadFreshSessionsModule()
   const owner = await seedProfile()
   const sessionId = await manageUserSession({
@@ -237,7 +262,7 @@ test('manageUserSession(end): 활동 기록이 실패해도 세션 쓰기는 이
   const row = await getSessionRaw(sessionId)
   assert.equal(row.is_active, 0, '세션은 실제로 비활성화됐어야 한다(본 작업이 막히지 않았다)')
 
-  assert.equal(errors.length, 1, '활동 기록 실패가 onActivityLogError로 정확히 한 번 전달돼야 한다')
+  assert.equal(errors.length, 1, '활동 기록 실패가 onWriteError로 정확히 한 번 전달돼야 한다')
   const combined = `${errors[0]?.message ?? ''} ${errors[0]?.cause?.message ?? ''}`
   assert.match(
     combined,
@@ -250,7 +275,7 @@ test('manageUserSession(end): 활동 기록이 실패해도 세션 쓰기는 이
   assert.equal(await countActivitiesRaw('ghost-user-nope', 'logout'), 0)
 })
 
-test('manageUserSession: onActivityLogError를 넘기지 않아도 세션 작업 자체는 여전히 성공한다(기본값은 조용한 무시)', async () => {
+test('manageUserSession: onWriteError를 넘기지 않아도 세션 작업 자체는 여전히 성공한다(기본값은 조용한 무시)', async () => {
   const { manageUserSession } = await loadFreshSessionsModule()
   const owner = await seedProfile()
   const sessionId = await manageUserSession({
@@ -269,7 +294,15 @@ test('manageUserSession: onActivityLogError를 넘기지 않아도 세션 작업
 
 // ------------------------------------------------------------- listActiveUsers
 
-test('listActiveUsers: 방금 가입한 신규 회원의 세션도 즉시 나타난다(active_users_view의 INNER JOIN 이월 버그 재현 대조)', async () => {
+test('listActiveUsers: 정상 경로(프로필 있는 신규 회원)의 세션은 즉시 나타난다', async () => {
+  // 이 테스트는 원본 INNER JOIN 버그(세션은 있는데 프로필이 없는 시점)를
+  // 재현하지 않는다 — Turso 스키마의 FK가 그 시점 자체를 막기 때문에
+  // 재현할 수 없다(모듈 설명 정정 참고). 여기서는 정상 경로가 절대
+  // 빠지지 않는다는 것만 확인한다. 원본 버그와 정확히 같은 실패 모드
+  // (세션은 있는데 프로필이 없다)가 여전히 재현 가능한지는 아래
+  // "manageUserSession(start): 프로필이 없는 사용자" 테스트가 별도로
+  // 확인한다(결론: 세션 자체가 안 생긴다 — 회원이 안 보이는 결과는
+  // 원본과 같다, 5xx만 막았다).
   const { manageUserSession, listActiveUsers } = await loadFreshSessionsModule()
   const freshMember = await seedProfile({ display_name: '방금가입한신입' })
 
@@ -280,6 +313,29 @@ test('listActiveUsers: 방금 가입한 신규 회원의 세션도 즉시 나타
   assert.ok(found, '신규 회원의 세션이 실시간 접속자 목록에서 사라지면 안 된다')
   assert.equal(found.display_name, '방금가입한신입')
   assert.equal(found.session_token, 'tok-fresh')
+})
+
+test('listActiveUsers: user_id가 NULL인 이관 고아 세션(--null-orphan-fk)도 LEFT JOIN 폴백으로 나타난다 — 원본 INNER JOIN이라면 걸러졌을 행이다', async () => {
+  // Turso에서 유일하게 재현 가능한 "세션은 있는데 프로필은 없는" 경로 —
+  // FK 위반(정상 쓰기 경로)이 아니라, 이관 스크립트(stage4.mjs)의
+  // --null-orphan-fk 옵션이 고아 참조를 NULL로 이관했을 때다. session_token
+  // UNIQUE 제약을 만족하기만 하면 되므로 원시 INSERT로 직접 재현한다.
+  const { listActiveUsers } = await loadFreshSessionsModule()
+  const now = Date.now()
+  await setupClient.execute({
+    sql: `INSERT INTO user_sessions (id, user_id, session_token, last_activity, is_active, login_at, metadata)
+          VALUES ('orphan-session-1', NULL, 'tok-orphan', ?, 1, ?, '{}')`,
+    args: [now, now],
+  })
+
+  const activeUsers = await listActiveUsers(50)
+  const found = activeUsers.find(u => u.session_token === 'tok-orphan')
+  assert.ok(
+    found,
+    'user_id가 NULL인 세션도 LEFT JOIN 폴백으로 나타나야 한다 — INNER JOIN이었다면 이 행은 걸러졌을 것이다'
+  )
+  assert.equal(found.display_name, '(프로필 없음)', '표시명은 COALESCE 폴백 문자열이어야 한다')
+  assert.equal(found.email, '', '이메일은 빈 문자열 폴백이어야 한다')
 })
 
 test('listActiveUsers: is_active=false인 세션은 제외된다', async () => {

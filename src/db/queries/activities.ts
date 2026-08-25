@@ -77,8 +77,18 @@ export interface LogActivityInput {
 /**
  * 활동 로그 하나를 기록하고, `daily_activity_stats`의 (오늘, 이 사용자, 이
  * 액션타입) 카운트를 1 증가시킨다(없으면 생성). `log_user_activity` RPC
- * 대체 — 원본은 단일 plpgsql 함수라 두 쓰기가 한 트랜잭션이었다; 여기서도
- * `db.transaction()`으로 묶어 같은 원자성을 유지한다.
+ * 대체 — 원본은 단일 plpgsql 함수라 두 쓰기가 한 트랜잭션이었다.
+ *
+ * **`db.transaction()`이 아니라 `db.batch()`를 쓴다.** 이 함수는 뜨거운
+ * 경로다(모듈 설명 참고) — `db.transaction()`(대화형 트랜잭션, BEGIN·
+ * INSERT·INSERT·COMMIT 각각 별도 왕복)은 원격 Turso에서 좋아요 1회에
+ * 최소 4번의 네트워크 왕복을 만들어 응답을 블로킹했다(코드리뷰 지적).
+ * 두 INSERT는 서로의 실행 결과에 의존하지 않으므로(두 번째 INSERT에
+ * 필요한 값 — activityDate/user_id/action_type — 은 이미 인자로 갖고
+ * 있다) `db.batch([...])`로 한 번의 왕복에 묶을 수 있다. libsql의
+ * batch()는 내부적으로 `BEGIN`으로 감싸 하나라도 실패하면 전체를
+ * 롤백한다(`@libsql/client`의 sqlite3/http/ws 드라이버 공통 동작) —
+ * `db.transaction()`과 원자성은 동일하고 왕복만 줄었다.
  * @returns 새로 생성된 활동 로그의 id(원본 RPC가 `RETURNING id`로 돌려주던
  * uuid와 동일한 모양).
  * @throws DB 쓰기가 실패하면 그대로 던진다(삼키지 않는다) — 모듈 설명 참고.
@@ -86,43 +96,42 @@ export interface LogActivityInput {
 export async function logUserActivity(input: LogActivityInput): Promise<string> {
   const activityDate = todayDateString()
 
-  return db.transaction(async tx => {
-    const [row] = await tx
-      .insert(userActivities)
-      .values({
-        userId: input.user_id,
-        actionType: input.action_type,
-        targetType: input.target_type ?? null,
-        targetId: input.target_id ?? null,
-        metadata: input.metadata ?? {},
-        ipAddress: input.ip_address ?? null,
-        userAgent: input.user_agent ?? null,
-        sessionId: input.session_id ?? null,
-      })
-      .returning({ id: userActivities.id })
+  const insertActivity = db
+    .insert(userActivities)
+    .values({
+      userId: input.user_id,
+      actionType: input.action_type,
+      targetType: input.target_type ?? null,
+      targetId: input.target_id ?? null,
+      metadata: input.metadata ?? {},
+      ipAddress: input.ip_address ?? null,
+      userAgent: input.user_agent ?? null,
+      sessionId: input.session_id ?? null,
+    })
+    .returning({ id: userActivities.id })
 
-    await tx
-      .insert(dailyActivityStats)
-      .values({
-        activityDate,
-        userId: input.user_id,
-        actionType: input.action_type,
-        count: 1,
-      })
-      .onConflictDoUpdate({
-        target: [
-          dailyActivityStats.activityDate,
-          dailyActivityStats.userId,
-          dailyActivityStats.actionType,
-        ],
-        set: {
-          count: sql`${dailyActivityStats.count} + 1`,
-          lastUpdated: new Date(),
-        },
-      })
+  const upsertDailyStat = db
+    .insert(dailyActivityStats)
+    .values({
+      activityDate,
+      userId: input.user_id,
+      actionType: input.action_type,
+      count: 1,
+    })
+    .onConflictDoUpdate({
+      target: [
+        dailyActivityStats.activityDate,
+        dailyActivityStats.userId,
+        dailyActivityStats.actionType,
+      ],
+      set: {
+        count: sql`${dailyActivityStats.count} + 1`,
+        lastUpdated: new Date(),
+      },
+    })
 
-    return row.id
-  })
+  const [insertedActivityRows] = await db.batch([insertActivity, upsertDailyStat])
+  return insertedActivityRows[0].id
 }
 
 export interface LogActivityBatchEntry {
@@ -253,13 +262,16 @@ export interface ListActivitiesFilter {
  * `analyzeContentEngagement`, `/api/admin/analytics/trends`의
  * `getEngagementTrends`, `/api/admin/reports/generate`의
  * `generateMemberActivityReport`)가 각자 만들던 수동 Supabase 쿼리를
- * 대체하는 공용 빌딩 블록이다 — `created_at` 내림차순 없이(원본 라우트들도
- * 정렬을 요구하지 않았다) id 순으로 반환한다.
+ * 대체하는 공용 빌딩 블록이다 — `created_at` 오름차순으로 반환한다(원본
+ * 라우트들은 정렬을 요구하지 않았지만, 안정적인 순서를 위해 생성 시각
+ * 오름차순으로 고정했다).
  */
 export async function listActivities(filter: ListActivitiesFilter): Promise<ActivityRow[]> {
   const conditions: SQL[] = [gte(userActivities.createdAt, filter.startDate)]
   if (filter.endDate) {
-    conditions.push(lt(userActivities.createdAt, filter.endDate))
+    // 원본 admin/reports/generate의 `.lte('created_at', endDate.toISOString())`와
+    // 동일하게 endDate를 포함한다(배타적 lt가 아니다) — 코드리뷰 지적.
+    conditions.push(lte(userActivities.createdAt, filter.endDate))
   }
   if (filter.userId) {
     conditions.push(eq(userActivities.userId, filter.userId))
@@ -584,7 +596,7 @@ export async function getWeeklyActivityStats(): Promise<WeeklyActivityStatsRow[]
 
   rows.forEach((row, i) => {
     const weekStart = mondayStartUtc(row.createdAt as Date).toISOString()
-    const key = `${weekStart} ${row.actionType}`
+    const key = `${weekStart}::${row.actionType}`
     let group = groups.get(key)
     if (!group) {
       group = {

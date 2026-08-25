@@ -62,7 +62,10 @@ export const GET = defineApiRoute({
       })
       activities = result.rows
       count = result.total
-    } catch {
+    } catch (error) {
+      // 이 저장소 이력상(알림이 1년간 죽어 있었는데 아무도 몰랐다) 실패를
+      // 조용히 삼키지 않는다 — 코드리뷰 지적.
+      console.error('활동 데이터 조회 오류:', error)
       return ApiError.internalServerError('활동 데이터 조회에 실패했습니다.').toNextResponse()
     }
 

@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
     // 세션 종료 처리 — 단계 4: manage_user_session RPC를 Turso 쿼리 계층
     // (manageUserSession)으로 대체했다. 세션 쓰기 자체가 실패하면(예: DB
     // 접속 불가) 그대로 던지고 500을 응답한다 — 로그아웃 활동 기록만
-    // 실패한 경우는 onActivityLogError로 로그를 남기고 세션 결과는 그대로
+    // 실패한 경우는 onWriteError로 로그를 남기고 세션 결과는 그대로
     // 응답한다(sessions.ts 모듈 설명, 브리프 필수 조건 1번).
     let sessionResult: string | null
     try {
