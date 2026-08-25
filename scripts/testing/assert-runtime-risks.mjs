@@ -154,6 +154,36 @@ function missingFrom(actual, expected) {
   return expected.filter(file => !seen.has(file))
 }
 
+// `export const <METHOD> = defineApiRoute(<...>)` 한 블록을 괄호 균형으로 잘라낸다.
+// 파일 전체가 아니라 메서드별 설정 객체 단위로 auth/rateLimitHeaders를 검증하기 위함.
+// `defineStreamRoute`(SSE 라우트)도 같은 설정 객체 모양이라 함께 받는다 —
+// 특권 트리 가드가 real-time/stream 라우트를 "잘라내지 못했다"로 오탐하지
+// 않게 하기 위해서다.
+const extractDefineApiRouteBlock = (source, method) => {
+  const marker = new RegExp(`export const ${method}\\s*=\\s*define(?:Api|Stream)Route`)
+  const match = marker.exec(source)
+  if (!match) return null
+
+  // 제네릭(`<Record<string, unknown>>`)은 괄호를 포함하지 않으므로 defineApiRoute
+  // 뒤 첫 여는 괄호가 곧 호출 인자 시작이다. 여기서부터 괄호 균형으로 블록을 잘라낸다.
+  const parenIdx = source.indexOf('(', match.index + match[0].length)
+  if (parenIdx === -1) return null
+
+  let depth = 0
+  for (let i = parenIdx; i < source.length; i++) {
+    const ch = source[i]
+    if (ch === '(') {
+      depth++
+    } else if (ch === ')') {
+      depth--
+      if (depth === 0) {
+        return source.slice(match.index, i + 1)
+      }
+    }
+  }
+  return null
+}
+
 const appFiles = globSync('src/app/**/{route,page,layout}.@(ts|tsx)', {
   cwd: root,
   exclude: ['**/node_modules/**', '**/.next/**'],
@@ -618,6 +648,166 @@ const apiRouteFiles = globSync('src/app/api/**/route.@(ts|tsx)', {
 const API_ROUTE_FILES_MIN = 60 // 현재 91
 const apiRouteFilesExpected = walkFiles('src/app/api', name => /^route\.tsx?$/.test(name))
 const apiRouteFilesMissed = missingFrom(apiRouteFiles, apiRouteFilesExpected)
+
+// ---------------------------------------------------------------------------
+// 특권 트리(admin·board-room)의 모든 핸들러가 게이트를 선언했는가 — 글롭으로.
+//
+// `defineApiRoute`의 `auth`는 이번 회차에서 **필수 필드**가 됐다(공개
+// 라우트는 `auth: 'public'`을 명시해야 한다). 그래도 이 가드가 따로 필요한
+// 이유는 두 가지다.
+//
+// 1. 타입은 `defineApiRoute`를 쓰기로 한 라우트만 본다. `src/app/api/
+//    board-room/**`의 11개 라우트는 전부 `export async function GET(...)`
+//    맨몸이고, 새 admin 라우트를 그 모양으로 베껴 쓰면 프레임워크가 아예
+//    개입하지 않는다.
+// 2. `auth: 'public'`은 타입상 합법이다. 특권 트리에서는 그 값이 곧 사고다.
+//
+// 예전 가드는 **손으로 적은 약 30개 경로 목록**이었다 — 내일 추가되는
+// admin 라우트를 구조적으로 못 잡는다. 그래서 트리 전체를 훑는다.
+const PRIVILEGED_ROUTE_TREES = ['src/app/api/admin', 'src/app/api/board-room']
+const PRIVILEGED_ROUTE_FILES_MIN = 35 // 현재 41 (admin 30 + board-room 11)
+const privilegedRouteFiles = PRIVILEGED_ROUTE_TREES.flatMap(tree =>
+  globSync(`${tree}/**/route.@(ts|tsx)`, {
+    cwd: root,
+    exclude: ['**/node_modules/**', '**/.next/**'],
+  })
+).sort()
+const privilegedRouteFilesExpected = PRIVILEGED_ROUTE_TREES.flatMap(tree =>
+  walkFiles(tree, name => /^route\.tsx?$/.test(name))
+).sort()
+const privilegedRouteFilesMissed = missingFrom(privilegedRouteFiles, privilegedRouteFilesExpected)
+
+const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD']
+// `defineApiRoute`/`defineStreamRoute`의 `auth`로 인정하는 값. 특권 트리에서
+// `'public'`은 **의도적으로 빠져 있다** — 그게 이 가드가 잡으려는 값이다.
+const PRIVILEGED_AUTH_VALUES = [
+  /^['"]admin['"]/,
+  /^['"]board-member['"]/,
+  /^createSettingsAdminAuth\(/,
+]
+// 맨몸 핸들러가 불러야 하는 게이트.
+const PRIVILEGED_GATE_CALLS = [/requireAdmin\(\)/, /requireBoardMember\(\)/]
+// 405 스텁(`export async function POST() { return ApiError.methodNotAllowed(...) }`)
+// 은 데이터를 만지지 않는다. 본문 전체가 그 한 줄일 때만 면제한다 — 뒤에
+// 뭐라도 붙으면 더 이상 스텁이 아니므로 게이트를 요구한다.
+const METHOD_NOT_ALLOWED_STUB =
+  /^\s*\{\s*return ApiError\.methodNotAllowed\([^)]*\)\.toNextResponse\(\)\s*\}\s*$/
+
+/**
+ * `code`에서 `export async function <method>(`의 본문(중괄호 블록)을 잘라낸다.
+ * 시그니처의 괄호 안에 중괄호가 들어가므로(구조 분해 인자) 여는 중괄호는
+ * 인자 목록의 괄호 균형을 먼저 맞춘 뒤에 찾는다.
+ */
+function extractExportedFunctionBody(code, method) {
+  const marker = new RegExp(`export async function ${method}\\s*\\(`)
+  const match = marker.exec(code)
+  if (!match) return null
+
+  let i = code.indexOf('(', match.index)
+  let depth = 0
+  for (; i < code.length; i++) {
+    if (code[i] === '(') depth++
+    else if (code[i] === ')') {
+      depth--
+      if (depth === 0) break
+    }
+  }
+  const braceStart = code.indexOf('{', i)
+  if (braceStart === -1) return null
+
+  depth = 0
+  for (let j = braceStart; j < code.length; j++) {
+    if (code[j] === '{') depth++
+    else if (code[j] === '}') {
+      depth--
+      if (depth === 0) return code.slice(braceStart, j + 1)
+    }
+  }
+  return null
+}
+
+const ungatedPrivilegedHandlers = []
+for (const file of privilegedRouteFiles) {
+  const raw = readFileSync(join(root, file), 'utf8')
+  // 주석·import를 걷어낸 코드로 본다 — 주석에 남은 `auth: 'admin'`이나
+  // 주석 처리된 `requireBoardMember()`로 통과하면 안 된다.
+  const code = stripCommentsAndImports(raw)
+  // 문자열 리터럴까지 걷어낸 판본. `auth` 키가 **실제로 존재하는지**와
+  // 게이트 호출부가 실제 코드인지를 볼 때 쓴다(디코이 문자열 면역).
+  const codeNoStrings = stripStringLiterals(code)
+
+  let handlersSeen = 0
+  for (const method of HTTP_METHODS) {
+    const constDecl = new RegExp(`export const ${method}\\s*=`).exec(code)
+    const fnDecl = new RegExp(`export async function ${method}\\s*\\(`).exec(code)
+    if (!constDecl && !fnDecl) continue
+    handlersSeen += 1
+
+    if (constDecl) {
+      const isDefineRoute = new RegExp(
+        `export const ${method}\\s*=\\s*define(Api|Stream)Route`
+      ).test(code)
+      if (!isDefineRoute) {
+        ungatedPrivilegedHandlers.push(
+          `${file}: export const ${method} — defineApiRoute/defineStreamRoute를 쓰지 않아 auth 선언을 강제할 수 없습니다`
+        )
+        continue
+      }
+      const block = extractDefineApiRouteBlock(code, method)
+      const blockNoStrings = extractDefineApiRouteBlock(codeNoStrings, method)
+      if (block === null || blockNoStrings === null) {
+        ungatedPrivilegedHandlers.push(
+          `${file}: export const ${method} — 설정 블록을 잘라내지 못했습니다(가드 고장으로 취급합니다)`
+        )
+        continue
+      }
+      // `auth` 키의 존재는 문자열을 걷어낸 판본에서 본다.
+      if (!/\bauth:\s*/.test(blockNoStrings)) {
+        ungatedPrivilegedHandlers.push(`${file}: export const ${method} — auth 선언이 없습니다`)
+        continue
+      }
+      const value = /\bauth:\s*([\s\S]*)$/.exec(block)?.[1] ?? ''
+      if (!PRIVILEGED_AUTH_VALUES.some(pattern => pattern.test(value))) {
+        ungatedPrivilegedHandlers.push(
+          `${file}: export const ${method} — auth 값이 'admin'·'board-member'·createSettingsAdminAuth() 중 하나가 아닙니다`
+        )
+      }
+      continue
+    }
+
+    const body = extractExportedFunctionBody(code, method)
+    if (body === null) {
+      ungatedPrivilegedHandlers.push(
+        `${file}: export async function ${method} — 본문을 잘라내지 못했습니다(가드 고장으로 취급합니다)`
+      )
+      continue
+    }
+    if (METHOD_NOT_ALLOWED_STUB.test(body)) continue
+
+    const bodyNoStrings = extractExportedFunctionBody(codeNoStrings, method) ?? ''
+    const hasGate = PRIVILEGED_GATE_CALLS.some(pattern => pattern.test(bodyNoStrings))
+    // 호출만으로는 부족하다 — 반환값을 버리면 게이트가 없는 것과 같다.
+    const returnsOnDenial = /instanceof NextResponse\)\s*return/.test(bodyNoStrings)
+    if (!hasGate || !returnsOnDenial) {
+      ungatedPrivilegedHandlers.push(
+        `${file}: export async function ${method} — ${
+          hasGate
+            ? 'requireAdmin()/requireBoardMember()의 거부 응답을 return하지 않습니다'
+            : 'requireAdmin()/requireBoardMember() 호출이 없습니다'
+        }`
+      )
+    }
+  }
+
+  // 공허한 통과 차단: 라우트 파일인데 인식된 HTTP 핸들러가 하나도 없다면
+  // 위 루프는 아무것도 검사하지 않은 것이다(핸들러 선언 모양이 바뀌었거나
+  // HTTP_METHODS 목록이 좁아진 경우). 그건 "깨끗하다"가 아니라 가드 고장이다.
+  if (handlersSeen === 0) {
+    ungatedPrivilegedHandlers.push(
+      `${file}: 인식된 HTTP 핸들러가 하나도 없습니다 — 이 파일에 대해서는 auth 강제 검사가 아무것도 실행되지 않았습니다(가드 고장으로 취급합니다)`
+    )
+  }
+}
 // 인증 강제 검사는 requireUser()/requireActiveMember()(@/lib/server/memberAuth)로
 // 수렴됐다(Task 3~5). 이 목록에 없는 라우트에서 `getUser(` 직접 호출이
 // 되살아나면(예: 헬퍼 도입 전 패턴으로 새 라우트를 베껴 쓰는 경우) 실패한다.
@@ -2738,32 +2928,6 @@ const hasSettingsAdminAuthResolver =
   /createErrorResponse\(\{\s*success:\s*false,\s*error:\s*['"]인증이 필요합니다\./.test(
     settingsAdminAuthSource
   )
-// `export const <METHOD> = defineApiRoute(<...>)` 한 블록을 괄호 균형으로 잘라낸다.
-// 파일 전체가 아니라 메서드별 설정 객체 단위로 auth/rateLimitHeaders를 검증하기 위함.
-const extractDefineApiRouteBlock = (source, method) => {
-  const marker = new RegExp(`export const ${method}\\s*=\\s*defineApiRoute`)
-  const match = marker.exec(source)
-  if (!match) return null
-
-  // 제네릭(`<Record<string, unknown>>`)은 괄호를 포함하지 않으므로 defineApiRoute
-  // 뒤 첫 여는 괄호가 곧 호출 인자 시작이다. 여기서부터 괄호 균형으로 블록을 잘라낸다.
-  const parenIdx = source.indexOf('(', match.index + match[0].length)
-  if (parenIdx === -1) return null
-
-  let depth = 0
-  for (let i = parenIdx; i < source.length; i++) {
-    const ch = source[i]
-    if (ch === '(') {
-      depth++
-    } else if (ch === ')') {
-      depth--
-      if (depth === 0) {
-        return source.slice(match.index, i + 1)
-      }
-    }
-  }
-  return null
-}
 const adminSettingsRouteSources = [
   {
     path: adminSettingsApiPath,
@@ -5106,6 +5270,28 @@ if (appFilesMissed.length > 0) {
   failures.push(
     `The src/app glob (appFiles) no longer matches every route/page/layout file that an independent directory walk finds. Whatever it skips is silently exempt from the edge-runtime ban and the three unsafe-pattern checks. Missing file(s):\n${appFilesMissed
       .map(file => `- ${file}`)
+      .join('\n')}`
+  )
+}
+
+if (privilegedRouteFiles.length < PRIVILEGED_ROUTE_FILES_MIN) {
+  failures.push(
+    `The privileged-route scan (src/app/api/admin, src/app/api/board-room) covered only ${privilegedRouteFiles.length} file(s) (expected at least ${PRIVILEGED_ROUTE_FILES_MIN}). This scan is what forces every admin/board-room handler to declare an auth gate; an empty scan silently exempts all of them.`
+  )
+}
+
+if (privilegedRouteFilesMissed.length > 0) {
+  failures.push(
+    `The privileged-route glob no longer matches every route file that an independent directory walk finds under src/app/api/admin and src/app/api/board-room. Whatever it skips is exempt from the auth-declaration requirement. Missing file(s):\n${privilegedRouteFilesMissed
+      .map(file => `- ${file}`)
+      .join('\n')}`
+  )
+}
+
+if (ungatedPrivilegedHandlers.length > 0) {
+  failures.push(
+    `Every HTTP handler under src/app/api/admin and src/app/api/board-room must declare an authorization gate: defineApiRoute/defineStreamRoute with auth: 'admin' | 'board-member' | createSettingsAdminAuth(), or a bare handler that calls requireAdmin()/requireBoardMember() and returns its denial response. Postgres RLS is gone, so this declaration is the only thing standing between a logged-in member and the admin surface — and defineApiRoute's own required-auth type cannot cover bare handlers or reject auth: 'public' here. Offending handler(s):\n${ungatedPrivilegedHandlers
+      .map(entry => `- ${entry}`)
       .join('\n')}`
   )
 }

@@ -20,7 +20,23 @@ type NextRouteContext = {
   params?: RouteParams | Promise<RouteParams>
 }
 
-type ApiRouteAuthMode = 'admin' | 'board-member'
+/**
+ * `'public'`은 "인가 게이트가 없다"를 **명시적으로** 선언하는 값이다.
+ *
+ * 예전에는 `auth`가 optional이라 빠뜨리면 게이트 없이, 경고 없이 통과했다
+ * (`if (!auth) return undefined`). Postgres RLS가 사라져 앱 코드가 유일한
+ * 경계가 된 지금, 기본값이 열림인 게 가장 위험한 자리다 — 새 admin 라우트를
+ * 하나 추가하며 `auth` 한 줄을 빠뜨리는 것만으로 조합원 전원에게 관리자
+ * 표면이 열린다. 그래서 `auth`를 필수 필드로 만들고(아래
+ * `DefineApiRouteConfig`), 게이트가 없는 라우트는 그 사실을 값으로 적게 했다.
+ *
+ * 특권 트리(`src/app/api/admin/**`, `src/app/api/board-room/**`)에서는
+ * `'public'`도 사고이므로 `scripts/testing/assert-runtime-risks.mjs`의 특권
+ * 라우트 가드가 그 트리에 한해 이 값을 거부한다. 타입은 "빠뜨림"을, 가드는
+ * "그 자리에 부적절한 값"과 "이 프레임워크를 아예 안 쓰는 맨몸 핸들러"를
+ * 각각 막는다 — 타입만으로는 후자를 잡을 수 없다.
+ */
+type ApiRouteAuthMode = 'admin' | 'board-member' | 'public'
 type ApiRouteAuthResult = AdminAuthSuccess | BoardAuthSuccess | undefined
 type ApiRouteAuthResolver<TAuth> = (ctx: {
   request: NextRequest
@@ -58,7 +74,8 @@ export type DefineApiRouteConfig<TBody, TAuth, TResult> = {
   name: string
   rateLimit?: RouteRateLimitConfig
   rateLimitHeaders?: boolean
-  auth?: ApiRouteAuthMode | ApiRouteAuthResolver<TAuth>
+  /** 필수다 — 게이트가 없는 라우트도 `'public'`으로 그 사실을 적어야 한다. */
+  auth: ApiRouteAuthMode | ApiRouteAuthResolver<TAuth>
   body?: BodyConfig<TBody>
   successStatus?: number
   errorMessage?: string
@@ -78,8 +95,6 @@ async function resolveRouteAuth<TAuth>(
   request: NextRequest,
   params: RouteParams
 ): Promise<TAuth | ApiRouteAuthResult | NextResponse> {
-  if (!auth) return undefined
-
   if (typeof auth === 'function') {
     return auth({ request, params })
   }
@@ -88,7 +103,18 @@ async function resolveRouteAuth<TAuth>(
     return requireAdmin()
   }
 
-  return requireBoardMember()
+  if (auth === 'board-member') {
+    return requireBoardMember()
+  }
+
+  if (auth === 'public') {
+    return undefined
+  }
+
+  // 여기 오는 유일한 길은 타입을 우회한 호출(누락·오타)이다. 예전에는
+  // 그 경우가 `if (!auth) return undefined`로 흡수돼 **게이트 없이 통과**했다.
+  // 이제는 열지 않고 막는다 — defineApiRoute의 catch가 500으로 바꾼다.
+  throw ApiError.internalServerError('라우트 인가 설정이 올바르지 않습니다.')
 }
 
 async function resolveRouteBody<TBody>(
