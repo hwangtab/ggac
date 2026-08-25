@@ -39,7 +39,21 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
   const annotateCommentLikeState = async (comments: Array<Record<string, unknown>>) => {
     const commentIds = comments.map(c => String(c.id)).filter(Boolean)
-    const likedCommentIds = user ? await getLikedCommentIds(user.id, commentIds) : new Set<string>()
+    // 개인화(하트 채움) 조회는 목록 자체의 성패와 분리한다. getLikedCommentIds는
+    // 이 저장소의 다른 쿼리 계층 함수처럼 실패 시 throw하는데, 그 예외를 그대로
+    // 두면 아래 catch가 500으로 바꿔 **댓글 섹션이 통째로 사라진다**(로그인
+    // 사용자만 — 비로그인은 이 조회를 아예 안 탄다). 형제 라우트 둘
+    // (`posts/route.ts`의 getLikedPostIds, `posts/[id]/route.ts`의
+    // getLikedCommentIds)은 같은 조회를 이미 `.catch()`로 흡수하고 근거도 같다:
+    // 하트만 안 채워지는 게 목록이 통째로 사라지는 것보다 낫다. 옛 Supabase
+    // 클라이언트가 `{data, error}`로 삼키던 성질을 여기서만 잃어버려 형제와
+    // 어긋나 있었다(최종 리뷰 B-5). 실제 댓글 화면이 쓰는 건 이 라우트다.
+    const likedCommentIds = user
+      ? await getLikedCommentIds(user.id, commentIds).catch(error => {
+          console.error('[API] 댓글 좋아요 조회 실패 — 하트 없이 계속 진행:', error)
+          return new Set<string>()
+        })
+      : new Set<string>()
 
     return comments.map(c => ({
       ...c,

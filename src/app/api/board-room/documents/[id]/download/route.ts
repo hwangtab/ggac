@@ -49,7 +49,22 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   // Task 4: board_documents 권위가 Turso로 옮겨졌다 — 조회는
   // getDocumentForDownload(id)로 바뀌었지만 권한 재검증(requireBoardMember()가
   // 이 DB 조회보다 먼저 실행됨)과 봉쇄 판정 순서는 그대로다.
-  const doc = await getDocumentForDownload(id)
+  //
+  // 이 라우트는 스트리밍 응답 때문에 `defineApiRoute` 래퍼 밖에서 GET을 직접
+  // export한다 — 던져진 예외를 앱 형식 JSON으로 바꿔 줄 상위 계층이 없다.
+  // Turso 순단 한 번이면 이사가 다운로드를 눌렀을 때 Next 기본 500(빈 탭)이
+  // 뜬다. 아래 스트리밍 호출은 이미 try/catch가 있는데 이 DB 조회만 무방비였다
+  // (최종 리뷰 B "함께 고칠 것"). 같은 형태로 감싼다.
+  let doc: Awaited<ReturnType<typeof getDocumentForDownload>>
+  try {
+    doc = await getDocumentForDownload(id)
+  } catch (queryError) {
+    log.error('서류 조회 실패', {
+      id,
+      error: queryError instanceof Error ? queryError.message : String(queryError),
+    })
+    return ApiError.internalServerError('서류를 불러올 수 없습니다.').toNextResponse()
+  }
 
   if (!doc) {
     return ApiError.notFound('서류를 찾을 수 없습니다.').toNextResponse()
