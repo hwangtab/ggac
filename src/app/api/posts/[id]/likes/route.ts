@@ -12,6 +12,8 @@ export const maxDuration = 30
 import { NextRequest, NextResponse } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { rateLimit } from '@/lib/server/rateLimit'
+import { getPostById } from '@/db/queries/posts'
+import { isPostLikedByUser, togglePostLike } from '@/db/queries/likes'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import type { PostLikeToggleResponse } from '@/types'
 import { validateUUID } from '@/utils/validation'
@@ -34,36 +36,26 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     }
     const validPostId = uuidValidation.sanitized
 
-    const supabase = await createSupabaseServer()
-
     // 좋아요 조회는 로그인만 확인한다(승인 여부는 보지 않음).
     const auth = await requireUser()
     if (auth instanceof NextResponse) return auth
     const { user } = auth
 
-    // 게시글 존재 확인
-    const { data: post, error: postError } = await supabase
-      .from('posts')
-      .select('id, like_count')
-      .eq('id', validPostId)
-      .single()
+    // 게시글 존재 확인 — 원본은 is_deleted를 걸러내지 않았다(삭제된 글도
+    // 좋아요 정보 조회는 계속 됐다).
+    const post = await getPostById(validPostId, { includeDeleted: true })
 
-    if (postError || !post) {
+    if (!post) {
       return ApiError.notFound('게시글을 찾을 수 없습니다.').toNextResponse()
     }
 
     // 현재 사용자의 좋아요 여부 확인
-    const { data: userLike } = await supabase
-      .from('post_likes')
-      .select('id')
-      .eq('post_id', validPostId)
-      .eq('user_id', user.id)
-      .single()
+    const isLiked = await isPostLikedByUser(validPostId, user.id)
 
     return ApiSuccess.ok({
       post_id: validPostId,
       like_count: post.like_count || 0,
-      is_liked: !!userLike,
+      is_liked: isLiked,
     }).toNextResponse()
   } catch (error) {
     console.error('[API] GET /likes 오류:', error)
@@ -92,8 +84,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.'
       ).toNextResponse()
     }
-
-    const supabase = await createSupabaseServer()
+    const validPostId = uuidValidation.sanitized
 
     // 좋아요 토글은 로그인 + 승인된 활성 멤버만 가능한 강제 검사였다.
     const auth = await requireActiveMember()
@@ -101,13 +92,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const { user } = auth
 
     // 게시글 존재 확인
-    const { data: post, error: postError } = await supabase
-      .from('posts')
-      .select('id, is_deleted, title')
-      .eq('id', uuidValidation.sanitized)
-      .single()
+    const post = await getPostById(validPostId, { includeDeleted: true })
 
-    if (postError || !post) {
+    if (!post) {
       return ApiError.notFound('게시글을 찾을 수 없습니다.').toNextResponse()
     }
 
@@ -115,30 +102,20 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       return ApiError.badRequest('삭제된 게시글에는 좋아요를 할 수 없습니다.').toNextResponse()
     }
 
-    // 좋아요 토글 실행
-    const { data: toggleResult, error: toggleError } = await supabase.rpc('toggle_post_like', {
-      p_post_id: uuidValidation.sanitized,
-      p_user_id: user.id,
-    })
+    // 좋아요 토글 실행 — toggle_post_like RPC 대체. 카운트는 트랜잭션 안에서
+    // 매번 COUNT(*)로 재계산한다(단계 2c, 브리프 결함 1번 — +1/-1 증감 금지).
+    const result = await togglePostLike(validPostId, user.id)
 
-    if (toggleError) {
-      console.error('[API] toggle_post_like RPC 오류:', toggleError)
-      return ApiError.internalServerError('좋아요 처리에 실패했습니다.').toNextResponse()
-    }
-
-    const result = toggleResult?.[0]
-    if (!result) {
-      console.error('[API] toggle_post_like RPC 결과 없음')
-      return ApiError.internalServerError('좋아요 처리 결과를 확인할 수 없습니다.').toNextResponse()
-    }
-
-    // 활동 로깅
+    // 활동 로깅 — log_user_activity RPC는 이 작업(단계 2c) 범위 밖이다.
+    // user_activities는 아직 Supabase가 권위이고 정상 동작하므로 그대로
+    // 둔다.
     try {
+      const supabase = await createSupabaseServer()
       await supabase.rpc('log_user_activity', {
         p_user_id: user.id,
         p_action_type: result.liked ? 'like_added' : 'like_removed',
         p_target_type: 'post',
-        p_target_id: uuidValidation.sanitized,
+        p_target_id: validPostId,
         p_metadata: {
           post_title: post.title,
           action: result.liked ? 'add' : 'remove',

@@ -3,6 +3,7 @@ import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { parseTrendPeriod, parseTrendType } from '@/constants/adminAnalytics'
 import type { TrendPeriod } from '@/constants/adminAnalytics'
+import { listProfileSignupsSince } from '@/db/queries/profiles'
 
 type ActivityTrendPoint = {
   date: string
@@ -167,12 +168,11 @@ async function getUserTrends(supabase: any, period: TrendPeriod, weeks: number) 
   const startDate = new Date()
   startDate.setDate(startDate.getDate() - weeks * 7)
 
-  // 주별 신규 등록 사용자
-  const { data: newUsers } = await supabase
-    .from('member_profiles')
-    .select('created_at')
-    .gte('created_at', startDate.toISOString())
-    .order('created_at', { ascending: true })
+  // 주별 신규 등록 사용자 — 코드리뷰 Important 3: member_profiles는 이미
+  // Turso가 권위(단계 3c 이후)인데 이 라우트만 빠져 있었다. listProfileSignupsSince
+  // (Turso)로 옮긴다. user_sessions는 여전히 Supabase 권위(단계 4 대상)라
+  // 아래 조회는 그대로 둔다 — 이 함수는 두 DB를 함께 읽는 과도기 상태다.
+  const newUsers = await listProfileSignupsSince(startDate)
 
   // 주별 활성 사용자 (세션 기반)
   const { data: activeSessions } = await supabase

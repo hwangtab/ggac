@@ -25,7 +25,7 @@ const PG_ARTIST = {
   id: 'a-uuid',
   legacy_id: 'artist-014',
   slug: 'hwang',
-  name: '황경하',
+  name: '홍길동',
   category: ['음악'],
   one_liner: '한 줄',
   bio: '소개',
@@ -45,15 +45,15 @@ const PG_ARTIST = {
 }
 const PG_PROFILE = {
   id: 'u1',
-  display_name: '황경하',
+  display_name: '홍길동',
   email: 'a@x.kr',
   phone_number: '010-0000-0000',
-  birth_date: '1992-01-09',
-  real_name: '황경하',
+  birth_date: '1990-01-01',
+  real_name: '홍길동',
   monthly_fee: 30000,
   bank_name: '국민',
   account_number: '123-456',
-  account_holder: '황경하',
+  account_holder: '홍길동',
   registration_status: 'approved',
   is_active: true,
   is_admin: true,
@@ -117,7 +117,7 @@ test('업서트 SQL은 파라미터 바인딩만 쓴다', () => {
   assert.match(sql, /^INSERT INTO "user"/)
   assert.match(sql, /ON CONFLICT\("id"\) DO UPDATE SET/)
   assert.equal(args.length, 7)
-  assert.ok(!sql.includes('황경하'), 'SQL 본문에 값이 박혀서는 안 된다')
+  assert.ok(!sql.includes('홍길동'), 'SQL 본문에 값이 박혀서는 안 된다')
 })
 
 test('전 컬럼을 덮으면 커버리지 검사를 통과한다', async () => {
@@ -209,7 +209,7 @@ test('적재하면 네 테이블이 채워지고 값이 보존된다', async () 
   const row = r.rows[0]
   assert.equal(row.monthly_fee, 30000)
   assert.equal(row.account_number, '123-456')
-  assert.equal(row.birth_date, '1992-01-09')
+  assert.equal(row.birth_date, '1990-01-01')
   assert.equal(row.is_active, 1)
   assert.equal(row.artist_id, 'artist-014')
   assert.equal(row.verification_status, '{"email":true,"phone":false,"identity":false}')

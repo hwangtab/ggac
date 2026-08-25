@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
-import { createSupabaseServer } from '@/lib/supabase/server'
+import { deleteComment, getCommentById } from '@/db/queries/comments'
 import { revalidateTag } from 'next/cache'
 import { validateUUID } from '@/utils/validation'
 import { requireUser } from '@/lib/server/memberAuth'
@@ -26,8 +26,6 @@ export async function DELETE(
   const validCommentId = commentIdValidation.sanitized
 
   try {
-    const supabase = await createSupabaseServer()
-
     // 댓글 삭제는 로그인만 확인한다(승인 여부는 보지 않음). 소유자 판정은
     // 아래에서 별도로 한다.
     const auth = await requireUser()
@@ -36,26 +34,13 @@ export async function DELETE(
     const userId = user.id
 
     // Verify ownership (or admin if needed)
-    const { data: comment } = await supabase
-      .from('comments')
-      .select('id, author_id')
-      .eq('id', validCommentId)
-      .eq('post_id', validPostId)
-      .maybeSingle()
+    const comment = await getCommentById(validCommentId, validPostId)
     if (!comment) return ApiError.notFound('Not found').toNextResponse()
-    if ((comment as any).author_id !== userId) {
+    if (comment.author_id !== userId) {
       return ApiError.forbidden('권한이 없습니다.').toNextResponse()
     }
 
-    const { error } = await supabase
-      .from('comments')
-      .delete()
-      .eq('id', validCommentId)
-      .eq('post_id', validPostId)
-    if (error) {
-      console.error('[API] 댓글 삭제 실패:', error)
-      return ApiError.internalServerError('댓글 삭제에 실패했습니다.').toNextResponse()
-    }
+    await deleteComment(validCommentId, validPostId)
 
     try {
       revalidateTag(`comments-post-${validPostId}`)

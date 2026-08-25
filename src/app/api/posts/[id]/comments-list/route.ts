@@ -1,6 +1,5 @@
 import { NextRequest } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-import { createSupabaseServer } from '@/lib/supabase/server'
+import { listCommentsKeyset } from '@/db/queries/comments'
 import { getUserLikedCommentIds } from '@/lib/server/commentLikes'
 import { validateUUID } from '@/utils/validation'
 import { parseIntegerParam } from '@/utils/queryParams'
@@ -33,16 +32,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     return ApiError.badRequest('유효하지 않은 커서입니다.').toNextResponse()
   }
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  if (!url || !anonKey) {
-    return ApiError.internalServerError('Supabase not configured').toNextResponse()
-  }
-
-  const supabase = createClient(url, anonKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  })
-  const sessionSupabase = await createSupabaseServer()
   // 로그인 여부에 따라 개인화 데이터(댓글 좋아요 여부)를 얹는 선택적
   // 조회다. 비로그인도 댓글 목록을 읽을 수 있어야 하므로 requireUser로
   // 바꾸지 않는다.
@@ -51,7 +40,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   const annotateCommentLikeState = async (comments: Array<Record<string, unknown>>) => {
     const commentIds = comments.map(c => String(c.id)).filter(Boolean)
     const likedCommentIds = user
-      ? await getUserLikedCommentIds(sessionSupabase, user.id, commentIds)
+      ? await getUserLikedCommentIds(user.id, commentIds)
       : new Set<string>()
 
     return comments.map(c => ({
@@ -62,84 +51,33 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   }
 
   try {
-    try {
-      const rpcLimit = limit + 1
-      const { data: rpcData, error: rpcError } = await supabase.rpc('get_post_comments_keyset', {
-        p_post_id: postId,
-        p_created_at: parsedCursor?.createdAt ?? null,
-        p_id: parsedCursor?.id ?? null,
-        p_limit: rpcLimit,
-      })
-      if (!rpcError && Array.isArray(rpcData)) {
-        let comments: any[] = rpcData
-        const hasNext = comments.length > limit
-        if (hasNext) comments = comments.slice(0, limit)
-        let nextCursor: string | null = null
-        if (hasNext && comments.length > 0) {
-          const last = comments[comments.length - 1]
-          nextCursor = formatTimestampUuidCursor(last.created_at, last.id)
-        }
-        const normalized = await annotateCommentLikeState(comments)
-        return ApiSuccess.ok({
-          comments: normalized,
-          has_next: hasNext,
-          next_cursor: nextCursor,
-        }).toNextResponse()
-      }
-    } catch {}
-
-    let query = supabase
-      .from('comments')
-      .select(
-        `
-        id,
-        content,
-        author_id,
-        created_at,
-        author:member_profiles!comments_author_id_fkey (display_name)
-      `
-      )
-      .eq('post_id', postId)
-      .order('created_at', { ascending: true })
-      .order('id', { ascending: true })
-
-    if (parsedCursor) {
-      query = query.gte('created_at', parsedCursor.createdAt).limit(limit + 5)
-    } else {
-      query = query.limit(limit + 1)
-    }
-
-    const { data: rows, error } = await query
-    if (error) {
-      console.error('[API] 댓글 조회 실패:', error)
-      return ApiError.internalServerError('댓글을 불러오는 데 실패했습니다.').toNextResponse()
-    }
-
-    let comments = rows || []
-    if (parsedCursor) {
-      comments = comments.filter(
-        (r: any) =>
-          r.created_at > parsedCursor.createdAt ||
-          (r.created_at === parsedCursor.createdAt && r.id > parsedCursor.id)
-      )
-    }
+    // 단계 2c(Task 6): get_post_comments_keyset RPC 시도 + 실패 시 수동
+    // Supabase 폴백 이중 경로를 listCommentsKeyset(Turso) 단일 경로로
+    // 대체했다 — 정렬(created_at asc, id asc)과 커서 조건은 그대로다.
+    const rpcLimit = limit + 1
+    const rows = await listCommentsKeyset(postId, {
+      createdAt: parsedCursor?.createdAt ?? null,
+      id: parsedCursor?.id ?? null,
+      limit: rpcLimit,
+    })
+    let comments: Array<Record<string, unknown>> = rows as unknown as Array<Record<string, unknown>>
 
     const hasNext = comments.length > limit
     if (hasNext) comments = comments.slice(0, limit)
 
     let nextCursor: string | null = null
     if (hasNext && comments.length > 0) {
-      const last = comments[comments.length - 1]
+      const last = comments[comments.length - 1] as { created_at: string; id: string }
       nextCursor = formatTimestampUuidCursor(last.created_at, last.id)
     }
 
-    const normalized = await annotateCommentLikeState(comments as Array<Record<string, unknown>>)
+    const normalized = await annotateCommentLikeState(comments)
     return ApiSuccess.ok({
       comments: normalized,
       has_next: hasNext,
       next_cursor: nextCursor,
     }).toNextResponse()
-  } catch (e: any) {
+  } catch (e) {
     console.error('[API] 댓글 조회 예외 발생:', e)
     return ApiError.internalServerError('요청 처리에 실패했습니다.').toNextResponse()
   }

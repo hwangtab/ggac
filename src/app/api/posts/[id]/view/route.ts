@@ -5,13 +5,13 @@ export const preferredRegion = 'icn1'
 
 import { NextRequest } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
-import { createSupabaseServer } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
 import { applyRateLimit, RATE_LIMIT_CONFIGS } from '@/lib/server/rateLimit'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { validateUUID } from '@/utils/validation'
 import { createLogger, maskId } from '@/utils/logger'
 import { getOptionalUser } from '@/lib/server/memberAuth'
+import { getPostById, incrementViewCount } from '@/db/queries/posts'
 
 const log = createLogger('api/posts/view')
 
@@ -53,22 +53,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const user = await getOptionalUser()
     const userId = user?.id
 
-    let serviceSupabase
-    try {
-      serviceSupabase = createServiceRoleClient()
-    } catch {
-      return ApiError.internalServerError('Server configuration error').toNextResponse()
-    }
+    // 게시글 존재 여부 및 작성자 확인. 단계 2c(Task 5): Supabase
+    // `.eq('id', validPostId).eq('is_deleted', false)`에서 Turso 쿼리 계층
+    // getPostById(validPostId, { includeDeleted: false })로 옮겼다 — 응답에
+    // 필요한 id/title/author_id/view_count는 전부 PostFields에 그대로 있다.
+    const post = await getPostById(validPostId, { includeDeleted: false }).catch(() => null)
 
-    // 게시글 존재 여부 및 작성자 확인
-    const { data: post, error: postError } = await serviceSupabase
-      .from('posts')
-      .select('id, title, author_id, view_count')
-      .eq('id', validPostId)
-      .eq('is_deleted', false)
-      .single()
-
-    if (postError || !post) {
+    if (!post) {
       return ApiError.notFound('Post not found').toNextResponse()
     }
 
@@ -95,21 +86,32 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       }
     }
 
-    // 조회수 증가 (데이터베이스 함수 사용)
-    const { data: result, error: incrementError } = await serviceSupabase.rpc(
-      'increment_post_view_count',
-      { post_uuid: validPostId }
-    )
+    // 조회수 증가. 단계 2c(Task 5): Supabase RPC `increment_post_view_count`
+    // 대신 Turso 쿼리 계층 incrementViewCount(validPostId)를 쓴다 — 내부는
+    // `UPDATE posts SET view_count = view_count + 1 WHERE id = ?` 단일
+    // 문이라 읽고-쓰기 왕복이 없다(동시 조회에서 유실되지 않는다).
+    const newViewCount = await incrementViewCount(validPostId).catch(error => {
+      console.error('조회수 증가 오류:', error)
+      return null
+    })
 
-    if (incrementError) {
-      console.error('조회수 증가 오류:', incrementError)
+    if (newViewCount === null) {
       return ApiError.internalServerError('Failed to increment view count').toNextResponse()
     }
 
-    const newViewCount = result || post.view_count + 1
+    // 활동 로그 기록(user_activities, 여전히 Supabase — 이 전환 범위 밖) 전용
+    // Service Role 클라이언트. 로그인한 사용자에 한해서만 만든다.
+    let serviceSupabase
+    if (userId) {
+      try {
+        serviceSupabase = createServiceRoleClient()
+      } catch (error) {
+        console.warn('활동 로그용 Service Role 클라이언트 생성 실패:', error)
+      }
+    }
 
     // 활동 로그 기록 (로그인한 사용자만)
-    if (userId) {
+    if (userId && serviceSupabase) {
       try {
         await serviceSupabase.from('user_activities').insert({
           user_id: userId,
@@ -157,17 +159,12 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
     const validPostId = uuidValidation.sanitized
 
-    const supabase = await createSupabaseServer()
+    // 게시글 조회수 조회. 단계 2c(Task 5): Supabase
+    // `.eq('id', validPostId).eq('is_deleted', false)`에서 Turso 쿼리 계층
+    // getPostById(validPostId, { includeDeleted: false })로 옮겼다.
+    const post = await getPostById(validPostId, { includeDeleted: false })
 
-    // 게시글 조회수 조회
-    const { data: post, error } = await supabase
-      .from('posts')
-      .select('view_count')
-      .eq('id', validPostId)
-      .eq('is_deleted', false)
-      .single()
-
-    if (error || !post) {
+    if (!post) {
       return ApiError.notFound('Post not found').toNextResponse()
     }
 

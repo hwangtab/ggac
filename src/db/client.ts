@@ -1,7 +1,7 @@
 import { createClient, type Client } from '@libsql/client'
 import { drizzle, type LibSQLDatabase } from 'drizzle-orm/libsql'
 
-import * as schema from './schema'
+import * as schema from './schema/index.ts'
 
 type Db = LibSQLDatabase<typeof schema>
 
@@ -19,6 +19,18 @@ function assertProductionCredentials(): void {
   if (!process.env.TURSO_DATABASE_URL && process.env.NODE_ENV === 'production') {
     throw new Error('TURSO_DATABASE_URL is required in production')
   }
+}
+
+/**
+ * `@/lib/server/supabaseAdmin`의 `hasServiceRoleEnv()`와 같은 목적 — 운영에서
+ * `TURSO_DATABASE_URL`이 없는 상태(예: 시크릿이 없는 CI 빌드)를 실제 쿼리를
+ * 시도하기 **전에** 동기적으로 판별한다. 개발/테스트 환경은 `file:local.db`
+ * 폴백이 있어 항상 `true`다(Task 8, `src/lib/server/board.ts`가 프리렌더
+ * 가드에 쓴다).
+ */
+export function hasTursoEnv(): boolean {
+  if (process.env.NODE_ENV !== 'production') return true
+  return Boolean(process.env.TURSO_DATABASE_URL?.trim())
 }
 
 function createRawClient(): Client {

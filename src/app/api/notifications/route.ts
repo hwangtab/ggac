@@ -6,7 +6,6 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
-import { createSupabaseServer } from '@/lib/supabase/server'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { parseIntegerParam } from '@/utils/queryParams'
@@ -15,7 +14,9 @@ import { requireUser } from '@/lib/server/memberAuth'
 import { sanitizeNotificationData } from '@/utils/notificationData'
 import { parseNotificationExpiresAt } from '@/utils/notificationExpiry'
 import { parseNotificationType } from '@/utils/notificationTypes'
-import type { NotificationListResponse, CreateNotificationRequest, Notification } from '@/types'
+import { getProfileById } from '@/db/queries/profiles'
+import { createNotification, listNotifications } from '@/db/queries/notifications'
+import type { NotificationListResponse, CreateNotificationRequest } from '@/types'
 
 function validateNotificationId(value: unknown, label: string): string | null {
   if (typeof value !== 'string') return null
@@ -40,8 +41,6 @@ export async function GET(request: NextRequest) {
     if (auth instanceof NextResponse) return auth
     const { user } = auth
 
-    const supabase = await createSupabaseServer()
-
     // URL 파라미터 추출 및 검증
     const { searchParams } = new URL(request.url)
     const page = parseIntegerParam(searchParams.get('page'), 1, { min: 1 })
@@ -54,48 +53,26 @@ export async function GET(request: NextRequest) {
       return ApiError.badRequest('잘못된 타입 파라미터입니다.').toNextResponse()
     }
 
-    const offset = (page - 1) * limit
-
-    // 기본 쿼리 구성
-    let query = supabase
-      .from('notifications')
-      .select('*', { count: 'exact' })
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-
-    // 필터 적용
-    if (type) {
-      query = query.eq('type', type)
-    }
-
-    if (unread_only) {
-      query = query.is('read_at', null)
-    }
-
-    // 페이지네이션 적용
-    query = query.range(offset, offset + limit - 1)
-
-    const { data: notifications, error, count } = await query
-
-    if (error) {
+    let listResult: Awaited<ReturnType<typeof listNotifications>>
+    try {
+      listResult = await listNotifications(user.id, {
+        type,
+        unreadOnly: unread_only,
+        page,
+        limit,
+      })
+    } catch (error) {
       console.error('알림 조회 오류:', error)
       return ApiError.internalServerError('알림을 불러올 수 없습니다.').toNextResponse()
     }
 
-    // 미읽은 알림 수 조회
-    const { count: unreadCount } = await supabase
-      .from('notifications')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .is('read_at', null)
-
-    const totalCount = count || 0
+    const { rows: notifications, total: totalCount, unreadCount } = listResult
     const totalPages = Math.ceil(totalCount / limit)
 
     const response: NotificationListResponse = {
-      notifications: notifications as Notification[],
+      notifications,
       total: totalCount,
-      unread_count: unreadCount || 0,
+      unread_count: unreadCount,
       pagination: {
         page,
         limit,
@@ -125,18 +102,18 @@ export async function POST(request: NextRequest) {
       return rateLimitResult.response
     }
 
-    const supabase = await createSupabaseServer()
-
-    // 관리자 권한 확인
+    // 관리자 권한 확인. 조회 자체가 실패해도(연결 오류 등) fail-closed
+    // 403으로 수렴시킨다(500으로 승격하지 않음) — bulk/route.ts와 동일 판단.
     const auth = await requireUser()
     if (auth instanceof NextResponse) return auth
     const { user } = auth
 
-    const { data: profile } = await supabase
-      .from('member_profiles')
-      .select('is_admin, registration_status, is_active')
-      .eq('id', user.id)
-      .single()
+    let profile: Awaited<ReturnType<typeof getProfileById>>
+    try {
+      profile = await getProfileById(user.id)
+    } catch {
+      profile = null
+    }
 
     if (!profile?.is_admin || profile.registration_status !== 'approved' || !profile.is_active) {
       return ApiError.forbidden('관리자 권한이 필요합니다.').toNextResponse()
@@ -189,24 +166,25 @@ export async function POST(request: NextRequest) {
     }
 
     // 알림 생성
-    const { data: notification, error } = await supabase.rpc('create_notification', {
-      p_user_id: userId,
-      p_type: notificationType,
-      p_title: notificationTitle,
-      p_message: notificationMessage,
-      p_data: notificationData,
-      p_related_post_id: relatedPostId,
-      p_related_user_id: relatedUserId,
-      p_expires_at: expiresAt,
-    })
-
-    if (error) {
+    let notificationId: string
+    try {
+      notificationId = await createNotification({
+        user_id: userId,
+        type: notificationType,
+        title: notificationTitle,
+        message: notificationMessage,
+        data: notificationData,
+        related_post_id: relatedPostId,
+        related_user_id: relatedUserId,
+        expires_at: expiresAt,
+      })
+    } catch (error) {
       console.error('알림 생성 오류:', error)
       return ApiError.internalServerError('알림을 생성할 수 없습니다.').toNextResponse()
     }
 
     return ApiSuccess.ok(
-      { notification_id: notification },
+      { notification_id: notificationId },
       '알림이 성공적으로 생성되었습니다.'
     ).toNextResponse()
   } catch (error) {

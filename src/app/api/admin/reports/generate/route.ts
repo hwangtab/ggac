@@ -1,6 +1,15 @@
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { parseIntegerParam } from '@/utils/queryParams'
+import {
+  listAllProfilesSummary,
+  listProfilesCreatedInRange,
+  listProfilesUpdatedInRange,
+  listRejectedProfilesInRange,
+  listProfileRegistrationStatusInRange,
+} from '@/db/queries/profiles'
+import { listPostsInRange } from '@/db/queries/posts'
+import { listCommentsInRange } from '@/db/queries/comments'
 
 const REPORT_TYPES = [
   'member_activity',
@@ -173,14 +182,16 @@ async function generateMemberActivityReport(
   endDate: Date,
   filters: any
 ) {
-  // 1. 전체 회원 통계 (기본 데이터)
-  const { data: allMembers, error: membersError } = await supabase
-    .from('member_profiles')
-    .select('id, display_name, email, registration_status, created_at, is_active')
-    .order('created_at', { ascending: false })
-
-  if (membersError) {
-    console.error('회원 데이터 조회 오류:', membersError)
+  // 1. 전체 회원 통계 (기본 데이터) — Task 8: member_profiles는 Turso가
+  // 권위(단계 3c 이후)라 listAllProfilesSummary(Turso)로 옮겼다.
+  // user_activities는 여전히 Supabase 권위(단계 4 대상)라 아래 activities
+  // 조회만 supabase 파라미터를 계속 쓴다 — 이 함수가 두 DB를 함께 읽는
+  // 과도기 상태는 스펙이 허용한 정상 상태다.
+  let allMembers: Awaited<ReturnType<typeof listAllProfilesSummary>> = []
+  try {
+    allMembers = await listAllProfilesSummary()
+  } catch (error) {
+    console.error('회원 데이터 조회 오류:', error)
   }
 
   // 2. 기간별 활동 통계 (수정된 쿼리 - 관계 문제 해결)
@@ -283,22 +294,23 @@ async function generatePostEngagementReport(
   endDate: Date,
   filters: any
 ) {
-  // 게시글 통계 (view_count 포함)
-  const { data: posts } = await supabase
-    .from('posts')
-    .select('id, title, category, created_at, like_count, view_count, is_pinned, author_id')
-    .gte('created_at', startDate.toISOString())
-    .lte('created_at', endDate.toISOString())
-    .order('created_at', { ascending: false })
+  // Task 8: posts/comments는 Turso가 권위(단계 3c 이후)라
+  // listPostsInRange/listCommentsInRange(Turso)로 옮겼다. 이 함수는 다른
+  // 표(user_activities 등)를 읽지 않으므로 교차 DB가 남지 않는다 —
+  // `supabase` 파라미터는 함수 시그니처 통일(generateComprehensiveReport가
+  // 4개 함수를 같은 방식으로 호출) 목적으로만 남아 있다.
+  let posts: Awaited<ReturnType<typeof listPostsInRange>> = []
+  try {
+    posts = await listPostsInRange(startDate, endDate)
+  } catch (error) {
+    console.error('게시글 조회 오류:', error)
+  }
 
-  const { data: comments, error: commentsError } = await supabase
-    .from('comments')
-    .select('id, post_id, created_at')
-    .gte('created_at', startDate.toISOString())
-    .lte('created_at', endDate.toISOString())
-
-  if (commentsError) {
-    console.error('댓글 조회 오류:', commentsError)
+  let comments: Awaited<ReturnType<typeof listCommentsInRange>> = []
+  try {
+    comments = await listCommentsInRange(startDate, endDate)
+  } catch (error) {
+    console.error('댓글 조회 오류:', error)
   }
 
   // 게시글별 댓글 수 계산
@@ -357,19 +369,14 @@ async function generateUserRegistrationReport(
   endDate: Date,
   filters: any
 ) {
+  // Task 8: member_profiles는 Turso가 권위(단계 3c 이후)라 아래 4개 조회를
+  // 모두 profiles.ts 쿼리 계층으로 옮겼다. 이 함수는 다른 표를 읽지 않으므로
+  // 교차 DB가 남지 않는다.
   // 1. 기간 내 신규 등록자 (created_at 기준)
-  const { data: newRegistrations } = await supabase
-    .from('member_profiles')
-    .select('id, display_name, email, registration_status, is_artist, created_at')
-    .gte('created_at', startDate.toISOString())
-    .lte('created_at', endDate.toISOString())
+  const newRegistrations = await listProfilesCreatedInRange(startDate, endDate)
 
   // 2. 기간 내 상태가 변경된 회원들 (updated_at 기준)
-  const { data: statusChanges } = await supabase
-    .from('member_profiles')
-    .select('id, display_name, email, registration_status, is_artist, created_at, updated_at')
-    .gte('updated_at', startDate.toISOString())
-    .lte('updated_at', endDate.toISOString())
+  const statusChanges = await listProfilesUpdatedInRange(startDate, endDate)
 
   // 3. 신규 등록 통계
   const newRegistrationStats =
@@ -386,13 +393,7 @@ async function generateUserRegistrationReport(
     }, {}) || {}
 
   // 5. 최근 거부된 회원들 (created_at과 관계없이 최근에 거부된 모든 회원)
-  const { data: recentlyRejected } = await supabase
-    .from('member_profiles')
-    .select('id, display_name, email, created_at, updated_at')
-    .eq('registration_status', 'rejected')
-    .gte('updated_at', startDate.toISOString())
-    .lte('updated_at', endDate.toISOString())
-    .order('updated_at', { ascending: false })
+  const recentlyRejected = await listRejectedProfilesInRange(startDate, endDate)
 
   return {
     summary: {
@@ -478,12 +479,13 @@ async function getEngagementTrends(supabase: any, startDate: Date, endDate: Date
 }
 
 // 일별 등록 분석
-async function getDailyRegistrationBreakdown(supabase: any, startDate: Date, endDate: Date) {
-  const { data } = await supabase
-    .from('member_profiles')
-    .select('created_at, registration_status')
-    .gte('created_at', startDate.toISOString())
-    .lte('created_at', endDate.toISOString())
+// Task 8: member_profiles는 Turso가 권위라 listProfileRegistrationStatusInRange
+// (Turso)로 옮겼다 — `supabase` 파라미터는 이제 이 함수 안에서 쓰이지
+// 않지만, generateUserRegistrationReport의 나머지 3개 리포트 헬퍼
+// (getDailyActivityBreakdown/getEngagementTrends 포함)와 같은 호출 방식을
+// 유지하려고 시그니처는 그대로 둔다.
+async function getDailyRegistrationBreakdown(_supabase: any, startDate: Date, endDate: Date) {
+  const data = await listProfileRegistrationStatusInRange(startDate, endDate)
 
   // 일별로 그룹화
   const dailyStats =

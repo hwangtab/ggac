@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import { supabase } from '../lib/supabase/client'
 import { logCommentCreated } from '@/utils/activityLogger'
 import CommentLikeButton from './CommentLikeButton'
 import type { CommentWithLikes } from '@/types'
@@ -9,6 +8,37 @@ import type { CommentWithLikes } from '@/types'
 interface Profile {
   id: string
   display_name: string
+}
+
+// 단계 2c(Task 6): comments/comment_likes가 Turso로 전환되며, 브라우저에서
+// Supabase 테이블을 직접 읽던 경로(`supabase.from('comments')...`,
+// `supabase.from('comment_likes')...`)를 `/api/posts/[id]/comments-list`
+// 서버 API 호출로 대체했다. is_liked/like_count는 이제 그 라우트가
+// 로그인 세션(쿠키, Better Auth)을 근거로 서버에서 정확히 계산해 내려준다 —
+// 클라이언트가 comment_likes 테이블을 직접 조회할 필요가 없어졌다. 이 값은
+// 그 API의 PAGE_SIZE_MAX(100, `src/app/api/posts/[id]/comments-list/route.ts`)와
+// 맞춘 상한이다 — 회원 23명 규모 커뮤니티에서 게시글 하나의 댓글이 100건을
+// 넘는 경우는 실질적으로 없다.
+const COMMENT_FETCH_LIMIT = 100
+
+async function fetchCommentsFromApi(postId: string): Promise<CommentWithLikes[]> {
+  const res = await fetch(`/api/posts/${postId}/comments-list?limit=${COMMENT_FETCH_LIMIT}`)
+  if (!res.ok) {
+    throw new Error(`댓글 조회 실패: ${res.status}`)
+  }
+  const json = await res.json()
+  // 리뷰 대응(3차): 무제한 조회이던 것이 COMMENT_FETCH_LIMIT(100)으로 상한이
+  // 생겼다 — 101번째 댓글부터는 이 호출이 조용히 빠뜨린다(초기 전체 조회
+  // 경로에서는 그 댓글 자체가, 좋아요 상태 병합 경로에서는 그 댓글의 is_liked
+  // 갱신이). 서버가 내려주는 has_next로 실제로 잘렸는지 확인해 개발자가 알
+  // 수 있게 로그만 남긴다 — 회원 23명 규모에선 실질적으로 안 일어나지만,
+  // 조용히 사라지는 것보다는 낫다.
+  if (json?.data?.has_next) {
+    console.warn(
+      `[CommentSection] 댓글이 ${COMMENT_FETCH_LIMIT}건을 넘어 일부만 불러왔습니다(postId=${postId}). ${COMMENT_FETCH_LIMIT + 1}번째 이후 댓글은 좋아요 상태 병합 또는 초기 목록에서 빠질 수 있습니다.`
+    )
+  }
+  return (json?.data?.comments as CommentWithLikes[] | undefined) || []
 }
 
 interface CommentSectionProps {
@@ -50,70 +80,15 @@ const CommentSection: React.FC<CommentSectionProps> = ({
 
   const fetchComments = useCallback(async () => {
     try {
-      // 현재 로그인한 사용자 확인 — Better Auth 세션은 서버(PostDetailClient)가
-      // 이미 판독해 `currentUserId`로 내려준다. Supabase에는 이 세션이 없으므로
-      // (Better Auth 쿠키와 무관) 브라우저에서 다시 물어볼 수 없다. `comments`·
-      // `comment_likes`의 익명 SELECT(`USING (true)`)는 세션과 무관하게 계속
-      // 읽히므로, 신원만 이 prop으로 바꾼다.
-      const user = currentUserId ? { id: currentUserId } : null
-
-      const { data, error } = await supabase
-        .from('comments')
-        .select('*')
-        .eq('post_id', postId)
-        .order('created_at', { ascending: true })
-
-      if (error) {
-        console.error('Error fetching comments:', error)
-        return
-      }
-
-      if (!data || data.length === 0) {
-        setComments([])
-        return
-      }
-
-      const commentIds = data.map(c => (c as any).id)
-
-      // 배치 조회 1: 모든 댓글의 좋아요 목록 (N+1 → 1 쿼리)
-      const { data: allLikes } = await supabase
-        .from('comment_likes')
-        .select('comment_id')
-        .in('comment_id', commentIds)
-
-      const likeCountMap: Record<string, number> = {}
-      commentIds.forEach(id => {
-        likeCountMap[id] = 0
-      })
-      ;(allLikes || []).forEach((row: any) => {
-        likeCountMap[row.comment_id] = (likeCountMap[row.comment_id] || 0) + 1
-      })
-
-      // 배치 조회 2: 현재 사용자의 좋아요 목록 (N+1 → 1 쿼리)
-      const likedSet = new Set<string>()
-      if (user && commentIds.length > 0) {
-        const { data: userLikes } = await supabase
-          .from('comment_likes')
-          .select('comment_id')
-          .eq('user_id', user.id)
-          .in('comment_id', commentIds)
-
-        ;(userLikes || []).forEach((row: any) => {
-          likedSet.add(row.comment_id)
-        })
-      }
-
-      const commentsWithLikes = data.map(comment => ({
-        ...(comment as any),
-        like_count: likeCountMap[(comment as any).id] || 0,
-        is_liked: likedSet.has((comment as any).id),
-      }))
-
-      setComments(commentsWithLikes as CommentWithLikes[])
+      // 서버(`/api/posts/[id]/comments-list`)가 이미 로그인 세션(쿠키)을
+      // 근거로 like_count/is_liked를 정확히 계산해 내려준다 — 브라우저에서
+      // comments/comment_likes 테이블을 직접 배치 조회할 필요가 없다.
+      const rows = await fetchCommentsFromApi(postId)
+      setComments(rows)
     } catch (error) {
       console.error('Error fetching comments with likes:', error)
     }
-  }, [postId, currentUserId])
+  }, [postId])
 
   const fetchProfiles = useCallback(async () => {
     const authorIds = Array.from(new Set(comments.map(comment => comment.author_id)))
@@ -155,23 +130,49 @@ const CommentSection: React.FC<CommentSectionProps> = ({
 
     // 상세 페이지 서버 셸은 ISR 캐시를 위해 is_liked를 채우지 않고 내려준다
     // (is_liked:false). 그래서 로그인 사용자에 한해 초기 댓글의 좋아요 상태를
-    // 여기서 배치 조회해 병합한다 — 이게 없으면 이미 좋아요한 댓글이 빈 하트로
-    // 표시되고, 다시 누르면 토글 RPC가 기존 좋아요를 삭제해 버린다.
-    // currentUserId는 PostDetailClient가 세션 복원 후 채우므로 그 시점에 effect가
-    // 재실행된다. liked인 것만 true로 덮어써 loadMore append분과 낙관적 토글을
-    // 훼손하지 않는다.
+    // 여기서 서버(comments-list API)에서 다시 조회해 병합한다 — 이게 없으면
+    // 이미 좋아요한 댓글이 빈 하트로 표시되고, 다시 누르면 토글 RPC가 기존
+    // 좋아요를 삭제해 버린다. currentUserId는 PostDetailClient가 세션 복원
+    // 후 채우므로 그 시점에 effect가 재실행된다.
+    //
+    // 리뷰 대응(3차): liked인 것만 `true`로 덮어쓴다(옛 Supabase 구현과 동일
+    // 방향) — like_count는 건드리지 않는다. SSR이 이미 정확한 like_count를
+    // 내려주고(Task 6에서 재계산 방식으로 고쳐 항상 정확하다), 이 병합은
+    // ISR 캐시가 생략한 is_liked만 채우는 게 목적이다. 양방향으로 덮으면
+    // (is_liked/like_count를 이 fetch 시점의 스냅샷으로 무조건 교체) 이
+    // 요청이 늦게 도착했을 때 그 사이 사용자가 낙관적으로 누른 좋아요를
+    // 되돌려버린다 — 이 fetch는 요청 시작 시점의 낡은 스냅샷이라, 사용자의
+    // 방금 클릭보다 먼저 만들어졌을 수 있기 때문이다. `true`만 덮는 단방향
+    // 갱신은 이미 좋아요한 댓글을 놓치지 않는 목적은 그대로 달성하면서
+    // 이 역전을 만들지 않는다(false로는 절대 덮지 않으므로 낙관적 토글이
+    // 방금 true로 바꾼 값을 이 fetch가 되돌릴 수 없다).
+    //
+    // 남은 비효율(의도적으로 손대지 않음): is_liked만 필요한데 댓글 본문
+    // 전체(최대 100건)를 다시 받는다 — 옛 Supabase 구현은 comment_likes의
+    // id만 골라 받는 경량 조회였다. 전용 경량 엔드포인트(예: comment id
+    // 배열 → 좋아요한 id 집합만 반환)를 새로 만들면 해결되지만, 새 공개
+    // API 라우트 하나(인증·레이트리밋 배선 포함)를 추가하는 일이라 이번
+    // 리뷰 라운드의 Minor 항목 범위를 넘는다고 판단했다 — "댓글 더보기"마다
+    // 재실행되는 게 아니라 이 effect는 postId/currentUserId가 바뀔 때만
+    // 도는데, initialComments가 바뀌어도 이 effect의 의존성 배열엔
+    // initialComments가 들어있어 loadMore로 댓글이 늘어날 때마다도 다시
+    // 실행된다는 점은 사실이다(회원 23명 커뮤니티 규모에서 댓글 최대
+    // 100건 재조회의 실제 비용은 낮다고 보지만, 트래픽이 커지면 재검토
+    // 대상).
     if (!currentUserId || initialComments.length === 0) return
     let cancelled = false
     ;(async () => {
-      const ids = (initialComments as any[]).map(c => c.id)
-      const { data: liked } = await supabase
-        .from('comment_likes')
-        .select('comment_id')
-        .eq('user_id', currentUserId)
-        .in('comment_id', ids)
-      if (cancelled || !liked?.length) return
-      const likedSet = new Set((liked as any[]).map(r => r.comment_id))
-      setComments(prev => prev.map(c => (likedSet.has(c.id) ? { ...c, is_liked: true } : c)))
+      try {
+        const rows = await fetchCommentsFromApi(postId)
+        if (cancelled || rows.length === 0) return
+        const likedIds = new Set(rows.filter(row => row.is_liked).map(row => row.id))
+        if (likedIds.size === 0) return
+        setComments(prev => prev.map(c => (likedIds.has(c.id) ? { ...c, is_liked: true } : c)))
+      } catch (error) {
+        // 네트워크 오류는 무시 — is_liked:false로 남고, 실제로 좋아요한
+        // 댓글을 다시 누르면 서버가 진짜 상태로 토글해 자연 복구된다.
+        console.error('초기 댓글 좋아요 상태 병합 실패:', error)
+      }
     })()
     return () => {
       cancelled = true

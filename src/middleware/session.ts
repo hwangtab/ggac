@@ -1,5 +1,13 @@
 import type { NextRequest } from 'next/server'
 import { getCookieCache, getSessionCookie } from 'better-auth/cookies'
+// 상대 경로 import: `@/*` alias는 Next.js 빌드에서만 해석된다. 이 파일은
+// 단위 테스트(scripts/testing/middleware-session.test.mjs)가 `node
+// --experimental-strip-types`로 직접 import하므로, alias를 쓰면 테스트가
+// ERR_MODULE_NOT_FOUND로 즉시 죽는다 — `src/db/queries/*`가 이미 같은
+// 이유로 상대 경로(`../client.ts`)를 쓰는 관례를 따른다.
+import { createLogger } from '../utils/logger.ts'
+
+const log = createLogger('middleware/session')
 
 const FETCH_TIMEOUT_MS = 3000
 
@@ -56,18 +64,36 @@ async function fetchVerifiedSession(request: NextRequest): Promise<{ id: string 
  * 불러 캐시를 건너뛰고 매번 재검증한다.
  */
 export async function readMiddlewareSession(request: NextRequest): Promise<{ id: string } | null> {
+  // catch를 getCookieCache 호출에만 좁힌다. 실측(2026-08-24)에서
+  // getCookieCache가 "requires a secret to be provided" 등으로 던지는 경우가
+  // 있었는데, 예전에는 이 함수 전체를 감싼 try/catch가 그 예외를 삼켜 폴백
+  // (fetchVerifiedSession, 쿠키가 있으면 200으로 정상 세션을 돌려주는 경로)에
+  // 도달하지 못하고 바로 null을 반환했다 — 쿠키가 멀쩡히 있는데도 미들웨어가
+  // 비로그인으로 취급하는 결함이었다. 캐시 실패는 조용히 넘기지 않고 반드시
+  // 로그로 남긴다 — 그러지 않으면 운영에서 캐시가 늘 깨져 있어도 아무도
+  // 모른다.
+  let cached: Awaited<ReturnType<typeof getCookieCache>> | null = null
   try {
-    const cached = await getCookieCache(request)
-    if (cached?.user?.id) {
-      return { id: cached.user.id }
-    }
+    cached = await getCookieCache(request)
+  } catch (error) {
+    log.warn('getCookieCache 실패 — fetchVerifiedSession 폴백으로 진행', error)
+  }
 
-    // 세션 쿠키 자체가 없으면(익명 방문자) 왕복하지 않고 바로 null.
-    if (!getSessionCookie(request)) {
-      return null
-    }
+  if (cached?.user?.id) {
+    return { id: cached.user.id }
+  }
 
-    // 세션 쿠키는 있는데 캐시가 만료됐다 — 정확한 id를 위해서만 서버에 왕복한다.
+  // 세션 쿠키 자체가 없으면(익명 방문자) 왕복하지 않고 바로 null.
+  if (!getSessionCookie(request)) {
+    return null
+  }
+
+  // 세션 쿠키는 있는데 캐시가 없거나(만료 또는 위 catch) 만료됐다 — 정확한
+  // id를 위해서만 서버에 왕복한다. fetchVerifiedSession 자체의 실패는 여전히
+  // null이다(fail-closed) — 이 함수는 예외를 위로 던지지 않는다. 이 catch는
+  // getCookieCache용 catch와 분리된 별개 지점이다 — 폴백 자체의 실패만 여기서
+  // 삼킨다.
+  try {
     return await fetchVerifiedSession(request)
   } catch {
     return null

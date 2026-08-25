@@ -5,9 +5,14 @@
 
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
-import { validateAdvancedSearchQuery, buildSearchQuery } from '@/utils/advancedFiltering'
+import { validateAdvancedSearchQuery } from '@/utils/advancedFiltering'
 import type { AdvancedSearchQuery, FilteredResult, FieldDefinition } from '@/types'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
+import {
+  searchPostsAdvanced,
+  countPostsAdvanced,
+  type AdvancedSearchSortField,
+} from '@/db/queries/posts'
 
 // 게시글 필드 정의
 const POST_FIELD_DEFINITIONS: FieldDefinition[] = [
@@ -114,9 +119,7 @@ export const POST = defineApiRoute<AdvancedSearchQuery>({
     console.error('고급 검색 API 오류:', error)
     return ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse()
   },
-  handler: async ({ body: searchQuery, auth }) => {
-    const { db: supabase } = auth
-
+  handler: async ({ body: searchQuery }) => {
     // 쿼리 검증
     const validation = validateAdvancedSearchQuery(searchQuery, POST_FIELD_DEFINITIONS)
     if (!validation.isValid) {
@@ -166,36 +169,31 @@ export const POST = defineApiRoute<AdvancedSearchQuery>({
     const { page, limit } = query.pagination!
 
     try {
-      // 안전한 stored procedure 호출
-      const [dataResult, countResult] = await Promise.all([
-        supabase.rpc('search_posts_advanced', {
-          p_filters: simpleFilters,
-          p_search_query: searchText,
-          p_search_fields: searchFields,
-          p_sort_field: sortField,
-          p_sort_direction: sortDirection,
-          p_page: page,
-          p_limit: limit,
+      // Task 8: 존재하지 않던 RPC(search_posts_advanced/count_posts_advanced,
+      // 이 라우트는 500만 내고 한 번도 동작한 적이 없었다 — decisions.md 참고)를
+      // Drizzle 쿼리(src/db/queries/posts.ts)로 대체한다. simpleFilters/
+      // searchText/searchFields/sortField/sortDirection은 이미 위에서 파싱한
+      // 값을 그대로 넘긴다 — 라우트의 파싱 로직은 손대지 않았다.
+      //
+      // total은 searchPostsAdvanced의 count(*) over()가 아니라 countPostsAdvanced
+      // (별도 COUNT 쿼리)로 구한다 — task-8-brief의 "listPosts.total 경계"
+      // 경고 대상이 바로 이 화면이다(관리자 페이지네이션 UI가 total을 표시).
+      // offset이 실제 총 개수를 넘어서면 count(*) over()는 0으로 떨어지지만
+      // countPostsAdvanced는 페이지 위치와 무관하게 정확하다.
+      const [dataResult, totalCount] = await Promise.all([
+        searchPostsAdvanced({
+          simpleFilters,
+          searchText,
+          searchFields,
+          sortField: sortField as AdvancedSearchSortField,
+          sortDirection: sortDirection as 'asc' | 'desc',
+          page,
+          limit,
         }),
-        supabase.rpc('count_posts_advanced', {
-          p_filters: simpleFilters,
-          p_search_query: searchText,
-          p_search_fields: searchFields,
-        }),
+        countPostsAdvanced({ simpleFilters, searchText, searchFields }),
       ])
 
-      if (dataResult.error) {
-        console.error('데이터 조회 오류:', dataResult.error)
-        return ApiError.internalServerError('검색 중 오류가 발생했습니다.').toNextResponse()
-      }
-
-      if (countResult.error) {
-        console.error('카운트 조회 오류:', countResult.error)
-        return ApiError.internalServerError('검색 중 오류가 발생했습니다.').toNextResponse()
-      }
-
-      const posts = dataResult.data || []
-      const totalCount = countResult.data || 0
+      const posts = dataResult.rows
       const totalPages = Math.ceil(totalCount / limit)
 
       const result: FilteredResult = {

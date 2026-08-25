@@ -8,17 +8,12 @@ export const runtime = 'nodejs'
 
 import { NextRequest } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
-import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
 import { timingSafeEqual } from 'crypto'
 import { deletePublicObjectEverywhere, logicalPathFromUrl } from '@/lib/storage/provider'
 import { createLogger } from '@/utils/logger'
+import { deleteExpiredTempAttachments, listTemporaryAttachments } from '@/db/queries/attachments'
 
 const log = createLogger('api/cleanup/temp-attachments')
-
-// Service Role 클라이언트 (RLS 우회 가능)
-function getSupabaseAdmin() {
-  return createServiceRoleClient()
-}
 
 /**
  * 임시 첨부파일 정리 실행
@@ -44,17 +39,20 @@ export async function POST(request: NextRequest) {
 
     log.debug('Temporary attachment cleanup started')
 
-    const supabaseAdmin = getSupabaseAdmin()
-
-    // 1. 만료된 임시 첨부파일 조회
-    const { data: expiredAttachments, error: queryError } = await supabaseAdmin
-      .from('post_attachments')
-      .select('id, file_url, file_name')
-      .eq('is_temporary', true)
-      .lt('expires_at', new Date().toISOString())
-
-    if (queryError) {
-      console.error('[CLEANUP] 만료된 첨부파일 조회 실패:', queryError)
+    // 1+3. 만료된 임시 첨부파일을 조회하면서 동시에 DB에서 삭제한다. 단계
+    // 2c(Task 5): Supabase 구현은 "SELECT(만료분) → Storage 삭제 시도 → id로
+    // DELETE" 순서였다. Turso 쿼리 계층 deleteExpiredTempAttachments는 SQLite
+    // `DELETE ... RETURNING`으로 조회+삭제를 원자적 단일 문으로 합친다 —
+    // **무엇이 삭제되는지(is_temporary=true AND expires_at < now)는 기존과
+    // 100% 동일**하지만, DB 삭제와 Storage 삭제의 순서가 바뀐다(DB가 먼저
+    // 지워진 뒤 그 결과로 Storage를 지운다). 만료된 임시 첨부는 애초에
+    // 24시간 TTL의 미게시 초안 파일이라 이 순서 변경의 실질적 위험은 낮다고
+    // 판단했다 — 자세한 근거는 task-5-report.md 참고.
+    let expiredAttachments
+    try {
+      expiredAttachments = await deleteExpiredTempAttachments()
+    } catch (queryError) {
+      console.error('[CLEANUP] 만료된 첨부파일 조회/삭제 실패:', queryError)
       return ApiError.internalServerError('Failed to query expired attachments').toNextResponse()
     }
 
@@ -68,7 +66,7 @@ export async function POST(request: NextRequest) {
 
     log.debug('Expired temporary attachments found', { count: expiredAttachments.length })
 
-    // 2. Storage에서 파일 삭제
+    // 2. Storage에서 파일 삭제(DB 행은 이미 지워졌다 — 위 순서 변경 참고)
     const filePaths = expiredAttachments
       .map(att => {
         const path = logicalPathFromUrl(att.file_url, 'attachments', 'temp')
@@ -98,20 +96,6 @@ export async function POST(request: NextRequest) {
         }
       }
       log.debug('Temporary attachment Storage deletion attempted')
-    }
-
-    // 3. 데이터베이스에서 레코드 삭제
-    const expiredIds = expiredAttachments.map(att => att.id)
-    const { error: deleteError } = await supabaseAdmin
-      .from('post_attachments')
-      .delete()
-      .in('id', expiredIds)
-
-    if (deleteError) {
-      console.error('[CLEANUP] DB 레코드 삭제 실패:', deleteError)
-      return ApiError.internalServerError(
-        'Failed to delete expired attachment records'
-      ).toNextResponse()
     }
 
     log.debug('Temporary attachment cleanup completed', { count: expiredAttachments.length })
@@ -153,15 +137,14 @@ export async function GET(request: NextRequest) {
       return ApiError.unauthorized('Unauthorized').toNextResponse()
     }
 
-    const supabaseAdmin = getSupabaseAdmin()
-
-    // 임시 첨부파일 통계 조회
-    const { data: stats, error } = await supabaseAdmin
-      .from('post_attachments')
-      .select('expires_at, file_size')
-      .eq('is_temporary', true)
-
-    if (error) {
+    // 임시 첨부파일 통계 조회. 단계 2c(Task 5): Supabase
+    // `.eq('is_temporary', true)`에서 Turso 쿼리 계층
+    // listTemporaryAttachments()로 옮겼다(만료 여부와 무관하게 임시 첨부
+    // 전체를 조회 — 아래에서 그대로 now 기준으로 분류한다).
+    let stats
+    try {
+      stats = await listTemporaryAttachments()
+    } catch {
       return ApiError.internalServerError('Failed to get stats').toNextResponse()
     }
 

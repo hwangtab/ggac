@@ -13,11 +13,18 @@ export const preferredRegion = 'icn1'
 import { NextRequest, NextResponse } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { revalidateTag } from 'next/cache'
-import { createSupabaseServer } from '@/lib/supabase/server'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { deletePublicObjectEverywhere, logicalPathFromUrl } from '@/lib/storage/provider'
 import { validateUUID } from '@/utils/validation'
 import { requireUser } from '@/lib/server/memberAuth'
+import { getProfileById } from '@/db/queries/profiles'
+import {
+  getAttachmentById,
+  getAttachmentWithPost,
+  unsetPrimaryForPost,
+  updateAttachment,
+  removeAttachment,
+} from '@/db/queries/attachments'
 
 const MAX_ALT_TEXT_LENGTH = 300
 
@@ -54,8 +61,6 @@ export async function GET(
 ) {
   const resolvedParams = await context.params
   try {
-    const supabase = await createSupabaseServer()
-
     // 첨부파일 조회는 로그인만 확인한다.
     const auth = await requireUser()
     if (auth instanceof NextResponse) return auth
@@ -64,15 +69,12 @@ export async function GET(
     if (!routeParams.ok) return routeParams.response
     const { postId, attachmentId } = routeParams
 
-    // 첨부파일 조회
-    const { data: attachment, error } = await supabase
-      .from('post_attachments')
-      .select('*')
-      .eq('id', attachmentId)
-      .eq('post_id', postId)
-      .single()
+    // 첨부파일 조회. 단계 2c(Task 5): Supabase
+    // `.eq('id', attachmentId).eq('post_id', postId)`에서 Turso 쿼리 계층
+    // getAttachmentById(attachmentId, postId)로 옮겼다.
+    const attachment = await getAttachmentById(attachmentId, postId).catch(() => null)
 
-    if (error || !attachment) {
+    if (!attachment) {
       return ApiError.notFound('첨부파일을 찾을 수 없습니다.').toNextResponse()
     }
 
@@ -92,8 +94,6 @@ export async function PUT(
 ) {
   const resolvedParams = await context.params
   try {
-    const supabase = await createSupabaseServer()
-
     // 첨부파일 수정은 로그인만 확인한다(승인 여부는 보지 않음). 작성자
     // 소유권 확인은 아래에서 별도로 한다.
     const auth = await requireUser()
@@ -133,20 +133,13 @@ export async function PUT(
       ).toNextResponse()
     }
 
-    // 첨부파일과 게시글 권한 확인
-    const { data: attachment, error: attachmentError } = await supabase
-      .from('post_attachments')
-      .select(
-        `
-        *,
-        posts!post_attachments_post_id_fkey(author_id, category)
-      `
-      )
-      .eq('id', attachmentId)
-      .eq('post_id', postId)
-      .single()
+    // 첨부파일과 게시글 권한 확인. 단계 2c(Task 5): Supabase
+    // `.select('*, posts!post_attachments_post_id_fkey(author_id, category)')`
+    // 에서 Turso 쿼리 계층 getAttachmentWithPost(attachmentId, postId)로
+    // 옮겼다 — `attachment.posts.author_id` 접근 형태를 그대로 보존한다.
+    const attachment = await getAttachmentWithPost(attachmentId, postId).catch(() => null)
 
-    if (attachmentError || !attachment) {
+    if (!attachment || !attachment.posts) {
       return ApiError.notFound('첨부파일을 찾을 수 없습니다.').toNextResponse()
     }
 
@@ -154,32 +147,29 @@ export async function PUT(
       return ApiError.forbidden('권한이 없습니다.').toNextResponse()
     }
 
-    // 대표 이미지로 설정하는 경우 기존 대표 이미지 해제
+    // 대표 이미지로 설정하는 경우 기존 대표 이미지 해제. 단계 2c(Task 5):
+    // Supabase `.eq('post_id', postId).eq('is_primary', true).neq('id',
+    // attachmentId)`에서 Turso 쿼리 계층
+    // unsetPrimaryForPost(postId, attachmentId)로 옮겼다(자기 자신은 제외).
     if (is_primary && attachment.file_type === 'image') {
-      await supabase
-        .from('post_attachments')
-        .update({ is_primary: false })
-        .eq('post_id', postId)
-        .eq('is_primary', true)
-        .neq('id', attachmentId)
+      await unsetPrimaryForPost(postId, attachmentId)
     }
 
-    // 첨부파일 정보 업데이트
-    const updateData: any = {}
-    if (alt_text !== undefined) updateData.alt_text = alt_text
+    // 첨부파일 정보 업데이트. 단계 2c(Task 5): Supabase
+    // `.update(updateData).eq('id', attachmentId).eq('post_id', postId)`에서
+    // Turso 쿼리 계층 updateAttachment(attachmentId, postId, patch)로 옮겼다.
+    const patch: { alt_text?: string | null; is_primary?: boolean; sort_order?: number } = {}
+    // 위에서 이미 런타임으로 형식을 검증했다(문자열 길이/boolean/정수 범위) —
+    // 여기서는 그 검증을 통과한 값만 patch로 옮기므로 as로 좁힌다.
+    if (alt_text !== undefined) patch.alt_text = alt_text as string | null
     if (is_primary !== undefined)
-      updateData.is_primary = is_primary && attachment.file_type === 'image'
-    if (sort_order !== undefined) updateData.sort_order = sort_order
+      patch.is_primary = Boolean(is_primary) && attachment.file_type === 'image'
+    if (sort_order !== undefined) patch.sort_order = sort_order as number
 
-    const { data: updatedAttachment, error: updateError } = await supabase
-      .from('post_attachments')
-      .update(updateData)
-      .eq('id', attachmentId)
-      .eq('post_id', postId)
-      .select()
-      .single()
-
-    if (updateError) {
+    let updatedAttachment
+    try {
+      updatedAttachment = await updateAttachment(attachmentId, postId, patch)
+    } catch (updateError) {
       console.error('첨부파일 수정 오류:', updateError)
       return ApiError.internalServerError('첨부파일 수정에 실패했습니다.').toNextResponse()
     }
@@ -214,8 +204,6 @@ export async function DELETE(
 ) {
   const resolvedParams = await context.params
   try {
-    const supabase = await createSupabaseServer()
-
     // 첨부파일 삭제는 로그인만 확인한다(승인 여부는 보지 않음). 작성자
     // 또는 관리자 권한 확인은 아래에서 별도로 한다.
     const auth = await requireUser()
@@ -226,29 +214,21 @@ export async function DELETE(
     if (!routeParams.ok) return routeParams.response
     const { postId, attachmentId } = routeParams
 
-    // 첨부파일과 게시글 권한 확인
-    const { data: attachment, error: attachmentError } = await supabase
-      .from('post_attachments')
-      .select(
-        `
-        *,
-        posts!post_attachments_post_id_fkey(author_id, category)
-      `
-      )
-      .eq('id', attachmentId)
-      .eq('post_id', postId)
-      .single()
+    // 첨부파일과 게시글 권한 확인. 단계 2c(Task 5): Supabase
+    // `.select('*, posts!post_attachments_post_id_fkey(author_id, category)')`
+    // 에서 Turso 쿼리 계층 getAttachmentWithPost(attachmentId, postId)로
+    // 옮겼다.
+    const attachment = await getAttachmentWithPost(attachmentId, postId).catch(() => null)
 
-    if (attachmentError || !attachment) {
+    if (!attachment || !attachment.posts) {
       return ApiError.notFound('첨부파일을 찾을 수 없습니다.').toNextResponse()
     }
 
-    // 사용자 권한 확인 (작성자 또는 관리자)
-    const { data: profile } = await supabase
-      .from('member_profiles')
-      .select('is_admin, registration_status, is_active')
-      .eq('id', user.id)
-      .single()
+    // 사용자 권한 확인 (작성자 또는 관리자). 단계 2c(Task 5): member_profiles
+    // 조회를 Supabase `.eq('id', user.id)`에서 Turso 쿼리 계층
+    // getProfileById(user.id)로 옮겼다 — 조건식(is_admin &&
+    // registration_status==='approved' && is_active)은 문자 그대로 보존.
+    const profile = await getProfileById(user.id).catch(() => null)
 
     const isAuthor = attachment.posts.author_id === user.id
     const isAdmin =
@@ -277,14 +257,12 @@ export async function DELETE(
       // Storage 오류여도 DB 삭제는 계속 진행
     }
 
-    // 데이터베이스에서 첨부파일 레코드 삭제
-    const { error: deleteError } = await supabase
-      .from('post_attachments')
-      .delete()
-      .eq('id', attachmentId)
-      .eq('post_id', postId)
-
-    if (deleteError) {
+    // 데이터베이스에서 첨부파일 레코드 삭제. 단계 2c(Task 5): Supabase
+    // `.delete().eq('id', attachmentId).eq('post_id', postId)`에서 Turso
+    // 쿼리 계층 removeAttachment(attachmentId, postId)로 옮겼다.
+    try {
+      await removeAttachment(attachmentId, postId)
+    } catch (deleteError) {
       console.error('첨부파일 DB 삭제 오류:', deleteError)
       return ApiError.internalServerError('첨부파일 삭제에 실패했습니다.').toNextResponse()
     }

@@ -16,6 +16,12 @@ export type NotificationType =
   | 'system_notice' // 시스템 공지 알림
   | 'maintenance' // 점검 알림
   | 'welcome' // 환영 메시지
+  | 'board_notice' // 이사회 알림(boardRoomNotify.ts) — DB 스키마
+// (`src/db/schema/content.ts`의 `NOTIFICATION_TYPE`)에는 이미 있었지만 이
+// 유니온에서 빠져 있었다(단계 2c Task 7에서 발견 — Turso 쿼리 계층이
+// 이 타입을 구조적으로 검사하면서 드러남). 관리자 알림 생성 API의 허용
+// 목록(`src/utils/notificationTypes.ts`의 `NOTIFICATION_TYPES`)에는 넣지
+// 않는다 — board_notice는 이사회 기능 코드가 내부적으로만 만든다.
 
 /**
  * 알림 인터페이스

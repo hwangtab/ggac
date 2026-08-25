@@ -8,6 +8,7 @@ import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { validateUUID } from '@/utils/validation'
+import { getProfileById, updateProfile } from '@/db/queries/profiles'
 
 function getRouteParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? (value[0] ?? '') : (value ?? '')
@@ -69,16 +70,24 @@ export const POST = defineApiRoute<Record<string, unknown>>({
       return ApiError.badRequest('유효하지 않은 역할입니다.').toNextResponse()
     }
 
-    // 대상 멤버 확인
-    const { data: targetMember, error: memberError } = await db
-      .from('member_profiles')
-      .select('id, display_name, email, artist_id, artist_role')
-      .eq('id', memberId)
-      .eq('registration_status', 'approved')
-      .eq('is_active', true)
-      .single()
+    // 대상 멤버 확인. 프로필 권위는 Turso다 — Supabase `.eq('id',
+    // memberId).eq('registration_status','approved').eq('is_active',
+    // true).single()` 대신 getProfileById로 조회한 뒤 같은 세 조건을
+    // 코드에서 검사한다(하나라도 어긋나면 이전과 동일하게 "멤버를 찾을 수
+    // 없습니다" 404 — 조건별 메시지를 나누지 않는다).
+    let targetMember: Awaited<ReturnType<typeof getProfileById>>
+    try {
+      targetMember = await getProfileById(memberId)
+    } catch (error) {
+      console.error('Member fetch error:', error)
+      return ApiError.notFound('멤버를 찾을 수 없습니다.').toNextResponse()
+    }
 
-    if (memberError || !targetMember) {
+    if (
+      !targetMember ||
+      targetMember.registration_status !== 'approved' ||
+      !targetMember.is_active
+    ) {
       return ApiError.notFound('멤버를 찾을 수 없습니다.').toNextResponse()
     }
 
@@ -87,23 +96,21 @@ export const POST = defineApiRoute<Record<string, unknown>>({
       return ApiError.badRequest('이미 다른 아티스트에 배정된 멤버입니다.').toNextResponse()
     }
 
-    // 아티스트 배정 업데이트
-    const { data: updatedMember, error: updateError } = await db
-      .from('member_profiles')
-      .update({
+    // 아티스트 배정 업데이트. artist_role은 위에서 허용 목록(owner/manager/
+    // collaborator)으로 이미 검증된 값이 항상 들어가므로 Turso의 NOT NULL
+    // 제약과 충돌하지 않는다(해제 라우트와 달리 null을 쓰지 않는다).
+    try {
+      await updateProfile(memberId, {
         artist_id: artistId,
-        artist_role: role,
+        artist_role: role as 'owner' | 'manager' | 'collaborator',
         is_artist: true,
-        updated_at: new Date().toISOString(),
       })
-      .eq('id', memberId)
-      .select()
-      .single()
-
-    if (updateError) {
-      console.error('Member update error:', updateError)
+    } catch (error) {
+      console.error('Member update error:', error)
       return ApiError.internalServerError('아티스트 배정에 실패했습니다.').toNextResponse()
     }
+
+    const updatedMember = await getProfileById(memberId)
 
     return ApiSuccess.ok(
       { member: updatedMember },

@@ -1,11 +1,11 @@
 import { notFound } from 'next/navigation'
 import { Link, redirect } from '@/i18n/navigation'
-import { createSupabaseServer } from '@/lib/supabase/server'
 import { readSessionUser } from '@/lib/server/session'
-import type { MemberProfile, Post as PostType } from '@/types'
 import type { Locale } from '@/i18n/routing'
 import EditPageClient from './EditPageClient'
 import { validateUUID } from '@/utils/validation'
+import { getProfileById } from '@/db/queries/profiles'
+import { getPostById } from '@/db/queries/posts'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -21,7 +21,6 @@ export default async function PostEditPage({ params }: PageProps) {
     notFound()
   }
   const postId = postIdValidation.sanitized
-  const supabase = await createSupabaseServer()
 
   const user = await readSessionUser()
 
@@ -35,15 +34,12 @@ export default async function PostEditPage({ params }: PageProps) {
     })
   }
 
-  const { data: profile } = await supabase
-    .from('member_profiles')
-    .select('registration_status, is_active')
-    .eq('id', user.id)
-    .single()
-
-  const typedProfile = profile as Pick<MemberProfile, 'registration_status' | 'is_active'> | null
-  const isMember =
-    typedProfile?.registration_status === 'approved' && typedProfile?.is_active === true
+  // 단계 2c(Task 5): member_profiles 조회를 Supabase
+  // `.eq('id', user.id)`에서 Turso 쿼리 계층 getProfileById(user.id)로
+  // 옮겼다 — 조건식(registration_status==='approved' && is_active)은
+  // 문자 그대로 보존.
+  const profile = await getProfileById(user.id).catch(() => null)
+  const isMember = profile?.registration_status === 'approved' && profile?.is_active === true
 
   if (!isMember) {
     return (
@@ -66,20 +62,24 @@ export default async function PostEditPage({ params }: PageProps) {
     )
   }
 
-  const { data: postData, error: postError } = await supabase
-    .from('posts')
-    .select('id, title, content, content_format, category, author_id')
-    .eq('id', postId)
-    .single()
+  // 단계 2c(Task 5): posts 조회를 Supabase `.eq('id', postId)`(is_deleted
+  // 필터 없음)에서 Turso 쿼리 계층 getPostById(postId, { includeDeleted:
+  // true })로 옮겼다 — 삭제된 글에도 필터를 걸지 않던 기존 동작을 그대로
+  // 재현한다(권한 판정은 아래 author_id 비교로 여전히 동일하게 막는다).
+  const fullPost = await getPostById(postId, { includeDeleted: true }).catch(() => null)
 
-  if (postError || !postData) {
+  if (!fullPost) {
     notFound()
   }
 
-  const post = postData as unknown as Pick<
-    PostType,
-    'id' | 'title' | 'content' | 'content_format' | 'category' | 'author_id'
-  >
+  const post = {
+    id: fullPost.id,
+    title: fullPost.title,
+    content: fullPost.content,
+    content_format: fullPost.content_format,
+    category: fullPost.category,
+    author_id: fullPost.author_id,
+  }
 
   if (post.author_id !== user.id) {
     return (

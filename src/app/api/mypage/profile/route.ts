@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServer } from '@/lib/supabase/server'
 import { ApiError, ApiSuccess, apiGet, apiPatch } from '@/utils/apiWrapper'
 import { rateLimit } from '@/lib/server/rateLimit'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { requireActiveMember } from '@/lib/server/memberAuth'
+import { getProfileById, updateProfile, type ProfilePatch } from '@/db/queries/profiles'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -56,7 +56,7 @@ function assertValidProfileBody(body: Record<string, unknown>) {
     throw ApiError.badRequest('은행명이 있으면 계좌번호도 입력해주세요.')
   }
 
-  const updateData = {
+  const updateData: ProfilePatch = {
     display_name: displayName,
     phone_number: phoneNumber,
     birth_date: birthDate,
@@ -64,7 +64,6 @@ function assertValidProfileBody(body: Record<string, unknown>) {
     bank_name: bankName,
     account_number: accountNumber,
     account_holder: accountHolder,
-    updated_at: new Date().toISOString(),
   }
 
   return updateData
@@ -76,14 +75,14 @@ export async function GET() {
   const { user } = auth
 
   return apiGet(async () => {
-    const supabase = await createSupabaseServer()
-    const { data: profile, error } = await supabase
-      .from('member_profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single()
+    let profile: Awaited<ReturnType<typeof getProfileById>>
+    try {
+      profile = await getProfileById(user.id)
+    } catch {
+      profile = null
+    }
 
-    if (error || !profile) {
+    if (!profile) {
       throw ApiError.internalServerError('프로필 정보를 조회할 수 없습니다.')
     }
 
@@ -103,7 +102,6 @@ export async function PATCH(request: NextRequest) {
   const { user } = auth
 
   return apiPatch(async () => {
-    const supabase = await createSupabaseServer()
     const body = await parseJsonObjectBody(request)
 
     if (!body) {
@@ -111,14 +109,15 @@ export async function PATCH(request: NextRequest) {
     }
 
     const updateData = assertValidProfileBody(body)
-    const { data: profile, error } = await supabase
-      .from('member_profiles')
-      .update(updateData as never)
-      .eq('id', user.id)
-      .select('*')
-      .single()
+    let profile: Awaited<ReturnType<typeof getProfileById>>
+    try {
+      await updateProfile(user.id, updateData)
+      profile = await getProfileById(user.id)
+    } catch {
+      profile = null
+    }
 
-    if (error || !profile) {
+    if (!profile) {
       throw ApiError.badRequest('프로필 업데이트에 실패했습니다.')
     }
 

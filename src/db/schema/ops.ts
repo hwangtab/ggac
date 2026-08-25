@@ -1,7 +1,7 @@
 import { integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
-import { createdAt, updatedAt, uuidPk } from './_shared'
-import { memberProfiles } from './identity'
+import { createdAt, updatedAt, uuidPk } from './_shared.ts'
+import { memberProfiles } from './identity.ts'
 
 export const SETTING_CATEGORY = [
   'notification',

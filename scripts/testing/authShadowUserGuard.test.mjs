@@ -1,7 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-const { isBenignShadowUserRetryError } = await import('../../src/lib/auth/shadowUserGuard.ts')
+const { isBenignShadowUserRetryError, isBenignShadowProfileRetryError } = await import(
+  '../../src/lib/auth/shadowUserGuard.ts'
+)
 
 test('GoTrue email_exists(422, 동일 id·email 재시도)는 무해하다', () => {
   // 실측(로컬 GoTrue v2.188.1): 완전 동일한 id·email로 admin.createUser를
@@ -53,4 +55,51 @@ test('null은 무해하지 않다', () => {
 
 test('undefined는 무해하지 않다', () => {
   assert.equal(isBenignShadowUserRetryError(undefined), false)
+})
+
+// ---------------------------------------------------------------- isBenignShadowProfileRetryError (9pre 수정 2)
+
+test('PostgREST 23505(member_profiles 재시도)는 무해하다', () => {
+  // 실측(로컬 Supabase 스택, 같은 id+email로 admin.from('member_profiles')
+  // .insert(...)를 두 번 호출): 두 번째 호출이 이 모양의 에러를 준다.
+  const error = {
+    code: '23505',
+    message: 'duplicate key value violates unique constraint "member_profiles_email_key"',
+    details: 'Key (email)=(probe@test.local) already exists.',
+    hint: null,
+  }
+  assert.equal(isBenignShadowProfileRetryError(error), true)
+})
+
+// 부정 대조: isBenignShadowUserRetryError가 같은 23505 에러를 무해하지 않다고
+// 판정한다는 사실(위 33번째 줄 테스트)과 대조된다 — 두 함수는 서로 다른
+// 원본(GoTrue Admin API vs PostgREST)의 에러 모양을 판정하므로, 같은 코드
+// 문자열이라도 "무해함"의 기준이 다르다는 것을 여기서 명시적으로 고정한다.
+test('같은 23505라도 isBenignShadowUserRetryError는 무해로 보지 않는다(서로 다른 판정 기준 고정)', () => {
+  const error = { code: '23505', message: 'duplicate key value violates unique constraint' }
+  assert.equal(isBenignShadowProfileRetryError(error), true)
+  assert.equal(isBenignShadowUserRetryError(error), false)
+})
+
+test('code가 email_exists면(member_profiles 판정 기준으로는) 무해하지 않다', () => {
+  const error = { code: 'email_exists', message: 'already registered' }
+  assert.equal(isBenignShadowProfileRetryError(error), false)
+})
+
+test('NOT NULL 위반(23502) 등 다른 SQLSTATE는 무해하지 않다', () => {
+  const error = {
+    code: '23502',
+    message: 'null value in column "display_name" violates not-null constraint',
+  }
+  assert.equal(isBenignShadowProfileRetryError(error), false)
+})
+
+test('code가 아예 없는 에러는 무해하지 않다 (member_profiles)', () => {
+  const error = { message: '알 수 없는 원인으로 실패했습니다.' }
+  assert.equal(isBenignShadowProfileRetryError(error), false)
+})
+
+test('null/undefined는 무해하지 않다 (member_profiles)', () => {
+  assert.equal(isBenignShadowProfileRetryError(null), false)
+  assert.equal(isBenignShadowProfileRetryError(undefined), false)
 })

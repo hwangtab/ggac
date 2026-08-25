@@ -4,6 +4,7 @@ import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { ApiSuccess } from '@/utils/apiWrapper'
 import type { MemberStatistics } from '@/types'
+import { listProfiles, ALL_PROFILES_LIMIT } from '@/db/queries/profiles'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -19,26 +20,16 @@ export const GET = defineApiRoute({
   auth: 'admin',
   errorResponse: () =>
     NextResponse.json({ error: '멤버 통계를 조회하는 중 오류가 발생했습니다.' }, { status: 500 }),
-  handler: async ({ auth }) => {
-    const { db } = auth
-
-    // 전체 회원 데이터 조회 (복합 상태 계산용)
-    const { data: allMembers, error: membersError } = await db.from('member_profiles').select(`
-        id,
-        registration_status,
-        is_active,
-        is_admin,
-        is_artist,
-        is_director,
-        is_suspended,
-        membership_type,
-        profile_completeness_score,
-        engagement_score,
-        created_at
-      `)
-
-    if (membersError) {
-      console.error('Members stats fetch error:', membersError)
+  handler: async () => {
+    // 전체 회원 데이터 조회 (복합 상태 계산용). 통계는 응답에 원본 행을
+    // 내보내지 않고 집계값만 돌려주므로 ProfileRow 33개 컬럼을 그대로
+    // 받아도 스키마 보존에 영향이 없다 — status 필터 없이 listProfiles로
+    // 전체를 한 번에 받는다(회원 23명, getDirectorRoster와 같은 패턴).
+    let allMembers: Awaited<ReturnType<typeof listProfiles>>['rows']
+    try {
+      ;({ rows: allMembers } = await listProfiles({ limit: ALL_PROFILES_LIMIT, offset: 0 }))
+    } catch (error) {
+      console.error('Members stats fetch error:', error)
       return NextResponse.json(
         { error: '회원 통계를 조회하는 중 오류가 발생했습니다.' },
         { status: 500 }

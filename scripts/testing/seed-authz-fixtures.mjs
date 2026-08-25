@@ -1,15 +1,43 @@
 /**
- * 권한 경계 E2E용 픽스처를 로컬 스택에 심는다 — Supabase(member_profiles·
- * posts·comments·notifications·post_likes)와 Turso(Better Auth의 user·
- * account) 양쪽 모두.
+ * 권한 경계 E2E용 픽스처를 로컬 스택에 심는다.
  *
  *   E2E_SUPABASE_URL=http://127.0.0.1:54321 \
  *   E2E_SUPABASE_SERVICE_ROLE_KEY=<로컬 service_role> \
  *   TURSO_DATABASE_URL=<로컬 파일 DB, 예: file:/tmp/ggac-2b6-local.db> \
  *   node --experimental-strip-types scripts/testing/seed-authz-fixtures.mjs
  *
+ * **단계 2c(Task 3~7)에서 member_profiles·posts·comments·notifications·
+ * post_likes가 전부 Turso 권위로 넘어갔다.** 이 스크립트는 원래 이
+ * 다섯 테이블을 전부 Supabase에만 심었다 — API가 Turso를 읽도록
+ * 바뀐 뒤에도 이 스크립트는 고쳐지지 않아, 앱이 실제로 보는 데이터와
+ * 픽스처가 심는 데이터가 서로 다른 저장소에 있는 상태가 됐다(권한
+ * 경계 e2e 30건 중 다수가 이 어긋남으로 깨지거나 거짓 통과했다 —
+ * `authz-remaining.spec.ts`의 "남의 알림 PATCH → 404" 단정이 실제로는
+ * "행 자체가 존재하지 않아서" 404가 나는 거짓 양성이 된 것이 대표
+ * 사례다). 지금은 다음처럼 나뉜다:
+ *
+ *   - **Turso 전용**: comments·notifications·post_likes — API가 Turso만
+ *     읽고, 이 테이블들을 참조하는 다른 Supabase 권위 테이블도 없다(FK
+ *     로 걸린 게 comment_likes/post_attachments의 부모 방향뿐인데, 그
+ *     둘 다 Task 6에서 이미 Turso로 전환됐거나 아예 이 스펙이 안 건드린다
+ *     — `grep -rln "REFERENCES.*comments(id)\|REFERENCES.*notifications(id)\|
+ *     REFERENCES.*post_likes(id)" supabase/migrations/*.sql`로 확인, 부모
+ *     방향 FK만 있고 외부 참조 없음).
+ *   - **양쪽 다**: member_profiles·posts — Turso가 권위(API가 여기를
+ *     읽는다)지만, **Supabase에도 그대로 남겨야 한다.** 이유:
+ *     `post_attachments`(Task 8 대상, 아직 Supabase 권위)가
+ *     `posts(id)`를 FK로 참조하고, `posts.author_id`는 다시
+ *     `member_profiles(id)`를 FK로 참조한다(둘 다
+ *     `supabase/migrations/20250106090010_init_member_profiles.sql` 확인).
+ *     `authz-remaining.spec.ts`가 실제로 픽스처 글에 첨부파일을 업로드하는
+ *     테스트를 갖고 있어(정책 36), 이 FK 사슬이 살아있는 한 Supabase 쪽
+ *     posts/member_profiles를 지우면 그 테스트가 FK 위반으로 깨진다.
+ *     Task 8이 post_attachments를 Turso로 옮기면 이 이중 시딩도 함께
+ *     걷어내야 한다.
+ *
  * `--experimental-strip-types`가 필요하다 — 이 스크립트가 `@/db/client`·
- * `@/db/schema/auth`·`@/lib/auth/password`(전부 `.ts`)를 동적 import한다.
+ * `@/db/schema/auth`·`@/db/schema/content`·`@/db/queries/profiles`·
+ * `@/lib/auth/password`(전부 `.ts`)를 동적 import한다.
  *
  * 단계 2b-6(Task 4) 수정 라운드 1: 로그인이 Supabase Auth에서 Better
  * Auth(Turso)로 넘어간 뒤 이 스크립트가 만든 계정이 로그인에 쓸 수 없게
@@ -20,7 +48,8 @@
  * 존재하지 않는) 프로필을 찾는다.
  *
  * 멱등이다 — 다시 실행해도 계정과 데이터가 늘지 않는다. 실패한 실행을
- * 그대로 다시 돌려 복구할 수 있어야 하기 때문이다.
+ * 그대로 다시 돌려 복구할 수 있어야 하기 때문이다. Turso 쪽도
+ * `onConflictDoUpdate`/`onConflictDoNothing`으로 같은 성질을 유지한다.
  *
  * 안전장치: 비로컬 호스트/DB면 거부한다. 이 스크립트는 계정을 만들고
  * 글을 쓰므로 운영에 실행되면 실제 데이터가 오염된다. Supabase는 호스트가
@@ -28,14 +57,14 @@
  * `libsql://`로 시작하면(=운영) 즉시 거부한다 — 운영 확인용 스크립트가
  * "운영이 아니면 거부"하는 것과 반대 방향의 같은 원칙이다.
  *
- * 스키마 편차 (운영 덤프 실물과 대조해 확인함):
- *   - notifications.type은 notification_type enum이고 'comment'는 그 안에
- *     없다(post_new/post_reply/post_mention/member_approved/...). 댓글
- *     알림에 가장 가까운 값은 'post_reply'라 그것을 쓴다.
- *   - notifications에는 is_read 컬럼이 없고 read_at(timestamptz, null 허용)
- *     이 있다. 미읽음 상태는 값을 아예 안 넣는 것(NULL)으로 표현한다.
+ * 스키마 편차 (운영 덤프 실물과 대조해 확인함, Supabase 쪽에 그대로
+ * 적용됨 — posts는 여전히 양쪽에 쓰므로 유효):
  *   - posts.category는 CHECK (category IN ('공지','잡담','홍보','건의'))이고
  *     '자유'는 그 안에 없다. 자유게시판에 가장 가까운 값인 '잡담'을 쓴다.
+ *   - (참고, 더는 Supabase에 쓰지 않지만 기록으로 남긴다) notifications.type은
+ *     notification_type enum이고 'comment'는 그 안에 없었다 — 댓글 알림에
+ *     가장 가까운 값 'post_reply'를 썼다. Turso 쪽도 같은 이유로 'post_reply'를
+ *     그대로 쓴다(스키마 enum 자체가 이 값들을 그대로 승계했다).
  */
 
 import { writeFileSync } from 'node:fs'
@@ -79,6 +108,13 @@ register('data:text/javascript,' + encodeURIComponent(resolveHookSource), import
 const { hashPassword } = await import('@/lib/auth/password')
 const { db } = await import('@/db/client')
 const { user: tursoUser, account: tursoAccount } = await import('@/db/schema/auth')
+const {
+  posts: tursoPosts,
+  comments: tursoComments,
+  notifications: tursoNotifications,
+  postLikes: tursoPostLikes,
+} = await import('@/db/schema/content')
+const { upsertProfile } = await import('@/db/queries/profiles')
 
 export const ACCOUNTS = [
   {
@@ -216,6 +252,9 @@ async function main() {
     await upsertTursoAuth(ids[account.key], account)
   }
 
+  // member_profiles: Turso가 권위지만, posts를 통해 걸리는 Supabase FK
+  // 사슬(post_attachments → posts → member_profiles, 파일 상단 주석 참고)
+  // 때문에 Supabase에도 그대로 남긴다.
   await upsert(
     url,
     key,
@@ -228,12 +267,22 @@ async function main() {
     })),
     'id'
   )
+  for (const account of ACCOUNTS) {
+    await upsertProfile({
+      id: ids[account.key],
+      email: account.email,
+      display_name: `authz-${account.key}`,
+      ...account.profile,
+    })
+  }
 
   // 고정 UUID를 쓴다 — 매번 새로 만들면 멱등이 깨지고, 실패한 실행이 쓰레기를 남긴다.
   const POST_ID = '00000000-0000-4000-8000-00000000a001'
   const COMMENT_ID = '00000000-0000-4000-8000-00000000a002'
   const NOTIFICATION_ID = '00000000-0000-4000-8000-00000000a003'
 
+  // posts: Turso가 권위지만, post_attachments(Task 8 대상, 아직 Supabase
+  // 권위)의 FK 앵커로 Supabase에도 그대로 남긴다(파일 상단 주석 참고).
   await upsert(
     url,
     key,
@@ -251,45 +300,57 @@ async function main() {
     ],
     'id'
   )
+  const postValues = {
+    id: POST_ID,
+    title: 'authz 픽스처 글',
+    content: '<p>소유권 경계 테스트용</p>',
+    contentFormat: 'html',
+    category: '잡담',
+    authorId: ids.owner,
+    isPinned: false,
+  }
+  await db
+    .insert(tursoPosts)
+    .values(postValues)
+    .onConflictDoUpdate({ target: tursoPosts.id, set: postValues })
 
-  await upsert(
-    url,
-    key,
-    'comments',
-    [
-      {
-        id: COMMENT_ID,
-        post_id: POST_ID,
-        author_id: ids.owner,
-        content: 'authz 픽스처 댓글',
-      },
-    ],
-    'id'
-  )
+  // comments: Turso 전용(Task 6부터 권위) — Supabase에는 더 이상 쓰지
+  // 않는다(파일 상단 주석 참고, 외부 FK 의존 없음을 확인함).
+  const commentValues = {
+    id: COMMENT_ID,
+    postId: POST_ID,
+    authorId: ids.owner,
+    content: 'authz 픽스처 댓글',
+  }
+  await db
+    .insert(tursoComments)
+    .values(commentValues)
+    .onConflictDoUpdate({ target: tursoComments.id, set: commentValues })
 
-  await upsert(
-    url,
-    key,
-    'notifications',
-    [
-      {
-        id: NOTIFICATION_ID,
-        user_id: ids.owner,
-        type: 'post_reply',
-        title: 'authz 픽스처 알림',
-        message: '소유권 경계 테스트용',
-      },
-    ],
-    'id'
-  )
+  // notifications: Turso 전용(Task 7부터 권위) — Supabase에는 더 이상
+  // 쓰지 않는다. readAt을 매 시드마다 null로 되돌린다 — e2e 스펙 안의
+  // resetNotificationUnread()가 테스트 사이 상태를 되돌리는 것과 별개로,
+  // 시드 자체도 항상 "안 읽음"에서 시작해야 최초 실행이 결정적이다.
+  const notificationValues = {
+    id: NOTIFICATION_ID,
+    userId: ids.owner,
+    type: 'post_reply',
+    title: 'authz 픽스처 알림',
+    message: '소유권 경계 테스트용',
+    readAt: null,
+  }
+  await db
+    .insert(tursoNotifications)
+    .values(notificationValues)
+    .onConflictDoUpdate({ target: tursoNotifications.id, set: notificationValues })
 
-  await upsert(
-    url,
-    key,
-    'post_likes',
-    [{ post_id: POST_ID, user_id: ids.owner }],
-    'post_id,user_id'
-  )
+  // post_likes: Turso 전용(Task 6부터 권위) — Supabase에는 더 이상 쓰지
+  // 않는다. id가 아니라 (postId, userId) 복합 유니크가 충돌 대상이라
+  // onConflictDoNothing만으로 충분하다(갱신할 다른 컬럼이 없다).
+  await db
+    .insert(tursoPostLikes)
+    .values({ postId: POST_ID, userId: ids.owner })
+    .onConflictDoNothing({ target: [tursoPostLikes.postId, tursoPostLikes.userId] })
 
   const fixtures = {
     users: ids,
@@ -299,7 +360,9 @@ async function main() {
   }
   writeFileSync(OUT_FILE, JSON.stringify(fixtures, null, 2) + '\n')
   console.log(`픽스처 시드 완료 → ${OUT_FILE}`)
-  console.log(`  계정 ${Object.keys(ids).length}개(Supabase+Turso), 글 1, 댓글 1, 알림 1, 좋아요 1`)
+  console.log(
+    `  계정 ${Object.keys(ids).length}개(Supabase+Turso), 글 1(양쪽), 댓글 1(Turso), 알림 1(Turso), 좋아요 1(Turso)`
+  )
 }
 
 await main()

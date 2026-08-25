@@ -1,8 +1,15 @@
 import { test, expect, request as apiRequest } from '@playwright/test'
+import { createClient } from '@libsql/client'
 
-import { assertLocalSupabase, readFixtures, storageStatePath } from './helpers/authState'
+import {
+  assertLocalSupabase,
+  assertLocalTurso,
+  readFixtures,
+  storageStatePath,
+} from './helpers/authState'
 
 assertLocalSupabase()
+assertLocalTurso()
 const fixtures = readFixtures()
 
 /**
@@ -51,16 +58,27 @@ async function ensureAttachmentsBucket(): Promise<void> {
   }
 }
 
-/** notifications.read_at을 NULL로 되돌린다. PATCH 재요청 시 .is('read_at', null) 매치 조건을 재현 가능하게 만든다. */
+/**
+ * notifications.read_at을 NULL로 되돌린다. PATCH 재요청 시 앱이 쓰는
+ * `markNotificationRead`(`src/db/queries/notifications.ts`)의
+ * `isNull(notifications.readAt)` 매치 조건을 재현 가능하게 만든다.
+ *
+ * 단계 2c(Task 7)부터 notifications는 Turso 권위다 — `/api/notifications/[id]`
+ * PATCH가 더 이상 Supabase를 전혀 읽지 않으므로, 이 리셋도 Supabase가 아니라
+ * Turso를 직접 UPDATE해야 실제로 다음 PATCH 요청에 영향을 준다(Supabase
+ * notifications를 계속 PATCH하면 조용한 no-op이 되어 "이미 읽음" 상태가
+ * 절대 안 풀리고, 그 결과 "남의 알림 PATCH → 404" 단정이 user_id 검사가
+ * 아니라 read_at 상태 우연으로 항상 통과하는 거짓 양성이 된다).
+ */
 async function resetNotificationUnread(notificationId: string): Promise<void> {
-  const url = process.env.E2E_SUPABASE_URL
-  const res = await fetch(`${url}/rest/v1/notifications?id=eq.${notificationId}`, {
-    method: 'PATCH',
-    headers: restHeaders(),
-    body: JSON.stringify({ read_at: null }),
-  })
-  if (!res.ok) {
-    throw new Error(`알림 read_at 리셋 실패: ${res.status} ${await res.text()}`)
+  const client = createClient({ url: process.env.TURSO_DATABASE_URL! })
+  try {
+    await client.execute({
+      sql: 'UPDATE notifications SET read_at = NULL WHERE id = ?',
+      args: [notificationId],
+    })
+  } finally {
+    client.close()
   }
 }
 

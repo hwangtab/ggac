@@ -5,6 +5,8 @@ import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { logSecurityEvent } from '@/utils/security'
 import { parseIntegerParam } from '@/utils/queryParams'
+import { listRecentProfilesForActivity } from '@/db/queries/profiles'
+import { listRecentPostsForActivity } from '@/db/queries/posts'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -32,9 +34,7 @@ export const GET = defineApiRoute({
       { status: 500 }
     )
   },
-  handler: async ({ request, auth }) => {
-    const { db } = auth
-
+  handler: async ({ request }) => {
     // 쿼리 파라미터 추출 및 검증
     const { searchParams } = new URL(request.url)
     const page = parseIntegerParam(searchParams.get('page'), 1, { min: 1 })
@@ -47,97 +47,85 @@ export const GET = defineApiRoute({
     }
 
     const offset = (page - 1) * limit
-    const cutoffDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+    const cutoffDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
 
     // 최적화된 단일 쿼리로 활동 데이터 수집
     const activities: any[] = []
 
-    // 최근 회원 가입 활동 (DB 레벨에서 페이지네이션 적용)
-    const { data: memberActivities, error: memberError } = await db
-      .from('member_profiles')
-      .select('id, display_name, created_at, registration_status, approved_at, updated_at')
-      .gte('created_at', cutoffDate)
-      .order('created_at', { ascending: false })
-      .limit(Math.ceil(limit / 2)) // 절반은 회원 활동, 절반은 게시글 활동으로 분배
+    // Task 8: member_profiles/posts 조회를 Supabase에서 Turso 쿼리 계층
+    // (listRecentProfilesForActivity/listRecentPostsForActivity)으로
+    // 옮겼다 — 둘 다 이미 Turso가 권위(단계 3c 이후)이므로 이 라우트에는
+    // 더 이상 교차 DB 조회가 남지 않는다(user_activities 등은 애초에 이
+    // 라우트가 읽지 않았다).
 
-    if (memberError) {
-      console.error('Member activities fetch error:', memberError)
-    } else if (memberActivities) {
-      memberActivities.forEach(member => {
-        // 회원 가입 활동
+    // 최근 회원 가입 활동 (DB 레벨에서 페이지네이션 적용)
+    let memberActivities: Awaited<ReturnType<typeof listRecentProfilesForActivity>> = []
+    try {
+      memberActivities = await listRecentProfilesForActivity(
+        cutoffDate,
+        Math.ceil(limit / 2) // 절반은 회원 활동, 절반은 게시글 활동으로 분배
+      )
+    } catch (error) {
+      console.error('Member activities fetch error:', error)
+    }
+
+    memberActivities.forEach(member => {
+      // 회원 가입 활동
+      activities.push({
+        id: `member_registered_${member.id}`,
+        type: 'member_registered',
+        title: `${member.display_name}님이 가입했습니다`,
+        description: `새로운 회원이 가입하여 ${member.registration_status === 'approved' ? '승인되었습니다' : '승인을 기다리고 있습니다'}.`,
+        timestamp: member.created_at,
+        user: {
+          name: member.display_name,
+        },
+        status: member.registration_status,
+      })
+
+      // 승인 활동이 있는 경우 별도 추가
+      if (member.registration_status === 'approved' && member.approved_at) {
         activities.push({
-          id: `member_registered_${member.id}`,
-          type: 'member_registered',
-          title: `${member.display_name}님이 가입했습니다`,
-          description: `새로운 회원이 가입하여 ${member.registration_status === 'approved' ? '승인되었습니다' : '승인을 기다리고 있습니다'}.`,
-          timestamp: member.created_at,
+          id: `member_approved_${member.id}`,
+          type: 'member_approved',
+          title: `${member.display_name}님이 승인되었습니다`,
+          description: '새로운 조합원이 승인되어 활동을 시작할 수 있습니다.',
+          timestamp: member.approved_at,
           user: {
             name: member.display_name,
           },
-          status: member.registration_status,
         })
-
-        // 승인 활동이 있는 경우 별도 추가
-        if (member.registration_status === 'approved' && member.approved_at) {
-          activities.push({
-            id: `member_approved_${member.id}`,
-            type: 'member_approved',
-            title: `${member.display_name}님이 승인되었습니다`,
-            description: '새로운 조합원이 승인되어 활동을 시작할 수 있습니다.',
-            timestamp: member.approved_at,
-            user: {
-              name: member.display_name,
-            },
-          })
-        }
-      })
-    }
+      }
+    })
 
     // 최근 게시글 활동 (DB 레벨에서 페이지네이션 적용)
-    const { data: postActivities, error: postError } = await db
-      .from('posts')
-      .select(
-        `
-        id, 
-        title, 
-        category, 
-        created_at,
-        is_pinned,
-        author:member_profiles!posts_author_id_fkey (
-          display_name
-        )
-      `
-      )
-      .gte('created_at', cutoffDate)
-      .eq('is_deleted', false)
-      .order('created_at', { ascending: false })
-      .limit(Math.ceil(limit / 2))
-
-    if (postError) {
-      console.error('Post activities fetch error:', postError)
-    } else if (postActivities) {
-      postActivities.forEach(post => {
-        const author = post.author as any
-        activities.push({
-          id: `post_created_${post.id}`,
-          type: 'post_created',
-          title: `새 게시글: "${post.title}"`,
-          description: `${author?.display_name || '알 수 없는 사용자'}님이 ${post.category} 카테고리에 게시글을 작성했습니다.`,
-          timestamp: post.created_at,
-          user: {
-            name: author?.display_name || '알 수 없는 사용자',
-          },
-          category: post.category,
-          is_pinned: post.is_pinned,
-        })
-      })
+    let postActivities: Awaited<ReturnType<typeof listRecentPostsForActivity>> = []
+    try {
+      postActivities = await listRecentPostsForActivity(cutoffDate, Math.ceil(limit / 2))
+    } catch (error) {
+      console.error('Post activities fetch error:', error)
     }
+
+    postActivities.forEach(post => {
+      activities.push({
+        id: `post_created_${post.id}`,
+        type: 'post_created',
+        title: `새 게시글: "${post.title}"`,
+        description: `${post.author?.display_name || '알 수 없는 사용자'}님이 ${post.category} 카테고리에 게시글을 작성했습니다.`,
+        timestamp: post.created_at,
+        user: {
+          name: post.author?.display_name || '알 수 없는 사용자',
+        },
+        category: post.category,
+        is_pinned: post.is_pinned,
+      })
+    })
 
     // 활동들을 시간순으로 정렬하고 페이지네이션 적용
     activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
 
     // 전체 활동 수 계산 (근사치)
-    const totalActivitiesApprox = (memberActivities?.length || 0) + (postActivities?.length || 0)
+    const totalActivitiesApprox = memberActivities.length + postActivities.length
     const paginatedActivities = activities.slice(offset, offset + limit)
 
     // 페이지네이션 정보 계산

@@ -1,9 +1,8 @@
 import { Link, redirect } from '@/i18n/navigation'
-import { createSupabaseServer } from '@/lib/supabase/server'
 import { readSessionUser } from '@/lib/server/session'
+import { getProfileById } from '@/db/queries/profiles'
 import { setRequestLocale, getTranslations } from 'next-intl/server'
 import type { Locale } from '@/i18n/routing'
-import type { MemberProfile } from '@/types'
 import WritePageClient from './WritePageClient'
 
 export const dynamic = 'force-dynamic'
@@ -18,7 +17,6 @@ export default async function WritePage({ params }: WritePageProps) {
   setRequestLocale(locale)
   const t = await getTranslations('board')
 
-  const supabase = await createSupabaseServer()
   const user = await readSessionUser()
 
   if (!user) {
@@ -31,15 +29,15 @@ export default async function WritePage({ params }: WritePageProps) {
     })
   }
 
-  const { data: profile } = await supabase
-    .from('member_profiles')
-    .select('registration_status, is_active')
-    .eq('id', user.id)
-    .single()
-
-  const typedProfile = profile as Pick<MemberProfile, 'registration_status' | 'is_active'> | null
-  const isMember =
-    typedProfile?.registration_status === 'approved' && typedProfile?.is_active === true
+  // 조회 자체가 실패해도(연결 오류 등) 이전 Supabase `.single()` 실패 시와
+  // 동일하게 "회원 아님"으로 취급한다(fail-closed, 500 승격하지 않음).
+  let profile: Awaited<ReturnType<typeof getProfileById>> = null
+  try {
+    profile = await getProfileById(user.id)
+  } catch {
+    profile = null
+  }
+  const isMember = profile?.registration_status === 'approved' && profile?.is_active === true
 
   if (!isMember) {
     return (

@@ -17,7 +17,6 @@ import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
 import { putPublicObject, deletePublicObject } from '@/lib/storage/provider'
 import { revalidateTag } from 'next/cache'
 import type { PostAttachmentStats } from '@/types'
-import { createSupabaseServer } from '@/lib/supabase/server'
 import { validateUUID, validateUUIDOrTempId, isValidTempId } from '@/utils/validation'
 import { generateUniqueFileName } from '@/utils/fileNameSanitizer'
 import {
@@ -26,6 +25,13 @@ import {
   formatValidationErrors,
   hasValidFileSignature,
 } from '@/utils/fileUploadValidation'
+import { getPostById } from '@/db/queries/posts'
+import {
+  addAttachment,
+  listAttachments,
+  getAttachmentUploadStats,
+  unsetPrimaryForPost,
+} from '@/db/queries/attachments'
 
 /**
  * Service Role 클라이언트 생성 (POST 업로드 전용)
@@ -60,28 +66,26 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
     // 공개 읽기 허용: 인증 없이도 첨부파일 목록을 조회할 수 있게 함
     // (쓰기/업로드는 계속 보호됨)
-    const supabase = await createSupabaseServer()
+    //
+    // 게시글 존재 확인. 단계 2c(Task 5): Supabase
+    // `.eq('id', validPostId).eq('is_deleted', false)`에서 Turso 쿼리 계층
+    // getPostById(validPostId, { includeDeleted: false })로 옮겼다. 이
+    // 라우트는 validPostId가 temp-{UUID}일 수도 있는데(위 validateUUIDOrTempId),
+    // 그 경우 posts 테이블에 해당 id 행이 없어 기존 Supabase 조회도 항상
+    // 404였다 — getPostById도 행이 없으면 null이라 같은 결과를 재현한다.
+    const post = await getPostById(validPostId, { includeDeleted: false }).catch(() => null)
 
-    // 게시글 존재 확인
-    const { data: post, error: postError } = await supabase
-      .from('posts')
-      .select('id, author_id')
-      .eq('id', validPostId)
-      .eq('is_deleted', false)
-      .single()
-
-    if (postError || !post) {
+    if (!post) {
       return ApiError.notFound('게시글을 찾을 수 없습니다.').toNextResponse()
     }
 
-    // 첨부파일 목록 조회
-    const { data: attachments, error: attachmentsError } = await supabase
-      .from('post_attachments')
-      .select('*')
-      .eq('post_id', validPostId)
-      .order('sort_order', { ascending: true })
-
-    if (attachmentsError) {
+    // 첨부파일 목록 조회. 단계 2c(Task 5): Supabase
+    // `.eq('post_id', validPostId).order('sort_order', ...)`에서 Turso 쿼리
+    // 계층 listAttachments(validPostId)로 옮겼다(이미 sort_order 오름차순).
+    let attachments
+    try {
+      attachments = await listAttachments(validPostId)
+    } catch (attachmentsError) {
       console.error('첨부파일 조회 오류:', attachmentsError)
       return ApiError.internalServerError('첨부파일을 조회할 수 없습니다.').toNextResponse()
     }
@@ -129,8 +133,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       ).toNextResponse()
     }
 
-    const supabase = await createSupabaseServer()
-
     // 첨부파일 업로드는 로그인만 확인한다(승인 여부는 보지 않음). 작성자
     // 소유권 확인은 아래에서 별도로 한다.
     const auth = await requireUser()
@@ -140,17 +142,16 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const validPostId = uuidValidation.sanitized
     const isTempId = isValidTempId(validPostId)
 
-    // 임시 ID가 아닌 경우에만 게시글 존재 및 권한 확인
+    // 임시 ID가 아닌 경우에만 게시글 존재 및 권한 확인. 단계 2c(Task 5):
+    // Supabase `.eq('id', validPostId)`(is_deleted 필터 없음)에서 Turso 쿼리
+    // 계층 getPostById(validPostId, { includeDeleted: true })로 옮겼다 —
+    // 삭제된 글에도 필터를 걸지 않던 기존 동작을 그대로 재현한다.
     let post = null
     if (!isTempId) {
-      const { data: postData, error: postError } = await supabase
-        .from('posts')
-        .select('id, author_id, category')
-        .eq('id', validPostId)
-        .single()
+      const postData = await getPostById(validPostId, { includeDeleted: true }).catch(() => null)
 
-      if (postError || !postData) {
-        console.error('[UPLOAD API] 게시글 조회 실패:', postError)
+      if (!postData) {
+        console.error('[UPLOAD API] 게시글 조회 실패: 게시글을 찾을 수 없음')
         return ApiError.notFound('게시글을 찾을 수 없습니다.').toNextResponse()
       }
 
@@ -185,21 +186,21 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     // 파일 타입 추출 (검증에서 이미 확인됨)
     const fileType = validation.fileType!
 
-    // 임시 ID가 아닌 경우에만 첨부파일 제한 확인
+    // 임시 ID가 아닌 경우에만 첨부파일 제한 확인. 단계 2c(Task 5): Supabase
+    // `.eq('post_id', validPostId)` 전체 조회 후 JS 합산에서 Turso 쿼리 계층
+    // getAttachmentUploadStats(validPostId)(단일 집계 쿼리, count(*)/sum)로
+    // 옮겼다.
     if (!isTempId) {
-      const { data: existingAttachments, error: existingError } = await supabase
-        .from('post_attachments')
-        .select('file_size')
-        .eq('post_id', validPostId)
-
-      if (existingError) {
+      let currentCount = 0
+      let currentTotalSize = 0
+      try {
+        const stats = await getAttachmentUploadStats(validPostId)
+        currentCount = stats.count
+        currentTotalSize = stats.total_size
+      } catch (existingError) {
         console.error('기존 첨부파일 조회 오류:', existingError)
         return ApiError.internalServerError('첨부파일 제한 확인에 실패했습니다.').toNextResponse()
       }
-
-      const currentCount = existingAttachments?.length || 0
-      const currentTotalSize =
-        existingAttachments?.reduce((sum, att) => sum + att.file_size, 0) || 0
 
       // 검증 설정에서 제한값 가져오기
       const config = FILE_VALIDATION_PROFILES.POST_ATTACHMENTS
@@ -269,44 +270,35 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     // 임시 파일이 아닌 경우에만 데이터베이스 저장
     if (!isTempId) {
-      // 대표 이미지로 설정하는 경우 기존 대표 이미지 해제
+      // 대표 이미지로 설정하는 경우 기존 대표 이미지 해제. 단계 2c(Task 5):
+      // Supabase `.eq('post_id', validPostId).eq('is_primary', true)`에서
+      // Turso 쿼리 계층 unsetPrimaryForPost(validPostId)로 옮겼다.
       if (isPrimary && fileType === 'image') {
-        const { error: primaryError } = await supabase
-          .from('post_attachments')
-          .update({ is_primary: false })
-          .eq('post_id', validPostId)
-          .eq('is_primary', true)
-
-        if (primaryError) {
+        try {
+          await unsetPrimaryForPost(validPostId)
+        } catch (primaryError) {
           console.warn('[UPLOAD API] 기존 대표 이미지 해제 실패:', primaryError)
         }
       }
 
-      // 첨부파일 메타데이터를 데이터베이스에 저장
-      const attachmentData = {
-        post_id: validPostId,
-        file_name: file.name,
-        file_url: fileUrl,
-        file_type: fileType,
-        file_size: file.size,
-        mime_type: file.type,
-        alt_text: altText || null,
-        is_primary: isPrimary && fileType === 'image',
-      }
-
-      const { data: attachment, error: dbError } = await supabase
-        .from('post_attachments')
-        .insert(attachmentData)
-        .select()
-        .single()
-
-      if (dbError) {
-        console.error('[UPLOAD API] 메타데이터 저장 실패:', {
-          error: dbError,
-          message: dbError.message,
-          code: dbError.code,
-          details: dbError.details,
+      // 첨부파일 메타데이터를 데이터베이스에 저장. 단계 2c(Task 5): Supabase
+      // `.insert(attachmentData).select().single()`에서 Turso 쿼리 계층
+      // addAttachment(Turso)로 옮겼다 — sort_order를 명시하지 않아 자동 부여
+      // 경로(트리거 재현)를 그대로 탄다.
+      let attachment
+      try {
+        attachment = await addAttachment({
+          post_id: validPostId,
+          file_name: file.name,
+          file_url: fileUrl,
+          file_type: fileType,
+          file_size: file.size,
+          mime_type: file.type,
+          alt_text: altText || null,
+          is_primary: isPrimary && fileType === 'image',
         })
+      } catch (dbError) {
+        console.error('[UPLOAD API] 메타데이터 저장 실패:', dbError)
 
         // 업로드된 파일 삭제 (롤백) — 방금 이 요청에서 현재 제공자로
         // 올린 파일을 되돌리는 것이므로 단일 제공자 삭제로 충분하다.
@@ -341,27 +333,26 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       const expiresAt = new Date()
       expiresAt.setHours(expiresAt.getHours() + 24)
 
-      const tempAttachmentData = {
-        post_id: validPostId, // 임시 ID
-        file_name: file.name,
-        file_url: fileUrl,
-        file_type: fileType,
-        file_size: file.size,
-        mime_type: file.type,
-        alt_text: altText || null,
-        is_primary: false, // 임시 파일은 대표 이미지가 될 수 없음
-        is_temporary: true,
-        temp_session: user.id, // 사용자 ID를 세션으로 사용
-        expires_at: expiresAt.toISOString(),
-      }
-
-      const { data: tempAttachment, error: tempDbError } = await supabase
-        .from('post_attachments')
-        .insert(tempAttachmentData)
-        .select()
-        .single()
-
-      if (tempDbError) {
+      // 단계 2c(Task 5): Supabase `.insert(tempAttachmentData).select().single()`
+      // 에서 Turso 쿼리 계층 addAttachment(Turso)로 옮겼다. validPostId는
+      // temp-{UUID} 문자열이라 posts FK를 참조하지 않는다(post_attachments의
+      // post_id는 실제 FK 제약이 아니라 서술적 컬럼일 뿐 — 스키마 정의 그대로).
+      let tempAttachment
+      try {
+        tempAttachment = await addAttachment({
+          post_id: validPostId, // 임시 ID
+          file_name: file.name,
+          file_url: fileUrl,
+          file_type: fileType,
+          file_size: file.size,
+          mime_type: file.type,
+          alt_text: altText || null,
+          is_primary: false, // 임시 파일은 대표 이미지가 될 수 없음
+          is_temporary: true,
+          temp_session: user.id, // 사용자 ID를 세션으로 사용
+          expires_at: expiresAt.toISOString(),
+        })
+      } catch (tempDbError) {
         console.error('[UPLOAD API] 임시 첨부파일 저장 실패:', tempDbError)
 
         // 실패 시 업로드된 파일 삭제 — 방금 이 요청에서 현재 제공자로

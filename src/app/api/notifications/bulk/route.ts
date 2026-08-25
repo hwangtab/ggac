@@ -6,7 +6,6 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
-import { createSupabaseServer } from '@/lib/supabase/server'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { validateUUID } from '@/utils/validation'
@@ -14,8 +13,9 @@ import { requireUser } from '@/lib/server/memberAuth'
 import { sanitizeNotificationData } from '@/utils/notificationData'
 import { parseNotificationExpiresAt } from '@/utils/notificationExpiry'
 import { parseNotificationType } from '@/utils/notificationTypes'
-import { markAllNotificationsRead } from '@/lib/server/notificationsWrite'
+import { createBulkNotifications, markAllNotificationsRead } from '@/db/queries/notifications'
 import type { CreateBulkNotificationRequest } from '@/types'
+import { getProfileById } from '@/db/queries/profiles'
 
 function validateBulkUserId(value: unknown): string | null {
   if (typeof value !== 'string') return null
@@ -36,18 +36,19 @@ export async function POST(request: NextRequest) {
       return rateLimitResult.response
     }
 
-    const supabase = await createSupabaseServer()
-
-    // 관리자 권한 확인
+    // 관리자 권한 확인. 조회 자체가 실패해도(연결 오류 등) 이전 Supabase
+    // 쿼리가 error를 검사하지 않고 `!profile`로만 판정하던 것과 동일하게
+    // fail-closed 403으로 수렴시킨다(500으로 승격하지 않음).
     const auth = await requireUser()
     if (auth instanceof NextResponse) return auth
     const { user } = auth
 
-    const { data: profile } = await supabase
-      .from('member_profiles')
-      .select('is_admin, registration_status, is_active')
-      .eq('id', user.id)
-      .single()
+    let profile: Awaited<ReturnType<typeof getProfileById>>
+    try {
+      profile = await getProfileById(user.id)
+    } catch {
+      profile = null
+    }
 
     if (!profile?.is_admin || profile.registration_status !== 'approved' || !profile.is_active) {
       return ApiError.forbidden('관리자 권한이 필요합니다.').toNextResponse()
@@ -103,16 +104,17 @@ export async function POST(request: NextRequest) {
     }
 
     // 대량 알림 생성
-    const { data: createdCount, error } = await supabase.rpc('create_bulk_notification', {
-      p_user_ids: userIds,
-      p_type: notificationType,
-      p_title: notificationTitle,
-      p_message: notificationMessage,
-      p_data: notificationData,
-      p_expires_at: expiresAt,
-    })
-
-    if (error) {
+    let createdCount: number
+    try {
+      createdCount = await createBulkNotifications({
+        user_ids: userIds,
+        type: notificationType,
+        title: notificationTitle,
+        message: notificationMessage,
+        data: notificationData,
+        expires_at: expiresAt,
+      })
+    } catch (error) {
       console.error('대량 알림 생성 오류:', error)
       return ApiError.internalServerError('알림을 생성할 수 없습니다.').toNextResponse()
     }
@@ -144,18 +146,19 @@ export async function PATCH(request: NextRequest) {
     if (auth instanceof NextResponse) return auth
     const { user } = auth
 
-    const supabase = await createSupabaseServer()
-
     // 모든 알림 읽음 처리
     //
     // 원래는 mark_all_notifications_read() RPC였다. 그 함수는
     // `WHERE user_id = auth.uid()` 하나로만 대상을 골랐는데, 서비스롤 클라이언트
     // 전환 이후 auth.uid()가 항상 NULL이라 늘 0건을 갱신하고 성공으로 응답했다
-    // (운영 재현 완료). 세션에서 확인한 user.id를 직접 조건으로 쓴다.
+    // (운영 재현 완료). 단계 2b-5에서 세션의 user.id를 직접 조건으로 쓰는 앱
+    // 계층 UPDATE(`src/lib/server/notificationsWrite.ts`)로 고쳤고, 단계
+    // 2c(Task 7)에서 그 구현을 Turso 쿼리 계층
+    // (`@/db/queries/notifications`의 markAllNotificationsRead)으로 옮겼다 —
+    // user_id 필터와 read_at IS NULL 조건은 그대로 유지된다.
     let updatedCount: number
     try {
-      const { updatedIds } = await markAllNotificationsRead(supabase, user.id)
-      updatedCount = updatedIds.length
+      updatedCount = await markAllNotificationsRead(user.id)
     } catch (error) {
       console.error('모든 알림 읽음 처리 오류:', error)
       return ApiError.internalServerError('알림을 읽음 처리할 수 없습니다.').toNextResponse()

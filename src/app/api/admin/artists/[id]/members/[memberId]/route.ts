@@ -8,6 +8,7 @@ import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { validateUUID } from '@/utils/validation'
+import { getProfileById, updateProfile } from '@/db/queries/profiles'
 
 function getRouteParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? (value[0] ?? '') : (value ?? '')
@@ -30,9 +31,7 @@ export const DELETE = defineApiRoute({
   auth: 'admin',
   errorResponse: () =>
     ApiError.internalServerError('아티스트 배정 해제 중 오류가 발생했습니다.').toNextResponse(),
-  handler: async ({ params, auth }) => {
-    const { db } = auth
-
+  handler: async ({ params }) => {
     const artistId = parseArtistLegacyId(getRouteParam(params.id))
     const memberIdValidation = validateUUID(getRouteParam(params.memberId), '멤버 ID')
 
@@ -46,13 +45,15 @@ export const DELETE = defineApiRoute({
     const memberId = memberIdValidation.sanitized
 
     // 대상 멤버 확인
-    const { data: targetMember, error: memberError } = await db
-      .from('member_profiles')
-      .select('id, display_name, email, artist_id, artist_role')
-      .eq('id', memberId)
-      .single()
+    let targetMember: Awaited<ReturnType<typeof getProfileById>>
+    try {
+      targetMember = await getProfileById(memberId)
+    } catch (error) {
+      console.error('Member fetch error:', error)
+      return ApiError.notFound('멤버를 찾을 수 없습니다.').toNextResponse()
+    }
 
-    if (memberError || !targetMember) {
+    if (!targetMember) {
       return ApiError.notFound('멤버를 찾을 수 없습니다.').toNextResponse()
     }
 
@@ -62,22 +63,25 @@ export const DELETE = defineApiRoute({
     }
 
     // 아티스트 배정 해제
-    const { data: updatedMember, error: updateError } = await db
-      .from('member_profiles')
-      .update({
+    //
+    // `artist_role`은 Postgres 원본에서는 nullable(배정 해제 시 null)이었지만,
+    // Turso 스키마(`src/db/schema/identity.ts`)는 `.notNull().default('owner')`로
+    // 옮겨졌다 — null을 쓰면 제약 위반으로 던진다. is_artist=false·
+    // artist_id=null만으로 "미배정" 상태를 판정하는 모든 소비자
+    // (assignedMembers 필터가 is_artist/artist_id 기준, admin/artists/[id]/members
+    // POST가 재배정 시 항상 새 role을 명시)에 영향이 없으므로 artist_role은
+    // 건드리지 않고 이전 값을 그대로 둔다.
+    try {
+      await updateProfile(memberId, {
         artist_id: null,
-        artist_role: null,
         is_artist: false,
-        updated_at: new Date().toISOString(),
       })
-      .eq('id', memberId)
-      .select()
-      .single()
-
-    if (updateError) {
-      console.error('Member update error:', updateError)
+    } catch (error) {
+      console.error('Member update error:', error)
       return ApiError.internalServerError('아티스트 배정 해제에 실패했습니다.').toNextResponse()
     }
+
+    const updatedMember = await getProfileById(memberId)
 
     return ApiSuccess.ok(
       { member: updatedMember },

@@ -13,6 +13,9 @@ import {
   combineStructuredData,
   structuredDataToScript,
 } from '@/utils/structuredData'
+import { listPosts, getPostById } from '@/db/queries/posts'
+import { listCommentsKeyset } from '@/db/queries/comments'
+import { listAttachments } from '@/db/queries/attachments'
 
 function normalizePostRouteId(id: string): string | null {
   const validation = validateUUID(id, '게시글 ID')
@@ -114,23 +117,18 @@ export const revalidate = 60
 // 취급된다(revalidate 선언이 무효). 최근 게시글은 빌드 시 프리렌더하고 나머지는
 // 첫 요청 시 생성·캐시(on-demand ISR)한다. 실패 시 빈 배열이어도 on-demand ISR은 유효.
 export async function generateStaticParams() {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    return []
-  }
+  // posts는 이제 Turso가 권위다. `listPosts`는 `src/db/client.ts`의 지연 생성
+  // Proxy를 거치므로, 자격 증명이 없는 빌드 환경에서도 모듈 로드 자체는
+  // 안전하고 실제 쿼리 시점에만 던진다 — 아래 try/catch가 그 경우 빈 배열로
+  // 흡수해 on-demand ISR(dynamicParams 기본 true)로 넘긴다.
   try {
-    const { createClient } = await import('@supabase/supabase-js')
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY,
-      { auth: { autoRefreshToken: false, persistSession: false } }
-    )
-    const { data } = await supabase
-      .from('posts')
-      .select('id')
-      .not('is_deleted', 'is', true)
-      .order('created_at', { ascending: false })
-      .limit(30)
-    return (data ?? []).map(row => ({ id: String(row.id) }))
+    const { rows } = await listPosts({
+      page: 1,
+      limit: 30,
+      sort: 'created_at_desc',
+      includeDeleted: false,
+    })
+    return rows.map(row => ({ id: row.id }))
   } catch {
     return []
   }
@@ -156,89 +154,39 @@ interface UserData {
 async function getInitialPostData(
   postId: string
 ): Promise<(InitialPostData & { user: UserData | null }) | null> {
-  // Service role 클라이언트 생성 (서버에서만 사용)
-  const { createClient } = await import('@supabase/supabase-js')
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-  if (!url) {
-    console.error('NEXT_PUBLIC_SUPABASE_URL이 설정되지 않았습니다')
-    return null
-  }
-
-  const supabaseAdmin = key
-    ? createClient(url, key, {
-        auth: { autoRefreshToken: false, persistSession: false },
-      })
-    : createClient(url, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '', {
-        auth: { autoRefreshToken: false, persistSession: false },
-      })
-
   try {
-    // 병렬 조회로 왕복 시간 최소화
-    const postQuery = supabaseAdmin
-      .from('posts')
-      .select(
-        `
-        id,
-        title,
-        content,
-        content_format,
-        category,
-        author_id,
-        created_at,
-        updated_at,
-        like_count,
-        view_count,
-        is_pinned,
-        author:member_profiles!posts_author_id_fkey (
-          display_name
-        )
-      `
-      )
-      .eq('id', postId)
-      .not('is_deleted', 'is', true)
-      .single()
+    // 단계 2c 후속(Task 6 확장): 게시글(+저자)·댓글에 이어 첨부도
+    // Supabase에서 Turso 쿼리 계층으로 옮겼다 — 셋 다 이제 Turso다. 댓글·
+    // 첨부 조회 실패는(예: 순단) 게시글 자체는 계속 렌더하고 각각 빈
+    // 배열로 대체한다 — 게시글 조회 실패(아래 postResult)만 error.tsx로
+    // 보내는 정책과 일관된다.
+    let post: Awaited<ReturnType<typeof getPostById>> = null
+    let postFetchError: unknown = null
+    const [postResult, commentsRaw, attachmentsRaw] = await Promise.all([
+      getPostById(postId, { includeDeleted: false })
+        .then(result => ({ data: result, error: null as unknown }))
+        .catch(error => ({ data: null, error })),
+      listCommentsKeyset(postId, { limit: 20 }).catch(error => {
+        console.error('초기 댓글 조회 실패 — 빈 배열로 대체:', error)
+        return [] as Awaited<ReturnType<typeof listCommentsKeyset>>
+      }),
+      listAttachments(postId, { orderBy: 'created_at' }).catch(error => {
+        console.error('초기 첨부 조회 실패 — 빈 배열로 대체:', error)
+        return [] as Awaited<ReturnType<typeof listAttachments>>
+      }),
+    ])
+    post = postResult.data
+    postFetchError = postResult.error
 
-    const commentsQuery = supabaseAdmin
-      .from('comments')
-      .select(
-        `
-        id,
-        content,
-        author_id,
-        created_at,
-        like_count,
-        author:member_profiles!comments_author_id_fkey (
-          display_name
-        )
-      `
-      )
-      .eq('post_id', postId)
-      .order('created_at', { ascending: true })
-      .limit(20)
+    const comments = commentsRaw
+    const attachments = attachmentsRaw
 
-    const attachmentsQuery = supabaseAdmin
-      .from('post_attachments')
-      .select('*')
-      .eq('post_id', postId)
-      .order('created_at', { ascending: true })
-
-    const [{ data: post, error: postError }, { data: commentsRaw }, { data: attachmentsRaw }] =
-      await Promise.all([postQuery, commentsQuery, attachmentsQuery])
-
-    const comments = Array.isArray(commentsRaw) ? commentsRaw : commentsRaw ? [commentsRaw] : []
-    const attachments = Array.isArray(attachmentsRaw)
-      ? attachmentsRaw
-      : attachmentsRaw
-        ? [attachmentsRaw]
-        : []
-
-    if (postError || !post) {
-      // 진짜 미존재(PGRST116: single()이 0행)만 null(→404). 그 외(DB 순단·타임아웃
-      // 등)는 throw해 error.tsx(재시도)로 보낸다 — 장애를 404로 오표시하면 멀쩡한
-      // 글이 영구 소실처럼 보이고 검색엔진이 404를 수집한다(전수감사 안정성 H3).
-      if (!postError || (postError as { code?: string }).code === 'PGRST116') {
+    if (!post) {
+      // 진짜 미존재(getPostById가 null)만 404로 보낸다. 조회 자체가
+      // 실패했으면(postFetchError, 연결 오류 등) throw해 error.tsx(재시도)로
+      // 보낸다 — 장애를 404로 오표시하면 멀쩡한 글이 영구 소실처럼 보이고
+      // 검색엔진이 404를 수집한다(전수감사 안정성 H3).
+      if (!postFetchError) {
         return null
       }
       // 단, 빌드 페이즈에서는 throw가 generateStaticParams로 프리렌더되는 최근 30개
@@ -247,14 +195,16 @@ async function getInitialPostData(
       // 장애만 error.tsx로 보낸다. dynamicParams(기본 true)로 미프리렌더 경로는
       // 첫 요청 시 생성되며 그때의 throw는 정상적으로 error.tsx로 간다.
       if (process.env.NEXT_PHASE === 'phase-production-build') {
-        console.warn('빌드 중 게시글 조회 실패 — 프리렌더 스킵:', postError?.message)
+        console.warn('빌드 중 게시글 조회 실패 — 프리렌더 스킵:', postFetchError)
         return null
       }
-      console.error('서버 게시글 조회 오류:', postError)
-      throw new Error(`게시글 조회 실패: ${postError.message ?? 'unknown'}`)
+      console.error('서버 게시글 조회 오류:', postFetchError)
+      throw postFetchError instanceof Error
+        ? postFetchError
+        : new Error(`게시글 조회 실패: ${String(postFetchError)}`)
     }
 
-    const authorRecord = Array.isArray(post.author) ? post.author[0] : post.author
+    const authorRecord = post.author
     const totalSize = (attachments || []).reduce(
       (sum, att) => sum + parseIntegerParam(String(att.file_size ?? ''), 0, { min: 0 }),
       0
@@ -272,7 +222,21 @@ async function getInitialPostData(
 
     return {
       post: {
-        ...post,
+        // 기존 PostgREST select와 같은 필드만 투영한다(추가 필드 노출 방지 —
+        // getPostById는 posts 컬럼 전부 + 확장된 author 객체를 돌려주는
+        // 상위집합이다).
+        id: post.id,
+        title: post.title,
+        content: post.content,
+        content_format: post.content_format,
+        category: post.category,
+        author_id: post.author_id,
+        created_at: post.created_at,
+        updated_at: post.updated_at,
+        like_count: post.like_count,
+        view_count: post.view_count,
+        is_pinned: post.is_pinned,
+        author: { display_name: post.author.display_name },
         is_liked: false, // 서버에서는 기본값, 클라이언트에서 업데이트
         comment_count: commentsWithLikeState.length,
         attachments_stats: {

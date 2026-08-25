@@ -69,6 +69,17 @@ local.db
 # RLS 토글 스크립트의 로컬 산출물 (rls-toggle.mjs가 생성)
 scripts/testing/.rls-state.json
 
+# 이관 스크립트 단위 테스트가 만드는 로컬 libSQL 파일 DB(테스트가 중간에
+# 죽으면 정리 없이 .db/-wal/-shm이 남을 수 있다)
+scripts/testing/.content-loader-test.db
+scripts/testing/.content-loader-test.db-*
+scripts/testing/.migrate-loader-test.db
+scripts/testing/.migrate-loader-test.db-*
+scripts/testing/.queries-profiles-test.db
+scripts/testing/.queries-profiles-test.db-*
+scripts/testing/.middleware-profile-test.db
+scripts/testing/.middleware-profile-test.db-*
+
 # 권한 경계 E2E 픽스처 산출물 (seed-authz-fixtures.mjs가 생성, 로컬 전용 UUID)
 e2e/.authz-fixtures.json
 

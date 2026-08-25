@@ -33,3 +33,28 @@ export function isBenignShadowUserRetryError(error: unknown): boolean {
   const code = (error as { code?: unknown }).code
   return code === 'email_exists'
 }
+
+/**
+ * PostgREST가 `member_profiles` 참조 무결성 껍데기 행(insert) 재시도에 대해
+ * 돌려주는 에러가 "이미 준비돼 있다"는 뜻의 무해한 재시도인지 판정한다.
+ *
+ * `ensureSupabaseAuthShadowUser`/`isBenignShadowUserRetryError`와 같은 이유로
+ * 존재한다 — 다만 이쪽은 GoTrue Admin API가 아니라 PostgREST(`.insert()`)를
+ * 거치므로 에러 모양이 다르다.
+ *
+ * 실측(로컬 Supabase 스택, `@supabase/supabase-js` `.from('member_profiles')
+ * .insert(...)`를 같은 id·email로 두 번 호출): 두 번째 호출은
+ * `{ code: '23505', message: 'duplicate key value violates unique
+ * constraint "member_profiles_email_key"', details: 'Key (email)=(...)
+ * already exists.', hint: null }`을 돌려준다 — Postgres 고유 제약 위반
+ * SQLSTATE(23505)를 PostgrestError가 그대로 실어 나른다. id(PK)든
+ * email(UNIQUE)이든 같은 SQLSTATE로 온다 — 우리 호출은 항상 같은 id+email
+ * 조합으로만 재시도되므로(가입 훅이 이미 확정한 사용자), 어느 제약이
+ * 걸렸는지 컬럼 단위로 더 좁힐 필요가 없다.
+ */
+export function isBenignShadowProfileRetryError(error: unknown): boolean {
+  if (error === null || error === undefined) return false
+  if (typeof error !== 'object') return false
+  const code = (error as { code?: unknown }).code
+  return code === '23505'
+}

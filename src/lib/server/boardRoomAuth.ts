@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { canAccessBoardRoom, getSessionContext, isApprovedActiveAdmin } from '@/lib/server/authz'
 import { createServiceRoleClient, type ServiceRoleSupabaseClient } from '@/lib/server/supabaseAdmin'
+import { listProfiles } from '@/db/queries/profiles'
 import { createLogger } from '@/utils/logger'
 
 const log = createLogger('boardRoomAuth')
@@ -66,29 +67,72 @@ export function requireBoardAdmin(auth: BoardAuthSuccess): NextResponse | null {
   return null
 }
 
-/** 재적 이사 명단(승인·활성 + is_director). 정족수 산정 기준이 된다. */
-export async function getDirectorRoster(db: ProfileQueryClient) {
-  const { data, error } = await db
-    .from('member_profiles')
-    .select('id, display_name, director_title')
-    .eq('is_director', true)
-    .eq('is_active', true)
-    .eq('registration_status', 'approved')
-  if (error) throw error
-  return data ?? []
+/**
+ * `listProfiles`는 상태 필터만 지원하고 `is_director`/`is_active`는 모른다
+ * (쿼리 모듈은 권한을 모른다 — CLAUDE.md/브리프 경계). 회원이 23명뿐이라
+ * "승인된 전체"를 한 번에 받아 메모리에서 걸러도 N+1이 아니다. 이 숫자를
+ * 넘길 걱정이 생기면(회원 수천 명대) 그때 `listProfiles`에 필터를 추가한다.
+ */
+const APPROVED_ROSTER_PAGE_LIMIT = 10000
+
+type RosterRow = { id: string; display_name: string; director_title: string | null }
+
+/**
+ * 명단을 이름 오름차순으로 고정한다(리뷰 라운드 1 Minor 3). 전환 전
+ * Supabase 쿼리에는 `ORDER BY`가 없어 정렬 순서가 보장된 적이 없었지만,
+ * 지금은 `listProfiles`가 `created_at DESC`를 강제해서 아무 정렬도 안 하면
+ * 이사회 명단이 "가입 최신순"으로 보이게 된다 — 정족수 확인용으로 사람이
+ * 읽는 명단이라 이름순이 자연스럽다. 명시적으로 정렬한다는 사실 자체가
+ * 중요해서 별도 함수로 뺐다(호출부에서 `.map(...)` 뒤에 슬쩍 끼워 넣으면
+ * 다음에 지워지기 쉽다).
+ */
+function sortByDisplayNameAsc(rows: RosterRow[]): RosterRow[] {
+  return [...rows].sort((a, b) => a.display_name.localeCompare(b.display_name, 'ko'))
+}
+
+/** 재적 이사 명단(승인·활성 + is_director). 정족수 산정 기준이 된다.
+ *
+ * 첫 인자(`_db`)는 더 이상 프로필 조회에 쓰이지 않는다 — 프로필의 권위는
+ * Turso다(`listProfiles`). 호출부(`boardRoomNotify.ts`, board-room 라우트들)가
+ * 여전히 service-role Supabase 클라이언트를 넘기므로 시그니처는 유지한다
+ * (범위 밖 파일의 호출부를 바꾸지 않는다).
+ */
+export async function getDirectorRoster(_db: ProfileQueryClient) {
+  const { rows } = await listProfiles({
+    status: 'approved',
+    limit: APPROVED_ROSTER_PAGE_LIMIT,
+    offset: 0,
+  })
+  return sortByDisplayNameAsc(
+    rows
+      .filter(row => row.is_director && row.is_active)
+      .map(row => ({
+        id: row.id,
+        display_name: row.display_name,
+        director_title: row.director_title,
+      }))
+  )
 }
 
 /**
  * 감사 명단(승인·활성 + is_auditor).
  * 이사회 참석·기록 대상이지만 정족수에는 산입되지 않는다.
+ *
+ * `_db`에 대해서는 `getDirectorRoster`와 같은 이유로 시그니처만 유지한다.
  */
-export async function getAuditorRoster(db: ProfileQueryClient) {
-  const { data, error } = await db
-    .from('member_profiles')
-    .select('id, display_name, director_title')
-    .eq('is_auditor', true)
-    .eq('is_active', true)
-    .eq('registration_status', 'approved')
-  if (error) throw error
-  return data ?? []
+export async function getAuditorRoster(_db: ProfileQueryClient) {
+  const { rows } = await listProfiles({
+    status: 'approved',
+    limit: APPROVED_ROSTER_PAGE_LIMIT,
+    offset: 0,
+  })
+  return sortByDisplayNameAsc(
+    rows
+      .filter(row => row.is_auditor && row.is_active)
+      .map(row => ({
+        id: row.id,
+        display_name: row.display_name,
+        director_title: row.director_title,
+      }))
+  )
 }
