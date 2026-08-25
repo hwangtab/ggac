@@ -2190,6 +2190,28 @@ const OWNERSHIP_GATE_CONTRACTS = [
     pattern: /const isAuthor = attachment\.posts\.author_id === user\.id/g,
     expected: 1,
   },
+  // 최종 회차 C-1: 같은 기능 안의 나머지 소유권 게이트 2곳. 리뷰어 실증 —
+  // 둘 다 통째로 지워도 이 파일은 exit 0이었다. 첫 번째는 위 첨부 삭제
+  // 게이트가 고정된 **바로 그 파일**의 90줄 위에 있다. 지워지면 아무 로그인
+  // 회원이 남의 글 첨부의 alt text·정렬·대표 이미지를 바꾸거나(PATCH),
+  // 남의 글에 첨부를 올릴 수 있게 된다(POST).
+  {
+    file: 'src/app/api/posts/[id]/attachments/[attachmentId]/route.ts',
+    source: postAttachmentDetailSource,
+    what: '첨부 수정(PATCH)은 첨부가 달린 게시글의 작성자만',
+    pattern: /if \(attachment\.posts\.author_id !== user\.id\) \{\s*return ApiError\.forbidden\(/g,
+    expected: 1,
+  },
+  {
+    file: 'src/app/api/posts/[id]/attachments/route.ts',
+    source: postAttachmentsSource,
+    what: '첨부 업로드(POST)는 게시글 작성자만',
+    // 조건과 거부 응답 사이에 console.error 한 줄이 있다 — 그 사이에 다른
+    // 분기(early return·조건부 통과)가 끼어들면 매치가 깨지도록 좁게 묶는다.
+    pattern:
+      /if \(postData\.author_id !== user\.id\) \{\s*console\.error\([^)]*\)\s*return ApiError\.forbidden\(/g,
+    expected: 1,
+  },
 ]
 
 const ownershipGateViolations = OWNERSHIP_GATE_CONTRACTS.flatMap(contract => {
