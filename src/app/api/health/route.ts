@@ -12,20 +12,19 @@
  *   필수다 — Supabase만 확인하면 Turso 연결이 끊겨도 헬스체크가 계속 'ok'를
  *   낸다.
  * - supabase: 'ok' | 'error' — Supabase 연결 확인. 단계 4(Task 4)에서
- *   `system_settings`을 포함한 설정·이사회·아티스트·기타 표의 **쓰기 권위가
- *   Turso로 옮겨갔다** — 더 이상 "아직 Supabase가 권위라 확인한다"는 이유는
- *   유효하지 않다. 그런데도 이 핑 대상을 `system_settings`으로 유지하는
- *   이유는 따로 있다: `src/middleware/settings.ts`/`supabase-rest.ts`(Edge
- *   런타임, Task 4 범위 밖)가 유지보수 모드 판정에 **여전히 Supabase의
- *   `system_settings` 사본을 REST로 직접 읽는다** — Task 4 이후 관리자가
- *   설정을 Turso로 바꿔도 그 미들웨어 사본은 갱신되지 않아 값이 갈라질 수
- *   있다(task-4-report.md "남은 우려" 참고, Task 5 또는 후속 작업 대상). 이
- *   핑은 "그 미들웨어가 의존하는 Supabase 테이블이 살아있는가"를 확인하는
- *   것이지, "system_settings의 권위가 Supabase에 있는가"가 아니다.
- *   `posts`는 컷오버 후 Supabase에서 지워질 1순위 후보라(코드리뷰 지적) 그
- *   표를 계속 핑하면 삭제되는 순간 이 헬스체크가 이유 없이 degraded로
- *   뒤집힌다 — `system_settings`은 미들웨어가 계속 참조하는 한 지워지지
- *   않을 표라 더 안정적인 핑 대상이다.
+ *   `system_settings`을 포함한 설정·이사회·아티스트·기타 표의 권위가
+ *   Turso로 옮겨갔고, 같은 라운드의 회귀 수정으로 `src/middleware/
+ *   settings.ts`도 더 이상 Supabase를 읽지 않는다(이전엔 미들웨어의
+ *   유지보수 모드 판정이 이 표의 Supabase 사본에 의존해서 그 표를 핑
+ *   대상으로 골랐지만, 그 의존이 없어졌다 — `src/middleware/
+ *   supabase-rest.ts`는 이제 아무도 참조하지 않는다, 삭제는 Task 5 몫).
+ *   이제 이 핑은 순수하게 "Supabase 프로젝트 자체가 아직 살아있는가"만
+ *   확인한다 — Task 5가 `createSupabaseServer()`를 완전히 걷어내기 전까지
+ *   남아있는 다른 Supabase 경로들의 대리 신호로 쓴다. `posts`는 컷오버 후
+ *   Supabase에서 지워질 1순위 후보라(코드리뷰 지적) 그 표를 계속 핑하면
+ *   삭제되는 순간 이 헬스체크가 이유 없이 degraded로 뒤집힌다 —
+ *   `system_settings`은 당장 지워질 계획이 없는 표라 더 안정적인 핑
+ *   대상이다.
  * - commit: 배포 커밋 SHA (Vercel 환경변수, 없으면 'unknown')
  *
  * 인증·rate limit 없음. 미들웨어는 /api/* 를 조기 통과시키므로 보호되지 않는다.
