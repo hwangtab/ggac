@@ -9,6 +9,7 @@ import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { validateUUID } from '@/utils/validation'
 import { getProfileById, updateProfile } from '@/db/queries/profiles'
+import { getArtistByLegacyId } from '@/db/queries/artists'
 import { notifyArtistApproved } from '@/lib/server/memberStatusNotify'
 
 function getRouteParam(value: string | string[] | undefined) {
@@ -35,9 +36,7 @@ export const POST = defineApiRoute<Record<string, unknown>>({
   },
   errorResponse: () =>
     ApiError.internalServerError('아티스트 배정 중 오류가 발생했습니다.').toNextResponse(),
-  handler: async ({ params, body, auth }) => {
-    const { db } = auth
-
+  handler: async ({ params, body }) => {
     // 요청 데이터 파싱
     const rawMemberId = typeof body.memberId === 'string' ? body.memberId : ''
     const role = typeof body.role === 'string' ? body.role : ''
@@ -54,12 +53,14 @@ export const POST = defineApiRoute<Record<string, unknown>>({
     const memberId = memberIdValidation.sanitized
 
     // 아티스트 존재 확인
-    const { data: artistExists, error: artistLookupError } = await db
-      .from('artists')
-      .select('legacy_id')
-      .eq('legacy_id', artistId)
-      .maybeSingle()
-    if (artistLookupError || !artistExists) {
+    let artistExists: Awaited<ReturnType<typeof getArtistByLegacyId>>
+    try {
+      artistExists = await getArtistByLegacyId(artistId)
+    } catch (error) {
+      console.error('Artist lookup error:', error)
+      artistExists = null
+    }
+    if (!artistExists) {
       return ApiError.notFound('아티스트를 찾을 수 없습니다.').toNextResponse()
     }
 

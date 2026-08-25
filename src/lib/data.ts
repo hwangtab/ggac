@@ -1,15 +1,33 @@
 import fs from 'fs'
 import path from 'path'
 import { cache } from 'react'
+import { unstable_cache } from 'next/cache'
 import { createLogger } from '@/utils/logger'
+import { listArtists, getArtistBySlug as getArtistBySlugQuery } from '@/db/queries/artists'
 
 const log = createLogger('data')
 
-// 캐시 전략(단일화): Supabase 조회는 Next 데이터 캐시(fetch revalidate+tags:['artists'])가
-// 유일한 인스턴스 간 캐시이고, React cache()는 같은 요청/렌더 내 중복 호출만 메모한다.
+// 캐시 전략(단일화): Task 4 이전에는 Supabase 조회의 Next 데이터 캐시(fetch
+// revalidate+tags:['artists'])가 유일한 인스턴스 간 캐시였다. Turso(libsql)
+// 쿼리는 fetch()를 거치지 않으므로 그 메커니즘이 통하지 않는다 — 대신
+// `unstable_cache`로 같은 tags:['artists']/revalidate:3600 계약을 그대로
+// 재현한다. `revalidateTag('artists')`를 호출하는 기존 소비처
+// (`src/app/api/mypage/artist/route.ts`·`photo/route.ts`)는 변경 없이 계속
+// 이 캐시를 무효화한다 — Next의 태그 기반 무효화는 어떤 캐싱 API를 썼는지와
+// 무관하게 동작한다. React `cache()`는 여전히 같은 요청/렌더 내 중복 호출만
+// 메모한다.
 // 과거의 모듈 레벨 인메모리 TTL 캐시(MemoryEfficientCache)는 revalidateTag('artists')로
 // 무효화되지 않아 관리자 수정 후 최대 5분 stale을 만들고, 빌드 워커 간 상태 공유로
 // 프리렌더 결과를 비결정적으로 만들어 제거했다(2026-07 전수감사 P4).
+const getCachedArtistRows = unstable_cache(async () => listArtists(), ['ggac-artists-all'], {
+  revalidate: 3600,
+  tags: ['artists'],
+})
+const getCachedArtistRowBySlug = unstable_cache(
+  async (slug: string) => getArtistBySlugQuery(slug),
+  ['ggac-artist-by-slug'],
+  { revalidate: 3600, tags: ['artists'] }
+)
 let legacyArtistMapPromise: Promise<Map<string, Artist>> | null = null
 let enArtistTextMapPromise: Promise<Map<string, Artist>> | null = null
 
@@ -46,44 +64,17 @@ const DEFAULT_GLOBAL_DATA: GlobalData = {
   },
 }
 
-// Supabase에서 전체 아티스트 목록 조회 (데이터베이스 우선, JSON 파일 백업)
+// Turso(artists 쿼리 계층)에서 전체 아티스트 목록 조회 (데이터베이스 우선, JSON 파일 백업)
 // locale은 DB 없이 JSON 폴백 경로에서만 적용됨 (DB _en 컬럼은 Phase 5에서 추가)
 // React cache(): 같은 렌더에서 여러 컴포넌트가 호출해도 1회만 실행.
 export const getArtistsFromDB = cache(async (locale = 'ko'): Promise<Artist[]> => {
   try {
-    // 환경 변수 체크 추가
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-      log.warn('Supabase environment variables not available, falling back to JSON')
-      return await getArtistsFromJSON(locale)
-    }
+    const dbArtists = await getCachedArtistRows()
 
-    // 정적 생성 시점에서도 접근 가능하도록 createClient 사용
-    const { createClient } = await import('@supabase/supabase-js')
-    // Attach Next.js cache tags so revalidateTag('artists') busts this cache across instances
-    const revalidateValue = 3600
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      {
-        global: {
-          fetch: (input: RequestInfo | URL, init?: RequestInit) => {
-            return fetch(input, {
-              ...init,
-              next: { revalidate: revalidateValue, tags: ['artists'] },
-            })
-          },
-        },
-      }
-    )
-
-    // 데이터베이스에서 아티스트 목록 조회 (public 접근 가능한 데이터만)
-    const { data: dbArtists, error } = await supabase
-      .from('artists')
-      .select('*')
-      .order('created_at', { ascending: true })
-
-    if (!error && dbArtists && dbArtists.length > 0) {
-      let result = dbArtists.map(a => convertDatabaseArtistToArtist(a, locale))
+    if (dbArtists.length > 0) {
+      let result = dbArtists.map(a =>
+        convertDatabaseArtistToArtist(a as unknown as DatabaseArtist, locale)
+      )
 
       try {
         const legacyMap = await getLegacyArtistMap()
@@ -208,8 +199,10 @@ export const getFaqData = cache(async (locale = 'ko'): Promise<FaqItem[]> => {
 })
 
 // 참고: 과거 이 파일에 있던 `export const revalidate = 86400`은 라우트 세그먼트
-// 파일이 아니어서 아무 효과가 없는 죽은 선언이라 제거했다. Supabase 조회의 TTL은
-// getArtistsFromDB 내부 fetch의 revalidate(3600)+tags(['artists'])가 담당한다.
+// 파일이 아니어서 아무 효과가 없는 죽은 선언이라 제거했다. 조회의 TTL은
+// (단계 4 이전엔 Supabase 조회 fetch의 revalidate+tags, 이후로는)
+// `getCachedArtistRows`/`getCachedArtistRowBySlug`의 `unstable_cache`
+// (revalidate:3600, tags:['artists'])가 담당한다.
 
 // DatabaseArtist를 Artist 타입으로 변환 — locale='en'이면 _en 컬럼 우선, 없으면 한국어 폴백
 // 아티스트 표기명의 괄호 앞 공백을 한 칸으로 통일한다(언어 순서 등 원본 표기는 유지).
@@ -355,44 +348,17 @@ function applyLegacyArtistFallback(artist: Artist, fallback?: Artist): Artist {
   return result
 }
 
-// Supabase에서 아티스트 조회 (데이터베이스 우선, JSON 파일 백업)
+// Turso(artists 쿼리 계층)에서 아티스트 조회 (데이터베이스 우선, JSON 파일 백업)
 export const getArtistBySlugFromDB = cache(
   async (slug: string, locale = 'ko'): Promise<Artist | null> => {
     try {
-      // 환경 변수 체크 추가
-      if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-        log.warn('Supabase environment variables not available, falling back to JSON')
-        const artists = await getArtistsFromJSON(locale)
-        return artists.find(artist => artist.slug === slug) || null
-      }
+      const dbArtist = await getCachedArtistRowBySlug(slug)
 
-      // 정적 생성 시점에서도 접근 가능하도록 createClient 사용
-      const { createClient } = await import('@supabase/supabase-js')
-      const revalidateValue = 3600
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-        {
-          global: {
-            fetch: (input: RequestInfo | URL, init?: RequestInit) => {
-              return fetch(input, {
-                ...init,
-                next: { revalidate: revalidateValue, tags: ['artists'] },
-              })
-            },
-          },
-        }
-      )
-
-      // 데이터베이스에서 아티스트 조회
-      const { data: dbArtist, error } = await supabase
-        .from('artists')
-        .select('*')
-        .eq('slug', slug)
-        .single()
-
-      if (!error && dbArtist) {
-        let convertedArtist = convertDatabaseArtistToArtist(dbArtist, locale)
+      if (dbArtist) {
+        let convertedArtist = convertDatabaseArtistToArtist(
+          dbArtist as unknown as DatabaseArtist,
+          locale
+        )
 
         try {
           const legacyMap = await getLegacyArtistMap()
