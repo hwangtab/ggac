@@ -64,6 +64,27 @@ export const systemSettings = sqliteTable(
   table => [uniqueIndex('system_settings_category_key_idx').on(table.category, table.settingKey)]
 )
 
+/**
+ * 단계 4: 시스템 설정 변경 히스토리 테이블(운영 실측 4행).
+ * Postgres 원본(20250721090010_create_system_settings.sql)은 setting_id·
+ * old_value·new_value·changed_by·change_reason을 전부 nullable로 선언한다
+ * — UPDATE 트리거가 채우는 감사 로그라 실측 4행 모두 changed_by/change_reason이
+ * NULL이었다(서비스 롤 컨텍스트에는 auth.uid()가 없다).
+ */
+export const systemSettingsHistory = sqliteTable('system_settings_history', {
+  id: uuidPk(),
+  settingId: text('setting_id').references(() => systemSettings.id, { onDelete: 'cascade' }),
+  category: text('category', { enum: SYSTEM_SETTING_CATEGORY }).notNull(),
+  settingKey: text('setting_key').notNull(),
+  oldValue: text('old_value', { mode: 'json' }).$type<unknown>(),
+  newValue: text('new_value', { mode: 'json' }).$type<unknown>(),
+  changedBy: text('changed_by').references(() => memberProfiles.id),
+  changedAt: integer('changed_at', { mode: 'timestamp_ms' })
+    .notNull()
+    .$defaultFn(() => new Date()),
+  changeReason: text('change_reason'),
+})
+
 export const defaultSettings = sqliteTable(
   'default_settings',
   {
@@ -117,6 +138,58 @@ export const userActivities = sqliteTable('user_activities', {
   sessionId: text('session_id'),
   createdAt: createdAt(),
 })
+
+/**
+ * 단계 4: 실시간 사용자 세션 추적 테이블(운영 실측 5937행).
+ * Postgres 원본(20250719090020_create_activity_tracking_system.sql)은
+ * user_id를 nullable로 선언한다 — NOT NULL이 아니다.
+ */
+export const userSessions = sqliteTable('user_sessions', {
+  id: uuidPk(),
+  userId: text('user_id').references(() => memberProfiles.id, { onDelete: 'cascade' }),
+  sessionToken: text('session_token').notNull().unique(),
+  lastActivity: integer('last_activity', { mode: 'timestamp_ms' })
+    .notNull()
+    .$defaultFn(() => new Date()),
+  isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+  /** Postgres inet → text */
+  ipAddress: text('ip_address'),
+  userAgent: text('user_agent'),
+  loginAt: integer('login_at', { mode: 'timestamp_ms' })
+    .notNull()
+    .$defaultFn(() => new Date()),
+  logoutAt: integer('logout_at', { mode: 'timestamp_ms' }),
+  metadata: text('metadata', { mode: 'json' })
+    .$type<Record<string, unknown>>()
+    .notNull()
+    .default({}),
+})
+
+/**
+ * 단계 4: 일별 활동 통계 집계 테이블(운영 실측 865행).
+ * activity_date는 date 전용 컬럼 — 타임존 해석을 피하려고 'YYYY-MM-DD'
+ * 문자열로 저장한다(identity.ts의 birthDate와 같은 관례).
+ */
+export const dailyActivityStats = sqliteTable(
+  'daily_activity_stats',
+  {
+    id: uuidPk(),
+    activityDate: text('activity_date').notNull(),
+    userId: text('user_id').references(() => memberProfiles.id, { onDelete: 'cascade' }),
+    actionType: text('action_type', { enum: ACTIVITY_ACTION_TYPE }).notNull(),
+    count: integer('count').notNull().default(0),
+    lastUpdated: integer('last_updated', { mode: 'timestamp_ms' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  table => [
+    uniqueIndex('daily_activity_stats_date_user_action_idx').on(
+      table.activityDate,
+      table.userId,
+      table.actionType
+    ),
+  ]
+)
 
 export const linkPreviews = sqliteTable('link_previews', {
   /** Postgres에서도 url이 PK다. */
