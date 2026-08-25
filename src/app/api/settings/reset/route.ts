@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { z } from 'zod'
-import { createSupabaseServer } from '@/lib/supabase/server'
 import { rateLimit } from '@/lib/server/rateLimit'
 import { createLogger } from '@/utils/logger'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { isUserSettingKey, parseUserSettingCategory } from '@/constants/userSettings'
 import { requireUser } from '@/lib/server/memberAuth'
+import { resetUserSettings } from '@/db/queries/settings'
 
 const log = createLogger('api/settings/reset')
 
@@ -32,8 +32,6 @@ export async function POST(request: NextRequest) {
     if (auth instanceof NextResponse) return auth
     const { user } = auth
 
-    const supabase = await createSupabaseServer()
-
     const rawJson = await parseJsonObjectBody(request)
     if (!rawJson) {
       return ApiError.badRequest('유효하지 않은 JSON 본문입니다.').toNextResponse()
@@ -56,16 +54,19 @@ export async function POST(request: NextRequest) {
       return ApiError.badRequest('유효하지 않은 설정입니다.').toNextResponse()
     }
 
-    // RPC의 auth.uid() 의존을 없애고 세션 사용자 id를 앱 계층에서 직접 넘긴다.
-    let deleteQuery = supabase.from('user_settings').delete().eq('user_id', user.id)
-    if (category) deleteQuery = deleteQuery.eq('category', category)
-    if (setting_key) deleteQuery = deleteQuery.eq('setting_key', setting_key)
-
-    // 삭제된 개수를 돌려주던 RPC의 반환 계약을 보존한다.
-    const { data: deletedRows, error } = await deleteQuery.select('id')
-    const deletedCount = deletedRows?.length ?? 0
-
-    if (error) {
+    // RPC의 auth.uid() 의존을 없애고 세션 사용자 id를 앱 계층에서 직접 넘긴다
+    // (단계 2b-4에서 이미 이 형태였고, 이번엔 그 삭제 대상만 Turso로 옮긴다).
+    // userId: user.id로만 스코프한다 — 이 경로는 E2E가 덮지 않으므로 이 필터가
+    // 유일한 방어선이다(다른 사용자의 설정을 지우면 안 된다).
+    let deletedCount = 0
+    try {
+      const deletedIds = await resetUserSettings({
+        userId: user.id,
+        category,
+        settingKey: setting_key,
+      })
+      deletedCount = deletedIds.length
+    } catch (error) {
       log.error('Settings reset error', error)
       return ApiError.badRequest('설정 초기화에 실패했습니다.').toNextResponse()
     }

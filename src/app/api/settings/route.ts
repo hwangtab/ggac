@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { z } from 'zod'
-import { createSupabaseServer } from '@/lib/supabase/server'
 import { applyRateLimit, RATE_LIMIT_CONFIGS } from '@/lib/server/rateLimit'
 import { createLogger } from '@/utils/logger'
 import { isUserSettingKey, parseUserSettingCategory } from '@/constants/userSettings'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { requireUser } from '@/lib/server/memberAuth'
+import { getUserSettings, upsertUserSetting } from '@/db/queries/settings'
 
 const log = createLogger('api/settings')
 
@@ -45,8 +45,6 @@ export async function GET(request: NextRequest) {
     if (auth instanceof NextResponse) return auth
     const { user } = auth
 
-    const supabase = await createSupabaseServer()
-
     // URL 파라미터에서 카테고리 필터 확인
     const { searchParams } = new URL(request.url)
     const categoryParam = searchParams.get('category')
@@ -55,46 +53,40 @@ export async function GET(request: NextRequest) {
       return ApiError.badRequest('유효하지 않은 설정 카테고리입니다.').toNextResponse()
     }
 
-    // 사용자 설정 조회 (기본값 포함)
-    let query = supabase.rpc('get_user_settings', { p_user_id: user.id })
+    // 사용자 설정 조회 (기본값 포함). get_user_settings RPC 대체 —
+    // src/db/queries/settings.ts의 getUserSettings 참고.
+    let allSettings: Awaited<ReturnType<typeof getUserSettings>>
+    try {
+      allSettings = await getUserSettings(user.id)
+    } catch (error) {
+      log.error('Settings fetch error:', error)
+      return ApiError.internalServerError('Failed to fetch settings').toNextResponse()
+    }
 
     if (category) {
-      // 카테고리별 필터링은 클라이언트에서 처리 (RPC 함수 한계)
-      const { data: allSettings, error } = await query
-
-      if (error) {
-        log.error('Settings fetch error:', error)
-        return ApiError.internalServerError('Failed to fetch settings').toNextResponse()
-      }
-
-      const filteredSettings =
-        allSettings?.filter((setting: any) => setting.category === category) || []
+      // 카테고리별 필터링은 클라이언트에서 처리 (RPC 함수 한계였던 형태를 그대로 유지)
+      const filteredSettings = allSettings.filter(setting => setting.category === category)
 
       return ApiSuccess.ok({
         settings: filteredSettings,
         category: category,
       }).toNextResponse()
     } else {
-      const { data: settings, error } = await query
-
-      if (error) {
-        log.error('Settings fetch error:', error)
-        return ApiError.internalServerError('Failed to fetch settings').toNextResponse()
-      }
-
       // 카테고리별로 그룹화
-      const groupedSettings =
-        settings?.reduce((acc: any, setting: any) => {
+      const groupedSettings = allSettings.reduce(
+        (acc: Record<string, typeof allSettings>, setting) => {
           if (!acc[setting.category]) {
             acc[setting.category] = []
           }
           acc[setting.category].push(setting)
           return acc
-        }, {}) || {}
+        },
+        {}
+      )
 
       return ApiSuccess.ok({
         settings: groupedSettings,
-        total: settings?.length || 0,
+        total: allSettings.length,
       }).toNextResponse()
     }
   } catch (error) {
@@ -122,8 +114,6 @@ export async function POST(request: NextRequest) {
     if (auth instanceof NextResponse) return auth
     const { user } = auth
 
-    const supabase = await createSupabaseServer()
-
     const body = await parseJsonObjectBody(request)
     if (!body) {
       return ApiError.badRequest('유효한 JSON body가 필요합니다.').toNextResponse()
@@ -138,23 +128,18 @@ export async function POST(request: NextRequest) {
       return ApiError.badRequest('유효하지 않은 설정입니다.').toNextResponse()
     }
 
-    // 설정 업데이트 (RPC의 auth.uid() 의존을 없애고 세션 사용자 id를 앱 계층에서 직접 넘긴다)
-    const { data: upserted, error } = await supabase
-      .from('user_settings')
-      .upsert(
-        {
-          user_id: user.id,
-          category,
-          setting_key,
-          setting_value,
-        } as never,
-        { onConflict: 'user_id,category,setting_key' }
-      )
-      .select('id')
-      .single()
-    const settingId = (upserted as { id?: string } | null)?.id ?? null
-
-    if (error) {
+    // 설정 업데이트 (RPC의 auth.uid() 의존을 없애고 세션 사용자 id를 앱 계층에서
+    // 직접 넘긴다 — 단계 2b-4에서 이미 이 형태였고, 이번엔 그 upsert 대상만
+    // Turso로 옮긴다. userId: user.id로 항상 본인 스코프에만 쓴다.)
+    let settingId: string | null = null
+    try {
+      settingId = await upsertUserSetting({
+        userId: user.id,
+        category,
+        settingKey: setting_key,
+        settingValue: setting_value,
+      })
+    } catch (error) {
       log.error('Setting update error:', error)
       return ApiError.badRequest('설정 업데이트에 실패했습니다.').toNextResponse()
     }
@@ -185,8 +170,6 @@ export async function PUT(request: NextRequest) {
     if (auth instanceof NextResponse) return auth
     const { user } = auth
 
-    const supabase = await createSupabaseServer()
-
     const body = await parseJsonObjectBody(request)
     if (!body) {
       return ApiError.badRequest('유효한 JSON body가 필요합니다.').toNextResponse()
@@ -216,39 +199,20 @@ export async function PUT(request: NextRequest) {
           continue
         }
 
-        const { data: upserted, error } = await supabase
-          .from('user_settings')
-          .upsert(
-            {
-              user_id: user.id,
-              category,
-              setting_key,
-              setting_value,
-            } as never,
-            { onConflict: 'user_id,category,setting_key' }
-          )
-          .select('id')
-          .single()
-        const settingId = (upserted as { id?: string } | null)?.id ?? null
+        const settingId = await upsertUserSetting({
+          userId: user.id,
+          category,
+          settingKey: setting_key,
+          settingValue: setting_value,
+        })
 
-        if (error) {
-          log.error('Bulk setting update error:', error)
-          results.push({
-            category,
-            setting_key,
-            success: false,
-            error: '설정 업데이트에 실패했습니다.',
-          })
-          errorCount++
-        } else {
-          results.push({
-            category,
-            setting_key,
-            success: true,
-            setting_id: settingId,
-          })
-          successCount++
-        }
+        results.push({
+          category,
+          setting_key,
+          success: true,
+          setting_id: settingId,
+        })
+        successCount++
       } catch (err) {
         log.error('Bulk setting update exception:', err)
         results.push({

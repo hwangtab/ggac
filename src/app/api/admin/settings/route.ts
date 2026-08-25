@@ -8,7 +8,7 @@ import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { logSecurityEvent } from '@/utils/security'
 import { refreshSettingsCache } from '@/utils/systemSettings'
 import { createLogger } from '@/utils/logger'
-import { updateSystemSetting } from '@/lib/server/systemSettingsWrite'
+import { listSystemSettings, updateSystemSetting } from '@/db/queries/settings'
 
 const log = createLogger('admin/settings')
 
@@ -190,37 +190,22 @@ export const GET = defineApiRoute({
       { status: isPermissionError ? 403 : 500 }
     )
   },
-  handler: async ({ auth }) => {
-    const supabase = auth.db
-
-    // 데이터베이스에서 시스템 설정 조회
-    const { data: initialSettingsData, error: settingsError } = await supabase.rpc(
-      'get_system_settings',
-      { include_sensitive: true }
-    )
-
-    let settingsData = initialSettingsData
-
-    if (settingsError) {
-      log.error('Settings query error', settingsError)
-
-      // 폴백: 직접 테이블 쿼리 시도
-      try {
-        const { data: fallbackData, error: fallbackError } = await supabase
-          .from('system_settings')
-          .select('category, setting_key, setting_value, description, is_sensitive, updated_at')
-          .order('category')
-          .order('setting_key')
-
-        if (fallbackError) {
-          log.error('설정 테이블 직접 조회 실패', fallbackError)
-          throw new Error('설정 테이블 조회 실패')
-        }
-
-        settingsData = fallbackData
-      } catch (fallbackErr) {
-        throw new Error('설정을 조회할 수 없습니다.')
-      }
+  handler: async () => {
+    // get_system_settings RPC 대체 — src/db/queries/settings.ts의
+    // listSystemSettings 참고. `includeSensitive: false`로 부른다: 원본 RPC는
+    // `include_sensitive: true`로 불렸지만 RPC 내부에서 `auth.uid()`로
+    // is_admin을 재확인했고, 서비스롤 전환 이후 그 값이 항상 NULL이라
+    // `is_admin`이 항상 false로 떨어져 sensitive 설정은 실제로는 (관리자
+    // 화면인데도) 항상 마스킹된 채 내려오고 있었다(운영 재현 확인). 이 라우트는
+    // 이미 `requireSettingsAdmin()`을 통과한 뒤라 원칙적으로는 마스킹을
+    // 풀어줘도 되지만, 이번 전환은 동작을 바꾸지 않는 것이 원칙이라 그 마스킹
+    // 결과를 그대로 보존한다(별도 개선 과제로 남긴다 — task-4-report.md 참고).
+    let settingsData: Awaited<ReturnType<typeof listSystemSettings>>
+    try {
+      settingsData = await listSystemSettings(false)
+    } catch (error) {
+      log.error('Settings query error', error)
+      throw new Error('설정을 조회할 수 없습니다.')
     }
 
     // 데이터베이스 결과를 프론트엔드 형식으로 변환
@@ -291,7 +276,6 @@ export const PUT = defineApiRoute<Record<string, unknown>>({
     )
   },
   handler: async ({ body, auth }) => {
-    const supabase = auth.db
     const { user } = auth
 
     const parsed = SystemSettingsUpdateSchema.safeParse(body)
@@ -429,8 +413,8 @@ export const PUT = defineApiRoute<Record<string, unknown>>({
       // 그룹화된 설정들을 데이터베이스에 업데이트
       for (const [settingKey, settingValue] of Object.entries(settingGroups)) {
         try {
-          await updateSystemSetting(supabase, {
-            category,
+          await updateSystemSetting({
+            category: category as 'site' | 'email' | 'security' | 'features',
             settingKey,
             settingValue,
             actorId: user.id,

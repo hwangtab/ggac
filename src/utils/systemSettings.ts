@@ -1,27 +1,16 @@
-import type { SupabaseClient } from '@supabase/supabase-js'
-import { createServiceRoleClient, hasServiceRoleEnv } from '@/lib/server/supabaseAdmin'
+import { listSystemSettings } from '@/db/queries/settings'
 
 /**
- * 주의: getSystemSettings는 일반 사용자 요청에서도 호출될 수 있으므로 service role
- * client로 system_settings 테이블을 직접 읽는다. 기존 get_system_settings RPC는
- * SECURITY DEFINER 내부에서 admin 권한 체크를 수행하기 때문에, 일반 사용자가 호출하면
- * 항상 실패하여 maintenance_mode 등이 무력화되는 버그가 있었다.
+ * 주의: getSystemSettings는 일반 사용자 요청에서도 호출될 수 있다. 예전에는
+ * `get_system_settings` RPC가 SECURITY DEFINER 내부에서 admin 권한 체크를
+ * 수행해서, 일반 사용자가 호출하면 항상 실패하여 maintenance_mode 등이
+ * 무력화되는 버그가 있었다(그래서 한동안 Supabase service-role client로 테이블을
+ * 직접 읽는 우회를 썼다). 단계 4에서 system_settings의 권위가 Turso로 옮겨간
+ * 뒤로는 그 우회 자체가 필요 없다 — `listSystemSettings`는 권한을 모르는 순수
+ * 쿼리 계층이라 애초에 관리자 체크를 하지 않는다. `includeSensitive: true`로
+ * 항상 원본 값을 읽는다 — 이 함수의 소비처(유지보수 모드, SMTP 설정, 보안
+ * 정책 등)는 실제 값이 필요하지 목록 화면의 마스킹된 값이 아니다.
  */
-
-let serviceRoleClient: SupabaseClient | null = null
-
-function getServiceRoleClient(): SupabaseClient | null {
-  if (serviceRoleClient) return serviceRoleClient
-
-  if (!hasServiceRoleEnv()) return null
-
-  try {
-    serviceRoleClient = createServiceRoleClient()
-    return serviceRoleClient
-  } catch {
-    return null
-  }
-}
 
 interface SystemSettingsData {
   site: {
@@ -239,18 +228,12 @@ export async function getSystemSettings(forceRefresh = false): Promise<SystemSet
       return cachedSettings
     }
 
-    const admin = getServiceRoleClient()
-    if (!admin) {
-      // service role 미설정 시 기본값 반환 (개발 환경 등)
-      return getDefaultSettings()
-    }
-
-    const { data: settingsData, error } = await admin
-      .from('system_settings')
-      .select('category, setting_key, setting_value')
-      .in('category', ['site', 'email', 'security', 'features'])
-
-    if (error) {
+    // system_settings의 카테고리 enum(site/email/security/features) 전체다 —
+    // 예전 Supabase `.in('category', [...])` 필터와 결과가 동일하다.
+    let settingsData: Awaited<ReturnType<typeof listSystemSettings>>
+    try {
+      settingsData = await listSystemSettings(true)
+    } catch (error) {
       console.error('Failed to fetch system settings:', error)
       // 오류 발생 시 기본값 반환
       return getDefaultSettings()
@@ -264,7 +247,7 @@ export async function getSystemSettings(forceRefresh = false): Promise<SystemSet
       features: {} as any,
     }
 
-    for (const row of settingsData || []) {
+    for (const row of settingsData) {
       const category = row.category as keyof SystemSettingsData
       const settingKey = row.setting_key
       const settingValue = row.setting_value

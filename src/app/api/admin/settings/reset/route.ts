@@ -8,7 +8,7 @@ import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { logSecurityEvent } from '@/utils/security'
 import { refreshSettingsCache } from '@/utils/systemSettings'
 import { createLogger } from '@/utils/logger'
-import { updateSystemSetting } from '@/lib/server/systemSettingsWrite'
+import { updateSystemSetting } from '@/db/queries/settings'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -267,7 +267,6 @@ export const POST = defineApiRoute<Record<string, unknown>>({
     )
   },
   handler: async ({ body, auth }) => {
-    const supabase = auth.db
     const { user } = auth
     let resetType: 'all' | 'category'
     let category: string | null
@@ -296,8 +295,8 @@ export const POST = defineApiRoute<Record<string, unknown>>({
 
     for (const setting of settingsToReset) {
       try {
-        await updateSystemSetting(supabase, {
-          category: setting.category,
+        await updateSystemSetting({
+          category: setting.category as 'site' | 'email' | 'security' | 'features',
           settingKey: setting.setting_key,
           settingValue: setting.setting_value,
           actorId: user.id,

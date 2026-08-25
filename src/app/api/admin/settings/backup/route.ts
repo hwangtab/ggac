@@ -8,7 +8,7 @@ import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { logSecurityEvent } from '@/utils/security'
 import { createLogger, maskId } from '@/utils/logger'
 import { refreshSettingsCache } from '@/utils/systemSettings'
-import { updateSystemSetting } from '@/lib/server/systemSettingsWrite'
+import { listSystemSettings, updateSystemSetting } from '@/db/queries/settings'
 
 const log = createLogger('admin/settings/backup')
 
@@ -59,41 +59,23 @@ export const GET = defineApiRoute({
       : ApiError.internalServerError('설정 백업 중 오류가 발생했습니다.').toNextResponse()
   },
   handler: async ({ auth }) => {
-    const supabase = auth.db
     const { user } = auth
 
-    // 모든 시스템 설정 조회 (민감한 정보 포함 — 응답 전 마스킹됨)
-    const { data: initialSettingsData, error: settingsError } = await supabase.rpc(
-      'get_system_settings',
-      { include_sensitive: true }
-    )
-
-    let settingsData = initialSettingsData
-
-    if (settingsError) {
-      log.warn('Settings backup RPC failed, trying fallback', { message: settingsError.message })
-
-      // 폴백: 직접 테이블 쿼리 시도
-      try {
-        const { data: fallbackData, error: fallbackError } = await supabase
-          .from('system_settings')
-          .select('category, setting_key, setting_value, description, is_sensitive, updated_at')
-          .order('category')
-          .order('setting_key')
-
-        if (fallbackError) {
-          log.error('Fallback query also failed', { message: fallbackError.message })
-          throw new Error('설정 백업 중 오류가 발생했습니다.')
-        }
-
-        settingsData = fallbackData
-      } catch {
-        throw new Error('설정 백업 중 오류가 발생했습니다.')
-      }
+    // 모든 시스템 설정 조회(민감한 정보 포함 — 아래에서 이 라우트 자체가
+    // is_sensitive 기준으로 무조건 REDACTED 처리하므로 queries 계층의
+    // 마스킹 여부와 무관하게 최종 출력은 동일하다).
+    let settingsData: Awaited<ReturnType<typeof listSystemSettings>>
+    try {
+      settingsData = await listSystemSettings(true)
+    } catch (error) {
+      log.warn('Settings backup query failed', {
+        message: error instanceof Error ? error.message : String(error),
+      })
+      throw new Error('설정 백업 중 오류가 발생했습니다.')
     }
 
     // 민감한 설정값 마스킹 (SMTP 비밀번호, API 키 등)
-    const sanitizedSettings = (settingsData || []).map((s: any) => ({
+    const sanitizedSettings = settingsData.map(s => ({
       ...s,
       setting_value: s.is_sensitive ? '***REDACTED***' : s.setting_value,
     }))
@@ -164,7 +146,6 @@ export const POST = defineApiRoute<Record<string, unknown>>({
     )
   },
   handler: async ({ body, auth }) => {
-    const supabase = auth.db
     const { user } = auth
 
     const parsed = RestoreBodySchema.safeParse(body)
@@ -199,8 +180,8 @@ export const POST = defineApiRoute<Record<string, unknown>>({
 
         // 데이터베이스 업데이트
         try {
-          await updateSystemSetting(supabase, {
-            category,
+          await updateSystemSetting({
+            category: category as 'site' | 'email' | 'security' | 'features',
             settingKey: setting_key,
             settingValue: setting_value,
             actorId: user.id,
