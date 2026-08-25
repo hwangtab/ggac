@@ -6,7 +6,13 @@ import OptimizedImage from '@/components/OptimizedImage'
 import YouTubeEmbed from '@/components/YouTubeEmbed'
 import ArtistProjects from '@/components/ArtistProjects'
 import { convertUrlsToMarkdownLinks } from '@/utils/markdown'
-import { getArtistSlugs, getArtistBySlug, getArtistProjects, type Artist } from '@/lib/data'
+import {
+  getArtistSlugs,
+  getArtistBySlug,
+  getArtistProjects,
+  isPublicArtistDataUnavailable,
+  type Artist,
+} from '@/lib/data'
 import { localizeArtistCategory } from '@/constants/categories'
 import { setRequestLocale, getTranslations } from 'next-intl/server'
 import type { Metadata } from 'next'
@@ -46,6 +52,13 @@ export async function generateStaticParams() {
     const slugs = await getArtistSlugs()
     return slugs.filter(slug => !WITHDRAWN_SLUGS.has(slug)).map(slug => ({ slug }))
   } catch (error) {
+    // 공개 아티스트 데이터를 DB에서 못 가져온 경우는 **삼키지 않는다.**
+    // 여기서 []를 돌려주면 상세 페이지가 한 장도 프리렌더되지 않은 채 빌드가
+    // 초록불로 끝난다 — 최종 리뷰 B-1이 잡은 "조용한 과거"의 출구 중 하나다.
+    // (그 실측 당시에는 이 catch가 발동하기도 전에 안쪽 getArtists()가 먼저
+    // JSON으로 폴백해 슬러그 목록 자체가 JSON에서 나왔다. 그 폴백이 운영에서
+    // 금지되면서 이제 예외가 여기까지 올라온다.)
+    if (isPublicArtistDataUnavailable(error)) throw error
     console.warn('Failed to generate static params for artists:', error)
     // 빌드 시점에서 환경 변수가 없을 때 빈 배열 반환
     return []

@@ -64,50 +64,104 @@ const DEFAULT_GLOBAL_DATA: GlobalData = {
   },
 }
 
+/**
+ * 공개 아티스트 데이터가 DB에서 오지 못했을 때 `data/artists.json`으로
+ * 되돌아가도 되는지.
+ *
+ * **운영에서는 안 된다.** 이 폴백은 에러도 빈 화면도 만들지 않아서, Turso가
+ * 실패하면 방문자는 아무 이상 없어 보이는 페이지에서 **과거 스냅샷**을 본다
+ * (최종 리뷰 B-1 실측: `next build`가 exit 0으로 초록불을 내면서
+ * `data/artists.json`의 옛 명단을 `.next/server/app/ko/artists.html`과 상세
+ * 페이지들에 그대로 구워 배포에 실었다). 조합원이 마이페이지에서 고친
+ * 소개글·사진은 DB에만 있으므로 그 상태는 "몇 주 전 프로필을 계속 보여주는
+ * 사이트"다. 같은 문을 여는 두 번째 경로도 실재한다 — `artists.category` 한
+ * 행만 JSON 인코딩이 깨져도 Drizzle `mode:'json'` 디코딩이 `listArtists()`
+ * 전체를 던져 13명 전부가 폴백으로 넘어간다.
+ *
+ * 그래서 **폴백을 어디까지 남길지**를 환경으로 가른다:
+ *  · 개발/테스트(`NODE_ENV !== 'production'`) — 그대로 남긴다. DB 없이
+ *    `npm run dev`로 공개 페이지를 여는 것은 흔하고 유용하며, 그 상태는
+ *    배포되지 않는다.
+ *  · 운영 빌드·운영 런타임 — **금지한다.** 던져서 빌드를 빨간불로 만든다.
+ *    이미 빌드된 페이지의 런타임 재검증(ISR)에서 던지면 Next는 마지막으로
+ *    성공한(=DB에서 온) 캐시본을 계속 내보내고 에러를 로그에 남긴다 —
+ *    JSON으로 갈아끼우는 것보다 낫다.
+ *
+ * 상세 페이지의 "행이 없다"는 이 함수를 타지 않는다. 그건 조회 실패가 아니라
+ * 404이고, 운영에서는 JSON으로 되살리지 않고 `null`(→ notFound)로 둔다.
+ */
+class PublicArtistDataUnavailableError extends Error {
+  constructor(reason: string, options?: { cause?: unknown }) {
+    super(
+      `공개 아티스트 데이터를 DB에서 가져오지 못했다(${reason}). ` +
+        '운영에서는 data/artists.json 폴백을 쓰지 않는다 — 조용히 과거 데이터를 ' +
+        '배포에 굽는 것을 막기 위해 실패로 처리한다.',
+      options
+    )
+    this.name = 'PublicArtistDataUnavailableError'
+  }
+}
+
+function refusePublicArtistJsonFallback(reason: string, cause?: unknown): void {
+  if (process.env.NODE_ENV !== 'production') return
+  throw new PublicArtistDataUnavailableError(reason, { cause })
+}
+
+/**
+ * 이 오류는 `generateStaticParams`처럼 "빌드를 살리려고" 예외를 삼키는 자리에서도
+ * 반드시 다시 던져야 한다 — 삼키면 B-1이 그대로 되살아난다.
+ */
+export function isPublicArtistDataUnavailable(error: unknown): boolean {
+  return error instanceof PublicArtistDataUnavailableError
+}
+
 // Turso(artists 쿼리 계층)에서 전체 아티스트 목록 조회 (데이터베이스 우선, JSON 파일 백업)
 // locale은 DB 없이 JSON 폴백 경로에서만 적용됨 (DB _en 컬럼은 Phase 5에서 추가)
 // React cache(): 같은 렌더에서 여러 컴포넌트가 호출해도 1회만 실행.
 export const getArtistsFromDB = cache(async (locale = 'ko'): Promise<Artist[]> => {
+  // 폴백 금지 판정을 try 밖에서 하기 위해 조회 결과와 오류를 먼저 분리한다.
+  // try 안에서 던지면 바로 아래 catch가 그것을 다시 삼켜 폴백으로 되돌린다.
+  let dbArtists: Awaited<ReturnType<typeof getCachedArtistRows>>
   try {
-    const dbArtists = await getCachedArtistRows()
-
-    if (dbArtists.length > 0) {
-      let result = dbArtists.map(a =>
-        convertDatabaseArtistToArtist(a as unknown as DatabaseArtist, locale)
-      )
-
-      try {
-        const legacyMap = await getLegacyArtistMap()
-        result = result.map(artist => {
-          const fallback = legacyMap.get(artist.slug) || legacyMap.get(artist.id)
-          return applyLegacyArtistFallback(artist, fallback)
-        })
-      } catch (fallbackError) {
-        log.warn('Failed to apply legacy artist image fallback:', fallbackError)
-      }
-
-      if (locale === 'en') {
-        try {
-          const enMap = await buildEnArtistTextMap()
-          result = result.map(a =>
-            overlayEnglishArtistText(a, enMap.get(a.slug) ?? enMap.get(a.id))
-          )
-        } catch (enError) {
-          log.warn('Failed to apply English text overlay:', enError)
-        }
-      }
-
-      return result
-    }
-
-    // 데이터베이스에 데이터가 없으면 JSON 파일에서 조회 (백업)
-    return await getArtistsFromJSON(locale)
+    dbArtists = await getCachedArtistRows()
   } catch (error) {
     log.error('Error fetching artists from database:', error)
-
-    // 오류 발생 시 JSON 파일에서 조회 (백업)
+    refusePublicArtistJsonFallback('조회 실패', error)
+    // 개발/테스트에서만 여기 도달한다.
     return await getArtistsFromJSON(locale)
   }
+
+  if (dbArtists.length === 0) {
+    log.error('아티스트 조회 결과가 0건이다 — DB가 비었거나 잘못된 DB를 보고 있다')
+    refusePublicArtistJsonFallback('조회 결과 0건')
+    // 데이터베이스에 데이터가 없으면 JSON 파일에서 조회 (백업, 비운영 한정)
+    return await getArtistsFromJSON(locale)
+  }
+
+  let result = dbArtists.map(a =>
+    convertDatabaseArtistToArtist(a as unknown as DatabaseArtist, locale)
+  )
+
+  try {
+    const legacyMap = await getLegacyArtistMap()
+    result = result.map(artist => {
+      const fallback = legacyMap.get(artist.slug) || legacyMap.get(artist.id)
+      return applyLegacyArtistFallback(artist, fallback)
+    })
+  } catch (fallbackError) {
+    log.warn('Failed to apply legacy artist image fallback:', fallbackError)
+  }
+
+  if (locale === 'en') {
+    try {
+      const enMap = await buildEnArtistTextMap()
+      result = result.map(a => overlayEnglishArtistText(a, enMap.get(a.slug) ?? enMap.get(a.id)))
+    } catch (enError) {
+      log.warn('Failed to apply English text overlay:', enError)
+    }
+  }
+
+  return result
 })
 
 // JSON 파일에서 아티스트 조회 (백업용)
@@ -351,48 +405,53 @@ function applyLegacyArtistFallback(artist: Artist, fallback?: Artist): Artist {
 // Turso(artists 쿼리 계층)에서 아티스트 조회 (데이터베이스 우선, JSON 파일 백업)
 export const getArtistBySlugFromDB = cache(
   async (slug: string, locale = 'ko'): Promise<Artist | null> => {
+    // 목록(getArtistsFromDB)과 같은 이유로 조회 결과와 오류를 try 밖에서 가른다.
+    let dbArtist: Awaited<ReturnType<typeof getCachedArtistRowBySlug>>
     try {
-      const dbArtist = await getCachedArtistRowBySlug(slug)
-
-      if (dbArtist) {
-        let convertedArtist = convertDatabaseArtistToArtist(
-          dbArtist as unknown as DatabaseArtist,
-          locale
-        )
-
-        try {
-          const legacyMap = await getLegacyArtistMap()
-          const fallback = legacyMap.get(convertedArtist.slug) || legacyMap.get(convertedArtist.id)
-          convertedArtist = applyLegacyArtistFallback(convertedArtist, fallback)
-        } catch (fallbackError) {
-          log.warn('Failed to apply legacy artist image fallback:', fallbackError)
-        }
-
-        if (locale === 'en') {
-          try {
-            const enMap = await buildEnArtistTextMap()
-            convertedArtist = overlayEnglishArtistText(
-              convertedArtist,
-              enMap.get(convertedArtist.slug) ?? enMap.get(convertedArtist.id)
-            )
-          } catch (enError) {
-            log.warn('Failed to apply English text overlay:', enError)
-          }
-        }
-
-        return convertedArtist
-      }
-
-      // 데이터베이스에 없으면 JSON 파일에서 조회 (백업)
-      const artists = await getArtistsFromJSON(locale)
-      return artists.find(artist => artist.slug === slug) || null
+      dbArtist = await getCachedArtistRowBySlug(slug)
     } catch (error) {
       log.error('Error fetching artist from database:', error)
-
-      // 오류 발생 시 JSON 파일에서 조회 (백업)
+      refusePublicArtistJsonFallback(`상세 조회 실패(slug=${slug})`, error)
+      // 오류 발생 시 JSON 파일에서 조회 (백업, 비운영 한정)
       const artists = await getArtistsFromJSON(locale)
       return artists.find(artist => artist.slug === slug) || null
     }
+
+    if (!dbArtist) {
+      // "행이 없다"는 조회 실패가 아니라 404다. 운영에서는 JSON으로
+      // 되살리지 않는다 — 그러면 DB에서 지운 아티스트가 배포에서 계속 살아난다.
+      if (process.env.NODE_ENV === 'production') return null
+      // 데이터베이스에 없으면 JSON 파일에서 조회 (백업, 비운영 한정)
+      const artists = await getArtistsFromJSON(locale)
+      return artists.find(artist => artist.slug === slug) || null
+    }
+
+    let convertedArtist = convertDatabaseArtistToArtist(
+      dbArtist as unknown as DatabaseArtist,
+      locale
+    )
+
+    try {
+      const legacyMap = await getLegacyArtistMap()
+      const fallback = legacyMap.get(convertedArtist.slug) || legacyMap.get(convertedArtist.id)
+      convertedArtist = applyLegacyArtistFallback(convertedArtist, fallback)
+    } catch (fallbackError) {
+      log.warn('Failed to apply legacy artist image fallback:', fallbackError)
+    }
+
+    if (locale === 'en') {
+      try {
+        const enMap = await buildEnArtistTextMap()
+        convertedArtist = overlayEnglishArtistText(
+          convertedArtist,
+          enMap.get(convertedArtist.slug) ?? enMap.get(convertedArtist.id)
+        )
+      } catch (enError) {
+        log.warn('Failed to apply English text overlay:', enError)
+      }
+    }
+
+    return convertedArtist
   }
 )
 
