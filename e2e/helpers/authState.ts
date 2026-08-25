@@ -72,6 +72,34 @@ export function assertLocalTurso(): void {
   }
 }
 
+/**
+ * **dev 서버가 상속할 값**을 판정한다 — `playwright.config.ts`가 조건 없이
+ * 부른다.
+ *
+ * Playwright는 webServer 프로세스에 `{...process.env, ...webServer.env}`를
+ * 넘긴다(`node_modules/playwright/lib/plugins/webServerPlugin.js`). 그래서
+ * `E2E_TURSO_DATABASE_URL`을 주지 않은 채 셸에 운영 `TURSO_DATABASE_URL`이
+ * export돼 있으면, e2e 전용 변수를 다루는 분기를 통째로 건너뛰고도 **운영
+ * URL이 그대로 dev 서버로 흘러간다.** 실측: 그 상태에서 dev 서버가 먼저 뜨고
+ * (`[WebServer]` 로그 7줄) 스펙 파일 로드 시점에야 죽는다 — 그 사이 readiness
+ * 요청이 운영 Turso를 읽는다.
+ *
+ * **판정 자체는 `assertLocalTurso()` 하나뿐이다**(사본을 만들지 않는다).
+ * 차이는 "값이 아예 없을 때"의 처리 하나다:
+ *
+ * - 이 함수는 **미설정을 통과시킨다.** CI는 `--project=chromium`으로
+ *   `e2e/smoke.spec.ts`만 돌리고 Turso 환경변수를 전혀 주지 않는다
+ *   (`.github/workflows/ci.yml`의 smoke-test 잡). 상속으로 운영에 닿을 값
+ *   자체가 없는 경우라 여기서 던지면 권한 E2E와 무관한 CI가 깨진다.
+ * - 권한 E2E 쪽은 미설정도 막아야 한다(대상이 `.env.local`로 새는 것을
+ *   허용하지 않는다). 그건 시드 스크립트와 authz 스펙들이 여전히
+ *   `assertLocalTurso()`를 직접 부르는 것으로 유지된다.
+ */
+export function assertNoRemoteTursoTarget(): void {
+  if (!process.env.TURSO_DATABASE_URL) return
+  assertLocalTurso()
+}
+
 export function storageStatePath(role: string): string {
   return `e2e/.auth/${role}.json`
 }

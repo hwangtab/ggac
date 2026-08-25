@@ -1,6 +1,6 @@
 import { defineConfig, devices } from '@playwright/test'
 
-import { assertLocalTurso } from './e2e/helpers/authState'
+import { assertNoRemoteTursoTarget } from './e2e/helpers/authState'
 
 if (process.env.FORCE_COLOR) {
   delete process.env.NO_COLOR
@@ -26,13 +26,20 @@ if (process.env.E2E_TURSO_DATABASE_URL) {
   // 로컬 `turso dev`는 토큰을 요구하지 않는다. 셸에 남아 있는 운영 토큰이
   // 그대로 따라붙지 않도록 함께 지운다.
   delete process.env.TURSO_AUTH_TOKEN
-  // **옮겨 심는 그 자리에서 판정한다.** 스펙 파일도 각자 assertLocalTurso()를
-  // 부르지만 그건 파일 로드 시점, 즉 webServer(`npm run dev`)가 이미 뜬
-  // 뒤다 — `E2E_TURSO_DATABASE_URL=libsql://ggac-prod…`를 잘못 주면 앱이
-  // **운영을 가리킨 채 먼저 뜨고** readiness 요청이 운영을 읽은 다음에야 전
-  // 스펙이 죽는다. 여기서 막으면 dev 서버가 시작조차 하지 않는다.
-  assertLocalTurso()
 }
+
+// **옮겨 심기가 끝난 자리에서, 조건 없이 판정한다.** 스펙 파일도 각자
+// assertLocalTurso()를 부르지만 그건 파일 로드 시점, 즉 webServer(`npm run
+// dev`)가 이미 뜬 뒤다 — 잘못된 대상을 주면 앱이 **운영을 가리킨 채 먼저
+// 뜨고** readiness 요청이 운영을 읽은 다음에야 전 스펙이 죽는다. 여기서
+// 막으면 dev 서버가 시작조차 하지 않는다.
+//
+// 이 호출이 위 `if` **밖**에 있어야 하는 이유: Playwright는 webServer에
+// `{...process.env, ...webServer.env}`를 넘긴다. `E2E_TURSO_DATABASE_URL`을
+// 주지 않고 셸에 운영 `TURSO_DATABASE_URL`만 export된 경우 위 블록은 통째로
+// 건너뛰지만 **운영 URL은 상속으로 그대로 dev 서버에 간다.** 안에 두면 그
+// 경로가 무방비였다.
+assertNoRemoteTursoTarget()
 
 export default defineConfig({
   testDir: './e2e',
