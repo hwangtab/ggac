@@ -27,6 +27,7 @@ import {
   excludeOrphans,
   resolveOrphans,
   parseExpect,
+  evaluateExpectGate,
 } from '../migrate/content.mjs'
 
 // ---------------------------------------------------------------- 픽스처
@@ -556,4 +557,50 @@ test('parseExpect: 형식이 틀리면 던진다', () => {
   assert.throws(() => parseExpect(['--expect', 'posts']), /--expect 형식이 잘못됐다/)
   assert.throws(() => parseExpect(['--expect', 'posts=abc']), /--expect 형식이 잘못됐다/)
   assert.throws(() => parseExpect(['--expect']), /usage/)
+})
+
+// ---------------------------------------------------------------- evaluateExpectGate (9pre 수정 1: --apply에는 --expect 필수)
+
+test('evaluateExpectGate: --apply인데 --expect가 없으면 apply_without_expect로 막는다 (부정 대조 c)', () => {
+  const result = evaluateExpectGate({
+    expect: null,
+    apply: true,
+    parsedCounts: { posts: 39, comments: 22 },
+  })
+  assert.equal(result.status, 'apply_without_expect')
+})
+
+test('evaluateExpectGate: dry-run(--apply 없음)이면 --expect가 없어도 막지 않는다(경고만)', () => {
+  const result = evaluateExpectGate({
+    expect: null,
+    apply: false,
+    parsedCounts: { posts: 39, comments: 22 },
+  })
+  assert.equal(result.status, 'no_expect_dry_run')
+})
+
+test('evaluateExpectGate: --apply + --expect가 파싱 건수와 일치하면 matched다', () => {
+  const result = evaluateExpectGate({
+    expect: { posts: 39, comments: 22 },
+    apply: true,
+    parsedCounts: { posts: 39, comments: 22 },
+  })
+  assert.equal(result.status, 'matched')
+})
+
+test('evaluateExpectGate: --expect가 파싱 건수와 다르면 apply 여부와 무관하게 mismatch다', () => {
+  const applyResult = evaluateExpectGate({
+    expect: { posts: 39 },
+    apply: true,
+    parsedCounts: { posts: 37 },
+  })
+  assert.equal(applyResult.status, 'mismatch')
+  assert.deepEqual(applyResult.mismatches, [['posts', 39]])
+
+  const dryRunResult = evaluateExpectGate({
+    expect: { posts: 39 },
+    apply: false,
+    parsedCounts: { posts: 37 },
+  })
+  assert.equal(dryRunResult.status, 'mismatch')
 })

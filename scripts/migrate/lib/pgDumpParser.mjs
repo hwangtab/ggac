@@ -67,27 +67,46 @@ function readValue(body, start) {
   return [trimmed === 'NULL' ? null : trimmed, i]
 }
 
-export function parseInsertRows(sql, schema, table) {
-  const header = qualified(schema, table)
-  const headerAt = sql.indexOf(header)
-  if (headerAt === -1) return []
-
+/**
+ * 문장 하나(`INSERT INTO "schema"."table" (cols) VALUES (...),(...);`)를
+ * `headerAt`에서 시작해 파싱한다. `;`로 제대로 끝나지 않거나 예기치 않은
+ * 문자를 만나면 던진다 — 조용히 일부만 반환하지 않는다. `--rows-per-insert`로
+ * 같은 표가 여러 INSERT 문으로 쪼개질 수 있으므로, 호출부(parseInsertRows)가
+ * 이 함수를 표 전체에서 발견되는 모든 헤더 위치에 대해 반복 호출해 행을
+ * 이어붙인다.
+ *
+ * @returns { cols, rows, endAt } endAt은 이 문장이 끝난(다음 검색을 시작할)
+ * 위치다.
+ */
+function parseOneInsertStatement(sql, header, headerAt) {
   const colsEnd = sql.indexOf(')', headerAt + header.length)
+  if (colsEnd === -1) {
+    throw new Error(`INSERT 컬럼 목록이 닫히지 않았다 (위치 ${headerAt}): ${header}`)
+  }
   const cols = sql
     .slice(headerAt + header.length, colsEnd)
     .split(',')
     .map(part => part.trim().replace(/^"|"$/g, ''))
 
   const valuesAt = sql.indexOf('VALUES', colsEnd)
-  if (valuesAt === -1) return []
+  if (valuesAt === -1) {
+    throw new Error(`VALUES를 찾지 못했다 (위치 ${headerAt}): ${header}`)
+  }
 
   const rows = []
   let i = valuesAt + 'VALUES'.length
+  let terminated = false
 
   while (i < sql.length) {
     while (i < sql.length && /\s/.test(sql[i])) i++
-    if (sql[i] === ';' || i >= sql.length) break
-    if (sql[i] !== '(') break
+    if (sql[i] === ';') {
+      i++
+      terminated = true
+      break
+    }
+    if (sql[i] !== '(') {
+      throw new Error(`${header}: 값 목록에서 예기치 않은 문자를 만나 파싱이 중단됐다 (위치 ${i})`)
+    }
     i++
 
     const values = []
@@ -103,7 +122,7 @@ export function parseInsertRows(sql, schema, table) {
         i++
         break
       }
-      break
+      throw new Error(`${header}: 값 하나가 ,나 )로 끝나지 않았다 (위치 ${i})`)
     }
 
     rows.push(
@@ -115,9 +134,61 @@ export function parseInsertRows(sql, schema, table) {
       i++
       continue
     }
-    break
+    if (sql[i] === ';') {
+      i++
+      terminated = true
+      break
+    }
+    throw new Error(`${header}: 행 목록이 ,나 ;로 끝나지 않았다 (위치 ${i})`)
   }
 
+  if (!terminated) {
+    throw new Error(`${header}: INSERT 문이 ;로 끝나지 않은 채 입력이 끝났다 (위치 ${headerAt})`)
+  }
+
+  return { cols, rows, endAt: i }
+}
+
+/**
+ * `schema.table`을 대상으로 하는 **모든** `INSERT INTO ... VALUES ...;`
+ * 문장을 찾아 행을 이어붙인다.
+ *
+ * `pg_dump --rows-per-insert`가 걸리면 같은 표가 여러 INSERT 문으로 쪼개져
+ * 나온다 — 첫 문장만 읽으면 나머지 행이 조용히 사라진다(되돌릴 수 없는
+ * 손실 경로: Turso 쪽 검증이 파싱된 매핑 결과와 대조하므로 양쪽이 똑같이
+ * 잘리면 "검증 통과"가 나온다). 그래서 여기서는 헤더가 더 안 나올 때까지
+ * `sql.indexOf(header, searchFrom)`를 반복한다.
+ *
+ * 각 문장의 컬럼 목록이 다르면(같은 표인데 다른 컬럼 순서로 덤프될 이유가
+ * 없다 — pg_dump는 표 하나당 컬럼 순서를 고정한다) 데이터 손상 신호이므로
+ * 던진다.
+ */
+export function parseInsertRows(sql, schema, table) {
+  const header = qualified(schema, table)
+  let rows = []
+  let cols = null
+  let searchFrom = 0
+  let found = false
+
+  while (true) {
+    const headerAt = sql.indexOf(header, searchFrom)
+    if (headerAt === -1) break
+    found = true
+
+    const statement = parseOneInsertStatement(sql, header, headerAt)
+    if (cols === null) {
+      cols = statement.cols
+    } else if (cols.join(' ') !== statement.cols.join(' ')) {
+      throw new Error(
+        `${header}: INSERT 문마다 컬럼 목록이 다르다 (위치 ${headerAt}) — 같은 표는 같은 컬럼 순서여야 한다`
+      )
+    }
+
+    rows = rows.concat(statement.rows)
+    searchFrom = statement.endAt
+  }
+
+  if (!found) return []
   return rows
 }
 

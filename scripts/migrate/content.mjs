@@ -353,6 +353,37 @@ export function parseExpect(argv) {
   return out
 }
 
+/**
+ * 건수 하드 게이트(지시 9번 "추측으로 진행하지 마라")의 판정 로직만 뺀 순수
+ * 함수. main()의 console.log/exitCode 부작용과 분리해 CLI를 실행하지 않고도
+ * 단위 테스트할 수 있게 한다.
+ *
+ * 판정 우선순위:
+ *   1. expect가 있는데 파싱 건수와 다르면 'mismatch' (dry-run/apply 공통 차단)
+ *   2. expect가 없고 apply면 'apply_without_expect' — **되돌릴 수 없는 쓰기에는
+ *      --expect가 필수다.** parseInsertRows가 표당 INSERT 문을 전부 읽도록
+ *      고쳐졌더라도, verifyContent는 Turso 행 수를 "파싱된 매핑 결과"와
+ *      대조할 뿐이라 파서가 어떤 이유로든 일부를 놓치면 양쪽이 똑같이 잘려
+ *      "검증 통과"가 나올 수 있다. 사람이 미리 실측한 건수와의 대조가 유일한
+ *      외부 기준이므로 여기서는 생략을 허용하지 않는다.
+ *   3. expect가 있고 일치하면 'matched'
+ *   4. expect가 없고 dry-run이면 'no_expect_dry_run' — 로컬 실험까지 막지는
+ *      않는다.
+ */
+export function evaluateExpectGate({ expect, apply, parsedCounts }) {
+  if (expect) {
+    const mismatches = Object.entries(expect).filter(([t, n]) => parsedCounts[t] !== n)
+    if (mismatches.length > 0) {
+      return { status: 'mismatch', mismatches }
+    }
+    return { status: 'matched' }
+  }
+  if (apply) {
+    return { status: 'apply_without_expect' }
+  }
+  return { status: 'no_expect_dry_run' }
+}
+
 /** orphans/unknown/residual 목록을 컬럼명·행id만으로 출력한다(값은 안 찍는다 — UUID뿐이라 안전). */
 function logOrphanList(label, list) {
   console.log(`\n${label} ${list.length}건:`)
@@ -406,24 +437,27 @@ async function main() {
       `notifications ${parsedCounts.notifications}`
   )
 
-  // 건수 하드 게이트(지시 9번 "추측으로 진행하지 마라"). --expect가 있으면
-  // 사람이 미리 실측한 건수와 파싱 결과를 기계적으로 대조한다. 사람이 눈으로
-  // 세는 것에만 의존하면 다른 세션이 같은 스크립트를 --expect 없이 돌렸을 때
-  // 조용히 잘못된 덤프로 진행할 수 있다. --expect가 없으면(로컬 실험 등)
-  // 경고만 내고 막지는 않는다.
-  if (expect) {
-    const countMismatches = Object.entries(expect).filter(([t, n]) => parsedCounts[t] !== n)
-    if (countMismatches.length > 0) {
-      console.error('\n--expect와 파싱 건수가 다르다:')
-      for (const [t, n] of countMismatches) {
-        console.error(`  ${t}: 기대 ${n}, 실제 ${parsedCounts[t] ?? '(알 수 없는 테이블)'}`)
-      }
-      process.exitCode = 1
-      return
+  const gate = evaluateExpectGate({ expect, apply, parsedCounts })
+  if (gate.status === 'mismatch') {
+    console.error('\n--expect와 파싱 건수가 다르다:')
+    for (const [t, n] of gate.mismatches) {
+      console.error(`  ${t}: 기대 ${n}, 실제 ${parsedCounts[t] ?? '(알 수 없는 테이블)'}`)
     }
+    process.exitCode = 1
+    return
+  }
+  if (gate.status === 'apply_without_expect') {
+    console.error(
+      '\n--apply에는 --expect가 필수다 — 사람이 미리 실측한 건수 없이는 운영 데이터를 ' +
+        '되돌릴 수 없는 쓰기로 진행할 수 없다. --expect table=N,table=N,...을 붙여라.'
+    )
+    process.exitCode = 1
+    return
+  }
+  if (gate.status === 'matched') {
     console.log('--expect 건수와 일치한다.')
   } else {
-    console.log('\n경고: --expect 없이 실행했다 — 파싱 건수를 사람이 직접 확인해야 한다.')
+    console.log('\n경고: --expect 없이 실행했다(dry-run) — 파싱 건수를 사람이 직접 확인해야 한다.')
   }
 
   let payload = {
