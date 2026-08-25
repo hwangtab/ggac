@@ -68,6 +68,26 @@ function readValue(body, start) {
 }
 
 /**
+ * `INSERT INTO "schema"."table" (` 다음의 컬럼 목록만 읽는다(`headerAt`은
+ * 이미 찾은 헤더 시작 위치). 값(VALUES) 파싱은 하지 않으므로 행 수와
+ * 무관하게 O(1)이다 — `parseInsertColumns`와 `parseOneInsertStatement`가
+ * 공유한다.
+ *
+ * @returns { cols, colsEnd }
+ */
+function parseColumnList(sql, header, headerAt) {
+  const colsEnd = sql.indexOf(')', headerAt + header.length)
+  if (colsEnd === -1) {
+    throw new Error(`INSERT 컬럼 목록이 닫히지 않았다 (위치 ${headerAt}): ${header}`)
+  }
+  const cols = sql
+    .slice(headerAt + header.length, colsEnd)
+    .split(',')
+    .map(part => part.trim().replace(/^"|"$/g, ''))
+  return { cols, colsEnd }
+}
+
+/**
  * 문장 하나(`INSERT INTO "schema"."table" (cols) VALUES (...),(...);`)를
  * `headerAt`에서 시작해 파싱한다. `;`로 제대로 끝나지 않거나 예기치 않은
  * 문자를 만나면 던진다 — 조용히 일부만 반환하지 않는다. `--rows-per-insert`로
@@ -79,14 +99,7 @@ function readValue(body, start) {
  * 위치다.
  */
 function parseOneInsertStatement(sql, header, headerAt) {
-  const colsEnd = sql.indexOf(')', headerAt + header.length)
-  if (colsEnd === -1) {
-    throw new Error(`INSERT 컬럼 목록이 닫히지 않았다 (위치 ${headerAt}): ${header}`)
-  }
-  const cols = sql
-    .slice(headerAt + header.length, colsEnd)
-    .split(',')
-    .map(part => part.trim().replace(/^"|"$/g, ''))
+  const { cols, colsEnd } = parseColumnList(sql, header, headerAt)
 
   const valuesAt = sql.indexOf('VALUES', colsEnd)
   if (valuesAt === -1) {
@@ -190,6 +203,113 @@ export function parseInsertRows(sql, schema, table) {
 
   if (!found) return []
   return rows
+}
+
+/**
+ * `schema.table`을 대상으로 하는 첫 `INSERT INTO ... (` 문의 컬럼 목록만
+ * 읽는다(값은 파싱하지 않는다 — 행 수와 무관하게 O(1)). 헤더가 없으면
+ * `null`을 돌려준다(그 표에 대한 INSERT 자체가 덤프에 없다는 뜻 — 운영에
+ * 0행이라 pg_dump가 문장을 안 낸 경우가 정상적으로 여기 해당한다).
+ *
+ * 이관 스크립트가 "Postgres 덤프 컬럼 ⊆ 매퍼가 낸 키" 방향을 검사할 때
+ * 쓴다 — 기존 커버리지 게이트(PRAGMA vs 매퍼)는 Turso 스키마와 매퍼만
+ * 비교해서, Postgres에는 있는데 Turso 스키마에도 매퍼에도 없는 컬럼은
+ * 두 게이트를 전부 통과하고 조용히 사라질 수 있었다.
+ */
+export function parseInsertColumns(sql, schema, table) {
+  const header = qualified(schema, table)
+  const headerAt = sql.indexOf(header)
+  if (headerAt === -1) return null
+  return parseColumnList(sql, header, headerAt).cols
+}
+
+/**
+ * Postgres 배열 리터럴(`{a,b,c}`)을 JS 배열로 바꾼다. `text[]`·`uuid[]`
+ * 컬럼이 `supabase db dump`를 거치면 이 형태의 문자열로 나온다(PostgREST를
+ * 거치면 이미 진짜 배열이라 이 함수를 안 거친다 — `pgArrayToJsonText`가
+ * 그 경우를 가려낸다).
+ *
+ * 따옴표로 감싼 원소(쉼표·이스케이프 포함 가능)와 안 감싼 원소(`NULL`
+ * 키워드 포함) 둘 다 다룬다. 형식이 아니면 조용히 원문을 통과시키지 않고
+ * 던진다 — 여기서 침묵하면 `artists.category` 같은 컬럼이 파싱 불가능한
+ * 문자열 그대로 Turso에 들어가고, 읽는 쪽의 `JSON.parse`가 던지면서
+ * 서비스가 죽는다(검증 단계는 매핑 결과 자체와 대조하므로 이 손상을
+ * 못 잡는다).
+ */
+export function parsePgArrayLiteral(value) {
+  if (value === null || value === undefined) return null
+  if (typeof value !== 'string') {
+    throw new Error(`Postgres 배열 리터럴이 아니다: ${JSON.stringify(value)}`)
+  }
+  const trimmed = value.trim()
+  if (trimmed === '{}') return []
+  if (trimmed[0] !== '{' || trimmed[trimmed.length - 1] !== '}') {
+    throw new Error(`Postgres 배열 리터럴 형식이 아니다: ${value}`)
+  }
+
+  const body = trimmed.slice(1, -1)
+  const out = []
+  let i = 0
+  while (i < body.length) {
+    if (body[i] === '"') {
+      i++
+      let elem = ''
+      let closed = false
+      while (i < body.length) {
+        const c = body[i]
+        if (c === '\\') {
+          const next = body[i + 1]
+          if (next === undefined) {
+            throw new Error(`Postgres 배열 리터럴이 역슬래시로 끝났다: ${value}`)
+          }
+          elem += next
+          i += 2
+          continue
+        }
+        if (c === '"') {
+          i++
+          closed = true
+          break
+        }
+        elem += c
+        i++
+      }
+      if (!closed) {
+        throw new Error(`Postgres 배열 리터럴의 따옴표가 닫히지 않았다: ${value}`)
+      }
+      out.push(elem)
+    } else {
+      let elem = ''
+      while (i < body.length && body[i] !== ',') {
+        elem += body[i]
+        i++
+      }
+      out.push(elem === 'NULL' ? null : elem)
+    }
+
+    if (body[i] === ',') {
+      i++
+      continue
+    }
+    if (i < body.length) {
+      throw new Error(`Postgres 배열 리터럴 파싱 중 예기치 않은 문자 (위치 ${i}): ${value}`)
+    }
+  }
+  return out
+}
+
+/**
+ * `text[]`/`uuid[]` 컬럼 값을 SQLite에 저장할 JSON 문자열로 바꾼다. 이미
+ * 진짜 배열이면(PostgREST 경로) 그대로 직렬화하고, Postgres 배열 리터럴
+ * 문자열이면(`supabase db dump` 경로) 먼저 `parsePgArrayLiteral`로 판다 —
+ * 호출부가 어느 소스에서 왔는지 몰라도 안전하게 쓸 수 있다.
+ */
+export function pgArrayToJsonText(value, fallback) {
+  if (value === null || value === undefined) {
+    return fallback === undefined ? null : JSON.stringify(fallback)
+  }
+  const arr = Array.isArray(value) ? value : parsePgArrayLiteral(value)
+  return JSON.stringify(arr)
 }
 
 /**

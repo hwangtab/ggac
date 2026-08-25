@@ -24,7 +24,7 @@
 import { createClient } from '@libsql/client'
 import { readFileSync } from 'node:fs'
 
-import { parseInsertRows } from './lib/pgDumpParser.mjs'
+import { parseInsertRows, parseInsertColumns } from './lib/pgDumpParser.mjs'
 import {
   toArtistRow,
   toBoardMeetingRow,
@@ -45,8 +45,10 @@ import {
   toEventApplicationRow,
   toMemberBulkOperationRow,
 } from './lib/stage4Mapping.mjs'
-import { parseArgs } from './identity.mjs'
+import { parseArgs, buildUpsert } from './identity.mjs'
 import { parseExpect, evaluateExpectGate } from './content.mjs'
+
+export { buildUpsert }
 
 /**
  * FK 의존 순서.
@@ -85,10 +87,22 @@ export const LOAD_ORDER = [
 const PK_COLUMN = { link_previews: 'url' }
 const pkColumnFor = table => PK_COLUMN[table] ?? 'id'
 
+/** 한 번에 보내는 쓰기 문 수. 11,083행짜리 user_activities를 단일
+ * client.batch()로 던지면 12MB짜리 HTTP 요청 하나가 되고, libsql은 청크도
+ * 재시도도 하지 않는다. 업서트가 멱등이라 쪼개도 비용이 없다. */
+const WRITE_CHUNK_SIZE = 500
+
+/** 검증 단계에서 한 번에 읽어오는 행 수. 11k행을 SELECT * 한 방으로
+ * 끌어오지 않고 페이지네이션한다. */
+const SELECT_PAGE_SIZE = 1000
+
 /**
  * payload 안의 FK 참조 전부. `parentSource: 'external'`은 이 스크립트가
  * 적재하지 않는 member_profiles를 가리킨다 — Turso에서 직접 조회한 id
  * 집합과 대조한다. `'internal'`은 이 payload 안에서 같이 적재하는 표다.
+ * `nullable`은 Turso(Drizzle) 스키마의 실제 제약이다 — `--null-orphan-fk`가
+ * NOT NULL 컬럼에 쓰이는 걸 막는 데 쓴다(board_meeting_attendees.member_id
+ * 등은 false).
  */
 export const REFERENCE_CHECKS = [
   {
@@ -97,6 +111,7 @@ export const REFERENCE_CHECKS = [
     column: 'created_by',
     parentKey: 'profiles',
     parentSource: 'external',
+    nullable: true,
   },
   {
     key: 'boardAgendas',
@@ -104,6 +119,7 @@ export const REFERENCE_CHECKS = [
     column: 'meeting_id',
     parentKey: 'boardMeetings',
     parentSource: 'internal',
+    nullable: false,
   },
   {
     key: 'boardAgendas',
@@ -111,6 +127,7 @@ export const REFERENCE_CHECKS = [
     column: 'proposed_by',
     parentKey: 'profiles',
     parentSource: 'external',
+    nullable: true,
   },
   {
     key: 'boardMinutes',
@@ -118,6 +135,7 @@ export const REFERENCE_CHECKS = [
     column: 'meeting_id',
     parentKey: 'boardMeetings',
     parentSource: 'internal',
+    nullable: false,
   },
   {
     key: 'boardMinutes',
@@ -125,6 +143,7 @@ export const REFERENCE_CHECKS = [
     column: 'author_id',
     parentKey: 'profiles',
     parentSource: 'external',
+    nullable: true,
   },
   {
     key: 'boardDocuments',
@@ -132,6 +151,7 @@ export const REFERENCE_CHECKS = [
     column: 'uploaded_by',
     parentKey: 'profiles',
     parentSource: 'external',
+    nullable: true,
   },
   {
     key: 'boardMeetingAttendees',
@@ -139,6 +159,7 @@ export const REFERENCE_CHECKS = [
     column: 'meeting_id',
     parentKey: 'boardMeetings',
     parentSource: 'internal',
+    nullable: false,
   },
   {
     key: 'boardMeetingAttendees',
@@ -146,6 +167,7 @@ export const REFERENCE_CHECKS = [
     column: 'member_id',
     parentKey: 'profiles',
     parentSource: 'external',
+    nullable: false,
   },
   {
     key: 'boardMeetingDateOptions',
@@ -153,6 +175,7 @@ export const REFERENCE_CHECKS = [
     column: 'meeting_id',
     parentKey: 'boardMeetings',
     parentSource: 'internal',
+    nullable: false,
   },
   {
     key: 'boardMeetingDateVotes',
@@ -160,6 +183,7 @@ export const REFERENCE_CHECKS = [
     column: 'option_id',
     parentKey: 'boardMeetingDateOptions',
     parentSource: 'internal',
+    nullable: false,
   },
   {
     key: 'boardMeetingDateVotes',
@@ -167,6 +191,7 @@ export const REFERENCE_CHECKS = [
     column: 'voter_id',
     parentKey: 'profiles',
     parentSource: 'external',
+    nullable: false,
   },
   {
     key: 'systemSettings',
@@ -174,6 +199,7 @@ export const REFERENCE_CHECKS = [
     column: 'updated_by',
     parentKey: 'profiles',
     parentSource: 'external',
+    nullable: true,
   },
   {
     key: 'systemSettingsHistory',
@@ -181,6 +207,7 @@ export const REFERENCE_CHECKS = [
     column: 'setting_id',
     parentKey: 'systemSettings',
     parentSource: 'internal',
+    nullable: true,
   },
   {
     key: 'systemSettingsHistory',
@@ -188,6 +215,7 @@ export const REFERENCE_CHECKS = [
     column: 'changed_by',
     parentKey: 'profiles',
     parentSource: 'external',
+    nullable: true,
   },
   {
     key: 'userSettings',
@@ -195,6 +223,7 @@ export const REFERENCE_CHECKS = [
     column: 'user_id',
     parentKey: 'profiles',
     parentSource: 'external',
+    nullable: false,
   },
   {
     key: 'userActivities',
@@ -202,6 +231,7 @@ export const REFERENCE_CHECKS = [
     column: 'user_id',
     parentKey: 'profiles',
     parentSource: 'external',
+    nullable: true,
   },
   {
     key: 'userSessions',
@@ -209,6 +239,7 @@ export const REFERENCE_CHECKS = [
     column: 'user_id',
     parentKey: 'profiles',
     parentSource: 'external',
+    nullable: true,
   },
   {
     key: 'dailyActivityStats',
@@ -216,6 +247,7 @@ export const REFERENCE_CHECKS = [
     column: 'user_id',
     parentKey: 'profiles',
     parentSource: 'external',
+    nullable: true,
   },
   {
     key: 'memberBulkOperations',
@@ -223,6 +255,7 @@ export const REFERENCE_CHECKS = [
     column: 'performed_by',
     parentKey: 'profiles',
     parentSource: 'external',
+    nullable: false,
   },
 ]
 
@@ -230,16 +263,6 @@ export const REFERENCE_CHECKS = [
  * payload 안에서 부모 행이 없는 FK를 찾는다. `profileIds`는 Turso의
  * member_profiles에서 직접 읽은 id 집합이다(이 스크립트는 그 표를
  * 적재하지 않는다).
- *
- * content.mjs와 달리 허용 목록이 없다 — 이 18표에 대해 실제 운영 덤프
- * (2026-08-25)로 미리 대조해본 결과 FK 고아가 하나도 없었다(board_*의
- * created_by/proposed_by/author_id/uploaded_by/member_id,
- * system_settings(_history)의 updated_by/changed_by,
- * user_activities/user_sessions/daily_activity_stats의 user_id 전부
- * 0건). "알려진 죽은 데이터를 허용 목록으로 눈감아준다"는 content.mjs의
- * 필요가 여기는 없으므로, 허용 목록·bypass 플래그를 만들지 않고 고아가
- * 하나라도 나오면 무조건 중단한다 — 나중에 실제로 알려진 고아가 발견되면
- * 그때 근거와 함께 허용 목록을 추가한다(YAGNI).
  */
 export function findOrphans(payload, profileIds) {
   const internalIdSets = {
@@ -260,6 +283,83 @@ export function findOrphans(payload, profileIds) {
   return orphans
 }
 
+/**
+ * `--null-orphan-fk table.column,table.column,...`를 파싱한다. 없으면
+ * 빈 Set — 기본값은 "고아를 하나도 허용하지 않는다"이다.
+ */
+export function parseNullOrphanFk(argv) {
+  const idx = argv.indexOf('--null-orphan-fk')
+  if (idx === -1) return new Set()
+  const raw = argv[idx + 1]
+  if (!raw || raw.startsWith('--')) {
+    throw new Error('usage: --null-orphan-fk table.column,table.column,...')
+  }
+  return new Set(raw.split(','))
+}
+
+/**
+ * `--null-orphan-fk`가 가리키는 표.컬럼이 REFERENCE_CHECKS가 아는 FK이고
+ * nullable인지 확인한다. 모르는 표.컬럼이거나 NOT NULL 컬럼(예:
+ * board_meeting_attendees.member_id)이면 던진다 — 어차피 SQLite가 NOT
+ * NULL 위반으로 막겠지만, 그 실패가 적재 중간(청크 일부가 이미 커밋된
+ * 뒤)이 아니라 시작 전에 분명한 메시지로 나오게 한다.
+ */
+export function validateNullOrphanFk(requested) {
+  const known = new Map(REFERENCE_CHECKS.map(c => [`${c.sqlTable}.${c.column}`, c.nullable]))
+  for (const key of requested) {
+    if (!known.has(key)) {
+      throw new Error(`--null-orphan-fk: 알 수 없는 표.컬럼이다: ${key}`)
+    }
+    if (known.get(key) === false) {
+      throw new Error(`--null-orphan-fk: ${key}은 NOT NULL 컬럼이라 쓸 수 없다`)
+    }
+  }
+}
+
+/**
+ * 고아를 정책에 따라 나눈다. `--null-orphan-fk`에 없는 표.컬럼의 고아는
+ * `disallowed`로 돌려주고(호출부가 중단해야 한다), 지정된 고아는 그 FK
+ * 컬럼만 null로 낮춘 payload 사본을 돌려준다 — **행 자체는 지우지
+ * 않는다**(Postgres가 걸어둔 ON DELETE set null과 같은 결과: 활동 기록은
+ * 남고 참조만 끊긴다). 기본값(빈 Set)이면 모든 고아가 disallowed로
+ * 떨어져 예전과 같이 무조건 중단한다.
+ */
+export function resolveOrphans(payload, orphans, nullOrphanFkSet) {
+  const disallowed = orphans.filter(o => !nullOrphanFkSet.has(`${o.table}.${o.column}`))
+  if (disallowed.length > 0) {
+    return { ok: false, disallowed }
+  }
+  if (orphans.length === 0) {
+    return { ok: true, payload, nulledCounts: {} }
+  }
+
+  const toNullByKey = new Map() // payload key -> Map(rowId -> Set(column))
+  for (const o of orphans) {
+    if (!toNullByKey.has(o.key)) toNullByKey.set(o.key, new Map())
+    const rowMap = toNullByKey.get(o.key)
+    if (!rowMap.has(o.id)) rowMap.set(o.id, new Set())
+    rowMap.get(o.id).add(o.column)
+  }
+
+  const out = { ...payload }
+  for (const [key, rowMap] of toNullByKey) {
+    out[key] = payload[key].map(row => {
+      const cols = rowMap.get(row.id)
+      if (!cols) return row
+      const patched = { ...row }
+      for (const c of cols) patched[c] = null
+      return patched
+    })
+  }
+
+  const nulledCounts = {}
+  for (const o of orphans) {
+    const k = `${o.table}.${o.column}`
+    nulledCounts[k] = (nulledCounts[k] ?? 0) + 1
+  }
+  return { ok: true, payload: out, nulledCounts }
+}
+
 /** `table`의 실제 컬럼 목록을 PRAGMA로 얻는다. 테이블이 없으면 던진다. */
 async function fetchDbColumns(client, table) {
   const info = await client.execute(`PRAGMA table_info("${table}")`)
@@ -269,9 +369,10 @@ async function fetchDbColumns(client, table) {
 }
 
 /**
- * rows 전체에 대해 컬럼 커버리지를 검사한다(content.mjs·identity.mjs와 같은
- * 이유로 첫 행만 보지 않는다 — NULL 때문에 키가 빠진 행을 놓칠 수 있다).
- * PRAGMA는 테이블당 한 번만 부르고 그 결과를 모든 행에 재사용한다.
+ * rows 전체에 대해 Turso 쪽 컬럼 커버리지를 검사한다(content.mjs·
+ * identity.mjs와 같은 이유로 첫 행만 보지 않는다 — NULL 때문에 키가 빠진
+ * 행을 놓칠 수 있다). PRAGMA는 테이블당 한 번만 부르고 그 결과를 모든
+ * 행에 재사용한다.
  */
 async function assertAllRowsColumnCoverage(client, table, rows) {
   if (rows.length === 0) return
@@ -291,43 +392,75 @@ async function assertAllRowsColumnCoverage(client, table, rows) {
 }
 
 /**
- * id 충돌 시 전 컬럼을 덮어쓰는 업서트. identity.mjs의 buildUpsert와 같은
- * 모양이지만, link_previews처럼 PK가 `id`가 아닌 표를 위해 pkColumn을
- * 받는다(기본값 'id').
+ * rows 전체에 대해 **Postgres 덤프 쪽** 컬럼 커버리지를 검사한다.
+ * 위의 `assertAllRowsColumnCoverage`(Turso PRAGMA vs 매퍼)와 반대 방향이다
+ * — Postgres에는 있는데 Turso 스키마에도 매퍼에도 없는 컬럼은 두 게이트를
+ * 전부 통과하고 출력 한 줄 없이 사라질 수 있었다. `dumpCols`가 null이면
+ * (그 표에 대한 INSERT 자체가 덤프에 없다 — 운영 0행) 검사할 게 없다.
  */
-export function buildUpsert(table, row, pkColumn = 'id') {
-  const cols = Object.keys(row)
-  const quoted = cols.map(c => `"${c}"`).join(', ')
-  const holes = cols.map(() => '?').join(', ')
-  const updates = cols
-    .filter(c => c !== pkColumn)
-    .map(c => `"${c}" = excluded."${c}"`)
-    .join(', ')
-  return {
-    sql: `INSERT INTO "${table}" (${quoted}) VALUES (${holes}) ON CONFLICT("${pkColumn}") DO UPDATE SET ${updates}`,
-    args: cols.map(c => row[c]),
+export function assertDumpColumnsCovered(table, dumpCols, mappedRows) {
+  if (!dumpCols) return
+  for (const row of mappedRows) {
+    const mapped = new Set(Object.keys(row))
+    const missing = dumpCols.filter(c => !mapped.has(c))
+    if (missing.length > 0) {
+      throw new Error(`${table}: Postgres 덤프에는 있는데 매퍼가 빠뜨린 컬럼 ${missing.join(', ')}`)
+    }
   }
 }
 
+/**
+ * 대용량 표(user_activities 11,083행 등)를 WRITE_CHUNK_SIZE 단위로 나눠
+ * 적재한다. 업서트가 멱등이라 청크 하나가 실패해도 재실행이 안전하다.
+ * 청크가 둘 이상일 때만 진행 상황을 찍는다(작은 표는 조용히).
+ */
 export async function loadStage4({ client, ...payload }) {
   const counts = {}
   for (const [table, key] of LOAD_ORDER) {
     const rows = payload[key]
     await assertAllRowsColumnCoverage(client, table, rows)
-    // 테이블 단위 트랜잭션. FK 순서를 지키려면 테이블끼리는 나눠야 한다.
-    await client.batch(
-      rows.map(r => buildUpsert(table, r, pkColumnFor(table))),
-      'write'
-    )
+    const pkCol = pkColumnFor(table)
+
+    let loaded = 0
+    for (let i = 0; i < rows.length; i += WRITE_CHUNK_SIZE) {
+      const chunk = rows.slice(i, i + WRITE_CHUNK_SIZE)
+      await client.batch(
+        chunk.map(r => buildUpsert(table, r, pkCol)),
+        'write'
+      )
+      loaded += chunk.length
+      if (rows.length > WRITE_CHUNK_SIZE) {
+        console.log(`  ${table}: ${loaded}/${rows.length}행 적재됨`)
+      }
+    }
     counts[table] = rows.length
   }
   return counts
 }
 
+/** SELECT_PAGE_SIZE 단위로 표 전체를 읽는다(단일 대형 응답을 피한다). */
+async function fetchAllRows(client, table) {
+  const pkCol = pkColumnFor(table)
+  const rows = []
+  let offset = 0
+  while (true) {
+    const res = await client.execute({
+      sql: `SELECT * FROM "${table}" ORDER BY "${pkCol}" LIMIT ? OFFSET ?`,
+      args: [SELECT_PAGE_SIZE, offset],
+    })
+    if (res.rows.length === 0) break
+    rows.push(...res.rows)
+    offset += res.rows.length
+    if (res.rows.length < SELECT_PAGE_SIZE) break
+  }
+  return rows
+}
+
 /**
  * 적재된 값을 원본 매핑과 필드 단위로 대조한다. "행 수가 맞다"는 검증이
  * 아니다 — 값이 하나라도 다르면 그 필드를 지목한다. 값 자체는 절대
- * 출력하지 않는다(표 이름·PK 값·컬럼 이름만).
+ * 출력하지 않는다(표 이름·PK 값·컬럼 이름만). 대형 표는 페이지네이션해
+ * 읽는다(단일 SELECT *로 11k행을 한 응답에 끌어오지 않는다).
  */
 export async function verifyStage4({ client, expected }) {
   const mismatches = []
@@ -335,8 +468,8 @@ export async function verifyStage4({ client, expected }) {
   for (const [table, key] of LOAD_ORDER) {
     const rows = expected[key]
     const pkCol = pkColumnFor(table)
-    const actual = await client.execute(`SELECT * FROM "${table}"`)
-    const index = new Map(actual.rows.map(r => [String(r[pkCol]), r]))
+    const actualRows = await fetchAllRows(client, table)
+    const index = new Map(actualRows.map(r => [String(r[pkCol]), r]))
 
     for (const row of rows) {
       const got = index.get(String(row[pkCol]))
@@ -354,9 +487,9 @@ export async function verifyStage4({ client, expected }) {
       }
     }
 
-    const extra = actual.rows.length - rows.length
+    const extra = actualRows.length - rows.length
     if (extra !== 0) {
-      mismatches.push(`${table}: 행 수 불일치 (Turso ${actual.rows.length} vs 원본 ${rows.length})`)
+      mismatches.push(`${table}: 행 수 불일치 (Turso ${actualRows.length} vs 원본 ${rows.length})`)
     }
   }
 
@@ -418,11 +551,22 @@ async function main() {
     process.exit(1)
   }
 
+  let nullOrphanFk
+  try {
+    nullOrphanFk = parseNullOrphanFk(process.argv.slice(2))
+    validateNullOrphanFk(nullOrphanFk)
+  } catch (err) {
+    console.error(err.message)
+    process.exit(1)
+  }
+
   const sql = readFileSync(dumpPath, 'utf8')
 
   const parsed = {}
+  const dumpCols = {}
   for (const [table] of LOAD_ORDER) {
     parsed[table] = parseInsertRows(sql, 'public', table)
+    dumpCols[table] = parseInsertColumns(sql, 'public', table)
   }
   const parsedCounts = Object.fromEntries(
     LOAD_ORDER.map(([table]) => [table, parsed[table].length])
@@ -464,7 +608,13 @@ async function main() {
     console.log('\n경고: --expect 없이 실행했다(dry-run) — 파싱 건수를 사람이 직접 확인해야 한다.')
   }
 
-  const payload = buildPayload(parsed)
+  let payload = buildPayload(parsed)
+
+  // Postgres 덤프 컬럼 ⊆ 매퍼 키. Turso PRAGMA 커버리지 게이트와 반대
+  // 방향이라 DB 연결 전에, 순수 계산만으로 검사한다.
+  for (const [table, key] of LOAD_ORDER) {
+    assertDumpColumnsCovered(table, dumpCols[table], payload[key])
+  }
 
   const client = createClient({
     url: requireEnv('TURSO_DATABASE_URL'),
@@ -479,14 +629,28 @@ async function main() {
 
     const orphans = findOrphans(payload, profileIds)
     if (orphans.length > 0) {
-      console.log(`\nFK 고아 ${orphans.length}건을 찾았다 — 허용 목록이 없으므로 무조건 중단한다:`)
-      logOrphanList(orphans)
-      console.log(
-        '\n원인을 먼저 확인해라 — member_profiles가 이미 Turso 권위이므로, 여기서 나오는 ' +
-          '고아는 이 표의 참조가 삭제된 회원을 가리키거나 덤프 시점이 어긋났다는 뜻이다.'
-      )
-      process.exitCode = 1
-      return
+      const resolved = resolveOrphans(payload, orphans, nullOrphanFk)
+      if (!resolved.ok) {
+        console.log(`\nFK 고아 ${resolved.disallowed.length}건(허용되지 않음)을 찾았다 — 중단한다:`)
+        logOrphanList(resolved.disallowed)
+        console.log(
+          '\n원인을 먼저 확인해라 — member_profiles가 이미 Turso 권위이므로, 여기서 나오는 ' +
+            '고아는 이 표의 참조가 삭제된 회원을 가리키거나 덤프 시점이 어긋났다는 뜻이다. ' +
+            'nullable 컬럼이라면 --null-orphan-fk table.column으로 그 컬럼만 null로 낮추고 ' +
+            '(행은 지우지 않고) 진행할 수 있다.'
+        )
+        process.exitCode = 1
+        return
+      }
+      if (orphans.length > 0) {
+        console.log(
+          `\nFK 고아 ${orphans.length}건을 --null-orphan-fk 지정에 따라 해당 컬럼만 null로 낮췄다:`
+        )
+        for (const [k, n] of Object.entries(resolved.nulledCounts)) {
+          console.log(`  ${k}: ${n}행`)
+        }
+      }
+      payload = resolved.payload
     }
 
     if (!apply) {

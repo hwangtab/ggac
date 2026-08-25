@@ -17,7 +17,7 @@
 import { createClient } from '@libsql/client'
 import { readFileSync } from 'node:fs'
 
-import { parseInsertRows } from './lib/pgDumpParser.mjs'
+import { parseInsertRows, parseInsertColumns } from './lib/pgDumpParser.mjs'
 import {
   toPostRow,
   toCommentRow,
@@ -199,6 +199,25 @@ async function assertAllRowsColumnCoverage(client, table, rows) {
     const unknown = [...mapped].filter(c => !allowed.has(c))
     if (unknown.length > 0) {
       throw new Error(`${table}: 테이블에 없는 키 ${unknown.join(', ')}`)
+    }
+  }
+}
+
+/**
+ * rows 전체에 대해 **Postgres 덤프 쪽** 컬럼 커버리지를 검사한다. 위의
+ * `assertAllRowsColumnCoverage`(Turso PRAGMA vs 매퍼)와 반대 방향이다 —
+ * Postgres에는 있는데 Turso 스키마에도 매퍼에도 없는 컬럼은 두 게이트를
+ * 전부 통과하고 출력 한 줄 없이 사라질 수 있었다(단계 4 코드리뷰 Important
+ * 3). `dumpCols`가 null이면(그 표에 대한 INSERT 자체가 덤프에 없다) 검사할
+ * 게 없다.
+ */
+export function assertDumpColumnsCovered(table, dumpCols, mappedRows) {
+  if (!dumpCols) return
+  for (const row of mappedRows) {
+    const mapped = new Set(Object.keys(row))
+    const missing = dumpCols.filter(c => !mapped.has(c))
+    if (missing.length > 0) {
+      throw new Error(`${table}: Postgres 덤프에는 있는데 매퍼가 빠뜨린 컬럼 ${missing.join(', ')}`)
     }
   }
 }
@@ -495,6 +514,13 @@ async function main() {
     commentLikes: pgCommentLikes.map(toCommentLikeRow),
     postAttachments: pgPostAttachments.map(toPostAttachmentRow),
     notifications: pgNotifications.map(toNotificationRow),
+  }
+
+  // Postgres 덤프 컬럼 ⊆ 매퍼 키(단계 4 코드리뷰 Important 3 — 반대 방향인
+  // Turso PRAGMA 커버리지 게이트는 이미 있었지만, 덤프에는 있는데 매퍼가
+  // 빠뜨린 컬럼은 그쪽으로 안 잡혔다).
+  for (const [table, key] of LOAD_ORDER) {
+    assertDumpColumnsCovered(table, parseInsertColumns(sql, 'public', table), payload[key])
   }
 
   // 부모 행이 이미 지워진 FK — Postgres에 ON DELETE CASCADE가 선언돼 있으니

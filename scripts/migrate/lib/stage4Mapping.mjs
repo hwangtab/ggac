@@ -19,6 +19,7 @@
  */
 import { toBool, toBoolDefault, toInt, toTs, toJsonText } from './contentMapping.mjs'
 import { toArtistRow } from './identityMapping.mjs'
+import { pgArrayToJsonText } from './pgDumpParser.mjs'
 
 /**
  * nullable jsonb 컬럼용. toJsonText와 달리 NULL을 '{}' 등으로 정규화하지
@@ -248,8 +249,8 @@ export function toDailyActivityStatRow(r) {
 // ---------------------------------------------------------------- 그 밖
 
 /**
- * link_previews 6컬럼. PK가 `id`가 아니라 `url`이다 — stage4.mjs의
- * buildUpsertGeneric이 이 표만 pkColumn='url'로 호출한다.
+ * link_previews 6컬럼. PK가 `id`가 아니라 `url`이다 — stage4.mjs가
+ * `buildUpsert(table, row, pkColumn)`을 이 표만 pkColumn='url'로 호출한다.
  */
 export function toLinkPreviewRow(r) {
   return {
@@ -289,16 +290,20 @@ export function toEventApplicationRow(r) {
 }
 
 /**
- * member_bulk_operations 11컬럼. member_ids는 NOT NULL(fallback 없음 —
- * Postgres도 기본값이 없는 uuid[] NOT NULL이라 비어 있으면 원본 데이터
- * 문제다). parameters/results는 NOT NULL default {}. 운영 실측 0행.
+ * member_bulk_operations 11컬럼. member_ids는 Postgres uuid[]라
+ * `pgArrayToJsonText`로 배열 리터럴을 판다(toJsonText를 썼다면 fallback
+ * 기본값 '{}'가 걸려 배열 컬럼에 객체 리터럴 문자열이 들어가는 오류가
+ * 있었다). fallback을 안 줬으므로 NOT NULL(Postgres도 기본값 없는 uuid[]
+ * NOT NULL)이라 비어 있으면 원본 데이터 문제로 그대로 null이 들어가
+ * DB의 NOT NULL 제약이 잡는다. parameters/results는 NOT NULL default {}.
+ * 운영 실측 0행.
  */
 export function toMemberBulkOperationRow(r) {
   return {
     id: r.id,
     operation_type: r.operation_type,
     performed_by: r.performed_by,
-    member_ids: toJsonText(r.member_ids),
+    member_ids: pgArrayToJsonText(r.member_ids),
     parameters: toJsonText(r.parameters, '{}'),
     results: toJsonText(r.results, '{}'),
     status: r.status,

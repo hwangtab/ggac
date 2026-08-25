@@ -24,12 +24,17 @@ import {
   toJsonTextOrNull,
 } from '../migrate/lib/stage4Mapping.mjs'
 import { toArtistRow, toMemberProfileRow } from '../migrate/lib/identityMapping.mjs'
+import { parseInsertRows } from '../migrate/lib/pgDumpParser.mjs'
 import { buildUpsert as identityBuildUpsert } from '../migrate/identity.mjs'
 import { parseExpect, evaluateExpectGate } from '../migrate/content.mjs'
 import {
   LOAD_ORDER,
   REFERENCE_CHECKS,
   findOrphans,
+  parseNullOrphanFk,
+  validateNullOrphanFk,
+  resolveOrphans,
+  assertDumpColumnsCovered,
   buildUpsert,
   loadStage4,
   verifyStage4,
@@ -44,7 +49,12 @@ const PG_ARTIST = {
   legacy_id: 'artist-099',
   slug: 'test-artist',
   name: '테스트',
-  category: ['미술'],
+  // Postgres text[] 컬럼 — pg_dump가 실제로 내는 배열 리터럴 문자열
+  // 형태(`{연극,연출}`)다. `['미술']`처럼 진짜 배열로 써두면
+  // pgArrayToJsonText가 실제로 배열 리터럴을 파싱하는 경로를 통과하지
+  // 못한 채 테스트가 통과해버린다(코드리뷰 Important 1 지적 — 정확히
+  // 이 픽스처가 원인이었다).
+  category: '{연극,연출}',
   one_liner: '한 줄',
   bio: '소개',
   template_type: '콜라주형',
@@ -243,7 +253,10 @@ const PG_MEMBER_BULK_OPERATION = {
   id: 'mbo1',
   operation_type: 'bulk_approve',
   performed_by: 'u1',
-  member_ids: '["u1","u2"]',
+  // uuid[] 컬럼 — pg_dump가 실제로 내는 배열 리터럴 형태(JSON 배열
+  // 문자열이 아니다). 이 픽스처를 JSON처럼 써두면 pgArrayToJsonText가
+  // 실제로 배열 리터럴을 파싱하는지 검증하지 못한다.
+  member_ids: '{u1,u2}',
   parameters: null,
   results: null,
   status: 'pending',
@@ -407,6 +420,55 @@ test('toMemberBulkOperationRow: 11개 컬럼, jsonb는 fallback을 쓴다', () =
   assert.equal(typeof row.member_ids, 'string')
 })
 
+test('toMemberBulkOperationRow: member_ids(uuid[])는 배열 리터럴을 실제 JSON 배열로 판다', () => {
+  // Postgres 배열 리터럴('{u1,u2}')을 JSON 배열 문자열로 바꿔야지, 원문
+  // 그대로 저장하면 JSON.parse가 던진다 — Important 1과 같은 함정.
+  const row = toMemberBulkOperationRow(PG_MEMBER_BULK_OPERATION)
+  assert.deepEqual(JSON.parse(row.member_ids), ['u1', 'u2'])
+})
+
+// ---------------------------------------------------------- Postgres 배열 리터럴 (코드리뷰 Important 1)
+//
+// 리뷰어가 실측으로 확정한 버그: 단계 2b는 artists를 PostgREST로 읽어
+// category가 진짜 배열이었지만, 이 스크립트는 pg_dump 텍스트를 읽으므로
+// `{연주자,창작자}` 형태의 Postgres 배열 리터럴 문자열이 온다. 예전
+// json()은 문자열이면 그대로 통과시켜 이 리터럴이 파싱 불가능한 값으로
+// Turso에 그대로 들어갔다 — verifyStage4는 매핑 결과 자체와 대조하므로
+// 통과했지만, 실제로 읽는 쪽(Drizzle JSON.parse)이 던져 아티스트 13명
+// 전원의 페이지가 죽었을 것이다.
+
+test('toArtistRow: 덤프 형식(text[] 배열 리터럴) category가 실제 JSON 배열이 된다', () => {
+  const row = toArtistRow(PG_ARTIST)
+  assert.deepEqual(JSON.parse(row.category), ['연극', '연출'])
+})
+
+test('부정 대조: category가 파싱 불가능한 배열 리터럴이면 던진다(조용히 원문을 통과시키지 않는다)', () => {
+  assert.throws(
+    () => toArtistRow({ ...PG_ARTIST, category: '{닫히지 않음' }),
+    /Postgres 배열 리터럴 형식이 아니다/
+  )
+})
+
+test('artists 3행을 실제 덤프와 같은 INSERT 문 형태로 파싱하면 전부 JSON 파싱 가능한 category가 된다', () => {
+  // 실제 운영 덤프(13행)를 이 저장소에 커밋할 수는 없으니(개인정보 우려는
+  // 없지만 덤프 파일 자체를 저장소에 두지 않는다는 원칙), 형태가 같은
+  // 3행짜리 INSERT 블록을 합성한다: 단순 원소, 다중 원소, 쉼표가 포함된
+  // 따옴표 원소 — 실제 덤프에서 나올 수 있는 세 가지 패턴을 다 담는다.
+  const sql = [
+    'INSERT INTO "public"."artists" ("id", "legacy_id", "slug", "name", "category", "one_liner", "bio", "template_type", "portfolio_links", "youtube_videos", "contact", "created_at", "updated_at", "profile_photo_url", "profile_photo_metadata", "is_active", "name_en", "one_liner_en", "bio_en", "template_type_en") VALUES',
+    `\t('a1', 'artist-1', 's1', '이름1', '{연주자}', NULL, NULL, NULL, '[]', '[]', NULL, '2026-01-01 00:00:00+00', '2026-01-01 00:00:00+00', NULL, '{}', 'true', NULL, NULL, NULL, NULL),`,
+    `\t('a2', 'artist-2', 's2', '이름2', '{연주자,창작자,엔지니어}', NULL, NULL, NULL, '[]', '[]', NULL, '2026-01-01 00:00:00+00', '2026-01-01 00:00:00+00', NULL, '{}', 'true', NULL, NULL, NULL, NULL),`,
+    `\t('a3', 'artist-3', 's3', '이름3', '{"기획자,공연",연출}', NULL, NULL, NULL, '[]', '[]', NULL, '2026-01-01 00:00:00+00', '2026-01-01 00:00:00+00', NULL, '{}', 'true', NULL, NULL, NULL, NULL);`,
+  ].join('\n')
+
+  const rows = parseInsertRows(sql, 'public', 'artists').map(toArtistRow)
+  assert.equal(rows.length, 3)
+  const categories = rows.map(r => JSON.parse(r.category))
+  assert.deepEqual(categories[0], ['연주자'])
+  assert.deepEqual(categories[1], ['연주자', '창작자', '엔지니어'])
+  assert.deepEqual(categories[2], ['기획자,공연', '연출'])
+})
+
 // ---------------------------------------------------------------- LOAD_ORDER
 
 test('LOAD_ORDER는 REFERENCE_CHECKS가 아는 internal 부모를 자식보다 먼저 적재한다', () => {
@@ -501,6 +563,99 @@ test('findOrphans: 고아가 없으면 빈 배열이다', () => {
   payload.boardAgendas = [toBoardAgendaRow(PG_BOARD_AGENDA)]
   const profileIds = new Set(['u1'])
   assert.deepEqual(findOrphans(payload, profileIds), [])
+})
+
+// -------------------------------------------------- --null-orphan-fk (코드리뷰 Important 4)
+
+test('parseNullOrphanFk: 플래그가 없으면 빈 Set이다(기본값 = 무조건 중단)', () => {
+  assert.deepEqual(parseNullOrphanFk(['--dump', 'x.sql']), new Set())
+})
+
+test('parseNullOrphanFk: table.column,table.column 형식을 파싱한다', () => {
+  const result = parseNullOrphanFk([
+    '--null-orphan-fk',
+    'user_activities.user_id,user_sessions.user_id',
+  ])
+  assert.deepEqual(result, new Set(['user_activities.user_id', 'user_sessions.user_id']))
+})
+
+test('parseNullOrphanFk: 값이 없거나 다음 플래그를 삼키면 던진다', () => {
+  assert.throws(() => parseNullOrphanFk(['--null-orphan-fk']), /usage/)
+  assert.throws(() => parseNullOrphanFk(['--null-orphan-fk', '--apply']), /usage/)
+})
+
+test('validateNullOrphanFk: 모르는 표.컬럼이면 던진다', () => {
+  assert.throws(
+    () => validateNullOrphanFk(new Set(['no_such_table.no_such_column'])),
+    /알 수 없는 표\.컬럼/
+  )
+})
+
+test('부정 대조: NOT NULL 컬럼(board_meeting_attendees.member_id)에 --null-orphan-fk를 쓰면 거부된다', () => {
+  assert.throws(
+    () => validateNullOrphanFk(new Set(['board_meeting_attendees.member_id'])),
+    /NOT NULL 컬럼이라 쓸 수 없다/
+  )
+})
+
+test('validateNullOrphanFk: nullable 컬럼(user_activities.user_id)은 통과한다', () => {
+  assert.doesNotThrow(() => validateNullOrphanFk(new Set(['user_activities.user_id'])))
+})
+
+test('resolveOrphans: 지정 밖의 고아는 disallowed로 돌려주고 중단해야 함을 알린다', () => {
+  const payload = emptyPayload()
+  payload.userActivities = [toUserActivityRow({ ...PG_USER_ACTIVITY, user_id: 'ghost' })]
+  const orphans = findOrphans(payload, new Set(['u1']))
+
+  const result = resolveOrphans(payload, orphans, new Set()) // 기본값: 빈 Set
+  assert.equal(result.ok, false)
+  assert.equal(result.disallowed.length, 1)
+})
+
+test('resolveOrphans: 지정된 nullable FK는 행을 지우지 않고 그 컬럼만 null로 낮춘다', () => {
+  const payload = emptyPayload()
+  payload.userActivities = [
+    toUserActivityRow({ ...PG_USER_ACTIVITY, id: 'ua-ghost', user_id: 'ghost' }),
+  ]
+  const orphans = findOrphans(payload, new Set(['u1']))
+
+  const result = resolveOrphans(payload, orphans, new Set(['user_activities.user_id']))
+  assert.equal(result.ok, true)
+  assert.equal(result.payload.userActivities.length, 1, '행 자체는 지워지지 않는다')
+  assert.equal(result.payload.userActivities[0].id, 'ua-ghost')
+  assert.equal(result.payload.userActivities[0].user_id, null, 'FK 컬럼만 null로 낮춘다')
+  assert.deepEqual(result.nulledCounts, { 'user_activities.user_id': 1 })
+})
+
+test('resolveOrphans: 고아가 없으면 payload를 그대로 통과시킨다', () => {
+  const payload = emptyPayload()
+  const result = resolveOrphans(payload, [], new Set())
+  assert.equal(result.ok, true)
+  assert.equal(result.payload, payload)
+  assert.deepEqual(result.nulledCounts, {})
+})
+
+// -------------------------------------------------- assertDumpColumnsCovered (코드리뷰 Important 3)
+
+test('assertDumpColumnsCovered: 덤프 컬럼이 매퍼 키에 다 있으면 통과한다', () => {
+  const row = toBoardMeetingRow(PG_BOARD_MEETING)
+  assert.doesNotThrow(() =>
+    assertDumpColumnsCovered('board_meetings', Object.keys(PG_BOARD_MEETING), [row])
+  )
+})
+
+test('부정 대조: 매퍼가 덤프에 있는 컬럼을 빠뜨리면 중단시킨다', () => {
+  const row = toBoardMeetingRow(PG_BOARD_MEETING)
+  delete row.status // 매퍼가 실수로 빠뜨렸다고 가정(운영 매퍼는 안 건드림)
+  const dumpCols = [...Object.keys(PG_BOARD_MEETING), 'brand_new_column_pg_has']
+  assert.throws(
+    () => assertDumpColumnsCovered('board_meetings', dumpCols, [row]),
+    /Postgres 덤프에는 있는데 매퍼가 빠뜨린 컬럼/
+  )
+})
+
+test('assertDumpColumnsCovered: 덤프에 그 표의 INSERT가 없으면(null) 검사를 건너뛴다', () => {
+  assert.doesNotThrow(() => assertDumpColumnsCovered('user_settings', null, []))
 })
 
 // ---------------------------------------------------------------- evaluateExpectGate(stage4 표 집합)
@@ -617,6 +772,47 @@ test('link_previews는 url을 PK로 검증한다', async () => {
   await client.execute(
     "update link_previews set ttl_seconds = 21600 where url = 'https://example.com/x'"
   )
+})
+
+// -------------------------------------------------- 청크 적재·페이지 검증 (코드리뷰 Important 2)
+//
+// user_activities 11,083행을 단일 client.batch()로 던지면 12MB짜리 HTTP
+// 요청 하나가 된다 — WRITE_CHUNK_SIZE(500)로 나눠 여러 번의 client.batch()로
+// 보내고, verifyStage4도 SELECT_PAGE_SIZE(1000)로 나눠 읽는다. 여기서는
+// 두 경계를 모두 넘는 1500행으로 실제 왕복이 맞는지 확인한다(정확한 청크
+// 크기를 픽스처가 알 필요는 없다 — "여러 청크/페이지에 걸쳐도 전부
+// 맞는다"만 검증하면 된다).
+
+test('대용량 표(1500행)를 적재·검증해도 청크 경계에서 행이 새지 않는다', async () => {
+  const bulkActivities = Array.from({ length: 1500 }, (_, i) =>
+    toUserActivityRow({ ...PG_USER_ACTIVITY, id: `bulk-ua-${i}`, user_id: 'u1' })
+  )
+  const basePayload = payload() // user_activities에 ua1이 이미 이전 테스트로 적재돼 있다
+
+  const counts = await loadStage4({
+    client,
+    ...basePayload,
+    userActivities: bulkActivities, // ua1은 이미 있으니 새 1500행만 넘긴다
+  })
+  assert.equal(counts.user_activities, 1500)
+
+  const bulkCount = await client.execute(
+    "select count(*) c from user_activities where id like 'bulk-ua-%'"
+  )
+  assert.equal(bulkCount.rows[0].c, 1500)
+
+  // 검증은 실제 Turso 상태(ua1 + 새 1500행)와 정확히 맞아야 한다.
+  const { mismatches } = await verifyStage4({
+    client,
+    expected: {
+      ...basePayload,
+      userActivities: [...basePayload.userActivities, ...bulkActivities],
+    },
+  })
+  assert.deepEqual(mismatches, [])
+
+  // 정리 — 이후 다른 테스트의 count(*) 기반 검증에 영향을 주지 않는다.
+  await client.execute("delete from user_activities where id like 'bulk-ua-%'")
 })
 
 test('개인정보 컬럼(event_applications)이 어긋나도 값은 절대 찍지 않는다', async () => {

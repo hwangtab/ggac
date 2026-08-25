@@ -1,7 +1,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { parseInsertRows, pgTimestampToMs } from '../migrate/lib/pgDumpParser.mjs'
+import {
+  parseInsertRows,
+  parseInsertColumns,
+  pgTimestampToMs,
+  parsePgArrayLiteral,
+  pgArrayToJsonText,
+} from '../migrate/lib/pgDumpParser.mjs'
 
 const SQL = `SET session_replication_role = replica;
 
@@ -143,4 +149,68 @@ test('같은 표의 두 INSERT 문이 컬럼 순서가 다르면 던진다', () 
   const mismatched = `INSERT INTO "public"."notifications" ("id", "user_id") VALUES ('n1', 'u1');
 INSERT INTO "public"."notifications" ("user_id", "id") VALUES ('u2', 'n2');`
   assert.throws(() => parseInsertRows(mismatched, 'public', 'notifications'), /컬럼 목록이 다르다/)
+})
+
+// ---------------------------------------------------------------- parseInsertColumns
+
+test('parseInsertColumns: 헤더의 컬럼 목록만 읽는다(값은 파싱하지 않는다)', () => {
+  assert.deepEqual(parseInsertColumns(SQL, 'auth', 'users'), [
+    'id',
+    'email',
+    'encrypted_password',
+    'email_confirmed_at',
+    'raw_meta',
+  ])
+})
+
+test('parseInsertColumns: 표에 대한 INSERT가 없으면 null이다', () => {
+  assert.equal(parseInsertColumns(SQL, 'auth', 'sessions'), null)
+})
+
+// ---------------------------------------------------------------- parsePgArrayLiteral / pgArrayToJsonText
+//
+// text[]·uuid[] 컬럼이 `supabase db dump`를 거치면 `{a,b}` 형태의 Postgres
+// 배열 리터럴 문자열로 나온다(단계 4 코드리뷰 Important 1 — artists.category
+// 13행이 전부 이 형태였고, 예전 코드는 이 문자열을 그대로 통과시켜 Turso에
+// 파싱 불가능한 값이 들어갔다).
+
+test('parsePgArrayLiteral: 단순 원소를 배열로 바꾼다', () => {
+  assert.deepEqual(parsePgArrayLiteral('{연주자,창작자}'), ['연주자', '창작자'])
+})
+
+test('parsePgArrayLiteral: 빈 배열과 null을 다룬다', () => {
+  assert.deepEqual(parsePgArrayLiteral('{}'), [])
+  assert.equal(parsePgArrayLiteral(null), null)
+  assert.equal(parsePgArrayLiteral(undefined), null)
+})
+
+test('parsePgArrayLiteral: 따옴표로 감싼 원소 안의 쉼표는 원소를 안 자른다', () => {
+  assert.deepEqual(parsePgArrayLiteral('{"a,b",c}'), ['a,b', 'c'])
+})
+
+test('parsePgArrayLiteral: 따옴표 안의 이스케이프된 따옴표를 푼다', () => {
+  assert.deepEqual(parsePgArrayLiteral('{"with \\"quote\\"",plain}'), ['with "quote"', 'plain'])
+})
+
+test('parsePgArrayLiteral: NULL 키워드(따옴표 없음)는 null 원소가 된다', () => {
+  assert.deepEqual(parsePgArrayLiteral('{a,NULL,b}'), ['a', null, 'b'])
+})
+
+test('부정 대조: 배열 리터럴 형식이 아니면 조용히 통과시키지 않고 던진다', () => {
+  assert.throws(() => parsePgArrayLiteral('연주자,창작자'), /Postgres 배열 리터럴 형식이 아니다/)
+  assert.throws(() => parsePgArrayLiteral('{닫히지 않음'), /Postgres 배열 리터럴 형식이 아니다/)
+  assert.throws(() => parsePgArrayLiteral(42), /Postgres 배열 리터럴이 아니다/)
+})
+
+test('pgArrayToJsonText: 배열 리터럴 문자열(덤프 경로)을 JSON 배열 문자열로 직렬화한다', () => {
+  assert.equal(pgArrayToJsonText('{연주자,창작자}'), '["연주자","창작자"]')
+})
+
+test('pgArrayToJsonText: 이미 진짜 배열이면(PostgREST 경로) 그대로 직렬화한다', () => {
+  assert.equal(pgArrayToJsonText(['연주자', '창작자']), '["연주자","창작자"]')
+})
+
+test('pgArrayToJsonText: null은 fallback이 없으면 null, 있으면 그 값을 직렬화한다', () => {
+  assert.equal(pgArrayToJsonText(null), null)
+  assert.equal(pgArrayToJsonText(null, []), '[]')
 })
