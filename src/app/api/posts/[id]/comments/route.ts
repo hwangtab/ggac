@@ -9,6 +9,7 @@ import { formatTimestampUuidCursor, parseTimestampUuidCursor } from '@/utils/key
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { rateLimit } from '@/lib/server/rateLimit'
 import { requireActiveMember, getOptionalUser } from '@/lib/server/memberAuth'
+import { notifyNewComment } from '@/lib/server/commentNotify'
 
 export const dynamic = 'force-dynamic'
 export const preferredRegion = 'icn1'
@@ -132,6 +133,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     } catch (revalidateError) {
       console.error('[API] 캐시 재검증 실패:', revalidateError)
     }
+
+    // 알림 발송 실패는 로깅만 하고 댓글 작성 응답을 막지 않는다
+    // (notifyNewComment 내부에서 이미 흡수한다).
+    await notifyNewComment({
+      postId: validPostId,
+      commentId: created.id,
+      commentAuthorId: userId,
+    })
 
     return ApiSuccess.ok(data).toNextResponse()
   } catch (e) {

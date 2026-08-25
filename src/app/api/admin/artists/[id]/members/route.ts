@@ -9,6 +9,7 @@ import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { validateUUID } from '@/utils/validation'
 import { getProfileById, updateProfile } from '@/db/queries/profiles'
+import { notifyArtistApproved } from '@/lib/server/memberStatusNotify'
 
 function getRouteParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? (value[0] ?? '') : (value ?? '')
@@ -99,6 +100,8 @@ export const POST = defineApiRoute<Record<string, unknown>>({
     // 아티스트 배정 업데이트. artist_role은 위에서 허용 목록(owner/manager/
     // collaborator)으로 이미 검증된 값이 항상 들어가므로 Turso의 NOT NULL
     // 제약과 충돌하지 않는다(해제 라우트와 달리 null을 쓰지 않는다).
+    const wasArtist = targetMember.is_artist
+
     try {
       await updateProfile(memberId, {
         artist_id: artistId,
@@ -108,6 +111,14 @@ export const POST = defineApiRoute<Record<string, unknown>>({
     } catch (error) {
       console.error('Member update error:', error)
       return ApiError.internalServerError('아티스트 배정에 실패했습니다.').toNextResponse()
+    }
+
+    // is_artist가 false → true로 실제로 바뀐 경우에만 알림을 보낸다(이미
+    // 아티스트인 회원이 역할만 바뀌거나 같은 아티스트에 재배정되는 경우는
+    // 제외 — 원본 트리거의 `OLD.is_artist = false AND NEW.is_artist = true`
+    // 조건). 실패는 로깅만 하고 응답을 막지 않는다(내부에서 이미 흡수).
+    if (!wasArtist) {
+      await notifyArtistApproved(memberId)
     }
 
     const updatedMember = await getProfileById(memberId)

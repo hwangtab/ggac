@@ -7,6 +7,10 @@ import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { logSecurityEvent } from '@/utils/security'
 import { validateUUID } from '@/utils/validation'
 import { getProfilesByIds, updateProfilesByIds, type ProfilePatch } from '@/db/queries/profiles'
+import {
+  notifyMembersApprovedBatch,
+  notifyMembersRejectedBatch,
+} from '@/lib/server/memberStatusNotify'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -226,6 +230,17 @@ export const POST = defineApiRoute<Partial<BulkOperationRequest>>({
               member_name: targetMember?.display_name,
               success: true,
             })
+          }
+        }
+
+        // 실제로 전이가 반영된 회원(updatedIdSet)에게만 배치 알림을 보낸다
+        // — eligibleIds 전체가 아니라 DB 업데이트가 실제로 성공한 id만.
+        // 실패는 로깅만 하고 응답을 막지 않는다(각 함수 내부에서 이미 흡수).
+        if (updatedIdSet.size > 0) {
+          if (operation_type === 'bulk_approve') {
+            await notifyMembersApprovedBatch(Array.from(updatedIdSet))
+          } else if (operation_type === 'bulk_reject') {
+            await notifyMembersRejectedBatch(Array.from(updatedIdSet))
           }
         }
       }

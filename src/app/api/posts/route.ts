@@ -29,6 +29,7 @@ import { parseJsonObjectBody } from '@/utils/requestBody'
 import { annotateImageDimensionsSafe } from '@/utils/imageDimensions'
 import { getBoardListRevalidationPaths } from '@/lib/revalidationPaths'
 import { createPost } from '@/db/queries/posts'
+import { notifyNewPost } from '@/lib/server/postNotify'
 
 export const runtime = 'nodejs'
 export const revalidate = 60
@@ -268,6 +269,16 @@ export async function POST(request: NextRequest) {
       } catch {
         // Cache invalidation must not turn a successful database write into a failed create.
       }
+
+      // 공지(category === '공지')인 경우에만 승인 회원 전체에게 알림을
+      // 배치 발송한다. 실패는 로깅만 하고 게시글 작성 응답을 막지 않는다
+      // (notifyNewPost 내부에서 이미 흡수한다).
+      await notifyNewPost({
+        postId: post.id,
+        authorId: post.author_id,
+        title: post.title,
+        category: post.category,
+      })
 
       return ApiSuccess.created(post, '게시글이 작성되었습니다.')
     },

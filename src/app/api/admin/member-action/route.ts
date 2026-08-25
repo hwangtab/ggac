@@ -7,6 +7,7 @@ import { logSecurityEvent } from '@/utils/security'
 import { createLogger, maskId } from '@/utils/logger'
 import { validateUUID } from '@/utils/validation'
 import { getProfileById, updateProfile, type ProfilePatch } from '@/db/queries/profiles'
+import { notifyMemberApproved, notifyMemberRejected } from '@/lib/server/memberStatusNotify'
 
 const log = createLogger('admin/member-action')
 
@@ -176,6 +177,17 @@ export const POST = defineApiRoute<Record<string, unknown>>({
           action,
         })
         return ApiError.internalServerError('회원 상태 업데이트에 실패했습니다.').toNextResponse()
+      }
+
+      // 상태 전이 알림. action이 'approve'/'reject'인 경로는 위에서 이미
+      // `targetMember.registration_status !== 'pending'`이면 400으로
+      // 빠졌으므로, 여기 도달했다는 것 자체가 pending → approved/rejected
+      // 전이가 실제로 일어났다는 뜻이다(재조회로 다시 검사하지 않는다).
+      // 실패는 로깅만 하고 응답을 막지 않는다(각 함수 내부에서 이미 흡수).
+      if (action === 'approve') {
+        await notifyMemberApproved(memberId)
+      } else if (action === 'reject') {
+        await notifyMemberRejected(memberId)
       }
 
       // 성공 응답

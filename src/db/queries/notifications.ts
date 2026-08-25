@@ -119,6 +119,12 @@ export interface CreateBulkNotificationsInput {
   message: string
   data?: Record<string, unknown>
   expires_at?: string | null
+  /** 모든 수신자에게 공통으로 붙는 연관 게시글/사용자 id. 생략하면 `null`.
+   * 원본 `create_bulk_notification` RPC에는 없던 인자다 — `notify_new_post()`
+   * 트리거는 이 값을 담으려고 대신 `create_notification`을 회원마다 호출하는
+   * 루프를 썼다(공지 알림 배치 전환, 아래 참고). */
+  related_post_id?: string | null
+  related_user_id?: string | null
 }
 
 /**
@@ -135,6 +141,8 @@ export async function createBulkNotifications(
   if (input.user_ids.length === 0) return 0
 
   const expiresAt = input.expires_at ? new Date(input.expires_at) : null
+  const relatedPostId = input.related_post_id ?? null
+  const relatedUserId = input.related_user_id ?? null
   const rows = await db
     .insert(notifications)
     .values(
@@ -145,6 +153,8 @@ export async function createBulkNotifications(
         message: input.message,
         data: input.data ?? {},
         expiresAt,
+        relatedPostId,
+        relatedUserId,
       }))
     )
     .returning({ id: notifications.id })
