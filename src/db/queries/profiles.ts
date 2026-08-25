@@ -15,7 +15,7 @@
  * 검사가 못 잡고 화면이 조용히 빈다(CLAUDE.md).
  */
 
-import { and, desc, eq, inArray, like, or, sql, type SQL } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, inArray, like, or, sql, type SQL } from 'drizzle-orm'
 
 import { db } from '../client.ts'
 import { memberProfiles } from '../schema/index.ts'
@@ -236,6 +236,79 @@ export async function listProfiles(
     rows: rows.map(rowToProfile),
     total: Number(totalRows[0]?.count ?? 0),
   }
+}
+
+export interface AdminMemberCounts {
+  totalMembers: number
+  pendingMembers: number
+  activeArtists: number
+}
+
+/**
+ * `/api/admin/stats` 대시보드가 쓰는 회원 관련 count 3개(전체/승인대기/활성
+ * 아티스트)를 한 번에 낸다(Task 8). count만 필요하므로 행 전송 없이 집계
+ * 쿼리 3개를 병렬 실행한다 — 기존 Supabase `.select('id', {count:'exact',
+ * head:true})` 3회와 동일 의미.
+ */
+export async function getAdminMemberCounts(): Promise<AdminMemberCounts> {
+  const [totalRow, pendingRow, artistRow] = await Promise.all([
+    db.select({ value: sql<number>`count(*)` }).from(memberProfiles),
+    db
+      .select({ value: sql<number>`count(*)` })
+      .from(memberProfiles)
+      .where(eq(memberProfiles.registrationStatus, 'pending')),
+    db
+      .select({ value: sql<number>`count(*)` })
+      .from(memberProfiles)
+      .where(and(eq(memberProfiles.isArtist, true), eq(memberProfiles.isActive, true))),
+  ])
+  return {
+    totalMembers: Number(totalRow[0]?.value ?? 0),
+    pendingMembers: Number(pendingRow[0]?.value ?? 0),
+    activeArtists: Number(artistRow[0]?.value ?? 0),
+  }
+}
+
+/**
+ * `/api/admin/stats/monthly`의 월별 회원 가입 집계에 쓰는 가벼운 조회
+ * (Task 8) — `created_at`/`registration_status`만 담아 반환한다(월별로 JS에서
+ * 버케팅하므로 전체 프로필 컬럼이 필요 없다). 기존 Supabase
+ * `.gte('created_at', startDate).order('created_at', {ascending:true})`와
+ * 동일 조건. `limit` 없음 — 집계 대상 기간(최대 24개월) 전체가 필요하다.
+ */
+export async function listProfileSignupsSince(
+  since: Date
+): Promise<{ created_at: string; registration_status: RegistrationStatus }[]> {
+  const rows = await db
+    .select({
+      createdAt: memberProfiles.createdAt,
+      registrationStatus: memberProfiles.registrationStatus,
+    })
+    .from(memberProfiles)
+    .where(gte(memberProfiles.createdAt, since))
+    .orderBy(asc(memberProfiles.createdAt))
+  return rows.map(row => ({
+    created_at: toIso(row.createdAt) as string,
+    registration_status: row.registrationStatus,
+  }))
+}
+
+/**
+ * `/api/admin/activity`의 "최근 회원 가입 활동"에 쓰는 조회(Task 8). 기존
+ * Supabase `.gte('created_at', cutoffDate).order('created_at',
+ * {ascending:false}).limit(n)`과 동일 조건.
+ */
+export async function listRecentProfilesForActivity(
+  since: Date,
+  limit: number
+): Promise<ProfileRow[]> {
+  const rows = await db
+    .select()
+    .from(memberProfiles)
+    .where(gte(memberProfiles.createdAt, since))
+    .orderBy(desc(memberProfiles.createdAt))
+    .limit(limit)
+  return rows.map(rowToProfile)
 }
 
 /**

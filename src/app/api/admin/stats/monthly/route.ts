@@ -4,6 +4,8 @@ import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { parseIntegerParam } from '@/utils/queryParams'
+import { listProfileSignupsSince } from '@/db/queries/profiles'
+import { listPostCreationsSince } from '@/db/queries/posts'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -38,32 +40,31 @@ export const GET = defineApiRoute({
     const startDate = new Date()
     startDate.setMonth(startDate.getMonth() - months)
 
-    // 월별 회원 가입 통계
-    const { data: memberStats, error: memberError } = await db
-      .from('member_profiles')
-      .select('created_at, registration_status')
-      .gte('created_at', startDate.toISOString())
-      .order('created_at', { ascending: true })
-
-    if (memberError) {
-      console.error('Member stats error:', memberError)
+    // Task 8: member_profiles/posts 조회를 Supabase에서 Turso 쿼리 계층
+    // (listProfileSignupsSince/listPostCreationsSince)으로 옮겼다 — 둘 다
+    // 이미 Turso가 권위(단계 3c 이후)다. user_activities는 여전히 Supabase
+    // 권위(단계 4 대상)라 이 조회만 남긴다 — 이 라우트가 두 DB를 함께 읽는
+    // 과도기 상태는 스펙이 허용한 정상 상태다(task-8-brief Step 3). 단계
+    // 4에서 user_activities가 Turso로 넘어오면 이 부분도 한 쿼리 계층으로
+    // 합쳐진다.
+    let memberStats: Awaited<ReturnType<typeof listProfileSignupsSince>>
+    try {
+      memberStats = await listProfileSignupsSince(startDate)
+    } catch (error) {
+      console.error('Member stats error:', error)
       return ApiError.internalServerError('회원 통계 조회 실패').toNextResponse()
     }
 
     // 월별 게시글 통계
-    const { data: postStats, error: postError } = await db
-      .from('posts')
-      .select('created_at, is_deleted')
-      .gte('created_at', startDate.toISOString())
-      .eq('is_deleted', false)
-      .order('created_at', { ascending: true })
-
-    if (postError) {
-      console.error('Post stats error:', postError)
+    let postStats: Awaited<ReturnType<typeof listPostCreationsSince>>
+    try {
+      postStats = await listPostCreationsSince(startDate)
+    } catch (error) {
+      console.error('Post stats error:', error)
       return ApiError.internalServerError('게시글 통계 조회 실패').toNextResponse()
     }
 
-    // 월별 활동 통계
+    // 월별 활동 통계 — user_activities는 아직 Supabase 권위(단계 4 대상).
     const { data: activityStats, error: activityError } = await db
       .from('user_activities')
       .select('created_at, action_type')

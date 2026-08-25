@@ -27,7 +27,7 @@
  * `post.author.display_name`에서 그대로 죽는다.
  */
 
-import { and, asc, desc, eq, gt, inArray, like, lt, or, sql, type SQL } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, gte, inArray, like, lt, or, sql, type SQL } from 'drizzle-orm'
 
 import { db } from '../client.ts'
 import { posts } from '../schema/index.ts'
@@ -704,10 +704,26 @@ export async function listRecentPostsForActivity(
   const rows = await db
     .select()
     .from(posts)
-    .where(and(gt(posts.createdAt, since), eq(posts.isDeleted, false)))
+    .where(and(gte(posts.createdAt, since), eq(posts.isDeleted, false)))
     .orderBy(desc(posts.createdAt))
     .limit(limit)
   return attachAuthors(rows.map(rowToPost))
+}
+
+/**
+ * `/api/admin/stats/monthly`의 월별 게시글 집계에 쓰는 가벼운 조회(Task 8) —
+ * `created_at`만 담아 반환한다(월별로 JS에서 버케팅하므로 전체 컬럼이
+ * 필요 없다). 기존 Supabase `.gte('created_at', startDate).eq('is_deleted',
+ * false).order('created_at', {ascending:true})`와 동일 조건. `limit` 없음 —
+ * 집계 대상 기간(최대 24개월) 전체가 필요하다.
+ */
+export async function listPostCreationsSince(since: Date): Promise<{ created_at: string }[]> {
+  const rows = await db
+    .select({ createdAt: posts.createdAt })
+    .from(posts)
+    .where(and(gte(posts.createdAt, since), eq(posts.isDeleted, false)))
+    .orderBy(asc(posts.createdAt))
+  return rows.map(row => ({ created_at: toIso(row.createdAt) as string }))
 }
 
 /** `/api/admin/stats` 대시보드의 "전체 게시글 수(삭제 제외)" count. */
