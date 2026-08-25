@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
   if (auth instanceof NextResponse) return auth
   const adminGuard = requireBoardAdmin(auth)
   if (adminGuard) return adminGuard
-  const { db, user } = auth
+  const { user } = auth
 
   return apiPost(
     async () => {
@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
         throw ApiError.internalServerError('후보 날짜 저장에 실패했습니다.')
       }
 
-      await notifyDirectors(db, {
+      await notifyDirectors({
         title: '이사회 일정 투표 요청',
         message: `'${title}' 회의 일정 투표가 시작되었습니다. 가능한 날짜에 투표해주세요.`,
         meetingId: meeting.id,

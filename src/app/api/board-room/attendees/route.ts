@@ -32,7 +32,7 @@ function validateMemberId(id: string) {
 export async function GET(request: NextRequest) {
   const auth = await requireBoardMember()
   if (auth instanceof NextResponse) return auth
-  const { db, user } = auth
+  const { user } = auth
   const meetingId = new URL(request.url).searchParams.get('meeting_id')
   if (!meetingId) {
     return ApiError.badRequest('meeting_id가 필요합니다.').toNextResponse()
@@ -43,8 +43,8 @@ export async function GET(request: NextRequest) {
 
   return apiGet(
     async () => {
-      const roster = await getDirectorRoster(db)
-      const auditors = await getAuditorRoster(db)
+      const roster = await getDirectorRoster()
+      const auditors = await getAuditorRoster()
       let attendees: Awaited<ReturnType<typeof listMeetingAttendees>>
       try {
         attendees = await listMeetingAttendees(sanitizedMeetingId)
@@ -77,7 +77,7 @@ export async function PUT(request: NextRequest) {
   if (auth instanceof NextResponse) return auth
   const adminGuard = requireBoardAdmin(auth)
   if (adminGuard) return adminGuard
-  const { db, user } = auth
+  const { user } = auth
 
   return apiPut(
     async () => {

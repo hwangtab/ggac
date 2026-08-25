@@ -114,10 +114,7 @@ test('checkAdminPermission: 조회 자체가 실패하면(깨진 DB 경로) 조�
   process.env.TURSO_DATABASE_URL = 'file:/definitely-nonexistent-dir-ggac-2c/broken.db'
   try {
     const { checkAdminPermission } = await import('../../src/lib/server/adminAuth.ts')
-    await assert.rejects(
-      () => checkAdminPermission({}, 'any-id'),
-      /프로필 정보를 조회할 수 없습니다/
-    )
+    await assert.rejects(() => checkAdminPermission('any-id'), /프로필 정보를 조회할 수 없습니다/)
   } finally {
     process.env.TURSO_DATABASE_URL = original
   }
@@ -296,7 +293,7 @@ test('checkAdminPermission: is_admin+approved+active면 통과하고 3개 필드
     })
   )
 
-  const profile = await checkAdminPermission({}, id)
+  const profile = await checkAdminPermission(id)
   assert.deepEqual(profile, {
     is_admin: true,
     registration_status: 'approved',
@@ -318,7 +315,7 @@ test('checkAdminPermission: is_admin=false면 관리자 권한 에러로 던진�
     })
   )
 
-  await assert.rejects(() => checkAdminPermission({}, id), /관리자 권한이 필요합니다/)
+  await assert.rejects(() => checkAdminPermission(id), /관리자 권한이 필요합니다/)
 })
 
 test('checkAdminPermission: registration_status가 approved가 아니면(관리자여도) 던진다', async () => {
@@ -335,7 +332,7 @@ test('checkAdminPermission: registration_status가 approved가 아니면(관리�
     })
   )
 
-  await assert.rejects(() => checkAdminPermission({}, id), /관리자 권한이 필요합니다/)
+  await assert.rejects(() => checkAdminPermission(id), /관리자 권한이 필요합니다/)
 })
 
 test('checkAdminPermission: is_active=false면(관리자·승인이어도) 던진다', async () => {
@@ -352,13 +349,13 @@ test('checkAdminPermission: is_active=false면(관리자·승인이어도) 던�
     })
   )
 
-  await assert.rejects(() => checkAdminPermission({}, id), /관리자 권한이 필요합니다/)
+  await assert.rejects(() => checkAdminPermission(id), /관리자 권한이 필요합니다/)
 })
 
 test('checkAdminPermission: 프로필이 없으면(행 없음) 조회 실패 에러로 던진다', async () => {
   const { checkAdminPermission } = await import('../../src/lib/server/adminAuth.ts')
   await assert.rejects(
-    () => checkAdminPermission({}, 'admin-missing-does-not-exist'),
+    () => checkAdminPermission('admin-missing-does-not-exist'),
     /프로필 정보를 조회할 수 없습니다/
   )
 })

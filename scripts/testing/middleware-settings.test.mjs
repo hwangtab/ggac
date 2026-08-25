@@ -108,7 +108,7 @@ test('Turso에 쓴 maintenance_mode/registration_enabled 값을 미들웨어 경
 
 test('행이 없으면(기본 시드가 없는 빈 DB) 기본값(유지보수 꺼짐, 가입 허용)을 돌려준다', async () => {
   const { getSystemSettings } = await loadFreshSettingsModule()
-  const result = await getSystemSettings(undefined, async () => [])
+  const result = await getSystemSettings(async () => [])
   assert.equal(result.maintenanceMode, false)
   assert.equal(result.registrationEnabled, true)
 })
@@ -129,7 +129,7 @@ test('site 카테고리가 아닌 행은 무시한다(다른 카테고리에 같
   })
 
   const { getSystemSettings } = await loadFreshSettingsModule()
-  const result = await getSystemSettings(undefined, async () => {
+  const result = await getSystemSettings(async () => {
     const { listSystemSettings } = await import(
       `${SETTINGS_QUERY_MODULE_URL.href}?t=${Date.now()}-${Math.random()}`
     )
@@ -170,7 +170,7 @@ test('타임아웃(FETCH_TIMEOUT_MS) 직전까지는 기다리고, 넘기면 nul
 
   mock.timers.enable({ apis: ['setTimeout'] })
   try {
-    const promise = getSystemSettings(undefined, neverResolves)
+    const promise = getSystemSettings(neverResolves)
     let settled = false
     promise.then(
       () => {
@@ -223,10 +223,10 @@ test('60초 TTL 캐시: TTL 안에서는 캐시를 쓰고, TTL이 지나면 반�
       return []
     }
 
-    await getSystemSettings(undefined, countingFetch)
+    await getSystemSettings(countingFetch)
     assert.equal(callCount, 1, '첫 호출은 캐시가 비어 있으니 조회한다')
 
-    await getSystemSettings(undefined, countingFetch)
+    await getSystemSettings(countingFetch)
     assert.equal(
       callCount,
       1,
@@ -235,13 +235,13 @@ test('60초 TTL 캐시: TTL 안에서는 캐시를 쓰고, TTL이 지나면 반�
 
     // TTL 1ms 전: 아직 캐시. TTL이 0에 가깝게 줄면 여기서 걸린다.
     mock.timers.tick(59_999)
-    await getSystemSettings(undefined, countingFetch)
+    await getSystemSettings(countingFetch)
     assert.equal(callCount, 1, '59_999ms는 아직 TTL(60_000ms) 안이다')
 
     // TTL 경과: 반드시 다시 조회. TTL이 Infinity이거나 캐시가 만료되지 않으면
     // 여기서 걸린다 — 관리자가 켠 유지보수 모드가 영원히 반영되지 않는 상태다.
     mock.timers.tick(2)
-    await getSystemSettings(undefined, countingFetch)
+    await getSystemSettings(countingFetch)
     assert.equal(
       callCount,
       2,

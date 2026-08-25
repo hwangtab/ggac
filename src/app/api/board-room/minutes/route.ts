@@ -21,7 +21,7 @@ function validateMeetingId(id: string) {
 export async function POST(request: NextRequest) {
   const auth = await requireBoardMember()
   if (auth instanceof NextResponse) return auth
-  const { db, user } = auth
+  const { user } = auth
 
   return apiPost(
     async () => {
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
       }
 
       const meetingTitle = await getMeetingTitle(sanitizedMeetingId)
-      await notifyDirectors(db, {
+      await notifyDirectors({
         title: '회의록 작성',
         message: `'${meetingTitle ?? '이사회'}' 회의록이 작성되었습니다.`,
         meetingId: sanitizedMeetingId,

@@ -1,4 +1,4 @@
-import { del, get, put } from '@vercel/blob'
+import { del, get, list, put } from '@vercel/blob'
 
 type StoreKind = 'public' | 'private'
 
@@ -22,16 +22,19 @@ function tokenFor(store: StoreKind): string {
 }
 
 /**
- * 비공개 Blob 저장소가 설정돼 있는지. 교차 제공자 폴백 전용이다.
+ * 공개 Blob 저장소가 설정돼 있는지.
  *
- * 선택된 제공자가 설정돼 있지 않으면 그건 운영 사고이므로 requireEnv가 그대로
- * 던져야 한다. 반면 "반대쪽 제공자에도 있나" 확인하는 폴백에서는 설정이 없는 게
- * 정상 상태(전환 전/롤백 후)다. 그때 requireEnv가 던지면 없는 문서 요청이
- * 404가 아니라 환경변수 이름이 담긴 500으로 나가므로, 폴백은 이 판정으로
- * 먼저 걸러야 한다.
+ * 업로드·삭제 라우트가 **작업을 시작하기 전에** 자격 증명을 확인하는 데 쓴다.
+ * 확인 없이 진행하면 토큰이 없는 배포에서 `del()`이 던지고, 그 예외를 로그만
+ * 남기고 삼키는 호출부(아티스트 사진 DELETE 등)가 실제로는 아무것도 지우지
+ * 않은 채 200을 내려준다. 사전 검증은 그 무음 성공을 500으로 바꾼다.
+ *
+ * `requireEnv`와 같은 기준을 쓰되(비어 있으면 없는 것), 앞뒤 공백만 있는
+ * 값도 없는 것으로 본다 — 환경변수 편집 실수로 개행 하나가 들어간 상태를
+ * "설정됨"으로 오인하면 사전 검증이 통과해 버린다.
  */
-export function hasPrivateBlobStore(): boolean {
-  return Boolean(process.env.PRIVATE_BLOB_READ_WRITE_TOKEN?.trim())
+export function hasPublicBlobStore(): boolean {
+  return Boolean(process.env.PUBLIC_BLOB_READ_WRITE_TOKEN?.trim())
 }
 
 export async function putObject(
@@ -87,4 +90,39 @@ export async function getPrivateObject(
     contentType: result.blob.contentType,
     etag: result.blob.etag,
   }
+}
+
+/** `listObjects`가 돌려주는 한 객체. `@vercel/blob`의 목록 응답은 contentType을
+ * 주지 않는다 — 목록에서 MIME이 필요하면 확장자로 추정해야 한다. */
+export type ListedObject = {
+  pathname: string
+  url: string
+  size: number
+  uploadedAt: Date
+}
+
+/**
+ * 접두사 아래 객체를 나열한다. 재귀적이다(`mode: 'folded'`를 쓰지 않으므로
+ * 하위 "폴더"의 객체까지 평평하게 나온다).
+ *
+ * `limit`은 Blob API가 한 번에 돌려주는 최대 개수이며 상한은 1000이다. 이
+ * 저장소의 사용자별 업로드는 그 규모에 한참 못 미치므로 커서 페이지네이션을
+ * 쓰지 않는다 — 필요해지면 `cursor`를 노출할 것.
+ */
+export async function listObjects(
+  store: StoreKind,
+  prefix: string,
+  limit: number
+): Promise<ListedObject[]> {
+  const { blobs } = await list({
+    prefix,
+    limit: Math.min(Math.max(limit, 1), 1000),
+    token: tokenFor(store),
+  })
+  return blobs.map(b => ({
+    pathname: b.pathname,
+    url: b.url,
+    size: b.size,
+    uploadedAt: b.uploadedAt,
+  }))
 }

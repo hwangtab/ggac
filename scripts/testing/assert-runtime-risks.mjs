@@ -131,13 +131,27 @@ const authMiddlewarePath = join(root, 'src/middleware/auth.ts')
 const authMiddlewareSource = readFileSync(authMiddlewarePath, 'utf8')
 const rootMiddlewarePath = join(root, 'src/middleware.ts')
 const rootMiddlewareSource = readFileSync(rootMiddlewarePath, 'utf8')
-// 미들웨어는 @supabase/ssr createServerClient + 쿠키 setAll로 세션을 검증하고
-// access token 만료 시 자동 갱신해야 한다(수동 REST 파서로 회귀하면 갱신이 사라진다).
-const middlewareUsesStandardSupabaseSession =
-  /from\s+['"]@supabase\/ssr['"]/.test(rootMiddlewareSource) &&
-  /createServerClient/.test(rootMiddlewareSource) &&
-  /setAll/.test(rootMiddlewareSource) &&
-  /res\.cookies\.set/.test(rootMiddlewareSource)
+// 단계 4 Task 5: 미들웨어에서 Supabase 클라이언트가 완전히 사라졌다. 신원은
+// Better Auth 쿠키(readMiddlewareSession/verifySessionFresh)로만 판정한다.
+//
+// 예전 @supabase/ssr 클라이언트는 setAll로 갱신 토큰 쿠키를 기반 응답(res)에
+// 실었고, 미들웨어가 새로 만드는 응답(리다이렉트·유지보수 503)에 그것을
+// 복사하지 않으면 세션 갱신이 유실됐다. 그 복사(copyResponseCookies)는 지금도
+// 필요하다 — handleAuth가 res에 쿠키를 쓰고, CSP 헤더도 같은 경로로 전달되기
+// 때문이다. 그래서 "Supabase가 없다"와 "복사가 살아 있다"를 함께 고정한다.
+const middlewareUsesBetterAuthSessionOnly =
+  !/@supabase\//.test(rootMiddlewareSource) &&
+  !/createServerClient|createSupabaseServer|createServiceRoleClient/.test(rootMiddlewareSource) &&
+  /verifySessionFresh\(request\)/.test(rootMiddlewareSource) &&
+  /function copyResponseCookies/.test(rootMiddlewareSource) &&
+  /from\.cookies\.getAll\(\)\.forEach\(cookie => to\.cookies\.set\(cookie\)\)/.test(
+    rootMiddlewareSource
+  ) &&
+  /to\.headers\.set\('content-security-policy', csp\)/.test(rootMiddlewareSource) &&
+  // 유지보수 판정이 다시 "Supabase env가 있을 때만" 같은 조건 뒤로 숨지 않게 —
+  // 그 조건이 살아 있으면 컷오버에서 Supabase 환경변수를 지우는 순간 인증·
+  // 유지보수 미들웨어가 통째로 무력화된다(사이트가 열린 채 잠기지 않는다).
+  !/hasSupabaseMiddlewareConfig/.test(rootMiddlewareSource)
 // 미들웨어 인증(handleAuth)은 단계 2b-6부터 Better Auth의 쿠키 캐시로 신원을
 // 판정한다(`readMiddlewareSession`, src/middleware/session.ts) — 캐시가 있으면
 // DB/GoTrue 왕복 없이 판정하고, 캐시가 만료됐을 때만 서버에 왕복한다. auth.ts가
@@ -530,23 +544,31 @@ const hasSharedOperationalBoundaryHelpers =
   /export function isApprovedActiveAdmin/.test(authzSource) &&
   /export function canAccessBoardRoom/.test(authzSource) &&
   /export async function getSessionContext/.test(authzSource)
+// 단계 4 Task 5: 두 헬퍼는 더 이상 service-role Supabase 클라이언트를 만들지도,
+// 호출부에 넘기지도 않는다(반환값에서 `db`가 사라졌다). 남은 계약은 "판정은
+// 공유 authz 헬퍼로, 프로필은 Turso 쿼리 계층으로"다.
+//
+// 반환 타입에 `db`가 되살아나면 실패시킨다 — 그게 곧 service-role 클라이언트를
+// 라우트로 다시 흘려보내는 회귀의 첫 단계였다.
 const existingAuthHelpersUseSharedOperationalBoundaries =
-  /from\s+['"]@\/lib\/server\/supabaseAdmin['"]/.test(adminAuthBoundarySource) &&
   /from\s+['"]@\/lib\/server\/authz['"]/.test(adminAuthBoundarySource) &&
-  /createServiceRoleClient/.test(adminAuthBoundarySource) &&
+  /from\s+['"]@\/db\/queries\/profiles['"]/.test(adminAuthBoundarySource) &&
   /isApprovedActiveAdmin/.test(adminAuthBoundarySource) &&
   /getSessionContext/.test(adminAuthBoundarySource) &&
-  !/createSupabaseServer/.test(adminAuthBoundarySource) &&
-  !/from\s+['"]@supabase\/supabase-js['"]/.test(adminAuthBoundarySource) &&
+  /getProfileById/.test(adminAuthBoundarySource) &&
+  /export type AdminAuthSuccess = \{\s*\n\s*user:/.test(adminAuthBoundarySource) &&
+  !/createSupabaseServer|createServiceRoleClient/.test(adminAuthBoundarySource) &&
+  !/@supabase\//.test(adminAuthBoundarySource) &&
   !/createClient\(/.test(adminAuthBoundarySource) &&
-  /from\s+['"]@\/lib\/server\/supabaseAdmin['"]/.test(boardRoomAuthBoundarySource) &&
   /from\s+['"]@\/lib\/server\/authz['"]/.test(boardRoomAuthBoundarySource) &&
-  /createServiceRoleClient/.test(boardRoomAuthBoundarySource) &&
+  /from\s+['"]@\/db\/queries\/profiles['"]/.test(boardRoomAuthBoundarySource) &&
   /canAccessBoardRoom/.test(boardRoomAuthBoundarySource) &&
   /isApprovedActiveAdmin/.test(boardRoomAuthBoundarySource) &&
   /getSessionContext/.test(boardRoomAuthBoundarySource) &&
-  !/createSupabaseServer/.test(boardRoomAuthBoundarySource) &&
-  !/from\s+['"]@supabase\/supabase-js['"]/.test(boardRoomAuthBoundarySource) &&
+  /listProfiles/.test(boardRoomAuthBoundarySource) &&
+  /export type BoardAuthSuccess = \{\s*\n\s*user:/.test(boardRoomAuthBoundarySource) &&
+  !/createSupabaseServer|createServiceRoleClient/.test(boardRoomAuthBoundarySource) &&
+  !/@supabase\//.test(boardRoomAuthBoundarySource) &&
   !/createClient\(/.test(boardRoomAuthBoundarySource)
 const serverRateLimitPath = join(root, 'src/lib/server/rateLimit.ts')
 const serverRateLimitSource = existsSync(serverRateLimitPath)
@@ -1113,12 +1135,13 @@ const validatesBoardDocumentStoragePaths =
   boardDocumentDownloadChecksAuthBeforeQuery &&
   boardDocumentDownloadChecksPathBeforeStream &&
   // (4) 삭제 라우트: 소유권은 DB 컬럼으로 검사하고(관리자만 예외), 봉쇄는
-  //     `isSafeBoardDocumentFilePath`로, 실제 삭제는 양쪽 제공자를 다 지우는
-  //     `deleteBoardDocumentEverywhere`로만 한다. Supabase Storage의
+  //     `isSafeBoardDocumentFilePath`로, 실제 삭제는 제공자 계층
+  //     `deleteBoardDocument`로만 한다(단계 4 Task 5에서 교차 제공자
+  //     `deleteBoardDocumentEverywhere`가 사라졌다). Supabase Storage의
   //     `.remove([...])` 직접 호출이 되살아나면 실패해야 한다.
   /doc\.uploaded_by !== user\.id && !isAdmin/.test(boardDocumentDetailCode) &&
   /isSafeBoardDocumentFilePath\(doc\.file_path\)/.test(boardDocumentDetailCode) &&
-  /deleteBoardDocumentEverywhere\(doc\.file_path\)/.test(boardDocumentDetailCode) &&
+  /deleteBoardDocument\(doc\.file_path\)/.test(boardDocumentDetailCode) &&
   !/\.remove\(\[/.test(boardDocumentDetailCode)
 
 // 비공개 저장소의 제공자 분기 계층. 아직 라우트에 연결되지 않았지만(전환 단계용
@@ -1131,43 +1154,46 @@ const privateProviderSource = existsSync(privateProviderPath)
   ? readFileSync(privateProviderPath, 'utf8')
   : ''
 const blobLibSource = readFileSync(join(root, 'src/lib/storage/blob.ts'), 'utf8')
-const supabaseLibSource = readFileSync(join(root, 'src/lib/storage/supabase.ts'), 'utf8')
 // (2)~(4)와 같은 이유로 원본이 아니라 stripCommentsAndImports를 거친 코드를
 // 본다. 원본 소스를 그대로 훑으면, 실제 로직을 `//`로 주석 처리해도 같은 줄
 // (또는 주변 JSDoc)에 남은 텍스트가 정규식에 그대로 걸려 죽은 채로 통과한다 —
 // `privateProvider.ts`의 `if (!hasPrivateBlobStore()) return null`을 주석
 // 처리해도 이전에는 게이트가 초록불이었다(리뷰 실측).
 const blobLibCode = stripCommentsAndImports(blobLibSource)
-const supabaseLibCode = stripCommentsAndImports(supabaseLibSource)
 const privateProviderCode = stripCommentsAndImports(privateProviderSource)
-// (1)의 토큰 존재 검사는 파일 전체가 아니라 각 함수의 본문만 본다. 파일 전체를
-// 보면 `PRIVATE_BLOB_READ_WRITE_TOKEN`이 `tokenFor()` 등 다른 함수에도 등장해서,
-// `hasPrivateBlobStore`의 본문을 주석 처리해 항상 `return`이 비어도(undefined,
+// 토큰 존재 검사는 파일 전체가 아니라 함수 본문만 본다. 파일 전체를 보면
+// `PUBLIC_BLOB_READ_WRITE_TOKEN`이 `tokenFor()` 등 다른 함수에도 등장해서,
+// `hasPublicBlobStore`의 본문을 주석 처리해 항상 `return`이 비어도(undefined,
 // falsy) 그 리터럴이 파일 어딘가에 남아 있으면 검사가 속는다.
-const hasPrivateBlobStoreBody =
-  blobLibCode.match(/export function hasPrivateBlobStore\(\):\s*boolean\s*\{[\s\S]*?\n\}/)?.[0] ??
-  ''
-const hasSupabaseServiceRoleBody =
-  supabaseLibCode.match(
-    /export function hasSupabaseServiceRole\(\):\s*boolean\s*\{[\s\S]*?\n\}/
-  )?.[0] ?? ''
-const boardDocumentProviderFallbackIsSafe =
+const hasPublicBlobStoreBody =
+  blobLibCode.match(/export function hasPublicBlobStore\(\):\s*boolean\s*\{[\s\S]*?\n\}/)?.[0] ?? ''
+// 단계 4 Task 5: 이사회 서류의 저장소는 비공개 Blob 하나뿐이다. Supabase
+// Storage 교차 폴백(`hasSupabaseServiceRole()` 게이트 + `fromSupabase`)이
+// 통째로 사라졌으므로, 가드도 "폴백이 안전한가"에서 "폴백이 되살아나지
+// 않았는가 + 세 경로 전부 봉쇄 판정을 거치는가"로 바꾼다.
+//
+// 봉쇄가 이 가드의 핵심이다: 같은 비공개 저장소에 조합 DB 전체 덤프가
+// `backups/` 접두어로 들어 있어서, 경로 조립이 `blobPathForBoardDocument`를
+// 건너뛰는 순간 회원 명부가 통째로 노출된다.
+const boardDocumentPrivateStorageIsBlobOnly =
   // (1) 설정 판정 함수는 env 이름을 소유한 모듈에, 그 이름을 실제로 참조하는
   //     본문과 함께 있어야 한다(이름 드리프트 방지 + 본문 무력화 방지).
-  /export function hasPrivateBlobStore/.test(blobLibCode) &&
-  /PRIVATE_BLOB_READ_WRITE_TOKEN/.test(hasPrivateBlobStoreBody) &&
-  /export function hasSupabaseServiceRole/.test(supabaseLibCode) &&
-  /SUPABASE_SERVICE_ROLE_KEY/.test(hasSupabaseServiceRoleBody) &&
-  // (2) 교차 제공자 폴백은 반대쪽이 설정됐을 때만 시도한다. 감싸지 않으면
-  //     requireEnv가 던져서, 없는 문서 요청이 404가 아니라 환경변수 이름이 담긴
-  //     500으로 나간다(전환 전·롤백 후에는 반대쪽이 비어 있는 게 정상이다).
-  /hasSupabaseServiceRole\(\)\s*\?\s*fromSupabase\(filePath\)\s*:\s*null/.test(
+  /export function hasPublicBlobStore/.test(blobLibCode) &&
+  /PUBLIC_BLOB_READ_WRITE_TOKEN/.test(hasPublicBlobStoreBody) &&
+  /PRIVATE_BLOB_READ_WRITE_TOKEN/.test(blobLibCode) &&
+  // (2) 쓰기·삭제·읽기 세 경로 전부 봉쇄 판정을 거친 경로만 쓴다.
+  /putObject\(\s*'private',\s*blobPathForBoardDocument\(filePath\)/.test(privateProviderCode) &&
+  /deleteObject\(\s*'private',\s*blobPathForBoardDocument\(filePath\)\)/.test(
     privateProviderCode
   ) &&
-  /if \(!hasPrivateBlobStore\(\)\) return null/.test(privateProviderCode) &&
-  // (3) 삭제 판정은 공개 쪽과 같은 헬퍼를 쓴다. 직접 세면 두 경로가 갈라진다.
-  /classifyDeleteEverywhereResults\(\[/.test(privateProviderCode) &&
-  !/failures\.length === 2/.test(privateProviderCode)
+  /getPrivateObject\(blobPathForBoardDocument\(filePath\),\s*ifNoneMatch\)/.test(
+    privateProviderCode
+  ) &&
+  // (3) 업로드는 덮어쓰지 않는다(경로에 타임스탬프가 들어가므로 충돌은 사고다).
+  /putObject\([\s\S]{0,120}?,\s*false\)/.test(privateProviderCode) &&
+  // (4) Supabase 폴백·클라이언트가 되살아나면 실패한다.
+  !/[Ss]upabase/.test(privateProviderCode) &&
+  !/classifyDeleteEverywhereResults/.test(privateProviderCode)
 const artistPhotoPath = join(root, 'src/app/api/mypage/artist/photo/route.ts')
 const artistPhotoSource = readFileSync(artistPhotoPath, 'utf8')
 const verifiesArtistPhotoSignature =
@@ -1333,14 +1359,14 @@ const validatesAttachmentDeleteAdminStatus =
     postAttachmentDetailSource
   )
 // 첨부 삭제도 같은 이관을 거쳤다(getProjectStorageObjectPath → logicalPathFromUrl,
-// supabase .remove() → deletePublicObjectEverywhere). 봉쇄 대상은 그대로
-// `attachments` 버킷의 `posts/<postId>` 하위다.
+// supabase .remove() → deletePublicObject). 봉쇄 대상은 그대로 `attachments`
+// 버킷의 `posts/<postId>` 하위다.
 const validatesAttachmentDeleteStoragePath =
   /logicalPathFromUrl/.test(postAttachmentDetailSource) &&
   /logicalPathFromUrl\(\s*attachment\.file_url,\s*['"]attachments['"],\s*`posts\/\$\{postId\}`\s*\)/.test(
     postAttachmentDetailSource
   ) &&
-  /deletePublicObjectEverywhere\(logical\)/.test(postAttachmentDetailSource) &&
+  /deletePublicObject\(logical\)/.test(postAttachmentDetailSource) &&
   // 봉쇄에 걸리면 지우지 않고 건너뛴다.
   /안전하지 않은 첨부파일 Storage URL 삭제 건너뜀/.test(postAttachmentDetailSource) &&
   !/attachment\.file_url\.split\(['"]\/['"]\)/.test(postAttachmentDetailSource)
@@ -2681,8 +2707,11 @@ const adminMembersBulkUsesSharedApiRoute =
 const hasSettingsAdminAuthResolver =
   /export type SettingsAdminAuth/.test(settingsAdminAuthSource) &&
   /export function createSettingsAdminAuth/.test(settingsAdminAuthSource) &&
-  /createSupabaseServer/.test(settingsAdminAuthSource) &&
-  /checkAdminPermission/.test(settingsAdminAuthSource) &&
+  // 단계 4 Task 5: `createSupabaseServer()`로 만들던 `db`가 사라졌다. 신원은
+  // readSessionUser(), 관리자 판정은 checkAdminPermission(Turso 프로필)이다.
+  /readSessionUser\(\)/.test(settingsAdminAuthSource) &&
+  /checkAdminPermission\(user\.id\)/.test(settingsAdminAuthSource) &&
+  !/createSupabaseServer|@supabase\//.test(settingsAdminAuthSource) &&
   /createErrorResponse\(\{\s*success:\s*false,\s*error:\s*['"]인증이 필요합니다\./.test(
     settingsAdminAuthSource
   )
@@ -3430,10 +3459,14 @@ const avoidsSupabaseCjsDevAlias =
   !/['"]@supabase\/supabase-js['"]:\s*require\.resolve\(['"]@supabase\/supabase-js['"]\)/.test(
     nextConfigSource
   )
+// 단계 4 Task 5: middleware.ts의 유일한 debug 로그였던 "Supabase env missing,
+// skipping auth middleware"가 그 분기와 함께 사라져 로거 자체를 걷어냈다.
+// 그래서 middleware.ts에는 "console.log로 되돌아가지 않는다"는 음성 단정만
+// 남기고, 로거 경유 요구는 실제로 debug 로그가 있는 auth.ts에만 건다 —
+// 없는 로그를 요구하면 아무도 못 지키는(또는 지키려고 죽은 로그를 넣는)
+// 가드가 된다.
 const middlewareUsesStructuredDebugLogging =
-  /createLogger\(['"]middleware['"]\)/.test(rootMiddlewareSource) &&
   /createLogger\(['"]middleware\/auth['"]\)/.test(authMiddlewareSource) &&
-  /log\.debug/.test(rootMiddlewareSource) &&
   /log\.debug/.test(authMiddlewareSource) &&
   !/console\.log\(/.test(rootMiddlewareSource) &&
   !/console\.log\(/.test(authMiddlewareSource) &&
@@ -3985,9 +4018,9 @@ if (!validateUUIDRejectsTempIds) {
   )
 }
 
-if (!middlewareUsesStandardSupabaseSession) {
+if (!middlewareUsesBetterAuthSessionOnly) {
   failures.push(
-    `Middleware must use @supabase/ssr createServerClient with cookie setAll for automatic session token refresh: ${relative(
+    `Middleware must resolve identity through Better Auth only (no Supabase client, no hasSupabaseMiddlewareConfig gate) while keeping copyResponseCookies' cookie+CSP propagation to redirect/maintenance responses: ${relative(
       root,
       rootMiddlewarePath
     )}`
@@ -4177,7 +4210,7 @@ if (directServiceRoleClientCreationFiles.length > 0) {
 
 if (!existingAuthHelpersUseSharedOperationalBoundaries) {
   failures.push(
-    `Existing admin and board-room auth helpers must consume shared service-role and authz boundaries instead of duplicating profile/client setup:\n- ${relative(
+    `Existing admin and board-room auth helpers must consume the shared authz boundary and the Turso profile query layer, and must not hand a Supabase client back to routes (no \`db\` in their success types):\n- ${relative(
       root,
       adminAuthPathForBoundary
     )}\n- ${relative(root, boardRoomAuthPathForBoundary)}`
@@ -4241,9 +4274,9 @@ if (!validatesBoardDocumentStoragePaths) {
   )
 }
 
-if (!boardDocumentProviderFallbackIsSafe) {
+if (!boardDocumentPrivateStorageIsBlobOnly) {
   failures.push(
-    `Board document cross-provider read fallback must be gated on the other provider being configured (otherwise a missing document 500s with an env var name instead of 404), and its delete classification must reuse classifyDeleteEverywhereResults:\n- ${relative(
+    `Board documents must live in the private Blob store only: every read/write/delete has to go through blobPathForBoardDocument() (the containment check that keeps \`backups/\` DB dumps out of reach), uploads must not overwrite, and no Supabase Storage fallback may come back:\n- ${relative(
       root,
       privateProviderPath
     )}`
@@ -5391,24 +5424,6 @@ if (!authCatchAllRejectsSignUpOutright) {
     `src/app/api/auth/[...all]/route.ts must reject POST requests to the sign-up/email path outright (ApiError.forbidden, no delegation to betterAuthPOST) now that disableSignUp is gone — rate-limiting alone was proven insufficient (three accounts with blank membership fields were created within the rate limit window): ${relative(
       root,
       authCatchAllPath
-    )}`
-  )
-}
-
-// 단계 2b-6(Task 4): createSupabaseServer()가 anon 키+쿠키 클라이언트에서
-// 서비스롤 클라이언트로 바뀌었다. Better Auth 세션에는 Supabase 쿠키가 없어,
-// anon 키로 돌아가면 RLS가 모든 행을 가려 getSessionContext()의
-// `profile: null` 회귀가 재발한다.
-const supabaseServerPath = join(root, 'src/lib/supabase/server.ts')
-const supabaseServerSource = readFileSync(supabaseServerPath, 'utf8')
-const supabaseServerStripped = stripComments(supabaseServerSource)
-const supabaseServerUsesServiceRole = /SUPABASE_SERVICE_ROLE_KEY/.test(supabaseServerStripped)
-const supabaseServerUsesAnonKey = /NEXT_PUBLIC_SUPABASE_ANON_KEY/.test(supabaseServerStripped)
-if (!supabaseServerUsesServiceRole || supabaseServerUsesAnonKey) {
-  failures.push(
-    `src/lib/supabase/server.ts's createSupabaseServer() must be built from SUPABASE_SERVICE_ROLE_KEY only (not NEXT_PUBLIC_SUPABASE_ANON_KEY) — an anon-key client can never see RLS-protected rows for a Better Auth session, which carries no Supabase cookie: ${relative(
-      root,
-      supabaseServerPath
     )}`
   )
 }

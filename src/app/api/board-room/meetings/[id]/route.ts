@@ -46,7 +46,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   const id = routeId.id
   const auth = await requireBoardMember()
   if (auth instanceof NextResponse) return auth
-  const { db, user } = auth
+  const { user } = auth
 
   return apiGet(
     async () => {
@@ -89,8 +89,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         throw ApiError.internalServerError('출석 정보를 불러올 수 없습니다.')
       }
 
-      const roster = await getDirectorRoster(db)
-      const auditors = await getAuditorRoster(db)
+      const roster = await getDirectorRoster()
+      const auditors = await getAuditorRoster()
       // 정족수는 재적 이사(roster)만으로 산정 — 감사(auditors)는 산입하지 않는다.
       const attendedCount = attendees.filter(
         a => a.attended && roster.some(r => r.id === a.member_id)
@@ -129,7 +129,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   if (auth instanceof NextResponse) return auth
   const adminGuard = requireBoardAdmin(auth)
   if (adminGuard) return adminGuard
-  const { db, user } = auth
+  const { user } = auth
 
   return apiPatch(
     async () => {
@@ -186,7 +186,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       if (!updated) throw ApiError.internalServerError('회의 수정에 실패했습니다.')
 
       if (confirmDate) {
-        await notifyDirectors(db, {
+        await notifyDirectors({
           title: '이사회 일정 확정',
           message: `'${updated.title}' 회의가 ${confirmDate} ${BOARD_MEETING_TIME}로 확정되었습니다.`,
           meetingId: id,

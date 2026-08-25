@@ -13,7 +13,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { rateLimit } from '@/lib/server/rateLimit'
 import { requireUser } from '@/lib/server/memberAuth'
-import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
+import { hasPublicBlobStore } from '@/lib/storage/blob'
 import { putPublicObject, deletePublicObject } from '@/lib/storage/provider'
 import { revalidateTag } from 'next/cache'
 import type { PostAttachmentStats } from '@/types'
@@ -32,19 +32,6 @@ import {
   getAttachmentUploadStats,
   unsetPrimaryForPost,
 } from '@/db/queries/attachments'
-
-/**
- * Service Role 클라이언트 생성 (POST 업로드 전용)
- *
- * 주의: 이 함수는 POST 엔드포인트에서만 사용됩니다.
- * - 용도: Storage 버킷에 파일을 업로드하기 위한 권한 필요
- * - GET 엔드포인트: createRouteHandlerClient 사용 (RLS 정책 적용)
- *
- * Service Role Key는 RLS를 우회하므로, 인증된 사용자의 업로드 작업에만 제한적으로 사용
- */
-function getSupabaseAdmin() {
-  return createServiceRoleClient()
-}
 
 /**
  * 첨부파일 목록 조회
@@ -219,17 +206,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       }
     }
 
-    // Storage 클라이언트 생성 및 파일 업로드
-    // 자격 증명으로 Service Role 클라이언트를 만들 수 있는지 업로드 전에
-    // 미리 검증한다 — 실패 시 구체적이고 조치 가능한 메시지로 즉시 응답한다.
-    // (결과 자체를 변수에 담아두진 않는다: 아래 롤백 지점들은 이제
-    // deletePublicObject로 현재 제공자를 따라가므로 이 클라이언트를 다시
-    // 쓰지 않는다 — 그 재사용 부분만 죽은 코드였고, 사전 검증이라는 동작은
-    // 그대로 유지한다.)
-    try {
-      getSupabaseAdmin()
-    } catch (error) {
-      console.error('[UPLOAD API] Supabase Admin 클라이언트 생성 오류:', error)
+    // 업로드 전에 저장소 자격 증명을 미리 검증한다 — 실패 시 구체적이고
+    // 조치 가능한 메시지로 즉시 응답한다(putPublicObject가 던지는 환경변수
+    // 이름이 그대로 사용자에게 보이는 500이 되지 않게).
+    if (!hasPublicBlobStore()) {
+      console.error('[UPLOAD API] PUBLIC_BLOB_READ_WRITE_TOKEN 미설정')
       return ApiError.serviceUnavailable(
         'Storage 서비스를 사용할 수 없습니다. 관리자에게 문의하세요.'
       ).toNextResponse()
@@ -238,7 +219,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     // 파일명 정제 및 고유 파일명 생성 (공통 검증에서 이미 생성됨)
     const uniqueFileName = validation.uniqueFileName || generateUniqueFileName(file.name)
 
-    // 파일을 Supabase Storage에 업로드
+    // 파일을 Blob 저장소에 업로드
     const fileBuffer = Buffer.from(await file.arrayBuffer())
     if (!hasValidFileSignature(fileBuffer, file.type)) {
       return ApiError.badRequest(
@@ -262,7 +243,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       // Storage bucket이 없는 경우 특별한 메시지
       if (message.includes('bucket') || message.includes('not found')) {
         return ApiError.serviceUnavailable(
-          'Storage가 설정되지 않았습니다. 관리자가 Supabase Storage bucket을 생성해야 합니다.'
+          'Storage가 설정되지 않았습니다. 관리자에게 문의하세요.'
         ).toNextResponse()
       }
       return ApiError.internalServerError('파일 업로드에 실패했습니다.').toNextResponse()

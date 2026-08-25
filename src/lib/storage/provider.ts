@@ -1,71 +1,39 @@
-import { deleteObject, getPublicUrl, putObject } from './blob'
+import { deleteObject, putObject } from './blob'
 import {
-  classifyDeleteEverywhereResults,
-  currentProvider,
   isBlobPublicUrl,
   logicalPathFromUrl,
   resolveOverwrite,
   splitBucketPath,
   type PutPublicObjectOptions,
 } from './paths'
-import { deleteSupabaseObject, putSupabaseObject, supabasePublicUrl } from './supabase'
 
-export type { StorageProvider, PutPublicObjectOptions } from './paths'
-// 순수 경로/판정 함수는 여기서 재export한다 — 이후 태스크의 라우트 코드는
+export type { PutPublicObjectOptions } from './paths'
+// 순수 경로/판정 함수는 여기서 재export한다 — 라우트 코드는
 // @/lib/storage/provider 하나만 import하면 되도록.
-export { currentProvider, isBlobPublicUrl, logicalPathFromUrl, splitBucketPath }
+export { isBlobPublicUrl, logicalPathFromUrl, splitBucketPath }
 
+/**
+ * 공개 객체 저장은 Vercel Blob 하나뿐이다.
+ *
+ * 단계 4(Task 5)에서 Supabase 클라이언트를 전부 걷어내면서 제공자 분기
+ * (`STORAGE_PROVIDER` 환경변수 + `currentProvider()`)도 함께 사라졌다.
+ * 분기를 남겨두면 환경변수를 설정하지 않은 배포가 조용히 "이제 존재하지 않는
+ * 제공자"로 떨어지므로, 갈림길 자체를 없애는 편이 안전하다.
+ */
 export async function putPublicObject(
   pathname: string,
   body: Buffer,
   contentType: string,
   opts?: PutPublicObjectOptions
 ): Promise<{ url: string; pathname: string }> {
-  const overwrite = resolveOverwrite(opts)
-  if (currentProvider() === 'blob') {
-    return putObject('public', pathname, body, contentType, overwrite)
-  }
-  const { bucket, key } = splitBucketPath(pathname)
-  return putSupabaseObject(bucket, key, body, contentType, overwrite)
-}
-
-export async function deletePublicObject(pathname: string): Promise<void> {
-  if (currentProvider() === 'blob') return deleteObject('public', pathname)
-  const { bucket, key } = splitBucketPath(pathname)
-  return deleteSupabaseObject(bucket, key)
+  return putObject('public', pathname, body, contentType, resolveOverwrite(opts))
 }
 
 /**
- * 전환기 전용. 어느 제공자에 있든 지운다.
- *
- * 두 SDK 모두 없는 객체에서 에러를 던지지 않으므로(Blob del은 멱등,
- * Supabase remove는 없는 키/버킷에도 성공), reject는 전부 진짜 실패로
- * 취급한다 — classifyDeleteEverywhereResults 참고. 한쪽만 실패해도
- * 호출 자체는 성공으로 치되, 그 실패는 반드시 로그에 남긴다. 둘 다
- * 실패했을 때만 throw한다.
+ * 없는 객체에도 실패하지 않는다 — `@vercel/blob`의 `del()`은 멱등이다.
+ * 그래서 여기서 나오는 reject는 전부 진짜 실패이고, 호출부는 그 사실을
+ * 반드시 로그로 드러내야 한다(삼키더라도 조용히 삼키지 말 것).
  */
-export async function deletePublicObjectEverywhere(pathname: string): Promise<void> {
-  const { bucket, key } = splitBucketPath(pathname)
-  const [blobResult, supabaseResult] = await Promise.allSettled([
-    deleteObject('public', pathname),
-    deleteSupabaseObject(bucket, key),
-  ])
-
-  const { toLog, shouldThrow } = classifyDeleteEverywhereResults([
-    { provider: 'blob', result: blobResult },
-    { provider: 'supabase', result: supabaseResult },
-  ])
-
-  for (const { provider, reason } of toLog) {
-    console.warn(`[storage] ${provider} 삭제 실패 ${pathname}: ${String(reason)}`)
-  }
-  if (shouldThrow) {
-    throw new Error(`삭제 실패: ${pathname}`)
-  }
-}
-
-export function publicUrlFor(pathname: string): string {
-  if (currentProvider() === 'blob') return getPublicUrl(pathname)
-  const { bucket, key } = splitBucketPath(pathname)
-  return supabasePublicUrl(bucket, key)
+export async function deletePublicObject(pathname: string): Promise<void> {
+  return deleteObject('public', pathname)
 }

@@ -12,9 +12,6 @@
 /** 비공개 Blob 저장소에서 이사회 문서가 사는 접두어. */
 export const BOARD_DOCUMENT_PREFIX = 'board-documents'
 
-/** Supabase 쪽 버킷명. 우연히 Blob 접두어와 같지만 별개의 개념이다. */
-const SUPABASE_BUCKET = 'board-documents'
-
 const MAX_FILE_PATH_LENGTH = 512
 
 /**
@@ -96,14 +93,6 @@ function assertSafe(filePath: unknown): string {
 /** 비공개 Blob 저장소에서의 전체 pathname. */
 export function blobPathForBoardDocument(filePath: unknown): string {
   return `${BOARD_DOCUMENT_PREFIX}/${assertSafe(filePath)}`
-}
-
-/** Supabase Storage에서의 버킷·키 쌍. */
-export function supabaseLocationForBoardDocument(filePath: unknown): {
-  bucket: string
-  key: string
-} {
-  return { bucket: SUPABASE_BUCKET, key: assertSafe(filePath) }
 }
 
 /**

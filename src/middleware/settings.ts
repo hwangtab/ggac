@@ -8,13 +8,12 @@
  * `src/middleware/profile.ts`가 `getProfileById`를 그대로 통과시키는 것과
  * 같은 패턴이다.
  *
- * 이전에는 이 디렉터리의 다른 파일이 노출하던 Supabase REST 헬퍼로
- * service-role 키를 써서 `system_settings`을 직접 읽었다(그 파일은 이제
- * 아무도 참조하지 않는다 — 8절/보고서 참고, 삭제는 Task 5 몫). 일반
- * 사용자도 유지보수 모드를 확인해야
- * 하는데 `get_system_settings` RPC는 SECURITY DEFINER 내부에서 admin 체크를
- * 해 일반 사용자가 호출하면 항상 실패했기 때문이다. `listSystemSettings`는
- * 권한을 모르는 순수 쿼리 계층이라 애초에 그 문제가 없다.
+ * 이전에는 이 디렉터리의 다른 모듈이 노출하던 REST 헬퍼로 service-role 키를
+ * 써서 `system_settings`을 직접 읽었다. 일반 사용자도 유지보수 모드를 확인해야
+ * 하는데 `get_system_settings` RPC는 SECURITY DEFINER 내부에서 admin 체크를 해
+ * 일반 사용자가 호출하면 항상 실패했기 때문이다. `listSystemSettings`는 권한을
+ * 모르는 순수 쿼리 계층이라 애초에 그 문제가 없다. 그 모듈은 Task 5에서
+ * 저장소에서 삭제됐다.
  *
  * Edge 런타임: `@libsql/client`의 Edge 진입점은 `file:` URL을 거부하지만
  * `libsql://`(운영 Turso URL)은 정상 동작한다 — 단계 2c에서
@@ -65,12 +64,8 @@ const SETTINGS_CACHE_DURATION = (() => {
  * 응답에 새지는 않지만 넓힐 이유가 없다(단계 4 리뷰 1회차).
  */
 export async function getSystemSettings(
-  _supabase?: unknown,
   fetchSettings: () => Promise<SystemSettingRow[]> = () => listSystemSettings(false)
 ): Promise<PublicSystemSettings | null> {
-  // _supabase 인자는 하위 호환성을 위해 유지하되 사용하지 않는다.
-  void _supabase
-
   if (settingsCache && Date.now() - settingsCache.timestamp < SETTINGS_CACHE_DURATION) {
     return settingsCache
   }

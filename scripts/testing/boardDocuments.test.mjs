@@ -5,7 +5,6 @@ const {
   BOARD_DOCUMENT_PREFIX,
   isSafeBoardDocumentFilePath,
   blobPathForBoardDocument,
-  supabaseLocationForBoardDocument,
   contentDispositionAttachment,
 } = await import('../../src/lib/storage/boardDocuments.ts')
 
@@ -69,17 +68,6 @@ test('Blob 경로는 board-documents/ 접두어를 붙인다', () => {
 test('Blob 경로 조립은 봉쇄를 통과하지 못한 값에 대해 던진다', () => {
   assert.throws(() => blobPathForBoardDocument('../backups/x.sql.gz'), /안전하지 않은/)
   assert.throws(() => blobPathForBoardDocument(''), /안전하지 않은/)
-})
-
-test('Supabase 위치는 버킷과 키로 나뉜다', () => {
-  assert.deepEqual(supabaseLocationForBoardDocument('seed/doc_0.pdf'), {
-    bucket: 'board-documents',
-    key: 'seed/doc_0.pdf',
-  })
-})
-
-test('Supabase 위치 조립도 봉쇄를 통과하지 못한 값에 대해 던진다', () => {
-  assert.throws(() => supabaseLocationForBoardDocument('seed/../x'), /안전하지 않은/)
 })
 
 test('Content-Disposition: ASCII 파일명은 그대로, 한글은 RFC 5987로', () => {

@@ -9,7 +9,7 @@ import {
   hasKnownFileSignature,
   hasValidFileSignature,
 } from '@/utils/fileUploadValidation'
-import { deleteBoardDocumentEverywhere, putBoardDocument } from '@/lib/storage/privateProvider'
+import { deleteBoardDocument, putBoardDocument } from '@/lib/storage/privateProvider'
 import { createDocument, listDocuments } from '@/db/queries/board'
 
 const log = createLogger('boardRoom/documents')
@@ -153,7 +153,7 @@ export async function POST(request: NextRequest) {
         })
         // Rollback: remove just-uploaded storage object
         try {
-          await deleteBoardDocumentEverywhere(storagePath)
+          await deleteBoardDocument(storagePath)
         } catch (removeErr) {
           log.error('rollback 삭제 실패', {
             error: removeErr instanceof Error ? removeErr.message : String(removeErr),

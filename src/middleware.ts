@@ -1,4 +1,3 @@
-import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import createIntlMiddleware from 'next-intl/middleware'
@@ -8,15 +7,9 @@ import { getSystemSettings } from './middleware/settings'
 import { handleAuth } from './middleware/auth'
 import { getMaintenanceResponse } from './middleware/maintenance'
 import { routing } from './i18n/routing'
-import { createLogger } from '@/utils/logger'
 import { verifySessionFresh } from './middleware/session'
 
 const intlMiddleware = createIntlMiddleware(routing)
-const log = createLogger('middleware')
-
-function hasSupabaseMiddlewareConfig() {
-  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
-}
 
 // 유지보수 모드가 켜져 있어도 항상 통과해야 하는 최소 집합.
 // 막으면 관리자 판정 자체가 불가능해지거나(로그인·세션 확인) 배포 스모크 체크가
@@ -42,37 +35,9 @@ function isMaintenanceExempt(pathname: string): boolean {
   )
 }
 
-// 페이지 경로와 API 경로가 공유하는 @supabase/ssr 서버 클라이언트 생성 로직.
-// 쿠키를 요청·응답(res) 양쪽에 반영해 access token 갱신이 브라우저까지 전달되게 한다.
-function createMiddlewareSupabaseClient(request: NextRequest, res: NextResponse) {
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      // 미들웨어는 모든 페이지/API 요청 경로다. Supabase Auth가 행이면 사이트 전체가
-      // 미들웨어 타임아웃까지 블로킹되므로 요청 상한을 짧게 둔다(초과 시 auth 실패
-      // 경로로 처리되어 공개 페이지는 통과, 보호 페이지는 로그인으로 유도).
-      global: {
-        fetch: (input: RequestInfo | URL, init?: RequestInit) =>
-          fetch(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(3000) }),
-      },
-      cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
-        setAll(cookiesToSet) {
-          // access token 갱신 시 새 쿠키를 요청·응답 양쪽에 반영해 브라우저까지 전달한다.
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-          cookiesToSet.forEach(({ name, value, options }) => res.cookies.set(name, value, options))
-        },
-      },
-    }
-  )
-}
-
-// @supabase/ssr가 setAll로 기반 응답(res)에 기록한 갱신 토큰 쿠키를, 미들웨어가 새로
-// 반환하는 응답(리다이렉트·유지보수)에도 복사해 브라우저까지 전달한다. 누락하면 토큰
-// 회전(rotation) 환경에서 갱신이 유실되어 다음 요청에 로그아웃될 수 있다.
+// handleAuth·getSystemSettings가 기반 응답(res)에 기록한 쿠키를, 미들웨어가 새로
+// 반환하는 응답(리다이렉트·유지보수)에도 복사해 브라우저까지 전달한다. 누락하면
+// 세션 갱신이 유실되어 다음 요청에 로그아웃될 수 있다.
 function copyResponseCookies(from: NextResponse, to: NextResponse): NextResponse {
   from.cookies.getAll().forEach(cookie => to.cookies.set(cookie))
   // 미들웨어가 새로 반환하는 응답(리다이렉트·유지보수 503·가입중단 403 HTML)은
@@ -98,10 +63,6 @@ export async function middleware(request: NextRequest) {
       return NextResponse.next()
     }
 
-    if (!hasSupabaseMiddlewareConfig()) {
-      return NextResponse.next()
-    }
-
     const systemSettings = await getSystemSettings()
 
     // 유지보수가 꺼져 있으면(평시) 세션을 읽지 않고 즉시 통과한다 — matcher
@@ -114,7 +75,6 @@ export async function middleware(request: NextRequest) {
     // 유지보수 ON: 관리자만 통과시킨다. 판정을 위해서만 세션을 읽는다 — 유지보수는
     // 드물고 저트래픽이라 이 왕복 비용은 무시할 만하다(평시 경로에는 없다).
     const res = NextResponse.next()
-    const supabase = createMiddlewareSupabaseClient(request, res)
     const authResult = await handleAuth(request, res, systemSettings)
     let isAdmin = authResult.profile?.is_admin === true
 
@@ -183,14 +143,7 @@ export async function middleware(request: NextRequest) {
   // CSP 보안 헤더 적용
   applyCSP(request, res)
 
-  if (!hasSupabaseMiddlewareConfig()) {
-    log.debug('Supabase env missing, skipping auth middleware')
-    return res
-  }
-
-  const supabase = createMiddlewareSupabaseClient(request, res)
-
-  const systemSettings = await getSystemSettings(supabase)
+  const systemSettings = await getSystemSettings()
   const authResult = await handleAuth(request, res, systemSettings)
 
   if (!authResult.shouldContinue && authResult.response) {
