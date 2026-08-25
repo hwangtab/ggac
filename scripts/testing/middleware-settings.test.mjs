@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import { readFileSync, rmSync } from 'node:fs'
 import { createClient } from '@libsql/client'
 
+import { FETCH_TIMEOUT_MS } from '../../src/middleware/profile.ts'
+
 /**
  * 구조를 고정한다. 미들웨어의 유지보수 모드/가입 허용 판정이 다시
  * Supabase(service-role REST)로 돌아가면, 관리자가 이제 Turso에만 쓰는
@@ -137,15 +139,47 @@ test('site 카테고리가 아닌 행은 무시한다(다른 카테고리에 같
  * 주입한다(운영 호출부는 이 인자를 넘기지 않고 기본값 `listSystemSettings`를
  * 쓴다 — 프로덕션 동작은 바뀌지 않는다).
  */
-test('타임아웃(FETCH_TIMEOUT_MS=3000ms) 안에 응답하지 않으면 null을 반환한다(fail-open, 사이트를 막지 않는다)', async () => {
+test('타임아웃 상수가 3000ms로 고정돼 있다(값이 조용히 줄거나 늘면 실패한다)', () => {
+  // 이 단언이 없으면 아래 타임아웃 테스트는 FETCH_TIMEOUT_MS를 500ms로 바꿔도
+  // 그대로 통과한다 — "타임아웃이 있다"만 보고 "얼마인지"를 안 보기 때문이다.
+  assert.equal(
+    FETCH_TIMEOUT_MS,
+    3000,
+    'FETCH_TIMEOUT_MS는 이전 Supabase REST 구현에서 가져온 값이다 — 바꾸려면 근거를 남겨라'
+  )
+})
+
+test('타임아웃(FETCH_TIMEOUT_MS) 직전까지는 기다리고, 넘기면 null을 반환한다(fail-open, 사이트를 막지 않는다)', async () => {
   const { getSystemSettings } = await loadFreshSettingsModule()
   const neverResolves = () => new Promise(() => {})
+
+  // setImmediate는 mock.timers가 가로채지 않으므로(apis에 없다) 마이크로태스크
+  // 큐를 실제로 비우는 데 쓴다. Promise.race로 "아직 안 끝났다"를 보면
+  // 이미 끝난 promise도 한 마이크로태스크 늦게 settle하면서 거짓 통과한다.
+  const flushMicrotasks = () => new Promise(resolve => setImmediate(resolve))
 
   mock.timers.enable({ apis: ['setTimeout'] })
   try {
     const promise = getSystemSettings(undefined, neverResolves)
-    mock.timers.tick(3000)
+    let settled = false
+    promise.then(
+      () => {
+        settled = true
+      },
+      () => {
+        settled = true
+      }
+    )
+
+    // 1ms 모자라면 아직 포기하지 않는다 — 타임아웃이 짧아지면 여기서 걸린다.
+    mock.timers.tick(FETCH_TIMEOUT_MS - 1)
+    await flushMicrotasks()
+    assert.equal(settled, false, `${FETCH_TIMEOUT_MS - 1}ms에는 아직 결과를 내면 안 된다`)
+
+    // 그 1ms를 마저 흘리면 포기한다 — 타임아웃이 늘거나 사라지면 여기서 걸린다.
+    mock.timers.tick(1)
     const result = await promise
+    assert.equal(settled, true, `${FETCH_TIMEOUT_MS}ms가 지나면 반드시 포기해야 한다`)
     assert.equal(
       result,
       null,
@@ -156,15 +190,56 @@ test('타임아웃(FETCH_TIMEOUT_MS=3000ms) 안에 응답하지 않으면 null�
   }
 })
 
-test('60초 TTL 캐시: 같은 모듈 인스턴스에서 두 번째 호출은 fetchSettings를 다시 부르지 않는다', async () => {
-  const { getSystemSettings } = await loadFreshSettingsModule()
-  let callCount = 0
-  const countingFetch = async () => {
-    callCount++
-    return []
-  }
+/**
+ * TTL은 `Date.now()` 차이로 판정하므로 가짜 시계 없이 연속 호출하면 두 호출
+ * 사이 경과가 0ms다 — TTL이 1ms든 `Infinity`든 "두 번째 호출은 캐시"가
+ * 통과한다. 그러면 이 파일이 막아야 할 실제 사고
+ * ("관리자가 유지보수 모드를 켰는데 미들웨어가 영원히 옛 값을 본다")를
+ * 전혀 못 잡는다(리뷰 1회차 Important 4).
+ *
+ * 그래서 `mock.timers`로 `Date`를 가짜 시계로 바꾸고 TTL 경계를 양쪽에서
+ * 조인다 — 59_999ms에는 캐시, 60_001ms에는 재조회.
+ */
+test('60초 TTL 캐시: TTL 안에서는 캐시를 쓰고, TTL이 지나면 반드시 다시 조회한다', async () => {
+  const originalTtl = process.env.SETTINGS_CACHE_TTL_MS
+  delete process.env.SETTINGS_CACHE_TTL_MS
 
-  await getSystemSettings(undefined, countingFetch)
-  await getSystemSettings(undefined, countingFetch)
-  assert.equal(callCount, 1, 'TTL 안의 재호출은 캐시를 써야 한다(매 요청마다 DB를 때리면 안 된다)')
+  mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 0 })
+  try {
+    const { getSystemSettings } = await loadFreshSettingsModule()
+    let callCount = 0
+    const countingFetch = async () => {
+      callCount++
+      return []
+    }
+
+    await getSystemSettings(undefined, countingFetch)
+    assert.equal(callCount, 1, '첫 호출은 캐시가 비어 있으니 조회한다')
+
+    await getSystemSettings(undefined, countingFetch)
+    assert.equal(
+      callCount,
+      1,
+      'TTL 안의 재호출은 캐시를 써야 한다(매 요청마다 DB를 때리면 안 된다)'
+    )
+
+    // TTL 1ms 전: 아직 캐시. TTL이 0에 가깝게 줄면 여기서 걸린다.
+    mock.timers.tick(59_999)
+    await getSystemSettings(undefined, countingFetch)
+    assert.equal(callCount, 1, '59_999ms는 아직 TTL(60_000ms) 안이다')
+
+    // TTL 경과: 반드시 다시 조회. TTL이 Infinity이거나 캐시가 만료되지 않으면
+    // 여기서 걸린다 — 관리자가 켠 유지보수 모드가 영원히 반영되지 않는 상태다.
+    mock.timers.tick(2)
+    await getSystemSettings(undefined, countingFetch)
+    assert.equal(
+      callCount,
+      2,
+      'TTL(60_000ms)이 지나면 다시 조회해야 한다 — 아니면 관리자가 켠 유지보수 모드를 미들웨어가 영원히 못 본다'
+    )
+  } finally {
+    mock.timers.reset()
+    if (originalTtl === undefined) delete process.env.SETTINGS_CACHE_TTL_MS
+    else process.env.SETTINGS_CACHE_TTL_MS = originalTtl
+  }
 })
