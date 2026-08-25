@@ -2,14 +2,19 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
-const src = readFileSync('src/lib/auth/server.ts', 'utf8')
+import { stripComments } from './strip-comments.mjs'
+
 // 주석·JSDoc은 걷어내고 본다. 이 파일의 단정 대부분이 "이 설정이 켜져 있다"
 // 같은 존재 검사인데, 원본 문자열을 그대로 훑으면 **설정을 지우고 주석으로만
 // 남겨도 통과한다.** 실제로 그런 일이 있었다: `disableSignUp: true`를 단계
 // 2b-6에서 제거했는데, 그 사실을 설명하는 주석에 같은 리터럴이 남아 있어
 // "공개 가입은 여전히 닫혀 있다"는 테스트가 초록불인 채로 계속 거짓을
 // 주장했다(단계 4 Task 5에서 발견).
-const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
+//
+// 걷어내기는 정규식이 아니라 TypeScript 파서를 쓴다(`./strip-comments.mjs`).
+// 여기 있던 정규식 판본은 문자열·정규식 리터럴 안의 `/*`·`//`를 주석 시작으로
+// 오인해 실제 코드를 지웠다(Task 5 리뷰 1회차).
+const code = stripComments(readFileSync('src/lib/auth/server.ts', 'utf8'))
 
 test('공개 가입은 열려 있고, 그 대신 catch-all 라우트가 sign-up/email 직접 호출을 막는다', () => {
   // 단계 2b-6에서 `disableSignUp: true`를 제거해 회원가입 화면이 동작한다.
@@ -19,9 +24,12 @@ test('공개 가입은 열려 있고, 그 대신 catch-all 라우트가 sign-up/
   assert.doesNotMatch(code, /disableSignUp/)
   assert.match(code, /emailAndPassword:\s*\{[\s\S]*?enabled:\s*true/)
 
-  const catchAll = readFileSync('src/app/api/auth/[...all]/route.ts', 'utf8')
-  assert.match(catchAll, /sign-up\/email/)
-  assert.match(catchAll, /ApiError\.forbidden/)
+  // 이쪽도 주석을 걷어내고 본다. 원본을 그대로 훑으면 이 라우트의 JSDoc
+  // (`\`sign-up/email\` 경로인지 판별한다` 등)만으로 두 단정이 만족돼,
+  // **봉쇄 코드를 통째로 지워도 초록불**이 된다.
+  const catchAll = stripComments(readFileSync('src/app/api/auth/[...all]/route.ts', 'utf8'))
+  assert.match(catchAll, /endsWith\(['"]\/sign-up\/email['"]\)/)
+  assert.match(catchAll, /if \(isSignUpEmailPath\(request\)\) \{\s*return ApiError\.forbidden\(/)
 })
 
 test('쿠키 캐시가 켜져 있다', () => {
