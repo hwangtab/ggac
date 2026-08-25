@@ -25,6 +25,16 @@ test('미들웨어 설정 모듈은 Supabase(service-role REST)를 더 이상 �
   assert.doesNotMatch(src, /supabase-rest|fetchSystemSettingsRows|SUPABASE_SERVICE_ROLE_KEY/)
 })
 
+test('미들웨어는 민감 설정을 평문으로 끌어오지 않는다(listSystemSettings(false))', () => {
+  // 미들웨어가 보는 maintenance_mode/registration_enabled는 is_sensitive=false라
+  // 마스킹 여부가 결과를 바꾸지 않는다. 반면 true로 부르면 캐시 미스마다 SMTP
+  // 비밀번호 같은 평문이 Edge isolate 메모리로 끌려온다 — 응답에 새지는 않지만
+  // 넓힐 이유가 없다.
+  const src = readFileSync('src/middleware/settings.ts', 'utf8')
+  assert.match(src, /listSystemSettings\(false\)/)
+  assert.doesNotMatch(src, /listSystemSettings\(true\)/)
+})
+
 test('middleware.ts가 system_settings를 직접 조회하지 않는다(getSystemSettings 경유)', () => {
   const src = readFileSync('src/middleware.ts', 'utf8')
   assert.doesNotMatch(src, /from\(['"]system_settings['"]\)/)

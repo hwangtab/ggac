@@ -56,15 +56,17 @@ const SETTINGS_CACHE_DURATION = (() => {
  * `fetchSettings`는 테스트에서 지연 응답을 주입하기 위한 선택 인자다(두 번째
  * 인자, `src/middleware/profile.ts`의 `fetchMemberProfileForMiddleware`와
  * 같은 자리) — 실제 호출부(`middleware.ts`)는 넘기지 않고 기본값
- * (`listSystemSettings(true)`)을 그대로 쓴다. `includeSensitive: true`로
- * 부르는 이유: `maintenance_mode`/`registration_enabled`는 `is_sensitive`가
- * never true인 설정이라 마스킹 여부가 결과에 영향을 주지 않지만, 이전
- * Supabase REST 구현도 service-role 키로 마스킹 없이 원값을 읽었으므로 그
- * 동작을 그대로 맞춘다.
+ * (`listSystemSettings(false)`)을 그대로 쓴다.
+ *
+ * `includeSensitive: false`인 이유: 이 모듈이 읽는
+ * `maintenance_mode`/`registration_enabled`는 `is_sensitive = false`라
+ * 마스킹 여부가 결과에 영향을 주지 않는다. 반면 `true`로 부르면 캐시 미스마다
+ * SMTP 비밀번호 같은 민감 설정의 **평문**이 Edge isolate 메모리로 끌려온다 —
+ * 응답에 새지는 않지만 넓힐 이유가 없다(단계 4 리뷰 1회차).
  */
 export async function getSystemSettings(
   _supabase?: unknown,
-  fetchSettings: () => Promise<SystemSettingRow[]> = () => listSystemSettings(true)
+  fetchSettings: () => Promise<SystemSettingRow[]> = () => listSystemSettings(false)
 ): Promise<PublicSystemSettings | null> {
   // _supabase 인자는 하위 호환성을 위해 유지하되 사용하지 않는다.
   void _supabase
@@ -77,6 +79,14 @@ export async function getSystemSettings(
     // 미들웨어는 요청마다 실행된다 — Turso 응답이 지연되면 타임아웃 없이는
     // 요청 하나가 무기한 대기하다가 Edge 실행 시간 제한에 하드킬(504)당하고,
     // 그 상태가 반복되면 사이트 전체가 죽는다. profile.ts와 같은 보호.
+    //
+    // 값이 바뀐 것은 의도한 것이다: 옛 Supabase REST 구현은 이 조회에만
+    // `AbortSignal.timeout(2500)`을 썼지만, 이제는 미들웨어의 두 Turso 조회
+    // (profile.ts의 프로필 조회와 이 설정 조회)가 같은 상수
+    // `FETCH_TIMEOUT_MS`(3000ms)를 공유한다 — 같은 런타임·같은 트랜스포트에
+    // 서로 다른 두 임계값을 두면 어느 쪽이 먼저 끊는지가 요청마다 달라져
+    // 장애 분석이 어려워진다. 500ms 차이는 fail-open 정책상 관측 가능한
+    // 동작 차이를 만들지 않는다(둘 다 null → 유지보수 모드 꺼짐).
     const rows = await withTimeout(
       fetchSettings(),
       FETCH_TIMEOUT_MS,
