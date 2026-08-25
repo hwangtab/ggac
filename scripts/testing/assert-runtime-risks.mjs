@@ -1921,6 +1921,13 @@ const displayPathsFullyOnTurso = [
   { path: publicPostsApiPath, source: publicPostsApiSource },
   { path: postOgImagePath, source: postOgImageSource },
   { path: libPostsPath, source: libPostsSource },
+  // Task 8: board_posts_with_stats 뷰가 listBoardPostsWithStats(Turso)로
+  // 대체되면서 이 세 파일도 Supabase 참조가 완전히 사라졌다(직접 grep으로
+  // 확인) — 강한 음성 단정 목록에 추가해 "listBoardPostsWithStats를 지우고
+  // 옛 Supabase 뷰 읽기로 되돌리는" 회귀를 잡는다.
+  { path: serverBoardPath, source: serverBoardSource },
+  { path: boardPostsApiPath, source: boardPostsApiSource },
+  { path: boardListPostsApiPath, source: boardListPostsApiSource },
 ]
 const staleSupabaseReadPattern =
   /createSupabaseServer|createServiceRoleClient|@supabase\/supabase-js|from\(\s*['"](?:comments|post_likes|comment_likes|post_attachments)['"]\s*\)/
@@ -1931,16 +1938,15 @@ const staleSupabaseReadOffenders = displayPathsFullyOnTurso.filter(({ source }) 
   staleSupabaseReadPattern.test(stripComments(source))
 )
 
-// 코디네이터 코드리뷰(2차): `src/app/api/posts/route.ts` GET은
-// `board_posts_with_stats` 뷰(Task 8 몫, 여전히 Supabase)를 읽는
-// fetchBoardPosts에 위임하므로 `staleSupabaseReadOffenders`(위, "이 파일엔
-// Supabase 참조가 0이어야 한다")에는 넣지 않는다 — 이 파일 자체가
-// `createSupabaseServer`를 더는 직접 호출하지 않지만, 뷰 때문에 완전
-// Supabase-free를 계약하기엔 이르다. 대신 "사용자가 좋아요한 게시글" 표시
-// (`post_likes` 조회)만 좁게 검사한다 — 컷오버 후 새 좋아요가 게시판
-// 목록에서 하트로 안 보이던 버그(상세 페이지는 Turso를 봐서 눌린 것으로
-// 보이는데 목록은 얼어붙은 Supabase 스냅샷을 봐서 안 눌린 것으로 보이는
-// 엇갈림)의 재발을 막는다.
+// 코디네이터 코드리뷰(2차, Task 8에서 board_posts_with_stats 뷰 대체 완료로
+// 갱신): `src/app/api/posts/route.ts` GET은 fetchBoardPosts에 위임하고, 그
+// 함수는 이제 listBoardPostsWithStats(Turso)를 읽는다 — 이 파일도 위
+// `displayPathsFullyOnTurso`(boardListPostsApiPath로 등록)에 들어가
+// Supabase 참조 자체가 없어야 한다는 강한 단정을 받는다. 아래는 그와 별개로
+// "사용자가 좋아요한 게시글" 표시(`post_likes` 조회)만 좁게 다시 검사한다
+// — 컷오버 후 새 좋아요가 게시판 목록에서 하트로 안 보이던 버그(상세
+// 페이지는 Turso를 봐서 눌린 것으로 보이는데 목록은 얼어붙은 Supabase
+// 스냅샷을 봐서 안 눌린 것으로 보이는 엇갈림)의 재발을 막는다.
 const validatesPostsListLikedSetUsesTurso =
   /getLikedPostIds\(userId,\s*postIds\)/.test(boardListPostsApiSource) &&
   !/\.from\(\s*['"]post_likes['"]\s*\)/.test(stripComments(boardListPostsApiSource))

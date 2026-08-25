@@ -1,22 +1,19 @@
 /**
  * 게시글 목록 조회 API - 단순 페이지 기반
  *
- * Turso 전환 메모(Task 4): 이 파일의 GET은 `posts`/`member_profiles`를 직접
- * 조회하지 않는다 — `fetchBoardPosts`(`@/lib/server/board`)에 위임하고,
- * 그 함수는 Postgres 뷰 `board_posts_with_stats`(댓글·좋아요·첨부 집계까지
- * 한 번에 조인)를 읽는다. 그 뷰 대체는 Task 8(`board_posts_with_stats` 뷰
- * 대체)의 몫으로 명시적으로 미뤄져 있어(2026-08-24-turso-stage2c-profiles-
- * content/task-8-brief.md, reference-views.md) 이 파일은 의도적으로
- * 손대지 않았다 — `board_posts_with_stats` 뷰 읽기는 `src/lib/server/board.ts`
- * 안에 있고, 그 파일이 Supabase 클라이언트를 계속 쓴다(이 파일 자체가
- * 직접 쓰지는 않는다).
+ * Turso 전환 메모(Task 4·갱신 Task 8): 이 파일의 GET은 `posts`/
+ * `member_profiles`를 직접 조회하지 않는다 — `fetchBoardPosts`
+ * (`@/lib/server/board`)에 위임한다. Task 8에서 그 함수 안의
+ * `board_posts_with_stats` 뷰 읽기 자체가 `listBoardPostsWithStats`(Turso
+ * 쿼리 계층, `src/db/queries/posts.ts`)로 대체됐다 — 이 파일은 여전히
+ * `fetchBoardPosts`에 위임만 하고 직접 손대지 않지만, 이제 그 위임 경로
+ * 전체가 Turso다(Supabase 뷰는 더 이상 존재하지 않는다).
  *
  * 단계 2c 후속(Task 6 코드리뷰 대응): "사용자가 좋아요한 게시글" 표시
- * (`userLikedSet`)만은 뷰와 무관한 별개 조회였다 — 컷오버 후 새로 누른
- * 좋아요가 목록에서 하트로 안 보이는 버그(Turso에는 기록되는데 이 조회가
- * 얼어붙은 Supabase 스냅샷을 봤다)로 실제로 드러나, `getLikedPostIds`(Turso
- * 쿼리 계층, `src/db/queries/likes.ts`)로 옮겼다. `board_posts_with_stats`
- * 뷰 자체는 여전히 손대지 않는다.
+ * (`userLikedSet`)만은 별개 조회였다 — 컷오버 후 새로 누른 좋아요가
+ * 목록에서 하트로 안 보이는 버그(Turso에는 기록되는데 이 조회가 얼어붙은
+ * Supabase 스냅샷을 봤다)로 실제로 드러나, `getLikedPostIds`(Turso 쿼리
+ * 계층, `src/db/queries/likes.ts`)로 옮겼다.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
