@@ -118,14 +118,6 @@ const nextConfig = {
               priority: 20,
               reuseExistingChunk: true,
             },
-            // Supabase 관련 번들
-            supabase: {
-              test: /[\\/]node_modules[\\/]@supabase[\\/]/,
-              name: 'supabase',
-              type: 'javascript/auto',
-              priority: 20,
-              reuseExistingChunk: true,
-            },
             // 공통 컴포넌트 번들(common cacheGroup)은 제거했다.
             // minChunks:2 + chunks:'all'이 앱 전역에서 2개 이상 청크가 쓰는 모든
             // 모듈을 단일 common.js로 병합하는데, OptimizedImage·ErrorBoundary 같은
