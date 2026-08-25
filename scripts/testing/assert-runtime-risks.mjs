@@ -2961,29 +2961,31 @@ const validatesBoardRoomAttendeesMeetingId =
 // Task 4: board_minutes 권위가 Turso로 옮겨지며 이 두 라우트가
 // `createMinutes({..., contentFormat, ...})`/
 // `updateMinutes(id, {..., contentFormat: bodyContentFormat})`
-// (src/db/queries/board.ts, 필드명 camelCase)를 쓴다 — 옛 Supabase
-// `content_format: contentFormat`/`update.content_format = bodyContentFormat`
-// 패턴도 계속 허용해 두 형태 모두 통과시킨다. "허용되지 않은 값 직접 대입"
-// 음의 검사는 두 표기 모두 막는다.
+// (src/db/queries/board.ts, 필드명 camelCase)를 쓴다. 두 라우트에 Supabase
+// 호출은 한 줄도 남지 않았으므로 옛 패턴 분기는 죽은 코드였다.
+//
+// 생성 쪽 긍정 검사는 반드시 `createMinutes({...})` 호출부에 고정한다 —
+// 파일 어디의 `contentFormat,` 토큰(함수 인자·구조분해·로그)으로도 만족되면
+// 아무것도 안 지킨다(리뷰 1회차 Important 2). 두 라우트 모두 "검증 안 된 body
+// 값 직행" 음의 검사를 snake_case/camelCase 양쪽으로 건다.
 const validatesBoardRoomMinutesContentFormat =
   /CONTENT_FORMATS\s*=\s*\[['"]plain['"],\s*['"]html['"],\s*['"]markdown['"]\]\s+as const/.test(
     contentFormatConstantsSource
   ) &&
   /parseContentFormat/.test(contentFormatConstantsSource) &&
   /parseContentFormat\(body\.content_format\)/.test(boardRoomMinutesSource) &&
-  (/content_format:\s*contentFormat/.test(boardRoomMinutesSource) ||
-    /contentFormat,/.test(boardRoomMinutesSource)) &&
+  /createMinutes\(\{[^)]*?\bcontentFormat,/.test(boardRoomMinutesSource) &&
   /parseContentFormat\(body\.content_format\)/.test(boardRoomMinutesDetailSource) &&
   // c39679f에서 요청 포맷/유효 포맷 구분을 위해 지역 변수가 bodyContentFormat으로
   // 개명됨 — "allowlist 검증값만 대입" 결선을 함께 고정
   /bodyContentFormat = parseContentFormat\(body\.content_format\)/.test(
     boardRoomMinutesDetailSource
   ) &&
-  (/update\.content_format = bodyContentFormat/.test(boardRoomMinutesDetailSource) ||
-    /update\.contentFormat = bodyContentFormat/.test(boardRoomMinutesDetailSource)) &&
+  /update\.contentFormat = bodyContentFormat/.test(boardRoomMinutesDetailSource) &&
   !/update\.content_format = body\.content_format/.test(boardRoomMinutesDetailSource) &&
   !/update\.contentFormat = body\.content_format/.test(boardRoomMinutesDetailSource) &&
-  !/content_format:\s*body\.content_format/.test(boardRoomMinutesSource)
+  !/content_format:\s*body\.content_format/.test(boardRoomMinutesSource) &&
+  !/contentFormat:\s*body\.content_format/.test(boardRoomMinutesSource)
 const validatesBoardRoomMeetingDateInputs =
   /parseBoardMeetingDate/.test(boardRoomConstantsSource) &&
   /\^\\d\{4\}-\\d\{2\}-\\d\{2\}\$/.test(boardRoomConstantsSource) &&
