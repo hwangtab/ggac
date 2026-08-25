@@ -24,9 +24,12 @@ if (!validSources.has(envSource)) {
 loadEnvConfig(process.cwd())
 
 const requiredEnvVars = [
+  // 앱 코드에 Supabase 클라이언트는 0개지만(정적 가드가 강제) 이 값 하나는
+  // 아직 필요하다: DB에 남아 있는 Supabase Storage 절대 URL을 "우리 것"으로
+  // 인정하는 판정 4곳(safeUrl.ts·storageUrlValidation.ts·imageDimensions.ts·
+  // storage/paths.ts)과 CSP/preconnect가 이 값을 읽는다. 지우면 전환 이전에
+  // 올라간 사진이 전부 안 뜬다. `.env.example`의 같은 항목 설명 참고.
   'NEXT_PUBLIC_SUPABASE_URL',
-  'NEXT_PUBLIC_SUPABASE_ANON_KEY',
-  'SUPABASE_SERVICE_ROLE_KEY',
   // Better Auth 배선(feat/turso-stage2b1)이 src/db/client.ts를 통해 모듈
   // 스코프에서 Turso에 연결한다. 이 셋이 없으면 캐치올 라우트를 빌드타임에
   // 수집하는 순간 "Failed to collect page data for /api/auth/[...all]"로
@@ -34,6 +37,19 @@ const requiredEnvVars = [
   'TURSO_DATABASE_URL',
   'TURSO_AUTH_TOKEN',
   'BETTER_AUTH_SECRET',
+  // 저장소는 Vercel Blob 하나뿐이다(단계 4 Task 5에서 제공자 분기가 사라졌다).
+  // 셋 다 없으면 **에러 없이 화면만 망가지는** 종류의 사고를 낸다:
+  //  · NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL이 비면 isBlobPublicUrl()이 항상 false
+  //    (src/lib/storage/paths.ts) → toSafeArtistImageSrc가 Blob 사진을 전부
+  //    기본 로고로 바꾸고(src/utils/safeUrl.ts) 첨부 렌더 게이트도 전부 닫힌다.
+  //  · PUBLIC_BLOB_READ_WRITE_TOKEN이 없으면 업로드·삭제(미디어·첨부·아티스트
+  //    사진)가 전부 실패한다.
+  //  · PRIVATE_BLOB_READ_WRITE_TOKEN이 없으면 이사회 서류 업로드·다운로드가
+  //    실패한다(src/lib/storage/privateProvider.ts).
+  // 셋 다 빠져 있는데도 이 스크립트가 초록불이던 상태가 최종 리뷰 B-2다.
+  'NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL',
+  'PUBLIC_BLOB_READ_WRITE_TOKEN',
+  'PRIVATE_BLOB_READ_WRITE_TOKEN',
 ]
 
 const redisEnvGroups = [
@@ -61,6 +77,14 @@ const optionalEnvVars = [
   // — 그래서 필수가 아니라 권장으로만 둔다.
   'BETTER_AUTH_URL',
   'NEXT_PUBLIC_SITE_URL',
+  // 앱 코드(`src/`)에는 이 둘을 읽는 줄이 **0줄**이다. 남아 있는 소비처는
+  // 이관·컷오버 스크립트(scripts/migrate, scripts/storage)가 Supabase에서
+  // 데이터를 읽을 때뿐이다. 그래서 필수가 아니라 선택으로 둔다 — 필수로 두면
+  // 컷오버에서 이 키들을 지우는 순간 배포 전 점검이 **거짓으로 빨간불**이 되고,
+  // 운영자에게 쓰지도 않는 service-role 키를 계속 꽂아 두라고 압박한다
+  // (최종 리뷰 B-2).
+  'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+  'SUPABASE_SERVICE_ROLE_KEY',
 ]
 
 console.log('🔍 Environment Variable Verification\n')
@@ -216,6 +240,25 @@ if (env.NEXT_PUBLIC_SUPABASE_URL) {
   if (!supabaseUrl.startsWith('https://') || !supabaseUrl.includes('.supabase.co')) {
     console.log(
       `❌ NEXT_PUBLIC_SUPABASE_URL: Invalid format (should be https://[project].supabase.co)`
+    )
+    hasErrors = true
+  }
+}
+
+// Validate public Blob base URL format
+// isBlobPublicUrl()은 `new URL(base).origin`을 대조한다 — 파싱되지 않는 값은
+// try/catch 안에서 조용히 false가 되어 "설정했는데 모든 사진이 안 뜨는" 상태를
+// 만든다. 값이 있는데 URL이 아닌 경우를 여기서 잡는다.
+if (env.NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL) {
+  let blobOrigin = null
+  try {
+    blobOrigin = new URL(env.NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL).origin
+  } catch {
+    blobOrigin = null
+  }
+  if (!blobOrigin || !blobOrigin.startsWith('https://')) {
+    console.log(
+      '❌ NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL: Invalid format (should be an absolute https:// URL, e.g. https://[store].public.blob.vercel-storage.com)'
     )
     hasErrors = true
   }
