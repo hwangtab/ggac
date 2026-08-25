@@ -734,6 +734,15 @@ const existingAuthHelpersUseSharedOperationalBoundaries =
  * `export function` / `export async function` / `function` 세 형태를 받는다.
  * 시그니처 괄호 안에 중괄호가 들어갈 수 있어(구조 분해 인자·객체 타입)
  * 괄호 균형을 먼저 맞춘 뒤 여는 중괄호를 찾는다.
+ *
+ * 닫는 괄호 **뒤**의 반환 타입 주석에도 중괄호가 들어갈 수 있다
+ * (`): Promise<{ profile: ProfileLike | null }> {`). 예전 구현은 거기서 첫
+ * `{`를 만나 **타입 객체를 본문으로 잘라냈다** — `resolveSessionProfile`이
+ * 정확히 그 모양이라, 이 함수를 계약에 넣자마자 본문 대신 타입이 검사돼
+ * 전부 "분기가 없습니다"로 나왔다(가드가 조용히 통과하는 쪽이 아니라
+ * 실패하는 쪽이라 드러났지만, 그 반대 모양이었으면 못 봤을 것이다).
+ * 그래서 꺾쇠 깊이를 함께 세어 **제네릭 인자 안의 중괄호는 건너뛴다**.
+ * `=>`의 `>`는 꺾쇠 닫힘이 아니므로 제외한다.
  */
 function extractNamedFunctionBody(code, name) {
   const marker = new RegExp(`(?:export\\s+)?(?:async\\s+)?function\\s+${name}\\s*\\(`)
@@ -749,7 +758,17 @@ function extractNamedFunctionBody(code, name) {
       if (depth === 0) break
     }
   }
-  const braceStart = code.indexOf('{', i)
+  let angle = 0
+  let braceStart = -1
+  for (let k = i; k < code.length; k += 1) {
+    const ch = code[k]
+    if (ch === '<') angle += 1
+    else if (ch === '>' && code[k - 1] !== '=') angle = Math.max(0, angle - 1)
+    else if (ch === '{' && angle === 0) {
+      braceStart = k
+      break
+    }
+  }
   if (braceStart === -1) return null
 
   depth = 0
@@ -916,6 +935,92 @@ const AUTHORIZATION_HELPER_CONTRACTS = [
       },
     ],
   },
+  // -------------------------------------------------------------------------
+  // 최종 회차 C-2: 위 9개 판정 헬퍼는 전부 `session.profile`을 **입력으로**
+  // 받는다. 그러니 그 공급자가 거짓말하면 아홉 개가 한꺼번에 열린다 —
+  // 리뷰어 실증: `getSessionContext`가 `profile`을 `{ is_admin: true,
+  // registration_status: 'approved', is_active: true }`로 위조해 돌려주게
+  // 고쳐도 이 파일은 exit 0이었다.
+  //
+  // 정적 가드는 어딘가에서 멈춰야 하니 원리적 한계이긴 하다. 그래도 RLS가
+  // 사라진 지금 이 세 함수가 **프로필의 유일한 출처**이고 본문을 다 합쳐도
+  // 30줄이 안 되므로 고정 비용이 거의 없다. 고정하는 것은 두 가지뿐이다.
+  //
+  // 1. 프로필이 **DB에서 온다** — `resolveSessionProfile` → `fetchProfile`
+  //    (기본값 `getProfileById`, 아래 authzReadsProfileFromDatabase가 그
+  //    기본값과 import를 따로 못박는다).
+  // 2. 어느 단계에서도 권한 필드를 **만들어 내지 않는다** — 세 본문 전부
+  //    `is_admin:`·`registration_status:` 같은 키가 나타나면 실패한다
+  //    (유일한 예외가 투영 함수인데, 그 본문은 아래에서 "profile.<필드>를
+  //    그대로 옮긴다"는 모양으로 통째로 고정된다).
+  {
+    file: 'src/lib/server/authz.ts',
+    source: authzSource,
+    name: 'getSessionContext',
+    requirements: [
+      {
+        what: '세션 사용자는 쿠키 세션에서 읽는다',
+        pattern: /const user = await readSessionUser\(\)/,
+      },
+      {
+        what: '세션이 없으면 프로필 없이 미인증으로 끝낸다',
+        pattern:
+          /if \(!user\) \{\s*return \{\s*authenticated: false,\s*user: null,\s*profile: null,/,
+      },
+      {
+        what: '프로필은 DB 조회(resolveSessionProfile)로만 채운다',
+        pattern: /const \{ profile, profileError \} = await resolveSessionProfile\(user\.id\)/,
+      },
+      {
+        what: '조회 결과를 그대로 돌려준다(다른 값으로 바꿔치기하지 않는다)',
+        pattern: /return \{\s*authenticated: true,\s*user,\s*profile,\s*profileError,\s*\}/,
+      },
+      {
+        what: '권한·승인 필드를 직접 만들어 내지 않는다',
+        absent: true,
+        pattern: /\b(?:is_admin|is_director|is_auditor|is_active|registration_status)\s*:/,
+      },
+    ],
+  },
+  {
+    file: 'src/lib/server/authz.ts',
+    source: authzSource,
+    name: 'resolveSessionProfile',
+    requirements: [
+      {
+        what: '주입된 조회 함수로 실제 DB를 읽는다(타임아웃 포함)',
+        pattern: /await withTimeout\(\s*fetchProfile\(userId\),/,
+      },
+      {
+        what: '행이 없으면 null이다(기본 프로필을 만들어 내지 않는다)',
+        pattern: /return \{ profile: profile \? toSessionProfileFields\(profile\) : null \}/,
+      },
+      {
+        what: '조회 실패는 profile: null + profileError로 떨어진다(삼키지 않는다)',
+        pattern: /catch \(profileError\) \{\s*return \{ profile: null, profileError \}\s*\}/,
+      },
+      {
+        what: '권한·승인 필드를 직접 만들어 내지 않는다',
+        absent: true,
+        pattern: /\b(?:is_admin|is_director|is_auditor|is_active|registration_status)\s*:/,
+      },
+    ],
+  },
+  {
+    file: 'src/lib/server/authz.ts',
+    source: authzSource,
+    name: 'toSessionProfileFields',
+    requirements: [
+      {
+        // 여기만 권한 필드 키가 나타나도 되는 자리다. 그래서 "값이 전부
+        // 인자에서 온다"를 한 덩어리로 못박는다 — 어느 한 필드라도
+        // 리터럴(`true`·`'approved'`)로 바뀌면 매치가 깨진다.
+        what: '다섯 필드를 인자 프로필에서 그대로 옮긴다(리터럴을 끼워 넣지 않는다)',
+        pattern:
+          /return \{\s*is_admin: profile\.is_admin,\s*is_director: profile\.is_director,\s*is_auditor: profile\.is_auditor,\s*registration_status: profile\.registration_status,\s*is_active: profile\.is_active,\s*\}/,
+      },
+    ],
+  },
 ]
 
 const authorizationHelperBodyViolations = []
@@ -928,12 +1033,29 @@ for (const contract of AUTHORIZATION_HELPER_CONTRACTS) {
     continue
   }
   for (const requirement of contract.requirements) {
-    if (!requirement.pattern.test(body)) {
+    const found = requirement.pattern.test(body)
+    if (requirement.absent === true ? found : !found) {
       authorizationHelperBodyViolations.push(
-        `${contract.file}: ${contract.name}() 본문에 "${requirement.what}" 분기가 없습니다`
+        requirement.absent === true
+          ? `${contract.file}: ${contract.name}() 본문이 "${requirement.what}"를 어겼습니다`
+          : `${contract.file}: ${contract.name}() 본문에 "${requirement.what}" 분기가 없습니다`
       )
     }
   }
+}
+
+// 최종 회차 C-2의 나머지 절반: 위 본문 계약은 `fetchProfile(userId)`를 부르는
+// 것까지만 본다. 그 `fetchProfile`의 **기본값**이 Turso 프로필 쿼리가 아니면
+// (예: 하드코딩 객체를 돌려주는 스텁) 본문 계약은 그대로 통과한다. 기본
+// 인자와 import는 함수 본문 밖이라 extractNamedFunctionBody가 보지 못하므로
+// 여기서 따로 못박는다.
+const authzReadsProfileFromDatabase =
+  /import \{ getProfileById \} from ['"]@\/db\/queries\/profiles['"]/.test(authzSource) &&
+  /fetchProfile: \(id: string\) => Promise<ProfileLike \| null> = getProfileById/.test(authzSource)
+if (!authzReadsProfileFromDatabase) {
+  authorizationHelperBodyViolations.push(
+    `src/lib/server/authz.ts: resolveSessionProfile()의 기본 조회 함수가 @/db/queries/profiles의 getProfileById가 아닙니다 — 프로필이 DB에서 오지 않으면 위 본문 계약은 전부 통과해도 아무 의미가 없습니다`
+  )
 }
 
 const serverRateLimitPath = join(root, 'src/lib/server/rateLimit.ts')
