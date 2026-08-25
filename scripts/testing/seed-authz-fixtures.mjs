@@ -103,6 +103,8 @@ const { systemSettings: tursoSystemSettings, defaultSettings: tursoDefaultSettin
   '@/db/schema/ops'
 )
 const { upsertProfile } = await import('@/db/queries/profiles')
+const { memberProfiles: tursoMemberProfiles } = await import('@/db/schema/identity')
+const { eq } = await import('drizzle-orm')
 
 // id는 전부 고정값이다. 예전에는 Supabase가 만들어준 uuid를 그대로 받아
 // 썼는데, 그쪽이 사라진 지금 매번 새로 뽑으면 재실행마다 계정이 늘고
@@ -201,8 +203,148 @@ async function upsertTursoAuth(account) {
     .onConflictDoUpdate({ target: tursoAccount.id, set: { password: hashed } })
 }
 
+/**
+ * 픽스처 계정의 **권한·승인 컬럼**이 가져야 할 값. 여기에 없는 컬럼은 이
+ * 스크립트가 강제하지 않는다.
+ *
+ * `upsertProfile()`은 이 컬럼들을 **절대 되돌리지 못한다.** 그 함수의 충돌
+ * 갱신 화이트리스트(`CONFLICT_UPDATABLE_FIELDS`,
+ * `src/db/queries/profiles.ts`)가 권한·승인 컬럼을 의도적으로 제외하기
+ * 때문이다 — 그건 운영을 지키는 올바른 설계다(재이관·재가입이 관리자 플래그나
+ * 승인 상태를 덮어쓰면 안 된다). 그래서 **되돌리는 책임이 시드 쪽에 있다.**
+ *
+ * 왜 필요한가(실측 시나리오): `updateProfile()`의 `where`가 빠지는 회귀 —
+ * 즉 `e2e/authz-roles.spec.ts`가 잡으라고 존재하는 바로 그 회귀 — 상태로
+ * 스위트를 한 번 돌리면 관리자 승인 액션이 **전 회원 행**에 적용돼
+ * `authz-pending`까지 `approved`가 된다. 그 뒤 시드를 몇 번 다시 돌려도
+ * `upsertProfile`만으로는 복구되지 않고, `authz-ownership.spec.ts`의 "미승인
+ * 조합원" 단정이 **원인이 앱에 있는 것처럼 보이는** 메시지로 계속 빨간불이
+ * 된다. 하필 그 회귀를 고치고 검증하려는 순간(컷오버 직전)에 걸린다.
+ *
+ * 새 권한 컬럼이 생기면 여기에 추가한다. 추가를 잊어도 조용히 넘어가지
+ * 않는다 — `expectedAuthzState()`가 계정 정의에 있는 미등록 키를 던진다.
+ */
+const AUTHZ_DEFAULTS = {
+  registrationStatus: 'pending',
+  isActive: false,
+  isAdmin: false,
+  isDirector: false,
+  isAuditor: false,
+  isSuspended: false,
+  directorTitle: null,
+  suspensionReason: null,
+  suspensionUntil: null,
+  approvedAt: null,
+  approvedBy: null,
+  rejectedBy: null,
+}
+
+const toCamelCaseKey = key => key.replace(/_([a-z])/g, (_, c) => c.toUpperCase())
+
+/** 계정 정의(`profile`, snake_case)를 컬럼 기대값(camelCase)으로 편다. */
+function expectedAuthzState(account) {
+  const state = { ...AUTHZ_DEFAULTS }
+  for (const [key, value] of Object.entries(account.profile)) {
+    const column = toCamelCaseKey(key)
+    if (!(column in AUTHZ_DEFAULTS)) {
+      throw new Error(
+        `계정 '${account.key}'의 profile에 있는 '${key}'가 AUTHZ_DEFAULTS에 없다. ` +
+          '권한·승인 컬럼이면 AUTHZ_DEFAULTS에 기본값과 함께 추가할 것 ' +
+          '(추가하지 않으면 시드가 그 컬럼을 되돌리지 못한다).'
+      )
+    }
+    state[column] = value
+  }
+  return state
+}
+
+const formatCell = value => {
+  if (value === null || value === undefined) return 'null'
+  if (value instanceof Date) return value.toISOString()
+  return String(value)
+}
+
+const AUTHZ_COLUMNS = Object.keys(AUTHZ_DEFAULTS)
+
+async function readAuthzState(id) {
+  const rows = await db
+    .select()
+    .from(tursoMemberProfiles)
+    .where(eq(tursoMemberProfiles.id, id))
+    .limit(1)
+  if (!rows[0]) return null
+  const state = {}
+  for (const column of AUTHZ_COLUMNS) state[column] = rows[0][column] ?? null
+  return state
+}
+
+function diffAuthzState(found, expected) {
+  return AUTHZ_COLUMNS.filter(column => {
+    const a = found[column]
+    const b = expected[column]
+    if (b === null) return !(a === null || a === undefined)
+    if (b instanceof Date) return !(a instanceof Date) || a.getTime() !== b.getTime()
+    return a !== b
+  }).map(column => ({ column, found: found[column], expected: expected[column] }))
+}
+
+/**
+ * 한 계정의 권한·승인 컬럼을 기대값으로 **강제로** 되돌린다.
+ *
+ * 조용히 고치지 않는다: 되돌리기 전 상태와 다르면 무엇이 어떻게 달랐는지
+ * 반환하고, 호출부가 경고로 찍는다. 그러지 않으면 "왜 오염됐는지"를 아무도
+ * 못 보게 된다 — 이 시드는 회귀 조사 중에 돌아갈 때가 가장 많다.
+ *
+ * 되돌린 **뒤에는 다시 읽어 대조하고, 그래도 다르면 던진다**(fail-closed).
+ * 여기서 조용히 넘어가면 스위트가 "무엇을 검사했는지 알 수 없는 초록불"이
+ * 될 수 있다 — `authz-maintenance.spec.ts`/`authz-roles.spec.ts`의
+ * `rowsAffected` 검사와 같은 기준이다.
+ *
+ * UPDATE의 `where`를 이 스크립트가 직접 쓴다(앱의 `updateProfile()`을 쓰지
+ * 않는다). 복구 도구가 검사 대상인 앱 코드에 의존하면, 바로 그
+ * "`where` 누락" 회귀 상태에서 시드가 **전 회원 행을 마지막 계정 상태로
+ * 덮어쓰는** 복구 불가능한 사고가 된다.
+ */
+async function enforceAuthzState(account) {
+  const expected = expectedAuthzState(account)
+  const before = await readAuthzState(account.id)
+  if (!before) {
+    throw new Error(
+      `계정 '${account.key}'(${account.id})의 member_profiles 행이 없다. ` +
+        'upsertProfile이 실패했는지 확인할 것.'
+    )
+  }
+
+  const drift = diffAuthzState(before, expected)
+  if (drift.length > 0) {
+    const updated = await db
+      .update(tursoMemberProfiles)
+      .set(expected)
+      .where(eq(tursoMemberProfiles.id, account.id))
+      .returning({ id: tursoMemberProfiles.id })
+    if (updated.length !== 1) {
+      throw new Error(
+        `계정 '${account.key}' 권한 상태 복구 실패: ${updated.length}개 행이 갱신됐다(1이어야 한다).`
+      )
+    }
+  }
+
+  const after = await readAuthzState(account.id)
+  const remaining = diffAuthzState(after ?? {}, expected)
+  if (remaining.length > 0) {
+    throw new Error(
+      `계정 '${account.key}'의 권한·승인 상태를 되돌리지 못했다:\n` +
+        remaining
+          .map(d => `  - ${d.column}: ${formatCell(d.found)} (기대: ${formatCell(d.expected)})`)
+          .join('\n')
+    )
+  }
+  return drift
+}
+
 async function main() {
   const ids = {}
+  const driftReport = []
   for (const account of ACCOUNTS) {
     ids[account.key] = account.id
     await upsertTursoAuth(account)
@@ -212,6 +354,8 @@ async function main() {
       display_name: `authz-${account.key}`,
       ...account.profile,
     })
+    const drift = await enforceAuthzState(account)
+    if (drift.length > 0) driftReport.push({ key: account.key, drift })
   }
 
   // 고정 UUID를 쓴다 — 매번 새로 만들면 멱등이 깨지고, 실패한 실행이 쓰레기를 남긴다.
@@ -442,6 +586,23 @@ async function main() {
     notificationId: NOTIFICATION_ID,
   }
   writeFileSync(OUT_FILE, JSON.stringify(fixtures, null, 2) + '\n')
+
+  // 되돌렸다는 사실을 **크게** 알린다. 조용히 고치면 "왜 오염됐는지"를 못 보게
+  // 되고, 다음 사람이 같은 회귀를 다시 만난다.
+  if (driftReport.length > 0) {
+    console.warn('\n⚠ 픽스처 계정의 권한·승인 상태가 기대와 달랐다 — 시드가 되돌렸다:')
+    for (const { key, drift } of driftReport) {
+      for (const d of drift) {
+        console.warn(`  - ${key}.${d.column}: ${formatCell(d.found)} → ${formatCell(d.expected)}`)
+      }
+    }
+    console.warn(
+      '  이 값들은 앱을 통해서만 바뀐다. 직전에 돌린 스위트가 권한 경계 회귀\n' +
+        '  (예: updateProfile의 where 누락)를 탔는지 확인할 것 — 픽스처가 오염됐다는 것은\n' +
+        '  같은 쓰기가 운영에서도 전 회원 행에 적용된다는 뜻이다.\n'
+    )
+  }
+
   console.log(`픽스처 시드 완료 → ${OUT_FILE}`)
   console.log(
     `  계정 ${Object.keys(ids).length}개, 글 1, 댓글 1, 알림 1, 좋아요 1, ` +
