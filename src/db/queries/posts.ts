@@ -784,6 +784,11 @@ export type PostPatch = Partial<{
   is_pinned: boolean
   /** ISO 문자열 또는 `null`. */
   pinned_at: string | null
+  /** 관리자 게시글 복원/삭제 액션(`/api/admin/posts/[id]` PATCH, Task 8)이
+   * `softDeletePost`(삭제 전용)와 달리 삭제/복원을 한 함수로 다루고 싶을 때
+   * 쓴다 — `softDeletePost`는 여전히 일반 삭제 라우트가 쓰는 전용 함수로
+   * 남아 있다. */
+  is_deleted: boolean
 }>
 
 /**

@@ -1,6 +1,7 @@
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
+import { getAdminPostStats } from '@/db/queries/posts'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -15,50 +16,12 @@ export const GET = defineApiRoute({
   rateLimitHeaders: true,
   auth: 'admin',
   errorResponse: () => ApiError.internalServerError('Internal server error').toNextResponse(),
-  handler: async ({ auth }) => {
-    const { db } = auth
-
-    // Get total posts count
-    const { count: totalPosts } = await db
-      .from('posts')
-      .select('id', { count: 'exact', head: true })
-
-    // Get deleted posts count
-    const { count: totalDeleted } = await db
-      .from('posts')
-      .select('id', { count: 'exact', head: true })
-      .eq('is_deleted', true)
-
-    // Get pinned posts count
-    const { count: totalPinned } = await db
-      .from('posts')
-      .select('id', { count: 'exact', head: true })
-      .eq('is_pinned', true)
-
-    // Get category stats
-    const { data: categoryData } = await db.from('posts').select('category').eq('is_deleted', false)
-
-    const categoryStats = {
-      공지: 0,
-      잡담: 0,
-      홍보: 0,
-      건의: 0,
-    }
-
-    if (categoryData) {
-      categoryData.forEach(post => {
-        if (post.category in categoryStats) {
-          categoryStats[post.category as keyof typeof categoryStats]++
-        }
-      })
-    }
-
-    const stats = {
-      totalPosts: totalPosts || 0,
-      totalDeleted: totalDeleted || 0,
-      totalPinned: totalPinned || 0,
-      categoryStats,
-    }
+  handler: async () => {
+    // Task 8: 4개 Supabase count 쿼리(전체/삭제/고정/카테고리별)를
+    // getAdminPostStats(src/db/queries/posts.ts)로 옮겼다 — 카테고리별
+    // 집계는 GROUP BY 단일 쿼리(원본은 is_deleted=false 행 전체를 내려받아
+    // JS에서 세었다).
+    const stats = await getAdminPostStats()
 
     return ApiSuccess.ok(stats)
   },

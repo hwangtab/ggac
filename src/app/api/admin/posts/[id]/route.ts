@@ -7,6 +7,7 @@ import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { validateUUID } from '@/utils/validation'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
+import { getPostById, updatePost, type PostPatch } from '@/db/queries/posts'
 
 type PostActionBody = Record<string, unknown>
 
@@ -26,9 +27,8 @@ export const PATCH = defineApiRoute<PostActionBody>({
     console.error('Admin posts [ID] - API error:', error)
     return ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse()
   },
-  handler: async ({ params, body, auth }) => {
+  handler: async ({ params, body }) => {
     const resolvedParams = { id: typeof params.id === 'string' ? params.id : '' }
-    const { db } = auth
 
     const uuidValidation = validateUUID(resolvedParams.id, '게시글 ID')
     if (!uuidValidation.isValid) {
@@ -42,19 +42,17 @@ export const PATCH = defineApiRoute<PostActionBody>({
       return ApiError.badRequest('잘못된 작업입니다.').toNextResponse()
     }
 
-    // Get the post to check if it exists
-    const { data: post } = await db
-      .from('posts')
-      .select('id, category, is_deleted, is_pinned')
-      .eq('id', postId)
-      .single()
+    // Task 8: posts 조회/갱신을 Supabase에서 Turso 쿼리 계층(getPostById/
+    // updatePost, src/db/queries/posts.ts)으로 옮겼다. 삭제된 글도 대상이
+    // 될 수 있으므로(restore) includeDeleted:true로 조회한다.
+    const post = await getPostById(postId, { includeDeleted: true })
 
     if (!post) {
       return ApiError.notFound('게시글을 찾을 수 없습니다.').toNextResponse()
     }
 
     // Prepare update data based on action
-    let updateData: any = {}
+    let updateData: PostPatch = {}
 
     switch (action) {
       case 'delete':
@@ -96,15 +94,15 @@ export const PATCH = defineApiRoute<PostActionBody>({
     }
 
     // Update the post
-    const { data: updatedPost, error: updateError } = await db
-      .from('posts')
-      .update(updateData)
-      .eq('id', postId)
-      .select()
-      .single()
+    let updatedPost
+    try {
+      updatedPost = await updatePost(postId, updateData)
+    } catch (error) {
+      console.error('Admin posts [ID] - Post update error:', error)
+      return ApiError.internalServerError('게시글 업데이트에 실패했습니다.').toNextResponse()
+    }
 
-    if (updateError) {
-      console.error('Admin posts [ID] - Post update error:', updateError)
+    if (!updatedPost) {
       return ApiError.internalServerError('게시글 업데이트에 실패했습니다.').toNextResponse()
     }
 
