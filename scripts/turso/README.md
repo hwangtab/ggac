@@ -19,8 +19,20 @@
 turso db shell ggac-prod                 # 대화형 셸
 turso db show ggac-prod                  # URL·리전 확인
 turso db tokens create ggac-prod         # 새 토큰 발급
-turso db shell ggac-prod .dump > backup.sql  # 덤프
+
+# 덤프 — 반드시 저장소 밖에. 아래 두 줄을 한 셸에서 이어서 실행한다.
+DUMP_DIR=$(mktemp -d)
+turso db shell ggac-prod .dump > "$DUMP_DIR/ggac-prod.sql"
 ```
+
+⚠️ **덤프를 저장소 안에 만들지 마라.** `ggac-prod` 덤프에는 조합원 전원의
+실명·전화번호·생년월일·계좌번호와 비밀번호 해시가 들어 있고 이 저장소는
+공개다. 예전 이 문서는 `.dump > backup.sql`이라고만 적어 놨는데 그 명령은
+CWD에 파일을 만든다 — 저장소 루트에서 한 번 실행하고 `git add -A` 한 번이면
+그대로 공개된다. `mktemp -d` 안에서 다루고 끝나면 `rm -rf "$DUMP_DIR"`로
+지운다(인증 덤프에 이미 쓰던 관례를 같은 이유로 여기에도 적용한다 —
+"단계 2b-3 이후" 절 참고). `.gitignore`에 루트 한정
+`*.sql`/`*.sql.gz`/`*.db` 규칙을 함께 넣어 뒀지만 그건 마지막 그물일 뿐이다.
 
 ⚠️ `turso db dump`는 이 CLI(v1.0.31 기준)에 존재하지 않는 서브커맨드다.
 실행해도 종료 코드는 0이고, 대신 `turso db --help`의 도움말 텍스트가

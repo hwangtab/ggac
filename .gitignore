@@ -81,3 +81,20 @@ e2e/.authz-fixtures.json
 
 # 권한 경계 E2E 로그인 세션 (authz.setup.ts가 storageState로 저장, 실제 쿠키 포함)
 e2e/.auth/
+
+# 운영 DB 덤프·백업이 저장소 루트로 떨어지는 사고 방지.
+# `turso db shell ggac-prod .dump > backup.sql`을 저장소 루트에서 실행하면
+# 조합원 전원의 계좌번호·생년월일·비밀번호 해시가 CWD에 떨어지고,
+# `git add -A` 한 번이면 그대로 공개 저장소에 올라간다. 덤프는 저장소
+# 밖(`mktemp -d`)에서만 다루는 것이 규칙이지만(scripts/turso/README.md),
+# 규칙을 어겼을 때 막아주는 그물이 하나도 없었다.
+#
+# **루트 한정(`/`) 규칙이다.** `src/db/migrations/*.sql`,
+# `supabase/migrations/*.sql`, `scripts/database/**/*.sql`처럼 정당하게
+# 커밋되는 SQL은 전부 하위 디렉터리에 있어 걸리지 않는다.
+/*.sql
+/*.sql.gz
+/*.dump
+/*.db
+/*.db-shm
+/*.db-wal
