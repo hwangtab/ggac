@@ -604,3 +604,65 @@ test('evaluateExpectGate: --expect가 파싱 건수와 다르면 apply 여부와
   })
   assert.equal(dryRunResult.status, 'mismatch')
 })
+
+// ---------------------------------------------------------------- evaluateExpectGate: 부분 --expect (9pre-2 Important 3)
+//
+// 게이트가 예전에는 expect에 적힌 표만 대조했다 — --expect member_profiles=23만
+// 붙여도 matched가 나오고 나머지 6개 표는 외부 기준 없이 통과했다. 표가
+// 덤프에서 통째로 빠지면 parseInsertRows의 `if (!found) return []`가 조용히
+// 0행을 내고, verifyContent도 그 0행을 기준으로 검증을 통과시킨다 — 우리가
+// 막으려던 실패 모드(수정 1)의 축소판이 이 구멍으로 그대로 들어온다.
+
+const ALL_SEVEN_COUNTS = {
+  member_profiles: 23,
+  posts: 39,
+  comments: 22,
+  post_likes: 10,
+  comment_likes: 5,
+  post_attachments: 3,
+  notifications: 8,
+}
+
+test('evaluateExpectGate: --apply인데 --expect가 표 하나(member_profiles)만 덮으면 incomplete_expect로 막는다 (부정 대조)', () => {
+  const result = evaluateExpectGate({
+    expect: { member_profiles: 23 },
+    apply: true,
+    parsedCounts: ALL_SEVEN_COUNTS,
+  })
+  assert.equal(result.status, 'incomplete_expect')
+  assert.deepEqual(
+    [...result.missingTables].sort(),
+    ['comment_likes', 'comments', 'notifications', 'post_attachments', 'post_likes', 'posts'].sort()
+  )
+})
+
+test('evaluateExpectGate: --apply + --expect가 7개 표를 전부 덮고 값도 일치하면 matched다', () => {
+  const result = evaluateExpectGate({
+    expect: { ...ALL_SEVEN_COUNTS },
+    apply: true,
+    parsedCounts: ALL_SEVEN_COUNTS,
+  })
+  assert.equal(result.status, 'matched')
+})
+
+test('evaluateExpectGate: dry-run(--apply 없음)은 표 하나만 덮은 --expect도 여전히 허용한다(부분 지정 허용)', () => {
+  const result = evaluateExpectGate({
+    expect: { member_profiles: 23 },
+    apply: false,
+    parsedCounts: ALL_SEVEN_COUNTS,
+  })
+  // dry-run은 완전성 검사를 하지 않는다 — expect에 적힌 표(member_profiles)가
+  // 실제 값과 일치하므로 매칭으로 통과해야 한다(incomplete_expect가 아니다).
+  assert.equal(result.status, 'matched')
+})
+
+test('evaluateExpectGate: --apply일 때 표가 빠지면 값 불일치보다 먼저(incomplete_expect가 mismatch보다 우선) 잡는다', () => {
+  // member_profiles 값 자체는 일치하지만 나머지 6개 표가 통째로 빠졌다 —
+  // "값이 맞으니 일단 matched"로 새지 않고 완전성 검사가 먼저 걸려야 한다.
+  const result = evaluateExpectGate({
+    expect: { member_profiles: 23 },
+    apply: true,
+    parsedCounts: ALL_SEVEN_COUNTS,
+  })
+  assert.equal(result.status, 'incomplete_expect')
+})

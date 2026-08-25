@@ -359,19 +359,34 @@ export function parseExpect(argv) {
  * 단위 테스트할 수 있게 한다.
  *
  * 판정 우선순위:
- *   1. expect가 있는데 파싱 건수와 다르면 'mismatch' (dry-run/apply 공통 차단)
- *   2. expect가 없고 apply면 'apply_without_expect' — **되돌릴 수 없는 쓰기에는
+ *   1. --apply인데 --expect가 parsedCounts의 표를 전부 덮지 않으면
+ *      'incomplete_expect' — 코드리뷰(9pre-2 Important 3) 지적: 게이트가
+ *      `expect`에 적힌 표만 대조하므로 `--expect member_profiles=23`처럼
+ *      일부만 줘도 나머지 표는 외부 기준 없이 통과했다. 표가 덤프에 통째로
+ *      빠진 경우가 정확히 이 구멍으로 들어온다 — `parseInsertRows`의
+ *      `if (!found) return []` → 파싱 0행 → `verifyContent`도 0행 대조 →
+ *      "검증 통과". 우리가 막으려던 그 실패 모드의 축소판이라 --apply에는
+ *      7개 표 전부를 요구한다. dry-run(로컬 실험)은 여전히 부분 지정을
+ *      허용한다 — 되돌릴 수 없는 쓰기가 아니라서 막을 이유가 없다.
+ *   2. expect가 있는데 파싱 건수와 다르면 'mismatch' (dry-run/apply 공통 차단)
+ *   3. expect가 없고 apply면 'apply_without_expect' — **되돌릴 수 없는 쓰기에는
  *      --expect가 필수다.** parseInsertRows가 표당 INSERT 문을 전부 읽도록
  *      고쳐졌더라도, verifyContent는 Turso 행 수를 "파싱된 매핑 결과"와
  *      대조할 뿐이라 파서가 어떤 이유로든 일부를 놓치면 양쪽이 똑같이 잘려
  *      "검증 통과"가 나올 수 있다. 사람이 미리 실측한 건수와의 대조가 유일한
  *      외부 기준이므로 여기서는 생략을 허용하지 않는다.
- *   3. expect가 있고 일치하면 'matched'
- *   4. expect가 없고 dry-run이면 'no_expect_dry_run' — 로컬 실험까지 막지는
+ *   4. expect가 있고(--apply면 전체를 덮고) 일치하면 'matched'
+ *   5. expect가 없고 dry-run이면 'no_expect_dry_run' — 로컬 실험까지 막지는
  *      않는다.
  */
 export function evaluateExpectGate({ expect, apply, parsedCounts }) {
   if (expect) {
+    if (apply) {
+      const missingTables = Object.keys(parsedCounts).filter(t => !(t in expect))
+      if (missingTables.length > 0) {
+        return { status: 'incomplete_expect', missingTables }
+      }
+    }
     const mismatches = Object.entries(expect).filter(([t, n]) => parsedCounts[t] !== n)
     if (mismatches.length > 0) {
       return { status: 'mismatch', mismatches }
@@ -438,6 +453,18 @@ async function main() {
   )
 
   const gate = evaluateExpectGate({ expect, apply, parsedCounts })
+  if (gate.status === 'incomplete_expect') {
+    console.error(
+      `\n--apply에는 --expect가 7개 표를 전부 덮어야 한다 — 빠진 표: ${gate.missingTables.join(', ')}`
+    )
+    console.error(
+      '표 하나가 덤프에서 통째로 빠지면 파싱 결과가 조용히 0행이 되고, 그 0행을 ' +
+        '기준으로 Turso 검증도 통과해버린다(우리가 막으려던 그 실패 모드다). ' +
+        '빠진 표까지 포함해 --expect table=N,table=N,...을 전부 채워라.'
+    )
+    process.exitCode = 1
+    return
+  }
   if (gate.status === 'mismatch') {
     console.error('\n--expect와 파싱 건수가 다르다:')
     for (const [t, n] of gate.mismatches) {
