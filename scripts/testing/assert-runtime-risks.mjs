@@ -102,8 +102,6 @@ function stripStringLiterals(source) {
   return out
 }
 
-const nextConfigPath = join(root, 'next.config.js')
-const nextConfigSource = readFileSync(nextConfigPath, 'utf8')
 const appFiles = globSync('src/app/**/{route,page,layout}.@(ts|tsx)', {
   cwd: root,
   exclude: ['**/node_modules/**', '**/.next/**'],
@@ -125,10 +123,13 @@ const rootMiddlewareSource = readFileSync(rootMiddlewarePath, 'utf8')
 // 실었고, 미들웨어가 새로 만드는 응답(리다이렉트·유지보수 503)에 그것을
 // 복사하지 않으면 세션 갱신이 유실됐다. 그 복사(copyResponseCookies)는 지금도
 // 필요하다 — handleAuth가 res에 쿠키를 쓰고, CSP 헤더도 같은 경로로 전달되기
-// 때문이다. 그래서 "Supabase가 없다"와 "복사가 살아 있다"를 함께 고정한다.
+// 때문이다. 그래서 여기서 "복사가 살아 있다"를 고정한다.
+//
+// "이 파일에 Supabase 접근이 없다"는 단정은 여기 두지 않는다 — 저장소 전수
+// 가드(`supabaseAccessOffenders`)가 `src/**/*.ts`를 훑으므로 이 파일도 이미
+// 그 안에 들어 있다. 같은 사실을 두 곳에서 단정하면, 한쪽이 실패할 때 어느
+// 쪽이 진짜 계약인지 알 수 없게 되고 파일별 사본은 계속 늘어난다.
 const middlewareUsesBetterAuthSessionOnly =
-  !/@supabase\//.test(rootMiddlewareSource) &&
-  !/createServerClient|createSupabaseServer|createServiceRoleClient/.test(rootMiddlewareSource) &&
   /verifySessionFresh\(request\)/.test(rootMiddlewareSource) &&
   /function copyResponseCookies/.test(rootMiddlewareSource) &&
   /from\.cookies\.getAll\(\)\.forEach\(cookie => to\.cookies\.set\(cookie\)\)/.test(
@@ -138,20 +139,24 @@ const middlewareUsesBetterAuthSessionOnly =
   // 유지보수 판정이 다시 "Supabase env가 있을 때만" 같은 조건 뒤로 숨지 않게 —
   // 그 조건이 살아 있으면 컷오버에서 Supabase 환경변수를 지우는 순간 인증·
   // 유지보수 미들웨어가 통째로 무력화된다(사이트가 열린 채 잠기지 않는다).
+  //
+  // **이 한 줄은 저장소 전수 가드가 덮지 못한다.** 그 가드의 패턴 목록에
+  // `NEXT_PUBLIC_SUPABASE_URL`은 없다(ANON_KEY·SERVICE_ROLE_KEY만 있다) —
+  // URL 하나만 보고 조기 반환하는 게이트가 부활하면 전수 가드는 침묵한다.
+  // 그래서 이름을 직접 못박는 이 단정만 남긴다.
   !/hasSupabaseMiddlewareConfig/.test(rootMiddlewareSource)
 // 미들웨어 인증(handleAuth)은 단계 2b-6부터 Better Auth의 쿠키 캐시로 신원을
 // 판정한다(`readMiddlewareSession`, src/middleware/session.ts) — 캐시가 있으면
-// DB/GoTrue 왕복 없이 판정하고, 캐시가 만료됐을 때만 서버에 왕복한다. auth.ts가
-// Supabase의 getClaims()/getUser()를 직접 부르면(구 방식으로 되돌아가면) 매
-// 요청마다 GoTrue 왕복이 조용히 부활하므로 정적으로 고정한다. 트레이드오프는
+// DB 왕복 없이 판정하고, 캐시가 만료됐을 때만 서버에 왕복한다. 트레이드오프는
 // 옛 로컬 검증과 동일하다: auth 레벨 세션 취소(전역 로그아웃·비번 변경·밴)는
 // 캐시 만료(5분)까지 못 본다 — 데이터·변형 표면은 하류 getSession()이, 유지보수
 // 관리자 예외는 middleware.ts의 재검증(verifySessionFresh)이 봉쇄한다.
-// (이 가드는 handleAuth가 있는 auth.ts만 스캔하므로 middleware.ts의 재검증과 무관하다.)
-const middlewareVerifiesJwtLocally =
-  /readMiddlewareSession/.test(authMiddlewareSource) &&
-  !/supabase\.auth\.getClaims\(\)/.test(authMiddlewareSource) &&
-  !/supabase\.auth\.getUser\(\)/.test(authMiddlewareSource)
+//
+// 예전에는 여기에 "Supabase의 getClaims()/getUser()를 부르지 않는다"는 음성
+// 단정이 붙어 있었다. 그 모양은 이제 저장소 전수
+// 가드(`supabaseAuthSessionCallOffenders`)가 `src/` 전체에서 문다 — 이 파일도
+// 그 스캔 안에 있으므로 사본을 남기지 않는다.
+const middlewareVerifiesJwtLocally = /readMiddlewareSession/.test(authMiddlewareSource)
 const authCallbackPath = join(root, 'src/app/auth/callback/route.ts')
 const authCallbackSource = readFileSync(authCallbackPath, 'utf8')
 const authVerifySessionPath = join(root, 'src/app/api/auth/verify-session/route.ts')
@@ -314,7 +319,6 @@ const authCallbackSafelyDefaultsUntrustedLocaleAndNext =
   )
 const postCreationUsesServerApi =
   /fetch\(['"]\/api\/posts['"]/.test(usePostCreationSource) &&
-  !/from\s+['"]@\/lib\/supabase\/client['"]/.test(usePostCreationSource) &&
   !/from\(['"]posts['"]\)[\s\S]*?\.insert/.test(usePostCreationSource)
 const boardPostCreationAvoidsRefreshQuery =
   /router\.push\(['"]\/board['"]\)/.test(writePageClientSource) &&
@@ -343,7 +347,6 @@ const postsApiCreatesPostsWithServerAuthAndInvalidatesBoard =
 const postEditUsesServerApi =
   /fetch\(`\/api\/posts\/\$\{post\.id\}`/.test(editPageClientSource) &&
   /method:\s*['"]PATCH['"]/.test(editPageClientSource) &&
-  !/from\s+['"]@\/lib\/supabase\/client['"]/.test(editPageClientSource) &&
   !/from\(['"]posts['"]\)[\s\S]*?\.update/.test(editPageClientSource)
 const postsApiUpdatesPostsWithServerAuthAndInvalidatesBoard =
   /export async function PATCH/.test(postDetailApiSource) &&
@@ -357,7 +360,6 @@ const postsApiUpdatesPostsWithServerAuthAndInvalidatesBoard =
   /revalidateTag\(['"]board-initial['"]\)/.test(postDetailApiSource)
 const profilePageUsesServerApi =
   /fetch\(['"]\/api\/mypage\/profile['"]/.test(mypageProfilePageSource) &&
-  !/from\s+['"]@\/lib\/supabase\/client['"]/.test(mypageProfilePageSource) &&
   !/from\(['"]member_profiles['"]\)[\s\S]*?\.update/.test(mypageProfilePageSource)
 const profileApiRestrictsSelfUpdates =
   /export async function GET/.test(mypageProfileApiSource) &&
@@ -383,10 +385,6 @@ const commentLikesAvoidBearerTokenForwarding =
 const likeHooksUseServerSessionTruth =
   /fetchSessionProfile/.test(useCommentLikesSource) &&
   /fetchSessionProfile/.test(usePostLikesSource) &&
-  !/from\s+['"]@\/lib\/supabase\/client['"]/.test(useCommentLikesSource) &&
-  !/from\s+['"]@\/lib\/supabase\/client['"]/.test(usePostLikesSource) &&
-  !/getSupabaseClient/.test(useCommentLikesSource) &&
-  !/getSupabaseClient/.test(usePostLikesSource) &&
   !/getSession\(\)/.test(useCommentLikesSource) &&
   !/getSession\(\)/.test(usePostLikesSource) &&
   !/onAuthStateChange/.test(useCommentLikesSource) &&
@@ -395,7 +393,6 @@ const activityLoggerAvoidsBearerTokenForwarding =
   /fetchSessionProfile/.test(activityLoggerEarlySource) &&
   /ensureSession/.test(activityLoggerEarlySource) &&
   /credentials:\s*['"]include['"]/.test(activityLoggerEarlySource) &&
-  !/from\s+['"]@\/lib\/supabase\/client['"]/.test(activityLoggerEarlySource) &&
   !/onAuthStateChange/.test(activityLoggerEarlySource) &&
   !/getSession\(\)/.test(activityLoggerEarlySource) &&
   !/session\.access_token/.test(activityLoggerEarlySource) &&
@@ -410,14 +407,11 @@ const mypagePermissionUsesServerSessionTruth =
   /is_admin/.test(authVerifySessionSource) &&
   /is_artist/.test(authVerifySessionSource) &&
   /artist_id/.test(authVerifySessionSource) &&
-  !/from\s+['"]@\/lib\/supabase\/client['"]/.test(mypagePermissionCheckSource) &&
-  !/from\s+['"]@\/lib\/supabase\/client['"]/.test(mypageNavigationSource) &&
   !/from\(['"]member_profiles['"]\)/.test(mypagePermissionCheckSource) &&
   !/from\(['"]member_profiles['"]\)/.test(mypageNavigationSource)
 const boardUserSectionUsesServerSessionTruth =
   (/fetchSessionProfile/.test(boardUserSectionSource) ||
     /fetch\(['"]\/api\/auth\/verify-session['"]/.test(boardUserSectionSource)) &&
-  !/from\s+['"]@\/lib\/supabase\/client['"]/.test(boardUserSectionSource) &&
   !/from\(['"]member_profiles['"]\)/.test(boardUserSectionSource) &&
   !/getSession\(\)/.test(boardUserSectionSource) &&
   !/onAuthStateChange/.test(boardUserSectionSource)
@@ -426,7 +420,6 @@ const navigationUsesServerSessionTruth =
   /is_director/.test(authVerifySessionSource) &&
   /is_auditor/.test(authVerifySessionSource) &&
   !/from\(['"]member_profiles['"]\)/.test(navigationSource) &&
-  !/import\(['"]@\/lib\/supabase\/client['"]\)/.test(navigationSource) &&
   !/getSession\(\)/.test(navigationSource) &&
   !/onAuthStateChange/.test(navigationSource)
 // 미인증 세션 판정은 requireUser() → getSessionContext()로 이관됐다(Task 3).
@@ -449,8 +442,7 @@ const authClientPagesUseServerSessionTruth =
   !/from\(['"]member_profiles['"]\)/.test(authRegisterPendingPageSource) &&
   !/getSession\(\)/.test(loginPageSource) &&
   !/getSession\(\)/.test(authRegisterPendingPageSource) &&
-  !/getSession\(\)/.test(authMypageArtistPageSource) &&
-  !/from\s+['"]@\/lib\/supabase\/client['"]/.test(authMypageArtistPageSource)
+  !/getSession\(\)/.test(authMypageArtistPageSource)
 const loginPageCleansAuthRedirectTimers =
   /useRef<ReturnType<typeof setTimeout> \| null>\(null\)/.test(loginPageSource) &&
   /const clearAuthRedirectTimer/.test(loginPageSource) &&
@@ -491,15 +483,11 @@ const resetPasswordUsesServerSessionTruth =
     resetPasswordPageSource
   ) &&
   !/fetchSessionProfile/.test(resetPasswordPageSource) &&
-  !/from\s+['"]@\/lib\/supabase\/client['"]/.test(resetPasswordPageSource) &&
-  !/getSession\(\)/.test(resetPasswordPageSource) &&
-  !/supabase\.auth\.updateUser/.test(resetPasswordPageSource)
+  !/getSession\(\)/.test(resetPasswordPageSource)
 const boardRoomClientPagesUseServerSessionTruth = boardRoomClientPageSources.every(
   ({ source }) =>
     (/fetchSessionProfile/.test(source) ||
       /fetch\(['"]\/api\/auth\/verify-session['"]/.test(source)) &&
-    !/from\s+['"]@\/lib\/supabase\/client['"]/.test(source) &&
-    !/import\(['"]@\/lib\/supabase\/client['"]\)/.test(source) &&
     !/from\(['"]member_profiles['"]\)/.test(source) &&
     !/getSession\(\)/.test(source)
 )
@@ -534,8 +522,6 @@ const existingAuthHelpersUseSharedOperationalBoundaries =
   /getSessionContext/.test(adminAuthBoundarySource) &&
   /getProfileById/.test(adminAuthBoundarySource) &&
   /export type AdminAuthSuccess = \{\s*\n\s*user:/.test(adminAuthBoundarySource) &&
-  !/createSupabaseServer|createServiceRoleClient/.test(adminAuthBoundarySource) &&
-  !/@supabase\//.test(adminAuthBoundarySource) &&
   !/createClient\(/.test(adminAuthBoundarySource) &&
   /from\s+['"]@\/lib\/server\/authz['"]/.test(boardRoomAuthBoundarySource) &&
   /from\s+['"]@\/db\/queries\/profiles['"]/.test(boardRoomAuthBoundarySource) &&
@@ -544,8 +530,6 @@ const existingAuthHelpersUseSharedOperationalBoundaries =
   /getSessionContext/.test(boardRoomAuthBoundarySource) &&
   /listProfiles/.test(boardRoomAuthBoundarySource) &&
   /export type BoardAuthSuccess = \{\s*\n\s*user:/.test(boardRoomAuthBoundarySource) &&
-  !/createSupabaseServer|createServiceRoleClient/.test(boardRoomAuthBoundarySource) &&
-  !/@supabase\//.test(boardRoomAuthBoundarySource) &&
   !/createClient\(/.test(boardRoomAuthBoundarySource)
 const serverRateLimitPath = join(root, 'src/lib/server/rateLimit.ts')
 const serverRateLimitSource = existsSync(serverRateLimitPath)
@@ -1738,7 +1722,6 @@ const annotatesAuthenticatedCommentLikeState =
   // 금지 가드를 함께 둔다.
   /is_liked:\s*false/.test(boardDetailPageSource) &&
   !/getUserLikedCommentIds\(/.test(boardDetailPageSource) &&
-  !/createSupabaseServer/.test(boardDetailPageSource) &&
   // 클라이언트 복원 경로가 실재하는지 검증 — 이게 없으면 초기 댓글이 항상 빈 하트로
   // 표시되고 재클릭 시 기존 좋아요가 삭제된다(코드리뷰 CONFIRMED). currentUserId가
   // 채워졌을 때 좋아요 상태를 다시 받아 is_liked를 병합해야 한다. 단계 2c:
@@ -2012,8 +1995,13 @@ const srcScanSubtreeShortfalls = Object.entries(SRC_SCAN_SUBTREE_MINIMUMS).flatM
 // (표를 통째로 비워도 이 검사가 전부 미커버로 걸린다 — 빈 표가 조용히
 // 통과하는 fail-open이 생기지 않는다. 반대로 스캔 자체가 비면 여기서는 아무것도
 // 안 걸리지만, 그 경우는 전체 하한과 서브트리 하한이 먼저 문다.)
-// `src/middleware.ts`처럼 src/ 바로 아래 놓인 파일은 서브트리가 아니라서 제외한다
-// (그 파일은 전용 가드가 따로 문다).
+// `src/middleware.ts`처럼 src/ 바로 아래 놓인 파일은 서브트리가 아니라서 이
+// 목록에서 빠진다. 그 자리를 비워두면 안 된다 — 예전 주석은 "전용 가드가 따로
+// 문다"고 적혀 있었지만, 그 전용 가드(middlewareUsesBetterAuthSessionOnly)는
+// **SDK import·env 게이트 모양만** 본다. `.from('table')`·`/rest/v1/`·`.auth.*`·
+// `p_user_id` 네 모양은 이 파일이 스캔에서 빠지는 순간 아무도 물지 않는다
+// (실증: SDK import 없이 `.from('member_profiles')`만 심으면 exit 0). 그래서
+// 아래 `srcRootFileCount` 하한을 따로 둔다.
 const srcScanUncoveredSubtrees = [
   ...new Set(
     srcAllFiles
@@ -2024,6 +2012,12 @@ const srcScanUncoveredSubtrees = [
 ]
   .filter(prefix => !(prefix in SRC_SCAN_SUBTREE_MINIMUMS))
   .sort()
+// 자기검사 ②-c: src/ 바로 아래 놓인 파일(현재 `src/middleware.ts` 1개)이
+// 스캔에 남아 있는가. 서브트리 하한표는 이 자리를 구조적으로 덮지 못하는데,
+// 하필 그 파일이 유지보수·인증 판정 전체를 쥐고 있다. 글롭이 `src/*/**`로
+// 좁아지면(흔한 실수다) 여기서 막힌다.
+const SRC_ROOT_MIN_FILES = 1 // 현재 1 (src/middleware.ts)
+const srcRootFileCount = srcAllFiles.filter(file => file.split('/').length === 2).length
 // 자기검사 ③: 패턴이 Drizzle 쿼리 계층(식별자 `.from(comments)`)이나 전환
 // 기록 주석을 오탐하면, 아무도 이 가드를 못 지켜 결국 예외 목록이 생긴다.
 const supabaseAccessFalsePositiveSamples = [
@@ -2670,7 +2664,6 @@ const hasSettingsAdminAuthResolver =
   // readSessionUser(), 관리자 판정은 checkAdminPermission(Turso 프로필)이다.
   /readSessionUser\(\)/.test(settingsAdminAuthSource) &&
   /checkAdminPermission\(user\.id\)/.test(settingsAdminAuthSource) &&
-  !/createSupabaseServer|@supabase\//.test(settingsAdminAuthSource) &&
   /createErrorResponse\(\{\s*success:\s*false,\s*error:\s*['"]인증이 필요합니다\./.test(
     settingsAdminAuthSource
   )
@@ -2736,7 +2729,6 @@ const adminSettingsRoutesUseSharedBoundary =
       /parseJsonObjectBody/.test(source) ||
       /applyRateLimit\(/.test(source) ||
       /addRateLimitHeaders/.test(source) ||
-      /createSupabaseServer/.test(source) ||
       /checkAdminPermission/.test(source)
     ) {
       return false
@@ -2769,9 +2761,23 @@ const settingsWriteRouteSources = [
 const pinsSystemSettingsHistoryActor = settingsWriteRouteSources.every(({ source }) => {
   // 주석에 적힌 `actorId: user.id`로 통과하지 않도록 주석·import를 먼저 지운다.
   const code = stripCommentsAndImports(source)
+  // 호출부 **개수**와 수집된 인자 블록 개수를 대조한다.
+  //
+  // 이 가드는 원래 fail-open이었다. 수집 정규식 `\(\{[^)]*?\}\)`는 인자 안에
+  // `)`가 하나라도 들어가면(예: `actorId: resolveActor()`) 그 호출을 목록에서
+  // **통째로 누락**한다. `calls.every(...)`는 없는 항목을 검사하지 않고
+  // `calls.length > 0`은 옆에 있는 정상 호출 하나로 충족되므로, 누락된 호출에
+  // `actorId: 'system'`을 심어도 초록불이 나왔다. 형제 가드인 minutes의
+  // `createMinutes\(\{` 핀은 같은 상황에서 매치 자체가 실패해 fail-closed다 —
+  // 이쪽만 방향이 반대였다.
+  //
+  // 그래서 "본 호출 수 = 수집한 호출 수"를 먼저 단정한다. 수집이 하나라도
+  // 새면 검사 결과가 아니라 **가드 고장**으로 실패한다.
+  const callSiteCount = (code.match(/\bupdateSystemSetting\(/g) ?? []).length
   const calls = code.match(/updateSystemSetting\(\{[^)]*?\}\)/g) ?? []
   return (
-    calls.length > 0 &&
+    callSiteCount > 0 &&
+    calls.length === callSiteCount &&
     // `user`는 defineApiRoute가 넘긴 인증 컨텍스트에서만 나와야 한다.
     /const \{ user \} = auth/.test(code) &&
     calls.every(call => /actorId:\s*user\.id,?/.test(call))
@@ -3398,7 +3404,6 @@ const avoidsClientOperationalConsoleNoise =
   !/console\.log\(/.test(adminSettingsPageSource) &&
   /debugRouteProtection/.test(routeProtectionSource) &&
   /errorRouteProtection/.test(routeProtectionSource) &&
-  !/from\s+['"]\.\.\/lib\/supabase\/client['"]/.test(routeProtectionSource) &&
   !/console\.log\(/.test(
     routeProtectionSource
       .replace(/const debugRouteProtection[\s\S]*?\n\}/, '')
@@ -3413,10 +3418,6 @@ const avoidsClientOperationalConsoleNoise =
   ) &&
   /process\.env\.NODE_ENV === ['"]development['"][\s\S]*?Auto-recovery attempt/.test(
     errorBoundarySource
-  )
-const avoidsSupabaseCjsDevAlias =
-  !/['"]@supabase\/supabase-js['"]:\s*require\.resolve\(['"]@supabase\/supabase-js['"]\)/.test(
-    nextConfigSource
   )
 // 단계 4 Task 5: middleware.ts의 유일한 debug 로그였던 "Supabase env missing,
 // skipping auth middleware"가 그 분기와 함께 사라져 로거 자체를 걷어냈다.
@@ -3979,7 +3980,7 @@ if (!validateUUIDRejectsTempIds) {
 
 if (!middlewareUsesBetterAuthSessionOnly) {
   failures.push(
-    `Middleware must resolve identity through Better Auth only (no Supabase client, no hasSupabaseMiddlewareConfig gate) while keeping copyResponseCookies' cookie+CSP propagation to redirect/maintenance responses: ${relative(
+    `Middleware must resolve identity through Better Auth only (no hasSupabaseMiddlewareConfig env gate) while keeping copyResponseCookies' cookie+CSP propagation to redirect/maintenance responses: ${relative(
       root,
       rootMiddlewarePath
     )}`
@@ -3988,7 +3989,7 @@ if (!middlewareUsesBetterAuthSessionOnly) {
 
 if (!middlewareVerifiesJwtLocally) {
   failures.push(
-    `Middleware auth must resolve identity via readMiddlewareSession() (Better Auth cookie cache) and must not call Supabase's getClaims()/getUser() directly — those add a network round trip to every request: ${relative(
+    `Middleware auth must resolve identity via readMiddlewareSession() (Better Auth cookie cache) — any other identity source adds a network round trip to every request: ${relative(
       root,
       authMiddlewarePath
     )}`
@@ -4069,7 +4070,7 @@ if (!commentLikesAvoidBearerTokenForwarding) {
 
 if (!likeHooksUseServerSessionTruth) {
   failures.push(
-    `Post/comment like hooks must use /api/auth/verify-session as the client session truth and avoid direct browser Supabase auth reads:\n- ${relative(
+    `Post/comment like hooks must use /api/auth/verify-session as the client session truth and must not read the session in the browser themselves:\n- ${relative(
       root,
       usePostLikesPath
     )}\n- ${relative(root, useCommentLikesPath)}`
@@ -4135,7 +4136,7 @@ if (!authClientPagesUseServerSessionTruth) {
 
 if (!resetPasswordUsesServerSessionTruth) {
   failures.push(
-    `Reset-password must confirm identity via the Better Auth reset token (?token=) and submit through authClient.resetPassword() instead of a cookie session or browser Supabase getSession/updateUser: ${relative(
+    `Reset-password must confirm identity via the Better Auth reset token (?token=) and submit through authClient.resetPassword() instead of a cookie session or a browser-side session read: ${relative(
       root,
       resetPasswordPagePath
     )}`
@@ -4161,7 +4162,7 @@ if (!hasSharedOperationalBoundaryHelpers) {
 
 if (!existingAuthHelpersUseSharedOperationalBoundaries) {
   failures.push(
-    `Existing admin and board-room auth helpers must consume the shared authz boundary and the Turso profile query layer, and must not hand a Supabase client back to routes (no \`db\` in their success types):\n- ${relative(
+    `Existing admin and board-room auth helpers must consume the shared authz boundary and the Turso profile query layer, and must not hand a database client back to routes (no \`db\` in their success types):\n- ${relative(
       root,
       adminAuthPathForBoundary
     )}\n- ${relative(root, boardRoomAuthPathForBoundary)}`
@@ -5038,6 +5039,12 @@ if (srcScanSubtreeShortfalls.length > 0) {
   )
 }
 
+if (srcRootFileCount < SRC_ROOT_MIN_FILES) {
+  failures.push(
+    `The repository-wide src/ scan covered ${srcRootFileCount} file(s) directly under src/ (expected at least ${SRC_ROOT_MIN_FILES}). src/middleware.ts lives there and decides maintenance mode and auth for every request; the per-subtree floors cannot cover it, so a glob that narrowed to src/*/** would silently drop it while every other floor still passed.`
+  )
+}
+
 if (srcScanUncoveredSubtrees.length > 0) {
   failures.push(
     `SRC_SCAN_SUBTREE_MINIMUMS has no floor for src/ subtree(s) that the scan currently covers. Without a floor, those directories can drop out of the scan entirely and still pass on the total count alone (src/types + src/constants + src/i18n were exactly that hole). Add a floor of roughly two thirds of the current file count for each:\n${srcScanUncoveredSubtrees
@@ -5116,15 +5123,6 @@ if (!adminReportsGuardsStatsFetchLifecycle) {
     `Admin reports stats fetches must avoid stale or unmounted state updates across initial, manual, and auto-refresh loads: ${relative(
       root,
       adminReportsPagePath
-    )}`
-  )
-}
-
-if (!avoidsSupabaseCjsDevAlias) {
-  failures.push(
-    `Next dev config must not alias @supabase/supabase-js through require.resolve because it forces the CommonJS entry and creates repeated critical dependency warnings: ${relative(
-      root,
-      nextConfigPath
     )}`
   )
 }
