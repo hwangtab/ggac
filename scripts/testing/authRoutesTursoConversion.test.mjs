@@ -81,11 +81,14 @@ test('auth/callback: member_profiles를 직접 조회하지 않고 getProfileByI
   assert.match(authCallbackSource, /getProfileById\(user\.id\)/)
 })
 
-test('auth/callback: createSupabaseServer는 여전히 남아있다 (RPC 로깅에 계속 쓴다 — member_profiles만 옮겼다)', () => {
-  assert.match(authCallbackSource, /from\s+['"]@\/lib\/supabase\/server['"]/)
-  assert.match(authCallbackSource, /createSupabaseServer/)
-  assert.match(authCallbackSource, /supabase\.rpc\(['"]manage_user_session['"]/)
-  assert.match(authCallbackSource, /supabase\.rpc\(['"]log_user_activity['"]/)
+test('auth/callback: 단계 4 이후 createSupabaseServer/RPC를 쓰지 않는다 — manage_user_session/log_user_activity가 Turso 쿼리 계층으로 넘어갔다', () => {
+  assert.doesNotMatch(authCallbackSource, /createSupabaseServer/)
+  assert.doesNotMatch(authCallbackSource, /from\s+['"]@\/lib\/supabase\/server['"]/)
+  assert.doesNotMatch(authCallbackSource, /supabase\.rpc\(/)
+  assert.match(authCallbackSource, /from\s+['"]@\/db\/queries\/sessions['"]/)
+  assert.match(authCallbackSource, /from\s+['"]@\/db\/queries\/activities['"]/)
+  assert.match(authCallbackSource, /manageUserSession\(/)
+  assert.match(authCallbackSource, /logUserActivity\(/)
 })
 
 test('auth/callback: 프로필 조회 실패(throw)를 삼켜 /register/pending으로 보낸다 — 행 없음과 같은 목적지(이전 Supabase .single()과 동일한 결과)', () => {

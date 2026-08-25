@@ -5,13 +5,13 @@ export const preferredRegion = 'icn1'
 
 import { NextRequest } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
-import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
 import { applyRateLimit, RATE_LIMIT_CONFIGS } from '@/lib/server/rateLimit'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { validateUUID } from '@/utils/validation'
 import { createLogger, maskId } from '@/utils/logger'
 import { getOptionalUser } from '@/lib/server/memberAuth'
 import { getPostById, incrementViewCount } from '@/db/queries/posts'
+import { logUserActivity } from '@/db/queries/activities'
 
 const log = createLogger('api/posts/view')
 
@@ -99,21 +99,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       return ApiError.internalServerError('Failed to increment view count').toNextResponse()
     }
 
-    // 활동 로그 기록(user_activities, 여전히 Supabase — 이 전환 범위 밖) 전용
-    // Service Role 클라이언트. 로그인한 사용자에 한해서만 만든다.
-    let serviceSupabase
+    // 활동 로그 기록 (로그인한 사용자만) — 단계 4: Turso 쿼리 계층
+    // (logUserActivity)으로 옮겼다. 실패해도 조회수 증가(본 작업)를 막지
+    // 않는다(activities.ts 모듈 설명, 브리프 필수 조건 1번).
     if (userId) {
       try {
-        serviceSupabase = createServiceRoleClient()
-      } catch (error) {
-        console.warn('활동 로그용 Service Role 클라이언트 생성 실패:', error)
-      }
-    }
-
-    // 활동 로그 기록 (로그인한 사용자만)
-    if (userId && serviceSupabase) {
-      try {
-        await serviceSupabase.from('user_activities').insert({
+        await logUserActivity({
           user_id: userId,
           action_type: 'page_viewed',
           target_type: 'post',

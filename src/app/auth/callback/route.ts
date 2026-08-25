@@ -1,6 +1,7 @@
-import { createSupabaseServer } from '@/lib/supabase/server'
 import { readSessionUser } from '@/lib/server/session'
 import { getProfileById } from '@/db/queries/profiles'
+import { manageUserSession } from '@/db/queries/sessions'
+import { logUserActivity } from '@/db/queries/activities'
 import { NextRequest, NextResponse, after } from 'next/server'
 import { createLogger } from '@/utils/logger'
 
@@ -56,10 +57,10 @@ export async function GET(request: NextRequest) {
     const user = await readSessionUser()
 
     if (user) {
-      const supabase = await createSupabaseServer()
-
-      // 로그인 활동 로깅 — RPC 2건이 리다이렉트를 블로킹하지 않도록 응답 후
-      // 실행한다(after). 실패해도 로그인 흐름에는 영향 없다.
+      // 로그인 활동 로깅 — 쿼리 2건이 리다이렉트를 블로킹하지 않도록 응답 후
+      // 실행한다(after). 실패해도 로그인 흐름에는 영향 없다(activities.ts/
+      // sessions.ts 모듈 설명의 "뜨거운 경로" 원칙 — 여기서는 세션/로그인
+      // 활동 기록이 부가 효과이고 리다이렉트가 본 작업이다).
       const ip =
         request.headers.get('x-forwarded-for')?.split(',')[0] ||
         request.headers.get('x-real-ip') ||
@@ -70,45 +71,54 @@ export async function GET(request: NextRequest) {
 
       after(async () => {
         try {
-          // manage_user_session 내부에서 유효 uuid(user_sessions.id)로 login 활동을
-          // 이미 기록하므로, 이 명시적 log_user_activity는 callback_url 메타데이터
-          // 부착이 목적이다. p_session_id는 uuid 컬럼이라 비-uuid sessionToken을
-          // 넘기면 매번 22P02로 조용히 실패했다(코드리뷰 CONFIRMED). null을 넘기고
-          // rpc의 error 반환값을 검사해 성공 로그를 실제 성공에만 게이트한다.
-          const { error: sessionError } = await supabase.rpc('manage_user_session', {
-            p_user_id: user.id,
-            p_session_token: sessionToken,
-            p_action: 'start',
-            p_ip_address: ip,
-            p_user_agent: userAgent,
-            p_metadata: {
-              login_method: 'oauth',
-              callback_url: callbackUrl,
-              timestamp: new Date().toISOString(),
-            },
-          })
-          if (sessionError) log.warn('세션 시작 기록 실패', { message: sessionError.message })
-
-          const { error: activityError } = await supabase.rpc('log_user_activity', {
-            p_user_id: user.id,
-            p_action_type: 'login',
-            p_target_type: 'system',
-            p_target_id: null,
-            p_metadata: {
-              login_method: 'oauth',
-              callback_url: callbackUrl,
+          // manageUserSession(start) 내부에서 유효 uuid(user_sessions.id)로
+          // login 활동을 이미 기록하므로(sessions.ts), 이 명시적
+          // logUserActivity는 callback_url 메타데이터 부착이 목적이다.
+          // session_id는 uuid 컬럼이라 비-uuid sessionToken을 넘기면 FK/형식
+          // 위반으로 조용히 실패했었다(코드리뷰 CONFIRMED, Supabase 시절
+          // 22P02). null을 넘긴다.
+          await manageUserSession(
+            {
+              user_id: user.id,
               session_token: sessionToken,
-              timestamp: new Date().toISOString(),
+              action: 'start',
+              ip_address: ip,
+              user_agent: userAgent,
+              metadata: {
+                login_method: 'oauth',
+                callback_url: callbackUrl,
+                timestamp: new Date().toISOString(),
+              },
             },
-            p_ip_address: ip,
-            p_user_agent: userAgent,
-            p_session_id: null, // was: sessionToken (비-uuid → 22P02)
-          })
+            sessionActivityError =>
+              log.warn('세션 시작 활동 기록 실패', {
+                message: (sessionActivityError as Error)?.message,
+              })
+          ).catch(sessionError =>
+            log.warn('세션 시작 기록 실패', { message: (sessionError as Error)?.message })
+          )
 
-          if (activityError) {
-            log.warn('Login activity logging failed', { message: activityError.message })
-          } else {
+          try {
+            await logUserActivity({
+              user_id: user.id,
+              action_type: 'login',
+              target_type: 'system',
+              target_id: null,
+              metadata: {
+                login_method: 'oauth',
+                callback_url: callbackUrl,
+                session_token: sessionToken,
+                timestamp: new Date().toISOString(),
+              },
+              ip_address: ip,
+              user_agent: userAgent,
+              session_id: null, // was: sessionToken (비-uuid → 형식 위반)
+            })
             log.info('로그인 활동 기록됨', { userId: maskId(user.id) })
+          } catch (activityError) {
+            log.warn('Login activity logging failed', {
+              message: (activityError as Error)?.message,
+            })
           }
         } catch (unexpectedError) {
           log.error('Login activity logging failed', unexpectedError)
