@@ -190,3 +190,72 @@ test.describe('이사회 경계', () => {
     }
   })
 })
+
+/**
+ * **페이지 레벨 인가.** 위 API 경계와 목적은 같지만 게이트가 다르다 —
+ * `src/middleware/auth.ts`의 두 분기(`/admin` + `!isAdmin`,
+ * board-room + `!isAdmin && !is_director && !is_auditor`)다.
+ *
+ * 왜 필요한가: `src/app/[locale]/admin/page.tsx`와
+ * `src/app/[locale]/board-room/page.tsx`는 **둘 다 `'use client'`**라 서버측
+ * 인가가 전혀 없다. **미들웨어가 유일한 게이트다.** 실측(리뷰 2회차): 두
+ * 분기를 동시에 무력화해도 권한 E2E 48건이 전부 초록이었다 — 승인된 일반
+ * 조합원이 관리자 콘솔과 이사회 화면을 그대로 여는 회귀를 아무도 잡지
+ * 못했다. 데이터 API가 403이라 즉시 유출은 아니지만, 미들웨어 주석 자신이
+ * "API `canAccessBoardRoom`과 동일 기준"이라 선언한 경계다.
+ *
+ * API 스펙과 같은 규칙을 지킨다: **짝지어 단정한다.** 리다이렉트만 확인하면
+ * 게이트가 "전부 리다이렉트"로 퇴화한 것(관리자·이사도 화면에 못 들어가는
+ * 상태)을 못 잡는다.
+ */
+test.describe('페이지 레벨 인가 (미들웨어)', () => {
+  test('이사회 화면은 이사만 연다 (/board-room)', async ({ browser }) => {
+    const memberContext = await browser.newContext({ storageState: storageStatePath('other') })
+    const directorContext = await browser.newContext({
+      storageState: storageStatePath('director'),
+    })
+
+    try {
+      // 금지 쪽: 승인된 **일반** 조합원. 미승인 계정을 쓰면 앞선 분기(승인
+      // 여부)가 먼저 걸려 이사 판정이 죽어도 계속 리다이렉트된다.
+      const memberPage = await memberContext.newPage()
+      await memberPage.goto('/board-room', { waitUntil: 'domcontentloaded' })
+      await expect(memberPage).toHaveURL(/\/board$/, { timeout: 15000 })
+
+      // 허용 쪽: **관리자가 아닌 이사**. admin 계정으로 확인하면 `isAdmin`
+      // 분기만 타서 `is_director` 판정은 여전히 검사되지 않는다.
+      const directorPage = await directorContext.newPage()
+      await directorPage.goto('/board-room', { waitUntil: 'domcontentloaded' })
+      await expect(directorPage).toHaveURL(/\/board-room$/, { timeout: 15000 })
+      // URL만 보면 "머물렀다"까지만 증명된다. 이사회 화면이 실제로 그려졌는지
+      // 확인해야 게이트 통과 후 다른 이유로 죽는 상태와 구분된다.
+      await expect(
+        directorPage.getByRole('heading', { name: '이사회 대시보드', level: 1 })
+      ).toBeVisible({ timeout: 15000 })
+    } finally {
+      await memberContext.close()
+      await directorContext.close()
+    }
+  })
+
+  test('관리자 콘솔은 관리자만 연다 (/admin)', async ({ browser }) => {
+    const memberContext = await browser.newContext({ storageState: storageStatePath('other') })
+    const adminContext = await browser.newContext({ storageState: storageStatePath('admin') })
+
+    try {
+      const memberPage = await memberContext.newPage()
+      await memberPage.goto('/admin', { waitUntil: 'domcontentloaded' })
+      await expect(memberPage).toHaveURL(/\/board$/, { timeout: 15000 })
+
+      const adminPage = await adminContext.newPage()
+      await adminPage.goto('/admin', { waitUntil: 'domcontentloaded' })
+      await expect(adminPage).toHaveURL(/\/admin$/, { timeout: 15000 })
+      await expect(
+        adminPage.getByRole('heading', { name: '관리자 대시보드', level: 1 })
+      ).toBeVisible({ timeout: 15000 })
+    } finally {
+      await memberContext.close()
+      await adminContext.close()
+    }
+  })
+})
