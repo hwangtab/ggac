@@ -1,13 +1,17 @@
--- 단계 4 Task 6b(수정 1회차) — `profile_completeness_score` 전원 소급 채움
+-- 단계 4 Task 6b(수정 2회차) — `profile_completeness_score` 전원 소급 채움
 --
 -- 배점표의 정본은 `src/db/queries/profileCompleteness.ts`의
 -- `profileCompletenessExpression()`이고, 그 정본의 원본은 Postgres
 -- `supabase/migrations/20250118090020_enhance_member_status_tracking.sql`
 -- 189~223행(`calculate_profile_completeness`)이다. 아래 식은 그 함수를
 -- 렌더링한 것과 **문자 단위로 같아야 한다** — 어긋나면
--- `scripts/testing/profileCompletenessBackfill.test.mjs`가 두 경로의 결과를
--- 행마다 대조해 실패한다(이 파일에 규칙을 다시 적는 순간 정본이 둘이 되므로,
--- 그 이중화를 테스트가 감시한다).
+-- `scripts/testing/profileCompletenessBackfill.test.mjs`의 "정본 대조: …
+-- 텍스트 단위로 같다" 테스트가 실패한다. 그 테스트는 `SQLiteSyncDialect`로
+-- `profileCompletenessExpression()`을 렌더링해 이 UPDATE 문의 SET 값과
+-- 문자 그대로 비교하므로(값이 아니라 SQL 리터럴 자체를 대조), 이 파일에
+-- 규칙을 다시 적는 순간 생기는 정본 이중화를 픽스처 커버리지와 무관하게
+-- 감시한다. (같은 파일의 "정본과의 대조" 값 비교 테스트는 별개로, 다섯
+-- 픽스처가 실행하는 조합에서만 결과값을 대조하는 보조 확인이다.)
 --
 -- ## 왜 필요한가
 --
