@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test'
 
-import { assertLocalSupabase, readFixtures, storageStatePath } from './helpers/authState'
+import { assertLocalTurso, readFixtures, storageStatePath } from './helpers/authState'
 
-assertLocalSupabase()
+assertLocalTurso()
 const fixtures = readFixtures()
 
 /**

@@ -1,6 +1,6 @@
 import { test as setup, expect } from '@playwright/test'
 
-import { assertLocalSupabase, storageStatePath } from './helpers/authState'
+import { assertLocalTurso, storageStatePath } from './helpers/authState'
 
 const ACCOUNTS = [
   { role: 'admin', email: 'authz-admin@test.local', password: 'Authz!Admin2026' },
@@ -11,7 +11,7 @@ const ACCOUNTS = [
 
 for (const account of ACCOUNTS) {
   setup(`${account.role} 로그인 상태를 저장한다`, async ({ page }) => {
-    assertLocalSupabase()
+    assertLocalTurso()
 
     await page.goto('/login')
     // 라벨 텍스트(`이메일 주소`/`비밀번호`)는 messages/ko.json에서 오므로 문구가

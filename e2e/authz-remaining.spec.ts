@@ -1,14 +1,8 @@
 import { test, expect, request as apiRequest } from '@playwright/test'
 import { createClient } from '@libsql/client'
 
-import {
-  assertLocalSupabase,
-  assertLocalTurso,
-  readFixtures,
-  storageStatePath,
-} from './helpers/authState'
+import { assertLocalTurso, readFixtures, storageStatePath } from './helpers/authState'
 
-assertLocalSupabase()
 assertLocalTurso()
 const fixtures = readFixtures()
 
@@ -22,41 +16,6 @@ const fixtures = readFixtures()
  * 단정은 상태 코드와 `error` 메시지 조각을 정확히 고정하고, 목록 부정
  * 단정은 반드시 소유자 세션의 긍정 단정과 짝짓는다.
  */
-
-// 로컬 스택 전용 관리 조작(픽스처 상태 리셋)에 service_role을 직접 쓴다 —
-// scripts/testing/seed-authz-fixtures.mjs와 같은 패턴이다. assertLocalSupabase()가
-// 이미 로컬이 아닌 호스트를 막으므로 이 헬퍼도 안전하다.
-function restHeaders(): Record<string, string> {
-  const key = process.env.E2E_SUPABASE_SERVICE_ROLE_KEY
-  if (!key) {
-    throw new Error('E2E_SUPABASE_SERVICE_ROLE_KEY가 없다. 권한 E2E는 로컬 스택에서만 돌린다.')
-  }
-  return { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }
-}
-
-/**
- * 로컬 스택에는 스키마(테이블/RLS)는 시딩돼 있지만 Storage 버킷은 비어 있다
- * (`GET /storage/v1/bucket` → `[]`). 정책 36을 검증하려면 실제 업로드 API를
- * 통과시켜야 하는데, putSupabaseObject(src/lib/storage/supabase.ts)가 요구하는
- * `attachments` 버킷이 없으면 업로드가 500 "Bucket not found"로 막혀 정책까지
- * 도달하지 못한다. 앱 코드나 config.toml을 건드리지 않고, 시드 스크립트와 같은
- * service-role 관리 API 호출로 버킷만 멱등하게 만든다.
- */
-async function ensureAttachmentsBucket(): Promise<void> {
-  const url = process.env.E2E_SUPABASE_URL
-  const res = await fetch(`${url}/storage/v1/bucket`, {
-    method: 'POST',
-    headers: restHeaders(),
-    body: JSON.stringify({ id: 'attachments', name: 'attachments', public: true }),
-  })
-  if (!res.ok) {
-    const body = await res.text()
-    // 이미 있으면 409 Duplicate — 멱등이므로 무시한다.
-    if (res.status !== 409 && !body.includes('already exists')) {
-      throw new Error(`attachments 버킷 생성 실패: ${res.status} ${body}`)
-    }
-  }
-}
 
 /**
  * notifications.read_at을 NULL로 되돌린다. PATCH 재요청 시 앱이 쓰는
@@ -138,7 +97,16 @@ test.describe('첨부파일 목록 조회는 로그인 없이도 공개다 (정�
     )?.id
 
     if (!attachmentId) {
-      await ensureAttachmentsBucket()
+      // 업로드 대상은 Vercel Blob 하나뿐이다(Task 5에서 제공자 분기가 사라졌다).
+      // `PUBLIC_BLOB_READ_WRITE_TOKEN`이 없으면 라우트가 업로드를 시작하기 전에
+      // 거부하므로(`hasPublicBlobStore()`), 여기서 그 사실을 먼저 명시한다 —
+      // 그러지 않으면 "왜 500인지" 알 수 없는 실패로 보인다. 예전 이 자리에
+      // 있던 `ensureAttachmentsBucket()`(Supabase Storage 버킷 생성)은
+      // 업로드 경로가 Blob으로 옮겨간 순간 아무 효과가 없는 죽은 코드가 됐다.
+      expect(
+        process.env.PUBLIC_BLOB_READ_WRITE_TOKEN,
+        'PUBLIC_BLOB_READ_WRITE_TOKEN이 없으면 정책 36의 업로드 준비 단계를 통과할 수 없다'
+      ).toBeTruthy()
 
       // 1x1 투명 PNG. hasValidFileSignature가 요구하는 PNG 매직 바이트를 포함한다.
       const png = Buffer.from(
