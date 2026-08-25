@@ -635,3 +635,68 @@ node 스크립트는 곧바로 커넥션을 닫으니 무해하지만, `turso db
 의도된 것이다. 탈퇴 회원을 실제로 지워야 하면 출석·투표 기록을 어떻게 할지
 먼저 정한 뒤 그 행부터 처리한다. 앱에는 회원 삭제 경로가 없으므로(코드에
 `member_profiles` DELETE 0곳) 화면 동작에는 영향이 없다.
+
+## 단계 4 Task 6b — 프로필 완성도 소급 채움 (`0003_backfill_profile_completeness.sql`)
+
+Postgres 트리거 `profile_completeness_trigger`를 쿼리 계층으로 이식하면서
+(`src/db/queries/profileCompleteness.ts`), 원본 마이그레이션
+`supabase/migrations/20250118090020_enhance_member_status_tracking.sql`이
+트리거를 만든 **직후** 돌린 소급 채움(241~244행)이 빠져 있었다. 0003이 그것을
+채운다.
+
+**왜 지금 필요한가.** 원본 트리거는 `BEFORE UPDATE`인데 본체가 테이블을 다시
+읽어 **갱신 직전** 값으로 점수를 매겼다(한 박자 지연). 그 지연은 승인 UPDATE
+에도 걸린다 — `registration_status`를 `'approved'`로 바꾸는 UPDATE가 보는 값은
+아직 `'pending'`이라 승인 10점이 붙지 않는다. 그래서 **승인 이후 프로필을 한
+번도 고치지 않은 회원은 10점이 빠진 점수**로 이관돼 있다. 그대로 두면 관리자
+화면에서 이미 다 채운 조합원이 계속 "프로필 미달"로 잡혀 불필요한 독촉 대상이
+된다.
+
+**원본의 `WHERE profile_completeness_score = 0`은 베끼지 않았다.** 그 조건은
+0인 행만 채우는데, 지금은 **0이 아니면서 틀린 값**(승인 10점 누락)이 실재해서
+그 조건으로는 손도 못 댄다. 0003은 조건 없이 전 행을 다시 매긴다 — 점수는 같은
+행의 다른 컬럼들만으로 정해지는 순수 함수이므로 몇 번 돌려도 같은 값에
+수렴한다(멱등). 근거와 증명은 `src/db/migrations/0003_backfill_profile_completeness.sql`
+헤더 주석과 `scripts/testing/profileCompletenessBackfill.test.mjs`에 있다.
+
+### ⚠ 적용 방법 — 0002와 같다(`drizzle-kit migrate` 금지)
+
+단언이 물었을 때 UPDATE까지 통째로 롤백되도록 `BEGIN`/`COMMIT`이 파일 안에
+있다. 마이그레이터가 자체 트랜잭션으로 감싸면 그 `BEGIN`이 `cannot start a
+transaction within a transaction`으로 즉시 실패해 전체가 롤백된다(= 아무 일도
+일어나지 않는다). 파일을 통째로 실행하는 경로로만 적용한다.
+
+```bash
+set -a; source .env.local; set +a   # 운영에 적용할 때만
+node -e "import('@libsql/client').then(async m => {
+  const fs = await import('node:fs')
+  const c = m.createClient({ url: process.env.TURSO_DATABASE_URL, authToken: process.env.TURSO_AUTH_TOKEN })
+  await c.executeMultiple(fs.readFileSync('src/db/migrations/0003_backfill_profile_completeness.sql','utf8'))
+  console.log('applied'); c.close()
+})"
+```
+
+### 적용 전후 확인
+
+```sql
+-- 적용 전: 지금 몇 명이 어떤 점수인지 기록해 둔다(적용 후 비교용).
+SELECT id, registration_status, profile_completeness_score FROM member_profiles ORDER BY id;
+-- 적용 후: 승인 회원 중 10점이 오른 행이 "승인 이후 프로필을 안 고친 회원"이다.
+SELECT count(*) FROM member_profiles;                       -- 적용 전 값과 같아야 한다
+SELECT min(profile_completeness_score), max(profile_completeness_score) FROM member_profiles;  -- 0~100
+SELECT name FROM sqlite_master WHERE name LIKE '__migration_%';  -- 0행
+```
+
+`updated_at`은 하나도 바뀌지 않는다 — 파생 값을 채우는 일이 "이 회원 정보가
+방금 바뀌었다"로 보이면 안 되기 때문이다. 마이그레이션 안의
+`__migration_assert_0003`(`CHECK (ok = 1)`)이 ① 행 수 유지 ② `updated_at` 무변경
+③ 결과 점수 0~100을 직접 확인하고, 어긋나면 트랜잭션 전체를 롤백한다(셋 다
+변이 테스트로 실제로 무는 것을 확인했다).
+
+### 운영에 미치는 동작 변화
+
+관리자 회원 관리 화면의 완성도 숫자와 `/api/admin/members/stats`의
+`averageProfileCompleteness`가 **한 번 움직인다.** 대부분 오르지만, 저장값이
+실제 상태보다 부풀어 있던 행은 내려갈 수도 있다(원본 지연은 양방향이다).
+회원에게 보이는 화면·권한·승인 상태에는 영향이 없다 — 0003은
+`profile_completeness_score` 컬럼 하나만 쓴다.
