@@ -304,6 +304,76 @@ test('updateSystemSetting: updated_by는 트리거가 auth.uid()로 덮어쓰지
   assert.equal(row.rows[0].updated_by, otherActor)
 })
 
+/**
+ * 삭제된 `scripts/testing/systemSettingsWrite.test.mjs`의 4번째 케이스
+ * ("category와 setting_key로 대상을 정확히 좁힌다 — 같은 카테고리의 다른
+ * 키까지 건드리지 않는다")를 새 구현에 맞춰 되살린다(단계 4 리뷰 1회차
+ * Important 6). 옛 파일은 stub 호출을 세는 방식이었지만 여기서는 실제
+ * SQLite에 형제 키를 심어 **값이 안 변했음**을 직접 본다.
+ *
+ * 스코프가 category 하나로 넓어지면 관리자가 한 설정을 저장할 때마다 같은
+ * 카테고리의 나머지 설정이 통째로 덮어써진다 — 이 파일 자체가 그
+ * "관리자 설정 저장 불가" 운영 회귀를 고치려고 만든 것이다.
+ */
+test('updateSystemSetting: 같은 카테고리의 형제 키는 값·updated_at·updated_by·이력 전부 불변이다', async () => {
+  const actorId = await seedProfile()
+  const targetId = await insertSystemSetting({
+    category: 'features',
+    settingKey: 'target_key',
+    settingValue: { value: '대상-원본' },
+  })
+  const siblingId = await insertSystemSetting({
+    category: 'features',
+    settingKey: 'sibling_key',
+    settingValue: { value: '형제-원본' },
+  })
+
+  const siblingBefore = await setupClient.execute({
+    sql: 'SELECT setting_value, updated_at, updated_by FROM system_settings WHERE id = ?',
+    args: [siblingId],
+  })
+
+  const { updateSystemSetting } = await loadFreshSettingsModule()
+  await updateSystemSetting({
+    category: 'features',
+    settingKey: 'target_key',
+    settingValue: { value: '대상-수정됨' },
+    actorId,
+  })
+
+  const target = await setupClient.execute({
+    sql: 'SELECT setting_value FROM system_settings WHERE id = ?',
+    args: [targetId],
+  })
+  assert.deepEqual(JSON.parse(target.rows[0].setting_value), { value: '대상-수정됨' })
+
+  const siblingAfter = await setupClient.execute({
+    sql: 'SELECT setting_value, updated_at, updated_by FROM system_settings WHERE id = ?',
+    args: [siblingId],
+  })
+  assert.deepEqual(
+    JSON.parse(siblingAfter.rows[0].setting_value),
+    { value: '형제-원본' },
+    '같은 카테고리의 다른 키 값이 덮어써지면 안 된다'
+  )
+  assert.equal(
+    siblingAfter.rows[0].updated_at,
+    siblingBefore.rows[0].updated_at,
+    '형제 키의 updated_at도 건드리면 안 된다'
+  )
+  assert.equal(
+    siblingAfter.rows[0].updated_by,
+    siblingBefore.rows[0].updated_by,
+    '형제 키의 updated_by도 건드리면 안 된다'
+  )
+  assert.equal(
+    await countHistoryRows(siblingId),
+    0,
+    '건드리지 않은 설정에 변경 이력이 생기면 이력 자체가 거짓이 된다'
+  )
+  assert.equal(await countHistoryRows(targetId), 1)
+})
+
 test('updateSystemSetting: 존재하지 않는 category/settingKey면 SettingNotFoundError를 던진다(UPSERT가 아니다)', async () => {
   const actorId = await seedProfile()
   const { updateSystemSetting, SettingNotFoundError } = await loadFreshSettingsModule()

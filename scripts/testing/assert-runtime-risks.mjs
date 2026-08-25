@@ -2766,6 +2766,29 @@ const adminSettingsRoutesUseSharedBoundary =
       )
     })
   })
+// `system_settings_history`는 "누가 설정을 바꿨는가"의 **유일한** 기록이다
+// (단계 4에서 Postgres 트리거 log_system_settings_change를
+// src/db/queries/settings.ts의 updateSystemSetting이 코드로 재현한다).
+// 그 기록의 changed_by는 라우트가 넘긴 actorId를 그대로 쓰므로, actorId가
+// 인증된 관리자의 id가 아니면 이력 전체가 조용히 거짓이 된다 — 상수 문자열로
+// 바꿔도 응답·동작은 전혀 달라지지 않아 아무도 눈치채지 못한다
+// (리뷰 1회차 Important 6: 지금은 어떤 가드·테스트도 이걸 고정하지 않았다).
+const settingsWriteRouteSources = [
+  { path: adminSettingsApiPath, source: adminSettingsApiSource },
+  { path: adminSettingsBackupApiPath, source: adminSettingsBackupApiSource },
+  { path: adminSettingsResetApiPath, source: adminSettingsResetApiSource },
+]
+const pinsSystemSettingsHistoryActor = settingsWriteRouteSources.every(({ source }) => {
+  // 주석에 적힌 `actorId: user.id`로 통과하지 않도록 주석·import를 먼저 지운다.
+  const code = stripCommentsAndImports(source)
+  const calls = code.match(/updateSystemSetting\(\{[^)]*?\}\)/g) ?? []
+  return (
+    calls.length > 0 &&
+    // `user`는 defineApiRoute가 넘긴 인증 컨텍스트에서만 나와야 한다.
+    /const \{ user \} = auth/.test(code) &&
+    calls.every(call => /actorId:\s*user\.id,?/.test(call))
+  )
+})
 const adminStandaloneRoutesUseSharedApiRoute =
   /from\s+['"]@\/lib\/server\/apiRoute['"]/.test(adminPerformanceSource) &&
   /export const GET = defineApiRoute/.test(adminPerformanceSource) &&
@@ -3849,6 +3872,14 @@ if (!adminSettingsRoutesUseSharedBoundary) {
     `Admin settings routes should share a settings-specific Supabase auth resolver and the JSON API route assembly boundary instead of hand-wiring auth, rate limits, and JSON parsing:\n${adminSettingsRouteSources
       .map(({ path }) => `- ${relative(root, path)}`)
       .join('\n')}\n- ${relative(root, settingsAdminAuthPath)}`
+  )
+}
+
+if (!pinsSystemSettingsHistoryActor) {
+  failures.push(
+    `System settings writes must record the authenticated admin as the history actor (actorId: user.id from the route auth context) — system_settings_history is the only record of who changed a setting:\n${settingsWriteRouteSources
+      .map(({ path }) => `- ${relative(root, path)}`)
+      .join('\n')}`
   )
 }
 
