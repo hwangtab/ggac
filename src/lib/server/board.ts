@@ -32,7 +32,7 @@ export interface BoardListResult {
   hasPrev: boolean
   currentPage: number
   /**
-   * true면 SUPABASE_SERVICE_ROLE_KEY 미설정으로 실제 DB 조회를 건너뛰고 빈 목록을
+   * true면 TURSO_DATABASE_URL 미설정으로 실제 DB 조회를 건너뛰고 빈 목록을
    * 반환했다는 뜻이다(정상 쿼리가 실패해 빈 배열이 된 경우와 구분하기 위한 필드 —
    * 그 경우는 이 필드가 없다). 정적 프리렌더(board/page.tsx)는 이 빈 결과를 그대로
    * 써도 되지만(noStore()로 캐시되지 않게 막혀 있다), API 라우트
