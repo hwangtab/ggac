@@ -19,7 +19,7 @@ import { and, asc, desc, eq, gte, inArray, like, lte, or, sql, type SQL } from '
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
 
 import { db } from '../client.ts'
-import { memberProfiles } from '../schema/index.ts'
+import { memberProfiles, user } from '../schema/index.ts'
 
 import { toCamelCase, toIso } from './_helpers.ts'
 import { profileCompletenessExpression } from './profileCompleteness.ts'
@@ -670,4 +670,82 @@ export async function updateProfilesByIds(ids: string[], patch: ProfilePatch): P
     }
     return updatedIds
   })
+}
+
+// -------------------------------------------------------------------------
+// 프로필 없는 계정("유령 회원") — 단계 4 Task 6b
+// -------------------------------------------------------------------------
+
+/**
+ * Better Auth `user` 행은 있는데 `member_profiles` 행이 없는 계정.
+ *
+ * 이런 계정은 로그인은 되지만 `/register/pending`에 영구 체류하고, 관리자
+ * 회원 목록(`listProfiles`는 `member_profiles`만 읽는다)에도 뜨지 않으며,
+ * `user.email` UNIQUE 때문에 같은 이메일로 재가입도 막힌다. 어떻게 생기는지는
+ * `src/lib/auth/server.ts`의 가입 훅 주석 참고.
+ */
+export interface ProfilelessUser {
+  id: string
+  email: string
+  /** Better Auth `user.name` — 가입 폼의 표시명이 들어 있다. */
+  name: string
+  created_at: string
+}
+
+/**
+ * 프로필이 없는 계정 목록(가입 최신순). 관리자 화면이 "유령 회원"을 발견하는
+ * 유일한 경로다 — 이 조회가 없으면 그런 계정은 어떤 화면에도 나타나지 않는다.
+ *
+ * `limit`은 호출부가 정한다. 정상 상태에서는 0행이므로 상한은 사고가 났을 때
+ * 화면과 응답이 터지지 않게 하는 안전장치일 뿐이다.
+ */
+export async function listProfilelessUsers(limit: number): Promise<ProfilelessUser[]> {
+  const rows = await db
+    .select({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      createdAt: user.createdAt,
+    })
+    .from(user)
+    .leftJoin(memberProfiles, eq(memberProfiles.id, user.id))
+    .where(sql`${memberProfiles.id} is null`)
+    .orderBy(desc(user.createdAt))
+    .limit(limit)
+  return rows.map(row => ({
+    id: row.id,
+    email: row.email,
+    name: row.name,
+    created_at: toIso(row.createdAt) as string,
+  }))
+}
+
+/**
+ * 프로필이 없는 계정 한 건을 id로 조회한다. 관리자 복구 라우트가 "정말로
+ * 프로필이 없는 계정인지" 확인한 뒤 그 계정의 email/name으로 프로필을 만들 때
+ * 쓴다 — 이미 프로필이 있는 회원에게 복구를 걸어 기존 행을 건드리는 일을
+ * 조회 단계에서 막는다.
+ *
+ * @returns 계정이 없거나 이미 프로필이 있으면 `null`.
+ */
+export async function getProfilelessUserById(id: string): Promise<ProfilelessUser | null> {
+  const rows = await db
+    .select({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      createdAt: user.createdAt,
+    })
+    .from(user)
+    .leftJoin(memberProfiles, eq(memberProfiles.id, user.id))
+    .where(and(eq(user.id, id), sql`${memberProfiles.id} is null`))
+    .limit(1)
+  const row = rows[0]
+  if (!row) return null
+  return {
+    id: row.id,
+    email: row.email,
+    name: row.name,
+    created_at: toIso(row.createdAt) as string,
+  }
 }

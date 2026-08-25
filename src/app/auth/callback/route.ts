@@ -1,5 +1,11 @@
 import { readSessionUser } from '@/lib/server/session'
-import { getProfileById } from '@/db/queries/profiles'
+import {
+  getProfileById,
+  getProfilelessUserById,
+  upsertProfile,
+  type UpsertProfileInput,
+} from '@/db/queries/profiles'
+import { buildMemberProfileRow } from '@/lib/auth/profileHook'
 import { manageUserSession } from '@/db/queries/sessions'
 import { logUserActivity } from '@/db/queries/activities'
 import { NextRequest, NextResponse, after } from 'next/server'
@@ -145,10 +151,52 @@ export async function GET(request: NextRequest) {
       }
 
       if (!profile) {
-        // Better Auth 가입 훅(databaseHooks.user.create.after)이 프로필을
-        // 만든다 — 여기서 다시 만들지 않는다(단계 2b-5 `/api/member-signup`이
-        // 그 책임을 갖는다). 훅이 실패했다면 관리자가 수동으로 복구한다.
+        // 단계 4 Task 6b: 예전에는 여기서 "훅이 만든다, 여기선 다시 만들지
+        // 않는다"며 그대로 돌려보냈다. 그 판단을 뒤집는다.
+        //
+        // 프로필이 없다는 건 가입 훅(databaseHooks.user.create.after)이나
+        // `/api/member-signup`의 프로필 쓰기가 실패했다는 뜻이고, 그 상태로
+        // 두면 이 회원은 `/register/pending`에 영구 체류한다 — 관리자 회원
+        // 목록에도 안 뜨고(그 목록은 member_profiles만 읽는다), 재가입도
+        // `user.email` UNIQUE에 막힌다. 자동 복구 경로가 아예 없었다.
+        //
+        // 이 재생성이 권한을 만들어 내지는 않는다. `buildMemberProfileRow`는
+        // 승인 대기·비활성을 하드코딩하고 클라이언트 입력을 하나도 읽지
+        // 않으므로, 결과는 "관리자 승인 화면에 뜨는 신청자"다. 관리자가
+        // 프로필을 지워서 없는 경우를 되살릴 걱정도 없다 — 이 앱에는
+        // member_profiles 행을 지우는 경로가 없다.
+        //
+        // 다만 가입 폼의 7필드(실명·연락처·계좌 등)는 이 시점에 남아 있지
+        // 않다. 되살아나는 것은 표시명·이메일뿐이고 나머지는 회원이 마이
+        // 페이지에서 다시 채우거나 관리자가 확인해야 한다 — 그래서 이
+        // 재생성이 관리자 복구 화면(`/api/admin/members/orphans`)을 대체하지
+        // 않는다. 둘 다 필요하다.
         log.warn('Profile not found', { userId: maskId(user.id) })
+        try {
+          // `getProfilelessUserById`는 프로필이 없는 계정만 돌려주므로, 위
+          // 조회가 DB 장애로 null이 된 경우(profile lookup failed)에는 여기서
+          // null이 나와 재생성을 건너뛴다 — 멀쩡한 프로필을 덮어쓸 여지가
+          // 없다. 표시명은 Better Auth `user.name`(가입 폼에 입력한 표시명)을
+          // 쓴다. 세션 객체에는 그 값이 없다(`SessionUser`는 id/email만 담는다).
+          const orphan = await getProfilelessUserById(user.id)
+          if (orphan) {
+            await upsertProfile(
+              buildMemberProfileRow({
+                id: orphan.id,
+                email: orphan.email,
+                name: orphan.name,
+              }) as unknown as UpsertProfileInput
+            )
+            log.info('Profile recreated for session user', { userId: maskId(user.id) })
+          }
+        } catch (recreateError) {
+          // 재생성까지 실패하면 예전과 같은 결과로 떨어진다 — 관리자 복구
+          // 화면이 이 계정을 계속 드러내므로 사무국이 손으로 고칠 수 있다.
+          log.error('Profile recreation failed', {
+            userId: maskId(user.id),
+            message: (recreateError as Error)?.message,
+          })
+        }
         return redirectToPath(requestUrl, '/register/pending', locale)
       }
 

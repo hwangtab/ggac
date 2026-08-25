@@ -57,9 +57,11 @@ test('인증 메일이 callbackURL을 넘긴다', () => {
 })
 
 test('가입 훅의 프로필 upsert 실패는 삼켜진다(가입 자체를 막지 않는다)', () => {
-  // 계정은 이미 만들어졌고 프로필은 관리자가 복구할 수 있다. 여기서 다시
-  // 던지면 Better Auth가 가입 응답을 실패로 뒤집는다.
-  // (프로필 없는 "유령 회원"의 복구 경로 자체는 Task 6 소관이다.)
+  // 던져도 계정은 남는다 — 이 훅은 `user` 행이 커밋된 뒤에 실행된다
+  // (@better-auth/core dist/context/transaction.mjs의 pendingHooks). 다시
+  // 던지면 계정은 그대로인데 응답만 500이 되어, 회원이 "가입 실패"로 읽고
+  // 재가입을 시도했다가 이메일 중복에 막힌다.
+  // 복구 경로는 아래 "유령 회원" 테스트들이 지킨다(단계 4 Task 6b).
   const hookMatch = code.match(
     /after:\s*async\s*user\s*=>\s*\{[\s\S]*?\n\s{6}\},\n\s{4}\},\n\s{2}\},/
   )
@@ -74,4 +76,45 @@ test('가입 훅의 프로필 upsert 실패는 삼켜진다(가입 자체를 막
     /throw error/,
     '가입 훅의 catch는 다시 던지면 안 된다'
   )
+})
+
+// ---------------------------------------------------------------- 유령 회원 복구 경로 (단계 4 Task 6b)
+//
+// 위 훅이 실패를 삼키는 것은 "계정을 되돌릴 수 없기 때문"이지 "괜찮기
+// 때문"이 아니다. 그 판단이 성립하려면 프로필 없는 계정을 **발견하고 고치는**
+// 경로가 실재해야 한다. 아래 세 단정이 그 경로가 지워지지 않았는지 본다.
+
+test('관리자 복구 라우트가 프로필 없는 계정만 대상으로 삼고, 승인 대기 프로필만 만든다', () => {
+  const route = stripComments(readFileSync('src/app/api/admin/members/orphans/route.ts', 'utf8'))
+
+  // 관리자 전용이어야 한다 — GET(목록)과 POST(복구) 둘 다.
+  assert.equal(
+    (route.match(/auth:\s*'admin'/g) ?? []).length,
+    2,
+    'GET·POST 둘 다 admin 인증이어야 한다'
+  )
+  // 대상 좁히기: 프로필이 이미 있는 회원의 id로는 아무 일도 일어나지 않는다.
+  assert.match(route, /getProfilelessUserById\(/)
+  // 프로필 조립은 가입 훅과 같은 빌더로만 한다(승인 대기·비활성 하드코딩).
+  assert.match(route, /buildMemberProfileRow\(/)
+  // 이 라우트가 권한·승인 컬럼을 직접 적는 순간 "복구"가 "승인"이 된다.
+  assert.doesNotMatch(route, /registration_status|is_admin|is_active|is_director|is_auditor/)
+})
+
+test('가입 훅과 복구 라우트가 쓰는 빌더는 승인 대기·무권한을 하드코딩한다', () => {
+  const builder = stripComments(readFileSync('src/lib/auth/profileHook.ts', 'utf8'))
+  assert.match(builder, /registration_status:\s*'pending'/)
+  assert.match(builder, /is_active:\s*false/)
+  assert.match(builder, /is_admin:\s*false/)
+  assert.match(builder, /is_director:\s*false/)
+  assert.match(builder, /is_auditor:\s*false/)
+  // 클라이언트 입력을 읽을 수 있는 통로가 없어야 한다 — 인자는 id/email/name뿐이다.
+  assert.doesNotMatch(builder, /input\.(registration_status|is_admin|is_active)/)
+})
+
+test('이메일 인증 콜백이 프로필 없는 세션 사용자에게 프로필을 다시 만든다', () => {
+  const callback = stripComments(readFileSync('src/app/auth/callback/route.ts', 'utf8'))
+  assert.match(callback, /getProfilelessUserById\(user\.id\)/)
+  assert.match(callback, /buildMemberProfileRow\(/)
+  assert.match(callback, /await upsertProfile\(/)
 })

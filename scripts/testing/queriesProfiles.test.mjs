@@ -790,4 +790,116 @@ test('verification_status가 깨진 JSON이어도 프로필 갱신이 실패하�
     args: [id],
   })
   assert.equal(Number(row.rows[0].s), BASELINE_SCORE + EXPECTED_POINTS.phone_number)
+
+  // 값을 되돌린다. 깨진 JSON이 남아 있으면 이후 `listProfiles`처럼 전체 행을
+  // 읽는 테스트가 Drizzle의 JSON.parse에서 터진다 — 이 정리 자체가 "깨진
+  // verification_status는 쓰기가 아니라 읽기에서 문제가 된다"는 사실의 확인이다.
+  await setupClient.execute({
+    sql: `UPDATE member_profiles SET verification_status = ? WHERE id = ?`,
+    args: [JSON.stringify({ email: false, phone: false, identity: false }), id],
+  })
+})
+
+// ---------------------------------------------------------------- 프로필 없는 계정("유령 회원")
+//
+// 단계 4 Task 6b. 가입은 Better Auth `user` 행과 `member_profiles` 행 두 번을
+// 쓰는데, 그 사이에서 프로필 쓰기가 실패하면 계정만 남는다. 그런 계정은
+// member_profiles만 읽는 관리자 회원 목록(`listProfiles`)에 나타나지 않는다.
+
+async function seedAuthUser(id, email, name, createdAt = Date.now()) {
+  await setupClient.execute({
+    sql: `INSERT INTO "user" (id, name, email, email_verified, created_at, updated_at)
+          VALUES (?, ?, ?, 1, ?, ?)`,
+    args: [id, name, email, createdAt, createdAt],
+  })
+}
+
+test('listProfilelessUsers: 프로필 없는 계정만 최신 가입순으로 돌려준다', async () => {
+  const { upsertProfile, listProfilelessUsers } = await loadFreshProfilesModule()
+
+  // 정상 회원 — 계정과 프로필이 둘 다 있다.
+  await seedAuthUser('orphan-ok', 'ok@orphan.test.local', '정상회원')
+  await upsertProfile({
+    id: 'orphan-ok',
+    email: 'ok@orphan.test.local',
+    display_name: '정상회원',
+  })
+  // 유령 회원 두 명 — 계정만 있다.
+  await seedAuthUser('orphan-1', 'ghost1@orphan.test.local', '유령1', 1000)
+  await seedAuthUser('orphan-2', 'ghost2@orphan.test.local', '유령2', 2000)
+
+  const rows = await listProfilelessUsers(50)
+  const ids = rows.map(r => r.id)
+  assert.deepEqual(ids, ['orphan-2', 'orphan-1'], '최신 가입순이어야 한다')
+  assert.equal(ids.includes('orphan-ok'), false, '프로필이 있는 계정은 나오면 안 된다')
+  assert.equal(rows[0].email, 'ghost2@orphan.test.local')
+  assert.equal(rows[0].name, '유령2')
+  assert.equal(typeof rows[0].created_at, 'string')
+})
+
+test('listProfilelessUsers: 관리자 회원 목록(listProfiles)에는 그 계정이 없다(=이 조회가 유일한 발견 경로다)', async () => {
+  const { listProfiles } = await loadFreshProfilesModule()
+  const { rows } = await listProfiles({ limit: 1000, offset: 0 })
+  assert.equal(
+    rows.some(row => row.id === 'orphan-1'),
+    false
+  )
+})
+
+test('listProfilelessUsers: limit을 넘겨 받은 만큼만 돌려준다', async () => {
+  const { listProfilelessUsers } = await loadFreshProfilesModule()
+  const rows = await listProfilelessUsers(1)
+  assert.equal(rows.length, 1)
+})
+
+test('getProfilelessUserById: 프로필이 없는 계정만 돌려준다(있는 회원·없는 계정은 null)', async () => {
+  const { getProfilelessUserById } = await loadFreshProfilesModule()
+
+  const orphan = await getProfilelessUserById('orphan-1')
+  assert.ok(orphan)
+  assert.equal(orphan.email, 'ghost1@orphan.test.local')
+
+  assert.equal(
+    await getProfilelessUserById('orphan-ok'),
+    null,
+    '이미 프로필이 있는 회원에게 복구를 걸면 기존 행을 건드리면 안 된다'
+  )
+  assert.equal(await getProfilelessUserById('does-not-exist'), null)
+})
+
+test('복구 경로: buildMemberProfileRow + upsertProfile을 거치면 승인 대기 회원으로 목록에 나타난다', async () => {
+  const { upsertProfile, listProfilelessUsers, listProfiles, getProfileById } =
+    await loadFreshProfilesModule()
+  const { buildMemberProfileRow } = await import(
+    new URL('../../src/lib/auth/profileHook.ts', import.meta.url).href
+  )
+
+  const before = await listProfilelessUsers(50)
+  assert.ok(before.some(r => r.id === 'orphan-1'))
+
+  const orphan = before.find(r => r.id === 'orphan-1')
+  await upsertProfile(
+    buildMemberProfileRow({ id: orphan.id, email: orphan.email, name: orphan.name })
+  )
+
+  const after = await listProfilelessUsers(50)
+  assert.equal(
+    after.some(r => r.id === 'orphan-1'),
+    false,
+    '복구한 계정은 유령 목록에서 빠져야 한다'
+  )
+  const { rows } = await listProfiles({ limit: 1000, offset: 0 })
+  assert.ok(
+    rows.some(row => row.id === 'orphan-1'),
+    '복구한 계정은 관리자 회원 목록에 나타나야 한다'
+  )
+
+  // 복구는 권한을 만들어 내지 않는다 — 승인 대기·비활성이다.
+  const profile = await getProfileById('orphan-1')
+  assert.equal(profile.registration_status, 'pending')
+  assert.equal(profile.is_active, false)
+  assert.equal(profile.is_admin, false)
+  assert.equal(profile.is_director, false)
+  assert.equal(profile.is_auditor, false)
+  assert.equal(profile.display_name, '유령1', 'Better Auth user.name을 표시명으로 살린다')
 })

@@ -157,8 +157,23 @@ export const auth = betterAuth({
           } catch (error) {
             // Postgres 트리거(handle_new_user)는 이 실패를 EXCEPTION WHEN OTHERS로
             // 삼켜서 프로필 없는 사용자를 조용히 만들었다. 여기서는 로그로 드러낸다
-            // — 다만 가입 자체를 실패시키지는 않는다. 계정은 이미 만들어졌고,
-            // 프로필은 관리자가 복구할 수 있다.
+            // — 다만 가입 자체를 실패시키지는 않는다.
+            //
+            // **던져도 계정은 남는다.** 이 훅은 `user` 행이 커밋된 **뒤**에
+            // 실행된다(@better-auth/core의 `runWithTransaction`이 `pendingHooks`
+            // 를 커밋 후에 돌린다 — dist/context/transaction.mjs:52~79). 여기서
+            // 던지면 `signUpEmail`이 500으로 실패하지만 계정은 그대로 남아,
+            // 회원은 "가입 실패"라고 읽고 재가입을 시도했다가 이메일 중복에
+            // 막힌다. 계정을 남긴 채 사실대로 알리는 편이 낫다.
+            //
+            // 단계 4 Task 6b 전까지 이 주석의 "관리자가 복구할 수 있다"는
+            // 사실이 아니었다 — 프로필 없는 계정은 어떤 화면에도 뜨지 않았다.
+            // 이제 실제 경로가 셋이다.
+            //   1. 회원에게: `/api/member-signup`이 202 + "사무국 문의" 안내.
+            //   2. 자동: 이메일 인증 링크(`/auth/callback`)에서 프로필이 없으면
+            //      승인 대기 프로필을 다시 만든다.
+            //   3. 관리자: `GET/POST /api/admin/members/orphans` + 회원 관리
+            //      화면 상단 경고 배너.
             logger.error(
               '[auth] 가입 후 member_profiles 생성 실패:',
               maskId(user.id),
