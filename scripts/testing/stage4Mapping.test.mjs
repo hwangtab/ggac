@@ -1,7 +1,9 @@
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync, rmSync } from 'node:fs'
+import { rmSync } from 'node:fs'
 import { createClient } from '@libsql/client'
+
+import { applyMigrations } from './apply-migrations.mjs'
 
 import {
   toBoardMeetingRow,
@@ -730,10 +732,7 @@ function payload() {
 before(async () => {
   rmSync(DB_PATH, { force: true })
   client = createClient({ url: `file:${DB_PATH}` })
-  await client.executeMultiple(
-    readFileSync('src/db/migrations/0000_dizzy_krista_starr.sql', 'utf8')
-  )
-  await client.executeMultiple(readFileSync('src/db/migrations/0001_neat_exiles.sql', 'utf8'))
+  await applyMigrations(client)
   // member_profiles는 이 스크립트가 적재하지 않는 external 참조 대상이라
   // identity.mjs의 buildUpsert로 직접 심는다(단계 2c의 실제 로더와 같은 경로).
   await client.execute(identityBuildUpsert('member_profiles', toMemberProfileRow(PG_PROFILE)))

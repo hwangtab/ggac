@@ -3,9 +3,11 @@ import assert from 'node:assert/strict'
 import { readFileSync, rmSync } from 'node:fs'
 import { createClient } from '@libsql/client'
 
+import { applyMigrations } from './apply-migrations.mjs'
+
 /**
  * `src/db/queries/profiles.ts`를 실제 SQLite 파일 DB(스텁 mock이 아니라)로
- * 검증한다. 스키마는 `src/db/migrations/0000_dizzy_krista_starr.sql`을 그대로
+ * 검증한다. 스키마는 `src/db/migrations/`의 마이그레이션 전부를 그대로
  * 실행해 만든다 — `scripts/testing/contentMapping.test.mjs`·
  * `scripts/testing/migrate-loader.test.mjs`와 같은 패턴이다.
  *
@@ -32,9 +34,7 @@ let setupClient
 before(async () => {
   for (const suffix of ['', '-wal', '-shm']) rmSync(`${DB_PATH}${suffix}`, { force: true })
   setupClient = createClient({ url: `file:${DB_PATH}` })
-  await setupClient.executeMultiple(
-    readFileSync('src/db/migrations/0000_dizzy_krista_starr.sql', 'utf8')
-  )
+  await applyMigrations(setupClient)
 })
 
 after(() => {

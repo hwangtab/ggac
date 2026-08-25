@@ -4,6 +4,8 @@ import { readFileSync, rmSync } from 'node:fs'
 import { register } from 'node:module'
 import { createClient } from '@libsql/client'
 
+import { applyMigrations } from './apply-migrations.mjs'
+
 /**
  * 단계 2c 남은 권한 판정 원천 3개(`authz.ts`/`adminAuth.ts`/`boardRoomAuth.ts`)의
  * `member_profiles` 조회를 Turso 쿼리 계층(`src/db/queries/profiles.ts`)으로
@@ -90,9 +92,7 @@ let setupClient
 before(async () => {
   for (const suffix of ['', '-wal', '-shm']) rmSync(`${DB_PATH}${suffix}`, { force: true })
   setupClient = createClient({ url: `file:${DB_PATH}` })
-  await setupClient.executeMultiple(
-    readFileSync('src/db/migrations/0000_dizzy_krista_starr.sql', 'utf8')
-  )
+  await applyMigrations(setupClient)
 })
 
 after(() => {

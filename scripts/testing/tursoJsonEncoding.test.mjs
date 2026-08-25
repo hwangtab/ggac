@@ -1,7 +1,9 @@
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync, rmSync } from 'node:fs'
+import { rmSync } from 'node:fs'
 import { createClient } from '@libsql/client'
+
+import { applyMigrations } from './apply-migrations.mjs'
 
 import {
   JSON_ARRAY_COLUMN_CONTRACTS,
@@ -41,10 +43,7 @@ async function insertArtist({ slug, category }) {
 before(async () => {
   for (const suffix of ['', '-wal', '-shm']) rmSync(`${DB_PATH}${suffix}`, { force: true })
   client = createClient({ url: `file:${DB_PATH}` })
-  await client.executeMultiple(
-    readFileSync('src/db/migrations/0000_dizzy_krista_starr.sql', 'utf8')
-  )
-  await client.executeMultiple(readFileSync('src/db/migrations/0001_neat_exiles.sql', 'utf8'))
+  await applyMigrations(client)
 })
 
 after(() => {

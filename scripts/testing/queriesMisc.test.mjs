@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import { readFileSync, rmSync } from 'node:fs'
 import { createClient } from '@libsql/client'
 
+import { applyMigrations } from './apply-migrations.mjs'
+
 // 라우트가 쓰는 바로 그 계약을 그대로 import한다 — 베껴 쓰지 않는다
 // (단계 4 리뷰 1회차 Important 5).
 import {
@@ -41,10 +43,7 @@ let setupClient
 before(async () => {
   for (const suffix of ['', '-wal', '-shm']) rmSync(`${DB_PATH}${suffix}`, { force: true })
   setupClient = createClient({ url: `file:${DB_PATH}` })
-  await setupClient.executeMultiple(
-    readFileSync('src/db/migrations/0000_dizzy_krista_starr.sql', 'utf8')
-  )
-  await setupClient.executeMultiple(readFileSync('src/db/migrations/0001_neat_exiles.sql', 'utf8'))
+  await applyMigrations(setupClient)
 })
 
 after(() => {

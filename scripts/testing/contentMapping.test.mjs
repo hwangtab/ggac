@@ -1,7 +1,9 @@
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync, rmSync } from 'node:fs'
+import { rmSync } from 'node:fs'
 import { createClient } from '@libsql/client'
+
+import { applyMigrations } from './apply-migrations.mjs'
 
 import {
   toBool,
@@ -278,9 +280,7 @@ function payload() {
 before(async () => {
   rmSync(DB_PATH, { force: true })
   client = createClient({ url: `file:${DB_PATH}` })
-  await client.executeMultiple(
-    readFileSync('src/db/migrations/0000_dizzy_krista_starr.sql', 'utf8')
-  )
+  await applyMigrations(client)
 })
 
 after(() => {

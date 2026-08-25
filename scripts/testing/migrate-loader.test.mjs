@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import { rmSync } from 'node:fs'
 import { createClient } from '@libsql/client'
 
+import { applyMigrations } from './apply-migrations.mjs'
+
 import {
   assertColumnCoverage,
   buildUpsert,
@@ -102,9 +104,7 @@ before(async () => {
   // 스키마는 커밋된 마이그레이션에서 그대로 가져온다 — 테스트가 자체 CREATE TABLE을
   // 들고 있으면 실제 스키마와 어긋나도 초록으로 통과한다.
   const { readFileSync } = await import('node:fs')
-  await client.executeMultiple(
-    readFileSync('src/db/migrations/0000_dizzy_krista_starr.sql', 'utf8')
-  )
+  await applyMigrations(client)
 })
 
 after(() => {
