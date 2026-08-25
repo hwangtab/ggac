@@ -136,14 +136,23 @@ const middlewareUsesBetterAuthSessionOnly =
     rootMiddlewareSource
   ) &&
   /to\.headers\.set\('content-security-policy', csp\)/.test(rootMiddlewareSource) &&
-  // 유지보수 판정이 다시 "Supabase env가 있을 때만" 같은 조건 뒤로 숨지 않게 —
-  // 그 조건이 살아 있으면 컷오버에서 Supabase 환경변수를 지우는 순간 인증·
-  // 유지보수 미들웨어가 통째로 무력화된다(사이트가 열린 채 잠기지 않는다).
+  // 인증·유지보수 판정이 다시 "Supabase env가 있을 때만" 같은 조건 뒤로 숨지
+  // 않게 — 그 조건이 살아 있으면 컷오버에서 Supabase 환경변수를 지우는 순간
+  // 미들웨어가 통째로 무력화된다(사이트가 열린 채 잠기지 않는다).
   //
-  // **이 한 줄은 저장소 전수 가드가 덮지 못한다.** 그 가드의 패턴 목록에
+  // **이 검사는 저장소 전수 가드가 덮지 못한다.** 그 가드의 패턴 목록에
   // `NEXT_PUBLIC_SUPABASE_URL`은 없다(ANON_KEY·SERVICE_ROLE_KEY만 있다) —
   // URL 하나만 보고 조기 반환하는 게이트가 부활하면 전수 가드는 침묵한다.
-  // 그래서 이름을 직접 못박는 이 단정만 남긴다.
+  // 전수 패턴에 그 이름을 추가하지도 않는다: `src/utils/site.ts`·`safeUrl.ts`·
+  // `src/lib/storage/paths.ts`가 아티스트 이미지 URL 검증에 정당하게 쓰고
+  // 있어 전부 오탐이 된다.
+  //
+  // **이름이 아니라 모양을 본다.** 예전에는 `hasSupabaseMiddlewareConfig`라는
+  // 식별자 하나만 금지했는데, 같은 게이트를 이름 없이
+  // `if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return NextResponse.next()`로
+  // 인라인해도 통과했다(리뷰어 실증). 이 파일에서는 `NEXT_PUBLIC_SUPABASE_`로
+  // 시작하는 env 참조 자체가 정당한 쓰임이 없으므로 접두어 단위로 막는다.
+  !/process\.env\.NEXT_PUBLIC_SUPABASE_/.test(rootMiddlewareSource) &&
   !/hasSupabaseMiddlewareConfig/.test(rootMiddlewareSource)
 // 미들웨어 인증(handleAuth)은 단계 2b-6부터 Better Auth의 쿠키 캐시로 신원을
 // 판정한다(`readMiddlewareSession`, src/middleware/session.ts) — 캐시가 있으면
@@ -3980,7 +3989,7 @@ if (!validateUUIDRejectsTempIds) {
 
 if (!middlewareUsesBetterAuthSessionOnly) {
   failures.push(
-    `Middleware must resolve identity through Better Auth only (no hasSupabaseMiddlewareConfig env gate) while keeping copyResponseCookies' cookie+CSP propagation to redirect/maintenance responses: ${relative(
+    `Middleware must resolve identity through Better Auth only (no NEXT_PUBLIC_SUPABASE_* env gate) while keeping copyResponseCookies' cookie+CSP propagation to redirect/maintenance responses: ${relative(
       root,
       rootMiddlewarePath
     )}`
