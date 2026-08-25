@@ -205,6 +205,16 @@ TURSO_DATABASE_URL=http://127.0.0.1:8901 \
   생기면 스위트가 그 글을 실제로 소프트 삭제하는데, 이 값이 upsert에 없으면
   시드를 다시 돌려도 복구되지 않아 **수정을 검증하려는 바로 그 순간**
   소유권·첨부 스펙이 앱 탓처럼 보이는 엉뚱한 메시지로 계속 빨간불이 된다.
+- **권한·승인 컬럼도 같은 이유로 강제로 되돌려진다**(`AUTHZ_DEFAULTS`).
+  `upsertProfile()`은 이 컬럼들을 되돌리지 못한다 — 그 함수의 충돌 갱신
+  화이트리스트(`CONFLICT_UPDATABLE_FIELDS`)가 권한·승인 컬럼을 **의도적으로**
+  제외하기 때문이고, 그건 운영을 지키는 올바른 설계다(재이관·재가입이 관리자
+  플래그를 덮어쓰면 안 된다). 그래서 되돌리는 책임이 시드 쪽에 있다.
+  `authz-roles.spec.ts`가 관리자 승인 액션을 실제로 호출하므로, `where` 누락
+  같은 회귀 상태로 스위트를 한 번만 돌려도 `authz-pending`이 `approved`가 되고
+  그 뒤 시드를 몇 번 돌려도 복구되지 않았다(수정 전 실측). 시드는 되돌리기
+  전 상태와 다르면 **무엇이 어떻게 달랐는지 경고로 찍고**(조용히 고치면 원인을
+  못 본다), 되돌린 뒤 다시 읽어 대조해 그래도 다르면 **던진다**(fail-closed).
 
 대상이 로컬 Turso가 아니면 아무것도 쓰기 전에 거부한다 —
 `e2e/helpers/authState.ts`의 `assertLocalTurso()`가 허용하는 형태는 `file:...`
@@ -231,9 +241,20 @@ npm run test:e2e:authz
 넘긴다 — 셸에 운영 `TURSO_DATABASE_URL`이 export돼 있어도 그 값으로는 절대
 돌지 않고, e2e 전용 변수를 의도적으로 지정해야만 돈다. `TURSO_AUTH_TOKEN`도
 함께 지운다(로컬 `turso dev`는 토큰을 요구하지 않는다). 로컬 엔드포인트인지는
-**옮겨 심는 그 자리에서** 판정한다 — 원격 URL을 주면 dev 서버가 뜨기 전에
-config 로드가 죽는다(실측: `libsql://ggac-prod…`·`https://ggac-prod…` 둘 다
-`playwright.config.ts`에서 거부).
+**옮겨 심기가 끝난 자리에서 조건 없이** 판정한다(`assertNoRemoteTursoTarget()`)
+— 원격 URL을 주면 dev 서버가 뜨기 전에 config 로드가 죽는다(실측:
+`libsql://ggac-prod…`·`https://ggac-prod…` 둘 다 `playwright.config.ts`에서
+거부).
+
+판정이 `if (E2E_TURSO_DATABASE_URL)` **밖**에 있어야 하는 이유: Playwright는
+webServer에 `{...process.env, ...webServer.env}`를 넘긴다. e2e 전용 변수를 주지
+않고 셸에 운영 `TURSO_DATABASE_URL`만 export된 경우 그 블록은 통째로 건너뛰지만
+**운영 URL은 상속으로 그대로 dev 서버에 간다** — 안에 두었을 때 실측하면 dev
+서버가 먼저 뜨고(`[WebServer]` 로그) 스펙 로드 시점에야 죽었다. 밖으로 뺀 뒤
+같은 조건에서 `[WebServer]` 출력은 **0줄**이다. (`TURSO_DATABASE_URL`이 아예
+없는 경우는 통과시킨다 — CI의 smoke 잡이 Turso 없이 `--project=chromium`만
+돌리기 때문이다. 권한 E2E 쪽은 시드와 스펙이 여전히 `assertLocalTurso()`를
+직접 불러 미설정도 거부한다.)
 
 `npm run test:e2e:authz`는
 `playwright test --project=authz --project=authz-public`의 별칭이다. 두
@@ -243,14 +264,17 @@ config 로드가 죽는다(실측: `libsql://ggac-prod…`·`https://ggac-prod�
 
 - `authz-setup`(5개 계정 로그인 → `e2e/.auth/*.json` storageState 저장) 5건
 - `authz`: `authz-maintenance`·`authz-ownership`·`authz-personal`·
-  `authz-remaining`·`authz-roles` 5개 스펙 26건
+  `authz-remaining`·`authz-roles` 5개 스펙 28건
 - `authz-public`: `authz-boundaries` 17건
 
-**실측 기준선(2026-08-26, Task 6c 수정 1회차):** 48 passed.
+**실측 기준선(2026-08-26, Task 6c 수정 2회차):** 50 passed.
 
-`PUBLIC_BLOB_READ_WRITE_TOKEN`을 빼면 정책 36 테스트가 "토큰이 없으면 업로드
-준비 단계를 통과할 수 없다"로 **명시적으로 실패한다**(조용히 건너뛰지
-않는다). 나머지 47건은 토큰 없이도 돈다.
+`PUBLIC_BLOB_READ_WRITE_TOKEN`을 빼면 **최초 실행에서는** 정책 36 테스트가
+"토큰이 없으면 업로드 준비 단계를 통과할 수 없다"로 **명시적으로 실패한다**
+(조용히 건너뛰지 않는다). 다만 그 준비 단계는 `if (!attachmentId)` 안에 있어서
+**이전 실행이 남긴 첨부 행이 로컬 DB에 있으면 업로드 블록을 통째로 건너뛴다**
+— 그 상태에서는 토큰 없이 돌려도 50건 전부 통과한다(실측). 즉 "토큰을 빼면
+반드시 빨간불"은 빈 DB에서만 참이다.
 
 `authz-roles.spec.ts`는 **관리자 경계**와 **이사 경계** 전용이다. 두 경계는
 각각 대표 엔드포인트 하나씩만 보되 **짝지어 단정한다**(금지된 세션 403 +
@@ -258,6 +282,15 @@ config 로드가 죽는다(실측: `libsql://ggac-prod…`·`https://ggac-prod�
 화면이 통째로 죽어도 초록불이기 때문이다. 관리자 게이트는 구현이 두 벌
 (`requireAdmin()`과 `checkAdminPermission()`)이라 쓰기·읽기를 각각 다른
 구현에서 골랐다.
+
+같은 파일에 **페이지 레벨 인가** 2건이 더 있다(`/board-room`·`/admin`).
+`src/app/[locale]/admin/page.tsx`와 `src/app/[locale]/board-room/page.tsx`는
+**둘 다 `'use client'`**라 서버측 인가가 전혀 없고 **미들웨어가 유일한
+게이트**인데(`src/middleware/auth.ts`의 `/admin`·board-room 두 분기), 그 두
+분기를 동시에 무력화해도 이전 48건은 전부 초록이었다. API 스펙과 같은 규칙으로
+짝지어 단정한다 — 금지 세션은 `/board`로 리다이렉트되고, 허용 세션(이사·관리자)은
+그 화면에 실제로 도달해 제목이 그려진다. 리다이렉트만 보면 게이트가 "전부
+리다이렉트"로 퇴화한 것을 못 잡는다(실측으로 확인).
 
 
 ### 4. 커버리지의 한계
