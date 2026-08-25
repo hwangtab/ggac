@@ -29,10 +29,11 @@ const nextConfig = {
   },
 
   // 최적화된 transpile 패키지 목록 - 필수만 유지
-  transpilePackages: [
-    '@supabase/supabase-js',
-    // react-markdown 제거: 이미 최적화된 패키지이므로 불필요
-  ],
+  // 단계 4 Task 5에서 `@supabase/supabase-js`를 뺐다. src/ 어디도 이 패키지를
+  // import하지 않으므로(정적 가드가 0개를 강제한다) Next 번들에 들어올 일이
+  // 없고, 남겨두면 "아직 앱이 Supabase를 쓴다"는 잘못된 신호만 준다. 이관·
+  // 컷오버 스크립트(scripts/)는 Next 번들러를 거치지 않으므로 영향이 없다.
+  transpilePackages: [],
 
   // 번들 최적화 설정
   webpack: (config, { buildId, dev, isServer, defaultLoaders, webpack }) => {

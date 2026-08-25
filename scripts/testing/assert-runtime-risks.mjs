@@ -213,7 +213,7 @@ const mypageProfilePagePath = join(root, 'src/app/[locale]/mypage/profile/page.t
 const mypageProfilePageSource = readFileSync(mypageProfilePagePath, 'utf8')
 const mypageProfileApiPath = join(root, 'src/app/api/mypage/profile/route.ts')
 const mypageProfileApiSource = existsSync(mypageProfileApiPath)
-  ? readFileSync(mypageProfileApiPath, 'utf8')
+  ? stripComments(readFileSync(mypageProfileApiPath, 'utf8'))
   : ''
 // requireActiveMember() 존재만 보는 양의 단정 전용이라(문자열 내용을 검사하는
 // 부정 단정 없음) 문자열 리터럴까지 걷어내 디코이 문자열 면역을 확보한다.
@@ -382,11 +382,9 @@ const profileApiRestrictsSelfUpdates =
   /requireActiveMember\(\)/.test(mypageProfileApiCode) &&
   // 단계 2c: member_profiles 조회/갱신을 Supabase `.eq('id', user.id)`에서
   // Turso 쿼리 계층 getProfileById(user.id)/updateProfile(user.id, ...)로
-  // 옮겼다 — 둘 다 여전히 user.id로만 스코프된다. 옛 Supabase 패턴도 계속
-  // 허용한다.
-  (/\.eq\(['"]id['"],\s*user\.id\)/.test(mypageProfileApiSource) ||
-    (/getProfileById\(user\.id\)/.test(mypageProfileApiSource) &&
-      /updateProfile\(user\.id,/.test(mypageProfileApiSource))) &&
+  // 옮겼다 — 둘 다 여전히 user.id로만 스코프된다.
+  /getProfileById\(user\.id\)/.test(mypageProfileApiSource) &&
+  /updateProfile\(user\.id,/.test(mypageProfileApiSource) &&
   /const updateData/.test(mypageProfileApiSource) &&
   !/is_admin/.test(mypageProfileApiSource) &&
   !/registration_status:\s*body/.test(mypageProfileApiSource) &&
@@ -848,14 +846,6 @@ const apiRoutesUsingDistributedRateLimitSymbols = apiRouteFiles.filter(file => {
     source
   )
 })
-const serviceRoleClientScanFiles = globSync('src/{app/api,lib/server,utils}/**/*.@(ts|tsx)', {
-  cwd: root,
-  exclude: ['**/node_modules/**', '**/.next/**', 'src/lib/server/supabaseAdmin.ts'],
-})
-const directServiceRoleClientCreationFiles = serviceRoleClientScanFiles.filter(file => {
-  const source = readFileSync(join(root, file), 'utf8')
-  return /SUPABASE_SERVICE_ROLE_KEY/.test(source) && /createClient\(/.test(source)
-})
 const hasSharedServerRateLimitFacade =
   /export const RATE_LIMITS/.test(serverRateLimitSource) &&
   /export const RATE_LIMIT_CONFIGS/.test(serverRateLimitSource) &&
@@ -1244,7 +1234,7 @@ const preventsArtistProfileServerGitSideEffects =
   !/git (?:add|commit|push)/.test(jsonSyncSource) &&
   !/commitAndPushJsonChanges/.test(jsonSyncSource)
 const postOgImagePath = join(root, 'src/app/api/og/post/[id]/route.tsx')
-const postOgImageSource = readFileSync(postOgImagePath, 'utf8')
+const postOgImageSource = stripComments(readFileSync(postOgImagePath, 'utf8'))
 const postUserDataApiPath = join(root, 'src/app/api/posts/[id]/user-data/route.ts')
 const postUserDataApiSource = readFileSync(postUserDataApiPath, 'utf8')
 const validatesPostOgAttachmentStorageUrl =
@@ -1287,26 +1277,19 @@ const validatesImagesApiPublicPathBoundary =
   !/resolved(?:Head)?\.startsWith\(publicPath\)/.test(imagesApiSource) &&
   !/application\/octet-stream/.test(imagesApiSource)
 const commentDeletePath = join(root, 'src/app/api/posts/[id]/comments/[commentId]/route.ts')
-const commentDeleteSource = readFileSync(commentDeletePath, 'utf8')
+const commentDeleteSource = stripComments(readFileSync(commentDeletePath, 'utf8'))
 // 단계 2c(Task 6): 소유권 조회·삭제 둘 다 Supabase `.eq('id',
 // validCommentId).eq('post_id', validPostId)`에서 Turso 쿼리 계층
 // getCommentById(validCommentId, validPostId)/deleteComment(validCommentId,
-// validPostId)로 옮겼다(둘 다 두 인자로 이중 스코프를 강제) — 옛 Supabase
-// 패턴도 계속 허용한다.
+// validPostId)로 옮겼다 — 둘 다 두 인자로 이중 스코프를 강제한다.
 const scopesCommentDeleteToPost =
-  (/from\(['"]comments['"]\)[\s\S]*?\.select\(['"]id, author_id['"]\)[\s\S]*?\.eq\(['"]id['"],\s*validCommentId\)[\s\S]*?\.eq\(['"]post_id['"],\s*validPostId\)/.test(
-    commentDeleteSource
-  ) ||
-    /getCommentById\(validCommentId,\s*validPostId\)/.test(commentDeleteSource)) &&
-  (/from\(['"]comments['"]\)[\s\S]*?\.delete\(\)[\s\S]*?\.eq\(['"]id['"],\s*validCommentId\)[\s\S]*?\.eq\(['"]post_id['"],\s*validPostId\)/.test(
-    commentDeleteSource
-  ) ||
-    /deleteComment\(validCommentId,\s*validPostId\)/.test(commentDeleteSource))
+  /getCommentById\(validCommentId,\s*validPostId\)/.test(commentDeleteSource) &&
+  /deleteComment\(validCommentId,\s*validPostId\)/.test(commentDeleteSource)
 const postAttachmentDetailPath = join(
   root,
   'src/app/api/posts/[id]/attachments/[attachmentId]/route.ts'
 )
-const postAttachmentDetailSource = readFileSync(postAttachmentDetailPath, 'utf8')
+const postAttachmentDetailSource = stripComments(readFileSync(postAttachmentDetailPath, 'utf8'))
 const postAttachmentsDisplayPath = join(root, 'src/components/PostAttachmentsDisplay.tsx')
 const postAttachmentsDisplaySource = readFileSync(postAttachmentsDisplayPath, 'utf8')
 const attachmentCardPath = join(root, 'src/components/attachments/AttachmentCard.tsx')
@@ -1321,7 +1304,7 @@ const attachmentActionsSource = readFileSync(attachmentActionsPath, 'utf8')
 // 삭제를 Supabase `.from('post_attachments').delete().eq('id',
 // attachmentId).eq('post_id', postId)`에서 removeAttachment(attachmentId,
 // postId)로 옮겼다 — 둘 다 인자 순서(attachmentId, postId)로 같은 스코프를
-// 강제한다. 옛 Supabase 패턴도 계속 허용해 두 형태 모두 통과시킨다.
+// 강제한다.
 const validatesAttachmentMetadataUpdate =
   /validateUUID\(params\.id,\s*['"]게시글 ID['"]\)/.test(postAttachmentDetailSource) &&
   /validateUUID\(params\.attachmentId,\s*['"]첨부파일 ID['"]\)/.test(postAttachmentDetailSource) &&
@@ -1329,24 +1312,15 @@ const validatesAttachmentMetadataUpdate =
   /typeof alt_text !== ['"]string['"]/.test(postAttachmentDetailSource) &&
   /typeof is_primary !== ['"]boolean['"]/.test(postAttachmentDetailSource) &&
   /Number\.isInteger\(sort_order\)/.test(postAttachmentDetailSource) &&
-  (/\.update\(updateData\)[\s\S]*?\.eq\(['"]id['"],\s*attachmentId\)[\s\S]*?\.eq\(['"]post_id['"],\s*postId\)/.test(
-    postAttachmentDetailSource
-  ) ||
-    /updateAttachment\(attachmentId,\s*postId,\s*patch\)/.test(postAttachmentDetailSource)) &&
-  (/from\(['"]post_attachments['"]\)[\s\S]*?\.delete\(\)[\s\S]*?\.eq\(['"]id['"],\s*attachmentId\)[\s\S]*?\.eq\(['"]post_id['"],\s*postId\)/.test(
-    postAttachmentDetailSource
-  ) ||
-    /removeAttachment\(attachmentId,\s*postId\)/.test(postAttachmentDetailSource))
+  /updateAttachment\(attachmentId,\s*postId,\s*patch\)/.test(postAttachmentDetailSource) &&
+  /removeAttachment\(attachmentId,\s*postId\)/.test(postAttachmentDetailSource)
 // 단계 2c(Task 5): DELETE의 관리자 판정을 Supabase
 // `.select('is_admin, registration_status, is_active').eq('id', user.id)`
 // 에서 Turso 쿼리 계층 getProfileById(user.id)로 옮겼다. 조건식
 // (profile?.is_admin === true && ... === 'approved' && ... === true)
-// 리터럴은 그대로다 — 옛 Supabase select 리터럴도 계속 허용한다.
+// 리터럴은 그대로다.
 const validatesAttachmentDeleteAdminStatus =
-  (/select\(['"]is_admin,\s*registration_status,\s*is_active['"]\)/.test(
-    postAttachmentDetailSource
-  ) ||
-    /getProfileById\(user\.id\)/.test(postAttachmentDetailSource)) &&
+  /getProfileById\(user\.id\)/.test(postAttachmentDetailSource) &&
   /profile\?\.is_admin === true[\s\S]*?profile\.registration_status === ['"]approved['"][\s\S]*?profile\.is_active === true/.test(
     postAttachmentDetailSource
   )
@@ -1425,9 +1399,9 @@ const eventApplicationStatusSource = readFileSync(eventApplicationStatusPath, 'u
 const adminEventApplicationsApiPath = join(root, 'src/app/api/admin/event-applications/route.ts')
 const adminEventApplicationsApiSource = readFileSync(adminEventApplicationsApiPath, 'utf8')
 const adminMemberActionApiPath = join(root, 'src/app/api/admin/member-action/route.ts')
-const adminMemberActionApiSource = readFileSync(adminMemberActionApiPath, 'utf8')
+const adminMemberActionApiSource = stripComments(readFileSync(adminMemberActionApiPath, 'utf8'))
 const adminMemberFlagsApiPath = join(root, 'src/app/api/admin/members/flags/route.ts')
-const adminMemberFlagsApiSource = readFileSync(adminMemberFlagsApiPath, 'utf8')
+const adminMemberFlagsApiSource = stripComments(readFileSync(adminMemberFlagsApiPath, 'utf8'))
 const adminMembersBulkApiPath = join(root, 'src/app/api/admin/members/bulk/route.ts')
 const adminMembersBulkApiSource = readFileSync(adminMembersBulkApiPath, 'utf8')
 const adminArtistMembersApiPath = join(root, 'src/app/api/admin/artists/[id]/members/route.ts')
@@ -1436,7 +1410,7 @@ const adminArtistMemberApiPath = join(
   root,
   'src/app/api/admin/artists/[id]/members/[memberId]/route.ts'
 )
-const adminArtistMemberApiSource = readFileSync(adminArtistMemberApiPath, 'utf8')
+const adminArtistMemberApiSource = stripComments(readFileSync(adminArtistMemberApiPath, 'utf8'))
 const validatesNotificationRouteId =
   (notificationDetailSource.match(/validateUUID\(resolvedParams\.id,\s*['"]알림 ID['"]\)/g) ?? [])
     .length >= 2 &&
@@ -1589,28 +1563,24 @@ const validatesEventApplicationDeleteId =
   !/\^\[0-9a-f-\]\{36\}\$/.test(adminEventApplicationsApiSource) &&
   !/\.delete\(\)\.eq\(['"]id['"],\s*id\)/.test(adminEventApplicationsApiSource)
 const userLikesPath = join(root, 'src/app/api/users/[id]/likes/route.ts')
-const userLikesSource = readFileSync(userLikesPath, 'utf8')
+const userLikesSource = stripComments(readFileSync(userLikesPath, 'utf8'))
 // 단계 2c(Task 6): get_user_likes RPC 호출(`p_user_id: requestedUserId`)과
 // post_likes 총 개수 Supabase 카운트(`.eq('user_id', requestedUserId)`)를
 // Turso 쿼리 계층 listUserLikes(requestedUserId, ...)/
-// countUserLikes(requestedUserId)로 옮겼다 — 옛 Supabase/RPC 패턴도 계속
-// 허용해 두 형태 모두 통과시킨다(Task 3/4/5가 세운 관례).
+// countUserLikes(requestedUserId)로 옮겼다.
 const validatesUserLikesRouteId =
   /validateUUID\(resolvedParams\.id,\s*['"]사용자 ID['"]\)/.test(userLikesSource) &&
-  (/p_user_id:\s*requestedUserId/.test(userLikesSource) ||
-    /listUserLikes\(requestedUserId,/.test(userLikesSource)) &&
-  (/\.eq\(['"]user_id['"],\s*requestedUserId\)/.test(userLikesSource) ||
-    /countUserLikes\(requestedUserId\)/.test(userLikesSource))
+  /listUserLikes\(requestedUserId,/.test(userLikesSource) &&
+  /countUserLikes\(requestedUserId\)/.test(userLikesSource)
 const validatesUserLikesAdminStatus =
-  (/select\(['"]is_admin,\s*registration_status,\s*is_active['"]\)/.test(userLikesSource) ||
-    /getProfileById\(user\.id\)/.test(userLikesSource)) &&
+  /getProfileById\(user\.id\)/.test(userLikesSource) &&
   /profile\.registration_status !== ['"]approved['"][\s\S]*?!profile\.is_active/.test(
     userLikesSource
   )
 const postDetailPath = join(root, 'src/app/api/posts/[id]/route.ts')
-const postDetailSource = readFileSync(postDetailPath, 'utf8')
+const postDetailSource = stripComments(readFileSync(postDetailPath, 'utf8'))
 const boardPostDetailPath = join(root, 'src/app/api/board/post/[id]/route.ts')
-const boardPostDetailSource = readFileSync(boardPostDetailPath, 'utf8')
+const boardPostDetailSource = stripComments(readFileSync(boardPostDetailPath, 'utf8'))
 const serverBoardPath = join(root, 'src/lib/server/board.ts')
 const serverBoardSource = readFileSync(serverBoardPath, 'utf8')
 const boardCategoriesPath = join(root, 'src/constants/categories.ts')
@@ -1635,15 +1605,15 @@ const postsQueriesSource = readFileSync(postsQueriesPath, 'utf8')
 const boardDetailPagePath = join(root, 'src/app/[locale]/board/[id]/page.tsx')
 const boardDetailPageSource = readFileSync(boardDetailPagePath, 'utf8')
 const commentsApiPath = join(root, 'src/app/api/posts/[id]/comments/route.ts')
-const commentsApiSource = readFileSync(commentsApiPath, 'utf8')
+const commentsApiSource = stripComments(readFileSync(commentsApiPath, 'utf8'))
 const commentsListApiPath = join(root, 'src/app/api/posts/[id]/comments-list/route.ts')
-const commentsListApiSource = readFileSync(commentsListApiPath, 'utf8')
+const commentsListApiSource = stripComments(readFileSync(commentsListApiPath, 'utf8'))
 const postContentApiPath = join(root, 'src/app/api/posts/[id]/content/route.ts')
-const postContentApiSource = readFileSync(postContentApiPath, 'utf8')
+const postContentApiSource = stripComments(readFileSync(postContentApiPath, 'utf8'))
 const postLikesApiPath = join(root, 'src/app/api/posts/[id]/likes/route.ts')
-const postLikesApiSource = readFileSync(postLikesApiPath, 'utf8')
+const postLikesApiSource = stripComments(readFileSync(postLikesApiPath, 'utf8'))
 const commentLikeApiPath = join(root, 'src/app/api/comments/[id]/like/route.ts')
-const commentLikeApiSource = readFileSync(commentLikeApiPath, 'utf8')
+const commentLikeApiSource = stripComments(readFileSync(commentLikeApiPath, 'utf8'))
 const boardPageShellPath = join(root, 'src/components/board/BoardPageShell.tsx')
 const boardPageShellSource = readFileSync(boardPageShellPath, 'utf8')
 const serverBoardViewPath = join(root, 'src/components/board/ServerBoardView.tsx')
@@ -1731,36 +1701,33 @@ const validatesCommentCursors =
   /formatTimestampUuidCursor\(last\.created_at,\s*last\.id\)/.test(commentsListApiSource) &&
   // 단계 2c(Task 6): get_post_comments_keyset RPC 파라미터
   // (p_created_at/p_id)를 listCommentsKeyset(Turso)의 createdAt/id 인자로
-  // 옮겼다 — 옛 RPC 패턴도 계속 허용해 두 형태 모두 통과시킨다.
-  (/p_created_at:\s*parsedCursor\?\.createdAt \?\? null/.test(commentsListApiSource) ||
-    /createdAt:\s*parsedCursor\?\.createdAt \?\? null/.test(commentsListApiSource)) &&
-  (/p_id:\s*parsedCursor\?\.id \?\? null/.test(commentsListApiSource) ||
-    /id:\s*parsedCursor\?\.id \?\? null/.test(commentsListApiSource)) &&
+  // 옮겼다. `p_id:`가 `id:`를 부분 문자열로 포함하므로, 새 인자 쪽 정규식은
+  // 앞에 단어문자가 오지 않는다는 조건(`(?<![\w])`)으로 못박는다 — 없으면
+  // RPC 호출로 되돌려도 이 단정이 그대로 통과한다.
+  /(?<![\w])createdAt:\s*parsedCursor\?\.createdAt \?\? null/.test(commentsListApiSource) &&
+  /(?<![\w])id:\s*parsedCursor\?\.id \?\? null/.test(commentsListApiSource) &&
   !/decodeURIComponent\(cursor\)/.test(commentsApiSource) &&
   !/decodeURIComponent\(cursor\)/.test(commentsListApiSource)
 const commentLikesHelperPath = join(root, 'src/lib/server/commentLikes.ts')
 const commentLikesHelperSource = existsSync(commentLikesHelperPath)
-  ? readFileSync(commentLikesHelperPath, 'utf8')
+  ? stripComments(readFileSync(commentLikesHelperPath, 'utf8'))
   : ''
 const commentSectionPath = join(root, 'src/components/CommentSection.tsx')
 const commentSectionSource = existsSync(commentSectionPath)
-  ? readFileSync(commentSectionPath, 'utf8')
+  ? stripComments(readFileSync(commentSectionPath, 'utf8'))
   : ''
 const likesQueriesPath = join(root, 'src/db/queries/likes.ts')
 const likesQueriesSource = existsSync(likesQueriesPath)
-  ? readFileSync(likesQueriesPath, 'utf8')
+  ? stripComments(readFileSync(likesQueriesPath, 'utf8'))
   : ''
 // 단계 2c(Task 6): comment_likes 배치 조회를 Supabase에서 Turso 쿼리
 // 계층(getLikedCommentIds, src/db/queries/likes.ts)으로 옮겼다 —
 // commentLikes.ts는 이제 그 함수를 감싸기만 하고, CommentSection도 브라우저에서
-// 테이블을 직접 읽는 대신 comments-list API를 다시 호출한다. 옛 Supabase
-// 리터럴도 계속 허용해 두 형태 모두 통과시킨다(Task 3/4/5가 세운 관례).
+// 테이블을 직접 읽는 대신 comments-list API를 다시 호출한다.
 const annotatesAuthenticatedCommentLikeState =
   /export async function getUserLikedCommentIds/.test(commentLikesHelperSource) &&
-  ((/\.from\(['"]comment_likes['"]\)/.test(commentLikesHelperSource) &&
-    /\.eq\(['"]user_id['"],\s*userId\)/.test(commentLikesHelperSource)) ||
-    (/getLikedCommentIds\(userId,\s*commentIds\)/.test(commentLikesHelperSource) &&
-      /eq\(commentLikes\.userId,\s*userId\)/.test(likesQueriesSource))) &&
+  /getLikedCommentIds\(userId,\s*commentIds\)/.test(commentLikesHelperSource) &&
+  /eq\(commentLikes\.userId,\s*userId\)/.test(likesQueriesSource) &&
   // 상세 페이지 SSR 셸은 ISR 캐시를 위해 개인화(세션 기반 is_liked)를 포함하지
   // 않는다(전수감사 P2) — 서버는 is_liked:false로 내려주고, 복원은 클라이언트
   // CommentSection이 로그인 사용자(currentUserId)에 한해 좋아요 상태를 다시
@@ -1775,22 +1742,14 @@ const annotatesAuthenticatedCommentLikeState =
   // 브라우저에서 comment_likes 테이블을 직접 읽던 옛 방식을 comments-list API
   // 재호출(fetchCommentsFromApi)로 옮겼다.
   /if \(!currentUserId \|\| initialComments\.length === 0\) return/.test(commentSectionSource) &&
-  (/\.from\(['"]comment_likes['"]\)[\s\S]{0,120}?\.eq\(['"]user_id['"],\s*currentUserId\)/.test(
-    commentSectionSource
-  ) ||
-    /fetchCommentsFromApi\(postId\)/.test(commentSectionSource)) &&
-  (/is_liked:\s*true/.test(commentSectionSource) ||
-    /is_liked:\s*hydrated\.is_liked/.test(commentSectionSource)) &&
+  /fetchCommentsFromApi\(postId\)/.test(commentSectionSource) &&
+  /is_liked:\s*true/.test(commentSectionSource) &&
   // 인증 사용자 대상 댓글 목록 API는 계속 서버에서 like 상태를 주석한다 —
   // 단계 2c에서 getUserLikedCommentIds가 SupabaseClient 인자를 받지 않게
   // 바뀌었다(commentLikes.ts가 이제 Turso를 직접 부르므로 세션 클라이언트를
   // 넘길 필요가 없다).
-  (/getUserLikedCommentIds\(sessionSupabase,\s*user\.id,\s*commentIds\)/.test(commentsApiSource) ||
-    /getUserLikedCommentIds\(user\.id,\s*commentIds\)/.test(commentsApiSource)) &&
-  (/getUserLikedCommentIds\(sessionSupabase,\s*user\.id,\s*commentIds\)/.test(
-    commentsListApiSource
-  ) ||
-    /getUserLikedCommentIds\(user\.id,\s*commentIds\)/.test(commentsListApiSource)) &&
+  /getUserLikedCommentIds\(user\.id,\s*commentIds\)/.test(commentsApiSource) &&
+  /getUserLikedCommentIds\(user\.id,\s*commentIds\)/.test(commentsListApiSource) &&
   /is_liked:\s*likedCommentIds\.has\(String\(c\.id\)\)/.test(commentsApiSource) &&
   /is_liked:\s*likedCommentIds\.has\(String\(c\.id\)\)/.test(commentsListApiSource)
 const validatesPostRouteIdsUseSanitizedUuid =
@@ -1812,10 +1771,9 @@ const validatesPostRouteIdsUseSanitizedUuid =
   /const memberId = memberIdValidation\.sanitized/.test(adminMemberActionApiSource) &&
   // 단계 2c: member_profiles 조회/갱신을 Supabase `.eq('id', memberId)`에서
   // Turso 쿼리 계층 getProfileById(memberId)/updateProfile(memberId, ...)로
-  // 옮겼다 — 옛 Supabase 패턴도 계속 허용해 두 형태 모두 통과시킨다.
-  (/\.eq\(['"]id['"],\s*memberId\)/.test(adminMemberActionApiSource) ||
-    (/getProfileById\(memberId\)/.test(adminMemberActionApiSource) &&
-      /updateProfile\(memberId,/.test(adminMemberActionApiSource))) &&
+  // 옮겼다.
+  /getProfileById\(memberId\)/.test(adminMemberActionApiSource) &&
+  /updateProfile\(memberId,/.test(adminMemberActionApiSource) &&
   /data\.action === ['"]suspend['"]/.test(adminMemberActionApiSource) &&
   /data\.suspension_reason === undefined && data\.suspension_until === undefined/.test(
     adminMemberActionApiSource
@@ -1825,9 +1783,8 @@ const validatesPostRouteIdsUseSanitizedUuid =
   ) &&
   /const memberId = memberIdValidation\.sanitized/.test(adminMemberFlagsApiSource) &&
   // 단계 2c: 위와 같은 이유(getProfileById/updateProfile로 전환).
-  (/\.eq\(['"]id['"],\s*memberId\)/.test(adminMemberFlagsApiSource) ||
-    (/getProfileById\(memberId\)/.test(adminMemberFlagsApiSource) &&
-      /updateProfile\(memberId,/.test(adminMemberFlagsApiSource))) &&
+  /getProfileById\(memberId\)/.test(adminMemberFlagsApiSource) &&
+  /updateProfile\(memberId,/.test(adminMemberFlagsApiSource) &&
   /const sanitizedMemberIds:\s*string\[\] = \[\]/.test(adminMembersBulkApiSource) &&
   /sanitizedMemberIds\.push\(memberIdValidation\.sanitized\)/.test(adminMembersBulkApiSource) &&
   /member_ids:\s*sanitizedMemberIds/.test(adminMembersBulkApiSource) &&
@@ -1850,64 +1807,48 @@ const validatesPostRouteIdsUseSanitizedUuid =
   ) &&
   /const memberId = memberIdValidation\.sanitized/.test(adminArtistMemberApiSource) &&
   // 단계 2c: 위와 같은 이유(getProfileById/updateProfile로 전환).
-  (/\.eq\(['"]id['"],\s*memberId\)/.test(adminArtistMemberApiSource) ||
-    (/getProfileById\(memberId\)/.test(adminArtistMemberApiSource) &&
-      /updateProfile\(memberId,/.test(adminArtistMemberApiSource))) &&
+  /getProfileById\(memberId\)/.test(adminArtistMemberApiSource) &&
+  /updateProfile\(memberId,/.test(adminArtistMemberApiSource) &&
   /const postId = uuidValidation\.sanitized/.test(postContentApiSource) &&
   // 단계 2c: posts 조회를 Supabase `.eq('id', postId)`에서 Turso 쿼리 계층
-  // getPostById(postId, ...)로 옮겼다 — 옛 Supabase 패턴도 계속 허용해 두
-  // 형태 모두 통과시킨다.
-  (/\.eq\(['"]id['"],\s*postId\)/.test(postContentApiSource) ||
-    /getPostById\(postId,/.test(postContentApiSource)) &&
+  // getPostById(postId, ...)로 옮겼다.
+  /getPostById\(postId,/.test(postContentApiSource) &&
   !/\.eq\(['"]id['"],\s*id\)/.test(postContentApiSource) &&
   /const validPostId = uuidValidation\.sanitized/.test(boardPostDetailSource) &&
   // 단계 2c 후속(Task 6 확장): 위와 같은 이유(getPostById(validPostId, ...)로
   // 전환) — 댓글·첨부 조회도 `.eq('post_id', validPostId)`에서
   // listCommentsKeyset(validPostId, ...)/listAttachments(validPostId, ...)로
-  // 옮겼다. 옛 Supabase 패턴도 계속 허용한다.
-  (/\.eq\(['"]id['"],\s*validPostId\)/.test(boardPostDetailSource) ||
-    /getPostById\(validPostId,/.test(boardPostDetailSource)) &&
-  (/\.eq\(['"]post_id['"],\s*validPostId\)/.test(boardPostDetailSource) ||
-    (/listCommentsKeyset\(validPostId,/.test(boardPostDetailSource) &&
-      /listAttachments\(validPostId,/.test(boardPostDetailSource))) &&
+  // 옮겼다.
+  /getPostById\(validPostId,/.test(boardPostDetailSource) &&
+  /listCommentsKeyset\(validPostId,/.test(boardPostDetailSource) &&
+  /listAttachments\(validPostId,/.test(boardPostDetailSource) &&
   !/\.eq\(['"]id['"],\s*postId\)/.test(boardPostDetailSource) &&
   /const postId = uuidValidation\.sanitized/.test(commentsApiSource) &&
   // 단계 2c(Task 6): 댓글 목록 조회를 Supabase `.eq('post_id', postId)`에서
-  // Turso 쿼리 계층 listCommentsKeyset(postId, ...)로 옮겼다 — 옛 Supabase
-  // 패턴도 계속 허용해 두 형태 모두 통과시킨다.
-  (/\.eq\(['"]post_id['"],\s*postId\)/.test(commentsApiSource) ||
-    /listCommentsKeyset\(postId,/.test(commentsApiSource)) &&
+  // Turso 쿼리 계층 listCommentsKeyset(postId, ...)로 옮겼다.
+  /listCommentsKeyset\(postId,/.test(commentsApiSource) &&
   /const validPostId = postIdValidation\.sanitized/.test(commentsApiSource) &&
   /post_id:\s*validPostId/.test(commentsApiSource) &&
   !/post_id:\s*postId/.test(commentsApiSource) &&
   /const postId = uuidValidation\.sanitized/.test(commentsListApiSource) &&
   // 단계 2c: get_post_comments_keyset RPC 시도 + 수동 Supabase 폴백
-  // 이중 경로를 listCommentsKeyset(Turso) 단일 경로로 대체했다 — 옛
-  // RPC/Supabase 패턴도 계속 허용한다.
-  (/p_post_id:\s*postId/.test(commentsListApiSource) ||
-    /listCommentsKeyset\(postId,/.test(commentsListApiSource)) &&
-  (/\.eq\(['"]post_id['"],\s*postId\)/.test(commentsListApiSource) ||
-    /listCommentsKeyset\(postId,/.test(commentsListApiSource)) &&
+  // 이중 경로를 listCommentsKeyset(Turso) 단일 경로로 대체했다.
+  /listCommentsKeyset\(postId,/.test(commentsListApiSource) &&
   !/p_post_id:\s*id/.test(commentsListApiSource) &&
   /const validPostId = uuidValidation\.sanitized/.test(postLikesApiSource) &&
   // 단계 2c: 게시글 존재 확인을 Supabase `.eq('id', validPostId)`에서 Turso
   // 쿼리 계층 getPostById(validPostId, ...)로, 좋아요 여부 확인을
   // `.eq('post_id', validPostId)`에서 isPostLikedByUser(validPostId, ...)로
-  // 옮겼다 — 옛 Supabase 패턴도 계속 허용한다.
-  (/\.eq\(['"]id['"],\s*validPostId\)/.test(postLikesApiSource) ||
-    /getPostById\(validPostId,/.test(postLikesApiSource)) &&
-  (/\.eq\(['"]post_id['"],\s*validPostId\)/.test(postLikesApiSource) ||
-    /isPostLikedByUser\(validPostId,/.test(postLikesApiSource)) &&
+  // 옮겼다.
+  /getPostById\(validPostId,/.test(postLikesApiSource) &&
+  /isPostLikedByUser\(validPostId,/.test(postLikesApiSource) &&
   /post_id:\s*validPostId/.test(postLikesApiSource) &&
   /const postId = postIdValidation\.sanitized/.test(postOgImageSource) &&
   // 단계 2c(Task 6 확장): posts 존재 확인을 Supabase `.eq('id', postId)`에서
   // Turso 쿼리 계층 getPostById(postId, ...)로, 첨부(post_attachments) 조회도
-  // `.eq('post_id', postId)`에서 listImageAttachments(postId)로 옮겼다 — 옛
-  // Supabase 패턴도 계속 허용해 두 형태 모두 통과시킨다.
-  (/\.eq\(['"]id['"],\s*postId\)/.test(postOgImageSource) ||
-    /getPostById\(postId,/.test(postOgImageSource)) &&
-  (/\.eq\(['"]post_id['"],\s*postId\)/.test(postOgImageSource) ||
-    /listImageAttachments\(postId\)/.test(postOgImageSource)) &&
+  // `.eq('post_id', postId)`에서 listImageAttachments(postId)로 옮겼다.
+  /getPostById\(postId,/.test(postOgImageSource) &&
+  /listImageAttachments\(postId\)/.test(postOgImageSource) &&
   /const userIdValidation = validateUUID\(userIdFromQuery,\s*['"]사용자 ID['"]\)/.test(
     postUserDataApiSource
   ) &&
@@ -1917,153 +1858,115 @@ const validatesPostRouteIdsUseSanitizedUuid =
   // 단계 2c: 소유권 확인(`.eq('id', validCommentId).eq('post_id',
   // validPostId)`)과 삭제(같은 이중 스코프)를 Turso 쿼리 계층
   // getCommentById(validCommentId, validPostId)/
-  // deleteComment(validCommentId, validPostId)로 옮겼다 — 옛 Supabase
-  // 패턴도 계속 허용한다.
-  (/\.eq\(['"]id['"],\s*validCommentId\)/.test(commentDeleteSource) ||
-    /getCommentById\(validCommentId,\s*validPostId\)/.test(commentDeleteSource)) &&
-  (/\.eq\(['"]post_id['"],\s*validPostId\)/.test(commentDeleteSource) ||
-    /getCommentById\(validCommentId,\s*validPostId\)/.test(commentDeleteSource) ||
-    /deleteComment\(validCommentId,\s*validPostId\)/.test(commentDeleteSource)) &&
+  // deleteComment(validCommentId, validPostId)로 옮겼다.
+  /getCommentById\(validCommentId,\s*validPostId\)/.test(commentDeleteSource) &&
+  /deleteComment\(validCommentId,\s*validPostId\)/.test(commentDeleteSource) &&
   !/\.eq\(['"]id['"],\s*commentId\)/.test(commentDeleteSource) &&
   /const validCommentId = uuidValidation\.sanitized/.test(commentLikeApiSource) &&
   // 단계 2c: 댓글 존재 확인을 Supabase `.eq('id', validCommentId)`에서
   // getCommentById(validCommentId)로, toggle_comment_like RPC를
-  // toggleCommentLike(validCommentId, ...)로 옮겼다 — 옛 Supabase/RPC
-  // 패턴도 계속 허용한다.
-  (/\.eq\(['"]id['"],\s*validCommentId\)/.test(commentLikeApiSource) ||
-    /getCommentById\(validCommentId\)/.test(commentLikeApiSource)) &&
-  (/p_comment_id:\s*validCommentId/.test(commentLikeApiSource) ||
-    /toggleCommentLike\(validCommentId,/.test(commentLikeApiSource)) &&
+  // toggleCommentLike(validCommentId, ...)로 옮겼다.
+  /getCommentById\(validCommentId\)/.test(commentLikeApiSource) &&
+  /toggleCommentLike\(validCommentId,/.test(commentLikeApiSource) &&
   !/p_comment_id:\s*commentId/.test(commentLikeApiSource)
 
-// 단계 2c 후속(Task 6 확장, 코드리뷰 지적 대응): 컷오버 후 "새 댓글·좋아요·
-// 첨부가 화면에 안 보인다" 버그 — 본문은 Turso에서 오는데 comments/
-// post_likes/comment_likes/post_attachments 표시 경로 6곳이 아직 얼어붙은
-// Supabase 스냅샷을 읽고 있었다. 그 6개 파일을 이번 라운드에서 전부
-// Turso로 옮겼다 — 위 `validatesPostRouteIdsUseSanitizedUuid`처럼 "옛
-// Supabase 패턴 OR 새 쿼리 계층"으로 넓히는 대신, 이 6개 파일에 한해서는
-// **Supabase 클라이언트 생성·호출 자체가 완전히 사라져야 한다**는 강한
-// 음성 단정을 건다 — 다른 관심사(알림·활동로그처럼 계속 Supabase가 권위인
-// 것)가 이 파일들엔 없어서, 부분 전환을 허용할 이유가 없다(다른 전환
-// 라운드의 파일들과 다른 지점 — 그쪽은 아직 남은 관심사가 있어 OR를
-// 유지한다). 이렇게 강하게 걸어야 "새 쿼리 계층 호출을 지우고 옛
-// Supabase 호출로 되돌리는" 회귀를 확실히 잡는다(OR 형태였다면 새 호출만
-// 지워도 옛 패턴 쪽이 여전히 없으니 통과하지 않지만, 옛 패턴을 다시
-// 추가하면서 새 호출을 남겨두는 절반짜리 되돌림은 OR로는 못 잡는다).
-const libPostsPath = join(root, 'src/lib/posts.ts')
-const libPostsSource = readFileSync(libPostsPath, 'utf8')
-const displayPathsFullyOnTurso = [
-  { path: postDetailPath, source: postDetailSource },
-  { path: boardPostDetailPath, source: boardPostDetailSource },
-  { path: boardDetailPagePath, source: boardDetailPageSource },
-  { path: publicPostsApiPath, source: publicPostsApiSource },
-  { path: postOgImagePath, source: postOgImageSource },
-  { path: libPostsPath, source: libPostsSource },
-  // Task 8: board_posts_with_stats 뷰가 listBoardPostsWithStats(Turso)로
-  // 대체되면서 이 세 파일도 Supabase 참조가 완전히 사라졌다(직접 grep으로
-  // 확인) — 강한 음성 단정 목록에 추가해 "listBoardPostsWithStats를 지우고
-  // 옛 Supabase 뷰 읽기로 되돌리는" 회귀를 잡는다.
-  { path: serverBoardPath, source: serverBoardSource },
-  { path: boardPostsApiPath, source: boardPostsApiSource },
-  { path: boardListPostsApiPath, source: boardListPostsApiSource },
-]
-const staleSupabaseReadPattern =
-  /createSupabaseServer|createServiceRoleClient|@supabase\/supabase-js|from\(\s*['"](?:comments|post_likes|comment_likes|post_attachments)['"]\s*\)/
-// 주석만 걷어내고 import 줄은 남긴다(stripComments, stripCommentsAndImports
-// 아님) — 이 검사는 정확히 "Supabase import가 되살아났는가"를 잡아야 하는데,
-// stripCommentsAndImports는 import 줄 자체를 지워버려 그 신호를 없앤다.
-const staleSupabaseReadOffenders = displayPathsFullyOnTurso.filter(({ source }) =>
-  staleSupabaseReadPattern.test(stripComments(source))
-)
-
-// 코디네이터 코드리뷰(2차, Task 8에서 board_posts_with_stats 뷰 대체 완료로
-// 갱신): `src/app/api/posts/route.ts` GET은 fetchBoardPosts에 위임하고, 그
-// 함수는 이제 listBoardPostsWithStats(Turso)를 읽는다 — 이 파일도 위
-// `displayPathsFullyOnTurso`(boardListPostsApiPath로 등록)에 들어가
-// Supabase 참조 자체가 없어야 한다는 강한 단정을 받는다. 아래는 그와 별개로
-// "사용자가 좋아요한 게시글" 표시(`post_likes` 조회)만 좁게 다시 검사한다
-// — 컷오버 후 새 좋아요가 게시판 목록에서 하트로 안 보이던 버그(상세
-// 페이지는 Turso를 봐서 눌린 것으로 보이는데 목록은 얼어붙은 Supabase
-// 스냅샷을 봐서 안 눌린 것으로 보이는 엇갈림)의 재발을 막는다.
+// 코디네이터 코드리뷰(2차): `src/app/api/posts/route.ts` GET은
+// fetchBoardPosts에 위임하고, 그 함수는 listBoardPostsWithStats(Turso)를
+// 읽는다. "Supabase를 만지지 않는다"는 아래 단계 4 Task 5의 저장소 전역
+// 가드가 이미 보장하므로, 여기서는 그와 별개로 **양의 단정**만 남긴다 —
+// 좋아요 세트를 실제로 Turso에서 가져오는가. 컷오버 후 새 좋아요가 게시판
+// 목록에서 하트로 안 보이던 버그(상세 페이지는 Turso를 봐서 눌린 것으로
+// 보이는데 목록은 얼어붙은 Supabase 스냅샷을 봐서 안 눌린 것으로 보이는
+// 엇갈림)의 재발을 막는다.
 const validatesPostsListLikedSetUsesTurso =
   /getLikedPostIds\(userId,\s*postIds\)/.test(boardListPostsApiSource) &&
   !/\.from\(\s*['"]post_likes['"]\s*\)/.test(stripComments(boardListPostsApiSource))
 
-// 코드리뷰 3차 대응: 위 `staleSupabaseReadOffenders`(displayPathsFullyOnTurso)는
-// 경로 6개를 하드코딩한 목록이라 "내일 누가 새 표시 경로를 만들어 Supabase에서
-// comments/post_likes/comment_likes/post_attachments를 읽어도" 게이트가
-// 침묵한다 — 그 목록에 없으니까. 화이트리스트로 뒤집는다: src/app·src/lib·
-// src/components 전체를 훑어 이 4개 테이블을 Supabase 스타일(`.from('테이블명')`,
-// 문자열 리터럴 — Drizzle의 `.from(comments)`처럼 식별자를 쓰는 쿼리 계층
-// 파일과 구분된다)로 참조하는 파일 집합을 구하고, 그 집합이 "지금 알려진
-// 예외"와 **정확히 일치**해야 한다고 단언한다. 신규 파일이 자동으로 걸리고,
-// Task 8이 예외 3개를 마저 옮기면 이 배열이 빈 배열이 되면서 계약이 저절로
-// 강해진다(그때는 아래 배열도 함께 비워야 가드가 유지된다).
+// ============================================================ 단계 4 Task 5
+// **Supabase를 만지는 파일이 `src/` 전체에 0개여야 한다.**
 //
-// CommentSection.tsx는 이 라운드에서 Supabase 참조가 0이 됐지만 위
-// `displayPathsFullyOnTurso`(파일 6개 하드코딩) 목록엔 원래 없었다 — 대신
-// 살아있는 OR 가드(`annotatesAuthenticatedCommentLikeState`)의 옛 가지가
-// "브라우저에서 comment_likes를 직접 읽는 코드를 되살려도" 계속 통과시킨다.
-// 이 저장소 전체를 훑는 아래 검사는 src/components도 포함하므로,
-// CommentSection.tsx가 다시 `supabase.from('comment_likes')`를 쓰면 예외
-// 목록에 없는 새 파일로 걸린다 — 별도 가드를 추가하지 않고 이 반전만으로
-// 해결된다.
-// Task 8이 세 예외를 마저 Turso 쿼리 계층으로 옮겼다(admin/posts/route.ts·
-// admin/reports/generate/route.ts·mypage/activity/route.ts) — 이 배열이
-// 빈 배열이 되면서 계약이 저절로 강해진다. `grep -rn
-// "from(['\"](comments|post_likes|comment_likes|post_attachments)['\"])"
-// src/{app,lib,components}`로 직접 확인했다(주석 안의 언급 1건
-// (`src/components/CommentSection.tsx`)만 있고, 실제 코드 매치는 0건).
-const knownRemainingSupabaseReadsOfCommentsLikesAttachments = []
-const commentsLikesAttachmentsScanFiles = globSync('src/{app,lib,components}/**/*.@(ts|tsx)', {
+// 단계 2c는 표별로 화이트리스트 반전 가드를 세웠다(comments/post_likes/
+// comment_likes/post_attachments 한 벌, notifications/notification_stats 한 벌).
+// 각 표의 권위가 옮겨갈 때마다 화이트리스트를 비워가는 방식이었다. 표가 전부
+// Turso로 넘어온 지금은 그 여러 가드가 하나로 합쳐진다 — "어떤 표를 Supabase로
+// 읽는가"가 아니라 "Supabase에 닿는 코드가 있는가"만 보면 되기 때문이다.
+// 새 표를 만들어 Supabase로 읽는 코드도 자동으로 걸린다(예전 가드는 표 이름을
+// 하드코딩해서 놓쳤다).
+//
+// 세 가지 접근 경로를 모두 막는다:
+//   (1) SDK 임포트·클라이언트 생성 (`@supabase/*`, createSupabaseServer,
+//       createServiceRoleClient, createBrowserClient, createServerClient,
+//       삭제된 내부 모듈 경로)
+//   (2) PostgREST 스타일 표 접근 (`.from('테이블명')` — 문자열 리터럴.
+//       Drizzle은 `.from(comments)`처럼 식별자를 쓰므로 구분된다)
+//   (3) SDK 없이 손으로 부르는 REST (`/rest/v1/...` + `apikey` 헤더) —
+//       삭제된 `src/middleware/supabase-rest.ts`가 정확히 이 모양이었다.
+//       (1)만 막으면 이 경로가 그대로 뒤로 들어온다.
+//
+// **fail-open 방지가 이 가드의 절반이다.** 검사 대상 목록이 비면 offenders도
+// 자동으로 비어 통과한다 — 글롭 패턴이 깨지거나 디렉터리가 옮겨가면 가드가
+// 조용히 죽는다는 뜻이다. 그래서 두 가지를 함께 단언한다:
+//   · 스캔한 파일 수가 하한을 넘는가(글롭이 살아 있는가)
+//   · 패턴이 알려진 양성 표본을 실제로 무는가(정규식이 눈멀지 않았는가)
+// 두 자기검사는 저장소 상태와 무관하게 매 실행마다 돈다.
+const supabaseAccessPattern = new RegExp(
+  [
+    // (1) SDK·내부 클라이언트 모듈
+    String.raw`['"]@supabase/`,
+    String.raw`['"]@/lib/supabase/`,
+    String.raw`['"]@/lib/server/supabaseAdmin['"]`,
+    String.raw`\bcreateSupabaseServer\b`,
+    String.raw`\bcreateServiceRoleClient\b`,
+    String.raw`\bcreateBrowserClient\b`,
+    String.raw`\bcreateServerClient\b`,
+    String.raw`\bSUPABASE_SERVICE_ROLE_KEY\b`,
+    String.raw`\bNEXT_PUBLIC_SUPABASE_ANON_KEY\b`,
+    // (2) PostgREST 스타일 표 접근(문자열 리터럴 테이블명)
+    String.raw`\.from\(\s*['"][a-z_]+['"]\s*\)`,
+    // (3) 손으로 부르는 REST
+    String.raw`/rest/v1/`,
+  ].join('|')
+)
+const supabaseAccessScanFiles = globSync('src/**/*.@(ts|tsx)', {
   cwd: root,
   exclude: ['**/node_modules/**', '**/.next/**'],
 }).sort()
-const supabaseCommentsLikesAttachmentsTablePattern =
-  /from\(\s*['"](?:comments|post_likes|comment_likes|post_attachments)['"]\s*\)/
-const actualSupabaseReadsOfCommentsLikesAttachments = commentsLikesAttachmentsScanFiles.filter(
-  file =>
-    supabaseCommentsLikesAttachmentsTablePattern.test(
-      stripComments(readFileSync(join(root, file), 'utf8'))
-    )
+// 주석은 걷어낸다 — 이 저장소는 전환 과정을 주석으로 많이 남겼고(옛 Supabase
+// 호출 모양을 그대로 적어둔 곳이 여럿), 원본을 훑으면 그 설명글이 전부 위반으로
+// 잡힌다. 반대로 문자열 리터럴은 남긴다: (3)의 REST 경로가 리터럴 안에 있다.
+const supabaseAccessOffenders = supabaseAccessScanFiles.filter(file =>
+  supabaseAccessPattern.test(stripComments(readFileSync(join(root, file), 'utf8')))
 )
-const sortedKnownExceptions = [...knownRemainingSupabaseReadsOfCommentsLikesAttachments].sort()
-const commentsLikesAttachmentsWhitelistMatches =
-  actualSupabaseReadsOfCommentsLikesAttachments.join('\n') === sortedKnownExceptions.join('\n')
-const unexpectedCommentsLikesAttachmentsReaders =
-  actualSupabaseReadsOfCommentsLikesAttachments.filter(f => !sortedKnownExceptions.includes(f))
-const missingExpectedCommentsLikesAttachmentsReaders = sortedKnownExceptions.filter(
-  f => !actualSupabaseReadsOfCommentsLikesAttachments.includes(f)
+// 자기검사 ①: 정규식이 실제로 무는가. 각 항목은 이 저장소에서 실제로 지운
+// 코드의 모양이다.
+const supabaseAccessSentinels = [
+  `import { createClient } from '@supabase/supabase-js'`,
+  `import { createServerClient } from '@supabase/ssr'`,
+  `const { createClient } = require('@supabase/supabase-js')`,
+  `const mod = await import('@supabase/supabase-js')`,
+  `import { createSupabaseServer } from '@/lib/supabase/server'`,
+  `import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'`,
+  `const client = createBrowserClient(url, key)`,
+  `await supabase.from('member_profiles').select('id')`,
+  `fetch(\`\${url}/rest/v1/system_settings?select=*\`, { headers: { apikey: key } })`,
+  `const key = process.env.SUPABASE_SERVICE_ROLE_KEY`,
+]
+const supabaseAccessPatternBlindSpots = supabaseAccessSentinels.filter(
+  sample => !supabaseAccessPattern.test(sample)
 )
-
-// 단계 2c(Task 7): 알림도 Turso 권위로 전환하면서 comments/post_likes/
-// comment_likes/post_attachments(위)와 같은 형태의 화이트리스트 반전 가드를
-// notifications/notification_stats에도 세운다. Task 7이 전환을 마친 시점
-// 기준으로 src/{app,lib,components} 전체를 훑어 이 두 테이블/뷰를 Supabase
-// 스타일(`.from('테이블명')`, 문자열 리터럴)로 읽는 파일이 하나도 없음을
-// 직접 확인했다(`grep -rn "from(['\"]notifications['\"])"` 등으로 실측,
-// 아래 known-exception 배열이 빈 배열인 이유) — comments/post_likes 라운드와
-// 달리 Task 8로 넘길 알려진 예외가 없다. 신규 파일이 이 테이블을 Supabase로
-// 다시 읽기 시작하면 즉시 걸린다(화이트리스트가 비어 있으므로 "예외 없음"이
-// 곧 "발견되는 즉시 실패"다).
-const knownRemainingSupabaseReadsOfNotifications = []
-const notificationsScanFiles = globSync('src/{app,lib,components}/**/*.@(ts|tsx)', {
-  cwd: root,
-  exclude: ['**/node_modules/**', '**/.next/**'],
-}).sort()
-const supabaseNotificationsTablePattern =
-  /from\(\s*['"](?:notifications|notification_stats)['"]\s*\)/
-const actualSupabaseReadsOfNotifications = notificationsScanFiles.filter(file =>
-  supabaseNotificationsTablePattern.test(stripComments(readFileSync(join(root, file), 'utf8')))
-)
-const sortedKnownNotificationExceptions = [...knownRemainingSupabaseReadsOfNotifications].sort()
-const notificationsWhitelistMatches =
-  actualSupabaseReadsOfNotifications.join('\n') === sortedKnownNotificationExceptions.join('\n')
-const unexpectedNotificationsReaders = actualSupabaseReadsOfNotifications.filter(
-  f => !sortedKnownNotificationExceptions.includes(f)
-)
-const missingExpectedNotificationsReaders = sortedKnownNotificationExceptions.filter(
-  f => !actualSupabaseReadsOfNotifications.includes(f)
+// 자기검사 ②: 스캔이 저장소를 실제로 훑었는가. 현재 410개이며, 하한은
+// 절반으로 잡는다 — 대량 삭제가 아니라 "글롭이 0~몇 개만 돌려주는" 고장을
+// 잡는 것이 목적이다.
+const SUPABASE_ACCESS_SCAN_MIN_FILES = 200
+// 자기검사 ③: 패턴이 Drizzle 쿼리 계층(식별자 `.from(comments)`)이나 전환
+// 기록 주석을 오탐하면, 아무도 이 가드를 못 지켜 결국 예외 목록이 생긴다.
+const supabaseAccessFalsePositiveSamples = [
+  `const rows = await db.select().from(comments).where(eq(comments.postId, postId))`,
+  `// 예전에는 supabase.from('comments')를 직접 읽었다`,
+  `const client = createClient({ url: process.env.TURSO_DATABASE_URL })`,
+]
+const supabaseAccessOverreach = supabaseAccessFalsePositiveSamples.filter(sample =>
+  supabaseAccessPattern.test(stripComments(sample))
 )
 
 const imageProxyPath = join(root, 'src/app/api/images/proxy/route.ts')
@@ -2088,11 +1991,9 @@ const mypageArtistPageSource = readFileSync(mypageArtistPagePath, 'utf8')
 // `.select('is_admin, registration_status, is_active').eq('id', user.id)`에서
 // Turso 쿼리 계층 getProfileById(user.id)로 옮겼다(GET 핸들러는 Task 4에서
 // 이미 같은 전환을 마쳤다). 조건식(prof?.is_admin && ... === 'approved' &&
-// prof.is_active) 리터럴은 두 핸들러 모두 그대로다 — 옛 Supabase select
-// 리터럴도 계속 허용해 두 형태 모두 통과시킨다.
+// prof.is_active) 리터럴은 두 핸들러 모두 그대로다.
 const validatesPostDetailAdminStatus =
-  (/select\(['"]is_admin,\s*registration_status,\s*is_active['"]\)/.test(postDetailSource) ||
-    /getProfileById\(user\.id\)/.test(postDetailSource)) &&
+  /getProfileById\(user\.id\)/.test(postDetailSource) &&
   /prof\?\.is_admin && prof\.registration_status === ['"]approved['"] && prof\.is_active/.test(
     postDetailSource
   )
@@ -4192,14 +4093,6 @@ if (!hasSharedOperationalBoundaryHelpers) {
   )
 }
 
-if (directServiceRoleClientCreationFiles.length > 0) {
-  failures.push(
-    `Service-role Supabase clients must be created through src/lib/server/supabaseAdmin.ts instead of route/local createClient calls:\n${directServiceRoleClientCreationFiles
-      .map(file => `- ${file}`)
-      .join('\n')}`
-  )
-}
-
 if (!existingAuthHelpersUseSharedOperationalBoundaries) {
   failures.push(
     `Existing admin and board-room auth helpers must consume the shared authz boundary and the Turso profile query layer, and must not hand a Supabase client back to routes (no \`db\` in their success types):\n- ${relative(
@@ -5032,14 +4925,6 @@ if (!validatesPostRouteIdsUseSanitizedUuid) {
   )
 }
 
-if (staleSupabaseReadOffenders.length > 0) {
-  failures.push(
-    `Display paths for comments/post_likes/comment_likes/post_attachments must read exclusively from the Turso query layer — no remaining Supabase client creation or table reads for these tables (post-cutover, new comments/likes/attachments must render immediately, not a frozen Supabase snapshot):\n${staleSupabaseReadOffenders
-      .map(({ path }) => `- ${relative(root, path)}`)
-      .join('\n')}`
-  )
-}
-
 if (!validatesPostsListLikedSetUsesTurso) {
   failures.push(
     `Board post-list "liked by me" set must read from Turso (getLikedPostIds) and must not reintroduce a raw Supabase post_likes read — new likes must show as hearted in the list immediately after cutover: ${relative(
@@ -5049,35 +4934,33 @@ if (!validatesPostsListLikedSetUsesTurso) {
   )
 }
 
-if (!commentsLikesAttachmentsWhitelistMatches) {
+if (supabaseAccessOffenders.length > 0) {
   failures.push(
-    `Files reading comments/post_likes/comment_likes/post_attachments via Supabase-style .from('table') must exactly match the known-exception whitelist (everything else must read via the Turso query layer). ` +
-      (unexpectedCommentsLikesAttachmentsReaders.length > 0
-        ? `Unexpected new reader(s) not in the whitelist:\n${unexpectedCommentsLikesAttachmentsReaders
-            .map(f => `- ${f}`)
-            .join('\n')}\n`
-        : '') +
-      (missingExpectedCommentsLikesAttachmentsReaders.length > 0
-        ? `Whitelisted file(s) no longer reading these tables from Supabase — narrow knownRemainingSupabaseReadsOfCommentsLikesAttachments in this file to match (the contract just got stronger, which is good, but the exception list must be kept in sync):\n${missingExpectedCommentsLikesAttachmentsReaders
-            .map(f => `- ${f}`)
-            .join('\n')}`
-        : '')
+    `No file under src/ may touch Supabase any more — every table moved to Turso and every object moved to Vercel Blob (stage 4, Task 5). Offending file(s) import a Supabase SDK/client module, call PostgREST-style .from('table'), or hand-roll a /rest/v1/ request:\n${supabaseAccessOffenders
+      .map(file => `- ${file}`)
+      .join('\n')}`
   )
 }
 
-if (!notificationsWhitelistMatches) {
+if (supabaseAccessPatternBlindSpots.length > 0) {
   failures.push(
-    `Files reading notifications/notification_stats via Supabase-style .from('table') must exactly match the known-exception whitelist (currently empty — notifications is fully Turso-authoritative post-Task-7, so any match here is unexpected). ` +
-      (unexpectedNotificationsReaders.length > 0
-        ? `Unexpected new reader(s) not in the whitelist:\n${unexpectedNotificationsReaders
-            .map(f => `- ${f}`)
-            .join('\n')}\n`
-        : '') +
-      (missingExpectedNotificationsReaders.length > 0
-        ? `Whitelisted file(s) no longer reading these tables from Supabase — narrow knownRemainingSupabaseReadsOfNotifications in this file to match:\n${missingExpectedNotificationsReaders
-            .map(f => `- ${f}`)
-            .join('\n')}`
-        : '')
+    `The Supabase-access guard's own pattern went blind: it no longer matches known-positive samples, so it would report "0 offenders" for code it is supposed to catch. Repair the pattern before trusting the guard again. Missed sample(s):\n${supabaseAccessPatternBlindSpots
+      .map(sample => `- ${sample}`)
+      .join('\n')}`
+  )
+}
+
+if (supabaseAccessOverreach.length > 0) {
+  failures.push(
+    `The Supabase-access guard now flags legitimate Turso/Drizzle code or transition-history comments, which would force someone to add exceptions and hollow the guard out. Over-matching sample(s):\n${supabaseAccessOverreach
+      .map(sample => `- ${sample}`)
+      .join('\n')}`
+  )
+}
+
+if (supabaseAccessScanFiles.length < SUPABASE_ACCESS_SCAN_MIN_FILES) {
+  failures.push(
+    `The Supabase-access guard scanned only ${supabaseAccessScanFiles.length} file(s) under src/ (expected at least ${SUPABASE_ACCESS_SCAN_MIN_FILES}). An empty or near-empty scan passes vacuously, so treat it as a broken guard rather than a clean repository.`
   )
 }
 
