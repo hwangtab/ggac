@@ -1360,9 +1360,16 @@ const validatesPostAttachmentRenderUrls =
   !/link\.href\s*=\s*attachment\.file_url/.test(attachmentActionsSource)
 const adminPostDetailPath = join(root, 'src/app/api/admin/posts/[id]/route.ts')
 const adminPostDetailSource = readFileSync(adminPostDetailPath, 'utf8')
+// Task 8: 이 라우트의 posts 조회/갱신이 Supabase `.eq('id', postId)`에서
+// Turso 쿼리 계층(getPostById(postId, ...)/updatePost(postId, ...))으로
+// 옮겨갔다 — Drizzle의 eq()는 항상 파라미터 바인딩이라 안전성 성질은
+// 그대로다(검증된 postId만 쿼리 인자로 들어간다). 패턴만 새 호출부에 맞게
+// 갱신한다(가드를 넓히지 않는다 — validateUUID 다음에 그 결과값을 실제
+// 쿼리 함수에 넘기는지 여전히 확인한다).
 const validatesAdminPostRouteId =
   /validateUUID\(resolvedParams\.id,\s*['"]게시글 ID['"]\)/.test(adminPostDetailSource) &&
-  /\.eq\(['"]id['"],\s*postId\)/.test(adminPostDetailSource)
+  /getPostById\(postId,/.test(adminPostDetailSource) &&
+  /updatePost\(postId,/.test(adminPostDetailSource)
 const adminPostActionUsesSharedApiRoute =
   /from\s+['"]@\/lib\/server\/apiRoute['"]/.test(adminPostDetailSource) &&
   /export const PATCH = defineApiRoute/.test(adminPostDetailSource) &&
@@ -1615,7 +1622,12 @@ const serverBoardViewSource = readFileSync(serverBoardViewPath, 'utf8')
 const validatesBoardCategoryFilters =
   /export const parseBoardCategory/.test(boardCategoriesSource) &&
   /parseBoardCategory\(category\) \?\? ['"]전체['"]/.test(serverBoardSource) &&
-  /query = query\.eq\(['"]category['"],\s*safeCategory\)/.test(serverBoardSource) &&
+  // Task 8: board.ts의 board_posts_with_stats 뷰 읽기(Supabase `query =
+  // query.eq('category', safeCategory)`)가 listBoardPostsWithStats(Turso,
+  // src/db/queries/posts.ts)로 옮겨갔다 — allowlist로 검증된 safeCategory를
+  // 그 함수의 category 인자로 넘기는지는 여전히 확인한다(가드를 넓히지
+  // 않는다, 패턴만 새 호출부에 맞게 갱신).
+  /listBoardPostsWithStats\(\{\s*category:\s*safeCategory/.test(serverBoardSource) &&
   // 카테고리 필터는 클라이언트(ServerBoardView)로 이관됨 — searchParams 값을
   // 반드시 parseBoardCategory allowlist로 검증한 뒤 사용해야 한다. 서버 파일에
   // await searchParams가 다시 생기면 /board ISR이 사문화되므로 함께 금지한다.
@@ -1952,11 +1964,13 @@ const validatesPostsListLikedSetUsesTurso =
 // CommentSection.tsx가 다시 `supabase.from('comment_likes')`를 쓰면 예외
 // 목록에 없는 새 파일로 걸린다 — 별도 가드를 추가하지 않고 이 반전만으로
 // 해결된다.
-const knownRemainingSupabaseReadsOfCommentsLikesAttachments = [
-  'src/app/api/admin/posts/route.ts',
-  'src/app/api/admin/reports/generate/route.ts',
-  'src/app/api/mypage/activity/route.ts',
-]
+// Task 8이 세 예외를 마저 Turso 쿼리 계층으로 옮겼다(admin/posts/route.ts·
+// admin/reports/generate/route.ts·mypage/activity/route.ts) — 이 배열이
+// 빈 배열이 되면서 계약이 저절로 강해진다. `grep -rn
+// "from(['\"](comments|post_likes|comment_likes|post_attachments)['\"])"
+// src/{app,lib,components}`로 직접 확인했다(주석 안의 언급 1건
+// (`src/components/CommentSection.tsx`)만 있고, 실제 코드 매치는 0건).
+const knownRemainingSupabaseReadsOfCommentsLikesAttachments = []
 const commentsLikesAttachmentsScanFiles = globSync('src/{app,lib,components}/**/*.@(ts|tsx)', {
   cwd: root,
   exclude: ['**/node_modules/**', '**/.next/**'],
