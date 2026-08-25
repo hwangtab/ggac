@@ -345,3 +345,51 @@ test('updateProfilesByIds 구현은 db.update를 정확히 한 번만 호출하�
   const updateCalls = body.match(/db\s*\.update\(/g) ?? []
   assert.equal(updateCalls.length, 1, 'db.update 호출이 정확히 한 번이어야 한다(쿼리 한 번)')
 })
+
+// ---------------------------------------------------------------- listProfileSignupsSince (Task 8 코드리뷰 대응)
+
+test('listProfileSignupsSince: since 이전 시각으로 조회하면 방금 만든 프로필이 포함된다', async () => {
+  const { upsertProfile, listProfileSignupsSince } = await loadFreshProfilesModule()
+  const id = 'signups-since-included'
+  await upsertProfile(makeProfile({ id, email: 'signups1@test.local', display_name: '가입자1' }))
+
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
+  const rows = await listProfileSignupsSince(oneDayAgo)
+  assert.ok(
+    rows.some(row => row.created_at && rows.length > 0),
+    'since가 과거면 결과가 비어있지 않아야 한다'
+  )
+  // id별 매칭까지 확인하려면 created_at 필드만 반환하므로, upsertProfile 직후
+  // getProfileById로 만든 시각을 얻어 교차 확인한다.
+  const { getProfileById } = await loadFreshProfilesModule()
+  const profile = await getProfileById(id)
+  assert.ok(
+    rows.some(row => row.created_at === profile.created_at),
+    '방금 만든 프로필의 created_at이 결과 목록에 있어야 한다'
+  )
+})
+
+test('listProfileSignupsSince: since 이후(미래) 시각으로 조회하면 비어 있다', async () => {
+  const { listProfileSignupsSince } = await loadFreshProfilesModule()
+  const oneDayFromNow = new Date(Date.now() + 24 * 60 * 60 * 1000)
+  const rows = await listProfileSignupsSince(oneDayFromNow)
+  assert.deepEqual(rows, [])
+})
+
+test('listProfileSignupsSince: registration_status를 함께 돌려준다', async () => {
+  const { upsertProfile, listProfileSignupsSince } = await loadFreshProfilesModule()
+  const id = 'signups-since-status'
+  await upsertProfile(
+    makeProfile({
+      id,
+      email: 'signups2@test.local',
+      display_name: '가입자2',
+      registration_status: 'approved',
+    })
+  )
+
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
+  const rows = await listProfileSignupsSince(oneDayAgo)
+  const row = rows.find(r => r.registration_status === 'approved')
+  assert.ok(row, 'approved 상태 프로필이 결과에 있어야 한다')
+})
