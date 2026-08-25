@@ -27,7 +27,7 @@
  * `post.author.display_name`에서 그대로 죽는다.
  */
 
-import { and, asc, desc, eq, gt, gte, inArray, like, lt, or, sql, type SQL } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, gte, inArray, like, lt, lte, or, sql, type SQL } from 'drizzle-orm'
 
 import { db } from '../client.ts'
 import { posts } from '../schema/index.ts'
@@ -733,6 +733,90 @@ export async function countActivePosts(): Promise<number> {
     .from(posts)
     .where(eq(posts.isDeleted, false))
   return Number(value)
+}
+
+export interface PostActivitySummary {
+  id: string
+  title: string
+  category: string
+  created_at: string
+  updated_at: string
+}
+
+/**
+ * `/api/mypage/activity`의 "내 게시글 활동"에 쓰는 조회(Task 8). 기존
+ * Supabase `.eq('author_id', userId).eq('is_deleted', false)
+ * .order('created_at', {ascending:false}).limit(cap)`과 동일 조건 — `cap`은
+ * 호출부의 `SOURCE_ROW_CAP`(폭주 방지, 전수감사 API Medium 12)을 그대로
+ * 받는다.
+ */
+export async function listPostsByAuthor(
+  authorId: string,
+  limit: number
+): Promise<PostActivitySummary[]> {
+  const rows = await db
+    .select({
+      id: posts.id,
+      title: posts.title,
+      category: posts.category,
+      createdAt: posts.createdAt,
+      updatedAt: posts.updatedAt,
+    })
+    .from(posts)
+    .where(and(eq(posts.authorId, authorId), eq(posts.isDeleted, false)))
+    .orderBy(desc(posts.createdAt))
+    .limit(limit)
+  return rows.map(row => ({
+    id: row.id,
+    title: row.title,
+    category: row.category,
+    created_at: toIso(row.createdAt) as string,
+    updated_at: toIso(row.updatedAt) as string,
+  }))
+}
+
+export interface PostEngagementReportRow {
+  id: string
+  title: string
+  category: string
+  created_at: string
+  like_count: number
+  view_count: number
+  is_pinned: boolean
+  author_id: string
+}
+
+/**
+ * `/api/admin/reports/generate`의 `generatePostEngagementReport`가 쓰는
+ * 조회(Task 8). 기존 Supabase `.gte('created_at',start).lte('created_at',end)
+ * .order('created_at', {ascending:false})`와 동일 조건 — `is_deleted` 필터가
+ * 원본에 없었으므로(리포트는 삭제된 글도 포함) 이 함수도 걸지 않는다.
+ */
+export async function listPostsInRange(start: Date, end: Date): Promise<PostEngagementReportRow[]> {
+  const rows = await db
+    .select({
+      id: posts.id,
+      title: posts.title,
+      category: posts.category,
+      createdAt: posts.createdAt,
+      likeCount: posts.likeCount,
+      viewCount: posts.viewCount,
+      isPinned: posts.isPinned,
+      authorId: posts.authorId,
+    })
+    .from(posts)
+    .where(and(gte(posts.createdAt, start), lte(posts.createdAt, end)))
+    .orderBy(desc(posts.createdAt))
+  return rows.map(row => ({
+    id: row.id,
+    title: row.title,
+    category: row.category,
+    created_at: toIso(row.createdAt) as string,
+    like_count: row.likeCount,
+    view_count: row.viewCount,
+    is_pinned: row.isPinned,
+    author_id: row.authorId,
+  }))
 }
 
 // -------------------------------------------------------------------------

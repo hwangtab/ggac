@@ -15,7 +15,7 @@
  * 검사가 못 잡고 화면이 조용히 빈다(CLAUDE.md).
  */
 
-import { and, asc, desc, eq, gte, inArray, like, or, sql, type SQL } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, inArray, like, lte, or, sql, type SQL } from 'drizzle-orm'
 
 import { db } from '../client.ts'
 import { memberProfiles } from '../schema/index.ts'
@@ -267,6 +267,174 @@ export async function getAdminMemberCounts(): Promise<AdminMemberCounts> {
     pendingMembers: Number(pendingRow[0]?.value ?? 0),
     activeArtists: Number(artistRow[0]?.value ?? 0),
   }
+}
+
+// -------------------------------------------------------------------------
+// 관리자 리포트 (Task 8) — /api/admin/reports/generate
+// -------------------------------------------------------------------------
+
+export interface ProfileReportSummary {
+  id: string
+  display_name: string
+  email: string
+  registration_status: RegistrationStatus
+  created_at: string
+  is_active: boolean
+}
+
+/** `generateMemberActivityReport`의 "전체 회원 통계" 기본 데이터. 날짜
+ * 범위와 무관하게 전체 회원을 담는다(원본 Supabase 쿼리도 날짜 필터가
+ * 없었다). */
+export async function listAllProfilesSummary(): Promise<ProfileReportSummary[]> {
+  const rows = await db
+    .select({
+      id: memberProfiles.id,
+      displayName: memberProfiles.displayName,
+      email: memberProfiles.email,
+      registrationStatus: memberProfiles.registrationStatus,
+      createdAt: memberProfiles.createdAt,
+      isActive: memberProfiles.isActive,
+    })
+    .from(memberProfiles)
+    .orderBy(desc(memberProfiles.createdAt))
+  return rows.map(row => ({
+    id: row.id,
+    display_name: row.displayName,
+    email: row.email,
+    registration_status: row.registrationStatus,
+    created_at: toIso(row.createdAt) as string,
+    is_active: row.isActive,
+  }))
+}
+
+export interface ProfileRegistrationReportRow {
+  id: string
+  display_name: string
+  email: string
+  registration_status: RegistrationStatus
+  is_artist: boolean
+  created_at: string
+}
+
+/** `generateUserRegistrationReport`의 "기간 내 신규 등록자"(created_at 기준). */
+export async function listProfilesCreatedInRange(
+  start: Date,
+  end: Date
+): Promise<ProfileRegistrationReportRow[]> {
+  const rows = await db
+    .select({
+      id: memberProfiles.id,
+      displayName: memberProfiles.displayName,
+      email: memberProfiles.email,
+      registrationStatus: memberProfiles.registrationStatus,
+      isArtist: memberProfiles.isArtist,
+      createdAt: memberProfiles.createdAt,
+    })
+    .from(memberProfiles)
+    .where(and(gte(memberProfiles.createdAt, start), lte(memberProfiles.createdAt, end)))
+  return rows.map(row => ({
+    id: row.id,
+    display_name: row.displayName,
+    email: row.email,
+    registration_status: row.registrationStatus,
+    is_artist: row.isArtist,
+    created_at: toIso(row.createdAt) as string,
+  }))
+}
+
+export interface ProfileStatusChangeReportRow extends ProfileRegistrationReportRow {
+  updated_at: string
+}
+
+/** `generateUserRegistrationReport`의 "기간 내 상태가 변경된 회원"(updated_at
+ * 기준). */
+export async function listProfilesUpdatedInRange(
+  start: Date,
+  end: Date
+): Promise<ProfileStatusChangeReportRow[]> {
+  const rows = await db
+    .select({
+      id: memberProfiles.id,
+      displayName: memberProfiles.displayName,
+      email: memberProfiles.email,
+      registrationStatus: memberProfiles.registrationStatus,
+      isArtist: memberProfiles.isArtist,
+      createdAt: memberProfiles.createdAt,
+      updatedAt: memberProfiles.updatedAt,
+    })
+    .from(memberProfiles)
+    .where(and(gte(memberProfiles.updatedAt, start), lte(memberProfiles.updatedAt, end)))
+  return rows.map(row => ({
+    id: row.id,
+    display_name: row.displayName,
+    email: row.email,
+    registration_status: row.registrationStatus,
+    is_artist: row.isArtist,
+    created_at: toIso(row.createdAt) as string,
+    updated_at: toIso(row.updatedAt) as string,
+  }))
+}
+
+export interface RejectedProfileReportRow {
+  id: string
+  display_name: string
+  email: string
+  created_at: string
+  updated_at: string
+}
+
+/** `generateUserRegistrationReport`의 "최근 거부된 회원들"
+ * (registration_status='rejected' AND updated_at 기간 내), updated_at desc. */
+export async function listRejectedProfilesInRange(
+  start: Date,
+  end: Date
+): Promise<RejectedProfileReportRow[]> {
+  const rows = await db
+    .select({
+      id: memberProfiles.id,
+      displayName: memberProfiles.displayName,
+      email: memberProfiles.email,
+      createdAt: memberProfiles.createdAt,
+      updatedAt: memberProfiles.updatedAt,
+    })
+    .from(memberProfiles)
+    .where(
+      and(
+        eq(memberProfiles.registrationStatus, 'rejected'),
+        gte(memberProfiles.updatedAt, start),
+        lte(memberProfiles.updatedAt, end)
+      )
+    )
+    .orderBy(desc(memberProfiles.updatedAt))
+  return rows.map(row => ({
+    id: row.id,
+    display_name: row.displayName,
+    email: row.email,
+    created_at: toIso(row.createdAt) as string,
+    updated_at: toIso(row.updatedAt) as string,
+  }))
+}
+
+/**
+ * `getDailyRegistrationBreakdown`이 일별로 그룹화할 원재료(created_at +
+ * registration_status만). 정렬 없음 — 호출부가 JS에서 날짜별로 묶는다(원본
+ * Supabase 쿼리도 정렬이 없었다).
+ */
+export async function listProfileRegistrationStatusInRange(
+  start: Date,
+  end: Date
+): Promise<{ created_at: string; registration_status: RegistrationStatus }[]> {
+  const rows = await db
+    .select({
+      createdAt: memberProfiles.createdAt,
+      registrationStatus: memberProfiles.registrationStatus,
+    })
+    .from(memberProfiles)
+    .where(and(gte(memberProfiles.createdAt, start), lte(memberProfiles.createdAt, end)))
+  return rows.map(row => ({
+    created_at: toIso(row.createdAt) as string,
+    registration_status: row.registrationStatus,
+  }))
 }
 
 /**

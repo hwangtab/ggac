@@ -29,10 +29,10 @@
  * `toggleCommentLike`이 담당한다.
  */
 
-import { and, asc, count, eq, gt, inArray, or, type SQL } from 'drizzle-orm'
+import { and, asc, count, desc, eq, gt, gte, inArray, lte, or, type SQL } from 'drizzle-orm'
 
 import { db } from '../client.ts'
-import { comments } from '../schema/index.ts'
+import { comments, posts } from '../schema/index.ts'
 
 import { getProfilesByIds } from './profiles.ts'
 import { toIso } from './_helpers.ts'
@@ -237,4 +237,69 @@ export async function countCommentsByPostIds(postIds: string[]): Promise<Map<str
     .where(inArray(comments.postId, postIds))
     .groupBy(comments.postId)
   return new Map(rows.map(row => [row.postId, row.value]))
+}
+
+export interface CommentWithPostSummary {
+  id: string
+  created_at: string
+  /** 기존 PostgREST `posts:post_id (id, title, category)` 임베드와 같은 모양.
+   * `comments.postId`가 `posts.id`를 참조하는 NOT NULL FK라 실제로는 항상
+   * 매칭돼야 하지만, 배치 조회 관례(posts.ts/profiles.ts)를 따라 못 찾는
+   * 경우를 `null`로 표현한다. */
+  post: { id: string; title: string; category: string } | null
+}
+
+/**
+ * `/api/mypage/activity`의 "내 댓글 활동"에 쓰는 조회(Task 8) — 댓글에 소속
+ * 게시글의 `id`/`title`/`category`를 조인해 함께 담는다. 기존 Supabase
+ * `.select('id, created_at, posts:post_id(id,title,category)')
+ * .eq('author_id', userId).order('created_at', {ascending:false})
+ * .limit(cap)`과 동일 조건 — `cap`은 호출부의 `SOURCE_ROW_CAP`을 그대로
+ * 받는다. LEFT JOIN 1쿼리 — 댓글마다 게시글을 따로 조회하지 않는다.
+ */
+export async function listCommentsByAuthorWithPost(
+  authorId: string,
+  limit: number
+): Promise<CommentWithPostSummary[]> {
+  const rows = await db
+    .select({
+      id: comments.id,
+      createdAt: comments.createdAt,
+      postId: posts.id,
+      postTitle: posts.title,
+      postCategory: posts.category,
+    })
+    .from(comments)
+    .leftJoin(posts, eq(comments.postId, posts.id))
+    .where(eq(comments.authorId, authorId))
+    .orderBy(desc(comments.createdAt))
+    .limit(limit)
+  return rows.map(row => ({
+    id: row.id,
+    created_at: toIso(row.createdAt) as string,
+    post: row.postId
+      ? { id: row.postId, title: row.postTitle as string, category: row.postCategory as string }
+      : null,
+  }))
+}
+
+/**
+ * `/api/admin/reports/generate`의 `generatePostEngagementReport`가 쓰는
+ * 조회(Task 8) — 기간 내 댓글의 `id`/`post_id`/`created_at`만(게시글별 댓글
+ * 수 집계는 호출부가 JS에서 한다, 원본 Supabase 쿼리와 동일 방식). 기존
+ * `.gte('created_at',start).lte('created_at',end)`와 동일 조건.
+ */
+export async function listCommentsInRange(
+  start: Date,
+  end: Date
+): Promise<{ id: string; post_id: string; created_at: string }[]> {
+  const rows = await db
+    .select({ id: comments.id, postId: comments.postId, createdAt: comments.createdAt })
+    .from(comments)
+    .where(and(gte(comments.createdAt, start), lte(comments.createdAt, end)))
+  return rows.map(row => ({
+    id: row.id,
+    post_id: row.postId,
+    created_at: toIso(row.createdAt) as string,
+  }))
 }
