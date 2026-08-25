@@ -2,6 +2,8 @@ import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { createClient } from '@supabase/supabase-js'
 
+import { assertLocalSupabase } from '../../e2e/helpers/authState.ts'
+
 /**
  * `src/lib/auth/server.ts`의 `ensureSupabaseMemberProfileShadowRow`(가입 훅
  * 내부 비공개 함수, 9pre 수정 2)가 실제로 하는 일을 로컬 Supabase 스택에
@@ -24,15 +26,47 @@ import { createClient } from '@supabase/supabase-js'
  * 제약) `node --test`에서 안전하게 단독 로드할 수 없다. 그래서 이 함수가
  * 실제로 실행하는 것과 동일한 insert 호출 시퀀스를 여기서 재현한다.
  *
- * `NEXT_PUBLIC_SUPABASE_URL`·`SUPABASE_SERVICE_ROLE_KEY`가 없으면(기본
- * `npm run test:unit` 실행 — 이 워크트리에는 `.env.local`이 없다) 스킵한다.
- * `supabase start`로 로컬 스택을 띄운 뒤 두 값을 넣어야 실행된다
- * (`scripts/testing/turso-blob-smoke.test.mjs`와 같은 skip 패턴).
+ * **운영 오염 방지가 이 파일에서 가장 중요한 속성이다.** 이 테스트는
+ * `auth.users`·`member_profiles`·`board_meetings`에 실제로 쓴다. 컷오버
+ * 절차상 운영자는 운영 Supabase 자격증명을 셸에 올린 채로 이관·검증
+ * 스크립트를 돌릴 수 있는데, 그 상태에서 `npm run test:unit`이 이 파일을
+ * 실행하면 운영에 회의 행이 생기고 정리 코드가 있어도 중간 단언 실패 시
+ * 행이 남을 수 있다(코드리뷰 9pre-2 Important 1 지적). 그래서:
+ *   - 환경변수 이름을 `NEXT_PUBLIC_SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`
+ *     (운영자가 실제로 셸에 올릴 법한 이름)가 아니라
+ *     `scripts/testing/seed-authz-fixtures.mjs`·`e2e/helpers/authState.ts`가
+ *     쓰는 `E2E_SUPABASE_URL`/`E2E_SUPABASE_SERVICE_ROLE_KEY`로 맞췄다 —
+ *     이관 절차가 이 이름을 셸에 올릴 이유가 없다.
+ *   - 그 값이 있어도 호스트가 로컬(127.0.0.1/localhost/::1)인지
+ *     `assertLocalSupabase()`(`e2e/helpers/authState.ts`, 이 저장소가 이미
+ *     같은 목적으로 쓰는 그 함수를 그대로 재사용한다 — 새 판정 로직을
+ *     또 만들지 않는다)로 검증한다. 아니면 스킵한다 — 값이 있어도, 그
+ *     값이 운영처럼 보이면 이 파일은 아무것도 실행하지 않는다.
+ *   - `E2E_SUPABASE_URL`/`E2E_SUPABASE_SERVICE_ROLE_KEY`가 없으면(기본
+ *     `npm run test:unit` 실행 — 이 워크트리에는 `.env.local`이 없다)
+ *     스킵한다. `supabase start`로 로컬 스택을 띄운 뒤 두 값을 넣어야
+ *     실행된다(`scripts/testing/turso-blob-smoke.test.mjs`와 같은 skip
+ *     패턴).
+ *   - 세 번째 테스트가 만드는 `board_meetings`/`board_meeting_date_options`
+ *     행도 `try/finally`로 감싸 중간 단언이 실패해도 정리가 실행되게
+ *     했다(그래도 로컬 전용 게이트가 1차 방어선이다 — 이 finally는
+ *     2차 방어선일 뿐이다).
  */
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
-const hasLocalSupabase = Boolean(SUPABASE_URL && SERVICE_ROLE_KEY)
+const SUPABASE_URL = process.env.E2E_SUPABASE_URL
+const SERVICE_ROLE_KEY = process.env.E2E_SUPABASE_SERVICE_ROLE_KEY
+
+function computeHasLocalSupabase() {
+  if (!SUPABASE_URL || !SERVICE_ROLE_KEY) return false
+  try {
+    assertLocalSupabase()
+    return true
+  } catch {
+    return false
+  }
+}
+
+const hasLocalSupabase = computeHasLocalSupabase()
 
 let admin
 let isBenignShadowProfileRetryError
@@ -137,33 +171,39 @@ test(
       .single()
     assert.equal(meetingError, null)
 
-    const { data: option, error: optionError } = await admin
-      .from('board_meeting_date_options')
-      .insert({ meeting_id: meeting.id, candidate_date: '2026-09-01' })
-      .select('id')
-      .single()
-    assert.equal(optionError, null)
+    // 이 지점부터는 실제 회의 행이 존재한다 — 아래 단언 중 하나라도
+    // 실패하면 예외가 던져지므로, finally로 정리를 보장한다(로컬 전용
+    // 게이트가 1차 방어선이고 이건 2차 방어선).
+    try {
+      const { data: option, error: optionError } = await admin
+        .from('board_meeting_date_options')
+        .insert({ meeting_id: meeting.id, candidate_date: '2026-09-01' })
+        .select('id')
+        .single()
+      assert.equal(optionError, null)
 
-    // (a) 그림자 행이 없는 상태 — FK 위반으로 막혀야 한다.
-    const beforeShadow = await admin
-      .from('board_meeting_date_votes')
-      .insert({ option_id: option.id, voter_id: voterId, is_available: true })
-    assert.ok(beforeShadow.error, '그림자 행이 없으면 실패해야 한다')
-    assert.equal(beforeShadow.error.code, '23503', 'FK 위반(23503)이어야 한다')
+      try {
+        // (a) 그림자 행이 없는 상태 — FK 위반으로 막혀야 한다.
+        const beforeShadow = await admin
+          .from('board_meeting_date_votes')
+          .insert({ option_id: option.id, voter_id: voterId, is_available: true })
+        assert.ok(beforeShadow.error, '그림자 행이 없으면 실패해야 한다')
+        assert.equal(beforeShadow.error.code, '23503', 'FK 위반(23503)이어야 한다')
 
-    // (b) 그림자 행을 만든 뒤에는 같은 쓰기가 성공해야 한다.
-    const shadowResult = await insertShadowProfileRow(voterId, voterEmail, '부정대조 이사')
-    assert.equal(shadowResult.error, null)
+        // (b) 그림자 행을 만든 뒤에는 같은 쓰기가 성공해야 한다.
+        const shadowResult = await insertShadowProfileRow(voterId, voterEmail, '부정대조 이사')
+        assert.equal(shadowResult.error, null)
 
-    const afterShadow = await admin
-      .from('board_meeting_date_votes')
-      .insert({ option_id: option.id, voter_id: voterId, is_available: true })
-    assert.equal(afterShadow.error, null, '그림자 행을 만든 뒤에는 성공해야 한다')
-
-    // 정리 — 자식부터 지운다(board_meetings CASCADE가 옵션·투표를 함께
-    // 지우지만, 명시적으로 지워 다른 테스트와 순서가 엇갈려도 안전하게 한다).
-    await admin.from('board_meeting_date_votes').delete().eq('option_id', option.id)
-    await admin.from('board_meeting_date_options').delete().eq('id', option.id)
-    await admin.from('board_meetings').delete().eq('id', meeting.id)
+        const afterShadow = await admin
+          .from('board_meeting_date_votes')
+          .insert({ option_id: option.id, voter_id: voterId, is_available: true })
+        assert.equal(afterShadow.error, null, '그림자 행을 만든 뒤에는 성공해야 한다')
+      } finally {
+        await admin.from('board_meeting_date_votes').delete().eq('option_id', option.id)
+        await admin.from('board_meeting_date_options').delete().eq('id', option.id)
+      }
+    } finally {
+      await admin.from('board_meetings').delete().eq('id', meeting.id)
+    }
   }
 )
