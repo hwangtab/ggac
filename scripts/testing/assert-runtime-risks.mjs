@@ -1941,10 +1941,37 @@ const supabaseAccessSentinels = [
 const supabaseAccessPatternBlindSpots = supabaseAccessSentinels.filter(
   sample => !supabaseAccessPattern.test(sample)
 )
-// 자기검사 ②: 스캔이 저장소를 실제로 훑었는가. 현재 410개이며, 하한은
-// 절반으로 잡는다 — 대량 삭제가 아니라 "글롭이 0~몇 개만 돌려주는" 고장을
-// 잡는 것이 목적이다.
-const SUPABASE_ACCESS_SCAN_MIN_FILES = 200
+// 자기검사 ②: 스캔이 저장소를 **구석구석** 훑었는가.
+//
+// 예전에는 전체 하한 하나(200)뿐이었는데, `src/app` 단독이 206이라 **가장
+// 그럴듯한 부분 고장**(글롭이 `src/app/**`로 좁아짐)이 하한을 넘겨 통과하면서
+// `src/lib`·`src/utils`·`src/middleware`·`src/db`·`src/components` 204파일을
+// 통째로 건너뛸 수 있었다 — 삭제된 Supabase 클라이언트가 전부 살던 자리다.
+// 그래서 서브트리별 하한을 함께 둔다. 전체 수는 파일이 늘면 자연히 여유가
+// 생기지만, 서브트리별 하한은 "그 자리가 비는 것"을 직접 잡는다.
+//
+// 숫자는 현재 개수(주석)의 대략 65~75%다. 대량 삭제가 아니라 "그 서브트리가
+// 스캔에서 빠졌다"를 잡는 것이 목적이므로 정상적인 파일 정리로는 걸리지 않고,
+// 디렉터리 하나가 통째로 빠지면 걸린다. 실제로 파일을 많이 지웠다면 이 숫자를
+// **의도적으로** 낮추는 커밋이 남아야 한다.
+const SUPABASE_ACCESS_SCAN_MIN_FILES = 380 // 현재 410
+const SUPABASE_ACCESS_SCAN_SUBTREE_MINIMUMS = {
+  'src/app/': 150, // 현재 206
+  'src/components/': 32, // 현재 50
+  'src/utils/': 32, // 현재 49
+  'src/lib/': 22, // 현재 34
+  'src/db/': 14, // 현재 21
+  'src/hooks/': 10, // 현재 16
+  'src/middleware/': 4, // 현재 7
+}
+const supabaseAccessScanSubtreeShortfalls = Object.entries(
+  SUPABASE_ACCESS_SCAN_SUBTREE_MINIMUMS
+).flatMap(([prefix, minimum]) => {
+  const count = supabaseAccessScanFiles.filter(file => file.startsWith(prefix)).length
+  return count < minimum
+    ? [`${prefix} — ${count} file(s) scanned, expected at least ${minimum}`]
+    : []
+})
 // 자기검사 ③: 패턴이 Drizzle 쿼리 계층(식별자 `.from(comments)`)이나 전환
 // 기록 주석을 오탐하면, 아무도 이 가드를 못 지켜 결국 예외 목록이 생긴다.
 const supabaseAccessFalsePositiveSamples = [
@@ -4948,6 +4975,14 @@ if (supabaseAccessOverreach.length > 0) {
 if (supabaseAccessScanFiles.length < SUPABASE_ACCESS_SCAN_MIN_FILES) {
   failures.push(
     `The Supabase-access guard scanned only ${supabaseAccessScanFiles.length} file(s) under src/ (expected at least ${SUPABASE_ACCESS_SCAN_MIN_FILES}). An empty or near-empty scan passes vacuously, so treat it as a broken guard rather than a clean repository.`
+  )
+}
+
+if (supabaseAccessScanSubtreeShortfalls.length > 0) {
+  failures.push(
+    `The Supabase-access guard skipped whole src/ subtrees. A total-count floor alone cannot catch this: src/app on its own is larger than the old floor, so a glob that narrowed to src/app/** would still have "passed" while silently skipping every directory the deleted Supabase clients used to live in. Subtree(s) below their floor:\n${supabaseAccessScanSubtreeShortfalls
+      .map(line => `- ${line}`)
+      .join('\n')}`
   )
 }
 
