@@ -248,8 +248,12 @@ export async function listUserLikes(
  * `.from('post_likes').select('id', {count:'exact', head:true})`를 그대로 옮긴
  * 결과다). 그래서 `/api/users/[id]/likes` 한 응답 안에서 목록(`liked_posts`,
  * 삭제 글 제외)과 총계(`pagination.total_count`, 삭제 글 포함)가 서로 다른
- * 기준을 말했다 — `total_pages`가 부풀어 마지막 페이지가 빈 채로 생기고,
- * 회원에게는 자기가 볼 수 없는 글까지 포함한 숫자가 나갔다.
+ * 기준을 말했다 — `total_pages`가 부풀어 마지막 페이지가 빈 채로 생긴다.
+ *
+ * **회원이 그 숫자를 본 적은 없다.** 이 엔드포인트를 부르는 화면·훅·E2E가
+ * 저장소에 하나도 없고 클라이언트가 부른 이력도 없다. 즉 이 변경은 드러난
+ * 오작동을 고친 것이 아니라, 한 응답 안의 두 숫자가 서로 다른 기준을 말하던
+ * 상태를 소비자가 생기기 전에 정리한 것이다.
  *
  * 그 불일치는 설계가 아니라 사고다. 원본 Postgres `get_user_likes` RPC는
  * `p.is_deleted = false`로 조인했고, 총계만 그 RPC를 거치지 않는 **별개**
