@@ -29,6 +29,13 @@
       "when": 1787760692937,
       "tag": "0003_backfill_profile_completeness",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1787847092937,
+      "tag": "0004_add_performance_indexes",
+      "breakpoints": true
     }
   ]
 }

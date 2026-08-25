@@ -422,12 +422,19 @@ describe('0002 마이그레이션의 성질', () => {
     const r = await db.execute(
       "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name LIKE 'board_%' AND sql IS NOT NULL ORDER BY name"
     )
+    // 앞의 셋은 0002가 표를 재작성하면서 다시 만들어야 하는 UNIQUE 인덱스다
+    // (하나라도 빠지면 재작성이 제약을 잃었다는 뜻이다). 뒤의 셋은 0004가
+    // 추가한 성능 인덱스다(최종 리뷰 B-7) — 목록을 정확히 고정해 두면
+    // "0002가 무엇을 지웠는가"와 "0004가 무엇을 더했는가"가 둘 다 드러난다.
     assert.deepEqual(
       r.rows.map(x => String(x.name)),
       [
         'board_meeting_attendees_meeting_member_idx',
         'board_meeting_date_votes_option_voter_idx',
         'board_minutes_meeting_id_idx',
+        'idx_board_agendas_meeting',
+        'idx_board_date_options_meeting',
+        'idx_board_documents_category',
       ]
     )
   })

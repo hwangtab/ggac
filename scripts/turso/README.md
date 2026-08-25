@@ -769,3 +769,100 @@ SELECT name FROM sqlite_master WHERE name LIKE '__migration_%';  -- 0행
 실제 상태보다 부풀어 있던 행은 내려갈 수도 있다(원본 지연은 양방향이다).
 회원에게 보이는 화면·권한·승인 상태에는 영향이 없다 — 0003은
 `profile_completeness_score` 컬럼 하나만 쓴다.
+
+## 단계 4 최종 리뷰 B-7 — 성능 인덱스 이관 (`0004_add_performance_indexes.sql`)
+
+0000(`drizzle-kit push` 산출물)은 **스키마에 선언된 UNIQUE 인덱스만** 만들었다.
+Postgres 원본이 성능을 위해 따로 만들어 둔 `CREATE INDEX`는 하나도 넘어오지
+않았고, `EXPLAIN QUERY PLAN`으로 확인한 결과 뜨거운 읽기 경로가 전부
+풀스캔이었다. 특히 로그인한 회원이 페이지를 열 때마다 `NotificationDropdown`이
+부르는 `/api/notifications/stats`가 `SCAN notifications`였다 — `notifications`는
+**공지 1건당 승인 회원 수만큼 행이 늘어나는 상한 없는 표**라 23명 규모에서는
+안 보이지만 선형으로 나빠진다.
+
+0004는 인덱스 20개를 만든다. **표를 재작성하지 않는다** — SQLite의
+`CREATE INDEX`는 표 정의를 건드리지 않으므로 0002 같은 12단계 재작성 절차가
+필요 없다. 어떤 도구가 이 변경으로 표를 재작성하려 들면 그건 잘못된 것이다.
+
+### 옮긴 것 / 옮기지 않은 것
+
+| 표 | 인덱스 | 원본과의 차이 |
+| --- | --- | --- |
+| posts | `idx_posts_keyset_pagination` (is_deleted, is_pinned↓, created_at↓, id↓) | 원본은 `WHERE is_deleted=false` 부분 인덱스 → 선행 컬럼화 |
+| posts | `idx_posts_category_keyset_pagination` (is_deleted, category, is_pinned↓, created_at↓, id↓) | 〃 |
+| posts | `idx_posts_author_id` (author_id, is_deleted, created_at↓) | 〃 |
+| posts | `idx_posts_created_at_not_deleted` (is_deleted, created_at↓) | 〃 |
+| comments | `idx_comments_post_id_created_at` (post_id, created_at, id) | 원본 부분 인덱스의 `is_deleted`는 Turso `comments`에 컬럼 자체가 없다 |
+| comments | `idx_comments_author_id` (author_id, created_at↓) | 정렬 컬럼 추가 |
+| post_likes | `idx_post_likes_user_post` (user_id, post_id) | 원본 `idx_post_likes_user_post_unique`와 같은 모양 |
+| comment_likes | `idx_comment_likes_user_comment` (user_id, comment_id) | 원본 `idx_comment_likes_user_id` 확장 |
+| notifications | `idx_notifications_user_created_at` (user_id, created_at↓) | 원본의 (user_id)와 (created_at↓)를 합친 형태 |
+| notifications | `idx_notifications_read_status` (user_id, read_at) | 원본과 동일 |
+| member_profiles | `idx_member_profiles_status` (registration_status, created_at↓) | 원본은 (registration_status, is_active) — `listProfiles`가 is_active로 거르지 않아 정렬이 임시 B-트리로 떨어졌다 |
+| member_profiles | `idx_member_profiles_created_at` (created_at↓) | 동일 |
+| member_profiles | `idx_member_profiles_artist_id` (artist_id) | 동일 |
+| post_attachments | `idx_post_attachments_post_sort` (post_id, sort_order) | 원본 `idx_post_attachments_sort_order` |
+| post_attachments | `idx_post_attachments_temp_cleanup` (is_temporary, expires_at) | 원본은 `WHERE is_temporary=TRUE` 부분 인덱스 → 선행 컬럼화 |
+| user_activities | `idx_user_activities_created_at` (created_at↓) | 동일 |
+| user_activities | `idx_user_activities_composite` (user_id, action_type, created_at↓) | 동일 |
+| board_agendas | `idx_board_agendas_meeting` (meeting_id, sort_order) | 동일 |
+| board_meeting_date_options | `idx_board_date_options_meeting` (meeting_id, candidate_date) | 정렬 컬럼 추가 |
+| board_documents | `idx_board_documents_category` (category, created_at↓) | 동일 |
+
+**부분 인덱스를 선행 컬럼으로 바꾼 이유.** SQLite도 부분 인덱스를 지원하지만
+질의의 WHERE가 인덱스의 WHERE를 **구문적으로 함의**해야 사용한다. Drizzle이
+만드는 조건은 바인딩 파라미터(`"is_deleted" = ?`)라 계획 단계에서 상수로
+취급되지 않아 부분 인덱스가 선택되지 않는다(실측). 필터 컬럼을 첫 컬럼으로
+올리는 SQLite 관용 형태가 같은 질의를 같은 비용으로 처리하고, 휴지통 조회
+(`is_deleted = 1`)도 함께 탄다. 원본의 `OR is_deleted IS NULL` 가지는 Turso
+스키마에서 무의미하다(`NOT NULL DEFAULT false`).
+
+**옮기지 않은 원본 인덱스**
+- Postgres 전용: `idx_posts_search_gin`(tsvector), `idx_posts_title_trgm`·
+  `idx_posts_content_trgm`(pg_trgm). SQLite에 대응물이 없다. 게시판 검색은
+  현재 `LIKE` 기반이라 이 인덱스들이 있었어도 안 쓰였다.
+- 표가 없음: `activity_logs`, `error_logs`, `member_login_history`,
+  `member_status_history`, `post_embedded_images`.
+- 컬럼이 없음: `idx_notifications_user_read`(원본 `is_read` ↔ Turso `read_at`),
+  `idx_member_profiles_photo_url`(`profile_photo_url`은 `artists`에만 있다).
+- 이 저장소의 어떤 질의도 안 씀: `idx_notifications_expires_at`,
+  `idx_notifications_type`, `idx_posts_like_count`, `idx_comments_like_count`.
+  인덱스는 쓰기마다 갱신 비용이 든다 — 안 쓰이는 것을 옮기지 않는다.
+- 기존 UNIQUE 인덱스가 접두사로 덮음: `idx_post_likes_post_id`·
+  `idx_post_likes_optimized`, `idx_comment_likes_comment_id`,
+  `idx_board_attendees_meeting`, `idx_board_date_votes_option`,
+  `idx_user_settings_user_id`·`idx_user_settings_user_category`,
+  `idx_artists_slug`·`idx_artists_legacy_id`, `idx_member_profiles_email`.
+
+### ⚠ 적용 방법 — 0002·0003과 같다(`drizzle-kit migrate` 금지)
+
+단언이 물었을 때 전체가 롤백되도록 `BEGIN`/`COMMIT`이 파일 안에 있다.
+마이그레이터가 자체 트랜잭션으로 감싸면 그 `BEGIN`이 `cannot start a
+transaction within a transaction`으로 즉시 실패해 전체가 롤백된다.
+
+```bash
+set -a; source .env.local; set +a   # 운영에 적용할 때만
+node -e "import('@libsql/client').then(async m => {
+  const fs = await import('node:fs')
+  const c = m.createClient({ url: process.env.TURSO_DATABASE_URL, authToken: process.env.TURSO_AUTH_TOKEN })
+  await c.executeMultiple(fs.readFileSync('src/db/migrations/0004_add_performance_indexes.sql','utf8'))
+  console.log('applied'); c.close()
+})"
+```
+
+### 적용 전후 확인
+
+```sql
+-- 적용 전 행 수를 기록해 둔다(인덱스 생성은 데이터를 건드리지 않는다).
+SELECT (SELECT count(*) FROM posts), (SELECT count(*) FROM notifications), (SELECT count(*) FROM member_profiles);
+-- 적용 후
+SELECT count(*) FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%';  -- 20
+SELECT name FROM sqlite_master WHERE name LIKE '__migration_%' OR name LIKE '__new_%';  -- 0행
+EXPLAIN QUERY PLAN SELECT count(*) FROM notifications WHERE user_id = '<아무 회원 id>';
+-- → SEARCH notifications USING INDEX idx_notifications_read_status
+```
+
+멱등이다(전부 `IF NOT EXISTS`). 증명은
+`scripts/testing/performanceIndexes.test.mjs`가 담당한다 — 적용 전/후 계획을
+같은 DB에서 대조하고(적용 전에 실제로 `SCAN`이었는지까지 단정한다), 행 수
+불변·재실행 수렴·단언 롤백을 각각 확인한다.
