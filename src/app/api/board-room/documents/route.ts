@@ -10,6 +10,7 @@ import {
   hasValidFileSignature,
 } from '@/utils/fileUploadValidation'
 import { deleteBoardDocumentEverywhere, putBoardDocument } from '@/lib/storage/privateProvider'
+import { createDocument, listDocuments } from '@/db/queries/board'
 
 const log = createLogger('boardRoom/documents')
 
@@ -44,34 +45,31 @@ function sanitizeFileName(name: string): string {
 export async function GET(request: NextRequest) {
   const auth = await requireBoardMember()
   if (auth instanceof NextResponse) return auth
-  const { db, user } = auth
+  const { user } = auth
   const category = new URL(request.url).searchParams.get('category')
 
   return apiGet(
     async () => {
-      let query = db
-        .from('board_documents')
-        .select(
-          'id, title, category, file_path, file_name, file_size, mime_type, uploaded_by, created_at'
-        )
-        .order('created_at', { ascending: false })
-      if (category) {
-        if (!(ALL_DOCUMENT_CATEGORIES as readonly string[]).includes(category)) {
-          throw ApiError.badRequest('잘못된 분류입니다.')
-        }
-        query = query.eq('category', category)
-      } else {
-        // 일반 서류함 전체 조회에는 정기총회 자료를 제외(별도 '정기총회' 메뉴에서 관리)
-        query = query.neq('category', ASSEMBLY_DOCUMENT_CATEGORY)
+      if (category && !(ALL_DOCUMENT_CATEGORIES as readonly string[]).includes(category)) {
+        throw ApiError.badRequest('잘못된 분류입니다.')
       }
-      const { data, error } = await query
-      if (error) throw ApiError.internalServerError('서류 목록을 불러올 수 없습니다.')
+
+      let data: Awaited<ReturnType<typeof listDocuments>>
+      try {
+        // 카테고리가 없으면 원본과 동일하게 정기총회 자료를 제외한다(별도
+        // '정기총회' 메뉴에서 관리).
+        data = await listDocuments(
+          category ? { category } : { excludeCategory: ASSEMBLY_DOCUMENT_CATEGORY }
+        )
+      } catch {
+        throw ApiError.internalServerError('서류 목록을 불러올 수 없습니다.')
+      }
 
       // 서명 URL을 만들지 않는다. 만료되지 않는 내부 경로만 내려주고, 권한은
       // 다운로드 시점에 매번 검사한다. 이 변경으로 uploaded_by가 NULL인 시드
       // 문서 14건의 다운로드도 함께 되살아난다 — 예전 경로 가드가 file_path와
       // uploaded_by의 접두어 일치를 요구해 전부 막고 있었다.
-      const documents = (data || []).map(doc => {
+      const documents = data.map(doc => {
         const { file_path, ...rest } = doc
         return {
           ...rest,
@@ -95,7 +93,7 @@ export async function POST(request: NextRequest) {
 
   const auth = await requireBoardMember()
   if (auth instanceof NextResponse) return auth
-  const { db, user } = auth
+  const { user } = auth
 
   return apiPost(
     async () => {
@@ -138,21 +136,21 @@ export async function POST(request: NextRequest) {
       }
 
       // Insert metadata row
-      const { data: doc, error: insertError } = await db
-        .from('board_documents')
-        .insert({
+      let doc: { id: string }
+      try {
+        doc = await createDocument({
           title,
           category,
-          file_path: storagePath,
-          file_name: file.name,
-          file_size: file.size,
-          mime_type: file.type,
-          uploaded_by: user.id,
+          filePath: storagePath,
+          fileName: file.name,
+          fileSize: file.size,
+          mimeType: file.type,
+          uploadedBy: user.id,
         })
-        .select('id')
-        .single()
-
-      if (insertError || !doc) {
+      } catch (insertError) {
+        log.error('메타데이터 삽입 실패', {
+          error: insertError instanceof Error ? insertError.message : String(insertError),
+        })
         // Rollback: remove just-uploaded storage object
         try {
           await deleteBoardDocumentEverywhere(storagePath)

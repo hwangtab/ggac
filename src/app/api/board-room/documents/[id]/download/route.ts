@@ -9,6 +9,7 @@ import {
   isSafeBoardDocumentFilePath,
 } from '@/lib/storage/boardDocuments'
 import { getBoardDocumentStream } from '@/lib/storage/privateProvider'
+import { getDocumentForDownload } from '@/db/queries/board'
 
 const log = createLogger('boardRoom/documents/download')
 
@@ -43,15 +44,14 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
   const auth = await requireBoardMember()
   if (auth instanceof NextResponse) return auth
-  const { db, user } = auth
+  const { user } = auth
 
-  const { data: doc, error } = await db
-    .from('board_documents')
-    .select('file_path, file_name, mime_type')
-    .eq('id', id)
-    .single()
+  // Task 4: board_documents 권위가 Turso로 옮겨졌다 — 조회는
+  // getDocumentForDownload(id)로 바뀌었지만 권한 재검증(requireBoardMember()가
+  // 이 DB 조회보다 먼저 실행됨)과 봉쇄 판정 순서는 그대로다.
+  const doc = await getDocumentForDownload(id)
 
-  if (error || !doc) {
+  if (!doc) {
     return ApiError.notFound('서류를 찾을 수 없습니다.').toNextResponse()
   }
 

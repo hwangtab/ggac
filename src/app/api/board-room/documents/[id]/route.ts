@@ -5,6 +5,7 @@ import { createLogger } from '@/utils/logger'
 import { isSafeBoardDocumentFilePath } from '@/lib/storage/boardDocuments'
 import { deleteBoardDocumentEverywhere } from '@/lib/storage/privateProvider'
 import { validateUUID } from '@/utils/validation'
+import { deleteDocument, getDocumentForDelete } from '@/db/queries/board'
 
 const log = createLogger('boardRoom/documents')
 
@@ -25,17 +26,13 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
   const id = routeId.id
   const auth = await requireBoardMember()
   if (auth instanceof NextResponse) return auth
-  const { db, user, isAdmin } = auth
+  const { user, isAdmin } = auth
 
   return apiDelete(
     async () => {
       // Load row to get uploader and storage path
-      const { data: doc, error: loadErr } = await db
-        .from('board_documents')
-        .select('uploaded_by, file_path')
-        .eq('id', id)
-        .single()
-      if (loadErr || !doc) throw ApiError.notFound('서류를 찾을 수 없습니다.')
+      const doc = await getDocumentForDelete(id)
+      if (!doc) throw ApiError.notFound('서류를 찾을 수 없습니다.')
 
       // Authorization: uploader or admin only
       if (doc.uploaded_by !== user.id && !isAdmin) throw ApiError.forbidden('삭제 권한이 없습니다.')
@@ -63,8 +60,11 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       }
 
       // Delete metadata row
-      const { error: deleteErr } = await db.from('board_documents').delete().eq('id', id)
-      if (deleteErr) throw ApiError.internalServerError('서류 삭제에 실패했습니다.')
+      try {
+        await deleteDocument(id)
+      } catch {
+        throw ApiError.internalServerError('서류 삭제에 실패했습니다.')
+      }
 
       return ApiSuccess.ok({ id }, '서류가 삭제되었습니다.')
     },

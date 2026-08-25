@@ -5,6 +5,7 @@ import { parseJsonObjectBody } from '@/utils/requestBody'
 import { validateUUID } from '@/utils/validation'
 import { parseContentFormat } from '@/constants/contentFormat'
 import { annotateImageDimensionsSafe } from '@/utils/imageDimensions'
+import { deleteMinutes, getMinutesAuthorAndFormat, updateMinutes } from '@/db/queries/board'
 
 export const runtime = 'nodejs'
 
@@ -16,17 +17,17 @@ function validateMinutesId(id: string) {
   return { id: validation.sanitized }
 }
 
-async function loadMinutesAuthor(db: any, id: string) {
+async function loadMinutesAuthor(id: string) {
   // author_id와 content_format을 한 번에 읽어, 아래 PATCH가 포맷 재조회 없이 재사용한다.
-  const { data, error } = await db
-    .from('board_minutes')
-    .select('author_id, content_format')
-    .eq('id', id)
-    .single()
-  if (error) return { error }
+  // 행이 없으면(notFound 대상) error:true, 행은 있지만 author_id가 NULL이면
+  // author: null을 그대로 돌려준다 — null을 undefined로 뭉개면 "없음"과
+  // "주인 없음"을 못 가려 관리자도 못 고치는 회귀가 생긴다(board_documents의
+  // uploaded_by NULL 시드 문제와 같은 종류).
+  const row = await getMinutesAuthorAndFormat(id)
+  if (!row) return { error: true as const }
   return {
-    author: data?.author_id as string | undefined,
-    contentFormat: (data?.content_format as string | undefined) ?? null,
+    author: row.author_id,
+    contentFormat: row.content_format,
   }
 }
 
@@ -37,7 +38,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   const id = routeId.id
   const auth = await requireBoardMember()
   if (auth instanceof NextResponse) return auth
-  const { db, user, isAdmin } = auth
+  const { user, isAdmin } = auth
 
   return apiPatch(
     async () => {
@@ -45,14 +46,14 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         author,
         contentFormat: existingContentFormat,
         error: authorErr,
-      } = await loadMinutesAuthor(db, id)
+      } = await loadMinutesAuthor(id)
       if (authorErr || author === undefined) throw ApiError.notFound('회의록을 찾을 수 없습니다.')
       if (author !== user.id && !isAdmin) throw ApiError.forbidden('편집 권한이 없습니다.')
 
       const body = await parseJsonObjectBody(request)
       if (!body) throw ApiError.badRequest('유효한 JSON body가 필요합니다.')
 
-      const update: Record<string, unknown> = {}
+      const update: { content?: string; contentFormat?: string } = {}
 
       // 포맷을 먼저 확정(요청에 있으면 검증). content 주석 여부 판단에도 재사용한다.
       let bodyContentFormat: string | null = null
@@ -61,7 +62,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         if (!bodyContentFormat) {
           throw ApiError.badRequest('content_format은 plain, html, markdown 중 하나여야 합니다.')
         }
-        update.content_format = bodyContentFormat
+        update.contentFormat = bodyContentFormat
       }
 
       if (typeof body.content === 'string') {
@@ -77,8 +78,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
       if (Object.keys(update).length === 0) throw ApiError.badRequest('변경할 내용이 없습니다.')
 
-      const { error } = await db.from('board_minutes').update(update).eq('id', id)
-      if (error) throw ApiError.internalServerError('회의록 편집에 실패했습니다.')
+      try {
+        await updateMinutes(id, update)
+      } catch {
+        throw ApiError.internalServerError('회의록 편집에 실패했습니다.')
+      }
       return ApiSuccess.ok({ id }, '회의록이 수정되었습니다.')
     },
     `/api/board-room/minutes/${id}`,
@@ -93,15 +97,18 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
   const id = routeId.id
   const auth = await requireBoardMember()
   if (auth instanceof NextResponse) return auth
-  const { db, user, isAdmin } = auth
+  const { user, isAdmin } = auth
 
   return apiDelete(
     async () => {
-      const { author, error: authorErr } = await loadMinutesAuthor(db, id)
+      const { author, error: authorErr } = await loadMinutesAuthor(id)
       if (authorErr || author === undefined) throw ApiError.notFound('회의록을 찾을 수 없습니다.')
       if (author !== user.id && !isAdmin) throw ApiError.forbidden('삭제 권한이 없습니다.')
-      const { error } = await db.from('board_minutes').delete().eq('id', id)
-      if (error) throw ApiError.internalServerError('회의록 삭제에 실패했습니다.')
+      try {
+        await deleteMinutes(id)
+      } catch {
+        throw ApiError.internalServerError('회의록 삭제에 실패했습니다.')
+      }
       return ApiSuccess.ok({ id }, '회의록이 삭제되었습니다.')
     },
     `/api/board-room/minutes/${id}`,

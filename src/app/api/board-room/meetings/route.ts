@@ -9,6 +9,7 @@ import {
 } from '@/constants/boardRoom'
 import { createLogger } from '@/utils/logger'
 import { parseJsonObjectBody } from '@/utils/requestBody'
+import { createDateOptions, createMeeting, deleteMeeting, listMeetings } from '@/db/queries/board'
 
 const log = createLogger('boardRoom/meetings')
 
@@ -17,16 +18,17 @@ export const runtime = 'nodejs'
 export async function GET(request: NextRequest) {
   const auth = await requireBoardMember()
   if (auth instanceof NextResponse) return auth
-  const { db, user } = auth
+  const { user } = auth
 
   return apiGet(
     async () => {
-      const { data, error } = await db
-        .from('board_meetings')
-        .select('id, title, meeting_date, location, status, vote_deadline, created_at')
-        .order('created_at', { ascending: false })
-      if (error) throw ApiError.internalServerError('회의 목록을 불러올 수 없습니다.')
-      return ApiSuccess.ok({ meetings: data, meeting_time: BOARD_MEETING_TIME })
+      let meetings: Awaited<ReturnType<typeof listMeetings>>
+      try {
+        meetings = await listMeetings()
+      } catch {
+        throw ApiError.internalServerError('회의 목록을 불러올 수 없습니다.')
+      }
+      return ApiSuccess.ok({ meetings, meeting_time: BOARD_MEETING_TIME })
     },
     '/api/board-room/meetings',
     { userId: user.id }
@@ -55,31 +57,29 @@ export async function POST(request: NextRequest) {
         throw ApiError.badRequest('후보 날짜는 YYYY-MM-DD 형식으로 1개 이상 선택해주세요.')
       if (!voteDeadline) throw ApiError.badRequest('투표 마감일을 설정해주세요.')
 
-      const { data: meeting, error: mErr } = await db
-        .from('board_meetings')
-        .insert({
+      let meeting: { id: string }
+      try {
+        meeting = await createMeeting({
           title,
           location,
-          status: 'polling',
-          vote_deadline: voteDeadline,
-          created_by: user.id,
+          voteDeadline: new Date(voteDeadline),
+          createdBy: user.id,
         })
-        .select('id')
-        .single()
-      if (mErr || !meeting) throw ApiError.internalServerError('회의 생성에 실패했습니다.')
+      } catch {
+        throw ApiError.internalServerError('회의 생성에 실패했습니다.')
+      }
 
-      const optionRows = candidateDates.map(d => ({
-        meeting_id: meeting.id,
-        candidate_date: d,
-      }))
-      const { error: oErr } = await db.from('board_meeting_date_options').insert(optionRows)
-      if (oErr) {
-        const { error: cleanupErr } = await db.from('board_meetings').delete().eq('id', meeting.id)
-        if (cleanupErr)
+      try {
+        await createDateOptions(meeting.id, candidateDates)
+      } catch {
+        try {
+          await deleteMeeting(meeting.id)
+        } catch (cleanupErr) {
           log.error('회의 롤백 실패: 고아 회의 발생', {
             meetingId: meeting.id,
-            error: cleanupErr.message,
+            error: cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr),
           })
+        }
         throw ApiError.internalServerError('후보 날짜 저장에 실패했습니다.')
       }
 
