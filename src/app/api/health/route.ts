@@ -11,14 +11,21 @@
  *   Turso가 권위이므로, 컷오버 후 헬스체크가 실제로 의미를 가지려면 이 확인이
  *   필수다 — Supabase만 확인하면 Turso 연결이 끊겨도 헬스체크가 계속 'ok'를
  *   낸다.
- * - supabase: 'ok' | 'error' — Supabase 연결 확인. 단계 4에서 활동로그·세션
- *   (user_activities 등)은 Turso로 넘어갔지만, 설정·이사회·아티스트 등
- *   Task 4 대상 표는 아직 Supabase가 권위라 계속 확인한다. 핑 대상은
- *   `system_settings`다 — `posts`는 컷오버 후 Supabase에서 지워질 1순위
- *   후보라(코드리뷰 지적) 그 표를 계속 핑하면 삭제되는 순간 이 헬스체크가
- *   이유 없이 degraded로 뒤집힌다. `system_settings`는 미들웨어의 유지보수
- *   모드 판정이 계속 의존하므로(단계 4 이후로도 안 지워질 표) 더 안정적인
- *   핑 대상이다.
+ * - supabase: 'ok' | 'error' — Supabase 연결 확인. 단계 4(Task 4)에서
+ *   `system_settings`을 포함한 설정·이사회·아티스트·기타 표의 **쓰기 권위가
+ *   Turso로 옮겨갔다** — 더 이상 "아직 Supabase가 권위라 확인한다"는 이유는
+ *   유효하지 않다. 그런데도 이 핑 대상을 `system_settings`으로 유지하는
+ *   이유는 따로 있다: `src/middleware/settings.ts`/`supabase-rest.ts`(Edge
+ *   런타임, Task 4 범위 밖)가 유지보수 모드 판정에 **여전히 Supabase의
+ *   `system_settings` 사본을 REST로 직접 읽는다** — Task 4 이후 관리자가
+ *   설정을 Turso로 바꿔도 그 미들웨어 사본은 갱신되지 않아 값이 갈라질 수
+ *   있다(task-4-report.md "남은 우려" 참고, Task 5 또는 후속 작업 대상). 이
+ *   핑은 "그 미들웨어가 의존하는 Supabase 테이블이 살아있는가"를 확인하는
+ *   것이지, "system_settings의 권위가 Supabase에 있는가"가 아니다.
+ *   `posts`는 컷오버 후 Supabase에서 지워질 1순위 후보라(코드리뷰 지적) 그
+ *   표를 계속 핑하면 삭제되는 순간 이 헬스체크가 이유 없이 degraded로
+ *   뒤집힌다 — `system_settings`은 미들웨어가 계속 참조하는 한 지워지지
+ *   않을 표라 더 안정적인 핑 대상이다.
  * - commit: 배포 커밋 SHA (Vercel 환경변수, 없으면 'unknown')
  *
  * 인증·rate limit 없음. 미들웨어는 /api/* 를 조기 통과시키므로 보호되지 않는다.

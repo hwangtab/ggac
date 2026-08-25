@@ -7,6 +7,7 @@ import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { validateAdvancedSearchQuery, buildSearchQuery } from '@/utils/advancedFiltering'
+import { executeMemberAdvancedSearch } from '@/db/queries/misc'
 import type { AdvancedSearchQuery, FilteredResult, FieldDefinition } from '@/types'
 
 // 멤버 필드 정의
@@ -212,9 +213,7 @@ export const POST = defineApiRoute<AdvancedSearchQuery>({
     console.error('고급 검색 API 오류:', error)
     return ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse()
   },
-  handler: async ({ body: searchQuery, auth }) => {
-    const { db } = auth
-
+  handler: async ({ body: searchQuery }) => {
     // 쿼리 검증
     const validation = validateAdvancedSearchQuery(searchQuery, MEMBER_FIELD_DEFINITIONS)
     if (!validation.isValid) {
@@ -231,19 +230,24 @@ export const POST = defineApiRoute<AdvancedSearchQuery>({
       },
     }
 
-    // SQL 쿼리 생성
+    // SQL 쿼리 생성. Task 4: execute_advanced_search RPC(Postgres) 대체로
+    // src/db/queries/misc.ts의 executeMemberAdvancedSearch(SQLite/Turso)를
+    // 쓴다 — 그 함수 JSDoc 참고. `artists`를 직접 LEFT JOIN하지 않고 서브쿼리로
+    // 좁혀 member_profiles와 겹치는 created_at/updated_at 컬럼명의 모호성을
+    // 피한다(선택 컬럼은 원본과 동일하게 a.name/a.slug뿐이다). `is_deleted =
+    // false`는 SQLite 정수 불리언 표현인 `is_deleted = 0`으로 바꿨다.
     const baseQuery = `
       member_profiles mp
-      LEFT JOIN artists a ON mp.artist_id = a.legacy_id
+      LEFT JOIN (SELECT legacy_id, name, slug FROM artists) a ON mp.artist_id = a.legacy_id
       LEFT JOIN (
-        SELECT author_id, COUNT(*) as post_count 
-        FROM posts 
-        WHERE is_deleted = false 
+        SELECT author_id, COUNT(*) as post_count
+        FROM posts
+        WHERE is_deleted = 0
         GROUP BY author_id
       ) p ON mp.id = p.author_id
       LEFT JOIN (
-        SELECT author_id, COUNT(*) as comment_count 
-        FROM comments 
+        SELECT author_id, COUNT(*) as comment_count
+        FROM comments
         GROUP BY author_id
       ) c ON mp.id = c.author_id
     `
@@ -267,30 +271,18 @@ export const POST = defineApiRoute<AdvancedSearchQuery>({
         FROM`
       )
 
-      // 병렬로 데이터와 총 개수 조회
-      const [dataResult, countResult] = await Promise.all([
-        db.rpc('execute_advanced_search', {
-          query_sql: dataQuery,
-          query_params: params,
-        }),
-        db.rpc('execute_advanced_search', {
-          query_sql: countSql,
-          query_params: params,
-        }),
-      ])
-
-      if (dataResult.error) {
-        console.error('데이터 조회 오류:', dataResult.error)
+      // 데이터와 총 개수를 한 번에 조회(내부적으로 병렬 실행 — misc.ts 참고)
+      let members: Record<string, unknown>[]
+      let totalCount: number
+      try {
+        const result = await executeMemberAdvancedSearch(dataQuery, countSql, params)
+        members = result.rows
+        totalCount = result.total
+      } catch (searchError) {
+        console.error('검색 조회 오류:', searchError)
         return ApiError.internalServerError('검색 중 오류가 발생했습니다.').toNextResponse()
       }
 
-      if (countResult.error) {
-        console.error('카운트 조회 오류:', countResult.error)
-        return ApiError.internalServerError('검색 중 오류가 발생했습니다.').toNextResponse()
-      }
-
-      const members = dataResult.data || []
-      const totalCount = countResult.data?.[0]?.total || 0
       const { page, limit } = query.pagination!
       const totalPages = Math.ceil(totalCount / limit)
 

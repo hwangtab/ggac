@@ -9,6 +9,12 @@ import { parseIntegerParam } from '@/utils/queryParams'
 import { isValidEventSlug, normalizeEventSlug } from '@/utils/eventApplicationValidation'
 import { validateUUID } from '@/utils/validation'
 import { z } from 'zod'
+import {
+  deleteEventApplication,
+  listEventApplications,
+  updateEventApplicationFields,
+  updateEventApplicationStatus,
+} from '@/db/queries/misc'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -18,9 +24,7 @@ export const GET = defineApiRoute({
   method: 'GET',
   name: 'api/admin/event-applications',
   auth: 'admin',
-  handler: async ({ request, auth }) => {
-    const { db } = auth
-
+  handler: async ({ request }) => {
     const { searchParams } = new URL(request.url)
     const eventSlugParam = searchParams.get('event_slug') || ''
     const eventSlug = normalizeEventSlug(eventSlugParam)
@@ -37,18 +41,18 @@ export const GET = defineApiRoute({
       return ApiError.badRequest('유효한 status 파라미터가 필요합니다.').toNextResponse()
     }
 
-    let query = db
-      .from('event_applications')
-      .select('*', { count: 'exact' })
-      .order('created_at', { ascending: false })
-      .range((page - 1) * limit, page * limit - 1)
-
-    if (eventSlug) query = query.eq('event_slug', eventSlug)
-    if (status) query = query.eq('status', status)
-
-    const [{ data, error, count }, allProjects] = await Promise.all([query, getProjects()])
-
-    if (error) {
+    let data: Awaited<ReturnType<typeof listEventApplications>>['rows']
+    let count: number
+    let allProjects: Awaited<ReturnType<typeof getProjects>>
+    try {
+      const [listResult, projects] = await Promise.all([
+        listEventApplications({ eventSlug: eventSlug || null, status, page, limit }),
+        getProjects(),
+      ])
+      data = listResult.rows
+      count = listResult.total
+      allProjects = projects
+    } catch (error) {
       console.error('[admin/event-applications] fetch error:', error)
       return ApiError.internalServerError('신청 내역을 불러오지 못했습니다.').toNextResponse()
     }
@@ -59,12 +63,12 @@ export const GET = defineApiRoute({
 
     return ApiSuccess.ok(
       {
-        applications: data ?? [],
+        applications: data,
         pagination: {
           currentPage: page,
-          totalCount: count ?? 0,
-          totalPages: Math.ceil((count ?? 0) / limit),
-          hasNext: page * limit < (count ?? 0),
+          totalCount: count,
+          totalPages: Math.ceil(count / limit),
+          hasNext: page * limit < count,
         },
         events,
       },
@@ -107,9 +111,7 @@ export const PATCH = defineApiRoute<Record<string, unknown>>({
   body: {
     invalidResponse: () => ApiError.badRequest('유효하지 않은 JSON 본문입니다.').toNextResponse(),
   },
-  handler: async ({ body, auth }) => {
-    const { db } = auth
-
+  handler: async ({ body }) => {
     const parsed = StatusUpdateSchema.safeParse(body)
     if (!parsed.success) {
       return ApiError.badRequest('id와 유효한 status가 필요합니다.').toNextResponse()
@@ -122,12 +124,9 @@ export const PATCH = defineApiRoute<Record<string, unknown>>({
     }
     const applicationId = idValidation.sanitized
 
-    const { error } = await db
-      .from('event_applications')
-      .update({ status, updated_at: new Date().toISOString() })
-      .eq('id', applicationId)
-
-    if (error) {
+    try {
+      await updateEventApplicationStatus(applicationId, status)
+    } catch (error) {
       console.error('[admin/event-applications] update error:', error)
       return ApiError.internalServerError('상태 업데이트에 실패했습니다.').toNextResponse()
     }
@@ -146,9 +145,7 @@ export const PUT = defineApiRoute<Record<string, unknown>>({
   body: {
     invalidResponse: () => ApiError.badRequest('유효하지 않은 JSON 본문입니다.').toNextResponse(),
   },
-  handler: async ({ body, auth }) => {
-    const { db } = auth
-
+  handler: async ({ body }) => {
     const parsed = FieldUpdateSchema.safeParse(body)
     if (!parsed.success) {
       return ApiError.badRequest('입력 값을 확인해주세요.').toNextResponse()
@@ -169,12 +166,11 @@ export const PUT = defineApiRoute<Record<string, unknown>>({
       links: fields.links?.trim() || null,
       message: fields.message?.trim() || null,
       participation_type: fields.participation_type?.trim() || null,
-      updated_at: new Date().toISOString(),
     }
 
-    const { error } = await db.from('event_applications').update(updateData).eq('id', applicationId)
-
-    if (error) {
+    try {
+      await updateEventApplicationFields(applicationId, updateData)
+    } catch (error) {
       console.error('[admin/event-applications] field update error:', error)
       return ApiError.internalServerError('수정에 실패했습니다.').toNextResponse()
     }
@@ -187,9 +183,7 @@ export const DELETE = defineApiRoute({
   method: 'DELETE',
   name: 'api/admin/event-applications',
   auth: 'admin',
-  handler: async ({ request, auth }) => {
-    const { db } = auth
-
+  handler: async ({ request }) => {
     const id = new URL(request.url).searchParams.get('id')
     const idValidation = validateUUID(id ?? '', '신청 ID')
     if (!idValidation.isValid) {
@@ -197,9 +191,9 @@ export const DELETE = defineApiRoute({
     }
     const applicationId = idValidation.sanitized
 
-    const { error } = await db.from('event_applications').delete().eq('id', applicationId)
-
-    if (error) {
+    try {
+      await deleteEventApplication(applicationId)
+    } catch (error) {
       console.error('[admin/event-applications] delete error:', error)
       return ApiError.internalServerError('삭제에 실패했습니다.').toNextResponse()
     }

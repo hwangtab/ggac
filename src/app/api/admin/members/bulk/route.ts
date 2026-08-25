@@ -11,6 +11,13 @@ import {
   notifyMembersApprovedBatch,
   notifyMembersRejectedBatch,
 } from '@/lib/server/memberStatusNotify'
+import {
+  completeBulkOperation,
+  createBulkOperation,
+  failBulkOperation,
+  listBulkOperations,
+  markBulkOperationInProgress,
+} from '@/db/queries/misc'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -40,7 +47,7 @@ export const POST = defineApiRoute<Partial<BulkOperationRequest>>({
     return ApiError.internalServerError('대량 작업 처리 중 오류가 발생했습니다.').toNextResponse()
   },
   handler: async ({ body: requestData, auth }) => {
-    const { db, user } = auth
+    const { user } = auth
 
     const { operation_type, member_ids, parameters = {} } = requestData
 
@@ -97,32 +104,21 @@ export const POST = defineApiRoute<Partial<BulkOperationRequest>>({
     }
 
     // 대량 작업 로그 생성
-    const { data: bulkOperation, error: bulkError } = await db
-      .from('member_bulk_operations')
-      .insert({
+    let bulkOperation: Awaited<ReturnType<typeof createBulkOperation>>
+    try {
+      bulkOperation = await createBulkOperation({
         operation_type,
         performed_by: user.id,
         member_ids: sanitizedMemberIds,
         parameters,
-        status: 'pending',
-        created_at: new Date().toISOString(),
       })
-      .select()
-      .single()
-
-    if (bulkError) {
+    } catch (bulkError) {
       console.error('Bulk operation log error:', bulkError)
       return ApiError.internalServerError('대량 작업 로그 생성에 실패했습니다.').toNextResponse()
     }
 
     // 작업 시작 표시
-    await db
-      .from('member_bulk_operations')
-      .update({
-        status: 'in_progress',
-        started_at: new Date().toISOString(),
-      })
-      .eq('id', bulkOperation.id)
+    await markBulkOperationInProgress(bulkOperation.id)
 
     let successCount = 0
     let errorCount = 0
@@ -246,18 +242,11 @@ export const POST = defineApiRoute<Partial<BulkOperationRequest>>({
       }
 
       // 작업 완료 표시
-      await db
-        .from('member_bulk_operations')
-        .update({
-          status: 'completed',
-          completed_at: new Date().toISOString(),
-          results: {
-            success_count: successCount,
-            error_count: errorCount,
-            details: results,
-          },
-        })
-        .eq('id', bulkOperation.id)
+      await completeBulkOperation(bulkOperation.id, {
+        success_count: successCount,
+        error_count: errorCount,
+        details: results,
+      })
 
       // 보안 이벤트 로깅
       logSecurityEvent(
@@ -286,19 +275,15 @@ export const POST = defineApiRoute<Partial<BulkOperationRequest>>({
       console.error('Bulk operation error:', operationError)
 
       // 작업 실패 표시
-      await db
-        .from('member_bulk_operations')
-        .update({
-          status: 'failed',
-          completed_at: new Date().toISOString(),
-          error_message: '작업 처리 중 오류가 발생했습니다.',
-          results: {
-            success_count: successCount,
-            error_count: errorCount,
-            details: results,
-          },
-        })
-        .eq('id', bulkOperation.id)
+      await failBulkOperation(
+        bulkOperation.id,
+        {
+          success_count: successCount,
+          error_count: errorCount,
+          details: results,
+        },
+        '작업 처리 중 오류가 발생했습니다.'
+      )
 
       return ApiError.internalServerError('대량 작업 처리 중 오류가 발생했습니다.').toNextResponse()
     }
@@ -321,40 +306,20 @@ export const GET = defineApiRoute({
       '대량 작업 이력을 조회하는 중 오류가 발생했습니다.'
     ).toNextResponse()
   },
-  handler: async ({ auth }) => {
-    const { db } = auth
-
+  handler: async () => {
     // 대량 작업 이력 조회. `performed_by_member`는 이전엔 Supabase FK 임베드
     // (member_profiles!performed_by)로 한 쿼리에 조인됐지만, 프로필 권위가
     // Turso로 옮겨진 뒤로는 두 단계로 나눠야 한다 — DB를 건넌 조인은 만들지
-    // 않고, 이력 조회(Supabase) 뒤 수행자 id들을 한 번에(getProfilesByIds)
-    // 배치 조회해 메모리에서 붙인다(id별 루프 금지).
-    const { data: operations, error: operationsError } = await db
-      .from('member_bulk_operations')
-      .select(
-        `
-        id,
-        operation_type,
-        member_ids,
-        parameters,
-        results,
-        status,
-        created_at,
-        started_at,
-        completed_at,
-        error_message,
-        performed_by
-      `
-      )
-      .order('created_at', { ascending: false })
-      .limit(50)
-
-    if (operationsError) {
-      console.error('Operations fetch error:', operationsError)
+    // 않고, 이력 조회 뒤 수행자 id들을 한 번에(getProfilesByIds) 배치 조회해
+    // 메모리에서 붙인다(id별 루프 금지).
+    let rows: Awaited<ReturnType<typeof listBulkOperations>>
+    try {
+      rows = await listBulkOperations(50)
+    } catch (error) {
+      console.error('Operations fetch error:', error)
       return ApiError.internalServerError('대량 작업 이력을 조회할 수 없습니다.').toNextResponse()
     }
 
-    const rows = operations || []
     const performerIds = Array.from(
       new Set(rows.map(op => op.performed_by).filter((id): id is string => Boolean(id)))
     )

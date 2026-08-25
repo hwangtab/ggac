@@ -1,5 +1,4 @@
 import { NextRequest } from 'next/server'
-import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
 import { z } from 'zod'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { RATE_LIMITS, applyRateLimit, createIPKeyGenerator } from '@/lib/server/rateLimit'
@@ -9,6 +8,7 @@ import {
   normalizeEventSlug,
 } from '@/utils/eventApplicationValidation'
 import { parseJsonObjectBody } from '@/utils/requestBody'
+import { createEventApplication } from '@/db/queries/misc'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -97,20 +97,10 @@ export async function POST(request: NextRequest) {
       privacy_consent_at: new Date().toISOString(),
     }
 
-    let db
+    let inserted: { id: string }
     try {
-      db = createServiceRoleClient()
-    } catch {
-      return ApiError.internalServerError('서버 구성 오류입니다.').toNextResponse()
-    }
-
-    const { data: inserted, error: insertError } = await db
-      .from('event_applications')
-      .insert(cleanedData)
-      .select('id')
-      .single()
-
-    if (insertError) {
+      inserted = await createEventApplication(cleanedData)
+    } catch (insertError) {
       console.error('[event-applications] insert error:', insertError)
       return ApiError.internalServerError('신청 처리 중 오류가 발생했습니다.').toNextResponse()
     }
