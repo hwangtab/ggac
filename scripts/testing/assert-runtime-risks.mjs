@@ -2437,13 +2437,20 @@ const userSettingsResetApiPath = join(root, 'src/app/api/settings/reset/route.ts
 const userSettingsResetApiSource = readFileSync(userSettingsResetApiPath, 'utf8')
 const activityConstantsPath = join(root, 'src/constants/activity.ts')
 const activityConstantsSource = readFileSync(activityConstantsPath, 'utf8')
+// 단계 4(활동로그·세션 Turso 전환)에서 admin/activities/users와
+// admin/analytics/patterns가 수동 Supabase 쿼리 빌더(`query.eq(...)`)를
+// Turso 쿼리 계층 호출(`listActivitiesWithProfile({ userId, ... })`/
+// `analyzeActivityPatterns(sanitizedUserId, ...)`)로 대체했다 — 검증
+// 순서(validateUUID → sanitizedUserId → 쿼리 계층 호출)는 그대로다.
 const validatesAdminAnalyticsUserIdFilters =
   /validateUUID/.test(adminActivitiesUsersSource) &&
   /let\s+sanitizedUserId[\s\S]*?=\s*null/.test(adminActivitiesUsersSource) &&
-  /query\.eq\(['"]user_id['"],\s*sanitizedUserId\)/.test(adminActivitiesUsersSource) &&
+  /listActivitiesWithProfile\(\{[\s\S]*?userId:\s*sanitizedUserId/.test(
+    adminActivitiesUsersSource
+  ) &&
   /validateUUID/.test(adminAnalyticsPatternsSource) &&
   /let\s+sanitizedUserId[\s\S]*?=\s*null/.test(adminAnalyticsPatternsSource) &&
-  /analyzeActivityPatterns\([\s\S]*?db,[\s\S]*?sanitizedUserId/.test(adminAnalyticsPatternsSource)
+  /analyzeActivityPatterns\(sanitizedUserId/.test(adminAnalyticsPatternsSource)
 const validatesAdminAnalyticsQueryEnums =
   /TREND_PERIODS/.test(adminAnalyticsConstantsSource) &&
   /TREND_TYPES/.test(adminAnalyticsConstantsSource) &&
@@ -2517,6 +2524,9 @@ const validatesUserSettingsAllowlists =
   /isUserSettingKey\(category,\s*setting_key\)/.test(userSettingsResetApiSource) &&
   !/const category = searchParams\.get\(['"]category['"]\)/.test(userSettingsApiSource) &&
   !/category:\s*z\.string\(\)\.min\(1\)\.max\(64\),/.test(userSettingsApiSource)
+// 단계 4: admin/activities/users가 `query = query.eq(...)` 대신
+// `listActivitiesWithProfile({ actionType, targetType, ... })`(검증된
+// actionType/targetType를 그대로 전달)를 쓴다 — 검증 순서는 그대로다.
 const validatesAdminActivityTypeFilters =
   /ACTIVITY_ACTION_TYPES/.test(activityConstantsSource) &&
   /ACTIVITY_TARGET_TYPES/.test(activityConstantsSource) &&
@@ -2528,8 +2538,8 @@ const validatesAdminActivityTypeFilters =
   /parseActivityTargetType\(targetTypeParam\)/.test(adminActivitiesUsersSource) &&
   /if\s*\(actionTypeParam && !actionType\)/.test(adminActivitiesUsersSource) &&
   /if\s*\(targetTypeParam && !targetType\)/.test(adminActivitiesUsersSource) &&
-  /query = query\.eq\(['"]action_type['"],\s*actionType\)/.test(adminActivitiesUsersSource) &&
-  /query = query\.eq\(['"]target_type['"],\s*targetType\)/.test(adminActivitiesUsersSource) &&
+  /listActivitiesWithProfile\(\{[\s\S]*?actionType,/.test(adminActivitiesUsersSource) &&
+  /listActivitiesWithProfile\(\{[\s\S]*?targetType,/.test(adminActivitiesUsersSource) &&
   !/const actionType = searchParams\.get\(['"]action_type['"]\)/.test(adminActivitiesUsersSource) &&
   !/const targetType = searchParams\.get\(['"]target_type['"]\)/.test(adminActivitiesUsersSource)
 const adminActivitiesUsersUsesSharedApiRoute =
@@ -2825,30 +2835,36 @@ const adminArtistMemberMutationRoutesUseSharedApiRoute =
   !/applyRateLimit\(/.test(adminArtistMemberApiSource) &&
   !/addRateLimitHeaders/.test(adminArtistMemberApiSource) &&
   !/requireAdmin\(\)/.test(adminArtistMemberApiSource)
+// 단계 4: log_user_activity/log_user_activities_batch RPC를 Turso 쿼리
+// 계층(logUserActivity/logUserActivitiesBatch)으로 대체했다 — RPC의
+// `p_action_type`/`p_target_type`/`p_target_id` 파라미터명은 이제
+// `action_type`/`target_type`/`target_id`(logUserActivity의 snake_case
+// 입력 필드명)이지만, 검증된 지역변수(actionType/targetType/targetId)만
+// 실린다는 성질은 그대로 유지한다.
 const validatesActivityLogTypes =
   /parseActivityActionType\(action_type\)/.test(activityLogSource) &&
   /parseActivityTargetType\(target_type\)/.test(activityLogSource) &&
   /validateUUID\(target_id,\s*['"]대상 ID['"]\)/.test(activityLogSource) &&
-  /p_action_type:\s*actionType/.test(activityLogSource) &&
-  /p_target_type:\s*targetType/.test(activityLogSource) &&
-  /p_target_id:\s*targetId/.test(activityLogSource) &&
+  /action_type:\s*actionType/.test(activityLogSource) &&
+  /target_type:\s*targetType/.test(activityLogSource) &&
+  /target_id:\s*targetId/.test(activityLogSource) &&
   /parseActivityActionType\(log\.action_type\)/.test(activityBatchLogSource) &&
   /parseActivityTargetType\(log\.target_type\)/.test(activityBatchLogSource) &&
   /validateUUID\(log\.target_id,\s*['"]대상 ID['"]\)/.test(activityBatchLogSource) &&
-  // 배치는 log_user_activities_batch(배열 RPC, Phase 3)로 일괄 기록 — 검증된
+  // 배치는 logUserActivitiesBatch(배열 인자, 단계 4)로 일괄 기록 — 검증된
   // 값(actionType/targetType/targetId)만 payload에 실리는지 확인
-  /rpc\(['"]log_user_activities_batch['"]/.test(activityBatchLogSource) &&
+  /logUserActivitiesBatch\(/.test(activityBatchLogSource) &&
   /action_type:\s*actionType/.test(activityBatchLogSource) &&
   /target_type:\s*targetType/.test(activityBatchLogSource) &&
   /target_id:\s*targetId/.test(activityBatchLogSource) &&
   /target_type:\s*['"]system['"]/.test(loginPageSource) &&
   !/target_type:\s*['"]auth['"]/.test(loginPageSource) &&
-  !/p_action_type:\s*action_type/.test(activityLogSource) &&
-  !/p_target_type:\s*target_type/.test(activityLogSource) &&
-  !/p_target_id:\s*target_id/.test(activityLogSource) &&
-  !/p_action_type:\s*log\.action_type/.test(activityBatchLogSource) &&
-  !/p_target_type:\s*log\.target_type/.test(activityBatchLogSource) &&
-  !/p_target_id:\s*log\.target_id/.test(activityBatchLogSource)
+  !/action_type:\s*action_type,/.test(activityLogSource) &&
+  !/target_type:\s*target_type,/.test(activityLogSource) &&
+  !/target_id:\s*target_id,/.test(activityLogSource) &&
+  !/action_type:\s*log\.action_type/.test(activityBatchLogSource) &&
+  !/target_type:\s*log\.target_type/.test(activityBatchLogSource) &&
+  !/target_id:\s*log\.target_id/.test(activityBatchLogSource)
 const boardRoomDynamicRouteChecks = [
   {
     path: 'src/app/api/board-room/meetings/[id]/route.ts',

@@ -11,8 +11,9 @@
  *   Turso가 권위이므로, 컷오버 후 헬스체크가 실제로 의미를 가지려면 이 확인이
  *   필수다 — Supabase만 확인하면 Turso 연결이 끊겨도 헬스체크가 계속 'ok'를
  *   낸다.
- * - supabase: 'ok' | 'error' — Supabase 연결 확인. 단계 4 대상 표
- *   (user_activities 등)가 아직 Supabase에 남아 있어 계속 확인한다. 핑 대상은
+ * - supabase: 'ok' | 'error' — Supabase 연결 확인. 단계 4에서 활동로그·세션
+ *   (user_activities 등)은 Turso로 넘어갔지만, 설정·이사회·아티스트 등
+ *   Task 4 대상 표는 아직 Supabase가 권위라 계속 확인한다. 핑 대상은
  *   `system_settings`다 — `posts`는 컷오버 후 Supabase에서 지워질 1순위
  *   후보라(코드리뷰 지적) 그 표를 계속 핑하면 삭제되는 순간 이 헬스체크가
  *   이유 없이 degraded로 뒤집힌다. `system_settings`는 미들웨어의 유지보수

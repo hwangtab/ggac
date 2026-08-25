@@ -4,6 +4,8 @@ import { parseIntegerParam } from '@/utils/queryParams'
 import { parseTrendPeriod, parseTrendType } from '@/constants/adminAnalytics'
 import type { TrendPeriod } from '@/constants/adminAnalytics'
 import { listProfileSignupsSince } from '@/db/queries/profiles'
+import { getWeeklyActivityStats, listActivities } from '@/db/queries/activities'
+import { listSessions } from '@/db/queries/sessions'
 
 type ActivityTrendPoint = {
   date: string
@@ -22,9 +24,7 @@ export const GET = defineApiRoute({
   rateLimit: RATE_LIMITS.ADMIN_API,
   auth: 'admin',
   errorMessage: '서버 오류가 발생했습니다.',
-  handler: async ({ request, auth }) => {
-    const { db } = auth
-
+  handler: async ({ request }) => {
     const { searchParams } = new URL(request.url)
     const periodParam = searchParams.get('period') || 'daily'
     const period = parseTrendPeriod(periodParam)
@@ -43,19 +43,19 @@ export const GET = defineApiRoute({
 
     switch (trendType) {
       case 'activity':
-        trendData = await getActivityTrends(db, period, weeks)
+        trendData = await getActivityTrends(period, weeks)
         break
 
       case 'users':
-        trendData = await getUserTrends(db, period, weeks)
+        trendData = await getUserTrends(period, weeks)
         break
 
       case 'engagement':
-        trendData = await getEngagementTrends(db, period, weeks)
+        trendData = await getEngagementTrends(period, weeks)
         break
 
       case 'performance':
-        trendData = await getPerformanceTrends(db, period, weeks)
+        trendData = await getPerformanceTrends(period, weeks)
         break
 
       default: {
@@ -80,17 +80,19 @@ export const GET = defineApiRoute({
 /**
  * 활동 트렌드 분석
  */
-async function getActivityTrends(supabase: any, period: TrendPeriod, weeks: number) {
+async function getActivityTrends(period: TrendPeriod, weeks: number) {
   const startDate = new Date()
   startDate.setDate(startDate.getDate() - weeks * 7)
   startDate.setHours(0, 0, 0, 0)
 
-  // 최근 기간의 전체 주간 활동 통계 사용
-  const { data: weeklyStats } = await supabase
-    .from('weekly_activity_stats')
-    .select('*')
-    .gte('week_start', startDate.toISOString())
-    .order('week_start', { ascending: true })
+  // 최근 기간의 전체 주간 활동 통계 사용 — 단계 4: weekly_activity_stats 뷰를
+  // Turso 쿼리 계층(getWeeklyActivityStats)으로 대체했다. 뷰가 원래도
+  // "최근 8주"로 고정된 창이었으므로(원본 SQL 참고), 이 조회 자체가 요청한
+  // `weeks`(최대 104)를 항상 채우지는 못할 수 있다 — 원본과 동일한 제약이다.
+  const allWeeklyStats = await getWeeklyActivityStats()
+  const weeklyStats = allWeeklyStats
+    .filter(week => week.week_start >= startDate.toISOString())
+    .sort((a, b) => a.week_start.localeCompare(b.week_start))
 
   const rawSeries: ActivityTrendPoint[] =
     weeklyStats?.map((week: any) => ({
@@ -164,22 +166,18 @@ async function getActivityTrends(supabase: any, period: TrendPeriod, weeks: numb
 /**
  * 사용자 트렌드 분석
  */
-async function getUserTrends(supabase: any, period: TrendPeriod, weeks: number) {
+async function getUserTrends(period: TrendPeriod, weeks: number) {
   const startDate = new Date()
   startDate.setDate(startDate.getDate() - weeks * 7)
 
-  // 주별 신규 등록 사용자 — 코드리뷰 Important 3: member_profiles는 이미
-  // Turso가 권위(단계 3c 이후)인데 이 라우트만 빠져 있었다. listProfileSignupsSince
-  // (Turso)로 옮긴다. user_sessions는 여전히 Supabase 권위(단계 4 대상)라
-  // 아래 조회는 그대로 둔다 — 이 함수는 두 DB를 함께 읽는 과도기 상태다.
+  // 주별 신규 등록 사용자 — member_profiles는 Turso가 권위(단계 3c 이후)라
+  // listProfileSignupsSince(Turso)를 쓴다. user_sessions도 단계 4에서 Turso
+  // 권위가 되어 listSessions(Turso)로 옮겼다 — 이 함수는 더 이상 두 DB를
+  // 함께 읽지 않는다.
   const newUsers = await listProfileSignupsSince(startDate)
 
   // 주별 활성 사용자 (세션 기반)
-  const { data: activeSessions } = await supabase
-    .from('user_sessions')
-    .select('login_at, user_id')
-    .gte('login_at', startDate.toISOString())
-    .order('login_at', { ascending: true })
+  const activeSessions = await listSessions({ loginAfter: startDate })
 
   // 주별 데이터 그룹화
   const weeklyData = []
@@ -233,19 +231,20 @@ async function getUserTrends(supabase: any, period: TrendPeriod, weeks: number) 
 /**
  * 참여도 트렌드 분석
  */
-async function getEngagementTrends(supabase: any, period: TrendPeriod, weeks: number) {
+async function getEngagementTrends(period: TrendPeriod, weeks: number) {
   const startDate = new Date()
   startDate.setDate(startDate.getDate() - weeks * 7)
 
-  // 참여도 관련 활동
-  const engagementActions = ['post_created', 'comment_created', 'like_added', 'post_updated']
+  // 참여도 관련 활동 — 단계 4: 수동 Supabase 쿼리를 Turso 쿼리 계층
+  // (listActivities)으로 대체했다.
+  const engagementActions: Array<
+    'post_created' | 'comment_created' | 'like_added' | 'post_updated'
+  > = ['post_created', 'comment_created', 'like_added', 'post_updated']
 
-  const { data: engagementData } = await supabase
-    .from('user_activities')
-    .select('created_at, action_type, user_id')
-    .gte('created_at', startDate.toISOString())
-    .in('action_type', engagementActions)
-    .order('created_at', { ascending: true })
+  const engagementData = await listActivities({
+    startDate,
+    actionTypes: engagementActions,
+  })
 
   // 주별 참여도 데이터 계산
   const weeklyEngagement = []
@@ -302,16 +301,13 @@ async function getEngagementTrends(supabase: any, period: TrendPeriod, weeks: nu
 /**
  * 성능 트렌드 분석
  */
-async function getPerformanceTrends(supabase: any, period: TrendPeriod, weeks: number) {
+async function getPerformanceTrends(period: TrendPeriod, weeks: number) {
   const startDate = new Date()
   startDate.setDate(startDate.getDate() - weeks * 7)
 
-  // 세션 성능 데이터
-  const { data: sessions } = await supabase
-    .from('user_sessions')
-    .select('login_at, logout_at, last_activity')
-    .gte('login_at', startDate.toISOString())
-    .order('login_at', { ascending: true })
+  // 세션 성능 데이터 — 단계 4: 수동 Supabase 쿼리를 Turso 쿼리 계층
+  // (listSessions)으로 대체했다.
+  const sessions = await listSessions({ loginAfter: startDate })
 
   const weeklyPerformance = []
   for (let i = 0; i < weeks; i++) {

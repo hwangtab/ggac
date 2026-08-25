@@ -10,6 +10,11 @@ import {
 } from '@/db/queries/profiles'
 import { listPostsInRange } from '@/db/queries/posts'
 import { listCommentsInRange } from '@/db/queries/comments'
+import {
+  getWeeklyActivityStats,
+  listActivities,
+  listDailyActivityStats,
+} from '@/db/queries/activities'
 
 const REPORT_TYPES = [
   'member_activity',
@@ -102,7 +107,7 @@ export const POST = defineApiRoute<Record<string, unknown>>({
   },
   errorResponse: () => ApiError.internalServerError('Internal server error').toNextResponse(),
   handler: async ({ body, auth }) => {
-    const { db: serviceSupabase, user } = auth
+    const { user } = auth
 
     const reportType = parseReportType(body.reportType)
     if (!reportType) {
@@ -118,35 +123,24 @@ export const POST = defineApiRoute<Record<string, unknown>>({
     const { startDate, endDate } = parsedDateRange
     const filters = parseReportFilters(body.filters)
 
-    // 리포트 유형별 데이터 생성 (Service Role 클라이언트 사용)
+    // 리포트 유형별 데이터 생성 — 단계 4: member_activity의
+    // user_activities/daily_activity_stats, post_engagement의
+    // weekly_activity_stats까지 전부 Turso 쿼리 계층으로 옮기면서, 이 라우트가
+    // 쓰던 Service Role(Supabase) 클라이언트가 완전히 불필요해졌다(다른 조회는
+    // 이미 단계 3c/Task 8에서 Turso로 넘어가 있었다).
     let reportData
     switch (reportType) {
       case 'member_activity':
-        reportData = await generateMemberActivityReport(
-          serviceSupabase,
-          startDate,
-          endDate,
-          filters
-        )
+        reportData = await generateMemberActivityReport(startDate, endDate, filters)
         break
       case 'post_engagement':
-        reportData = await generatePostEngagementReport(
-          serviceSupabase,
-          startDate,
-          endDate,
-          filters
-        )
+        reportData = await generatePostEngagementReport(startDate, endDate, filters)
         break
       case 'user_registration':
-        reportData = await generateUserRegistrationReport(
-          serviceSupabase,
-          startDate,
-          endDate,
-          filters
-        )
+        reportData = await generateUserRegistrationReport(startDate, endDate, filters)
         break
       case 'comprehensive':
-        reportData = await generateComprehensiveReport(serviceSupabase, startDate, endDate, filters)
+        reportData = await generateComprehensiveReport(startDate, endDate, filters)
         break
       default:
         return ApiError.badRequest('Invalid report type').toNextResponse()
@@ -176,17 +170,9 @@ export const POST = defineApiRoute<Record<string, unknown>>({
 })
 
 // 멤버 활동 리포트 생성
-async function generateMemberActivityReport(
-  supabase: any,
-  startDate: Date,
-  endDate: Date,
-  filters: any
-) {
+async function generateMemberActivityReport(startDate: Date, endDate: Date, filters: any) {
   // 1. 전체 회원 통계 (기본 데이터) — Task 8: member_profiles는 Turso가
   // 권위(단계 3c 이후)라 listAllProfilesSummary(Turso)로 옮겼다.
-  // user_activities는 여전히 Supabase 권위(단계 4 대상)라 아래 activities
-  // 조회만 supabase 파라미터를 계속 쓴다 — 이 함수가 두 DB를 함께 읽는
-  // 과도기 상태는 스펙이 허용한 정상 상태다.
   let allMembers: Awaited<ReturnType<typeof listAllProfilesSummary>> = []
   try {
     allMembers = await listAllProfilesSummary()
@@ -194,15 +180,14 @@ async function generateMemberActivityReport(
     console.error('회원 데이터 조회 오류:', error)
   }
 
-  // 2. 기간별 활동 통계 (수정된 쿼리 - 관계 문제 해결)
-  const { data: activities, error: activitiesError } = await supabase
-    .from('user_activities')
-    .select('id, user_id, action_type, created_at')
-    .gte('created_at', startDate.toISOString())
-    .lte('created_at', endDate.toISOString())
-
-  if (activitiesError) {
-    console.error('사용자 활동 데이터 조회 오류:', activitiesError)
+  // 2. 기간별 활동 통계 — 단계 4: user_activities가 Turso 권위가 되어
+  // listActivities(Turso)로 옮겼다. 이 함수는 더 이상 두 DB를 함께 읽지
+  // 않는다.
+  let activities: Awaited<ReturnType<typeof listActivities>> = []
+  try {
+    activities = await listActivities({ startDate, endDate })
+  } catch (error) {
+    console.error('사용자 활동 데이터 조회 오류:', error)
   }
 
   // 3. 활동별 집계
@@ -281,24 +266,18 @@ async function generateMemberActivityReport(
     data: {
       activitySummary,
       userActivities: userActivities.slice(0, 50), // 상위 50명만
-      dailyActivities: await getDailyActivityBreakdown(supabase, startDate, endDate),
+      dailyActivities: await getDailyActivityBreakdown(startDate, endDate),
       memberBreakdown: memberStats,
     },
   }
 }
 
 // 게시글 참여도 리포트 생성
-async function generatePostEngagementReport(
-  supabase: any,
-  startDate: Date,
-  endDate: Date,
-  filters: any
-) {
+async function generatePostEngagementReport(startDate: Date, endDate: Date, filters: any) {
   // Task 8: posts/comments는 Turso가 권위(단계 3c 이후)라
-  // listPostsInRange/listCommentsInRange(Turso)로 옮겼다. 이 함수는 다른
-  // 표(user_activities 등)를 읽지 않으므로 교차 DB가 남지 않는다 —
-  // `supabase` 파라미터는 함수 시그니처 통일(generateComprehensiveReport가
-  // 4개 함수를 같은 방식으로 호출) 목적으로만 남아 있다.
+  // listPostsInRange/listCommentsInRange(Turso)로 옮겼다. 단계 4에서
+  // weekly_activity_stats(getEngagementTrends 아래)까지 Turso로 넘어오면서
+  // 이 함수는 이제 Supabase를 전혀 읽지 않는다.
   let posts: Awaited<ReturnType<typeof listPostsInRange>> = []
   try {
     posts = await listPostsInRange(startDate, endDate)
@@ -357,18 +336,13 @@ async function generatePostEngagementReport(
           commentCount: commentsByPost[post.id] || 0,
         })) || [],
       categoryStats,
-      engagementTrends: await getEngagementTrends(supabase, startDate, endDate),
+      engagementTrends: await getEngagementTrends(startDate, endDate),
     },
   }
 }
 
 // 사용자 등록 리포트 생성
-async function generateUserRegistrationReport(
-  supabase: any,
-  startDate: Date,
-  endDate: Date,
-  filters: any
-) {
+async function generateUserRegistrationReport(startDate: Date, endDate: Date, filters: any) {
   // Task 8: member_profiles는 Turso가 권위(단계 3c 이후)라 아래 4개 조회를
   // 모두 profiles.ts 쿼리 계층으로 옮겼다. 이 함수는 다른 표를 읽지 않으므로
   // 교차 DB가 남지 않는다.
@@ -413,7 +387,7 @@ async function generateUserRegistrationReport(
     data: {
       newRegistrationStats,
       statusChangeStats,
-      dailyRegistrations: await getDailyRegistrationBreakdown(supabase, startDate, endDate),
+      dailyRegistrations: await getDailyRegistrationBreakdown(startDate, endDate),
       recentRegistrations: newRegistrations?.slice(0, 20) || [],
       recentlyRejected: recentlyRejected || [],
       recentStatusChanges: statusChanges?.slice(0, 20) || [],
@@ -422,16 +396,11 @@ async function generateUserRegistrationReport(
 }
 
 // 종합 리포트 생성
-async function generateComprehensiveReport(
-  supabase: any,
-  startDate: Date,
-  endDate: Date,
-  filters: any
-) {
+async function generateComprehensiveReport(startDate: Date, endDate: Date, filters: any) {
   const [memberActivity, postEngagement, userRegistration] = await Promise.all([
-    generateMemberActivityReport(supabase, startDate, endDate, filters),
-    generatePostEngagementReport(supabase, startDate, endDate, filters),
-    generateUserRegistrationReport(supabase, startDate, endDate, filters),
+    generateMemberActivityReport(startDate, endDate, filters),
+    generatePostEngagementReport(startDate, endDate, filters),
+    generateUserRegistrationReport(startDate, endDate, filters),
   ])
 
   return {
@@ -449,42 +418,34 @@ async function generateComprehensiveReport(
   }
 }
 
-// 일별 활동 분석
-async function getDailyActivityBreakdown(supabase: any, startDate: Date, endDate: Date) {
-  const { data, error } = await supabase
-    .from('daily_activity_stats')
-    .select('activity_date, action_type, count')
-    .gte('activity_date', startDate.toISOString().split('T')[0])
-    .lte('activity_date', endDate.toISOString().split('T')[0])
-    .order('activity_date', { ascending: true })
-
-  if (error) {
+// 일별 활동 분석 — 단계 4: daily_activity_stats가 Turso 권위가 되어
+// listDailyActivityStats(Turso)로 옮겼다.
+async function getDailyActivityBreakdown(startDate: Date, endDate: Date) {
+  try {
+    return await listDailyActivityStats(startDate, endDate)
+  } catch (error) {
     console.error('일별 활동 통계 조회 오류:', error)
+    return []
   }
-
-  return data || []
 }
 
-// 참여도 트렌드 분석
-async function getEngagementTrends(supabase: any, startDate: Date, endDate: Date) {
-  // 주간 집계로 트렌드 분석
-  const { data } = await supabase
-    .from('weekly_activity_stats')
-    .select('week_start, action_type, total_count, unique_users')
-    .gte('week_start', startDate.toISOString())
-    .lte('week_start', endDate.toISOString())
-    .order('week_start', { ascending: true })
-
-  return data || []
+// 참여도 트렌드 분석 — 단계 4: weekly_activity_stats 뷰를 Turso 쿼리 계층
+// (getWeeklyActivityStats)으로 대체했다. 뷰의 원 계약(최근 8주만 담고
+// 있다)은 getWeeklyActivityStats에 그대로 남아 있으므로, 여기서도
+// `.gte`/`.lte`로 원래 하던 추가 필터링을 그대로 적용한다.
+async function getEngagementTrends(startDate: Date, endDate: Date) {
+  const allWeeklyStats = await getWeeklyActivityStats()
+  return allWeeklyStats
+    .filter(
+      week => week.week_start >= startDate.toISOString() && week.week_start <= endDate.toISOString()
+    )
+    .sort((a, b) => a.week_start.localeCompare(b.week_start))
 }
 
 // 일별 등록 분석
 // Task 8: member_profiles는 Turso가 권위라 listProfileRegistrationStatusInRange
-// (Turso)로 옮겼다 — `supabase` 파라미터는 이제 이 함수 안에서 쓰이지
-// 않지만, generateUserRegistrationReport의 나머지 3개 리포트 헬퍼
-// (getDailyActivityBreakdown/getEngagementTrends 포함)와 같은 호출 방식을
-// 유지하려고 시그니처는 그대로 둔다.
-async function getDailyRegistrationBreakdown(_supabase: any, startDate: Date, endDate: Date) {
+// (Turso)로 옮겼다.
+async function getDailyRegistrationBreakdown(startDate: Date, endDate: Date) {
   const data = await listProfileRegistrationStatusInRange(startDate, endDate)
 
   // 일별로 그룹화

@@ -1,6 +1,8 @@
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { parseIntegerParam } from '@/utils/queryParams'
+import { listActiveUsers } from '@/db/queries/sessions'
+import { getRealTimeActivityFeed } from '@/db/queries/activities'
 
 /**
  * 실시간 활성 사용자 조회 API
@@ -12,38 +14,28 @@ export const GET = defineApiRoute({
   rateLimit: RATE_LIMITS.ADMIN_API,
   auth: 'admin',
   errorResponse: () => ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse(),
-  handler: async ({ request, auth }) => {
-    const { db } = auth
-
+  handler: async ({ request }) => {
     const { searchParams } = new URL(request.url)
     const limit = parseIntegerParam(searchParams.get('limit'), 20, { min: 1, max: 100 })
     const includeActivity = searchParams.get('include_activity') === 'true'
 
-    // 실시간 활성 사용자 조회 (active_users_view 사용)
-    const { data: activeUsers, error: activeError } = await db
-      .from('active_users_view')
-      .select('*')
-      .limit(limit)
-
-    if (activeError) {
-      console.error('활성 사용자 조회 오류:', activeError)
+    // 실시간 활성 사용자 조회 — 단계 4: active_users_view 대체
+    // (sessions.ts의 listActiveUsers).
+    let activeUsers: Awaited<ReturnType<typeof listActiveUsers>>
+    try {
+      activeUsers = await listActiveUsers(limit)
+    } catch (error) {
+      console.error('활성 사용자 조회 오류:', error)
       throw ApiError.internalServerError('활성 사용자 데이터 조회에 실패했습니다.')
     }
 
-    let recentActivity = []
+    let recentActivity: Awaited<ReturnType<typeof getRealTimeActivityFeed>> = []
     if (includeActivity) {
-      // 최근 활동 피드 조회
-      const { data: activityData, error: activityError } = await db.rpc(
-        'get_real_time_activity_feed',
-        {
-          p_limit: 30,
-        }
-      )
-
-      if (activityError) {
-        console.error('활동 피드 조회 오류:', activityError)
-      } else {
-        recentActivity = activityData || []
+      // 최근 활동 피드 조회 — 단계 4: get_real_time_activity_feed RPC 대체.
+      try {
+        recentActivity = await getRealTimeActivityFeed({ limit: 30 })
+      } catch (error) {
+        console.error('활동 피드 조회 오류:', error)
       }
     }
 
