@@ -1,6 +1,7 @@
 import { createClient } from '@libsql/client'
 
 import { comparePgToSqlite, formatReport, loadSnapshot } from './check-schema-parity.mjs'
+import { findJsonEncodingViolations, formatJsonEncodingReport } from './check-json-encoding.mjs'
 
 const url = process.argv[2] ?? 'file:local.db'
 const client = createClient({ url })
@@ -24,8 +25,18 @@ try {
   const report = comparePgToSqlite(loadSnapshot(), sqliteSchema)
   console.log(formatReport(report))
 
+  // 이름 패리티가 통과해도 값 인코딩은 깨질 수 있다 — Postgres text[]에서 온
+  // JSON 배열 컬럼이 배열 리터럴(`{음악,영상}`)로 들어가면 읽기 전체가 던지고,
+  // 그 예외를 상위 폴백이 삼켜 조용히 낡은 JSON 파일로 되돌아간다.
+  // 상세는 check-json-encoding.mjs 상단 주석.
+  const jsonViolations = await findJsonEncodingViolations(client)
+  console.log(formatJsonEncodingReport(jsonViolations))
+
   const failed =
-    report.missingTables.length || report.missingColumns.length || report.extraTables.length
+    report.missingTables.length ||
+    report.missingColumns.length ||
+    report.extraTables.length ||
+    jsonViolations.length
   process.exitCode = failed ? 1 : 0
 } finally {
   client.close()
