@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { globSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { stripComments } from './strip-comments.mjs'
@@ -102,10 +102,67 @@ function stripStringLiterals(source) {
   return out
 }
 
+/**
+ * `dir` 아래를 재귀로 걸어 `matches(basename)`인 파일의 저장소 상대경로를
+ * 정렬해 돌려준다. **글롭과 독립적인 두 번째 열거 경로**다.
+ *
+ * 이게 왜 필요한가 — `srcAllFiles`에는 개수 하한(전체·서브트리·루트)이
+ * 붙어 있는데 `appFiles`·`apiRouteFiles`에는 하나도 없었다. 두 글롭이 비면
+ * edge runtime 금지·raw `getUser(` 금지·레거시 rate limiter import 금지 등
+ * 7개 가드가 **조용히** 꺼진다(전부 `filter(...)` 결과가 빈 배열이면
+ * 통과하는 모양이라 빈 스캔이 곧 초록불이다).
+ *
+ * 개수 하한을 베끼는 대신 구조 대조를 쓴다. 하한은 "충분히 줄었을 때"만
+ * 잡지만, 대조는 글롭이 **한 파일이라도** 놓치는 순간 잡는다 — 그리고
+ * 손으로 유지할 숫자표·미커버 서브트리 점검이 필요 없다(`srcAllFiles`의
+ * 하한표는 그 자체가 fail-open 구멍을 두 번 만들었다). 대조 대상이 되는
+ * 계약은 파일 이름 규칙 하나뿐이라 오탐이 생길 여지도 없다.
+ *
+ * `readdirSync` 재귀는 `globSync`의 패턴 매칭과 구현이 전혀 다르므로,
+ * 글롭 패턴을 좁히는 흔한 사고(`src/app/api/**`로 축소, `page.tsx`만 남김,
+ * `**` 하나 누락)는 전부 여기서 불일치로 드러난다. 둘 다 고쳐야만 통과하는
+ * 구조는 "한 곳만 건드려 가드를 끄는" 경로를 없앤다. 스캔 자체가 통째로
+ * 비는 경우(디렉터리 소멸·cwd 오류)는 대조로는 안 잡히므로 개수 하한을
+ * 함께 둔다.
+ */
+function walkFiles(dir, matches) {
+  const out = []
+  const walk = current => {
+    let entries
+    try {
+      entries = readdirSync(join(root, current), { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      if (entry.name === 'node_modules' || entry.name === '.next') continue
+      const next = `${current}/${entry.name}`
+      if (entry.isDirectory()) {
+        walk(next)
+      } else if (matches(entry.name)) {
+        out.push(next)
+      }
+    }
+  }
+  walk(dir)
+  return out.sort()
+}
+
+/** 두 목록의 차집합(정렬된 배열 2개를 받아 `expected`에만 있는 항목). */
+function missingFrom(actual, expected) {
+  const seen = new Set(actual)
+  return expected.filter(file => !seen.has(file))
+}
+
 const appFiles = globSync('src/app/**/{route,page,layout}.@(ts|tsx)', {
   cwd: root,
   exclude: ['**/node_modules/**', '**/.next/**'],
 })
+// 위 walkFiles 설명 참고. 숫자는 현재 개수의 대략 3분의 2다 — 대조가
+// 주 방어선이고 이 하한은 "스캔이 통째로 비었다"만 잡는 보조 장치다.
+const APP_FILES_MIN = 100 // 현재 148
+const appFilesExpected = walkFiles('src/app', name => /^(route|page|layout)\.tsx?$/.test(name))
+const appFilesMissed = missingFrom(appFiles, appFilesExpected)
 
 const edgeRuntimeFiles = appFiles.filter(file => {
   const source = readFileSync(join(root, file), 'utf8')
@@ -556,6 +613,11 @@ const apiRouteFiles = globSync('src/app/api/**/route.@(ts|tsx)', {
   cwd: root,
   exclude: ['**/node_modules/**', '**/.next/**'],
 })
+// `appFiles`와 같은 장치(walkFiles 설명 참고). 이 목록이 비면 raw `getUser(`
+// 금지와 레거시 rate limiter import 금지가 통째로 꺼진다.
+const API_ROUTE_FILES_MIN = 60 // 현재 91
+const apiRouteFilesExpected = walkFiles('src/app/api', name => /^route\.tsx?$/.test(name))
+const apiRouteFilesMissed = missingFrom(apiRouteFiles, apiRouteFilesExpected)
 // 인증 강제 검사는 requireUser()/requireActiveMember()(@/lib/server/memberAuth)로
 // 수렴됐다(Task 3~5). 이 목록에 없는 라우트에서 `getUser(` 직접 호출이
 // 되살아나면(예: 헬퍼 도입 전 패턴으로 새 라우트를 베껴 쓰는 경우) 실패한다.
@@ -5030,6 +5092,34 @@ if (supabaseAccessOverreach.length > 0) {
   failures.push(
     `The Supabase-access guard now flags legitimate Turso/Drizzle code or transition-history comments, which would force someone to add exceptions and hollow the guard out. Over-matching sample(s):\n${supabaseAccessOverreach
       .map(sample => `- ${sample}`)
+      .join('\n')}`
+  )
+}
+
+if (appFiles.length < APP_FILES_MIN) {
+  failures.push(
+    `The src/app scan (appFiles) covered only ${appFiles.length} file(s) (expected at least ${APP_FILES_MIN}). It feeds the edge-runtime ban, the unsafe searchParam integer parser check, the JSON-body {} fallback check and the blank-window opener check — all of which pass vacuously on an empty list, so an empty scan is a broken guard, not a clean repository.`
+  )
+}
+
+if (appFilesMissed.length > 0) {
+  failures.push(
+    `The src/app glob (appFiles) no longer matches every route/page/layout file that an independent directory walk finds. Whatever it skips is silently exempt from the edge-runtime ban and the three unsafe-pattern checks. Missing file(s):\n${appFilesMissed
+      .map(file => `- ${file}`)
+      .join('\n')}`
+  )
+}
+
+if (apiRouteFiles.length < API_ROUTE_FILES_MIN) {
+  failures.push(
+    `The src/app/api scan (apiRouteFiles) covered only ${apiRouteFiles.length} file(s) (expected at least ${API_ROUTE_FILES_MIN}). It feeds the raw getUser( ban and the legacy rate-limiter import bans, which pass vacuously on an empty list.`
+  )
+}
+
+if (apiRouteFilesMissed.length > 0) {
+  failures.push(
+    `The src/app/api glob (apiRouteFiles) no longer matches every route file that an independent directory walk finds. Whatever it skips can call getUser( directly or import the legacy in-memory rate limiter without anyone noticing. Missing file(s):\n${apiRouteFilesMissed
+      .map(file => `- ${file}`)
       .join('\n')}`
   )
 }
