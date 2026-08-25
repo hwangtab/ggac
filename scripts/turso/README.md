@@ -140,106 +140,97 @@ NULL이 된다 — 운영 RLS 정책 58개 중 52개가 그 함수에 의존하�
 전체 58개 정책 대 앱 계층 검사 1:1 매핑표는
 `docs/superpowers/specs/2026-08-13-rls-mapping.md`에 있다(`docs/`는
 gitignore 대상이라 이 저장소에는 커밋되지 않는다 — 새로 클론한 환경에는
-없다). 아래는 그 표를 다시 만드는 절차다.
+없다).
 
-### 1. 로컬 스택을 띄운다
+위 문단은 **단계 2b-3 시점의 판정 기준**이다(Postgres·RLS가 살아 있던
+때). 아래 절차는 그 이후 저장소가 Turso 단일 저장소가 된 현재 기준으로
+갱신돼 있다 — 권한 E2E는 지금도 권한 경계 회귀를 잡는 **유일한 자동
+검사**이므로, 컷오버 전에 반드시 초록불임을 확인한다.
 
-로컬 Supabase는 `supabase/migrations`를 그대로 두면 `supabase start`가
-드리프트로 실패한다(운영이 `applied` 마킹과 실제 DDL이 어긋나 있다 — 위
-"Supabase 마이그레이션 드리프트" 항목 참고). 그래서 마이그레이션을 잠깐
-치우고 운영 스키마를 직접 주입한다. 포트는 Supabase 기본값
-(API 54321 / DB 54322)을 그대로 쓴다 — `supabase/config.toml`을 건드릴
-필요가 없다(포트가 이미 비어 있다는 전제 — 충돌하면 별도 포트 이동이
-필요하며, 그 경우에만 config.toml을 고치고 **끝나면 반드시 원복한다**).
+### 1. 로컬 스택을 띄운다 (단계 4 Task 6c 이후)
 
-```bash
-# 드리프트 우회: 마이그레이션을 잠시 다른 곳으로 옮기고 빈 상태로 기동
-mv supabase/migrations /tmp/ggac-migrations-parked
-mkdir -p supabase/migrations
-supabase start
-
-# 운영 스키마를 읽기 전용으로 덤프해 로컬 컨테이너에 주입
-supabase db dump --linked -f /tmp/ggac-schema.sql
-docker cp /tmp/ggac-schema.sql supabase_db_ggac:/tmp/schema.sql
-docker exec supabase_db_ggac psql -U postgres -f /tmp/schema.sql
-```
-
-확인:
+**로컬 Supabase 스택은 더 이상 필요 없다.** 단계 4 Task 5에서 앱 코드의
+Supabase가 0개가 됐고, Task 6c에서 시드 스크립트와 e2e 스펙도 Turso만
+쓰도록 바뀌었다. 필요한 것은 로컬 Turso 하나뿐이다.
 
 ```bash
-export E2E_DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
-node scripts/testing/rls-toggle.mjs status
+# 1) 로컬 Turso를 HTTP 엔드포인트로 띄운다. 포트는 비어 있는 것으로 고른다.
+#    (8080은 turso dev의 기본값이지만 다른 로컬 서비스와 부딪히기 쉽다)
+turso dev --db-file /tmp/ggac-authz.db --port 8901 &
+
+# 2) 스키마를 밀어 넣는다
+TURSO_DATABASE_URL=http://127.0.0.1:8901 npx drizzle-kit push --force
 ```
 
-기대값: `RLS 켜진 테이블: 30개` — 운영과 정확히 같은 수여야 한다. 다르면
-스키마 주입이 불완전한 것이므로 멈추고 원인을 확인한다(정책 개수도 58개와
-일치해야 한다).
+**왜 `file:` 파일 DB가 아니라 `turso dev`인가.** 유지보수 모드 판정은 Edge
+미들웨어 안에서 Turso를 읽는다(`src/middleware/settings.ts`). Edge 런타임용
+`@libsql/client` 진입점은 `file:` URL을 `URL_SCHEME_NOT_SUPPORTED`로 거부하고,
+그 실패는 fail-open(유지보수 꺼짐)으로 흡수된다 — 즉 `file:`로 돌리면
+`authz-maintenance.spec.ts`가 "켰는데 안 걸린다"로 항상 깨진다. HTTP
+엔드포인트여야 앱의 Edge 경로와 스펙이 같은 DB를 본다.
 
-끝나면(작업이 완전히 끝난 뒤): `supabase stop`, 그리고
-`rm -rf supabase/migrations && mv /tmp/ggac-migrations-parked
-supabase/migrations`로 원복한다. 포트를 옮겼다면 `config.toml`도 543xx로
-되돌린다.
+> **옛 절차(단계 2b-3, 2026-08-13).** 그때는 RLS 정책 58개를 판정하려고 로컬
+> Supabase 스택(`supabase start` + 운영 스키마 주입 + `rls-toggle.mjs off`)을
+> 띄우고 "RLS OFF에서 통과해야 증거"라는 기준으로 돌렸다. Postgres가 사라진
+> 지금 그 절차는 재현 불가능하고 의미도 없다 — 접근 판정이 전부 앱 계층에만
+> 있다. 절차 원문은 git 이력(`scripts/turso/README.md`, Task 6c 이전)에 있다.
 
 ### 2. 픽스처를 시드한다
 
 ```bash
-node scripts/testing/seed-authz-fixtures.mjs
+TURSO_DATABASE_URL=http://127.0.0.1:8901 \
+  node --experimental-strip-types scripts/testing/seed-authz-fixtures.mjs
 ```
 
-`admin`/`owner`/`other`/`pending` 네 계정(GoTrue admin API로 생성)과 글 1·
-댓글 1·알림 1·좋아요 1을 채우는 멱등 스크립트다. 두 번 돌려도 행이 늘지
-않는다. 로컬이 아닌 호스트(`E2E_SUPABASE_URL`의 호스트가
-127.0.0.1/localhost/::1이 아닌 경우)에는 거부하고 exit 1로 죽는다 — 운영에
-잘못 시드되는 사고를 막는 가드다. 결과는 `e2e/.authz-fixtures.json`
-(gitignore 대상)에 남고, E2E 스펙은 이 파일을 읽어 계정 id·글 id 등을
-얻는다.
+`admin`/`owner`/`other`/`pending` 네 계정(Better Auth `user`/`account` +
+`member_profiles`)과 글 1·댓글 1·알림 1·좋아요 1, 그리고 **`system_settings`
+2행**(`site/maintenance_mode`, `site/registration_enabled`)과
+`default_settings` 16행을 채우는 멱등 스크립트다. 두 번 돌려도 행이 늘지
+않는다(id가 전부 고정값이다).
 
-RLS를 끄고 켜는 스크립트는 `scripts/testing/rls-toggle.mjs`다:
+- `system_settings`가 없으면 `authz-maintenance.spec.ts`의 UPDATE가 0행에
+  적용돼 유지보수 모드가 아예 켜지지 않는다. 스펙은 `rowsAffected`를 확인해
+  그 상태를 통과가 아니라 실패로 만든다.
+- `default_settings`가 없으면 `getUserSettings`(default_settings를 왼쪽
+  테이블로 조인)가 항상 빈 목록을 돌려줘 정책 58 스펙이 깨진다.
 
-```bash
-node scripts/testing/rls-toggle.mjs status   # 현재 RLS 켜진 테이블 수
-node scripts/testing/rls-toggle.mjs off      # 30개 전부 끈다 (판정용)
-node scripts/testing/rls-toggle.mjs on       # 복원
-```
+대상이 로컬 Turso가 아니면 아무것도 쓰기 전에 거부한다 —
+`e2e/helpers/authState.ts`의 `assertLocalTurso()`가 허용하는 형태는 `file:...`
+또는 `http(s)://127.0.0.1|localhost|::1` 뿐이고, `libsql://`·원격 `https://`는
+전부 거부한다. 스펙 파일도 같은 함수를 부른다(판정이 한 곳뿐이다).
 
-`off`/`on` 모두 `docker exec <컨테이너> psql`로 실행되며(호스트에 psql 설치
-불필요), `E2E_DATABASE_URL`의 호스트·Docker 엔드포인트·컨테이너의
-`com.supabase.cli.project` 라벨 셋 다 로컬임을 확인해야만 동작한다 — 셋 중
-하나라도 아니면 ALTER TABLE 이전에 거부한다. 컨테이너명은
-`E2E_DB_CONTAINER`로 바꿀 수 있다(기본값 `supabase_db_ggac`).
+결과는 `e2e/.authz-fixtures.json`(gitignore 대상)에 남고, E2E 스펙은 이
+파일을 읽어 계정 id·글 id 등을 얻는다.
 
 ### 3. 권한 E2E를 돌린다
 
 ```bash
-export E2E_SUPABASE_URL="http://127.0.0.1:54321"
-export E2E_SUPABASE_ANON_KEY="<supabase status의 anon key>"
-export E2E_SUPABASE_SERVICE_ROLE_KEY="<supabase status의 service_role key>"
-export E2E_DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+export E2E_TURSO_DATABASE_URL="http://127.0.0.1:8901"
+export BETTER_AUTH_SECRET="<아무 로컬 문자열>"
+# 정책 36(첨부 업로드)만 필요로 한다. 공개 스토어 토큰만 쓴다.
+export PUBLIC_BLOB_READ_WRITE_TOKEN="<공개 Blob 스토어 토큰>"
+export NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL="<공개 Blob 베이스 URL>"
 
 npm run test:e2e:authz
 ```
 
-필요한 환경변수는 이 넷뿐이다. `npm run test:e2e:authz`는
-`playwright test --project=authz`의 별칭이며, `authz-setup` 프로젝트(4개
-계정 로그인 → `e2e/.auth/*.json` storageState 저장)에 의존한 뒤
-`e2e/authz-ownership.spec.ts`·`e2e/authz-personal.spec.ts`(총 18개 테스트)를
-돈다. Playwright의 `webServer`가 이 네 환경변수를 `npm run dev`에 그대로
-주입하므로, `.env.local`(운영 Supabase를 가리킴)보다 우선한다 — 빠뜨리면
-`assertLocalSupabase()` 가드가 즉시 예외를 던진다.
+`E2E_TURSO_DATABASE_URL`은 **일부러 이름이 다르다.** `playwright.config.ts`가
+그 값을 `process.env.TURSO_DATABASE_URL`로 옮겨 심고 dev 서버에도 같은 값을
+넘긴다 — 셸에 운영 `TURSO_DATABASE_URL`이 export돼 있어도 그 값으로는 절대
+돌지 않고, e2e 전용 변수를 의도적으로 지정해야만 돈다. `TURSO_AUTH_TOKEN`도
+함께 지운다(로컬 `turso dev`는 토큰을 요구하지 않는다).
 
-**판정 절차:**
+`npm run test:e2e:authz`는 `playwright test --project=authz`의 별칭이며,
+`authz-setup` 프로젝트(4개 계정 로그인 → `e2e/.auth/*.json` storageState
+저장)에 의존한 뒤 `authz-maintenance`·`authz-ownership`·`authz-personal`·
+`authz-remaining` 4개 스펙(총 23개 테스트, setup 4개 포함 27개)을 돈다.
 
-```bash
-node scripts/testing/rls-toggle.mjs off
-npm run test:e2e:authz    # 이 결과가 판정이다
-node scripts/testing/rls-toggle.mjs on
-```
+**실측 기준선(2026-08-26, Task 6c):** 27 passed.
 
-**RLS OFF에서 18/18 통과해야 "앱 계층이 스스로 접근을 판정한다"고 말할 수
-있다. RLS ON 상태로 돌려서 나온 통과는 증거가 아니다** — 위에서 실측한
-대로, RLS가 조용히 대신 막아주는 사례가 실제로 있었다(알림 목록 필터
-제거). RLS ON 실행은 앱 코드가 정상적으로 동작하는지 확인하는 회귀
-스모크 정도로만 취급한다.
+`PUBLIC_BLOB_READ_WRITE_TOKEN`을 빼면 정책 36 테스트가 "토큰이 없으면 업로드
+준비 단계를 통과할 수 없다"로 **명시적으로 실패한다**(조용히 건너뛰지
+않는다). 나머지 26건은 토큰 없이도 돈다.
+
 
 ### 4. 커버리지의 한계
 
