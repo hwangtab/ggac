@@ -330,6 +330,94 @@ describe('0002 마이그레이션의 성질', () => {
     }
   })
 
+  test('PRAGMA가 먹지 않으면 FK 단언이 물고 전체가 롤백된다', async () => {
+    // 이 마이그레이션이 안전한 근거는 `PRAGMA foreign_keys=OFF`가 실제로 먹었다는
+    // 사실 하나뿐인데, 운영 Turso에서 그게 참인지는 적용 전에 알 수 없다. 그래서
+    // 첫 DROP 전에 FK 상태 자체를 단언한다. PRAGMA를 무력화해(= 안 먹는 상황)
+    // 그 단언이 실제로 무는지 확인한다.
+    const c = createClient({ url: ':memory:' })
+    try {
+      await applyPreFixMigrations(c)
+      await seedBoardFixture(c, { memberId: 'fk', meetingId: 'fkmt' })
+      const file = migrationFiles().find(f => f.includes('0002_'))
+      const mutated = readFileSync(file, 'utf8').replace('PRAGMA foreign_keys=OFF;', 'SELECT 1;')
+      assert.notEqual(mutated, readFileSync(file, 'utf8'), '변이가 적용되지 않았다')
+
+      await assert.rejects(() => c.executeMultiple(mutated), /CHECK constraint failed/)
+
+      // 조용한 데이터 소실이 원자적 중단으로 바뀐다 — 7개 표 전부 그대로.
+      for (const table of [...BOARD_CHILD_TABLES, 'board_meetings', 'board_documents']) {
+        assert.equal(await count(c, table), 1, `${table} 행이 사라졌다`)
+      }
+      const leftovers = await c.execute(
+        "SELECT name FROM sqlite_master WHERE name LIKE '__new_%' OR name LIKE '__migration_assert%'"
+      )
+      assert.deepEqual(leftovers.rows, [])
+    } finally {
+      c.close()
+    }
+  })
+
+  test('부정 대조 — FK 단언을 빼면 같은 상황이 에러 없이 커밋되고 5개 표가 빈다', async () => {
+    // 위 단언이 "통과하지만 아무것도 안 지키는" 장식이 아님을 보인다. 행 수 단언은
+    // 표마다 자기 DROP 직전에 걸려 있어서, 뒤에 오는 `DROP TABLE board_meetings`가
+    // 이미 재작성을 마친 앞 표들을 cascade로 비우는 사고를 하나도 잡지 못한다.
+    const c = createClient({ url: ':memory:' })
+    try {
+      await applyPreFixMigrations(c)
+      await seedBoardFixture(c, { memberId: 'nofk', meetingId: 'nofkmt' })
+      const file = migrationFiles().find(f => f.includes('0002_'))
+      const assertLine =
+        'INSERT INTO `__migration_assert_0002` (`ok`) SELECT CASE WHEN (SELECT foreign_keys FROM pragma_foreign_keys()) = 0 THEN 1 ELSE 0 END;\n--> statement-breakpoint\n'
+      const raw = readFileSync(file, 'utf8')
+      assert.ok(raw.includes(assertLine), 'FK 단언이 마이그레이션에서 사라졌다')
+      const mutated = raw.replace('PRAGMA foreign_keys=OFF;', 'SELECT 1;').replace(assertLine, '')
+
+      // 에러 없이 커밋된다.
+      await c.executeMultiple(mutated)
+
+      assert.equal(await count(c, 'board_meetings'), 1)
+      for (const table of BOARD_CHILD_TABLES) {
+        assert.equal(await count(c, table), 0, `${table}이 비지 않았다 — 대조가 무의미해졌다`)
+      }
+    } finally {
+      c.close()
+    }
+  })
+
+  test('이미 열린 트랜잭션 안에서 실행되면 BEGIN이 즉시 막고 아무것도 바뀌지 않는다', async () => {
+    // `drizzle-kit migrate`처럼 마이그레이터가 자체 트랜잭션으로 감싸는 경로를
+    // 흉내낸다. 트랜잭션 안에서는 `PRAGMA foreign_keys`가 무시되므로 위험해
+    // 보이지만, 스크립트의 `BEGIN`이 먼저 실패해 **안전하게** 멈춘다. 이 성질이
+    // 사라지면(= 누가 BEGIN/COMMIT을 걷어내면) 이 테스트가 깨져야 한다.
+    const c = createClient({ url: ':memory:' })
+    try {
+      await applyPreFixMigrations(c)
+      await seedBoardFixture(c, { memberId: 'tx', meetingId: 'txmt' })
+      const file = migrationFiles().find(f => f.includes('0002_'))
+      const statements = readFileSync(file, 'utf8')
+        .split('--> statement-breakpoint')
+        .map(s => s.trim())
+        .filter(s => s && !/^(?:--[^\n]*\n?)+$/.test(s))
+
+      await c.execute('BEGIN')
+      await assert.rejects(async () => {
+        for (const statement of statements) await c.execute(statement)
+      }, /cannot start a transaction within a transaction/)
+      await c.execute('ROLLBACK')
+
+      for (const table of [...BOARD_CHILD_TABLES, 'board_meetings', 'board_documents']) {
+        assert.equal(await count(c, table), 1, `${table} 행이 사라졌다`)
+      }
+      const leftovers = await c.execute(
+        "SELECT name FROM sqlite_master WHERE name LIKE '__new_%' OR name LIKE '__migration_assert%'"
+      )
+      assert.deepEqual(leftovers.rows, [])
+    } finally {
+      c.close()
+    }
+  })
+
   test('재작성으로 인덱스가 사라지지 않는다', async () => {
     const r = await db.execute(
       "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name LIKE 'board_%' AND sql IS NOT NULL ORDER BY name"
