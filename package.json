@@ -25,6 +25,8 @@
     "images:optimize": "node scripts/utils/image-processing/ensure-webp.js && node scripts/utils/image-processing/update-image-references.js",
     "images:verify": "node scripts/utils/image-processing/update-image-references.js --check && node scripts/utils/image-processing/verify-webp.js",
     "storage:ensure-webp": "node scripts/utils/storage/ensure-supabase-webp.js",
+    "storage:verify-private": "node scripts/migrate/copy-private-objects.mjs",
+    "storage:copy-private": "node scripts/migrate/copy-private-objects.mjs --apply",
     "llms:generate": "node scripts/utils/content/generate-llms-txt.mjs",
     "new:show": "node scripts/utils/content/new-show.mjs",
     "llms:check": "node scripts/utils/content/generate-llms-txt.mjs --check",
