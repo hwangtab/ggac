@@ -253,3 +253,104 @@ test('60초 TTL 캐시: TTL 안에서는 캐시를 쓰고, TTL이 지나면 반�
     else process.env.SETTINGS_CACHE_TTL_MS = originalTtl
   }
 })
+
+/**
+ * 최종 리뷰 B-4. 미들웨어 matcher는 전 페이지 + 대부분의 `/api/*`다. 예전에는
+ * 실패를 전혀 기억하지 않아서 Turso 순단 한 번에 **모든 요청**이 각자 조회를
+ * 시작하고 각자 3초를 기다렸다(리뷰어 계측 3002ms). 취소가 불가능하므로
+ * (`@libsql/client` 0.17.4의 `execute()`는 `AbortSignal`을 받지 않는다) 포기한
+ * 쿼리는 뒤에 남아 쌓인다 — 그래서 ① 실패를 짧게 캐시하고 ② 동시 조회를
+ * 하나로 합친다. 아래 두 테스트가 그 둘을 각각 못박는다.
+ */
+test('실패 캐시: 조회가 실패하면 짧은 창 동안 재조회하지 않고, 창이 지나면 반드시 다시 시도한다', async () => {
+  const originalTtl = process.env.SETTINGS_CACHE_TTL_MS
+  delete process.env.SETTINGS_CACHE_TTL_MS
+
+  mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 0 })
+  try {
+    const { getSystemSettings } = await loadFreshSettingsModule()
+    let calls = 0
+    const failing = async () => {
+      calls++
+      throw new Error('Turso 순단 재현')
+    }
+
+    assert.equal(await getSystemSettings(failing), null, '실패는 fail-open(null)이다')
+    assert.equal(calls, 1)
+
+    await getSystemSettings(failing)
+    assert.equal(calls, 1, '실패 직후 재호출은 DB를 다시 때리면 안 된다(폭주 방지)')
+
+    // 실패 캐시 1ms 전: 아직 캐시. 창이 0에 가깝게 줄면 여기서 걸린다.
+    mock.timers.tick(9_999)
+    await getSystemSettings(failing)
+    assert.equal(calls, 1, '9_999ms는 아직 실패 캐시(10_000ms) 안이다')
+
+    // 창이 지나면 반드시 재시도. 실패 캐시가 성공 TTL만큼 길어지거나 영구가 되면
+    // 여기서 걸린다 — 복구를 알아채지 못하는 상태다.
+    mock.timers.tick(2)
+    await getSystemSettings(failing)
+    assert.equal(calls, 2, '실패 캐시(10_000ms)가 지나면 다시 시도해야 한다')
+  } finally {
+    mock.timers.reset()
+    if (originalTtl === undefined) delete process.env.SETTINGS_CACHE_TTL_MS
+    else process.env.SETTINGS_CACHE_TTL_MS = originalTtl
+  }
+})
+
+test('실패 캐시는 성공하면 즉시 풀린다(복구를 늦게 알아채면 안 된다)', async () => {
+  const originalTtl = process.env.SETTINGS_CACHE_TTL_MS
+  delete process.env.SETTINGS_CACHE_TTL_MS
+
+  mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 0 })
+  try {
+    const { getSystemSettings } = await loadFreshSettingsModule()
+    let calls = 0
+    let shouldFail = true
+    const flaky = async () => {
+      calls++
+      if (shouldFail) throw new Error('Turso 순단 재현')
+      return []
+    }
+
+    assert.equal(await getSystemSettings(flaky), null)
+    mock.timers.tick(10_001)
+    shouldFail = false
+    const recovered = await getSystemSettings(flaky)
+    assert.equal(calls, 2)
+    assert.equal(recovered.maintenanceMode, false, '복구되면 정상 값을 돌려준다')
+
+    // 성공 이후에는 성공 TTL(60초)만 지배해야 한다 — 실패 캐시가 남아 있으면
+    // 아래 호출이 캐시가 아니라 null로 떨어진다.
+    const cached = await getSystemSettings(flaky)
+    assert.equal(calls, 2, 'TTL 안에서는 캐시를 쓴다')
+    assert.equal(cached, recovered)
+  } finally {
+    mock.timers.reset()
+    if (originalTtl === undefined) delete process.env.SETTINGS_CACHE_TTL_MS
+    else process.env.SETTINGS_CACHE_TTL_MS = originalTtl
+  }
+})
+
+test('동시 요청은 조회 하나를 공유한다(취소가 불가능하므로 여러 개를 시작하지 않는다)', async () => {
+  const { getSystemSettings } = await loadFreshSettingsModule()
+  let calls = 0
+  let resolveRows
+  const slow = () => {
+    calls++
+    return new Promise(resolve => {
+      resolveRows = resolve
+    })
+  }
+
+  const first = getSystemSettings(slow)
+  const second = getSystemSettings(slow)
+  const third = getSystemSettings(slow)
+  assert.equal(calls, 1, '같은 isolate에서 동시에 날아가는 설정 조회는 최대 1개여야 한다')
+
+  resolveRows([])
+  const [a, b, c] = await Promise.all([first, second, third])
+  assert.equal(a.maintenanceMode, false)
+  assert.equal(b, a, '뒤따라온 요청은 앞선 조회의 결과를 그대로 받는다')
+  assert.equal(c, a)
+})

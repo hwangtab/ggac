@@ -52,6 +52,40 @@ const SETTINGS_CACHE_DURATION = (() => {
 })()
 
 /**
+ * **실패도 캐시한다**(최종 리뷰 B-4).
+ *
+ * 이 미들웨어의 matcher는 전 페이지 + 대부분의 `/api/*`다. 예전에는 실패를
+ * 전혀 기억하지 않아서, Turso가 잠깐 느려지거나 멎으면 **모든 요청이 각자**
+ * 조회를 시작하고 각자 `FETCH_TIMEOUT_MS`(3000ms)를 기다렸다 — 회원 전원의
+ * 모든 요청에 최대 3초가 얹히고, 포기한 요청의 쿼리는 취소되지 않은 채
+ * 뒤에 남아 쌓인다(아래 "취소" 문단 참고). 순단 한 번이 그대로 폭주가 된다.
+ *
+ * 실패를 짧게 기억하면 그 창 동안은 조회를 아예 시도하지 않고 즉시 null
+ * (fail-open, 유지보수 꺼짐)을 돌려준다. 성공 TTL(60초)보다 훨씬 짧게 두는
+ * 이유는 복구를 늦게 알아채면 안 되기 때문이다.
+ *
+ * `SETTINGS_CACHE_TTL_MS=0`(E2E)에서는 이 값도 0이 되어 실패 캐시가 꺼진다 —
+ * 유지보수 모드를 켜고 끄며 즉시 반영을 검증하는 스펙이 실패 캐시에 걸리면
+ * 안 된다.
+ */
+const SETTINGS_FAILURE_CACHE_MS = Math.min(10 * 1000, SETTINGS_CACHE_DURATION)
+
+/** 실패 캐시가 유효한 시각(ms). 이 시각 전에는 조회를 시도하지 않는다. */
+let settingsFailureUntil = 0
+
+/**
+ * 같은 isolate에서 이미 날아간 조회가 있으면 그 promise를 **공유**한다.
+ *
+ * `@libsql/client`(0.17.4)의 `execute()`는 `AbortSignal`을 받지 않고, 취소
+ * 수단은 클라이언트 **생성 시점**의 `Config.fetch` 훅뿐이다 — 즉 호출부에서
+ * 개별 쿼리를 취소할 방법이 없다(그래서 BASE의 `AbortSignal.timeout(2500)`을
+ * 그대로 되돌릴 수 없다). 취소가 불가능하다면 애초에 **여러 개를 시작하지
+ * 않는 것**이 유일한 실질적 방어다: 이 공유로 한 isolate가 동시에 들고 있는
+ * 설정 조회는 최대 1개가 되고, 실패 캐시가 그 뒤 재시도 간격을 벌린다.
+ */
+let settingsInFlight: Promise<PublicSystemSettings | null> | null = null
+
+/**
  * `fetchSettings`는 테스트에서 지연 응답을 주입하기 위한 선택 인자다(두 번째
  * 인자, `src/middleware/profile.ts`의 `fetchMemberProfileForMiddleware`와
  * 같은 자리) — 실제 호출부(`middleware.ts`)는 넘기지 않고 기본값
@@ -70,6 +104,29 @@ export async function getSystemSettings(
     return settingsCache
   }
 
+  // 직전 조회가 실패했다면 짧은 창 동안은 재시도하지 않는다(위 상수 설명 참고).
+  if (Date.now() < settingsFailureUntil) {
+    return null
+  }
+
+  // 같은 isolate에서 이미 조회가 날아가 있으면 그것을 공유한다 — 취소가 불가능한
+  // 이상 "여러 개를 시작하지 않는 것"이 유일한 실질적 방어다.
+  if (settingsInFlight) {
+    return settingsInFlight
+  }
+
+  const run = fetchPublicSystemSettings(fetchSettings)
+  settingsInFlight = run
+  try {
+    return await run
+  } finally {
+    settingsInFlight = null
+  }
+}
+
+async function fetchPublicSystemSettings(
+  fetchSettings: () => Promise<SystemSettingRow[]>
+): Promise<PublicSystemSettings | null> {
   try {
     // 미들웨어는 요청마다 실행된다 — Turso 응답이 지연되면 타임아웃 없이는
     // 요청 하나가 무기한 대기하다가 Edge 실행 시간 제한에 하드킬(504)당하고,
@@ -109,9 +166,12 @@ export async function getSystemSettings(
       registrationEnabled,
       timestamp: Date.now(),
     }
+    // 성공하면 실패 캐시를 즉시 푼다 — 복구를 늦게 알아채면 안 된다.
+    settingsFailureUntil = 0
     return settingsCache
   } catch (error) {
     console.error('[middleware/settings] System settings fetch error:', error)
+    settingsFailureUntil = Date.now() + SETTINGS_FAILURE_CACHE_MS
     return null
   }
 }
