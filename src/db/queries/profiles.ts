@@ -22,6 +22,7 @@ import { db } from '../client.ts'
 import { memberProfiles } from '../schema/index.ts'
 
 import { toCamelCase, toIso } from './_helpers.ts'
+import { profileCompletenessExpression } from './profileCompleteness.ts'
 
 export type RegistrationStatus = 'pending' | 'approved' | 'rejected'
 
@@ -556,6 +557,34 @@ function buildConflictSet(values: Record<string, unknown>): Record<string, SQL> 
   return set
 }
 
+/** `db.transaction(async tx => ...)`이 넘겨주는 트랜잭션 핸들의 타입. */
+type ProfileTx = Parameters<Parameters<typeof db.transaction>[0]>[0]
+
+/**
+ * `where`에 걸린 행들의 `profile_completeness_score`를 현재 값 기준으로 다시
+ * 매긴다. Postgres 트리거 `profile_completeness_trigger`의 대체다 — 배점
+ * 근거와 원본과의 차이는 `./profileCompleteness.ts`에 적어 뒀다.
+ *
+ * **반드시 본 쓰기와 같은 트랜잭션 안에서, 본 쓰기 다음에 별도 문장으로
+ * 호출한다.** 같은 `UPDATE`의 SET 절에 섞으면 SQLite가 갱신 전 값으로 식을
+ * 평가해 점수가 한 박자 늦는다(원본 트리거가 가졌던 바로 그 결함).
+ *
+ * `updated_at`을 자기 자신으로 못박는 이유: 이 문장은 방금 커밋될 변경에서
+ * **파생된** 값을 채우는 것이지 새로운 변경이 아니다. 스키마의 `$onUpdate`
+ * 훅은 `set`에 키가 없을 때만 현재 시각을 채우므로(drizzle-orm/sqlite-core/
+ * dialect.cjs의 `set[colName] ?? onUpdateFnResult`), 여기서 명시적으로 넘겨야
+ * 본 쓰기가 찍은 `updated_at`이 밀리지 않는다.
+ */
+async function recomputeCompleteness(tx: ProfileTx, where: SQL): Promise<void> {
+  await tx
+    .update(memberProfiles)
+    .set({
+      profileCompletenessScore: profileCompletenessExpression(),
+      updatedAt: sql`${sql.identifier(memberProfiles.updatedAt.name)}`,
+    })
+    .where(where)
+}
+
 /**
  * 프로필을 생성하거나(id 미존재) 갱신한다(id 존재).
  * 가입 훅·member-signup 라우트가 쓴다. `id`/`email`/`display_name`은 필수,
@@ -572,10 +601,13 @@ function buildConflictSet(values: Record<string, unknown>): Record<string, SQL> 
  */
 export async function upsertProfile(row: UpsertProfileInput): Promise<void> {
   const values = toWriteRow(row) as typeof memberProfiles.$inferInsert
-  await db
-    .insert(memberProfiles)
-    .values(values)
-    .onConflictDoUpdate({ target: memberProfiles.id, set: buildConflictSet(values) })
+  await db.transaction(async tx => {
+    await tx
+      .insert(memberProfiles)
+      .values(values)
+      .onConflictDoUpdate({ target: memberProfiles.id, set: buildConflictSet(values) })
+    await recomputeCompleteness(tx, eq(memberProfiles.id, values.id))
+  })
 }
 
 /**
@@ -589,10 +621,13 @@ export async function updateProfile(id: string, patch: ProfilePatch): Promise<vo
   const { updated_at: _ignoredUpdatedAt, ...rest } = patch as Record<string, unknown>
   const values = toWriteRow(rest)
   if (Object.keys(values).length === 0) return
-  await db
-    .update(memberProfiles)
-    .set(values as Partial<typeof memberProfiles.$inferInsert>)
-    .where(eq(memberProfiles.id, id))
+  await db.transaction(async tx => {
+    await tx
+      .update(memberProfiles)
+      .set(values as Partial<typeof memberProfiles.$inferInsert>)
+      .where(eq(memberProfiles.id, id))
+    await recomputeCompleteness(tx, eq(memberProfiles.id, id))
+  })
 }
 
 /**
@@ -620,10 +655,19 @@ export async function updateProfilesByIds(ids: string[], patch: ProfilePatch): P
   const { updated_at: _ignoredUpdatedAt, ...rest } = patch as Record<string, unknown>
   const values = toWriteRow(rest)
   if (Object.keys(values).length === 0) return []
-  const rows = await db
-    .update(memberProfiles)
-    .set(values as Partial<typeof memberProfiles.$inferInsert>)
-    .where(inArray(memberProfiles.id, ids))
-    .returning({ id: memberProfiles.id })
-  return rows.map(row => row.id)
+  return db.transaction(async tx => {
+    const rows = await tx
+      .update(memberProfiles)
+      .set(values as Partial<typeof memberProfiles.$inferInsert>)
+      .where(inArray(memberProfiles.id, ids))
+      .returning({ id: memberProfiles.id })
+    // 실제로 갱신된 행만 다시 매긴다 — 존재하지 않는 id까지 WHERE에 넣어도
+    // 결과는 같지만, "이번 UPDATE가 건드린 행"과 점수 재계산 대상을 같은
+    // 집합으로 묶어 두는 편이 읽기 쉽다.
+    const updatedIds = rows.map(row => row.id)
+    if (updatedIds.length > 0) {
+      await recomputeCompleteness(tx, inArray(memberProfiles.id, updatedIds))
+    }
+    return updatedIds
+  })
 }

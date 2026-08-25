@@ -102,7 +102,10 @@ test('upsertProfile로 생성한 행을 getProfileById가 snake_case + ISO 타�
   assert.equal(row.registration_status, 'pending')
   assert.equal(row.is_active, false)
   assert.equal(row.is_member, true) // DB 기본값
-  assert.equal(row.profile_completeness_score, 0) // DB 기본값
+  // display_name 10 + email 10. 단계 4 Task 6b가 Postgres 트리거
+  // profile_completeness_trigger를 쿼리 계층으로 옮기면서, 이 값은 더 이상
+  // DB 기본값(0)이 아니라 방금 쓴 행에서 계산된 점수다(아래 배점 테스트 참고).
+  assert.equal(row.profile_completeness_score, 20)
   assert.deepEqual(row.verification_status, { email: false, phone: false, identity: false })
 
   // snake_case 키만 있어야 한다 — camelCase 키가 섞이면 프런트가 못 읽는다.
@@ -467,7 +470,7 @@ test('updateProfilesByIds: 빈 id 배열은 쿼리를 실행하지 않고 빈 �
   }
 })
 
-test('updateProfilesByIds 구현은 db.update를 정확히 한 번만 호출하고 inArray를 쓴다 (소스 가드 — N+1 회귀 방지)', () => {
+test('updateProfilesByIds 구현은 집합 단위 UPDATE 두 문장만 쓰고 inArray로 건다 (소스 가드 — N+1 회귀 방지)', () => {
   const src = readFileSync('src/db/queries/profiles.ts', 'utf8')
   const match = src.match(/export async function updateProfilesByIds\([\s\S]*?\n\}\n/)
   assert.ok(match, 'updateProfilesByIds 함수 본문을 찾지 못했다')
@@ -479,10 +482,40 @@ test('updateProfilesByIds 구현은 db.update를 정확히 한 번만 호출하�
     /updateProfile\(/,
     '배치 갱신이 단건 갱신 함수를 id별로 호출하면 N+1이다'
   )
-  // prettier가 체인을 여러 줄로 쪼개면 `db`와 `.update(` 사이에 개행이 낀다
-  // (`await db\n    .update(...)`) — 공백류를 허용해야 실제 포맷과 맞는다.
-  const updateCalls = body.match(/db\s*\.update\(/g) ?? []
-  assert.equal(updateCalls.length, 1, 'db.update 호출이 정확히 한 번이어야 한다(쿼리 한 번)')
+  // 단계 4 Task 6b 이전에는 `db.update` 한 번이었다. 이제 같은 트랜잭션 안에서
+  // ① 요청받은 patch를 적용하는 UPDATE와 ② profile_completeness_score를 다시
+  // 매기는 UPDATE, **두 문장**을 쓴다(Postgres 트리거
+  // profile_completeness_trigger의 대체 — src/db/queries/profileCompleteness.ts).
+  // 막으려는 회귀는 그대로다: id마다 문장을 하나씩 내는 것. 그래서 개수뿐
+  // 아니라 "두 문장 모두 집합 단위인지"까지 못박는다.
+  const updateCalls = body.match(/(?:db|tx)\s*\.update\(/g) ?? []
+  assert.equal(
+    updateCalls.length,
+    1,
+    'patch 적용 UPDATE는 정확히 한 문장이어야 한다(점수 재계산은 recomputeCompleteness가 낸다)'
+  )
+  assert.match(
+    body,
+    /recomputeCompleteness\(tx,\s*inArray\(/,
+    '점수 재계산도 inArray로 한 문장에 끝내야 한다 — id별로 부르면 그게 N+1이다'
+  )
+  assert.doesNotMatch(body, /\bfor\s*\(/, 'id를 도는 루프가 있으면 문장 수가 회원 수에 비례한다')
+})
+
+test('recomputeCompleteness 구현은 UPDATE 한 문장으로 where에 걸린 행 전부를 다시 매긴다 (소스 가드)', () => {
+  const src = readFileSync('src/db/queries/profiles.ts', 'utf8')
+  const match = src.match(/async function recomputeCompleteness\([\s\S]*?\n\}\n/)
+  assert.ok(match, 'recomputeCompleteness 함수 본문을 찾지 못했다')
+  const body = match[0]
+
+  const updateCalls = body.match(/tx\s*\.update\(/g) ?? []
+  assert.equal(updateCalls.length, 1, '재계산은 UPDATE 한 문장이어야 한다')
+  assert.doesNotMatch(body, /\.select\(/, '행을 읽어와 JS에서 계산하면 대상 수만큼 왕복이 생긴다')
+  assert.match(
+    body,
+    /profileCompletenessExpression\(\)/,
+    '배점표는 profileCompleteness.ts의 식 하나만 쓴다(여기에 규칙을 다시 적으면 정본이 둘이 된다)'
+  )
 })
 
 // ---------------------------------------------------------------- listProfileSignupsSince (Task 8 코드리뷰 대응)
@@ -531,4 +564,230 @@ test('listProfileSignupsSince: registration_status를 함께 돌려준다', asyn
   const rows = await listProfileSignupsSince(oneDayAgo)
   const row = rows.find(r => r.registration_status === 'approved')
   assert.ok(row, 'approved 상태 프로필이 결과에 있어야 한다')
+})
+
+// ---------------------------------------------------------------- profile_completeness_score
+//
+// 단계 4 Task 6b. Postgres 트리거 `profile_completeness_trigger`가 사라져
+// 신규 회원이 영원히 0%였다. 이식판은 `src/db/queries/profileCompleteness.ts`.
+//
+// **이 블록의 기대값은 구현이 아니라 원본 트리거 본문에서 손으로 뽑았다.**
+// 원본: supabase/migrations/20250118090020_enhance_member_status_tracking.sql
+// 202~219행. 구현에서 배점표를 베껴 오면 둘 다 틀린 채로 초록불이 되므로,
+// 아래 EXPECTED_POINTS는 그 SQL을 한 줄씩 읽어 옮긴 표다.
+//
+//   203: display_name  IS NOT NULL AND LENGTH > 0        → 10
+//   204: email         IS NOT NULL AND LENGTH > 0        → 10
+//   205: real_name     IS NOT NULL AND LENGTH > 0        → 10
+//   206: registration_status = 'approved'                → 10
+//   209: phone_number  IS NOT NULL AND LENGTH > 0        → 10
+//   210: birth_date    IS NOT NULL          (길이 검사 없음) → 10
+//   213: monthly_fee   IS NOT NULL AND > 0               → 10
+//   214: bank_name IS NOT NULL AND account_number IS NOT NULL (길이 검사 없음) → 10
+//   217: verification_status->>'email'    = true         → 7
+//   218: verification_status->>'phone'    = true         → 7
+//   219: verification_status->>'identity' = true         → 6
+
+const EXPECTED_POINTS = {
+  display_name: 10,
+  email: 10,
+  real_name: 10,
+  approved: 10,
+  phone_number: 10,
+  birth_date: 10,
+  monthly_fee: 10,
+  bank_and_account: 10,
+  verified_email: 7,
+  verified_phone: 7,
+  verified_identity: 6,
+}
+
+/**
+ * 배점 대상 필드 중 `email`만 채운 기준선.
+ *
+ * `email`을 비우고 싶지만 `member_profiles_email_idx`가 UNIQUE라 빈 문자열
+ * 행은 저장소 전체에 하나만 존재할 수 있다(그 하나는 아래 "빈 문자열" 전용
+ * 테스트가 쓴다). 그래서 나머지 케이스는 id마다 다른 이메일을 주고 기준선을
+ * `BASELINE_SCORE`(= email 10점)로 잡는다. `display_name`은 NOT NULL이라
+ * 빈 문자열로 두고, 그 밖의 배점 대상은 전부 NULL이다.
+ */
+const BASELINE_SCORE = EXPECTED_POINTS.email
+
+function baselineProfile(id) {
+  return {
+    id,
+    email: `${id}@score.test.local`,
+    display_name: '',
+    registration_status: 'pending',
+    is_active: false,
+  }
+}
+
+async function scoreOf(id) {
+  const { getProfileById } = await loadFreshProfilesModule()
+  return (await getProfileById(id)).profile_completeness_score
+}
+
+test('배점 기준선: email 말고 채운 필드가 없으면 정확히 10점이다', async () => {
+  const { upsertProfile } = await loadFreshProfilesModule()
+  const id = 'score-baseline'
+  await upsertProfile(baselineProfile(id))
+  assert.equal(await scoreOf(id), BASELINE_SCORE)
+})
+
+test('배점: display_name·email이 빈 문자열이면 0점이다(LENGTH > 0 검사가 실재한다)', async () => {
+  const { upsertProfile } = await loadFreshProfilesModule()
+  const id = 'score-empty-strings'
+  await upsertProfile({
+    id,
+    email: '',
+    display_name: '',
+    registration_status: 'pending',
+    is_active: false,
+  })
+  assert.equal(await scoreOf(id), 0)
+})
+
+// 필드 하나씩만 채워 "그 필드가 정확히 몇 점인지"를 따로 확인한다. 합계만
+// 보면 7/7/6을 7/7/7로 잘못 옮겨도 다른 오차와 상쇄되어 통과할 수 있다.
+const SINGLE_FIELD_CASES = [
+  ['display_name', { display_name: '홍길동' }, EXPECTED_POINTS.display_name],
+  ['real_name', { real_name: '홍길동' }, EXPECTED_POINTS.real_name],
+  ['registration_status=approved', { registration_status: 'approved' }, EXPECTED_POINTS.approved],
+  ['phone_number', { phone_number: '010-0000-0000' }, EXPECTED_POINTS.phone_number],
+  ['birth_date', { birth_date: '1990-01-01' }, EXPECTED_POINTS.birth_date],
+  ['monthly_fee', { monthly_fee: 30000 }, EXPECTED_POINTS.monthly_fee],
+  [
+    'bank_name+account_number',
+    { bank_name: '농협', account_number: '123-456' },
+    EXPECTED_POINTS.bank_and_account,
+  ],
+  [
+    'verification_status.email',
+    { verification_status: { email: true, phone: false, identity: false } },
+    EXPECTED_POINTS.verified_email,
+  ],
+  [
+    'verification_status.phone',
+    { verification_status: { email: false, phone: true, identity: false } },
+    EXPECTED_POINTS.verified_phone,
+  ],
+  [
+    'verification_status.identity',
+    { verification_status: { email: false, phone: false, identity: true } },
+    EXPECTED_POINTS.verified_identity,
+  ],
+]
+
+for (const [label, patch, points] of SINGLE_FIELD_CASES) {
+  test(`배점: ${label}를 추가로 채우면 정확히 ${points}점이 더 붙는다`, async () => {
+    const { upsertProfile, updateProfile } = await loadFreshProfilesModule()
+    const id = `score-one-${label.replace(/[^a-z_]/gi, '')}`
+    await upsertProfile(baselineProfile(id))
+    assert.equal(await scoreOf(id), BASELINE_SCORE, '기준선이 어긋나면 아래 델타가 무의미하다')
+    await updateProfile(id, patch)
+    assert.equal(await scoreOf(id), BASELINE_SCORE + points)
+  })
+}
+
+test('배점: bank_name만 있고 account_number가 없으면 0점이다(원본은 AND다)', async () => {
+  const { upsertProfile, updateProfile } = await loadFreshProfilesModule()
+  const id = 'score-bank-only'
+  await upsertProfile(baselineProfile(id))
+  await updateProfile(id, { bank_name: '농협' })
+  assert.equal(await scoreOf(id), BASELINE_SCORE)
+  await updateProfile(id, { bank_name: null, account_number: '123-456' })
+  assert.equal(await scoreOf(id), BASELINE_SCORE, 'account_number만 있어도 가점이 없어야 한다')
+})
+
+test('배점: 계좌 두 칸은 빈 문자열이어도 10점이다(원본에 LENGTH 검사가 없다)', async () => {
+  const { upsertProfile, updateProfile } = await loadFreshProfilesModule()
+  const id = 'score-bank-empty'
+  await upsertProfile(baselineProfile(id))
+  await updateProfile(id, { bank_name: '', account_number: '' })
+  assert.equal(await scoreOf(id), BASELINE_SCORE + EXPECTED_POINTS.bank_and_account)
+})
+
+test('배점: monthly_fee가 0이면 0점이다(원본은 > 0을 요구한다)', async () => {
+  const { upsertProfile, updateProfile } = await loadFreshProfilesModule()
+  const id = 'score-fee-zero'
+  await upsertProfile(baselineProfile(id))
+  await updateProfile(id, { monthly_fee: 0 })
+  assert.equal(await scoreOf(id), BASELINE_SCORE)
+})
+
+test('배점: registration_status가 pending/rejected면 그 10점은 붙지 않는다', async () => {
+  const { upsertProfile, updateProfile } = await loadFreshProfilesModule()
+  const id = 'score-status'
+  await upsertProfile(baselineProfile(id))
+  await updateProfile(id, { registration_status: 'rejected' })
+  assert.equal(await scoreOf(id), BASELINE_SCORE)
+  await updateProfile(id, { registration_status: 'approved' })
+  assert.equal(await scoreOf(id), BASELINE_SCORE + EXPECTED_POINTS.approved)
+})
+
+test('배점: 전부 채우면 정확히 100점이다(배점 합이 100이라는 원본 CHECK와 일치)', async () => {
+  const { upsertProfile, updateProfile } = await loadFreshProfilesModule()
+  const id = 'score-full'
+  await upsertProfile(baselineProfile(id))
+  await updateProfile(id, {
+    display_name: '홍길동',
+    email: 'full@test.local',
+    real_name: '홍길동',
+    registration_status: 'approved',
+    phone_number: '010-1111-2222',
+    birth_date: '1990-01-01',
+    monthly_fee: 30000,
+    bank_name: '농협',
+    account_number: '123-456',
+    verification_status: { email: true, phone: true, identity: true },
+  })
+  assert.equal(await scoreOf(id), 100)
+  const expectedTotal = Object.values(EXPECTED_POINTS).reduce((a, b) => a + b, 0)
+  assert.equal(expectedTotal, 100, '배점표 자체의 합도 100이어야 한다')
+})
+
+test('점수는 갱신 직후 값으로 매겨진다(원본 트리거의 한 박자 지연을 옮기지 않았다)', async () => {
+  const { upsertProfile, updateProfile } = await loadFreshProfilesModule()
+  const id = 'score-no-lag'
+  await upsertProfile(baselineProfile(id))
+  // 원본 BEFORE UPDATE 트리거는 갱신 **직전** 행을 다시 읽어 점수를 매겼다.
+  // 그 동작이었다면 이 UPDATE 직후 점수는 기준선 그대로이고, 다음 UPDATE에서야
+  // 전화번호 10점이 붙는다.
+  await updateProfile(id, { phone_number: '010-0000-0000' })
+  assert.equal(await scoreOf(id), BASELINE_SCORE + EXPECTED_POINTS.phone_number)
+})
+
+test('updateProfilesByIds(관리자 일괄 승인)도 점수를 다시 매긴다', async () => {
+  const { upsertProfile, updateProfilesByIds } = await loadFreshProfilesModule()
+  const ids = ['score-bulk-1', 'score-bulk-2']
+  for (const id of ids) {
+    await upsertProfile({ ...baselineProfile(id), display_name: `일괄${id}` })
+    assert.equal(await scoreOf(id), BASELINE_SCORE + EXPECTED_POINTS.display_name)
+  }
+  const updated = await updateProfilesByIds(ids, { registration_status: 'approved' })
+  assert.deepEqual(updated.sort(), [...ids].sort())
+  for (const id of ids) {
+    assert.equal(
+      await scoreOf(id),
+      BASELINE_SCORE + EXPECTED_POINTS.display_name + EXPECTED_POINTS.approved
+    )
+  }
+})
+
+test('verification_status가 깨진 JSON이어도 프로필 갱신이 실패하지 않는다(인증 가점만 0)', async () => {
+  const { upsertProfile, updateProfile } = await loadFreshProfilesModule()
+  const id = 'score-broken-json'
+  await upsertProfile(baselineProfile(id))
+  // 컬럼 타입이 text라 애플리케이션을 거치지 않으면 깨진 값도 들어갈 수 있다.
+  await setupClient.execute({
+    sql: `UPDATE member_profiles SET verification_status = 'unverified' WHERE id = ?`,
+    args: [id],
+  })
+  await updateProfile(id, { phone_number: '010-0000-0000' })
+  const row = await setupClient.execute({
+    sql: `SELECT profile_completeness_score AS s FROM member_profiles WHERE id = ?`,
+    args: [id],
+  })
+  assert.equal(Number(row.rows[0].s), BASELINE_SCORE + EXPECTED_POINTS.phone_number)
 })
