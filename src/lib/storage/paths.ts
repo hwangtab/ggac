@@ -1,16 +1,8 @@
-export type StorageProvider = 'blob' | 'supabase'
-
-/** 명시적으로 'blob'일 때만 전환한다. 오타·미설정에서 조용히 넘어가지 않게. */
-export function currentProvider(): StorageProvider {
-  return process.env.STORAGE_PROVIDER === 'blob' ? 'blob' : 'supabase'
-}
-
 export type PutPublicObjectOptions = {
   /**
    * 같은 경로에 이미 객체가 있어도 덮어쓸지. 기본은 false — 있으면 업로드가
-   * 실패한다. Supabase storage-js의 upload() 기본값(upsert: false)과
-   * @vercel/blob put()의 allowOverwrite 옵션(명시하지 않으면 실패) 둘 다
-   * "조용한 덮어쓰기 금지"가 기본이므로, 여기서도 그 기본을 그대로 따른다.
+   * 실패한다. @vercel/blob put()의 allowOverwrite 옵션도 명시하지 않으면
+   * 실패하므로("조용한 덮어쓰기 금지"), 여기서도 그 기본을 그대로 따른다.
    * 정말로 덮어써야 하는 호출부만 명시적으로 { overwrite: true }를 넘겨야 한다.
    */
   overwrite?: boolean
@@ -97,8 +89,17 @@ const SUPABASE_PUBLIC_MARKER = '/storage/v1/object/public/'
 
 /**
  * 저장된 절대 URL에서 논리 경로 `<bucket>/<key>`를 되돌린다.
- * 양쪽 제공자 형식을 받되, 기대한 버킷·접두사와 다르면 null을 준다.
+ * 기대한 버킷·접두사와 다르면 null을 준다.
  * 이 확인은 기존 getProjectStorageObjectPath가 하던 봉쇄를 유지하기 위한 것이다.
+ *
+ * **Supabase 형식(`/storage/v1/object/public/<bucket>/<key>`)도 계속 인식한다.**
+ * Task 5가 Supabase 클라이언트를 전부 걷어냈어도 이건 클라이언트가 아니라
+ * *문자열 파싱*이다 — DB에는 전환 이전에 저장된 Supabase Storage 절대 URL이
+ * 그대로 남아 있고(`post_attachments.file_url`,
+ * `artists.profile_photo_url` 등), 이 가지를 지우면 그 행들의 URL이 전부
+ * `null`로 판정되어 삭제·검증 경로가 조용히 멈춘다. 저장된 URL을 Blob으로
+ * 재작성하는 컷오버 작업(`scripts/storage/rewrite-db-urls.mjs`)이 끝나고
+ * 남은 Supabase URL이 0건임을 실측한 뒤에만 지울 수 있다.
  */
 export function logicalPathFromUrl(
   url: string,
@@ -145,45 +146,4 @@ export function logicalPathFromUrl(
   if (normalizedPrefix && !parts.key.startsWith(`${normalizedPrefix}/`)) return null
 
   return logical
-}
-
-export type ProviderName = 'blob' | 'supabase'
-
-export type SettledDeleteResult = {
-  provider: ProviderName
-  result: PromiseSettledResult<unknown>
-}
-
-export type DeleteEverywhereClassification = {
-  /** 실패한 제공자 전부 — 이유를 알 수 없는 채로 조용히 넘어가면 안 된다. */
-  toLog: { provider: ProviderName; reason: unknown }[]
-  shouldThrow: boolean
-}
-
-/**
- * deletePublicObjectEverywhere의 순수 판정부.
- *
- * 두 SDK 모두 "없는 객체"에서는 에러를 던지지 않는다 — Vercel Blob의
- * del()은 멱등이고, Supabase storage-js의 remove()는 없는 키에도
- * { error: null }을 준다. 그래서 reject는 메시지가 뭐든 전부 진짜 실패다.
- * "not found"류 메시지를 걸러내던 예전 정규식은 실제로는 절대 안 맞는
- * 케이스를 걸러내려다, 잘못된 토큰이 만드는 "This store does not exist."
- * 같은 진짜 실패까지 조용히 삼켜버렸다 — 그래서 삭제했다.
- *
- * 규칙은 그만큼 단순해진다: 하나라도 실패하면 로그에 남기고, 전부
- * 실패했을 때만 throw한다. 한쪽만 실패해도 호출은 성공으로 치되(기존
- * 전환기 관용은 유지), 실패 사실은 반드시 로그로 보인다.
- */
-export function classifyDeleteEverywhereResults(
-  results: SettledDeleteResult[]
-): DeleteEverywhereClassification {
-  const rejected = results.filter(r => r.result.status === 'rejected')
-  const toLog = rejected.map(r => ({
-    provider: r.provider,
-    reason: (r.result as PromiseRejectedResult).reason,
-  }))
-  return {
-    toLog,
-    shouldThrow: results.length > 0 && rejected.length === results.length,
-  }
 }

@@ -11,7 +11,8 @@ export const preferredRegion = 'icn1'
 import { NextRequest, NextResponse } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { countUserLikes, listUserLikes } from '@/db/queries/likes'
-import { getProfileById } from '@/db/queries/profiles'
+import { getProfileAuthzFields } from '@/db/queries/profiles'
+import { isApprovedActiveAdmin } from '@/lib/server/authz'
 import { RATE_LIMITS, applyRateLimit, createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { validateUUID } from '@/utils/validation'
@@ -48,11 +49,12 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const limit = parseIntegerParam(searchParams.get('limit'), 20, { min: 1, max: 100 })
     const offset = (page - 1) * limit
 
-    // 본인 데이터이거나 관리자만 조회 가능
+    // 본인 데이터이거나 관리자만 조회 가능. 판정에 쓰는 컬럼이 셋뿐이라
+    // 프로필 전체(33개 컬럼, 계좌번호·실명 포함)를 실어 오지 않는다.
     if (user.id !== requestedUserId) {
-      const profile = await getProfileById(user.id)
+      const profile = await getProfileAuthzFields(user.id)
 
-      if (!profile?.is_admin || profile.registration_status !== 'approved' || !profile.is_active) {
+      if (!isApprovedActiveAdmin(profile)) {
         return ApiError.forbidden('권한이 없습니다.').toNextResponse()
       }
     }

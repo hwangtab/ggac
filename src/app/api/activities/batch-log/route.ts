@@ -1,4 +1,3 @@
-import { createSupabaseServer } from '@/lib/supabase/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { NextRequest, NextResponse } from 'next/server'
 import { withRateLimit } from '@/lib/server/rateLimit'
@@ -7,6 +6,7 @@ import { sanitizeInput } from '@/utils/security'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { parseActivityActionType, parseActivityTargetType } from '@/constants/activity'
 import { validateUUID } from '@/utils/validation'
+import { logUserActivitiesBatch } from '@/db/queries/activities'
 import type { ActivityLogRequest } from '@/types'
 
 /**
@@ -19,8 +19,6 @@ export async function POST(request: NextRequest) {
       const auth = await requireUser()
       if (auth instanceof NextResponse) return auth
       const { user } = auth
-
-      const supabase = await createSupabaseServer()
 
       const body = await parseJsonObjectBody(request)
       if (!body) {
@@ -110,20 +108,23 @@ export async function POST(request: NextRequest) {
       }
 
       if (validEntries.length > 0) {
-        const { error } = await supabase.rpc('log_user_activities_batch', {
-          p_user_id: user.id,
-          p_logs: validEntries.map(entry => entry.payload),
-          p_ip_address: clientIP,
-          p_user_agent: userAgent,
-        })
-
-        if (error) {
+        // 단계 4: log_user_activities_batch RPC를 Turso 쿼리 계층
+        // (logUserActivitiesBatch)으로 대체했다 — 여전히 배치 INSERT 한 번.
+        try {
+          await logUserActivitiesBatch(
+            user.id,
+            validEntries.map(entry => entry.payload) as unknown as Parameters<
+              typeof logUserActivitiesBatch
+            >[1],
+            clientIP,
+            userAgent
+          )
+          validEntries.forEach(entry => results.push({ index: entry.index }))
+        } catch (error) {
           console.error('[API] 활동 로그 배치 기록 실패:', error)
           validEntries.forEach(entry =>
             errors.push({ index: entry.index, error: '활동 로그 기록에 실패했습니다.' })
           )
-        } else {
-          validEntries.forEach(entry => results.push({ index: entry.index }))
         }
       }
 

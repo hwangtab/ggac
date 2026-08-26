@@ -6,6 +6,12 @@ import { parseJsonObjectBody } from '@/utils/requestBody'
 import { validateUUID } from '@/utils/validation'
 import { parseContentFormat } from '@/constants/contentFormat'
 import { annotateImageDimensionsSafe } from '@/utils/imageDimensions'
+import {
+  createMinutes,
+  getMeetingTitle,
+  getMinutesIdByMeetingId,
+  isDuplicateMinutesError,
+} from '@/db/queries/board'
 
 export const runtime = 'nodejs'
 
@@ -20,7 +26,7 @@ function validateMeetingId(id: string) {
 export async function POST(request: NextRequest) {
   const auth = await requireBoardMember()
   if (auth instanceof NextResponse) return auth
-  const { db, user } = auth
+  const { user } = auth
 
   return apiPost(
     async () => {
@@ -41,38 +47,43 @@ export async function POST(request: NextRequest) {
       if (routeMeetingId.error) throw routeMeetingId.error
       const sanitizedMeetingId = routeMeetingId.id
 
-      const { data: existing, error: existErr } = await db
-        .from('board_minutes')
-        .select('id')
-        .eq('meeting_id', sanitizedMeetingId)
-        .maybeSingle()
-      if (existErr) throw ApiError.internalServerError('회의록 조회에 실패했습니다.')
-      if (existing) throw ApiError.conflict('이미 회의록이 존재합니다.')
+      let existingId: string | null
+      try {
+        existingId = await getMinutesIdByMeetingId(sanitizedMeetingId)
+      } catch {
+        throw ApiError.internalServerError('회의록 조회에 실패했습니다.')
+      }
+      if (existingId) throw ApiError.conflict('이미 회의록이 존재합니다.')
 
       // html 본문일 때만 저장 전 이미지 크기 주입(CLS 방지). Safe 래퍼는 절대 throw 안 함.
       const contentToSave =
         contentFormat === 'html' ? await annotateImageDimensionsSafe(content) : content
 
-      const { data: minutes, error } = await db
-        .from('board_minutes')
-        .insert({
-          meeting_id: sanitizedMeetingId,
+      let minutes: { id: string }
+      try {
+        minutes = await createMinutes({
+          meetingId: sanitizedMeetingId,
           content: contentToSave,
-          content_format: contentFormat,
-          author_id: user.id,
+          contentFormat,
+          authorId: user.id,
         })
-        .select('id')
-        .single()
-      if (error || !minutes) throw ApiError.internalServerError('회의록 생성에 실패했습니다.')
+      } catch (createError) {
+        // 위 `getMinutesIdByMeetingId` 검사와 이 INSERT 사이에 다른 이사가
+        // 같은 회의의 회의록을 먼저 올리면 `board_minutes.meeting_id` UNIQUE에
+        // 걸린다(단계 4 Task 6a가 그 제약을 복원하면서 드러났다 — 그전에는
+        // 중복이 조용히 들어갔다). 원인을 삼키고 500을 주면, 이사는 "서버
+        // 오류"를 보고 다시 시도하게 된다. 사실은 이미 회의록이 있는 것이므로
+        // 위 사전 검사와 **같은 409**로 답한다.
+        if (isDuplicateMinutesError(createError)) {
+          throw ApiError.conflict('이미 회의록이 존재합니다.')
+        }
+        throw ApiError.internalServerError('회의록 생성에 실패했습니다.')
+      }
 
-      const { data: meeting } = await db
-        .from('board_meetings')
-        .select('title')
-        .eq('id', sanitizedMeetingId)
-        .single()
-      await notifyDirectors(db, {
+      const meetingTitle = await getMeetingTitle(sanitizedMeetingId)
+      await notifyDirectors({
         title: '회의록 작성',
-        message: `'${meeting?.title ?? '이사회'}' 회의록이 작성되었습니다.`,
+        message: `'${meetingTitle ?? '이사회'}' 회의록이 작성되었습니다.`,
         meetingId: sanitizedMeetingId,
       })
 

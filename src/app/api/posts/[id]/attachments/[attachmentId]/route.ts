@@ -14,7 +14,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { revalidateTag } from 'next/cache'
 import { parseJsonObjectBody } from '@/utils/requestBody'
-import { deletePublicObjectEverywhere, logicalPathFromUrl } from '@/lib/storage/provider'
+import { deletePublicObject, logicalPathFromUrl } from '@/lib/storage/provider'
 import { validateUUID } from '@/utils/validation'
 import { requireUser } from '@/lib/server/memberAuth'
 import { getProfileById } from '@/db/queries/profiles'
@@ -240,15 +240,14 @@ export async function DELETE(
       return ApiError.forbidden('권한이 없습니다.').toNextResponse()
     }
 
-    // Storage에서 파일 삭제 (가능한 경우에만) — 전환기에는 이 첨부파일이
-    // 어느 제공자에 있는지 알 수 없으므로 양쪽 다 지운다. 버킷·접두사
-    // 봉쇄(attachments 버킷, posts/<postId> 하위)는 logicalPathFromUrl이
+    // Storage에서 파일 삭제 (가능한 경우에만). 버킷·접두사 봉쇄
+    // (attachments 버킷, posts/<postId> 하위)는 logicalPathFromUrl이
     // 그대로 유지한다.
     try {
       const logical = logicalPathFromUrl(attachment.file_url, 'attachments', `posts/${postId}`)
 
       if (logical) {
-        await deletePublicObjectEverywhere(logical)
+        await deletePublicObject(logical)
       } else {
         console.warn('안전하지 않은 첨부파일 Storage URL 삭제 건너뜀:', attachmentId)
       }

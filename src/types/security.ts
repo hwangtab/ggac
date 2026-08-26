@@ -54,6 +54,9 @@ export type SecurityEventType =
   | 'ADMIN_MEMBER_APPROVAL_ERROR'
   | 'ADMIN_MEMBER_UPDATE_ERROR'
   | 'ADMIN_MEMBER_ACTION_ERROR'
+  // 프로필 없는 계정("유령 회원") 복구 — 단계 4 Task 6b.
+  // 관리자가 남의 계정에 프로필을 만드는 쓰기이므로 감사 로그에 남긴다.
+  | 'ORPHAN_PROFILE_RECOVERED'
   | 'ADMIN_POSTS_API_ERROR'
   | 'ADMIN_POST_DELETE_ERROR'
   | 'ADMIN_POST_UPDATE_ERROR'

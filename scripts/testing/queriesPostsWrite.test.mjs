@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import { readFileSync, rmSync } from 'node:fs'
 import { createClient } from '@libsql/client'
 
+import { applyMigrations } from './apply-migrations.mjs'
+
 /**
  * `src/db/queries/posts.ts`의 쓰기 함수(`createPost`/`updatePost`/
  * `softDeletePost`/`incrementViewCount`)를 실제 SQLite 파일 DB로 검증한다.
@@ -25,9 +27,7 @@ let setupClient
 before(async () => {
   for (const suffix of ['', '-wal', '-shm']) rmSync(`${DB_PATH}${suffix}`, { force: true })
   setupClient = createClient({ url: `file:${DB_PATH}` })
-  await setupClient.executeMultiple(
-    readFileSync('src/db/migrations/0000_dizzy_krista_starr.sql', 'utf8')
-  )
+  await applyMigrations(setupClient)
 })
 
 after(() => {

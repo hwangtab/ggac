@@ -12,12 +12,14 @@
  * `auth.api.signUpEmail`(Set-Cookie 확보) → 프로필 업서트(Turso) →
  * 응답에 Set-Cookie 전달.
  *
- * `disableSignUp: true`(`src/lib/auth/server.ts`)가 켜져 있는 한
- * `signUpEmail`은 항상 400 `EMAIL_PASSWORD_SIGN_UP_DISABLED`를 던진다.
- * 그게 지금의 의도된 상태다 — 단계 2b-6이 그 줄을 지운다.
+ * 단계 2b-6(Task 4)에서 `disableSignUp: true`가 제거돼 `signUpEmail`이 실제로
+ * 계정을 만든다. 그 순간 `POST /api/auth/sign-up/email`이 인증 없이 공개되므로,
+ * 직접 호출 봉쇄는 catch-all 라우트(`src/app/api/auth/[...all]/route.ts`)가
+ * `ApiError.forbidden`으로 전담한다 — 조합원 7필드를 받는 정상 경로는 이
+ * 라우트뿐이다.
  *
- * 화면은 단계 2b-6까지 이 라우트를 쓰지 않는다
- * (`src/app/[locale]/signup/page.tsx`는 여전히 Supabase `auth.signUp`을 호출한다).
+ * 가입 화면(`src/app/[locale]/signup/page.tsx`)은 이 라우트를 호출한다
+ * (`fetch('/api/member-signup')`). Supabase `auth.signUp` 경로는 없다.
  */
 
 import { NextRequest } from 'next/server'

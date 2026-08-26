@@ -8,7 +8,13 @@ import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { logSecurityEvent } from '@/utils/security'
 import { refreshSettingsCache } from '@/utils/systemSettings'
 import { createLogger } from '@/utils/logger'
-import { updateSystemSetting } from '@/lib/server/systemSettingsWrite'
+import { listSystemSettings, updateSystemSetting } from '@/db/queries/settings'
+import {
+  SETTING_MAPPINGS,
+  isClientEchoOfServedValue,
+  seedSettingGroup,
+  type SettingMapping,
+} from '@/lib/server/systemSettingsMapping'
 
 const log = createLogger('admin/settings')
 
@@ -90,76 +96,6 @@ interface SystemSettings {
   }
 }
 
-// 설정 카테고리별 키 매핑
-const SETTING_MAPPINGS = {
-  site: {
-    maintenance_mode: {
-      key: 'maintenance_mode',
-      transform: (value: any) => value?.enabled || false,
-    },
-    registration_enabled: {
-      key: 'registration_enabled',
-      transform: (value: any) => value?.enabled || false,
-    },
-    site_title: {
-      key: 'site_title',
-      transform: (value: any) => value?.value || '경기아트콜렉티브',
-    },
-    site_description: {
-      key: 'site_description',
-      transform: (value: any) => value?.value || '서울 밖에서 시끄러워집니다',
-    },
-    max_members: { key: 'max_members', transform: (value: any) => value?.value || 1000 },
-  },
-  email: {
-    smtp_host: { key: 'smtp_config', transform: (value: any) => value?.host || '' },
-    smtp_port: { key: 'smtp_config', transform: (value: any) => value?.port || 587 },
-    smtp_user: { key: 'smtp_config', transform: (value: any) => value?.user || '' },
-    smtp_password: {
-      key: 'smtp_config',
-      transform: (value: any) => (value?.password ? '••••••••' : ''),
-    },
-    from_email: {
-      key: 'smtp_config',
-      transform: (value: any) => value?.from_email || 'noreply@ggac.kr',
-    },
-    from_name: {
-      key: 'smtp_config',
-      transform: (value: any) => value?.from_name || '경기아트콜렉티브',
-    },
-  },
-  security: {
-    session_timeout: {
-      key: 'session_config',
-      transform: (value: any) => value?.timeout_minutes || 60,
-    },
-    max_login_attempts: {
-      key: 'login_policy',
-      transform: (value: any) => value?.max_attempts || 5,
-    },
-    password_min_length: {
-      key: 'password_policy',
-      transform: (value: any) => value?.min_length || 8,
-    },
-    require_email_verification: {
-      key: 'email_verification',
-      transform: (value: any) => value?.required || true,
-    },
-  },
-  features: {
-    board_enabled: { key: 'board_features', transform: (value: any) => value?.enabled || true },
-    artist_registration_enabled: {
-      key: 'artist_features',
-      transform: (value: any) => value?.registration_enabled || true,
-    },
-    comments_enabled: {
-      key: 'comment_features',
-      transform: (value: any) => value?.enabled || true,
-    },
-    file_uploads_enabled: { key: 'file_upload', transform: (value: any) => value?.enabled || true },
-  },
-}
-
 // GET: 관리자 설정 조회
 export const GET = defineApiRoute({
   method: 'GET',
@@ -190,37 +126,27 @@ export const GET = defineApiRoute({
       { status: isPermissionError ? 403 : 500 }
     )
   },
-  handler: async ({ auth }) => {
-    const supabase = auth.db
-
-    // 데이터베이스에서 시스템 설정 조회
-    const { data: initialSettingsData, error: settingsError } = await supabase.rpc(
-      'get_system_settings',
-      { include_sensitive: true }
-    )
-
-    let settingsData = initialSettingsData
-
-    if (settingsError) {
-      log.error('Settings query error', settingsError)
-
-      // 폴백: 직접 테이블 쿼리 시도
-      try {
-        const { data: fallbackData, error: fallbackError } = await supabase
-          .from('system_settings')
-          .select('category, setting_key, setting_value, description, is_sensitive, updated_at')
-          .order('category')
-          .order('setting_key')
-
-        if (fallbackError) {
-          log.error('설정 테이블 직접 조회 실패', fallbackError)
-          throw new Error('설정 테이블 조회 실패')
-        }
-
-        settingsData = fallbackData
-      } catch (fallbackErr) {
-        throw new Error('설정을 조회할 수 없습니다.')
-      }
+  handler: async () => {
+    // get_system_settings RPC 대체 — src/db/queries/settings.ts의
+    // listSystemSettings 참고. `includeSensitive: false`로 부른다: 이 라우트는
+    // 이미 `requireSettingsAdmin()`을 통과한 뒤라 원칙적으로는 마스킹을 풀어도
+    // 되지만, 관리자 브라우저에까지 SMTP 비밀번호 평문을 내려보낼 이유가 없다.
+    //
+    // ⚠ 정정(최종 리뷰 B-3): 예전 이 자리의 주석은 "옛 RPC도 어차피 마스킹된
+    // 값을 줬으니 동작이 같다"고 적었는데 **사실이 아니다.** 옛 라우트는
+    // service-role 클라이언트라 RPC 호출 자체가 예외로 떨어졌고, 그때
+    // 마스킹 없는 직접 select로 폴백해 **평문**을 내려보내고 있었다. 즉
+    // 마스킹은 이 전환이 처음 들여온 동작이다. 그 차이가 실제 사고를 만든다 —
+    // 화면은 `settings` 객체 **전체**를 PUT하므로, 마스킹된 값을 그대로 받은
+    // 화면에서 유지보수 모드 토글 한 번만 눌러도 `smtp_config`가 빈 값으로
+    // 덮였다. 그래서 PUT 쪽에 "클라이언트가 본 그대로 돌려준 민감 필드는
+    // 변경으로 취급하지 않는다"는 방어를 넣었다(아래 PUT 핸들러 참고).
+    let settingsData: Awaited<ReturnType<typeof listSystemSettings>>
+    try {
+      settingsData = await listSystemSettings(false)
+    } catch (error) {
+      log.error('Settings query error', error)
+      throw new Error('설정을 조회할 수 없습니다.')
     }
 
     // 데이터베이스 결과를 프론트엔드 형식으로 변환
@@ -291,7 +217,6 @@ export const PUT = defineApiRoute<Record<string, unknown>>({
     )
   },
   handler: async ({ body, auth }) => {
-    const supabase = auth.db
     const { user } = auth
 
     const parsed = SystemSettingsUpdateSchema.safeParse(body)
@@ -300,9 +225,37 @@ export const PUT = defineApiRoute<Record<string, unknown>>({
     }
     const requestData: z.infer<typeof SystemSettingsUpdateSchema> = parsed.data
 
+    // 현재 저장값(평문)을 한 번만 읽어 둔다. 두 가지에 쓴다(최종 리뷰 B-3):
+    //
+    //  ① **부분 갱신 병합.** 한 `setting_value`(예: `smtp_config`)는 프런트엔드
+    //     필드 여러 개가 공유하는 JSON 객체다. 예전에는 그 객체를 매번 `{}`에서
+    //     새로 쌓아 올려서, 필드 하나만 보내도 나머지 형제 필드가 통째로
+    //     사라졌다(같은 이유로 `max_members.current_count`도 매번 0으로 리셋됐다).
+    //     저장값을 씨앗으로 두면 보내지 않은 필드는 그대로 남는다.
+    //
+    //  ② **마스킹된 값의 되쓰기 차단.** GET은 `is_sensitive` 설정을
+    //     `{masked:true, ...}`로 내려보내고, 그것이 SETTING_MAPPINGS의 transform을
+    //     지나면 화면에는 빈 문자열·기본값으로 보인다. 화면은 `settings` 객체
+    //     **전체**를 PUT하므로, 그 값들이 그대로 돌아와 진짜 SMTP 설정을 덮어썼다
+    //     — 유지보수 모드 토글 한 번이면 충분했다. 서버는 "지금 GET이 무엇을
+    //     내보내는지"를 알고 있으므로, 민감 설정에 한해 **클라이언트가 본 그대로
+    //     돌려준 필드는 변경으로 취급하지 않는다.** 관리자가 실제로 새 값을
+    //     입력하면 본 값과 달라지므로 그대로 저장된다.
+    let currentSettingRows: Awaited<ReturnType<typeof listSystemSettings>>
+    try {
+      currentSettingRows = await listSystemSettings(true)
+    } catch (error) {
+      log.error('Settings query error (PUT precondition)', error)
+      throw new Error('설정을 조회할 수 없습니다.')
+    }
+    const currentSettingByKey = new Map(
+      currentSettingRows.map(row => [`${row.category}.${row.setting_key}`, row])
+    )
+
     // 설정별로 데이터베이스 업데이트
     const updateResults: string[] = []
     const errorResults: string[] = []
+    const ignoredMaskedFields: string[] = []
 
     for (const [category, categoryData] of Object.entries(requestData)) {
       if (!categoryData || typeof categoryData !== 'object') {
@@ -319,14 +272,26 @@ export const PUT = defineApiRoute<Record<string, unknown>>({
 
       for (const [frontendKey, frontendValue] of Object.entries(categoryData)) {
         const mapping = categoryMappings[frontendKey as keyof typeof categoryMappings] as
-          | { key: string; transform: (value: any) => any }
+          | SettingMapping
           | undefined
         if (!mapping) {
           continue
         }
 
+        const currentRow = currentSettingByKey.get(`${category}.${mapping.key}`)
+
+        // ② 마스킹된 값의 되쓰기 차단(위 설명 참고). 판정과 근거는
+        // `@/lib/server/systemSettingsMapping`에 있고, 그 파일을
+        // `scripts/testing/systemSettingsMapping.test.mjs`가 실제 매핑 표로
+        // 검증한다(라우트 파일은 `@/` 별칭 때문에 plain Node로 못 부른다).
+        if (isClientEchoOfServedValue(currentRow, mapping, frontendValue)) {
+          ignoredMaskedFields.push(`${category}.${frontendKey}`)
+          continue
+        }
+
         if (!settingGroups[mapping.key]) {
-          settingGroups[mapping.key] = {}
+          // ① 부분 갱신 병합(위 설명 참고). 저장된 JSON 객체를 씨앗으로 둔다.
+          settingGroups[mapping.key] = seedSettingGroup(currentRow?.setting_value)
         }
 
         // 역변환: 프론트엔드 값을 데이터베이스 형식으로 변환
@@ -429,8 +394,8 @@ export const PUT = defineApiRoute<Record<string, unknown>>({
       // 그룹화된 설정들을 데이터베이스에 업데이트
       for (const [settingKey, settingValue] of Object.entries(settingGroups)) {
         try {
-          await updateSystemSetting(supabase, {
-            category,
+          await updateSystemSetting({
+            category: category as 'site' | 'email' | 'security' | 'features',
             settingKey,
             settingValue,
             actorId: user.id,
@@ -455,6 +420,9 @@ export const PUT = defineApiRoute<Record<string, unknown>>({
         adminId: user.id,
         updated: updateResults,
         errors: errorResults,
+        // 화면이 마스킹된 값을 그대로 돌려보내 무시한 필드. 값은 담지 않는다
+        // (필드 이름만). 조용히 버리면 "저장했는데 안 바뀐다"의 원인을 못 찾는다.
+        ignoredMaskedFields,
       },
       'medium'
     )

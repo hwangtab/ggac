@@ -14,7 +14,7 @@ import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { rateLimit } from '@/lib/server/rateLimit'
 import { getPostById } from '@/db/queries/posts'
 import { isPostLikedByUser, togglePostLike } from '@/db/queries/likes'
-import { createSupabaseServer } from '@/lib/supabase/server'
+import { logUserActivity } from '@/db/queries/activities'
 import type { PostLikeToggleResponse } from '@/types'
 import { validateUUID } from '@/utils/validation'
 import { requireUser, requireActiveMember } from '@/lib/server/memberAuth'
@@ -106,17 +106,16 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     // 매번 COUNT(*)로 재계산한다(단계 2c, 브리프 결함 1번 — +1/-1 증감 금지).
     const result = await togglePostLike(validPostId, user.id)
 
-    // 활동 로깅 — log_user_activity RPC는 이 작업(단계 2c) 범위 밖이다.
-    // user_activities는 아직 Supabase가 권위이고 정상 동작하므로 그대로
-    // 둔다.
+    // 활동 로깅 — 단계 4에서 Turso 쿼리 계층(logUserActivity)으로 옮겼다.
+    // 실패해도 좋아요 토글(본 작업)을 막지 않는다(activities.ts 모듈 설명,
+    // 브리프 필수 조건 1번) — 대신 조용히 삼키지 않고 로그를 남긴다.
     try {
-      const supabase = await createSupabaseServer()
-      await supabase.rpc('log_user_activity', {
-        p_user_id: user.id,
-        p_action_type: result.liked ? 'like_added' : 'like_removed',
-        p_target_type: 'post',
-        p_target_id: validPostId,
-        p_metadata: {
+      await logUserActivity({
+        user_id: user.id,
+        action_type: result.liked ? 'like_added' : 'like_removed',
+        target_type: 'post',
+        target_id: validPostId,
+        metadata: {
           post_title: post.title,
           action: result.liked ? 'add' : 'remove',
         },

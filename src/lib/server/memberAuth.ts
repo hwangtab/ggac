@@ -3,17 +3,12 @@ import { NextResponse } from 'next/server'
 import { getSessionContext, isApprovedActive } from '@/lib/server/authz'
 import type { ProfileLike, SessionContext } from '@/lib/server/authz'
 import { readSessionUser, type SessionUser } from '@/lib/server/session'
-import { createServiceRoleClient, type ServiceRoleSupabaseClient } from '@/lib/server/supabaseAdmin'
-import { createLogger } from '@/utils/logger'
-
-const log = createLogger('memberAuth')
 
 export type UserAuthSuccess = {
   user: { id: string; email?: string | null; email_confirmed_at?: string | null }
 }
 
 export type MemberAuthSuccess = {
-  db: ServiceRoleSupabaseClient
   user: { id: string; email?: string | null; email_confirmed_at?: string | null }
   profile: ProfileLike | null
 }
@@ -47,9 +42,11 @@ export function classifySessionForMember(
  * 로그인만 확인한다. 조합원 승인 여부는 보지 않는다.
  *
  * 가입 직후 승인 대기 중인 사용자도 자기 프로필을 읽고 고쳐야 하므로,
- * `requireActiveMember`와 구분해서 존재한다. service-role 클라이언트를 주지
- * 않는 것도 같은 이유다 — 승인되지 않은 사용자에게 RLS를 우회하는 클라이언트를
- * 쥐여줄 근거가 없다. 필요한 라우트는 `createSupabaseServer()`를 직접 부른다.
+ * `requireActiveMember`와 구분해서 존재한다. 두 함수의 차이는 이제 오직
+ * "승인·활성까지 요구하는가"뿐이다 — 단계 4 Task 5 이전에는
+ * `requireActiveMember`만 service-role Supabase 클라이언트를 함께 돌려줬지만,
+ * 데이터 권위가 전부 Turso로 넘어가면서 그 클라이언트를 쓰는 호출부가 하나도
+ * 남지 않아 반환값에서 뺐다.
  */
 export async function requireUser(): Promise<UserAuthSuccess | NextResponse> {
   const session = await getSessionContext()
@@ -69,12 +66,12 @@ export async function requireUser(): Promise<UserAuthSuccess | NextResponse> {
 
 /**
  * 로그인 + 조합원 승인(`registration_status='approved'`, `is_active=true`)을
- * 확인하고 service-role 클라이언트를 함께 돌려준다.
+ * 확인한다.
  *
  * 사용 예:
  *   const auth = await requireActiveMember()
  *   if (auth instanceof NextResponse) return auth
- *   const { db, user } = auth
+ *   const { user } = auth
  */
 export async function requireActiveMember(): Promise<MemberAuthSuccess | NextResponse> {
   const session = await getSessionContext()
@@ -90,16 +87,7 @@ export async function requireActiveMember(): Promise<MemberAuthSuccess | NextRes
     return NextResponse.json({ error: '승인된 조합원만 이용할 수 있습니다.' }, { status: 403 })
   }
 
-  let db: ServiceRoleSupabaseClient
-  try {
-    db = createServiceRoleClient()
-  } catch {
-    log.error('SUPABASE_SERVICE_ROLE_KEY 또는 NEXT_PUBLIC_SUPABASE_URL 미설정')
-    return NextResponse.json({ error: '서버 구성 오류입니다.' }, { status: 500 })
-  }
-
   return {
-    db,
     user: {
       id: session.user!.id,
       email: session.user!.email,

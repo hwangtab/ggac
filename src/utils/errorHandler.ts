@@ -9,7 +9,6 @@
  */
 
 import { NextResponse } from 'next/server'
-import { SupabaseClient } from '@supabase/supabase-js'
 import { createLogger, maskId } from '@/utils/logger'
 
 const log = createLogger('errorHandler')

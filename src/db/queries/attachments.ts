@@ -184,6 +184,27 @@ export async function listImageAttachments(postId: string): Promise<PostAttachme
   return rows.map(rowToAttachment)
 }
 
+/**
+ * `listImageAttachments`와 같은 순서에서 **첫 한 건만** 가져온다 — 대표
+ * 이미지 하나만 쓰는 호출부(OG 이미지 라우트)를 위한 `LIMIT 1` 판이다.
+ *
+ * 이관 과정에서 원본 Supabase 쿼리의 `.limit(1)`이 빠져, 첨부가 여러 장인
+ * 게시글의 OG 이미지 요청이 매번 첨부 전부를 실어 오고 `[0]`만 쓰고 버렸다.
+ * OG 라우트는 크롤러·메신저 미리보기가 부르는 뜨거운 경로라 그 낭비가
+ * 그대로 남는다.
+ *
+ * @returns 이미지 첨부가 없으면 `null`.
+ */
+export async function getPrimaryImageAttachment(postId: string): Promise<PostAttachmentRow | null> {
+  const rows = await db
+    .select()
+    .from(postAttachments)
+    .where(and(eq(postAttachments.postId, postId), eq(postAttachments.fileType, 'image')))
+    .orderBy(desc(postAttachments.isPrimary), asc(postAttachments.createdAt))
+    .limit(1)
+  return rows[0] ? rowToAttachment(rows[0]) : null
+}
+
 /** id + post_id로 첨부파일 한 건을 조회한다(소유 게시글 스코프 강제). */
 export async function getAttachmentById(
   id: string,

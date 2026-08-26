@@ -9,7 +9,7 @@ export const runtime = 'nodejs'
 import { NextRequest } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { timingSafeEqual } from 'crypto'
-import { deletePublicObjectEverywhere, logicalPathFromUrl } from '@/lib/storage/provider'
+import { deletePublicObject, logicalPathFromUrl } from '@/lib/storage/provider'
 import { createLogger } from '@/utils/logger'
 import { deleteExpiredTempAttachments, listTemporaryAttachments } from '@/db/queries/attachments'
 
@@ -82,14 +82,12 @@ export async function POST(request: NextRequest) {
     if (filePaths.length > 0) {
       log.debug('Deleting temporary attachment files from Storage', { count: filePaths.length })
       // filePaths의 각 항목은 logicalPathFromUrl이 돌려준, 버킷을 포함한
-      // 논리 경로('attachments/temp/...')다 — deletePublicObjectEverywhere가
-      // 그대로 기대하는 형태라 추가 접두사 없이 곧장 넘긴다. logicalPathFromUrl은
-      // Supabase·Blob 두 origin을 다 이해하므로, 향후 file_url이 Blob URL로
-      // 재작성돼도 이 확인이 계속 통과한다(getProjectStorageObjectPath였다면
-      // Supabase origin만 인정해 그 시점부터 이 정리가 조용히 멈췄을 것).
-      // 전환기에는 이 임시 파일이 어느 제공자에 있는지 알 수 없으므로 양쪽
-      // 다 지우되, 개별 실패로 전체 정리가 막히지 않도록 실패만 로그에 남긴다.
-      const results = await Promise.allSettled(filePaths.map(p => deletePublicObjectEverywhere(p)))
+      // 논리 경로('attachments/temp/...')다 — deletePublicObject가 그대로
+      // 기대하는 형태라 추가 접두사 없이 곧장 넘긴다. logicalPathFromUrl은
+      // 아직 Supabase 형식 URL도 이해한다 — 저장된 file_url이 Blob URL로
+      // 재작성되기 전 행이 남아 있어서다(그 함수 주석 참고). 개별 실패로 전체
+      // 정리가 막히지 않도록 실패는 로그에만 남긴다.
+      const results = await Promise.allSettled(filePaths.map(p => deletePublicObject(p)))
       for (const r of results) {
         if (r.status === 'rejected') {
           log.warn('임시 첨부 삭제 실패', { reason: String(r.reason) })

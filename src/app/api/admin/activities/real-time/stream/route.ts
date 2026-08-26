@@ -1,6 +1,8 @@
 import { RATE_LIMITS, defineStreamRoute } from '@/lib/server/streamRoute'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { parseIntegerParam } from '@/utils/queryParams'
+import { listActiveUsers } from '@/db/queries/sessions'
+import { getRealTimeActivityFeed } from '@/db/queries/activities'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -13,9 +15,7 @@ export const GET = defineStreamRoute({
     keyGenerator: createUserKeyGenerator('admin_realtime_stream'),
   },
   auth: 'admin',
-  handler: async ({ request, auth }) => {
-    const { db } = auth
-
+  handler: async ({ request }) => {
     const { searchParams } = new URL(request.url)
     const limit = parseIntegerParam(searchParams.get('limit'), 20, { min: 1, max: 100 })
     const includeActivity = searchParams.get('include_activity') === 'true'
@@ -30,15 +30,14 @@ export const GET = defineStreamRoute({
 
         async function pushOnce() {
           try {
-            const { data: activeUsers } = await db
-              .from('active_users_view')
-              .select('*')
-              .limit(limit)
+            // 단계 4: active_users_view/get_real_time_activity_feed RPC를
+            // Turso 쿼리 계층(listActiveUsers/getRealTimeActivityFeed)으로
+            // 대체했다.
+            const activeUsers = await listActiveUsers(limit)
 
             let recentActivity: any[] = []
             if (includeActivity) {
-              const { data } = await db.rpc('get_real_time_activity_feed', { p_limit: 30 })
-              recentActivity = data || []
+              recentActivity = await getRealTimeActivityFeed({ limit: 30 })
             }
 
             const activeCount = activeUsers?.length || 0

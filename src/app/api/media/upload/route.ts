@@ -12,7 +12,8 @@ export const preferredRegion = 'icn1'
 import { NextRequest, NextResponse } from 'next/server'
 import path from 'path'
 import sharp from 'sharp'
-import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
+import { hasPublicBlobStore, listObjects } from '@/lib/storage/blob'
+import { toMediaListing } from '@/lib/storage/mediaListing'
 import type { MediaFile } from '@/types'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import distLimiter from '@/lib/server/rateLimit'
@@ -23,11 +24,6 @@ import { buildVariantPathSuffixes } from '@/lib/storage/paths'
 import { requireUser, requireActiveMember } from '@/lib/server/memberAuth'
 
 const log = createLogger('api/media/upload')
-
-// Service Role 클라이언트는 Storage 작업에만 사용
-function getSupabaseAdmin() {
-  return createServiceRoleClient()
-}
 
 // 매직 바이트 시그니처 (서버 사이드 Buffer 기반)
 const MAGIC_BYTE_SIGNATURES: Record<string, number[][]> = {
@@ -395,12 +391,10 @@ export async function POST(request: NextRequest) {
     // Storage 경로 생성
     const storagePaths = generateStoragePaths(bucket, user.id, file.name)
 
-    // Storage 자격 증명 확인 (putPublicObject가 내부적으로 다시 만들지만,
+    // Storage 자격 증명 확인 (putPublicObject가 내부적으로 다시 확인하지만,
     // 여기서 먼저 확인해 설정 오류를 구분된 응답으로 돌려준다)
-    try {
-      getSupabaseAdmin()
-    } catch (error) {
-      log.error('Supabase Admin 클라이언트 생성 오류', error)
+    if (!hasPublicBlobStore()) {
+      log.error('PUBLIC_BLOB_READ_WRITE_TOKEN 미설정 (UPLOAD)')
       return ApiError.serviceUnavailable(
         'Storage 서비스를 사용할 수 없습니다. 관리자에게 문의하세요.'
       ).toNextResponse()
@@ -536,93 +530,37 @@ export async function GET(request: NextRequest) {
     const limit = parseIntegerParam(searchParams.get('limit'), 50, { min: 1, max: 100 })
     const offset = parseIntegerParam(searchParams.get('offset'), 0, { min: 0 })
 
-    // Storage 클라이언트 생성
-    let supabaseAdmin
-    try {
-      supabaseAdmin = getSupabaseAdmin()
-    } catch (error) {
-      log.error('Supabase Admin 클라이언트 생성 오류 (LIST)', error)
+    // 저장소 자격 증명 확인 — 없으면 listObjects가 환경변수 이름이 담긴
+    // 예외를 던진다.
+    if (!hasPublicBlobStore()) {
+      log.error('PUBLIC_BLOB_READ_WRITE_TOKEN 미설정 (LIST)')
       return ApiError.serviceUnavailable('Storage 서비스를 사용할 수 없습니다.').toNextResponse()
     }
 
-    // Storage에서 사용자 파일 목록 조회
+    // Storage에서 사용자 파일 목록 조회.
+    //
+    // Blob `list()`는 offset을 받지 않고 커서만 준다. 이 저장소의 사용자별
+    // 업로드 규모(회원 23명)에서는 limit+offset만큼 한 번에 받아 잘라내는
+    // 쪽이 커서를 왕복시키는 것보다 단순하고 결과도 같다. 상한(1000)은
+    // listObjects가 강제한다.
     const basePrefix = getBucketPrefix(bucket, user.id)
-    const listPrefix = `${basePrefix}/`
-
-    const { data: files, error: listError } = await supabaseAdmin.storage
-      .from(bucket)
-      .list(listPrefix, {
-        limit,
-        offset,
-        sortBy: { column: 'created_at', order: 'desc' },
-      })
-
-    if (listError) {
+    let objects: Awaited<ReturnType<typeof listObjects>>
+    try {
+      objects = await listObjects('public', `${bucket}/${basePrefix}/`, limit + offset)
+    } catch (listError) {
       log.error('Storage list error', listError)
       return ApiError.internalServerError('파일 목록 조회에 실패했습니다.').toNextResponse()
     }
 
-    const allFileNames = new Set((files || []).map(file => file.name))
+    // 최신순 정렬은 예전 Supabase `sortBy: { column: 'created_at', order: 'desc' }`가
+    // 하던 일이다. Blob 목록은 정렬을 보장하지 않으므로 여기서 직접 한다 —
+    // 빼먹으면 목록이 매번 다른 순서로 나오고 offset 페이지네이션이 깨진다.
+    objects.sort((a, b) => b.uploadedAt.getTime() - a.uploadedAt.getTime())
 
-    // MediaFile 형태로 변환 (WebP/폴백 파일은 목록에서 제외하고 메타데이터로 제공)
-    const mediaFiles: MediaFile[] = (files || [])
-      .filter(file => {
-        if (!file.name) return false
-        if (file.name.endsWith('.webp')) return false
-        if (file.name.endsWith('.fallback.jpg')) return false
-        return true
-      })
-      .map((file, index) => {
-        const filePath = `${basePrefix}/${file.name}`
-        const ext = path.extname(file.name)
-        const baseName = ext ? file.name.slice(0, file.name.length - ext.length) : file.name
-
-        const webpName = `${baseName}.webp`
-        const fallbackName = `${baseName}.fallback.jpg`
-
-        const variantPaths = {
-          original: filePath,
-          webp: allFileNames.has(webpName) ? `${basePrefix}/${webpName}` : undefined,
-          fallback: allFileNames.has(fallbackName)
-            ? `${basePrefix}/${fallbackName}`
-            : ['.jpg', '.jpeg'].includes(ext.toLowerCase())
-              ? filePath
-              : undefined,
-        }
-
-        const { data: originalUrlData } = supabaseAdmin.storage
-          .from(bucket)
-          .getPublicUrl(variantPaths.original)
-        const { data: webpUrlData } = variantPaths.webp
-          ? supabaseAdmin.storage.from(bucket).getPublicUrl(variantPaths.webp)
-          : { data: undefined }
-        const { data: fallbackUrlData } = variantPaths.fallback
-          ? supabaseAdmin.storage.from(bucket).getPublicUrl(variantPaths.fallback)
-          : { data: undefined }
-
-        const variantUrls = {
-          original: originalUrlData?.publicUrl,
-          webp: webpUrlData?.publicUrl,
-          fallback: fallbackUrlData?.publicUrl,
-        }
-
-        return {
-          id: `${bucket}-${file.name}-${index}`,
-          name: file.name,
-          size: file.metadata?.size || 0,
-          type: file.metadata?.mimetype || 'application/octet-stream',
-          path: variantPaths.webp || variantPaths.original,
-          public_url: variantUrls.webp || variantUrls.original || '',
-          variants: variantPaths,
-          variant_urls: variantUrls,
-          uploaded_at: file.created_at || new Date().toISOString(),
-          metadata: {
-            ...(file.metadata || {}),
-            variants: variantPaths,
-            variant_urls: variantUrls,
-          },
-        }
-      })
+    // MediaFile 형태로 변환 (WebP/폴백 파일은 목록에서 제외하고 메타데이터로 제공).
+    // 변형 파일이 목록에서 빠지므로, 잘라내기는 변환 뒤에 해야 페이지당 개수가
+    // 예전과 같아진다.
+    const mediaFiles = toMediaListing(objects, bucket, basePrefix).slice(offset, offset + limit)
 
     const resList = ApiSuccess.ok({
       files: mediaFiles,

@@ -15,9 +15,49 @@ type Db = LibSQLDatabase<typeof schema>
  * 자격 증명 없이 운영에서 실제로 쿼리를 시도하면 여전히 이 에러로 실패한다.
  * `file:local.db`로 조용히 폴백하는 일은 없다.
  */
+/**
+ * 원격 Turso 엔드포인트인가. `libsql://`·`wss://`·원격 `https://`가 여기 해당하고,
+ * `file:`과 로컬 루프백(`turso dev`가 띄우는 `http://127.0.0.1:...`)은 아니다.
+ * 원격만 토큰을 요구하기 위한 판정이라 **모양**으로만 가른다 — 호스트 목록을
+ * 하드코딩하지 않는다.
+ */
+function isRemoteTursoUrl(rawUrl: string): boolean {
+  const url = rawUrl.trim()
+  if (!url || url.startsWith('file:')) return false
+
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    // 파싱되지 않는 값은 원격으로 못 박지 않는다 — 토큰 요구가 오히려
+    // 거짓 실패를 만든다. 실제 연결 시점에 libsql이 제 이유로 실패한다.
+    return false
+  }
+
+  const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '')
+  const isLoopback = host === 'localhost' || host === '127.0.0.1' || host === '::1'
+  return !isLoopback
+}
+
 function assertProductionCredentials(): void {
-  if (!process.env.TURSO_DATABASE_URL && process.env.NODE_ENV === 'production') {
+  if (process.env.NODE_ENV !== 'production') return
+
+  const url = process.env.TURSO_DATABASE_URL?.trim()
+  if (!url) {
     throw new Error('TURSO_DATABASE_URL is required in production')
+  }
+
+  // 토큰은 **만료되는 물건**이다. 예전에는 URL만 봤기 때문에
+  // `TURSO_AUTH_TOKEN`이 없거나 만료된 상태로도 이 가드를 통과했고, 그 실패는
+  // 쿼리 시점에야 드러났다 — 그리고 `src/lib/data.ts`의 JSON 폴백이 그것을
+  // 삼켜 빌드가 조용히 초록불로 끝났다(최종 리뷰 B-1). 원격 엔드포인트에서는
+  // 토큰 없이 성공할 수 없으므로, 여기서 먼저 잘라 낸다.
+  // 로컬 파일 DB(`file:`)와 `turso dev` 루프백은 토큰을 요구하지 않으므로
+  // 제외한다 — 요구하면 그쪽이 거짓 실패가 된다.
+  if (isRemoteTursoUrl(url) && !process.env.TURSO_AUTH_TOKEN?.trim()) {
+    throw new Error(
+      'TURSO_AUTH_TOKEN is required in production when TURSO_DATABASE_URL points at a remote Turso endpoint'
+    )
   }
 }
 

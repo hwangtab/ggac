@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
+import { hasPublicBlobStore } from '@/lib/storage/blob'
 import { putPublicObject } from '@/lib/storage/provider'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { RATE_LIMITS, applyRateLimit, createIPKeyGenerator } from '@/lib/server/rateLimit'
@@ -78,9 +78,10 @@ export async function POST(request: NextRequest) {
     const fileName = `${Date.now()}-${crypto.randomUUID()}.${ext}`
     const storagePath = `event-applications/${eventSlug}/${fileName}`
 
-    try {
-      createServiceRoleClient()
-    } catch {
+    // 업로드를 시작하기 전에 저장소 자격 증명을 확인한다 — 없으면 아래
+    // putPublicObject가 환경변수 이름이 담긴 예외를 던지고, 그게 그대로
+    // 사용자에게 보이는 500이 된다.
+    if (!hasPublicBlobStore()) {
       return ApiError.internalServerError('서버 구성 오류입니다.').toNextResponse()
     }
 

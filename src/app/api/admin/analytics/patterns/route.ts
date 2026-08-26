@@ -2,6 +2,8 @@ import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { validateUUID } from '@/utils/validation'
+import { listActivities, getUserActivityStats } from '@/db/queries/activities'
+import { listSessions } from '@/db/queries/sessions'
 
 /**
  * 활동 패턴 분석 API
@@ -13,9 +15,7 @@ export const GET = defineApiRoute({
   rateLimit: RATE_LIMITS.ADMIN_API,
   auth: 'admin',
   errorMessage: '서버 오류가 발생했습니다.',
-  handler: async ({ request, auth }) => {
-    const { db } = auth
-
+  handler: async ({ request }) => {
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get('user_id')
     let sanitizedUserId: string | null = null
@@ -40,22 +40,22 @@ export const GET = defineApiRoute({
     switch (analysisType) {
       case 'activity_patterns':
         // 활동 패턴 분석
-        analysisResult = await analyzeActivityPatterns(db, sanitizedUserId, startDate, excludeTest)
+        analysisResult = await analyzeActivityPatterns(sanitizedUserId, startDate, excludeTest)
         break
 
       case 'user_behavior':
         // 사용자 행동 분석
-        analysisResult = await analyzeUserBehavior(db, sanitizedUserId, startDate)
+        analysisResult = await analyzeUserBehavior(sanitizedUserId, startDate)
         break
 
       case 'session_analysis':
         // 세션 분석
-        analysisResult = await analyzeSessionPatterns(db, sanitizedUserId, startDate)
+        analysisResult = await analyzeSessionPatterns(sanitizedUserId, startDate)
         break
 
       case 'content_engagement':
         // 콘텐츠 참여도 분석
-        analysisResult = await analyzeContentEngagement(db, sanitizedUserId, startDate)
+        analysisResult = await analyzeContentEngagement(sanitizedUserId, startDate)
         break
 
       default:
@@ -83,28 +83,18 @@ export const GET = defineApiRoute({
  * 활동 패턴 분석
  */
 async function analyzeActivityPatterns(
-  supabase: any,
   userId: string | null,
   startDate: Date,
   excludeTest: boolean
 ) {
-  // 시간대별 활동 분석
-  let query = supabase
-    .from('user_activities')
-    .select('created_at, action_type, metadata')
-    .gte('created_at', startDate.toISOString())
-
-  // userId가 있을 때만 user_id 필터 적용
-  if (userId) {
-    query = query.eq('user_id', userId)
-  }
-
-  // 테스트 데이터 제외 옵션: metadata.generated === true 인 행만 제외
-  if (excludeTest) {
-    query = query.not('metadata', 'cs', '{"generated":true}') as any
-  }
-
-  const { data: hourlyActivity } = await query
+  // 시간대별 활동 분석 — 단계 4: 수동 Supabase 쿼리를 Turso 쿼리 계층
+  // (listActivities)으로 대체했다. excludeTest 옵션(metadata.generated===true
+  // 제외)도 그대로 옮겼다.
+  const hourlyActivity = await listActivities({
+    userId,
+    startDate,
+    excludeGeneratedMetadata: excludeTest,
+  })
 
   const hourlyDistribution =
     hourlyActivity?.reduce((acc: Record<number, number>, activity: any) => {
@@ -165,22 +155,18 @@ async function analyzeActivityPatterns(
 /**
  * 사용자 행동 분석
  */
-async function analyzeUserBehavior(supabase: any, userId: string | null, startDate: Date) {
-  // 사용자 통계 조회
-  const { data: userStats } = await supabase.rpc('get_user_activity_stats', {
-    p_user_id: userId,
-    p_start_date: startDate.toISOString().split('T')[0],
-    p_end_date: new Date().toISOString().split('T')[0],
+async function analyzeUserBehavior(userId: string | null, startDate: Date) {
+  // 사용자 통계 조회 — 단계 4: get_user_activity_stats RPC를 Turso 쿼리
+  // 계층(getUserActivityStats)으로 대체했다.
+  const userStats = await getUserActivityStats({
+    userId,
+    startDate,
+    endDate: new Date(),
   })
 
-  // 사용자 세션 통계
-  let query = supabase.from('user_sessions').select('*').gte('login_at', startDate.toISOString())
-
-  if (userId) {
-    query = query.eq('user_id', userId)
-  }
-
-  const { data: sessions } = await query
+  // 사용자 세션 통계 — 단계 4: 수동 Supabase 쿼리를 Turso 쿼리 계층
+  // (listSessions)으로 대체했다.
+  const sessions = await listSessions({ userId, loginAfter: startDate })
 
   const sessionStats = sessions?.reduce(
     (acc: any, session: any) => {
@@ -218,14 +204,9 @@ async function analyzeUserBehavior(supabase: any, userId: string | null, startDa
 /**
  * 세션 패턴 분석
  */
-async function analyzeSessionPatterns(supabase: any, userId: string | null, startDate: Date) {
-  let query = supabase.from('user_sessions').select('*').gte('login_at', startDate.toISOString())
-
-  if (userId) {
-    query = query.eq('user_id', userId)
-  }
-
-  const { data: sessions } = await query
+async function analyzeSessionPatterns(userId: string | null, startDate: Date) {
+  // 단계 4: 수동 Supabase 쿼리를 Turso 쿼리 계층(listSessions)으로 대체했다.
+  const sessions = await listSessions({ userId, loginAfter: startDate })
 
   // 세션 길이 분석
   const sessionDurations =
@@ -268,19 +249,14 @@ async function analyzeSessionPatterns(supabase: any, userId: string | null, star
 /**
  * 콘텐츠 참여도 분석
  */
-async function analyzeContentEngagement(supabase: any, userId: string | null, startDate: Date) {
-  // 게시글 관련 활동
-  let postQuery = supabase
-    .from('user_activities')
-    .select('*')
-    .gte('created_at', startDate.toISOString())
-    .in('action_type', ['post_created', 'post_updated', 'comment_created', 'like_added'])
-
-  if (userId) {
-    postQuery = postQuery.eq('user_id', userId)
-  }
-
-  const { data: postActivities } = await postQuery
+async function analyzeContentEngagement(userId: string | null, startDate: Date) {
+  // 게시글 관련 활동 — 단계 4: 수동 Supabase 쿼리를 Turso 쿼리 계층
+  // (listActivities)으로 대체했다.
+  const postActivities = await listActivities({
+    userId,
+    startDate,
+    actionTypes: ['post_created', 'post_updated', 'comment_created', 'like_added'],
+  })
 
   const engagementStats =
     postActivities?.reduce((acc: any, activity: any) => {

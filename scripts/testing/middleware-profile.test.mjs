@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import { readFileSync, rmSync } from 'node:fs'
 import { createClient } from '@libsql/client'
 
+import { applyMigrations } from './apply-migrations.mjs'
+
 /**
  * 구조를 고정한다. 미들웨어의 프로필 조회가 다시 RLS 적용 클라이언트로
  * 되돌아가거나, `getProfileById`의 null/throw 계약을 흡수해버리면 승인된
@@ -73,9 +75,7 @@ let setupClient
 before(async () => {
   for (const suffix of ['', '-wal', '-shm']) rmSync(`${DB_PATH}${suffix}`, { force: true })
   setupClient = createClient({ url: `file:${DB_PATH}` })
-  await setupClient.executeMultiple(
-    readFileSync('src/db/migrations/0000_dizzy_krista_starr.sql', 'utf8')
-  )
+  await applyMigrations(setupClient)
 })
 
 after(() => {

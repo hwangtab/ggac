@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServer } from '@/lib/supabase/server'
-import { createServiceRoleClient, hasServiceRoleEnv } from '@/lib/server/supabaseAdmin'
 import { z } from 'zod'
 import { createOptionsResponse } from '@/utils/apiResponse'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
@@ -17,6 +15,7 @@ import { isProjectStorageObjectPath } from '@/utils/storageUrlValidation'
 import { logicalPathFromUrl } from '@/lib/storage/paths'
 import { createLogger } from '@/utils/logger'
 import { getProfileById } from '@/db/queries/profiles'
+import { getArtistByLegacyId, updateArtistByLegacyId } from '@/db/queries/artists'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -128,10 +127,7 @@ export async function GET(request: NextRequest) {
     if (auth instanceof NextResponse) return auth
     const { user } = auth
 
-    const supabase = await createSupabaseServer()
-
-    // 사용자의 프로필 정보 조회 (아티스트 ID 확인). 프로필 권위는 Turso다 —
-    // artists 테이블 조회는 그대로 Supabase에 남긴다(아직 그쪽이 권위).
+    // 사용자의 프로필 정보 조회 (아티스트 ID 확인). 프로필 권위는 Turso다.
     let profile: Awaited<ReturnType<typeof getProfileById>>
     try {
       profile = await getProfileById(user.id)
@@ -149,15 +145,16 @@ export async function GET(request: NextRequest) {
       return ApiError.forbidden('아티스트 권한이 없습니다.').toNextResponse()
     }
 
-    // 아티스트 정보 조회
-    const { data: artist, error: artistError } = await supabase
-      .from('artists')
-      .select('*')
-      .eq('legacy_id', profile.artist_id)
-      .single()
-
-    if (artistError) {
-      console.error('Artist fetch error:', artistError)
+    // 아티스트 정보 조회. Task 4: artists 권위가 Turso로 옮겨졌다.
+    let artist: Awaited<ReturnType<typeof getArtistByLegacyId>>
+    try {
+      artist = await getArtistByLegacyId(profile.artist_id)
+    } catch (error) {
+      console.error('Artist fetch error:', error)
+      return ApiError.internalServerError('아티스트 정보를 조회할 수 없습니다.').toNextResponse()
+    }
+    if (!artist) {
+      console.error('Artist fetch error: not found')
       return ApiError.internalServerError('아티스트 정보를 조회할 수 없습니다.').toNextResponse()
     }
 
@@ -174,8 +171,6 @@ export async function PATCH(request: NextRequest) {
     const auth = await requireActiveMember()
     if (auth instanceof NextResponse) return auth
     const { user } = auth
-
-    const supabase = await createSupabaseServer()
 
     // 요청 데이터 파싱 및 검증
     const body = await parseJsonObjectBody(request)
@@ -268,9 +263,6 @@ export async function PATCH(request: NextRequest) {
     // 연락처 정리 (빈 문자열을 null로 변환)
     const contactValue = updateData.contact === '' ? null : updateData.contact
 
-    // 아티스트 정보 업데이트 (service-role 우선 사용) + 서버 측 소유자 검증
-    const db = hasServiceRoleEnv() ? createServiceRoleClient() : supabase
-
     // 이전엔 `.eq('id', user.id).eq('artist_id', profile.artist_id)`로 두
     // 조건을 DB에서 걸렀지만, getProfileById는 id 하나만 받으므로 조회 후
     // artist_id 일치를 코드에서 검사한다(동일한 최종 판정).
@@ -292,9 +284,9 @@ export async function PATCH(request: NextRequest) {
       return ApiError.forbidden('아티스트 권한이 없거나 비활성 상태입니다.').toNextResponse()
     }
 
-    const { data: updatedArtist, error: updateError } = await db
-      .from('artists')
-      .update({
+    let updatedArtist: Awaited<ReturnType<typeof updateArtistByLegacyId>>
+    try {
+      updatedArtist = await updateArtistByLegacyId(profile.artist_id, {
         name: updateData.name,
         category: updateData.category,
         one_liner: updateData.one_liner,
@@ -305,25 +297,22 @@ export async function PATCH(request: NextRequest) {
         portfolio_links: updateData.portfolio_links || [],
         youtube_videos: updateData.youtube_videos || [],
         contact: contactValue,
-        updated_at: new Date().toISOString(),
       })
-      .eq('legacy_id', profile.artist_id)
-      .select()
-      .single()
-
-    if (updateError) {
-      console.error('Artist update error:', updateError)
+    } catch (error) {
+      console.error('Artist update error:', error)
+      return ApiError.internalServerError('아티스트 정보 업데이트에 실패했습니다.').toNextResponse()
+    }
+    if (!updatedArtist) {
+      console.error('Artist update error: not found')
       return ApiError.internalServerError('아티스트 정보 업데이트에 실패했습니다.').toNextResponse()
     }
 
     // 🚀 즉시 캐시 무효화 - 웹사이트에 실시간 반영
     try {
-      // 아티스트 슬러그 조회 (데이터베이스에서)
-      const { data: artistForSlug } = await supabase
-        .from('artists')
-        .select('slug')
-        .eq('legacy_id', profile.artist_id)
-        .single()
+      // 아티스트 슬러그는 위에서 이미 받은 updatedArtist에 들어 있다 —
+      // 별도 재조회가 필요 없다(원본은 Supabase RLS 재확인 관례로 다시
+      // 조회했지만, Turso는 그 관례가 필요 없다).
+      const artistForSlug = updatedArtist
 
       if (artistForSlug?.slug) {
         // 관련된 모든 페이지의 캐시 무효화 (즉시 반영) — ko(내부 rewrite 경로

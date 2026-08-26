@@ -59,8 +59,13 @@ test('formatReport 성공 메시지의 테이블 수는 하드코딩이 아니�
   assert.equal(formatReport(r), '패리티 통과: 2개 테이블 전 컬럼 일치')
 })
 
-test('실제 스냅샷(22개 테이블) 기준 성공 메시지는 기존 문자열과 바이트 단위로 동일하다', () => {
+test('실제 스냅샷(25개 테이블) 기준 성공 메시지는 기존 문자열과 바이트 단위로 동일하다', () => {
   const snapshot = loadSnapshot()
+  // 스냅샷을 고치면 이 숫자도 손으로 고치게 만든다 — 표가 늘거나 줄 때
+  // "왜 늘었나"를 커밋으로 남기게 하는 게 목적이다. 단계 4 Task 6a에서
+  // 22 → 25(system_settings_history·user_sessions·daily_activity_stats를
+  // droppedTables에서 되살림).
+  assert.equal(Object.keys(snapshot.tables).length, 25)
   const r = comparePgToSqlite(snapshot, snapshot.tables)
-  assert.equal(formatReport(r), '패리티 통과: 22개 테이블 전 컬럼 일치')
+  assert.equal(formatReport(r), '패리티 통과: 25개 테이블 전 컬럼 일치')
 })

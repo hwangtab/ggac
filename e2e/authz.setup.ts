@@ -1,17 +1,20 @@
 import { test as setup, expect } from '@playwright/test'
 
-import { assertLocalSupabase, storageStatePath } from './helpers/authState'
+import { assertLocalTurso, storageStatePath } from './helpers/authState'
 
 const ACCOUNTS = [
   { role: 'admin', email: 'authz-admin@test.local', password: 'Authz!Admin2026' },
   { role: 'owner', email: 'authz-owner@test.local', password: 'Authz!Owner2026' },
   { role: 'other', email: 'authz-other@test.local', password: 'Authz!Other2026' },
   { role: 'pending', email: 'authz-pending@test.local', password: 'Authz!Pend2026' },
+  // 관리자가 아닌 이사. 이사회 경계(`authz-roles.spec.ts`)의 허용 쪽이다 —
+  // 계정 정의는 `scripts/testing/seed-authz-fixtures.mjs`의 ACCOUNTS와 짝이다.
+  { role: 'director', email: 'authz-director@test.local', password: 'Authz!Direct2026' },
 ]
 
 for (const account of ACCOUNTS) {
   setup(`${account.role} 로그인 상태를 저장한다`, async ({ page }) => {
-    assertLocalSupabase()
+    assertLocalTurso()
 
     await page.goto('/login')
     // 라벨 텍스트(`이메일 주소`/`비밀번호`)는 messages/ko.json에서 오므로 문구가

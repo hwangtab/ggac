@@ -89,17 +89,22 @@ async function assertAllRowsColumnCoverage(client, table, rows, allowlist = []) 
   }
 }
 
-/** id 충돌 시 전 컬럼을 덮어쓰는 업서트. 재실행이 행을 늘리지 않는다. */
-export function buildUpsert(table, row) {
+/**
+ * PK 충돌 시 전 컬럼을 덮어쓰는 업서트. 재실행이 행을 늘리지 않는다.
+ * `pkColumn`은 기본 `'id'` — link_previews처럼 PK가 `id`가 아닌 표를 위해
+ * stage4.mjs가 세 번째 인자로 넘긴다. 기존 2-인자 호출(content.mjs·
+ * identity.mjs 자신)은 동작이 바뀌지 않는다.
+ */
+export function buildUpsert(table, row, pkColumn = 'id') {
   const cols = Object.keys(row)
   const quoted = cols.map(c => `"${c}"`).join(', ')
   const holes = cols.map(() => '?').join(', ')
   const updates = cols
-    .filter(c => c !== 'id')
+    .filter(c => c !== pkColumn)
     .map(c => `"${c}" = excluded."${c}"`)
     .join(', ')
   return {
-    sql: `INSERT INTO "${table}" (${quoted}) VALUES (${holes}) ON CONFLICT("id") DO UPDATE SET ${updates}`,
+    sql: `INSERT INTO "${table}" (${quoted}) VALUES (${holes}) ON CONFLICT("${pkColumn}") DO UPDATE SET ${updates}`,
     args: cols.map(c => row[c]),
   }
 }

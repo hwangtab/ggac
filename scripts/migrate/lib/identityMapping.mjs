@@ -1,10 +1,20 @@
-import { pgTimestampToMs } from './pgDumpParser.mjs'
+import { pgTimestampToMs, pgArrayToJsonText } from './pgDumpParser.mjs'
 
-/** SQLite에는 불리언 타입이 없다. Drizzle의 mode:'boolean'도 0/1을 읽는다. */
+/**
+ * SQLite에는 불리언 타입이 없다. Drizzle의 mode:'boolean'도 0/1을 읽는다.
+ *
+ * 알려진 토큰 밖이면 조용히 0으로 떨어뜨리지 않고 던진다(contentMapping.mjs의
+ * toBool과 같은 이유·같은 형태) — 예전에는 `'true'|'t'|'1'` 밖의 모든 값이
+ * 전부 0으로 떨어졌다. `artists.is_active`가 이 함수를 거치므로, 덤프 표기가
+ * 바뀌어 여기서 침묵하면 아티스트 13명 전원이 `is_active=0`이 되어 공개
+ * 사이트에서 사라지는데 검증은 매핑 결과 자체와 대조하므로 통과해버린다.
+ */
 function bool(value) {
   if (value === null || value === undefined) return null
   if (typeof value === 'boolean') return value ? 1 : 0
-  return value === 'true' || value === 't' || value === '1' ? 1 : 0
+  if (value === 'true' || value === 't' || value === '1' || value === 1) return 1
+  if (value === 'false' || value === 'f' || value === '0' || value === 0) return 0
+  throw new Error(`boolean으로 해석할 수 없다: ${JSON.stringify(value)}`)
 }
 
 /** JSON 컬럼(mode:'json')은 텍스트에 직렬화된 형태로 저장된다. */
@@ -53,7 +63,13 @@ export function toArtistRow(a) {
     legacy_id: a.legacy_id,
     slug: a.slug,
     name: a.name,
-    category: json(a.category),
+    // Postgres text[] 컬럼. PostgREST 경로(identity.mjs)는 진짜 배열을
+    // 주지만, 덤프 경로(stage4.mjs가 이 함수를 재사용)는 `{연주자,창작자}`
+    // 형태의 배열 리터럴 문자열을 준다. json()의 typeof==='string' 그대로
+    // 통과 규칙에 걸리면 그 문자열이 파싱 불가능한 값으로 그대로 저장돼
+    // 읽는 쪽 JSON.parse가 던진다 — pgArrayToJsonText가 두 소스 모두
+    // 안전하게 처리한다.
+    category: pgArrayToJsonText(a.category),
     one_liner: a.one_liner,
     bio: a.bio,
     template_type: a.template_type,

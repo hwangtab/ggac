@@ -19,9 +19,10 @@ import { and, asc, desc, eq, gte, inArray, like, lte, or, sql, type SQL } from '
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
 
 import { db } from '../client.ts'
-import { memberProfiles } from '../schema/index.ts'
+import { memberProfiles, user } from '../schema/index.ts'
 
 import { toCamelCase, toIso } from './_helpers.ts'
+import { profileCompletenessExpression } from './profileCompleteness.ts'
 
 export type RegistrationStatus = 'pending' | 'approved' | 'rejected'
 
@@ -177,6 +178,43 @@ function toWriteRow(row: Record<string, unknown>): Record<string, unknown> {
 export async function getProfileById(id: string): Promise<ProfileRow | null> {
   const rows = await db.select().from(memberProfiles).where(eq(memberProfiles.id, id)).limit(1)
   return rows[0] ? rowToProfile(rows[0]) : null
+}
+
+/**
+ * 권한 판정에 필요한 세 컬럼만 조회한다.
+ *
+ * `getProfileById`는 33개 컬럼 전부(계좌번호·실명·전화번호·생년월일 같은
+ * 민감 컬럼 포함)를 실어 온다. "이 사람이 승인된 활성 관리자인가"만 알면
+ * 되는 호출부가 그 함수를 쓰면, 필요 없는 개인정보를 요청마다 프로세스 안으로
+ * 끌어들이고 그 객체가 응답에 실릴 여지를 만든다 — `src/lib/server/authz.ts`의
+ * `toSessionProfileFields`가 같은 이유로 세션 컨텍스트를 좁혀 놓았다.
+ *
+ * 반환 모양은 `authz.ts`의 `ProfileLike` 부분집합이라
+ * `isApprovedActiveAdmin()`에 그대로 넘길 수 있다.
+ *
+ * @returns 행이 없으면 `null`.
+ */
+export async function getProfileAuthzFields(id: string): Promise<{
+  is_admin: boolean
+  registration_status: RegistrationStatus
+  is_active: boolean
+} | null> {
+  const rows = await db
+    .select({
+      isAdmin: memberProfiles.isAdmin,
+      registrationStatus: memberProfiles.registrationStatus,
+      isActive: memberProfiles.isActive,
+    })
+    .from(memberProfiles)
+    .where(eq(memberProfiles.id, id))
+    .limit(1)
+  const row = rows[0]
+  if (!row) return null
+  return {
+    is_admin: row.isAdmin,
+    registration_status: row.registrationStatus,
+    is_active: row.isActive,
+  }
 }
 
 /**
@@ -556,6 +594,34 @@ function buildConflictSet(values: Record<string, unknown>): Record<string, SQL> 
   return set
 }
 
+/** `db.transaction(async tx => ...)`이 넘겨주는 트랜잭션 핸들의 타입. */
+type ProfileTx = Parameters<Parameters<typeof db.transaction>[0]>[0]
+
+/**
+ * `where`에 걸린 행들의 `profile_completeness_score`를 현재 값 기준으로 다시
+ * 매긴다. Postgres 트리거 `profile_completeness_trigger`의 대체다 — 배점
+ * 근거와 원본과의 차이는 `./profileCompleteness.ts`에 적어 뒀다.
+ *
+ * **반드시 본 쓰기와 같은 트랜잭션 안에서, 본 쓰기 다음에 별도 문장으로
+ * 호출한다.** 같은 `UPDATE`의 SET 절에 섞으면 SQLite가 갱신 전 값으로 식을
+ * 평가해 점수가 한 박자 늦는다(원본 트리거가 가졌던 바로 그 결함).
+ *
+ * `updated_at`을 자기 자신으로 못박는 이유: 이 문장은 방금 커밋될 변경에서
+ * **파생된** 값을 채우는 것이지 새로운 변경이 아니다. 스키마의 `$onUpdate`
+ * 훅은 `set`에 키가 없을 때만 현재 시각을 채우므로(drizzle-orm/sqlite-core/
+ * dialect.cjs의 `set[colName] ?? onUpdateFnResult`), 여기서 명시적으로 넘겨야
+ * 본 쓰기가 찍은 `updated_at`이 밀리지 않는다.
+ */
+async function recomputeCompleteness(tx: ProfileTx, where: SQL): Promise<void> {
+  await tx
+    .update(memberProfiles)
+    .set({
+      profileCompletenessScore: profileCompletenessExpression(),
+      updatedAt: sql`${sql.identifier(memberProfiles.updatedAt.name)}`,
+    })
+    .where(where)
+}
+
 /**
  * 프로필을 생성하거나(id 미존재) 갱신한다(id 존재).
  * 가입 훅·member-signup 라우트가 쓴다. `id`/`email`/`display_name`은 필수,
@@ -572,10 +638,13 @@ function buildConflictSet(values: Record<string, unknown>): Record<string, SQL> 
  */
 export async function upsertProfile(row: UpsertProfileInput): Promise<void> {
   const values = toWriteRow(row) as typeof memberProfiles.$inferInsert
-  await db
-    .insert(memberProfiles)
-    .values(values)
-    .onConflictDoUpdate({ target: memberProfiles.id, set: buildConflictSet(values) })
+  await db.transaction(async tx => {
+    await tx
+      .insert(memberProfiles)
+      .values(values)
+      .onConflictDoUpdate({ target: memberProfiles.id, set: buildConflictSet(values) })
+    await recomputeCompleteness(tx, eq(memberProfiles.id, values.id))
+  })
 }
 
 /**
@@ -589,10 +658,13 @@ export async function updateProfile(id: string, patch: ProfilePatch): Promise<vo
   const { updated_at: _ignoredUpdatedAt, ...rest } = patch as Record<string, unknown>
   const values = toWriteRow(rest)
   if (Object.keys(values).length === 0) return
-  await db
-    .update(memberProfiles)
-    .set(values as Partial<typeof memberProfiles.$inferInsert>)
-    .where(eq(memberProfiles.id, id))
+  await db.transaction(async tx => {
+    await tx
+      .update(memberProfiles)
+      .set(values as Partial<typeof memberProfiles.$inferInsert>)
+      .where(eq(memberProfiles.id, id))
+    await recomputeCompleteness(tx, eq(memberProfiles.id, id))
+  })
 }
 
 /**
@@ -620,10 +692,97 @@ export async function updateProfilesByIds(ids: string[], patch: ProfilePatch): P
   const { updated_at: _ignoredUpdatedAt, ...rest } = patch as Record<string, unknown>
   const values = toWriteRow(rest)
   if (Object.keys(values).length === 0) return []
+  return db.transaction(async tx => {
+    const rows = await tx
+      .update(memberProfiles)
+      .set(values as Partial<typeof memberProfiles.$inferInsert>)
+      .where(inArray(memberProfiles.id, ids))
+      .returning({ id: memberProfiles.id })
+    // 실제로 갱신된 행만 다시 매긴다 — 존재하지 않는 id까지 WHERE에 넣어도
+    // 결과는 같지만, "이번 UPDATE가 건드린 행"과 점수 재계산 대상을 같은
+    // 집합으로 묶어 두는 편이 읽기 쉽다.
+    const updatedIds = rows.map(row => row.id)
+    if (updatedIds.length > 0) {
+      await recomputeCompleteness(tx, inArray(memberProfiles.id, updatedIds))
+    }
+    return updatedIds
+  })
+}
+
+// -------------------------------------------------------------------------
+// 프로필 없는 계정("유령 회원") — 단계 4 Task 6b
+// -------------------------------------------------------------------------
+
+/**
+ * Better Auth `user` 행은 있는데 `member_profiles` 행이 없는 계정.
+ *
+ * 이런 계정은 로그인은 되지만 `/register/pending`에 영구 체류하고, 관리자
+ * 회원 목록(`listProfiles`는 `member_profiles`만 읽는다)에도 뜨지 않으며,
+ * `user.email` UNIQUE 때문에 같은 이메일로 재가입도 막힌다. 어떻게 생기는지는
+ * `src/lib/auth/server.ts`의 가입 훅 주석 참고.
+ */
+export interface ProfilelessUser {
+  id: string
+  email: string
+  /** Better Auth `user.name` — 가입 폼의 표시명이 들어 있다. */
+  name: string
+  created_at: string
+}
+
+/**
+ * 프로필이 없는 계정 목록(가입 최신순). 관리자 화면이 "유령 회원"을 발견하는
+ * 유일한 경로다 — 이 조회가 없으면 그런 계정은 어떤 화면에도 나타나지 않는다.
+ *
+ * `limit`은 호출부가 정한다. 정상 상태에서는 0행이므로 상한은 사고가 났을 때
+ * 화면과 응답이 터지지 않게 하는 안전장치일 뿐이다.
+ */
+export async function listProfilelessUsers(limit: number): Promise<ProfilelessUser[]> {
   const rows = await db
-    .update(memberProfiles)
-    .set(values as Partial<typeof memberProfiles.$inferInsert>)
-    .where(inArray(memberProfiles.id, ids))
-    .returning({ id: memberProfiles.id })
-  return rows.map(row => row.id)
+    .select({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      createdAt: user.createdAt,
+    })
+    .from(user)
+    .leftJoin(memberProfiles, eq(memberProfiles.id, user.id))
+    .where(sql`${memberProfiles.id} is null`)
+    .orderBy(desc(user.createdAt))
+    .limit(limit)
+  return rows.map(row => ({
+    id: row.id,
+    email: row.email,
+    name: row.name,
+    created_at: toIso(row.createdAt) as string,
+  }))
+}
+
+/**
+ * 프로필이 없는 계정 한 건을 id로 조회한다. 관리자 복구 라우트가 "정말로
+ * 프로필이 없는 계정인지" 확인한 뒤 그 계정의 email/name으로 프로필을 만들 때
+ * 쓴다 — 이미 프로필이 있는 회원에게 복구를 걸어 기존 행을 건드리는 일을
+ * 조회 단계에서 막는다.
+ *
+ * @returns 계정이 없거나 이미 프로필이 있으면 `null`.
+ */
+export async function getProfilelessUserById(id: string): Promise<ProfilelessUser | null> {
+  const rows = await db
+    .select({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      createdAt: user.createdAt,
+    })
+    .from(user)
+    .leftJoin(memberProfiles, eq(memberProfiles.id, user.id))
+    .where(and(eq(user.id, id), sql`${memberProfiles.id} is null`))
+    .limit(1)
+  const row = rows[0]
+  if (!row) return null
+  return {
+    id: row.id,
+    email: row.email,
+    name: row.name,
+    created_at: toIso(row.createdAt) as string,
+  }
 }

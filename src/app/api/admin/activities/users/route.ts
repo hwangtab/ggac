@@ -3,6 +3,7 @@ import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { validateUUID } from '@/utils/validation'
 import { parseActivityActionType, parseActivityTargetType } from '@/constants/activity'
+import { listActivitiesWithProfile } from '@/db/queries/activities'
 
 /**
  * 사용자별 활동 조회 API
@@ -14,9 +15,7 @@ export const GET = defineApiRoute({
   rateLimit: RATE_LIMITS.ADMIN_API,
   auth: 'admin',
   errorMessage: '서버 오류가 발생했습니다.',
-  handler: async ({ request, auth }) => {
-    const { db } = auth
-
+  handler: async ({ request }) => {
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get('user_id')
     let sanitizedUserId: string | null = null
@@ -44,50 +43,29 @@ export const GET = defineApiRoute({
       return ApiError.badRequest('잘못된 대상 유형입니다.').toNextResponse()
     }
 
-    const offset = (page - 1) * limit
     const startDate = new Date()
     startDate.setDate(startDate.getDate() - days)
 
-    // 기본 쿼리 구성
-    let query = db
-      .from('user_activities')
-      .select(
-        `
-          id,
-          user_id,
-          action_type,
-          target_type,
-          target_id,
-          metadata,
-          ip_address,
-          user_agent,
-          session_id,
-          created_at,
-          member_profiles!user_id (
-            display_name,
-            email
-          )
-        `,
-        { count: 'exact' }
-      )
-      .gte('created_at', startDate.toISOString())
-      .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1)
-
-    // 필터 적용
-    if (sanitizedUserId) {
-      query = query.eq('user_id', sanitizedUserId)
-    }
-    if (actionType) {
-      query = query.eq('action_type', actionType)
-    }
-    if (targetType) {
-      query = query.eq('target_type', targetType)
-    }
-
-    const { data: activities, error, count } = await query
-
-    if (error) {
+    // 단계 4: 수동 Supabase 쿼리(member_profiles!user_id 임베드 +
+    // {count:'exact'} + .range())를 Turso 쿼리 계층
+    // (listActivitiesWithProfile)으로 대체했다.
+    let activities: Awaited<ReturnType<typeof listActivitiesWithProfile>>['rows']
+    let count: number
+    try {
+      const result = await listActivitiesWithProfile({
+        userId: sanitizedUserId,
+        actionType,
+        targetType,
+        startDate,
+        page,
+        limit,
+      })
+      activities = result.rows
+      count = result.total
+    } catch (error) {
+      // 이 저장소 이력상(알림이 1년간 죽어 있었는데 아무도 몰랐다) 실패를
+      // 조용히 삼키지 않는다 — 코드리뷰 지적.
+      console.error('활동 데이터 조회 오류:', error)
       return ApiError.internalServerError('활동 데이터 조회에 실패했습니다.').toNextResponse()
     }
 

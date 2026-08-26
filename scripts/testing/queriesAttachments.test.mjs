@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import { readFileSync, rmSync } from 'node:fs'
 import { createClient } from '@libsql/client'
 
+import { applyMigrations } from './apply-migrations.mjs'
+
 /**
  * `src/db/queries/attachments.ts`를 실제 SQLite 파일 DB로 검증한다. 패턴은
  * `scripts/testing/queriesPosts.test.mjs`(Task 4)와 동일. `post_attachments`는
@@ -30,9 +32,7 @@ let setupClient
 before(async () => {
   for (const suffix of ['', '-wal', '-shm']) rmSync(`${DB_PATH}${suffix}`, { force: true })
   setupClient = createClient({ url: `file:${DB_PATH}` })
-  await setupClient.executeMultiple(
-    readFileSync('src/db/migrations/0000_dizzy_krista_starr.sql', 'utf8')
-  )
+  await applyMigrations(setupClient)
 })
 
 after(() => {
@@ -581,4 +581,49 @@ test('listImageAttachments: 이미지 첨부가 없으면 빈 배열을 돌려�
   )
   const rows = await listImageAttachments(postId)
   assert.deepEqual(rows, [])
+})
+
+// ---------------------------------------------------------------- getPrimaryImageAttachment (단계 4 Task 6b)
+
+test('getPrimaryImageAttachment: listImageAttachments의 첫 원소와 같은 행을 돌려준다', async () => {
+  const { addAttachment, listImageAttachments, getPrimaryImageAttachment } =
+    await loadFreshAttachmentsModule()
+  const postId = await seedPost()
+  await addAttachment(
+    fileInput({
+      post_id: postId,
+      file_name: 'doc.pdf',
+      file_type: 'document',
+      mime_type: 'application/pdf',
+    })
+  )
+  await addAttachment(fileInput({ post_id: postId, file_name: 'older.png', file_type: 'image' }))
+  const primaryImage = await addAttachment(
+    fileInput({ post_id: postId, file_name: 'primary.png', file_type: 'image', is_primary: true })
+  )
+
+  const all = await listImageAttachments(postId)
+  const one = await getPrimaryImageAttachment(postId)
+  assert.ok(all.length > 1, '두 판이 갈리는지 보려면 이미지가 둘 이상이어야 한다')
+  assert.equal(one.id, primaryImage.id)
+  assert.deepEqual(one, all[0], '정렬 규칙이 두 함수에서 갈리면 대표 이미지가 달라진다')
+})
+
+test('getPrimaryImageAttachment 구현은 LIMIT 1을 건다 (소스 가드 — 전체 조회 회귀 방지)', () => {
+  const src = readFileSync('src/db/queries/attachments.ts', 'utf8')
+  const match = src.match(/export async function getPrimaryImageAttachment\([\s\S]*?\n\}\n/)
+  assert.ok(match, 'getPrimaryImageAttachment 함수 본문을 찾지 못했다')
+  // 첫 한 건만 쓰는 호출부(OG 라우트)를 위해 존재하는 함수다. limit이 빠지면
+  // listImageAttachments와 같은 전체 조회가 되어 존재 이유가 사라진다 —
+  // 반환값만 보는 위 테스트로는 그 회귀가 잡히지 않는다.
+  assert.match(match[0], /\.limit\(1\)/)
+})
+
+test('getPrimaryImageAttachment: 이미지 첨부가 없으면 null을 돌려준다', async () => {
+  const { addAttachment, getPrimaryImageAttachment } = await loadFreshAttachmentsModule()
+  const postId = await seedPost()
+  await addAttachment(
+    fileInput({ post_id: postId, file_type: 'document', mime_type: 'application/pdf' })
+  )
+  assert.equal(await getPrimaryImageAttachment(postId), null)
 })

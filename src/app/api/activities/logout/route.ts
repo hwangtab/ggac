@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
-import { createSupabaseServer } from '@/lib/supabase/server'
 import { applyRateLimit, RATE_LIMIT_CONFIGS } from '@/lib/server/rateLimit'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { requireUser } from '@/lib/server/memberAuth'
+import { manageUserSession } from '@/db/queries/sessions'
+import { createLogger } from '@/utils/logger'
+
+const log = createLogger('api/activities/logout')
 
 /**
  * 사용자 로그아웃 활동 로깅 API
@@ -27,8 +30,6 @@ export async function POST(request: NextRequest) {
     const auth = await requireUser()
     if (auth instanceof NextResponse) return auth
     const { user } = auth
-
-    const supabase = await createSupabaseServer()
 
     const body = await parseJsonObjectBody(request)
 
@@ -58,21 +59,30 @@ export async function POST(request: NextRequest) {
       '127.0.0.1'
     const userAgent = request.headers.get('user-agent') || 'Unknown'
 
-    // 세션 종료 처리
-    const { data: sessionResult, error: sessionError } = await supabase.rpc('manage_user_session', {
-      p_user_id: user.id,
-      p_session_token: sessionToken,
-      p_action: 'end',
-      p_ip_address: ip,
-      p_user_agent: userAgent,
-      p_metadata: {
-        ...metadata,
-        logout_reason: 'user_initiated',
-        timestamp: new Date().toISOString(),
-      },
-    })
-
-    if (sessionError) {
+    // 세션 종료 처리 — 단계 4: manage_user_session RPC를 Turso 쿼리 계층
+    // (manageUserSession)으로 대체했다. 세션 쓰기 자체가 실패하면(예: DB
+    // 접속 불가) 그대로 던지고 500을 응답한다 — 로그아웃 활동 기록만
+    // 실패한 경우는 onWriteError로 로그를 남기고 세션 결과는 그대로
+    // 응답한다(sessions.ts 모듈 설명, 브리프 필수 조건 1번).
+    let sessionResult: string | null
+    try {
+      sessionResult = await manageUserSession(
+        {
+          user_id: user.id,
+          session_token: sessionToken,
+          action: 'end',
+          ip_address: ip,
+          user_agent: userAgent,
+          metadata: {
+            ...metadata,
+            logout_reason: 'user_initiated',
+            timestamp: new Date().toISOString(),
+          },
+        },
+        activityLogError =>
+          log.warn('로그아웃 활동 기록 실패', { message: (activityLogError as Error)?.message })
+      )
+    } catch (sessionError) {
       console.error('Session management error:', sessionError)
       return ApiError.internalServerError('Failed to manage session').toNextResponse()
     }

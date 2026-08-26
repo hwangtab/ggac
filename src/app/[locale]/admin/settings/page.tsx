@@ -52,8 +52,49 @@ interface AdminSettings {
   }
 }
 
+/**
+ * 저장 시 **바뀐 값만** 골라낸다(최종 리뷰 B-3).
+ *
+ * 예전에는 `settings` 객체 전체를 PUT했다. 그런데 GET은 `is_sensitive` 설정
+ * (`smtp_config`)을 마스킹해서 내려주고, 그것이 화면에서는 빈 값·기본값으로
+ * 보인다 — 즉 화면은 SMTP의 진짜 값을 **애초에 가지고 있지 않다.** 그 상태로
+ * 전체를 PUT하면 유지보수 모드 토글 한 번에 SMTP 설정이 빈 값으로 덮인다.
+ *
+ * 서버에도 같은 사고를 막는 방어가 있지만(마스킹된 값의 되쓰기 차단),
+ * 화면이 애초에 안 건드린 것을 보내지 않는 쪽이 정확하다 — 서버 방어는
+ * 오래된 탭·다른 클라이언트를 위한 최후의 그물이다.
+ *
+ * PUT 스키마는 모든 카테고리·필드가 optional이라 부분 페이로드를 그대로 받는다.
+ */
+function diffSettings(
+  next: AdminSettings,
+  baseline: AdminSettings | null
+): Partial<Record<keyof AdminSettings, Record<string, unknown>>> {
+  const payload: Partial<Record<keyof AdminSettings, Record<string, unknown>>> = {}
+  if (!baseline) return next as unknown as typeof payload
+  ;(Object.keys(next) as Array<keyof AdminSettings>).forEach(category => {
+    const nextCategory = next[category] as Record<string, unknown>
+    const baseCategory = (baseline[category] ?? {}) as Record<string, unknown>
+    const changed: Record<string, unknown> = {}
+
+    Object.keys(nextCategory).forEach(key => {
+      if (nextCategory[key] !== baseCategory[key]) {
+        changed[key] = nextCategory[key]
+      }
+    })
+
+    if (Object.keys(changed).length > 0) {
+      payload[category] = changed
+    }
+  })
+
+  return payload
+}
+
 export default function AdminSettingsPage() {
   const [settings, setSettings] = useState<AdminSettings | null>(null)
+  // 서버가 마지막으로 내려준(=저장된) 값. 저장 시 이것과의 차이만 보낸다.
+  const savedSettingsRef = useRef<AdminSettings | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [activeTab, setActiveTab] = useState<'site' | 'email' | 'security' | 'features' | 'backup'>(
@@ -106,6 +147,7 @@ export default function AdminSettingsPage() {
 
       const json = await response.json()
       setSettings(json.data)
+      savedSettingsRef.current = json.data
     } catch (err) {
       console.error('Settings fetch error:', err)
       setError(err instanceof Error ? err.message : '설정 정보를 불러오는 중 오류가 발생했습니다.')
@@ -132,18 +174,28 @@ export default function AdminSettingsPage() {
         )
       }
 
+      // 바뀐 값만 보낸다(diffSettings 주석 참고). 아무것도 안 바뀌었으면
+      // 요청 자체를 보내지 않는다 — 빈 PUT은 무의미한 변경 이력만 남긴다.
+      const changedSettings = diffSettings(settings, savedSettingsRef.current)
+      if (Object.keys(changedSettings).length === 0) {
+        setSuccess('변경된 설정이 없습니다.')
+        scheduleStatusClear(3000, { clearError: false })
+        return
+      }
+
       const response = await fetch('/api/admin/settings', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(settings),
+        body: JSON.stringify(changedSettings),
       })
 
       if (!response.ok) {
         throw new Error('설정 저장 중 오류가 발생했습니다.')
       }
 
+      savedSettingsRef.current = settings
       setSuccess('설정이 성공적으로 저장되었습니다.')
       setValidationErrors([]) // 저장 성공 시 유효성 오류 초기화
 

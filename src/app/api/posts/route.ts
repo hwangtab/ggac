@@ -109,7 +109,7 @@ export async function GET(request: NextRequest) {
 
       const boardResult = await fetchBoardPosts({ category: boardCategory, page, pageSize: limit })
 
-      // degraded === true는 쿼리 실패가 아니라 SUPABASE_SERVICE_ROLE_KEY가 없어
+      // degraded === true는 쿼리 실패가 아니라 TURSO_DATABASE_URL이 없어
       // fetchBoardPosts가 DB 조회 자체를 건너뛴 경우다(src/lib/server/board.ts 참고).
       // 이 라우트는 기본이 private, no-store라 캐시 문제는 없지만, 200 빈 목록을
       // 그대로 내려주면 클라이언트가 "정말로 글이 없다"고 오해한다 — 하드 실패로

@@ -101,6 +101,21 @@ test('불리언은 0/1 정수로 바꾼다', () => {
   assert.equal(row.is_suspended, 0)
 })
 
+test('부정 대조: bool()은 모르는 토큰에서 조용히 0으로 떨어지지 않고 던진다 (코드리뷰 Important 5)', () => {
+  // 예전에는 'true'|'t'|'1' 밖의 모든 값이 전부 0이었다 — artists.is_active가
+  // 이 함수를 거치므로 덤프 표기가 'TRUE'처럼 바뀌면 아티스트 13명 전원이
+  // is_active=0이 되어 공개 사이트에서 사라지는데 검증(매핑 결과 자체와
+  // 대조)은 통과해버렸다.
+  assert.throws(
+    () => toMemberProfileRow({ ...PG_PROFILE, is_active: 'YES' }),
+    /boolean으로 해석할 수 없다/
+  )
+  assert.throws(
+    () => toArtistRow({ ...PG_ARTIST, is_active: 'TRUE' }),
+    /boolean으로 해석할 수 없다/
+  )
+})
+
 test('JSON 컬럼은 문자열로 직렬화한다', () => {
   assert.equal(
     toMemberProfileRow(PG_PROFILE).verification_status,
@@ -126,6 +141,14 @@ test('portfolio_links의 NULL은 빈 배열로 정규화한다', () => {
   // Turso 스키마가 notNull().default([])라 NULL을 그대로 넣으면 INSERT가 실패한다.
   assert.equal(toArtistRow(PG_ARTIST).portfolio_links, '[]')
   assert.equal(toArtistRow(PG_ARTIST).youtube_videos, '[]')
+})
+
+test('category(text[])는 PostgREST 경로(진짜 배열)에서 그대로 직렬화된다', () => {
+  // identity.mjs는 PostgREST(fetch)로 읽으므로 category가 이미 진짜 배열이다
+  // (덤프 텍스트 배열 리터럴 `{a,b}`을 파싱해야 하는 건 stage4.mjs 경로 —
+  // stage4Mapping.test.mjs가 그쪽을 커버한다). 두 경로 모두 pgArrayToJsonText
+  // 하나로 처리되므로 여기서는 배열 통과 분기가 안 깨졌는지만 확인한다.
+  assert.equal(toArtistRow(PG_ARTIST).category, '["음악"]')
 })
 
 test('사용자 행은 7개 컬럼이고 이름은 표시명에서 온다', () => {

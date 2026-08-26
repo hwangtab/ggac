@@ -6,6 +6,7 @@ import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { listProfileSignupsSince } from '@/db/queries/profiles'
 import { listPostCreationsSince } from '@/db/queries/posts'
+import { listActivities } from '@/db/queries/activities'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -28,9 +29,7 @@ export const GET = defineApiRoute({
       { error: '월별 통계 정보를 조회하는 중 오류가 발생했습니다.' },
       { status: 500 }
     ),
-  handler: async ({ request, auth }) => {
-    const { db } = auth
-
+  handler: async ({ request }) => {
     // 쿼리 파라미터 추출
     const { searchParams } = new URL(request.url)
     const months = parseIntegerParam(searchParams.get('months'), 12, { min: 1, max: 24 })
@@ -42,11 +41,9 @@ export const GET = defineApiRoute({
 
     // Task 8: member_profiles/posts 조회를 Supabase에서 Turso 쿼리 계층
     // (listProfileSignupsSince/listPostCreationsSince)으로 옮겼다 — 둘 다
-    // 이미 Turso가 권위(단계 3c 이후)다. user_activities는 여전히 Supabase
-    // 권위(단계 4 대상)라 이 조회만 남긴다 — 이 라우트가 두 DB를 함께 읽는
-    // 과도기 상태는 스펙이 허용한 정상 상태다(task-8-brief Step 3). 단계
-    // 4에서 user_activities가 Turso로 넘어오면 이 부분도 한 쿼리 계층으로
-    // 합쳐진다.
+    // 이미 Turso가 권위(단계 3c 이후)다. 단계 4에서 user_activities도
+    // Turso로 넘어와(listActivities, 아래) 이 라우트는 더 이상 두 DB를
+    // 함께 읽지 않는다.
     let memberStats: Awaited<ReturnType<typeof listProfileSignupsSince>>
     try {
       memberStats = await listProfileSignupsSince(startDate)
@@ -64,15 +61,14 @@ export const GET = defineApiRoute({
       return ApiError.internalServerError('게시글 통계 조회 실패').toNextResponse()
     }
 
-    // 월별 활동 통계 — user_activities는 아직 Supabase 권위(단계 4 대상).
-    const { data: activityStats, error: activityError } = await db
-      .from('user_activities')
-      .select('created_at, action_type')
-      .gte('created_at', startDate.toISOString())
-      .order('created_at', { ascending: true })
-
-    if (activityError) {
-      console.error('Activity stats error:', activityError)
+    // 월별 활동 통계 — 단계 4: user_activities가 Turso 권위가 되어
+    // listActivities(Turso)로 옮겼다. 이제 이 라우트의 세 조회
+    // (memberStats/postStats/activityStats) 모두 Turso 하나로 합쳐졌다.
+    let activityStats: Awaited<ReturnType<typeof listActivities>>
+    try {
+      activityStats = await listActivities({ startDate })
+    } catch (error) {
+      console.error('Activity stats error:', error)
       return ApiError.internalServerError('활동 통계 조회 실패').toNextResponse()
     }
 

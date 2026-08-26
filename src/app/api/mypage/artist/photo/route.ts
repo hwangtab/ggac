@@ -7,14 +7,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { rateLimit } from '@/lib/server/rateLimit'
-import { createSupabaseServer } from '@/lib/supabase/server'
-import { createServiceRoleClient } from '@/lib/server/supabaseAdmin'
-import {
-  putPublicObject,
-  deletePublicObject,
-  deletePublicObjectEverywhere,
-  logicalPathFromUrl,
-} from '@/lib/storage/provider'
+import { hasPublicBlobStore } from '@/lib/storage/blob'
+import { putPublicObject, deletePublicObject, logicalPathFromUrl } from '@/lib/storage/provider'
 import { buildVariantPathSuffixes } from '@/lib/storage/paths'
 import { revalidatePath, revalidateTag } from 'next/cache'
 import sharp from 'sharp'
@@ -25,15 +19,12 @@ import { hasValidFileSignature } from '@/utils/fileUploadValidation'
 import { isProjectStorageObjectPath } from '@/utils/storageUrlValidation'
 import { requireUser, requireActiveMember } from '@/lib/server/memberAuth'
 import { getProfileById } from '@/db/queries/profiles'
+import { getArtistPhotoInfoByLegacyId, updateArtistByLegacyId } from '@/db/queries/artists'
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 const MAX_FILE_SIZE = 5 * 1024 * 1024
 const WEBP_QUALITY = 82
 const JPEG_QUALITY = 85
-
-function getSupabaseAdmin() {
-  return createServiceRoleClient()
-}
 
 // 파일 타입 검증
 function validateFileType(file: File): boolean {
@@ -143,8 +134,6 @@ function generateArtistStoragePaths(artistId: string, originalFilename: string) 
     extension,
   }
 }
-
-type AdminClient = ReturnType<typeof getSupabaseAdmin>
 
 function collectSafeArtistVariantPaths(
   metadata: ProfilePhotoMetadata | null | undefined,
@@ -280,18 +269,6 @@ export async function PUT(request: NextRequest) {
   }
 
   try {
-    const supabase = await createSupabaseServer()
-    let supabaseAdmin: AdminClient
-    try {
-      supabaseAdmin = getSupabaseAdmin()
-    } catch (error) {
-      console.error('Failed to initialise Supabase admin client:', error)
-      return NextResponse.json(
-        { success: false, error: '서버 설정 오류로 인해 업로드를 진행할 수 없습니다.' },
-        { status: 500 }
-      )
-    }
-
     // 사용자 인증 확인 (로그인 + 승인된 활성 조합원)
     const auth = await requireActiveMember()
     if (auth instanceof NextResponse) return auth
@@ -355,27 +332,16 @@ export async function PUT(request: NextRequest) {
 
     const cropSettings = parseCropSettings(cropSettingsValue)
 
-    // 기존 아티스트 프로필 사진 조회
-    let currentArtistQuery = await supabase
-      .from('artists')
-      .select('profile_photo_url, profile_photo_metadata, slug')
-      .eq('legacy_id', profile.artist_id)
-      .maybeSingle()
-
-    if (!currentArtistQuery.data) {
-      const adminResult = await supabaseAdmin
-        .from('artists')
-        .select('profile_photo_url, profile_photo_metadata, slug')
-        .eq('legacy_id', profile.artist_id)
-        .maybeSingle()
-      if (adminResult.error) {
-        console.error('Admin artist lookup error:', adminResult.error)
-      } else {
-        currentArtistQuery = adminResult
-      }
+    // 기존 아티스트 프로필 사진 조회. Task 4: artists 권위가 Turso로
+    // 옮겨졌다 — Turso는 RLS 개념이 없어 일반/service-role 이중 조회가
+    // 필요 없다(단일 조회로 충분, 위 프로필 조회와 같은 이유).
+    let currentArtist: Awaited<ReturnType<typeof getArtistPhotoInfoByLegacyId>>
+    try {
+      currentArtist = await getArtistPhotoInfoByLegacyId(profile.artist_id)
+    } catch (error) {
+      console.error('Artist lookup error:', error)
+      currentArtist = null
     }
-
-    const currentArtist = currentArtistQuery.data
 
     // Storage 경로 생성
     const storagePaths = generateArtistStoragePaths(profile.artist_id, file.name)
@@ -418,17 +384,19 @@ export async function PUT(request: NextRequest) {
     }
 
     // 아티스트 테이블 업데이트
-    const { error: updateError } = await supabase
-      .from('artists')
-      .update({
+    let updatedArtist: Awaited<ReturnType<typeof updateArtistByLegacyId>>
+    try {
+      updatedArtist = await updateArtistByLegacyId(profile.artist_id, {
         profile_photo_url: variantUrls.webp || variantUrls.fallback || variantUrls.original || null,
-        profile_photo_metadata: finalMetadata,
-        updated_at: new Date().toISOString(),
+        profile_photo_metadata: finalMetadata as unknown as Record<string, unknown>,
       })
-      .eq('legacy_id', profile.artist_id)
+    } catch (error) {
+      updatedArtist = null
+      console.error('Database update error:', error)
+    }
 
-    if (updateError) {
-      console.error('Database update error:', updateError)
+    if (!updatedArtist) {
+      console.error('Database update error: artist row not found')
 
       // 실패 시 업로드된 파일 삭제 — 방금 이 요청에서 현재 제공자로 올린
       // 파일을 되돌리는 롤백이므로 단일 제공자 삭제로 충분하다. 다만
@@ -459,8 +427,7 @@ export async function PUT(request: NextRequest) {
       )
     }
 
-    // 기존 아티스트 프로필 사진 삭제 (Storage에서) — 전환기에는 이전 파일이
-    // 어느 제공자에 있는지 알 수 없으므로 양쪽 다 지운다.
+    // 기존 아티스트 프로필 사진 삭제 (Storage에서).
     // removalTargets는 버킷을 포함한 논리 경로(`artists/...`)로 통일한다 —
     // logicalPathFromUrl이 이미 그 형태를 돌려주므로, collectSafeArtistVariantPaths가
     // 주는 버킷 상대 경로 쪽에 `artists/`를 붙여 맞춘다.
@@ -483,7 +450,7 @@ export async function PUT(request: NextRequest) {
 
     if (removalTargets.size > 0) {
       const results = await Promise.allSettled(
-        Array.from(removalTargets).map(logical => deletePublicObjectEverywhere(logical))
+        Array.from(removalTargets).map(logical => deletePublicObject(logical))
       )
       for (const result of results) {
         if (result.status === 'rejected') {
@@ -529,20 +496,12 @@ export async function PUT(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
-    const supabase = await createSupabaseServer()
-
-    // 자격 증명으로 Service Role 클라이언트를 만들 수 있는지 삭제 작업 전에
-    // 미리 검증한다 — 실패 시 즉시 500으로 응답한다. (결과 자체를 변수에
-    // 담아두진 않는다: 아래 스토리지 삭제는 deletePublicObjectEverywhere가
-    // 내부적으로 자체 클라이언트를 만들어 쓰므로 이 클라이언트를 재사용하지
-    // 않는다 — 그 재사용 부분만 죽은 코드였고, 사전 검증이라는 동작은
-    // 그대로 유지한다. 이 검증이 없으면 Supabase 자격 증명만 깨진 상태에서
-    // Blob 쪽 삭제가 멱등하게 "성공"해 shouldThrow가 false로 떨어지고,
-    // 실제 파일은 남았는데 200 성공 응답이 나가는 시나리오가 생긴다.)
-    try {
-      getSupabaseAdmin()
-    } catch (error) {
-      console.error('Failed to initialise Supabase admin client:', error)
+    // 삭제 작업 전에 저장소 자격 증명을 미리 검증한다 — 실패 시 즉시 500으로
+    // 응답한다. 아래 삭제 루프는 개별 실패를 로그만 남기고 삼키므로, 이
+    // 검증이 없으면 토큰이 없는 배포에서 파일은 하나도 안 지워졌는데 DB만
+    // 비워지고 200 성공 응답이 나간다.
+    if (!hasPublicBlobStore()) {
+      console.error('PUBLIC_BLOB_READ_WRITE_TOKEN 미설정 — 아티스트 사진 삭제 중단')
       return NextResponse.json(
         { success: false, error: '서버 설정 오류로 인해 삭제를 진행할 수 없습니다.' },
         { status: 500 }
@@ -578,14 +537,16 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
-    // 현재 아티스트 프로필 사진 정보 조회
-    const { data: artist, error: artistError } = await supabase
-      .from('artists')
-      .select('profile_photo_url, profile_photo_metadata, slug')
-      .eq('legacy_id', profile.artist_id)
-      .single()
+    // 현재 아티스트 프로필 사진 정보 조회. Task 4: artists 권위가 Turso로 옮겨졌다.
+    let artist: Awaited<ReturnType<typeof getArtistPhotoInfoByLegacyId>>
+    try {
+      artist = await getArtistPhotoInfoByLegacyId(profile.artist_id)
+    } catch (error) {
+      console.error('Artist lookup error:', error)
+      artist = null
+    }
 
-    if (artistError || !artist) {
+    if (!artist) {
       return NextResponse.json(
         { success: false, error: '아티스트 정보를 찾을 수 없습니다.' },
         { status: 404 }
@@ -599,8 +560,7 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
-    // Storage에서 파일 삭제 — 전환기에는 이전 파일이 어느 제공자에 있는지
-    // 알 수 없으므로 양쪽 다 지운다.
+    // Storage에서 파일 삭제.
     // removalTargets는 버킷을 포함한 논리 경로(`artists/...`)로 통일한다.
     try {
       const removalTargets = new Set<string>()
@@ -623,7 +583,7 @@ export async function DELETE(request: NextRequest) {
 
       if (removalTargets.size > 0) {
         const results = await Promise.allSettled(
-          Array.from(removalTargets).map(logical => deletePublicObjectEverywhere(logical))
+          Array.from(removalTargets).map(logical => deletePublicObject(logical))
         )
         for (const result of results) {
           if (result.status === 'rejected') {
@@ -636,17 +596,18 @@ export async function DELETE(request: NextRequest) {
     }
 
     // 데이터베이스에서 아티스트 프로필 사진 정보 제거
-    const { error: updateError } = await supabase
-      .from('artists')
-      .update({
+    let cleared: Awaited<ReturnType<typeof updateArtistByLegacyId>>
+    try {
+      cleared = await updateArtistByLegacyId(profile.artist_id, {
         profile_photo_url: null,
         profile_photo_metadata: null,
-        updated_at: new Date().toISOString(),
       })
-      .eq('legacy_id', profile.artist_id)
+    } catch (error) {
+      cleared = null
+      console.error('Database update error:', error)
+    }
 
-    if (updateError) {
-      console.error('Database update error:', updateError)
+    if (!cleared) {
       return NextResponse.json(
         { success: false, error: '데이터베이스 업데이트에 실패했습니다.' },
         { status: 500 }
@@ -684,8 +645,6 @@ export async function DELETE(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createSupabaseServer()
-
     // 사용자 인증 확인
     const auth = await requireUser()
     if (auth instanceof NextResponse) return auth
@@ -714,14 +673,16 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // 아티스트 프로필 사진 정보 조회
-    const { data: artist, error: artistError } = await supabase
-      .from('artists')
-      .select('profile_photo_url, profile_photo_metadata')
-      .eq('legacy_id', profile.artist_id)
-      .single()
+    // 아티스트 프로필 사진 정보 조회. Task 4: artists 권위가 Turso로 옮겨졌다.
+    let artist: Awaited<ReturnType<typeof getArtistPhotoInfoByLegacyId>>
+    try {
+      artist = await getArtistPhotoInfoByLegacyId(profile.artist_id)
+    } catch (error) {
+      console.error('Artist lookup error:', error)
+      artist = null
+    }
 
-    if (artistError || !artist) {
+    if (!artist) {
       return NextResponse.json(
         { success: false, error: '아티스트 정보를 찾을 수 없습니다.' },
         { status: 404 }

@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import { readFileSync, rmSync } from 'node:fs'
 import { createClient } from '@libsql/client'
 
+import { applyMigrations } from './apply-migrations.mjs'
+
 /**
  * 단계 2c: 회원 관리·마이페이지 라우트 15개를 `src/db/queries/profiles.ts`
  * (Turso)로 전환한 것을 검증한다.
@@ -33,9 +35,7 @@ let setupClient
 before(async () => {
   for (const suffix of ['', '-wal', '-shm']) rmSync(`${DB_PATH}${suffix}`, { force: true })
   setupClient = createClient({ url: `file:${DB_PATH}` })
-  await setupClient.executeMultiple(
-    readFileSync('src/db/migrations/0000_dizzy_krista_starr.sql', 'utf8')
-  )
+  await applyMigrations(setupClient)
 })
 
 after(() => {
@@ -98,9 +98,19 @@ test('15개 라우트 모두 src/db/queries/profiles(쿼리 계층)를 임포트
   }
 })
 
-test('admin/members/bulk는 member_bulk_operations 등 다른 Supabase 접근을 그대로 유지한다', () => {
+// 단계 4(Task 4)에서 member_bulk_operations 권위도 Turso로 옮겨갔다 — 이
+// 테스트는 원래 "이 테이블은 그대로 Supabase에 남는다"를 고정했지만, 이제는
+// 그 반대(쿼리 계층 함수를 쓰고 Supabase 직접 접근이 남아있지 않다)를
+// 검증한다.
+test('admin/members/bulk는 member_bulk_operations를 쿼리 계층(src/db/queries/misc.ts)으로 접근한다(Task 4에서 Turso로 전환)', () => {
   const bulkSrc = readFileSync(ROUTE_FILES.adminMembersBulk, 'utf8')
-  assert.match(bulkSrc, /\.from\(\s*['"]member_bulk_operations['"]\s*\)/)
+  assert.doesNotMatch(bulkSrc, /\.from\(\s*['"]member_bulk_operations['"]\s*\)/)
+  assert.match(bulkSrc, /from\s+['"]@\/db\/queries\/misc['"]/)
+  assert.match(bulkSrc, /createBulkOperation\(/)
+  assert.match(bulkSrc, /markBulkOperationInProgress\(/)
+  assert.match(bulkSrc, /completeBulkOperation\(/)
+  assert.match(bulkSrc, /failBulkOperation\(/)
+  assert.match(bulkSrc, /listBulkOperations\(/)
 })
 
 // 단계 2c Task 7: notifications/bulk는 이 스위트가 처음 작성됐을 때(회원
@@ -123,13 +133,21 @@ test('notifications/bulk는 더 이상 create_bulk_notification RPC나 createSup
 // 그 판단이 놓친 사실이 있었다 — 이 파일이 member_profiles에 **쓴다**는
 // 것. 해제(DELETE, [memberId]/route.ts)는 이미 Turso로 전환됐는데 배정
 // (POST, 이 파일)이 계속 Supabase에 쓰면 배정은 무효, 해제만 유효한
-// 반쪽짜리 상태가 된다 — 그래서 이 파일도 member_profiles만 전환한다.
-// artists 테이블 조회(존재 확인)는 Supabase 그대로 남긴다(아직 그쪽이
-// 권위).
+// 반쪽짜리 상태가 된다 — 그래서 이 파일도 member_profiles만 전환했었다
+// (단계 2c). artists 테이블 조회(존재 확인)는 그때 Supabase에 남겨뒀지만,
+// 단계 4(Task 4)에서 artists 권위 자체가 Turso로 옮겨가며 이 존재 확인도
+// 함께 전환됐다 — 이제는 그 반대(Supabase 직접 접근이 남아있지 않다)를
+// 검증한다.
 
-test('admin/artists/[id]/members(배정 POST)는 artists 테이블 조회를 Supabase에 그대로 남긴다', () => {
+test('admin/artists/[id]/members(배정 POST)는 artists 존재 확인을 getArtistByLegacyId(Turso)로 한다(Task 4에서 전환)', () => {
   const src = readFileSync(ROUTE_FILES.adminArtistAssign, 'utf8')
-  assert.match(src, /\.from\(\s*['"]artists['"]\s*\)/, 'artists 조회는 여전히 Supabase여야 한다')
+  assert.doesNotMatch(
+    src,
+    /\.from\(\s*['"]artists['"]\s*\)/,
+    'artists 조회는 더 이상 Supabase가 아니어야 한다'
+  )
+  assert.match(src, /from\s+['"]@\/db\/queries\/artists['"]/)
+  assert.match(src, /getArtistByLegacyId\(artistId\)/)
   assert.match(src, /getProfileById\(memberId\)/)
   assert.match(src, /updateProfile\(memberId,/)
 })
@@ -750,16 +768,22 @@ test('아티스트 배정 로직 재현: 이미 다른 아티스트에 배정된
 // 하지만(쓰기 없음), 그 낡은 Supabase 값으로 "이 회원이 아티스트인가"를
 // 판정한다. 배정은 이미 Turso에 쓰는데 이 두 파일이 계속 Supabase를 읽으면
 // 관리자가 방금 배정한 회원이 마이페이지에서 자기 아티스트 페이지를
-// 못 본다. artists 테이블 자체는 그대로 Supabase에 남긴다(아직 그쪽이
-// 권위).
+// 못 본다. artists 테이블 자체는 그때(단계 2c) Supabase에 남겨뒀지만,
+// 단계 4(Task 4)에서 artists 권위 자체가 Turso로 옮겨가며 이 두 파일의
+// artists 조회도 함께 전환됐다.
 
-test('mypage/artist, mypage/artist/photo는 artists 테이블 조회를 Supabase에 그대로 남긴다', () => {
+test('mypage/artist, mypage/artist/photo는 artists 조회를 쿼리 계층(src/db/queries/artists.ts)으로 한다(Task 4에서 전환)', () => {
   for (const file of [ROUTE_FILES.mypageArtist, ROUTE_FILES.mypageArtistPhoto]) {
     const src = readFileSync(file, 'utf8')
-    assert.match(
+    assert.doesNotMatch(
       src,
       /\.from\(\s*['"]artists['"]\s*\)/,
-      `${file}: artists 조회는 Supabase여야 한다`
+      `${file}: artists 조회는 더 이상 Supabase가 아니어야 한다`
+    )
+    assert.match(
+      src,
+      /from\s+['"]@\/db\/queries\/artists['"]/,
+      `${file}: artists 쿼리 계층을 임포트해야 한다`
     )
     assert.match(
       src,

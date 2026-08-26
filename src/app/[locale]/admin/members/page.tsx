@@ -65,6 +65,14 @@ interface Member {
   rejected_by?: string
 }
 
+/** `/api/admin/members/orphans`가 돌려주는 프로필 없는 계정. */
+interface ProfilelessAccount {
+  id: string
+  email: string
+  name: string
+  created_at: string
+}
+
 interface MembersResponse {
   members: Member[]
   pagination: {
@@ -95,6 +103,15 @@ export default function MembersPage() {
     until: string
   }>({ reason: '', until: '' })
 
+  // 프로필 없는 계정("유령 회원") — 단계 4 Task 6b.
+  // 가입은 `user` 행과 `member_profiles` 행 두 번을 쓰는데, 그 사이에서
+  // 프로필 쓰기가 실패하면 계정만 남는다. 그런 회원은 member_profiles만 읽는
+  // 아래 목록에 **뜨지 않아** 승인도 거부도 할 수 없고, 당사자는
+  // /register/pending에 갇힌 채 재가입도 막힌다(user.email UNIQUE).
+  // 정상 상태에서는 빈 배열이라 이 배너는 아예 렌더되지 않는다.
+  const [orphans, setOrphans] = useState<ProfilelessAccount[]>([])
+  const [orphanActionId, setOrphanActionId] = useState<string | null>(null)
+
   // 고급 필터링 상태
   const [useAdvancedFilter, setUseAdvancedFilter] = useState(false)
   const [fieldDefinitions, setFieldDefinitions] = useState<FieldDefinition[]>([])
@@ -108,6 +125,7 @@ export default function MembersPage() {
       fetchMembers()
     }
     fetchMemberStatsData() // 통계는 항상 별도로 로드
+    fetchOrphans() // 프로필 없는 계정 경고(정상 상태에서는 0건)
   }, [filter, searchTerm, useAdvancedFilter]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 고급 필터 상태가 변경될 때 쿼리 실행
@@ -182,6 +200,43 @@ export default function MembersPage() {
       setStatsLoading(false)
     }
   }, [])
+
+  const fetchOrphans = useCallback(async () => {
+    try {
+      const response = await fetch('/api/admin/members/orphans')
+      if (!response.ok) return
+      const payload = await response.json()
+      setOrphans(payload.data?.orphans ?? [])
+    } catch (error) {
+      // 이 배너는 부가 정보다 — 조회가 실패해도 회원 목록 화면 자체를 막지 않는다.
+      console.error('프로필 없는 계정 조회 실패:', error)
+    }
+  }, [])
+
+  const recoverOrphan = async (userId: string) => {
+    setOrphanActionId(userId)
+    try {
+      const response = await fetch('/api/admin/members/orphans', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      })
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null)
+        // ApiError는 `{ success: false, error: '<메시지>' }` 모양이다(apiWrapper.ts).
+        throw new Error(
+          typeof payload?.error === 'string' ? payload.error : '프로필 복구에 실패했습니다.'
+        )
+      }
+      // 복구된 계정은 이제 승인 대기 회원이다 — 두 목록을 함께 새로고침한다.
+      await Promise.all([fetchOrphans(), fetchMembers()])
+      await fetchMemberStatsData()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '프로필 복구에 실패했습니다.')
+    } finally {
+      setOrphanActionId(null)
+    }
+  }
 
   // 상세 통계 모달용
   const fetchMemberStats = async () => {
@@ -504,6 +559,49 @@ export default function MembersPage() {
   return (
     <AdminLayout title="회원 관리" description="회원 승인, 거부 및 상태 관리">
       <div className="space-y-6">
+        {/* 프로필 없는 계정 경고 — 정상 상태에서는 렌더되지 않는다 */}
+        {orphans.length > 0 && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <FiAlertCircle className="w-5 h-5 text-red-500 mt-0.5 shrink-0" />
+              <div className="flex-1">
+                <p className="font-semibold text-red-800">
+                  조합원 정보가 저장되지 않은 계정 {orphans.length}건
+                </p>
+                <p className="text-sm text-red-700 mt-1">
+                  가입 도중 조합원 정보 저장이 실패한 계정입니다. 아래 회원 목록에는 나타나지 않고,
+                  당사자는 로그인해도 승인 대기 화면에서 더 나아가지 못합니다. 복구하면 승인 대기
+                  상태로 회원 목록에 나타납니다(표시명·이메일만 복구되며, 연락처·계좌 등은 본인에게
+                  다시 받아야 합니다).
+                </p>
+                <ul className="mt-3 space-y-2">
+                  {orphans.map(orphan => (
+                    <li
+                      key={orphan.id}
+                      className="flex flex-wrap items-center justify-between gap-2 bg-white border border-red-200 rounded px-3 py-2"
+                    >
+                      <span className="text-sm text-gray-800">
+                        {orphan.name || '(표시명 없음)'}{' '}
+                        <span className="text-gray-500">{orphan.email}</span>
+                        <span className="text-gray-400 ml-2">
+                          {new Date(orphan.created_at).toLocaleDateString('ko-KR')} 가입
+                        </span>
+                      </span>
+                      <button
+                        onClick={() => recoverOrphan(orphan.id)}
+                        disabled={orphanActionId === orphan.id}
+                        className="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+                      >
+                        {orphanActionId === orphan.id ? '복구 중...' : '프로필 복구'}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* 주요 통계 카드 */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-white rounded-lg border border-gray-200 p-4">

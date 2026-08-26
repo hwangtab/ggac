@@ -3,6 +3,7 @@ import { apiPut, ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { requireBoardMember } from '@/lib/server/boardRoomAuth'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { validateUUID } from '@/utils/validation'
+import { getDateOptionMeetingId, getMeetingVotingState, upsertDateVote } from '@/db/queries/board'
 
 export const runtime = 'nodejs'
 
@@ -17,7 +18,7 @@ function validateOptionId(id: string) {
 export async function PUT(request: NextRequest) {
   const auth = await requireBoardMember()
   if (auth instanceof NextResponse) return auth
-  const { db, user } = auth
+  const { user } = auth
 
   return apiPut(
     async () => {
@@ -33,31 +34,21 @@ export async function PUT(request: NextRequest) {
       if (routeOptionId.error) throw routeOptionId.error
       const sanitizedOptionId = routeOptionId.id
 
-      const { data: opt, error: optErr } = await db
-        .from('board_meeting_date_options')
-        .select('id, meeting_id')
-        .eq('id', sanitizedOptionId)
-        .single()
-      if (optErr || !opt) throw ApiError.notFound('후보 날짜를 찾을 수 없습니다.')
+      const opt = await getDateOptionMeetingId(sanitizedOptionId)
+      if (!opt) throw ApiError.notFound('후보 날짜를 찾을 수 없습니다.')
 
-      const { data: meeting, error: mErr } = await db
-        .from('board_meetings')
-        .select('status, vote_deadline')
-        .eq('id', opt.meeting_id)
-        .single()
-      if (mErr || !meeting) throw ApiError.notFound('회의를 찾을 수 없습니다.')
+      const meeting = await getMeetingVotingState(opt.meeting_id)
+      if (!meeting) throw ApiError.notFound('회의를 찾을 수 없습니다.')
       if (meeting.status !== 'polling') throw ApiError.forbidden('투표가 마감된 회의입니다.')
       if (meeting.vote_deadline && new Date(meeting.vote_deadline).getTime() < Date.now()) {
         throw ApiError.forbidden('투표 마감 시간이 지났습니다.')
       }
 
-      const { error } = await db
-        .from('board_meeting_date_votes')
-        .upsert(
-          { option_id: sanitizedOptionId, voter_id: user.id, is_available: isAvailable },
-          { onConflict: 'option_id,voter_id' }
-        )
-      if (error) throw ApiError.internalServerError('투표 저장에 실패했습니다.')
+      try {
+        await upsertDateVote(sanitizedOptionId, user.id, isAvailable)
+      } catch {
+        throw ApiError.internalServerError('투표 저장에 실패했습니다.')
+      }
 
       return ApiSuccess.ok(
         { option_id: sanitizedOptionId, is_available: isAvailable },

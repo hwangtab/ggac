@@ -10,7 +10,8 @@ import { createLogger } from '@/utils/logger'
 
 const log = createLogger('streamRoute')
 
-type StreamRouteAuthMode = 'admin'
+/** `apiRoute.ts`의 `ApiRouteAuthMode`와 같은 이유로 `'public'`을 명시값으로 둔다. */
+type StreamRouteAuthMode = 'admin' | 'public'
 type StreamRouteAuthResult = AdminAuthSuccess | undefined
 type StreamRouteAuthResolver<TAuth> = (ctx: {
   request: NextRequest
@@ -26,7 +27,8 @@ export type DefineStreamRouteConfig<TAuth> = {
   method: 'GET'
   name: string
   rateLimit?: RouteRateLimitConfig
-  auth?: StreamRouteAuthMode | StreamRouteAuthResolver<TAuth>
+  /** 필수다 — 게이트가 없는 스트림도 `'public'`으로 그 사실을 적어야 한다. */
+  auth: StreamRouteAuthMode | StreamRouteAuthResolver<TAuth>
   errorResponse?: (error: unknown) => Response
   handler: (ctx: StreamRouteContext<TAuth>) => Promise<Response> | Response
 }
@@ -35,13 +37,20 @@ async function resolveStreamAuth<TAuth>(
   auth: DefineStreamRouteConfig<TAuth>['auth'],
   request: NextRequest
 ): Promise<TAuth | StreamRouteAuthResult | NextResponse> {
-  if (!auth) return undefined
-
   if (typeof auth === 'function') {
     return auth({ request })
   }
 
-  return requireAdmin()
+  if (auth === 'admin') {
+    return requireAdmin()
+  }
+
+  if (auth === 'public') {
+    return undefined
+  }
+
+  // 타입을 우회한 누락·오타는 열지 않고 막는다(apiRoute.ts와 같은 이유).
+  throw new Error('스트림 라우트 인가 설정이 올바르지 않습니다.')
 }
 
 export function defineStreamRoute<TAuth = StreamRouteAuthResult>(

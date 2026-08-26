@@ -1,7 +1,9 @@
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync, rmSync } from 'node:fs'
+import { rmSync } from 'node:fs'
 import { createClient } from '@libsql/client'
+
+import { applyMigrations } from './apply-migrations.mjs'
 
 import {
   toBool,
@@ -28,6 +30,7 @@ import {
   resolveOrphans,
   parseExpect,
   evaluateExpectGate,
+  assertDumpColumnsCovered,
 } from '../migrate/content.mjs'
 
 // ---------------------------------------------------------------- 픽스처
@@ -277,9 +280,7 @@ function payload() {
 before(async () => {
   rmSync(DB_PATH, { force: true })
   client = createClient({ url: `file:${DB_PATH}` })
-  await client.executeMultiple(
-    readFileSync('src/db/migrations/0000_dizzy_krista_starr.sql', 'utf8')
-  )
+  await applyMigrations(client)
 })
 
 after(() => {
@@ -427,6 +428,31 @@ test('개인정보 컬럼이 어긋나면 검증은 컬럼명과 id만 낸다 �
 test('parseArgs는 identity.mjs 것을 그대로 재사용한다', () => {
   assert.deepEqual(parseArgs(['--dump', 'public.sql']), { dumpPath: 'public.sql', apply: false })
   assert.throws(() => parseArgs(['--apply']), /usage/)
+})
+
+// ------------------------------------------ assertDumpColumnsCovered (단계 4 코드리뷰 Important 3)
+//
+// Turso PRAGMA 커버리지 게이트(assertColumnCoverage)는 Turso 스키마와
+// 매퍼만 비교한다 — Postgres 덤프에는 있는데 Turso 스키마에도 매퍼에도
+// 없는 컬럼은 그 게이트를 통과하고 조용히 사라질 수 있었다. content.mjs도
+// stage4.mjs와 같은 반대 방향 게이트를 쓴다.
+
+test('assertDumpColumnsCovered: 덤프 컬럼이 매퍼 키에 다 있으면 통과한다', () => {
+  const row = toPostRow(PG_POST)
+  assert.doesNotThrow(() => assertDumpColumnsCovered('posts', Object.keys(PG_POST), [row]))
+})
+
+test('부정 대조: 매퍼가 덤프에 있는 컬럼을 빠뜨리면 중단시킨다', () => {
+  const row = toPostRow(PG_POST)
+  delete row.view_count // 매퍼가 실수로 빠뜨렸다고 가정(운영 매퍼는 안 건드림)
+  assert.throws(
+    () => assertDumpColumnsCovered('posts', Object.keys(PG_POST), [row]),
+    /Postgres 덤프에는 있는데 매퍼가 빠뜨린 컬럼/
+  )
+})
+
+test('assertDumpColumnsCovered: 덤프에 그 표의 INSERT가 없으면(null) 검사를 건너뛴다', () => {
+  assert.doesNotThrow(() => assertDumpColumnsCovered('posts', null, []))
 })
 
 // ---------------------------------------------------------------- FK 고아 (리뷰 라운드 1: C1·C2)

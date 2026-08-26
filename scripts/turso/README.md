@@ -19,8 +19,20 @@
 turso db shell ggac-prod                 # 대화형 셸
 turso db show ggac-prod                  # URL·리전 확인
 turso db tokens create ggac-prod         # 새 토큰 발급
-turso db shell ggac-prod .dump > backup.sql  # 덤프
+
+# 덤프 — 반드시 저장소 밖에. 아래 두 줄을 한 셸에서 이어서 실행한다.
+DUMP_DIR=$(mktemp -d)
+turso db shell ggac-prod .dump > "$DUMP_DIR/ggac-prod.sql"
 ```
+
+⚠️ **덤프를 저장소 안에 만들지 마라.** `ggac-prod` 덤프에는 조합원 전원의
+실명·전화번호·생년월일·계좌번호와 비밀번호 해시가 들어 있고 이 저장소는
+공개다. 예전 이 문서는 `.dump > backup.sql`이라고만 적어 놨는데 그 명령은
+CWD에 파일을 만든다 — 저장소 루트에서 한 번 실행하고 `git add -A` 한 번이면
+그대로 공개된다. `mktemp -d` 안에서 다루고 끝나면 `rm -rf "$DUMP_DIR"`로
+지운다(인증 덤프에 이미 쓰던 관례를 같은 이유로 여기에도 적용한다 —
+"단계 2b-3 이후" 절 참고). `.gitignore`에 루트 한정
+`*.sql`/`*.sql.gz`/`*.db` 규칙을 함께 넣어 뒀지만 그건 마지막 그물일 뿐이다.
 
 ⚠️ `turso db dump`는 이 CLI(v1.0.31 기준)에 존재하지 않는 서브커맨드다.
 실행해도 종료 코드는 0이고, 대신 `turso db --help`의 도움말 텍스트가
@@ -103,13 +115,16 @@ BACKUP_DIR="$HOME/ggac-url-backup/2026-08-14T01-45-11-393Z" \
 직전의 `artists` / `posts` / `post_attachments` / `event_applications` 값이
 들어 있다.
 
-복원과 함께 신규 업로드도 Supabase로 되돌리려면 `STORAGE_PROVIDER`를 지우고
-재배포한다:
-
-```bash
-vercel env rm STORAGE_PROVIDER production
-git commit --allow-empty -m "chore(storage): 제공자 롤백 반영" && git push origin main
-```
+> **⚠ 단계 4 Task 5에서 이 탈출구가 사라졌다.** 예전에는 `STORAGE_PROVIDER`를
+> 지우면 신규 업로드가 다시 Supabase Storage로 갔다. 이제 코드에 제공자 분기
+> 자체가 없다(`src/lib/storage/provider.ts`는 Vercel Blob만 부른다) — 환경변수를
+> 지워도 아무 효과가 없고, Supabase 클라이언트가 저장소에 0개라 되살릴 수도 없다.
+>
+> 위 URL 복원은 **이미 저장된 URL을 백업 시점 값으로 되돌리는 것**이라 여전히
+> 동작한다(옛 Supabase 객체를 지우지 않았으므로 그 URL은 계속 열린다). 다만
+> **복원 이후 새로 올라오는 파일은 계속 Blob에 쌓인다.** 신규 업로드까지
+> Supabase로 되돌려야 하는 상황이라면 배포 자체를 Task 5 이전 커밋으로
+> 되돌리는 수밖에 없다.
 
 ### 주의 — 복원은 시점 되돌리기다
 
@@ -137,111 +152,168 @@ NULL이 된다 — 운영 RLS 정책 58개 중 52개가 그 함수에 의존하�
 전체 58개 정책 대 앱 계층 검사 1:1 매핑표는
 `docs/superpowers/specs/2026-08-13-rls-mapping.md`에 있다(`docs/`는
 gitignore 대상이라 이 저장소에는 커밋되지 않는다 — 새로 클론한 환경에는
-없다). 아래는 그 표를 다시 만드는 절차다.
+없다).
 
-### 1. 로컬 스택을 띄운다
+위 문단은 **단계 2b-3 시점의 판정 기준**이다(Postgres·RLS가 살아 있던
+때). 아래 절차는 그 이후 저장소가 Turso 단일 저장소가 된 현재 기준으로
+갱신돼 있다 — 권한 E2E는 지금도 권한 경계 회귀를 잡는 **유일한 자동
+검사**이므로, 컷오버 전에 반드시 초록불임을 확인한다.
 
-로컬 Supabase는 `supabase/migrations`를 그대로 두면 `supabase start`가
-드리프트로 실패한다(운영이 `applied` 마킹과 실제 DDL이 어긋나 있다 — 위
-"Supabase 마이그레이션 드리프트" 항목 참고). 그래서 마이그레이션을 잠깐
-치우고 운영 스키마를 직접 주입한다. 포트는 Supabase 기본값
-(API 54321 / DB 54322)을 그대로 쓴다 — `supabase/config.toml`을 건드릴
-필요가 없다(포트가 이미 비어 있다는 전제 — 충돌하면 별도 포트 이동이
-필요하며, 그 경우에만 config.toml을 고치고 **끝나면 반드시 원복한다**).
+### 1. 로컬 스택을 띄운다 (단계 4 Task 6c 이후)
 
-```bash
-# 드리프트 우회: 마이그레이션을 잠시 다른 곳으로 옮기고 빈 상태로 기동
-mv supabase/migrations /tmp/ggac-migrations-parked
-mkdir -p supabase/migrations
-supabase start
-
-# 운영 스키마를 읽기 전용으로 덤프해 로컬 컨테이너에 주입
-supabase db dump --linked -f /tmp/ggac-schema.sql
-docker cp /tmp/ggac-schema.sql supabase_db_ggac:/tmp/schema.sql
-docker exec supabase_db_ggac psql -U postgres -f /tmp/schema.sql
-```
-
-확인:
+**로컬 Supabase 스택은 더 이상 필요 없다.** 단계 4 Task 5에서 앱 코드의
+Supabase가 0개가 됐고, Task 6c에서 시드 스크립트와 e2e 스펙도 Turso만
+쓰도록 바뀌었다. 필요한 것은 로컬 Turso 하나뿐이다.
 
 ```bash
-export E2E_DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
-node scripts/testing/rls-toggle.mjs status
+# 1) 로컬 Turso를 HTTP 엔드포인트로 띄운다. 포트는 비어 있는 것으로 고른다.
+#    (8080은 turso dev의 기본값이지만 다른 로컬 서비스와 부딪히기 쉽다)
+turso dev --db-file /tmp/ggac-authz.db --port 8901 &
+
+# 2) 스키마를 밀어 넣는다
+TURSO_DATABASE_URL=http://127.0.0.1:8901 npx drizzle-kit push --force
 ```
 
-기대값: `RLS 켜진 테이블: 30개` — 운영과 정확히 같은 수여야 한다. 다르면
-스키마 주입이 불완전한 것이므로 멈추고 원인을 확인한다(정책 개수도 58개와
-일치해야 한다).
+**왜 `file:` 파일 DB가 아니라 `turso dev`인가.** 유지보수 모드 판정은 Edge
+미들웨어 안에서 Turso를 읽는다(`src/middleware/settings.ts`). Edge 런타임용
+`@libsql/client` 진입점은 `file:` URL을 `URL_SCHEME_NOT_SUPPORTED`로 거부하고,
+그 실패는 fail-open(유지보수 꺼짐)으로 흡수된다 — 즉 `file:`로 돌리면
+`authz-maintenance.spec.ts`가 "켰는데 안 걸린다"로 항상 깨진다. HTTP
+엔드포인트여야 앱의 Edge 경로와 스펙이 같은 DB를 본다.
 
-끝나면(작업이 완전히 끝난 뒤): `supabase stop`, 그리고
-`rm -rf supabase/migrations && mv /tmp/ggac-migrations-parked
-supabase/migrations`로 원복한다. 포트를 옮겼다면 `config.toml`도 543xx로
-되돌린다.
+> **옛 절차(단계 2b-3, 2026-08-13).** 그때는 RLS 정책 58개를 판정하려고 로컬
+> Supabase 스택(`supabase start` + 운영 스키마 주입 + `rls-toggle.mjs off`)을
+> 띄우고 "RLS OFF에서 통과해야 증거"라는 기준으로 돌렸다. Postgres가 사라진
+> 지금 그 절차는 재현 불가능하고 의미도 없다 — 접근 판정이 전부 앱 계층에만
+> 있다. 절차 원문은 git 이력(`scripts/turso/README.md`, Task 6c 이전)에 있다.
 
 ### 2. 픽스처를 시드한다
 
 ```bash
-node scripts/testing/seed-authz-fixtures.mjs
+TURSO_DATABASE_URL=http://127.0.0.1:8901 \
+  node --experimental-strip-types scripts/testing/seed-authz-fixtures.mjs
 ```
 
-`admin`/`owner`/`other`/`pending` 네 계정(GoTrue admin API로 생성)과 글 1·
-댓글 1·알림 1·좋아요 1을 채우는 멱등 스크립트다. 두 번 돌려도 행이 늘지
-않는다. 로컬이 아닌 호스트(`E2E_SUPABASE_URL`의 호스트가
-127.0.0.1/localhost/::1이 아닌 경우)에는 거부하고 exit 1로 죽는다 — 운영에
-잘못 시드되는 사고를 막는 가드다. 결과는 `e2e/.authz-fixtures.json`
-(gitignore 대상)에 남고, E2E 스펙은 이 파일을 읽어 계정 id·글 id 등을
-얻는다.
+계정 **6개**(Better Auth `user`/`account` + `member_profiles`)와 글 1·댓글
+1·알림 1·좋아요 1, 그리고 **`system_settings` 2행**(`site/maintenance_mode`,
+`site/registration_enabled`)과 `default_settings` 16행을 채우는 멱등
+스크립트다. 두 번 돌려도 행이 늘지 않는다(id가 전부 고정값이다).
 
-RLS를 끄고 켜는 스크립트는 `scripts/testing/rls-toggle.mjs`다:
+| 계정             | 역할                                    | 로그인 |
+| ---------------- | --------------------------------------- | ------ |
+| `admin`          | 관리자(승인·활성)                       | O      |
+| `owner`          | 승인된 일반 조합원 — 픽스처 글의 작성자 | O      |
+| `other`          | 승인된 일반 조합원 — "남"               | O      |
+| `pending`        | 미승인                                  | O      |
+| `director`       | 관리자가 **아닌** 이사                  | O      |
+| `approvalTarget` | 관리자 승인 액션의 대상(미승인)         | X      |
 
-```bash
-node scripts/testing/rls-toggle.mjs status   # 현재 RLS 켜진 테이블 수
-node scripts/testing/rls-toggle.mjs off      # 30개 전부 끈다 (판정용)
-node scripts/testing/rls-toggle.mjs on       # 복원
-```
+- `system_settings`가 없으면 `authz-maintenance.spec.ts`의 UPDATE가 0행에
+  적용돼 유지보수 모드가 아예 켜지지 않는다. 스펙은 `rowsAffected`를 확인해
+  그 상태를 통과가 아니라 실패로 만든다.
+- `default_settings`가 없으면 `getUserSettings`(default_settings를 왼쪽
+  테이블로 조인)가 항상 빈 목록을 돌려줘 정책 58 스펙이 깨진다.
+- 픽스처 글은 `is_deleted = false`로 **되돌려진다**. 삭제 인가에 회귀가
+  생기면 스위트가 그 글을 실제로 소프트 삭제하는데, 이 값이 upsert에 없으면
+  시드를 다시 돌려도 복구되지 않아 **수정을 검증하려는 바로 그 순간**
+  소유권·첨부 스펙이 앱 탓처럼 보이는 엉뚱한 메시지로 계속 빨간불이 된다.
+- **권한·승인 컬럼도 같은 이유로 강제로 되돌려진다**(`AUTHZ_DEFAULTS`).
+  `upsertProfile()`은 이 컬럼들을 되돌리지 못한다 — 그 함수의 충돌 갱신
+  화이트리스트(`CONFLICT_UPDATABLE_FIELDS`)가 권한·승인 컬럼을 **의도적으로**
+  제외하기 때문이고, 그건 운영을 지키는 올바른 설계다(재이관·재가입이 관리자
+  플래그를 덮어쓰면 안 된다). 그래서 되돌리는 책임이 시드 쪽에 있다.
+  `authz-roles.spec.ts`가 관리자 승인 액션을 실제로 호출하므로, `where` 누락
+  같은 회귀 상태로 스위트를 한 번만 돌려도 `authz-pending`이 `approved`가 되고
+  그 뒤 시드를 몇 번 돌려도 복구되지 않았다(수정 전 실측). 시드는 되돌리기
+  전 상태와 다르면 **무엇이 어떻게 달랐는지 경고로 찍고**(조용히 고치면 원인을
+  못 본다), 되돌린 뒤 다시 읽어 대조해 그래도 다르면 **던진다**(fail-closed).
 
-`off`/`on` 모두 `docker exec <컨테이너> psql`로 실행되며(호스트에 psql 설치
-불필요), `E2E_DATABASE_URL`의 호스트·Docker 엔드포인트·컨테이너의
-`com.supabase.cli.project` 라벨 셋 다 로컬임을 확인해야만 동작한다 — 셋 중
-하나라도 아니면 ALTER TABLE 이전에 거부한다. 컨테이너명은
-`E2E_DB_CONTAINER`로 바꿀 수 있다(기본값 `supabase_db_ggac`).
+대상이 로컬 Turso가 아니면 아무것도 쓰기 전에 거부한다 —
+`e2e/helpers/authState.ts`의 `assertLocalTurso()`가 허용하는 형태는 `file:...`
+또는 `http(s)://127.0.0.1|localhost|::1` 뿐이고, `libsql://`·원격 `https://`는
+전부 거부한다. 스펙 파일도 같은 함수를 부른다(판정이 한 곳뿐이다).
+
+결과는 `e2e/.authz-fixtures.json`(gitignore 대상)에 남고, E2E 스펙은 이
+파일을 읽어 계정 id·글 id 등을 얻는다.
 
 ### 3. 권한 E2E를 돌린다
 
 ```bash
-export E2E_SUPABASE_URL="http://127.0.0.1:54321"
-export E2E_SUPABASE_ANON_KEY="<supabase status의 anon key>"
-export E2E_SUPABASE_SERVICE_ROLE_KEY="<supabase status의 service_role key>"
-export E2E_DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+export E2E_TURSO_DATABASE_URL="http://127.0.0.1:8901"
+export BETTER_AUTH_SECRET="<아무 로컬 문자열>"
+# 정책 36(첨부 업로드)만 필요로 한다. 공개 스토어 토큰만 쓴다.
+export PUBLIC_BLOB_READ_WRITE_TOKEN="<공개 Blob 스토어 토큰>"
+export NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL="<공개 Blob 베이스 URL>"
 
 npm run test:e2e:authz
 ```
 
-필요한 환경변수는 이 넷뿐이다. `npm run test:e2e:authz`는
-`playwright test --project=authz`의 별칭이며, `authz-setup` 프로젝트(4개
-계정 로그인 → `e2e/.auth/*.json` storageState 저장)에 의존한 뒤
-`e2e/authz-ownership.spec.ts`·`e2e/authz-personal.spec.ts`(총 18개 테스트)를
-돈다. Playwright의 `webServer`가 이 네 환경변수를 `npm run dev`에 그대로
-주입하므로, `.env.local`(운영 Supabase를 가리킴)보다 우선한다 — 빠뜨리면
-`assertLocalSupabase()` 가드가 즉시 예외를 던진다.
+`E2E_TURSO_DATABASE_URL`은 **일부러 이름이 다르다.** `playwright.config.ts`가
+그 값을 `process.env.TURSO_DATABASE_URL`로 옮겨 심고 dev 서버에도 같은 값을
+넘긴다 — 셸에 운영 `TURSO_DATABASE_URL`이 export돼 있어도 그 값으로는 절대
+돌지 않고, e2e 전용 변수를 의도적으로 지정해야만 돈다. `TURSO_AUTH_TOKEN`도
+함께 지운다(로컬 `turso dev`는 토큰을 요구하지 않는다). 로컬 엔드포인트인지는
+**옮겨 심기가 끝난 자리에서 조건 없이** 판정한다(`assertNoRemoteTursoTarget()`)
+— 원격 URL을 주면 dev 서버가 뜨기 전에 config 로드가 죽는다(실측:
+`libsql://ggac-prod…`·`https://ggac-prod…` 둘 다 `playwright.config.ts`에서
+거부).
 
-**판정 절차:**
+판정이 `if (E2E_TURSO_DATABASE_URL)` **밖**에 있어야 하는 이유: Playwright는
+webServer에 `{...process.env, ...webServer.env}`를 넘긴다. e2e 전용 변수를 주지
+않고 셸에 운영 `TURSO_DATABASE_URL`만 export된 경우 그 블록은 통째로 건너뛰지만
+**운영 URL은 상속으로 그대로 dev 서버에 간다** — 안에 두었을 때 실측하면 dev
+서버가 먼저 뜨고(`[WebServer]` 로그) 스펙 로드 시점에야 죽었다. 밖으로 뺀 뒤
+같은 조건에서 `[WebServer]` 출력은 **0줄**이다. (`TURSO_DATABASE_URL`이 아예
+없는 경우는 통과시킨다 — CI의 smoke 잡이 Turso 없이 `--project=chromium`만
+돌리기 때문이다. 권한 E2E 쪽은 시드와 스펙이 여전히 `assertLocalTurso()`를
+직접 불러 미설정도 거부한다.)
 
-```bash
-node scripts/testing/rls-toggle.mjs off
-npm run test:e2e:authz    # 이 결과가 판정이다
-node scripts/testing/rls-toggle.mjs on
-```
+`npm run test:e2e:authz`는
+`playwright test --project=authz --project=authz-public`의 별칭이다. 두
+프로젝트를 다 도는 이유: `authz-boundaries.spec.ts`(비인증 401·보호 페이지
+리다이렉트·API 계약)가 `authz-public`에 있어서, `--project=authz`만 돌리면
+**컷오버 게이트인 이 명령 하나가 그 17건을 통째로 빼먹는다.**
 
-**RLS OFF에서 18/18 통과해야 "앱 계층이 스스로 접근을 판정한다"고 말할 수
-있다. RLS ON 상태로 돌려서 나온 통과는 증거가 아니다** — 위에서 실측한
-대로, RLS가 조용히 대신 막아주는 사례가 실제로 있었다(알림 목록 필터
-제거). RLS ON 실행은 앱 코드가 정상적으로 동작하는지 확인하는 회귀
-스모크 정도로만 취급한다.
+- `authz-setup`(5개 계정 로그인 → `e2e/.auth/*.json` storageState 저장) 5건
+- `authz`: `authz-maintenance`·`authz-ownership`·`authz-personal`·
+  `authz-remaining`·`authz-roles` 5개 스펙 28건
+- `authz-public`: `authz-boundaries` 17건
+
+**실측 기준선(2026-08-26, Task 6c 수정 2회차):** 50 passed.
+
+`PUBLIC_BLOB_READ_WRITE_TOKEN`을 빼면 **최초 실행에서는** 정책 36 테스트가
+"토큰이 없으면 업로드 준비 단계를 통과할 수 없다"로 **명시적으로 실패한다**
+(조용히 건너뛰지 않는다). 다만 그 준비 단계는 `if (!attachmentId)` 안에 있어서
+**이전 실행이 남긴 첨부 행이 로컬 DB에 있으면 업로드 블록을 통째로 건너뛴다**
+— 그 상태에서는 토큰 없이 돌려도 50건 전부 통과한다(실측). 즉 "토큰을 빼면
+반드시 빨간불"은 빈 DB에서만 참이다.
+
+`authz-roles.spec.ts`는 **관리자 경계**와 **이사 경계** 전용이다. 두 경계는
+각각 대표 엔드포인트 하나씩만 보되 **짝지어 단정한다**(금지된 세션 403 +
+허용된 세션 성공) — 금지 쪽만 보면 게이트가 "전부 막기"로 퇴화해 관리자
+화면이 통째로 죽어도 초록불이기 때문이다. 관리자 게이트는 구현이 두 벌
+(`requireAdmin()`과 `checkAdminPermission()`)이라 쓰기·읽기를 각각 다른
+구현에서 골랐다.
+
+같은 파일에 **페이지 레벨 인가** 2건이 더 있다(`/board-room`·`/admin`).
+`src/app/[locale]/admin/page.tsx`와 `src/app/[locale]/board-room/page.tsx`는
+**둘 다 `'use client'`**라 서버측 인가가 전혀 없고 **미들웨어가 유일한
+게이트**인데(`src/middleware/auth.ts`의 `/admin`·board-room 두 분기), 그 두
+분기를 동시에 무력화해도 이전 48건은 전부 초록이었다. API 스펙과 같은 규칙으로
+짝지어 단정한다 — 금지 세션은 `/board`로 리다이렉트되고, 허용 세션(이사·관리자)은
+그 화면에 실제로 도달해 제목이 그려진다. 리다이렉트만 보면 게이트가 "전부
+리다이렉트"로 퇴화한 것을 못 잡는다(실측으로 확인).
+
 
 ### 4. 커버리지의 한계
 
-이 스위트는 게시글·댓글·알림·마이페이지 프로필 10개 엔드포인트만
-건드린다. 운영 RLS 정책 58개 중 이 스위트가 실제로 경계를 단정하는 것은
+이 스위트는 게시글·댓글·알림·마이페이지 프로필 10개 엔드포인트에 더해
+관리자·이사 경계의 **대표 3개**(`/api/admin/member-action`,
+`/api/admin/settings`, `/api/board-room/documents`)를 건드린다. 관리자
+경계는 `/api/admin/*` 12개 디렉터리 중 두 라우트만 보는 셈이지만, 목적은
+전수 커버리지가 아니라 **게이트 두 구현이 살아 있는지**다 — 그 게이트가
+죽으면 나머지 라우트도 함께 열린다. 운영 RLS 정책 58개 중 이 스위트가
+실제로 경계를 단정하는 것은
 9개였다(단계 2b-3 시점). **단계 2b-4에서 3개가 추가로 승격돼 12개가 됐다** —
 아래 「단계 2b-4: 신원 경로 일원화 판정」 참고. 나머지는 코드를 읽어 동등한
 검사를 확인했지만 테스트는 없거나(28개), 테스트도 코드상 동등 검사도
@@ -467,8 +539,12 @@ Supabase 세션과 무관하지만 예외가 아니다. 이 저장소는 배포�
   `auth.uid() <> p_user_id` 가드가 컷오버 후 **조용히 무력화**된다(위
   "RLS 밖의 `auth.uid()` 의존" 절 참고). impersonation 구멍은 없다고
   확인했지만, 가드 자체가 없어지는 문제는 미해결이다.
-- 그림자 `auth.users` 행이 프로필 없이 남는 경우(가입 훅이 두 쓰기 사이에
-  죽는 경우)를 보여주는 관리자 화면이 없다.
+- ~~그림자 `auth.users` 행이 프로필 없이 남는 경우(가입 훅이 두 쓰기 사이에
+  죽는 경우)를 보여주는 관리자 화면이 없다.~~ **단계 4 Task 6b에서 해소.**
+  회원 관리 화면 상단에 프로필 없는 계정 경고 배너가 뜨고(0건이면 렌더되지
+  않는다), `GET/POST /api/admin/members/orphans`가 목록과 복구를 맡는다.
+  이메일 인증 콜백(`/auth/callback`)도 프로필이 없으면 승인 대기 프로필을
+  다시 만든다.
 - `reset-password/page.tsx`는 아직 Supabase의 링크 모양을 전제로 하고,
   이 단계에서 손본 이메일은 `?token=` 모양의 URL을 만든다. 화면이 그
   파라미터를 읽지 않는다 — 단계 2b-6이 화면을 옮길 때 함께 고쳐야 한다.
@@ -516,3 +592,277 @@ Supabase 세션과 무관하지만 예외가 아니다. 이 저장소는 배포�
 **남은 일:** 채팅에 노출된 Resend API 키 교체. `toggle_post_like` 등
 `auth.uid()` 의존 RPC 3개는 전환 후 조용히 무력화된 상태이고, 콘텐츠 이관
 단계에서 함께 걷어낸다.
+
+---
+
+## 단계 4 Task 6a — 이사회 스키마 제약 회복 (`0002_restore_board_constraints.sql`)
+
+전환 초기 스키마(`0000`)가 Postgres 원본
+(`supabase/migrations/20260529090020_create_board_room_tables.sql`)과 어긋난
+제약 7개를 되돌린다. 정본 비교표와 근거는 `src/db/schema/board.ts` 상단 주석,
+증명은 `scripts/testing/boardSchemaConstraints.test.mjs`에 있다.
+
+| 제약 | 원본(Postgres) | 0000(Turso) | 0002 |
+|---|---|---|---|
+| `board_minutes.meeting_id` | UNIQUE | (없음) | UNIQUE 인덱스 복원 |
+| `board_meetings.created_by` | SET NULL | NO ACTION | SET NULL |
+| `board_agendas.proposed_by` | SET NULL | NO ACTION | SET NULL |
+| `board_minutes.author_id` | SET NULL | NO ACTION | SET NULL |
+| `board_documents.uploaded_by` | SET NULL | NO ACTION | SET NULL |
+| `board_meeting_attendees.member_id` | NO ACTION | **cascade** | NO ACTION |
+| `board_meeting_date_votes.voter_id` | NO ACTION | **cascade** | NO ACTION |
+
+### ⚠ 적용 방법 — `drizzle-kit migrate`로 적용하지 말 것
+
+SQLite는 `ALTER TABLE`로 제약을 못 바꾸므로 0002는 표 6개를 재작성한다.
+재작성은 `PRAGMA foreign_keys=OFF` 상태여야 한다 — **켜진 채로 하면
+`DROP TABLE board_meetings`가 자식 표(안건·회의록·출석·후보일자·투표)를
+cascade로 전부 지운다.** 로컬 파일 DB에서 실측했다(`drizzle-kit generate`
+생성물 원문이 정확히 그 상태였고, 각 1행씩 심어 두고 돌리자 5개 표가 전부
+0행이 됐다).
+
+**`drizzle-kit migrate`로 쳤을 때 실제로 일어나는 일(실측 확인):** 참사는
+재현되지 **않는다.** PRAGMA가 트랜잭션 안에서 무시되는 것은 맞지만, 그 전에
+스크립트의 `BEGIN;`이 `cannot start a transaction within a transaction`으로
+즉시 실패해 전체가 롤백된다. 7개 표 행 수 그대로, `__drizzle_migrations`
+그대로, 임시 표 0. 게다가 `ggac-prod`에는 `__drizzle_migrations` 베이스라인이
+없어 `migrate`는 0000에서 먼저 죽는다.
+
+> **컷오버 중에 exit 1을 봤다면 아무 일도 일어나지 않은 것이다.** 덤프 복원
+> 같은 복구 작업에 들어가지 말고, 아래 지정 경로로 다시 적용하면 된다.
+> (`BEGIN`은 원자성 장치이면서 동시에 이 오적용을 막는 **우연한 차단
+> 장치**다. "트랜잭션은 마이그레이터가 걸어 주니 빼자"는 정리를 하면 그
+> 차단이 사라진다 — 같은 경고를 SQL 헤더 주석에도 남겼고, 성질이 사라지면
+> 깨지도록 `boardSchemaConstraints.test.mjs`에 테스트로 박아 뒀다.)
+
+그래도 적용은 스크립트를 통째로 실행하는 경로로만 한다:
+
+```bash
+set -a; source .env.local; set +a   # 운영에 적용할 때만
+node -e "import('@libsql/client').then(async m => {
+  const fs = await import('node:fs')
+  const c = m.createClient({ url: process.env.TURSO_DATABASE_URL, authToken: process.env.TURSO_AUTH_TOKEN })
+  await c.executeMultiple(fs.readFileSync('src/db/migrations/0002_restore_board_constraints.sql','utf8'))
+  console.log('applied'); c.close()
+})"
+```
+
+### 적용 전 확인 (①②는 0행, ③은 인덱스 2개뿐)
+
+```sql
+-- ① 중복 회의록이 있으면 UNIQUE 인덱스 생성이 실패해 전체가 롤백된다
+SELECT meeting_id, count(*) FROM board_minutes GROUP BY meeting_id HAVING count(*) > 1;
+-- ② 기존 고아 행이 하나라도 있으면 0002의 마지막 단언이 전체를 롤백한다.
+--    이 저장소의 복원 경로는 FK를 끈 채로 적재하므로(turso-restore) 고아가
+--    존재할 수 있는 DB다. 컷오버 도중 실패로 알게 되지 말고 여기서 먼저 본다.
+PRAGMA foreign_key_check;
+-- ③ 0000이 만든 것 말고 다른 인덱스·트리거가 board_* 에 붙어 있으면
+--    재작성에 딸려 사라진다. 적용 전 기대값은 0000이 만든 유니크 인덱스
+--    2개뿐이다(board_meeting_attendees_meeting_member_idx,
+--    board_meeting_date_votes_option_voter_idx). 적용 후에는
+--    board_minutes_meeting_id_idx가 더해져 3개가 된다.
+SELECT type, name FROM sqlite_master WHERE tbl_name LIKE 'board_%' AND sql IS NOT NULL AND type <> 'table';
+```
+
+### 적용 후 확인
+
+```sql
+PRAGMA foreign_key_check;                                  -- 0행
+SELECT count(*) FROM board_meeting_attendees;              -- 적용 전 값과 같아야 한다
+SELECT count(*) FROM board_meeting_date_votes;             -- 〃
+SELECT "table", "from", "on_delete" FROM pragma_foreign_key_list('board_meeting_attendees');
+SELECT name FROM sqlite_master WHERE name LIKE '__new_%' OR name LIKE '__migration_assert%';  -- 0행
+```
+
+검증은 마이그레이션 안에도 들어 있다: `__migration_assert_0002`는
+`CHECK (ok = 1)` 하나뿐인 표이고, **첫 DROP 전에 FK가 실제로 꺼졌는지**·표마다
+재작성 전후 행 수가 같은지·마지막에 FK 위반이 0인지를 여기에 INSERT해
+확인한다. 어긋나면 CHECK 위반으로 트랜잭션 전체가 롤백된다(변이 테스트로 셋 다
+실제로 무는 것을 확인했다).
+
+> **FK 확인이 왜 따로 있나.** 행 수 단언은 표마다 자기 `DROP` 직전에 걸려
+> 있어서, 뒤에 오는 `DROP TABLE board_meetings`가 **이미 재작성을 마친 앞
+> 표들을** cascade로 비우는 형태의 사고를 하나도 잡지 못한다(앞 단언은 이미
+> 통과, 뒤 단언은 `0 = 0`, `PRAGMA foreign_key_check`도 고아가 아니라 행 자체가
+> 없으므로 0행). 실측: `PRAGMA foreign_keys=OFF`를 무력화하면 **에러 없이
+> 커밋되고 5개 표가 비었다.** FK 단언을 넣은 뒤 같은 시나리오는
+> `CHECK constraint failed: ok` → 전체 롤백 → 7개 표 전부 그대로가 된다.
+> 즉 이 스크립트가 안전한 근거가 "PRAGMA가 먹었기를 바란다"에서 단언으로
+> 바뀌었다. 운영 Turso가 PRAGMA를 어떻게 다루든 조용한 데이터 소실은 없다.
+
+**⚠ 실패했을 때 커넥션에 `foreign_keys=OFF`가 남는다.** 마지막
+`PRAGMA foreign_keys=ON;`은 스크립트가 성공했을 때만 실행된다. 위의 일회성
+node 스크립트는 곧바로 커넥션을 닫으니 무해하지만, `turso db shell` 같은
+대화형 세션에서 실패하면 **같은 세션의 이후 DML이 FK 없이 돈다.** 실패한
+세션은 닫거나 `PRAGMA foreign_keys=ON;`을 직접 실행한 뒤 쓴다.
+
+### 운영에 미치는 동작 변화
+
+`board_meeting_attendees`·`board_meeting_date_votes`가 NO ACTION으로 돌아가
+**출석·투표 기록이 남아 있는 회원은 `member_profiles`에서 바로 지울 수 없다**
+(FK 에러). 이게 Postgres 원본의 동작이고, 출석은 정족수 계산의 원천이라
+의도된 것이다. 탈퇴 회원을 실제로 지워야 하면 출석·투표 기록을 어떻게 할지
+먼저 정한 뒤 그 행부터 처리한다. 앱에는 회원 삭제 경로가 없으므로(코드에
+`member_profiles` DELETE 0곳) 화면 동작에는 영향이 없다.
+
+## 단계 4 Task 6b — 프로필 완성도 소급 채움 (`0003_backfill_profile_completeness.sql`)
+
+Postgres 트리거 `profile_completeness_trigger`를 쿼리 계층으로 이식하면서
+(`src/db/queries/profileCompleteness.ts`), 원본 마이그레이션
+`supabase/migrations/20250118090020_enhance_member_status_tracking.sql`이
+트리거를 만든 **직후** 돌린 소급 채움(241~244행)이 빠져 있었다. 0003이 그것을
+채운다.
+
+**왜 지금 필요한가.** 원본 트리거는 `BEFORE UPDATE`인데 본체가 테이블을 다시
+읽어 **갱신 직전** 값으로 점수를 매겼다(한 박자 지연). 그 지연은 승인 UPDATE
+에도 걸린다 — `registration_status`를 `'approved'`로 바꾸는 UPDATE가 보는 값은
+아직 `'pending'`이라 승인 10점이 붙지 않는다. 그래서 **승인 이후 프로필을 한
+번도 고치지 않은 회원은 10점이 빠진 점수**로 이관돼 있다. 그대로 두면 관리자
+화면에서 이미 다 채운 조합원이 계속 "프로필 미달"로 잡혀 불필요한 독촉 대상이
+된다.
+
+**원본의 `WHERE profile_completeness_score = 0`은 베끼지 않았다.** 그 조건은
+0인 행만 채우는데, 지금은 **0이 아니면서 틀린 값**(승인 10점 누락)이 실재해서
+그 조건으로는 손도 못 댄다. 0003은 조건 없이 전 행을 다시 매긴다 — 점수는 같은
+행의 다른 컬럼들만으로 정해지는 순수 함수이므로 몇 번 돌려도 같은 값에
+수렴한다(멱등). 근거와 증명은 `src/db/migrations/0003_backfill_profile_completeness.sql`
+헤더 주석과 `scripts/testing/profileCompletenessBackfill.test.mjs`에 있다.
+
+### ⚠ 적용 방법 — 0002와 같다(`drizzle-kit migrate` 금지)
+
+단언이 물었을 때 UPDATE까지 통째로 롤백되도록 `BEGIN`/`COMMIT`이 파일 안에
+있다. 마이그레이터가 자체 트랜잭션으로 감싸면 그 `BEGIN`이 `cannot start a
+transaction within a transaction`으로 즉시 실패해 전체가 롤백된다(= 아무 일도
+일어나지 않는다). 파일을 통째로 실행하는 경로로만 적용한다.
+
+```bash
+set -a; source .env.local; set +a   # 운영에 적용할 때만
+node -e "import('@libsql/client').then(async m => {
+  const fs = await import('node:fs')
+  const c = m.createClient({ url: process.env.TURSO_DATABASE_URL, authToken: process.env.TURSO_AUTH_TOKEN })
+  await c.executeMultiple(fs.readFileSync('src/db/migrations/0003_backfill_profile_completeness.sql','utf8'))
+  console.log('applied'); c.close()
+})"
+```
+
+### 적용 전후 확인
+
+```sql
+-- 적용 전: 지금 몇 명이 어떤 점수인지 기록해 둔다(적용 후 비교용).
+SELECT id, registration_status, profile_completeness_score FROM member_profiles ORDER BY id;
+-- 적용 후: 승인 회원 중 10점이 오른 행이 "승인 이후 프로필을 안 고친 회원"이다.
+SELECT count(*) FROM member_profiles;                       -- 적용 전 값과 같아야 한다
+SELECT min(profile_completeness_score), max(profile_completeness_score) FROM member_profiles;  -- 0~100
+SELECT name FROM sqlite_master WHERE name LIKE '__migration_%';  -- 0행
+```
+
+`updated_at`은 하나도 바뀌지 않는다 — 파생 값을 채우는 일이 "이 회원 정보가
+방금 바뀌었다"로 보이면 안 되기 때문이다. 마이그레이션 안의
+`__migration_assert_0003`(`CHECK (ok = 1)`)이 ① 행 수 유지 ② `updated_at` 무변경
+③ 결과 점수 0~100을 직접 확인하고, 어긋나면 트랜잭션 전체를 롤백한다(셋 다
+변이 테스트로 실제로 무는 것을 확인했다).
+
+### 운영에 미치는 동작 변화
+
+관리자 회원 관리 화면의 완성도 숫자와 `/api/admin/members/stats`의
+`averageProfileCompleteness`가 **한 번 움직인다.** 대부분 오르지만, 저장값이
+실제 상태보다 부풀어 있던 행은 내려갈 수도 있다(원본 지연은 양방향이다).
+회원에게 보이는 화면·권한·승인 상태에는 영향이 없다 — 0003은
+`profile_completeness_score` 컬럼 하나만 쓴다.
+
+## 단계 4 최종 리뷰 B-7 — 성능 인덱스 이관 (`0004_add_performance_indexes.sql`)
+
+0000(`drizzle-kit push` 산출물)은 **스키마에 선언된 UNIQUE 인덱스만** 만들었다.
+Postgres 원본이 성능을 위해 따로 만들어 둔 `CREATE INDEX`는 하나도 넘어오지
+않았고, `EXPLAIN QUERY PLAN`으로 확인한 결과 뜨거운 읽기 경로가 전부
+풀스캔이었다. 특히 로그인한 회원이 페이지를 열 때마다 `NotificationDropdown`이
+부르는 `/api/notifications/stats`가 `SCAN notifications`였다 — `notifications`는
+**공지 1건당 승인 회원 수만큼 행이 늘어나는 상한 없는 표**라 23명 규모에서는
+안 보이지만 선형으로 나빠진다.
+
+0004는 인덱스 20개를 만든다. **표를 재작성하지 않는다** — SQLite의
+`CREATE INDEX`는 표 정의를 건드리지 않으므로 0002 같은 12단계 재작성 절차가
+필요 없다. 어떤 도구가 이 변경으로 표를 재작성하려 들면 그건 잘못된 것이다.
+
+### 옮긴 것 / 옮기지 않은 것
+
+| 표 | 인덱스 | 원본과의 차이 |
+| --- | --- | --- |
+| posts | `idx_posts_keyset_pagination` (is_deleted, is_pinned↓, created_at↓, id↓) | 원본은 `WHERE is_deleted=false` 부분 인덱스 → 선행 컬럼화 |
+| posts | `idx_posts_category_keyset_pagination` (is_deleted, category, is_pinned↓, created_at↓, id↓) | 〃 |
+| posts | `idx_posts_author_id` (author_id, is_deleted, created_at↓) | 〃 |
+| posts | `idx_posts_created_at_not_deleted` (is_deleted, created_at↓) | 〃 |
+| comments | `idx_comments_post_id_created_at` (post_id, created_at, id) | 원본 부분 인덱스의 `is_deleted`는 Turso `comments`에 컬럼 자체가 없다 |
+| comments | `idx_comments_author_id` (author_id, created_at↓) | 정렬 컬럼 추가 |
+| post_likes | `idx_post_likes_user_post` (user_id, post_id) | 원본 `idx_post_likes_user_post_unique`와 같은 모양 |
+| comment_likes | `idx_comment_likes_user_comment` (user_id, comment_id) | 원본 `idx_comment_likes_user_id` 확장 |
+| notifications | `idx_notifications_user_created_at` (user_id, created_at↓) | 원본의 (user_id)와 (created_at↓)를 합친 형태 |
+| notifications | `idx_notifications_read_status` (user_id, read_at) | 원본과 동일 |
+| member_profiles | `idx_member_profiles_status` (registration_status, created_at↓) | 원본은 (registration_status, is_active) — `listProfiles`가 is_active로 거르지 않아 정렬이 임시 B-트리로 떨어졌다 |
+| member_profiles | `idx_member_profiles_created_at` (created_at↓) | 동일 |
+| member_profiles | `idx_member_profiles_artist_id` (artist_id) | 동일 |
+| post_attachments | `idx_post_attachments_post_sort` (post_id, sort_order) | 원본 `idx_post_attachments_sort_order` |
+| post_attachments | `idx_post_attachments_temp_cleanup` (is_temporary, expires_at) | 원본은 `WHERE is_temporary=TRUE` 부분 인덱스 → 선행 컬럼화 |
+| user_activities | `idx_user_activities_created_at` (created_at↓) | 동일 |
+| user_activities | `idx_user_activities_composite` (user_id, action_type, created_at↓) | 동일 |
+| board_agendas | `idx_board_agendas_meeting` (meeting_id, sort_order) | 동일 |
+| board_meeting_date_options | `idx_board_date_options_meeting` (meeting_id, candidate_date) | 정렬 컬럼 추가 |
+| board_documents | `idx_board_documents_category` (category, created_at↓) | 동일 |
+
+**부분 인덱스를 선행 컬럼으로 바꾼 이유.** SQLite도 부분 인덱스를 지원하지만
+질의의 WHERE가 인덱스의 WHERE를 **구문적으로 함의**해야 사용한다. Drizzle이
+만드는 조건은 바인딩 파라미터(`"is_deleted" = ?`)라 계획 단계에서 상수로
+취급되지 않아 부분 인덱스가 선택되지 않는다(실측). 필터 컬럼을 첫 컬럼으로
+올리는 SQLite 관용 형태가 같은 질의를 같은 비용으로 처리하고, 휴지통 조회
+(`is_deleted = 1`)도 함께 탄다. 원본의 `OR is_deleted IS NULL` 가지는 Turso
+스키마에서 무의미하다(`NOT NULL DEFAULT false`).
+
+**옮기지 않은 원본 인덱스**
+- Postgres 전용: `idx_posts_search_gin`(tsvector), `idx_posts_title_trgm`·
+  `idx_posts_content_trgm`(pg_trgm). SQLite에 대응물이 없다. 게시판 검색은
+  현재 `LIKE` 기반이라 이 인덱스들이 있었어도 안 쓰였다.
+- 표가 없음: `activity_logs`, `error_logs`, `member_login_history`,
+  `member_status_history`, `post_embedded_images`.
+- 컬럼이 없음: `idx_notifications_user_read`(원본 `is_read` ↔ Turso `read_at`),
+  `idx_member_profiles_photo_url`(`profile_photo_url`은 `artists`에만 있다).
+- 이 저장소의 어떤 질의도 안 씀: `idx_notifications_expires_at`,
+  `idx_notifications_type`, `idx_posts_like_count`, `idx_comments_like_count`.
+  인덱스는 쓰기마다 갱신 비용이 든다 — 안 쓰이는 것을 옮기지 않는다.
+- 기존 UNIQUE 인덱스가 접두사로 덮음: `idx_post_likes_post_id`·
+  `idx_post_likes_optimized`, `idx_comment_likes_comment_id`,
+  `idx_board_attendees_meeting`, `idx_board_date_votes_option`,
+  `idx_user_settings_user_id`·`idx_user_settings_user_category`,
+  `idx_artists_slug`·`idx_artists_legacy_id`, `idx_member_profiles_email`.
+
+### ⚠ 적용 방법 — 0002·0003과 같다(`drizzle-kit migrate` 금지)
+
+단언이 물었을 때 전체가 롤백되도록 `BEGIN`/`COMMIT`이 파일 안에 있다.
+마이그레이터가 자체 트랜잭션으로 감싸면 그 `BEGIN`이 `cannot start a
+transaction within a transaction`으로 즉시 실패해 전체가 롤백된다.
+
+```bash
+set -a; source .env.local; set +a   # 운영에 적용할 때만
+node -e "import('@libsql/client').then(async m => {
+  const fs = await import('node:fs')
+  const c = m.createClient({ url: process.env.TURSO_DATABASE_URL, authToken: process.env.TURSO_AUTH_TOKEN })
+  await c.executeMultiple(fs.readFileSync('src/db/migrations/0004_add_performance_indexes.sql','utf8'))
+  console.log('applied'); c.close()
+})"
+```
+
+### 적용 전후 확인
+
+```sql
+-- 적용 전 행 수를 기록해 둔다(인덱스 생성은 데이터를 건드리지 않는다).
+SELECT (SELECT count(*) FROM posts), (SELECT count(*) FROM notifications), (SELECT count(*) FROM member_profiles);
+-- 적용 후
+SELECT count(*) FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%';  -- 20
+SELECT name FROM sqlite_master WHERE name LIKE '__migration_%' OR name LIKE '__new_%';  -- 0행
+EXPLAIN QUERY PLAN SELECT count(*) FROM notifications WHERE user_id = '<아무 회원 id>';
+-- → SEARCH notifications USING INDEX idx_notifications_read_status
+```
+
+멱등이다(전부 `IF NOT EXISTS`). 증명은
+`scripts/testing/performanceIndexes.test.mjs`가 담당한다 — 적용 전/후 계획을
+같은 DB에서 대조하고(적용 전에 실제로 `SCAN`이었는지까지 단정한다), 행 수
+불변·재실행 수렴·단언 롤백을 각각 확인한다.
