@@ -4,7 +4,9 @@ import { comparePgToSqlite, formatReport, loadSnapshot } from './check-schema-pa
 import { findJsonEncodingViolations, formatJsonEncodingReport } from './check-json-encoding.mjs'
 
 const url = process.argv[2] ?? 'file:local.db'
-const client = createClient({ url })
+// 원격 URL로 부를 때(컷오버 사전·사후 점검) 토큰 없이는 접속 자체가 안 된다 —
+// 최종 리뷰가 지적한 한 줄. 파일 DB에는 authToken이 무시되므로 무해하다.
+const client = createClient({ url, authToken: process.env.TURSO_AUTH_TOKEN })
 
 try {
   const tableRows = await client.execute(
