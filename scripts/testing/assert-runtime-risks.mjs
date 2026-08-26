@@ -755,6 +755,22 @@ const existingAuthHelpersUseSharedOperationalBoundaries =
  * 실패하는 쪽이라 드러났지만, 그 반대 모양이었으면 못 봤을 것이다).
  * 그래서 꺾쇠 깊이를 함께 세어 **제네릭 인자 안의 중괄호는 건너뛴다**.
  * `=>`의 `>`는 꺾쇠 닫힘이 아니므로 제외한다.
+ *
+ * **알려진 미대응 모양 — 계약을 추가할 때의 함정이다.** 꺾쇠 세기는 제네릭에
+ * *싸인* 객체 타입만 건너뛴다. 그래서 반환 타입이 **맨몸 인라인 객체**인 모양
+ * (`): { is_admin: boolean } {`)은 여전히 그 타입 객체를 본문으로 잘라낸다
+ * (실측: 위 시그니처에서 반환값이 `"{ is_admin: boolean }"`이었다).
+ *
+ * 그 모양에서 무슨 일이 생기냐면 — **양성 요구는 큰소리로 실패하지만**(본문
+ * 대신 타입을 검사하니 아무것도 못 찾는다) **`absent` 요구는 공허하게
+ * 참이 된다**: 부정 패턴을 타입 주석에 대고 검사하는 셈이라, 진짜 본문에
+ * 무엇이 들어 있든 통과한다. 즉 **조용히 통과하는 쪽**으로 고장 난다.
+ *
+ * 지금은 결함이 아니다. **현재 12개 계약 중 이 모양은 없고**(전부 `boolean`·
+ * `ProfileLike`·`NextResponse | null` 같은 단순 타입이거나 `Promise<…>`),
+ * `async` 함수는 반환 타입이 항상 `Promise<…>`라 구조적으로 이 모양이 될 수
+ * 없다. 계약을 **추가할 때** 대상 함수가 이 모양이면 먼저 이 함수를 고쳐라 —
+ * `absent` 요구가 소리 없이 무력화된다.
  */
 function extractNamedFunctionBody(code, name) {
   const marker = new RegExp(`(?:export\\s+)?(?:async\\s+)?function\\s+${name}\\s*\\(`)
@@ -964,7 +980,19 @@ const AUTHORIZATION_HELPER_CONTRACTS = [
   // 2. 어느 단계에서도 권한 필드를 **만들어 내지 않는다** — 세 본문 전부
   //    `is_admin:`·`registration_status:` 같은 키가 나타나면 실패한다
   //    (유일한 예외가 투영 함수인데, 그 본문은 아래에서 "profile.<필드>를
-  //    그대로 옮긴다"는 모양으로 통째로 고정된다).
+  //    그대로 옮긴다"는 모양으로 필드별로 고정된다).
+  //
+  // **`absent` 요구의 사정거리를 오해하지 마라 — 이 보증은 함수 본문에
+  // 국소적이다.** 검사 대상은 `extractNamedFunctionBody`가 잘라낸 그 함수의
+  // 중괄호 블록뿐이고, 모듈 스코프는 보지 않는다. 그래서 아래 모양은 고정된
+  // 패턴 네 개가 전부 살아 있는 채로 **통과한다**(재리뷰어 실증):
+  //
+  //   const BACKDOOR_PROFILE = { is_admin: true, … }  // 모듈 스코프 = 검사 밖
+  //   if (BACKDOOR_IDS.has(userId)) return { profile: BACKDOOR_PROFILE }
+  //
+  // 정적 가드는 어딘가에서 멈춰야 하니 원리적 한계다. 여기서 막으려 들지
+  // 말고, "권한 필드 리터럴이 이 세 함수 **본문 안에** 나타나지 않는다"까지가
+  // 이 계약이 실제로 보증하는 전부라고 읽어라. 그 밖은 코드 리뷰의 몫이다.
   {
     file: 'src/lib/server/authz.ts',
     source: authzSource,
