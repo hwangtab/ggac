@@ -1022,18 +1022,58 @@ const AUTHORIZATION_HELPER_CONTRACTS = [
     file: 'src/lib/server/authz.ts',
     source: authzSource,
     name: 'toSessionProfileFields',
+    // 여기만 권한 필드 키가 나타나도 되는 자리다(위 두 계약은 키 자체를
+    // 금지한다). 그래서 "값이 전부 인자에서 온다"를 못박아야 하는데, 이걸
+    // **한 덩어리 정규식**으로 하면 다섯 필드의 순서만 바꿔도 실패하고
+    // 메시지는 "분기가 없습니다"라고 나온다 — 의미 없는 변경을 사실과 다른
+    // 이유로 막는 셈이라, 걸린 사람이 계약을 지우는 쪽으로 가게 된다.
+    //
+    // 그래서 **필드별 양성 요구 5개 + 부정 요구 1개**로 쪼갠다. 순서·줄바꿈·
+    // 정렬은 자유가 되고, 값 바꿔치기는 두 겹으로 막힌다.
+    //
+    // 남는 제약 하나: **인자 이름 `profile`은 여전히 고정된다.** 부정 요구가
+    // "인자에서 온 값"을 `profile.`이라는 이름으로밖에 표현할 수 없기 때문이다
+    // (그 이름이 자유로워지면 `is_admin: anything.is_admin`이 통과한다).
+    // 그러니 인자를 `row` 같은 이름으로 바꾸면 여기서 걸린다 — 의도된 비용이다.
+    // 대신 실패 메시지가 "분기가 없습니다"가 아니라 "계약이 못박은 모양을
+    // 벗어났습니다"라고 말하므로, 걸린 사람이 원인을 오해하지는 않는다.
+    //
+    // 이 계약을 통째로 빼면 어떻게 되는지: 위 두 계약의 `absent`는
+    // `getSessionContext`·`resolveSessionProfile` **본문에만** 걸려 있고
+    // 이 함수에는 걸려 있지 않다. 그래서 계약을 빼고 `is_admin: profile.is_admin`을
+    // `is_admin: true`로 바꾸면 파일 전체가 그대로 통과한다 — 위조가 실제로
+    // 먹히는 유일한 자리의 보호가 통째로 사라진다. 빼지 마라.
     requirements: [
+      ...['is_admin', 'is_director', 'is_auditor', 'registration_status', 'is_active'].map(
+        field => ({
+          what: `${field}를 인자 프로필의 같은 필드에서 그대로 옮긴다`,
+          // 뒤의 `(?=[,}])`가 핵심이다. `\b`로 끝내면
+          // `is_admin: profile.is_admin || FORCE_ADMIN`이 통과해 버린다 —
+          // 한 덩어리 정규식이 (쉼표를 요구해서) 우연히 막던 각도라
+          // 쪼개면서 잃지 않도록 명시적으로 되살린다.
+          pattern: new RegExp(`${field}:\\s*profile\\.${field}\\s*(?=[,}])`),
+        })
+      ),
       {
-        // 여기만 권한 필드 키가 나타나도 되는 자리다. 그래서 "값이 전부
-        // 인자에서 온다"를 한 덩어리로 못박는다 — 어느 한 필드라도
-        // 리터럴(`true`·`'approved'`)로 바뀌면 매치가 깨진다.
-        what: '다섯 필드를 인자 프로필에서 그대로 옮긴다(리터럴을 끼워 넣지 않는다)',
+        // 양성 요구 5개는 "있어야 할 것"만 본다. 필드를 **추가로** 끼워
+        // 넣거나 다른 출처(`other.is_admin`)로 바꾸는 각도는 이쪽이 막는다.
+        //
+        // 공백을 lookahead **안**에 둔 것이 중요하다. `\s*:\s*(?!profile\.)`로
+        // 쓰면 `\s*`가 0글자로 되짚어져 lookahead가 공백 위치에서 평가되고,
+        // 그 결과 **올바른 본문까지 위반으로 잡힌다**(실측 확인).
+        what: '다섯 권한 필드 중 어느 하나도 인자 프로필 아닌 값으로 채우지 않는다',
+        absent: true,
         pattern:
-          /return \{\s*is_admin: profile\.is_admin,\s*is_director: profile\.is_director,\s*is_auditor: profile\.is_auditor,\s*registration_status: profile\.registration_status,\s*is_active: profile\.is_active,\s*\}/,
+          /\b(?:is_admin|is_director|is_auditor|registration_status|is_active)\s*:(?!\s*profile\.)/,
       },
     ],
   },
 ]
+
+// 계약이 어디 적혀 있는지를 실패 메시지에 함께 싣는다 — 이 메시지를 처음 보는
+// 사람이 "어느 파일을 고쳐야 하는가"를 되묻지 않도록.
+const AUTHZ_CONTRACT_HINT =
+  'scripts/testing/assert-runtime-risks.mjs의 AUTHORIZATION_HELPER_CONTRACTS'
 
 const authorizationHelperBodyViolations = []
 for (const contract of AUTHORIZATION_HELPER_CONTRACTS) {
@@ -1047,10 +1087,13 @@ for (const contract of AUTHORIZATION_HELPER_CONTRACTS) {
   for (const requirement of contract.requirements) {
     const found = requirement.pattern.test(body)
     if (requirement.absent === true ? found : !found) {
+      // "분기가 없습니다"라고 뭉뚱그리지 않는다 — 요구 중에는 분기가 아닌
+      // 것(투영 필드 하나하나)도 있어서, 필드 순서만 바꾼 사람에게는 사실과
+      // 다르게 들린다. 못 찾았다는 사실만 말하고, 계약 위치를 함께 준다.
       authorizationHelperBodyViolations.push(
         requirement.absent === true
-          ? `${contract.file}: ${contract.name}() 본문이 "${requirement.what}"를 어겼습니다`
-          : `${contract.file}: ${contract.name}() 본문에 "${requirement.what}" 분기가 없습니다`
+          ? `${contract.file}: ${contract.name}() 본문이 "${requirement.what}"를 어겼습니다 (이 계약은 ${AUTHZ_CONTRACT_HINT}에 있습니다)`
+          : `${contract.file}: ${contract.name}() 본문에서 "${requirement.what}"를 확인하지 못했습니다 — 요구 자체가 사라졌거나, 계약이 못박은 모양을 벗어났습니다 (이 계약은 ${AUTHZ_CONTRACT_HINT}에 있습니다)`
       )
     }
   }
