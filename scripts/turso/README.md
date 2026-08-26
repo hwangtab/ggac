@@ -866,3 +866,42 @@ EXPLAIN QUERY PLAN SELECT count(*) FROM notifications WHERE user_id = '<아무 �
 `scripts/testing/performanceIndexes.test.mjs`가 담당한다 — 적용 전/후 계획을
 같은 DB에서 대조하고(적용 전에 실제로 `SCAN`이었는지까지 단정한다), 행 수
 불변·재실행 수렴·단언 롤백을 각각 확인한다.
+
+---
+
+## 단계 4 컷오버 실행 기록 (2026-08-26)
+
+**이 배포(`f567ff4`)부터 Supabase는 아무것도 담당하지 않는다.**
+
+실측 순서와 결과:
+
+1. 사전 확인 — unit 918(915 pass)·runtime-risks·schema-contract·lint·type-check·build,
+   authz e2e **50 passed**, Vercel 필수 변수 7종 존재 확인(`vercel env ls`, pull 안 씀)
+2. 리허설 — `turso dev :8902`에 0000→0004 + content.mjs + stage4.mjs로 운영 덤프 전체 적재,
+   빌드·기동 후 공개 화면·API 걷기(아티스트 13명, 저자 조인, 401 경계). 문제 0
+3. 유지보수 ON — 현 배포가 Supabase를 읽으므로 **Supabase REST로** 켬(값 병합, 메시지 보존).
+   65초 후 페이지·쓰기 503 / health·auth 200 확인
+4. 운영 Turso 백업 — CLI 미로그인이라 **libsql API로 직접 덤프**(26표 182행).
+   빈 파일 DB에 부어 복원 검증까지(23명/39글/13아티스트)
+5. 실측 — 유지보수 ON **이후** 덤프. `maintenance_mode`가 `enabled:true`로 담긴 것 육안 확인.
+   history 4→5(ON 기록). boolean 소문자
+6. 선행 점검 — 원격 `PRAGMA foreign_keys=1` **실측**(마지막 미검증 구간), fk_check 0,
+   board 표 전부 0행, 인덱스 정확히 0000의 2개, 비공개 Blob 서류 14
+7. 마이그레이션 0001→0004 `executeMultiple` 적용 — 표 29, 임시 표 0, board 인덱스 6(유니크 3+성능 3),
+   0003 점수 30~80, 성능 인덱스 20
+8. 재이관 — stage4.mjs 18표, `--expect` 전량(user_activities 11,083 포함), 필드 단위 검증 통과
+9. 배포 — `git push` → health `commit=f567ff4`·`turso:ok`. **새 배포가 Turso의 유지보수 값을
+   읽어 503 유지** — 권위 전환이 끊기지 않음
+10. 유지보수 OFF(`set-maintenance.mjs off`) 후 실측 — 공개 페이지·게시판(저자 조인)·게시글
+    상세·아티스트 13명(+사진 Blob 200)·OG 메타·401 경계·`/signup` 200·직접 가입 403 전부 정상
+11. 레거시 Storage — Turso 잔여 URL **0건**(6표 전수) → Supabase Storage 객체 삭제:
+    board-documents 14 / attachments 37 / artists 27 / profiles 0. 삭제 후 사이트 이미지 정상
+
+주의로 남길 것:
+- `turso` CLI는 이 기계에서 미로그인 — 백업·shell은 libsql API로 한다
+- zsh에서 루프 변수 `path`는 `PATH`를 덮는다(실제로 당함)
+- 컷오버 당일 `og/post`라는 API는 없다 — 게시글 OG는 페이지 metadata에서 나온다
+
+남은 것: 1주 관찰 → Supabase 프로젝트 정지 → 최종 pg_dump 보관 → 삭제(단계 5).
+그때 Vercel의 `NEXT_PUBLIC_SUPABASE_ANON_KEY`·`SUPABASE_SERVICE_ROLE_KEY`·`STORAGE_PROVIDER`
+제거(verify-env는 이미 선택 취급), `NEXT_PUBLIC_SUPABASE_URL`도 잔여 0 확인됐으므로 제거 가능.
