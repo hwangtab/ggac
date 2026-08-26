@@ -2359,10 +2359,14 @@ const OWNERSHIP_GATE_CONTRACTS = [
     file: 'src/app/api/posts/[id]/attachments/route.ts',
     source: postAttachmentsSource,
     what: '첨부 업로드(POST)는 게시글 작성자만',
-    // 조건과 거부 응답 사이에 console.error 한 줄이 있다 — 그 사이에 다른
-    // 분기(early return·조건부 통과)가 끼어들면 매치가 깨지도록 좁게 묶는다.
+    // 조건과 거부 응답 사이에 다른 분기(early return·조건부 통과)가 끼어들면
+    // 매치가 깨지도록 좁게 묶는다. 다만 지금 그 자리에 있는 디버그 로그
+    // (`console.error('[UPLOAD API] …')`) 한 줄은 **선택**으로 둔다 — 필수로
+    // 박아 두면 로그 한 줄 지우는 정당한 정리가 "게이트가 0곳"이라는 사실과
+    // 다른 실패로 나오고, 걸린 사람은 게이트가 아니라 이 계약을 지우는 쪽으로
+    // 간다(가드를 느슨하게 만들어 온 바로 그 유인이다).
     pattern:
-      /if \(postData\.author_id !== user\.id\) \{\s*console\.error\([^)]*\)\s*return ApiError\.forbidden\(/g,
+      /if \(postData\.author_id !== user\.id\) \{\s*(?:console\.error\([^)]*\)\s*)?return ApiError\.forbidden\(/g,
     expected: 1,
   },
 ]
