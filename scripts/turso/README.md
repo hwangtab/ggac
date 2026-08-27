@@ -991,3 +991,115 @@ node scripts/turso/restore-from-dump.mjs        # 로컬 파일 DB로 복원
          → SEARCH … idx_user_sessions_active_last_activity (is_active=?)
 행 수 5,937 불변 · 임시 표 잔여 0 · 2회 적용 수렴
 ```
+
+---
+
+## 단계 5 — Supabase 프로젝트 해지 절차
+
+**삭제는 되돌릴 수 없다.** 컷오버 후 감사(2026-08-27)가 "최종 `pg_dump` 절차가
+계획 문장 한 줄뿐"이라고 Critical로 지적했다. 아래가 정본이다. **순서를 지킨다.**
+
+### 선행 조건 (전부 충족돼야 시작한다)
+
+- [ ] 컷오버 후 **1주 관찰** 완료, 이상 없음
+- [ ] **실계정 로그인 1회 성공 확인** — 컷오버 이후 Better Auth `session`이 계속
+      0행이면 "아무도 안 들어왔다"와 "로그인이 깨졌다"가 구분되지 않는다.
+      이것만은 반드시 사람이 확인한다
+- [ ] 야간 자동 백업이 최근 7일 연속 성공 (`gh run list --workflow=turso-backup.yml`)
+
+### Step 1 — 이관되지 않은 표를 어떻게 할지 **먼저 결정한다**
+
+Turso에 없고 Supabase에만 있는 데이터 표(2026-08-27 실측):
+
+| 표 | 행 | 처리 |
+|---|---:|---|
+| `member_login_history` | 0 | 폐기(원본도 0행) |
+| `member_status_history` | 0 | 폐기(원본도 0행) |
+| `profiles` | 0 | 폐기(원본도 0행) |
+| `error_logs` | 1 | 폐기(README 폐기 목록에 명시) |
+| **`member_profiles_normalize_log`** | **11** | **⚠ 결정된 적 없음** |
+
+`member_profiles_normalize_log`는 2025-09-12 정규화 스크립트가 남긴 **변경 전/후
+값**이다 — 전화번호 8건, 은행명 2건, **계좌번호 1건**. 관리자에게 열려 있던
+되돌리기용 기록이고, 앱 코드 참조는 0곳이라 화면은 안 깨진다. 어느 폐기 목록에도
+없으니 **판단이 아니라 누락이다.**
+
+**보관하기로 하면** 아래 최종 덤프에 포함되므로 별도 작업이 필요 없다.
+**버리기로 하면** 그 결정을 여기 적어라 — 나중에 "왜 없지?"가 나온다.
+
+### Step 2 — 최종 `pg_dump`
+
+```bash
+BK=~/ggac-backups && mkdir -p "$BK" && chmod 700 "$BK"
+STAMP=$(date +%Y%m%d)
+
+# 스키마 + 데이터 + 역할까지 전부. --data-only를 쓰지 마라 —
+# 이건 재이관용이 아니라 영구 보관용이라 DDL·RLS 정책·함수가 다 필요하다.
+supabase db dump --file "$BK/supabase-final-$STAMP.sql"
+supabase db dump --data-only --file "$BK/supabase-final-data-$STAMP.sql"
+
+chmod 600 "$BK"/supabase-final-*.sql
+```
+
+**검증**(하나라도 어긋나면 삭제하지 마라):
+
+```bash
+# ① 크기가 0이 아니고 잘리지 않았는가
+ls -la "$BK"/supabase-final-*.sql
+tail -1 "$BK/supabase-final-data-$STAMP.sql"     # 중간에서 끊기지 않았는지
+
+# ② 표가 다 들어갔는가 (데이터 덤프에 INSERT가 있는 표)
+grep -o 'INSERT INTO "public"\."[a-z_]*"' "$BK/supabase-final-data-$STAMP.sql" \
+  | sort -u | wc -l
+
+# ③ 결정한 표가 실제로 담겼는가
+grep -c 'member_profiles_normalize_log' "$BK/supabase-final-data-$STAMP.sql"
+
+# ④ 스키마 덤프에 함수·정책이 담겼는가 (재현 가능성)
+grep -c 'CREATE POLICY' "$BK/supabase-final-$STAMP.sql"
+grep -c 'CREATE FUNCTION' "$BK/supabase-final-$STAMP.sql"
+```
+
+> **⚠ 개인정보다.** 조합원 23명의 실명·전화·생년월일·계좌번호와 bcrypt 해시가
+> 들어 있다. **저장소 밖에 두고**(`~/ggac-backups`, 700/600) **절대 커밋하지 마라.**
+> 저장소는 공개다. 루트에 `.sql`을 두면 `.gitignore`의 `/*.sql`이 막지만
+> 하위 디렉터리는 안 막는다.
+
+### Step 3 — Storage 확인
+
+**컷오버(2026-08-26)에 4개 버킷 78객체를 이미 삭제했다.** Turso 잔여 URL 0건을
+실측한 뒤였다. 지금 비어 있는지만 재확인한다.
+
+### Step 4 — 정지 → 관찰 → 삭제
+
+1. **프로젝트 정지**(삭제 아님). 며칠 두고 사이트에 아무 영향이 없는지 본다 —
+   정지 상태에서 무언가 깨지면 **아직 Supabase를 읽는 경로가 남아 있다는 뜻**이고,
+   그때는 삭제 전에 그것부터 찾는다.
+2. 이상 없으면 **삭제**.
+
+### Step 5 — 삭제 후 코드·환경 정리
+
+삭제 **전에는** 하지 마라. 되돌릴 때 필요하다.
+
+- [ ] Vercel 환경변수 제거: `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
+      `STORAGE_PROVIDER`(읽는 코드 0곳 실측), 그리고 **마지막에**
+      `NEXT_PUBLIC_SUPABASE_URL`
+- [ ] `NEXT_PUBLIC_SUPABASE_URL`을 지우면 레거시 Storage URL 판정 4곳
+      (`src/utils/site.ts`·`storageUrlValidation.ts`·`imageDimensions.ts`·
+      `lib/storage/paths.ts`)이 의미를 잃는다. **Turso 잔여 URL 0건은 컷오버에서
+      이미 실측했으므로 제거 전제조건은 충족돼 있다.** 그 판정 코드도 함께 정리한다
+- [ ] `verify-env.js`에서 Supabase 항목 제거
+- [ ] CSP·preconnect의 Supabase 잔재 제거 — `src/middleware/csp.ts`,
+      `next.config.js`, `src/utils/security.ts`(3중복), `layout.tsx`의 preconnect.
+      지금은 아무것도 안 깨지지만 **이제 아무것도 서빙하지 않는 호스트로 매 페이지
+      DNS+TLS 핸드셰이크를 낭비한다**
+- [ ] `supabase/migrations/`는 **역사 기록으로 남긴다.** 원본 제약·트리거·RPC의
+      유일한 출처이고, 이 이전 내내 "원본이 무엇이었나"를 여기서 확인했다
+- [ ] `.claude/settings.local.json`의 `Bash(supabase:*)`·`supabase db push` 무확인
+      허용 제거 — 죽은 DB에 DDL을 밀어넣을 수 있는 경로다
+
+### 이 시점부터 되돌릴 수 없는 것
+
+Supabase를 지우면 **Postgres 형태의 사본은 Step 2의 덤프가 전부다.** Turso 백업은
+SQLite다 — 스키마·타입·함수·RLS 정책이 다르다. 즉 "Postgres로 돌아간다"는 선택지는
+그 덤프 파일 하나에 달린다.
