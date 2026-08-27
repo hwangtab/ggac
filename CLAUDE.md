@@ -302,9 +302,18 @@ throw ApiError.internalServerError('Server error')
   절차는 `scripts/turso/README.md`에 있다
 - **RLS는 더 이상 존재하지 않는다.** Postgres가 행 단위로 막아주던 것을 이제
   **앱 코드가 전부 판정한다**. "RLS 정책을 고친다"는 접근은 아무것도 바꾸지
-  않으면서 경계가 지켜진다고 믿게 만든다. 권한 관련 변경은
-  `src/lib/server/*Auth.ts`· `src/lib/server/authz.ts`와
-  `scripts/testing/assert-runtime-risks.mjs`의 계약을 본다
+  않으면서 경계가 지켜진다고 믿게 만든다.
+- **권한의 안전망은 E2E다. 정적 가드가 아니다.** 인가를 바꿨으면
+  `npm run test:e2e:authz`(기준선 **50 passed**, 실행법은
+  `scripts/turso/README.md`)를 돌려라.
+  `scripts/testing/assert-runtime-risks.mjs`의 계약은 **보조**다 — 적대
+  감사(2026-08-27)가 15가지 우회를 시도해 **11가지가 초록불**이었다. 예:
+  `src/lib/server/authz.ts`의 `isApprovedActive` 맨 앞에
+  `if (profile) return true` 한 줄을 넣으면 관리자 API 26개가 열리는데 가드도
+  `tsc`도 통과한다. 가드는 **"이 문자열이 이 파일에 있는가"**를 볼 뿐 도달
+  가능성·실행 순서·데이터 흐름을 보지 않는다. 같은 감사에서 **E2E는 관리자
+  게이트 무력화를 실제로 잡았다.** 인가 코드는
+  `src/lib/server/*Auth.ts`·`src/lib/server/authz.ts`에 있다
 - 스키마 변경 후 `npm run db:parity`로 확인한다. **인자로 URL을 주지 않으면
   `file:local.db`를 본다** — 운영을 보려면 URL을 명시해야 한다
 
