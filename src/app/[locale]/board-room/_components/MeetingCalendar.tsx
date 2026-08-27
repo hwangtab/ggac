@@ -17,7 +17,7 @@ import {
   subMonths,
   parseISO,
 } from 'date-fns'
-import { BOARD_MEETING_TIME } from '@/constants/boardRoom'
+import { resolveBoardMeetingTime } from '@/constants/boardRoom'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -57,7 +57,13 @@ type VoteModeProps = {
   onConfirm?: (date: string) => void | Promise<void>
 }
 
-type MeetingCalendarProps = SelectModeProps | VoteModeProps
+/** 두 모드가 공유하는 옵션. `meetingTime`이 없으면 기본 시각으로 표시한다. */
+type CommonProps = {
+  /** 'HH:MM'. 비면 `DEFAULT_BOARD_MEETING_TIME`. */
+  meetingTime?: string | null
+}
+
+type MeetingCalendarProps = (SelectModeProps | VoteModeProps) & CommonProps
 
 const DATE_KEY = 'yyyy-MM-dd'
 const WEEKDAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const
@@ -66,6 +72,7 @@ const WEEKDAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const
 
 export default function MeetingCalendar(props: MeetingCalendarProps) {
   const t = useTranslations('boardRoom.calendar')
+  const meetingTime = resolveBoardMeetingTime(props.meetingTime)
 
   // Anchor the visible month sensibly per mode.
   const [visibleMonth, setVisibleMonth] = useState<Date>(() => {
@@ -136,7 +143,7 @@ export default function MeetingCalendar(props: MeetingCalendarProps) {
       </div>
 
       {/* Meeting time hint */}
-      <p className="text-xs text-gray-500 mb-2">{t('timeHint', { time: BOARD_MEETING_TIME })}</p>
+      <p className="text-xs text-gray-500 mb-2">{t('timeHint', { time: meetingTime })}</p>
 
       {/* Weekday header */}
       <div className="grid grid-cols-7 gap-1 mb-1">
@@ -195,9 +202,7 @@ export default function MeetingCalendar(props: MeetingCalendarProps) {
                   <span className="absolute bottom-1 h-1 w-1 rounded-full bg-primary-500" />
                 )}
                 {selected && (
-                  <span className="text-[9px] leading-none mt-0.5 opacity-90">
-                    {BOARD_MEETING_TIME}
-                  </span>
+                  <span className="text-[9px] leading-none mt-0.5 opacity-90">{meetingTime}</span>
                 )}
               </button>
             )

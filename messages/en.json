@@ -562,7 +562,7 @@
       "voteDeadlineLabel": "Vote Deadline",
       "candidateDatesLabel": "Candidate Dates",
       "addDate": "Add",
-      "candidateDateHint": "All candidate times are 21:00.",
+      "candidateDateHint": "Every candidate date uses the meeting time set above.",
       "submit": "Create Meeting",
       "submitting": "Creating...",
       "cancel": "Cancel",
@@ -581,7 +581,10 @@
         "thu": "Thu",
         "fri": "Fri",
         "sat": "Sat"
-      }
+      },
+      "meetingTimeLabel": "Meeting time",
+      "meetingTimeHint": "The same time applies to every candidate date. Defaults to 21:00.",
+      "validationTime": "Enter the meeting time in HH:MM format."
     },
     "calendar": {
       "prevMonth": "Previous month",
@@ -626,7 +629,7 @@
       "locationPlaceholder": "Enter meeting location",
       "voteDeadlineLabel": "Vote Deadline",
       "voteDeadlineHint": "Applies only to meetings still in polling.",
-      "dateNotice": "The meeting date is confirmed via date voting, and the meeting time is always 21:00. Here you can edit only the title, location, and vote deadline.",
+      "dateNotice": "The meeting date is fixed by date vote. Here you can edit the title, location, meeting time, and voting deadline.",
       "save": "Save",
       "saving": "Saving...",
       "cancel": "Cancel",
@@ -640,7 +643,10 @@
       "loading": "Loading...",
       "notFound": "Meeting not found.",
       "error": "Failed to load meeting information.",
-      "errorGeneric": "An error occurred. Please try again."
+      "errorGeneric": "An error occurred. Please try again.",
+      "meetingTimeLabel": "Meeting time",
+      "meetingTimeHint": "Changes the time of the confirmed meeting.",
+      "validationTime": "Enter the meeting time in HH:MM format."
     },
     "status": {
       "polling": "Polling",

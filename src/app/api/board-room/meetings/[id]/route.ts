@@ -9,7 +9,8 @@ import {
 import { notifyDirectors } from '@/lib/server/boardRoomNotify'
 import {
   BOARD_MEETING_STATUS,
-  BOARD_MEETING_TIME,
+  parseBoardMeetingTime,
+  resolveBoardMeetingTime,
   parseBoardMeetingDate,
   parseBoardMeetingDeadline,
 } from '@/constants/boardRoom'
@@ -98,7 +99,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
       return ApiSuccess.ok({
         meeting,
-        meeting_time: BOARD_MEETING_TIME,
+        meeting_time: resolveBoardMeetingTime(meeting.meeting_time),
         options,
         votes,
         agendas,
@@ -153,6 +154,15 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         update.voteDeadline = new Date(voteDeadline)
       }
 
+      if (body.meeting_time === null) {
+        // 명시적 null은 '기본 시각으로 되돌린다'는 뜻이다.
+        update.meetingTime = null
+      } else if (body.meeting_time !== undefined) {
+        const meetingTime = parseBoardMeetingTime(body.meeting_time)
+        if (!meetingTime) throw ApiError.badRequest('회의 시각은 HH:MM(24시간) 형식이어야 합니다.')
+        update.meetingTime = meetingTime
+      }
+
       const confirmDate = parseBoardMeetingDate(body.confirm_date)
       if (body.confirm_date !== undefined && !confirmDate) {
         throw ApiError.badRequest('확정 날짜는 YYYY-MM-DD 형식이어야 합니다.')
@@ -177,7 +187,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
       if (Object.keys(update).length === 0) throw ApiError.badRequest('변경할 내용이 없습니다.')
 
-      let updated: { title: string; meeting_date: string | null } | null
+      let updated: {
+        title: string
+        meeting_date: string | null
+        meeting_time: string | null
+      } | null
       try {
         updated = await updateMeeting(id, update)
       } catch {
@@ -188,7 +202,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       if (confirmDate) {
         await notifyDirectors({
           title: '이사회 일정 확정',
-          message: `'${updated.title}' 회의가 ${confirmDate} ${BOARD_MEETING_TIME}로 확정되었습니다.`,
+          message: `'${updated.title}' 회의가 ${confirmDate} ${resolveBoardMeetingTime(updated.meeting_time)}로 확정되었습니다.`,
           meetingId: id,
         })
       }
