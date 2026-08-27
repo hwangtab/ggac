@@ -313,11 +313,15 @@ test('toJsonTextOrNull: null은 null로 보존하고 값은 직렬화한다', ()
   assert.equal(toJsonTextOrNull('{"a":1}'), '{"a":1}')
 })
 
-test('toBoardMeetingRow: 9개 컬럼을 낸다, 날짜 전용 컬럼은 문자열 그대로', () => {
+test('toBoardMeetingRow: 10개 컬럼을 낸다, 날짜 전용 컬럼은 문자열 그대로', () => {
   const row = toBoardMeetingRow(PG_BOARD_MEETING)
-  assert.equal(Object.keys(row).length, 9)
+  assert.equal(Object.keys(row).length, 10)
   assert.equal(row.meeting_date, '2026-03-01')
   assert.equal(typeof row.created_at, 'number')
+  // `meeting_time`은 컷오버 이후 추가된 컬럼(0007)이라 Supabase 원본에 없다.
+  // 매퍼가 명시적으로 null을 낸다 — 생략하면 커버리지 게이트가 막는다.
+  assert.equal(row.meeting_time, null)
+  assert.ok('meeting_time' in row, '키 자체가 있어야 커버리지 게이트를 통과한다')
 })
 
 test('toBoardAgendaRow: 9개 컬럼, sort_order는 정수로 바뀐다', () => {

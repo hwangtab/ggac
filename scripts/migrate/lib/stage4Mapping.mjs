@@ -41,13 +41,26 @@ export { toArtistRow }
 
 // ---------------------------------------------------------------- board_*
 
-/** board_meetings 9행. created_by는 nullable(실측 12행 중 10행이 NULL). */
+/** board_meetings 10컬럼. created_by는 nullable(실측 12행 중 10행이 NULL).
+ * meeting_time은 컷오버 이후 컬럼이라 항상 null이다. */
 export function toBoardMeetingRow(r) {
   return {
     id: r.id,
     title: r.title,
     // date 전용 컬럼 — 'YYYY-MM-DD' 문자열 그대로 옮긴다.
     meeting_date: r.meeting_date,
+    // `meeting_time`은 **컷오버 이후 추가된 컬럼**이다(0007, 2026-08-27).
+    // Supabase 원본에는 존재한 적이 없으므로 옮길 값이 없다 — null로 명시한다.
+    //
+    // 생략하면 `assertAllRowsColumnCoverage`가 "매핑이 빠뜨린 컬럼"으로 막는다.
+    // 그 게이트는 **컬럼이 새로 생겼는데 아무도 매퍼를 안 고친 상황**을 잡으려고
+    // 있는 것이고, 실제로 이 컬럼에서 그렇게 잡혔다. 여기서 판단을 적어 두는 것이
+    // 게이트를 느슨하게 만드는 것보다 낫다.
+    //
+    // (재이관 자체는 컷오버 이후 금지다 — README의 Step 7 경고 참고. 그럼에도
+    // 매퍼를 맞춰 두는 이유는 이 게이트가 스키마 드리프트를 감지하는 유일한
+    // 자동 검사이기 때문이다.)
+    meeting_time: null,
     location: r.location,
     status: r.status,
     vote_deadline: toTs(r.vote_deadline),
