@@ -971,3 +971,23 @@ node scripts/turso/restore-from-dump.mjs        # 로컬 파일 DB로 복원
 - **단계 5 최종 `pg_dump` 절차가 정해져 있지 않다.** Supabase를 지우는 순간
   Postgres 형태의 사본은 영구히 사라진다 — **삭제 전에 어디에·어떤 명령으로·어떻게
   검증할지 정하고 실행할 것.**
+
+### `0005_add_user_sessions_indexes.sql` (2026-08-27)
+
+컷오버 후 감사에서 **0004가 `user_sessions`를 통째로 빠뜨린 것**이 드러났다.
+미이관 사유 목록에도 없었으니 판단이 아니라 누락이다. Postgres 원본
+(`20250719090020_create_activity_tracking_system.sql:148-151`)에는 인덱스가 4개 있었다.
+
+이 표는 **로그인·세션 갱신마다 읽히고 가장 빨리 자란다**(적용 시점 5,937행).
+
+적용 방법은 0002~0004와 같다(`drizzle-kit migrate` 금지, `executeMultiple`).
+
+실측:
+
+```
+적용 전  SELECT … WHERE user_id=? AND is_active=1          → SCAN user_sessions
+         SELECT … WHERE is_active=1 ORDER BY last_activity → SCAN user_sessions
+적용 후  → SEARCH … idx_user_sessions_user_active (user_id=? AND is_active=?)
+         → SEARCH … idx_user_sessions_active_last_activity (is_active=?)
+행 수 5,937 불변 · 임시 표 잔여 0 · 2회 적용 수렴
+```
