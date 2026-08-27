@@ -1,4 +1,13 @@
-export const BOARD_MEETING_TIME = '21:00' as const // 이사회 시각은 항상 밤 9시 고정
+/**
+ * 시각을 따로 정하지 않은 회의의 기본 시각.
+ *
+ * 예전에는 이 값이 **모든** 이사회의 시각이었다(`BOARD_MEETING_TIME`, 항상
+ * 밤 9시 고정). 그래서 오후에 모인 회의는 화면에 21:00으로 찍히고, 실제
+ * 시각은 장소 뒤에 `· 오후 3시`처럼 손으로 덧붙이는 관행이 생겼다. 이제
+ * 시각은 `board_meetings.meeting_time`에 회의별로 저장되고, 이 상수는
+ * 그 값이 비어 있을 때(= 과거에 만들어진 회의 전부) 쓰는 기본값이다.
+ */
+export const DEFAULT_BOARD_MEETING_TIME = '21:00' as const
 export const MAX_BOARD_MEETING_CANDIDATE_DATES = 30
 export const MAX_BOARD_AGENDA_SORT_ORDER = 10000
 
@@ -21,6 +30,25 @@ export const ALL_DOCUMENT_CATEGORIES = [
   ASSEMBLY_DOCUMENT_CATEGORY,
 ] as const
 export type AnyDocumentCategory = (typeof ALL_DOCUMENT_CATEGORIES)[number]
+
+/** `HH:MM`(24시간) 형식만 통과시킨다. 그 밖에는 `null`. */
+export function parseBoardMeetingTime(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+
+  const trimmed = value.trim()
+  if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(trimmed)) return null
+
+  return trimmed
+}
+
+/**
+ * 저장된 시각이 없으면 기본값으로 떨어진다. `meeting_time`이 NULL인 과거
+ * 회의를 화면에서 시각 없이 보이게 두지 않으려는 것 — 그 회의들은 실제로
+ * 전부 21:00이었다.
+ */
+export function resolveBoardMeetingTime(value: string | null | undefined): string {
+  return parseBoardMeetingTime(value) ?? DEFAULT_BOARD_MEETING_TIME
+}
 
 export function parseBoardMeetingDate(value: unknown): string | null {
   if (typeof value !== 'string') return null

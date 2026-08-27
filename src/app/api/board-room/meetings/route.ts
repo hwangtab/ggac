@@ -3,9 +3,10 @@ import { apiGet, apiPost, ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { requireBoardMember, requireBoardAdmin } from '@/lib/server/boardRoomAuth'
 import { notifyDirectors } from '@/lib/server/boardRoomNotify'
 import {
-  BOARD_MEETING_TIME,
+  DEFAULT_BOARD_MEETING_TIME,
   parseBoardMeetingCandidateDates,
   parseBoardMeetingDeadline,
+  parseBoardMeetingTime,
 } from '@/constants/boardRoom'
 import { createLogger } from '@/utils/logger'
 import { parseJsonObjectBody } from '@/utils/requestBody'
@@ -28,7 +29,14 @@ export async function GET(request: NextRequest) {
       } catch {
         throw ApiError.internalServerError('회의 목록을 불러올 수 없습니다.')
       }
-      return ApiSuccess.ok({ meetings, meeting_time: BOARD_MEETING_TIME })
+      // `meeting_time`은 예전에 '모든 회의의 시각'이었다. 이제 회의별 시각은
+      // 각 행의 `meeting_time`에 있고, 이 키는 시각이 비어 있는 회의에 쓰는
+      // 기본값이다. 기존 소비자가 깨지지 않게 키 이름은 그대로 둔다.
+      return ApiSuccess.ok({
+        meetings,
+        meeting_time: DEFAULT_BOARD_MEETING_TIME,
+        default_meeting_time: DEFAULT_BOARD_MEETING_TIME,
+      })
     },
     '/api/board-room/meetings',
     { userId: user.id }
@@ -51,8 +59,14 @@ export async function POST(request: NextRequest) {
       const candidateDates = parseBoardMeetingCandidateDates(body.candidate_dates)
       const voteDeadline = parseBoardMeetingDeadline(body.vote_deadline)
       const location = typeof body.location === 'string' ? body.location.trim() || null : null
+      const meetingTime =
+        body.meeting_time === undefined || body.meeting_time === null
+          ? null
+          : parseBoardMeetingTime(body.meeting_time)
 
       if (!title) throw ApiError.badRequest('제목을 입력해주세요.')
+      if (body.meeting_time !== undefined && body.meeting_time !== null && !meetingTime)
+        throw ApiError.badRequest('회의 시각은 HH:MM(24시간) 형식이어야 합니다.')
       if (!candidateDates)
         throw ApiError.badRequest('후보 날짜는 YYYY-MM-DD 형식으로 1개 이상 선택해주세요.')
       if (!voteDeadline) throw ApiError.badRequest('투표 마감일을 설정해주세요.')
@@ -62,6 +76,7 @@ export async function POST(request: NextRequest) {
         meeting = await createMeeting({
           title,
           location,
+          meetingTime,
           voteDeadline: new Date(voteDeadline),
           createdBy: user.id,
         })

@@ -44,6 +44,8 @@ export interface MeetingRow {
   id: string
   title: string
   meeting_date: string | null
+  /** 'HH:MM' 또는 NULL. NULL이면 화면이 `DEFAULT_BOARD_MEETING_TIME`으로 읽는다. */
+  meeting_time: string | null
   location: string | null
   status: string
   vote_deadline: string | null
@@ -55,6 +57,7 @@ function rowToMeeting(row: typeof boardMeetings.$inferSelect): MeetingRow {
     id: row.id,
     title: row.title,
     meeting_date: row.meetingDate,
+    meeting_time: row.meetingTime,
     location: row.location,
     status: row.status,
     vote_deadline: toIso(row.voteDeadline),
@@ -87,6 +90,8 @@ export async function getMeetingTitle(id: string): Promise<string | null> {
 export interface CreateMeetingInput {
   title: string
   location: string | null
+  /** 'HH:MM'. 주지 않으면 NULL로 저장되고 화면은 기본 시각으로 읽는다. */
+  meetingTime?: string | null
   voteDeadline: Date
   createdBy: string
 }
@@ -98,6 +103,7 @@ export async function createMeeting(input: CreateMeetingInput): Promise<{ id: st
     .values({
       title: input.title,
       location: input.location,
+      meetingTime: input.meetingTime ?? null,
       status: 'polling',
       voteDeadline: input.voteDeadline,
       createdBy: input.createdBy,
@@ -111,6 +117,7 @@ export interface MeetingUpdatePatch {
   location?: string | null
   voteDeadline?: Date | null
   meetingDate?: string
+  meetingTime?: string | null
   status?: string
 }
 
@@ -123,13 +130,19 @@ export interface MeetingUpdatePatch {
 export async function updateMeeting(
   id: string,
   patch: MeetingUpdatePatch
-): Promise<{ title: string; meeting_date: string | null } | null> {
+): Promise<{ title: string; meeting_date: string | null; meeting_time: string | null } | null> {
   const [row] = await db
     .update(boardMeetings)
     .set(patch)
     .where(eq(boardMeetings.id, id))
-    .returning({ title: boardMeetings.title, meetingDate: boardMeetings.meetingDate })
-  return row ? { title: row.title, meeting_date: row.meetingDate } : null
+    .returning({
+      title: boardMeetings.title,
+      meetingDate: boardMeetings.meetingDate,
+      meetingTime: boardMeetings.meetingTime,
+    })
+  return row
+    ? { title: row.title, meeting_date: row.meetingDate, meeting_time: row.meetingTime }
+    : null
 }
 
 /** `/api/board-room/meetings` POST의 롤백, `/api/board-room/meetings/[id]` DELETE. */

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
-import { BOARD_MEETING_TIME } from '@/constants/boardRoom'
+import { resolveBoardMeetingTime } from '@/constants/boardRoom'
 import type { BoardMeetingStatus, BoardAgendaStatus } from '@/constants/boardRoom'
 import { fetchSessionProfile, isApprovedActiveAdmin } from '@/utils/sessionProfile'
 import StatusBadge from '../../_components/StatusBadge'
@@ -19,6 +19,7 @@ interface Meeting {
   id: string
   title: string
   meeting_date: string | null
+  meeting_time: string | null
   location: string | null
   status: BoardMeetingStatus
   vote_deadline: string | null
@@ -271,7 +272,7 @@ export default function MeetingDetailPage() {
 
         {isScheduledOrCompleted && meeting.meeting_date && (
           <p className="text-gray-600 text-sm">
-            {meeting.meeting_date} {BOARD_MEETING_TIME}
+            {meeting.meeting_date} {resolveBoardMeetingTime(meeting.meeting_time)}
             {meeting.location && ` · ${meeting.location}`}
           </p>
         )}
@@ -295,6 +296,7 @@ export default function MeetingDetailPage() {
           ) : (
             <MeetingCalendar
               mode="vote"
+              meetingTime={meeting.meeting_time}
               options={options}
               votes={votes}
               roster={roster}

@@ -117,6 +117,38 @@ test('updateMeeting: 부분 갱신 후 title/meeting_date를 돌려준다. 존�
   assert.equal(missing, null)
 })
 
+test('meeting_time: 주지 않으면 NULL로 남고(과거 회의와 같다), 주면 그대로 왕복한다', async () => {
+  const creator = await seedProfile()
+  const { createMeeting, getMeetingById, updateMeeting } = await loadFreshBoardModule()
+
+  // 시각을 주지 않은 회의 — 컷오버 이전에 만들어진 회의와 같은 모양이다.
+  const legacy = await createMeeting({
+    title: '시각 없는 회의',
+    location: null,
+    voteDeadline: new Date(),
+    createdBy: creator,
+  })
+  assert.equal((await getMeetingById(legacy.id)).meeting_time, null)
+
+  const timed = await createMeeting({
+    title: '오후 4시 회의',
+    location: null,
+    meetingTime: '16:00',
+    voteDeadline: new Date(),
+    createdBy: creator,
+  })
+  assert.equal((await getMeetingById(timed.id)).meeting_time, '16:00')
+
+  // 시각만 바꿔도 갱신되고, 갱신 결과가 시각을 함께 돌려준다(확정 알림이 이 값을 쓴다).
+  const updated = await updateMeeting(timed.id, { meetingTime: '19:30' })
+  assert.equal(updated.meeting_time, '19:30')
+  assert.equal((await getMeetingById(timed.id)).meeting_time, '19:30')
+
+  // 명시적 null은 '기본 시각으로 되돌린다'는 뜻이라 NULL로 저장된다.
+  const cleared = await updateMeeting(timed.id, { meetingTime: null })
+  assert.equal(cleared.meeting_time, null)
+})
+
 test('deleteMeeting: 존재하는 회의를 지운다(멱등 — 다시 지워도 에러 없음)', async () => {
   const creator = await seedProfile()
   const { createMeeting, deleteMeeting, getMeetingById } = await loadFreshBoardModule()

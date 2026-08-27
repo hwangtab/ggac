@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
-import { BOARD_MEETING_TIME } from '@/constants/boardRoom'
+import { resolveBoardMeetingTime } from '@/constants/boardRoom'
 import type { BoardMeetingStatus } from '@/constants/boardRoom'
 import { fetchSessionProfile, isApprovedActiveAdmin } from '@/utils/sessionProfile'
 import StatusBadge from '../_components/StatusBadge'
@@ -12,6 +12,7 @@ interface Meeting {
   id: string
   title: string
   meeting_date: string | null
+  meeting_time: string | null
   location: string | null
   status: BoardMeetingStatus
   vote_deadline: string | null
@@ -156,7 +157,7 @@ export default function MeetingListPage() {
                       </p>
                       {m.meeting_date ? (
                         <p className="text-sm text-gray-500 mt-0.5">
-                          {m.meeting_date} {BOARD_MEETING_TIME}
+                          {m.meeting_date} {resolveBoardMeetingTime(m.meeting_time)}
                           {m.location && ` · ${m.location}`}
                         </p>
                       ) : m.vote_deadline ? (
