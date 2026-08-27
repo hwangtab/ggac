@@ -19,7 +19,12 @@
 backups/
 
 # internal documentation — governance/meeting records, sensitive content
-docs/
+# `docs/`가 아니라 `docs/*`인 이유: 디렉터리를 통째로 제외하면 git이 그 안을
+# 들여다보지 않아 하위 예외(!)가 전혀 먹지 않는다.
+docs/*
+# 예외: 공개해도 되는 제도·절차 매뉴얼만 추적한다. 조합 내부 현황·판단이
+# 담긴 문서는 여기 두지 말고 이사회 서류함(비공개 Blob)에 올린다.
+!docs/사회적기업/
 
 # playwright MCP session logs — may contain PII/sensitive test data
 .playwright-mcp/
