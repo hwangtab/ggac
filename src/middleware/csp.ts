@@ -42,13 +42,15 @@ export function applyCSP(request: NextRequest, response: NextResponse) {
       process.env.NODE_ENV === 'development'
         ? "media-src 'self' http://localhost:* http://127.0.0.1:* https://www.youtube.com https://*.supabase.co"
         : "media-src 'self' https://www.youtube.com https://*.supabase.co",
-      "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com",
+      // 토스 결제창은 iframe으로 뜬다. 빠지면 결제 버튼이 먹통이 된다.
+      "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://*.tosspayments.com",
       process.env.NODE_ENV === 'development'
-        ? "connect-src 'self' http://localhost:* http://127.0.0.1:* https://api.supabase.io https://*.supabase.co ws://localhost:* ws://127.0.0.1:* wss://localhost:* wss://127.0.0.1:* wss://*.supabase.co"
-        : "connect-src 'self' https://api.supabase.io https://*.supabase.co wss://*.supabase.co",
+        ? "connect-src 'self' http://localhost:* http://127.0.0.1:* https://api.supabase.io https://*.supabase.co ws://localhost:* ws://127.0.0.1:* wss://localhost:* wss://127.0.0.1:* wss://*.supabase.co https://*.tosspayments.com"
+        : "connect-src 'self' https://api.supabase.io https://*.supabase.co wss://*.supabase.co https://*.tosspayments.com",
       "object-src 'none'",
       "base-uri 'self'",
-      "form-action 'self'",
+      // 결제창이 카드사 인증 페이지로 폼을 제출한다(next.config.js의 같은 항목 참고).
+      "form-action 'self' https://*.tosspayments.com",
       "frame-ancestors 'none'",
       "worker-src 'self' blob:",
       "manifest-src 'self'",
