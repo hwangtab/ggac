@@ -416,69 +416,12 @@ export const logSecurityEvent = (
             })
           }
         }
-        // 웹훅이 하나도 설정되지 않았으면 Slack 봇으로 보낸다. 이게 없으면
-        // 운영에서 보안 이벤트가 콘솔 밖으로 나가지 않는다(감사에서 실제로
-        // 그 상태였다).
-        if (!process.env.SECURITY_WEBHOOK_URL && !process.env.SECURITY_ALERT_WEBHOOK_URL) {
-          await postSecurityEventToSlack(event, severity, immutableDetails)
-        }
       } catch (error) {
         // 보안 로깅 실패는 콘솔에만 기록 (무한 루프 방지)
         console.error('[Security] Failed to send security event:', error)
       }
     })
   }
-}
-
-/**
- * 보안 이벤트를 Slack으로 보낸다 — **웹훅 URL이 없을 때의 폴백**이다.
- *
- * 컷오버 후 감사(2026-08-27)에서 `SECURITY_WEBHOOK_URL`·
- * `SECURITY_ALERT_WEBHOOK_URL`이 **Vercel에 둘 다 없다**는 것이 드러났다. 즉
- * 보안 이벤트가 콘솔 로그 말고는 아무 데도 안 갔고, high 심각도 알림도 조용히
- * 증발했다. 그런데 `SLACK_BOT_TOKEN`·`SLACK_CHANNEL_ID`는 **이미 운영에 있다**
- * (배포 알림이 쓴다).
- *
- * 그래서 새 시크릿을 요구하는 대신 있는 것을 쓴다. 웹훅 URL을 설정하면 그쪽이
- * 우선이고 이 폴백은 타지 않는다 — 기존 동작은 그대로다.
- */
-async function postSecurityEventToSlack(
-  event: string,
-  severity: string,
-  details: unknown
-): Promise<void> {
-  const token = process.env.SLACK_BOT_TOKEN
-  const channel = process.env.SLACK_CHANNEL_ID
-  if (!token || !channel) return
-
-  const isCritical = severity === 'high'
-  await fetch('https://slack.com/api/chat.postMessage', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      channel,
-      text: `${isCritical ? '🚨' : '⚠️'} 보안 이벤트 [${severity.toUpperCase()}] ${event}`,
-      attachments: [
-        {
-          color: isCritical ? 'danger' : 'warning',
-          fields: [
-            { title: 'Event', value: event, short: true },
-            { title: 'Severity', value: severity.toUpperCase(), short: true },
-            {
-              title: 'Details',
-              // Slack 첨부 필드 상한(약 2000자)에 맞춰 자른다.
-              value: JSON.stringify(details, null, 2).slice(0, 1800),
-              short: false,
-            },
-          ],
-          ts: Math.floor(Date.now() / 1000),
-        },
-      ],
-    }),
-  })
 }
 
 /**
