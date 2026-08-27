@@ -1,0 +1,77 @@
+name: 조합비 자동 청구
+
+# 자동결제(빌링)를 등록한 조합원에게 매달 조합비를 청구한다.
+#
+# 토스는 **스케줄링 기능을 제공하지 않는다**(문서 명시). 청구 시점을 정하고
+# 자동결제 승인 API를 부르는 건 전적으로 우리 몫이다.
+#
+# Vercel 크론 대신 GitHub Actions를 쓰는 이유는 `cleanup-temp-attachments.yml`과
+# 같다 — 실패가 Actions 이력에 남아 추적할 수 있다.
+#
+# 이중 청구 방지는 이 워크플로가 아니라 **서버 쪽**에 있다: 회원당 청구월
+# 유일 제약(DB)과 "이미 낸 사람은 건너뛴다"는 판단(`billingRun.ts`)이다.
+# 그래서 이 워크플로가 실수로 두 번 돌아도 두 번 청구되지 않는다.
+
+on:
+  schedule:
+    # 매월 5일 20:00 UTC = KST 6일 05:00.
+    # 5일로 잡은 이유: 월초 급여일 이후라 잔액 부족으로 인한 실패가 줄고,
+    # 실패한 회원이 그 달 안에 카드를 바꿔 다시 낼 시간이 남는다.
+    - cron: "0 20 5 * *"
+  workflow_dispatch:
+
+jobs:
+  charge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 조합비 자동 청구 호출
+        env:
+          TOKEN: ${{ secrets.PAYMENTS_CRON_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${TOKEN:-}" ]; then
+            echo "::error::PAYMENTS_CRON_TOKEN 시크릿이 없다. Vercel의 같은 이름 값과 일치해야 한다."
+            exit 1
+          fi
+
+          # 자동결제 승인은 한 건에 최대 60초까지 걸린다. 조합원 수만큼 누적되므로
+          # 넉넉히 기다린다(라우트의 maxDuration과 맞춘다).
+          HTTP=$(curl -sS -o /tmp/dues.json -w '%{http_code}' \
+            --max-time 850 \
+            -X POST https://www.ggac.kr/api/internal/dues/charge \
+            -H "Authorization: Bearer ${TOKEN}")
+
+          echo "HTTP ${HTTP}"
+
+          # **본문을 그대로 찍지 마라.** 이 저장소는 공개라 Actions 로그도 공개다.
+          # 응답에 회원 식별 정보는 없지만, 앞으로 필드가 늘 수 있으므로 집계만 남긴다.
+          node -e '
+            const fs = require("fs")
+            try {
+              const j = JSON.parse(fs.readFileSync("/tmp/dues.json", "utf8"))
+              const d = j.data ?? {}
+              console.log(`청구월 ${d.billingMonth ?? "?"} — 성공 ${d.charged ?? "?"}건, 실패 ${d.failed ?? "?"}건, 건너뜀 ${d.skipped ?? "?"}건, 판단보류 ${d.undecided ?? "?"}건`)
+            } catch {
+              console.log("응답 본문을 파싱하지 못했다(상태 코드로 판정한다).")
+            }
+          '
+
+          if [ "${HTTP}" != "200" ]; then
+            echo "::error::자동 청구 엔드포인트가 ${HTTP}를 반환했다 (401이면 Vercel과 GitHub의 토큰이 다르고, 503이면 자동결제 키가 없다)."
+            exit 1
+          fi
+
+          # 판단보류(undecided)가 남으면 청구됐는지 모르는 건이 있다는 뜻이다.
+          # 실패로 처리하지 않되, 사람이 확인하도록 경고로 남긴다.
+          UNDECIDED=$(node -e '
+            const fs = require("fs")
+            try {
+              const j = JSON.parse(fs.readFileSync("/tmp/dues.json", "utf8"))
+              process.stdout.write(String((j.data ?? {}).undecided ?? 0))
+            } catch { process.stdout.write("0") }
+          ')
+
+          if [ "${UNDECIDED}" != "0" ]; then
+            echo "::warning::청구 결과를 확인하지 못한 건이 ${UNDECIDED}건 있다. 토스 상점관리자에서 대사가 필요하다."
+          fi

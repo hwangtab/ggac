@@ -88,6 +88,54 @@ export function isPaymentEnabled(): boolean {
   return process.env[PAYMENT_MODE_ENV] === 'toss'
 }
 
+/**
+ * 자동결제(빌링)는 **일반결제와 다른 키를 쓴다.**
+ *
+ * 토스는 연동 방식마다 키를 따로 발급한다. 일반결제(주문서형)는 `gck`/`gsk`,
+ * 자동결제는 `ck`/`sk`(API 개별 연동 키)다. 실측으로 확인한 바로는 `gsk` 키로
+ * 빌링 API를 부르면 `NOT_FOUND_MERCHANT`가 떨어진다 — 상점 자체를 못 찾는다.
+ *
+ * 그래서 자동결제 키가 없거나 잘못된 계열이면 **기능을 통째로 숨긴다.** 카드
+ * 등록 화면까지 갔다가 발급 단계에서 실패하면, 회원은 등록된 줄 알고 다음
+ * 달 청구를 기다리게 된다.
+ */
+export function isBillingEnabled(): boolean {
+  const clientKey = process.env.NEXT_PUBLIC_TOSS_BILLING_CLIENT_KEY ?? ''
+  const secretKey = process.env.TOSS_BILLING_SECRET_KEY ?? ''
+
+  // 일반결제 계열(gck/gsk)이 잘못 들어오면 거부한다.
+  if (/^(test|live)_g(c|s)k_/.test(clientKey) || /^(test|live)_g(c|s)k_/.test(secretKey)) {
+    return false
+  }
+
+  try {
+    assertKeyPairConsistent(clientKey, secretKey)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** 브라우저로 내려보내도 되는 자동결제 공개 키. */
+export function getPublicBillingClientKey(): string {
+  return process.env.NEXT_PUBLIC_TOSS_BILLING_CLIENT_KEY ?? ''
+}
+
+/**
+ * 서버 전용 자동결제 설정. 시크릿 키가 들어 있으므로 응답에 실으면 안 된다.
+ */
+export function getBillingConfig(): { clientKey: string; secretKey: string } {
+  if (!isBillingEnabled()) {
+    throw new KeyMismatchError(
+      '자동결제 키가 설정되지 않았습니다. 자동결제는 API 개별 연동 키(test_ck_/test_sk_)가 필요합니다.'
+    )
+  }
+  return {
+    clientKey: process.env.NEXT_PUBLIC_TOSS_BILLING_CLIENT_KEY ?? '',
+    secretKey: process.env.TOSS_BILLING_SECRET_KEY ?? '',
+  }
+}
+
 /** 브라우저로 내려보내도 되는 공개 키. */
 export function getPublicClientKey(): string {
   return process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY ?? ''

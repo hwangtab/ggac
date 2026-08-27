@@ -92,3 +92,54 @@ test('정수가 아닌 회비는 거부한다', () => {
   assert.throws(() => assertDuesAmount('30000'), /회비/)
   assert.throws(() => assertDuesAmount(null), /회비/)
 })
+
+// ---------------------------------------------------------------- 자동결제 키
+
+test('자동결제 키가 없으면 자동결제 기능이 꺼진다', async () => {
+  const mod = await import(
+    `${new URL('../../src/lib/payments/toss/config.ts', import.meta.url).href}?t=${Date.now()}-a`
+  )
+  const saved = {
+    c: process.env.NEXT_PUBLIC_TOSS_BILLING_CLIENT_KEY,
+    s: process.env.TOSS_BILLING_SECRET_KEY,
+  }
+  delete process.env.NEXT_PUBLIC_TOSS_BILLING_CLIENT_KEY
+  delete process.env.TOSS_BILLING_SECRET_KEY
+  try {
+    assert.equal(mod.isBillingEnabled(), false)
+  } finally {
+    if (saved.c) process.env.NEXT_PUBLIC_TOSS_BILLING_CLIENT_KEY = saved.c
+    if (saved.s) process.env.TOSS_BILLING_SECRET_KEY = saved.s
+  }
+})
+
+test('자동결제 키가 짝을 이루면 기능이 켜진다', async () => {
+  const mod = await import(
+    `${new URL('../../src/lib/payments/toss/config.ts', import.meta.url).href}?t=${Date.now()}-b`
+  )
+  process.env.NEXT_PUBLIC_TOSS_BILLING_CLIENT_KEY = 'test_ck_sample'
+  process.env.TOSS_BILLING_SECRET_KEY = 'test_sk_sample'
+  assert.equal(mod.isBillingEnabled(), true)
+  assert.equal(mod.getPublicBillingClientKey(), 'test_ck_sample')
+})
+
+test('자동결제 키의 환경이 어긋나면 기능이 꺼진다', async () => {
+  // 결제창은 뜨는데 빌링키 발급만 실패하는 상태를 만들지 않는다.
+  const mod = await import(
+    `${new URL('../../src/lib/payments/toss/config.ts', import.meta.url).href}?t=${Date.now()}-c`
+  )
+  process.env.NEXT_PUBLIC_TOSS_BILLING_CLIENT_KEY = 'test_ck_sample'
+  process.env.TOSS_BILLING_SECRET_KEY = 'live_sk_sample'
+  assert.equal(mod.isBillingEnabled(), false)
+})
+
+test('일반결제 키를 자동결제에 잘못 쓰면 거부한다', async () => {
+  // gck/gsk로는 빌링 API가 열리지 않는다(실측: NOT_FOUND_MERCHANT).
+  // 설정 단계에서 걸러야 카드 등록까지 갔다가 실패하는 일이 없다.
+  const mod = await import(
+    `${new URL('../../src/lib/payments/toss/config.ts', import.meta.url).href}?t=${Date.now()}-d`
+  )
+  process.env.NEXT_PUBLIC_TOSS_BILLING_CLIENT_KEY = 'test_gck_docs_Ovk5rk1EwkEbP0W43n07xlzm'
+  process.env.TOSS_BILLING_SECRET_KEY = 'test_gsk_docs_OaPz8L5KdmQXkzRz3y47BMw6'
+  assert.equal(mod.isBillingEnabled(), false)
+})

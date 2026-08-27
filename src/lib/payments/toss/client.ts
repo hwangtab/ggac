@@ -60,7 +60,7 @@ export class TossLookupError extends Error {
 }
 
 interface RequestOptions {
-  method: 'GET' | 'POST'
+  method: 'GET' | 'POST' | 'DELETE'
   path: string
   body?: unknown
   idempotency?: { orderId: string; action: IdempotentAction }
@@ -211,4 +211,107 @@ export async function cancelPayment(
     throw new TossLookupError(`결제 취소: ${code} ${message}`, errorBody)
   }
   throw new TossApiError(code, message, response.status, errorBody)
+}
+
+// ------------------------------------------------------------ 자동결제(빌링)
+
+/**
+ * 카드 등록 인증키(`authKey`)를 **빌링키**로 바꾼다.
+ *
+ * 결제창이 성공 주소로 돌려보낸 `authKey`는 일회성이다. 이 호출로 빌링키를
+ * 받는 순간부터 카드번호 없이 결제를 걸 수 있게 된다.
+ *
+ * ⚠️ 받은 빌링키는 **다시 조회할 수 없다**(토스 문서). 저장에 실패하면 회원이
+ * 카드를 다시 등록하는 수밖에 없으므로, 호출부는 저장이 끝난 뒤에 성공을
+ * 알려야 한다.
+ */
+export async function issueBillingKey(
+  input: { authKey: string; customerKey: string },
+  deps: TossDeps
+): Promise<Record<string, unknown>> {
+  const response = await request(
+    {
+      method: 'POST',
+      path: '/v1/billing/authorizations/issue',
+      body: { authKey: input.authKey, customerKey: input.customerKey },
+    },
+    deps
+  )
+
+  if (!response.ok) await throwForStatus(response, '빌링키 발급')
+  return readJson(response)
+}
+
+/**
+ * 빌링키로 결제를 건다. **서버 전용 경로다** — 결제창도, 성공 주소도, 승인
+ * 확정도 거치지 않고 이 한 번의 호출로 결제가 끝난다.
+ *
+ * 그래서 토스는 자동결제에 **완료 웹훅을 보내지 않는다**. 응답을 받은 그
+ * 자리에서 기록해야 하고, 응답을 못 받은 건은 대사로 맞춰야 한다.
+ *
+ * `customerKey`가 빌링키와 짝이 맞지 않으면 `NOT_MATCHES_CUSTOMER_KEY`로
+ * 거절된다 — 빌링키만으로는 결제할 수 없다는 뜻이라, 이 값도 비밀에 준해
+ * 다뤄야 한다.
+ */
+export async function chargeBilling(
+  billingKey: string,
+  input: {
+    customerKey: string
+    amount: number
+    orderId: string
+    orderName: string
+    customerEmail?: string | null
+    customerName?: string | null
+  },
+  deps: TossDeps
+): Promise<Record<string, unknown>> {
+  const body: Record<string, unknown> = {
+    customerKey: input.customerKey,
+    amount: input.amount,
+    orderId: input.orderId,
+    orderName: input.orderName,
+  }
+  if (input.customerEmail) body.customerEmail = input.customerEmail
+  if (input.customerName) body.customerName = input.customerName
+
+  const response = await request(
+    {
+      method: 'POST',
+      path: `/v1/billing/${encodeURIComponent(billingKey)}`,
+      body,
+      idempotency: { orderId: input.orderId, action: 'billing-charge' },
+    },
+    deps
+  )
+
+  if (!response.ok) await throwForStatus(response, '자동결제 승인')
+  return readJson(response)
+}
+
+/**
+ * 빌링키를 토스에서 삭제한다. 해지할 때 우리 쪽 비활성화와 함께 부른다.
+ *
+ * 응답 본문을 파싱하지 않는다 — 레퍼런스는 "빈 body에 200", 가이드는
+ * `{billingKey}`라고 적어 서로 다르다. 상태 코드만 본다.
+ *
+ * 이미 없는 키라는 응답도 성공으로 다룬다. 해지 재시도에서 던지면 회원
+ * 화면에 "해지 실패"가 뜨는데, 실제로는 해지된 상태다.
+ */
+export async function deleteBillingKey(billingKey: string, deps: TossDeps): Promise<boolean> {
+  const response = await request(
+    { method: 'DELETE', path: `/v1/billing/${encodeURIComponent(billingKey)}` },
+    deps
+  )
+
+  if (response.ok) return true
+
+  const body = await readJson(response).catch(() => ({}) as Record<string, unknown>)
+  const code = typeof body.code === 'string' ? body.code : 'UNKNOWN'
+  if (code === 'NOT_FOUND_BILLING_KEY' || code === 'NOT_FOUND_BILLING') return true
+
+  const message = typeof body.message === 'string' ? body.message : '빌링키 삭제 실패'
+  if (isUndecidable(response.status)) {
+    throw new TossLookupError(`빌링키 삭제: ${code} ${message}`, body)
+  }
+  throw new TossApiError(code, message, response.status, body)
 }
