@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
-import { BOARD_MEETING_TIME } from '@/constants/boardRoom'
+import { resolveBoardMeetingTime } from '@/constants/boardRoom'
 import type { BoardMeetingStatus } from '@/constants/boardRoom'
 import { fetchSessionProfile, isApprovedActiveAdmin } from '@/utils/sessionProfile'
 import StatusBadge from './_components/StatusBadge'
@@ -12,6 +12,7 @@ interface Meeting {
   id: string
   title: string
   meeting_date: string | null
+  meeting_time: string | null
   location: string | null
   status: BoardMeetingStatus
   vote_deadline: string | null
@@ -199,7 +200,7 @@ function MeetingCard({ meeting, viewDetailLabel }: { meeting: Meeting; viewDetai
           </h3>
           {meeting.meeting_date && (
             <p className="text-sm text-gray-500 mt-1">
-              {meeting.meeting_date} {BOARD_MEETING_TIME}
+              {meeting.meeting_date} {resolveBoardMeetingTime(meeting.meeting_time)}
               {meeting.location && ` · ${meeting.location}`}
             </p>
           )}

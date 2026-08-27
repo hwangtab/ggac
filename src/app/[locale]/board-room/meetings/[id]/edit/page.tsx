@@ -4,13 +4,18 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { Link, useRouter } from '@/i18n/navigation'
-import type { BoardMeetingStatus } from '@/constants/boardRoom'
+import {
+  DEFAULT_BOARD_MEETING_TIME,
+  resolveBoardMeetingTime,
+  type BoardMeetingStatus,
+} from '@/constants/boardRoom'
 import { fetchSessionProfile, isApprovedActiveAdmin } from '@/utils/sessionProfile'
 
 interface Meeting {
   id: string
   title: string
   meeting_date: string | null
+  meeting_time: string | null
   location: string | null
   status: BoardMeetingStatus
   vote_deadline: string | null
@@ -41,6 +46,7 @@ export default function EditMeetingPage() {
   const [title, setTitle] = useState('')
   const [location, setLocation] = useState('')
   const [voteDeadline, setVoteDeadline] = useState('')
+  const [meetingTime, setMeetingTime] = useState<string>(DEFAULT_BOARD_MEETING_TIME)
 
   const [saving, setSaving] = useState(false)
   const [busy, setBusy] = useState(false) // complete/delete in-flight
@@ -76,6 +82,7 @@ export default function EditMeetingPage() {
         setTitle(m.title || '')
         setLocation(m.location || '')
         setVoteDeadline(isoToDatetimeLocal(m.vote_deadline))
+        setMeetingTime(resolveBoardMeetingTime(m.meeting_time))
         setLoadError(null)
       } else {
         setLoadError(json.error || t('error'))
@@ -111,6 +118,13 @@ export default function EditMeetingPage() {
       ? new Date(meeting.vote_deadline).toISOString()
       : null
     if (newDeadlineIso !== oldDeadlineIso && newDeadlineIso) body.vote_deadline = newDeadlineIso
+    if (meetingTime !== resolveBoardMeetingTime(meeting.meeting_time)) {
+      if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(meetingTime)) {
+        setValidationError(t('validationTime'))
+        return
+      }
+      body.meeting_time = meetingTime
+    }
 
     if (Object.keys(body).length === 0) {
       setValidationError(t('noChanges'))
@@ -294,6 +308,21 @@ export default function EditMeetingPage() {
             placeholder={t('locationPlaceholder')}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
           />
+        </div>
+
+        {/* 회의 시각 */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="meetingTime">
+            {t('meetingTimeLabel')}
+          </label>
+          <input
+            id="meetingTime"
+            type="time"
+            value={meetingTime}
+            onChange={e => setMeetingTime(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+          />
+          <p className="text-xs text-gray-400 mt-1">{t('meetingTimeHint')}</p>
         </div>
 
         {/* 투표 마감일 */}

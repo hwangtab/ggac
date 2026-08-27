@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useTranslations } from 'next-intl'
 import { format, parseISO } from 'date-fns'
 import { Link, useRouter } from '@/i18n/navigation'
-import { BOARD_MEETING_TIME } from '@/constants/boardRoom'
+import { DEFAULT_BOARD_MEETING_TIME } from '@/constants/boardRoom'
 import { fetchSessionProfile, isApprovedActiveAdmin } from '@/utils/sessionProfile'
 import MeetingCalendar from '../../_components/MeetingCalendar'
 
@@ -15,6 +15,7 @@ export default function NewMeetingPage() {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null)
   const [title, setTitle] = useState('')
   const [location, setLocation] = useState('')
+  const [meetingTime, setMeetingTime] = useState<string>(DEFAULT_BOARD_MEETING_TIME)
   const [voteDeadline, setVoteDeadline] = useState('')
   const [candidateDates, setCandidateDates] = useState<string[]>([])
   const [submitting, setSubmitting] = useState(false)
@@ -62,7 +63,7 @@ export default function NewMeetingPage() {
       month: format(d, 'MM'),
       day: format(d, 'dd'),
       weekday: WEEKDAY_LABELS[d.getDay()],
-      time: BOARD_MEETING_TIME,
+      time: meetingTime,
     })
   }
 
@@ -83,6 +84,10 @@ export default function NewMeetingPage() {
       setValidationError(t('validationDates'))
       return
     }
+    if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(meetingTime)) {
+      setValidationError(t('validationTime'))
+      return
+    }
 
     setSubmitting(true)
     try {
@@ -92,6 +97,7 @@ export default function NewMeetingPage() {
         body: JSON.stringify({
           title: title.trim(),
           location: location.trim() || undefined,
+          meeting_time: meetingTime,
           vote_deadline: new Date(voteDeadline).toISOString(),
           candidate_dates: candidateDates,
         }),
@@ -187,6 +193,21 @@ export default function NewMeetingPage() {
           />
         </div>
 
+        {/* 회의 시각 */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="meetingTime">
+            {t('meetingTimeLabel')}
+          </label>
+          <input
+            id="meetingTime"
+            type="time"
+            value={meetingTime}
+            onChange={e => setMeetingTime(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+          />
+          <p className="mt-1 text-xs text-gray-400">{t('meetingTimeHint')}</p>
+        </div>
+
         {/* 투표 마감일 */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="voteDeadline">
@@ -212,6 +233,7 @@ export default function NewMeetingPage() {
               mode="select"
               selectedDates={candidateDates}
               onToggleDate={toggleDate}
+              meetingTime={meetingTime}
             />
           </div>
 
