@@ -1,0 +1,47 @@
+name: 임시 첨부 정리
+
+# 컷오버 후 감사(2026-08-27) — `/api/cleanup/temp-attachments`는 라우트·쿼리
+# 계층·정적 가드까지 다 갖춰져 있는데 **아무도 부르지 않았고, 불러도 401이었다**
+# (`CLEANUP_CRON_TOKEN`이 Vercel에 없었다). 고아 임시 첨부가 Blob과 DB에 영구
+# 누적되는 상태였다.
+#
+# Vercel 크론 대신 GitHub Actions를 쓰는 이유: 이 저장소는 이미 야간 백업을
+# 이 방식으로 돌리고 있고(`turso-backup.yml`), 실패가 Actions 이력에 남아
+# 추적할 수 있다. `vercel.json`에 크론을 넣으면 플랜 제한과 별개 대시보드로
+# 흩어진다.
+
+on:
+  schedule:
+    # 매일 19:00 UTC = KST 04:00 (야간 백업 03:00 다음)
+    - cron: "0 19 * * *"
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 만료된 임시 첨부 정리 호출
+        env:
+          TOKEN: ${{ secrets.CLEANUP_CRON_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${TOKEN:-}" ]; then
+            echo "::error::CLEANUP_CRON_TOKEN 시크릿이 없다. Vercel의 같은 이름 값과 일치해야 한다."
+            exit 1
+          fi
+
+          # 응답 본문과 상태 코드를 분리해서 받는다. 401이면 토큰 불일치이고,
+          # 그 경우 조용히 넘어가면 컷오버 전과 똑같은 상태(아무도 안 부름)가 된다.
+          HTTP=$(curl -sS -o /tmp/cleanup.json -w '%{http_code}' \
+            -X POST https://www.ggac.kr/api/cleanup/temp-attachments \
+            -H "Authorization: Bearer ${TOKEN}")
+
+          echo "HTTP ${HTTP}"
+          cat /tmp/cleanup.json
+          echo
+
+          if [ "${HTTP}" != "200" ]; then
+            echo "::error::정리 엔드포인트가 ${HTTP}를 반환했다 (401이면 Vercel과 GitHub의 토큰이 다르다)."
+            exit 1
+          fi
