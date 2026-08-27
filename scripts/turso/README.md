@@ -97,40 +97,48 @@ Supabase Storage의 공개 버킷 3개(`artists`, `posts`, `attachments`)를 Ver
 Blob 공개 저장소로 옮기고, DB에 저장돼 있던 URL을 재작성했다. 조합원이 새로
 올리는 파일은 이제 Blob으로 간다.
 
-### 되돌리는 방법
+### 되돌리는 방법 — ⛔ **이 탈출구는 단계 4 컷오버로 사라졌다** (2026-08-27 갱신)
 
-DB의 URL만 백업 시점 값으로 되돌린다. **Supabase 원본 객체는 지우지 않았으므로
-이 복원만으로 옛 URL이 다시 살아난다.**
+예전 이 절은 아래 명령을 복붙용으로 안내했다.
 
 ```bash
+# ⛔ 실행하지 마라 — 스크립트가 즉시 중단된다.
 set -a; source .env.local; set +a
-BACKUP_DIR="$HOME/ggac-url-backup/2026-08-14T01-45-11-393Z" \
-  node scripts/storage/restore-db-urls.mjs --dry-run   # 먼저 확인
-BACKUP_DIR="$HOME/ggac-url-backup/2026-08-14T01-45-11-393Z" \
-  node scripts/storage/restore-db-urls.mjs
+BACKUP_DIR="$HOME/ggac-url-backup/<타임스탬프>" \
+  node scripts/storage/restore-db-urls.mjs --dry-run
 ```
 
-`BACKUP_DIR`은 **JSON 4개가 직접 들어 있는 디렉터리**다(재작성 스크립트의
-`BACKUP_DIR`은 그 상위 베이스 디렉터리라는 점에서 다르다). 백업에는 재작성
-직전의 `artists` / `posts` / `post_attachments` / `event_applications` 값이
-들어 있다.
+**그 복원은 Supabase의 표를 되돌린다.** 단계 4(2026-08-26)에서 `artists` /
+`posts` / `post_attachments` / `event_applications`의 권위가 Turso로 옮겨갔고,
+앱은 Supabase를 어디에서도 읽지 않는다 — 되돌려도 **화면은 한 픽셀도 안
+바뀐다.** 그래서 `scripts/storage/restore-db-urls.mjs`와 짝인
+`rewrite-db-urls.mjs`는 직접 실행하면 즉시 중단되게 막아 뒀다(단위 테스트가
+순수 함수를 import하므로 모듈 로딩 자체는 그대로 통과한다).
 
-> **⚠ 단계 4 Task 5에서 이 탈출구가 사라졌다.** 예전에는 `STORAGE_PROVIDER`를
-> 지우면 신규 업로드가 다시 Supabase Storage로 갔다. 이제 코드에 제공자 분기
-> 자체가 없다(`src/lib/storage/provider.ts`는 Vercel Blob만 부른다) — 환경변수를
-> 지워도 아무 효과가 없고, Supabase 클라이언트가 저장소에 0개라 되살릴 수도 없다.
->
-> 위 URL 복원은 **이미 저장된 URL을 백업 시점 값으로 되돌리는 것**이라 여전히
-> 동작한다(옛 Supabase 객체를 지우지 않았으므로 그 URL은 계속 열린다). 다만
-> **복원 이후 새로 올라오는 파일은 계속 Blob에 쌓인다.** 신규 업로드까지
-> Supabase로 되돌려야 하는 상황이라면 배포 자체를 Task 5 이전 커밋으로
+지금 URL을 되돌려야 한다면:
+
+1. 대상은 **Turso의 같은 네 표**다(`src/db/schema/identity.ts`·`content.ts`).
+2. 백업 JSON(`$HOME/ggac-url-backup/<타임스탬프>/*.json`)은 Supabase 시절의 행
+   id를 담고 있다. Turso의 id와 같은지부터 확인해야 한다
+   (`scripts/migrate/lib/`의 매핑 참고).
+3. 그 일을 하는 도구는 **아직 없다.** 필요해지면 새로 써야 한다.
+
+Supabase 원본 객체는 아직 지우지 않았으므로 옛 URL 자체는 계속 열린다. 다만
+그 URL을 다시 쓰게 만들려면 Turso를 고쳐야 한다.
+
+> **⚠ 신규 업로드 되돌리기도 사라졌다.** 예전에는 `STORAGE_PROVIDER`를 지우면
+> 신규 업로드가 다시 Supabase Storage로 갔다. 이제 코드에 제공자 분기 자체가
+> 없다(`src/lib/storage/provider.ts`는 Vercel Blob만 부른다) — 환경변수를 지워도
+> 아무 효과가 없고, Supabase 클라이언트가 저장소에 0개라 되살릴 수도 없다.
+> 신규 업로드까지 되돌려야 하는 상황이라면 배포 자체를 단계 4 이전 커밋으로
 > 되돌리는 수밖에 없다.
 
 ### 주의 — 복원은 시점 되돌리기다
 
-복원은 백업 시점 값을 무조건 덮어쓴다. 재작성 이후 정상적으로 바뀐 값(예: 그
-사이 교체된 사진)도 함께 되돌아간다. 사고 대응용으로는 맞지만, 시간이 꽤
-지난 뒤에 쓰려면 먼저 현재 값을 따로 떠두는 편이 안전하다.
+(Turso용 복원 도구를 새로 쓸 때도 그대로 적용되는 성질이다.) 복원은 백업 시점
+값을 무조건 덮어쓴다. 재작성 이후 정상적으로 바뀐 값(예: 그 사이 교체된 사진)도
+함께 되돌아간다. 사고 대응용으로는 맞지만, 시간이 꽤 지난 뒤에 쓰려면 먼저 현재
+값을 따로 떠두는 편이 안전하다.
 
 ### Supabase 원본을 지워도 되는 시점
 

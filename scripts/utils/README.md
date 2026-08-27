@@ -11,10 +11,12 @@
 - 로고 및 아이콘 생성
 
 ### `data-migration/`
-데이터 이관 관련 스크립트들
-- JSON에서 데이터베이스로 이관
-- 아티스트 데이터 동기화
-- 프로젝트 데이터 업데이트
+Supabase 시절의 데이터 이관 스크립트들 — ⛔ **대부분 무해화돼 실행하면 즉시 중단된다.**
+- `generate-test-activity-data.js` / `run-sql-script.js`: Supabase에 쓰던 것. 중단됨.
+- `analyze-member-status.js`: 로컬 서버(http://localhost:3000) API만 호출한다. 그대로 쓸 수 있다.
+- `optimize-activity-tracking.js`: 파일만 읽어 보고서를 만든다. DB를 건드리지 않는다.
+
+Turso로 옮긴 뒤의 데이터 이관 도구는 `scripts/migrate/`에 있다.
 
 ### `deployment/`
 배포 관련 스크립트들
@@ -28,8 +30,8 @@
 # 이미지 변환
 node scripts/utils/image-processing/convert-images.js
 
-# 데이터 마이그레이션
-node scripts/utils/data-migration/sync-artists-json-to-db.js
+# 데이터 이관 (Turso) — scripts/migrate/ 를 쓴다
+node scripts/migrate/copy-private-objects.mjs   # 인자 없이 = dry-run 대조
 
 # 배포 알림
 node scripts/utils/deployment/deploy-notify.js

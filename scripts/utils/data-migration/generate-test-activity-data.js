@@ -1,3 +1,31 @@
+// ⛔ 무해화됨 — Supabase→Turso 컷오버 잔재. **실행해도 즉시 중단된다.**
+//
+// 이 스크립트는 Supabase `user_activities`에 리포트 테스트용 활동 행 수백 개를
+// **대량 INSERT**한다. cwd의 `.env.local`을 직접 파싱하므로 셸 export조차
+// 필요 없다 — 지금까지 이걸 막아 온 건 설계가 아니라 우연이었다.
+//
+// 컷오버(2026-08-26) 이후 앱은 Supabase를 어디에서도 읽지 않는다. 그런데
+// `.env.local`에 Supabase 값이 남아 있으면 이 스크립트는 **버려진 사본을
+// 건드리고 성공 메시지를 내고 끝난다** — 화면은 그대로인데 아무도 이유를
+// 모른다. 조용한 성공이 이 저장소에서 가장 비싼 실패이므로 아래 가드가
+// 무조건 막는다. 지금 이걸 막고 있는 건 `dotenv` 미설치나 따옴표 파싱
+// 실패 같은 **우연**이었다 — `npm i dotenv` 한 번이나
+// `set -a; source .env.local; set +a`(scripts/turso/README.md가 DB 작업 전에
+// 하라고 안내하는 바로 그 명령)면 그 우연은 사라진다.
+//
+// 활동 로그의 권위는 Turso `user_activities`다(`src/db/queries/activities.ts`).
+// 리포트 화면에 표시할 데이터가 필요하면 Turso를 대상으로 하는 시드를 써야
+// 한다 — 다만 **운영 DB(`ggac-prod`)에 가짜 활동을 넣지 마라.** 회원 23명이
+// 쓰는 운영 사이트의 통계가 오염된다. 로컬 픽스처는
+// `scripts/testing/seed-authz-fixtures.mjs`·`scripts/testing/seed-build-fixture.mjs`를 보라.
+//
+// 실행 흐름은 그대로 남겨 둔다(다시 필요해지면 포팅할 때 원본 로직이 필요하다).
+console.error(
+  '[중단] 이 스크립트는 Supabase `user_activities`에 가짜 활동을 대량 INSERT합니다. ' +
+    '활동 로그의 권위는 Turso입니다 — 그리고 운영 DB에 가짜 데이터를 넣어서는 안 됩니다. ' +
+    '로컬 픽스처는 scripts/testing/seed-*.mjs 를 보십시오.'
+)
+process.exit(1)
 /**
  * 리포트 테스트용 활동 데이터 대량 생성 스크립트
  * 실제 사용자들의 과거 활동을 시뮬레이션하여 리포트에 표시할 데이터를 생성합니다.

@@ -1,3 +1,34 @@
+// ⛔ 무해화됨 — Supabase→Turso 컷오버 잔재. **실행해도 즉시 중단된다.**
+//
+// 이 스크립트는 Supabase Storage `profiles` 버킷의 이미지를 WebP/JPEG로
+// 변환해 다시 올리고, Supabase `member_profiles`의
+// `profile_photo_url`·`profile_photo_metadata`를 UPDATE한다.
+// package.json의 `storage:ensure-webp`로 배선돼 있었다(같은 커밋에서 제거).
+//
+// 컷오버(2026-08-26) 이후 앱은 Supabase를 어디에서도 읽지 않는다. 그런데
+// `.env.local`에 Supabase 값이 남아 있으면 이 스크립트는 **버려진 사본을
+// 건드리고 성공 메시지를 내고 끝난다** — 화면은 그대로인데 아무도 이유를
+// 모른다. 조용한 성공이 이 저장소에서 가장 비싼 실패이므로 아래 가드가
+// 무조건 막는다. 지금 이걸 막고 있는 건 `dotenv` 미설치나 따옴표 파싱
+// 실패 같은 **우연**이었다 — `npm i dotenv` 한 번이나
+// `set -a; source .env.local; set +a`(scripts/turso/README.md가 DB 작업 전에
+// 하라고 안내하는 바로 그 명령)면 그 우연은 사라진다.
+//
+// **Turso `member_profiles`에는 그 두 컬럼이 아예 없다.** 회원 사진은
+// `artists.profile_photo_url`·`artists.profile_photo_metadata`에 있다
+// (`src/db/schema/identity.ts`). 객체 저장소도 Supabase Storage가 아니라
+// Vercel Blob이다(`src/lib/storage/`). 즉 이 스크립트는 존재하지 않는
+// 컬럼을, 아무도 읽지 않는 버킷에 대해 갱신하려 든다.
+// "회원 사진이 이상하다"를 고치려면 여기가 아니라 업로드 경로
+// (`src/lib/storage/`)와 `artists` 표를 봐야 한다.
+//
+// 실행 흐름은 그대로 남겨 둔다(다시 필요해지면 포팅할 때 원본 로직이 필요하다).
+console.error(
+  '[중단] 이 스크립트는 Supabase Storage와 Supabase `member_profiles`를 갱신합니다. ' +
+    'Turso `member_profiles`에는 profile_photo_url/profile_photo_metadata 컬럼이 없고 ' +
+    '(회원 사진은 artists 표), 객체는 Vercel Blob에 있습니다 — 실행해도 아무것도 안 바뀝니다.'
+)
+process.exit(1)
 const fs = require('fs')
 const path = require('path')
 const os = require('os')

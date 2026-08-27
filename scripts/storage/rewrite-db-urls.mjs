@@ -1,3 +1,34 @@
+// ⛔ 무해화됨 — Supabase→Turso 컷오버 잔재. **직접 실행하면 즉시 중단된다.**
+//
+// 이 스크립트는 Supabase `artists`·`posts`·`post_attachments`·
+// `event_applications`의 URL 컬럼을 Supabase Storage → Vercel Blob으로
+// 재작성한다(단계 1a, 2026-08-14에 이미 끝난 작업이다).
+//
+// 컷오버(2026-08-26) 이후 앱은 Supabase를 어디에서도 읽지 않는다. 그런데
+// `.env.local`에 Supabase 값이 남아 있으면 이 스크립트는 **버려진 사본을
+// 건드리고 성공 메시지를 내고 끝난다** — 화면은 그대로인데 아무도 이유를
+// 모른다. 조용한 성공이 이 저장소에서 가장 비싼 실패이므로 아래 가드가
+// 무조건 막는다. 지금 이걸 막고 있는 건 `dotenv` 미설치나 따옴표 파싱
+// 실패 같은 **우연**이었다 — `npm i dotenv` 한 번이나
+// `set -a; source .env.local; set +a`(scripts/turso/README.md가 DB 작업 전에
+// 하라고 안내하는 바로 그 명령)면 그 우연은 사라진다.
+//
+// 그 표들의 권위는 이제 Turso다. Turso에는 이미 재작성된 Blob URL이 들어
+// 있으므로 다시 돌릴 일이 없고, 돌려도 버려진 Supabase 사본만 바뀐다.
+// URL이 실제로 잘못돼 있다면 Turso를 대상으로 고쳐야 한다
+// (`src/db/schema/identity.ts`·`content.ts`, `src/lib/storage/paths.ts`).
+//
+// 가드를 파일 최상단의 top-level `process.exit(1)`이 아니라 진입점 조건문으로
+// 두는 이유: 이 모듈은 순수 함수를 export하고 `scripts/testing/`의 단위 테스트가
+// 그걸 import한다. top-level에서 나가면 테스트 스위트가 통째로 죽는다.
+// import는 그대로 통과하고 **직접 실행만** 막는다.
+if (process.argv[1]?.endsWith('rewrite-db-urls.mjs')) {
+  console.error(
+    '[중단] 이 스크립트는 Supabase 표의 URL 컬럼을 재작성합니다. 그 표들의 권위는 ' +
+      'Turso이고 재작성은 2026-08-14에 이미 끝났습니다 — 실행해도 운영에는 영향이 없습니다.'
+  )
+  process.exit(1)
+}
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { createClient } from '@supabase/supabase-js'
 

@@ -1,3 +1,31 @@
+// ⛔ 무해화됨 — Supabase→Turso 컷오버 잔재. **실행해도 즉시 중단된다.**
+//
+// 이 스크립트는 활동 추적 시스템을 "검증"한다면서 Supabase
+// `user_activities`에 실제로 INSERT까지 하고, 끝에 `=== 검증 완료 ===`를 찍는다.
+// 검증 스크립트가 버려진 사본에 초록불을 주는 것이 이 중에서 제일 나쁘다.
+//
+// 컷오버(2026-08-26) 이후 앱은 Supabase를 어디에서도 읽지 않는다. 그런데
+// `.env.local`에 Supabase 값이 남아 있으면 이 스크립트는 **버려진 사본을
+// 건드리고 성공 메시지를 내고 끝난다** — 화면은 그대로인데 아무도 이유를
+// 모른다. 조용한 성공이 이 저장소에서 가장 비싼 실패이므로 아래 가드가
+// 무조건 막는다. 지금 이걸 막고 있는 건 `dotenv` 미설치나 따옴표 파싱
+// 실패 같은 **우연**이었다 — `npm i dotenv` 한 번이나
+// `set -a; source .env.local; set +a`(scripts/turso/README.md가 DB 작업 전에
+// 하라고 안내하는 바로 그 명령)면 그 우연은 사라진다.
+//
+// 활동 로그의 권위는 Turso `user_activities`·`user_sessions`다
+// (`src/db/schema/ops.ts`, 쿼리 계층 `src/db/queries/activities.ts`).
+// Turso에는 RLS가 없다 — 활동 로깅 권한은 앱 계층
+// (`src/utils/activityLogger.ts`)이 판정하므로 "RPC/정책이 동작하는가"는
+// 더 이상 검증 대상이 아니다.
+//
+// 실행 흐름은 그대로 남겨 둔다(다시 필요해지면 포팅할 때 원본 로직이 필요하다).
+console.error(
+  '[중단] 이 스크립트는 Supabase `user_activities`를 읽고 쓰면서 "검증 완료"를 찍습니다. ' +
+    '활동 로그의 권위는 Turso입니다 — 버려진 사본에 초록불을 주는 것이 제일 나쁩니다. ' +
+    'src/db/queries/activities.ts 기준으로 포팅한 뒤에 쓰십시오.'
+)
+process.exit(1)
 /**
  * 활동 추적 시스템 검증 스크립트
  * - 데이터베이스 테이블 존재 여부 확인

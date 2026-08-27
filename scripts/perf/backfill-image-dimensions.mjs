@@ -1,3 +1,30 @@
+// ⛔ 무해화됨 — Supabase→Turso 컷오버 잔재. **실행해도 즉시 중단된다.**
+//
+// 이 스크립트는 `--apply` 시 Supabase `posts.content`·`board_minutes.content`를
+// UPDATE한다(본문 img에 width/height를 주입해 CLS를 줄이는 백필).
+//
+// 컷오버(2026-08-26) 이후 앱은 Supabase를 어디에서도 읽지 않는다. 그런데
+// `.env.local`에 Supabase 값이 남아 있으면 이 스크립트는 **버려진 사본을
+// 건드리고 성공 메시지를 내고 끝난다** — 화면은 그대로인데 아무도 이유를
+// 모른다. 조용한 성공이 이 저장소에서 가장 비싼 실패이므로 아래 가드가
+// 무조건 막는다. 지금 이걸 막고 있는 건 `dotenv` 미설치나 따옴표 파싱
+// 실패 같은 **우연**이었다 — `npm i dotenv` 한 번이나
+// `set -a; source .env.local; set +a`(scripts/turso/README.md가 DB 작업 전에
+// 하라고 안내하는 바로 그 명령)면 그 우연은 사라진다.
+//
+// 동기(CLS 개선)는 여전히 정당하지만 대상 DB가 틀렸다. 본문의 권위는 Turso
+// `posts`·`board_minutes`다(`src/db/schema/content.ts`·`src/db/schema/board.ts`).
+// 게다가 주입 판정에 쓰는 `isSupabaseImageUrl`(`src/utils/imageDimensions.ts`)은
+// Supabase Storage origin을 보는데, 이미지는 이미 Vercel Blob으로 옮겨졌다 —
+// Turso로 포팅할 때 그 호스트 판정도 함께 고쳐야 한다.
+//
+// 실행 흐름은 그대로 남겨 둔다(다시 필요해지면 포팅할 때 원본 로직이 필요하다).
+console.error(
+  '[중단] 이 스크립트는 Supabase `posts`·`board_minutes`의 content를 덮어씁니다. ' +
+    '본문의 권위는 Turso이고 이미지 호스트도 Vercel Blob으로 바뀌었습니다 — ' +
+    '실행해도 CLS는 그대로입니다. Turso + Blob 기준으로 포팅한 뒤에 쓰십시오.'
+)
+process.exit(1)
 // scripts/perf/backfill-image-dimensions.mjs
 //
 // 본문 HTML 이미지에 width/height를 백필해 CLS(레이아웃 이동)를 줄인다.

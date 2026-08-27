@@ -1,5 +1,29 @@
 # Database Scripts
 
+> ## ⛔ 이 디렉터리는 통째로 Supabase 시절 잔재다 (2026-08-27 갱신)
+>
+> 2026-08-26 Turso 컷오버로 **운영 데이터의 권위는 Turso(SQLite)** 다. 앱은
+> Supabase를 어디에서도 읽지 않는다.
+>
+> - 여기의 `.js`는 **전부 무해화돼 실행하면 즉시 중단된다.** 각 파일 상단에
+>   "무엇을 하려던 스크립트였고, 지금은 어디를 봐야 하는지"가 적혀 있다.
+> - 여기의 `.sql`은 **Postgres 전용**이다(RLS·`auth.uid()`·`DO $$`). Supabase
+>   SQL Editor나 psql에 붙여넣지 마라 — 버려진 사본만 바뀌고 화면은 그대로다.
+> - **Turso에는 RLS가 없다.** 접근 통제는 앱 계층(`src/middleware/`,
+>   `src/db/queries/`, API 라우트의 인가 게이트)이 하고, 권한 경계는
+>   `npm run test:e2e:authz`로 증명한다.
+>
+> 지금 필요한 것 → 볼 곳
+>
+> | 하려는 일 | 지금 쓰는 것 |
+> | --- | --- |
+> | 데이터 조회 | `turso db shell ggac-prod`, `src/db/queries/` |
+> | 스키마 확인 | `src/db/schema/`, `npm run test:schema-contract` |
+> | 스키마 변경 | `npm run db:generate` → `src/db/migrations/` (절차: `scripts/turso/README.md`) |
+> | 권한 검증 | `npm run test:e2e:authz` |
+>
+> 아래 설명은 Supabase 시절의 원문이며 기록용으로만 남긴다.
+
 데이터베이스 관련 모든 스크립트를 관리하는 디렉터리입니다.
 
 ## 📁 하위 디렉터리
