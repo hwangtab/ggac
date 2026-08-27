@@ -963,13 +963,42 @@ EXPLAIN QUERY PLAN SELECT count(*) FROM notifications WHERE user_id = '<아무 �
 
 되찾는 절차:
 ```bash
-node scripts/turso/download-latest-backup.mjs   # 비공개 Blob에서 최신본
-node scripts/turso/restore-from-dump.mjs        # 로컬 파일 DB로 복원
+# 자격증명을 셸에 로드한다 — 두 스크립트 다 PRIVATE_BLOB_READ_WRITE_TOKEN이 필요하다
+set -a; source .env.local; set +a
+
+D=$(mktemp -d) && chmod 700 "$D"
+
+# ① 최신본 내려받기 — **경로 인자가 필수다**(없으면 usage만 찍고 exit 1)
+node scripts/turso/download-latest-backup.mjs "$D/latest.sql.gz"
+
+# ② **압축을 푼다.** 백업은 .sql.gz이고 복원 스크립트는 SQL 텍스트를 읽는다.
+#    gz를 그대로 먹이면 `SqliteError: unrecognized token` 으로 죽는다.
+gunzip -c "$D/latest.sql.gz" > "$D/latest.sql"
+
+# ③ 복원 — **덤프 경로와 대상 URL 두 인자가 필수다**
+node scripts/turso/restore-from-dump.mjs "$D/latest.sql" "file:$D/restored.db"
+
+# 확인 후 반드시 지운다 — 복원된 .db에도 조합원 PII가 그대로 들어 있다
+rm -rf "$D"
 ```
 
-**실측(2026-08-27):** 최신본을 받아 복원하니 **29표 / `idx_*` 20개 / 18,250행**으로
-운영과 완전히 일치했고, 그 DB로 `next start`가 정상 기동했다.
-**즉 Turso가 통째로 날아가도 최대 24시간 전으로 완전 복구된다.**
+> **🔴 정정(2026-08-27 적대 감사).** 이 절은 원래 두 명령을 인자 없이 적어 뒀고
+> `gunzip` 단계가 통째로 빠져 있었다. **복붙하면 둘 다 exit 1로 죽는다.** 사고
+> 한복판에서 이 문서를 펴 든 사람이 인자·환경변수·압축해제를 역추적해야 했다 —
+> 이 절이 겨냥한 바로 그 독자가 잃는다.
+
+**실측(2026-08-27):** 위 절차대로 최신본을 받아 복원하니 **29표 / `idx_*` 20개 /
+18,250행**이 나왔고, 앱 쿼리 계층으로 읽어 값까지 운영과 일치함을 확인했다.
+
+> **⚠ "24시간 전으로 완전 복구"는 최신본 한 개에만 해당한다.** 적대 감사가 비공개
+> Blob의 백업 13개를 직접 열어 보니 **12개가 껍데기**였다(0~182행). 컷오버 전
+> Turso가 실제로 그 상태였기 때문이지 손상은 아니지만, **복구 가능 시점은 90개가
+> 아니라 사실상 1개**다. 하루만 뒤로 가면 `system_settings` 0행짜리가 나온다.
+> (2026-08-27 이후 백업에는 행 수 하한 검증이 붙어 이 상황이 재발하지 않는다.)
+
+**⚠ 복원 후 마이그레이션을 재적용해야 할 수 있다.** 백업 시점 이후에 적용된
+마이그레이션은 복원본에 없다. 복원 직후 `idx_*` 개수를 세어 **23개**가 아니면
+`src/db/migrations/`의 `0004`·`0005`를 다시 적용한다(적용 절차는 아래).
 
 **RPO는 24시간이다.** 그 사이 쓰기는 유실된다.
 
@@ -1068,42 +1097,74 @@ Turso에 없고 Supabase에만 있는 데이터 표(2026-08-27 실측):
 `pg_dump`가 전 표를 뜨므로 별도 작업이 필요 없다 — 다만 **검증 ③에서 이 표가
 실제로 담겼는지 반드시 확인**한다. 되찾을 일이 생기면 그 덤프가 유일한 출처다.
 
-### Step 2 — 최종 `pg_dump`
+### Step 2 — 최종 덤프 (스키마 + 데이터 + 역할, **셋 다 떠야 한다**)
+
+> **🔴 정정(2026-08-27 적대 감사).** 이 절은 원래 `supabase db dump`가 "스키마 +
+> 데이터 + 역할까지 전부"를 뜬다고 적혀 있었다. **틀렸다.** `--dry-run`으로
+> 확인한 실제 플래그:
+>
+> | 명령 | pg_dump 플래그 |
+> |---|---|
+> | `supabase db dump` | `--schema-only` ← **데이터가 없다** |
+> | `supabase db dump --data-only` | `--data-only --column-inserts --schema '*'` |
+> | `supabase db dump --role-only` | 역할만 |
+>
+> 즉 **첫 명령만 돌리고 프로젝트를 지우면 데이터가 영구히 사라진다.** 역할은
+> 어느 쪽에도 안 담기므로 별도 명령이 필요하다.
 
 ```bash
 BK=~/ggac-backups && mkdir -p "$BK" && chmod 700 "$BK"
 STAMP=$(date +%Y%m%d)
 
-# 스키마 + 데이터 + 역할까지 전부. --data-only를 쓰지 마라 —
-# 이건 재이관용이 아니라 영구 보관용이라 DDL·RLS 정책·함수가 다 필요하다.
-supabase db dump --file "$BK/supabase-final-$STAMP.sql"
-supabase db dump --data-only --file "$BK/supabase-final-data-$STAMP.sql"
+supabase db dump              --file "$BK/supabase-final-schema-$STAMP.sql"
+supabase db dump --data-only  --file "$BK/supabase-final-data-$STAMP.sql"
+supabase db dump --role-only  --file "$BK/supabase-final-roles-$STAMP.sql"
 
 chmod 600 "$BK"/supabase-final-*.sql
 ```
 
-**검증**(하나라도 어긋나면 삭제하지 마라):
+**검증** — 기대값을 함께 적는다. 기대값 없는 검사는 실패할 수 없는 검사다.
 
 ```bash
-# ① 크기가 0이 아니고 잘리지 않았는가
-ls -la "$BK"/supabase-final-*.sql
-tail -1 "$BK/supabase-final-data-$STAMP.sql"     # 중간에서 끊기지 않았는지
+cd "$BK"
+S=supabase-final-schema-$STAMP.sql
+D=supabase-final-data-$STAMP.sql
+R=supabase-final-roles-$STAMP.sql
 
-# ② 표가 다 들어갔는가 (데이터 덤프에 INSERT가 있는 표)
-grep -o 'INSERT INTO "public"\."[a-z_]*"' "$BK/supabase-final-data-$STAMP.sql" \
-  | sort -u | wc -l
+# ① 셋 다 비어 있지 않고 잘리지 않았는가
+ls -la supabase-final-*.sql          # 스키마 ~200KB · 데이터 ~11MB · 역할 수 KB
+tail -1 "$S"; tail -1 "$D"           # 중간에서 끊기지 않았는지 눈으로
 
-# ③ 결정한 표가 실제로 담겼는가
-grep -c 'member_profiles_normalize_log' "$BK/supabase-final-data-$STAMP.sql"
+# ② 데이터 덤프의 표 개수 (기대: public 23표 이상)
+grep -oE 'INSERT INTO "public"\."[a-z_]+"' "$D" | sort -u | wc -l
 
-# ④ 스키마 덤프에 함수·정책이 담겼는가 (재현 가능성)
-grep -c 'CREATE POLICY' "$BK/supabase-final-$STAMP.sql"
-grep -c 'CREATE FUNCTION' "$BK/supabase-final-$STAMP.sql"
+# ③ auth 스키마가 담겼는가 — **조합원 23명의 인증 원본이다**
+#    `--schema '*'`라 들어가야 정상. 0이면 로그인 정보를 잃는다.
+grep -c 'INSERT INTO "auth"\."users"' "$D"
+
+# ④ 보관 결정한 표가 실제로 담겼는가
+grep -c 'member_profiles_normalize_log' "$D"     # 기대: 11행 + DDL
+
+# ⑤ 스키마 덤프에 함수·정책이 담겼는가
+#    ⚠ `CREATE FUNCTION`으로 세지 마라 — CLI가 sed로 `CREATE OR REPLACE
+#    FUNCTION`으로 바꾼다(실측). 그렇게 세면 정상 덤프에서도 항상 0이 나오고,
+#    "하나라도 어긋나면 삭제 금지" 규칙과 겹쳐 영원히 막히거나 검증을 무시하는
+#    습관이 든다.
+grep -c 'CREATE OR REPLACE FUNCTION' "$S"        # 기대: 90 이상
+grep -c 'CREATE POLICY' "$S"                     # 기대: 50 이상
+grep -c 'CREATE OR REPLACE TRIGGER' "$S"         # 트리거도 같은 변환을 탄다
+
+# ⑥ 역할 덤프
+grep -c 'CREATE ROLE' "$R"                       # 기대: 1 이상
 ```
 
+> **⚠ `supabase db dump`는 임시 로그인 역할을 만들고 그 자격증명을 콘솔에 평문
+> 출력한다**(적대 감사가 관측). 화면 공유·로그 저장 중이면 주의하고, 출력을
+> 파일로 리다이렉트해 두지 마라.
+
 > **⚠ 개인정보다.** 조합원 23명의 실명·전화·생년월일·계좌번호와 bcrypt 해시가
-> 들어 있다. **저장소 밖에 두고**(`~/ggac-backups`, 700/600) **절대 커밋하지 마라.**
-> 저장소는 공개다. 루트에 `.sql`을 두면 `.gitignore`의 `/*.sql`이 막지만
+> 들어 있다. **저장소 밖**(`~/ggac-backups`, 700/600)에 두고 **절대 커밋하지
+> 마라.** 저장소는 공개다. 루트의 `.sql`은 `.gitignore`의 `/*.sql`이 막지만
 > 하위 디렉터리는 안 막는다.
 
 ### Step 3 — Storage 확인
