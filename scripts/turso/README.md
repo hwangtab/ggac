@@ -7,12 +7,21 @@
   그 그룹에 합류해 리전을 자동 상속했다. `turso db create`에 `--location`을
   주지 않았고 앞으로도 주면 안 된다 — 새 그룹 생성을 시도해 그룹 한도
   초과로 실패한다.
-- 스키마 적용: `npx drizzle-kit push` (drizzle.config.ts가
-  `process.env.TURSO_DATABASE_URL`/`TURSO_AUTH_TOKEN`을 읽는다). drizzle-kit은
-  `.env.local`을 자동으로 읽지 않으므로, 실행 전에 셸에 직접 로드해야 한다:
-  `set -a; source .env.local; set +a`. 로드하지 않으면 조용히 로컬
-  `file:local.db`에 push된다 — 실행 후 출력에 원격 `libsql://` URL이
-  찍히는지 반드시 확인한다.
+- 스키마 적용: **`drizzle-kit push`를 운영에 쓰지 마라.**
+
+  > **🔴 정정(2026-08-27 적대 감사).** 이 줄은 원래 `.env.local`을 셸에 로드한 뒤
+  > push하라고 안내했다. **그대로 하면 성능 인덱스 23개가 전부 사라진다** —
+  > 실측으로 `idx_*` 23 → 0, 질의 계획이 `SEARCH` → `SCAN`으로 되돌아갔다.
+  > 원인은 `0004`·`0005`가 만든 인덱스가 Drizzle 스키마에 `index()`로 선언돼
+  > 있지 않아 push가 "잉여"로 보고 지우기 때문이다. 에러는 나지 않는다 —
+  > 전 조합원이 로그인·게시판 속도를 잃고 아무도 알아채지 못한다.
+  >
+  > 이제 `drizzle.config.ts`가 **원격 URL이면 던진다.** 로컬(`file:`·루프백)만
+  > 통과한다. 우회 변수가 있지만 그걸 쓰기 전에 **인덱스를 스키마에 선언해
+  > push가 지우지 않게 만드는 것이 먼저다.**
+
+  운영 스키마 변경은 `src/db/migrations/`의 마이그레이션으로 한다 — `0002`~`0005`가
+  그 방식이고 적용 절차가 이 문서 아래에 있다. push는 **로컬 개발·CI 전용**이다.
 
 ## 자주 쓰는 명령
 ```bash
