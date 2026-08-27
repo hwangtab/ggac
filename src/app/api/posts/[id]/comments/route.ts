@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createComment, listCommentsKeyset } from '@/db/queries/comments'
+import { getPostById } from '@/db/queries/posts'
 import { getLikedCommentIds } from '@/db/queries/likes'
 import { revalidateTag } from 'next/cache'
 import { validateUUID } from '@/utils/validation'
@@ -116,6 +117,23 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     const content = (body?.content || '').toString().trim()
     if (!content) return ApiError.badRequest('내용이 비어있습니다.').toNextResponse()
+
+    // 글이 실재하고 삭제되지 않았는지 먼저 본다.
+    //
+    // 예전에는 이 검사가 없어서 **소프트 삭제된 글에 댓글이 저장됐다**(적대
+    // 감사 2026-08-27 실측: 200 성공, DB에 실제 저장). 그 댓글은 글이 404라
+    // 아무도 볼 수 없고, 알림도 `commentNotify`에서 경고만 남기고 사라진다 —
+    // 쓴 사람만 성공했다고 믿는다. 형제 경로인 좋아요는 이미 막고 있었다
+    // (`likes/route.ts`의 `post.is_deleted` 분기).
+    //
+    // 없는 글에 대해 FK 위반이 그대로 500으로 새어 나가던 것도 404로 바꾼다.
+    const post = await getPostById(validPostId, { includeDeleted: true })
+    if (!post) {
+      return ApiError.notFound('게시글을 찾을 수 없습니다.').toNextResponse()
+    }
+    if (post.is_deleted) {
+      return ApiError.badRequest('삭제된 게시글에는 댓글을 쓸 수 없습니다.').toNextResponse()
+    }
 
     const created = await createComment({ post_id: validPostId, author_id: userId, content })
     const data = {

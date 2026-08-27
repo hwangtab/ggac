@@ -2423,8 +2423,8 @@ const OWNERSHIP_GATE_CONTRACTS = [
   {
     file: 'src/app/api/posts/[id]/comments/[commentId]/route.ts',
     source: commentDeleteSource,
-    what: '댓글 작성자 본인만 삭제',
-    pattern: /if \(comment\.author_id !== userId\) \{\s*return ApiError\.forbidden\(/g,
+    what: '댓글은 작성자 본인 또는 관리자만 삭제',
+    pattern: /if \(comment\.author_id !== userId && !isAdmin\) \{\s*return ApiError\.forbidden\(/g,
     expected: 1,
   },
   {

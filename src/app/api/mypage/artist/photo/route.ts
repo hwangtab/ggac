@@ -339,8 +339,42 @@ export async function PUT(request: NextRequest) {
     try {
       currentArtist = await getArtistPhotoInfoByLegacyId(profile.artist_id)
     } catch (error) {
+      // 조회 자체가 실패한 것(DB 장애)과 "행이 없다"는 다르다. 아래에서
+      // 구분해 처리하려고 여기서는 sentinel을 던진다.
       console.error('Artist lookup error:', error)
-      currentArtist = null
+      return NextResponse.json(
+        {
+          success: false,
+          error: '아티스트 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.',
+        },
+        { status: 503 }
+      )
+    }
+
+    // **업로드 전에** 아티스트 행이 실재하는지 판정한다.
+    //
+    // 예전에는 조회 결과가 null이어도 그대로 업로드를 진행했고, 마지막
+    // UPDATE가 0행이라 500 `데이터베이스 업데이트에 실패했습니다.`로 끝났다.
+    // 적대 감사(2026-08-27) 실측 — 운영에 `member_profiles.artist_id`가
+    // 어떤 `artists` 행과도 매칭되지 않는 조합원이 **3명** 있다
+    // (`artist-002`·`artist-003`·`artist-017`, 탈퇴 아티스트를 가리키는 끊어진
+    // 참조다. `artist_id`에 FK가 없어 막히지 않았다).
+    //
+    // 그 3명은 사진을 등록·교체할 수 없는데 화면에는 원인을 알 수 없는 서버
+    // 오류만 떴다. 게다가 유료 공개 스토어에 먼저 올린 뒤 실패하므로 시도마다
+    // 롤백 삭제가 돌아야 했다 — 롤백이 실패하면 고아 객체가 남는다.
+    //
+    // 이제 업로드 전에 멈추고, 조합원이 무엇을 해야 할지 알 수 있는 메시지를 준다.
+    if (!currentArtist) {
+      console.error('Artist row not found for legacy_id', { artistId: profile.artist_id })
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            '연결된 아티스트 정보를 찾을 수 없습니다. 사무국에 문의해 주세요(아티스트 연결이 끊어져 있습니다).',
+        },
+        { status: 409 }
+      )
     }
 
     // Storage 경로 생성
