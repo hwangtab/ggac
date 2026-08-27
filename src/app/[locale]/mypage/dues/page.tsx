@@ -13,15 +13,24 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { loadTossPayments } from '@tosspayments/tosspayments-sdk'
-import { FiCheckCircle, FiCreditCard, FiAlertCircle } from 'react-icons/fi'
+import { FiCheckCircle, FiCreditCard, FiAlertCircle, FiRepeat } from 'react-icons/fi'
 
 import MypageLayout from '../components/MypageLayout'
 import PermissionCheck from '../components/PermissionCheck'
 
 interface DuesStatus {
   paymentEnabled: boolean
+  billingEnabled: boolean
   billingMonth: string
   monthlyFee: number | null
+  billingClientKey: string
+  customerKey: string
+  autoPay: {
+    registered: boolean
+    cardNumberMasked?: string | null
+    cardType?: string | null
+    registeredAt?: string | null
+  }
   dues: { status: string; amount: number | null; paid_at: string | null }
   payments: Array<{
     order_id: string
@@ -130,6 +139,48 @@ export default function DuesPage() {
     }
   }, [])
 
+  /** 카드 등록 창을 연다. 이 단계에서는 돈이 빠져나가지 않는다. */
+  const registerCard = useCallback(async () => {
+    if (!status) return
+    setError(null)
+    try {
+      const tossPayments = await loadTossPayments(status.billingClientKey)
+      const payment = tossPayments.payment({ customerKey: status.customerKey })
+      await payment.requestBillingAuth({
+        method: 'CARD',
+        successUrl: `${window.location.origin}/mypage/dues/billing/success`,
+        failUrl: `${window.location.origin}/mypage/dues/fail`,
+        // PC 기본값은 iframe인데, 그 안에서 카드사 인증 스크립트가 토스 쪽
+        // 보안 정책에 막혀 조용히 멈춘다(실측: "Evaluating a string as
+        // JavaScript violates..." — 우리 정책이 아니라 결제 페이지의 정책이다).
+        // 전체 페이지로 이동하면 그 제약을 받지 않는다.
+        windowTarget: 'self',
+      })
+    } catch (caught) {
+      console.error('카드 등록 실패:', caught)
+      setError('카드 등록 창을 여는 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.')
+    }
+  }, [status])
+
+  const cancelAutoPay = useCallback(async () => {
+    if (!window.confirm('자동결제를 해지하시겠습니까? 다음 달부터 청구되지 않습니다.')) return
+    setError(null)
+    try {
+      const response = await fetch('/api/payments/billing', {
+        method: 'DELETE',
+        credentials: 'include',
+      })
+      if (!response.ok) {
+        const result = (await response.json().catch(() => null)) as { error?: string } | null
+        setError(result?.error ?? '자동결제를 해지하지 못했습니다.')
+        return
+      }
+      await fetchStatus()
+    } catch {
+      setError('자동결제를 해지하지 못했습니다.')
+    }
+  }, [fetchStatus])
+
   const requestPayment = useCallback(async () => {
     const widgets = widgetsRef.current as never as {
       requestPayment: (input: Record<string, unknown>) => Promise<void>
@@ -214,6 +265,62 @@ export default function DuesPage() {
                     )}
                   </div>
                 )}
+              </section>
+            )}
+
+            {/* 자동결제 */}
+            {status?.billingEnabled && (
+              <section className="rounded-lg border border-gray-200 bg-white p-6">
+                <div className="flex items-start gap-3">
+                  <FiRepeat className="mt-1 h-5 w-5 flex-none text-primary-600" aria-hidden />
+                  <div className="min-w-0 flex-1">
+                    <h2 className="text-lg font-semibold text-gray-900">자동결제</h2>
+
+                    {status.autoPay.registered ? (
+                      <>
+                        <p className="mt-1 text-gray-600">
+                          매달 조합비가 자동으로 결제됩니다.
+                          {status.autoPay.cardNumberMasked && (
+                            <span className="ml-1 text-gray-900">
+                              {status.autoPay.cardNumberMasked}
+                            </span>
+                          )}
+                        </p>
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void registerCard()}
+                            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                          >
+                            카드 변경
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void cancelAutoPay()}
+                            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                          >
+                            자동결제 해지
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <p className="mt-1 text-gray-600">
+                          카드를 한 번 등록하면 매달 조합비가 자동으로 결제됩니다. 해지는 언제든지
+                          하실 수 있습니다.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => void registerCard()}
+                          className="mt-4 inline-flex items-center gap-2 rounded-lg border border-primary-600 px-4 py-2 text-sm font-medium text-primary-700 transition hover:bg-primary-50"
+                        >
+                          <FiCreditCard className="h-4 w-4" aria-hidden />
+                          자동결제 등록
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
               </section>
             )}
 

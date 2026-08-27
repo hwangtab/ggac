@@ -57,6 +57,13 @@
       "when": 1787809505001,
       "tag": "0007_add_board_meeting_time",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1787813439215,
+      "tag": "0008_daily_snowbird",
+      "breakpoints": true
     }
   ]
 }

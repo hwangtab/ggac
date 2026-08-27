@@ -11,7 +11,14 @@ import { NextResponse } from 'next/server'
 import { requireActiveMember } from '@/lib/server/memberAuth'
 import { getProfileById } from '@/db/queries/profiles'
 import { getDues, listPaymentsByUser } from '@/db/queries/payments'
-import { currentBillingMonth, isPaymentEnabled } from '@/lib/payments/toss/config'
+import { getActiveBillingKey } from '@/db/queries/billingKeys'
+import { buildCustomerKey } from '@/lib/payments/toss/protocol'
+import {
+  currentBillingMonth,
+  isPaymentEnabled,
+  isBillingEnabled,
+  getPublicBillingClientKey,
+} from '@/lib/payments/toss/config'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
 
@@ -32,11 +39,25 @@ export async function GET() {
     const billingMonth = currentBillingMonth()
     const dues = await getDues(user.id, billingMonth)
     const payments = await listPaymentsByUser(user.id, 24)
+    const card = await getActiveBillingKey(user.id)
 
     return ApiSuccess.ok({
       paymentEnabled: isPaymentEnabled(),
+      billingEnabled: isPaymentEnabled() && isBillingEnabled(),
       billingMonth,
       monthlyFee: profile.monthly_fee ?? null,
+      // 카드 등록 화면을 여는 데 필요한 값. 공개 키와 해시된 식별값이라
+      // 노출돼도 되지만, **빌링키는 절대 싣지 않는다**.
+      billingClientKey: getPublicBillingClientKey(),
+      customerKey: buildCustomerKey(user.id),
+      autoPay: card
+        ? {
+            registered: true,
+            cardNumberMasked: card.card_number_masked,
+            cardType: card.card_type,
+            registeredAt: card.created_at,
+          }
+        : { registered: false },
       dues: dues
         ? { status: dues.status, amount: dues.amount, paid_at: dues.paid_at }
         : { status: 'unpaid', amount: profile.monthly_fee ?? null, paid_at: null },
