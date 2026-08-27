@@ -38,8 +38,21 @@ jobs:
             -H "Authorization: Bearer ${TOKEN}")
 
           echo "HTTP ${HTTP}"
-          cat /tmp/cleanup.json
-          echo
+
+          # **본문을 그대로 찍지 마라.** 응답에 삭제된 첨부의 파일명 목록이 담기고
+          # (`route.ts`의 `files:`), 이 저장소는 공개라 Actions 로그도 공개다.
+          # 파일명에는 회원이 올린 원본 이름이 들어간다. 건수만 남긴다.
+          node -e '
+            const fs = require("fs")
+            try {
+              const j = JSON.parse(fs.readFileSync("/tmp/cleanup.json", "utf8"))
+              const d = j.data ?? {}
+              const n = Array.isArray(d.files) ? d.files.length : (d.deleted ?? "?")
+              console.log(`정리된 임시 첨부: ${n}건`)
+            } catch {
+              console.log("응답 본문을 파싱하지 못했다(상태 코드로 판정한다).")
+            }
+          '
 
           if [ "${HTTP}" != "200" ]; then
             echo "::error::정리 엔드포인트가 ${HTTP}를 반환했다 (401이면 Vercel과 GitHub의 토큰이 다르다)."
