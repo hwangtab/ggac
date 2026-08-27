@@ -78,11 +78,26 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # 단계 4 컷오버 이후 빌드는 Turso를 읽는다. 그리고 최종 리뷰(B-1)가
+      # "아티스트 조회 실패·0건이면 운영 빌드를 실패시킨다"를 넣었으므로,
+      # 빌드에는 최소 1행이 있는 DB가 필요하다.
+      #
+      # CI에 운영 자격증명을 주지 않는다 — CI가 운영 DB를 읽을 이유가 없고
+      # 토큰이 새는 자리만 는다. 대신 로컬 파일 DB를 만들어 쓴다.
+      # (`file:` URL은 assertProductionCredentials가 토큰을 요구하지 않는 경로다.)
+      - name: Prepare local build database
+        run: |
+          npx drizzle-kit push --force
+          node scripts/testing/seed-build-fixture.mjs
+        env:
+          TURSO_DATABASE_URL: file:./ci-build.db
+
       - name: Build application
         run: npm run build
         env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          TURSO_DATABASE_URL: file:./ci-build.db
+          BETTER_AUTH_SECRET: ci-build-placeholder-not-a-real-secret
+          NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL: https://ci-placeholder.public.blob.vercel-storage.com
 
   smoke-test:
     runs-on: ubuntu-latest
