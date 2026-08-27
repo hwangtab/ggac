@@ -456,15 +456,21 @@ const nextConfig = {
               process.env.NODE_ENV === 'development'
                 ? "media-src 'self' http://localhost:* http://127.0.0.1:* https://www.youtube.com https://*.supabase.co"
                 : "media-src 'self' https://www.youtube.com https://*.supabase.co",
-              "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com",
+              // 토스 결제창은 iframe으로 뜬다. 이 항목이 없으면 결제 버튼을 눌러도
+              // 아무 일도 일어나지 않는다(콘솔에만 CSP 위반이 찍힌다).
+              "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://*.tosspayments.com",
               // 로컬 Supabase 스택(supabase start)은 http://127.0.0.1:5442x에 뜬다.
               // 이 분기가 없어 `supabase start`로 띄운 스택에 앱이 아예 붙지 못했다.
               process.env.NODE_ENV === 'development'
-                ? "connect-src 'self' http://localhost:* http://127.0.0.1:* https://api.supabase.io https://*.supabase.co ws://localhost:* ws://127.0.0.1:* wss://localhost:* wss://127.0.0.1:* wss://*.supabase.co"
-                : "connect-src 'self' https://api.supabase.io https://*.supabase.co wss://*.supabase.co",
+                ? "connect-src 'self' http://localhost:* http://127.0.0.1:* https://api.supabase.io https://*.supabase.co ws://localhost:* ws://127.0.0.1:* wss://localhost:* wss://127.0.0.1:* wss://*.supabase.co https://*.tosspayments.com"
+                : "connect-src 'self' https://api.supabase.io https://*.supabase.co wss://*.supabase.co https://*.tosspayments.com",
               "object-src 'none'",
               "base-uri 'self'",
-              "form-action 'self'",
+              // 결제창은 카드사 인증 페이지로 폼을 제출한다. 'self'만 두면 카드를
+              // 넣은 뒤 인증 단계에서 조용히 막힌다. 카드사 도메인은 카드사마다
+              // 달라 미리 다 알 수 없으므로, 실제 결제를 끝까지 통과시켜 보며
+              // 필요한 도메인을 확인해 추가한다.
+              "form-action 'self' https://*.tosspayments.com",
               "frame-ancestors 'none'",
               "worker-src 'self' blob:",
               "manifest-src 'self'",

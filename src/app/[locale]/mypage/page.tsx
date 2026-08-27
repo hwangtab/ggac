@@ -1,7 +1,7 @@
 import { Metadata } from 'next'
 import { getTranslations, setRequestLocale } from 'next-intl/server'
 import { Link } from '@/i18n/navigation'
-import { FiUser, FiSettings, FiMusic, FiActivity } from 'react-icons/fi'
+import { FiUser, FiSettings, FiMusic, FiActivity, FiCreditCard } from 'react-icons/fi'
 import MypageLayout from './components/MypageLayout'
 import DashboardCard from './components/DashboardCard'
 import PermissionCheck from './components/PermissionCheck'
@@ -71,6 +71,14 @@ export default async function MypagePage({ params }: { params: Promise<{ locale:
             icon={<FiUser className="w-8 h-8 text-primary-600" />}
             href="/mypage/profile"
             buttonText={t('profileCardButton')}
+          />
+
+          <DashboardCard
+            title="조합비"
+            description="월 조합비를 납부하고 내역을 확인하세요."
+            icon={<FiCreditCard className="w-8 h-8 text-primary-600" />}
+            href="/mypage/dues"
+            buttonText="조합비 납부"
           />
 
           <PermissionCheck
