@@ -1,13 +1,15 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { globSync } from 'node:fs'
-import { join, relative } from 'node:path'
+import { basename, join, relative } from 'node:path'
+import ts from 'typescript'
 import { stripComments } from './strip-comments.mjs'
 
 const root = process.cwd()
 
 /**
- * 소스 파일을 읽되 **`.ts`/`.tsx`는 주석을 걷어내고** 돌려준다.
+ * 소스 파일을 읽되 **자바스크립트/타입스크립트는 주석을 걷어내고** 돌려준다
+ * (`.ts`·`.tsx`·`.js`·`.mjs`·`.cjs`).
  *
  * 이 파일의 검사는 대부분 정규식으로 소스를 훑는다. 원본을 그대로 훑으면
  * 인가 조건문을 `//`로 통째로 주석 처리해도 그 줄의 **텍스트는 그대로 남아**
@@ -19,14 +21,39 @@ const root = process.cwd()
  * 그래서 읽기 자체를 안전한 기본값으로 바꾼다. 개별 검사가 "주석을 걷어낼지"
  * 를 매번 기억해야 하는 구조에서는 다음 사람이 반드시 잊는다.
  *
- * `.ts`/`.tsx`가 아닌 파일(.md·.json·설정 파일)은 그대로 돌려준다 —
- * `stripComments`는 TypeScript 파서 기반이라 그런 파일에서는 fail-closed로
- * 던진다. 문자열·템플릿·정규식 리터럴은 보호되고 길이·위치도 보존되므로,
- * 메시지 문구를 찾는 부정 단정이나 `indexOf` 순서 비교는 영향을 받지 않는다.
+ * `.js`/`.mjs`/`.cjs`도 같은 기본값에 넣는다. `scripts/` 아래의 Supabase 가드는
+ * 이 확장자만 훑는데, 이 저장소는 컷오버 잔재를 **긴 주석으로 설명해 두는**
+ * 관례가 있어(무해화 배너가 금지 패턴을 그대로 인용한다) 원본을 훑으면 그
+ * 설명글이 전부 위반으로 잡히거나, 반대로 "포팅했다"는 주석만 남기고 실제
+ * 가드를 지워도 통과한다. `stripComments`는 TypeScript 파서 기반이지만 JS도
+ * 그대로 파싱하고 셔뱅(`#!`)도 처리한다.
+ *
+ * 그 밖의 파일(.md·.json·설정 파일)은 그대로 돌려준다 — `stripComments`는
+ * 그런 파일에서는 fail-closed로 던진다. 문자열·템플릿·정규식 리터럴은 보호되고
+ * 길이·위치도 보존되므로, 메시지 문구를 찾는 부정 단정이나 `indexOf` 순서
+ * 비교는 영향을 받지 않는다.
  */
+/**
+ * `readSourceAt`이 주석을 걷어낼지 결정하는 판정. **따로 뽑아 둔 이유는 그
+ * 판정 자체를 단정할 수 있게 하기 위해서다.**
+ *
+ * 이 확장자 목록이 조용히 `.ts`/`.tsx`로 되돌아가도(원래 그랬다) 지금 저장소
+ * 상태에서는 아무 검사도 안 터진다 — 실증했다. `scripts/` 아래 파일이 전부
+ * Supabase를 코드로도 언급하고 있어서, 주석까지 함께 읽어도 분류가 그대로이기
+ * 때문이다. 그러나 되돌아간 순간 **"Supabase를 주석으로만 언급하는 파일"이
+ * 전부 위반으로 뒤집힌다.** 이 저장소는 컷오버 잔재를 긴 주석으로 설명해 두는
+ * 관례가 있고(무해화 배너가 금지 모양을 그대로 인용한다), 그때 사람이 손을
+ * 대는 곳은 패턴 쪽이다 — 가드를 약하게 만드는 방향으로.
+ *
+ * 그래서 회귀를 "언젠가 오탐이 터지면 안다"에 맡기지 않고 여기서 못박는다.
+ */
+function shouldStripComments(path) {
+  return /\.(tsx?|[cm]?js)$/.test(String(path))
+}
+
 function readSourceAt(path) {
   const text = readFileSync(path, 'utf8')
-  return /\.tsx?$/.test(String(path)) ? stripComments(text) : text
+  return shouldStripComments(path) ? stripComments(text) : text
 }
 
 /**
@@ -2904,6 +2931,420 @@ const supabaseAccessFalsePositiveSamples = [
 const supabaseAccessOverreach = supabaseAccessFalsePositiveSamples.filter(sample =>
   supabaseAccessPattern.test(stripComments(sample))
 )
+
+// ---------------------------------------------------------------------------
+// `scripts/` 아래에서 Supabase를 건드리는 코드가 새로 생기는 것을 막는다.
+//
+// 위 가드는 `src/`만 본다. 그런데 컷오버 감사가 찾아낸 실제 피해는 `scripts/`
+// 쪽이었다: **실행하면 에러 없이 성공 메시지를 내고 아무것도 하지 않는**
+// 스크립트가 30개 넘게 남아 있었다. `npm run storage:ensure-webp`는 Turso에
+// 존재하지도 않는 `member_profiles.profile_photo_url`을 갱신했고,
+// `clear-link-preview-cache.js`는 지금도 쓰이는 캐시를 "지웠다"고 찍었으며,
+// `verify-activity-system.js`는 버려진 사본에 `=== 검증 완료 ===`를 줬다.
+// 조용한 성공이 이 저장소에서 가장 비싼 실패다.
+//
+// 그것들을 막고 있던 것은 설계가 아니라 우연이었다 — `dotenv` 미설치,
+// `.env.local`의 큰따옴표를 손수 만든 파서가 못 벗기는 것, `__dirname/.env.local`
+// 경로 오류. `npm i dotenv` 한 번이나 `set -a; source .env.local; set +a`
+// (`scripts/turso/README.md`가 DB 작업 전에 하라고 안내하는 바로 그 명령)면
+// 세 우연이 전부 사라진다. 그래서 우연 대신 구조로 막는다.
+//
+// 이 가드는 **목록이 아니라 모양**을 고정한다. `scripts/` 아래에서 Supabase를
+// 건드리는 파일은 셋 중 하나여야 한다:
+//   (1) **무해화돼 있다** — 실행하면 DB에 닿기 전에 메시지를 내고 즉시 나간다.
+//   (2) **허용목록에 이유와 함께 올라 있다** — 조회 전용 이관·검증 도구.
+//       Supabase는 컷오버 후 1주 관찰 뒤 삭제 예정이라, 그 기간에 Supabase를
+//       읽는 정당한 도구가 있다.
+//   (3) 그 밖에는 없다. **쓰기는 허용목록에 올릴 수 없다**(아래에서 강제한다).
+//
+// 패턴은 정규식 하나로 적지 않고 **이름 붙은 가지 목록**으로 적는다. 아래
+// 자기검사가 "가지마다 그것을 무는 양성 표본이 최소 하나 있는가"를 확인하는데,
+// 통짜 정규식으로는 그걸 못 한다. 표본 배열을 통째로 비우면 표본별 검사
+// (`filter`)는 **빈 배열이라 조용히 통과**한다 — 실제로 이 가드 초안이 그
+// 구멍을 갖고 있었고(표본 두 배열을 비웠더니 초록불), 가지별 대조가 그걸 막는다.
+const SCRIPTS_SUPABASE_CLIENT_ALTERNATIVES = [
+  { label: 'Supabase SDK import/require', source: String.raw`['"]@supabase/` },
+  { label: 'service-role key', source: String.raw`\bSUPABASE_SERVICE_ROLE_KEY\b` },
+  { label: 'anon key', source: String.raw`\bNEXT_PUBLIC_SUPABASE_ANON_KEY\b` },
+  // SDK 없이 손으로 부르는 PostgREST/GoTrue REST
+  { label: 'hand-rolled /rest/v1/ call', source: String.raw`/rest/v1/` },
+]
+const SCRIPTS_SUPABASE_CLIENT_PATTERN = new RegExp(
+  SCRIPTS_SUPABASE_CLIENT_ALTERNATIVES.map(alternative => alternative.source).join('|')
+)
+// "쓰기"의 범위: 표 변경(insert/update/upsert/delete) · 스토리지 변경
+// (upload/remove/버킷 조작) · RPC(임의 SQL을 실행하던 `exec_sql`이 실재했다) ·
+// GoTrue admin API(계정 생성·삭제) · 손으로 부르는 REST의 쓰기 메서드.
+//
+// 표 변경은 `.from(...)`에서 시작하는 **연쇄**로만 문다. `.update(` 단독으로
+// 물면 `createHash('sha256').update(buf)`가 걸려, 실제로는 Vercel Blob에만
+// 쓰는 이관 도구 두 개(`copy-to-blob.mjs`·`copy-private-objects.mjs`)가
+// "Supabase에 쓴다"는 이유로 허용목록에 올라가게 된다 — 허용목록이 거짓말을
+// 담기 시작하면 그 순간부터 아무도 안 읽는다.
+const SCRIPTS_SUPABASE_WRITE_ALTERNATIVES = [
+  {
+    label: 'PostgREST table write chain',
+    source: String.raw`\.from\([^)]{0,120}\)[\s\S]{0,240}?\.(insert|update|upsert|delete|remove|upload)\s*\(`,
+  },
+  {
+    label: 'storage bucket admin',
+    source: String.raw`\.(createBucket|updateBucket|emptyBucket|deleteBucket)\s*\(`,
+  },
+  { label: 'RPC call', source: String.raw`\.rpc\s*\(` },
+  { label: 'GoTrue admin API', source: String.raw`\.auth\.admin\.` },
+  {
+    label: 'hand-rolled REST write method',
+    source: String.raw`method:\s*['"](POST|PATCH|PUT|DELETE)['"]`,
+  },
+]
+const SCRIPTS_SUPABASE_WRITE_PATTERN = new RegExp(
+  SCRIPTS_SUPABASE_WRITE_ALTERNATIVES.map(alternative => alternative.source).join('|')
+)
+
+// 스캔에서 빼는 파일은 **이 가드 자신 하나뿐**이다. 아래 sentinel 배열이 금지
+// 모양을 소스에 그대로 담고 있어서(그게 sentinel의 존재 이유다) 자기 자신을
+// 위반으로 문다. 문자열을 쪼개 붙여 패턴을 피해 가는 방법도 있지만, 그러면
+// sentinel이 "실제 코드 모양"이기를 그만두고 가드가 눈머는 것을 못 잡게 된다.
+//
+// **이 예외가 "이 파일은 패턴에 걸리니까 빼자"로 정당화되지 않는다는 점에
+// 주의하라.** 초안은 그렇게 적었다가 거짓 안심을 샀다: sentinel을 전부 지운
+// 뒤에도 이 파일은 여전히 쓰기 패턴에 걸렸다(오탐 표본 두 개가 240자 창 안에서
+// 우연히 연쇄를 이뤘다). 즉 "걸린다"는 사실은 sentinel이 살아 있다는 증거가
+// 못 된다. 그 증거는 아래 가지별 대조가 댄다.
+const SCRIPTS_SCAN_SELF = 'scripts/testing/assert-runtime-risks.mjs'
+
+// (c) 판정 — Supabase를 **조회만** 하는 정당한 도구. 이유 없이는 못 올린다.
+const SCRIPTS_SUPABASE_ALLOWLIST = [
+  {
+    path: 'scripts/migrate/copy-private-objects.mjs',
+    reason:
+      'Supabase Storage board-documents 버킷을 읽어 Vercel Blob과 SHA-256으로 대조한다. ' +
+      '쓰기는 Blob 쪽에만 한다. package.json의 storage:verify-private/storage:copy-private가 ' +
+      '이걸 부르고, Supabase 삭제 전까지 "이관이 정말 끝났는가"를 증명하는 유일한 도구다.',
+  },
+  {
+    path: 'scripts/storage/copy-to-blob.mjs',
+    reason:
+      '공개 버킷(attachments·artists)을 읽어 Vercel Blob과 대조·복사한다(--verify는 대조만). ' +
+      '위와 같은 이유로 Supabase 삭제 전까지 남긴다.',
+  },
+  {
+    path: 'scripts/migrate/identity.mjs',
+    reason:
+      '단계 2b 인증 이관 도구. Supabase 덤프/GoTrue에서 계정을 읽어 Turso로 옮긴 기록이자 재현 수단이다.',
+  },
+  {
+    path: 'scripts/testing/refresh-schema-snapshot.mjs',
+    reason:
+      '운영 Supabase의 PostgREST OpenAPI를 읽어 schema-snapshot.json을 만든다(조회 전용). ' +
+      'Supabase가 살아 있는 동안 옛 스키마 계약을 다시 뜰 수 있어야 한다.',
+  },
+  {
+    path: 'scripts/verify-env.js',
+    reason:
+      '환경변수 검사기. NEXT_PUBLIC_SUPABASE_URL 등 이름만 다루고 Supabase에 접속하지 않는다.',
+  },
+  {
+    path: 'scripts/testing/auth-config.test.mjs',
+    reason: '단위 테스트. Supabase 시절 인증 설정 문자열을 픽스처로 담는다(접속 없음).',
+  },
+  {
+    path: 'scripts/testing/middleware-profile.test.mjs',
+    reason: '단위 테스트. 미들웨어가 Supabase를 더 이상 부르지 않음을 단정하는 픽스처다.',
+  },
+  {
+    path: 'scripts/testing/middleware-settings.test.mjs',
+    reason:
+      '단위 테스트. 유지보수 모드 판정이 Supabase가 아니라 Turso system_settings를 읽는지 단정하는 픽스처다(접속 없음).',
+  },
+  {
+    path: 'scripts/testing/strip-comments.test.mjs',
+    reason: '단위 테스트. 옛 정규식 구현이 지웠던 Supabase import 줄을 회귀 표본으로 담는다.',
+  },
+  {
+    path: 'scripts/testing/verifyEnv.test.mjs',
+    reason: '단위 테스트. verify-env.js가 죽은 Supabase 키 없이도 통과하는지 본다(접속 없음).',
+  },
+]
+const scriptsSupabaseAllowedPaths = new Set(SCRIPTS_SUPABASE_ALLOWLIST.map(entry => entry.path))
+
+const scriptsAllFiles = globSync('scripts/**/*.@(js|mjs|cjs|ts)', {
+  cwd: root,
+  exclude: ['**/node_modules/**'],
+}).sort()
+
+/**
+ * "이 파일은 실행되면 DB에 닿기 전에 나가는가"를 **구조로** 판정한다.
+ *
+ * 문자열 검사(`/process\.exit\(1\)/.test(source)`)로는 안 된다. 이 스크립트들은
+ * 거의 전부 `if (!supabaseUrl) { console.error(...); process.exit(1) }` 같은
+ * 환경변수 가드를 이미 갖고 있어서, 그 한 줄만으로 "무해화됐다"가 참이 돼버린다
+ * — 환경변수가 채워지면 그 분기는 안 타고 스크립트는 그대로 진행한다.
+ *
+ * 그래서 TypeScript 파서로 **최상위 문(statement) 목록**을 뽑아, 중단이
+ * 실행 흐름의 맨 앞에 있는지 본다. 중단보다 먼저 올 수 있는 것은 `import`
+ * 선언과 `console.error(...)` 뿐이다. CommonJS의 `require` 대입은
+ * VariableStatement라 여기 못 들어온다 — CJS 스크립트는 `require`보다 앞에
+ * 중단이 와야 한다는 뜻이고, 그게 맞다.
+ *
+ * 인정하는 중단 모양은 둘이다.
+ *   A. 최상위 `process.exit(1)` — `scripts/archive/supabase-board/`의 선례.
+ *   B. `if (process.argv[1]?.endsWith('<이 파일 이름>')) { ... process.exit(1) }`
+ *      — 순수 함수를 export하고 `scripts/testing/`의 단위 테스트가 그걸
+ *      import하는 하이브리드 모듈용이다(`storage/rewrite-db-urls.mjs`·
+ *      `restore-db-urls.mjs`). 최상위에서 나가면 테스트 스위트가 통째로 죽는다.
+ *      **파일 이름까지 대조한다** — 다른 파일 이름을 적어 두면 조건이 영원히
+ *      거짓이라 "무해화된 것처럼 보이지만 그냥 실행되는" 모양이 된다.
+ *
+ * 그리고 중단에는 반드시 사람이 읽을 메시지(`console.error`)가 붙어야 한다.
+ * 말없이 exit 1만 하면 "왜 안 되는지"를 아무도 모르고, 그건 조용한 성공만큼
+ * 나쁜 조용한 실패다.
+ */
+function diagnoseScriptHalt(file, strippedSource) {
+  const sourceFile = ts.createSourceFile(
+    file,
+    strippedSource,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS
+  )
+  const statements = sourceFile.statements
+  const textOf = statement =>
+    strippedSource.slice(statement.getStart(sourceFile, false), statement.end).trim()
+
+  let haltIndex = -1
+  for (let i = 0; i < statements.length; i += 1) {
+    if (/process\.exit\(1\)/.test(textOf(statements[i]))) {
+      haltIndex = i
+      break
+    }
+  }
+  if (haltIndex === -1) {
+    return '최상위 실행 흐름에 process.exit(1) 중단이 없다'
+  }
+
+  const halt = statements[haltIndex]
+  const haltText = textOf(halt)
+  const selfName = basename(file).replace(/[.]/g, '\\.')
+  const entryGuardPattern = new RegExp(
+    String.raw`^if\s*\(\s*process\.argv\[1\]\?\.endsWith\(\s*['"]${selfName}['"]\s*\)\s*\)\s*\{[\s\S]*\}$`
+  )
+  const isBareExit = /^process\.exit\(1\)\s*;?$/.test(haltText)
+  const isEntryGuard = ts.isIfStatement(halt) && entryGuardPattern.test(haltText)
+  if (!isBareExit && !isEntryGuard) {
+    return `중단 모양을 인정할 수 없다(최상위 process.exit(1) 또는 진입점 조건문이어야 한다): ${haltText.slice(0, 120).replace(/\s+/g, ' ')}`
+  }
+
+  const precedingTexts = []
+  for (let i = 0; i < haltIndex; i += 1) {
+    const statement = statements[i]
+    const text = textOf(statement)
+    if (ts.isImportDeclaration(statement)) {
+      precedingTexts.push(text)
+      continue
+    }
+    if (ts.isExpressionStatement(statement) && /^console\.error\(/.test(text)) {
+      precedingTexts.push(text)
+      continue
+    }
+    return `중단보다 먼저 실행되는 문이 있다(import와 console.error만 앞설 수 있다): ${text.slice(0, 120).replace(/\s+/g, ' ')}`
+  }
+
+  const hasMessage =
+    /console\.error\(/.test(haltText) || precedingTexts.some(text => /^console\.error\(/.test(text))
+  if (!hasMessage) {
+    return '중단에 console.error 안내 메시지가 없다 — 왜 막혔는지 알 수 없는 조용한 실패가 된다'
+  }
+  return null
+}
+
+const scriptsSupabaseTouching = []
+for (const file of scriptsAllFiles) {
+  if (file === SCRIPTS_SCAN_SELF) continue
+  const source = readSourceAt(join(root, file))
+  if (!SCRIPTS_SUPABASE_CLIENT_PATTERN.test(source)) continue
+  scriptsSupabaseTouching.push({
+    file,
+    writes: SCRIPTS_SUPABASE_WRITE_PATTERN.test(source),
+    haltProblem: diagnoseScriptHalt(file, source),
+  })
+}
+
+// 위반 ①: 무해화도 안 됐고 허용목록에도 없는 파일.
+const scriptsSupabaseUnguarded = scriptsSupabaseTouching
+  .filter(entry => entry.haltProblem !== null && !scriptsSupabaseAllowedPaths.has(entry.file))
+  .map(entry => `${entry.file} — ${entry.writes ? '쓰기' : '조회'}: ${entry.haltProblem}`)
+// 위반 ②: **쓰기**를 허용목록으로 빠져나가려는 시도. 허용목록은 조회 전용이다.
+const scriptsSupabaseAllowlistedWrites = scriptsSupabaseTouching
+  .filter(entry => entry.writes && scriptsSupabaseAllowedPaths.has(entry.file))
+  .map(entry => entry.file)
+// 위반 ③: 낡은 허용목록 항목. 파일이 없어졌거나 더 이상 Supabase를 안 건드리면
+// 그 항목은 다음 사람에게 "여긴 원래 예외"라는 잘못된 신호만 남긴다.
+const scriptsSupabaseTouchingPaths = new Set(scriptsSupabaseTouching.map(entry => entry.file))
+const scriptsSupabaseStaleAllowlist = SCRIPTS_SUPABASE_ALLOWLIST.filter(
+  entry => !scriptsSupabaseTouchingPaths.has(entry.path)
+).map(entry =>
+  existsSync(join(root, entry.path))
+    ? `${entry.path} — 더 이상 Supabase를 건드리지 않는다(항목을 지워라)`
+    : `${entry.path} — 파일이 없다(항목을 지워라)`
+)
+// 위반 ④: 이유 없는 허용목록 항목.
+const scriptsSupabaseUnexplainedAllowlist = SCRIPTS_SUPABASE_ALLOWLIST.filter(
+  entry => typeof entry.reason !== 'string' || entry.reason.trim().length < 20
+).map(entry => entry.path)
+
+// --- 이하 fail-open 방지. 스캔이 비면 offenders도 비어 조용히 통과한다. ---
+//
+// 자기검사 ①: 패턴이 알려진 양성 표본을 실제로 무는가. 각 항목은 이 저장소에서
+// 실제로 무해화한 코드의 모양이다(파일 이름을 주석에 적어 둔다 — 모양이 어디서
+// 왔는지 모르면 다음 사람이 "안 쓰는 것 같다"며 지운다).
+const scriptsSupabaseClientSentinels = [
+  `const { createClient } = require('@supabase/supabase-js')`, // scripts/clear-link-preview-cache.js
+  `import { createClient } from '@supabase/supabase-js'`, // scripts/storage/rewrite-db-urls.mjs
+  `const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY`, // scripts/utils/storage/ensure-supabase-webp.js
+  `const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY`, // scripts/database/setup/add-is-member-column.js
+  `const res = await fetch(url + '/rest/v1/rpc/execute_sql', { headers })`, // scripts/one-off/final-sql-execution.js
+]
+const scriptsSupabaseWriteSentinels = [
+  `await supabase.from('member_profiles').update({ profile_photo_url: webp }).eq('id', userId)`, // ensure-supabase-webp.js
+  `await supabase.from('user_activities').insert(rows)`, // generate-test-activity-data.js
+  `await supabase.from('link_previews').delete().eq('url', url)`, // clear-link-preview-cache.js
+  `await supabase.from('posts').upsert(rows)`,
+  `await supabase.storage.from('profiles').upload(path, buffer, { upsert: true })`, // ensure-supabase-webp.js
+  `await supabase.storage.from('attachments').remove([key])`,
+  `await supabase.storage.createBucket('profiles', { public: true })`, // scripts/database/setup/create-storage-bucket-direct.js
+  `await supabase.rpc('exec_sql', { sql_query: sql })`, // scripts/database/apply-activity-fix.js
+  `await supabase.auth.admin.deleteUser(userId)`,
+  `await fetch(url + '/rest/v1/posts', { method: 'PATCH', body })`,
+]
+const scriptsSupabaseClientBlindSpots = scriptsSupabaseClientSentinels.filter(
+  sample => !SCRIPTS_SUPABASE_CLIENT_PATTERN.test(sample)
+)
+const scriptsSupabaseWriteBlindSpots = scriptsSupabaseWriteSentinels.filter(
+  sample => !SCRIPTS_SUPABASE_WRITE_PATTERN.test(sample)
+)
+// 자기검사 ①-b: **패턴의 가지마다** 그것을 무는 표본이 있는가.
+//
+// 위 ①은 표본을 순회하므로 **표본 배열이 비면 빈 결과로 조용히 통과한다.**
+// 실증: 두 sentinel 배열을 `[]`로 만들어도 초록불이었다. 그 상태에서는 패턴을
+// 통째로 망가뜨려도 아무도 안 문다. 여기서는 반대 방향으로 — 가지에서 표본으로 —
+// 대조하므로 배열을 비우면 모든 가지가 미검증으로 걸린다. 가지를 새로 추가할
+// 때 표본을 함께 적으라고 막는 효과도 있다(그게 없으면 새 가지는 영원히
+// 검증되지 않은 채로 남는다).
+const scriptsSupabaseAllSentinels = [
+  ...scriptsSupabaseClientSentinels,
+  ...scriptsSupabaseWriteSentinels,
+]
+const scriptsSupabaseUnexercisedAlternatives = [
+  ...SCRIPTS_SUPABASE_CLIENT_ALTERNATIVES.map(alternative => ({
+    ...alternative,
+    kind: 'client',
+  })),
+  ...SCRIPTS_SUPABASE_WRITE_ALTERNATIVES.map(alternative => ({ ...alternative, kind: 'write' })),
+]
+  .filter(alternative => {
+    const branch = new RegExp(alternative.source)
+    return !scriptsSupabaseAllSentinels.some(sample => branch.test(sample))
+  })
+  .map(alternative => `${alternative.kind}: ${alternative.label}`)
+// 자기검사 ②: 패턴이 Turso/Drizzle 코드나 전환 기록 주석을 오탐하면, 정당한
+// 파일이 허용목록으로 밀려나 목록이 부풀고 결국 아무도 안 읽는다. 주석 표본은
+// `stripComments`를 통과시켜 검사한다 — 이 가드가 실제로 보는 것과 같게.
+const scriptsSupabaseFalsePositiveSamples = [
+  `const digest = createHash('sha256').update(buffer).digest('hex')`,
+  `await db.update(memberProfiles).set({ isAdmin: true }).where(eq(memberProfiles.id, id))`,
+  `const rows = await db.select().from(memberProfiles).where(eq(memberProfiles.id, id))`,
+  `await client.execute({ sql: 'update member_profiles set is_admin = 1', args: [] })`,
+  `// 예전에는 supabase.from('posts').update({ content }) 를 직접 불렀다`,
+  `// const { createClient } = require('@supabase/supabase-js')`,
+]
+const scriptsSupabaseOverreach = scriptsSupabaseFalsePositiveSamples.filter(sample => {
+  const stripped = stripComments(sample)
+  return (
+    SCRIPTS_SUPABASE_CLIENT_PATTERN.test(stripped) || SCRIPTS_SUPABASE_WRITE_PATTERN.test(stripped)
+  )
+})
+// ②도 표본을 순회하므로 배열을 비우면 조용히 통과한다. 여기서는 가지별로
+// 뒤집을 대상이 없으므로(오탐은 "어떤 가지도 물면 안 된다"이다) 개수 하한으로
+// 못박는다. 마지막 둘은 **주석 표본**이라 반드시 남아야 한다 — 이 저장소가
+// 반복해 밟은 함정이 "주석에 매치해 초록불"이고, 무해화 배너 자체가 금지
+// 모양을 그대로 인용하고 있어서 주석 처리가 무너지면 전 파일이 오탐으로 뒤집힌다.
+const SCRIPTS_FALSE_POSITIVE_MIN_SAMPLES = 6 // 현재 6
+const scriptsSupabaseFalsePositiveCommentSamples = scriptsSupabaseFalsePositiveSamples.filter(
+  sample => /^\s*\/\//.test(sample)
+).length
+const SCRIPTS_FALSE_POSITIVE_MIN_COMMENT_SAMPLES = 2 // 현재 2
+// 자기검사 ③: 자기 제외가 여전히 **글롭 안의 파일**을 가리키는가. 경로가
+// 어긋나면 예외가 아무것도 빼지 않게 되고(그 경우 이 파일이 위반으로 잡혀
+// 바로 드러난다), 반대로 글롭이 이 파일을 놓치면 예외만 남아 의미를 잃는다.
+//
+// 예전 초안은 여기서 "이 파일이 패턴에 걸리는가"까지 확인하며 그걸 sentinel이
+// 살아 있다는 증거로 삼았다. **거짓이었다** — sentinel을 전부 지워도 오탐 표본
+// 두 개가 240자 창 안에서 우연히 `.from(...)....update(` 연쇄를 이뤄 여전히
+// 걸렸다. sentinel의 생사는 자기검사 ①-b(가지별 대조)가 판정한다.
+const scriptsScanSelfIsInScan = scriptsAllFiles.includes(SCRIPTS_SCAN_SELF)
+// 자기검사 ③-b: 이 스캔이 읽는 확장자에서 주석이 실제로 걷히는가.
+// (위 `shouldStripComments`의 주석 참고 — 이 목록이 줄어들면 오탐으로 뒤집힌다.)
+const scriptsSourceReaderStripExpectations = [
+  ['scripts/x.js', true],
+  ['scripts/x.mjs', true],
+  ['scripts/x.cjs', true],
+  ['src/x.ts', true],
+  ['src/x.tsx', true],
+  ['README.md', false], // stripComments는 .md에서 fail-closed로 던진다 — 걷으면 안 된다
+  ['package.json', false],
+]
+const scriptsSourceReaderStripMismatches = scriptsSourceReaderStripExpectations
+  .filter(([path, expected]) => shouldStripComments(path) !== expected)
+  .map(([path, expected]) => `${path} — expected stripComments=${expected}`)
+// 자기검사 ③-c: 패턴 가지를 통째로 지워 가드를 좁히는 길을 막는다. 가지를
+// 지우면 그 모양은 영원히 검증되지 않고, 자기검사 ①-b는 "남은 가지"만 보므로
+// 침묵한다(지운 가지는 목록에 없으니 미검증으로도 안 잡힌다).
+const SCRIPTS_CLIENT_ALTERNATIVE_MIN = 4 // 현재 4
+const SCRIPTS_WRITE_ALTERNATIVE_MIN = 5 // 현재 5
+// 자기검사 ④: 스캔이 `scripts/`를 구석구석 훑었는가. `src/` 가드와 같은 구조로
+// 전체 하한·서브트리별 하한·하한표의 커버리지를 함께 본다. `scripts/testing`
+// 하나가 전체의 절반이라, 전체 하한만 두면 다른 디렉터리가 통째로 빠져도
+// 통과한다 — 하필 무해화한 파일들이 전부 그 "다른 디렉터리"에 있다.
+const SCRIPTS_SCAN_MIN_FILES = 100 // 현재 147
+const SCRIPTS_SCAN_SUBTREE_MINIMUMS = {
+  'scripts/archive/': 5, // 현재 8
+  'scripts/auth/': 1, // 현재 1
+  'scripts/database/': 15, // 현재 23
+  'scripts/migrate/': 5, // 현재 8
+  'scripts/one-off/': 2, // 현재 4
+  'scripts/perf/': 1, // 현재 2
+  'scripts/recovery/': 1, // 현재 1
+  'scripts/storage/': 2, // 현재 3
+  'scripts/testing/': 47, // 현재 71
+  'scripts/turso/': 4, // 현재 7
+  'scripts/utils/': 11, // 현재 17
+}
+const scriptsScanSubtreeShortfalls = Object.entries(SCRIPTS_SCAN_SUBTREE_MINIMUMS).flatMap(
+  ([prefix, minimum]) => {
+    const count = scriptsAllFiles.filter(file => file.startsWith(prefix)).length
+    return count < minimum
+      ? [`${prefix} — ${count} file(s) scanned, expected at least ${minimum}`]
+      : []
+  }
+)
+const scriptsScanUncoveredSubtrees = [
+  ...new Set(
+    scriptsAllFiles
+      .map(file => file.split('/'))
+      .filter(segments => segments.length > 2)
+      .map(segments => `${segments[0]}/${segments[1]}/`)
+  ),
+]
+  .filter(prefix => !(prefix in SCRIPTS_SCAN_SUBTREE_MINIMUMS))
+  .sort()
+// `scripts/` 바로 아래 놓인 파일(현재 `clear-link-preview-cache.js`·
+// `verify-env.js` 2개)은 서브트리 하한표가 구조적으로 못 덮는다. 글롭이
+// `scripts/*/**`로 좁아지면(흔한 실수다) 둘 다 조용히 빠진다 — 한쪽은
+// 무해화 대상이고 다른 쪽은 허용목록 항목이라 둘 다 빠지면 위반 ③까지
+// 함께 침묵한다.
+const SCRIPTS_ROOT_MIN_FILES = 2 // 현재 2
+const scriptsRootFileCount = scriptsAllFiles.filter(file => file.split('/').length === 2).length
 
 const imageProxyPath = join(root, 'src/app/api/images/proxy/route.ts')
 const imageProxySource = readSourceAt(imageProxyPath)
@@ -5872,6 +6313,128 @@ if (supabaseAccessOverreach.length > 0) {
     `The Supabase-access guard now flags legitimate Turso/Drizzle code or transition-history comments, which would force someone to add exceptions and hollow the guard out. Over-matching sample(s):\n${supabaseAccessOverreach
       .map(sample => `- ${sample}`)
       .join('\n')}`
+  )
+}
+
+if (scriptsSupabaseUnguarded.length > 0) {
+  failures.push(
+    `Every file under scripts/ that touches Supabase must either abort before it reaches the database, or sit on SCRIPTS_SUPABASE_ALLOWLIST with a reason. Supabase is an abandoned copy since the 2026-08-26 Turso cutover: a script that still runs against it prints a success message and changes nothing anyone can see, which is the most expensive failure mode this repository has. Neutralize it the way scripts/archive/supabase-board/ does — a top-level console.error(...) + process.exit(1) ahead of every require/DB call, saying what the script wanted to do and where to look now (Turso: src/db/queries/, src/db/schema/, turso db shell ggac-prod). Offending file(s):\n${scriptsSupabaseUnguarded
+      .map(entry => `- ${entry}`)
+      .join('\n')}`
+  )
+}
+
+if (scriptsSupabaseAllowlistedWrites.length > 0) {
+  failures.push(
+    `SCRIPTS_SUPABASE_ALLOWLIST is for read-only Supabase tooling only — a file that WRITES to Supabase can never be allowlisted, only neutralized. Allowing writes through the list is exactly how this guard would be hollowed out one "just this once" at a time. Remove the entry and add the halt instead:\n${scriptsSupabaseAllowlistedWrites
+      .map(file => `- ${file}`)
+      .join('\n')}`
+  )
+}
+
+if (scriptsSupabaseStaleAllowlist.length > 0) {
+  failures.push(
+    `SCRIPTS_SUPABASE_ALLOWLIST has entries that no longer describe anything. A stale entry tells the next reader "this directory is allowed to talk to Supabase", which is how allowlists rot into blanket exemptions:\n${scriptsSupabaseStaleAllowlist
+      .map(entry => `- ${entry}`)
+      .join('\n')}`
+  )
+}
+
+if (scriptsSupabaseUnexplainedAllowlist.length > 0) {
+  failures.push(
+    `Every SCRIPTS_SUPABASE_ALLOWLIST entry needs a reason someone can check — what it reads, why that is still legitimate, and when it stops being legitimate. Entries without one:\n${scriptsSupabaseUnexplainedAllowlist
+      .map(path => `- ${path}`)
+      .join('\n')}`
+  )
+}
+
+if (scriptsSupabaseClientBlindSpots.length > 0 || scriptsSupabaseWriteBlindSpots.length > 0) {
+  failures.push(
+    `The scripts/ Supabase guard's own patterns went blind: they no longer match known-positive samples, so the guard would report "0 offenders" for code it is supposed to catch. Repair the patterns before trusting it again. Missed sample(s):\n${[
+      ...scriptsSupabaseClientBlindSpots,
+      ...scriptsSupabaseWriteBlindSpots,
+    ]
+      .map(sample => `- ${sample}`)
+      .join('\n')}`
+  )
+}
+
+if (scriptsSupabaseOverreach.length > 0) {
+  failures.push(
+    `The scripts/ Supabase guard now flags legitimate Turso/Drizzle/libsql code or transition-history comments. Over-matching pushes honest files onto the allowlist until nobody reads it any more. Over-matching sample(s):\n${scriptsSupabaseOverreach
+      .map(sample => `- ${sample}`)
+      .join('\n')}`
+  )
+}
+
+if (scriptsSupabaseUnexercisedAlternatives.length > 0) {
+  failures.push(
+    `Every branch of the scripts/ Supabase patterns needs at least one positive sample, otherwise nothing proves that branch still bites. Per-sample checks cannot show this: emptying the sentinel arrays makes them iterate over nothing and pass — that hole was real in this guard's first draft. Add a sample that matches each branch below (or delete the branch if it is genuinely dead):\n${scriptsSupabaseUnexercisedAlternatives
+      .map(entry => `- ${entry}`)
+      .join('\n')}`
+  )
+}
+
+if (scriptsSupabaseFalsePositiveSamples.length < SCRIPTS_FALSE_POSITIVE_MIN_SAMPLES) {
+  failures.push(
+    `The scripts/ Supabase over-reach check has only ${scriptsSupabaseFalsePositiveSamples.length} sample(s) (expected at least ${SCRIPTS_FALSE_POSITIVE_MIN_SAMPLES}). It iterates over the samples, so an emptied list passes vacuously and nothing stops the patterns from swallowing legitimate Turso/Drizzle/libsql code.`
+  )
+}
+
+if (scriptsSupabaseFalsePositiveCommentSamples < SCRIPTS_FALSE_POSITIVE_MIN_COMMENT_SAMPLES) {
+  failures.push(
+    `The scripts/ Supabase over-reach check needs at least ${SCRIPTS_FALSE_POSITIVE_MIN_COMMENT_SAMPLES} comment sample(s) and has ${scriptsSupabaseFalsePositiveCommentSamples}. Comment samples are the ones that prove readSourceAt still strips comments from .js/.mjs: every neutralized script quotes the forbidden shapes verbatim in its banner, so if comment stripping breaks, the whole scripts/ tree flips to false positives and the fix people reach for is weakening the patterns.`
+  )
+}
+
+if (scriptsSourceReaderStripMismatches.length > 0) {
+  failures.push(
+    `readSourceAt must strip comments from every extension the scripts/ Supabase scan reads (.js/.mjs/.cjs as well as .ts/.tsx), and must not try to strip the file types where the TypeScript-based stripper fails closed (.md/.json). Reverting that list does not break anything today — every script under scripts/ mentions Supabase in code as well as in prose — but it silently flips every file that mentions Supabase only in a comment into a violation, and the repair people reach for then is weakening the patterns. Mismatch(es):\n${scriptsSourceReaderStripMismatches
+      .map(entry => `- ${entry}`)
+      .join('\n')}`
+  )
+}
+
+if (
+  SCRIPTS_SUPABASE_CLIENT_ALTERNATIVES.length < SCRIPTS_CLIENT_ALTERNATIVE_MIN ||
+  SCRIPTS_SUPABASE_WRITE_ALTERNATIVES.length < SCRIPTS_WRITE_ALTERNATIVE_MIN
+) {
+  failures.push(
+    `The scripts/ Supabase patterns lost a branch (client ${SCRIPTS_SUPABASE_CLIENT_ALTERNATIVES.length}/${SCRIPTS_CLIENT_ALTERNATIVE_MIN}, write ${SCRIPTS_SUPABASE_WRITE_ALTERNATIVES.length}/${SCRIPTS_WRITE_ALTERNATIVE_MIN}). Deleting a branch is the quietest way to narrow this guard: the per-branch sample check only walks the branches that still exist, so a deleted one is neither exercised nor reported. If a branch is genuinely dead, lower the floor in the same commit and say why.`
+  )
+}
+
+if (!scriptsScanSelfIsInScan) {
+  failures.push(
+    `SCRIPTS_SCAN_SELF (${SCRIPTS_SCAN_SELF}) is the single file excluded from the scripts/ Supabase scan, but the scan no longer covers that path — so the exclusion now hides nothing and, worse, whatever this file became is unscanned by accident rather than by decision. Fix the glob or the path.`
+  )
+}
+
+if (scriptsAllFiles.length < SCRIPTS_SCAN_MIN_FILES) {
+  failures.push(
+    `The scripts/ scan covered only ${scriptsAllFiles.length} file(s) (expected at least ${SCRIPTS_SCAN_MIN_FILES}). An empty or near-empty scan passes vacuously, so treat it as a broken guard rather than a clean repository.`
+  )
+}
+
+if (scriptsScanSubtreeShortfalls.length > 0) {
+  failures.push(
+    `The scripts/ scan skipped whole subtrees, blinding the Supabase guard there. A total-count floor alone cannot catch this: scripts/testing is about half of all files, so a glob that narrowed to it would still "pass" while silently skipping scripts/database, scripts/one-off, scripts/recovery and scripts/storage — where every neutralized script lives. Subtree(s) below their floor:\n${scriptsScanSubtreeShortfalls
+      .map(entry => `- ${entry}`)
+      .join('\n')}`
+  )
+}
+
+if (scriptsScanUncoveredSubtrees.length > 0) {
+  failures.push(
+    `SCRIPTS_SCAN_SUBTREE_MINIMUMS has no floor for scripts/ subtree(s) the scan currently covers. Without a floor, those directories can drop out of the scan entirely and still pass on the total count alone. Add a floor of roughly two thirds of the current file count for each:\n${scriptsScanUncoveredSubtrees
+      .map(prefix => `- ${prefix}`)
+      .join('\n')}`
+  )
+}
+
+if (scriptsRootFileCount < SCRIPTS_ROOT_MIN_FILES) {
+  failures.push(
+    `The scripts/ scan covered ${scriptsRootFileCount} file(s) directly under scripts/ (expected at least ${SCRIPTS_ROOT_MIN_FILES}). The per-subtree floors cannot cover that position, and both files that live there are load-bearing for this guard: clear-link-preview-cache.js is a neutralized script and verify-env.js is an allowlist entry, so a glob narrowed to scripts/*/** would silently drop the offender check and the stale-allowlist check together.`
   )
 }
 
