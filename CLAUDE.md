@@ -38,6 +38,15 @@ npm run deploy:notify           # Deploy notification script
 
 ### CLI Tools Available
 
+> **⚠ Supabase는 2026-08-26 컷오버로 은퇴했다.** 아래 Supabase CLI 명령은 **1주
+> 관찰 기간 동안의 조회·최종 백업용**이며, 그 뒤 프로젝트가 삭제되면 전부
+> 무의미해진다. **운영 DB 작업은 Turso로 한다** — `scripts/turso/README.md`가
+> 정본이다.
+>
+> 이 저장소에는 아직 Supabase를 향해 쓰는 죽은 스크립트가 남아 있다. 대부분은
+> 실행하면 **에러 없이 성공 메시지를 내고 아무것도 하지 않는다.** `scripts/`
+> 아래 도구를 쓰기 전에 그것이 Turso를 보는지 확인해라.
+
 Both **Vercel CLI** and **Supabase CLI** are installed globally and can be
 invoked directly (no need to wrap through npm scripts).
 
@@ -107,9 +116,13 @@ This is a **Next.js 15 App Router** project for 경기아트콜렉티브 협동�
 - **Framework**: Next.js 15.4.4 (App Router) + React 19
 - **Language**: TypeScript (strict: false for gradual migration)
 - **Styling**: Tailwind CSS + custom particle systems (WebGL/Canvas)
-- **Backend**: Next.js API routes + Supabase
-- **Database**: Supabase PostgreSQL with link preview caching
-- **Auth**: Supabase Auth with role-based access control
+- **Backend**: Next.js API routes + Turso(libSQL)
+- **Database**: Turso + Drizzle ORM. 쿼리 계층은 `src/db/queries/`에 있고
+  **권한을 모른다**(`NextResponse`·`next/headers`·인가 임포트 금지) — 인가는
+  전부 라우트가 판정한다
+- **Auth**: Better Auth (`src/lib/auth/`)
+- **Storage**: Vercel Blob — 공개(첨부·아티스트 사진)와 비공개(이사회 서류·백업)
+  분리
 - **Rich Text**: React Quill editor + react-markdown with DOMPurify sanitization
 - **Image Processing**: Sharp for optimization, WebP-first delivery
 - **Rate Limiting**: Upstash Redis (distributed) with memory fallback
@@ -121,7 +134,8 @@ This is a **Next.js 15 App Router** project for 경기아트콜렉티브 협동�
 
 - **Static Content**: JSON files in `/data/` directory (artists.json,
   projects.json, global.json)
-- **Dynamic Content**: Supabase database (users, posts, comments, notifications)
+- **Dynamic Content**: Turso 데이터베이스
+  (회원·게시글·댓글·알림·이사회·활동로그)
 - **Images**: Static files in `/public/images/` with WebP optimization
 
 ### Critical Components
@@ -219,7 +233,7 @@ throw ApiError.internalServerError('Server error')
 
 ### Authentication & Middleware
 
-- **Authentication**: Supabase Auth with JWT tokens
+- **Authentication**: Better Auth (세션 쿠키 캐시 5분, 세션 7일)
 - **Authorization**: Role-based access control (admin/user)
 - **Middleware**: Handles auth, CSP headers, and request processing
 - **Rate Limiting**: Distributed rate limiting via
@@ -260,17 +274,39 @@ throw ApiError.internalServerError('Server error')
 
 ### Environment Variables Issues
 
-- Always set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- Set `SUPABASE_SERVICE_ROLE_KEY` for server-side operations
-- Optional: `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` for
-  distributed rate limiting
-- Use `NEXT_STRICT_CSP=true` to enable strict CSP in development
+**필수** (없으면 앱이 뜨지 않는다):
+
+- `TURSO_DATABASE_URL` — 원격(`libsql://`)이면 `TURSO_AUTH_TOKEN`도 **필수**.
+  `file:`·루프백은 토큰 없이 동작한다(`assertProductionCredentials`)
+- `TURSO_AUTH_TOKEN`
+- `BETTER_AUTH_SECRET`
+- `NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL` — **비면 모든 Blob 사진이 기본 로고로
+  바뀐다** (`isBlobPublicUrl`이 항상 false가 된다). 에러는 안 난다
+- `PUBLIC_BLOB_READ_WRITE_TOKEN` / `PRIVATE_BLOB_READ_WRITE_TOKEN`
+- `NEXT_PUBLIC_SUPABASE_URL` — **DB 연결용이 아니다.** DB에 남은 레거시 Storage
+  절대 URL을 "우리 것"으로 인정하는 판정 4곳이 읽는다
+
+**선택**: `UPSTASH_REDIS_REST_URL`·`UPSTASH_REDIS_REST_TOKEN`(분산 레이트리밋 —
+없으면 인스턴스별 메모리 폴백이라 Vercel에서 사실상 무효), `RESEND_API_KEY`(인증
+메일. **없으면 가입·재설정이 200을 반환하고 메일만 안 간다**),
+`NEXT_STRICT_CSP=true`.
+
+정본은 `npm run env:check`(`scripts/verify-env.js`)다.
 
 ### Database Migration Issues
 
-- Run migrations from `supabase/migrations/` directory
-- Ensure `link_previews` table exists for caching functionality
-- Check RLS policies are properly configured
+- 마이그레이션 정본은 **`src/db/migrations/`**(Drizzle)다.
+  `supabase/migrations/`는 **역사 기록**이며 더 이상 적용하지 않는다
+- **`drizzle-kit migrate`를 쓰지 마라.** `0002`~`0004`는 파일 안에
+  `BEGIN`/`COMMIT`과 자체 단언이 있어 마이그레이터가 감싸면 실패한다. 적용
+  절차는 `scripts/turso/README.md`에 있다
+- **RLS는 더 이상 존재하지 않는다.** Postgres가 행 단위로 막아주던 것을 이제
+  **앱 코드가 전부 판정한다**. "RLS 정책을 고친다"는 접근은 아무것도 바꾸지
+  않으면서 경계가 지켜진다고 믿게 만든다. 권한 관련 변경은
+  `src/lib/server/*Auth.ts`· `src/lib/server/authz.ts`와
+  `scripts/testing/assert-runtime-risks.mjs`의 계약을 본다
+- 스키마 변경 후 `npm run db:parity`로 확인한다. **인자로 URL을 주지 않으면
+  `file:local.db`를 본다** — 운영을 보려면 URL을 명시해야 한다
 
 This codebase emphasizes user experience through advanced image optimization,
 comprehensive error handling, performance-focused architecture, and robust

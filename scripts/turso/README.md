@@ -905,3 +905,69 @@ EXPLAIN QUERY PLAN SELECT count(*) FROM notifications WHERE user_id = '<아무 �
 남은 것: 1주 관찰 → Supabase 프로젝트 정지 → 최종 pg_dump 보관 → 삭제(단계 5).
 그때 Vercel의 `NEXT_PUBLIC_SUPABASE_ANON_KEY`·`SUPABASE_SERVICE_ROLE_KEY`·`STORAGE_PROVIDER`
 제거(verify-env는 이미 선택 취급), `NEXT_PUBLIC_SUPABASE_URL`도 잔여 0 확인됐으므로 제거 가능.
+
+---
+
+## 백업 — 어디에 있고 어떻게 되찾는가
+
+**컷오버 후 감사(2026-08-27)에서 "백업 자동화가 어떤 문서에도 없다"가 Critical로
+지적됐다.** 사고 한복판에서 이 문서를 펴 든 사람이 **이미 있는 백업에 도달하지
+못하는 것**이 가장 비싼 실패다. 아래가 정본이다.
+
+### 1. 야간 자동 백업 (정상 경로)
+
+`.github/workflows/turso-backup.yml` — 매일 **18:00 UTC(KST 03:00)** + 수동 트리거.
+
+`turso db shell .dump` → 크기·`CREATE TABLE`·마지막 줄 `COMMIT;` 3중 검증 → gzip →
+**Vercel 비공개 Blob `backups/YYYYMMDD.sql.gz`, 90일 보존.**
+
+되찾는 절차:
+```bash
+node scripts/turso/download-latest-backup.mjs   # 비공개 Blob에서 최신본
+node scripts/turso/restore-from-dump.mjs        # 로컬 파일 DB로 복원
+```
+
+**실측(2026-08-27):** 최신본을 받아 복원하니 **29표 / `idx_*` 20개 / 18,250행**으로
+운영과 완전히 일치했고, 그 DB로 `next start`가 정상 기동했다.
+**즉 Turso가 통째로 날아가도 최대 24시간 전으로 완전 복구된다.**
+
+**RPO는 24시간이다.** 그 사이 쓰기는 유실된다.
+
+### 2. `turso db shell .dump`가 이 기계에서 안 되는 이유
+
+**CLI가 미로그인이다**(`~/.turso/settings.json` 없음). 위 워크플로는 GitHub 시크릿
+`TURSO_API_TOKEN`으로 돌지만 로컬에는 그 토큰이 없다.
+
+로컬에서 즉석 덤프가 필요하면 **libsql API로 직접 뜬다** — 컷오버 때 쓴 방법이다.
+`sqlite_master`를 읽어 DDL을 뽑고 표별로 `SELECT`해 `INSERT`를 만든다.
+(`turso auth login`을 하면 CLI 경로가 열린다.)
+
+### 3. `~/ggac-backups/turso-pre-cutover-2026-08-26.sql` — **무엇이 빠졌는지 알고 써라**
+
+컷오버 **직전**(단계 4 재이관 이전) 스냅샷이다. 26표 182행. 복원 자체는 검증됐다.
+
+**이걸로 롤백하면 사라지는 것:**
+
+| | |
+|---|---|
+| **표가 통째로 없음** | `user_sessions`(5,937) · `daily_activity_stats`(865) · `system_settings_history` |
+| **0행이 됨** | `user_activities` 11,083 · **`system_settings` 19**(사이트 설정·SMTP·유지보수·가입 토글) · `default_settings` 16 · 이사회 108 · `event_applications` 15 · `link_previews` 20 |
+| **인덱스** | 성능 인덱스 20개 전부 |
+| **살아남음** | 회원 23 · 글 39 · 댓글 22 · 알림 24 · 아티스트 13 · 첨부 2 |
+
+**롤백 시 후속 작업**: `0001`~`0004` 재적용(표 3개 + 인덱스 20개) → `system_settings`
+재구성. `user_sessions`가 없어도 로그인은 죽지 않지만(`manageUserSession`이 `after()`
+안에서 `.catch`) 세션 추적과 관리자 실시간·분석 화면이 조용히 빈다.
+
+**위 컷오버 기록 5번의 "덤프에 `maintenance_mode`가 담긴 것 확인"은 재이관용 Supabase
+`pg_dump` 이야기다.** 이 Turso 백업 파일에는 `system_settings` INSERT가 **0건**이다.
+
+### 4. 알려진 빈 곳 (2026-08-27 감사)
+
+- **백업 실패 알림이 없다.** 2026-08-18 실행이 API 토큰 만료로 실패했는데 조용히
+  지나갔다(`SLACK_BOT_TOKEN` 시크릿은 있으나 워크플로가 안 쓴다). 토큰은 또 만료된다.
+- **백업이 운영과 같은 Vercel 계정 안에만 있다.** `PRIVATE_BLOB_READ_WRITE_TOKEN`
+  하나가 유일한 열쇠고 오프사이트 사본이 없다.
+- **단계 5 최종 `pg_dump` 절차가 정해져 있지 않다.** Supabase를 지우는 순간
+  Postgres 형태의 사본은 영구히 사라진다 — **삭제 전에 어디에·어떤 명령으로·어떻게
+  검증할지 정하고 실행할 것.**
