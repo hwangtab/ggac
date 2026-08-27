@@ -31,15 +31,27 @@ export function buildWhereClause(
   }
 
   switch (operator) {
+    // `equals`/`not_equals`가 `convertValue`를 건너뛰던 것이 컷오버 회귀였다.
+    //
+    // UI(`FilterConditionEditor.tsx`의 `<select>`)는 boolean 필드에 대해 **항상
+    // 문자열** `'true'`/`'false'`를 보낸다. Postgres는 `is_admin = $1`에서
+    // 파라미터 타입을 boolean으로 추론해 통과시켰지만, **SQLite에서 `1 = 'true'`는
+    // 거짓**이다(INTEGER < TEXT). 그래서 관리자가 "관리자 여부 = 예"로 거르면
+    // 에러 없이 **항상 0건**이 나온다 — 위쪽 통계 바에는 진짜 숫자가 그대로
+    // 보이므로 필터가 고장 난 줄 모른다. 적대 감사(2026-08-27) 실측.
+    //
+    // boolean 필드는 `operators: ['equals']`뿐이라(memberSearchFields.ts) 다른
+    // 연산자로 우회할 수도 없었다. 같은 저장소의 `posts.ts`
+    // `normalizeBooleanFilterValue`가 이미 올바른 참조 구현이다.
     case 'equals':
       sql = `${field} = $${nextIndex}`
-      params.push(value)
+      params.push(convertValue(value, type))
       nextIndex++
       break
 
     case 'not_equals':
       sql = `${field} != $${nextIndex}`
-      params.push(value)
+      params.push(convertValue(value, type))
       nextIndex++
       break
 
