@@ -62,6 +62,39 @@ jobs:
             echo "덤프의 마지막 줄이 COMMIT;이 아니다(길이: ${#LAST_LINE}자). 스트림 중간에 잘린 것으로 보고 실패 처리한다. 실패 아티팩트를 안전한 채널로 직접 확인할 것(로그에 내용 미출력)."
             exit 1
           fi
+          # ── 위 세 검사가 못 잡는 것: **내용이 비어도 통과한다.**
+          # 적대 감사(2026-08-27)가 실행으로 증명했다 — INSERT를 전부 지운
+          # 덤프(16KB)도 크기·CREATE TABLE·COMMIT; 세 검사를 모두 통과했고,
+          # 복원하면 조합원 0명·글 0건·설정 0행인 껍데기가 나온다. 즉 운영
+          # 데이터가 지워져도 백업은 매일 "성공"을 보고하고, 90일 뒤에는 빈
+          # 백업만 남는다.
+          #
+          # 그래서 **표 개수와 행 개수의 하한**을 함께 본다. 숫자를 낮추려면
+          # 이 파일을 고쳐야 하고 그 커밋이 리뷰에 남는다.
+          TABLES=$(grep -c '^CREATE TABLE' "$DUMP_SQL" || true)
+          INSERTS=$(grep -c '^INSERT INTO' "$DUMP_SQL" || true)
+          echo "표 ${TABLES}개 · INSERT ${INSERTS}줄"
+
+          MIN_TABLES=25
+          MIN_INSERTS=15000
+          if [ "$TABLES" -lt "$MIN_TABLES" ]; then
+            echo "::error::표가 ${TABLES}개다(하한 ${MIN_TABLES}). 스키마가 통째로 빠진 덤프다."
+            exit 1
+          fi
+          if [ "$INSERTS" -lt "$MIN_INSERTS" ]; then
+            echo "::error::INSERT가 ${INSERTS}줄이다(하한 ${MIN_INSERTS}). 데이터가 빠진 껍데기 덤프다 — 이대로 보관하면 복구가 불가능하다."
+            exit 1
+          fi
+
+          # 핵심 표가 실제로 담겼는지도 본다. 표 개수만으로는 "26표가 있는데
+          # member_profiles만 비었다"를 못 잡는다.
+          for T in member_profiles posts user artists board_documents; do
+            if ! grep -q "^INSERT INTO \"\?${T}\"\? " "$DUMP_SQL" && ! grep -q "^INSERT INTO \`${T}\`" "$DUMP_SQL"; then
+              echo "::error::${T} 표에 INSERT가 한 줄도 없다. 이 표가 비면 복구가 의미 없다."
+              exit 1
+            fi
+          done
+
           gzip "$DUMP_SQL"
           echo "DUMP_FILE=${DUMP_SQL}.gz" >> "$GITHUB_ENV"
 

@@ -36,9 +36,38 @@ function parseStampToDate(stamp) {
   return new Date(Date.UTC(year, month - 1, day))
 }
 
+/**
+ * 같은 UTC 날짜에 두 번 올릴 때 **덮어쓰지 않는다.**
+ *
+ * 적대 감사(2026-08-27) 지적 — 경로가 `backups/<UTC날짜>.sql.gz` 하나이고
+ * `allowOverwrite: true`라, 같은 날 두 번째 실행이 그날의 정상본을 지웠다.
+ * 실제로 2026-08-19에 두 번(수동 트리거 + 정기) 같은 경로에 썼다.
+ *
+ * **이게 왜 위험한가:** 사고가 났을 때 "새 백업이나 떠 두자"고 수동 트리거를
+ * 누르는 것이 자연스러운 반응인데, 그 시점 DB가 이미 손상됐다면 **마지막
+ * 정상본을 스스로 덮어쓴다.** 복구 수단을 지우는 버튼이 되는 것이다.
+ *
+ * 그래서 두 번째부터는 `-2`, `-3` … 접미사를 붙여 **정상본을 보존**한다.
+ * 90일 정리(`deleteOldBackups`)는 날짜 접두사로 판정하므로 접미사가 붙어도
+ * 같은 날짜로 함께 만료된다.
+ */
+async function resolveUploadPath(stamp, token) {
+  const base = `${PREFIX}${stamp}`
+  const { blobs } = await list({ prefix: base, token, limit: 100 })
+  if (blobs.length === 0) return `${base}.sql.gz`
+
+  // `20260827.sql.gz`, `20260827-2.sql.gz` … 중 가장 큰 번호 다음을 쓴다.
+  let maxSeq = 1
+  for (const b of blobs) {
+    const m = b.pathname.match(/-(\d+)\.sql\.gz$/)
+    if (m) maxSeq = Math.max(maxSeq, Number(m[1]))
+  }
+  return `${base}-${maxSeq + 1}.sql.gz`
+}
+
 export async function uploadBackup(localPath, token = requireEnv('PRIVATE_BLOB_READ_WRITE_TOKEN')) {
   const stamp = extractDateStamp(basename(localPath))
-  const pathname = `${PREFIX}${stamp}.sql.gz`
+  const pathname = await resolveUploadPath(stamp, token)
   const body = readFileSync(localPath)
 
   const blob = await put(pathname, body, {
@@ -46,7 +75,9 @@ export async function uploadBackup(localPath, token = requireEnv('PRIVATE_BLOB_R
     contentType: 'application/gzip',
     token,
     addRandomSuffix: false,
-    allowOverwrite: true,
+    // 위에서 빈 경로를 골랐으므로 덮어쓸 일이 없다. 그래도 false로 두어
+    // 경합이 나면 조용히 덮어쓰는 대신 실패하게 한다.
+    allowOverwrite: false,
   })
 
   return { pathname: blob.pathname, size: body.length, stamp }
@@ -63,7 +94,9 @@ export async function deleteOldBackups(
 
   const deleted = []
   for (const blob of blobs) {
-    const match = blob.pathname.match(/^backups\/(\d{8})\.sql\.gz$/)
+    // 접미사(`-2`, `-3` …)가 붙은 같은 날 백업도 함께 만료시킨다. 안 받으면
+    // 그 파일들이 영원히 남아 90일 보존이 무의미해진다.
+    const match = blob.pathname.match(/^backups\/(\d{8})(?:-\d+)?\.sql\.gz$/)
     if (!match) continue
     const stampDate = parseStampToDate(match[1])
     if (stampDate.getTime() < cutoff) {

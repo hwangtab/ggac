@@ -19,11 +19,16 @@ export async function findLatestBackup(token = requireEnv('PRIVATE_BLOB_READ_WRI
 
   const dated = blobs
     .map(blob => {
-      const match = blob.pathname.match(/^backups\/(\d{8})\.sql\.gz$/)
-      return match ? { blob, stamp: match[1] } : null
+      // 같은 날 두 번째 백업은 `20260827-2.sql.gz` 형태다(upload-backup.mjs가
+      // 정상본을 덮어쓰지 않으려고 접미사를 붙인다). 접미사를 받지 않으면
+      // **그날의 최신본이 목록에서 통째로 빠져** 더 오래된 백업을 최신이라고
+      // 집어 든다 — 적대 감사(2026-08-27)에서 잡혔다.
+      const match = blob.pathname.match(/^backups\/(\d{8})(?:-(\d+))?\.sql\.gz$/)
+      return match ? { blob, stamp: match[1], seq: Number(match[2] ?? 1) } : null
     })
     .filter(Boolean)
-    .sort((a, b) => b.stamp.localeCompare(a.stamp))
+    // 날짜가 같으면 접미사가 큰 쪽(나중에 뜬 것)이 최신이다.
+    .sort((a, b) => b.stamp.localeCompare(a.stamp) || b.seq - a.seq)
 
   return dated[0]?.blob ?? null
 }
