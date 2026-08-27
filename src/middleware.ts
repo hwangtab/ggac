@@ -106,8 +106,18 @@ export async function middleware(request: NextRequest) {
 
   // Trailing slash 정규화: `/about/` → `/about` 301 리디렉션.
   // next-intl locale 처리 이전에 수행하여 이중 리디렉션 방지.
+  //
+  // **`request.nextUrl.clone()`을 쓰지 마라.** `NextURL`은 pathname setter가
+  // 내부 포맷 결과에 반영되지 않아, `url.pathname`은 `/artists`로 바뀌는데
+  // `toString()`과 Location 헤더는 여전히 `/artists/`가 나온다. 그러면 이 블록이
+  // 자기 자신으로 301을 내보내 **무한 리다이렉트**가 된다(브라우저는
+  // ERR_TOO_MANY_REDIRECTS). 슬래시가 붙은 모든 URL이 열리지 않았다 —
+  // 외부 링크·북마크·메일·QR이 슬래시를 달고 있으면 그 방문자는 페이지를
+  // 아예 못 봤다. 컷오버 후 감사(2026-08-27)에서 발견됐고 이관 이전부터 있었다.
+  //
+  // 표준 `URL`은 setter가 정상 동작하며 쿼리스트링과 로케일 접두사를 보존한다.
   if (pathname.length > 1 && pathname.endsWith('/')) {
-    const url = request.nextUrl.clone()
+    const url = new URL(request.url)
     url.pathname = pathname.replace(/\/+$/, '')
     return NextResponse.redirect(url, 301)
   }
