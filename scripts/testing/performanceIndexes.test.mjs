@@ -315,9 +315,16 @@ test('부정 대조: 인덱스 하나가 빠지면 단언이 물어 전체가 �
 
   const c = open()
   try {
-    const idx = await c.execute(
-      "SELECT count(*) AS n FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%'"
+    // **0004가 만드는 인덱스만** 센다. `idx_%` 전체를 세면 이후 마이그레이션이
+    // 인덱스를 추가할 때마다 이 테스트가 거짓 실패한다(0005 추가 때 실제로 그랬다).
+    const owned = [...SQL.matchAll(/CREATE INDEX IF NOT EXISTS `(idx_[a-z0-9_]+)`/g)].map(
+      mm => mm[1]
     )
+    assert.ok(owned.length > 0, '0004에서 인덱스 이름을 뽑지 못했다(정규식이 낡았다)')
+    const idx = await c.execute({
+      sql: `SELECT count(*) AS n FROM sqlite_master WHERE type='index' AND name IN (${owned.map(() => '?').join(',')})`,
+      args: owned,
+    })
     assert.equal(Number(idx.rows[0].n), 0, '단언이 물면 앞서 만든 인덱스도 함께 롤백돼야 한다')
     const leftovers = await c.execute(
       "SELECT name FROM sqlite_master WHERE name LIKE '__migration%'"
