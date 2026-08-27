@@ -2851,6 +2851,17 @@ const supabaseAccessSentinels = [
   `fetch(\`\${url}/rest/v1/system_settings?select=*\`, { headers: { apikey: key } })`,
   `const key = process.env.SUPABASE_SERVICE_ROLE_KEY`,
 ]
+/**
+ * **표본 배열 자체가 비면 이 자기검사는 공허하게 통과한다.** 배열을 `[]`로
+ * 비우면 `filter`가 빈 배열을 내고 "눈먼 곳 없음"으로 읽힌다 — 컷오버 후
+ * 감사에서 실증됐다(둘 다 비우니 전수 가드가 exit 0). 이 저장소가 전환 내내
+ * 반복해 당한 유형이라, 개수 하한을 함께 고정한다.
+ *
+ * 표본을 **줄이려면** 이 숫자도 함께 내려야 하고, 그 커밋이 리뷰에 남는다.
+ */
+const SUPABASE_ACCESS_SENTINEL_MIN = 10
+const SUPABASE_ACCESS_FALSE_POSITIVE_MIN = 3
+
 const supabaseAccessPatternBlindSpots = supabaseAccessSentinels.filter(
   sample => !supabaseAccessPattern.test(sample)
 )
@@ -2931,6 +2942,21 @@ const supabaseAccessFalsePositiveSamples = [
 const supabaseAccessOverreach = supabaseAccessFalsePositiveSamples.filter(sample =>
   supabaseAccessPattern.test(stripComments(sample))
 )
+
+if (supabaseAccessSentinels.length < SUPABASE_ACCESS_SENTINEL_MIN) {
+  failures.push(
+    `src/ Supabase 전수 가드의 양성 표본이 ${supabaseAccessSentinels.length}개다 — ` +
+      `${SUPABASE_ACCESS_SENTINEL_MIN}개 이상이어야 한다. 표본이 비면 "패턴에 눈먼 곳이 ` +
+      `없다"는 자기검사가 공허하게 통과한다. 줄이려면 상수도 함께 내려라.`
+  )
+}
+if (supabaseAccessFalsePositiveSamples.length < SUPABASE_ACCESS_FALSE_POSITIVE_MIN) {
+  failures.push(
+    `src/ Supabase 전수 가드의 오탐 표본이 ${supabaseAccessFalsePositiveSamples.length}개다 — ` +
+      `${SUPABASE_ACCESS_FALSE_POSITIVE_MIN}개 이상이어야 한다. 표본이 비면 "정당한 Drizzle ` +
+      `코드를 오탐하지 않는다"는 자기검사가 공허하게 통과한다.`
+  )
+}
 
 // ---------------------------------------------------------------------------
 // `scripts/` 아래에서 Supabase를 건드리는 코드가 새로 생기는 것을 막는다.
