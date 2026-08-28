@@ -5,6 +5,7 @@ import { BOARD_AGENDA_STATUS, parseBoardAgendaSortOrder } from '@/constants/boar
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { validateUUID } from '@/utils/validation'
 import { deleteAgenda, getAgendaOwner, updateAgenda } from '@/db/queries/board'
+import { hasLiveComments } from '@/db/queries/boardAgendaComments'
 
 export const runtime = 'nodejs'
 
@@ -85,6 +86,15 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       if (owner !== user.id && !isAdmin) {
         throw ApiError.forbidden('삭제 권한이 없습니다.')
       }
+
+      // 안건 삭제는 hard DELETE고 `board_agenda_comments`가 cascade로 딸려
+      // 간다 — 제안자 한 사람이 다른 이사들의 발언을 **행째로** 없앨 수 있다.
+      // 그건 댓글 DELETE가 관리자에게조차 금지한 일이다(그쪽은 soft delete만
+      // 한다). 그래서 토론이 붙은 안건은 관리자만 지운다.
+      if (!isAdmin && (await hasLiveComments(id))) {
+        throw ApiError.forbidden('토론이 진행된 안건은 관리자만 삭제할 수 있습니다.')
+      }
+
       try {
         await deleteAgenda(id)
       } catch {

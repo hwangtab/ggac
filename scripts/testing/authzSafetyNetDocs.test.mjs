@@ -32,11 +32,20 @@ test('컷오버 절차서에도 같은 정정이 있다', () => {
   assert.match(tursoReadme, /인가는 E2E가 지킨다/)
 })
 
-test('세 문서가 같은 기준선(50)을 말한다', () => {
+test('세 문서가 같은 기준선(64)을 말한다', () => {
+  // 이름은 "세 문서"인데 가드 파일(`assert-runtime-risks.mjs`)은 빠져 있었다 —
+  // 그래서 기준선을 올린 첫 회차에 그 파일만 낡은 숫자로 남았는데도 초록이었다.
   for (const [name, src] of [
     ['CLAUDE.md', claudeMd],
     ['scripts/turso/README.md', tursoReadme],
+    ['scripts/testing/assert-runtime-risks.mjs', guard],
   ]) {
-    assert.match(src, /50 passed/, `${name}의 기준선이 사라지면 "몇 건이 정상인지"를 잃는다`)
+    assert.match(src, /64 passed/, `${name}의 기준선이 사라지면 "몇 건이 정상인지"를 잃는다`)
+    // 낡은 숫자가 **함께** 남아 있으면 위 match만으로는 못 잡는다.
+    assert.doesNotMatch(
+      src,
+      /기준선[^\n]*50 passed/,
+      `${name}에 옛 기준선이 살아 있으면 다음 사람이 어느 쪽을 믿을지 알 수 없다`
+    )
   }
 })

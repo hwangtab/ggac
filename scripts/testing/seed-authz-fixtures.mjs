@@ -104,6 +104,11 @@ const { systemSettings: tursoSystemSettings, defaultSettings: tursoDefaultSettin
 )
 const { upsertProfile } = await import('@/db/queries/profiles')
 const { memberProfiles: tursoMemberProfiles } = await import('@/db/schema/identity')
+const {
+  boardMeetings: tursoBoardMeetings,
+  boardAgendas: tursoBoardAgendas,
+  boardAgendaComments: tursoBoardAgendaComments,
+} = await import('@/db/schema/board')
 const { eq } = await import('drizzle-orm')
 
 // id는 전부 고정값이다. 예전에는 Supabase가 만들어준 uuid를 그대로 받아
@@ -363,6 +368,11 @@ async function main() {
   const COMMENT_ID = '00000000-0000-4000-8000-00000000a002'
   const NOTIFICATION_ID = '00000000-0000-4000-8000-00000000a003'
   const MAINTENANCE_SETTING_ID = '00000000-0000-4000-8000-00000000a004'
+  const BOARD_MEETING_ID = '00000000-0000-4000-8000-00000000a006'
+  const BOARD_AGENDA_ID = '00000000-0000-4000-8000-00000000a007'
+  const BOARD_COMMENT_ID = '00000000-0000-4000-8000-00000000a008'
+  const BOARD_COMMENT_DELETABLE_ID = '00000000-0000-4000-8000-00000000a009'
+  const BOARD_COMMENT_BY_ADMIN_ID = '00000000-0000-4000-8000-00000000a00a'
   const REGISTRATION_SETTING_ID = '00000000-0000-4000-8000-00000000a005'
 
   // `isDeleted: false`가 여기 있어야 시드가 **복구 수단**이 된다. 이 스크립트는
@@ -400,6 +410,60 @@ async function main() {
     .insert(tursoComments)
     .values(commentValues)
     .onConflictDoUpdate({ target: tursoComments.id, set: commentValues })
+
+  // 이사회 안건 토론 픽스처. 작성자는 `director`다 — 관리자(admin)가 남의
+  // 발언을 **수정은 못 하고 삭제만 할 수 있다**는 경계를 두 계정으로 재현한다.
+  // 댓글이 둘인 이유: 관리자 삭제 테스트가 하나를 소모하므로, 남겨 두는 쪽
+  // (BOARD_COMMENT_ID)이 없으면 같은 파일의 뒤 테스트가 404로 흔들린다.
+  const boardMeetingValues = {
+    id: BOARD_MEETING_ID,
+    title: 'authz 픽스처 이사회',
+    status: 'scheduled',
+    createdBy: ids.admin,
+  }
+  await db
+    .insert(tursoBoardMeetings)
+    .values(boardMeetingValues)
+    .onConflictDoUpdate({ target: tursoBoardMeetings.id, set: boardMeetingValues })
+
+  const boardAgendaValues = {
+    id: BOARD_AGENDA_ID,
+    meetingId: BOARD_MEETING_ID,
+    title: 'authz 픽스처 안건',
+    content: '토론 경계 테스트용',
+    sortOrder: 0,
+    status: 'proposed',
+    proposedBy: ids.director,
+  }
+  await db
+    .insert(tursoBoardAgendas)
+    .values(boardAgendaValues)
+    .onConflictDoUpdate({ target: tursoBoardAgendas.id, set: boardAgendaValues })
+
+  // `isDeleted: false`는 픽스처 글과 같은 이유로 반드시 set에도 들어간다 —
+  // 관리자 삭제 스펙이 soft delete를 남기므로 시드가 되돌리지 못하면 다음
+  // 실행이 404로 시작한다.
+  // 세 번째 댓글의 작성자는 **관리자**다 — "이사이지만 작성자가 아닌 사람"
+  // 경계(이사가 남의 발언을 지우거나 고치지 못한다)를 표현하려면 director가
+  // 작성자가 **아닌** 댓글이 하나 있어야 한다.
+  const boardCommentAuthors = {
+    [BOARD_COMMENT_ID]: ids.director,
+    [BOARD_COMMENT_DELETABLE_ID]: ids.director,
+    [BOARD_COMMENT_BY_ADMIN_ID]: ids.admin,
+  }
+  for (const [id, authorId] of Object.entries(boardCommentAuthors)) {
+    const values = {
+      id,
+      agendaId: BOARD_AGENDA_ID,
+      authorId,
+      content: 'authz 픽스처 안건 의견',
+      isDeleted: false,
+    }
+    await db
+      .insert(tursoBoardAgendaComments)
+      .values(values)
+      .onConflictDoUpdate({ target: tursoBoardAgendaComments.id, set: values })
+  }
 
   // readAt을 매 시드마다 null로 되돌린다 — e2e 스펙 안의
   // resetNotificationUnread()가 테스트 사이 상태를 되돌리는 것과 별개로,
@@ -584,6 +648,11 @@ async function main() {
     postId: POST_ID,
     commentId: COMMENT_ID,
     notificationId: NOTIFICATION_ID,
+    boardMeetingId: BOARD_MEETING_ID,
+    boardAgendaId: BOARD_AGENDA_ID,
+    boardCommentId: BOARD_COMMENT_ID,
+    boardCommentDeletableId: BOARD_COMMENT_DELETABLE_ID,
+    boardCommentByAdminId: BOARD_COMMENT_BY_ADMIN_ID,
   }
   writeFileSync(OUT_FILE, JSON.stringify(fixtures, null, 2) + '\n')
 
@@ -606,6 +675,7 @@ async function main() {
   console.log(`픽스처 시드 완료 → ${OUT_FILE}`)
   console.log(
     `  계정 ${Object.keys(ids).length}개, 글 1, 댓글 1, 알림 1, 좋아요 1, ` +
+      `이사회 회의 1·안건 1·안건 의견 3, ` +
       `system_settings ${settingRows.length}행, default_settings ${DEFAULT_SETTINGS.length}행 (전부 Turso)`
   )
 }

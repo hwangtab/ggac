@@ -733,6 +733,22 @@
       "saving": "Saving...",
       "cancel": "Cancel",
       "errorGeneric": "An error occurred. Please try again."
+    },
+    "discussion": {
+      "toggle": "Discussion {count}",
+      "loading": "Loading...",
+      "empty": "No comments yet. Start the discussion.",
+      "placeholder": "Share your view on this agenda item",
+      "send": "Post",
+      "sending": "Posting...",
+      "save": "Save",
+      "cancel": "Cancel",
+      "edit": "Edit",
+      "delete": "Delete",
+      "edited": "(edited)",
+      "deleted": "This comment was deleted.",
+      "deleteConfirm": "Delete this comment?",
+      "error": "The request could not be completed."
     }
   },
   "home": {

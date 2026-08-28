@@ -212,7 +212,7 @@ TURSO_DATABASE_URL=http://127.0.0.1:8901 \
 ```
 
 계정 **6개**(Better Auth `user`/`account` + `member_profiles`)와 글 1·댓글
-1·알림 1·좋아요 1, 그리고 **`system_settings` 2행**(`site/maintenance_mode`,
+1·알림 1·좋아요 1·이사회 회의 1·안건 1·안건 의견 3, 그리고 **`system_settings` 2행**(`site/maintenance_mode`,
 `site/registration_enabled`)과 `default_settings` 16행을 채우는 멱등
 스크립트다. 두 번 돌려도 행이 늘지 않는다(id가 전부 고정값이다).
 
@@ -289,20 +289,22 @@ webServer에 `{...process.env, ...webServer.env}`를 넘긴다. e2e 전용 변�
 `playwright test --project=authz --project=authz-public`의 별칭이다. 두
 프로젝트를 다 도는 이유: `authz-boundaries.spec.ts`(비인증 401·보호 페이지
 리다이렉트·API 계약)가 `authz-public`에 있어서, `--project=authz`만 돌리면
-**컷오버 게이트인 이 명령 하나가 그 17건을 통째로 빼먹는다.**
+**컷오버 게이트인 이 명령 하나가 그 21건을 통째로 빼먹는다.**
 
 - `authz-setup`(5개 계정 로그인 → `e2e/.auth/*.json` storageState 저장) 5건
 - `authz`: `authz-maintenance`·`authz-ownership`·`authz-personal`·
-  `authz-remaining`·`authz-roles` 5개 스펙 28건
-- `authz-public`: `authz-boundaries` 17건
+  `authz-remaining`·`authz-roles` 5개 스펙 38건
+- `authz-public`: `authz-boundaries` 21건
 
-**실측 기준선(2026-08-26, Task 6c 수정 2회차):** 50 passed.
+**실측 기준선:** 64 passed(2026-08-28, 이사회 안건 토론 추가 후). 그 전 기준선은
+50 passed(2026-08-26, Task 6c 수정 2회차)였고, 안건 토론 경계 14건
+(`authz-ownership` 10 + `authz-boundaries` 4)이 늘어난 차이다.
 
 `PUBLIC_BLOB_READ_WRITE_TOKEN`을 빼면 **최초 실행에서는** 정책 36 테스트가
 "토큰이 없으면 업로드 준비 단계를 통과할 수 없다"로 **명시적으로 실패한다**
 (조용히 건너뛰지 않는다). 다만 그 준비 단계는 `if (!attachmentId)` 안에 있어서
 **이전 실행이 남긴 첨부 행이 로컬 DB에 있으면 업로드 블록을 통째로 건너뛴다**
-— 그 상태에서는 토큰 없이 돌려도 50건 전부 통과한다(실측). 즉 "토큰을 빼면
+— 그 상태에서는 토큰 없이 돌려도 전부 통과한다(2026-08-26 당시 50건 실측). 즉 "토큰을 빼면
 반드시 빨간불"은 빈 DB에서만 참이다.
 
 `authz-roles.spec.ts`는 **관리자 경계**와 **이사 경계** 전용이다. 두 경계는
@@ -938,7 +940,7 @@ EXPLAIN QUERY PLAN SELECT count(*) FROM notifications WHERE user_id = '<아무 �
 가드도 타입 검사도 통과한다. 가드는 **"이 문자열이 이 파일에 있는가"**만 보고
 도달 가능성·실행 순서·데이터 흐름을 보지 않는다.
 
-**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 50 passed, 실행 절차는
+**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 64 passed, 실행 절차는
 위 "권한 E2E" 절). 같은 감사에서 **E2E는 관리자 게이트 무력화를 실제로 잡았다.**
 
 `assert-runtime-risks.mjs`가 여전히 값을 하는 자리는 **지워진 것**(게이트를 통째로

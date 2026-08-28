@@ -29,8 +29,12 @@ import {
   updateMeeting,
   type MeetingUpdatePatch,
 } from '@/db/queries/board'
+import { countCommentsByAgendas } from '@/db/queries/boardAgendaComments'
+import { createLogger } from '@/utils/logger'
 
 export const runtime = 'nodejs'
+
+const log = createLogger('boardMeetingDetail')
 
 function validateMeetingId(id: string) {
   const validation = validateUUID(id, '회의 ID')
@@ -76,6 +80,31 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         throw ApiError.internalServerError('안건을 불러올 수 없습니다.')
       }
 
+      // 토론 배지용 개수만 함께 싣는다. 본문은 안건을 펼칠 때 따로 받는다 —
+      // 안건 10개짜리 회의의 스레드를 상세 응답에 미리 담을 이유가 없다.
+      //
+      // 실패해도 던지지 않는다. 배포(`git push`)와 마이그레이션 적용은 별개
+      // 절차라 `board_agenda_comments`가 아직 없는 창이 열릴 수 있는데, 그때
+      // 던지면 **배지 하나 때문에 회의 상세 전체가 500**이 된다. 배지는 0으로
+      // 떨어지고 회의·안건·회의록은 그대로 보이는 쪽이 옳다.
+      // 실패는 삼키되 **반드시 남긴다**. 이 라우트의 다른 로더들은 전부
+      // 500을 던지는데 여기만 통과시키므로, 로그가 없으면 "토론 0"이 진짜
+      // 0인지 조회가 죽은 건지 아무도 구분하지 못한다.
+      let commentCounts: Record<string, number> = {}
+      try {
+        commentCounts = await countCommentsByAgendas(agendas.map(a => a.id))
+      } catch (e) {
+        log.error('안건 토론 수 조회 실패 — 배지를 0으로 표시한다', {
+          meetingId: id,
+          error: (e as Error).message,
+        })
+        commentCounts = {}
+      }
+      const agendasWithCounts = agendas.map(agenda => ({
+        ...agenda,
+        comment_count: commentCounts[agenda.id] ?? 0,
+      }))
+
       let minutes: Awaited<ReturnType<typeof getMinutesByMeetingId>>
       try {
         minutes = await getMinutesByMeetingId(id)
@@ -102,7 +131,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         meeting_time: resolveBoardMeetingTime(meeting.meeting_time),
         options,
         votes,
-        agendas,
+        agendas: agendasWithCounts,
         minutes,
         roster,
         auditors,

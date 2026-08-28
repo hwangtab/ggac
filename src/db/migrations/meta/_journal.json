@@ -64,6 +64,13 @@
       "when": 1787813439215,
       "tag": "0008_daily_snowbird",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1787879412407,
+      "tag": "0009_add_board_agenda_comments",
+      "breakpoints": true
     }
   ]
 }

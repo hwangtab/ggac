@@ -218,6 +218,22 @@ export async function getProfileAuthzFields(id: string): Promise<{
 }
 
 /**
+ * 표시 이름 한 칸만 읽는다. 알림 문구에 "누가 썼는지"를 넣으려고 전체 행을
+ * 끌어오면 계좌번호·실명·전화번호·생년월일이 함께 딸려 온다(위
+ * `getProfileAuthzFields`의 주석과 같은 이유).
+ *
+ * @returns 행이 없으면 `null`.
+ */
+export async function getProfileDisplayName(id: string): Promise<string | null> {
+  const rows = await db
+    .select({ displayName: memberProfiles.displayName })
+    .from(memberProfiles)
+    .where(eq(memberProfiles.id, id))
+    .limit(1)
+  return rows[0]?.displayName ?? null
+}
+
+/**
  * 여러 id의 프로필을 **쿼리 한 번**으로 조회한다. 게시글·댓글 목록에서
  * 저자 정보를 채울 때 N+1을 피하려고 쓴다.
  *

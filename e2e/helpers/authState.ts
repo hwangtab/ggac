@@ -17,6 +17,14 @@ export type Fixtures = {
   postId: string
   commentId: string
   notificationId: string
+  /** 이사회 안건 토론 경계용 — `director`가 작성자다. */
+  boardMeetingId: string
+  boardAgendaId: string
+  boardCommentId: string
+  /** 관리자 삭제 스펙이 소모하는 쪽. 스펙이 실행 안에서 되돌린다. */
+  boardCommentDeletableId: string
+  /** 작성자가 `admin`인 댓글 — "이사이지만 작성자가 아닌 사람" 경계용. */
+  boardCommentByAdminId: string
 }
 
 /**

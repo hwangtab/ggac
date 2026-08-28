@@ -13,7 +13,7 @@ test.describe('권한 경계 회귀 (비인증)', () => {
   // board-room 변이 API는 모두 requireBoardMember()로 게이트되며,
   // 비인증 요청은 DB 접근 이전에 401을 반환한다(src/lib/server/boardRoomAuth.ts).
   const boardRoomMutations: Array<{
-    method: 'post' | 'put'
+    method: 'post' | 'put' | 'patch' | 'delete'
     path: string
     data: Record<string, unknown>
   }> = [
@@ -31,6 +31,21 @@ test.describe('권한 경계 회귀 (비인증)', () => {
     { method: 'post', path: '/api/board-room/documents', data: { meeting_id: VALID_UUID } },
     { method: 'put', path: '/api/board-room/date-votes', data: { meeting_id: VALID_UUID } },
     { method: 'put', path: '/api/board-room/attendees', data: { meeting_id: VALID_UUID } },
+    {
+      method: 'post',
+      path: `/api/board-room/agendas/${VALID_UUID}/comments`,
+      data: { content: 'x' },
+    },
+    {
+      method: 'patch',
+      path: `/api/board-room/agendas/${VALID_UUID}/comments/${VALID_UUID}`,
+      data: { content: 'x' },
+    },
+    {
+      method: 'delete',
+      path: `/api/board-room/agendas/${VALID_UUID}/comments/${VALID_UUID}`,
+      data: {},
+    },
   ]
 
   for (const { method, path, data } of boardRoomMutations) {
@@ -39,6 +54,13 @@ test.describe('권한 경계 회귀 (비인증)', () => {
       expect(response.status()).toBe(401)
     })
   }
+
+  test('비인증 안건 토론 조회는 401을 반환한다', async ({ request }) => {
+    // 이사회 토론은 **읽기도** 게이트 안이다. 변이만 막고 GET을 열어 두면
+    // 이사회 논의 전문이 그대로 새 나간다.
+    const response = await request.get(`/api/board-room/agendas/${VALID_UUID}/comments`)
+    expect(response.status()).toBe(401)
+  })
 
   test('비인증 comment-like POST 는 401을 반환한다', async ({ request }) => {
     // 순서: rate-limit → UUID 검증 → 인증(getUser) → DB. 유효한 UUID를 보내

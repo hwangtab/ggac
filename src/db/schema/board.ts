@@ -1,4 +1,4 @@
-import { integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
 import { createdAt, updatedAt, uuidPk } from './_shared.ts'
 import { memberProfiles } from './identity.ts'
@@ -132,4 +132,30 @@ export const boardMeetingDateVotes = sqliteTable(
   table => [
     uniqueIndex('board_meeting_date_votes_option_voter_idx').on(table.optionId, table.voterId),
   ]
+)
+
+/**
+ * 안건별 토론 댓글. 회의를 지우면 안건과 함께 cascade로 사라진다.
+ *
+ * `author_id`는 NOT NULL + NO ACTION이다(게시판 `comments`와 동일). 이사회
+ * 발언은 회의록의 근거라 작성자를 지운 익명 기록으로 남기지 않는다 — 댓글이
+ * 있으면 회원 삭제 자체가 막힌다. 삭제는 `is_deleted` soft delete로만 하고
+ * 본문은 라우트가 마스킹해 API 응답에도 싣지 않는다.
+ */
+export const boardAgendaComments = sqliteTable(
+  'board_agenda_comments',
+  {
+    id: uuidPk(),
+    agendaId: text('agenda_id')
+      .notNull()
+      .references(() => boardAgendas.id, { onDelete: 'cascade' }),
+    authorId: text('author_id')
+      .notNull()
+      .references(() => memberProfiles.id),
+    content: text('content').notNull(),
+    isDeleted: integer('is_deleted', { mode: 'boolean' }).notNull().default(false),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  table => [index('board_agenda_comments_agenda_created_idx').on(table.agendaId, table.createdAt)]
 )

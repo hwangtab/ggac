@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
+import AgendaCommentThread from './AgendaCommentThread'
 import { BOARD_AGENDA_STATUS } from '@/constants/boardRoom'
 import type { BoardAgendaStatus } from '@/constants/boardRoom'
 
@@ -13,6 +14,7 @@ interface Agenda {
   status: BoardAgendaStatus
   proposed_by: string
   created_at: string
+  comment_count?: number
 }
 
 interface AgendaListProps {
@@ -309,6 +311,15 @@ export default function AgendaList({
                   )}
                 </div>
               )}
+              {/* 삼항 **바깥**에 둔다. 안에 두면 같은 안건의 수정 버튼을 누르는
+                  순간 스레드가 통째로 언마운트돼 쓰던 의견 초안이 사라진다. */}
+              <AgendaCommentThread
+                agendaId={agenda.id}
+                commentCount={agenda.comment_count ?? 0}
+                currentUserId={currentUserId}
+                isAdmin={isAdmin}
+                onCountChanged={onChanged}
+              />
             </div>
           ))}
         </div>

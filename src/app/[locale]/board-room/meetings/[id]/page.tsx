@@ -45,6 +45,7 @@ interface Agenda {
   status: BoardAgendaStatus
   proposed_by: string
   created_at: string
+  comment_count: number
 }
 
 interface Minutes {

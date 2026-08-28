@@ -100,3 +100,9 @@ export function parseBoardAgendaSortOrder(value: unknown): number | null {
 
   return value
 }
+
+/**
+ * 안건 토론 댓글 본문 길이 상한. 이사회 전용 경로라 레이트리밋 대신 이
+ * 상한 하나로 남용을 막는다(인증된 이사 20여 명만 도달한다).
+ */
+export const MAX_AGENDA_COMMENT_LENGTH = 2000
