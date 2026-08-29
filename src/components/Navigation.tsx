@@ -7,6 +7,7 @@ import { Link, usePathname, useRouter } from '@/i18n/navigation'
 import {
   clearSessionProfileCache,
   fetchSessionProfile,
+  SESSION_CHANGE_EVENT,
   type VerifiedSessionUser,
 } from '@/utils/sessionProfile'
 
@@ -123,11 +124,15 @@ const Navigation = () => {
     void loadNavigationSession()
     window.addEventListener('focus', loadNavigationSession)
     document.addEventListener('visibilitychange', refreshWhenVisible)
+    // 로그인 페이지에 머문 채 인증이 끝나는 경로에서는 pathname이 안 바뀌므로
+    // 이 이벤트가 없으면 내비가 로그인 전 메뉴(이사회 링크 없음)로 남는다.
+    window.addEventListener(SESSION_CHANGE_EVENT, loadNavigationSession)
 
     return () => {
       mounted = false
       window.removeEventListener('focus', loadNavigationSession)
       document.removeEventListener('visibilitychange', refreshWhenVisible)
+      window.removeEventListener(SESSION_CHANGE_EVENT, loadNavigationSession)
     }
   }, [pathname])
 
@@ -393,7 +398,9 @@ const Navigation = () => {
             <div className="w-6 h-6 flex flex-col justify-center items-center">
               <span
                 className={`bg-current h-0.5 w-6 transition-all duration-300 ${
-                  isMenuOpen ? 'rotate-45 translate-y-0.5' : ''
+                  // 막대 중심선 간격이 6px(막대 2px + mt-1 4px)이라 위/아래가 각각
+                  // ±6px 이동해야 정확히 가운데서 교차한다. 값이 어긋나면 X가 찌그러진다.
+                  isMenuOpen ? 'rotate-45 translate-y-1.5' : ''
                 }`}
               />
               <span
@@ -418,8 +425,13 @@ const Navigation = () => {
             role="menu"
             aria-labelledby="mobile-menu-button"
           >
+            {/*
+              패널은 fixed 내비 안의 absolute라 넘친 부분은 페이지 스크롤로 닿지 않는다.
+              항목이 늘거나(이사회 링크) 화면이 짧으면 아래쪽 항목이 그대로 잘리므로
+              뷰포트에 맞춰 자체 스크롤한다. dvh는 모바일 주소창 높이 변화를 반영한다.
+            */}
             <div
-              className={`rounded-lg shadow-lg p-2 border ${'bg-[#08080a]/95 backdrop-blur-md text-white'}`}
+              className={`max-h-[calc(100dvh-5.5rem)] overflow-y-auto overscroll-contain rounded-lg shadow-lg p-2 border ${'bg-[#08080a]/95 backdrop-blur-md text-white'}`}
             >
               {/* Main Menu Items */}
               {menuItems.map(item => (

@@ -44,6 +44,31 @@ let inflight: Promise<VerifiedSession> | null = null
 // 덮어쓰고, 로그아웃 후 in-flight 요청이 인증 상태를 되살린다(코드리뷰 CONFIRMED).
 let epoch = 0
 
+/**
+ * 인증 상태가 실제로 바뀐 순간 알리는 브라우저 이벤트.
+ * 로그인 후 페이지 이동이 없는 경로(redirect 파라미터 없는 로그인)에서는
+ * Navigation의 pathname 기반 재조회가 걸리지 않아 내비가 로그인 전 상태로
+ * 남는다. 캐시를 쥔 이 모듈이 변화를 알리는 게 유일하게 새는 곳 없는 지점이다.
+ */
+export const SESSION_CHANGE_EVENT = 'gac:session-change'
+
+function emitSessionChange(): void {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new Event(SESSION_CHANGE_EVENT))
+}
+
+/** 같은 사용자·같은 권한이면 알리지 않는다 — 구독자가 되돌아 호출해도 루프가 없다. */
+function isSameIdentity(a: VerifiedSession | null, b: VerifiedSession | null): boolean {
+  if (a?.user?.id !== b?.user?.id) return false
+  return (
+    !!a?.profile?.is_admin === !!b?.profile?.is_admin &&
+    !!a?.profile?.is_director === !!b?.profile?.is_director &&
+    !!a?.profile?.is_auditor === !!b?.profile?.is_auditor &&
+    a?.profile?.registration_status === b?.profile?.registration_status &&
+    !!a?.profile?.is_active === !!b?.profile?.is_active
+  )
+}
+
 async function requestSessionProfile(): Promise<VerifiedSession> {
   const response = await fetch('/api/auth/verify-session', {
     method: 'GET',
@@ -86,8 +111,10 @@ export async function fetchSessionProfile(
       // 내가 최신 세대일 때만 캐시에 반영 — 이후 세대(force·로그아웃·재호출)가
       // 시작됐다면 이 결과는 stale이므로 캐시를 덮어쓰지 않는다.
       if (myEpoch === epoch) {
+        const changed = !isSameIdentity(cachedSession, session)
         cachedSession = session
         cachedAt = Date.now()
+        if (changed) emitSessionChange()
       }
       return session
     })
@@ -115,10 +142,12 @@ export function refreshSessionProfile(): Promise<VerifiedSession> {
 /** 로그아웃 처리 직후 즉시 미인증 상태를 반영하고 싶을 때 사용한다. */
 export function clearSessionProfileCache(): void {
   // epoch를 올려 in-flight 요청이 로그아웃 이후 인증 상태를 재캐시하지 못하게 한다.
+  const hadSession = !!cachedSession?.user
   epoch++
   cachedSession = null
   cachedAt = 0
   inflight = null
+  if (hadSession) emitSessionChange()
 }
 
 export function isApprovedActiveAdmin(profile: VerifiedSessionProfile | null): boolean {
