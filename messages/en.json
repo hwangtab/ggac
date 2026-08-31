@@ -116,6 +116,13 @@
       "titleLine2": "and started a cooperative",
       "subtitle": "People work alone in studios and on stages across Gyeonggi. It is hard to keep that up alone, so we gathered to back each other."
     },
+    "why": {
+      "heading": "Why a cooperative",
+      "p1": "Putting on a single show means paying for the venue, splitting the fees, taking bookings, and settling the accounts. Applying for a public arts grant requires a business registration number. Working with an institution requires a contract and a tax invoice.",
+      "p2": "An artist working alone stops here. The bank account is personal, tax invoices cannot be issued, card payments cannot be taken. The work goes elsewhere — not for lack of skill, but for lack of a vessel to receive it in. That is usually where arts organizations run aground too: not because they cannot make the work, but because they cannot take it on as a business.",
+      "p3": "A cooperative is that vessel. It signs contracts under a legal name, issues tax invoices, takes payments and bookings, and settles accounts. Members do their own work and the cooperative handles the paperwork.",
+      "p4": "We incorporated in May 2025. In the sixteen months since, we have put on nineteen performances and exhibitions and nine more workshops, markets, and gatherings. Metal Syndicate Network is on its fifth edition; Healthy Fervor and Suwon Sound Market have passed their second. All of it ran on this vessel."
+    },
     "mission": {
       "heading": "Our Purpose",
       "p1": "Artists working in Gyeonggi came together and set up a producer cooperative. The registered name is Gyeonggi Art Collective Cooperative. Making work is mostly done alone and the income is not steady. We built this to handle those conditions together instead of each on our own.",
@@ -124,12 +131,35 @@
       "p4": "We work across all of Gyeonggi-do. We run arts education programs for local residents and students. We also work with other cooperatives and regional institutions. Members are creators, organizers, and supporting members. Anyone who agrees with what the cooperative is for can join.",
       "p5": "What the cooperative wants is for artists' rights to be respected and for what comes of the work to be shared with the region. We are looking for people to do it with."
     },
-    "chairman": {
-      "heading": "A Message from the President",
-      "imageAlt": "President Choi Hee-cheol",
-      "name": "President Choi Hee-cheol",
-      "quote1": "To my fellow artists. Hello, I am Choi Hee-cheol, President of the Gyeonggi Art Collective Cooperative. I understand, perhaps more than anyone, the sense of helplessness that comes with the word 'alone.' I believe our coming together will carve a warm path through that helplessness.",
-      "quote2": "Here, not only your successes but also your failures and struggles become precious assets. Please don't hesitate to share your voice. We are always ready to listen."
+    "governance": {
+      "heading": "How the cooperative runs",
+      "p1": "A cooperative is not a company. In a company, whoever buys the most shares holds that much of the decision and that much of the business. In a cooperative, one person has one vote regardless of what they put in. The member who paid for one share and the member who paid for ten have the same vote.",
+      "p2": "The general assembly decides. Every member casts one vote there. Anyone who wants to be more involved can join the board — directors are elected at the general assembly from among the members. Board agenda items and minutes are open to members.",
+      "p3": "Projects are started by the people who want to do them. Bring a plan and the cooperative backs it: the venue, the contract, the bookings, the settlement, the paperwork. The planning and the stage stay with whoever started it. Metal Syndicate Network, Healthy Fervor, and Suwon Sound Market all began that way.",
+      "p4": "If there is something you want to do, put it to the board as an agenda item."
+    },
+    "membership": {
+      "heading": "What membership means",
+      "coopHeading": "What the cooperative does",
+      "coop": [
+        "Signs contracts and issues tax invoices under the cooperative's name, so we can work with institutions, local government, and companies.",
+        "Takes bookings and card payments through the cooperative's accounts, and handles the settlement.",
+        "Backs the projects members want to run — venue, contract, paperwork, and settlement.",
+        "Opens stages through our own series: Metal Syndicate Network, Healthy Fervor, Suwon Sound Market. Both the performing and the programming are members' work.",
+        "Produces and distributes recordings together.",
+        "Applies under the cooperative's name to grants and programs such as preliminary social enterprise status, which individuals mostly cannot qualify for.",
+        "Shares skills and information, as with our home recording and mixing workshop."
+      ],
+      "memberHeading": "What members do",
+      "member": [
+        "Pay at least one share of 10,000 won. It is returned under the articles of association when you leave.",
+        "Pay 10,000 won in monthly dues.",
+        "Start the things they want to do.",
+        "Go to each other's shows, buy the tickets, spread the word. That is what the cooperative earns.",
+        "Pitch in on each other's projects with whatever they can do — sound, filming, design, sales, carrying gear.",
+        "Cast one vote at the general assembly."
+      ],
+      "closing": "This is not a place to extract more than the dues you pay. It is closer to a community where members back each other when someone starts a project. That is what this cooperative does best."
     },
     "timeline": {
       "heading": "A Trail in Time"
@@ -160,7 +190,7 @@
     "commit1Body": "A minimum investment of 1 share (₩10,000) is required to become a member. Your share becomes the cooperative's capital and is refunded upon withdrawal per our articles of incorporation.",
     "commit2Title": "Monthly Fee",
     "commit2Body": "A monthly membership fee of ₩10,000 is required to support cooperative operations. (Subject to adjustment by board resolution)",
-    "commitFooter": "We build a sustainable community that grows together through active member participation — a process of mutual cooperation through which each member's talents and values are fully expressed.",
+    "commitFooter": "This is not a place to extract more than the dues you pay. It is closer to a community where members back each other when someone starts a project. That is what this cooperative does best.",
     "joinCta": "Become a Member",
     "contactBody": "Anything else, just ask.",
     "snsHeading": "We are on social too",
@@ -169,7 +199,18 @@
     "applicationPending": "Your application is under review.",
     "applicationPendingCta": "Check status",
     "applicationRejected": "Your previous application was not approved.",
-    "applicationRejectedCta": "See details"
+    "applicationRejectedCta": "See details",
+    "coopHeading": "What the cooperative does",
+    "coopIntro": "This is what comes with membership.",
+    "coop": [
+      "Signs contracts and issues tax invoices under the cooperative's name, so we can work with institutions, local government, and companies.",
+      "Takes bookings and card payments through the cooperative's accounts, and handles the settlement.",
+      "Backs the projects members want to run — venue, contract, paperwork, and settlement.",
+      "Opens stages through our own series: Metal Syndicate Network, Healthy Fervor, Suwon Sound Market. Both the performing and the programming are members' work.",
+      "Produces and distributes recordings together.",
+      "Applies under the cooperative's name to grants and programs such as preliminary social enterprise status, which individuals mostly cannot qualify for.",
+      "Shares skills and information, as with our home recording and mixing workshop."
+    ]
   },
   "faq": {
     "heading": "Frequently Asked Questions",

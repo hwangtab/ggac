@@ -103,6 +103,11 @@ const ConnectPage = async ({ params }: ConnectPageProps) => {
     getTranslations('connect'),
     getTranslations('footer'),
   ])
+  // 소개 페이지의 「조합원이 되면」과 같은 배열을 쓴다. 번역이 빠지면 배열이 아닌
+  // 값이 오므로 렌더 전에 걸러낸다.
+  const rawCoopDoes = t.raw('coop')
+  const coopDoes = Array.isArray(rawCoopDoes) ? (rawCoopDoes as string[]) : []
+
   const safeInstagramUrl = toSafeHttpUrl(globalData.social.instagram)
   const safeYoutubeUrl = toSafeHttpUrl(globalData.social.youtube)
   const safeEmailHref = toSafeEmailHref(globalData.contact.email)
@@ -201,6 +206,25 @@ const ConnectPage = async ({ params }: ConnectPageProps) => {
                 <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-white/70 sm:text-base">
                   {t('joinSubtitle')}
                 </p>
+              </div>
+
+              {/* 조합이 하는 일 — 자격·약속(내는 것) 앞에 받는 것을 먼저 놓는다 */}
+              <div className="mb-12 border border-white/15 p-8">
+                <h3 className="font-post mb-2 text-2xl font-bold tracking-tight">
+                  {t('coopHeading')}
+                </h3>
+                <p className="mb-6 text-sm text-gray-500">{t('coopIntro')}</p>
+                <ul className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  {coopDoes.map(item => (
+                    <li key={item} className="flex">
+                      <span
+                        aria-hidden="true"
+                        className="mr-3 mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-primary-600"
+                      />
+                      <span className="text-sm leading-relaxed text-gray-600">{item}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">

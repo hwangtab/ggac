@@ -1,4 +1,3 @@
-import Image from 'next/image'
 import { Link } from '@/i18n/navigation'
 import { setRequestLocale, getTranslations, getLocale } from 'next-intl/server'
 import { getProjects } from '@/lib/data'
@@ -106,6 +105,13 @@ const AboutPage = async ({ params }: AboutPageProps) => {
   ])
   const dateLocale = currentLocale === 'en' ? 'en-US' : 'ko-KR'
 
+  // 목록형 문안은 메시지 파일에 배열로 둔다(Hero의 disciplines와 같은 방식).
+  // 번역이 빠지면 t.raw가 배열이 아닌 값을 돌려주므로 렌더 전에 걸러낸다.
+  const rawCoopDoes = t.raw('membership.coop')
+  const rawMemberDoes = t.raw('membership.member')
+  const coopDoes = Array.isArray(rawCoopDoes) ? (rawCoopDoes as string[]) : []
+  const memberDoes = Array.isArray(rawMemberDoes) ? (rawMemberDoes as string[]) : []
+
   // 날짜순으로 정렬 (오래된 것부터)
   const sortedProjects = projects.sort(
     (a, b) => new Date(a.publishedDate).getTime() - new Date(b.publishedDate).getTime()
@@ -184,6 +190,21 @@ const AboutPage = async ({ params }: AboutPageProps) => {
           subtitle={t('hero.subtitle')}
         />
 
+        {/* Why a cooperative — 설립 목적 앞에서 "왜 이런 조직이 필요한가"를 먼저 깐다 */}
+        <section className="py-16 md:py-24">
+          <div className="tw-container-custom">
+            <div className="max-w-4xl mx-auto">
+              <h2 className="tw-heading-secondary text-center mb-12">{t('why.heading')}</h2>
+              <div className="prose prose-lg max-w-none">
+                <p className="tw-text-body leading-relaxed mb-6">{t('why.p1')}</p>
+                <p className="tw-text-body leading-relaxed mb-6">{t('why.p2')}</p>
+                <p className="tw-text-body leading-relaxed mb-6">{t('why.p3')}</p>
+                <p className="tw-text-body leading-relaxed mb-6">{t('why.p4')}</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* Mission Section */}
         <section className="py-16 md:py-24">
           <div className="tw-container-custom">
@@ -200,34 +221,61 @@ const AboutPage = async ({ params }: AboutPageProps) => {
           </div>
         </section>
 
-        {/* Chairman Message */}
+        {/* Governance — 1인 1표·이사회 참여·기획 자율성 */}
         <section className="py-16 md:py-24 bg-gray-50">
           <div className="tw-container-custom">
             <div className="max-w-4xl mx-auto">
-              <div className="text-center mb-12">
-                <h2 className="tw-heading-secondary mb-4">{t('chairman.heading')}</h2>
-                <div className="w-64 h-64 rounded-full mx-auto mb-8 overflow-hidden border-6 border-white shadow-xl">
-                  <Image
-                    src="/images/artists/boss.webp"
-                    alt={t('chairman.imageAlt')}
-                    width={256}
-                    height={256}
-                    className="w-full h-full object-cover"
-                    priority
-                  />
-                </div>
-                <p className="text-lg text-gray-600 font-medium">{t('chairman.name')}</p>
+              <h2 className="tw-heading-secondary text-center mb-12">{t('governance.heading')}</h2>
+              <div className="prose prose-lg max-w-none">
+                <p className="tw-text-body leading-relaxed mb-6">{t('governance.p1')}</p>
+                <p className="tw-text-body leading-relaxed mb-6">{t('governance.p2')}</p>
+                <p className="tw-text-body leading-relaxed mb-6">{t('governance.p3')}</p>
+                <p className="tw-text-body leading-relaxed mb-6">{t('governance.p4')}</p>
               </div>
+            </div>
+          </div>
+        </section>
 
-              <div className="bg-white rounded-2xl p-8 shadow-lg">
-                <blockquote className="tw-text-body italic leading-relaxed">
-                  &ldquo;{t('chairman.quote1')}&rdquo;
-                </blockquote>
-                <br />
-                <blockquote className="tw-text-body italic leading-relaxed">
-                  &ldquo;{t('chairman.quote2')}&rdquo;
-                </blockquote>
+        {/* Membership — 조합이 하는 일 / 조합원이 하는 일 */}
+        <section className="py-16 md:py-24">
+          <div className="tw-container-custom">
+            <div className="max-w-4xl mx-auto">
+              <h2 className="tw-heading-secondary text-center mb-12">{t('membership.heading')}</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div>
+                  <h3 className="font-post mb-6 text-xl font-bold tracking-tight">
+                    {t('membership.coopHeading')}
+                  </h3>
+                  <ul className="space-y-4">
+                    {coopDoes.map(item => (
+                      <li key={item} className="flex">
+                        <span
+                          aria-hidden="true"
+                          className="mr-3 mt-2.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-primary-600"
+                        />
+                        <span className="tw-text-body text-base leading-relaxed">{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <h3 className="font-post mb-6 text-xl font-bold tracking-tight">
+                    {t('membership.memberHeading')}
+                  </h3>
+                  <ul className="space-y-4">
+                    {memberDoes.map(item => (
+                      <li key={item} className="flex">
+                        <span
+                          aria-hidden="true"
+                          className="mr-3 mt-2.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-accent-600"
+                        />
+                        <span className="tw-text-body text-base leading-relaxed">{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
+              <p className="tw-text-body mt-12 leading-relaxed">{t('membership.closing')}</p>
             </div>
           </div>
         </section>
