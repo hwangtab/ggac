@@ -70,5 +70,35 @@
     "category": "About the Music",
     "question": "Where can I listen to the artists’ music?",
     "answer": "Each artist’s detail page links out to Bandcamp, YouTube, Instagram, and more. For example, Sabbaha and Meridies have music on Bandcamp."
+  },
+  {
+    "id": "faq-013",
+    "category": "Membership",
+    "question": "What do I get for the membership dues?",
+    "answer": "You can sign contracts and issue tax invoices under the cooperative's name. The cooperative handles bookings, payments, and settlement. You can perform in our own series or programme one yourself, and produce and distribute recordings with us. You can apply, under the cooperative's name, to grants that individuals cannot qualify for. That said, this is not a place that pays back what you put in. It is closer to gaining colleagues who back you when you start a project."
+  },
+  {
+    "id": "faq-014",
+    "category": "How We Run",
+    "question": "Who decides what the cooperative does?",
+    "answer": "The general assembly decides. Every member has one vote regardless of what they put in. In a company, whoever buys the most shares holds that much of the decision; in a cooperative the vote is the same no matter the stake. Anyone who wants to be more involved can join the board — directors are elected at the general assembly from among the members."
+  },
+  {
+    "id": "faq-015",
+    "category": "How We Run",
+    "question": "How do I get involved in a show or a project?",
+    "answer": "Put the plan to the board as an agenda item. The cooperative takes on the venue, the contract, the bookings, the settlement, and the paperwork; the planning and the stage stay with whoever started it. Most of the series we run now began exactly that way."
+  },
+  {
+    "id": "faq-016",
+    "category": "How We Run",
+    "question": "How does the cooperative fund itself?",
+    "answer": "Dues and member shares are the base, with performance income, sales, and contract work on top. We also apply for public arts funding. Those programmes are mostly open to legal entities and closed to individuals — there are many an artist cannot even apply to alone, and that is one of the reasons we incorporated. That said, a cooperative running on grants alone ends when the grants do, which is why we build performance income and sales alongside them. When we do win a grant, that budget puts members on stage and pays their fees."
+  },
+  {
+    "id": "faq-017",
+    "category": "Membership",
+    "question": "Can I join if I am not an artist?",
+    "answer": "Yes. Members are creators, organizers, and supporting members. If you think work like this should exist, you can join as a supporting member."
   }
 ]
