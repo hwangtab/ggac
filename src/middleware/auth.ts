@@ -89,6 +89,11 @@ export async function handleAuth(
   const isBoardEdit = Boolean(boardEditMatch && UUID_PATH_SEGMENT_REGEX.test(boardEditMatch[1]))
   const isBoardProtected = isBoardWrite || isBoardEdit
   const isBoardRoom = authPathname.startsWith('/board-room')
+  // 조합원에게 열린 이사회 페이지는 대시보드와 회의(안건·회의록)뿐이다.
+  // 일정 투표·서류함·정기총회는 이사·감사·관리자 전용으로 남는다.
+  // API 쪽 짝은 `canReadBoardRecords`(열람)와 `canAccessBoardRoom`(그 밖 전부)이다.
+  const isBoardRoomRecordPage =
+    authPathname === '/board-room' || authPathname.startsWith('/board-room/meetings')
   const isProtectedPage =
     authPathname.startsWith('/admin') ||
     authPathname.startsWith('/mypage') ||
@@ -336,8 +341,15 @@ export async function handleAuth(
         shouldContinue: false,
       }
     }
-    // 이사회 페이지는 이사·관리자·감사만 접근 (API canAccessBoardRoom과 동일 기준)
-    if (isBoardRoom && !isAdmin && !profile.is_director && !profile.is_auditor) {
+    // 이사회 페이지는 이사·관리자·감사만 접근 (API canAccessBoardRoom과 동일 기준).
+    // 예외는 안건·회의록을 읽는 대시보드·회의 페이지 — 승인·활성 조합원이면 들어온다.
+    if (
+      isBoardRoom &&
+      !isBoardRoomRecordPage &&
+      !isAdmin &&
+      !profile.is_director &&
+      !profile.is_auditor
+    ) {
       return {
         response: redirectToPath(request, '/board'),
         shouldContinue: false,

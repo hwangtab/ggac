@@ -23,6 +23,12 @@ interface AgendaListProps {
   isAdmin: boolean
   meetingId: string
   onChanged: () => void
+  /**
+   * 이사가 아닌 조합원이 열람만 하는 경우. 안건 추가·수정·삭제와 토론 작성을
+   * 감춘다. 실제 차단은 API(`requireBoardMember`)가 하고, 여기서는 눌러도
+   * 403이 나는 버튼을 보여주지 않는다.
+   */
+  readOnly?: boolean
 }
 
 const agendaStatusStyles: Record<BoardAgendaStatus, string> = {
@@ -37,6 +43,7 @@ export default function AgendaList({
   isAdmin,
   meetingId,
   onChanged,
+  readOnly = false,
 }: AgendaListProps) {
   const t = useTranslations('boardRoom.detail')
   const tStatus = useTranslations('boardRoom.agendaStatus')
@@ -147,13 +154,14 @@ export default function AgendaList({
     }
   }
 
-  const canControl = (agenda: Agenda) => isAdmin || agenda.proposed_by === currentUserId
+  const canControl = (agenda: Agenda) =>
+    !readOnly && (isAdmin || agenda.proposed_by === currentUserId)
 
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-base font-semibold text-gray-900">{t('agendaHeading')}</h3>
-        {!adding && (
+        {!adding && !readOnly && (
           <button
             onClick={() => setAdding(true)}
             className="text-sm text-primary-600 hover:underline font-medium"
@@ -318,6 +326,7 @@ export default function AgendaList({
                 commentCount={agenda.comment_count ?? 0}
                 currentUserId={currentUserId}
                 isAdmin={isAdmin}
+                readOnly={readOnly}
                 onCountChanged={onChanged}
               />
             </div>

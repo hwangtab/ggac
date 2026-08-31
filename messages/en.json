@@ -732,7 +732,8 @@
       "save": "Save",
       "saving": "Saving...",
       "cancel": "Cancel",
-      "errorGeneric": "An error occurred. Please try again."
+      "errorGeneric": "An error occurred. Please try again.",
+      "pollingMemberNote": "This meeting is still being scheduled. Agenda items and minutes appear once the date is set."
     },
     "discussion": {
       "toggle": "Discussion {count}",

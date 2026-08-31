@@ -1025,6 +1025,31 @@ const AUTHORIZATION_HELPER_CONTRACTS = [
   {
     file: 'src/lib/server/boardRoomAuth.ts',
     source: boardRoomAuthBoundarySource,
+    name: 'requireBoardRecordReader',
+    requirements: [
+      {
+        what: '미인증이면 401로 막는다',
+        pattern:
+          /if \(!session\.authenticated \|\| !session\.user\) \{[\s\S]*?status: 401[\s\S]*?\}/,
+      },
+      {
+        what: '프로필 조회 실패면 500으로 막는다',
+        pattern:
+          /if \(session\.profileError \|\| !session\.profile\) \{[\s\S]*?status: 500[\s\S]*?\}/,
+      },
+      {
+        what: '승인·활성 조합원이 아니면 403으로 막는다',
+        pattern: /if \(!canReadBoardRecords\(session\.profile\)\) \{[\s\S]*?status: 403[\s\S]*?\}/,
+      },
+      {
+        what: '이사 여부를 isBoardMember로 알려 호출부가 이사회 전용 정보를 가릴 수 있게 한다',
+        pattern: /isBoardMember: canAccessBoardRoom\(session\.profile\)/,
+      },
+    ],
+  },
+  {
+    file: 'src/lib/server/boardRoomAuth.ts',
+    source: boardRoomAuthBoundarySource,
     name: 'requireBoardAdmin',
     requirements: [
       {
@@ -1268,7 +1293,18 @@ const PRIVILEGED_AUTH_VALUES = [
   /^createSettingsAdminAuth\(/,
 ]
 // 맨몸 핸들러가 불러야 하는 게이트.
-const PRIVILEGED_GATE_CALLS = [/requireAdmin\(\)/, /requireBoardMember\(\)/]
+//
+// `requireBoardRecordReader()`는 이사회 **기록 읽기**(회의 목록·안건·토론·
+// 회의록 GET) 전용 게이트다. 승인·활성 조합원까지 통과시키므로
+// `requireBoardMember()`보다 넓지만 비인증·미승인·비활성은 그대로 막고,
+// 이사회 전용 정보(일정 투표·출석·정족수)는 호출부가 `isBoardMember`로
+// 갈라 응답에서 뺀다. **쓰기 핸들러에 쓰면 안 된다** — 아래
+// `boardRecordReaderReadOnly` 계약이 그 오용을 잡는다.
+const PRIVILEGED_GATE_CALLS = [
+  /requireAdmin\(\)/,
+  /requireBoardMember\(\)/,
+  /requireBoardRecordReader\(\)/,
+]
 // 405 스텁(`export async function POST() { return ApiError.methodNotAllowed(...) }`)
 // 은 데이터를 만지지 않는다. 본문 전체가 그 한 줄일 때만 면제한다 — 뒤에
 // 뭐라도 붙으면 더 이상 스텁이 아니므로 게이트를 요구한다.
@@ -1387,6 +1423,16 @@ for (const file of privilegedRouteFiles) {
 
     const bodyNoStrings = extractExportedFunctionBody(codeNoStrings, method) ?? ''
     const hasGate = PRIVILEGED_GATE_CALLS.some(pattern => pattern.test(bodyNoStrings))
+
+    // 열람 게이트는 GET에만 허용한다. `requireBoardRecordReader()`는 승인·활성
+    // 조합원까지 통과시키므로, 이걸 POST/PATCH/DELETE에 붙이면 이사회 쓰기가
+    // 조합원 전체에게 열린다 — 위 `hasGate`만 보면 그 오용이 초록으로 통과한다.
+    if (method !== 'GET' && /requireBoardRecordReader\(\)/.test(bodyNoStrings)) {
+      ungatedPrivilegedHandlers.push(
+        `${file}: export async function ${method} — requireBoardRecordReader()는 읽기(GET) 전용입니다. 쓰기 핸들러는 requireBoardMember()를 써야 합니다`
+      )
+      continue
+    }
     // 호출만으로는 부족하다 — 반환값을 버리면 게이트가 없는 것과 같다.
     const returnsOnDenial = /instanceof NextResponse\)\s*return/.test(bodyNoStrings)
     if (!hasGate || !returnsOnDenial) {

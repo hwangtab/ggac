@@ -3,6 +3,7 @@ import { apiGet, apiPatch, apiDelete, ApiSuccess, ApiError } from '@/utils/apiWr
 import {
   requireBoardMember,
   requireBoardAdmin,
+  requireBoardRecordReader,
   getDirectorRoster,
   getAuditorRoster,
 } from '@/lib/server/boardRoomAuth'
@@ -49,28 +50,32 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   const routeId = validateMeetingId(params.id)
   if (routeId.error) return routeId.error.toNextResponse()
   const id = routeId.id
-  const auth = await requireBoardMember()
+  // 조합원은 안건·회의록까지만 읽는다. 이사·감사·관리자인지는 isBoardMember로
+  // 갈라, 이사회 전용 정보(후보 날짜·투표·출석·정족수·명단)를 응답에서 뺀다.
+  const auth = await requireBoardRecordReader()
   if (auth instanceof NextResponse) return auth
-  const { user } = auth
+  const { user, isBoardMember } = auth
 
   return apiGet(
     async () => {
       const meeting = await getMeetingById(id)
       if (!meeting) throw ApiError.notFound('회의를 찾을 수 없습니다.')
 
-      let options: Awaited<ReturnType<typeof listDateOptions>>
-      try {
-        options = await listDateOptions(id)
-      } catch {
-        throw ApiError.internalServerError('후보 날짜를 불러올 수 없습니다.')
-      }
+      let options: Awaited<ReturnType<typeof listDateOptions>> = []
+      let votes: Awaited<ReturnType<typeof listDateVotesByOptionIds>> = []
+      if (isBoardMember) {
+        try {
+          options = await listDateOptions(id)
+        } catch {
+          throw ApiError.internalServerError('후보 날짜를 불러올 수 없습니다.')
+        }
 
-      const optionIds = options.map(o => o.id)
-      let votes: Awaited<ReturnType<typeof listDateVotesByOptionIds>>
-      try {
-        votes = await listDateVotesByOptionIds(optionIds)
-      } catch {
-        throw ApiError.internalServerError('투표 정보를 불러올 수 없습니다.')
+        const optionIds = options.map(o => o.id)
+        try {
+          votes = await listDateVotesByOptionIds(optionIds)
+        } catch {
+          throw ApiError.internalServerError('투표 정보를 불러올 수 없습니다.')
+        }
       }
 
       let agendas: Awaited<ReturnType<typeof listAgendasByMeeting>>
@@ -112,6 +117,25 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         throw ApiError.internalServerError('회의록을 불러올 수 없습니다.')
       }
 
+      // 여기부터는 이사회 전용이다. 조합원 응답에는 출석·명단·정족수를 싣지
+      // 않는다 — 누가 나왔고 누가 빠졌는지는 열람 개방의 범위가 아니다.
+      if (!isBoardMember) {
+        return ApiSuccess.ok({
+          meeting,
+          meeting_time: resolveBoardMeetingTime(meeting.meeting_time),
+          options: [],
+          votes: [],
+          agendas: agendasWithCounts,
+          minutes,
+          roster: [],
+          auditors: [],
+          attendees: [],
+          quorum: null,
+          is_board_member: false,
+          current_user_id: user.id,
+        })
+      }
+
       let attendees: Awaited<ReturnType<typeof listMeetingAttendees>>
       try {
         attendees = await listMeetingAttendees(id)
@@ -142,6 +166,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
           attended: attendedCount,
           met: isQuorumMet(roster.length, attendedCount),
         },
+        is_board_member: true,
         current_user_id: user.id,
       })
     },

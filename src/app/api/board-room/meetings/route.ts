@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { apiGet, apiPost, ApiSuccess, ApiError } from '@/utils/apiWrapper'
-import { requireBoardMember, requireBoardAdmin } from '@/lib/server/boardRoomAuth'
+import {
+  requireBoardMember,
+  requireBoardAdmin,
+  requireBoardRecordReader,
+} from '@/lib/server/boardRoomAuth'
 import { notifyDirectors } from '@/lib/server/boardRoomNotify'
 import {
   DEFAULT_BOARD_MEETING_TIME,
@@ -17,7 +21,9 @@ const log = createLogger('boardRoom/meetings')
 export const runtime = 'nodejs'
 
 export async function GET(request: NextRequest) {
-  const auth = await requireBoardMember()
+  // 회의 목록은 조합원도 읽는다(안건·회의록으로 들어가는 입구). 회의 생성·수정은
+  // 아래 POST가 그대로 이사·관리자에게만 열려 있다.
+  const auth = await requireBoardRecordReader()
   if (auth instanceof NextResponse) return auth
   const { user } = auth
 

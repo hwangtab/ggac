@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server'
-import { canAccessBoardRoom, getSessionContext, isApprovedActiveAdmin } from '@/lib/server/authz'
+import {
+  canAccessBoardRoom,
+  canReadBoardRecords,
+  getSessionContext,
+  isApprovedActiveAdmin,
+} from '@/lib/server/authz'
 import { listProfiles } from '@/db/queries/profiles'
 
 export type BoardAuthSuccess = {
@@ -7,6 +12,14 @@ export type BoardAuthSuccess = {
   isAdmin: boolean
   isAuditor: boolean
 }
+
+/**
+ * 열람 전용 접근의 결과. `isBoardMember`가 false면 **조합원 자격으로 읽고 있는
+ * 것**이라, 호출부는 이사회 전용 정보(일정 투표·출석·정족수)를 응답에서 빼야
+ * 한다. 이 플래그를 보지 않고 그대로 응답하면 열람 개방이 곧 이사회 내부
+ * 정보 개방이 된다.
+ */
+export type BoardReadAuthSuccess = BoardAuthSuccess & { isBoardMember: boolean }
 
 /**
  * 이사회 전용 API 권한 헬퍼.
@@ -35,6 +48,37 @@ export async function requireBoardMember(): Promise<BoardAuthSuccess | NextRespo
     user: { id: session.user.id },
     isAdmin: isApprovedActiveAdmin(session.profile),
     isAuditor: session.profile.is_auditor === true,
+  }
+}
+
+/**
+ * 이사회 기록(회의 목록·안건·토론·회의록) **읽기** 전용 게이트.
+ * 승인·활성 조합원이면 통과하고, 이사·감사·관리자인지는 `isBoardMember`로 알린다.
+ *
+ * 쓰기 라우트에는 절대 쓰지 마라 — 안건 작성·수정, 댓글 작성, 일정 투표, 출석
+ * 체크, 서류함, 총회 자료는 전부 `requireBoardMember`(이사·감사·관리자)를 그대로
+ * 유지한다.
+ */
+export async function requireBoardRecordReader(): Promise<BoardReadAuthSuccess | NextResponse> {
+  const session = await getSessionContext()
+
+  if (!session.authenticated || !session.user) {
+    return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+  }
+
+  if (session.profileError || !session.profile) {
+    return NextResponse.json({ error: '프로필 정보를 조회할 수 없습니다.' }, { status: 500 })
+  }
+
+  if (!canReadBoardRecords(session.profile)) {
+    return NextResponse.json({ error: '이사회 기록 열람 권한이 없습니다.' }, { status: 403 })
+  }
+
+  return {
+    user: { id: session.user.id },
+    isAdmin: isApprovedActiveAdmin(session.profile),
+    isAuditor: session.profile.is_auditor === true,
+    isBoardMember: canAccessBoardRoom(session.profile),
   }
 }
 

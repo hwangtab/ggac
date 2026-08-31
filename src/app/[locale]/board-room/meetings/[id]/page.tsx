@@ -84,7 +84,9 @@ interface DetailData {
   roster: RosterMember[]
   auditors: RosterMember[]
   attendees: Attendee[]
-  quorum: Quorum
+  quorum: Quorum | null
+  /** 이사·감사·관리자면 true. 조합원 열람이면 false — 일정 투표·출석은 응답에 없다. */
+  is_board_member?: boolean
   current_user_id: string
 }
 
@@ -247,6 +249,10 @@ export default function MeetingDetailPage() {
     current_user_id,
   } = data
 
+  // 서버가 조합원 응답에서 일정 투표·출석·정족수를 빼고 내려준다. 화면도 같은
+  // 기준으로 이사회 전용 영역을 감춘다.
+  const isBoardMember = data.is_board_member !== false
+
   const votingClosed = meeting.vote_deadline ? new Date(meeting.vote_deadline) < new Date() : false
 
   const isPolling = meeting.status === 'polling'
@@ -289,7 +295,13 @@ export default function MeetingDetailPage() {
       </div>
 
       {/* ── POLLING VIEW ─────────────────────────────────────────────── */}
-      {isPolling && (
+      {isPolling && !isBoardMember && (
+        <section className="bg-white border border-gray-200 rounded-xl shadow-sm p-6 mb-6">
+          <p className="text-sm text-gray-500">{t('pollingMemberNote')}</p>
+        </section>
+      )}
+
+      {isPolling && isBoardMember && (
         <section className="bg-white border border-gray-200 rounded-xl shadow-sm p-6 mb-6">
           <h2 className="text-base font-semibold text-gray-900 mb-4">{t('dateVoteHeading')}</h2>
           {options.length === 0 ? (
@@ -331,6 +343,7 @@ export default function MeetingDetailPage() {
               agendas={agendas}
               currentUserId={current_user_id}
               isAdmin={isAdmin}
+              readOnly={!isBoardMember}
               meetingId={meeting.id}
               onChanged={fetchDetail}
             />
@@ -343,22 +356,25 @@ export default function MeetingDetailPage() {
               meetingId={meeting.id}
               currentUserId={current_user_id}
               isAdmin={isAdmin}
+              readOnly={!isBoardMember}
               onChanged={fetchDetail}
             />
           </section>
 
-          {/* Attendance */}
-          <section className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
-            <AttendancePanel
-              roster={roster}
-              auditors={auditors}
-              attendees={attendees}
-              quorum={quorum}
-              meetingId={meeting.id}
-              isAdmin={isAdmin}
-              onChanged={fetchDetail}
-            />
-          </section>
+          {/* Attendance — 이사회 전용. 조합원 응답에는 명단·출석·정족수가 없다. */}
+          {isBoardMember && quorum && (
+            <section className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+              <AttendancePanel
+                roster={roster}
+                auditors={auditors}
+                attendees={attendees}
+                quorum={quorum}
+                meetingId={meeting.id}
+                isAdmin={isAdmin}
+                onChanged={fetchDetail}
+              />
+            </section>
+          )}
         </div>
       )}
     </div>

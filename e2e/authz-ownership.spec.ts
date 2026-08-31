@@ -112,8 +112,10 @@ test.describe('미승인 조합원', () => {
  *
  * 여기서 지켜야 할 경계는 세 겹이고, 셋 다 서로를 대신하지 못한다.
  *
- *   1. **이사회 게이트** — 승인된 일반 조합원도 읽지 못한다(403). 비인증
- *      401은 `authz-boundaries.spec.ts`가 본다.
+ *   1. **이사회 게이트** — 승인된 일반 조합원은 **읽기까지만** 된다. 안건과
+ *      토론은 조합원에게 열려 있고(소개 페이지가 공개적으로 약속한 범위),
+ *      작성·수정·삭제는 이사·감사·관리자만이다. 비인증 401은
+ *      `authz-boundaries.spec.ts`가 본다.
  *   2. **작성자 경계** — 수정은 본인만이다. 관리자도 남의 발언을 고쳐 쓰지
  *      못한다(회의록의 근거라 삭제=가림까지가 관리자 권한의 끝이다).
  *   3. **경로 대조** — 댓글 id 앞에 아무 안건 id나 붙여도 통하지 않는다.
@@ -123,10 +125,10 @@ test.describe('미승인 조합원', () => {
 test.describe('이사회 안건 토론 (일반 조합원)', () => {
   test.use({ storageState: storageStatePath('other') })
 
-  test('토론 읽기는 403 + 이사회 접근 안내다', async ({ request }) => {
+  test('토론 읽기는 200이다 (열람은 조합원에게 열려 있다)', async ({ request }) => {
     const res = await request.get(`/api/board-room/agendas/${fixtures.boardAgendaId}/comments`)
-    expect(res.status()).toBe(403)
-    expect((await res.json()).error).toContain('이사회 접근 권한이 없습니다')
+    expect(res.status()).toBe(200)
+    expect(Array.isArray((await res.json()).data?.comments)).toBe(true)
   })
 
   test('의견 작성은 403 + 이사회 접근 안내다', async ({ request }) => {

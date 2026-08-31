@@ -37,6 +37,21 @@ export function canAccessBoardRoom(profile: ProfileLike | null): boolean {
 }
 
 /**
+ * 이사회 **기록**(회의 목록·안건·토론·회의록) 열람 자격 — 승인·활성 조합원이면
+ * 된다. 소개 페이지가 "이사회 안건과 회의록은 조합원이 볼 수 있습니다"라고
+ * 밝히는 범위가 정확히 이만큼이다.
+ *
+ * `canAccessBoardRoom`을 넓히지 않고 등급을 따로 둔 이유: 이사회방 API는
+ * 읽기와 쓰기가 `requireBoardMember` 하나로 묶여 있어서, 그 함수를 완화하면
+ * 열람만 열려는 결정이 **안건 작성·댓글·일정 투표·출석 체크까지** 함께 여는
+ * 결과가 된다. 서류함(등록증·정관·계약)과 총회 자료도 같은 게이트 뒤에 있다.
+ * 두 등급을 분리해 두면 "무엇을 열었는가"가 호출부마다 드러난다.
+ */
+export function canReadBoardRecords(profile: ProfileLike | null): boolean {
+  return isApprovedActive(profile)
+}
+
+/**
  * `ProfileRow`(33개 컬럼 전부 — `account_number`·`bank_name`·`real_name`·
  * `phone_number`·`birth_date` 같은 민감 컬럼 포함)를 세션 판정에만 필요한
  * `ProfileLike`의 5개 필드로 좁힌다. 전환 전 `getSessionContext`는

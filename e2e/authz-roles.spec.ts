@@ -189,6 +189,85 @@ test.describe('이사회 경계', () => {
       await directorContext.dispose()
     }
   })
+
+  /**
+   * 열람 개방의 **양면**을 한 테스트에서 본다. 조합원은 안건·회의록까지
+   * 읽지만 출석·정족수는 못 본다 — 한쪽만 단정하면 게이트가 "전부 열림"이나
+   * "전부 닫힘"으로 퇴화한 것을 놓친다.
+   *
+   * 소개 페이지가 "이사회 안건과 회의록은 조합원이 볼 수 있습니다"라고
+   * 공개적으로 약속하는 범위가 정확히 이만큼이라, 이 테스트가 그 약속과
+   * 코드가 어긋나는 순간을 잡는 자리다.
+   */
+  test('조합원은 안건·회의록까지만 읽는다 (출석·정족수는 못 본다)', async ({ baseURL }) => {
+    const memberContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('other'),
+    })
+    const directorContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('director'),
+    })
+
+    try {
+      const list = await memberContext.get('/api/board-room/meetings')
+      expect(list.status()).toBe(200)
+      expect(Array.isArray((await list.json()).data?.meetings)).toBe(true)
+
+      const detail = await memberContext.get(`/api/board-room/meetings/${fixtures.boardMeetingId}`)
+      expect(detail.status()).toBe(200)
+      const memberBody = (await detail.json()).data
+      // 열린 쪽: 안건과 회의록 키가 실제로 온다.
+      expect(Array.isArray(memberBody?.agendas)).toBe(true)
+      expect(memberBody).toHaveProperty('minutes')
+      // 닫힌 쪽: 이사회 전용 정보는 비어서 온다.
+      expect(memberBody?.is_board_member).toBe(false)
+      expect(memberBody?.attendees).toEqual([])
+      expect(memberBody?.roster).toEqual([])
+      expect(memberBody?.quorum).toBeNull()
+
+      // 짝: 이사에게는 같은 응답에 출석·정족수가 실린다. 이게 없으면
+      // "조합원 응답이 비었다"가 게이트 때문인지 데이터가 없어서인지 모른다.
+      const directorDetail = await directorContext.get(
+        `/api/board-room/meetings/${fixtures.boardMeetingId}`
+      )
+      expect(directorDetail.status()).toBe(200)
+      const directorBody = (await directorDetail.json()).data
+      expect(directorBody?.is_board_member).toBe(true)
+      expect(directorBody?.quorum).not.toBeNull()
+      expect(Array.isArray(directorBody?.roster)).toBe(true)
+      expect(directorBody.roster.length).toBeGreaterThan(0)
+    } finally {
+      await memberContext.dispose()
+      await directorContext.dispose()
+    }
+  })
+
+  test('조합원은 안건 토론을 읽을 수는 있어도 쓰지는 못한다', async ({ baseURL }) => {
+    const memberContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('other'),
+    })
+
+    try {
+      const read = await memberContext.get(
+        `/api/board-room/agendas/${fixtures.boardAgendaId}/comments`
+      )
+      expect(read.status()).toBe(200)
+      expect(Array.isArray((await read.json()).data?.comments)).toBe(true)
+
+      // 열람 게이트가 쓰기로 새면 여기서 201이 난다. 이사회 의사 형성에
+      // 비이사가 들어오는 회귀라 읽기 개방과 반드시 함께 검사한다.
+      const write = await memberContext.post(
+        `/api/board-room/agendas/${fixtures.boardAgendaId}/comments`,
+        { data: { content: '조합원이 쓰면 안 된다' } }
+      )
+      expect(write.status()).toBe(403)
+      expect((await write.json()).error).toContain('이사회 접근 권한이 없습니다')
+    } finally {
+      await memberContext.dispose()
+    }
+  })
 })
 
 /**
@@ -209,7 +288,7 @@ test.describe('이사회 경계', () => {
  * 상태)을 못 잡는다.
  */
 test.describe('페이지 레벨 인가 (미들웨어)', () => {
-  test('이사회 화면은 이사만 연다 (/board-room)', async ({ browser }) => {
+  test('이사회 전용 화면은 이사만 연다 (/board-room/documents)', async ({ browser }) => {
     const memberContext = await browser.newContext({ storageState: storageStatePath('other') })
     const directorContext = await browser.newContext({
       storageState: storageStatePath('director'),
@@ -218,8 +297,13 @@ test.describe('페이지 레벨 인가 (미들웨어)', () => {
     try {
       // 금지 쪽: 승인된 **일반** 조합원. 미승인 계정을 쓰면 앞선 분기(승인
       // 여부)가 먼저 걸려 이사 판정이 죽어도 계속 리다이렉트된다.
+      //
+      // 대상이 `/board-room`에서 `/board-room/documents`로 바뀐 이유: 이제
+      // 대시보드와 회의(안건·회의록)는 조합원에게 열려 있다(소개 페이지가
+      // 공개적으로 약속한 범위). 서류함·일정 투표·정기총회는 그대로 이사
+      // 전용이고, 미들웨어의 `isBoardRoomRecordPage` 예외가 그 선을 긋는다.
       const memberPage = await memberContext.newPage()
-      await memberPage.goto('/board-room', { waitUntil: 'domcontentloaded' })
+      await memberPage.goto('/board-room/documents', { waitUntil: 'domcontentloaded' })
       await expect(memberPage).toHaveURL(/\/board$/, { timeout: 15000 })
 
       // 허용 쪽: **관리자가 아닌 이사**. admin 계정으로 확인하면 `isAdmin`
@@ -235,6 +319,21 @@ test.describe('페이지 레벨 인가 (미들웨어)', () => {
     } finally {
       await memberContext.close()
       await directorContext.close()
+    }
+  })
+
+  test('조합원은 이사회 회의 페이지에 들어간다 (/board-room/meetings)', async ({ browser }) => {
+    const memberContext = await browser.newContext({ storageState: storageStatePath('other') })
+
+    try {
+      // 위 테스트의 짝. 서류함에서 튕겨 나오는 것만 확인하면 게이트가 "전부
+      // 리다이렉트"로 되돌아간 상태(= 조합원 열람 개방이 통째로 사라진 상태)를
+      // 못 잡는다.
+      const memberPage = await memberContext.newPage()
+      await memberPage.goto('/board-room/meetings', { waitUntil: 'domcontentloaded' })
+      await expect(memberPage).toHaveURL(/\/board-room\/meetings$/, { timeout: 15000 })
+    } finally {
+      await memberContext.close()
     }
   })
 

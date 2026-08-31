@@ -30,6 +30,8 @@ interface MinutesEditorProps {
   meetingId: string
   currentUserId: string
   isAdmin: boolean
+  /** 이사가 아닌 조합원의 열람. 작성·수정 진입점을 모두 감춘다. */
+  readOnly?: boolean
   onChanged: () => void
 }
 
@@ -38,6 +40,7 @@ export default function MinutesEditor({
   meetingId,
   currentUserId,
   isAdmin,
+  readOnly = false,
   onChanged,
 }: MinutesEditorProps) {
   const t = useTranslations('boardRoom.detail')
@@ -49,7 +52,9 @@ export default function MinutesEditor({
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const canEdit = minutes ? isAdmin || minutes.author_id === currentUserId : true // any board member can create
+  // 열람 전용이면 작성 진입점도 없다. 회의록이 아직 없을 때 true로 떨어지는
+  // 기본값(= 이사 누구나 작성 가능)이 조합원에게까지 열리지 않게 막는다.
+  const canEdit = readOnly ? false : minutes ? isAdmin || minutes.author_id === currentUserId : true // any board member can create
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()

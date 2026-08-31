@@ -732,7 +732,8 @@
       "save": "저장",
       "saving": "저장 중...",
       "cancel": "취소",
-      "errorGeneric": "오류가 발생했습니다. 다시 시도해주세요."
+      "errorGeneric": "오류가 발생했습니다. 다시 시도해주세요.",
+      "pollingMemberNote": "아직 일정을 조율하고 있는 회의입니다. 안건과 회의록은 일정이 확정된 뒤에 올라옵니다."
     },
     "discussion": {
       "toggle": "토론 {count}",

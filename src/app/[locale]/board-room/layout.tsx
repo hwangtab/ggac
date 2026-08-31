@@ -1,17 +1,43 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { Link, usePathname } from '@/i18n/navigation'
+import { fetchSessionProfile, canAccessBoardRoom } from '@/utils/sessionProfile'
 
+// `boardOnly`인 메뉴는 이사·감사·관리자에게만 보인다. 조합원에게 열린 것은
+// 대시보드와 회의(안건·회의록)뿐이고, 미들웨어가 나머지 경로를 실제로 막는다.
 const navItems = [
-  { href: '/board-room', label: '대시보드', exact: true },
-  { href: '/board-room/meetings', label: '이사회 회의' },
-  { href: '/board-room/schedule', label: '일정 투표' },
-  { href: '/board-room/documents', label: '서류함' },
-  { href: '/board-room/assembly', label: '정기총회' },
+  { href: '/board-room', label: '대시보드', exact: true, boardOnly: false },
+  { href: '/board-room/meetings', label: '이사회 회의', boardOnly: false },
+  { href: '/board-room/schedule', label: '일정 투표', boardOnly: true },
+  { href: '/board-room/documents', label: '서류함', boardOnly: true },
+  { href: '/board-room/assembly', label: '정기총회', boardOnly: true },
 ] as const
 
 export default function BoardRoomLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+
+  // 판정이 끝나기 전에는 이사회 전용 메뉴를 감춘 상태로 둔다. 반대로 두면
+  // 조합원 화면에서 메뉴가 잠깐 보였다 사라진다.
+  const [isBoardMember, setIsBoardMember] = useState(false)
+
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      try {
+        const session = await fetchSessionProfile()
+        if (mounted) setIsBoardMember(canAccessBoardRoom(session.profile))
+      } catch {
+        if (mounted) setIsBoardMember(false)
+      }
+    })()
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  const visibleNavItems = navItems.filter(item => !item.boardOnly || isBoardMember)
+
   const isActive = (item: { href: string; exact?: boolean }) =>
     item.exact ? pathname === item.href : pathname.startsWith(item.href)
 
@@ -25,7 +51,7 @@ export default function BoardRoomLayout({ children }: { children: React.ReactNod
               aria-label="이사회 메뉴"
               className="flex gap-1 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible lg:pb-0 lg:sticky lg:top-24"
             >
-              {navItems.map(item => {
+              {visibleNavItems.map(item => {
                 const active = isActive(item)
                 return (
                   <Link

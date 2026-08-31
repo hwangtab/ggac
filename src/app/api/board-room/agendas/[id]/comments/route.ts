@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { apiGet, apiPost, ApiSuccess, ApiError } from '@/utils/apiWrapper'
-import { requireBoardMember } from '@/lib/server/boardRoomAuth'
+import { requireBoardMember, requireBoardRecordReader } from '@/lib/server/boardRoomAuth'
 import { MAX_AGENDA_COMMENT_LENGTH } from '@/constants/boardRoom'
 import { notifyAgendaDiscussion } from '@/lib/server/boardRoomNotify'
 import { parseJsonObjectBody } from '@/utils/requestBody'
@@ -31,7 +31,9 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
   const routeId = validateAgendaId(params.id)
   if (routeId.error) return routeId.error.toNextResponse()
   const agendaId = routeId.id
-  const auth = await requireBoardMember()
+  // 안건 토론은 안건의 일부라 조합원도 읽는다. 작성(POST)은 아래에서 그대로
+  // 이사·감사·관리자만 통과한다.
+  const auth = await requireBoardRecordReader()
   if (auth instanceof NextResponse) return auth
   const { user } = auth
 
