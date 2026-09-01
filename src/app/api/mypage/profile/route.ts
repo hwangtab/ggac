@@ -5,6 +5,7 @@ import { parseJsonObjectBody } from '@/utils/requestBody'
 import { parseMonthlyFee, MONTHLY_FEE_RANGE_MESSAGE } from '@/constants/memberProfile'
 import { requireActiveMember } from '@/lib/server/memberAuth'
 import { getProfileById, updateProfile, type ProfilePatch } from '@/db/queries/profiles'
+import { isRegion, isStandardGenre } from '@/constants/interests'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -17,6 +18,26 @@ function normalizeOptionalText(value: unknown, maxLength: number): string | null
 
 function normalizeRequiredText(value: unknown, maxLength: number): string {
   return typeof value === 'string' ? value.trim().slice(0, maxLength) : ''
+}
+
+/** 관심사 배열 하나를 검증한다. 키가 아예 없으면 `undefined`(갱신하지 않음)를 돌려준다. */
+function parseInterestArray(
+  raw: unknown,
+  isValid: (v: unknown) => boolean,
+  label: string
+): string[] | undefined {
+  if (raw === undefined) return undefined
+  if (!Array.isArray(raw)) {
+    throw ApiError.badRequest(`${label}은(는) 배열이어야 합니다.`)
+  }
+  // 알 수 없는 값을 조용히 버리지 않고 막는다. 버리면 화면에는 저장된 것처럼 보이는데
+  // 실제로는 빠져 있고, 그 상태로 kosmart 요청에 실려도 0건이 돌아와 아무 일도 안 난다.
+  for (const v of raw) {
+    if (!isValid(v)) {
+      throw ApiError.badRequest(`${label}에 알 수 없는 값이 있습니다: ${String(v).slice(0, 20)}`)
+    }
+  }
+  return [...new Set(raw as string[])]
 }
 
 function assertValidProfileBody(body: Record<string, unknown>) {
@@ -61,6 +82,9 @@ function assertValidProfileBody(body: Record<string, unknown>) {
     throw ApiError.badRequest('은행명이 있으면 계좌번호도 입력해주세요.')
   }
 
+  const interestGenres = parseInterestArray(body.interest_genres, isStandardGenre, '관심 장르')
+  const interestRegions = parseInterestArray(body.interest_regions, isRegion, '관심 지역')
+
   const updateData: ProfilePatch = {
     display_name: displayName,
     phone_number: phoneNumber,
@@ -70,6 +94,11 @@ function assertValidProfileBody(body: Record<string, unknown>) {
     account_number: accountNumber,
     account_holder: accountHolder,
   }
+
+  // undefined를 그대로 넣지 않는 이유: updateProfile이 patch의 키를 그대로 .set()에
+  // 넘기므로, 관심사를 보내지 않은 기존 프로필 수정 요청이 관심사를 지워버린다.
+  if (interestGenres !== undefined) updateData.interest_genres = interestGenres
+  if (interestRegions !== undefined) updateData.interest_regions = interestRegions
 
   return updateData
 }

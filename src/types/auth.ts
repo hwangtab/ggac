@@ -55,6 +55,10 @@ export interface MemberProfile {
   }
   membership_type: 'regular' | 'premium' | 'lifetime'
   engagement_score: number
+
+  // 관심사(장르·지역). 빈 배열/미포함이 미설정(조합 기본값 적용 대상)이다.
+  interest_genres?: string[]
+  interest_regions?: string[]
 }
 
 export interface MemberStatusHistory {

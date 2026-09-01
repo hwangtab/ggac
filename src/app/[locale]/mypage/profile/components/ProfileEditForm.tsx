@@ -5,6 +5,7 @@ import { MemberProfile, DatabaseArtist, ProfilePhotoMetadata } from '@/types'
 import PersonalInfo from './PersonalInfo'
 import CooperativeInfo from './CooperativeInfo'
 import AccountInfo from './AccountInfo'
+import InterestSettings from './InterestSettings'
 
 interface ProfileEditFormProps {
   profile: MemberProfile
@@ -21,6 +22,8 @@ const ProfileEditForm: React.FC<ProfileEditFormProps> = ({ profile, onUpdate, lo
     bank_name: profile.bank_name || '',
     account_number: profile.account_number || '',
     account_holder: profile.account_holder || '',
+    interest_genres: profile.interest_genres || [],
+    interest_regions: profile.interest_regions || [],
   })
 
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -36,6 +39,15 @@ const ProfileEditForm: React.FC<ProfileEditFormProps> = ({ profile, onUpdate, lo
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }))
     }
+  }
+
+  const handleInterestChange = (next: { genres: string[]; regions: string[] }) => {
+    setFormData(prev => ({
+      ...prev,
+      interest_genres: next.genres,
+      interest_regions: next.regions,
+    }))
+    setIsDirty(true)
   }
 
   const validateForm = () => {
@@ -130,6 +142,8 @@ const ProfileEditForm: React.FC<ProfileEditFormProps> = ({ profile, onUpdate, lo
       bank_name: profile.bank_name || '',
       account_number: profile.account_number || '',
       account_holder: profile.account_holder || '',
+      interest_genres: profile.interest_genres || [],
+      interest_regions: profile.interest_regions || [],
     })
     setErrors({})
     setIsDirty(false)
@@ -155,6 +169,14 @@ const ProfileEditForm: React.FC<ProfileEditFormProps> = ({ profile, onUpdate, lo
 
       {/* 조합 정보 */}
       <CooperativeInfo data={formData} errors={errors} onChange={handleChange} />
+
+      {/* 관심사 */}
+      <InterestSettings
+        genres={formData.interest_genres}
+        regions={formData.interest_regions}
+        onChange={handleInterestChange}
+        disabled={loading}
+      />
 
       {/* 계좌 정보 */}
       <AccountInfo data={formData} errors={errors} onChange={handleChange} />
