@@ -26,7 +26,7 @@ interface Member {
   real_name?: string
   created_at: string
   updated_at: string
-  registration_status: 'pending' | 'approved' | 'rejected'
+  registration_status: 'pending' | 'approved' | 'rejected' | 'withdrawal_requested' | 'withdrawn'
   is_active: boolean
   is_admin: boolean
   is_director: boolean
@@ -61,7 +61,7 @@ interface MemberDetailModalProps {
   onClose: () => void
   onAction: (
     memberId: string,
-    action: 'approve' | 'reject' | 'deactivate' | 'activate' | 'suspend' | 'unsuspend',
+    action: 'approve' | 'reject' | 'deactivate' | 'activate' | 'suspend' | 'unsuspend' | 'withdraw',
     params?: any
   ) => void
   onFlagsUpdate?: (
@@ -84,6 +84,8 @@ export default function MemberDetailModal({
   const [directorTitle, setDirectorTitle] = useState(member.director_title ?? '')
   const [auditorChecked, setAuditorChecked] = useState(member.is_auditor)
   const [flagsLoading, setFlagsLoading] = useState(false)
+  // 탈퇴 확정은 되돌릴 수 없으므로 조합원 이름을 그대로 입력해야 버튼이 열린다.
+  const [confirmName, setConfirmName] = useState('')
   const dialogRef = useRef<HTMLDivElement>(null)
 
   useDialogA11y({ containerRef: dialogRef, onClose, isOpen })
@@ -103,6 +105,7 @@ export default function MemberDetailModal({
       setDirectorChecked(member.is_director)
       setDirectorTitle(member.director_title ?? '')
       setAuditorChecked(member.is_auditor)
+      setConfirmName('')
     }
   }, [isOpen, member.is_director, member.director_title, member.is_auditor])
 
@@ -163,6 +166,10 @@ export default function MemberDetailModal({
         return 'bg-green-100 text-green-800'
       case 'rejected':
         return 'bg-red-100 text-red-800'
+      case 'withdrawal_requested':
+        return 'bg-orange-100 text-orange-800'
+      case 'withdrawn':
+        return 'bg-gray-200 text-gray-700'
       default:
         return 'bg-gray-100 text-gray-800'
     }
@@ -176,6 +183,10 @@ export default function MemberDetailModal({
         return '승인됨'
       case 'rejected':
         return '거부됨'
+      case 'withdrawal_requested':
+        return '탈퇴 신청됨'
+      case 'withdrawn':
+        return '탈퇴함'
       default:
         return '알 수 없음'
     }
@@ -656,6 +667,28 @@ export default function MemberDetailModal({
                 {member.is_suspended ? '정지해제' : '정지'}
               </button>
             </>
+          )}
+
+          {member.registration_status === 'withdrawal_requested' && (
+            /* 되돌릴 수 없는 조작이라 이름을 그대로 입력해야 실행할 수 있게 한다.
+               저장소의 다른 위험한 조작과 같은 방식이다. */
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+              <input
+                value={confirmName}
+                onChange={e => setConfirmName(e.target.value)}
+                placeholder={member.display_name ?? ''}
+                aria-label="확인을 위해 조합원 이름을 입력하세요"
+                disabled={isLoading}
+                className="px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50"
+              />
+              <button
+                onClick={() => onAction(member.id, 'withdraw')}
+                disabled={isLoading || confirmName !== member.display_name}
+                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 flex items-center justify-center text-sm sm:text-base"
+              >
+                탈퇴 확정
+              </button>
+            </div>
           )}
 
           <button
