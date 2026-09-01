@@ -1,4 +1,5 @@
-import { integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import { sql } from 'drizzle-orm'
+import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
 import { createdAt, updatedAt, uuidPk } from './_shared.ts'
 
@@ -57,7 +58,21 @@ export const memberProfiles = sqliteTable(
     isAuditor: integer('is_auditor', { mode: 'boolean' }).notNull().default(false),
   },
   // Postgres 원본도 email에 UNIQUE 제약이 있다(20250106090010_init_member_profiles.sql:18).
-  table => [uniqueIndex('member_profiles_email_idx').on(table.email)]
+  table => [
+    uniqueIndex('member_profiles_email_idx').on(table.email),
+    /**
+     * 성능 인덱스 — 정의의 정본은 `0004_add_performance_indexes.sql`이고, 운영 DB에
+     * 이미 같은 이름·같은 컬럼으로 존재한다. 여기 선언하는 이유는 **`drizzle-kit
+     * push`가 스키마에 없는 인덱스를 "잉여"로 보고 지우기 때문**이다(적대 감사
+     * 2026-08-27 실측: 23 → 0, 질의 계획이 SEARCH → SCAN). 지우지 말 것 —
+     * `scripts/testing/performanceIndexDeclarations.test.mjs`가 못박고 있다.
+     *
+     * DESC는 `sql` 템플릿으로 쓴다. 이 Drizzle 버전에는 `column.desc()`가 없다.
+     */
+    index('idx_member_profiles_status').on(table.registrationStatus, sql`\`created_at\` DESC`),
+    index('idx_member_profiles_created_at').on(sql`\`created_at\` DESC`),
+    index('idx_member_profiles_artist_id').on(table.artistId),
+  ]
 )
 
 export const artists = sqliteTable('artists', {

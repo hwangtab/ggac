@@ -1,4 +1,5 @@
-import { integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import { sql } from 'drizzle-orm'
+import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
 import { createdAt, updatedAt, uuidPk } from './_shared.ts'
 import { memberProfiles } from './identity.ts'
@@ -121,49 +122,86 @@ export const userSettings = sqliteTable(
   ]
 )
 
-export const userActivities = sqliteTable('user_activities', {
-  id: uuidPk(),
-  userId: text('user_id').references(() => memberProfiles.id, { onDelete: 'set null' }),
-  actionType: text('action_type', { enum: ACTIVITY_ACTION_TYPE }).notNull(),
-  targetType: text('target_type', { enum: ACTIVITY_TARGET_TYPE }),
-  targetId: text('target_id'),
-  metadata: text('metadata', { mode: 'json' })
-    .$type<Record<string, unknown>>()
-    .notNull()
-    .default({}),
-  /** Postgres inet → text */
-  ipAddress: text('ip_address'),
-  userAgent: text('user_agent'),
-  /** 세션 추적은 폐기했지만 컬럼은 과거 데이터 이관을 위해 유지한다. */
-  sessionId: text('session_id'),
-  createdAt: createdAt(),
-})
+export const userActivities = sqliteTable(
+  'user_activities',
+  {
+    id: uuidPk(),
+    userId: text('user_id').references(() => memberProfiles.id, { onDelete: 'set null' }),
+    actionType: text('action_type', { enum: ACTIVITY_ACTION_TYPE }).notNull(),
+    targetType: text('target_type', { enum: ACTIVITY_TARGET_TYPE }),
+    targetId: text('target_id'),
+    metadata: text('metadata', { mode: 'json' })
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
+    /** Postgres inet → text */
+    ipAddress: text('ip_address'),
+    userAgent: text('user_agent'),
+    /** 세션 추적은 폐기했지만 컬럼은 과거 데이터 이관을 위해 유지한다. */
+    sessionId: text('session_id'),
+    createdAt: createdAt(),
+  },
+  table => [
+    /**
+     * 성능 인덱스 — 정의의 정본은 `0004_add_performance_indexes.sql`이고, 운영 DB에
+     * 이미 같은 이름·같은 컬럼으로 존재한다. 여기 선언하는 이유는 **`drizzle-kit
+     * push`가 스키마에 없는 인덱스를 "잉여"로 보고 지우기 때문**이다(적대 감사
+     * 2026-08-27 실측: 23 → 0, 질의 계획이 SEARCH → SCAN). 지우지 말 것 —
+     * `scripts/testing/performanceIndexDeclarations.test.mjs`가 못박고 있다.
+     *
+     * DESC는 `sql` 템플릿으로 쓴다. 이 Drizzle 버전에는 `column.desc()`가 없다.
+     */
+    index('idx_user_activities_created_at').on(sql`\`created_at\` DESC`),
+    index('idx_user_activities_composite').on(
+      table.userId,
+      table.actionType,
+      sql`\`created_at\` DESC`
+    ),
+  ]
+)
 
 /**
  * 단계 4: 실시간 사용자 세션 추적 테이블(운영 실측 5937행).
  * Postgres 원본(20250719090020_create_activity_tracking_system.sql)은
  * user_id를 nullable로 선언한다 — NOT NULL이 아니다.
  */
-export const userSessions = sqliteTable('user_sessions', {
-  id: uuidPk(),
-  userId: text('user_id').references(() => memberProfiles.id, { onDelete: 'cascade' }),
-  sessionToken: text('session_token').notNull().unique(),
-  lastActivity: integer('last_activity', { mode: 'timestamp_ms' })
-    .notNull()
-    .$defaultFn(() => new Date()),
-  isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
-  /** Postgres inet → text */
-  ipAddress: text('ip_address'),
-  userAgent: text('user_agent'),
-  loginAt: integer('login_at', { mode: 'timestamp_ms' })
-    .notNull()
-    .$defaultFn(() => new Date()),
-  logoutAt: integer('logout_at', { mode: 'timestamp_ms' }),
-  metadata: text('metadata', { mode: 'json' })
-    .$type<Record<string, unknown>>()
-    .notNull()
-    .default({}),
-})
+export const userSessions = sqliteTable(
+  'user_sessions',
+  {
+    id: uuidPk(),
+    userId: text('user_id').references(() => memberProfiles.id, { onDelete: 'cascade' }),
+    sessionToken: text('session_token').notNull().unique(),
+    lastActivity: integer('last_activity', { mode: 'timestamp_ms' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+    /** Postgres inet → text */
+    ipAddress: text('ip_address'),
+    userAgent: text('user_agent'),
+    loginAt: integer('login_at', { mode: 'timestamp_ms' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    logoutAt: integer('logout_at', { mode: 'timestamp_ms' }),
+    metadata: text('metadata', { mode: 'json' })
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
+  },
+  table => [
+    /**
+     * 성능 인덱스 — 정의의 정본은 `0004_add_performance_indexes.sql`이고, 운영 DB에
+     * 이미 같은 이름·같은 컬럼으로 존재한다. 여기 선언하는 이유는 **`drizzle-kit
+     * push`가 스키마에 없는 인덱스를 "잉여"로 보고 지우기 때문**이다(적대 감사
+     * 2026-08-27 실측: 23 → 0, 질의 계획이 SEARCH → SCAN). 지우지 말 것 —
+     * `scripts/testing/performanceIndexDeclarations.test.mjs`가 못박고 있다.
+     *
+     * DESC는 `sql` 템플릿으로 쓴다. 이 Drizzle 버전에는 `column.desc()`가 없다.
+     */
+    index('idx_user_sessions_user_active').on(table.userId, table.isActive),
+    index('idx_user_sessions_active_last_activity').on(table.isActive, table.lastActivity),
+    index('idx_user_sessions_last_activity').on(table.lastActivity),
+  ]
+)
 
 /**
  * 단계 4: 일별 활동 통계 집계 테이블(운영 실측 865행).

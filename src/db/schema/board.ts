@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm'
 import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
 import { createdAt, updatedAt, uuidPk } from './_shared.ts'
@@ -40,21 +41,36 @@ export const boardMeetings = sqliteTable('board_meetings', {
   updatedAt: updatedAt(),
 })
 
-export const boardAgendas = sqliteTable('board_agendas', {
-  id: uuidPk(),
-  meetingId: text('meeting_id')
-    .notNull()
-    .references(() => boardMeetings.id, { onDelete: 'cascade' }),
-  title: text('title').notNull(),
-  content: text('content'),
-  sortOrder: integer('sort_order').notNull().default(0),
-  status: text('status').notNull().default('proposed'),
-  proposedBy: text('proposed_by').references(() => memberProfiles.id, {
-    onDelete: 'set null',
-  }),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-})
+export const boardAgendas = sqliteTable(
+  'board_agendas',
+  {
+    id: uuidPk(),
+    meetingId: text('meeting_id')
+      .notNull()
+      .references(() => boardMeetings.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    content: text('content'),
+    sortOrder: integer('sort_order').notNull().default(0),
+    status: text('status').notNull().default('proposed'),
+    proposedBy: text('proposed_by').references(() => memberProfiles.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  table => [
+    /**
+     * 성능 인덱스 — 정의의 정본은 `0004_add_performance_indexes.sql`이고, 운영 DB에
+     * 이미 같은 이름·같은 컬럼으로 존재한다. 여기 선언하는 이유는 **`drizzle-kit
+     * push`가 스키마에 없는 인덱스를 "잉여"로 보고 지우기 때문**이다(적대 감사
+     * 2026-08-27 실측: 23 → 0, 질의 계획이 SEARCH → SCAN). 지우지 말 것 —
+     * `scripts/testing/performanceIndexDeclarations.test.mjs`가 못박고 있다.
+     *
+     * DESC는 `sql` 템플릿으로 쓴다. 이 Drizzle 버전에는 `column.desc()`가 없다.
+     */
+    index('idx_board_agendas_meeting').on(table.meetingId, table.sortOrder),
+  ]
+)
 
 export const boardMinutes = sqliteTable(
   'board_minutes',
@@ -72,20 +88,35 @@ export const boardMinutes = sqliteTable(
   table => [uniqueIndex('board_minutes_meeting_id_idx').on(table.meetingId)]
 )
 
-export const boardDocuments = sqliteTable('board_documents', {
-  id: uuidPk(),
-  title: text('title').notNull(),
-  category: text('category').notNull(),
-  /** Blob 비공개 저장소의 pathname. 인증된 라우트가 스트리밍으로만 노출한다. */
-  filePath: text('file_path').notNull(),
-  fileName: text('file_name'),
-  fileSize: integer('file_size'),
-  mimeType: text('mime_type'),
-  uploadedBy: text('uploaded_by').references(() => memberProfiles.id, {
-    onDelete: 'set null',
-  }),
-  createdAt: createdAt(),
-})
+export const boardDocuments = sqliteTable(
+  'board_documents',
+  {
+    id: uuidPk(),
+    title: text('title').notNull(),
+    category: text('category').notNull(),
+    /** Blob 비공개 저장소의 pathname. 인증된 라우트가 스트리밍으로만 노출한다. */
+    filePath: text('file_path').notNull(),
+    fileName: text('file_name'),
+    fileSize: integer('file_size'),
+    mimeType: text('mime_type'),
+    uploadedBy: text('uploaded_by').references(() => memberProfiles.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: createdAt(),
+  },
+  table => [
+    /**
+     * 성능 인덱스 — 정의의 정본은 `0004_add_performance_indexes.sql`이고, 운영 DB에
+     * 이미 같은 이름·같은 컬럼으로 존재한다. 여기 선언하는 이유는 **`drizzle-kit
+     * push`가 스키마에 없는 인덱스를 "잉여"로 보고 지우기 때문**이다(적대 감사
+     * 2026-08-27 실측: 23 → 0, 질의 계획이 SEARCH → SCAN). 지우지 말 것 —
+     * `scripts/testing/performanceIndexDeclarations.test.mjs`가 못박고 있다.
+     *
+     * DESC는 `sql` 템플릿으로 쓴다. 이 Drizzle 버전에는 `column.desc()`가 없다.
+     */
+    index('idx_board_documents_category').on(table.category, sql`\`created_at\` DESC`),
+  ]
+)
 
 export const boardMeetingAttendees = sqliteTable(
   'board_meeting_attendees',
@@ -106,14 +137,29 @@ export const boardMeetingAttendees = sqliteTable(
   ]
 )
 
-export const boardMeetingDateOptions = sqliteTable('board_meeting_date_options', {
-  id: uuidPk(),
-  meetingId: text('meeting_id')
-    .notNull()
-    .references(() => boardMeetings.id, { onDelete: 'cascade' }),
-  /** date 전용: 'YYYY-MM-DD' */
-  candidateDate: text('candidate_date').notNull(),
-})
+export const boardMeetingDateOptions = sqliteTable(
+  'board_meeting_date_options',
+  {
+    id: uuidPk(),
+    meetingId: text('meeting_id')
+      .notNull()
+      .references(() => boardMeetings.id, { onDelete: 'cascade' }),
+    /** date 전용: 'YYYY-MM-DD' */
+    candidateDate: text('candidate_date').notNull(),
+  },
+  table => [
+    /**
+     * 성능 인덱스 — 정의의 정본은 `0004_add_performance_indexes.sql`이고, 운영 DB에
+     * 이미 같은 이름·같은 컬럼으로 존재한다. 여기 선언하는 이유는 **`drizzle-kit
+     * push`가 스키마에 없는 인덱스를 "잉여"로 보고 지우기 때문**이다(적대 감사
+     * 2026-08-27 실측: 23 → 0, 질의 계획이 SEARCH → SCAN). 지우지 말 것 —
+     * `scripts/testing/performanceIndexDeclarations.test.mjs`가 못박고 있다.
+     *
+     * DESC는 `sql` 템플릿으로 쓴다. 이 Drizzle 버전에는 `column.desc()`가 없다.
+     */
+    index('idx_board_date_options_meeting').on(table.meetingId, table.candidateDate),
+  ]
+)
 
 export const boardMeetingDateVotes = sqliteTable(
   'board_meeting_date_votes',
