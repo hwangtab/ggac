@@ -519,6 +519,7 @@
     "nav": {
       "dashboard": "Dashboard",
       "profile": "Personal Profile",
+      "calendar": "My Calendar",
       "artist": "Artist Profile",
       "activity": "Activity Log",
       "settings": "Settings",
