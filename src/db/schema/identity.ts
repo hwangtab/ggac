@@ -1,9 +1,9 @@
 import { sql } from 'drizzle-orm'
 import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
-import { createdAt, updatedAt, uuidPk } from './_shared.ts'
+import { REGISTRATION_STATUSES } from '../../constants/memberProfile.ts'
 
-export const REGISTRATION_STATUS = ['pending', 'approved', 'rejected'] as const
+import { createdAt, updatedAt, uuidPk } from './_shared.ts'
 
 export const memberProfiles = sqliteTable(
   'member_profiles',
@@ -20,7 +20,7 @@ export const memberProfiles = sqliteTable(
     bankName: text('bank_name'),
     accountNumber: text('account_number'),
     accountHolder: text('account_holder'),
-    registrationStatus: text('registration_status', { enum: REGISTRATION_STATUS })
+    registrationStatus: text('registration_status', { enum: REGISTRATION_STATUSES })
       .notNull()
       .default('pending'),
     isActive: integer('is_active', { mode: 'boolean' }).notNull().default(false),

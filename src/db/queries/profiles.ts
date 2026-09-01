@@ -21,12 +21,16 @@ import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
 import { db } from '../client.ts'
 import { memberProfiles, user } from '../schema/index.ts'
 
-import type { ArtistRole, MembershipType } from '../../constants/memberProfile.ts'
+import type { ArtistRole, MembershipType, RegistrationStatus } from '../../constants/memberProfile.ts'
 
 import { toCamelCase, toIso } from './_helpers.ts'
 import { profileCompletenessExpression } from './profileCompleteness.ts'
 
-export type RegistrationStatus = 'pending' | 'approved' | 'rejected'
+// 정본은 `constants/memberProfile.ts`. 여기서 재수출하는 이유는 기존
+// 소비처(예: `admin/members/route.ts`)가 이 모듈에서 타입을 가져오던 경로를
+// 그대로 유지하기 위해서다 — 값을 복사해 두 곳에 적으면(이전 상태) 탈퇴
+// 상태 같은 새 값이 한쪽에만 반영되고도 tsc가 못 잡는다.
+export type { RegistrationStatus }
 
 /** API 응답에 쓰이는 snake_case 정규화 형태. 컬럼 33개 전부를 담는다. */
 export interface ProfileRow {
