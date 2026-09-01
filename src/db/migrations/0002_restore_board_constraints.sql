@@ -23,9 +23,28 @@
 -- 그래서 `PRAGMA foreign_keys=OFF`는 스크립트 전체를 감싸고,
 -- `=ON` 복원은 맨 끝 한 번만 한다(SQLite 문서의 12단계 표 재작성 절차).
 --
--- 재실행 가능(idempotent): 표 블록은 `__new_*`를 먼저 지우고 시작하며,
--- 두 번 돌려도 같은 스키마·같은 행에 수렴한다. 재작성 전체가 하나의
--- 트랜잭션이라 중간에 죽어도 DROP↔RENAME 사이의 표 유실이 없다.
+-- ⚠ **재실행 금지 — 이 파일은 더 이상 idempotent가 아니다.**
+--
+-- 원래는 "두 번 돌려도 같은 스키마·같은 행에 수렴한다"고 적혀 있었고 그때는
+-- 사실이었다. `0007`이 `board_meetings`에 `meeting_time`을 붙이고 `0004`가
+-- `idx_board_agendas_meeting`·`idx_board_documents_category`를 만들면서 거짓이
+-- 됐다 — 아래 `__new_board_meetings`는 그 컬럼을 모르고, 표를 재작성하면
+-- 그 표에 걸린 인덱스도 함께 사라진다.
+--
+-- 실측(2026-09-01, 0000~0009 적용 후 0002만 재적용):
+--   meeting_time 있음 true → false      (값도 함께 영구 유실)
+--   idx_board_* 3개 → 1개
+--   **에러 없이 성공했고 기존 단언 3종은 전부 통과했다.**
+-- 그 상태에서 이사회 회의 조회·생성·수정이 `no such column: meeting_time`으로
+-- 전부 500이 된다.
+--
+-- 그래서 아래에 **재실행 차단 단언**을 넣었다. `meeting_time`이 이미 있으면
+-- (= `0007`이 적용된 DB면) CHECK 위반으로 트랜잭션 전체가 롤백되고 아무것도
+-- 파괴되지 않는다. 처음 적용하는 경로(0002가 0007보다 먼저 도는 정상 순서)는
+-- 그 컬럼이 없으므로 그대로 통과한다.
+--
+-- 재작성 전체가 하나의 트랜잭션이라 중간에 죽어도 DROP↔RENAME 사이의 표
+-- 유실이 없다.
 --
 -- 검증은 마이그레이션 안에 들어 있다: `__migration_assert_0002`는 `CHECK (ok = 1)`
 -- 뿐인 표이고, **첫 DROP 전에 FK가 실제로 꺼졌는지**, 표마다 재작성 전후 행
@@ -58,6 +77,13 @@ DROP TABLE IF EXISTS `__migration_assert_0002`;
 CREATE TABLE `__migration_assert_0002` (`ok` integer NOT NULL CHECK (`ok` = 1));
 --> statement-breakpoint
 INSERT INTO `__migration_assert_0002` (`ok`) SELECT CASE WHEN (SELECT foreign_keys FROM pragma_foreign_keys()) = 0 THEN 1 ELSE 0 END;
+--> statement-breakpoint
+-- 재실행 차단: `0007`이 붙인 `meeting_time`이 이미 있으면 여기서 롤백한다.
+-- 이 단언이 없으면 아래 표 재작성이 그 컬럼과 값, 그리고 `0004`가 만든
+-- `idx_board_agendas_meeting`·`idx_board_documents_category`를 **에러 없이** 지운다.
+INSERT INTO `__migration_assert_0002` (`ok`) SELECT CASE WHEN (
+  SELECT count(*) FROM pragma_table_info('board_meetings') WHERE `name` = 'meeting_time'
+) = 0 THEN 1 ELSE 0 END;
 --> statement-breakpoint
 DROP TABLE IF EXISTS `__new_board_agendas`;
 --> statement-breakpoint

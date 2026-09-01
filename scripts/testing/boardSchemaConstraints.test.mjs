@@ -303,6 +303,63 @@ describe('0002 마이그레이션의 성질', () => {
     }
   })
 
+  test('전체 마이그레이션 위에서 0002를 다시 돌리면 차단되고 아무것도 사라지지 않는다', async () => {
+    // 위 idempotent 테스트는 **0000·0001만** 깔고 0002를 두 번 돌린다. 그래서
+    // `0004`(인덱스)와 `0007`(`meeting_time`)이 존재하지 않는 스키마를 상대로
+    // 초록불을 냈고, 실제 회귀를 구조적으로 못 잡았다.
+    //
+    // 실측(2026-09-01) — 0000~0009를 전부 적용한 DB에 0002만 재적용하면
+    // `meeting_time` 컬럼과 값이, 그리고 `idx_board_agendas_meeting`·
+    // `idx_board_documents_category`가 **에러 없이** 사라졌다. 기존 단언 3종은
+    // 전부 통과했다. 그 상태에서 이사회 회의 조회·생성·수정이
+    // `no such column: meeting_time`으로 500이 된다.
+    //
+    // 0002에 재실행 차단 단언을 넣었고, 이 테스트가 그것을 지킨다.
+    const path = 'scripts/testing/.board-schema-reapply.db'
+    cleanup(path)
+    const c = createClient({ url: `file:${path}` })
+    try {
+      await applyMigrations(c)
+
+      const columns = async () =>
+        (await c.execute("SELECT name FROM pragma_table_info('board_meetings')")).rows.map(
+          r => r.name
+        )
+      const boardIndexes = async () =>
+        (
+          await c.execute(
+            "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_board%' ORDER BY name"
+          )
+        ).rows.map(r => r.name)
+
+      const columnsBefore = await columns()
+      const indexesBefore = await boardIndexes()
+      assert.ok(columnsBefore.includes('meeting_time'), '0007이 적용된 상태여야 한다')
+      assert.ok(indexesBefore.length >= 2, '0004가 적용된 상태여야 한다')
+
+      const sql = readFileSync(
+        migrationFiles().find(f => f.includes('0002_')),
+        'utf8'
+      )
+      await assert.rejects(
+        () => c.executeMultiple(sql),
+        /CHECK constraint failed/,
+        '0007 이후 0002 재실행은 막혀야 한다'
+      )
+
+      // 차단이 롤백까지 해야 의미가 있다 — 반쪽 파괴가 남으면 안 된다.
+      assert.deepEqual(await columns(), columnsBefore, '컬럼이 그대로여야 한다')
+      assert.deepEqual(await boardIndexes(), indexesBefore, '인덱스가 그대로여야 한다')
+      const leftovers = await c.execute(
+        "SELECT name FROM sqlite_master WHERE name LIKE '__new_%' OR name LIKE '__migration_%'"
+      )
+      assert.deepEqual(leftovers.rows, [], '임시 표가 남으면 안 된다')
+    } finally {
+      c.close()
+      cleanup(path)
+    }
+  })
+
   test('변이 대조 — 행이 하나라도 새면 마이그레이션 안의 단언이 물고 전체가 롤백된다', async () => {
     // 마이그레이션에 심은 `__migration_assert_0002`가 장식이 아님을 보인다.
     // 복사 SELECT에 `WHERE 0`을 끼워 일부러 0행을 옮기게 만든다.
