@@ -135,6 +135,26 @@ export async function listRecentDigestItems(weeks: number): Promise<GrantItem[]>
   return rows.flatMap(r => (r.items ?? []) as GrantItem[])
 }
 
+/**
+ * 최근 `weeks`개 회차 중 **발행된(`status='published'`) 회차만** 항목을 평평하게 모은다.
+ * 캘린더(`src/db/queries/calendar.ts`)가 쓴다.
+ *
+ * `listRecentDigestItems`와 다른 이유: 그 함수는 크론의 중복 제거용이라 status를 가리면
+ * 안 된다(초안만 만들고 발행 안 한 회차의 공고도 다음 주에 또 올리면 관리자가 같은 것을
+ * 두 번 검토하게 된다 — 그 함수 docstring 참고). 반대로 캘린더는 조합원이 보는 화면이라
+ * **발행되지 않은 회차(초안·발행중·폐기)의 공고가 보이면 안 된다** — 관리자가 아직
+ * 검수하지 않았거나 일부러 폐기한 내용이 노출되는 것이기 때문이다.
+ */
+export async function listPublishedDigestItems(weeks: number): Promise<GrantItem[]> {
+  const rows = await db
+    .select({ items: grantDigests.items })
+    .from(grantDigests)
+    .where(eq(grantDigests.status, 'published'))
+    .orderBy(desc(grantDigests.createdAt))
+    .limit(weeks)
+  return rows.flatMap(r => (r.items ?? []) as GrantItem[])
+}
+
 export type GrantDigestPatch = Partial<{
   items: GrantItem[]
   status: GrantDigestStatus

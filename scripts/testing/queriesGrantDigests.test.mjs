@@ -121,6 +121,21 @@ test('listRecentDigestItems는 최근 회차의 항목을 평평하게 모은다
   assert.ok(keys.includes('ncas:41'))
 })
 
+test('listPublishedDigestItems는 발행된 회차의 항목만 모은다 (F2)', async () => {
+  const m = await loadFresh()
+  await m.createGrantDigest({ week_key: '2026-W46', items: [{ ...ITEM, key: 'ncas:46-draft' }] })
+  const published = await m.createGrantDigest({
+    week_key: '2026-W47',
+    items: [{ ...ITEM, key: 'ncas:47-published' }],
+  })
+  await m.updateGrantDigest(published.id, { status: 'published' })
+
+  const items = await m.listPublishedDigestItems(12)
+  const keys = items.map(i => i.key)
+  assert.ok(keys.includes('ncas:47-published'), '발행된 회차의 항목은 있어야 한다')
+  assert.ok(!keys.includes('ncas:46-draft'), '초안 회차의 항목은 없어야 한다')
+})
+
 // ---------------------------------------------------------------- claimGrantDigestForPublish
 //
 // `UPDATE ... WHERE status='draft' RETURNING *` 한 문장이 조합원 중복 발송을

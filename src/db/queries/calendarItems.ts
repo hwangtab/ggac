@@ -51,6 +51,8 @@ function inRange(date: string, range: CalendarRange): boolean {
  * 세 소스를 하나의 배열로 합친다. **순수 함수** — 네트워크·DB 접근이 없다.
  *
  * 빠지는 것:
+ * - 관리자가 이번 회차에서 뺀 공고(`excluded: true`) — 발행 경로(`activeItems`)와 같은
+ *   기준이다. 여기서 걸지 않으면 게시글·메일에서는 빠진 공고가 캘린더에만 남는다.
  * - 마감이 없는 상시 공고(`apply_end: null`) — 달력에 찍을 자리가 없다. 화면이 그리드
  *   아래 별도 목록으로 따로 보여준다.
  * - 날짜가 정해지지 않은 회의(`meeting_date: null`, 일정 투표 중) — 같은 이유.
@@ -67,6 +69,7 @@ export function toCalendarItems(sources: CalendarSources, range: CalendarRange):
   }
 
   for (const g of sources.grants) {
+    if (g.excluded) continue
     if (!g.apply_end) continue
     if (!inRange(g.apply_end, range)) continue
     push({
@@ -117,12 +120,15 @@ export function toCalendarItems(sources: CalendarSources, range: CalendarRange):
  * 화면이 그리드 아래 목록으로 따로 보여준다. 여기서 빠뜨리면 상시 공고는 조합원이 볼 곳이
  * 게시글뿐이 된다.
  *
+ * `excluded` 항목은 여기서도 뺀다 — `toCalendarItems`와 같은 기준.
+ *
  * `date`는 빈 문자열이다 — `CalendarItem` 형태를 그대로 쓰되 날짜가 없음을 나타낸다.
  */
 export function toOngoingGrants(grants: GrantItem[]): CalendarItem[] {
   const out: CalendarItem[] = []
   const seen = new Set<string>()
   for (const g of grants) {
+    if (g.excluded) continue
     if (g.apply_end) continue
     const key = `grant:${g.key}`
     if (seen.has(key)) continue

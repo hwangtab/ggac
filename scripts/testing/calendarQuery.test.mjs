@@ -195,3 +195,34 @@ test('toOngoingGrants는 장르·지역을 실어 준다 (개인 필터용)', ()
   assert.deepEqual(out[0].genres, ['음악'])
   assert.deepEqual(out[0].regions, ['서울'])
 })
+
+// ---------------------------------------------------------------- excluded 항목 (F2)
+
+test('toCalendarItems는 excluded 항목을 캘린더에 담지 않는다', () => {
+  const out = toCalendarItems(
+    {
+      grants: [
+        grant({ key: 'kept', apply_end: '2026-09-15' }),
+        grant({ key: 'dropped', apply_end: '2026-09-20', excluded: true }),
+      ],
+      meetings: [],
+      projects: [],
+    },
+    RANGE
+  )
+  assert.deepEqual(
+    out.map(i => i.key),
+    ['grant:kept']
+  )
+})
+
+test('toOngoingGrants는 excluded 항목을 상시 목록에 담지 않는다', () => {
+  const out = toOngoingGrants([
+    grant({ key: 'kept', apply_end: null }),
+    grant({ key: 'dropped', apply_end: null, excluded: true }),
+  ])
+  assert.deepEqual(
+    out.map(i => i.key),
+    ['grant:kept']
+  )
+})

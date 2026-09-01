@@ -12,7 +12,7 @@
  */
 import { getProjects } from '../../lib/data.ts'
 import { listMeetings } from './board.ts'
-import { listRecentDigestItems } from './grantDigests.ts'
+import { listPublishedDigestItems } from './grantDigests.ts'
 import {
   toCalendarItems,
   toOngoingGrants,
@@ -22,7 +22,7 @@ import {
 
 export { toCalendarItems, toOngoingGrants, type CalendarItem, type CalendarRange }
 
-/** 최근 회차에서 공고를 모을 범위. 마감이 최대 90일 뒤이므로 넉넉히 잡는다. */
+/** 최근 발행된 회차에서 공고를 모을 범위. 마감이 최대 90일 뒤이므로 넉넉히 잡는다. */
 const DIGEST_LOOKBACK_WEEKS = 26
 
 /**
@@ -34,7 +34,7 @@ export async function listCalendarItems(
   range: CalendarRange
 ): Promise<{ items: CalendarItem[]; ongoing: CalendarItem[] }> {
   const [grants, meetings, projects] = await Promise.all([
-    listRecentDigestItems(DIGEST_LOOKBACK_WEEKS),
+    listPublishedDigestItems(DIGEST_LOOKBACK_WEEKS),
     listMeetings(),
     getProjects('ko'),
   ])
