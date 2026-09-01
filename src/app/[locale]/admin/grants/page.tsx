@@ -69,6 +69,18 @@ function dDayLabel(applyEnd: string | null): string {
   return `D-${days}`
 }
 
+/**
+ * 수신 건수 분포 한 줄 요약. `zero_match_count`(0건인 사람 수)만으로는 "0건은 아니지만
+ * 적게 받은 사람"이 안 보인다 — kosmart 210명 카드 0장 사고의 이웃 사례다.
+ */
+function matchStatsLabel(perMember: { matched: number }[] | undefined): string | null {
+  if (!perMember || perMember.length === 0) return null
+  const counts = [...perMember.map(p => p.matched)].sort((a, b) => a - b)
+  const mid = Math.floor(counts.length / 2)
+  const median = counts.length % 2 === 0 ? (counts[mid - 1] + counts[mid]) / 2 : counts[mid]
+  return `수신 건수: 최소 ${counts[0]} · 중앙값 ${median} · 최대 ${counts[counts.length - 1]}`
+}
+
 export default function AdminGrantsPage() {
   const [summaries, setSummaries] = useState<DigestSummary[]>([])
   const [selected, setSelected] = useState<Digest | null>(null)
@@ -182,11 +194,13 @@ export default function AdminGrantsPage() {
       const json = await res.json()
       if (!res.ok) throw new Error(json?.error?.message ?? '발행하지 못했습니다.')
       const d = json.data
+      const statsLabel = matchStatsLabel(d.per_member)
       setResult(
         `발행했습니다. 알림 ${d.notified}명, 메일 성공 ${d.email_sent} · 실패 ${d.email_failed}` +
           ` · 수신거부 ${d.email_skipped_optout} · 주소오류 ${d.email_skipped_address}` +
           ` · 맞는 공고 없음 ${d.email_skipped_nomatch}` +
-          (d.notification_failed ? ' (알림 생성 실패 — 로그 확인 필요)' : '')
+          (d.notification_failed ? ' (알림 생성 실패 — 로그 확인 필요)' : '') +
+          (statsLabel ? ` · ${statsLabel}` : '')
       )
       setZeroMatch(d.zero_match_count ?? 0)
       setSelected(null)

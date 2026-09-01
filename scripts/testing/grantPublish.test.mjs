@@ -1,7 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-const { runGrantPublish, isEmailOptedOut } = await import('../../src/lib/server/grantPublish.ts')
+const { runGrantPublish, isEmailOptedOut, summarizeMatchCounts } = await import(
+  '../../src/lib/server/grantPublish.ts'
+)
 
 function item(over = {}) {
   return {
@@ -424,4 +426,89 @@ test('게시글에는 풀 전체가 담긴다 (개인 필터를 걸지 않는다
   await runGrantPublish(h.input)
   assert.ok(h.calls.posts[0].content.includes('a-title'))
   assert.ok(h.calls.posts[0].content.includes('b-title'))
+})
+
+// ---------------------------------------------------------------- 수신 건수 분포 (F4)
+
+test('발행 결과에 수신자별 담긴 건수가 담긴다', async () => {
+  const h = harness({
+    members: [
+      member({ id: 'u1', interest_genres: ['음악'], interest_regions: ['경기'] }),
+      member({ id: 'u2', interest_genres: ['시각예술'], interest_regions: ['부산'] }),
+    ],
+    digest: {
+      id: 'd1',
+      week_key: '2026-W36',
+      status: 'draft',
+      items: [
+        item({ key: 'a', genres: ['음악'], regions: ['경기'] }),
+        item({ key: 'b', genres: ['음악'], regions: ['경기'] }),
+        item({ key: 'c', genres: ['시각예술'], regions: ['부산'] }),
+      ],
+    },
+  })
+  const r = await runGrantPublish(h.input)
+  assert.deepEqual(
+    r.per_member.map(p => p.matched).sort((a, b) => a - b),
+    [1, 2]
+  )
+})
+
+test('0건 회원도 분포에 matched: 0으로 나타난다 (0건인데 조용히 빠지지 않는다)', async () => {
+  const h = harness({
+    members: [member({ id: 'u1', interest_genres: ['문학'], interest_regions: ['제주'] })],
+    digest: {
+      id: 'd1',
+      week_key: '2026-W36',
+      status: 'draft',
+      items: [item({ key: 'a', genres: ['음악'], regions: ['경기'] })],
+    },
+  })
+  const r = await runGrantPublish(h.input)
+  assert.deepEqual(r.per_member, [{ matched: 0 }])
+  assert.equal(r.zero_match_count, 1)
+})
+
+test('수신거부·주소오류 회원은 분포에 담기지 않는다 (애초에 이메일 후보가 아니다)', async () => {
+  const settings = new Map([
+    [
+      'u2',
+      [{ category: 'notification', setting_key: 'email_notifications', setting_value: false }],
+    ],
+  ])
+  const h = harness({
+    members: [
+      member({ id: 'u1', email: 'a@example.test' }),
+      member({ id: 'u2', email: 'b@example.test' }),
+      member({ id: 'u3', email: null }),
+    ],
+    settingsByUserId: settings,
+    digest: {
+      id: 'd1',
+      week_key: '2026-W36',
+      status: 'draft',
+      items: [item({ key: 'a', genres: ['음악'], regions: ['경기'] })],
+    },
+  })
+  const r = await runGrantPublish(h.input)
+  assert.equal(r.per_member.length, 1) // u1만
+  assert.deepEqual(r.per_member, [{ matched: 1 }])
+})
+
+test('per_member는 이메일 주소·회원 id를 담지 않는다', async () => {
+  const h = harness()
+  const r = await runGrantPublish(h.input)
+  for (const entry of r.per_member) {
+    assert.deepEqual(Object.keys(entry), ['matched'])
+  }
+})
+
+test('summarizeMatchCounts: 최소·중앙값·최대를 계산한다', () => {
+  assert.deepEqual(summarizeMatchCounts([1, 3, 2]), { min: 1, median: 2, max: 3 })
+  assert.deepEqual(summarizeMatchCounts([1, 2, 3, 4]), { min: 1, median: 2.5, max: 4 })
+  assert.deepEqual(summarizeMatchCounts([5]), { min: 5, median: 5, max: 5 })
+})
+
+test('summarizeMatchCounts: 빈 배열은 전부 0이다', () => {
+  assert.deepEqual(summarizeMatchCounts([]), { min: 0, median: 0, max: 0 })
 })

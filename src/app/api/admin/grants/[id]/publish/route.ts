@@ -16,7 +16,7 @@ import { getUserSettings } from '@/db/queries/settings'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { sendEmail } from '@/lib/mail/send'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
-import { runGrantPublish, type SettingLike } from '@/lib/server/grantPublish'
+import { runGrantPublish, summarizeMatchCounts, type SettingLike } from '@/lib/server/grantPublish'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger, maskId } from '@/utils/logger'
 import { logSecurityEvent } from '@/utils/security'
@@ -124,6 +124,10 @@ export const POST = defineApiRoute({
       published_at: new Date().toISOString(),
     })
 
+    // 건너뛴 사유를 뭉뚱그리지 않는다 — 수신거부·주소오류·0건매치는 뜻이 다르다.
+    // 수신 건수 분포(matched*)도 함께 남긴다: zero_match_count만으로는 "0건은 아니지만
+    // 적게 받은 사람"이 안 보인다 — kosmart 210명 카드 0장 사고의 이웃 사례다.
+    const matchStats = summarizeMatchCounts(result.per_member.map(p => p.matched))
     logSecurityEvent(
       'GRANT_DIGEST_PUBLISHED',
       {
@@ -133,7 +137,12 @@ export const POST = defineApiRoute({
         recipients: members.length,
         emailSent: result.email_sent,
         emailFailed: result.email_failed,
+        emailSkippedOptout: result.email_skipped_optout,
+        emailSkippedAddress: result.email_skipped_address,
         emailSkippedNomatch: result.email_skipped_nomatch,
+        matchedMin: matchStats.min,
+        matchedMedian: matchStats.median,
+        matchedMax: matchStats.max,
       },
       'medium'
     )

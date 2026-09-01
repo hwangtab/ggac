@@ -61,8 +61,34 @@ export interface GrantPublishResult {
   email_skipped_nomatch: number
   /** `email_skipped_nomatch`와 같은 값. 관리자 화면이 읽는 이름. */
   zero_match_count: number
+  /**
+   * 수신자별 담긴 건수 분포. 이메일 수신 대상(수신거부·주소오류로 걸러지지 않은 회원)
+   * 각각에 대해 관심사와 겹친 공고 수를 하나씩 담는다 — **이메일 주소·회원 id는 담지
+   * 않는다**, 숫자뿐이라 관리자 화면에 그대로 실려도 PII가 아니다.
+   *
+   * **왜 필요한가**: "18명 중 12명이 12건 대신 1건씩 받았다" 같은 부분적 개인화 실패는
+   * `zero_match_count`(0건인 사람 수)만으로는 안 보인다. kosmart가 210명에게 카드
+   * 0장을 준 사고의 이웃 사례가 정확히 이것이다 — 조금 받는 사람도 보여야 한다.
+   */
+  per_member: { matched: number }[]
   /** 실패한 주소(마스킹됨)와 사유. 관리자 화면에 그대로 보여준다. */
   email_errors: { to: string; error: string }[]
+}
+
+/**
+ * 수신 건수 분포 요약(최소·중앙값·최대). **순수 함수.** 관리자 화면과 보안 로그가
+ * `per_member`를 그대로 보여주는 대신 한 줄 요약이 필요할 때 쓴다.
+ */
+export function summarizeMatchCounts(counts: number[]): {
+  min: number
+  median: number
+  max: number
+} {
+  if (counts.length === 0) return { min: 0, median: 0, max: 0 }
+  const sorted = [...counts].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  const median = sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
+  return { min: sorted[0], median, max: sorted[sorted.length - 1] }
 }
 
 export interface RunGrantPublishInput {
@@ -185,6 +211,9 @@ export async function runGrantPublish(input: RunGrantPublishInput): Promise<Gran
   let skippedAddress = 0
   let skippedNoMatch = 0
   const errors: { to: string; error: string }[] = []
+  // 이메일 수신 대상(수신거부·주소오류로 걸러지지 않은 회원)의 담긴 건수. 숫자만 —
+  // 회원 id·이메일은 담지 않는다.
+  const matchedCounts: number[] = []
 
   for (const m of members) {
     if (isEmailOptedOut(input.settingsByUserId.get(m.id))) {
@@ -199,6 +228,7 @@ export async function runGrantPublish(input: RunGrantPublishInput): Promise<Gran
     // 이 회원의 관심사로 풀을 거른다. 미설정이면 조합 기본값이 적용된다.
     const interests = effectiveInterests(m)
     const mine = active.filter(it => matchesInterests(it, interests)).slice(0, CAP)
+    matchedCounts.push(mine.length)
 
     if (mine.length === 0) {
       // 빈 메일은 노이즈다. 게시글과 인앱 알림은 이미 갔으므로 이 회원도 볼 것은 있다.
@@ -224,6 +254,7 @@ export async function runGrantPublish(input: RunGrantPublishInput): Promise<Gran
     }
   }
 
+  const matchStats = summarizeMatchCounts(matchedCounts)
   log.info('지원사업 발행 완료', {
     digestId: digest.id,
     postId: post.id,
@@ -233,6 +264,9 @@ export async function runGrantPublish(input: RunGrantPublishInput): Promise<Gran
     skippedOptout,
     skippedAddress,
     skippedNoMatch,
+    matchedMin: matchStats.min,
+    matchedMedian: matchStats.median,
+    matchedMax: matchStats.max,
   })
 
   return {
@@ -245,6 +279,7 @@ export async function runGrantPublish(input: RunGrantPublishInput): Promise<Gran
     email_skipped_address: skippedAddress,
     email_skipped_nomatch: skippedNoMatch,
     zero_match_count: skippedNoMatch,
+    per_member: matchedCounts.map(matched => ({ matched })),
     email_errors: errors,
   }
 }
