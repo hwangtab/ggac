@@ -46,3 +46,18 @@ test('탈퇴 확정 뒤 커밋된 결과로 빌링키 해지를 시도한다', a
   // 해지 실패가 탈퇴 자체를 무효로 만들면 안 된다.
   assert.match(withdrawBlock, /catch[\s\S]{0,400}(BILLING_KEY_REVOKE_FAILED|해지 실패)/)
 })
+
+// ---------------------------------------------------------------- 레이트리밋
+
+test('탈퇴 신청·취소 라우트에 레이트리밋이 걸려 있다', async () => {
+  const src = await readFile(ROUTE, 'utf8')
+  // POST/DELETE 각각에 걸려야 한다 — 둘 다 상태를 바꾸는 쓰기다.
+  assert.match(src, /rateLimit\(request, 'GENERAL_API'\)/)
+  const postBody = src.slice(
+    src.indexOf('export async function POST'),
+    src.indexOf('export async function DELETE')
+  )
+  const deleteBody = src.slice(src.indexOf('export async function DELETE'))
+  assert.match(postBody, /rl\.success/, 'POST에 레이트리밋 검사가 없다')
+  assert.match(deleteBody, /rl\.success/, 'DELETE에 레이트리밋 검사가 없다')
+})

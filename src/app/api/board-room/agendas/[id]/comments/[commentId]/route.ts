@@ -4,6 +4,7 @@ import { requireBoardDiscussionWriter } from '@/lib/server/boardRoomAuth'
 import { MAX_AGENDA_COMMENT_LENGTH } from '@/constants/boardRoom'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { validateUUID } from '@/utils/validation'
+import { applyRouteRateLimit, createIPKeyGenerator, RATE_LIMITS } from '@/lib/server/rateLimit'
 import {
   getAgendaCommentOwner,
   softDeleteAgendaComment,
@@ -41,6 +42,18 @@ async function loadComment(commentId: string, agendaId: string) {
 }
 
 export async function PATCH(request: NextRequest, context: RouteParams) {
+  // 작성(POST)만 막고 수정·삭제가 열려 있으면 옆문이 된다 — 같은 설정·같은
+  // 키 생성기(IP + 기능)를 쓴다. 경로가 아니라 기능으로 나눠야 안건마다
+  // 상한이 곱해지지 않는다(위 POST 라우트 주석 참고).
+  const rl = await applyRouteRateLimit(request, {
+    ...RATE_LIMITS.POST_CREATION,
+    message: '의견을 너무 빠르게 남기고 있습니다. 잠시 후 다시 시도해주세요.',
+    keyGenerator: createIPKeyGenerator('board-discussion'),
+  })
+  if (!rl.success) {
+    return rl.response ?? ApiError.tooManyRequests('요청이 너무 많습니다.').toNextResponse()
+  }
+
   const params = await context.params
   const ids = validateIds(params.id, params.commentId)
   if (ids.error) return ids.error.toNextResponse()
@@ -77,7 +90,16 @@ export async function PATCH(request: NextRequest, context: RouteParams) {
   )
 }
 
-export async function DELETE(_request: NextRequest, context: RouteParams) {
+export async function DELETE(request: NextRequest, context: RouteParams) {
+  const rl = await applyRouteRateLimit(request, {
+    ...RATE_LIMITS.POST_CREATION,
+    message: '의견을 너무 빠르게 남기고 있습니다. 잠시 후 다시 시도해주세요.',
+    keyGenerator: createIPKeyGenerator('board-discussion'),
+  })
+  if (!rl.success) {
+    return rl.response ?? ApiError.tooManyRequests('요청이 너무 많습니다.').toNextResponse()
+  }
+
   const params = await context.params
   const ids = validateIds(params.id, params.commentId)
   if (ids.error) return ids.error.toNextResponse()

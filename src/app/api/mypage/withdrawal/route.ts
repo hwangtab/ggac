@@ -1,13 +1,23 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 
 import { ApiError, ApiSuccess } from '@/utils/apiWrapper'
 import { requireActiveMember } from '@/lib/server/memberAuth'
 import { requestWithdrawal, cancelWithdrawal } from '@/db/queries/withdrawal'
+import { rateLimit } from '@/lib/server/rateLimit'
 
 export const dynamic = 'force-dynamic'
 
 /** 탈퇴 신청. 확정은 관리자가 한다 — 이 단계에서는 아무것도 지워지지 않는다. */
-export async function POST() {
+export async function POST(request: NextRequest) {
+  // 게시글 작성만큼 무거운 쓰기는 아니지만 상태를 바꾸는 쓰기다. 같은 날
+  // 만든 다른 상태변경 라우트(mypage/profile PATCH)와 같은 GENERAL_API를
+  // 쓴다 — 신청·취소는 사람이 반복할 이유가 없는 동작이라 더 낮은 상한을
+  // 새로 만들 근거가 없다.
+  const rl = await rateLimit(request, 'GENERAL_API')
+  if (!rl.success) {
+    return rl.response ?? ApiError.tooManyRequests('요청이 너무 많습니다.').toNextResponse()
+  }
+
   const auth = await requireActiveMember()
   if (auth instanceof NextResponse) return auth
 
@@ -21,7 +31,12 @@ export async function POST() {
 }
 
 /** 신청 취소. 관리자가 확정하기 전까지 회원이 되돌릴 수 있다. */
-export async function DELETE() {
+export async function DELETE(request: NextRequest) {
+  const rl = await rateLimit(request, 'GENERAL_API')
+  if (!rl.success) {
+    return rl.response ?? ApiError.tooManyRequests('요청이 너무 많습니다.').toNextResponse()
+  }
+
   const auth = await requireActiveMember()
   if (auth instanceof NextResponse) return auth
 
