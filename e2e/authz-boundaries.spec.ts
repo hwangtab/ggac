@@ -80,6 +80,7 @@ test.describe('보호 페이지 리다이렉트 (비인증)', () => {
     '/mypage',
     '/mypage/profile',
     '/mypage/settings',
+    '/mypage/calendar',
     '/en/mypage',
     '/notifications',
     '/en/notifications',
