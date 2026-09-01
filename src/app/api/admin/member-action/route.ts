@@ -7,6 +7,7 @@ import { logSecurityEvent } from '@/utils/security'
 import { createLogger, maskId } from '@/utils/logger'
 import { validateUUID } from '@/utils/validation'
 import { getProfileById, updateProfile, type ProfilePatch } from '@/db/queries/profiles'
+import { withdrawMember } from '@/db/queries/withdrawal'
 import { notifyMemberApproved, notifyMemberRejected } from '@/lib/server/memberStatusNotify'
 
 const log = createLogger('admin/member-action')
@@ -14,7 +15,15 @@ const log = createLogger('admin/member-action')
 const MemberActionSchema = z
   .object({
     memberId: z.string().uuid('유효하지 않은 멤버 ID입니다.'),
-    action: z.enum(['approve', 'reject', 'activate', 'deactivate', 'suspend', 'unsuspend']),
+    action: z.enum([
+      'approve',
+      'reject',
+      'activate',
+      'deactivate',
+      'suspend',
+      'unsuspend',
+      'withdraw',
+    ]),
     suspension_reason: z.string().min(1).max(500).optional(),
     suspension_until: z
       .string()
@@ -89,6 +98,36 @@ export const POST = defineApiRoute<Record<string, unknown>>({
           memberId: maskId(memberId),
         })
         return ApiError.notFound('회원을 찾을 수 없습니다.').toNextResponse()
+      }
+
+      // 탈퇴 확정은 되돌릴 수 없고 여러 표를 함께 정리하므로, 다른 액션처럼
+      // `updateProfile`로 컬럼을 바꾸는 경로를 타지 않는다. 쿼리 계층의
+      // 단일 트랜잭션(`withdrawMember`)이 전부 처리한다.
+      if (action === 'withdraw') {
+        if (memberId === user.id) {
+          return ApiError.badRequest('자기 자신은 탈퇴 처리할 수 없습니다.').toNextResponse()
+        }
+
+        const outcome = await withdrawMember(memberId)
+        // `strict: false`(strictNullChecks 꺼짐)에서는 `ok: true | false`
+        // 같은 불리언 판별 유니언이 `!outcome.ok`로 좁혀지지 않는다(실측 —
+        // outcome이 여전히 전체 유니언으로 남아 `reason`에 접근할 수 없다는
+        // 타입 오류가 난다). `reason in outcome`은 이 설정에서도 좁혀진다.
+        if ('reason' in outcome) {
+          const message =
+            outcome.reason === 'last_admin'
+              ? '마지막 관리자는 탈퇴 처리할 수 없습니다. 다른 관리자를 먼저 지정해주세요.'
+              : '탈퇴 신청 상태의 회원만 확정할 수 있습니다.'
+          return ApiError.conflict(message).toNextResponse()
+        }
+
+        logSecurityEvent(
+          'MEMBER_STATUS_CHANGED',
+          { memberId: maskId(memberId), action, adminId: maskId(user.id) },
+          'medium'
+        )
+
+        return ApiSuccess.ok({ status: 'withdrawn' }, '탈퇴가 확정되었습니다.').toNextResponse()
       }
 
       // 액션에 따른 업데이트 데이터 준비
