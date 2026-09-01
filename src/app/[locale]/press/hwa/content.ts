@@ -201,7 +201,7 @@ export const PRESS_EN: PressContent = {
   subtitle: 'Debut EP · 8 tracks · 10 minutes 30 seconds',
   releaseLine: 'Out August 21, 2026',
   lede: [
-    'Gene Meyer gave his December 2, 2025 Blast Worship column — Decibel’s showcase for emerging grindcore bands — over to HWA and wrote of the band’s Demo 2025: “Demo of the year in my humble opinion.” This EP is where those songs arrive finished. Four of them — “September Theater,” “Past Self,” “Hollow Face” and “Letter to Jane Doe” — are re-recorded here, and the record runs to eight tracks in all.',
+    'Gene Meyer gave his December 2, 2025 Blast Worship column — Decibel’s showcase for emerging grindcore bands — over to HWA and wrote of the band’s Demo 2025: “Demo of the year in my humble opinion.” This EP is where those songs arrive finished. Four of them — “September Theater,” “Past Self,” “Hollow Face” and “Letter to Jane Doe” — are re-recorded here. The other four reach streaming for the first time — until now they had appeared only on a physical split with Naiite.',
     'The whole thing is eight tracks and ten minutes thirty seconds. The band describes what it plays as blast-beat-driven drums, merciless guitar and very high screams with melodic, emotional riffs laid over them — grindcore that is fast and ferocious and beautiful at once — and names Discordance Axis, Gridlink, Barren Path, Vektor and Cloud Rat as its reference points.',
     'The lyrics are in English throughout, written by vocalist JK. HWA says it sets out to put the hurt, loneliness, misanthropy, self-loathing and emptiness that come out of human relationships down raw, without dressing them up. The full text of all eight songs is on this page.',
   ],
@@ -264,7 +264,7 @@ export const PRESS_KO: PressContent = {
   subtitle: '첫 EP · 8곡 · 10분 30초',
   releaseLine: '2026년 8월 21일 발매',
   lede: [
-    '2025년 12월 2일, 익스트림 메탈 잡지 Decibel의 Gene Meyer는 신흥 그라인드코어 밴드를 소개하는 「Blast Worship」 코너에 HWA를 올리며 Demo 2025를 두고 “Demo of the year in my humble opinion”이라고 썼다. 그 데모에 실렸던 네 곡 「September Theater」·「Past Self」·「Hollow Face」·「Letter to Jane Doe」는 이번 EP에 재녹음돼 실렸고, 여기에 네 곡이 더해져 모두 여덟 곡이 됐다.',
+    '2025년 12월 2일, 익스트림 메탈 잡지 Decibel의 Gene Meyer는 신흥 그라인드코어 밴드를 소개하는 「Blast Worship」 코너에 HWA를 올리며 Demo 2025를 두고 “Demo of the year in my humble opinion”이라고 썼다. 그 데모에 실렸던 네 곡 「September Theater」·「Past Self」·「Hollow Face」·「Letter to Jane Doe」는 이번 EP에 재녹음돼 실렸다. 나머지 네 곡은 Naiite와의 스플릿에 실물로만 나왔던 것이라 음원으로는 이번이 처음이다.',
     '8곡 전체가 10분 30초다. 밴드는 Discordance Axis, Gridlink, Barren Path, Vektor, Cloud Rat을 참조점으로 밝혔다.',
     '음악평론가 장재원은 이 앨범을 두고 이렇게 썼다. “기존의 다른 그라인드코어 밴드들이 ‘텍스쳐’보다는 장르 특유의 ‘감정’에 중시하여 듣는 이 자체를 ‘그저 분노에 표출해 머리를 흔들며 벽에다 주먹질을 하는’ 무지막지한 단세포 동물로 만들었다면, 이 HWA의 음악은 그렇게 화난 이들을 의자에 끌어다 앉힌 후 ‘수준높은 분노’를 듣는 이에게 선사한다.”',
     '“그라인드코어에서 음악의 텍스쳐로 진지한 고찰을 하게 만든 앨범이 우리나라에 몇 개나 있던가?” — 음악평론가 장재원',
