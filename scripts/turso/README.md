@@ -1185,26 +1185,47 @@ grep -c 'ALTER ROLE' "$R"                        # 기대: 1 이상
    그때는 삭제 전에 그것부터 찾는다.
 2. 이상 없으면 **삭제**.
 
-### Step 5 — 삭제 후 코드·환경 정리
+### Step 5 — 삭제 후 코드·환경 정리 — **완료(2026-09-01)**
 
 삭제 **전에는** 하지 마라. 되돌릴 때 필요하다.
 
-- [ ] Vercel 환경변수 제거: `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
-      `STORAGE_PROVIDER`(읽는 코드 0곳 실측), 그리고 **마지막에**
-      `NEXT_PUBLIC_SUPABASE_URL`
-- [ ] `NEXT_PUBLIC_SUPABASE_URL`을 지우면 레거시 Storage URL 판정 4곳
-      (`src/utils/site.ts`·`storageUrlValidation.ts`·`imageDimensions.ts`·
-      `lib/storage/paths.ts`)이 의미를 잃는다. **Turso 잔여 URL 0건은 컷오버에서
-      이미 실측했으므로 제거 전제조건은 충족돼 있다.** 그 판정 코드도 함께 정리한다
-- [ ] `verify-env.js`에서 Supabase 항목 제거
-- [ ] CSP·preconnect의 Supabase 잔재 제거 — `src/middleware/csp.ts`,
-      `next.config.js`, `src/utils/security.ts`(3중복), `layout.tsx`의 preconnect.
-      지금은 아무것도 안 깨지지만 **이제 아무것도 서빙하지 않는 호스트로 매 페이지
-      DNS+TLS 핸드셰이크를 낭비한다**
-- [ ] `supabase/migrations/`는 **역사 기록으로 남긴다.** 원본 제약·트리거·RPC의
-      유일한 출처이고, 이 이전 내내 "원본이 무엇이었나"를 여기서 확인했다
-- [ ] `.claude/settings.local.json`의 `Bash(supabase:*)`·`supabase db push` 무확인
-      허용 제거 — 죽은 DB에 DDL을 밀어넣을 수 있는 경로다
+아래는 실제 수행 기록이다. 다시 할 일은 없고, 무엇을 어떤 근거로 지웠는지가
+남길 가치가 있는 부분이다.
+
+- [x] Vercel 환경변수 제거 — `SUPABASE_SERVICE_ROLE_KEY`·`NEXT_PUBLIC_SUPABASE_ANON_KEY`
+      (production·preview·development 각 3개 환경), `STORAGE_PROVIDER`(production).
+      그리고 코드 정리를 마친 뒤 **마지막에** `NEXT_PUBLIC_SUPABASE_URL`
+- [x] 레거시 Storage URL 판정 4곳 정리 — `src/utils/site.ts`(`getSupabaseOrigin` 삭제,
+      `layout.tsx`의 preconnect도 함께)·`storageUrlValidation.ts`(`isProjectStoragePublicUrl`
+      삭제)·`imageDimensions.ts`·`lib/storage/paths.ts`(Supabase 형식 분기 제거).
+
+      **판정을 지울 때 게이트를 넓히지 않는 것이 요점이었다.** 삭제된
+      `isProjectStoragePublicUrl`은 버킷·접두사까지 봤는데 `isBlobPublicUrl`은
+      origin만 본다. 그래서 호출부 8곳은 `isBlobPublicUrl`이 아니라 이미 있던
+      `logicalPathFromUrl(...) !== null`로 옮겼다 — 경계가 오히려 좁아진다.
+
+      `imageDimensions`와 `OptimizedImage`의 판정은 **지우지 않고 Blob 쪽으로
+      도려냈다.** 전자는 "치수를 주입할 대상"을 고르는 게이트라 지우면 본문의 임의
+      외부 URL까지 서버가 fetch한다(SSRF 표면). 후자는 원격 저장소 이미지에만
+      재시도 3회와 12초 타임아웃을 주는 자리라, 지우면 Blob 사진이 재시도 없이
+      폴백으로 떨어진다
+- [x] `verify-env.js`에서 Supabase 항목 제거. `NEXT_PUBLIC_SUPABASE_URL`은 필수에서
+      선택으로 내렸고, 그것을 "여전히 필수다"라고 못박던 테스트는 전제가 사라졌으므로
+      **"더 이상 필수가 아니다"로 뒤집었다**(삭제가 아니라 반전 — 회귀를 계속 잡는다)
+- [x] CSP·preconnect의 Supabase 잔재 제거 — `src/middleware/csp.ts`, `next.config.js`
+      (`images.remotePatterns` 포함), `src/utils/security.ts`, `layout.tsx`의 preconnect
+- [x] `supabase/migrations/`는 **역사 기록으로 남겼다.** 원본 제약·트리거·RPC의
+      유일한 출처다
+- [x] `.claude/settings.local.json`의 Supabase 무확인 허용 5개 제거
+      (`Bash(supabase:*)`·`supabase config push`·`supabase db push`·MCP `execute_sql`)
+
+**실증**: 네 환경변수를 전부 지운 환경(`env -u`)에서 `npm run build` 성공,
+유닛 1074 통과, `assert-runtime-risks` 통과. 즉 변수가 없어도 아무것도 깨지지 않는다.
+
+> 빌드 검증을 로컬에서 할 때, 다른 세션의 `next dev`가 같은 `.next`를 쓰고 있으면
+> `Cannot find module './NNNN.js'`로 실패한다. 코드 문제가 아니라 경합이다.
+> `distDir`은 환경변수로 못 바꾸니, 워킹트리를 저장소 밖으로 복사하고
+> `node_modules`를 심볼릭 링크해서 빌드해라.
 
 ### 이 시점부터 되돌릴 수 없는 것
 
