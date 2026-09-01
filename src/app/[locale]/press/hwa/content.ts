@@ -48,8 +48,10 @@ export const STREAMING: [string, string][] = [
 /**
  * 자산 URL.
  *
- * ⚠ 아직 미확정이다 — Blob 업로드가 사용자 권한 대기 중이라 실제 URL이 생기지
- * 않았다. 아래는 예정 경로다. **업로드 후 hwa-assets.json과 대조해 확인할 것.**
+ * 2026-09-01 업로드 완료. 세 URL 모두 HEAD 200과 content-type을 확인했다.
+ *
+ * 경로를 바꾸지 마라 — 이 주소가 기자들에게 나가는 메일에 그대로 박힌다.
+ * 자산을 갈아 끼울 때도 같은 경로에 덮어쓴다(addRandomSuffix: false).
  */
 export const ASSETS = {
   zip: 'https://r8qnr9c7mestxusj.public.blob.vercel-storage.com/press/hwa/hwa-ep-mp3.zip',
