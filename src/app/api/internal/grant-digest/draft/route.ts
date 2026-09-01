@@ -16,9 +16,10 @@ import {
   listRecentDigestItems,
 } from '@/db/queries/grantDigests'
 import { createBulkNotifications } from '@/db/queries/notifications'
-import { listProfiles } from '@/db/queries/profiles'
+import { listProfiles, type ProfileRow } from '@/db/queries/profiles'
 import { fetchGrantOpportunities } from '@/lib/server/grantFetch'
-import { DEDUPE_WEEKS, buildDraftItems, weekKey } from '@/lib/server/grantDigest'
+import { DEDUPE_WEEKS, POOL_CAP, buildDraftItems, weekKey } from '@/lib/server/grantDigest'
+import { unionInterests } from '@/lib/server/interestMatch'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
 
@@ -27,6 +28,9 @@ const log = createLogger('api/internal/grant-digest/draft')
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
+
+/** 수집 범위(관심사 합집합)와 관리자 목록을 함께 낼 때 쓰는 회원 조회 상한. */
+const MEMBER_FETCH_LIMIT = 1000
 
 function isAuthorized(request: NextRequest): boolean {
   const expected = process.env.GRANT_DIGEST_CRON_TOKEN
@@ -37,22 +41,25 @@ function isAuthorized(request: NextRequest): boolean {
   return timingSafeEqual(Buffer.from(provided), Buffer.from(expected))
 }
 
-/** 관리자 프로필 id 목록. 알림 대상이다. */
-async function adminUserIds(): Promise<string[]> {
-  const { rows } = await listProfiles({ status: 'approved', limit: 1000, offset: 0 })
+/** 이미 읽은 회원 목록에서 관리자 id만 거른다. 알림 대상이다. */
+function adminUserIds(rows: ProfileRow[]): string[] {
   return rows.filter(r => r.is_admin && r.is_active).map(r => r.id)
 }
 
-/** 관리자에게만 알린다. 실패해도 던지지 않는다 — 초안은 이미 만들어졌다. */
-async function notifyAdmins(title: string, message: string, data: Record<string, unknown>) {
+/** 관리자에게만 알린다. 실패해도 던지지 않는다 — 초안은 이미 만들어졌다(혹은 실패가 이미 확정됐다). */
+async function notifyAdmins(
+  adminIds: string[],
+  title: string,
+  message: string,
+  data: Record<string, unknown>
+) {
   try {
-    const ids = await adminUserIds()
-    if (ids.length === 0) {
+    if (adminIds.length === 0) {
       log.error('관리자 알림 대상이 없다', { title })
       return
     }
     await createBulkNotifications({
-      user_ids: ids,
+      user_ids: adminIds,
       type: 'system_notice',
       title,
       message,
@@ -73,6 +80,9 @@ export async function POST(request: NextRequest) {
   }
 
   const key = weekKey()
+  // 성공 경로에서 이미 읽은 회원 목록을 catch에서도 재사용한다. 목록 조회 자체가
+  // 실패하면 이 값은 계속 null이고, catch에서 관리자 id만 다시 조회한다.
+  let profiles: ProfileRow[] | null = null
 
   try {
     const existing = await getGrantDigestByWeekKey(key)
@@ -87,15 +97,29 @@ export async function POST(request: NextRequest) {
       }).toNextResponse()
     }
 
-    const fetched = await fetchGrantOpportunities()
+    // 수집 범위는 조합 기본값과 조합원 설정의 합집합이다. 아무도 설정하지 않았으면
+    // 조합 기본값만 남아 지금까지와 똑같이 동작한다.
+    const { rows } = await listProfiles({
+      status: 'approved',
+      limit: MEMBER_FETCH_LIMIT,
+      offset: 0,
+    })
+    profiles = rows
+    const active = rows.filter(p => p.is_active)
+    const scope = unionInterests(active)
+
+    const fetched = await fetchGrantOpportunities(scope)
     const sentKeys = new Set((await listRecentDigestItems(DEDUPE_WEEKS)).map(i => i.key))
-    const items = buildDraftItems(fetched, sentKeys)
+    const items = buildDraftItems(fetched, sentKeys, POOL_CAP)
 
     const digest = await createGrantDigest({ week_key: key, items })
 
     await notifyAdmins(
+      adminUserIds(profiles),
       '지원사업 초안이 준비됐습니다',
-      `${key} 회차에 공고 ${items.length}건이 담겼습니다. 관리자 > 지원사업에서 확인하고 발행해 주세요.`,
+      `${key} 회차에 공고 ${items.length}건이 담겼습니다. ` +
+        `(수집 범위: 장르 ${scope.genres.length}종 · 지역 ${scope.regions.length}곳) ` +
+        `관리자 > 지원사업에서 확인하고 발행해 주세요.`,
       { weekKey: key, digestId: digest.id, count: items.length }
     )
 
@@ -109,8 +133,32 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     log.error('초안 생성 실패', { weekKey: key, error: message })
-    // 조합원에게는 아무 일도 일어나지 않는다. 관리자만 안다.
+
+    // 조합원에게는 아무 일도 일어나지 않는다. 관리자만 안다 — 그러니 이 경로에서도
+    // 반드시 알림이 가야 한다. 위에서 회원 목록을 이미 읽었으면 그걸 쓰고, 못 읽었으면
+    // (목록 조회 자체가 실패 원인이었을 수 있다) 관리자 id만 다시 조회한다.
+    let adminIds: string[]
+    if (profiles) {
+      adminIds = adminUserIds(profiles)
+    } else {
+      try {
+        const { rows } = await listProfiles({
+          status: 'approved',
+          limit: MEMBER_FETCH_LIMIT,
+          offset: 0,
+        })
+        adminIds = adminUserIds(rows)
+      } catch (retryError) {
+        log.error('관리자 알림 대상 재조회 실패', {
+          weekKey: key,
+          error: retryError instanceof Error ? retryError.message : String(retryError),
+        })
+        adminIds = []
+      }
+    }
+
     await notifyAdmins(
+      adminIds,
       '지원사업 초안 생성에 실패했습니다',
       `${key} 회차 초안을 만들지 못했습니다. 원인: ${message.slice(0, 200)}`,
       { weekKey: key }

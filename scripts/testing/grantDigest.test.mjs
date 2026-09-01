@@ -72,6 +72,17 @@ test('CAP까지만 남긴다', () => {
   assert.equal(buildDraftItems(many, new Set()).length, CAP)
 })
 
+test('buildDraftItems는 넘겨준 cap을 따른다 (POOL_CAP 용)', async () => {
+  const { buildDraftItems, POOL_CAP } = await import('../../src/lib/server/grantDigest.ts')
+  const many = Array.from({ length: POOL_CAP + 10 }, (_, i) => item({ key: `ncas:${i}` }))
+  assert.equal(buildDraftItems(many, new Set(), POOL_CAP).length, POOL_CAP)
+})
+
+test('POOL_CAP은 CAP보다 크다 (풀이 메일 한 통보다 넓어야 한다)', async () => {
+  const { CAP, POOL_CAP } = await import('../../src/lib/server/grantDigest.ts')
+  assert.ok(POOL_CAP > CAP)
+})
+
 test('kosmart가 준 순서를 보존한다 (점수 정렬을 다시 하지 않는다)', () => {
   const out = buildDraftItems(
     [item({ key: 'a' }), item({ key: 'b' }), item({ key: 'c' })],

@@ -3,7 +3,15 @@
  * `src/lib/server/grantDigest.ts`가 하고 여기는 가져오기만 한다.
  */
 import type { GrantItem } from '@/db/queries/grantDigests'
-import { DIGEST_GENRES, DIGEST_REGIONS, WINDOW_DAYS, CAP } from '@/lib/server/grantDigest'
+import { WINDOW_DAYS } from '@/lib/server/grantDigest'
+
+/** 장르 하나당 요청 상한. API의 MAX_LIMIT(100)을 넘지 않는다. */
+const PER_GENRE_LIMIT = 100
+
+export interface FetchScope {
+  genres: string[]
+  regions: string[]
+}
 
 /** 응답에 필요한 필드가 다 있는지 본다. 없는 항목은 조용히 버리지 않고 호출부가 세게 한다. */
 function isGrantItem(v: unknown): v is GrantItem {
@@ -22,41 +30,59 @@ function isGrantItem(v: unknown): v is GrantItem {
 }
 
 /**
- * @throws 환경변수 누락·HTTP 실패·응답 형식 오류는 전부 던진다. 호출부(크론 라우트)가
- *   관리자에게 알린다 — 조용히 빈 배열을 돌려주면 "이번 주는 공고가 없었다"와 구분되지 않는다.
+ * kosmart에서 공고를 받아온다. **장르 하나당 한 번씩 호출한다.**
+ *
+ * 왜 나눠 부르나: API의 `limit` 상한이 100인데, 실측(2026-09-01)으로 경기·서울 ×
+ * 음악·시각예술·다원예술이 벌써 93건이다. 조합원이 관심 장르를 넓힐수록 한 번의 호출로는
+ * 천장에 닿고, 잘린 뒷부분은 **에러 없이 사라진다**. 장르 하나씩이면 각 호출이 그 장르의
+ * 공고 수만큼만 되므로 조합원이 몇 명이 되든 잘리지 않는다.
+ *
+ * @throws 환경변수 누락·HTTP 실패·응답 형식 오류는 전부 던진다. 호출부가 관리자에게 알린다 —
+ *   조용히 빈 배열을 돌려주면 "이번 주는 공고가 없었다"와 구분되지 않는다.
  */
-export async function fetchGrantOpportunities(): Promise<GrantItem[]> {
+export async function fetchGrantOpportunities(scope: FetchScope): Promise<GrantItem[]> {
   const base = process.env.KOSMART_OPPORTUNITIES_URL
   const token = process.env.KOSMART_API_TOKEN
   if (!base) throw new Error('KOSMART_OPPORTUNITIES_URL이 설정되지 않았습니다.')
   if (!token) throw new Error('KOSMART_API_TOKEN이 설정되지 않았습니다.')
+  if (scope.genres.length === 0) throw new Error('요청할 장르가 비어 있습니다.')
 
-  const url = new URL(base)
-  url.searchParams.set('genres', DIGEST_GENRES.join(','))
-  url.searchParams.set('regions', DIGEST_REGIONS.join(','))
-  url.searchParams.set('days', String(WINDOW_DAYS))
-  // CAP보다 넉넉히 받아온다 — 중복 제거로 빠진 만큼을 뒤에서 채울 수 있게.
-  url.searchParams.set('limit', String(CAP * 4))
-  url.searchParams.set('strictRegion', 'true')
+  const seen = new Set<string>()
+  const out: GrantItem[] = []
 
-  const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
-    signal: AbortSignal.timeout(20_000),
-    cache: 'no-store',
-  })
+  for (const genre of scope.genres) {
+    const url = new URL(base)
+    url.searchParams.set('genres', genre)
+    url.searchParams.set('regions', scope.regions.join(','))
+    url.searchParams.set('days', String(WINDOW_DAYS))
+    url.searchParams.set('limit', String(PER_GENRE_LIMIT))
+    url.searchParams.set('strictRegion', 'true')
 
-  if (!response.ok) {
-    const detail = await response.text().catch(() => '')
-    throw new Error(`kosmart 공고 조회 실패 (${response.status}): ${detail.slice(0, 200)}`)
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(20_000),
+      cache: 'no-store',
+    })
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '')
+      throw new Error(
+        `kosmart 공고 조회 실패 (장르 ${genre}, ${response.status}): ${detail.slice(0, 200)}`
+      )
+    }
+    const payload: unknown = await response.json()
+    const items = (payload as { items?: unknown })?.items
+    if (!Array.isArray(items)) {
+      throw new Error(`kosmart 응답에 items 배열이 없습니다 (장르 ${genre}).`)
+    }
+    if (!items.every(isGrantItem)) {
+      throw new Error(`kosmart 응답 항목의 형식이 예상과 다릅니다 (장르 ${genre}).`)
+    }
+    for (const it of items as GrantItem[]) {
+      if (seen.has(it.key)) continue
+      seen.add(it.key)
+      out.push(it)
+    }
   }
 
-  const payload: unknown = await response.json()
-  const items = (payload as { items?: unknown })?.items
-  if (!Array.isArray(items)) {
-    throw new Error('kosmart 응답에 items 배열이 없습니다.')
-  }
-  if (!items.every(isGrantItem)) {
-    throw new Error('kosmart 응답 항목의 형식이 예상과 다릅니다.')
-  }
-  return items
+  return out
 }
