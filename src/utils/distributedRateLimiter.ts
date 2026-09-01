@@ -39,6 +39,19 @@ interface UpstashRedisConfig {
 interface DistributedRateLimitConfig {
   windowMs: number // 시간 윈도우 (밀리초)
   maxRequests: number // 허용되는 최대 요청 수
+  /**
+   * 기본 키의 네임스페이스. **설정마다 달라야 한다.**
+   *
+   * 없으면 `defaultKeyGenerator`가 IP 하나로만 키를 만들어 **서로 다른 설정이
+   * 카운터를 공유한다.** 2026-09-01 감사 실측: 기본 키를 쓰는 라우트 14곳이
+   * 창 길이(60초~1시간)와 상한(5~100)이 제각각인 채 `rate_limit:<ip>` 하나를
+   * 나눠 쓰고 있었다. Lua가 `current == 1`일 때만 EXPIRE를 걸므로 **처음 온
+   * 요청의 창이 나머지 전부를 지배하고**, 자동 차단은 그때그때 호출된 설정의
+   * `maxRequests * 2`로 판정된다. 결과: 게시글 10개를 읽은 뒤(GENERAL_API로
+   * count 10) 댓글을 쓰면(POST_CREATION, 상한 5 → 임계 10) 11 > 10 이 되어
+   * **IP가 10분간 전면 차단**됐다. 지극히 평범한 사용 패턴이다.
+   */
+  name?: string
   keyGenerator?: (req: NextRequest) => string // 키 생성 함수
   skipSuccessfulRequests?: boolean // 성공한 요청 제외 여부
   skipFailedRequests?: boolean // 실패한 요청 제외 여부
@@ -240,12 +253,12 @@ class DistributedRateLimiter {
     return this.rateLimitUnavailable(windowMs, maxRequests)
   }
 
-  // 기본 키 생성 함수 (IP 주소 기반)
-  private defaultKeyGenerator = (req: NextRequest): string => {
+  // 기본 키 생성 함수 (설정 네임스페이스 + IP 주소)
+  private defaultKeyGenerator = (req: NextRequest, namespace: string): string => {
     const forwarded = req.headers.get('x-forwarded-for')
     const realIp = req.headers.get('x-real-ip')
     const ip = forwarded ? forwarded.split(',')[0] : realIp || 'unknown'
-    return `rate_limit:${ip}`
+    return `rate_limit:${namespace}:${ip}`
   }
 
   // 메모리 기반 폴백 구현
@@ -278,10 +291,18 @@ class DistributedRateLimiter {
     const {
       windowMs,
       maxRequests,
-      keyGenerator = this.defaultKeyGenerator,
+      name,
+      keyGenerator,
       message = 'Too many requests, please try again later.',
       blockDuration = 10 * 60 * 1000, // 10분
     } = config
+
+    // `name`이 없는 설정은 창 길이·상한으로 네임스페이스를 만든다. 이름을 빠뜨린
+    // 설정끼리도 값이 다르면 섞이지 않게 하려는 것이지, 이름을 안 붙여도 된다는
+    // 뜻이 아니다 — 값이 같은 두 설정은 여전히 한 카운터를 쓴다.
+    const namespace = name ?? `w${windowMs}m${maxRequests}`
+    const resolveKey =
+      keyGenerator ?? ((req: NextRequest) => this.defaultKeyGenerator(req, namespace))
 
     return async (req: NextRequest): Promise<RateLimitResult> => {
       this.reportMemoryFallbackIfNeeded()
@@ -290,7 +311,7 @@ class DistributedRateLimiter {
         return this.degradeByMethod(req, windowMs, maxRequests, 'unconfigured')
       }
 
-      const baseKey = keyGenerator(req)
+      const baseKey = resolveKey(req)
       const blockKey = `${baseKey}:blocked`
 
       try {
@@ -529,6 +550,7 @@ const distributedRateLimiter = new DistributedRateLimiter()
 export const DISTRIBUTED_RATE_LIMIT_CONFIGS = {
   // 일반 API 요청 (분당 60회)
   GENERAL_API: {
+    name: 'general_api',
     windowMs: 60 * 1000, // 1분
     maxRequests: 60,
     message: '잠시 후 다시 시도해주세요.',
@@ -536,6 +558,7 @@ export const DISTRIBUTED_RATE_LIMIT_CONFIGS = {
 
   // 인증 API (분당 10회)
   AUTH_API: {
+    name: 'auth_api',
     windowMs: 60 * 1000, // 1분
     maxRequests: 10,
     message: '로그인 시도가 너무 많습니다. 잠시 후 다시 시도해주세요.',
@@ -544,6 +567,7 @@ export const DISTRIBUTED_RATE_LIMIT_CONFIGS = {
 
   // 게시글 작성 (분당 5회)
   POST_CREATION: {
+    name: 'post_creation',
     windowMs: 60 * 1000, // 1분
     maxRequests: 5,
     message: '게시글 작성이 너무 빠릅니다. 잠시 후 다시 시도해주세요.',
@@ -551,6 +575,7 @@ export const DISTRIBUTED_RATE_LIMIT_CONFIGS = {
 
   // 검색 API (분당 30회)
   SEARCH_API: {
+    name: 'search_api',
     windowMs: 60 * 1000, // 1분
     maxRequests: 30,
     message: '검색 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.',
@@ -558,6 +583,7 @@ export const DISTRIBUTED_RATE_LIMIT_CONFIGS = {
 
   // 파일 업로드 (시간당 10회)
   FILE_UPLOAD: {
+    name: 'file_upload',
     windowMs: 60 * 60 * 1000, // 1시간
     maxRequests: 10,
     message: '파일 업로드 한도를 초과했습니다. 잠시 후 다시 시도해주세요.',
@@ -565,6 +591,7 @@ export const DISTRIBUTED_RATE_LIMIT_CONFIGS = {
 
   // 관리자 API (분당 100회)
   ADMIN_API: {
+    name: 'admin_api',
     windowMs: 60 * 1000, // 1분
     maxRequests: 100,
     message: '관리자 API 요청이 너무 많습니다.',
@@ -572,6 +599,7 @@ export const DISTRIBUTED_RATE_LIMIT_CONFIGS = {
 
   // 대량 작업 (시간당 5회)
   BULK_OPERATIONS: {
+    name: 'bulk_operations',
     windowMs: 60 * 60 * 1000, // 1시간
     maxRequests: 5,
     message: '대량 작업 한도를 초과했습니다. 잠시 후 다시 시도해주세요.',

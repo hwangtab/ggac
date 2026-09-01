@@ -18,6 +18,9 @@ export type RouteRateLimitConfig = Pick<
   DistributedRateLimitConfig,
   | 'windowMs'
   | 'maxRequests'
+  // `name`이 빠지면 라우트를 거쳐 온 설정이 이름을 잃고 기본 키로 되돌아간다 —
+  // 즉 서로 다른 설정이 다시 카운터를 공유한다. Pick에 반드시 들어 있어야 한다.
+  | 'name'
   | 'message'
   | 'keyGenerator'
   | 'skipSuccessfulRequests'
