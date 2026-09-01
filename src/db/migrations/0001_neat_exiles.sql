@@ -1,3 +1,13 @@
+-- ⚠ **적용은 파일을 통째로 실행하는 경로로만 한다**(`executeMultiple`).
+-- `drizzle-kit migrate`는 쓰지 않는다 — 이 저장소의 규약이고, 마이그레이터가
+-- 자체 트랜잭션으로 감싸면 아래 `BEGIN`이 즉시 실패한다.
+--
+-- **왜 BEGIN/COMMIT이 붙었나.** `executeMultiple()`은 **문마다 자동 커밋**하므로
+-- 트랜잭션이 없으면 중간 실패가 앞 문들을 그대로 남긴다. 그 반쪽 상태는
+-- 재실행으로 복구되지 않는다(다음 실행이 "이미 있다"로 죽는다). 초기 구축이
+-- 절반만 된 DB는 특히 알아채기 어렵다 — 앱이 뜨다가 없는 표에서 죽는다.
+BEGIN;
+--> statement-breakpoint
 CREATE TABLE `daily_activity_stats` (
 	`id` text PRIMARY KEY NOT NULL,
 	`activity_date` text NOT NULL,
@@ -38,3 +48,5 @@ CREATE TABLE `user_sessions` (
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `user_sessions_session_token_unique` ON `user_sessions` (`session_token`);
+--> statement-breakpoint
+COMMIT;
