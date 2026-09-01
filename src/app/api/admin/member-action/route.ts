@@ -1,3 +1,4 @@
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { createOptionsResponse } from '@/utils/apiResponse'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { z } from 'zod'
@@ -11,6 +12,11 @@ import { withdrawMember } from '@/db/queries/withdrawal'
 import { notifyMemberApproved, notifyMemberRejected } from '@/lib/server/memberStatusNotify'
 import { deleteBillingKey } from '@/lib/payments/toss/client'
 import { getBillingConfig, isBillingEnabled } from '@/lib/payments/toss/config'
+import { hasPublicBlobStore } from '@/lib/storage/blob'
+import { deletePublicObject, logicalPathFromUrl } from '@/lib/storage/provider'
+import { isProjectStorageObjectPath } from '@/utils/storageUrlValidation'
+import { invalidateArtistsCache } from '@/lib/data'
+import { getArtistCoreRevalidationPaths } from '@/lib/revalidationPaths'
 
 const log = createLogger('admin/member-action')
 
@@ -148,6 +154,83 @@ export const POST = defineApiRoute<Record<string, unknown>>({
                 'medium'
               )
             }
+          }
+        }
+
+        // 연결된 아티스트가 있었다면 트랜잭션이 이미 `is_active=0`으로
+        // 내리고 개인정보를 지웠다 — 남은 일은 Blob 사진(외부 호출이라
+        // 트랜잭션 밖) 정리와 캐시 무효화뿐이다. 빌링키와 같은 이유로 커밋
+        // 뒤에 한다.
+        if (outcome.artistPhotoCleanup) {
+          const { artistLegacyId, slug, profilePhotoUrl, profilePhotoMetadata } =
+            outcome.artistPhotoCleanup
+
+          if (!hasPublicBlobStore()) {
+            // 삭제할 사진이 없으면(프로필 사진 없는 아티스트) 자격증명
+            // 미설정을 굳이 경고할 필요가 없다.
+            if (profilePhotoUrl) {
+              log.error(
+                'PUBLIC_BLOB_READ_WRITE_TOKEN 미설정 — 탈퇴 확정 후 아티스트 사진 삭제를 건너뛴다',
+                { memberId: maskId(memberId) }
+              )
+            }
+          } else {
+            try {
+              // `src/app/api/mypage/artist/photo/route.ts`의 DELETE와 같은
+              // 방식 — 변형(webp·fallback)이 metadata.variants에 여럿 있을
+              // 수 있으므로 그것부터 모으고, 없으면 profile_photo_url
+              // 하나로 되돌아간다.
+              const variants = (
+                profilePhotoMetadata as { variants?: Record<string, unknown> } | null
+              )?.variants
+              const removalTargets = new Set<string>()
+              for (const path of [variants?.original, variants?.webp, variants?.fallback]) {
+                if (typeof path === 'string' && isProjectStorageObjectPath(path, artistLegacyId)) {
+                  removalTargets.add(`artists/${path}`)
+                }
+              }
+              if (removalTargets.size === 0 && profilePhotoUrl) {
+                const legacyLogical = logicalPathFromUrl(profilePhotoUrl, 'artists', artistLegacyId)
+                if (legacyLogical) removalTargets.add(legacyLogical)
+              }
+
+              if (removalTargets.size > 0) {
+                const results = await Promise.allSettled(
+                  Array.from(removalTargets).map(logical => deletePublicObject(logical))
+                )
+                for (const result of results) {
+                  if (result.status === 'rejected') {
+                    log.error('탈퇴 확정 후 아티스트 사진 삭제 실패', {
+                      memberId: maskId(memberId),
+                      error:
+                        result.reason instanceof Error
+                          ? result.reason.message
+                          : String(result.reason),
+                    })
+                  }
+                }
+              }
+            } catch (error) {
+              log.error('탈퇴 확정 후 아티스트 사진 정리 중 오류', {
+                memberId: maskId(memberId),
+                error: error instanceof Error ? error.message : String(error),
+              })
+            }
+          }
+
+          // 공개 페이지에서 즉시 내려가도록 캐시를 무효화한다 — 실패해도
+          // 탈퇴 자체는 유효하다(ISR revalidate가 결국 따라잡는다).
+          try {
+            revalidateTag('artists')
+            for (const path of getArtistCoreRevalidationPaths(slug)) {
+              revalidatePath(path)
+            }
+            invalidateArtistsCache()
+          } catch (error) {
+            log.warn('탈퇴 확정 후 아티스트 캐시 무효화 실패', {
+              memberId: maskId(memberId),
+              error: error instanceof Error ? error.message : String(error),
+            })
           }
         }
 

@@ -12,6 +12,7 @@ import { WITHDRAWN_DISPLAY_NAME, withdrawnEmailFor } from '../../constants/membe
 import { db } from '../client.ts'
 import {
   account,
+  artists,
   billingKeys,
   dailyActivityStats,
   memberProfiles,
@@ -62,12 +63,31 @@ export async function cancelWithdrawal(userId: string): Promise<boolean> {
 }
 
 /**
- * 확정의 결과. 성공하면 **해지해야 할 토스 빌링키**를 함께 돌려준다 —
- * 트랜잭션이 행을 지우고 나면 다시 읽을 수 없기 때문이다(Task 7이 커밋 뒤에
- * `deleteBillingKey`를 부른다).
+ * 탈퇴 확정 뒤 커밋 밖에서 지워야 할 아티스트 프로필 사진 정보.
+ *
+ * `artists.profile_photo_url`/`profile_photo_metadata`는 트랜잭션이 이미
+ * NULL/{}로 지운 뒤라 커밋 후에는 다시 읽을 수 없다 — Blob 삭제(외부 호출)는
+ * 트랜잭션 밖에서 해야 하므로(이 저장소 규칙, `revokedBillingKeys`와 같은
+ * 이유), 지우기 **전에** 값을 여기 담아 돌려준다. 변형(webp·fallback) 경로가
+ * `profile_photo_metadata.variants`에 여럿 있을 수 있다 —
+ * `src/app/api/mypage/artist/photo/route.ts`의 DELETE가 쓰는 것과 같은
+ * 원본 메타데이터를 그대로 넘긴다.
+ */
+export interface ArtistPhotoCleanup {
+  artistLegacyId: string
+  slug: string
+  profilePhotoUrl: string | null
+  profilePhotoMetadata: Record<string, unknown> | null
+}
+
+/**
+ * 확정의 결과. 성공하면 **해지해야 할 토스 빌링키**와, 연결된 아티스트가
+ * 있었다면 **지워야 할 프로필 사진 정보**를 함께 돌려준다 — 트랜잭션이 값을
+ * 지우고 나면 다시 읽을 수 없기 때문이다(Task 7이 커밋 뒤에
+ * `deleteBillingKey`를, 호출부가 커밋 뒤에 Blob 삭제를 부른다).
  */
 export type WithdrawOutcome =
-  | { ok: true; revokedBillingKeys: string[] }
+  | { ok: true; revokedBillingKeys: string[]; artistPhotoCleanup: ArtistPhotoCleanup | null }
   | { ok: false; reason: 'not_requested' | 'last_admin' }
 
 /**
@@ -113,6 +133,18 @@ export const PII_NULL_FIELDS = {
  */
 export async function withdrawMember(userId: string): Promise<WithdrawOutcome> {
   return db.transaction(async tx => {
+    // **연결이 끊기기 전에** artist_id를 읽어 둔다. 아래 UPDATE가 이 값을
+    // NULL로 만들고 나면 "이 회원이 어느 아티스트였는지"를 다시 알아낼 수
+    // 없다. `artist_id`는 FK가 아니라 `artists.legacy_id`를 담는 문자열이라
+    // (`artists.id`(uuid)가 아니다) 매칭되는 행이 없을 수도 있다(끊어진 참조,
+    // `src/app/api/mypage/artist/photo/route.ts` 주석 참고) — 아래에서
+    // 존재를 확인한다.
+    const [beforeRow] = await tx
+      .select({ artistId: memberProfiles.artistId })
+      .from(memberProfiles)
+      .where(eq(memberProfiles.id, userId))
+    const priorArtistLegacyId = beforeRow?.artistId ?? null
+
     // 상태 전이 + 마지막 관리자 차단을 **한 UPDATE 안에서** 원자적으로 한다.
     // 읽고-판단하고-쓰면 관리자가 둘 동시에 눌렀을 때 둘 다 통과한다.
     const claimed = await tx
@@ -204,6 +236,83 @@ export async function withdrawMember(userId: string): Promise<WithdrawOutcome> {
     ).map(r => r.key)
     await tx.delete(billingKeys).where(eq(billingKeys.userId, userId))
 
+    // ⑤ 연결된 아티스트 — 공개 페이지를 내리고 개인정보를 지운다. 행 자체는
+    // 남긴다(조합의 과거 기록, slug도 유지 — 링크가 404가 아니라 "없는
+    // 아티스트"로 처리되게).
+    //
+    // `member_profiles.contact`가 아니라 `artists.contact`가 공개 아티스트
+    // 페이지에 실제로 노출되는 연락처다 — PII_NULL_FIELDS(회원 개인정보)와는
+    // 별개 표라 여기서 따로 다룬다. Blob 사진 삭제는 외부 호출이라 여기서
+    // 하지 않는다(트랜잭션 규칙) — 지우기 전 값을 담아 커밋 뒤 호출부에
+    // 넘긴다.
+    let artistPhotoCleanup: ArtistPhotoCleanup | null = null
+    if (priorArtistLegacyId) {
+      const [artistRow] = await tx
+        .select({
+          slug: artists.slug,
+          profilePhotoUrl: artists.profilePhotoUrl,
+          profilePhotoMetadata: artists.profilePhotoMetadata,
+        })
+        .from(artists)
+        .where(eq(artists.legacyId, priorArtistLegacyId))
+        .limit(1)
+
+      // 끊어진 참조(artist_id가 어떤 artists 행도 가리키지 않음)일 수 있다 —
+      // 그럴 땐 지울 것이 없다.
+      if (artistRow) {
+        await tx
+          .update(artists)
+          .set({
+            isActive: false,
+            name: WITHDRAWN_DISPLAY_NAME,
+            oneLiner: null,
+            bio: null,
+            contact: null,
+            profilePhotoUrl: null,
+            profilePhotoMetadata: {},
+            nameEn: null,
+            oneLinerEn: null,
+            bioEn: null,
+          })
+          .where(eq(artists.legacyId, priorArtistLegacyId))
+
+        artistPhotoCleanup = {
+          artistLegacyId: priorArtistLegacyId,
+          slug: artistRow.slug,
+          profilePhotoUrl: artistRow.profilePhotoUrl,
+          profilePhotoMetadata: artistRow.profilePhotoMetadata,
+        }
+
+        // 자체 단언 — member_profiles 쪽과 같은 이유(장식이 아니다).
+        const [leftoverArtist] = await tx
+          .select({
+            isActive: artists.isActive,
+            oneLiner: artists.oneLiner,
+            bio: artists.bio,
+            contact: artists.contact,
+            profilePhotoUrl: artists.profilePhotoUrl,
+            nameEn: artists.nameEn,
+            oneLinerEn: artists.oneLinerEn,
+            bioEn: artists.bioEn,
+          })
+          .from(artists)
+          .where(eq(artists.legacyId, priorArtistLegacyId))
+        const artistLeaked =
+          !leftoverArtist ||
+          leftoverArtist.isActive !== false ||
+          leftoverArtist.oneLiner !== null ||
+          leftoverArtist.bio !== null ||
+          leftoverArtist.contact !== null ||
+          leftoverArtist.profilePhotoUrl !== null ||
+          leftoverArtist.nameEn !== null ||
+          leftoverArtist.oneLinerEn !== null ||
+          leftoverArtist.bioEn !== null
+        if (artistLeaked) {
+          throw new Error('탈퇴 처리 후에도 아티스트 개인정보가 남았다 — 전체를 롤백한다')
+        }
+      }
+    }
+
     // ① 로그인 수단 — 지운다. Better Auth의 user 행은 묘비로 덮는다.
     await tx.delete(account).where(eq(account.userId, userId))
     await tx.delete(session).where(eq(session.userId, userId))
@@ -238,6 +347,6 @@ export async function withdrawMember(userId: string): Promise<WithdrawOutcome> {
       throw new Error(`탈퇴 처리 후에도 개인정보가 남았다(${leaked.join(', ')}) — 전체를 롤백한다`)
     }
 
-    return { ok: true, revokedBillingKeys }
+    return { ok: true, revokedBillingKeys, artistPhotoCleanup }
   })
 }

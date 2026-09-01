@@ -183,6 +183,7 @@ const WITHDRAWAL_FIXTURE_TABLES = [
   'session',
   'user',
   'member_profiles',
+  'artists',
 ]
 
 /**
@@ -240,6 +241,25 @@ async function seedWithdrawalFixture(
     sql: `INSERT INTO account (id, account_id, provider_id, user_id, password, created_at, updated_at)
           VALUES ('a1', 'm1', 'credential', 'm1', 'hashed', ?, ?)`,
     args: [now, now],
+  })
+
+  // ⑤ 연결된 아티스트 — m1의 artist_id('artist-014')가 가리키는 행. 지워져야
+  // 할 개인정보를 전부 채워 둔다(비어 있으면 "지웠다"가 증명되지 않는다).
+  // 두 번째 아티스트(artist-020)는 어떤 회원과도 연결되지 않는다 — 탈퇴가
+  // 이 행을 건드리지 않는지 확인하는 대조군이다.
+  await client.execute({
+    sql: `INSERT INTO artists
+            (id, legacy_id, slug, name, one_liner, bio, contact,
+             profile_photo_url, profile_photo_metadata, is_active,
+             name_en, one_liner_en, bio_en, created_at, updated_at)
+          VALUES
+            ('artist-uuid-1', 'artist-014', 'artist-m1', '아티스트 m1', '한 줄 소개', '약력입니다',
+             'm1-artist@example.test', 'https://blob.example.test/artists/artist-014/photo.webp',
+             '{"variants":{"original":"artist-014/original.jpg","webp":"artist-014/photo.webp"}}', 1,
+             'Artist M1', 'One liner', 'Bio', ?, ?),
+            ('artist-uuid-2', 'artist-020', 'artist-other', '다른 아티스트', '건드리면 안 됨', '건드리면 안 됨',
+             'other-artist@example.test', null, '{}', 1, null, null, null, ?, ?)`,
+    args: [now, now, now, now],
   })
 
   // ② 콘텐츠·조합 기록 — 한 건도 바뀌면 안 되는 것들. 스펙이 나열한 7종
@@ -378,7 +398,48 @@ test('확정은 신원을 지우고 로그를 지우되 콘텐츠·조합 기록
   const contentTablesBefore = await snapshotContentTables(setupClient)
 
   const { withdrawMember } = await import(WITHDRAWAL_MODULE_URL.href)
-  assert.deepEqual(await withdrawMember('m1'), { ok: true, revokedBillingKeys: ['bk_test'] })
+  const outcome = await withdrawMember('m1')
+  assert.deepEqual(outcome, {
+    ok: true,
+    revokedBillingKeys: ['bk_test'],
+    artistPhotoCleanup: {
+      artistLegacyId: 'artist-014',
+      slug: 'artist-m1',
+      profilePhotoUrl: 'https://blob.example.test/artists/artist-014/photo.webp',
+      profilePhotoMetadata: {
+        variants: { original: 'artist-014/original.jpg', webp: 'artist-014/photo.webp' },
+      },
+    },
+  })
+
+  // ⑤ 연결된 아티스트 — 내려가고 개인정보가 지워졌다. slug는 남는다(링크가
+  // 404가 아니라 "없는 아티스트"로 처리되게).
+  const artist = (await setupClient.execute("SELECT * FROM artists WHERE legacy_id='artist-014'"))
+    .rows[0]
+  assert.equal(artist.is_active, 0)
+  assert.equal(artist.name, '탈퇴한 조합원')
+  assert.equal(artist.slug, 'artist-m1', 'slug는 남아야 한다(URL이라 링크가 살아 있어야 함)')
+  for (const col of [
+    'one_liner',
+    'bio',
+    'contact',
+    'profile_photo_url',
+    'name_en',
+    'one_liner_en',
+    'bio_en',
+  ]) {
+    assert.equal(artist[col], null, `artists.${col}이 남았다`)
+  }
+  assert.equal(artist.profile_photo_metadata, '{}')
+
+  // 다른 아티스트(artist-020)는 건드리지 않는다.
+  const otherArtist = (
+    await setupClient.execute("SELECT * FROM artists WHERE legacy_id='artist-020'")
+  ).rows[0]
+  assert.equal(otherArtist.is_active, 1)
+  assert.equal(otherArtist.name, '다른 아티스트')
+  assert.equal(otherArtist.one_liner, '건드리면 안 됨')
+  assert.equal(otherArtist.contact, 'other-artist@example.test')
 
   // ① 신원 — 전부 비워졌다
   const p = (await setupClient.execute("SELECT * FROM member_profiles WHERE id='m1'")).rows[0]
@@ -516,7 +577,13 @@ test('본인 제외 승인 관리자가 1명 남아 있으면 관리자도 탈�
   })
 
   const { withdrawMember } = await import(WITHDRAWAL_MODULE_URL.href)
-  assert.deepEqual(await withdrawMember('m2'), { ok: true, revokedBillingKeys: [] })
+  // m2는 artist_id가 없는 회원 — 아티스트에 연결되지 않은 탈퇴가 여전히
+  // 정상 동작하는지(artistPhotoCleanup: null) 확인한다.
+  assert.deepEqual(await withdrawMember('m2'), {
+    ok: true,
+    revokedBillingKeys: [],
+    artistPhotoCleanup: null,
+  })
 
   const p = (
     await setupClient.execute(
@@ -573,4 +640,54 @@ test('개인정보가 남으면 던지고 전부 롤백된다', async () => {
     1,
     '로그인 수단이 롤백돼야 한다'
   )
+  const artist = (
+    await setupClient.execute(
+      "SELECT is_active, one_liner FROM artists WHERE legacy_id='artist-014'"
+    )
+  ).rows[0]
+  assert.equal(artist.is_active, 1, '아티스트 is_active가 롤백돼야 한다')
+  assert.notEqual(artist.one_liner, null, '아티스트 개인정보가 롤백돼야 한다')
+})
+
+// ---------------------------------------------------------------- listArtists의 is_active 필터
+//
+// 탈퇴 확정이 `artists.is_active`를 0으로 내려도, 공개 목록(`listArtists`)이
+// 그 값을 보지 않으면 개인정보만 지워진 빈 행이 여전히 공개 화면에 남는다.
+// `src/db/queries/artists.ts`가 그 컬럼을 실제로 거르는지 확인한다.
+
+const ARTISTS_MODULE_URL = new URL('../../src/db/queries/artists.ts', import.meta.url)
+
+test('listArtists는 is_active=1인 행만 내고, activeOnly:false를 주면 전부 낸다', async () => {
+  await seedWithdrawalFixture(setupClient)
+  const { withdrawMember } = await import(WITHDRAWAL_MODULE_URL.href)
+  assert.equal((await withdrawMember('m1')).ok, true)
+
+  const { listArtists, getArtistBySlug } = await import(ARTISTS_MODULE_URL.href)
+
+  // 기본값 — 탈퇴로 내려간 artist-014는 빠지고, 손대지 않은 artist-020만 남는다.
+  const activeOnly = await listArtists()
+  assert.deepEqual(activeOnly.map(a => a.legacy_id).sort(), ['artist-020'])
+
+  // 관리자용 — activeOnly:false를 명시하면 비활성 행도 나온다(둘 다).
+  const all = await listArtists({ activeOnly: false })
+  assert.deepEqual(all.map(a => a.legacy_id).sort(), ['artist-014', 'artist-020'])
+
+  // getArtistBySlug도 같은 규칙 — 탈퇴한 아티스트의 slug는 "없는 아티스트"로
+  // 처리돼야 한다(404), activeOnly:false로 명시하면 여전히 찾을 수 있다.
+  assert.equal(await getArtistBySlug('artist-m1'), null)
+  assert.notEqual(await getArtistBySlug('artist-m1', { activeOnly: false }), null)
+  assert.notEqual(await getArtistBySlug('artist-other'), null)
+})
+
+test('전원이 활성일 때 listArtists()는 activeOnly 필터 없이도 같은 결과를 낸다(회귀 방지)', async () => {
+  // 오늘 기준 조합 13명 전원이 활성 아티스트다 — is_active 필터를 넣어도
+  // 지금 화면이 바뀌면 안 된다는 요구사항을 두 행짜리 픽스처로 확인한다.
+  await seedWithdrawalFixture(setupClient)
+  // withdrawMember를 부르지 않았으므로 artist-014도 여전히 is_active=1이다.
+
+  const { listArtists } = await import(ARTISTS_MODULE_URL.href)
+  const filtered = await listArtists()
+  const unfiltered = await listArtists({ activeOnly: false })
+  assert.deepEqual(filtered.map(a => a.legacy_id).sort(), unfiltered.map(a => a.legacy_id).sort())
+  assert.deepEqual(filtered.map(a => a.legacy_id).sort(), ['artist-014', 'artist-020'])
 })

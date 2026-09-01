@@ -22,7 +22,7 @@
  * 'artist-015')로 조회한다 — Postgres 시절부터의 관례를 그대로 유지한다.
  */
 
-import { asc, eq } from 'drizzle-orm'
+import { and, asc, eq } from 'drizzle-orm'
 
 import { db } from '../client.ts'
 import { artists } from '../schema/index.ts'
@@ -81,15 +81,41 @@ function rowToArtist(row: typeof artists.$inferSelect): ArtistRow {
  * 전체 아티스트 목록. `src/lib/data.ts`의 `getArtistsFromDB`가 이전엔
  * Supabase `.select('*').order('created_at', {ascending:true})`로 조회하던
  * 것을 대체한다 — 정렬 방향(created_at 오름차순)을 그대로 유지한다.
+ *
+ * **기본은 `is_active=1`만 낸다.** 공개 페이지가 소비하는 함수라 — 탈퇴
+ * 확정 시 `withdrawMember`(`src/db/queries/withdrawal.ts`)가 대상 아티스트
+ * 행을 `is_active=0`으로 내리는데, 여기서 그 값을 안 보면 개인정보만 지워진
+ * 빈 행이 여전히 공개 목록·상세 페이지에 남는다. 관리자 화면처럼 비활성
+ * 행도 봐야 하는 소비처는 `{ activeOnly: false }`를 명시한다
+ * (`src/app/api/admin/artists/route.ts`가 쓴다).
  */
-export async function listArtists(): Promise<ArtistRow[]> {
-  const rows = await db.select().from(artists).orderBy(asc(artists.createdAt))
+export async function listArtists(options: { activeOnly?: boolean } = {}): Promise<ArtistRow[]> {
+  const { activeOnly = true } = options
+  const rows = await db
+    .select()
+    .from(artists)
+    .where(activeOnly ? eq(artists.isActive, true) : undefined)
+    .orderBy(asc(artists.createdAt))
   return rows.map(rowToArtist)
 }
 
-/** `slug`로 단건 조회. `src/lib/data.ts`의 `getArtistBySlugFromDB` 대체. */
-export async function getArtistBySlug(slug: string): Promise<ArtistRow | null> {
-  const [row] = await db.select().from(artists).where(eq(artists.slug, slug)).limit(1)
+/**
+ * `slug`로 단건 조회. `src/lib/data.ts`의 `getArtistBySlugFromDB` 대체.
+ *
+ * `listArtists`와 같은 이유로 기본은 `is_active=1`만 낸다 — 유일한 호출부
+ * (`src/app/[locale]/artists/[slug]/page.tsx`)는 공개 상세 페이지이므로,
+ * 탈퇴로 비활성화된 아티스트는 "없는 아티스트"(notFound)로 처리돼야 한다.
+ */
+export async function getArtistBySlug(
+  slug: string,
+  options: { activeOnly?: boolean } = {}
+): Promise<ArtistRow | null> {
+  const { activeOnly = true } = options
+  const [row] = await db
+    .select()
+    .from(artists)
+    .where(and(eq(artists.slug, slug), activeOnly ? eq(artists.isActive, true) : undefined))
+    .limit(1)
   return row ? rowToArtist(row) : null
 }
 

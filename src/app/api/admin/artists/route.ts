@@ -1,7 +1,7 @@
 import { createOptionsResponse } from '@/utils/apiResponse'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
-import { getArtists } from '@/lib/data'
+import { getAllArtistsForAdmin } from '@/lib/data'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { listProfiles, ALL_PROFILES_LIMIT } from '@/db/queries/profiles'
 
@@ -23,8 +23,9 @@ export const GET = defineApiRoute({
       '아티스트 정보를 조회하는 중 오류가 발생했습니다.'
     ).toNextResponse(),
   handler: async () => {
-    // JSON 파일에서 아티스트 데이터 가져오기
-    const artists = await getArtists()
+    // 관리자 화면은 배정 회원 관리를 위해 비활성(탈퇴로 내려간) 아티스트도
+    // 봐야 한다 — 공개 목록이 쓰는 `getArtists()`(is_active=1만)와 다르다.
+    const artists = await getAllArtistsForAdmin()
 
     // 배정된 멤버 정보를 아티스트별로 개별 조회하던 것(N개 쿼리)을 프로필
     // 전체를 한 번만 조회해 메모리에서 아티스트별로 나누는 방식으로 바꿨다

@@ -187,6 +187,34 @@ export const getArtistsFromJSON = async (locale = 'ko'): Promise<Artist[]> => {
   }
 }
 
+/**
+ * 관리자 전용 — `is_active=0`(탈퇴로 내려간 아티스트 포함) 전체를 낸다.
+ *
+ * `getArtistsFromDB`(=`getArtists`)는 `listArtists()`가 기본으로 거는
+ * `is_active=1` 필터를 그대로 물려받는 공개 소비 경로다(캐시·JSON 폴백
+ * 포함). 관리자 화면(`src/app/api/admin/artists/route.ts`)은 배정 회원
+ * 관리를 위해 비활성 아티스트도 봐야 하므로 별도 함수로 나눈다 — 캐시를
+ * 타지 않는 대신(admin 라우트는 이미 `force-dynamic`) 항상 최신 상태를
+ * 본다. `React cache()`도 쓰지 않는다 — 요청마다 한 번뿐인 호출이라 의미가
+ * 없다.
+ */
+export async function getAllArtistsForAdmin(): Promise<Artist[]> {
+  const dbArtists = await listArtists({ activeOnly: false })
+  let result = dbArtists.map(a => convertDatabaseArtistToArtist(a as unknown as DatabaseArtist))
+
+  try {
+    const legacyMap = await getLegacyArtistMap()
+    result = result.map(artist => {
+      const fallback = legacyMap.get(artist.slug) || legacyMap.get(artist.id)
+      return applyLegacyArtistFallback(artist, fallback)
+    })
+  } catch (fallbackError) {
+    log.warn('Failed to apply legacy artist image fallback (admin):', fallbackError)
+  }
+
+  return result
+}
+
 // 기존 함수를 새로운 DB 조회 함수로 교체
 export const getArtists = getArtistsFromDB
 
