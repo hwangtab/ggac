@@ -96,9 +96,12 @@ export function dDay(applyEnd: string | null, todayIso: string): string {
   return `D-${days}`
 }
 
-/** 마크다운 링크 텍스트가 깨지지 않게 대괄호·역슬래시를 막는다. */
+/**
+ * 마크다운 제어문자를 막는다 — 대괄호·역슬래시(링크 문법 `[텍스트](url)`가 깨지지 않게),
+ * `*`·`_`·백틱(외부 기관 텍스트에 섞여 들어와 의도치 않게 강조·코드로 서식화되지 않게).
+ */
 function escapeMarkdown(value: string): string {
-  return value.replace(/([\\[\]])/g, '\\$1')
+  return value.replace(/([\\[\]*_`])/g, '\\$1')
 }
 
 /** HTML 특수문자를 막는다. `src/lib/auth/email.ts:20`과 같은 목록. */
@@ -141,9 +144,9 @@ export function renderDigestMarkdown(
         `### [${escapeMarkdown(it.title)}](${it.url})`,
         '',
         `- 마감: ${dDay(it.apply_end, todayIso)}${it.apply_end ? ` (${it.apply_end})` : ''}`,
-        `- 분류: ${tagLine(it)}`,
+        `- 분류: ${escapeMarkdown(tagLine(it))}`,
       ]
-      if (it.summary) lines.push(`- ${it.summary}`)
+      if (it.summary) lines.push(`- ${escapeMarkdown(it.summary)}`)
       return lines.join('\n')
     })
     .join('\n\n')

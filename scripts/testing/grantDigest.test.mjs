@@ -144,6 +144,24 @@ test('빈 목록도 본문을 만든다 (빈 문자열을 게시글로 만들지
   assert.ok(md.includes('없습니다'))
 })
 
+test('마크다운은 summary의 제어문자를 이스케이프한다 (외부 기관 텍스트가 서식을 깨지 않게)', () => {
+  const md = renderDigestMarkdown(
+    [item({ summary: '요약에 *강조*와 `코드`, [링크처럼](보이는) 것이 있다' })],
+    '2026-W36',
+    '2026-09-01'
+  )
+  assert.ok(md.includes('\\*강조\\*'))
+  assert.ok(md.includes('\\`코드\\`'))
+  assert.ok(md.includes('\\[링크처럼\\]'))
+  assert.ok(!md.includes('*강조*'))
+})
+
+test('마크다운은 분류(tagLine)의 제어문자를 biz_type 경유로 이스케이프한다', () => {
+  const md = renderDigestMarkdown([item({ biz_type: '*중요* 지원' })], '2026-W36', '2026-09-01')
+  assert.ok(md.includes('\\*중요\\* 지원'))
+  assert.ok(!md.includes('- 분류: 경기 · 음악 · *중요* 지원'))
+})
+
 // ---------------------------------------------------------------- 이메일
 
 test('이메일 제목에 건수가 들어간다', () => {
