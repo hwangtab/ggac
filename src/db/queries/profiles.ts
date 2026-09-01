@@ -67,6 +67,13 @@ export interface ProfileRow {
   is_director: boolean
   director_title: string | null
   is_auditor: boolean
+  /**
+   * 관심 장르. `src/constants/interests.ts`의 `STANDARD_GENRES` 값만 들어간다.
+   * 빈 배열이 미설정(조합 기본값 적용 대상)이다.
+   */
+  interest_genres: string[]
+  /** 관심 지역(시도). 빈 배열이 미설정이다. */
+  interest_regions: string[]
 }
 
 /**
@@ -160,6 +167,11 @@ function rowToProfile(row: MemberProfileSelectRow): ProfileRow {
     is_director: row.isDirector,
     director_title: row.directorTitle,
     is_auditor: row.isAuditor,
+    // `?? []`를 두는 이유: 컬럼에 NOT NULL DEFAULT '[]'가 있지만, 마이그레이션
+    // 이전에 만들어진 행을 읽는 경로가 남아 있을 수 있고 JSON 파싱이 null을
+    // 낼 수도 있다. 화면이 조용히 비는 것보다 빈 배열이 낫다.
+    interest_genres: row.interestGenres ?? [],
+    interest_regions: row.interestRegions ?? [],
   }
 }
 

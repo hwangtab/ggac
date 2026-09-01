@@ -131,7 +131,7 @@ export function toAccountRow(authUser) {
   }
 }
 
-/** member_profiles 19행. 컬럼 33개를 하나도 빠짐없이 명시한다. */
+/** member_profiles 19행. 컬럼 35개를 하나도 빠짐없이 명시한다. */
 export function toMemberProfileRow(p) {
   return {
     id: p.id,
@@ -172,5 +172,11 @@ export function toMemberProfileRow(p) {
     is_director: bool(p.is_director),
     director_title: p.director_title,
     is_auditor: bool(p.is_auditor),
+    // 컷오버 후(단계 4 Task 2 — member-calendar) 추가된 컬럼이라 Supabase
+    // 덤프에는 대응 값이 없다(p.interest_genres는 항상 undefined). Turso
+    // 스키마의 NOT NULL DEFAULT '[]'와 같은 의미로 json()이 빈 배열을 채운다
+    // — artists.portfolio_links와 같은 패턴.
+    interest_genres: json(p.interest_genres, []),
+    interest_regions: json(p.interest_regions, []),
   }
 }

@@ -56,6 +56,20 @@ export const memberProfiles = sqliteTable(
     isDirector: integer('is_director', { mode: 'boolean' }).notNull().default(false),
     directorTitle: text('director_title'),
     isAuditor: integer('is_auditor', { mode: 'boolean' }).notNull().default(false),
+    /**
+     * 관심 장르. `src/constants/interests.ts`의 `STANDARD_GENRES` 값만 들어간다.
+     * **빈 배열이 미설정이고, 미설정은 조합 기본값(음악)을 뜻한다** — `null`을 쓰지
+     * 않는 이유는 둘 다 "미설정"이라 구분해봐야 판정만 두 갈래로 늘기 때문이다.
+     */
+    interestGenres: text('interest_genres', { mode: 'json' })
+      .$type<string[]>()
+      .notNull()
+      .default([]),
+    /** 관심 지역(시도). 미설정이면 조합 기본값(경기·서울). */
+    interestRegions: text('interest_regions', { mode: 'json' })
+      .$type<string[]>()
+      .notNull()
+      .default([]),
   },
   // Postgres 원본도 email에 UNIQUE 제약이 있다(20250106090010_init_member_profiles.sql:18).
   table => [

@@ -256,8 +256,9 @@ test('toNotificationRow: 11개 컬럼을 낸다', () => {
 
 // ---------------------------------------------------------------- member_profiles 재사용
 
-test('toMemberProfileRow는 identityMapping.mjs 것을 재사용한다 (33컬럼)', () => {
-  assert.equal(Object.keys(toMemberProfileRow(PG_PROFILE)).length, 33)
+test('toMemberProfileRow는 identityMapping.mjs 것을 재사용한다 (35컬럼)', () => {
+  // 33 + interest_genres/interest_regions(단계 4 Task 2 — member-calendar).
+  assert.equal(Object.keys(toMemberProfileRow(PG_PROFILE)).length, 35)
 })
 
 // ---------------------------------------------------------------- content.mjs: 로더 통합

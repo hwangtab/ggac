@@ -903,3 +903,49 @@ test('복구 경로: buildMemberProfileRow + upsertProfile을 거치면 승인 �
   assert.equal(profile.is_auditor, false)
   assert.equal(profile.display_name, '유령1', 'Better Auth user.name을 표시명으로 살린다')
 })
+
+// ---------------------------------------------------------------- 관심 장르·지역 (Task 2 — member-calendar)
+//
+// interest_genres/interest_regions는 빈 배열이 "미설정"을 뜻한다(조합 기본값
+// 적용 대상). null을 쓰지 않는다 — 둘 다 "미설정"이라 구분해봐야 판정만
+// 두 갈래로 늘기 때문이다.
+
+test('관심사 기본값은 빈 배열이다', async () => {
+  const { upsertProfile, getProfileById } = await loadFreshProfilesModule()
+  const id = 'interests-default'
+  await upsertProfile(makeProfile({ id, email: 'interests-default@test.local' }))
+  const p = await getProfileById(id)
+  assert.deepEqual(p.interest_genres, [])
+  assert.deepEqual(p.interest_regions, [])
+})
+
+test('관심사를 저장하고 읽는다', async () => {
+  const { upsertProfile, updateProfile, getProfileById } = await loadFreshProfilesModule()
+  const id = 'interests-roundtrip'
+  await upsertProfile(makeProfile({ id, email: 'interests-roundtrip@test.local' }))
+  await updateProfile(id, { interest_genres: ['음악', '무용'], interest_regions: ['경기'] })
+  const p = await getProfileById(id)
+  assert.deepEqual(p.interest_genres, ['음악', '무용'])
+  assert.deepEqual(p.interest_regions, ['경기'])
+})
+
+test('빈 배열로 되돌릴 수 있다 (설정 해제)', async () => {
+  const { upsertProfile, updateProfile, getProfileById } = await loadFreshProfilesModule()
+  const id = 'interests-unset'
+  await upsertProfile(makeProfile({ id, email: 'interests-unset@test.local' }))
+  await updateProfile(id, { interest_genres: ['음악'] })
+  await updateProfile(id, { interest_genres: [] })
+  const p = await getProfileById(id)
+  assert.deepEqual(p.interest_genres, [])
+})
+
+test('listProfiles 결과에도 관심사가 실린다', async () => {
+  const { upsertProfile, updateProfile, listProfiles } = await loadFreshProfilesModule()
+  const id = 'interests-in-list'
+  await upsertProfile(makeProfile({ id, email: 'interests-in-list@test.local' }))
+  await updateProfile(id, { interest_genres: ['시각예술'] })
+  const { rows } = await listProfiles({ limit: 1000, offset: 0 })
+  const found = rows.find(r => r.id === id)
+  assert.ok(found, '방금 만든 프로필이 listProfiles 결과에 있어야 한다')
+  assert.deepEqual(found.interest_genres, ['시각예술'])
+})
