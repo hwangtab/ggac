@@ -105,6 +105,7 @@ const { systemSettings: tursoSystemSettings, defaultSettings: tursoDefaultSettin
 const { upsertProfile } = await import('@/db/queries/profiles')
 const { memberProfiles: tursoMemberProfiles } = await import('@/db/schema/identity')
 const { WITHDRAWN_DISPLAY_NAME, withdrawnEmailFor } = await import('@/constants/memberProfile')
+const { requestWithdrawal, withdrawMember } = await import('@/db/queries/withdrawal')
 const {
   boardMeetings: tursoBoardMeetings,
   boardAgendas: tursoBoardAgendas,
@@ -387,9 +388,13 @@ async function main() {
 
   // 탈퇴 **완료** 계정(Task 8). 위 ACCOUNTS 루프(`upsertTursoAuth`)에 넣지
   // 않는다 — 그 루프는 모든 계정에 로그인 가능한 `account`(비밀번호) 행을
-  // 만드는데, 탈퇴 완료 계정은 정확히 그 행이 **없어야** `withdrawMember()`가
-  // 만드는 실제 상태(로그인 수단 삭제)를 재현한다. `member_profiles`·`user`
-  // 행은 앱이 탈퇴 확정 때 남기는 모양(묘비) 그대로 직접 심는다.
+  // 만드는데, 탈퇴 완료 계정은 정확히 그 행이 **없어야** 한다.
+  //
+  // **묘비를 손으로 심지 않는다.** 예전에는 `registration_status:'withdrawn'`
+  // 부터 PII NULL까지 앱이 남기는 모양을 이 파일이 흉내 냈는데, 그러면
+  // `withdrawMember()`가 무엇을 바꾸는지가 달라져도 이 픽스처는 조용히 옛
+  // 모양을 유지한다 — 검증하려던 상태가 실제 상태와 갈라진다. 승인 상태로
+  // 심은 뒤 **실제 프로덕션 함수를 그대로 부른다.**
   const WITHDRAWN_ID = '00000000-0000-4000-8000-00000000b008'
   const withdrawnEmail = withdrawnEmailFor(WITHDRAWN_ID)
 
@@ -407,36 +412,66 @@ async function main() {
   // 있으면 안 되므로(멱등), insert가 아니라 매번 delete한다.
   await db.delete(tursoAccount).where(eq(tursoAccount.userId, WITHDRAWN_ID))
 
-  const withdrawnProfileValues = {
+  // 탈퇴 **전** 상태로 심는다 — 이름·PII가 들어 있는 평범한 승인 조합원.
+  // 재실행 때 앞선 실행이 남긴 묘비를 덮어써야 하므로 모든 필드를 명시한다.
+  const preWithdrawalProfile = {
     id: WITHDRAWN_ID,
-    displayName: WITHDRAWN_DISPLAY_NAME,
-    email: withdrawnEmail,
-    registrationStatus: 'withdrawn',
-    isActive: false,
+    displayName: '탈퇴예정조합원',
+    email: 'pre-withdrawal@ggac.test',
+    registrationStatus: 'approved',
+    isActive: true,
     isAdmin: false,
-    isMember: false,
+    isMember: true,
     isArtist: false,
     isDirector: false,
     isAuditor: false,
     isSuspended: false,
-    realName: null,
-    phoneNumber: null,
-    birthDate: null,
-    bankName: null,
-    accountNumber: null,
-    accountHolder: null,
-    monthlyFee: null,
+    realName: '홍길동',
+    phoneNumber: '010-0000-0000',
     artistId: null,
     directorTitle: null,
     artistRole: 'owner',
-    verificationStatus: { email: false, phone: false, identity: false },
-    withdrawnAt: new Date('2026-08-30T00:00:00.000Z'),
+    verificationStatus: { email: true, phone: false, identity: false },
+    withdrawnAt: null,
     withdrawalRequestedAt: null,
   }
   await db
     .insert(tursoMemberProfiles)
-    .values(withdrawnProfileValues)
-    .onConflictDoUpdate({ target: tursoMemberProfiles.id, set: withdrawnProfileValues })
+    .values(preWithdrawalProfile)
+    .onConflictDoUpdate({ target: tursoMemberProfiles.id, set: preWithdrawalProfile })
+
+  // 실제 경로 그대로: 회원이 신청하고, 관리자가 확정한다. 둘 다 프로덕션
+  // 함수다 — 이 두 함수가 만드는 상태가 바뀌면 픽스처도 함께 바뀐다.
+  // requestWithdrawal은 boolean, withdrawMember는 {ok, reason}을 돌려준다.
+  if (!(await requestWithdrawal(WITHDRAWN_ID))) {
+    throw new Error('탈퇴 신청 픽스처 실패: rowsAffected가 0이다')
+  }
+  const withdrawn = await withdrawMember(WITHDRAWN_ID)
+  if (!withdrawn.ok) {
+    throw new Error(`탈퇴 확정 픽스처 실패: ${withdrawn.reason}`)
+  }
+
+  // 함수가 실제로 묘비를 남겼는지 확인한다 — 픽스처가 조용히 어긋나면
+  // 이 시드에 기대는 E2E 전부가 엉뚱한 상태를 검증하게 된다.
+  const [tombstone] = await db
+    .select({
+      status: tursoMemberProfiles.registrationStatus,
+      email: tursoMemberProfiles.email,
+      displayName: tursoMemberProfiles.displayName,
+      realName: tursoMemberProfiles.realName,
+      isActive: tursoMemberProfiles.isActive,
+    })
+    .from(tursoMemberProfiles)
+    .where(eq(tursoMemberProfiles.id, WITHDRAWN_ID))
+  if (
+    tombstone?.status !== 'withdrawn' ||
+    tombstone.email !== withdrawnEmail ||
+    tombstone.displayName !== WITHDRAWN_DISPLAY_NAME ||
+    tombstone.realName !== null ||
+    tombstone.isActive !== false
+  ) {
+    throw new Error(`탈퇴 확정 뒤 상태가 기대와 다르다: ${JSON.stringify(tombstone)}`)
+  }
 
   ids.withdrawnEmail = withdrawnEmail
 
