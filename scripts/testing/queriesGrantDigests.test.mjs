@@ -120,3 +120,52 @@ test('listRecentDigestItems는 최근 회차의 항목을 평평하게 모은다
   assert.ok(keys.includes('ncas:40'))
   assert.ok(keys.includes('ncas:41'))
 })
+
+// ---------------------------------------------------------------- claimGrantDigestForPublish
+//
+// `UPDATE ... WHERE status='draft' RETURNING *` 한 문장이 조합원 중복 발송을
+// 막는 유일한 불변식이다(발행 라우트의 read-check-act 경쟁 창을 없앤다). 이
+// 스위트가 지워진 수동 curl 검증을 대체한다.
+
+test('claimGrantDigestForPublish: draft 회차를 선점하면 publishing이 되고 행이 돌아온다', async () => {
+  const m = await loadFresh()
+  const created = await m.createGrantDigest({ week_key: '2026-W42', items: [ITEM] })
+  assert.equal(created.status, 'draft')
+
+  const claimed = await m.claimGrantDigestForPublish(created.id)
+  assert.ok(claimed, '첫 선점은 행을 돌려줘야 한다')
+  assert.equal(claimed.id, created.id)
+  assert.equal(claimed.status, 'publishing')
+})
+
+test('claimGrantDigestForPublish: 같은 회차를 두 번째로 선점하면 null이다 (중복 발송을 막는 핵심 불변식)', async () => {
+  const m = await loadFresh()
+  const created = await m.createGrantDigest({ week_key: '2026-W43', items: [ITEM] })
+
+  const first = await m.claimGrantDigestForPublish(created.id)
+  assert.equal(first.status, 'publishing')
+
+  const second = await m.claimGrantDigestForPublish(created.id)
+  assert.equal(second, null, '이미 publishing인 회차를 다시 선점하면 null이어야 한다')
+
+  // 세 번째 시도도 마찬가지 — 한 번 잠기면 계속 잠겨 있어야 한다.
+  const third = await m.claimGrantDigestForPublish(created.id)
+  assert.equal(third, null)
+})
+
+test('claimGrantDigestForPublish: 이미 published인 회차를 선점하면 null이다', async () => {
+  const m = await loadFresh()
+  const created = await m.createGrantDigest({ week_key: '2026-W44', items: [ITEM] })
+  await m.updateGrantDigest(created.id, {
+    status: 'published',
+    published_at: '2026-11-02T00:00:00.000Z',
+  })
+
+  const claimed = await m.claimGrantDigestForPublish(created.id)
+  assert.equal(claimed, null)
+})
+
+test('claimGrantDigestForPublish: 없는 id를 선점하면 null이다', async () => {
+  const m = await loadFresh()
+  assert.equal(await m.claimGrantDigestForPublish('no-such-digest-id'), null)
+})
