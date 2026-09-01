@@ -26,12 +26,7 @@ import {
   hasValidFileSignature,
 } from '@/utils/fileUploadValidation'
 import { getPostById } from '@/db/queries/posts'
-import {
-  addAttachment,
-  listAttachments,
-  getAttachmentUploadStats,
-  unsetPrimaryForPost,
-} from '@/db/queries/attachments'
+import { addAttachment, listAttachments, getAttachmentUploadStats } from '@/db/queries/attachments'
 
 /**
  * 첨부파일 목록 조회
@@ -251,17 +246,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     // 임시 파일이 아닌 경우에만 데이터베이스 저장
     if (!isTempId) {
-      // 대표 이미지로 설정하는 경우 기존 대표 이미지 해제. 단계 2c(Task 5):
-      // Supabase `.eq('post_id', validPostId).eq('is_primary', true)`에서
-      // Turso 쿼리 계층 unsetPrimaryForPost(validPostId)로 옮겼다.
-      if (isPrimary && fileType === 'image') {
-        try {
-          await unsetPrimaryForPost(validPostId)
-        } catch (primaryError) {
-          console.warn('[UPLOAD API] 기존 대표 이미지 해제 실패:', primaryError)
-        }
-      }
-
+      // 기존 대표 이미지 해제는 여기서 하지 않는다 — addAttachment가 INSERT와
+      // 같은 트랜잭션 안에서 함께 처리한다. 여기서 따로 부르던 시절에는 해제
+      // 실패를 console.warn만 하고 넘어가 대표가 둘이 되기도 했다.
+      //
       // 첨부파일 메타데이터를 데이터베이스에 저장. 단계 2c(Task 5): Supabase
       // `.insert(attachmentData).select().single()`에서 Turso 쿼리 계층
       // addAttachment(Turso)로 옮겼다 — sort_order를 명시하지 않아 자동 부여

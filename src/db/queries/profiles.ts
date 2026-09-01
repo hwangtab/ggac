@@ -319,7 +319,11 @@ export async function listProfiles(
       .select()
       .from(memberProfiles)
       .where(where)
-      .orderBy(desc(memberProfiles.createdAt))
+      // id를 2차 정렬 키로 둔다. created_at은 ms 정밀도라 같은 요청에서
+      // 만들어진 행들이 같은 값을 가질 수 있고, 그러면 SQLite가 그들의
+      // 상대 순서를 보장하지 않아 limit/offset 페이지 경계에서 같은 행이
+      // 두 번 나오거나 아예 빠진다.
+      .orderBy(desc(memberProfiles.createdAt), desc(memberProfiles.id))
       .limit(filter.limit)
       .offset(filter.offset),
     db

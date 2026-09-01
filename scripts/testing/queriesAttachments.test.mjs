@@ -266,35 +266,70 @@ test('getAttachmentUploadStats: 첨부가 없으면 0/0', async () => {
   assert.equal(stats.total_size, 0)
 })
 
-// ---------------------------------------------------------------- unsetPrimaryForPost
+// ---------------------------------------------------------------- 대표 이미지 배타성
+//
+// `unsetPrimaryForPost`는 없앴다. 해제와 지정이 두 호출로 갈라져 있으면 그
+// 사이가 벌어져 대표가 둘이 되기 때문이다(마이그레이션 0015 참고). 이제
+// 배타성은 addAttachment·updateAttachment가 각자의 트랜잭션 안에서 지키고,
+// DB의 부분 유니크 인덱스가 마지막 방어선이다. 아래 테스트는 그 계약을 본다.
 
-test('unsetPrimaryForPost: 같은 게시글의 대표 이미지를 전부 해제한다', async () => {
-  const { addAttachment, unsetPrimaryForPost, listAttachments } = await loadFreshAttachmentsModule()
+test('addAttachment: 새 대표를 넣으면 기존 대표가 같은 트랜잭션에서 내려간다', async () => {
+  const { addAttachment, listAttachments } = await loadFreshAttachmentsModule()
   const postId = await seedPost()
-  await addAttachment(
+  const old = await addAttachment(
     fileInput({ post_id: postId, file_name: 'old-primary.png', is_primary: true })
   )
-  await unsetPrimaryForPost(postId)
+  const fresh = await addAttachment(
+    fileInput({ post_id: postId, file_name: 'new-primary.png', is_primary: true })
+  )
+
   const rows = await listAttachments(postId)
-  assert.ok(rows.every(r => r.is_primary === false))
+  const primaries = rows.filter(r => r.is_primary === true)
+  assert.equal(primaries.length, 1, '대표는 언제나 한 건뿐이어야 한다')
+  assert.equal(primaries[0].id, fresh.id)
+  assert.equal(rows.find(r => r.id === old.id).is_primary, false)
 })
 
-test('unsetPrimaryForPost: excludeAttachmentId로 지정한 첨부는 건드리지 않는다', async () => {
-  const { addAttachment, unsetPrimaryForPost, getAttachmentById } =
-    await loadFreshAttachmentsModule()
+test('updateAttachment: 대표로 지정하면 같은 게시글의 다른 대표가 내려간다', async () => {
+  const { addAttachment, updateAttachment, getAttachmentById } = await loadFreshAttachmentsModule()
   const postId = await seedPost()
-  const keep = await addAttachment(
-    fileInput({ post_id: postId, file_name: 'keep.png', is_primary: true })
+  const first = await addAttachment(
+    fileInput({ post_id: postId, file_name: 'first.png', is_primary: true })
   )
-  const other = await addAttachment(
-    fileInput({ post_id: postId, file_name: 'other.png', is_primary: true })
-  )
-  await unsetPrimaryForPost(postId, keep.id)
+  const second = await addAttachment(fileInput({ post_id: postId, file_name: 'second.png' }))
 
-  const keptAfter = await getAttachmentById(keep.id, postId)
-  const otherAfter = await getAttachmentById(other.id, postId)
-  assert.equal(keptAfter.is_primary, true, 'exclude로 지정한 첨부는 그대로 유지돼야 한다')
-  assert.equal(otherAfter.is_primary, false)
+  await updateAttachment(second.id, postId, { is_primary: true })
+
+  assert.equal((await getAttachmentById(first.id, postId)).is_primary, false)
+  assert.equal((await getAttachmentById(second.id, postId)).is_primary, true)
+})
+
+test('DB가 게시글당 대표 둘을 거부한다 (트랜잭션이 풀려도 막힌다)', async () => {
+  const { addAttachment } = await loadFreshAttachmentsModule()
+  const { db } = await import(new URL('../../src/db/client.ts', import.meta.url).href)
+  const { postAttachments } = await import(
+    new URL('../../src/db/schema/index.ts', import.meta.url).href
+  )
+  const { eq } = await import('drizzle-orm')
+
+  const postId = await seedPost()
+  const a = await addAttachment(fileInput({ post_id: postId, file_name: 'a.png' }))
+  const b = await addAttachment(fileInput({ post_id: postId, file_name: 'b.png' }))
+
+  // 쿼리 계층을 우회해 직접 둘 다 대표로 세운다 — 인덱스가 없으면 통과한다.
+  await db.update(postAttachments).set({ isPrimary: true }).where(eq(postAttachments.id, a.id))
+  // Drizzle이 에러를 감싸서 UNIQUE 문구가 cause 체인 안쪽에 들어간다 —
+  // 정규식으로 top-level message만 보면 놓친다. 체인을 따라가며 찾는다.
+  await assert.rejects(
+    () => db.update(postAttachments).set({ isPrimary: true }).where(eq(postAttachments.id, b.id)),
+    error => {
+      for (let e = error; e; e = e.cause) {
+        if (/UNIQUE constraint failed/i.test(e.message ?? '')) return true
+      }
+      return false
+    },
+    'post_attachments_primary_idx가 두 번째 대표를 막아야 한다'
+  )
 })
 
 // ---------------------------------------------------------------- updateAttachment

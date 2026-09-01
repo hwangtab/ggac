@@ -182,6 +182,15 @@ export const postAttachments = sqliteTable(
      */
     index('idx_post_attachments_post_sort').on(table.postId, table.sortOrder),
     index('idx_post_attachments_temp_cleanup').on(table.isTemporary, table.expiresAt),
+    /**
+     * 게시글당 대표 이미지는 하나뿐(마이그레이션 0015). 부분 인덱스라
+     * is_primary = 0인 첨부는 여러 건이어도 걸리지 않는다. 쿼리 계층의
+     * 트랜잭션(`addAttachment`·`updateAttachment`)이 1차 방어이고 이것이
+     * 그 트랜잭션이 풀렸을 때 깨지게 하는 마지막 방어선이다.
+     */
+    uniqueIndex('post_attachments_primary_idx')
+      .on(table.postId)
+      .where(sql`${table.isPrimary} = 1`),
   ]
 )
 

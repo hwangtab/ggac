@@ -664,7 +664,10 @@ export async function listPostsForAdmin(
       .select()
       .from(posts)
       .where(where)
-      .orderBy(desc(posts.createdAt))
+      // id를 2차 정렬 키로 둔다 — 이유는 profiles.ts의 listProfiles와 같다.
+      // created_at이 ms 정밀도라 동률이 실제로 생기고, 동률 행의 순서가
+      // 요청마다 달라지면 페이지 경계에서 중복·누락이 난다.
+      .orderBy(desc(posts.createdAt), desc(posts.id))
       .limit(filter.limit)
       .offset(offset),
     db

@@ -100,6 +100,15 @@ export interface AddAttachmentInput {
  */
 export async function addAttachment(input: AddAttachmentInput): Promise<PostAttachmentRow> {
   const row = await db.transaction(async tx => {
+    // 대표 이미지로 넣는다면 같은 트랜잭션 안에서 기존 대표를 먼저 내린다.
+    // 라우트가 unsetPrimaryForPost를 따로 부르던 시절에는 두 문 사이가
+    // 벌어져 동시 업로드 두 건이 모두 대표가 될 수 있었다.
+    if (input.is_primary) {
+      await tx
+        .update(postAttachments)
+        .set({ isPrimary: false })
+        .where(and(eq(postAttachments.postId, input.post_id), eq(postAttachments.isPrimary, true)))
+    }
     let sortOrder = input.sort_order
     if (!sortOrder) {
       const [maxRow] = await tx
@@ -318,27 +327,13 @@ export async function getAttachmentUploadStats(
   return { count: Number(rows[0]?.count ?? 0), total_size: Number(rows[0]?.totalSize ?? 0) }
 }
 
-/**
- * 같은 게시글 안의 대표 이미지(`is_primary`)를 전부 해제한다. 새 대표 이미지를
- * 지정하기 전에 부른다. `excludeAttachmentId`를 넘기면 그 첨부는 건드리지
- * 않는다(수정 라우트가 "자기 자신은 그대로 두고 나머지만 해제"할 때 씀).
+/*
+ * 대표 이미지 해제를 하는 `unsetPrimaryForPost`는 없앴다. 이 함수가 밖에
+ * 노출돼 있으면 "해제"와 "지정"이 다시 두 호출로 갈라지고, 그 사이가
+ * 벌어져 대표가 둘이 되는 경합이 되살아난다. 해제는 `addAttachment`와
+ * `updateAttachment`가 각자의 트랜잭션 안에서만 한다. 마지막 방어선은
+ * DB의 부분 유니크 인덱스 `post_attachments_primary_idx`(마이그레이션 0015)다.
  */
-export async function unsetPrimaryForPost(
-  postId: string,
-  excludeAttachmentId?: string
-): Promise<void> {
-  const conditions: SQL[] = [
-    eq(postAttachments.postId, postId),
-    eq(postAttachments.isPrimary, true),
-  ]
-  if (excludeAttachmentId) {
-    conditions.push(ne(postAttachments.id, excludeAttachmentId))
-  }
-  await db
-    .update(postAttachments)
-    .set({ isPrimary: false })
-    .where(and(...conditions))
-}
 
 export type AttachmentPatch = Partial<{
   alt_text: string | null
@@ -366,11 +361,28 @@ export async function updateAttachment(
     return getAttachmentById(id, postId)
   }
 
-  const rows = await db
-    .update(postAttachments)
-    .set(values as Partial<typeof postAttachments.$inferInsert>)
-    .where(and(eq(postAttachments.id, id), eq(postAttachments.postId, postId)))
-    .returning()
+  // 대표 이미지 지정은 "남의 대표 해제 + 내 대표 지정"이 반드시 함께 일어나야
+  // 한다. 라우트가 두 호출로 나눠 하던 시절에는 서로 다른 첨부를 대표로
+  // 지정하는 두 요청이 겹칠 때 둘 다 is_primary=true로 남을 수 있었다.
+  const rows = await db.transaction(async tx => {
+    if (values.isPrimary === true) {
+      await tx
+        .update(postAttachments)
+        .set({ isPrimary: false })
+        .where(
+          and(
+            eq(postAttachments.postId, postId),
+            eq(postAttachments.isPrimary, true),
+            ne(postAttachments.id, id)
+          )
+        )
+    }
+    return tx
+      .update(postAttachments)
+      .set(values as Partial<typeof postAttachments.$inferInsert>)
+      .where(and(eq(postAttachments.id, id), eq(postAttachments.postId, postId)))
+      .returning()
+  })
   return rows[0] ? rowToAttachment(rows[0]) : null
 }
 

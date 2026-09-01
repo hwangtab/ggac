@@ -21,7 +21,6 @@ import { getProfileById } from '@/db/queries/profiles'
 import {
   getAttachmentById,
   getAttachmentWithPost,
-  unsetPrimaryForPost,
   updateAttachment,
   removeAttachment,
 } from '@/db/queries/attachments'
@@ -147,14 +146,10 @@ export async function PUT(
       return ApiError.forbidden('권한이 없습니다.').toNextResponse()
     }
 
-    // 대표 이미지로 설정하는 경우 기존 대표 이미지 해제. 단계 2c(Task 5):
-    // Supabase `.eq('post_id', postId).eq('is_primary', true).neq('id',
-    // attachmentId)`에서 Turso 쿼리 계층
-    // unsetPrimaryForPost(postId, attachmentId)로 옮겼다(자기 자신은 제외).
-    if (is_primary && attachment.file_type === 'image') {
-      await unsetPrimaryForPost(postId, attachmentId)
-    }
-
+    // 기존 대표 이미지 해제는 여기서 하지 않는다 — updateAttachment가 같은
+    // 트랜잭션 안에서 함께 처리한다. 라우트에서 따로 부르던 시절에는 두 문
+    // 사이가 벌어져 동시 요청 두 건이 모두 대표로 남을 수 있었다.
+    //
     // 첨부파일 정보 업데이트. 단계 2c(Task 5): Supabase
     // `.update(updateData).eq('id', attachmentId).eq('post_id', postId)`에서
     // Turso 쿼리 계층 updateAttachment(attachmentId, postId, patch)로 옮겼다.
@@ -240,9 +235,27 @@ export async function DELETE(
       return ApiError.forbidden('권한이 없습니다.').toNextResponse()
     }
 
+    // **DB 행을 먼저 지우고, 그 다음 Storage 파일을 지운다.** 순서가 중요하다.
+    // 반대로 하면(예전 순서다) Storage 삭제 성공 뒤 DB 삭제가 실패했을 때
+    // 파일은 사라졌는데 file_url을 가진 행이 남아 화면에 깨진 이미지가 뜬다.
+    // 지금 순서에서 최악은 "DB에는 없는데 Storage에 파일만 남는" 고아 파일인데,
+    // 이건 아무 화면도 깨뜨리지 않고 용량만 조금 쓴다 — 되돌릴 수 없는 쪽이
+    // 아니라 되돌릴 수 있는 쪽으로 실패하게 만든다.
+    // (만료 임시첨부 정리 `deleteExpiredTempAttachments`도 같은 순서다.)
+    //
+    // 단계 2c(Task 5): Supabase `.delete().eq('id', attachmentId)
+    // .eq('post_id', postId)`에서 Turso 쿼리 계층 removeAttachment로 옮겼다.
+    try {
+      await removeAttachment(attachmentId, postId)
+    } catch (deleteError) {
+      console.error('첨부파일 DB 삭제 오류:', deleteError)
+      return ApiError.internalServerError('첨부파일 삭제에 실패했습니다.').toNextResponse()
+    }
+
     // Storage에서 파일 삭제 (가능한 경우에만). 버킷·접두사 봉쇄
     // (attachments 버킷, posts/<postId> 하위)는 logicalPathFromUrl이
-    // 그대로 유지한다.
+    // 그대로 유지한다. 여기서 실패해도 사용자에게는 삭제 성공이다 —
+    // DB 행이 이미 없으므로 화면에서는 사라졌다.
     try {
       const logical = logicalPathFromUrl(attachment.file_url, 'attachments', `posts/${postId}`)
 
@@ -252,18 +265,7 @@ export async function DELETE(
         console.warn('안전하지 않은 첨부파일 Storage URL 삭제 건너뜀:', attachmentId)
       }
     } catch (error) {
-      console.warn('Storage 삭제 시도 중 오류:', error)
-      // Storage 오류여도 DB 삭제는 계속 진행
-    }
-
-    // 데이터베이스에서 첨부파일 레코드 삭제. 단계 2c(Task 5): Supabase
-    // `.delete().eq('id', attachmentId).eq('post_id', postId)`에서 Turso
-    // 쿼리 계층 removeAttachment(attachmentId, postId)로 옮겼다.
-    try {
-      await removeAttachment(attachmentId, postId)
-    } catch (deleteError) {
-      console.error('첨부파일 DB 삭제 오류:', deleteError)
-      return ApiError.internalServerError('첨부파일 삭제에 실패했습니다.').toNextResponse()
+      console.warn('Storage 삭제 시도 중 오류(고아 파일이 남는다):', error)
     }
 
     try {

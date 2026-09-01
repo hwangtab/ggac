@@ -112,13 +112,22 @@ export default function EventApplicationsPage() {
   }, [fetchApplications])
 
   const updateStatus = async (id: string, status: 'pending' | 'approved' | 'rejected') => {
+    // 화면이 보고 있던 상태를 함께 보낸다. 서버는 그 값이 아직 그대로일 때만
+    // 쓴다 — 관리자 둘이 거의 동시에 승인과 거부를 누를 때 나중 쓰기가 조용히
+    // 이기는 것을 막는다.
+    const expectedStatus = applications.find(app => app.id === id)?.status
     setUpdating(id)
     try {
       const res = await fetch('/api/admin/event-applications', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, status }),
+        body: JSON.stringify({ id, status, expected_status: expectedStatus }),
       })
+      if (res.status === 409) {
+        alert('다른 관리자가 먼저 처리했습니다. 목록을 새로고침합니다.')
+        await fetchApplications()
+        return
+      }
       if (!res.ok) throw new Error('업데이트 실패')
       setApplications(prev => prev.map(app => (app.id === id ? { ...app, status } : app)))
     } catch {

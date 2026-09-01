@@ -82,6 +82,16 @@ const StatusUpdateSchema = z.object({
   status: z.enum(EVENT_APPLICATION_STATUSES, {
     errorMap: () => ({ message: 'pending, approved, rejected 중 하나여야 합니다.' }),
   }),
+  /**
+   * 관리자가 화면에서 보고 있던 상태. 이 값이 아직 그대로일 때만 갱신한다
+   * (낙관적 잠금). 없으면 무조건 덮어쓰던 예전 동작 — 관리자 둘이 동시에
+   * 승인과 거부를 누르면 나중 쓰기가 이긴다.
+   */
+  expected_status: z
+    .enum(EVENT_APPLICATION_STATUSES, {
+      errorMap: () => ({ message: 'pending, approved, rejected 중 하나여야 합니다.' }),
+    })
+    .optional(),
 })
 
 const FieldUpdateSchema = z.object({
@@ -117,18 +127,28 @@ export const PATCH = defineApiRoute<Record<string, unknown>>({
       return ApiError.badRequest('id와 유효한 status가 필요합니다.').toNextResponse()
     }
 
-    const { id, status } = parsed.data
+    const { id, status, expected_status } = parsed.data
     const idValidation = validateUUID(id, '신청 ID')
     if (!idValidation.isValid) {
       return ApiError.badRequest('유효한 ID가 필요합니다.').toNextResponse()
     }
     const applicationId = idValidation.sanitized
 
+    let updated: boolean
     try {
-      await updateEventApplicationStatus(applicationId, status)
+      updated = await updateEventApplicationStatus(applicationId, status, expected_status)
     } catch (error) {
       console.error('[admin/event-applications] update error:', error)
       return ApiError.internalServerError('상태 업데이트에 실패했습니다.').toNextResponse()
+    }
+
+    // rowsAffected가 0이면 두 가지다: 신청이 사라졌거나, 그 사이 다른
+    // 관리자가 상태를 바꿨거나. 어느 쪽이든 화면이 낡았으니 새로고침을
+    // 요구한다 — 조용히 성공을 돌려주면 관리자는 자기 판단이 반영된 줄 안다.
+    if (!updated) {
+      return ApiError.conflict(
+        '다른 관리자가 먼저 처리했거나 신청이 삭제되었습니다. 목록을 새로고침해 주세요.'
+      ).toNextResponse()
     }
 
     return ApiSuccess.ok(

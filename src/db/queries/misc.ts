@@ -229,12 +229,30 @@ export async function listEventApplications(
   return { rows: rows.map(rowToEventApplication), total: totalRows[0]?.value ?? 0 }
 }
 
-/** 상태만 갱신. `admin/event-applications` PATCH 대체. */
-export async function updateEventApplicationStatus(id: string, status: string): Promise<void> {
-  await db
+/**
+ * 상태만 갱신. `admin/event-applications` PATCH 대체.
+ *
+ * **조건부 UPDATE + rowsAffected 판정이다.** `expectedStatus`를 넘기면 그 값이
+ * 아직 그대로일 때만 쓴다. 읽고-판단하고-쓰면 관리자 둘이 거의 동시에 승인과
+ * 거부를 누를 때 나중 쓰기가 그냥 이기고, 먼저 누른 쪽은 자기 판단이 반영된
+ * 줄 안다(`withdrawal.ts`의 `requestWithdrawal`이 같은 이유로 이 형태다).
+ *
+ * @returns 실제로 갱신했으면 true. false면 그 사이 다른 사람이 상태를 바꿨다.
+ */
+export async function updateEventApplicationStatus(
+  id: string,
+  status: string,
+  expectedStatus?: string
+): Promise<boolean> {
+  const conditions = [eq(eventApplications.id, id)]
+  if (expectedStatus !== undefined) {
+    conditions.push(eq(eventApplications.status, expectedStatus))
+  }
+  const result = await db
     .update(eventApplications)
     .set({ status, updatedAt: new Date() })
-    .where(eq(eventApplications.id, id))
+    .where(and(...conditions))
+  return result.rowsAffected > 0
 }
 
 export interface EventApplicationFieldPatch {

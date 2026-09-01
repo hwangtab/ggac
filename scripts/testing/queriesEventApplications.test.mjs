@@ -94,3 +94,63 @@ test('신청 기록이 아예 없으면 false를 돌려준다', async () => {
   const result = await hasEventApplicationForContact('evt-never-applied', '010-0000-0000')
   assert.equal(result, false)
 })
+
+// -------------------------------------------------- 상태 전이 낙관적 잠금
+//
+// 관리자 둘이 거의 동시에 승인과 거부를 누르면, 조건 없는 UPDATE에서는
+// 나중 쓰기가 그냥 이기고 먼저 누른 쪽은 자기 판단이 반영된 줄 안다.
+// `updateEventApplicationStatus`는 `expectedStatus`를 받아 그 값이 아직
+// 그대로일 때만 쓰고, 아니면 false를 돌려준다(라우트가 409로 바꾼다).
+
+test('expectedStatus가 맞으면 갱신하고 true를 돌려준다', async () => {
+  const { createEventApplication, updateEventApplicationStatus, listEventApplications } =
+    await loadFreshMiscModule()
+
+  const { id } = await createEventApplication(
+    makeApplication({ event_slug: 'evt-lock-1', contact_phone: '010-1000-0001' })
+  )
+
+  assert.equal(await updateEventApplicationStatus(id, 'approved', 'pending'), true)
+
+  const { rows } = await listEventApplications({ eventSlug: 'evt-lock-1', page: 1, limit: 10 })
+  assert.equal(rows[0].status, 'approved')
+})
+
+test('그 사이 다른 관리자가 상태를 바꿨으면 쓰지 않고 false를 돌려준다', async () => {
+  const { createEventApplication, updateEventApplicationStatus, listEventApplications } =
+    await loadFreshMiscModule()
+
+  const { id } = await createEventApplication(
+    makeApplication({ event_slug: 'evt-lock-2', contact_phone: '010-1000-0002' })
+  )
+
+  // 관리자 A가 먼저 승인했다.
+  assert.equal(await updateEventApplicationStatus(id, 'approved', 'pending'), true)
+
+  // 관리자 B는 아직 pending 화면을 보고 있다 — 거부를 누른다.
+  assert.equal(
+    await updateEventApplicationStatus(id, 'rejected', 'pending'),
+    false,
+    '낡은 기대 상태로는 쓰지 못해야 한다'
+  )
+
+  const { rows } = await listEventApplications({ eventSlug: 'evt-lock-2', page: 1, limit: 10 })
+  assert.equal(rows[0].status, 'approved', 'A의 승인이 살아 있어야 한다')
+})
+
+test('없는 신청이면 false다 (삭제된 뒤 누른 경우)', async () => {
+  const { updateEventApplicationStatus } = await loadFreshMiscModule()
+
+  const missing = '00000000-0000-4000-8000-0000000000ff'
+  assert.equal(await updateEventApplicationStatus(missing, 'approved', 'pending'), false)
+})
+
+test('expectedStatus를 생략하면 조건 없이 쓴다 (기존 호출부 호환)', async () => {
+  const { createEventApplication, updateEventApplicationStatus } = await loadFreshMiscModule()
+
+  const { id } = await createEventApplication(
+    makeApplication({ event_slug: 'evt-lock-3', contact_phone: '010-1000-0003' })
+  )
+
+  assert.equal(await updateEventApplicationStatus(id, 'rejected'), true)
+})

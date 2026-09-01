@@ -2789,7 +2789,14 @@ const validatesPostRouteIdsUseSanitizedUuid =
   // `updateEventApplicationFields(applicationId, updateData)`
   // (src/db/queries/misc.ts)로 바뀌었다. 이 라우트에는 Supabase 호출이 한 줄도
   // 남지 않았으므로 옛 패턴 분기는 죽은 코드였다(리뷰 1회차 Important 1).
-  /updateEventApplicationStatus\(applicationId,\s*status\)/.test(adminEventApplicationsApiSource) &&
+  // 2026-09-02: 3번째 인자 `expected_status`를 **요구한다**. 이 갱신은
+  // 낙관적 잠금이다 — 그 인자가 빠지면 조건 없는 덮어쓰기로 되돌아가고
+  // 관리자 둘이 동시에 누를 때 나중 쓰기가 조용히 이긴다. 예전 이 가드는
+  // `(applicationId, status)` 정확 매칭을 요구해서, 고치려면 가드부터
+  // 깨야 하는 상태로 버그를 붙들고 있었다.
+  /updateEventApplicationStatus\(\s*applicationId,\s*status,\s*expected_status\s*\)/.test(
+    adminEventApplicationsApiSource
+  ) &&
   /updateEventApplicationFields\(applicationId,\s*updateData\)/.test(
     adminEventApplicationsApiSource
   ) &&
