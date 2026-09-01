@@ -21,7 +21,11 @@ import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
 import { db } from '../client.ts'
 import { memberProfiles, user } from '../schema/index.ts'
 
-import type { ArtistRole, MembershipType, RegistrationStatus } from '../../constants/memberProfile.ts'
+import type {
+  ArtistRole,
+  MembershipType,
+  RegistrationStatus,
+} from '../../constants/memberProfile.ts'
 
 import { toCamelCase, toIso } from './_helpers.ts'
 import { profileCompletenessExpression } from './profileCompleteness.ts'
