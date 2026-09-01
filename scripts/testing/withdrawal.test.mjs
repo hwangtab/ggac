@@ -42,6 +42,15 @@ async function statusOf(client, id) {
   return result.rows[0]?.s
 }
 
+/** 신청 중인지를 타임스탬프로 판단한다(상태값이 아니다 — 0011 참조). */
+async function isRequested(client, id) {
+  const result = await client.execute({
+    sql: 'SELECT withdrawal_requested_at t FROM member_profiles WHERE id=?',
+    args: [id],
+  })
+  return result.rows[0]?.t != null
+}
+
 let setupClient
 
 before(async () => {
@@ -55,14 +64,26 @@ after(() => {
   for (const suffix of ['', '-wal', '-shm']) rmSync(`${DB_PATH}${suffix}`, { force: true })
 })
 
-test('탈퇴 상태 두 개가 상태 목록에 있다', async () => {
+test('탈퇴 확정 상태가 상태 목록에 있고, 신청은 더 이상 상태값이 아니다', async () => {
   const { REGISTRATION_STATUSES } = await import(CONSTANTS.href)
-  assert.ok(REGISTRATION_STATUSES.includes('withdrawal_requested'))
   assert.ok(REGISTRATION_STATUSES.includes('withdrawn'))
+  // 신청은 `withdrawal_requested_at` 타임스탬프로 표현한다(0011 참조) —
+  // 상태 목록에 별도 값을 두지 않는다. 두면 `isApprovedActive`를 비롯해
+  // `registration_status === 'approved'`를 직접 비교하는 저장소 전역(실측
+  // 36곳)이 신청자를 승인 조합원 판정에서 배제한다.
+  assert.ok(!REGISTRATION_STATUSES.includes('withdrawal_requested'))
   // 기존 값이 사라지면 승인·거부 흐름이 통째로 깨진다.
   for (const existing of ['pending', 'approved', 'rejected']) {
     assert.ok(REGISTRATION_STATUSES.includes(existing), `${existing}가 사라졌다`)
   }
+  // 정확히 4값이어야 한다 — 다섯 번째가 몰래 늘면(반대로 하나가 빠지면)
+  // 여기서 잡는다.
+  assert.deepEqual([...REGISTRATION_STATUSES].sort(), [
+    'approved',
+    'pending',
+    'rejected',
+    'withdrawn',
+  ])
 })
 
 test('자리표시자 이메일은 회원마다 다르고 실제 도메인이 아니다', async () => {
@@ -105,7 +126,7 @@ test('탐지기의 상태 목록이 앱 상수와 정확히 같다(양방향)', 
   )
 })
 
-test('신청·취소가 조건부 UPDATE로 승인↔신청 상태를 오가고, 다른 조합원은 건드리지 않는다', async () => {
+test('신청·취소가 조건부 UPDATE로 타임스탬프를 오가고, registration_status는 승인 그대로이며, 다른 조합원은 건드리지 않는다', async () => {
   // m1만 신청·취소를 거치고, m2는 승인 상태 그대로 남아야 한다 — id 술어가
   // 빠지면(리뷰 지적) 승인 상태 조합원 전원이 함께 바뀌는데, 조합원이 한 명뿐인
   // 픽스처로는 그 결함이 드러나지 않는다.
@@ -115,17 +136,23 @@ test('신청·취소가 조건부 UPDATE로 승인↔신청 상태를 오가고,
   const { requestWithdrawal, cancelWithdrawal } = await import(WITHDRAWAL_MODULE_URL.href)
 
   assert.equal(await requestWithdrawal('m1'), true)
-  assert.equal(await statusOf(setupClient, 'm1'), 'withdrawal_requested')
+  // 핵심 회귀 방지 — 신청해도 registration_status는 'approved' 그대로다.
+  // (여기서 'withdrawal_requested'로 바뀌면 isApprovedActive가 거짓이 되어
+  // 취소 API조차 부를 수 없는 결함으로 되돌아간다.)
+  assert.equal(await statusOf(setupClient, 'm1'), 'approved')
+  assert.equal(await isRequested(setupClient, 'm1'), true)
   assert.equal(await statusOf(setupClient, 'm2'), 'approved')
+  assert.equal(await isRequested(setupClient, 'm2'), false)
 
-  // 두 번째 신청은 이미 신청 상태라 false — 조건부 UPDATE의 rowsAffected 판정.
+  // 두 번째 신청은 이미 신청 중이라 false — 조건부 UPDATE의 rowsAffected 판정.
   assert.equal(await requestWithdrawal('m1'), false)
 
   assert.equal(await cancelWithdrawal('m1'), true)
   assert.equal(await statusOf(setupClient, 'm1'), 'approved')
+  assert.equal(await isRequested(setupClient, 'm1'), false)
   assert.equal(await statusOf(setupClient, 'm2'), 'approved')
 
-  // 승인 상태에서 또 취소하면 false
+  // 신청 중이 아닐 때 또 취소하면 false
   assert.equal(await cancelWithdrawal('m1'), false)
 })
 
@@ -161,10 +188,14 @@ const WITHDRAWAL_FIXTURE_TABLES = [
 /**
  * m1(탈퇴 대상)과 m2(관리자)를 심고, m1에게 네 갈래를 전부 붙인다 —
  * ① 신원·로그인 수단, ② 콘텐츠(글·댓글), ③ 로그, ④ 돈.
+ *
+ * 신청은 상태값이 아니라 타임스탬프다(0011 참조) — 그래서 `targetStatus`
+ * 대신 `targetRequested`(불리언)를 받는다. `registration_status`는 두
+ * 회원 다 항상 `'approved'`다.
  */
 async function seedWithdrawalFixture(
   client,
-  { targetStatus = 'withdrawal_requested', adminStatus = 'approved' } = {}
+  { targetRequested = true, adminRequested = false } = {}
 ) {
   for (const table of WITHDRAWAL_FIXTURE_TABLES) await client.execute(`DELETE FROM "${table}"`)
   const now = Date.now()
@@ -175,22 +206,22 @@ async function seedWithdrawalFixture(
     sql: `INSERT INTO member_profiles
             (id, email, display_name, real_name, phone_number, birth_date,
              bank_name, account_number, account_holder, monthly_fee,
-             registration_status, is_active, is_admin, is_member, is_artist,
+             registration_status, withdrawal_requested_at, is_active, is_admin, is_member, is_artist,
              is_director, is_auditor, is_suspended, suspension_reason, suspension_until,
              artist_role, artist_id, director_title, last_login_at, created_at, updated_at)
           VALUES ('m1', 'm1@example.test', '회원 m1', '홍길동', '010-1234-5678', '1990-01-01',
                   '국민은행', '110-1234-567890', '홍길동', 30000,
-                  ?, 1, 0, 1, 1,
+                  'approved', ?, 1, 0, 1, 1,
                   1, 1, 1, '경고 누적', ?,
                   'member', 'artist-014', '사무국장', ?, ?, ?)`,
-    args: [targetStatus, now, now, now, now],
+    args: [targetRequested ? now : null, now, now, now, now],
   })
   await client.execute({
     sql: `INSERT INTO member_profiles
-            (id, email, display_name, real_name, registration_status, is_active, is_admin,
-             created_at, updated_at)
-          VALUES ('m2', 'm2@example.test', '회원 m2', '김관리', ?, 1, 1, ?, ?)`,
-    args: [adminStatus, now, now],
+            (id, email, display_name, real_name, registration_status, withdrawal_requested_at,
+             is_active, is_admin, created_at, updated_at)
+          VALUES ('m2', 'm2@example.test', '회원 m2', '김관리', 'approved', ?, 1, 1, ?, ?)`,
+    args: [adminRequested ? now : null, now, now],
   })
 
   for (const id of ['m1', 'm2']) {
@@ -379,6 +410,8 @@ test('확정은 신원을 지우고 로그를 지우되 콘텐츠·조합 기록
   assert.equal(p.is_suspended, 0)
   assert.equal(p.verification_status, '{"email":false,"phone":false,"identity":false}')
   assert.ok(p.withdrawn_at > 0)
+  // 신청 타임스탬프는 확정되면 더 이상 의미가 없다 — 정리돼야 한다.
+  assert.equal(p.withdrawal_requested_at, null)
   // `artist_role`은 NOT NULL default 'owner'라 NULL로 둘 수 없다.
   assert.equal(p.artist_role, 'owner')
 
@@ -424,7 +457,7 @@ test('확정은 신원을 지우고 로그를 지우되 콘텐츠·조합 기록
 })
 
 test('신청하지 않은 회원은 확정되지 않는다', async () => {
-  await seedWithdrawalFixture(setupClient, { targetStatus: 'approved' })
+  await seedWithdrawalFixture(setupClient, { targetRequested: false })
 
   const { withdrawMember } = await import(WITHDRAWAL_MODULE_URL.href)
   assert.deepEqual(await withdrawMember('m1'), { ok: false, reason: 'not_requested' })
@@ -441,11 +474,17 @@ test('신청하지 않은 회원은 확정되지 않는다', async () => {
   assert.equal(await countOf(setupClient, 'billing_keys', "user_id='m1'"), 1)
 })
 
-test('마지막 관리자는 탈퇴 확정되지 않는다', async () => {
-  // 관리자는 m2 하나뿐이고, 그가 신청 상태다 — 확정하면 조합이 잠긴다.
+// ---------------------------------------------------------------- 마지막 관리자 차단 (경계 양쪽)
+//
+// 음성 통제: 조건식을 `> 1`(옛 방식)로 되돌리면 "본인 제외 관리자가 1명"인
+// 정상 케이스까지 막혀 아래 "0명 → 차단" 테스트는 그대로 통과하지만
+// "1명 → 허용" 테스트가 실패해야 한다 — 즉 이 두 테스트가 경계 양쪽을 덮는다.
+
+test('본인 제외 승인 관리자가 0명이면(마지막 관리자) 탈퇴가 차단된다', async () => {
+  // 관리자는 m2 하나뿐이고, 그가 신청 중이다 — 확정하면 조합이 잠긴다.
   await seedWithdrawalFixture(setupClient, {
-    targetStatus: 'approved',
-    adminStatus: 'withdrawal_requested',
+    targetRequested: true,
+    adminRequested: true,
   })
 
   const { withdrawMember } = await import(WITHDRAWAL_MODULE_URL.href)
@@ -456,14 +495,16 @@ test('마지막 관리자는 탈퇴 확정되지 않는다', async () => {
   assert.equal(p.a, 1, '관리자 권한이 남아 있어야 한다')
 })
 
-test('다른 승인 관리자가 1명 남아 있으면 관리자도 탈퇴 확정된다', async () => {
-  // 신청자 본인(m2)은 이 시점에 registration_status가 'withdrawal_requested'라
-  // approved 집계에서 스스로 빠진다 — 그래서 "본인 말고 승인 관리자 1명(m3)"만
-  // 있어도 탈퇴 후 관리자가 1명(m3) 남으므로 허용돼야 한다. `> 1`로 잘못
-  // 쓰면 이 경우가 부당하게 차단된다(회귀 대상).
+test('본인 제외 승인 관리자가 1명 남아 있으면 관리자도 탈퇴 확정된다', async () => {
+  // 신청이 이제 타임스탬프라 신청자 본인(m2)의 registration_status는 이
+  // 시점에도 여전히 'approved'다 — 그래서 확정 쿼리의 count는 **자신을
+  // 명시적으로 뺀(`id != userId`) "본인 제외 승인 관리자 수"다. "본인 말고
+  // 승인 관리자 1명(m3)"만 있어도 탈퇴 후 관리자가 1명(m3) 남으므로
+  // 허용돼야 한다. `> 1`로 잘못 쓰거나 자신을 빼지 않으면 이 경우가 부당하게
+  // 차단된다(회귀 대상 — 위 테스트와 짝을 이루는 경계 반대쪽).
   await seedWithdrawalFixture(setupClient, {
-    targetStatus: 'approved',
-    adminStatus: 'withdrawal_requested',
+    targetRequested: true,
+    adminRequested: true,
   })
   const now = Date.now()
   await setupClient.execute({
@@ -511,10 +552,11 @@ test('개인정보가 남으면 던지고 전부 롤백된다', async () => {
 
   const p = (
     await setupClient.execute(
-      "SELECT registration_status s, real_name r, email e FROM member_profiles WHERE id='m1'"
+      "SELECT registration_status s, withdrawal_requested_at t, real_name r, email e FROM member_profiles WHERE id='m1'"
     )
   ).rows[0]
-  assert.equal(p.s, 'withdrawal_requested', '상태가 롤백돼야 한다')
+  assert.equal(p.s, 'approved', '상태가 롤백돼야 한다')
+  assert.notEqual(p.t, null, '신청 타임스탬프가 롤백돼야 한다(지워지면 안 된다)')
   assert.notEqual(p.r, null, '개인정보가 롤백돼야 한다')
   assert.equal(p.e, 'm1@example.test', '이메일이 롤백돼야 한다')
   assert.ok(

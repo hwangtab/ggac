@@ -13,6 +13,12 @@ export interface VerifiedSessionProfile {
   artist_id?: string | null
   is_director?: boolean | null
   is_auditor?: boolean | null
+  /**
+   * 탈퇴 신청 시각. `registration_status`는 신청 중에도 `'approved'`로
+   * 남으므로(0011 참조), 마이페이지 설정 화면은 이 필드로 신청/취소 버튼을
+   * 가른다.
+   */
+  withdrawal_requested_at?: string | null
 }
 
 export interface VerifiedSession {

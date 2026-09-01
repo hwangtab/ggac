@@ -26,7 +26,12 @@ interface Member {
   real_name?: string
   created_at: string
   updated_at: string
-  registration_status: 'pending' | 'approved' | 'rejected' | 'withdrawal_requested' | 'withdrawn'
+  registration_status: 'pending' | 'approved' | 'rejected' | 'withdrawn'
+  /**
+   * 탈퇴 신청 시각. `registration_status`는 신청 중에도 `'approved'`로
+   * 남으므로(0011 참조), 화면은 이 필드로 "탈퇴 신청됨" 상태를 판단한다.
+   */
+  withdrawal_requested_at?: string | null
   is_active: boolean
   is_admin: boolean
   is_director: boolean
@@ -157,6 +162,13 @@ export default function MemberDetailModal({
   }
 
   if (!isOpen) return null
+
+  // `registration_status`는 탈퇴 신청 중에도 'approved'로 남는다(0011 참조) —
+  // 화면 판정은 이 파생값으로 한다. `getStatusColor`/`getStatusText`가 받는
+  // "표시용 상태" 문자열도 이 값을 기준으로 만든다.
+  const isWithdrawalRequested =
+    member.registration_status === 'approved' && !!member.withdrawal_requested_at
+  const displayStatus = isWithdrawalRequested ? 'withdrawal_requested' : member.registration_status
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -295,9 +307,9 @@ export default function MemberDetailModal({
                   </h3>
                   <div className="flex flex-wrap gap-1 sm:gap-2 mt-1">
                     <span
-                      className={`px-2 py-1 text-xs font-medium rounded-full whitespace-nowrap ${getStatusColor(member.registration_status)}`}
+                      className={`px-2 py-1 text-xs font-medium rounded-full whitespace-nowrap ${getStatusColor(displayStatus)}`}
                     >
-                      {getStatusText(member.registration_status)}
+                      {getStatusText(displayStatus)}
                     </span>
                     {member.is_artist && (
                       <span className="px-2 py-1 text-xs font-medium bg-purple-100 text-purple-800 rounded-full whitespace-nowrap">
@@ -635,7 +647,7 @@ export default function MemberDetailModal({
             </>
           )}
 
-          {member.registration_status === 'approved' && (
+          {member.registration_status === 'approved' && !isWithdrawalRequested && (
             <>
               <button
                 onClick={() => handleAction(member.is_active ? 'deactivate' : 'activate')}
@@ -669,7 +681,7 @@ export default function MemberDetailModal({
             </>
           )}
 
-          {member.registration_status === 'withdrawal_requested' && (
+          {isWithdrawalRequested && (
             /* 되돌릴 수 없는 조작이라 이름을 그대로 입력해야 실행할 수 있게 한다.
                저장소의 다른 위험한 조작과 같은 방식이다. */
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">

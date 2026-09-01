@@ -86,15 +86,12 @@ export const CHECK_INVARIANTS = [
   {
     constraint: 'member_profiles_registration_status_check',
     table: 'member_profiles',
-    // 탈퇴 상태 둘을 더했다. 앱의 `REGISTRATION_STATUSES`(정본)와 같아야 한다 —
-    // 어긋나면 정상 데이터를 위반으로 보고하거나 그 반대가 된다.
-    where: notIn('registration_status', [
-      'pending',
-      'approved',
-      'rejected',
-      'withdrawal_requested',
-      'withdrawn',
-    ]),
+    // `withdrawn`을 더했다. 앱의 `REGISTRATION_STATUSES`(정본)와 같아야 한다 —
+    // 어긋나면 정상 데이터를 위반으로 보고하거나 그 반대가 된다. 탈퇴 "신청"은
+    // 상태값이 아니라 `withdrawal_requested_at` 타임스탬프로 표현한다
+    // (`0011_add_withdrawal_requested_at.sql` 참조) — 신청 중에도
+    // `registration_status`는 `'approved'`로 남는다.
+    where: notIn('registration_status', ['pending', 'approved', 'rejected', 'withdrawn']),
   },
   {
     constraint: 'member_profiles_membership_type_check',

@@ -76,9 +76,10 @@ const PG_ARTIST = {
   template_type_en: null,
 }
 
-test('조합원 프로필은 34개 컬럼을 전부 낸다', () => {
-  // 0010에서 withdrawn_at이 늘어 33 → 34.
-  assert.equal(Object.keys(toMemberProfileRow(PG_PROFILE)).length, 34)
+test('조합원 프로필은 35개 컬럼을 전부 낸다', () => {
+  // 0010에서 withdrawn_at이 늘어 33 → 34, 0011에서 withdrawal_requested_at이
+  // 늘어 34 → 35.
+  assert.equal(Object.keys(toMemberProfileRow(PG_PROFILE)).length, 35)
 })
 
 test('가입 폼 7개 필드를 그대로 옮긴다', () => {

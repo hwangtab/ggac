@@ -175,5 +175,8 @@ export function toMemberProfileRow(p) {
     // 0010에서 신설된 컬럼. 이관 대상 Supabase 데이터에는 애초에 없던 값이고,
     // 이관 시점(탈퇴 기능 이전)엔 탈퇴자가 있을 수 없으므로 NULL이 맞다.
     withdrawn_at: null,
+    // 0011에서 신설된 컬럼. 같은 이유로 NULL — 이관 시점엔 탈퇴 "신청"
+    // 개념 자체가 없었다.
+    withdrawal_requested_at: null,
   }
 }

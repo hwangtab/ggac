@@ -63,6 +63,12 @@ interface Member {
   engagement_score: number
   approved_by?: string
   rejected_by?: string
+  /**
+   * 탈퇴 신청 시각. `registration_status`는 신청 중에도 `'approved'`로
+   * 남으므로(0011 참조), `MemberDetailModal`이 이 필드로 신청 상태를
+   * 판단한다.
+   */
+  withdrawal_requested_at?: string | null
 }
 
 /** `/api/admin/members/orphans`가 돌려주는 프로필 없는 계정. */

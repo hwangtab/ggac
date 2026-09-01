@@ -84,13 +84,7 @@ export type MembershipType = (typeof MEMBERSHIP_TYPES)[number]
  * 운영 데이터를 매일 확인한다 — 둘이 어긋나면 탐지기가 정상 데이터를 위반으로
  * 보고하거나 그 반대가 된다.
  */
-export const REGISTRATION_STATUSES = [
-  'pending',
-  'approved',
-  'rejected',
-  'withdrawal_requested',
-  'withdrawn',
-] as const
+export const REGISTRATION_STATUSES = ['pending', 'approved', 'rejected', 'withdrawn'] as const
 export type RegistrationStatus = (typeof REGISTRATION_STATUSES)[number]
 
 /** 탈퇴 확정 후 화면에 찍히는 이름. 콘텐츠는 남고 작성자만 이것으로 바뀐다. */

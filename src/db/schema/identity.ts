@@ -58,9 +58,19 @@ export const memberProfiles = sqliteTable(
     isAuditor: integer('is_auditor', { mode: 'boolean' }).notNull().default(false),
     /**
      * 탈퇴가 확정된 시각. `registration_status = 'withdrawn'`인 행에만 있다.
-     * 신청 단계(`withdrawal_requested`)에서는 아직 NULL이다.
+     * 신청 단계에서는 아직 NULL이다.
      */
     withdrawnAt: integer('withdrawn_at', { mode: 'timestamp_ms' }),
+    /**
+     * 탈퇴를 "신청"한 시각. **상태값이 아니라 타임스탬프다** — 신청 중에도
+     * `registrationStatus`는 `'approved'` 그대로 두고 이 컬럼만 채운다.
+     * `isApprovedActive`를 비롯해 저장소 곳곳(실측 36곳)이
+     * `registration_status === 'approved'`를 직접 비교하므로, 신청을 별도
+     * 상태값으로 표현하면 그 36곳이 신청자를 승인 조합원 판정에서 배제한다
+     * (`0011_add_withdrawal_requested_at.sql` 참조). NULL이면 미신청, 값이
+     * 있으면 신청 중, 확정되면(`withdrawMember`) 다시 NULL로 되돌린다.
+     */
+    withdrawalRequestedAt: integer('withdrawal_requested_at', { mode: 'timestamp_ms' }),
   },
   // Postgres 원본도 email에 UNIQUE 제약이 있다(20250106090010_init_member_profiles.sql:18).
   table => [

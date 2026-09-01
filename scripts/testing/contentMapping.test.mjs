@@ -256,9 +256,10 @@ test('toNotificationRow: 11개 컬럼을 낸다', () => {
 
 // ---------------------------------------------------------------- member_profiles 재사용
 
-test('toMemberProfileRow는 identityMapping.mjs 것을 재사용한다 (34컬럼)', () => {
-  // 0010에서 withdrawn_at이 늘어 33 → 34.
-  assert.equal(Object.keys(toMemberProfileRow(PG_PROFILE)).length, 34)
+test('toMemberProfileRow는 identityMapping.mjs 것을 재사용한다 (35컬럼)', () => {
+  // 0010에서 withdrawn_at이 늘어 33 → 34, 0011에서 withdrawal_requested_at이
+  // 늘어 34 → 35.
+  assert.equal(Object.keys(toMemberProfileRow(PG_PROFILE)).length, 35)
 })
 
 // ---------------------------------------------------------------- content.mjs: 로더 통합

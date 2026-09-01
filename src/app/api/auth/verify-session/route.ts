@@ -66,6 +66,7 @@ export async function GET() {
         artist_id: profile.artist_id,
         is_director: profile.is_director,
         is_auditor: profile.is_auditor,
+        withdrawal_requested_at: profile.withdrawal_requested_at,
       },
     }).toNextResponse()
   } catch (error) {

@@ -26,6 +26,12 @@ import {
 /**
  * 탈퇴를 신청한다. 승인 상태인 조합원만 신청할 수 있다.
  *
+ * **상태값을 바꾸지 않는다.** `withdrawal_requested_at`만 채운다 —
+ * `registration_status`는 신청 중에도 `'approved'` 그대로다. 상태를 바꾸면
+ * `isApprovedActive`를 비롯해 이 값을 직접 비교하는 저장소 전역(실측 36곳)이
+ * 신청자를 승인 조합원 판정에서 배제해, 취소 API조차 부를 수 없게 되는
+ * 결함이 있었다(`0011_add_withdrawal_requested_at.sql` 참조).
+ *
  * **조건부 UPDATE + rowsAffected 판정이다.** 읽고-판단하고-쓰면 관리자와 회원이
  * 동시에 상태를 바꿀 때 어긋난다 — 같은 저장소의 승인/거부가 그 방식이라
  * 관리자 둘이 동시에 누르면 승인 알림과 거부 알림이 둘 다 가는 경합이 실재한다.
@@ -33,21 +39,24 @@ import {
 export async function requestWithdrawal(userId: string): Promise<boolean> {
   const result = await db
     .update(memberProfiles)
-    .set({ registrationStatus: 'withdrawal_requested' })
-    .where(and(eq(memberProfiles.id, userId), eq(memberProfiles.registrationStatus, 'approved')))
-  return (result.rowsAffected ?? 0) > 0
-}
-
-/** 신청을 취소해 승인 상태로 되돌린다. 신청 상태에서만 된다. */
-export async function cancelWithdrawal(userId: string): Promise<boolean> {
-  const result = await db
-    .update(memberProfiles)
-    .set({ registrationStatus: 'approved' })
+    .set({ withdrawalRequestedAt: new Date() })
     .where(
       and(
         eq(memberProfiles.id, userId),
-        eq(memberProfiles.registrationStatus, 'withdrawal_requested')
+        eq(memberProfiles.registrationStatus, 'approved'),
+        sql`${memberProfiles.withdrawalRequestedAt} IS NULL`
       )
+    )
+  return (result.rowsAffected ?? 0) > 0
+}
+
+/** 신청을 취소한다. 신청 중(타임스탬프가 있는 상태)에서만 된다. */
+export async function cancelWithdrawal(userId: string): Promise<boolean> {
+  const result = await db
+    .update(memberProfiles)
+    .set({ withdrawalRequestedAt: null })
+    .where(
+      and(eq(memberProfiles.id, userId), sql`${memberProfiles.withdrawalRequestedAt} IS NOT NULL`)
     )
   return (result.rowsAffected ?? 0) > 0
 }
@@ -103,6 +112,8 @@ export async function withdrawMember(userId: string): Promise<WithdrawOutcome> {
       .set({
         registrationStatus: 'withdrawn',
         withdrawnAt: new Date(),
+        // 신청 타임스탬프는 확정되면 더 이상 의미가 없다 — 정리해 둔다.
+        withdrawalRequestedAt: null,
         displayName: WITHDRAWN_DISPLAY_NAME,
         email: withdrawnEmailFor(userId),
         ...PII_NULL_FIELDS,
@@ -125,28 +136,41 @@ export async function withdrawMember(userId: string): Promise<WithdrawOutcome> {
       .where(
         and(
           eq(memberProfiles.id, userId),
-          eq(memberProfiles.registrationStatus, 'withdrawal_requested'),
+          eq(memberProfiles.registrationStatus, 'approved'),
+          sql`${memberProfiles.withdrawalRequestedAt} IS NOT NULL`,
           // 마지막 관리자를 내보내면 조합이 잠긴다.
-          // 신청자 본인은 이 시점에 registration_status가 이미
-          // 'withdrawal_requested'로 바뀌어 있어 approved 집계에서
-          // 저절로 빠진다. 즉 이 count는 "본인을 제외한" 승인 관리자 수다 —
-          // 그래서 "탈퇴 후에도 관리자가 1명 남는다"는 count > 0이지 count > 1이
-          // 아니다(> 1로 쓰면 본인 말고 2명이 더 있어야 통과해, 관리자가 정상
-          // 1명 남는 탈퇴까지 막는다).
-          sql`((SELECT count(*) FROM ${memberProfiles} WHERE is_admin = 1 AND registration_status = 'approved') > 0
+          //
+          // 신청이 이제 상태값이 아니라 타임스탬프라, 신청자 본인은 이
+          // 시점에도 registration_status가 여전히 'approved'다 — 그래서
+          // 아래 count는 **자기 자신을 명시적으로 빼야** "본인 말고 남는
+          // 승인 관리자 수"가 된다(`id != userId`). 빼지 않으면 본인이 항상
+          // 집계에 잡혀 count가 실제보다 1 많아지고, "본인 포함 관리자
+          // 1명"인 흔한 경우(본인이 유일한 관리자)조차 count > 0이 참이
+          // 되어 마지막 관리자 차단이 무력화된다 — 그 값이 항상 참이 되는
+          // 결함이 바로 이번에 고치는 대상이다.
+          //
+          // `id != userId`로 자신을 뺀 뒤에는 "본인 제외 승인 관리자가
+          // 1명 이상"이 정확히 "탈퇴해도 관리자가 남는다"는 뜻이므로
+          // count > 0이 맞다(> 1로 쓰면 본인 말고 2명이 더 있어야 통과해,
+          // 관리자가 정상적으로 1명 남는 탈퇴까지 막는다).
+          sql`((SELECT count(*) FROM ${memberProfiles} WHERE is_admin = 1 AND registration_status = 'approved' AND id != ${userId}) > 0
               OR (SELECT is_admin FROM ${memberProfiles} WHERE id = ${userId}) = 0)`
         )
       )
 
     if ((claimed.rowsAffected ?? 0) === 0) {
-      // 신청 상태가 아니거나 마지막 관리자다. 둘을 구분해 호출부가 다른 메시지를
+      // 신청 중이 아니거나 마지막 관리자다. 둘을 구분해 호출부가 다른 메시지를
       // 줄 수 있게 한다.
       const [row] = await tx
-        .select({ status: memberProfiles.registrationStatus, isAdmin: memberProfiles.isAdmin })
+        .select({
+          status: memberProfiles.registrationStatus,
+          requestedAt: memberProfiles.withdrawalRequestedAt,
+          isAdmin: memberProfiles.isAdmin,
+        })
         .from(memberProfiles)
         .where(eq(memberProfiles.id, userId))
-      const reason =
-        row?.status === 'withdrawal_requested' && row.isAdmin ? 'last_admin' : 'not_requested'
+      const wasRequested = row?.status === 'approved' && row.requestedAt != null
+      const reason = wasRequested && row?.isAdmin ? 'last_admin' : 'not_requested'
       return { ok: false, reason }
     }
 

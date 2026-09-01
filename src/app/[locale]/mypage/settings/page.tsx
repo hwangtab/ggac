@@ -35,7 +35,11 @@ export default function MypageSettingsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string | null>(null)
   // 탈퇴 신청·취소 영역 상태. 설정 탭 데이터와는 별개로 세션 프로필에서 온다.
-  const [registrationStatus, setRegistrationStatus] = useState<string | null>(null)
+  //
+  // `registration_status`는 신청 중에도 'approved'로 남는다(0011 참조) —
+  // 그래서 신청 여부는 별도 타임스탬프로 든다. `null`이면 미신청, 값이 있으면
+  // 신청 중이다.
+  const [withdrawalRequestedAt, setWithdrawalRequestedAt] = useState<string | null>(null)
   const [withdrawalSubmitting, setWithdrawalSubmitting] = useState(false)
 
   const tabs: SettingsTab[] = [
@@ -150,7 +154,7 @@ export default function MypageSettingsPage() {
 
   useEffect(() => {
     fetchSessionProfile().then(session => {
-      setRegistrationStatus(session.profile?.registration_status ?? null)
+      setWithdrawalRequestedAt(session.profile?.withdrawal_requested_at ?? null)
     })
   }, [])
 
@@ -173,8 +177,10 @@ export default function MypageSettingsPage() {
         alert(result?.error || '탈퇴 신청에 실패했습니다.')
         return
       }
-      setRegistrationStatus(result.data?.status ?? 'withdrawal_requested')
-      await refreshSessionProfile()
+      // 서버는 정확한 타임스탬프를 응답에 싣지 않는다(경합 시 실제로 쓰인
+      // 값과 다를 수 있어서) — 강제 재조회로 권위 있는 값을 가져온다.
+      const session = await refreshSessionProfile()
+      setWithdrawalRequestedAt(session.profile?.withdrawal_requested_at ?? null)
       alert(result.message || '탈퇴 신청이 접수되었습니다.')
     } catch {
       alert('네트워크 오류로 신청하지 못했습니다. 연결을 확인하고 다시 시도해주세요.')
@@ -194,8 +200,8 @@ export default function MypageSettingsPage() {
         alert(result?.error || '탈퇴 신청 취소에 실패했습니다.')
         return
       }
-      setRegistrationStatus(result.data?.status ?? 'approved')
-      await refreshSessionProfile()
+      const session = await refreshSessionProfile()
+      setWithdrawalRequestedAt(session.profile?.withdrawal_requested_at ?? null)
       alert(result.message || '탈퇴 신청을 취소했습니다.')
     } catch {
       alert('네트워크 오류로 취소하지 못했습니다. 연결을 확인하고 다시 시도해주세요.')
@@ -279,9 +285,10 @@ export default function MypageSettingsPage() {
             <li>조합비 납부 기록은 법령에 따라 보존됩니다.</li>
             <li>자동결제가 등록되어 있으면 해지됩니다.</li>
           </ul>
-          {/* 신청/취소 버튼 — 현재 registration_status에 따라 하나만 보인다 */}
+          {/* 신청/취소 버튼 — registration_status는 신청 중에도 'approved'로
+              남으므로(0011 참조) withdrawalRequestedAt으로 하나만 고른다 */}
           <div className="mt-4">
-            {registrationStatus === 'approved' && (
+            {!withdrawalRequestedAt && (
               <button
                 type="button"
                 onClick={handleWithdrawalRequest}
@@ -291,7 +298,7 @@ export default function MypageSettingsPage() {
                 {withdrawalSubmitting ? '처리 중...' : '탈퇴 신청'}
               </button>
             )}
-            {registrationStatus === 'withdrawal_requested' && (
+            {withdrawalRequestedAt && (
               <div className="space-y-2">
                 <p className="text-sm text-amber-700">
                   탈퇴 신청이 접수되어 관리자 확인을 기다리고 있습니다.

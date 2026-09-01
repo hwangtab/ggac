@@ -252,7 +252,7 @@ function extractObjectLiteralKeys(source, startMarker) {
   return keys
 }
 
-test('admin/members 목록 응답은 정확히 29개 필드로 좁힌다 (Member 인터페이스와 1:1, 키 하나라도 빠지면 실패)', () => {
+test('admin/members 목록 응답은 정확히 30개 필드로 좁힌다 (Member 인터페이스와 1:1, 키 하나라도 빠지면 실패)', () => {
   const src = readFileSync(ROUTE_FILES.adminMembersList, 'utf8')
   const keys = extractObjectLiteralKeys(src, 'const members = rows.map(row => (')
 
@@ -286,13 +286,16 @@ test('admin/members 목록 응답은 정확히 29개 필드로 좁힌다 (Member
     'engagement_score',
     'approved_by',
     'rejected_by',
+    // 0011에서 늘었다 — registration_status는 탈퇴 신청 중에도 'approved'로
+    // 남으므로, MemberDetailModal이 신청 상태를 판단하려면 이 필드가 필요하다.
+    'withdrawal_requested_at',
   ]
 
-  assert.equal(expected.length, 29, '기대 키 목록 자체가 29개여야 한다(오타 방지)')
+  assert.equal(expected.length, 30, '기대 키 목록 자체가 30개여야 한다(오타 방지)')
   assert.deepEqual(
     keys.sort(),
     [...expected].sort(),
-    'admin/members 응답 키 집합이 admin/members/page.tsx의 Member 인터페이스(29개)와 어긋난다'
+    'admin/members 응답 키 집합이 admin/members/page.tsx의 Member 인터페이스(30개)와 어긋난다'
   )
 })
 
