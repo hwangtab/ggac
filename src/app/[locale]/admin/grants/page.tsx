@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import AdminLayout from '../components/AdminLayout'
 
 type GrantItem = {
@@ -72,11 +72,25 @@ function dDayLabel(applyEnd: string | null): string {
 export default function AdminGrantsPage() {
   const [summaries, setSummaries] = useState<DigestSummary[]>([])
   const [selected, setSelected] = useState<Digest | null>(null)
+  // 서버와 마지막으로 동기화된 items 스냅샷. openDigest가 회차를 불러올 때와
+  // saveItems가 성공해 서버 응답을 받을 때만 갱신한다 — toggleExcluded는 여기를
+  // 절대 안 건드린다. selected.items와 이 스냅샷을 비교해 dirty(미저장 변경)를
+  // 판정하고, dirty면 발행을 막는다. 자동 저장으로 때우지 않는 이유: 관리자가
+  // 실수로 푼 체크를 조용히 확정해 버리면 안 된다 — 발행은 회수 불가 동작이다.
+  const [savedItems, setSavedItems] = useState<GrantItem[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<string | null>(null)
+
+  const dirty = useMemo(() => {
+    if (!selected || !savedItems) return false
+    if (selected.items.length !== savedItems.length) return true
+    return selected.items.some(
+      (it, idx) => Boolean(it.excluded) !== Boolean(savedItems[idx]?.excluded)
+    )
+  }, [selected, savedItems])
 
   const loadList = useCallback(async () => {
     setLoading(true)
@@ -105,9 +119,16 @@ export default function AdminGrantsPage() {
       const json = await res.json()
       if (!res.ok) throw new Error(json?.error?.message ?? '회차를 불러오지 못했습니다.')
       setSelected(json.data.digest)
+      setSavedItems(json.data.digest.items)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
+  }
+
+  function closeModal() {
+    if (dirty && !window.confirm('저장하지 않은 변경이 있습니다. 닫으면 사라집니다.')) return
+    setSelected(null)
+    setSavedItems(null)
   }
 
   function toggleExcluded(key: string) {
@@ -131,6 +152,7 @@ export default function AdminGrantsPage() {
       const json = await res.json()
       if (!res.ok) throw new Error(json?.error?.message ?? '저장하지 못했습니다.')
       setSelected(json.data.digest)
+      setSavedItems(json.data.digest.items)
       setResult('저장했습니다.')
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -141,6 +163,10 @@ export default function AdminGrantsPage() {
 
   async function publish() {
     if (!selected) return
+    if (dirty) {
+      setError('저장하지 않은 변경이 있습니다. 저장한 뒤에 발행할 수 있습니다.')
+      return
+    }
     const active = selected.items.filter(i => !i.excluded).length
     const ok = window.confirm(
       `조합원 전원에게 게시글·알림·이메일이 나갑니다 (공고 ${active}건).\n` +
@@ -160,6 +186,7 @@ export default function AdminGrantsPage() {
           (d.notification_failed ? ' (알림 생성 실패 — 로그 확인 필요)' : '')
       )
       setSelected(null)
+      setSavedItems(null)
       await loadList()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -222,7 +249,7 @@ export default function AdminGrantsPage() {
               <h2 className="text-lg font-bold">
                 {selected.week_key} · 공고 {selected.items.filter(i => !i.excluded).length}건
               </h2>
-              <button type="button" onClick={() => setSelected(null)} className="text-gray-400">
+              <button type="button" onClick={closeModal} className="text-gray-400">
                 닫기
               </button>
             </div>
@@ -273,23 +300,30 @@ export default function AdminGrantsPage() {
             </ul>
 
             {selected.status === 'draft' ? (
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => void saveItems()}
-                  disabled={saving}
-                  className="rounded border px-4 py-2 disabled:opacity-50"
-                >
-                  {saving ? '저장 중…' : '저장'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void publish()}
-                  disabled={publishing}
-                  className="rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50"
-                >
-                  {publishing ? '발행 중…' : '발행'}
-                </button>
+              <div className="flex flex-col items-end gap-2">
+                {dirty && (
+                  <p className="text-sm text-amber-600">
+                    저장하지 않은 변경이 있습니다. 저장한 뒤에 발행할 수 있습니다.
+                  </p>
+                )}
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void saveItems()}
+                    disabled={saving}
+                    className="rounded border px-4 py-2 disabled:opacity-50"
+                  >
+                    {saving ? '저장 중…' : '저장'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void publish()}
+                    disabled={publishing || dirty}
+                    className="rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50"
+                  >
+                    {publishing ? '발행 중…' : '발행'}
+                  </button>
+                </div>
               </div>
             ) : (
               <p className="text-right text-sm text-gray-500">
