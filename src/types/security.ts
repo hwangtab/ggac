@@ -93,6 +93,9 @@ export type SecurityEventType =
   | 'INVALID_MEMBER_ACTION'
   | 'MEMBER_STATUS_CHANGED'
   | 'INVALID_MEMBER_SEARCH'
+  // 탈퇴 확정 후 토스 빌링키 해지 실패 — 탈퇴 자체는 유효하다(우리 쪽
+  // 결제 수단은 이미 지웠다), 다만 토스 쪽에 키가 남았을 수 있어 감사한다.
+  | 'BILLING_KEY_REVOKE_FAILED'
 
   // 대량 작업 이벤트
   | 'INVALID_BULK_OPERATION'

@@ -11,6 +11,7 @@ import SecuritySettings from './components/SecuritySettings'
 import PreferenceSettings from './components/PreferenceSettings'
 import { FiSettings, FiBell, FiShield, FiMonitor, FiLock, FiUser } from 'react-icons/fi'
 import type { SettingCategory, SettingWithDefault } from '@/types/index'
+import { fetchSessionProfile, refreshSessionProfile } from '@/utils/sessionProfile'
 
 interface SettingsTab {
   id: SettingCategory
@@ -33,6 +34,13 @@ export default function MypageSettingsPage() {
   })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string | null>(null)
+  // 탈퇴 신청·취소 영역 상태. 설정 탭 데이터와는 별개로 세션 프로필에서 온다.
+  //
+  // `registration_status`는 신청 중에도 'approved'로 남는다(0011 참조) —
+  // 그래서 신청 여부는 별도 타임스탬프로 든다. `null`이면 미신청, 값이 있으면
+  // 신청 중이다.
+  const [withdrawalRequestedAt, setWithdrawalRequestedAt] = useState<string | null>(null)
+  const [withdrawalSubmitting, setWithdrawalSubmitting] = useState(false)
 
   const tabs: SettingsTab[] = [
     {
@@ -144,6 +152,64 @@ export default function MypageSettingsPage() {
     fetchSettings()
   }, [])
 
+  useEffect(() => {
+    fetchSessionProfile().then(session => {
+      setWithdrawalRequestedAt(session.profile?.withdrawal_requested_at ?? null)
+    })
+  }, [])
+
+  // 탈퇴 신청. `fetch`는 네트워크가 끊기면 reject하므로 try/finally 없이
+  // 제출 상태를 관리하면 버튼이 영구히 잠긴다(EditPageClient.tsx가 겪은 버그).
+  const handleWithdrawalRequest = async () => {
+    if (withdrawalSubmitting) return
+    if (
+      !confirm(
+        '탈퇴를 신청하시겠습니까? 관리자 확인 후 처리되며, 확인 전까지는 신청을 취소할 수 있습니다.'
+      )
+    ) {
+      return
+    }
+    setWithdrawalSubmitting(true)
+    try {
+      const response = await fetch('/api/mypage/withdrawal', { method: 'POST' })
+      const result = await response.json().catch(() => null)
+      if (!response.ok || !result?.success) {
+        alert(result?.error || '탈퇴 신청에 실패했습니다.')
+        return
+      }
+      // 서버는 정확한 타임스탬프를 응답에 싣지 않는다(경합 시 실제로 쓰인
+      // 값과 다를 수 있어서) — 강제 재조회로 권위 있는 값을 가져온다.
+      const session = await refreshSessionProfile()
+      setWithdrawalRequestedAt(session.profile?.withdrawal_requested_at ?? null)
+      alert(result.message || '탈퇴 신청이 접수되었습니다.')
+    } catch {
+      alert('네트워크 오류로 신청하지 못했습니다. 연결을 확인하고 다시 시도해주세요.')
+    } finally {
+      setWithdrawalSubmitting(false)
+    }
+  }
+
+  // 탈퇴 신청 취소.
+  const handleWithdrawalCancel = async () => {
+    if (withdrawalSubmitting) return
+    setWithdrawalSubmitting(true)
+    try {
+      const response = await fetch('/api/mypage/withdrawal', { method: 'DELETE' })
+      const result = await response.json().catch(() => null)
+      if (!response.ok || !result?.success) {
+        alert(result?.error || '탈퇴 신청 취소에 실패했습니다.')
+        return
+      }
+      const session = await refreshSessionProfile()
+      setWithdrawalRequestedAt(session.profile?.withdrawal_requested_at ?? null)
+      alert(result.message || '탈퇴 신청을 취소했습니다.')
+    } catch {
+      alert('네트워크 오류로 취소하지 못했습니다. 연결을 확인하고 다시 시도해주세요.')
+    } finally {
+      setWithdrawalSubmitting(false)
+    }
+  }
+
   const ActiveComponent = tabs.find(tab => tab.id === activeTab)?.component
 
   return (
@@ -206,6 +272,49 @@ export default function MypageSettingsPage() {
             </div>
           )}
         </div>
+
+        {/* 탈퇴는 되돌릴 수 없으므로 무엇이 사라지고 무엇이 남는지 미리 밝힌다. */}
+        <section className="mt-12 border-t border-gray-200 pt-8">
+          <h2 className="text-lg font-semibold text-gray-900">조합 탈퇴</h2>
+          <p className="mt-2 text-sm text-gray-600">
+            탈퇴를 신청하면 관리자 확인 후 처리됩니다. 확인 전까지는 신청을 취소할 수 있습니다.
+          </p>
+          <ul className="mt-3 list-disc pl-5 text-sm text-gray-600 space-y-1">
+            <li>이름·연락처·생년월일·계좌 정보는 삭제됩니다.</li>
+            <li>작성하신 글과 댓글은 남고, 작성자만 &lsquo;탈퇴한 조합원&rsquo;으로 바뀝니다.</li>
+            <li>조합비 납부 기록은 법령에 따라 보존됩니다.</li>
+            <li>자동결제가 등록되어 있으면 해지됩니다.</li>
+          </ul>
+          {/* 신청/취소 버튼 — registration_status는 신청 중에도 'approved'로
+              남으므로(0011 참조) withdrawalRequestedAt으로 하나만 고른다 */}
+          <div className="mt-4">
+            {!withdrawalRequestedAt && (
+              <button
+                type="button"
+                onClick={handleWithdrawalRequest}
+                disabled={withdrawalSubmitting}
+                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 text-sm"
+              >
+                {withdrawalSubmitting ? '처리 중...' : '탈퇴 신청'}
+              </button>
+            )}
+            {withdrawalRequestedAt && (
+              <div className="space-y-2">
+                <p className="text-sm text-amber-700">
+                  탈퇴 신청이 접수되어 관리자 확인을 기다리고 있습니다.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleWithdrawalCancel}
+                  disabled={withdrawalSubmitting}
+                  className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:opacity-50 text-sm"
+                >
+                  {withdrawalSubmitting ? '처리 중...' : '탈퇴 신청 취소'}
+                </button>
+              </div>
+            )}
+          </div>
+        </section>
       </MypageLayout>
     </PermissionCheck>
   )

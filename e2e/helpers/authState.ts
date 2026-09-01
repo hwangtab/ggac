@@ -10,8 +10,14 @@ export type Fixtures = {
     | 'other'
     | 'pending'
     | 'director'
+    // 탈퇴 "신청" 상태(Task 8) — `registration_status`는 여전히 'approved'라
+    // 정상 로그인하고 storageState도 만든다.
+    | 'withdrawalRequested'
     // 로그인하지 않는 계정: 관리자 전용 쓰기 경계(회원 승인)의 **대상**이다.
-    | 'approvalTarget',
+    | 'approvalTarget'
+    // 탈퇴 **완료** 계정(Task 8)의 자리표시자 이메일. 로그인 수단(account
+    // 행)이 없어 storageState를 만들지 않는다 — 값은 id가 아니라 이메일이다.
+    | 'withdrawnEmail',
     string
   >
   postId: string

@@ -77,8 +77,9 @@ const PG_ARTIST = {
 }
 
 test('조합원 프로필은 35개 컬럼을 전부 낸다', () => {
-  // 33 + interest_genres/interest_regions(단계 4 Task 2 — member-calendar).
-  assert.equal(Object.keys(toMemberProfileRow(PG_PROFILE)).length, 35)
+  // 33 + 탈퇴 2개(withdrawn_at·withdrawal_requested_at) + 관심사 2개
+  // (interest_genres·interest_regions). 두 갈래가 각각 2개씩 더해 37이 됐다.
+  assert.equal(Object.keys(toMemberProfileRow(PG_PROFILE)).length, 37)
 })
 
 test('가입 폼 7개 필드를 그대로 옮긴다', () => {

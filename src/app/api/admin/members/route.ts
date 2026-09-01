@@ -116,6 +116,9 @@ export const GET = defineApiRoute({
       engagement_score: row.engagement_score,
       approved_by: row.approved_by,
       rejected_by: row.rejected_by,
+      // 탈퇴 신청 여부 판단용 — registration_status는 신청 중에도 'approved'로
+      // 남으므로(0011 참조) 화면이 이 필드로 신청 상태를 구분한다.
+      withdrawal_requested_at: row.withdrawal_requested_at,
     }))
 
     // 페이지네이션 정보 계산

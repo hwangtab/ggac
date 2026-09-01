@@ -104,6 +104,7 @@ const { systemSettings: tursoSystemSettings, defaultSettings: tursoDefaultSettin
 )
 const { upsertProfile } = await import('@/db/queries/profiles')
 const { memberProfiles: tursoMemberProfiles } = await import('@/db/schema/identity')
+const { WITHDRAWN_DISPLAY_NAME, withdrawnEmailFor } = await import('@/constants/memberProfile')
 const {
   boardMeetings: tursoBoardMeetings,
   boardAgendas: tursoBoardAgendas,
@@ -172,6 +173,23 @@ export const ACCOUNTS = [
     email: 'authz-approval-target@test.local',
     password: 'Authz!Target2026',
     profile: { is_admin: false, registration_status: 'pending', is_active: false },
+  },
+  // 탈퇴 "신청" 상태(Task 8) — 설계가 상태값이 아니라
+  // `withdrawal_requested_at` 타임스탬프로 바뀐 핵심을 검증하는 계정이다.
+  // `registration_status`는 여전히 'approved'이고 로그인·마이페이지·게시판
+  // 접근이 그대로 되어야 한다. 로그인 대상이므로 `e2e/authz.setup.ts`에도
+  // 있다.
+  {
+    key: 'withdrawalRequested',
+    id: '00000000-0000-4000-8000-00000000b007',
+    email: 'authz-withdrawal-requested@test.local',
+    password: 'Authz!WithdrawReq2026',
+    profile: {
+      is_admin: false,
+      registration_status: 'approved',
+      is_active: true,
+      withdrawal_requested_at: new Date('2026-08-25T00:00:00.000Z'),
+    },
   },
 ]
 
@@ -242,6 +260,10 @@ const AUTHZ_DEFAULTS = {
   approvedAt: null,
   approvedBy: null,
   rejectedBy: null,
+  // Task 8: 탈퇴 신청 여부. AUTHZ_DEFAULTS에 없으면 `expectedAuthzState()`가
+  // 'withdrawalRequested' 계정의 profile 키를 보고 던진다 — 그 가드가 여기
+  // 추가를 강제한다.
+  withdrawalRequestedAt: null,
 }
 
 const toCamelCaseKey = key => key.replace(/_([a-z])/g, (_, c) => c.toUpperCase())
@@ -362,6 +384,61 @@ async function main() {
     const drift = await enforceAuthzState(account)
     if (drift.length > 0) driftReport.push({ key: account.key, drift })
   }
+
+  // 탈퇴 **완료** 계정(Task 8). 위 ACCOUNTS 루프(`upsertTursoAuth`)에 넣지
+  // 않는다 — 그 루프는 모든 계정에 로그인 가능한 `account`(비밀번호) 행을
+  // 만드는데, 탈퇴 완료 계정은 정확히 그 행이 **없어야** `withdrawMember()`가
+  // 만드는 실제 상태(로그인 수단 삭제)를 재현한다. `member_profiles`·`user`
+  // 행은 앱이 탈퇴 확정 때 남기는 모양(묘비) 그대로 직접 심는다.
+  const WITHDRAWN_ID = '00000000-0000-4000-8000-00000000b008'
+  const withdrawnEmail = withdrawnEmailFor(WITHDRAWN_ID)
+
+  const withdrawnUserValues = {
+    id: WITHDRAWN_ID,
+    name: WITHDRAWN_DISPLAY_NAME,
+    email: withdrawnEmail,
+    emailVerified: false,
+  }
+  await db
+    .insert(tursoUser)
+    .values(withdrawnUserValues)
+    .onConflictDoUpdate({ target: tursoUser.id, set: withdrawnUserValues })
+  // 로그인 수단을 없앤다 — 재실행 때 이전 실행이 만든 account 행이 남아
+  // 있으면 안 되므로(멱등), insert가 아니라 매번 delete한다.
+  await db.delete(tursoAccount).where(eq(tursoAccount.userId, WITHDRAWN_ID))
+
+  const withdrawnProfileValues = {
+    id: WITHDRAWN_ID,
+    displayName: WITHDRAWN_DISPLAY_NAME,
+    email: withdrawnEmail,
+    registrationStatus: 'withdrawn',
+    isActive: false,
+    isAdmin: false,
+    isMember: false,
+    isArtist: false,
+    isDirector: false,
+    isAuditor: false,
+    isSuspended: false,
+    realName: null,
+    phoneNumber: null,
+    birthDate: null,
+    bankName: null,
+    accountNumber: null,
+    accountHolder: null,
+    monthlyFee: null,
+    artistId: null,
+    directorTitle: null,
+    artistRole: 'owner',
+    verificationStatus: { email: false, phone: false, identity: false },
+    withdrawnAt: new Date('2026-08-30T00:00:00.000Z'),
+    withdrawalRequestedAt: null,
+  }
+  await db
+    .insert(tursoMemberProfiles)
+    .values(withdrawnProfileValues)
+    .onConflictDoUpdate({ target: tursoMemberProfiles.id, set: withdrawnProfileValues })
+
+  ids.withdrawnEmail = withdrawnEmail
 
   // 고정 UUID를 쓴다 — 매번 새로 만들면 멱등이 깨지고, 실패한 실행이 쓰레기를 남긴다.
   const POST_ID = '00000000-0000-4000-8000-00000000a001'

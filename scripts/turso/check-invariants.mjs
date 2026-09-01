@@ -86,7 +86,12 @@ export const CHECK_INVARIANTS = [
   {
     constraint: 'member_profiles_registration_status_check',
     table: 'member_profiles',
-    where: notIn('registration_status', ['pending', 'approved', 'rejected']),
+    // `withdrawn`을 더했다. 앱의 `REGISTRATION_STATUSES`(정본)와 같아야 한다 —
+    // 어긋나면 정상 데이터를 위반으로 보고하거나 그 반대가 된다. 탈퇴 "신청"은
+    // 상태값이 아니라 `withdrawal_requested_at` 타임스탬프로 표현한다
+    // (`0012_add_withdrawal_requested_at.sql` 참조) — 신청 중에도
+    // `registration_status`는 `'approved'`로 남는다.
+    where: notIn('registration_status', ['pending', 'approved', 'rejected', 'withdrawn']),
   },
   {
     constraint: 'member_profiles_membership_type_check',
@@ -224,6 +229,26 @@ export function profileCompletenessExpressionSql(path = BACKFILL_SQL_PATH) {
   return match[1]
 }
 
+/**
+ * 탈퇴 확정 때 지워야 하는 개인정보 컬럼(snake_case, DB 컬럼명).
+ *
+ * **정본은 `src/db/queries/withdrawal.ts`의 `PII_NULL_FIELDS`다.** 이 파일은
+ * `.mjs`라 그 `.ts` 객체를 임포트할 수 없다 — GitHub Actions 백업 워크플로가
+ * `--experimental-strip-types` 없이 이 파일을 `node scripts/turso/check-invariants.mjs`로
+ * 직접 돌리기 때문이다(`.github/workflows/turso-backup.yml`). 그래서 컬럼명을
+ * 여기 다시 적는다. **정본이 바뀌면 여기도 고쳐라** — 둘이 같은 컬럼 집합인지는
+ * `scripts/testing/piiNullFieldsParity.test.mjs`가 못박는다.
+ */
+export const WITHDRAWN_PII_COLUMNS = [
+  'real_name',
+  'phone_number',
+  'birth_date',
+  'bank_name',
+  'account_number',
+  'account_holder',
+  'monthly_fee',
+]
+
 /** CHECK가 아닌 파생값 불변식. */
 export function derivedInvariants() {
   return [
@@ -231,6 +256,19 @@ export function derivedInvariants() {
       constraint: 'profile_completeness_score = 배점식',
       table: 'member_profiles',
       where: `profile_completeness_score IS NOT ${profileCompletenessExpressionSql()}`,
+    },
+    {
+      // Task 8. Postgres CHECK를 재현하는 것이 아니라 새로 추가하는 규칙이라
+      // CHECK_INVARIANTS(원본 20개 목록)가 아니라 여기 둔다 —
+      // `missingCheckConstraints.test.mjs`가 그 20개 목록의 이름을 문자
+      // 단위로 못박고 있어, 새 규칙을 거기 섞으면 그 회귀 테스트가 깨진다.
+      //
+      // 앱을 지나지 않는 쓰기(손으로 친 SQL·일회성 스크립트)로 탈퇴 처리가
+      // 반쪽만 된 경우 — 상태만 'withdrawn'으로 바뀌고 개인정보 삭제가
+      // 빠진 경우 — 를 잡는다. 야간 백업 뒤 매일 돈다.
+      constraint: 'withdrawn_rows_have_no_personal_data',
+      table: 'member_profiles',
+      where: `registration_status = 'withdrawn' AND (${WITHDRAWN_PII_COLUMNS.map(c => `${c} IS NOT NULL`).join(' OR ')})`,
     },
   ]
 }

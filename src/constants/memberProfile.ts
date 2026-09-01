@@ -75,3 +75,30 @@ export function isValidArtistRole(value: unknown): value is ArtistRole {
  */
 export const MEMBERSHIP_TYPES = ['regular', 'premium', 'lifetime'] as const
 export type MembershipType = (typeof MEMBERSHIP_TYPES)[number]
+
+/**
+ * 원본: `member_profiles_registration_status_check`.
+ *
+ * 이전에서 CHECK 제약이 사라졌으므로(운영 `sqlite_master`에 CHECK 0건) 이 배열이
+ * 값 목록의 정본이다. `scripts/turso/check-invariants.mjs`가 같은 목록으로
+ * 운영 데이터를 매일 확인한다 — 둘이 어긋나면 탐지기가 정상 데이터를 위반으로
+ * 보고하거나 그 반대가 된다.
+ */
+export const REGISTRATION_STATUSES = ['pending', 'approved', 'rejected', 'withdrawn'] as const
+export type RegistrationStatus = (typeof REGISTRATION_STATUSES)[number]
+
+/** 탈퇴 확정 후 화면에 찍히는 이름. 콘텐츠는 남고 작성자만 이것으로 바뀐다. */
+export const WITHDRAWN_DISPLAY_NAME = '탈퇴한 조합원'
+
+/**
+ * 탈퇴 시 넣는 자리표시자 이메일.
+ *
+ * `member_profiles.email`과 `user.email`이 둘 다 NOT NULL이고 UNIQUE라
+ * 비울 수 없다. 자리표시자로 바꾸는 순간 **원래 주소가 풀려** 그 사람이
+ * 나중에 같은 이메일로 재가입할 수 있다(설계 결정 5).
+ *
+ * `.invalid`는 RFC 2606이 예약한 도메인이라 실수로 메일이 발송되지 않는다.
+ */
+export function withdrawnEmailFor(id: string): string {
+  return `withdrawn+${id}@ggac.invalid`
+}
