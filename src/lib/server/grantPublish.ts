@@ -142,7 +142,7 @@ export async function runGrantPublish(input: RunGrantPublishInput): Promise<Gran
   // ① 게시글. 실패하면 던진다 — 게시글이 없으면 알림이 가리킬 곳이 없다.
   const content = renderDigestMarkdown(digest.items, digest.week_key, todayIso)
   const post = await input.createPost({
-    title: `[지원사업] ${digest.week_key} 경기·서울 음악 분야 ${active.length}건`,
+    title: `[지원사업] ${digest.week_key} ${active.length}건`,
     content,
     content_format: 'markdown',
     category: '지원사업',

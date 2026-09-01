@@ -174,7 +174,7 @@ export function renderDigestMarkdown(
   todayIso: string
 ): string {
   const active = activeItems(items)
-  const head = `${weekKeyValue} 기준 경기·서울 음악 분야 지원사업입니다.\n`
+  const head = `${weekKeyValue} 기준 지원사업입니다.\n`
 
   if (active.length === 0) {
     return `${head}\n이번 주에 새로 안내할 공고가 없습니다.\n`
@@ -227,7 +227,7 @@ export function renderDigestEmail(
 
   const html = `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto; padding: 32px 24px; color: #1f2937;">
   <h1 style="font-size: 20px; font-weight: 700; margin-bottom: 8px">이번 주 예술지원사업</h1>
-  <p style="font-size: 13px; color: #6b7280; margin: 0 0 20px">${escapeHtml(weekKeyValue)} · 경기·서울 음악 분야</p>
+  <p style="font-size: 13px; color: #6b7280; margin: 0 0 20px">${escapeHtml(weekKeyValue)}</p>
   ${active.length === 0 ? empty : cards}
   <p style="font-size: 12px; line-height: 1.6; color: #9ca3af; margin-top: 24px">
     공고 정보는 각 기관 원문을 기준으로 합니다. 신청 전 원문에서 자격과 마감을 다시 확인해 주세요.<br />
@@ -249,6 +249,6 @@ export function renderDigestNotification(
     message:
       count === 0
         ? `${weekKeyValue} 지원사업 안내가 올라왔습니다.`
-        : `경기·서울 음악 분야 지원사업 ${count}건이 올라왔습니다.`,
+        : `지원사업 ${count}건이 올라왔습니다.`,
   }
 }
