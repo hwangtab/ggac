@@ -28,7 +28,7 @@
  * `db.insert`를 호출하지 않는지 정적으로 확인한다).
  */
 
-import { and, count, desc, eq, isNull, sql, type SQL } from 'drizzle-orm'
+import { and, count, desc, eq, gt, isNull, or, sql, type SQL } from 'drizzle-orm'
 
 import { db } from '../client.ts'
 import { NOTIFICATION_TYPE, notifications } from '../schema/index.ts'
@@ -165,6 +165,22 @@ export async function createBulkNotifications(
 // 읽기 — 목록 + 통계
 // -------------------------------------------------------------------------
 
+/**
+ * "만료되지 않음" 조건 — `expires_at IS NULL OR expires_at > now`.
+ * `expires_at`을 읽는 코드가 이 모듈이 생기기 전까지 저장소 어디에도
+ * 없었다(쓰기만 했다) — 목록·통계 어디서도 걸러지지 않아 만료된 알림이
+ * 안 읽음 배지에 영구히 잡혀 있었다(운영 실측: 전체 111건 중 만료 17건,
+ * 그중 안 읽음 9건). 대부분의 알림은 `expires_at`이 `NULL`(만료 없음)이라
+ * `IS NULL`을 반드시 통과시켜야 한다 — `expires_at > now`만 쓰면 만료 없는
+ * 알림까지 전부 사라진다.
+ *
+ * `listNotifications`(목록 + 두 COUNT)와 `getNotificationStats`(통계) 모두
+ * 이 함수를 쓴다 — 갈라지면 한쪽만 고쳐지는 문제를 막는다.
+ */
+function notExpired(): SQL {
+  return or(isNull(notifications.expiresAt), gt(notifications.expiresAt, new Date())) as SQL
+}
+
 export interface ListNotificationsFilter {
   type?: NotificationTypeValue | null
   unreadOnly?: boolean
@@ -182,13 +198,16 @@ export interface ListNotificationsFilter {
  * 떨어지지 않는다 — 알림 페이지네이션 UI가 `total_pages`를 실제로
  * 표시하므로 그 경계를 피했다). `unreadCount`는 `type`/`unread_only` 필터와
  * 무관하게 항상 "이 사용자의 안 읽은 알림 수" 하나를 구한다(기존 라우트의
- * 별도 `unreadCount` 쿼리와 동일 스코프).
+ * 별도 `unreadCount` 쿼리와 동일 스코프). 목록·`total`·`unreadCount` 셋 다
+ * `notExpired()`를 거친다 — 만료된 알림은 사용자가 지우지 않아도 목록과
+ * 배지에서 자연히 빠진다(정리 크론은 두지 않는다, 조회에서 거르는 것으로
+ * 충분하다).
  */
 export async function listNotifications(
   userId: string,
   filter: ListNotificationsFilter
 ): Promise<{ rows: NotificationRow[]; total: number; unreadCount: number }> {
-  const conditions: SQL[] = [eq(notifications.userId, userId)]
+  const conditions: SQL[] = [eq(notifications.userId, userId), notExpired()]
   if (filter.type) {
     conditions.push(eq(notifications.type, filter.type))
   }
@@ -211,7 +230,7 @@ export async function listNotifications(
     db
       .select({ value: count() })
       .from(notifications)
-      .where(and(eq(notifications.userId, userId), isNull(notifications.readAt))),
+      .where(and(eq(notifications.userId, userId), isNull(notifications.readAt), notExpired())),
   ])
 
   return {
@@ -247,7 +266,10 @@ export interface NotificationStatsRow {
  * `WHERE user_id = ?` 하나로 집계해 **행이 없을 때도 항상 0으로 채운
  * 객체를 돌려준다**. 최종 API 응답은 두 경로 모두 동일하다(0으로 채운
  * 통계) — 호출부가 "없으면 기본값" 분기를 따로 둘 필요가 없어졌을 뿐,
- * 응답 스키마는 바뀌지 않는다.
+ * 응답 스키마는 바뀌지 않는다. 원본 뷰 정의에는 없던 `notExpired()`를
+ * `WHERE`에 추가했다 — 뷰를 그대로 옮기면 만료된 알림이 `total_notifications`
+ * ·`unread_count`에 영구히 잡힌다(`listNotifications`와 같은 이유,
+ * `notExpired()` 참고).
  */
 export async function getNotificationStats(userId: string): Promise<NotificationStatsRow> {
   const [row] = await db
@@ -258,7 +280,7 @@ export async function getNotificationStats(userId: string): Promise<Notification
       latest: sql<number | null>`max(${notifications.createdAt})`,
     })
     .from(notifications)
-    .where(eq(notifications.userId, userId))
+    .where(and(eq(notifications.userId, userId), notExpired()))
 
   return {
     user_id: userId,
@@ -275,6 +297,17 @@ export async function getNotificationStats(userId: string): Promise<Notification
 // -------------------------------------------------------------------------
 // 쓰기 — 읽음 처리 / 삭제
 // -------------------------------------------------------------------------
+
+/**
+ * **`markNotificationRead`/`markAllNotificationsRead`는 의도적으로
+ * `notExpired()`를 걸지 않는다.** 만료된 알림은 이미 `listNotifications`·
+ * `getNotificationStats`에서 완전히 걸러지므로, `read_at`이 무엇이든 배지·
+ * 목록에 다시 나타나지 않는다 — 즉 만료된 행의 읽음 처리는 어떤 사용자에게
+ * 보이는 것에도 영향을 주지 않는 무해한 연산이다. 여기에 만료 조건을
+ * 추가하면(예: "만료된 건 읽음 처리 자체를 거부") 관찰 가능한 동작은
+ * 하나도 바뀌지 않으면서 코드만 늘어난다 — "가장 단순한 수단을 먼저"
+ * 원칙에 따라 손대지 않는다.
+ */
 
 /**
  * 알림 하나를 읽음 처리한다. 기존 `/api/notifications/[id]` PATCH의 수동

@@ -341,6 +341,31 @@ test('listNotifications: 마지막 페이지를 넘겨 요청해도 total은 0�
   assert.equal(total, 2, 'total은 별도 COUNT 쿼리라 페이지와 무관하게 정확해야 한다')
 })
 
+test('listNotifications: 만료된(expires_at이 과거인) 알림은 목록·total·unreadCount에서 빠진다', async () => {
+  const { listNotifications } = await loadFreshNotificationsModule()
+  const user = await seedProfile()
+  const past = new Date(Date.now() - 1000)
+  const { id: expiredId } = await seedNotification({
+    userId: user,
+    expiresAt: past,
+    title: '만료됨',
+  })
+  const { id: liveId } = await seedNotification({
+    userId: user,
+    expiresAt: new Date(Date.now() + 86400000),
+    title: '아직 안 만료',
+  })
+  const { id: noExpiryId } = await seedNotification({ userId: user, title: '만료 없음' })
+
+  const { rows, total, unreadCount } = await listNotifications(user, { page: 1, limit: 20 })
+  const ids = rows.map(r => r.id)
+  assert.ok(!ids.includes(expiredId), '만료된 알림은 목록에 나오면 안 된다')
+  assert.ok(ids.includes(liveId), '아직 안 만료된 알림은 나와야 한다')
+  assert.ok(ids.includes(noExpiryId), 'expires_at이 NULL(만료 없음)인 알림은 나와야 한다')
+  assert.equal(total, 2, 'total도 만료된 1건을 빼야 한다')
+  assert.equal(unreadCount, 2, 'unreadCount(배지)도 만료된 안 읽음 알림을 빼야 한다')
+})
+
 // ------------------------------------------------------------- getNotificationStats
 
 test('getNotificationStats: FILTER 없이 SUM(CASE)으로 옮긴 집계가 실제 값과 일치한다', async () => {
@@ -383,6 +408,25 @@ test('getNotificationStats: 집계가 실제로 틀리면(잘못된 카운트) �
   assert.equal(stats.unread_count + stats.read_count, stats.total_notifications)
   assert.equal(stats.unread_count, 4)
   assert.equal(stats.read_count, 3)
+})
+
+test('getNotificationStats: 만료된 알림은 total/unread/read 집계에서 빠진다', async () => {
+  const { getNotificationStats } = await loadFreshNotificationsModule()
+  const user = await seedProfile()
+  const past = new Date(Date.now() - 1000)
+  await seedNotification({ userId: user, expiresAt: past, title: '만료된 안읽음' })
+  await seedNotification({
+    userId: user,
+    expiresAt: past,
+    readAt: new Date(),
+    title: '만료된 읽음',
+  })
+  await seedNotification({ userId: user, title: '만료 없음' })
+
+  const stats = await getNotificationStats(user)
+  assert.equal(stats.total_notifications, 1, '만료된 2건은 집계에서 빠져야 한다')
+  assert.equal(stats.unread_count, 1)
+  assert.equal(stats.read_count, 0)
 })
 
 // ------------------------------------------------------------- markNotificationRead
