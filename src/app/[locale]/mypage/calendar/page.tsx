@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { format, startOfMonth, endOfMonth } from 'date-fns'
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek } from 'date-fns'
 
 import MonthGrid from '@/components/calendar/MonthGrid'
 import { Link } from '@/i18n/navigation'
@@ -36,9 +36,13 @@ export default function MyCalendarPage() {
     setLoading(true)
     setError(null)
     try {
-      // 그리드가 앞뒤 달을 걸쳐 보여주므로 한 달치보다 넉넉히 받는다.
-      const from = format(startOfMonth(monthDate), 'yyyy-MM-01')
-      const to = format(endOfMonth(monthDate), 'yyyy-MM-dd')
+      // MonthGrid는 6주(일~토) 고정 그리드라 앞뒤 달의 며칠을 함께 그린다
+      // (gridStart/gridEnd 계산은 MonthGrid.tsx와 동일해야 하루도 안 어긋난다).
+      // 달의 1일~말일만 받으면 그 앞뒤 칸은 항목이 있어도 항상 빈 칸으로 보인다.
+      const gridStart = startOfWeek(startOfMonth(monthDate), { weekStartsOn: 0 })
+      const gridEnd = endOfWeek(endOfMonth(monthDate), { weekStartsOn: 0 })
+      const from = format(gridStart, 'yyyy-MM-dd')
+      const to = format(gridEnd, 'yyyy-MM-dd')
       const res = await fetch(`/api/mypage/calendar?from=${from}&to=${to}`)
       const json = await res.json()
       if (!res.ok) throw new Error(json?.error?.message ?? '캘린더를 불러오지 못했습니다.')
