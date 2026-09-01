@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslations, useFormatter } from 'next-intl'
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek } from 'date-fns'
 
 import MonthGrid from '@/components/calendar/MonthGrid'
@@ -18,43 +19,48 @@ type CalendarItem = {
   regions?: string[]
 }
 
-const KIND_STYLE: Record<CalendarItem['kind'], { dot: string; label: string }> = {
-  grant: { dot: 'bg-blue-500', label: '지원사업' },
-  project: { dot: 'bg-green-500', label: '조합 행사' },
-  board: { dot: 'bg-purple-500', label: '이사회' },
+const KIND_DOT: Record<CalendarItem['kind'], string> = {
+  grant: 'bg-blue-500',
+  project: 'bg-green-500',
+  board: 'bg-purple-500',
 }
 
-const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
+const WEEKDAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const
 
 export default function MyCalendarPage() {
+  const t = useTranslations('mypage.calendar')
+  const formatter = useFormatter()
   const [items, setItems] = useState<CalendarItem[]>([])
   const [ongoing, setOngoing] = useState<CalendarItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
 
-  const load = useCallback(async (monthDate: Date) => {
-    setLoading(true)
-    setError(null)
-    try {
-      // MonthGrid는 6주(일~토) 고정 그리드라 앞뒤 달의 며칠을 함께 그린다
-      // (gridStart/gridEnd 계산은 MonthGrid.tsx와 동일해야 하루도 안 어긋난다).
-      // 달의 1일~말일만 받으면 그 앞뒤 칸은 항목이 있어도 항상 빈 칸으로 보인다.
-      const gridStart = startOfWeek(startOfMonth(monthDate), { weekStartsOn: 0 })
-      const gridEnd = endOfWeek(endOfMonth(monthDate), { weekStartsOn: 0 })
-      const from = format(gridStart, 'yyyy-MM-dd')
-      const to = format(gridEnd, 'yyyy-MM-dd')
-      const res = await fetch(`/api/mypage/calendar?from=${from}&to=${to}`)
-      const json = await res.json()
-      if (!res.ok) throw new Error(json?.error?.message ?? '캘린더를 불러오지 못했습니다.')
-      setItems(json.data.items)
-      setOngoing(json.data.ongoing)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  const load = useCallback(
+    async (monthDate: Date) => {
+      setLoading(true)
+      setError(null)
+      try {
+        // MonthGrid는 6주(일~토) 고정 그리드라 앞뒤 달의 며칠을 함께 그린다
+        // (gridStart/gridEnd 계산은 MonthGrid.tsx와 동일해야 하루도 안 어긋난다).
+        // 달의 1일~말일만 받으면 그 앞뒤 칸은 항목이 있어도 항상 빈 칸으로 보인다.
+        const gridStart = startOfWeek(startOfMonth(monthDate), { weekStartsOn: 0 })
+        const gridEnd = endOfWeek(endOfMonth(monthDate), { weekStartsOn: 0 })
+        const from = format(gridStart, 'yyyy-MM-dd')
+        const to = format(gridEnd, 'yyyy-MM-dd')
+        const res = await fetch(`/api/mypage/calendar?from=${from}&to=${to}`)
+        const json = await res.json()
+        if (!res.ok) throw new Error(json?.error?.message ?? t('loadError'))
+        setItems(json.data.items)
+        setOngoing(json.data.ongoing)
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e))
+      } finally {
+        setLoading(false)
+      }
+    },
+    [t]
+  )
 
   useEffect(() => {
     // KST 기준 오늘이 속한 달을 초기 조회한다 — MonthGrid의 초기 표시 달과 같은
@@ -71,13 +77,13 @@ export default function MyCalendarPage() {
 
   return (
     <div className="p-6">
-      <h1 className="mb-1 text-xl font-bold">내 캘린더</h1>
+      <h1 className="mb-1 text-xl font-bold">{t('title')}</h1>
       <p className="mb-6 text-sm text-gray-500">
-        관심 분야에 맞는 지원사업 마감일과 조합 행사·이사회 일정입니다. 관심 분야는{' '}
+        {t('descriptionPrefix')}
         <Link href="/mypage/profile" className="underline">
-          프로필
+          {t('descriptionLink')}
         </Link>
-        에서 바꿀 수 있습니다.
+        {t('descriptionSuffix')}
       </p>
 
       {error && <p className="mb-4 rounded bg-red-50 p-3 text-sm text-red-700">{error}</p>}
@@ -85,17 +91,20 @@ export default function MyCalendarPage() {
       <div className="mb-3 flex gap-4 text-xs text-gray-600">
         {(['grant', 'project', 'board'] as const).map(k => (
           <span key={k} className="flex items-center gap-1">
-            <span className={`inline-block h-2 w-2 rounded-full ${KIND_STYLE[k].dot}`} />
-            {KIND_STYLE[k].label}
+            <span className={`inline-block h-2 w-2 rounded-full ${KIND_DOT[k]}`} />
+            {t(`kind.${k}`)}
           </span>
         ))}
       </div>
 
       <MonthGrid
-        weekdayLabels={WEEKDAYS}
-        todayLabel="오늘"
-        prevLabel="이전 달"
-        nextLabel="다음 달"
+        weekdayLabels={WEEKDAY_KEYS.map(k => t(`weekday.${k}`))}
+        todayLabel={t('today')}
+        prevLabel={t('prevMonth')}
+        nextLabel={t('nextMonth')}
+        formatMonthLabel={visibleMonth =>
+          formatter.dateTime(visibleMonth, { year: 'numeric', month: 'long' })
+        }
         onMonthChange={m => void load(new Date(`${m}-01T00:00:00`))}
         renderDay={iso => {
           const day = byDate.get(iso)
@@ -109,7 +118,7 @@ export default function MyCalendarPage() {
               {day.slice(0, 3).map(it => (
                 <span key={it.key} className="flex items-center gap-1 truncate">
                   <span
-                    className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${KIND_STYLE[it.kind].dot}`}
+                    className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${KIND_DOT[it.kind]}`}
                   />
                   <span className="truncate text-[11px]">{it.title}</span>
                 </span>
@@ -124,10 +133,8 @@ export default function MyCalendarPage() {
 
       {ongoing.length > 0 && (
         <section className="mt-8">
-          <h2 className="mb-1 text-sm font-semibold">상시 모집</h2>
-          <p className="mb-3 text-xs text-gray-500">
-            마감일이 정해지지 않아 달력에 표시되지 않는 공고입니다.
-          </p>
+          <h2 className="mb-1 text-sm font-semibold">{t('ongoingHeading')}</h2>
+          <p className="mb-3 text-xs text-gray-500">{t('ongoingDescription')}</p>
           <ul className="space-y-2">
             {ongoing.map(it => (
               <li key={it.key} className="rounded border p-3 text-sm">
@@ -152,7 +159,7 @@ export default function MyCalendarPage() {
         </section>
       )}
 
-      {loading && <p className="mt-3 text-sm text-gray-500">불러오는 중…</p>}
+      {loading && <p className="mt-3 text-sm text-gray-500">{t('loading')}</p>}
 
       {selected && (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-6">
@@ -160,17 +167,15 @@ export default function MyCalendarPage() {
             <div className="mb-4 flex items-center justify-between">
               <h2 className="font-bold">{selected}</h2>
               <button type="button" onClick={() => setSelected(null)} className="text-gray-400">
-                닫기
+                {t('close')}
               </button>
             </div>
             <ul className="space-y-3">
               {(byDate.get(selected) ?? []).map(it => (
                 <li key={it.key} className="rounded border p-3">
                   <span className="mb-1 flex items-center gap-1 text-xs text-gray-500">
-                    <span
-                      className={`inline-block h-2 w-2 rounded-full ${KIND_STYLE[it.kind].dot}`}
-                    />
-                    {KIND_STYLE[it.kind].label}
+                    <span className={`inline-block h-2 w-2 rounded-full ${KIND_DOT[it.kind]}`} />
+                    {t(`kind.${it.kind}`)}
                     {it.time ? ` · ${it.time}` : ''}
                   </span>
                   {it.url ? (

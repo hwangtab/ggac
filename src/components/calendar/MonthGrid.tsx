@@ -24,6 +24,9 @@ export interface MonthGridProps {
   todayLabel: string
   prevLabel: string
   nextLabel: string
+  /** 헤더에 보이는 월 라벨(예: "2026년 9월" / "September 2026")을 만든다.
+   * MonthGrid는 도메인·언어를 모르므로 포맷팅은 부모가 결정한다. */
+  formatMonthLabel: (visibleMonth: Date) => string
 }
 
 /** KST 기준 오늘이 속한 달의 1일. 서버(UTC)·브라우저(KST 가정)의 렌더가 갈라지지 않게 `new Date()` 대신 쓴다. */
@@ -46,6 +49,7 @@ export default function MonthGrid({
   todayLabel,
   prevLabel,
   nextLabel,
+  formatMonthLabel,
 }: MonthGridProps) {
   const [visibleMonth, setVisibleMonth] = useState(() => currentMonthSeoul())
 
@@ -70,7 +74,7 @@ export default function MonthGrid({
           ‹
         </button>
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold">{format(visibleMonth, 'yyyy년 M월')}</span>
+          <span className="text-sm font-semibold">{formatMonthLabel(visibleMonth)}</span>
           <button
             type="button"
             onClick={() => go(currentMonthSeoul())}

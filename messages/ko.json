@@ -530,6 +530,34 @@
       "roleMember": "조합원",
       "helpPrompt": "도움이 필요하시면",
       "helpBody": "관리자에게 문의해 주세요."
+    },
+    "calendar": {
+      "title": "내 캘린더",
+      "descriptionPrefix": "관심 분야에 맞는 지원사업 마감일과 조합 행사·이사회 일정입니다. 관심 분야는 ",
+      "descriptionLink": "프로필",
+      "descriptionSuffix": "에서 바꿀 수 있습니다.",
+      "kind": {
+        "grant": "지원사업",
+        "project": "조합 행사",
+        "board": "이사회"
+      },
+      "today": "오늘",
+      "prevMonth": "이전 달",
+      "nextMonth": "다음 달",
+      "loading": "불러오는 중…",
+      "close": "닫기",
+      "loadError": "캘린더를 불러오지 못했습니다.",
+      "ongoingHeading": "상시 모집",
+      "ongoingDescription": "마감일이 정해지지 않아 달력에 표시되지 않는 공고입니다.",
+      "weekday": {
+        "sun": "일",
+        "mon": "월",
+        "tue": "화",
+        "wed": "수",
+        "thu": "목",
+        "fri": "금",
+        "sat": "토"
+      }
     }
   },
   "board": {

@@ -530,6 +530,34 @@
       "roleMember": "Member",
       "helpPrompt": "Need help?",
       "helpBody": "Please contact an admin."
+    },
+    "calendar": {
+      "title": "My Calendar",
+      "descriptionPrefix": "Grant deadlines matched to your interests, plus cooperative events and board meetings. You can change your interests in ",
+      "descriptionLink": "your profile",
+      "descriptionSuffix": ".",
+      "kind": {
+        "grant": "Grant",
+        "project": "Cooperative Event",
+        "board": "Board Meeting"
+      },
+      "today": "Today",
+      "prevMonth": "Previous month",
+      "nextMonth": "Next month",
+      "loading": "Loading…",
+      "close": "Close",
+      "loadError": "Failed to load the calendar.",
+      "ongoingHeading": "Ongoing Applications",
+      "ongoingDescription": "Listings with no fixed deadline, so they don't appear on the calendar.",
+      "weekday": {
+        "sun": "Sun",
+        "mon": "Mon",
+        "tue": "Tue",
+        "wed": "Wed",
+        "thu": "Thu",
+        "fri": "Fri",
+        "sat": "Sat"
+      }
     }
   },
   "board": {
