@@ -4,12 +4,14 @@ import assert from 'node:assert/strict'
 const {
   weekKey,
   buildDraftItems,
+  interleaveGenreBlocks,
   activeItems,
   dDay,
   renderDigestMarkdown,
   renderDigestEmail,
   renderDigestNotification,
   CAP,
+  POOL_CAP,
 } = await import('../../src/lib/server/grantDigest.ts')
 
 function item(over = {}) {
@@ -92,6 +94,73 @@ test('kosmart가 준 순서를 보존한다 (점수 정렬을 다시 하지 않�
     out.map(i => i.key),
     ['a', 'b', 'c']
   )
+})
+
+// ---------------------------------------------------------------- interleaveGenreBlocks (F1)
+
+test('블록이 하나뿐이면 순서가 그대로 보존되고 buildDraftItems가 상위 POOL_CAP건을 낸다 (회귀 방어)', () => {
+  // 지금 조합원 전원이 관심사 미설정이라 unionInterests가 음악 하나만 요청한다 — 그때
+  // grantFetch가 돌려주는 블록은 [[...]] 하나뿐이다. 이 경우 interleaveGenreBlocks는
+  // 원래 순서를 정확히 그대로 유지해야 한다. 이게 깨지면 미설정 조합원에게 회귀다.
+  const single = Array.from({ length: POOL_CAP + 10 }, (_, i) => item({ key: `ncas:${i}` }))
+  const merged = interleaveGenreBlocks([single])
+  assert.deepEqual(
+    merged.map(i => i.key),
+    single.map(i => i.key)
+  )
+
+  const out = buildDraftItems(merged, new Set(), POOL_CAP)
+  assert.equal(out.length, POOL_CAP)
+  assert.deepEqual(
+    out.map(i => i.key),
+    single.slice(0, POOL_CAP).map(i => i.key)
+  )
+})
+
+test('두 블록을 한 건씩 번갈아 뽑는다', () => {
+  const a = [item({ key: 'a1' }), item({ key: 'a2' })]
+  const b = [item({ key: 'b1' }), item({ key: 'b2' })]
+  const merged = interleaveGenreBlocks([a, b])
+  assert.deepEqual(
+    merged.map(i => i.key),
+    ['a1', 'b1', 'a2', 'b2']
+  )
+})
+
+test('첫 장르가 풀 상한을 넘게 많아도 둘째 장르 항목이 결과에 존재한다', () => {
+  const music = Array.from({ length: POOL_CAP + 20 }, (_, i) => item({ key: `music:${i}` }))
+  const visualArts = Array.from({ length: 5 }, (_, i) => item({ key: `visual:${i}` }))
+  const merged = interleaveGenreBlocks([music, visualArts])
+  const out = buildDraftItems(merged, new Set(), POOL_CAP)
+  assert.equal(out.length, POOL_CAP)
+  assert.ok(
+    out.some(i => i.key.startsWith('visual:')),
+    '둘째 장르(시각예술) 항목이 풀에 하나도 없다'
+  )
+})
+
+test('한 장르가 적으면 남는 자리를 다른 장르가 채운다 (자리를 낭비하지 않는다)', () => {
+  const small = Array.from({ length: 3 }, (_, i) => item({ key: `small:${i}` }))
+  const large = Array.from({ length: POOL_CAP + 20 }, (_, i) => item({ key: `large:${i}` }))
+  const merged = interleaveGenreBlocks([small, large])
+  const out = buildDraftItems(merged, new Set(), POOL_CAP)
+  assert.equal(out.length, POOL_CAP)
+  // 짧은 장르(3건)는 전부 담기고, 나머지 자리는 큰 장르가 채운다.
+  assert.equal(out.filter(i => i.key.startsWith('small:')).length, 3)
+  assert.equal(out.filter(i => i.key.startsWith('large:')).length, POOL_CAP - 3)
+})
+
+test('빈 블록은 순환에서 빠진다', () => {
+  const merged = interleaveGenreBlocks([[], [item({ key: 'x' })], []])
+  assert.deepEqual(
+    merged.map(i => i.key),
+    ['x']
+  )
+})
+
+test('블록이 전부 비었으면 빈 배열이다', () => {
+  assert.deepEqual(interleaveGenreBlocks([[], []]), [])
+  assert.deepEqual(interleaveGenreBlocks([]), [])
 })
 
 test('빈 입력은 빈 배열이다', () => {

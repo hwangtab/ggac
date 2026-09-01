@@ -65,10 +65,42 @@ export function weekKey(now: Date = new Date()): string {
 }
 
 /**
+ * 장르별 블록을 한 건씩 번갈아 뽑아 하나의 배열로 섞는다. **순수 함수** — `grantFetch.ts`가
+ * 만든 `GenreBlock[]`을 `buildDraftItems`에 넘기기 전에 쓴다.
+ *
+ * **왜 필요한가**: `grantFetch.ts`는 장르별 블록을 `scope.genres` 순서대로 돌려주는데,
+ * 그 순서는 조합 기본값(음악)이 항상 먼저다. 블록을 그대로 이어붙여 `buildDraftItems`에
+ * 넘기면 앞 장르가 `POOL_CAP`을 다 채워버리는 주가 온다 — 그러면 뒤 장르만 고른 조합원은
+ * 매주 공고 0건을 받는다. 라운드로빈으로 섞으면 각 장르가 공평한 몫을 갖고, 어느 장르가
+ * 그 몫을 못 채우면(블록이 짧으면) 그 장르는 자연히 순환에서 빠지고 남은 장르가 빈 자리를
+ * 채운다 — 자리가 낭비되지 않는다.
+ *
+ * **블록이 하나뿐이면(장르 미설정 — 지금 모든 조합원의 상태) 원래 순서를 그대로 보존한다**
+ * — 매 순환마다 그 블록에서 한 건씩 순서대로 꺼내는 것과 같으므로 결과가 입력과 동일하다.
+ * 이게 깨지면 미설정 조합원에게 회귀다.
+ */
+export function interleaveGenreBlocks(blocks: GrantItem[][]): GrantItem[] {
+  const out: GrantItem[] = []
+  const indices = blocks.map(() => 0)
+  let remaining = blocks.reduce((sum, b) => sum + b.length, 0)
+  while (remaining > 0) {
+    for (let i = 0; i < blocks.length; i++) {
+      if (indices[i] >= blocks[i].length) continue
+      out.push(blocks[i][indices[i]])
+      indices[i] += 1
+      remaining -= 1
+    }
+  }
+  return out
+}
+
+/**
  * kosmart가 준 목록에서 최근 회차에 이미 담긴 것을 빼고 CAP까지 남긴다.
  *
- * **순서를 다시 정렬하지 않는다** — kosmart가 `rankAndCap`으로 이미 점수순·마감임박순으로
- * 정렬해서 보낸다. 여기서 다시 정렬하면 그 규칙을 두 곳에 두게 된다.
+ * **순서를 다시 정렬하지 않는다** — 이미 `interleaveGenreBlocks`로 장르 간 공정한 순서가
+ * 정해져 있거나(풀 생성 경로), kosmart가 `rankAndCap`으로 점수순·마감임박순으로 정렬해서
+ * 보낸 순서 그대로다(단일 장르·개인 메일 필터 경로). 여기서 다시 정렬하면 그 규칙을 두
+ * 곳에 두게 된다.
  */
 export function buildDraftItems(
   fetched: GrantItem[],

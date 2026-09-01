@@ -60,6 +60,12 @@ async function fetchGenre(base: string, token: string, regionsParam: string, gen
   return items as GrantItem[]
 }
 
+/** 장르 하나에 대응하는 결과 블록. 순서는 `scope.genres`의 순서를 따른다. */
+export interface GenreBlock {
+  genre: string
+  items: GrantItem[]
+}
+
 /**
  * kosmart에서 공고를 받아온다. **장르 하나당 한 번씩, 병렬로 호출한다.**
  *
@@ -75,16 +81,24 @@ async function fetchGenre(base: string, token: string, regionsParam: string, gen
  * 풀이 불완전하므로 던지는 게 맞고, `Promise.all`의 첫 reject 즉시 reject가 그 의미와
  * 맞는다.
  *
+ * **왜 장르별 블록으로 돌려주나(평평하게 이어붙이지 않는다):** 예전에는 여기서
+ * `scope.genres` 순서대로 이어붙인 flat 배열을 돌려줬다. 그러면 첫 장르(조합 기본값의
+ * 음악)가 항상 풀의 앞자리를 다 차지하고, `buildDraftItems`가 앞에서부터 `POOL_CAP`을
+ * 자르면 뒤 장르는 음악이 그 주에 60건을 넘길 때마다 통째로 굶는다. 장르별 공정한 배분은
+ * **판정**(어느 항목을 풀에 남길까)이라 여기(네트워크 경계)가 아니라
+ * `grantDigest.ts`의 `interleaveGenreBlocks`가 맡는다 — 이 파일은 "장르별로 나눠서
+ * 가져오기"까지만 하고, "어떻게 섞을까"는 판정 쪽에 넘긴다.
+ *
  * **중복 제거는 순서에 의존하지 않는다.** 병렬 호출 결과가 한꺼번에 배열로 오므로,
- * `scope.genres` 순서대로 결과를 이어붙인 뒤 `key`로 중복을 제거한다(같은 공고가 여러
- * 장르 태그를 달고 있으면 각 호출에 겹쳐 온다 — 예:「연극·무용·음악 통합공모」). kosmart가
- * 장르마다 점수순으로 정렬해 보내므로 장르 순서를 그대로 보존하는 것이 결과의 예측
- * 가능성에 중요하다(먼저 요청한 장르의 상위권이 뒤 장르의 하위권보다 앞선다).
+ * `scope.genres` 순서대로 블록을 채우면서 `key`로 전역 중복을 제거한다(같은 공고가 여러
+ * 장르 태그를 달고 있으면 각 호출에 겹쳐 온다 — 예:「연극·무용·음악 통합공모」). 겹치는
+ * 항목은 먼저 요청한 장르의 블록에만 남는다 — kosmart가 장르마다 점수순으로 정렬해
+ * 보내므로 각 블록 내부 순서는 그대로 보존된다.
  *
  * @throws 환경변수 누락·HTTP 실패·응답 형식 오류는 전부 던진다. 호출부가 관리자에게 알린다 —
  *   조용히 빈 배열을 돌려주면 "이번 주는 공고가 없었다"와 구분되지 않는다.
  */
-export async function fetchGrantOpportunities(scope: FetchScope): Promise<GrantItem[]> {
+export async function fetchGrantOpportunities(scope: FetchScope): Promise<GenreBlock[]> {
   const base = process.env.KOSMART_OPPORTUNITIES_URL
   const token = process.env.KOSMART_API_TOKEN
   if (!base) throw new Error('KOSMART_OPPORTUNITIES_URL이 설정되지 않았습니다.')
@@ -97,14 +111,16 @@ export async function fetchGrantOpportunities(scope: FetchScope): Promise<GrantI
   )
 
   const seen = new Set<string>()
-  const out: GrantItem[] = []
-  for (const items of byGenre) {
-    for (const it of items) {
+  const blocks: GenreBlock[] = []
+  for (let i = 0; i < scope.genres.length; i++) {
+    const items: GrantItem[] = []
+    for (const it of byGenre[i]) {
       if (seen.has(it.key)) continue
       seen.add(it.key)
-      out.push(it)
+      items.push(it)
     }
+    blocks.push({ genre: scope.genres[i], items })
   }
 
-  return out
+  return blocks
 }

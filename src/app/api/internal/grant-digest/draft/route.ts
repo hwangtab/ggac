@@ -18,7 +18,13 @@ import {
 import { createBulkNotifications } from '@/db/queries/notifications'
 import { listProfiles, type ProfileRow } from '@/db/queries/profiles'
 import { fetchGrantOpportunities } from '@/lib/server/grantFetch'
-import { DEDUPE_WEEKS, POOL_CAP, buildDraftItems, weekKey } from '@/lib/server/grantDigest'
+import {
+  DEDUPE_WEEKS,
+  POOL_CAP,
+  buildDraftItems,
+  interleaveGenreBlocks,
+  weekKey,
+} from '@/lib/server/grantDigest'
 import { unionInterests } from '@/lib/server/interestMatch'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
@@ -116,7 +122,11 @@ export async function POST(request: NextRequest) {
     const active = rows.filter(p => p.is_active)
     const scope = unionInterests(active)
 
-    const fetched = await fetchGrantOpportunities(scope)
+    // 장르별 블록으로 받아 한 건씩 번갈아 섞는다 — 그래야 뒤 장르(음악 아닌 것)가
+    // 조합 기본값(음악)에 밀려 매주 굶지 않는다. 블록이 하나뿐이면(지금처럼 아무도
+    // 관심사를 설정하지 않은 상태) 순서가 원래 그대로 보존된다.
+    const blocks = await fetchGrantOpportunities(scope)
+    const fetched = interleaveGenreBlocks(blocks.map(b => b.items))
     const sentKeys = new Set((await listRecentDigestItems(DEDUPE_WEEKS)).map(i => i.key))
     const items = buildDraftItems(fetched, sentKeys, POOL_CAP)
 
