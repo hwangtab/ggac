@@ -1,12 +1,28 @@
-import test from 'node:test'
+import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
+import { rmSync } from 'node:fs'
 import { createClient } from '@libsql/client'
 
 import { applyMigrations } from './apply-migrations.mjs'
 
 const CONSTANTS = new URL('../../src/constants/memberProfile.ts', import.meta.url)
 
-/** 승인·활성 조합원 한 명을 심고 client를 돌려준다. */
+/**
+ * `src/db/queries/withdrawal.ts`가 쓰는 `src/db/client.ts`의 `db`는 모듈
+ * 수준 지연 Proxy라, 처음 실제로 접근하는 시점의 `TURSO_DATABASE_URL`로 연결을
+ * 고정해 프로세스 안에서 재사용한다(`cachedRawClient`). 그래서 이 env를 **그
+ * 모듈을 처음 import하기 전에** 파일 스코프에서 직접 설정해야 한다 — 실행자가
+ * 셸에서 손으로 넘겨주는 값에만 기대면(운영 자격증명이 셸에 남은 채
+ * `npm run test:unit`을 돌리는 경우) 이 테스트가 실제로 운영 DB에 UPDATE를
+ * 쏠 수 있다. `scripts/testing/queriesProfiles.test.mjs`를 비롯한
+ * `queries*.test.mjs` 전부가 이 패턴을 쓴다 — 새 방식을 발명하지 않는다.
+ */
+const DB_PATH = 'scripts/testing/.withdrawal-test.db'
+process.env.TURSO_DATABASE_URL = `file:${DB_PATH}`
+
+const WITHDRAWAL_MODULE_URL = new URL('../../src/db/queries/withdrawal.ts', import.meta.url)
+
+/** 승인·활성 조합원 한 명을 심는다. */
 async function seedMember(client, { id = 'm1', isAdmin = false } = {}) {
   const now = Date.now()
   await client.execute({
@@ -17,6 +33,27 @@ async function seedMember(client, { id = 'm1', isAdmin = false } = {}) {
   })
   return id
 }
+
+async function statusOf(client, id) {
+  const result = await client.execute({
+    sql: 'SELECT registration_status s FROM member_profiles WHERE id=?',
+    args: [id],
+  })
+  return result.rows[0]?.s
+}
+
+let setupClient
+
+before(async () => {
+  for (const suffix of ['', '-wal', '-shm']) rmSync(`${DB_PATH}${suffix}`, { force: true })
+  setupClient = createClient({ url: `file:${DB_PATH}` })
+  await applyMigrations(setupClient)
+})
+
+after(() => {
+  setupClient?.close()
+  for (const suffix of ['', '-wal', '-shm']) rmSync(`${DB_PATH}${suffix}`, { force: true })
+})
 
 test('탈퇴 상태 두 개가 상태 목록에 있다', async () => {
   const { REGISTRATION_STATUSES } = await import(CONSTANTS.href)
@@ -68,43 +105,26 @@ test('탐지기의 상태 목록이 앱 상수와 정확히 같다(양방향)', 
   )
 })
 
-// `requestWithdrawal`/`cancelWithdrawal`이 쓰는 `src/db/client.ts`의 `db`는
-// 프로세스 안에서 연결을 한 번 열면 그 파일 경로에 고정해 재사용한다
-// (`cachedRawClient`). 신청 테스트가 끝난 뒤 파일을 지우고 같은 경로에 새
-// 파일을 만들면 그 캐시가 "이동된 파일"을 보게 되어 SQLITE_READONLY_DBMOVED로
-// 죽는다 — 그래서 신청·취소를 별도 테스트로 나누지 않고 같은 DB 파일 위에서
-// 한 테스트 안에 이어 붙인다. (`queriesProfiles.test.mjs`도 같은 이유로
-// before/after에서 파일을 한 번만 만든다.)
-test('신청·취소가 조건부 UPDATE로 승인↔신청 상태를 오간다', async () => {
-  const path = '/tmp/wd-request.db'
-  const { rmSync } = await import('node:fs')
-  for (const s of ['', '-wal', '-shm']) rmSync(`${path}${s}`, { force: true })
-  const c = createClient({ url: `file:${path}` })
-  try {
-    await applyMigrations(c)
-    await seedMember(c, { id: 'm1' })
+test('신청·취소가 조건부 UPDATE로 승인↔신청 상태를 오가고, 다른 조합원은 건드리지 않는다', async () => {
+  // m1만 신청·취소를 거치고, m2는 승인 상태 그대로 남아야 한다 — id 술어가
+  // 빠지면(리뷰 지적) 승인 상태 조합원 전원이 함께 바뀌는데, 조합원이 한 명뿐인
+  // 픽스처로는 그 결함이 드러나지 않는다.
+  await seedMember(setupClient, { id: 'm1' })
+  await seedMember(setupClient, { id: 'm2' })
 
-    const { requestWithdrawal, cancelWithdrawal } = await import(
-      new URL('../../src/db/queries/withdrawal.ts', import.meta.url).href
-    )
-    // 쿼리 계층은 모듈 수준 `db`를 쓰므로 TURSO_DATABASE_URL이 이 파일을
-    // 가리켜야 한다. 테스트 실행 시 env로 지정한다.
-    assert.equal(await requestWithdrawal('m1'), true)
+  const { requestWithdrawal, cancelWithdrawal } = await import(WITHDRAWAL_MODULE_URL.href)
 
-    let after = await c.execute("SELECT registration_status s FROM member_profiles WHERE id='m1'")
-    assert.equal(after.rows[0].s, 'withdrawal_requested')
+  assert.equal(await requestWithdrawal('m1'), true)
+  assert.equal(await statusOf(setupClient, 'm1'), 'withdrawal_requested')
+  assert.equal(await statusOf(setupClient, 'm2'), 'approved')
 
-    // 두 번째 신청은 이미 신청 상태라 false — 조건부 UPDATE의 rowsAffected 판정.
-    assert.equal(await requestWithdrawal('m1'), false)
+  // 두 번째 신청은 이미 신청 상태라 false — 조건부 UPDATE의 rowsAffected 판정.
+  assert.equal(await requestWithdrawal('m1'), false)
 
-    assert.equal(await cancelWithdrawal('m1'), true)
-    after = await c.execute("SELECT registration_status s FROM member_profiles WHERE id='m1'")
-    assert.equal(after.rows[0].s, 'approved')
+  assert.equal(await cancelWithdrawal('m1'), true)
+  assert.equal(await statusOf(setupClient, 'm1'), 'approved')
+  assert.equal(await statusOf(setupClient, 'm2'), 'approved')
 
-    // 승인 상태에서 또 취소하면 false
-    assert.equal(await cancelWithdrawal('m1'), false)
-  } finally {
-    c.close()
-    for (const s of ['', '-wal', '-shm']) rmSync(`${path}${s}`, { force: true })
-  }
+  // 승인 상태에서 또 취소하면 false
+  assert.equal(await cancelWithdrawal('m1'), false)
 })
