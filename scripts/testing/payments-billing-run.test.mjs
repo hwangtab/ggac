@@ -13,7 +13,17 @@ import { runBillingCharges } from '../../src/lib/payments/billingRun.ts'
  */
 
 function makeDeps(overrides = {}) {
-  const calls = { charged: [], done: [], failed: [], duesPaid: [], ensured: [] }
+  const calls = {
+    charged: [],
+    done: [],
+    failed: [],
+    duesPaid: [],
+    ensured: [],
+    claimed: [],
+    released: [],
+  }
+  // 선점 상태를 실제 DB처럼 흉내 낸다 — 같은 (회원, 청구월)은 한 번만 잡힌다.
+  const claims = new Set()
 
   const deps = {
     billingMonth: '2026-09',
@@ -52,11 +62,22 @@ function makeDeps(overrides = {}) {
     markDuesPaid: async input => {
       calls.duesPaid.push(input)
     },
+    claimDuesForCharge: async input => {
+      calls.claimed.push(input)
+      const key = `${input.userId}:${input.billingMonth}`
+      if (claims.has(key)) return false
+      claims.add(key)
+      return true
+    },
+    releaseDuesClaim: async input => {
+      calls.released.push(input)
+      claims.delete(`${input.userId}:${input.billingMonth}`)
+    },
     getPaymentByOrderId: async orderId => ({ id: `p_${orderId}` }),
     notifyFailure: async () => {},
     ...overrides,
   }
-  return { deps, calls }
+  return { deps, calls, claims }
 }
 
 test('대상자에게 청구하고 납부 처리한다', async () => {
@@ -195,4 +216,79 @@ test('대상이 없으면 아무것도 하지 않는다', async () => {
   const result = await runBillingCharges(deps)
   assert.equal(calls.charged.length, 0)
   assert.equal(result.charged, 0)
+})
+
+test('청구 뒤 납부 표시 직전에 죽어도 다음 실행이 다시 청구하지 않는다', async () => {
+  // 2026-09-01 감사가 잡은 이중 청구 경로의 재현.
+  //
+  // 예전에는 `getDues().status === 'paid'` 검사가 유일한 방어였다. 청구가
+  // **성공한 뒤** `markDuesPaid` 직전에 죽으면 회비는 `unpaid`로 남고, 다음
+  // 실행이 그 검사를 통과해 같은 달을 또 청구한다. 주문번호가 randomUUID라
+  // `payments_order_id_unique`도 그것을 못 잡는다.
+  //
+  // 워크플로와 스키마 주석이 "회원당 청구월 유일 제약 때문에 두 번 돌아도 두 번
+  // 청구되지 않는다"고 적어 두었는데, 그 제약은 회비 **행**이 둘 생기는 것을
+  // 막을 뿐 카드가 두 번 긁히는 것은 막지 못한다.
+  const { deps, calls, claims } = makeDeps({
+    // 첫 실행이 납부 표시에 실패한 상황을 만든다.
+    markDuesPaid: async () => {
+      throw new Error('여기서 죽었다')
+    },
+  })
+
+  await assert.rejects(() => runBillingCharges(deps))
+  assert.equal(calls.charged.length, 1, '첫 실행은 실제로 청구했다')
+  assert.equal(claims.size, 1, '선점이 남아 있어야 한다')
+
+  // 두 번째 실행: 회비는 여전히 unpaid다(= 옛 검사는 통과한다).
+  const second = makeDeps({ getDues: async () => ({ status: 'unpaid' }) })
+  // 첫 실행이 남긴 선점을 물려받는다.
+  second.claims.add('u1:2026-09')
+
+  const result = await runBillingCharges(second.deps)
+
+  assert.equal(second.calls.charged.length, 0, '두 번째 실행은 청구하면 안 된다 — 이중 청구다')
+  assert.equal(result.skipped, 1)
+  assert.equal(
+    second.calls.failed[0]?.code,
+    'DUES_ALREADY_CLAIMED',
+    '왜 건너뛰었는지가 결제 행에 남아야 대사가 가능하다'
+  )
+})
+
+test('확정된 실패는 선점을 풀어 재시도할 수 있게 한다', async () => {
+  // 카드 한도 초과처럼 **결과가 확정된** 실패는 다시 시도할 수 있어야 한다.
+  // 선점을 풀지 않으면 그 회원은 그 달 내내 회비를 낼 수 없다.
+  const { deps, calls, claims } = makeDeps({
+    charge: async () => {
+      const err = new Error('카드 한도 초과')
+      err.code = 'REJECT_CARD_LIMIT'
+      throw err
+    },
+  })
+
+  const result = await runBillingCharges(deps)
+
+  assert.equal(result.failed, 1)
+  assert.equal(calls.released.length, 1, '확정 실패는 선점을 푼다')
+  assert.equal(claims.size, 0)
+})
+
+test('판단할 수 없는 실패는 선점을 남긴다 — 덜 걷는 쪽이 안전하다', async () => {
+  // 청구가 나갔는지 모르는 상태다. 선점을 풀면 다음 실행이 다시 긁는다.
+  const { deps, calls, claims } = makeDeps({
+    charge: async () => {
+      // 판단 불가는 `name === 'TossLookupError'`로만 판정한다
+      // (`billingRun.ts:100`). 토스 클라이언트가 5xx·401·403·429에 이 이름을 붙인다.
+      const err = new Error('타임아웃')
+      err.name = 'TossLookupError'
+      throw err
+    },
+  })
+
+  const result = await runBillingCharges(deps)
+
+  assert.equal(result.undecided, 1)
+  assert.equal(calls.released.length, 0, '판단 불가에서는 선점을 풀면 안 된다')
+  assert.equal(claims.size, 1)
 })

@@ -19,6 +19,8 @@ import {
   markPaymentDone,
   markPaymentFailed,
   markDuesPaid,
+  claimDuesForCharge,
+  releaseDuesClaim,
   getPaymentByOrderId,
 } from '@/db/queries/payments'
 import { createNotification } from '@/db/queries/notifications'
@@ -77,6 +79,8 @@ export async function POST(request: NextRequest) {
       markPaymentDone,
       markPaymentFailed,
       markDuesPaid,
+      claimDuesForCharge,
+      releaseDuesClaim,
       getPaymentByOrderId,
       notifyFailure: async input => {
         // 카드 한도 초과나 유효기간 만료가 대부분이라, 회원이 카드를 바꿔

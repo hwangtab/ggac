@@ -57,6 +57,18 @@ export interface BillingRunDeps {
     billingMonth: string
     paymentId: string
   }) => Promise<unknown>
+  /** 청구 전 선점. false면 이미 누가 청구 중이거나 청구했다는 뜻이다. */
+  claimDuesForCharge: (input: {
+    userId: string
+    billingMonth: string
+    paymentId: string
+  }) => Promise<boolean>
+  /** 확정된 실패 뒤 선점 해제. 판단 불가에서는 부르지 않는다. */
+  releaseDuesClaim: (input: {
+    userId: string
+    billingMonth: string
+    paymentId: string
+  }) => Promise<unknown>
   getPaymentByOrderId: (orderId: string) => Promise<Record<string, unknown> | null>
   notifyFailure: (input: {
     userId: string
@@ -121,7 +133,7 @@ export async function runBillingCharges(deps: BillingRunDeps): Promise<BillingRu
     const orderId = generateOrderId('dues')
     const orderName = `경기아트콜렉티브 ${monthLabel(deps.billingMonth)} 조합비`
 
-    await deps.createPendingPayment({
+    const pending = await deps.createPendingPayment({
       orderId,
       userId,
       kind: 'dues',
@@ -130,6 +142,31 @@ export async function runBillingCharges(deps: BillingRunDeps): Promise<BillingRu
       payerName: (target.display_name as string) ?? null,
       payerEmail: (target.email as string) ?? null,
     })
+    const pendingId = String(pending?.id ?? '')
+
+    // **청구를 나가기 전에 그 달을 선점한다.**
+    //
+    // 위의 `status === 'paid'` 검사만으로는 부족하다. 청구가 성공한 뒤
+    // `markDuesPaid` 직전에 죽으면 회비는 `unpaid`로 남고, 다음 실행이 그 검사를
+    // 통과해 **같은 달을 다시 청구한다**. 주문번호가 randomUUID라
+    // `payments_order_id_unique`도 그것을 못 잡는다(2026-09-01 감사).
+    //
+    // 선점은 단일 UPDATE의 원자성에 기대므로 동시 실행에서도 한쪽만 이긴다.
+    const claimed = await deps.claimDuesForCharge({
+      userId,
+      billingMonth: deps.billingMonth,
+      paymentId: pendingId,
+    })
+    if (!claimed) {
+      // 다른 실행이 이미 이 달을 잡았다. 여기서 청구하면 그게 이중 청구다.
+      await deps.markPaymentFailed(orderId, {
+        code: 'DUES_ALREADY_CLAIMED',
+        message: '같은 청구월이 이미 선점되어 있어 청구하지 않았습니다.',
+      })
+      deps.log?.warn?.('자동결제 건너뜀(이미 선점됨)', { userId, orderId })
+      result.skipped++
+      continue
+    }
 
     let approved: Record<string, unknown>
     try {
@@ -152,6 +189,14 @@ export async function runBillingCharges(deps: BillingRunDeps): Promise<BillingRu
       const code = (error as { code?: string }).code ?? 'BILLING_FAILED'
       const message = error instanceof Error ? error.message : '자동결제에 실패했습니다.'
       await deps.markPaymentFailed(orderId, { code, message })
+      // 확정된 실패다 — 카드를 바꿔 다시 낼 수 있게 선점을 푼다.
+      // (판단 불가는 위에서 이미 continue했다. 그쪽은 **일부러 선점을 남긴다** —
+      //  덜 걷는 것이 두 번 걷는 것보다 낫다.)
+      await deps.releaseDuesClaim({
+        userId,
+        billingMonth: deps.billingMonth,
+        paymentId: pendingId,
+      })
       await deps.notifyFailure({
         userId,
         email: (target.email as string) ?? null,

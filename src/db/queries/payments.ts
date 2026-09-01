@@ -10,7 +10,7 @@
  * 토스는 웹훅을 최대 7번 재전송하므로 이건 예외 상황이 아니라 일상이다.
  */
 
-import { and, asc, eq, lt, sql } from 'drizzle-orm'
+import { and, asc, eq, isNull, lt, sql } from 'drizzle-orm'
 
 import { db } from '../client.ts'
 import { membershipDues, payments } from '../schema/index.ts'
@@ -214,6 +214,65 @@ export async function countDues(userId: string, billingMonth: string): Promise<n
  * 납부 처리. **미납인 행만** 바꾼다 — 이미 납부된 달을 다시 납부로 덮어써
  * 결제 연결이 바뀌면, 어느 결제로 냈는지 추적이 끊긴다.
  */
+/**
+ * 청구를 **나가기 전에** 그 달 회비를 선점한다.
+ *
+ * 성공하면 true, 이미 누가 선점했거나 이미 낸 달이면 false.
+ *
+ * **왜 필요한가.** 이 표의 `(user_id, billing_month)` 유니크 인덱스는 회비 *행*이
+ * 두 개 생기는 것을 막을 뿐, 카드가 **두 번 긁히는 것**은 막지 못한다. 주문번호가
+ * `randomUUID()`라 `payments_order_id_unique`도 중복 청구를 못 잡는다. 그래서
+ * 크론이 청구에 성공하고 `markDuesPaid` 직전에 죽으면 회비는 `unpaid`로 남고,
+ * 다음 실행이 **같은 달을 다시 청구한다**(2026-09-01 감사).
+ *
+ * 이 함수는 그 창을 닫는다. 단일 UPDATE 문의 원자성에 기대며, `payment_id`가
+ * 비어 있는 `unpaid` 행에만 걸린다. 선점에 실패하면 호출자는 **청구하지 않고
+ * 건너뛰어야 한다.**
+ *
+ * 판단 불가(청구가 나갔는지 모르는) 실패에서는 선점을 **풀지 않는다** — 덜 걷는
+ * 것이 두 번 걷는 것보다 낫다. 확정된 실패에서만 `releaseDuesClaim`으로 푼다.
+ */
+export async function claimDuesForCharge(input: {
+  userId: string
+  billingMonth: string
+  paymentId: string
+}): Promise<boolean> {
+  const result = await db
+    .update(membershipDues)
+    .set({ paymentId: input.paymentId })
+    .where(
+      and(
+        eq(membershipDues.userId, input.userId),
+        eq(membershipDues.billingMonth, input.billingMonth),
+        eq(membershipDues.status, 'unpaid'),
+        isNull(membershipDues.paymentId)
+      )
+    )
+  return (result.rowsAffected ?? 0) > 0
+}
+
+/**
+ * 확정된 실패 뒤 선점을 푼다 — 이 회원이 카드를 바꿔 다시 낼 수 있어야 한다.
+ * 자기가 건 선점만 푼다(`payment_id` 대조).
+ */
+export async function releaseDuesClaim(input: {
+  userId: string
+  billingMonth: string
+  paymentId: string
+}): Promise<void> {
+  await db
+    .update(membershipDues)
+    .set({ paymentId: null })
+    .where(
+      and(
+        eq(membershipDues.userId, input.userId),
+        eq(membershipDues.billingMonth, input.billingMonth),
+        eq(membershipDues.status, 'unpaid'),
+        eq(membershipDues.paymentId, input.paymentId)
+      )
+    )
+}
+
 export async function markDuesPaid(input: {
   userId: string
   billingMonth: string

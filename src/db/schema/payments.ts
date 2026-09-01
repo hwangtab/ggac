@@ -71,9 +71,14 @@ export const membershipDues = sqliteTable(
   },
   table => [
     /**
-     * 회원당 청구월 하나. 매월 청구 크론이 두 번 돌아도 같은 달이 두 번
-     * 청구되지 않게 하는 **마지막 방어선**이다 — 크론 코드의 조건문에만
-     * 기대면 동시 실행에서 뚫린다.
+     * 회원당 청구월 하나.
+     *
+     * **이것만으로는 이중 청구를 막지 못한다.** 이 제약은 회비 *행*이 둘 생기는
+     * 것을 막을 뿐, 카드가 두 번 긁히는 것과는 무관하다 — 청구가 성공한 뒤
+     * 납부 표시 직전에 죽으면 행은 하나인 채 `unpaid`로 남고 다음 실행이 다시
+     * 긁는다(2026-09-01 감사에서 실측·재현). 실제 방어선은 `billingRun.ts`가
+     * 청구 **전에** 거는 선점(`claimDuesForCharge`)이고, 이 인덱스는 그 선점이
+     * 걸릴 행이 하나임을 보장하는 역할이다.
      */
     uniqueIndex('membership_dues_user_month_idx').on(table.userId, table.billingMonth),
   ]
