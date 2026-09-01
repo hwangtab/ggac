@@ -9,6 +9,7 @@ import { createLogger, maskId } from '@/utils/logger'
 import { getPostById as getPostByIdFromDb } from '@/db/queries/posts'
 import { getProfileById } from '@/db/queries/profiles'
 import { listImageAttachments } from '@/db/queries/attachments'
+import { stripMarkdownSyntax } from '@/utils/textUtils'
 
 const log = createLogger('Posts')
 
@@ -17,6 +18,7 @@ export interface PostDetail {
   id: string
   title: string
   content: string
+  content_format?: string
   category: string
   author_id: string
   created_at: string
@@ -129,12 +131,23 @@ export async function getPostThumbnail(postId: string): Promise<string | null> {
 
 /**
  * 게시물 내용에서 텍스트만 추출 (HTML 태그 제거)
+ *
+ * `contentFormat`이 `'markdown'`일 때만 마크다운 문법(헤딩·링크·이스케이프 등)도
+ * 먼저 벗겨낸다 — `createTextPreview`(`@/utils/textUtils`)와 같은 게이트.
+ * 무조건 적용하면 `[x](y)`를 정당하게 쓰는 기존 평문 게시글의 meta
+ * description/OG 설명이 조용히 바뀐다.
  */
-export function extractTextFromContent(content: string, maxLength: number = 150): string {
+export function extractTextFromContent(
+  content: string,
+  maxLength: number = 150,
+  contentFormat?: string
+): string {
   if (!content) return ''
 
+  const source = contentFormat === 'markdown' ? stripMarkdownSyntax(content) : content
+
   // HTML 태그 제거
-  const textOnly = content.replace(/<[^>]*>/g, '')
+  const textOnly = source.replace(/<[^>]*>/g, '')
 
   // 연속된 공백과 줄바꿈 정리
   const cleaned = textOnly.replace(/\s+/g, ' ').trim()
@@ -200,7 +213,7 @@ function generatePostKeywords(post: any, author: any): string[] {
 
   // 내용에서 자주 언급되는 단어 추출 (간단한 방식)
   if (post.content) {
-    const contentText = extractTextFromContent(post.content)
+    const contentText = extractTextFromContent(post.content, 150, post.content_format)
     const commonWords = [
       '음악',
       '공연',
@@ -235,12 +248,16 @@ export const getPostMetadata = cache(async (postId: string) => {
       getPostThumbnail(postId),
     ])
 
-    const description = extractTextFromContent(post.content)
+    const description = extractTextFromContent(post.content, 150, post.content_format)
     const categoryEmoji = getCategoryEmoji(post.category)
     const keywords = generatePostKeywords(post, author)
 
     // 색인 가치 판단을 위한 본문 텍스트 길이 (HTML/공백 제거 후)
-    const contentTextLength = extractTextFromContent(post.content, Number.MAX_SAFE_INTEGER).length
+    const contentTextLength = extractTextFromContent(
+      post.content,
+      Number.MAX_SAFE_INTEGER,
+      post.content_format
+    ).length
 
     return { post, author, thumbnail, description, categoryEmoji, keywords, contentTextLength }
   } catch (error) {

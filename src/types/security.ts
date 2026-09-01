@@ -99,6 +99,9 @@ export type SecurityEventType =
   | 'BULK_OPERATION_COMPLETED'
   | 'BULK_OPERATION_ERROR'
 
+  // 지원사업 다이제스트 이벤트 (단계 4 Task 7 — 관리자 발행)
+  | 'GRANT_DIGEST_PUBLISHED'
+
   // 검색 이벤트
   | 'SEARCH_QUERY_BLOCKED'
   | 'SEARCH_INJECTION_ATTEMPT'

@@ -71,6 +71,13 @@
       "when": 1787879412407,
       "tag": "0009_add_board_agenda_comments",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1788236596042,
+      "tag": "0010_fat_cassandra_nova",
+      "breakpoints": true
     }
   ]
 }
