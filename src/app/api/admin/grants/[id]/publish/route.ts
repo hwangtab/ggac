@@ -63,7 +63,13 @@ export const POST = defineApiRoute({
     })
     const members = rows
       .filter(r => r.is_active && !r.is_suspended)
-      .map(r => ({ id: r.id, email: r.email, display_name: r.display_name }))
+      .map(r => ({
+        id: r.id,
+        email: r.email,
+        display_name: r.display_name,
+        interest_genres: r.interest_genres ?? [],
+        interest_regions: r.interest_regions ?? [],
+      }))
 
     // 회원별 설정. 18명 규모라 한 명씩 조회해도 충분하다.
     const settingsByUserId = new Map<string, SettingLike[]>()
@@ -127,6 +133,7 @@ export const POST = defineApiRoute({
         recipients: members.length,
         emailSent: result.email_sent,
         emailFailed: result.email_failed,
+        emailSkippedNomatch: result.email_skipped_nomatch,
       },
       'medium'
     )

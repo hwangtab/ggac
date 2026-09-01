@@ -14,7 +14,9 @@ import {
   renderDigestEmail,
   renderDigestMarkdown,
   renderDigestNotification,
+  CAP,
 } from './grantDigest.ts'
+import { effectiveInterests, matchesInterests } from './interestMatch.ts'
 
 /** `getUserSettings`가 돌려주는 행의 필요한 부분만. */
 export interface SettingLike {
@@ -27,6 +29,9 @@ export interface PublishMember {
   id: string
   email: string | null
   display_name: string | null
+  /** 빈 배열이면 조합 기본값. `effectiveInterests`가 해석한다. */
+  interest_genres: string[]
+  interest_regions: string[]
 }
 
 export interface PublishDigest {
@@ -42,7 +47,20 @@ export interface GrantPublishResult {
   notification_failed: boolean
   email_sent: number
   email_failed: number
-  email_skipped: number
+  /** 조합원이 이메일 수신을 껐다. */
+  email_skipped_optout: number
+  /** 주소가 없거나 형식이 깨졌다. */
+  email_skipped_address: number
+  /**
+   * 관심사와 겹치는 공고가 0건이었다.
+   *
+   * **이 사유만 따로 세는 이유**: 앞의 둘은 사람이 선택했거나 데이터가 깨진 것이고,
+   * 이것은 **우리 필터가 만든 결과**다. kosmart는 지역을 AND로 바꾼 뒤 210명이 카드
+   * 0장을 받는 상태를 한동안 몰랐다 — 아무것도 못 받은 사람은 항의하지 않는다.
+   */
+  email_skipped_nomatch: number
+  /** `email_skipped_nomatch`와 같은 값. 관리자 화면이 읽는 이름. */
+  zero_match_count: number
   /** 실패한 주소(마스킹됨)와 사유. 관리자 화면에 그대로 보여준다. */
   email_errors: { to: string; error: string }[]
 }
@@ -160,22 +178,36 @@ export async function runGrantPublish(input: RunGrantPublishInput): Promise<Gran
 
   // ③ 이메일. 18통 규모라 순차로 보낸다 — 레이트리밋·배치 드레인이 필요 없다.
   const settingsUrl = `${input.siteUrl}/ko/mypage/settings`
-  const { subject, html } = renderDigestEmail(digest.items, digest.week_key, todayIso, settingsUrl)
 
   let sent = 0
   let failed = 0
-  let skipped = 0
+  let skippedOptout = 0
+  let skippedAddress = 0
+  let skippedNoMatch = 0
   const errors: { to: string; error: string }[] = []
 
   for (const m of members) {
     if (isEmailOptedOut(input.settingsByUserId.get(m.id))) {
-      skipped += 1
+      skippedOptout += 1
       continue
     }
     if (!isSendableEmail(m.email)) {
-      skipped += 1
+      skippedAddress += 1
       continue
     }
+
+    // 이 회원의 관심사로 풀을 거른다. 미설정이면 조합 기본값이 적용된다.
+    const interests = effectiveInterests(m)
+    const mine = active.filter(it => matchesInterests(it, interests)).slice(0, CAP)
+
+    if (mine.length === 0) {
+      // 빈 메일은 노이즈다. 게시글과 인앱 알림은 이미 갔으므로 이 회원도 볼 것은 있다.
+      skippedNoMatch += 1
+      continue
+    }
+
+    const { subject, html } = renderDigestEmail(mine, digest.week_key, todayIso, settingsUrl)
+
     try {
       await input.sendEmail({
         to: m.email,
@@ -198,7 +230,9 @@ export async function runGrantPublish(input: RunGrantPublishInput): Promise<Gran
     notified,
     sent,
     failed,
-    skipped,
+    skippedOptout,
+    skippedAddress,
+    skippedNoMatch,
   })
 
   return {
@@ -207,7 +241,10 @@ export async function runGrantPublish(input: RunGrantPublishInput): Promise<Gran
     notification_failed: notificationFailed,
     email_sent: sent,
     email_failed: failed,
-    email_skipped: skipped,
+    email_skipped_optout: skippedOptout,
+    email_skipped_address: skippedAddress,
+    email_skipped_nomatch: skippedNoMatch,
+    zero_match_count: skippedNoMatch,
     email_errors: errors,
   }
 }

@@ -83,6 +83,7 @@ export default function AdminGrantsPage() {
   const [publishing, setPublishing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<string | null>(null)
+  const [zeroMatch, setZeroMatch] = useState(0)
 
   const dirty = useMemo(() => {
     if (!selected || !savedItems) return false
@@ -182,9 +183,12 @@ export default function AdminGrantsPage() {
       if (!res.ok) throw new Error(json?.error?.message ?? '발행하지 못했습니다.')
       const d = json.data
       setResult(
-        `발행했습니다. 알림 ${d.notified}명, 메일 성공 ${d.email_sent} · 실패 ${d.email_failed} · 건너뜀 ${d.email_skipped}` +
+        `발행했습니다. 알림 ${d.notified}명, 메일 성공 ${d.email_sent} · 실패 ${d.email_failed}` +
+          ` · 수신거부 ${d.email_skipped_optout} · 주소오류 ${d.email_skipped_address}` +
+          ` · 맞는 공고 없음 ${d.email_skipped_nomatch}` +
           (d.notification_failed ? ' (알림 생성 실패 — 로그 확인 필요)' : '')
       )
+      setZeroMatch(d.zero_match_count ?? 0)
       setSelected(null)
       setSavedItems(null)
       await loadList()
@@ -202,6 +206,12 @@ export default function AdminGrantsPage() {
     >
       {error && <p className="mb-4 rounded bg-red-50 p-3 text-sm text-red-700">{error}</p>}
       {result && <p className="mb-4 rounded bg-green-50 p-3 text-sm text-green-700">{result}</p>}
+      {zeroMatch > 0 && (
+        <p className="mb-4 rounded bg-amber-50 p-3 text-sm text-amber-800">
+          조합원 {zeroMatch}명에게는 관심사와 맞는 공고가 없어 메일이 가지 않았습니다. 관심 분야를
+          너무 좁게 설정했거나, 이번 회차에 그 분야 공고가 없습니다.
+        </p>
+      )}
 
       {loading ? (
         <p className="text-sm text-gray-500">불러오는 중…</p>
