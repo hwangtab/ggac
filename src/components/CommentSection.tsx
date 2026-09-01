@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { logCommentCreated } from '@/utils/activityLogger'
 import CommentLikeButton from './CommentLikeButton'
 import type { CommentWithLikes } from '@/types'
+import { SEOUL_TIME_ZONE } from '@/utils/date'
 
 interface Profile {
   id: string
@@ -270,6 +271,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({
                       </span>
                       <span className="text-xs text-gray-500">
                         {new Date(popularComment.created_at).toLocaleDateString('ko-KR', {
+                          ...SEOUL_TIME_ZONE,
                           month: 'short',
                           day: 'numeric',
                           hour: '2-digit',
@@ -324,6 +326,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({
                     </span>
                     <span className="text-xs text-gray-500">
                       {new Date(comment.created_at).toLocaleDateString('ko-KR', {
+                        ...SEOUL_TIME_ZONE,
                         month: 'short',
                         day: 'numeric',
                         hour: '2-digit',

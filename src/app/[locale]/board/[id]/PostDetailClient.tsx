@@ -9,6 +9,7 @@ import PostContentRenderer from '@/components/PostContentRenderer'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { toSafeArtistImageSrc } from '@/utils/safeUrl'
 import { fetchSessionProfile } from '@/utils/sessionProfile'
+import { SEOUL_TIME_ZONE } from '@/utils/date'
 
 interface Post {
   id: string
@@ -205,6 +206,7 @@ export default function PostDetailClient({
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
     return date.toLocaleDateString('ko-KR', {
+      ...SEOUL_TIME_ZONE,
       year: 'numeric',
       month: 'long',
       day: 'numeric',

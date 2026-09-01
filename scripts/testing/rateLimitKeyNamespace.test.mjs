@@ -70,3 +70,20 @@ test('창·상한이 다른 두 설정은 name이 없어도 키가 갈린다 (�
     'name을 빠뜨린 설정끼리도 값이 다르면 섞이지 않아야 한다'
   )
 })
+
+test('사용자 키 생성기가 Authorization 헤더로 버킷을 가르지 않는다', () => {
+  // 이 앱은 100% 쿠키 세션이다. 정상 클라이언트는 우리 API에 Authorization을
+  // 보내지 않으므로, 그 헤더로 키를 잡는 분기는 **매 요청 무작위 Bearer를 붙이는
+  // 쪽에만 새 버킷을 내주는 우회로**였다(2026-09-01 감사). 바꿀 수 없는 축은
+  // IP뿐이라 IP를 불변축으로 삼는다.
+  const gen = source.slice(
+    source.indexOf('export const createDistributedUserKeyGenerator'),
+    source.indexOf('export const createDistributedIPKeyGenerator')
+  )
+  assert.doesNotMatch(
+    gen,
+    /headers\.get\('authorization'\)/,
+    'Authorization 헤더로 키를 잡으면 공격자가 요청마다 새 버킷을 얻는다'
+  )
+  assert.match(gen, /x-forwarded-for/, 'IP를 불변축으로 써야 한다')
+})

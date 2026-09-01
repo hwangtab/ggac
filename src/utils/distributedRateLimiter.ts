@@ -607,14 +607,23 @@ export const DISTRIBUTED_RATE_LIMIT_CONFIGS = {
 } as const
 
 // 키 생성 함수들
+/**
+ * 라우트별 네임스페이스 + 호출자 IP로 키를 만든다.
+ *
+ * **`Authorization` 헤더로 키를 잡던 분기를 지웠다.** 이 앱은 100% 쿠키 세션이라
+ * 정상 클라이언트는 우리 API에 `Authorization`을 보내지 않는다(저장소 안의 두
+ * 사용처는 Resend·토스로 **나가는** 호출이다). 그래서 그 분기는 정상 사용자에게는
+ * 죽은 코드였고, **매 요청 무작위 `Bearer`를 붙이는 쪽에만 요청마다 새 버킷을
+ * 내주는 우회로**였다 — 이 생성기를 쓰는 호출부에는 `POST /api/posts`(분당 5회),
+ * 알림 대량 발송(요청당 수신자 1000명), 관리자 대량·복원 라우트가 들어 있다.
+ *
+ * 세션 사용자 id로 키를 잡는 편이 이상적이지만, 레이트리밋은 **인증보다 먼저**
+ * 돌기 때문에 그 시점에 신원이 없다. 그리고 클라이언트가 보내는 값(헤더든
+ * 쿠키든)은 무엇이든 공격자가 바꿔 새 버킷을 얻을 수 있다. 바꿀 수 없는 축은
+ * IP뿐이므로 IP를 불변축으로 삼는다.
+ */
 export const createDistributedUserKeyGenerator = (prefix: string = 'user') => {
   return (req: NextRequest): string => {
-    const authHeader = req.headers.get('authorization')
-    if (authHeader) {
-      const token = authHeader.replace('Bearer ', '')
-      return `rate_limit:${prefix}:${token.substring(0, 16)}`
-    }
-
     const forwarded = req.headers.get('x-forwarded-for')
     const realIp = req.headers.get('x-real-ip')
     const ip = forwarded ? forwarded.split(',')[0] : realIp || 'unknown'

@@ -7,6 +7,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Link, useRouter } from '@/i18n/navigation'
 import { useTranslations, useLocale } from 'next-intl'
 import { fetchSessionProfile } from '@/utils/sessionProfile'
+import { SEOUL_TIME_ZONE } from '@/utils/date'
 
 export default function PendingPage() {
   const t = useTranslations('auth')
@@ -91,6 +92,7 @@ export default function PendingPage() {
 
   const formatLastChecked = (date: Date) => {
     return date.toLocaleString(dateLocale, {
+      ...SEOUL_TIME_ZONE,
       month: 'short',
       day: 'numeric',
       hour: '2-digit',

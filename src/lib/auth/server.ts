@@ -100,6 +100,18 @@ export const auth = betterAuth({
     // 건다 — 그 파일의 주석에 왜 `hooks.before`가 아니라 이 방식을 골랐는지
     // 적어뒀다.
     minPasswordLength: 8,
+    /**
+     * 비밀번호를 재설정하면 그 사용자의 **기존 세션을 전부 지운다.**
+     *
+     * 이 옵션이 없으면 Better Auth는 세션을 손대지 않는다(실측:
+     * `better-auth/dist/api/routes/password.mjs:172`이 이 플래그가 있을 때만
+     * `deleteUserSessions`를 부른다). 즉 세션 쿠키를 탈취당한 회원이 그걸
+     * 눈치채고 비밀번호를 바꿔도 **탈취된 세션은 만료(7일)까지 그대로 살아
+     * 있었다.** 재설정은 바로 그 상황에서 쓰는 수단인데, 이 저장소에는 세션을
+     * 일괄 취소하는 경로가 따로 없어서 사용자가 할 수 있는 대응이 하나도
+     * 없었다(2026-09-01 감사).
+     */
+    revokeSessionsOnPasswordReset: true,
     password: {
       hash: hashPassword,
       verify: verifyPassword,

@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { MAX_AGENDA_COMMENT_LENGTH } from '@/constants/boardRoom'
+import { SEOUL_TIME_ZONE } from '@/utils/date'
 
 interface AgendaComment {
   id: string
@@ -35,6 +36,7 @@ function wasEdited(comment: AgendaComment) {
 
 function formatTimestamp(iso: string) {
   return new Date(iso).toLocaleString('ko-KR', {
+    ...SEOUL_TIME_ZONE,
     month: 'numeric',
     day: 'numeric',
     hour: '2-digit',

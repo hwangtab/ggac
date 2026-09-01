@@ -9,6 +9,7 @@ import { parseIntegerParam } from '@/utils/queryParams'
 import type { BoardInitialPost } from '@/lib/server/board'
 import type { BoardCategory } from '@/constants/categories'
 import PageHero from '@/components/PageHero'
+import { SEOUL_TIME_ZONE } from '@/utils/date'
 
 interface BoardListViewProps {
   /** 첫 페이지(전체 카테고리) SSR 데이터 — 초기 진입 시 그대로 렌더 */
@@ -169,6 +170,7 @@ export const BoardListView = ({
                   </span>
                   <span className="text-sm text-gray-500">
                     {new Date(post.created_at).toLocaleDateString(dateLocale, {
+                      ...SEOUL_TIME_ZONE,
                       year: 'numeric',
                       month: 'long',
                       day: 'numeric',

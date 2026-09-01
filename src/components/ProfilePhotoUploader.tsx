@@ -263,14 +263,19 @@ const ProfilePhotoUploader: React.FC<ProfilePhotoUploaderProps> = ({
       }
       currentBlobUrl.current = croppedImageUrl
     }
-    // 언마운트 시 최종 revoke
+    // 교체·언마운트 시 최종 revoke
     return () => {
       if (currentBlobUrl.current) {
         URL.revokeObjectURL(currentBlobUrl.current)
         currentBlobUrl.current = null
       }
     }
-  })
+    // **의존성 배열이 반드시 있어야 한다.** 배열이 없으면 이 effect가 매 렌더마다
+    // 돌고, 그 cleanup이 **재렌더 직전에** 실행되어 지금 `<img src>`가 쓰고 있는
+    // blob URL을 revoke한다. 결과: 크롭 박스를 두 번째로 움직이는 순간(= 상태가
+    // 바뀌어 재렌더되는 순간) 미리보기가 빈칸이 된다. 에러는 나지 않는다
+    // (2026-09-01 감사).
+  }, [croppedImageUrl])
 
   // 크롭 모달 a11y: 열릴 때 focus 이동, focus trap, Escape 처리, 이전 focus 복원
   const [previousFocus, setPreviousFocus] = useState<HTMLElement | null>(null)

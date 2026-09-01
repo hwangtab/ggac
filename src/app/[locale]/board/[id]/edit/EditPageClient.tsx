@@ -28,29 +28,39 @@ export default function EditPageClient({ initialPost }: EditPageClientProps) {
     if (submitting) return
     setSubmitting(true)
 
-    const response = await fetch(`/api/posts/${post.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title: post.title,
-        content: post.content,
-        content_format: useRichEditor ? 'html' : 'plain',
-        category: post.category,
-      }),
-    })
-    const result = (await response.json().catch(() => null)) as {
-      success?: boolean
-      error?: string
-    } | null
+    // `fetch`는 네트워크가 끊기면 **reject한다**(HTTP 오류와 달리 예외다).
+    // try/finally가 없으면 `setSubmitting(false)`에 도달하지 못해 버튼이
+    // "저장 중…"으로 영구히 잠기고, 사용자는 새로고침 말고는 길이 없는데
+    // 새로고침하면 편집 내용이 통째로 날아간다(2026-09-01 감사).
+    // 글쓰기 경로는 `useLoadingState`가 같은 일을 해주고 있고 수정만 빠져 있었다.
+    try {
+      const response = await fetch(`/api/posts/${post.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: post.title,
+          content: post.content,
+          content_format: useRichEditor ? 'html' : 'plain',
+          category: post.category,
+        }),
+      })
+      const result = (await response.json().catch(() => null)) as {
+        success?: boolean
+        error?: string
+      } | null
 
-    setSubmitting(false)
-
-    if (!response.ok || !result?.success) {
-      alert(result?.error || '게시글 수정 중 오류가 발생했습니다.')
-    } else {
-      alert('게시글이 수정되었습니다.')
-      router.push(`/board/${post.id}`)
-      router.refresh()
+      if (!response.ok || !result?.success) {
+        alert(result?.error || '게시글 수정 중 오류가 발생했습니다.')
+      } else {
+        alert('게시글이 수정되었습니다.')
+        router.push(`/board/${post.id}`)
+        router.refresh()
+      }
+    } catch {
+      // 네트워크 실패. 편집 내용은 화면에 그대로 남으므로 다시 누르면 된다.
+      alert('네트워크 오류로 저장하지 못했습니다. 연결을 확인하고 다시 시도해주세요.')
+    } finally {
+      setSubmitting(false)
     }
   }
 
