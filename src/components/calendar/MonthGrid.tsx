@@ -32,7 +32,9 @@ function currentMonthSeoul() {
 }
 
 /**
- * 도메인 무관 월간 그리드. 6주(일~토) 고정이라 월이 바뀌어도 높이가 흔들리지 않는다.
+ * 도메인 무관 월간 그리드. `startOfWeek(startOfMonth)`~`endOfWeek(endOfMonth)`(일~토) 범위라
+ * 달마다 그리드가 5주 또는 6주로 다르다(고정 6주가 아니다) — 예: 2026-09은 5주. 그래서 월이
+ * 바뀌면 그리드 높이도 함께 바뀔 수 있다.
  *
  * `board-room/_components/MeetingCalendar.tsx`는 그대로 둔다 — 그쪽은 select/vote 모드와
  * 정족수 배지가 이사회에 결합돼 있어 일반화하려면 그 도메인을 건드려야 한다.
