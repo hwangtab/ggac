@@ -413,6 +413,44 @@ test('마지막 관리자는 탈퇴 확정되지 않는다', async () => {
   assert.equal(p.a, 1, '관리자 권한이 남아 있어야 한다')
 })
 
+test('다른 승인 관리자가 1명 남아 있으면 관리자도 탈퇴 확정된다', async () => {
+  // 신청자 본인(m2)은 이 시점에 registration_status가 'withdrawal_requested'라
+  // approved 집계에서 스스로 빠진다 — 그래서 "본인 말고 승인 관리자 1명(m3)"만
+  // 있어도 탈퇴 후 관리자가 1명(m3) 남으므로 허용돼야 한다. `> 1`로 잘못
+  // 쓰면 이 경우가 부당하게 차단된다(회귀 대상).
+  await seedWithdrawalFixture(setupClient, {
+    targetStatus: 'approved',
+    adminStatus: 'withdrawal_requested',
+  })
+  const now = Date.now()
+  await setupClient.execute({
+    sql: `INSERT INTO member_profiles
+            (id, email, display_name, real_name, registration_status, is_active, is_admin,
+             created_at, updated_at)
+          VALUES ('m3', 'm3@example.test', '회원 m3', '박관리', 'approved', 1, 1, ?, ?)`,
+    args: [now, now],
+  })
+
+  const { withdrawMember } = await import(WITHDRAWAL_MODULE_URL.href)
+  assert.deepEqual(await withdrawMember('m2'), { ok: true, revokedBillingKeys: [] })
+
+  const p = (
+    await setupClient.execute(
+      "SELECT registration_status s, is_admin a FROM member_profiles WHERE id='m2'"
+    )
+  ).rows[0]
+  assert.equal(p.s, 'withdrawn')
+  assert.equal(p.a, 0)
+  // 남은 관리자(m3)는 그대로다.
+  const other = (
+    await setupClient.execute(
+      "SELECT registration_status s, is_admin a FROM member_profiles WHERE id='m3'"
+    )
+  ).rows[0]
+  assert.equal(other.s, 'approved')
+  assert.equal(other.a, 1)
+})
+
 test('개인정보가 남으면 던지고 전부 롤백된다', async () => {
   // 트랜잭션 후반(user 표 갱신)에서 던지게 만든다 — 그래야 앞에서 이미 지운
   // 로그와 이미 비운 신원이 **되살아나는지**를 볼 수 있다. 유령 계정에

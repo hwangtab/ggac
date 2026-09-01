@@ -118,7 +118,13 @@ export async function withdrawMember(userId: string): Promise<WithdrawOutcome> {
           eq(memberProfiles.id, userId),
           eq(memberProfiles.registrationStatus, 'withdrawal_requested'),
           // 마지막 관리자를 내보내면 조합이 잠긴다.
-          sql`((SELECT count(*) FROM ${memberProfiles} WHERE is_admin = 1 AND registration_status = 'approved') > 1
+          // 신청자 본인은 이 시점에 registration_status가 이미
+          // 'withdrawal_requested'로 바뀌어 있어 approved 집계에서
+          // 저절로 빠진다. 즉 이 count는 "본인을 제외한" 승인 관리자 수다 —
+          // 그래서 "탈퇴 후에도 관리자가 1명 남는다"는 count > 0이지 count > 1이
+          // 아니다(> 1로 쓰면 본인 말고 2명이 더 있어야 통과해, 관리자가 정상
+          // 1명 남는 탈퇴까지 막는다).
+          sql`((SELECT count(*) FROM ${memberProfiles} WHERE is_admin = 1 AND registration_status = 'approved') > 0
               OR (SELECT is_admin FROM ${memberProfiles} WHERE id = ${userId}) = 0)`
         )
       )
