@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { apiPatch, apiDelete, ApiSuccess, ApiError } from '@/utils/apiWrapper'
-import { requireBoardMember } from '@/lib/server/boardRoomAuth'
+import { requireBoardDiscussionWriter } from '@/lib/server/boardRoomAuth'
 import { MAX_AGENDA_COMMENT_LENGTH } from '@/constants/boardRoom'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { validateUUID } from '@/utils/validation'
@@ -45,7 +45,7 @@ export async function PATCH(request: NextRequest, context: RouteParams) {
   const ids = validateIds(params.id, params.commentId)
   if (ids.error) return ids.error.toNextResponse()
   const { agendaId, commentId } = ids
-  const auth = await requireBoardMember()
+  const auth = await requireBoardDiscussionWriter()
   if (auth instanceof NextResponse) return auth
   const { user } = auth
 
@@ -82,7 +82,7 @@ export async function DELETE(_request: NextRequest, context: RouteParams) {
   const ids = validateIds(params.id, params.commentId)
   if (ids.error) return ids.error.toNextResponse()
   const { agendaId, commentId } = ids
-  const auth = await requireBoardMember()
+  const auth = await requireBoardDiscussionWriter()
   if (auth instanceof NextResponse) return auth
   const { user, isAdmin } = auth
 

@@ -326,7 +326,6 @@ export default function AgendaList({
                 commentCount={agenda.comment_count ?? 0}
                 currentUserId={currentUserId}
                 isAdmin={isAdmin}
-                readOnly={readOnly}
                 onCountChanged={onChanged}
               />
             </div>

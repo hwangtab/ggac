@@ -293,12 +293,13 @@ webServer에 `{...process.env, ...webServer.env}`를 넘긴다. e2e 전용 변�
 
 - `authz-setup`(5개 계정 로그인 → `e2e/.auth/*.json` storageState 저장) 5건
 - `authz`: `authz-maintenance`·`authz-ownership`·`authz-personal`·
-  `authz-remaining`·`authz-roles` 5개 스펙 38건
+  `authz-remaining`·`authz-roles` 5개 스펙 44건
 - `authz-public`: `authz-boundaries` 21건
 
-**실측 기준선:** 64 passed(2026-08-28, 이사회 안건 토론 추가 후). 그 전 기준선은
-50 passed(2026-08-26, Task 6c 수정 2회차)였고, 안건 토론 경계 14건
-(`authz-ownership` 10 + `authz-boundaries` 4)이 늘어난 차이다.
+**실측 기준선:** 70 passed(2026-09-01, 안건 토론을 조합원에게 개방한 뒤).
+이력: 50(2026-08-26 컷오버) → 64(안건 토론 추가) → 70(토론 열람·참여 개방).
+조합원 개방분은 `authz-ownership`의 조합원 200·안건 추가 403·미승인 403 계열과
+`authz-roles`의 짝 단정이다.
 
 `PUBLIC_BLOB_READ_WRITE_TOKEN`을 빼면 **최초 실행에서는** 정책 36 테스트가
 "토큰이 없으면 업로드 준비 단계를 통과할 수 없다"로 **명시적으로 실패한다**
@@ -940,7 +941,7 @@ EXPLAIN QUERY PLAN SELECT count(*) FROM notifications WHERE user_id = '<아무 �
 가드도 타입 검사도 통과한다. 가드는 **"이 문자열이 이 파일에 있는가"**만 보고
 도달 가능성·실행 순서·데이터 흐름을 보지 않는다.
 
-**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 64 passed, 실행 절차는
+**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 70 passed, 실행 절차는
 위 "권한 E2E" 절). 같은 감사에서 **E2E는 관리자 게이트 무력화를 실제로 잡았다.**
 
 `assert-runtime-risks.mjs`가 여전히 값을 하는 자리는 **지워진 것**(게이트를 통째로

@@ -243,7 +243,7 @@ test.describe('이사회 경계', () => {
     }
   })
 
-  test('조합원은 안건 토론을 읽을 수는 있어도 쓰지는 못한다', async ({ baseURL }) => {
+  test('조합원은 안건 토론을 읽고 쓰지만 이사회 쓰기는 막힌다', async ({ baseURL }) => {
     const memberContext = await apiRequest.newContext({
       baseURL,
       storageState: storageStatePath('other'),
@@ -256,16 +256,36 @@ test.describe('이사회 경계', () => {
       expect(read.status()).toBe(200)
       expect(Array.isArray((await read.json()).data?.comments)).toBe(true)
 
-      // 열람 게이트가 쓰기로 새면 여기서 201이 난다. 이사회 의사 형성에
-      // 비이사가 들어오는 회귀라 읽기 개방과 반드시 함께 검사한다.
+      // 토론은 조합원에게 열려 있다.
       const write = await memberContext.post(
         `/api/board-room/agendas/${fixtures.boardAgendaId}/comments`,
-        { data: { content: '조합원이 쓰면 안 된다' } }
+        { data: { content: '조합원의 의견' } }
       )
-      expect(write.status()).toBe(403)
-      expect((await write.json()).error).toContain('이사회 접근 권한이 없습니다')
+      expect(write.status()).toBe(201)
+
+      // **짝 단정.** 토론 게이트가 다른 이사회 쓰기로 번지면 여기서 201이
+      // 난다 — 비이사가 안건을 올리는 회귀는 토론 개방과 반드시 함께 본다.
+      const agenda = await memberContext.post('/api/board-room/agendas', {
+        data: { meeting_id: fixtures.boardMeetingId, title: '조합원이 올린 안건' },
+      })
+      expect(agenda.status()).toBe(403)
+      expect((await agenda.json()).error).toContain('이사회 접근 권한이 없습니다')
     } finally {
       await memberContext.dispose()
+    }
+  })
+
+  // 위 테스트가 남긴 조합원 의견을 실행 안에서 치운다 — 시드는 지우지 않아
+  // 그대로 두면 실행마다 쌓인다.
+  test.afterAll(async () => {
+    const client = createClient({ url: process.env.TURSO_DATABASE_URL! })
+    try {
+      await client.execute({
+        sql: 'DELETE FROM board_agenda_comments WHERE agenda_id = ? AND author_id = ?',
+        args: [fixtures.boardAgendaId, fixtures.users.other],
+      })
+    } finally {
+      client.close()
     }
   })
 })

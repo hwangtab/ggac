@@ -55,9 +55,10 @@ export async function requireBoardMember(): Promise<BoardAuthSuccess | NextRespo
  * 이사회 기록(회의 목록·안건·토론·회의록) **읽기** 전용 게이트.
  * 승인·활성 조합원이면 통과하고, 이사·감사·관리자인지는 `isBoardMember`로 알린다.
  *
- * 쓰기 라우트에는 절대 쓰지 마라 — 안건 작성·수정, 댓글 작성, 일정 투표, 출석
- * 체크, 서류함, 총회 자료는 전부 `requireBoardMember`(이사·감사·관리자)를 그대로
- * 유지한다.
+ * 쓰기 라우트에는 절대 쓰지 마라 — 안건 작성·수정, 일정 투표, 출석 체크,
+ * 서류함, 총회 자료는 전부 `requireBoardMember`(이사·감사·관리자)를 그대로
+ * 유지한다. 안건 토론 쓰기만 조합원에게 열려 있고, 그건 이 게이트가 아니라
+ * `requireBoardDiscussionWriter`가 판정한다.
  */
 export async function requireBoardRecordReader(): Promise<BoardReadAuthSuccess | NextResponse> {
   const session = await getSessionContext()
@@ -72,6 +73,42 @@ export async function requireBoardRecordReader(): Promise<BoardReadAuthSuccess |
 
   if (!canReadBoardRecords(session.profile)) {
     return NextResponse.json({ error: '이사회 기록 열람 권한이 없습니다.' }, { status: 403 })
+  }
+
+  return {
+    user: { id: session.user.id },
+    isAdmin: isApprovedActiveAdmin(session.profile),
+    isAuditor: session.profile.is_auditor === true,
+    isBoardMember: canAccessBoardRoom(session.profile),
+  }
+}
+
+/**
+ * 안건 토론 **쓰기** 게이트. 승인·활성 조합원이면 통과한다 —
+ * `requireBoardRecordReader`와 판정은 같고 이름과 용도만 다르다.
+ *
+ * 왜 읽기 게이트를 그대로 쓰지 않는가: `assert-runtime-risks.mjs`가
+ * "`requireBoardRecordReader()`는 GET 전용"을 정적으로 못박고 있고, 그 규칙은
+ * 계속 필요하다 — 없으면 일정 투표·출석·서류함 같은 이사회 전용 쓰기가
+ * 실수로 조합원 전체에게 열린다. 예외를 이름으로 만들어 두면 가드는 이
+ * 게이트가 **어느 파일에 쓰였는지**까지 확인할 수 있다.
+ *
+ * 토론에만 쓴다. 안건 작성·수정·삭제, 회의록, 일정 투표, 출석, 서류함은
+ * 전부 `requireBoardMember`(이사·감사·관리자)를 그대로 유지한다.
+ */
+export async function requireBoardDiscussionWriter(): Promise<BoardReadAuthSuccess | NextResponse> {
+  const session = await getSessionContext()
+
+  if (!session.authenticated || !session.user) {
+    return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+  }
+
+  if (session.profileError || !session.profile) {
+    return NextResponse.json({ error: '프로필 정보를 조회할 수 없습니다.' }, { status: 500 })
+  }
+
+  if (!canReadBoardRecords(session.profile)) {
+    return NextResponse.json({ error: '승인된 조합원만 참여할 수 있습니다.' }, { status: 403 })
   }
 
   return {

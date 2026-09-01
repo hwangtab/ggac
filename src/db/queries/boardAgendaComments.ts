@@ -13,7 +13,7 @@
  * **본문을 담지 않는다**(라우트가 다시 거를 필요가 없게 여기서 끊는다).
  */
 
-import { and, asc, count, eq, inArray } from 'drizzle-orm'
+import { and, asc, count, eq, inArray, ne } from 'drizzle-orm'
 
 import { db } from '../client.ts'
 import { boardAgendaComments, boardAgendas, memberProfiles } from '../schema/index.ts'
@@ -87,13 +87,26 @@ export async function countCommentsByAgendas(agendaIds: string[]): Promise<Recor
   return out
 }
 
-/** 살아있는 의견이 하나라도 있는지. 안건 삭제 가드가 쓴다. */
-export async function hasLiveComments(agendaId: string): Promise<boolean> {
+/**
+ * `exceptAuthorId` **말고 다른 사람**의 살아있는 의견이 있는지. 안건 삭제
+ * 가드가 쓴다.
+ *
+ * 자기 혼자 메모처럼 남긴 의견까지 세면, 제안자가 자기 안건을 정리하려 할 때
+ * 관리자를 불러야 한다. 가드가 지키려는 것은 **남의 발언**이다.
+ */
+export async function hasLiveCommentsByOthers(
+  agendaId: string,
+  exceptAuthorId: string
+): Promise<boolean> {
   const [row] = await db
     .select({ total: count() })
     .from(boardAgendaComments)
     .where(
-      and(eq(boardAgendaComments.agendaId, agendaId), eq(boardAgendaComments.isDeleted, false))
+      and(
+        eq(boardAgendaComments.agendaId, agendaId),
+        eq(boardAgendaComments.isDeleted, false),
+        ne(boardAgendaComments.authorId, exceptAuthorId)
+      )
     )
   return (row?.total ?? 0) > 0
 }

@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { apiGet, apiPost, ApiSuccess, ApiError } from '@/utils/apiWrapper'
-import { requireBoardMember, requireBoardRecordReader } from '@/lib/server/boardRoomAuth'
+import { requireBoardDiscussionWriter, requireBoardRecordReader } from '@/lib/server/boardRoomAuth'
 import { MAX_AGENDA_COMMENT_LENGTH } from '@/constants/boardRoom'
 import { notifyAgendaDiscussion } from '@/lib/server/boardRoomNotify'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { validateUUID } from '@/utils/validation'
 import { createLogger } from '@/utils/logger'
+import { rateLimit } from '@/lib/server/rateLimit'
 import {
   createAgendaComment,
   getAgendaContext,
@@ -61,7 +62,18 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   const routeId = validateAgendaId(params.id)
   if (routeId.error) return routeId.error.toNextResponse()
   const agendaId = routeId.id
-  const auth = await requireBoardMember()
+
+  // 조합원 전체에게 열린 쓰기 경로다. 이사 20여 명만 닿던 때는 길이 상한으로
+  // 충분했지만, 이제 승인 계정 하나로 반복 호출하면 댓글마다 참여자 전원에게
+  // 알림이 나간다 — 게시판 댓글(`posts/[id]/comments`)과 같은 창을 쓴다.
+  const rl = await rateLimit(request, 'POST_CREATION')
+  if (!rl.success) {
+    return rl.response ?? ApiError.tooManyRequests('요청이 너무 많습니다.').toNextResponse()
+  }
+
+  // 토론 참여는 조합원 전체에게 열려 있다(읽기와 같은 기준: 승인·활성).
+  // 이사회 전용 쓰기는 여전히 `requireBoardMember`다.
+  const auth = await requireBoardDiscussionWriter()
   if (auth instanceof NextResponse) return auth
   const { user } = auth
 
@@ -90,7 +102,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         throw ApiError.internalServerError('의견 등록에 실패했습니다.')
       }
 
-      // 이름을 못 읽어도 댓글은 남는다. 다만 알림 문구가 "이사 님이"로
+      // 이름을 못 읽어도 댓글은 남는다. 다만 알림 문구가 "조합원 님이"로
       // 뭉개지므로 원인을 남긴다 — 조용히 익명이 되면 아무도 눈치채지 못한다.
       const actorName = await getProfileDisplayName(user.id).catch(e => {
         log.warn('작성자 이름 조회 실패 — 토론 알림이 익명으로 나간다', {
@@ -106,7 +118,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         proposedBy: agenda.proposed_by,
         participantIds,
         actorId: user.id,
-        actorName: actorName ?? '이사',
+        actorName: actorName ?? '조합원',
       })
 
       return ApiSuccess.created({ id: comment.id }, '의견이 등록되었습니다.')

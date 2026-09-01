@@ -302,7 +302,7 @@ throw ApiError.internalServerError('Server error')
   **앱 코드가 전부 판정한다**. "RLS 정책을 고친다"는 접근은 아무것도 바꾸지
   않으면서 경계가 지켜진다고 믿게 만든다.
 - **권한의 안전망은 E2E다. 정적 가드가 아니다.** 인가를 바꿨으면
-  `npm run test:e2e:authz`(기준선 **64 passed**, 실행법은
+  `npm run test:e2e:authz`(기준선 **70 passed**, 실행법은
   `scripts/turso/README.md`)를 돌려라.
   `scripts/testing/assert-runtime-risks.mjs`의 계약은 **보조**다 — 적대
   감사(2026-08-27)가 15가지 우회를 시도해 **11가지가 초록불**이었다. 예:

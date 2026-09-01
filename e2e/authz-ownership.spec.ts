@@ -112,9 +112,10 @@ test.describe('미승인 조합원', () => {
  *
  * 여기서 지켜야 할 경계는 세 겹이고, 셋 다 서로를 대신하지 못한다.
  *
- *   1. **이사회 게이트** — 승인된 일반 조합원은 **읽기까지만** 된다. 안건과
- *      토론은 조합원에게 열려 있고(소개 페이지가 공개적으로 약속한 범위),
- *      작성·수정·삭제는 이사·감사·관리자만이다. 비인증 401은
+ *   1. **참여 게이트** — 토론은 승인·활성 조합원이면 읽고 쓴다. 열린 것은
+ *      토론뿐이라 안건 작성·수정·삭제와 나머지 이사회 쓰기는 그대로
+ *      이사·감사·관리자만이다(그 짝 단정이 아래 '안건 추가는 여전히 403'
+ *      이다). 미승인·비활성은 읽기부터 막힌다. 비인증 401은
  *      `authz-boundaries.spec.ts`가 본다.
  *   2. **작성자 경계** — 수정은 본인만이다. 관리자도 남의 발언을 고쳐 쓰지
  *      못한다(회의록의 근거라 삭제=가림까지가 관리자 권한의 끝이다).
@@ -131,12 +132,54 @@ test.describe('이사회 안건 토론 (일반 조합원)', () => {
     expect(Array.isArray((await res.json()).data?.comments)).toBe(true)
   })
 
-  test('의견 작성은 403 + 이사회 접근 안내다', async ({ request }) => {
+  // 조합원이 남긴 의견은 스위트가 만들어 낸 쓰레기다 — 시드가 지우지 않으므로
+  // 실행마다 쌓인다. 실행 안에서 직접 치운다(관리자 삭제 스펙과 같은 방식).
+  test.afterAll(async () => {
+    const client = createClient({ url: process.env.TURSO_DATABASE_URL! })
+    try {
+      await client.execute({
+        sql: 'DELETE FROM board_agenda_comments WHERE agenda_id = ? AND author_id = ?',
+        args: [fixtures.boardAgendaId, fixtures.users.other],
+      })
+    } finally {
+      client.close()
+    }
+  })
+
+  test('의견 작성은 201이다 (토론은 조합원에게 열려 있다)', async ({ request }) => {
     const res = await request.post(`/api/board-room/agendas/${fixtures.boardAgendaId}/comments`, {
       data: { content: '조합원의 의견' },
     })
+    expect(res.status()).toBe(201)
+  })
+
+  test('안건 추가는 여전히 403이다 (열린 것은 토론뿐이다)', async ({ request }) => {
+    // 토론을 열면서 이사회 쓰기 전체가 함께 열리지 않았는지 본다. 이 단정이
+    // 없으면 댓글 게이트를 다른 라우트에 잘못 붙여도 스위트가 초록이다.
+    const res = await request.post('/api/board-room/agendas', {
+      data: { meeting_id: fixtures.boardMeetingId, title: '조합원이 올린 안건' },
+    })
     expect(res.status()).toBe(403)
     expect((await res.json()).error).toContain('이사회 접근 권한이 없습니다')
+  })
+})
+
+test.describe('이사회 안건 토론 (미승인 조합원)', () => {
+  test.use({ storageState: storageStatePath('pending') })
+
+  test('토론 읽기는 403이다', async ({ request }) => {
+    const res = await request.get(`/api/board-room/agendas/${fixtures.boardAgendaId}/comments`)
+    expect(res.status()).toBe(403)
+  })
+
+  test('의견 작성은 403 + 승인된 조합원 안내다', async ({ request }) => {
+    // 게이트가 "로그인만 하면 통과"로 퇴화하는 것을 잡는 단정이다 —
+    // 승인·활성 판정이 사라져도 위 조합원 200 케이스는 그대로 초록이다.
+    const res = await request.post(`/api/board-room/agendas/${fixtures.boardAgendaId}/comments`, {
+      data: { content: '미승인 회원의 의견' },
+    })
+    expect(res.status()).toBe(403)
+    expect((await res.json()).error).toContain('승인된 조합원')
   })
 })
 

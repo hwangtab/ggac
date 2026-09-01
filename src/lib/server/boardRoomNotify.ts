@@ -1,4 +1,6 @@
-import { getAuditorRoster, getDirectorRoster } from '@/lib/server/boardRoomAuth'
+import { getDirectorRoster } from '@/lib/server/boardRoomAuth'
+import { getProfilesByIds } from '@/db/queries/profiles'
+import { canReadBoardRecords } from '@/lib/server/authz'
 import { createBulkNotifications } from '@/db/queries/notifications'
 import { createLogger } from '@/utils/logger'
 
@@ -62,8 +64,8 @@ type AgendaDiscussionInput = {
 
 /**
  * 안건 토론 알림. 대상은 **제안자 + 그 안건에 이미 발언한 사람**이다
- * (본인 제외, 중복 제거). `notifyDirectors`처럼 이사 23명 전원에게 보내면
- * 댓글 하나에 알림 23건이 쌓여 이사회 알림 자체가 무시당한다.
+ * (본인 제외, 중복 제거, 승인·활성만). `notifyDirectors`처럼 전원에게 보내면
+ * 댓글 하나에 알림 수십 건이 쌓여 이사회 알림 자체가 무시당한다.
  *
  * 실패는 로깅만 한다 — 댓글 작성 자체를 막지 않는다.
  */
@@ -74,18 +76,23 @@ export async function notifyAgendaDiscussion(input: AgendaDiscussionInput): Prom
 
   if (candidates.length === 0) return
 
-  // 대상은 **지금** 이사회에 접근할 수 있는 사람으로 좁힌다. 후보는 과거
-  // 기록(제안자·기존 발언자)에서 나오므로, 이사에서 내려온 사람이 그 명단에
-  // 영원히 남는다 — 그대로 보내면 이사회 API가 전부 403인 사람에게 안건
-  // 제목과 발언자 이름이 알림으로 계속 흘러간다. `notifyDirectors`가 매번
-  // `getDirectorRoster()`를 다시 읽는 것과 같은 이유다(감사도 이사회를 보므로
-  // 함께 허용한다).
+  // 대상은 **지금** 토론을 볼 수 있는 사람으로 좁힌다. 후보는 과거
+  // 기록(제안자·기존 발언자)에서 나오므로 탈퇴·비활성 계정이 그 명단에 영원히
+  // 남는데, 그대로 보내면 이사회 API가 전부 403인 사람에게 안건 제목과
+  // 발언자 이름이 알림으로 계속 흘러간다.
+  //
+  // 기준은 토론 게이트(`requireBoardDiscussionWriter` = 승인·활성 조합원)와
+  // 같아야 한다. 이사·감사 명단으로 좁히면 **조합원은 자기 발언에 달린 답글
+  // 알림을 받지 못한다** — 토론에 참여시켜 놓고 대화가 이어진 사실만 감추는
+  // 꼴이다. 후보가 몇 명뿐이라 명단 전체 조회 대신 id로 직접 읽는다.
   let allowed: Set<string>
   try {
-    const [directors, auditors] = await Promise.all([getDirectorRoster(), getAuditorRoster()])
-    allowed = new Set([...directors, ...auditors].map(({ id }) => id))
+    const profiles = await getProfilesByIds(candidates)
+    // 판정은 게이트와 **같은 함수**로 한다. 손으로 조건을 베껴 두면 게이트를
+    // 조인 뒤에도 알림만 옛 기준으로 계속 나간다.
+    allowed = new Set(candidates.filter(id => canReadBoardRecords(profiles.get(id) ?? null)))
   } catch (e) {
-    log.error('이사회 명단 조회 실패 — 토론 알림을 보내지 않는다', {
+    log.error('수신자 상태 조회 실패 — 토론 알림을 보내지 않는다', {
       agendaId: input.agendaId,
       error: (e as Error).message,
     })

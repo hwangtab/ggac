@@ -20,8 +20,6 @@ interface AgendaCommentThreadProps {
   commentCount: number
   currentUserId: string
   isAdmin: boolean
-  /** 이사가 아닌 조합원의 열람. 의견 작성 폼과 삭제 버튼을 감춘다. */
-  readOnly?: boolean
   /** 댓글 수 배지를 다시 계산하도록 회의 상세를 새로 받는다. */
   onCountChanged: () => void
 }
@@ -49,7 +47,6 @@ export default function AgendaCommentThread({
   commentCount,
   currentUserId,
   isAdmin,
-  readOnly = false,
   onCountChanged,
 }: AgendaCommentThreadProps) {
   const t = useTranslations('boardRoom.discussion')
@@ -219,7 +216,7 @@ export default function AgendaCommentThread({
                         {t('edit')}
                       </button>
                     )}
-                    {!readOnly && (comment.author_id === currentUserId || isAdmin) && (
+                    {(comment.author_id === currentUserId || isAdmin) && (
                       <button
                         type="button"
                         onClick={() => handleDelete(comment.id)}
@@ -271,27 +268,25 @@ export default function AgendaCommentThread({
 
           {error && <p className="text-xs text-red-600">{error}</p>}
 
-          {!readOnly && (
-            <form onSubmit={handleSubmit} className="space-y-2">
-              <textarea
-                value={draft}
-                onChange={e => setDraft(e.target.value)}
-                placeholder={t('placeholder')}
-                rows={2}
-                maxLength={MAX_AGENDA_COMMENT_LENGTH}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
-              />
-              <div className="flex justify-end">
-                <button
-                  type="submit"
-                  disabled={submitting || !draft.trim()}
-                  className="px-4 py-1.5 bg-primary-600 text-white text-xs font-medium rounded-lg hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-                >
-                  {submitting ? t('sending') : t('send')}
-                </button>
-              </div>
-            </form>
-          )}
+          <form onSubmit={handleSubmit} className="space-y-2">
+            <textarea
+              value={draft}
+              onChange={e => setDraft(e.target.value)}
+              placeholder={t('placeholder')}
+              rows={2}
+              maxLength={MAX_AGENDA_COMMENT_LENGTH}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+            />
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                disabled={submitting || !draft.trim()}
+                className="px-4 py-1.5 bg-primary-600 text-white text-xs font-medium rounded-lg hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+              >
+                {submitting ? t('sending') : t('send')}
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </div>
