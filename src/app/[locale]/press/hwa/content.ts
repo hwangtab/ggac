@@ -30,13 +30,13 @@ export type PressContent = {
 /** 트랙과 스트리밍은 언어에 따라 달라지지 않으므로 PressContent 밖에 둔다. */
 export const TRACKS = [
   { n: 1, title: 'September Theater', length: '1:13' },
-  { n: 2, title: 'Past Self', length: '1:04' },
-  { n: 3, title: 'Violent Disgust', length: '1:01' },
-  { n: 4, title: 'Hollow Face', length: '1:44' },
+  { n: 2, title: 'Past Self', length: '1:05' },
+  { n: 3, title: 'Violent Disgust', length: '1:02' },
+  { n: 4, title: 'Hollow Face', length: '1:45' },
   { n: 5, title: 'Letter to Jane Doe', length: '0:53' },
   { n: 6, title: 'Hymn for the Night', length: '1:04' },
-  { n: 7, title: 'Irreversible Imprint', length: '1:20' },
-  { n: 8, title: 'Decomposition', length: '2:06' },
+  { n: 7, title: 'Irreversible Imprint', length: '1:21' },
+  { n: 8, title: 'Decomposition', length: '2:07' },
 ]
 
 export const STREAMING: [string, string][] = [
@@ -199,7 +199,7 @@ export const PRESS_EN: PressContent = {
   subtitle: 'Debut EP · 8 tracks · 10 minutes 30 seconds',
   releaseLine: 'Out August 21, 2026',
   lede: [
-    'Gene Meyer gave his December 2, 2025 Blast Worship column in Decibel over to HWA and wrote of the band’s Demo 2025: “Demo of the year in my humble opinion.” This EP is where those songs arrive finished. Four of them — “September Theater,” “Past Self,” “Hollow Face” and “Letter to Jane Doe” — are re-recorded here, alongside four that have not been released before.',
+    'Gene Meyer gave his December 2, 2025 Blast Worship column — Decibel’s showcase for emerging grindcore bands — over to HWA and wrote of the band’s Demo 2025: “Demo of the year in my humble opinion.” This EP is where those songs arrive finished. Four of them — “September Theater,” “Past Self,” “Hollow Face” and “Letter to Jane Doe” — are re-recorded here, alongside four that have not been released before.',
     'The whole thing is eight tracks and ten minutes thirty seconds. The band describes what it plays as blast-beat-driven drums, merciless guitar and very high screams with melodic, emotional riffs laid over them — grindcore that is fast and ferocious and beautiful at once — and names Discordance Axis, Gridlink, Barren Path, Vektor and Cloud Rat as its reference points.',
     'The lyrics are in English throughout, written by vocalist JK. HWA says it sets out to put the hurt, loneliness, misanthropy, self-loathing and emptiness that come out of human relationships down raw, without dressing them up. The full text of all eight songs is on this page.',
   ],
@@ -229,7 +229,7 @@ export const PRESS_EN: PressContent = {
   ],
   bio: [
     'HWA formed in Seoul in September 2024 as a two-piece: OCheolWang on guitars and bass, GopChang on drums. Vocalist JK joined in 2025, completing the current three-piece lineup.',
-    'The band put out Demo 2025 on October 30, 2025. Decibel covered it in Blast Worship on December 2, 2025. On April 20, 2026 HWA released a split with the Korean grindcore band Naiite, 《Hwa // Naiite》, through Vanilla Thunder Records.',
+    'The band put out Demo 2025 on October 30, 2025. Decibel covered it in Blast Worship on December 2, 2025. In 2026, HWA released a split with the Korean grindcore band Naiite, 《Hwa // Naiite》, through Vanilla Thunder Records.',
     '《HWA》, out August 21, 2026, is the band’s first EP.',
   ],
   downloads: [
@@ -294,7 +294,7 @@ export const PRESS_KO: PressContent = {
   ],
   bio: [
     'HWA는 2024년 9월 서울에서 결성됐다. 처음에는 기타와 베이스를 맡은 OCheolWang, 드럼을 맡은 GopChang 둘이었고, 보컬 JK가 2025년에 합류하면서 지금의 3인조가 됐다.',
-    '2025년 10월 30일 Demo 2025를 냈고, 2025년 12월 2일 Decibel의 「Blast Worship」이 이를 다뤘다. 2026년 4월 20일에는 한국 그라인드코어 밴드 Naiite와의 스플릿 《Hwa // Naiite》를 Vanilla Thunder Records를 통해 발매했다.',
+    '2025년 10월 30일 Demo 2025를 냈고, 2025년 12월 2일 Decibel의 「Blast Worship」이 이를 다뤘다. 2026년에는 한국 그라인드코어 밴드 Naiite와의 스플릿 《Hwa // Naiite》를 Vanilla Thunder Records를 통해 발매했다.',
     '2026년 8월 21일에 나온 《HWA》가 밴드의 첫 EP다.',
   ],
   downloads: [

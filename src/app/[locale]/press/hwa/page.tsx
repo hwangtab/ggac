@@ -12,13 +12,13 @@ export async function generateMetadata({
   const isEn = locale === 'en'
   const base = getSiteUrl()
   return {
-    title: isEn ? 'HWA — Debut EP Press Kit' : '화(HWA) 첫 EP 프레스킷',
+    title: isEn ? 'HWA — Debut EP Press Kit' : '화 (HWA) 첫 EP 프레스킷',
     description: isEn
       ? 'Press kit for HWA, a grindcore band from Seoul. Debut EP out August 21, 2026 — 8 tracks, 10 minutes 30 seconds.'
-      : '서울의 그라인드코어 밴드 화(HWA)의 첫 EP 프레스킷. 2026년 8월 21일 발매, 8트랙 10분 30초.',
+      : '서울의 그라인드코어 밴드 화 (HWA)의 첫 EP 프레스킷. 2026년 8월 21일 발매, 8트랙 10분 30초.',
     alternates: getLocaleAlternates('/press/hwa', locale),
     openGraph: {
-      title: isEn ? 'HWA — Debut EP' : '화(HWA) 첫 EP',
+      title: isEn ? 'HWA — Debut EP' : '화 (HWA) 첫 EP',
       description: isEn
         ? 'Out August 21, 2026 · 8 tracks · 10:30'
         : '2026년 8월 21일 발매 · 8트랙 · 10분 30초',
