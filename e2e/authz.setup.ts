@@ -10,6 +10,14 @@ const ACCOUNTS = [
   // 관리자가 아닌 이사. 이사회 경계(`authz-roles.spec.ts`)의 허용 쪽이다 —
   // 계정 정의는 `scripts/testing/seed-authz-fixtures.mjs`의 ACCOUNTS와 짝이다.
   { role: 'director', email: 'authz-director@test.local', password: 'Authz!Direct2026' },
+  // 탈퇴 "신청" 상태(Task 8) — `registration_status`는 여전히 'approved'라
+  // 정상 로그인된다. 신청 중에도 마이페이지·게시판 접근이 그대로임을
+  // `authz-roles.spec.ts`가 이 storageState로 확인한다.
+  {
+    role: 'withdrawalRequested',
+    email: 'authz-withdrawal-requested@test.local',
+    password: 'Authz!WithdrawReq2026',
+  },
 ]
 
 for (const account of ACCOUNTS) {

@@ -378,3 +378,83 @@ test.describe('페이지 레벨 인가 (미들웨어)', () => {
     }
   })
 })
+
+/**
+ * **회원 탈퇴 경계**(Task 8) — 안전망의 마지막 조각.
+ *
+ * 설계가 중간에 바뀌었다: 탈퇴 "신청"은 `registration_status`를 바꾸지
+ * 않는다(`withdrawal_requested_at` 타임스탬프만 채운다). 그래서 이 스위트가
+ * 증명해야 할 것은 세 가지다 — ①확정된 탈퇴자는 로그인 자체가 막힌다
+ * (`account` 행 삭제), ②관리자가 자기 자신을 탈퇴시키는 것은 막힌다,
+ * ③신청 **중**인 회원은 여전히 정상 조합원이다(이게 이번 설계 수정의
+ * 핵심이라 가장 중요하다 — 신청을 상태값으로 표현했다면 이 단정이 깨졌을
+ * 것이다).
+ */
+test.describe('회원 탈퇴 경계', () => {
+  test('탈퇴가 확정된 조합원은 로그인이 되지 않는다', async ({ baseURL }) => {
+    // storageState를 쓰지 않는다 — 애초에 로그인이 안 되는 계정이라 만들
+    // storageState가 없다(`e2e/authz.setup.ts`에도 없다).
+    const anonContext = await apiRequest.newContext({ baseURL })
+    try {
+      // 비밀번호(account 행)가 `withdrawMember()`로 지워졌으므로, 어떤
+      // 비밀번호를 넣어도 401이어야 한다 — Better Auth 기준 로그인
+      // 시도(`/api/auth/sign-in/email`)다.
+      const login = await anonContext.post('/api/auth/sign-in/email', {
+        data: { email: fixtures.users.withdrawnEmail, password: 'anything-goes-here-2026' },
+      })
+      expect(login.status()).toBe(401)
+    } finally {
+      await anonContext.dispose()
+    }
+  })
+
+  test('관리자는 자기 자신을 탈퇴 처리할 수 없다', async ({ baseURL }) => {
+    const adminContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('admin'),
+    })
+    try {
+      const res = await adminContext.post('/api/admin/member-action', {
+        data: { memberId: fixtures.users.admin, action: 'withdraw' },
+      })
+      expect(res.status()).toBe(400)
+      expect((await res.json()).error).toContain('자기 자신은 탈퇴 처리할 수 없습니다')
+
+      // 짝: 거부됐다면 관리자 계정이 실제로 탈퇴되지 않았어야 한다. 상태
+      // 코드만 보면 400을 돌려주면서 처리는 이미 해버리는 모양을 못 잡는다.
+      expect(await readRegistrationStatus(fixtures.users.admin)).toBe('approved')
+    } finally {
+      await adminContext.dispose()
+    }
+  })
+
+  test('탈퇴 신청 중인 회원은 여전히 조합원이다 (마이페이지·게시판 접근 유지)', async ({
+    baseURL,
+  }) => {
+    const requesterContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('withdrawalRequested'),
+    })
+    try {
+      // 신청 상태여도 registration_status는 'approved' 그대로다 — 상태값을
+      // 바꾸는 설계였다면 이 단정이 깨졌을 것이다.
+      expect(await readRegistrationStatus(fixtures.users.withdrawalRequested)).toBe('approved')
+
+      // 마이페이지 전용 라우트(`requireActiveMember`)가 통과한다 — 이미
+      // 신청한 상태라 재신청은 409로 거절되지만, 그 409 자체가 "게이트를
+      // 통과했다"는 증거다(미승인/비활성이었다면 403이 먼저 났을 것이다).
+      const reRequest = await requesterContext.post('/api/mypage/withdrawal')
+      expect(reRequest.status()).toBe(409)
+
+      // 게시판 접근도 그대로다 — 소개 페이지가 조합원에게 공개적으로
+      // 약속한 범위(이사회 안건 토론 읽기)로 확인한다.
+      const boardRead = await requesterContext.get(
+        `/api/board-room/agendas/${fixtures.boardAgendaId}/comments`
+      )
+      expect(boardRead.status()).toBe(200)
+      expect(Array.isArray((await boardRead.json()).data?.comments)).toBe(true)
+    } finally {
+      await requesterContext.dispose()
+    }
+  })
+})

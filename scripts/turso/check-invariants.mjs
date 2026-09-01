@@ -237,6 +237,23 @@ export function derivedInvariants() {
       table: 'member_profiles',
       where: `profile_completeness_score IS NOT ${profileCompletenessExpressionSql()}`,
     },
+    {
+      // Task 8. Postgres CHECK를 재현하는 것이 아니라 새로 추가하는 규칙이라
+      // CHECK_INVARIANTS(원본 20개 목록)가 아니라 여기 둔다 —
+      // `missingCheckConstraints.test.mjs`가 그 20개 목록의 이름을 문자
+      // 단위로 못박고 있어, 새 규칙을 거기 섞으면 그 회귀 테스트가 깨진다.
+      //
+      // 앱을 지나지 않는 쓰기(손으로 친 SQL·일회성 스크립트)로 탈퇴 처리가
+      // 반쪽만 된 경우 — 상태만 'withdrawn'으로 바뀌고 개인정보 삭제가
+      // 빠진 경우 — 를 잡는다. 야간 백업 뒤 매일 돈다.
+      constraint: 'withdrawn_rows_have_no_personal_data',
+      table: 'member_profiles',
+      where: `registration_status = 'withdrawn' AND (
+        real_name IS NOT NULL OR phone_number IS NOT NULL OR
+        birth_date IS NOT NULL OR account_number IS NOT NULL OR
+        bank_name IS NOT NULL OR account_holder IS NOT NULL
+      )`,
+    },
   ]
 }
 
