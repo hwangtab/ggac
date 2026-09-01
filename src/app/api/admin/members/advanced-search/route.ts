@@ -6,7 +6,11 @@
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
-import { validateAdvancedSearchQuery, buildSearchQuery } from '@/utils/advancedFiltering'
+import {
+  validateAdvancedSearchQuery,
+  buildSearchQuery,
+  normalizeConditionTypes,
+} from '@/utils/advancedFiltering'
 import { executeMemberAdvancedSearch } from '@/db/queries/misc'
 // 필드 화이트리스트·FROM 절·조회 컬럼은 라우트 밖(`src/constants/memberSearchFields.ts`)에
 // 산다 — 그래야 단위 테스트가 그 계약을 **베끼지 않고** 그대로 import해서 검증한다
@@ -46,6 +50,12 @@ export const POST = defineApiRoute<AdvancedSearchQuery>({
     // 기본값 설정
     const query = {
       ...searchQuery,
+      // 값 타입은 **서버가 정한다.** 클라이언트가 보낸 `type` 힌트를 그대로 쓰면
+      // 힌트가 빠지거나 틀렸을 때 변환이 건너뛰어져, SQLite에서 boolean 필터가
+      // 항상 0건이 되고 날짜 필터가 조용히 무효화된다(2026-09-01 감사).
+      filters: searchQuery.filters
+        ? normalizeConditionTypes(searchQuery.filters, MEMBER_FIELD_DEFINITIONS)
+        : searchQuery.filters,
       pagination: {
         page: 1,
         limit: 20,

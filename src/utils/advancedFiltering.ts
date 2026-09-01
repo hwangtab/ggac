@@ -359,6 +359,52 @@ export function isValidFieldName(field: string): boolean {
 /**
  * 값 타입 변환
  */
+/**
+ * 조건의 `type`을 **서버가 가진 필드 정의로 덮어쓴다.**
+ *
+ * `type`은 클라이언트가 보내는 "값 타입 힌트"인데, `validateFilterCondition`이
+ * 필드명·연산자·필터 가능 여부는 검증하면서 **`type`은 필드 정의와 대조하지
+ * 않는다.** 그래서 힌트가 빠지거나 틀리면 `convertValue`가 변환을 건너뛰고
+ * `String(value)`로 떨어진다.
+ *
+ * Postgres에서는 드라이버가 파라미터 타입을 추론해 덮어줬지만 **SQLite에서는
+ * 조용히 틀린 답이 나온다**(2026-09-01 감사 실측):
+ *
+ *   `is_admin = 'true'`            → 0건   (INTEGER < TEXT라 절대 안 맞는다)
+ *   `created_at >= '2026-01-01'`   → 0건
+ *   `created_at <= '2026-01-01'`   → **전체 행** (필터가 통째로 무효화)
+ *
+ * 에러가 안 나므로 관리자는 "그런 회원이 없구나"라고 읽는다. 특히
+ * `<input type="date">`의 원값(`2026-01-01`)은 ISO 정규식에도 안 걸려서 날짜
+ * 경로에는 여유가 전혀 없다.
+ *
+ * 클라이언트가 보낸 힌트는 **무시한다** — 신뢰할 이유가 없고, 서버는 이미
+ * 정확한 타입을 갖고 있다.
+ */
+export function normalizeConditionTypes<T extends { conditions?: any[]; groups?: any[] }>(
+  group: T,
+  fieldDefinitions: FieldDefinition[]
+): T {
+  const typeByField = new Map(fieldDefinitions.map(f => [f.name, f.type]))
+
+  const walk = (g: any): any => {
+    if (!g || typeof g !== 'object') return g
+    return {
+      ...g,
+      conditions: Array.isArray(g.conditions)
+        ? g.conditions.map((c: any) =>
+            c && typeof c === 'object' && typeByField.has(c.field)
+              ? { ...c, type: typeByField.get(c.field) }
+              : c
+          )
+        : g.conditions,
+      groups: Array.isArray(g.groups) ? g.groups.map(walk) : g.groups,
+    }
+  }
+
+  return walk(group) as T
+}
+
 export function convertValue(value: any, type?: string): any {
   if (value === null || value === undefined) {
     return null
