@@ -24,6 +24,7 @@ import { getProfileById } from '@/db/queries/profiles'
 import { countComments, listCommentsByOffset } from '@/db/queries/comments'
 import { getLikedCommentIds, isPostLikedByUser } from '@/db/queries/likes'
 import { listAttachments } from '@/db/queries/attachments'
+import { parsePostContentFormat } from '@/utils/postContentFormat'
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const resolvedParams = await context.params
@@ -262,8 +263,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
     const title = typeof body.title === 'string' ? body.title.trim() : ''
     const content = typeof body.content === 'string' ? body.content : ''
-    const contentFormat =
-      body.content_format === 'plain' || body.content_format === 'html' ? body.content_format : null
+    const contentFormat = parsePostContentFormat(body.content_format)
     const category = parseBoardCategory(body.category)
 
     if (!title) {
