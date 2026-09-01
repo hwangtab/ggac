@@ -7,7 +7,7 @@
  * 반환 형태는 snake_case다. `strict: false`라 키가 바뀌어도 타입 검사가 못 잡고
  * 화면이 조용히 빈다 — Drizzle 행 → snake_case 매핑을 손으로 쓴다.
  */
-import { desc, eq } from 'drizzle-orm'
+import { and, desc, eq } from 'drizzle-orm'
 
 import { db } from '../client.ts'
 import { grantDigests } from '../schema/content.ts'
@@ -36,7 +36,7 @@ export interface GrantItem {
   manual?: boolean
 }
 
-export type GrantDigestStatus = 'draft' | 'published' | 'discarded'
+export type GrantDigestStatus = 'draft' | 'publishing' | 'published' | 'discarded'
 
 export interface GrantDigestRow {
   id: string
@@ -92,6 +92,23 @@ export async function getGrantDigestByWeekKey(weekKey: string): Promise<GrantDig
 export async function getGrantDigestById(id: string): Promise<GrantDigestRow | null> {
   const rows = await db.select().from(grantDigests).where(eq(grantDigests.id, id)).limit(1)
   return rows[0] ? rowToDigest(rows[0]) : null
+}
+
+/**
+ * 발행을 위해 회차를 조건부로 선점한다 — `UPDATE ... WHERE status='draft' RETURNING *`
+ * 한 문장이라 동시에 두 요청이 들어와도 하나만 갱신된 행을 받는다(SQLite의 단일 쓰기
+ * 트랜잭션이 원자성을 보장). 발행 라우트의 read-check-act(조회 → 상태 확인 → 발행 →
+ * 그제서야 status 갱신) 경쟁 창을 없앤다 — 그 창 안에서 두 번째 요청이 같은 draft를
+ * 읽으면 조합원 전원에게 메일이 두 번 나간다(회수 불가).
+ * @returns 갱신된 행이 없으면(이미 draft가 아니면) `null`.
+ */
+export async function claimGrantDigestForPublish(id: string): Promise<GrantDigestRow | null> {
+  const [row] = await db
+    .update(grantDigests)
+    .set({ status: 'publishing' })
+    .where(and(eq(grantDigests.id, id), eq(grantDigests.status, 'draft')))
+    .returning()
+  return row ? rowToDigest(row) : null
 }
 
 /** 최신 회차부터. */

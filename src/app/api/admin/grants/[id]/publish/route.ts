@@ -4,7 +4,11 @@
  * 절차 자체는 `src/lib/server/grantPublish.ts`가 갖고 있고 여기는 **배선만** 한다 —
  * 조회로 재료를 모으고, 주입하고, 결과를 회차에 기록한다.
  */
-import { getGrantDigestById, updateGrantDigest } from '@/db/queries/grantDigests'
+import {
+  claimGrantDigestForPublish,
+  getGrantDigestById,
+  updateGrantDigest,
+} from '@/db/queries/grantDigests'
 import { createBulkNotifications } from '@/db/queries/notifications'
 import { createPost } from '@/db/queries/posts'
 import { listProfiles } from '@/db/queries/profiles'
@@ -42,6 +46,16 @@ export const POST = defineApiRoute({
       throw ApiError.badRequest('이미 발행되었거나 폐기된 회차입니다.')
     }
 
+    // draft → publishing 조건부 선점. 동시에 두 요청이 여기 도달해도 UPDATE ... WHERE
+    // status='draft'는 하나만 갱신된 행을 돌려준다 — 나머지는 null을 받고 400으로 빠진다.
+    // 이 선점이 없으면 위의 존재·상태 확인과 아래 status:'published' 기록 사이에 경쟁
+    // 창이 생겨, 같은 회차가 두 번 발행되면(더블클릭·재시도·관리자 두 명) 조합원
+    // 전원에게 메일이 두 번 나간다 — 이미 나간 메일은 회수되지 않는다.
+    const claimed = await claimGrantDigestForPublish(id)
+    if (!claimed) {
+      throw ApiError.badRequest('이미 발행 중이거나 발행된 회차입니다.')
+    }
+
     const { rows } = await listProfiles({
       status: 'approved',
       limit: MEMBER_FETCH_LIMIT,
@@ -69,19 +83,34 @@ export const POST = defineApiRoute({
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.ggac.kr'
 
-    const result = await runGrantPublish({
-      digest,
-      authorId: adminId,
-      members,
-      settingsByUserId,
-      siteUrl,
-      now: new Date(),
-      createPost: async input => createPost(input),
-      createBulkNotifications: async input =>
-        createBulkNotifications(input as Parameters<typeof createBulkNotifications>[0]),
-      sendEmail,
-      log,
-    })
+    let result: Awaited<ReturnType<typeof runGrantPublish>>
+    try {
+      result = await runGrantPublish({
+        digest: claimed,
+        authorId: adminId,
+        members,
+        settingsByUserId,
+        siteUrl,
+        now: new Date(),
+        createPost: async input => createPost(input),
+        createBulkNotifications: async input =>
+          createBulkNotifications(input as Parameters<typeof createBulkNotifications>[0]),
+        sendEmail,
+        log,
+      })
+    } catch (error) {
+      // 게시글 생성 실패(runGrantPublish가 던지는 유일한 지점) — 선점을 되돌리지 않으면
+      // 회차가 'publishing'에 영구히 갇혀 관리자가 다시 발행할 수 없다.
+      try {
+        await updateGrantDigest(id, { status: 'draft' })
+      } catch (rollbackError) {
+        log.error('발행 실패 후 draft 되돌리기 실패 — 회차가 publishing에 갇혔다', {
+          digestId: id,
+          error: rollbackError instanceof Error ? rollbackError.message : String(rollbackError),
+        })
+      }
+      throw error
+    }
 
     await updateGrantDigest(id, {
       status: 'published',
@@ -94,7 +123,7 @@ export const POST = defineApiRoute({
       {
         adminId: maskId(adminId),
         digestId: id,
-        weekKey: digest.week_key,
+        weekKey: claimed.week_key,
         recipients: members.length,
         emailSent: result.email_sent,
         emailFailed: result.email_failed,

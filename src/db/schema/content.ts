@@ -115,7 +115,14 @@ export const notifications = sqliteTable('notifications', {
   relatedUserId: text('related_user_id'),
 })
 
-export const GRANT_DIGEST_STATUS = ['draft', 'published', 'discarded'] as const
+/**
+ * `publishing`은 발행 중(claim됨, `runGrantPublish` 진행 중) 상태다. DDL은 바뀌지 않는다 —
+ * 컬럼이 `text NOT NULL DEFAULT 'draft'`이고 CHECK 제약이 없어(0010_fat_cassandra_nova.sql)
+ * 앱 레벨 유니온만 넓히면 된다. 발행 API의 동시 요청 경쟁(TOCTOU) 차단용 —
+ * `claimGrantDigestForPublish`가 `draft → publishing`으로 조건부 선점하고, 발행이 끝나면
+ * `published`로, 실패하면 `draft`로 되돌린다(src/app/api/admin/grants/[id]/publish/route.ts).
+ */
+export const GRANT_DIGEST_STATUS = ['draft', 'publishing', 'published', 'discarded'] as const
 
 /**
  * 예술지원사업 주간 회차. 공고 원장은 kosmart가 소유하고 우리는 **보낸 것만** 남긴다.
