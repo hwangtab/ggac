@@ -40,6 +40,7 @@ const ALL_KEYS = [
   'NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL',
   'PUBLIC_BLOB_READ_WRITE_TOKEN',
   'PRIVATE_BLOB_READ_WRITE_TOKEN',
+  'RESEND_API_KEY',
 ]
 
 const COMPLETE_ENV = {
@@ -49,6 +50,7 @@ const COMPLETE_ENV = {
   NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL: 'https://example-store.public.blob.vercel-storage.com',
   PUBLIC_BLOB_READ_WRITE_TOKEN: 'local-placeholder',
   PRIVATE_BLOB_READ_WRITE_TOKEN: 'local-placeholder',
+  RESEND_API_KEY: 'local-placeholder',
 }
 
 function run(overrides) {
@@ -84,6 +86,7 @@ for (const key of [
   'NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL',
   'PUBLIC_BLOB_READ_WRITE_TOKEN',
   'PRIVATE_BLOB_READ_WRITE_TOKEN',
+  'RESEND_API_KEY',
 ]) {
   test(`부정 대조: ${key}가 없으면 실패한다`, () => {
     const env = { ...COMPLETE_ENV }
