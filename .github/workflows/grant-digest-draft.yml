@@ -1,0 +1,27 @@
+# 매주 월요일 08:00 KST에 지원사업 초안을 만든다.
+#
+# Vercel Cron이 아니라 Actions인 이유는 이 저장소의 관례다 —
+# 실패가 Actions 이력에 남아 추적할 수 있다(charge-monthly-dues.yml 참고).
+#
+# 이 워크플로는 조합원에게 아무것도 보내지 않는다. 초안을 만들고 관리자에게 알릴 뿐이다.
+name: grant-digest-draft
+
+on:
+  schedule:
+    - cron: "0 23 * * 0" # 일요일 23:00 UTC = 월요일 08:00 KST
+  workflow_dispatch:
+
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 초안 생성 요청
+        run: |
+          code=$(curl -sS -o /tmp/out.json -w '%{http_code}' -X POST \
+            -H "Authorization: Bearer ${{ secrets.GRANT_DIGEST_CRON_TOKEN }}" \
+            https://www.ggac.kr/api/internal/grant-digest/draft)
+          echo "HTTP $code"
+          cat /tmp/out.json
+          if [ "$code" != "200" ] && [ "$code" != "201" ]; then
+            exit 1
+          fi
