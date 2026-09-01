@@ -128,3 +128,326 @@ test('신청·취소가 조건부 UPDATE로 승인↔신청 상태를 오가고,
   // 승인 상태에서 또 취소하면 false
   assert.equal(await cancelWithdrawal('m1'), false)
 })
+
+/**
+ * 확정(`withdrawMember`)용 픽스처.
+ *
+ * 앞의 신청·취소 테스트가 남긴 행 위에 얹으면 "지워졌는가"를 세는 단언이
+ * 남의 행을 세게 된다. 그래서 매번 관련 표를 전부 비우고 처음부터 심는다.
+ * 지우는 순서는 FK 자식 → 부모다(`PRAGMA foreign_keys`가 켜져 있다 — 실측).
+ */
+const WITHDRAWAL_FIXTURE_TABLES = [
+  'comments',
+  'posts',
+  'user_settings',
+  'daily_activity_stats',
+  'user_sessions',
+  'user_activities',
+  'notifications',
+  'billing_keys',
+  'membership_dues',
+  'payments',
+  'account',
+  'session',
+  'user',
+  'member_profiles',
+]
+
+/**
+ * m1(탈퇴 대상)과 m2(관리자)를 심고, m1에게 네 갈래를 전부 붙인다 —
+ * ① 신원·로그인 수단, ② 콘텐츠(글·댓글), ③ 로그, ④ 돈.
+ */
+async function seedWithdrawalFixture(
+  client,
+  { targetStatus = 'withdrawal_requested', adminStatus = 'approved' } = {}
+) {
+  for (const table of WITHDRAWAL_FIXTURE_TABLES) await client.execute(`DELETE FROM "${table}"`)
+  const now = Date.now()
+
+  // ① 신원 — 지워져야 할 값을 전부 채워 둔다. 비어 있으면 "지웠다"가 증명되지 않는다.
+  // artist_role은 일부러 기본값('owner')이 아닌 값으로 둔다 — 되돌려지는지 봐야 한다.
+  await client.execute({
+    sql: `INSERT INTO member_profiles
+            (id, email, display_name, real_name, phone_number, birth_date,
+             bank_name, account_number, account_holder, monthly_fee,
+             registration_status, is_active, is_admin, is_member, is_artist,
+             is_director, is_auditor, is_suspended, suspension_reason, suspension_until,
+             artist_role, artist_id, director_title, last_login_at, created_at, updated_at)
+          VALUES ('m1', 'm1@example.test', '회원 m1', '홍길동', '010-1234-5678', '1990-01-01',
+                  '국민은행', '110-1234-567890', '홍길동', 30000,
+                  ?, 1, 0, 1, 1,
+                  1, 1, 1, '경고 누적', ?,
+                  'member', 'artist-014', '사무국장', ?, ?, ?)`,
+    args: [targetStatus, now, now, now, now],
+  })
+  await client.execute({
+    sql: `INSERT INTO member_profiles
+            (id, email, display_name, real_name, registration_status, is_active, is_admin,
+             created_at, updated_at)
+          VALUES ('m2', 'm2@example.test', '회원 m2', '김관리', ?, 1, 1, ?, ?)`,
+    args: [adminStatus, now, now],
+  })
+
+  for (const id of ['m1', 'm2']) {
+    await client.execute({
+      sql: `INSERT INTO user (id, name, email, email_verified, image, created_at, updated_at)
+            VALUES (?, ?, ?, 1, 'https://example.test/face.png', ?, ?)`,
+      args: [id, `회원 ${id}`, `${id}@example.test`, now, now],
+    })
+  }
+  await client.execute({
+    sql: `INSERT INTO session (id, expires_at, token, created_at, updated_at, user_id)
+          VALUES ('s1', ?, 'tok-1', ?, ?, 'm1')`,
+    args: [now + 60_000, now, now],
+  })
+  await client.execute({
+    sql: `INSERT INTO account (id, account_id, provider_id, user_id, password, created_at, updated_at)
+          VALUES ('a1', 'm1', 'credential', 'm1', 'hashed', ?, ?)`,
+    args: [now, now],
+  })
+
+  // ② 콘텐츠 — 한 건도 바뀌면 안 되는 것들.
+  await client.execute({
+    sql: `INSERT INTO posts (id, title, content, category, author_id, created_at, updated_at)
+          VALUES ('p1', '조합 소식', '본문입니다', '잡담', 'm1', ?, ?)`,
+    args: [now, now],
+  })
+  await client.execute({
+    sql: `INSERT INTO comments (id, post_id, author_id, content, created_at, updated_at)
+          VALUES ('c1', 'p1', 'm1', '댓글입니다', ?, ?)`,
+    args: [now, now],
+  })
+
+  // ③ 로그 — IP·User-Agent가 들어 있다. 전부 사라져야 한다.
+  for (const [id, action] of [
+    ['ua1', 'login'],
+    ['ua2', 'page_viewed'],
+  ]) {
+    await client.execute({
+      sql: `INSERT INTO user_activities (id, user_id, action_type, ip_address, user_agent, created_at)
+            VALUES (?, 'm1', ?, '203.0.113.7', 'Mozilla/5.0', ?)`,
+      args: [id, action, now],
+    })
+  }
+  await client.execute({
+    sql: `INSERT INTO user_sessions (id, user_id, session_token, last_activity, login_at)
+          VALUES ('us1', 'm1', 'st-1', ?, ?)`,
+    args: [now, now],
+  })
+  await client.execute({
+    sql: `INSERT INTO daily_activity_stats (id, activity_date, user_id, action_type, count, last_updated)
+          VALUES ('da1', '2026-09-01', 'm1', 'login', 3, ?)`,
+    args: [now],
+  })
+  await client.execute({
+    sql: `INSERT INTO notifications (id, user_id, type, title, message, created_at)
+          VALUES ('n1', 'm1', 'welcome', '환영합니다', '가입을 환영합니다', ?)`,
+    args: [now],
+  })
+  // 남의 알림이 m1을 가리킨다 — 알림 자체는 m2 것이라 남고, 참조만 끊겨야 한다.
+  await client.execute({
+    sql: `INSERT INTO notifications (id, user_id, type, title, message, related_user_id, created_at)
+          VALUES ('n2', 'm2', 'post_reply', '새 답글', 'm1이 답글을 달았습니다', 'm1', ?)`,
+    args: [now],
+  })
+  await client.execute({
+    sql: `INSERT INTO user_settings (id, user_id, category, setting_key, created_at, updated_at)
+          VALUES ('st1', 'm1', 'notification', 'email_digest', ?, ?)`,
+    args: [now, now],
+  })
+
+  // ④ 돈 — 결제·회비는 회계 증빙이라 남고, 결제 수단(빌링키)만 사라진다.
+  await client.execute({
+    sql: `INSERT INTO payments (id, order_id, user_id, kind, order_name, amount, status, created_at, updated_at)
+          VALUES ('pay1', 'ord-1', 'm1', 'dues', '2026-09 회비', 30000, 'done', ?, ?)`,
+    args: [now, now],
+  })
+  await client.execute({
+    sql: `INSERT INTO membership_dues (id, user_id, billing_month, amount, status, created_at, updated_at)
+          VALUES ('due1', 'm1', '2026-09', 30000, 'paid', ?, ?)`,
+    args: [now, now],
+  })
+  await client.execute({
+    sql: `INSERT INTO billing_keys (id, user_id, billing_key, customer_key, created_at, updated_at)
+          VALUES ('bk1', 'm1', 'bk_test', 'cust-1', ?, ?)`,
+    args: [now, now],
+  })
+}
+
+async function countOf(client, table, where, args) {
+  const result = await client.execute({
+    sql: `SELECT count(*) n FROM "${table}" WHERE ${where}`,
+    args,
+  })
+  return Number(result.rows[0].n)
+}
+
+test('확정은 신원을 지우고 로그를 지우되 콘텐츠는 한 건도 바꾸지 않는다', async () => {
+  await seedWithdrawalFixture(setupClient)
+
+  const contentBefore = await setupClient.execute(
+    'SELECT id, title, content, author_id FROM posts ORDER BY id'
+  )
+  const commentsBefore = await setupClient.execute(
+    'SELECT id, post_id, author_id, content FROM comments ORDER BY id'
+  )
+
+  const { withdrawMember } = await import(WITHDRAWAL_MODULE_URL.href)
+  assert.deepEqual(await withdrawMember('m1'), { ok: true, revokedBillingKeys: ['bk_test'] })
+
+  // ① 신원 — 전부 비워졌다
+  const p = (await setupClient.execute("SELECT * FROM member_profiles WHERE id='m1'")).rows[0]
+  for (const col of [
+    'real_name',
+    'phone_number',
+    'birth_date',
+    'bank_name',
+    'account_number',
+    'account_holder',
+    'monthly_fee',
+    'last_login_at',
+    'suspension_reason',
+    'suspension_until',
+    'artist_id',
+    'director_title',
+  ]) {
+    assert.equal(p[col], null, `${col}이 남았다`)
+  }
+  assert.equal(p.display_name, '탈퇴한 조합원')
+  assert.equal(p.email, 'withdrawn+m1@ggac.invalid')
+  assert.equal(p.registration_status, 'withdrawn')
+  assert.equal(p.is_active, 0)
+  assert.equal(p.is_admin, 0)
+  assert.equal(p.is_member, 0)
+  assert.equal(p.is_artist, 0)
+  assert.equal(p.is_director, 0)
+  assert.equal(p.is_auditor, 0)
+  assert.equal(p.is_suspended, 0)
+  assert.equal(p.verification_status, '{"email":false,"phone":false,"identity":false}')
+  assert.ok(p.withdrawn_at > 0)
+  // `artist_role`은 NOT NULL default 'owner'라 NULL로 둘 수 없다.
+  assert.equal(p.artist_role, 'owner')
+
+  // ② 콘텐츠 — 한 건도 안 바뀌었다. 작성자 참조는 묘비를 가리킨 채 남는다.
+  const contentAfter = await setupClient.execute(
+    'SELECT id, title, content, author_id FROM posts ORDER BY id'
+  )
+  const commentsAfter = await setupClient.execute(
+    'SELECT id, post_id, author_id, content FROM comments ORDER BY id'
+  )
+  assert.deepEqual(
+    contentAfter.rows.map(r => ({ ...r })),
+    contentBefore.rows.map(r => ({ ...r }))
+  )
+  assert.deepEqual(
+    commentsAfter.rows.map(r => ({ ...r })),
+    commentsBefore.rows.map(r => ({ ...r }))
+  )
+
+  // ③ 로그 — 전부 사라졌다
+  for (const t of [
+    'user_activities',
+    'user_sessions',
+    'daily_activity_stats',
+    'notifications',
+    'user_settings',
+  ]) {
+    assert.equal(await countOf(setupClient, t, "user_id='m1'"), 0, `${t}에 행이 남았다`)
+  }
+  // 남의 알림은 남되, 이 사람을 가리키던 참조만 끊긴다.
+  assert.equal(await countOf(setupClient, 'notifications', "id='n2'"), 1)
+  assert.equal(await countOf(setupClient, 'notifications', "related_user_id='m1'"), 0)
+
+  // ④ 돈 — 결제·회비는 남고 빌링키만 사라졌다
+  assert.equal(await countOf(setupClient, 'payments', "user_id='m1'"), 1)
+  assert.equal(await countOf(setupClient, 'membership_dues', "user_id='m1'"), 1)
+  assert.equal(await countOf(setupClient, 'billing_keys', "user_id='m1'"), 0)
+
+  // 로그인 수단 — 사라졌다
+  assert.equal(await countOf(setupClient, 'account', "user_id='m1'"), 0)
+  assert.equal(await countOf(setupClient, 'session', "user_id='m1'"), 0)
+
+  // Better Auth의 user 행도 묘비가 된다 — 여기 이메일이 남으면 로그인·메일이 살아 있다.
+  const u = (await setupClient.execute("SELECT * FROM user WHERE id='m1'")).rows[0]
+  assert.equal(u.email, 'withdrawn+m1@ggac.invalid')
+  assert.equal(u.name, '탈퇴한 조합원')
+  assert.equal(u.image, null)
+  assert.equal(u.email_verified, 0)
+
+  // 다른 조합원은 손대지 않는다.
+  const other = (await setupClient.execute("SELECT * FROM member_profiles WHERE id='m2'")).rows[0]
+  assert.equal(other.real_name, '김관리')
+  assert.equal(other.registration_status, 'approved')
+})
+
+test('신청하지 않은 회원은 확정되지 않는다', async () => {
+  await seedWithdrawalFixture(setupClient, { targetStatus: 'approved' })
+
+  const { withdrawMember } = await import(WITHDRAWAL_MODULE_URL.href)
+  assert.deepEqual(await withdrawMember('m1'), { ok: false, reason: 'not_requested' })
+
+  const p = (
+    await setupClient.execute(
+      "SELECT registration_status s, real_name r FROM member_profiles WHERE id='m1'"
+    )
+  ).rows[0]
+  assert.equal(p.s, 'approved', '상태가 바뀌면 안 된다')
+  assert.notEqual(p.r, null, '개인정보가 지워지면 안 된다')
+  // 신청 상태가 아니면 로그·빌링키도 그대로 남아 있어야 한다.
+  assert.equal(await countOf(setupClient, 'user_activities', "user_id='m1'"), 2)
+  assert.equal(await countOf(setupClient, 'billing_keys', "user_id='m1'"), 1)
+})
+
+test('마지막 관리자는 탈퇴 확정되지 않는다', async () => {
+  // 관리자는 m2 하나뿐이고, 그가 신청 상태다 — 확정하면 조합이 잠긴다.
+  await seedWithdrawalFixture(setupClient, {
+    targetStatus: 'approved',
+    adminStatus: 'withdrawal_requested',
+  })
+
+  const { withdrawMember } = await import(WITHDRAWAL_MODULE_URL.href)
+  assert.deepEqual(await withdrawMember('m2'), { ok: false, reason: 'last_admin' })
+
+  const p = (await setupClient.execute("SELECT is_admin a FROM member_profiles WHERE id='m2'"))
+    .rows[0]
+  assert.equal(p.a, 1, '관리자 권한이 남아 있어야 한다')
+})
+
+test('개인정보가 남으면 던지고 전부 롤백된다', async () => {
+  // 트랜잭션 후반(user 표 갱신)에서 던지게 만든다 — 그래야 앞에서 이미 지운
+  // 로그와 이미 비운 신원이 **되살아나는지**를 볼 수 있다. 유령 계정에
+  // 자리표시자 이메일을 먼저 점유시키면 `user.email`의 UNIQUE가 걸린다.
+  await seedWithdrawalFixture(setupClient)
+  const now = Date.now()
+  await setupClient.execute({
+    sql: `INSERT INTO user (id, name, email, created_at, updated_at)
+          VALUES ('ghost', '유령', 'withdrawn+m1@ggac.invalid', ?, ?)`,
+    args: [now, now],
+  })
+
+  const { withdrawMember } = await import(WITHDRAWAL_MODULE_URL.href)
+  await assert.rejects(() => withdrawMember('m1'))
+
+  const p = (
+    await setupClient.execute(
+      "SELECT registration_status s, real_name r, email e FROM member_profiles WHERE id='m1'"
+    )
+  ).rows[0]
+  assert.equal(p.s, 'withdrawal_requested', '상태가 롤백돼야 한다')
+  assert.notEqual(p.r, null, '개인정보가 롤백돼야 한다')
+  assert.equal(p.e, 'm1@example.test', '이메일이 롤백돼야 한다')
+  assert.ok(
+    (await countOf(setupClient, 'user_activities', "user_id='m1'")) > 0,
+    '로그가 롤백돼야 한다'
+  )
+  assert.equal(
+    await countOf(setupClient, 'billing_keys', "user_id='m1'"),
+    1,
+    '빌링키가 롤백돼야 한다'
+  )
+  assert.equal(
+    await countOf(setupClient, 'account', "user_id='m1'"),
+    1,
+    '로그인 수단이 롤백돼야 한다'
+  )
+})
