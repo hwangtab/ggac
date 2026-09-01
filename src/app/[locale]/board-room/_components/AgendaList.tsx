@@ -53,6 +53,7 @@ export default function AgendaList({
   const [newContent, setNewContent] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState('')
@@ -109,14 +110,23 @@ export default function AgendaList({
 
   const handleDelete = async (agendaId: string) => {
     if (!confirm(t('deleteAgendaConfirm'))) return
+    setDeleteError(null)
     try {
       const res = await fetch(`/api/board-room/agendas/${agendaId}`, {
         method: 'DELETE',
       })
       const json = await res.json()
-      if (json.success) onChanged()
+      if (json.success) {
+        onChanged()
+      } else {
+        // 거절 사유를 반드시 보여준다. 토론이 붙은 안건은 관리자만 지울 수
+        // 있는데(라우트의 403), 조용히 삼키면 삭제 버튼이 먹통으로 보인다 —
+        // 특히 남이 썼다 지운 의견만 남은 안건은 배지가 '토론 0'이라 이유를
+        // 짐작할 단서조차 화면에 없다.
+        setDeleteError(json.error || t('errorGeneric'))
+      }
     } catch {
-      // silently fail
+      setDeleteError(t('errorGeneric'))
     }
   }
 
@@ -227,6 +237,8 @@ export default function AgendaList({
           </div>
         </form>
       )}
+
+      {deleteError && <p className="mb-3 text-xs text-red-600">{deleteError}</p>}
 
       {sortedAgendas.length === 0 && !adding ? (
         <p className="text-sm text-gray-500 italic py-2">{t('noAgendas')}</p>
