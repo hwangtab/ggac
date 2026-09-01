@@ -21,7 +21,7 @@ npm run lint:fix                 # Auto-fix linting issues
 npm run format                   # Format code with Prettier
 npm run format:check             # Check code formatting
 npm run type-check               # TypeScript type checking
-npm run test:e2e                 # Run E2E tests
+npm run test:e2e                 # Run E2E tests (시스템 Chrome 사용 — 브라우저 설치 불필요)
 npm run test:e2e:ui              # Run E2E tests with UI
 npm run audit:security           # Security audit
 ANALYZE=true npm run build       # Bundle size analysis
@@ -93,6 +93,28 @@ Aside, 계측은 Chrome DevTools** 담당이다.
 
 참고: 설치된 aside는 Aside Browser 제품(`~/.local/bin/aside`)이며,
 github.com/egozverev/aside(ICLR 논문)와는 무관하다.
+
+#### E2E는 시스템 Chrome으로 돈다 — 브라우저를 받지 마라
+
+**`playwright install`을 실행하지 마라.** `npx`든
+`./node_modules/.bin/playwright`든 마찬가지다. 실측된 실패가 셋이다:
+
+- `npx`는 프로젝트 버전이 아닌 최신본을 받아 **멀쩡한 빌드를 지운다**
+- 프로젝트 바이너리로 받아도 `chromium`과 `chromium-headless-shell`이
+  **따로**라, 전자만 받으면 headless 실행이 안 된다
+- 후자만 따로 받으면 이번엔 앞서 받은 전체 빌드가 사라진다(2026-09-01 실측)
+
+`playwright.config.ts`의 모든 프로젝트가 **로컬에서 `channel: 'chrome'`**(이미
+설치된 시스템 Chrome)을 쓴다. 다운로드가 0이고 캐시가 비어 있어도 돈다. CI에서만
+`CI` 환경변수로 번들 브라우저 경로를 탄다.
+
+브라우저가 없다는 에러(`Executable doesn't exist at …ms-playwright/…`)를 보면
+받지 말고 **설정이 `channel: 'chrome'`을 타는지** 확인해라. `CI=1`이 셸에 남아
+있으면 로컬에서도 번들 경로로 떨어진다.
+
+MCP 두 개(aside·chrome-devtools)는 **스펙 파일을 대신 실행하지 못한다** —
+`e2e/*.spec.ts`는 Playwright 러너가 필요하다. 화면 확인·계측용이지 E2E 실행
+수단이 아니다.
 
 ### Post-Task Checklist
 

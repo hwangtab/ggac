@@ -66,7 +66,27 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      // **로컬에서는 이미 깔린 시스템 Chrome을 쓴다(다운로드 0).**
+      //
+      // 이 프로젝트만 번들 브라우저를 고집하는 바람에, 개발자 머신에서
+      // `authz`가 아닌 스펙 5개(약 30건 — 게시판 SSR·이사회·홈 모션·비밀번호
+      // 재설정·API 회귀)가 **아예 실행되지 못했다.** CI는 `smoke.spec.ts`만
+      // 돌리므로 그 30건은 어디에서도 돌지 않는 상태였다(2026-09-01 확인).
+      //
+      // 번들 브라우저를 받아 해결하려 들지 마라. 저장소 정책은 **받지 않는
+      // 것**이다 — `npx playwright install`은 프로젝트 버전이 아닌 최신본을
+      // 받아 멀쩡한 빌드를 지운 이력이 있고, 프로젝트 바이너리로 받아도
+      // `chromium`과 `chromium-headless-shell`이 따로 놀아 부분 설치로
+      // 끝나는 것을 실측했다. 형제 프로젝트(authz 계열)가 진작부터 쓰던
+      // 방식으로 통일한다.
+      //
+      // CI에서는 `channel`을 비워 번들 브라우저를 쓴다 — 러너에 Chrome이
+      // 없고 워크플로가 `npx playwright install --with-deps chromium`으로
+      // 직접 깔기 때문이다(`.github/workflows/ci.yml`).
+      use: {
+        ...devices['Desktop Chrome'],
+        ...(process.env.CI ? {} : { channel: 'chrome' as const }),
+      },
       testIgnore: /authz[.-]/,
     },
     // authz 계열은 로컬 Turso(`turso dev`)와 픽스처 시드가 있어야 도는 로컬 전용
