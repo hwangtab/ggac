@@ -74,8 +74,16 @@ export type WithdrawOutcome =
  * 탈퇴 확정 때 반드시 지워야 할 개인정보 컬럼과 그 목표값(전부 null)을
  * 한곳에 묶는다. 아래 `.set()`과 끝의 자체 단언이 **이 객체 하나**를
  * 함께 쓴다 — 컬럼을 추가하면서 한쪽만 고치는 사고를 구조적으로 막는다.
+ *
+ * **정본이다.** `scripts/turso/check-invariants.mjs`의
+ * `withdrawn_rows_have_no_personal_data`가 야간에 같은 성질(탈퇴 행에
+ * 개인정보가 없어야 한다)을 앱 밖 우회 쓰기까지 잡으려고 별도로 검사한다.
+ * 그 파일은 `.mjs`라 이 `.ts` 객체를 임포트하지 못해(플래그 없이 CI에서
+ * 도는 GitHub Actions 백업 워크플로가 깨진다) 컬럼 목록을 문자로 다시
+ * 적는다 — 두 목록이 같은지는 `scripts/testing/piiNullFieldsParity.test.mjs`가
+ * 못박는다. 여기 컬럼을 추가·삭제하면 그 목록도 고쳐라.
  */
-const PII_NULL_FIELDS = {
+export const PII_NULL_FIELDS = {
   realName: null,
   phoneNumber: null,
   birthDate: null,

@@ -36,7 +36,7 @@ import { profileCompletenessExpression } from './profileCompleteness.ts'
 // 상태 같은 새 값이 한쪽에만 반영되고도 tsc가 못 잡는다.
 export type { RegistrationStatus }
 
-/** API 응답에 쓰이는 snake_case 정규화 형태. 컬럼 33개 전부를 담는다. */
+/** API 응답에 쓰이는 snake_case 정규화 형태. 컬럼 34개 전부를 담는다. */
 export interface ProfileRow {
   id: string
   display_name: string

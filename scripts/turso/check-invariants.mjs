@@ -229,6 +229,26 @@ export function profileCompletenessExpressionSql(path = BACKFILL_SQL_PATH) {
   return match[1]
 }
 
+/**
+ * 탈퇴 확정 때 지워야 하는 개인정보 컬럼(snake_case, DB 컬럼명).
+ *
+ * **정본은 `src/db/queries/withdrawal.ts`의 `PII_NULL_FIELDS`다.** 이 파일은
+ * `.mjs`라 그 `.ts` 객체를 임포트할 수 없다 — GitHub Actions 백업 워크플로가
+ * `--experimental-strip-types` 없이 이 파일을 `node scripts/turso/check-invariants.mjs`로
+ * 직접 돌리기 때문이다(`.github/workflows/turso-backup.yml`). 그래서 컬럼명을
+ * 여기 다시 적는다. **정본이 바뀌면 여기도 고쳐라** — 둘이 같은 컬럼 집합인지는
+ * `scripts/testing/piiNullFieldsParity.test.mjs`가 못박는다.
+ */
+export const WITHDRAWN_PII_COLUMNS = [
+  'real_name',
+  'phone_number',
+  'birth_date',
+  'bank_name',
+  'account_number',
+  'account_holder',
+  'monthly_fee',
+]
+
 /** CHECK가 아닌 파생값 불변식. */
 export function derivedInvariants() {
   return [
@@ -248,11 +268,7 @@ export function derivedInvariants() {
       // 빠진 경우 — 를 잡는다. 야간 백업 뒤 매일 돈다.
       constraint: 'withdrawn_rows_have_no_personal_data',
       table: 'member_profiles',
-      where: `registration_status = 'withdrawn' AND (
-        real_name IS NOT NULL OR phone_number IS NOT NULL OR
-        birth_date IS NOT NULL OR account_number IS NOT NULL OR
-        bank_name IS NOT NULL OR account_holder IS NOT NULL
-      )`,
+      where: `registration_status = 'withdrawn' AND (${WITHDRAWN_PII_COLUMNS.map(c => `${c} IS NOT NULL`).join(' OR ')})`,
     },
   ]
 }
