@@ -9,6 +9,8 @@ import { validateUUID } from '@/utils/validation'
 import { getProfileById, updateProfile, type ProfilePatch } from '@/db/queries/profiles'
 import { withdrawMember } from '@/db/queries/withdrawal'
 import { notifyMemberApproved, notifyMemberRejected } from '@/lib/server/memberStatusNotify'
+import { deleteBillingKey } from '@/lib/payments/toss/client'
+import { getBillingConfig, isBillingEnabled } from '@/lib/payments/toss/config'
 
 const log = createLogger('admin/member-action')
 
@@ -126,6 +128,28 @@ export const POST = defineApiRoute<Record<string, unknown>>({
           { memberId: maskId(memberId), action, adminId: maskId(user.id) },
           'medium'
         )
+
+        // 빌링키 행은 트랜잭션에서 이미 지워졌다. 토스 쪽 해지는 외부 호출이라
+        // 트랜잭션 안에 넣으면 쓰기 락을 잡은 채 네트워크를 기다리게 된다.
+        // 실패해도 탈퇴는 유효하다 — 우리 쪽 결제 수단은 이미 사라졌다.
+        if (isBillingEnabled() && outcome.revokedBillingKeys.length > 0) {
+          const { secretKey } = getBillingConfig()
+          for (const billingKey of outcome.revokedBillingKeys) {
+            try {
+              await deleteBillingKey(billingKey, { secretKey })
+            } catch (error) {
+              log.error('탈퇴 확정 후 빌링키 삭제 실패', {
+                memberId: maskId(memberId),
+                error: error instanceof Error ? error.message : String(error),
+              })
+              logSecurityEvent(
+                'BILLING_KEY_REVOKE_FAILED',
+                { memberId: maskId(memberId) },
+                'medium'
+              )
+            }
+          }
+        }
 
         return ApiSuccess.ok({ status: 'withdrawn' }, '탈퇴가 확정되었습니다.').toNextResponse()
       }

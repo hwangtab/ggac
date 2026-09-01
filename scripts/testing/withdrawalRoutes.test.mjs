@@ -29,3 +29,20 @@ test('관리자 액션에 withdraw가 있고 자기 자신은 막는다', async 
   assert.match(src, /withdrawMember/)
   assert.doesNotMatch(src, /db\.delete\(/, '라우트가 직접 삭제하면 트랜잭션 밖이 된다')
 })
+
+test('탈퇴 확정 뒤 커밋된 결과로 빌링키 해지를 시도한다', async () => {
+  const src = await readFile(ADMIN_ROUTE, 'utf8')
+  // withdrawMember가 커밋 전에 지운 빌링키를 revokedBillingKeys로 돌려주고,
+  // 라우트는 그 목록으로 커밋 뒤에 토스 해지를 부른다.
+  assert.match(src, /revokedBillingKeys/)
+  assert.match(src, /deleteBillingKey/)
+  // 해지는 트랜잭션이 끝난 뒤(withdrawMember 호출 이후)에 있어야 한다 —
+  // 트랜잭션 안에서 외부 네트워크를 부르면 쓰기 락을 잡은 채 기다리게 된다.
+  const withdrawBlock = src.slice(src.indexOf("action === 'withdraw'"))
+  const withdrawMemberAt = withdrawBlock.indexOf('await withdrawMember(')
+  const deleteBillingKeyAt = withdrawBlock.indexOf('deleteBillingKey(')
+  assert.ok(withdrawMemberAt >= 0 && deleteBillingKeyAt >= 0, '두 호출을 찾지 못했다')
+  assert.ok(withdrawMemberAt < deleteBillingKeyAt, '해지는 확정 트랜잭션 뒤에 있어야 한다')
+  // 해지 실패가 탈퇴 자체를 무효로 만들면 안 된다.
+  assert.match(withdrawBlock, /catch[\s\S]{0,400}(BILLING_KEY_REVOKE_FAILED|해지 실패)/)
+})
