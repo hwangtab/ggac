@@ -21,6 +21,8 @@ import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
 import { db } from '../client.ts'
 import { memberProfiles, user } from '../schema/index.ts'
 
+import type { ArtistRole, MembershipType } from '../../constants/memberProfile.ts'
+
 import { toCamelCase, toIso } from './_helpers.ts'
 import { profileCompletenessExpression } from './profileCompleteness.ts'
 
@@ -52,12 +54,16 @@ export interface ProfileRow {
   is_suspended: boolean
   profile_completeness_score: number
   verification_status: { email: boolean; phone: boolean; identity: boolean }
-  membership_type: string
+  /** 사라진 `member_profiles_membership_type_check`의 타입 재현 —
+   * 런타임 쓰기 경로가 없어 검사할 자리가 없는 대신 타입이 막는다. */
+  membership_type: MembershipType
   engagement_score: number
   is_member: boolean
   artist_id: string | null
   is_artist: boolean
-  artist_role: string
+  /** 사라진 `check_artist_role`의 타입 재현. 런타임 검사는
+   * `isValidArtistRole`(admin 아티스트 배정 라우트)이 한다. */
+  artist_role: ArtistRole
   is_director: boolean
   director_title: string | null
   is_auditor: boolean
@@ -142,12 +148,15 @@ function rowToProfile(row: MemberProfileSelectRow): ProfileRow {
     is_suspended: row.isSuspended,
     profile_completeness_score: row.profileCompletenessScore,
     verification_status: row.verificationStatus,
-    membership_type: row.membershipType,
+    // DB에 CHECK가 없으므로 읽어 온 값이 목록 밖일 **수는** 있다. 읽기에서
+    // 던지면 그 회원의 화면이 통째로 죽으므로 여기서는 캐스팅만 하고,
+    // 목록 밖 값의 탐지는 `scripts/turso/check-invariants.mjs`가 맡는다.
+    membership_type: row.membershipType as MembershipType,
     engagement_score: row.engagementScore,
     is_member: row.isMember,
     artist_id: row.artistId,
     is_artist: row.isArtist,
-    artist_role: row.artistRole,
+    artist_role: row.artistRole as ArtistRole,
     is_director: row.isDirector,
     director_title: row.directorTitle,
     is_auditor: row.isAuditor,

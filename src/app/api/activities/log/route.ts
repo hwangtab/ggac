@@ -42,6 +42,15 @@ export async function POST(request: NextRequest) {
         ).toNextResponse()
       }
       const targetId = targetIdValidation?.sanitized ?? null
+      // 사라진 `valid_target_combination` CHECK — 대상 종류 없이 대상 id만
+      // 보내는 건 금지다. 쿼리 계층(`assertValidTargetCombination`)이 같은
+      // 조합을 던져서 막지만, 그건 500이 된다. 사용자 입력이 들어오는 이
+      // 자리에서는 400으로 돌려준다.
+      if (!targetType && targetId) {
+        return ApiError.badRequest(
+          'target_id를 보내려면 target_type도 함께 보내야 합니다.'
+        ).toNextResponse()
+      }
 
       // 입력 검증 및 sanitization
       const sanitizedMetadata =

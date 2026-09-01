@@ -93,7 +93,39 @@ export interface LogActivityInput {
  * uuid와 동일한 모양).
  * @throws DB 쓰기가 실패하면 그대로 던진다(삼키지 않는다) — 모듈 설명 참고.
  */
+/**
+ * 사라진 `valid_target_combination` CHECK의 앱 재현.
+ *
+ * 원본(Postgres): `(target_type IS NULL AND target_id IS NULL) OR target_type
+ * IS NOT NULL`. 즉 **대상 종류 없이 대상 id만 있는 행**을 금지한다 — 그런
+ * 행은 "무언가의 id"인데 그 무언가가 뭔지 모르는 로그라, 활동 피드가 링크를
+ * 만들 수 없고 통계도 붙일 데가 없다.
+ *
+ * 이 검사가 라우트가 아니라 쿼리 계층에 있는 이유: 원본 CHECK가 있던 자리가
+ * 여기다. `user_activities`에 쓰는 경로는 이 파일의 두 함수뿐이고
+ * (`logUserActivity`·`logUserActivitiesBatch`), 그 호출부는 외부 입력을 받는
+ * 라우트 2개와 내부 헬퍼 여러 곳이다. 라우트에만 두면 내부 헬퍼가 새로
+ * 생길 때마다 같은 검사를 다시 적어야 하고, 한 번 빠지면 아무도 모른다.
+ * (값의 유효성은 권한 판정이 아니므로 이 모듈의 "권한을 모른다" 규칙과
+ * 충돌하지 않는다 — `NextResponse`도 `next/headers`도 쓰지 않는다.)
+ *
+ * 라우트는 이 예외가 500으로 새어 나가지 않도록 같은 조합을 먼저 400으로
+ * 거른다. 여기는 그 그물을 빠져나온 호출부를 위한 마지막 방어선이다.
+ */
+export function assertValidTargetCombination(entry: {
+  target_type?: string | null
+  target_id?: string | null
+}): void {
+  if (!entry.target_type && entry.target_id) {
+    throw new Error(
+      'user_activities: target_type 없이 target_id만 기록할 수 없습니다(valid_target_combination).'
+    )
+  }
+}
+
 export async function logUserActivity(input: LogActivityInput): Promise<string> {
+  assertValidTargetCombination(input)
+
   const activityDate = todayDateString()
 
   const insertActivity = db
@@ -160,6 +192,8 @@ export async function logUserActivitiesBatch(
   userAgent?: string | null
 ): Promise<number> {
   if (!Array.isArray(logs) || logs.length === 0) return 0
+
+  for (const entry of logs) assertValidTargetCombination(entry)
 
   const activityDate = todayDateString()
 

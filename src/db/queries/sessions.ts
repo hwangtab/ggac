@@ -78,6 +78,30 @@ function isForeignKeyViolation(error: unknown): boolean {
   return /FOREIGN KEY|FOREIGNKEY/.test(combined)
 }
 
+/**
+ * 사라진 `valid_session_state` CHECK의 앱 재현.
+ *
+ * 원본(Postgres): `(is_active = true AND logout_at IS NULL) OR (is_active =
+ * false AND logout_at IS NOT NULL)`. 두 컬럼은 **한 상태의 두 면**이라 따로
+ * 쓰면 안 된다 — `is_active`만 false로 내리면 "끝났는데 언제 끝났는지 모르는"
+ * 세션이 남고, 활성 세션 수와 로그아웃 시각을 같이 읽는 화면이 조용히 어긋난다.
+ *
+ * 그래서 값 대신 **짝**을 만든다. `.set()`/`.values()`에 이 함수의 반환을
+ * 펼쳐 쓰면 한쪽만 바꾸는 일이 구조적으로 불가능해지고, 그래도 손으로
+ * 어긋난 짝을 만들면 여기서 던진다. 검사가 쿼리 계층에 있는 이유는 이
+ * 불변식에 **사용자 입력이 없기** 때문이다 — 라우트가 판정할 것이 없고,
+ * `user_sessions`에 쓰는 코드는 이 파일이 전부다.
+ */
+export function sessionState(
+  isActive: boolean,
+  logoutAt: Date | null
+): { isActive: boolean; logoutAt: Date | null } {
+  if (isActive !== (logoutAt === null)) {
+    throw new Error('user_sessions: is_active와 logout_at은 짝이어야 합니다(valid_session_state).')
+  }
+  return { isActive, logoutAt }
+}
+
 async function startSession(
   input: Required<Omit<ManageSessionInput, 'action'>>,
   onWriteError?: (error: unknown) => void
@@ -89,7 +113,7 @@ async function startSession(
       // (원본 RPC의 'start' 분기도 이전 세션 종료는 조용히 처리했다).
       await tx
         .update(userSessions)
-        .set({ isActive: false, logoutAt: new Date() })
+        .set(sessionState(false, new Date()))
         .where(and(eq(userSessions.userId, input.user_id), eq(userSessions.isActive, true)))
 
       const [row] = await tx
@@ -100,6 +124,9 @@ async function startSession(
           ipAddress: input.ip_address,
           userAgent: input.user_agent,
           metadata: input.metadata,
+          // 스키마 기본값(is_active=1, logout_at NULL)과 같은 값이지만
+          // 명시한다 — 기본값이 바뀌어도 짝이 깨지지 않는다.
+          ...sessionState(true, null),
         })
         .returning({ id: userSessions.id })
 
@@ -183,7 +210,7 @@ async function endSession(
 ): Promise<string | null> {
   const [row] = await db
     .update(userSessions)
-    .set({ isActive: false, logoutAt: new Date() })
+    .set(sessionState(false, new Date()))
     .where(
       and(
         eq(userSessions.sessionToken, input.session_token),

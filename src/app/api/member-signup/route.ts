@@ -33,18 +33,12 @@ import { applyRateLimit, RATE_LIMIT_CONFIGS, createIPKeyGenerator } from '@/lib/
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { ApiSuccess, ApiError as HttpApiError } from '@/utils/apiWrapper'
 import { createLogger, maskId } from '@/utils/logger'
+import { parseMonthlyFee, MONTHLY_FEE_RANGE_MESSAGE } from '@/constants/memberProfile'
 
 const log = createLogger('api/member-signup')
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-
-// 실측(로컬 스택, 2026-08-19): member_profiles.monthly_fee는
-// CHECK (monthly_fee >= 10000 AND monthly_fee <= 50000). 컬럼 자체는
-// nullable이라 값을 안 보내는 건 허용하지만, 보낸 값이 이 범위를 벗어나면
-// DB가 23514로 거부한다 — 여기서 미리 걸러 500 대신 400을 준다.
-const MONTHLY_FEE_MIN = 10000
-const MONTHLY_FEE_MAX = 50000
 
 /**
  * `auth.api.signUpEmail`이 던지는 better-call `APIError`/`ValidationError`는
@@ -135,18 +129,13 @@ export async function POST(request: NextRequest) {
       return HttpApiError.badRequest('이메일, 비밀번호, 표시명은 필수입니다.').toNextResponse()
     }
 
-    const monthlyFeeRaw = body.monthly_fee
-    if (monthlyFeeRaw !== undefined && monthlyFeeRaw !== null && monthlyFeeRaw !== '') {
-      const monthlyFeeNumber = Number(monthlyFeeRaw)
-      if (
-        !Number.isInteger(monthlyFeeNumber) ||
-        monthlyFeeNumber < MONTHLY_FEE_MIN ||
-        monthlyFeeNumber > MONTHLY_FEE_MAX
-      ) {
-        return HttpApiError.badRequest(
-          `월 회비는 ${MONTHLY_FEE_MIN.toLocaleString()}원 이상 ${MONTHLY_FEE_MAX.toLocaleString()}원 이하이어야 합니다.`
-        ).toNextResponse()
-      }
+    // 실측(로컬 스택, 2026-08-19): member_profiles.monthly_fee는 Postgres에서
+    // CHECK (monthly_fee >= 10000 AND monthly_fee <= 50000)이었다. Turso에는
+    // 그 CHECK가 없으므로 이 검사가 유일한 방어선이다. 범위의 정본은
+    // `@/constants/memberProfile` — `mypage/profile` 라우트와 같은 값을
+    // 쓴다(예전에는 두 라우트의 상·하한이 서로 달랐다).
+    if (!parseMonthlyFee(body.monthly_fee).ok) {
+      return HttpApiError.badRequest(MONTHLY_FEE_RANGE_MESSAGE).toNextResponse()
     }
 
     // birth_date는 실측(signupProfile.ts 참고)으로 nullable date 컬럼이라

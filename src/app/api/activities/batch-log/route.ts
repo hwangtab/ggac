@@ -70,6 +70,15 @@ export async function POST(request: NextRequest) {
           continue
         }
         const targetId = targetIdValidation?.sanitized ?? null
+        // 사라진 `valid_target_combination` CHECK — 대상 종류 없이 대상 id만
+        // 있는 항목은 건너뛴다(쿼리 계층이 던지면 배치 전체가 롤백된다).
+        if (!targetType && targetId) {
+          errors.push({
+            index: i,
+            error: 'target_id를 보내려면 target_type도 함께 보내야 합니다.',
+          })
+          continue
+        }
 
         // 입력 검증 및 sanitization
         const sanitizedMetadata =

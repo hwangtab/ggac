@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { ApiError, ApiSuccess, apiGet, apiPatch } from '@/utils/apiWrapper'
 import { rateLimit } from '@/lib/server/rateLimit'
 import { parseJsonObjectBody } from '@/utils/requestBody'
-import { parseIntegerParam } from '@/utils/queryParams'
+import { parseMonthlyFee, MONTHLY_FEE_RANGE_MESSAGE } from '@/constants/memberProfile'
 import { requireActiveMember } from '@/lib/server/memberAuth'
 import { getProfileById, updateProfile, type ProfilePatch } from '@/db/queries/profiles'
 
@@ -23,11 +23,16 @@ function assertValidProfileBody(body: Record<string, unknown>) {
   const displayName = normalizeRequiredText(body.display_name, 80)
   const phoneNumber = normalizeRequiredText(body.phone_number, 40)
   const birthDate = normalizeOptionalText(body.birth_date, 10)
-  const monthlyFeeParam =
-    typeof body.monthly_fee === 'number' || typeof body.monthly_fee === 'string'
-      ? String(body.monthly_fee)
-      : null
-  const monthlyFee = parseIntegerParam(monthlyFeeParam, 0, { min: 0, max: 10_000_000 })
+  // 사라진 `member_profiles_monthly_fee_check`(10000~50000)의 앱 재현.
+  // 예전에는 여기서 0부터 천만 원까지를 통과시켰다 — 가입 라우트가 막던 값이
+  // 프로필 수정으로는 그대로 들어갔고, DB에 CHECK가 없어 아무도 몰랐다.
+  // (값을 안 보내면 0으로 떨어뜨려 저장했는데, 0도 원본 CHECK가 거부하던 값이다.)
+  // 값을 안 보내면 NULL이다(원본 CHECK도 nullable 컬럼이라 NULL을 허용한다).
+  const monthlyFeeResult = parseMonthlyFee(body.monthly_fee)
+  if (!monthlyFeeResult.ok) {
+    throw ApiError.badRequest(MONTHLY_FEE_RANGE_MESSAGE)
+  }
+  const monthlyFee = monthlyFeeResult.value
   const bankName = normalizeOptionalText(body.bank_name, 80)
   const accountNumber = normalizeOptionalText(body.account_number, 80)
   const accountHolder = normalizeOptionalText(body.account_holder, 80)

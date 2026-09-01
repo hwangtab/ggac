@@ -11,6 +11,7 @@ import { validateUUID } from '@/utils/validation'
 import { getProfileById, updateProfile } from '@/db/queries/profiles'
 import { getArtistByLegacyId } from '@/db/queries/artists'
 import { notifyArtistApproved } from '@/lib/server/memberStatusNotify'
+import { isValidArtistRole } from '@/constants/memberProfile'
 
 function getRouteParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? (value[0] ?? '') : (value ?? '')
@@ -68,7 +69,9 @@ export const POST = defineApiRoute<Record<string, unknown>>({
       return ApiError.badRequest('역할이 필요합니다.').toNextResponse()
     }
 
-    if (!['owner', 'manager', 'collaborator'].includes(role)) {
+    // 사라진 `check_artist_role` CHECK의 앱 재현. 허용값의 정본은
+    // `@/constants/memberProfile` — 여기 인라인으로 적혀 있던 배열을 옮겼다.
+    if (!isValidArtistRole(role)) {
       return ApiError.badRequest('유효하지 않은 역할입니다.').toNextResponse()
     }
 
