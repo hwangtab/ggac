@@ -303,6 +303,7 @@ export interface BoardPostStatsRow {
   updated_at: string
   is_pinned: boolean
   content_head: string
+  content_format: string
   like_count: number
   author_display_name: string | null
   comment_count: number
@@ -354,6 +355,7 @@ export async function listBoardPostsWithStats(
       updatedAt: posts.updatedAt,
       isPinned: posts.isPinned,
       contentHead: sql<string>`substr(${posts.content}, 1, 2000)`,
+      contentFormat: posts.contentFormat,
       likeCount: posts.likeCount,
     })
     .from(posts)
@@ -385,6 +387,7 @@ export async function listBoardPostsWithStats(
       updated_at: toIso(row.updatedAt) as string,
       is_pinned: row.isPinned,
       content_head: row.contentHead,
+      content_format: row.contentFormat,
       like_count: row.likeCount,
       author_display_name: profile?.display_name ?? null,
       comment_count: commentCounts.get(row.id) ?? 0,
