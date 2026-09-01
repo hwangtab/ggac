@@ -1,7 +1,22 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { createClient } from '@libsql/client'
+
+import { applyMigrations } from './apply-migrations.mjs'
 
 const CONSTANTS = new URL('../../src/constants/memberProfile.ts', import.meta.url)
+
+/** 승인·활성 조합원 한 명을 심고 client를 돌려준다. */
+async function seedMember(client, { id = 'm1', isAdmin = false } = {}) {
+  const now = Date.now()
+  await client.execute({
+    sql: `INSERT INTO member_profiles
+            (id, email, display_name, registration_status, is_active, is_admin, created_at, updated_at)
+          VALUES (?, ?, ?, 'approved', 1, ?, ?, ?)`,
+    args: [id, `${id}@example.test`, `회원 ${id}`, isAdmin ? 1 : 0, now, now],
+  })
+  return id
+}
 
 test('탈퇴 상태 두 개가 상태 목록에 있다', async () => {
   const { REGISTRATION_STATUSES } = await import(CONSTANTS.href)
@@ -51,4 +66,45 @@ test('탐지기의 상태 목록이 앱 상수와 정확히 같다(양방향)', 
     [...REGISTRATION_STATUSES].sort(),
     '탐지기 상태 목록과 앱 상수(REGISTRATION_STATUSES)가 어긋난다'
   )
+})
+
+// `requestWithdrawal`/`cancelWithdrawal`이 쓰는 `src/db/client.ts`의 `db`는
+// 프로세스 안에서 연결을 한 번 열면 그 파일 경로에 고정해 재사용한다
+// (`cachedRawClient`). 신청 테스트가 끝난 뒤 파일을 지우고 같은 경로에 새
+// 파일을 만들면 그 캐시가 "이동된 파일"을 보게 되어 SQLITE_READONLY_DBMOVED로
+// 죽는다 — 그래서 신청·취소를 별도 테스트로 나누지 않고 같은 DB 파일 위에서
+// 한 테스트 안에 이어 붙인다. (`queriesProfiles.test.mjs`도 같은 이유로
+// before/after에서 파일을 한 번만 만든다.)
+test('신청·취소가 조건부 UPDATE로 승인↔신청 상태를 오간다', async () => {
+  const path = '/tmp/wd-request.db'
+  const { rmSync } = await import('node:fs')
+  for (const s of ['', '-wal', '-shm']) rmSync(`${path}${s}`, { force: true })
+  const c = createClient({ url: `file:${path}` })
+  try {
+    await applyMigrations(c)
+    await seedMember(c, { id: 'm1' })
+
+    const { requestWithdrawal, cancelWithdrawal } = await import(
+      new URL('../../src/db/queries/withdrawal.ts', import.meta.url).href
+    )
+    // 쿼리 계층은 모듈 수준 `db`를 쓰므로 TURSO_DATABASE_URL이 이 파일을
+    // 가리켜야 한다. 테스트 실행 시 env로 지정한다.
+    assert.equal(await requestWithdrawal('m1'), true)
+
+    let after = await c.execute("SELECT registration_status s FROM member_profiles WHERE id='m1'")
+    assert.equal(after.rows[0].s, 'withdrawal_requested')
+
+    // 두 번째 신청은 이미 신청 상태라 false — 조건부 UPDATE의 rowsAffected 판정.
+    assert.equal(await requestWithdrawal('m1'), false)
+
+    assert.equal(await cancelWithdrawal('m1'), true)
+    after = await c.execute("SELECT registration_status s FROM member_profiles WHERE id='m1'")
+    assert.equal(after.rows[0].s, 'approved')
+
+    // 승인 상태에서 또 취소하면 false
+    assert.equal(await cancelWithdrawal('m1'), false)
+  } finally {
+    c.close()
+    for (const s of ['', '-wal', '-shm']) rmSync(`${path}${s}`, { force: true })
+  }
 })
