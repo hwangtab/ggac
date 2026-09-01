@@ -3792,8 +3792,17 @@ const parsesAttachmentSizesSafely =
   !/att\.file_size\s*\|\|\s*0/.test(boardDetailPageSource)
 // 아티스트 사진 경계는 공유 헬퍼 toSafeArtistImageSrc(내부에서 artists 버킷의
 // logicalPathFromUrl 검증)로 통일됐다(커밋 0c32462). 검사도 헬퍼 사용과
-// 헬퍼 자체의 버킷 경계를 함께 고정한다. PersonalInfo는 진짜 artist_id 스코프
-// 저수준 검증을 유지하므로 기존 조건 유지.
+// 헬퍼 자체의 버킷 경계를 함께 고정한다.
+//
+// **PersonalInfo의 접두사는 `legacy_id`여야 한다.** 사진의 저장 경로를 만드는
+// 것은 업로드 라우트의 `member_profiles.artist_id`(= `artist-016` 꼴)이고,
+// `artists.id`(UUID)를 넘기면 게이트가 모든 아티스트에 대해 영구히 false가 되어
+// **사진이 아무 에러 없이 기본 아이콘으로 사라진다.**
+//
+// 2026-09-01 적대 감사 전까지 이 가드는 **버그 쪽 형태(`artistData?.id`)를 그대로
+// 못박고 있었다** — 즉 가드가 초록불인 채로 마이페이지 사진이 전원 사라진
+// 상태를 지키고 있었다. 이 저장소의 가드가 "이 문자열이 이 파일에 있는가"만
+// 본다는 한계의 실례다. 아래는 옳은 형태를 요구하고, 옛 형태를 금지한다.
 const validatesRenderedArtistProfilePhotoUrls =
   /toSafeArtistImageSrc/.test(postDetailClientSource) &&
   /const\s+safeAuthorProfilePhotoUrl\s*=\s*toSafeArtistImageSrc\(authorProfile\?\.profile_photo_url,\s*['"]['"]\)/.test(
@@ -3805,7 +3814,8 @@ const validatesRenderedArtistProfilePhotoUrls =
     mypageProfilePersonalInfoSource
   ) &&
   !/src=\{artistPhotoUrl\}/.test(mypageProfilePersonalInfoSource) &&
-  /artistId=\{artistData\?\.id \|\| null\}/.test(mypageProfileEditFormSource) &&
+  /artistId=\{artistData\?\.legacy_id \|\| null\}/.test(mypageProfileEditFormSource) &&
+  !/artistId=\{artistData\?\.id \|\| null\}/.test(mypageProfileEditFormSource) &&
   /safePreviewImageForDisplay/.test(mypageArtistPageSource) &&
   /const\s+safePreviewImageForDisplay\s*=\s*toSafeArtistImageSrc\(previewImageForDisplay,\s*['"]['"]\)/.test(
     mypageArtistPageSource

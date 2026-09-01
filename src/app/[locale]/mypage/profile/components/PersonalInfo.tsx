@@ -31,6 +31,11 @@ const PersonalInfo: React.FC<PersonalInfoProps> = ({
   onChange,
   readOnlyEmail,
 }) => {
+  // `artistId`로 받는 값은 **`legacy_id`(`artist-016` 꼴)여야 한다.** 사진의
+  // 저장 경로를 만드는 것은 업로드 라우트의 `member_profiles.artist_id`이고, 그
+  // 값이 legacy_id다. `artists.id`(UUID)를 넘기면 이 게이트가 모든 아티스트에
+  // 대해 영구히 false가 되어 **사진이 아무 에러 없이 기본 아이콘으로 사라진다**
+  // (2026-09-01 적대 감사에서 실제로 그 상태였다).
   const safeArtistPhotoUrl =
     artistPhotoUrl && artistId && logicalPathFromUrl(artistPhotoUrl, 'artists', artistId) !== null
       ? artistPhotoUrl

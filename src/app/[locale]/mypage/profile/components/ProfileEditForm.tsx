@@ -144,7 +144,7 @@ const ProfileEditForm: React.FC<ProfileEditFormProps> = ({ profile, onUpdate, lo
           phone_number: formData.phone_number,
           birth_date: formData.birth_date,
         }}
-        artistId={artistData?.id || null}
+        artistId={artistData?.legacy_id || null}
         artistPhotoUrl={artistData?.profile_photo_url || null}
         artistPhotoMetadata={artistData?.profile_photo_metadata}
         hasArtistPermission={profile.is_artist && !!profile.artist_id}

@@ -191,3 +191,48 @@ test('중복 경로 제거: .webp 업로드로 원본·webp 변형 경로가 같
   assert.deepEqual(toRemove, [suffixes.originalPath, suffixes.fallbackPath])
   assert.equal(toRemove.length, 2)
 })
+
+test('마이페이지 사진 게이트는 legacy_id를 접두사로 받는다 — UUID를 넘기면 사진이 사라진다', () => {
+  // 2026-09-01 적대 감사가 잡은 실제 회귀. `ProfileEditForm`이 `artistData?.id`
+  // (UUID)를 `PersonalInfo`의 `artistId`로 넘기고 있었는데, 사진의 저장 경로
+  // 접두사는 업로드 라우트가 쓰는 `member_profiles.artist_id`(= `artist-016` 꼴)다.
+  //
+  // 이 불일치는 **에러를 내지 않는다.** 게이트가 조용히 false가 되어 사진 자리가
+  // 기본 아이콘으로 바뀔 뿐이라, 화면을 직접 보지 않으면 알 수 없다. 그래서
+  // 여기에 못박는다.
+  const url = `${BLOB_BASE}/artists/artist-016/profile_1778033706926.webp`
+
+  assert.equal(
+    logicalPathFromUrl(url, 'artists', 'artist-016'),
+    'artists/artist-016/profile_1778033706926.webp',
+    'legacy_id 접두사는 통과해야 한다'
+  )
+  assert.equal(
+    logicalPathFromUrl(url, 'artists', 'e7dde30e-a826-40d8-8112-759f7cbdb8c8'),
+    null,
+    'UUID 접두사는 막힌다 — 이것이 회귀의 정체다'
+  )
+})
+
+test('ProfileEditForm은 artistId로 legacy_id를 넘긴다 (UUID인 artists.id가 아니라)', async () => {
+  // 위 테스트는 함수의 성질만 본다. 정작 회귀는 **호출부가 무엇을 넘기는가**에
+  // 있었으므로, 호출부 자체를 못박는다.
+  const { readFile } = await import('node:fs/promises')
+  const src = await readFile(
+    new URL(
+      '../../src/app/[locale]/mypage/profile/components/ProfileEditForm.tsx',
+      import.meta.url
+    ),
+    'utf8'
+  )
+  assert.match(
+    src,
+    /artistId=\{artistData\?\.legacy_id\s*\|\|\s*null\}/,
+    'artistId에는 legacy_id를 넘겨야 한다'
+  )
+  assert.doesNotMatch(
+    src,
+    /artistId=\{artistData\?\.id\s*\|\|\s*null\}/,
+    'artists.id(UUID)를 넘기면 마이페이지 사진이 전원 사라진다'
+  )
+})
