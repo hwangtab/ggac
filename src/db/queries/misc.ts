@@ -139,6 +139,34 @@ export interface CreateEventApplicationInput {
 }
 
 /**
+ * 같은 이벤트에 같은 연락처로 이미 신청했는지 확인한다.
+ * `src/app/api/event-applications/route.ts` POST가 insert 전에 부른다.
+ *
+ * 이 폼은 로그인 없는 익명 공개 폼이라 `user_id`가 없다 — 판정 기준은
+ * `event_slug` + `contact_phone`이다(운영 실측 중복 2건도 이 조합이 같았다).
+ * **경합에는 뚫린다**: SELECT와 이어지는 INSERT 사이에 원자성이 없어 동시에
+ * 들어온 두 요청이 둘 다 이 확인을 통과할 수 있다. 원자적으로 막으려면 DB
+ * 유니크 인덱스가 필요한데, 운영에 이미 같은 조합의 중복 2건이 있어 지금은
+ * 인덱스 생성 자체가 실패한다(선행 정리 필요 — 권고로만 남긴다).
+ */
+export async function hasEventApplicationForContact(
+  eventSlug: string,
+  contactPhone: string
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: eventApplications.id })
+    .from(eventApplications)
+    .where(
+      and(
+        eq(eventApplications.eventSlug, eventSlug),
+        eq(eventApplications.contactPhone, contactPhone)
+      )
+    )
+    .limit(1)
+  return !!row
+}
+
+/**
  * 공개 신청 폼 제출. `src/app/api/event-applications/route.ts` POST의
  * `.insert(cleanedData).select('id').single()` 대체.
  */

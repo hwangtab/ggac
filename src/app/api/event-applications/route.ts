@@ -8,7 +8,7 @@ import {
   normalizeEventSlug,
 } from '@/utils/eventApplicationValidation'
 import { parseJsonObjectBody } from '@/utils/requestBody'
-import { createEventApplication } from '@/db/queries/misc'
+import { createEventApplication, hasEventApplicationForContact } from '@/db/queries/misc'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -95,6 +95,24 @@ export async function POST(request: NextRequest) {
       photo_url: d.photo_url?.trim() || null,
       privacy_consent: true,
       privacy_consent_at: new Date().toISOString(),
+    }
+
+    // 애플리케이션 단계의 중복 검사. insert 전 SELECT라 원자적이지 않다 —
+    // 동시에 들어온 두 요청은 둘 다 이 검사를 통과할 수 있다(경합에 뚫린다).
+    // 원자적 방어(DB 유니크 인덱스)는 운영에 이미 같은 조합 중복이 있어
+    // 지금 만들 수 없다 — 중복 정리가 선행돼야 한다는 권고로 남긴다.
+    let alreadyApplied: boolean
+    try {
+      alreadyApplied = await hasEventApplicationForContact(
+        cleanedData.event_slug,
+        cleanedData.contact_phone
+      )
+    } catch (checkError) {
+      console.error('[event-applications] duplicate check error:', checkError)
+      return ApiError.internalServerError('신청 처리 중 오류가 발생했습니다.').toNextResponse()
+    }
+    if (alreadyApplied) {
+      return ApiError.conflict('이미 같은 연락처로 신청이 접수되어 있습니다.').toNextResponse()
     }
 
     let inserted: { id: string }
