@@ -1156,8 +1156,12 @@ grep -c 'CREATE OR REPLACE FUNCTION' "$S"        # 기대: 90 이상
 grep -c 'CREATE POLICY' "$S"                     # 기대: 50 이상
 grep -c 'CREATE OR REPLACE TRIGGER' "$S"         # 트리거도 같은 변환을 탄다
 
-# ⑥ 역할 덤프
-grep -c 'CREATE ROLE' "$R"                       # 기대: 1 이상
+# ⑥ 역할 덤프 — **`CREATE ROLE`은 0이 정상이다**(2026-09-01 실측).
+#    Supabase 관리형 프로젝트에는 커스텀 역할이 없고, `--role-only`는 관리형
+#    역할의 **설정 변경분만** 담는다(실제 산출물은 `ALTER ROLE ... statement_timeout`
+#    3줄, 297바이트). `CREATE ROLE` 개수를 기대값으로 삼으면 정상 덤프에서
+#    영원히 막힌다 — 검증 ⑤에서 겪은 것과 같은 실수다.
+grep -c 'ALTER ROLE' "$R"                        # 기대: 1 이상
 ```
 
 > **⚠ `supabase db dump`는 임시 로그인 역할을 만들고 그 자격증명을 콘솔에 평문

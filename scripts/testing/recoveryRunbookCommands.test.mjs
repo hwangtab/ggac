@@ -61,6 +61,14 @@ test('함수 검증이 CREATE OR REPLACE FUNCTION을 센다', () => {
   assert.match(readme.slice(i, i + 200), /기대: \d+/, '기대값 없는 검사는 실패할 수 없다')
 })
 
+test('역할 검증이 ALTER ROLE을 센다 (CREATE ROLE은 0이 정상)', () => {
+  assert.match(
+    readme,
+    /grep -c 'ALTER ROLE'/,
+    'Supabase 관리형 프로젝트엔 커스텀 역할이 없다 — CREATE ROLE로 세면 정상 덤프에서도 0이다'
+  )
+})
+
 test('데이터 덤프에 auth 스키마가 담겼는지 검증한다', () => {
   assert.match(
     readme,
