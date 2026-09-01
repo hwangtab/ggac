@@ -99,6 +99,13 @@
       "when": 1788254223984,
       "tag": "0013_member_interests",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1788278498513,
+      "tag": "0014_event_application_unique",
+      "breakpoints": true
     }
   ]
 }

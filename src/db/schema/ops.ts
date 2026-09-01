@@ -241,24 +241,34 @@ export const linkPreviews = sqliteTable('link_previews', {
   updatedAt: updatedAt(),
 })
 
-export const eventApplications = sqliteTable('event_applications', {
-  id: uuidPk(),
-  eventSlug: text('event_slug').notNull(),
-  applicantName: text('applicant_name').notNull(),
-  contactEmail: text('contact_email'),
-  contactPhone: text('contact_phone'),
-  performanceInfo: text('performance_info'),
-  itemsToSell: text('items_to_sell'),
-  links: text('links'),
-  message: text('message'),
-  status: text('status').notNull().default('pending'),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-  privacyConsent: integer('privacy_consent', { mode: 'boolean' }).notNull().default(false),
-  privacyConsentAt: integer('privacy_consent_at', { mode: 'timestamp_ms' }),
-  participationType: text('participation_type'),
-  photoUrl: text('photo_url'),
-})
+export const eventApplications = sqliteTable(
+  'event_applications',
+  {
+    id: uuidPk(),
+    eventSlug: text('event_slug').notNull(),
+    applicantName: text('applicant_name').notNull(),
+    contactEmail: text('contact_email'),
+    contactPhone: text('contact_phone'),
+    performanceInfo: text('performance_info'),
+    itemsToSell: text('items_to_sell'),
+    links: text('links'),
+    message: text('message'),
+    status: text('status').notNull().default('pending'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    privacyConsent: integer('privacy_consent', { mode: 'boolean' }).notNull().default(false),
+    privacyConsentAt: integer('privacy_consent_at', { mode: 'timestamp_ms' }),
+    participationType: text('participation_type'),
+    photoUrl: text('photo_url'),
+  },
+  // 같은 이벤트에 같은 연락처로 두 번 신청하는 것을 DB가 막는다. 앱 계층의
+  // 중복 검사만으로는 동시 요청을 막지 못한다(검사와 INSERT 사이가 벌어진다).
+  // `contact_phone`이 NULL인 행끼리는 SQLite가 서로 다른 값으로 취급하므로
+  // 연락처 없이 들어온 신청은 이 제약에 걸리지 않는다.
+  table => [
+    uniqueIndex('event_applications_slug_phone_idx').on(table.eventSlug, table.contactPhone),
+  ]
+)
 
 export const memberBulkOperations = sqliteTable('member_bulk_operations', {
   id: uuidPk(),

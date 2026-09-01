@@ -99,8 +99,9 @@ export async function POST(request: NextRequest) {
 
     // 애플리케이션 단계의 중복 검사. insert 전 SELECT라 원자적이지 않다 —
     // 동시에 들어온 두 요청은 둘 다 이 검사를 통과할 수 있다(경합에 뚫린다).
-    // 원자적 방어(DB 유니크 인덱스)는 운영에 이미 같은 조합 중복이 있어
-    // 지금 만들 수 없다 — 중복 정리가 선행돼야 한다는 권고로 남긴다.
+    // 그래서 여기는 사용자에게 친절한 메시지를 주기 위한 1차 관문일 뿐이고,
+    // 실제 방어선은 `event_applications_slug_phone_idx`(마이그레이션 0014)다.
+    // 경합으로 이 검사를 통과한 두 번째 INSERT는 아래 catch가 409로 돌려준다.
     let alreadyApplied: boolean
     try {
       alreadyApplied = await hasEventApplicationForContact(
@@ -119,6 +120,13 @@ export async function POST(request: NextRequest) {
     try {
       inserted = await createEventApplication(cleanedData)
     } catch (insertError) {
+      // 유니크 인덱스 위반 = 경합으로 뚫린 중복 신청. 서버 장애가 아니므로
+      // 위의 1차 검사와 같은 409·같은 문구로 돌려준다(사용자에게는 구분이
+      // 없어야 한다). SQLite는 위반을 메시지로만 알려주므로 문자열로 본다.
+      const message = insertError instanceof Error ? insertError.message : ''
+      if (/UNIQUE constraint failed/i.test(message)) {
+        return ApiError.conflict('이미 같은 연락처로 신청이 접수되어 있습니다.').toNextResponse()
+      }
       console.error('[event-applications] insert error:', insertError)
       return ApiError.internalServerError('신청 처리 중 오류가 발생했습니다.').toNextResponse()
     }
