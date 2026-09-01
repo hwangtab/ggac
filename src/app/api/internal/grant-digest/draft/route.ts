@@ -27,7 +27,15 @@ const log = createLogger('api/internal/grant-digest/draft')
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60
+/**
+ * 장르별 kosmart 호출은 병렬이지만(`fetchGrantOpportunities`), 그 전후로 회원 목록
+ * 조회·DB 쓰기·관리자 알림이 있다. kosmart가 느린 날엔 병렬 호출 전체가 가장 느린
+ * 장르 하나만큼 걸리고(`AbortSignal.timeout` 20초), 조합원이 늘면 그 뒤 단계도
+ * 늘어난다. `/api/internal/dues/charge`(같은 저장소, `maxDuration = 800`)와 같은
+ * 이유로 여유를 둔다 — 지금 필요한 시간보다 넉넉히 잡아 시간 초과로 인한 "조용한 실패"
+ * (Vercel이 프로세스를 죽여 catch도 못 돌고 관리자 알림도 못 가는 상태)를 막는다.
+ */
+export const maxDuration = 300
 
 /** 수집 범위(관심사 합집합)와 관리자 목록을 함께 낼 때 쓰는 회원 조회 상한. */
 const MEMBER_FETCH_LIMIT = 1000
