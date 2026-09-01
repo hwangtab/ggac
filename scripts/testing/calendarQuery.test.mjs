@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 
 // 순수 함수는 calendarItems.ts에 있다 — calendar.ts를 import하면 getProjects가
 // next/cache의 cache()를 끌고 들어와 plain `node --test`에서 모듈 로드가 죽는다.
-const { toCalendarItems } = await import('../../src/db/queries/calendarItems.ts')
+const { toCalendarItems, toOngoingGrants } = await import('../../src/db/queries/calendarItems.ts')
 
 const RANGE = { from: '2026-09-01', to: '2026-09-30' }
 
@@ -167,4 +167,31 @@ test('eventDate 없는 프로젝트는 빠진다', () => {
 
 test('빈 입력은 빈 배열이다', () => {
   assert.deepEqual(toCalendarItems({ grants: [], meetings: [], projects: [] }, RANGE), [])
+})
+
+// ---------------------------------------------------------------- 상시 공고 목록 (toOngoingGrants)
+
+test('toOngoingGrants는 마감 없는 공고만 돌려준다', () => {
+  const out = toOngoingGrants([
+    grant({ key: 'a', apply_end: '2026-09-15' }),
+    grant({ key: 'b', apply_end: null, title: '상시 공고' }),
+  ])
+  assert.equal(out.length, 1)
+  assert.equal(out[0].title, '상시 공고')
+  assert.equal(out[0].kind, 'grant')
+  assert.equal(out[0].date, '')
+})
+
+test('toOngoingGrants도 중복을 제거한다', () => {
+  const out = toOngoingGrants([
+    grant({ key: 'x', apply_end: null }),
+    grant({ key: 'x', apply_end: null }),
+  ])
+  assert.equal(out.length, 1)
+})
+
+test('toOngoingGrants는 장르·지역을 실어 준다 (개인 필터용)', () => {
+  const out = toOngoingGrants([grant({ apply_end: null, genres: ['음악'], regions: ['서울'] })])
+  assert.deepEqual(out[0].genres, ['음악'])
+  assert.deepEqual(out[0].regions, ['서울'])
 })

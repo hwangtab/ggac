@@ -28,6 +28,7 @@ const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
 
 export default function MyCalendarPage() {
   const [items, setItems] = useState<CalendarItem[]>([])
+  const [ongoing, setOngoing] = useState<CalendarItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
@@ -47,6 +48,7 @@ export default function MyCalendarPage() {
       const json = await res.json()
       if (!res.ok) throw new Error(json?.error?.message ?? '캘린더를 불러오지 못했습니다.')
       setItems(json.data.items)
+      setOngoing(json.data.ongoing)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -119,6 +121,36 @@ export default function MyCalendarPage() {
           )
         }}
       />
+
+      {ongoing.length > 0 && (
+        <section className="mt-8">
+          <h2 className="mb-1 text-sm font-semibold">상시 모집</h2>
+          <p className="mb-3 text-xs text-gray-500">
+            마감일이 정해지지 않아 달력에 표시되지 않는 공고입니다.
+          </p>
+          <ul className="space-y-2">
+            {ongoing.map(it => (
+              <li key={it.key} className="rounded border p-3 text-sm">
+                {it.url ? (
+                  <a
+                    href={it.url}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="text-blue-700 hover:underline"
+                  >
+                    {it.title}
+                  </a>
+                ) : (
+                  it.title
+                )}
+                <span className="mt-1 block text-xs text-gray-500">
+                  {[...(it.regions ?? []), ...(it.genres ?? [])].join(' · ')}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {loading && <p className="mt-3 text-sm text-gray-500">불러오는 중…</p>}
 

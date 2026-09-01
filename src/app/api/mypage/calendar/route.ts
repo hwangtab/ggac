@@ -37,12 +37,15 @@ export async function GET(request: NextRequest) {
   }
 
   const interests = effectiveInterests(profile)
-  const all = await listCalendarItems({ from, to })
+  const { items: allItems, ongoing: allOngoing } = await listCalendarItems({ from, to })
 
-  const items = all.filter(item => {
-    if (item.kind !== 'grant') return true
-    return matchesInterests({ genres: item.genres ?? [], regions: item.regions ?? [] }, interests)
-  })
+  const matches = (item: { kind: string; genres?: string[]; regions?: string[] }) =>
+    item.kind !== 'grant' ||
+    matchesInterests({ genres: item.genres ?? [], regions: item.regions ?? [] }, interests)
 
-  return ApiSuccess.ok({ items, interests }).toNextResponse()
+  return ApiSuccess.ok({
+    items: allItems.filter(matches),
+    ongoing: allOngoing.filter(matches),
+    interests,
+  }).toNextResponse()
 }

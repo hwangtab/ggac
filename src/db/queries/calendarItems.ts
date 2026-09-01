@@ -111,3 +111,32 @@ export function toCalendarItems(sources: CalendarSources, range: CalendarRange):
 
   return out.sort((a, b) => (a.date === b.date ? 0 : a.date < b.date ? -1 : 1))
 }
+
+/**
+ * 마감이 없는 상시 공고. **달력에 찍을 자리가 없어** `toCalendarItems`가 버리는 것들이라,
+ * 화면이 그리드 아래 목록으로 따로 보여준다. 여기서 빠뜨리면 상시 공고는 조합원이 볼 곳이
+ * 게시글뿐이 된다.
+ *
+ * `date`는 빈 문자열이다 — `CalendarItem` 형태를 그대로 쓰되 날짜가 없음을 나타낸다.
+ */
+export function toOngoingGrants(grants: GrantItem[]): CalendarItem[] {
+  const out: CalendarItem[] = []
+  const seen = new Set<string>()
+  for (const g of grants) {
+    if (g.apply_end) continue
+    const key = `grant:${g.key}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({
+      key,
+      kind: 'grant',
+      date: '',
+      time: null,
+      title: g.title,
+      url: g.url,
+      genres: g.genres,
+      regions: g.regions,
+    })
+  }
+  return out
+}

@@ -13,22 +13,33 @@
 import { getProjects } from '../../lib/data.ts'
 import { listMeetings } from './board.ts'
 import { listRecentDigestItems } from './grantDigests.ts'
-import { toCalendarItems, type CalendarItem, type CalendarRange } from './calendarItems.ts'
+import {
+  toCalendarItems,
+  toOngoingGrants,
+  type CalendarItem,
+  type CalendarRange,
+} from './calendarItems.ts'
 
-export { toCalendarItems, type CalendarItem, type CalendarRange }
+export { toCalendarItems, toOngoingGrants, type CalendarItem, type CalendarRange }
 
 /** 최근 회차에서 공고를 모을 범위. 마감이 최대 90일 뒤이므로 넉넉히 잡는다. */
 const DIGEST_LOOKBACK_WEEKS = 26
 
 /**
- * 세 소스를 조회해 `toCalendarItems`에 넘긴다. 개인 필터는 걸지 않는다 — 라우트의 몫이다.
+ * 세 소스를 조회해 `toCalendarItems`·`toOngoingGrants`에 넘긴다. 개인 필터는 걸지 않는다 —
+ * 라우트의 몫이다.
  * @throws 조회가 실패하면 그대로 던진다.
  */
-export async function listCalendarItems(range: CalendarRange): Promise<CalendarItem[]> {
+export async function listCalendarItems(
+  range: CalendarRange
+): Promise<{ items: CalendarItem[]; ongoing: CalendarItem[] }> {
   const [grants, meetings, projects] = await Promise.all([
     listRecentDigestItems(DIGEST_LOOKBACK_WEEKS),
     listMeetings(),
     getProjects('ko'),
   ])
-  return toCalendarItems({ grants, meetings, projects }, range)
+  return {
+    items: toCalendarItems({ grants, meetings, projects }, range),
+    ongoing: toOngoingGrants(grants),
+  }
 }
