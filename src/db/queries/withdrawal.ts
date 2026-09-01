@@ -30,7 +30,7 @@ import {
  * `registration_status`는 신청 중에도 `'approved'` 그대로다. 상태를 바꾸면
  * `isApprovedActive`를 비롯해 이 값을 직접 비교하는 저장소 전역(실측 36곳)이
  * 신청자를 승인 조합원 판정에서 배제해, 취소 API조차 부를 수 없게 되는
- * 결함이 있었다(`0011_add_withdrawal_requested_at.sql` 참조).
+ * 결함이 있었다(`0012_add_withdrawal_requested_at.sql` 참조).
  *
  * **조건부 UPDATE + rowsAffected 판정이다.** 읽고-판단하고-쓰면 관리자와 회원이
  * 동시에 상태를 바꿀 때 어긋난다 — 같은 저장소의 승인/거부가 그 방식이라

@@ -78,7 +78,7 @@ export interface ProfileRow {
   /**
    * 탈퇴 "신청" 시각. `null`이면 미신청, 값이 있으면 신청 중 —
    * `registration_status`는 이 값과 무관하게 `'approved'`로 남는다
-   * (`0011_add_withdrawal_requested_at.sql` 참조). 화면이 신청/취소 버튼
+   * (`0012_add_withdrawal_requested_at.sql` 참조). 화면이 신청/취소 버튼
    * 중 무엇을 보여줄지 이 필드로 판단한다.
    */
   withdrawal_requested_at: string | null

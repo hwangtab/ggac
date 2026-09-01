@@ -10,6 +10,8 @@ import {
   FiBarChart,
   FiLogOut,
   FiClipboard,
+  FiGift,
+  FiBell,
 } from 'react-icons/fi'
 import { Link, usePathname } from '@/i18n/navigation'
 
@@ -66,6 +68,18 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ title, description, children 
       label: '행사 신청 내역',
       href: '/admin/event-applications',
       icon: <FiClipboard className="w-5 h-5" />,
+    },
+    {
+      id: 'grants',
+      label: '지원사업',
+      href: '/admin/grants',
+      icon: <FiGift className="w-5 h-5" />,
+    },
+    {
+      id: 'notifications',
+      label: '알림 발송',
+      href: '/admin/notifications',
+      icon: <FiBell className="w-5 h-5" />,
     },
     {
       id: 'settings',

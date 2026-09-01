@@ -67,7 +67,7 @@ export const memberProfiles = sqliteTable(
      * `isApprovedActive`를 비롯해 저장소 곳곳(실측 36곳)이
      * `registration_status === 'approved'`를 직접 비교하므로, 신청을 별도
      * 상태값으로 표현하면 그 36곳이 신청자를 승인 조합원 판정에서 배제한다
-     * (`0011_add_withdrawal_requested_at.sql` 참조). NULL이면 미신청, 값이
+     * (`0012_add_withdrawal_requested_at.sql` 참조). NULL이면 미신청, 값이
      * 있으면 신청 중, 확정되면(`withdrawMember`) 다시 NULL로 되돌린다.
      */
     withdrawalRequestedAt: integer('withdrawal_requested_at', { mode: 'timestamp_ms' }),

@@ -32,13 +32,14 @@ export const ARTIST_CATEGORIES = [
 export type ArtistCategory = (typeof ARTIST_CATEGORIES)[number]
 
 // 게시판 카테고리 (멤버 전용, 친밀한 분위기 - 한글 전체 사용)
-export const BOARD_CATEGORIES = ['전체', '공지', '잡담', '홍보', '건의'] as const
+export const BOARD_CATEGORIES = ['전체', '공지', '지원사업', '잡담', '홍보', '건의'] as const
 
 export type BoardCategory = (typeof BOARD_CATEGORIES)[number]
 
 // 카테고리별 스타일 매핑 (게시글 카드 꾸밈용)
 export const BOARD_CATEGORY_STYLES = {
   공지: 'bg-red-100 text-red-800',
+  지원사업: 'bg-purple-100 text-purple-800',
   잡담: 'bg-blue-100 text-blue-800',
   홍보: 'bg-green-100 text-green-800',
   건의: 'bg-yellow-100 text-yellow-800',

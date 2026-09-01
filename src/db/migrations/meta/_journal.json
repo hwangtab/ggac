@@ -75,15 +75,22 @@
     {
       "idx": 10,
       "version": "6",
-      "when": 1788245633633,
-      "tag": "0010_add_withdrawn_at",
+      "when": 1788236596042,
+      "tag": "0010_fat_cassandra_nova",
       "breakpoints": true
     },
     {
       "idx": 11,
       "version": "6",
-      "when": 1788332033633,
-      "tag": "0011_add_withdrawal_requested_at",
+      "when": 1788236597042,
+      "tag": "0011_add_withdrawn_at",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1788236598042,
+      "tag": "0012_add_withdrawal_requested_at",
       "breakpoints": true
     }
   ]

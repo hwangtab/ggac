@@ -44,6 +44,11 @@ const requiredEnvVars = [
   'NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL',
   'PUBLIC_BLOB_READ_WRITE_TOKEN',
   'PRIVATE_BLOB_READ_WRITE_TOKEN',
+  // 인증 메일(가입·비밀번호 재설정)과 지원사업 다이제스트 메일 발송에 쓴다.
+  // 없으면 두 발송 모두 에러 없이 조용히 실패한다 — RESEND_API_KEY 없이도
+  // 가입·재설정 API는 200을 반환하고 메일만 안 간다(README 알려진 이슈).
+  // 지금까지는 .env.local에만 있어 이 스크립트가 누락을 못 잡았다.
+  'RESEND_API_KEY',
 ]
 
 const redisEnvGroups = [
@@ -84,6 +89,18 @@ const optionalEnvVars = [
   // imageDimensions.ts·storage/paths.ts)이 사라졌고, 운영 DB에 남은 Supabase
   // 절대 URL은 실측 0건이다. 앱은 이제 이 값을 한 줄도 읽지 않는다.
   'NEXT_PUBLIC_SUPABASE_URL',
+  // 지원사업 다이제스트가 kosmart 공고 조회 API를 부르는 데 쓴다. 둘 다
+  // 없으면 크론이 호출에 실패해 그 주 초안이 만들어지지 않는다 — Vercel
+  // production에는 아직 없어 필수로 올리면 배포가 막힌다.
+  'KOSMART_OPPORTUNITIES_URL',
+  'KOSMART_API_TOKEN',
+  // 지원사업 초안 생성 크론(GitHub Actions → /api/internal/grant-digest/draft)의
+  // 인증 토큰. 없으면 크론 라우트가 401을 반환해 초안이 만들어지지 않는다.
+  'GRANT_DIGEST_CRON_TOKEN',
+  // 조합비 자동청구 크론 인증 토큰. Vercel production에는 이미 있다.
+  'PAYMENTS_CRON_TOKEN',
+  // 임시 첨부 정리 크론 인증 토큰. Vercel production에는 이미 있다.
+  'CLEANUP_CRON_TOKEN',
 ]
 
 console.log('🔍 Environment Variable Verification\n')

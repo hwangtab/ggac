@@ -115,7 +115,7 @@ export const fetchBoardPosts = cache(
     const { rows, hasNext } = statsResult
 
     const posts: BoardInitialPost[] = rows.map(row => {
-      const preview = createTextPreview(row.content_head || '', 150)
+      const preview = createTextPreview(row.content_head || '', 150, row.content_format)
       const imageCount = parseIntegerParam(String(row.image_count ?? ''), 0, { min: 0 })
 
       return {
