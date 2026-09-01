@@ -16,12 +16,42 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 초안 생성 요청
+        env:
+          TOKEN: ${{ secrets.GRANT_DIGEST_CRON_TOKEN }}
         run: |
-          code=$(curl -sS -o /tmp/out.json -w '%{http_code}' -X POST \
-            -H "Authorization: Bearer ${{ secrets.GRANT_DIGEST_CRON_TOKEN }}" \
-            https://www.ggac.kr/api/internal/grant-digest/draft)
-          echo "HTTP $code"
-          cat /tmp/out.json
-          if [ "$code" != "200" ] && [ "$code" != "201" ]; then
+          set -euo pipefail
+
+          if [ -z "${TOKEN:-}" ]; then
+            echo "::error::GRANT_DIGEST_CRON_TOKEN 시크릿이 없다. Vercel의 같은 이름 값과 일치해야 한다."
+            exit 1
+          fi
+
+          # 라우트의 maxDuration(60초)에 여유를 더한다.
+          HTTP=$(curl -sS -o /tmp/out.json -w '%{http_code}' \
+            --max-time 90 \
+            -X POST https://www.ggac.kr/api/internal/grant-digest/draft \
+            -H "Authorization: Bearer ${TOKEN}")
+
+          echo "HTTP ${HTTP}"
+
+          # **본문을 그대로 찍지 마라.** 이 저장소는 공개라 Actions 로그도 공개다.
+          # digest_id·week_key는 식별 정보가 아니므로 집계로만 남긴다.
+          node -e '
+            const fs = require("fs")
+            try {
+              const j = JSON.parse(fs.readFileSync("/tmp/out.json", "utf8"))
+              const d = j.data ?? {}
+              if (d.skipped) {
+                console.log(`이미 있는 회차라 건너뜀 — 회차 ${d.week_key ?? "?"} (digest ${d.digest_id ?? "?"})`)
+              } else {
+                console.log(`초안 생성 — 회차 ${d.week_key ?? "?"} (digest ${d.digest_id ?? "?"}) · 조회 ${d.fetched ?? "?"}건 · 채택 ${d.kept ?? "?"}건`)
+              }
+            } catch {
+              console.log("응답 본문을 파싱하지 못했다(상태 코드로 판정한다).")
+            }
+          '
+
+          if [ "${HTTP}" != "200" ] && [ "${HTTP}" != "201" ]; then
+            echo "::error::초안 생성 엔드포인트가 ${HTTP}를 반환했다 (401이면 Vercel과 GitHub의 토큰이 다르다)."
             exit 1
           fi
