@@ -15,7 +15,7 @@
  * 검사가 못 잡고 화면이 조용히 빈다(CLAUDE.md).
  */
 
-import { and, asc, desc, eq, gte, inArray, like, lte, or, sql, type SQL } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, inArray, lte, or, sql, type SQL } from 'drizzle-orm'
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
 
 import { db } from '../client.ts'
@@ -27,7 +27,7 @@ import type {
   RegistrationStatus,
 } from '../../constants/memberProfile.ts'
 
-import { toCamelCase, toIso } from './_helpers.ts'
+import { likeContains, toCamelCase, toIso } from './_helpers.ts'
 import { profileCompletenessExpression } from './profileCompleteness.ts'
 
 // 정본은 `constants/memberProfile.ts`. 여기서 재수출하는 이유는 기존
@@ -300,12 +300,15 @@ export async function listProfiles(
     conditions.push(eq(memberProfiles.registrationStatus, filter.status))
   }
   if (filter.search) {
-    const needle = `%${filter.search}%`
+    // likeContains가 `%`/`_` 이스케이프 + `ESCAPE` 절을 함께 처리한다 —
+    // 그냥 `%${input}%`로 끼워 넣으면 검색어의 `%`·`_`가 LIKE 와일드카드로
+    // 해석돼 검색이 무력화된다(posts.ts의 공개 검색에서 실측된 것과 동일한
+    // 패턴, `_helpers.ts` 참고).
     conditions.push(
       or(
-        like(memberProfiles.displayName, needle),
-        like(memberProfiles.email, needle),
-        like(memberProfiles.realName, needle)
+        likeContains(memberProfiles.displayName, filter.search),
+        likeContains(memberProfiles.email, filter.search),
+        likeContains(memberProfiles.realName, filter.search)
       ) as SQL
     )
   }

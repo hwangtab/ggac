@@ -395,6 +395,32 @@ test('executeMemberAdvancedSearch: equals 필터(is_admin=true)가 정확히 걸
   assert.equal(result.total, result.rows.length)
 })
 
+test('executeMemberAdvancedSearch: contains 필터에 %%·__ 같은 LIKE 와일드카드가 섞여도 인젝션되지 않는다', async () => {
+  const uniqueTag = `와일드카드검사-${Date.now()}`
+  const idA = await seedProfile({ display_name: `${uniqueTag}-이름A` })
+  const idB = await seedProfile({ display_name: `${uniqueTag}-이름B` })
+
+  for (const needle of ['%%', '__']) {
+    const build = buildDataAndCountSql({
+      filters: {
+        operator: 'AND',
+        conditions: [
+          { field: 'display_name', operator: 'contains', value: needle, type: 'string' },
+        ],
+      },
+      pagination: { page: 1, limit: 20 },
+    })
+    const { dataQuery, countSql, params } = await build()
+
+    const { executeMemberAdvancedSearch } = await loadFreshMiscModule()
+    const result = await executeMemberAdvancedSearch(dataQuery, countSql, params)
+    assert.ok(
+      !result.rows.some(r => r.id === idA || r.id === idB),
+      `contains=${JSON.stringify(needle)}가 %·_이 없는 display_name과 매치되면 안 된다`
+    )
+  }
+})
+
 test('executeMemberAdvancedSearch: contains(ILIKE→LIKE) 필터가 부분 일치를 찾는다', async () => {
   await seedProfile({ display_name: '검색가능한이름' })
   await seedProfile({ display_name: '무관한이름' })

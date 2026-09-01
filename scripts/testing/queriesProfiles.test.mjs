@@ -351,6 +351,19 @@ test('listProfiles: status 필터·search·페이지네이션·total이 동작�
   assert.ok(searched.rows.some(r => r.id === 'list-approved-1'))
   assert.ok(!searched.rows.some(r => r.id === 'list-approved-2'))
 
+  // LIKE 와일드카드 인젝션 회귀: 방금 심은 프로필들의 display_name/email/
+  // real_name 어디에도 %·_이 없으므로, 이 검색어들은 그 프로필들과 매치되면
+  // 안 된다(매치되면 %/_이 이스케이프되지 않고 와일드카드로 새어나간 것).
+  for (const needle of ['%%', '__']) {
+    const wildcardResult = await listProfiles({ search: needle, limit: 50, offset: 0 })
+    assert.ok(
+      !wildcardResult.rows.some(r => r.id === 'list-approved-1'),
+      `search=${JSON.stringify(needle)}가 무관한 프로필과 매치되면 안 된다`
+    )
+    assert.ok(!wildcardResult.rows.some(r => r.id === 'list-approved-2'))
+    assert.ok(!wildcardResult.rows.some(r => r.id === 'list-pending-1'))
+  }
+
   const page1 = await listProfiles({ limit: 1, offset: 0 })
   const page2 = await listProfiles({ limit: 1, offset: 1 })
   assert.equal(page1.rows.length, 1)

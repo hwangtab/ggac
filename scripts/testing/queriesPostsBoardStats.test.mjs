@@ -210,6 +210,25 @@ test('searchPostsAdvanced: title/content LIKE 검색이 동작한다', async () 
   assert.equal(rows.length, 2)
 })
 
+test('searchPostsAdvanced: search=%%·__는 LIKE 와일드카드로 해석되지 않는다(전체를 반환하면 안 된다)', async () => {
+  const { searchPostsAdvanced } = await loadFreshPostsModule()
+  const category = `고급검색와일드카드-${++seedCounter}`
+  await seedPost({ category, title: '아무거나1', content: '내용1' })
+  await seedPost({ category, title: '아무거나2', content: '내용2' })
+
+  for (const needle of ['%%', '__']) {
+    const { rows, total } = await searchPostsAdvanced({
+      simpleFilters: { category },
+      searchText: needle,
+      searchFields: ['title', 'content'],
+      page: 1,
+      limit: 20,
+    })
+    assert.equal(total, 0, `searchText=${JSON.stringify(needle)}는 아무 글도 매치하면 안 된다`)
+    assert.equal(rows.length, 0)
+  }
+})
+
 test('searchPostsAdvanced: is_pinned/category 단순 필터가 함께 적용된다', async () => {
   const { searchPostsAdvanced } = await loadFreshPostsModule()
   const category = `필터테스트-${++seedCounter}`
@@ -506,6 +525,24 @@ test('listPostsForAdmin: 검색어는 title/content에 LIKE로 매칭된다', as
   })
   assert.equal(total, 2)
   assert.equal(rows.length, 2)
+})
+
+test('listPostsForAdmin: search=%%·__는 LIKE 와일드카드로 해석되지 않는다(전체를 반환하면 안 된다)', async () => {
+  const { listPostsForAdmin } = await loadFreshPostsModule()
+  const category = `관리자검색와일드카드-${++seedCounter}`
+  await seedPost({ category, title: '아무거나1' })
+  await seedPost({ category, title: '아무거나2' })
+
+  for (const needle of ['%%', '__']) {
+    const { rows, total } = await listPostsForAdmin({
+      filter: category,
+      search: needle,
+      page: 1,
+      limit: 20,
+    })
+    assert.equal(total, 0, `search=${JSON.stringify(needle)}는 아무 글도 매치하면 안 된다`)
+    assert.equal(rows.length, 0)
+  }
 })
 
 // ---------------------------------------------------------------- getAdminPostStats

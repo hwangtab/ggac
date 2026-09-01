@@ -27,7 +27,7 @@
  * `post.author.display_name`에서 그대로 죽는다.
  */
 
-import { and, asc, desc, eq, gt, gte, inArray, like, lt, lte, or, sql, type SQL } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, gte, inArray, lt, lte, or, sql, type SQL } from 'drizzle-orm'
 
 import { db } from '../client.ts'
 import { comments, posts } from '../schema/index.ts'
@@ -35,7 +35,7 @@ import { comments, posts } from '../schema/index.ts'
 import { getProfilesByIds } from './profiles.ts'
 import { countCommentsByPostIds } from './comments.ts'
 import { getAttachmentStatsByPostIds } from './attachments.ts'
-import { toCamelCase, toIso } from './_helpers.ts'
+import { likeContains, toCamelCase, toIso } from './_helpers.ts'
 
 /** API 응답에 쓰이는 snake_case 정규화 형태. `posts` 컬럼 전부 + author 임베드. */
 export interface PostFields {
@@ -247,8 +247,11 @@ export async function listPostsKeyset(
       .slice(0, 3)
     if (tokens.length > 0) {
       const tokenConditions = tokens.flatMap(token => {
-        const needle = `%${token}%`
-        return [like(posts.title, needle), like(posts.content, needle)]
+        // `%`·`_`를 이스케이프하지 않으면 LIKE 와일드카드 인젝션이 된다 —
+        // 예: 검색어 "%%"·"__"가 부분일치 대신 "아무 문자열"과 매치돼 검색
+        // 없을 때와 동일한 전체 목록을 돌려준다(실측). likeContains가 이스케이프 +
+        // ESCAPE 절을 함께 처리한다.
+        return [likeContains(posts.title, token), likeContains(posts.content, token)]
       })
       conditions.push(or(...tokenConditions) as SQL)
     }
@@ -481,10 +484,9 @@ function buildAdvancedSearchConditions(filter: SearchPostsAdvancedFilter): SQL[]
   const searchText = filter.searchText?.trim()
   if (searchText) {
     const fields = new Set(filter.searchFields ?? ['title', 'content'])
-    const needle = `%${searchText}%`
     const textConditions: SQL[] = []
-    if (fields.has('title')) textConditions.push(like(posts.title, needle))
-    if (fields.has('content')) textConditions.push(like(posts.content, needle))
+    if (fields.has('title')) textConditions.push(likeContains(posts.title, searchText))
+    if (fields.has('content')) textConditions.push(likeContains(posts.content, searchText))
     if (textConditions.length > 0) {
       conditions.push(or(...textConditions) as SQL)
     }
@@ -618,10 +620,11 @@ export interface ListPostsForAdminFilter {
   filter: AdminPostListFilter
   /** title/content LIKE 검색어. 호출부(`admin/posts/route.ts`)가 이미
    * `validateSearchQuery`로 검증·새니타이즈한 `sanitized` 값을 넘긴다 — 이
-   * 함수 자체는 새니타이징하지 않는다. `like()`는 Drizzle 파라미터 바인딩을
-   * 쓰므로 SQL 인젝션 걱정은 없다(옛 PostgREST `escapePostgrestValue`는
-   * Supabase `.or()` 문자열 조합용이었고, 이 커밋에서 그 호출 자체가
-   * 사라졌다 — 이 주석이 예전엔 그걸 계속 쓴다고 잘못 말하고 있었다). */
+   * 함수 자체는 새니타이징하지 않는다. `likeContains`(`_helpers.ts`)가
+   * Drizzle 파라미터 바인딩 + `%`/`_` 이스케이프를 함께 처리하므로 SQL
+   * 인젝션도, LIKE 와일드카드 인젝션(검색어 자체에 `%`/`_`가 섞여 검색이
+   * 무력화되는 문제)도 없다(옛 PostgREST `escapePostgrestValue`는 Supabase
+   * `.or()` 문자열 조합용이었고, 이 커밋에서 그 호출 자체가 사라졌다). */
   search?: string
   page: number
   limit: number
@@ -648,8 +651,9 @@ export async function listPostsForAdmin(
 
   const search = filter.search?.trim()
   if (search) {
-    const needle = `%${search}%`
-    conditions.push(or(like(posts.title, needle), like(posts.content, needle)) as SQL)
+    conditions.push(
+      or(likeContains(posts.title, search), likeContains(posts.content, search)) as SQL
+    )
   }
 
   const where = conditions.length > 0 ? and(...conditions) : undefined

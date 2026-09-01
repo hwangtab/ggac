@@ -3,6 +3,11 @@
  * SQL 쿼리 생성, 조건 검증, 필터 최적화 등을 담당
  */
 
+// 상대 경로 + `.ts` 확장자로 임포트한다 — `@/*` 별칭은 이 파일이 `node
+// --experimental-strip-types`로 직접 로드되는 유닛 테스트(`scripts/testing/
+// queriesMisc.test.mjs`)에서 해석되지 않는다(`src/db/queries/*`가 서로를
+// `.ts` 확장자 상대 경로로 임포트하는 것과 같은 이유).
+import { escapeLikePattern, LIKE_ESCAPE_CHAR } from '../db/queries/_helpers.ts'
 import type {
   FilterCondition,
   FilterGroup,
@@ -55,27 +60,32 @@ export function buildWhereClause(
       nextIndex++
       break
 
+    // `%`/`_`를 이스케이프하지 않으면 검색어 자체에 그 문자가 섞였을 때
+    // LIKE 와일드카드로 해석돼 의도한 부분일치가 아니라 "아무 문자열"과
+    // 매치된다(`src/db/queries/_helpers.ts`의 `escapeLikePattern` 참고 —
+    // 게시판 공개 검색에서 실측된 것과 같은 패턴). `ESCAPE` 문자는 상수라
+    // 파라미터로 바인딩하지 않고 SQL 리터럴로 붙인다.
     case 'contains':
-      sql = `${field} ILIKE $${nextIndex}`
-      params.push(`%${value}%`)
+      sql = `${field} ILIKE $${nextIndex} ESCAPE '${LIKE_ESCAPE_CHAR}'`
+      params.push(`%${escapeLikePattern(String(value))}%`)
       nextIndex++
       break
 
     case 'not_contains':
-      sql = `${field} NOT ILIKE $${nextIndex}`
-      params.push(`%${value}%`)
+      sql = `${field} NOT ILIKE $${nextIndex} ESCAPE '${LIKE_ESCAPE_CHAR}'`
+      params.push(`%${escapeLikePattern(String(value))}%`)
       nextIndex++
       break
 
     case 'starts_with':
-      sql = `${field} ILIKE $${nextIndex}`
-      params.push(`${value}%`)
+      sql = `${field} ILIKE $${nextIndex} ESCAPE '${LIKE_ESCAPE_CHAR}'`
+      params.push(`${escapeLikePattern(String(value))}%`)
       nextIndex++
       break
 
     case 'ends_with':
-      sql = `${field} ILIKE $${nextIndex}`
-      params.push(`%${value}`)
+      sql = `${field} ILIKE $${nextIndex} ESCAPE '${LIKE_ESCAPE_CHAR}'`
+      params.push(`%${escapeLikePattern(String(value))}`)
       nextIndex++
       break
 
@@ -293,11 +303,12 @@ export function buildSearchQuery(
         if (!isValidFieldName(field)) {
           throw new Error(`Invalid search field: ${field}`)
         }
-        return `${field} ILIKE $${paramIndex}`
+        return `${field} ILIKE $${paramIndex} ESCAPE '${LIKE_ESCAPE_CHAR}'`
       })
 
       const searchClause = `(${searchConditions.join(' OR ')})`
-      const searchValue = `%${query.search.query}%`
+      // `%`/`_` 이스케이프 — 위 `buildWhereClause`의 `contains`와 같은 이유.
+      const searchValue = `%${escapeLikePattern(query.search.query)}%`
 
       if (whereClause) {
         whereClause += ` AND ${searchClause}`

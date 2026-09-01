@@ -8,6 +8,9 @@
  * 경계를 한 곳에 모은다.
  */
 
+import { sql, type SQL } from 'drizzle-orm'
+import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
+
 /** Drizzle의 camelCase 행 → API 응답용 snake_case 객체. 얕은 변환이다. */
 export function toSnakeCase<T extends Record<string, unknown>>(row: T): Record<string, unknown> {
   const out: Record<string, unknown> = {}
@@ -38,4 +41,34 @@ export function toCamelCase(row: Record<string, unknown>): Record<string, unknow
  */
 export function toIso(value: Date | null | undefined): string | null {
   return value ? value.toISOString() : null
+}
+
+/**
+ * SQLite `LIKE`는 `%`·`_`를 와일드카드로 해석한다 — 사용자 입력을 그대로
+ * `%${input}%`에 끼워 넣으면 검색어에 `%`나 `_`가 섞였을 때 의도한 부분일치가
+ * 아니라 "아무 문자열"과 매치돼버린다. 실측: 공개 게시판 검색에서
+ * `search=%%`(URL 인코딩된 `%25%25`)를 넣으면 검색어 없을 때와 완전히 같은
+ * 응답이 나왔다(전체 목록) — 검색이 통째로 무력화되는 것이다. 파라미터
+ * 바인딩은 이미 하고 있어 SQL 인젝션은 아니지만, 필터 자체가 뚫린다.
+ *
+ * `\`를 이스케이프 문자로 정하고, 이스케이프 문자 자신을 가장 먼저 치환한다
+ * (나중에 치환하면 `%`→`\%`로 만든 `\`를 다시 이스케이프해버려 이중으로
+ * 깨진다). 호출부는 반드시 SQL에 `ESCAPE '\'`(SQL 리터럴 기준 백슬래시
+ * 하나)를 함께 붙여야 한다 — `LIKE_ESCAPE_CHAR`가 그 값이다.
+ */
+export const LIKE_ESCAPE_CHAR = '\\'
+
+export function escapeLikePattern(input: string): string {
+  return input.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_')
+}
+
+/**
+ * `column LIKE '%이스케이프된 needle%' ESCAPE '\'` 조건. Drizzle의 `like()`는
+ * `ESCAPE` 절을 지원하지 않아 `sql` 템플릿으로 직접 만든다(파라미터 바인딩은
+ * 그대로 유지 — 값을 SQL 문자열에 직접 이어붙이지 않는다). `posts.ts`
+ * (공개 검색·관리자 고급검색·관리자 목록 검색 3곳)와 `profiles.ts`(회원
+ * 검색)가 모두 이 함수를 쓴다 — 갈라지면 한 곳만 고쳐지는 문제를 막는다.
+ */
+export function likeContains(column: AnySQLiteColumn, needle: string): SQL {
+  return sql`${column} LIKE ${'%' + escapeLikePattern(needle) + '%'} ESCAPE ${LIKE_ESCAPE_CHAR}`
 }

@@ -350,6 +350,81 @@ test('listPostsKeyset: search는 title/content 부분일치 OR, 2글자 미만 �
   assert.ok(!foundIds.includes(noMatch))
 })
 
+test('listPostsKeyset: search=%%·__는 LIKE 와일드카드로 해석되지 않는다(전체 목록을 반환하면 안 된다)', async () => {
+  const { listPostsKeyset } = await loadFreshPostsModule()
+  const cat = `와일드카드테스트-${Date.now()}`
+  await insertPost({ category: cat, title: '아무거나1', content: '내용1' })
+  await insertPost({ category: cat, title: '아무거나2', content: '내용2' })
+
+  const { rows: unfiltered } = await listPostsKeyset({
+    category: cat,
+    sortOrder: 'desc',
+    limit: 20,
+    cursor: null,
+  })
+  assert.equal(unfiltered.length, 2, '사전 조건: 이 카테고리에 글이 2건 있어야 한다')
+
+  for (const needle of ['%%', '__']) {
+    const { rows } = await listPostsKeyset({
+      category: cat,
+      search: needle,
+      sortOrder: 'desc',
+      limit: 20,
+      cursor: null,
+    })
+    assert.equal(
+      rows.length,
+      0,
+      `search=${JSON.stringify(needle)}는 제목/내용에 %나 _이 없는 글과 매치되면 안 된다(실측 회귀 — 이 값이 검색 없을 때와 같은 전체 목록을 냈었다)`
+    )
+  }
+})
+
+test('listPostsKeyset: 존재하지 않는 검색어는 빈 결과, 실제 검색어는 여전히 찾는다(회귀 방지)', async () => {
+  const { listPostsKeyset } = await loadFreshPostsModule()
+  const cat = `정상검색회귀-${Date.now()}`
+  const matched = await insertPost({ category: cat, title: '가나다검색어포함', content: 'x' })
+  const notMatched = await insertPost({ category: cat, title: '무관한글', content: '무관한내용' })
+
+  const { rows: none } = await listPostsKeyset({
+    category: cat,
+    search: 'zzzznonexistent',
+    sortOrder: 'desc',
+    limit: 20,
+    cursor: null,
+  })
+  assert.equal(none.length, 0)
+
+  const { rows: found } = await listPostsKeyset({
+    category: cat,
+    search: '가나다검색어',
+    sortOrder: 'desc',
+    limit: 20,
+    cursor: null,
+  })
+  const foundIds = found.map(r => r.id)
+  assert.ok(foundIds.includes(matched))
+  assert.ok(!foundIds.includes(notMatched))
+})
+
+test('listPostsKeyset: 제목에 literal %가 있으면 % 검색으로 그 글만 찾는다(이스케이프 후에도 리터럴 매치는 유지)', async () => {
+  const { listPostsKeyset } = await loadFreshPostsModule()
+  const cat = `리터럴퍼센트-${Date.now()}`
+  const withPercent = await insertPost({ category: cat, title: '할인 50% 진행중', content: 'x' })
+  const withoutPercent = await insertPost({ category: cat, title: '할인 진행중', content: 'x' })
+
+  const { rows } = await listPostsKeyset({
+    category: cat,
+    search: '50%',
+    sortOrder: 'desc',
+    limit: 20,
+    cursor: null,
+  })
+  const ids = rows.map(r => r.id)
+  assert.ok(ids.includes(withPercent))
+  assert.ok(!ids.includes(withoutPercent))
+})
+
 test('listPostsKeyset: is_deleted=true인 글은 검색·목록에서 빠진다', async () => {
   const { listPostsKeyset } = await loadFreshPostsModule()
   const cat = `삭제필터테스트-${Date.now()}`
