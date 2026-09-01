@@ -62,6 +62,21 @@ export type WithdrawOutcome =
   | { ok: false; reason: 'not_requested' | 'last_admin' }
 
 /**
+ * 탈퇴 확정 때 반드시 지워야 할 개인정보 컬럼과 그 목표값(전부 null)을
+ * 한곳에 묶는다. 아래 `.set()`과 끝의 자체 단언이 **이 객체 하나**를
+ * 함께 쓴다 — 컬럼을 추가하면서 한쪽만 고치는 사고를 구조적으로 막는다.
+ */
+const PII_NULL_FIELDS = {
+  realName: null,
+  phoneNumber: null,
+  birthDate: null,
+  bankName: null,
+  accountNumber: null,
+  accountHolder: null,
+  monthlyFee: null,
+} as const
+
+/**
  * 탈퇴를 확정한다. **되돌릴 수 없다.**
  *
  * 전부 한 트랜잭션 안에서 한다. 중간에 실패하면 전부 롤백되어 "이름만 지워지고
@@ -90,13 +105,7 @@ export async function withdrawMember(userId: string): Promise<WithdrawOutcome> {
         withdrawnAt: new Date(),
         displayName: WITHDRAWN_DISPLAY_NAME,
         email: withdrawnEmailFor(userId),
-        realName: null,
-        phoneNumber: null,
-        birthDate: null,
-        bankName: null,
-        accountNumber: null,
-        accountHolder: null,
-        monthlyFee: null,
+        ...PII_NULL_FIELDS,
         lastLoginAt: null,
         suspensionReason: null,
         suspensionUntil: null,
@@ -177,22 +186,24 @@ export async function withdrawMember(userId: string): Promise<WithdrawOutcome> {
       .where(eq(user.id, userId))
 
     // 자체 단언 — 개인정보가 남았으면 던져서 전부 롤백시킨다. 장식이 아니다.
+    // PII_NULL_FIELDS의 키를 그대로 도는 이유: 위 `.set()`이 지우기로 한
+    // 컬럼과 여기서 확인하는 컬럼이 같은 객체에서 나와야, 나중에 컬럼 하나를
+    // 추가하면서 한쪽만 고치는 사고가 안 생긴다.
+    const piiColumns = Object.keys(PII_NULL_FIELDS) as Array<keyof typeof PII_NULL_FIELDS>
     const [leftover] = await tx
-      .select({
-        realName: memberProfiles.realName,
-        phoneNumber: memberProfiles.phoneNumber,
-        birthDate: memberProfiles.birthDate,
-        accountNumber: memberProfiles.accountNumber,
-      })
+      .select(
+        Object.fromEntries(piiColumns.map(key => [key, memberProfiles[key]])) as Record<
+          keyof typeof PII_NULL_FIELDS,
+          (typeof memberProfiles)[keyof typeof PII_NULL_FIELDS]
+        >
+      )
       .from(memberProfiles)
       .where(eq(memberProfiles.id, userId))
-    if (
-      leftover?.realName !== null ||
-      leftover?.phoneNumber !== null ||
-      leftover?.birthDate !== null ||
-      leftover?.accountNumber !== null
-    ) {
-      throw new Error('탈퇴 처리 후에도 개인정보가 남았다 — 전체를 롤백한다')
+    const leaked = piiColumns.filter(
+      key => (leftover as Record<string, unknown> | undefined)?.[key] !== null
+    )
+    if (leaked.length > 0) {
+      throw new Error(`탈퇴 처리 후에도 개인정보가 남았다(${leaked.join(', ')}) — 전체를 롤백한다`)
     }
 
     return { ok: true, revokedBillingKeys }

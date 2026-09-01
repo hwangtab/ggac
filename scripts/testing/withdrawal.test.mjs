@@ -137,8 +137,13 @@ test('신청·취소가 조건부 UPDATE로 승인↔신청 상태를 오가고,
  * 지우는 순서는 FK 자식 → 부모다(`PRAGMA foreign_keys`가 켜져 있다 — 실측).
  */
 const WITHDRAWAL_FIXTURE_TABLES = [
+  'post_likes',
   'comments',
   'posts',
+  'board_meeting_attendees',
+  'board_minutes',
+  'board_documents',
+  'board_meetings',
   'user_settings',
   'daily_activity_stats',
   'user_sessions',
@@ -206,7 +211,9 @@ async function seedWithdrawalFixture(
     args: [now, now],
   })
 
-  // ② 콘텐츠 — 한 건도 바뀌면 안 되는 것들.
+  // ② 콘텐츠·조합 기록 — 한 건도 바뀌면 안 되는 것들. 스펙이 나열한 7종
+  // (글·댓글·이사회 회의록·서류·회의·출석·좋아요) 전부를 심는다 — 일부만
+  // 심으면 나머지 종류에 대한 회귀를 잡을 테스트가 없어진다.
   await client.execute({
     sql: `INSERT INTO posts (id, title, content, category, author_id, created_at, updated_at)
           VALUES ('p1', '조합 소식', '본문입니다', '잡담', 'm1', ?, ?)`,
@@ -215,6 +222,33 @@ async function seedWithdrawalFixture(
   await client.execute({
     sql: `INSERT INTO comments (id, post_id, author_id, content, created_at, updated_at)
           VALUES ('c1', 'p1', 'm1', '댓글입니다', ?, ?)`,
+    args: [now, now],
+  })
+  await client.execute({
+    sql: `INSERT INTO post_likes (id, post_id, user_id, created_at)
+          VALUES ('pl1', 'p1', 'm1', ?)`,
+    args: [now],
+  })
+  await client.execute({
+    sql: `INSERT INTO board_meetings
+            (id, title, meeting_date, meeting_time, location, status, created_by, created_at, updated_at)
+          VALUES ('bm1', '9월 정기회의', '2026-09-10', '19:00', '사무국', 'scheduled', 'm1', ?, ?)`,
+    args: [now, now],
+  })
+  await client.execute({
+    sql: `INSERT INTO board_minutes (id, meeting_id, content, content_format, author_id, created_at, updated_at)
+          VALUES ('bmin1', 'bm1', '회의록 본문입니다', 'plain', 'm1', ?, ?)`,
+    args: [now, now],
+  })
+  await client.execute({
+    sql: `INSERT INTO board_documents
+            (id, title, category, file_path, file_name, file_size, mime_type, uploaded_by, created_at)
+          VALUES ('bdoc1', '정관', '정관', 'board/articles.pdf', 'articles.pdf', 1024, 'application/pdf', 'm1', ?)`,
+    args: [now],
+  })
+  await client.execute({
+    sql: `INSERT INTO board_meeting_attendees (id, meeting_id, member_id, attended, created_at, updated_at)
+          VALUES ('batt1', 'bm1', 'm1', 1, ?, ?)`,
     args: [now, now],
   })
 
@@ -282,15 +316,35 @@ async function countOf(client, table, where, args) {
   return Number(result.rows[0].n)
 }
 
-test('확정은 신원을 지우고 로그를 지우되 콘텐츠는 한 건도 바꾸지 않는다', async () => {
+/**
+ * ② 콘텐츠·조합 기록 7종 전체(글·댓글·좋아요·회의·회의록·서류·출석)의 스냅샷.
+ * `withdrawMember`가 이 표들을 **한 건도 UPDATE하지 않는다**는 것을 전후
+ * 비교로 못박는다 — 표 하나를 빼먹으면 그 표에 대한 회귀를 잡을 수단이
+ * 없어진다는 리뷰 지적을 반영한다.
+ */
+const CONTENT_TABLES_SNAPSHOT_SQL = {
+  posts: 'SELECT id, title, content, author_id FROM posts ORDER BY id',
+  comments: 'SELECT id, post_id, author_id, content FROM comments ORDER BY id',
+  post_likes: 'SELECT id, post_id, user_id FROM post_likes ORDER BY id',
+  board_meetings: 'SELECT id, title, created_by FROM board_meetings ORDER BY id',
+  board_minutes: 'SELECT id, meeting_id, content, author_id FROM board_minutes ORDER BY id',
+  board_documents: 'SELECT id, title, file_path, uploaded_by FROM board_documents ORDER BY id',
+  board_meeting_attendees:
+    'SELECT id, meeting_id, member_id, attended FROM board_meeting_attendees ORDER BY id',
+}
+
+async function snapshotContentTables(client) {
+  const snapshot = {}
+  for (const [table, sql] of Object.entries(CONTENT_TABLES_SNAPSHOT_SQL)) {
+    snapshot[table] = (await client.execute(sql)).rows.map(r => ({ ...r }))
+  }
+  return snapshot
+}
+
+test('확정은 신원을 지우고 로그를 지우되 콘텐츠·조합 기록 7종은 한 건도 바꾸지 않는다', async () => {
   await seedWithdrawalFixture(setupClient)
 
-  const contentBefore = await setupClient.execute(
-    'SELECT id, title, content, author_id FROM posts ORDER BY id'
-  )
-  const commentsBefore = await setupClient.execute(
-    'SELECT id, post_id, author_id, content FROM comments ORDER BY id'
-  )
+  const contentTablesBefore = await snapshotContentTables(setupClient)
 
   const { withdrawMember } = await import(WITHDRAWAL_MODULE_URL.href)
   assert.deepEqual(await withdrawMember('m1'), { ok: true, revokedBillingKeys: ['bk_test'] })
@@ -328,21 +382,10 @@ test('확정은 신원을 지우고 로그를 지우되 콘텐츠는 한 건도 
   // `artist_role`은 NOT NULL default 'owner'라 NULL로 둘 수 없다.
   assert.equal(p.artist_role, 'owner')
 
-  // ② 콘텐츠 — 한 건도 안 바뀌었다. 작성자 참조는 묘비를 가리킨 채 남는다.
-  const contentAfter = await setupClient.execute(
-    'SELECT id, title, content, author_id FROM posts ORDER BY id'
-  )
-  const commentsAfter = await setupClient.execute(
-    'SELECT id, post_id, author_id, content FROM comments ORDER BY id'
-  )
-  assert.deepEqual(
-    contentAfter.rows.map(r => ({ ...r })),
-    contentBefore.rows.map(r => ({ ...r }))
-  )
-  assert.deepEqual(
-    commentsAfter.rows.map(r => ({ ...r })),
-    commentsBefore.rows.map(r => ({ ...r }))
-  )
+  // ② 콘텐츠·조합 기록 7종 — 한 건도 안 바뀌었다. 작성자·업로더·출석 참조는
+  // 묘비를 가리킨 채 남는다.
+  const contentTablesAfter = await snapshotContentTables(setupClient)
+  assert.deepEqual(contentTablesAfter, contentTablesBefore)
 
   // ③ 로그 — 전부 사라졌다
   for (const t of [
