@@ -172,5 +172,8 @@ export function toMemberProfileRow(p) {
     is_director: bool(p.is_director),
     director_title: p.director_title,
     is_auditor: bool(p.is_auditor),
+    // 0010에서 신설된 컬럼. 이관 대상 Supabase 데이터에는 애초에 없던 값이고,
+    // 이관 시점(탈퇴 기능 이전)엔 탈퇴자가 있을 수 없으므로 NULL이 맞다.
+    withdrawn_at: null,
   }
 }

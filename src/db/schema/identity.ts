@@ -56,6 +56,11 @@ export const memberProfiles = sqliteTable(
     isDirector: integer('is_director', { mode: 'boolean' }).notNull().default(false),
     directorTitle: text('director_title'),
     isAuditor: integer('is_auditor', { mode: 'boolean' }).notNull().default(false),
+    /**
+     * 탈퇴가 확정된 시각. `registration_status = 'withdrawn'`인 행에만 있다.
+     * 신청 단계(`withdrawal_requested`)에서는 아직 NULL이다.
+     */
+    withdrawnAt: integer('withdrawn_at', { mode: 'timestamp_ms' }),
   },
   // Postgres 원본도 email에 UNIQUE 제약이 있다(20250106090010_init_member_profiles.sql:18).
   table => [

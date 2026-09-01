@@ -86,7 +86,15 @@ export const CHECK_INVARIANTS = [
   {
     constraint: 'member_profiles_registration_status_check',
     table: 'member_profiles',
-    where: notIn('registration_status', ['pending', 'approved', 'rejected']),
+    // 탈퇴 상태 둘을 더했다. 앱의 `REGISTRATION_STATUSES`(정본)와 같아야 한다 —
+    // 어긋나면 정상 데이터를 위반으로 보고하거나 그 반대가 된다.
+    where: notIn('registration_status', [
+      'pending',
+      'approved',
+      'rejected',
+      'withdrawal_requested',
+      'withdrawn',
+    ]),
   },
   {
     constraint: 'member_profiles_membership_type_check',
