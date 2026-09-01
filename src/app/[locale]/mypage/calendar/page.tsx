@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslations, useFormatter } from 'next-intl'
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek } from 'date-fns'
 
@@ -35,6 +35,7 @@ export default function MyCalendarPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
 
   const load = useCallback(
     async (monthDate: Date) => {
@@ -67,6 +68,17 @@ export default function MyCalendarPage() {
     // 기준(`todaySeoul()`)을 써야 화면에 보이는 달과 실제로 불러온 데이터가 어긋나지 않는다.
     void load(parseLocalDate(todaySeoul()))
   }, [load])
+
+  useEffect(() => {
+    if (!selected) return
+    // 열릴 때 포커스를 모달 안으로 옮긴다.
+    closeButtonRef.current?.focus()
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelected(null)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [selected])
 
   const byDate = new Map<string, CalendarItem[]>()
   for (const it of items) {
@@ -105,7 +117,11 @@ export default function MyCalendarPage() {
         formatMonthLabel={visibleMonth =>
           formatter.dateTime(visibleMonth, { year: 'numeric', month: 'long' })
         }
-        onMonthChange={m => void load(new Date(`${m}-01T00:00:00`))}
+        onMonthChange={m => {
+          // 월을 바꾸면 이전 달 기준으로 열려 있던 모달이 빈 목록을 보여줄 수 있어 닫는다.
+          setSelected(null)
+          void load(new Date(`${m}-01T00:00:00`))
+        }}
         renderDay={iso => {
           const day = byDate.get(iso)
           if (!day || day.length === 0) return null
@@ -162,11 +178,27 @@ export default function MyCalendarPage() {
       {loading && <p className="mt-3 text-sm text-gray-500">{t('loading')}</p>}
 
       {selected && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-6">
-          <div className="w-full max-w-md rounded-lg bg-white p-6">
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-6"
+          onClick={() => setSelected(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="mypage-calendar-modal-title"
+            className="w-full max-w-md rounded-lg bg-white p-6"
+            onClick={e => e.stopPropagation()}
+          >
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="font-bold">{selected}</h2>
-              <button type="button" onClick={() => setSelected(null)} className="text-gray-400">
+              <h2 id="mypage-calendar-modal-title" className="font-bold">
+                {selected}
+              </h2>
+              <button
+                ref={closeButtonRef}
+                type="button"
+                onClick={() => setSelected(null)}
+                className="text-gray-400"
+              >
                 {t('close')}
               </button>
             </div>
