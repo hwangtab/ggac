@@ -114,3 +114,31 @@ export const notifications = sqliteTable('notifications', {
   relatedPostId: text('related_post_id'),
   relatedUserId: text('related_user_id'),
 })
+
+export const GRANT_DIGEST_STATUS = ['draft', 'published', 'discarded'] as const
+
+/**
+ * 예술지원사업 주간 회차. 공고 원장은 kosmart가 소유하고 우리는 **보낸 것만** 남긴다.
+ *
+ * 공고 미러 테이블을 두지 않는 이유: 발행된 내용은 게시글이 아카이브이고, 중복 제거는
+ * 최근 몇 주 회차의 `items`만 보면 된다. 미러를 두면 kosmart와의 동기화 상태(삭제·마감·
+ * 태그 수정)를 계속 맞춰야 하는데 조합원 18명 규모에 그 기계를 유지할 이유가 없다.
+ */
+export const grantDigests = sqliteTable(
+  'grant_digests',
+  {
+    id: uuidPk(),
+    /** ISO 주차 'YYYY-Www'. 회차 멱등키 — 크론이 두 번 돌아도 회차는 하나다. */
+    weekKey: text('week_key').notNull(),
+    /** GrantItem[] 스냅샷. 관리자가 제외·추가한 결과까지 반영된 최종본. */
+    items: text('items', { mode: 'json' }).$type<unknown[]>().notNull().default([]),
+    status: text('status', { enum: GRANT_DIGEST_STATUS }).notNull().default('draft'),
+    /** 발행된 게시글 id. 발행 전에는 null. */
+    postId: text('post_id'),
+    createdAt: createdAt(),
+    publishedAt: integer('published_at', { mode: 'timestamp_ms' }),
+  },
+  table => ({
+    weekKeyIdx: uniqueIndex('grant_digests_week_key_idx').on(table.weekKey),
+  })
+)
