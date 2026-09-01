@@ -60,3 +60,15 @@ test('저장소가 playwright install을 자동 실행하지 않는다', async (
     `npm 스크립트가 브라우저를 받는다: ${offenders.map(([k]) => k).join(', ')}`
   )
 })
+
+test('영상 녹화는 CI 전용이다 — ffmpeg가 없어도 로컬이 돌아야 한다', () => {
+  // 영상은 캐시의 `ffmpeg-*` 바이너리를 요구하고, 없으면 `newPage`가 **테스트마다**
+  // 실패한다(`retain-on-failure`도 일단 전부 녹화한 뒤 통과분을 버린다).
+  // 실측(2026-09-01): 캐시를 비우니 Chrome은 정상 실행되는데 ffmpeg 때문에 29건이
+  // 죽었다. `video`를 CI 전용으로 내리자 같은 조건에서 **37건 전부 통과, 다운로드 0**.
+  assert.match(
+    codeOnly,
+    /video: isCI \? 'retain-on-failure' : 'off'/,
+    '로컬에서 영상을 켜면 ffmpeg가 없는 머신에서 전 스위트가 죽는다'
+  )
+})

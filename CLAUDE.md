@@ -112,6 +112,15 @@ github.com/egozverev/aside(ICLR 논문)와는 무관하다.
 받지 말고 **설정이 `channel: 'chrome'`을 타는지** 확인해라. `CI=1`이 셸에 남아
 있으면 로컬에서도 번들 경로로 떨어진다.
 
+**에러 경로에 `ffmpeg-`가 보이면 브라우저 문제가 아니다.** 영상 녹화가 캐시의
+ffmpeg를 요구하는 것이고, 그래서 `video`는 CI에서만 켠다(`retain-on-failure`는
+실패분만 남길 뿐 **녹화 자체는 전부** 하므로 캐시가 비면 전 스위트가 죽는다).
+로컬 디버깅은 `trace`와 `screenshot`으로 하며 둘 다 추가 바이너리를 요구하지
+않는다.
+
+검증된 상태(2026-09-01): `PLAYWRIGHT_BROWSERS_PATH`를 빈 디렉터리로 두고 돌려
+**37건 전부 통과, 받은 바이너리 0개.**
+
 MCP 두 개(aside·chrome-devtools)는 **스펙 파일을 대신 실행하지 못한다** —
 `e2e/*.spec.ts`는 Playwright 러너가 필요하다. 화면 확인·계측용이지 E2E 실행
 수단이 아니다.

@@ -60,7 +60,18 @@ export default defineConfig({
     locale: 'ko-KR',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
+    // **영상은 CI에서만 남긴다.**
+    //
+    // 영상 녹화는 `ms-playwright` 캐시의 `ffmpeg-*` 바이너리를 요구하고, 없으면
+    // `browserContext.newPage`가 **테스트마다** 실패한다(실패한 테스트만이 아니다 —
+    // `retain-on-failure`도 일단 전부 녹화한 뒤 통과분을 버린다). 이 저장소는
+    // 브라우저를 받지 않는 정책이라(아래 `chromium` 프로젝트 주석), 캐시를 비운
+    // 머신에서 영상 하나 때문에 전 스위트가 죽는 것은 앞뒤가 안 맞는다.
+    // 실측(2026-09-01): 캐시를 비우면 Chrome은 정상 실행되는데 ffmpeg 때문에 29건이 죽었다.
+    //
+    // 로컬 디버깅은 `trace`(스크린샷 포함)와 `screenshot`으로 충분하고, 둘 다
+    // 추가 바이너리를 요구하지 않는다.
+    video: isCI ? 'retain-on-failure' : 'off',
   },
 
   projects: [
