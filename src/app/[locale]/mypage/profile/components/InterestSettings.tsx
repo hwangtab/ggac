@@ -43,7 +43,7 @@ export default function InterestSettings({
           {STANDARD_GENRES.map(g => (
             <label
               key={g}
-              className={`cursor-pointer rounded-full border px-3 py-1 text-sm ${
+              className={`cursor-pointer rounded-full border px-3 py-1 text-sm focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-offset-1 ${
                 genres.includes(g)
                   ? 'border-blue-600 bg-blue-50 text-blue-800'
                   : 'border-gray-300 text-gray-600'
@@ -67,7 +67,7 @@ export default function InterestSettings({
           {REGIONS.map(r => (
             <label
               key={r}
-              className={`cursor-pointer rounded-full border px-3 py-1 text-sm ${
+              className={`cursor-pointer rounded-full border px-3 py-1 text-sm focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-offset-1 ${
                 regions.includes(r)
                   ? 'border-blue-600 bg-blue-50 text-blue-800'
                   : 'border-gray-300 text-gray-600'
