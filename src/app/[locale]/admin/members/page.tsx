@@ -36,7 +36,7 @@ interface Member {
   real_name?: string
   created_at: string
   updated_at: string
-  registration_status: 'pending' | 'approved' | 'rejected'
+  registration_status: 'pending' | 'approved' | 'rejected' | 'withdrawn'
   is_active: boolean
   is_admin: boolean
   is_director: boolean
@@ -771,6 +771,8 @@ export default function MembersPage() {
                 <option value="pending">승인 대기</option>
                 <option value="approved">승인됨</option>
                 <option value="rejected">거부됨</option>
+                {/* 탈퇴 확정 회원. 없으면 관리자가 목록에서 골라볼 방법이 없다. */}
+                <option value="withdrawn">탈퇴함</option>
               </select>
 
               <button

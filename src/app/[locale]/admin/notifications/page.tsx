@@ -14,7 +14,7 @@ interface MemberProfile {
   id: string
   email: string
   name: string
-  registration_status: 'pending' | 'approved' | 'rejected'
+  registration_status: 'pending' | 'approved' | 'rejected' | 'withdrawn'
   is_artist: boolean
   is_admin: boolean
 }

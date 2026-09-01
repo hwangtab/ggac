@@ -23,7 +23,7 @@ interface Member {
   real_name?: string
   created_at: string
   updated_at: string
-  registration_status: 'pending' | 'approved' | 'rejected'
+  registration_status: 'pending' | 'approved' | 'rejected' | 'withdrawn'
   is_active: boolean
   is_admin: boolean
   is_director: boolean
@@ -76,6 +76,10 @@ function MemberCard({ member, onView, onAction, isLoading }: MemberCardProps) {
         return member.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
       case 'rejected':
         return 'bg-red-100 text-red-800'
+      // 탈퇴 확정. `MemberDetailModal`과 같은 색을 쓴다 — 두 화면이 같은 회원을
+      // 다른 색으로 그리면 관리자가 다른 상태로 읽는다.
+      case 'withdrawn':
+        return 'bg-gray-200 text-gray-700'
       default:
         return 'bg-gray-100 text-gray-800'
     }
@@ -93,6 +97,9 @@ function MemberCard({ member, onView, onAction, isLoading }: MemberCardProps) {
         return member.is_active ? '승인됨' : '비활성화됨'
       case 'rejected':
         return '거부됨'
+      // 없으면 탈퇴 회원이 목록에서 "알 수 없음"으로 뜬다(2026-09-02 감사).
+      case 'withdrawn':
+        return '탈퇴함'
       default:
         return '알 수 없음'
     }
