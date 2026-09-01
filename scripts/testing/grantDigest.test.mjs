@@ -10,6 +10,8 @@ const {
   renderDigestMarkdown,
   renderDigestEmail,
   renderDigestNotification,
+  isExcludedByTitle,
+  EXCLUDE_TITLE_KEYWORDS,
   CAP,
   POOL_CAP,
 } = await import('../../src/lib/server/grantDigest.ts')
@@ -165,6 +167,70 @@ test('블록이 전부 비었으면 빈 배열이다', () => {
 
 test('빈 입력은 빈 배열이다', () => {
   assert.deepEqual(buildDraftItems([], new Set()), [])
+})
+
+// ---------------------------------------------------------------- isExcludedByTitle / 제목 기반 제외 필터
+
+test('EXCLUDE_TITLE_KEYWORDS는 정확히 둘이다 (합창, 단원)', () => {
+  assert.deepEqual([...EXCLUDE_TITLE_KEYWORDS], ['합창', '단원'])
+})
+
+test('합창단 신규단원 모집 공고는 제외된다', () => {
+  assert.equal(isExcludedByTitle('[공고] 2026년 하반기 종로구립합창단 신규단원 모집'), true)
+})
+
+test('합창단 지도단원 모집 재공고는 제외된다', () => {
+  assert.equal(
+    isExcludedByTitle('2026년 종로구립어르신합창단 지도단원(알토) 모집 재공고 안내'),
+    true
+  )
+})
+
+test('무용·합창 워크숍 참여자 모집은 제외된다', () => {
+  assert.equal(
+    isExcludedByTitle('2026년 생활예술 마스터클래스 역량강화 워크숍 참여자 모집(무용, 합창)'),
+    true
+  )
+})
+
+test('연극·무용·음악·전통 통합공모는 제외되지 않는다 (오차단 방어)', () => {
+  assert.equal(
+    isExcludedByTitle('2027년 서울 커넥트 스테이지(연극·무용·음악·전통) 통합공모 안내'),
+    false
+  )
+})
+
+test('참여단체 모집은 제외되지 않는다 (단체와 단원 구분)', () => {
+  assert.equal(isExcludedByTitle('서울문화재단 대학로센터 <제철공연> 참여단체 모집'), false)
+})
+
+test('음악 태그만 있는 일반 공고는 제외되지 않는다', () => {
+  assert.equal(isExcludedByTitle('2027 서울 커넥트 스테이지-음악'), false)
+})
+
+test('buildDraftItems는 제외 대상 항목을 담지 않는다', () => {
+  const out = buildDraftItems(
+    [
+      item({ key: 'a', title: '[공고] 종로구립합창단 신규단원 모집' }),
+      item({ key: 'b', title: '2026년 음악 창작지원' }),
+    ],
+    new Set()
+  )
+  assert.deepEqual(
+    out.map(i => i.key),
+    ['b']
+  )
+})
+
+test('buildDraftItems는 제외된 자리를 다음 항목으로 채운다 (cap을 채운다)', () => {
+  const many = [
+    item({ key: 'ex1', title: '종로구립합창단 신규단원 모집' }),
+    item({ key: 'ex2', title: '시립교향악단 상임단원 모집 공고' }),
+    ...Array.from({ length: CAP }, (_, i) => item({ key: `ok:${i}` })),
+  ]
+  const out = buildDraftItems(many, new Set())
+  assert.equal(out.length, CAP)
+  assert.ok(out.every(i => i.key.startsWith('ok:')))
 })
 
 // ---------------------------------------------------------------- activeItems

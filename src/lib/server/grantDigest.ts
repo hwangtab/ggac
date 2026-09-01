@@ -95,7 +95,39 @@ export function interleaveGenreBlocks(blocks: GrantItem[][]): GrantItem[] {
 }
 
 /**
- * kosmart가 준 목록에서 최근 회차에 이미 담긴 것을 빼고 CAP까지 남긴다.
+ * 제목만으로 조합원과 무관한 공고를 거른다.
+ *
+ * kosmart는 장르를 `genres=['음악']`으로만 분류해 보내므로, 합창단·무용 등
+ * 실험음악·중음악(둠메탈·드론·슬러지) 조합원과 무관한 공고가 장르 필터를 통과해 섞인다.
+ * 장르 태그로는 거를 수 없어 제목 문자열로 판정한다.
+ *
+ * 키워드는 정확히 둘이다({@link EXCLUDE_TITLE_KEYWORDS} 참고) — 더 넣지 않는다. 넓히면
+ * 「커넥트 스테이지(연극·무용·음악·전통) 통합공모」처럼 음악도 받는 유효한 공고가 함께
+ * 걸린다.
+ */
+export function isExcludedByTitle(title: string): boolean {
+  return EXCLUDE_TITLE_KEYWORDS.some(keyword => title.includes(keyword))
+}
+
+/**
+ * 제목 기반 제외 키워드. 이 둘만이다 — 더 넣지 않는다.
+ *
+ * - `합창`: 종로구립합창단 신규단원 모집, 종로구립어르신합창단 지도단원 모집, 무용·합창
+ *   워크숍 참여자 모집 세 건이 전부 이 키워드로 걸린다. 「커넥트 스테이지(연극·무용·음악·
+ *   전통) 통합공모」처럼 음악도 받는 공고는 제목에 '합창'이 없어 안 걸린다.
+ * - `단원`: 기관 소속 단원 채용(구립합창단·시립교향악단류)을 잡는다. 「제철공연
+ *   참여단체 모집」은 '단원'이 아니라 안 걸린다. 국장 지시는 "단원 모집"이었지만 '단원'
+ *   만 쓰는 이유는 「지도단원(알토) 모집」처럼 사이에 말이 끼면 '단원 모집'이라는 정확한
+ *   문자열이 없기 때문이다.
+ * - `무용`을 넣지 않는 이유: 「서울 커넥트 스테이지(연극·무용·음악·전통) 통합공모」가
+ *   함께 걸린다 — 음악도 받는 유효한 창작지원이다. 순수 무용 공고는 `genres=['무용']`
+ *   이라 관심사 필터가 이미 거른다.
+ */
+export const EXCLUDE_TITLE_KEYWORDS = ['합창', '단원'] as const
+
+/**
+ * kosmart가 준 목록에서 최근 회차에 이미 담긴 것과 제목 기반 제외 대상을 빼고 CAP까지
+ * 남긴다.
  *
  * **순서를 다시 정렬하지 않는다** — 이미 `interleaveGenreBlocks`로 장르 간 공정한 순서가
  * 정해져 있거나(풀 생성 경로), kosmart가 `rankAndCap`으로 점수순·마감임박순으로 정렬해서
@@ -112,6 +144,7 @@ export function buildDraftItems(
   for (const it of fetched) {
     if (sentKeys.has(it.key)) continue
     if (seen.has(it.key)) continue // 같은 응답 안의 중복
+    if (isExcludedByTitle(it.title)) continue // cap을 세기 전에 걸러야 자리를 먹지 않는다
     seen.add(it.key)
     out.push(it)
     if (out.length >= cap) break
