@@ -1,5 +1,4 @@
-import { isBlobPublicUrl } from '@/lib/storage/paths'
-import { isProjectStoragePublicUrl } from './storageUrlValidation'
+import { logicalPathFromUrl } from '@/lib/storage/paths'
 
 export function isSafeInternalPath(value: string): boolean {
   return value.startsWith('/') && !value.startsWith('//')
@@ -30,13 +29,13 @@ export function toSafeInternalImagePath(value: unknown, fallback = '/images/logo
 /**
  * 아티스트 프로필 이미지 src로 안전하게 사용할 값으로 정규화한다.
  * - 내부 경로(`/images/...`): toSafeInternalImagePath 검증 적용
- * - 우리 Supabase 프로젝트의 `artists` 버킷 public URL: 그대로 허용
+ * - 우리 Blob 저장소의 `artists` 버킷 public URL: 그대로 허용
  *   (마이페이지 업로드 사진이 저장되는 유일한 신뢰 경로)
- * - 그 외(임의 외부 URL, 다른 프로젝트/버킷, 잘못된 값): fallback(기본 로고)
+ * - 그 외(임의 외부 URL, 다른 버킷, 잘못된 값): fallback(기본 로고)
  *
- * `*.supabase.co` 전체를 허용하던 예전 방식과 달리 origin이
- * NEXT_PUBLIC_SUPABASE_URL과 일치하고 경로가 `artists` 버킷일 때만 통과시켜
- * SSRF/피싱 표면을 넓히지 않으면서도 업로드 사진 표시 회귀를 막는다.
+ * 호스트 와일드카드를 허용하던 예전 방식과 달리 origin이 우리 Blob 공개
+ * 저장소와 정확히 일치하고 경로가 `artists` 버킷일 때만 통과시켜 SSRF/피싱
+ * 표면을 넓히지 않으면서도 업로드 사진 표시 회귀를 막는다.
  * 화면 렌더링·OG 메타데이터·JSON-LD가 모두 이 helper를 공유해 경계를 통일한다.
  */
 export function toSafeArtistImageSrc(
@@ -50,9 +49,7 @@ export function toSafeArtistImageSrc(
     return toSafeInternalImagePath(trimmed, fallback)
   }
 
-  // 전환기에는 양쪽을 모두 허용한다. Supabase URL은 재작성 전까지 유효하고
-  // Blob URL은 재작성 후부터 나타난다.
-  if (isProjectStoragePublicUrl(trimmed, 'artists') || isBlobPublicUrl(trimmed)) {
+  if (logicalPathFromUrl(trimmed, 'artists') !== null) {
     return trimmed
   }
 

@@ -35,18 +35,17 @@ export function applyCSP(request: NextRequest, response: NextResponse) {
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
-      // 로컬 스택의 Storage는 http://127.0.0.1:54321에서 서빙된다
       process.env.NODE_ENV === 'development'
-        ? "img-src 'self' https: http://localhost:* http://127.0.0.1:* blob: data: https://*.supabase.co"
-        : "img-src 'self' https: blob: data: https://*.supabase.co",
+        ? "img-src 'self' https: http://localhost:* http://127.0.0.1:* blob: data:"
+        : "img-src 'self' https: blob: data:",
       process.env.NODE_ENV === 'development'
-        ? "media-src 'self' http://localhost:* http://127.0.0.1:* https://www.youtube.com https://*.supabase.co"
-        : "media-src 'self' https://www.youtube.com https://*.supabase.co",
+        ? "media-src 'self' http://localhost:* http://127.0.0.1:* https://www.youtube.com"
+        : "media-src 'self' https://www.youtube.com",
       // 토스 결제창은 iframe으로 뜬다. 빠지면 결제 버튼이 먹통이 된다.
       "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://*.tosspayments.com",
       process.env.NODE_ENV === 'development'
-        ? "connect-src 'self' http://localhost:* http://127.0.0.1:* https://api.supabase.io https://*.supabase.co ws://localhost:* ws://127.0.0.1:* wss://localhost:* wss://127.0.0.1:* wss://*.supabase.co https://*.tosspayments.com"
-        : "connect-src 'self' https://api.supabase.io https://*.supabase.co wss://*.supabase.co https://*.tosspayments.com",
+        ? "connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* wss://localhost:* wss://127.0.0.1:* https://*.tosspayments.com"
+        : "connect-src 'self' https://*.tosspayments.com",
       "object-src 'none'",
       "base-uri 'self'",
       // 결제창이 카드사 인증 페이지로 폼을 제출한다(next.config.js의 같은 항목 참고).

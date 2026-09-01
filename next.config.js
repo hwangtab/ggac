@@ -451,19 +451,18 @@ const nextConfig = {
               "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               process.env.NODE_ENV === 'development'
-                ? "img-src 'self' https: http://localhost:* http://127.0.0.1:* blob: data: https://*.supabase.co"
-                : "img-src 'self' https: blob: data: https://*.supabase.co",
+                ? "img-src 'self' https: http://localhost:* http://127.0.0.1:* blob: data:"
+                : "img-src 'self' https: blob: data:",
               process.env.NODE_ENV === 'development'
-                ? "media-src 'self' http://localhost:* http://127.0.0.1:* https://www.youtube.com https://*.supabase.co"
-                : "media-src 'self' https://www.youtube.com https://*.supabase.co",
+                ? "media-src 'self' http://localhost:* http://127.0.0.1:* https://www.youtube.com"
+                : "media-src 'self' https://www.youtube.com",
               // 토스 결제창은 iframe으로 뜬다. 이 항목이 없으면 결제 버튼을 눌러도
               // 아무 일도 일어나지 않는다(콘솔에만 CSP 위반이 찍힌다).
               "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://*.tosspayments.com",
-              // 로컬 Supabase 스택(supabase start)은 http://127.0.0.1:5442x에 뜬다.
-              // 이 분기가 없어 `supabase start`로 띄운 스택에 앱이 아예 붙지 못했다.
+              // dev 분기의 로컬 호스트 허용은 로컬 API/HMR용이다.
               process.env.NODE_ENV === 'development'
-                ? "connect-src 'self' http://localhost:* http://127.0.0.1:* https://api.supabase.io https://*.supabase.co ws://localhost:* ws://127.0.0.1:* wss://localhost:* wss://127.0.0.1:* wss://*.supabase.co https://*.tosspayments.com"
-                : "connect-src 'self' https://api.supabase.io https://*.supabase.co wss://*.supabase.co https://*.tosspayments.com",
+                ? "connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* wss://localhost:* wss://127.0.0.1:* https://*.tosspayments.com"
+                : "connect-src 'self' https://*.tosspayments.com",
               "object-src 'none'",
               "base-uri 'self'",
               // 결제창은 카드사 인증 페이지로 폼을 제출한다. 'self'만 두면 카드를
@@ -495,13 +494,7 @@ const nextConfig = {
   images: {
     // 외부 이미지 도메인 허용
     remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: '*.supabase.co',
-        port: '',
-        pathname: '/storage/v1/object/public/**',
-      },
-      // Vercel Blob 공개 저장소 (전환기: 실제 호스트만 허용, 와일드카드 금지 —
+      // Vercel Blob 공개 저장소 (실제 호스트만 허용, 와일드카드 금지 —
       // *.public.blob.vercel-storage.com은 다른 Vercel 고객의 공개 저장소까지 허용한다)
       {
         protocol: 'https',

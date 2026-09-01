@@ -4,15 +4,19 @@ import sharp from 'sharp'
 export type ImageDim = { width: number; height: number }
 
 /**
- * 아티스트·첨부 이미지가 로드되는 Supabase Storage origin(scheme+host)을 반환한다.
+ * 우리 Vercel Blob 공개 저장소의 origin(scheme+host)을 반환한다.
  *
- * NOTE: `@/utils/site`의 `getSupabaseOrigin`과 동일한 로직을 의도적으로 인라인한다.
- * 이 유틸은 `node --test`(타입 스트리핑)로 직접 import되어 단위 테스트되는데,
- * node ESM 리졸버는 `@/*` 경로 별칭을 해석하지 못한다(ERR_MODULE_NOT_FOUND).
- * 동작(NEXT_PUBLIC_SUPABASE_URL → origin)은 site.ts와 바이트 단위로 동일하다.
+ * NOTE: `@/lib/storage/paths`의 `isBlobPublicUrl`과 같은 판정을 의도적으로
+ * 인라인한다. 이 유틸은 `node --test`(타입 스트리핑)로 직접 import되어 단위
+ * 테스트되는데, node ESM 리졸버는 `@/*` 경로 별칭을 해석하지 못한다
+ * (ERR_MODULE_NOT_FOUND).
+ *
+ * 예전에는 NEXT_PUBLIC_SUPABASE_URL을 읽었다. Supabase 프로젝트가
+ * 2026-09-01에 삭제되면서 DB에 남은 Supabase 절대 URL이 0건임을 실측해
+ * 판정을 Blob origin 하나로 좁혔다.
  */
-function getSupabaseOrigin(): string | null {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+function getBlobOrigin(): string | null {
+  const url = process.env.NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL
   if (!url) return null
   try {
     return new URL(url).origin
@@ -21,8 +25,9 @@ function getSupabaseOrigin(): string | null {
   }
 }
 
-export function isSupabaseImageUrl(src: string): boolean {
-  const origin = getSupabaseOrigin()
+/** 우리 Blob 저장소에서 오는 이미지인지. 남의 origin 이미지는 치수 주입 대상이 아니다. */
+export function isOurStorageImageUrl(src: string): boolean {
+  const origin = getBlobOrigin()
   if (!origin) return false
   try {
     return new URL(src).origin === origin
@@ -58,7 +63,7 @@ export async function annotateImageDimensions(
         const $el = $(el)
         if ($el.attr('width') != null || $el.attr('height') != null) return false
         const src = $el.attr('src')
-        return !!src && isSupabaseImageUrl(src)
+        return !!src && isOurStorageImageUrl(src)
       })
     if (targets.length === 0) return html
     const concurrency = opts.concurrency ?? 4

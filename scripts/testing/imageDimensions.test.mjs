@@ -1,17 +1,17 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-// 테스트는 우리 Supabase origin을 알아야 isSupabaseImageUrl이 매칭된다
-process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://proj.supabase.co'
+// 테스트는 우리 Blob origin을 알아야 isOurStorageImageUrl이 매칭된다
+process.env.NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL = 'https://examplestore.public.blob.vercel-storage.com'
 const { annotateImageDimensions, annotateImageDimensionsSafe } = await import(
   '../../src/utils/imageDimensions.ts'
 )
 
-const SB = 'https://proj.supabase.co/storage/v1/object/public/board/a.jpg'
+const SB = 'https://examplestore.public.blob.vercel-storage.com/attachments/a.jpg'
 // 주입 가능한 stub resolver로 fetch/sharp 없이 순수 변환 검증
 const stub = async src => (src === SB ? { width: 800, height: 600 } : null)
 
-test('크기 없는 Supabase 이미지에 width/height 주입', async () => {
+test('크기 없는 우리 Blob 이미지에 width/height 주입', async () => {
   const html = `<p>t</p><img src="${SB}">`
   const out = await annotateImageDimensions(html, stub)
   assert.match(out, /width="800"/)
@@ -33,7 +33,7 @@ test('외부 URL 이미지는 스킵', async () => {
 })
 
 test('resolve가 null이면 그 img 불변', async () => {
-  const html = `<img src="https://proj.supabase.co/storage/v1/object/public/board/none.jpg">`
+  const html = `<img src="https://examplestore.public.blob.vercel-storage.com/attachments/none.jpg">`
   const out = await annotateImageDimensions(html, async () => null)
   assert.doesNotMatch(out, /width=/)
 })
@@ -68,11 +68,11 @@ test('텍스트 노드의 &quot;/&apos;는 리터럴 따옴표로 정규화(고�
 })
 
 // --- 동시성 배치 루프 커버리지 ---
-test('한 호출의 여러 Supabase 이미지 모두 주입(배치 루프)', async () => {
+test('한 호출의 여러 Blob 이미지 모두 주입(배치 루프)', async () => {
   const n = 5
   const srcs = Array.from(
     { length: n },
-    (_, i) => `https://proj.supabase.co/storage/v1/object/public/board/img${i}.jpg`
+    (_, i) => `https://examplestore.public.blob.vercel-storage.com/attachments/img${i}.jpg`
   )
   const many = async src =>
     srcs.includes(src) ? { width: 100 + srcs.indexOf(src), height: 200 } : null
@@ -90,7 +90,7 @@ test('커스텀 concurrency(2)에서도 모든 이미지 주입', async () => {
   const n = 5
   const srcs = Array.from(
     { length: n },
-    (_, i) => `https://proj.supabase.co/storage/v1/object/public/board/c${i}.jpg`
+    (_, i) => `https://examplestore.public.blob.vercel-storage.com/attachments/c${i}.jpg`
   )
   const many = async src => (srcs.includes(src) ? { width: 300, height: 400 } : null)
   const html = srcs.map(s => `<p><img src="${s}"></p>`).join('')
@@ -102,9 +102,9 @@ test('커스텀 concurrency(2)에서도 모든 이미지 주입', async () => {
 
 // --- resolver 하드닝 ---
 test('resolver가 특정 src에서 throw해도 나머지는 주입되고 유틸은 throw 안 함', async () => {
-  const A = 'https://proj.supabase.co/storage/v1/object/public/board/ok1.jpg'
-  const BOOM = 'https://proj.supabase.co/storage/v1/object/public/board/boom.jpg'
-  const C = 'https://proj.supabase.co/storage/v1/object/public/board/ok2.jpg'
+  const A = 'https://examplestore.public.blob.vercel-storage.com/attachments/ok1.jpg'
+  const BOOM = 'https://examplestore.public.blob.vercel-storage.com/attachments/boom.jpg'
+  const C = 'https://examplestore.public.blob.vercel-storage.com/attachments/ok2.jpg'
   const throwing = async src => {
     if (src === BOOM) throw new Error('resolver blew up')
     return { width: 50, height: 60 }

@@ -283,8 +283,6 @@ throw ApiError.internalServerError('Server error')
 - `NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL` — **비면 모든 Blob 사진이 기본 로고로
   바뀐다** (`isBlobPublicUrl`이 항상 false가 된다). 에러는 안 난다
 - `PUBLIC_BLOB_READ_WRITE_TOKEN` / `PRIVATE_BLOB_READ_WRITE_TOKEN`
-- `NEXT_PUBLIC_SUPABASE_URL` — **DB 연결용이 아니다.** DB에 남은 레거시 Storage
-  절대 URL을 "우리 것"으로 인정하는 판정 4곳이 읽는다
 
 **선택**: `UPSTASH_REDIS_REST_URL`·`UPSTASH_REDIS_REST_TOKEN`(분산 레이트리밋 —
 없으면 인스턴스별 메모리 폴백이라 Vercel에서 사실상 무효), `RESEND_API_KEY`(인증

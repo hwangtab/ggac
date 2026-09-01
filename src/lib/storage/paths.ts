@@ -85,21 +85,16 @@ export function isBlobPublicUrl(value: string): boolean {
   }
 }
 
-const SUPABASE_PUBLIC_MARKER = '/storage/v1/object/public/'
-
 /**
  * 저장된 절대 URL에서 논리 경로 `<bucket>/<key>`를 되돌린다.
  * 기대한 버킷·접두사와 다르면 null을 준다.
  * 이 확인은 기존 getProjectStorageObjectPath가 하던 봉쇄를 유지하기 위한 것이다.
  *
- * **Supabase 형식(`/storage/v1/object/public/<bucket>/<key>`)도 계속 인식한다.**
- * Task 5가 Supabase 클라이언트를 전부 걷어냈어도 이건 클라이언트가 아니라
- * *문자열 파싱*이다 — DB에는 전환 이전에 저장된 Supabase Storage 절대 URL이
- * 그대로 남아 있고(`post_attachments.file_url`,
- * `artists.profile_photo_url` 등), 이 가지를 지우면 그 행들의 URL이 전부
- * `null`로 판정되어 삭제·검증 경로가 조용히 멈춘다. 저장된 URL을 Blob으로
- * 재작성하는 컷오버 작업(`scripts/storage/rewrite-db-urls.mjs`)이 끝나고
- * 남은 Supabase URL이 0건임을 실측한 뒤에만 지울 수 있다.
+ * **Supabase 형식(`/storage/v1/object/public/<bucket>/<key>`) 인식은 걷어냈다.**
+ * 저장된 URL을 Blob으로 재작성하는 컷오버가 끝난 뒤 운영 DB를 실측해
+ * 남은 Supabase 절대 URL이 0건임을 확인했고(2026-09-01에는 Supabase
+ * 프로젝트 자체도 삭제됐다), 그 가지는 이제 도달하지 않는다. 남겨두면
+ * 판정 근거가 사라진 환경변수(NEXT_PUBLIC_SUPABASE_URL)에 계속 매여 있게 된다.
  */
 export function logicalPathFromUrl(
   url: string,
@@ -107,28 +102,13 @@ export function logicalPathFromUrl(
   pathPrefix = ''
 ): string | null {
   if (typeof url !== 'string' || !url) return null
+  if (!isBlobPublicUrl(url)) return null
 
   let logical: string | null = null
-
-  if (isBlobPublicUrl(url)) {
-    try {
-      logical = decodeURIComponent(new URL(url).pathname.replace(/^\/+/, '')) || null
-    } catch {
-      return null
-    }
-  } else {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    if (!supabaseUrl) return null
-    try {
-      const parsed = new URL(url)
-      if (parsed.origin !== new URL(supabaseUrl).origin) return null
-      const idx = parsed.pathname.indexOf(SUPABASE_PUBLIC_MARKER)
-      if (idx === -1) return null
-      logical =
-        decodeURIComponent(parsed.pathname.slice(idx + SUPABASE_PUBLIC_MARKER.length)) || null
-    } catch {
-      return null
-    }
+  try {
+    logical = decodeURIComponent(new URL(url).pathname.replace(/^\/+/, '')) || null
+  } catch {
+    return null
   }
 
   if (!logical) return null

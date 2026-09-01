@@ -9,8 +9,7 @@ export const runtime = 'nodejs'
 export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { isBlobPublicUrl } from '@/lib/storage/paths'
-import { isProjectStoragePublicUrl } from '@/utils/storageUrlValidation'
+import { logicalPathFromUrl } from '@/lib/storage/paths'
 import { validateUUID } from '@/utils/validation'
 import { createLogger, maskId } from '@/utils/logger'
 import { getPostById } from '@/db/queries/posts'
@@ -76,10 +75,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     // 이미지 첨부파일이 있는 경우 해당 이미지 반환
     if (attachment) {
       const imageUrl = attachment.file_url
-      if (
-        !isProjectStoragePublicUrl(imageUrl, 'attachments', 'posts') &&
-        !isBlobPublicUrl(imageUrl)
-      ) {
+      if (logicalPathFromUrl(imageUrl, 'attachments', 'posts') === null) {
         console.warn('[OG API] Unsafe attachment image URL, using default OG image')
         return new Response(null, {
           status: 302,

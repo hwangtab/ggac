@@ -14,8 +14,7 @@ import {
 } from 'react-icons/fi'
 import type { PostAttachment } from '@/types'
 import OptimizedImage from '../OptimizedImage'
-import { isBlobPublicUrl } from '@/lib/storage/paths'
-import { isProjectStoragePublicUrl } from '@/utils/storageUrlValidation'
+import { logicalPathFromUrl } from '@/lib/storage/paths'
 
 interface AttachmentCardProps {
   attachment: PostAttachment
@@ -79,10 +78,7 @@ export const AttachmentCard: React.FC<AttachmentCardProps> = ({
   const FileIcon = getFileIcon(attachment.file_type)
   const canEdit = showActions && (isAuthor || isAdmin)
   const safeFileUrl =
-    isProjectStoragePublicUrl(attachment.file_url, 'attachments') ||
-    isBlobPublicUrl(attachment.file_url)
-      ? attachment.file_url
-      : null
+    logicalPathFromUrl(attachment.file_url, 'attachments') !== null ? attachment.file_url : null
 
   if (isEditing && editForm) {
     return (

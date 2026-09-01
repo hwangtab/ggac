@@ -24,12 +24,6 @@ if (!validSources.has(envSource)) {
 loadEnvConfig(process.cwd())
 
 const requiredEnvVars = [
-  // 앱 코드에 Supabase 클라이언트는 0개지만(정적 가드가 강제) 이 값 하나는
-  // 아직 필요하다: DB에 남아 있는 Supabase Storage 절대 URL을 "우리 것"으로
-  // 인정하는 판정 4곳(safeUrl.ts·storageUrlValidation.ts·imageDimensions.ts·
-  // storage/paths.ts)과 CSP/preconnect가 이 값을 읽는다. 지우면 전환 이전에
-  // 올라간 사진이 전부 안 뜬다. `.env.example`의 같은 항목 설명 참고.
-  'NEXT_PUBLIC_SUPABASE_URL',
   // Better Auth 배선(feat/turso-stage2b1)이 src/db/client.ts를 통해 모듈
   // 스코프에서 Turso에 연결한다. 이 셋이 없으면 캐치올 라우트를 빌드타임에
   // 수집하는 순간 "Failed to collect page data for /api/auth/[...all]"로
@@ -85,6 +79,11 @@ const optionalEnvVars = [
   // (최종 리뷰 B-2).
   'NEXT_PUBLIC_SUPABASE_ANON_KEY',
   'SUPABASE_SERVICE_ROLE_KEY',
+  // 2026-09-01 Supabase 프로젝트 삭제로 함께 선택으로 내려왔다. 레거시 Storage
+  // 절대 URL을 "우리 것"으로 인정하던 판정 4곳(safeUrl.ts·storageUrlValidation.ts·
+  // imageDimensions.ts·storage/paths.ts)이 사라졌고, 운영 DB에 남은 Supabase
+  // 절대 URL은 실측 0건이다. 앱은 이제 이 값을 한 줄도 읽지 않는다.
+  'NEXT_PUBLIC_SUPABASE_URL',
 ]
 
 console.log('🔍 Environment Variable Verification\n')
@@ -233,17 +232,6 @@ optionalEnvVars.forEach(varName => {
     console.log(`✅ ${varName}: ${displayValue}`)
   }
 })
-
-// Validate Supabase URL format
-if (env.NEXT_PUBLIC_SUPABASE_URL) {
-  const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL
-  if (!supabaseUrl.startsWith('https://') || !supabaseUrl.includes('.supabase.co')) {
-    console.log(
-      `❌ NEXT_PUBLIC_SUPABASE_URL: Invalid format (should be https://[project].supabase.co)`
-    )
-    hasErrors = true
-  }
-}
 
 // Validate public Blob base URL format
 // isBlobPublicUrl()은 `new URL(base).origin`을 대조한다 — 파싱되지 않는 값은

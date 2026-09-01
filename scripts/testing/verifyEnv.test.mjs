@@ -43,7 +43,6 @@ const ALL_KEYS = [
 ]
 
 const COMPLETE_ENV = {
-  NEXT_PUBLIC_SUPABASE_URL: 'https://example-project.supabase.co',
   TURSO_DATABASE_URL: 'file:local.db',
   TURSO_AUTH_TOKEN: 'local-placeholder',
   BETTER_AUTH_SECRET: 'local-placeholder',
@@ -104,17 +103,21 @@ test('NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL이 URL이 아니면 실패한다(조용�
   assert.match(stdout, /NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL: Invalid format/)
 })
 
-test('죽은 Supabase 키(anon/service-role)가 없어도 통과한다 — 컷오버에서 지울 수 있어야 한다', () => {
+test('죽은 Supabase 키(url/anon/service-role)가 없어도 통과한다 — 컷오버에서 지울 수 있어야 한다', () => {
   const { code, stdout } = run(COMPLETE_ENV)
   assert.equal(code, 0, stdout)
+  assert.match(stdout, /NEXT_PUBLIC_SUPABASE_URL: Not set \(optional\)/)
   assert.match(stdout, /NEXT_PUBLIC_SUPABASE_ANON_KEY: Not set \(optional\)/)
   assert.match(stdout, /SUPABASE_SERVICE_ROLE_KEY: Not set \(optional\)/)
 })
 
-test('NEXT_PUBLIC_SUPABASE_URL은 여전히 필수다(레거시 Storage URL 판정 4곳)', () => {
+// 2026-09-01 Supabase 프로젝트 삭제로 전제가 사라졌다. 이 값을 읽던 레거시
+// Storage URL 판정 4곳이 없어졌으므로, Vercel에서 지워도 배포 전 점검이
+// 빨간불이 되면 안 된다.
+test('NEXT_PUBLIC_SUPABASE_URL은 더 이상 필수가 아니다', () => {
   const env = { ...COMPLETE_ENV }
   delete env.NEXT_PUBLIC_SUPABASE_URL
   const { code, stdout } = run(env)
-  assert.equal(code, 1, stdout)
-  assert.match(stdout, /NEXT_PUBLIC_SUPABASE_URL: Missing/)
+  assert.equal(code, 0, stdout)
+  assert.doesNotMatch(stdout, /NEXT_PUBLIC_SUPABASE_URL: Missing/)
 })

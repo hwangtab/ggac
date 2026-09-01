@@ -1,7 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://btugywkltavbogdnhwpu.supabase.co'
 process.env.NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL = 'https://examplestore.public.blob.vercel-storage.com'
 
 const {
@@ -31,14 +30,17 @@ test('잘못된 경로를 거부한다', () => {
   }
 })
 
-test('Supabase URL에서 논리 경로를 복원한다', () => {
+// 2026-09-01 Supabase 프로젝트 삭제 후, 남은 Supabase 절대 URL이 0건임을
+// 실측하고 logicalPathFromUrl에서 Supabase 형식 인식을 걷어냈다. 되살아나면
+// 판정 근거가 없는 환경변수에 다시 매이므로, 거부하는지를 고정한다.
+test('레거시 Supabase Storage URL은 더 이상 인식하지 않는다', () => {
   assert.equal(
     logicalPathFromUrl(
       'https://btugywkltavbogdnhwpu.supabase.co/storage/v1/object/public/attachments/posts/p1/a.webp',
       'attachments',
       'posts/p1'
     ),
-    'attachments/posts/p1/a.webp'
+    null
   )
 })
 
@@ -169,7 +171,7 @@ test('경로 형태 통일: logicalPathFromUrl 결과는 버킷 상대 경로에
   // profile_photo_url을 logicalPathFromUrl로 되돌린 논리 경로와 정확히 같은
   // 모양이어야 한다 — 두 형태를 한 Set에 안전하게 섞을 수 있는 근거.
   const bucketRelative = 'artist-001/profile_1755000000000_ab12.webp'
-  const url = `https://btugywkltavbogdnhwpu.supabase.co/storage/v1/object/public/artists/${bucketRelative}`
+  const url = `${BLOB_BASE}/artists/${bucketRelative}`
   const logical = logicalPathFromUrl(url, 'artists', 'artist-001')
   assert.equal(logical, `artists/${bucketRelative}`)
 })

@@ -5,6 +5,7 @@ import { useState, useEffect, useRef, memo, useCallback } from 'react'
 import { useTranslations } from 'next-intl'
 import type { OptimizedImageProps } from '@/types'
 import { parseIntegerParam } from '@/utils/queryParams'
+import { isBlobPublicUrl } from '@/lib/storage/paths'
 
 // Next.js 설정과 동기화된 허용 품질 값 파싱
 const DEFAULT_ALLOWED_QUALITIES = [50, 65, 75, 80, 85, 90, 100]
@@ -224,16 +225,19 @@ const OptimizedImage = memo(function OptimizedImage({
   const handleError = useCallback(
     (event?: React.SyntheticEvent<HTMLImageElement>) => {
       clearLoadAndErrorTimers()
-      const isSupabaseImage = currentSrc.includes('supabase.co')
-      const maxRetries = isSupabaseImage ? 3 : 1
+      // Supabase 컷오버(2026-08-26) 전에는 `supabase.co` 문자열로 판정했다.
+      // 프로젝트가 삭제된 지금 그 판정은 항상 false라 원격 저장소 이미지가
+      // 재시도 없이 폴백으로 떨어졌다. 같은 자리를 Blob 판정이 잇는다.
+      const isRemoteStorageImage = isBlobPublicUrl(currentSrc)
+      const maxRetries = isRemoteStorageImage ? 3 : 1
 
-      // Supabase 이미지의 경우 재시도 로직 적용
-      if (isSupabaseImage && retryCount < maxRetries) {
+      // 원격 저장소 이미지에만 재시도를 적용한다(일시적 5xx·콜드 캐시 대비).
+      if (isRemoteStorageImage && retryCount < maxRetries) {
         const retryDelay = Math.min(1000 * Math.pow(2, retryCount), 5000) // 지수 백오프, 최대 5초
 
         if (process.env.NODE_ENV === 'development') {
           console.warn(
-            `[OptimizedImage] Supabase 이미지 재시도 ${retryCount + 1}/${maxRetries}: ${currentSrc}`
+            `[OptimizedImage] 저장소 이미지 재시도 ${retryCount + 1}/${maxRetries}: ${currentSrc}`
           )
         }
 
@@ -293,10 +297,16 @@ const OptimizedImage = memo(function OptimizedImage({
       return
     }
 
-    const isSupabaseImage = currentSrc.includes('supabase.co')
+    const isRemoteStorageImage = isBlobPublicUrl(currentSrc)
     const isLocalImage = currentSrc.startsWith('/images/') || currentSrc.startsWith('/fonts/')
     // Priority 이미지는 타임아웃 단축 (폴링으로 빠른 감지)
-    const baseLoadTimeout = priority ? 2000 : isLocalImage ? 3000 : isSupabaseImage ? 12000 : 8000
+    const baseLoadTimeout = priority
+      ? 2000
+      : isLocalImage
+        ? 3000
+        : isRemoteStorageImage
+          ? 12000
+          : 8000
     const resolvedLoadTimeout = loadTimeoutMs ?? baseLoadTimeout
     const resolvedErrorTimeout = errorTimeoutMs ?? (priority ? 2000 : 4000)
 
@@ -377,14 +387,12 @@ const OptimizedImage = memo(function OptimizedImage({
     setIsLoading(false)
 
     if (process.env.NODE_ENV === 'development') {
-      const isSupabaseImage = currentSrc.includes('supabase.co')
+      const isRemoteStorageImage = isBlobPublicUrl(currentSrc)
       const retryText = retryCount > 0 ? ` (${retryCount}회 재시도 후)` : ''
       console.log(`[OptimizedImage] ✅ 이미지 로드 성공${retryText}: ${currentSrc}`)
 
-      if (isSupabaseImage) {
-        console.log(
-          `[OptimizedImage] 📊 Supabase 이미지 로딩 통계 - 성공 (재시도: ${retryCount}회)`
-        )
+      if (isRemoteStorageImage) {
+        console.log(`[OptimizedImage] 📊 저장소 이미지 로딩 통계 - 성공 (재시도: ${retryCount}회)`)
       }
     }
 
@@ -436,7 +444,7 @@ const OptimizedImage = memo(function OptimizedImage({
         <span className="text-primary-600 font-medium text-center px-4 text-xl font-sans">
           {fallbackText || alt?.slice(0, 3) || ''}
         </span>
-        {src?.includes('supabase.co') && (
+        {isBlobPublicUrl(src ?? '') && (
           <button
             onClick={handleRetry}
             className="text-xs text-primary-500 hover:text-primary-700 underline transition-colors"

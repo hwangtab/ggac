@@ -3,8 +3,7 @@
 import { useState, useCallback } from 'react'
 import { useMultiLoadingState } from '@/hooks/useLoadingState'
 import type { PostAttachment } from '@/types'
-import { isBlobPublicUrl } from '@/lib/storage/paths'
-import { isProjectStoragePublicUrl } from '@/utils/storageUrlValidation'
+import { logicalPathFromUrl } from '@/lib/storage/paths'
 
 interface AttachmentEditForm {
   alt_text: string
@@ -41,10 +40,7 @@ export const useAttachmentActions = ({
   // 파일 다운로드
   const handleDownload = useCallback((attachment: PostAttachment) => {
     const safeFileUrl =
-      isProjectStoragePublicUrl(attachment.file_url, 'attachments') ||
-      isBlobPublicUrl(attachment.file_url)
-        ? attachment.file_url
-        : null
+      logicalPathFromUrl(attachment.file_url, 'attachments') !== null ? attachment.file_url : null
     if (!safeFileUrl) return
 
     const link = document.createElement('a')

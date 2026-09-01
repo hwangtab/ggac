@@ -4,8 +4,7 @@ import { useState, useEffect } from 'react'
 import { FiUser, FiEdit3 } from 'react-icons/fi'
 import { Link } from '@/i18n/navigation'
 import type { ProfilePhotoMetadata } from '@/types'
-import { isBlobPublicUrl } from '@/lib/storage/paths'
-import { isProjectStoragePublicUrl } from '@/utils/storageUrlValidation'
+import { logicalPathFromUrl } from '@/lib/storage/paths'
 
 interface PersonalInfoProps {
   data: {
@@ -33,10 +32,7 @@ const PersonalInfo: React.FC<PersonalInfoProps> = ({
   readOnlyEmail,
 }) => {
   const safeArtistPhotoUrl =
-    artistPhotoUrl &&
-    artistId &&
-    (isProjectStoragePublicUrl(artistPhotoUrl, 'artists', artistId) ||
-      isBlobPublicUrl(artistPhotoUrl))
+    artistPhotoUrl && artistId && logicalPathFromUrl(artistPhotoUrl, 'artists', artistId) !== null
       ? artistPhotoUrl
       : null
 

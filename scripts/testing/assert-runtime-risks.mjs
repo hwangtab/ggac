@@ -1050,6 +1050,22 @@ const AUTHORIZATION_HELPER_CONTRACTS = [
   {
     file: 'src/lib/server/boardRoomAuth.ts',
     source: boardRoomAuthBoundarySource,
+    name: 'requireBoardDiscussionWriter',
+    requirements: [
+      {
+        what: '승인·활성 조합원이 아니면 403으로 막는다',
+        pattern: /if \(!canReadBoardRecords\(session\.profile\)\) \{[\s\S]*?status: 403[\s\S]*?\}/,
+      },
+      {
+        what: '미인증이면 401로 막는다',
+        pattern:
+          /if \(!session\.authenticated \|\| !session\.user\) \{[\s\S]*?status: 401[\s\S]*?\}/,
+      },
+    ],
+  },
+  {
+    file: 'src/lib/server/boardRoomAuth.ts',
+    source: boardRoomAuthBoundarySource,
     name: 'requireBoardAdmin',
     requirements: [
       {
@@ -1304,7 +1320,17 @@ const PRIVILEGED_GATE_CALLS = [
   /requireAdmin\(\)/,
   /requireBoardMember\(\)/,
   /requireBoardRecordReader\(\)/,
+  /requireBoardDiscussionWriter\(\)/,
 ]
+
+// `requireBoardDiscussionWriter()`는 승인·활성 조합원까지 통과시키는 **쓰기**
+// 게이트다. 안건 토론 하나만을 위한 의도적 예외이므로, 아래 두 파일 밖에서
+// 쓰이면 실패한다 — 이름만 빌려다 일정 투표·출석·서류함에 붙이는 순간
+// 이사회 쓰기가 조합원 전체에게 열린다.
+const DISCUSSION_WRITE_ROUTE_FILES = new Set([
+  'src/app/api/board-room/agendas/[id]/comments/route.ts',
+  'src/app/api/board-room/agendas/[id]/comments/[commentId]/route.ts',
+])
 // 405 스텁(`export async function POST() { return ApiError.methodNotAllowed(...) }`)
 // 은 데이터를 만지지 않는다. 본문 전체가 그 한 줄일 때만 면제한다 — 뒤에
 // 뭐라도 붙으면 더 이상 스텁이 아니므로 게이트를 요구한다.
@@ -1430,6 +1456,16 @@ for (const file of privilegedRouteFiles) {
     if (method !== 'GET' && /requireBoardRecordReader\(\)/.test(bodyNoStrings)) {
       ungatedPrivilegedHandlers.push(
         `${file}: export async function ${method} — requireBoardRecordReader()는 읽기(GET) 전용입니다. 쓰기 핸들러는 requireBoardMember()를 써야 합니다`
+      )
+      continue
+    }
+    // 토론 쓰기 게이트는 허용된 파일에서만 쓴다(위 DISCUSSION_WRITE_ROUTE_FILES).
+    if (
+      /requireBoardDiscussionWriter\(\)/.test(bodyNoStrings) &&
+      !DISCUSSION_WRITE_ROUTE_FILES.has(file)
+    ) {
+      ungatedPrivilegedHandlers.push(
+        `${file}: export async function ${method} — requireBoardDiscussionWriter()는 안건 토론 라우트 전용입니다. 다른 이사회 쓰기는 requireBoardMember()를 써야 합니다`
       )
       continue
     }
@@ -2124,13 +2160,16 @@ const postOgImagePath = join(root, 'src/app/api/og/post/[id]/route.tsx')
 const postOgImageSource = readSourceAt(postOgImagePath)
 const postUserDataApiPath = join(root, 'src/app/api/posts/[id]/user-data/route.ts')
 const postUserDataApiSource = readSourceAt(postUserDataApiPath)
+// 2026-09-01: Supabase 프로젝트 삭제로 isProjectStoragePublicUrl(Supabase 전용)이
+// 사라졌다. 봉쇄는 logicalPathFromUrl(우리 Blob origin + `attachments` 버킷 +
+// `posts` 접두사)로 이관됐다 — 버킷·접두사까지 보므로 경계는 그대로다.
 const validatesPostOgAttachmentStorageUrl =
-  /isProjectStoragePublicUrl/.test(postOgImageSource) &&
+  /logicalPathFromUrl/.test(postOgImageSource) &&
   // 단계 4 Task 6b: 첨부 조회가 목록(attachments[0])에서 단건
   // (getPrimaryImageAttachment → attachment)으로 바뀌었다. 지키려는 것은
   // 그대로다 — 리다이렉트 URL이 첨부 행에서 오고 아래 검증을 거친다는 것.
   /const imageUrl = attachment\.file_url/.test(postOgImageSource) &&
-  /isProjectStoragePublicUrl\(imageUrl,\s*['"]attachments['"],\s*['"]posts['"]\)/.test(
+  /logicalPathFromUrl\(imageUrl,\s*['"]attachments['"],\s*['"]posts['"]\)\s*===\s*null/.test(
     postOgImageSource
   ) &&
   /unsafe attachment image URL/i.test(postOgImageSource)
@@ -2226,21 +2265,33 @@ const validatesAttachmentDeleteStoragePath =
   // 봉쇄에 걸리면 지우지 않고 건너뛴다.
   /안전하지 않은 첨부파일 Storage URL 삭제 건너뜀/.test(postAttachmentDetailSource) &&
   !/attachment\.file_url\.split\(['"]\/['"]\)/.test(postAttachmentDetailSource)
+// 첨부 렌더·다운로드 게이트도 같은 이관을 거쳤다(isProjectStoragePublicUrl →
+// logicalPathFromUrl(..., 'attachments') !== null). 옛 판정은 Supabase origin만
+// 봤고 Blob URL은 origin만 보는 isBlobPublicUrl이 통과시켰는데, 이관 후에는
+// 버킷까지 확인한다.
 const validatesPostAttachmentRenderUrls =
-  /isProjectStoragePublicUrl/.test(postAttachmentsDisplaySource) &&
+  /logicalPathFromUrl\(url,\s*['"]attachments['"]\)\s*!==\s*null/.test(
+    postAttachmentsDisplaySource
+  ) &&
   /isSafeAttachmentUrl/.test(postAttachmentsDisplaySource) &&
   /safeImages/.test(postAttachmentsDisplaySource) &&
   /safeOtherFiles/.test(postAttachmentsDisplaySource) &&
   !/src=\{image\.file_url\}/.test(postAttachmentsDisplaySource) &&
   !/href=\{file\.file_url\}/.test(postAttachmentsDisplaySource) &&
   !/src=\{selectedImage\.file_url\}/.test(postAttachmentsDisplaySource) &&
-  /isProjectStoragePublicUrl/.test(attachmentCardSource) &&
+  /logicalPathFromUrl\(attachment\.file_url,\s*['"]attachments['"]\)\s*!==\s*null/.test(
+    attachmentCardSource
+  ) &&
   /safeFileUrl/.test(attachmentCardSource) &&
   !/src=\{attachment\.file_url\}/.test(attachmentCardSource) &&
-  /isProjectStoragePublicUrl/.test(imageModalSource) &&
+  /logicalPathFromUrl\(attachment\.file_url,\s*['"]attachments['"]\)\s*!==\s*null/.test(
+    imageModalSource
+  ) &&
   /safeFileUrl/.test(imageModalSource) &&
   !/src=\{attachment\.file_url\}/.test(imageModalSource) &&
-  /isProjectStoragePublicUrl/.test(attachmentActionsSource) &&
+  /logicalPathFromUrl\(attachment\.file_url,\s*['"]attachments['"]\)\s*!==\s*null/.test(
+    attachmentActionsSource
+  ) &&
   /safeFileUrl/.test(attachmentActionsSource) &&
   !/link\.href\s*=\s*attachment\.file_url/.test(attachmentActionsSource)
 const adminPostDetailPath = join(root, 'src/app/api/admin/posts/[id]/route.ts')
@@ -3740,7 +3791,7 @@ const parsesAttachmentSizesSafely =
   ) &&
   !/att\.file_size\s*\|\|\s*0/.test(boardDetailPageSource)
 // 아티스트 사진 경계는 공유 헬퍼 toSafeArtistImageSrc(내부에서 artists 버킷의
-// isProjectStoragePublicUrl 검증)로 통일됐다(커밋 0c32462). 검사도 헬퍼 사용과
+// logicalPathFromUrl 검증)로 통일됐다(커밋 0c32462). 검사도 헬퍼 사용과
 // 헬퍼 자체의 버킷 경계를 함께 고정한다. PersonalInfo는 진짜 artist_id 스코프
 // 저수준 검증을 유지하므로 기존 조건 유지.
 const validatesRenderedArtistProfilePhotoUrls =
@@ -3750,8 +3801,7 @@ const validatesRenderedArtistProfilePhotoUrls =
   ) &&
   !/src=\{authorProfile\.profile_photo_url\}/.test(postDetailClientSource) &&
   /artistId\?:\s*string\s*\|\s*null/.test(mypageProfilePersonalInfoSource) &&
-  /isProjectStoragePublicUrl/.test(mypageProfilePersonalInfoSource) &&
-  /isProjectStoragePublicUrl\(artistPhotoUrl,\s*['"]artists['"],\s*artistId\)/.test(
+  /logicalPathFromUrl\(artistPhotoUrl,\s*['"]artists['"],\s*artistId\)\s*!==\s*null/.test(
     mypageProfilePersonalInfoSource
   ) &&
   !/src=\{artistPhotoUrl\}/.test(mypageProfilePersonalInfoSource) &&
@@ -3761,7 +3811,7 @@ const validatesRenderedArtistProfilePhotoUrls =
     mypageArtistPageSource
   ) &&
   !/src=\{previewImageForDisplay\}/.test(mypageArtistPageSource) &&
-  /isProjectStoragePublicUrl\(trimmed,\s*['"]artists['"]\)/.test(safeUrlSource)
+  /logicalPathFromUrl\(trimmed,\s*['"]artists['"]\)\s*!==\s*null/.test(safeUrlSource)
 const profileEditFormGuardsArtistFetchUnmount =
   /let mounted = true/.test(mypageProfileEditFormSource) &&
   // 표준 응답 래퍼 전환(f358383)으로 페이로드 접근이 json.data?.artist로 바뀜 —
@@ -4968,7 +5018,10 @@ const avoidsOptimizedImageProductionUrlLogs =
   /process\.env\.NODE_ENV === ['"]development['"][\s\S]*?모든 이미지 로딩 실패:[\s\S]*?currentSrc/.test(
     optimizedImageSource
   ) &&
-  /process\.env\.NODE_ENV === ['"]development['"][\s\S]*?Supabase 이미지 재시도[\s\S]*?currentSrc/.test(
+  // 컷오버 후(2026-09-01) 이 로그는 Supabase가 아니라 Blob 판정을 따르므로
+  // 문구가 '저장소 이미지 재시도'로 바뀌었다. 가드가 보는 것은 문구가 아니라
+  // **이 로그가 development 블록 안에 있는가**이며, 그 조건은 그대로다.
+  /process\.env\.NODE_ENV === ['"]development['"][\s\S]*?저장소 이미지 재시도[\s\S]*?currentSrc/.test(
     optimizedImageSource
   ) &&
   /process\.env\.NODE_ENV === ['"]development['"][\s\S]*?로딩 지연 감지[\s\S]*?currentSrc/.test(

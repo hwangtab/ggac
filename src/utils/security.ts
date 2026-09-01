@@ -435,7 +435,7 @@ export const generateCSPPolicy = (): string => {
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "img-src 'self' data: https: blob:",
     "font-src 'self' https://fonts.gstatic.com",
-    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://vercel.live",
+    "connect-src 'self' https://vercel.live",
     "media-src 'self' https:",
     "object-src 'none'",
     "base-uri 'self'",
