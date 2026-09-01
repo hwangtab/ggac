@@ -88,13 +88,16 @@ export async function countCommentsByAgendas(agendaIds: string[]): Promise<Recor
 }
 
 /**
- * `exceptAuthorId` **말고 다른 사람**의 살아있는 의견이 있는지. 안건 삭제
- * 가드가 쓴다.
+ * `exceptAuthorId` **말고 다른 사람**의 의견이 있는지. 안건 삭제 가드가 쓴다.
  *
  * 자기 혼자 메모처럼 남긴 의견까지 세면, 제안자가 자기 안건을 정리하려 할 때
  * 관리자를 불러야 한다. 가드가 지키려는 것은 **남의 발언**이다.
+ *
+ * 삭제된 의견도 센다(`is_deleted` 필터 없음). soft delete는 화면에서 가릴
+ * 뿐 행은 남겨 두는 것이고, 안건 삭제는 그 행을 cascade로 **없앤다** — 여기서
+ * 걸러 내면 "남이 썼다 지운 안건"은 제안자가 통째로 파기할 수 있게 된다.
  */
-export async function hasLiveCommentsByOthers(
+export async function hasCommentsByOthers(
   agendaId: string,
   exceptAuthorId: string
 ): Promise<boolean> {
@@ -104,7 +107,6 @@ export async function hasLiveCommentsByOthers(
     .where(
       and(
         eq(boardAgendaComments.agendaId, agendaId),
-        eq(boardAgendaComments.isDeleted, false),
         ne(boardAgendaComments.authorId, exceptAuthorId)
       )
     )

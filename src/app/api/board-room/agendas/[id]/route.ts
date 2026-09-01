@@ -5,7 +5,7 @@ import { BOARD_AGENDA_STATUS, parseBoardAgendaSortOrder } from '@/constants/boar
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { validateUUID } from '@/utils/validation'
 import { deleteAgenda, getAgendaOwner, updateAgenda } from '@/db/queries/board'
-import { hasLiveCommentsByOthers } from '@/db/queries/boardAgendaComments'
+import { hasCommentsByOthers } from '@/db/queries/boardAgendaComments'
 
 export const runtime = 'nodejs'
 
@@ -92,7 +92,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       // 댓글 DELETE가 관리자에게조차 금지한 일이다(그쪽은 soft delete만 한다).
       // 그래서 남의 의견이 붙은 안건은 관리자만 지운다. 자기 의견만 달린
       // 안건은 그대로 지울 수 있다 — 가드가 지키는 것은 남의 발언이다.
-      if (!isAdmin && (await hasLiveCommentsByOthers(id, user.id))) {
+      if (!isAdmin && (await hasCommentsByOthers(id, user.id))) {
         throw ApiError.forbidden('토론이 진행된 안건은 관리자만 삭제할 수 있습니다.')
       }
 
