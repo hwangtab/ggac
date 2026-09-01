@@ -259,7 +259,7 @@ export const PRESS_EN: PressContent = {
 
 export const PRESS_KO: PressContent = {
   title: '화 (HWA)',
-  subtitle: '첫 EP 《HWA》 · 8곡 · 10분 30초',
+  subtitle: '첫 EP · 8곡 · 10분 30초',
   releaseLine: '2026년 8월 21일 발매',
   lede: [
     '2025년 12월 2일, 익스트림 메탈 잡지 Decibel의 Gene Meyer는 신흥 그라인드코어 밴드를 소개하는 「Blast Worship」 코너에 HWA를 올리며 Demo 2025를 두고 “Demo of the year in my humble opinion”이라고 썼다. 그 데모에 실렸던 네 곡 「September Theater」·「Past Self」·「Hollow Face」·「Letter to Jane Doe」는 이번 EP에 재녹음돼 실렸고, 여기에 미발표곡 네 개가 더해졌다.',
