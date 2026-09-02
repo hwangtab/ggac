@@ -3497,6 +3497,7 @@ const SCRIPTS_SCAN_SUBTREE_MINIMUMS = {
   'scripts/recovery/': 1, // 현재 1
   'scripts/storage/': 2, // 현재 3
   'scripts/testing/': 47, // 현재 71
+  'scripts/ticketing/': 1, // 현재 1 (공연 등록 도구)
   'scripts/turso/': 4, // 현재 7
   'scripts/utils/': 11, // 현재 17
 }
