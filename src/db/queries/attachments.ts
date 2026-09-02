@@ -393,33 +393,18 @@ export async function removeAttachment(id: string, postId: string): Promise<void
     .where(and(eq(postAttachments.id, id), eq(postAttachments.postId, postId)))
 }
 
-/** 만료 여부를 따지지 않고 임시 첨부(`is_temporary = true`) 전체를 조회한다.
- * `/api/cleanup/temp-attachments` GET(통계)이 만료/활성 분류를 직접
- * 계산할 때 쓴다. */
-export async function listTemporaryAttachments(): Promise<PostAttachmentRow[]> {
-  const rows = await db.select().from(postAttachments).where(eq(postAttachments.isTemporary, true))
-  return rows.map(rowToAttachment)
-}
-
-/**
- * 만료된 임시 첨부(`is_temporary = true AND expires_at < now`)를 삭제하고,
- * 삭제된 행을 돌려준다 — 호출부(cleanup 라우트)가 그 `file_url`로 Storage
- * 파일도 지운다.
+/*
+ * 임시 첨부(`is_temporary`) 관련 함수들은 걷어냈다 — `listTemporaryAttachments`,
+ * `deleteExpiredTempAttachments`, 그리고 그것들을 부르던
+ * `/api/cleanup/temp-attachments` 크론까지.
  *
- * 원래 Supabase 구현은 "만료분 SELECT → Storage 삭제 시도 → id로 DELETE"
- * 순서였다. 이 함수는 SQLite `DELETE ... RETURNING`으로 조회+삭제를 원자적
- * 단일 문장으로 합친다 — **무엇이 삭제되는지(조건)는 100% 동일**하게
- * 옮겼지만, DB 삭제와 Storage 삭제의 순서가 바뀐다(DB가 먼저 지워진 뒤 그
- * 결과로 Storage를 지운다). 만료된 임시 첨부는 애초에 24시간 TTL의 미게시
- * 초안 파일이라 이 순서 변경의 실질적 위험은 낮다고 판단했다 — 자세한 근거는
- * task-5-report.md "남은 우려" 참고.
+ * 그 개념이 **도달할 수 없었기 때문이다.** 임시 첨부는 `post_id`가
+ * `temp-{UUID}`인 행으로 만들어지게 돼 있었는데, 업로드 라우트의 POST는
+ * `validateUUID`로 그런 id를 400으로 거부한다. 프론트도 글을 먼저 만들고
+ * 진짜 id로 올린다(`CreatePostForm` → `uploadAttachments(postId)`). 운영
+ * DB에도 `is_temporary = 1`인 행이 0건이었다(2026-09-02 실측). 즉 크론은
+ * 매번 0건을 지우고 있었다.
+ *
+ * 컬럼(`is_temporary`·`temp_session`·`expires_at`)은 남겨 둔다 — 지워서
+ * 얻는 것이 없고 SQLite에서 컬럼을 없애려면 표를 재작성해야 한다.
  */
-export async function deleteExpiredTempAttachments(
-  now: Date = new Date()
-): Promise<PostAttachmentRow[]> {
-  const rows = await db
-    .delete(postAttachments)
-    .where(and(eq(postAttachments.isTemporary, true), lt(postAttachments.expiresAt, now)))
-    .returning()
-  return rows.map(rowToAttachment)
-}

@@ -10,7 +10,6 @@ import type { UUIDValidationResult, SecurityEventType, SecurityEventSeverity } f
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 // 임시 ID 검증 정규식 (temp-{UUID} 형식)
-const TEMP_ID_REGEX = /^temp-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 // 데이터베이스 검증 관련 타입
 interface DatabaseValidationResult {
@@ -74,23 +73,6 @@ export const isValidUUID = (value: string): boolean => {
 }
 
 /**
- * 임시 ID 검증 (temp-{UUID} 형식)
- */
-export const isValidTempId = (value: string): boolean => {
-  if (!value || typeof value !== 'string') {
-    return false
-  }
-  return TEMP_ID_REGEX.test(value)
-}
-
-/**
- * UUID 또는 임시 ID 검증
- */
-export const isValidUUIDOrTempId = (value: string): boolean => {
-  return isValidUUID(value) || isValidTempId(value)
-}
-
-/**
  * UUID 검증 (DatabaseValidationResult 형태로 반환)
  */
 export const validateUUID = (uuid: string, paramName: string = 'ID'): UUIDValidationResult => {
@@ -135,42 +117,13 @@ export const validateUUID = (uuid: string, paramName: string = 'ID'): UUIDValida
   } as const
 }
 
-/**
- * UUID 또는 임시 ID 검증.
- * 임시 게시글 첨부파일처럼 DB 레코드 생성 전의 명시적 임시 흐름에서만 사용한다.
+/*
+ * `validateUUIDOrTempId`·`isValidTempId`·`isValidUUIDOrTempId`는 걷어냈다.
+ * 유일한 사용처였던 게시글 첨부 라우트에서 임시 ID 경로 자체가 도달할 수
+ * 없었기 때문이다(같은 파일의 POST가 `validateUUID`로 temp-{UUID}를 400
+ * 거부했고, 프론트는 글을 먼저 만들고 진짜 id로 올린다). 운영 DB에도
+ * 임시 첨부가 0건이었다 — 2026-09-02.
  */
-export const validateUUIDOrTempId = (
-  uuid: string,
-  paramName: string = 'ID'
-): UUIDValidationResult => {
-  const uuidValidation = validateUUID(uuid, paramName)
-  if (uuidValidation.isValid) return uuidValidation
-
-  if (typeof uuid !== 'string') return uuidValidation
-
-  const trimmed = uuid.trim()
-  if (!isValidTempId(trimmed)) return uuidValidation
-
-  if (detectXssPatterns(trimmed) || detectSqlInjection(trimmed)) {
-    return {
-      isValid: false,
-      sanitized: trimmed.toLowerCase(),
-      errors: Object.freeze([`${paramName}에 위험한 패턴이 감지되었습니다.`]),
-      warnings: Object.freeze([]),
-      idType: 'invalid',
-    } as const
-  }
-
-  logSecurityEvent('TEMP_ID_USAGE', { tempId: trimmed, paramName }, 'low')
-
-  return {
-    isValid: true,
-    sanitized: trimmed.toLowerCase(),
-    errors: Object.freeze([]),
-    warnings: Object.freeze([`임시 ID가 사용되었습니다: ${paramName}`]),
-    idType: 'temp-id',
-  } as const
-}
 
 /**
  * 이메일 주소 검증

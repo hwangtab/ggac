@@ -57,36 +57,18 @@ export interface PostAttachment {
   updated_at?: string
 }
 
-export interface TempPostAttachment extends PostAttachment {
-  is_temporary: true
-  temp_session: string
-  expires_at: string
-}
+/*
+ * 임시/영구 첨부를 가르던 `TempPostAttachment`·`PermanentPostAttachment`·
+ * `AnyPostAttachment`는 걷어냈다 — 아무 데서도 쓰이지 않았고, 임시 첨부라는
+ * 개념 자체가 만들어질 수 없는 죽은 경로였다(2026-09-02).
+ */
 
-export interface PermanentPostAttachment extends PostAttachment {
-  is_temporary: false
-  temp_session?: never
-  expires_at?: never
-}
-
-export type AnyPostAttachment = TempPostAttachment | PermanentPostAttachment
-
-export interface FileUploadSuccessResponse {
-  success: true
-  message: string
-  attachment: AnyPostAttachment
-  url: string
-  tempId?: string
-  expiresAt?: string
-}
-
-export interface FileUploadErrorResponse {
-  success: false
-  error: string
-  details?: string[]
-}
-
-export type FileUploadApiResponse = FileUploadSuccessResponse | FileUploadErrorResponse
+/*
+ * 업로드 응답 타입(`FileUploadSuccessResponse`·`FileUploadErrorResponse`·
+ * `FileUploadApiResponse`)도 함께 걷어냈다. 지운 `AnyPostAttachment`에
+ * 의존했고, 저장소 어디서도 쓰이지 않았다 — 업로드 라우트는 `ApiSuccess`/
+ * `ApiError`로 응답한다.
+ */
 
 export interface StrictFileValidationResult {
   readonly isValid: boolean
@@ -103,7 +85,7 @@ export interface UUIDValidationResult {
   readonly sanitized: string
   readonly errors: readonly string[]
   readonly warnings: readonly string[]
-  readonly idType: 'uuid' | 'temp-id' | 'invalid'
+  readonly idType: 'uuid' | 'invalid'
 }
 
 export interface PostAttachmentUpload {

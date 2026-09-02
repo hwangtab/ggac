@@ -17,7 +17,7 @@ import { hasPublicBlobStore } from '@/lib/storage/blob'
 import { putPublicObject, deletePublicObject } from '@/lib/storage/provider'
 import { revalidateTag } from 'next/cache'
 import type { PostAttachmentStats } from '@/types'
-import { validateUUID, validateUUIDOrTempId, isValidTempId } from '@/utils/validation'
+import { validateUUID } from '@/utils/validation'
 import { generateUniqueFileName } from '@/utils/fileNameSanitizer'
 import {
   validateFile,
@@ -36,8 +36,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   try {
     const postId = resolvedParams.id
 
-    // 임시 게시글 작성 중 첨부 업로드는 temp-{UUID}도 명시적으로 허용한다.
-    const uuidValidation = validateUUIDOrTempId(postId, '게시글 ID')
+    const uuidValidation = validateUUID(postId, '게시글 ID')
     if (!uuidValidation.isValid) {
       return ApiError.badRequest(
         uuidValidation.errors[0] || '잘못된 게시글 ID 형식입니다.'
@@ -51,10 +50,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     //
     // 게시글 존재 확인. 단계 2c(Task 5): Supabase
     // `.eq('id', validPostId).eq('is_deleted', false)`에서 Turso 쿼리 계층
-    // getPostById(validPostId, { includeDeleted: false })로 옮겼다. 이
-    // 라우트는 validPostId가 temp-{UUID}일 수도 있는데(위 validateUUIDOrTempId),
-    // 그 경우 posts 테이블에 해당 id 행이 없어 기존 Supabase 조회도 항상
-    // 404였다 — getPostById도 행이 없으면 null이라 같은 결과를 재현한다.
+    // getPostById(validPostId, { includeDeleted: false })로 옮겼다.
     const post = await getPostById(validPostId, { includeDeleted: false }).catch(() => null)
 
     if (!post) {
@@ -122,14 +118,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const { user } = auth
 
     const validPostId = uuidValidation.sanitized
-    const isTempId = isValidTempId(validPostId)
 
-    // 임시 ID가 아닌 경우에만 게시글 존재 및 권한 확인. 단계 2c(Task 5):
-    // Supabase `.eq('id', validPostId)`(is_deleted 필터 없음)에서 Turso 쿼리
+    // 게시글 존재 및 권한 확인. 단계 2c(Task 5): Supabase
+    // `.eq('id', validPostId)`(is_deleted 필터 없음)에서 Turso 쿼리
     // 계층 getPostById(validPostId, { includeDeleted: true })로 옮겼다 —
     // 삭제된 글에도 필터를 걸지 않던 기존 동작을 그대로 재현한다.
     let post = null
-    if (!isTempId) {
+    {
       const postData = await getPostById(validPostId, { includeDeleted: true }).catch(() => null)
 
       if (!postData) {
@@ -168,11 +163,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     // 파일 타입 추출 (검증에서 이미 확인됨)
     const fileType = validation.fileType!
 
-    // 임시 ID가 아닌 경우에만 첨부파일 제한 확인. 단계 2c(Task 5): Supabase
+    // 첨부파일 제한 확인. 단계 2c(Task 5): Supabase
     // `.eq('post_id', validPostId)` 전체 조회 후 JS 합산에서 Turso 쿼리 계층
     // getAttachmentUploadStats(validPostId)(단일 집계 쿼리, count(*)/sum)로
     // 옮겼다.
-    if (!isTempId) {
+    {
       let currentCount = 0
       let currentTotalSize = 0
       try {
@@ -222,10 +217,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       ).toNextResponse()
     }
 
-    // 임시 파일과 영구 파일의 경로 구분
-    const filePath = isTempId
-      ? `temp/${validPostId}/${uniqueFileName}`
-      : `posts/${validPostId}/${uniqueFileName}`
+    const filePath = `posts/${validPostId}/${uniqueFileName}`
 
     let fileUrl: string
     try {
@@ -244,8 +236,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       return ApiError.internalServerError('파일 업로드에 실패했습니다.').toNextResponse()
     }
 
-    // 임시 파일이 아닌 경우에만 데이터베이스 저장
-    if (!isTempId) {
+    {
       // 기존 대표 이미지 해제는 여기서 하지 않는다 — addAttachment가 INSERT와
       // 같은 트랜잭션 안에서 함께 처리한다. 여기서 따로 부르던 시절에는 해제
       // 실패를 console.warn만 하고 넘어가 대표가 둘이 되기도 했다.
@@ -294,55 +285,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       return ApiSuccess.ok(
         { attachment },
         '첨부파일이 성공적으로 업로드되었습니다.'
-      ).toNextResponse()
-    } else {
-      // 임시 파일의 경우 임시 첨부파일로 데이터베이스에 저장
-
-      // 24시간 후 만료 설정
-      const expiresAt = new Date()
-      expiresAt.setHours(expiresAt.getHours() + 24)
-
-      // 단계 2c(Task 5): Supabase `.insert(tempAttachmentData).select().single()`
-      // 에서 Turso 쿼리 계층 addAttachment(Turso)로 옮겼다. validPostId는
-      // temp-{UUID} 문자열이라 posts FK를 참조하지 않는다(post_attachments의
-      // post_id는 실제 FK 제약이 아니라 서술적 컬럼일 뿐 — 스키마 정의 그대로).
-      let tempAttachment
-      try {
-        tempAttachment = await addAttachment({
-          post_id: validPostId, // 임시 ID
-          file_name: file.name,
-          file_url: fileUrl,
-          file_type: fileType,
-          file_size: file.size,
-          mime_type: file.type,
-          alt_text: altText || null,
-          is_primary: false, // 임시 파일은 대표 이미지가 될 수 없음
-          is_temporary: true,
-          temp_session: user.id, // 사용자 ID를 세션으로 사용
-          expires_at: expiresAt.toISOString(),
-        })
-      } catch (tempDbError) {
-        console.error('[UPLOAD API] 임시 첨부파일 저장 실패:', tempDbError)
-
-        // 실패 시 업로드된 파일 삭제 — 방금 이 요청에서 현재 제공자로
-        // 올린 파일을 되돌리는 것이므로 단일 제공자 삭제로 충분하다.
-        try {
-          await deletePublicObject(`attachments/${filePath}`)
-        } catch (rollbackError) {
-          console.error('[UPLOAD API] 임시 파일 롤백 실패:', rollbackError)
-        }
-
-        return ApiError.internalServerError('임시 이미지 저장에 실패했습니다.').toNextResponse()
-      }
-
-      return ApiSuccess.ok(
-        {
-          url: fileUrl,
-          attachment: tempAttachment,
-          tempId: validPostId,
-          expiresAt: expiresAt.toISOString(),
-        },
-        '임시 이미지가 성공적으로 업로드되었습니다.'
       ).toNextResponse()
     }
   } catch (error) {

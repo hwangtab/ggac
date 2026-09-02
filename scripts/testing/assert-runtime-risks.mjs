@@ -1927,8 +1927,10 @@ const validationSource = readSourceAt(validationPath)
 // `validateUUIDOrTempId`를 걸러낸다.
 const validateUUIDSource =
   validationSource.match(/export const validateUUID\b[\s\S]*?\n\}\n/)?.[0] ?? ''
+// 2026-09-02: `validateUUIDOrTempId`가 존재해야 한다는 조건을 뒤집었다 —
+// 임시 ID 경로를 통째로 걷어냈으므로 이제 그 함수가 **없어야** 한다.
 const validateUUIDRejectsTempIds =
-  /export const validateUUIDOrTempId/.test(validationSource) &&
+  !/validateUUIDOrTempId/.test(validationSource) &&
   !/isValidTempId/.test(validateUUIDSource) &&
   /잘못된 \$\{paramName\} 형식입니다\. UUID 형식이어야 합니다\./.test(validateUUIDSource)
 
@@ -1937,11 +1939,16 @@ const postAttachmentsSource = readSourceAt(postAttachmentsPath)
 const verifiesAttachmentSignature =
   /hasValidFileSignature/.test(postAttachmentsSource) &&
   /Buffer\.from\(await file\.arrayBuffer\(\)\)/.test(postAttachmentsSource)
-const preservesTemporaryPostAttachmentUploads =
-  /validateUUIDOrTempId/.test(postAttachmentsSource) &&
-  /const uuidValidation = validateUUIDOrTempId\(postId,\s*['"]게시글 ID['"]\)/.test(
-    postAttachmentsSource
-  )
+// 2026-09-02: 뒤집었다. 예전에는 이 라우트가 `validateUUIDOrTempId`를 쓰기를
+// **요구**했는데, 임시 첨부는 애초에 만들어질 수 없었다 — POST가 같은 파일에서
+// `validateUUID`로 temp-{UUID}를 400 거부했고, 프론트도 글을 먼저 만들고 진짜
+// id로 올린다. 운영 DB에도 is_temporary 행이 0건이었다. 관대한 검증만 남아
+// "여기로 temp가 들어온다"는 거짓 인상을 주고 있었으므로 임시 경로를 전부
+// 걷어냈고, 이 가드는 그것이 되살아나지 않는지를 본다.
+const rejectsTempIdsOnPostAttachments =
+  !/validateUUIDOrTempId/.test(postAttachmentsSource) &&
+  !/isValidTempId/.test(postAttachmentsSource) &&
+  !/is_temporary/.test(postAttachmentsSource)
 const boardDocumentsPath = join(root, 'src/app/api/board-room/documents/route.ts')
 const boardDocumentsSource = readSourceAt(boardDocumentsPath)
 const boardDocumentDetailPath = join(root, 'src/app/api/board-room/documents/[id]/route.ts')
@@ -5095,8 +5102,6 @@ const sortsBoardRoomMeetingYearsSafely =
   !/Number\(b\)\s*-\s*Number\(a\)/.test(boardRoomMeetingsPageSource)
 const mediaUploadPath = join(root, 'src/app/api/media/upload/route.ts')
 const mediaUploadSource = readSourceAt(mediaUploadPath)
-const cleanupTempAttachmentsPath = join(root, 'src/app/api/cleanup/temp-attachments/route.ts')
-const cleanupTempAttachmentsSource = readSourceAt(cleanupTempAttachmentsPath)
 const avoidsServerOperationalConsoleLogs =
   /createLogger\(['"]api\/security\/csp-report['"]\)/.test(cspReportSource) &&
   /log\.debug\(['"]Ignored CSP report['"]/.test(cspReportSource) &&
@@ -5114,8 +5119,6 @@ const avoidsServerOperationalConsoleLogs =
   !/console\.log\(/.test(postViewSource) &&
   /createLogger\(['"]api\/mypage\/artist['"]\)/.test(artistProfileSource) &&
   !/console\.log\(/.test(artistProfileSource) &&
-  /createLogger\(['"]api\/cleanup\/temp-attachments['"]\)/.test(cleanupTempAttachmentsSource) &&
-  !/console\.log\(/.test(cleanupTempAttachmentsSource) &&
   /createLogger\(['"]apiPerformanceMonitor['"]\)/.test(apiPerformanceMonitorSource) &&
   !/console\.log\(/.test(apiPerformanceMonitorSource)
 const restrictsMediaUploadBuckets =
@@ -5139,14 +5142,6 @@ const sanitizesUploadMetadata =
   /height:\s*imageDimensions\.height/.test(artistPhotoSource) &&
   !/providedMetadata\s*=\s*JSON\.parse/.test(artistPhotoSource) &&
   !/\.\.\.providedMetadata/.test(artistPhotoSource)
-// 만료된 임시 첨부 정리도 logicalPathFromUrl로 이관됐다. 봉쇄에 걸린 URL 하나가
-// 전체 정리를 중단시키면 안 되므로, null을 걸러내고 나머지는 계속 지운다.
-const cleanupSkipsUnsafeTempAttachmentUrls =
-  /logicalPathFromUrl\(att\.file_url,\s*['"]attachments['"],\s*['"]temp['"]\)/.test(
-    cleanupTempAttachmentsSource
-  ) &&
-  /filter\(\(path\):\s*path is string => path !== null\)/.test(cleanupTempAttachmentsSource) &&
-  !/const\s+url\s*=\s*new URL\(att\.file_url\)/.test(cleanupTempAttachmentsSource)
 const unsafeSearchParamIntegerParsers = appFiles.filter(file => {
   const source = readSourceAt(join(root, file))
   return (
@@ -5672,9 +5667,9 @@ if (!verifiesAttachmentSignature) {
   )
 }
 
-if (!preservesTemporaryPostAttachmentUploads) {
+if (!rejectsTempIdsOnPostAttachments) {
   failures.push(
-    `Temporary post attachment uploads must use an explicit UUID-or-temp-id validator instead of the strict DB UUID validator: ${relative(
+    `Post attachment routes must not accept temp-{UUID} ids — that path was unreachable and has been removed: ${relative(
       root,
       postAttachmentsPath
     )}`
@@ -6912,7 +6907,7 @@ if (!avoidsServerOperationalConsoleLogs) {
     )}\n- ${relative(root, postViewPath)}\n- ${relative(
       root,
       artistProfilePath
-    )}\n- ${relative(root, cleanupTempAttachmentsPath)}\n- ${relative(root, apiPerformanceMonitorPath)}`
+    )}\n- ${relative(root, apiPerformanceMonitorPath)}`
   )
 }
 
@@ -6931,15 +6926,6 @@ if (!sanitizesUploadMetadata) {
       root,
       mediaUploadPath
     )}\n- ${relative(root, artistPhotoPath)}`
-  )
-}
-
-if (!cleanupSkipsUnsafeTempAttachmentUrls) {
-  failures.push(
-    `Temporary attachment cleanup must skip malformed or non-temp Storage URLs without aborting expired DB row cleanup: ${relative(
-      root,
-      cleanupTempAttachmentsPath
-    )}`
   )
 }
 
