@@ -162,3 +162,45 @@ test('자동결제 키가 없으면 관련 라우트가 열리지 않는다', ()
   assert.match(BILLING, /isBillingEnabled/)
   assert.match(CHARGE, /isBillingEnabled/)
 })
+
+// ---------------------------------------------------------------- 공연 예매
+
+const TICKET_PREPARE = readFileSync('src/app/api/tickets/prepare/route.ts', 'utf8')
+const TICKET_CONFIRM = readFileSync('src/app/api/tickets/confirm/route.ts', 'utf8')
+
+test('예매 준비는 좌석을 먼저 잡고 결제 주문을 만든다', () => {
+  // 순서를 뒤집어 결제부터 받으면, 매진된 회차의 표를 팔고 나서 환불해야 한다.
+  const holdAt = TICKET_PREPARE.indexOf('holdReservation(')
+  const paymentAt = TICKET_PREPARE.indexOf('createPendingPayment(')
+  assert.ok(holdAt > 0 && paymentAt > 0, '두 호출을 찾지 못했다')
+  assert.ok(holdAt < paymentAt, '좌석 선점이 결제 주문 생성보다 먼저여야 한다')
+})
+
+test('예매 금액을 클라이언트가 보낸 값으로 정하지 않는다', () => {
+  // 금액은 티켓 종류의 가격 × 매수로 서버가 계산한다.
+  assert.match(TICKET_PREPARE, /unitPrice\s*\*\s*quantity/)
+  assert.doesNotMatch(TICKET_PREPARE, /amount:\s*(body|Number\(body)\.amount/)
+})
+
+test('예매 확정도 금액을 대조하고 저장값을 토스에 넘긴다', () => {
+  assert.match(TICKET_CONFIRM, /assertAmountMatches/)
+  assert.match(TICKET_CONFIRM, /confirmPayment\(\s*\{[^}]*amount:\s*storedAmount/s)
+})
+
+test('선점이 풀린 뒤 돌아온 결제는 승인하지 않는다', () => {
+  // 승인하면 좌석 없이 결제만 받게 된다.
+  assert.match(TICKET_CONFIRM, /status === 'expired'/)
+})
+
+test('좌석 확정에 실패하면 결제를 환불한다', () => {
+  // 돈만 받고 표를 못 주는 것이 최악이다.
+  assert.match(TICKET_CONFIRM, /cancelPayment\(/)
+})
+
+test('예매도 판단 불가 오류를 실패로 확정하지 않는다', () => {
+  const lookupBlock = TICKET_CONFIRM.match(
+    /error instanceof TossLookupError\)\s*\{([\s\S]*?)\n      \}/
+  )
+  assert.ok(lookupBlock, 'TossLookupError 분기를 찾지 못했다')
+  assert.doesNotMatch(lookupBlock[1], /markPaymentFailed|cancelReservation/)
+})
