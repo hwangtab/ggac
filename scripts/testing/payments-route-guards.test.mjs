@@ -204,3 +204,40 @@ test('예매도 판단 불가 오류를 실패로 확정하지 않는다', () =>
   assert.ok(lookupBlock, 'TossLookupError 분기를 찾지 못했다')
   assert.doesNotMatch(lookupBlock[1], /markPaymentFailed|cancelReservation/)
 })
+
+// ---------------------------------------------------------------- 예매 취소
+
+const TICKET_CANCEL = readFileSync('src/app/api/tickets/cancel/route.ts', 'utf8')
+
+test('환불을 먼저 하고 그 뒤에 좌석을 푼다', () => {
+  // 뒤집으면 좌석은 풀렸는데 돈은 안 돌아간 상태가 생긴다. 화면에는
+  // "취소됨"으로 보여서 관객이 알아채기 어렵다.
+  const refundAt = TICKET_CANCEL.indexOf('cancelPayment(')
+  const seatAt = TICKET_CANCEL.indexOf('cancelReservation(')
+  assert.ok(refundAt > 0 && seatAt > 0, '두 호출을 찾지 못했다')
+  assert.ok(refundAt < seatAt, '환불이 좌석 반환보다 먼저여야 한다')
+})
+
+test('본인 예매만 취소할 수 있다', () => {
+  assert.match(TICKET_CANCEL, /reservation\.user_id !== user\.id/)
+})
+
+test('환불 금액을 라우트가 직접 계산하지 않는다', () => {
+  // 공제율은 소비자분쟁해결기준을 따르고 토스 회신·화면과 같아야 한다.
+  // 라우트에 흩어지면 세 곳이 어긋난다.
+  assert.match(TICKET_CANCEL, /calculateTicketRefund/)
+  assert.doesNotMatch(TICKET_CANCEL, /0\.1|0\.2|0\.3/)
+})
+
+test('환불 판단 불가일 때는 좌석을 풀지 않는다', () => {
+  // 환불됐는지 모르는 상태에서 좌석을 풀면 돈은 그대로인 채 표만 사라진다.
+  const block = TICKET_CANCEL.match(/error instanceof TossLookupError\)\s*\{([\s\S]*?)\n      \}/)
+  assert.ok(block, 'TossLookupError 분기를 찾지 못했다')
+  assert.doesNotMatch(block[1], /cancelReservation|recordPaymentCancel/)
+})
+
+test('전액 환불이면 취소 금액을 싣지 않는다', () => {
+  // 토스는 cancelAmount가 없으면 전액 취소로 처리한다. 전액인데 금액을
+  // 실으면 반올림 차이로 거절될 수 있다.
+  assert.match(TICKET_CANCEL, /isFullRefund \? \{\} : \{ cancelAmount/)
+})
