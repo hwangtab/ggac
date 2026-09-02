@@ -79,7 +79,7 @@ test('트랜잭션을 씌운 뒤에도 처음부터 적용이 정상이다', asy
     const junk = await c.execute(
       "SELECT count(*) AS n FROM sqlite_master WHERE name LIKE '__migration_%' OR name LIKE '__new_%'"
     )
-    assert.equal(Number(tables.rows[0].n), 34, '운영과 같은 표 수여야 한다')
+    assert.equal(Number(tables.rows[0].n), 38, '운영과 같은 표 수여야 한다')
     assert.equal(Number(indexes.rows[0].n), 23, '운영과 같은 성능 인덱스 수여야 한다')
     assert.equal(Number(junk.rows[0].n), 0, '임시 표가 남으면 안 된다')
   } finally {
