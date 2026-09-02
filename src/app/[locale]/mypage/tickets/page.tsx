@@ -2,7 +2,7 @@
 
 /** 내 예매 내역. 공연 당일 예매번호를 확인하는 화면이다. */
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { FiCalendar, FiMapPin } from 'react-icons/fi'
 
 import MypageLayout from '../components/MypageLayout'
@@ -18,6 +18,12 @@ interface Reservation {
   quantity: number
   total_amount: number
   status: string
+  refund: {
+    refundable: boolean
+    refund_amount: number
+    deduction_rate: number
+    reason: string
+  } | null
 }
 
 function formatShow(iso: string | null): string {
@@ -35,24 +41,84 @@ function formatShow(iso: string | null): string {
 export default function MyTicketsPage() {
   const [reservations, setReservations] = useState<Reservation[]>([])
   const [loading, setLoading] = useState(true)
+  const [canceling, setCanceling] = useState<string | null>(null)
+  const [message, setMessage] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    try {
+      const response = await fetch('/api/mypage/tickets', { credentials: 'include' })
+      const result = (await response.json().catch(() => null)) as {
+        data?: { reservations?: Reservation[] }
+      } | null
+      setReservations(result?.data?.reservations ?? [])
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
-    void (async () => {
+    void load()
+  }, [load])
+
+  const cancel = useCallback(
+    async (reservation: Reservation) => {
+      const refund = reservation.refund
+      if (!refund?.refundable) return
+
+      // 얼마가 돌아오는지 확인시킨 뒤에 진행한다. 공제가 있는데 모르고
+      // 취소하면 그대로 항의로 이어진다.
+      const confirmed = window.confirm(
+        `예매를 취소하시겠습니까?\n\n${refund.reason}\n환불 금액: ${refund.refund_amount.toLocaleString('ko-KR')}원`
+      )
+      if (!confirmed) return
+
+      setCanceling(reservation.id)
+      setError(null)
+      setMessage(null)
       try {
-        const response = await fetch('/api/mypage/tickets', { credentials: 'include' })
+        const response = await fetch('/api/tickets/cancel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ reservationId: reservation.id }),
+        })
         const result = (await response.json().catch(() => null)) as {
-          data?: { reservations?: Reservation[] }
+          data?: { refundAmount?: number }
+          error?: string
         } | null
-        setReservations(result?.data?.reservations ?? [])
+
+        if (!response.ok) {
+          setError(result?.error ?? '예매를 취소하지 못했습니다.')
+          return
+        }
+        setMessage(
+          `예매가 취소되었습니다. ${(result?.data?.refundAmount ?? 0).toLocaleString('ko-KR')}원이 환불됩니다.`
+        )
+        await load()
+      } catch {
+        setError('예매를 취소하지 못했습니다. 잠시 후 다시 시도해 주세요.')
       } finally {
-        setLoading(false)
+        setCanceling(null)
       }
-    })()
-  }, [])
+    },
+    [load]
+  )
 
   return (
     <PermissionCheck requiredPermission="member">
       <MypageLayout title="예매 내역" description="예매하신 공연과 예매번호를 확인하세요.">
+        {message && (
+          <div className="mb-5 rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800">
+            {message}
+          </div>
+        )}
+        {error && (
+          <div className="mb-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            {error}
+          </div>
+        )}
+
         {loading ? (
           <p className="py-12 text-center text-gray-500">불러오는 중…</p>
         ) : reservations.length === 0 ? (
@@ -103,6 +169,22 @@ export default function MyTicketsPage() {
                     </p>
                   </div>
                 </div>
+
+                {reservation.status === 'confirmed' && reservation.refund && (
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4">
+                    <p className="text-sm text-gray-600">{reservation.refund.reason}</p>
+                    {reservation.refund.refundable && (
+                      <button
+                        type="button"
+                        onClick={() => void cancel(reservation)}
+                        disabled={canceling === reservation.id}
+                        className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        {canceling === reservation.id ? '취소하는 중…' : '예매 취소'}
+                      </button>
+                    )}
+                  </div>
+                )}
               </li>
             ))}
           </ul>
