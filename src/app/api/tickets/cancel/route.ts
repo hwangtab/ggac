@@ -120,6 +120,7 @@ export async function POST(request: NextRequest) {
     // 두 번 허용하는 순간 두 번째가 `lt` 조건에 걸려 조용히 무시된다.
     const canceled = await finalizeTicketRefund({
       orderId: String(payment.order_id),
+      paymentId: String(payment.id),
       reservationId,
       canceledAmount: Number(payment.canceled_amount ?? 0) + quote.refundAmount,
       raw: { canceledBy: 'member', daysBefore: quote.daysBefore },

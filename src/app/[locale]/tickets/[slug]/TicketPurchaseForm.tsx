@@ -56,9 +56,18 @@ export default function TicketPurchaseForm({ performance, paymentEnabled, locale
   const [bookerEmail, setBookerEmail] = useState('')
 
   const [error, setError] = useState<string | null>(null)
+  // 선택이 자동으로 바뀐 사실을 알리는 자리. 오류가 아니므로 error와 나눈다.
+  const [notice, setNotice] = useState<string | null>(null)
   const [preparing, setPreparing] = useState(false)
   const [prepared, setPrepared] = useState<Prepared | null>(null)
   const widgetsRef = useRef<unknown>(null)
+
+  // 갱신 시점의 선택 회차를 effect가 알아야 하는데, showId를 의존성에 넣으면
+  // 선택을 바꿀 때마다 재고를 다시 불러온다. ref로 최신값만 들고 본다.
+  const showIdRef = useRef(showId)
+  useEffect(() => {
+    showIdRef.current = showId
+  }, [showId])
 
   useEffect(() => {
     let canceled = false
@@ -72,7 +81,23 @@ export default function TicketPurchaseForm({ performance, paymentEnabled, locale
           data?: { performance?: { shows?: Show[] } }
         } | null
         const fresh = result?.data?.performance?.shows
-        if (!canceled && Array.isArray(fresh) && fresh.length > 0) setShows(fresh)
+        if (canceled || !Array.isArray(fresh) || fresh.length === 0) return
+        setShows(fresh)
+
+        // 재고만 갈아 끼우고 선택은 그대로 두면, 미리 골라 둔 회차가 그 사이
+        // 매진됐을 때 예매 버튼이 아무 설명 없이 비활성으로 남는다. 선택을
+        // 다시 판정해 다음 예매 가능 회차로 옮기고, 무슨 일이 일어났는지
+        // 문장으로 알린다.
+        const bookable = (show: Show) => !show.is_past && show.remaining_seats > 0
+        const current = showIdRef.current
+        const selected = current ? fresh.find(show => show.id === current) : undefined
+        if (selected && bookable(selected)) return
+
+        const next = fresh.find(bookable)
+        setShowId(next?.id ?? '')
+        setQuantity(1)
+        // 애초에 고른 회차가 없었으면(전 회차 매진 상태로 진입) 알릴 변화도 없다.
+        if (current) setNotice(next ? t('detail.showMoved') : t('detail.showSoldOut'))
       } catch {
         // 재고 갱신 실패는 조용히 넘긴다 — 서버가 그린 값으로도 예매는 된다.
       }
@@ -80,7 +105,7 @@ export default function TicketPurchaseForm({ performance, paymentEnabled, locale
     return () => {
       canceled = true
     }
-  }, [performance.slug])
+  }, [performance.slug, t])
 
   const selectedShow = useMemo(
     () => shows.find(show => show.id === showId) ?? null,
@@ -179,6 +204,19 @@ export default function TicketPurchaseForm({ performance, paymentEnabled, locale
         </div>
       )}
 
+      {notice && (
+        // 사용자가 손대지 않았는데 선택이 바뀐 경우라 화면을 읽고 있지 않을 수
+        // 있다 — 스크린리더에도 알리도록 live region으로 둔다.
+        <div
+          role="status"
+          aria-live="polite"
+          className="mb-6 flex gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900"
+        >
+          <FiAlertCircle className="mt-0.5 h-5 w-5 flex-none" aria-hidden />
+          <p className="text-sm">{notice}</p>
+        </div>
+      )}
+
       {/* 예매 폼 — 결제창이 열리기 전까지만 보인다 */}
       <section className={prepared ? 'hidden' : 'rounded-lg border border-gray-200 bg-white p-6'}>
         <h2 className="text-lg font-semibold text-gray-900">{t('detail.bookHeading')}</h2>
@@ -215,6 +253,8 @@ export default function TicketPurchaseForm({ performance, paymentEnabled, locale
                       onChange={() => {
                         setShowId(show.id)
                         setQuantity(1)
+                        // 사용자가 직접 고른 순간 자동 이동 안내는 역할이 끝난다.
+                        setNotice(null)
                       }}
                       className="h-4 w-4"
                     />

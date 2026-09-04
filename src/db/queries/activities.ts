@@ -290,6 +290,12 @@ export interface ListActivitiesFilter {
   excludeGeneratedMetadata?: boolean
   /** 없으면 `DEFAULT_ACTIVITY_SCAN_LIMIT`. `MAX_ACTIVITY_SCAN_LIMIT`을 넘길 수 없다. */
   limit?: number
+  /**
+   * 상한에 걸려 결과가 잘렸을 때만 호출된다. 반환값이 배열이라 "잘렸다"를 값으로
+   * 알릴 자리가 없어 콜백으로 알린다(`board.ts`의 `BoardListOptions`와 같은 이유).
+   * 쿼리 계층은 로그를 남기지 않는다 — 무엇을 할지는 호출부가 판단한다.
+   */
+  onTruncated?: (info: { limit: number }) => void
 }
 
 /**
@@ -327,16 +333,23 @@ export async function listActivities(filter: ListActivitiesFilter): Promise<Acti
   // 상한을 둔다. 이 함수는 기간만 걸러 표를 통째로 원격에서 끌어오고 있었고,
   // `user_activities`는 상한 없이 자라는 표다(2026-09 실측 1만 1천 행). 관리자
   // 분석·리포트 네 곳이 이 결과를 JS에서 집계하므로, 넘치면 응답이 아니라
-  // 메모리가 먼저 무너진다. 잘린 경우를 호출자가 알 수 있게 기본값을 넉넉히
-  // 잡되 무한은 허용하지 않는다.
+  // 메모리가 먼저 무너진다.
+  //
+  // **자르는 방향이 중요하다.** 오름차순으로 자르면 넘칠 때 사라지는 것이 가장
+  // 최근 활동이라, 긴 기간을 조회할수록 최근 주차가 0으로 떨어지면서도 경고가
+  // 없다. 최신부터 읽어 오래된 쪽을 버리고, 호출자가 기대하는 오름차순은
+  // 메모리에서 되돌린다.
+  const limit = Math.min(filter.limit ?? DEFAULT_ACTIVITY_SCAN_LIMIT, MAX_ACTIVITY_SCAN_LIMIT)
   const rows = await db
     .select()
     .from(userActivities)
     .where(and(...conditions))
-    .orderBy(asc(userActivities.createdAt))
-    .limit(Math.min(filter.limit ?? DEFAULT_ACTIVITY_SCAN_LIMIT, MAX_ACTIVITY_SCAN_LIMIT))
+    .orderBy(desc(userActivities.createdAt))
+    .limit(limit)
 
-  return rows.map(rowToActivity)
+  if (rows.length === limit) filter.onTruncated?.({ limit })
+
+  return rows.reverse().map(rowToActivity)
 }
 
 export interface ListActivitiesPaginatedFilter {

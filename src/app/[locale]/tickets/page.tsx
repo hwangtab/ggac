@@ -29,11 +29,35 @@ const log = createLogger('tickets/list')
 // 회차별 잔여 좌석은 상세 화면이 별도로 갱신한다.
 export const revalidate = 60
 
-const OG_IMAGE = 'https://ggac.kr/images/logo/gac_og.webp'
+// 운영 도메인을 문자열로 박지 않는다 — 정본은 `getSiteUrl()`이다(프리뷰
+// 배포에서는 그 배포 호스트를 써야 미리보기가 뜬다). 끝 슬래시는 이미 떼여 있다.
+const OG_IMAGE_PATH = '/images/logo/gac_og.webp'
+
+/**
+ * DB 행에서 목록이 실제로 쓰는 필드만 골라 새 객체를 만든다.
+ *
+ * `listOpenPerformances`는 `toSnakeCase`로 키만 바꾼 행 전체를 돌려주므로
+ * 그대로 넘기면 `created_by`(관리자 UUID)·내부 id·타임스탬프가 서버 렌더
+ * HTML에 직렬화돼 공개·색인된다. 상세 페이지와 같은 이유·같은 처리다.
+ */
+function toPerformanceSummary(row: Record<string, unknown>): PerformanceSummary {
+  const text = (value: unknown): string | null =>
+    typeof value === 'string' && value.trim() !== '' ? value : null
+  return {
+    slug: String(row.slug ?? ''),
+    title: String(row.title ?? ''),
+    summary: text(row.summary),
+    venue: text(row.venue),
+    poster_image: text(row.poster_image),
+    next_show_at: text(row.next_show_at),
+    show_count: Number(row.show_count ?? 0),
+  }
+}
 
 async function loadPerformances(): Promise<PerformanceSummary[]> {
   try {
-    return (await listOpenPerformances()) as unknown as PerformanceSummary[]
+    const rows = await listOpenPerformances()
+    return rows.map(toPerformanceSummary)
   } catch (error) {
     // DB가 없거나(빌드 시점) 조회가 실패해도 페이지는 떠야 한다.
     log.error('공연 목록 조회 실패', { error })
@@ -53,6 +77,7 @@ export async function generateMetadata({
   const title = t('meta.listTitle')
   const description = t('meta.listDescription')
   const siteName = isEn ? 'Gyeonggi Art Collective' : '경기아트콜렉티브 협동조합'
+  const ogImage = `${base}${OG_IMAGE_PATH}`
 
   return {
     title,
@@ -63,7 +88,7 @@ export async function generateMetadata({
       description,
       url: isEn ? `${base}/en/tickets` : `${base}/tickets`,
       siteName,
-      images: [{ url: OG_IMAGE, width: 1200, height: 630, alt: siteName }],
+      images: [{ url: ogImage, width: 1200, height: 630, alt: siteName }],
       locale: getOgLocale(locale),
       type: 'website',
     },
@@ -71,7 +96,7 @@ export async function generateMetadata({
       card: 'summary_large_image',
       title: `${title} | ${siteName}`,
       description,
-      images: [OG_IMAGE],
+      images: [ogImage],
     },
   }
 }

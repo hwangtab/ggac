@@ -311,6 +311,12 @@ export interface ListSessionsFilter {
   loginAfter: Date
   /** 없으면 `DEFAULT_SESSION_SCAN_LIMIT`. `MAX_SESSION_SCAN_LIMIT`을 넘길 수 없다. */
   limit?: number
+  /**
+   * 상한에 걸려 결과가 잘렸을 때만 호출된다. 반환값이 배열이라 "잘렸다"를 값으로
+   * 알릴 자리가 없어 콜백으로 알린다(`board.ts`의 `BoardListOptions`와 같은 이유).
+   * 쿼리 계층은 로그를 남기지 않는다 — 무엇을 할지는 호출부가 판단한다.
+   */
+  onTruncated?: (info: { limit: number }) => void
 }
 
 /**
@@ -330,12 +336,18 @@ export async function listSessions(filter: ListSessionsFilter): Promise<SessionR
 
   // `listActivities`와 같은 이유로 상한을 둔다 — `user_sessions`도 상한 없이
   // 자라는 표다(2026-09 실측 5,937행). `login_at` 인덱스는 0017이 더했다.
-  const rows = await db
+  // 자르는 방향도 같은 이유로 최신부터다(넘칠 때 최근 세션이 사라지면 안 된다).
+  const limit = Math.min(filter.limit ?? DEFAULT_SESSION_SCAN_LIMIT, MAX_SESSION_SCAN_LIMIT)
+  const rowsDesc = await db
     .select()
     .from(userSessions)
     .where(and(...conditions))
-    .orderBy(userSessions.loginAt)
-    .limit(Math.min(filter.limit ?? DEFAULT_SESSION_SCAN_LIMIT, MAX_SESSION_SCAN_LIMIT))
+    .orderBy(desc(userSessions.loginAt))
+    .limit(limit)
+
+  if (rowsDesc.length === limit) filter.onTruncated?.({ limit })
+
+  const rows = rowsDesc.reverse()
 
   return rows.map(row => ({
     id: row.id,

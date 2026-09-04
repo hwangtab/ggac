@@ -307,6 +307,8 @@
       "membersOnly": "조합원 전용",
       "soldOut": "매진",
       "showEnded": "종료",
+      "showMoved": "선택하신 회차가 매진되어 예매 가능한 다음 회차로 옮겼습니다. 확인 후 예매해 주세요.",
+      "showSoldOut": "선택하신 회차가 매진되었습니다. 현재 예매 가능한 회차가 없습니다.",
       "seatsLeft": "{count}석 남음",
       "paymentPreparing": "결제 기능을 준비하고 있습니다.",
       "submit": "예매하고 결제하기",

@@ -25,6 +25,17 @@ import { toIso, toSnakeCase } from './_helpers.ts'
 /** 결제창을 열어 두고 사라진 사람의 자리를 언제까지 잡아 둘지. 토스 인증 유효시간과 맞춘다. */
 export const DEFAULT_HOLD_MINUTES = 10
 
+/**
+ * 지금 팔아도 되는 공연 상태.
+ *
+ * `draft`는 준비 중이라 아직 공개하지 않은 것이므로 제외한다. `closed`는
+ * 예매 기간이 끝난 것이므로 제외한다. `canceled`는 공연 자체가 취소된
+ * 것이므로 제외한다 — 남은 값은 `open` 하나뿐이지만, 나중에 상태가 늘어나도
+ * 이 판정이 스키마의 `PERFORMANCE_STATUS` 전체를 다시 훑도록 이름을
+ * 남긴다(암묵적으로 "open만 허용"에 기대지 않는다).
+ */
+export const SELLABLE_PERFORMANCE_STATUSES = ['open'] as const
+
 export class SoldOutError extends Error {
   remaining: number
 
@@ -280,8 +291,26 @@ export async function finalizeTicketPayment(input: {
         )
       )
       .returning()
-    // 좌석을 못 잡았다. 결제는 손대지 않았으므로 라우트가 환불만 하면 된다.
-    if (!confirmed) return null
+    if (!confirmed) {
+      // 좌석을 못 잡은 이유가 **이미 이 주문으로 확정됐기 때문**일 수 있다.
+      // 승인 요청이 두 번 오는 것은 드물지 않다(더블클릭, 클라이언트 재시도,
+      // 토스 리다이렉트 중복). 그때 두 번째 요청을 실패로 돌려주면 라우트가
+      // 멀쩡한 결제를 환불한다 — 관객은 좌석을 잃고, 원장에는 승인과 취소가
+      // 같이 남는다. 같은 주문의 같은 좌석이면 성공으로 답한다.
+      const [already] = await tx
+        .select()
+        .from(reservations)
+        .where(
+          and(
+            eq(reservations.id, input.reservationId),
+            eq(reservations.orderId, input.orderId),
+            eq(reservations.status, 'confirmed')
+          )
+        )
+        .limit(1)
+      if (!already) return null
+      return rowToReservation(already as unknown as Record<string, unknown>)
+    }
 
     await tx
       .update(payments)
@@ -309,10 +338,17 @@ export async function finalizeTicketPayment(input: {
  *
  * `canceledAmount`는 `recordPaymentCancel`과 같은 **누적 총액**이다.
  *
+ * 짝은 `order_id`가 아니라 **`payment_id`로 본다.** 확정된 예매는 자기를 산
+ * 결제를 이미 가리키고 있고(호출부도 그 연결을 따라 결제를 찾는다), 그 값은
+ * 주문번호 컬럼이 생기기 **전에** 확정된 예매에도 들어 있다. `order_id`로
+ * 봤다면 옛 예매를 취소할 때 토스 환불은 나가고 이 UPDATE만 0행을 건드려
+ * "돈은 나갔는데 좌석은 그대로"가 됐다.
+ *
  * @returns 취소된 예매. 짝이 맞지 않거나 이미 취소된 예매면 `null`.
  */
 export async function finalizeTicketRefund(input: {
   orderId: string
+  paymentId: string
   reservationId: string
   canceledAmount: number
   raw: unknown
@@ -325,7 +361,7 @@ export async function finalizeTicketRefund(input: {
       .where(
         and(
           eq(reservations.id, input.reservationId),
-          eq(reservations.orderId, input.orderId),
+          eq(reservations.paymentId, input.paymentId),
           inArray(reservations.status, ['pending', 'confirmed'])
         )
       )
@@ -548,7 +584,28 @@ export async function getTicketType(id: string): Promise<Record<string, unknown>
   return rows[0] ? toSnakeCase(rows[0] as unknown as Record<string, unknown>) : null
 }
 
+/**
+ * 회차 단건 조회. 회차만으로는 "지금 팔아도 되는가"를 판정할 수 없다 —
+ * 그 판정은 회차가 아니라 공연의 `status`에 달려 있다. 그래서 여기서
+ * `performances`를 조인해 `performance_status`로 함께 내려준다. 왕복을
+ * 늘리지 않으려고 별도 조회 대신 조인 하나로 끝낸다.
+ *
+ * 호출부(예매 준비·취소 라우트)가 `SELLABLE_PERFORMANCE_STATUSES`와 대조해
+ * 판매 가능 여부를 판정한다 — 이 함수 자체는 권한/판정을 모른다.
+ */
 export async function getShow(id: string): Promise<Record<string, unknown> | null> {
-  const rows = await db.select().from(performanceShows).where(eq(performanceShows.id, id)).limit(1)
-  return rows[0] ? rowToShow(rows[0] as unknown as Record<string, unknown>) : null
+  const rows = await db
+    .select({
+      show: performanceShows,
+      performanceStatus: performances.status,
+    })
+    .from(performanceShows)
+    .innerJoin(performances, eq(performanceShows.performanceId, performances.id))
+    .where(eq(performanceShows.id, id))
+    .limit(1)
+  const row = rows[0]
+  if (!row) return null
+  const show = rowToShow(row.show as unknown as Record<string, unknown>)
+  show.performance_status = row.performanceStatus
+  return show
 }

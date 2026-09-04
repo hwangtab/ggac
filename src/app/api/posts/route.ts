@@ -17,7 +17,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { revalidatePath, revalidateTag } from 'next/cache'
+import { revalidatePath } from 'next/cache'
 import { getLikedPostIds } from '@/db/queries/likes'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { apiGet, apiPost, ApiSuccess, ApiError } from '@/utils/apiWrapper'
@@ -263,9 +263,9 @@ export async function POST(request: NextRequest) {
         for (const boardPath of getBoardListRevalidationPaths()) {
           revalidatePath(boardPath)
         }
-        revalidateTag('board-post')
-        revalidateTag('board-initial')
-        revalidateTag(`board-${category}`)
+        // 태그 무효화는 하지 않는다. 이 저장소에서 `board-*`/`post-*` 태그를
+        // **부착하는** 곳이 하나도 없어(유일한 태그는 data.ts의 'artists')
+        // 호출해도 아무 일이 일어나지 않으면서 "무효화했다"는 인상만 준다.
       } catch {
         // Cache invalidation must not turn a successful database write into a failed create.
       }

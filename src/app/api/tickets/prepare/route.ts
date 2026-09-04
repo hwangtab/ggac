@@ -19,6 +19,7 @@ import {
   getShow,
   getTicketType,
   getRemainingSeats,
+  SELLABLE_PERFORMANCE_STATUSES,
   SoldOutError,
 } from '@/db/queries/ticketing'
 import { generateOrderId, buildCustomerKey } from '@/lib/payments/toss/protocol'
@@ -41,7 +42,7 @@ const log = createLogger('api/tickets/prepare')
 const PREPARE_RATE_LIMIT = {
   name: 'ticket_prepare',
   windowMs: 60_000,
-  maxRequests: 10,
+  maxRequests: 20,
   message: '예매 요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요.',
 }
 
@@ -60,13 +61,20 @@ export async function POST(request: NextRequest) {
     }
 
     // 경로가 아니라 IP + 기능으로 나눈다 — 경로로 나누면 회차 id가 키에 들어가
-    // "회차마다 10회"가 되어 회차 수만큼 곱해진다.
+    // "회차마다 N회"가 되어 회차 수만큼 곱해진다.
+    //
+    // 한도를 분당 20으로 잡은 것은 이동통신 CGNAT 때문이다. 티켓 오픈 시각에는
+    // 같은 공인 IP 뒤에 여러 관객이 있고, 리미터는 한도의 두 배를 넘기면 그 IP를
+    // 자동 차단한다 — 너무 좁게 잡으면 스크립트가 아니라 관객이 잠긴다.
+    //
+    // 503(리미터 없음·순단)은 통과시킨다. Upstash는 선택 환경변수인데, 그것이
+    // 비었다는 이유로 예매 자체가 되지 않으면 막으려던 피해보다 크다.
     const rl = await applyRouteRateLimit(request, {
       ...PREPARE_RATE_LIMIT,
       keyGenerator: createIPKeyGenerator('ticket-prepare'),
     })
-    if (!rl.success) {
-      return rl.response ?? ApiError.tooManyRequests('요청이 너무 많습니다.').toNextResponse()
+    if (!rl.success && rl.response?.status === 429) {
+      return rl.response
     }
 
     const body = await parseJsonObjectBody(request)
@@ -92,6 +100,19 @@ export async function POST(request: NextRequest) {
 
     const show = await getShow(showId)
     if (!show) return ApiError.notFound('회차를 찾을 수 없습니다.').toNextResponse()
+
+    // 공연이 지금 팔 수 있는 상태인지 본다. 공개 목록은 `open`만 내보내지만,
+    // 회차 id를 아는 사람은 목록을 거치지 않고 여기로 바로 온다 — 이 검사가
+    // 없으면 공연을 취소해도 판매가 계속되고, 준비 중(draft) 공연의 표가
+    // 링크를 아는 사람에게만 조용히 팔린다.
+    if (
+      !SELLABLE_PERFORMANCE_STATUSES.includes(
+        show.performance_status as (typeof SELLABLE_PERFORMANCE_STATUSES)[number]
+      )
+    ) {
+      return ApiError.badRequest('현재 예매할 수 없는 공연입니다.').toNextResponse()
+    }
+
     if (new Date(String(show.starts_at)).getTime() <= Date.now()) {
       return ApiError.badRequest('이미 시작된 공연은 예매할 수 없습니다.').toNextResponse()
     }

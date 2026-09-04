@@ -307,6 +307,8 @@
       "membersOnly": "Members only",
       "soldOut": "Sold out",
       "showEnded": "Ended",
+      "showMoved": "The show you selected sold out, so we moved your selection to the next available show. Please check before booking.",
+      "showSoldOut": "The show you selected sold out. No shows are available right now.",
       "seatsLeft": "{count} seat(s) left",
       "paymentPreparing": "Online payment is being set up.",
       "submit": "Book and pay",

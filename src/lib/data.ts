@@ -227,6 +227,15 @@ export async function getAllArtistsForAdmin(): Promise<Artist[]> {
 // 기존 함수를 새로운 DB 조회 함수로 교체
 export const getArtists = getArtistsFromDB
 
+/**
+ * @throws 파일을 읽지 못하면 그대로 던진다. **삼키지 않는 것이 핵심이다** —
+ * 로더가 빈 배열을 정상값으로 돌려주면 모듈 레벨 메모가 그 빈 배열을 영구
+ * 캐시해 인스턴스가 죽을 때까지 모든 요청이 빈 목록을 받는다. 폴백 판단은
+ * 호출부(`getProjects`)가 하고, 그 결과는 캐시하지 않는다.
+ *
+ * en 로케일의 ko 폴백은 실패가 아니라 설계다 — 번역본이 없는 프로젝트는
+ * 원문을 보여주는 것이 정상 동작이므로 여기서 처리하고 정상 반환한다.
+ */
 async function loadProjectsFromDisk(locale: string): Promise<Project[]> {
   const filePath =
     locale === 'en'
@@ -237,13 +246,10 @@ async function loadProjectsFromDisk(locale: string): Promise<Project[]> {
     return JSON.parse(fileContents)
   } catch (error) {
     if (locale === 'en') {
-      try {
-        const fallback = path.join(process.cwd(), 'data/projects.json')
-        return JSON.parse(await fs.promises.readFile(fallback, 'utf8'))
-      } catch {}
+      const fallback = path.join(process.cwd(), 'data/projects.json')
+      return JSON.parse(await fs.promises.readFile(fallback, 'utf8'))
     }
-    log.error('Error loading projects data:', error)
-    return []
+    throw error
   }
 }
 
@@ -263,9 +269,18 @@ export const getProjects = cache(async (locale = 'ko'): Promise<Project[]> => {
       }
     })
   }
-  return promise
+  try {
+    return await promise
+  } catch (error) {
+    // 폴백은 **캐시하지 않는다.** 위 catch가 이미 실패 프로미스를 지웠으므로
+    // 다음 호출은 디스크를 다시 읽는다. 콜드스타트 중 한 번의 EMFILE·부분
+    // 배포 때문에 인스턴스 수명 내내 빈 목록을 서빙하는 일을 막는다.
+    log.error('Error loading projects data:', error)
+    return []
+  }
 })
 
+/** @throws loadProjectsFromDisk와 같은 계약 — 실패는 던지고 폴백은 호출부가 한다. */
 async function loadGlobalDataFromDisk(locale: string): Promise<GlobalData> {
   const filePath =
     locale === 'en'
@@ -276,13 +291,10 @@ async function loadGlobalDataFromDisk(locale: string): Promise<GlobalData> {
     return JSON.parse(fileContents)
   } catch (error) {
     if (locale === 'en') {
-      try {
-        const fallback = path.join(process.cwd(), 'data/global.json')
-        return JSON.parse(await fs.promises.readFile(fallback, 'utf8'))
-      } catch {}
+      const fallback = path.join(process.cwd(), 'data/global.json')
+      return JSON.parse(await fs.promises.readFile(fallback, 'utf8'))
     }
-    log.error('Error loading global data:', error)
-    return DEFAULT_GLOBAL_DATA
+    throw error
   }
 }
 
@@ -298,11 +310,19 @@ export const getGlobalData = cache(async (locale = 'ko'): Promise<GlobalData> =>
       }
     })
   }
-  return promise
+  try {
+    return await promise
+  } catch (error) {
+    // 폴백은 캐시하지 않는다 — 한 번 실패했다고 `joinFormUrl`이 빈 기본값으로
+    // 굳으면 인스턴스가 죽을 때까지 가입 버튼이 전부 깨진다.
+    log.error('Error loading global data:', error)
+    return DEFAULT_GLOBAL_DATA
+  }
 })
 
 export type FaqItem = { id: string; category: string; question: string; answer: string }
 
+/** @throws loadProjectsFromDisk와 같은 계약 — 실패는 던지고 폴백은 호출부가 한다. */
 async function loadFaqDataFromDisk(locale: string): Promise<FaqItem[]> {
   const filePath =
     locale === 'en'
@@ -313,13 +333,10 @@ async function loadFaqDataFromDisk(locale: string): Promise<FaqItem[]> {
     return JSON.parse(fileContents)
   } catch (error) {
     if (locale === 'en') {
-      try {
-        const fallback = path.join(process.cwd(), 'data/faq.json')
-        return JSON.parse(await fs.promises.readFile(fallback, 'utf8'))
-      } catch {}
+      const fallback = path.join(process.cwd(), 'data/faq.json')
+      return JSON.parse(await fs.promises.readFile(fallback, 'utf8'))
     }
-    log.error('Error loading FAQ data:', error)
-    return []
+    throw error
   }
 }
 
@@ -335,7 +352,13 @@ export const getFaqData = cache(async (locale = 'ko'): Promise<FaqItem[]> => {
       }
     })
   }
-  return promise
+  try {
+    return await promise
+  } catch (error) {
+    // 폴백은 캐시하지 않는다 — 다음 호출이 다시 시도할 수 있어야 한다.
+    log.error('Error loading FAQ data:', error)
+    return []
+  }
 })
 
 // 참고: 과거 이 파일에 있던 `export const revalidate = 86400`은 라우트 세그먼트

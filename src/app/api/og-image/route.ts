@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createErrorResponse } from '@/utils/apiResponse'
 import { toSafeInternalImagePath } from '@/utils/safeUrl'
+import { getSiteUrl } from '@/utils/site'
 import fs from 'fs'
 import path from 'path'
 
@@ -57,9 +58,10 @@ export async function GET(request: NextRequest) {
       return createErrorResponse({ success: false, error: 'Artist not found' }, 404)
     }
 
-    // 베이스 URL 설정
-    const baseUrl =
-      process.env.NODE_ENV === 'production' ? 'https://ggac.kr' : 'http://localhost:3000'
+    // 베이스 URL은 `getSiteUrl()`이 정본이다 — 운영 도메인을 여기에 다시
+    // 박으면 프리뷰 배포에서 존재하지 않는 이미지를 가리키고, 도메인이 바뀔 때
+    // 이 파일만 뒤처진다. 끝 슬래시는 이미 떼여 있어 그대로 이으면 된다.
+    const baseUrl = getSiteUrl()
 
     // 프로필 이미지 경로 (JPG 우선)
     let imagePath = toSafeInternalImagePath(artist.profileImage)

@@ -63,6 +63,11 @@ export async function POST(request: NextRequest) {
 
     // 승인은 토스를 대신 호출하게 만드는 일이라 외부 쿼터와 함수 동시성을 쓴다.
     // 정상적인 결제는 주문 하나에 한 번이므로 넉넉히 잡아도 사람은 걸리지 않는다.
+    //
+    // 429(진짜 한도 초과)만 막고 503(리미터 없음·순단)은 통과시킨다. 이 지점에서
+    // 막힌 사람은 **이미 카드가 긁힌 상태**다 — 승인을 못 끝내면 돈은 나갔는데
+    // 좌석이 없고, 선점은 10분 뒤 풀려 표를 살 수도 없다. Upstash는 선택
+    // 환경변수라 그것이 비었다는 이유로 그 상태를 만들면 안 된다.
     const rl = await applyRouteRateLimit(request, {
       name: 'ticket_confirm',
       windowMs: 60_000,
@@ -70,8 +75,8 @@ export async function POST(request: NextRequest) {
       message: '결제 확인 요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요.',
       keyGenerator: createIPKeyGenerator('ticket-confirm'),
     })
-    if (!rl.success) {
-      return rl.response ?? ApiError.tooManyRequests('요청이 너무 많습니다.').toNextResponse()
+    if (!rl.success && rl.response?.status === 429) {
+      return rl.response
     }
 
     // 서로를 필요로 하지 않는 조회다. 원격 왕복을 직렬로 쌓을 이유가 없다.
@@ -82,12 +87,31 @@ export async function POST(request: NextRequest) {
     if (!payment) return ApiError.notFound('결제 내역을 찾을 수 없습니다.').toNextResponse()
     if (!reservation) return ApiError.notFound('예매 내역을 찾을 수 없습니다.').toNextResponse()
 
+    // 새로고침해도 안전하게 — 이미 확정된 건은 그대로 성공으로 답한다.
+    //
+    // 짝은 `payment_id`로 본다. 확정이 끝난 예매는 자기를 산 결제를 가리키고
+    // 있으므로, 주문번호 컬럼이 생기기 **전에** 확정된 예매도 이 검사를 지난다.
+    // 여기서 그냥 `status`만 봤다면 남의 확정 예매 id를 실어 예매번호를 읽어낼
+    // 수 있었다(아래 결합 검사를 이 분기가 건너뛰기 때문이다).
+    if (
+      payment.status === 'done' &&
+      reservation.status === 'confirmed' &&
+      reservation.payment_id === payment.id
+    ) {
+      return ApiSuccess.ok({
+        orderId,
+        reservationCode: reservation.reservation_code,
+        amount: payment.amount,
+      }).toNextResponse()
+    }
+
     // 이 라우트에서 가장 중요한 한 줄. 여기를 지나면 아래 모든 처리가 "이
     // 주문의 예매"를 다룬다고 믿는다.
     //
-    // 예매에 주문번호가 없으면 이 컬럼이 생기기 전의 건이다. 그런 예매는 이
-    // 경로로 확정하지 않는다 — 짝을 확인할 방법이 없는 채로 승인하느니 사무국
-    // 문의로 보내는 편이 낫다.
+    // 예매에 주문번호가 없으면 이 컬럼이 생기기 전의 건이다. 아직 확정되지 않은
+    // 그런 예매는 이 경로로 확정하지 않는다 — 짝을 확인할 방법이 없는 채로
+    // 승인하느니 사무국 문의로 보내는 편이 낫다. 선점은 10분이면 풀리므로 이
+    // 상태에 걸리는 예매는 배포 직전 10분치뿐이고, 그마저 다시 예매하면 된다.
     if (!reservation.order_id || reservation.order_id !== orderId) {
       log.error('예매·결제 불일치', {
         orderId,
@@ -109,15 +133,6 @@ export async function POST(request: NextRequest) {
       return ApiError.badRequest(
         '결제 금액을 확인할 수 없습니다. 사무국으로 문의해 주세요.'
       ).toNextResponse()
-    }
-
-    // 새로고침해도 안전하게 — 이미 확정된 건은 그대로 성공으로 답한다.
-    if (payment.status === 'done' && reservation.status === 'confirmed') {
-      return ApiSuccess.ok({
-        orderId,
-        reservationCode: reservation.reservation_code,
-        amount: payment.amount,
-      }).toNextResponse()
     }
 
     // 선점이 풀린 뒤에 돌아온 경우. 승인하면 좌석 없이 결제만 받게 된다.

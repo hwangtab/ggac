@@ -25,7 +25,7 @@ import {
 } from '@/utils/structuredData'
 
 import TicketPurchaseForm from './TicketPurchaseForm'
-import type { PerformanceDetail } from '../types'
+import type { PerformanceDetail, Show, TicketType } from '../types'
 
 const log = createLogger('tickets/detail')
 
@@ -34,18 +34,76 @@ const log = createLogger('tickets/detail')
 // 판매를 막는 진짜 경계는 선점 트랜잭션이므로 이 캐시가 표를 더 팔지는 않는다.
 export const revalidate = 60
 
-const OG_IMAGE = 'https://ggac.kr/images/logo/gac_og.webp'
+// 운영 도메인을 문자열로 박지 않는다 — 정본은 `getSiteUrl()`이고, 프리뷰
+// 배포에서는 그 배포의 호스트를 써야 미리보기가 실제로 뜬다. `getSiteUrl()`은
+// 끝 슬래시를 떼고 돌려주므로 `${base}/...`로 이으면 된다.
+const OG_IMAGE_PATH = '/images/logo/gac_og.webp'
+
+function defaultOgImage(): string {
+  return `${getSiteUrl()}${OG_IMAGE_PATH}`
+}
 
 interface PageProps {
   params: Promise<{ locale: string; slug: string }>
 }
 
+type RawRow = Record<string, unknown>
+
+/** 빈 문자열은 없는 값으로 본다(화면이 `null` 검사로 분기한다). */
+function asText(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() !== '' ? value : null
+}
+
+/**
+ * DB 행에서 **화면이 실제로 쓰는 필드만** 골라 새 객체를 만든다.
+ *
+ * `getPerformanceDetail`은 `toSnakeCase`로 키만 바꾼 행 전체를 돌려준다 —
+ * 그대로 넘기면 `created_by`(공연을 만든 관리자 UUID)와 회차 `capacity`(정원),
+ * 내부 타임스탬프가 서버 렌더 HTML의 직렬화 페이로드에 박혀 공개·색인된다.
+ * 타입 단언(`as unknown as`)은 런타임 필터가 아니므로 여기서 직접 고른다.
+ */
+function toShow(row: RawRow): Show {
+  return {
+    id: String(row.id ?? ''),
+    starts_at: String(row.starts_at ?? ''),
+    remaining_seats: Number(row.remaining_seats ?? 0),
+    is_past: Boolean(row.is_past),
+  }
+}
+
+function toTicketType(row: RawRow): TicketType {
+  return {
+    id: String(row.id ?? ''),
+    name: String(row.name ?? ''),
+    price: Number(row.price ?? 0),
+    max_per_order: Number(row.max_per_order ?? 1),
+    members_only: Boolean(row.members_only),
+  }
+}
+
+function toPerformanceDetail(row: RawRow): PerformanceDetail {
+  const shows = Array.isArray(row.shows) ? (row.shows as RawRow[]) : []
+  const types = Array.isArray(row.ticket_types) ? (row.ticket_types as RawRow[]) : []
+  return {
+    slug: String(row.slug ?? ''),
+    title: String(row.title ?? ''),
+    summary: asText(row.summary),
+    description: asText(row.description),
+    venue: asText(row.venue),
+    poster_image: asText(row.poster_image),
+    notice_text: asText(row.notice_text),
+    status: String(row.status ?? 'draft'),
+    shows: shows.map(toShow),
+    ticket_types: types.map(toTicketType),
+  }
+}
+
 /** 공개된(=draft가 아닌) 공연만 돌려준다. */
 async function loadPerformance(slug: string): Promise<PerformanceDetail | null> {
   try {
-    const detail = (await getPerformanceDetail(slug)) as unknown as PerformanceDetail | null
-    if (!detail || detail.status === 'draft') return null
-    return detail
+    const row = await getPerformanceDetail(slug)
+    if (!row || row.status === 'draft') return null
+    return toPerformanceDetail(row)
   } catch (error) {
     log.error('공연 상세 조회 실패', { slug, error })
     return null
@@ -54,11 +112,11 @@ async function loadPerformance(slug: string): Promise<PerformanceDetail | null> 
 
 /** OG 이미지로 쓸 수 있는 절대 https URL인가. */
 function toAbsoluteImage(value: string | null | undefined): string {
-  if (!value) return OG_IMAGE
+  if (!value) return defaultOgImage()
   const safe = toSafeHttpUrl(value)
   if (safe?.startsWith('https://')) return safe
-  if (value.startsWith('/')) return `${getSiteUrl().replace(/\/$/, '')}${value}`
-  return OG_IMAGE
+  if (value.startsWith('/')) return `${getSiteUrl()}${value}`
+  return defaultOgImage()
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -137,7 +195,12 @@ export default async function PerformanceDetailPage({ params }: PageProps) {
   // 아직 남은 회차 중 가장 이른 것을 공연일로 삼는다. 없으면 마지막 회차.
   const upcoming = performance.shows.find(show => !show.is_past)
   const eventDate = (upcoming ?? performance.shows[performance.shows.length - 1])?.starts_at
-  const hasSeats = performance.shows.some(show => !show.is_past && show.remaining_seats > 0)
+  // 취소된 공연(`performances.status = 'canceled'`)은 리치 결과에도 취소로
+  // 나가야 한다 — 안 그러면 구글이 계속 `EventScheduled · InStock`으로 노출해
+  // 열리지 않는 공연에 사람을 보낸다. 좌석도 남지 않은 것으로 본다.
+  const isCanceled = performance.status === 'canceled'
+  const hasSeats =
+    !isCanceled && performance.shows.some(show => !show.is_past && show.remaining_seats > 0)
 
   // 헬퍼는 프로젝트용이라 `url`을 `/projects/{slug}`로 굳힌다. 예매 페이지는
   // 주소가 다르므로 생성 뒤 덮어쓴다(헬퍼는 다른 화면도 쓰므로 건드리지 않는다).
@@ -148,6 +211,7 @@ export default async function PerformanceDetailPage({ params }: PageProps) {
       slug: performance.slug,
       publishedDate: eventDate ?? new Date().toISOString(),
       eventDate,
+      cancelled: isCanceled,
       venue: performance.venue ? { name: performance.venue } : undefined,
       coverImage: performance.poster_image,
       category: '공연·전시',

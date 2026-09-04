@@ -249,6 +249,30 @@ test('짝이 맞으면 확정되고 결제도 함께 완료된다', async () => 
   assert.equal(payment.rows[0].payment_key, 'key-order-happy')
 })
 
+test('같은 주문으로 두 번 확정해도 실패로 답하지 않는다', async () => {
+  // 승인 요청이 두 번 오는 것은 드물지 않다(더블클릭, 클라이언트 재시도, 토스
+  // 리다이렉트 중복). 두 번째를 실패로 돌려주면 라우트가 멀쩡한 결제를
+  // 환불한다 — 관객은 좌석을 잃고 원장에는 승인과 취소가 같이 남는다.
+  const mod = await loadFresh()
+  const show = await makeShow(10)
+  const held = await holdFor(mod, show, 'order-twice')
+
+  const first = await confirmVia(mod, held)
+  assert.equal(first.status, 'confirmed')
+
+  const second = await mod.finalizeTicketPayment({
+    orderId: 'order-twice',
+    reservationId: held.id,
+    paymentKey: 'key-order-twice',
+    method: '카드',
+    approvedAt: new Date(),
+    raw: { ok: true },
+  })
+  assert.ok(second, '두 번째 승인도 성공으로 답해야 한다(환불로 이어지면 안 된다)')
+  assert.equal(second.status, 'confirmed')
+  assert.equal(second.id, held.id)
+})
+
 /** 주문번호를 지정해 한 자리를 선점한다. */
 async function holdFor(mod, show, orderId) {
   return mod.holdReservation(booking({ showId: show, quantity: 2, orderId }))
@@ -336,6 +360,68 @@ test('매진된 회차에서 취소가 나오면 다시 팔 수 있다', async (
 
   const again = await holdReservation(booking({ showId: show, quantity: 1 }))
   assert.equal(again.status, 'pending')
+})
+
+// ---------------------------------------------------------------- 공연 상태
+
+/**
+ * `getShow`가 회차만 보고 판매 가능 여부를 판정할 수 없게 만들려고, 별도
+ * 공연(status 지정 가능)에 회차를 하나 붙여 만든다. `perf-1`은 이미 'open'
+ * 고정이라 다른 상태를 검증하려면 공연 자체를 새로 만들어야 한다.
+ */
+async function makeShowUnderPerformance(status, capacity = 10) {
+  const now = Date.now()
+  const performanceId = `perf-gen-${++showSeq}`
+  const id = `show-gen-${++showSeq}`
+  for (let attempt = 0; attempt < 20; attempt++) {
+    try {
+      await setupClient.execute({
+        sql: `INSERT INTO performances (id, slug, title, status, created_at, updated_at)
+              VALUES (?, ?, '테스트 공연(상태)', ?, ?, ?)`,
+        args: [performanceId, `test-show-${performanceId}`, status, now, now],
+      })
+      await setupClient.execute({
+        sql: `INSERT INTO performance_shows (id, performance_id, starts_at, capacity, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?)`,
+        args: [id, performanceId, now + 24 * HOUR, capacity, now, now],
+      })
+      return id
+    } catch (error) {
+      if (!/SQLITE_BUSY|locked/i.test(String(error))) throw error
+      await new Promise(resolve => setTimeout(resolve, 50))
+    }
+  }
+  throw new Error('회차를 만들지 못했다(락 경합).')
+}
+
+test('getShow는 회차가 속한 공연의 상태도 함께 돌려준다', async () => {
+  const { getShow } = await loadFresh()
+
+  const show = await getShow(showId)
+  assert.equal(show.performance_status, 'open')
+  // 기존 키는 그대로 남아 있어야 한다 — 호출부가 이름 그대로 쓰고 있다.
+  assert.equal(show.id, showId)
+  assert.ok(show.starts_at)
+  assert.ok(show.capacity)
+})
+
+test('판매 불가 상태(draft/closed/canceled)인 공연의 회차도 조회는 되지만 상태로 구분된다', async () => {
+  const { getShow, SELLABLE_PERFORMANCE_STATUSES } = await loadFresh()
+
+  for (const status of ['draft', 'closed', 'canceled']) {
+    const show = await makeShowUnderPerformance(status)
+    const result = await getShow(show)
+    assert.ok(result, `${status} 공연의 회차도 조회는 되어야 한다`)
+    assert.equal(result.performance_status, status)
+    assert.ok(
+      !SELLABLE_PERFORMANCE_STATUSES.includes(status),
+      `${status}는 판매 가능 목록에 없어야 한다`
+    )
+  }
+
+  const openShow = await makeShowUnderPerformance('open')
+  const openResult = await getShow(openShow)
+  assert.ok(SELLABLE_PERFORMANCE_STATUSES.includes(openResult.performance_status))
 })
 
 test('마지막 좌석을 동시에 사려 하면 한 명만 성공한다', async () => {

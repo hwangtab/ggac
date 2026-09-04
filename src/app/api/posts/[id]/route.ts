@@ -13,7 +13,7 @@ import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { RATE_LIMITS, applyRateLimit, createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { validateUUID } from '@/utils/validation'
 import { parseIntegerParam } from '@/utils/queryParams'
-import { revalidatePath, revalidateTag } from 'next/cache'
+import { revalidatePath } from 'next/cache'
 import { CATEGORIES, parseBoardCategory } from '@/constants/categories'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { annotateImageDimensionsSafe } from '@/utils/imageDimensions'
@@ -340,11 +340,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       for (const boardPath of getBoardPostRevalidationPaths(validPostId)) {
         revalidatePath(boardPath)
       }
-      revalidateTag(`post-${validPostId}`)
-      revalidateTag('board-post')
-      revalidateTag('board-initial')
-      revalidateTag(`board-${post.category}`)
-      revalidateTag(`board-${category}`)
+      // 태그 무효화는 하지 않는다 — 부착하는 곳이 없어 아무 일도 하지 않는다.
     } catch {
       // 캐시 무효화 실패는 DB 수정 성공을 실패로 바꾸지 않는다.
     }
@@ -427,12 +423,6 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       // 캐시에 남지 않게 한다. 로케일 접두사 처리는 @/lib/revalidationPaths 참고.
       for (const boardPath of getBoardPostRevalidationPaths(validPostId)) {
         revalidatePath(boardPath)
-      }
-      revalidateTag(`post-${validPostId}`)
-      revalidateTag('board-post')
-      if (post.category) {
-        revalidateTag(`board-${post.category}`)
-        revalidateTag('board-initial')
       }
     } catch {
       // 캐시 무효화 실패는 무시

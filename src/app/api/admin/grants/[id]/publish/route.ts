@@ -19,6 +19,7 @@ import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { runGrantPublish, summarizeMatchCounts, type SettingLike } from '@/lib/server/grantPublish'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger, maskId } from '@/utils/logger'
+import { getSiteUrl } from '@/utils/site'
 import { logSecurityEvent } from '@/utils/security'
 
 const log = createLogger('api/admin/grants/publish')
@@ -88,7 +89,10 @@ export const POST = defineApiRoute({
       })
     }
 
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.ggac.kr'
+    // 폴백 도메인을 여기에 따로 박으면 정본(`getSiteUrl()`)과 호스트가 갈린다
+    // — 실제로 여기만 `www.` 붙은 다른 호스트였다. 링크는 메일로 나가므로
+    // 절대 URL이어야 하고, `getSiteUrl()`이 그 판단을 한 곳에서 한다.
+    const siteUrl = getSiteUrl()
 
     let result: Awaited<ReturnType<typeof runGrantPublish>>
     try {
