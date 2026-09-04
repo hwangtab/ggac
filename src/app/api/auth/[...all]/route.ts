@@ -3,6 +3,7 @@ import { toNextJsHandler } from 'better-auth/next-js'
 
 import { auth } from '@/lib/auth/server'
 import { ApiError } from '@/utils/apiWrapper'
+import { RATE_LIMITS, applyRouteRateLimit, createIPKeyGenerator } from '@/lib/server/rateLimit'
 
 export const runtime = 'nodejs'
 
@@ -32,6 +33,61 @@ export { GET, PATCH, PUT, DELETE }
 function isSignUpEmailPath(request: NextRequest): boolean {
   return request.nextUrl.pathname.endsWith('/sign-up/email')
 }
+
+/** 로그인 시도 경로인지 판별한다(크리덴셜 스터핑 방어 대상). */
+function isSignInEmailPath(request: NextRequest): boolean {
+  return request.nextUrl.pathname.endsWith('/sign-in/email')
+}
+
+/**
+ * 비밀번호 재설정·인증메일 발송 경로인지 판별한다(메일 폭탄 방어 대상).
+ * 세 엔드포인트 모두 "이메일 주소만 있으면" 메일을 발송시킬 수 있어 로그인보다
+ * 더 낮은 한도가 필요하다.
+ */
+/**
+ * 메일을 **발송시키는** 경로. 이메일 주소만 있으면 남의 편지함에 메일을 쏟을
+ * 수 있어 가장 좁은 한도가 필요하다.
+ *
+ * `/request-password-reset`이 better-auth 1.6.26이 실제로 여는 주소다
+ * (`authClient.requestPasswordReset()`이 이걸 부른다). `/forget-password`는
+ * 옛 별칭이라 둘 다 본다 — 별칭만 보고 있으면 리밋이 아무것도 막지 못한다.
+ */
+function isPasswordResetRequestPath(request: NextRequest): boolean {
+  const { pathname } = request.nextUrl
+  return (
+    pathname.endsWith('/request-password-reset') ||
+    pathname.endsWith('/forget-password') ||
+    pathname.endsWith('/send-verification-email')
+  )
+}
+
+/**
+ * 토큰을 **제출하는** 경로. 발송과 버킷을 나눈다 — 합쳐 두면 새 비밀번호를
+ * 몇 번 잘못 입력한 사람이 발송 한도까지 소진해, 정작 메일을 다시 받지 못한
+ * 채로 토큰이 만료된다.
+ */
+function isPasswordResetSubmitPath(request: NextRequest): boolean {
+  return request.nextUrl.pathname.endsWith('/reset-password')
+}
+
+/**
+ * 비밀번호 재설정·인증메일 발송용 레이트리밋(10분당 5회, IP 기준).
+ *
+ * Better Auth 기본 리미터는 인스턴스별 메모리 저장소라 Vercel 같은 분산
+ * 환경에서는 인스턴스마다 카운터가 따로 놀아 사실상 무제한이다(CLAUDE.md
+ * "Rate Limiting" 참고). 이 저장소의 다른 보호 라우트와 동일하게
+ * `distributedRateLimiter`(Upstash Redis REST)를 쓴다. 로그인(AUTH_API,
+ * 분당 10회)보다 한도를 더 좁게 잡은 이유는 메일 발송 자체가 비용이고,
+ * 공격자가 남의 이메일로 재설정 메일을 반복 발송시키는 폭탄 공격에
+ * 노출되기 때문이다.
+ */
+const PASSWORD_RESET_RATE_LIMIT = {
+  name: 'auth_password_reset',
+  windowMs: 10 * 60 * 1000, // 10분
+  maxRequests: 5,
+  message: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.',
+  blockDuration: 30 * 60 * 1000, // 30분 차단
+} as const
 
 /**
  * `sign-up/email`을 HTTP로 직접 때리면 무조건 거부한다.
@@ -70,11 +126,54 @@ function isSignUpEmailPath(request: NextRequest): boolean {
  * 바로 읽을 수 있어야 한다. 429(레이트리밋)나 400(입력 오류)은 "다시
  * 시도하면 될 것 같다"는 오해를 주므로 쓰지 않는다.
  */
+/**
+ * 한도를 적용하되, **리미터 자체가 없을 때는 통과시킨다.**
+ *
+ * 분산 리미터는 운영에서 Upstash가 없거나 순단이면 쓰기 요청에 503을 준다.
+ * 그 판단은 게시글 작성 같은 쓰기에는 옳지만 로그인에는 옳지 않다 — 선택
+ * 환경변수 하나가 비어 있다는 이유로 **전 조합원이 로그인하지 못하는**
+ * 전면 장애가 된다. Upstash는 CLAUDE.md가 선택으로 분류한 값이다.
+ *
+ * 그래서 429(진짜 한도 초과)만 막고, 503(리미터 없음·오류)은 통과시킨다.
+ * 통과시켜도 무방비는 아니다 — better-auth 자체 리미터가 여전히 바닥을
+ * 받치고, 리미터 부재는 부팅 시점에 이미 high 심각도로 기록된다.
+ */
+async function enforce(
+  request: NextRequest,
+  config: { name: string; windowMs: number; maxRequests: number; message?: string },
+  prefix: string
+) {
+  const rl = await applyRouteRateLimit(request, {
+    ...config,
+    keyGenerator: createIPKeyGenerator(prefix),
+  })
+  if (rl.success) return null
+  if (rl.response && rl.response.status !== 429) return null
+  return (
+    rl.response ??
+    ApiError.tooManyRequests(config.message ?? '요청이 너무 많습니다.').toNextResponse()
+  )
+}
+
 export async function POST(request: NextRequest) {
   if (isSignUpEmailPath(request)) {
     return ApiError.forbidden(
       '이 주소로는 가입할 수 없습니다. 가입 페이지(/signup)를 이용해 주세요.'
     ).toNextResponse()
+  }
+
+  // 로그인·비밀번호 재설정·인증메일에 IP 기준 분산 레이트리밋을 건다(위
+  // PASSWORD_RESET_RATE_LIMIT 주석 참고). sign-up/email은 위에서 이미 전면
+  // 차단되므로 여기 내려오지 않는다.
+  if (isSignInEmailPath(request)) {
+    const blocked = await enforce(request, RATE_LIMITS.AUTH_API, 'auth_sign_in')
+    if (blocked) return blocked
+  } else if (isPasswordResetRequestPath(request)) {
+    const blocked = await enforce(request, PASSWORD_RESET_RATE_LIMIT, 'auth_password_reset')
+    if (blocked) return blocked
+  } else if (isPasswordResetSubmitPath(request)) {
+    const blocked = await enforce(request, PASSWORD_RESET_RATE_LIMIT, 'auth_password_reset_submit')
+    if (blocked) return blocked
   }
 
   return betterAuthPOST(request)

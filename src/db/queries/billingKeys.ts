@@ -41,21 +41,30 @@ function rowToCard(row: Record<string, unknown>): Record<string, unknown> {
  * 동작이어야 하고, 순서가 뒤바뀌면 부분 유니크 인덱스가 거부한다.
  */
 export async function saveBillingKey(input: SaveBillingKeyInput): Promise<Record<string, unknown>> {
-  await deactivateBillingKey(input.userId)
+  // 내리기와 올리기를 한 트랜잭션으로 묶는다. 둘 사이에서 실패하면 회원은
+  // **활성 카드가 없는 상태**가 되는데, 빌링키는 토스에서 다시 조회할 수 없어
+  // (이 파일 첫머리 참고) 카드를 새로 등록하는 것 말고는 되돌릴 방법이 없다.
+  // 그 사이 청구가 돌면 회비만 조용히 걷히지 않는다.
+  return db.transaction(async tx => {
+    await tx
+      .update(billingKeys)
+      .set({ isActive: false, deactivatedAt: new Date() })
+      .where(and(eq(billingKeys.userId, input.userId), eq(billingKeys.isActive, true)))
 
-  const rows = await db
-    .insert(billingKeys)
-    .values({
-      userId: input.userId,
-      billingKey: input.billingKey,
-      customerKey: input.customerKey,
-      cardIssuerCode: input.cardIssuerCode ?? null,
-      cardNumberMasked: input.cardNumberMasked ?? null,
-      cardType: input.cardType ?? null,
-      isActive: true,
-    })
-    .returning()
-  return rowToCard(rows[0])
+    const rows = await tx
+      .insert(billingKeys)
+      .values({
+        userId: input.userId,
+        billingKey: input.billingKey,
+        customerKey: input.customerKey,
+        cardIssuerCode: input.cardIssuerCode ?? null,
+        cardNumberMasked: input.cardNumberMasked ?? null,
+        cardType: input.cardType ?? null,
+        isActive: true,
+      })
+      .returning()
+    return rowToCard(rows[0])
+  })
 }
 
 export async function getActiveBillingKey(userId: string): Promise<Record<string, unknown> | null> {

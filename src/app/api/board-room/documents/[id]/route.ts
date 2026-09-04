@@ -37,8 +37,21 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       // Authorization: uploader or admin only
       if (doc.uploaded_by !== user.id && !isAdmin) throw ApiError.forbidden('삭제 권한이 없습니다.')
 
-      // 저장소 객체를 먼저 지운다. 실패해도 메타데이터 행 삭제는 진행한다 —
-      // 지울 수 없는 레코드가 남는 쪽이 더 나쁘다.
+      // **DB 행을 먼저 지우고, 그 다음 Storage 파일을 지운다.** 순서가 중요하다
+      // — 첨부 라우트(`src/app/api/posts/[id]/attachments/[attachmentId]/route.ts`)와
+      // 같은 근거로 통일한다. 반대로 하면(예전 이 라우트의 순서) Storage 삭제
+      // 성공 뒤 DB 삭제가 실패했을 때 파일은 사라졌는데 행은 남아 다운로드가
+      // 404로 죽는다. 지금 순서에서 최악은 "DB에는 없는데 Storage에 파일만
+      // 남는" 고아 파일인데, 이건 아무 화면도 깨뜨리지 않고 용량만 조금 쓴다 —
+      // 되돌릴 수 없는 쪽이 아니라 되돌릴 수 있는 쪽으로 실패하게 만든다.
+      try {
+        await deleteDocument(id)
+      } catch {
+        throw ApiError.internalServerError('서류 삭제에 실패했습니다.')
+      }
+
+      // Storage에서 파일 삭제 (가능한 경우에만). 여기서 실패해도 사용자에게는
+      // 삭제 성공이다 — DB 행이 이미 없으므로 화면에서는 사라졌다.
       if (isSafeBoardDocumentFilePath(doc.file_path)) {
         try {
           await deleteBoardDocument(doc.file_path)
@@ -54,13 +67,6 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
           id,
           path: doc.file_path,
         })
-      }
-
-      // Delete metadata row
-      try {
-        await deleteDocument(id)
-      } catch {
-        throw ApiError.internalServerError('서류 삭제에 실패했습니다.')
       }
 
       return ApiSuccess.ok({ id }, '서류가 삭제되었습니다.')

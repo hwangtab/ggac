@@ -265,6 +265,96 @@
       "viewRelated": "관련 프로젝트 보기",
       "goToArticle": "기사 링크로 이동",
       "imageAlt": "기사 이미지"
+    },
+    "error": {
+      "heading": "프로젝트를 불러올 수 없습니다",
+      "body": "일시적인 오류가 발생했습니다. 다시 시도해주세요.",
+      "retry": "다시 시도"
+    }
+  },
+  "tickets": {
+    "meta": {
+      "listTitle": "공연 예매",
+      "listDescription": "경기아트콜렉티브가 기획한 공연을 온라인으로 예매하실 수 있습니다. 회차와 남은 좌석을 확인하고 바로 결제하세요.",
+      "detailDescription": "{title} 예매 — {venue}. 회차와 남은 좌석을 확인하고 온라인으로 결제하실 수 있습니다.",
+      "notFoundTitle": "공연을 찾을 수 없습니다",
+      "notFoundDescription": "요청하신 공연을 찾을 수 없습니다. 예매 중인 다른 공연을 확인해 주세요."
+    },
+    "list": {
+      "heading": "공연 예매",
+      "subtitle": "경기아트콜렉티브가 기획한 공연을 예매하실 수 있습니다.",
+      "emptyTitle": "현재 예매 중인 공연이 없습니다.",
+      "emptyHint": "새로운 공연 소식은 인스타그램에서 먼저 알려드립니다.",
+      "posterAlt": "{title} 공연 포스터",
+      "nextShowLabel": "가장 빠른 회차",
+      "venueLabel": "공연장",
+      "moreShows": "외 {count}회차"
+    },
+    "detail": {
+      "bookHeading": "예매하기",
+      "showLegend": "회차",
+      "ticketLegend": "티켓",
+      "quantityLabel": "매수",
+      "quantityOption": "{count}매",
+      "noQuantity": "선택 가능한 매수가 없습니다. 다른 회차를 골라 주세요.",
+      "maxPerOrder": "1회에 최대 {count}매까지 예매할 수 있습니다.",
+      "bookerName": "예매자 이름",
+      "bookerPhone": "연락처",
+      "bookerEmail": "이메일",
+      "optional": "(선택)",
+      "totalLabel": "결제 금액",
+      "priceFormat": "{amount}원",
+      "membersOnly": "조합원 전용",
+      "soldOut": "매진",
+      "showEnded": "종료",
+      "showMoved": "선택하신 회차가 매진되어 예매 가능한 다음 회차로 옮겼습니다. 확인 후 예매해 주세요.",
+      "showSoldOut": "선택하신 회차가 매진되었습니다. 현재 예매 가능한 회차가 없습니다.",
+      "seatsLeft": "{count}석 남음",
+      "paymentPreparing": "결제 기능을 준비하고 있습니다.",
+      "submit": "예매하고 결제하기",
+      "opening": "결제창을 여는 중…",
+      "holdNotice": "좌석을 임시로 잡아 두었습니다. <strong>10분 안에 결제</strong>하지 않으면 좌석이 반환됩니다.",
+      "pay": "결제하기",
+      "payAmount": "{amount} 결제하기",
+      "noticeHeading": "예매 안내",
+      "errorPrepare": "예매를 준비하지 못했습니다.",
+      "errorWidget": "결제창을 여는 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+      "errorRequest": "결제를 시작하지 못했습니다. 다시 시도해 주세요."
+    },
+    "success": {
+      "confirming": "예매를 확정하는 중입니다. 창을 닫지 말아 주세요.",
+      "heading": "예매가 완료되었습니다",
+      "codeLabel": "예매번호",
+      "entryNote": "공연 당일 입구에서 <strong>예매번호와 연락처</strong>를 말씀해 주세요. 별도 티켓은 발송되지 않습니다.",
+      "otherShows": "다른 공연 보기",
+      "myTickets": "예매 내역",
+      "failedHeading": "예매를 확정하지 못했습니다",
+      "backToList": "공연 목록으로",
+      "missingParams": "예매 정보가 올바르지 않습니다. 결제가 되었는지 사무국으로 확인해 주세요.",
+      "confirmFailed": "예매를 확정하지 못했습니다.",
+      "networkFailed": "결제 결과를 확인하지 못했습니다. 카드에서 결제가 되었을 수 있으니 사무국으로 문의해 주세요."
+    },
+    "fail": {
+      "heading": "결제가 완료되지 않았습니다",
+      "note": "결제되지 않았으므로 예매도 되지 않았습니다. 잡아 둔 좌석은 잠시 후 자동으로 반환됩니다.",
+      "retry": "다시 예매하기",
+      "defaultMessage": "결제가 완료되지 않았습니다.",
+      "codes": {
+        "PAY_PROCESS_CANCELED": "결제를 취소하셨습니다. 좌석은 자동으로 반환됩니다.",
+        "PAY_PROCESS_ABORTED": "결제가 중단되었습니다. 잠시 후 다시 시도해 주세요.",
+        "REJECT_CARD_COMPANY": "카드사에서 결제를 거절했습니다. 다른 카드로 시도해 주세요.",
+        "REJECT_CARD_PAYMENT": "한도 초과 또는 잔액 부족으로 결제되지 않았습니다.",
+        "INVALID_CARD_EXPIRATION": "카드 유효기간이 올바르지 않습니다."
+      }
+    },
+    "common": {
+      "loading": "불러오는 중…",
+      "contactOffice": "사무국에 문의"
+    },
+    "error": {
+      "heading": "공연 정보를 불러올 수 없습니다",
+      "body": "일시적인 오류가 발생했습니다. 다시 시도해주세요.",
+      "retry": "다시 시도"
     }
   },
   "application": {

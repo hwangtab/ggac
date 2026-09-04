@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { apiGet, apiPost, ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { rateLimit } from '@/lib/server/rateLimit'
 import { requireBoardMember } from '@/lib/server/boardRoomAuth'
-import { ALL_DOCUMENT_CATEGORIES, ASSEMBLY_DOCUMENT_CATEGORY } from '@/constants/boardRoom'
+import { ALL_DOCUMENT_CATEGORIES, BOARD_DOCUMENT_CATEGORIES } from '@/constants/boardRoom'
 import { createLogger } from '@/utils/logger'
 import {
   hasBinaryNullBytes,
@@ -57,9 +57,18 @@ export async function GET(request: NextRequest) {
       let data: Awaited<ReturnType<typeof listDocuments>>
       try {
         // 카테고리가 없으면 원본과 동일하게 정기총회 자료를 제외한다(별도
-        // '정기총회' 메뉴에서 관리).
+        // '정기총회' 메뉴에서 관리). 제외(`!=`) 대신 **허용 목록**으로 넘기는
+        // 이유: `!=`는 idx_board_documents_category를 타지 못해 서류함 기본
+        // 조회가 매번 전체 스캔이었다. `ALL_DOCUMENT_CATEGORIES =
+        // BOARD_DOCUMENT_CATEGORIES + ASSEMBLY_DOCUMENT_CATEGORY`라
+        // (constants/boardRoom.ts) 아래 목록은 '총회 제외'와 정확히 같은 집합이다
+        // — 카테고리를 새로 만들면 이 상수에 함께 넣어야 목록에서 사라지지 않는다.
         data = await listDocuments(
-          category ? { category } : { excludeCategory: ASSEMBLY_DOCUMENT_CATEGORY }
+          category ? { category } : { categories: BOARD_DOCUMENT_CATEGORIES },
+          {
+            onTruncated: ({ limit }) =>
+              log.error('서류 목록이 상한에 걸려 잘렸다 — 페이지네이션이 필요하다', { limit }),
+          }
         )
       } catch {
         throw ApiError.internalServerError('서류 목록을 불러올 수 없습니다.')

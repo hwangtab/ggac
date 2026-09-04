@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Link } from '@/i18n/navigation'
 import OptimizedImage from '@/components/OptimizedImage'
@@ -54,6 +54,7 @@ export const ArtistsView = ({
   )
 
   const hasArtists = filteredArtists.length > 0
+  const [openTooltipId, setOpenTooltipId] = useState<string | null>(null)
 
   return (
     <div className="pt-20">
@@ -120,15 +121,32 @@ export const ArtistsView = ({
                                 </span>
                               ))}
                               {artist.category.length > 3 && (
-                                <span
-                                  className="inline-block px-3 py-1 bg-gray-200 text-gray-600 text-sm font-medium rounded-full cursor-help relative group/tooltip"
-                                  title={artist.category
-                                    .slice(3)
-                                    .map(c => localizeArtistCategory(c, locale))
-                                    .join(', ')}
-                                >
-                                  {t('moreCount', { count: artist.category.length - 3 })}
-                                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-3 px-3 py-1.5 bg-gray-800 text-white text-sm rounded-lg opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-normal max-w-sm leading-relaxed text-center z-50">
+                                <span className="relative inline-block group/tooltip">
+                                  <button
+                                    type="button"
+                                    className="inline-block px-3 py-1 bg-gray-200 text-gray-600 text-sm font-medium rounded-full cursor-help focus:outline-none focus:ring-2 focus:ring-primary-500"
+                                    aria-label={artist.category
+                                      .slice(3)
+                                      .map(c => localizeArtistCategory(c, locale))
+                                      .join(', ')}
+                                    aria-expanded={openTooltipId === artist.id}
+                                    onClick={event => {
+                                      event.preventDefault()
+                                      event.stopPropagation()
+                                      setOpenTooltipId(current =>
+                                        current === artist.id ? null : artist.id
+                                      )
+                                    }}
+                                  >
+                                    {t('moreCount', { count: artist.category.length - 3 })}
+                                  </button>
+                                  <div
+                                    className={`absolute bottom-full left-1/2 transform -translate-x-1/2 mb-3 px-3 py-1.5 bg-gray-800 text-white text-sm rounded-lg transition-opacity duration-200 pointer-events-none whitespace-normal max-w-sm leading-relaxed text-center z-50 ${
+                                      openTooltipId === artist.id
+                                        ? 'opacity-100'
+                                        : 'opacity-0 group-hover/tooltip:opacity-100 group-focus-within/tooltip:opacity-100'
+                                    }`}
+                                  >
                                     {artist.category
                                       .slice(3)
                                       .map(c => localizeArtistCategory(c, locale))

@@ -18,12 +18,18 @@ const Lightbox = ({ images, currentIndex, onClose, onNext, onPrev }: LightboxPro
   const t = useTranslations('common')
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
+  const triggerElementRef = useRef<HTMLElement | null>(null)
   const safeImages = images.map(image => toSafeInternalImagePath(image))
   const safeCurrentIndex = Math.min(Math.max(currentIndex, 0), Math.max(safeImages.length - 1, 0))
 
-  // Focus close button when modal opens
+  // Focus close button when modal opens, and restore focus to the trigger on close (WCAG 2.4.3)
   useEffect(() => {
+    triggerElementRef.current = document.activeElement as HTMLElement | null
     closeButtonRef.current?.focus()
+
+    return () => {
+      triggerElementRef.current?.focus?.()
+    }
   }, [])
 
   useEffect(() => {

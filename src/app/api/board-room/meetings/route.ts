@@ -14,7 +14,7 @@ import {
 } from '@/constants/boardRoom'
 import { createLogger } from '@/utils/logger'
 import { parseJsonObjectBody } from '@/utils/requestBody'
-import { createDateOptions, createMeeting, deleteMeeting, listMeetings } from '@/db/queries/board'
+import { createMeetingWithDateOptions, listMeetings } from '@/db/queries/board'
 
 const log = createLogger('boardRoom/meetings')
 
@@ -31,7 +31,12 @@ export async function GET(request: NextRequest) {
     async () => {
       let meetings: Awaited<ReturnType<typeof listMeetings>>
       try {
-        meetings = await listMeetings()
+        // 방어적 상한(기본 500). 잘리면 로그로만 알린다 — 응답 형태는 기존
+        // 소비자를 위해 그대로 둔다.
+        meetings = await listMeetings({
+          onTruncated: ({ limit }) =>
+            log.error('회의 목록이 상한에 걸려 잘렸다 — 페이지네이션이 필요하다', { limit }),
+        })
       } catch {
         throw ApiError.internalServerError('회의 목록을 불러올 수 없습니다.')
       }
@@ -77,31 +82,26 @@ export async function POST(request: NextRequest) {
         throw ApiError.badRequest('후보 날짜는 YYYY-MM-DD 형식으로 1개 이상 선택해주세요.')
       if (!voteDeadline) throw ApiError.badRequest('투표 마감일을 설정해주세요.')
 
+      // 회의 + 후보 날짜를 한 트랜잭션으로 만든다. 예전에는 두 INSERT를 따로
+      // 부르고 뒤쪽이 실패하면 손수 삭제해 보상했는데, 그 삭제마저 실패하면
+      // 투표를 시작할 수 없는 고아 회의가 목록에 남고 알림만 나갔다.
       let meeting: { id: string }
       try {
-        meeting = await createMeeting({
-          title,
-          location,
-          meetingTime,
-          voteDeadline: new Date(voteDeadline),
-          createdBy: user.id,
+        meeting = await createMeetingWithDateOptions(
+          {
+            title,
+            location,
+            meetingTime,
+            voteDeadline: new Date(voteDeadline),
+            createdBy: user.id,
+          },
+          candidateDates
+        )
+      } catch (err) {
+        log.error('회의 생성 실패(트랜잭션 롤백됨)', {
+          error: err instanceof Error ? err.message : String(err),
         })
-      } catch {
         throw ApiError.internalServerError('회의 생성에 실패했습니다.')
-      }
-
-      try {
-        await createDateOptions(meeting.id, candidateDates)
-      } catch {
-        try {
-          await deleteMeeting(meeting.id)
-        } catch (cleanupErr) {
-          log.error('회의 롤백 실패: 고아 회의 발생', {
-            meetingId: meeting.id,
-            error: cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr),
-          })
-        }
-        throw ApiError.internalServerError('후보 날짜 저장에 실패했습니다.')
       }
 
       await notifyDirectors({

@@ -112,8 +112,11 @@ const AboutPage = async ({ params }: AboutPageProps) => {
   const coopDoes = Array.isArray(rawCoopDoes) ? (rawCoopDoes as string[]) : []
   const memberDoes = Array.isArray(rawMemberDoes) ? (rawMemberDoes as string[]) : []
 
-  // 날짜순으로 정렬 (오래된 것부터)
-  const sortedProjects = projects.sort(
+  // 날짜순으로 정렬 (오래된 것부터).
+  // **반드시 복사해서 정렬한다** — `getProjects()`는 모듈 레벨로 메모된 같은
+  // 배열 인스턴스를 프로세스 수명 내내 돌려준다. 제자리 정렬하면 이 페이지가
+  // 한 번 렌더된 뒤부터 sitemap·image-sitemap이 보는 순서까지 뒤집힌다.
+  const sortedProjects = [...projects].sort(
     (a, b) => new Date(a.publishedDate).getTime() - new Date(b.publishedDate).getTime()
   )
 

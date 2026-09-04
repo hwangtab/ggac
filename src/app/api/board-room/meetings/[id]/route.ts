@@ -58,64 +58,93 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
   return apiGet(
     async () => {
-      const meeting = await getMeetingById(id)
-      if (!meeting) throw ApiError.notFound('회의를 찾을 수 없습니다.')
-
-      let options: Awaited<ReturnType<typeof listDateOptions>> = []
-      let votes: Awaited<ReturnType<typeof listDateVotesByOptionIds>> = []
-      if (isBoardMember) {
-        try {
-          options = await listDateOptions(id)
-        } catch {
-          throw ApiError.internalServerError('후보 날짜를 불러올 수 없습니다.')
-        }
-
-        const optionIds = options.map(o => o.id)
-        try {
-          votes = await listDateVotesByOptionIds(optionIds)
-        } catch {
-          throw ApiError.internalServerError('투표 정보를 불러올 수 없습니다.')
-        }
-      }
-
-      let agendas: Awaited<ReturnType<typeof listAgendasByMeeting>>
-      try {
-        agendas = await listAgendasByMeeting(id)
-      } catch {
-        throw ApiError.internalServerError('안건을 불러올 수 없습니다.')
-      }
-
-      // 토론 배지용 개수만 함께 싣는다. 본문은 안건을 펼칠 때 따로 받는다 —
-      // 안건 10개짜리 회의의 스레드를 상세 응답에 미리 담을 이유가 없다.
+      // 인가는 위(`requireBoardRecordReader`)에서 이미 끝났다 — 아래는 조회뿐이다.
+      // 원격 Turso라 왕복 지연이 단계 수만큼 쌓이므로, **의존이 있는 쌍 안에서만**
+      // 순차로 두고 쌍끼리는 병렬로 돌린다(options→votes, agendas→commentCounts).
+      // 회의·회의록·출석·명단은 서로 독립이다.
       //
-      // 실패해도 던지지 않는다. 배포(`git push`)와 마이그레이션 적용은 별개
-      // 절차라 `board_agenda_comments`가 아직 없는 창이 열릴 수 있는데, 그때
-      // 던지면 **배지 하나 때문에 회의 상세 전체가 500**이 된다. 배지는 0으로
-      // 떨어지고 회의·안건·회의록은 그대로 보이는 쪽이 옳다.
-      // 실패는 삼키되 **반드시 남긴다**. 이 라우트의 다른 로더들은 전부
-      // 500을 던지는데 여기만 통과시키므로, 로그가 없으면 "토론 0"이 진짜
-      // 0인지 조회가 죽은 건지 아무도 구분하지 못한다.
-      let commentCounts: Record<string, number> = {}
-      try {
-        commentCounts = await countCommentsByAgendas(agendas.map(a => a.id))
-      } catch (e) {
-        log.error('안건 토론 수 조회 실패 — 배지를 0으로 표시한다', {
-          meetingId: id,
-          error: (e as Error).message,
-        })
-        commentCounts = {}
-      }
-      const agendasWithCounts = agendas.map(agenda => ({
-        ...agenda,
-        comment_count: commentCounts[agenda.id] ?? 0,
-      }))
+      // 실패 처리는 종전과 같다: 각 쌍이 자기 몫의 ApiError를 그대로 던지고,
+      // 토론 수만 예외적으로 삼킨다(아래 주석 참고).
+      const boardOnlyLoads = isBoardMember
+        ? (async () => {
+            let options: Awaited<ReturnType<typeof listDateOptions>>
+            try {
+              options = await listDateOptions(id)
+            } catch {
+              throw ApiError.internalServerError('후보 날짜를 불러올 수 없습니다.')
+            }
+            try {
+              const votes = await listDateVotesByOptionIds(options.map(o => o.id))
+              return { options, votes }
+            } catch {
+              throw ApiError.internalServerError('투표 정보를 불러올 수 없습니다.')
+            }
+          })()
+        : Promise.resolve({
+            options: [] as Awaited<ReturnType<typeof listDateOptions>>,
+            votes: [] as Awaited<ReturnType<typeof listDateVotesByOptionIds>>,
+          })
 
-      let minutes: Awaited<ReturnType<typeof getMinutesByMeetingId>>
-      try {
-        minutes = await getMinutesByMeetingId(id)
-      } catch {
+      const agendaLoads = (async () => {
+        let agendas: Awaited<ReturnType<typeof listAgendasByMeeting>>
+        try {
+          agendas = await listAgendasByMeeting(id)
+        } catch {
+          throw ApiError.internalServerError('안건을 불러올 수 없습니다.')
+        }
+
+        // 토론 배지용 개수만 함께 싣는다. 본문은 안건을 펼칠 때 따로 받는다 —
+        // 안건 10개짜리 회의의 스레드를 상세 응답에 미리 담을 이유가 없다.
+        //
+        // 실패해도 던지지 않는다. 배포(`git push`)와 마이그레이션 적용은 별개
+        // 절차라 `board_agenda_comments`가 아직 없는 창이 열릴 수 있는데, 그때
+        // 던지면 **배지 하나 때문에 회의 상세 전체가 500**이 된다. 배지는 0으로
+        // 떨어지고 회의·안건·회의록은 그대로 보이는 쪽이 옳다.
+        // 실패는 삼키되 **반드시 남긴다**. 이 라우트의 다른 로더들은 전부
+        // 500을 던지는데 여기만 통과시키므로, 로그가 없으면 "토론 0"이 진짜
+        // 0인지 조회가 죽은 건지 아무도 구분하지 못한다.
+        let commentCounts: Record<string, number> = {}
+        try {
+          commentCounts = await countCommentsByAgendas(agendas.map(a => a.id))
+        } catch (e) {
+          log.error('안건 토론 수 조회 실패 — 배지를 0으로 표시한다', {
+            meetingId: id,
+            error: (e as Error).message,
+          })
+          commentCounts = {}
+        }
+        return agendas.map(agenda => ({
+          ...agenda,
+          comment_count: commentCounts[agenda.id] ?? 0,
+        }))
+      })()
+
+      const minutesLoad = getMinutesByMeetingId(id).catch(() => {
         throw ApiError.internalServerError('회의록을 불러올 수 없습니다.')
-      }
+      })
+
+      // 이사회 전용 재료(출석·명단)도 여기서 함께 띄운다. 조합원 응답에는
+      // 싣지 않으므로 그때는 조회 자체를 하지 않는다.
+      const attendeesLoad = isBoardMember
+        ? listMeetingAttendees(id).catch(() => {
+            throw ApiError.internalServerError('출석 정보를 불러올 수 없습니다.')
+          })
+        : Promise.resolve([] as Awaited<ReturnType<typeof listMeetingAttendees>>)
+      const rosterLoad = isBoardMember ? getDirectorRoster() : Promise.resolve([])
+      const auditorsLoad = isBoardMember ? getAuditorRoster() : Promise.resolve([])
+
+      const [meeting, dateData, agendasWithCounts, minutes, attendees, roster, auditors] =
+        await Promise.all([
+          getMeetingById(id),
+          boardOnlyLoads,
+          agendaLoads,
+          minutesLoad,
+          attendeesLoad,
+          rosterLoad,
+          auditorsLoad,
+        ])
+      if (!meeting) throw ApiError.notFound('회의를 찾을 수 없습니다.')
+      const { options, votes } = dateData
 
       // 여기부터는 이사회 전용이다. 조합원 응답에는 출석·명단·정족수를 싣지
       // 않는다 — 누가 나왔고 누가 빠졌는지는 열람 개방의 범위가 아니다.
@@ -136,15 +165,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         })
       }
 
-      let attendees: Awaited<ReturnType<typeof listMeetingAttendees>>
-      try {
-        attendees = await listMeetingAttendees(id)
-      } catch {
-        throw ApiError.internalServerError('출석 정보를 불러올 수 없습니다.')
-      }
-
-      const roster = await getDirectorRoster()
-      const auditors = await getAuditorRoster()
       // 정족수는 재적 이사(roster)만으로 산정 — 감사(auditors)는 산입하지 않는다.
       const attendedCount = attendees.filter(
         a => a.attended && roster.some(r => r.id === a.member_id)

@@ -9,12 +9,19 @@ import { parseIntegerParam } from '@/utils/queryParams'
 import { isValidEventSlug, normalizeEventSlug } from '@/utils/eventApplicationValidation'
 import { validateUUID } from '@/utils/validation'
 import { z } from 'zod'
+import { eq } from 'drizzle-orm'
+import { db } from '@/db/client'
+import { eventApplications } from '@/db/schema'
+import { logicalPathFromUrl, deletePublicObject } from '@/lib/storage/provider'
+import { createLogger } from '@/utils/logger'
 import {
   deleteEventApplication,
   listEventApplications,
   updateEventApplicationFields,
   updateEventApplicationStatus,
 } from '@/db/queries/misc'
+
+const log = createLogger('api/admin/event-applications')
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -211,11 +218,54 @@ export const DELETE = defineApiRoute({
     }
     const applicationId = idValidation.sanitized
 
+    // 삭제 전에 photo_url을 읽어 둔다 — DB 행을 지운 뒤에는 이 값을 다시 얻을
+    // 방법이 없다. db/queries/misc.ts에는 id 단건 조회 함수가 없고 이 작업
+    // 범위에서 그 파일을 건드릴 수 없어, 딱 이 컬럼 하나만 여기서 직접 읽는다.
+    let photoUrl: string | null = null
+    try {
+      const [row] = await db
+        .select({ photoUrl: eventApplications.photoUrl })
+        .from(eventApplications)
+        .where(eq(eventApplications.id, applicationId))
+        .limit(1)
+      photoUrl = row?.photoUrl ?? null
+    } catch (error) {
+      // 조회 실패는 치명적이지 않다 — 아래에서 photoUrl이 null이면 Blob
+      // 삭제를 건너뛸 뿐, 신청 삭제 자체는 계속 진행한다.
+      log.error('삭제 전 photo_url 조회 실패', { id: applicationId, error })
+    }
+
     try {
       await deleteEventApplication(applicationId)
     } catch (error) {
       console.error('[admin/event-applications] delete error:', error)
       return ApiError.internalServerError('삭제에 실패했습니다.').toNextResponse()
+    }
+
+    // DB 행 삭제 성공 후에만 Blob을 지운다(첨부 라우트·board-room 서류
+    // 라우트와 같은 순서·같은 근거) — 반대 순서면 Blob 삭제 성공 뒤 DB 삭제가
+    // 실패했을 때 신청은 남았는데 사진만 사라진 상태가 된다. 지금 순서의
+    // 최악은 "DB에는 없는데 Blob에 사진만 남는" 고아 파일인데, 신청자 삭제가
+    // 이미 성공했으므로 되돌릴 수 없는 쪽이 아니라 되돌릴 수 있는 쪽으로
+    // 실패하게 만든다. Blob 삭제 실패는 로그만 남기고 요청은 성공 처리한다.
+    if (photoUrl) {
+      const logical = logicalPathFromUrl(photoUrl, 'attachments', 'event-applications')
+      if (logical) {
+        try {
+          await deletePublicObject(logical)
+        } catch (error) {
+          log.error('신청 삭제 후 photo Blob 삭제 실패(고아 파일 남음)', {
+            id: applicationId,
+            photoUrl,
+            error,
+          })
+        }
+      } else {
+        log.error('안전하지 않은 photo_url이라 Blob 삭제를 건너뜀', {
+          id: applicationId,
+          photoUrl,
+        })
+      }
     }
 
     return ApiSuccess.ok({ id: applicationId }, '신청이 삭제되었습니다.').toNextResponse()

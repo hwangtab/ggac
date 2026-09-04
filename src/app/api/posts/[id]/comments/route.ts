@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createComment, listCommentsKeyset } from '@/db/queries/comments'
 import { getPostById } from '@/db/queries/posts'
 import { getLikedCommentIds } from '@/db/queries/likes'
-import { revalidateTag } from 'next/cache'
+import { revalidatePath } from 'next/cache'
 import { validateUUID } from '@/utils/validation'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { parseJsonObjectBody } from '@/utils/requestBody'
@@ -11,6 +11,7 @@ import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { rateLimit } from '@/lib/server/rateLimit'
 import { requireActiveMember, getOptionalUser } from '@/lib/server/memberAuth'
 import { notifyNewComment } from '@/lib/server/commentNotify'
+import { getBoardPostRevalidationPaths } from '@/lib/revalidationPaths'
 
 export const dynamic = 'force-dynamic'
 export const preferredRegion = 'icn1'
@@ -144,10 +145,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     }
 
     try {
-      revalidateTag(`comments-post-${validPostId}`)
-      revalidateTag(`attachments-post-${validPostId}`)
-      revalidateTag('board-post')
-      revalidateTag(validPostId)
+      // 이 저장소에서 board-*/comments-*/attachments-* 태그를 부착하는 fetch가
+      // 하나도 없어(유일한 생산자는 data.ts의 'artists') revalidateTag는
+      // 아무것도 무효화하지 않았다. 게시글 상세 경로를 직접 무효화한다.
+      for (const boardPath of getBoardPostRevalidationPaths(validPostId)) {
+        revalidatePath(boardPath)
+      }
     } catch (revalidateError) {
       console.error('[API] 캐시 재검증 실패:', revalidateError)
     }

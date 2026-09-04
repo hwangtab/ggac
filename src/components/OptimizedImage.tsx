@@ -6,6 +6,9 @@ import { useTranslations } from 'next-intl'
 import type { OptimizedImageProps } from '@/types'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { isBlobPublicUrl } from '@/lib/storage/paths'
+import { createLogger } from '@/utils/logger'
+
+const log = createLogger('OptimizedImage')
 
 // Next.js 설정과 동기화된 허용 품질 값 파싱
 const DEFAULT_ALLOWED_QUALITIES = [50, 65, 75, 80, 85, 90, 100]
@@ -358,11 +361,7 @@ const OptimizedImage = memo(function OptimizedImage({
 
       // 이미지가 완전히 로드되었는지 확인
       if (img && img.complete && img.naturalWidth > 0) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log(
-            `[OptimizedImage] 🔄 폴링으로 이미지 로드 감지 (${elapsedTime}ms): ${currentSrc}`
-          )
-        }
+        log.debug(`폴링으로 이미지 로드 감지 (${elapsedTime}ms): ${currentSrc}`)
         clearLoadAndErrorTimers()
         setIsLoading(false)
         onLoadProp?.()
@@ -386,14 +385,12 @@ const OptimizedImage = memo(function OptimizedImage({
     clearLoadAndErrorTimers()
     setIsLoading(false)
 
-    if (process.env.NODE_ENV === 'development') {
-      const isRemoteStorageImage = isBlobPublicUrl(currentSrc)
-      const retryText = retryCount > 0 ? ` (${retryCount}회 재시도 후)` : ''
-      console.log(`[OptimizedImage] ✅ 이미지 로드 성공${retryText}: ${currentSrc}`)
+    const isRemoteStorageImage = isBlobPublicUrl(currentSrc)
+    const retryText = retryCount > 0 ? ` (${retryCount}회 재시도 후)` : ''
+    log.debug(`이미지 로드 성공${retryText}: ${currentSrc}`)
 
-      if (isRemoteStorageImage) {
-        console.log(`[OptimizedImage] 📊 저장소 이미지 로딩 통계 - 성공 (재시도: ${retryCount}회)`)
-      }
+    if (isRemoteStorageImage) {
+      log.debug(`저장소 이미지 로딩 통계 - 성공 (재시도: ${retryCount}회)`)
     }
 
     onLoadProp?.()

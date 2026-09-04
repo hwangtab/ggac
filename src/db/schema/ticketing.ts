@@ -111,6 +111,18 @@ export const reservations = sqliteTable(
      * 연결은 선택이고, 예매자 정보는 아래 컬럼에 따로 새긴다.
      */
     userId: text('user_id').references(() => memberProfiles.id, { onDelete: 'set null' }),
+    /**
+     * 이 예매를 위해 만든 결제 주문번호. **선점과 같은 순간에 새긴다.**
+     *
+     * 없으면 예매와 결제를 이어 주는 것이 아무것도 없다. `payment_id`는 승인이
+     * 끝난 뒤에야 채워지므로, 승인을 판단하는 시점에는 쓸 수 없다. 그 틈으로
+     * 싼 주문의 승인 결과를 비싼 예매에 붙이는 요청이 들어올 수 있었다.
+     *
+     * 비워 둘 수 있게 한 이유는 두 가지다 — 이 컬럼이 생기기 전의 예매가 이미
+     * 있고, 결제가 필요 없는 무료 예매를 나중에 열 수 있다. 대신 값이 있으면
+     * 유일하다(SQLite는 NULL을 서로 다른 값으로 보므로 빈 값은 제약 밖이다).
+     */
+    orderId: text('order_id'),
     bookerName: text('booker_name').notNull(),
     bookerPhone: text('booker_phone').notNull(),
     bookerEmail: text('booker_email'),
@@ -133,9 +145,19 @@ export const reservations = sqliteTable(
     index('reservations_show_status_idx').on(table.showId, table.status),
     index('reservations_user_idx').on(table.userId),
     /**
-     * 같은 공연에 같은 연락처로 중복 예매하는 것 자체는 막지 않는다(가족
-     * 예매가 정상이다). 대신 확정된 예매만 예매번호로 유일하다.
+     * 만료된 선점 정리가 `(status, hold_expires_at)`로 훑는다. 위의
+     * `reservations_show_status_idx`는 선두가 `show_id`라 그 조회를 못 덮는다.
      */
-    uniqueIndex('reservations_code_idx').on(table.reservationCode),
+    index('reservations_status_hold_idx').on(table.status, table.holdExpiresAt),
+    /**
+     * 승인 요청이 들고 온 주문번호로 예매를 되찾을 때 쓴다. 유일해야 하는
+     * 이유는 성능이 아니라 정합성이다 — 한 주문이 두 예매를 확정하면 그 순간
+     * 초과 판매다.
+     *
+     * 예매번호(`reservation_code`)에는 별도 인덱스를 두지 않는다. 컬럼 선언의
+     * `.unique()`가 이미 유일 인덱스를 만들고 있어, 따로 선언하면 같은 인덱스를
+     * 두 벌 유지하게 된다(0016이 실제로 그렇게 만들었고 0017이 지운다).
+     */
+    uniqueIndex('reservations_order_id_idx').on(table.orderId),
   ]
 )

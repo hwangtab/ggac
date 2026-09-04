@@ -52,7 +52,7 @@
  * 뜨거운 경로 최적화와는 다른 상황).
  */
 
-import { and, eq } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 
 import { db } from '../client.ts'
 import {
@@ -115,6 +115,78 @@ export async function getUserSettings(userId: string): Promise<UserSettingRow[]>
     is_default: row.userSettingId === null,
     description: row.description,
   }))
+}
+
+/**
+ * `getUserSettings`의 배치판 — 여러 회원의 설정을 **쿼리 2회**로 읽는다
+ * (기본값 표 1회 + 사용자 오버라이드 1회). 회원 한 명당 한 쿼리를 날리던
+ * 호출부(지원사업 발행)를 위해 만들었다: `Promise.all`이라 지연은 병렬이어도
+ * 원격 커넥션에는 회원 수만큼 왕복이 꽂힌다.
+ *
+ * **기본값 합성은 `getUserSettings`와 글자 그대로 같아야 한다** — 여기서
+ * 어긋나면 수신 설정이 조용히 다르게 읽혀 알림이 잘못 나간다. 그래서 단건
+ * 함수와 동일하게: `default_settings` 전 행을 기준으로, 그 회원의 오버라이드
+ * 행이 없으면 `default_value` + `is_default: true`, 있으면 그 값 +
+ * `is_default: false`. 정렬도 `category, setting_key`로 같다.
+ *
+ * `ids`가 비면 쿼리 없이 빈 Map을 돌려준다(`getProfilesByIds`와 같은 계약 —
+ * Drizzle `inArray()`에 빈 배열을 넘기면 유효하지 않은 SQL이 된다).
+ *
+ * @returns userId → 그 회원의 설정 행 배열. 요청한 id는 오버라이드가 하나도
+ *   없어도 **기본값 전체**가 담긴 항목으로 들어간다(단건 함수와 동일).
+ */
+export async function getUserSettingsByUserIds(
+  ids: string[]
+): Promise<Map<string, UserSettingRow[]>> {
+  if (ids.length === 0) return new Map()
+  const uniqueIds = [...new Set(ids)]
+
+  const [defaults, overrides] = await Promise.all([
+    db
+      .select({
+        category: defaultSettings.category,
+        settingKey: defaultSettings.settingKey,
+        description: defaultSettings.description,
+        defaultValue: defaultSettings.defaultValue,
+      })
+      .from(defaultSettings)
+      .orderBy(defaultSettings.category, defaultSettings.settingKey),
+    db
+      .select({
+        userId: userSettings.userId,
+        category: userSettings.category,
+        settingKey: userSettings.settingKey,
+        settingValue: userSettings.settingValue,
+      })
+      .from(userSettings)
+      .where(inArray(userSettings.userId, uniqueIds)),
+  ])
+
+  // (userId, category, settingKey) → 오버라이드 값. 단건 함수의 LEFT JOIN
+  // 조건(user_id + category + setting_key)을 그대로 옮긴 키다.
+  const overrideByKey = new Map<string, unknown>()
+  for (const row of overrides) {
+    overrideByKey.set(`${row.userId}\u0000${row.category}\u0000${row.settingKey}`, row.settingValue)
+  }
+
+  const result = new Map<string, UserSettingRow[]>()
+  for (const userId of uniqueIds) {
+    result.set(
+      userId,
+      defaults.map(d => {
+        const key = `${userId}\u0000${d.category}\u0000${d.settingKey}`
+        const hasOverride = overrideByKey.has(key)
+        return {
+          category: d.category,
+          setting_key: d.settingKey,
+          setting_value: hasOverride ? overrideByKey.get(key) : d.defaultValue,
+          is_default: !hasOverride,
+          description: d.description,
+        }
+      })
+    )
+  }
+  return result
 }
 
 export interface UpsertUserSettingInput {

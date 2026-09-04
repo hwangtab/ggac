@@ -483,7 +483,9 @@ describe('0002 마이그레이션의 성질', () => {
     // (하나라도 빠지면 재작성이 제약을 잃었다는 뜻이다). 다음 셋은 0004가
     // 추가한 성능 인덱스다(최종 리뷰 B-7) — 목록을 정확히 고정해 두면
     // "0002가 무엇을 지웠는가"와 "0004가 무엇을 더했는가"가 둘 다 드러난다.
-    // 마지막 하나는 0009(안건 토론)가 더한 조회 인덱스다.
+    // 그다음 하나는 0009(안건 토론)가 더한 조회 인덱스이고, 마지막은 0017이
+    // 더한 회의 목록 정렬 인덱스다(`board_meetings`에는 인덱스가 하나도 없어
+    // 목록이 매번 전체 스캔 뒤 정렬이었다).
     assert.deepEqual(
       r.rows.map(x => String(x.name)),
       [
@@ -494,6 +496,7 @@ describe('0002 마이그레이션의 성질', () => {
         'idx_board_agendas_meeting',
         'idx_board_date_options_meeting',
         'idx_board_documents_category',
+        'idx_board_meetings_created_at',
       ]
     )
   })

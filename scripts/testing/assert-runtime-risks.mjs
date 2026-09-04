@@ -600,8 +600,11 @@ const postsApiCreatesPostsWithServerAuthAndInvalidatesBoard =
   /getBoardListRevalidationPaths\(\)/.test(postsApiSource) &&
   /revalidatePath\(boardPath\)/.test(postsApiSource) &&
   !/revalidatePath\(['"]\/board['"]\)/.test(postsApiSource) &&
-  /revalidateTag\(['"]board-post['"]\)/.test(postsApiSource) &&
-  /revalidateTag\(['"]board-initial['"]\)/.test(postsApiSource)
+  // 태그 무효화는 더 이상 요구하지 않는다. 이 저장소에는 `board-*` 태그를
+  // 부착하는 곳이 없어 그 호출이 아무 일도 하지 않았다(2026-09-04 코드리뷰).
+  // 가드가 죽은 문자열의 존재를 통과 조건으로 삼고 있어, 지우려면 여기가
+  // 먼저 막았다. 실제로 지켜야 할 것은 위의 경로 무효화다.
+  !/revalidateTag\(/.test(postsApiSource)
 const postEditUsesServerApi =
   /fetch\(`\/api\/posts\/\$\{post\.id\}`/.test(editPageClientSource) &&
   /method:\s*['"]PATCH['"]/.test(editPageClientSource) &&
@@ -613,9 +616,10 @@ const postsApiUpdatesPostsWithServerAuthAndInvalidatesBoard =
   /registration_status/.test(postDetailApiSource) &&
   /is_active/.test(postDetailApiSource) &&
   /post\.author_id !== user\.id && !isAdmin/.test(postDetailApiSource) &&
-  /revalidateTag\(`post-\$\{validPostId\}`\)/.test(postDetailApiSource) &&
-  /revalidateTag\(['"]board-post['"]\)/.test(postDetailApiSource) &&
-  /revalidateTag\(['"]board-initial['"]\)/.test(postDetailApiSource)
+  // 같은 이유로 태그가 아니라 경로 무효화를 요구한다.
+  /getBoardPostRevalidationPaths\(validPostId\)/.test(postDetailApiSource) &&
+  /revalidatePath\(boardPath\)/.test(postDetailApiSource) &&
+  !/revalidateTag\(/.test(postDetailApiSource)
 const profilePageUsesServerApi =
   /fetch\(['"]\/api\/mypage\/profile['"]/.test(mypageProfilePageSource) &&
   !/from\(['"]member_profiles['"]\)[\s\S]*?\.update/.test(mypageProfilePageSource)

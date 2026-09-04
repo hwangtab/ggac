@@ -265,6 +265,96 @@
       "viewRelated": "View related project",
       "goToArticle": "Go to article",
       "imageAlt": "Article image"
+    },
+    "error": {
+      "heading": "Unable to load projects",
+      "body": "A temporary error occurred. Please try again.",
+      "retry": "Try Again"
+    }
+  },
+  "tickets": {
+    "meta": {
+      "listTitle": "Tickets",
+      "listDescription": "Book tickets online for performances produced by Gyeonggi Art Collective. Check show times and remaining seats, then pay right away.",
+      "detailDescription": "Tickets for {title} — {venue}. Check show times and remaining seats, and pay online.",
+      "notFoundTitle": "Performance not found",
+      "notFoundDescription": "We could not find the performance you asked for. Please check the other performances on sale."
+    },
+    "list": {
+      "heading": "Tickets",
+      "subtitle": "Book tickets for performances produced by Gyeonggi Art Collective.",
+      "emptyTitle": "No performances are on sale right now.",
+      "emptyHint": "We announce new performances on Instagram first.",
+      "posterAlt": "Poster for {title}",
+      "nextShowLabel": "Next show",
+      "venueLabel": "Venue",
+      "moreShows": "and {count} more show(s)"
+    },
+    "detail": {
+      "bookHeading": "Book tickets",
+      "showLegend": "Show",
+      "ticketLegend": "Ticket",
+      "quantityLabel": "Quantity",
+      "quantityOption": "{count} ticket(s)",
+      "noQuantity": "No tickets are available for this show. Please pick another show.",
+      "maxPerOrder": "Up to {count} ticket(s) per order.",
+      "bookerName": "Name",
+      "bookerPhone": "Phone",
+      "bookerEmail": "Email",
+      "optional": "(optional)",
+      "totalLabel": "Total",
+      "priceFormat": "KRW {amount}",
+      "membersOnly": "Members only",
+      "soldOut": "Sold out",
+      "showEnded": "Ended",
+      "showMoved": "The show you selected sold out, so we moved your selection to the next available show. Please check before booking.",
+      "showSoldOut": "The show you selected sold out. No shows are available right now.",
+      "seatsLeft": "{count} seat(s) left",
+      "paymentPreparing": "Online payment is being set up.",
+      "submit": "Book and pay",
+      "opening": "Opening payment…",
+      "holdNotice": "Your seats are held for now. They are released unless you <strong>pay within 10 minutes</strong>.",
+      "pay": "Pay",
+      "payAmount": "Pay {amount}",
+      "noticeHeading": "Booking information",
+      "errorPrepare": "We could not start your booking.",
+      "errorWidget": "Something went wrong while opening the payment window. Please try again in a moment.",
+      "errorRequest": "We could not start the payment. Please try again."
+    },
+    "success": {
+      "confirming": "Confirming your booking. Please keep this window open.",
+      "heading": "Your booking is complete",
+      "codeLabel": "Booking number",
+      "entryNote": "At the door, please give your <strong>booking number and phone number</strong>. No separate ticket is sent.",
+      "otherShows": "See other performances",
+      "myTickets": "My bookings",
+      "failedHeading": "We could not confirm your booking",
+      "backToList": "Back to performances",
+      "missingParams": "The booking details are not valid. Please contact the office to check whether you were charged.",
+      "confirmFailed": "We could not confirm your booking.",
+      "networkFailed": "We could not verify the payment result. Your card may have been charged, so please contact the office."
+    },
+    "fail": {
+      "heading": "The payment did not go through",
+      "note": "Because the payment did not go through, no booking was made. The held seats are released shortly.",
+      "retry": "Try booking again",
+      "defaultMessage": "The payment did not go through.",
+      "codes": {
+        "PAY_PROCESS_CANCELED": "You canceled the payment. The seats are released automatically.",
+        "PAY_PROCESS_ABORTED": "The payment was interrupted. Please try again in a moment.",
+        "REJECT_CARD_COMPANY": "Your card issuer declined the payment. Please try another card.",
+        "REJECT_CARD_PAYMENT": "The payment failed because of a limit or insufficient balance.",
+        "INVALID_CARD_EXPIRATION": "The card expiry date is not valid."
+      }
+    },
+    "common": {
+      "loading": "Loading…",
+      "contactOffice": "Contact the office"
+    },
+    "error": {
+      "heading": "Unable to load performance information",
+      "body": "A temporary error occurred. Please try again.",
+      "retry": "Try Again"
     }
   },
   "application": {

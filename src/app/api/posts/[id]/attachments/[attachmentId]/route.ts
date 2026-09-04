@@ -12,12 +12,13 @@ export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
-import { revalidateTag } from 'next/cache'
+import { revalidatePath } from 'next/cache'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { deletePublicObject, logicalPathFromUrl } from '@/lib/storage/provider'
 import { validateUUID } from '@/utils/validation'
 import { requireUser } from '@/lib/server/memberAuth'
 import { getProfileById } from '@/db/queries/profiles'
+import { getBoardPostRevalidationPaths } from '@/lib/revalidationPaths'
 import {
   getAttachmentById,
   getAttachmentWithPost,
@@ -170,13 +171,10 @@ export async function PUT(
     }
 
     try {
-      revalidateTag(`attachments-post-${postId}`)
-      revalidateTag(`comments-post-${postId}`)
-      revalidateTag('board-post')
-      revalidateTag(postId)
-      if ((attachment as any)?.posts?.category) {
-        revalidateTag(`board-${(attachment as any).posts.category}`)
-        revalidateTag('board-initial')
+      // 태그 무효화는 생산자가 없어 무효했다(posts/[id]/route.ts와 동일
+      // 사유). 게시글 상세·목록 경로를 직접 무효화한다.
+      for (const boardPath of getBoardPostRevalidationPaths(postId)) {
+        revalidatePath(boardPath)
       }
     } catch {}
 
@@ -269,13 +267,10 @@ export async function DELETE(
     }
 
     try {
-      revalidateTag(`attachments-post-${postId}`)
-      revalidateTag(`comments-post-${postId}`)
-      revalidateTag('board-post')
-      revalidateTag(postId)
-      if ((attachment as any)?.posts?.category) {
-        revalidateTag(`board-${(attachment as any).posts.category}`)
-        revalidateTag('board-initial')
+      // 태그 무효화는 생산자가 없어 무효했다(posts/[id]/route.ts와 동일
+      // 사유). 게시글 상세·목록 경로를 직접 무효화한다.
+      for (const boardPath of getBoardPostRevalidationPaths(postId)) {
+        revalidatePath(boardPath)
       }
     } catch {}
 

@@ -16,6 +16,7 @@ import {
 import { listPosts, getPostById } from '@/db/queries/posts'
 import { listCommentsKeyset } from '@/db/queries/comments'
 import { listAttachments } from '@/db/queries/attachments'
+import { getSiteUrl } from '@/utils/site'
 
 function normalizePostRouteId(id: string): string | null {
   const validation = validateUUID(id, '게시글 ID')
@@ -75,7 +76,7 @@ export async function generateMetadata({
       openGraph: {
         title: ogTitle,
         description,
-        url: `https://ggac.kr/board/${postId}`,
+        url: `${getSiteUrl()}/board/${postId}`,
         siteName: '경기아트콜렉티브 협동조합',
         locale: 'ko_KR',
         images: [
@@ -305,9 +306,9 @@ export default async function PostDetailPage({
 
   const breadcrumbData = metadata
     ? generateBreadcrumbStructuredData([
-        { name: '홈', url: 'https://ggac.kr' },
-        { name: '게시판', url: 'https://ggac.kr/board' },
-        { name: metadata.post.title, url: `https://ggac.kr/board/${postId}` },
+        { name: '홈', url: getSiteUrl() },
+        { name: '게시판', url: `${getSiteUrl()}/board` },
+        { name: metadata.post.title, url: `${getSiteUrl()}/board/${postId}` },
       ])
     : null
 

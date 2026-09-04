@@ -65,10 +65,50 @@ function rowToMeeting(row: typeof boardMeetings.$inferSelect): MeetingRow {
   }
 }
 
+/**
+ * 목록 조회의 방어적 상한. `board_meetings`·`board_documents`는 상한 없이 자라는
+ * 표인데 두 목록 조회 모두 표를 통째로 원격에서 끌어오고 있었다(`activities.ts`의
+ * `DEFAULT_ACTIVITY_SCAN_LIMIT`과 같은 취지). 이사회 규모에서 500을 넘길 일은
+ * 없지만, 넘치면 응답이 아니라 메모리가 먼저 무너진다.
+ */
+export const DEFAULT_BOARD_LIST_LIMIT = 500
+
+/**
+ * 목록 조회 옵션. 인자를 통째로 생략할 수 있게 만든 이유는 기존 호출부
+ * (`listMeetings()`·`listCalendarItems`)를 깨지 않기 위해서다.
+ *
+ * `onTruncated`가 필요한 이유: 반환값이 배열이라 "상한에 걸려 잘렸다"를 값으로
+ * 알릴 자리가 없다. 반환 타입을 `{rows, truncated}`로 바꾸면 기존 호출부가 전부
+ * 깨지므로, 잘림을 콜백으로만 알린다 — 호출부(라우트)가 로그를 남기든 경고를
+ * 띄우든 판단한다. 내부적으로 `limit + 1`행을 읽어 판정하고 초과분은 버린다.
+ */
+export interface BoardListOptions {
+  /** 없으면 `DEFAULT_BOARD_LIST_LIMIT`. */
+  limit?: number
+  /** 상한에 걸려 결과가 잘렸을 때만 호출된다. */
+  onTruncated?: (info: { limit: number }) => void
+}
+
+function resolveBoardListLimit(options?: BoardListOptions): number {
+  const limit = options?.limit ?? DEFAULT_BOARD_LIST_LIMIT
+  return limit > 0 ? limit : DEFAULT_BOARD_LIST_LIMIT
+}
+
+function applyBoardListLimit<T>(rows: T[], limit: number, options?: BoardListOptions): T[] {
+  if (rows.length <= limit) return rows
+  options?.onTruncated?.({ limit })
+  return rows.slice(0, limit)
+}
+
 /** `/api/board-room/meetings` GET. `created_at` 내림차순은 원본과 동일. */
-export async function listMeetings(): Promise<MeetingRow[]> {
-  const rows = await db.select().from(boardMeetings).orderBy(desc(boardMeetings.createdAt))
-  return rows.map(rowToMeeting)
+export async function listMeetings(options?: BoardListOptions): Promise<MeetingRow[]> {
+  const limit = resolveBoardListLimit(options)
+  const rows = await db
+    .select()
+    .from(boardMeetings)
+    .orderBy(desc(boardMeetings.createdAt))
+    .limit(limit + 1)
+  return applyBoardListLimit(rows, limit, options).map(rowToMeeting)
 }
 
 /** `/api/board-room/meetings/[id]` GET. */
@@ -110,6 +150,47 @@ export async function createMeeting(input: CreateMeetingInput): Promise<{ id: st
     })
     .returning({ id: boardMeetings.id })
   return row
+}
+
+/**
+ * 회의와 후보 날짜를 **한 트랜잭션**으로 만든다(`likes.ts`의 `togglePostLike`와
+ * 같은 형식).
+ *
+ * 예전에는 라우트가 `createMeeting` → `createDateOptions`를 따로 부르고, 뒤쪽이
+ * 실패하면 `deleteMeeting`으로 손수 보상했다. 그 보상마저 실패하면 **후보 날짜가
+ * 없는 고아 회의**가 목록에 남고(투표를 시작할 수 없다) 이사들에게는 투표 요청
+ * 알림만 나갔다. 트랜잭션이면 그 창 자체가 없어진다 — 둘 다 들어가거나 둘 다
+ * 없거나다.
+ *
+ * `candidateDates`가 비면 후보 날짜 INSERT를 건너뛴다(`createDateOptions`와 동일
+ * 계약 — Drizzle에 빈 values 배열을 넘기면 유효하지 않은 SQL이 된다). 후보가
+ * 1개 이상이어야 한다는 판단은 라우트가 한다(이 모듈은 검증을 모른다).
+ */
+export async function createMeetingWithDateOptions(
+  input: CreateMeetingInput,
+  candidateDates: string[]
+): Promise<{ id: string }> {
+  return db.transaction(async tx => {
+    const [row] = await tx
+      .insert(boardMeetings)
+      .values({
+        title: input.title,
+        location: input.location,
+        meetingTime: input.meetingTime ?? null,
+        status: 'polling',
+        voteDeadline: input.voteDeadline,
+        createdBy: input.createdBy,
+      })
+      .returning({ id: boardMeetings.id })
+
+    if (candidateDates.length > 0) {
+      await tx
+        .insert(boardMeetingDateOptions)
+        .values(candidateDates.map(candidateDate => ({ meetingId: row.id, candidateDate })))
+    }
+
+    return { id: row.id }
+  })
 }
 
 export interface MeetingUpdatePatch {
@@ -570,23 +651,44 @@ function rowToDocument(row: typeof boardDocuments.$inferSelect): DocumentRow {
  * `/api/board-room/documents` GET. `category`가 있으면 그 값으로만 걸러진다.
  * 없으면 원본처럼 정기총회 자료(`assemblyDocumentCategory`)를 제외한
  * 일반 서류함 전체를 돌려준다.
+ *
+ * 필터 우선순위는 `category` → `categories` → `excludeCategory`다.
+ *
+ * `categories`(허용 목록, `inArray`)를 새로 받는 이유: `excludeCategory`의
+ * `!=`는 `idx_board_documents_category`(category, created_at DESC)를 타지 못해
+ * 서류함 **기본 조회가 매번 전체 스캔 후 정렬**이었다. 같은 조건을 허용 목록으로
+ * 뒤집으면 인덱스를 탄다. 목록 자체는 이 모듈이 만들지 않는다 — 카테고리는
+ * 도메인 상수(`@/constants/boardRoom`)이고 이 모듈은 도메인을 모르므로,
+ * 호출부가 넘긴다. **허용 목록에 없는 카테고리의 서류는 목록에서 사라진다** —
+ * 쓰기 경로(`/api/board-room/documents` POST)가 `ALL_DOCUMENT_CATEGORIES`로
+ * 검증하고, 운영 DB 실측(2026-09-04)도 그 5종뿐이라 지금은 안전하다.
+ * `excludeCategory`는 그 전제가 깨진 곳을 위해 남겨둔다.
  */
-export async function listDocuments(filter: {
-  category?: string | null
-  excludeCategory?: string | null
-}): Promise<DocumentRow[]> {
+export async function listDocuments(
+  filter: {
+    category?: string | null
+    /** 이 목록에 있는 카테고리만. 비어 있으면 무시한다. */
+    categories?: readonly string[] | null
+    excludeCategory?: string | null
+  },
+  options?: BoardListOptions
+): Promise<DocumentRow[]> {
   const where = filter.category
     ? eq(boardDocuments.category, filter.category)
-    : filter.excludeCategory
-      ? ne(boardDocuments.category, filter.excludeCategory)
-      : undefined
+    : filter.categories && filter.categories.length > 0
+      ? inArray(boardDocuments.category, [...filter.categories])
+      : filter.excludeCategory
+        ? ne(boardDocuments.category, filter.excludeCategory)
+        : undefined
 
+  const limit = resolveBoardListLimit(options)
   const rows = await db
     .select()
     .from(boardDocuments)
     .where(where)
     .orderBy(desc(boardDocuments.createdAt))
-  return rows.map(rowToDocument)
+    .limit(limit + 1)
+  return applyBoardListLimit(rows, limit, options).map(rowToDocument)
 }
 
 export interface CreateDocumentInput {

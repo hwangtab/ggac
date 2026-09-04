@@ -288,6 +288,14 @@ export interface ListActivitiesFilter {
    * `exclude_test` 옵션 — 원본은 Postgres JSONB 포함 연산자 `.not('metadata',
    * 'cs', '{"generated":true}')`였다). */
   excludeGeneratedMetadata?: boolean
+  /** 없으면 `DEFAULT_ACTIVITY_SCAN_LIMIT`. `MAX_ACTIVITY_SCAN_LIMIT`을 넘길 수 없다. */
+  limit?: number
+  /**
+   * 상한에 걸려 결과가 잘렸을 때만 호출된다. 반환값이 배열이라 "잘렸다"를 값으로
+   * 알릴 자리가 없어 콜백으로 알린다(`board.ts`의 `BoardListOptions`와 같은 이유).
+   * 쿼리 계층은 로그를 남기지 않는다 — 무엇을 할지는 호출부가 판단한다.
+   */
+  onTruncated?: (info: { limit: number }) => void
 }
 
 /**
@@ -300,6 +308,11 @@ export interface ListActivitiesFilter {
  * 라우트들은 정렬을 요구하지 않았지만, 안정적인 순서를 위해 생성 시각
  * 오름차순으로 고정했다).
  */
+/** 기간 조회의 기본 상한. 월간 리포트 한 달치를 넉넉히 덮는 값이다. */
+export const DEFAULT_ACTIVITY_SCAN_LIMIT = 5000
+/** 호출자가 무엇을 넘기든 이 이상은 읽지 않는다. */
+export const MAX_ACTIVITY_SCAN_LIMIT = 20000
+
 export async function listActivities(filter: ListActivitiesFilter): Promise<ActivityRow[]> {
   const conditions: SQL[] = [gte(userActivities.createdAt, filter.startDate)]
   if (filter.endDate) {
@@ -317,13 +330,26 @@ export async function listActivities(filter: ListActivitiesFilter): Promise<Acti
     conditions.push(sql`coalesce(json_extract(${userActivities.metadata}, '$.generated'), 0) != 1`)
   }
 
+  // 상한을 둔다. 이 함수는 기간만 걸러 표를 통째로 원격에서 끌어오고 있었고,
+  // `user_activities`는 상한 없이 자라는 표다(2026-09 실측 1만 1천 행). 관리자
+  // 분석·리포트 네 곳이 이 결과를 JS에서 집계하므로, 넘치면 응답이 아니라
+  // 메모리가 먼저 무너진다.
+  //
+  // **자르는 방향이 중요하다.** 오름차순으로 자르면 넘칠 때 사라지는 것이 가장
+  // 최근 활동이라, 긴 기간을 조회할수록 최근 주차가 0으로 떨어지면서도 경고가
+  // 없다. 최신부터 읽어 오래된 쪽을 버리고, 호출자가 기대하는 오름차순은
+  // 메모리에서 되돌린다.
+  const limit = Math.min(filter.limit ?? DEFAULT_ACTIVITY_SCAN_LIMIT, MAX_ACTIVITY_SCAN_LIMIT)
   const rows = await db
     .select()
     .from(userActivities)
     .where(and(...conditions))
-    .orderBy(asc(userActivities.createdAt))
+    .orderBy(desc(userActivities.createdAt))
+    .limit(limit)
 
-  return rows.map(rowToActivity)
+  if (rows.length === limit) filter.onTruncated?.({ limit })
+
+  return rows.reverse().map(rowToActivity)
 }
 
 export interface ListActivitiesPaginatedFilter {

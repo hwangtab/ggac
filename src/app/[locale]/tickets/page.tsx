@@ -1,122 +1,131 @@
-'use client'
-
 /**
  * 예매 가능한 공연 목록. **로그인 없이 볼 수 있다** — 표를 사려면 먼저
  * 조합원이 되어야 한다면 아무도 사지 않는다.
+ *
+ * 서버에서 그린다. 예전에는 클라이언트가 `/api/tickets`를 불러 채웠는데, 그
+ * 경우 첫 HTML이 비어 있어 검색엔진도 카카오톡 미리보기도 공연을 보지 못했다.
  */
 
-import { useEffect, useState } from 'react'
-import { FiCalendar, FiMapPin } from 'react-icons/fi'
+import type { Metadata } from 'next'
+import { getTranslations, setRequestLocale } from 'next-intl/server'
 
-import { Link } from '@/i18n/navigation'
+import { listOpenPerformances } from '@/db/queries/ticketing'
+import { createLogger } from '@/utils/logger'
+import { getLocaleAlternates, getOgLocale, getSiteUrl } from '@/utils/site'
+import {
+  combineStructuredData,
+  generateBreadcrumbStructuredData,
+  generateItemListStructuredData,
+  structuredDataToScript,
+} from '@/utils/structuredData'
 
-interface PerformanceSummary {
-  slug: string
-  title: string
-  summary: string | null
-  venue: string | null
-  poster_image: string | null
-  next_show_at: string | null
-  show_count: number
+import TicketsListContent from './TicketsListContent'
+import type { PerformanceSummary } from './types'
+
+const log = createLogger('tickets/list')
+
+// 재고가 실시간으로 변하므로 프로젝트(1시간)보다 훨씬 짧게 잡는다. 목록에는
+// 잔여 좌석이 없고 "어떤 공연이 열려 있는가"만 보이므로 60초면 충분하다.
+// 회차별 잔여 좌석은 상세 화면이 별도로 갱신한다.
+export const revalidate = 60
+
+// 운영 도메인을 문자열로 박지 않는다 — 정본은 `getSiteUrl()`이다(프리뷰
+// 배포에서는 그 배포 호스트를 써야 미리보기가 뜬다). 끝 슬래시는 이미 떼여 있다.
+const OG_IMAGE_PATH = '/images/logo/gac_og.webp'
+
+/**
+ * DB 행에서 목록이 실제로 쓰는 필드만 골라 새 객체를 만든다.
+ *
+ * `listOpenPerformances`는 `toSnakeCase`로 키만 바꾼 행 전체를 돌려주므로
+ * 그대로 넘기면 `created_by`(관리자 UUID)·내부 id·타임스탬프가 서버 렌더
+ * HTML에 직렬화돼 공개·색인된다. 상세 페이지와 같은 이유·같은 처리다.
+ */
+function toPerformanceSummary(row: Record<string, unknown>): PerformanceSummary {
+  const text = (value: unknown): string | null =>
+    typeof value === 'string' && value.trim() !== '' ? value : null
+  return {
+    slug: String(row.slug ?? ''),
+    title: String(row.title ?? ''),
+    summary: text(row.summary),
+    venue: text(row.venue),
+    poster_image: text(row.poster_image),
+    next_show_at: text(row.next_show_at),
+    show_count: Number(row.show_count ?? 0),
+  }
 }
 
-function formatDate(iso: string | null): string {
-  if (!iso) return ''
-  return new Date(iso).toLocaleString('ko-KR', {
-    month: 'long',
-    day: 'numeric',
-    weekday: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+async function loadPerformances(): Promise<PerformanceSummary[]> {
+  try {
+    const rows = await listOpenPerformances()
+    return rows.map(toPerformanceSummary)
+  } catch (error) {
+    // DB가 없거나(빌드 시점) 조회가 실패해도 페이지는 떠야 한다.
+    log.error('공연 목록 조회 실패', { error })
+    return []
+  }
 }
 
-export default function TicketsPage() {
-  const [performances, setPerformances] = useState<PerformanceSummary[]>([])
-  const [loading, setLoading] = useState(true)
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>
+}): Promise<Metadata> {
+  const { locale } = await params
+  const t = await getTranslations({ locale, namespace: 'tickets' })
+  const base = getSiteUrl()
+  const isEn = locale === 'en'
+  const title = t('meta.listTitle')
+  const description = t('meta.listDescription')
+  const siteName = isEn ? 'Gyeonggi Art Collective' : '경기아트콜렉티브 협동조합'
+  const ogImage = `${base}${OG_IMAGE_PATH}`
 
-  useEffect(() => {
-    void (async () => {
-      try {
-        const response = await fetch('/api/tickets')
-        const result = (await response.json().catch(() => null)) as {
-          data?: { performances?: PerformanceSummary[] }
-        } | null
-        setPerformances(result?.data?.performances ?? [])
-      } finally {
-        setLoading(false)
-      }
-    })()
-  }, [])
+  return {
+    title,
+    description,
+    alternates: getLocaleAlternates('/tickets', locale),
+    openGraph: {
+      title: `${title} | ${siteName}`,
+      description,
+      url: isEn ? `${base}/en/tickets` : `${base}/tickets`,
+      siteName,
+      images: [{ url: ogImage, width: 1200, height: 630, alt: siteName }],
+      locale: getOgLocale(locale),
+      type: 'website',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `${title} | ${siteName}`,
+      description,
+      images: [ogImage],
+    },
+  }
+}
+
+export default async function TicketsPage({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params
+  setRequestLocale(locale)
+
+  const performances = await loadPerformances()
+  const base = getSiteUrl()
+  const prefix = locale === 'en' ? `${base}/en` : base
+
+  const jsonLd = combineStructuredData([
+    generateItemListStructuredData(
+      performances.map(performance => ({
+        name: performance.title,
+        url: `${prefix}/tickets/${performance.slug}`,
+      }))
+    ),
+    generateBreadcrumbStructuredData([
+      { name: '홈', url: base },
+      { name: '공연 예매', url: `${base}/tickets` },
+    ]),
+  ])
 
   return (
-    <div className="min-h-screen bg-gray-50 px-4 pt-32 pb-20 sm:px-6 md:pt-40">
-      <div className="mx-auto max-w-4xl">
-        <header className="mb-10">
-          <h1 className="text-3xl font-bold text-gray-900 md:text-4xl">공연 예매</h1>
-          <p className="mt-2 text-gray-600">
-            경기아트콜렉티브가 기획한 공연을 예매하실 수 있습니다.
-          </p>
-        </header>
-
-        {loading ? (
-          <p className="py-16 text-center text-gray-500">불러오는 중…</p>
-        ) : performances.length === 0 ? (
-          <div className="rounded-lg border border-gray-200 bg-white py-16 text-center">
-            <p className="text-gray-700">현재 예매 중인 공연이 없습니다.</p>
-            <p className="mt-1 text-sm text-gray-500">
-              새로운 공연 소식은 인스타그램에서 먼저 알려드립니다.
-            </p>
-          </div>
-        ) : (
-          <ul className="grid gap-5 sm:grid-cols-2">
-            {performances.map(performance => (
-              <li key={performance.slug}>
-                <Link
-                  href={`/tickets/${performance.slug}`}
-                  className="block h-full overflow-hidden rounded-lg border border-gray-200 bg-white transition hover:border-primary-400 hover:shadow-md"
-                >
-                  {performance.poster_image && (
-                    // 공연 포스터는 비율이 제각각이라 크기를 고정하지 않는다.
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={performance.poster_image}
-                      alt=""
-                      className="h-48 w-full object-cover"
-                      loading="lazy"
-                    />
-                  )}
-                  <div className="p-5">
-                    <h2 className="text-lg font-semibold text-gray-900">{performance.title}</h2>
-                    {performance.summary && (
-                      <p className="mt-1 line-clamp-2 text-sm text-gray-600">
-                        {performance.summary}
-                      </p>
-                    )}
-                    <dl className="mt-3 space-y-1 text-sm text-gray-600">
-                      {performance.next_show_at && (
-                        <div className="flex items-center gap-1.5">
-                          <FiCalendar className="h-4 w-4 flex-none" aria-hidden />
-                          <dd>
-                            {formatDate(performance.next_show_at)}
-                            {performance.show_count > 1 && ` 외 ${performance.show_count - 1}회차`}
-                          </dd>
-                        </div>
-                      )}
-                      {performance.venue && (
-                        <div className="flex items-center gap-1.5">
-                          <FiMapPin className="h-4 w-4 flex-none" aria-hidden />
-                          <dd>{performance.venue}</dd>
-                        </div>
-                      )}
-                    </dl>
-                  </div>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </div>
+    <>
+      {structuredDataToScript(jsonLd)}
+      <TicketsListContent performances={performances} locale={locale} />
+    </>
   )
 }

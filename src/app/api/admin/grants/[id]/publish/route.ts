@@ -12,13 +12,14 @@ import {
 import { createBulkNotifications } from '@/db/queries/notifications'
 import { createPost } from '@/db/queries/posts'
 import { listProfiles } from '@/db/queries/profiles'
-import { getUserSettings } from '@/db/queries/settings'
+import { getUserSettingsByUserIds } from '@/db/queries/settings'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { sendEmail } from '@/lib/mail/send'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { runGrantPublish, summarizeMatchCounts, type SettingLike } from '@/lib/server/grantPublish'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger, maskId } from '@/utils/logger'
+import { getSiteUrl } from '@/utils/site'
 import { logSecurityEvent } from '@/utils/security'
 
 const log = createLogger('api/admin/grants/publish')
@@ -71,23 +72,27 @@ export const POST = defineApiRoute({
         interest_regions: r.interest_regions ?? [],
       }))
 
-    // 회원별 설정. 18명 규모라 한 명씩 조회해도 충분하다.
-    const settingsByUserId = new Map<string, SettingLike[]>()
-    await Promise.all(
-      members.map(async m => {
-        try {
-          settingsByUserId.set(m.id, (await getUserSettings(m.id)) as SettingLike[])
-        } catch (error) {
-          // 설정을 못 읽었다고 발송을 막지 않는다 — 미설정과 같게 취급한다.
-          log.error('회원 설정 조회 실패', {
-            userId: maskId(m.id),
-            error: error instanceof Error ? error.message : String(error),
-          })
-        }
+    // 회원별 설정을 **배치 한 번**으로 읽는다. 예전에는 회원마다 한 쿼리였고
+    // (`Promise.all`이라 지연은 병렬이어도) 원격 커넥션에 회원 수만큼 왕복이
+    // 꽂혔다. 기본값 합성은 단건 `getUserSettings`와 동일하다(그 함수 주석 참고).
+    // 조회가 통째로 실패해도 발송을 막지 않는다 — 종전처럼 미설정과 같게 취급한다.
+    let settingsByUserId = new Map<string, SettingLike[]>()
+    try {
+      settingsByUserId = (await getUserSettingsByUserIds(members.map(m => m.id))) as Map<
+        string,
+        SettingLike[]
+      >
+    } catch (error) {
+      log.error('회원 설정 배치 조회 실패 — 전원을 미설정으로 취급한다', {
+        recipients: members.length,
+        error: error instanceof Error ? error.message : String(error),
       })
-    )
+    }
 
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.ggac.kr'
+    // 폴백 도메인을 여기에 따로 박으면 정본(`getSiteUrl()`)과 호스트가 갈린다
+    // — 실제로 여기만 `www.` 붙은 다른 호스트였다. 링크는 메일로 나가므로
+    // 절대 URL이어야 하고, `getSiteUrl()`이 그 판단을 한 곳에서 한다.
+    const siteUrl = getSiteUrl()
 
     let result: Awaited<ReturnType<typeof runGrantPublish>>
     try {
@@ -118,11 +123,37 @@ export const POST = defineApiRoute({
       throw error
     }
 
-    await updateGrantDigest(id, {
-      status: 'published',
-      post_id: result.post_id,
-      published_at: new Date().toISOString(),
-    })
+    // 이 기록이 실패를 흡수하면 안 된다. 게시글은 나갔고 메일도 나갔는데 회차는
+    // 'publishing'에 남는데, `claimGrantDigestForPublish`는 **draft만** 선점하므로
+    // (grantDigests.ts) 관리자에게는 재시도 경로가 없다 — 회차 PATCH도 items만
+    // 고친다. 그래서 여기서는 draft로 되돌리지 않는다(되돌리면 재발행이 가능해지고,
+    // 그 재발행은 조합원 전원에게 **메일을 두 번** 보낸다. 회수되지 않는다).
+    // 대신 사람이 손으로 고칠 수 있게 필요한 것(회차 id·게시글 id)을 로그와 응답에
+    // 모두 남기고 500으로 끝낸다 — 관리자가 "발행됐다"고 오해하는 쪽이 더 나쁘다.
+    try {
+      await updateGrantDigest(id, {
+        status: 'published',
+        post_id: result.post_id,
+        published_at: new Date().toISOString(),
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      log.error('발행 결과 기록 실패 — 게시글·메일은 나갔고 회차만 publishing에 갇혔다', {
+        digestId: id,
+        postId: result.post_id,
+        error: message,
+      })
+      logSecurityEvent(
+        'GRANT_DIGEST_PUBLISH_RECORD_FAILED',
+        { adminId: maskId(adminId), digestId: id, postId: result.post_id, error: message },
+        'high'
+      )
+      throw ApiError.internalServerError(
+        `게시글(${result.post_id})은 발행됐지만 회차 상태 기록에 실패했습니다. ` +
+          `회차 ${id}가 'publishing'에 갇혔으니 다시 발행하지 말고(메일이 두 번 나갑니다) ` +
+          `상태를 손으로 'published'로 고쳐주세요.`
+      )
+    }
 
     // 건너뛴 사유를 뭉뚱그리지 않는다 — 수신거부·주소오류·0건매치는 뜻이 다르다.
     // 수신 건수 분포(matched*)도 함께 남긴다: zero_match_count만으로는 "0건은 아니지만

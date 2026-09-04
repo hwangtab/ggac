@@ -389,7 +389,7 @@ const Navigation = () => {
           <button
             id="mobile-menu-button"
             onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className={`md:hidden p-2 rounded-md transition-colors duration-300 ${textColor} ${hoverColor} focus:outline-none focus:ring-2 focus:ring-primary-500`}
+            className={`md:hidden flex min-h-11 min-w-11 items-center justify-center p-2 rounded-md transition-colors duration-300 ${textColor} ${hoverColor} focus:outline-none focus:ring-2 focus:ring-primary-500`}
             aria-expanded={isMenuOpen}
             aria-controls="mobile-menu"
             aria-label={isMenuOpen ? t('nav.closeMenu') : t('nav.openMenu')}

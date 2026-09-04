@@ -168,6 +168,36 @@ test('자동결제 키가 없으면 관련 라우트가 열리지 않는다', ()
 const TICKET_PREPARE = readFileSync('src/app/api/tickets/prepare/route.ts', 'utf8')
 const TICKET_CONFIRM = readFileSync('src/app/api/tickets/confirm/route.ts', 'utf8')
 
+test('예매 준비는 팔 수 있는 공연인지 먼저 확인한다', () => {
+  // 공개 목록은 `open`만 내보내지만, 회차 id를 아는 사람은 목록을 거치지 않고
+  // 바로 이 라우트로 온다. 이 검사가 빠지면 공연을 취소해도 판매가 계속되고
+  // 준비 중(draft) 공연의 표가 링크를 아는 사람에게 조용히 팔린다.
+  assert.match(TICKET_PREPARE, /SELLABLE_PERFORMANCE_STATUSES/)
+  const statusAt = TICKET_PREPARE.indexOf('SELLABLE_PERFORMANCE_STATUSES.includes')
+  const holdAt2 = TICKET_PREPARE.indexOf('holdReservation(')
+  assert.ok(statusAt > 0 && holdAt2 > 0, '두 지점을 찾지 못했다')
+  assert.ok(statusAt < holdAt2, '상태 확인이 좌석 선점보다 먼저여야 한다')
+})
+
+test('예매 확정은 주문과 예매가 짝인지 확인한다', () => {
+  // 대조가 없으면 싼 주문을 결제하고 비싼 예매 id를 실어 보내 좌석을 확정할 수
+  // 있었다(2026-09-04 코드리뷰). 연결 고리는 선점 때 새기는 `order_id`뿐이다.
+  assert.match(TICKET_CONFIRM, /reservation\.order_id !== orderId/)
+  const couplingAt = TICKET_CONFIRM.indexOf('reservation.order_id !== orderId')
+  const approveAt = TICKET_CONFIRM.indexOf('confirmPayment(')
+  assert.ok(couplingAt > 0 && approveAt > 0, '두 지점을 찾지 못했다')
+  assert.ok(couplingAt < approveAt, '결합 확인이 토스 승인보다 먼저여야 한다')
+})
+
+test('예매 준비가 주문번호를 선점과 함께 새긴다', () => {
+  // 주문번호를 선점 뒤에 만들면 그 사이 예매는 짝 없는 상태로 존재한다.
+  const orderAt = TICKET_PREPARE.indexOf("generateOrderId('ticket')")
+  const holdAt3 = TICKET_PREPARE.indexOf('holdReservation(')
+  assert.ok(orderAt > 0 && holdAt3 > 0, '두 지점을 찾지 못했다')
+  assert.ok(orderAt < holdAt3, '주문번호 발급이 좌석 선점보다 먼저여야 한다')
+  assert.match(TICKET_PREPARE, /holdReservation\(\{\s*\n\s*orderId,/)
+})
+
 test('예매 준비는 좌석을 먼저 잡고 결제 주문을 만든다', () => {
   // 순서를 뒤집어 결제부터 받으면, 매진된 회차의 표를 팔고 나서 환불해야 한다.
   const holdAt = TICKET_PREPARE.indexOf('holdReservation(')
@@ -212,8 +242,12 @@ const TICKET_CANCEL = readFileSync('src/app/api/tickets/cancel/route.ts', 'utf8'
 test('환불을 먼저 하고 그 뒤에 좌석을 푼다', () => {
   // 뒤집으면 좌석은 풀렸는데 돈은 안 돌아간 상태가 생긴다. 화면에는
   // "취소됨"으로 보여서 관객이 알아채기 어렵다.
+  //
+  // 원장 기록과 좌석 반환은 이제 `finalizeTicketRefund` 한 트랜잭션이다
+  // (2026-09-04 코드리뷰 — 둘이 나뉘어 있으면 사이에서 실패했을 때 원장은
+  // `canceled`인데 예매는 `confirmed`로 남아 자리가 영영 잠겼다).
   const refundAt = TICKET_CANCEL.indexOf('cancelPayment(')
-  const seatAt = TICKET_CANCEL.indexOf('cancelReservation(')
+  const seatAt = TICKET_CANCEL.indexOf('finalizeTicketRefund(')
   assert.ok(refundAt > 0 && seatAt > 0, '두 호출을 찾지 못했다')
   assert.ok(refundAt < seatAt, '환불이 좌석 반환보다 먼저여야 한다')
 })
@@ -233,7 +267,7 @@ test('환불 판단 불가일 때는 좌석을 풀지 않는다', () => {
   // 환불됐는지 모르는 상태에서 좌석을 풀면 돈은 그대로인 채 표만 사라진다.
   const block = TICKET_CANCEL.match(/error instanceof TossLookupError\)\s*\{([\s\S]*?)\n      \}/)
   assert.ok(block, 'TossLookupError 분기를 찾지 못했다')
-  assert.doesNotMatch(block[1], /cancelReservation|recordPaymentCancel/)
+  assert.doesNotMatch(block[1], /finalizeTicketRefund|cancelReservation|recordPaymentCancel/)
 })
 
 test('전액 환불이면 취소 금액을 싣지 않는다', () => {

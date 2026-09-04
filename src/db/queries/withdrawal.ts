@@ -17,6 +17,7 @@ import {
   dailyActivityStats,
   memberProfiles,
   notifications,
+  reservations,
   session,
   user,
   userActivities,
@@ -111,6 +112,28 @@ export const PII_NULL_FIELDS = {
   accountNumber: null,
   accountHolder: null,
   monthlyFee: null,
+} as const
+
+/**
+ * 예매 표에 남는 개인정보. `member_profiles`와 **별개 표**라 위 목록으로는
+ * 지워지지 않는다.
+ *
+ * 예매(0016, 2026-09-02)가 탈퇴 설계(0011·0012, 2026-09-01)보다 나중에 들어와
+ * 생긴 누락이다. 조합원이 탈퇴해도 `booker_name`·`booker_phone`에 실명과
+ * 휴대폰이 그대로 남아 있었고, 야간 불변식 검사도 `member_profiles`만 보므로
+ * 걸리지 않았다.
+ *
+ * `booker_name`·`booker_phone`은 NOT NULL이라 NULL로 못 만든다. 현장에서
+ * 예매번호로 대조하는 값이므로 행 자체는 남기고 **묘비로 덮는다** — 결제
+ * 원장이 `payer_name` 스냅샷을 남기는 것과 같은 취급이다.
+ *
+ * `scripts/turso/check-invariants.mjs`의
+ * `withdrawn_members_have_no_reservation_pii`가 같은 성질을 야간에 다시 본다.
+ */
+export const RESERVATION_TOMBSTONE = {
+  bookerName: WITHDRAWN_DISPLAY_NAME,
+  bookerPhone: '',
+  bookerEmail: null,
 } as const
 
 /**
@@ -236,6 +259,18 @@ export async function withdrawMember(userId: string): Promise<WithdrawOutcome> {
     ).map(r => r.key)
     await tx.delete(billingKeys).where(eq(billingKeys.userId, userId))
 
+    // ④-2 예매 — 행은 남기고 예매자 정보만 묘비로 덮는다.
+    //
+    // 아직 결제하지 않은 선점은 먼저 만료시킨다. 떠나는 사람이 잡아 둔 자리를
+    // 10분씩 붙들고 있을 이유가 없다 — 재고 계산이 즉시 그 자리를 돌려준다.
+    // 확정된 예매는 상태를 건드리지 않는다. 이미 결제가 끝난 표라 임의로
+    // 취소하면 환불 없는 취소가 되고, 공연 당일 입장 대조도 못 하게 된다.
+    await tx
+      .update(reservations)
+      .set({ status: 'expired' })
+      .where(and(eq(reservations.userId, userId), eq(reservations.status, 'pending')))
+    await tx.update(reservations).set(RESERVATION_TOMBSTONE).where(eq(reservations.userId, userId))
+
     // ⑤ 연결된 아티스트 — 공개 페이지를 내리고 개인정보를 지운다. 행 자체는
     // 남긴다(조합의 과거 기록, slug도 유지 — 링크가 404가 아니라 "없는
     // 아티스트"로 처리되게).
@@ -345,6 +380,23 @@ export async function withdrawMember(userId: string): Promise<WithdrawOutcome> {
     )
     if (leaked.length > 0) {
       throw new Error(`탈퇴 처리 후에도 개인정보가 남았다(${leaked.join(', ')}) — 전체를 롤백한다`)
+    }
+
+    // 예매 표도 같은 방식으로 확인한다. 위 UPDATE가 조용히 0행을 건드렸는지
+    // (조건이 어긋났거나 컬럼이 늘었거나) 여기서 드러난다.
+    const [reservationLeak] = await tx
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(reservations)
+      .where(
+        and(
+          eq(reservations.userId, userId),
+          sql`(${reservations.bookerName} <> ${RESERVATION_TOMBSTONE.bookerName}
+               OR ${reservations.bookerPhone} <> ${RESERVATION_TOMBSTONE.bookerPhone}
+               OR ${reservations.bookerEmail} IS NOT NULL)`
+        )
+      )
+    if (Number(reservationLeak?.count ?? 0) > 0) {
+      throw new Error('탈퇴 처리 후에도 예매에 개인정보가 남았다 — 전체를 롤백한다')
     }
 
     return { ok: true, revokedBillingKeys, artistPhotoCleanup }

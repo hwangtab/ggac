@@ -86,7 +86,7 @@ function toSecureMetadataImageUrl(value: string, baseUrl: string): string | unde
   }
 
   if (value.startsWith('/')) {
-    const safeBase = toSafeHttpUrl(baseUrl) ?? 'https://ggac.kr'
+    const safeBase = toSafeHttpUrl(baseUrl) ?? getSiteUrl()
     return `${safeBase.replace(/\/$/, '')}${value}`
   }
 
@@ -165,7 +165,6 @@ function sanitizeMetadataString(str: string): string {
 
 // generateMetadata 개선 - 강화된 에러 처리 및 Facebook 크롤러 대응
 export async function generateMetadata({ params }: ProjectPageProps): Promise<Metadata> {
-  const isProductionEnv = process.env.NODE_ENV === 'production'
   const timestamp = new Date().toISOString()
 
   try {
@@ -202,7 +201,7 @@ export async function generateMetadata({ params }: ProjectPageProps): Promise<Me
     const safeSlug = sanitizeMetadataString(project.slug || resolvedParams.slug)
 
     // OG 이미지 생성 - 에러 처리 추가
-    let ogImageUrl = 'https://ggac.kr/images/logo/gac_og.webp' // 기본값
+    let ogImageUrl = `${getSiteUrl()}/images/logo/gac_og.webp` // 기본값
     try {
       ogImageUrl = generateProjectOgImage(project)
     } catch (imageError) {
@@ -264,10 +263,6 @@ export async function generateMetadata({ params }: ProjectPageProps): Promise<Me
       },
     }
 
-    if (!isProductionEnv) {
-      console.log(`[${timestamp}] generateMetadata: Successfully generated for "${safeTitle}"`)
-    }
-
     return metadata
   } catch (error) {
     console.error(`[${timestamp}] generateMetadata: Critical error:`, error)
@@ -295,8 +290,8 @@ function getDefaultMetadata(locale = 'ko'): Metadata {
       siteName,
       images: [
         {
-          url: 'https://ggac.kr/images/logo/gac_og.webp',
-          secureUrl: 'https://ggac.kr/images/logo/gac_og.webp',
+          url: `${getSiteUrl()}/images/logo/gac_og.webp`,
+          secureUrl: `${getSiteUrl()}/images/logo/gac_og.webp`,
           width: 1200,
           height: 630,
           alt,
@@ -310,7 +305,7 @@ function getDefaultMetadata(locale = 'ko'): Metadata {
       card: 'summary_large_image',
       title,
       description,
-      images: ['https://ggac.kr/images/logo/gac_og.webp'],
+      images: [`${getSiteUrl()}/images/logo/gac_og.webp`],
     },
   }
 }
@@ -334,8 +329,8 @@ function getNotFoundMetadata(locale = 'ko'): Metadata {
       siteName,
       images: [
         {
-          url: 'https://ggac.kr/images/logo/gac_og.webp',
-          secureUrl: 'https://ggac.kr/images/logo/gac_og.webp',
+          url: `${getSiteUrl()}/images/logo/gac_og.webp`,
+          secureUrl: `${getSiteUrl()}/images/logo/gac_og.webp`,
           width: 1200,
           height: 630,
           alt,
@@ -349,7 +344,7 @@ function getNotFoundMetadata(locale = 'ko'): Metadata {
       card: 'summary_large_image',
       title: 'Project Not Found',
       description,
-      images: ['https://ggac.kr/images/logo/gac_og.webp'],
+      images: [`${getSiteUrl()}/images/logo/gac_og.webp`],
     },
   }
 }
@@ -399,10 +394,11 @@ const ProjectDetailPage = async ({ params }: ProjectPageProps) => {
   const EVENT_CATEGORIES = new Set(['공연·전시', '행사', 'Performance & Exhibition', 'Event'])
   const isEvent = EVENT_CATEGORIES.has(project.category)
 
+  const siteUrl = getSiteUrl()
   const breadcrumbData = generateBreadcrumbStructuredData([
-    { name: '홈', url: 'https://ggac.kr' },
-    { name: '프로젝트', url: 'https://ggac.kr/projects' },
-    { name: project.title, url: `https://ggac.kr/projects/${project.slug}` },
+    { name: '홈', url: siteUrl },
+    { name: '프로젝트', url: `${siteUrl}/projects` },
+    { name: project.title, url: `${siteUrl}/projects/${project.slug}` },
   ])
 
   // 예정/지난 판정은 서버에서(클라이언트 날짜 재계산 → 하이드레이션 불일치 방지).
@@ -430,7 +426,7 @@ const ProjectDetailPage = async ({ params }: ProjectPageProps) => {
         artistIds: project.artistIds,
         performers: participatingArtists.map(a => ({
           name: a.name,
-          url: `https://ggac.kr/artists/${a.slug}`,
+          url: `${siteUrl}/artists/${a.slug}`,
         })),
         ticketing: project.ticketing,
         category: project.category,

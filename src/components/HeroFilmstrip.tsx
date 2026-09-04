@@ -157,7 +157,7 @@ const HeroFilmstrip = ({ artists }: HeroFilmstripProps) => {
           type="button"
           onClick={() => setPaused(previous => !previous)}
           aria-pressed={paused}
-          className="inline-flex h-7 w-7 shrink-0 items-center justify-center border border-white/35 text-white/75 transition-colors duration-200 hover:border-white/80 hover:text-white"
+          className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center border border-white/35 text-white/75 transition-colors duration-200 hover:border-white/80 hover:text-white"
         >
           {paused ? <PlayIcon /> : <PauseIcon />}
           <span className="sr-only">{paused ? t('playMotion') : t('pauseMotion')}</span>
