@@ -72,6 +72,13 @@ const mimeMatchesFileType = Object.entries(MIME_BY_FILE_TYPE)
  * CHECK 20개. `constraint`는 Postgres에서 쓰던 제약 이름 그대로다 — 원본
  * 정의를 덤프에서 찾아볼 때의 열쇠다.
  */
+/**
+ * 게시글에 저장될 수 있는 카테고리. 정본은 `src/constants/categories.ts`의
+ * `BOARD_CATEGORIES`이고, 그 첫 항목 '전체'는 저장되는 값이 아니라 UI 필터라
+ * 여기서는 뺀다.
+ */
+export const BOARD_CATEGORY_VALUES = ['공지', '지원사업', '잡담', '홍보', '건의']
+
 export const CHECK_INVARIANTS = [
   {
     constraint: 'member_profiles_monthly_fee_check',
@@ -79,9 +86,18 @@ export const CHECK_INVARIANTS = [
     where: 'monthly_fee IS NOT NULL AND (monthly_fee < 10000 OR monthly_fee > 50000)',
   },
   {
+    // 이 목록은 `src/constants/categories.ts`의 `BOARD_CATEGORIES`(첫 항목
+    // '전체'는 UI 필터값이라 제외)를 손으로 옮겨 적은 사본이다 — 이 파일은
+    // `.mjs`라 `.ts`를 임포트하지 못한다(`WITHDRAWN_PII_COLUMNS`와 같은 이유).
+    // 두 목록이 같은지는 `scripts/testing/boardCategoryParity.test.mjs`가 못박는다.
+    //
+    // '지원사업'이 빠져 있어 오랫동안 위반 1건으로 빨간불이었다(2026-09-04
+    // 실측). 지원사업 다이제스트가 만드는 정상 글인데, 원본 CHECK가 그 기능보다
+    // 먼저 사라져 목록이 옛 상태로 굳어 있었다. 가드가 옛 계약을 붙들고 있으면
+    // 진짜 위반이 묻힌다.
     constraint: 'posts_category_check',
     table: 'posts',
-    where: notIn('category', ['공지', '잡담', '홍보', '건의']),
+    where: notIn('category', BOARD_CATEGORY_VALUES),
   },
   {
     constraint: 'member_profiles_registration_status_check',

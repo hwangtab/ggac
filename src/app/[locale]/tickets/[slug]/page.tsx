@@ -6,6 +6,7 @@
  * 예매 폼, 결제창)만 `TicketPurchaseForm`으로 내려간다.
  */
 
+import { cache } from 'react'
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { getTranslations, setRequestLocale } from 'next-intl/server'
@@ -98,8 +99,14 @@ function toPerformanceDetail(row: RawRow): PerformanceDetail {
   }
 }
 
-/** 공개된(=draft가 아닌) 공연만 돌려준다. */
-async function loadPerformance(slug: string): Promise<PerformanceDetail | null> {
+/**
+ * 공개된(=draft가 아닌) 공연만 돌려준다.
+ *
+ * React `cache()`로 감싼다. `generateMetadata`와 본문이 같은 요청에서 각각
+ * 이 함수를 부르는데, 감싸지 않으면 공연 상세 조회가 요청마다 두 벌 돈다 —
+ * 회차별 재고 집계까지 두 번이라, 애써 없앤 N+1이 다른 모양으로 돌아온다.
+ */
+const loadPerformance = cache(async (slug: string): Promise<PerformanceDetail | null> => {
   try {
     const row = await getPerformanceDetail(slug)
     if (!row || row.status === 'draft') return null
@@ -108,7 +115,7 @@ async function loadPerformance(slug: string): Promise<PerformanceDetail | null> 
     log.error('공연 상세 조회 실패', { slug, error })
     return null
   }
-}
+})
 
 /** OG 이미지로 쓸 수 있는 절대 https URL인가. */
 function toAbsoluteImage(value: string | null | undefined): string {
