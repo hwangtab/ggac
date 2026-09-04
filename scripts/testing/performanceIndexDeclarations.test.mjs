@@ -29,6 +29,9 @@ import * as schema from '../../src/db/schema/index.ts'
 const MIGRATIONS = [
   'src/db/migrations/0004_add_performance_indexes.sql',
   'src/db/migrations/0005_add_user_sessions_indexes.sql',
+  // 0017이 더한 넷(결제 원장·회비 청구월·회의 목록·세션 로그인 시각). 여기에
+  // 적지 않으면 스키마 선언이 "근거 없는 잉여"로 잡힌다 — 이 목록이 정본이다.
+  'src/db/migrations/0017_reservation_order_link.sql',
 ]
 
 /** 공백·따옴표·`IF NOT EXISTS`를 정규화해 두 출처의 DDL을 비교 가능하게 만든다. */
@@ -82,16 +85,18 @@ function declaredFromSchema() {
   return found
 }
 
-test('0004·0005의 성능 인덱스가 전부 Drizzle 스키마에 선언돼 있다', () => {
+test('마이그레이션의 성능 인덱스가 전부 Drizzle 스키마에 선언돼 있다', () => {
   const expected = expectedFromMigrations()
   const declared = declaredFromSchema()
 
   // 정본이 실제로 읽혔는지 먼저 확인한다 — 정규식이 아무것도 못 잡으면
   // 아래 비교가 "0 === 0"으로 통과해 아무것도 증명하지 못한다.
+  // 23(0004·0005) + 4(0017). 인덱스를 더할 때 이 수도 함께 올려라 — 여기가
+  // 올라가지 않으면 새 인덱스가 스키마에 선언됐는지 아무도 확인하지 않는다.
   assert.equal(
     expected.size,
-    23,
-    `0004·0005에서 성능 인덱스 23개를 찾아야 하는데 ${expected.size}개를 찾았다`
+    27,
+    `마이그레이션에서 성능 인덱스 27개를 찾아야 하는데 ${expected.size}개를 찾았다`
   )
 
   const missing = [...expected.keys()].filter(name => !declared.has(name))

@@ -47,8 +47,8 @@ export async function generateMetadata({
 
 const privacyJsonLd = structuredDataToScript(
   generateBreadcrumbStructuredData([
-    { name: '홈', url: 'https://ggac.kr' },
-    { name: '개인정보처리방침', url: 'https://ggac.kr/privacy' },
+    { name: '홈', url: getSiteUrl() },
+    { name: '개인정보처리방침', url: `${getSiteUrl()}/privacy` },
   ])
 )
 

@@ -92,10 +92,18 @@ async function makeShow(capacity) {
   throw new Error('회차를 만들지 못했다(락 경합).')
 }
 
+let orderSeq = 0
+
+/**
+ * 결제 주문번호는 예매마다 유일해야 한다(0017의 유니크 인덱스). 테스트가
+ * 같은 값을 두 번 쓰면 두 번째 선점이 인덱스에서 죽는데, 그 실패는 재고와
+ * 아무 상관이 없어 원인을 찾기 어렵다.
+ */
 function booking(overrides = {}) {
   return {
     showId,
     ticketTypeId,
+    orderId: `order-${++orderSeq}`,
     userId: null,
     bookerName: '홍길동',
     bookerPhone: '01012345678',
@@ -105,6 +113,33 @@ function booking(overrides = {}) {
     holdMinutes: 10,
     ...overrides,
   }
+}
+
+/**
+ * 승인 경로는 결제 원장 행이 있어야 돈다. `finalizeTicketPayment`가 주문번호로
+ * 결제와 예매를 **함께** 찾아 바꾸기 때문이다.
+ */
+async function seedPayment(orderId, amount) {
+  const now = Date.now()
+  await setupClient.execute({
+    sql: `INSERT INTO payments (id, order_id, kind, order_name, amount, status, canceled_amount, created_at, updated_at)
+          VALUES (?, ?, 'ticket', '테스트 주문', ?, 'pending', 0, ?, ?)`,
+    args: [`pay-${orderId}`, orderId, amount, now, now],
+  })
+  return `pay-${orderId}`
+}
+
+/** 승인 한 번을 흉내낸다. 좌석 확정까지 끝난 예매를 돌려준다. */
+async function confirmVia(mod, held, amount = 40000) {
+  await seedPayment(held.order_id, amount)
+  return mod.finalizeTicketPayment({
+    orderId: held.order_id,
+    reservationId: held.id,
+    paymentKey: `key-${held.order_id}`,
+    method: '카드',
+    approvedAt: new Date(),
+    raw: { ok: true },
+  })
 }
 
 // ---------------------------------------------------------------- 선점
@@ -141,11 +176,89 @@ test('예매번호는 매번 다르다', async () => {
   assert.equal(codes.size, 5)
 })
 
+// ------------------------------------------------- 예매·결제 결합 (2026-09-04 코드리뷰)
+
+/**
+ * 여기 세 테스트가 막는 것은 재고 사고가 아니라 **결제 사고**다.
+ *
+ * 예전에는 승인 라우트가 주문과 예매를 각각 찾아 놓고 짝을 대조하지 않았다.
+ * 싼 주문을 실제로 결제한 뒤 비싼 예매의 id를 실어 보내면 금액 검사(결제 원장
+ * 기준)를 통과하고 비싼 좌석이 확정됐고, 금액이 어긋났을 때는 요청이 지목한
+ * 예매를 취소해 줬으므로 돈 한 푼 없이 남의 자리를 없앨 수도 있었다.
+ *
+ * 이제 `reservations.order_id`가 유일한 연결 고리이고, 확정과 취소가 모두 그
+ * 값을 WHERE에 넣고 돈다.
+ */
+
+test('다른 주문의 예매는 확정되지 않는다', async () => {
+  const mod = await loadFresh()
+  const show = await makeShow(10)
+
+  const mine = await holdFor(mod, show, 'order-attacker')
+  const theirs = await holdFor(mod, show, 'order-victim')
+
+  await seedPayment('order-attacker', 20000)
+
+  // 내 주문번호로 남의 예매를 확정하려 한다.
+  const result = await mod.finalizeTicketPayment({
+    orderId: 'order-attacker',
+    reservationId: theirs.id,
+    paymentKey: 'key-attacker',
+    method: '카드',
+    approvedAt: new Date(),
+    raw: {},
+  })
+
+  assert.equal(result, null, '짝이 맞지 않으면 확정되지 않는다')
+
+  const victim = await mod.getReservationById(theirs.id)
+  assert.equal(victim.status, 'pending', '남의 예매는 그대로 대기 상태다')
+
+  // 결제 상태 변경도 함께 롤백돼야 한다 — 좌석 없이 결제만 done인 상태가 최악이다.
+  const payment = await setupClient.execute({
+    sql: `SELECT status FROM payments WHERE order_id = 'order-attacker'`,
+  })
+  assert.equal(payment.rows[0].status, 'pending', '좌석을 못 잡았으면 결제도 되돌린다')
+})
+
+test('다른 주문의 예매는 취소되지 않는다', async () => {
+  const mod = await loadFresh()
+  const show = await makeShow(10)
+  const theirs = await holdFor(mod, show, 'order-victim-2')
+
+  await mod.cancelReservation(theirs.id, { expectedOrderId: 'order-someone-else' })
+
+  const victim = await mod.getReservationById(theirs.id)
+  assert.equal(victim.status, 'pending', '주문이 다르면 취소가 아무것도 바꾸지 않는다')
+})
+
+test('짝이 맞으면 확정되고 결제도 함께 완료된다', async () => {
+  const mod = await loadFresh()
+  const show = await makeShow(10)
+  const held = await holdFor(mod, show, 'order-happy')
+
+  const confirmed = await confirmVia(mod, held)
+
+  assert.equal(confirmed.status, 'confirmed')
+  assert.ok(confirmed.payment_id, '확정된 예매는 결제를 가리킨다')
+
+  const payment = await setupClient.execute({
+    sql: `SELECT status, payment_key FROM payments WHERE order_id = 'order-happy'`,
+  })
+  assert.equal(payment.rows[0].status, 'done')
+  assert.equal(payment.rows[0].payment_key, 'key-order-happy')
+})
+
+/** 주문번호를 지정해 한 자리를 선점한다. */
+async function holdFor(mod, show, orderId) {
+  return mod.holdReservation(booking({ showId: show, quantity: 2, orderId }))
+}
+
 // ---------------------------------------------------------------- 재고
 
 test('남은 좌석은 정원에서 선점과 확정을 뺀 값이다', async () => {
-  const { holdReservation, confirmReservation, getRemainingSeats, listReservationsByShow } =
-    await loadFresh()
+  const mod = await loadFresh()
+  const { holdReservation, getRemainingSeats, listReservationsByShow } = mod
   const show = await makeShow(10)
 
   assert.equal(await getRemainingSeats(show), 10)
@@ -153,7 +266,7 @@ test('남은 좌석은 정원에서 선점과 확정을 뺀 값이다', async ()
   const held = await holdReservation(booking({ showId: show, quantity: 3 }))
   assert.equal(await getRemainingSeats(show), 7, '선점도 자리를 차지한다')
 
-  await confirmReservation(held.id, { paymentId: null })
+  await confirmVia(mod, held)
   assert.equal(await getRemainingSeats(show), 7, '확정돼도 같은 자리다')
 
   assert.equal((await listReservationsByShow(show)).length, 1)
@@ -174,12 +287,12 @@ test('만료된 선점은 자리를 돌려준다', async () => {
 })
 
 test('취소된 예매는 자리를 돌려준다', async () => {
-  const { holdReservation, confirmReservation, cancelReservation, getRemainingSeats } =
-    await loadFresh()
+  const mod = await loadFresh()
+  const { holdReservation, cancelReservation, getRemainingSeats } = mod
   const show = await makeShow(10)
 
   const held = await holdReservation(booking({ showId: show, quantity: 2 }))
-  await confirmReservation(held.id, { paymentId: null })
+  await confirmVia(mod, held)
   assert.equal(await getRemainingSeats(show), 8)
 
   await cancelReservation(held.id)
@@ -210,12 +323,12 @@ test('남은 좌석을 정확히 채우는 예매는 통과하고, 그 뒤로는
 })
 
 test('매진된 회차에서 취소가 나오면 다시 팔 수 있다', async () => {
-  const { holdReservation, confirmReservation, cancelReservation, getRemainingSeats } =
-    await loadFresh()
+  const mod = await loadFresh()
+  const { holdReservation, cancelReservation, getRemainingSeats } = mod
   const show = await makeShow(2)
 
   const held = await holdReservation(booking({ showId: show, quantity: 2 }))
-  await confirmReservation(held.id, { paymentId: null })
+  await confirmVia(mod, held)
   assert.equal(await getRemainingSeats(show), 0, '매진')
 
   await cancelReservation(held.id)

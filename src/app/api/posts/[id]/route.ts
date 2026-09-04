@@ -95,7 +95,10 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       is_deleted: boolean
       is_pinned: boolean
       like_count: number
-      author: { display_name: string; email: string }
+      // email은 없다 — 비로그인도 열람 가능한 응답이라, 목록 API
+      // (src/app/api/posts/route.ts)와 마찬가지로 조합원 이메일을 실어 보내지
+      // 않는다. 이 라우트 안에서 email을 다른 용도로 쓰는 코드는 없다(grep 확인).
+      author: { display_name: string }
     } | null = null
     try {
       const fullPost = await getPostById(validPostId, { includeDeleted: true })
@@ -112,7 +115,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
           is_deleted: fullPost.is_deleted,
           is_pinned: fullPost.is_pinned,
           like_count: fullPost.like_count,
-          author: { display_name: fullPost.author.display_name, email: fullPost.author.email },
+          // 응답에 email을 담지 않는다(비로그인도 조회 가능한 엔드포인트라
+          // 게시글 id만 알면 조합원 이메일을 수집할 수 있었다).
+          author: { display_name: fullPost.author.display_name },
         }
       }
     } catch (postFetchError) {

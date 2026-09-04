@@ -188,9 +188,14 @@ export const postAttachments = sqliteTable(
      * 트랜잭션(`addAttachment`·`updateAttachment`)이 1차 방어이고 이것이
      * 그 트랜잭션이 풀렸을 때 깨지게 하는 마지막 방어선이다.
      */
+    // 조건을 raw SQL로 쓴다 — `${table.isPrimary}`는 테이블 한정자가 붙은
+    // `"post_attachments"."is_primary"`로 렌더되는데, SQLite는 부분 인덱스의
+    // WHERE에 한정자 붙은 컬럼명을 거부한다. 0015는 손으로 쓴 비한정 형태라
+    // 지금 DB는 멀쩡하지만, 이 인덱스가 도구로 재생성되는 순간 실패한다.
+    // `billing.ts`의 `billing_keys_active_user_idx`가 같은 함정을 이미 겪었다.
     uniqueIndex('post_attachments_primary_idx')
       .on(table.postId)
-      .where(sql`${table.isPrimary} = 1`),
+      .where(sql`"is_primary" = 1`),
   ]
 )
 

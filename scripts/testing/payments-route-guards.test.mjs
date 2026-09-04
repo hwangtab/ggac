@@ -212,8 +212,12 @@ const TICKET_CANCEL = readFileSync('src/app/api/tickets/cancel/route.ts', 'utf8'
 test('환불을 먼저 하고 그 뒤에 좌석을 푼다', () => {
   // 뒤집으면 좌석은 풀렸는데 돈은 안 돌아간 상태가 생긴다. 화면에는
   // "취소됨"으로 보여서 관객이 알아채기 어렵다.
+  //
+  // 원장 기록과 좌석 반환은 이제 `finalizeTicketRefund` 한 트랜잭션이다
+  // (2026-09-04 코드리뷰 — 둘이 나뉘어 있으면 사이에서 실패했을 때 원장은
+  // `canceled`인데 예매는 `confirmed`로 남아 자리가 영영 잠겼다).
   const refundAt = TICKET_CANCEL.indexOf('cancelPayment(')
-  const seatAt = TICKET_CANCEL.indexOf('cancelReservation(')
+  const seatAt = TICKET_CANCEL.indexOf('finalizeTicketRefund(')
   assert.ok(refundAt > 0 && seatAt > 0, '두 호출을 찾지 못했다')
   assert.ok(refundAt < seatAt, '환불이 좌석 반환보다 먼저여야 한다')
 })
@@ -233,7 +237,7 @@ test('환불 판단 불가일 때는 좌석을 풀지 않는다', () => {
   // 환불됐는지 모르는 상태에서 좌석을 풀면 돈은 그대로인 채 표만 사라진다.
   const block = TICKET_CANCEL.match(/error instanceof TossLookupError\)\s*\{([\s\S]*?)\n      \}/)
   assert.ok(block, 'TossLookupError 분기를 찾지 못했다')
-  assert.doesNotMatch(block[1], /cancelReservation|recordPaymentCancel/)
+  assert.doesNotMatch(block[1], /finalizeTicketRefund|cancelReservation|recordPaymentCancel/)
 })
 
 test('전액 환불이면 취소 금액을 싣지 않는다', () => {

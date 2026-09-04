@@ -1,6 +1,9 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { createLogger } from '@/utils/logger'
+
+const log = createLogger('PerformanceMonitor')
 
 interface PerformanceMetrics {
   fps: number
@@ -191,9 +194,7 @@ export const usePerformanceMonitor = (options: PerformanceMonitorOptions = {}) =
 
       memoryUsage = Math.round((baseEstimate + frameEstimate + complexityEstimate) * 100) / 100
 
-      if (process.env.NODE_ENV === 'development') {
-        console.log('📊 Memory estimate (Firefox/Safari):', `${memoryUsage}MB (estimated)`)
-      }
+      log.debug('Memory estimate (Firefox/Safari):', `${memoryUsage}MB (estimated)`)
     }
 
     setMetrics(prev => ({
@@ -223,9 +224,7 @@ export const usePerformanceMonitor = (options: PerformanceMonitorOptions = {}) =
     // 메모리 업데이트 간격 설정
     memoryIntervalRef.current = setInterval(updateMemory, memoryUpdateInterval)
 
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🔍 Performance monitoring started')
-    }
+    log.debug('Performance monitoring started')
   }, [
     enabled,
     devOnly,
@@ -256,9 +255,7 @@ export const usePerformanceMonitor = (options: PerformanceMonitorOptions = {}) =
       memoryIntervalRef.current = undefined
     }
 
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🔍 Performance monitoring stopped')
-    }
+    log.debug('Performance monitoring stopped')
   }, [])
 
   // 성능 데이터 리셋

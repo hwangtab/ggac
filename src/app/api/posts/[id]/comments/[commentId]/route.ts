@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { deleteComment, getCommentById } from '@/db/queries/comments'
-import { revalidateTag } from 'next/cache'
+import { revalidatePath } from 'next/cache'
 import { validateUUID } from '@/utils/validation'
 import { requireUser } from '@/lib/server/memberAuth'
 import { getProfileById } from '@/db/queries/profiles'
 import { isApprovedActiveAdmin } from '@/lib/server/authz'
+import { getBoardPostRevalidationPaths } from '@/lib/revalidationPaths'
 
 export const dynamic = 'force-dynamic'
 export const preferredRegion = 'icn1'
@@ -56,10 +57,11 @@ export async function DELETE(
     await deleteComment(validCommentId, validPostId)
 
     try {
-      revalidateTag(`comments-post-${validPostId}`)
-      revalidateTag(`attachments-post-${validPostId}`)
-      revalidateTag('board-post')
-      revalidateTag(validPostId)
+      // 태그 무효화는 생산자가 없어 무효했다(comments/route.ts와 동일 사유).
+      // 경로를 직접 무효화한다.
+      for (const boardPath of getBoardPostRevalidationPaths(validPostId)) {
+        revalidatePath(boardPath)
+      }
     } catch {}
 
     return ApiSuccess.ok(null).toNextResponse()

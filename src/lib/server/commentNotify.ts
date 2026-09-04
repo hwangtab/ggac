@@ -3,7 +3,7 @@
 // 쓰는 plain `node --experimental-strip-types --test`에서는 풀리지 않는다.
 // 이 파일을 테스트가 실제 코드로 직접 import해 검증할 수 있어야 하므로
 // `@/lib/server/boardRoomAuth`처럼 별칭을 쓰지 않는다.
-import { getPostById } from '../../db/queries/posts.ts'
+import { getPostTitleAndAuthor } from '../../db/queries/posts.ts'
 import { createNotification } from '../../db/queries/notifications.ts'
 import { createLogger } from '../../utils/logger.ts'
 
@@ -32,7 +32,10 @@ export async function notifyNewComment(input: NotifyNewCommentInput): Promise<vo
 
   let post
   try {
-    post = await getPostById(postId)
+    // 제목·작성자만 읽는다 — `getPostById`는 본문까지 전 컬럼을 읽고 저자
+    // 프로필 조회 1쿼리를 더 태우는데 여기서 쓰는 건 이 두 칸뿐이다.
+    // 삭제된 글이 `null`인 동작은 종전과 같다(아래 주석 참고).
+    post = await getPostTitleAndAuthor(postId)
   } catch (e) {
     log.error('게시글 조회 실패 — 댓글 알림을 건너뛴다', {
       postId,
@@ -42,7 +45,7 @@ export async function notifyNewComment(input: NotifyNewCommentInput): Promise<vo
     return
   }
   // 댓글 라우트는 게시글 존재 여부를 검사하지 않는다(post_id는 FK로만
-  // 강제된다) — 삭제된 글(getPostById 기본 includeDeleted:false)이나
+  // 강제된다) — 삭제된 글(getPostTitleAndAuthor는 is_deleted=true를 제외한다)이나
   // 이미 지워진 글에 댓글이 달리면 여기 걸린다. 다른 실패 경로엔 전부
   // log.error가 있는데 이 경로만 조용히 넘어가면 "알림이 흔적 없이
   // 사라진다"는, 이 작업이 애초에 고치려던 문제를 그대로 재현하게 된다

@@ -3,6 +3,7 @@ import { toNextJsHandler } from 'better-auth/next-js'
 
 import { auth } from '@/lib/auth/server'
 import { ApiError } from '@/utils/apiWrapper'
+import { RATE_LIMITS, applyRouteRateLimit, createIPKeyGenerator } from '@/lib/server/rateLimit'
 
 export const runtime = 'nodejs'
 
@@ -32,6 +33,44 @@ export { GET, PATCH, PUT, DELETE }
 function isSignUpEmailPath(request: NextRequest): boolean {
   return request.nextUrl.pathname.endsWith('/sign-up/email')
 }
+
+/** 로그인 시도 경로인지 판별한다(크리덴셜 스터핑 방어 대상). */
+function isSignInEmailPath(request: NextRequest): boolean {
+  return request.nextUrl.pathname.endsWith('/sign-in/email')
+}
+
+/**
+ * 비밀번호 재설정·인증메일 발송 경로인지 판별한다(메일 폭탄 방어 대상).
+ * 세 엔드포인트 모두 "이메일 주소만 있으면" 메일을 발송시킬 수 있어 로그인보다
+ * 더 낮은 한도가 필요하다.
+ */
+function isPasswordResetFlowPath(request: NextRequest): boolean {
+  const { pathname } = request.nextUrl
+  return (
+    pathname.endsWith('/forget-password') ||
+    pathname.endsWith('/send-verification-email') ||
+    pathname.endsWith('/reset-password')
+  )
+}
+
+/**
+ * 비밀번호 재설정·인증메일 발송용 레이트리밋(10분당 5회, IP 기준).
+ *
+ * Better Auth 기본 리미터는 인스턴스별 메모리 저장소라 Vercel 같은 분산
+ * 환경에서는 인스턴스마다 카운터가 따로 놀아 사실상 무제한이다(CLAUDE.md
+ * "Rate Limiting" 참고). 이 저장소의 다른 보호 라우트와 동일하게
+ * `distributedRateLimiter`(Upstash Redis REST)를 쓴다. 로그인(AUTH_API,
+ * 분당 10회)보다 한도를 더 좁게 잡은 이유는 메일 발송 자체가 비용이고,
+ * 공격자가 남의 이메일로 재설정 메일을 반복 발송시키는 폭탄 공격에
+ * 노출되기 때문이다.
+ */
+const PASSWORD_RESET_RATE_LIMIT = {
+  name: 'auth_password_reset',
+  windowMs: 10 * 60 * 1000, // 10분
+  maxRequests: 5,
+  message: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.',
+  blockDuration: 30 * 60 * 1000, // 30분 차단
+} as const
 
 /**
  * `sign-up/email`을 HTTP로 직접 때리면 무조건 거부한다.
@@ -75,6 +114,29 @@ export async function POST(request: NextRequest) {
     return ApiError.forbidden(
       '이 주소로는 가입할 수 없습니다. 가입 페이지(/signup)를 이용해 주세요.'
     ).toNextResponse()
+  }
+
+  // 로그인·비밀번호 재설정·인증메일에 IP 기준 분산 레이트리밋을 건다(위
+  // PASSWORD_RESET_RATE_LIMIT 주석 참고). sign-up/email은 위에서 이미 전면
+  // 차단되므로 여기 내려오지 않는다.
+  if (isSignInEmailPath(request)) {
+    const rl = await applyRouteRateLimit(request, {
+      ...RATE_LIMITS.AUTH_API,
+      keyGenerator: createIPKeyGenerator('auth_sign_in'),
+    })
+    if (!rl.success) {
+      return rl.response ?? ApiError.tooManyRequests(RATE_LIMITS.AUTH_API.message).toNextResponse()
+    }
+  } else if (isPasswordResetFlowPath(request)) {
+    const rl = await applyRouteRateLimit(request, {
+      ...PASSWORD_RESET_RATE_LIMIT,
+      keyGenerator: createIPKeyGenerator('auth_password_reset'),
+    })
+    if (!rl.success) {
+      return (
+        rl.response ?? ApiError.tooManyRequests(PASSWORD_RESET_RATE_LIMIT.message).toNextResponse()
+      )
+    }
   }
 
   return betterAuthPOST(request)

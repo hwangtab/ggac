@@ -13,6 +13,7 @@ export default function robots(): MetadataRoute.Robots {
     '/register',
     '/board/write',
     '/board/*/edit',
+    '/board-room',
   ]
 
   return {

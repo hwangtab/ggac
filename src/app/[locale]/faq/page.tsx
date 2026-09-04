@@ -83,8 +83,8 @@ export default async function FAQPage({ params }: FAQPageProps) {
   )
 
   const breadcrumbData = generateBreadcrumbStructuredData([
-    { name: '홈', url: 'https://ggac.kr' },
-    { name: '자주 묻는 질문', url: 'https://ggac.kr/faq' },
+    { name: '홈', url: getSiteUrl() },
+    { name: '자주 묻는 질문', url: `${getSiteUrl()}/faq` },
   ])
 
   const structuredData = combineStructuredData([faqSchema, breadcrumbData])

@@ -3,6 +3,7 @@ import { Suspense } from 'react'
 import BoardServerData from './BoardServerData'
 import { generateBreadcrumbStructuredData, structuredDataToScript } from '@/utils/structuredData'
 import { setRequestLocale } from 'next-intl/server'
+import { getSiteUrl } from '@/utils/site'
 import type { Metadata } from 'next'
 
 export const revalidate = 60
@@ -77,8 +78,8 @@ interface BoardPageProps {
 
 const boardBreadcrumbJsonLd = structuredDataToScript(
   generateBreadcrumbStructuredData([
-    { name: '홈', url: 'https://ggac.kr' },
-    { name: '조합원 게시판', url: 'https://ggac.kr/board' },
+    { name: '홈', url: getSiteUrl() },
+    { name: '조합원 게시판', url: `${getSiteUrl()}/board` },
   ])
 )
 

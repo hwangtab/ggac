@@ -16,6 +16,7 @@ import { logicalPathFromUrl } from '@/lib/storage/paths'
 import { createLogger } from '@/utils/logger'
 import { getProfileById } from '@/db/queries/profiles'
 import { getArtistByLegacyId, updateArtistByLegacyId } from '@/db/queries/artists'
+import { getProjects } from '@/lib/data'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -327,15 +328,15 @@ export async function PATCH(request: NextRequest) {
         // 인메모리 캐시 강제 무효화 (즉시 최신 데이터 반영)
         invalidateArtistsCache()
 
-        // 아티스트가 포함된 프로젝트 상세 페이지들도 함께 무효화
+        // 아티스트가 포함된 프로젝트 상세 페이지들도 함께 무효화.
+        // 이전엔 여기서만 raw fs로 data/projects.json을 다시 읽었다(동적
+        // `await import('fs')`까지 동원) — getProjects()를 우회해 en 폴백
+        // 규칙도, 모듈 레벨 캐시(@/lib/data)도 적용받지 못했다. 로딩 경로를
+        // getProjects() 하나로 합친다.
         try {
-          const fs = await import('fs')
-          const path = await import('path')
-          const projectsPath = path.join(process.cwd(), 'data', 'projects.json')
-          const raw = await fs.promises.readFile(projectsPath, 'utf8')
-          const projects = JSON.parse(raw)
+          const projects = await getProjects()
           const affected = projects.filter(
-            (p: any) => Array.isArray(p.artistIds) && p.artistIds.includes(profile.artist_id)
+            p => Array.isArray(p.artistIds) && p.artistIds.includes(profile.artist_id)
           )
           for (const p of affected) {
             if (p?.slug) {

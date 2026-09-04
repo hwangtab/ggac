@@ -2,6 +2,7 @@ import { MetadataRoute } from 'next'
 import { getArtists, getProjects } from '@/lib/data'
 import { getSiteUrl } from '@/utils/site'
 import { listPosts } from '@/db/queries/posts'
+import { listOpenPerformances } from '@/db/queries/ticketing'
 
 // posts는 이제 Turso가 권위다. `listPosts`는 카테고리 단일값 필터(포함)만
 // 지원하고 "잡담 제외"는 지원하지 않으므로, 카테고리 필터 없이 최신
@@ -40,6 +41,29 @@ async function getBoardPostsForSitemap(): Promise<Array<{ id: string; updated_at
         return text.length >= 200
       })
       .map(({ id, updated_at }) => ({ id, updated_at }))
+  } catch {
+    return []
+  }
+}
+
+/**
+ * sitemap에 넣을 공연.
+ *
+ * `listOpenPerformances`는 **status가 `open`이고 아직 남은 회차가 있는 공연만**
+ * 돌려준다 — 끝난 공연·마감된 공연·준비 중(draft)인 공연은 여기서 이미 빠진다.
+ * 예매가 끝난 페이지를 색인에 남겨 두면 검색으로 들어온 사람이 살 수 없는 표
+ * 앞에 서게 되므로, 별도 필터 없이 이 목록을 그대로 신뢰한다.
+ *
+ * 게시글과 같은 이유로 try/catch — DB 자격증명이 없는 빌드에서 사이트맵
+ * 프리렌더가 죽지 않게 한다.
+ */
+async function getPerformancesForSitemap(): Promise<Array<{ slug: string; updated_at?: string }>> {
+  try {
+    const rows = await listOpenPerformances()
+    return rows.map(row => ({
+      slug: String(row.slug),
+      updated_at: typeof row.updated_at === 'string' ? row.updated_at : undefined,
+    }))
   } catch {
     return []
   }
@@ -110,15 +134,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'monthly',
       priority: 0.5,
     }),
+    ...bilingualEntry('/tickets', baseUrl, {
+      lastModified: now,
+      changeFrequency: 'daily',
+      priority: 0.8,
+    }),
     // board: 회원 전용 / noindex → ko만, alternates 없음
     { url: `${baseUrl}/board`, lastModified: now, changeFrequency: 'daily', priority: 0.6 },
   ]
 
   try {
-    const [artists, projects, boardPosts] = await Promise.all([
+    const [artists, projects, boardPosts, performances] = await Promise.all([
       getArtists('ko'),
       getProjects('ko'),
       getBoardPostsForSitemap(),
+      getPerformancesForSitemap(),
     ])
 
     const artistPages: MetadataRoute.Sitemap = artists.flatMap(artist =>
@@ -145,7 +175,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.4,
     }))
 
-    return [...staticPages, ...artistPages, ...projectPages, ...boardPostPages]
+    // 예매 페이지: 재고·회차가 자주 바뀌므로 daily.
+    const performancePages: MetadataRoute.Sitemap = performances.flatMap(performance =>
+      bilingualEntry(`/tickets/${performance.slug}`, baseUrl, {
+        lastModified: performance.updated_at ? new Date(performance.updated_at) : new Date(),
+        changeFrequency: 'daily',
+        priority: 0.7,
+      })
+    )
+
+    return [...staticPages, ...artistPages, ...projectPages, ...boardPostPages, ...performancePages]
   } catch (error) {
     console.error('Error generating sitemap:', error)
     return staticPages

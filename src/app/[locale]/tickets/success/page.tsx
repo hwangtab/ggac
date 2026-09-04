@@ -7,15 +7,19 @@
  * "예매되었습니다"를 먼저 띄우지 않고 확정 결과를 받은 뒤에 보여준다.
  */
 
-import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { useSearchParams } from 'next/navigation'
-import { FiCheckCircle, FiAlertCircle, FiLoader } from 'react-icons/fi'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { FiAlertCircle, FiCheckCircle, FiLoader } from 'react-icons/fi'
 
 import { Link } from '@/i18n/navigation'
+
+import { resolvePaymentFailureMessage } from '../paymentFailure'
 
 type Phase = 'confirming' | 'done' | 'failed'
 
 function TicketSuccessContent() {
+  const t = useTranslations('tickets')
   const params = useSearchParams()
   const [phase, setPhase] = useState<Phase>('confirming')
   const [message, setMessage] = useState('')
@@ -30,7 +34,7 @@ function TicketSuccessContent() {
 
     if (!paymentKey || !orderId || !reservationId) {
       setPhase('failed')
-      setMessage('예매 정보가 올바르지 않습니다. 결제가 되었는지 사무국으로 확인해 주세요.')
+      setMessage(t('success.missingParams'))
       return
     }
 
@@ -48,7 +52,15 @@ function TicketSuccessContent() {
 
       if (!response.ok) {
         setPhase('failed')
-        setMessage(result?.error ?? '예매를 확정하지 못했습니다.')
+        // 실패 사유는 `/tickets/fail`과 같은 매핑을 쓴다 — 결제사 코드가 붙어
+        // 돌아오는 경우(일부 결제수단)를 여기서도 사람이 읽는 문장으로 바꾼다.
+        setMessage(
+          resolvePaymentFailureMessage(
+            t,
+            params.get('code'),
+            result?.error ?? t('success.confirmFailed')
+          )
+        )
         return
       }
 
@@ -56,11 +68,9 @@ function TicketSuccessContent() {
       setPhase('done')
     } catch {
       setPhase('failed')
-      setMessage(
-        '결제 결과를 확인하지 못했습니다. 카드에서 결제가 되었을 수 있으니 사무국으로 문의해 주세요.'
-      )
+      setMessage(t('success.networkFailed'))
     }
-  }, [params])
+  }, [params, t])
 
   useEffect(() => {
     if (startedRef.current) return
@@ -74,38 +84,37 @@ function TicketSuccessContent() {
         {phase === 'confirming' && (
           <>
             <FiLoader className="mx-auto h-10 w-10 animate-spin text-primary-600" aria-hidden />
-            <p className="mt-4 text-gray-700">예매를 확정하는 중입니다. 창을 닫지 말아 주세요.</p>
+            <p className="mt-4 text-gray-700">{t('success.confirming')}</p>
           </>
         )}
 
         {phase === 'done' && (
           <>
             <FiCheckCircle className="mx-auto h-12 w-12 text-green-600" aria-hidden />
-            <h1 className="mt-4 text-xl font-semibold text-gray-900">예매가 완료되었습니다</h1>
+            <h1 className="mt-4 text-xl font-semibold text-gray-900">{t('success.heading')}</h1>
             {code && (
               <div className="mt-5 rounded-lg bg-gray-50 p-4">
-                <p className="text-sm text-gray-600">예매번호</p>
+                <p className="text-sm text-gray-600">{t('success.codeLabel')}</p>
                 <p className="mt-1 font-mono text-2xl font-semibold tracking-wider text-gray-900">
                   {code}
                 </p>
               </div>
             )}
             <p className="mt-4 text-sm text-gray-600">
-              공연 당일 입구에서 <strong>예매번호와 연락처</strong>를 말씀해 주세요. 별도 티켓은
-              발송되지 않습니다.
+              {t.rich('success.entryNote', { strong: chunks => <strong>{chunks}</strong> })}
             </p>
             <div className="mt-6 flex flex-wrap justify-center gap-3">
               <Link
                 href="/tickets"
                 className="rounded-lg bg-primary-600 px-5 py-2.5 font-medium text-white transition hover:bg-primary-700"
               >
-                다른 공연 보기
+                {t('success.otherShows')}
               </Link>
               <Link
                 href="/mypage/tickets"
                 className="rounded-lg border border-gray-300 px-5 py-2.5 font-medium text-gray-700 transition hover:bg-gray-50"
               >
-                예매 내역
+                {t('success.myTickets')}
               </Link>
             </div>
           </>
@@ -114,20 +123,22 @@ function TicketSuccessContent() {
         {phase === 'failed' && (
           <>
             <FiAlertCircle className="mx-auto h-12 w-12 text-amber-600" aria-hidden />
-            <h1 className="mt-4 text-xl font-semibold text-gray-900">예매를 확정하지 못했습니다</h1>
+            <h1 className="mt-4 text-xl font-semibold text-gray-900">
+              {t('success.failedHeading')}
+            </h1>
             <p className="mt-2 text-gray-600">{message}</p>
             <div className="mt-6 flex flex-wrap justify-center gap-3">
               <Link
                 href="/tickets"
                 className="rounded-lg bg-primary-600 px-5 py-2.5 font-medium text-white transition hover:bg-primary-700"
               >
-                공연 목록으로
+                {t('success.backToList')}
               </Link>
               <a
                 href="mailto:contact@ggac.kr"
                 className="rounded-lg border border-gray-300 px-5 py-2.5 font-medium text-gray-700 transition hover:bg-gray-50"
               >
-                사무국에 문의
+                {t('common.contactOffice')}
               </a>
             </div>
           </>
@@ -137,15 +148,18 @@ function TicketSuccessContent() {
   )
 }
 
+function SuccessFallback() {
+  const t = useTranslations('tickets')
+  return <div className="min-h-screen pt-40 text-center text-gray-500">{t('common.loading')}</div>
+}
+
 /**
  * `useSearchParams()`는 서버에서 미리 그릴 수 없다. 공개 페이지라 Next.js가
  * 프리렌더를 시도하므로 Suspense로 감싸야 빌드가 통과한다.
  */
 export default function TicketSuccessPage() {
   return (
-    <Suspense
-      fallback={<div className="min-h-screen pt-40 text-center text-gray-500">불러오는 중…</div>}
-    >
+    <Suspense fallback={<SuccessFallback />}>
       <TicketSuccessContent />
     </Suspense>
   )

@@ -10,7 +10,7 @@
  * 토스는 웹훅을 최대 7번 재전송하므로 이건 예외 상황이 아니라 일상이다.
  */
 
-import { and, asc, eq, isNull, lt, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, isNull, lt, sql } from 'drizzle-orm'
 
 import { db } from '../client.ts'
 import { membershipDues, payments } from '../schema/index.ts'
@@ -310,7 +310,9 @@ export async function listPaymentsByUser(
     .select()
     .from(payments)
     .where(eq(payments.userId, userId))
-    .orderBy(asc(payments.createdAt))
+    // 최신순이다. 오름차순이면 결제가 limit을 넘는 순간 **최근 결제가 화면에서
+    // 사라진다** — 영수증 목록에서 가장 필요한 것이 방금 낸 결제인데도.
+    .orderBy(desc(payments.createdAt))
     .limit(limit)
   return rows.map(rowToPayment)
 }

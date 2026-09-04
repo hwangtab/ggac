@@ -249,6 +249,13 @@ export const WITHDRAWN_PII_COLUMNS = [
   'monthly_fee',
 ]
 
+/**
+ * 탈퇴 시 예매자 이름 자리에 넣는 묘비값.
+ * 정본은 `src/constants/memberProfile.ts`의 `WITHDRAWN_DISPLAY_NAME`이다 —
+ * 이 파일은 `.mjs`라 `.ts`를 임포트하지 못해 문자로 다시 적는다.
+ */
+const WITHDRAWN_RESERVATION_NAME = '탈퇴한 조합원'
+
 /** CHECK가 아닌 파생값 불변식. */
 export function derivedInvariants() {
   return [
@@ -269,6 +276,19 @@ export function derivedInvariants() {
       constraint: 'withdrawn_rows_have_no_personal_data',
       table: 'member_profiles',
       where: `registration_status = 'withdrawn' AND (${WITHDRAWN_PII_COLUMNS.map(c => `${c} IS NOT NULL`).join(' OR ')})`,
+    },
+    {
+      // 예매 표는 `member_profiles`와 별개라 위 규칙이 보지 못한다. 예매
+      // 기능이 탈퇴 설계보다 나중에 들어와, 탈퇴한 조합원의 실명·휴대폰이
+      // `booker_name`·`booker_phone`에 그대로 남아 있었다.
+      //
+      // 두 컬럼은 NOT NULL이라 NULL이 아니라 묘비값으로 덮는다 —
+      // `src/db/queries/withdrawal.ts`의 `RESERVATION_TOMBSTONE`이 정본이고,
+      // 여기 값과 같은지는 `piiNullFieldsParity.test.mjs`가 못박는다.
+      constraint: 'withdrawn_members_have_no_reservation_pii',
+      table: 'reservations',
+      where: `user_id IN (SELECT id FROM member_profiles WHERE registration_status = 'withdrawn')
+              AND (booker_name <> '${WITHDRAWN_RESERVATION_NAME}' OR booker_phone <> '' OR booker_email IS NOT NULL)`,
     },
   ]
 }

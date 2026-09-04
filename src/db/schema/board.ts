@@ -23,23 +23,33 @@ import { memberProfiles } from './identity.ts'
  * `board_meetings`를 가리키는 FK 4개의 `ON DELETE CASCADE`는 원본과 같다.
  */
 
-export const boardMeetings = sqliteTable('board_meetings', {
-  id: uuidPk(),
-  title: text('title').notNull(),
-  /** date 전용: 'YYYY-MM-DD' */
-  meetingDate: text('meeting_date'),
-  /**
-   * time 전용: 'HH:MM'(24시간). NULL이면 `DEFAULT_BOARD_MEETING_TIME`(21:00).
-   * 컷오버 이전에 만들어진 회의는 전부 NULL이고, 실제로도 21:00이었다.
-   */
-  meetingTime: text('meeting_time'),
-  location: text('location'),
-  status: text('status').notNull().default('polling'),
-  voteDeadline: integer('vote_deadline', { mode: 'timestamp_ms' }),
-  createdBy: text('created_by').references(() => memberProfiles.id, { onDelete: 'set null' }),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-})
+export const boardMeetings = sqliteTable(
+  'board_meetings',
+  {
+    id: uuidPk(),
+    title: text('title').notNull(),
+    /** date 전용: 'YYYY-MM-DD' */
+    meetingDate: text('meeting_date'),
+    /**
+     * time 전용: 'HH:MM'(24시간). NULL이면 `DEFAULT_BOARD_MEETING_TIME`(21:00).
+     * 컷오버 이전에 만들어진 회의는 전부 NULL이고, 실제로도 21:00이었다.
+     */
+    meetingTime: text('meeting_time'),
+    location: text('location'),
+    status: text('status').notNull().default('polling'),
+    voteDeadline: integer('vote_deadline', { mode: 'timestamp_ms' }),
+    createdBy: text('created_by').references(() => memberProfiles.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  table => [
+    /**
+     * 회의 목록이 `ORDER BY created_at DESC`로 돈다. 형제 표들은 전부 성능
+     * 인덱스를 선언했는데 이 표만 하나도 없어 매번 전체 스캔 뒤 정렬이었다.
+     */
+    index('idx_board_meetings_created_at').on(table.createdAt),
+  ]
+)
 
 export const boardAgendas = sqliteTable(
   'board_agendas',

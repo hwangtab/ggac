@@ -1,4 +1,4 @@
-import { integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
 import { createdAt, updatedAt, uuidPk } from './_shared.ts'
 import { memberProfiles } from './identity.ts'
@@ -26,34 +26,44 @@ export const PAYMENT_STATUS = ['pending', 'done', 'failed', 'partial_canceled', 
 
 export const DUES_STATUS = ['unpaid', 'paid', 'canceled'] as const
 
-export const payments = sqliteTable('payments', {
-  id: uuidPk(),
-  /**
-   * 우리가 만들어 토스에 넘기는 주문번호. 토스 규격은 6~64자다.
-   * 유일성이 없으면 승인 응답이 어느 행에 반영될지 알 수 없으므로 UNIQUE다.
-   */
-  orderId: text('order_id').notNull().unique(),
-  userId: text('user_id').references(() => memberProfiles.id, { onDelete: 'set null' }),
-  kind: text('kind', { enum: PAYMENT_KIND }).notNull(),
-  orderName: text('order_name').notNull(),
-  /** 원 단위 정수. 실수로 두면 100원이 99.999999원이 되는 일이 실제로 생긴다. */
-  amount: integer('amount').notNull(),
-  status: text('status', { enum: PAYMENT_STATUS }).notNull().default('pending'),
-  /** 토스가 발급하는 결제 식별자. 취소·조회에 쓴다. */
-  paymentKey: text('payment_key'),
-  method: text('method'),
-  approvedAt: integer('approved_at', { mode: 'timestamp_ms' }),
-  canceledAmount: integer('canceled_amount').notNull().default(0),
-  failureCode: text('failure_code'),
-  failureMessage: text('failure_message'),
-  /** 토스 응답 원문. 분쟁 시 우리 요약값이 아니라 이게 근거가 된다. */
-  rawResponse: text('raw_response', { mode: 'json' }),
-  /** 회원이 지워져도 남아야 하는 결제자 정보 스냅샷. */
-  payerName: text('payer_name'),
-  payerEmail: text('payer_email'),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-})
+export const payments = sqliteTable(
+  'payments',
+  {
+    id: uuidPk(),
+    /**
+     * 우리가 만들어 토스에 넘기는 주문번호. 토스 규격은 6~64자다.
+     * 유일성이 없으면 승인 응답이 어느 행에 반영될지 알 수 없으므로 UNIQUE다.
+     */
+    orderId: text('order_id').notNull().unique(),
+    userId: text('user_id').references(() => memberProfiles.id, { onDelete: 'set null' }),
+    kind: text('kind', { enum: PAYMENT_KIND }).notNull(),
+    orderName: text('order_name').notNull(),
+    /** 원 단위 정수. 실수로 두면 100원이 99.999999원이 되는 일이 실제로 생긴다. */
+    amount: integer('amount').notNull(),
+    status: text('status', { enum: PAYMENT_STATUS }).notNull().default('pending'),
+    /** 토스가 발급하는 결제 식별자. 취소·조회에 쓴다. */
+    paymentKey: text('payment_key'),
+    method: text('method'),
+    approvedAt: integer('approved_at', { mode: 'timestamp_ms' }),
+    canceledAmount: integer('canceled_amount').notNull().default(0),
+    failureCode: text('failure_code'),
+    failureMessage: text('failure_message'),
+    /** 토스 응답 원문. 분쟁 시 우리 요약값이 아니라 이게 근거가 된다. */
+    rawResponse: text('raw_response', { mode: 'json' }),
+    /** 회원이 지워져도 남아야 하는 결제자 정보 스냅샷. */
+    payerName: text('payer_name'),
+    payerEmail: text('payer_email'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  table => [
+    /**
+     * 마이페이지 영수증 목록이 `WHERE user_id = ? ORDER BY created_at`으로 돈다.
+     * 결제 원장은 지우지 않는 표라 인덱스 없이는 시간이 갈수록 나빠지기만 한다.
+     */
+    index('idx_payments_user_created').on(table.userId, table.createdAt),
+  ]
+)
 
 export const membershipDues = sqliteTable(
   'membership_dues',
@@ -81,5 +91,11 @@ export const membershipDues = sqliteTable(
      * 걸릴 행이 하나임을 보장하는 역할이다.
      */
     uniqueIndex('membership_dues_user_month_idx').on(table.userId, table.billingMonth),
+    /**
+     * 매월 청구가 `WHERE billing_month = ? AND status = 'unpaid'`로 찾는다.
+     * 위 유니크 인덱스는 선두가 `user_id`라 이 조회를 덮지 못한다 — 회비 표는
+     * 달마다 회원 수만큼 늘어나므로 전체 스캔을 그냥 두면 안 된다.
+     */
+    index('idx_membership_dues_month_status').on(table.billingMonth, table.status),
   ]
 )

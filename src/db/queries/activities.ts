@@ -288,6 +288,8 @@ export interface ListActivitiesFilter {
    * `exclude_test` 옵션 — 원본은 Postgres JSONB 포함 연산자 `.not('metadata',
    * 'cs', '{"generated":true}')`였다). */
   excludeGeneratedMetadata?: boolean
+  /** 없으면 `DEFAULT_ACTIVITY_SCAN_LIMIT`. `MAX_ACTIVITY_SCAN_LIMIT`을 넘길 수 없다. */
+  limit?: number
 }
 
 /**
@@ -300,6 +302,11 @@ export interface ListActivitiesFilter {
  * 라우트들은 정렬을 요구하지 않았지만, 안정적인 순서를 위해 생성 시각
  * 오름차순으로 고정했다).
  */
+/** 기간 조회의 기본 상한. 월간 리포트 한 달치를 넉넉히 덮는 값이다. */
+export const DEFAULT_ACTIVITY_SCAN_LIMIT = 5000
+/** 호출자가 무엇을 넘기든 이 이상은 읽지 않는다. */
+export const MAX_ACTIVITY_SCAN_LIMIT = 20000
+
 export async function listActivities(filter: ListActivitiesFilter): Promise<ActivityRow[]> {
   const conditions: SQL[] = [gte(userActivities.createdAt, filter.startDate)]
   if (filter.endDate) {
@@ -317,11 +324,17 @@ export async function listActivities(filter: ListActivitiesFilter): Promise<Acti
     conditions.push(sql`coalesce(json_extract(${userActivities.metadata}, '$.generated'), 0) != 1`)
   }
 
+  // 상한을 둔다. 이 함수는 기간만 걸러 표를 통째로 원격에서 끌어오고 있었고,
+  // `user_activities`는 상한 없이 자라는 표다(2026-09 실측 1만 1천 행). 관리자
+  // 분석·리포트 네 곳이 이 결과를 JS에서 집계하므로, 넘치면 응답이 아니라
+  // 메모리가 먼저 무너진다. 잘린 경우를 호출자가 알 수 있게 기본값을 넉넉히
+  // 잡되 무한은 허용하지 않는다.
   const rows = await db
     .select()
     .from(userActivities)
     .where(and(...conditions))
     .orderBy(asc(userActivities.createdAt))
+    .limit(Math.min(filter.limit ?? DEFAULT_ACTIVITY_SCAN_LIMIT, MAX_ACTIVITY_SCAN_LIMIT))
 
   return rows.map(rowToActivity)
 }

@@ -26,31 +26,43 @@ import { requireUser, requireActiveMember } from '@/lib/server/memberAuth'
 const log = createLogger('api/media/upload')
 
 // 매직 바이트 시그니처 (서버 사이드 Buffer 기반)
-const MAGIC_BYTE_SIGNATURES: Record<string, number[][]> = {
-  'image/jpeg': [[0xff, 0xd8, 0xff]],
-  'image/png': [[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]],
-  'image/gif': [[0x47, 0x49, 0x46, 0x38]],
-  'image/webp': [[0x52, 0x49, 0x46, 0x46]],
-  'application/pdf': [[0x25, 0x50, 0x44, 0x46]],
-  // MP4: ftyp box는 offset 4에 위치 (box size는 가변적), 또는 offset 0에 ftyp가 바로 오는 경우
-  // checkMagicBytes는 prefix 매칭이므로 ftyp offset 4 패턴을 커버하기 위해 null 허용 처리
-  'video/mp4': [
-    [0x00, 0x00, 0x00, 0x20, 0x66, 0x74, 0x79, 0x70], // ftyp size=32
-    [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70], // ftyp size=24
-    [0x00, 0x00, 0x00, 0x1c, 0x66, 0x74, 0x79, 0x70], // ftyp size=28
-    [0x66, 0x74, 0x79, 0x70], // ftyp at offset 0
-  ],
-  'video/webm': [[0x1a, 0x45, 0xdf, 0xa3]],
+//
+// 각 서명은 { bytes, offset? }다 — offset 생략 시 0(파일 선두)에서 매칭한다.
+// MP4(ISO BMFF)는 박스 구조상 `ftyp` 태그가 항상 offset 4에 온다(앞 4바이트는
+// 가변 박스 크기 필드라 대조 대상이 아니다) — 예전에는 이걸 prefix 매칭
+// 함수로만 검사하려고 흔한 박스 크기(32/24/28바이트) 세 가지를 하드코딩한
+// 패턴으로 흉내 냈는데, 그 크기가 아닌 실제 MP4 파일은 걸러졌다. 지금은
+// checkMagicBytes가 offset을 직접 지원하므로 실제 구조 그대로 한 줄로 검사한다.
+const MAGIC_BYTE_SIGNATURES: Record<string, { bytes: number[]; offset?: number }[]> = {
+  'image/jpeg': [{ bytes: [0xff, 0xd8, 0xff] }],
+  'image/png': [{ bytes: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] }],
+  'image/gif': [{ bytes: [0x47, 0x49, 0x46, 0x38] }],
+  'image/webp': [{ bytes: [0x52, 0x49, 0x46, 0x46] }],
+  // PDF: %PDF
+  'application/pdf': [{ bytes: [0x25, 0x50, 0x44, 0x46] }],
+  // MP4: ftyp 박스 태그, offset 4(앞 4바이트는 가변 박스 크기)
+  'video/mp4': [{ bytes: [0x66, 0x74, 0x79, 0x70], offset: 4 }],
+  // WebM: EBML 헤더(Matroska와 공유하는 시그니처)
+  'video/webm': [{ bytes: [0x1a, 0x45, 0xdf, 0xa3] }],
+  // MP3: ID3 태그가 있으면 그것으로, 없으면 프레임 싱크(MPEG-1/2 Layer III
+  // 후보 세 종류)로 판정한다 — 인코더에 따라 어느 쪽만 있을 수 있어 여러
+  // 후보를 모두 허용해야 한다.
   'audio/mpeg': [
-    [0xff, 0xfb],
-    [0x49, 0x44, 0x33],
+    { bytes: [0x49, 0x44, 0x33] }, // ID3
+    { bytes: [0xff, 0xfb] },
+    { bytes: [0xff, 0xf3] },
+    { bytes: [0xff, 0xf2] },
   ],
 }
 
 function checkMagicBytes(buffer: Buffer, mimeType: string): boolean {
   const signatures = MAGIC_BYTE_SIGNATURES[mimeType]
-  if (!signatures) return true // 알 수 없는 타입은 통과 (MIME 검증에 의존)
-  return signatures.some(sig => sig.every((byte, i) => buffer[i] === byte))
+  // 알 수 없는 타입은 거부한다(MIME 헤더만 믿지 않는다) — event-applications/photo
+  // 라우트가 이미 이 계약이었고, 여기만 반대(통과)였던 불일치를 없앤다.
+  if (!signatures) return false
+  return signatures.some(({ bytes, offset = 0 }) =>
+    bytes.every((byte, i) => buffer[offset + i] === byte)
+  )
 }
 
 // 기본 설정

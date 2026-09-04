@@ -309,6 +309,8 @@ export interface SessionRow {
 export interface ListSessionsFilter {
   userId?: string | null
   loginAfter: Date
+  /** 없으면 `DEFAULT_SESSION_SCAN_LIMIT`. `MAX_SESSION_SCAN_LIMIT`을 넘길 수 없다. */
+  limit?: number
 }
 
 /**
@@ -317,15 +319,23 @@ export interface ListSessionsFilter {
  * (`getUserTrends`의 활성 세션 조회·`getPerformanceTrends`)가 각자 만들던
  * 수동 Supabase 쿼리를 대체하는 공용 빌딩 블록이다.
  */
+/** 세션 조회의 기본 상한. */
+export const DEFAULT_SESSION_SCAN_LIMIT = 5000
+/** 호출자가 무엇을 넘기든 이 이상은 읽지 않는다. */
+export const MAX_SESSION_SCAN_LIMIT = 20000
+
 export async function listSessions(filter: ListSessionsFilter): Promise<SessionRow[]> {
   const conditions = [gte(userSessions.loginAt, filter.loginAfter)]
   if (filter.userId) conditions.push(eq(userSessions.userId, filter.userId))
 
+  // `listActivities`와 같은 이유로 상한을 둔다 — `user_sessions`도 상한 없이
+  // 자라는 표다(2026-09 실측 5,937행). `login_at` 인덱스는 0017이 더했다.
   const rows = await db
     .select()
     .from(userSessions)
     .where(and(...conditions))
     .orderBy(userSessions.loginAt)
+    .limit(Math.min(filter.limit ?? DEFAULT_SESSION_SCAN_LIMIT, MAX_SESSION_SCAN_LIMIT))
 
   return rows.map(row => ({
     id: row.id,

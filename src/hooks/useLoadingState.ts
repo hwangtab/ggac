@@ -11,6 +11,10 @@
 'use client'
 
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
+import { createLogger } from '@/utils/logger'
+
+const log = createLogger('LoadingState')
+const multiLog = createLogger('MultiLoadingState')
 
 // 로딩 상태 타입 정의
 export interface LoadingState {
@@ -107,13 +111,13 @@ export function useLoadingState(initialOptions?: Partial<AsyncOperationOptions>)
           }))
 
           if (shouldLog) {
-            console.warn('[LoadingState] Operation timed out after', effectiveOptions.timeout, 'ms')
+            log.warn('Operation timed out after', effectiveOptions.timeout, 'ms')
           }
         }, effectiveOptions.timeout)
       }
 
       if (shouldLog) {
-        console.log('[LoadingState] Started loading')
+        log.debug('Started loading')
       }
     },
     [options, shouldLogLoadingState]
@@ -142,7 +146,7 @@ export function useLoadingState(initialOptions?: Partial<AsyncOperationOptions>)
         }
 
         if (shouldLog) {
-          console.log('[LoadingState] Finished loading in', duration, 'ms')
+          log.debug('Finished loading in', duration, 'ms')
         }
 
         return newState
@@ -184,7 +188,7 @@ export function useLoadingState(initialOptions?: Partial<AsyncOperationOptions>)
         }
 
         if (shouldLog) {
-          console.error('[LoadingState] Failed after', duration, 'ms:', errorMessage)
+          log.error('Failed after', duration, 'ms:', errorMessage)
         }
 
         return newState
@@ -223,7 +227,7 @@ export function useLoadingState(initialOptions?: Partial<AsyncOperationOptions>)
     })
 
     if (shouldLogLoadingState) {
-      console.log('[LoadingState] Reset state')
+      log.debug('Reset state')
     }
   }, [options, shouldLogLoadingState])
 
@@ -334,7 +338,7 @@ export function useMultiLoadingState(globalOptions?: Partial<AsyncOperationOptio
       }
 
       if (shouldLog) {
-        console.log(`[MultiLoadingState] Started loading for key: ${key}`)
+        multiLog.debug(`Started loading for key: ${key}`)
       }
     },
     [options, calculateGlobalState, shouldLogLoadingState]
@@ -370,7 +374,7 @@ export function useMultiLoadingState(globalOptions?: Partial<AsyncOperationOptio
         }
 
         if (shouldLog) {
-          console.log(`[MultiLoadingState] Finished loading for key: ${key} in ${duration}ms`)
+          multiLog.debug(`Finished loading for key: ${key} in ${duration}ms`)
         }
 
         return {
@@ -423,10 +427,7 @@ export function useMultiLoadingState(globalOptions?: Partial<AsyncOperationOptio
         }
 
         if (shouldLog) {
-          console.error(
-            `[MultiLoadingState] Failed loading for key: ${key} after ${duration}ms:`,
-            errorMessage
-          )
+          multiLog.error(`Failed loading for key: ${key} after ${duration}ms:`, errorMessage)
         }
 
         return {
@@ -500,7 +501,7 @@ export function useMultiLoadingState(globalOptions?: Partial<AsyncOperationOptio
       }
 
       if (shouldLogLoadingState) {
-        console.log(`[MultiLoadingState] Reset ${key ? `key: ${key}` : 'all states'}`)
+        multiLog.debug(`Reset ${key ? `key: ${key}` : 'all states'}`)
       }
     },
     [options, calculateGlobalState, shouldLogLoadingState]

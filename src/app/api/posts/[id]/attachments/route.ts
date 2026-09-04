@@ -15,7 +15,8 @@ import { rateLimit } from '@/lib/server/rateLimit'
 import { requireUser } from '@/lib/server/memberAuth'
 import { hasPublicBlobStore } from '@/lib/storage/blob'
 import { putPublicObject, deletePublicObject } from '@/lib/storage/provider'
-import { revalidateTag } from 'next/cache'
+import { revalidatePath } from 'next/cache'
+import { getBoardPostRevalidationPaths } from '@/lib/revalidationPaths'
 import type { PostAttachmentStats } from '@/types'
 import { validateUUID } from '@/utils/validation'
 import { generateUniqueFileName } from '@/utils/fileNameSanitizer'
@@ -272,13 +273,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       }
 
       try {
-        revalidateTag(`attachments-post-${validPostId}`)
-        revalidateTag(`comments-post-${validPostId}`)
-        revalidateTag('board-post')
-        revalidateTag(validPostId)
-        if ((post as any)?.category) {
-          revalidateTag(`board-${(post as any).category}`)
-          revalidateTag('board-initial')
+        // 태그 무효화는 생산자가 없어 무효했다(posts/[id]/route.ts와 동일
+        // 사유). 게시글 상세·목록 경로를 직접 무효화한다.
+        for (const boardPath of getBoardPostRevalidationPaths(validPostId)) {
+          revalidatePath(boardPath)
         }
       } catch {}
 

@@ -128,6 +128,25 @@ export async function getPostById(
   return withAuthor
 }
 
+/**
+ * 알림 문구에 필요한 **제목·작성자만** 읽는다. `getPostById`는 전 컬럼(본문
+ * 포함)을 읽고 저자 프로필까지 배치 조회(쿼리 1회 추가)하는데, 댓글 알림
+ * (`commentNotify`)은 `title`과 `author_id`만 쓴다.
+ *
+ * 삭제 판정은 `getPostById`의 기본값과 같다 — `is_deleted = true`인 글은
+ * `null`이다(삭제된 글에 달린 댓글의 알림을 건너뛰는 기존 동작을 유지한다).
+ */
+export async function getPostTitleAndAuthor(
+  id: string
+): Promise<{ title: string; author_id: string } | null> {
+  const rows = await db
+    .select({ title: posts.title, authorId: posts.authorId })
+    .from(posts)
+    .where(and(eq(posts.id, id), eq(posts.isDeleted, false)))
+    .limit(1)
+  return rows[0] ? { title: rows[0].title, author_id: rows[0].authorId } : null
+}
+
 export type PostSort = 'created_at_desc' | 'created_at_asc' | 'updated_at_desc'
 
 export interface ListPostsFilter {
@@ -278,8 +297,28 @@ export async function listPostsKeyset(
   orderByClauses.push(ascending ? asc(posts.createdAt) : desc(posts.createdAt))
   orderByClauses.push(ascending ? asc(posts.id) : desc(posts.id))
 
+  // 본문을 통째로 실어 오지 않는다. 유일한 소비처(`/api/posts/public`)는
+  // 태그를 벗겨 **앞 150자**만 미리보기로 쓰고 나머지를 버리는데, 페이지당
+  // 최대 50건이라 목록 응답이 본문 전량만큼 커진다. 형제 함수
+  // `listBoardPostsWithStats`가 이미 쓰는 방식(`substr(content, 1, 2000)`)을
+  // 그대로 따른다 — 2000자는 HTML 태그가 섞여도 150자 미리보기를 만들기에
+  // 넉넉하고, 검색(WHERE의 LIKE)은 여전히 **잘리지 않은 원본 컬럼**을 본다.
   const rows = await db
-    .select()
+    .select({
+      id: posts.id,
+      title: posts.title,
+      content: sql<string>`substr(${posts.content}, 1, 2000)`,
+      contentFormat: posts.contentFormat,
+      category: posts.category,
+      authorId: posts.authorId,
+      createdAt: posts.createdAt,
+      updatedAt: posts.updatedAt,
+      isDeleted: posts.isDeleted,
+      isPinned: posts.isPinned,
+      pinnedAt: posts.pinnedAt,
+      likeCount: posts.likeCount,
+      viewCount: posts.viewCount,
+    })
     .from(posts)
     .where(where)
     .orderBy(...orderByClauses)

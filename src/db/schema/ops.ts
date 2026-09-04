@@ -200,6 +200,11 @@ export const userSessions = sqliteTable(
     index('idx_user_sessions_user_active').on(table.userId, table.isActive),
     index('idx_user_sessions_active_last_activity').on(table.isActive, table.lastActivity),
     index('idx_user_sessions_last_activity').on(table.lastActivity),
+    /**
+     * 관리자 세션 목록은 `login_at`으로 거르고 정렬하는데 위 셋은 전부
+     * `is_active`/`last_activity` 기준이라 그 조회를 못 덮었다.
+     */
+    index('idx_user_sessions_login_at').on(table.loginAt),
   ]
 )
 

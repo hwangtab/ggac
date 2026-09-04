@@ -338,6 +338,29 @@ export async function listProfiles(
   }
 }
 
+/**
+ * 승인 회원의 **id만** 모은다. 전원 알림(`postNotify`) 같은 "누구에게 보낼지"만
+ * 필요한 경로를 위한 것이다 — 그 경로는 `listProfiles`로 34컬럼 전 행을 받고
+ * (계좌번호·실명·전화번호·생년월일 포함) 쓰지도 않는 COUNT까지 함께 돌린 뒤
+ * `rows.map(r => r.id)`만 썼다.
+ *
+ * 거르는 조건은 `listProfiles({ status: 'approved' })`와 **같다** —
+ * `registration_status = 'approved'` 하나뿐이다(`is_active`·`is_suspended`는
+ * `listProfiles`도 보지 않는다. 그 필터가 필요한 호출부는 지금도 전 행을 받아
+ * 메모리에서 거른다). 여기서 조건이 달라지면 알림 수신자가 조용히 달라진다.
+ *
+ * 정렬은 하지 않는다(수신자 집합만 쓰는 호출부라 순서에 의미가 없다).
+ * 상한은 `listProfiles` 호출부들이 쓰던 `ALL_PROFILES_LIMIT`과 같은 값이다.
+ */
+export async function listApprovedMemberIds(): Promise<string[]> {
+  const rows = await db
+    .select({ id: memberProfiles.id })
+    .from(memberProfiles)
+    .where(eq(memberProfiles.registrationStatus, 'approved'))
+    .limit(ALL_PROFILES_LIMIT)
+  return rows.map(row => row.id)
+}
+
 export interface AdminMemberCounts {
   totalMembers: number
   pendingMembers: number

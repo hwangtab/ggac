@@ -1,6 +1,6 @@
 // 상대경로 + 명시적 확장자로 임포트한다 — commentNotify.ts와 같은 이유
 // (plain `node --test`에서 `@/` 별칭이 풀리지 않는다).
-import { listProfiles, ALL_PROFILES_LIMIT } from '../../db/queries/profiles.ts'
+import { listApprovedMemberIds } from '../../db/queries/profiles.ts'
 import { createBulkNotifications } from '../../db/queries/notifications.ts'
 import { createLogger } from '../../utils/logger.ts'
 
@@ -34,12 +34,10 @@ export async function notifyNewPost(input: NotifyNewPostInput): Promise<void> {
 
   let recipientIds: string[]
   try {
-    const { rows } = await listProfiles({
-      status: 'approved',
-      limit: ALL_PROFILES_LIMIT,
-      offset: 0,
-    })
-    recipientIds = rows.map(row => row.id)
+    // id 컬럼만 읽는다. 예전에는 `listProfiles`로 승인 회원 **전 행(34컬럼)** 과
+    // 쓰지도 않는 COUNT까지 받아 놓고 id만 뽑아 썼다 — 수신자 조건은 그때와
+    // 같다(`registration_status = 'approved'`, `listApprovedMemberIds` 주석 참고).
+    recipientIds = await listApprovedMemberIds()
   } catch (e) {
     log.error('승인 회원 명단 조회 실패 — 공지 알림을 건너뛴다', {
       postId: input.postId,

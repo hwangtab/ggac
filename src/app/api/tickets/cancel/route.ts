@@ -12,8 +12,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { requireUser } from '@/lib/server/memberAuth'
-import { getReservationById, cancelReservation, getShow } from '@/db/queries/ticketing'
-import { getPaymentById, recordPaymentCancel } from '@/db/queries/payments'
+import { getReservationById, finalizeTicketRefund, getShow } from '@/db/queries/ticketing'
+import { getPaymentById } from '@/db/queries/payments'
 import { calculateTicketRefund } from '@/lib/payments/refundPolicy'
 import { cancelPayment, TossApiError, TossLookupError } from '@/lib/payments/toss/client'
 import { getServerPaymentConfig, isPaymentEnabled } from '@/lib/payments/toss/config'
@@ -114,12 +114,27 @@ export async function POST(request: NextRequest) {
       throw error
     }
 
-    // 2) 환불이 끝난 뒤에 좌석을 푼다.
-    await recordPaymentCancel(String(payment.order_id), {
-      canceledAmount: quote.refundAmount,
+    // 2) 환불이 끝난 뒤에 원장과 좌석을 **함께** 바꾼다.
+    //
+    // `canceledAmount`는 누적 총액이다. 이번 회차 환불액만 넘기면, 부분 환불을
+    // 두 번 허용하는 순간 두 번째가 `lt` 조건에 걸려 조용히 무시된다.
+    const canceled = await finalizeTicketRefund({
+      orderId: String(payment.order_id),
+      reservationId,
+      canceledAmount: Number(payment.canceled_amount ?? 0) + quote.refundAmount,
       raw: { canceledBy: 'member', daysBefore: quote.daysBefore },
     })
-    const canceled = await cancelReservation(reservationId)
+    if (!canceled) {
+      // 환불은 이미 나갔는데 우리 기록만 못 바꿨다. 자동으로 되돌릴 방법이 없다.
+      log.error('환불 기록 실패 — 수동 처리 필요', {
+        orderId: String(payment.order_id),
+        reservationId,
+        refundAmount: quote.refundAmount,
+      })
+      return ApiError.internalServerError(
+        '환불은 처리됐으나 예매 상태를 갱신하지 못했습니다. 사무국(contact@ggac.kr)으로 문의해 주세요.'
+      ).toNextResponse()
+    }
 
     log.info('예매 취소', {
       userId: maskId(user.id),
@@ -132,7 +147,7 @@ export async function POST(request: NextRequest) {
       refundAmount: quote.refundAmount,
       deductionRate: quote.deductionRate,
       reason: quote.reason,
-      reservationCode: canceled?.reservation_code ?? reservation.reservation_code,
+      reservationCode: canceled.reservation_code ?? reservation.reservation_code,
     }).toNextResponse()
   } catch (error) {
     log.error('예매 취소 실패:', error)
