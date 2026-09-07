@@ -12,6 +12,8 @@ const {
   listPendingInboundEmails,
   countInboundSince,
   appendThreadReference,
+  insertAttachment,
+  getAttachment,
 } = await import('../../src/db/queries/mailbox.ts')
 
 function sample(overrides = {}) {
@@ -63,6 +65,18 @@ test('본문을 채우면 body_fetch_status가 done이 된다', async () => {
   assert.equal(after.body_html, '<p>안녕하세요</p>')
 })
 
+test('본문 조회 결과가 제목을 안 주면 기존 제목을 지우지 않는다', async () => {
+  const row = await insertInboundEmail(sample({ subject: '원래 제목' }))
+  await markBodyFetched(row.id, {
+    body_html: '<p>본문</p>',
+    body_text: '본문',
+    headers: null,
+    subject: null,
+  })
+  const after = await getInboundEmail(row.id)
+  assert.equal(after.subject, '원래 제목')
+})
+
 test('pending 목록은 done을 빼고 준다', async () => {
   const pending = await insertInboundEmail(sample())
   const done = await insertInboundEmail(sample())
@@ -109,6 +123,24 @@ test('같은 References를 두 번 넣어도 한 번만 쌓인다', async () => 
   await appendThreadReference(row.id, '<one@x>')
   const after = await getInboundEmail(row.id)
   assert.equal(after.thread_references, '<one@x>')
+})
+
+test('첨부는 호출부가 정한 id를 그대로 쓴다 — Blob 경로와 행이 같은 id를 가리켜야 한다', async () => {
+  const row = await insertInboundEmail(sample())
+  const chosenId = `att_${Math.random().toString(36).slice(2)}`
+  await insertAttachment({
+    id: chosenId,
+    email_id: row.id,
+    filename: 'photo.png',
+    content_type: 'image/png',
+    content_id: null,
+    size_bytes: 1024,
+    blob_path: `mailbox/${chosenId}/photo.png`,
+  })
+  const attachment = await getAttachment(chosenId)
+  assert.ok(attachment)
+  assert.equal(attachment.id, chosenId)
+  assert.equal(attachment.blob_path, `mailbox/${chosenId}/photo.png`)
 })
 
 test('기준 시각 이후 수신 건수를 센다 — 쿼터 감시용', async () => {

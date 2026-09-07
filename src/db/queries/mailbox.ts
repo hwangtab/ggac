@@ -11,7 +11,7 @@ import { and, desc, eq, gte, or, sql } from 'drizzle-orm'
 import { db } from '../client.ts'
 import { inboundEmails, inboundEmailAttachments, inboundEmailReplies } from '../schema/index.ts'
 
-import { toIso, toSnakeCase, LIKE_ESCAPE_CHAR } from './_helpers.ts'
+import { toIso, toSnakeCase, likeContains } from './_helpers.ts'
 
 export type InsertInboundEmailInput = {
   resend_email_id: string
@@ -65,9 +65,12 @@ export async function insertInboundEmail(input: InsertInboundEmailInput) {
       resendEmailId: input.resend_email_id,
       messageId: input.message_id ?? null,
       fromAddress: input.from_address,
-      toAddresses: JSON.stringify(input.to_addresses ?? []),
-      ccAddresses: JSON.stringify(input.cc_addresses ?? []),
-      receivedFor: JSON.stringify(input.received_for ?? []),
+      toAddresses: JSON.stringify(Array.isArray(input.to_addresses) ? input.to_addresses : []),
+      ccAddresses: JSON.stringify(Array.isArray(input.cc_addresses) ? input.cc_addresses : []),
+      // received_for는 허용 주소 판정의 입력이다 — 배열이 아닌 값이 섞여
+      // 문자열로 저장되면 읽는 쪽 JSON.parse가 배열이 아닌 값을 받아 게이트가
+      // 조용히 어긋난다.
+      receivedFor: JSON.stringify(Array.isArray(input.received_for) ? input.received_for : []),
       subject: input.subject ?? null,
       receivedAt: input.received_at,
     })
@@ -76,7 +79,15 @@ export async function insertInboundEmail(input: InsertInboundEmailInput) {
   return row ? rowToEmail(row) : null
 }
 
-/** 본문·헤더를 채우고 나면 body_fetch_status를 done으로 옮긴다. */
+/**
+ * 본문·헤더를 채우고 나면 body_fetch_status를 done으로 옮긴다.
+ *
+ * `patch.subject`가 `null`이면 기존 제목을 그대로 둔다 — 웹훅 메타데이터
+ * 단계에서 이미 제목을 넣어 뒀는데, 본문 조회 결과가 제목을 안 준다고 해서
+ * 그 값을 지우면 안 된다. Drizzle의 `.set()`은 `undefined` 필드를 UPDATE에서
+ * 아예 빼므로, `null`을 그대로 넘기면(컬럼을 NULL로 덮어씀) 안 되고
+ * `undefined`로 바꿔 넘겨야 "값 유지"가 된다.
+ */
 export async function markBodyFetched(
   id: string,
   patch: {
@@ -118,15 +129,10 @@ export async function listInboundEmails(
   }
 
   if (options.search) {
-    const escaped = options.search
-      .replaceAll(LIKE_ESCAPE_CHAR, LIKE_ESCAPE_CHAR + LIKE_ESCAPE_CHAR)
-      .replaceAll('%', LIKE_ESCAPE_CHAR + '%')
-      .replaceAll('_', LIKE_ESCAPE_CHAR + '_')
-    const pattern = `%${escaped}%`
     conditions.push(
       or(
-        sql`${inboundEmails.subject} LIKE ${pattern} ESCAPE ${LIKE_ESCAPE_CHAR}`,
-        sql`${inboundEmails.fromAddress} LIKE ${pattern} ESCAPE ${LIKE_ESCAPE_CHAR}`
+        likeContains(inboundEmails.subject, options.search),
+        likeContains(inboundEmails.fromAddress, options.search)
       )
     )
   }
@@ -153,7 +159,7 @@ export async function listInboundEmails(
   const rowsQuery = db
     .select(columns)
     .from(inboundEmails)
-    .orderBy(desc(inboundEmails.receivedAt))
+    .orderBy(desc(inboundEmails.receivedAt), desc(inboundEmails.id))
     .limit(options.limit)
     .offset(options.offset)
 
