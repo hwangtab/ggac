@@ -13,6 +13,9 @@
 
 /** `표시 이름 <a@b.c>` 에서 주소만 뽑는다. 꺾쇠가 없으면 통째로 본다. */
 function normalizeAddress(value: string): string {
+  // 외부 웹훅 JSON에서 온 값이 항상 문자열이 아닐 수 있음.
+  // fail-closed 계약: 예외 던지기가 아니라 거부로 끝나야 함.
+  if (typeof value !== 'string') return ''
   const match = value.match(/<([^>]+)>/)
   return (match ? match[1] : value).trim().toLowerCase()
 }

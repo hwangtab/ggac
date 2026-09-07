@@ -45,3 +45,11 @@ test('허용 목록이 비면 전부 거부한다 — fail-closed', () => {
 test('수신자 목록이 비면 거부한다', () => {
   assert.equal(isAllowedRecipient([], ['contact@ggac.kr']), false)
 })
+
+test('null이 섞여 있어도 예외를 던지지 않고, 정상 주소가 있으면 통과한다', () => {
+  assert.equal(isAllowedRecipient([null, 'contact@ggac.kr'], ['contact@ggac.kr']), true)
+})
+
+test('null·undefined만 있으면 예외를 던지지 않고 거부한다 — fail-closed', () => {
+  assert.equal(isAllowedRecipient([null, undefined], ['contact@ggac.kr']), false)
+})
