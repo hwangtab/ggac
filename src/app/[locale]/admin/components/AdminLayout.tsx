@@ -12,6 +12,7 @@ import {
   FiClipboard,
   FiGift,
   FiBell,
+  FiMail,
 } from 'react-icons/fi'
 import { Link, usePathname } from '@/i18n/navigation'
 
@@ -80,6 +81,12 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ title, description, children 
       label: '알림 발송',
       href: '/admin/notifications',
       icon: <FiBell className="w-5 h-5" />,
+    },
+    {
+      id: 'mailbox',
+      label: '메일함',
+      href: '/admin/mailbox',
+      icon: <FiMail className="w-5 h-5" />,
     },
     {
       id: 'settings',

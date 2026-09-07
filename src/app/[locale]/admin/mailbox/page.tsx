@@ -1,0 +1,527 @@
+'use client'
+
+import { useState, useEffect, useCallback } from 'react'
+import { FiMail, FiRefreshCw, FiSend, FiX, FiPaperclip, FiSearch } from 'react-icons/fi'
+import AdminLayout from '../components/AdminLayout'
+
+interface InboundEmail {
+  id: string
+  resend_email_id: string
+  message_id: string | null
+  from_address: string
+  to_addresses: string
+  cc_addresses: string
+  received_for: string
+  subject: string | null
+  status: 'unread' | 'read' | 'replied' | 'archived' | 'spam'
+  body_fetch_status: 'pending' | 'done' | 'failed'
+  thread_references: string | null
+  received_at: string
+  created_at: string
+  updated_at: string
+}
+
+interface InboundEmailDetail extends InboundEmail {
+  body_html: string | null
+  body_text: string | null
+  headers: string | null
+}
+
+interface Attachment {
+  id: string
+  email_id: string
+  filename: string
+  content_type: string | null
+  content_id: string | null
+  size_bytes: number | null
+  blob_path: string
+  created_at: string
+}
+
+const STATUS_LABELS: Record<string, { label: string; color: string }> = {
+  unread: { label: '안 읽음', color: 'bg-blue-100 text-blue-800' },
+  read: { label: '읽음', color: 'bg-gray-100 text-gray-700' },
+  replied: { label: '답장함', color: 'bg-green-100 text-green-800' },
+  archived: { label: '보관', color: 'bg-purple-100 text-purple-700' },
+  spam: { label: '스팸', color: 'bg-red-100 text-red-800' },
+}
+
+const STATUS_ORDER: InboundEmail['status'][] = ['unread', 'read', 'replied', 'archived', 'spam']
+
+const LIMIT = 30
+
+const inputClass =
+  'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500'
+
+function formatBytes(bytes: number | null): string {
+  if (bytes === null || bytes === undefined) return ''
+  if (bytes < 1024) return `${bytes}B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
+}
+
+export default function MailboxPage() {
+  const [emails, setEmails] = useState<InboundEmail[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [search, setSearch] = useState('')
+  const [searchInput, setSearchInput] = useState('')
+  const [totalCount, setTotalCount] = useState(0)
+  const [offset, setOffset] = useState(0)
+  const [updating, setUpdating] = useState<string | null>(null)
+
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const [detail, setDetail] = useState<InboundEmailDetail | null>(null)
+  const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [detailError, setDetailError] = useState<string | null>(null)
+
+  const [replyTarget, setReplyTarget] = useState<InboundEmail | null>(null)
+  const [replyBody, setReplyBody] = useState('')
+  const [replySending, setReplySending] = useState(false)
+
+  const fetchEmails = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const params = new URLSearchParams()
+      if (statusFilter !== 'all') params.set('status', statusFilter)
+      if (search) params.set('search', search)
+      params.set('limit', String(LIMIT))
+      params.set('offset', String(offset))
+
+      const res = await fetch(`/api/admin/mailbox?${params}`)
+      if (!res.ok) throw new Error('데이터를 불러오지 못했습니다.')
+      const json = await res.json()
+      setEmails(json.data?.emails ?? [])
+      setTotalCount(json.data?.pagination?.total_count ?? 0)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }, [statusFilter, search, offset])
+
+  useEffect(() => {
+    fetchEmails()
+  }, [fetchEmails])
+
+  const fetchDetail = useCallback(async (id: string) => {
+    setDetailLoading(true)
+    setDetailError(null)
+    try {
+      const res = await fetch(`/api/admin/mailbox/${id}`)
+      if (!res.ok) throw new Error('상세를 불러오지 못했습니다.')
+      const json = await res.json()
+      setDetail(json.data?.email ?? null)
+      setAttachments(json.data?.attachments ?? [])
+    } catch (err) {
+      setDetailError(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.')
+    } finally {
+      setDetailLoading(false)
+    }
+  }, [])
+
+  const toggleExpand = (email: InboundEmail) => {
+    if (expanded === email.id) {
+      setExpanded(null)
+      setDetail(null)
+      setAttachments([])
+      return
+    }
+    setExpanded(email.id)
+    setDetail(null)
+    setAttachments([])
+    fetchDetail(email.id)
+
+    // 안 읽음이면 읽음으로 낙관적 전이 — 관리자가 열어 봤다는 사실이다.
+    if (email.status === 'unread') {
+      updateStatus(email, 'read')
+    }
+  }
+
+  const updateStatus = async (email: InboundEmail, status: InboundEmail['status']) => {
+    const expectedStatus = email.status
+    setUpdating(email.id)
+    try {
+      const res = await fetch(`/api/admin/mailbox/${email.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, expected_status: expectedStatus }),
+      })
+      if (res.status === 409) {
+        alert('다른 관리자가 먼저 처리했습니다. 목록을 새로고침합니다.')
+        await fetchEmails()
+        return
+      }
+      if (!res.ok) throw new Error('업데이트 실패')
+      setEmails(prev => prev.map(e => (e.id === email.id ? { ...e, status } : e)))
+      setDetail(prev => (prev && prev.id === email.id ? { ...prev, status } : prev))
+    } catch {
+      alert('상태 업데이트에 실패했습니다.')
+    } finally {
+      setUpdating(null)
+    }
+  }
+
+  const openReply = (email: InboundEmail) => {
+    setReplyTarget(email)
+    setReplyBody('')
+  }
+
+  const closeReply = () => {
+    if (replySending) return
+    setReplyTarget(null)
+    setReplyBody('')
+  }
+
+  const sendReply = async () => {
+    if (!replyTarget || !replyBody.trim()) return
+    setReplySending(true)
+    try {
+      const res = await fetch(`/api/admin/mailbox/${replyTarget.id}/reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body_html: replyBody }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) {
+        throw new Error(json?.error?.message || '답장 발송에 실패했습니다.')
+      }
+      const recorded = json?.data?.recorded ?? true
+      const targetId = replyTarget.id
+      setEmails(prev => prev.map(e => (e.id === targetId ? { ...e, status: 'replied' } : e)))
+      setDetail(prev => (prev && prev.id === targetId ? { ...prev, status: 'replied' } : prev))
+      setReplyTarget(null)
+      setReplyBody('')
+      if (recorded) {
+        alert('답장을 보냈습니다.')
+      } else {
+        alert(
+          '답장은 나갔지만 기록에 실패했습니다. 관리자에게 문의해 이 메일의 답장 기록을 확인해 주세요.'
+        )
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '답장 발송에 실패했습니다.')
+    } finally {
+      setReplySending(false)
+    }
+  }
+
+  const runSearch = () => {
+    setOffset(0)
+    setSearch(searchInput.trim())
+  }
+
+  const filterButtons: { key: string; label: string }[] = [
+    { key: 'all', label: '전체' },
+    ...STATUS_ORDER.map(s => ({ key: s, label: STATUS_LABELS[s].label })),
+  ]
+
+  const page = Math.floor(offset / LIMIT) + 1
+  const totalPages = Math.max(1, Math.ceil(totalCount / LIMIT))
+
+  return (
+    <AdminLayout title="메일함" description="ggac.kr 수신 메일 조회 및 답장">
+      <div className="space-y-6">
+        {/* 헤더 */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center text-primary-600">
+              <FiMail className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">수신 메일함</h2>
+              <p className="text-sm text-gray-500">전체 {totalCount}건</p>
+            </div>
+          </div>
+          <button
+            onClick={fetchEmails}
+            className="flex items-center gap-2 px-4 py-2 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <FiRefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            새로고침
+          </button>
+        </div>
+
+        {/* 검색 */}
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={searchInput}
+            onChange={e => setSearchInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') runSearch()
+            }}
+            placeholder="제목 또는 보낸 주소 검색"
+            className={`${inputClass} max-w-xs`}
+          />
+          <button
+            onClick={runSearch}
+            className="flex items-center gap-1 px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <FiSearch className="w-4 h-4" />
+            검색
+          </button>
+        </div>
+
+        {/* 상태 필터 */}
+        <div className="flex gap-2 flex-wrap">
+          {filterButtons.map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => {
+                setStatusFilter(key)
+                setOffset(0)
+              }}
+              className={`px-4 py-2 text-sm rounded-lg border transition-colors ${
+                statusFilter === key
+                  ? 'bg-primary-600 text-white border-primary-600'
+                  : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* 오류 */}
+        {error && (
+          <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+            {error}
+          </div>
+        )}
+
+        {/* 목록 */}
+        {loading ? (
+          <div className="space-y-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="h-20 bg-gray-100 rounded-lg animate-pulse" />
+            ))}
+          </div>
+        ) : emails.length === 0 ? (
+          <div className="py-16 text-center text-gray-500">수신 메일이 없습니다.</div>
+        ) : (
+          <div className="space-y-3">
+            {emails.map(email => {
+              const isExpanded = expanded === email.id
+              const statusInfo = STATUS_LABELS[email.status]
+              return (
+                <div
+                  key={email.id}
+                  className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden"
+                >
+                  {/* 요약 행 */}
+                  <div
+                    className="flex items-center gap-4 p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                    onClick={() => toggleExpand(email)}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium text-gray-900 truncate">
+                          {email.subject || '(제목 없음)'}
+                        </span>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusInfo.color}`}
+                        >
+                          {statusInfo.label}
+                        </span>
+                        {email.body_fetch_status !== 'done' && (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                            본문 받는 중
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-sm text-gray-500 mt-0.5 truncate">
+                        {email.from_address}
+                      </div>
+                    </div>
+                    <div className="text-xs text-gray-400 whitespace-nowrap">
+                      {new Date(email.received_at).toLocaleDateString('ko-KR', {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </div>
+                  </div>
+
+                  {/* 상세 */}
+                  {isExpanded && (
+                    <div className="border-t border-gray-100 p-4 space-y-4">
+                      {detailLoading ? (
+                        <div className="h-40 bg-gray-100 rounded-lg animate-pulse" />
+                      ) : detailError ? (
+                        <div className="text-sm text-red-600">{detailError}</div>
+                      ) : (
+                        <>
+                          {/*
+                            받은 메일의 HTML은 외부에서 온 것이다. 관리자 화면 DOM에 직접 넣으면
+                            관리자 세션을 노린 XSS 통로가 된다. sandbox에 allow-scripts를 주지 않아
+                            스크립트를 아예 못 돌게 하고, 그 위에 서버가 sanitize한 결과만 받는다.
+                            본문은 html_format=data_uri로 받아 인라인 이미지가 base64로 박혀 있으므로
+                            외부 요청도 없다.
+                          */}
+                          <iframe
+                            title="메일 본문"
+                            sandbox=""
+                            srcDoc={
+                              detail?.body_html ??
+                              '<p style="font-family:sans-serif;color:#6b7280">본문이 아직 도착하지 않았습니다.</p>'
+                            }
+                            className="w-full min-h-[320px] rounded border border-gray-200 bg-white"
+                          />
+
+                          {attachments.length > 0 && (
+                            <div>
+                              <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                                첨부파일
+                              </div>
+                              <ul className="space-y-1">
+                                {attachments.map(att => (
+                                  <li key={att.id} className="flex items-center gap-2 text-sm">
+                                    <FiPaperclip className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                    <a
+                                      href={`/api/admin/mailbox/attachments/${att.id}/download`}
+                                      className="text-blue-600 hover:underline break-all"
+                                    >
+                                      {att.filename}
+                                    </a>
+                                    {att.size_bytes !== null && (
+                                      <span className="text-xs text-gray-400">
+                                        ({formatBytes(att.size_bytes)})
+                                      </span>
+                                    )}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                      {/* 상태 변경 + 답장 버튼 */}
+                      <div className="flex items-center gap-2 pt-2 border-t border-gray-100 flex-wrap">
+                        <span className="text-sm text-gray-500 mr-1">상태 변경:</span>
+                        {STATUS_ORDER.map(s => (
+                          <button
+                            key={s}
+                            disabled={updating === email.id || email.status === s}
+                            onClick={() => updateStatus(email, s)}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors hover:opacity-80 ${STATUS_LABELS[s].color}`}
+                          >
+                            {STATUS_LABELS[s].label}
+                          </button>
+                        ))}
+                        <span className="flex-1" />
+                        <button
+                          onClick={e => {
+                            e.stopPropagation()
+                            openReply(email)
+                          }}
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-primary-100 text-primary-700 hover:bg-primary-200 transition-colors"
+                        >
+                          <FiSend className="w-3 h-3" />
+                          답장
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* 페이지네이션 */}
+        {!loading && totalCount > LIMIT && (
+          <div className="flex items-center justify-center gap-3 pt-2">
+            <button
+              disabled={offset === 0}
+              onClick={() => setOffset(Math.max(0, offset - LIMIT))}
+              className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              이전
+            </button>
+            <span className="text-sm text-gray-500">
+              {page} / {totalPages}
+            </span>
+            <button
+              disabled={offset + LIMIT >= totalCount}
+              onClick={() => setOffset(offset + LIMIT)}
+              className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              다음
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* 답장 모달 */}
+      {replyTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={e => {
+            if (e.target === e.currentTarget) closeReply()
+          }}
+        >
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-5 border-b border-gray-200">
+              <h2 className="text-base font-semibold text-gray-900">답장 보내기</h2>
+              <button
+                onClick={closeReply}
+                className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+              >
+                <FiX className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="text-sm text-gray-500">
+                받는 사람: <span className="text-gray-900">{replyTarget.from_address}</span>
+              </div>
+              <div className="text-sm text-gray-500">
+                제목:{' '}
+                <span className="text-gray-900">
+                  {(replyTarget.subject || '(제목 없음)').startsWith('Re: ')
+                    ? replyTarget.subject
+                    : `Re: ${replyTarget.subject || '(제목 없음)'}`}
+                </span>
+              </div>
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-gray-600">
+                  본문 <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  rows={10}
+                  value={replyBody}
+                  onChange={e => setReplyBody(e.target.value)}
+                  placeholder="답장 내용을 입력하세요."
+                  className={`${inputClass} resize-none`}
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 p-5 border-t border-gray-200">
+              <button
+                onClick={closeReply}
+                disabled={replySending}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={sendReply}
+                disabled={replySending || !replyBody.trim()}
+                className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {replySending ? '보내는 중...' : '보내기'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </AdminLayout>
+  )
+}
