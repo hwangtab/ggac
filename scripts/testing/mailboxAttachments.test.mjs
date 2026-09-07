@@ -60,6 +60,7 @@ test('경로 이탈을 거부한다', () => {
     `${MAILBOX_ATTACHMENT_PREFIX}/a/b#x`,
     `https://example.com/${MAILBOX_ATTACHMENT_PREFIX}/a/b`,
     `${MAILBOX_ATTACHMENT_PREFIX}/a/b `,
+    `${MAILBOX_ATTACHMENT_PREFIX}/a/b \u0000`,
     '',
   ]) {
     assert.equal(
