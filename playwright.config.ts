@@ -113,7 +113,7 @@ export default defineConfig({
     },
     {
       name: 'authz',
-      testMatch: /authz-(ownership|personal|remaining|maintenance|roles)\.spec\.ts/,
+      testMatch: /authz-(ownership|personal|remaining|maintenance|roles|mailbox)\.spec\.ts/,
       dependencies: ['authz-setup'],
       use: { ...devices['Desktop Chrome'], channel: 'chrome' },
     },
