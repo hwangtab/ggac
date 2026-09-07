@@ -87,6 +87,22 @@ test('pending 목록은 done을 빼고 준다', async () => {
   assert.equal(ids.includes(done.id), false)
 })
 
+test('pending 목록은 오래된 순이다 — 백필이 밀린 것부터 소진해야 30일 컷오프가 그 행에 닿는다', async () => {
+  const older = await insertInboundEmail(
+    sample({ received_at: new Date(Date.now() - 40 * 24 * 60 * 60 * 1000) })
+  )
+  const newer = await insertInboundEmail(sample({ received_at: new Date() }))
+  const rows = await listPendingInboundEmails(50)
+  const ids = rows.map(r => r.id)
+  const olderIndex = ids.indexOf(older.id)
+  const newerIndex = ids.indexOf(newer.id)
+  assert.ok(olderIndex !== -1 && newerIndex !== -1)
+  assert.ok(
+    olderIndex < newerIndex,
+    '오래된 행이 먼저 나와야 배치 크기를 넘는 백로그에서도 백필에 집힌다'
+  )
+})
+
 test('상태 변경은 expected가 맞을 때만 먹는다', async () => {
   const row = await insertInboundEmail(sample())
   assert.equal(await updateInboundStatus(row.id, 'unread', 'read'), 'updated')

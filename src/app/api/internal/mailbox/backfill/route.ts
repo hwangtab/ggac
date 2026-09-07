@@ -75,6 +75,10 @@ async function handleBackfill(request: NextRequest) {
 
     for (const row of pending) {
       const receivedAt = row.received_at ? new Date(String(row.received_at)).getTime() : NaN
+      // `>`(초과)로 비교한다 — 정확히 경계값(딱 30일 지난 행)은 아직 한 번
+      // 더 재시도할 기회를 준다. Resend 보관 기한이 근사치라, 그 시점에
+      // 원본이 막 사라진 것과 아직 남아 있는 것을 정확히 가를 수 없어서
+      // 재시도 한 번을 손해 볼지언정 포기를 서두르지 않는 쪽을 택했다.
       const isExpired = Number.isFinite(receivedAt) && now - receivedAt > RESEND_RETENTION_MS
 
       if (isExpired) {

@@ -6,7 +6,7 @@
  * 응답 조립이나 인가 판정에 쓰는 것은 아무것도 이 파일에 들여오지 않는다.
  */
 
-import { and, desc, eq, gte, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, or, sql } from 'drizzle-orm'
 
 import { db } from '../client.ts'
 import { inboundEmails, inboundEmailAttachments, inboundEmailReplies } from '../schema/index.ts'
@@ -278,13 +278,27 @@ export async function appendThreadReference(id: string, messageId: string): Prom
     .where(eq(inboundEmails.id, id))
 }
 
-/** 본문·첨부를 아직 당겨오지 못한 메일. 최근 순으로 `limit`만큼 준다. */
+/**
+ * 본문·첨부를 아직 당겨오지 못한 메일. **오래된 순**으로 `limit`만큼 준다.
+ *
+ * 관리자 목록(`listInboundEmails`)과 반대다 — 일부러 그렇다. 유일한
+ * 프로덕션 호출자는 백필 크론(`/api/internal/mailbox/backfill`)이고, 그
+ * 크론은 30일을 넘긴 pending 행을 `markBodyFetchFailed`로 포기 표시한다.
+ * 최신순으로 주면 pending 백로그가 배치 크기(`BATCH_SIZE`)를 넘어 지속될 때
+ * 오래된 행이 정렬 아래로 가라앉아 **다시는 선택되지 않는다** — 매 실행이
+ * 최근 것만 집고 끝나 버려서, 30일 컷오프가 필요한 바로 그 행에는 영영 닿지
+ * 못하고 컷오프 로직이 죽은 코드가 된다. 오래된 순이면 컷오프 대상이 배치
+ * 앞에 자연히 오고, 밀린 것부터 소진된다.
+ *
+ * `id`(UUID)를 타이브레이커로 둔다 — `received_at`이 같은 행이 여러 개일
+ * 때도 실행마다 순서가 흔들리지 않게 하기 위해서다.
+ */
 export async function listPendingInboundEmails(limit: number): Promise<Record<string, unknown>[]> {
   const rows = await db
     .select()
     .from(inboundEmails)
     .where(eq(inboundEmails.bodyFetchStatus, 'pending'))
-    .orderBy(desc(inboundEmails.receivedAt))
+    .orderBy(asc(inboundEmails.receivedAt), asc(inboundEmails.id))
     .limit(limit)
   return rows.map(rowToEmail)
 }
