@@ -22,12 +22,24 @@ function safeExtension(filename: string): string {
   return /^[A-Za-z0-9]{1,10}$/.test(ext) ? `.${ext.toLowerCase()}` : ''
 }
 
+/**
+ * 경로가 자기 봉쇄 판정을 통과하지 못하면 예외를 던진다.
+ * 저장소에 쓰기 전 쓰기 측에서 이 검사를 거쳐야 한다.
+ */
+function assertSafe(path: string): string {
+  if (!isSafeMailboxAttachmentPath(path)) {
+    throw new Error('안전하지 않은 메일함 첨부 경로입니다')
+  }
+  return path
+}
+
 export function blobPathForAttachment(
   emailId: string,
   attachmentId: string,
   filename: string
 ): string {
-  return `${MAILBOX_ATTACHMENT_PREFIX}/${emailId}/${attachmentId}${safeExtension(filename)}`
+  const path = `${MAILBOX_ATTACHMENT_PREFIX}/${emailId}/${attachmentId}${safeExtension(filename)}`
+  return assertSafe(path)
 }
 
 /**
@@ -56,7 +68,14 @@ export function isSafeMailboxAttachmentPath(path: string): boolean {
  * 브라우저가 파일로 저장하게 만드는 헤더. 파일명에 개행·따옴표가 섞이면
  * 헤더가 쪼개지므로 ASCII 대체본과 UTF-8 인코딩본을 함께 낸다.
  */
-export function contentDispositionAttachment(filename: string): string {
-  const fallback = filename.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_')
-  return `attachment; filename="${fallback}"; filename*=UTF-8''${encodeURIComponent(filename)}`
+export function contentDispositionAttachment(filename: unknown): string {
+  const raw = typeof filename === 'string' ? filename.trim() : ''
+  const safeName = raw || 'download'
+
+  // ASCII 폴백: 인쇄 가능한 ASCII만 남기고 따옴표·역슬래시는 제거한다.
+  // eslint-disable-next-line no-control-regex
+  const ascii = safeName.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_')
+  const asciiFallback = ascii.trim() || 'download'
+
+  return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(safeName)}`
 }
