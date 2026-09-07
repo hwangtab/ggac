@@ -300,11 +300,19 @@ webServer에 `{...process.env, ...webServer.env}`를 넘긴다. e2e 전용 변�
 
 - `authz-setup`(5개 계정 로그인 → `e2e/.auth/*.json` storageState 저장) 5건
 - `authz`: `authz-maintenance`·`authz-ownership`·`authz-personal`·
-  `authz-remaining`·`authz-roles` 5개 스펙 44건
+  `authz-remaining`·`authz-roles`·`authz-mailbox` 6개 스펙
 - `authz-public`: `authz-boundaries` 21건
 
-**실측 기준선:** 70 passed(2026-09-01, 안건 토론을 조합원에게 개방한 뒤).
-이력: 50(2026-08-26 컷오버) → 64(안건 토론 추가) → 70(토론 열람·참여 개방).
+**실측 기준선(2026-09-07, 관리자 메일함 태스크 완료 후):** 총 90건 중
+**89 passed, 1 failed.** 실패한 1건은 `authz-remaining.spec.ts`의 정책 36
+(`PUBLIC_BLOB_READ_WRITE_TOKEN` 부재를 단언하는 기존 테스트)로, 이 저장소의
+다른 변경과 무관한 기존 실패다 — 실제 정책 단언은 이번 실행에서 실행되지
+않았을 뿐 새로 깨진 것이 없다. 새로 더해진 `authz-mailbox.spec.ts`(관리자
+메일함 인가 게이트) 12건은 전부 통과했다.
+
+이력: 50(2026-08-26 컷오버) → 64(안건 토론 추가) → 70(2026-09-01, 토론 열람·
+참여 개방) → 78(그 뒤 인가 스펙에 누적된 추가분, 정확한 출처는 커밋별로
+재구성하지 못했다) → 89(2026-09-07, 관리자 메일함 인가 케이스 12건 추가).
 조합원 개방분은 `authz-ownership`의 조합원 200·안건 추가 403·미승인 403 계열과
 `authz-roles`의 짝 단정이다.
 
@@ -948,7 +956,7 @@ EXPLAIN QUERY PLAN SELECT count(*) FROM notifications WHERE user_id = '<아무 �
 가드도 타입 검사도 통과한다. 가드는 **"이 문자열이 이 파일에 있는가"**만 보고
 도달 가능성·실행 순서·데이터 흐름을 보지 않는다.
 
-**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 70 passed, 실행 절차는
+**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 89 passed, 실행 절차는
 위 "권한 E2E" 절). 같은 감사에서 **E2E는 관리자 게이트 무력화를 실제로 잡았다.**
 
 `assert-runtime-risks.mjs`가 여전히 값을 하는 자리는 **지워진 것**(게이트를 통째로

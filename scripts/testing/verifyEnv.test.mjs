@@ -41,6 +41,9 @@ const ALL_KEYS = [
   'PUBLIC_BLOB_READ_WRITE_TOKEN',
   'PRIVATE_BLOB_READ_WRITE_TOKEN',
   'RESEND_API_KEY',
+  'RESEND_INBOUND_API_KEY',
+  'RESEND_INBOUND_WEBHOOK_SECRET',
+  'MAILBOX_ALLOWED_RECIPIENTS',
 ]
 
 const COMPLETE_ENV = {
@@ -51,6 +54,9 @@ const COMPLETE_ENV = {
   PUBLIC_BLOB_READ_WRITE_TOKEN: 'local-placeholder',
   PRIVATE_BLOB_READ_WRITE_TOKEN: 'local-placeholder',
   RESEND_API_KEY: 'local-placeholder',
+  RESEND_INBOUND_API_KEY: 'local-placeholder',
+  RESEND_INBOUND_WEBHOOK_SECRET: 'local-placeholder',
+  MAILBOX_ALLOWED_RECIPIENTS: 'office@ggac.kr',
 }
 
 function run(overrides) {
@@ -87,6 +93,9 @@ for (const key of [
   'PUBLIC_BLOB_READ_WRITE_TOKEN',
   'PRIVATE_BLOB_READ_WRITE_TOKEN',
   'RESEND_API_KEY',
+  'RESEND_INBOUND_API_KEY',
+  'RESEND_INBOUND_WEBHOOK_SECRET',
+  'MAILBOX_ALLOWED_RECIPIENTS',
 ]) {
   test(`부정 대조: ${key}가 없으면 실패한다`, () => {
     const env = { ...COMPLETE_ENV }
