@@ -57,6 +57,16 @@ const RESEND_ENDPOINT = 'https://api.resend.com/emails'
 const FROM = '경기아트콜렉티브 <noreply@ggac.kr>'
 
 /**
+ * 회신을 받을 주소. `noreply@ggac.kr`로 회신이 가면 반송되거나 유실된다 —
+ * 실제로 그것이 "Resend 회신을 확인할 수 없다"의 직접 원인이었다.
+ * 값이 없으면 키를 아예 넣지 않는다(전환 전 동작 그대로).
+ */
+function replyToPayload(): { reply_to: string[] } | Record<string, never> {
+  const value = process.env.MAILBOX_REPLY_TO?.trim()
+  return value ? { reply_to: [value] } : {}
+}
+
+/**
  * Resend HTTP API로 인증 메일을 보낸다.
  *
  * SMTP(465)가 아니라 HTTP를 쓰는 이유: 서버리스 함수는 연결을 유지하지 못해
@@ -89,7 +99,7 @@ export async function sendAuthEmail(kind: AuthEmailKind, to: string, url: string
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ from: FROM, to: [to], subject, html }),
+    body: JSON.stringify({ from: FROM, to: [to], subject, html, ...replyToPayload() }),
     signal: AbortSignal.timeout(10_000),
   })
 

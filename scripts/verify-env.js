@@ -103,6 +103,9 @@ const optionalEnvVars = [
   'PAYMENTS_CRON_TOKEN',
   // 임시 첨부 정리 크론 인증 토큰. Vercel production에는 이미 있다.
   'CLEANUP_CRON_TOKEN',
+  // 발신 메일의 회신 주소. 없으면 회신이 noreply@ggac.kr로 가서 유실된다.
+  // 필수가 아닌 이유: 없어도 발송 자체는 성공하고, 전환 전 동작과 같다.
+  'MAILBOX_REPLY_TO',
 ]
 
 console.log('🔍 Environment Variable Verification\n')
