@@ -1,20 +1,45 @@
-import { test, before } from 'node:test'
+import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
+import { rmSync } from 'node:fs'
+import { createClient } from '@libsql/client'
 
-process.env.TURSO_DATABASE_URL = 'file:local.db'
+import { applyMigrations } from './apply-migrations.mjs'
 
-const {
-  insertInboundEmail,
-  getInboundEmail,
-  listInboundEmails,
-  updateInboundStatus,
-  markBodyFetched,
-  listPendingInboundEmails,
-  countInboundSince,
-  appendThreadReference,
-  insertAttachment,
-  getAttachment,
-} = await import('../../src/db/queries/mailbox.ts')
+/**
+ * `src/db/queries/mailbox.ts`를 실제 SQLite 파일 DB로 검증한다. 패턴은
+ * `scripts/testing/queriesMisc.test.mjs` / `queriesActivities.test.mjs`와
+ * 동일 — 전용 임시 DB 파일 + `applyMigrations` + 종료 시 `rmSync`.
+ *
+ * 이전에는 공유 `file:local.db`를 마이그레이션·정리 없이 그대로 썼다.
+ * 반복 실행마다 `inbound_emails`에 pending 행이 쌓였고(관측 시점 123건),
+ * "pending 목록은 오래된 순이다" 테스트는 `listPendingInboundEmails(50)`을
+ * 부르는데 정렬이 오래된 순(asc)이라 방금 심은 최신 행(`received_at`이
+ * `now`인 행)이 배치 50개 밖으로 밀려 `indexOf`가 -1을 줬다 — 프로덕션
+ * 결함이 아니라 테스트 격리 결함이었다. 전용 DB로 각 실행이 빈 상태에서
+ * 시작하게 해서 고친다.
+ */
+
+const DB_PATH = 'scripts/testing/.queries-mailbox-test.db'
+const MAILBOX_MODULE_URL = new URL('../../src/db/queries/mailbox.ts', import.meta.url)
+
+async function loadFreshMailboxModule() {
+  return import(`${MAILBOX_MODULE_URL.href}?t=${Date.now()}-${Math.random()}`)
+}
+
+let setupClient
+
+before(async () => {
+  for (const suffix of ['', '-wal', '-shm']) rmSync(`${DB_PATH}${suffix}`, { force: true })
+  setupClient = createClient({ url: `file:${DB_PATH}` })
+  await applyMigrations(setupClient)
+})
+
+after(() => {
+  setupClient?.close()
+  for (const suffix of ['', '-wal', '-shm']) rmSync(`${DB_PATH}${suffix}`, { force: true })
+})
+
+process.env.TURSO_DATABASE_URL = `file:${DB_PATH}`
 
 function sample(overrides = {}) {
   return {
@@ -31,6 +56,7 @@ function sample(overrides = {}) {
 }
 
 test('같은 resend_email_id로 두 번 넣으면 두 번째는 null이다 — 웹훅 재전송 방어', async () => {
+  const { insertInboundEmail } = await loadFreshMailboxModule()
   const input = sample()
   const first = await insertInboundEmail(input)
   assert.ok(first)
@@ -39,12 +65,14 @@ test('같은 resend_email_id로 두 번 넣으면 두 번째는 null이다 — �
 })
 
 test('삽입 직후 상태는 unread, 본문은 pending이다', async () => {
+  const { insertInboundEmail } = await loadFreshMailboxModule()
   const row = await insertInboundEmail(sample())
   assert.equal(row.status, 'unread')
   assert.equal(row.body_fetch_status, 'pending')
 })
 
 test('응답 키는 snake_case이고 시각은 ISO 문자열이다', async () => {
+  const { insertInboundEmail } = await loadFreshMailboxModule()
   const row = await insertInboundEmail(sample())
   assert.ok('from_address' in row)
   assert.equal('fromAddress' in row, false)
@@ -53,6 +81,7 @@ test('응답 키는 snake_case이고 시각은 ISO 문자열이다', async () =>
 })
 
 test('본문을 채우면 body_fetch_status가 done이 된다', async () => {
+  const { insertInboundEmail, markBodyFetched, getInboundEmail } = await loadFreshMailboxModule()
   const row = await insertInboundEmail(sample())
   await markBodyFetched(row.id, {
     body_html: '<p>안녕하세요</p>',
@@ -66,6 +95,7 @@ test('본문을 채우면 body_fetch_status가 done이 된다', async () => {
 })
 
 test('본문 조회 결과가 제목을 안 주면 기존 제목을 지우지 않는다', async () => {
+  const { insertInboundEmail, markBodyFetched, getInboundEmail } = await loadFreshMailboxModule()
   const row = await insertInboundEmail(sample({ subject: '원래 제목' }))
   await markBodyFetched(row.id, {
     body_html: '<p>본문</p>',
@@ -78,6 +108,8 @@ test('본문 조회 결과가 제목을 안 주면 기존 제목을 지우지 �
 })
 
 test('pending 목록은 done을 빼고 준다', async () => {
+  const { insertInboundEmail, markBodyFetched, listPendingInboundEmails } =
+    await loadFreshMailboxModule()
   const pending = await insertInboundEmail(sample())
   const done = await insertInboundEmail(sample())
   await markBodyFetched(done.id, { body_html: null, body_text: null, headers: null, subject: null })
@@ -88,6 +120,7 @@ test('pending 목록은 done을 빼고 준다', async () => {
 })
 
 test('pending 목록은 오래된 순이다 — 백필이 밀린 것부터 소진해야 30일 컷오프가 그 행에 닿는다', async () => {
+  const { insertInboundEmail, listPendingInboundEmails } = await loadFreshMailboxModule()
   const older = await insertInboundEmail(
     sample({ received_at: new Date(Date.now() - 40 * 24 * 60 * 60 * 1000) })
   )
@@ -104,6 +137,7 @@ test('pending 목록은 오래된 순이다 — 백필이 밀린 것부터 소�
 })
 
 test('상태 변경은 expected가 맞을 때만 먹는다', async () => {
+  const { insertInboundEmail, updateInboundStatus } = await loadFreshMailboxModule()
   const row = await insertInboundEmail(sample())
   assert.equal(await updateInboundStatus(row.id, 'unread', 'read'), 'updated')
   assert.equal(await updateInboundStatus(row.id, 'unread', 'archived'), 'conflict')
@@ -111,6 +145,7 @@ test('상태 변경은 expected가 맞을 때만 먹는다', async () => {
 })
 
 test('검색어의 %는 와일드카드로 해석되지 않는다', async () => {
+  const { insertInboundEmail, listInboundEmails } = await loadFreshMailboxModule()
   await insertInboundEmail(sample({ subject: '정상 제목' }))
   const all = await listInboundEmails({ limit: 100, offset: 0 })
   const wild = await listInboundEmails({ limit: 100, offset: 0, search: '%' })
@@ -119,6 +154,8 @@ test('검색어의 %는 와일드카드로 해석되지 않는다', async () => 
 })
 
 test('상태로 거를 수 있다', async () => {
+  const { insertInboundEmail, updateInboundStatus, listInboundEmails } =
+    await loadFreshMailboxModule()
   const row = await insertInboundEmail(sample())
   await updateInboundStatus(row.id, 'unread', 'archived')
   const result = await listInboundEmails({ limit: 100, offset: 0, status: 'archived' })
@@ -126,6 +163,8 @@ test('상태로 거를 수 있다', async () => {
 })
 
 test('References는 공백으로 이어 쌓인다', async () => {
+  const { insertInboundEmail, appendThreadReference, getInboundEmail } =
+    await loadFreshMailboxModule()
   const row = await insertInboundEmail(sample())
   await appendThreadReference(row.id, '<one@x>')
   await appendThreadReference(row.id, '<two@x>')
@@ -134,6 +173,8 @@ test('References는 공백으로 이어 쌓인다', async () => {
 })
 
 test('같은 References를 두 번 넣어도 한 번만 쌓인다', async () => {
+  const { insertInboundEmail, appendThreadReference, getInboundEmail } =
+    await loadFreshMailboxModule()
   const row = await insertInboundEmail(sample())
   await appendThreadReference(row.id, '<one@x>')
   await appendThreadReference(row.id, '<one@x>')
@@ -142,6 +183,7 @@ test('같은 References를 두 번 넣어도 한 번만 쌓인다', async () => 
 })
 
 test('첨부는 호출부가 정한 id를 그대로 쓴다 — Blob 경로와 행이 같은 id를 가리켜야 한다', async () => {
+  const { insertInboundEmail, insertAttachment, getAttachment } = await loadFreshMailboxModule()
   const row = await insertInboundEmail(sample())
   const chosenId = `att_${Math.random().toString(36).slice(2)}`
   await insertAttachment({
@@ -160,6 +202,7 @@ test('첨부는 호출부가 정한 id를 그대로 쓴다 — Blob 경로와 �
 })
 
 test('기준 시각 이후 수신 건수를 센다 — 쿼터 감시용', async () => {
+  const { insertInboundEmail, countInboundSince } = await loadFreshMailboxModule()
   const before = await countInboundSince(Date.now() - 60_000)
   await insertInboundEmail(sample())
   const after = await countInboundSince(Date.now() - 60_000)
