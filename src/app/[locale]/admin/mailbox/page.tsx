@@ -229,10 +229,15 @@ export default function MailboxPage() {
     if (!replyTarget || !replyBody.trim()) return
     setReplySending(true)
     try {
+      // textarea 입력은 평문이지만 서버는 이것을 body_html로 받아 그대로
+      // HTML로 발송한다(sanitizePostHtml은 태그를 정화할 뿐 개행을 <br>로
+      // 바꿔주지 않는다). 여기서 이스케이프하고 개행을 <br>로 바꿔 보내지
+      // 않으면 수신자는 문단이 통째로 붙은 메일을 받는다.
+      const replyHtml = escapeHtml(replyBody).replace(/\n/g, '<br>')
       const res = await fetch(`/api/admin/mailbox/${replyTarget.id}/reply`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ body_html: replyBody }),
+        body: JSON.stringify({ body_html: replyHtml }),
       })
       const json = await res.json().catch(() => null)
       if (!res.ok) {
@@ -385,9 +390,14 @@ export default function MailboxPage() {
                         >
                           {statusInfo.label}
                         </span>
-                        {email.body_fetch_status !== 'done' && (
+                        {email.body_fetch_status === 'pending' && (
                           <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                             본문 받는 중
+                          </span>
+                        )}
+                        {email.body_fetch_status === 'failed' && (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            본문 없음
                           </span>
                         )}
                       </div>

@@ -16,6 +16,12 @@ const TIMEOUT_MS = 15_000
  */
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
 
+/**
+ * `downloadAttachment`가 받는 URL은 인증된 Resend 응답에서 오지만 값 자체는
+ * 검증 없이 그대로 fetch된다. Resend 첨부 CDN과 API 도메인만 허용한다.
+ */
+const ALLOWED_ATTACHMENT_HOSTS = ['inbound-cdn.resend.com', 'resend.com']
+
 export type ReceivedEmail = {
   id: string
   from: string
@@ -96,9 +102,22 @@ export async function listReceivedAttachments(emailId: string): Promise<Received
  *
  * 실패하면 던진다 — 호출부(Task 8)는 해당 첨부만 건너뛰고 나머지와 본문은 저장한다.
  *
- * @throws 크기 초과, HTTP 실패 등
+ * URL은 서명된 값이라 예외 메시지에 절대 넣지 않는다 — 로그로 새면 그
+ * 서명이 그대로 유출된다.
+ *
+ * @throws 허용되지 않은 호스트, 크기 초과, HTTP 실패 등
  */
 export async function downloadAttachment(url: string): Promise<Buffer> {
+  let host: string
+  try {
+    host = new URL(url).hostname
+  } catch {
+    throw new Error('첨부 URL을 해석할 수 없습니다.')
+  }
+  if (!ALLOWED_ATTACHMENT_HOSTS.some(allowed => host === allowed || host.endsWith(`.${allowed}`))) {
+    throw new Error('허용되지 않은 첨부 URL 호스트입니다.')
+  }
+
   const response = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) })
   if (!response.ok) {
     throw new Error(`첨부 내려받기 실패 (${response.status})`)

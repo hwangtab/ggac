@@ -28,6 +28,9 @@
 
 - [ ] `MAILBOX_REPLY_TO` 환경변수를 Vercel에 등록한다 (예: `office@ggac.kr` —
       실제 받을 주소로 정한다)
+- [ ] 회신 주소를 `MAILBOX_ALLOWED_RECIPIENTS`에도 넣었다 — 두 값이 어긋나면 그
+      주소로 온 답장의 답장이 에러도 로그도 없이 사라진다 (`npm run env:check`가
+      이 조합을 경고로 잡아 준다)
 - [ ] 코드 배포 (`git push origin main`)
 - [ ] 인증 메일이나 비밀번호 재설정 메일을 실제로 받아서 "회신" 버튼을 눌러 보낸
       곳이 `MAILBOX_REPLY_TO`로 설정한 주소인지 확인한다
@@ -54,6 +57,9 @@
 - [ ] 필수 환경변수 셋을 Vercel에 등록했는지 확인한다: `RESEND_INBOUND_API_KEY`·
       `RESEND_INBOUND_WEBHOOK_SECRET`·`MAILBOX_ALLOWED_RECIPIENTS`
       (`npm run env:check --source=vercel`로 확인 가능)
+- [ ] Vercel 프로젝트에 `CRON_SECRET`이 설정돼 있다 — 없으면 새 시간별 백필
+      크론(`/api/internal/mailbox/backfill`)이 영원히 401을 받고, 아무도 그
+      사실을 모른 채 넘어간다(이 체크 자체가 자동 검사로 잡히지 않는다)
 - [ ] 배포 후 `npm run db:parity`를 **운영 URL을 명시해서** 돌린다 — 인자 없이
       돌리면 로컬(`file:local.db`)만 보고 운영을 보지 않는다
 
@@ -118,6 +124,10 @@ MX는 건드리지 않았으므로 `ggac.kr` 메일 수신에는 아무 영향�
   하루 평균 수신 건수: ____ 건
   ```
 
+- [ ] Resend 대시보드(Settings → Usage)에서 일일·월간 실제 사용량을 확인했다. 위
+      "유입량 기록" 칸은 화이트리스트를 통과해 **저장된** 메일만 센 값이다 —
+      화이트리스트가 거른 메일도 Resend 쿼터는 이미 먹었으므로, 실제 사용량은 이
+      값이 아니라 Resend 대시보드에서만 정확히 보인다
 - [ ] **판단:** 위 최대 건수가 Resend Free 한도(하루 100통·월 3,000통, 수신도
       발신과 같은 쿼터를 먹는다)에 견줘 여유가 있는가?
   - **여유가 있다** (예: 하루 최대치가 30건 이하 등, 스팸 유입을 감안해도
@@ -134,6 +144,9 @@ MX는 건드리지 않았으므로 `ggac.kr` 메일 수신에는 아무 영향�
 
 **전제조건:** 4단계의 "판단"에서 **여유가 있다**로 확인됐을 때만 진행한다.
 
+- [ ] Resend 대시보드(Settings → Usage)에서 일일·월간 실제 사용량을 다시
+      확인했다 — 루트 MX를 옮기면 유입량이 늘 수 있으므로 전환 직전에 한 번 더
+      본다
 - [ ] hosting.kr DNS 관리 화면에서 `ggac.kr` 루트 도메인의 기존 MX 레코드
       `aspmx.daum.net`(우선순위 10)·`alt.aspmx.daum.net`(우선순위 20)을
       **지운다**

@@ -94,7 +94,12 @@ export async function POST(request: NextRequest) {
       cc_addresses: Array.isArray(data.cc) ? data.cc.map(String) : [],
       received_for: Array.isArray(data.received_for) ? data.received_for.map(String) : [],
       subject: data.subject == null ? null : String(data.subject),
-      received_at: data.created_at ? new Date(String(data.created_at)) : new Date(),
+      // 파싱 불가면 Invalid Date가 되어 삽입 자체가 실패하고, 바깥 catch가
+      // 200으로 삼켜 메일이 조용히 사라진다 — 그 대신 수신 시각으로 떨어진다.
+      received_at: (() => {
+        const parsed = data.created_at ? new Date(String(data.created_at)) : null
+        return parsed && !Number.isNaN(parsed.getTime()) ? parsed : new Date()
+      })(),
     })
 
     // 이미 있던 메일이다 — 재전송이므로 아무것도 더 하지 않는다.
@@ -128,6 +133,15 @@ export async function POST(request: NextRequest) {
  * Free 플랜은 일 100통이고 수신이 발신 쿼터를 함께 먹는다. 한도에 닿으면
  * 회원가입 인증 메일과 비밀번호 재설정 메일이 같이 멈추므로, 그 전에 알아채야 한다.
  * 알림 메일은 보내지 않는다 — 그것도 쿼터를 먹는다.
+ *
+ * **이 카운트는 저장된 것만 세는 하한선이다.** `countInboundSince`는
+ * `inbound_emails` 표의 행을 세는데, 화이트리스트(`MAILBOX_ALLOWED_RECIPIENTS`)에
+ * 걸러진 메일은 저장 자체를 하지 않는다 — 그런데 그 메일도 Resend 쪽에서는
+ * 이미 수신 처리돼 쿼터를 먹은 뒤다. 즉 스팸이 화이트리스트 밖 주소로 하루
+ * 100통을 채우는 경로에서는 이 경보가 한 번도 울리지 않을 수 있다. 완전한
+ * 해법(서명 직후 별도 카운터)은 이 문제 크기에 비해 무겁다고 판단해 채택하지
+ * 않았다 — 대신 실제 사용량은 반드시 Resend 대시보드(Settings → Usage)에서
+ * 확인해야 한다(`docs/mailbox-cutover.md` 4·5단계 체크박스).
  */
 async function warnIfQuotaPressure(): Promise<void> {
   try {

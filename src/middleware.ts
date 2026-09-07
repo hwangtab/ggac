@@ -24,9 +24,17 @@ const intlMiddleware = createIntlMiddleware(routing)
  *   조용히 동결에서 빼준다 — 예외는 최소 집합이어야 하므로 세그먼트에 못박는다.
  * - `PREFIX`는 하위 경로가 실제로 있는 것만 둔다. `/api/auth/`는
  *   `[...all]` 캐치올이라 하위 경로 전체가 인증 흐름이다.
+ *
+ * `/api/inbound/`와 `/api/internal/`도 같은 이유로 면제한다 — **유지보수
+ * 우회가 아니다.** 이 두 접두사는 세션과 무관한 자체 게이트를 이미 갖고
+ * 있다: 웹훅(`/api/inbound/resend`)은 Svix 서명이, 크론(`/api/internal/*`)은
+ * `timingSafeEqual` 토큰이 각각 판정한다. 막으면 Resend가 재시도를 포기해
+ * 그 메일이 영영 도착하지 않고(백필도 못 본다), 크론도 유지보수 중 멈춘다 —
+ * 둘 다 "웹훅은 어떤 경우에도 500을 내지 않는다"는 계약이 미들웨어 단계의
+ * 503으로 깨지는 사례다.
  */
 const MAINTENANCE_EXEMPT_EXACT = ['/api/health']
-const MAINTENANCE_EXEMPT_PREFIXES = ['/api/auth/']
+const MAINTENANCE_EXEMPT_PREFIXES = ['/api/auth/', '/api/inbound/', '/api/internal/']
 
 function isMaintenanceExempt(pathname: string): boolean {
   return (

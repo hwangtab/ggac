@@ -285,6 +285,22 @@ if (env.NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL) {
   }
 }
 
+// MAILBOX_REPLY_TO(선택)가 MAILBOX_ALLOWED_RECIPIENTS(필수)에 없으면 관리자
+// 답장에 대한 회신이 화이트리스트를 통과하지 못해 에러도 로그도 없이
+// 사라진다. 둘 다 있을 때만 검사한다 — 어느 한쪽이 없으면(설정 자체를
+// 안 했으면) 이 조합 문제가 성립하지 않는다. 주소 비교는 대소문자를 무시한다.
+if (env.MAILBOX_REPLY_TO && env.MAILBOX_ALLOWED_RECIPIENTS) {
+  const replyTo = env.MAILBOX_REPLY_TO.trim().toLowerCase()
+  const allowedList = env.MAILBOX_ALLOWED_RECIPIENTS.split(',').map(entry =>
+    entry.trim().toLowerCase()
+  )
+  if (replyTo && !allowedList.includes(replyTo)) {
+    console.log(
+      `⚠️  MAILBOX_REPLY_TO(${env.MAILBOX_REPLY_TO})가 MAILBOX_ALLOWED_RECIPIENTS에 없습니다 — 그 주소로 온 회신이 저장되지 않고 조용히 사라집니다.`
+    )
+  }
+}
+
 // Check environment
 console.log(`\n🌍 Environment: ${process.env.NODE_ENV || 'development'}`)
 console.log(`🔧 Platform: ${process.platform}`)
