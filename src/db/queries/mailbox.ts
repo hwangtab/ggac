@@ -109,7 +109,15 @@ export async function markBodyFetched(
     .where(eq(inboundEmails.id, id))
 }
 
-/** 본문 당겨오기가 실패했을 때 상태만 failed로 남긴다. */
+/**
+ * 상태를 failed로 최종 확정한다.
+ *
+ * **웹훅 직후의 본문 조회 실패에는 쓰지 않는다** — 그 경로는 상태를
+ * 'pending'으로 둬야 `listPendingInboundEmails`(백필)가 다시 집어 재시도할
+ * 수 있다. 이 함수는 Task 9의 백필이 **Resend 보관 기한(30일)을 넘긴
+ * pending을 더 재시도해 봐야 소용없다고 판단했을 때** 최종 포기 표시로
+ * 쓰는 자리다.
+ */
 export async function markBodyFetchFailed(id: string): Promise<void> {
   await db.update(inboundEmails).set({ bodyFetchStatus: 'failed' }).where(eq(inboundEmails.id, id))
 }

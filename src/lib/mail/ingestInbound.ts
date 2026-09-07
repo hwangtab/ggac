@@ -17,9 +17,20 @@ import { logSecurityEvent } from '../../utils/security.ts'
 
 import { fetchReceivedEmail, listReceivedAttachments, downloadAttachment } from './inboundClient.ts'
 import { blobPathForAttachment } from '../storage/mailboxAttachments.ts'
-import { markBodyFetched, markBodyFetchFailed, insertAttachment } from '../../db/queries/mailbox.ts'
+import { markBodyFetched, insertAttachment } from '../../db/queries/mailbox.ts'
 
-export async function ingestInboundEmail(resendEmailId: string, rowId: string): Promise<void> {
+/**
+ * 세 번째 인자는 테스트 전용 주입 자리다 — 기본값은 실제 `putObject`(운영
+ * Blob에 쓴다). 첨부 테스트가 조합의 비공개 저장소에 실제로 쓰는 사고를
+ * 막기 위해 `putObject`를 스텁으로 바꿔 넣을 수 있게 열어 둔다. 호출부
+ * (웹훅 라우트)는 이 인자를 넘기지 않는다 — 항상 실제 구현을 쓴다.
+ */
+export async function ingestInboundEmail(
+  resendEmailId: string,
+  rowId: string,
+  deps: { putObject: typeof putObject } = { putObject }
+): Promise<void> {
+  const put = deps.putObject
   try {
     const email = await fetchReceivedEmail(resendEmailId)
     await markBodyFetched(rowId, {
@@ -29,7 +40,11 @@ export async function ingestInboundEmail(resendEmailId: string, rowId: string): 
       subject: email.subject,
     })
   } catch (error) {
-    await markBodyFetchFailed(rowId).catch(() => {})
+    // 상태를 'pending'으로 그대로 둔다 — 여기서 markBodyFetchFailed를 부르면
+    // Task 7의 유일한 복구 쿼리(listPendingInboundEmails)가 'pending'만 읽어
+    // 이 행이 백필의 눈에 영영 안 보이게 된다. 삽입 시 기본값이 이미
+    // 'pending'이므로 아무것도 쓰지 않으면 다음 백필 실행이 이 행을 다시
+    // 집어 재시도한다.
     logSecurityEvent(
       'MAILBOX_BODY_FETCH_FAILED',
       { rowId, error: error instanceof Error ? error.message : 'unknown' },
@@ -46,7 +61,7 @@ export async function ingestInboundEmail(resendEmailId: string, rowId: string): 
         const bytes = await downloadAttachment(attachment.download_url)
         const attachmentId = randomUUID()
         const path = blobPathForAttachment(rowId, attachmentId, attachment.filename)
-        await putObject(
+        await put(
           'private',
           path,
           bytes,
@@ -63,6 +78,9 @@ export async function ingestInboundEmail(resendEmailId: string, rowId: string): 
           blob_path: path,
         })
       } catch (error) {
+        // 본문은 이미 'done'으로 표시돼 백필이 이 행을 다시 안 본다 — 이
+        // 첨부는 조용히 영영 빠진다. 잡음이 아니라 데이터 손실이라 severity를
+        // 'medium'으로 둔다.
         logSecurityEvent(
           'MAILBOX_ATTACHMENT_COPY_FAILED',
           {
@@ -70,15 +88,16 @@ export async function ingestInboundEmail(resendEmailId: string, rowId: string): 
             filename: attachment.filename,
             error: error instanceof Error ? error.message : 'unknown',
           },
-          'low'
+          'medium'
         )
       }
     }
   } catch (error) {
+    // 목록 조회 자체가 실패하면 첨부 전체가 빠진다 — 위와 같은 이유로 'medium'.
     logSecurityEvent(
       'MAILBOX_ATTACHMENT_LIST_FAILED',
       { rowId, error: error instanceof Error ? error.message : 'unknown' },
-      'low'
+      'medium'
     )
   }
 }

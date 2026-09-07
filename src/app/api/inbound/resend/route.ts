@@ -19,6 +19,11 @@ import { insertInboundEmail, countInboundSince } from '@/db/queries/mailbox'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+// 본문 조회 1건 + 첨부 목록 1건 + 첨부 N건을 인라인으로 await한다. 각 Resend
+// 호출은 15초 타임아웃(`inboundClient.ts`)이고 첨부 개수는 이론상
+// `listReceivedAttachments`의 limit=100까지 갈 수 있다. `/api/internal/uploads/cleanup`
+// (같은 형태 — 최대 100건의 개별 네트워크 왕복 루프)과 같은 예산인 300을 쓴다.
+export const maxDuration = 300
 
 const DAILY_ALERT_DEFAULT = 60
 
@@ -70,6 +75,14 @@ export async function POST(request: NextRequest) {
     const allowed = parseAllowedRecipients(process.env.MAILBOX_ALLOWED_RECIPIENTS)
     if (!isAllowedRecipient(recipients, allowed)) {
       // 저장은 하지 않지만 쿼터는 이미 깎였다. 그래서 200이되 기록은 남긴다.
+      // isAllowedRecipient는 allowed가 비어 있어도 false를 돌려준다 —
+      // MAILBOX_ALLOWED_RECIPIENTS를 빠뜨리거나 오타를 내면 들어오는 모든
+      // 메일이 이 분기로 조용히 사라진다. 그 설정 사고를 놓치지 않도록 남긴다.
+      logSecurityEvent(
+        'MAILBOX_RECIPIENT_NOT_ALLOWED',
+        { resendEmailId, recipients, allowedCount: allowed.length },
+        'medium'
+      )
       return ApiSuccess.ok({ ignored: true, reason: 'recipient not allowed' }).toNextResponse()
     }
 
@@ -95,11 +108,18 @@ export async function POST(request: NextRequest) {
     return ApiSuccess.ok({ id: row.id }).toNextResponse()
   } catch (error) {
     // 여기서 500을 내면 Resend가 재시도하고 그 재시도가 쿼터를 먹는다.
-    logSecurityEvent(
-      'MAILBOX_WEBHOOK_UNEXPECTED_ERROR',
-      { error: error instanceof Error ? error.message : 'unknown' },
-      'high'
-    )
+    // logSecurityEvent 자체가 던지면(예: SECURITY_WEBHOOK_URL 관련 코드가
+    // 동기적으로 실패하는 경우) 그 예외가 여기서 새 나가 파일 헤더가 금지한
+    // 500을 만들 수 있다 — 그래서 로그를 자체 try/catch로 한 번 더 감싼다.
+    try {
+      logSecurityEvent(
+        'MAILBOX_WEBHOOK_UNEXPECTED_ERROR',
+        { error: error instanceof Error ? error.message : 'unknown' },
+        'high'
+      )
+    } catch {
+      // 로그 실패는 무시한다 — 응답은 반드시 200으로 나가야 한다.
+    }
     return ApiSuccess.ok({ accepted: true }).toNextResponse()
   }
 }
