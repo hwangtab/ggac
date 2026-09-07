@@ -137,6 +137,14 @@ export type SecurityEventType =
   | 'SQL_INJECTION_IN_SEARCH'
   | 'XSS_IN_SEARCH'
 
+  // 관리자 메일함 수신 이벤트 (단계 4 Task 8 — Resend Inbound 웹훅)
+  | 'MAILBOX_BODY_FETCH_FAILED'
+  | 'MAILBOX_ATTACHMENT_COPY_FAILED'
+  | 'MAILBOX_ATTACHMENT_LIST_FAILED'
+  | 'MAILBOX_WEBHOOK_SIGNATURE_REJECTED'
+  | 'MAILBOX_WEBHOOK_UNEXPECTED_ERROR'
+  | 'MAILBOX_INBOUND_QUOTA_PRESSURE'
+
 export type SecurityEventSeverity = 'low' | 'medium' | 'high'
 
 export interface SecurityEventContext {
