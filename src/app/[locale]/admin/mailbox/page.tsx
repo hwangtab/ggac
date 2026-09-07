@@ -60,6 +60,44 @@ function formatBytes(bytes: number | null): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+/**
+ * 받은 메일 본문을 iframe에 넣을 srcDoc을 만든다.
+ *
+ * 수신 본문 경로에는 정화(sanitize)가 없다 — `sanitizePostHtml`은 답장
+ * 발신 경로에서만 쓰인다. 실제 방어는 `sandbox=""` 하나뿐이지만 그것으로
+ * 충분하다(스크립트를 아예 못 돌린다). 다만 sandbox는 서브리소스 로드는
+ * 막지 않으므로, 본문에 박힌 원격 `<img>`(추적 픽셀)가 그대로 요청돼
+ * 관리자의 IP와 "읽었다는 사실"을 발신자에게 알릴 수 있다. 문서 맨 앞에
+ * CSP 메타로 `img-src data:`만 허용해 원격 이미지를 막는다 — 첨부로 붙은
+ * 인라인 이미지는 `html_format=data_uri`로 이미 base64로 박혀 있으므로
+ * 그대로 보인다.
+ *
+ * `body_html`이 없고 `body_text`만 있으면(순수 텍스트 메일 —
+ * `body_fetch_status`는 이미 'done'이라 배지가 뜨지 않는다) 그것을
+ * `<pre>`로 보여준다. HTML로 해석되면 안 되므로 반드시 이스케이프한다.
+ */
+const REMOTE_IMAGE_GUARD_META =
+  '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src data:; style-src \'unsafe-inline\'">'
+
+function buildBodySrcDoc(detail: InboundEmailDetail | null): string {
+  if (detail?.body_html) {
+    return `${REMOTE_IMAGE_GUARD_META}${detail.body_html}`
+  }
+  if (detail?.body_text) {
+    return `${REMOTE_IMAGE_GUARD_META}<pre style="font-family:sans-serif;white-space:pre-wrap;word-break:break-word;margin:0">${escapeHtml(detail.body_text)}</pre>`
+  }
+  return `${REMOTE_IMAGE_GUARD_META}<p style="font-family:sans-serif;color:#6b7280">본문이 아직 도착하지 않았습니다.</p>`
+}
+
 export default function MailboxPage() {
   const [emails, setEmails] = useState<InboundEmail[]>([])
   const [loading, setLoading] = useState(true)
@@ -136,12 +174,19 @@ export default function MailboxPage() {
     fetchDetail(email.id)
 
     // 안 읽음이면 읽음으로 낙관적 전이 — 관리자가 열어 봤다는 사실이다.
+    // silent: 열어 봤을 뿐인 부수 효과라 실패해도(예: 다른 관리자가 먼저
+    // 읽어서 409) 경고창을 띄우지 않는다 — 명시적 상태 변경 버튼의 실패만
+    // 알린다.
     if (email.status === 'unread') {
-      updateStatus(email, 'read')
+      updateStatus(email, 'read', { silent: true })
     }
   }
 
-  const updateStatus = async (email: InboundEmail, status: InboundEmail['status']) => {
+  const updateStatus = async (
+    email: InboundEmail,
+    status: InboundEmail['status'],
+    options: { silent?: boolean } = {}
+  ) => {
     const expectedStatus = email.status
     setUpdating(email.id)
     try {
@@ -151,7 +196,9 @@ export default function MailboxPage() {
         body: JSON.stringify({ status, expected_status: expectedStatus }),
       })
       if (res.status === 409) {
-        alert('다른 관리자가 먼저 처리했습니다. 목록을 새로고침합니다.')
+        if (!options.silent) {
+          alert('다른 관리자가 먼저 처리했습니다. 목록을 새로고침합니다.')
+        }
         await fetchEmails()
         return
       }
@@ -159,7 +206,9 @@ export default function MailboxPage() {
       setEmails(prev => prev.map(e => (e.id === email.id ? { ...e, status } : e)))
       setDetail(prev => (prev && prev.id === email.id ? { ...prev, status } : prev))
     } catch {
-      alert('상태 업데이트에 실패했습니다.')
+      if (!options.silent) {
+        alert('상태 업데이트에 실패했습니다.')
+      }
     } finally {
       setUpdating(null)
     }
@@ -187,17 +236,26 @@ export default function MailboxPage() {
       })
       const json = await res.json().catch(() => null)
       if (!res.ok) {
-        throw new Error(json?.error?.message || '답장 발송에 실패했습니다.')
+        // 이 저장소의 오류 응답은 { success: false, error: "<문자열>" }이다
+        // (json.error가 곧 메시지 — json.error.message가 아니다).
+        throw new Error(json?.error || '답장 발송에 실패했습니다.')
       }
       const recorded = json?.data?.recorded ?? true
       const targetId = replyTarget.id
-      setEmails(prev => prev.map(e => (e.id === targetId ? { ...e, status: 'replied' } : e)))
-      setDetail(prev => (prev && prev.id === targetId ? { ...prev, status: 'replied' } : prev))
       setReplyTarget(null)
       setReplyBody('')
       if (recorded) {
+        setEmails(prev => prev.map(e => (e.id === targetId ? { ...e, status: 'replied' } : e)))
+        setDetail(prev => (prev && prev.id === targetId ? { ...prev, status: 'replied' } : prev))
         alert('답장을 보냈습니다.')
       } else {
+        // 기록 실패는 같은 트랜잭션 안에서 상태 전이(updateInboundStatus)도
+        // 함께 실패했을 수 있다는 뜻이다 — 낙관적으로 'replied'로 표시하면
+        // 화면이 DB와 어긋날 수 있으므로 목록을 다시 읽어 실제 값을 반영한다.
+        await fetchEmails()
+        if (expanded === targetId) {
+          fetchDetail(targetId)
+        }
         alert(
           '답장은 나갔지만 기록에 실패했습니다. 관리자에게 문의해 이 메일의 답장 기록을 확인해 주세요.'
         )
@@ -319,7 +377,7 @@ export default function MailboxPage() {
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium text-gray-900 truncate">
+                        <span className="font-medium text-gray-900 truncate min-w-0">
                           {email.subject || '(제목 없음)'}
                         </span>
                         <span
@@ -358,18 +416,18 @@ export default function MailboxPage() {
                         <>
                           {/*
                             받은 메일의 HTML은 외부에서 온 것이다. 관리자 화면 DOM에 직접 넣으면
-                            관리자 세션을 노린 XSS 통로가 된다. sandbox에 allow-scripts를 주지 않아
-                            스크립트를 아예 못 돌게 하고, 그 위에 서버가 sanitize한 결과만 받는다.
-                            본문은 html_format=data_uri로 받아 인라인 이미지가 base64로 박혀 있으므로
-                            외부 요청도 없다.
+                            관리자 세션을 노린 XSS 통로가 된다. 수신 본문 경로에는 서버 정화가
+                            없다(`sanitizePostHtml`은 답장 발신 경로 전용) — 실제 방어는
+                            sandbox="" 하나뿐이고, allow-scripts를 주지 않아 스크립트를 아예 못
+                            돌게 하는 것으로 충분하다. 다만 sandbox는 서브리소스 로드까지 막지는
+                            않으므로 buildBodySrcDoc()이 CSP 메타로 원격 이미지(추적 픽셀)를
+                            추가로 막는다 — 그 메타 덕분에 인라인 이미지(html_format=data_uri로
+                            base64 첨부)만 보이고 외부 요청은 나가지 않는다.
                           */}
                           <iframe
                             title="메일 본문"
                             sandbox=""
-                            srcDoc={
-                              detail?.body_html ??
-                              '<p style="font-family:sans-serif;color:#6b7280">본문이 아직 도착하지 않았습니다.</p>'
-                            }
+                            srcDoc={buildBodySrcDoc(detail)}
                             className="w-full min-h-[320px] rounded border border-gray-200 bg-white"
                           />
 
