@@ -30,6 +30,13 @@ export function parseAllowedRecipients(raw: string | undefined): string[] {
 
 export function isAllowedRecipient(candidates: string[], allowed: string[]): boolean {
   if (allowed.length === 0 || candidates.length === 0) return false
-  const allowedSet = new Set(allowed.map(entry => normalizeAddress(entry)))
-  return candidates.some(candidate => allowedSet.has(normalizeAddress(candidate)))
+  // 정규화가 실패한 값(빈 문자열)끼리 서로 일치해 게이트가 열리는 것을 막는다.
+  // 양쪽에서 배제: allowedSet 구성 시 + 후보 조회 시.
+  const allowedSet = new Set(
+    allowed.map(entry => normalizeAddress(entry)).filter(entry => entry.length > 0)
+  )
+  return candidates.some(candidate => {
+    const normalized = normalizeAddress(candidate)
+    return normalized.length > 0 && allowedSet.has(normalized)
+  })
 }

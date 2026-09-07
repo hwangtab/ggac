@@ -53,3 +53,11 @@ test('null이 섞여 있어도 예외를 던지지 않고, 정상 주소가 있�
 test('null·undefined만 있으면 예외를 던지지 않고 거부한다 — fail-closed', () => {
   assert.equal(isAllowedRecipient([null, undefined], ['contact@ggac.kr']), false)
 })
+
+test('null이 허용 목록에도 섞여 있어도, 정규화 실패값끼리 매치되지 않는다', () => {
+  assert.equal(isAllowedRecipient([null], [null, 'contact@ggac.kr']), false)
+})
+
+test('빈 문자열이 양쪽에 있어도 서로 매치되지 않는다 — fail-closed', () => {
+  assert.equal(isAllowedRecipient([''], ['']), false)
+})
