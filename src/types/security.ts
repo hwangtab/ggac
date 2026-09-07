@@ -146,6 +146,10 @@ export type SecurityEventType =
   | 'MAILBOX_INBOUND_QUOTA_PRESSURE'
   | 'MAILBOX_RECIPIENT_NOT_ALLOWED'
   | 'ADMIN_MAILBOX_API_ERROR'
+  // 답장 발송은 됐는데(되돌릴 수 없음) 기록(회신 원장·스레드 참조·상태 전이)
+  // 중 하나가 실패한 경우 — Task 11. 던지면 관리자가 "실패"로 보고 재시도해
+  // 같은 메일이 두 번 나간다. 그래서 던지지 않고 감사만 하고 200을 준다.
+  | 'MAILBOX_REPLY_RECORD_FAILED'
 
 export type SecurityEventSeverity = 'low' | 'medium' | 'high'
 
