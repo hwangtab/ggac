@@ -105,6 +105,30 @@ test.describe('미승인 조합원', () => {
     expect(res.status()).toBe(403)
     expect((await res.json()).error).toContain('승인된 조합원')
   })
+
+  // 글 작성·댓글 작성이 승인된 조합원만 되는데 삭제·첨부 업로드가 로그인만
+  // 확인하면 승인 취소·비활성화된 회원이 여전히 자기 글·댓글을 지우고
+  // 첨부를 올릴 수 있다 — 그 등급 불일치를 막는 경계다(수정과 동일 규칙으로
+  // 승격됐다).
+  test('글 삭제는 403 + 승인된 조합원 안내다', async ({ request }) => {
+    const res = await request.delete(`/api/posts/${fixtures.postId}`)
+    expect(res.status()).toBe(403)
+    expect((await res.json()).error).toContain('승인된 조합원')
+  })
+
+  test('댓글 삭제는 403 + 승인된 조합원 안내다', async ({ request }) => {
+    const res = await request.delete(`/api/posts/${fixtures.postId}/comments/${fixtures.commentId}`)
+    expect(res.status()).toBe(403)
+    expect((await res.json()).error).toContain('승인된 조합원')
+  })
+
+  test('첨부 업로드는 403 + 승인된 조합원 안내다', async ({ request }) => {
+    const res = await request.post(`/api/posts/${fixtures.postId}/attachments`, {
+      multipart: { file: { name: 'x.png', mimeType: 'image/png', buffer: Buffer.from([]) } },
+    })
+    expect(res.status()).toBe(403)
+    expect((await res.json()).error).toContain('승인된 조합원')
+  })
 })
 
 /**

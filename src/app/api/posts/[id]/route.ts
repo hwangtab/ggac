@@ -18,7 +18,7 @@ import { CATEGORIES, parseBoardCategory } from '@/constants/categories'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { annotateImageDimensionsSafe } from '@/utils/imageDimensions'
 import { getBoardPostRevalidationPaths } from '@/lib/revalidationPaths'
-import { requireUser, requireActiveMember, getOptionalUser } from '@/lib/server/memberAuth'
+import { requireActiveMember, getOptionalUser } from '@/lib/server/memberAuth'
 import { getPostById, updatePost, softDeletePost } from '@/db/queries/posts'
 import { getProfileById } from '@/db/queries/profiles'
 import { countComments, listCommentsByOffset } from '@/db/queries/comments'
@@ -371,19 +371,14 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
 
     const validPostId = uuidValidation.sanitized
 
-    // 게시글 삭제는 로그인만 확인한다(승인 여부는 보지 않음). 소유자/관리자
-    // 판정은 아래에서 별도로 한다.
-    const auth = await requireUser()
+    // 게시글 삭제도 수정과 마찬가지로 승인된 활성 멤버만 가능하다. 수정은
+    // 막고 삭제는 허용하는 것은 일관성이 없다 — 승인 취소·비활성화된 회원이
+    // 자기 글을 여전히 지울 수 있던 구멍을 막는다.
+    const auth = await requireActiveMember()
     if (auth instanceof NextResponse) return auth
-    const { user } = auth
+    const { user, profile } = auth
 
-    // 관리자 여부 확인. 단계 2c(Task 5): member_profiles 조회를 Supabase
-    // `.eq('id', user.id)`에서 Turso 쿼리 계층 getProfileById(user.id)로
-    // 옮겼다 — 조건식(is_admin && registration_status==='approved' &&
-    // is_active) 자체는 문자 그대로 보존.
-    let isAdmin = false
-    const prof = await getProfileById(user.id).catch(() => null)
-    isAdmin = !!(prof?.is_admin && prof.registration_status === 'approved' && prof.is_active)
+    const isAdmin = profile?.is_admin === true
 
     // 게시글 조회 및 소유자 확인. 단계 2c(Task 5): posts 조회를 Supabase
     // `.eq('id', validPostId)`에서 Turso 쿼리 계층 getPostById(validPostId,

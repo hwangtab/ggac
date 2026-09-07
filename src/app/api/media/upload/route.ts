@@ -22,6 +22,7 @@ import { parseIntegerParam } from '@/utils/queryParams'
 import { putPublicObject } from '@/lib/storage/provider'
 import { buildVariantPathSuffixes } from '@/lib/storage/paths'
 import { requireUser, requireActiveMember } from '@/lib/server/memberAuth'
+import { recordUpload } from '@/db/queries/uploads'
 
 const log = createLogger('api/media/upload')
 
@@ -441,6 +442,37 @@ export async function POST(request: NextRequest) {
       original: uploadResult.original.url,
       webp: uploadResult.webp?.url,
       fallback: uploadResult.fallback?.url,
+    }
+
+    // 업로드 원장에 기록한다.
+    //
+    // 이 기록이 없으면 에디터에 삽입되지 않은 파일은 **추적할 수단 자체가
+    // 없는 영구 고아**가 된다(참조가 남는 곳은 게시글 본문의 URL 문자열뿐이다).
+    // 기록해 두면 정리 크론이 "올라왔지만 아무 데서도 참조하지 않는 파일"을
+    // 골라 지울 수 있다.
+    //
+    // 실패해도 업로드는 성공으로 돌려준다 — 고아 파일 하나가 남는 쪽이,
+    // 이미 Blob에 올라간 파일을 두고 사용자에게 "업로드 실패"를 말하는 쪽보다
+    // 낫다(사용자는 재시도할 것이고 그러면 고아가 하나 더 생긴다).
+    //
+    // 기록하는 것은 **에디터에 삽입되는 대표 URL 하나**다. WebP·폴백 변형까지
+    // 각각 기록하면 정리 크론이 "본문에 없는 변형"을 지워 OptimizedImage의
+    // 폴백 사슬(WebP → JPEG → …)을 끊는다.
+    const primaryPath = uploadResult.webp?.path || uploadResult.original.path
+    const primaryUrl = variantUrls.webp || variantUrls.original || ''
+    if (primaryUrl) {
+      try {
+        await recordUpload({
+          user_id: user.id,
+          bucket,
+          path: primaryPath,
+          url: primaryUrl,
+          mime_type: uploadResult.webp?.contentType || uploadResult.original.contentType,
+          size_bytes: uploadResult.webp?.size ?? uploadResult.original.size,
+        })
+      } catch (error) {
+        log.error('업로드 원장 기록 실패(고아 파일이 될 수 있음)', { path: primaryPath, error })
+      }
     }
 
     // 파일 메타데이터 추출

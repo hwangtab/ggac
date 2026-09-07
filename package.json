@@ -24,8 +24,6 @@
     "env:check:vercel:production": "NODE_ENV=production node scripts/verify-env.js --source=vercel",
     "images:optimize": "node scripts/utils/image-processing/ensure-webp.js && node scripts/utils/image-processing/update-image-references.js",
     "images:verify": "node scripts/utils/image-processing/update-image-references.js --check && node scripts/utils/image-processing/verify-webp.js",
-    "storage:verify-private": "node scripts/migrate/copy-private-objects.mjs",
-    "storage:copy-private": "node scripts/migrate/copy-private-objects.mjs --apply",
     "llms:generate": "node scripts/utils/content/generate-llms-txt.mjs",
     "new:show": "node scripts/utils/content/new-show.mjs",
     "llms:check": "node scripts/utils/content/generate-llms-txt.mjs --check",
@@ -47,7 +45,6 @@
   },
   "dependencies": {
     "@libsql/client": "^0.17.4",
-    "@supabase/supabase-js": "^2.108.2",
     "@tosspayments/tosspayments-sdk": "^2.8.1",
     "@vercel/blob": "^2.8.0",
     "bcryptjs": "^3.0.3",

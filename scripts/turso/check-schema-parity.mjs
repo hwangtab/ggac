@@ -28,6 +28,7 @@ const POST_CUTOVER_TABLES = new Set([
   'performance_shows', // 0016
   'ticket_types', // 0016
   'reservations', // 0016
+  'media_uploads', // 0018 에디터 업로드 원장
 ])
 
 export function comparePgToSqlite(pgSnapshot, sqliteSchema) {

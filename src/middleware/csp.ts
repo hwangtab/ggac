@@ -4,10 +4,17 @@ import type { NextRequest } from 'next/server'
 /**
  * Configure Content Security Policy (CSP)
  *
- * 호스트 허용 방식: 'self' + 'unsafe-inline' + https:
+ * 호스트 허용 방식: 'self' + 'unsafe-inline' + 명시 호스트 허용목록
  * - 정적 prerender 호환 (nonce+strict-dynamic은 빌드/Edge 프로세스 분리로 성립 불가)
  * - Next.js 프레임워크 청크(/_next/static)는 'self'로 허용
  * - Next.js 인라인 hydration 스크립트는 'unsafe-inline'으로 허용
+ * - 외부 스크립트는 https: 와일드카드가 아니라 호스트를 하나씩 적는다.
+ *   현재 허용 대상은 토스 결제 SDK(https://js.tosspayments.com/v2/standard,
+ *   서브도메인이 늘어날 수 있어 https://*.tosspayments.com)뿐이다.
+ *
+ * ⚠️ 외부 스크립트 호스트를 추가할 때는 이 파일의 script-src/script-src-elem과
+ *    next.config.js의 같은 두 지시문을 **함께** 고쳐라(scripts/testing/payments-csp.test.mjs가
+ *    두 파일을 모두 검사한다). 빠뜨린 호스트는 에러 없이 조용히 차단된다.
  */
 export function applyCSP(request: NextRequest, response: NextResponse) {
   const isProduction = process.env.NODE_ENV === 'production'
@@ -29,9 +36,9 @@ export function applyCSP(request: NextRequest, response: NextResponse) {
       // 이것이 빠지면 dev에서 모든 페이지의 하이드레이션이 통째로 실패한다
       // (connect-src의 dev 분기와 동일한 패턴, CLAUDE.md 문서와 일치).
       process.env.NODE_ENV === 'development'
-        ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:"
-        : "script-src 'self' 'unsafe-inline' https:",
-      "script-src-elem 'self' 'unsafe-inline' https:",
+        ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.tosspayments.com"
+        : "script-src 'self' 'unsafe-inline' https://*.tosspayments.com",
+      "script-src-elem 'self' 'unsafe-inline' https://*.tosspayments.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",

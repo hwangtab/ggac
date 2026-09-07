@@ -38,17 +38,12 @@ npm run deploy:notify           # Deploy notification script
 
 ### CLI Tools Available
 
-> **⚠ Supabase는 2026-08-26 컷오버로 은퇴했다.** 아래 Supabase CLI 명령은 **1주
-> 관찰 기간 동안의 조회·최종 백업용**이며, 그 뒤 프로젝트가 삭제되면 전부
-> 무의미해진다. **운영 DB 작업은 Turso로 한다** — `scripts/turso/README.md`가
-> 정본이다.
->
-> 이 저장소에는 아직 Supabase를 향해 쓰는 죽은 스크립트가 남아 있다. 대부분은
-> 실행하면 **에러 없이 성공 메시지를 내고 아무것도 하지 않는다.** `scripts/`
-> 아래 도구를 쓰기 전에 그것이 Turso를 보는지 확인해라.
+> **Supabase는 2026-08-26 컷오버로 은퇴했고, 2026-09-01 프로젝트가 삭제됐다.**
+> 운영 DB 작업은 전부 Turso로 한다 — `scripts/turso/README.md`가 정본이다.
+> `supabase/migrations/`는 역사 기록으로만 남겼고 더 이상 적용하지 않는다.
 
-Both **Vercel CLI** and **Supabase CLI** are installed globally and can be
-invoked directly (no need to wrap through npm scripts).
+**Vercel CLI**는 전역 설치돼 있어 바로 호출할 수 있다(npm 스크립트로 감쌀 필요
+없음).
 
 ```bash
 # Vercel CLI (installed via fnm global)
@@ -60,21 +55,11 @@ vercel deploy                   # Preview deployment
 vercel deploy --prod            # Production deployment
 vercel logs <deployment-url>    # View runtime logs
 vercel inspect <deployment-url> # Inspect a deployment
-
-# Supabase CLI (installed via Homebrew)
-supabase --version              # Check version
-supabase status                 # Local dev stack status
-supabase db push                # Apply migrations to linked project
-supabase db pull                # Pull remote schema to local
-supabase migration new <name>   # Create a new migration
-supabase migration list         # List migrations (local vs remote)
-supabase gen types typescript   # Generate TS types from DB schema
-supabase link --project-ref <ref>  # Link local repo to remote project
 ```
 
-Use these CLIs directly for env sync, migration work, and deployment inspection
-rather than spinning up one-off scripts. For destructive operations (e.g.,
-`db push` to production, `env rm`), confirm with the user first.
+Use it directly for env sync and deployment inspection rather than spinning up
+one-off scripts. For destructive operations (e.g., `env rm`), confirm with the
+user first.
 
 ### Browser Tooling: Aside vs Chrome DevTools MCP
 

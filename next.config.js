@@ -443,10 +443,14 @@ const nextConfig = {
               // 허용 — 이 정적 헤더는 미들웨어가 CSP를 붙이지 않는 경로에도 적용되므로,
               // 여기서 프로덕션 CSP만 두면 정상 dev(NEXT_STRICT_CSP 미설정)의 하이드레이션이
               // 통째로 죽는다. src/middleware/csp.ts의 dev 분기와 동일 패턴.
+              // 외부 스크립트는 https: 와일드카드가 아니라 호스트 허용목록으로 받는다.
+              // 현재 유일한 외부 스크립트는 토스 결제 SDK(js.tosspayments.com/v2/standard).
+              // 호스트를 추가할 때는 src/middleware/csp.ts의 script-src/script-src-elem도
+              // 같이 고쳐라 — 빠진 호스트는 에러 없이 조용히 차단된다.
               process.env.NODE_ENV === 'development'
-                ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:"
-                : "script-src 'self' 'unsafe-inline' https:",
-              "script-src-elem 'self' 'unsafe-inline' https:",
+                ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.tosspayments.com"
+                : "script-src 'self' 'unsafe-inline' https://*.tosspayments.com",
+              "script-src-elem 'self' 'unsafe-inline' https://*.tosspayments.com",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",

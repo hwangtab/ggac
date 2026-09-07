@@ -77,8 +77,10 @@ const optionalEnvVars = [
   'BETTER_AUTH_URL',
   'NEXT_PUBLIC_SITE_URL',
   // 앱 코드(`src/`)에는 이 둘을 읽는 줄이 **0줄**이다. 남아 있는 소비처는
-  // 이관·컷오버 스크립트(scripts/migrate, scripts/storage)가 Supabase에서
-  // 데이터를 읽을 때뿐이다. 그래서 필수가 아니라 선택으로 둔다 — 필수로 두면
+  // 인증 이관 기록 도구 `scripts/migrate/identity.mjs`(PostgREST를 fetch로
+  // 직접 읽는다) 하나뿐이다. 2026-09-07 정리로 `scripts/storage`의 Supabase
+  // 클라이언트 스크립트(copy-to-blob·rewrite/restore-db-urls)는 프로젝트
+  // 삭제와 함께 지웠다. 그래서 필수가 아니라 선택으로 둔다 — 필수로 두면
   // 컷오버에서 이 키들을 지우는 순간 배포 전 점검이 **거짓으로 빨간불**이 되고,
   // 운영자에게 쓰지도 않는 service-role 키를 계속 꽂아 두라고 압박한다
   // (최종 리뷰 B-2).

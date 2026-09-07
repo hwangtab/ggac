@@ -30,14 +30,28 @@ function cleanup(path) {
 
 after(() => paths.forEach(cleanup))
 
-/** 0003까지 적용하고 최소 시드를 넣은 파일 DB를 만든다. 연결 팩토리를 돌려준다. */
+/**
+ * 0004를 뺀 나머지를 적용하고 최소 시드를 넣은 파일 DB를 만든다. 연결 팩토리를
+ * 돌려준다.
+ *
+ * 0019도 함께 뺀다. 0019는 표를 재작성하면서 그 표에 걸린 인덱스를 **다시
+ * 만드는데**(DROP TABLE이 인덱스를 함께 지우므로 피할 수 없다), 그 목록에
+ * 0004가 만든 `idx_*`가 그대로 들어 있다. 0019를 적용하면 "0004 이전"인데도
+ * 인덱스가 이미 있어, 이 파일이 검증하려는 "적용 전 풀스캔 → 적용 후 인덱스"와
+ * "인덱스 하나가 빠지면 0004의 단언이 문다"가 둘 다 성립하지 않는다.
+ * 0019 자체의 인덱스 보존은 그 파일 안의 단언과 `migrationAtomicity`가 본다.
+ */
+const SKIPPED_FOR_ISOLATION = ['0004', '0019']
+
 async function freshDb(name) {
   const path = `${DB_PATH}.${name}`
   paths.push(path)
   cleanup(path)
 
   const setup = createClient({ url: `file:${path}` })
-  for (const file of migrationFiles().filter(f => !f.includes('0004'))) {
+  for (const file of migrationFiles().filter(
+    f => !SKIPPED_FOR_ISOLATION.some(m => f.includes(m))
+  )) {
     await setup.executeMultiple(readFileSync(file, 'utf8'))
   }
   const now = Date.now()

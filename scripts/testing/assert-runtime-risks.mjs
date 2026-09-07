@@ -1682,8 +1682,10 @@ const requiredAuthHelperCallCounts = [
     calls: [{ pattern: /requireUser\(\)/g, min: 3 }],
   },
   {
+    // 첨부 업로드도 승인된 활성 멤버만 가능하도록 requireActiveMember()로
+    // 승격했다(글쓰기·수정과 일관).
     file: 'src/app/api/posts/[id]/attachments/route.ts',
-    calls: [{ pattern: /requireUser\(\)/g, min: 1 }],
+    calls: [{ pattern: /requireActiveMember\(\)/g, min: 1 }],
   },
   {
     // POST(댓글 작성)는 requireActiveMember() — GET(선택적 조회)은 단계
@@ -1692,8 +1694,10 @@ const requiredAuthHelperCallCounts = [
     calls: [{ pattern: /requireActiveMember\(\)/g, min: 1 }],
   },
   {
+    // 댓글 삭제도 댓글 작성과 마찬가지로 승인된 활성 멤버만 가능하도록
+    // requireActiveMember()로 승격했다.
     file: 'src/app/api/posts/[id]/comments/[commentId]/route.ts',
-    calls: [{ pattern: /requireUser\(\)/g, min: 1 }],
+    calls: [{ pattern: /requireActiveMember\(\)/g, min: 1 }],
   },
   {
     // GET은 requireUser(), POST(좋아요)는 requireActiveMember().
@@ -1704,13 +1708,11 @@ const requiredAuthHelperCallCounts = [
     ],
   },
   {
-    // PATCH는 requireActiveMember(), DELETE는 requireUser() — GET(선택적
-    // 조회)은 단계 2b-4(Task 2)에서 getOptionalUser()로 수렴됐다.
+    // PATCH·DELETE 둘 다 requireActiveMember() — 삭제도 승인된 활성 멤버만
+    // 가능하도록 승격했다(수정과 일관). GET(선택적 조회)은 단계 2b-4(Task
+    // 2)에서 getOptionalUser()로 수렴됐다.
     file: 'src/app/api/posts/[id]/route.ts',
-    calls: [
-      { pattern: /requireActiveMember\(\)/g, min: 1 },
-      { pattern: /requireUser\(\)/g, min: 1 },
-    ],
+    calls: [{ pattern: /requireActiveMember\(\)/g, min: 2 }],
   },
   {
     file: 'src/app/api/posts/[id]/user-data/route.ts',
@@ -2566,10 +2568,14 @@ const OWNERSHIP_GATE_CONTRACTS = [
   {
     file: 'src/app/api/posts/[id]/route.ts',
     source: postDetailSource,
-    what: '관리자 판정에 승인·활성까지 함께 본다(DELETE)',
+    // GET 한 곳만 남는다 — DELETE는 requireActiveMember()로 승격되면서
+    // 세션 사용자 본인이 이미 승인·활성임을 그 호출이 보장하므로, 별도
+    // getProfileById 조회 없이 requireActiveMember()가 돌려준 profile의
+    // is_admin만 보면 된다(PATCH와 동일 패턴으로 수렴).
+    what: '관리자 판정에 승인·활성까지 함께 본다(GET)',
     pattern:
       /isAdmin = !!\(prof\?\.is_admin && prof\.registration_status === ['"]approved['"] && prof\.is_active\)/g,
-    expected: 2,
+    expected: 1,
   },
   {
     file: 'src/app/api/posts/[id]/comments/[commentId]/route.ts',
@@ -3200,19 +3206,6 @@ const SCRIPTS_SCAN_SELF = 'scripts/testing/assert-runtime-risks.mjs'
 // (c) 판정 — Supabase를 **조회만** 하는 정당한 도구. 이유 없이는 못 올린다.
 const SCRIPTS_SUPABASE_ALLOWLIST = [
   {
-    path: 'scripts/migrate/copy-private-objects.mjs',
-    reason:
-      'Supabase Storage board-documents 버킷을 읽어 Vercel Blob과 SHA-256으로 대조한다. ' +
-      '쓰기는 Blob 쪽에만 한다. package.json의 storage:verify-private/storage:copy-private가 ' +
-      '이걸 부르고, Supabase 삭제 전까지 "이관이 정말 끝났는가"를 증명하는 유일한 도구다.',
-  },
-  {
-    path: 'scripts/storage/copy-to-blob.mjs',
-    reason:
-      '공개 버킷(attachments·artists)을 읽어 Vercel Blob과 대조·복사한다(--verify는 대조만). ' +
-      '위와 같은 이유로 Supabase 삭제 전까지 남긴다.',
-  },
-  {
     path: 'scripts/migrate/identity.mjs',
     reason:
       '단계 2b 인증 이관 도구. Supabase 덤프/GoTrue에서 계정을 읽어 Turso로 옮긴 기록이자 재현 수단이다.',
@@ -3490,20 +3483,18 @@ const SCRIPTS_WRITE_ALTERNATIVE_MIN = 5 // 현재 5
 // 전체 하한·서브트리별 하한·하한표의 커버리지를 함께 본다. `scripts/testing`
 // 하나가 전체의 절반이라, 전체 하한만 두면 다른 디렉터리가 통째로 빠져도
 // 통과한다 — 하필 무해화한 파일들이 전부 그 "다른 디렉터리"에 있다.
-const SCRIPTS_SCAN_MIN_FILES = 100 // 현재 147
+const SCRIPTS_SCAN_MIN_FILES = 100 // 현재 141 (2026-09-07 Supabase 잔재 정리로 scripts/archive/,
+// scripts/database/, scripts/one-off/, scripts/recovery/, scripts/storage/의 스캔 대상 스크립트가
+// 0개가 되어 아래 하한표에서 빠졌다 — 디렉터리 자체가 사라진 게 아니라 .sql/.md/.sh만 남았다)
 const SCRIPTS_SCAN_SUBTREE_MINIMUMS = {
-  'scripts/archive/': 5, // 현재 8
   'scripts/auth/': 1, // 현재 1
-  'scripts/database/': 15, // 현재 23
-  'scripts/migrate/': 5, // 현재 8
-  'scripts/one-off/': 2, // 현재 4
-  'scripts/perf/': 1, // 현재 2
-  'scripts/recovery/': 1, // 현재 1
-  'scripts/storage/': 2, // 현재 3
-  'scripts/testing/': 47, // 현재 71
+  'scripts/migrate/': 5, // 현재 7 (copy-private-objects.mjs 삭제 — Supabase 삭제 완료로
+  // SCRIPTS_SUPABASE_ALLOWLIST의 "Supabase 삭제 전까지 남긴다" 조건이 끝남)
+  'scripts/perf/': 1, // 현재 1 (backfill-image-dimensions.mjs 삭제)
+  'scripts/testing/': 47, // 현재 109
   'scripts/ticketing/': 1, // 현재 1 (공연 등록 도구)
-  'scripts/turso/': 4, // 현재 7
-  'scripts/utils/': 11, // 현재 17
+  'scripts/turso/': 4, // 현재 8
+  'scripts/utils/': 11, // 현재 13
 }
 const scriptsScanSubtreeShortfalls = Object.entries(SCRIPTS_SCAN_SUBTREE_MINIMUMS).flatMap(
   ([prefix, minimum]) => {
@@ -3528,7 +3519,8 @@ const scriptsScanUncoveredSubtrees = [
 // `scripts/*/**`로 좁아지면(흔한 실수다) 둘 다 조용히 빠진다 — 한쪽은
 // 무해화 대상이고 다른 쪽은 허용목록 항목이라 둘 다 빠지면 위반 ③까지
 // 함께 침묵한다.
-const SCRIPTS_ROOT_MIN_FILES = 2 // 현재 2
+const SCRIPTS_ROOT_MIN_FILES = 1 // 현재 1 (clear-link-preview-cache.js는 2026-09-07
+// Supabase 잔재 정리로 삭제됨 — 죽은 Supabase 도구였고 npm 스크립트도 부르지 않았다)
 const scriptsRootFileCount = scriptsAllFiles.filter(file => file.split('/').length === 2).length
 
 const imageProxyPath = join(root, 'src/app/api/images/proxy/route.ts')
@@ -3549,13 +3541,13 @@ const mypageProfileEditFormPath = join(
 const mypageProfileEditFormSource = readSourceAt(mypageProfileEditFormPath)
 const mypageArtistPagePath = join(root, 'src/app/[locale]/mypage/artist/page.tsx')
 const mypageArtistPageSource = readSourceAt(mypageArtistPagePath)
-// 단계 2c(Task 5): DELETE 핸들러의 관리자 판정을 Supabase
-// `.select('is_admin, registration_status, is_active').eq('id', user.id)`에서
-// Turso 쿼리 계층 getProfileById(user.id)로 옮겼다(GET 핸들러는 Task 4에서
-// 이미 같은 전환을 마쳤다). 조건식(prof?.is_admin && ... === 'approved' &&
-// prof.is_active) 리터럴은 두 핸들러 모두 그대로다.
+// DELETE는 requireActiveMember()로 승격되면서 별도 getProfileById(user.id)
+// 관리자 조회가 사라졌다(세션 사용자 본인의 승인·활성은 이미 그 호출이
+// 보장하므로 PATCH와 같은 패턴으로 profile.is_admin만 본다). GET 핸들러(비로그인
+// 열람 허용, 선택적 조회)만 여전히 별도 getProfileById(userId) 조회로
+// 관리자 판정을 승인·활성까지 함께 본다 — 그 리터럴을 여기서 못박는다.
 const validatesPostDetailAdminStatus =
-  /getProfileById\(user\.id\)/.test(postDetailSource) &&
+  /getProfileById\(userId\)/.test(postDetailSource) &&
   /prof\?\.is_admin && prof\.registration_status === ['"]approved['"] && prof\.is_active/.test(
     postDetailSource
   )
@@ -6619,7 +6611,7 @@ if (scriptsScanUncoveredSubtrees.length > 0) {
 
 if (scriptsRootFileCount < SCRIPTS_ROOT_MIN_FILES) {
   failures.push(
-    `The scripts/ scan covered ${scriptsRootFileCount} file(s) directly under scripts/ (expected at least ${SCRIPTS_ROOT_MIN_FILES}). The per-subtree floors cannot cover that position, and both files that live there are load-bearing for this guard: clear-link-preview-cache.js is a neutralized script and verify-env.js is an allowlist entry, so a glob narrowed to scripts/*/** would silently drop the offender check and the stale-allowlist check together.`
+    `The scripts/ scan covered ${scriptsRootFileCount} file(s) directly under scripts/ (expected at least ${SCRIPTS_ROOT_MIN_FILES}). The per-subtree floors cannot cover that position, and verify-env.js lives there as an allowlist entry, so a glob narrowed to scripts/*/** would silently drop the stale-allowlist check.`
   )
 }
 

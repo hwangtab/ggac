@@ -52,4 +52,24 @@ for (const [name, source] of SOURCES) {
       assert.match(line, /tosspayments\.com/, `form-action에 토스가 없다: ${line}`)
     }
   })
+
+  test(`${name}: 결제 SDK를 내려받을 수 있게 script-src가 토스를 허용한다`, () => {
+    // script-src의 https: 와일드카드를 호스트 허용목록으로 좁혔다. 토스가 목록에서
+    // 빠지면 결제 SDK 로드가 조용히 차단돼 결제창 자체가 뜨지 않는다.
+    for (const directive of ['script-src', 'script-src-elem']) {
+      // next/image의 SVG 샌드박스 CSP(script-src 'none')는 페이지 CSP가 아니다.
+      const lines = directiveLines(source, directive).filter(
+        line => !line.includes("script-src 'none'")
+      )
+      assert.ok(lines.length > 0, `${directive} 지시문을 찾지 못했다`)
+      for (const line of lines) {
+        assert.match(line, /tosspayments\.com/, `${directive}에 토스가 없다: ${line}`)
+        assert.doesNotMatch(
+          line,
+          /\shttps:(\s|"|')/,
+          `${directive}에 https: 와일드카드가 되살아났다: ${line}`
+        )
+      }
+    }
+  })
 }

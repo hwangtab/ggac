@@ -12,7 +12,7 @@ export const preferredRegion = 'icn1'
 import { NextRequest, NextResponse } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { rateLimit } from '@/lib/server/rateLimit'
-import { requireUser } from '@/lib/server/memberAuth'
+import { requireActiveMember } from '@/lib/server/memberAuth'
 import { hasPublicBlobStore } from '@/lib/storage/blob'
 import { putPublicObject, deletePublicObject } from '@/lib/storage/provider'
 import { revalidatePath } from 'next/cache'
@@ -112,9 +112,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       ).toNextResponse()
     }
 
-    // 첨부파일 업로드는 로그인만 확인한다(승인 여부는 보지 않음). 작성자
-    // 소유권 확인은 아래에서 별도로 한다.
-    const auth = await requireUser()
+    // 첨부파일 업로드도 게시글 작성·수정과 마찬가지로 승인된 활성 멤버만
+    // 가능하다. 글쓰기는 막고 첨부 업로드는 허용하는 것은 일관성이 없다 —
+    // 승인 취소·비활성화된 회원이 여전히 파일을 올릴 수 있던 구멍을 막는다.
+    // 작성자 소유권 확인은 아래에서 별도로 한다.
+    const auth = await requireActiveMember()
     if (auth instanceof NextResponse) return auth
     const { user } = auth
 

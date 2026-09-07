@@ -121,8 +121,15 @@ BACKUP_DIR="$HOME/ggac-url-backup/<타임스탬프>" \
 `posts` / `post_attachments` / `event_applications`의 권위가 Turso로 옮겨갔고,
 앱은 Supabase를 어디에서도 읽지 않는다 — 되돌려도 **화면은 한 픽셀도 안
 바뀐다.** 그래서 `scripts/storage/restore-db-urls.mjs`와 짝인
-`rewrite-db-urls.mjs`는 직접 실행하면 즉시 중단되게 막아 뒀다(단위 테스트가
-순수 함수를 import하므로 모듈 로딩 자체는 그대로 통과한다).
+`rewrite-db-urls.mjs`는 직접 실행하면 즉시 중단되게 막아 두었었다.
+
+> **⚠ 2026-09-07 갱신.** Supabase 프로젝트 삭제와 `@supabase/supabase-js`
+> 의존성 제거에 맞춰 `scripts/storage/rewrite-db-urls.mjs`·
+> `restore-db-urls.mjs`·`copy-to-blob.mjs`, `scripts/migrate/copy-private-objects.mjs`
+> 네 파일을 실제로 지웠다. 위 명령은 더 이상 실행할 수 없다 — 원본 Supabase가
+> 없어 복원할 데이터 자체가 없고, 코드는 `@supabase/supabase-js`를 정적
+> import해 그 패키지 없이는 로드조차 안 됐다. 아래 서술은 그 지점까지의
+> 역사 기록으로 남긴다.
 
 지금 URL을 되돌려야 한다면:
 

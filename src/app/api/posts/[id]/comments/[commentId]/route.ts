@@ -3,8 +3,7 @@ import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { deleteComment, getCommentById } from '@/db/queries/comments'
 import { revalidatePath } from 'next/cache'
 import { validateUUID } from '@/utils/validation'
-import { requireUser } from '@/lib/server/memberAuth'
-import { getProfileById } from '@/db/queries/profiles'
+import { requireActiveMember } from '@/lib/server/memberAuth'
 import { isApprovedActiveAdmin } from '@/lib/server/authz'
 import { getBoardPostRevalidationPaths } from '@/lib/revalidationPaths'
 
@@ -29,11 +28,13 @@ export async function DELETE(
   const validCommentId = commentIdValidation.sanitized
 
   try {
-    // 댓글 삭제는 로그인만 확인한다(승인 여부는 보지 않음). 소유자 판정은
+    // 댓글 삭제도 댓글 작성(POST)과 마찬가지로 승인된 활성 멤버만 가능하다.
+    // 작성은 막고 삭제는 허용하는 것은 일관성이 없다 — 승인 취소·비활성화된
+    // 회원이 자기 댓글을 여전히 지울 수 있던 구멍을 막는다. 소유자 판정은
     // 아래에서 별도로 한다.
-    const auth = await requireUser()
+    const auth = await requireActiveMember()
     if (auth instanceof NextResponse) return auth
-    const { user } = auth
+    const { user, profile } = auth
     const userId = user.id
 
     const comment = await getCommentById(validCommentId, validPostId)
@@ -47,9 +48,7 @@ export async function DELETE(
     // 사라지면서 **스팸·비방 댓글을 지울 경로가 0개**가 됐다(적대 감사
     // 2026-08-27, 관리자 세션 DELETE → 403 실측). 게시글 삭제(`posts/[id]`)는
     // 이미 같은 규칙이므로 그쪽에 맞춘다.
-    //
-    // 조회 실패는 "관리자 아님"으로 흡수한다(fail-closed) — 형제 라우트와 같다.
-    const isAdmin = isApprovedActiveAdmin(await getProfileById(userId).catch(() => null))
+    const isAdmin = isApprovedActiveAdmin(profile)
     if (comment.author_id !== userId && !isAdmin) {
       return ApiError.forbidden('권한이 없습니다.').toNextResponse()
     }
