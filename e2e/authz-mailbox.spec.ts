@@ -19,8 +19,17 @@ assertLocalTurso()
  * 파일 안에서 직접 심는다(고정 id, `ON CONFLICT`로 멱등) — 관리자 계정 등
  * 공유 계정 픽스처는 그 스크립트가 이미 만들어 두므로 여기서는 메일함
  * 표(`inbound_emails`/`inbound_email_attachments`)만 추가한다. 기존
- * 70건이 이 표를 전혀 건드리지 않으므로 공유 스크립트를 바꿔 그 70건에
- * 회귀를 만들 위험을 지지 않는 편이 안전하다.
+ * 스위트가 이 표를 전혀 건드리지 않으므로 공유 스크립트를 바꿔 회귀를
+ * 만들 위험을 지지 않는 편이 안전하다.
+ *
+ * **첨부 다운로드의 "배선"은 이 스위트가 덮지 못한다.** 실제 Blob 객체를
+ * 만들지 않으므로(운영 Blob 오염 방지) `isSafeMailboxAttachmentPath`가
+ * 실제로 경로를 거부하는지, 응답 헤더(`content-disposition`·`cache-control`)가
+ * 맞는지는 여기서 증명되지 않는다 — 봉쇄 판정이 거부할 때와 첨부를 못
+ * 찾을 때가 둘 다 같은 404("첨부를 찾을 수 없습니다")라 응답만으로는
+ * 구분되지 않는다. 이 스위트가 증명하는 것은 **인가**(관리자만 그 라우트에
+ * 닿는다)뿐이다. 배선 자체는 실제 메일이 오가는 전환 절차(4단계) 검증에서
+ * 확인한다.
  */
 
 const EMAIL_PENDING_ID = '00000000-0000-4000-8000-00000000c001'
@@ -36,9 +45,30 @@ const LONG_SUBJECT_PREFIX = 'MAILBOX-E2E-LONG-TITLE-'
 const LONG_SUBJECT = LONG_SUBJECT_PREFIX + 'A'.repeat(220)
 const PENDING_SUBJECT = 'MAILBOX-E2E-PENDING-BADGE-FIXTURE'
 
+/**
+ * 마이그레이션 0020(`src/db/migrations/0020_mailbox.sql`)이 로컬 Turso에
+ * 적용되지 않았으면 아래 INSERT들이 "no such table: inbound_emails" 같은
+ * raw SQL 에러로 죽고, 그 에러가 `beforeAll`에서 나므로 이 파일의 11개
+ * 테스트가 전부 알아보기 힘든 메시지와 함께 한꺼번에 실패한다. 먼저 표
+ * 존재를 확인해 원인을 바로 알 수 있는 메시지로 막는다.
+ */
+async function assertMailboxSchemaApplied(client: ReturnType<typeof createClient>): Promise<void> {
+  const result = await client.execute({
+    sql: `SELECT name FROM sqlite_master WHERE type='table' AND name IN ('inbound_emails', 'inbound_email_attachments')`,
+  })
+  if (result.rows.length < 2) {
+    throw new Error(
+      '메일함 표(inbound_emails/inbound_email_attachments)가 없다. ' +
+        '로컬 Turso에 마이그레이션 0020을 먼저 적용할 것 ' +
+        '(`src/db/migrations/0020_mailbox.sql`, 절차는 scripts/turso/README.md).'
+    )
+  }
+}
+
 async function seedMailboxFixtures(): Promise<void> {
   const client = createClient({ url: process.env.TURSO_DATABASE_URL! })
   try {
+    await assertMailboxSchemaApplied(client)
     const now = Date.now()
 
     const pendingEmail = {
@@ -123,6 +153,22 @@ test.beforeAll(async () => {
   await seedMailboxFixtures()
 })
 
+/** PATCH 403 뒤 실제로 행이 안 바뀌었는지 읽는다 — 상태 코드만으로는
+ * "거부하면서 쓰기는 이미 해버리는" 모양을 구분할 수 없다
+ * (`authz-roles.spec.ts` 파일 상단 규칙과 동일). */
+async function readEmailStatus(id: string): Promise<string | null> {
+  const client = createClient({ url: process.env.TURSO_DATABASE_URL! })
+  try {
+    const res = await client.execute({
+      sql: 'SELECT status FROM inbound_emails WHERE id = ?',
+      args: [id],
+    })
+    return (res.rows[0]?.status as string) ?? null
+  } finally {
+    client.close()
+  }
+}
+
 /**
  * 역할별 API 경계. 브리프가 요구하는 표: 4역할(비로그인/승인 대기/일반 승인
  * 회원/이사) × 5엔드포인트가 전부 401 또는 403이어야 한다.
@@ -171,6 +217,9 @@ test.describe('관리자 메일함 API 경계', () => {
       const res = await request[ep.method](ep.path, ep.data ? { data: ep.data } : undefined)
       expect(res.status(), `${ep.label} (비로그인)`).toBe(401)
     }
+    // 상태 코드만으로는 부족하다 — PATCH가 401을 돌려주면서 실제로는 상태를
+    // 바꿔 버리는 모양을 구분하지 못한다.
+    expect(await readEmailStatus(EMAIL_DONE_ID)).toBe('unread')
   })
 
   for (const role of DENIED_ROLES) {
@@ -181,6 +230,12 @@ test.describe('관리자 메일함 API 경계', () => {
           const res = await ctx[ep.method](ep.path, ep.data ? { data: ep.data } : undefined)
           expect(res.status(), `${ep.label} (${role})`).toBe(403)
         }
+        // 짝: 403을 돌려주면서 PATCH 쓰기는 이미 해버렸을 수도 있다 — 상태
+        // 코드만으로는 구분되지 않으므로 행을 직접 읽는다.
+        expect(
+          await readEmailStatus(EMAIL_DONE_ID),
+          `PATCH가 거부됐는데도 상태가 바뀌었다 (${role})`
+        ).toBe('unread')
       } finally {
         await ctx.dispose()
       }
@@ -193,10 +248,8 @@ test.describe('관리자 메일함 API 경계', () => {
    * `auth:'admin'` 경로, 다운로드는 `requireAdmin()`을 직접 부르는 별도
    * 핸들러라 — 둘 다 관리자에게는 통과함을 각각 증명해야 한다.
    *
-   * PATCH·POST reply는 상태를 바꾸거나(낙관적 동시성 충돌 위험) 실제 메일을
-   * 내보내므로 관리자로 성공시키지 않는다 — 목록·상세·다운로드 세 곳으로
-   * 관리자 게이트 자체가 살아 있음을 충분히 증명한다(PATCH·reply도 같은
-   * `auth:'admin'` 배선을 쓴다).
+   * PATCH·POST reply 중 reply는 실제 메일을 내보내므로 관리자로 성공시키지
+   * 않는다. PATCH는 아래 별도 테스트에서 관리자 성공 짝을 확인한다.
    */
   test('관리자는 목록·상세·다운로드에서 게이트를 통과한다', async ({ baseURL }) => {
     const adminCtx = await apiRequest.newContext({
@@ -218,21 +271,53 @@ test.describe('관리자 메일함 API 경계', () => {
       expect(detailBody.data?.email?.id).toBe(EMAIL_DONE_ID)
       expect(Array.isArray(detailBody.data?.attachments)).toBe(true)
 
-      // 다운로드: 실제 Blob 객체가 없어 성공 응답(200 + 헤더)까지는 못 간다.
-      // 여기서 증명하는 것은 "관리자가 401/403에 막히지 않는다"는 것 하나뿐이다
-      // — 인가는 통과했고, 그 다음(저장소 조회)에서 막혔다는 뜻이다. 실제
-      // Blob 객체를 만들지 않는 이유는 운영 Blob 오염을 피하기 위해서다.
+      // 다운로드: 실제 Blob 객체가 없어 성공 응답(200 + 헤더)까지는 못 간다
+      // (운영 Blob 오염을 피하려고 만들지 않았다 — 파일 상단 주석 참고).
+      // 여기서 증명하는 것은 **인가만**이다 — 200(있었다면)과 404(첨부를 못
+      // 찾음)만 허용한다. 500은 일부러 배제했다: `requireAdmin()`이 프로필
+      // 조회 실패로 던지는 코드도 500이라(`src/lib/server/adminAuth.ts`),
+      // 500을 통과시키면 라우트가 통째로 망가져도 이 테스트가 초록불이
+      // 된다 — "게이트를 통과한다"는 제목의 테스트가 게이트 실패를 가리게
+      // 된다는 뜻이라 배제했다.
       const download = await adminCtx.get(
         `/api/admin/mailbox/attachments/${ATTACHMENT_ID}/download`
       )
-      expect([200, 404, 500]).toContain(download.status())
-      expect(download.status()).not.toBe(401)
-      expect(download.status()).not.toBe(403)
+      expect([200, 404]).toContain(download.status())
       if (download.status() === 200) {
         // 실제 Blob 객체가 있었다면(로컬 사설 스토어 등) 헤더까지 단언한다.
+        // 이번 스위트가 만드는 픽스처로는 이 분기가 실행되지 않는다 — 배선
+        // (경로 봉쇄·헤더)은 이 스위트가 덮지 못한다는 파일 상단 주석 참고.
         expect(download.headers()['content-disposition']).toContain('attachment')
         expect(download.headers()['cache-control']).toContain('no-store')
       }
+    } finally {
+      await adminCtx.dispose()
+    }
+  })
+
+  /**
+   * PATCH의 관리자 성공 짝. 위 403 루프는 "막힌다"만 증명한다 — 관리자만
+   * PATCH에서 막히는 회귀(예: 이 라우트에만 잘못된 조건이 추가되는 경우)는
+   * 짝이 없으면 잡히지 않는다. 답장 발송과 달리 낙관적 동시성 필드까지
+   * 명시해서 보내는 상태 변경은 되돌릴 수 있고, 다음 실행의
+   * `seedMailboxFixtures()`가 `ON CONFLICT DO UPDATE`로 다시 'unread'로
+   * 되돌린다(고정 픽스처라 안전하다 — 답장처럼 외부로 나가는 부수효과가
+   * 없다).
+   */
+  test('관리자는 PATCH로 상태를 바꿀 수 있다', async ({ baseURL }) => {
+    const adminCtx = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('admin'),
+    })
+    try {
+      const res = await adminCtx.patch(`/api/admin/mailbox/${EMAIL_PENDING_ID}`, {
+        data: { status: 'read', expected_status: 'unread' },
+      })
+      expect(res.status()).toBe(200)
+      const body = await res.json()
+      expect(body.success).toBe(true)
+      expect(body.data?.status).toBe('read')
+      expect(await readEmailStatus(EMAIL_PENDING_ID)).toBe('read')
     } finally {
       await adminCtx.dispose()
     }
