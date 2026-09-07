@@ -145,6 +145,7 @@ export type SecurityEventType =
   | 'MAILBOX_WEBHOOK_UNEXPECTED_ERROR'
   | 'MAILBOX_INBOUND_QUOTA_PRESSURE'
   | 'MAILBOX_RECIPIENT_NOT_ALLOWED'
+  | 'ADMIN_MAILBOX_API_ERROR'
 
 export type SecurityEventSeverity = 'low' | 'medium' | 'high'
 
