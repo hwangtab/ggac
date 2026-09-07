@@ -2,6 +2,7 @@ import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { logSecurityEvent } from '@/utils/security'
+import { parseIntegerParam } from '@/utils/queryParams'
 import { listInboundEmails } from '@/db/queries/mailbox'
 
 export const dynamic = 'force-dynamic'
@@ -27,8 +28,8 @@ export const GET = defineApiRoute({
     const params = request.nextUrl.searchParams
     const status = params.get('status')
     const search = params.get('search')?.slice(0, 100) ?? undefined
-    const limit = Math.min(Math.max(Number(params.get('limit') ?? 30) || 30, 1), 100)
-    const offset = Math.max(Number(params.get('offset') ?? 0) || 0, 0)
+    const limit = parseIntegerParam(params.get('limit'), 30, { min: 1, max: 100 })
+    const offset = parseIntegerParam(params.get('offset'), 0, { min: 0, max: 100000 })
 
     if (status && !ALLOWED_STATUSES.includes(status as (typeof ALLOWED_STATUSES)[number])) {
       throw ApiError.badRequest('알 수 없는 상태입니다.')

@@ -3,6 +3,7 @@ import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { logSecurityEvent } from '@/utils/security'
 import { getInboundEmail, listAttachmentsForEmail, updateInboundStatus } from '@/db/queries/mailbox'
+import { validateUUID } from '@/utils/validation'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -24,10 +25,11 @@ export const GET = defineApiRoute({
     return ApiError.internalServerError('메일을 조회하는 중 오류가 발생했습니다.').toNextResponse()
   },
   handler: async ({ params }) => {
-    const id = String(params.id ?? '')
-    if (!id) {
+    const idValidation = validateUUID(String(params.id ?? ''), '메일 ID')
+    if (!idValidation.isValid) {
       throw ApiError.badRequest('유효한 id가 필요합니다.')
     }
+    const id = idValidation.sanitized
 
     const email = await getInboundEmail(id)
     if (!email) {
@@ -57,12 +59,13 @@ export const PATCH = defineApiRoute<{ status?: string; expected_status?: string 
     return ApiError.internalServerError('상태를 변경하는 중 오류가 발생했습니다.').toNextResponse()
   },
   handler: async ({ body, params }) => {
-    const id = String(params.id ?? '')
-    const next = String(body?.status ?? '')
-    const expected = String(body?.expected_status ?? '')
-    if (!id) {
+    const idValidation = validateUUID(String(params.id ?? ''), '메일 ID')
+    if (!idValidation.isValid) {
       throw ApiError.badRequest('유효한 id가 필요합니다.')
     }
+    const id = idValidation.sanitized
+    const next = String(body?.status ?? '')
+    const expected = String(body?.expected_status ?? '')
     if (!ALLOWED_STATUSES.includes(next as (typeof ALLOWED_STATUSES)[number])) {
       throw ApiError.badRequest('알 수 없는 상태입니다.')
     }
