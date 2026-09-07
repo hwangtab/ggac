@@ -84,16 +84,6 @@ CREATE TABLE `inbound_email_replies` (
 --> statement-breakpoint
 CREATE INDEX `inbound_email_replies_email_idx` ON `inbound_email_replies` (`email_id`);
 --> statement-breakpoint
--- 재실행 차단: 이미 적용됐으면 롤백한다.
-CREATE TABLE `__migration_assert_0020` (
-  ok INTEGER NOT NULL CHECK (ok = 1)
-);
---> statement-breakpoint
-INSERT INTO `__migration_assert_0020` (ok)
-SELECT CASE WHEN (SELECT count(*) FROM sqlite_master
-                  WHERE type = 'table' AND name = 'inbound_emails') = 1
-            THEN 1 ELSE 0 END;
---> statement-breakpoint
-DROP TABLE `__migration_assert_0020`;
---> statement-breakpoint
+-- 재실행 차단은 `IF NOT EXISTS` 없는 위 `CREATE TABLE`이 맡는다. 두 번째
+-- 적용은 그 자리에서 실패하고 BEGIN/COMMIT 전체가 롤백된다.
 COMMIT;
