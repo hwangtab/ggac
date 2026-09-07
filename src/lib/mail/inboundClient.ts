@@ -10,6 +10,11 @@
  */
 const RECEIVING_ENDPOINT = 'https://api.resend.com/emails/receiving'
 const TIMEOUT_MS = 15_000
+/**
+ * 첨부 파일 최대 크기. Resend가 상한을 문서화하지 않아 우리가 감당할 수 있는 선으로
+ * 정한 값이다. 전환 절차 4단계에서 실제 첨부로 재본 뒤 조정한다.
+ */
+const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
 
 export type ReceivedEmail = {
   id: string
@@ -64,7 +69,7 @@ export async function fetchReceivedEmail(emailId: string): Promise<ReceivedEmail
     html: body.html == null ? null : String(body.html),
     text: body.text == null ? null : String(body.text),
     headers:
-      body.headers && typeof body.headers === 'object'
+      body.headers && typeof body.headers === 'object' && !Array.isArray(body.headers)
         ? (body.headers as Record<string, string>)
         : {},
   }
@@ -86,10 +91,38 @@ export async function listReceivedAttachments(emailId: string): Promise<Received
   })
 }
 
+/**
+ * Resend 첨부 서명 URL에서 파일을 내려받는다.
+ *
+ * 실패하면 던진다 — 호출부(Task 8)는 해당 첨부만 건너뛰고 나머지와 본문은 저장한다.
+ *
+ * @throws 크기 초과, HTTP 실패 등
+ */
 export async function downloadAttachment(url: string): Promise<Buffer> {
   const response = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) })
   if (!response.ok) {
     throw new Error(`첨부 내려받기 실패 (${response.status})`)
   }
-  return Buffer.from(await response.arrayBuffer())
+
+  // Content-Length 헤더로 미리 크기 확인 (헤더 없으면 스킵).
+  const contentLength = response.headers.get('content-length')
+  if (contentLength) {
+    const size = parseInt(contentLength, 10)
+    if (!Number.isNaN(size) && size > MAX_ATTACHMENT_BYTES) {
+      throw new Error(
+        `첨부가 크기 제한을 초과합니다 (${Math.round(size / 1024 / 1024)}MB > ${Math.round(MAX_ATTACHMENT_BYTES / 1024 / 1024)}MB)`
+      )
+    }
+  }
+
+  // 실제 본문 크기 재확인 (Content-Length는 거짓일 수 있음). 이미 메모리에 올린 뒤라
+  // 늦지만 저장은 막는다.
+  const buffer = Buffer.from(await response.arrayBuffer())
+  if (buffer.length > MAX_ATTACHMENT_BYTES) {
+    throw new Error(
+      `첨부가 크기 제한을 초과합니다 (${Math.round(buffer.length / 1024 / 1024)}MB > ${Math.round(MAX_ATTACHMENT_BYTES / 1024 / 1024)}MB)`
+    )
+  }
+
+  return buffer
 }
