@@ -150,6 +150,9 @@ export type SecurityEventType =
   // 중 하나가 실패한 경우 — Task 11. 던지면 관리자가 "실패"로 보고 재시도해
   // 같은 메일이 두 번 나간다. 그래서 던지지 않고 감사만 하고 200을 준다.
   | 'MAILBOX_REPLY_RECORD_FAILED'
+  // 첨부 다운로드 라우트가 DB의 blob_path를 봉쇄 판정으로 재검증했을 때
+  // 실패한 경우 — Task 12. 비공개 저장소에는 조합 DB 전체 덤프가 같이 산다.
+  | 'MAILBOX_ATTACHMENT_PATH_REJECTED'
 
 export type SecurityEventSeverity = 'low' | 'medium' | 'high'
 
