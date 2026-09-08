@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { FiMail, FiRefreshCw, FiSend, FiX, FiPaperclip, FiSearch } from 'react-icons/fi'
+import { FiMail, FiRefreshCw, FiSend, FiX, FiPaperclip, FiSearch, FiArrowLeft } from 'react-icons/fi'
 
 interface InboundEmail {
   id: string
@@ -59,6 +59,15 @@ function formatBytes(bytes: number | null): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
 }
 
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('ko-KR', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -105,6 +114,10 @@ function buildBodySrcDoc(detail: InboundEmailDetail | null): string {
  * false면 상태 변경 버튼·답장 버튼·답장 모달을 **렌더하지 않는다** — 숨기는
  * 게 아니라 안 그린다. 이사·감사는 열람만 하고 답장·상태 변경은 관리자만
  * 한다는 국장 결정(브리프 목표) 때문이다.
+ *
+ * 구조는 메일 클라이언트 표준 2단(좌 목록 / 우 상세)이다. 좁은 화면
+ * (`lg` 미만)에서는 목록과 상세 중 하나만 보이고, 전환은 별도 상태 없이
+ * `selectedId !== null`로 판정한다.
  */
 export default function MailboxView() {
   const [emails, setEmails] = useState<InboundEmail[]>([])
@@ -118,7 +131,7 @@ export default function MailboxView() {
   const [updating, setUpdating] = useState<string | null>(null)
   const [canManage, setCanManage] = useState(false)
 
-  const [expanded, setExpanded] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const [detail, setDetail] = useState<InboundEmailDetail | null>(null)
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [detailLoading, setDetailLoading] = useState(false)
@@ -172,14 +185,8 @@ export default function MailboxView() {
     }
   }, [])
 
-  const toggleExpand = (email: InboundEmail) => {
-    if (expanded === email.id) {
-      setExpanded(null)
-      setDetail(null)
-      setAttachments([])
-      return
-    }
-    setExpanded(email.id)
+  const selectEmail = (email: InboundEmail) => {
+    setSelectedId(email.id)
     setDetail(null)
     setAttachments([])
     fetchDetail(email.id)
@@ -192,6 +199,12 @@ export default function MailboxView() {
     if (canManage && email.status === 'unread') {
       updateStatus(email, 'read', { silent: true })
     }
+  }
+
+  const closeDetail = () => {
+    setSelectedId(null)
+    setDetail(null)
+    setAttachments([])
   }
 
   const updateStatus = async (
@@ -270,7 +283,7 @@ export default function MailboxView() {
         // 함께 실패했을 수 있다는 뜻이다 — 낙관적으로 'replied'로 표시하면
         // 화면이 DB와 어긋날 수 있으므로 목록을 다시 읽어 실제 값을 반영한다.
         await fetchEmails()
-        if (expanded === targetId) {
+        if (selectedId === targetId) {
           fetchDetail(targetId)
         }
         alert(
@@ -296,11 +309,12 @@ export default function MailboxView() {
 
   const page = Math.floor(offset / LIMIT) + 1
   const totalPages = Math.max(1, Math.ceil(totalCount / LIMIT))
+  const selectedEmail = emails.find(e => e.id === selectedId) ?? null
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col h-[calc(100vh-15rem)] min-h-[520px]">
       {/* 헤더 */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between mb-4 shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center text-primary-600">
             <FiMail className="w-5 h-5" />
@@ -319,226 +333,250 @@ export default function MailboxView() {
         </button>
       </div>
 
-      {/* 검색 */}
-      <div className="flex items-center gap-2">
-        <input
-          type="text"
-          value={searchInput}
-          onChange={e => setSearchInput(e.target.value)}
-          onKeyDown={e => {
-            if (e.key === 'Enter') runSearch()
-          }}
-          placeholder="제목 또는 보낸 주소 검색"
-          className={`${inputClass} max-w-xs`}
-        />
-        <button
-          onClick={runSearch}
-          className="flex items-center gap-1 px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-        >
-          <FiSearch className="w-4 h-4" />
-          검색
-        </button>
-      </div>
-
-      {/* 상태 필터 */}
-      <div className="flex gap-2 flex-wrap">
-        {filterButtons.map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => {
-              setStatusFilter(key)
-              setOffset(0)
-            }}
-            className={`px-4 py-2 text-sm rounded-lg border transition-colors ${
-              statusFilter === key
-                ? 'bg-primary-600 text-white border-primary-600'
-                : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {/* 오류 */}
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+        <div className="p-4 mb-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm shrink-0">
           {error}
         </div>
       )}
 
-      {/* 목록 */}
-      {loading ? (
-        <div className="space-y-3">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="h-20 bg-gray-100 rounded-lg animate-pulse" />
-          ))}
-        </div>
-      ) : emails.length === 0 ? (
-        <div className="py-16 text-center text-gray-500">수신 메일이 없습니다.</div>
-      ) : (
-        <div className="space-y-3">
-          {emails.map(email => {
-            const isExpanded = expanded === email.id
-            const statusInfo = STATUS_LABELS[email.status]
-            return (
-              <div
-                key={email.id}
-                className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden"
+      {/* 2단 본체 */}
+      <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4 lg:gap-6">
+        {/* 목록 칸 — 좁은 화면에서는 상세가 선택되면 숨긴다 */}
+        <div
+          className={`${
+            selectedId !== null ? 'hidden lg:flex' : 'flex'
+          } flex-col w-full lg:w-1/3 lg:max-w-sm min-h-0 bg-white border border-gray-200 rounded-lg overflow-hidden`}
+        >
+          {/* 검색 + 필터 */}
+          <div className="p-3 border-b border-gray-100 space-y-3 shrink-0">
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={searchInput}
+                onChange={e => setSearchInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') runSearch()
+                }}
+                placeholder="제목 또는 보낸 주소 검색"
+                className={inputClass}
+              />
+              <button
+                onClick={runSearch}
+                className="flex items-center gap-1 px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shrink-0"
               >
-                {/* 요약 행 */}
-                <div
-                  className="flex items-center gap-4 p-4 cursor-pointer hover:bg-gray-50 transition-colors"
-                  onClick={() => toggleExpand(email)}
+                <FiSearch className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex gap-1.5 flex-wrap">
+              {filterButtons.map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => {
+                    setStatusFilter(key)
+                    setOffset(0)
+                  }}
+                  className={`px-2.5 py-1 text-xs rounded-lg border transition-colors ${
+                    statusFilter === key
+                      ? 'bg-primary-600 text-white border-primary-600'
+                      : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                  }`}
                 >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-gray-900 truncate min-w-0">
-                        {email.subject || '(제목 없음)'}
-                      </span>
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusInfo.color}`}
-                      >
-                        {statusInfo.label}
-                      </span>
-                      {email.body_fetch_status === 'pending' && (
-                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                          본문 받는 중
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 목록 — 독립 스크롤 */}
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            {loading ? (
+              <div className="p-3 space-y-3">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="h-16 bg-gray-100 rounded-lg animate-pulse" />
+                ))}
+              </div>
+            ) : emails.length === 0 ? (
+              <div className="py-16 text-center text-gray-500 text-sm">수신 메일이 없습니다.</div>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {emails.map(email => {
+                  const isSelected = selectedId === email.id
+                  const statusInfo = STATUS_LABELS[email.status]
+                  return (
+                    <div
+                      key={email.id}
+                      onClick={() => selectEmail(email)}
+                      className={`p-3 cursor-pointer transition-colors ${
+                        isSelected ? 'bg-primary-50' : 'hover:bg-gray-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium text-gray-900 truncate min-w-0 text-sm">
+                          {email.subject || '(제목 없음)'}
                         </span>
-                      )}
-                      {email.body_fetch_status === 'failed' && (
-                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                          본문 없음
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-sm text-gray-500 mt-0.5 truncate">
-                      {email.from_address}
-                    </div>
-                  </div>
-                  <div className="text-xs text-gray-400 whitespace-nowrap">
-                    {new Date(email.received_at).toLocaleDateString('ko-KR', {
-                      month: 'short',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </div>
-                </div>
-
-                {/* 상세 */}
-                {isExpanded && (
-                  <div className="border-t border-gray-100 p-4 space-y-4">
-                    {detailLoading ? (
-                      <div className="h-40 bg-gray-100 rounded-lg animate-pulse" />
-                    ) : detailError ? (
-                      <div className="text-sm text-red-600">{detailError}</div>
-                    ) : (
-                      <>
-                        {/*
-                          받은 메일의 HTML은 외부에서 온 것이다. 화면 DOM에 직접 넣으면
-                          세션을 노린 XSS 통로가 된다. 수신 본문 경로에는 서버 정화가
-                          없다(`sanitizePostHtml`은 답장 발신 경로 전용) — 실제 방어는
-                          sandbox="" 하나뿐이고, allow-scripts를 주지 않아 스크립트를 아예 못
-                          돌게 하는 것으로 충분하다. 다만 sandbox는 서브리소스 로드까지 막지는
-                          않으므로 buildBodySrcDoc()이 CSP 메타로 원격 이미지(추적 픽셀)를
-                          추가로 막는다 — 그 메타 덕분에 인라인 이미지(html_format=data_uri로
-                          base64 첨부)만 보이고 외부 요청은 나가지 않는다.
-                        */}
-                        <iframe
-                          title="메일 본문"
-                          sandbox=""
-                          srcDoc={buildBodySrcDoc(detail)}
-                          className="w-full min-h-[320px] rounded border border-gray-200 bg-white"
-                        />
-
-                        {attachments.length > 0 && (
-                          <div>
-                            <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
-                              첨부파일
-                            </div>
-                            <ul className="space-y-1">
-                              {attachments.map(att => (
-                                <li key={att.id} className="flex items-center gap-2 text-sm">
-                                  <FiPaperclip className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                                  <a
-                                    href={`/api/admin/mailbox/${email.id}/attachments/${att.id}/download`}
-                                    className="text-blue-600 hover:underline break-all"
-                                  >
-                                    {att.filename}
-                                  </a>
-                                  {att.size_bytes !== null && (
-                                    <span className="text-xs text-gray-400">
-                                      ({formatBytes(att.size_bytes)})
-                                    </span>
-                                  )}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                      </>
-                    )}
-
-                    {/* 상태 변경 + 답장 버튼 — 관리자만. 이사·감사는 열람만 한다
-                        (브리프 목표). canManage가 false면 그리지 않는다 — 숨기는
-                        게 아니라 안 그린다. */}
-                    {canManage && (
-                      <div className="flex items-center gap-2 pt-2 border-t border-gray-100 flex-wrap">
-                        <span className="text-sm text-gray-500 mr-1">상태 변경:</span>
-                        {STATUS_ORDER.map(s => (
-                          <button
-                            key={s}
-                            disabled={updating === email.id || email.status === s}
-                            onClick={() => updateStatus(email, s)}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors hover:opacity-80 ${STATUS_LABELS[s].color}`}
-                          >
-                            {STATUS_LABELS[s].label}
-                          </button>
-                        ))}
-                        <span className="flex-1" />
-                        <button
-                          onClick={e => {
-                            e.stopPropagation()
-                            openReply(email)
-                          }}
-                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-primary-100 text-primary-700 hover:bg-primary-200 transition-colors"
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusInfo.color}`}
                         >
-                          <FiSend className="w-3 h-3" />
-                          답장
-                        </button>
+                          {statusInfo.label}
+                        </span>
+                        {email.body_fetch_status === 'pending' && (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                            본문 받는 중
+                          </span>
+                        )}
+                        {email.body_fetch_status === 'failed' && (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            본문 없음
+                          </span>
+                        )}
                       </div>
-                    )}
+                      <div className="text-xs text-gray-500 mt-0.5 truncate">
+                        {email.from_address}
+                      </div>
+                      <div className="text-xs text-gray-400 mt-0.5">
+                        {formatDate(email.received_at)}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* 페이지네이션 */}
+          {!loading && totalCount > LIMIT && (
+            <div className="flex items-center justify-center gap-3 py-2 border-t border-gray-100 shrink-0">
+              <button
+                disabled={offset === 0}
+                onClick={() => setOffset(Math.max(0, offset - LIMIT))}
+                className="px-3 py-1 text-xs bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                이전
+              </button>
+              <span className="text-xs text-gray-500">
+                {page} / {totalPages}
+              </span>
+              <button
+                disabled={offset + LIMIT >= totalCount}
+                onClick={() => setOffset(offset + LIMIT)}
+                className="px-3 py-1 text-xs bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                다음
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* 상세 칸 — 좁은 화면에서는 목록이 선택되지 않았으면 숨긴다 */}
+        <div
+          className={`${
+            selectedId !== null ? 'flex' : 'hidden lg:flex'
+          } flex-col flex-1 min-h-0 bg-white border border-gray-200 rounded-lg overflow-hidden`}
+        >
+          {selectedEmail === null ? (
+            <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
+              메일을 선택하세요
+            </div>
+          ) : (
+            <>
+              {/* 상세 헤더 — 고정 */}
+              <div className="p-4 border-b border-gray-100 shrink-0">
+                <button
+                  onClick={closeDetail}
+                  className="lg:hidden mb-2 flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+                >
+                  <FiArrowLeft className="w-4 h-4" />
+                  목록
+                </button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="font-semibold text-gray-900 break-words">
+                    {selectedEmail.subject || '(제목 없음)'}
+                  </h3>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_LABELS[selectedEmail.status].color}`}
+                  >
+                    {STATUS_LABELS[selectedEmail.status].label}
+                  </span>
+                </div>
+                <div className="text-sm text-gray-500 mt-1">{selectedEmail.from_address}</div>
+                <div className="text-xs text-gray-400 mt-0.5">
+                  {formatDate(selectedEmail.received_at)}
+                </div>
+                {attachments.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-3">
+                    {attachments.map(att => (
+                      <a
+                        key={att.id}
+                        href={`/api/admin/mailbox/${selectedEmail.id}/attachments/${att.id}/download`}
+                        className="flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                      >
+                        <FiPaperclip className="w-3 h-3 shrink-0" />
+                        {att.filename}
+                        {att.size_bytes !== null && (
+                          <span className="text-gray-400">({formatBytes(att.size_bytes)})</span>
+                        )}
+                      </a>
+                    ))}
                   </div>
                 )}
               </div>
-            )
-          })}
-        </div>
-      )}
 
-      {/* 페이지네이션 */}
-      {!loading && totalCount > LIMIT && (
-        <div className="flex items-center justify-center gap-3 pt-2">
-          <button
-            disabled={offset === 0}
-            onClick={() => setOffset(Math.max(0, offset - LIMIT))}
-            className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            이전
-          </button>
-          <span className="text-sm text-gray-500">
-            {page} / {totalPages}
-          </span>
-          <button
-            disabled={offset + LIMIT >= totalCount}
-            onClick={() => setOffset(offset + LIMIT)}
-            className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            다음
-          </button>
+              {/* 본문 — 남는 세로 전부를 채운다 */}
+              {detailLoading ? (
+                <div className="flex-1 min-h-0 p-4">
+                  <div className="h-full bg-gray-100 rounded-lg animate-pulse" />
+                </div>
+              ) : detailError ? (
+                <div className="flex-1 min-h-0 p-4 text-sm text-red-600">{detailError}</div>
+              ) : (
+                /*
+                  받은 메일의 HTML은 외부에서 온 것이다. 화면 DOM에 직접 넣으면
+                  세션을 노린 XSS 통로가 된다. 수신 본문 경로에는 서버 정화가
+                  없다(`sanitizePostHtml`은 답장 발신 경로 전용) — 실제 방어는
+                  sandbox="" 하나뿐이고, allow-scripts를 주지 않아 스크립트를 아예 못
+                  돌게 하는 것으로 충분하다. 다만 sandbox는 서브리소스 로드까지 막지는
+                  않으므로 buildBodySrcDoc()이 CSP 메타로 원격 이미지(추적 픽셀)를
+                  추가로 막는다 — 그 메타 덕분에 인라인 이미지(html_format=data_uri로
+                  base64 첨부)만 보이고 외부 요청은 나가지 않는다.
+                */
+                <iframe
+                  title="메일 본문"
+                  sandbox=""
+                  srcDoc={buildBodySrcDoc(detail)}
+                  className="w-full flex-1 min-h-0 bg-white"
+                />
+              )}
+
+              {/* 상태 변경 + 답장 버튼 — 관리자만. 이사·감사는 열람만 한다
+                  (브리프 목표). canManage가 false면 그리지 않는다 — 숨기는
+                  게 아니라 안 그린다. */}
+              {canManage && (
+                <div className="flex items-center gap-2 p-3 border-t border-gray-100 flex-wrap shrink-0">
+                  <span className="text-sm text-gray-500 mr-1">상태 변경:</span>
+                  {STATUS_ORDER.map(s => (
+                    <button
+                      key={s}
+                      disabled={updating === selectedEmail.id || selectedEmail.status === s}
+                      onClick={() => updateStatus(selectedEmail, s)}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors hover:opacity-80 ${STATUS_LABELS[s].color}`}
+                    >
+                      {STATUS_LABELS[s].label}
+                    </button>
+                  ))}
+                  <span className="flex-1" />
+                  <button
+                    onClick={() => openReply(selectedEmail)}
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-primary-100 text-primary-700 hover:bg-primary-200 transition-colors"
+                  >
+                    <FiSend className="w-3 h-3" />
+                    답장
+                  </button>
+                </div>
+              )}
+            </>
+          )}
         </div>
-      )}
+      </div>
 
       {/* 답장 모달 — 관리자만 그린다. */}
       {canManage && replyTarget && (

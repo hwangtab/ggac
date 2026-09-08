@@ -13,8 +13,12 @@ import MailboxView from '../../admin/mailbox/MailboxView'
  * 알아서 가린다.
  */
 export default function BoardRoomMailboxPage() {
+  // 2단 구조(목록+상세)는 max-w-4xl 안에서는 상세 칸이 좁아 iframe이
+  // 실질적으로 늘어나지 않는다 — 이사회 레이아웃의 다른 페이지는 폭 제약이
+  // 필요 없는 문서·안건 목록이라 4xl로 충분했지만, 메일함은 상세 칸에 화면
+  // 폭 대부분이 필요하다.
   return (
-    <div className="mx-auto max-w-4xl pb-16">
+    <div className="pb-16">
       <div className="mb-6">
         <Link
           href="/board-room"
