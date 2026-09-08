@@ -81,9 +81,15 @@
       봐야 안다):
 
   ```
-  수신 MX 호스트명: ______________________________________
-  우선순위(Priority): ____
-  기록 날짜: ____________
+  수신 MX 호스트명: inbound-smtp.ap-northeast-1.amazonaws.com
+  우선순위(Priority): 10
+  기록 날짜: 2026-09-08
+
+  (Resend 대시보드 mail.ggac.kr 상세 화면에서 확인. 리전 Tokyo.
+   같은 화면에서 함께 받은 나머지 레코드 셋:
+     TXT   resend._domainkey.mail  → DKIM 공개키
+     CNAME rsend.mail              → rsend-apne1.forge.rmta.net
+     CNAME send.mail               → send.forge.rmta.net)
   ```
 
 - [ ] Resend 대시보드에서 해당 도메인의 인바운드(Inbound) 설정을 켠다

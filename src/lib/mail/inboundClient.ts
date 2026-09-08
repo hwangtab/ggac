@@ -19,8 +19,15 @@ const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
 /**
  * `downloadAttachment`가 받는 URL은 인증된 Resend 응답에서 오지만 값 자체는
  * 검증 없이 그대로 fetch된다. Resend 첨부 CDN과 API 도메인만 허용한다.
+ *
+ * **`cdn.resend.app`이 실측으로 확인된 실제 호스트다**(2026-09-08, 전환 절차
+ * 4단계에서 진짜 메일의 `download_url`을 열어 확인). 문서에는 이 호스트가
+ * 적혀 있지 않아 처음에는 `inbound-cdn.resend.com`만 넣었고, 그 결과 첨부가
+ * 한 건도 복사되지 않은 채 로그만 남았다 — 본문은 이미 `done`이라 백필이
+ * 다시 보지 않아 영구 손실이 될 뻔했다. 목록을 좁힐 일이 생기면 실제 응답을
+ * 먼저 확인해라.
  */
-const ALLOWED_ATTACHMENT_HOSTS = ['inbound-cdn.resend.com', 'resend.com']
+const ALLOWED_ATTACHMENT_HOSTS = ['cdn.resend.app', 'inbound-cdn.resend.com', 'resend.com']
 
 export type ReceivedEmail = {
   id: string
