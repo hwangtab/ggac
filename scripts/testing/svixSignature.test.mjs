@@ -1,10 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createHmac } from 'node:crypto'
+import { createHmac, randomBytes } from 'node:crypto'
 
 import { verifySvixSignature } from '../../src/lib/mail/svixSignature.ts'
 
-const SECRET = 'whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw'
+// 고정 문자열은 비밀 스캐너가 실제 키로 오인한다 — 실행 때마다 새로 만든다.
+const SECRET = `whsec_${randomBytes(24).toString('base64')}`
 const BODY = '{"type":"email.received","data":{"email_id":"abc"}}'
 const ID = 'msg_p5jXN8AQM9LWM0D4loKWxJek'
 
@@ -33,7 +34,7 @@ test('본문이 한 글자라도 바뀌면 거부한다', () => {
 
 test('서명이 다른 시크릿으로 만들어졌으면 거부한다', () => {
   const ts = 1788800000
-  const other = 'whsec_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa=='
+  const other = `whsec_${randomBytes(24).toString('base64')}`
   const r = verifySvixSignature(BODY, headersFor(ts, sign(ID, ts, BODY, other)), SECRET, ts * 1000)
   assert.equal(r.ok, false)
 })
