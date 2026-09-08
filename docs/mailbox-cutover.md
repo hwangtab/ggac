@@ -216,7 +216,7 @@ MX는 건드리지 않았으므로 `ggac.kr` 메일 수신에는 아무 영향�
 - 환경변수 목록과 "없으면 무엇이 깨지는가": `CLAUDE.md`의
   `Environment Variables Issues` 절, 정본은 `npm run env:check`
 - 마이그레이션 적용 절차: `scripts/turso/README.md`
-- 인가(권한) 검증: `npm run test:e2e:authz`(기준선 92 passed) — 이사·감사·
+- 인가(권한) 검증: `npm run test:e2e:authz`(기준선 93 passed) — 이사·감사·
   관리자가 아닌 사람이 메일함 목록·상세·첨부 다운로드에 접근하지 못하는지,
   이사·감사가 답장·상태 변경까지는 못 하는지 이 테스트가 확인한다. **정적
   검사(`assert-runtime-risks.mjs`)는 배선이 실제로 연결됐는지는 보지 못한다** —
