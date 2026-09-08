@@ -75,7 +75,7 @@ export default function TrackBrowser({ isEn }: { isEn: boolean }) {
         onPause={() => setPlaying(false)}
       />
 
-      <div className="grid items-start gap-6 md:grid-cols-2">
+      <div className="grid gap-6 md:grid-cols-2">
         <ol className="overflow-hidden rounded-lg border border-gray-200">
           {TRACKS.map((t, i) => {
             const active = t.n === current
@@ -113,13 +113,28 @@ export default function TrackBrowser({ isEn }: { isEn: boolean }) {
           })}
         </ol>
 
-        <div className="rounded-lg border border-gray-200 p-4 md:sticky md:top-6 md:self-start">
-          <p className="text-xs uppercase tracking-widest text-gray-500">
-            {String(track.n).padStart(2, '0')} · {track.title}
-          </p>
-          <pre className="mt-3 max-h-96 overflow-y-auto whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-gray-800">
-            {LYRICS[track.n]}
-          </pre>
+        {/*
+          두 칸의 높이를 맞춘다.
+
+          그냥 두면 가사가 긴 곡에서 가사 칸이 목록보다 커지고, 목록은 그
+          높이까지 늘어나 아래에 빈 자리가 생긴다. 반대로 각자 제 높이만
+          쓰게 하면 두 카드의 아래끝이 어긋난다.
+
+          그래서 바깥 칸은 자리만 잡고(md:relative), 실제 카드를 그 안에
+          띄운다(md:absolute inset-0). 카드는 스스로 높이를 갖지 않으므로
+          행 높이는 트랙 목록이 정하고, 카드는 딱 그만큼 채운다. 넘치는
+          가사는 카드 안에서 스크롤된다. 한 단으로 접히는 모바일에서는
+          평범하게 흐르고 가사 칸에만 최대 높이를 준다.
+        */}
+        <div className="md:relative">
+          <div className="flex flex-col rounded-lg border border-gray-200 p-4 md:absolute md:inset-0">
+            <p className="shrink-0 text-xs uppercase tracking-widest text-gray-500">
+              {String(track.n).padStart(2, '0')} · {track.title}
+            </p>
+            <pre className="mt-3 max-h-96 min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-gray-800 md:max-h-none">
+              {LYRICS[track.n]}
+            </pre>
+          </div>
         </div>
       </div>
 
