@@ -101,16 +101,15 @@ export function interleaveGenreBlocks(blocks: GrantItem[][]): GrantItem[] {
  * 실험음악·중음악(둠메탈·드론·슬러지) 조합원과 무관한 공고가 장르 필터를 통과해 섞인다.
  * 장르 태그로는 거를 수 없어 제목 문자열로 판정한다.
  *
- * 키워드는 정확히 둘이다({@link EXCLUDE_TITLE_KEYWORDS} 참고) — 더 넣지 않는다. 넓히면
- * 「커넥트 스테이지(연극·무용·음악·전통) 통합공모」처럼 음악도 받는 유효한 공고가 함께
- * 걸린다.
+ * 키워드는 {@link EXCLUDE_TITLE_KEYWORDS} 목록만 쓴다 — 넓히면 「커넥트 스테이지(연극·
+ * 무용·음악·전통) 통합공모」처럼 음악도 받는 유효한 공고가 함께 걸린다.
  */
 export function isExcludedByTitle(title: string): boolean {
   return EXCLUDE_TITLE_KEYWORDS.some(keyword => title.includes(keyword))
 }
 
 /**
- * 제목 기반 제외 키워드. 이 둘만이다 — 더 넣지 않는다.
+ * 제목 기반 제외 키워드.
  *
  * - `합창`: 종로구립합창단 신규단원 모집, 종로구립어르신합창단 지도단원 모집, 무용·합창
  *   워크숍 참여자 모집 세 건이 전부 이 키워드로 걸린다. 「커넥트 스테이지(연극·무용·음악·
@@ -123,7 +122,52 @@ export function isExcludedByTitle(title: string): boolean {
  *   함께 걸린다 — 음악도 받는 유효한 창작지원이다. 순수 무용 공고는 `genres=['무용']`
  *   이라 관심사 필터가 이미 거른다.
  */
-export const EXCLUDE_TITLE_KEYWORDS = ['합창', '단원'] as const
+export const EXCLUDE_TITLE_KEYWORDS = [
+  '합창',
+  '단원',
+  // 2026-W37 실측: '안내'만으로 거르면 유효한 공모(8번 「2027년 해외 우수 콘텐츠 지역
+  // 네트워크 사업 공모 안내」, 19·20번 「이음 예술창작 아카데미 …과정 안내」)까지 함께
+  // 걸린다. 그래서 '안내' 단독이 아니라 앞말이 붙은 두 어절을 정확히 쓴다.
+  // - '제출 안내': 「예술활동준비금지원사업 예술활동보고서 제출 안내」처럼 행정 서류
+  //   제출을 알리는 공고를 잡는다. 지원사업 자체가 아니라 이미 받은 사업의 사후 절차다.
+  // - '제도 운영 안내': 「예술활동증명 제도 운영 안내」처럼 제도 자체를 설명하는 공고를
+  //   잡는다. 공모·모집이 아니라 행정 안내문이다.
+  '제출 안내',
+  '제도 운영 안내',
+] as const
+
+/**
+ * kosmart가 장르 분류에 실패해 `genres`가 빈 배열로 오는 공고를 거른다.
+ *
+ * 관심사와 맞는지 판정할 수 없고, 발행 시 개인 필터(`matchesInterests`)가 어차피
+ * 떨어뜨려 메일에는 안 나간다 — 게시글에만 실려 노이즈가 된다(2026-W37 실측 13·15번).
+ *
+ * `genres=['전체']`는 와일드카드이지 분류 실패가 아니므로 남긴다 — `length === 0`만 본다.
+ */
+export function isExcludedByGenres(genres: string[]): boolean {
+  return genres.length === 0
+}
+
+/**
+ * `biz_type`의 모든 값이 '교육'일 때만 제외한다.
+ *
+ * `biz_type`은 쉼표로 이어진 다중값이다(`'창작, 기타'`처럼). 조합원이 지원사업 안내에서
+ * 기대하는 것은 창작지원·공모이지 교육 프로그램이 아니다(2026-W37 실측 16·17번:
+ * 액셀러레이터 프로그램, 진로·취업 상담 수강생 모집). 다만 `'창작지원, 교육'`처럼
+ * 창작이 함께 붙은 것은 남겨야 하므로 값 하나하나를 정확히 비교한다 —
+ * `'예술교육'`은 `'교육'`과 다른 문자열이라 걸리지 않는다.
+ *
+ * `null`/빈 문자열이면 이 규칙은 적용하지 않는다(다른 규칙이 판단한다).
+ */
+export function isExcludedByBizType(bizType: string | null | undefined): boolean {
+  if (!bizType) return false
+  const values = bizType
+    .split(',')
+    .map(v => v.trim())
+    .filter(v => v.length > 0)
+  if (values.length === 0) return false
+  return values.every(v => v === '교육')
+}
 
 /**
  * kosmart 응답의 카테고리로 생활정보성 공고를 거른다.
@@ -171,6 +215,8 @@ export function buildDraftItems(
     if (seen.has(it.key)) continue // 같은 응답 안의 중복
     if (isExcludedByTitle(it.title)) continue // cap을 세기 전에 걸러야 자리를 먹지 않는다
     if (isExcludedByCategory(it.category)) continue // 위와 같은 이유
+    if (isExcludedByGenres(it.genres)) continue // 위와 같은 이유
+    if (isExcludedByBizType(it.biz_type)) continue // 위와 같은 이유
     seen.add(it.key)
     out.push(it)
     if (out.length >= cap) break

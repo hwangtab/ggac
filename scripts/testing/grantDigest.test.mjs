@@ -11,6 +11,8 @@ const {
   renderDigestEmail,
   renderDigestNotification,
   isExcludedByTitle,
+  isExcludedByGenres,
+  isExcludedByBizType,
   EXCLUDE_TITLE_KEYWORDS,
   isExcludedByCategory,
   CAP,
@@ -172,8 +174,8 @@ test('빈 입력은 빈 배열이다', () => {
 
 // ---------------------------------------------------------------- isExcludedByTitle / 제목 기반 제외 필터
 
-test('EXCLUDE_TITLE_KEYWORDS는 정확히 둘이다 (합창, 단원)', () => {
-  assert.deepEqual([...EXCLUDE_TITLE_KEYWORDS], ['합창', '단원'])
+test('EXCLUDE_TITLE_KEYWORDS는 정확히 넷이다 (합창, 단원, 제출 안내, 제도 운영 안내)', () => {
+  assert.deepEqual([...EXCLUDE_TITLE_KEYWORDS], ['합창', '단원', '제출 안내', '제도 운영 안내'])
 })
 
 test('합창단 신규단원 모집 공고는 제외된다', () => {
@@ -267,6 +269,77 @@ test('buildDraftItems는 life 카테고리 항목을 담지 않고 그 자리를
     item({ key: 'welfare1', category: 'welfare', title: '2026년 개인 심리상담 신청 안내' }),
     item({ key: 'admin1', category: 'admin', title: '예술활동증명 제도 운영 안내' }),
     ...Array.from({ length: CAP }, (_, i) => item({ key: `ok:${i}`, category: 'grant' })),
+// ---------------------------------------------------------------- isExcludedByGenres
+
+test('genres가 빈 배열이면 제외된다 (kosmart 분류 실패)', () => {
+  assert.equal(isExcludedByGenres([]), true)
+})
+
+test("genres=['전체']는 와일드카드라 제외되지 않는다", () => {
+  assert.equal(isExcludedByGenres(['전체']), false)
+})
+
+test('일반 장르 태그는 제외되지 않는다', () => {
+  assert.equal(isExcludedByGenres(['음악']), false)
+})
+
+// ---------------------------------------------------------------- isExcludedByBizType
+
+test("biz_type이 '교육'뿐이면 제외된다", () => {
+  assert.equal(isExcludedByBizType('교육'), true)
+})
+
+test('창작이 함께 있으면 남긴다 (다중값 중 하나라도 교육이 아니면 통과)', () => {
+  assert.equal(isExcludedByBizType('창작지원, 교육'), false)
+})
+
+test("'예술교육'은 '교육'과 다른 값이라 걸리지 않는다 (정확 일치만 본다)", () => {
+  assert.equal(isExcludedByBizType('예술교육'), false)
+})
+
+test('창작만 있으면 제외되지 않는다', () => {
+  assert.equal(isExcludedByBizType('창작'), false)
+})
+
+test('null이면 판정하지 않는다', () => {
+  assert.equal(isExcludedByBizType(null), false)
+})
+
+test('빈 문자열이면 판정하지 않는다', () => {
+  assert.equal(isExcludedByBizType(''), false)
+})
+
+test('모든 값이 교육이면 제외된다', () => {
+  assert.equal(isExcludedByBizType('교육, 교육'), true)
+})
+
+// ---------------------------------------------------------------- 제목 기반 제외 확장 (제출 안내 / 제도 운영 안내)
+
+test("'예술활동보고서 제출 안내'는 제외된다", () => {
+  assert.equal(isExcludedByTitle('예술활동보고서 제출 안내'), true)
+})
+
+test("'예술활동증명 제도 운영 안내'는 제외된다", () => {
+  assert.equal(isExcludedByTitle('예술활동증명 제도 운영 안내'), true)
+})
+
+test('해외 우수 콘텐츠 지역 네트워크 사업 공모 안내는 제외되지 않는다 (오차단 방어)', () => {
+  assert.equal(isExcludedByTitle('2027년 해외 우수 콘텐츠 지역 네트워크 사업 공모 안내'), false)
+})
+
+test('창작자과정 안내는 제외되지 않는다 (오차단 방어)', () => {
+  assert.equal(isExcludedByTitle('[2026 이음 예술창작 아카데미] 창작자과정 안내(6월~12월)'), false)
+})
+
+// ---------------------------------------------------------------- buildDraftItems 통합 (네 규칙)
+
+test('buildDraftItems는 네 규칙을 함께 적용하고 제외된 자리를 다음 항목이 채운다', () => {
+  const many = [
+    item({ key: 'ex-title', title: '종로구립합창단 신규단원 모집' }),
+    item({ key: 'ex-genre', genres: [] }),
+    item({ key: 'ex-biztype', biz_type: '교육' }),
+    item({ key: 'ex-admin', title: '예술활동보고서 제출 안내' }),
+    ...Array.from({ length: CAP }, (_, i) => item({ key: `ok:${i}` })),
   ]
   const out = buildDraftItems(many, new Set())
   assert.equal(out.length, CAP)
