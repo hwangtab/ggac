@@ -118,8 +118,13 @@ function buildBodySrcDoc(detail: InboundEmailDetail | null): string {
  * 구조는 메일 클라이언트 표준 2단(좌 목록 / 우 상세)이다. 좁은 화면
  * (`lg` 미만)에서는 목록과 상세 중 하나만 보이고, 전환은 별도 상태 없이
  * `selectedId !== null`로 판정한다.
+ *
+ * 루트 높이는 이 컴포넌트가 정하지 않는다 — `admin/mailbox`와
+ * `board-room/mailbox`가 서로 다른 레이아웃 크롬(헤더·푸터·사이드 메뉴 높이가
+ * 다르다) 안에서 이 화면을 공유하므로, 고정 calc 하나로는 양쪽에 맞지
+ * 않는다. 각 페이지가 `className`으로 자기 크롬에 맞는 높이를 넘긴다.
  */
-export default function MailboxView() {
+export default function MailboxView({ className = '' }: { className?: string }) {
   const [emails, setEmails] = useState<InboundEmail[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -312,9 +317,16 @@ export default function MailboxView() {
   const selectedEmail = emails.find(e => e.id === selectedId) ?? null
 
   return (
-    <div className="flex flex-col h-[calc(100vh-15rem)] min-h-[520px]">
-      {/* 헤더 */}
-      <div className="flex items-center justify-between mb-4 shrink-0">
+    <div className={`flex flex-col ${className}`}>
+      {/* 헤더 — 좁은 화면에서 상세를 보고 있을 때는 접어 세로를 상세 칸에
+          돌려준다(브리프: 좁은 화면은 상세가 "전체 화면"이어야 한다). 별도
+          상태 없이 selectedId로 판정한다. */}
+      <div
+        className={`${
+          selectedId !== null ? 'hidden lg:flex' : 'flex'
+        } items-center justify-between mb-4 shrink-0`}
+      >
+
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center text-primary-600">
             <FiMail className="w-5 h-5" />
@@ -489,7 +501,10 @@ export default function MailboxView() {
                   목록
                 </button>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="font-semibold text-gray-900 break-words">
+                  <h3
+                    className="font-semibold text-gray-900 break-words line-clamp-2"
+                    title={selectedEmail.subject || '(제목 없음)'}
+                  >
                     {selectedEmail.subject || '(제목 없음)'}
                   </h3>
                   <span
