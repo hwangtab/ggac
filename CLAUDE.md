@@ -327,7 +327,7 @@ noreply@ggac.kr로 가서 유실된다), `MAILBOX_BACKFILL_CRON_TOKEN`(메일함
   **앱 코드가 전부 판정한다**. "RLS 정책을 고친다"는 접근은 아무것도 바꾸지
   않으면서 경계가 지켜진다고 믿게 만든다.
 - **권한의 안전망은 E2E다. 정적 가드가 아니다.** 인가를 바꿨으면
-  `npm run test:e2e:authz`(기준선 **92 passed**, 총 94건 중 1건은
+  `npm run test:e2e:authz`(기준선 **93 passed**, 총 95건 중 1건은
   `authz-remaining.spec.ts`의 policy-36 — `PUBLIC_BLOB_READ_WRITE_TOKEN` 부재를
   단언하는 기존 테스트로 이 저장소의 다른 변경과 무관하다. 나머지 1건은 스킵이다
   — 메일함 첨부 다운로드 기록 테스트가 실제 Blob 객체를 요구해서다 (운영 Blob

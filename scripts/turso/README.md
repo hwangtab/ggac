@@ -303,8 +303,8 @@ webServer에 `{...process.env, ...webServer.env}`를 넘긴다. e2e 전용 변�
   `authz-remaining`·`authz-roles`·`authz-mailbox` 6개 스펙
 - `authz-public`: `authz-boundaries` 21건
 
-**실측 기준선(2026-09-08, 메일함 이사·감사 열람 확대 태스크 완료 후):** 총
-94건 중 **92 passed, 1 failed, 1 skipped.** 실패한 1건은
+**실측 기준선(2026-09-08, 메일함 이사·감사 열람 확대 태스크 + 리뷰 수정 완료 후):** 총
+95건 중 **93 passed, 1 failed, 1 skipped.** 실패한 1건은
 `authz-remaining.spec.ts`의 정책 36(`PUBLIC_BLOB_READ_WRITE_TOKEN` 부재를
 단언하는 기존 테스트)로, 이 저장소의 다른 변경과 무관한 기존 실패다 — 실제
 정책 단언은 이번 실행에서 실행되지 않았을 뿐 새로 깨진 것이 없다. 스킵된
@@ -313,16 +313,18 @@ webServer에 `{...process.env, ...webServer.env}`를 넘긴다. e2e 전용 변�
 객체를 만들지 않아 다운로드가 늘 404로 끝나므로, 기록이 남는 성공 경로를
 증명할 수 없다.
 
-`authz-mailbox.spec.ts`(관리자 메일함 인가 게이트)는 16건(15 passed, 1
+`authz-mailbox.spec.ts`(관리자 메일함 인가 게이트)는 17건(16 passed, 1
 skipped)이다 — 이사·감사 열람 확대 전에는 12건이었고, 이번에 director의
 목록·상세·다운로드 허용 짝, 첨부 스코프 대조(메일 A의 첨부 id를 메일 B
 경로에 넣으면 404), 옛 첨부 경로 삭제 확인, `/board-room/mailbox` 화면
-확인, 그리고 스킵된 기록 테스트가 늘었다.
+확인, 스킵된 기록 테스트, 그리고 리뷰 수정으로 일반 조합원의
+`/board-room/mailbox` 리다이렉트 테스트가 늘었다.
 
 이력: 50(2026-08-26 컷오버) → 64(안건 토론 추가) → 70(2026-09-01, 토론 열람·
 참여 개방) → 78(그 뒤 인가 스펙에 누적된 추가분, 정확한 출처는 커밋별로
 재구성하지 못했다) → 89(2026-09-07, 관리자 메일함 인가 케이스 12건 추가) →
-94(2026-09-08, 메일함 이사·감사 열람 확대로 순 +4, 스킵 +1).
+94(2026-09-08, 메일함 이사·감사 열람 확대로 순 +4, 스킵 +1) → 95(같은 날
+리뷰 수정으로 `/board-room/mailbox` 조합원 리다이렉트 테스트 +1).
 조합원 개방분은 `authz-ownership`의 조합원 200·안건 추가 403·미승인 403 계열과
 `authz-roles`의 짝 단정이다.
 
@@ -966,7 +968,7 @@ EXPLAIN QUERY PLAN SELECT count(*) FROM notifications WHERE user_id = '<아무 �
 가드도 타입 검사도 통과한다. 가드는 **"이 문자열이 이 파일에 있는가"**만 보고
 도달 가능성·실행 순서·데이터 흐름을 보지 않는다.
 
-**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 92 passed, 실행 절차는
+**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 93 passed, 실행 절차는
 위 "권한 E2E" 절). 같은 감사에서 **E2E는 관리자 게이트 무력화를 실제로 잡았다.**
 
 `assert-runtime-risks.mjs`가 여전히 값을 하는 자리는 **지워진 것**(게이트를 통째로

@@ -22,6 +22,7 @@ export const ACTIVITY_ACTION_TYPES = [
   'notification_read',
   'search_performed',
   'page_viewed',
+  'attachment_downloaded',
 ] as const satisfies readonly ActivityActionType[]
 
 export const ACTIVITY_TARGET_TYPES = [
@@ -33,6 +34,7 @@ export const ACTIVITY_TARGET_TYPES = [
   'file',
   'notification',
   'system',
+  'inbound_email_attachment',
 ] as const satisfies readonly ActivityTargetType[]
 
 export function parseActivityActionType(value: unknown): ActivityActionType | null {

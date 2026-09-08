@@ -29,7 +29,9 @@ assertLocalTurso()
  * 찾을 때가 둘 다 같은 404("첨부를 찾을 수 없습니다")라 응답만으로는
  * 구분되지 않는다. 이 스위트가 증명하는 것은 **인가**(관리자만 그 라우트에
  * 닿는다)뿐이다. 배선 자체는 실제 메일이 오가는 전환 절차(4단계) 검증에서
- * 확인한다.
+ * 확인한다. 같은 이유로 스코프 대조(브리프 B, 메일 A/B 교차 테스트) 역시
+ * "라우트에 닿는가"만 증명하고 스코프 검사 자체가 실제로 걸러내는지는
+ * 증명하지 못한다 — 해당 테스트 옆 주석 참고.
  *
  * **단계 5(이사·감사 열람 확대) 추가분.** 첨부 다운로드 기록
  * (`user_activities.action_type='attachment_downloaded'`) 테스트는
@@ -60,7 +62,7 @@ const PENDING_SUBJECT = 'MAILBOX-E2E-PENDING-BADGE-FIXTURE'
 /**
  * 마이그레이션 0020(`src/db/migrations/0020_mailbox.sql`)이 로컬 Turso에
  * 적용되지 않았으면 아래 INSERT들이 "no such table: inbound_emails" 같은
- * raw SQL 에러로 죽고, 그 에러가 `beforeAll`에서 나므로 이 파일의 11개
+ * raw SQL 에러로 죽고, 그 에러가 `beforeAll`에서 나므로 이 파일의 17개
  * 테스트가 전부 알아보기 힘든 메시지와 함께 한꺼번에 실패한다. 먼저 표
  * 존재를 확인해 원인을 바로 알 수 있는 메시지로 막는다.
  */
@@ -293,6 +295,9 @@ test.describe('관리자 메일함 API 경계', () => {
       expect(listBody.success).toBe(true)
       expect(Array.isArray(listBody.data?.emails)).toBe(true)
       expect(listBody.data.emails.some((e: { id: string }) => e.id === EMAIL_DONE_ID)).toBe(true)
+      // director 쪽은 false만 단언돼 있었다 — can_manage가 "항상 false"로
+      // 퇴화해도 그 테스트만으로는 안 잡힌다. 관리자 쪽에 true 단언을 더한다.
+      expect(listBody.data?.can_manage).toBe(true)
 
       const detail = await adminCtx.get(`/api/admin/mailbox/${EMAIL_DONE_ID}`)
       expect(detail.status()).toBe(200)
@@ -300,6 +305,7 @@ test.describe('관리자 메일함 API 경계', () => {
       expect(detailBody.success).toBe(true)
       expect(detailBody.data?.email?.id).toBe(EMAIL_DONE_ID)
       expect(Array.isArray(detailBody.data?.attachments)).toBe(true)
+      expect(detailBody.data?.can_manage).toBe(true)
 
       // 다운로드: 실제 Blob 객체가 없어 성공 응답(200 + 헤더)까지는 못 간다
       // (운영 Blob 오염을 피하려고 만들지 않았다 — 파일 상단 주석 참고).
@@ -378,6 +384,13 @@ test.describe('관리자 메일함 API 경계', () => {
    * 권한으로 시도해도 스코프 자체가 막아야 한다 — 인가만 통과하면 다른
    * 메일의 첨부에 닿을 수 있다면 이사·감사로 열람자가 늘어난 지금 실질적인
    * 구멍이 된다.
+   *
+   * **한계**: 이 스위트는 실제 Blob을 만들지 않으므로(운영 오염 방지)
+   * 스코프 거부와 객체 부재가 같은 404다. 스코프 검사(라우트의
+   * `attachment.email_id !== emailId` 대조)를 통째로 지워도 이 테스트는
+   * 여전히 초록이다 — `getPrivateObject`가 어차피 찾지 못해 404를 주기
+   * 때문이다. 스코프 검사 자체가 실제로 걸러내는지는 실제 Blob이 있는
+   * 환경(전환 4단계)에서 사람이 확인한다.
    */
   test('메일 A의 첨부 id를 메일 B 경로에 넣으면 404다', async ({ baseURL }) => {
     const adminCtx = await apiRequest.newContext({
@@ -516,6 +529,24 @@ test.describe('관리자 메일함 페이지 인가', () => {
   }
 
   /**
+   * `/board-room/mailbox`는 `/admin/mailbox`와 다른 게이트를 탄다 —
+   * `src/middleware/auth.ts`의 `isBoardRoomRecordPage`가 `/board-room` +
+   * `/board-room/meetings`만 조합원에게 열고 `/board-room/mailbox`는
+   * 포함하지 않아, 승인된 일반 조합원(`other`)도 이사회 게이트
+   * (`isBoardRoom`)에 걸려 `/board`로 리다이렉트된다.
+   */
+  test('일반 조합원은 /board-room/mailbox에서 /board로 리다이렉트된다', async ({ browser }) => {
+    const ctx = await browser.newContext({ storageState: storageStatePath('other') })
+    try {
+      const page = await ctx.newPage()
+      await page.goto('/board-room/mailbox', { waitUntil: 'domcontentloaded' })
+      await expect(page).toHaveURL(/\/board$/, { timeout: 15000 })
+    } finally {
+      await ctx.close()
+    }
+  })
+
+  /**
    * 허용 쪽 + 화면 시각 검증 3종. 로컬 미들웨어 제약으로 이제까지 브라우저로
    * 한 번도 확인되지 않았던 화면이다.
    *
@@ -568,9 +599,11 @@ test.describe('관리자 메일함 페이지 인가', () => {
    * `/admin`을 관리자에게만 열어서 이사는 위 `/admin/mailbox` 리다이렉트
    * 테스트대로 여전히 들어가지 못한다. 그래서 이사회 영역에 같은 본체를
    * 공유하는 새 경로를 두었다. 여기서는 director가 그 경로에 들어가 목록
-   * 행이 실제로 보이는지만 확인한다 — 답장·상태 변경 버튼이 안 그려지는지는
-   * API의 `can_manage:false`가 이미 별도 테스트로 증명하므로 화면에서는
-   * 행 가시성만 본다.
+   * 행이 실제로 보이는지, 그리고 행을 펼쳤을 때 답장·상태 변경 버튼이
+   * 렌더 트리에 아예 없는지(`canManage`가 false면 숨기는 게 아니라 안
+   * 그린다 — `MailboxView.tsx`) 확인한다. API의 `can_manage:false`는
+   * 별도 테스트로 증명돼 있지만, 화면이 그 값을 실제로 반영해 버튼을
+   * 그리지 않는지는 여기서만 증명된다.
    */
   test('director는 /board-room/mailbox에 들어가 메일함 행을 본다', async ({ browser }) => {
     const ctx = await browser.newContext({ storageState: storageStatePath('director') })
@@ -581,6 +614,11 @@ test.describe('관리자 메일함 페이지 인가', () => {
 
       const doneRow = page.getByText(LONG_SUBJECT_PREFIX, { exact: false }).first()
       await expect(doneRow).toBeVisible({ timeout: 15000 })
+
+      // 행을 펼쳐 답장·상태 변경 버튼이 렌더 트리에 없는지 확인한다.
+      await doneRow.click()
+      await expect(page.getByRole('button', { name: '답장', exact: true })).toHaveCount(0)
+      await expect(page.getByText('상태 변경:')).toHaveCount(0)
     } finally {
       await ctx.close()
     }

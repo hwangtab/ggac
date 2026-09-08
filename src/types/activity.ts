@@ -20,6 +20,7 @@ export type ActivityActionType =
   | 'notification_read'
   | 'search_performed'
   | 'page_viewed'
+  | 'attachment_downloaded'
 
 export type ActivityTargetType =
   | 'post'
@@ -30,6 +31,7 @@ export type ActivityTargetType =
   | 'file'
   | 'notification'
   | 'system'
+  | 'inbound_email_attachment'
 
 export interface UserActivity {
   id: string

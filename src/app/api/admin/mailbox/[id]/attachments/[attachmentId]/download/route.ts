@@ -13,7 +13,7 @@ import { getPrivateObject } from '@/lib/storage/blob'
 import { getAttachment } from '@/db/queries/mailbox'
 import { logUserActivity } from '@/db/queries/activities'
 
-const log = createLogger('admin/mailbox/attachments/download')
+const log = createLogger('admin/mailbox/[id]/attachments/[attachmentId]/download')
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
