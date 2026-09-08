@@ -9,6 +9,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { FiBell, FiSend, FiUsers, FiEdit3, FiTrash2, FiPlus } from 'react-icons/fi'
 import type { CreateBulkNotificationRequest, NotificationType } from '@/types'
 import { parseIntegerParam } from '@/utils/queryParams'
+import AdminLayout from '../components/AdminLayout'
 
 interface MemberProfile {
   id: string
@@ -203,17 +204,11 @@ const AdminNotificationsPage = () => {
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      {/* 헤더 */}
+    // 다른 관리자 페이지와 같은 크롬(사이드바·상단 제목)을 쓴다. 이 페이지만
+    // 자체 컨테이너로 렌더돼 메뉴에서 들어오면 관리자 패널 밖으로 "빠져나간"
+    // 것처럼 보였다. 제목·설명은 AdminLayout이 그리므로 여기서는 탭부터 시작한다.
+    <AdminLayout title="알림 관리" description="멤버들에게 알림을 발송하고 관리합니다.">
       <div className="mb-8">
-        <div className="flex items-center mb-4">
-          <FiBell className="w-8 h-8 text-primary-600 mr-3" />
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">알림 관리</h1>
-            <p className="text-gray-600">멤버들에게 알림을 발송하고 관리합니다.</p>
-          </div>
-        </div>
-
         {/* 탭 */}
         <div className="border-b border-gray-200">
           <nav className="-mb-px flex space-x-8">
@@ -447,7 +442,7 @@ const AdminNotificationsPage = () => {
           </div>
         </div>
       )}
-    </div>
+    </AdminLayout>
   )
 }
 
