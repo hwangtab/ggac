@@ -126,6 +126,31 @@ export function isExcludedByTitle(title: string): boolean {
 export const EXCLUDE_TITLE_KEYWORDS = ['합창', '단원'] as const
 
 /**
+ * kosmart 응답의 카테고리로 생활정보성 공고를 거른다.
+ *
+ * `grantFetch.ts`는 kosmart에 `strictRegion=true`만 넘기는데, kosmart의
+ * `buildPartnerFeed`는 `interestCategories: []`를 "관심사 미설정 → 전부 통과"(옵트아웃)로
+ * 처리한다 — fail-closed가 아니다. 그 결과 `housing`(임대주택)·`finance`(전세자금 융자
+ * 등)·`welfare`(심리상담 등)·`admin`(예술활동증명 안내 등) 같은 생활정보 카테고리가 예술지원
+ * 게시글에 섞여 들어온다. 게시글은 개인화하지 않고 풀 전체를 싣기 때문에, 여기서 거르지
+ * 않으면 조합 공식 게시물에 임대주택 공고가 통째로 올라간다.
+ *
+ * kosmart의 life 계열 다섯(`housing|finance|welfare|space|admin`) 중 넷만 뺀다:
+ *
+ * - `space`는 빼지 않는다. 연습실·공연장·무대용품 대여처럼 음악인에게 실제로 쓸모가 있고,
+ *   지난 회차 발행분에도 「면목역 문화광장 사전 예약」·「리스테이지 서울 무대용품 대여」가
+ *   실제로 유용하게 담겼다.
+ * - `finance`는 뺀다. 「예술산업보증」처럼 예술 관련 금융이 섞여 있지만, 실제로는 전세자금·
+ *   생활안정자금 융자가 대부분이라 조합원이 지원사업 메일에서 기대하는 내용이 아니다.
+ */
+export function isExcludedByCategory(category: string): boolean {
+  return EXCLUDED_CATEGORIES.has(category)
+}
+
+/** 카테고리 기반 제외 대상. {@link isExcludedByCategory} 참고 — `space`는 의도적으로 뺐다. */
+const EXCLUDED_CATEGORIES = new Set(['housing', 'finance', 'welfare', 'admin'])
+
+/**
  * kosmart가 준 목록에서 최근 회차에 이미 담긴 것과 제목 기반 제외 대상을 빼고 CAP까지
  * 남긴다.
  *
@@ -145,6 +170,7 @@ export function buildDraftItems(
     if (sentKeys.has(it.key)) continue
     if (seen.has(it.key)) continue // 같은 응답 안의 중복
     if (isExcludedByTitle(it.title)) continue // cap을 세기 전에 걸러야 자리를 먹지 않는다
+    if (isExcludedByCategory(it.category)) continue // 위와 같은 이유
     seen.add(it.key)
     out.push(it)
     if (out.length >= cap) break

@@ -12,6 +12,7 @@ const {
   renderDigestNotification,
   isExcludedByTitle,
   EXCLUDE_TITLE_KEYWORDS,
+  isExcludedByCategory,
   CAP,
   POOL_CAP,
 } = await import('../../src/lib/server/grantDigest.ts')
@@ -231,6 +232,59 @@ test('buildDraftItems는 제외된 자리를 다음 항목으로 채운다 (cap�
   const out = buildDraftItems(many, new Set())
   assert.equal(out.length, CAP)
   assert.ok(out.every(i => i.key.startsWith('ok:')))
+})
+
+// ---------------------------------------------------------------- isExcludedByCategory / 카테고리 기반 제외 필터
+
+test('housing·finance·welfare·admin은 제외된다', () => {
+  assert.equal(isExcludedByCategory('housing'), true)
+  assert.equal(isExcludedByCategory('finance'), true)
+  assert.equal(isExcludedByCategory('welfare'), true)
+  assert.equal(isExcludedByCategory('admin'), true)
+})
+
+test('grant는 제외되지 않는다', () => {
+  assert.equal(isExcludedByCategory('grant'), false)
+})
+
+test('space는 제외되지 않는다 (오차단 방어 — 연습실·공연장 대여는 조합원에게 유용하다)', () => {
+  assert.equal(isExcludedByCategory('space'), false)
+})
+
+test('gig·audition 같은 다른 예술 카테고리는 제외되지 않는다', () => {
+  assert.equal(isExcludedByCategory('gig'), false)
+  assert.equal(isExcludedByCategory('audition'), false)
+})
+
+test('buildDraftItems는 life 카테고리 항목을 담지 않고 그 자리를 다음 항목이 채운다', () => {
+  const many = [
+    item({
+      key: 'housing1',
+      category: 'housing',
+      title: '26년 2차 기숙사형 청년주택 예비입주자 모집공고',
+    }),
+    item({ key: 'finance1', category: 'finance', title: '2026년 전세자금 융자 사업 안내' }),
+    item({ key: 'welfare1', category: 'welfare', title: '2026년 개인 심리상담 신청 안내' }),
+    item({ key: 'admin1', category: 'admin', title: '예술활동증명 제도 운영 안내' }),
+    ...Array.from({ length: CAP }, (_, i) => item({ key: `ok:${i}`, category: 'grant' })),
+  ]
+  const out = buildDraftItems(many, new Set())
+  assert.equal(out.length, CAP)
+  assert.ok(out.every(i => i.key.startsWith('ok:')))
+})
+
+test('buildDraftItems는 제목 필터와 카테고리 필터를 함께 적용한다', () => {
+  const many = [
+    item({ key: 'title-ex', category: 'grant', title: '종로구립합창단 신규단원 모집' }),
+    item({ key: 'cat-ex', category: 'housing', title: '2026년 음악 창작지원' }),
+    item({ key: 'ok1', category: 'grant', title: '2026년 음악 창작지원' }),
+    item({ key: 'ok2', category: 'space', title: '연습실 대여 안내' }),
+  ]
+  const out = buildDraftItems(many, new Set())
+  assert.deepEqual(
+    out.map(i => i.key),
+    ['ok1', 'ok2']
+  )
 })
 
 // ---------------------------------------------------------------- activeItems
