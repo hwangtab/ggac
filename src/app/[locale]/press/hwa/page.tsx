@@ -1,7 +1,7 @@
 import { setRequestLocale } from 'next-intl/server'
 import type { Metadata } from 'next'
 import { getSiteUrl, getLocaleAlternates, getOgLocale } from '@/utils/site'
-import { PRESS_KO, PRESS_EN, TRACKS, STREAMING, ASSETS, LYRICS } from './content'
+import { PRESS_KO, PRESS_EN, STREAMING, ASSETS } from './content'
 import TrackBrowser from './TrackBrowser'
 
 export async function generateMetadata({
@@ -130,18 +130,6 @@ export default async function HwaPressPage({ params }: { params: Promise<{ local
           </div>
         ))}
       </dl>
-
-      <h2 className="mb-3 mt-10 text-xl font-semibold text-gray-900">{c.lyricsHeading}</h2>
-      {TRACKS.map(t => (
-        <section key={t.n} className="mb-6">
-          <h3 className="font-semibold text-gray-900">
-            {t.n}. {t.title}
-          </h3>
-          <pre className="whitespace-pre-wrap break-words font-sans text-gray-800">
-            {LYRICS[t.n]}
-          </pre>
-        </section>
-      ))}
     </main>
   )
 }

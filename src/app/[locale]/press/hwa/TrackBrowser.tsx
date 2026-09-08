@@ -75,7 +75,7 @@ export default function TrackBrowser({ isEn }: { isEn: boolean }) {
         onPause={() => setPlaying(false)}
       />
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid items-start gap-6 md:grid-cols-2">
         <ol className="overflow-hidden rounded-lg border border-gray-200">
           {TRACKS.map((t, i) => {
             const active = t.n === current
