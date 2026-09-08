@@ -202,8 +202,10 @@ export const PRESS_EN: PressContent = {
   releaseLine: 'Out August 21, 2026',
   lede: [
     'Gene Meyer gave his December 2, 2025 Blast Worship column — Decibel’s showcase for emerging grindcore bands — over to HWA and wrote of the band’s Demo 2025: “Demo of the year in my humble opinion.” This EP is HWA’s side of 《Hwa // Naiite》, the band’s split with fellow Korean grindcore band Naiite, carried over track for track. The split came out first, on physical only, so all eight recordings reach streaming here for the first time. Four of them — “September Theater,” “Past Self,” “Hollow Face” and “Letter to Jane Doe” — are the demo takes with a new mix and master; the other four were recorded for the first time.',
-    'The whole thing is eight tracks and ten minutes thirty seconds. The band describes what it plays as blast-beat-driven drums, merciless guitar and very high screams with melodic, emotional riffs laid over them — grindcore that is fast and ferocious and beautiful at once — and names Discordance Axis, Gridlink, Barren Path, Vektor and Cloud Rat as its reference points.',
-    'The lyrics are in English throughout, written by vocalist JK. HWA says it sets out to put the hurt, loneliness, misanthropy, self-loathing and emptiness that come out of human relationships down raw, without dressing them up. The full text of all eight songs is on this page.',
+    'The whole thing is eight tracks and ten minutes thirty seconds, and it is built to be taken in one pass rather than sampled. The band describes what it plays as blast-beat-driven drums, merciless guitar and very high screams with melodic, emotional riffs laid over them — grindcore that is fast and ferocious and beautiful at once — and names Discordance Axis, Gridlink, Barren Path, Vektor and Cloud Rat as its reference points.',
+    'The album’s press release was written by the Korean music critic Jaewon Jang, who reads those reference points as three separate debts: the technical, melodic grindcore of Discordance Axis, Gridlink and Barren Path; the flamboyance of Vektor; the depressive cast of Cloud Rat. He hears thrash and a black-metal sense of melody running through the riffs, and writes that JK’s screaming brings Jon Chang to mind.',
+    'His argument is that the record lands on texture before it lands on rage. “Where other grindcore bands have prized the genre’s emotion over its texture — turning the listener into a single-celled creature shaking its head and punching a wall — HWA drags those angry listeners into a chair and hands them a higher-order anger.” He closes by asking how many albums in Korea have used the texture of grindcore to make a listener think seriously.',
+    'The lyrics are in English throughout, written by vocalist JK, who also drew the cover. HWA says it sets out to put the hurt, loneliness, misanthropy, self-loathing and emptiness that come out of human relationships down raw, without dressing them up. The full text of all eight songs is on this page.',
   ],
   quote: {
     text: 'Demo of the year in my humble opinion.',
@@ -230,8 +232,9 @@ export const PRESS_EN: PressContent = {
     ['Photo', 'Jung Wootaek'],
   ],
   bio: [
-    'HWA formed in Seoul in September 2024 as a two-piece: OCheolWang on guitars and bass, GopChang on drums. Vocalist JK joined in 2025, completing the current three-piece lineup.',
-    'The band put out Demo 2025 on October 30, 2025. Decibel covered it in Blast Worship on December 2, 2025. In 2026, HWA released a split with the Korean grindcore band Naiite, 《Hwa // Naiite》, through Vanilla Thunder Records.',
+    'HWA formed in Seoul in September 2024 as a two-piece: OCheolWang on guitars and bass, and GopChang — a drummer active across the Korean grindcore scene — on drums. Vocalist JK joined in 2025, completing the current three-piece lineup.',
+    'The band put out Demo 2025 on October 30, 2025. It was never given a formal release, and Decibel covered it anyway, in Blast Worship on December 2, 2025. In 2026, HWA released a split with the Korean grindcore band Naiite, 《Hwa // Naiite》, through Vanilla Thunder Records.',
+    'The band’s name is the Korean syllable hwa, and the album’s press release turns it over through its written forms: 火, fire and anger; 禍, calamity; 和, harmony; 花, a flower.',
     '《HWA》, out August 21, 2026, is the band’s first EP.',
   ],
   downloads: [
@@ -265,10 +268,10 @@ export const PRESS_KO: PressContent = {
   releaseLine: '2026년 8월 21일 발매',
   lede: [
     '2025년 12월 2일, 익스트림 메탈 잡지 Decibel의 Gene Meyer는 신흥 그라인드코어 밴드를 소개하는 「Blast Worship」 코너에 HWA를 올리며 Demo 2025를 두고 “Demo of the year in my humble opinion”이라고 썼다. 이 EP는 같은 한국 그라인드코어 밴드 Naiite와의 스플릿 《Hwa // Naiite》에서 HWA 쪽 여덟 곡을 그대로 옮긴 것이다. 스플릿이 실물로 먼저 나왔던 터라 여덟 곡 모두 음원으로는 이번이 처음이다. 그중 네 곡 「September Theater」·「Past Self」·「Hollow Face」·「Letter to Jane Doe」는 데모의 녹음을 새로 믹싱·마스터링한 것이고, 나머지 네 곡은 이때 처음 녹음했다.',
-    '8곡 전체가 10분 30초다. 밴드는 Discordance Axis, Gridlink, Barren Path, Vektor, Cloud Rat을 참조점으로 밝혔다.',
+    '8곡 전체가 10분 30초다. 골라 듣기보다 한 번에 통과하도록 만든 음반이다. 밴드는 Discordance Axis, Gridlink, Barren Path, Vektor, Cloud Rat을 참조점으로 밝혔고, 장재원은 이를 앞의 셋에서 온 테크니컬·멜로딕함, Vektor의 화려함, Cloud Rat의 디프레시브함으로 나눠 읽는다. 리프에는 스래시와 블랙메탈적 멜로디가 흐르고, 보컬 JK의 절규는 Jon Chang을 떠올리게 한다고 썼다.',
     '음악평론가 장재원은 이 앨범을 두고 이렇게 썼다. “기존의 다른 그라인드코어 밴드들이 ‘텍스쳐’보다는 장르 특유의 ‘감정’에 중시하여 듣는 이 자체를 ‘그저 분노에 표출해 머리를 흔들며 벽에다 주먹질을 하는’ 무지막지한 단세포 동물로 만들었다면, 이 HWA의 음악은 그렇게 화난 이들을 의자에 끌어다 앉힌 후 ‘수준높은 분노’를 듣는 이에게 선사한다.”',
     '“그라인드코어에서 음악의 텍스쳐로 진지한 고찰을 하게 만든 앨범이 우리나라에 몇 개나 있던가?” — 음악평론가 장재원',
-    '가사는 전곡 영어다. 밴드는 인간관계에서 느낀 상처와 외로움, 인간혐오, 자괴감, 공허감을 날것 그대로 표현한다고 밝혔다. 전곡 가사 전문을 이 페이지에 실었다.',
+    '가사는 전곡 영어이고 보컬 JK가 썼다. 커버 아트워크도 JK가 직접 그렸다. 밴드는 인간관계에서 느낀 상처와 외로움, 인간혐오, 자괴감, 공허감을 날것 그대로 표현한다고 밝혔다. 전곡 가사 전문을 이 페이지에 실었다.',
   ],
   quote: {
     text: 'Demo of the year in my humble opinion.',
@@ -295,7 +298,7 @@ export const PRESS_KO: PressContent = {
     ['사진', '정우택'],
   ],
   bio: [
-    'HWA는 2024년 9월 서울에서 결성됐다. 처음에는 기타와 베이스를 맡은 OCheolWang, 드럼을 맡은 GopChang 둘이었고, 보컬 JK가 2025년에 합류하면서 지금의 3인조가 됐다.',
+    'HWA는 2024년 9월 서울에서 결성됐다. 처음에는 기타와 베이스를 맡은 OCheolWang, 한국 그라인드코어 씬에서 두루 활동해 온 드러머 GopChang 둘이었고, 보컬 JK가 2025년에 합류하면서 지금의 3인조가 됐다.',
     '2025년 10월 30일 Demo 2025를 냈고, 2025년 12월 2일 Decibel의 「Blast Worship」이 이를 다뤘다. 2026년에는 한국 그라인드코어 밴드 Naiite와의 스플릿 《Hwa // Naiite》를 Vanilla Thunder Records를 통해 발매했다.',
     '2026년 8월 21일에 나온 《HWA》가 밴드의 첫 EP다.',
   ],
