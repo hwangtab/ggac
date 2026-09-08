@@ -30,11 +30,23 @@ assertLocalTurso()
  * 구분되지 않는다. 이 스위트가 증명하는 것은 **인가**(관리자만 그 라우트에
  * 닿는다)뿐이다. 배선 자체는 실제 메일이 오가는 전환 절차(4단계) 검증에서
  * 확인한다.
+ *
+ * **단계 5(이사·감사 열람 확대) 추가분.** 첨부 다운로드 기록
+ * (`user_activities.action_type='attachment_downloaded'`) 테스트는
+ * `test.skip`이다 — 기록은 스트리밍 직전에만 남는데 이 스위트는 운영 Blob
+ * 오염을 피하려고 실제 Blob 객체를 만들지 않아 다운로드가 늘 404로 끝난다.
+ * 그래서 기록이 남는 성공 경로를 이 스위트로는 증명할 수 없다. 감사
+ * (is_auditor) 역할의 storageState 픽스처도 `authz.setup.ts`에 없어 별도
+ * 검증을 못 한다 — director 검증이 `requireBoardMember()`의 같은 분기를
+ * 타므로 사실상 커버한다(아래 '관리자 메일함 API 경계' describe 설명 참고).
  */
 
 const EMAIL_PENDING_ID = '00000000-0000-4000-8000-00000000c001'
 const EMAIL_DONE_ID = '00000000-0000-4000-8000-00000000c002'
 const ATTACHMENT_ID = '00000000-0000-4000-8000-00000000c003'
+// 스코프 대조 픽스처(브리프 B) — 메일 A(EMAIL_DONE_ID)의 첨부를 메일
+// B(EMAIL_SCOPE_OTHER_ID)의 경로에 넣으면 404여야 한다.
+const EMAIL_SCOPE_OTHER_ID = '00000000-0000-4000-8000-00000000c004'
 
 // 목록/펼침 화면에서 실제로 이 마커를 찾아 "그려졌다"를 확인한다 —
 // 요소 존재가 아니라 텍스트 가시성을 본다.
@@ -96,7 +108,20 @@ async function seedMailboxFixtures(): Promise<void> {
       received_at: now - 30_000,
     }
 
-    for (const email of [pendingEmail, doneEmail]) {
+    const scopeOtherEmail = {
+      id: EMAIL_SCOPE_OTHER_ID,
+      resend_email_id: 'authz-mailbox-scope-other-fixture',
+      message_id: '<authz-mailbox-scope-other@fixture.local>',
+      from_address: 'sender-scope-other@example.com',
+      to_addresses: JSON.stringify(['mailbox@ggac.kr']),
+      subject: 'MAILBOX-E2E-SCOPE-OTHER-FIXTURE',
+      body_html: null,
+      status: 'unread',
+      body_fetch_status: 'done',
+      received_at: now - 20_000,
+    }
+
+    for (const email of [pendingEmail, doneEmail, scopeOtherEmail]) {
       await client.execute({
         sql: `INSERT INTO inbound_emails
                 (id, resend_email_id, message_id, from_address, to_addresses,
@@ -170,18 +195,23 @@ async function readEmailStatus(id: string): Promise<string | null> {
 }
 
 /**
- * 역할별 API 경계. 브리프가 요구하는 표: 4역할(비로그인/승인 대기/일반 승인
- * 회원/이사) × 5엔드포인트가 전부 401 또는 403이어야 한다.
+ * 역할별 API 경계.
  *
- * `pending`·`other`·`director` 세 storageState는 인증은 됐지만
- * `isApprovedActiveAdmin()`을 통과하지 못해 403이다(관리자 게이트는 승인
- * 여부가 아니라 `is_admin` 자체를 본다 — pending도 예외가 아니다). 비로그인은
- * `request` 기본 픽스처를 그대로 쓴다 — 이 프로젝트(`authz`)는 전역
- * storageState를 쓰지 않으므로 익명이다(`authz-boundaries.spec.ts`와 같은
- * 전제).
+ * 브리프의 새 정책(단계 5 이사·감사 열람 확대): 비로그인은 전부 401,
+ * pending·other(일반 조합원)는 전부 403 — 그대로. director(이사)는 목록·
+ * 상세·첨부 다운로드가 열리고(`requireBoardMember()`가 이사·감사·관리자를
+ * 통과시킨다) PATCH·답장은 여전히 403이다(관리자만). 감사(is_auditor)
+ * 역할의 storageState 픽스처는 `authz.setup.ts`에 없어 이 스위트에서
+ * 별도로 검증하지 못한다 — `requireBoardMember()`가 이사와 감사를 같은
+ * 분기로 통과시키므로(둘 다 `canAccessBoardRoom`) director 검증이
+ * 감사 경로도 사실상 커버한다.
+ *
+ * 비로그인은 `request` 기본 픽스처를 그대로 쓴다 — 이 프로젝트(`authz`)는
+ * 전역 storageState를 쓰지 않으므로 익명이다(`authz-boundaries.spec.ts`와
+ * 같은 전제).
  */
 test.describe('관리자 메일함 API 경계', () => {
-  const DENIED_ROLES = ['pending', 'other', 'director'] as const
+  const DENIED_ROLES = ['pending', 'other'] as const
 
   const endpoints: Array<{
     label: string
@@ -208,7 +238,7 @@ test.describe('관리자 메일함 API 경계', () => {
     {
       label: 'GET 첨부 다운로드',
       method: 'get',
-      path: `/api/admin/mailbox/attachments/${ATTACHMENT_ID}/download`,
+      path: `/api/admin/mailbox/${EMAIL_DONE_ID}/attachments/${ATTACHMENT_ID}/download`,
     },
   ]
 
@@ -280,7 +310,7 @@ test.describe('관리자 메일함 API 경계', () => {
       // 된다 — "게이트를 통과한다"는 제목의 테스트가 게이트 실패를 가리게
       // 된다는 뜻이라 배제했다.
       const download = await adminCtx.get(
-        `/api/admin/mailbox/attachments/${ATTACHMENT_ID}/download`
+        `/api/admin/mailbox/${EMAIL_DONE_ID}/attachments/${ATTACHMENT_ID}/download`
       )
       expect([200, 404]).toContain(download.status())
       if (download.status() === 200) {
@@ -293,6 +323,106 @@ test.describe('관리자 메일함 API 경계', () => {
     } finally {
       await adminCtx.dispose()
     }
+  })
+
+  /**
+   * 이사(director)는 목록·상세·첨부 다운로드를 열람하지만 답장·상태 변경은
+   * 여전히 관리자만 — 단계 5 브리프의 핵심 정책. `requireBoardMember()`가
+   * 이사·감사·관리자를 통과시키되 `isAdmin`은 `isApprovedActiveAdmin()`에서만
+   * true가 되므로, PATCH·reply 라우트(auth: 'admin' 그대로)는 이사에게 여전히
+   * 403이다.
+   */
+  test('director는 목록·상세·다운로드를 보되 PATCH·답장은 403이다', async ({ baseURL }) => {
+    const directorCtx = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('director'),
+    })
+    try {
+      const list = await directorCtx.get('/api/admin/mailbox')
+      expect(list.status()).toBe(200)
+      const listBody = await list.json()
+      expect(listBody.success).toBe(true)
+      expect(listBody.data?.can_manage).toBe(false)
+
+      const detail = await directorCtx.get(`/api/admin/mailbox/${EMAIL_DONE_ID}`)
+      expect(detail.status()).toBe(200)
+      const detailBody = await detail.json()
+      expect(detailBody.success).toBe(true)
+      expect(detailBody.data?.can_manage).toBe(false)
+
+      // 다운로드: 관리자 테스트와 같은 이유로 200 또는 404만 허용한다(Blob 없음).
+      const download = await directorCtx.get(
+        `/api/admin/mailbox/${EMAIL_DONE_ID}/attachments/${ATTACHMENT_ID}/download`
+      )
+      expect([200, 404]).toContain(download.status())
+
+      const patch = await directorCtx.patch(`/api/admin/mailbox/${EMAIL_DONE_ID}`, {
+        data: { status: 'read', expected_status: 'unread' },
+      })
+      expect(patch.status()).toBe(403)
+      expect(await readEmailStatus(EMAIL_DONE_ID)).toBe('unread')
+
+      const reply = await directorCtx.post(`/api/admin/mailbox/${EMAIL_DONE_ID}/reply`, {
+        data: { body_html: '<p>이사는 답장을 보낼 수 없어야 한다</p>' },
+      })
+      expect(reply.status()).toBe(403)
+    } finally {
+      await directorCtx.dispose()
+    }
+  })
+
+  /**
+   * 스코프 대조(브리프 B) — 이번 변경의 핵심 보안 수정. 메일
+   * A(EMAIL_DONE_ID)의 첨부 id를 메일 B(EMAIL_SCOPE_OTHER_ID)의 경로에
+   * 넣으면, 첨부는 실재하지만 그 메일의 것이 아니므로 404여야 한다. 관리자
+   * 권한으로 시도해도 스코프 자체가 막아야 한다 — 인가만 통과하면 다른
+   * 메일의 첨부에 닿을 수 있다면 이사·감사로 열람자가 늘어난 지금 실질적인
+   * 구멍이 된다.
+   */
+  test('메일 A의 첨부 id를 메일 B 경로에 넣으면 404다', async ({ baseURL }) => {
+    const adminCtx = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('admin'),
+    })
+    try {
+      const res = await adminCtx.get(
+        `/api/admin/mailbox/${EMAIL_SCOPE_OTHER_ID}/attachments/${ATTACHMENT_ID}/download`
+      )
+      expect(res.status()).toBe(404)
+    } finally {
+      await adminCtx.dispose()
+    }
+  })
+
+  /**
+   * 옛 첨부 다운로드 경로(`/api/admin/mailbox/attachments/[id]/download`)는
+   * 삭제됐다 — 라우트 파일 자체가 없으므로 Next.js가 404를 준다.
+   */
+  test('옛 첨부 다운로드 경로는 404다', async ({ baseURL }) => {
+    const adminCtx = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('admin'),
+    })
+    try {
+      const res = await adminCtx.get(`/api/admin/mailbox/attachments/${ATTACHMENT_ID}/download`)
+      expect(res.status()).toBe(404)
+    } finally {
+      await adminCtx.dispose()
+    }
+  })
+
+  /**
+   * 첨부 다운로드 기록(브리프 C) — 이사가 다운로드에 성공하면
+   * `user_activities`에 `action_type='attachment_downloaded'` 행이 남아야
+   * 한다. 기록은 스트리밍 직전이므로, 실제 Blob 객체가 없어 404가 나는 이
+   * 스위트의 픽스처 조건에서는 스트리밍까지 가지 못해 기록도 남지 않는다
+   * (`src/app/api/admin/mailbox/[id]/attachments/[attachmentId]/download/route.ts`
+   * 참고 — 기록은 `getPrivateObject`가 객체를 돌려준 뒤에 실행된다). 그래서
+   * 이 테스트는 실제 Blob이 있어야 검증 가능하고, 운영 Blob을 건드리지
+   * 않기 위해 여기서는 만들지 않는다(브리프 E 지시). 스킵하되 이유를 남긴다.
+   */
+  test.skip('이사가 첨부 다운로드에 성공하면 user_activities에 기록이 남는다 (실제 Blob 필요 — 스킵)', async () => {
+    // 실제 Blob 객체가 있는 환경에서만 의미 있는 테스트라 본문은 비워 둔다.
   })
 
   /**
@@ -428,6 +558,29 @@ test.describe('관리자 메일함 페이지 인가', () => {
       await expect(iframeLocator).toBeVisible({ timeout: 15000 })
       const bodyFrame = page.frameLocator('iframe[sandbox=""]')
       await expect(bodyFrame.getByText(BODY_MARKER)).toBeVisible({ timeout: 15000 })
+    } finally {
+      await ctx.close()
+    }
+  })
+
+  /**
+   * 이사회 메일함 화면(`/board-room/mailbox`, 브리프 D) — 미들웨어가
+   * `/admin`을 관리자에게만 열어서 이사는 위 `/admin/mailbox` 리다이렉트
+   * 테스트대로 여전히 들어가지 못한다. 그래서 이사회 영역에 같은 본체를
+   * 공유하는 새 경로를 두었다. 여기서는 director가 그 경로에 들어가 목록
+   * 행이 실제로 보이는지만 확인한다 — 답장·상태 변경 버튼이 안 그려지는지는
+   * API의 `can_manage:false`가 이미 별도 테스트로 증명하므로 화면에서는
+   * 행 가시성만 본다.
+   */
+  test('director는 /board-room/mailbox에 들어가 메일함 행을 본다', async ({ browser }) => {
+    const ctx = await browser.newContext({ storageState: storageStatePath('director') })
+    try {
+      const page = await ctx.newPage()
+      await page.goto('/board-room/mailbox', { waitUntil: 'domcontentloaded' })
+      await expect(page).toHaveURL(/\/board-room\/mailbox$/, { timeout: 15000 })
+
+      const doneRow = page.getByText(LONG_SUBJECT_PREFIX, { exact: false }).first()
+      await expect(doneRow).toBeVisible({ timeout: 15000 })
     } finally {
       await ctx.close()
     }

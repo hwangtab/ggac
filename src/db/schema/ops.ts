@@ -36,6 +36,9 @@ export const ACTIVITY_ACTION_TYPE = [
   'notification_read',
   'search_performed',
   'page_viewed',
+  // 메일함 첨부 다운로드(이사·감사·관리자) — 누가 언제 무엇을 받았는지 기록.
+  // 타입 배열일 뿐 DB CHECK가 없으므로 마이그레이션 불필요(브리프 C).
+  'attachment_downloaded',
 ] as const
 
 export const ACTIVITY_TARGET_TYPE = [
@@ -47,6 +50,8 @@ export const ACTIVITY_TARGET_TYPE = [
   'file',
   'notification',
   'system',
+  // 메일함 첨부 다운로드 기록의 대상 종류 (브리프 C)
+  'inbound_email_attachment',
 ] as const
 
 export const systemSettings = sqliteTable(

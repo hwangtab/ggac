@@ -1,6 +1,7 @@
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
+import type { BoardAuthSuccess } from '@/lib/server/boardRoomAuth'
 import { logSecurityEvent } from '@/utils/security'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { listInboundEmails } from '@/db/queries/mailbox'
@@ -10,8 +11,8 @@ export const runtime = 'nodejs'
 
 const ALLOWED_STATUSES = ['unread', 'read', 'replied', 'archived', 'spam'] as const
 
-// GET: 관리자 메일함 목록 조회
-export const GET = defineApiRoute({
+// GET: 이사·감사·관리자 메일함 목록 조회 (브리프 A)
+export const GET = defineApiRoute<undefined, BoardAuthSuccess>({
   method: 'GET',
   name: 'api/admin/mailbox',
   rateLimit: {
@@ -19,12 +20,12 @@ export const GET = defineApiRoute({
     keyGenerator: createUserKeyGenerator('admin_mailbox'),
   },
   rateLimitHeaders: true,
-  auth: 'admin',
+  auth: 'board-member',
   errorResponse: () => {
     logSecurityEvent('ADMIN_MAILBOX_API_ERROR', { error: '서버 오류가 발생했습니다.' }, 'medium')
     return ApiError.internalServerError('메일을 조회하는 중 오류가 발생했습니다.').toNextResponse()
   },
-  handler: async ({ request }) => {
+  handler: async ({ request, auth }) => {
     const params = request.nextUrl.searchParams
     const status = params.get('status')
     const search = params.get('search')?.slice(0, 100) ?? undefined
@@ -39,6 +40,7 @@ export const GET = defineApiRoute({
     return ApiSuccess.ok({
       emails: result.emails,
       pagination: { total_count: result.total_count, limit, offset },
+      can_manage: auth.isAdmin,
     })
   },
 })

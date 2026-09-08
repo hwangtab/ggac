@@ -327,13 +327,19 @@ noreply@ggac.kr로 가서 유실된다), `MAILBOX_BACKFILL_CRON_TOKEN`(메일함
   **앱 코드가 전부 판정한다**. "RLS 정책을 고친다"는 접근은 아무것도 바꾸지
   않으면서 경계가 지켜진다고 믿게 만든다.
 - **권한의 안전망은 E2E다. 정적 가드가 아니다.** 인가를 바꿨으면
-  `npm run test:e2e:authz`(기준선 **89 passed**, 총 90건 중 1건은
+  `npm run test:e2e:authz`(기준선 **92 passed**, 총 94건 중 1건은
   `authz-remaining.spec.ts`의 policy-36 — `PUBLIC_BLOB_READ_WRITE_TOKEN` 부재를
-  단언하는 기존 테스트로 이 저장소의 다른 변경과 무관하다. 실행법은
-  `scripts/turso/README.md`)를 돌려라.
-  `scripts/testing/assert-runtime-risks.mjs`의 계약은 **보조**다 — 적대
-  감사(2026-08-27)가 15가지 우회를 시도해 **11가지가 초록불**이었다. 예:
-  `src/lib/server/authz.ts`의 `isApprovedActive` 맨 앞에
+  단언하는 기존 테스트로 이 저장소의 다른 변경과 무관하다. 나머지 1건은 스킵이다
+  — 메일함 첨부 다운로드 기록 테스트가 실제 Blob 객체를 요구해서다 (운영 Blob
+  오염을 피하려고 만들지 않는다). 실행법은 `scripts/turso/README.md`)를 돌려라.
+- **메일함 게이트(단계 5).** 관리자 메일함(`/api/admin/mailbox*`,
+  `/admin/mailbox`·`/board-room/mailbox`)은 목록·상세·첨부 다운로드가
+  `requireBoardMember()`(이사·감사·관리자)로 열리고, 상태 변경·답장은
+  `requireAdmin()`(관리자만)로 그대로 막힌다. 첨부 다운로드는 스코프 대조(첨부의
+  `email_id`가 경로의 메일 id와 같은지) 뒤 `logUserActivity`로 누가 언제 무엇을
+  받았는지 기록한다. `scripts/testing/assert-runtime-risks.mjs`의 계약은
+  **보조**다 — 적대 감사(2026-08-27)가 15가지 우회를 시도해 **11가지가
+  초록불**이었다. 예: `src/lib/server/authz.ts`의 `isApprovedActive` 맨 앞에
   `if (profile) return true` 한 줄을 넣으면 관리자 API 26개가 열리는데 가드도
   `tsc`도 통과한다. 가드는 **"이 문자열이 이 파일에 있는가"**를 볼 뿐 도달
   가능성·실행 순서·데이터 흐름을 보지 않는다. 같은 감사에서 **E2E는 관리자

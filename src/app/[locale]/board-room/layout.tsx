@@ -12,6 +12,7 @@ const navItems = [
   { href: '/board-room/schedule', label: '일정 투표', boardOnly: true },
   { href: '/board-room/documents', label: '서류함', boardOnly: true },
   { href: '/board-room/assembly', label: '정기총회', boardOnly: true },
+  { href: '/board-room/mailbox', label: '메일함', boardOnly: true },
 ] as const
 
 export default function BoardRoomLayout({ children }: { children: React.ReactNode }) {

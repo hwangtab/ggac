@@ -153,6 +153,9 @@ export type SecurityEventType =
   // 첨부 다운로드 라우트가 DB의 blob_path를 봉쇄 판정으로 재검증했을 때
   // 실패한 경우 — Task 12. 비공개 저장소에는 조합 DB 전체 덤프가 같이 산다.
   | 'MAILBOX_ATTACHMENT_PATH_REJECTED'
+  // 이사·감사·관리자 첨부 다운로드 기록(logUserActivity)이 실패한 경우.
+  // 기록 실패가 다운로드 자체를 막지 않으므로(브리프 C) 여기로만 남긴다.
+  | 'MAILBOX_DOWNLOAD_AUDIT_FAILED'
 
 export type SecurityEventSeverity = 'low' | 'medium' | 'high'
 

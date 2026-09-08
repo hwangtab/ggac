@@ -1,6 +1,7 @@
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
+import type { BoardAuthSuccess } from '@/lib/server/boardRoomAuth'
 import { logSecurityEvent } from '@/utils/security'
 import { getInboundEmail, listAttachmentsForEmail, updateInboundStatus } from '@/db/queries/mailbox'
 import { validateUUID } from '@/utils/validation'
@@ -10,8 +11,8 @@ export const runtime = 'nodejs'
 
 const ALLOWED_STATUSES = ['unread', 'read', 'replied', 'archived', 'spam'] as const
 
-// GET: 메일 한 건 상세 + 첨부 목록
-export const GET = defineApiRoute({
+// GET: 메일 한 건 상세 + 첨부 목록 (이사·감사·관리자, 브리프 A)
+export const GET = defineApiRoute<undefined, BoardAuthSuccess>({
   method: 'GET',
   name: 'api/admin/mailbox/[id]',
   rateLimit: {
@@ -19,12 +20,12 @@ export const GET = defineApiRoute({
     keyGenerator: createUserKeyGenerator('admin_mailbox'),
   },
   rateLimitHeaders: true,
-  auth: 'admin',
+  auth: 'board-member',
   errorResponse: () => {
     logSecurityEvent('ADMIN_MAILBOX_API_ERROR', { error: '서버 오류가 발생했습니다.' }, 'medium')
     return ApiError.internalServerError('메일을 조회하는 중 오류가 발생했습니다.').toNextResponse()
   },
-  handler: async ({ params }) => {
+  handler: async ({ params, auth }) => {
     const idValidation = validateUUID(String(params.id ?? ''), '메일 ID')
     if (!idValidation.isValid) {
       throw ApiError.badRequest('유효한 id가 필요합니다.')
@@ -37,7 +38,7 @@ export const GET = defineApiRoute({
     }
 
     const attachments = await listAttachmentsForEmail(id)
-    return ApiSuccess.ok({ email, attachments })
+    return ApiSuccess.ok({ email, attachments, can_manage: auth.isAdmin })
   },
 })
 
