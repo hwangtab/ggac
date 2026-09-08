@@ -29,15 +29,20 @@ export type PressContent = {
 
 /** 트랙과 스트리밍은 언어에 따라 달라지지 않으므로 PressContent 밖에 둔다. */
 export const TRACKS = [
-  { n: 1, title: 'September Theater', length: '1:13' },
-  { n: 2, title: 'Past Self', length: '1:05' },
-  { n: 3, title: 'Violent Disgust', length: '1:02' },
-  { n: 4, title: 'Hollow Face', length: '1:45' },
-  { n: 5, title: 'Letter to Jane Doe', length: '0:53' },
-  { n: 6, title: 'Hymn for the Night', length: '1:04' },
-  { n: 7, title: 'Irreversible Imprint', length: '1:21' },
-  { n: 8, title: 'Decomposition', length: '2:07' },
+  { n: 1, title: 'September Theater', length: '1:13', file: '01-september-theater' },
+  { n: 2, title: 'Past Self', length: '1:05', file: '02-past-self' },
+  { n: 3, title: 'Violent Disgust', length: '1:02', file: '03-violent-disgust' },
+  { n: 4, title: 'Hollow Face', length: '1:45', file: '04-hollow-face' },
+  { n: 5, title: 'Letter to Jane Doe', length: '0:53', file: '05-letter-to-jane-doe' },
+  { n: 6, title: 'Hymn for the Night', length: '1:04', file: '06-hymn-for-the-night' },
+  { n: 7, title: 'Irreversible Imprint', length: '1:21', file: '07-irreversible-imprint' },
+  { n: 8, title: 'Decomposition', length: '2:07', file: '08-decomposition' },
 ]
+
+/** 프레스 페이지 안에서 바로 듣게 하는 개별 트랙. zip과 같은 320kbps 파일이다. */
+export function trackAudioUrl(file: string): string {
+  return `https://r8qnr9c7mestxusj.public.blob.vercel-storage.com/press/hwa/audio/${file}.mp3`
+}
 
 export const STREAMING: [string, string][] = [
   ['Spotify', 'https://open.spotify.com/album/6vcAuVZzlBTEOQEGU7oSAx'],

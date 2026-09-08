@@ -45,9 +45,14 @@ export function applyCSP(request: NextRequest, response: NextResponse) {
       process.env.NODE_ENV === 'development'
         ? "img-src 'self' https: http://localhost:* http://127.0.0.1:* blob: data:"
         : "img-src 'self' https: blob: data:",
+      // 프레스킷의 음원 플레이어가 Blob에서 MP3를 직접 문다. 빠지면 곡은 바뀌고
+      // 가사도 따라오는데 소리만 안 난다 — 콘솔에
+      // "Media load rejected by URL safety check"만 찍힌다.
+      // img-src와 달리 와일드카드를 쓰지 않고 우리 저장소 호스트만 적는다
+      // (*.public.blob.vercel-storage.com은 다른 Vercel 고객 저장소까지 허용한다).
       process.env.NODE_ENV === 'development'
-        ? "media-src 'self' http://localhost:* http://127.0.0.1:* https://www.youtube.com"
-        : "media-src 'self' https://www.youtube.com",
+        ? "media-src 'self' http://localhost:* http://127.0.0.1:* https://www.youtube.com https://r8qnr9c7mestxusj.public.blob.vercel-storage.com"
+        : "media-src 'self' https://www.youtube.com https://r8qnr9c7mestxusj.public.blob.vercel-storage.com",
       // 토스 결제창은 iframe으로 뜬다. 빠지면 결제 버튼이 먹통이 된다.
       "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://*.tosspayments.com",
       process.env.NODE_ENV === 'development'
