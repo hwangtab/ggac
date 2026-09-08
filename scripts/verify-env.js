@@ -49,6 +49,13 @@ const requiredEnvVars = [
   // 가입·재설정 API는 200을 반환하고 메일만 안 간다(README 알려진 이슈).
   // 지금까지는 .env.local에만 있어 이 스크립트가 누락을 못 잡았다.
   'RESEND_API_KEY',
+  // 메일함 수신. 셋 중 하나라도 없으면 받은 메일이 조용히 사라진다 —
+  //  · RESEND_INBOUND_WEBHOOK_SECRET이 없으면 웹훅이 전부 401이다(fail-closed).
+  //  · RESEND_INBOUND_API_KEY가 없으면 행은 생기지만 본문이 영영 pending이다.
+  //  · MAILBOX_ALLOWED_RECIPIENTS가 비면 모든 수신이 거부된다(fail-closed).
+  'RESEND_INBOUND_API_KEY',
+  'RESEND_INBOUND_WEBHOOK_SECRET',
+  'MAILBOX_ALLOWED_RECIPIENTS',
 ]
 
 const redisEnvGroups = [
@@ -103,6 +110,13 @@ const optionalEnvVars = [
   'PAYMENTS_CRON_TOKEN',
   // 임시 첨부 정리 크론 인증 토큰. Vercel production에는 이미 있다.
   'CLEANUP_CRON_TOKEN',
+  // 발신 메일의 회신 주소. 없으면 회신이 noreply@ggac.kr로 가서 유실된다.
+  // 필수가 아닌 이유: 없어도 발송 자체는 성공하고, 전환 전 동작과 같다.
+  'MAILBOX_REPLY_TO',
+  // 백필 크론 손호출용. Vercel 크론은 CRON_SECRET을 쓴다.
+  'MAILBOX_BACKFILL_CRON_TOKEN',
+  // 일일 수신 임계치. 기본 60.
+  'MAILBOX_DAILY_INBOUND_ALERT',
 ]
 
 console.log('🔍 Environment Variable Verification\n')
@@ -268,6 +282,22 @@ if (env.NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL) {
       '❌ NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL: Invalid format (should be an absolute https:// URL, e.g. https://[store].public.blob.vercel-storage.com)'
     )
     hasErrors = true
+  }
+}
+
+// MAILBOX_REPLY_TO(선택)가 MAILBOX_ALLOWED_RECIPIENTS(필수)에 없으면 관리자
+// 답장에 대한 회신이 화이트리스트를 통과하지 못해 에러도 로그도 없이
+// 사라진다. 둘 다 있을 때만 검사한다 — 어느 한쪽이 없으면(설정 자체를
+// 안 했으면) 이 조합 문제가 성립하지 않는다. 주소 비교는 대소문자를 무시한다.
+if (env.MAILBOX_REPLY_TO && env.MAILBOX_ALLOWED_RECIPIENTS) {
+  const replyTo = env.MAILBOX_REPLY_TO.trim().toLowerCase()
+  const allowedList = env.MAILBOX_ALLOWED_RECIPIENTS.split(',').map(entry =>
+    entry.trim().toLowerCase()
+  )
+  if (replyTo && !allowedList.includes(replyTo)) {
+    console.log(
+      `⚠️  MAILBOX_REPLY_TO(${env.MAILBOX_REPLY_TO})가 MAILBOX_ALLOWED_RECIPIENTS에 없습니다 — 그 주소로 온 회신이 저장되지 않고 조용히 사라집니다.`
+    )
   }
 }
 

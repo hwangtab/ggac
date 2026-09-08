@@ -299,11 +299,20 @@ throw ApiError.internalServerError('Server error')
 - `NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL` — **비면 모든 Blob 사진이 기본 로고로
   바뀐다** (`isBlobPublicUrl`이 항상 false가 된다). 에러는 안 난다
 - `PUBLIC_BLOB_READ_WRITE_TOKEN` / `PRIVATE_BLOB_READ_WRITE_TOKEN`
+- `RESEND_INBOUND_WEBHOOK_SECRET` — **없으면 메일함 웹훅이 전부
+  401**(fail-closed)
+- `RESEND_INBOUND_API_KEY` — 없으면 수신 행은 생기지만 본문이 영영 `pending`으로
+  남는다
+- `MAILBOX_ALLOWED_RECIPIENTS` — 비면 모든 수신이 거부된다(fail-closed)
 
 **선택**: `UPSTASH_REDIS_REST_URL`·`UPSTASH_REDIS_REST_TOKEN`(분산 레이트리밋 —
 없으면 인스턴스별 메모리 폴백이라 Vercel에서 사실상 무효), `RESEND_API_KEY`(인증
 메일. **없으면 가입·재설정이 200을 반환하고 메일만 안 간다**),
-`NEXT_STRICT_CSP=true`.
+`NEXT_STRICT_CSP=true`, `MAILBOX_REPLY_TO`(발신 메일의 회신 주소. 없으면 회신이
+noreply@ggac.kr로 가서 유실된다), `MAILBOX_BACKFILL_CRON_TOKEN`(메일함 백필 크론
+손호출용 — Vercel 크론 자체는 `CRON_SECRET`을 쓴다),
+`MAILBOX_DAILY_INBOUND_ALERT` (일일 수신 임계치, 기본 60 — 없어도 기본값으로
+동작한다).
 
 정본은 `npm run env:check`(`scripts/verify-env.js`)다.
 
@@ -318,7 +327,9 @@ throw ApiError.internalServerError('Server error')
   **앱 코드가 전부 판정한다**. "RLS 정책을 고친다"는 접근은 아무것도 바꾸지
   않으면서 경계가 지켜진다고 믿게 만든다.
 - **권한의 안전망은 E2E다. 정적 가드가 아니다.** 인가를 바꿨으면
-  `npm run test:e2e:authz`(기준선 **70 passed**, 실행법은
+  `npm run test:e2e:authz`(기준선 **89 passed**, 총 90건 중 1건은
+  `authz-remaining.spec.ts`의 policy-36 — `PUBLIC_BLOB_READ_WRITE_TOKEN` 부재를
+  단언하는 기존 테스트로 이 저장소의 다른 변경과 무관하다. 실행법은
   `scripts/turso/README.md`)를 돌려라.
   `scripts/testing/assert-runtime-risks.mjs`의 계약은 **보조**다 — 적대
   감사(2026-08-27)가 15가지 우회를 시도해 **11가지가 초록불**이었다. 예:

@@ -32,19 +32,26 @@ test('컷오버 절차서에도 같은 정정이 있다', () => {
   assert.match(tursoReadme, /인가는 E2E가 지킨다/)
 })
 
-test('세 문서가 같은 기준선(70)을 말한다', () => {
+test('세 문서가 같은 기준선(89)을 말한다', () => {
   // 이름은 "세 문서"인데 가드 파일(`assert-runtime-risks.mjs`)은 빠져 있었다 —
   // 그래서 기준선을 올린 첫 회차에 그 파일만 낡은 숫자로 남았는데도 초록이었다.
+  //
+  // 89는 2026-09-07(관리자 메일함 태스크 완료) 실측이다: 총 90건 중 89
+  // passed, 1 failed(`authz-remaining.spec.ts` 정책 36 —
+  // `PUBLIC_BLOB_READ_WRITE_TOKEN` 부재를 단언하는 기존 테스트로 이 저장소의
+  // 다른 변경과 무관하다). 70이었을 때도 마찬가지로 이 실패 1건은 별도였다 —
+  // "70 passed"·"89 passed"는 둘 다 "그 1건을 뺀 나머지가 전부 초록"이라는
+  // 뜻이지 "총 실행 건수"가 아니다.
   for (const [name, src] of [
     ['CLAUDE.md', claudeMd],
     ['scripts/turso/README.md', tursoReadme],
     ['scripts/testing/assert-runtime-risks.mjs', guard],
   ]) {
-    assert.match(src, /70 passed/, `${name}의 기준선이 사라지면 "몇 건이 정상인지"를 잃는다`)
+    assert.match(src, /89 passed/, `${name}의 기준선이 사라지면 "몇 건이 정상인지"를 잃는다`)
     // 낡은 숫자가 **함께** 남아 있으면 위 match만으로는 못 잡는다.
     assert.doesNotMatch(
       src,
-      /기준선[^\n]*(50|64) passed/,
+      /기준선[^\n]*(50|64|70) passed/,
       `${name}에 옛 기준선이 살아 있으면 다음 사람이 어느 쪽을 믿을지 알 수 없다`
     )
   }

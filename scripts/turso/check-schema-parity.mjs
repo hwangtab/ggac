@@ -29,6 +29,9 @@ const POST_CUTOVER_TABLES = new Set([
   'ticket_types', // 0016
   'reservations', // 0016
   'media_uploads', // 0018 에디터 업로드 원장
+  'inbound_emails', // 0020 관리자 메일함
+  'inbound_email_attachments', // 0020 관리자 메일함
+  'inbound_email_replies', // 0020 관리자 메일함
 ])
 
 export function comparePgToSqlite(pgSnapshot, sqliteSchema) {

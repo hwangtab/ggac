@@ -25,6 +25,7 @@ docs/*
 # 예외: 공개해도 되는 제도·절차 매뉴얼만 추적한다. 조합 내부 현황·판단이
 # 담긴 문서는 여기 두지 말고 이사회 서류함(비공개 Blob)에 올린다.
 !docs/사회적기업/
+!docs/mailbox-cutover.md
 
 # playwright MCP session logs — may contain PII/sensitive test data
 .playwright-mcp/

@@ -137,6 +137,23 @@ export type SecurityEventType =
   | 'SQL_INJECTION_IN_SEARCH'
   | 'XSS_IN_SEARCH'
 
+  // 관리자 메일함 수신 이벤트 (단계 4 Task 8 — Resend Inbound 웹훅)
+  | 'MAILBOX_BODY_FETCH_FAILED'
+  | 'MAILBOX_ATTACHMENT_COPY_FAILED'
+  | 'MAILBOX_ATTACHMENT_LIST_FAILED'
+  | 'MAILBOX_WEBHOOK_SIGNATURE_REJECTED'
+  | 'MAILBOX_WEBHOOK_UNEXPECTED_ERROR'
+  | 'MAILBOX_INBOUND_QUOTA_PRESSURE'
+  | 'MAILBOX_RECIPIENT_NOT_ALLOWED'
+  | 'ADMIN_MAILBOX_API_ERROR'
+  // 답장 발송은 됐는데(되돌릴 수 없음) 기록(회신 원장·스레드 참조·상태 전이)
+  // 중 하나가 실패한 경우 — Task 11. 던지면 관리자가 "실패"로 보고 재시도해
+  // 같은 메일이 두 번 나간다. 그래서 던지지 않고 감사만 하고 200을 준다.
+  | 'MAILBOX_REPLY_RECORD_FAILED'
+  // 첨부 다운로드 라우트가 DB의 blob_path를 봉쇄 판정으로 재검증했을 때
+  // 실패한 경우 — Task 12. 비공개 저장소에는 조합 DB 전체 덤프가 같이 산다.
+  | 'MAILBOX_ATTACHMENT_PATH_REJECTED'
+
 export type SecurityEventSeverity = 'low' | 'medium' | 'high'
 
 export interface SecurityEventContext {

@@ -12,6 +12,16 @@
 const RESEND_ENDPOINT = 'https://api.resend.com/emails'
 const FROM = '경기아트콜렉티브 <noreply@ggac.kr>'
 
+/**
+ * 회신을 받을 주소. `noreply@ggac.kr`로 회신이 가면 반송되거나 유실된다 —
+ * 실제로 그것이 "Resend 회신을 확인할 수 없다"의 직접 원인이었다.
+ * 값이 없으면 키를 아예 넣지 않는다(전환 전 동작 그대로).
+ */
+function replyToPayload(): { reply_to: string[] } | Record<string, never> {
+  const value = process.env.MAILBOX_REPLY_TO?.trim()
+  return value ? { reply_to: [value] } : {}
+}
+
 export interface SendEmailInput {
   to: string
   subject: string
@@ -40,6 +50,7 @@ export async function sendEmail(input: SendEmailInput): Promise<void> {
       to: [input.to],
       subject: input.subject,
       html: input.html,
+      ...replyToPayload(),
       ...(input.headers ? { headers: input.headers } : {}),
     }),
     signal: AbortSignal.timeout(10_000),

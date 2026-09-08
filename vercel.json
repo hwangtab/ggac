@@ -5,6 +5,10 @@
     {
       "path": "/api/internal/uploads/cleanup",
       "schedule": "30 20 * * *"
+    },
+    {
+      "path": "/api/internal/mailbox/backfill",
+      "schedule": "15 * * * *"
     }
   ]
 }
