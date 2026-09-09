@@ -16,6 +16,8 @@ interface BoardDocument {
   uploaded_by: string
   created_at: string
   download_url: string | null
+  has_body: boolean
+  visibility: string
 }
 
 export default function AssemblyPage() {
@@ -80,21 +82,23 @@ export default function AssemblyPage() {
             연도별 총회 자료집·회의록·감사보고서·결산서를 한곳에 모아 둡니다.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowUpload(v => !v)}
-          aria-expanded={showUpload}
-          className={`shrink-0 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-            showUpload
-              ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              : 'bg-primary-600 text-white hover:bg-primary-700'
-          }`}
-        >
-          {showUpload ? '닫기' : '자료 올리기'}
-        </button>
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={() => setShowUpload(v => !v)}
+            aria-expanded={showUpload}
+            className={`shrink-0 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+              showUpload
+                ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                : 'bg-primary-600 text-white hover:bg-primary-700'
+            }`}
+          >
+            {showUpload ? '닫기' : '자료 올리기'}
+          </button>
+        )}
       </div>
 
-      {showUpload && (
+      {isAdmin && showUpload && (
         <div className="mb-8">
           <DocumentUpload
             onUploaded={() => {
@@ -103,6 +107,7 @@ export default function AssemblyPage() {
             }}
             fixedCategory={ASSEMBLY_DOCUMENT_CATEGORY}
             titlePrefixes={ASSEMBLY_DOC_TYPES}
+            showVisibility
           />
         </div>
       )}

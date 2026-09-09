@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { Link } from '@/i18n/navigation'
 import { ASSEMBLY_DOC_TYPES, type AssemblyDocType } from '@/constants/boardRoom'
 import { isSafeInternalPath } from '@/utils/safeUrl'
 
@@ -14,6 +15,8 @@ interface BoardDocument {
   uploaded_by: string
   created_at: string
   download_url: string | null
+  has_body: boolean
+  visibility: string
 }
 
 interface Props {
@@ -229,13 +232,21 @@ export default function AssemblyDocumentList({
                   )
                   return (
                     <li key={doc.id} className="flex items-center gap-3 px-4 py-3">
-                      {href ? (
+                      {doc.has_body ? (
+                        <Link
+                          href={`/board-room/assembly/${doc.id}`}
+                          className="flex min-w-0 flex-1 items-center gap-3 rounded-lg hover:text-primary-700"
+                          title="웹에서 읽기"
+                        >
+                          {body}
+                        </Link>
+                      ) : href ? (
                         <a
                           href={href}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex min-w-0 flex-1 items-center gap-3 rounded-lg hover:text-primary-700"
-                          title="새 창에서 열기"
+                          title="내려받기"
                         >
                           {body}
                         </a>
