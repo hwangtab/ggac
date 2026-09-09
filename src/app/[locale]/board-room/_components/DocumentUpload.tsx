@@ -8,15 +8,22 @@ interface DocumentUploadProps {
   onUploaded: () => void
   /** 주어지면 분류 선택 UI를 숨기고 이 카테고리로 고정 업로드(예: 정기총회 메뉴) */
   fixedCategory?: string
+  /** 주어지면 "자료 종류" 선택을 보이고, 제목에 없으면 앞에 붙여 저장한다 */
+  titlePrefixes?: readonly string[]
 }
 
-export default function DocumentUpload({ onUploaded, fixedCategory }: DocumentUploadProps) {
+export default function DocumentUpload({
+  onUploaded,
+  fixedCategory,
+  titlePrefixes,
+}: DocumentUploadProps) {
   const t = useTranslations('boardRoom.documents')
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
   const [title, setTitle] = useState('')
   const [category, setCategory] = useState(fixedCategory ?? '')
+  const [prefix, setPrefix] = useState('')
   const [uploading, setUploading] = useState(false)
   const [validationError, setValidationError] = useState<string | null>(null)
   const [apiError, setApiError] = useState<string | null>(null)
@@ -25,6 +32,7 @@ export default function DocumentUpload({ onUploaded, fixedCategory }: DocumentUp
     setFile(null)
     setTitle('')
     setCategory(fixedCategory ?? '')
+    setPrefix('')
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
@@ -50,7 +58,10 @@ export default function DocumentUpload({ onUploaded, fixedCategory }: DocumentUp
     try {
       const formData = new FormData()
       formData.append('file', file)
-      formData.append('title', title.trim())
+      const trimmed = title.trim()
+      const finalTitle =
+        prefix && prefix !== '기타' && !trimmed.includes(prefix) ? `${prefix} ${trimmed}` : trimmed
+      formData.append('title', finalTitle)
       formData.append('category', category)
 
       // Note: do NOT set Content-Type — the browser sets the multipart boundary.
@@ -108,6 +119,29 @@ export default function DocumentUpload({ onUploaded, fixedCategory }: DocumentUp
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
         />
       </div>
+
+      {/* 자료 종류 (정기총회처럼 제목 앞머리로 구분하는 경우) */}
+      {titlePrefixes && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="doc-prefix">
+            자료 종류
+          </label>
+          <select
+            id="doc-prefix"
+            value={prefix}
+            onChange={e => setPrefix(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm bg-white"
+          >
+            <option value="">선택 안 함</option>
+            {titlePrefixes.map(p => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-gray-400 mt-1">제목에 종류가 없으면 앞에 붙여 저장합니다.</p>
+        </div>
+      )}
 
       {/* 분류 (fixedCategory가 없을 때만 노출) */}
       {!fixedCategory && (

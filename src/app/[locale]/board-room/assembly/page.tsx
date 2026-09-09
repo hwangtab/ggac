@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { ASSEMBLY_DOCUMENT_CATEGORY } from '@/constants/boardRoom'
+import { ASSEMBLY_DOCUMENT_CATEGORY, ASSEMBLY_DOC_TYPES } from '@/constants/boardRoom'
 import { fetchSessionProfile, isApprovedActiveAdmin } from '@/utils/sessionProfile'
-import DocumentList from '../_components/DocumentList'
+import AssemblyDocumentList from '../_components/AssemblyDocumentList'
 import DocumentUpload from '../_components/DocumentUpload'
 
 interface BoardDocument {
@@ -24,6 +24,7 @@ export default function AssemblyPage() {
   const [error, setError] = useState<string | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string>('')
   const [isAdmin, setIsAdmin] = useState(false)
+  const [showUpload, setShowUpload] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -72,15 +73,39 @@ export default function AssemblyPage() {
 
   return (
     <div className="mx-auto max-w-4xl pb-16">
-      <h1 className="mb-2 text-2xl font-bold text-gray-900 md:text-3xl">정기총회</h1>
-      <p className="mb-8 text-sm text-gray-500">
-        정기총회 자료집·회의록·감사보고서·거래내역서 등 총회 관련 자료를 보관합니다.
-      </p>
-
-      {/* 업로드 (카테고리 '총회' 고정) */}
-      <div className="mb-8">
-        <DocumentUpload onUploaded={fetchDocuments} fixedCategory={ASSEMBLY_DOCUMENT_CATEGORY} />
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="mb-2 text-2xl font-bold text-gray-900 md:text-3xl">정기총회</h1>
+          <p className="text-sm text-gray-500">
+            연도별 총회 자료집·회의록·감사보고서·결산서를 한곳에 모아 둡니다.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowUpload(v => !v)}
+          aria-expanded={showUpload}
+          className={`shrink-0 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+            showUpload
+              ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              : 'bg-primary-600 text-white hover:bg-primary-700'
+          }`}
+        >
+          {showUpload ? '닫기' : '자료 올리기'}
+        </button>
       </div>
+
+      {showUpload && (
+        <div className="mb-8">
+          <DocumentUpload
+            onUploaded={() => {
+              setShowUpload(false)
+              fetchDocuments()
+            }}
+            fixedCategory={ASSEMBLY_DOCUMENT_CATEGORY}
+            titlePrefixes={ASSEMBLY_DOC_TYPES}
+          />
+        </div>
+      )}
 
       {loading ? (
         <div className="space-y-3">
@@ -93,7 +118,7 @@ export default function AssemblyPage() {
           {error}
         </div>
       ) : (
-        <DocumentList
+        <AssemblyDocumentList
           documents={documents}
           currentUserId={currentUserId}
           isAdmin={isAdmin}

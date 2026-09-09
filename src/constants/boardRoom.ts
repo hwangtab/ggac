@@ -24,6 +24,19 @@ export type BoardDocumentCategory = (typeof BOARD_DOCUMENT_CATEGORIES)[number]
 // 정기총회 전용 카테고리 — 일반 서류함과 분리된 '정기총회' 메뉴에서만 사용
 export const ASSEMBLY_DOCUMENT_CATEGORY = '총회' as const
 
+// 정기총회 자료 종류 — 별도 컬럼이 없어 제목 앞머리로 표시하고, 목록에서는
+// 제목 키워드로 되짚어 배지를 단다. 순서가 목록 안 정렬 순서다.
+export const ASSEMBLY_DOC_TYPES = [
+  '자료집',
+  '회의록',
+  '감사보고서',
+  '결산서',
+  '사업보고서',
+  '거래내역서',
+  '기타',
+] as const
+export type AssemblyDocType = (typeof ASSEMBLY_DOC_TYPES)[number]
+
 // DB CHECK 제약(chk_board_document_category)과 일치하는 전체 허용 카테고리
 export const ALL_DOCUMENT_CATEGORIES = [
   ...BOARD_DOCUMENT_CATEGORIES,
