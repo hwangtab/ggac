@@ -341,10 +341,12 @@ test('toBoardMinuteRow: 7개 컬럼, author_id null 허용', () => {
   assert.equal(row.author_id, null)
 })
 
-test('toBoardDocumentRow: 9개 컬럼, file_size는 정수로 바뀐다', () => {
+test('toBoardDocumentRow: 11개 컬럼, file_size는 정수로 바뀐다', () => {
   const row = toBoardDocumentRow(PG_BOARD_DOCUMENT)
-  assert.equal(Object.keys(row).length, 9)
+  assert.equal(Object.keys(row).length, 11)
   assert.equal(row.file_size, 1024)
+  assert.equal(row.body_markdown, null)
+  assert.equal(row.visibility, 'board')
 })
 
 test('toBoardMeetingAttendeeRow: 6개 컬럼, attended는 0/1로 바뀐다', () => {

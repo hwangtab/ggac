@@ -5,6 +5,10 @@
 --
 -- SQLite는 ADD COLUMN에 CHECK를 붙일 수 없다. 값 검증은 쓰기 경로가 맡고
 -- (documents POST, 수입 스크립트), 회귀는 documentVisibility.test.mjs가 본다.
+BEGIN;
+--> statement-breakpoint
 ALTER TABLE `board_documents` ADD COLUMN `body_markdown` text;
 --> statement-breakpoint
 ALTER TABLE `board_documents` ADD COLUMN `visibility` text DEFAULT 'board' NOT NULL;
+--> statement-breakpoint
+COMMIT;
