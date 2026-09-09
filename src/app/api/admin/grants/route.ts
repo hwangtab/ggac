@@ -13,7 +13,8 @@ export const GET = defineApiRoute({
   auth: 'admin',
   handler: async () => {
     const digests = await listGrantDigests(LIST_LIMIT)
-    // 목록에는 항목 배열을 통째로 싣지 않는다 — 회차당 12건 × 20회차면 응답이 불필요하게 커진다.
+    // 목록에는 항목 배열을 통째로 싣지 않는다 — 회차당 최대 POOL_CAP(60)건 × 20회차면
+    // 응답이 불필요하게 커진다(실측 회차 하나가 48건이었다).
     return ApiSuccess.ok({
       digests: digests.map(d => ({
         id: d.id,

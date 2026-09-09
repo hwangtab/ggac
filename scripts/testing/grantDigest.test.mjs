@@ -15,16 +15,24 @@ const {
   isExcludedByBizType,
   EXCLUDE_TITLE_KEYWORDS,
   isExcludedByCategory,
+  isExcludedByRegions,
+  normalizedTitleKey,
+  sortByDeadline,
   CAP,
   POOL_CAP,
+  DEDUPE_WEEKS,
+  DIGEST_LOOKBACK_WEEKS,
 } = await import('../../src/lib/server/grantDigest.ts')
 
 function item(over = {}) {
+  // 제목은 key마다 다르게 둔다 — buildDraftItems가 정규화한 제목으로도 중복을 거르므로
+  // (재공고 방어) 같은 제목을 여러 건 만들면 그 규칙에 걸린다.
+  const key = over.key ?? 'ncas:1'
   return {
     key: 'ncas:1',
     source: 'ncas',
     source_id: '1',
-    title: '2026년 음악 창작지원',
+    title: `2026년 음악 창작지원 ${key}`,
     genres: ['음악'],
     regions: ['경기'],
     category: 'grant',
@@ -174,8 +182,14 @@ test('빈 입력은 빈 배열이다', () => {
 
 // ---------------------------------------------------------------- isExcludedByTitle / 제목 기반 제외 필터
 
-test('EXCLUDE_TITLE_KEYWORDS는 정확히 넷이다 (합창, 단원, 제출 안내, 제도 운영 안내)', () => {
-  assert.deepEqual([...EXCLUDE_TITLE_KEYWORDS], ['합창', '단원', '제출 안내', '제도 운영 안내'])
+test('EXCLUDE_TITLE_KEYWORDS는 정확히 넷이다 (합창, 모집, 제출 안내, 제도 운영 안내)', () => {
+  assert.deepEqual([...EXCLUDE_TITLE_KEYWORDS], ['합창', '모집', '제출 안내', '제도 운영 안내'])
+})
+
+test('예술감독 모집(채용)은 제외된다', () => {
+  // 2026-W37 실측 3번. category='grant', biz_type='인력, 기타'라 다른 규칙에 안 걸려
+  // 게시글·메일·캘린더에 전부 실렸다.
+  assert.equal(isExcludedByTitle('2026년 꿈의 극단 안산 예술감독 모집'), true)
 })
 
 test('합창단 신규단원 모집 공고는 제외된다', () => {
@@ -203,8 +217,10 @@ test('연극·무용·음악·전통 통합공모는 제외되지 않는다 (오
   )
 })
 
-test('참여단체 모집은 제외되지 않는다 (단체와 단원 구분)', () => {
-  assert.equal(isExcludedByTitle('서울문화재단 대학로센터 <제철공연> 참여단체 모집'), false)
+test("'모집'은 참여단체 모집도 함께 거른다 (알려진 오차단 — 2026-09-09 계획 결정)", () => {
+  // '단원' 대신 '모집'을 쓰기로 한 결정의 대가다. 「제철공연 참여단체 모집」처럼
+  // 유효한 공모가 함께 걸린다 — 되돌리려면 이 테스트와 EXCLUDE_TITLE_KEYWORDS를 같이 고친다.
+  assert.equal(isExcludedByTitle('서울문화재단 대학로센터 <제철공연> 참여단체 모집'), true)
 })
 
 test('음악 태그만 있는 일반 공고는 제외되지 않는다', () => {
@@ -249,7 +265,9 @@ test('grant는 제외되지 않는다', () => {
   assert.equal(isExcludedByCategory('grant'), false)
 })
 
-test('space는 제외되지 않는다 (오차단 방어 — 연습실·공연장 대여는 조합원에게 유용하다)', () => {
+test('목록에 없는 값은 제외되지 않는다 (운영 데이터에 없는 값을 넣지 않는다)', () => {
+  // 설계 문서는 한때 'space'를 "일부러 남긴 다섯 번째 life 값"으로 적었지만, 운영
+  // grant_digests 60건 실측에서 category='space'는 0건이다. 근거 없는 서술이었다.
   assert.equal(isExcludedByCategory('space'), false)
 })
 
@@ -281,7 +299,7 @@ test('genres가 빈 배열이면 제외된다 (kosmart 분류 실패)', () => {
   assert.equal(isExcludedByGenres([]), true)
 })
 
-test("genres=['전체']는 와일드카드라 제외되지 않는다", () => {
+test("genres=['전체']는 이 규칙에서 제외되지 않는다 (개인 매칭이 떨어뜨린다)", () => {
   assert.equal(isExcludedByGenres(['전체']), false)
 })
 
@@ -339,10 +357,11 @@ test('창작자과정 안내는 제외되지 않는다 (오차단 방어)', () =
 
 // ---------------------------------------------------------------- buildDraftItems 통합 (네 규칙)
 
-test('buildDraftItems는 네 규칙을 함께 적용하고 제외된 자리를 다음 항목이 채운다', () => {
+test('buildDraftItems는 다섯 규칙을 함께 적용하고 제외된 자리를 다음 항목이 채운다', () => {
   const many = [
     item({ key: 'ex-title', title: '종로구립합창단 신규단원 모집' }),
     item({ key: 'ex-genre', genres: [] }),
+    item({ key: 'ex-region', regions: [] }),
     item({ key: 'ex-biztype', biz_type: '교육' }),
     item({ key: 'ex-admin', title: '예술활동보고서 제출 안내' }),
     ...Array.from({ length: CAP }, (_, i) => item({ key: `ok:${i}` })),
@@ -482,4 +501,149 @@ test('알림 제목·본문에 건수가 들어간다', () => {
   const n = renderDigestNotification([item(), item({ key: 'ncas:2' })], '2026-W36')
   assert.ok(n.title.length > 0)
   assert.ok(n.message.includes('2건'))
+})
+
+// ------------------------------------------------- 상수 정합성 (H4/H9)
+
+test('DEDUPE_WEEKS는 캘린더가 보는 범위와 같은 값이다', () => {
+  // 12(중복 제거)와 26(캘린더)으로 갈라져 있으면, 캘린더가 아직 보고 있는 옛 회차의
+  // 공고가 새 초안에 다시 담겨 같은 공고가 캘린더에 두 번 찍힌다.
+  assert.equal(DEDUPE_WEEKS, DIGEST_LOOKBACK_WEEKS)
+  assert.equal(DIGEST_LOOKBACK_WEEKS, 26)
+})
+
+test('메일 상한 CAP은 20이다', () => {
+  assert.equal(CAP, 20)
+})
+
+// ------------------------------------------------- isExcludedByRegions (H7/F3)
+
+test('regions가 빈 배열이면 제외된다 (전국이 아니라 분류 실패)', () => {
+  assert.equal(isExcludedByRegions([]), true)
+})
+
+test("regions=['전국']·['전체']는 제외되지 않는다", () => {
+  assert.equal(isExcludedByRegions(['전국']), false)
+  assert.equal(isExcludedByRegions(['전체']), false)
+})
+
+test("실데이터 형태: genres=['음악'] · regions=[] 인 타지역 공고가 풀에 담기지 않는다", () => {
+  // 실측 W37 40번. 그때는 genres도 비어 장르 규칙에 걸렸을 뿐이고, 장르가 붙어 오면
+  // 어느 단계에서도 안 걸려 경기·서울만 보는 조합원 전원에게 대구 공고가 나갔다.
+  const out = buildDraftItems(
+    [
+      item({
+        key: 'artnuri:daegu',
+        title: '2026년 대구아트웨이 스튜디오 입주예술인(단체) 공모',
+        genres: ['음악'],
+        regions: [],
+      }),
+      item({ key: 'artnuri:ok' }),
+    ],
+    new Set()
+  )
+  assert.deepEqual(
+    out.map(i => i.key),
+    ['artnuri:ok']
+  )
+})
+
+// ------------------------------------------------- 제목 기반 중복 제거 (H6)
+
+test('재공고는 원공고와 같은 정규화 키를 갖는다', () => {
+  assert.equal(
+    normalizedTitleKey('2026년 양평문화자원 공연 창작프로젝트 공모'),
+    normalizedTitleKey('2026년 양평문화자원 공연 창작 프로젝트 공모 재공고')
+  )
+})
+
+test('다른 사업의 제목은 같은 키로 뭉개지지 않는다', () => {
+  assert.notEqual(
+    normalizedTitleKey('2027 서울 커넥트 스테이지-음악'),
+    normalizedTitleKey('2026년 양평문화자원 공연 창작프로젝트 공모')
+  )
+})
+
+test('같은 회차 안의 재공고를 한 건으로 줄인다', () => {
+  const out = buildDraftItems(
+    [
+      item({ key: 'artnuri:1', title: '2026년 양평문화자원 공연 창작프로젝트 공모' }),
+      item({ key: 'artnuri:2', title: '2026년 양평문화자원 공연 창작 프로젝트 공모 재공고' }),
+    ],
+    new Set()
+  )
+  assert.deepEqual(
+    out.map(i => i.key),
+    ['artnuri:1']
+  )
+})
+
+test('지난 회차에 나간 공고의 재공고는 key가 달라도 다시 담기지 않는다', () => {
+  const sentTitleKeys = new Set([normalizedTitleKey('2026년 양평문화자원 공연 창작프로젝트 공모')])
+  const out = buildDraftItems(
+    [item({ key: 'artnuri:new', title: '2026년 양평문화자원 공연 창작 프로젝트 공모 재공고' })],
+    new Set(),
+    CAP,
+    sentTitleKeys
+  )
+  assert.deepEqual(out, [])
+})
+
+// ------------------------------------------------- sortByDeadline (H2)
+
+test('마감 오름차순으로 정렬하고 상시(마감 없음)를 맨 뒤로 보낸다', () => {
+  // 실측 W37 active의 마감 순서를 그대로 쓴다 — 전혀 마감순이 아니었다.
+  const raw = [
+    '2026-11-02',
+    '2026-09-17',
+    '2026-09-23',
+    null,
+    '2026-09-15',
+    null,
+    '2026-09-14',
+  ].map((apply_end, i) => item({ key: `w37:${i}`, apply_end }))
+  const sorted = sortByDeadline(raw)
+  assert.deepEqual(
+    sorted.map(i => i.apply_end),
+    ['2026-09-14', '2026-09-15', '2026-09-17', '2026-09-23', '2026-11-02', null, null]
+  )
+})
+
+test('마감이 같으면 원래 순서를 지킨다 (안정 정렬)', () => {
+  const raw = [
+    item({ key: 'a', apply_end: '2026-09-14' }),
+    item({ key: 'b', apply_end: '2026-09-14' }),
+  ]
+  assert.deepEqual(
+    sortByDeadline(raw).map(i => i.key),
+    ['a', 'b']
+  )
+})
+
+test('sortByDeadline은 입력 배열을 바꾸지 않는다', () => {
+  const raw = [item({ key: 'a', apply_end: '2026-11-02' }), item({ key: 'b', apply_end: null })]
+  sortByDeadline(raw)
+  assert.deepEqual(
+    raw.map(i => i.key),
+    ['a', 'b']
+  )
+})
+
+// ------------------------------------------------- 메일 절단 문구 (H1)
+
+test('잘렸을 때만 메일 본문에 몇 건이 빠졌는지 적는다', () => {
+  const items = [item({ key: 'a' })]
+  const truncated = renderDigestEmail(items, '2026-W37', '2026-09-09', 'https://x.test/s', {
+    truncatedFrom: 3,
+  })
+  assert.ok(truncated.html.includes('2건'))
+  assert.ok(truncated.html.includes('게시판'))
+
+  const intact = renderDigestEmail(items, '2026-W37', '2026-09-09', 'https://x.test/s', {
+    truncatedFrom: 1,
+  })
+  assert.ok(!intact.html.includes('나머지'))
+
+  const noOption = renderDigestEmail(items, '2026-W37', '2026-09-09', 'https://x.test/s')
+  assert.ok(!noOption.html.includes('나머지'))
 })

@@ -10,6 +10,7 @@
  * 값 import해서, 판정 로직이 이 파일에 같이 있으면 plain `node --test`가 `next/cache`
  * 해석에 걸려 순수 함수 테스트까지 죽는다. 판정만 테스트한다.
  */
+import { DIGEST_LOOKBACK_WEEKS } from '../../lib/server/grantDigest.ts'
 import { getProjects } from '../../lib/data.ts'
 import { listMeetings } from './board.ts'
 import { listPublishedDigestItems } from './grantDigests.ts'
@@ -22,8 +23,9 @@ import {
 
 export { toCalendarItems, toOngoingGrants, type CalendarItem, type CalendarRange }
 
-/** 최근 발행된 회차에서 공고를 모을 범위. 마감이 최대 90일 뒤이므로 넉넉히 잡는다. */
-const DIGEST_LOOKBACK_WEEKS = 26
+// 거슬러 볼 회차 수는 `grantDigest.ts`가 정본이다 — 크론의 중복 제거 범위
+// (`DEDUPE_WEEKS`)와 **같은 값이어야** 캘린더가 보고 있는 옛 회차의 공고가 새 초안에
+// 다시 담기지 않는다. 두 숫자가 12와 26으로 갈라져 있던 시절이 그 버그였다.
 
 /**
  * 세 소스를 조회해 `toCalendarItems`·`toOngoingGrants`에 넘긴다. 개인 필터는 걸지 않는다 —

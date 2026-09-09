@@ -23,9 +23,10 @@ import {
   POOL_CAP,
   buildDraftItems,
   interleaveGenreBlocks,
+  normalizedTitleKey,
   weekKey,
 } from '@/lib/server/grantDigest'
-import { unionInterests } from '@/lib/server/interestMatch'
+import { filterByDefaultInterests, unionInterests } from '@/lib/server/interestMatch'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
 
@@ -127,8 +128,17 @@ export async function POST(request: NextRequest) {
     // 관심사를 설정하지 않은 상태) 순서가 원래 그대로 보존된다.
     const blocks = await fetchGrantOpportunities(scope)
     const fetched = interleaveGenreBlocks(blocks.map(b => b.items))
-    const sentKeys = new Set((await listRecentDigestItems(DEDUPE_WEEKS)).map(i => i.key))
-    const items = buildDraftItems(fetched, sentKeys, POOL_CAP)
+    // 중복 제거는 두 축이다: `key`(= source:source_id)와 정규화한 제목. 재공고는 새
+    // source_id를 받으므로 key만으로는 안 잡힌다(실측: 양평문화자원 공모/재공고가 두 회차에
+    // 걸쳐 게시글·메일·캘린더에 나란히 실렸다).
+    const recent = await listRecentDigestItems(DEDUPE_WEEKS)
+    const sentKeys = new Set(recent.map(i => i.key))
+    const sentTitleKeys = new Set(recent.map(i => normalizedTitleKey(i.title)).filter(Boolean))
+    const items = buildDraftItems(fetched, sentKeys, POOL_CAP, sentTitleKeys)
+
+    // 게시글·인앱 알림은 개인화하지 않으므로 조합 기본 관심사로 좁혀 렌더된다
+    // (`grantPublish.ts`). 관리자가 발행 전에 그 숫자를 알 수 있게 초안 알림에 함께 적는다.
+    const forPost = filterByDefaultInterests(items).length
 
     const digest = await createGrantDigest({ week_key: key, items })
 
@@ -136,9 +146,10 @@ export async function POST(request: NextRequest) {
       adminUserIds(profiles),
       '지원사업 초안이 준비됐습니다',
       `${key} 회차에 공고 ${items.length}건이 담겼습니다. ` +
+        `(그중 조합 기본 관심사로 게시글·알림에 실릴 것은 ${forPost}건) ` +
         `(수집 범위: 장르 ${scope.genres.length}종 · 지역 ${scope.regions.length}곳) ` +
         `관리자 > 지원사업에서 확인하고 발행해 주세요.`,
-      { weekKey: key, digestId: digest.id, count: items.length }
+      { weekKey: key, digestId: digest.id, count: items.length, post_count: forPost }
     )
 
     log.info('초안 생성 완료', { weekKey: key, fetched: fetched.length, kept: items.length })

@@ -2,6 +2,7 @@ import { z } from 'zod'
 
 import { getGrantDigestById, updateGrantDigest, type GrantItem } from '@/db/queries/grantDigests'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
+import { POOL_CAP } from '@/lib/server/grantDigest'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 
@@ -40,7 +41,9 @@ const itemSchema = z
 
 const patchSchema = z
   .object({
-    items: z.array(itemSchema).max(60),
+    // 상한은 POOL_CAP이 정본이다 — 손으로 복제하면 POOL_CAP을 올렸을 때 관리자가
+    // 편집을 저장할 수 없게 된다(400).
+    items: z.array(itemSchema).max(POOL_CAP),
   })
   .strict()
 

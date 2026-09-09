@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 const { runGrantPublish, isEmailOptedOut, summarizeMatchCounts } = await import(
   '../../src/lib/server/grantPublish.ts'
 )
+const { CAP } = await import('../../src/lib/server/grantDigest.ts')
 
 function item(over = {}) {
   return {
@@ -337,7 +338,8 @@ test('메일 상한 CAP은 개인별로 적용된다', async () => {
   })
   await runGrantPublish(h.input)
   const cards = (h.calls.emails[0].html.match(/border-radius: 8px/g) ?? []).length
-  assert.equal(cards, 12) // CAP
+  assert.equal(cards, CAP)
+  assert.equal(CAP, 20)
 })
 
 // ---------------------------------------------------------------- 0건 관측
@@ -410,7 +412,7 @@ test('건너뛴 사유가 셋으로 갈린다', async () => {
 
 // ---------------------------------------------------------------- 게시글은 개인화되지 않는다
 
-test('게시글에는 풀 전체가 담긴다 (개인 필터를 걸지 않는다)', async () => {
+test('게시글·알림은 조합 기본 관심사만 담는다 (한 사람의 설정이 조합 게시물을 바꾸지 않는다) (H8)', async () => {
   const h = harness({
     members: [member({ interest_genres: ['문학'], interest_regions: ['제주'] })],
     digest: {
@@ -419,13 +421,59 @@ test('게시글에는 풀 전체가 담긴다 (개인 필터를 걸지 않는다
       status: 'draft',
       items: [
         item({ key: 'a', title: 'a-title', genres: ['음악'], regions: ['경기'] }),
-        item({ key: 'b', title: 'b-title', genres: ['무용'], regions: ['서울'] }),
+        // 한 조합원이 '문학'·'제주'를 켜서 수집 범위에 딸려 온 공고.
+        item({ key: 'b', title: 'b-title', genres: ['문학'], regions: ['제주'] }),
       ],
     },
   })
-  await runGrantPublish(h.input)
+  const r = await runGrantPublish(h.input)
   assert.ok(h.calls.posts[0].content.includes('a-title'))
-  assert.ok(h.calls.posts[0].content.includes('b-title'))
+  assert.ok(!h.calls.posts[0].content.includes('b-title'))
+  assert.equal(r.post_item_count, 1)
+  assert.ok(h.calls.posts[0].title.includes('1건'))
+  assert.ok(h.calls.notifications[0].message.includes('1건'))
+})
+
+test('메일은 개인 관심사 그대로다 (게시글 필터에 묶이지 않는다) (H8)', async () => {
+  const h = harness({
+    members: [member({ interest_genres: ['문학'], interest_regions: ['제주'] })],
+    digest: {
+      id: 'd1',
+      week_key: '2026-W36',
+      status: 'draft',
+      items: [item({ key: 'b', title: 'b-title', genres: ['문학'], regions: ['제주'] })],
+    },
+  })
+  const r = await runGrantPublish(h.input)
+  assert.equal(r.email_sent, 1)
+  assert.ok(h.calls.emails[0].html.includes('b-title'))
+  assert.equal(r.post_item_count, 0)
+})
+
+// ------------------------------------------------- 절단 순서와 표시 (H1/H2)
+
+test('메일이 잘릴 때는 마감 임박순으로 남기고 상시를 뒤로 보낸다', async () => {
+  const items = [
+    ...Array.from({ length: CAP }, (_, i) =>
+      item({ key: `p${i}`, title: `p${i}`, apply_end: null })
+    ),
+    item({ key: 'urgent', title: 'urgent-title', apply_end: '2026-09-03' }),
+  ]
+  const h = harness({ digest: { id: 'd1', week_key: '2026-W36', status: 'draft', items } })
+  const r = await runGrantPublish(h.input)
+  assert.ok(
+    h.calls.emails[0].html.includes('urgent-title'),
+    '마감 임박 공고가 꼬리에 있다는 이유로 잘리면 안 된다'
+  )
+  assert.deepEqual(r.per_member, [{ matched: CAP, truncated: 1 }])
+  assert.ok(h.calls.emails[0].html.includes('나머지 1건'))
+})
+
+test('잘리지 않으면 truncated는 0이고 절단 문구도 없다', async () => {
+  const h = harness()
+  const r = await runGrantPublish(h.input)
+  assert.deepEqual(r.per_member, [{ matched: 1, truncated: 0 }])
+  assert.ok(!h.calls.emails[0].html.includes('나머지'))
 })
 
 // ---------------------------------------------------------------- 수신 건수 분포 (F4)
@@ -465,7 +513,7 @@ test('0건 회원도 분포에 matched: 0으로 나타난다 (0건인데 조용�
     },
   })
   const r = await runGrantPublish(h.input)
-  assert.deepEqual(r.per_member, [{ matched: 0 }])
+  assert.deepEqual(r.per_member, [{ matched: 0, truncated: 0 }])
   assert.equal(r.zero_match_count, 1)
 })
 
@@ -492,14 +540,14 @@ test('수신거부·주소오류 회원은 분포에 담기지 않는다 (애초
   })
   const r = await runGrantPublish(h.input)
   assert.equal(r.per_member.length, 1) // u1만
-  assert.deepEqual(r.per_member, [{ matched: 1 }])
+  assert.deepEqual(r.per_member, [{ matched: 1, truncated: 0 }])
 })
 
 test('per_member는 이메일 주소·회원 id를 담지 않는다', async () => {
   const h = harness()
   const r = await runGrantPublish(h.input)
   for (const entry of r.per_member) {
-    assert.deepEqual(Object.keys(entry), ['matched'])
+    assert.deepEqual(Object.keys(entry), ['matched', 'truncated'])
   }
 })
 

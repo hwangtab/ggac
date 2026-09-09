@@ -226,3 +226,56 @@ test('toOngoingGrants는 excluded 항목을 상시 목록에 담지 않는다', 
     ['grant:kept']
   )
 })
+
+// ------------------- excluded 그림자: 지난 회차 사본으로 되살아나지 않는다 (H4)
+
+test('최신 회차에서 뺀 공고는 지난 회차 사본이 있어도 캘린더에 남지 않는다', () => {
+  // 실측 재현: 「2026년 양평문화자원 공연 창작 프로젝트 공모 재공고」가 최신 회차에서
+  // excluded인데 지난 회차 사본(excluded=false)이 있어 캘린더에 그대로 남았다.
+  // listPublishedDigestItems는 최신 회차부터 돌려주므로 최신 판단이 이겨야 한다.
+  const out = toCalendarItems(
+    {
+      grants: [
+        grant({
+          key: 'artnuri:재공고',
+          apply_end: '2026-09-20',
+          excluded: true,
+          title: '2026년 양평문화자원 공연 창작 프로젝트 공모 재공고',
+        }),
+        grant({
+          key: 'artnuri:재공고',
+          apply_end: '2026-09-20',
+          excluded: false,
+          title: '2026년 양평문화자원 공연 창작 프로젝트 공모 재공고',
+        }),
+      ],
+      meetings: [],
+      projects: [],
+    },
+    RANGE
+  )
+  assert.deepEqual(out, [])
+})
+
+test('상시 목록도 지난 회차 사본으로 되살아나지 않는다', () => {
+  const out = toOngoingGrants([
+    grant({ key: 'artnuri:상시', apply_end: null, excluded: true }),
+    grant({ key: 'artnuri:상시', apply_end: null, excluded: false }),
+  ])
+  assert.deepEqual(out, [])
+})
+
+test('제외되지 않은 공고는 사본이 여러 개여도 한 번만 담긴다', () => {
+  const out = toCalendarItems(
+    {
+      grants: [
+        grant({ key: 'artnuri:1', apply_end: '2026-09-20' }),
+        grant({ key: 'artnuri:1', apply_end: '2026-09-20' }),
+      ],
+      meetings: [],
+      projects: [],
+    },
+    RANGE
+  )
+  assert.equal(out.length, 1)
+})

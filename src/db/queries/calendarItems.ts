@@ -53,6 +53,8 @@ function inRange(date: string, range: CalendarRange): boolean {
  * 빠지는 것:
  * - 관리자가 이번 회차에서 뺀 공고(`excluded: true`) — 발행 경로(`activeItems`)와 같은
  *   기준이다. 여기서 걸지 않으면 게시글·메일에서는 빠진 공고가 캘린더에만 남는다.
+ *   **제외된 항목도 중복 제거 집합에는 등록한다** — 등록을 건너뛰면 같은 공고의 지난
+ *   회차 사본(그때는 `excluded=false`)이 뒤이어 통과해 되살아난다.
  * - 마감이 없는 상시 공고(`apply_end: null`) — 달력에 찍을 자리가 없다. 화면이 그리드
  *   아래 별도 목록으로 따로 보여준다.
  * - 날짜가 정해지지 않은 회의(`meeting_date: null`, 일정 투표 중) — 같은 이유.
@@ -69,11 +71,20 @@ export function toCalendarItems(sources: CalendarSources, range: CalendarRange):
   }
 
   for (const g of sources.grants) {
+    // 제외된 항목도 먼저 `seen`에 등록한다 — 등록하지 않으면 관리자가 이번 회차에서 뺀
+    // 공고가 **지난 회차의 사본으로 되살아난다**(실측: 「양평문화자원 공연 창작 프로젝트
+    // 공모 재공고」가 최신 회차 excluded인데 캘린더에 남았다). `grants`는 최신 회차부터
+    // 오므로, 최신 회차의 판단이 옛 회차를 이긴다.
+    const grantKey = `grant:${g.key}`
+    if (seen.has(grantKey)) continue
+    seen.add(grantKey)
     if (g.excluded) continue
     if (!g.apply_end) continue
     if (!inRange(g.apply_end, range)) continue
-    push({
-      key: `grant:${g.key}`,
+    // `push`가 아니라 직접 넣는다 — 위에서 이미 `seen`에 등록했으므로 `push`는
+    // 중복으로 보고 버린다.
+    out.push({
+      key: grantKey,
       kind: 'grant',
       date: g.apply_end,
       time: null,
@@ -128,11 +139,13 @@ export function toOngoingGrants(grants: GrantItem[]): CalendarItem[] {
   const out: CalendarItem[] = []
   const seen = new Set<string>()
   for (const g of grants) {
-    if (g.excluded) continue
-    if (g.apply_end) continue
+    // `toCalendarItems`와 같은 이유로 `excluded` 검사보다 먼저 등록한다 — 최신 회차에서
+    // 뺀 공고가 옛 회차 사본으로 되살아나지 않게.
     const key = `grant:${g.key}`
     if (seen.has(key)) continue
     seen.add(key)
+    if (g.excluded) continue
+    if (g.apply_end) continue
     out.push({
       key,
       kind: 'grant',

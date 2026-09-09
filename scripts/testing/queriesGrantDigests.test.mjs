@@ -111,14 +111,69 @@ test('없는 id를 갱신하면 null이다', async () => {
   assert.equal(await m.updateGrantDigest('no-such-id', { status: 'discarded' }), null)
 })
 
-test('listRecentDigestItems는 최근 회차의 항목을 평평하게 모은다', async () => {
+test('listRecentDigestItems는 발행된 회차의 항목을 평평하게 모은다', async () => {
   const m = await loadFresh()
-  await m.createGrantDigest({ week_key: '2026-W40', items: [{ ...ITEM, key: 'ncas:40' }] })
-  await m.createGrantDigest({ week_key: '2026-W41', items: [{ ...ITEM, key: 'ncas:41' }] })
+  const a = await m.createGrantDigest({
+    week_key: '2026-W40',
+    items: [{ ...ITEM, key: 'ncas:40' }],
+  })
+  const b = await m.createGrantDigest({
+    week_key: '2026-W41',
+    items: [{ ...ITEM, key: 'ncas:41' }],
+  })
+  await m.updateGrantDigest(a.id, { status: 'published' })
+  await m.updateGrantDigest(b.id, { status: 'published' })
   const items = await m.listRecentDigestItems(12)
   const keys = items.map(i => i.key)
   assert.ok(keys.includes('ncas:40'))
   assert.ok(keys.includes('ncas:41'))
+})
+
+test('listRecentDigestItems는 폐기된 회차의 항목을 억제하지 않는다 (H5)', async () => {
+  // 수집이 잘못돼 한 회차를 통째로 폐기하면 그 회차의 공고가 12주간 다시 초안에 오르지
+  // 못했다 — 마감이 최대 90일이라 상당수가 그 사이에 마감돼 조합원에게 영영 안 갔다.
+  const m = await loadFresh()
+  const discarded = await m.createGrantDigest({
+    week_key: '2026-W48',
+    items: [{ ...ITEM, key: 'ncas:48-discarded' }],
+  })
+  await m.updateGrantDigest(discarded.id, { status: 'discarded' })
+  const keys = (await m.listRecentDigestItems(12)).map(i => i.key)
+  assert.ok(!keys.includes('ncas:48-discarded'))
+})
+
+test('listRecentDigestItems는 초안 회차의 항목을 억제하지 않는다', async () => {
+  const m = await loadFresh()
+  await m.createGrantDigest({ week_key: '2026-W49', items: [{ ...ITEM, key: 'ncas:49-draft' }] })
+  const keys = (await m.listRecentDigestItems(12)).map(i => i.key)
+  assert.ok(!keys.includes('ncas:49-draft'))
+})
+
+test('listRecentDigestItems는 관리자가 제외한 항목을 억제하지 않는다 (H5)', async () => {
+  // 실수로 제외 체크한 항목을 회수할 방법이 없었다. 실측 W37에 excluded 34건이 있다.
+  const m = await loadFresh()
+  const row = await m.createGrantDigest({
+    week_key: '2026-W50',
+    items: [
+      { ...ITEM, key: 'ncas:50-kept' },
+      { ...ITEM, key: 'ncas:50-excluded', excluded: true },
+    ],
+  })
+  await m.updateGrantDigest(row.id, { status: 'published' })
+  const keys = (await m.listRecentDigestItems(12)).map(i => i.key)
+  assert.ok(keys.includes('ncas:50-kept'))
+  assert.ok(!keys.includes('ncas:50-excluded'))
+})
+
+test('listPublishedDigestItems는 excluded 항목을 그대로 남긴다 (캘린더 중복 제거용)', async () => {
+  const m = await loadFresh()
+  const row = await m.createGrantDigest({
+    week_key: '2026-W51',
+    items: [{ ...ITEM, key: 'ncas:51-excluded', excluded: true }],
+  })
+  await m.updateGrantDigest(row.id, { status: 'published' })
+  const keys = (await m.listPublishedDigestItems(12)).map(i => i.key)
+  assert.ok(keys.includes('ncas:51-excluded'))
 })
 
 test('listPublishedDigestItems는 발행된 회차의 항목만 모은다 (F2)', async () => {

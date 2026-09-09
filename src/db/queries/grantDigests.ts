@@ -122,28 +122,39 @@ export async function listGrantDigests(limit: number): Promise<GrantDigestRow[]>
 }
 
 /**
- * 최근 `weeks`개 회차의 항목을 평평하게 모은다. 중복 제거용이라 status를 가리지 않는다 —
- * 초안만 만들어두고 발행하지 않은 회차의 공고도 다음 주에 또 올리면 관리자가 같은 것을
- * 두 번 검토하게 된다.
+ * 최근 `weeks`개 **발행된** 회차에서 조합원에게 실제로 나간 항목만 평평하게 모은다.
+ * 크론의 중복 제거용이다.
+ *
+ * **`status='published'`만 보고, `excluded=true`인 항목은 뺀다.** 예전에는 status를
+ * 가리지 않고 `items` 전체를 억제 목록으로 썼는데, 그러면 두 가지가 조합원에게 영영
+ * 가지 못한다:
+ *
+ * - 수집이 잘못돼 관리자가 통째로 **폐기(`discarded`)한 회차**의 공고(최대 `POOL_CAP`건).
+ *   마감이 최대 90일 뒤이므로 상당수가 억제 기간 안에 마감된다.
+ * - 관리자가 실수로 **제외 표시한 항목**. 회수할 방법이 없었다.
+ *
+ * 발행되지 않은 회차의 항목을 다시 담는 대가는 "관리자가 같은 것을 한 번 더 본다"이고,
+ * 억제하는 대가는 "조합원이 그 공고를 영영 못 본다"이다. 후자가 더 크다.
  */
 export async function listRecentDigestItems(weeks: number): Promise<GrantItem[]> {
   const rows = await db
     .select({ items: grantDigests.items })
     .from(grantDigests)
+    .where(eq(grantDigests.status, 'published'))
     .orderBy(desc(grantDigests.createdAt))
     .limit(weeks)
-  return rows.flatMap(r => (r.items ?? []) as GrantItem[])
+  return rows.flatMap(r => (r.items ?? []) as GrantItem[]).filter(i => !i.excluded)
 }
 
 /**
  * 최근 `weeks`개 회차 중 **발행된(`status='published'`) 회차만** 항목을 평평하게 모은다.
  * 캘린더(`src/db/queries/calendar.ts`)가 쓴다.
  *
- * `listRecentDigestItems`와 다른 이유: 그 함수는 크론의 중복 제거용이라 status를 가리면
- * 안 된다(초안만 만들고 발행 안 한 회차의 공고도 다음 주에 또 올리면 관리자가 같은 것을
- * 두 번 검토하게 된다 — 그 함수 docstring 참고). 반대로 캘린더는 조합원이 보는 화면이라
- * **발행되지 않은 회차(초안·발행중·폐기)의 공고가 보이면 안 된다** — 관리자가 아직
- * 검수하지 않았거나 일부러 폐기한 내용이 노출되는 것이기 때문이다.
+ * `listRecentDigestItems`와 다른 점: 그 함수는 `excluded=true`인 항목까지 빼지만
+ * 여기서는 남긴다 — 캘린더 쪽 중복 제거(`calendarItems.ts`)가 "최신 회차에서 뺀 공고는
+ * 옛 회차 사본으로도 되살아나지 않는다"를 판정하려면 제외 표시 자체가 필요하기 때문이다.
+ * 공통점은 `status='published'`만 본다는 것 — 캘린더는 조합원이 보는 화면이라 관리자가
+ * 아직 검수하지 않았거나 일부러 폐기한 회차의 공고가 보이면 안 된다.
  */
 export async function listPublishedDigestItems(weeks: number): Promise<GrantItem[]> {
   const rows = await db

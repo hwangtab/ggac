@@ -4,9 +4,13 @@ import assert from 'node:assert/strict'
 const { STANDARD_GENRES, REGIONS, isStandardGenre, isRegion } = await import(
   '../../src/constants/interests.ts'
 )
-const { effectiveInterests, matchesInterests, unionInterests } = await import(
-  '../../src/lib/server/interestMatch.ts'
-)
+const {
+  effectiveInterests,
+  matchesInterests,
+  unionInterests,
+  filterByDefaultInterests,
+  DEFAULT_DIGEST_INTERESTS,
+} = await import('../../src/lib/server/interestMatch.ts')
 
 // ---------------------------------------------------------------- 상수
 
@@ -17,8 +21,8 @@ test('장르 10종이고 음악이 들어 있다', () => {
   assert.ok(STANDARD_GENRES.includes('다원예술'))
 })
 
-test('장르 목록에 와일드카드 전체가 들어 있지 않다', () => {
-  // '전체'는 공고에만 붙는 와일드카드다. 조합원이 고를 값이 아니다.
+test('장르 목록에 전체가 들어 있지 않다', () => {
+  // '전체'는 공고에만 붙는 값이고 "장르 특정 불가"를 뜻한다. 조합원이 고를 값이 아니다.
   assert.ok(!STANDARD_GENRES.includes('전체'))
 })
 
@@ -80,8 +84,9 @@ test('지역이 맞아도 장르가 다르면 탈락', () => {
   assert.equal(matchesInterests({ genres: ['무용'], regions: ['경기'] }, MINE), false)
 })
 
-test("공고 장르가 '전체'면 장르 축을 통과한다", () => {
-  assert.equal(matchesInterests({ genres: ['전체'], regions: ['서울'] }, MINE), true)
+test("공고 장르가 '전체'면 탈락한다 ('전체'는 전 장르가 아니라 분류 실패다)", () => {
+  // kosmart 실측(2026-09-09, n=64): ['전체'] 15건 중 14건이 융자·행정 안내·교육·심리상담.
+  assert.equal(matchesInterests({ genres: ['전체'], regions: ['서울'] }, MINE), false)
 })
 
 test("공고 지역이 '전국'이면 지역 축을 통과한다", () => {
@@ -92,8 +97,36 @@ test("공고 지역이 '전체'여도 지역 축을 통과한다", () => {
   assert.equal(matchesInterests({ genres: ['음악'], regions: ['전체'] }, MINE), true)
 })
 
-test('공고 지역 태그가 비면 전국으로 보고 통과한다', () => {
-  assert.equal(matchesInterests({ genres: ['음악'], regions: [] }, MINE), true)
+test('공고 지역 태그가 비면 탈락한다 (빈 배열은 전국이 아니라 분류 실패다)', () => {
+  // 실측: 「2026년 대구아트웨이 스튜디오 입주예술인(단체) 공모」가 regions=[]로 실려
+  // 경기·서울 요청을 그대로 통과했다. kosmart는 regions=[]에 제목 기반 지역 추론조차
+  // 적용하지 않는다.
+  assert.equal(matchesInterests({ genres: ['음악'], regions: [] }, MINE), false)
+})
+
+test('실데이터 형태: 관심사 미설정 회원(빈 배열)은 조합 기본값으로 판정된다', () => {
+  const i = effectiveInterests({ interest_genres: [], interest_regions: [] })
+  assert.equal(matchesInterests({ genres: ['음악'], regions: ['경기'] }, i), true)
+  assert.equal(matchesInterests({ genres: ['전체'], regions: [] }, i), false)
+})
+
+// ------------------------------------------------- 게시글·알림은 조합 기본값만 (H8)
+
+test('filterByDefaultInterests는 조합 기본 관심사 통과분만 남긴다', () => {
+  const items = [
+    { key: 'a', genres: ['음악'], regions: ['경기'] },
+    { key: 'b', genres: ['문학'], regions: ['제주'] }, // 한 조합원이 켠 관심사로 딸려 온 것
+    { key: 'c', genres: ['음악'], regions: ['전국'] },
+  ]
+  assert.deepEqual(
+    filterByDefaultInterests(items).map(i => i.key),
+    ['a', 'c']
+  )
+})
+
+test('DEFAULT_DIGEST_INTERESTS는 조합 기본값(음악 / 경기·서울)이다', () => {
+  assert.deepEqual(DEFAULT_DIGEST_INTERESTS.genres, ['음악'])
+  assert.deepEqual(DEFAULT_DIGEST_INTERESTS.regions, ['경기', '서울'])
 })
 
 test('공고 장르 태그가 비면 탈락한다 (지역만으로 통과시키지 않는다)', () => {

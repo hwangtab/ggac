@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import AdminLayout from '../components/AdminLayout'
+import { CAP } from '@/lib/server/grantDigest'
+import { filterByDefaultInterests } from '@/lib/server/interestMatch'
 
 type GrantItem = {
   key: string
@@ -73,12 +75,29 @@ function dDayLabel(applyEnd: string | null): string {
  * 수신 건수 분포 한 줄 요약. `zero_match_count`(0건인 사람 수)만으로는 "0건은 아니지만
  * 적게 받은 사람"이 안 보인다 — kosmart 210명 카드 0장 사고의 이웃 사례다.
  */
-function matchStatsLabel(perMember: { matched: number }[] | undefined): string | null {
+function matchStatsLabel(
+  perMember: { matched: number; truncated?: number }[] | undefined
+): string | null {
   if (!perMember || perMember.length === 0) return null
   const counts = [...perMember.map(p => p.matched)].sort((a, b) => a - b)
   const mid = Math.floor(counts.length / 2)
   const median = counts.length % 2 === 0 ? (counts[mid - 1] + counts[mid]) / 2 : counts[mid]
-  return `수신 건수: 최소 ${counts[0]} · 중앙값 ${median} · 최대 ${counts[counts.length - 1]}`
+  const base = `수신 건수: 최소 ${counts[0]} · 중앙값 ${median} · 최대 ${counts[counts.length - 1]}`
+  // 절단은 따로 적는다 — "최대 20"만 보면 상한과 같은 값이라는 것이 잘렸다는 뜻임을
+  // 화면이 말해주지 않는다(2026-W37에 실제로 2건이 조용히 잘렸다).
+  const truncatedPeople = perMember.filter(p => (p.truncated ?? 0) > 0)
+  if (truncatedPeople.length === 0) return base
+  const worst = Math.max(...truncatedPeople.map(p => p.truncated ?? 0))
+  return `${base} · 메일에서 잘림: ${truncatedPeople.length}명 (최대 ${worst}건, 상한 ${CAP})`
+}
+
+/**
+ * 이 회차에서 조합 공식 게시글·인앱 알림에 실릴 건수. 메일·캘린더와 달리 이 둘은
+ * 개인화하지 않고 **조합 기본 관심사**(음악 / 경기·서울)로 좁힌다 — 발행 전에 그 숫자를
+ * 보여주지 않으면 관리자가 "14건 남겼다"고 생각한 회차의 게시글이 몇 건짜리인지 알 수 없다.
+ */
+function postItemCount(items: GrantItem[]): number {
+  return filterByDefaultInterests(items.filter(i => !i.excluded)).length
 }
 
 export default function AdminGrantsPage() {
@@ -181,8 +200,12 @@ export default function AdminGrantsPage() {
       return
     }
     const active = selected.items.filter(i => !i.excluded).length
+    const forPost = postItemCount(selected.items)
     const ok = window.confirm(
-      `조합원 전원에게 게시글·알림·이메일이 나갑니다 (공고 ${active}건).\n` +
+      `조합원 전원에게 게시글·알림·이메일이 나갑니다.\n` +
+        `· 게시글·알림: ${forPost}건 (조합 기본 관심사 통과분)\n` +
+        `· 메일: 사람마다 관심사로 갈리며 한 통에 최대 ${CAP}건 (마감 임박순)\n` +
+        `· 남긴 공고: ${active}건\n` +
         '이미 나간 메일과 알림은 회수되지 않습니다. 발행할까요?'
     )
     if (!ok) return
@@ -272,11 +295,24 @@ export default function AdminGrantsPage() {
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-bold">
                 {selected.week_key} · 공고 {selected.items.filter(i => !i.excluded).length}건
+                <span className="ml-2 text-sm font-normal text-gray-500">
+                  (게시글·알림 {postItemCount(selected.items)}건)
+                </span>
               </h2>
               <button type="button" onClick={closeModal} className="text-gray-400">
                 닫기
               </button>
             </div>
+
+            {selected.items.length > 0 &&
+              selected.items.some(i => !i.excluded) &&
+              postItemCount(selected.items) === 0 && (
+                <p className="mb-4 rounded bg-amber-50 p-3 text-sm text-amber-800">
+                  남긴 공고가 조합 기본 관심사(음악 / 경기·서울)를 하나도 통과하지 못했습니다.
+                  발행하면 게시글과 알림은 &quot;이번 주에 새로 안내할 공고가 없습니다&quot;로
+                  나갑니다. 메일은 개인 관심사로 판정하므로 따로 나갈 수 있습니다.
+                </p>
+              )}
 
             {selected.items.length === 0 && (
               <p className="mb-4 text-sm text-gray-500">

@@ -14,9 +14,10 @@ import {
   renderDigestEmail,
   renderDigestMarkdown,
   renderDigestNotification,
+  sortByDeadline,
   CAP,
 } from './grantDigest.ts'
-import { effectiveInterests, matchesInterests } from './interestMatch.ts'
+import { effectiveInterests, filterByDefaultInterests, matchesInterests } from './interestMatch.ts'
 
 /** `getUserSettings`가 돌려주는 행의 필요한 부분만. */
 export interface SettingLike {
@@ -70,7 +71,9 @@ export interface GrantPublishResult {
    * `zero_match_count`(0건인 사람 수)만으로는 안 보인다. kosmart가 210명에게 카드
    * 0장을 준 사고의 이웃 사례가 정확히 이것이다 — 조금 받는 사람도 보여야 한다.
    */
-  per_member: { matched: number }[]
+  per_member: { matched: number; truncated: number }[]
+  /** 조합 기본 관심사(음악 / 경기·서울)를 통과해 게시글·알림에 실린 건수. */
+  post_item_count: number
   /** 실패한 주소(마스킹됨)와 사유. 관리자 화면에 그대로 보여준다. */
   email_errors: { to: string; error: string }[]
 }
@@ -164,11 +167,16 @@ export async function runGrantPublish(input: RunGrantPublishInput): Promise<Gran
   const { digest, members, log } = input
   const todayIso = kstTodayIso(input.now)
   const active = activeItems(digest.items)
+  // 조합 공식 게시글과 인앱 알림은 **조합 기본 관심사**로 좁힌다. 수집 범위는 조합원
+  // 관심사의 합집합이라, 한 사람이 '문학'·'제주'를 켜면 그 공고가 풀에 들어온다 —
+  // 개인화하지 않는 두 경로를 그대로 두면 한 사람의 설정이 조합 게시물을 바꾼다.
+  // 메일과 캘린더는 사람마다 갈리므로 개인 관심사를 그대로 쓴다.
+  const postItems = filterByDefaultInterests(active)
 
   // ① 게시글. 실패하면 던진다 — 게시글이 없으면 알림이 가리킬 곳이 없다.
-  const content = renderDigestMarkdown(digest.items, digest.week_key, todayIso)
+  const content = renderDigestMarkdown(postItems, digest.week_key, todayIso)
   const post = await input.createPost({
-    title: `[지원사업] ${digest.week_key} ${active.length}건`,
+    title: `[지원사업] ${digest.week_key} ${postItems.length}건`,
     content,
     content_format: 'markdown',
     category: '지원사업',
@@ -178,7 +186,7 @@ export async function runGrantPublish(input: RunGrantPublishInput): Promise<Gran
   })
 
   // ② 인앱 알림. 실패해도 발행을 되돌리지 않는다 — 게시글은 이미 올라갔다.
-  const notification = renderDigestNotification(digest.items, digest.week_key)
+  const notification = renderDigestNotification(postItems, digest.week_key)
   const userIds = members.map(m => m.id)
   let notified = 0
   let notificationFailed = false
@@ -188,7 +196,7 @@ export async function runGrantPublish(input: RunGrantPublishInput): Promise<Gran
       type: 'system_notice',
       title: notification.title,
       message: notification.message,
-      data: { weekKey: digest.week_key, digestId: digest.id, count: active.length },
+      data: { weekKey: digest.week_key, digestId: digest.id, count: postItems.length },
       expires_at: new Date(
         input.now.getTime() + NOTIFICATION_EXPIRY_DAYS * 86_400_000
       ).toISOString(),
@@ -214,6 +222,8 @@ export async function runGrantPublish(input: RunGrantPublishInput): Promise<Gran
   // 이메일 수신 대상(수신거부·주소오류로 걸러지지 않은 회원)의 담긴 건수. 숫자만 —
   // 회원 id·이메일은 담지 않는다.
   const matchedCounts: number[] = []
+  // 같은 회원에 대해 CAP에서 잘려 메일에 못 실린 건수. 잘리지 않았으면 0이다.
+  const truncatedCounts: number[] = []
 
   for (const m of members) {
     if (isEmailOptedOut(input.settingsByUserId.get(m.id))) {
@@ -227,8 +237,12 @@ export async function runGrantPublish(input: RunGrantPublishInput): Promise<Gran
 
     // 이 회원의 관심사로 풀을 거른다. 미설정이면 조합 기본값이 적용된다.
     const interests = effectiveInterests(m)
-    const mine = active.filter(it => matchesInterests(it, interests)).slice(0, CAP)
+    // 자르기 전에 마감 임박순으로 정렬한다 — 정렬 없이 자르면 kosmart 점수순 배열의
+    // 꼬리가 잘려, 마감이 코앞인 공고가 게시글에는 있고 메일에는 없는 일이 생긴다.
+    const eligible = sortByDeadline(active.filter(it => matchesInterests(it, interests)))
+    const mine = eligible.slice(0, CAP)
     matchedCounts.push(mine.length)
+    truncatedCounts.push(eligible.length - mine.length)
 
     if (mine.length === 0) {
       // 빈 메일은 노이즈다. 게시글과 인앱 알림은 이미 갔으므로 이 회원도 볼 것은 있다.
@@ -236,7 +250,9 @@ export async function runGrantPublish(input: RunGrantPublishInput): Promise<Gran
       continue
     }
 
-    const { subject, html } = renderDigestEmail(mine, digest.week_key, todayIso, settingsUrl)
+    const { subject, html } = renderDigestEmail(mine, digest.week_key, todayIso, settingsUrl, {
+      truncatedFrom: eligible.length,
+    })
 
     try {
       await input.sendEmail({
@@ -267,6 +283,8 @@ export async function runGrantPublish(input: RunGrantPublishInput): Promise<Gran
     matchedMin: matchStats.min,
     matchedMedian: matchStats.median,
     matchedMax: matchStats.max,
+    truncatedTotal: truncatedCounts.reduce((sum, n) => sum + n, 0),
+    postItemCount: postItems.length,
   })
 
   return {
@@ -279,7 +297,11 @@ export async function runGrantPublish(input: RunGrantPublishInput): Promise<Gran
     email_skipped_address: skippedAddress,
     email_skipped_nomatch: skippedNoMatch,
     zero_match_count: skippedNoMatch,
-    per_member: matchedCounts.map(matched => ({ matched })),
+    per_member: matchedCounts.map((matched, idx) => ({
+      matched,
+      truncated: truncatedCounts[idx] ?? 0,
+    })),
+    post_item_count: postItems.length,
     email_errors: errors,
   }
 }

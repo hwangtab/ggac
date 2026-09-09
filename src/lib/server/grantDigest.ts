@@ -23,8 +23,16 @@ export const DIGEST_REGIONS = ['경기', '서울'] as const
  */
 export const WINDOW_DAYS = 90
 
-/** 한 회차에 담을 공고 수 상한. */
-export const CAP = 12
+/**
+ * **메일 한 통**에 담을 공고 수 상한.
+ *
+ * 20인 이유: 2026-W37 실측에서 관리자가 남긴 공고가 14건이었는데 옛 상한 12가 꼬리
+ * 2건을 조용히 잘랐다 — 게시글은 14건, 알림은 14건, 메일만 12건이라 세 숫자가 갈렸고
+ * 어느 화면도 잘렸다고 말하지 않았다. 20이면 실측 규모(active 14)에 여유가 있고,
+ * 그래도 넘치면 {@link sortByDeadline}으로 마감 임박순으로 정렬한 뒤 자르며 메일 본문과
+ * 관리자 화면이 잘린 사실을 함께 알린다.
+ */
+export const CAP = 20
 
 /**
  * 한 회차의 공고 풀 상한. `CAP`(12)은 **메일 한 통**의 상한이고 이것은 **풀 전체**의
@@ -36,8 +44,19 @@ export const CAP = 12
  */
 export const POOL_CAP = 60
 
-/** 중복 제거에 볼 과거 회차 수. */
-export const DEDUPE_WEEKS = 12
+/**
+ * 캘린더가 거슬러 읽는 발행 회차 수(`src/db/queries/calendar.ts`).
+ *
+ * 마감이 최대 `WINDOW_DAYS`(90일) 뒤이므로 넉넉히 잡는다.
+ */
+export const DIGEST_LOOKBACK_WEEKS = 26
+
+/**
+ * 중복 제거에 볼 과거 회차 수. **캘린더가 읽는 범위와 같은 값이어야 한다** —
+ * 짧으면 캘린더가 아직 보고 있는 옛 회차의 공고가 새 초안에 다시 담긴다(같은 공고가
+ * 캘린더에 두 번 찍힌다).
+ */
+export const DEDUPE_WEEKS = DIGEST_LOOKBACK_WEEKS
 
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000
 
@@ -114,17 +133,19 @@ export function isExcludedByTitle(title: string): boolean {
  * - `합창`: 종로구립합창단 신규단원 모집, 종로구립어르신합창단 지도단원 모집, 무용·합창
  *   워크숍 참여자 모집 세 건이 전부 이 키워드로 걸린다. 「커넥트 스테이지(연극·무용·음악·
  *   전통) 통합공모」처럼 음악도 받는 공고는 제목에 '합창'이 없어 안 걸린다.
- * - `단원`: 기관 소속 단원 채용(구립합창단·시립교향악단류)을 잡는다. 「제철공연
- *   참여단체 모집」은 '단원'이 아니라 안 걸린다. 국장 지시는 "단원 모집"이었지만 '단원'
- *   만 쓰는 이유는 「지도단원(알토) 모집」처럼 사이에 말이 끼면 '단원 모집'이라는 정확한
- *   문자열이 없기 때문이다.
+ * - `모집`: 사람을 뽑는 공고를 잡는다. 기관 소속 단원 채용(구립합창단·시립교향악단류)과
+ *   2026-W37 실측 3번 「2026년 꿈의 극단 안산 예술감독 모집」(`biz_type='인력, 기타'`,
+ *   `category='grant'`)이 여기 걸린다. 그 항목은 채용 공고인데 카테고리·장르·biz_type
+ *   어느 규칙에도 안 걸려 게시글·메일·캘린더에 전부 실렸다.
+ *   `단원`을 따로 두지 않는 이유는 「지도단원(알토) 모집」을 포함해 실측된 단원 채용
+ *   공고가 전부 '모집'으로 끝나서 이 키워드가 덮기 때문이다.
  * - `무용`을 넣지 않는 이유: 「서울 커넥트 스테이지(연극·무용·음악·전통) 통합공모」가
  *   함께 걸린다 — 음악도 받는 유효한 창작지원이다. 순수 무용 공고는 `genres=['무용']`
  *   이라 관심사 필터가 이미 거른다.
  */
 export const EXCLUDE_TITLE_KEYWORDS = [
   '합창',
-  '단원',
+  '모집',
   // 2026-W37 실측: '안내'만으로 거르면 유효한 공모(8번 「2027년 해외 우수 콘텐츠 지역
   // 네트워크 사업 공모 안내」, 19·20번 「이음 예술창작 아카데미 …과정 안내」)까지 함께
   // 걸린다. 그래서 '안내' 단독이 아니라 앞말이 붙은 두 어절을 정확히 쓴다.
@@ -142,7 +163,11 @@ export const EXCLUDE_TITLE_KEYWORDS = [
  * 관심사와 맞는지 판정할 수 없고, 발행 시 개인 필터(`matchesInterests`)가 어차피
  * 떨어뜨려 메일에는 안 나간다 — 게시글에만 실려 노이즈가 된다(2026-W37 실측 13·15번).
  *
- * `genres=['전체']`는 와일드카드이지 분류 실패가 아니므로 남긴다 — `length === 0`만 본다.
+ * `genres=['전체']`는 여기서 거르지 않는다 — `length === 0`만 본다. 다만 `'전체'`가
+ * "전 장르 대상"이라는 뜻은 **아니다**: kosmart 응답 실측(2026-09-09, n=64)에서
+ * `['전체']` 15건 중 14건이 융자·행정 안내·교육·심리상담처럼 장르 개념이 없는 공고였다.
+ * 즉 `'전체'`는 "장르를 특정할 수 없음"이다. 그래서 개인 매칭
+ * (`interestMatch.ts:matchesInterests`)은 `'전체'`를 통과시키지 않는다.
  */
 export function isExcludedByGenres(genres: string[]): boolean {
   return genres.length === 0
@@ -172,20 +197,21 @@ export function isExcludedByBizType(bizType: string | null | undefined): boolean
 /**
  * kosmart 응답의 카테고리로 생활정보성 공고를 거른다.
  *
- * `grantFetch.ts`는 kosmart에 `strictRegion=true`만 넘기는데, kosmart의
- * `buildPartnerFeed`는 `interestCategories: []`를 "관심사 미설정 → 전부 통과"(옵트아웃)로
- * 처리한다 — fail-closed가 아니다. 그 결과 `housing`(임대주택)·`finance`(전세자금 융자
- * 등)·`welfare`(심리상담 등)·`admin`(예술활동증명 안내 등) 같은 생활정보 카테고리가 예술지원
- * 게시글에 섞여 들어온다. 게시글은 개인화하지 않고 풀 전체를 싣기 때문에, 여기서 거르지
- * 않으면 조합 공식 게시물에 임대주택 공고가 통째로 올라간다.
+ * kosmart의 partner 피드에는 자체 발송(`digest.ts`)이 쓰는 life 쿼터가 없다 — 실측
+ * (2026-09-09, `genres=음악&regions=경기,서울&strictRegion=true`, n=64)으로 **64건 중
+ * 37건(58%)이 life 계열**이었다(housing 28 · finance 6 · admin 2 · welfare 1).
+ * 게시글은 풀 전체를 싣기 때문에, 여기서 거르지 않으면 조합 공식 게시물에 임대주택
+ * 공고가 통째로 올라간다.
  *
- * kosmart의 life 계열 다섯(`housing|finance|welfare|space|admin`) 중 넷만 뺀다:
+ * 거르는 값은 운영 데이터에서 실제로 관찰된 것만 적는다. `grant_digests` 60건 실측
+ * (2026-W36·W37)의 카테고리 분포는 `grant 32 · housing 19 · finance 6 · admin 2 ·
+ * welfare 1`이었다.
  *
- * - `space`는 빼지 않는다. 연습실·공연장·무대용품 대여처럼 음악인에게 실제로 쓸모가 있고,
- *   지난 회차 발행분에도 「면목역 문화광장 사전 예약」·「리스테이지 서울 무대용품 대여」가
- *   실제로 유용하게 담겼다.
  * - `finance`는 뺀다. 「예술산업보증」처럼 예술 관련 금융이 섞여 있지만, 실제로는 전세자금·
  *   생활안정자금 융자가 대부분이라 조합원이 지원사업 메일에서 기대하는 내용이 아니다.
+ *
+ * 새 카테고리 값이 들어오면 이 목록은 그것을 모른다 — 값을 추가하기 전에 운영 데이터에서
+ * 그 값이 실제로 오는지부터 확인한다.
  */
 export function isExcludedByCategory(category: string): boolean {
   return EXCLUDED_CATEGORIES.has(category)
@@ -195,29 +221,96 @@ export function isExcludedByCategory(category: string): boolean {
 const EXCLUDED_CATEGORIES = new Set(['housing', 'finance', 'welfare', 'admin'])
 
 /**
- * kosmart가 준 목록에서 최근 회차에 이미 담긴 것과 제목 기반 제외 대상을 빼고 CAP까지
- * 남긴다.
+ * 지역을 특정할 수 없는 공고를 거른다.
+ *
+ * kosmart 실측(2026-09-09): `effectiveOpportunityRegions`는 `regions=['전국']`일 때만
+ * 제목으로 지역을 추론하고, `regions=[]`이면 추론에 도달하지 못한 채 "지역 무관"으로
+ * 통과시킨다. 그래서 경기·서울로 좁혀 받은 요청에 「2026년 대구아트웨이 스튜디오
+ * 입주예술인(단체) 공모」 같은 타지역 현장 공고가 `regions=[]`로 실려 온다.
+ *
+ * 빈 배열은 "전국"이 아니라 **분류 실패**다. 장르(`isExcludedByGenres`)와 같은 기준으로
+ * 다룬다. 와일드카드 `'전국'`·`'전체'`가 붙은 공고는 여기서 걸리지 않는다.
+ */
+export function isExcludedByRegions(regions: string[]): boolean {
+  return regions.length === 0
+}
+
+/**
+ * 제목 기반 중복 제거 키.
+ *
+ * `key = source:source_id`만으로는 재공고를 못 잡는다 — 실측(2026-W36·W37)에서
+ * 「2026년 양평문화자원 공연 창작프로젝트 공모」와 「2026년 양평문화자원 공연 창작
+ * 프로젝트 공모 재공고」가 다른 `source_id`를 받아 게시글·메일·캘린더에 나란히 두 번
+ * 실렸다(둘 다 마감 2026-11-02).
+ *
+ * 공백을 모두 지우고(띄어쓰기가 회차마다 다르다), '재공고'·'안내' 같은 꼬리말과
+ * 괄호·문장부호를 지운 뒤 소문자로 맞춘다. 소스는 키에 넣지 않는다 — 같은 사업이
+ * 다른 기관 페이지로 올라오는 경우도 같은 것으로 본다.
+ */
+export function normalizedTitleKey(title: string): string {
+  return title
+    .replace(/[[\]()<>{}·,.\-–—_'"`]/g, '')
+    .replace(/재공고|공고안내|안내$/g, '')
+    .replace(/\s+/g, '')
+    .toLowerCase()
+}
+
+/**
+ * 마감 오름차순. **마감이 없는 상시 공고는 맨 뒤**로 보낸다 — 날짜를 지어내 정렬에
+ * 끼워 넣지 않는다. 마감이 같으면 원래 순서를 지킨다(안정 정렬).
+ *
+ * 메일이 `CAP`에서 잘릴 때 무엇이 잘리는지를 정하는 유일한 규칙이다. 정렬 없이 자르면
+ * kosmart 점수순 배열의 꼬리가 잘리는데, 실측 W37의 마감 순서는
+ * `11-02, 09-17, 09-23, 상시, 09-15, …`로 마감과 아무 상관이 없었다 — active가 CAP을
+ * 넘는 주에는 D-2 공고가 게시글에는 있고 메일에는 없는 일이 생긴다.
+ */
+export function sortByDeadline<T extends { apply_end: string | null }>(items: T[]): T[] {
+  return [...items]
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => {
+      const ae = a.item.apply_end
+      const be = b.item.apply_end
+      if (ae === be || (!ae && !be)) return a.index - b.index
+      if (!ae) return 1
+      if (!be) return -1
+      if (ae === be) return a.index - b.index
+      return ae < be ? -1 : 1
+    })
+    .map(entry => entry.item)
+}
+
+/**
+ * kosmart가 준 목록에서 최근 회차에 이미 담긴 것과 규칙상 제외 대상을 빼고 cap까지 남긴다.
+ *
+ * 중복 제거는 두 축이다: `key`(= `source:source_id`)와 {@link normalizedTitleKey}.
+ * 후자가 없으면 재공고가 새 `source_id`를 달고 다시 들어온다 — 실측된 양평문화자원
+ * 사례가 그것이다. `sentKeys`에 대해서도 같은 두 축을 본다.
  *
  * **순서를 다시 정렬하지 않는다** — 이미 `interleaveGenreBlocks`로 장르 간 공정한 순서가
  * 정해져 있거나(풀 생성 경로), kosmart가 `rankAndCap`으로 점수순·마감임박순으로 정렬해서
- * 보낸 순서 그대로다(단일 장르·개인 메일 필터 경로). 여기서 다시 정렬하면 그 규칙을 두
- * 곳에 두게 된다.
+ * 보낸 순서 그대로다. 메일이 잘릴 때의 순서는 발행 시점에 `sortByDeadline`이 정한다.
  */
 export function buildDraftItems(
   fetched: GrantItem[],
   sentKeys: Set<string>,
-  cap: number = CAP
+  cap: number = CAP,
+  sentTitleKeys: Set<string> = new Set()
 ): GrantItem[] {
   const out: GrantItem[] = []
   const seen = new Set<string>()
+  const seenTitles = new Set<string>()
   for (const it of fetched) {
     if (sentKeys.has(it.key)) continue
     if (seen.has(it.key)) continue // 같은 응답 안의 중복
+    const titleKey = normalizedTitleKey(it.title)
+    if (titleKey.length > 0 && (sentTitleKeys.has(titleKey) || seenTitles.has(titleKey))) continue
     if (isExcludedByTitle(it.title)) continue // cap을 세기 전에 걸러야 자리를 먹지 않는다
     if (isExcludedByCategory(it.category)) continue // 위와 같은 이유
     if (isExcludedByGenres(it.genres)) continue // 위와 같은 이유
+    if (isExcludedByRegions(it.regions)) continue // 위와 같은 이유
     if (isExcludedByBizType(it.biz_type)) continue // 위와 같은 이유
     seen.add(it.key)
+    if (titleKey.length > 0) seenTitles.add(titleKey)
     out.push(it)
     if (out.length >= cap) break
   }
@@ -305,12 +398,20 @@ export function renderDigestMarkdown(
   return `${head}\n${body}${foot}`
 }
 
-/** 이메일 제목과 본문. */
+/**
+ * 이메일 제목과 본문.
+ *
+ * `options.truncatedFrom`은 **자르기 전 건수**다. 담긴 건수보다 크면 본문에 몇 건이
+ * 잘렸는지 한 줄을 넣는다 — 잘리지 않았으면 그 줄은 나오지 않는다. 이 문구가 없던
+ * 시절에는 게시글 14건 · 알림 14건 · 메일 12건으로 숫자가 갈렸는데 어느 화면도 그
+ * 사실을 말하지 않았다(2026-W37 실측).
+ */
 export function renderDigestEmail(
   items: GrantItem[],
   weekKeyValue: string,
   todayIso: string,
-  settingsUrl: string
+  settingsUrl: string,
+  options: { truncatedFrom?: number } = {}
 ): { subject: string; html: string } {
   const active = activeItems(items)
   const subject = `[경기아트콜렉티브] 이번 주 예술지원사업 ${active.length}건`
@@ -330,10 +431,16 @@ export function renderDigestEmail(
   const empty =
     '<p style="font-size: 14px; color: #4b5563">이번 주에 새로 안내할 공고가 없습니다.</p>'
 
+  const truncatedFrom = options.truncatedFrom ?? active.length
+  const truncatedNote =
+    truncatedFrom > active.length
+      ? `<p style="font-size: 13px; color: #b45309; margin: 0 0 16px">마감이 빠른 순으로 ${active.length}건만 담았습니다. 나머지 ${truncatedFrom - active.length}건은 게시판 &gt; 지원사업 글에서 볼 수 있습니다.</p>`
+      : ''
+
   const html = `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto; padding: 32px 24px; color: #1f2937;">
   <h1 style="font-size: 20px; font-weight: 700; margin-bottom: 8px">이번 주 예술지원사업</h1>
   <p style="font-size: 13px; color: #6b7280; margin: 0 0 20px">${escapeHtml(weekKeyValue)}</p>
-  ${active.length === 0 ? empty : cards}
+  ${truncatedNote}${active.length === 0 ? empty : cards}
   <p style="font-size: 12px; line-height: 1.6; color: #9ca3af; margin-top: 24px">
     공고 정보는 각 기관 원문을 기준으로 합니다. 신청 전 원문에서 자격과 마감을 다시 확인해 주세요.<br />
     이 메일을 받지 않으려면 <a href="${safeSettings}" style="color: #6b7280">마이페이지 &gt; 설정</a>에서 이메일 알림을 꺼 주세요.
