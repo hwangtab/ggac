@@ -272,6 +272,10 @@ throw ApiError.internalServerError('Server error')
 
 - **Authentication**: Better Auth (세션 쿠키 캐시 5분, 세션 7일)
 - **Authorization**: Role-based access control (admin/user)
+- **서류 열람 범위**: `board_documents.visibility`가 `'board'`(이사·감사·관리자)
+  와 `'members'`(승인·활성 조합원)를 가른다. 기본값은 `'board'`이고 등급은 포함
+  관계다. 정기총회 페이지는 조합원에게 열려 있지만 자료는 이 칸으로 다시 갈린다.
+  목록과 상세가 **각각** 판정한다
 - **Middleware**: Handles auth, CSP headers, and request processing
 - **Rate Limiting**: Distributed rate limiting via
   `@/utils/distributedRateLimiter` (Upstash Redis REST). 인스턴스별 메모리
