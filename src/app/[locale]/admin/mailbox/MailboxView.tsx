@@ -93,9 +93,13 @@ function escapeHtml(value: string): string {
  * 충분하다(스크립트를 아예 못 돌린다). 다만 sandbox는 서브리소스 로드는
  * 막지 않으므로, 본문에 박힌 원격 `<img>`(추적 픽셀)가 그대로 요청돼
  * 열람자의 IP와 "읽었다는 사실"을 발신자에게 알릴 수 있다. 문서 맨 앞에
- * CSP 메타로 `img-src data:`만 허용해 원격 이미지를 막는다 — 첨부로 붙은
+ * CSP 메타로 `img-src`를 `data:` + **우리 출처**(ggac.kr, 공개 Blob,
+ * YouTube 썸네일)로 한정해 그 밖의 원격 이미지를 막는다 — 첨부로 붙은
  * 인라인 이미지는 `html_format=data_uri`로 이미 base64로 박혀 있으므로
- * 그대로 보인다.
+ * 그대로 보이고, 우리가 보낸 메일이 인용돼 돌아온 경우(프레스킷 아트워크·
+ * 앨범 썸네일)도 깨지지 않는다. 그 외 출처는 관리자가 메일별로
+ * "이미지 표시"를 눌렀을 때만(`showRemoteImages`) `https:` 전체로 연다 —
+ * 발신자에게 열람 사실을 알리는 것은 그때뿐이다.
  *
  * `body_html`이 없고 `body_text`만 있으면(순수 텍스트 메일 —
  * `body_fetch_status`는 이미 'done'이라 배지가 뜨지 않는다) 그것을
@@ -107,14 +111,47 @@ function escapeHtml(value: string): string {
  * 된다(2026-09-09 실제 메일로 확인). `color-scheme` 메타와 인라인 스타일로
  * 고정한다 — 둘 다 위 CSP(`style-src 'unsafe-inline'`)가 허용한다.
  */
-const REMOTE_IMAGE_GUARD_META =
-  '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src data:; style-src \'unsafe-inline\'">'
+const TRUSTED_IMAGE_ORIGINS = [
+  'https://ggac.kr',
+  'https://www.ggac.kr',
+  'https://img.youtube.com',
+  'https://i.ytimg.com',
+  // NEXT_PUBLIC_ 접두사라 빌드 시 클라이언트 번들에 박힌다. 비어 있으면 빠진다.
+  (process.env.NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL ?? '').replace(/\/+$/, ''),
+]
+  .filter(origin => /^https:\/\/[^\s'";]+$/.test(origin))
+  .join(' ')
+
+function remoteImageGuardMeta(showRemoteImages: boolean): string {
+  const imgSrc = showRemoteImages ? 'data: https:' : `data: ${TRUSTED_IMAGE_ORIGINS}`
+  return `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${imgSrc}; style-src 'unsafe-inline'">`
+}
+
+/** 본문에 우리 출처가 아닌 원격 이미지가 있는가 — "이미지 표시" 버튼을 띄울지 판정. */
+function hasUntrustedRemoteImage(bodyHtml: string | null | undefined): boolean {
+  if (!bodyHtml) return false
+  const trusted = TRUSTED_IMAGE_ORIGINS.split(' ')
+  for (const match of bodyHtml.matchAll(
+    /<img\b[^>]*?\ssrc\s*=\s*["']?\s*(https?:\/\/[^"'\s>]+)/gi
+  )) {
+    let origin: string
+    try {
+      origin = new URL(match[1]).origin
+    } catch {
+      return true
+    }
+    if (!trusted.includes(origin)) return true
+  }
+  return false
+}
 const LIGHT_CANVAS =
   '<meta name="color-scheme" content="light only">' +
   '<style>html,body{background:#fff;color:#111827;margin:0;padding:8px}</style>'
-const BODY_DOC_HEAD = REMOTE_IMAGE_GUARD_META + LIGHT_CANVAS
-
-function buildBodySrcDoc(detail: InboundEmailDetail | null): string {
+function buildBodySrcDoc(
+  detail: InboundEmailDetail | null,
+  showRemoteImages: boolean = false
+): string {
+  const BODY_DOC_HEAD = remoteImageGuardMeta(showRemoteImages) + LIGHT_CANVAS
   if (detail?.body_html) {
     return `${BODY_DOC_HEAD}${detail.body_html}`
   }
@@ -156,6 +193,9 @@ export default function MailboxView({ className = '' }: { className?: string }) 
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [detail, setDetail] = useState<InboundEmailDetail | null>(null)
+  // 메일별로 켜고, 다른 메일을 고르면 다시 꺼진다 — 한 번의 허용이 다음
+  // 메일의 추적 픽셀까지 열어 주면 안 된다.
+  const [showRemoteImages, setShowRemoteImages] = useState(false)
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState<string | null>(null)
@@ -212,6 +252,7 @@ export default function MailboxView({ className = '' }: { className?: string }) 
     setSelectedId(email.id)
     setDetail(null)
     setAttachments([])
+    setShowRemoteImages(false)
     fetchDetail(email.id)
 
     // 안 읽음이면 읽음으로 낙관적 전이 — 열어 봤다는 사실이다. 관리 권한이
@@ -228,6 +269,7 @@ export default function MailboxView({ className = '' }: { className?: string }) 
     setSelectedId(null)
     setDetail(null)
     setAttachments([])
+    setShowRemoteImages(false)
   }
 
   const updateStatus = async (
@@ -569,14 +611,33 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                   돌게 하는 것으로 충분하다. 다만 sandbox는 서브리소스 로드까지 막지는
                   않으므로 buildBodySrcDoc()이 CSP 메타로 원격 이미지(추적 픽셀)를
                   추가로 막는다 — 그 메타 덕분에 인라인 이미지(html_format=data_uri로
-                  base64 첨부)만 보이고 외부 요청은 나가지 않는다.
+                  base64 첨부)와 우리 출처 이미지만 보이고 그 밖의 외부 요청은
+                  "이미지 표시"를 누르기 전에는 나가지 않는다.
                 */
-                <iframe
-                  title="메일 본문"
-                  sandbox=""
-                  srcDoc={buildBodySrcDoc(detail)}
-                  className="w-full flex-1 min-h-0 bg-white"
-                />
+                <>
+                  {hasUntrustedRemoteImage(detail?.body_html) && (
+                    <div className="flex items-center justify-between gap-3 px-4 py-2 text-xs bg-amber-50 text-amber-800 border-b border-amber-100 shrink-0">
+                      <span>
+                        {showRemoteImages
+                          ? '이 메일의 외부 이미지를 표시하고 있습니다. 발신자가 열람 사실을 알 수 있습니다.'
+                          : '외부 이미지를 차단했습니다. 표시하면 발신자가 열람 사실을 알 수 있습니다.'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowRemoteImages(v => !v)}
+                        className="shrink-0 px-2.5 py-1 rounded-md font-medium bg-white border border-amber-300 hover:bg-amber-100"
+                      >
+                        {showRemoteImages ? '이미지 숨기기' : '이미지 표시'}
+                      </button>
+                    </div>
+                  )}
+                  <iframe
+                    title="메일 본문"
+                    sandbox=""
+                    srcDoc={buildBodySrcDoc(detail, showRemoteImages)}
+                    className="w-full flex-1 min-h-0 bg-white"
+                  />
+                </>
               )}
 
               {/* 상태 변경 + 답장 버튼 — 관리자만. 이사·감사는 열람만 한다
