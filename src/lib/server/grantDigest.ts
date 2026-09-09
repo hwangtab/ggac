@@ -223,16 +223,26 @@ const EXCLUDED_CATEGORIES = new Set(['housing', 'finance', 'welfare', 'admin'])
 /**
  * 지역을 특정할 수 없는 공고를 거른다.
  *
- * kosmart 실측(2026-09-09): `effectiveOpportunityRegions`는 `regions=['전국']`일 때만
- * 제목으로 지역을 추론하고, `regions=[]`이면 추론에 도달하지 못한 채 "지역 무관"으로
- * 통과시킨다. 그래서 경기·서울로 좁혀 받은 요청에 「2026년 대구아트웨이 스튜디오
- * 입주예술인(단체) 공모」 같은 타지역 현장 공고가 `regions=[]`로 실려 온다.
- *
  * 빈 배열은 "전국"이 아니라 **분류 실패**다. 장르(`isExcludedByGenres`)와 같은 기준으로
  * 다룬다. 와일드카드 `'전국'`·`'전체'`가 붙은 공고는 여기서 걸리지 않는다.
+ *
+ * 2026-09-09 실측: 경기·서울로 좁혀 받은 요청에 「2026년 대구아트웨이 스튜디오
+ * 입주예술인(단체) 공모」가 `regions=[]`로 실려 왔다. kosmart가 그 뒤 이 항목을
+ * 서버에서 거르기로 했다고 들었으나 이 저장소에서 재실측하지 않았다 — 그러니 여기서
+ * 무엇이 막히는지는 적지 않고, **ggac이 직접 거른다**는 것만 적는다.
  */
 export function isExcludedByRegions(regions: string[]): boolean {
   return regions.length === 0
+}
+
+/**
+ * 사업자·법인만 신청할 수 있는 공고를 거른다 — 조합원은 개인이다.
+ *
+ * `undefined`(이 필드를 모르는 옛 응답)는 제외하지 않는다. 모른다고 감추면, 필드가
+ * 실리기 전에 만들어진 항목이 통째로 사라진다.
+ */
+export function isExcludedByRequiresBusiness(requiresBusiness: boolean | undefined): boolean {
+  return requiresBusiness === true
 }
 
 /**
@@ -308,6 +318,7 @@ export function buildDraftItems(
     if (isExcludedByCategory(it.category)) continue // 위와 같은 이유
     if (isExcludedByGenres(it.genres)) continue // 위와 같은 이유
     if (isExcludedByRegions(it.regions)) continue // 위와 같은 이유
+    if (isExcludedByRequiresBusiness(it.requires_business)) continue // 위와 같은 이유
     if (isExcludedByBizType(it.biz_type)) continue // 위와 같은 이유
     seen.add(it.key)
     if (titleKey.length > 0) seenTitles.add(titleKey)

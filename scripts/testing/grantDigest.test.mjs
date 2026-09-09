@@ -16,6 +16,7 @@ const {
   EXCLUDE_TITLE_KEYWORDS,
   isExcludedByCategory,
   isExcludedByRegions,
+  isExcludedByRequiresBusiness,
   normalizedTitleKey,
   sortByDeadline,
   CAP,
@@ -646,4 +647,42 @@ test('잘렸을 때만 메일 본문에 몇 건이 빠졌는지 적는다', () =
 
   const noOption = renderDigestEmail(items, '2026-W37', '2026-09-09', 'https://x.test/s')
   assert.ok(!noOption.html.includes('나머지'))
+})
+
+// ------------------------------------------------- requires_business (사업자 전용 공고)
+
+test('requires_business=true는 제외된다 (조합원은 개인이다)', () => {
+  assert.equal(isExcludedByRequiresBusiness(true), true)
+})
+
+test('requires_business가 없거나 false면 제외되지 않는다', () => {
+  assert.equal(isExcludedByRequiresBusiness(undefined), false)
+  assert.equal(isExcludedByRequiresBusiness(false), false)
+})
+
+test('실데이터 형태: 사업자 전용 공고가 풀에 담기지 않고 그 자리를 다음 항목이 채운다', () => {
+  const out = buildDraftItems(
+    [
+      item({
+        key: 'kocca:atf',
+        title: '2026 ATF 한국공동관 참가기업 공모',
+        requires_business: true,
+      }),
+      item({ key: 'artnuri:ok' }),
+    ],
+    new Set()
+  )
+  assert.deepEqual(
+    out.map(i => i.key),
+    ['artnuri:ok']
+  )
+})
+
+test('requires_business 필드가 아예 없는 옛 항목은 그대로 담긴다', () => {
+  const legacy = item({ key: 'artnuri:legacy' })
+  delete legacy.requires_business
+  assert.deepEqual(
+    buildDraftItems([legacy], new Set()).map(i => i.key),
+    ['artnuri:legacy']
+  )
 })

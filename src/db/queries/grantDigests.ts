@@ -30,6 +30,11 @@ export interface GrantItem {
   summary: string | null
   biz_type: string | null
   target: string | null
+  /**
+   * 사업자·법인만 신청할 수 있는 공고. kosmart가 실어 보내는 필드이고, **없을 수 있다**
+   * (이 필드를 모르는 옛 응답). 없으면 `false`로 읽는다 — 모른다고 감추지 않는다.
+   */
+  requires_business?: boolean
   /** 관리자가 이번 회차에서 뺀 항목. 발행 시 제외되지만 기록은 남는다. */
   excluded?: boolean
   /** 관리자가 손으로 넣은 항목(kosmart에 없는 공고). */

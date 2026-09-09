@@ -2,11 +2,22 @@
  * kosmart 공고 API 호출. **네트워크 경계만** 담당한다 — 판정은
  * `src/lib/server/grantDigest.ts`가 하고 여기는 가져오기만 한다.
  */
-import type { GrantItem } from '@/db/queries/grantDigests'
-import { WINDOW_DAYS } from '@/lib/server/grantDigest'
+// 로컬 import는 `.ts`를 명시한다 — `node --test`의 타입 스트리핑 모드가 확장자 없는
+// 로컬 import와 `@/` 별칭을 해석하지 못한다(같은 이유로 grantDigest.ts도 그렇게 쓴다).
+import type { GrantItem } from '../../db/queries/grantDigests.ts'
+import { WINDOW_DAYS } from './grantDigest.ts'
 
 /** 장르 하나당 요청 상한. API의 MAX_LIMIT(100)을 넘지 않는다. */
 const PER_GENRE_LIMIT = 100
+
+/**
+ * kosmart에 요청할 카테고리. 생활정보(임대주택·융자·복지·행정)를 서버에서 거른다.
+ *
+ * **이 파라미터를 모르는 kosmart 배포에서는 무시된다** — 그때는 응답에 life 계열이
+ * 그대로 섞여 오고, `grantDigest.ts:isExcludedByCategory`가 이중 방어로 거른다.
+ * 그래서 응답 파싱은 이 파라미터의 유무·반영 여부에 기대지 않는다.
+ */
+export const REQUESTED_CATEGORIES = ['grant', 'gig', 'audition'] as const
 
 export interface FetchScope {
   genres: string[]
@@ -37,6 +48,7 @@ async function fetchGenre(base: string, token: string, regionsParam: string, gen
   url.searchParams.set('days', String(WINDOW_DAYS))
   url.searchParams.set('limit', String(PER_GENRE_LIMIT))
   url.searchParams.set('strictRegion', 'true')
+  url.searchParams.set('categories', REQUESTED_CATEGORIES.join(','))
 
   const response = await fetch(url, {
     headers: { Authorization: `Bearer ${token}` },
