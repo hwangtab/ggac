@@ -100,7 +100,7 @@ export async function requireBoardRecordReader(): Promise<BoardReadAuthSuccess |
  * 실수로 조합원 전체에게 열린다. 예외를 이름으로 만들어 두면 가드는 이
  * 게이트가 **어느 파일에 쓰였는지**까지 확인할 수 있다.
  *
- * 토론에만 쓴다. 안건 작성·수정·삭제, 회의록, 일정 투표, 출석, 서류함은
+ * 토론에만 쓴다. 안건 작성·수정·삭제, 회의록, 일정 투표, 출석, 서류함(쓰기)은
  * 전부 `requireBoardMember`(이사·감사·관리자)를 그대로 유지한다.
  */
 export async function requireBoardDiscussionWriter(): Promise<BoardReadAuthSuccess | NextResponse> {

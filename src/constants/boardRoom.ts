@@ -38,6 +38,19 @@ export function isDocumentVisibility(value: unknown): value is DocumentVisibilit
   return (DOCUMENT_VISIBILITY as readonly unknown[]).includes(value)
 }
 
+/**
+ * `visibility`를 정할 수 있는 사람은 관리자뿐이다(설계 문서 §6 권한 표).
+ * 업로드 게이트 자체(`requireBoardMember` — 이사·감사·관리자)는 건드리지
+ * 않는다: 기본값 `'board'`는 이사도 그대로 올릴 수 있어야 하고, 조합원 전체
+ * 공개(`'members'`)로 넓히는 것만 관리자로 좁힌다.
+ */
+export function canSetDocumentVisibility(
+  visibility: DocumentVisibility,
+  isAdmin: boolean
+): boolean {
+  return visibility === 'board' || isAdmin
+}
+
 // 정기총회 자료 종류 — 별도 컬럼이 없어 제목 앞머리로 표시하고, 목록에서는
 // 제목 키워드로 되짚어 배지를 단다. 순서가 목록 안 정렬 순서다.
 export const ASSEMBLY_DOC_TYPES = [

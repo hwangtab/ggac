@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-const { DOCUMENT_VISIBILITY, isDocumentVisibility } = await import(
+const { DOCUMENT_VISIBILITY, isDocumentVisibility, canSetDocumentVisibility } = await import(
   '../../src/constants/boardRoom.ts'
 )
 
@@ -144,4 +144,25 @@ test('다운로드 조회가 돌려주는 board 자료는 조합원 범위 밖�
   } finally {
     await deleteDocument(id)
   }
+})
+
+// POST /api/board-room/documents 라우트가 `canSetDocumentVisibility`로
+// 판정한다 — 관리자가 아닌 이사가 `visibility='members'`(조합원 전체 공개)로
+// 올리는 것을 막는다(설계 문서 §6 권한 표: visibility 변경은 관리자만).
+// 업로드 게이트 자체(requireBoardMember)는 그대로라 이사도 기본값
+// 'board'로는 계속 올릴 수 있어야 한다.
+test('관리자가 아닌 이사는 members로 정할 수 없다', () => {
+  assert.equal(canSetDocumentVisibility('members', false), false)
+})
+
+test('관리자가 아닌 이사도 기본값(board)으로는 올릴 수 있다', () => {
+  assert.equal(canSetDocumentVisibility('board', false), true)
+})
+
+test('관리자는 members로 정할 수 있다', () => {
+  assert.equal(canSetDocumentVisibility('members', true), true)
+})
+
+test('관리자는 board로도 그대로 올릴 수 있다', () => {
+  assert.equal(canSetDocumentVisibility('board', true), true)
 })

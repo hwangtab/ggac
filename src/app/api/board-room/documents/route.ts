@@ -9,6 +9,7 @@ import {
 import {
   ALL_DOCUMENT_CATEGORIES,
   BOARD_DOCUMENT_CATEGORIES,
+  canSetDocumentVisibility,
   isDocumentVisibility,
 } from '@/constants/boardRoom'
 import { createLogger } from '@/utils/logger'
@@ -115,7 +116,7 @@ export async function POST(request: NextRequest) {
 
   const auth = await requireBoardMember()
   if (auth instanceof NextResponse) return auth
-  const { user } = auth
+  const { user, isAdmin } = auth
 
   return apiPost(
     async () => {
@@ -131,6 +132,14 @@ export async function POST(request: NextRequest) {
       if (!(ALL_DOCUMENT_CATEGORIES as readonly string[]).includes(category))
         throw ApiError.badRequest('잘못된 분류입니다.')
       if (!isDocumentVisibility(visibility)) throw ApiError.badRequest('잘못된 열람 범위입니다.')
+      // 업로드 자체는 이사·감사·관리자 모두 가능(requireBoardMember)하지만,
+      // 조합원 전체 공개(visibility='members')는 관리자만 정할 수 있다(설계
+      // 문서 §6 권한 표). 기본값 'board'는 이사도 그대로 통과한다.
+      if (!canSetDocumentVisibility(visibility, isAdmin)) {
+        throw ApiError.forbidden(
+          '조합원 전체 공개(visibility=members)는 관리자만 설정할 수 있습니다. 기본값인 이사회 열람으로 올려주세요.'
+        )
+      }
       if (!file) throw ApiError.badRequest('업로드된 파일이 없습니다.')
       if (file.size > MAX_FILE_SIZE) throw ApiError.badRequest('파일 크기는 최대 50MB입니다.')
       if (!ALLOWED_MIME_TYPES.has(file.type))
