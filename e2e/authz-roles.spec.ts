@@ -158,7 +158,9 @@ test.describe('관리자 전용 경계', () => {
 })
 
 test.describe('이사회 경계', () => {
-  test('이사회 서류 목록은 이사만 볼 수 있다', async ({ baseURL }) => {
+  test('이사회 서류 목록은 이사가 아니면 board 자료를 못 본다(게이트가 아니라 visibility가 막는다)', async ({
+    baseURL,
+  }) => {
     const memberContext = await apiRequest.newContext({
       baseURL,
       storageState: storageStatePath('other'),
@@ -169,16 +171,36 @@ test.describe('이사회 경계', () => {
     })
 
     try {
-      // 금지 쪽: **인증된** 비이사다. `authz-boundaries.spec.ts`가 보는 비인증
-      // 401은 로그인 게이트만 증명한다 — 로그인한 일반 조합원이 이사회 서류를
-      // 열람하게 되는 회귀는 그쪽으로는 잡히지 않는다.
-      const denied = await memberContext.get('/api/board-room/documents')
-      expect(denied.status()).toBe(403)
-      expect((await denied.json()).error).toContain('이사회 접근 권한이 없습니다')
+      // 금지 쪽: **인증된** 비이사다. 이 라우트는 이미 requireBoardRecordReader()로
+      // 바뀌어(Task 4·5, 74d20dd·6fbd866) 승인·활성 조합원이면 누구나 200을
+      // 받는다 — 403 게이트는 더 이상 여기 없다. `authz-boundaries.spec.ts`가
+      // 보는 비인증 401도 로그인 게이트만 증명할 뿐 이 경계와는 무관하다.
+      // 로그인한 일반 조합원이 이사회 서류를 열람하게 되는 회귀를 잡던 자리는
+      // 이제 게이트가 아니라 `visibility` 필터다 — 조합원 응답에
+      // visibility='board' 자료가 하나도 없어야 한다. 새 단언은 옛 403보다
+      // 강하다: 게이트 통과 여부가 아니라 필터가 실제로 걸러내는지를 본다.
+      const memberList = await memberContext.get('/api/board-room/documents')
+      expect(memberList.status()).toBe(200)
+      const memberBody = await memberList.json()
+      expect(memberBody.success).toBe(true)
+      const memberDocuments = memberBody.data?.documents as Array<{ visibility: string }>
+      expect(Array.isArray(memberDocuments)).toBe(true)
+      expect(memberDocuments.some(doc => doc.visibility === 'board')).toBe(false)
+
+      // 서류함 카테고리를 명시해도 마찬가지다 — 이 라우트의 서류함 자료는
+      // 기본값이 visibility='board'라서(src/db/schema/board.ts), 카테고리를
+      // 콕 집어 불러도 조합원 응답은 비어 있어야 한다.
+      const memberCategoryList = await memberContext.get(
+        '/api/board-room/documents?category=정관'
+      )
+      expect(memberCategoryList.status()).toBe(200)
+      const memberCategoryBody = await memberCategoryList.json()
+      expect(memberCategoryBody.data?.documents).toHaveLength(0)
 
       // 허용 쪽은 **관리자가 아닌 이사**다. admin 계정으로 확인하면
       // canAccessBoardRoom의 is_admin 분기만 타서 is_director 판정은 여전히
-      // 검사되지 않는다.
+      // 검사되지 않는다. 이사는 게이트도 필터도 걸리지 않고 실제로 자료를
+      // 받는지 여전히 확인한다.
       const allowed = await directorContext.get('/api/board-room/documents')
       expect(allowed.status()).toBe(200)
       const body = await allowed.json()
