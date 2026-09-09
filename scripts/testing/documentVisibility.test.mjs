@@ -20,9 +20,8 @@ test('허용값이 아니면 거른다', () => {
 
 process.env.TURSO_DATABASE_URL = 'file:local.db'
 
-const { listDocuments, createDocument, getDocumentDetail, deleteDocument } = await import(
-  '../../src/db/queries/board.ts'
-)
+const { listDocuments, createDocument, getDocumentDetail, getDocumentForDownload, deleteDocument } =
+  await import('../../src/db/queries/board.ts')
 
 async function seedDoc({ title, visibility, body }) {
   const { id } = await createDocument({
@@ -119,4 +118,30 @@ test('이사 범위는 조합원 범위를 포함한다', () => {
   const boardScope = visibilityScopeFor(true)
   assert.equal(boardScope.includes('members'), true)
   assert.equal(boardScope.includes('board'), true)
+})
+
+// 다운로드 라우트(`/api/board-room/documents/[id]/download`)가 실제로 쓰는
+// 값 — `getDocumentForDownload`가 돌려주는 `visibility` — 로 재판정을
+// 단언한다. `visibilityScopeFor` 자체는 위에서 이미 시험했으니, 여기서는
+// 다운로드 경로의 조회 결과와 재판정이 정확히 맞물리는지만 본다(수정
+// 1회차 Important 1 — 게이트만 넓히고 재판정을 빠뜨리면 조합원이
+// visibility='board' 재무 원자료까지 내려받는다).
+test('다운로드 조회가 돌려주는 board 자료는 조합원 범위 밖이고 이사 범위 안이다', async () => {
+  const id = await seedDoc({ title: `다운로드-${Date.now()}`, visibility: 'board' })
+  try {
+    const doc = await getDocumentForDownload(id)
+    assert.equal(doc.visibility, 'board')
+    assert.equal(
+      visibilityScopeFor(false).includes(doc.visibility),
+      false,
+      '조합원은 이 자료를 내려받을 수 없어야 한다(라우트는 여기서 404를 준다)'
+    )
+    assert.equal(
+      visibilityScopeFor(true).includes(doc.visibility),
+      true,
+      '이사·감사·관리자는 여전히 내려받을 수 있어야 한다'
+    )
+  } finally {
+    await deleteDocument(id)
+  }
 })

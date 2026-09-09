@@ -796,19 +796,35 @@ export async function getDocumentDetail(id: string): Promise<DocumentDetailRow |
   }
 }
 
-/** `/api/board-room/documents/[id]/download` GET. */
-export async function getDocumentForDownload(
-  id: string
-): Promise<{ file_path: string; file_name: string | null; mime_type: string | null } | null> {
+/**
+ * `/api/board-room/documents/[id]/download` GET.
+ *
+ * `visibility`를 함께 낸다 — 다운로드 라우트가 열람 게이트
+ * (`requireBoardRecordReader()`)로 바뀌면서 조합원도 통과하는데, 자료마다
+ * 등급이 다르므로 라우트가 이 값으로 다시 판정해야 한다. 별도 조회를
+ * 추가하면 두 조회 사이에 값이 바뀔 틈이 생기고 왕복도 늘어난다.
+ */
+export async function getDocumentForDownload(id: string): Promise<{
+  file_path: string
+  file_name: string | null
+  mime_type: string | null
+  visibility: string
+} | null> {
   const [row] = await db
     .select({
       filePath: boardDocuments.filePath,
       fileName: boardDocuments.fileName,
       mimeType: boardDocuments.mimeType,
+      visibility: boardDocuments.visibility,
     })
     .from(boardDocuments)
     .where(eq(boardDocuments.id, id))
     .limit(1)
   if (!row) return null
-  return { file_path: row.filePath, file_name: row.fileName, mime_type: row.mimeType }
+  return {
+    file_path: row.filePath,
+    file_name: row.fileName,
+    mime_type: row.mimeType,
+    visibility: row.visibility,
+  }
 }

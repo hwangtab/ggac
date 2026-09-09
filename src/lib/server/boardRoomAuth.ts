@@ -52,13 +52,20 @@ export async function requireBoardMember(): Promise<BoardAuthSuccess | NextRespo
 }
 
 /**
- * 이사회 기록(회의 목록·안건·토론·회의록) **읽기** 전용 게이트.
+ * 이사회 기록(회의 목록·안건·토론·회의록) **읽기** 전용 게이트. 서류함·총회
+ * 자료의 목록·상세·다운로드 GET도 이 게이트를 쓴다.
  * 승인·활성 조합원이면 통과하고, 이사·감사·관리자인지는 `isBoardMember`로 알린다.
  *
- * 쓰기 라우트에는 절대 쓰지 마라 — 안건 작성·수정, 일정 투표, 출석 체크,
- * 서류함, 총회 자료는 전부 `requireBoardMember`(이사·감사·관리자)를 그대로
- * 유지한다. 안건 토론 쓰기만 조합원에게 열려 있고, 그건 이 게이트가 아니라
+ * **쓰기는 여전히 `requireBoardMember`(이사·감사·관리자)다** — 안건
+ * 작성·수정, 일정 투표, 출석 체크, 서류 업로드·삭제는 전부 그대로 유지한다.
+ * 안건 토론 쓰기만 조합원에게 열려 있고, 그건 이 게이트가 아니라
  * `requireBoardDiscussionWriter`가 판정한다.
+ *
+ * 서류함·총회는 이 게이트를 통과했다고 끝이 아니다 — **자료마다
+ * `visibility`로 다시 갈린다.** 조합원(`isBoardMember: false`)은
+ * `visibility='members'` 자료만, 이사·감사·관리자는 `'board'`까지 본다
+ * (`visibilityScopeFor`). 이 게이트는 "이사회 기록을 읽을 자격이 있는가"만
+ * 판정하고, "이 자료를 볼 수 있는가"는 호출부가 자료 등급으로 다시 판정한다.
  */
 export async function requireBoardRecordReader(): Promise<BoardReadAuthSuccess | NextResponse> {
   const session = await getSessionContext()

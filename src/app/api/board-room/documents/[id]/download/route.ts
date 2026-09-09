@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ApiError } from '@/utils/apiWrapper'
-import { requireBoardMember } from '@/lib/server/boardRoomAuth'
+import { requireBoardRecordReader, visibilityScopeFor } from '@/lib/server/boardRoomAuth'
 import { rateLimit } from '@/lib/server/rateLimit'
 import { validateUUID } from '@/utils/validation'
 import { createLogger } from '@/utils/logger'
@@ -21,7 +21,14 @@ export const runtime = 'nodejs'
  * 예전에는 목록 API가 300초짜리 Supabase 서명 URL을 만들어 브라우저에 넘겼다.
  * 그 방식은 발급 후 5분 동안 **권한을 잃은 사람에게도 유효하다** — 이사에서
  * 해임된 계정이 목록을 한 번 열어두면 그 URL이 계속 산다. 여기서는 매 요청마다
- * requireBoardMember()를 통과해야 하므로 권한 회수가 즉시 반영된다.
+ * requireBoardRecordReader()를 통과해야 하므로 권한 회수가 즉시 반영된다.
+ *
+ * 열람 게이트라 조합원도 통과한다. 그래서 게이트 통과 뒤 **자료마다
+ * visibility로 다시 판정한다** — 목록·상세와 같은 모양
+ * (`visibilityScopeFor(isBoardMember).includes(doc.visibility)`)이다. 여기서
+ * 걸러진 자료는 403이 아니라 404다 — 존재 여부 자체를 알리지 않는다. 이
+ * 판정을 빼면 게이트만 넓어져 조합원이 visibility='board' 재무 원자료까지
+ * 내려받을 수 있다.
  *
  * 신뢰 경계: 사용자가 넘기는 값은 문서 id(UUID) 하나뿐이다. 저장소 경로는
  * DB 행에서만 온다. 그 값도 그대로 믿지 않고 봉쇄 판정을 한 번 더 통과시킨다 —
@@ -42,12 +49,12 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   }
   const id = validation.sanitized
 
-  const auth = await requireBoardMember()
+  const auth = await requireBoardRecordReader()
   if (auth instanceof NextResponse) return auth
-  const { user } = auth
+  const { user, isBoardMember } = auth
 
   // Task 4: board_documents 권위가 Turso로 옮겨졌다 — 조회는
-  // getDocumentForDownload(id)로 바뀌었지만 권한 재검증(requireBoardMember()가
+  // getDocumentForDownload(id)로 바뀌었지만 권한 재검증(requireBoardRecordReader()가
   // 이 DB 조회보다 먼저 실행됨)과 봉쇄 판정 순서는 그대로다.
   //
   // 이 라우트는 스트리밍 응답 때문에 `defineApiRoute` 래퍼 밖에서 GET을 직접
@@ -67,6 +74,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   }
 
   if (!doc) {
+    return ApiError.notFound('서류를 찾을 수 없습니다.').toNextResponse()
+  }
+
+  // 열람 게이트 통과만으로는 부족하다 — 목록·상세와 같은 모양으로 자료
+  // 등급을 다시 본다. 권한 밖 자료는 경로 봉쇄 판정보다 먼저 404로 끊는다 —
+  // 권한 없는 사람에게 경로 관련 오류를 보여줄 이유가 없다.
+  if (!visibilityScopeFor(isBoardMember).includes(doc.visibility)) {
     return ApiError.notFound('서류를 찾을 수 없습니다.').toNextResponse()
   }
 
