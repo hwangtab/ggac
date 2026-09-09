@@ -34,6 +34,9 @@ const itemSchema = z
     summary: z.string().nullable(),
     biz_type: z.string().nullable(),
     target: z.string().nullable(),
+    // kosmart가 새로 싣는 필드. 없을 수 있다(옛 회차). 여기 빠뜨리면 `.strict()`가
+    // 그 필드를 가진 회차의 저장을 전부 400으로 막는다.
+    requires_business: z.boolean().optional(),
     excluded: z.boolean().optional(),
     manual: z.boolean().optional(),
   })

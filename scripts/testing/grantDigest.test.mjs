@@ -22,6 +22,7 @@ const {
   CAP,
   POOL_CAP,
   DEDUPE_WEEKS,
+  TITLE_DEDUPE_WEEKS,
   DIGEST_LOOKBACK_WEEKS,
 } = await import('../../src/lib/server/grantDigest.ts')
 
@@ -183,14 +184,11 @@ test('빈 입력은 빈 배열이다', () => {
 
 // ---------------------------------------------------------------- isExcludedByTitle / 제목 기반 제외 필터
 
-test('EXCLUDE_TITLE_KEYWORDS는 정확히 넷이다 (합창, 모집, 제출 안내, 제도 운영 안내)', () => {
-  assert.deepEqual([...EXCLUDE_TITLE_KEYWORDS], ['합창', '모집', '제출 안내', '제도 운영 안내'])
-})
-
-test('예술감독 모집(채용)은 제외된다', () => {
-  // 2026-W37 실측 3번. category='grant', biz_type='인력, 기타'라 다른 규칙에 안 걸려
-  // 게시글·메일·캘린더에 전부 실렸다.
-  assert.equal(isExcludedByTitle('2026년 꿈의 극단 안산 예술감독 모집'), true)
+test('EXCLUDE_TITLE_KEYWORDS는 정확히 다섯이다', () => {
+  assert.deepEqual(
+    [...EXCLUDE_TITLE_KEYWORDS],
+    ['합창', '단원', '예술감독', '제출 안내', '제도 운영 안내']
+  )
 })
 
 test('합창단 신규단원 모집 공고는 제외된다', () => {
@@ -218,10 +216,14 @@ test('연극·무용·음악·전통 통합공모는 제외되지 않는다 (오
   )
 })
 
-test("'모집'은 참여단체 모집도 함께 거른다 (알려진 오차단 — 2026-09-09 계획 결정)", () => {
-  // '단원' 대신 '모집'을 쓰기로 한 결정의 대가다. 「제철공연 참여단체 모집」처럼
-  // 유효한 공모가 함께 걸린다 — 되돌리려면 이 테스트와 EXCLUDE_TITLE_KEYWORDS를 같이 고친다.
-  assert.equal(isExcludedByTitle('서울문화재단 대학로센터 <제철공연> 참여단체 모집'), true)
+test('참여단체 모집은 제외되지 않는다 (단체와 단원 구분)', () => {
+  // '모집'을 통째로 거르면 이런 유효한 공모가 함께 걸린다 — 실데이터 집계에서
+  // 오차단이 6:1이었다. 채용은 직함('단원'·'예술감독')으로 좁혀 잡는다.
+  assert.equal(isExcludedByTitle('서울문화재단 대학로센터 <제철공연> 참여단체 모집'), false)
+})
+
+test('참여자 모집도 제외되지 않는다', () => {
+  assert.equal(isExcludedByTitle('2026년 지역문화예술 프로그램 참여자 모집'), false)
 })
 
 test('음악 태그만 있는 일반 공고는 제외되지 않는다', () => {
@@ -302,6 +304,10 @@ test('genres가 빈 배열이면 제외된다 (kosmart 분류 실패)', () => {
 
 test("genres=['전체']는 이 규칙에서 제외되지 않는다 (개인 매칭이 떨어뜨린다)", () => {
   assert.equal(isExcludedByGenres(['전체']), false)
+})
+
+test("genres=['음악','전체']는 제외되지 않는다 (음악 태그가 붙어 있다)", () => {
+  assert.equal(isExcludedByGenres(['음악', '전체']), false)
 })
 
 test('일반 장르 태그는 제외되지 않는다', () => {
@@ -513,6 +519,12 @@ test('DEDUPE_WEEKS는 캘린더가 보는 범위와 같은 값이다', () => {
   assert.equal(DIGEST_LOOKBACK_WEEKS, 26)
 })
 
+test('제목 축 중복 제거 창은 key 축보다 짧다', () => {
+  // 제목 정규화는 근사라 연례 공모처럼 해마다 제목이 같은 사업을 뭉갤 수 있다.
+  assert.equal(TITLE_DEDUPE_WEEKS, 12)
+  assert.ok(TITLE_DEDUPE_WEEKS < DEDUPE_WEEKS)
+})
+
 test('메일 상한 CAP은 20이다', () => {
   assert.equal(CAP, 20)
 })
@@ -637,8 +649,11 @@ test('잘렸을 때만 메일 본문에 몇 건이 빠졌는지 적는다', () =
   const truncated = renderDigestEmail(items, '2026-W37', '2026-09-09', 'https://x.test/s', {
     truncatedFrom: 3,
   })
-  assert.ok(truncated.html.includes('2건'))
-  assert.ok(truncated.html.includes('게시판'))
+  assert.ok(truncated.html.includes('나머지 2건'))
+  // 나머지를 찾을 곳은 캘린더다 — 게시글은 조합 기본 관심사로 좁혀 렌더되므로
+  // 개인 관심사로 고른 이 메일의 나머지가 거기 없을 수 있다.
+  assert.ok(truncated.html.includes('마이페이지 캘린더'))
+  assert.ok(!truncated.html.includes('게시판'))
 
   const intact = renderDigestEmail(items, '2026-W37', '2026-09-09', 'https://x.test/s', {
     truncatedFrom: 1,
@@ -685,4 +700,9 @@ test('requires_business 필드가 아예 없는 옛 항목은 그대로 담긴�
     buildDraftItems([legacy], new Set()).map(i => i.key),
     ['artnuri:legacy']
   )
+})
+
+test('예술감독 모집(채용)은 제외되고 예술감독이 없는 공모는 남는다', () => {
+  assert.equal(isExcludedByTitle('2026년 꿈의 극단 안산 예술감독 모집'), true)
+  assert.equal(isExcludedByTitle('2027 서울 커넥트 스테이지-음악'), false)
 })

@@ -133,6 +133,10 @@ test('공고 장르 태그가 비면 탈락한다 (지역만으로 통과시키�
   assert.equal(matchesInterests({ genres: [], regions: ['경기'] }, MINE), false)
 })
 
+test("genres=['음악','전체']는 통과한다 ('전체'가 섞여도 음악이 있으면 맞다)", () => {
+  assert.equal(matchesInterests({ genres: ['음악', '전체'], regions: ['경기'] }, MINE), true)
+})
+
 test('여러 장르 중 하나만 겹쳐도 통과', () => {
   assert.equal(matchesInterests({ genres: ['연극', '음악'], regions: ['경기'] }, MINE), true)
 })

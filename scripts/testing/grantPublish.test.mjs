@@ -467,6 +467,7 @@ test('메일이 잘릴 때는 마감 임박순으로 남기고 상시를 뒤로 
   )
   assert.deepEqual(r.per_member, [{ matched: CAP, truncated: 1 }])
   assert.ok(h.calls.emails[0].html.includes('나머지 1건'))
+  assert.ok(h.calls.emails[0].html.includes('마이페이지 캘린더'))
 })
 
 test('잘리지 않으면 truncated는 0이고 절단 문구도 없다', async () => {
@@ -559,4 +560,31 @@ test('summarizeMatchCounts: 최소·중앙값·최대를 계산한다', () => {
 
 test('summarizeMatchCounts: 빈 배열은 전부 0이다', () => {
   assert.deepEqual(summarizeMatchCounts([]), { min: 0, median: 0, max: 0 })
+})
+
+test('게시글이 0건인 회차에서도 절단 안내는 캘린더를 가리킨다 (거짓 안내 방지)', async () => {
+  // 조합 기본값(음악/경기·서울)을 통과하는 항목이 없으면 게시글은 "없습니다"로 나간다.
+  // 그래도 개인 관심사로는 CAP을 넘을 수 있다 — 그때 "게시글에서 보라"는 거짓이다.
+  const items = [
+    ...Array.from({ length: CAP }, (_, i) =>
+      item({ key: `j${i}`, title: `j${i}`, genres: ['문학'], regions: ['제주'], apply_end: null })
+    ),
+    item({
+      key: 'j-urgent',
+      title: 'j-urgent',
+      genres: ['문학'],
+      regions: ['제주'],
+      apply_end: '2026-09-03',
+    }),
+  ]
+  const h = harness({
+    members: [member({ interest_genres: ['문학'], interest_regions: ['제주'] })],
+    digest: { id: 'd1', week_key: '2026-W36', status: 'draft', items },
+  })
+  const r = await runGrantPublish(h.input)
+  assert.equal(r.post_item_count, 0)
+  assert.deepEqual(r.per_member, [{ matched: CAP, truncated: 1 }])
+  assert.ok(h.calls.emails[0].html.includes('마이페이지 캘린더'))
+  assert.ok(!h.calls.emails[0].html.includes('게시판'))
+  assert.ok(h.calls.posts[0].content.includes('이번 주에 새로 안내할 공고가 없습니다'))
 })

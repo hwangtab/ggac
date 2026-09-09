@@ -20,6 +20,7 @@ import { listProfiles, type ProfileRow } from '@/db/queries/profiles'
 import { fetchGrantOpportunities } from '@/lib/server/grantFetch'
 import {
   DEDUPE_WEEKS,
+  TITLE_DEDUPE_WEEKS,
   POOL_CAP,
   buildDraftItems,
   interleaveGenreBlocks,
@@ -131,9 +132,15 @@ export async function POST(request: NextRequest) {
     // 중복 제거는 두 축이다: `key`(= source:source_id)와 정규화한 제목. 재공고는 새
     // source_id를 받으므로 key만으로는 안 잡힌다(실측: 양평문화자원 공모/재공고가 두 회차에
     // 걸쳐 게시글·메일·캘린더에 나란히 실렸다).
+    // 두 축의 창이 다르다: key는 캘린더가 보는 26주 전체, 제목은 12주. 제목 축은
+    // 근사라 서로 다른 사업을 같은 것으로 볼 수 있어(연례 공모는 해마다 제목이 거의
+    // 같다) 창을 짧게 둔다.
     const recent = await listRecentDigestItems(DEDUPE_WEEKS)
+    const recentForTitles = await listRecentDigestItems(TITLE_DEDUPE_WEEKS)
     const sentKeys = new Set(recent.map(i => i.key))
-    const sentTitleKeys = new Set(recent.map(i => normalizedTitleKey(i.title)).filter(Boolean))
+    const sentTitleKeys = new Set(
+      recentForTitles.map(i => normalizedTitleKey(i.title)).filter(Boolean)
+    )
     const items = buildDraftItems(fetched, sentKeys, POOL_CAP, sentTitleKeys)
 
     // 게시글·인앱 알림은 개인화하지 않으므로 조합 기본 관심사로 좁혀 렌더된다

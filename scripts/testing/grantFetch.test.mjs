@@ -83,6 +83,47 @@ test('categories를 모르는 배포의 응답(파라미터 무시)도 그대로
 test('requires_business가 없는 옛 응답도 형식 검사를 통과한다', async () => {
   const blocks = await fetchGrantOpportunities({ genres: ['음악'], regions: ['경기'] })
   assert.equal(blocks[0].items[0].requires_business, undefined)
+  assert.ok(!('requires_business' in blocks[0].items[0]))
+})
+
+test('모르는 필드는 저장 객체에 담기지 않는다 (관리자 PATCH 400 방어)', async () => {
+  // 원본을 통째로 저장하면 kosmart가 필드를 늘릴 때마다 PATCH의 .strict() 스키마가
+  // 그 회차의 저장을 전부 400으로 막는다.
+  globalThis.fetch = async url => {
+    requested.push(new URL(url))
+    return new Response(
+      JSON.stringify({
+        items: [
+          payloadItem({
+            requires_business: false,
+            source_label: '예술나루',
+            score: 12.5,
+            match_tier: 'exact',
+          }),
+        ],
+      }),
+      { status: 200 }
+    )
+  }
+  const blocks = await fetchGrantOpportunities({ genres: ['음악'], regions: ['경기'] })
+  const stored = blocks[0].items[0]
+  assert.deepEqual(Object.keys(stored).sort(), [
+    'apply_end',
+    'apply_start',
+    'biz_type',
+    'category',
+    'genres',
+    'key',
+    'regions',
+    'requires_business',
+    'source',
+    'source_id',
+    'summary',
+    'target',
+    'title',
+    'url',
+  ])
+  assert.equal(stored.requires_business, false)
 })
 
 test('requires_business가 실려 오면 그대로 보존한다', async () => {
@@ -94,4 +135,21 @@ test('requires_business가 실려 오면 그대로 보존한다', async () => {
   }
   const blocks = await fetchGrantOpportunities({ genres: ['음악'], regions: ['경기'] })
   assert.equal(blocks[0].items[0].requires_business, true)
+})
+
+test('저장되는 모든 필드가 관리자 PATCH 스키마에 있다 (저장은 되는데 편집이 안 되는 상태 방지)', async () => {
+  const { readFileSync } = await import('node:fs')
+  const routeSource = readFileSync(
+    new URL('../../src/app/api/admin/grants/[id]/route.ts', import.meta.url),
+    'utf8'
+  )
+  const schema = routeSource.slice(
+    routeSource.indexOf('const itemSchema'),
+    routeSource.indexOf('const patchSchema')
+  )
+  const blocks = await fetchGrantOpportunities({ genres: ['음악'], regions: ['경기'] })
+  const stored = { ...blocks[0].items[0], requires_business: true }
+  for (const field of Object.keys(stored)) {
+    assert.ok(schema.includes(`${field}:`), `itemSchema에 ${field}가 없다`)
+  }
 })

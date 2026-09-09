@@ -140,6 +140,11 @@ export async function listGrantDigests(limit: number): Promise<GrantDigestRow[]>
  *
  * 발행되지 않은 회차의 항목을 다시 담는 대가는 "관리자가 같은 것을 한 번 더 본다"이고,
  * 억제하는 대가는 "조합원이 그 공고를 영영 못 본다"이다. 후자가 더 크다.
+ *
+ * **트레이드오프**: 관리자가 손으로 제외한 항목은 규칙에 걸리지 않는 한 **매주 다시
+ * 초안에 오른다.** 그 항목을 매주 다시 빼는 수고를 관리자가 진다. 실측(2026-W36·W37)
+ * 에서는 제외 표시 37건이 전부 규칙에 걸리는 것이었고 손으로 뺀 것은 0건이라, 지금
+ * 이 수고는 0이다. 손으로 빼는 일이 잦아지면 "영구 제외" 목록을 따로 두는 편이 낫다.
  */
 export async function listRecentDigestItems(weeks: number): Promise<GrantItem[]> {
   const rows = await db

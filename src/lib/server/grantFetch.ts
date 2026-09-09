@@ -40,6 +40,36 @@ function isGrantItem(v: unknown): v is GrantItem {
   )
 }
 
+/**
+ * 응답 항목에서 **우리가 아는 필드만** 골라 담는다.
+ *
+ * 원본 객체를 그대로 저장하면 kosmart가 필드를 하나 늘릴 때마다 그 값이 `grant_digests`
+ * 에 섞여 들어가고, 관리자 편집 저장(`PATCH /api/admin/grants/[id]`)의 `.strict()`
+ * 스키마가 모르는 키를 보고 **400으로 거절한다** — 회차 전체가 편집 불가가 된다.
+ * 여기서 걸러 두면 새 필드는 조용히 무시되고, 우리가 쓰기로 한 뒤에 이 목록에 추가한다.
+ */
+function pickGrantItem(o: GrantItem): GrantItem {
+  const picked: GrantItem = {
+    key: o.key,
+    source: o.source,
+    source_id: o.source_id,
+    title: o.title,
+    genres: o.genres,
+    regions: o.regions,
+    category: o.category,
+    apply_start: o.apply_start ?? null,
+    apply_end: o.apply_end ?? null,
+    url: o.url,
+    summary: o.summary ?? null,
+    biz_type: o.biz_type ?? null,
+    target: o.target ?? null,
+  }
+  // 옛 응답에는 이 필드가 없다. 없으면 키 자체를 만들지 않는다 — `undefined`를 담으면
+  // JSON 저장에서 사라지므로 결과는 같지만, 없는 것을 없는 채로 두는 편이 읽기 쉽다.
+  if (typeof o.requires_business === 'boolean') picked.requires_business = o.requires_business
+  return picked
+}
+
 /** 장르 하나를 조회한다. 실패하면 어느 장르에서 실패했는지를 담아 던진다. */
 async function fetchGenre(base: string, token: string, regionsParam: string, genre: string) {
   const url = new URL(base)
@@ -69,7 +99,7 @@ async function fetchGenre(base: string, token: string, regionsParam: string, gen
   if (!items.every(isGrantItem)) {
     throw new Error(`kosmart 응답 항목의 형식이 예상과 다릅니다 (장르 ${genre}).`)
   }
-  return items as GrantItem[]
+  return (items as GrantItem[]).map(pickGrantItem)
 }
 
 /** 장르 하나에 대응하는 결과 블록. 순서는 `scope.genres`의 순서를 따른다. */

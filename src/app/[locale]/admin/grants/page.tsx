@@ -19,6 +19,7 @@ type GrantItem = {
   summary: string | null
   biz_type: string | null
   target: string | null
+  requires_business?: boolean
   excluded?: boolean
   manual?: boolean
 }
