@@ -20,12 +20,8 @@ test('회의 날짜가 겹치지 않는다 (한 회의에 회의록은 하나다
   assert.equal(new Set(dates).size, dates.length)
 })
 
-test(
-  '원본이 있는 컴퓨터라면 경로가 전부 실재한다',
-  { skip: !existsSync('docs/이사회') },
-  () => {
-    for (const entry of [...ASSEMBLY_DOCS, ...BOARD_MINUTES]) {
-      assert.ok(existsSync(entry.file), `없는 경로: ${entry.file}`)
-    }
+test('원본이 있는 컴퓨터라면 경로가 전부 실재한다', { skip: !existsSync('docs/이사회') }, () => {
+  for (const entry of [...ASSEMBLY_DOCS, ...BOARD_MINUTES]) {
+    assert.ok(existsSync(entry.file), `없는 경로: ${entry.file}`)
   }
-)
+})

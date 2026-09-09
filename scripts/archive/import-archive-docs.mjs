@@ -31,6 +31,19 @@ if (!url) {
   console.error('TURSO_DATABASE_URL이 없다.')
   process.exit(1)
 }
+
+/** 토큰·경로를 찍지 않고 대상 DB를 눈으로 확인할 수 있게 호스트만 보여준다. */
+function describeTarget(rawUrl) {
+  try {
+    const parsed = new URL(rawUrl)
+    if (parsed.protocol === 'file:') return `file:${parsed.pathname || rawUrl}`
+    return `${parsed.protocol}//${parsed.host}`
+  } catch {
+    return rawUrl
+  }
+}
+console.log(`대상 DB: ${describeTarget(url)}`)
+
 const db = createClient({ url, authToken: process.env.TURSO_AUTH_TOKEN })
 
 function label() {
@@ -100,22 +113,44 @@ async function importMinutes() {
       process.exitCode = 1
       continue
     }
+
     let meetingId = meetings.rows[0]?.id
-    if (!meetingId) {
+    if (meetingId) {
+      if (meetings.rows[0].title !== entry.title) {
+        console.warn(
+          `  ! 제목이 다르다: DB "${meetings.rows[0].title}" vs 매핑 표 "${entry.title}" (${entry.date})`
+        )
+      }
+      console.log(`  = 기존 회의에 붙임: ${entry.date} ${meetings.rows[0].title}`)
+    } else {
+      // 날짜로는 못 찾았다. 만들기 전에 제목으로 한 번 더 대조한다 — 운영에
+      // 다른 날짜로 기록된 같은 회의가 있으면 두 벌이 생기는 유일한 파괴
+      // 경로라, 여기서는 짐작하지 않고 멈춘다.
+      const byTitle = await db.execute({
+        sql: 'select id, title, meeting_date from board_meetings where title = ?',
+        args: [entry.title],
+      })
+      if (byTitle.rows.length > 0) {
+        const other = byTitle.rows[0]
+        console.error(
+          `  ✗ 같은 제목의 회의가 다른 날짜에 있다: id=${other.id} "${other.title}" (${other.meeting_date}) — 매핑 표 날짜는 ${entry.date}. 만들지 않고 중단한다.`
+        )
+        process.exitCode = 1
+        continue
+      }
       console.log(`  + 회의 새로 만듦: ${entry.date} ${entry.title}`)
       meetingId = randomUUID()
       if (apply) {
         await db.execute({
-          sql: "insert into board_meetings (id, title, meeting_date, status) values (?, ?, ?, 'done')",
+          sql: "insert into board_meetings (id, title, meeting_date, status) values (?, ?, ?, 'completed')",
           args: [meetingId, entry.title, entry.date],
         })
       }
-    } else {
-      console.log(`  = 기존 회의에 붙임: ${entry.date} ${meetings.rows[0].title}`)
     }
 
-    if (!apply) continue
-
+    // 존재 검사는 읽기다 — apply 여부와 무관하게 마른 실행에서도 무엇이
+    // 바뀔지(또는 바뀌지 않을지) 보여준다. 새로 만들 회의는 아직 DB에
+    // 없으니 당연히 회의록도 없다.
     const existing = await db.execute({
       sql: 'select id from board_minutes where meeting_id = ?',
       args: [meetingId],
@@ -124,6 +159,10 @@ async function importMinutes() {
       console.log('    이미 회의록이 있다. 덮지 않고 건너뛴다.')
       continue
     }
+
+    console.log(`    회의록 ${content.length}자 넣을 예정`)
+    if (!apply) continue
+
     await db.execute({
       sql: "insert into board_minutes (id, meeting_id, content, content_format) values (?, ?, ?, 'markdown')",
       args: [randomUUID(), meetingId, content],
@@ -133,4 +172,9 @@ async function importMinutes() {
 
 if (doAssembly) await importAssembly()
 if (doMinutes) await importMinutes()
-console.log(apply ? '\n적용 끝.' : '\n마른 실행이다. 실제로 쓰려면 --apply를 줘라.')
+
+if (process.exitCode) {
+  console.log(`\n${label()} 중 실패가 있었다 — 위 ✗ 표시를 확인해라.`)
+} else {
+  console.log(apply ? '\n적용 끝.' : '\n마른 실행이다. 실제로 쓰려면 --apply를 줘라.')
+}
