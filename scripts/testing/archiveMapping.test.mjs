@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
 
-const { ASSEMBLY_DOCS, BOARD_MINUTES } = await import('../archive/mapping.mjs')
+const { ASSEMBLY_DOCS, BOARD_MINUTES } = await import('../import/mapping.mjs')
 
 test('총회 세 건, 이사회 아홉 건이다', () => {
   assert.equal(ASSEMBLY_DOCS.length, 3)

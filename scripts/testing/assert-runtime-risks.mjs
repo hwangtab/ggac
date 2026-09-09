@@ -3516,6 +3516,7 @@ const SCRIPTS_SCAN_MIN_FILES = 100 // 현재 141 (2026-09-07 Supabase 잔재 정
 // 0개가 되어 아래 하한표에서 빠졌다 — 디렉터리 자체가 사라진 게 아니라 .sql/.md/.sh만 남았다)
 const SCRIPTS_SCAN_SUBTREE_MINIMUMS = {
   'scripts/auth/': 1, // 현재 1
+  'scripts/import/': 2, // 현재 2 (총회·이사회 기록 수입 도구 — 둘 중 하나만 없어져도 도구가 죽는다)
   'scripts/migrate/': 5, // 현재 7 (copy-private-objects.mjs 삭제 — Supabase 삭제 완료로
   // SCRIPTS_SUPABASE_ALLOWLIST의 "Supabase 삭제 전까지 남긴다" 조건이 끝남)
   'scripts/perf/': 1, // 현재 1 (backfill-image-dimensions.mjs 삭제)

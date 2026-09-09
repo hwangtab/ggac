@@ -315,9 +315,7 @@ test.describe('이사회 경계', () => {
 
       // 서류함 카테고리(board 자료의 카테고리)를 명시해도 마찬가지다 — 카테고리
       // 조건은 통과하지만 visibility 조건에서 걸러져 빈 목록이어야 한다.
-      const memberCategoryList = await memberContext.get(
-        '/api/board-room/documents?category=정관'
-      )
+      const memberCategoryList = await memberContext.get('/api/board-room/documents?category=정관')
       expect(memberCategoryList.status()).toBe(200)
       const memberCategoryBody = await memberCategoryList.json()
       expect(memberCategoryBody.data?.documents).toHaveLength(0)

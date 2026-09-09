@@ -5,9 +5,9 @@
  * 기본은 마른 실행이다. 무엇을 바꿀지 출력만 하고 끝난다.
  * 실제로 쓰려면 `--apply`를 준다.
  *
- *   node scripts/archive/import-archive-docs.mjs --assembly
- *   node scripts/archive/import-archive-docs.mjs --assembly --apply
- *   node scripts/archive/import-archive-docs.mjs --minutes
+ *   node scripts/import/import-archive-docs.mjs --assembly
+ *   node scripts/import/import-archive-docs.mjs --assembly --apply
+ *   node scripts/import/import-archive-docs.mjs --minutes
  *
  * 이사회는 `--minutes` 전에 반드시 운영 회의 목록을 눈으로 확인해라.
  * 없는 회의를 만들기 때문에, 이미 있는 회의를 못 찾으면 두 벌이 된다.
