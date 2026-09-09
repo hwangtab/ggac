@@ -21,11 +21,32 @@ npm run lint:fix                 # Auto-fix linting issues
 npm run format                   # Format code with Prettier
 npm run format:check             # Check code formatting
 npm run type-check               # TypeScript type checking
+npm run test:unit                # 단위 테스트 (먼저 `npm run db:push:local` — 아래 참고)
 npm run test:e2e                 # Run E2E tests (시스템 Chrome 사용 — 브라우저 설치 불필요)
 npm run test:e2e:ui              # Run E2E tests with UI
 npm run audit:security           # Security audit
 ANALYZE=true npm run build       # Bundle size analysis
 ```
+
+#### 단위 테스트는 준비된 `local.db`를 요구한다
+
+`scripts/testing/ingestInbound.test.mjs`는 `TURSO_DATABASE_URL=file:local.db`로
+붙는다. 이 파일은 `.gitignore` 대상이라 **새로 클론하거나 worktree를 만들면
+없다.** 없으면 libsql이 빈 파일을 새로 만들고, 표가 없으니 5건이 전부
+
+```
+Error: Failed query: insert into "inbound_emails" ... code: 'SQLITE_ERROR'
+```
+
+로 떨어진다. 표가 없다는 말이 메시지에 없어 코드 버그로 오인하기 쉽다.
+
+```bash
+npm run db:push:local            # local.db에 스키마를 깐다 (한 번만)
+```
+
+깔고 나면 통과한다(2026-09-09 실측: 1361 passed / 0 failed). 본 저장소에는 이미
+깔려 있어 **worktree에서만 빨간불이 뜬다** — 그래서 "main에서도 재현된다"고 잘못
+읽기 쉽다.
 
 ### Deployment
 

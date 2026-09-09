@@ -269,6 +269,12 @@ test('buildDraftItems는 life 카테고리 항목을 담지 않고 그 자리를
     item({ key: 'welfare1', category: 'welfare', title: '2026년 개인 심리상담 신청 안내' }),
     item({ key: 'admin1', category: 'admin', title: '예술활동증명 제도 운영 안내' }),
     ...Array.from({ length: CAP }, (_, i) => item({ key: `ok:${i}`, category: 'grant' })),
+  ]
+  const out = buildDraftItems(many, new Set())
+  assert.equal(out.length, CAP)
+  assert.ok(out.every(i => i.key.startsWith('ok:')))
+})
+
 // ---------------------------------------------------------------- isExcludedByGenres
 
 test('genres가 빈 배열이면 제외된다 (kosmart 분류 실패)', () => {
