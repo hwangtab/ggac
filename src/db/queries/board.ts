@@ -630,6 +630,9 @@ export interface DocumentRow {
   file_size: number | null
   mime_type: string | null
   uploaded_by: string | null
+  visibility: string
+  /** 본문이 있는가. 본문 자체는 상세에서만 준다. */
+  has_body: boolean
   created_at: string
 }
 
@@ -643,6 +646,8 @@ function rowToDocument(row: typeof boardDocuments.$inferSelect): DocumentRow {
     file_size: row.fileSize,
     mime_type: row.mimeType,
     uploaded_by: row.uploadedBy,
+    visibility: row.visibility,
+    has_body: Boolean(row.bodyMarkdown && row.bodyMarkdown.length > 0),
     created_at: toIso(row.createdAt) as string,
   }
 }
@@ -670,16 +675,24 @@ export async function listDocuments(
     /** 이 목록에 있는 카테고리만. 비어 있으면 무시한다. */
     categories?: readonly string[] | null
     excludeCategory?: string | null
+    /**
+     * 이 등급에 보이는 자료만. **필수다.** 선택으로 두면 호출부가 빠뜨렸을 때
+     * 조용히 전부 열린다. 인가 판정은 라우트가 하고, 이 계층은 받은 목록을
+     * 그대로 조건에 넣을 뿐이다.
+     */
+    visibility: readonly string[]
   },
   options?: BoardListOptions
 ): Promise<DocumentRow[]> {
-  const where = filter.category
+  const categoryWhere = filter.category
     ? eq(boardDocuments.category, filter.category)
     : filter.categories && filter.categories.length > 0
       ? inArray(boardDocuments.category, [...filter.categories])
       : filter.excludeCategory
         ? ne(boardDocuments.category, filter.excludeCategory)
         : undefined
+  const visibilityWhere = inArray(boardDocuments.visibility, [...filter.visibility])
+  const where = categoryWhere ? and(categoryWhere, visibilityWhere) : visibilityWhere
 
   const limit = resolveBoardListLimit(options)
   const rows = await db
@@ -698,7 +711,9 @@ export interface CreateDocumentInput {
   fileName: string
   fileSize: number
   mimeType: string
-  uploadedBy: string
+  uploadedBy: string | null
+  visibility: string
+  bodyMarkdown?: string | null
 }
 
 /** `/api/board-room/documents` POST. */
@@ -713,6 +728,8 @@ export async function createDocument(input: CreateDocumentInput): Promise<{ id: 
       fileSize: input.fileSize,
       mimeType: input.mimeType,
       uploadedBy: input.uploadedBy,
+      visibility: input.visibility,
+      bodyMarkdown: input.bodyMarkdown ?? null,
     })
     .returning({ id: boardDocuments.id })
   return row
@@ -734,6 +751,49 @@ export async function getDocumentForDelete(
 /** `/api/board-room/documents/[id]` DELETE. */
 export async function deleteDocument(id: string): Promise<void> {
   await db.delete(boardDocuments).where(eq(boardDocuments.id, id))
+}
+
+export interface DocumentDetailRow {
+  id: string
+  title: string
+  category: string
+  body_markdown: string | null
+  visibility: string
+  file_name: string | null
+  mime_type: string | null
+  created_at: string
+}
+
+/**
+ * `/api/board-room/documents/[id]` GET. 본문까지 싣는다.
+ * 이 계층은 권한을 모른다 — 호출부가 `visibility`를 보고 판정한다.
+ */
+export async function getDocumentDetail(id: string): Promise<DocumentDetailRow | null> {
+  const [row] = await db
+    .select({
+      id: boardDocuments.id,
+      title: boardDocuments.title,
+      category: boardDocuments.category,
+      bodyMarkdown: boardDocuments.bodyMarkdown,
+      visibility: boardDocuments.visibility,
+      fileName: boardDocuments.fileName,
+      mimeType: boardDocuments.mimeType,
+      createdAt: boardDocuments.createdAt,
+    })
+    .from(boardDocuments)
+    .where(eq(boardDocuments.id, id))
+    .limit(1)
+  if (!row) return null
+  return {
+    id: row.id,
+    title: row.title,
+    category: row.category,
+    body_markdown: row.bodyMarkdown,
+    visibility: row.visibility,
+    file_name: row.fileName,
+    mime_type: row.mimeType,
+    created_at: toIso(row.createdAt) as string,
+  }
 }
 
 /** `/api/board-room/documents/[id]/download` GET. */
