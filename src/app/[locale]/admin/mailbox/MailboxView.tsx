@@ -1,7 +1,15 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { FiMail, FiRefreshCw, FiSend, FiX, FiPaperclip, FiSearch, FiArrowLeft } from 'react-icons/fi'
+import {
+  FiMail,
+  FiRefreshCw,
+  FiSend,
+  FiX,
+  FiPaperclip,
+  FiSearch,
+  FiArrowLeft,
+} from 'react-icons/fi'
 
 interface InboundEmail {
   id: string
@@ -92,18 +100,28 @@ function escapeHtml(value: string): string {
  * `body_html`이 없고 `body_text`만 있으면(순수 텍스트 메일 —
  * `body_fetch_status`는 이미 'done'이라 배지가 뜨지 않는다) 그것을
  * `<pre>`로 보여준다. HTML로 해석되면 안 되므로 반드시 이스케이프한다.
+ *
+ * 본문 문서는 관리자 화면의 다크 테마와 무관하게 **항상 밝은 바탕**이다.
+ * 메일 HTML은 대개 `<body>`도 배경 지정도 없이 검은 글씨만 전제하므로,
+ * iframe 문서가 부모의 `color-scheme: dark`를 물려받으면 검정 위에 검정이
+ * 된다(2026-09-09 실제 메일로 확인). `color-scheme` 메타와 인라인 스타일로
+ * 고정한다 — 둘 다 위 CSP(`style-src 'unsafe-inline'`)가 허용한다.
  */
 const REMOTE_IMAGE_GUARD_META =
   '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src data:; style-src \'unsafe-inline\'">'
+const LIGHT_CANVAS =
+  '<meta name="color-scheme" content="light only">' +
+  '<style>html,body{background:#fff;color:#111827;margin:0;padding:8px}</style>'
+const BODY_DOC_HEAD = REMOTE_IMAGE_GUARD_META + LIGHT_CANVAS
 
 function buildBodySrcDoc(detail: InboundEmailDetail | null): string {
   if (detail?.body_html) {
-    return `${REMOTE_IMAGE_GUARD_META}${detail.body_html}`
+    return `${BODY_DOC_HEAD}${detail.body_html}`
   }
   if (detail?.body_text) {
-    return `${REMOTE_IMAGE_GUARD_META}<pre style="font-family:sans-serif;white-space:pre-wrap;word-break:break-word;margin:0">${escapeHtml(detail.body_text)}</pre>`
+    return `${BODY_DOC_HEAD}<pre style="font-family:sans-serif;white-space:pre-wrap;word-break:break-word;margin:0">${escapeHtml(detail.body_text)}</pre>`
   }
-  return `${REMOTE_IMAGE_GUARD_META}<p style="font-family:sans-serif;color:#6b7280">본문이 아직 도착하지 않았습니다.</p>`
+  return `${BODY_DOC_HEAD}<p style="font-family:sans-serif;color:#6b7280">본문이 아직 도착하지 않았습니다.</p>`
 }
 
 /**
@@ -326,7 +344,6 @@ export default function MailboxView({ className = '' }: { className?: string }) 
           selectedId !== null ? 'hidden lg:flex' : 'flex'
         } items-center justify-between mb-4 shrink-0`}
       >
-
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center text-primary-600">
             <FiMail className="w-5 h-5" />
