@@ -150,6 +150,14 @@ function sortByDisplayNameAsc(rows: RosterRow[]): RosterRow[] {
   return [...rows].sort((a, b) => a.display_name.localeCompare(b.display_name, 'ko'))
 }
 
+/**
+ * 이사회 등급을 서류 열람 범위 목록으로 바꾼다. 등급은 포함 관계라 이사는
+ * 조합원이 보는 것까지 전부 본다.
+ */
+export function visibilityScopeFor(isBoardMember: boolean): readonly string[] {
+  return isBoardMember ? ['board', 'members'] : ['members']
+}
+
 /** 재적 이사 명단(승인·활성 + is_director). 정족수 산정 기준이 된다. */
 export async function getDirectorRoster() {
   const { rows } = await listProfiles({
