@@ -34,6 +34,7 @@ import {
   boardMinutes,
 } from '../schema/index.ts'
 
+import type { BoardMeetingStatus } from '@/constants/boardRoom'
 import { toIso } from './_helpers.ts'
 
 // -------------------------------------------------------------------------
@@ -101,11 +102,19 @@ function applyBoardListLimit<T>(rows: T[], limit: number, options?: BoardListOpt
 }
 
 /** `/api/board-room/meetings` GET. `created_at` 내림차순은 원본과 동일. */
-export async function listMeetings(options?: BoardListOptions): Promise<MeetingRow[]> {
+export async function listMeetings(
+  options?: BoardListOptions & { statuses?: readonly BoardMeetingStatus[] }
+): Promise<MeetingRow[]> {
   const limit = resolveBoardListLimit(options)
+  // statuses를 주지 않으면 지금까지와 똑같이 전체를 본다 — 회의 목록 화면이
+  // polling(투표 중)을 계속 보여줘야 하기 때문이다. 캘린더만 확정분으로 좁힌다.
+  const statuses = options?.statuses
   const rows = await db
     .select()
     .from(boardMeetings)
+    .where(
+      statuses && statuses.length > 0 ? inArray(boardMeetings.status, [...statuses]) : undefined
+    )
     .orderBy(desc(boardMeetings.createdAt))
     .limit(limit + 1)
   return applyBoardListLimit(rows, limit, options).map(rowToMeeting)

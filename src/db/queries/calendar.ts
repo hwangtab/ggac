@@ -37,7 +37,10 @@ export async function listCalendarItems(
 ): Promise<{ items: CalendarItem[]; ongoing: CalendarItem[] }> {
   const [grants, meetings, projects] = await Promise.all([
     listPublishedDigestItems(DIGEST_LOOKBACK_WEEKS),
-    listMeetings(),
+    // 캘린더는 승인·활성 조합원 전체가 본다. 날짜가 확정된 회의만 싣는다 —
+    // 예전에는 meeting_date가 비었는지로만 갈렸는데, 그건 날짜 확정과
+    // scheduled 전환이 같이 일어나는 현재 흐름에 기댄 우연이지 규칙이 아니었다.
+    listMeetings({ statuses: ['scheduled', 'completed'] }),
     getProjects('ko'),
   ])
   return {
