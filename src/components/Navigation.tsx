@@ -14,7 +14,13 @@ import {
 import NotificationDropdown from './NotificationDropdown'
 import LocaleSwitcher from './LocaleSwitcher'
 
-type NavProfile = { is_director: boolean; is_admin: boolean; is_auditor: boolean } | null
+type NavProfile = {
+  is_director: boolean
+  is_admin: boolean
+  is_auditor: boolean
+  registration_status?: string | null
+  is_active?: boolean | null
+} | null
 
 const Navigation = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -33,12 +39,19 @@ const Navigation = () => {
   // 홈페이지인지 확인
   const isHomePage = pathname === '/'
 
-  // 이사회 링크 노출 여부 (이사 · 관리자 · 감사)
-  const showBoardRoom = !!(
+  // 이사회 공간 입구. 승인·활성 조합원이면 누구나 들어간다 — 미들웨어도
+  // /board-room과 회의·총회를 조합원에게 열어 두고 있다. 예전에는 이 판정이
+  // 역할 셋만 봐서, 들어갈 수는 있는데 링크가 없는 "문 없는 방"이었다.
+  const isApprovedActive =
+    navProfile?.registration_status === 'approved' && navProfile?.is_active === true
+  const isBoardMember = !!(
     navProfile?.is_director ||
     navProfile?.is_admin ||
     navProfile?.is_auditor
   )
+  const showBoardRoom = isApprovedActive || isBoardMember
+  // 라벨을 나누는 이유: 조합원에게 DIRECTORS를 보여주면 자기가 이사인 줄 안다.
+  const boardRoomLabel = isBoardMember ? 'DIRECTORS' : 'RECORDS'
 
   // 사이트 전체가 다크 포스터 테마다. 내비도 항상 다크로 유지한다.
   const isDark = true
@@ -52,8 +65,8 @@ const Navigation = () => {
     { href: '/projects', label: 'PROJECT' },
     { href: '/artists', label: 'ARTISTS' },
     { href: '/board', label: 'BOARD' },
-    // 이사회: 이사/관리자에게만 노출, 게시판(BOARD) 다음에 배치
-    ...(showBoardRoom ? [{ href: '/board-room', label: 'DIRECTORS' }] : []),
+    // 이사회/열람: 승인·활성 조합원 전체에게 노출, 게시판(BOARD) 다음에 배치
+    ...(showBoardRoom ? [{ href: '/board-room', label: boardRoomLabel }] : []),
     { href: '/connect', label: 'CONNECT' },
   ]
 
@@ -101,6 +114,8 @@ const Navigation = () => {
                   is_director: !!session.profile.is_director,
                   is_admin: !!session.profile.is_admin,
                   is_auditor: !!session.profile.is_auditor,
+                  registration_status: session.profile.registration_status,
+                  is_active: session.profile.is_active,
                 }
               : null
           )
