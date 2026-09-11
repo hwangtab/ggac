@@ -1315,11 +1315,14 @@ const PRIVILEGED_AUTH_VALUES = [
 // 맨몸 핸들러가 불러야 하는 게이트.
 //
 // `requireBoardRecordReader()`는 이사회 **기록 읽기**(회의 목록·안건·토론·
-// 회의록 GET) 전용 게이트다. 승인·활성 조합원까지 통과시키므로
+// 회의록 GET) 전용 게이트다. 서류함·총회 자료의 목록·상세·다운로드 GET도
+// (수정 1회차부터) 이 게이트를 쓴다. 승인·활성 조합원까지 통과시키므로
 // `requireBoardMember()`보다 넓지만 비인증·미승인·비활성은 그대로 막고,
 // 이사회 전용 정보(일정 투표·출석·정족수)는 호출부가 `isBoardMember`로
-// 갈라 응답에서 뺀다. **쓰기 핸들러에 쓰면 안 된다** — 아래
-// `boardRecordReaderReadOnly` 계약이 그 오용을 잡는다.
+// 갈라 응답에서 뺀다. 서류함·총회는 여기서 한 번 더 갈린다 — 게이트를
+// 통과해도 자료마다 `visibility`가 다르므로 호출부가 `visibilityScopeFor`로
+// 다시 판정한다. **쓰기 핸들러에 쓰면 안 된다** — 아래(1457행 부근)
+// `method !== 'GET'` 검사가 그 오용을 잡는다.
 const PRIVILEGED_GATE_CALLS = [
   /requireAdmin\(\)/,
   /requireBoardMember\(\)/,
@@ -1997,7 +2000,10 @@ const verifiesBoardDocumentSignature =
 //
 // 목록 API는 더 이상 서명 URL을 만들지 않는다 — 발급된 서명 URL은 만료 전까지
 // 권한을 잃은 사람에게도 유효했다. 대신 만료 없는 내부 프록시 경로만 내려주고,
-// 그 다운로드 라우트가 매 요청마다 `requireBoardMember()`로 권한을 다시 검사한다.
+// 그 다운로드 라우트가 매 요청마다 `requireBoardRecordReader()`로 권한을 다시
+// 검사한다. 이 게이트는 조합원도 통과시키므로, 통과 뒤 자료마다 `visibility`로
+// 다시 갈라야 한다(`isSafeBoardDocumentFilePath` 봉쇄 판정보다 먼저) — 없으면
+// 조합원이 재무 원자료(`visibility='board'`)까지 내려받는다(수정 1회차 Important 1).
 // 목록 응답이 `file_path`를 그대로 흘리는 회귀도 이 검사식이 고정한다 — 저장소
 // 경로가 클라이언트로 새 나가면 봉쇄를 우회할 필요도 없이 저장소 레이아웃이
 // 그대로 노출된다.
@@ -2011,7 +2017,15 @@ const verifiesBoardDocumentSignature =
 const boardDocumentsCode = stripCommentsAndImports(boardDocumentsSource)
 const boardDocumentDetailCode = stripCommentsAndImports(boardDocumentDetailSource)
 const boardDocumentDownloadCode = stripCommentsAndImports(boardDocumentDownloadSource)
-const boardDocumentDownloadAuthIndex = boardDocumentDownloadCode.indexOf('requireBoardMember()')
+// 수정 1회차 Important 1: 조합원이 목록·상세에서 visibility='members' 자료를
+// 보게 되면서, 다운로드 게이트도 requireBoardMember()(이사·감사·관리자
+// 전용)에서 requireBoardRecordReader()(승인·활성 조합원까지 통과)로 넓혔다.
+// 옛 계약(`requireBoardMember()` 리터럴)은 이제 틀렸다 — 새 게이트 이름을
+// 본다. 게이트만 넓히고 끝내면 조합원이 재무 원자료까지 내려받으므로, 아래
+// `boardDocumentDownloadRevalidatesVisibility`가 그 오용을 잡는다.
+const boardDocumentDownloadAuthIndex = boardDocumentDownloadCode.indexOf(
+  'requireBoardRecordReader()'
+)
 // Task 4: board_documents 권위가 Turso로 옮겨지며 이 라우트의 조회가
 // Supabase `.from('board_documents')`에서 쿼리 계층 호출
 // `getDocumentForDownload(id)`(src/db/queries/board.ts)로 바뀌었다. 이
@@ -2022,12 +2036,24 @@ const boardDocumentDownloadChecksAuthBeforeQuery =
   boardDocumentDownloadAuthIndex !== -1 &&
   boardDocumentDownloadQueryIndex !== -1 &&
   boardDocumentDownloadAuthIndex < boardDocumentDownloadQueryIndex
+// 수정 1회차 Important 1: 게이트 통과가 곧 열람 허가가 아니다 — 상세 GET과
+// 같은 모양(`visibilityScopeFor(isBoardMember).includes(doc.visibility)`)의
+// 재판정이 조회 뒤, 봉쇄 판정보다 먼저 있어야 한다.
+const boardDocumentDownloadVisibilityIndex = boardDocumentDownloadCode.indexOf(
+  'visibilityScopeFor(isBoardMember).includes(doc.visibility)'
+)
 const boardDocumentDownloadSafetyIndex = boardDocumentDownloadCode.indexOf(
   'isSafeBoardDocumentFilePath(doc.file_path)'
 )
 const boardDocumentDownloadStreamIndex = boardDocumentDownloadCode.indexOf(
   'getBoardDocumentStream(doc.file_path'
 )
+const boardDocumentDownloadRevalidatesVisibility =
+  boardDocumentDownloadVisibilityIndex !== -1 &&
+  boardDocumentDownloadQueryIndex !== -1 &&
+  boardDocumentDownloadSafetyIndex !== -1 &&
+  boardDocumentDownloadQueryIndex < boardDocumentDownloadVisibilityIndex &&
+  boardDocumentDownloadVisibilityIndex < boardDocumentDownloadSafetyIndex
 const boardDocumentDownloadChecksPathBeforeStream =
   boardDocumentDownloadSafetyIndex !== -1 &&
   boardDocumentDownloadStreamIndex !== -1 &&
@@ -2048,9 +2074,11 @@ const validatesBoardDocumentStoragePaths =
     boardDocumentsCode
   ) &&
   !/signedUrl/.test(boardDocumentsCode) &&
-  // (3) 다운로드 라우트: 권한 검사가 DB 조회보다 먼저고, DB에서 온 file_path를
-  //     봉쇄 판정에 다시 통과시킨 뒤에만 스트리밍한다.
+  // (3) 다운로드 라우트: 권한 검사가 DB 조회보다 먼저고, 조회 뒤 자료 등급을
+  //     다시 판정하며, DB에서 온 file_path를 봉쇄 판정에 다시 통과시킨
+  //     뒤에만 스트리밍한다.
   boardDocumentDownloadChecksAuthBeforeQuery &&
+  boardDocumentDownloadRevalidatesVisibility &&
   boardDocumentDownloadChecksPathBeforeStream &&
   // (4) 삭제 라우트: 소유권은 DB 컬럼으로 검사하고(관리자만 예외), 봉쇄는
   //     `isSafeBoardDocumentFilePath`로, 실제 삭제는 제공자 계층
@@ -3488,6 +3516,7 @@ const SCRIPTS_SCAN_MIN_FILES = 100 // 현재 141 (2026-09-07 Supabase 잔재 정
 // 0개가 되어 아래 하한표에서 빠졌다 — 디렉터리 자체가 사라진 게 아니라 .sql/.md/.sh만 남았다)
 const SCRIPTS_SCAN_SUBTREE_MINIMUMS = {
   'scripts/auth/': 1, // 현재 1
+  'scripts/import/': 2, // 현재 2 (총회·이사회 기록 수입 도구 — 둘 중 하나만 없어져도 도구가 죽는다)
   'scripts/migrate/': 5, // 현재 7 (copy-private-objects.mjs 삭제 — Supabase 삭제 완료로
   // SCRIPTS_SUPABASE_ALLOWLIST의 "Supabase 삭제 전까지 남긴다" 조건이 끝남)
   'scripts/perf/': 1, // 현재 1 (backfill-image-dimensions.mjs 삭제)

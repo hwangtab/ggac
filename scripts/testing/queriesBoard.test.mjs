@@ -551,6 +551,7 @@ test('createDocument → listDocuments(카테고리 필터/제외) → getDocume
     fileSize: 1000,
     mimeType: 'application/pdf',
     uploadedBy: uploader,
+    visibility: 'board',
   })
   await createDocument({
     title: '총회서류',
@@ -560,12 +561,16 @@ test('createDocument → listDocuments(카테고리 필터/제외) → getDocume
     fileSize: 2000,
     mimeType: 'application/pdf',
     uploadedBy: uploader,
+    visibility: 'board',
   })
 
-  const generalOnly = await listDocuments({ category: 'general' })
+  const generalOnly = await listDocuments({ category: 'general', visibility: ['board', 'members'] })
   assert.ok(generalOnly.every(d => d.category === 'general'))
 
-  const excludingAssembly = await listDocuments({ excludeCategory: 'assembly' })
+  const excludingAssembly = await listDocuments({
+    excludeCategory: 'assembly',
+    visibility: ['board', 'members'],
+  })
   assert.ok(!excludingAssembly.some(d => d.category === 'assembly'))
   assert.ok(excludingAssembly.some(d => d.id === doc1.id))
 

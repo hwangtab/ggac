@@ -10,12 +10,15 @@ interface DocumentUploadProps {
   fixedCategory?: string
   /** 주어지면 "자료 종류" 선택을 보이고, 제목에 없으면 앞에 붙여 저장한다 */
   titlePrefixes?: readonly string[]
+  /** 주어지면 열람 범위 선택을 보인다. 관리자 화면에서만 넘긴다. */
+  showVisibility?: boolean
 }
 
 export default function DocumentUpload({
   onUploaded,
   fixedCategory,
   titlePrefixes,
+  showVisibility,
 }: DocumentUploadProps) {
   const t = useTranslations('boardRoom.documents')
 
@@ -24,6 +27,7 @@ export default function DocumentUpload({
   const [title, setTitle] = useState('')
   const [category, setCategory] = useState(fixedCategory ?? '')
   const [prefix, setPrefix] = useState('')
+  const [visibility, setVisibility] = useState('board')
   const [uploading, setUploading] = useState(false)
   const [validationError, setValidationError] = useState<string | null>(null)
   const [apiError, setApiError] = useState<string | null>(null)
@@ -33,6 +37,7 @@ export default function DocumentUpload({
     setTitle('')
     setCategory(fixedCategory ?? '')
     setPrefix('')
+    setVisibility('board')
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
@@ -63,6 +68,7 @@ export default function DocumentUpload({
         prefix && prefix !== '기타' && !trimmed.includes(prefix) ? `${prefix} ${trimmed}` : trimmed
       formData.append('title', finalTitle)
       formData.append('category', category)
+      formData.append('visibility', visibility)
 
       // Note: do NOT set Content-Type — the browser sets the multipart boundary.
       const res = await fetch('/api/board-room/documents', {
@@ -162,6 +168,26 @@ export default function DocumentUpload({
               </option>
             ))}
           </select>
+        </div>
+      )}
+
+      {showVisibility && (
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="doc-visibility">
+            열람 범위
+          </label>
+          <select
+            id="doc-visibility"
+            value={visibility}
+            onChange={e => setVisibility(e.target.value)}
+            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-primary-500"
+          >
+            <option value="board">이사·감사·관리자</option>
+            <option value="members">승인된 조합원 전체</option>
+          </select>
+          <p className="mt-1 text-xs text-gray-400">
+            재무 원자료처럼 내부에만 둘 것은 이사회로 두십시오.
+          </p>
         </div>
       )}
 

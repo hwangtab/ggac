@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { apiDelete, ApiSuccess, ApiError } from '@/utils/apiWrapper'
-import { requireBoardMember } from '@/lib/server/boardRoomAuth'
+import { apiDelete, apiGet, ApiSuccess, ApiError } from '@/utils/apiWrapper'
+import {
+  requireBoardMember,
+  requireBoardRecordReader,
+  visibilityScopeFor,
+} from '@/lib/server/boardRoomAuth'
 import { createLogger } from '@/utils/logger'
 import { isSafeBoardDocumentFilePath } from '@/lib/storage/boardDocuments'
 import { deleteBoardDocument } from '@/lib/storage/privateProvider'
 import { validateUUID } from '@/utils/validation'
-import { deleteDocument, getDocumentForDelete } from '@/db/queries/board'
+import { deleteDocument, getDocumentDetail, getDocumentForDelete } from '@/db/queries/board'
 
 const log = createLogger('boardRoom/documents')
 
@@ -17,6 +21,34 @@ function validateDocumentId(id: string) {
     return { error: ApiError.badRequest(validation.errors[0] || '잘못된 서류 ID 형식입니다.') }
   }
   return { id: validation.sanitized }
+}
+
+/**
+ * 서류 한 건의 본문까지 낸다. 열람 게이트이므로 조합원도 들어오는데,
+ * **목록에서 걸렀으니 됐다고 보지 않고 여기서 다시 판정한다.** 권한 밖
+ * 자료는 403이 아니라 404를 준다 — 존재 여부 자체를 알리지 않는다.
+ */
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const params = await context.params
+  const routeId = validateDocumentId(params.id)
+  if (routeId.error) return routeId.error.toNextResponse()
+  const id = routeId.id
+  const auth = await requireBoardRecordReader()
+  if (auth instanceof NextResponse) return auth
+  const { user, isBoardMember } = auth
+
+  return apiGet(
+    async () => {
+      const document = await getDocumentDetail(id)
+      if (!document) throw ApiError.notFound('서류를 찾을 수 없습니다.')
+      if (!visibilityScopeFor(isBoardMember).includes(document.visibility)) {
+        throw ApiError.notFound('서류를 찾을 수 없습니다.')
+      }
+      return ApiSuccess.ok({ document })
+    },
+    `/api/board-room/documents/${id}`,
+    { userId: user.id }
+  )
 }
 
 export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {

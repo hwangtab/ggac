@@ -98,7 +98,12 @@ export function toBoardMinuteRow(r) {
   }
 }
 
-/** board_documents 9컬럼. file_size는 nullable integer. */
+/**
+ * board_documents 11컬럼. file_size는 nullable integer.
+ *
+ * body_markdown·visibility는 옛 Supabase 원본에 없던 칸(0021에서 신설)이라
+ * 이관 대상 자체가 없다. null과 닫힌 기본값 'board'로 채운다.
+ */
 export function toBoardDocumentRow(r) {
   return {
     id: r.id,
@@ -109,6 +114,8 @@ export function toBoardDocumentRow(r) {
     file_size: toInt(r.file_size),
     mime_type: r.mime_type,
     uploaded_by: r.uploaded_by,
+    body_markdown: null,
+    visibility: 'board',
     created_at: toTs(r.created_at),
   }
 }

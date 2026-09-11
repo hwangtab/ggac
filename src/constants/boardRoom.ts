@@ -24,6 +24,33 @@ export type BoardDocumentCategory = (typeof BOARD_DOCUMENT_CATEGORIES)[number]
 // 정기총회 전용 카테고리 — 일반 서류함과 분리된 '정기총회' 메뉴에서만 사용
 export const ASSEMBLY_DOCUMENT_CATEGORY = '총회' as const
 
+/**
+ * 서류 열람 범위. `'board'`는 이사·감사·관리자, `'members'`는 승인·활성
+ * 조합원까지다. 등급은 포함 관계라 이사는 `'members'` 자료도 전부 본다.
+ *
+ * 본문 유무에서 파생시키지 않고 칸을 따로 둔 이유: 파생시키면 회의록을
+ * PDF로만 올렸을 때 조합원 화면에서 조용히 사라지고 단서가 남지 않는다.
+ */
+export const DOCUMENT_VISIBILITY = ['board', 'members'] as const
+export type DocumentVisibility = (typeof DOCUMENT_VISIBILITY)[number]
+
+export function isDocumentVisibility(value: unknown): value is DocumentVisibility {
+  return (DOCUMENT_VISIBILITY as readonly unknown[]).includes(value)
+}
+
+/**
+ * `visibility`를 정할 수 있는 사람은 관리자뿐이다(설계 문서 §6 권한 표).
+ * 업로드 게이트 자체(`requireBoardMember` — 이사·감사·관리자)는 건드리지
+ * 않는다: 기본값 `'board'`는 이사도 그대로 올릴 수 있어야 하고, 조합원 전체
+ * 공개(`'members'`)로 넓히는 것만 관리자로 좁힌다.
+ */
+export function canSetDocumentVisibility(
+  visibility: DocumentVisibility,
+  isAdmin: boolean
+): boolean {
+  return visibility === 'board' || isAdmin
+}
+
 // 정기총회 자료 종류 — 별도 컬럼이 없어 제목 앞머리로 표시하고, 목록에서는
 // 제목 키워드로 되짚어 배지를 단다. 순서가 목록 안 정렬 순서다.
 export const ASSEMBLY_DOC_TYPES = [

@@ -112,6 +112,13 @@ export const boardDocuments = sqliteTable(
     uploadedBy: text('uploaded_by').references(() => memberProfiles.id, {
       onDelete: 'set null',
     }),
+    /**
+     * 웹에서 바로 읽히는 본문. 마크다운이다. PDF만 있는 자료(은행 거래내역서
+     * 등)는 비어 있고, 그런 행은 목록에서 링크가 되지 않는다.
+     */
+    bodyMarkdown: text('body_markdown'),
+    /** 'board' | 'members'. 기본은 닫힘이다. `@/constants/boardRoom` 참고. */
+    visibility: text('visibility').notNull().default('board'),
     createdAt: createdAt(),
   },
   table => [

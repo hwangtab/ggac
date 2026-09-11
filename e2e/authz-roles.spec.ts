@@ -79,6 +79,122 @@ async function readRegistrationStatus(memberId: string): Promise<string | null> 
   }
 }
 
+/**
+ * '이사회 서류 목록은...' 테스트 전용 픽스처. `scripts/testing/seed-authz-fixtures.mjs`는
+ * `board_documents`에 아무 행도 심지 않는다(2026-09-09 확인, 실측 0행) —
+ * 그래서 목록이 원래 비어 있으면 "필터가 board 자료를 걸렀다"와 "애초에
+ * 아무것도 없었다"를 구분할 수 없고, 인가를 통째로 지워도 이 스펙이
+ * 통과해 버린다(공허한 테스트).
+ *
+ * `authz-mailbox.spec.ts`의 `seedMailboxFixtures()`를 본떠 공용 시드
+ * 스크립트는 건드리지 않고 이 파일 안에서 libsql 클라이언트로 직접 심는다
+ * (고정 id, `ON CONFLICT`로 재실행에 견딘다). 다만 그 선례와 달리 이 두 행은
+ * 실행이 끝나면 명시적으로 지운다 — 아래 `test.afterAll`에서 정리한다.
+ *
+ * **members 쪽 카테고리를 '총회'가 아니라 '기타'로 심은 이유.**
+ * `GET /api/board-room/documents`(카테고리 미지정)는 `visibility`를 보기
+ * 전에 카테고리로 먼저 거른다 — `BOARD_DOCUMENT_CATEGORIES`(등록증·정관·
+ * 계약·기타)만 포함하고 `ASSEMBLY_DOCUMENT_CATEGORY`('총회')는 무조건
+ * 뺀다(`src/db/queries/board.ts`의 `listDocuments` 호출부 주석, "카테고리가
+ * 없으면 원본과 동일하게 정기총회 자료를 제외한다"). 그래서 '총회' 카테고리로
+ * 심으면 visibility가 'members'여도 이 엔드포인트의 기본 목록에는 애초에
+ * 나타나지 않는다 — category 배제가 먼저 걸려 visibility 필터를 아예
+ * 시험하지 못한다(실측: '총회'로 심었더니 두 역할 모두 빈 배열이었다). 그래서
+ * `BOARD_DOCUMENT_CATEGORIES` 안의 카테고리('기타')를 썼다 — 이래야 두 문서가
+ * 모두 카테고리 조건은 통과하고 visibility 조건에서만 갈린다.
+ */
+const BOARD_ONLY_DOCUMENT_ID = '00000000-0000-4000-8000-00000000d001'
+const MEMBERS_VISIBLE_DOCUMENT_ID = '00000000-0000-4000-8000-00000000d002'
+const BOARD_ONLY_DOCUMENT_TITLE = 'AUTHZ-E2E-BOARD-ONLY-DOCUMENT-FIXTURE'
+const MEMBERS_VISIBLE_DOCUMENT_TITLE = 'AUTHZ-E2E-MEMBERS-VISIBLE-DOCUMENT-FIXTURE'
+
+async function seedBoardDocumentFixtures(): Promise<void> {
+  const client = createClient({ url: process.env.TURSO_DATABASE_URL! })
+  try {
+    const now = Date.now()
+    // 1) 서류함 자료 — 조합원에게 보이면 안 된다. visibility 기본값이 이미
+    //    'board'지만 회귀를 명확히 잡으려고 명시한다.
+    await client.execute({
+      sql: `INSERT INTO board_documents
+              (id, title, category, file_path, file_name, file_size, mime_type,
+               uploaded_by, body_markdown, visibility, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+              title = excluded.title,
+              category = excluded.category,
+              file_path = excluded.file_path,
+              file_name = excluded.file_name,
+              file_size = excluded.file_size,
+              mime_type = excluded.mime_type,
+              uploaded_by = excluded.uploaded_by,
+              body_markdown = excluded.body_markdown,
+              visibility = excluded.visibility,
+              created_at = excluded.created_at`,
+      args: [
+        BOARD_ONLY_DOCUMENT_ID,
+        BOARD_ONLY_DOCUMENT_TITLE,
+        '정관',
+        'authz-e2e-fixtures/board-only.pdf',
+        'board-only.pdf',
+        1234,
+        'application/pdf',
+        fixtures.users.admin,
+        null,
+        'board',
+        now - 60_000,
+      ],
+    })
+    // 2) 서류함 카테고리이지만 조합원에게 공개로 지정된 자료 — 조합원에게
+    //    보여야 한다. 위 주석대로 카테고리는 '기타'(BOARD_DOCUMENT_CATEGORIES
+    //    안)를 쓴다 — '총회'를 쓰면 이 엔드포인트가 카테고리 단계에서부터
+    //    빼버려 visibility 필터를 시험하지 못한다.
+    await client.execute({
+      sql: `INSERT INTO board_documents
+              (id, title, category, file_path, file_name, file_size, mime_type,
+               uploaded_by, body_markdown, visibility, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+              title = excluded.title,
+              category = excluded.category,
+              file_path = excluded.file_path,
+              file_name = excluded.file_name,
+              file_size = excluded.file_size,
+              mime_type = excluded.mime_type,
+              uploaded_by = excluded.uploaded_by,
+              body_markdown = excluded.body_markdown,
+              visibility = excluded.visibility,
+              created_at = excluded.created_at`,
+      args: [
+        MEMBERS_VISIBLE_DOCUMENT_ID,
+        MEMBERS_VISIBLE_DOCUMENT_TITLE,
+        '기타',
+        'authz-e2e-fixtures/members-visible.md',
+        'members-visible.md',
+        56,
+        'text/markdown',
+        fixtures.users.admin,
+        '# 조합원 공개 자료\n\nAUTHZ-E2E-MEMBERS-VISIBLE-BODY-MARKER',
+        'members',
+        now - 30_000,
+      ],
+    })
+  } finally {
+    client.close()
+  }
+}
+
+async function deleteBoardDocumentFixtures(): Promise<void> {
+  const client = createClient({ url: process.env.TURSO_DATABASE_URL! })
+  try {
+    await client.execute({
+      sql: 'DELETE FROM board_documents WHERE id IN (?, ?)',
+      args: [BOARD_ONLY_DOCUMENT_ID, MEMBERS_VISIBLE_DOCUMENT_ID],
+    })
+  } finally {
+    client.close()
+  }
+}
+
 test.describe('관리자 전용 경계', () => {
   test('회원 승인은 관리자만 할 수 있다 (requireAdmin — 쓰기)', async ({ baseURL }) => {
     const targetId = fixtures.users.approvalTarget
@@ -158,7 +274,13 @@ test.describe('관리자 전용 경계', () => {
 })
 
 test.describe('이사회 경계', () => {
-  test('이사회 서류 목록은 이사만 볼 수 있다', async ({ baseURL }) => {
+  test.beforeAll(async () => {
+    await seedBoardDocumentFixtures()
+  })
+
+  test('이사회 서류 목록은 이사가 아니면 board 자료를 못 본다(게이트가 아니라 visibility가 막는다)', async ({
+    baseURL,
+  }) => {
     const memberContext = await apiRequest.newContext({
       baseURL,
       storageState: storageStatePath('other'),
@@ -169,21 +291,57 @@ test.describe('이사회 경계', () => {
     })
 
     try {
-      // 금지 쪽: **인증된** 비이사다. `authz-boundaries.spec.ts`가 보는 비인증
-      // 401은 로그인 게이트만 증명한다 — 로그인한 일반 조합원이 이사회 서류를
-      // 열람하게 되는 회귀는 그쪽으로는 잡히지 않는다.
-      const denied = await memberContext.get('/api/board-room/documents')
-      expect(denied.status()).toBe(403)
-      expect((await denied.json()).error).toContain('이사회 접근 권한이 없습니다')
+      // 금지 쪽: **인증된** 비이사다. 이 라우트는 이미 requireBoardRecordReader()로
+      // 바뀌어(Task 4·5, 74d20dd·6fbd866) 승인·활성 조합원이면 누구나 200을
+      // 받는다 — 403 게이트는 더 이상 여기 없다. `authz-boundaries.spec.ts`가
+      // 보는 비인증 401도 로그인 게이트만 증명할 뿐 이 경계와는 무관하다.
+      // 로그인한 일반 조합원이 이사회 서류를 열람하게 되는 회귀를 잡던 자리는
+      // 이제 게이트가 아니라 `visibility` 필터다.
+      //
+      // id로 식별한다(개수로 하지 않는다) — 다른 테스트나 실행이 행을 더
+      // 추가해도 흔들리지 않기 위해서다. 두 방향을 모두 본다: board 자료가
+      // '없다'만 보면 필터가 통째로 고장 나 전부 빈 배열이 되는 상태(인가를
+      // 지워도 통과하는 공허한 테스트)를 못 잡는다 — members 자료가
+      // '있다'는 단언이 바로 그 구멍을 막는다.
+      const memberList = await memberContext.get('/api/board-room/documents')
+      expect(memberList.status()).toBe(200)
+      const memberBody = await memberList.json()
+      expect(memberBody.success).toBe(true)
+      const memberDocuments = memberBody.data?.documents as Array<{ id: string }>
+      expect(Array.isArray(memberDocuments)).toBe(true)
+      const memberIds = memberDocuments.map(doc => doc.id)
+      expect(memberIds).not.toContain(BOARD_ONLY_DOCUMENT_ID)
+      expect(memberIds).toContain(MEMBERS_VISIBLE_DOCUMENT_ID)
+
+      // 서류함 카테고리(board 자료의 카테고리)를 명시해도 마찬가지다 — 카테고리
+      // 조건은 통과하지만 visibility 조건에서 걸러져 빈 목록이어야 한다.
+      const memberCategoryList = await memberContext.get('/api/board-room/documents?category=정관')
+      expect(memberCategoryList.status()).toBe(200)
+      const memberCategoryBody = await memberCategoryList.json()
+      expect(memberCategoryBody.data?.documents).toHaveLength(0)
 
       // 허용 쪽은 **관리자가 아닌 이사**다. admin 계정으로 확인하면
       // canAccessBoardRoom의 is_admin 분기만 타서 is_director 판정은 여전히
-      // 검사되지 않는다.
+      // 검사되지 않는다. 이사는 게이트도 필터도 걸리지 않는다 — board 자료가
+      // 목록에도, 카테고리 필터 결과에도 실제로 실려야 한다(대조군. 배열
+      // 여부만으로는 부족하다 — 필터가 이사 쪽까지 잘못 걸러도 빈 배열은
+      // 여전히 배열이다).
       const allowed = await directorContext.get('/api/board-room/documents')
       expect(allowed.status()).toBe(200)
       const body = await allowed.json()
       expect(body.success).toBe(true)
-      expect(Array.isArray(body.data?.documents)).toBe(true)
+      const directorIds = (body.data?.documents as Array<{ id: string }>).map(doc => doc.id)
+      expect(directorIds).toContain(BOARD_ONLY_DOCUMENT_ID)
+
+      const directorCategoryList = await directorContext.get(
+        '/api/board-room/documents?category=정관'
+      )
+      expect(directorCategoryList.status()).toBe(200)
+      const directorCategoryBody = await directorCategoryList.json()
+      const directorCategoryIds = (
+        directorCategoryBody.data?.documents as Array<{ id: string }>
+      ).map(doc => doc.id)
+      expect(directorCategoryIds).toContain(BOARD_ONLY_DOCUMENT_ID)
     } finally {
       await memberContext.dispose()
       await directorContext.dispose()
@@ -276,7 +434,9 @@ test.describe('이사회 경계', () => {
   })
 
   // 위 테스트가 남긴 조합원 의견을 실행 안에서 치운다 — 시드는 지우지 않아
-  // 그대로 두면 실행마다 쌓인다.
+  // 그대로 두면 실행마다 쌓인다. 이 describe가 심은 board_documents 픽스처
+  // 두 행도 같은 이유로 여기서 지운다 — 남기면 서류함 관련 다른 스펙이나
+  // 다음 실행이 이 픽스처를 실제 자료로 착각한다.
   test.afterAll(async () => {
     const client = createClient({ url: process.env.TURSO_DATABASE_URL! })
     try {
@@ -287,6 +447,7 @@ test.describe('이사회 경계', () => {
     } finally {
       client.close()
     }
+    await deleteBoardDocumentFixtures()
   })
 })
 

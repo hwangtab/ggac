@@ -5,13 +5,14 @@ import { Link, usePathname } from '@/i18n/navigation'
 import { fetchSessionProfile, canAccessBoardRoom } from '@/utils/sessionProfile'
 
 // `boardOnly`인 메뉴는 이사·감사·관리자에게만 보인다. 조합원에게 열린 것은
-// 대시보드와 회의(안건·회의록)뿐이고, 미들웨어가 나머지 경로를 실제로 막는다.
+// 대시보드와 회의(안건·회의록), 그리고 정기총회다. 총회는 페이지를 열되
+// 자료마다 열람 범위로 다시 갈린다. 미들웨어가 나머지 경로를 실제로 막는다.
 const navItems = [
   { href: '/board-room', label: '대시보드', exact: true, boardOnly: false },
   { href: '/board-room/meetings', label: '이사회 회의', boardOnly: false },
   { href: '/board-room/schedule', label: '일정 투표', boardOnly: true },
   { href: '/board-room/documents', label: '서류함', boardOnly: true },
-  { href: '/board-room/assembly', label: '정기총회', boardOnly: true },
+  { href: '/board-room/assembly', label: '정기총회', boardOnly: false },
   { href: '/board-room/mailbox', label: '메일함', boardOnly: true },
 ] as const
 

@@ -1,8 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { apiGet, apiPost, ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { rateLimit } from '@/lib/server/rateLimit'
-import { requireBoardMember } from '@/lib/server/boardRoomAuth'
-import { ALL_DOCUMENT_CATEGORIES, BOARD_DOCUMENT_CATEGORIES } from '@/constants/boardRoom'
+import {
+  requireBoardMember,
+  requireBoardRecordReader,
+  visibilityScopeFor,
+} from '@/lib/server/boardRoomAuth'
+import {
+  ALL_DOCUMENT_CATEGORIES,
+  BOARD_DOCUMENT_CATEGORIES,
+  canSetDocumentVisibility,
+  isDocumentVisibility,
+} from '@/constants/boardRoom'
 import { createLogger } from '@/utils/logger'
 import {
   hasBinaryNullBytes,
@@ -43,9 +52,12 @@ function sanitizeFileName(name: string): string {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = await requireBoardMember()
+  // 열람 게이트다. 조합원은 visibility='members' 자료만 받는다 — 서류함
+  // (등록증·정관·계약)은 전부 'board'라 목록에서 아예 빠진다.
+  const auth = await requireBoardRecordReader()
   if (auth instanceof NextResponse) return auth
-  const { user } = auth
+  const { user, isBoardMember } = auth
+  const visibility = visibilityScopeFor(isBoardMember)
   const category = new URL(request.url).searchParams.get('category')
 
   return apiGet(
@@ -64,7 +76,9 @@ export async function GET(request: NextRequest) {
         // (constants/boardRoom.ts) 아래 목록은 '총회 제외'와 정확히 같은 집합이다
         // — 카테고리를 새로 만들면 이 상수에 함께 넣어야 목록에서 사라지지 않는다.
         data = await listDocuments(
-          category ? { category } : { categories: BOARD_DOCUMENT_CATEGORIES },
+          category
+            ? { category, visibility }
+            : { categories: BOARD_DOCUMENT_CATEGORIES, visibility },
           {
             onTruncated: ({ limit }) =>
               log.error('서류 목록이 상한에 걸려 잘렸다 — 페이지네이션이 필요하다', { limit }),
@@ -102,7 +116,7 @@ export async function POST(request: NextRequest) {
 
   const auth = await requireBoardMember()
   if (auth instanceof NextResponse) return auth
-  const { user } = auth
+  const { user, isAdmin } = auth
 
   return apiPost(
     async () => {
@@ -110,11 +124,22 @@ export async function POST(request: NextRequest) {
       const file = formData.get('file') as File | null
       const title = ((formData.get('title') as string) || '').trim()
       const category = (formData.get('category') as string) || ''
+      const rawVisibility = formData.get('visibility')
+      const visibility = rawVisibility == null ? 'board' : String(rawVisibility)
 
       // Validate fields
       if (!title) throw ApiError.badRequest('제목을 입력해주세요.')
       if (!(ALL_DOCUMENT_CATEGORIES as readonly string[]).includes(category))
         throw ApiError.badRequest('잘못된 분류입니다.')
+      if (!isDocumentVisibility(visibility)) throw ApiError.badRequest('잘못된 열람 범위입니다.')
+      // 업로드 자체는 이사·감사·관리자 모두 가능(requireBoardMember)하지만,
+      // 조합원 전체 공개(visibility='members')는 관리자만 정할 수 있다(설계
+      // 문서 §6 권한 표). 기본값 'board'는 이사도 그대로 통과한다.
+      if (!canSetDocumentVisibility(visibility, isAdmin)) {
+        throw ApiError.forbidden(
+          '조합원 전체 공개(visibility=members)는 관리자만 설정할 수 있습니다. 기본값인 이사회 열람으로 올려주세요.'
+        )
+      }
       if (!file) throw ApiError.badRequest('업로드된 파일이 없습니다.')
       if (file.size > MAX_FILE_SIZE) throw ApiError.badRequest('파일 크기는 최대 50MB입니다.')
       if (!ALLOWED_MIME_TYPES.has(file.type))
@@ -155,6 +180,7 @@ export async function POST(request: NextRequest) {
           fileSize: file.size,
           mimeType: file.type,
           uploadedBy: user.id,
+          visibility,
         })
       } catch (insertError) {
         log.error('메타데이터 삽입 실패', {
