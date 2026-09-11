@@ -2,6 +2,7 @@
 
 import React, { useMemo } from 'react'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import Image from 'next/image'
 import { detectXssPatterns, logSecurityEvent } from '@/utils/security'
 import { sanitizePostHtml } from '@/utils/sanitizePostHtml'
@@ -68,6 +69,10 @@ export const PostContentRenderer: React.FC<PostContentRendererProps> = ({
     return (
       <div className={`prose max-w-none ${className}`}>
         <ReactMarkdown
+          // GFM이 없으면 표가 파이프 문자 그대로 나온다. 이사회·총회 기록은
+          // 회의 개요·결산을 전부 표로 적어서(자료집 한 건에만 표가 202줄)
+          // 그대로 두면 읽으라고 올린 문서가 읽히지 않는다.
+          remarkPlugins={[remarkGfm]}
           components={{
             a: ({ node, href, children, ...props }) => {
               const safeHref = typeof href === 'string' ? toSafeLinkHref(href) : null
