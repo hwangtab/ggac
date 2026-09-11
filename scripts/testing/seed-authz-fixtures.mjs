@@ -110,6 +110,7 @@ const {
   boardMeetings: tursoBoardMeetings,
   boardAgendas: tursoBoardAgendas,
   boardAgendaComments: tursoBoardAgendaComments,
+  boardMinutes: tursoBoardMinutes,
 } = await import('@/db/schema/board')
 const { eq } = await import('drizzle-orm')
 
@@ -481,6 +482,13 @@ async function main() {
   const NOTIFICATION_ID = '00000000-0000-4000-8000-00000000a003'
   const MAINTENANCE_SETTING_ID = '00000000-0000-4000-8000-00000000a004'
   const BOARD_MEETING_ID = '00000000-0000-4000-8000-00000000a006'
+  // 회의록 은닉 경계를 증명하려면 **내용이 있는 회의록**이 두 벌 필요하다.
+  // scheduled 회의의 것은 조합원에게 가려야 하고 completed 회의의 것은 보여야
+  // 하는데, 한 벌만 두면 "가려졌다"가 게이트 때문인지 데이터가 없어서인지
+  // 구분되지 않는다.
+  const BOARD_MEETING_DONE_ID = '00000000-0000-4000-8000-00000000a020'
+  const BOARD_MINUTES_DRAFT_ID = '00000000-0000-4000-8000-00000000a021'
+  const BOARD_MINUTES_DONE_ID = '00000000-0000-4000-8000-00000000a022'
   const BOARD_AGENDA_ID = '00000000-0000-4000-8000-00000000a007'
   const BOARD_COMMENT_ID = '00000000-0000-4000-8000-00000000a008'
   const BOARD_COMMENT_DELETABLE_ID = '00000000-0000-4000-8000-00000000a009'
@@ -551,6 +559,41 @@ async function main() {
     .insert(tursoBoardAgendas)
     .values(boardAgendaValues)
     .onConflictDoUpdate({ target: tursoBoardAgendas.id, set: boardAgendaValues })
+
+  const boardMeetingDoneValues = {
+    id: BOARD_MEETING_DONE_ID,
+    title: 'authz 픽스처 완료 이사회',
+    status: 'completed',
+    createdBy: ids.admin,
+  }
+  await db
+    .insert(tursoBoardMeetings)
+    .values(boardMeetingDoneValues)
+    .onConflictDoUpdate({ target: tursoBoardMeetings.id, set: boardMeetingDoneValues })
+
+  const minutesDraftValues = {
+    id: BOARD_MINUTES_DRAFT_ID,
+    meetingId: BOARD_MEETING_ID,
+    content: '작성 중인 회의록 본문 — 조합원에게 보이면 안 된다',
+    contentFormat: 'markdown',
+    authorId: ids.director,
+  }
+  await db
+    .insert(tursoBoardMinutes)
+    .values(minutesDraftValues)
+    .onConflictDoUpdate({ target: tursoBoardMinutes.id, set: minutesDraftValues })
+
+  const minutesDoneValues = {
+    id: BOARD_MINUTES_DONE_ID,
+    meetingId: BOARD_MEETING_DONE_ID,
+    content: '확정된 회의록 본문 — 조합원도 읽는다',
+    contentFormat: 'markdown',
+    authorId: ids.director,
+  }
+  await db
+    .insert(tursoBoardMinutes)
+    .values(minutesDoneValues)
+    .onConflictDoUpdate({ target: tursoBoardMinutes.id, set: minutesDoneValues })
 
   // `isDeleted: false`는 픽스처 글과 같은 이유로 반드시 set에도 들어간다 —
   // 관리자 삭제 스펙이 soft delete를 남기므로 시드가 되돌리지 못하면 다음
@@ -761,6 +804,7 @@ async function main() {
     commentId: COMMENT_ID,
     notificationId: NOTIFICATION_ID,
     boardMeetingId: BOARD_MEETING_ID,
+    boardMeetingDoneId: BOARD_MEETING_DONE_ID,
     boardAgendaId: BOARD_AGENDA_ID,
     boardCommentId: BOARD_COMMENT_ID,
     boardCommentDeletableId: BOARD_COMMENT_DELETABLE_ID,
@@ -787,7 +831,7 @@ async function main() {
   console.log(`픽스처 시드 완료 → ${OUT_FILE}`)
   console.log(
     `  계정 ${Object.keys(ids).length}개, 글 1, 댓글 1, 알림 1, 좋아요 1, ` +
-      `이사회 회의 1·안건 1·안건 의견 3, ` +
+      `이사회 회의 2(scheduled·completed)·회의록 2·안건 1·안건 의견 3, ` +
       `system_settings ${settingRows.length}행, default_settings ${DEFAULT_SETTINGS.length}행 (전부 Turso)`
   )
 }

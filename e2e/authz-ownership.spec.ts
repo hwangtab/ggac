@@ -170,16 +170,18 @@ test.describe('이사회 안건 토론 (일반 조합원)', () => {
     }
   })
 
-  test('의견 작성은 201이다 (토론은 조합원에게 열려 있다)', async ({ request }) => {
+  test('의견 작성은 403이다 (조합원에게 열린 것은 읽기까지다)', async ({ request }) => {
+    // 열람 개방의 범위는 읽기다. 쓰기는 이사·감사·관리자만 한다.
     const res = await request.post(`/api/board-room/agendas/${fixtures.boardAgendaId}/comments`, {
       data: { content: '조합원의 의견' },
     })
-    expect(res.status()).toBe(201)
+    expect(res.status()).toBe(403)
+    expect((await res.json()).error).toContain('이사회 접근 권한이 없습니다')
   })
 
-  test('안건 추가는 여전히 403이다 (열린 것은 토론뿐이다)', async ({ request }) => {
-    // 토론을 열면서 이사회 쓰기 전체가 함께 열리지 않았는지 본다. 이 단정이
-    // 없으면 댓글 게이트를 다른 라우트에 잘못 붙여도 스위트가 초록이다.
+  test('안건 추가도 403이다', async ({ request }) => {
+    // 짝 단정. 토론 쓰기를 닫으면서 읽기까지 함께 닫히지 않았는지는 위
+    // '토론 읽기는 200이다'가 보고, 여기서는 이사회 쓰기가 전부 막힌 상태를 본다.
     const res = await request.post('/api/board-room/agendas', {
       data: { meeting_id: fixtures.boardMeetingId, title: '조합원이 올린 안건' },
     })
@@ -196,14 +198,16 @@ test.describe('이사회 안건 토론 (미승인 조합원)', () => {
     expect(res.status()).toBe(403)
   })
 
-  test('의견 작성은 403 + 승인된 조합원 안내다', async ({ request }) => {
-    // 게이트가 "로그인만 하면 통과"로 퇴화하는 것을 잡는 단정이다 —
-    // 승인·활성 판정이 사라져도 위 조합원 200 케이스는 그대로 초록이다.
+  test('의견 작성은 403이다', async ({ request }) => {
+    // 게이트가 "로그인만 하면 통과"로 퇴화하는 것을 잡는 단정이다.
+    // 토론 쓰기가 이사회 전용이 된 뒤로는 미승인·승인 조합원이 같은 문구로
+    // 막힌다 — 승인 판정이 살아 있는지는 위 '토론 읽기는 403이다'가 본다
+    // (그쪽은 승인·활성 조합원이면 200이므로 문구가 갈린다).
     const res = await request.post(`/api/board-room/agendas/${fixtures.boardAgendaId}/comments`, {
       data: { content: '미승인 회원의 의견' },
     })
     expect(res.status()).toBe(403)
-    expect((await res.json()).error).toContain('승인된 조합원')
+    expect((await res.json()).error).toContain('이사회 접근 권한이 없습니다')
   })
 })
 

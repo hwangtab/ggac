@@ -375,7 +375,9 @@ test.describe('이사회 경계', () => {
       const detail = await memberContext.get(`/api/board-room/meetings/${fixtures.boardMeetingId}`)
       expect(detail.status()).toBe(200)
       const memberBody = (await detail.json()).data
-      // 열린 쪽: 안건과 회의록 키가 실제로 온다.
+      // 열린 쪽: 안건이 실제로 오고, 회의록 키도 응답 모양에 남는다.
+      // (값이 실리는 조건은 '조합원은 확정된 회의의 회의록만 읽는다'가 따로 본다 —
+      // 이 픽스처 회의는 scheduled라 여기서는 null이다.)
       expect(Array.isArray(memberBody?.agendas)).toBe(true)
       expect(memberBody).toHaveProperty('minutes')
       // 닫힌 쪽: 이사회 전용 정보는 비어서 온다.
@@ -401,28 +403,85 @@ test.describe('이사회 경계', () => {
     }
   })
 
-  test('조합원은 안건 토론을 읽고 쓰지만 이사회 쓰기는 막힌다', async ({ baseURL }) => {
+  test('조합원은 확정된 회의의 회의록만 읽는다', async ({ baseURL }) => {
     const memberContext = await apiRequest.newContext({
       baseURL,
       storageState: storageStatePath('other'),
     })
+    const directorContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('director'),
+    })
 
     try {
+      // 닫힌 쪽: scheduled 회의. 회의록 내용이 실제로 있어도 조합원에게는
+      // null로 온다 — `board_minutes`에 초안/확정 구분이 없어 회의 상태가
+      // 그 역할을 한다.
+      const draft = await memberContext.get(`/api/board-room/meetings/${fixtures.boardMeetingId}`)
+      expect(draft.status()).toBe(200)
+      const draftBody = (await draft.json()).data
+      expect(draftBody).toHaveProperty('minutes')
+      expect(draftBody?.minutes).toBeNull()
+
+      // 열린 쪽: completed 회의. 같은 조합원에게 회의록이 실제로 온다.
+      const done = await memberContext.get(
+        `/api/board-room/meetings/${fixtures.boardMeetingDoneId}`
+      )
+      expect(done.status()).toBe(200)
+      const doneBody = (await done.json()).data
+      expect(doneBody?.minutes).not.toBeNull()
+      expect(doneBody?.minutes?.content).toContain('확정된 회의록')
+
+      // **짝 단정.** 이사에게는 작성 중인 회의록도 보인다. 이게 없으면 조합원
+      // 쪽 null이 게이트 때문인지 픽스처가 비어서인지 구분되지 않는다.
+      const directorDraft = await directorContext.get(
+        `/api/board-room/meetings/${fixtures.boardMeetingId}`
+      )
+      expect(directorDraft.status()).toBe(200)
+      const directorMinutes = (await directorDraft.json()).data?.minutes
+      expect(directorMinutes).not.toBeNull()
+      expect(directorMinutes?.content).toContain('작성 중인 회의록')
+    } finally {
+      await memberContext.dispose()
+      await directorContext.dispose()
+    }
+  })
+
+  test('조합원은 안건 토론을 읽기만 한다', async ({ baseURL }) => {
+    const memberContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('other'),
+    })
+    const directorContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('director'),
+    })
+
+    try {
+      // 열린 쪽: 읽기. 토론은 안건의 일부라 조합원도 본다.
       const read = await memberContext.get(
         `/api/board-room/agendas/${fixtures.boardAgendaId}/comments`
       )
       expect(read.status()).toBe(200)
       expect(Array.isArray((await read.json()).data?.comments)).toBe(true)
 
-      // 토론은 조합원에게 열려 있다.
+      // 닫힌 쪽: 쓰기. 열람 개방의 범위는 읽기까지다.
       const write = await memberContext.post(
         `/api/board-room/agendas/${fixtures.boardAgendaId}/comments`,
         { data: { content: '조합원의 의견' } }
       )
-      expect(write.status()).toBe(201)
+      expect(write.status()).toBe(403)
+      expect((await write.json()).error).toContain('이사회 접근 권한이 없습니다')
 
-      // **짝 단정.** 토론 게이트가 다른 이사회 쓰기로 번지면 여기서 201이
-      // 난다 — 비이사가 안건을 올리는 회귀는 토론 개방과 반드시 함께 본다.
+      // **짝 단정.** 이사에게는 여전히 열려 있다 — 없으면 게이트가 "전부
+      // 403"으로 퇴화한 상태(이사도 토론 못 하는)를 못 잡는다.
+      const directorWrite = await directorContext.post(
+        `/api/board-room/agendas/${fixtures.boardAgendaId}/comments`,
+        { data: { content: '이사의 의견' } }
+      )
+      expect(directorWrite.status()).toBe(201)
+
+      // **짝 단정.** 안건 쓰기도 그대로 막혀 있다.
       const agenda = await memberContext.post('/api/board-room/agendas', {
         data: { meeting_id: fixtures.boardMeetingId, title: '조합원이 올린 안건' },
       })
@@ -430,19 +489,24 @@ test.describe('이사회 경계', () => {
       expect((await agenda.json()).error).toContain('이사회 접근 권한이 없습니다')
     } finally {
       await memberContext.dispose()
+      await directorContext.dispose()
     }
   })
 
-  // 위 테스트가 남긴 조합원 의견을 실행 안에서 치운다 — 시드는 지우지 않아
-  // 그대로 두면 실행마다 쌓인다. 이 describe가 심은 board_documents 픽스처
-  // 두 행도 같은 이유로 여기서 지운다 — 남기면 서류함 관련 다른 스펙이나
-  // 다음 실행이 이 픽스처를 실제 자료로 착각한다.
+  // 위 테스트가 남긴 의견을 실행 안에서 치운다 — 시드는 지우지 않아 그대로 두면
+  // 실행마다 쌓인다. **내용으로 좁히는 이유**: 작성자(director)로만 지우면
+  // 시드가 심은 이사 댓글(`boardCommentId` 등)까지 함께 사라져, 그 행에 기대는
+  // `authz-ownership.spec.ts`의 이사·관리자 수정/삭제 테스트가 404로 깨진다
+  // (실측). 조합원 쓰기는 이제 403이라 남는 행이 없지만 예전 실행이 남긴
+  // 조합원 댓글도 함께 거둔다. 이 describe가 심은 board_documents 픽스처 두
+  // 행도 같은 이유로 여기서 지운다 — 남기면 서류함 관련 다른 스펙이나 다음
+  // 실행이 이 픽스처를 실제 자료로 착각한다.
   test.afterAll(async () => {
     const client = createClient({ url: process.env.TURSO_DATABASE_URL! })
     try {
       await client.execute({
-        sql: 'DELETE FROM board_agenda_comments WHERE agenda_id = ? AND author_id = ?',
-        args: [fixtures.boardAgendaId, fixtures.users.other],
+        sql: 'DELETE FROM board_agenda_comments WHERE agenda_id = ? AND content IN (?, ?)',
+        args: [fixtures.boardAgendaId, '이사의 의견', '조합원의 의견'],
       })
     } finally {
       client.close()

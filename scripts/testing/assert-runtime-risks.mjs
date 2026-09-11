@@ -26,7 +26,7 @@
  *
  * ## 그럼 인가는 무엇이 지키는가 — **E2E다**
  *
- * `npm run test:e2e:authz`(기준선 93 passed). 같은 감사에서 **E2E는 관리자 게이트
+ * `npm run test:e2e:authz`(기준선 94 passed). 같은 감사에서 **E2E는 관리자 게이트
  * 무력화를 실제로 잡았다.** 인가를 바꿨으면 그걸 돌려라. 이 파일이 초록불인 것은
  * 인가가 지켜진다는 증거가 아니다.
  *
@@ -1054,22 +1054,6 @@ const AUTHORIZATION_HELPER_CONTRACTS = [
   {
     file: 'src/lib/server/boardRoomAuth.ts',
     source: boardRoomAuthBoundarySource,
-    name: 'requireBoardDiscussionWriter',
-    requirements: [
-      {
-        what: '승인·활성 조합원이 아니면 403으로 막는다',
-        pattern: /if \(!canReadBoardRecords\(session\.profile\)\) \{[\s\S]*?status: 403[\s\S]*?\}/,
-      },
-      {
-        what: '미인증이면 401로 막는다',
-        pattern:
-          /if \(!session\.authenticated \|\| !session\.user\) \{[\s\S]*?status: 401[\s\S]*?\}/,
-      },
-    ],
-  },
-  {
-    file: 'src/lib/server/boardRoomAuth.ts',
-    source: boardRoomAuthBoundarySource,
     name: 'requireBoardAdmin',
     requirements: [
       {
@@ -1327,17 +1311,8 @@ const PRIVILEGED_GATE_CALLS = [
   /requireAdmin\(\)/,
   /requireBoardMember\(\)/,
   /requireBoardRecordReader\(\)/,
-  /requireBoardDiscussionWriter\(\)/,
 ]
 
-// `requireBoardDiscussionWriter()`는 승인·활성 조합원까지 통과시키는 **쓰기**
-// 게이트다. 안건 토론 하나만을 위한 의도적 예외이므로, 아래 두 파일 밖에서
-// 쓰이면 실패한다 — 이름만 빌려다 일정 투표·출석·서류함에 붙이는 순간
-// 이사회 쓰기가 조합원 전체에게 열린다.
-const DISCUSSION_WRITE_ROUTE_FILES = new Set([
-  'src/app/api/board-room/agendas/[id]/comments/route.ts',
-  'src/app/api/board-room/agendas/[id]/comments/[commentId]/route.ts',
-])
 // 405 스텁(`export async function POST() { return ApiError.methodNotAllowed(...) }`)
 // 은 데이터를 만지지 않는다. 본문 전체가 그 한 줄일 때만 면제한다 — 뒤에
 // 뭐라도 붙으면 더 이상 스텁이 아니므로 게이트를 요구한다.
@@ -1463,16 +1438,6 @@ for (const file of privilegedRouteFiles) {
     if (method !== 'GET' && /requireBoardRecordReader\(\)/.test(bodyNoStrings)) {
       ungatedPrivilegedHandlers.push(
         `${file}: export async function ${method} — requireBoardRecordReader()는 읽기(GET) 전용입니다. 쓰기 핸들러는 requireBoardMember()를 써야 합니다`
-      )
-      continue
-    }
-    // 토론 쓰기 게이트는 허용된 파일에서만 쓴다(위 DISCUSSION_WRITE_ROUTE_FILES).
-    if (
-      /requireBoardDiscussionWriter\(\)/.test(bodyNoStrings) &&
-      !DISCUSSION_WRITE_ROUTE_FILES.has(file)
-    ) {
-      ungatedPrivilegedHandlers.push(
-        `${file}: export async function ${method} — requireBoardDiscussionWriter()는 안건 토론 라우트 전용입니다. 다른 이사회 쓰기는 requireBoardMember()를 써야 합니다`
       )
       continue
     }

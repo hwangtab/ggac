@@ -341,7 +341,7 @@ const Navigation = () => {
                   pathname.startsWith('/board-room') ? activeColor : `${textColor} ${hoverColor}`
                 }`}
               >
-                DIRECTORS
+                {boardRoomLabel}
               </Link>
             )}
 

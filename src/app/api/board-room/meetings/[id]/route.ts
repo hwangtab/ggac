@@ -155,7 +155,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
           options: [],
           votes: [],
           agendas: agendasWithCounts,
-          minutes,
+          // 회의록은 **완료된 회의**의 것만 조합원에게 보인다. `board_minutes`에는
+          // 초안/확정 구분이 없어 이사가 저장하는 순간이 곧 공개였다 — 회의가
+          // `completed`로 넘어갔는지가 그 구분을 대신한다. 필드는 남기고 값만
+          // 비운다(null): 상태에 따라 응답 모양이 달라지면 소비 측이 두 벌을 다뤄야 한다.
+          minutes: meeting.status === 'completed' ? minutes : null,
           roster: [],
           auditors: [],
           attendees: [],

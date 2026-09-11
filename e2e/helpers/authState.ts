@@ -25,6 +25,8 @@ export type Fixtures = {
   notificationId: string
   /** 이사회 안건 토론 경계용 — `director`가 작성자다. */
   boardMeetingId: string
+  /** status='completed' 회의. 확정된 회의록만 조합원에게 보이는지 확인하는 데 쓴다. */
+  boardMeetingDoneId: string
   boardAgendaId: string
   boardCommentId: string
   /** 관리자 삭제 스펙이 소모하는 쪽. 스펙이 실행 안에서 되돌린다. */

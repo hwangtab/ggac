@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { apiGet, apiPost, ApiSuccess, ApiError } from '@/utils/apiWrapper'
-import { requireBoardDiscussionWriter, requireBoardRecordReader } from '@/lib/server/boardRoomAuth'
+import { requireBoardMember, requireBoardRecordReader } from '@/lib/server/boardRoomAuth'
 import { MAX_AGENDA_COMMENT_LENGTH } from '@/constants/boardRoom'
 import { notifyAgendaDiscussion } from '@/lib/server/boardRoomNotify'
 import { parseJsonObjectBody } from '@/utils/requestBody'
@@ -32,8 +32,8 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
   const routeId = validateAgendaId(params.id)
   if (routeId.error) return routeId.error.toNextResponse()
   const agendaId = routeId.id
-  // 안건 토론은 안건의 일부라 조합원도 읽는다. 작성(POST)도 같은 기준이다 —
-  // 아래 `requireBoardDiscussionWriter`가 승인·활성 조합원까지 통과시킨다.
+  // 안건 토론은 안건의 일부라 조합원도 **읽는다**. 쓰기(POST)는 이사회 전용이다 —
+  // 열람 개방의 범위는 읽기까지다.
   const auth = await requireBoardRecordReader()
   if (auth instanceof NextResponse) return auth
   const { user } = auth
@@ -83,9 +83,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     return rl.response ?? ApiError.tooManyRequests('요청이 너무 많습니다.').toNextResponse()
   }
 
-  // 토론 참여는 조합원 전체에게 열려 있다(읽기와 같은 기준: 승인·활성).
-  // 이사회 전용 쓰기는 여전히 `requireBoardMember`다.
-  const auth = await requireBoardDiscussionWriter()
+  // 토론 쓰기는 이사·감사·관리자만 한다. 조합원에게는 읽기(GET)만 열려 있다.
+  const auth = await requireBoardMember()
   if (auth instanceof NextResponse) return auth
   const { user } = auth
 

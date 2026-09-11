@@ -81,10 +81,11 @@ export async function notifyAgendaDiscussion(input: AgendaDiscussionInput): Prom
   // 남는데, 그대로 보내면 이사회 API가 전부 403인 사람에게 안건 제목과
   // 발언자 이름이 알림으로 계속 흘러간다.
   //
-  // 기준은 토론 게이트(`requireBoardDiscussionWriter` = 승인·활성 조합원)와
-  // 같아야 한다. 이사·감사 명단으로 좁히면 **조합원은 자기 발언에 달린 답글
-  // 알림을 받지 못한다** — 토론에 참여시켜 놓고 대화가 이어진 사실만 감추는
-  // 꼴이다. 후보가 몇 명뿐이라 명단 전체 조회 대신 id로 직접 읽는다.
+  // 기준은 토론을 **읽을** 수 있는가(`canReadBoardRecords` = 승인·활성 조합원)다.
+  // 쓰기는 이사회 전용으로 좁혔지만 읽기는 조합원에게 열려 있으므로, 과거에
+  // 발언한 조합원이 후보에 남아 있다면 그 답글 알림은 여전히 정당하다 —
+  // 알림에 담기는 것도 그 사람이 지금 열어볼 수 있는 내용뿐이다.
+  // 후보가 몇 명뿐이라 명단 전체 조회 대신 id로 직접 읽는다.
   let allowed: Set<string>
   try {
     const profiles = await getProfilesByIds(candidates)

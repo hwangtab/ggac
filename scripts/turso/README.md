@@ -219,7 +219,7 @@ TURSO_DATABASE_URL=http://127.0.0.1:8901 \
 ```
 
 계정 **6개**(Better Auth `user`/`account` + `member_profiles`)와 글 1·댓글
-1·알림 1·좋아요 1·이사회 회의 1·안건 1·안건 의견 3, 그리고 **`system_settings` 2행**(`site/maintenance_mode`,
+1·알림 1·좋아요 1·이사회 회의 2(scheduled·completed)·회의록 2·안건 1·안건 의견 3, 그리고 **`system_settings` 2행**(`site/maintenance_mode`,
 `site/registration_enabled`)과 `default_settings` 16행을 채우는 멱등
 스크립트다. 두 번 돌려도 행이 늘지 않는다(id가 전부 고정값이다).
 
