@@ -95,6 +95,44 @@ test('createMeeting → getMeetingById → listMeetings(created_at desc)', async
   assert.ok(idxSecond < idxFirst, '최신 회의가 먼저 나와야 한다(created_at desc)')
 })
 
+test('listMeetings({ statuses }): 캘린더가 확정된 회의만 받는다', async () => {
+  // 마이페이지 캘린더는 승인·활성 조합원 전체가 본다. 투표 중(polling) 회의가
+  // 거기 뜨지 않는 것은 지금까지 "날짜가 아직 비어 있어서"라는 우연에 기대고
+  // 있었다(`calendarItems.ts`가 meeting_date 없는 회의를 건너뛴다). 이 테스트는
+  // 규칙 쪽을 본다 — 날짜가 **채워진** polling 회의를 만들어 두고도 필터가
+  // 걸러내는지. 이게 없으면 board.ts의 `.where(...)`를 통째로 지워도 전부 초록이다.
+  const creator = await seedProfile()
+  const { createMeeting, updateMeeting, listMeetings } = await loadFreshBoardModule()
+
+  const polling = await createMeeting({
+    title: '투표 중 회의',
+    location: null,
+    voteDeadline: new Date(Date.now() + 86400000),
+    createdBy: creator,
+  })
+  // 날짜만 채우고 상태는 polling으로 남긴다. 운영 흐름에서는 날짜 확정과
+  // scheduled 전환이 함께 일어나지만, 그 결합은 규칙이 아니라 관행이다.
+  await updateMeeting(polling.id, { meetingDate: '2026-10-01' })
+
+  const confirmed = await createMeeting({
+    title: '확정된 회의',
+    location: null,
+    voteDeadline: new Date(Date.now() + 86400000),
+    createdBy: creator,
+  })
+  await updateMeeting(confirmed.id, { meetingDate: '2026-10-02', status: 'scheduled' })
+
+  const calendarView = await listMeetings({ statuses: ['scheduled', 'completed'] })
+  const ids = calendarView.map(m => m.id)
+  assert.ok(ids.includes(confirmed.id), '확정된 회의는 캘린더에 실려야 한다')
+  assert.ok(!ids.includes(polling.id), '투표 중 회의는 날짜가 채워져 있어도 캘린더에서 빠져야 한다')
+
+  // 짝 단정: 인자를 주지 않는 호출은 그대로 전부 본다. 회의 목록 화면이
+  // polling을 계속 보여줘야 하므로 기본 동작이 바뀌면 안 된다.
+  const allIds = (await listMeetings()).map(m => m.id)
+  assert.ok(allIds.includes(polling.id), '인자 없는 listMeetings는 polling도 돌려줘야 한다')
+})
+
 test('updateMeeting: 부분 갱신 후 title/meeting_date를 돌려준다. 존재하지 않으면 null', async () => {
   const creator = await seedProfile()
   const { createMeeting, updateMeeting } = await loadFreshBoardModule()

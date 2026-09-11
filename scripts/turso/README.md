@@ -303,7 +303,13 @@ webServer에 `{...process.env, ...webServer.env}`를 넘긴다. e2e 전용 변�
   `authz-remaining`·`authz-roles`·`authz-mailbox` 6개 스펙
 - `authz-public`: `authz-boundaries` 21건
 
-**실측 기준선(2026-09-08, 메일함 이사·감사 열람 확대 태스크 + 리뷰 수정 완료 후):** 총
+**실측 기준선(2026-09-11, 조합원 열람을 읽기까지로 정리한 뒤):** 총 96건 중
+**94 passed, 1 failed, 1 skipped.** 늘어난 1건은 회의록 은닉 경계
+(`authz-roles.spec.ts`의 "조합원은 확정된 회의의 회의록만 읽는다")다. 로컬에서는
+`authz-mailbox.spec.ts`의 "관리자는 화면에 들어가 메일함을 본다"가 하나 더
+빨간불일 수 있는데, main 기준으로도 같은 자리에서 실패하는 환경 의존 실패다.
+
+**직전 기준선(2026-09-08, 메일함 이사·감사 열람 확대 태스크 + 리뷰 수정 완료 후):** 총
 95건 중 **93 passed, 1 failed, 1 skipped.** 실패한 1건은
 `authz-remaining.spec.ts`의 정책 36(`PUBLIC_BLOB_READ_WRITE_TOKEN` 부재를
 단언하는 기존 테스트)로, 이 저장소의 다른 변경과 무관한 기존 실패다 — 실제
@@ -968,7 +974,7 @@ EXPLAIN QUERY PLAN SELECT count(*) FROM notifications WHERE user_id = '<아무 �
 가드도 타입 검사도 통과한다. 가드는 **"이 문자열이 이 파일에 있는가"**만 보고
 도달 가능성·실행 순서·데이터 흐름을 보지 않는다.
 
-**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 93 passed, 실행 절차는
+**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 94 passed, 실행 절차는
 위 "권한 E2E" 절). 같은 감사에서 **E2E는 관리자 게이트 무력화를 실제로 잡았다.**
 
 `assert-runtime-risks.mjs`가 여전히 값을 하는 자리는 **지워진 것**(게이트를 통째로

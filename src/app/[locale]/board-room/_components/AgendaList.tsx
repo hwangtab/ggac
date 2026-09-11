@@ -339,6 +339,7 @@ export default function AgendaList({
                 currentUserId={currentUserId}
                 isAdmin={isAdmin}
                 onCountChanged={onChanged}
+                readOnly={readOnly}
               />
             </div>
           ))}
