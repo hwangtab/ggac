@@ -89,7 +89,11 @@ export async function handleAuth(
   const isBoardEdit = Boolean(boardEditMatch && UUID_PATH_SEGMENT_REGEX.test(boardEditMatch[1]))
   const isBoardProtected = isBoardWrite || isBoardEdit
   const isBoardRoom = authPathname.startsWith('/board-room')
-  // 조합원에게 열린 이사회 경로. 일정 투표·서류함은 여기 없다 — 이사회 전용이다.
+  // 조합원에게 열린 이사회 페이지는 대시보드·회의(안건·회의록)·정기총회다.
+  // 일정 투표와 서류함은 이사·감사·관리자 전용으로 남는다.
+  // 정기총회는 페이지를 열되 **자료마다** `visibility`로 다시 갈린다 —
+  // 조합원은 'members' 자료만 받고 재무 원자료는 목록에서 아예 빠진다.
+  // API 쪽 짝은 `canReadBoardRecords`(열람)와 `canAccessBoardRoom`(그 밖 전부)이다.
   const isBoardRoomRecordPage =
     authPathname === '/board-room' ||
     authPathname.startsWith('/board-room/meetings') ||
