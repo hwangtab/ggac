@@ -654,6 +654,35 @@ test.describe('페이지 레벨 인가 (미들웨어)', () => {
     }
   })
 
+  test('회의 생성·수정 화면은 조합원에게 닫힌다', async ({ browser }) => {
+    const memberContext = await browser.newContext({ storageState: storageStatePath('other') })
+    const adminContext = await browser.newContext({ storageState: storageStatePath('admin') })
+
+    try {
+      // `/board-room/meetings`는 조합원에게 열려 있지만, 그 아래 **쓰기** 화면은
+      // 아니다. `startsWith` 예외가 하위 경로를 전부 잡던 시절에는 조합원도
+      // 폼 화면까지 도달했다(폼 대신 권한 안내가 떴을 뿐이다).
+      const memberNew = await memberContext.newPage()
+      await memberNew.goto('/board-room/meetings/new', { waitUntil: 'domcontentloaded' })
+      await expect(memberNew).toHaveURL(/\/board$/, { timeout: 15000 })
+
+      const memberEdit = await memberContext.newPage()
+      await memberEdit.goto(`/board-room/meetings/${fixtures.boardMeetingId}/edit`, {
+        waitUntil: 'domcontentloaded',
+      })
+      await expect(memberEdit).toHaveURL(/\/board$/, { timeout: 15000 })
+
+      // **짝 단정.** 관리자에게는 그대로 열려 있다 — 없으면 예외에서 빼는 변경이
+      // "전원 차단"으로 퇴화한 상태를 못 잡는다.
+      const adminNew = await adminContext.newPage()
+      await adminNew.goto('/board-room/meetings/new', { waitUntil: 'domcontentloaded' })
+      await expect(adminNew).toHaveURL(/\/board-room\/meetings\/new$/, { timeout: 15000 })
+    } finally {
+      await memberContext.close()
+      await adminContext.close()
+    }
+  })
+
   test('조합원은 이사회 회의 페이지에 들어간다 (/board-room/meetings)', async ({ browser }) => {
     const memberContext = await browser.newContext({ storageState: storageStatePath('other') })
 

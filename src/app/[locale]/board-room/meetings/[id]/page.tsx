@@ -353,6 +353,9 @@ export default function MeetingDetailPage() {
           <section className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
             <MinutesEditor
               minutes={minutes}
+              // 조합원에게는 완료된 회의의 회의록만 내려온다. 회의가 아직
+              // 끝나지 않았으면 "없다"가 아니라 "공개 전"이라고 말한다.
+              pendingPublication={!isBoardMember && meeting.status !== 'completed'}
               meetingId={meeting.id}
               currentUserId={current_user_id}
               isAdmin={isAdmin}

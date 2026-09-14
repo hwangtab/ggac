@@ -95,11 +95,21 @@ export async function handleAuth(
   // 조합원은 'members' 자료만 받고 인감증명서·거래내역서 같은 것은 목록에서
   // 아예 빠진다(상세·다운로드도 404).
   // API 쪽 짝은 `canReadBoardRecords`(열람)와 `canAccessBoardRoom`(그 밖 전부)이다.
+  //
+  // 회의 **쓰기** 화면(`/meetings/new`, `/meetings/{id}/edit`)은 예외에서 뺀다 —
+  // `startsWith('/board-room/meetings')`가 하위 경로를 전부 잡아 조합원도
+  // 도달했다(폼은 `isAdmin` 검사에 걸려 안 보였지만, "이사회로 돌아가기"라는
+  // 안내를 조합원에게 보여주는 자리였다). 이사·감사·관리자는 이 예외와
+  // 무관하게 아래 역할 판정으로 통과한다.
+  const isBoardMeetingWritePage =
+    authPathname === '/board-room/meetings/new' ||
+    /^\/board-room\/meetings\/[^/]+\/edit$/.test(authPathname)
   const isBoardRoomRecordPage =
-    authPathname === '/board-room' ||
-    authPathname.startsWith('/board-room/meetings') ||
-    authPathname.startsWith('/board-room/assembly') ||
-    authPathname.startsWith('/board-room/documents')
+    !isBoardMeetingWritePage &&
+    (authPathname === '/board-room' ||
+      authPathname.startsWith('/board-room/meetings') ||
+      authPathname.startsWith('/board-room/assembly') ||
+      authPathname.startsWith('/board-room/documents'))
   const isProtectedPage =
     authPathname.startsWith('/admin') ||
     authPathname.startsWith('/mypage') ||

@@ -5,7 +5,11 @@ import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
 import { resolveBoardMeetingTime } from '@/constants/boardRoom'
 import type { BoardMeetingStatus } from '@/constants/boardRoom'
-import { fetchSessionProfile, isApprovedActiveAdmin } from '@/utils/sessionProfile'
+import {
+  fetchSessionProfile,
+  isApprovedActiveAdmin,
+  canAccessBoardRoom,
+} from '@/utils/sessionProfile'
 import StatusBadge from '../_components/StatusBadge'
 
 interface Meeting {
@@ -33,13 +37,23 @@ export default function MeetingListPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
+  // 백링크를 누구에게 보일지 판정한다. 조합원에게 `/board-room`은 이 화면이
+  // 아니라 조합 서류로 가는 리다이렉트라, 돌아가기가 원래 자리로 돌려놓지
+  // 못하고 엉뚱한 화면에 떨어뜨린다. 사이드 메뉴가 이미 이동 수단이다.
+  // `null`은 아직 판정하지 못한 상태다 — 그때도 보이지 않는다.
+  const [isBoardMember, setIsBoardMember] = useState<boolean | null>(null)
 
   useEffect(() => {
     let mounted = true
     ;(async () => {
       try {
         const session = await fetchSessionProfile()
-        if (mounted) setIsAdmin(isApprovedActiveAdmin(session.profile))
+        if (mounted) {
+          setIsAdmin(isApprovedActiveAdmin(session.profile))
+          // 인증이 확인된 세션만 판정으로 받는다 — `fetchSessionProfile`은
+          // 실패해도 reject하지 않고 빈 세션을 준다.
+          if (session.authenticated) setIsBoardMember(canAccessBoardRoom(session.profile))
+        }
       } catch {
         if (mounted) setIsAdmin(false)
       }
@@ -108,12 +122,14 @@ export default function MeetingListPage() {
     <div className="mx-auto max-w-4xl pb-16">
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
-          <Link
-            href="/board-room"
-            className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
-          >
-            ← 이사회
-          </Link>
+          {isBoardMember && (
+            <Link
+              href="/board-room"
+              className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
+            >
+              ← 이사회
+            </Link>
+          )}
           <h1 className="text-2xl md:text-3xl font-bold text-gray-900">{t('heading')}</h1>
         </div>
         {isAdmin && (

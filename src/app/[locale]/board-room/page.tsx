@@ -30,6 +30,11 @@ export default function BoardRoomPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
+  // `null`은 아직 판정하지 못한 상태. 이 화면은 이사 전용 내용을 그리므로
+  // 판정이 끝나기 전에는 본문 대신 스켈레톤을 유지한다 — 회의 목록 조회가
+  // 세션 판정보다 먼저 끝나면 조합원에게 '이사회 대시보드'가 실제로 그려졌다가
+  // 한 박자 뒤에 튕기는 깜빡임이 생긴다(리다이렉트만으로는 못 막는다).
+  const [isBoardMember, setIsBoardMember] = useState<boolean | null>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -48,8 +53,10 @@ export default function BoardRoomPage() {
         // `canAccessBoardRoom(null) === false`라 순단 한 번에 이사가 조합원으로
         // 강등돼 여기서 튕긴다(새로고침 전까지 회복되지 않는다). "조합원으로
         // 판정됐다"와 "판정하지 못했다"는 다르고, 후자에는 아무것도 하지 않는다.
-        if (session.authenticated && !canAccessBoardRoom(session.profile)) {
-          router.replace('/board-room/documents')
+        if (session.authenticated) {
+          const boardMember = canAccessBoardRoom(session.profile)
+          setIsBoardMember(boardMember)
+          if (!boardMember) router.replace('/board-room/documents')
         }
       } catch {
         if (mounted) setIsAdmin(false)
@@ -88,7 +95,8 @@ export default function BoardRoomPage() {
   const scheduledMeetings = meetings.filter(m => m.status === 'scheduled')
   const completedMeetings = meetings.filter(m => m.status === 'completed')
 
-  if (loading) {
+  // 판정 전(`null`)이거나 조합원으로 확정돼 이동 중이면 본문을 그리지 않는다.
+  if (loading || isBoardMember !== true) {
     return (
       <div className="mx-auto max-w-4xl">
         <div className="h-8 w-48 bg-gray-200 rounded mb-8 animate-pulse" />

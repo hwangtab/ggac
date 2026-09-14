@@ -27,6 +27,13 @@ function isContentEmpty(value: string): boolean {
 
 interface MinutesEditorProps {
   minutes: Minutes | null
+  /**
+   * 회의록이 **아직 공개되지 않은** 상태인가. 조합원에게는 회의가 `completed`일
+   * 때만 회의록이 내려가므로(서버가 그 전에는 `null`로 접는다), 그냥 "없다"고
+   * 하면 "이사가 아직 안 썼구나"로 읽힌다 — 실제로는 "끝나야 공개된다"이다.
+   * 안건은 같은 화면에서 보이기 때문에 그 비대칭이 더 눈에 띈다.
+   */
+  pendingPublication?: boolean
   meetingId: string
   currentUserId: string
   isAdmin: boolean
@@ -37,6 +44,7 @@ interface MinutesEditorProps {
 
 export default function MinutesEditor({
   minutes,
+  pendingPublication = false,
   meetingId,
   currentUserId,
   isAdmin,
@@ -145,7 +153,13 @@ export default function MinutesEditor({
       </div>
 
       {/* No minutes yet */}
-      {!minutes && !editing && (
+      {!minutes && !editing && pendingPublication && (
+        <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4">
+          <p className="text-sm text-gray-500">{t('minutesPendingPublication')}</p>
+        </div>
+      )}
+
+      {!minutes && !editing && !pendingPublication && (
         <div className="flex flex-col items-start gap-3 p-4 bg-gray-50 border border-dashed border-gray-300 rounded-lg">
           <p className="text-sm text-gray-500">{t('noMinutes')}</p>
           {canEdit && (

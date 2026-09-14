@@ -72,7 +72,13 @@ export default function BoardRoomLayout({ children }: { children: React.ReactNod
           {/* 사이드 메뉴 (데스크톱: 좌측 세로 / 모바일: 상단 가로 스크롤) */}
           <aside className="mb-5 lg:mb-0 lg:w-52 lg:flex-shrink-0">
             <nav
-              aria-label={isBoardMember ? '이사회 메뉴' : '조합 자료 메뉴'}
+              aria-label={
+                isBoardMember === null
+                  ? '메뉴 불러오는 중'
+                  : isBoardMember
+                    ? '이사회 메뉴'
+                    : '조합 자료 메뉴'
+              }
               aria-busy={isBoardMember === null}
               className="flex gap-1 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible lg:pb-0 lg:sticky lg:top-24"
             >
