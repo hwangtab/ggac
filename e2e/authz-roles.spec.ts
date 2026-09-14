@@ -630,7 +630,30 @@ test.describe('페이지 레벨 인가 (미들웨어)', () => {
     }
   })
 
-  test('조합원이 /board-room에 오면 조합 서류로 보낸다', async ({ browser }) => {
+  test('정관 화면은 조합원도 이사도 연다', async ({ browser }) => {
+    const memberContext = await browser.newContext({ storageState: storageStatePath('other') })
+    const directorContext = await browser.newContext({
+      storageState: storageStatePath('director'),
+    })
+
+    try {
+      // 정관은 조합원이 자기 권리·의무를 확인하는 기본 문서다. 양쪽 다 열려야
+      // 하고, 한쪽만 확인하면 "전원 차단"이나 "전원 개방"으로 퇴화한 상태를
+      // 구분하지 못한다.
+      const memberPage = await memberContext.newPage()
+      await memberPage.goto('/board-room/charter', { waitUntil: 'domcontentloaded' })
+      await expect(memberPage).toHaveURL(/\/board-room\/charter$/, { timeout: 15000 })
+
+      const directorPage = await directorContext.newPage()
+      await directorPage.goto('/board-room/charter', { waitUntil: 'domcontentloaded' })
+      await expect(directorPage).toHaveURL(/\/board-room\/charter$/, { timeout: 15000 })
+    } finally {
+      await memberContext.close()
+      await directorContext.close()
+    }
+  })
+
+  test('조합원이 /board-room에 오면 정관으로 보낸다', async ({ browser }) => {
     const memberContext = await browser.newContext({ storageState: storageStatePath('other') })
     const directorContext = await browser.newContext({
       storageState: storageStatePath('director'),
@@ -641,7 +664,7 @@ test.describe('페이지 레벨 인가 (미들웨어)', () => {
       // 않는다. 미들웨어가 아니라 화면이 세션 판정 뒤에 옮긴다.
       const memberPage = await memberContext.newPage()
       await memberPage.goto('/board-room', { waitUntil: 'domcontentloaded' })
-      await expect(memberPage).toHaveURL(/\/board-room\/documents$/, { timeout: 15000 })
+      await expect(memberPage).toHaveURL(/\/board-room\/charter$/, { timeout: 15000 })
 
       // **짝 단정.** 이사는 대시보드에 그대로 머문다 — 없으면 리다이렉트가
       // "전원 이동"으로 퇴화한 상태를 못 잡는다.

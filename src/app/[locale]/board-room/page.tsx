@@ -45,8 +45,8 @@ export default function BoardRoomPage() {
         if (!mounted) return
         setIsAdmin(isApprovedActiveAdmin(session.profile))
         // 이 대시보드는 이사회 회의를 굴리는 화면이다. 조합원에게는 첫 화면으로
-        // 줄 이유가 없어(회의 목록은 '이사회 회의록'이 담당한다) 조합 서류로
-        // 보낸다.
+        // 줄 이유가 없어(회의 목록은 '이사회 회의록'이 담당한다) 정관으로
+        // 보낸다 — 조합원 메뉴의 맨 위이고, 조합을 알아보는 출발점이다.
         //
         // `session.authenticated`를 먼저 보는 이유: `fetchSessionProfile`은
         // 실패해도 reject하지 않고 **빈 세션**을 돌려준다. 그 값만 보면
@@ -56,7 +56,7 @@ export default function BoardRoomPage() {
         if (session.authenticated) {
           const boardMember = canAccessBoardRoom(session.profile)
           setIsBoardMember(boardMember)
-          if (!boardMember) router.replace('/board-room/documents')
+          if (!boardMember) router.replace('/board-room/charter')
         }
       } catch {
         if (mounted) setIsAdmin(false)

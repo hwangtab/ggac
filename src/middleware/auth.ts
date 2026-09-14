@@ -109,7 +109,8 @@ export async function handleAuth(
     (authPathname === '/board-room' ||
       authPathname.startsWith('/board-room/meetings') ||
       authPathname.startsWith('/board-room/assembly') ||
-      authPathname.startsWith('/board-room/documents'))
+      authPathname.startsWith('/board-room/documents') ||
+      authPathname === '/board-room/charter')
   const isProtectedPage =
     authPathname.startsWith('/admin') ||
     authPathname.startsWith('/mypage') ||

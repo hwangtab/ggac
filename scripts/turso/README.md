@@ -303,7 +303,11 @@ webServer에 `{...process.env, ...webServer.env}`를 넘긴다. e2e 전용 변�
   `authz-remaining`·`authz-roles`·`authz-mailbox` 6개 스펙
 - `authz-public`: `authz-boundaries` 21건
 
-**실측 기준선(2026-09-14, 조합원 화면을 다듬은 뒤):** 총 99건 중
+**실측 기준선(2026-09-14, 정관 전용 화면을 낸 뒤):** 총 100건 중
+**98 passed, 1 failed, 1 skipped.** 늘어난 1건은 정관 화면이 조합원·이사 양쪽에
+열린다는 경계다.
+
+**직전 기준선(2026-09-14, 조합원 화면을 다듬은 뒤):** 총 99건 중
 **97 passed, 1 failed, 1 skipped.** 늘어난 1건은 회의 생성·수정 화면이
 조합원에게 닫힌다는 경계다.
 
@@ -982,7 +986,7 @@ EXPLAIN QUERY PLAN SELECT count(*) FROM notifications WHERE user_id = '<아무 �
 가드도 타입 검사도 통과한다. 가드는 **"이 문자열이 이 파일에 있는가"**만 보고
 도달 가능성·실행 순서·데이터 흐름을 보지 않는다.
 
-**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 97 passed, 실행 절차는
+**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 98 passed, 실행 절차는
 위 "권한 E2E" 절). 같은 감사에서 **E2E는 관리자 게이트 무력화를 실제로 잡았다.**
 
 `assert-runtime-risks.mjs`가 여전히 값을 하는 자리는 **지워진 것**(게이트를 통째로

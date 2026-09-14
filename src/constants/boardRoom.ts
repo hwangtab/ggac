@@ -24,6 +24,11 @@ export type BoardDocumentCategory = (typeof BOARD_DOCUMENT_CATEGORIES)[number]
 // 정기총회 전용 카테고리 — 일반 서류함과 분리된 '정기총회' 메뉴에서만 사용
 export const ASSEMBLY_DOCUMENT_CATEGORY = '총회' as const
 
+// 정관 카테고리 — 사이드 메뉴의 '정관'이 이 분류의 문서를 바로 펼친다.
+// `BOARD_DOCUMENT_CATEGORIES`에 이미 들어 있어(서류함에서도 보인다) 새 분류가
+// 아니라 **이름표**다. 화면이 '정관' 문자열을 손으로 적지 않게 하려는 것이다.
+export const CHARTER_DOCUMENT_CATEGORY = '정관' as const
+
 /**
  * 서류 열람 범위. `'board'`는 이사·감사·관리자, `'members'`는 승인·활성
  * 조합원까지다. 등급은 포함 관계라 이사는 `'members'` 자료도 전부 본다.

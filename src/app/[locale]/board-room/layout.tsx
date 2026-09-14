@@ -13,6 +13,7 @@ import { fetchSessionProfile, canAccessBoardRoom } from '@/utils/sessionProfile'
 // 조합원은 'members' 자료만 본다. 미들웨어가 나머지 경로를 실제로 막는다.
 const BOARD_NAV_ITEMS = [
   { href: '/board-room', label: '대시보드', exact: true },
+  { href: '/board-room/charter', label: '정관' },
   { href: '/board-room/meetings', label: '이사회 회의' },
   { href: '/board-room/schedule', label: '일정 투표' },
   { href: '/board-room/documents', label: '서류함' },
@@ -24,6 +25,7 @@ const BOARD_NAV_ITEMS = [
 // 회의 목록은 아래 '이사회 회의록'이 이미 담당한다. `/board-room`으로 들어온
 // 조합원은 대시보드가 조합 서류로 보낸다.
 const MEMBER_NAV_ITEMS = [
+  { href: '/board-room/charter', label: '정관' },
   { href: '/board-room/documents', label: '조합 서류' },
   { href: '/board-room/assembly', label: '정기총회' },
   { href: '/board-room/meetings', label: '이사회 회의록' },
