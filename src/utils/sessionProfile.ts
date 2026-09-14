@@ -165,8 +165,11 @@ export function isApprovedActiveAdmin(profile: VerifiedSessionProfile | null): b
 }
 
 /**
- * 이사회 전용 기능(일정 투표·출석·서류함·정기총회, 그리고 모든 쓰기)을 화면에
- * 보여도 되는지. 서버의 `canAccessBoardRoom`과 같은 기준이다.
+ * 이사회 전용 기능(일정 투표·출석·메일함, 서류 업로드·삭제, 그리고 모든 쓰기)을
+ * 화면에 보여도 되는지. 서버의 `canAccessBoardRoom`과 같은 기준이다.
+ *
+ * 서류함·정기총회 **화면 자체**는 조합원에게도 열려 있다 — 그 안에서 자료마다
+ * `visibility`로 다시 갈린다. 이 판정은 그 화면의 쓰기 컨트롤에만 쓴다.
  *
  * 이건 **표시 판정일 뿐 경계가 아니다.** 실제 차단은 API의
  * `requireBoardMember`와 미들웨어가 한다 — 여기서 버튼을 감추는 것은 조합원에게

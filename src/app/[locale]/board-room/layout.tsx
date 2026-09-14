@@ -32,18 +32,26 @@ const MEMBER_NAV_ITEMS = [
 export default function BoardRoomLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
 
-  // 판정이 끝나기 전에는 이사회 전용 메뉴를 감춘 상태로 둔다. 반대로 두면
-  // 조합원 화면에서 메뉴가 잠깐 보였다 사라진다.
-  const [isBoardMember, setIsBoardMember] = useState(false)
+  // 세 값이다: `null`은 **아직 판정하지 못했다**(로딩 또는 세션 조회 실패),
+  // `true`/`false`는 판정 결과다. 둘을 구분하는 이유: `fetchSessionProfile`은
+  // 실패해도 reject하지 않고 빈 세션을 준다 — 그것을 false로 접으면 순단 한
+  // 번에 이사 메뉴가 조합원 메뉴로 바뀌어 일정 투표·메일함 링크가 사라진다.
+  // 판정 전에는 메뉴를 그리지 않는다. 먼저 한쪽을 그렸다가 바꾸면 이사는 매
+  // 로드마다 항목 수·라벨·순서가 통째로 흔들리는 깜빡임을 본다.
+  const [isBoardMember, setIsBoardMember] = useState<boolean | null>(null)
 
   useEffect(() => {
     let mounted = true
     ;(async () => {
       try {
         const session = await fetchSessionProfile()
-        if (mounted) setIsBoardMember(canAccessBoardRoom(session.profile))
+        // 인증이 확인된 세션만 판정으로 받는다. 그 밖에는 `null`로 남겨
+        // 메뉴를 그리지 않는다 — 틀린 메뉴를 보여주느니 비워 두는 편이 낫다.
+        if (mounted && session.authenticated) {
+          setIsBoardMember(canAccessBoardRoom(session.profile))
+        }
       } catch {
-        if (mounted) setIsBoardMember(false)
+        // 판정 실패. `null`을 유지한다.
       }
     })()
     return () => {
@@ -51,9 +59,8 @@ export default function BoardRoomLayout({ children }: { children: React.ReactNod
     }
   }, [])
 
-  const visibleNavItems: readonly { href: string; label: string; exact?: boolean }[] = isBoardMember
-    ? BOARD_NAV_ITEMS
-    : MEMBER_NAV_ITEMS
+  const visibleNavItems: readonly { href: string; label: string; exact?: boolean }[] =
+    isBoardMember === null ? [] : isBoardMember ? BOARD_NAV_ITEMS : MEMBER_NAV_ITEMS
 
   const isActive = (item: { href: string; exact?: boolean }) =>
     item.exact ? pathname === item.href : pathname.startsWith(item.href)
@@ -66,6 +73,7 @@ export default function BoardRoomLayout({ children }: { children: React.ReactNod
           <aside className="mb-5 lg:mb-0 lg:w-52 lg:flex-shrink-0">
             <nav
               aria-label={isBoardMember ? '이사회 메뉴' : '조합 자료 메뉴'}
+              aria-busy={isBoardMember === null}
               className="flex gap-1 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible lg:pb-0 lg:sticky lg:top-24"
             >
               {visibleNavItems.map(item => {

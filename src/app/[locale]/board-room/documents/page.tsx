@@ -36,7 +36,11 @@ export default function DocumentsPage() {
   // 조합원에게 이 화면은 **읽는 곳**이다. 업로드·카테고리 탭을 감추고 평면
   // 목록으로 둔다 — 볼 수 있는 자료가 한 자리 수인 동안은 탭이 방해다.
   // 실제 차단은 서버가 한다(`visibilityScopeFor` + 업로드는 requireBoardMember).
-  const [isBoardMember, setIsBoardMember] = useState(false)
+  //
+  // 세 값인 이유는 레이아웃과 같다: `null`은 아직 판정하지 못한 상태다.
+  // false로 접으면 판정이 도달하지 않아도 조합원 화면이 그려져, 이사가 잠깐
+  // '조합 서류'를 보고 업로드 컨트롤이 사라지는 깜빡임이 생긴다.
+  const [isBoardMember, setIsBoardMember] = useState<boolean | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -46,13 +50,13 @@ export default function DocumentsPage() {
         if (mounted) {
           setCurrentUserId(session.user?.id ?? '')
           setIsAdmin(isApprovedActiveAdmin(session.profile))
-          setIsBoardMember(canAccessBoardRoom(session.profile))
+          // 인증이 확인된 세션만 판정으로 받는다. 실패는 `null`로 남긴다.
+          if (session.authenticated) setIsBoardMember(canAccessBoardRoom(session.profile))
         }
       } catch {
         if (mounted) {
           setCurrentUserId('')
           setIsAdmin(false)
-          setIsBoardMember(false)
         }
       }
     })()
@@ -106,11 +110,20 @@ export default function DocumentsPage() {
         </div>
       )}
 
-      <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
-        {isBoardMember ? t('heading') : t('memberHeading')}
-      </h1>
-      {!isBoardMember && <p className="mb-8 text-sm text-gray-500">{t('memberDescription')}</p>}
-      {isBoardMember && <div className="mb-6" />}
+      {isBoardMember === null ? (
+        <div className="mb-8 h-9 w-48 animate-pulse rounded bg-gray-100" />
+      ) : (
+        <>
+          <h1
+            className={`text-2xl md:text-3xl font-bold text-gray-900 ${
+              isBoardMember ? 'mb-8' : 'mb-2'
+            }`}
+          >
+            {isBoardMember ? t('heading') : t('memberHeading')}
+          </h1>
+          {!isBoardMember && <p className="mb-8 text-sm text-gray-500">{t('memberDescription')}</p>}
+        </>
+      )}
 
       {/* Upload — 이사·감사·관리자만. 서버도 requireBoardMember다. */}
       {isBoardMember && (

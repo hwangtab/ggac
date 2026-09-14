@@ -342,6 +342,34 @@ test.describe('이사회 경계', () => {
         directorCategoryBody.data?.documents as Array<{ id: string }>
       ).map(doc => doc.id)
       expect(directorCategoryIds).toContain(BOARD_ONLY_DOCUMENT_ID)
+
+      // **상세와 다운로드도 각각 재판정한다.** 목록에서 안 보이는 것과 직접
+      // 주소를 쳐서 못 받는 것은 다른 문제다 — 조합원이 이 화면에 들어오게 된
+      // 뒤로는 두 표면이 실제 경계이고, 없으면 `visibilityScopeFor` 한 줄을
+      // 지워도 스위트가 전부 초록이다(정적 가드는 도달 가능성을 보지 않는다).
+      // 없는 것처럼 404다 — 403이면 "그런 자료가 있다"는 사실이 새 나간다.
+      const memberDetail = await memberContext.get(
+        `/api/board-room/documents/${BOARD_ONLY_DOCUMENT_ID}`
+      )
+      expect(memberDetail.status()).toBe(404)
+
+      const memberDownload = await memberContext.get(
+        `/api/board-room/documents/${BOARD_ONLY_DOCUMENT_ID}/download`
+      )
+      expect(memberDownload.status()).toBe(404)
+
+      // 짝: 조합원도 members 자료의 상세는 받는다. 없으면 위 404가 게이트
+      // 때문인지 "상세가 통째로 고장 났는지" 구분되지 않는다.
+      const memberOwnDetail = await memberContext.get(
+        `/api/board-room/documents/${MEMBERS_VISIBLE_DOCUMENT_ID}`
+      )
+      expect(memberOwnDetail.status()).toBe(200)
+
+      // 짝: 이사에게는 같은 board 자료의 상세가 열린다.
+      const directorDetail = await directorContext.get(
+        `/api/board-room/documents/${BOARD_ONLY_DOCUMENT_ID}`
+      )
+      expect(directorDetail.status()).toBe(200)
     } finally {
       await memberContext.dispose()
       await directorContext.dispose()
@@ -553,22 +581,29 @@ test.describe('페이지 레벨 인가 (미들웨어)', () => {
 
       // 허용 쪽: **관리자가 아닌 이사**. admin 계정으로 확인하면 `isAdmin`
       // 분기만 타서 `is_director` 판정은 여전히 검사되지 않는다.
+      //
+      // 금지 쪽과 **같은 경로**를 연다. 예전에는 허용 쪽이 `/board-room`을 열었는데,
+      // 그 경로는 이제 조합원에게도 열려 있어 schedule 판정이 "전원 리다이렉트"로
+      // 퇴화해도 초록이었다.
       const directorPage = await directorContext.newPage()
-      await directorPage.goto('/board-room', { waitUntil: 'domcontentloaded' })
-      await expect(directorPage).toHaveURL(/\/board-room$/, { timeout: 15000 })
+      await directorPage.goto('/board-room/schedule', { waitUntil: 'domcontentloaded' })
+      await expect(directorPage).toHaveURL(/\/board-room\/schedule$/, { timeout: 15000 })
       // URL만 보면 "머물렀다"까지만 증명된다. 이사회 화면이 실제로 그려졌는지
       // 확인해야 게이트 통과 후 다른 이유로 죽는 상태와 구분된다.
-      await expect(
-        directorPage.getByRole('heading', { name: '이사회 대시보드', level: 1 })
-      ).toBeVisible({ timeout: 15000 })
+      await expect(directorPage.getByRole('heading', { name: '일정 투표', level: 1 })).toBeVisible({
+        timeout: 15000,
+      })
     } finally {
       await memberContext.close()
       await directorContext.close()
     }
   })
 
-  test('조합원은 조합 서류를 연다 (/board-room/documents)', async ({ browser }) => {
+  test('조합원은 조합 서류를 열고, 이사는 같은 URL에서 서류함을 본다', async ({ browser }) => {
     const memberContext = await browser.newContext({ storageState: storageStatePath('other') })
+    const directorContext = await browser.newContext({
+      storageState: storageStatePath('director'),
+    })
 
     try {
       const memberPage = await memberContext.newPage()
@@ -579,8 +614,19 @@ test.describe('페이지 레벨 인가 (미들웨어)', () => {
       await expect(memberPage.getByRole('heading', { name: '조합 서류', level: 1 })).toBeVisible({
         timeout: 15000,
       })
+
+      // **짝 단정.** 이사에게는 같은 URL이 '서류함'이고 업로드 컨트롤이 있다.
+      // 이게 없으면 `setIsBoardMember` 한 줄이 사라져 **전원이 조합원 화면**을
+      // 보는 퇴화를 아무도 잡지 못한다 — 판정이 도달하지 않아도 조합원 화면은
+      // 그려지기 때문이다.
+      const directorPage = await directorContext.newPage()
+      await directorPage.goto('/board-room/documents', { waitUntil: 'domcontentloaded' })
+      await expect(directorPage.getByRole('heading', { name: '서류함', level: 1 })).toBeVisible({
+        timeout: 15000,
+      })
     } finally {
       await memberContext.close()
+      await directorContext.close()
     }
   })
 

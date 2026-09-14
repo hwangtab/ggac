@@ -52,8 +52,9 @@ function sanitizeFileName(name: string): string {
 }
 
 export async function GET(request: NextRequest) {
-  // 열람 게이트다. 조합원은 visibility='members' 자료만 받는다 — 서류함
-  // (등록증·정관·계약)은 전부 'board'라 목록에서 아예 빠진다.
+  // 열람 게이트다. 조합원은 visibility='members' 자료만 받는다 — 관리자가
+  // 그렇게 지정한 것만이다. 기본값은 'board'라, 지정하지 않은 자료(인감증명서·
+  // 계좌 거래내역서 등)는 조합원 목록에서 아예 빠진다.
   const auth = await requireBoardRecordReader()
   if (auth instanceof NextResponse) return auth
   const { user, isBoardMember } = auth

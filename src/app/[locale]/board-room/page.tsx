@@ -41,8 +41,14 @@ export default function BoardRoomPage() {
         setIsAdmin(isApprovedActiveAdmin(session.profile))
         // 이 대시보드는 이사회 회의를 굴리는 화면이다. 조합원에게는 첫 화면으로
         // 줄 이유가 없어(회의 목록은 '이사회 회의록'이 담당한다) 조합 서류로
-        // 보낸다. **판정이 끝난 뒤에만** 옮긴다 — 로딩 중에 옮기면 이사도 튕긴다.
-        if (!canAccessBoardRoom(session.profile)) {
+        // 보낸다.
+        //
+        // `session.authenticated`를 먼저 보는 이유: `fetchSessionProfile`은
+        // 실패해도 reject하지 않고 **빈 세션**을 돌려준다. 그 값만 보면
+        // `canAccessBoardRoom(null) === false`라 순단 한 번에 이사가 조합원으로
+        // 강등돼 여기서 튕긴다(새로고침 전까지 회복되지 않는다). "조합원으로
+        // 판정됐다"와 "판정하지 못했다"는 다르고, 후자에는 아무것도 하지 않는다.
+        if (session.authenticated && !canAccessBoardRoom(session.profile)) {
           router.replace('/board-room/documents')
         }
       } catch {

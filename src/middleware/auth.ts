@@ -348,7 +348,8 @@ export async function handleAuth(
       }
     }
     // 이사회 페이지는 이사·관리자·감사만 접근 (API canAccessBoardRoom과 동일 기준).
-    // 예외는 대시보드·회의(안건·회의록)·정기총회 페이지 — 승인·활성 조합원이면 들어온다.
+    // 예외는 대시보드·회의(안건·회의록)·정기총회·서류함 — 승인·활성 조합원이면
+    // 들어온다. 서류함과 정기총회는 들어온 뒤 자료마다 `visibility`로 다시 갈린다.
     if (
       isBoardRoom &&
       !isBoardRoomRecordPage &&
