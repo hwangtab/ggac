@@ -141,7 +141,12 @@ export async function POST(request: NextRequest) {
     const sentTitleKeys = new Set(
       recentForTitles.map(i => normalizedTitleKey(i.title)).filter(Boolean)
     )
+    // `sentKeys`·`sentTitleKeys`는 이제 **버리는 기준이 아니라 표시하는 기준**이다 —
+    // 이미 보낸 공고도 아직 접수 중이면 다시 싣고 `is_new: false`를 붙인다(국장 판정
+    // 2026-09-14). 같은 응답 안의 중복만 버린다.
     const items = buildDraftItems(fetched, sentKeys, POOL_CAP, sentTitleKeys)
+    const freshCount = items.filter(i => i.is_new).length
+    const ongoingCount = items.length - freshCount
 
     // 게시글·인앱 알림은 개인화하지 않으므로 조합 기본 관심사로 좁혀 렌더된다
     // (`grantPublish.ts`). 관리자가 발행 전에 그 숫자를 알 수 있게 초안 알림에 함께 적는다.
@@ -152,14 +157,28 @@ export async function POST(request: NextRequest) {
     await notifyAdmins(
       adminUserIds(profiles),
       '지원사업 초안이 준비됐습니다',
-      `${key} 회차에 공고 ${items.length}건이 담겼습니다. ` +
+      `${key} 회차에 공고 ${items.length}건이 담겼습니다` +
+        `(신규 ${freshCount} · 계속 접수 중 ${ongoingCount}). ` +
         `(그중 조합 기본 관심사로 게시글·알림에 실릴 것은 ${forPost}건) ` +
         `(수집 범위: 장르 ${scope.genres.length}종 · 지역 ${scope.regions.length}곳) ` +
         `관리자 > 지원사업에서 확인하고 발행해 주세요.`,
-      { weekKey: key, digestId: digest.id, count: items.length, post_count: forPost }
+      {
+        weekKey: key,
+        digestId: digest.id,
+        count: items.length,
+        post_count: forPost,
+        new_count: freshCount,
+        ongoing_count: ongoingCount,
+      }
     )
 
-    log.info('초안 생성 완료', { weekKey: key, fetched: fetched.length, kept: items.length })
+    log.info('초안 생성 완료', {
+      weekKey: key,
+      fetched: fetched.length,
+      kept: items.length,
+      fresh: freshCount,
+      ongoing: ongoingCount,
+    })
     return ApiSuccess.created({
       digest_id: digest.id,
       week_key: key,

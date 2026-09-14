@@ -153,3 +153,22 @@ test('저장되는 모든 필드가 관리자 PATCH 스키마에 있다 (저장�
     assert.ok(schema.includes(`${field}:`), `itemSchema에 ${field}가 없다`)
   }
 })
+
+test('buildDraftItems가 붙이는 필드도 관리자 PATCH 스키마에 있다 (is_new 누락 시 저장 400)', async () => {
+  const { readFileSync } = await import('node:fs')
+  const routeSource = readFileSync(
+    new URL('../../src/app/api/admin/grants/[id]/route.ts', import.meta.url),
+    'utf8'
+  )
+  const schema = routeSource.slice(
+    routeSource.indexOf('const itemSchema'),
+    routeSource.indexOf('const patchSchema')
+  )
+  const { buildDraftItems } = await import('../../src/lib/server/grantDigest.ts')
+  const blocks = await fetchGrantOpportunities({ genres: ['음악'], regions: ['경기'] })
+  const drafted = buildDraftItems(blocks[0].items, new Set())
+  assert.ok(drafted.length > 0, '초안이 비어 있으면 이 테스트가 아무것도 안 본다')
+  for (const field of Object.keys(drafted[0])) {
+    assert.ok(schema.includes(`${field}:`), `itemSchema에 ${field}가 없다`)
+  }
+})

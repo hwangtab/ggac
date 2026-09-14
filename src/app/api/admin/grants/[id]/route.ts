@@ -37,6 +37,9 @@ const itemSchema = z
     // kosmart가 새로 싣는 필드. 없을 수 있다(옛 회차). 여기 빠뜨리면 `.strict()`가
     // 그 필드를 가진 회차의 저장을 전부 400으로 막는다.
     requires_business: z.boolean().optional(),
+    // `buildDraftItems`가 붙이는 신규/계속 표시. 옛 회차에는 없다. 여기 빠뜨리면
+    // `.strict()`가 이 필드를 가진 회차의 저장을 전부 400으로 막는다.
+    is_new: z.boolean().optional(),
     excluded: z.boolean().optional(),
     manual: z.boolean().optional(),
   })

@@ -588,3 +588,66 @@ test('게시글이 0건인 회차에서도 절단 안내는 캘린더를 가리�
   assert.ok(!h.calls.emails[0].html.includes('게시판'))
   assert.ok(h.calls.posts[0].content.includes('이번 주에 새로 안내할 공고가 없습니다'))
 })
+
+// -------------------------------------------- 신규/계속 (2026-09-14 국장 판정)
+
+test('메일이 CAP에서 잘릴 때 신규가 먼저 남는다', async () => {
+  // 마감이 먼 신규 5건 + 마감이 가까운 계속분 20건. 마감순으로만 자르면 신규가 전부
+  // 잘려 나간다 — 조합원이 처음 보는 공고를 잃는 편이 손해가 크다.
+  const ongoing = Array.from({ length: CAP }, (_, i) =>
+    item({
+      key: `old${i}`,
+      title: `계속 ${i}`,
+      genres: ['음악'],
+      regions: ['경기'],
+      apply_end: '2026-09-20',
+      is_new: false,
+    })
+  )
+  const fresh = Array.from({ length: 5 }, (_, i) =>
+    item({
+      key: `new${i}`,
+      title: `신규 ${i}`,
+      genres: ['음악'],
+      regions: ['경기'],
+      apply_end: '2026-12-01',
+      is_new: true,
+    })
+  )
+  const h = harness({
+    digest: {
+      id: 'd1',
+      week_key: '2026-W38',
+      status: 'draft',
+      items: [...ongoing, ...fresh],
+    },
+  })
+  await runGrantPublish(h.input)
+  const html = h.calls.emails[0].html
+  const cards = (html.match(/border-radius: 8px/g) ?? []).length
+  assert.equal(cards, CAP)
+  for (let i = 0; i < 5; i++) assert.ok(html.includes(`신규 ${i}`), `신규 ${i}가 빠졌다`)
+  // 잘린 건수는 개인 필터 통과분 전체(25) 기준이다.
+  assert.ok(html.includes('나머지 5건'))
+})
+
+test('게시글은 두 구획으로 나뉜다', async () => {
+  const h = harness({
+    digest: {
+      id: 'd1',
+      week_key: '2026-W38',
+      status: 'draft',
+      items: [
+        item({ key: 'a', title: '신규 공고', genres: ['음악'], regions: ['경기'], is_new: true }),
+        item({ key: 'b', title: '계속 공고', genres: ['음악'], regions: ['경기'], is_new: false }),
+      ],
+    },
+  })
+  await runGrantPublish(h.input)
+  const content = h.calls.posts[0].content
+  assert.ok(content.includes('## 이번 주 새 공고'))
+  assert.ok(content.includes('## 계속 접수 중'))
+  assert.ok(
+    h.calls.notifications[0].message.includes('이번 주 새 공고 1건, 계속 접수 중 1건입니다.')
+  )
+})

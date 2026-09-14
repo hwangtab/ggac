@@ -19,6 +19,9 @@ const {
   isExcludedByRequiresBusiness,
   normalizedTitleKey,
   sortByDeadline,
+  capKeepingNew,
+  partitionByNewness,
+  newnessCountPhrase,
   CAP,
   POOL_CAP,
   DEDUPE_WEEKS,
@@ -68,20 +71,28 @@ test('weekKey는 연말 주차를 ISO 규칙으로 넘긴다', () => {
 
 // ---------------------------------------------------------------- buildDraftItems
 
-test('이미 보낸 key를 제외한다', () => {
+// 2026-09-14 뒤집음: 예전에는 `sentKeys`에 있는 공고를 버렸다. 국장 판정으로
+// "이미 보냈더라도 아직 접수 중이면 다시 싣는다"가 되어 **표시만** 한다. 근거는
+// 2026-W38 실측 — 규칙을 통과한 26건 중 18건이 이 규칙에 잘려 초안이 2건이었다.
+test('이미 보낸 key도 담되 is_new=false로 표시한다', () => {
   const out = buildDraftItems(
     [item({ key: 'ncas:1' }), item({ key: 'ncas:2' })],
     new Set(['ncas:1'])
   )
   assert.deepEqual(
     out.map(i => i.key),
-    ['ncas:2']
+    ['ncas:1', 'ncas:2']
+  )
+  assert.deepEqual(
+    out.map(i => i.is_new),
+    [false, true]
   )
 })
 
-test('전부 중복이면 빈 배열이다', () => {
+test('전부 이미 보낸 것이어도 담긴다 (전부 is_new=false)', () => {
   const out = buildDraftItems([item({ key: 'ncas:1' })], new Set(['ncas:1']))
-  assert.deepEqual(out, [])
+  assert.equal(out.length, 1)
+  assert.equal(out[0].is_new, false)
 })
 
 test('CAP까지만 남긴다', () => {
@@ -591,7 +602,9 @@ test('같은 회차 안의 재공고를 한 건으로 줄인다', () => {
   )
 })
 
-test('지난 회차에 나간 공고의 재공고는 key가 달라도 다시 담기지 않는다', () => {
+// 2026-09-14 뒤집음: 위와 같은 이유로 제목 축도 **버리는 기준이 아니라 표시하는
+// 기준**이다. 같은 회차 안의 재공고 중복 제거(바로 위 테스트)는 그대로 남는다.
+test('지난 회차에 나간 공고의 재공고는 담되 is_new=false로 표시한다', () => {
   const sentTitleKeys = new Set([normalizedTitleKey('2026년 양평문화자원 공연 창작프로젝트 공모')])
   const out = buildDraftItems(
     [item({ key: 'artnuri:new', title: '2026년 양평문화자원 공연 창작 프로젝트 공모 재공고' })],
@@ -599,7 +612,8 @@ test('지난 회차에 나간 공고의 재공고는 key가 달라도 다시 담
     CAP,
     sentTitleKeys
   )
-  assert.deepEqual(out, [])
+  assert.equal(out.length, 1)
+  assert.equal(out[0].is_new, false)
 })
 
 // ------------------------------------------------- sortByDeadline (H2)
@@ -705,4 +719,220 @@ test('requires_business 필드가 아예 없는 옛 항목은 그대로 담긴�
 test('예술감독 모집(채용)은 제외되고 예술감독이 없는 공모는 남는다', () => {
   assert.equal(isExcludedByTitle('2026년 꿈의 극단 안산 예술감독 모집'), true)
   assert.equal(isExcludedByTitle('2027 서울 커넥트 스테이지-음악'), false)
+})
+
+// ------------------------------------------------- 신규/계속 구분 (2026-09-14)
+// 국장 판정: 다이제스트는 "신규만"이 아니라 "지금 접수 중인 것 전부"를 싣는다.
+// 이미 보낸 것은 버리지 않고 `is_new: false`로 표시해 렌더가 구획을 나눈다.
+
+test('is_new는 두 축 어디에도 안 걸린 항목에만 true다', () => {
+  const out = buildDraftItems(
+    [
+      item({ key: 'ncas:1', title: '2026년 음악 창작지원 A' }),
+      item({ key: 'ncas:2', title: '2026년 음악 창작지원 B' }),
+      item({ key: 'ncas:3', title: '2026년 음악 창작지원 C' }),
+    ],
+    new Set(['ncas:1']),
+    CAP,
+    new Set([normalizedTitleKey('2026년 음악 창작지원 B')])
+  )
+  assert.deepEqual(
+    out.map(i => [i.key, i.is_new]),
+    [
+      ['ncas:1', false],
+      ['ncas:2', false],
+      ['ncas:3', true],
+    ]
+  )
+})
+
+test('이미 보낸 항목도 규칙 기반 제외는 그대로 받는다 (합창단 공고는 여전히 빠진다)', () => {
+  const out = buildDraftItems(
+    [
+      item({ key: 'ncas:1', title: '종로구립합창단 신규단원 모집' }),
+      item({ key: 'ncas:2', title: '임대주택 공고', category: 'housing' }),
+      item({ key: 'ncas:3', title: '2026년 음악 창작지원 C' }),
+    ],
+    new Set(['ncas:1', 'ncas:2', 'ncas:3'])
+  )
+  assert.deepEqual(
+    out.map(i => i.key),
+    ['ncas:3']
+  )
+})
+
+test('capKeepingNew는 넘치지 않으면 입력을 그대로 낸다', () => {
+  const items = [
+    { is_new: false, k: 1 },
+    { is_new: true, k: 2 },
+  ]
+  assert.deepEqual(capKeepingNew(items, 5), items)
+})
+
+test('capKeepingNew는 자를 때 신규를 먼저 남기고 입력 순서를 보존한다', () => {
+  const items = [
+    { k: 'old1', is_new: false },
+    { k: 'new1', is_new: true },
+    { k: 'old2', is_new: false },
+    { k: 'new2', is_new: true },
+  ]
+  // 신규 둘을 먼저 확보하고 남은 한 자리를 앞선 계속분(old1)이 채운다. 낸 순서는
+  // 입력 순서 그대로다 — 신규를 앞으로 끌어오지 않는다(구획은 렌더가 나눈다).
+  assert.deepEqual(
+    capKeepingNew(items, 3).map(i => i.k),
+    ['old1', 'new1', 'new2']
+  )
+  assert.deepEqual(
+    capKeepingNew(items, 2).map(i => i.k),
+    ['new1', 'new2']
+  )
+})
+
+test('buildDraftItems는 cap을 넘칠 때 신규를 먼저 남긴다', () => {
+  const sent = new Set()
+  const many = Array.from({ length: CAP + 5 }, (_, i) => item({ key: `ncas:${i}` }))
+  // 앞 CAP건을 "이미 보냄"으로 만든다 — 옛 절단 규칙이면 신규가 전부 잘려 나갔다.
+  for (let i = 0; i < CAP; i++) sent.add(`ncas:${i}`)
+  const out = buildDraftItems(many, sent, CAP)
+  assert.equal(out.length, CAP)
+  assert.equal(out.filter(i => i.is_new).length, 5)
+})
+
+test('partitionByNewness는 is_new가 없는 옛 항목을 계속분으로 센다', () => {
+  const { fresh, ongoing } = partitionByNewness([{ is_new: true }, { is_new: false }, {}])
+  assert.equal(fresh.length, 1)
+  assert.equal(ongoing.length, 2)
+})
+
+test('newnessCountPhrase는 0인 쪽을 뺀다', () => {
+  assert.equal(newnessCountPhrase(2, 18), '신규 2건 · 접수 중 18건')
+  assert.equal(newnessCountPhrase(2, 0), '신규 2건')
+  assert.equal(newnessCountPhrase(0, 18), '접수 중 18건')
+  assert.equal(newnessCountPhrase(0, 0), null)
+})
+
+test('마크다운은 두 구획으로 나누고 각 구획 안에서 마감 임박순으로 정렬한다', () => {
+  const md = renderDigestMarkdown(
+    [
+      item({ key: 'a', title: '계속 늦은 마감', is_new: false, apply_end: '2026-12-01' }),
+      item({ key: 'b', title: '신규 늦은 마감', is_new: true, apply_end: '2026-11-01' }),
+      item({ key: 'c', title: '계속 상시', is_new: false, apply_end: null }),
+      item({ key: 'd', title: '계속 빠른 마감', is_new: false, apply_end: '2026-09-20' }),
+      item({ key: 'e', title: '신규 빠른 마감', is_new: true, apply_end: '2026-09-18' }),
+    ],
+    '2026-W38',
+    '2026-09-14'
+  )
+  const order = [...md.matchAll(/^#{2,3} \[?([^\]\n]+)/gm)].map(m => m[1])
+  assert.deepEqual(order, [
+    '이번 주 새 공고',
+    '신규 빠른 마감',
+    '신규 늦은 마감',
+    '계속 접수 중',
+    '계속 빠른 마감',
+    '계속 늦은 마감',
+    '계속 상시',
+  ])
+})
+
+test('마크다운은 빈 구획을 제목째로 생략한다', () => {
+  const onlyNew = renderDigestMarkdown([item({ key: 'a', is_new: true })], '2026-W38', '2026-09-14')
+  assert.ok(onlyNew.includes('## 이번 주 새 공고'))
+  assert.ok(!onlyNew.includes('## 계속 접수 중'))
+
+  const onlyOngoing = renderDigestMarkdown(
+    [item({ key: 'a', is_new: false })],
+    '2026-W38',
+    '2026-09-14'
+  )
+  assert.ok(onlyOngoing.includes('## 계속 접수 중'))
+  assert.ok(!onlyOngoing.includes('## 이번 주 새 공고'))
+})
+
+test('이메일 제목은 신규·계속 건수를 함께 적고 0인 쪽을 뺀다', () => {
+  const both = renderDigestEmail(
+    [item({ key: 'a', is_new: true }), item({ key: 'b', is_new: false })],
+    '2026-W38',
+    '2026-09-14',
+    'https://x.test/s'
+  )
+  assert.equal(both.subject, '[경기아트콜렉티브] 이번 주 예술지원사업 신규 1건 · 접수 중 1건')
+
+  const onlyNew = renderDigestEmail(
+    [item({ key: 'a', is_new: true })],
+    '2026-W38',
+    '2026-09-14',
+    'https://x.test/s'
+  )
+  assert.equal(onlyNew.subject, '[경기아트콜렉티브] 이번 주 예술지원사업 신규 1건')
+
+  const onlyOngoing = renderDigestEmail(
+    [item({ key: 'a', is_new: false })],
+    '2026-W38',
+    '2026-09-14',
+    'https://x.test/s'
+  )
+  assert.equal(onlyOngoing.subject, '[경기아트콜렉티브] 이번 주 예술지원사업 접수 중 1건')
+})
+
+test('이메일 본문은 두 소제목으로 나누고 빈 구획은 생략한다', () => {
+  const both = renderDigestEmail(
+    [item({ key: 'a', is_new: true }), item({ key: 'b', is_new: false })],
+    '2026-W38',
+    '2026-09-14',
+    'https://x.test/s'
+  )
+  assert.ok(both.html.includes('이번 주 새 공고'))
+  assert.ok(both.html.includes('계속 접수 중'))
+  assert.ok(both.html.indexOf('이번 주 새 공고') < both.html.indexOf('계속 접수 중'))
+
+  const onlyNew = renderDigestEmail(
+    [item({ key: 'a', is_new: true })],
+    '2026-W38',
+    '2026-09-14',
+    'https://x.test/s'
+  )
+  assert.ok(!onlyNew.html.includes('계속 접수 중'))
+})
+
+test('알림 본문은 신규·계속 건수를 적고 0인 쪽을 뺀다', () => {
+  assert.equal(
+    renderDigestNotification(
+      [item({ key: 'a', is_new: true }), item({ key: 'b', is_new: false })],
+      '2026-W38'
+    ).message,
+    '이번 주 새 공고 1건, 계속 접수 중 1건입니다.'
+  )
+  assert.equal(
+    renderDigestNotification([item({ key: 'a', is_new: true })], '2026-W38').message,
+    '이번 주 새 공고 1건입니다.'
+  )
+  assert.equal(
+    renderDigestNotification([item({ key: 'a', is_new: false })], '2026-W38').message,
+    '계속 접수 중 1건입니다.'
+  )
+  assert.equal(
+    renderDigestNotification([], '2026-W38').message,
+    '2026-W38 지원사업 안내가 올라왔습니다.'
+  )
+})
+
+// ------------------------------------------------- W38 실데이터 (28건)
+
+test('실데이터 2026-W38: 28건 중 20건이 담기고 신규 2 · 계속 18이다', async () => {
+  const fs = await import('node:fs')
+  const path = new URL('./fixtures/grant-pool-2026-W38.json', import.meta.url)
+  const pool = JSON.parse(fs.readFileSync(path, 'utf8'))
+  assert.equal(pool.length, 28)
+  // 이 회차의 "이미 보냄" 두 축. 운영 W36·W37 회차에서 뽑은 실제 값이다.
+  const sent = JSON.parse(
+    fs.readFileSync(new URL('./fixtures/grant-sent-2026-W38.json', import.meta.url), 'utf8')
+  )
+  const out = buildDraftItems(pool, new Set(sent.keys), POOL_CAP, new Set(sent.title_keys))
+  const fresh = out.filter(i => i.is_new)
+  assert.equal(out.length, 20)
+  assert.equal(fresh.length, 2)
+  assert.equal(out.length - fresh.length, 18)
+  // 옛 동작(이미 보낸 것을 버림)이면 초안이 2건뿐이었다 — 그게 이 변경의 이유다.
+  assert.equal(fresh.length, 2)
 })

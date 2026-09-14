@@ -309,15 +309,56 @@ export function sortByDeadline<T extends { apply_end: string | null }>(items: T[
 }
 
 /**
- * kosmart가 준 목록에서 최근 회차에 이미 담긴 것과 규칙상 제외 대상을 빼고 cap까지 남긴다.
+ * cap을 넘치면 **신규를 먼저 남기고** 자른다. 넘치지 않으면 입력을 그대로 돌려준다.
  *
- * 중복 제거는 두 축이다: `key`(= `source:source_id`)와 {@link normalizedTitleKey}.
- * 후자가 없으면 재공고가 새 `source_id`를 달고 다시 들어온다 — 실측된 양평문화자원
- * 사례가 그것이다. `sentKeys`에 대해서도 같은 두 축을 본다.
+ * 남긴 항목은 **입력 순서 그대로** 낸다 — 신규를 앞으로 끌어오지 않는다. 순서는 호출부가
+ * 이미 정해 두었고(풀 경로는 `interleaveGenreBlocks`의 장르 인터리브, 발행 경로는
+ * `sortByDeadline`의 마감 임박순), 구획 나누기는 렌더가 한다.
+ *
+ * 왜 신규를 먼저 남기나: 계속 접수 중인 공고는 지난 회차에도 실렸고 캘린더에도 남아 있다.
+ * 자리가 모자랄 때 조합원이 **처음 보는** 것을 잃는 편이 손해가 크다.
+ */
+export function capKeepingNew<T extends { is_new?: boolean }>(items: T[], cap: number): T[] {
+  if (items.length <= cap) return items
+  const kept = new Set<T>()
+  for (const it of items) {
+    if (kept.size >= cap) break
+    if (it.is_new) kept.add(it)
+  }
+  for (const it of items) {
+    if (kept.size >= cap) break
+    if (!it.is_new) kept.add(it)
+  }
+  return items.filter(it => kept.has(it))
+}
+
+/** 신규(`is_new === true`)와 계속 접수 중으로 나눈다. 렌더가 두 구획을 그릴 때 쓴다. */
+export function partitionByNewness<T extends { is_new?: boolean }>(
+  items: T[]
+): { fresh: T[]; ongoing: T[] } {
+  return {
+    fresh: items.filter(i => i.is_new === true),
+    ongoing: items.filter(i => i.is_new !== true),
+  }
+}
+
+/**
+ * kosmart가 준 목록에서 규칙상 제외 대상과 **같은 응답 안의 중복**을 빼고 cap까지 남긴다.
+ *
+ * **지난 회차에 이미 나간 공고는 버리지 않는다.** 국장 판정(2026-09-14): 이미 보냈더라도
+ * 아직 접수 중이면 다시 실어야 한다. 실측 근거는 2026-W38이다 — kosmart가 준 28건 중
+ * 26건이 규칙을 통과했는데 그중 18건이 "이미 보냄"으로 잘려 초안에 2건만 담겼다.
+ * 그래서 `sentKeys`·`sentTitleKeys`는 **버리는 기준이 아니라 표시하는 기준**이다:
+ * 둘 중 어느 축에도 없으면 `is_new: true`, 하나라도 걸리면 `is_new: false`를 붙인다.
+ *
+ * 중복 제거 두 축(`key` = `source:source_id`와 {@link normalizedTitleKey})은 **같은 응답
+ * 안에서는 그대로 적용한다** — 재공고가 새 `source_id`를 달고 같은 회차에 두 번 실리는
+ * 일(실측 양평문화자원)은 여전히 막아야 한다.
  *
  * **순서를 다시 정렬하지 않는다** — 이미 `interleaveGenreBlocks`로 장르 간 공정한 순서가
- * 정해져 있거나(풀 생성 경로), kosmart가 `rankAndCap`으로 점수순·마감임박순으로 정렬해서
- * 보낸 순서 그대로다. 메일이 잘릴 때의 순서는 발행 시점에 `sortByDeadline`이 정한다.
+ * 정해져 있거나, kosmart가 점수순으로 정렬해 보낸 순서 그대로다. 구획(신규/계속)과 구획
+ * 안의 마감 임박순은 렌더 시점에 정해진다. cap을 넘칠 때만 {@link capKeepingNew}가
+ * 신규를 먼저 남긴다.
  */
 export function buildDraftItems(
   fetched: GrantItem[],
@@ -329,10 +370,9 @@ export function buildDraftItems(
   const seen = new Set<string>()
   const seenTitles = new Set<string>()
   for (const it of fetched) {
-    if (sentKeys.has(it.key)) continue
     if (seen.has(it.key)) continue // 같은 응답 안의 중복
     const titleKey = normalizedTitleKey(it.title)
-    if (titleKey.length > 0 && (sentTitleKeys.has(titleKey) || seenTitles.has(titleKey))) continue
+    if (titleKey.length > 0 && seenTitles.has(titleKey)) continue // 같은 회차 안의 재공고
     if (isExcludedByTitle(it.title)) continue // cap을 세기 전에 걸러야 자리를 먹지 않는다
     if (isExcludedByCategory(it.category)) continue // 위와 같은 이유
     if (isExcludedByGenres(it.genres)) continue // 위와 같은 이유
@@ -341,10 +381,10 @@ export function buildDraftItems(
     if (isExcludedByBizType(it.biz_type)) continue // 위와 같은 이유
     seen.add(it.key)
     if (titleKey.length > 0) seenTitles.add(titleKey)
-    out.push(it)
-    if (out.length >= cap) break
+    const alreadySent = sentKeys.has(it.key) || (titleKey.length > 0 && sentTitleKeys.has(titleKey))
+    out.push({ ...it, is_new: !alreadySent })
   }
-  return out
+  return capKeepingNew(out, cap)
 }
 
 /** 관리자가 제외하지 않은 항목만. */
@@ -390,6 +430,26 @@ function tagLine(it: GrantItem): string {
   return tags.join(' · ')
 }
 
+/** 두 구획의 제목. 게시글·메일·알림이 같은 말을 쓰도록 한 곳에 둔다. */
+export const SECTION_TITLE_NEW = '## 이번 주 새 공고'
+export const SECTION_TITLE_ONGOING = '## 계속 접수 중'
+
+/** 메일 HTML 소제목. 마크다운 제목({@link SECTION_TITLE_NEW})과 같은 말을 쓴다. */
+export const SECTION_HEADING_NEW = '이번 주 새 공고'
+export const SECTION_HEADING_ONGOING = '계속 접수 중'
+
+/**
+ * 신규·계속 건수를 사람이 읽는 한 조각으로 만든다. **0인 쪽은 빼고 자연스럽게 쓴다** —
+ * "신규 0건"은 정보가 아니라 잡음이다. 둘 다 0이면 `null`이다(호출부가 다른 문구를 쓴다).
+ */
+export function newnessCountPhrase(freshCount: number, ongoingCount: number): string | null {
+  const parts: string[] = []
+  if (freshCount > 0) parts.push(`신규 ${freshCount}건`)
+  if (ongoingCount > 0) parts.push(`접수 중 ${ongoingCount}건`)
+  if (parts.length === 0) return null
+  return parts.join(' · ')
+}
+
 /**
  * 게시글 본문(마크다운).
  *
@@ -408,18 +468,31 @@ export function renderDigestMarkdown(
     return `${head}\n이번 주에 새로 안내할 공고가 없습니다.\n`
   }
 
-  const body = active
-    .map(it => {
-      const lines = [
-        `### [${escapeMarkdown(it.title)}](${it.url})`,
-        '',
-        `- 마감: ${dDay(it.apply_end, todayIso)}${it.apply_end ? ` (${it.apply_end})` : ''}`,
-        `- 분류: ${escapeMarkdown(tagLine(it))}`,
-      ]
-      if (it.summary) lines.push(`- ${escapeMarkdown(it.summary)}`)
-      return lines.join('\n')
-    })
-    .join('\n\n')
+  const renderItem = (it: GrantItem): string => {
+    const lines = [
+      `### [${escapeMarkdown(it.title)}](${it.url})`,
+      '',
+      `- 마감: ${dDay(it.apply_end, todayIso)}${it.apply_end ? ` (${it.apply_end})` : ''}`,
+      `- 분류: ${escapeMarkdown(tagLine(it))}`,
+    ]
+    if (it.summary) lines.push(`- ${escapeMarkdown(it.summary)}`)
+    return lines.join('\n')
+  }
+
+  const { fresh, ongoing } = partitionByNewness(active)
+  const sections: string[] = []
+  // 빈 구획은 제목째로 생략한다 — "이번 주 새 공고" 아래가 비어 있으면 오해를 부른다.
+  if (fresh.length > 0) {
+    sections.push(
+      [SECTION_TITLE_NEW, '', sortByDeadline(fresh).map(renderItem).join('\n\n')].join('\n')
+    )
+  }
+  if (ongoing.length > 0) {
+    sections.push(
+      [SECTION_TITLE_ONGOING, '', sortByDeadline(ongoing).map(renderItem).join('\n\n')].join('\n')
+    )
+  }
+  const body = sections.join('\n\n')
 
   const foot =
     '\n\n---\n\n' +
@@ -449,19 +522,31 @@ export function renderDigestEmail(
   options: { truncatedFrom?: number } = {}
 ): { subject: string; html: string } {
   const active = activeItems(items)
-  const subject = `[경기아트콜렉티브] 이번 주 예술지원사업 ${active.length}건`
+  const { fresh, ongoing } = partitionByNewness(active)
+  const phrase = newnessCountPhrase(fresh.length, ongoing.length)
+  const subject = phrase
+    ? `[경기아트콜렉티브] 이번 주 예술지원사업 ${phrase}`
+    : `[경기아트콜렉티브] 이번 주 예술지원사업 ${active.length}건`
   const safeSettings = escapeHtml(settingsUrl)
 
-  const cards = active
-    .map(
-      it => `
+  const card = (it: GrantItem): string => `
   <div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 12px">
     <a href="${escapeHtml(it.url)}" style="font-size: 15px; font-weight: 700; color: #1f2937; text-decoration: none">${escapeHtml(it.title)}</a>
     <p style="font-size: 12px; color: #6b7280; margin: 8px 0 0">${escapeHtml(dDay(it.apply_end, todayIso))}${it.apply_end ? ` · 마감 ${escapeHtml(it.apply_end)}` : ''} · ${escapeHtml(tagLine(it))}</p>
     ${it.summary ? `<p style="font-size: 13px; line-height: 1.6; color: #4b5563; margin: 8px 0 0">${escapeHtml(it.summary.slice(0, 140))}</p>` : ''}
   </div>`
-    )
-    .join('')
+
+  const sectionHeading = (label: string): string =>
+    `<h2 style="font-size: 15px; font-weight: 700; color: #1f2937; margin: 24px 0 12px">${escapeHtml(label)}</h2>`
+
+  // 빈 구획은 제목째로 생략한다.
+  const cards =
+    (fresh.length > 0
+      ? sectionHeading(SECTION_HEADING_NEW) + sortByDeadline(fresh).map(card).join('')
+      : '') +
+    (ongoing.length > 0
+      ? sectionHeading(SECTION_HEADING_ONGOING) + sortByDeadline(ongoing).map(card).join('')
+      : '')
 
   const empty =
     '<p style="font-size: 14px; color: #4b5563">이번 주에 새로 안내할 공고가 없습니다.</p>'
@@ -490,12 +575,16 @@ export function renderDigestNotification(
   items: GrantItem[],
   weekKeyValue: string
 ): { title: string; message: string } {
-  const count = activeItems(items).length
+  const active = activeItems(items)
+  const { fresh, ongoing } = partitionByNewness(active)
+  const parts: string[] = []
+  if (fresh.length > 0) parts.push(`이번 주 새 공고 ${fresh.length}건`)
+  if (ongoing.length > 0) parts.push(`계속 접수 중 ${ongoing.length}건`)
   return {
     title: '이번 주 예술지원사업 안내',
     message:
-      count === 0
+      parts.length === 0
         ? `${weekKeyValue} 지원사업 안내가 올라왔습니다.`
-        : `지원사업 ${count}건이 올라왔습니다.`,
+        : `${parts.join(', ')}입니다.`,
   }
 }

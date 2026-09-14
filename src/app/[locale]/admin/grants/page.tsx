@@ -20,6 +20,7 @@ type GrantItem = {
   biz_type: string | null
   target: string | null
   requires_business?: boolean
+  is_new?: boolean
   excluded?: boolean
   manual?: boolean
 }
@@ -99,6 +100,17 @@ function matchStatsLabel(
  */
 function postItemCount(items: GrantItem[]): number {
   return filterByDefaultInterests(items.filter(i => !i.excluded)).length
+}
+
+/**
+ * 남긴 공고의 신규/계속 건수. 회차에는 이번 주 처음 싣는 공고와 지난 회차에도 실렸지만
+ * 아직 접수 중인 공고가 함께 담긴다 — 관리자가 그 비율을 모르면 "지난 주와 같은 글이
+ * 또 올라간다"는 인상만 남는다. `is_new`가 없는 옛 회차는 계속분으로 센다.
+ */
+function newnessCounts(items: GrantItem[]): { fresh: number; ongoing: number } {
+  const active = items.filter(i => !i.excluded)
+  const fresh = active.filter(i => i.is_new === true).length
+  return { fresh, ongoing: active.length - fresh }
 }
 
 export default function AdminGrantsPage() {
@@ -297,7 +309,9 @@ export default function AdminGrantsPage() {
               <h2 className="text-lg font-bold">
                 {selected.week_key} · 공고 {selected.items.filter(i => !i.excluded).length}건
                 <span className="ml-2 text-sm font-normal text-gray-500">
-                  (게시글·알림 {postItemCount(selected.items)}건)
+                  (신규 {newnessCounts(selected.items).fresh} · 계속 접수 중{' '}
+                  {newnessCounts(selected.items).ongoing} · 게시글·알림{' '}
+                  {postItemCount(selected.items)}건)
                 </span>
               </h2>
               <button type="button" onClick={closeModal} className="text-gray-400">

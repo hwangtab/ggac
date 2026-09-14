@@ -35,6 +35,12 @@ export interface GrantItem {
    * (이 필드를 모르는 옛 응답). 없으면 `false`로 읽는다 — 모른다고 감추지 않는다.
    */
   requires_business?: boolean
+  /**
+   * 이번 회차에서 **처음 싣는** 공고. `false`면 지난 회차에도 실렸고 아직 접수 중이라
+   * 다시 싣는 것이다. kosmart가 주는 필드가 아니라 `buildDraftItems`가 붙인다
+   * (`sentKeys`·`sentTitleKeys`와 대조한 결과). 옛 회차에는 이 키가 없다.
+   */
+  is_new?: boolean
   /** 관리자가 이번 회차에서 뺀 항목. 발행 시 제외되지만 기록은 남는다. */
   excluded?: boolean
   /** 관리자가 손으로 넣은 항목(kosmart에 없는 공고). */
