@@ -746,13 +746,25 @@ const resetPasswordUsesServerSessionTruth =
   ) &&
   !/fetchSessionProfile/.test(resetPasswordPageSource) &&
   !/getSession\(\)/.test(resetPasswordPageSource)
-const boardRoomClientPagesUseServerSessionTruth = boardRoomClientPageSources.every(
-  ({ source }) =>
+const boardRoomClientPagesUseServerSessionTruth = boardRoomClientPageSources.every(({ source }) => {
+  // 서버 컴포넌트는 이 계약의 대상이 아니다. 계약의 취지는 "**브라우저에서**
+  // 권한을 판정할 때 서버 진실(`/api/auth/verify-session`)을 쓰고 클라이언트가
+  // `member_profiles`를 직접 읽지 마라"인데, `'use client'`가 없는 파일은
+  // 애초에 브라우저에서 판정하지 않는다. 세션 호출이 없다는 이유로 실패시키면
+  // **더 안전한 방향(서버 판정)으로 옮기는 것을 가드가 막는다.**
+  //
+  // 면제가 구멍이 되지는 않는다 — 이사 전용 화면은 아래 "Board-only pages
+  // must gate on the server" 검사가 `requireBoardMemberPage()` 호출을 따로
+  // 요구한다. 조합원에게 열린 화면은 애초에 게이트가 필요 없다.
+  if (!/^\s*['"]use client['"]/m.test(source)) return true
+
+  return (
     (/fetchSessionProfile/.test(source) ||
       /fetch\(['"]\/api\/auth\/verify-session['"]/.test(source)) &&
     !/from\(['"]member_profiles['"]\)/.test(source) &&
     !/getSession\(\)/.test(source)
-)
+  )
+})
 
 const serverEnvPath = join(root, 'src/lib/server/env.ts')
 const serverEnvSource = existsSync(serverEnvPath) ? readSourceAt(serverEnvPath) : ''
@@ -7214,6 +7226,54 @@ if (trackedFiles === null) {
   if (credentialHits.length > 0) {
     failures.push(
       `Hardcoded credentials must never be committed — this repository is public. Move the value to an environment variable (and rotate the exposed credential):\n${credentialHits
+        .map(hit => `- ${hit}`)
+        .join('\n')}`
+    )
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 이사회 **전용 화면**(일정 투표·메일함)은 미들웨어 말고도 서버에서 한 번 더
+// 판정한다.
+//
+// 왜 검사하는가: 두 화면은 예전에 `'use client'`뿐이라 서버 인가가 전혀 없었고,
+// 경계가 `src/middleware/auth.ts`의 `isBoardRoomRecordPage` 예외 목록 **한
+// 겹**이었다. 그 목록은 조합원 열람을 여는 과정에서만 두 번 바뀐 자리다 —
+// 예외를 하나 잘못 더하면 이사 전용 화면이 조합원 전체에게 열린다.
+//
+// 이 검사는 "가드가 도달 가능성을 보지 않는다"는 한계를 그대로 안는다(파일에
+// 문자열이 있는지만 본다). 그래도 **게이트 호출이 통째로 사라지는** 회귀는
+// 잡는다. 진짜 안전망은 `npm run test:e2e:authz`다.
+{
+  const guardedBoardPages = [
+    'src/app/[locale]/board-room/schedule/page.tsx',
+    'src/app/[locale]/board-room/mailbox/page.tsx',
+  ]
+  const unguardedBoardPages = []
+
+  for (const file of guardedBoardPages) {
+    const path = join(root, file)
+    if (!existsSync(path)) {
+      unguardedBoardPages.push(
+        `${file}: 파일이 없습니다 — 경로가 바뀌었다면 이 목록도 고쳐야 합니다`
+      )
+      continue
+    }
+    const code = readSourceAt(path)
+    // 서버 컴포넌트여야 게이트를 걸 수 있다. `'use client'`가 붙는 순간
+    // 아래 호출은 빌드는 되지만 **서버에서 실행되지 않는다**.
+    if (/^\s*['"]use client['"]/m.test(code)) {
+      unguardedBoardPages.push(`${file}: 'use client'가 붙어 서버 게이트를 걸 수 없습니다`)
+      continue
+    }
+    if (!code.includes('requireBoardMemberPage(')) {
+      unguardedBoardPages.push(`${file}: requireBoardMemberPage() 호출이 없습니다`)
+    }
+  }
+
+  if (unguardedBoardPages.length > 0) {
+    failures.push(
+      `Board-only pages must gate on the server as well as in middleware — middleware's path list is one string away from opening them to every member:\n${unguardedBoardPages
         .map(hit => `- ${hit}`)
         .join('\n')}`
     )

@@ -1,7 +1,14 @@
-'use client'
-
 import { Link } from '@/i18n/navigation'
+import type { Locale } from '@/i18n/routing'
+import { requireBoardMemberPage } from '@/lib/server/boardRoomPageAuth'
 import MailboxView from '../../admin/mailbox/MailboxView'
+
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
+interface PageProps {
+  params: Promise<{ locale: Locale }>
+}
 
 /**
  * 이사회 메일함 — 브리프 D.
@@ -11,8 +18,14 @@ import MailboxView from '../../admin/mailbox/MailboxView'
  * API(`/api/admin/mailbox*`)는 이제 `board-member` 게이트라 이사·감사도
  * 통과하고, 답장·상태 변경은 API가 주는 `can_manage`(관리자 여부)로 화면이
  * 알아서 가린다.
+ *
+ * 이 페이지는 훅을 쓰지 않아 **서버 컴포넌트**로 둔다 — 그래야 미들웨어와
+ * 별개로 한 번 더 판정할 수 있다. 본체(`MailboxView`)는 그대로 클라이언트다.
  */
-export default function BoardRoomMailboxPage() {
+export default async function BoardRoomMailboxPage({ params }: PageProps) {
+  const { locale } = await params
+  await requireBoardMemberPage(locale, '/board-room/mailbox')
+
   // 2단 구조(목록+상세)는 max-w-4xl 안에서는 상세 칸이 좁아 iframe이
   // 실질적으로 늘어나지 않는다 — 이사회 레이아웃의 다른 페이지는 폭 제약이
   // 필요 없는 문서·안건 목록이라 4xl로 충분했지만, 메일함은 상세 칸에 화면
