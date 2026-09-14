@@ -533,7 +533,7 @@ test.describe('이사회 경계', () => {
  * 상태)을 못 잡는다.
  */
 test.describe('페이지 레벨 인가 (미들웨어)', () => {
-  test('이사회 전용 화면은 이사만 연다 (/board-room/documents)', async ({ browser }) => {
+  test('이사회 전용 화면은 이사만 연다 (/board-room/schedule)', async ({ browser }) => {
     const memberContext = await browser.newContext({ storageState: storageStatePath('other') })
     const directorContext = await browser.newContext({
       storageState: storageStatePath('director'),
@@ -543,12 +543,12 @@ test.describe('페이지 레벨 인가 (미들웨어)', () => {
       // 금지 쪽: 승인된 **일반** 조합원. 미승인 계정을 쓰면 앞선 분기(승인
       // 여부)가 먼저 걸려 이사 판정이 죽어도 계속 리다이렉트된다.
       //
-      // 대상이 `/board-room`에서 `/board-room/documents`로 바뀐 이유: 이제
-      // 대시보드와 회의(안건·회의록)는 조합원에게 열려 있다(소개 페이지가
-      // 공개적으로 약속한 범위). 서류함·일정 투표·정기총회는 그대로 이사
-      // 전용이고, 미들웨어의 `isBoardRoomRecordPage` 예외가 그 선을 긋는다.
+      // 대상이 `/board-room/documents`에서 `/board-room/schedule`로 바뀐 이유:
+      // 서류함도 조합원에게 열렸다(자료마다 `visibility`로 갈린다). 이제 순수한
+      // 이사 전용 화면은 일정 투표와 메일함뿐이고, 미들웨어의
+      // `isBoardRoomRecordPage` 예외가 그 선을 긋는다.
       const memberPage = await memberContext.newPage()
-      await memberPage.goto('/board-room/documents', { waitUntil: 'domcontentloaded' })
+      await memberPage.goto('/board-room/schedule', { waitUntil: 'domcontentloaded' })
       await expect(memberPage).toHaveURL(/\/board$/, { timeout: 15000 })
 
       // 허용 쪽: **관리자가 아닌 이사**. admin 계정으로 확인하면 `isAdmin`
@@ -561,6 +561,47 @@ test.describe('페이지 레벨 인가 (미들웨어)', () => {
       await expect(
         directorPage.getByRole('heading', { name: '이사회 대시보드', level: 1 })
       ).toBeVisible({ timeout: 15000 })
+    } finally {
+      await memberContext.close()
+      await directorContext.close()
+    }
+  })
+
+  test('조합원은 조합 서류를 연다 (/board-room/documents)', async ({ browser }) => {
+    const memberContext = await browser.newContext({ storageState: storageStatePath('other') })
+
+    try {
+      const memberPage = await memberContext.newPage()
+      await memberPage.goto('/board-room/documents', { waitUntil: 'domcontentloaded' })
+      await expect(memberPage).toHaveURL(/\/board-room\/documents$/, { timeout: 15000 })
+      // URL만 보면 "머물렀다"까지만 증명된다. 조합원용 제목이 실제로 그려졌는지
+      // 봐야 이사용 화면이 그대로 노출되는 상태와 구분된다.
+      await expect(memberPage.getByRole('heading', { name: '조합 서류', level: 1 })).toBeVisible({
+        timeout: 15000,
+      })
+    } finally {
+      await memberContext.close()
+    }
+  })
+
+  test('조합원이 /board-room에 오면 조합 서류로 보낸다', async ({ browser }) => {
+    const memberContext = await browser.newContext({ storageState: storageStatePath('other') })
+    const directorContext = await browser.newContext({
+      storageState: storageStatePath('director'),
+    })
+
+    try {
+      // 대시보드는 이사회 회의를 굴리는 화면이라 조합원에게 첫 화면으로 주지
+      // 않는다. 미들웨어가 아니라 화면이 세션 판정 뒤에 옮긴다.
+      const memberPage = await memberContext.newPage()
+      await memberPage.goto('/board-room', { waitUntil: 'domcontentloaded' })
+      await expect(memberPage).toHaveURL(/\/board-room\/documents$/, { timeout: 15000 })
+
+      // **짝 단정.** 이사는 대시보드에 그대로 머문다 — 없으면 리다이렉트가
+      // "전원 이동"으로 퇴화한 상태를 못 잡는다.
+      const directorPage = await directorContext.newPage()
+      await directorPage.goto('/board-room', { waitUntil: 'domcontentloaded' })
+      await expect(directorPage).toHaveURL(/\/board-room$/, { timeout: 15000 })
     } finally {
       await memberContext.close()
       await directorContext.close()

@@ -843,7 +843,9 @@
       "validationFile": "파일을 선택해주세요.",
       "validationTitle": "제목을 입력해주세요.",
       "validationCategory": "분류를 선택해주세요.",
-      "errorGeneric": "오류가 발생했습니다. 다시 시도해주세요."
+      "errorGeneric": "오류가 발생했습니다. 다시 시도해주세요.",
+      "memberHeading": "조합 서류",
+      "memberDescription": "조합원이 열람할 수 있는 조합 서류입니다."
     },
     "detail": {
       "back": "회의 목록으로 돌아가기",

@@ -303,7 +303,11 @@ webServer에 `{...process.env, ...webServer.env}`를 넘긴다. e2e 전용 변�
   `authz-remaining`·`authz-roles`·`authz-mailbox` 6개 스펙
 - `authz-public`: `authz-boundaries` 21건
 
-**실측 기준선(2026-09-11, 조합원 열람을 읽기까지로 정리한 뒤):** 총 96건 중
+**실측 기준선(2026-09-14, 조합원에게 서류함을 열고 메뉴를 재배치한 뒤):** 총 98건 중
+**96 passed, 1 failed, 1 skipped.** 늘어난 2건은 조합원의 조합 서류 열람과
+`/board-room` 리다이렉트 경계다.
+
+**직전 기준선(2026-09-11, 조합원 열람을 읽기까지로 정리한 뒤):** 총 96건 중
 **94 passed, 1 failed, 1 skipped.** 늘어난 1건은 회의록 은닉 경계
 (`authz-roles.spec.ts`의 "조합원은 확정된 회의의 회의록만 읽는다")다. 로컬에서는
 `authz-mailbox.spec.ts`의 "관리자는 화면에 들어가 메일함을 본다"가 하나 더
@@ -974,7 +978,7 @@ EXPLAIN QUERY PLAN SELECT count(*) FROM notifications WHERE user_id = '<아무 �
 가드도 타입 검사도 통과한다. 가드는 **"이 문자열이 이 파일에 있는가"**만 보고
 도달 가능성·실행 순서·데이터 흐름을 보지 않는다.
 
-**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 94 passed, 실행 절차는
+**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 96 passed, 실행 절차는
 위 "권한 E2E" 절). 같은 감사에서 **E2E는 관리자 게이트 무력화를 실제로 잡았다.**
 
 `assert-runtime-risks.mjs`가 여전히 값을 하는 자리는 **지워진 것**(게이트를 통째로

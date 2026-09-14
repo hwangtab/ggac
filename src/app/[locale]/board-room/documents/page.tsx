@@ -4,7 +4,11 @@ import { useState, useEffect, useCallback } from 'react'
 import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
 import { BOARD_DOCUMENT_CATEGORIES } from '@/constants/boardRoom'
-import { fetchSessionProfile, isApprovedActiveAdmin } from '@/utils/sessionProfile'
+import {
+  fetchSessionProfile,
+  isApprovedActiveAdmin,
+  canAccessBoardRoom,
+} from '@/utils/sessionProfile'
 import DocumentList from '../_components/DocumentList'
 import DocumentUpload from '../_components/DocumentUpload'
 
@@ -29,6 +33,10 @@ export default function DocumentsPage() {
   const [activeCategory, setActiveCategory] = useState<string>('') // '' = 전체
   const [currentUserId, setCurrentUserId] = useState<string>('')
   const [isAdmin, setIsAdmin] = useState(false)
+  // 조합원에게 이 화면은 **읽는 곳**이다. 업로드·카테고리 탭을 감추고 평면
+  // 목록으로 둔다 — 볼 수 있는 자료가 한 자리 수인 동안은 탭이 방해다.
+  // 실제 차단은 서버가 한다(`visibilityScopeFor` + 업로드는 requireBoardMember).
+  const [isBoardMember, setIsBoardMember] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -38,11 +46,13 @@ export default function DocumentsPage() {
         if (mounted) {
           setCurrentUserId(session.user?.id ?? '')
           setIsAdmin(isApprovedActiveAdmin(session.profile))
+          setIsBoardMember(canAccessBoardRoom(session.profile))
         }
       } catch {
         if (mounted) {
           setCurrentUserId('')
           setIsAdmin(false)
+          setIsBoardMember(false)
         }
       }
     })()
@@ -83,43 +93,54 @@ export default function DocumentsPage() {
 
   return (
     <div className="mx-auto max-w-4xl pb-16">
-      {/* Back link */}
-      <div className="mb-6">
-        <Link
-          href="/board-room"
-          className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
-        >
-          ← {t('back')}
-        </Link>
-      </div>
-
-      <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-8">{t('heading')}</h1>
-
-      {/* Upload */}
-      <div className="mb-8">
-        <DocumentUpload onUploaded={fetchDocuments} />
-      </div>
-
-      {/* Category filter tabs */}
-      <div className="flex flex-wrap gap-2 mb-6">
-        <button
-          type="button"
-          onClick={() => setActiveCategory('')}
-          className={`${tabBase} ${activeCategory === '' ? tabActive : tabInactive}`}
-        >
-          {t('all')}
-        </button>
-        {BOARD_DOCUMENT_CATEGORIES.map(c => (
-          <button
-            key={c}
-            type="button"
-            onClick={() => setActiveCategory(c)}
-            className={`${tabBase} ${activeCategory === c ? tabActive : tabInactive}`}
+      {/* Back link — 이사 전용. 조합원에게 /board-room은 이 화면으로 되돌아오는
+          리다이렉트라, 돌아가기 링크를 두면 제자리를 맴돈다. */}
+      {isBoardMember && (
+        <div className="mb-6">
+          <Link
+            href="/board-room"
+            className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
           >
-            {c}
+            ← {t('back')}
+          </Link>
+        </div>
+      )}
+
+      <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
+        {isBoardMember ? t('heading') : t('memberHeading')}
+      </h1>
+      {!isBoardMember && <p className="mb-8 text-sm text-gray-500">{t('memberDescription')}</p>}
+      {isBoardMember && <div className="mb-6" />}
+
+      {/* Upload — 이사·감사·관리자만. 서버도 requireBoardMember다. */}
+      {isBoardMember && (
+        <div className="mb-8">
+          <DocumentUpload onUploaded={fetchDocuments} />
+        </div>
+      )}
+
+      {/* Category filter tabs — 이사 전용. 조합원은 평면 목록으로 본다. */}
+      {isBoardMember && (
+        <div className="flex flex-wrap gap-2 mb-6">
+          <button
+            type="button"
+            onClick={() => setActiveCategory('')}
+            className={`${tabBase} ${activeCategory === '' ? tabActive : tabInactive}`}
+          >
+            {t('all')}
           </button>
-        ))}
-      </div>
+          {BOARD_DOCUMENT_CATEGORIES.map(c => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setActiveCategory(c)}
+              className={`${tabBase} ${activeCategory === c ? tabActive : tabInactive}`}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* List / states */}
       {loading ? (

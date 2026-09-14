@@ -843,7 +843,9 @@
       "validationFile": "Please select a file.",
       "validationTitle": "Please enter a title.",
       "validationCategory": "Please select a category.",
-      "errorGeneric": "An error occurred. Please try again."
+      "errorGeneric": "An error occurred. Please try again.",
+      "memberHeading": "Cooperative Documents",
+      "memberDescription": "Documents available to members."
     },
     "detail": {
       "back": "Back to Meeting List",

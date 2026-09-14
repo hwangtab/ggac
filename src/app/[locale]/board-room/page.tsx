@@ -2,10 +2,14 @@
 
 import { useState, useEffect } from 'react'
 import { useTranslations } from 'next-intl'
-import { Link } from '@/i18n/navigation'
+import { Link, useRouter } from '@/i18n/navigation'
 import { resolveBoardMeetingTime } from '@/constants/boardRoom'
 import type { BoardMeetingStatus } from '@/constants/boardRoom'
-import { fetchSessionProfile, isApprovedActiveAdmin } from '@/utils/sessionProfile'
+import {
+  fetchSessionProfile,
+  isApprovedActiveAdmin,
+  canAccessBoardRoom,
+} from '@/utils/sessionProfile'
 import StatusBadge from './_components/StatusBadge'
 
 interface Meeting {
@@ -26,13 +30,21 @@ export default function BoardRoomPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
+  const router = useRouter()
 
   useEffect(() => {
     let mounted = true
     ;(async () => {
       try {
         const session = await fetchSessionProfile()
-        if (mounted) setIsAdmin(isApprovedActiveAdmin(session.profile))
+        if (!mounted) return
+        setIsAdmin(isApprovedActiveAdmin(session.profile))
+        // 이 대시보드는 이사회 회의를 굴리는 화면이다. 조합원에게는 첫 화면으로
+        // 줄 이유가 없어(회의 목록은 '이사회 회의록'이 담당한다) 조합 서류로
+        // 보낸다. **판정이 끝난 뒤에만** 옮긴다 — 로딩 중에 옮기면 이사도 튕긴다.
+        if (!canAccessBoardRoom(session.profile)) {
+          router.replace('/board-room/documents')
+        }
       } catch {
         if (mounted) setIsAdmin(false)
       }
@@ -40,7 +52,7 @@ export default function BoardRoomPage() {
     return () => {
       mounted = false
     }
-  }, [])
+  }, [router])
 
   // Fetch meetings
   useEffect(() => {
