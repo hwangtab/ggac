@@ -28,6 +28,9 @@ interface FooterProps {
       establishedDate: string
       registrationDate: string
       registrationNumber: string
+      /** 전자상거래법 제13조가 요구하는 상호·대표자. 없으면 기본값으로 표시한다. */
+      companyName?: string
+      representative?: string
     }
   }
 }
@@ -45,7 +48,7 @@ const Footer = ({ globalData }: FooterProps) => {
     contact: {
       email: 'contact@ggac.kr',
       phone: '0507-1384-3144',
-      address: '경기도 고양시 덕양구 성사동 719',
+      address: '경기도 고양시 덕양구 고양대로1384번길 19-23, 103동 1202호',
     },
     social: {
       instagram: 'https://www.instagram.com/ggackr',
@@ -55,6 +58,8 @@ const Footer = ({ globalData }: FooterProps) => {
       establishedDate: '2025-05-01',
       registrationDate: '2025-05-14',
       registrationNumber: '513-86-03832',
+      companyName: '경기아트콜렉티브 협동조합',
+      representative: '최희철',
     },
   }
 
@@ -221,14 +226,22 @@ const Footer = ({ globalData }: FooterProps) => {
         {/* Bottom */}
         <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="text-gray-400 text-sm mb-4 md:mb-0">
+            {/*
+              전자상거래법 제13조는 상호와 대표자 성명을 표시하도록 한다.
+              토스페이먼츠 심사에서도 이 두 항목 누락으로 보완 요청을 받았다(2026-09).
+            */}
+            <p>
+              {t('companyName')}: {data.businessInfo.companyName ?? '경기아트콜렉티브 협동조합'} |{' '}
+              {t('representative')}: {data.businessInfo.representative ?? '최희철'}
+            </p>
+            <p>
+              {t('businessNumber')}: {data.businessInfo.registrationNumber}
+            </p>
             <p>
               {t('established')}:{' '}
               {new Date(data.businessInfo.establishedDate).toLocaleDateString(dateLocale)} |
               {t('incorporated')}:{' '}
               {new Date(data.businessInfo.registrationDate).toLocaleDateString(dateLocale)}
-            </p>
-            <p>
-              {t('businessNumber')}: {data.businessInfo.registrationNumber}
             </p>
           </div>
           <div className="flex flex-col items-center md:items-end gap-2">

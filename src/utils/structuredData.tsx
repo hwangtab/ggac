@@ -22,7 +22,7 @@ const ORGANIZATION_DATA = {
   foundingDate: '2025-05-01',
   address: {
     '@type': 'PostalAddress',
-    streetAddress: '성사동 719',
+    streetAddress: '고양대로1384번길 19-23, 103동 1202호',
     addressLocality: '고양시 덕양구',
     addressRegion: '경기도',
     postalCode: '10577',

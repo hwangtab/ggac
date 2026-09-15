@@ -66,7 +66,7 @@ const DEFAULT_SETTINGS = [
     setting_value: {
       email: 'contact@ggac.kr',
       phone: '0507-1384-3144',
-      address: '경기도 고양시 덕양구 성사동 719',
+      address: '경기도 고양시 덕양구 고양대로1384번길 19-23, 103동 1202호',
     },
     description: '연락처 정보',
     is_sensitive: false,

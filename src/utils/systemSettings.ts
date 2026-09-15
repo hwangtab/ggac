@@ -126,7 +126,7 @@ function getDefaultSettings(): SystemSettingsData {
       contact_info: {
         email: 'contact@ggac.kr',
         phone: '0507-1384-3144',
-        address: '경기도 고양시 덕양구 성사동 719',
+        address: '경기도 고양시 덕양구 고양대로1384번길 19-23, 103동 1202호',
       },
     },
     email: {
@@ -414,7 +414,7 @@ export async function getSiteInfo() {
       contact: {
         email: 'contact@ggac.kr',
         phone: '0507-1384-3144',
-        address: '경기도 고양시 덕양구 성사동 719',
+        address: '경기도 고양시 덕양구 고양대로1384번길 19-23, 103동 1202호',
       },
     }
   }
@@ -425,7 +425,7 @@ export async function getSiteInfo() {
     contact: settings.site.contact_info || {
       email: 'contact@ggac.kr',
       phone: '0507-1384-3144',
-      address: '경기도 고양시 덕양구 성사동 719',
+      address: '경기도 고양시 덕양구 고양대로1384번길 19-23, 103동 1202호',
     },
   }
 }
