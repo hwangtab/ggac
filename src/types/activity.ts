@@ -21,6 +21,11 @@ export type ActivityActionType =
   | 'search_performed'
   | 'page_viewed'
   | 'attachment_downloaded'
+  | 'funding_campaign_created'
+  | 'funding_campaign_submitted'
+  | 'funding_campaign_reviewed'
+  | 'funding_pledge_paid'
+  | 'funding_pledge_canceled'
 
 export type ActivityTargetType =
   | 'post'
@@ -32,6 +37,8 @@ export type ActivityTargetType =
   | 'notification'
   | 'system'
   | 'inbound_email_attachment'
+  | 'funding_campaign'
+  | 'funding_pledge'
 
 export interface UserActivity {
   id: string

@@ -16,7 +16,7 @@ import { memberProfiles } from './identity.ts'
  * 새겨 둔다.
  */
 
-export const PAYMENT_KIND = ['dues', 'ticket'] as const
+export const PAYMENT_KIND = ['dues', 'ticket', 'funding'] as const
 
 /**
  * `pending` 준비됨(결제창을 띄우기 직전) · `done` 승인 완료 ·

@@ -16,6 +16,12 @@ export const NOTIFICATION_TYPE = [
   'maintenance',
   'welcome',
   'board_notice',
+  // 펀딩 (설계 2026-09-21). 타입 배열일 뿐 DB CHECK가 없어 마이그레이션 불필요.
+  'funding_submitted',
+  'funding_approved',
+  'funding_rejected',
+  'funding_pledged',
+  'funding_closed',
 ] as const
 
 export const posts = sqliteTable(

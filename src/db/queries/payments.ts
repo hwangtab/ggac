@@ -17,7 +17,7 @@ import { membershipDues, payments } from '../schema/index.ts'
 
 import { toIso, toSnakeCase } from './_helpers.ts'
 
-export type PaymentKind = 'dues' | 'ticket'
+export type PaymentKind = 'dues' | 'ticket' | 'funding'
 
 export interface CreatePendingPaymentInput {
   orderId: string

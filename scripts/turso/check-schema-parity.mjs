@@ -32,6 +32,10 @@ const POST_CUTOVER_TABLES = new Set([
   'inbound_emails', // 0020 관리자 메일함
   'inbound_email_attachments', // 0020 관리자 메일함
   'inbound_email_replies', // 0020 관리자 메일함
+  'funding_campaigns', // 0022 조합원 프로젝트 펀딩
+  'funding_rewards', // 0022
+  'funding_pledges', // 0022
+  'funding_settlements', // 0022
 ])
 
 export function comparePgToSqlite(pgSnapshot, sqliteSchema) {
