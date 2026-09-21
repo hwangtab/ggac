@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import AdminLayout from '../components/AdminLayout'
 import { CAP } from '@/lib/server/grantDigest'
-import { filterByDefaultInterests } from '@/lib/server/interestMatch'
+import { countGenreUnclassified, filterByDefaultInterests } from '@/lib/server/interestMatch'
 
 type GrantItem = {
   key: string
@@ -111,6 +111,16 @@ function newnessCounts(items: GrantItem[]): { fresh: number; ongoing: number } {
   const active = items.filter(i => !i.excluded)
   const fresh = active.filter(i => i.is_new === true).length
   return { fresh, ongoing: active.length - fresh }
+}
+
+/**
+ * 남긴 공고 중 kosmart가 장르를 특정하지 못한 것(`genres`에 '전체') 수.
+ *
+ * 판정에는 쓰지 않는다 — 이 값이 붙은 공고도 그대로 실린다. 분류가 나빠지면 이 숫자가
+ * 먼저 커지므로 관리자가 매주 보게 둔다(`interestMatch.ts`의 isGenreUnclassified 참고).
+ */
+function unclassifiedCount(items: GrantItem[]): number {
+  return countGenreUnclassified(items.filter(i => !i.excluded))
 }
 
 export default function AdminGrantsPage() {
@@ -311,7 +321,10 @@ export default function AdminGrantsPage() {
                 <span className="ml-2 text-sm font-normal text-gray-500">
                   (신규 {newnessCounts(selected.items).fresh} · 계속 접수 중{' '}
                   {newnessCounts(selected.items).ongoing} · 게시글·알림{' '}
-                  {postItemCount(selected.items)}건)
+                  {postItemCount(selected.items)}건
+                  {unclassifiedCount(selected.items) > 0 &&
+                    ` · 장르 미분류 ${unclassifiedCount(selected.items)}건`}
+                  )
                 </span>
               </h2>
               <button type="button" onClick={closeModal} className="text-gray-400">

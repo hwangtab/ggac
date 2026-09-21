@@ -31,7 +31,25 @@ const REGION_WILDCARDS = new Set(['전국', '전체'])
  * 5건이 전부 `category='grant'`였고 융자·행정은 0건이었다(화성 메세나, 크라우드펀딩
  * 챌린지, 서울거리예술창작센터 국제 워크숍, 이음 예술창작 아카데미 2건).
  */
-const GENRE_WILDCARD = '전체'
+export const GENRE_WILDCARD = '전체'
+
+/**
+ * kosmart가 장르를 특정하지 못한 공고인가.
+ *
+ * 판정에는 쓰지 않는다({@link matchesInterests}는 이 값을 통과시킨다) — **세어서 보여주려고**
+ * 있는 함수다. 이 규칙은 두 번 틀렸고 두 번 다 조용히 틀렸다: 통과시켰을 때는 융자·임대주택이
+ * 28건 실렸고(2026-09-09), 막았을 때는 멀쩡한 공고 5건이 게시글·메일에서 사라졌다(2026-W39).
+ * 어느 쪽으로 정하든 kosmart의 분류가 달라지면 또 틀리므로, **그때 사람이 알아챌 수 있게**
+ * 초안 알림과 관리자 화면에 건수를 싣는다. 이 통이 갑자기 커지면 분류가 나빠진 것이다.
+ */
+export function isGenreUnclassified(item: { genres: string[] }): boolean {
+  return item.genres.includes(GENRE_WILDCARD)
+}
+
+/** 장르 미분류 공고 수. {@link isGenreUnclassified} 참고 — 표시 전용이다. */
+export function countGenreUnclassified(items: { genres: string[] }[]): number {
+  return items.filter(isGenreUnclassified).length
+}
 
 /**
  * 이 회원에게 실제로 적용할 관심사.

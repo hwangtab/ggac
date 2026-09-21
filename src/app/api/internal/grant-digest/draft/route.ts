@@ -27,7 +27,11 @@ import {
   normalizedTitleKey,
   weekKey,
 } from '@/lib/server/grantDigest'
-import { filterByDefaultInterests, unionInterests } from '@/lib/server/interestMatch'
+import {
+  countGenreUnclassified,
+  filterByDefaultInterests,
+  unionInterests,
+} from '@/lib/server/interestMatch'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
 
@@ -151,6 +155,7 @@ export async function POST(request: NextRequest) {
     // 게시글·인앱 알림은 개인화하지 않으므로 조합 기본 관심사로 좁혀 렌더된다
     // (`grantPublish.ts`). 관리자가 발행 전에 그 숫자를 알 수 있게 초안 알림에 함께 적는다.
     const forPost = filterByDefaultInterests(items).length
+    const unclassified = countGenreUnclassified(items)
 
     const digest = await createGrantDigest({ week_key: key, items })
 
@@ -160,6 +165,9 @@ export async function POST(request: NextRequest) {
       `${key} 회차에 공고 ${items.length}건이 담겼습니다` +
         `(신규 ${freshCount} · 계속 접수 중 ${ongoingCount}). ` +
         `(그중 조합 기본 관심사로 게시글·알림에 실릴 것은 ${forPost}건) ` +
+        // 장르 미분류는 판정에 안 쓰지만 **분류가 나빠지는 것을 사람이 알아채는 유일한 신호**다
+        // (`interestMatch.ts`의 isGenreUnclassified 참고). 0건이면 굳이 적지 않는다.
+        (unclassified > 0 ? `(장르 미분류 ${unclassified}건 포함) ` : '') +
         `(수집 범위: 장르 ${scope.genres.length}종 · 지역 ${scope.regions.length}곳) ` +
         `관리자 > 지원사업에서 확인하고 발행해 주세요.`,
       {
@@ -169,6 +177,7 @@ export async function POST(request: NextRequest) {
         post_count: forPost,
         new_count: freshCount,
         ongoing_count: ongoingCount,
+        unclassified_genre_count: unclassified,
       }
     )
 

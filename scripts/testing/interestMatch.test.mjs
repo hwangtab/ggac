@@ -10,6 +10,8 @@ const {
   unionInterests,
   filterByDefaultInterests,
   DEFAULT_DIGEST_INTERESTS,
+  isGenreUnclassified,
+  countGenreUnclassified,
 } = await import('../../src/lib/server/interestMatch.ts')
 
 // ---------------------------------------------------------------- 상수
@@ -189,4 +191,39 @@ test('합집합이 알 수 없는 값을 걸러낸다', () => {
   const u = unionInterests([{ interest_genres: ['둠메탈'], interest_regions: ['화성'] }])
   assert.deepEqual(u.genres, ['음악'])
   assert.deepEqual([...u.regions].sort(), ['경기', '서울'])
+})
+
+// --------------------------------------------- 장르 미분류 관측 (판정이 아니라 표시)
+
+test("isGenreUnclassified는 genres에 '전체'가 있으면 참이다", () => {
+  assert.equal(isGenreUnclassified({ genres: ['전체'] }), true)
+  assert.equal(isGenreUnclassified({ genres: ['음악', '전체'] }), true)
+  assert.equal(isGenreUnclassified({ genres: ['음악'] }), false)
+  assert.equal(isGenreUnclassified({ genres: [] }), false)
+})
+
+test('미분류 판정은 매칭을 바꾸지 않는다 (세기만 한다)', () => {
+  // 이 둘이 어긋나면 "표시용"이라는 전제가 깨진 것이다.
+  const item = { genres: ['전체'], regions: ['서울'] }
+  assert.equal(isGenreUnclassified(item), true)
+  assert.equal(matchesInterests(item, DEFAULT_DIGEST_INTERESTS), true)
+})
+
+test('실데이터 형태: 2026-W39 초안 16건에서 미분류는 5건이다', () => {
+  // 화성 메세나 · 국제 워크숍 · 크라우드펀딩 챌린지 · 이음 아카데미 2건.
+  const w39 = [
+    { genres: ['전체'], regions: ['경기'] },
+    { genres: ['전체'], regions: ['서울'] },
+    { genres: ['전체'], regions: ['전국'] },
+    { genres: ['전체'], regions: ['전국'] },
+    { genres: ['전체'], regions: ['전국'] },
+    { genres: ['음악', '다원예술'], regions: ['전국'] },
+    { genres: ['연극', '뮤지컬', '무용', '음악', '전통예술'], regions: ['경기'] },
+  ]
+  assert.equal(countGenreUnclassified(w39), 5)
+})
+
+test('미분류가 없으면 0이다', () => {
+  assert.equal(countGenreUnclassified([{ genres: ['음악'], regions: ['서울'] }]), 0)
+  assert.equal(countGenreUnclassified([]), 0)
 })
