@@ -313,7 +313,7 @@ test('genres가 빈 배열이면 제외된다 (kosmart 분류 실패)', () => {
   assert.equal(isExcludedByGenres([]), true)
 })
 
-test("genres=['전체']는 이 규칙에서 제외되지 않는다 (개인 매칭이 떨어뜨린다)", () => {
+test("genres=['전체']는 제외되지 않는다 (빈 배열만 보는 규칙이다)", () => {
   assert.equal(isExcludedByGenres(['전체']), false)
 })
 

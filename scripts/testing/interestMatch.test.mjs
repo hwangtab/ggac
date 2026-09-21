@@ -84,9 +84,24 @@ test('지역이 맞아도 장르가 다르면 탈락', () => {
   assert.equal(matchesInterests({ genres: ['무용'], regions: ['경기'] }, MINE), false)
 })
 
-test("공고 장르가 '전체'면 탈락한다 ('전체'는 전 장르가 아니라 분류 실패다)", () => {
-  // kosmart 실측(2026-09-09, n=64): ['전체'] 15건 중 14건이 융자·행정 안내·교육·심리상담.
-  assert.equal(matchesInterests({ genres: ['전체'], regions: ['서울'] }, MINE), false)
+test("공고 장르가 '전체'면 장르 축을 통과한다", () => {
+  // 한때 막았다(2026-09-09 실측 n=64에서 ['전체'] 15건 중 14건이 융자·행정·교육이었다).
+  // 그 노이즈는 life 카테고리였고 지금은 수집 요청의 categories 인자가 서버에서 잘라낸다.
+  // 2026-W39 실측: ['전체'] 5건이 전부 category='grant', 융자·행정 0건.
+  assert.equal(matchesInterests({ genres: ['전체'], regions: ['서울'] }, MINE), true)
+})
+
+test("장르가 '전체'여도 지역이 안 맞으면 탈락한다 (지역 축은 그대로다)", () => {
+  assert.equal(matchesInterests({ genres: ['전체'], regions: ['대구'] }, MINE), false)
+})
+
+test("장르가 '전체'인데 지역 태그가 비면 탈락한다", () => {
+  assert.equal(matchesInterests({ genres: ['전체'], regions: [] }, MINE), false)
+})
+
+test("실데이터 형태: 화성 메세나(genres=['전체'], regions=['경기'])는 통과한다", () => {
+  // 2026-W39에서 이 규칙 때문에 게시글·메일에서 빠졌던 실제 공고.
+  assert.equal(matchesInterests({ genres: ['전체'], regions: ['경기'] }, MINE), true)
 })
 
 test("공고 지역이 '전국'이면 지역 축을 통과한다", () => {
@@ -108,6 +123,7 @@ test('실데이터 형태: 관심사 미설정 회원(빈 배열)은 조합 기�
   const i = effectiveInterests({ interest_genres: [], interest_regions: [] })
   assert.equal(matchesInterests({ genres: ['음악'], regions: ['경기'] }, i), true)
   assert.equal(matchesInterests({ genres: ['전체'], regions: [] }, i), false)
+  assert.equal(matchesInterests({ genres: ['전체'], regions: ['서울'] }, i), true)
 })
 
 // ------------------------------------------------- 게시글·알림은 조합 기본값만 (H8)

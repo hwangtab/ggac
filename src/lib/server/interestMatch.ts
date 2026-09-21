@@ -17,14 +17,21 @@ export interface EffectiveInterests {
   regions: string[]
 }
 
-/**
- * 공고에 붙는 지역 와일드카드. 조합원 선택지가 아니다.
- *
- * 장르에는 이런 와일드카드가 없다 — `genres=['전체']`는 "전 장르 대상"이 아니라
- * **"장르를 특정할 수 없음"**이다. kosmart 응답 실측(2026-09-09, n=64)에서 `['전체']`
- * 15건 중 14건이 융자·행정 안내·교육·심리상담이었다.
- */
+/** 공고에 붙는 지역 와일드카드. 조합원 선택지가 아니다. */
 const REGION_WILDCARDS = new Set(['전국', '전체'])
+
+/**
+ * 공고에 붙는 장르 와일드카드. 조합원 선택지가 아니다.
+ *
+ * **이 값은 통과시킨다.** 한때 막았다 — 2026-09-09 실측(n=64)에서 `['전체']` 15건 중
+ * 14건이 융자·행정 안내·교육·심리상담이라 "장르 특정 실패"의 표시로 봤기 때문이다.
+ * 그 노이즈의 정체는 kosmart의 life 계열 카테고리였고, **지금은 수집 요청이
+ * `categories=grant,gig,audition`으로 그것을 서버에서 잘라낸다**(`grantFetch.ts`).
+ * 근거가 사라진 규칙만 남아 멀쩡한 공고를 막고 있었다 — 2026-W39 실측에서 `['전체']`
+ * 5건이 전부 `category='grant'`였고 융자·행정은 0건이었다(화성 메세나, 크라우드펀딩
+ * 챌린지, 서울거리예술창작센터 국제 워크숍, 이음 예술창작 아카데미 2건).
+ */
+const GENRE_WILDCARD = '전체'
 
 /**
  * 이 회원에게 실제로 적용할 관심사.
@@ -50,14 +57,15 @@ export function effectiveInterests(profile: InterestLike): EffectiveInterests {
  *
  * 빈 배열은 통과가 아니다. `genres=[]`·`regions=[]`는 "전 장르·전국"이 아니라 **분류
  * 실패**이고, kosmart는 `regions=[]`에 제목 기반 지역 추론조차 적용하지 않아 경기·서울
- * 요청에 대구 현장 공고가 그대로 실려 온다. `genres=['전체']`도 마찬가지로 통과시키지
- * 않는다({@link REGION_WILDCARDS} 참고) — 지역 와일드카드 `'전국'`·`'전체'`만 남긴다.
+ * 요청에 대구 현장 공고가 그대로 실려 온다. 반면 명시된 와일드카드는 통과시킨다 —
+ * 지역은 {@link REGION_WILDCARDS}, 장르는 {@link GENRE_WILDCARD}.
  */
 export function matchesInterests(
   item: { genres: string[]; regions: string[] },
   interests: EffectiveInterests
 ): boolean {
-  const genreOk = item.genres.some(g => interests.genres.includes(g))
+  const genreOk =
+    item.genres.includes(GENRE_WILDCARD) || item.genres.some(g => interests.genres.includes(g))
 
   const regionOk =
     item.regions.some(r => REGION_WILDCARDS.has(r)) ||
