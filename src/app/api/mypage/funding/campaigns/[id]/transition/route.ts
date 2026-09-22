@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { requireActiveMember } from '@/lib/server/memberAuth'
-import { getCampaignById, listRewards, transitionCampaign } from '@/db/queries/funding'
-import { logUserActivity } from '@/db/queries/activities'
+import { getCampaignById, transitionCampaign } from '@/db/queries/funding'
+import { logUserActivity, type ActivityActionTypeValue } from '@/db/queries/activities'
 import { canManageCampaign } from '@/lib/server/fundingAuth'
-import { actorFor, isCampaignAction, nextStatus, type CampaignStatus } from '@/lib/funding/transitions'
+import { actorFor, isCampaignAction, nextStatus, type CampaignAction, type CampaignStatus } from '@/lib/funding/transitions'
+import { checkActionPreconditions } from '@/lib/funding/campaignPreconditions'
 import { notifyCampaignSubmitted } from '@/lib/funding/notify'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
@@ -13,6 +14,15 @@ import { createLogger } from '@/utils/logger'
 const log = createLogger('api/mypage/funding/transition')
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+
+/** 실제로 일어난 동작을 기록한다. 심사 어휘(`funding_campaign_reviewed`)는
+ * 승인·반려에만 쓴다 — 그 밖(withdraw·close)은 전용 어휘가 없으므로 범용
+ * 관리 행위(`admin_action`)로 남긴다. */
+function activityTypeFor(action: CampaignAction): ActivityActionTypeValue {
+  if (action === 'submit') return 'funding_campaign_submitted'
+  if (action === 'approve' || action === 'reject') return 'funding_campaign_reviewed'
+  return 'admin_action'
+}
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireActiveMember()
@@ -30,16 +40,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
   const from = campaign.status as CampaignStatus
   if (!nextStatus(from, action)) return ApiError.badRequest('지금 상태에서는 할 수 없는 동작입니다.').toNextResponse()
-  if (action === 'submit' && (await listRewards(id)).length === 0) {
-    return ApiError.badRequest('리워드를 하나 이상 만든 뒤 제출해 주세요.').toNextResponse()
-  }
+  const precondition = await checkActionPreconditions(id, action)
+  if (precondition.ok === false) return ApiError.badRequest(precondition.message).toNextResponse()
 
   const updated = await transitionCampaign({ id, action, expectedFrom: from })
   if (!updated) return ApiError.conflict('상태가 이미 바뀌었습니다. 새로고침해 주세요.').toNextResponse()
 
   logUserActivity({
     user_id: auth.user.id,
-    action_type: action === 'submit' ? 'funding_campaign_submitted' : 'admin_action',
+    action_type: activityTypeFor(action),
     target_type: 'funding_campaign', target_id: id, metadata: { action },
   }).catch(e => log.warn('활동 기록 실패', e))
   if (action === 'submit') notifyCampaignSubmitted(updated).catch(e => log.error('제출 알림 실패', e))

@@ -59,10 +59,28 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (scope === 'contentOnly') return ApiError.badRequest('공개된 프로젝트에서는 리워드를 삭제할 수 없습니다.').toNextResponse()
   }
 
-  for (const cur of existing) if (!incomingIds.has(String(cur.id))) await deleteReward(String(cur.id))
+  // 검증(위)은 all-or-nothing이다 — 하나라도 거절되면 이 아래는 아무것도
+  // 실행되지 않는다. 하지만 여기서부터는 트랜잭션이 아니다. DB 오류가 중간에
+  // 나면 이미 실행된 쓰기는 되돌리지 않는다. 그래서 생성·수정을 먼저 하고
+  // 삭제를 맨 마지막에 둔다 — 실패해도 "지우려던 게 아직 남은" 상태(다시
+  // 저장하면 회복된다)로 남지, "있던 리워드가 사라진" 상태로는 남지 않는다.
   for (const r of parsed.rewards) {
-    if (r.id) await updateReward(r.id, r)
-    else await createReward({ campaign_id: id, ...r })
+    if (!r.id) {
+      await createReward({ campaign_id: id, ...r })
+      continue
+    }
+    const cur = byId.get(r.id)
+    // 검증 시점엔 잠기지 않았더라도, 검증과 이 쓰기 사이에 결제가 확정돼
+    // 잠길 수 있다(가격이 바뀐 뒤 결제한 사람이 생기는 것을 막으려는 게 잠금의
+    // 목적이므로, 검증 한 번으로는 부족하다). 금액·배송 여부가 바뀌는
+    // 갱신은 DB에 "여전히 안 잠겨 있을 때만" 조건을 걸어 마지막 방어선을 둔다.
+    const changesLockedFields = cur !== undefined && (r.amount !== Number(cur.amount) || r.requires_shipping !== Boolean(cur.requires_shipping))
+    const wasUnlocked = !cur?.locked_at
+    const result = await updateReward(r.id, r, { requireUnlocked: wasUnlocked && changesLockedFields })
+    if (!result.changed) {
+      return ApiError.conflict(`'${cur?.title ?? r.title}' 리워드에 방금 후원이 들어왔습니다. 새로고침한 뒤 다시 시도해 주세요.`).toNextResponse()
+    }
   }
+  for (const cur of existing) if (!incomingIds.has(String(cur.id))) await deleteReward(String(cur.id))
   return ApiSuccess.ok({ rewards: await listRewards(id) }).toNextResponse()
 }

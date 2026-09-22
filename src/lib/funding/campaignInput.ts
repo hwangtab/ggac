@@ -14,6 +14,32 @@ function dateOrNull(v: unknown): string | null | false {
   if (typeof v !== 'string' || Number.isNaN(new Date(v).getTime())) return false
   return v
 }
+/**
+ * 연-월(`YYYY-MM`)만 받는다. `estimated_delivery`는 배송 예정월이지 날짜가
+ * 아니다 — 형식을 확인하지 않고 앞 7자만 자르면 전체 날짜가 조용히 "연-월"로
+ * 둔갑하고, 아무 문자 7개도 날짜처럼 저장된다.
+ */
+function yearMonthOrNull(v: unknown): string | null | false {
+  if (v === null || v === undefined || v === '') return null
+  if (typeof v !== 'string') return false
+  const trimmed = v.trim()
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(trimmed)) return false
+  return trimmed
+}
+/**
+ * 원 단위 정수만 허용한다. `Number()`에 값을 그대로 넘기면 `[1000000]`(단일
+ * 원소 배열)이 `1000000`으로, `'1e6'`이 `1000000`으로 둔갑한다. 숫자 모양을
+ * 정규식으로 먼저 확인한 뒤에만 변환한다 —
+ * `src/lib/payments/toss/protocol.ts`의 `toWon`과 같은 규칙이다.
+ */
+function toInt(v: unknown): number | null {
+  if (typeof v === 'number') return Number.isSafeInteger(v) ? v : null
+  if (typeof v !== 'string') return null
+  const trimmed = v.trim()
+  if (!/^-?\d+$/.test(trimmed)) return null
+  const n = Number(trimmed)
+  return Number.isSafeInteger(n) ? n : null
+}
 
 export function parseCampaignPatch(
   body: Record<string, unknown>,
@@ -31,9 +57,12 @@ export function parseCampaignPatch(
     const v = body[key]
     switch (key) {
       case 'title': {
-        const s = str(v, 80)
-        if (!s) return { ok: false, message: '제목을 입력해 주세요.' }
-        patch.title = s; break
+        // 잘라서 저장하면 "수정됐다"는 응답과 실제로 저장된 값이 달라진다 —
+        // 길이 초과는 summary와 같이 조용히 자르지 않고 거절한다.
+        if (typeof v !== 'string' || v.trim().length === 0) return { ok: false, message: '제목을 입력해 주세요.' }
+        const trimmed = v.trim()
+        if (trimmed.length > 80) return { ok: false, message: '제목은 80자 이내여야 합니다.' }
+        patch.title = trimmed; break
       }
       case 'summary': {
         const s = str(v, 200)
@@ -46,8 +75,8 @@ export function parseCampaignPatch(
         if (!(FUNDING_CATEGORY as readonly string[]).includes(String(v))) return { ok: false, message: '분류가 올바르지 않습니다.' }
         patch.category = v; break
       case 'goal_amount': {
-        const n = Number(v)
-        if (!Number.isSafeInteger(n) || n <= 0) return { ok: false, message: '목표 금액은 1원 이상의 정수입니다.' }
+        const n = toInt(v)
+        if (n === null || n <= 0) return { ok: false, message: '목표 금액은 1원 이상의 정수입니다.' }
         patch.goal_amount = n; break
       }
       case 'start_at':
@@ -93,14 +122,28 @@ export function parseRewardList(body: unknown): Verdict<{ rewards: RewardInput[]
       if (!Number.isSafeInteger(q) || q <= 0) return { ok: false, message: `${title}의 수량이 올바르지 않습니다.` }
       total_quantity = q
     }
+    // `=== true` 비교라 문자열 `"true"`가 조용히 false로 떨어졌었다 — 배송
+    // 여부가 뒤집히면 개설자 명단에서 주소가 통째로 빠지고 아무 오류도 없이
+    // 배송 정보가 사라진다. 진짜 boolean만 받고 그 밖은 거절한다.
+    let requires_shipping = false
+    if (r.requires_shipping !== undefined && r.requires_shipping !== null) {
+      if (typeof r.requires_shipping !== 'boolean') {
+        return { ok: false, message: `${title}의 배송 필요 여부는 true/false여야 합니다.` }
+      }
+      requires_shipping = r.requires_shipping
+    }
+    const estimatedDelivery = yearMonthOrNull(r.estimated_delivery)
+    if (estimatedDelivery === false) {
+      return { ok: false, message: `${title}의 예상 전달월은 YYYY-MM 형식이어야 합니다.` }
+    }
     rewards.push({
       id: typeof r.id === 'string' ? r.id : undefined,
       title,
       description: str(r.description, 1000),
       amount,
       total_quantity,
-      requires_shipping: r.requires_shipping === true,
-      estimated_delivery: str(r.estimated_delivery, 7),
+      requires_shipping,
+      estimated_delivery: estimatedDelivery,
       image_url: str(r.image_url, 500),
       sort_order: Number.isInteger(Number(r.sort_order)) ? Number(r.sort_order) : i,
     })

@@ -41,6 +41,7 @@ export async function POST(request: NextRequest) {
     start_at: (patch.start_at as string | null) ?? null,
     end_at: (patch.end_at as string | null) ?? null,
     cover_image: (patch.cover_image as string | null) ?? null,
+    og_image: (patch.og_image as string | null) ?? null,
     project_slug: (patch.project_slug as string | null) ?? null,
     terms_version: CREATOR_TERMS_VERSION,
   })
