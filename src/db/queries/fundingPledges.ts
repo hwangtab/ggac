@@ -3,7 +3,7 @@
  * 승인이 끝나면 확정하며, 주문번호(`order_id`)가 결제와 후원을 잇는 유일한 고리다.
  */
 
-import { and, desc, eq, gt, inArray, isNull, lte, or, sql } from 'drizzle-orm'
+import { and, desc, eq, gt, inArray, isNotNull, isNull, lte, or, sql } from 'drizzle-orm'
 
 import { db } from '../client.ts'
 import { fundingPledges, fundingRewards, payments } from '../schema/index.ts'
@@ -22,6 +22,27 @@ export class RewardSoldOutError extends Error {
     super(remaining > 0 ? `남은 수량이 ${remaining}개뿐입니다.` : '준비된 수량이 모두 소진되었습니다.')
     this.name = 'RewardSoldOutError'
     this.remaining = remaining
+  }
+}
+
+/**
+ * 이 프로젝트의 환불은 전부 전액 환불이다. 부분 환불을 모델링하려면 후원에
+ * "일부만 환불됨" 상태와 남은 금액이 따로 있어야 하는데 그 상태가 아직
+ * 없다 — 조용히 절반만 처리하고 `refunded`로 넘겨버리면 원장의 누적
+ * 취소액이 실제보다 적게 남고(다음 부분 환불이 매칭할 상태를 잃는다), 재고도
+ * 전액 환불처럼 통째로 풀리고, 후원자는 실제로는 일부만 돌려받았는데
+ * "환불 완료"로 보인다. 지원하지 못하는 입력은 조용히 잘못 처리하는 것보다
+ * 시끄럽게 거부하는 편이 낫다. 제대로 된 부분 환불은 이후 관리자 환불
+ * 화면과 함께 들어온다.
+ */
+export class PartialRefundUnsupportedError extends Error {
+  totalAmount: number
+  canceledAmount: number
+  constructor(totalAmount: number, canceledAmount: number) {
+    super(`부분 환불은 아직 지원하지 않습니다. 후원 금액 ${totalAmount}원 중 ${canceledAmount}원만 취소 요청됐습니다.`)
+    this.name = 'PartialRefundUnsupportedError'
+    this.totalAmount = totalAmount
+    this.canceledAmount = canceledAmount
   }
 }
 
@@ -231,11 +252,25 @@ export async function claimPledgeForCancel(
   return row ? rowToPledge(row as Row) : null
 }
 
+/**
+ * 취소 선점을 되돌린다(토스 거절 시). `canceled`이기만 하면 되돌리는 것으로는
+ * 부족하다 — `cancelPendingPledge`도 같은 `canceled` 상태를 만드는데, 그건
+ * `pending`에서 결제 한 번 없이 온 것이다. 그 id로 이 함수를 부르면 결제
+ * 연결도 결제 시각도 없는 후원이 `paid`가 되어 재고를 팔린 것처럼 차지하고
+ * 공개 명단에 빈 날짜로 나타난다. 실제로 결제가 붙었던(= `payment_id`가
+ * 있는) 후원만 되돌린다.
+ */
 export async function revertPledgeCancel(pledgeId: string): Promise<void> {
   await db
     .update(fundingPledges)
     .set({ status: 'paid', canceledAt: null })
-    .where(and(eq(fundingPledges.id, pledgeId), eq(fundingPledges.status, 'canceled')))
+    .where(
+      and(
+        eq(fundingPledges.id, pledgeId),
+        eq(fundingPledges.status, 'canceled'),
+        isNotNull(fundingPledges.paymentId)
+      )
+    )
 }
 
 /** 토스 환불이 끝난 뒤. 후원 `refunded`와 원장 누적 취소액을 한 트랜잭션으로. */
@@ -247,6 +282,18 @@ export async function finalizePledgeRefund(input: {
   raw: unknown
 }): Promise<Row | null> {
   return db.transaction(async tx => {
+    const [pledge] = await tx
+      .select({ totalAmount: fundingPledges.totalAmount })
+      .from(fundingPledges)
+      .where(and(eq(fundingPledges.id, input.pledgeId), eq(fundingPledges.paymentId, input.paymentId)))
+      .limit(1)
+    if (!pledge) return null
+    // 이 프로젝트의 환불은 전액뿐이다 — 후원 총액에 못 미치는 취소액은
+    // 아무것도 쓰지 않고 시끄럽게 거부한다(위 클래스 주석 참고).
+    if (input.canceledAmount < pledge.totalAmount) {
+      throw new PartialRefundUnsupportedError(pledge.totalAmount, input.canceledAmount)
+    }
+
     const [refunded] = await tx
       .update(fundingPledges)
       .set({ status: 'refunded', refundedAt: new Date() })
