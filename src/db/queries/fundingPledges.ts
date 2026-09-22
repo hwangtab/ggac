@@ -56,7 +56,15 @@ function rowToPledge(row: Row): Row {
   return snake
 }
 
-/** 재고를 차지하는 후원: paid이거나 아직 만료되지 않은 pending. */
+/**
+ * 재고를 차지하는 후원: paid이거나 아직 만료되지 않은 pending.
+ *
+ * `isNull(holdExpiresAt)` 가지는 오늘은 닿지 않는다 — `holdPledgeOnce`가
+ * 선점을 만들 때 항상 만료시각을 함께 새기므로 만료시각 없는 pending 행은
+ * 생기지 않는다. 생겼다면 만료 스윕(`listExpiredHolds`)이 절대 고르지
+ * 못해 영구히 재고를 차지하는 채로 남는다 — 티켓 예매 모듈에서 그대로
+ * 물려받은 모양이다.
+ */
 function occupyingCondition(now: Date) {
   return or(
     eq(fundingPledges.status, 'paid'),
@@ -303,6 +311,11 @@ export async function finalizePledgeRefund(input: {
       .where(and(eq(fundingPledges.id, input.pledgeId), eq(fundingPledges.paymentId, input.paymentId), inArray(fundingPledges.status, ['paid', 'canceled'])))
       .returning()
     if (!refunded) return null
+    // `canceledAmount < input.canceledAmount` 조건은 오늘은 닿지 않는다 —
+    // 이 후원 총액보다 작은 취소액은 위에서 이미 시끄럽게 거부되므로, 여기
+    // 도달하는 값은 항상 총액 이상이고 원장의 기존 누적 취소액(0 또는 같은
+    // 값)보다 작을 수 없다. 부분 환불이 실제로 모델링되면(위 클래스 주석
+    // 참고) 이 조건이 재전송된 낡은 통지를 걸러내는 실제 방어선이 된다.
     await tx
       .update(payments)
       .set({
