@@ -54,6 +54,30 @@ async function handle(request: NextRequest) {
       try {
         const p = await lookupPayment(String(payment.payment_key), { secretKey })
         if (!p) return 'not_found'
+        // 대기 상태인 원장 행의 payment_key는 confirm 라우트가 승인 호출
+        // *전에* 클라이언트가 보낸 값을 그대로 새긴 것이다(유실된 승인을
+        // 구하기 위한 조치) — 즉 검증된 승인에서 나왔다는 보장이 없다.
+        // 자신의 대기 후원에 남의 이미 승인된 결제의 paymentKey를 실어
+        // 보내면, confirm의 토스 승인 호출은 "이미 처리됨"으로 실패해
+        // 정리되는 게 정상이지만 그 요청이 도중에 죽으면(타임아웃·인스턴스
+        // 종료) payment_key가 대기 행에 남는다. 다음 스윕이 이걸 그대로
+        // 승격시키면 남의 결제를 자기 후원으로 가로챈다. 그래서 토스가
+        // 말하는 결제가 *이 주문의 결제가 맞는지*를 승격 전에 반드시
+        // 확인한다 — 주문번호와 금액이 우리 원장과 일치해야만 믿는다.
+        const tossOrderId = typeof p.orderId === 'string' ? p.orderId : null
+        const tossTotalAmount = Number(p.totalAmount)
+        const expectedAmount = Number(payment.amount)
+        if (tossOrderId !== orderId || !Number.isFinite(tossTotalAmount) || tossTotalAmount !== expectedAmount) {
+          log.error('스윕 대상 결제가 이 주문의 것이 아님 — 승격·만료 모두 보류', {
+            orderId,
+            paymentKey: payment.payment_key,
+            expectedOrderId: orderId,
+            receivedOrderId: tossOrderId,
+            expectedAmount,
+            receivedAmount: tossTotalAmount,
+          })
+          return 'unknown'
+        }
         return {
           status: String(p.status),
           paymentKey: String(p.paymentKey),
