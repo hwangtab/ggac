@@ -11,7 +11,7 @@ import { getPaymentByOrderId, markPaymentFailed, recordPaymentKey } from '@/db/q
 import { getPledgeById, finalizePledgePayment, cancelPendingPledge } from '@/db/queries/fundingPledges'
 import { getCampaignById } from '@/db/queries/funding'
 import { assertAmountMatches, AmountMismatchError } from '@/lib/payments/toss/protocol'
-import { confirmPayment, cancelPayment, TossApiError, TossLookupError } from '@/lib/payments/toss/client'
+import { confirmPayment, cancelPayment, lookupPayment, TossApiError, TossLookupError } from '@/lib/payments/toss/client'
 import { getServerPaymentConfig, isPaymentEnabled } from '@/lib/payments/toss/config'
 import { notifyPledgePaid } from '@/lib/funding/notify'
 import { parseJsonObjectBody } from '@/utils/requestBody'
@@ -106,18 +106,50 @@ export async function POST(request: NextRequest) {
     try {
       approved = await confirmPayment({ paymentKey, orderId, amount: storedAmount }, { secretKey })
     } catch (error) {
-      if (error instanceof TossApiError) {
+      // `ALREADY_PROCESSED_PAYMENT`는 거절이 아니다 — 우리 쪽 승인 응답이
+      // 유실되고 나서 이 라우트가 재시도(재전송 버튼)됐을 때 정확히 이
+      // 코드가 온다. 이 시점에 돈은 이미 승인돼 있다. 다른 거절과 같이
+      // 취급해 취소해 버리면 승인은 됐는데 후원은 취소돼 돈만 잃는다.
+      // 그래서 이 코드만 따로 떼어 토스에 다시 물어보고, 정말 이 주문·이
+      // 금액의 승인이 맞을 때만 성공 경로로 넘긴다. 확인이 안 되면(다른
+      // 결제이거나 조회 자체가 안 되면) 절대 취소하지 않고 "확인 중"
+      // 응답으로 물러난다 — 취소는 되돌릴 수 없지만 재확인은 다음 기회가
+      // 있다.
+      if (error instanceof TossApiError && error.code === 'ALREADY_PROCESSED_PAYMENT') {
+        let recheck: Record<string, unknown> | null = null
+        try {
+          recheck = await lookupPayment(paymentKey, { secretKey })
+        } catch {
+          recheck = null
+        }
+        const belongsToThisOrder =
+          recheck !== null &&
+          String(recheck.status) === 'DONE' &&
+          recheck.orderId === orderId &&
+          Number(recheck.totalAmount) === storedAmount
+        if (belongsToThisOrder && recheck) {
+          approved = recheck
+        } else {
+          log.error('이미 처리된 결제 재확인 실패 — 취소하지 않고 보류', {
+            orderId,
+            receivedOrderId: recheck ? recheck.orderId : undefined,
+            receivedAmount: recheck ? recheck.totalAmount : undefined,
+            expectedAmount: storedAmount,
+          })
+          return ApiError.serviceUnavailable('결제 결과를 확인하는 중입니다. 잠시 후 후원 내역을 확인해 주세요.').toNextResponse()
+        }
+      } else if (error instanceof TossApiError) {
         await markPaymentFailed(orderId, { code: error.code, message: error.message })
         await cancelPendingPledge(pledgeId, orderId)
         log.warn('후원 결제 거절', { orderId, code: error.code })
         return ApiError.badRequest(error.message).toNextResponse()
-      }
-      if (error instanceof TossLookupError) {
+      } else if (error instanceof TossLookupError) {
         // 승인됐는지 모른다. 아무것도 건드리지 않는다 — 만료 크론이 토스를 다시 본다.
         log.error('후원 결제 판단 불가', { orderId, message: error.message })
         return ApiError.serviceUnavailable('결제 결과를 확인하는 중입니다. 잠시 후 후원 내역을 확인해 주세요.').toNextResponse()
+      } else {
+        throw error
       }
-      throw error
     }
 
     const approvedAtRaw = typeof approved.approvedAt === 'string' ? approved.approvedAt : new Date().toISOString()
