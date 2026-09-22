@@ -1,38 +1,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { register } from 'node:module'
+
+import { registerAliasResolveHook } from './aliasResolveHook.mjs'
 
 // fundingAuth.ts는 `@/lib/server/authz` 같은 tsconfig 경로 별칭을 정적
 // import한다. 플레인 `node --test`의 ESM 리졸버는 번들러 전용 별칭인 `@/*`를
-// 풀지 못하므로, memberAuth.test.mjs와 같은 해석 훅을 여기서도 등록한다.
-const projectRootUrl = new URL('../../', import.meta.url).href
-const resolveHookSource = `
-const ROOT = ${JSON.stringify(projectRootUrl)}
-const FALLBACK_SUFFIXES = ['.ts', '.js', '/index.ts']
-
-export async function resolve(specifier, context, nextResolve) {
-  if (specifier.startsWith('@/')) {
-    return { url: new URL('src/' + specifier.slice(2) + '.ts', ROOT).href, shortCircuit: true }
-  }
-  try {
-    return await nextResolve(specifier, context)
-  } catch (err) {
-    const isResolutionError =
-      err && (err.code === 'ERR_MODULE_NOT_FOUND' || err.code === 'ERR_UNSUPPORTED_DIR_IMPORT')
-    if (isResolutionError && !specifier.endsWith('.ts') && !specifier.endsWith('.js')) {
-      for (const suffix of FALLBACK_SUFFIXES) {
-        try {
-          return await nextResolve(specifier + suffix, context)
-        } catch {
-          // 다음 후보 확장자로 계속 시도한다.
-        }
-      }
-    }
-    throw err
-  }
-}
-`
-register('data:text/javascript,' + encodeURIComponent(resolveHookSource), import.meta.url)
+// 풀지 못하므로, 공용 해석 훅(memberAuth.test.mjs가 처음 만든 것과 같은
+// 내용)을 여기서 등록한다.
+registerAliasResolveHook(import.meta.url)
 
 const { canManageCampaign, canReviewCampaign, canViewPledge } = await import(
   '../../src/lib/server/fundingAuth.ts'
