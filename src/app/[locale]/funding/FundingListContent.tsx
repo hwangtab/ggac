@@ -87,10 +87,10 @@ function CampaignCard({
   return (
     <Link
       href={`/funding/${campaign.slug}`}
-      // tailwind.config.js의 `tw-card-interactive`는 `@apply cursor-pointer group`을
-      // 쓰는데, Tailwind는 `@apply`로 group/peer 유틸리티를 적용하는 것을 금지한다
-      // (실제로 클래스가 쓰이는 순간 빌드가 깨진다). 그래서 직접 클래스를 쌓는다 —
-      // 예매 목록 카드의 hover 처리에 `group`만 더한다.
+      // tailwind.config.js가 정의한 공용 인터랙티브 카드 유틸리티는 구현이
+      // 잘못되어 있다(`@apply`로 group/peer 유틸리티를 적용하는 것을 Tailwind가
+      // 금지한다 — 실제로 쓰이는 순간 빌드가 깨진다). 그래서 그 이름을 쓰지 않고
+      // 직접 클래스를 쌓는다 — 예매 목록 카드의 hover 처리에 `group`만 더한다.
       className="group block cursor-pointer overflow-hidden rounded-xl border border-gray-200 bg-white transition hover:border-primary-400 hover:shadow-md"
     >
       <div className="relative aspect-[16/9] w-full overflow-hidden bg-gray-100">
