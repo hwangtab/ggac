@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server'
 import { getCampaignById } from '@/db/queries/funding'
 import { getPledgeByCodeAndEmail } from '@/db/queries/fundingPledges'
 import { isPledgeCode } from '@/lib/funding/pledgeCode'
+import { toPublicPledgeFields } from '@/lib/funding/pledgeView'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { applyRouteRateLimit, createIPKeyGenerator } from '@/lib/server/rateLimit'
@@ -16,14 +17,7 @@ export const dynamic = 'force-dynamic'
 /** 후원자에게 보여줄 필드만. 배송지·전화·관리자 메모는 내보내지 않는다. */
 function publicView(pledge: Record<string, unknown>, campaign: Record<string, unknown> | null) {
   return {
-    pledge_code: pledge.pledge_code,
-    status: pledge.status,
-    reward_title: pledge.reward_title,
-    quantity: pledge.quantity,
-    additional_amount: pledge.additional_amount,
-    total_amount: pledge.total_amount,
-    paid_at: pledge.paid_at,
-    fulfillment_status: pledge.fulfillment_status,
+    ...toPublicPledgeFields(pledge),
     campaign_slug: campaign?.slug ?? null,
     campaign_title: campaign?.title ?? null,
     campaign_status: campaign?.status ?? null,
