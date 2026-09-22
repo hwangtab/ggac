@@ -17,7 +17,7 @@ import { membershipDues, payments } from '../schema/index.ts'
 
 import { toIso, toSnakeCase } from './_helpers.ts'
 
-export type PaymentKind = 'dues' | 'ticket'
+export type PaymentKind = 'dues' | 'ticket' | 'funding'
 
 export interface CreatePendingPaymentInput {
   orderId: string
@@ -91,6 +91,24 @@ export async function getPaymentByOrderId(
 export async function getPaymentById(id: string): Promise<Record<string, unknown> | null> {
   const rows = await db.select().from(payments).where(eq(payments.id, id)).limit(1)
   return rows[0] ? rowToPayment(rows[0]) : null
+}
+
+/**
+ * 승인 요청을 보내기 **직전에** 결제 식별자만 새긴다. **대기 상태인 행만** 바꾼다.
+ *
+ * 순서가 핵심이다. 이 식별자를 승인 호출 *뒤에*(확정 함수 안에서만) 적으면,
+ * 토스는 승인해 카드를 긁었는데 우리 쪽 confirm 응답이 타임아웃이나 프로세스
+ * 죽음으로 유실된 경우 원장에 식별자가 전혀 남지 않는다. 만료 크론은 이
+ * 식별자로 결제를 찾아 조회하므로, 그 순간 크론은 "결제가 없다"로 오판해
+ * 선점을 만료시키고 재고를 풀어버린다 — 카드는 긁혔는데 후원은 사라진다.
+ * 여기서 먼저 적어 두면, 그 뒤 확정이 유실돼도 크론이 이 식별자로 토스를
+ * 조회해 승인 여부를 직접 확인할 수 있다.
+ */
+export async function recordPaymentKey(orderId: string, paymentKey: string): Promise<void> {
+  await db
+    .update(payments)
+    .set({ paymentKey })
+    .where(and(eq(payments.orderId, orderId), eq(payments.status, 'pending')))
 }
 
 /**

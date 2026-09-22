@@ -23,6 +23,11 @@ export const ACTIVITY_ACTION_TYPES = [
   'search_performed',
   'page_viewed',
   'attachment_downloaded',
+  'funding_campaign_created',
+  'funding_campaign_submitted',
+  'funding_campaign_reviewed',
+  'funding_pledge_paid',
+  'funding_pledge_canceled',
 ] as const satisfies readonly ActivityActionType[]
 
 export const ACTIVITY_TARGET_TYPES = [
@@ -35,6 +40,8 @@ export const ACTIVITY_TARGET_TYPES = [
   'notification',
   'system',
   'inbound_email_attachment',
+  'funding_campaign',
+  'funding_pledge',
 ] as const satisfies readonly ActivityTargetType[]
 
 export function parseActivityActionType(value: unknown): ActivityActionType | null {

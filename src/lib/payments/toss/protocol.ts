@@ -28,7 +28,7 @@ export function buildAuthHeader(secretKey: string): string {
 }
 
 /** 주문번호에 붙는 용도 접두사. 나중에 원장을 눈으로 훑을 때 구분된다. */
-export type OrderKind = 'dues' | 'ticket'
+export type OrderKind = 'dues' | 'ticket' | 'funding'
 
 /**
  * 토스 주문번호.

@@ -109,3 +109,6 @@ e2e/.auth/
 # 담고 있어 하드코딩된 값이 있으면 그대로 함께 커밋된다(실제로 옛 Supabase
 # anon 키가 이 캐시에 남아 있었다).
 .serena/cache/
+
+# 격리 워크트리 작업 산출물 (superpowers:subagent-driven-development)
+.superpowers/
