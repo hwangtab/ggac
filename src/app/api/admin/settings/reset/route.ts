@@ -230,6 +230,17 @@ const DEFAULT_SETTINGS = [
     description: '소셜 기능 설정',
     is_sensitive: false,
   },
+  {
+    category: 'features',
+    setting_key: 'funding_features',
+    setting_value: {
+      enabled: false,
+      platform_fee_rate_bp: 0,
+      hold_minutes: 10,
+    },
+    description: '크라우드펀딩 기능 설정',
+    is_sensitive: false,
+  },
 ]
 
 // POST: 모든 설정을 기본값으로 복원

@@ -17,7 +17,7 @@ import { createPendingPayment } from '@/db/queries/payments'
 import { PledgeAmountError, computePledgeTotal } from '@/lib/funding/amounts'
 import { generateOrderId, buildCustomerKey } from '@/lib/payments/toss/protocol'
 import { isPaymentEnabled, getPublicClientKey } from '@/lib/payments/toss/config'
-import { isFundingEnabled } from '@/lib/funding/settings'
+import { getFundingSettings } from '@/lib/funding/settings'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { applyRouteRateLimit, createIPKeyGenerator } from '@/lib/server/rateLimit'
@@ -39,7 +39,8 @@ function normalizePhone(v: unknown): string {
 
 export async function POST(request: NextRequest) {
   try {
-    if (!isPaymentEnabled() || !(await isFundingEnabled())) {
+    const fundingSettings = await getFundingSettings()
+    if (!isPaymentEnabled() || !fundingSettings.enabled) {
       return ApiError.serviceUnavailable('펀딩을 준비 중입니다.').toNextResponse()
     }
     // 선점은 돈 없이 재고를 줄인다. 429만 막고 503은 통과(티켓과 같은 이유).
@@ -129,6 +130,7 @@ export async function POST(request: NextRequest) {
         message_public: body.messagePublic === true,
         shipping,
         terms_version: FUNDING_TERMS_VERSION,
+        hold_minutes: fundingSettings.hold_minutes,
       })
     } catch (error) {
       if (error instanceof RewardSoldOutError) return ApiError.badRequest(error.message).toNextResponse()

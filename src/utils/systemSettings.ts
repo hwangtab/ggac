@@ -104,6 +104,11 @@ interface SystemSettingsData {
       follow_system: boolean
       activity_feed: boolean
     }
+    funding_features: {
+      enabled: boolean
+      platform_fee_rate_bp: number
+      hold_minutes: number
+    }
   }
 }
 
@@ -211,6 +216,11 @@ function getDefaultSettings(): SystemSettingsData {
         sharing_enabled: true,
         follow_system: false,
         activity_feed: true,
+      },
+      funding_features: {
+        enabled: false,
+        platform_fee_rate_bp: 0,
+        hold_minutes: 10,
       },
     },
   }

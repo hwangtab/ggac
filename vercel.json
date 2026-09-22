@@ -9,6 +9,10 @@
     {
       "path": "/api/internal/mailbox/backfill",
       "schedule": "15 * * * *"
+    },
+    {
+      "path": "/api/internal/funding/expire",
+      "schedule": "*/10 * * * *"
     }
   ]
 }
