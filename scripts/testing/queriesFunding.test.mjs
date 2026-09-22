@@ -73,17 +73,11 @@ test('updateCampaignFields는 허용 키만 반영한다', async () => {
   assert.equal(updated.platform_fee_rate, 0)
 })
 
-test('리워드 CRUD와 잠금', async () => {
+test('리워드 CRUD', async () => {
   const c = await q.createCampaign({ owner_user_id: 'u1', title: 't', summary: 's', goal_amount: 1 })
   const r = await q.createReward({ campaign_id: c.id, title: 'CD', amount: 30000, total_quantity: 50 })
   assert.equal(r.locked_at, null)
   assert.equal((await q.listRewards(c.id)).length, 1)
-  await q.lockRewardIfUnlocked(r.id, new Date('2026-09-21T00:00:00Z'))
-  const locked = await q.getReward(r.id)
-  assert.equal(locked.locked_at, '2026-09-21T00:00:00.000Z')
-  // 두 번째 잠금은 첫 시각을 덮지 않는다
-  await q.lockRewardIfUnlocked(r.id, new Date('2026-10-01T00:00:00Z'))
-  assert.equal((await q.getReward(r.id)).locked_at, '2026-09-21T00:00:00.000Z')
   assert.equal(await q.deleteReward(r.id), true)
   assert.equal(await q.getReward(r.id), null)
 })

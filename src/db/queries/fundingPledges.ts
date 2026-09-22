@@ -228,6 +228,9 @@ export async function finalizePledgePayment(input: {
       .set({ status: 'done', paymentKey: input.paymentKey, method: input.method, approvedAt: input.approvedAt, rawResponse: input.raw, failureCode: null, failureMessage: null })
       .where(eq(payments.id, payment.id))
 
+    // 의도적으로 인라인이다: 이 트랜잭션 핸들(tx) 위에서 실행돼야 하므로
+    // 모듈 수준 커넥션을 닫는 별도 헬퍼로 뺄 수 없다 — 뺐다면 이 확정과
+    // 다른 트랜잭션이었을 커밋 시점을 가진다.
     await tx
       .update(fundingRewards)
       .set({ lockedAt: input.approvedAt })

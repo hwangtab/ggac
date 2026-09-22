@@ -254,7 +254,8 @@ export async function createReward(input: {
 /**
  * `requireUnlocked`가 있으면 `WHERE locked_at IS NULL`을 같이 걸어 갱신한다.
  * 검증 시점(`evaluateRewardPatch`)과 이 쓰기 사이에 결제가 확정돼 리워드가
- * 잠기면(`lockRewardIfUnlocked`) 이 조건에 걸려 0행이 되고, 그 값을 호출자가
+ * 잠기면(`fundingPledges.ts`의 `finalizePledgePayment`가 트랜잭션 안에서
+ * 인라인으로 잠근다) 이 조건에 걸려 0행이 되고, 그 값을 호출자가
  * `changed: false`로 받는다 — 검증을 통과한 뒤에도 경합으로 잠길 수 있으므로
  * 마지막 방어선은 DB 조건이다.
  */
@@ -299,12 +300,4 @@ export async function updateReward(
 export async function deleteReward(id: string): Promise<boolean> {
   const rows = await db.delete(fundingRewards).where(eq(fundingRewards.id, id)).returning({ id: fundingRewards.id })
   return rows.length > 0
-}
-
-/** 첫 결제가 붙을 때 한 번만 찍는다. 이미 찍힌 시각은 덮지 않는다. */
-export async function lockRewardIfUnlocked(id: string, now: Date = new Date()): Promise<void> {
-  await db
-    .update(fundingRewards)
-    .set({ lockedAt: now })
-    .where(and(eq(fundingRewards.id, id), isNull(fundingRewards.lockedAt)))
 }
