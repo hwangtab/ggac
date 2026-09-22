@@ -68,7 +68,13 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
   const [isAnonymous, setIsAnonymous] = useState(false)
   const [error, setError] = useState('')
   const [preparing, setPreparing] = useState(false)
-  const [prepared, setPrepared] = useState<Prepared | null>(null)
+  // 서버가 선점(reservation)을 돌려주는 순간 여기 세운다 — 위젯 로드는
+  // 별개 단계다. 위젯이 실패해도 이 값은 남아 있어야, 다시 눌렀을 때 새
+  // 선점을 또 만들지 않고 같은 선점으로 위젯만 다시 연다(아래 `retryWidget`).
+  const [reservation, setReservation] = useState<Prepared | null>(null)
+  // 결제창(위젯)이 실제로 뜬 상태인가. `reservation`과 분리해 둬야 "선점은
+  // 됐는데 위젯만 실패"한 상태를 표현할 수 있다.
+  const [widgetReady, setWidgetReady] = useState(false)
   const widgetsRef = useRef<unknown>(null)
   const errorRef = useRef<HTMLDivElement | null>(null)
 
@@ -77,6 +83,12 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
   // 초과 판매를 막는 진짜 경계는 여전히 선점 트랜잭션이고, 이건 사람이 5분을
   // 들여 정보를 다 채운 뒤에야 매진을 알게 되는 낭비를 줄이기 위한 보정이다.
   const [rewards, setRewards] = useState<Reward[]>(campaign.rewards)
+  // 갱신이 끝나는 시점의 최신 선택값을 보려면 ref가 필요하다 — 이 effect는
+  // 마운트 시 한 번만 걸리므로 클로저 안의 `rewardId`는 갱신되지 않는다.
+  const rewardIdRef = useRef(rewardId)
+  useEffect(() => {
+    rewardIdRef.current = rewardId
+  }, [rewardId])
   useEffect(() => {
     let canceled = false
     void (async () => {
@@ -91,11 +103,20 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
         } | null
         const stock = result?.data?.stock
         if (canceled || !stock || typeof stock !== 'object') return
-        setRewards(prev =>
-          prev.map(r =>
+        // 남은 수량이 이미 고른 수량보다 줄었으면, 선택지가 줄어드는 것과
+        // 같은 순간에 고른 값도 함께 내린다 — 따로 두면 화면은 줄어든
+        // 선택지의 첫 값을 그리는데 총액·선점 요청은 예전 수량을 쓴다.
+        setRewards(prev => {
+          const next = prev.map(r =>
             Object.hasOwn(stock, r.id) ? { ...r, remaining_quantity: stock[r.id] } : r
           )
-        )
+          const selected = next.find(r => r.id === rewardIdRef.current)
+          if (selected && selected.remaining_quantity !== null) {
+            const max = Math.max(1, Math.min(MAX_QUANTITY, selected.remaining_quantity))
+            setQuantity(q => Math.min(q, max))
+          }
+          return next
+        })
       } catch {
         // 갱신 실패는 조용히 넘긴다 — 서버가 넘겨준 값으로도 후원은 된다.
       }
@@ -143,6 +164,50 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
     reward?.remaining_quantity !== null && reward?.remaining_quantity !== undefined
       ? Math.min(MAX_QUANTITY, reward.remaining_quantity)
       : MAX_QUANTITY
+
+  /**
+   * 선점(reservation)을 이미 손에 쥔 채로 위젯만 새로 연다. 광고 차단기·
+   * 일시적인 스크립트 오류처럼 위젯 쪽만 실패했을 때 쓴다 — 새 선점을
+   * 만들지 않으므로, 방금 내가 잡은 재고가 나 자신을 "품절"로 막는 일이
+   * 없다.
+   */
+  const loadWidget = useCallback(
+    async (order: Prepared) => {
+      try {
+        const tossPayments = await loadTossPayments(order.clientKey)
+        const widgets = tossPayments.widgets({ customerKey: order.customerKey })
+        await widgets.setAmount({ currency: 'KRW', value: order.amount })
+        await Promise.all([
+          widgets.renderPaymentMethods({
+            selector: '#funding-payment-method',
+            variantKey: 'DEFAULT',
+          }),
+          widgets.renderAgreement({
+            selector: '#funding-payment-agreement',
+            variantKey: 'AGREEMENT',
+          }),
+        ])
+        widgetsRef.current = widgets
+        setWidgetReady(true)
+      } catch (caught) {
+        console.error('결제창 준비 실패:', caught)
+        setWidgetReady(false)
+        setError(t('fail.defaultMessage'))
+      }
+    },
+    [t]
+  )
+
+  const retryWidget = useCallback(async () => {
+    if (!reservation) return
+    setError('')
+    setPreparing(true)
+    try {
+      await loadWidget(reservation)
+    } finally {
+      setPreparing(false)
+    }
+  }, [reservation, loadWidget])
 
   const startPledge = useCallback(async () => {
     setError('')
@@ -221,24 +286,11 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
       }
       const order = body.data
 
-      // 위젯 생성·렌더가 실패하면 `prepared`를 세우지 않는다 — 미리 세워 두면
-      // 폼 섹션이 숨겨진 채로 결제 섹션(빈 위젯, 눌러도 반응 없는 버튼)만 남아
-      // 새로고침 말고는 빠져나올 길이 없고, 새로고침은 선점 전체를 버린다.
-      const tossPayments = await loadTossPayments(order.clientKey)
-      const widgets = tossPayments.widgets({ customerKey: order.customerKey })
-      await widgets.setAmount({ currency: 'KRW', value: order.amount })
-      await Promise.all([
-        widgets.renderPaymentMethods({
-          selector: '#funding-payment-method',
-          variantKey: 'DEFAULT',
-        }),
-        widgets.renderAgreement({
-          selector: '#funding-payment-agreement',
-          variantKey: 'AGREEMENT',
-        }),
-      ])
-      widgetsRef.current = widgets
-      setPrepared(order)
+      // 서버가 선점에 성공한 시점에 즉시 세운다 — 위젯이 이어서 실패해도
+      // 이 선점은 잊히지 않는다. 폼 섹션은 이 값이 서는 순간 숨는다(아래
+      // 렌더 참고), 그러니 다시 눌러도 `startPledge`가 또 불리지 않는다.
+      setReservation(order)
+      await loadWidget(order)
     } catch (caught) {
       console.error('후원 준비 실패:', caught)
       setError(t('fail.defaultMessage'))
@@ -258,6 +310,7 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
     messagePublic,
     isAnonymous,
     campaign.id,
+    loadWidget,
     t,
   ])
 
@@ -265,23 +318,23 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
     const widgets = widgetsRef.current as {
       requestPayment: (input: Record<string, unknown>) => Promise<void>
     } | null
-    if (!widgets || !prepared) return
+    if (!widgets || !reservation) return
     try {
       const successUrl = new URL('/funding/success', window.location.origin)
-      successUrl.searchParams.set('pledgeId', prepared.pledgeId)
+      successUrl.searchParams.set('pledgeId', reservation.pledgeId)
       await widgets.requestPayment({
-        orderId: prepared.orderId,
-        orderName: prepared.orderName,
+        orderId: reservation.orderId,
+        orderName: reservation.orderName,
         successUrl: successUrl.toString(),
         failUrl: `${window.location.origin}/funding/fail`,
-        customerName: prepared.customerName,
-        customerEmail: prepared.customerEmail,
+        customerName: reservation.customerName,
+        customerEmail: reservation.customerEmail,
       })
     } catch (caught) {
       console.error('결제창 실패:', caught)
       setError(t('fail.defaultMessage'))
     }
-  }, [prepared, t])
+  }, [reservation, t])
 
   // 배너는 폼 맨 위에 있고 제출 버튼은 맨 아래에 있다 — 스크린리더가 읽어
   // 주는 것과 별개로, 화면을 눈으로 보는 사람도 아래에서 제출하면 배너가 바뀐
@@ -316,8 +369,10 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
         </div>
       ) : null}
 
-      {/* 후원 폼 — 결제창이 열리기 전까지만 보인다 */}
-      <section className={prepared ? 'hidden' : 'rounded-lg border border-gray-200 bg-white p-6'}>
+      {/* 후원 폼 — 선점(reservation)이 서기 전까지만 보인다 */}
+      <section
+        className={reservation ? 'hidden' : 'rounded-lg border border-gray-200 bg-white p-6'}
+      >
         <h2 className="text-lg font-semibold text-gray-900">{t('form.heading')}</h2>
 
         <div className="mt-5 space-y-5">
@@ -366,6 +421,14 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
                           : r.remaining_quantity === null
                             ? t('reward.unlimited')
                             : t('reward.remaining', { count: r.remaining_quantity })}
+                      </span>
+                      {/* 배송 여부·예상 발송월. 실물이 오는지, 언제쯤인지는
+                          커밋 전에 알아야 한다 — 수량·가격만으로는 안 보인다. */}
+                      <span className="mt-1 block text-xs text-gray-500">
+                        {r.requires_shipping ? t('reward.shipping') : t('reward.noShipping')}
+                        {r.requires_shipping && r.estimated_delivery
+                          ? ` · ${t('reward.delivery', { month: r.estimated_delivery })}`
+                          : ''}
                       </span>
                     </span>
                   </label>
@@ -595,22 +658,39 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
         </div>
       </section>
 
-      {/* 결제창 */}
-      <section className={prepared ? 'block' : 'hidden'}>
+      {/* 결제창 — 선점이 서 있는 동안만 보인다. 위젯이 아직 안 떴으면
+          (실패했거나 다시 여는 중이면) 위젯 자리 대신 재시도 버튼을 보인다 —
+          빈 위젯·눌러도 반응 없는 버튼만 남기지 않는다. */}
+      <section className={reservation ? 'block' : 'hidden'}>
         <h2 className="mb-4 text-lg font-semibold text-gray-900">{t('form.paymentHeading')}</h2>
-        <div id="funding-payment-method" />
-        <div id="funding-payment-agreement" />
-        <button
-          type="button"
-          onClick={() => void requestPayment()}
-          className="mt-4 w-full rounded-lg bg-primary-600 px-5 py-3 font-medium text-white transition hover:bg-primary-700"
-        >
-          {prepared
-            ? t('form.payButton', {
-                amount: t('progress.amount', { amount: formatAmount(prepared.amount, locale) }),
-              })
-            : t('form.submit')}
-        </button>
+        {widgetReady ? (
+          <>
+            <div id="funding-payment-method" />
+            <div id="funding-payment-agreement" />
+            <button
+              type="button"
+              onClick={() => void requestPayment()}
+              className="mt-4 w-full rounded-lg bg-primary-600 px-5 py-3 font-medium text-white transition hover:bg-primary-700"
+            >
+              {reservation
+                ? t('form.payButton', {
+                    amount: t('progress.amount', {
+                      amount: formatAmount(reservation.amount, locale),
+                    }),
+                  })
+                : t('form.submit')}
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => void retryWidget()}
+            disabled={preparing}
+            className="w-full rounded-lg border border-primary-600 px-5 py-3 font-medium text-primary-600 transition hover:bg-primary-50 disabled:opacity-50"
+          >
+            {preparing ? t('form.submitting') : t('form.retryWidget')}
+          </button>
+        )}
       </section>
     </div>
   )
