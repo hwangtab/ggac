@@ -31,9 +31,14 @@ function FailInner() {
         <FiAlertCircle className="mx-auto h-10 w-10 text-red-500" aria-hidden />
         <h1 className="mt-4 text-xl font-semibold text-gray-900">{t('fail.title')}</h1>
         <p className="mt-2 text-gray-600">{message}</p>
-        <Link href="/funding" className="tw-btn-primary mt-6 inline-flex">
-          {t('fail.toList')}
-        </Link>
+        <div className="mt-6 flex flex-wrap justify-center gap-3">
+          <Link href="/funding" className="tw-btn-primary inline-flex">
+            {t('fail.toList')}
+          </Link>
+          <a href="mailto:contact@ggac.kr" className="tw-btn-secondary inline-flex">
+            {t('common.contactOffice')}
+          </a>
+        </div>
       </div>
     </div>
   )

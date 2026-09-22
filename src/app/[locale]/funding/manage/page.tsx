@@ -11,7 +11,7 @@
  * 두 경우 모두 같은 404를 준다.
  */
 
-import { useTranslations } from 'next-intl'
+import { useLocale, useTranslations } from 'next-intl'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { FiAlertCircle } from 'react-icons/fi'
 
@@ -38,6 +38,7 @@ interface PledgeView {
 
 export default function FundingManagePage() {
   const t = useTranslations('funding')
+  const locale = useLocale()
   const [code, setCode] = useState('')
   const [email, setEmail] = useState('')
   const [pledge, setPledge] = useState<PledgeView | null>(null)
@@ -121,7 +122,7 @@ export default function FundingManagePage() {
     const isRetry = pledge.status === 'canceled' && pledge.refund_retry_possible
     const confirmText = isRetry
       ? t('manage.retryConfirm')
-      : t('manage.cancelConfirm', { amount: formatAmount(pledge.total_amount, 'ko') })
+      : t('manage.cancelConfirm', { amount: formatAmount(pledge.total_amount, locale) })
     if (!window.confirm(confirmText)) return
     setError('')
     setNotice('')
@@ -251,9 +252,9 @@ export default function FundingManagePage() {
               />
               <Row
                 label={t('form.total')}
-                value={t('progress.amount', { amount: formatAmount(pledge.total_amount, 'ko') })}
+                value={t('progress.amount', { amount: formatAmount(pledge.total_amount, locale) })}
               />
-              <Row label={t('success.title')} value={t(`status.${pledge.status}`)} />
+              <Row label={t('manage.status')} value={t(`status.${pledge.status}`)} />
             </dl>
             {canCancel || canRetryRefund ? (
               <button

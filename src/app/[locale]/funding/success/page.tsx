@@ -8,24 +8,29 @@
  * 그래서 확인이 끝나기 전에는 "후원이 확정되었습니다"를 쓰지 않는다.
  */
 
-import { useTranslations } from 'next-intl'
+import { useLocale, useTranslations } from 'next-intl'
 import { Suspense, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { FiCheckCircle, FiAlertCircle, FiLoader } from 'react-icons/fi'
+import { FiCheckCircle, FiAlertCircle, FiHelpCircle, FiLoader } from 'react-icons/fi'
 
 import { Link } from '@/i18n/navigation'
 
 import { formatAmount } from '../format'
 
-type Phase = 'confirming' | 'done' | 'failed'
+// 'checking'은 실패가 아니다 — 토스 승인 조회가 막혀서 확인을 못 했을 뿐,
+// 돈은 이미 움직였을 수 있다(`/api/funding/pledges/confirm`이 이 경우 503을
+// 준다). 'failed'는 승인이 실제로 거절됐거나 정보가 아예 없을 때만 쓴다.
+type Phase = 'confirming' | 'done' | 'failed' | 'checking'
 
 function SuccessInner() {
   const t = useTranslations('funding')
+  const locale = useLocale()
   const params = useSearchParams()
   const [phase, setPhase] = useState<Phase>('confirming')
   const [pledgeCode, setPledgeCode] = useState('')
   const [amount, setAmount] = useState(0)
   const [failMessage, setFailMessage] = useState('')
+  const [checkingMessage, setCheckingMessage] = useState('')
   // React 18 StrictMode가 effect를 두 번 부른다. 승인은 멱등이지만 요청을
   // 두 번 보낼 이유가 없다.
   const startedRef = useRef(false)
@@ -52,6 +57,13 @@ function SuccessInner() {
           body: JSON.stringify({ paymentKey, orderId, pledgeId, amount: rawAmount }),
         })
         const body = await res.json().catch(() => null)
+        if (res.status === 503) {
+          // 토스 조회가 막혔거나 재승인을 다시 확인 못 한 경우다 — 이미
+          // 승인됐는데 실패로 보이면 안 된다. 서버가 준 문장을 그대로 싣는다.
+          setPhase('checking')
+          setCheckingMessage(body?.error || t('success.checkingBody'))
+          return
+        }
         if (!res.ok) {
           setPhase('failed')
           // 서버가 이미 사람이 읽는 한국어 문구를 준다. 그대로 보인다.
@@ -73,6 +85,24 @@ function SuccessInner() {
       <Shell>
         <FiLoader className="mx-auto h-10 w-10 animate-spin text-primary-600" aria-hidden />
         <p className="mt-4 text-gray-700">{t('success.confirming')}</p>
+      </Shell>
+    )
+  }
+
+  if (phase === 'checking') {
+    return (
+      <Shell>
+        <FiHelpCircle className="mx-auto h-10 w-10 text-amber-500" aria-hidden />
+        <h1 className="mt-4 text-xl font-semibold text-gray-900">{t('success.checkingTitle')}</h1>
+        <p className="mt-2 text-gray-600">{checkingMessage}</p>
+        <div className="mt-6 flex flex-col gap-2">
+          <Link href="/funding/manage" className="tw-btn-primary">
+            {t('success.toLookup')}
+          </Link>
+          <a href="mailto:contact@ggac.kr" className="tw-btn-secondary">
+            {t('common.contactOffice')}
+          </a>
+        </div>
       </Shell>
     )
   }
@@ -103,16 +133,18 @@ function SuccessInner() {
         <div className="flex justify-between">
           <dt className="text-gray-500">{t('success.amount')}</dt>
           <dd className="font-medium text-gray-900">
-            {t('progress.amount', { amount: formatAmount(amount, 'ko') })}
+            {t('progress.amount', { amount: formatAmount(amount, locale) })}
           </dd>
         </div>
       </dl>
+      {/* 비회원 후원이 기본 경로다 — 기본 버튼이 로그인 벽(마이페이지) 뒤로
+          보내면 대부분의 후원자는 막다른 곳에 닿는다. 조회 화면을 기본으로. */}
       <div className="mt-6 flex flex-col gap-2">
-        <Link href="/mypage/funding" className="tw-btn-primary">
-          {t('success.toMypage')}
-        </Link>
-        <Link href="/funding/manage" className="tw-btn-secondary">
+        <Link href="/funding/manage" className="tw-btn-primary">
           {t('success.toLookup')}
+        </Link>
+        <Link href="/mypage/funding" className="tw-btn-secondary">
+          {t('success.toMypage')}
         </Link>
       </div>
     </Shell>
