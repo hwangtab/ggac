@@ -1,4 +1,5 @@
 import { listPublicCampaigns, getCampaignProgress } from '@/db/queries/funding'
+import { toPublicCampaign } from '@/lib/funding/publicCampaign'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
 
@@ -10,7 +11,10 @@ export async function GET() {
   try {
     const campaigns = await listPublicCampaigns()
     const withProgress = await Promise.all(
-      campaigns.map(async c => ({ ...c, progress: await getCampaignProgress(String(c.id)) }))
+      campaigns.map(async c => ({
+        ...toPublicCampaign(c),
+        progress: await getCampaignProgress(String(c.id)),
+      }))
     )
     return ApiSuccess.ok({ campaigns: withProgress }).toNextResponse()
   } catch (error) {
