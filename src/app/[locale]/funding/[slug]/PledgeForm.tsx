@@ -658,35 +658,40 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
         </div>
       </section>
 
-      {/* 결제창 — 선점이 서 있는 동안만 보인다. 위젯이 아직 안 떴으면
-          (실패했거나 다시 여는 중이면) 위젯 자리 대신 재시도 버튼을 보인다 —
-          빈 위젯·눌러도 반응 없는 버튼만 남기지 않는다. */}
+      {/* 결제창 — 선점이 서 있는 동안만 보인다. 마운트 자리(`#funding-payment-method`·
+          `#funding-payment-agreement`)는 `widgetReady`와 무관하게 항상 트리에
+          둔다 — 위젯의 `renderPaymentMethods`/`renderAgreement`가 이 요소를
+          찾아야 렌더에 성공하고, 그래야 `widgetReady`가 true가 된다. 마운트
+          자리를 `widgetReady`로 감싸면 첫 시도에서 요소가 아직 없어 렌더가
+          실패하고, 재시도도 똑같이 실패하는 순환에 빠진다(선점은 잡혔는데
+          폼도 결제창도 못 여는 상태로 굳는다 — item 3이 없애려던 바로 그
+          상태를 항상 재현하게 된다). 결제 버튼만 위젯이 실제로 뜬 뒤에
+          보이고, 위젯이 아직 안 떴으면 마운트 자리 옆에 재시도 버튼을
+          더한다(대신하지 않는다). */}
       <section className={reservation ? 'block' : 'hidden'}>
         <h2 className="mb-4 text-lg font-semibold text-gray-900">{t('form.paymentHeading')}</h2>
+        <div id="funding-payment-method" />
+        <div id="funding-payment-agreement" />
         {widgetReady ? (
-          <>
-            <div id="funding-payment-method" />
-            <div id="funding-payment-agreement" />
-            <button
-              type="button"
-              onClick={() => void requestPayment()}
-              className="mt-4 w-full rounded-lg bg-primary-600 px-5 py-3 font-medium text-white transition hover:bg-primary-700"
-            >
-              {reservation
-                ? t('form.payButton', {
-                    amount: t('progress.amount', {
-                      amount: formatAmount(reservation.amount, locale),
-                    }),
-                  })
-                : t('form.submit')}
-            </button>
-          </>
+          <button
+            type="button"
+            onClick={() => void requestPayment()}
+            className="mt-4 w-full rounded-lg bg-primary-600 px-5 py-3 font-medium text-white transition hover:bg-primary-700"
+          >
+            {reservation
+              ? t('form.payButton', {
+                  amount: t('progress.amount', {
+                    amount: formatAmount(reservation.amount, locale),
+                  }),
+                })
+              : t('form.submit')}
+          </button>
         ) : (
           <button
             type="button"
             onClick={() => void retryWidget()}
             disabled={preparing}
-            className="w-full rounded-lg border border-primary-600 px-5 py-3 font-medium text-primary-600 transition hover:bg-primary-50 disabled:opacity-50"
+            className="mt-4 w-full rounded-lg border border-primary-600 px-5 py-3 font-medium text-primary-600 transition hover:bg-primary-50 disabled:opacity-50"
           >
             {preparing ? t('form.submitting') : t('form.retryWidget')}
           </button>

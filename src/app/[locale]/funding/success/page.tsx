@@ -57,9 +57,12 @@ function SuccessInner() {
           body: JSON.stringify({ paymentKey, orderId, pledgeId, amount: rawAmount }),
         })
         const body = await res.json().catch(() => null)
-        if (res.status === 503) {
-          // 토스 조회가 막혔거나 재승인을 다시 확인 못 한 경우다 — 이미
-          // 승인됐는데 실패로 보이면 안 된다. 서버가 준 문장을 그대로 싣는다.
+        // 503은 토스 조회가 막혔거나(승인 여부 판단 불가), 승인은 끝났는데
+        // 확정 기록만 실패한 경우다 — 둘 다 이미 승인됐을 수 있다. 429는
+        // 이 라우트의 레이트리밋인데, 여기 걸린 사람은 이미 카드가 긁힌
+        // 상태다(라우트 주석 참고) — 재시도하면 될 수도 있는 상황을 "결제
+        // 실패"로 단정하면 안 된다. 둘 다 같은 "확인 중" 상태로 본다.
+        if (res.status === 503 || res.status === 429) {
           setPhase('checking')
           setCheckingMessage(body?.error || t('success.checkingBody'))
           return
