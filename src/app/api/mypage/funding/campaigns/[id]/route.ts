@@ -6,6 +6,7 @@ import { listPledgesByCampaign } from '@/db/queries/fundingPledges'
 import { canManageCampaign } from '@/lib/server/fundingAuth'
 import { editScope, type CampaignStatus } from '@/lib/funding/transitions'
 import { parseCampaignPatch } from '@/lib/funding/campaignInput'
+import { isFundingEnabled } from '@/lib/funding/settings'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 
@@ -48,6 +49,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
 }
 
 export async function PATCH(request: NextRequest, { params }: Ctx) {
+  if (!(await isFundingEnabled())) return ApiError.serviceUnavailable('펀딩을 준비 중입니다.').toNextResponse()
   const auth = await requireActiveMember()
   if (auth instanceof NextResponse) return auth
   const { id } = await params

@@ -6,7 +6,7 @@ import { logUserActivity, type ActivityActionTypeValue } from '@/db/queries/acti
 import { isCampaignAction, nextStatus, type CampaignAction, type CampaignStatus } from '@/lib/funding/transitions'
 import { checkActionPreconditions } from '@/lib/funding/campaignPreconditions'
 import { isValidSlug } from '@/lib/funding/campaignInput'
-import { getFundingSettings } from '@/lib/funding/settings'
+import { getFundingSettings, isFundingEnabled } from '@/lib/funding/settings'
 import { notifyCampaignReviewed, notifyCampaignClosed } from '@/lib/funding/notify'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
@@ -27,6 +27,7 @@ function activityTypeFor(action: CampaignAction): ActivityActionTypeValue {
 }
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (!(await isFundingEnabled())) return ApiError.serviceUnavailable('펀딩을 준비 중입니다.').toNextResponse()
   const auth = await requireAdmin()
   if (auth instanceof NextResponse) return auth
   const { id } = await params
@@ -65,7 +66,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       if (isDuplicateCampaignSlugError(error)) return ApiError.badRequest('이미 쓰는 주소입니다.').toNextResponse()
       throw error
     }
-    if (!updated) return ApiError.badRequest('상태가 이미 바뀌었습니다. 새로고침해 주세요.').toNextResponse()
+    if (!updated) return ApiError.conflict('상태가 이미 바뀌었습니다. 새로고침해 주세요.').toNextResponse()
 
     logUserActivity({
       user_id: auth.user.id, action_type: activityTypeFor(action),

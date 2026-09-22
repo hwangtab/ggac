@@ -7,6 +7,7 @@ import { canManageCampaign } from '@/lib/server/fundingAuth'
 import { actorFor, isCampaignAction, nextStatus, type CampaignAction, type CampaignStatus } from '@/lib/funding/transitions'
 import { checkActionPreconditions } from '@/lib/funding/campaignPreconditions'
 import { notifyCampaignSubmitted } from '@/lib/funding/notify'
+import { isFundingEnabled } from '@/lib/funding/settings'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
@@ -25,6 +26,7 @@ function activityTypeFor(action: CampaignAction): ActivityActionTypeValue {
 }
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (!(await isFundingEnabled())) return ApiError.serviceUnavailable('펀딩을 준비 중입니다.').toNextResponse()
   const auth = await requireActiveMember()
   if (auth instanceof NextResponse) return auth
   const { id } = await params

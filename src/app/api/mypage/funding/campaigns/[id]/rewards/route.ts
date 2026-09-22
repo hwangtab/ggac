@@ -10,6 +10,7 @@ import { canManageCampaign } from '@/lib/server/fundingAuth'
 import { editScope, type CampaignStatus } from '@/lib/funding/transitions'
 import { parseRewardList } from '@/lib/funding/campaignInput'
 import { evaluateRewardPatch, canDeleteReward } from '@/lib/funding/rewardLock'
+import { isFundingEnabled } from '@/lib/funding/settings'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 
 export const runtime = 'nodejs'
@@ -22,6 +23,7 @@ const LOCK_MESSAGES = {
 } as const
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (!(await isFundingEnabled())) return ApiError.serviceUnavailable('펀딩을 준비 중입니다.').toNextResponse()
   const auth = await requireActiveMember()
   if (auth instanceof NextResponse) return auth
   const { id } = await params
