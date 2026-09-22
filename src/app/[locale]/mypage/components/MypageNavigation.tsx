@@ -3,7 +3,15 @@
 import { useState, useEffect } from 'react'
 import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
-import { FiUser, FiMusic, FiActivity, FiSettings, FiChevronRight, FiCalendar } from 'react-icons/fi'
+import {
+  FiUser,
+  FiMusic,
+  FiActivity,
+  FiSettings,
+  FiChevronRight,
+  FiCalendar,
+  FiHeart,
+} from 'react-icons/fi'
 import { MypageMenuItem } from '@/types'
 import PermissionCheck from './PermissionCheck'
 import { fetchSessionProfile } from '@/utils/sessionProfile'
@@ -61,6 +69,14 @@ const MypageNavigation: React.FC<MypageNavigationProps> = ({ currentPath }) => {
       icon: FiCalendar,
       requiredPermission: 'member',
       isActive: currentPath === '/mypage/calendar',
+    },
+    {
+      id: 'funding',
+      label: t('nav.funding'),
+      href: '/mypage/funding',
+      icon: FiHeart,
+      requiredPermission: 'member',
+      isActive: currentPath === '/mypage/funding',
     },
     {
       id: 'artist',
