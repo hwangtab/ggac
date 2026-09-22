@@ -16,18 +16,14 @@
 
 import { loadTossPayments } from '@tosspayments/tosspayments-sdk'
 import { useTranslations } from 'next-intl'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FiAlertCircle } from 'react-icons/fi'
 
 import { Link } from '@/i18n/navigation'
+import { ADDITIONAL_AMOUNT_STEP, MAX_ADDITIONAL_AMOUNT, MAX_QUANTITY } from '@/lib/funding/amounts'
 
 import { formatAmount } from '../format'
 import type { CampaignDetail, Reward } from '../types'
-
-/** 서버가 정한 한도. `src/lib/funding/amounts.ts`와 같은 값이어야 한다. */
-const MAX_QUANTITY = 10
-const ADDITIONAL_STEP = 1000
-const MAX_ADDITIONAL = 5_000_000
 
 interface Prepared {
   orderId: string
@@ -74,10 +70,44 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
   const [preparing, setPreparing] = useState(false)
   const [prepared, setPrepared] = useState<Prepared | null>(null)
   const widgetsRef = useRef<unknown>(null)
+  const errorRef = useRef<HTMLDivElement | null>(null)
+
+  // 상세 페이지는 60초 ISR로 캐시된다 — 그 사이 남은 수량이 달라질 수 있다.
+  // 화면에 들어온 시점에 가벼운 상태 엔드포인트로 한 번 최신값을 덮어쓴다.
+  // 초과 판매를 막는 진짜 경계는 여전히 선점 트랜잭션이고, 이건 사람이 5분을
+  // 들여 정보를 다 채운 뒤에야 매진을 알게 되는 낭비를 줄이기 위한 보정이다.
+  const [rewards, setRewards] = useState<Reward[]>(campaign.rewards)
+  useEffect(() => {
+    let canceled = false
+    void (async () => {
+      try {
+        const response = await fetch(
+          `/api/funding/campaigns/${encodeURIComponent(campaign.slug)}/status`,
+          { cache: 'no-store' }
+        )
+        if (!response.ok) return
+        const result = (await response.json().catch(() => null)) as {
+          data?: { stock?: Record<string, number | null> }
+        } | null
+        const stock = result?.data?.stock
+        if (canceled || !stock || typeof stock !== 'object') return
+        setRewards(prev =>
+          prev.map(r =>
+            Object.hasOwn(stock, r.id) ? { ...r, remaining_quantity: stock[r.id] } : r
+          )
+        )
+      } catch {
+        // 갱신 실패는 조용히 넘긴다 — 서버가 넘겨준 값으로도 후원은 된다.
+      }
+    })()
+    return () => {
+      canceled = true
+    }
+  }, [campaign.slug])
 
   const reward: Reward | undefined = useMemo(
-    () => campaign.rewards.find(r => r.id === rewardId),
-    [campaign.rewards, rewardId]
+    () => rewards.find(r => r.id === rewardId),
+    [rewards, rewardId]
   )
 
   /**
@@ -92,13 +122,22 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
 
   const total = reward ? reward.amount * quantity + additional : 0
 
+  // blur와 제출이 같은 규칙(내림 + 상한)을 쓴다. 제출에서만 내리고 상한을
+  // 빼먹으면, 필드에 눈을 떼지 않고 키보드로 바로 제출하는 사람이 상한을
+  // 넘는 값을 그대로 서버에 보내 레이트리밋만 태우고 거절당한다.
+  const normalizeAdditionalValue = useCallback(
+    (n: number) =>
+      Math.min(
+        MAX_ADDITIONAL_AMOUNT,
+        Math.max(0, Math.floor(n / ADDITIONAL_AMOUNT_STEP) * ADDITIONAL_AMOUNT_STEP)
+      ),
+    []
+  )
+
   const normalizeAdditional = useCallback(() => {
-    const n = Math.min(
-      MAX_ADDITIONAL,
-      Math.max(0, Math.floor(additional / ADDITIONAL_STEP) * ADDITIONAL_STEP)
-    )
+    const n = normalizeAdditionalValue(additional)
     setAdditionalText(n === 0 ? '' : String(n))
-  }, [additional])
+  }, [additional, normalizeAdditionalValue])
 
   const maxQuantity =
     reward?.remaining_quantity !== null && reward?.remaining_quantity !== undefined
@@ -108,7 +147,7 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
   const startPledge = useCallback(async () => {
     setError('')
     if (!reward) {
-      setError(t('reward.select'))
+      setError(t('form.errorReward'))
       return
     }
     if (reward.remaining_quantity !== null && reward.remaining_quantity <= 0) {
@@ -116,19 +155,25 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
       return
     }
     if (!backerName.trim()) {
-      setError(t('form.name'))
+      setError(t('form.errorName'))
       return
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(backerEmail.trim())) {
-      setError(t('form.email'))
+      setError(t('form.errorEmail'))
       return
     }
     if (reward.requires_shipping) {
       const s = shipping
       if (!s.postcode.trim() || !s.address1.trim() || s.phone.replace(/[^0-9]/g, '').length < 9) {
-        setError(t('form.shippingHeading'))
+        setError(t('form.errorShipping'))
         return
       }
+    }
+
+    // 화면에 보이는 총액이 실제로 청구될 금액과 같도록, 보낼 값으로 필드도 맞춘다.
+    const normalizedAdditional = normalizeAdditionalValue(additional)
+    if (normalizedAdditional !== additional) {
+      setAdditionalText(normalizedAdditional === 0 ? '' : String(normalizedAdditional))
     }
 
     setPreparing(true)
@@ -140,7 +185,7 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
           campaignId: campaign.id,
           rewardId: reward.id,
           quantity,
-          additionalAmount: Math.floor(additional / ADDITIONAL_STEP) * ADDITIONAL_STEP,
+          additionalAmount: normalizedAdditional,
           backerName: backerName.trim(),
           backerEmail: backerEmail.trim(),
           backerPhone: backerPhone.replace(/[^0-9]/g, ''),
@@ -164,19 +209,23 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
             : {}),
         }),
       })
-      const body = await res.json().catch(() => null)
-      if (!res.ok) {
+      const body = (await res.json().catch(() => null)) as {
+        data?: Prepared
+        error?: string
+      } | null
+      if (!res.ok || !body?.data) {
         // 서버가 준 한국어 문구를 그대로 보인다 — 매진·수량 상한·마감이 전부
         // 여기로 온다. 화면이 이유를 다시 추측하지 않는다.
         setError(body?.error || t('fail.defaultMessage'))
         return
       }
-      const order = body.data as Prepared
-      setPrepared(order)
+      const order = body.data
 
+      // 위젯 생성·렌더가 실패하면 `prepared`를 세우지 않는다 — 미리 세워 두면
+      // 폼 섹션이 숨겨진 채로 결제 섹션(빈 위젯, 눌러도 반응 없는 버튼)만 남아
+      // 새로고침 말고는 빠져나올 길이 없고, 새로고침은 선점 전체를 버린다.
       const tossPayments = await loadTossPayments(order.clientKey)
       const widgets = tossPayments.widgets({ customerKey: order.customerKey })
-      widgetsRef.current = widgets
       await widgets.setAmount({ currency: 'KRW', value: order.amount })
       await Promise.all([
         widgets.renderPaymentMethods({
@@ -188,6 +237,8 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
           variantKey: 'AGREEMENT',
         }),
       ])
+      widgetsRef.current = widgets
+      setPrepared(order)
     } catch (caught) {
       console.error('후원 준비 실패:', caught)
       setError(t('fail.defaultMessage'))
@@ -198,6 +249,7 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
     reward,
     quantity,
     additional,
+    normalizeAdditionalValue,
     backerName,
     backerEmail,
     backerPhone,
@@ -231,6 +283,16 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
     }
   }, [prepared, t])
 
+  // 배너는 폼 맨 위에 있고 제출 버튼은 맨 아래에 있다 — 스크린리더가 읽어
+  // 주는 것과 별개로, 화면을 눈으로 보는 사람도 아래에서 제출하면 배너가 바뀐
+  // 것을 보지 못한다. 오류가 뜨는 순간 그리로 옮긴다.
+  useEffect(() => {
+    if (error) {
+      errorRef.current?.focus()
+      errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [error])
+
   if (!paymentEnabled) {
     return (
       <div className="mt-6 rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
@@ -242,7 +304,13 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
   return (
     <div className="mt-6">
       {error ? (
-        <div className="mb-4 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        <div
+          ref={errorRef}
+          role="alert"
+          aria-live="assertive"
+          tabIndex={-1}
+          className="mb-4 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 outline-none"
+        >
           <FiAlertCircle className="mt-0.5 shrink-0" aria-hidden />
           <span>{error}</span>
         </div>
@@ -258,7 +326,7 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
               {t('detail.rewardsHeading')}
             </legend>
             <div className="space-y-2">
-              {campaign.rewards.map(r => {
+              {rewards.map(r => {
                 const soldOut = r.remaining_quantity !== null && r.remaining_quantity <= 0
                 return (
                   <label
@@ -517,7 +585,9 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
 
           <p className="text-xs text-gray-500">
             {t.rich('form.agreeNotice', {
-              terms: chunks => <Link href="/funding/terms">{chunks}</Link>,
+              // 펀딩 전용 약관 페이지가 생기기 전까지는 조합 공통 약관으로
+              // 연결한다. 후속 태스크가 전용 페이지로 바꿀 것이다.
+              terms: chunks => <Link href="/terms">{chunks}</Link>,
               privacy: chunks => <Link href="/privacy">{chunks}</Link>,
             })}
           </p>
@@ -527,6 +597,7 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
 
       {/* 결제창 */}
       <section className={prepared ? 'block' : 'hidden'}>
+        <h2 className="mb-4 text-lg font-semibold text-gray-900">{t('form.paymentHeading')}</h2>
         <div id="funding-payment-method" />
         <div id="funding-payment-agreement" />
         <button
@@ -535,7 +606,9 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
           className="mt-4 w-full rounded-lg bg-primary-600 px-5 py-3 font-medium text-white transition hover:bg-primary-700"
         >
           {prepared
-            ? t('progress.amount', { amount: formatAmount(prepared.amount, locale) })
+            ? t('form.payButton', {
+                amount: t('progress.amount', { amount: formatAmount(prepared.amount, locale) }),
+              })
             : t('form.submit')}
         </button>
       </section>

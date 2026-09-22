@@ -433,8 +433,13 @@
       "submit": "Back this project",
       "submitting": "Preparing…",
       "agreeNotice": "By clicking Back this project, you agree to the <terms>Funding Terms</terms> and <privacy>Privacy Policy</privacy>.",
-      "holdNotice": "The payment window stays open for 10 minutes. If payment isn't completed in that time, your selected quantity is released again.",
-      "paymentHeading": "Payment"
+      "holdNotice": "Your reward is held while the payment window is open. If payment isn't completed in time, your reserved quantity is released again.",
+      "paymentHeading": "Payment",
+      "payButton": "Pay {amount}",
+      "errorReward": "Please choose a reward to back.",
+      "errorName": "Please enter your name.",
+      "errorEmail": "Please enter a valid email address.",
+      "errorShipping": "Please fill in all shipping details."
     },
     "success": {
       "confirming": "Confirming your payment…",

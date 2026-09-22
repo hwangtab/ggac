@@ -433,8 +433,13 @@
       "submit": "후원하기",
       "submitting": "준비 중…",
       "agreeNotice": "후원하기를 누르면 <terms>펀딩 약관</terms>과 <privacy>개인정보 처리방침</privacy>에 동의하는 것으로 봅니다.",
-      "holdNotice": "결제창은 10분 동안 열려 있습니다. 그 안에 결제를 마치지 않으면 선택한 수량이 다시 풀립니다.",
-      "paymentHeading": "결제"
+      "holdNotice": "결제창이 열려 있는 동안 리워드가 선점됩니다. 정해진 시간 안에 결제를 마치지 못하면 선점한 수량이 다시 풀립니다.",
+      "paymentHeading": "결제",
+      "payButton": "{amount} 결제하기",
+      "errorReward": "후원할 리워드를 선택해 주세요.",
+      "errorName": "이름을 입력해 주세요.",
+      "errorEmail": "이메일 주소를 올바르게 입력해 주세요.",
+      "errorShipping": "배송지 정보를 모두 입력해 주세요."
     },
     "success": {
       "confirming": "결제를 확인하고 있습니다…",
