@@ -64,30 +64,54 @@ export default function FundingManagePage() {
     }
   }, [notice])
 
-  const lookup = useCallback(async () => {
-    setError('')
-    setNotice('')
-    setLoading(true)
+  // 실제 조회 호출 하나만 한다 — 실패(응답 거부·네트워크 예외 가리지 않고)는
+  // 전부 null로 뭉뚱그린다. "코드는 있는데 이메일만 틀렸다"와 "그런 코드가
+  // 없다"를 구분해서 보이지 않으려는 것과 같은 이유로, 여기서도 실패의
+  // 종류를 캐지 않는다. 이 함수 자체는 화면 상태를 건드리지 않는다 — 호출자가
+  // 실패를 어떻게 보일지(또는 안 보일지) 각자 정한다.
+  const fetchPledge = useCallback(async (): Promise<PledgeView | null> => {
     try {
       const res = await fetch('/api/funding/pledges/lookup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pledgeCode: code.trim().toUpperCase(), email: email.trim() }),
       })
+      if (!res.ok) return null
       const body = await res.json().catch(() => null)
-      if (!res.ok) {
+      return (body?.data?.pledge as PledgeView | undefined) ?? null
+    } catch {
+      return null
+    }
+  }, [code, email])
+
+  // 조회 폼이 쓰는 "시끄러운" 조회. 실패하면 "찾을 수 없습니다"를 보인다 —
+  // 여기서는 그게 맞다. 이 화면에서 조회가 실패하는 이유는 실질적으로 코드나
+  // 이메일이 안 맞는 것뿐이고, 사용자는 그 문장을 보고 다시 입력해야 한다.
+  const lookup = useCallback(async () => {
+    setError('')
+    setNotice('')
+    setLoading(true)
+    try {
+      const found = await fetchPledge()
+      if (!found) {
         setPledge(null)
         setError(t('manage.notFound'))
         return
       }
-      setPledge(body.data?.pledge as PledgeView)
-    } catch {
-      setPledge(null)
-      setError(t('manage.notFound'))
+      setPledge(found)
     } finally {
       setLoading(false)
     }
-  }, [code, email, t])
+  }, [fetchPledge, t])
+
+  // 취소 성공 뒤의 "조용한" 재조회. 이 시점엔 취소가 이미 서버에서
+  // 확정됐으므로, 다시 읽기가 실패했다고 "찾을 수 없습니다"를 띄우면 방금
+  // 뜬 확인 문구와 모순되는 배너가 겹친다 — 후원이 사라진 게 아니라 다시
+  // 읽기만 실패한 것이다. 되면 반영하고, 안 되면 조용히 넘어간다.
+  const refreshPledgeQuietly = useCallback(async () => {
+    const found = await fetchPledge()
+    if (found) setPledge(found)
+  }, [fetchPledge])
 
   const cancel = useCallback(async () => {
     if (!pledge) return
@@ -100,6 +124,7 @@ export default function FundingManagePage() {
       : t('manage.cancelConfirm', { amount: formatAmount(pledge.total_amount, 'ko') })
     if (!window.confirm(confirmText)) return
     setError('')
+    setNotice('')
     setCanceling(true)
     try {
       const res = await fetch('/api/funding/pledges/cancel', {
@@ -112,18 +137,19 @@ export default function FundingManagePage() {
         setError(body?.error || t('fail.defaultMessage'))
         return
       }
-      // 조회를 먼저 끝내고 안내 문구는 그 뒤에 켠다. lookup()은 첫 줄에서
-      // notice를 지우는데, 그걸 먼저 부르고 나서 notice를 켜지 않으면
-      // "취소는 성공했지만 안내는 안 뜨는" 결과가 된다(두 setState가 await
-      // 이전에 나란히 있으면 리액트가 한 렌더로 묶어 지우기가 이긴다).
-      await lookup()
+      // 취소는 이미 서버에서 확정됐다 — 재조회는 화면을 최신으로 맞추는
+      // 덤일 뿐이라 실패해도 확인 문구를 막지 않는다(조용한 재조회를 쓴다).
+      // 재조회를 먼저 끝내고 확인 문구는 그 뒤에 켠다: 둘 다 await 이전에
+      // 나란히 있으면 리액트가 한 렌더로 묶어 재조회 쪽 상태 변경이
+      // 확인 문구를 덮어써 버린다.
+      await refreshPledgeQuietly()
       setNotice(t('manage.canceled'))
     } catch {
       setError(t('fail.defaultMessage'))
     } finally {
       setCanceling(false)
     }
-  }, [pledge, email, t, lookup])
+  }, [pledge, email, t, refreshPledgeQuietly])
 
   const canCancel =
     pledge?.status === 'paid' &&
