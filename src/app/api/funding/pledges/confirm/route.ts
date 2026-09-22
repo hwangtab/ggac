@@ -7,8 +7,9 @@
  */
 import { NextRequest, after } from 'next/server'
 
-import { getPaymentByOrderId, markPaymentFailed } from '@/db/queries/payments'
+import { getPaymentByOrderId, markPaymentFailed, recordPaymentKey } from '@/db/queries/payments'
 import { getPledgeById, finalizePledgePayment, cancelPendingPledge } from '@/db/queries/fundingPledges'
+import { getCampaignById } from '@/db/queries/funding'
 import { assertAmountMatches, AmountMismatchError } from '@/lib/payments/toss/protocol'
 import { confirmPayment, cancelPayment, TossApiError, TossLookupError } from '@/lib/payments/toss/client'
 import { getServerPaymentConfig, isPaymentEnabled } from '@/lib/payments/toss/config'
@@ -65,6 +66,24 @@ export async function POST(request: NextRequest) {
       return ApiError.badRequest('결제 시간이 지났습니다. 다시 후원해 주세요.').toNextResponse()
     }
 
+    // 선점 상태는 아직 'pending'이어도 hold가 지났으면 만료 크론 눈에는 이미
+    // 재고 계산에서 빠진 후원이다. 이 창에서 다른 사람이 마지막 한 개를
+    // 선점해 결제까지 끝낼 수 있으므로, 승인 요청을 보내기 전에 여기서도
+    // 같은 판정을 한다 — 돈이 나가기 전에 막아야 의미가 있다.
+    const holdExpiresAt = pledge.hold_expires_at ? new Date(String(pledge.hold_expires_at)) : null
+    if (pledge.status === 'pending' && holdExpiresAt && holdExpiresAt.getTime() <= Date.now()) {
+      await markPaymentFailed(orderId, { code: 'PLEDGE_EXPIRED', message: '결제 시간이 지나 후원이 취소되었습니다.' })
+      return ApiError.badRequest('결제 시간이 지났습니다. 다시 후원해 주세요.').toNextResponse()
+    }
+
+    // 캠페인이 그새 마감·중단됐으면 재고 계산의 전제 자체가 없다. 이 역시
+    // 승인 전에 막는다.
+    const campaign = await getCampaignById(String(pledge.campaign_id))
+    if (!campaign || campaign.status !== 'active') {
+      await markPaymentFailed(orderId, { code: 'PLEDGE_EXPIRED', message: '결제 시간이 지나 후원이 취소되었습니다.' })
+      return ApiError.badRequest('결제 시간이 지났습니다. 다시 후원해 주세요.').toNextResponse()
+    }
+
     const storedAmount = Number(payment.amount)
     try {
       assertAmountMatches(storedAmount, body.amount)
@@ -79,6 +98,10 @@ export async function POST(request: NextRequest) {
     }
 
     const { secretKey } = getServerPaymentConfig()
+    // 승인 호출 *전에* 결제 식별자를 원장에 새긴다 — 이 확인의 이유는
+    // `recordPaymentKey`의 주석 참고. 확정 함수 안에서 다시 같은 값을
+    // 적으므로(멱등) 여기서 실패해도 뒤가 깨지지 않는다.
+    await recordPaymentKey(orderId, paymentKey)
     let approved: Record<string, unknown>
     try {
       approved = await confirmPayment({ paymentKey, orderId, amount: storedAmount }, { secretKey })

@@ -43,9 +43,12 @@ async function handle(request: NextRequest) {
   const result = await runExpiryGuard({
     listExpiredHolds: () => listExpiredHolds(),
     lookupPayment: async orderId => {
-      // 승인 응답이 유실된 건은 paymentKey를 모른다. 원장의 paymentKey가 없으면
-      // 토스 주문번호 조회(`/v1/payments/orders/{orderId}`)가 필요한데 client.ts에
-      // 그 함수가 없으므로 여기서는 payment_key가 있는 건만 조회한다.
+      // confirm 라우트가 승인 호출 *전에* `recordPaymentKey`로 식별자를 이미
+      // 새긴다(대기 상태인 행에만). 그래서 원장에 payment_key가 없다는 것은
+      // "승인 응답이 유실됐다"가 아니라 "승인 요청 자체가 나간 적이 없다"는
+      // 뜻이다 — 이 경우엔 조회할 결제가 토스에도 없으므로 `not_found`로
+      // 답하고 그대로 만료시키는 것이 맞다. payment_key가 있는데 confirm이
+      // 유실된 건만 이 아래에서 실제로 조회한다.
       const payment = await getPaymentByOrderId(orderId)
       if (!payment?.payment_key) return 'not_found'
       try {

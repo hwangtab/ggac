@@ -220,3 +220,18 @@ test('비회원 조회는 번호+이메일, 공개 명단은 익명·비공개 �
     assert.deepEqual(Object.keys(row).sort(), ['message', 'name', 'paid_at'])
   }
 })
+
+test('recordPaymentKey는 pending 행에만 식별자를 새기고 settled 행은 건드리지 않는다', async () => {
+  const p = await hold('funding_record_key', unlimited.id, 1)
+  await payq.recordPaymentKey('funding_record_key', 'pk_early')
+  assert.equal((await payq.getPaymentByOrderId('funding_record_key')).payment_key, 'pk_early')
+
+  await pq.finalizePledgePayment({
+    orderId: 'funding_record_key', pledgeId: p.id, paymentKey: 'pk_early', method: '카드', approvedAt: new Date(), raw: {},
+  })
+  assert.equal((await payq.getPaymentByOrderId('funding_record_key')).status, 'done')
+
+  // 이미 done인 행에 다른 식별자를 쓰려 해도 무시된다 — 정본은 첫 확정이다.
+  await payq.recordPaymentKey('funding_record_key', 'pk_late_overwrite_attempt')
+  assert.equal((await payq.getPaymentByOrderId('funding_record_key')).payment_key, 'pk_early')
+})
