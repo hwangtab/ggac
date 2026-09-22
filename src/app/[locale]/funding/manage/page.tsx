@@ -12,7 +12,7 @@
  */
 
 import { useTranslations } from 'next-intl'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { FiAlertCircle } from 'react-icons/fi'
 
 import { Link } from '@/i18n/navigation'
@@ -31,6 +31,9 @@ interface PledgeView {
   campaign_slug: string | null
   campaign_title: string | null
   campaign_status: string | null
+  // 취소 라우트가 "판단 불가"로 끝나 canceled·결제 연결이 남은 채 멈춘
+  // 후원인가. 이 경우 같은 취소 API를 다시 호출하는 것이 곧 복구 경로다.
+  refund_retry_possible: boolean
 }
 
 export default function FundingManagePage() {
@@ -42,6 +45,24 @@ export default function FundingManagePage() {
   const [loading, setLoading] = useState(false)
   const [canceling, setCanceling] = useState(false)
   const [notice, setNotice] = useState('')
+  const errorRef = useRef<HTMLDivElement | null>(null)
+  const noticeRef = useRef<HTMLDivElement | null>(null)
+
+  // 배너는 화면 위쪽에 있고, 실제로 값이 바뀌는 자리(조회 결과·취소 버튼)는
+  // 그 아래다 — 스크린리더뿐 아니라 눈으로 보는 사람도 아래에서 버튼을
+  // 누르면 위 배너가 바뀐 걸 못 본다. 뜨는 순간 그리로 옮긴다.
+  useEffect(() => {
+    if (error) {
+      errorRef.current?.focus()
+      errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [error])
+  useEffect(() => {
+    if (notice) {
+      noticeRef.current?.focus()
+      noticeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [notice])
 
   const lookup = useCallback(async () => {
     setError('')
@@ -70,7 +91,14 @@ export default function FundingManagePage() {
 
   const cancel = useCallback(async () => {
     if (!pledge) return
-    if (!window.confirm(t('manage.cancelConfirm'))) return
+    // 재시도 건(canceled + 결제 연결 남음)은 "취소"가 아니라 "환불이 실제로
+    // 나갔는지 다시 확인"이다 — 확인 문구를 다르게 준다. 판정은 취소
+    // 라우트와 같은 조건(`refund_retry_possible`)을 서버가 이미 계산해 준다.
+    const isRetry = pledge.status === 'canceled' && pledge.refund_retry_possible
+    const confirmText = isRetry
+      ? t('manage.retryConfirm')
+      : t('manage.cancelConfirm', { amount: formatAmount(pledge.total_amount, 'ko') })
+    if (!window.confirm(confirmText)) return
     setError('')
     setCanceling(true)
     try {
@@ -84,8 +112,12 @@ export default function FundingManagePage() {
         setError(body?.error || t('fail.defaultMessage'))
         return
       }
-      setNotice(t('manage.canceled'))
+      // 조회를 먼저 끝내고 안내 문구는 그 뒤에 켠다. lookup()은 첫 줄에서
+      // notice를 지우는데, 그걸 먼저 부르고 나서 notice를 켜지 않으면
+      // "취소는 성공했지만 안내는 안 뜨는" 결과가 된다(두 setState가 await
+      // 이전에 나란히 있으면 리액트가 한 렌더로 묶어 지우기가 이긴다).
       await lookup()
+      setNotice(t('manage.canceled'))
     } catch {
       setError(t('fail.defaultMessage'))
     } finally {
@@ -97,6 +129,7 @@ export default function FundingManagePage() {
     pledge?.status === 'paid' &&
     pledge?.campaign_status === 'active' &&
     pledge?.fulfillment_status === 'none'
+  const canRetryRefund = pledge?.status === 'canceled' && pledge?.refund_retry_possible === true
 
   return (
     <div className="min-h-screen bg-gray-50 px-4 pt-32 pb-20 sm:px-6 md:pt-40">
@@ -105,13 +138,25 @@ export default function FundingManagePage() {
         <p className="mt-2 text-gray-600">{t('manage.subtitle')}</p>
 
         {error ? (
-          <div className="mt-6 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <div
+            ref={errorRef}
+            role="alert"
+            aria-live="assertive"
+            tabIndex={-1}
+            className="mt-6 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 outline-none"
+          >
             <FiAlertCircle className="mt-0.5 shrink-0" aria-hidden />
             <span>{error}</span>
           </div>
         ) : null}
         {notice ? (
-          <div className="mt-6 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+          <div
+            ref={noticeRef}
+            role="alert"
+            aria-live="assertive"
+            tabIndex={-1}
+            className="mt-6 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800 outline-none"
+          >
             {notice}
           </div>
         ) : null}
@@ -179,14 +224,20 @@ export default function FundingManagePage() {
               />
               <Row label={t('success.title')} value={t(`status.${pledge.status}`)} />
             </dl>
-            {canCancel ? (
+            {canCancel || canRetryRefund ? (
               <button
                 type="button"
                 onClick={() => void cancel()}
                 disabled={canceling}
                 className="mt-6 w-full rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 disabled:opacity-60"
               >
-                {canceling ? t('manage.canceling') : t('manage.cancel')}
+                {canRetryRefund
+                  ? canceling
+                    ? t('manage.retrying')
+                    : t('manage.retry')
+                  : canceling
+                    ? t('manage.canceling')
+                    : t('manage.cancel')}
               </button>
             ) : null}
           </div>

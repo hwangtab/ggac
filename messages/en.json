@@ -474,9 +474,12 @@
       "submitting": "Looking up…",
       "notFound": "We couldn't find that pledge. Please check the code and email again.",
       "cancel": "Cancel pledge",
-      "cancelConfirm": "Cancel this pledge and receive a full refund?",
+      "cancelConfirm": "Cancel this pledge ({amount} won) and receive a full refund?",
       "canceling": "Canceling…",
-      "canceled": "Canceled. Refunds may take a few days depending on your card issuer."
+      "canceled": "Canceled. Refunds may take a few days depending on your card issuer.",
+      "retry": "Recheck refund status",
+      "retryConfirm": "Check again whether the refund actually went through? This re-checks the status — it does not cancel a charge.",
+      "retrying": "Checking…"
     },
     "mypage": {
       "title": "My pledges",
