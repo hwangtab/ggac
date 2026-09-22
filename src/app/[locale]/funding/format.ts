@@ -1,9 +1,9 @@
 /**
  * 펀딩 화면의 금액·기간·달성률 포매팅.
  *
- * 서버와 클라이언트가 같은 문자열을 만들어야 하므로 타임존을 고정한다
- * (`SEOUL_TIME_ZONE`) — 고정하지 않으면 SSR HTML과 하이드레이션이 어긋난다.
- * 예매 화면(`../tickets/format.ts`)과 같은 이유·같은 방식이다.
+ * 서버와 클라이언트가 같은 문자열을 만들어야 하므로 타임존을 고정한다 —
+ * 고정하지 않으면 SSR HTML과 하이드레이션이 어긋난다. 예매 화면
+ * (`../tickets/format.ts`)과 같은 이유·같은 방식이다.
  */
 
 export function intlLocale(locale: string): string {

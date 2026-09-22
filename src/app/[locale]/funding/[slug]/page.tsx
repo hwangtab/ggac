@@ -15,6 +15,7 @@ import OptimizedImage from '@/components/OptimizedImage'
 import PostContentRenderer from '@/components/PostContentRenderer'
 import { getCampaignBySlug, listRewards, getCampaignProgress } from '@/db/queries/funding'
 import { getRemainingQuantity, listPublicBackers } from '@/db/queries/fundingPledges'
+import { getFundingSettings } from '@/lib/funding/settings'
 import { PUBLIC_CAMPAIGN_STATUSES } from '@/lib/funding/transitions'
 import { isPaymentEnabled } from '@/lib/payments/toss/config'
 import { createLogger } from '@/utils/logger'
@@ -39,50 +40,61 @@ export const revalidate = 60
 
 const OG_IMAGE_PATH = '/images/logo/gac_og.webp'
 
-/** `generateMetadata`와 본문이 한 번만 조회하도록 감싼다. */
+/**
+ * `generateMetadata`와 본문이 한 번만 조회하도록 감싼다.
+ *
+ * DB 조회 실패는 그대로 던지지 않는다 — 예매 상세 페이지(`loadPerformance`)와
+ * 같은 이유로, 서버 오류 화면 대신 `notFound()`로 떨어지게 null을 준다.
+ */
 const loadCampaign = cache(async (slug: string): Promise<CampaignDetail | null> => {
-  const row = await getCampaignBySlug(slug)
-  if (!row) return null
-  if (!(PUBLIC_CAMPAIGN_STATUSES as readonly string[]).includes(String(row.status))) return null
+  try {
+    const row = await getCampaignBySlug(slug)
+    if (!row) return null
+    if (!(PUBLIC_CAMPAIGN_STATUSES as readonly string[]).includes(String(row.status))) return null
 
-  const id = String(row.id)
-  const [rewardRows, progress] = await Promise.all([listRewards(id), getCampaignProgress(id)])
-  const rewards: Reward[] = await Promise.all(
-    rewardRows.map(async r => ({
-      id: String(r.id),
-      title: String(r.title ?? ''),
-      description: typeof r.description === 'string' ? r.description : null,
-      amount: Number(r.amount ?? 0),
-      total_quantity: r.total_quantity === null ? null : Number(r.total_quantity),
-      remaining_quantity: await getRemainingQuantity(String(r.id)),
-      requires_shipping: Boolean(r.requires_shipping),
-      estimated_delivery: typeof r.estimated_delivery === 'string' ? r.estimated_delivery : null,
-      image_url: typeof r.image_url === 'string' ? r.image_url : null,
-    }))
-  )
+    const id = String(row.id)
+    const [rewardRows, progress] = await Promise.all([listRewards(id), getCampaignProgress(id)])
+    const rewards: Reward[] = await Promise.all(
+      rewardRows.map(async r => ({
+        id: String(r.id),
+        title: String(r.title ?? ''),
+        description: typeof r.description === 'string' ? r.description : null,
+        amount: Number(r.amount ?? 0),
+        total_quantity: r.total_quantity === null ? null : Number(r.total_quantity),
+        remaining_quantity: await getRemainingQuantity(String(r.id)),
+        requires_shipping: Boolean(r.requires_shipping),
+        estimated_delivery: typeof r.estimated_delivery === 'string' ? r.estimated_delivery : null,
+        image_url: typeof r.image_url === 'string' ? r.image_url : null,
+      }))
+    )
 
-  const text = (v: unknown): string | null => (typeof v === 'string' && v.trim() !== '' ? v : null)
+    const text = (v: unknown): string | null =>
+      typeof v === 'string' && v.trim() !== '' ? v : null
 
-  // 필드를 직접 골라 새 객체를 만든다 — owner_user_id·platform_fee_rate·
-  // review_note가 서버 렌더 HTML로 새지 않게.
-  return {
-    id,
-    slug: String(row.slug ?? ''),
-    title: String(row.title ?? ''),
-    summary: String(row.summary ?? ''),
-    story: String(row.story ?? ''),
-    cover_image: text(row.cover_image),
-    og_image: text(row.og_image),
-    category: String(row.category ?? '기타'),
-    goal_amount: Number(row.goal_amount ?? 0),
-    start_at: text(row.start_at),
-    end_at: text(row.end_at),
-    status: String(row.status ?? ''),
-    rewards,
-    progress: {
-      raised_amount: Number(progress?.raised_amount ?? 0),
-      backer_count: Number(progress?.backer_count ?? 0),
-    },
+    // 필드를 직접 골라 새 객체를 만든다 — owner_user_id·platform_fee_rate·
+    // review_note가 서버 렌더 HTML로 새지 않게.
+    return {
+      id,
+      slug: String(row.slug ?? ''),
+      title: String(row.title ?? ''),
+      summary: String(row.summary ?? ''),
+      story: String(row.story ?? ''),
+      cover_image: text(row.cover_image),
+      og_image: text(row.og_image),
+      category: String(row.category ?? '기타'),
+      goal_amount: Number(row.goal_amount ?? 0),
+      start_at: text(row.start_at),
+      end_at: text(row.end_at),
+      status: String(row.status ?? ''),
+      rewards,
+      progress: {
+        raised_amount: Number(progress?.raised_amount ?? 0),
+        backer_count: Number(progress?.backer_count ?? 0),
+      },
+    }
+  } catch (error) {
+    log.error('펀딩 상세 조회 실패', { slug, error })
+    return null
   }
 })
 
@@ -144,6 +156,11 @@ export default async function FundingDetailPage({
 
   const t = await getTranslations({ locale, namespace: 'funding' })
   const site = getSiteUrl()
+  // 결제 모드(킬스위치)만으로는 펀딩 전용 설정 스위치가 꺼진 상태를 못 잡는다
+  // — 그 상태로도 폼은 그려지고, 선점 API(`/api/funding/pledges/prepare`)는
+  // `fundingSettings.enabled`까지 함께 본다. 여기서 두 조건을 합쳐야 폼 대신
+  // "준비 중" 안내가 뜬다.
+  const fundingSettings = await getFundingSettings()
   const backers: PublicBacker[] = (await listPublicBackers(campaign.id)).map(b => ({
     name: String(b.name ?? ''),
     message: typeof b.message === 'string' ? b.message : null,
@@ -251,21 +268,25 @@ export default async function FundingDetailPage({
                   />
                 </div>
 
-                <dl className="mt-4 grid grid-cols-3 gap-2 text-center">
-                  <div>
-                    <dt className="text-xs text-gray-500">{t('progress.percent')}</dt>
-                    <dd className="font-semibold text-gray-900">
-                      {t('progress.percentValue', { percent })}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-gray-500">
-                      {t('progress.backers', { count: campaign.progress.backer_count })}
-                    </dt>
-                    <dd className="font-semibold text-gray-900">
-                      {campaign.progress.backer_count}
-                    </dd>
-                  </div>
+                <dl
+                  className={`mt-4 grid gap-2 text-center ${showFigures ? 'grid-cols-3' : 'grid-cols-1'}`}
+                >
+                  {showFigures ? (
+                    <>
+                      <div>
+                        <dt className="text-xs text-gray-500">{t('progress.percent')}</dt>
+                        <dd className="font-semibold text-gray-900">
+                          {t('progress.percentValue', { percent })}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-gray-500">{t('progress.backersLabel')}</dt>
+                        <dd className="font-semibold text-gray-900">
+                          {t('progress.backers', { count: campaign.progress.backer_count })}
+                        </dd>
+                      </div>
+                    </>
+                  ) : null}
                   <div>
                     <dt className="text-xs text-gray-500">{t('progress.daysLeft')}</dt>
                     <dd className="font-semibold text-gray-900">
@@ -283,7 +304,7 @@ export default async function FundingDetailPage({
                 {campaign.status === 'active' ? (
                   <PledgeForm
                     campaign={campaign}
-                    paymentEnabled={isPaymentEnabled()}
+                    paymentEnabled={isPaymentEnabled() && fundingSettings.enabled}
                     locale={locale}
                   />
                 ) : (
