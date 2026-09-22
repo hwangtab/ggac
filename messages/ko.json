@@ -387,15 +387,14 @@
       "closed": "마감",
       "backers": "후원 {count}건",
       "goal": "목표 {goal}원",
-      "label": "후원 달성률"
+      "label": "후원 달성률",
+      "backersLabel": "후원자"
     },
     "detail": {
       "storyHeading": "프로젝트 소개",
       "rewardsHeading": "리워드",
       "backersHeading": "함께한 후원자",
       "backersEmpty": "첫 후원자가 되어 주세요.",
-      "anonymous": "익명",
-      "creator": "창작자",
       "closedNotice": "모금이 끝났습니다. 함께해 주신 분들께 감사드립니다.",
       "preparingNotice": "결제를 준비 중입니다. 잠시 후 다시 확인해 주세요."
     },
@@ -406,9 +405,7 @@
       "unlimited": "수량 제한 없음",
       "shipping": "배송 있음",
       "noShipping": "배송 없음",
-      "delivery": "{month} 발송 예정",
-      "select": "이 리워드로 후원하기",
-      "selected": "선택됨"
+      "delivery": "{month} 발송 예정"
     },
     "form": {
       "heading": "후원 정보",
@@ -432,14 +429,15 @@
       "total": "결제 금액",
       "submit": "후원하기",
       "submitting": "준비 중…",
-      "agreeNotice": "후원하기를 누르면 <terms>펀딩 약관</terms>과 <privacy>개인정보 처리방침</privacy>에 동의하는 것으로 봅니다.",
+      "agreeNotice": "후원하기를 누르면 <terms>이용약관</terms>과 <privacy>개인정보 처리방침</privacy>에 동의하는 것으로 봅니다.",
       "holdNotice": "결제창이 열려 있는 동안 리워드가 선점됩니다. 정해진 시간 안에 결제를 마치지 못하면 선점한 수량이 다시 풀립니다.",
       "paymentHeading": "결제",
       "payButton": "{amount} 결제하기",
       "errorReward": "후원할 리워드를 선택해 주세요.",
       "errorName": "이름을 입력해 주세요.",
       "errorEmail": "이메일 주소를 올바르게 입력해 주세요.",
-      "errorShipping": "배송지 정보를 모두 입력해 주세요."
+      "errorShipping": "배송지 정보를 모두 입력해 주세요.",
+      "retryWidget": "결제창 다시 열기"
     },
     "success": {
       "confirming": "결제를 확인하고 있습니다…",
@@ -447,9 +445,10 @@
       "body": "확인 메일을 보내 드렸습니다. 후원번호로 언제든 다시 확인하실 수 있습니다.",
       "pledgeCode": "후원번호",
       "amount": "결제 금액",
-      "toCampaign": "프로젝트로 돌아가기",
       "toMypage": "내 후원 내역 보기",
-      "toLookup": "후원번호로 조회하기"
+      "toLookup": "후원번호로 조회하기",
+      "checkingTitle": "결제 결과를 확인하고 있습니다",
+      "checkingBody": "결제 결과를 확인하는 중입니다. 잠시 후 다시 확인해 주세요."
     },
     "fail": {
       "title": "결제가 완료되지 않았습니다",
@@ -479,13 +478,15 @@
       "canceled": "취소되었습니다. 환불은 카드사에 따라 며칠 걸릴 수 있습니다.",
       "retry": "환불 처리 다시 확인하기",
       "retryConfirm": "환불이 실제로 처리됐는지 다시 확인할까요? 카드를 다시 취소하는 것이 아니라 상태만 확인합니다.",
-      "retrying": "확인하는 중…"
+      "retrying": "확인하는 중…",
+      "status": "상태"
     },
     "mypage": {
       "title": "내 후원",
       "description": "내가 후원한 프로젝트입니다.",
       "empty": "아직 후원한 프로젝트가 없습니다.",
-      "browse": "펀딩 둘러보기"
+      "browse": "펀딩 둘러보기",
+      "manageNotice": "후원번호와 이메일이 있다면 <manage>후원 조회</manage>에서도 확인하고 취소할 수 있습니다."
     },
     "status": {
       "pending": "결제 대기",
@@ -501,7 +502,8 @@
     },
     "common": {
       "loading": "불러오는 중…",
-      "required": "필수 항목입니다."
+      "required": "필수 항목입니다.",
+      "contactOffice": "사무국에 문의"
     }
   },
   "application": {
