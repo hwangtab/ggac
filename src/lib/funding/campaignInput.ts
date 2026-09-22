@@ -25,19 +25,37 @@ function dateOrNull(v: unknown): string | null | false {
  * 받으면 회원이 편집 가능한 필드로 임의 스킴(`javascript:`)이나 임의
  * 출처(피싱 사이트)를 심을 수 있다. 이 서비스가 실제로 이미지를 담는 곳은
  * 두 곳뿐이다 — 이 사이트가 서빙하는 Blob 공개 저장소(절대 URL, 오리진
- * 대조)와 이 사이트 자신(사이트 상대 경로, 슬래시 하나로 시작). `//evil.com`
- * 같은 프로토콜 상대 경로는 슬래시 두 개라 상대 경로 취급에서 제외된다 —
- * 브라우저가 그걸 다른 호스트로의 절대 URL로 읽기 때문이다.
+ * 대조)와 이 사이트 자신(사이트 상대 경로).
+ *
+ * "슬래시 하나로 시작하면 상대 경로"라는 접두 매칭은 뚫린다 — `//evil.com`
+ * (프로토콜 상대)뿐 아니라 `/\evil.com`(백슬래시)도 브라우저가 호스트를 바꾸는
+ * 절대 URL로 읽는다. WHATWG URL 파서는 `http(s)` 같은 "특수 스킴"에서
+ * 백슬래시를 슬래시와 동일하게 취급하기 때문이다. 접두어를 늘리는 대신
+ * 판정 자체를 바꾼다 — 후보를 아무 의미도 없는 더미 오리진 기준으로
+ * 해석해 보고, 해석된 오리진이 여전히 그 더미면 사이트 상대 경로로,
+ * 아니면(다른 오리진으로 넘어갔으면) 거부한다. 이 한 규칙이 `//`·`/\`·그
+ * 밖의 모든 변형을 한 번에 잡는다.
  * `NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL`이 없는 환경(테스트 등)에서는
  * `isBlobPublicUrl`이 항상 false를 주므로 상대 경로만 허용된다.
  */
+const RELATIVE_PATH_PROBE_ORIGIN = 'https://relative-path-probe.invalid'
+
+function isSiteRelativePath(trimmed: string): boolean {
+  if (!trimmed.startsWith('/')) return false
+  try {
+    return new URL(trimmed, RELATIVE_PATH_PROBE_ORIGIN).origin === RELATIVE_PATH_PROBE_ORIGIN
+  } catch {
+    return false
+  }
+}
+
 function imageUrlOrNull(v: unknown): string | null | false {
   if (v === null || v === undefined || v === '') return null
   if (typeof v !== 'string') return false
   const trimmed = v.trim()
   if (trimmed.length === 0) return null
   if (trimmed.length > 500) return false
-  if (trimmed.startsWith('/') && !trimmed.startsWith('//')) return trimmed
+  if (isSiteRelativePath(trimmed)) return trimmed
   if (isBlobPublicUrl(trimmed)) return trimmed
   return false
 }

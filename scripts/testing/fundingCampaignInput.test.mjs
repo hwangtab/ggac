@@ -165,6 +165,14 @@ test('cover_image·og_image: 블롭 오리진과 사이트 상대 경로만 허�
     const rejectedScheme = parseCampaignPatch({ og_image: 'javascript:alert(1)' }, 'all')
     assert.equal(rejectedScheme.ok, false)
 
+    // 프로토콜 상대(`//`)와 백슬래시(`/\`) 둘 다 브라우저가 다른 호스트로
+    // 읽는 절대 URL이다 — 접두 매칭이 아니라 해석 결과로 잡아야 한다.
+    const rejectedProtocolRelative = parseCampaignPatch({ cover_image: '//evil.example.com/a.png' }, 'all')
+    assert.equal(rejectedProtocolRelative.ok, false)
+
+    const rejectedBackslash = parseCampaignPatch({ og_image: '/\\evil.example.com/a.png' }, 'all')
+    assert.equal(rejectedBackslash.ok, false)
+
     // 비우는 것은 항상 허용한다.
     assert.equal(parseCampaignPatch({ cover_image: null }, 'all').ok, true)
     assert.equal(parseCampaignPatch({ cover_image: '' }, 'all').patch.cover_image, null)
