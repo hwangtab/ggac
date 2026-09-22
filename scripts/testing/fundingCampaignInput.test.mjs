@@ -142,3 +142,48 @@ test('slug 길이 경계: 3자·60자는 되고 2자·61자는 안 된다', () =
   assert.equal(isValidSlug('a'.repeat(60)), true)
   assert.equal(isValidSlug('a'.repeat(61)), false)
 })
+
+test('cover_image·og_image: 블롭 오리진과 사이트 상대 경로만 허용', () => {
+  const prevBase = process.env.NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL
+  try {
+    process.env.NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL = 'https://example.public.blob.vercel-storage.com'
+
+    const acceptedBlob = parseCampaignPatch(
+      { cover_image: 'https://example.public.blob.vercel-storage.com/covers/a.webp' },
+      'all'
+    )
+    assert.equal(acceptedBlob.ok, true)
+    assert.equal(acceptedBlob.patch.cover_image, 'https://example.public.blob.vercel-storage.com/covers/a.webp')
+
+    const acceptedRelative = parseCampaignPatch({ og_image: '/images/og-default.png' }, 'all')
+    assert.equal(acceptedRelative.ok, true)
+    assert.equal(acceptedRelative.patch.og_image, '/images/og-default.png')
+
+    const rejectedForeign = parseCampaignPatch({ cover_image: 'https://evil.example.com/a.png' }, 'all')
+    assert.equal(rejectedForeign.ok, false)
+
+    const rejectedScheme = parseCampaignPatch({ og_image: 'javascript:alert(1)' }, 'all')
+    assert.equal(rejectedScheme.ok, false)
+
+    // 비우는 것은 항상 허용한다.
+    assert.equal(parseCampaignPatch({ cover_image: null }, 'all').ok, true)
+    assert.equal(parseCampaignPatch({ cover_image: '' }, 'all').patch.cover_image, null)
+  } finally {
+    if (prevBase === undefined) delete process.env.NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL
+    else process.env.NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL = prevBase
+  }
+})
+
+test('cover_image·og_image: 환경변수가 없으면 상대 경로만 허용된다', () => {
+  const prevBase = process.env.NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL
+  try {
+    delete process.env.NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL
+    const relative = parseCampaignPatch({ cover_image: '/images/og-default.png' }, 'all')
+    assert.equal(relative.ok, true)
+    const absolute = parseCampaignPatch({ cover_image: 'https://anywhere.example.com/a.png' }, 'all')
+    assert.equal(absolute.ok, false)
+  } finally {
+    if (prevBase === undefined) delete process.env.NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL
+    else process.env.NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL = prevBase
+  }
+})

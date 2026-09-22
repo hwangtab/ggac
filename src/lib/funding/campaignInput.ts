@@ -1,4 +1,5 @@
 import { FUNDING_CATEGORY } from '@/db/schema/funding'
+import { isBlobPublicUrl } from '@/lib/storage/paths'
 import { CONTENT_ONLY_FIELDS } from './transitions'
 
 type Verdict<T> = ({ ok: true } & T) | { ok: false; message: string }
@@ -19,6 +20,28 @@ function dateOrNull(v: unknown): string | null | false {
  * 아니다 — 형식을 확인하지 않고 앞 7자만 자르면 전체 날짜가 조용히 "연-월"로
  * 둔갑하고, 아무 문자 7개도 날짜처럼 저장된다.
  */
+/**
+ * `cover_image`·`og_image`는 나중에 페이지가 그대로 렌더한다. 아무 문자열이나
+ * 받으면 회원이 편집 가능한 필드로 임의 스킴(`javascript:`)이나 임의
+ * 출처(피싱 사이트)를 심을 수 있다. 이 서비스가 실제로 이미지를 담는 곳은
+ * 두 곳뿐이다 — 이 사이트가 서빙하는 Blob 공개 저장소(절대 URL, 오리진
+ * 대조)와 이 사이트 자신(사이트 상대 경로, 슬래시 하나로 시작). `//evil.com`
+ * 같은 프로토콜 상대 경로는 슬래시 두 개라 상대 경로 취급에서 제외된다 —
+ * 브라우저가 그걸 다른 호스트로의 절대 URL로 읽기 때문이다.
+ * `NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL`이 없는 환경(테스트 등)에서는
+ * `isBlobPublicUrl`이 항상 false를 주므로 상대 경로만 허용된다.
+ */
+function imageUrlOrNull(v: unknown): string | null | false {
+  if (v === null || v === undefined || v === '') return null
+  if (typeof v !== 'string') return false
+  const trimmed = v.trim()
+  if (trimmed.length === 0) return null
+  if (trimmed.length > 500) return false
+  if (trimmed.startsWith('/') && !trimmed.startsWith('//')) return trimmed
+  if (isBlobPublicUrl(trimmed)) return trimmed
+  return false
+}
+
 function yearMonthOrNull(v: unknown): string | null | false {
   if (v === null || v === undefined || v === '') return null
   if (typeof v !== 'string') return false
@@ -86,7 +109,11 @@ export function parseCampaignPatch(
         patch[key] = d; break
       }
       case 'cover_image':
-      case 'og_image':
+      case 'og_image': {
+        const img = imageUrlOrNull(v)
+        if (img === false) return { ok: false, message: '이미지 주소는 이 사이트의 저장소 URL이거나 "/"로 시작하는 경로여야 합니다.' }
+        patch[key] = img; break
+      }
       case 'project_slug':
         patch[key] = str(v, 500); break
     }
