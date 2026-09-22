@@ -14,7 +14,7 @@ import { FiAlertCircle, FiCheckCircle, FiLoader } from 'react-icons/fi'
 
 import { Link } from '@/i18n/navigation'
 
-import { resolvePaymentFailureMessage } from '../paymentFailure'
+import { resolvePaymentFailureMessage } from '@/lib/payments/failureMessage'
 
 type Phase = 'confirming' | 'done' | 'failed'
 
