@@ -761,3 +761,91 @@ export async function listPublicBackers(
     paid_at: toIso(r.paidAt) ?? '',
   }))
 }
+
+/**
+ * 이행 상태를 **조건부로** 옮긴다. 옮겨진 행만 돌려준다.
+ *
+ * 읽고 나서 쓰지 않는다 — 이 기능에서 두 번 물렸던 자리다. 화면이 본 상태와
+ * 쓰는 시점의 상태가 다를 수 있으므로(두 탭, 개설자와 사무국이 동시에),
+ * **판정 근거였던 출발 상태를 쓰기 조건에 그대로 걸어** 그사이 움직인 행은
+ * 아무것도 쓰지 않고 빠지게 한다. 호출부는 요청한 개수와 돌아온 개수를
+ * 견주어 409로 답한다.
+ *
+ * 조건이 넷이다: 이 캠페인의 후원이고(남의 캠페인 id를 섞어 보낼 수 없다),
+ * 결제가 끝난 건이며(환불·취소된 후원에는 이행이 없다), 출발 상태가 허용된
+ * 목록 안에 있고, 요청한 id 중 하나다.
+ */
+export async function advanceFulfillment(input: {
+  campaignId: string
+  pledgeIds: string[]
+  to: (typeof fundingPledges.$inferSelect)['fulfillmentStatus']
+  allowedFrom: (typeof fundingPledges.$inferSelect)['fulfillmentStatus'][]
+}): Promise<Row[]> {
+  if (input.pledgeIds.length === 0 || input.allowedFrom.length === 0) return []
+  const rows = await db
+    .update(fundingPledges)
+    .set({ fulfillmentStatus: input.to })
+    .where(
+      and(
+        inArray(fundingPledges.id, input.pledgeIds),
+        eq(fundingPledges.campaignId, input.campaignId),
+        eq(fundingPledges.status, 'paid'),
+        inArray(fundingPledges.fulfillmentStatus, input.allowedFrom)
+      )
+    )
+    .returning()
+  return rows.map(r => rowToPledge(r as Row))
+}
+
+/**
+ * 배송이 필요한 리워드의 **결제 완료** 후원. 배송 목록 내보내기가 쓴다.
+ *
+ * 리워드 테이블과 조인해 `requires_shipping`을 본다 — 후원 행만 보면 알 수
+ * 없다(배송지 칸이 비어 있는 것과 배송이 필요 없는 것은 다른 사실이다).
+ * 익명 여부를 함께 준다: 부치는 사람에게 받는 사람 이름은 가리지 않지만,
+ * 후원자 표기는 개설자 화면과 같은 규칙(`익명`)을 따라야 한다.
+ */
+export async function listShippingPledges(campaignId: string): Promise<Row[]> {
+  const rows = await db
+    .select({
+      pledgeCode: fundingPledges.pledgeCode,
+      backerName: fundingPledges.backerName,
+      isAnonymous: fundingPledges.isAnonymous,
+      rewardTitle: fundingPledges.rewardTitle,
+      quantity: fundingPledges.quantity,
+      totalAmount: fundingPledges.totalAmount,
+      fulfillmentStatus: fundingPledges.fulfillmentStatus,
+      shippingName: fundingPledges.shippingName,
+      shippingPhone: fundingPledges.shippingPhone,
+      shippingPostcode: fundingPledges.shippingPostcode,
+      shippingAddress1: fundingPledges.shippingAddress1,
+      shippingAddress2: fundingPledges.shippingAddress2,
+      shippingMemo: fundingPledges.shippingMemo,
+      paidAt: fundingPledges.paidAt,
+    })
+    .from(fundingPledges)
+    .innerJoin(fundingRewards, eq(fundingRewards.id, fundingPledges.rewardId))
+    .where(
+      and(
+        eq(fundingPledges.campaignId, campaignId),
+        eq(fundingPledges.status, 'paid'),
+        eq(fundingRewards.requiresShipping, true)
+      )
+    )
+    .orderBy(desc(fundingPledges.paidAt))
+  return rows.map(r => ({
+    pledge_code: r.pledgeCode,
+    backer_name: r.isAnonymous ? '익명' : r.backerName,
+    reward_title: r.rewardTitle,
+    quantity: r.quantity,
+    total_amount: r.totalAmount,
+    fulfillment_status: r.fulfillmentStatus,
+    shipping_name: r.shippingName,
+    shipping_phone: r.shippingPhone,
+    shipping_postcode: r.shippingPostcode,
+    shipping_address1: r.shippingAddress1,
+    shipping_address2: r.shippingAddress2,
+    shipping_memo: r.shippingMemo,
+    paid_at: toIso(r.paidAt),
+  }))
+}
