@@ -547,6 +547,9 @@ async function main() {
   const FUNDING_MEMBER_PLEDGE_CODE = 'FND-20260901-MEMBER22'
   const FUNDING_GUEST_PLEDGE_CODE = 'FND-20260901-GUEST222'
   const FUNDING_GUEST_BACKER_EMAIL = 'authz-guest-backer@test.local'
+  // 회원 후원자(`other`)의 가입 이메일과 같은 값이다. 비회원 경로의 열쇠
+  // 절반이라 스펙이 그대로 쓴다.
+  const FUNDING_MEMBER_BACKER_EMAIL = 'authz-other@test.local'
 
   // `isDeleted: false`가 여기 있어야 시드가 **복구 수단**이 된다. 이 스크립트는
   // 스스로 "멱등이다 — 실패한 실행을 그대로 다시 돌려 복구할 수 있어야 한다"고
@@ -852,9 +855,11 @@ async function main() {
     description: '후원 취소 경계 테스트용 리워드',
     amount: 15000,
     totalQuantity: null,
-    // 배송 리워드로 두면 개설자 화면이 후원자 이메일까지 받게 된다. 이 픽스처의
-    // 목적은 취소 경계이므로 필요 없는 정보를 늘리지 않는다.
-    requiresShipping: false,
+    // **배송 리워드다.** 개설자 화면(`ownerPledgeView`)은 배송 리워드에만
+    // 배송지 묶음을 싣는다. 이 값이 false면 "개설자 화면에 후원자 이메일이
+    // 없다"는 단정이 게이트 덕분인지 리워드가 배송이 아니어서인지 구분되지
+    // 않는다 — 공허하게 통과한다. 같은 이유로 아래 후원 행에 배송지도 심는다.
+    requiresShipping: true,
     sortOrder: 0,
   }
   await db
@@ -869,7 +874,7 @@ async function main() {
       userId: ids.other,
       orderId: 'authz-e2e-funding-order-member',
       backerName: 'authz 회원 후원자',
-      backerEmail: 'authz-other@test.local',
+      backerEmail: FUNDING_MEMBER_BACKER_EMAIL,
     },
     {
       id: FUNDING_GUEST_PLEDGE_ID,
@@ -906,6 +911,13 @@ async function main() {
       refundedAt: null,
       fulfillmentStatus: 'none',
       entrySource: 'online',
+      // 배송 리워드라 개설자 화면이 이 묶음을 싣는다. 택배를 부치는 데 필요한
+      // 것은 여기까지다 — 이메일은 싣지 않는다(그 결정과 이유는 라우트 주석에).
+      shippingName: p.backerName,
+      shippingPhone: '010-0000-0000',
+      shippingPostcode: '00000',
+      shippingAddress1: '경기도 어딘가 1',
+      shippingAddress2: '101호',
     }
     await db
       .insert(tursoFundingPledges)
@@ -1128,6 +1140,7 @@ async function main() {
     fundingActiveCampaignId: FUNDING_ACTIVE_CAMPAIGN_ID,
     fundingMemberPledgeId: FUNDING_MEMBER_PLEDGE_ID,
     fundingMemberPledgeCode: FUNDING_MEMBER_PLEDGE_CODE,
+    fundingMemberBackerEmail: FUNDING_MEMBER_BACKER_EMAIL,
     fundingGuestPledgeId: FUNDING_GUEST_PLEDGE_ID,
     fundingGuestPledgeCode: FUNDING_GUEST_PLEDGE_CODE,
     fundingGuestBackerEmail: FUNDING_GUEST_BACKER_EMAIL,

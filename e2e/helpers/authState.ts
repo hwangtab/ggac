@@ -54,6 +54,8 @@ export type Fixtures = {
   /** 위 캠페인의 회원 후원 — 후원자는 `other`(개설자가 아니다). */
   fundingMemberPledgeId: string
   fundingMemberPledgeCode: string
+  /** 회원 후원자의 이메일 — 비회원 경로의 열쇠 절반. */
+  fundingMemberBackerEmail: string
   /** 위 캠페인의 비회원 후원 — 번호+이메일 경로 경계용. */
   fundingGuestPledgeId: string
   fundingGuestPledgeCode: string

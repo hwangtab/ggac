@@ -805,4 +805,107 @@ test.describe('펀딩 — 후원 취소 경계', () => {
       await anonContext.dispose()
     }
   })
+
+  /**
+   * **세션은 신원이다.** 번호+이메일 경로는 인증할 수 없는 사람을 위한
+   * 길이지, 인증할 수 있는 사람에게 열린 두 번째 문이 아니다.
+   *
+   * 4차 감사에서 확인한 실제 경로다 — 개설자 화면이 결제 완료 후원의
+   * `pledge_code`를 전부 주고 배송 리워드면 `backer_email`까지 줬다. 그 둘을
+   * 쥔 개설자가 `pledgeId` 대신 번호+이메일을 보내면 `canViewPledge`를 보지
+   * 않는 갈래로 우회해 자기 후원자의 결제를 전액 환불시킬 수 있었다.
+   *
+   * 두 곳을 함께 닫았고 **한쪽만으로는 닫히지 않는다** — 이메일만 빼면 번호는
+   * 여전히 화면에 있고(다른 경로로 이메일을 알면 그만이다), 라우트만 고치면
+   * 개설자 화면은 계속 남의 결제 열쇠를 화면에 뿌린다.
+   */
+  test('개설자는 후원번호와 이메일로도 남의 후원을 취소하지 못한다 — 임자 있는 후원은 세션이 임자일 때만', async ({
+    baseURL,
+  }) => {
+    const ownerContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('owner'),
+    })
+    const backerContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('other'),
+    })
+    try {
+      // 금지 쪽: 캠페인 개설자가 자기 후원자의 번호+이메일을 그대로 보낸다.
+      // 둘 다 맞는 값이다 — 막는 것은 값의 정확성이 아니라 임자 판정이다.
+      const denied = await ownerContext.post('/api/funding/pledges/cancel', {
+        data: {
+          pledgeCode: fixtures.fundingMemberPledgeCode,
+          email: fixtures.fundingMemberBackerEmail,
+        },
+      })
+      expect(denied.status()).toBe(404)
+      expect((await denied.json()).error).toBe(PLEDGE_NOT_FOUND)
+
+      const afterDenied = await readPledgeRow(fixtures.fundingMemberPledgeId)
+      expect(afterDenied?.status).toBe('paid')
+      expect(afterDenied?.canceled_at).toBeNull()
+
+      // 허용 쪽: 같은 번호+이메일을 **후원자 본인**이 보내면 지난다. 이 단정이
+      // 없으면 갈래를 통째로 막아도(= 회원 후원은 번호+이메일로 영영 못 건드리게
+      // 해도) 위 부정 단정은 초록불이다. 후원자에게 열린 두 길(후원 id·번호+이메일)이
+      // 둘 다 살아 있어야 한다 — 앞 테스트가 후원 id 쪽을 본다.
+      const allowed = await backerContext.post('/api/funding/pledges/cancel', {
+        data: {
+          pledgeCode: fixtures.fundingMemberPledgeCode,
+          email: fixtures.fundingMemberBackerEmail,
+        },
+      })
+      expect(allowed.status()).toBe(400)
+      expect((await allowed.json()).error).toBe(PLEDGE_NO_PAYMENT)
+
+      expect((await readPledgeRow(fixtures.fundingMemberPledgeId))?.status).toBe('paid')
+    } finally {
+      await ownerContext.dispose()
+      await backerContext.dispose()
+    }
+  })
+
+  /**
+   * **개설자 화면은 후원자 이메일을 싣지 않는다.**
+   *
+   * 택배를 부치는 데 필요한 것은 받는 사람 이름·전화번호·주소이고 그 셋은
+   * 그대로 간다. 이메일은 거기에 보태는 편의였는데, 같은 화면이 주는
+   * `pledge_code`와 짝이 되는 순간 남의 결제를 환불하는 열쇠가 된다.
+   *
+   * 값을 치른다 — 개설자가 후원자에게 메일로 연락할 길이 화면에서 사라진다.
+   * 그런 일은 사무국을 거친다. 의도한 맞바꿈이라 여기 적어 둔다.
+   */
+  test('개설자 화면은 후원자 이메일을 싣지 않는다 — 배송에 필요한 것만 간다', async ({
+    baseURL,
+  }) => {
+    const ownerContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('owner'),
+    })
+    try {
+      const res = await ownerContext.get(
+        `/api/mypage/funding/campaigns/${fixtures.fundingActiveCampaignId}`
+      )
+      expect(res.status()).toBe(200)
+      const bodyText = await res.text()
+      const body = JSON.parse(bodyText)
+      const pledges = body.data?.pledges as Array<Record<string, unknown>>
+      const mine = pledges.find(p => p.pledge_code === fixtures.fundingMemberPledgeCode)
+      expect(mine, '개설자 화면에 그 후원이 보이지 않는다 — 시드를 확인할 것').toBeTruthy()
+
+      // 먼저 **배송 묶음이 실제로 실려 있는지** 본다. 이 리워드가 배송이
+      // 아니면 아래 단정이 게이트와 무관하게 공허하게 통과한다.
+      expect(mine!.shipping_address1).toBeTruthy()
+      expect(mine!.shipping_phone).toBeTruthy()
+
+      expect(mine!.backer_email).toBeUndefined()
+      // 키 이름을 바꿔 같은 값을 다시 싣는 길도 막는다 — 응답 어디에도
+      // 후원자 이메일 문자열이 없어야 한다.
+      expect(bodyText).not.toContain(fixtures.fundingMemberBackerEmail)
+      expect(bodyText).not.toContain(fixtures.fundingGuestBackerEmail)
+    } finally {
+      await ownerContext.dispose()
+    }
+  })
 })

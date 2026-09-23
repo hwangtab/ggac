@@ -20,7 +20,20 @@ export const dynamic = 'force-dynamic'
 
 type Ctx = { params: Promise<{ id: string }> }
 
-/** 개설자에게 보이는 후원 행. 배송 리워드가 아니면 연락처·주소는 싣지 않는다. */
+/**
+ * 개설자에게 보이는 후원 행. 배송 리워드가 아니면 연락처·주소는 싣지 않는다.
+ *
+ * **후원자 이메일은 배송 리워드에도 싣지 않는다.** 택배를 부치는 데 필요한
+ * 것은 받는 사람 이름·전화번호·주소이고 그 셋은 그대로 간다. 이메일은 거기에
+ * 보태는 편의였는데, 이 화면이 함께 주는 `pledge_code`와 짝이 되는 순간
+ * **남의 결제를 환불하는 버튼**이 된다 — 후원 취소의 비회원 경로가 번호+이메일
+ * 한 쌍을 열쇠로 쓰기 때문이다(`src/app/api/funding/pledges/cancel/route.ts`).
+ * 그쪽에도 "임자 있는 후원은 세션이 임자일 때만"이라는 조건을 넣었지만, 한쪽만
+ * 고치면 다른 쪽이 그대로 문이 되므로 둘 다 닫는다.
+ *
+ * 값을 치른다 — 개설자가 후원자에게 메일로 연락할 길이 화면에서 사라진다.
+ * 그런 일은 사무국(contact@ggac.kr)을 거친다.
+ */
 function ownerPledgeView(p: Record<string, unknown>, shippingRewardIds: Set<string>) {
   const ships = shippingRewardIds.has(String(p.reward_id))
   return {
@@ -36,7 +49,6 @@ function ownerPledgeView(p: Record<string, unknown>, shippingRewardIds: Set<stri
     fulfillment_status: p.fulfillment_status,
     ...(ships
       ? {
-          backer_email: p.backer_email,
           shipping_name: p.shipping_name,
           shipping_phone: p.shipping_phone,
           shipping_postcode: p.shipping_postcode,
