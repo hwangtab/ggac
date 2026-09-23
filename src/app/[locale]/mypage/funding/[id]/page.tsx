@@ -20,13 +20,13 @@ import { FiAlertCircle } from 'react-icons/fi'
 
 import { Link } from '@/i18n/navigation'
 import { computePercent, formatAmount, hasBackers } from '@/app/[locale]/funding/format'
+// 공개 링크를 걸어도 되는 상태 — 목록 화면과 같은 기준을 사본이 아니라
+// 전이 표의 정본으로 쓴다.
+import { PUBLIC_CAMPAIGN_STATUSES } from '@/lib/funding/transitions'
 
 import MypageLayout from '../../components/MypageLayout'
 import PermissionCheck from '../../components/PermissionCheck'
 import CampaignStatusBadge from '../CampaignStatusBadge'
-
-// 공개 링크를 걸어도 되는 상태만 — 목록 화면과 같은 기준.
-const PUBLIC_LINKABLE_STATUSES = ['active', 'closed', 'settled'] as const
 
 type TransitionAction = 'submit' | 'withdraw' | 'close'
 
@@ -54,6 +54,11 @@ interface OwnerPledge {
   quantity: number
   total_amount: number
   backer_name: string
+  // 익명 후원은 `backer_name`이 '익명'으로 바뀌어 온다. 배송이 필요한
+  // 리워드라면 그것만으로는 택배를 부칠 수 없으므로, 서버가 함께 보내는
+  // 받는 사람 이름을 배송지 칸에 적는다 — 익명은 공개 화면의 표기를 감추는
+  // 약속이지, 물건을 부치는 사람에게 수취인을 감추는 약속이 아니다.
+  shipping_name?: string
   shipping_address1?: string
   shipping_address2?: string
   shipping_postcode?: string
@@ -163,7 +168,7 @@ export default function ManageCampaignPage() {
 
   const campaign = data?.campaign
   const canLinkPublic =
-    !!campaign && (PUBLIC_LINKABLE_STATUSES as readonly string[]).includes(campaign.status)
+    !!campaign && (PUBLIC_CAMPAIGN_STATUSES as readonly string[]).includes(campaign.status)
   const rejected = campaign?.status === 'draft' && !!campaign.review_note
   const showFigures = data ? hasBackers(data.progress) : false
   const percent = data ? computePercent(data.progress.raised_amount, data.campaign.goal_amount) : 0
@@ -186,7 +191,30 @@ export default function ManageCampaignPage() {
 
         {loading ? (
           <p className="text-gray-600">{t('common.loading')}</p>
-        ) : campaign ? (
+        ) : !campaign ? (
+          // 잘못 적은 주소·남의 캠페인·지워진 캠페인은 모두 같은 응답이라
+          // 여기로 온다. 배너만 남기면 나갈 길이 없다 — 편집기의
+          // `readOnlyGuidance` 블록과 같은 모양으로 돌아갈 길과 재시도를 준다.
+          <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <p className="text-sm text-gray-900">{t('creator.loadFailedGuidance')}</p>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setError('')
+                  setLoading(true)
+                  void load()
+                }}
+                className="tw-btn-secondary"
+              >
+                {t('error.retry')}
+              </button>
+              <Link href="/mypage/funding" className="text-sm text-primary-600 hover:underline">
+                {t('creator.backToList')}
+              </Link>
+            </div>
+          </div>
+        ) : (
           <>
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="text-2xl font-bold text-gray-900">{campaign.title}</h1>
@@ -317,7 +345,16 @@ export default function ManageCampaignPage() {
                           <td className="py-2 pr-4 text-gray-900">
                             {t('progress.amount', { amount: formatAmount(p.total_amount, locale) })}
                           </td>
-                          <td className="py-2 pr-4 text-gray-700">{shippingAddress(p)}</td>
+                          <td className="py-2 pr-4 text-gray-700">
+                            {p.shipping_address1 ? (
+                              <>
+                                {p.shipping_name ? (
+                                  <span className="block text-gray-900">{p.shipping_name}</span>
+                                ) : null}
+                                <span>{shippingAddress(p)}</span>
+                              </>
+                            ) : null}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -326,7 +363,7 @@ export default function ManageCampaignPage() {
               ) : null}
             </section>
           </>
-        ) : null}
+        )}
       </MypageLayout>
     </PermissionCheck>
   )
