@@ -1316,6 +1316,7 @@ body {
 [data-poster] .hover\:bg-red-200:hover,
 [data-poster] .hover\:bg-orange-200:hover,
 [data-poster] .hover\:bg-yellow-200:hover,
+[data-poster] .hover\:bg-purple-200:hover,
 [data-poster] .hover\:bg-primary-200:hover,
 [data-poster] .hover\:bg-accent-200:hover {
   background-color: rgba(255, 255, 255, 0.2);

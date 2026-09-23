@@ -88,6 +88,13 @@ export const SETTING_MAPPINGS = {
       transform: (value: any) => value?.enabled || true,
     },
     file_uploads_enabled: { key: 'file_upload', transform: (value: any) => value?.enabled || true },
+    // 펀딩은 켜면 돈이 움직인다 — 다른 기능들과 달리 값이 없을 때(true) 쪽으로
+    // 기울면 안 된다. `|| true` 관용구를 그대로 쓰면 꺼져 있어도 화면에 항상
+    // 켜진 것으로 보인다(다른 기능 토글의 기존 결함이지만 여기서는 재현하지 않는다).
+    funding_enabled: {
+      key: 'funding_features',
+      transform: (value: any) => value?.enabled === true,
+    },
   },
 }
 

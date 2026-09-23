@@ -49,6 +49,7 @@ interface AdminSettings {
     artist_registration_enabled: boolean
     comments_enabled: boolean
     file_uploads_enabled: boolean
+    funding_enabled: boolean
   }
 }
 
@@ -912,6 +913,26 @@ export default function AdminSettingsPage() {
                         />
                         <span className="text-sm font-medium text-gray-700">파일 업로드 허용</span>
                       </label>
+                    </div>
+
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={settings.features.funding_enabled}
+                          onChange={e =>
+                            updateSettings('features', 'funding_enabled', e.target.checked)
+                          }
+                          className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 mr-2"
+                        />
+                        <span className="text-sm font-medium text-gray-700">
+                          펀딩 기능 — 조합원 캠페인 개설·후원 결제 허용
+                        </span>
+                      </label>
+                      <p className="mt-1 ml-6 text-xs text-amber-800">
+                        켜면 조합원이 캠페인을 만들어 심사에 올릴 수 있고, 승인된 캠페인은 실제
+                        결제로 후원을 받습니다. 끄면 새 개설·심사 처리·결제가 모두 막힙니다.
+                      </p>
                     </div>
                   </div>
                 )}
