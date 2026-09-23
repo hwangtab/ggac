@@ -7280,6 +7280,178 @@ if (trackedFiles === null) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// 펀딩 — 돈이 걸린 경계의 **문자열 계약**.
+//
+// 이 파일이 할 수 있는 일과 없는 일을 먼저 적는다(맨 위 머리 주석의 되풀이가
+// 아니라, 아래 네 계약에 대해 구체적으로). 적대 감사(2026-08-27)가 인가 우회
+// 15가지 중 11가지를 이 가드로 통과시켰다. 도달 가능성·실행 순서·데이터
+// 흐름을 보지 않기 때문이다. 아래 계약도 전부 같은 한계를 안는다:
+//
+//   - 게이트 호출 **앞에** 조기 반환을 끼워 넣으면 전부 초록불이다
+//   - 게이트의 반환값을 쓰지 않고 버려도 초록불이다
+//   - 같은 이름의 지역 함수로 섀도잉해도 초록불이다
+//
+// **펀딩 인가의 안전망은 `npm run test:e2e:authz`의
+// `e2e/authz-funding.spec.ts`다.** 이 블록이 초록불인 것은 경계가 지켜진다는
+// 증거가 아니다. 여기서 잡는 것은 하나뿐이다 — **통째로 사라지는 것.**
+{
+  const fundingFailures = []
+
+  const readIfExists = file => {
+    const path = join(root, file)
+    if (!existsSync(path)) {
+      fundingFailures.push(`${file}: 파일이 없습니다 — 경로가 바뀌었다면 이 계약도 고쳐야 합니다`)
+      return null
+    }
+    return readSourceAt(path)
+  }
+
+  const MYPAGE_TRANSITION = 'src/app/api/mypage/funding/campaigns/[id]/transition/route.ts'
+  const CANCEL_ROUTE = 'src/app/api/funding/pledges/cancel/route.ts'
+  const TRANSITIONS_LIB = 'src/lib/funding/transitions.ts'
+  const FUNDING_SPEC = 'e2e/authz-funding.spec.ts'
+
+  // (1) 마이페이지 전이 라우트는 **관리자 전용 동작을 스스로 거절한다.**
+  //
+  // 이 한 줄이 없으면 개설자가 자기 캠페인에 `{"action":"approve"}`를 보내
+  // 공개하고 돈을 받기 시작한다. 그다음은 `close`·`settle`이다.
+  // `canManageCampaign`은 **누구의 캠페인인가**만 보고, 전이표에는 행위자
+  // 개념이 없으며, `checkActionPreconditions`에는 `submit` 규칙만 있다 —
+  // 즉 이 줄 말고 이 경로를 막는 것이 라우트에 없다.
+  //
+  // **증명하지 않는 것**: 이 줄이 쓰기보다 앞에 있는지, 실제로 도달하는지.
+  // 줄을 남겨 둔 채 위에 `return` 하나를 끼우면 그대로 통과한다.
+  const transitionSource = readIfExists(MYPAGE_TRANSITION)
+  if (transitionSource !== null) {
+    if (!/actorFor\(\s*action\s*\)\s*!==\s*'owner_or_admin'/.test(transitionSource)) {
+      fundingFailures.push(
+        `${MYPAGE_TRANSITION}: 관리자 전용 동작을 거절하는 ` +
+          `\`actorFor(action) !== 'owner_or_admin'\` 검사가 없습니다`
+      )
+    }
+  }
+
+  // (2) 관리자 전용 동작 목록과 **E2E가 실제로 두드리는 동작 목록**이 어긋나지
+  // 않는다.
+  //
+  // `actorFor`에 동작을 하나 더 넣으면(예: 환불·수기 등록) 그 동작은 위 (1)의
+  // 한 줄에 자동으로 걸린다 — 그러나 **그 한 줄이 지워졌을 때 울어 줄 테스트는
+  // 자동으로 생기지 않는다.** 이 저장소가 여러 번 데인 "사본 목록이 갈라지는"
+  // 자리다(`duplicate-lists-must-sync`). 그래서 목록을 소스에서 뽑아 스펙과
+  // 대조한다.
+  //
+  // **증명하지 않는 것**: 스펙이 그 동작을 **제대로** 단정하는지. 여기서 보는
+  // 것은 문자열이 스펙 파일에 있다는 사실뿐이다.
+  const transitionsLibSource = readIfExists(TRANSITIONS_LIB)
+  const fundingSpecSource = readIfExists(FUNDING_SPEC)
+  if (transitionsLibSource !== null && fundingSpecSource !== null) {
+    const actorForBody = transitionsLibSource.match(/export function actorFor\([\s\S]*?\n\}/)?.[0]
+    if (!actorForBody) {
+      fundingFailures.push(`${TRANSITIONS_LIB}: actorFor 함수를 찾지 못했습니다`)
+    } else {
+      // `? 'admin'` **앞에** 적힌 조건의 동작들이 관리자 전용이다. 반환 타입
+      // 주석(`: 'owner_or_admin' | 'admin'`)에도 같은 문자열이 있으므로
+      // 단순한 indexOf로는 서명 줄에서 끊긴다.
+      const adminArm = /\?\s*'admin'/.exec(actorForBody)
+      const adminBranch = adminArm ? actorForBody.slice(0, adminArm.index) : ''
+      const adminOnlyActions = [...adminBranch.matchAll(/action === '([a-z]+)'/g)].map(m => m[1])
+      // 표본이 비면 아래 for 문이 공허하게 통과한다 — 이 저장소가 실제로
+      // 만든 적 있는 실패 모드다.
+      if (adminOnlyActions.length === 0) {
+        fundingFailures.push(
+          `${TRANSITIONS_LIB}: actorFor에서 관리자 전용 동작을 하나도 뽑지 못했습니다 ` +
+            '(모양이 바뀌었다면 이 계약의 정규식도 함께 고쳐야 합니다)'
+        )
+      }
+      for (const action of adminOnlyActions) {
+        if (!fundingSpecSource.includes(`action: '${action}'`)) {
+          fundingFailures.push(
+            `${FUNDING_SPEC}: 관리자 전용 동작 '${action}'을 두드리는 짝 단정이 없습니다 ` +
+              `(ADMIN_ONLY_ACTIONS에 \`action: '${action}'\`을 더할 것)`
+          )
+        }
+      }
+    }
+  }
+
+  // (3) 후원 취소 라우트의 **임자 판정 두 갈래**.
+  //
+  // 이 라우트는 `getOptionalUser()`로 요청자를 알아본다 — 아무도 막지 않는
+  // 함수다. 회원 경로에서 "내 후원"을 가르는 것은 `canViewPledge` 하나이고,
+  // 비회원 경로에서는 번호+이메일을 **함께** 보는 조회 하나다. 어느 쪽이든
+  // 지우면 후원 id나 후원번호를 아는 사람이 남의 결제를 환불시킬 수 있다.
+  //
+  // **증명하지 않는 것**: 그 호출의 결과를 실제로 쓰는지. `canViewPledge(...)`를
+  // 부르고 값을 버려도 이 계약은 통과한다.
+  const cancelSource = readIfExists(CANCEL_ROUTE)
+  if (cancelSource !== null) {
+    if (!cancelSource.includes('canViewPledge(')) {
+      fundingFailures.push(`${CANCEL_ROUTE}: 회원 경로의 소유 판정(canViewPledge) 호출이 없습니다`)
+    }
+    if (!cancelSource.includes('getPledgeByCodeAndEmail(')) {
+      fundingFailures.push(
+        `${CANCEL_ROUTE}: 비회원 경로가 번호와 이메일을 함께 보는 ` +
+          'getPledgeByCodeAndEmail 호출이 없습니다'
+      )
+    }
+    // 스펙이 이 라우트를 **한 번도 부르지 않는 상태**로 돌아가는 것을 막는다.
+    // 이번 회차 전까지 `e2e/` 어디에도 `/api/funding/pledges/`가 없었다.
+    if (fundingSpecSource !== null && !fundingSpecSource.includes('/api/funding/pledges/cancel')) {
+      fundingFailures.push(
+        `${FUNDING_SPEC}: 후원 취소 라우트를 두드리는 단정이 없습니다 ` +
+          '(이 경계는 E2E 말고 아무것도 지키지 않습니다)'
+      )
+    }
+  }
+
+  // (4) 펀딩 API 라우트의 **게이트 개수**. 글롭이라 새 라우트가 자동으로 들어온다.
+  //
+  // **증명하지 않는 것**: 게이트가 어느 핸들러에, 어느 순서로 있는지.
+  // `GET`에만 걸고 `POST`는 비워 두어도 이 계약은 통과한다.
+  const adminFundingRoutes = globSync('src/app/api/admin/funding/**/route.@(ts|tsx)', {
+    cwd: root,
+    exclude: ['**/node_modules/**', '**/.next/**'],
+  })
+  const mypageFundingRoutes = globSync('src/app/api/mypage/funding/**/route.@(ts|tsx)', {
+    cwd: root,
+    exclude: ['**/node_modules/**', '**/.next/**'],
+  })
+  // 글롭이 비면 아래 검사가 통째로 꺼진다. 현재 각각 2개·5개다.
+  if (adminFundingRoutes.length < 2 || mypageFundingRoutes.length < 4) {
+    fundingFailures.push(
+      `펀딩 라우트 글롭이 비었거나 줄었습니다(admin ${adminFundingRoutes.length}, ` +
+        `mypage ${mypageFundingRoutes.length}) — 경로가 바뀌었다면 이 계약도 고쳐야 합니다`
+    )
+  }
+  for (const file of adminFundingRoutes) {
+    const code = readSourceAt(join(root, file))
+    if (!code.includes('requireAdmin(')) {
+      fundingFailures.push(`${file}: 관리자 펀딩 라우트에 requireAdmin() 호출이 없습니다`)
+    }
+  }
+  for (const file of mypageFundingRoutes) {
+    const code = readSourceAt(join(root, file))
+    if (!code.includes('requireActiveMember(') && !code.includes('requireUser(')) {
+      fundingFailures.push(
+        `${file}: 마이페이지 펀딩 라우트에 로그인 게이트(requireActiveMember/requireUser)가 없습니다`
+      )
+    }
+    // 캠페인 id를 경로로 받는 라우트는 **그 캠페인이 내 것인지**를 따로
+    // 판정해야 한다. 로그인만으로는 남의 캠페인 id를 넣는 것을 막지 못한다.
+    if (file.includes('[id]') && !code.includes('canManageCampaign(')) {
+      fundingFailures.push(`${file}: 캠페인 소유 판정(canManageCampaign) 호출이 없습니다`)
+    }
+  }
+
+  if (fundingFailures.length > 0) {
+    failures.push(
+      `Funding boundaries guard money, and this file can only pin strings — the real safety net is e2e/authz-funding.spec.ts (npm run test:e2e:authz). These contracts catch a gate that disappeared entirely; they prove nothing about reachability, ordering or data flow. Offending contract(s):\n${fundingFailures
+        .map(hit => `- ${hit}`)
+        .join('\n')}`
+    )
+  }
+}
 if (failures.length > 0) {
   console.error(failures.join('\n\n'))
   process.exit(1)
