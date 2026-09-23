@@ -1,0 +1,333 @@
+'use client'
+
+/**
+ * 펀딩 운영 대시보드. 창작자가 캠페인을 만든 뒤 가장 자주 오는 곳이다.
+ *
+ * **지금 무엇을 해야 하는가**를 맨 위에서 한 줄로 말해 준다 — 상태별로
+ * 문구가 갈리고, 반려된 뒤 다시 초안으로 돌아왔으면 관리자가 남긴 반려
+ * 사유(`campaign.review_note`)를 그대로 보인다.
+ *
+ * 동작 버튼(심사 올리기·제출 취소·마감하기)은 전부 `POST …/transition`에
+ * `{ action }`을 보낸다. 되돌릴 수 없는 둘(심사 올리기·마감하기)만
+ * `window.confirm`으로 먼저 묻는다. 서버가 거절하면 그 문장을 그대로
+ * 배너에 보인다 — 화면이 이유를 따로 추측하지 않는다.
+ */
+
+import { useLocale, useTranslations } from 'next-intl'
+import { useParams } from 'next/navigation'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { FiAlertCircle } from 'react-icons/fi'
+
+import { Link } from '@/i18n/navigation'
+import { computePercent, formatAmount, hasBackers } from '@/app/[locale]/funding/format'
+
+import MypageLayout from '../../components/MypageLayout'
+import PermissionCheck from '../../components/PermissionCheck'
+import CampaignStatusBadge from '../CampaignStatusBadge'
+
+// 공개 링크를 걸어도 되는 상태만 — 목록 화면과 같은 기준.
+const PUBLIC_LINKABLE_STATUSES = ['active', 'closed', 'settled'] as const
+
+type TransitionAction = 'submit' | 'withdraw' | 'close'
+
+// GET /api/mypage/funding/campaigns/[id] 응답 중 이 화면이 쓰는 필드만.
+interface Campaign {
+  id: string
+  slug: string
+  title: string
+  status: string
+  goal_amount: number
+  review_note: string | null
+}
+
+interface Progress {
+  raised_amount: number
+  backer_count: number
+}
+
+// 서버 화이트리스트(`ownerPledgeView`)와 정확히 맞춘다 — 배송 필드는
+// 배송이 필요한 리워드 건에만 실려 온다.
+interface OwnerPledge {
+  id: string
+  pledge_code: string
+  reward_title: string
+  quantity: number
+  total_amount: number
+  backer_name: string
+  shipping_address1?: string
+  shipping_address2?: string
+  shipping_postcode?: string
+}
+
+interface DashboardData {
+  campaign: Campaign
+  progress: Progress
+  pledges: OwnerPledge[]
+  edit_scope: 'all' | 'contentOnly' | 'none'
+}
+
+function nextLineKey(status: string): string | null {
+  switch (status) {
+    case 'draft':
+      return 'creator.nextDraft'
+    case 'submitted':
+      return 'creator.nextSubmitted'
+    case 'active':
+      return 'creator.nextActive'
+    case 'closed':
+      return 'creator.nextClosed'
+    case 'settled':
+      return 'creator.nextSettled'
+    default:
+      return null
+  }
+}
+
+function shippingAddress(p: OwnerPledge): string {
+  if (!p.shipping_address1) return ''
+  const parts = [p.shipping_postcode, p.shipping_address1, p.shipping_address2].filter(Boolean)
+  return parts.join(' ')
+}
+
+export default function ManageCampaignPage() {
+  const params = useParams<{ id: string }>()
+  const id = params.id
+  const t = useTranslations('funding')
+  const locale = useLocale()
+
+  const [data, setData] = useState<DashboardData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState<TransitionAction | null>(null)
+  const errorRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (error) {
+      errorRef.current?.focus()
+      errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [error])
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/mypage/funding/campaigns/${id}`)
+      const body = await res.json().catch(() => null)
+      if (!res.ok || !body?.data?.campaign) {
+        setError(t('creator.errorLoad'))
+        return
+      }
+      setData(body.data as DashboardData)
+    } catch {
+      setError(t('creator.errorLoad'))
+    } finally {
+      setLoading(false)
+    }
+  }, [id, t])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  const runTransition = useCallback(
+    async (action: TransitionAction) => {
+      const confirmKey =
+        action === 'submit'
+          ? 'creator.confirmSubmit'
+          : action === 'close'
+            ? 'creator.confirmClose'
+            : null
+      if (confirmKey && !window.confirm(t(confirmKey))) return
+      setError('')
+      setBusy(action)
+      try {
+        const res = await fetch(`/api/mypage/funding/campaigns/${id}/transition`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action }),
+        })
+        const body = await res.json().catch(() => null)
+        if (res.ok === false) {
+          setError(body?.error || t('creator.errorTransition'))
+          return
+        }
+        // 상태가 바뀌었으니 화면을 서버 값으로 다시 맞춘다.
+        await load()
+      } catch {
+        setError(t('creator.errorTransition'))
+      } finally {
+        setBusy(null)
+      }
+    },
+    [id, t, load]
+  )
+
+  const campaign = data?.campaign
+  const canLinkPublic =
+    !!campaign && (PUBLIC_LINKABLE_STATUSES as readonly string[]).includes(campaign.status)
+  const rejected = campaign?.status === 'draft' && !!campaign.review_note
+  const showFigures = data ? hasBackers(data.progress) : false
+  const percent = data ? computePercent(data.progress.raised_amount, data.campaign.goal_amount) : 0
+
+  return (
+    <PermissionCheck requiredPermission="member">
+      <MypageLayout title={t('creator.manageTitle')}>
+        {error ? (
+          <div
+            ref={errorRef}
+            role="alert"
+            aria-live="assertive"
+            tabIndex={-1}
+            className="mb-4 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 outline-none"
+          >
+            <FiAlertCircle className="mt-0.5 shrink-0" aria-hidden />
+            <span>{error}</span>
+          </div>
+        ) : null}
+
+        {loading ? (
+          <p className="text-gray-600">{t('common.loading')}</p>
+        ) : campaign ? (
+          <>
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-2xl font-bold text-gray-900">{campaign.title}</h1>
+              <CampaignStatusBadge status={campaign.status} />
+            </div>
+            {canLinkPublic ? (
+              <Link
+                href={`/funding/${campaign.slug}`}
+                className="mt-1 inline-block text-sm text-primary-600 hover:underline"
+              >
+                {t('creator.openPublic')}
+              </Link>
+            ) : null}
+
+            <div className="mt-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
+              {rejected ? (
+                <p className="text-sm text-gray-900">
+                  <span className="font-semibold text-red-700">{t('creator.rejected')}</span>
+                  {' — '}
+                  {t('creator.rejectedReason')}: {campaign.review_note}
+                </p>
+              ) : (
+                <p className="text-sm text-gray-900">
+                  {(() => {
+                    const key = nextLineKey(campaign.status)
+                    return key ? t(key) : null
+                  })()}
+                </p>
+              )}
+            </div>
+
+            {data ? (
+              <dl className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3">
+                {showFigures ? (
+                  <>
+                    <div>
+                      <dt className="text-xs text-gray-500">{t('progress.raised')}</dt>
+                      <dd className="font-semibold text-gray-900">
+                        {t('progress.amount', {
+                          amount: formatAmount(data.progress.raised_amount, locale),
+                        })}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-gray-500">{t('progress.percent')}</dt>
+                      <dd className="font-semibold text-gray-900">
+                        {t('progress.percentValue', { percent })}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-gray-500">{t('progress.backersLabel')}</dt>
+                      <dd className="font-semibold text-gray-900">
+                        {t('progress.backers', { count: data.progress.backer_count })}
+                      </dd>
+                    </div>
+                  </>
+                ) : (
+                  <div>
+                    <dt className="text-xs text-gray-500">{t('creator.goal')}</dt>
+                    <dd className="font-semibold text-gray-900">
+                      {t('progress.goal', { goal: formatAmount(campaign.goal_amount, locale) })}
+                    </dd>
+                  </div>
+                )}
+              </dl>
+            ) : null}
+
+            <div className="mt-6 flex flex-wrap gap-3">
+              {data && data.edit_scope !== 'none' ? (
+                <Link href={`/mypage/funding/${id}/edit`} className="tw-btn-secondary">
+                  {t('creator.edit')}
+                </Link>
+              ) : null}
+              {campaign.status === 'draft' ? (
+                <button
+                  type="button"
+                  onClick={() => void runTransition('submit')}
+                  disabled={busy !== null}
+                  className="tw-btn-primary disabled:opacity-50"
+                >
+                  {t('creator.submit')}
+                </button>
+              ) : null}
+              {campaign.status === 'submitted' ? (
+                <button
+                  type="button"
+                  onClick={() => void runTransition('withdraw')}
+                  disabled={busy !== null}
+                  className="tw-btn-secondary disabled:opacity-50"
+                >
+                  {t('creator.withdraw')}
+                </button>
+              ) : null}
+              {campaign.status === 'active' ? (
+                <button
+                  type="button"
+                  onClick={() => void runTransition('close')}
+                  disabled={busy !== null}
+                  className="tw-btn-secondary disabled:opacity-50"
+                >
+                  {t('creator.close')}
+                </button>
+              ) : null}
+            </div>
+
+            <section className="mt-10 border-t border-gray-200 pt-8">
+              <h2 className="text-lg font-semibold text-gray-900">{t('creator.backers')}</h2>
+              {data && data.pledges.length === 0 ? (
+                <p className="mt-3 text-gray-600">{t('creator.noBackers')}</p>
+              ) : data ? (
+                <div className="mt-4 overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-200 text-xs text-gray-500">
+                        <th className="py-2 pr-4 font-medium">{t('creator.backerName')}</th>
+                        <th className="py-2 pr-4 font-medium">{t('creator.backerReward')}</th>
+                        <th className="py-2 pr-4 font-medium">{t('creator.backerAmount')}</th>
+                        <th className="py-2 pr-4 font-medium">{t('creator.backerShipping')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.pledges.map(p => (
+                        <tr key={p.id} className="border-b border-gray-100 last:border-0">
+                          <td className="py-2 pr-4 text-gray-900">{p.backer_name}</td>
+                          <td className="py-2 pr-4 text-gray-700">
+                            {p.reward_title} × {p.quantity}
+                          </td>
+                          <td className="py-2 pr-4 text-gray-900">
+                            {t('progress.amount', { amount: formatAmount(p.total_amount, locale) })}
+                          </td>
+                          <td className="py-2 pr-4 text-gray-700">{shippingAddress(p)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+            </section>
+          </>
+        ) : null}
+      </MypageLayout>
+    </PermissionCheck>
+  )
+}
