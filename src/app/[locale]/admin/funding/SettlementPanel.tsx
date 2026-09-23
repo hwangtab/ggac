@@ -1,0 +1,289 @@
+'use client'
+
+/**
+ * 정산 내역 패널 — 관리자 화면이라 한국어 전용이고 next-intl을 쓰지 않는다.
+ *
+ * 화면이 지켜야 하는 것 하나: **어느 숫자가 사람 손에서 나왔는지 분명히
+ * 말한다.** 총 모금액·환불액·후원자 수는 후원 원장에서 나오고, 결제대행
+ * 수수료만 사람이 정산서를 보고 넣는다. 그래서 입력 칸은 하나뿐이고 그 칸
+ * 옆에 그렇다고 적혀 있다.
+ *
+ * 금액은 화면이 계산하지 않는다 — 저장하면 서버가 그 순간의 원장으로 다시
+ * 세어 돌려주고, 화면은 받은 값을 보인다. 미리보기조차 하지 않는 이유는
+ * 미리보기가 맞는 것처럼 보이는 순간 그것이 근거가 되기 때문이다.
+ */
+
+import { useCallback, useEffect, useState } from 'react'
+
+interface Settlement {
+  status: 'pending' | 'paid'
+  gross_amount: number
+  refund_amount: number
+  pg_fee_amount: number
+  platform_fee_amount: number
+  payout_amount: number
+  backer_count: number
+  paid_out_at: string | null
+  memo: string | null
+}
+
+interface Payload {
+  settlement: Settlement | null
+  current_basis: {
+    gross_amount: number
+    refund_amount: number
+    backer_count: number
+    net_amount: number
+  }
+  platform_fee_rate_bp: number
+  is_stale: boolean
+}
+
+function won(n: number): string {
+  return `${Number(n || 0).toLocaleString('ko-KR')}원`
+}
+
+export default function SettlementPanel({
+  campaignId,
+  campaignTitle,
+  onSettled,
+}: {
+  campaignId: string
+  campaignTitle: string
+  /** 정산서가 움직였을 때 바깥 목록을 새로고침한다. */
+  onSettled?: () => void
+}) {
+  const [payload, setPayload] = useState<Payload | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [pgFee, setPgFee] = useState('')
+  const [memo, setMemo] = useState('')
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/admin/funding/campaigns/${campaignId}/settlement`)
+      const json = await res.json()
+      if (res.ok === false)
+        throw new Error(json?.error?.message ?? '정산 내역을 불러오지 못했습니다.')
+      const data = json.data as Payload
+      setPayload(data)
+      if (data.settlement) {
+        setPgFee(String(data.settlement.pg_fee_amount))
+        setMemo(data.settlement.memo ?? '')
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
+    }
+  }, [campaignId])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  async function send(init: RequestInit, successMessage: string) {
+    setBusy(true)
+    setError(null)
+    setNotice(null)
+    try {
+      const res = await fetch(`/api/admin/funding/campaigns/${campaignId}/settlement`, {
+        headers: { 'Content-Type': 'application/json' },
+        ...init,
+      })
+      const json = await res.json()
+      if (res.ok === false) {
+        // 409는 "그 사이에 무언가 움직였다"는 뜻이다. 서버가 무엇이 움직였는지
+        // 문장으로 말해 주므로 그대로 보이고, 현재 값을 다시 불러온다.
+        setError(json?.error?.message ?? '처리하지 못했습니다.')
+        if (res.status === 409) await load()
+        return
+      }
+      setPayload(json.data as Payload)
+      setNotice(successMessage)
+      onSettled?.()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function handlePrepare() {
+    const value = Number(pgFee.replace(/,/g, '').trim())
+    if (!Number.isSafeInteger(value) || value < 0) {
+      setError('결제대행 수수료를 0원 이상의 정수로 입력해 주세요.')
+      return
+    }
+    void send(
+      { method: 'POST', body: JSON.stringify({ pg_fee_amount: value, memo: memo.trim() || null }) },
+      '정산 내역을 정리했습니다.'
+    )
+  }
+
+  function handleMarkPaid() {
+    const payout = payload?.settlement?.payout_amount ?? 0
+    const ok = window.confirm(
+      `"${campaignTitle}"의 정산금 ${won(payout)}을 지급한 것으로 기록합니다.\n기록한 뒤에는 금액을 고칠 수 없습니다. 실제로 이체를 끝냈을 때만 누르세요. 계속할까요?`
+    )
+    if (!ok) return
+    void send(
+      { method: 'PATCH', body: JSON.stringify({ action: 'mark_paid' }) },
+      '지급을 기록했습니다.'
+    )
+  }
+
+  if (loading) return <p className="text-sm text-gray-500">정산 내역을 불러오는 중…</p>
+
+  const settlement = payload?.settlement ?? null
+  const paid = settlement?.status === 'paid'
+  const basis = payload?.current_basis
+  const rate = payload?.platform_fee_rate_bp ?? 0
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-4">
+      <div className="flex items-center justify-between gap-3">
+        <h4 className="text-sm font-semibold text-gray-900">정산 내역</h4>
+        <span
+          className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+            paid ? 'bg-purple-100 text-purple-800' : 'bg-yellow-100 text-yellow-800'
+          }`}
+        >
+          {settlement ? (paid ? '지급 완료' : '지급 전') : '정리 전'}
+        </span>
+      </div>
+
+      {/* 서버가 답한 결과는 소리 내어 읽히게 한다 — 성공도 실패도. */}
+      <p className="sr-only" aria-live="polite">
+        {error ?? notice ?? ''}
+      </p>
+      {error ? <p className="mt-2 text-sm text-red-700">{error}</p> : null}
+      {notice ? <p className="mt-2 text-sm text-green-700">{notice}</p> : null}
+
+      {payload?.is_stale ? (
+        <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+          정리한 뒤 후원 환불이 있었습니다. 지금 원장 기준으로는 총 모금액{' '}
+          {won(basis?.gross_amount ?? 0)}, 환불 {won(basis?.refund_amount ?? 0)}입니다. 다시
+          정리해야 지급을 기록할 수 있습니다.
+        </p>
+      ) : null}
+
+      <dl className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+        <div>
+          <dt className="text-xs text-gray-500">총 모금액</dt>
+          <dd className="font-semibold text-gray-900">
+            {won(settlement?.gross_amount ?? basis?.gross_amount ?? 0)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs text-gray-500">환불액</dt>
+          <dd className="font-semibold text-gray-900">
+            {won(settlement?.refund_amount ?? basis?.refund_amount ?? 0)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs text-gray-500">실 모금액</dt>
+          <dd className="font-semibold text-gray-900">
+            {won(
+              settlement
+                ? settlement.gross_amount - settlement.refund_amount
+                : (basis?.net_amount ?? 0)
+            )}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs text-gray-500">후원자 수</dt>
+          <dd className="font-semibold text-gray-900">
+            {settlement?.backer_count ?? basis?.backer_count ?? 0}명
+          </dd>
+        </div>
+        {settlement ? (
+          <>
+            <div>
+              <dt className="text-xs text-gray-500">결제대행 수수료</dt>
+              <dd className="font-semibold text-gray-900">{won(settlement.pg_fee_amount)}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-gray-500">플랫폼 수수료({rate / 100}%)</dt>
+              <dd className="font-semibold text-gray-900">{won(settlement.platform_fee_amount)}</dd>
+            </div>
+            <div className="col-span-2">
+              <dt className="text-xs text-gray-500">지급액</dt>
+              <dd className="text-lg font-bold text-gray-900">{won(settlement.payout_amount)}</dd>
+            </div>
+          </>
+        ) : null}
+      </dl>
+
+      {paid ? (
+        <p className="mt-3 text-sm text-gray-600">
+          {settlement?.paid_out_at
+            ? `${new Date(settlement.paid_out_at).toLocaleString('ko-KR')}에 지급으로 기록했습니다.`
+            : '지급으로 기록했습니다.'}{' '}
+          지급한 정산 내역은 고칠 수 없습니다. 이제 '정산 완료 처리'를 누를 수 있습니다.
+        </p>
+      ) : (
+        <div className="mt-4 space-y-3">
+          <div className="flex flex-col gap-1">
+            <label htmlFor={`pg-fee-${campaignId}`} className="text-xs font-medium text-gray-600">
+              결제대행 수수료(원) — 이 값만 사람이 넣습니다
+            </label>
+            <input
+              id={`pg-fee-${campaignId}`}
+              type="text"
+              inputMode="numeric"
+              value={pgFee}
+              disabled={busy}
+              onChange={e => setPgFee(e.target.value)}
+              placeholder="예: 33000"
+              aria-describedby={`pg-fee-help-${campaignId}`}
+              className="w-48 rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+            <p id={`pg-fee-help-${campaignId}`} className="text-xs text-gray-500">
+              토스는 수수료를 알려 주지 않고 우리도 저장하지 않습니다. 결제사 정산서에 적힌 금액을
+              그대로 넣어 주세요. 나머지 금액은 후원 내역에서 자동으로 계산됩니다.
+            </p>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label htmlFor={`memo-${campaignId}`} className="text-xs font-medium text-gray-600">
+              메모 — 사무국 기록용이며 개설자에게 보이지 않습니다
+            </label>
+            <input
+              id={`memo-${campaignId}`}
+              type="text"
+              value={memo}
+              disabled={busy}
+              onChange={e => setMemo(e.target.value)}
+              placeholder="예: 9월 토스 정산서 기준"
+              className="w-full max-w-md rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={handlePrepare}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {settlement ? '다시 정리' : '정산 내역 정리'}
+            </button>
+            {settlement ? (
+              <button
+                type="button"
+                disabled={busy || payload?.is_stale === true}
+                onClick={handleMarkPaid}
+                className="px-3 py-1.5 text-xs font-medium rounded-lg bg-purple-100 text-purple-700 hover:bg-purple-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                지급 기록
+              </button>
+            ) : null}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

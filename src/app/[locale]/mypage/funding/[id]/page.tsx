@@ -76,9 +76,31 @@ interface OwnerPledge {
   fulfillment_status: FulfillmentStatus
 }
 
+/**
+ * 정산 내역. 서버(`creatorSettlementView`)가 주는 그대로다.
+ *
+ * 창작자는 이 거래의 상대방이므로 **사무국에 묻지 않고도** 얼마를 받는지
+ * 보여야 한다. 그래서 지급 전에도 보이고, 지급 전이라는 사실과 숫자가 어떻게
+ * 나왔는지를 같이 보인다.
+ */
+interface Settlement {
+  status: 'pending' | 'paid'
+  gross_amount: number
+  refund_amount: number
+  net_amount: number
+  pg_fee_amount: number
+  platform_fee_amount: number
+  payout_amount: number
+  backer_count: number
+  paid_out_at: string | null
+  /** 정리한 뒤 환불이 들어와 금액이 다시 계산될 예정인가. */
+  is_stale: boolean
+}
+
 interface DashboardData {
   campaign: Campaign
   progress: Progress
+  settlement: Settlement | null
   pledges: OwnerPledge[]
   edit_scope: 'all' | 'contentOnly' | 'none'
   is_admin: boolean
@@ -298,6 +320,10 @@ export default function ManageCampaignPage() {
     !!campaign && (PUBLIC_CAMPAIGN_STATUSES as readonly string[]).includes(campaign.status)
   const rejected = campaign?.status === 'draft' && !!campaign.review_note
   const showFigures = data ? hasBackers(data.progress) : false
+  // 마감 뒤에만 정산 자리를 만든다. 그 전에는 최종 숫자라는 것이 없어
+  // '아직 없습니다'조차 할 말이 아니다.
+  const showSettlementSection =
+    data !== null && (data.campaign.status === 'closed' || data.campaign.status === 'settled')
   const percent = data ? computePercent(data.progress.raised_amount, data.campaign.goal_amount) : 0
   // 후원을 받기 시작한 뒤(active·closed·settled)에만 이행을 움직인다 —
   // 판정은 전이 표가 하고 라우트가 다시 한다.
@@ -463,6 +489,81 @@ export default function ManageCampaignPage() {
                 </button>
               ) : null}
             </div>
+
+            {data && (data.settlement || showSettlementSection) ? (
+              <section className="mt-10 border-t border-gray-200 pt-8">
+                <h2 className="text-lg font-semibold text-gray-900">
+                  {t('creator.settlementHeading')}
+                </h2>
+                {data.settlement === null ? (
+                  <p className="mt-3 text-sm text-gray-600">{t('creator.settlementNone')}</p>
+                ) : (
+                  <>
+                    {/* 상태와 "금액이 바뀔 수 있다"는 사실을 숫자보다 먼저 읽게
+                        한다 — 화면을 눈으로 훑는 사람도, 읽어 주는 화면도 같다. */}
+                    <p className="mt-2 text-sm font-semibold text-gray-900" aria-live="polite">
+                      {data.settlement.status === 'paid'
+                        ? t('creator.settlementStatusPaid')
+                        : t('creator.settlementStatusPending')}
+                    </p>
+                    {data.settlement.is_stale ? (
+                      <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+                        {t('creator.settlementStale')}
+                      </p>
+                    ) : null}
+                    <dl className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
+                      {(
+                        [
+                          ['creator.settlementGross', data.settlement.gross_amount],
+                          ['creator.settlementRefund', data.settlement.refund_amount],
+                          ['creator.settlementNet', data.settlement.net_amount],
+                          ['creator.settlementPgFee', data.settlement.pg_fee_amount],
+                          ['creator.settlementPlatformFee', data.settlement.platform_fee_amount],
+                        ] as const
+                      ).map(([key, amount]) => (
+                        <div key={key}>
+                          <dt className="text-xs text-gray-500">{t(key)}</dt>
+                          <dd className="font-semibold text-gray-900">
+                            {t('progress.amount', { amount: formatAmount(amount, locale) })}
+                          </dd>
+                        </div>
+                      ))}
+                      <div>
+                        <dt className="text-xs text-gray-500">{t('creator.settlementBackers')}</dt>
+                        <dd className="font-semibold text-gray-900">
+                          {t('progress.backers', { count: data.settlement.backer_count })}
+                        </dd>
+                      </div>
+                      <div className="col-span-2 sm:col-span-3 border-t border-gray-200 pt-4">
+                        <dt className="text-xs text-gray-500">{t('creator.settlementPayout')}</dt>
+                        <dd className="text-xl font-bold text-gray-900">
+                          {t('progress.amount', {
+                            amount: formatAmount(data.settlement.payout_amount, locale),
+                          })}
+                        </dd>
+                      </div>
+                      {data.settlement.paid_out_at ? (
+                        <div className="col-span-2 sm:col-span-3">
+                          <dt className="text-xs text-gray-500">{t('creator.settlementPaidAt')}</dt>
+                          <dd className="font-semibold text-gray-900">
+                            {new Date(data.settlement.paid_out_at).toLocaleDateString(locale)}
+                          </dd>
+                        </div>
+                      ) : null}
+                    </dl>
+                    <p className="mt-4 text-sm text-gray-600">{t('creator.settlementFormula')}</p>
+                    {/* 이 한 칸만 사람이 넣었다는 것을 분명히 말한다 — 토스는
+                        수수료를 돌려주지 않고 우리도 적어 두지 않는다. */}
+                    <p className="mt-1 text-sm text-gray-600">{t('creator.settlementPgFeeNote')}</p>
+                    <p className="mt-1 text-sm text-gray-600">
+                      {data.settlement.status === 'paid'
+                        ? t('creator.settlementPaidNote')
+                        : t('creator.settlementPendingNote')}
+                    </p>
+                  </>
+                )}
+              </section>
+            ) : null}
 
             <section className="mt-10 border-t border-gray-200 pt-8">
               <h2 className="text-lg font-semibold text-gray-900">{t('creator.backers')}</h2>
