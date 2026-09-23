@@ -10,6 +10,7 @@ import assert from 'node:assert/strict'
 
 const {
   computeSettlementAmounts,
+  cooperativeLossFor,
   isBasisStale,
   netAmount,
   platformFeeFor,
@@ -74,6 +75,32 @@ test('전액 환불된 캠페인은 실 모금액도 지급액도 0이다', () =
   const a = amountsOf({ gross_amount: 500_000, refund_amount: 500_000, backer_count: 0 }, 1000, 0)
   assert.equal(a.platform_fee_amount, 0)
   assert.equal(a.payout_amount, 0)
+  assert.equal(cooperativeLossFor(a), 0)
+})
+
+test('남은 돈이 없어도 실제로 나간 결제대행 수수료는 적을 수 있다 — 차액은 조합 몫', () => {
+  // 결제대행사는 환불해도 제 수수료를 대체로 돌려주지 않는다. 여기서 거부하면
+  // 사실인 수수료를 적을 길이 없어 "0원인 줄 알면서 0원을 넣는" 수밖에 없다.
+  const a = amountsOf(
+    { gross_amount: 500_000, refund_amount: 500_000, backer_count: 0 },
+    1000,
+    15_000
+  )
+  assert.equal(a.pg_fee_amount, 15_000)
+  // 창작자에게서 되돌려 받을 것은 없으므로 지급액은 0이고 음수가 되지 않는다.
+  assert.equal(a.payout_amount, 0)
+  // 그 차액은 숨기지 않고 되짚어 보인다.
+  assert.equal(cooperativeLossFor(a), 15_000)
+})
+
+test('예외는 "남은 돈이 0일 때"로 좁다 — 1원이라도 남으면 여전히 거부한다', () => {
+  const result = computeSettlementAmounts({
+    basis: { gross_amount: 500_001, refund_amount: 500_000, backer_count: 1 },
+    platform_fee_rate_bp: 0,
+    pg_fee_amount: 15_000,
+  })
+  assert.equal(result.ok, false)
+  assert.equal(result.reason, 'pg_fee_too_large')
 })
 
 test('지급액을 음수로 만드는 결제대행 수수료는 거부한다 — 조용히 0으로 깎지 않는다', () => {

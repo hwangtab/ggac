@@ -342,6 +342,52 @@ test('환불 문장은 돈이 안 들어올 때 갈 곳을 알려 준다', () =>
  * 알린다는 것 둘 다 코드가 실제로 하는 일이다(`prepareSettlement`,
  * `notifySettlementPaid`).
  */
+/**
+ * 기한 약속을 **모양으로** 잡는다. 금지어 몇 개를 문자열로 늘어놓으면
+ * '3일 안에 지급'·'다음 달에 입금'·'자동 이체'·맨 날짜가 전부 그냥 통과한다.
+ * 이 목록은 아래 반례로 스스로를 검사한다 — 가드가 물지 않으면 가드 쪽이
+ * 먼저 실패한다.
+ */
+const PROMISE_SHAPES = [
+  // 기간 + 지급: '3일 안에 지급', '영업일 기준 5일 내 입금'
+  /\d+\s*(영업일|일|주일|주|개월|달)[^.]{0,8}(지급|입금|정산|보내)/,
+  // 시점 + 지급: '이내에 지급', '다음 달에 입금', '월말까지 정산'
+  /(영업일|이내|안에|까지|다음\s*(달|주)|이달|월말|말일)[^.]{0,8}(지급|입금|정산해|보내)/,
+  // 순서가 뒤집힌 약속: '지급은 3일 안에', '입금은 다음 달에'
+  /(지급|입금|정산)[^.]{0,10}\d+\s*(영업일|일|주일|주|개월|달)/,
+  /(지급|입금|정산)[^.]{0,10}(이내|안에|까지|다음\s*(달|주)|월말)/,
+  // 자동 처리 약속
+  /자동[^.]{0,6}(입금|이체|지급|정산)/,
+  // 맨 날짜
+  /\d{4}년\s*\d{1,2}월|\d{1,2}월\s*\d{1,2}일/,
+]
+
+function promiseIn(text) {
+  return PROMISE_SHAPES.find(re => re.test(text)) ?? null
+}
+
+test('기한 약속 가드가 실제로 문다', () => {
+  // 반례가 하나라도 빠져나가면 가드는 아무것도 지키지 못한다.
+  for (const bad of [
+    '지급은 3일 안에 됩니다.',
+    '영업일 기준 5일 내 입금됩니다.',
+    '다음 달에 입금해 드립니다.',
+    '정산금은 자동으로 이체됩니다.',
+    '2026년 10월에 지급합니다.',
+    '10월 15일에 보내 드립니다.',
+    '월말까지 정산해 드립니다.',
+  ]) {
+    assert.ok(promiseIn(bad), `가드가 놓친다: ${bad}`)
+  }
+  // 우리가 실제로 쓰는 문장은 걸리지 않아야 한다.
+  for (const fine of [
+    '지급이 끝나면 따로 알려 드립니다.',
+    '사무국이 결제대행 수수료를 확인해 정산 내역을 정리합니다.',
+  ]) {
+    assert.equal(promiseIn(fine), null, `멀쩡한 문장을 잡는다: ${fine}`)
+  }
+})
+
 test('마감 문장은 실제로 있는 정산 절차만 말한다', () => {
   const notice = buildCampaignClosedNotice(CAMPAIGN, SITE)
   assert.ok(notice.message.includes('정산 내역'))
@@ -349,8 +395,15 @@ test('마감 문장은 실제로 있는 정산 절차만 말한다', () => {
   assert.ok(notice.message.includes('지급이 끝나면'))
   assert.ok(notice.message.includes('contact@ggac.kr'))
   // 기한은 여전히 약속하지 않는다 — 코드에 그런 것이 없다.
-  for (const promise of ['영업일', '이내에 지급', '자동으로 입금']) {
-    assert.ok(!notice.message.includes(promise), `없는 약속을 한다: ${promise}`)
+  assert.equal(promiseIn(notice.message), null, '없는 기한을 약속한다')
+})
+
+test('정산 문안도 기한을 약속하지 않는다', () => {
+  for (const notice of [
+    buildSettlementPreparedNotice(CAMPAIGN, SETTLEMENT, SITE),
+    buildSettlementPaidNotice(CAMPAIGN, SETTLEMENT, SITE),
+  ]) {
+    assert.equal(promiseIn(notice.message), null, `없는 기한을 약속한다: ${notice.title}`)
   }
 })
 
@@ -395,7 +448,35 @@ test('지급 문장은 보냈다고 말하고, 안 들어왔을 때 갈 곳을 �
 test('지급액이 0원이면 "보냈다"고 하지 않는다', () => {
   const notice = buildSettlementPaidNotice(CAMPAIGN, { ...SETTLEMENT, payout_amount: 0 }, SITE)
   assert.ok(notice.message.includes('남지 않아'))
-  assert.ok(!notice.message.includes('0원을 등록된 계좌로'))
+  assert.ok(!notice.message.includes('0원을'))
+})
+
+test('계좌를 "등록된 계좌"라고 부르지 않는다 — 비어 있을 수 있는 칸이다', () => {
+  const notice = buildSettlementPaidNotice(CAMPAIGN, SETTLEMENT, SITE)
+  assert.ok(!notice.message.includes('등록된 계좌'))
+  assert.ok(notice.message.includes('사무국이 알고 있는 계좌'))
+  // 계좌가 틀렸을 때 갈 곳을 함께 준다.
+  assert.ok(notice.message.includes('계좌가 바뀌었거나'))
+  assert.ok(notice.message.includes('contact@ggac.kr'))
+})
+
+test('전액 환불된 캠페인은 수수료를 조합이 떠안았다고 말한다', () => {
+  // 실 모금액 0원인데 결제대행 수수료 3,000원이 나갔다 — 토스는 환불해도
+  // 제 수수료를 돌려주지 않는다.
+  const refunded = {
+    gross_amount: 50_000,
+    refund_amount: 50_000,
+    pg_fee_amount: 3_000,
+    platform_fee_amount: 0,
+    payout_amount: 0,
+  }
+  const notice = buildSettlementPaidNotice(CAMPAIGN, refunded, SITE)
+  assert.ok(notice.message.includes('후원이 모두 환불되어'))
+  assert.ok(notice.message.includes('3,000원 많은데'))
+  assert.ok(notice.message.includes('조합이 부담하며 창작자에게 청구하지 않습니다'))
+  // 수수료를 0원으로 적었다면 이 문장 자체가 나오지 않는다.
+  const zeroed = buildSettlementPaidNotice(CAMPAIGN, { ...refunded, pg_fee_amount: 0 }, SITE)
+  assert.ok(!zeroed.message.includes('조합이 부담'))
 })
 
 test('정산 문안은 고정된 용어만 쓴다', () => {

@@ -23,6 +23,8 @@ const SETTLE_URL = new URL('../../src/db/queries/fundingSettlements.ts', import.
 const PAYMENTS_URL = new URL('../../src/db/queries/payments.ts', import.meta.url)
 const PRECONDITIONS_URL = new URL('../../src/lib/funding/campaignPreconditions.ts', import.meta.url)
 
+const { cooperativeLossFor } = await import('../../src/lib/funding/settlement.ts')
+
 let client, pq, fq, sq, payq, preq
 let seq = 0
 
@@ -139,26 +141,63 @@ test('총 모금액은 돌려준 돈까지 세고, 실 모금액은 남은 후�
   assert.equal(basis.backer_count, progress.backer_count)
 })
 
-test('결제가 붙은 적 없는 취소·만료 선점은 총 모금액에 들어가지 않는다', async () => {
-  const { campaign, reward } = await openCampaign()
-  await paidPledge(campaign, reward)
-  const held = await pq.holdPledge({
+async function hold(campaign, reward, name) {
+  return pq.holdPledge({
     order_id: `settle_hold_${++seq}`,
     campaign_id: campaign.id,
     reward_id: reward.id,
     user_id: null,
     quantity: 1,
     additional_amount: 0,
-    backer_name: '미결제',
-    backer_email: 'nopay@x.kr',
+    backer_name: name,
+    backer_email: `${name}@x.kr`,
     terms_version: 'v1',
   })
-  await pq.expirePledge(held.id)
+}
+
+test('결제가 붙은 적 없는 취소·만료 선점은 총 모금액에 들어가지 않는다', async () => {
+  const { campaign, reward } = await openCampaign()
+  await paidPledge(campaign, reward)
+
+  // ① 만료된 선점(`expired`)
+  const expired = await hold(campaign, reward, 'expired')
+  await pq.expirePledge(expired.id)
+
+  // ② **결제 한 번 없이 취소된 선점(`canceled`)** — 토스가 승인을 거절하면
+  //    `cancelPendingPledge`가 만드는 행이고, 이것이 `payment_id IS NOT NULL`
+  //    조건이 존재하는 이유다. 상태만 보면 환불 진행 건과 구별되지 않는다.
+  const rejected = await hold(campaign, reward, 'rejected')
+  const canceled = await pq.cancelPendingPledge(rejected.id, rejected.order_id)
+  assert.equal(canceled.status, 'canceled')
+  assert.equal(canceled.payment_id, null, '전제가 깨졌다 — 결제가 붙어 있다')
 
   const basis = await sq.computeSettlementBasis(campaign.id)
+  // 조건을 지우면 gross와 refund가 나란히 10,000씩 늘어 실 모금액은 그대로다.
+  // 그래서 금액만 보면 조용히 통과한다 — 총액과 환불액을 따로 못박는다.
   assert.equal(basis.gross_amount, 10_000)
   assert.equal(basis.refund_amount, 0)
   assert.equal(basis.backer_count, 1)
+})
+
+test('정리한 뒤 토스가 승인을 거절해도 정산서는 낡지 않는다', async () => {
+  const { campaign, reward } = await openCampaign()
+  await paidPledge(campaign, reward)
+  await close(campaign)
+  const prepared = await sq.prepareSettlement({
+    campaign_id: campaign.id,
+    platform_fee_rate_bp: 0,
+    pg_fee_amount: 0,
+  })
+  assert.equal(prepared.ok, true)
+
+  // 결제된 적 없는 선점 하나가 거절돼 `canceled`가 된다. 돈은 오간 적이 없으니
+  // 정산서의 근거는 하나도 움직이지 않아야 한다 — 움직이면 창작자는 있지도
+  // 않았던 환불을 통지받고, 사무국은 고칠 것이 없는 정산서를 다시 정리한다.
+  const rejected = await hold(campaign, reward, 'rejected2')
+  await pq.cancelPendingPledge(rejected.id, rejected.order_id)
+
+  assert.equal(await sq.isSettlementStale(await sq.getSettlementByCampaign(campaign.id)), false)
+  assert.equal((await sq.markSettlementPaid(campaign.id)).ok, true)
 })
 
 test('환불이 진행 중인 건(canceled + 결제 있음)은 환불로 센다 — 지급액을 크게 잡지 않는다', async () => {
@@ -241,6 +280,74 @@ test('지급액이 음수가 되는 정산서는 만들지 않는다', async () 
   assert.equal(result.ok, false)
   assert.equal(result.reason, 'compute')
   assert.equal(await sq.getSettlementByCampaign(campaign.id), null)
+})
+
+test('전액 환불된 캠페인도 실제로 나간 결제대행 수수료를 적을 수 있다', async () => {
+  const { campaign, reward } = await openCampaign()
+  const gone = await paidPledge(campaign, reward)
+  await refund(gone)
+  await close(campaign)
+
+  // 실 모금액은 0이다. 그래도 결제대행사는 제 수수료를 대체로 돌려주지 않으니
+  // 조합은 그 돈을 실제로 잃었다. 거부하면 사실인 수수료를 적을 길이 없어
+  // "0원인 줄 알면서 0원을 넣는" 수밖에 없어진다.
+  const result = await sq.prepareSettlement({
+    campaign_id: campaign.id,
+    platform_fee_rate_bp: 0,
+    pg_fee_amount: 330,
+  })
+  assert.equal(result.ok, true)
+  assert.equal(result.settlement.gross_amount, 10_000)
+  assert.equal(result.settlement.refund_amount, 10_000)
+  assert.equal(result.settlement.pg_fee_amount, 330)
+  // 창작자에게서 되돌려 받을 것은 없다 — 지급액은 0이고 음수가 되지 않는다.
+  assert.equal(result.settlement.payout_amount, 0)
+  assert.equal(cooperativeLossFor(result.settlement), 330)
+})
+
+test('실 모금액이 남아 있으면 지급액을 음수로 만드는 수수료는 여전히 거부한다', async () => {
+  // 위 예외는 "남은 돈이 0일 때"로 좁다. 1원이라도 남아 있으면 오타를 조용히
+  // 0으로 깎지 않고 거부한다.
+  const { campaign, reward } = await openCampaign()
+  await paidPledge(campaign, reward)
+  await close(campaign)
+  const result = await sq.prepareSettlement({
+    campaign_id: campaign.id,
+    platform_fee_rate_bp: 0,
+    pg_fee_amount: 10_001,
+  })
+  assert.equal(result.ok, false)
+  assert.equal(result.reason, 'compute')
+})
+
+test('정산서가 없으면 지급을 기록할 수 없고, 있으면 직전 금액을 함께 돌려준다', async () => {
+  const { campaign, reward } = await openCampaign()
+  await paidPledge(campaign, reward)
+  await close(campaign)
+
+  const none = await sq.markSettlementPaid(campaign.id)
+  assert.equal(none.ok, false)
+  assert.equal(none.reason, 'not_found')
+
+  const first = await sq.prepareSettlement({
+    campaign_id: campaign.id,
+    platform_fee_rate_bp: 0,
+    pg_fee_amount: 0,
+  })
+  assert.equal(first.ok, true)
+  assert.equal(first.created, true)
+  // 처음 만든 정산서에는 '직전'이 없다 — 호출부는 이 null을 보고 알린다.
+  assert.equal(first.previous_payout_amount, null)
+
+  const again = await sq.prepareSettlement({
+    campaign_id: campaign.id,
+    platform_fee_rate_bp: 0,
+    pg_fee_amount: 1_000,
+  })
+  assert.equal(again.ok, true)
+  // 직전 값은 트랜잭션 안에서 읽는다 — 같은 금액을 두 번 알리지 않기 위한 근거다.
+  assert.equal(again.previous_payout_amount, 10_000)
+  assert.equal(again.settlement.payout_amount, 9_000)
 })
 
 // ---------------------------------------------------------------- 정리 뒤 환불
