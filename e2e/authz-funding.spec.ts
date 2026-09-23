@@ -625,6 +625,12 @@ async function resetAdminActionCampaigns(): Promise<void> {
         )
       }
     }
+    // 정산 캠페인은 정산서까지 지운다 — 남겨 두면 다음 실행에서 '이미 지급이
+    // 끝난 정산 내역'이라 다시 정리할 수 없어 스위트가 한 번만 돈다.
+    await client.execute({
+      sql: 'DELETE FROM funding_settlements WHERE campaign_id = ?',
+      args: [fixtures.fundingSettleCampaignId],
+    })
   } finally {
     client.close()
   }
@@ -668,6 +674,31 @@ test.describe('펀딩 — 관리자 전용 동작은 마이페이지 라우트�
         // 수 없다 — DB를 직접 읽는다.
         const afterDenied = await readCampaignRow(campaignId)
         expect(afterDenied?.status, `${action} 거부 후 상태`).toBe(from)
+
+        // 정산 완료(`settle`)는 **지급까지 끝난 정산 내역**이 있어야 통과한다
+        // (`src/lib/funding/campaignPreconditions.ts`). 기록 없이 '정산 완료'
+        // 딱지만 붙는 일을 막는 규칙이라, 허용 쪽을 확인하기 전에 그 기록을
+        // 관리자 라우트로 실제로 만든다 — 그 두 라우트도 관리자 전용이다.
+        if (action === 'settle') {
+          const blocked = await adminContext.post(
+            `/api/admin/funding/campaigns/${campaignId}/transition`,
+            { data: { action } }
+          )
+          expect(blocked.status(), '정산 내역 없이 정산 완료').toBe(400)
+          expect((await blocked.json()).error).toContain('정산 내역을 먼저 정리')
+
+          const prepared = await adminContext.post(
+            `/api/admin/funding/campaigns/${campaignId}/settlement`,
+            { data: { pg_fee_amount: 0, memo: 'authz 픽스처 정산' } }
+          )
+          expect(prepared.status(), '정산 내역 정리').toBe(200)
+          const paidOut = await adminContext.patch(
+            `/api/admin/funding/campaigns/${campaignId}/settlement`,
+            { data: { action: 'mark_paid' } }
+          )
+          expect(paidOut.status(), '정산 지급 기록').toBe(200)
+          expect((await paidOut.json()).data?.settlement?.status).toBe('paid')
+        }
 
         // 허용 쪽: 같은 동작이 관리자 라우트로는 통한다. 이 단정이 없으면
         // 게이트가 "전부 막기"로 퇴화해도 위 부정 단정은 그대로 초록불이다.
