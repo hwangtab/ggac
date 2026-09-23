@@ -3,6 +3,10 @@ import assert from 'node:assert/strict'
 
 import {
   SETTING_MAPPINGS,
+  buildLoginPolicyValue,
+  buildPasswordPolicyValue,
+  buildRegistrationEnabledValue,
+  buildSessionConfigValue,
   isClientEchoOfServedValue,
   seedSettingGroup,
   valueServedToClient,
@@ -148,4 +152,101 @@ test('객체가 아닌 저장값은 빈 객체로 시작한다', () => {
   assert.deepEqual(seedSettingGroup(undefined), {})
   assert.deepEqual(seedSettingGroup('문자열'), {})
   assert.deepEqual(seedSettingGroup([1, 2]), {})
+})
+
+/**
+ * `|| true` 관용복구 — 저장된 `false`가 화면과 저장 양쪽에서 되살아나던 자리들.
+ *
+ * 세 경우를 **전부** 본다: 저장된 true · 저장된 false · 값 없음.
+ * "저장된 true"만 봤다면 고치기 전에도 통과했다 — 이 결함이 그렇게 살아남았다.
+ *
+ * 값이 없을 때의 기대값은 취향이 아니라 소비처가 정한 것이다:
+ *  - features 넷: `@/utils/systemSettings`의 `isFeatureEnabled()`가 `?? true`
+ *  - require_email_verification: 읽는 코드가 없고, 없을 때의 동작을 적어 둔
+ *    유일한 자리(`getDefaultSettings()`)가 `required: false`
+ *  - 쓰기 쪽 여섯: 같은 모듈의 `getDefaultSettings()`와 reset 기본값 표가 `true`
+ */
+
+const DISPLAY_CASES = [
+  // [카테고리, 프런트엔드 키, 저장 JSON 필드, 값 없을 때의 기대값]
+  ['security', 'require_email_verification', 'required', false],
+  ['features', 'board_enabled', 'enabled', true],
+  ['features', 'artist_registration_enabled', 'registration_enabled', true],
+  ['features', 'comments_enabled', 'enabled', true],
+  ['features', 'file_uploads_enabled', 'enabled', true],
+]
+
+for (const [category, frontendKey, jsonField, absentExpected] of DISPLAY_CASES) {
+  test(`화면 표시 ${category}.${frontendKey}: 저장 true/false/없음을 그대로 말한다`, () => {
+    const { transform } = SETTING_MAPPINGS[category][frontendKey]
+
+    assert.equal(transform({ [jsonField]: true }), true)
+    assert.equal(
+      transform({ [jsonField]: false }),
+      false,
+      '관리자가 끈 값이 화면에서 켜진 것으로 보이면 안 된다'
+    )
+    assert.equal(transform({}), absentExpected, '값이 없을 때는 소비처의 판정과 같아야 한다')
+    assert.equal(transform(null), absentExpected)
+    assert.equal(transform(undefined), absentExpected)
+  })
+}
+
+test('화면 표시: 펀딩만 값이 없을 때 꺼진 쪽으로 기운다(소비처가 그렇게 읽는다)', () => {
+  const { transform } = SETTING_MAPPINGS.features.funding_enabled
+  assert.equal(transform({ enabled: true }), true)
+  assert.equal(transform({ enabled: false }), false)
+  assert.equal(transform({}), false)
+})
+
+const WRITE_CASES = [
+  // [builder, 저장 JSON 필드, 다른 인자, 값 없을 때의 기대값]
+  [buildRegistrationEnabledValue, 'require_approval', true, true],
+  [buildSessionConfigValue, 'require_reauth_for_sensitive', 120, true],
+  [buildLoginPolicyValue, 'require_strong_password', 5, true],
+  [buildPasswordPolicyValue, 'require_uppercase', 8, true],
+  [buildPasswordPolicyValue, 'require_lowercase', 8, true],
+  [buildPasswordPolicyValue, 'require_numbers', 8, true],
+]
+
+for (const [build, jsonField, otherArg, absentExpected] of WRITE_CASES) {
+  test(`저장 ${build.name} → ${jsonField}: 저장 true/false/없음을 그대로 다시 쓴다`, () => {
+    assert.equal(build({ [jsonField]: true }, otherArg)[jsonField], true)
+    assert.equal(
+      build({ [jsonField]: false }, otherArg)[jsonField],
+      false,
+      '끈 값이 같은 그룹의 다른 항목을 저장할 때 되살아나면 안 된다'
+    )
+    assert.equal(build({}, otherArg)[jsonField], absentExpected)
+    assert.equal(build(undefined, otherArg)[jsonField], absentExpected)
+  })
+}
+
+test('저장: 화면이 보낸 필드는 씨앗값이 아니라 보낸 값으로 저장된다', () => {
+  assert.equal(buildRegistrationEnabledValue({ enabled: true }, false).enabled, false)
+  assert.equal(buildSessionConfigValue({ timeout_minutes: 480 }, 30).timeout_minutes, 30)
+  assert.equal(buildLoginPolicyValue({ max_attempts: 5 }, 3).max_attempts, 3)
+  assert.equal(buildPasswordPolicyValue({ min_length: 8 }, 12).min_length, 12)
+})
+
+test('저장: 열두 자리 밖의 형제 필드는 저장값 그대로 남는다', () => {
+  const session = buildSessionConfigValue({ max_concurrent_sessions: 2 }, 60)
+  assert.equal(session.max_concurrent_sessions, 2)
+
+  const login = buildLoginPolicyValue({ lockout_duration_minutes: 45 }, 5)
+  assert.equal(login.lockout_duration_minutes, 45)
+
+  // require_special은 기본값이 false라 `||`로도 뒤집히지 않았다 — 그래도
+  // 저장된 true가 보존되는지는 못박아 둔다.
+  const password = buildPasswordPolicyValue({ require_special: true, history_count: 9 }, 8)
+  assert.equal(password.require_special, true)
+  assert.equal(password.history_count, 9)
+  assert.equal(buildPasswordPolicyValue({}, 8).require_special, false)
+})
+
+test('부정 대조: 옛 `||` 관용구였다면 저장된 false가 전부 true로 되살아난다', () => {
+  // 고치기 전 코드가 무엇을 했는지 이 자리에 남겨 둔다.
+  const oldIdiom = stored => stored?.require_uppercase || true
+  assert.equal(oldIdiom({ require_uppercase: false }), true)
+  assert.equal(buildPasswordPolicyValue({ require_uppercase: false }, 8).require_uppercase, false)
 })

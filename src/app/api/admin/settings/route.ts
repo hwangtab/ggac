@@ -11,6 +11,10 @@ import { createLogger } from '@/utils/logger'
 import { listSystemSettings, updateSystemSetting } from '@/db/queries/settings'
 import {
   SETTING_MAPPINGS,
+  buildLoginPolicyValue,
+  buildPasswordPolicyValue,
+  buildRegistrationEnabledValue,
+  buildSessionConfigValue,
   isClientEchoOfServedValue,
   seedSettingGroup,
   type SettingMapping,
@@ -307,10 +311,10 @@ export const PUT = defineApiRoute<Record<string, unknown>>({
             }
             break
           case 'registration_enabled':
-            settingGroups[mapping.key] = {
-              enabled: frontendValue,
-              require_approval: settingGroups[mapping.key]?.require_approval || true,
-            }
+            settingGroups[mapping.key] = buildRegistrationEnabledValue(
+              settingGroups[mapping.key],
+              frontendValue
+            )
             break
           case 'site_title':
           case 'site_description':
@@ -335,35 +339,26 @@ export const PUT = defineApiRoute<Record<string, unknown>>({
             break
           case 'session_config':
             if (frontendKey === 'session_timeout') {
-              settingGroups[mapping.key] = {
-                timeout_minutes: frontendValue,
-                max_concurrent_sessions: settingGroups[mapping.key]?.max_concurrent_sessions || 5,
-                require_reauth_for_sensitive:
-                  settingGroups[mapping.key]?.require_reauth_for_sensitive || true,
-              }
+              settingGroups[mapping.key] = buildSessionConfigValue(
+                settingGroups[mapping.key],
+                frontendValue
+              )
             }
             break
           case 'login_policy':
             if (frontendKey === 'max_login_attempts') {
-              settingGroups[mapping.key] = {
-                max_attempts: frontendValue,
-                lockout_duration_minutes:
-                  settingGroups[mapping.key]?.lockout_duration_minutes || 30,
-                require_strong_password:
-                  settingGroups[mapping.key]?.require_strong_password || true,
-              }
+              settingGroups[mapping.key] = buildLoginPolicyValue(
+                settingGroups[mapping.key],
+                frontendValue
+              )
             }
             break
           case 'password_policy':
             if (frontendKey === 'password_min_length') {
-              settingGroups[mapping.key] = {
-                min_length: frontendValue,
-                require_uppercase: settingGroups[mapping.key]?.require_uppercase || true,
-                require_lowercase: settingGroups[mapping.key]?.require_lowercase || true,
-                require_numbers: settingGroups[mapping.key]?.require_numbers || true,
-                require_special: settingGroups[mapping.key]?.require_special || false,
-                history_count: settingGroups[mapping.key]?.history_count || 5,
-              }
+              settingGroups[mapping.key] = buildPasswordPolicyValue(
+                settingGroups[mapping.key],
+                frontendValue
+              )
             }
             break
           case 'email_verification':
