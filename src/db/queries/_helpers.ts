@@ -72,3 +72,44 @@ export function escapeLikePattern(input: string): string {
 export function likeContains(column: AnySQLiteColumn, needle: string): SQL {
   return sql`${column} LIKE ${'%' + escapeLikePattern(needle) + '%'} ESCAPE ${LIKE_ESCAPE_CHAR}`
 }
+
+/**
+ * SQLite의 쓰기 잠금 경합인가.
+ *
+ * SQLite는 데이터베이스마다 쓰는 사람이 한 명이다. 원격 Turso에서는 문장
+ * 하나가 왕복 하나라 트랜잭션이 잠금을 쥐는 시간이 길고, 그동안 다른 쓰기는
+ * `SQLITE_BUSY`로 튕긴다. 경합은 고장이 아니라 일상이므로 잠시 뒤 다시 하면
+ * 대개 지난다 — 판정 기준을 한 곳에 둬야 재시도하는 자리마다 다른 문자열을
+ * 보는 일이 없다.
+ */
+export function isLockContention(error: unknown): boolean {
+  const code = (error as { code?: string })?.code
+  if (code === 'SQLITE_BUSY' || code === 'SQLITE_LOCKED') return true
+  const message = error instanceof Error ? error.message : String(error)
+  return /SQLITE_BUSY|database is locked|SQLITE_LOCKED/i.test(message)
+}
+
+/**
+ * 락 경합만 네 번까지 다시 해 본다. 25·50·75ms를 쉬고 물러난다.
+ *
+ * `isFinal`이 참을 돌려주는 오류는 **다시 해도 같은 답**이므로 그대로 올린다
+ * (매진·자리 없음 같은 판정). 그 밖의 오류도 경합이 아니면 그대로 올린다 —
+ * 진짜 고장을 재시도로 덮으면 느려지기만 한다.
+ */
+export async function retryOnLockContention<T>(
+  run: () => Promise<T>,
+  isFinal: (error: unknown) => boolean = () => false
+): Promise<T> {
+  let lastError: unknown
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      return await run()
+    } catch (error) {
+      if (isFinal(error)) throw error
+      if (!isLockContention(error)) throw error
+      lastError = error
+      await new Promise(resolve => setTimeout(resolve, 25 * (attempt + 1)))
+    }
+  }
+  throw lastError
+}

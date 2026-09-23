@@ -438,3 +438,90 @@ test('판 번호가 날짜로 읽히지 않으면 아무것도 쓰지 않는다'
   )
   assert.equal((await q.getCampaignById(c.id)).status, 'submitted')
 })
+
+// ── 쓰기 잠금을 가장 오래 쥐는 트랜잭션에만 재시도가 없던 것 ───────────────
+
+/**
+ * 이 배치는 맨 앞의 조건부 UPDATE로 쓰기 잠금을 잡은 뒤 생성·수정·삭제를 전부
+ * 그 안에서 한다 — 원격 Turso에서는 문장마다 왕복이라 잠금을 쥐는 시간이 이
+ * 앱에서 가장 길고, 그만큼 스스로도 `SQLITE_BUSY`를 만나기 쉽다.
+ *
+ * **다른 커넥션으로 진짜 경합을 만들어 검증하지 못한다.** 로컬 파일 DB에서는
+ * `BEGIN IMMEDIATE`가 한 번 실패한 커넥션이 그다음 트랜잭션의 COMMIT에서
+ * `SQLITE_BUSY: cannot commit transaction - SQL statements in progress`로
+ * 이어진다(실측) — 재시도가 로컬에서는 구조적으로 성공할 수 없다. 운영은
+ * 원격 Turso라 트랜잭션마다 새 스트림이 열려 이 제약이 없다. 그래서 여기서는
+ * 경합 자체를 주입해 **배선**을 못박는다: 첫 트랜잭션이 경합으로 죽어도
+ * 배치가 다시 시도해 저장까지 가는가.
+ */
+test('applyRewardBatch는 첫 트랜잭션이 경합으로 죽어도 다시 시도해 저장한다', async () => {
+  const c = await q.createCampaign({
+    owner_user_id: 'u1',
+    title: '경합',
+    summary: 's',
+    goal_amount: 1,
+  })
+  // 쿼리 계층이 쓰는 바로 그 db 인스턴스의 클래스를 잡는다(같은 모듈이다).
+  const { db } = await import('../../src/db/client.ts')
+  const proto = db.constructor.prototype
+  const original = proto.transaction
+  let calls = 0
+  proto.transaction = function patched(...args) {
+    calls += 1
+    if (calls === 1) {
+      const busy = new Error('SQLITE_BUSY: database is locked')
+      busy.code = 'SQLITE_BUSY'
+      return Promise.reject(busy)
+    }
+    return original.apply(this, args)
+  }
+  try {
+    const res = await q.applyRewardBatch({
+      campaign_id: c.id,
+      expected_status: 'draft',
+      creates: [{ campaign_id: c.id, title: '경합리워드', amount: 1000 }],
+      updates: [],
+      delete_ids: [],
+    })
+    assert.equal(res.ok, true)
+    assert.equal(calls, 2, '경합 뒤 한 번 더 시도해야 한다')
+  } finally {
+    proto.transaction = original
+  }
+  const rewards = await q.listRewards(c.id)
+  assert.equal(rewards.length, 1)
+  assert.equal(rewards[0].title, '경합리워드')
+})
+
+test('applyRewardBatch의 되감기 신호는 재시도를 타지 않는다 — 다시 해도 같은 답이다', async () => {
+  const c = await q.createCampaign({
+    owner_user_id: 'u1',
+    title: '되감기',
+    summary: 's',
+    goal_amount: 1,
+  })
+  const { db } = await import('../../src/db/client.ts')
+  const proto = db.constructor.prototype
+  const original = proto.transaction
+  let calls = 0
+  proto.transaction = function counted(...args) {
+    calls += 1
+    return original.apply(this, args)
+  }
+  try {
+    // 기대 상태가 어긋나면 `status_changed`다. 이걸 재시도하면 잠금을 오래
+    // 쥐는 트랜잭션을 네 번 여는 셈이 된다.
+    const res = await q.applyRewardBatch({
+      campaign_id: c.id,
+      expected_status: 'active',
+      creates: [],
+      updates: [],
+      delete_ids: [],
+    })
+    assert.equal(res.ok, false)
+    assert.equal(res.reason, 'status_changed')
+    assert.equal(calls, 1)
+  } finally {
+    proto.transaction = original
+  }
+})

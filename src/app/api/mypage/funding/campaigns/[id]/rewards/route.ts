@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 
 import { requireActiveMember } from '@/lib/server/memberAuth'
 import { getCampaignById, listRewards, applyRewardBatch } from '@/db/queries/funding'
+import { isLockContention } from '@/db/queries/_helpers'
 import { logUserActivity } from '@/db/queries/activities'
 import { canManageCampaign } from '@/lib/server/fundingAuth'
 import { editScope, type CampaignStatus } from '@/lib/funding/transitions'
@@ -36,7 +37,30 @@ const LOCK_MESSAGES = {
     '공개된 프로젝트에서는 기존 리워드의 수량을 줄일 수 없습니다. 늘리는 것만 됩니다.',
 } as const
 
+/**
+ * 라우트 전체를 감싼다. 안쪽에서 던진 예외가 그대로 빠져나가면 Next가 본문
+ * 없는 500을 돌려주고, 개설자는 리워드를 한참 고쳐 넣은 화면에서 아무 문장도
+ * 못 받는다. 특히 `applyRewardBatch`는 이 앱에서 쓰기 잠금을 가장 오래 쥐는
+ * 트랜잭션이라 `SQLITE_BUSY`가 실제로 여기까지 올라온다(쿼리 계층이 네 번
+ * 다시 해 본 뒤다). 그 경우와 나머지는 개설자가 할 일이 다르므로 문장을 나눈다.
+ */
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    return await handlePut(request, params)
+  } catch (error) {
+    log.error('리워드 저장 실패:', error)
+    if (isLockContention(error)) {
+      return ApiError.serviceUnavailable(
+        '지금 저장 요청이 몰려 리워드를 저장하지 못했습니다. 입력하신 내용은 그대로 남아 있으니 30초쯤 뒤에 저장을 한 번 더 눌러 주세요.'
+      ).toNextResponse()
+    }
+    return ApiError.internalServerError(
+      '리워드를 저장하지 못했습니다. 입력하신 내용은 그대로 남아 있으니 잠시 뒤에 다시 저장해 주세요. 계속 같은 화면이 나오면 사무국(contact@ggac.kr)으로 알려 주시면 확인해 드리겠습니다.'
+    ).toNextResponse()
+  }
+}
+
+async function handlePut(request: NextRequest, params: Promise<{ id: string }>) {
   if (!(await isFundingEnabled()))
     return ApiError.serviceUnavailable('펀딩을 준비 중입니다.').toNextResponse()
   const auth = await requireActiveMember()

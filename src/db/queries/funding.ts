@@ -11,7 +11,7 @@ import { fundingCampaigns, fundingPledges, fundingRewards } from '../schema/inde
 import type { CampaignAction, CampaignStatus } from '../../lib/funding/transitions.ts'
 import { nextStatus, PUBLIC_CAMPAIGN_STATUSES } from '../../lib/funding/transitions.ts'
 
-import { toIso, toSnakeCase } from './_helpers.ts'
+import { retryOnLockContention, toIso, toSnakeCase } from './_helpers.ts'
 
 type Row = Record<string, unknown>
 
@@ -433,43 +433,51 @@ export async function applyRewardBatch(plan: {
   updates: { id: string; patch: RewardPatchInput; require_unlocked?: boolean }[]
   delete_ids: string[]
 }): Promise<RewardBatchResult> {
+  // 이 트랜잭션은 이 앱에서 쓰기 잠금을 가장 오래 쥔다 — 맨 앞의 조건부
+  // UPDATE로 잠금을 잡은 뒤 생성·수정·삭제를 전부 그 안에서 하고, 원격
+  // Turso에서는 문장 하나가 왕복 하나다. 그만큼 스스로도 다른 쓰기에
+  // 막히기 쉬우므로 `holdPledge`·`finalizePledgePayment`와 **같은 재시도**를
+  // 쓴다. 되감기 신호(`RewardBatchAbort`)는 경합이 아니라 판정이므로
+  // 재시도를 타지 않고 그대로 아래 catch로 간다.
   try {
-    return await db.transaction(async tx => {
-      const held = await tx
-        .update(fundingCampaigns)
-        .set({ status: plan.expected_status })
-        .where(
-          and(
-            eq(fundingCampaigns.id, plan.campaign_id),
-            eq(fundingCampaigns.status, plan.expected_status)
+    return await retryOnLockContention(() =>
+      db.transaction(async tx => {
+        const held = await tx
+          .update(fundingCampaigns)
+          .set({ status: plan.expected_status })
+          .where(
+            and(
+              eq(fundingCampaigns.id, plan.campaign_id),
+              eq(fundingCampaigns.status, plan.expected_status)
+            )
           )
-        )
-        .returning({ id: fundingCampaigns.id })
-      if (held.length === 0) throw new RewardBatchAbort({ ok: false, reason: 'status_changed' })
+          .returning({ id: fundingCampaigns.id })
+        if (held.length === 0) throw new RewardBatchAbort({ ok: false, reason: 'status_changed' })
 
-      for (const input of plan.creates)
-        await tx.insert(fundingRewards).values(rewardInsertValues(input))
+        for (const input of plan.creates)
+          await tx.insert(fundingRewards).values(rewardInsertValues(input))
 
-      for (const u of plan.updates) {
-        const set = rewardUpdateSet(u.patch)
-        if (Object.keys(set).length === 0) continue
-        const conditions = [eq(fundingRewards.id, u.id)]
-        if (u.require_unlocked) conditions.push(isNull(fundingRewards.lockedAt))
-        const rows = await tx
-          .update(fundingRewards)
-          .set(set)
-          .where(and(...conditions))
-          .returning({ id: fundingRewards.id })
-        if (rows.length === 0 && u.require_unlocked) {
-          throw new RewardBatchAbort({ ok: false, reason: 'reward_locked', reward_id: u.id })
+        for (const u of plan.updates) {
+          const set = rewardUpdateSet(u.patch)
+          if (Object.keys(set).length === 0) continue
+          const conditions = [eq(fundingRewards.id, u.id)]
+          if (u.require_unlocked) conditions.push(isNull(fundingRewards.lockedAt))
+          const rows = await tx
+            .update(fundingRewards)
+            .set(set)
+            .where(and(...conditions))
+            .returning({ id: fundingRewards.id })
+          if (rows.length === 0 && u.require_unlocked) {
+            throw new RewardBatchAbort({ ok: false, reason: 'reward_locked', reward_id: u.id })
+          }
         }
-      }
 
-      if (plan.delete_ids.length > 0) {
-        await tx.delete(fundingRewards).where(inArray(fundingRewards.id, plan.delete_ids))
-      }
-      return { ok: true } as RewardBatchResult
-    })
+        if (plan.delete_ids.length > 0) {
+          await tx.delete(fundingRewards).where(inArray(fundingRewards.id, plan.delete_ids))
+        }
+        return { ok: true } as RewardBatchResult
+      })
+    )
   } catch (error) {
     if (error instanceof RewardBatchAbort) return error.result
     throw error
