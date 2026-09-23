@@ -9,6 +9,7 @@ import {
 } from '@/db/queries/funding'
 import { listPledgesByCampaign } from '@/db/queries/fundingPledges'
 import { getSettlementByCampaign, isSettlementStale } from '@/db/queries/fundingSettlements'
+import { cooperativeLossFor } from '@/lib/funding/settlement'
 import { canManageCampaign } from '@/lib/server/fundingAuth'
 import { isApprovedActiveAdmin } from '@/lib/server/authz'
 import { editScope, type CampaignStatus } from '@/lib/funding/transitions'
@@ -90,6 +91,11 @@ function creatorSettlementView(settlement: Record<string, unknown>, isStale: boo
     backer_count: settlement.backer_count,
     paid_out_at: settlement.paid_out_at,
     is_stale: isStale,
+    // 수수료가 실 모금액보다 클 때의 차액. 저장된 값들에서 되짚는다 —
+    // 컬럼을 만들면 손으로 맞춰야 하는 숫자가 하나 더 생긴다.
+    cooperative_loss_amount: cooperativeLossFor(
+      settlement as Parameters<typeof cooperativeLossFor>[0]
+    ),
   }
 }
 

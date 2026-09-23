@@ -12,6 +12,8 @@
  * 쓰지 않는다(약관과 화면이 쓰는 말과 같아야 한다).
  */
 
+import { cooperativeLossFor } from './settlement.ts'
+
 export interface NoticeCopy {
   /** 인앱 알림 제목이자 메일 제목. */
   title: string
@@ -448,6 +450,19 @@ function settlementArithmetic(settlement: SettlementLike): string {
 }
 
 /**
+ * 수수료가 실 모금액보다 클 때의 차액 — 조합이 떠안은 돈. 0이면 빈 문자열이다.
+ *
+ * 후원이 전부 환불된 캠페인에서 생긴다. 결제대행사는 환불해도 제 수수료를
+ * 대체로 돌려주지 않는다. 그 사실을 문장에서 빼면 창작자는 수수료 줄과 0원
+ * 지급을 나란히 보고 자기가 물어내야 하는 돈인지 헷갈린다.
+ */
+function settlementLossLine(settlement: SettlementLike): string {
+  const loss = cooperativeLossFor(settlement as Parameters<typeof cooperativeLossFor>[0])
+  if (loss <= 0) return ''
+  return ` 실 모금액보다 수수료가 ${formatWon(loss)} 많은데, 이 차액은 조합이 부담하며 창작자에게 청구하지 않습니다.`
+}
+
+/**
  * ⑨ 정산 내역을 정리했다 → **개설자**.
  *
  * 마감 뒤 사무국이 결제대행 수수료를 확인해 정산서를 만든 그때 한 번 나간다.
@@ -476,7 +491,7 @@ export function buildSettlementPreparedNotice(
   }
   return {
     title: '정산 내역이 정리되었습니다',
-    message: `'${title}' 프로젝트의 정산 내역을 정리했습니다. 지급 예정 금액은 ${payout}입니다. ${settlementArithmetic(settlement)} 지급이 끝나면 다시 알려 드립니다. 내역이 실제와 다르면 지급 전에 사무국(contact@ggac.kr)으로 알려 주세요.`,
+    message: `'${title}' 프로젝트의 정산 내역을 정리했습니다. 지급 예정 금액은 ${payout}입니다. ${settlementArithmetic(settlement)}${settlementLossLine(settlement)} 지급이 끝나면 다시 알려 드립니다. 내역이 실제와 다르면 지급 전에 사무국(contact@ggac.kr)으로 알려 주세요.`,
     url: urls.creatorCampaign(campaign.id),
     cta: '정산 내역 보기',
     data: { campaign_id: campaign.id ?? null, revised: false, scope: 'funding' },
@@ -502,13 +517,21 @@ export function buildSettlementPaidNotice(
   const urls = fundingUrls(siteUrl)
   const title = str(campaign.title, '제목 없는 프로젝트')
   const payout = Number(settlement.payout_amount) || 0
+  const net = (Number(settlement.gross_amount) || 0) - (Number(settlement.refund_amount) || 0)
+  // **계좌를 "등록된 계좌"라고 부르지 않는다.** 프로필에 은행·계좌 칸이 있기는
+  // 하지만 둘 다 비어 있을 수 있고, 이 흐름은 그 값을 읽지도 요구하지도
+  // 않는다. 한 번도 채운 적 없는 창작자에게 "등록된 계좌로 보냈다"고 하면
+  // 없는 계좌를 찾게 만든다. 사무국이 아는 계좌로 보냈다는 것만 말하고,
+  // 그것이 틀렸을 때 갈 곳을 함께 준다.
   const head =
     payout > 0
-      ? `'${title}' 프로젝트의 정산금 ${formatWon(payout)}을 등록된 계좌로 보냈습니다.`
-      : `'${title}' 프로젝트의 정산을 마쳤습니다. 수수료를 빼고 나면 지급할 금액이 남지 않아 보내 드린 돈은 없습니다.`
+      ? `'${title}' 프로젝트의 정산금 ${formatWon(payout)}을 사무국이 알고 있는 계좌로 보냈습니다.`
+      : net <= 0
+        ? `'${title}' 프로젝트는 후원이 모두 환불되어 정산할 금액이 남지 않았습니다.`
+        : `'${title}' 프로젝트의 정산을 마쳤습니다. 수수료를 빼고 나면 지급할 금액이 남지 않아 보내 드린 돈은 없습니다.`
   return {
     title: '정산금을 지급했습니다',
-    message: `${head} ${settlementArithmetic(settlement)} 입금이 보이지 않거나 내역이 실제와 다르면 사무국(contact@ggac.kr)으로 알려 주세요.`,
+    message: `${head} ${settlementArithmetic(settlement)}${settlementLossLine(settlement)} 입금이 보이지 않거나 계좌가 바뀌었거나 내역이 실제와 다르면 사무국(contact@ggac.kr)으로 알려 주세요.`,
     url: urls.creatorCampaign(campaign.id),
     cta: '정산 내역 보기',
     data: { campaign_id: campaign.id ?? null, scope: 'funding' },

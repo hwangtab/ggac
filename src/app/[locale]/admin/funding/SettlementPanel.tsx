@@ -15,6 +15,8 @@
 
 import { useCallback, useEffect, useState } from 'react'
 
+import { cooperativeLossFor } from '@/lib/funding/settlement'
+
 interface Settlement {
   status: 'pending' | 'paid'
   gross_amount: number
@@ -143,6 +145,9 @@ export default function SettlementPanel({
   const paid = settlement?.status === 'paid'
   const basis = payload?.current_basis
   const rate = payload?.platform_fee_rate_bp ?? 0
+  // 수수료가 실 모금액보다 클 때의 차액 — 후원이 전부 환불된 캠페인에서
+  // 생긴다. 숨기면 0원 지급이 "수수료를 안 냈다"처럼 읽힌다.
+  const loss = settlement ? cooperativeLossFor(settlement) : 0
 
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-4">
@@ -211,6 +216,12 @@ export default function SettlementPanel({
               <dt className="text-xs text-gray-500">플랫폼 수수료({rate / 100}%)</dt>
               <dd className="font-semibold text-gray-900">{won(settlement.platform_fee_amount)}</dd>
             </div>
+            {loss > 0 ? (
+              <div className="col-span-2">
+                <dt className="text-xs text-gray-500">조합이 부담한 차액</dt>
+                <dd className="font-semibold text-gray-900">{won(loss)}</dd>
+              </div>
+            ) : null}
             <div className="col-span-2">
               <dt className="text-xs text-gray-500">지급액</dt>
               <dd className="text-lg font-bold text-gray-900">{won(settlement.payout_amount)}</dd>
@@ -218,6 +229,14 @@ export default function SettlementPanel({
           </>
         ) : null}
       </dl>
+
+      {loss > 0 ? (
+        <p className="mt-3 text-sm text-gray-600">
+          실 모금액보다 수수료가 {won(loss)} 많습니다. 후원이 전부 환불돼 남은 돈이 없는 경우이며,
+          결제대행사는 환불해도 수수료를 대체로 돌려주지 않습니다. 이 차액은 조합이 부담하고
+          창작자에게 청구하지 않습니다.
+        </p>
+      ) : null}
 
       {paid ? (
         <p className="mt-3 text-sm text-gray-600">

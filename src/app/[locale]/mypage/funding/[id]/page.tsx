@@ -95,6 +95,13 @@ interface Settlement {
   paid_out_at: string | null
   /** 정리한 뒤 환불이 들어와 금액이 다시 계산될 예정인가. */
   is_stale: boolean
+  /**
+   * 수수료가 실 모금액보다 클 때의 차액 — 조합이 떠안은 돈. 0이면 숨긴다.
+   *
+   * 후원이 전부 환불된 캠페인에서 생긴다. 이 줄이 없으면 창작자는 수수료 줄과
+   * 0원 지급을 나란히 보고 자기가 물어내야 하는 돈인지 헷갈린다.
+   */
+  cooperative_loss_amount: number
 }
 
 interface DashboardData {
@@ -534,6 +541,16 @@ export default function ManageCampaignPage() {
                           {t('progress.backers', { count: data.settlement.backer_count })}
                         </dd>
                       </div>
+                      {data.settlement.cooperative_loss_amount > 0 ? (
+                        <div className="col-span-2 sm:col-span-3">
+                          <dt className="text-xs text-gray-500">{t('creator.settlementLoss')}</dt>
+                          <dd className="font-semibold text-gray-900">
+                            {t('progress.amount', {
+                              amount: formatAmount(data.settlement.cooperative_loss_amount, locale),
+                            })}
+                          </dd>
+                        </div>
+                      ) : null}
                       <div className="col-span-2 sm:col-span-3 border-t border-gray-200 pt-4">
                         <dt className="text-xs text-gray-500">{t('creator.settlementPayout')}</dt>
                         <dd className="text-xl font-bold text-gray-900">
@@ -552,6 +569,11 @@ export default function ManageCampaignPage() {
                       ) : null}
                     </dl>
                     <p className="mt-4 text-sm text-gray-600">{t('creator.settlementFormula')}</p>
+                    {data.settlement.cooperative_loss_amount > 0 ? (
+                      <p className="mt-1 text-sm text-gray-600">
+                        {t('creator.settlementLossNote')}
+                      </p>
+                    ) : null}
                     {/* 이 한 칸만 사람이 넣었다는 것을 분명히 말한다 — 토스는
                         수수료를 돌려주지 않고 우리도 적어 두지 않는다. */}
                     <p className="mt-1 text-sm text-gray-600">{t('creator.settlementPgFeeNote')}</p>

@@ -106,14 +106,24 @@ export function computeSettlementAmounts(input: {
   }
   const net = netAmount(basis)
   const platformFee = platformFeeFor(net, rate)
-  const payout = net - input.pg_fee_amount - platformFee
-  if (payout < 0) {
+  const raw = net - input.pg_fee_amount - platformFee
+  // 실 모금액이 남아 있는데 지급액이 음수가 되면 수수료를 잘못 넣은 것이다.
+  // 조용히 0으로 깎지 않고 거부한다 — 잘못 넣은 값이 기록에 남지 않은 채
+  // 사라지는 것이 이 설계가 막으려는 바로 그 일이다.
+  if (raw < 0 && net > 0) {
     return {
       ok: false,
       reason: 'pg_fee_too_large',
       message: `결제대행 수수료가 너무 큽니다. 실 모금액 ${net.toLocaleString('ko-KR')}원에서 플랫폼 수수료 ${platformFee.toLocaleString('ko-KR')}원을 뺀 ${(net - platformFee).toLocaleString('ko-KR')}원까지 넣을 수 있습니다.`,
     }
   }
+  // 실 모금액이 0인데 결제대행 수수료가 있는 경우 — 후원이 전부 환불된
+  // 캠페인이다. 토스는 환불해도 제 수수료를 대체로 돌려주지 않으므로 그 돈은
+  // **실제로 조합이 잃은 돈**이다. 여기서 거부하면 사실인 수수료를 적을 길이
+  // 없어져 "0원이라고 알면서 0원을 넣는" 수밖에 없게 된다. 그래서 사실대로
+  // 적게 하고, 지급액은 0으로 둔다 — 창작자에게서 되돌려 받을 것은 없다.
+  // 그 차액은 `cooperativeLossFor`가 되짚어 주고 화면이 손실이라고 말한다.
+  const payout = raw < 0 ? 0 : raw
   return {
     ok: true,
     net_amount: net,
@@ -145,6 +155,26 @@ export function isBasisStale(stored: SettlementBasis, current: SettlementBasis):
     stored.refund_amount !== current.refund_amount ||
     stored.backer_count !== current.backer_count
   )
+}
+
+/**
+ * 조합이 떠안은 금액.
+ *
+ * 수수료 합이 실 모금액보다 클 때의 차액이다. 오늘 이 값이 0보다 커질 수 있는
+ * 경우는 하나뿐이다 — 후원이 전부 환불되어 남은 돈이 없는데 결제대행
+ * 수수료는 나간 캠페인(`computeSettlementAmounts`의 주석 참고). 저장하지 않고
+ * 저장된 값들에서 되짚는다. 별도 컬럼을 만들면 손으로 맞춰야 하는 숫자가
+ * 하나 더 생긴다.
+ */
+export function cooperativeLossFor(amounts: {
+  gross_amount: unknown
+  refund_amount: unknown
+  pg_fee_amount: unknown
+  platform_fee_amount: unknown
+}): number {
+  const net = Number(amounts.gross_amount || 0) - Number(amounts.refund_amount || 0)
+  const fees = Number(amounts.pg_fee_amount || 0) + Number(amounts.platform_fee_amount || 0)
+  return Math.max(0, fees - net)
 }
 
 /** 화면과 알림이 함께 쓰는 한국어 표기. */
