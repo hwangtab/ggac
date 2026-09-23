@@ -144,8 +144,46 @@ test('표 한 줄은 머리글과 같은 칸 수이고 이행 상태는 한국�
 test('내려받기 파일명은 한글을 RFC 5987로 주고 ASCII 이름을 함께 남긴다', () => {
   const d = x.shippingExportDisposition('첫 "정규" 앨범', new Date('2026-09-23T00:00:00Z'))
   assert.ok(d.startsWith('attachment; '))
-  assert.ok(d.includes('filename="funding-shipping-2026-09-23.csv"'))
+  assert.ok(d.includes('filename="funding-shipping-excel-2026-09-23.csv"'))
   assert.ok(d.includes("filename*=UTF-8''"))
   // 헤더를 깨뜨릴 글자는 이름에서 사라진다.
   assert.ok(!d.includes('"첫'))
+  // 두 판본이 같은 이름으로 내려오면 폴더에서 구분되지 않는다.
+  const c = x.shippingExportDisposition('앨범', new Date('2026-09-23T00:00:00Z'), 'courier')
+  assert.ok(c.includes('filename="funding-shipping-courier-2026-09-23.csv"'))
+  assert.notEqual(c, d)
+})
+
+// ---------------------------------------------------------------- 두 판본
+
+test('택배사 판본은 우편번호·전화번호를 값 그대로 준다', () => {
+  // 엑셀 판본의 ="06236"을 택배사 양식에 그대로 올리면 전화번호 칸에 그
+  // 글자가 들어가 배달되지 않는 행이 된다 — 하필 이 처리가 지키려던 바로
+  // 그 두 칸에서.
+  assert.equal(x.csvDigits('06236', 'excel'), String.raw`"=""06236"""`)
+  assert.equal(x.csvDigits('06236', 'courier'), '"06236"')
+  assert.equal(x.csvDigits('010-1234-5678', 'courier'), '"010-1234-5678"')
+  // 어느 판본이든 숫자·하이픈만 남는다 — 이 칸으로 수식은 못 들어간다.
+  assert.equal(x.csvDigits('=cmd|calc', 'courier'), '""')
+})
+
+test('택배사 판본도 BOM과 수식 차단은 그대로다', () => {
+  const csv = x.buildShippingCsv(
+    [{ shipping_postcode: '06236', shipping_memo: '=HYPERLINK("http://evil/","x")' }],
+    'courier'
+  )
+  // 한글은 어느 쪽에서든 깨지면 안 된다.
+  assert.equal(csv[0], '\uFEFF')
+  // 남이 적은 글자가 수식이 되는 것도 어느 쪽에서든 안 된다.
+  assert.ok(csv.includes(String.raw`"'=HYPERLINK`))
+  // 값 그대로인 것은 앞의 0을 지켜야 하는 두 칸뿐이다.
+  assert.ok(csv.includes('"06236"'))
+  assert.ok(!csv.includes(String.raw`=""06236""`))
+})
+
+test('모르는 판본 이름은 엑셀로 떨어진다', () => {
+  assert.equal(x.parseShippingExportFormat('courier'), 'courier')
+  assert.equal(x.parseShippingExportFormat('excel'), 'excel')
+  assert.equal(x.parseShippingExportFormat(null), 'excel')
+  assert.equal(x.parseShippingExportFormat('xlsx'), 'excel')
 })

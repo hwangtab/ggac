@@ -32,9 +32,40 @@
  * 이 두 칸만 엑셀의 문자열 수식(`="06236"`)으로 적는다. 수식을 우리가 만드는
  * 셈이라 ②와 어긋나 보이지만, 그 전에 **숫자와 하이픈만 남기고 전부 버리기**
  * 때문에 후원자가 넣은 글자가 수식 안으로 들어갈 길이 없다.
+ *
+ * ## ④ 그런데 그 수식이 택배사 양식을 깨뜨린다 — 그래서 판본이 둘이다
+ *
+ * ③의 `="06236"`은 **엑셀만 아는 문법**이다. 개설자가 같은 파일을 택배사의
+ * 대량 접수 양식에 그대로 올리면 전화번호 칸에 `="01012345678"`이라는 **글자
+ * 그대로**가 들어가 배달되지 않는 행이 된다 — 하필 그 처리가 지키려던 바로
+ * 그 두 칸에서. 한 파일로 둘 다 만족시킬 방법은 없다.
+ *
+ * 그래서 두 판본을 준다.
+ *
+ * - `excel` — 엑셀에서 눈으로 보고 손으로 고칠 때. ①②③ 전부 적용.
+ * - `courier` — 택배사 양식이나 다른 프로그램에 올릴 때. 우편번호·전화번호를
+ *   **값 그대로** 적는다. ①(BOM·CRLF)과 ②(수식 차단)는 그대로 둔다 — 한글은
+ *   어느 쪽에서든 깨지면 안 되고, 남이 적은 글자가 수식이 되는 것도 어느
+ *   쪽에서든 안 된다.
+ *
+ * 고르는 사람이 스프레드시트를 생각하지 않아도 되도록, 화면의 두 링크는
+ * **하려는 일**로 이름을 단다("엑셀에서 열어 보기" / "택배사 양식에 올리기").
  */
 
 import { FULFILLMENT_LABEL, type FulfillmentStatus } from './fulfillment.ts'
+
+/** 내보내기 판본. 무엇에 쓸 파일인가로 갈린다. */
+export const SHIPPING_EXPORT_FORMATS = ['excel', 'courier'] as const
+
+export type ShippingExportFormat = (typeof SHIPPING_EXPORT_FORMATS)[number]
+
+/**
+ * 요청의 `format` 값을 판본으로. 모르는 값은 `excel`로 떨어진다 — 링크를
+ * 손으로 고쳐 넣은 사람에게 빈 화면 대신 쓸 수 있는 파일을 준다.
+ */
+export function parseShippingExportFormat(value: unknown): ShippingExportFormat {
+  return value === 'courier' ? 'courier' : 'excel'
+}
 
 /** 엑셀이 수식으로 읽기 시작하는 첫 글자들. */
 const FORMULA_LEADS = ['=', '+', '-', '@', '\t', '\r']
@@ -48,13 +79,18 @@ export function csvCell(value: unknown): string {
 }
 
 /**
- * 앞의 0을 지켜야 하는 칸. 숫자와 하이픈만 남긴 뒤 엑셀 문자열 수식으로 적는다.
- * 남는 글자가 없으면 빈 칸을 준다 — `=""`는 엑셀에서 빈 문자열이라 괜찮지만
- * 읽는 사람에게 더 조용한 쪽을 고른다.
+ * 앞의 0을 지켜야 하는 칸(우편번호·전화번호).
+ *
+ * 어느 판본이든 **숫자와 하이픈만 남긴다** — 그래서 이 칸으로는 후원자가 적은
+ * 글자가 들어갈 수 없고, 아래에서 수식을 만들어도 안전하다.
+ *
+ * - `excel`: 엑셀 문자열 수식(`="06236"`)으로 감싸 앞의 0을 지킨다.
+ * - `courier`: 값 그대로. 택배사 양식은 수식 문법을 모른다.
  */
-export function csvDigits(value: unknown): string {
+export function csvDigits(value: unknown, format: ShippingExportFormat = 'excel'): string {
   const digits = String(value ?? '').replace(/[^0-9-]/g, '')
   if (digits.length === 0) return '""'
+  if (format === 'courier') return `"${digits}"`
   return `"=""${digits}"""`
 }
 
@@ -91,7 +127,10 @@ function label(status: unknown): string {
 }
 
 /** 표 한 장. 맨 앞의 BOM과 `\r\n`이 ①의 처리다. */
-export function buildShippingCsv(rows: ShippingRow[]): string {
+export function buildShippingCsv(
+  rows: ShippingRow[],
+  format: ShippingExportFormat = 'excel'
+): string {
   const lines = [SHIPPING_EXPORT_HEADERS.map(csvCell).join(',')]
   for (const r of rows) {
     lines.push(
@@ -99,8 +138,8 @@ export function buildShippingCsv(rows: ShippingRow[]): string {
         csvCell(r.pledge_code),
         csvCell(r.backer_name),
         csvCell(r.shipping_name),
-        csvDigits(r.shipping_phone),
-        csvDigits(r.shipping_postcode),
+        csvDigits(r.shipping_phone, format),
+        csvDigits(r.shipping_postcode, format),
         csvCell(r.shipping_address1),
         csvCell(r.shipping_address2),
         csvCell(r.shipping_memo),
@@ -120,14 +159,20 @@ export function buildShippingCsv(rows: ShippingRow[]): string {
  * `filename*=UTF-8''…`로 한글을 주고, 그 문법을 모르는 오래된 클라이언트를
  * 위해 ASCII 이름을 `filename=`에 함께 남긴다.
  */
-export function shippingExportDisposition(campaignTitle: unknown, today: Date): string {
+export function shippingExportDisposition(
+  campaignTitle: unknown,
+  today: Date,
+  format: ShippingExportFormat = 'excel'
+): string {
   const date = today.toISOString().slice(0, 10)
   const safeTitle = String(campaignTitle ?? '')
     // 따옴표·역슬래시·제어문자는 헤더를 깨뜨린다. 경로 구분자도 지운다.
     .replace(/["\\/\r\n\t]/g, ' ')
     .trim()
     .slice(0, 60)
-  const korean = `${safeTitle || '펀딩'}_배송목록_${date}.csv`
-  const ascii = `funding-shipping-${date}.csv`
+  // 두 판본을 같은 이름으로 주면 내려받기 폴더에서 구분이 안 된다.
+  const kind = format === 'courier' ? '택배사용' : '엑셀용'
+  const korean = `${safeTitle || '펀딩'}_배송목록_${kind}_${date}.csv`
+  const ascii = `funding-shipping-${format}-${date}.csv`
   return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(korean)}`
 }
