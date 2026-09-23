@@ -1,6 +1,12 @@
 /**
  * 펀딩 약관.
  *
+ * 한 문서에 두 부가 들어 있다 — 제1부는 후원자에게, 제2부는 펀딩을 여는
+ * 창작자에게 적용된다. 창작자 동의 체크박스(`/mypage/funding/new`)가
+ * `#creator`로 제2부를 가리킨다. 문서를 둘로 나누지 않는 이유는 시행일이
+ * 하나여야 하기 때문이다 — 동의 기록(`terms_version`)은 개설자 쪽도
+ * 후원자 쪽도 같은 판본 문자열(`FUNDING_TERMS_REVISION`)을 남긴다.
+ *
  * 후원 폼의 동의 문구가 이 주소를 가리킨다. 전자상거래법 제13조는 청약철회·
  * 환불 조건의 **고지**를 요구하고(동의 체크가 아니다), 개인정보보호법 제30조는
  * 처리방침의 **공개**를 요구한다. 그래서 이 문서는 읽을 수 있게 놓여 있기만
@@ -14,9 +20,12 @@ import type { Metadata } from 'next'
 import { setRequestLocale } from 'next-intl/server'
 
 import { Link } from '@/i18n/navigation'
+import { FUNDING_TERMS_REVISION } from '@/lib/funding/terms'
 import { getLocaleAlternates, getSiteUrl } from '@/utils/site'
 
-const REVISION = '2026-09-23'
+// 시행일 문자열의 정본은 `@/lib/funding/terms`다 — 동의를 기록하는 두
+// 라우트가 같은 상수를 읽으므로, 이 문서가 바뀌면 기록된 판본도 함께 바뀐다.
+const REVISION = FUNDING_TERMS_REVISION
 
 export async function generateMetadata({
   params,
@@ -28,11 +37,11 @@ export async function generateMetadata({
   const path = '/funding/terms'
   return {
     title: '펀딩 약관',
-    description: '경기아트콜렉티브 협동조합 펀딩의 후원·환불·배송 약관입니다.',
+    description: '경기아트콜렉티브 협동조합 펀딩의 후원·환불·배송 약관과 창작자 약관입니다.',
     alternates: getLocaleAlternates(path, locale),
     openGraph: {
       title: '펀딩 약관',
-      description: '경기아트콜렉티브 협동조합 펀딩의 후원·환불·배송 약관입니다.',
+      description: '경기아트콜렉티브 협동조합 펀딩의 후원·환불·배송 약관과 창작자 약관입니다.',
       url: `${site}${locale === 'ko' ? '' : `/${locale}`}${path}`,
       type: 'website',
     },
@@ -54,6 +63,12 @@ export default async function FundingTermsPage({
         <p className="text-sm text-gray-500">
           시행일 {REVISION}
           {locale === 'en' ? ' · The Korean text is the authoritative version.' : ''}
+        </p>
+
+        <h2>제1부 후원자 약관</h2>
+        <p>
+          제1조부터 제8조까지는 펀딩에 후원하시는 분에게 적용됩니다. 펀딩을 여는 창작자에게는{' '}
+          <Link href="/funding/terms#creator">제2부</Link>가 함께 적용됩니다.
         </p>
 
         <h2>제1조 (성격)</h2>
@@ -112,6 +127,51 @@ export default async function FundingTermsPage({
         <p>
           펀딩과 리워드에 관한 문의는 사무국(<a href="mailto:contact@ggac.kr">contact@ggac.kr</a>)이
           받습니다.
+        </p>
+
+        <h2 id="creator">제2부 창작자 약관</h2>
+        <p>
+          아래 제9조부터 제13조까지는 <strong>펀딩을 여는 창작자</strong>와 조합 사이에 적용됩니다.
+          캠페인을 만들 때 동의하시는 개설자 약관이 이 부분입니다. 제1부는 그대로 후원자에게
+          적용됩니다.
+        </p>
+
+        <h2>제9조 (목표 미달과 제작)</h2>
+        <p>
+          목표 금액에 미치지 못해도 모인 금액으로 제작을 진행합니다. 창작자는 목표 미달을 이유로
+          제작을 중단하거나 리워드를 줄이지 않습니다. 제작이 불가능해진 경우 창작자는 조합에 곧바로
+          알리고, 후원 금액은 제2조에 따라 환불됩니다.
+        </p>
+
+        <h2>제10조 (마감)</h2>
+        <p>
+          캠페인에 적힌 마감일은 <strong>안내를 위한 표시</strong>이고, 후원 접수의 종료는 창작자
+          또는 조합이 마감을 실행한 시점입니다. 마감을 실행하지 않으면 마감일이 지난 뒤에도 캠페인은
+          열려 있습니다.
+        </p>
+
+        <h2>제11조 (공개 뒤 변경)</h2>
+        <p>
+          캠페인이 공개된 뒤에는 제목·목표 금액·분류를 바꿀 수 없습니다. 소개·본문·이미지·마감일은
+          공개된 뒤에도 고칠 수 있습니다.
+        </p>
+        <p>
+          리워드는 공개된 뒤에 새로 추가하거나 수량을 늘리는 것만 됩니다. 이미 후원이 들어온
+          리워드는 <strong>금액과 배송 여부를 바꿀 수 없고, 삭제할 수 없습니다.</strong> 다른 조건이
+          필요하면 리워드를 새로 추가해 주세요.
+        </p>
+
+        <h2>제12조 (리워드 이행)</h2>
+        <p>
+          캠페인에 적은 리워드를 후원자에게 전달할 책임은 창작자에게 있습니다. 배송이 필요한
+          리워드는 후원자가 입력한 주소로 창작자가 보냅니다. 발송이 예정보다 늦어지는 경우 창작자가
+          후원자에게 알립니다.
+        </p>
+
+        <h2>제13조 (심사)</h2>
+        <p>
+          조합은 캠페인을 공개하기 전에 심사합니다. 심사 중에는 내용을 고칠 수 없고, 심사를 통과하지
+          못한 캠페인은 공개되지 않습니다. 조합은 사유를 적어 창작자에게 돌려보냅니다.
         </p>
       </article>
     </div>

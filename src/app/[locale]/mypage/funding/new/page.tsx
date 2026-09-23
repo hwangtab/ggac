@@ -182,7 +182,9 @@ export default function NewCampaignPage() {
             {t('creator.agreeTerms')}
           </label>
           <p className="-mt-3 text-xs text-gray-500">
-            <Link href="/funding/terms" className="text-primary-600 hover:underline">
+            {/* 창작자에게 적용되는 제2부로 곧장 보낸다 — 문서는 하나지만
+                동의하는 대상은 그 부분이다. */}
+            <Link href="/funding/terms#creator" className="text-primary-600 hover:underline">
               {t('creator.agreeTermsLink')}
             </Link>
           </p>

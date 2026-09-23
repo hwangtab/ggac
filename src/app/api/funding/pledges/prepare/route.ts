@@ -18,6 +18,7 @@ import { PledgeAmountError, computePledgeTotal } from '@/lib/funding/amounts'
 import { generateOrderId, buildCustomerKey } from '@/lib/payments/toss/protocol'
 import { isPaymentEnabled, getPublicClientKey } from '@/lib/payments/toss/config'
 import { getFundingSettings } from '@/lib/funding/settings'
+import { FUNDING_TERMS_REVISION } from '@/lib/funding/terms'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { applyRouteRateLimit, createIPKeyGenerator } from '@/lib/server/rateLimit'
@@ -28,7 +29,9 @@ const log = createLogger('api/funding/pledges/prepare')
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const FUNDING_TERMS_VERSION = '2026-09-21'
+// 동의 기록에 남길 판본 — 후원자가 실제로 본 문서(`/funding/terms`)의
+// 시행일과 같은 상수를 읽는다.
+const FUNDING_TERMS_VERSION = FUNDING_TERMS_REVISION
 
 function str(v: unknown, max = 200): string {
   return typeof v === 'string' ? v.trim().slice(0, max) : ''
@@ -67,7 +70,8 @@ export async function POST(request: NextRequest) {
     const agreedTerms = body.agreedTerms === true
     const agreedPrivacy = body.agreedPrivacy === true
 
-    if (!campaignId || !rewardId) return ApiError.badRequest('리워드를 선택해 주세요.').toNextResponse()
+    if (!campaignId || !rewardId)
+      return ApiError.badRequest('리워드를 선택해 주세요.').toNextResponse()
     if (!backerName) return ApiError.badRequest('이름을 입력해 주세요.').toNextResponse()
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(backerEmail)) {
       return ApiError.badRequest('이메일을 정확히 입력해 주세요.').toNextResponse()
@@ -90,11 +94,19 @@ export async function POST(request: NextRequest) {
     try {
       computePledgeTotal({ unitAmount: Number(reward.amount), quantity, additionalAmount })
     } catch (error) {
-      if (error instanceof PledgeAmountError) return ApiError.badRequest(error.message).toNextResponse()
+      if (error instanceof PledgeAmountError)
+        return ApiError.badRequest(error.message).toNextResponse()
       throw error
     }
 
-    let shipping: { name: string; phone: string; postcode: string; address1: string; address2: string | null; memo: string | null } | null = null
+    let shipping: {
+      name: string
+      phone: string
+      postcode: string
+      address1: string
+      address2: string | null
+      memo: string | null
+    } | null = null
     if (reward.requires_shipping) {
       const s = (body.shipping ?? {}) as Record<string, unknown>
       shipping = {
@@ -105,7 +117,12 @@ export async function POST(request: NextRequest) {
         address2: str(s.address2, 200) || null,
         memo: str(s.memo, 200) || null,
       }
-      if (!shipping.phone || shipping.phone.length < 9 || !shipping.postcode || !shipping.address1) {
+      if (
+        !shipping.phone ||
+        shipping.phone.length < 9 ||
+        !shipping.postcode ||
+        !shipping.address1
+      ) {
         return ApiError.badRequest('배송지를 정확히 입력해 주세요.').toNextResponse()
       }
     }
@@ -133,9 +150,15 @@ export async function POST(request: NextRequest) {
         hold_minutes: fundingSettings.hold_minutes,
       })
     } catch (error) {
-      if (error instanceof RewardSoldOutError) return ApiError.badRequest(error.message).toNextResponse()
-      log.warn('후원 선점 실패', { rewardId, error: error instanceof Error ? error.message : error })
-      return ApiError.serviceUnavailable('후원이 몰리고 있습니다. 잠시 후 다시 시도해 주세요.').toNextResponse()
+      if (error instanceof RewardSoldOutError)
+        return ApiError.badRequest(error.message).toNextResponse()
+      log.warn('후원 선점 실패', {
+        rewardId,
+        error: error instanceof Error ? error.message : error,
+      })
+      return ApiError.serviceUnavailable(
+        '후원이 몰리고 있습니다. 잠시 후 다시 시도해 주세요.'
+      ).toNextResponse()
     }
 
     // 결제 원장·응답에는 pledge 자신이 트랜잭션 안에서 계산해 저장한 금액을
@@ -164,7 +187,9 @@ export async function POST(request: NextRequest) {
       pledgeCode: pledge.pledge_code,
       holdExpiresAt: pledge.hold_expires_at,
       clientKey: getPublicClientKey(),
-      customerKey: user ? buildCustomerKey(user.id) : `g_${String(pledge.id).replace(/-/g, '')}`.slice(0, 50),
+      customerKey: user
+        ? buildCustomerKey(user.id)
+        : `g_${String(pledge.id).replace(/-/g, '')}`.slice(0, 50),
       customerName: backerName,
       customerEmail: backerEmail,
     }).toNextResponse()
