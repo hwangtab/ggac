@@ -490,6 +490,29 @@ test.describe('펀딩 — 비인증 요청', () => {
               { data: { action: 'reject', reviewNote: '비인증 시도' } }
             ),
         ],
+        [
+          'GET /api/admin/funding/campaigns/[id]/settlement',
+          () =>
+            anonContext.get(
+              `/api/admin/funding/campaigns/${fixtures.fundingReviewCampaignId}/settlement`
+            ),
+        ],
+        [
+          'POST /api/admin/funding/campaigns/[id]/settlement',
+          () =>
+            anonContext.post(
+              `/api/admin/funding/campaigns/${fixtures.fundingReviewCampaignId}/settlement`,
+              { data: { pg_fee_amount: 0 } }
+            ),
+        ],
+        [
+          'PATCH /api/admin/funding/campaigns/[id]/settlement',
+          () =>
+            anonContext.patch(
+              `/api/admin/funding/campaigns/${fixtures.fundingReviewCampaignId}/settlement`,
+              { data: { action: 'mark_paid' } }
+            ),
+        ],
       ]
 
       for (const [label, run] of requests) {
