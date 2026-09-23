@@ -244,8 +244,13 @@ export async function POST(request: NextRequest) {
             { secretKey }
           )
         } catch (refundError) {
+          // 환불이 **안 나갔다**가 아니라 **나갔는지 모른다**이다. 같은 결제에
+          // 대한 취소가 겹쳐 들어오거나 응답이 유실되면 이 자리에서 오류가
+          // 나는데, 그때 이미 환불은 끝나 있을 수 있다. 여기서 "환불되지
+          // 않았다"고 단정하면 이미 돈을 돌려받은 후원자에게 사무국으로
+          // 연락하라고 시키게 된다.
           refunded = false
-          log.error('재고 부족 자동 환불 실패 — 수동 처리 필요', {
+          log.error('재고 부족 자동 환불 결과 불확실 — 사람이 확인 필요', {
             orderId,
             pledgeId,
             error: refundError instanceof Error ? refundError.message : refundError,
@@ -257,7 +262,7 @@ export async function POST(request: NextRequest) {
           code: error.reason === 'campaign_closed' ? 'CAMPAIGN_CLOSED' : 'REWARD_SOLD_OUT',
           message: refunded
             ? '후원을 확정할 자리가 없어 승인된 결제를 전액 환불했습니다.'
-            : '후원을 확정할 자리가 없으나 자동 환불에 실패했습니다. 수동 환불이 필요합니다.',
+            : '후원을 확정할 자리가 없어 환불을 요청했으나 결과를 확인하지 못했습니다. 환불 여부를 사람이 확인해야 합니다.',
         })
         log.error('후원 확정 불가 — 승인 후 환불', {
           orderId,
@@ -272,7 +277,7 @@ export async function POST(request: NextRequest) {
         return ApiError.badRequest(
           refunded
             ? `${what} 결제하신 금액은 전액 환불했으며, 카드사에 따라 영업일 기준 3~5일 안에 확인하실 수 있습니다. 불편을 드려 죄송합니다.`
-            : `${what} 환불을 자동으로 처리하지 못했으니 사무국(contact@ggac.kr)으로 후원자 성함과 결제하신 날짜를 알려 주시면 전액 환불해 드리겠습니다.`
+            : `${what} 결제 취소를 요청했지만 결과까지 확인하지는 못했습니다. 카드 내역이나 후원 내역에서 환불이 보이지 않으면 사무국(contact@ggac.kr)으로 후원자 성함과 결제하신 날짜를 알려 주세요. 확인해 전액 환불해 드리겠습니다.`
         ).toNextResponse()
       }
       log.error('후원 확정 기록 실패 — 승인은 이미 끝난 상태', { orderId, pledgeId, error })

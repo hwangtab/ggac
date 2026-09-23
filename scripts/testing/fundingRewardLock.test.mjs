@@ -216,3 +216,42 @@ test('예상 전달월 변경은 이전 값·새 값과 함께 기록거리로 �
     []
   )
 })
+
+// ── 사진이 NULL인 행 하나가 그 캠페인의 리워드 저장을 통째로 막던 것 ────────
+
+test('빈 값과 값 없음은 같은 것으로 본다 — 사진·설명이 NULL인 행이 저장을 막지 않는다', () => {
+  // 화면이 보내는 값은 `parseRewardList`를 지나 빈 입력칸이 `''`가 된다.
+  // 표에는 NULL이 들어 있을 수 있다(시드·수기 보정). 둘 다 "없음"이다.
+  const existing = {
+    title: '음반',
+    description: null,
+    amount: 30000,
+    requires_shipping: true,
+    total_quantity: 10,
+    image_url: null,
+    locked_at: null,
+  }
+  const patch = {
+    title: '음반',
+    description: '',
+    amount: 30000,
+    requires_shipping: true,
+    total_quantity: 10,
+    image_url: '',
+  }
+  assert.deepEqual(evaluateRewardPatch(existing, patch, 'contentOnly'), { ok: true })
+  // 반대 방향도 같다.
+  assert.deepEqual(
+    evaluateRewardPatch(
+      { ...existing, description: '', image_url: '' },
+      { ...patch, description: null, image_url: null },
+      'contentOnly'
+    ),
+    { ok: true }
+  )
+  // 진짜로 사진이 바뀌는 것은 여전히 막는다.
+  assert.deepEqual(
+    evaluateRewardPatch(existing, { ...patch, image_url: 'https://x/y.webp' }, 'contentOnly'),
+    { ok: false, reason: 'content_only_image' }
+  )
+})

@@ -74,6 +74,20 @@ export interface RewardPatch {
   sort_order?: number
 }
 
+/**
+ * 빈 텍스트와 값 없음을 같은 것으로 본다.
+ *
+ * 화면이 보내는 값은 `parseRewardList`의 `str()`을 지난다 — 빈 입력칸은
+ * `''`가 되고, 키 자체가 없을 때만 `null`이다. 표에는 `NULL`이 그대로 들어
+ * 있을 수 있다(시드·수기 보정·앞으로 생길 관리자 도구). 이 둘을 글자 그대로
+ * 비교하면 **개설자가 건드린 적도 없는 사진 때문에** 그 캠페인의 리워드
+ * 저장이 영원히 거절된다 — `NULL !== ''`이므로 "사진을 바꿨다"고 판정한다.
+ * 사람에게는 둘 다 "없음"이므로 없음끼리는 같다고 본다.
+ */
+function sameText(a: string | null | undefined, b: string | null | undefined): boolean {
+  return (a ?? '') === (b ?? '')
+}
+
 export function evaluateRewardPatch(
   existing: RewardLockView,
   patch: RewardPatch,
@@ -86,7 +100,7 @@ export function evaluateRewardPatch(
     if (patch.title !== undefined && patch.title !== existing.title) {
       return { ok: false, reason: 'content_only_field' }
     }
-    if (patch.description !== undefined && patch.description !== existing.description) {
+    if (patch.description !== undefined && !sameText(patch.description, existing.description)) {
       return { ok: false, reason: 'content_only_field' }
     }
     if (patch.amount !== undefined && patch.amount !== existing.amount) {
@@ -100,7 +114,7 @@ export function evaluateRewardPatch(
     }
     // 사진도 이름·설명과 같은 자리다 — 거절 문장을 따로 두는 것은 개설자가
     // 무엇을 어떻게 해야 하는지(사무국 문의)가 다르기 때문이다.
-    if (patch.image_url !== undefined && patch.image_url !== existing.image_url) {
+    if (patch.image_url !== undefined && !sameText(patch.image_url, existing.image_url)) {
       return { ok: false, reason: 'content_only_image' }
     }
     // 수량은 늘리기만 된다 — 결제가 아직 없어도 마찬가지다. 결제 잠금
