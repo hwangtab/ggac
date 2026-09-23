@@ -13,8 +13,16 @@
  * 알림은 **발송 경계를 넘은 건에만** 나간다(`crossesSentBoundary`). 준비
  * 중은 개설자의 내부 단계이고, 이미 보냈다고 알린 건을 전달 완료로 마저
  * 옮길 때는 다시 알리지 않는다.
+ *
+ * **기능 스위치를 인증보다 먼저 본다** — 이 저장소의 다른 펀딩 쓰기 라우트
+ * 전부와 같은 순서다(`…/route.ts`, `…/rewards/route.ts`,
+ * `…/transition/route.ts`). 스위치가 꺼져 있으면 누가 부르든 503이고, 그
+ * 응답은 "당신이 누구인지와 무관하게 이 기능이 아직 없다"만 말한다 — 인증
+ * 여부에 따라 답이 갈리지 않으므로 흘리는 것이 없다. 켜져 있으면 비인증
+ * 요청은 401을 받고, `e2e/authz-funding.spec.ts`가 스위치를 켠 채로 그것을
+ * 직접 확인한다.
  */
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 
 import { requireActiveMember } from '@/lib/server/memberAuth'
 import { getCampaignById } from '@/db/queries/funding'
@@ -29,6 +37,7 @@ import {
   isFulfillmentStatus,
 } from '@/lib/funding/fulfillment'
 import { notifyPledgesShipped } from '@/lib/funding/notify'
+import { MAX_BULK_RECIPIENTS } from '@/lib/funding/notifyContent'
 import { isFundingEnabled } from '@/lib/funding/settings'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
@@ -38,9 +47,28 @@ const log = createLogger('api/mypage/funding/fulfillment')
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+/**
+ * 쓰기 자체는 금방 끝나지만 `after()`로 넘긴 발송 알림은 후원자 수만큼 메일을
+ * 보낸다. 플랫폼 기본값(10~15초)이면 마흔 명분(초당 2통 간격으로 20초)도 못
+ * 채우고 함수가 얼어붙는다 — 그러면 앞쪽 몇 통만 나가고, 후원은 이미
+ * `shipped`라 버튼을 다시 눌러도 조건에 걸리는 행이 없어 **재시도할 길조차
+ * 없다.** 리워드 저장 라우트·만료 크론과 같은 300을 준다.
+ */
+export const maxDuration = 300
 
-/** 한 번에 옮길 수 있는 건수. 화면의 '전체 선택'이 그대로 들어오는 자리다. */
-const MAX_PLEDGES_PER_REQUEST = 500
+/**
+ * 한 번에 옮길 수 있는 건수.
+ *
+ * **대량 발송기의 상한과 같은 값이어야 한다.** 달랐을 때 무슨 일이
+ * 벌어지는지가 이 상수가 여기 있는 이유다: 라우트가 500까지 받고 발송기가
+ * 400을 넘으면 통째로 포기하므로, 450건을 한 번에 누르면 450명 전원이
+ * 되돌릴 수 없이 발송 완료가 되고 개설자는 성공을 보고받으며 **후원자는 아무도
+ * 연락을 받지 못한다.** 450명 캠페인에서 '전체 선택' 한 번이면 일어난다.
+ *
+ * 그래서 값을 하나로 묶고, **쓰기 전에** 막는다 — 넘친 것을 나중에 알면
+ * 이미 되돌릴 수 없는 상태가 되어 있다.
+ */
+const MAX_PLEDGES_PER_REQUEST = MAX_BULK_RECIPIENTS
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!(await isFundingEnabled()))
@@ -67,9 +95,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   ]
   if (pledgeIds.length === 0)
     return ApiError.badRequest('상태를 바꿀 후원을 하나 이상 선택해 주세요.').toNextResponse()
+  // 쓰기보다 먼저 막는다 — 위 상수 주석 참고.
   if (pledgeIds.length > MAX_PLEDGES_PER_REQUEST)
     return ApiError.badRequest(
-      `한 번에 ${MAX_PLEDGES_PER_REQUEST}건까지 바꿀 수 있습니다. 나누어 처리해 주세요.`
+      `한 번에 ${MAX_PLEDGES_PER_REQUEST}건까지 바꿀 수 있습니다. 나누어 선택해 주세요.`
     ).toNextResponse()
 
   const campaign = await getCampaignById(id)
@@ -121,17 +150,27 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     metadata: { to, requested: pledgeIds.length, updated: updated.length },
   }).catch(e => log.warn('활동 기록 실패', e))
 
-  // 알림 하나가 이 응답을 바꾸면 안 되므로 기다리지 않는다 — 실패는 알림
-  // 모듈 안에서 삼켜진다.
+  // 후원자 수가 얼마든 응답을 기다리게 하지 않는다. 다만 **떠다니는 약속으로
+  // 두지 않는다** — 응답이 나가는 순간 함수가 얼어붙어 메일이 중간에 끊긴다.
+  // `after()`가 응답 뒤에도 함수를 살려 두고, 위 `maxDuration`이 그 시간을
+  // 준다(리워드 저장 라우트·확정 라우트와 같은 모양). `notifyPledgesShipped`는
+  // 스스로 던지지 않지만 `after()` 안에서 새는 예외는 잡아 줄 사람이 없으므로
+  // 한 번 더 감싼다.
   if (crossed.length > 0) {
-    notifyPledgesShipped(campaign, crossed).catch(e => log.error('발송 알림 실패', e))
+    after(() => notifyPledgesShipped(campaign, crossed).catch(e => log.error('발송 알림 실패', e)))
   }
 
   if (updated.length !== pledgeIds.length) {
-    // 움직인 것은 그대로 둔다(되돌리면 이미 나간 알림과 어긋난다). 대신
-    // 몇 건이 빠졌는지 말해 주고 새로고침을 요청한다.
+    // **여기까지 오는 것은 진짜 경합뿐이다.** 화면이 옮길 수 있는 건만 골라
+    // 보내므로(`canTransitionFulfillment`), 이미 그 상태였던 건이 섞여 이
+    // 갈림길에 오지 않는다 — 다른 탭이나 사무국이 그사이 같은 후원을
+    // 움직였을 때만 온다.
+    //
+    // 움직인 것은 그대로 둔다(되돌리면 이미 나간 알림과 어긋난다). 무슨 일이
+    // 있었는지는 **추측하지 않는다** — 결제가 취소됐다고 단정하면 아무 일도
+    // 없던 돈 이야기를 개설자가 읽게 된다.
     return ApiError.conflict(
-      `${pledgeIds.length}건 중 ${updated.length}건만 바꿨습니다. 나머지는 이미 상태가 바뀌었거나 결제가 취소된 후원입니다. 새로고침한 뒤 다시 확인해 주세요.`
+      `${pledgeIds.length}건 중 ${updated.length}건만 바꿨습니다. 나머지는 그사이 다른 곳에서 상태가 바뀌었습니다. 새로고침한 뒤 남은 건을 다시 확인해 주세요.`
     ).toNextResponse()
   }
 
