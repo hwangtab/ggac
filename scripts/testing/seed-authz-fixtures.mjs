@@ -112,8 +112,11 @@ const {
   boardAgendaComments: tursoBoardAgendaComments,
   boardMinutes: tursoBoardMinutes,
 } = await import('@/db/schema/board')
-const { fundingCampaigns: tursoFundingCampaigns, fundingRewards: tursoFundingRewards } =
-  await import('@/db/schema/funding')
+const {
+  fundingCampaigns: tursoFundingCampaigns,
+  fundingRewards: tursoFundingRewards,
+  fundingPledges: tursoFundingPledges,
+} = await import('@/db/schema/funding')
 const { eq } = await import('drizzle-orm')
 
 // id는 전부 고정값이다. 예전에는 Supabase가 만들어준 uuid를 그대로 받아
@@ -508,6 +511,43 @@ async function main() {
   const FUNDING_REVIEW_CAMPAIGN_ID = '00000000-0000-4000-8000-00000000f003'
   const FUNDING_REVIEW_REWARD_ID = '00000000-0000-4000-8000-00000000f004'
 
+  // 관리자 전용 동작(approve·reject·settle)을 **동작마다 한 캠페인씩** 둔다.
+  //
+  // 왜 캠페인을 나누는가: 짝 단정(개설자는 거부 · 관리자는 성공)이 실제로
+  // 같은 동작을 두 번 시도한다. 한 캠페인을 돌려쓰면 관리자 쪽이 먼저 상태를
+  // 옮겨버려 다음 동작의 시작 상태가 스위트 실행 순서에 종속된다. 그리고
+  // `settle`은 시작 상태가 `closed`여야 전이표를 지난다 — 시작 상태가 다르면
+  // 가드를 지워도 400(전이 불가)이 나서 "막혔다"와 구별되지 않는다.
+  const FUNDING_APPROVE_CAMPAIGN_ID = '00000000-0000-4000-8000-00000000f005'
+  const FUNDING_APPROVE_REWARD_ID = '00000000-0000-4000-8000-00000000f006'
+  const FUNDING_REJECT_CAMPAIGN_ID = '00000000-0000-4000-8000-00000000f007'
+  const FUNDING_REJECT_REWARD_ID = '00000000-0000-4000-8000-00000000f008'
+  const FUNDING_SETTLE_CAMPAIGN_ID = '00000000-0000-4000-8000-00000000f009'
+  const FUNDING_SETTLE_REWARD_ID = '00000000-0000-4000-8000-00000000f00a'
+
+  // 후원 취소 경계(`POST /api/funding/pledges/cancel`)용. 공개(active) 캠페인
+  // 하나에 결제가 끝난 후원 둘 — 회원(`other`)의 것과 비회원의 것.
+  //
+  // **후원자는 `owner`가 아니다.** 감사가 짚은 시나리오가 "개설자의 대시보드가
+  // 자기 캠페인의 후원 id를 전부 건네준다"이므로, 거부당해야 하는 쪽이
+  // 개설자(`owner`)이고 허용돼야 하는 쪽이 후원자(`other`)여야 그 시나리오를
+  // 그대로 재현한다.
+  //
+  // `paymentId`는 **일부러 비워 둔다.** 취소 라우트의 성공 경로는 토스에 실제
+  // 환불을 요청하는데(`API_BASE`가 상수라 가짜 서버로 돌릴 수 없다) E2E에서
+  // 그걸 부를 수는 없다. 결제 연결이 없으면 라우트는 신원 확인을 **지난 뒤**
+  // 400 `결제 정보를 확인할 수 없습니다`로 답한다 — 거부(404 `찾을 수 없습니다`)와
+  // 글자 단위로 다른 답이라, 신원 관문을 통과했다는 사실만은 돈을 움직이지 않고
+  // 증명할 수 있다. 선점(`claimPledgeForCancel`)은 이 검사보다 뒤에 있으므로
+  // 어느 쪽 요청도 행을 바꾸지 않는다.
+  const FUNDING_ACTIVE_CAMPAIGN_ID = '00000000-0000-4000-8000-00000000f00b'
+  const FUNDING_ACTIVE_REWARD_ID = '00000000-0000-4000-8000-00000000f00c'
+  const FUNDING_MEMBER_PLEDGE_ID = '00000000-0000-4000-8000-00000000f00d'
+  const FUNDING_GUEST_PLEDGE_ID = '00000000-0000-4000-8000-00000000f00e'
+  const FUNDING_MEMBER_PLEDGE_CODE = 'FND-20260901-MEMBER22'
+  const FUNDING_GUEST_PLEDGE_CODE = 'FND-20260901-GUEST222'
+  const FUNDING_GUEST_BACKER_EMAIL = 'authz-guest-backer@test.local'
+
   // `isDeleted: false`가 여기 있어야 시드가 **복구 수단**이 된다. 이 스크립트는
   // 스스로 "멱등이다 — 실패한 실행을 그대로 다시 돌려 복구할 수 있어야 한다"고
   // 적고 있지만, 이 키가 빠져 있으면 `onConflictDoUpdate`의 set에도 들어가지
@@ -707,6 +747,171 @@ async function main() {
     .insert(tursoFundingRewards)
     .values(fundingReviewRewardValues)
     .onConflictDoUpdate({ target: tursoFundingRewards.id, set: fundingReviewRewardValues })
+
+  // 관리자 전용 동작 경계용 캠페인 셋. 위 두 캠페인과 같은 이유로
+  // `status`·`submittedAt`·`reviewNote`·`approvedAt`·`settledAt`을 매번 set에
+  // 넣어 시작 상태로 되돌린다 — 짝 단정의 허용 쪽이 상태를 옮기기 때문이다.
+  const adminActionCampaigns = [
+    {
+      id: FUNDING_APPROVE_CAMPAIGN_ID,
+      rewardId: FUNDING_APPROVE_REWARD_ID,
+      slug: 'authz-e2e-funding-approve',
+      title: 'authz 픽스처 펀딩(승인 경계)',
+      summary: '관리자 전용 동작 approve 경계 테스트용 캠페인',
+      status: 'submitted',
+      submittedAt: new Date('2026-09-01T00:00:00.000Z'),
+      closedAt: null,
+    },
+    {
+      id: FUNDING_REJECT_CAMPAIGN_ID,
+      rewardId: FUNDING_REJECT_REWARD_ID,
+      slug: 'authz-e2e-funding-reject',
+      title: 'authz 픽스처 펀딩(반려 경계)',
+      summary: '관리자 전용 동작 reject 경계 테스트용 캠페인',
+      status: 'submitted',
+      submittedAt: new Date('2026-09-01T00:00:00.000Z'),
+      closedAt: null,
+    },
+    {
+      id: FUNDING_SETTLE_CAMPAIGN_ID,
+      rewardId: FUNDING_SETTLE_REWARD_ID,
+      slug: 'authz-e2e-funding-settle',
+      title: 'authz 픽스처 펀딩(정산 경계)',
+      summary: '관리자 전용 동작 settle 경계 테스트용 캠페인',
+      // settle은 `closed`에서만 전이표를 지난다.
+      status: 'closed',
+      submittedAt: new Date('2026-09-01T00:00:00.000Z'),
+      closedAt: new Date('2026-09-02T00:00:00.000Z'),
+    },
+  ]
+  for (const c of adminActionCampaigns) {
+    const campaignValues = {
+      id: c.id,
+      slug: c.slug,
+      ownerUserId: ids.owner,
+      title: c.title,
+      summary: c.summary,
+      story: '',
+      category: '기타',
+      goalAmount: 500000,
+      status: c.status,
+      submittedAt: c.submittedAt,
+      approvedAt: null,
+      closedAt: c.closedAt,
+      settledAt: null,
+      reviewNote: null,
+    }
+    await db
+      .insert(tursoFundingCampaigns)
+      .values(campaignValues)
+      .onConflictDoUpdate({ target: tursoFundingCampaigns.id, set: campaignValues })
+
+    const rewardValues = {
+      id: c.rewardId,
+      campaignId: c.id,
+      title: '얼리버드',
+      description: '관리자 전용 동작 경계 테스트용 리워드',
+      amount: 20000,
+      totalQuantity: null,
+      requiresShipping: false,
+      sortOrder: 0,
+    }
+    await db
+      .insert(tursoFundingRewards)
+      .values(rewardValues)
+      .onConflictDoUpdate({ target: tursoFundingRewards.id, set: rewardValues })
+  }
+
+  // 후원 취소 경계용 공개 캠페인과 후원 둘. 위 상수 선언부에 왜 이 모양인지
+  // (후원자가 `owner`가 아닌 이유, `paymentId`를 비워 두는 이유) 적어 두었다.
+  const fundingActiveCampaignValues = {
+    id: FUNDING_ACTIVE_CAMPAIGN_ID,
+    slug: 'authz-e2e-funding-active',
+    ownerUserId: ids.owner,
+    title: 'authz 픽스처 펀딩(공개중)',
+    summary: '후원 취소 경계 테스트용 공개 캠페인',
+    story: '',
+    category: '기타',
+    goalAmount: 300000,
+    status: 'active',
+    submittedAt: new Date('2026-09-01T00:00:00.000Z'),
+    approvedAt: new Date('2026-09-02T00:00:00.000Z'),
+    closedAt: null,
+    settledAt: null,
+    reviewNote: null,
+  }
+  await db
+    .insert(tursoFundingCampaigns)
+    .values(fundingActiveCampaignValues)
+    .onConflictDoUpdate({ target: tursoFundingCampaigns.id, set: fundingActiveCampaignValues })
+
+  const fundingActiveRewardValues = {
+    id: FUNDING_ACTIVE_REWARD_ID,
+    campaignId: FUNDING_ACTIVE_CAMPAIGN_ID,
+    title: '응원 리워드',
+    description: '후원 취소 경계 테스트용 리워드',
+    amount: 15000,
+    totalQuantity: null,
+    // 배송 리워드로 두면 개설자 화면이 후원자 이메일까지 받게 된다. 이 픽스처의
+    // 목적은 취소 경계이므로 필요 없는 정보를 늘리지 않는다.
+    requiresShipping: false,
+    sortOrder: 0,
+  }
+  await db
+    .insert(tursoFundingRewards)
+    .values(fundingActiveRewardValues)
+    .onConflictDoUpdate({ target: tursoFundingRewards.id, set: fundingActiveRewardValues })
+
+  const pledgeRows = [
+    {
+      id: FUNDING_MEMBER_PLEDGE_ID,
+      pledgeCode: FUNDING_MEMBER_PLEDGE_CODE,
+      userId: ids.other,
+      orderId: 'authz-e2e-funding-order-member',
+      backerName: 'authz 회원 후원자',
+      backerEmail: 'authz-other@test.local',
+    },
+    {
+      id: FUNDING_GUEST_PLEDGE_ID,
+      pledgeCode: FUNDING_GUEST_PLEDGE_CODE,
+      userId: null,
+      orderId: 'authz-e2e-funding-order-guest',
+      backerName: 'authz 비회원 후원자',
+      backerEmail: FUNDING_GUEST_BACKER_EMAIL,
+    },
+  ]
+  for (const p of pledgeRows) {
+    // status·fulfillmentStatus·paymentId를 매번 set에 넣어 되돌린다 — 취소
+    // 경계가 회귀하면 스위트가 실제로 이 행을 canceled로 옮기고, 그 상태로는
+    // 다음 실행이 원래 전제(결제가 끝난 후원이다)를 다시 만들지 못한다.
+    const values = {
+      id: p.id,
+      pledgeCode: p.pledgeCode,
+      campaignId: FUNDING_ACTIVE_CAMPAIGN_ID,
+      rewardId: FUNDING_ACTIVE_REWARD_ID,
+      userId: p.userId,
+      orderId: p.orderId,
+      paymentId: null,
+      backerName: p.backerName,
+      backerEmail: p.backerEmail,
+      rewardTitle: '응원 리워드',
+      unitAmount: 15000,
+      quantity: 1,
+      additionalAmount: 0,
+      totalAmount: 15000,
+      status: 'paid',
+      holdExpiresAt: null,
+      paidAt: new Date('2026-09-03T00:00:00.000Z'),
+      canceledAt: null,
+      refundedAt: null,
+      fulfillmentStatus: 'none',
+      entrySource: 'online',
+    }
+    await db
+      .insert(tursoFundingPledges)
+      .values(values)
+      .onConflictDoUpdate({ target: tursoFundingPledges.id, set: values })
+  }
 
   // readAt을 매 시드마다 null로 되돌린다 — e2e 스펙 안의
   // resetNotificationUnread()가 테스트 사이 상태를 되돌리는 것과 별개로,
@@ -916,6 +1121,16 @@ async function main() {
     fundingDraftRewardId: FUNDING_DRAFT_REWARD_ID,
     fundingReviewCampaignId: FUNDING_REVIEW_CAMPAIGN_ID,
     fundingReviewRewardId: FUNDING_REVIEW_REWARD_ID,
+    fundingApproveCampaignId: FUNDING_APPROVE_CAMPAIGN_ID,
+    fundingApproveCampaignSlug: 'authz-e2e-funding-approve',
+    fundingRejectCampaignId: FUNDING_REJECT_CAMPAIGN_ID,
+    fundingSettleCampaignId: FUNDING_SETTLE_CAMPAIGN_ID,
+    fundingActiveCampaignId: FUNDING_ACTIVE_CAMPAIGN_ID,
+    fundingMemberPledgeId: FUNDING_MEMBER_PLEDGE_ID,
+    fundingMemberPledgeCode: FUNDING_MEMBER_PLEDGE_CODE,
+    fundingGuestPledgeId: FUNDING_GUEST_PLEDGE_ID,
+    fundingGuestPledgeCode: FUNDING_GUEST_PLEDGE_CODE,
+    fundingGuestBackerEmail: FUNDING_GUEST_BACKER_EMAIL,
   }
   writeFileSync(OUT_FILE, JSON.stringify(fixtures, null, 2) + '\n')
 
@@ -939,7 +1154,7 @@ async function main() {
   console.log(
     `  계정 ${Object.keys(ids).length}개, 글 1, 댓글 1, 알림 1, 좋아요 1, ` +
       `이사회 회의 2(scheduled·completed)·회의록 2·안건 1·안건 의견 3, ` +
-      `펀딩 캠페인 2(draft·submitted)·리워드 2, ` +
+      `펀딩 캠페인 6(draft·submitted 3·closed·active)·리워드 6·후원 2(회원·비회원), ` +
       `system_settings ${settingRows.length}행, default_settings ${DEFAULT_SETTINGS.length}행 (전부 Turso)`
   )
 }

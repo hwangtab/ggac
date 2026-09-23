@@ -39,6 +39,25 @@ export type Fixtures = {
   /** `owner` 소유의 심사 대기(submitted) 캠페인 — 관리자 심사 경계용. */
   fundingReviewCampaignId: string
   fundingReviewRewardId: string
+  /**
+   * 관리자 전용 동작(approve·reject·settle) 경계용 캠페인 셋. 동작마다 하나씩
+   * 두어 짝 단정(개설자 거부 · 관리자 성공)이 서로의 시작 상태를 밟지 않게 한다.
+   * approve·reject는 `submitted`에서, settle은 `closed`에서 시작한다.
+   */
+  fundingApproveCampaignId: string
+  /** 승인 요청이 그대로 다시 보내는 주소. 바꾸지 않으므로 유니크 충돌이 없다. */
+  fundingApproveCampaignSlug: string
+  fundingRejectCampaignId: string
+  fundingSettleCampaignId: string
+  /** 후원 취소 경계용 공개(active) 캠페인. 개설자는 `owner`다. */
+  fundingActiveCampaignId: string
+  /** 위 캠페인의 회원 후원 — 후원자는 `other`(개설자가 아니다). */
+  fundingMemberPledgeId: string
+  fundingMemberPledgeCode: string
+  /** 위 캠페인의 비회원 후원 — 번호+이메일 경로 경계용. */
+  fundingGuestPledgeId: string
+  fundingGuestPledgeCode: string
+  fundingGuestBackerEmail: string
 }
 
 /**
