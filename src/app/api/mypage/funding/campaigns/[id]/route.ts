@@ -9,6 +9,7 @@ import {
 } from '@/db/queries/funding'
 import { listPledgesByCampaign } from '@/db/queries/fundingPledges'
 import { canManageCampaign } from '@/lib/server/fundingAuth'
+import { isApprovedActiveAdmin } from '@/lib/server/authz'
 import { editScope, type CampaignStatus } from '@/lib/funding/transitions'
 import { parseCampaignPatch } from '@/lib/funding/campaignInput'
 import { isFundingEnabled } from '@/lib/funding/settings'
@@ -83,6 +84,10 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     progress,
     pledges: pledges.map(p => ownerPledgeView(p, shippingIds)),
     edit_scope: editScope(campaign.status as CampaignStatus),
+    // 이행 상태를 되돌리는 것은 사무국만 할 수 있다. 화면이 그 버튼을 보일지
+    // 정하려면 이 값이 필요하다 — 없으면 대부분의 사람에게 눌러도 거절당하는
+    // 버튼을 보이게 된다. 권한 판정 자체는 언제나 라우트가 다시 한다.
+    is_admin: isApprovedActiveAdmin(auth.profile),
   }).toNextResponse()
 }
 

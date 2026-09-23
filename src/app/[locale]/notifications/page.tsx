@@ -253,6 +253,7 @@ const NotificationsPage = () => {
       funding_closed: 'bg-gray-100 text-gray-800',
       funding_delivery_changed: 'bg-amber-100 text-amber-800',
       funding_refunded: 'bg-rose-100 text-rose-800',
+      funding_shipped: 'bg-sky-100 text-sky-800',
     }
     return colors[type] || 'bg-gray-100 text-gray-800'
   }
@@ -278,6 +279,7 @@ const NotificationsPage = () => {
       funding_closed: '펀딩 마감',
       funding_delivery_changed: '리워드 전달 시기',
       funding_refunded: '후원 환불',
+      funding_shipped: '리워드 발송',
     }
     return names[type] || type
   }

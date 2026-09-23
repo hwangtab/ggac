@@ -589,7 +589,33 @@
       "rewardsSaveScopeNotice": "Rewards are saved with the 'Save rewards' button in the Rewards tab. The 'Save' button at the bottom of the editor saves only basic info and the story.",
       "saveRewards": "Save rewards",
       "savingRewards": "Saving…",
-      "rewardsSaved": "Rewards saved."
+      "rewardsSaved": "Rewards saved.",
+      "backerFulfillment": "Fulfilment",
+      "fulfillmentNone": "Not started",
+      "fulfillmentPreparing": "Preparing",
+      "fulfillmentShipped": "Sent",
+      "fulfillmentDelivered": "Delivered",
+      "selectPledge": "Select the pledge from {name}",
+      "selectAllPledges": "Select all pledges",
+      "selectedCount": "{count, number} selected",
+      "fulfillmentHeading": "Reward fulfilment",
+      "fulfillmentHelp": "Pick pledges and move their fulfilment state. Marking them sent notifies those backers and stops them cancelling on their own. Up to 400 at a time. Creators cannot move a fulfilment state back — please contact the office at contact@ggac.kr. Not even the office can move a pledge back out of sent or delivered.",
+      "markPreparing": "Mark preparing",
+      "markShipped": "Mark sent",
+      "markDelivered": "Mark delivered",
+      "markNone": "Move back to not started (office)",
+      "confirmPreparing": "Move {count, number} pledges to preparing. Those backers will no longer be able to cancel on their own, and undoing this needs the office. Continue?",
+      "confirmShipped": "Move {count, number} pledges to sent. Those backers will be notified and this cannot be undone. Continue?",
+      "confirmDelivered": "Move {count, number} pledges to delivered. This cannot be undone. Continue?",
+      "confirmNone": "Move {count, number} pledges back to not started. Those backers will be able to cancel on their own again. Continue?",
+      "fulfillmentNoSelection": "Please select the pledges whose fulfilment state you want to change.",
+      "fulfillmentDone": "Changed the fulfilment state of {count, number} pledges.",
+      "errorFulfillment": "Couldn't change the fulfilment state. Please try again shortly.",
+      "exportShipping": "Download the shipping list",
+      "exportShippingHelp": "Contains only paid pledges whose reward needs shipping. Take ‘Open in Excel’ to read and edit it by hand, or ‘Upload to a courier form’ to feed it straight into a courier's bulk form or another program. It holds backers' names, phone numbers and addresses — please handle the file with care.",
+      "fulfillmentNothingToDo": "The {count, number} selected pledges are already in that state. Nothing changed.",
+      "exportShippingExcel": "Open in Excel",
+      "exportShippingCourier": "Upload to a courier form"
     },
     "status": {
       "pending": "Payment pending",
@@ -607,6 +633,14 @@
       "loading": "Loading…",
       "required": "This field is required.",
       "contactOffice": "Contact the office"
+    },
+    "fulfillment": {
+      "label": "Reward fulfilment",
+      "none": "Not started",
+      "preparing": "Preparing",
+      "shipped": "Sent",
+      "delivered": "Delivered",
+      "cancelBlocked": "The creator has started preparing this reward, so you can no longer cancel this pledge yourself. If you need to cancel, please contact the office at contact@ggac.kr with your pledge number."
     }
   },
   "application": {

@@ -589,7 +589,33 @@
       "rewardsSaveScopeNotice": "리워드는 리워드 탭의 '리워드 저장' 버튼으로 저장합니다. 편집기 아래쪽 '저장' 버튼은 기본 정보와 이야기만 저장합니다.",
       "saveRewards": "리워드 저장",
       "savingRewards": "저장하는 중…",
-      "rewardsSaved": "리워드를 저장했습니다."
+      "rewardsSaved": "리워드를 저장했습니다.",
+      "backerFulfillment": "이행",
+      "fulfillmentNone": "준비 전",
+      "fulfillmentPreparing": "준비 중",
+      "fulfillmentShipped": "발송 완료",
+      "fulfillmentDelivered": "전달 완료",
+      "selectPledge": "{name}님의 후원 선택",
+      "selectAllPledges": "후원 전체 선택",
+      "selectedCount": "{count, number}건 선택함",
+      "fulfillmentHeading": "리워드 이행",
+      "fulfillmentHelp": "후원을 골라 이행 상태를 옮깁니다. 발송 완료로 옮기면 후원자에게 발송 안내가 나가고, 그 후원은 후원자가 직접 취소할 수 없게 됩니다. 한 번에 400건까지 바꿀 수 있습니다. 개설자는 이행 상태를 되돌릴 수 없으니 사무국(contact@ggac.kr)으로 문의해 주세요. 발송 완료·전달 완료는 사무국도 되돌릴 수 없습니다.",
+      "markPreparing": "준비 중으로",
+      "markShipped": "발송 완료로",
+      "markDelivered": "전달 완료로",
+      "markNone": "준비 전으로 되돌리기 (사무국)",
+      "confirmPreparing": "{count, number}건을 준비 중으로 옮깁니다. 이 후원들은 후원자가 직접 취소할 수 없게 되며, 되돌리려면 사무국에 문의해야 합니다. 계속할까요?",
+      "confirmShipped": "{count, number}건을 발송 완료로 옮깁니다. 후원자에게 발송 안내가 나가고 되돌릴 수 없습니다. 계속할까요?",
+      "confirmDelivered": "{count, number}건을 전달 완료로 옮깁니다. 되돌릴 수 없습니다. 계속할까요?",
+      "confirmNone": "{count, number}건을 준비 전으로 되돌립니다. 후원자가 다시 직접 취소할 수 있게 됩니다. 계속할까요?",
+      "fulfillmentNoSelection": "이행 상태를 바꿀 후원을 먼저 선택해 주세요.",
+      "fulfillmentDone": "{count, number}건의 이행 상태를 바꿨습니다.",
+      "errorFulfillment": "이행 상태를 바꾸지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      "exportShipping": "배송 목록 내려받기",
+      "exportShippingHelp": "배송이 필요한 리워드의 결제 완료 후원만 담깁니다. 화면에서 보고 손으로 고칠 때는 '엑셀에서 열어 보기', 택배사 접수 양식이나 다른 프로그램에 그대로 올릴 때는 '택배사 양식에 올리기'를 받으세요. 후원자의 이름·연락처·주소가 들어 있으니 파일 관리에 유의해 주세요.",
+      "fulfillmentNothingToDo": "선택한 {count, number}건은 이미 그 상태입니다. 바뀐 것이 없습니다.",
+      "exportShippingExcel": "엑셀에서 열어 보기",
+      "exportShippingCourier": "택배사 양식에 올리기"
     },
     "status": {
       "pending": "결제 대기",
@@ -607,6 +633,14 @@
       "loading": "불러오는 중…",
       "required": "필수 항목입니다.",
       "contactOffice": "사무국에 문의"
+    },
+    "fulfillment": {
+      "label": "리워드 준비",
+      "none": "준비 전",
+      "preparing": "준비 중",
+      "shipped": "발송 완료",
+      "delivered": "전달 완료",
+      "cancelBlocked": "개설자가 리워드 준비를 시작해 이 후원은 직접 취소할 수 없습니다. 취소가 필요하시면 사무국(contact@ggac.kr)으로 후원번호와 함께 문의해 주세요."
     }
   },
   "application": {

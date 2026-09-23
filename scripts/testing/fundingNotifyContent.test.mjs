@@ -13,6 +13,7 @@ import {
   buildPledgePaidBackerNotice,
   buildPledgePaidCreatorNotice,
   buildPledgeRefundedNotice,
+  buildPledgeShippedNotice,
   formatDeliveryMonth,
   formatWon,
   isRateLimited,
@@ -417,4 +418,42 @@ test('발송 포기 통지는 관리자가 할 일을 말한다', () => {
   assert.ok(notice.message.includes('500'))
   assert.ok(notice.message.includes(String(MAX_BULK_RECIPIENTS)))
   assert.ok(notice.message.includes('직접'))
+})
+
+// ---------------------------------------------------------------- ⑧ 발송
+
+test('발송 문안은 비회원에게 후원번호와 조회 화면을, 회원에게 마이페이지를 준다', () => {
+  const guest = buildPledgeShippedNotice(
+    { pledge_code: 'FND-20260923-ABCDEFGH', reward_title: 'CD 한 장', user_id: null },
+    { id: 'camp-1', title: '첫 정규앨범' },
+    'https://ggac.kr'
+  )
+  assert.match(guest.message, /FND-20260923-ABCDEFGH/)
+  assert.equal(guest.url, 'https://ggac.kr/ko/funding/manage')
+
+  const member = buildPledgeShippedNotice(
+    { pledge_code: 'FND-20260923-ABCDEFGH', reward_title: 'CD 한 장', user_id: 'u-1' },
+    { id: 'camp-1', title: '첫 정규앨범' },
+    'https://ggac.kr'
+  )
+  // 회원은 번호를 마이페이지에서 볼 수 있으므로 문장이 들고 가지 않는다.
+  assert.ok(!member.message.includes('FND-20260923-ABCDEFGH'))
+  assert.equal(member.url, 'https://ggac.kr/ko/mypage/funding')
+  assert.match(member.message, /'CD 한 장'/)
+})
+
+test('발송 문안은 같은 사람의 나머지 건수를 센다', () => {
+  const one = buildPledgeShippedNotice(
+    { reward_title: 'CD 한 장' },
+    { title: '앨범' },
+    'https://ggac.kr'
+  )
+  assert.ok(!one.message.includes('외 '))
+  const many = buildPledgeShippedNotice(
+    { reward_title: 'CD 한 장' },
+    { title: '앨범' },
+    'https://ggac.kr',
+    2
+  )
+  assert.match(many.message, /외 2건/)
 })

@@ -40,6 +40,7 @@ interface MyPledge {
   quantity: number
   total_amount: number
   paid_at: string | null
+  fulfillment_status: string
   campaign_id: string
   campaign_slug: string | null
 }
@@ -153,6 +154,15 @@ export default function MyFundingPage() {
                       {t('progress.amount', { amount: formatAmount(p.total_amount, locale) })}
                     </p>
                     <p className="mt-1 text-xs text-gray-500">{t(`status.${p.status}`)}</p>
+                    {/* 결제가 끝난 뒤부터는 리워드가 어디까지 왔는지가
+                        후원자에게 더 중요한 소식이다. 준비 시작은 알림을
+                        보내지 않는 내부 단계이므로, 직접 취소가 닫힌 이유를
+                        이 줄이 대신 설명한다. */}
+                    {p.status === 'paid' && p.fulfillment_status ? (
+                      <p className="mt-1 text-xs text-gray-500">
+                        {t('fulfillment.label')}: {t(`fulfillment.${p.fulfillment_status}`)}
+                      </p>
+                    ) : null}
                   </div>
                 </div>
               </li>

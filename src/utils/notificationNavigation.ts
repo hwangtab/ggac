@@ -80,6 +80,7 @@ export function getNotificationRoute(
     case 'funding_pledged':
     case 'funding_delivery_changed':
     case 'funding_refunded':
+    case 'funding_shipped':
       return getStoredUrlRoute(notification) ?? '/mypage/funding'
 
     default:

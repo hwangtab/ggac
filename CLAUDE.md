@@ -354,12 +354,12 @@ noreply@ggac.kr로 가서 유실된다), `MAILBOX_BACKFILL_CRON_TOKEN`(메일함
 - **권한의 안전망은 E2E다. 정적 가드가 아니다.** 인가를 바꿨으면
   `npm run test:e2e:authz`(기준선 **116 passed**, 총 117건 중 나머지 1건은
   스킵이다 — 메일함 첨부 다운로드 기록 테스트가 실제 Blob 객체를 요구해서다
-  (운영 Blob 오염을 피하려고 만들지 않는다). 실행법은 `scripts/turso/README.md`)를
-  돌려라.
-  **환경에 따라 하나 더 빨간불일 수 있다**: `authz-mailbox.spec.ts`의 "관리자는
-  화면에 들어가 메일함을 본다"는 메일 본문 iframe이 뜨길 기다리는데, 로컬에서는
-  main 기준으로도 같은 자리에서 실패한다(2026-09-11 대조 실측). 인가 변경 탓인지
-  가릴 때는 main 워크트리에서 같은 스펙 하나만 돌려 비교해라.
+  (운영 Blob 오염을 피하려고 만들지 않는다). 실행법은
+  `scripts/turso/README.md`)를 돌려라. **환경에 따라 하나 더 빨간불일 수 있다**:
+  `authz-mailbox.spec.ts`의 "관리자는 화면에 들어가 메일함을 본다"는 메일 본문
+  iframe이 뜨길 기다리는데, 로컬에서는 main 기준으로도 같은 자리에서
+  실패한다(2026-09-11 대조 실측). 인가 변경 탓인지 가릴 때는 main 워크트리에서
+  같은 스펙 하나만 돌려 비교해라.
 - **메일함 게이트(단계 5).** 관리자 메일함(`/api/admin/mailbox*`,
   `/admin/mailbox`·`/board-room/mailbox`)은 목록·상세·첨부 다운로드가
   `requireBoardMember()`(이사·감사·관리자)로 열리고, 상태 변경·답장은

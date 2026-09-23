@@ -427,6 +427,12 @@ test.describe('펀딩 — 관리자 심사 경계 (심사 대기 캠페인)', ()
  * 앞에 있는 라우트(PATCH·PUT·전이 계열)에서는 특히, 스위치가 꺼져 있으면
  * 비인증 요청이 401 대신 503을 받아 "인증도 확인 안 하고 막았다"는 착시를
  * 준다 — 이 스펙은 스위치를 켜 둔 상태로 돌므로 그 착시 없이 401을 직접 본다.
+ *
+ * 이행(`POST …/fulfillment`)과 배송 목록 내보내기(`GET …/shipping-export`)도
+ * 같은 순서를 쓴다. 그 순서를 **일부러** 고른 것이다: 스위치가 꺼져 있으면
+ * 누가 부르든 503이고 그 답은 인증 여부에 따라 갈리지 않으므로 흘리는 것이
+ * 없다. 배송 목록은 남의 이름·연락처·주소를 내보내는 라우트라 더 조심해야
+ * 하지만, 그 조심은 여기가 아니라 인증·소유자 판정·기록·빈도 제한이 맡는다.
  */
 test.describe('펀딩 — 비인증 요청', () => {
   test('마이페이지·관리자 펀딩 라우트는 전부 401이다', async ({ baseURL }) => {
@@ -458,6 +464,21 @@ test.describe('펀딩 — 비인증 요청', () => {
             anonContext.post(
               `/api/mypage/funding/campaigns/${fixtures.fundingDraftCampaignId}/transition`,
               { data: { action: 'submit' } }
+            ),
+        ],
+        [
+          'POST /api/mypage/funding/campaigns/[id]/fulfillment',
+          () =>
+            anonContext.post(
+              `/api/mypage/funding/campaigns/${fixtures.fundingDraftCampaignId}/fulfillment`,
+              { data: { to: 'shipped', pledge_ids: ['00000000-0000-0000-0000-000000000000'] } }
+            ),
+        ],
+        [
+          'GET /api/mypage/funding/campaigns/[id]/shipping-export',
+          () =>
+            anonContext.get(
+              `/api/mypage/funding/campaigns/${fixtures.fundingDraftCampaignId}/shipping-export`
             ),
         ],
         ['GET /api/admin/funding/campaigns', () => anonContext.get('/api/admin/funding/campaigns')],

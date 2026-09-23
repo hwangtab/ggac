@@ -27,6 +27,8 @@ export type ActivityActionType =
   | 'funding_pledge_paid'
   | 'funding_pledge_canceled'
   | 'funding_reward_delivery_changed'
+  | 'funding_fulfillment_updated'
+  | 'funding_shipping_exported'
 
 export type ActivityTargetType =
   | 'post'

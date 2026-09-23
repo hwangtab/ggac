@@ -284,7 +284,7 @@ test('수신자가 상한을 넘으면 발송을 포기하고 관리자에게 �
 
 // ------------------------------------------------ 알림 종류
 
-test('일곱 알림이 저마다 제 종류로 기록된다', async () => {
+test('여덟 알림이 저마다 제 종류로 기록된다', async () => {
   const seen = []
   const collect = {
     createNotification: async i => seen.push(i.type),
@@ -308,6 +308,8 @@ test('일곱 알림이 저마다 제 종류로 기록된다', async () => {
     }).deps
   )
 
+  await notify.notifyPledgesShipped(CAMPAIGN, [MEMBER_PLEDGE], spy(collect).deps)
+
   assert.deepEqual([...new Set(seen)].sort(), [
     'funding_approved',
     'funding_closed',
@@ -315,6 +317,7 @@ test('일곱 알림이 저마다 제 종류로 기록된다', async () => {
     'funding_pledged',
     'funding_refunded',
     'funding_rejected',
+    'funding_shipped',
     'funding_submitted',
   ])
 })
@@ -323,4 +326,85 @@ test('인앱 알림의 data.url은 저장되어 화면이 읽을 수 있다', as
   const { deps, calls } = spy()
   await notify.notifyCampaignClosed(CAMPAIGN, deps)
   assert.equal(calls.inApp[0].data.url, 'https://ggac.kr/ko/mypage/funding/camp-1')
+})
+
+// ---------------------------------------------------------------- ⑧ 발송
+
+test('발송 알림은 회원에게 인앱+메일, 비회원에게 메일만 간다', async () => {
+  const { deps, calls } = spy()
+  await notify.notifyPledgesShipped(CAMPAIGN, [MEMBER_PLEDGE, GUEST_PLEDGE], deps)
+  // 인앱은 회원 한 사람만. 비회원은 계정이 없어 만들 자리가 없다.
+  assert.equal(calls.bulk.length, 1)
+  assert.deepEqual(calls.bulk[0].user_ids, ['user-9'])
+  assert.equal(calls.bulk[0].type, 'funding_shipped')
+  // 메일은 둘 다. 주소가 같아 한 통으로 합쳐지지 않도록 테스트 자료의
+  // 비회원 주소를 따로 둔다면 두 통이 되지만, 여기서는 같은 주소이므로
+  // 대량 발송기가 한 통으로 합친다 — 그게 의도다.
+  assert.equal(calls.mail.length, 1)
+  assert.match(calls.mail[0].subject, /리워드를 보냈습니다/)
+})
+
+test('발송 알림은 선택 알림이다 — 수신거부한 회원에게는 메일이 가지 않는다', async () => {
+  const { deps, calls } = spy({
+    getUserSettingsByUserIds: async () => new Map([['user-9', OPTED_OUT]]),
+  })
+  await notify.notifyPledgesShipped(CAMPAIGN, [MEMBER_PLEDGE], deps)
+  assert.equal(calls.mail.length, 0)
+  // 인앱 알림은 그대로 남는다 — 수신거부는 메일에 대한 약속이다.
+  assert.equal(calls.bulk.length, 1)
+})
+
+test('발송 알림 문장에 남의 정보가 실리지 않는다', async () => {
+  const { deps, calls } = spy()
+  await notify.notifyPledgesShipped(
+    CAMPAIGN,
+    [MEMBER_PLEDGE, { ...GUEST_PLEDGE, backer_email: 'other@example.com', backer_name: '이웃' }],
+    deps
+  )
+  for (const mail of calls.mail) {
+    assert.ok(!mail.html.includes('이웃'), '다른 후원자의 이름이 실렸다')
+    assert.ok(!mail.html.includes('서울시 어딘가'), '배송지가 실렸다')
+    assert.ok(!mail.html.includes('010-'), '연락처가 실렸다')
+  }
+})
+
+test('발송 알림은 한 사람의 여러 건을 한 통으로 합치고 나머지 건수를 센다', async () => {
+  const { deps, calls } = spy()
+  await notify.notifyPledgesShipped(
+    CAMPAIGN,
+    [MEMBER_PLEDGE, { ...MEMBER_PLEDGE, id: 'p-9', reward_title: 'LP 한 장' }],
+    deps
+  )
+  assert.equal(calls.mail.length, 1)
+  assert.match(calls.mail[0].html, /외 1건/)
+})
+
+test('발송 알림은 수신자가 상한을 넘으면 통째로 포기하고 관리자에게 알린다', async () => {
+  const many = Array.from({ length: 401 }, (_, i) => ({
+    ...GUEST_PLEDGE,
+    id: `p-${i}`,
+    backer_email: `b${i}@example.com`,
+  }))
+  const { deps, calls } = spy()
+  await notify.notifyPledgesShipped(CAMPAIGN, many, deps)
+  assert.equal(calls.mail.length, 2, '관리자 두 사람에게만 나간다')
+  assert.equal(calls.bulk[0].type, 'system_notice')
+})
+
+test('발송 알림은 절대 던지지 않는다 — 라우트 응답을 바꾸면 안 된다', async () => {
+  const { deps } = spy({
+    createBulkNotifications: async () => {
+      throw new Error('DB 폭발')
+    },
+    sendEmail: async () => {
+      throw new Error('메일 폭발')
+    },
+  })
+  await notify.notifyPledgesShipped(CAMPAIGN, [MEMBER_PLEDGE], deps)
+})
+
+test('보낼 건이 없으면 아무것도 하지 않는다', async () => {
+  const { deps, calls } = spy()
+  await notify.notifyPledgesShipped(CAMPAIGN, [], deps)
+  assert.equal(calls.mail.length + calls.bulk.length + calls.inApp.length, 0)
 })

@@ -255,7 +255,20 @@ export default function FundingManagePage() {
                 value={t('progress.amount', { amount: formatAmount(pledge.total_amount, locale) })}
               />
               <Row label={t('manage.status')} value={t(`status.${pledge.status}`)} />
+              {/* 이행 상태를 보인다. 개설자가 '준비 중'으로 옮기는 순간 아래
+                  취소 버튼이 사라지는데, 이 줄이 없으면 버튼이 **이유 없이**
+                  없어진 것처럼 보인다. 준비 시작은 알림을 보내지 않는
+                  내부 단계라 이 화면이 유일하게 알려 주는 자리다. */}
+              <Row
+                label={t('fulfillment.label')}
+                value={t(`fulfillment.${pledge.fulfillment_status}`)}
+              />
             </dl>
+            {pledge.status === 'paid' && pledge.fulfillment_status !== 'none' ? (
+              <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                {t('fulfillment.cancelBlocked')}
+              </p>
+            ) : null}
             {canCancel || canRetryRefund ? (
               <button
                 type="button"

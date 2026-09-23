@@ -354,6 +354,51 @@ export function buildPledgeRefundedNotice(
 }
 
 /**
+ * ⑧ 리워드를 보냈다 → **그 후원의 후원자**.
+ *
+ * 개설자가 이행 상태를 `shipped`(또는 건너뛴 `delivered`)로 옮긴 건에만
+ * 나간다. `preparing`은 개설자의 내부 단계라 알리지 않고, 이미 보냈다고 알린
+ * 건을 `delivered`로 마저 옮길 때도 다시 알리지 않는다 — 같은 소포를 두 번
+ * 알리는 것이 한 번도 안 알리는 것보다 나쁘다.
+ *
+ * **선택 알림** — 돈이 오가는 일이 아니라 배송 소식이므로 수신거부를
+ * 존중한다(전달 시기 변경과 같은 갈래다). 비회원은 설정 자체가 없어 그대로
+ * 받고, 인앱 알림이 없으므로 문장이 후원번호를 함께 들고 간다.
+ *
+ * **남의 정보는 담지 않는다** — 프로젝트 이름과 이 사람 자신의 리워드뿐이다.
+ * 송장 번호를 적는 칸은 이 시스템에 없으므로 문장도 약속하지 않는다.
+ */
+export function buildPledgeShippedNotice(
+  pledge: Record<string, unknown>,
+  campaign: Record<string, unknown> | null,
+  siteUrl: string,
+  /**
+   * 같은 사람이 이번에 함께 받는 **다른** 후원 건수. 한 사람이 같은
+   * 프로젝트에 여러 건을 후원할 수 있고(선물 세 건은 이 조합에서 예외가
+   * 아니다), 메일은 주소당 한 통만 나가므로 나머지를 문장이 세어 준다.
+   */
+  otherCount = 0
+): NoticeCopy {
+  const urls = fundingUrls(siteUrl)
+  const campaignTitle = str(campaign?.title, '프로젝트')
+  const what =
+    otherCount > 0
+      ? `리워드 '${str(pledge.reward_title, '-')}' 외 ${otherCount}건`
+      : `리워드 '${str(pledge.reward_title, '-')}'`
+  return {
+    title: '리워드를 보냈습니다',
+    message: `'${campaignTitle}'의 ${what}를 발송했습니다. 도착까지 보통 2~3일이 걸리며, 받으신 뒤 문제가 있으면 사무국(contact@ggac.kr)으로 알려 주세요.${lookupHint(pledge)}`,
+    url: pledge.user_id ? urls.myPledges : urls.guestLookup,
+    cta: pledge.user_id ? '내 후원 내역 보기' : '후원 내역 조회하기',
+    data: {
+      campaign_id: campaign?.id ?? pledge.campaign_id ?? null,
+      pledge_code: pledge.pledge_code ?? null,
+      scope: 'funding',
+    },
+  }
+}
+
+/**
  * ⑦ 후원자가 상한을 넘어 자동 발송을 포기했다 → **관리자**.
  *
  * 알려야 할 사람에게 아무것도 못 보냈다는 사실을, 손으로 보낼 수 있는 사람이

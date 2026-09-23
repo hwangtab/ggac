@@ -156,6 +156,11 @@ export type SecurityEventType =
   // 이사·감사·관리자 첨부 다운로드 기록(logUserActivity)이 실패한 경우.
   // 기록 실패가 다운로드 자체를 막지 않으므로(브리프 C) 여기로만 남긴다.
   | 'MAILBOX_DOWNLOAD_AUDIT_FAILED'
+  // 배송 목록 내보내기 기록(logUserActivity)이 실패한 경우. 후원자 전원의
+  // 이름·연락처·주소가 한 파일로 나가는 요청이라, 기록이 없으면 누가 언제
+  // 무엇을 가져갔는지 답할 길이 없다. 첨부 다운로드와 같은 판단으로 기록
+  // 실패가 내려받기를 막지는 않되, 여기로 올린다.
+  | 'FUNDING_SHIPPING_EXPORT_AUDIT_FAILED'
 
 export type SecurityEventSeverity = 'low' | 'medium' | 'high'
 
