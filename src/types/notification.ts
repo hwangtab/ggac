@@ -17,16 +17,18 @@ export type NotificationType =
   | 'maintenance' // 점검 알림
   | 'welcome' // 환영 메시지
   | 'board_notice' // 이사회 알림(boardRoomNotify.ts) — DB 스키마
-// (`src/db/schema/content.ts`의 `NOTIFICATION_TYPE`)에는 이미 있었지만 이
-// 유니온에서 빠져 있었다(단계 2c Task 7에서 발견 — Turso 쿼리 계층이
-// 이 타입을 구조적으로 검사하면서 드러남). 관리자 알림 생성 API의 허용
-// 목록(`src/utils/notificationTypes.ts`의 `NOTIFICATION_TYPES`)에는 넣지
-// 않는다 — board_notice는 이사회 기능 코드가 내부적으로만 만든다.
+  // (`src/db/schema/content.ts`의 `NOTIFICATION_TYPE`)에는 이미 있었지만 이
+  // 유니온에서 빠져 있었다(단계 2c Task 7에서 발견 — Turso 쿼리 계층이
+  // 이 타입을 구조적으로 검사하면서 드러남). 관리자 알림 생성 API의 허용
+  // 목록(`src/utils/notificationTypes.ts`의 `NOTIFICATION_TYPES`)에는 넣지
+  // 않는다 — board_notice는 이사회 기능 코드가 내부적으로만 만든다.
   | 'funding_submitted' // 펀딩 캠페인 심사 제출 알림
   | 'funding_approved' // 펀딩 캠페인 승인 알림
   | 'funding_rejected' // 펀딩 캠페인 반려 알림
   | 'funding_pledged' // 펀딩 후원 접수 알림
   | 'funding_closed' // 펀딩 캠페인 마감 알림
+  | 'funding_delivery_changed' // 리워드 전달 예정 시기 변경 알림(약관 제12조)
+  | 'funding_refunded' // 승인 후 확정 불가 — 전액 환불 알림
 
 /**
  * 알림 인터페이스

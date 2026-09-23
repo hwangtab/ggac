@@ -361,6 +361,38 @@ export async function listApprovedMemberIds(): Promise<string[]> {
   return rows.map(row => row.id)
 }
 
+/**
+ * 알림을 받아야 할 **관리자**의 id·이름·이메일. 심사 대기처럼 "관리자만
+ * 처리할 수 있는 일"을 알릴 때 쓴다.
+ *
+ * 조건은 `isAdmin`(`src/lib/server/authz.ts`)과 같아야 한다 — 거기서는
+ * 승인·활성 상태에 더해 `is_admin`을 본다. 여기서 조건이 느슨해지면 탈퇴·
+ * 정지된 계정에도 심사 알림이 쌓인다.
+ *
+ * 컬럼은 세 개만 고른다 — 전 행(계좌번호·실명·생년월일 포함)을 받아 세 개만
+ * 쓰는 일이 없도록.
+ */
+export async function listAdminRecipients(): Promise<
+  { id: string; email: string | null; display_name: string | null }[]
+> {
+  const rows = await db
+    .select({
+      id: memberProfiles.id,
+      email: memberProfiles.email,
+      displayName: memberProfiles.displayName,
+    })
+    .from(memberProfiles)
+    .where(
+      and(
+        eq(memberProfiles.isAdmin, true),
+        eq(memberProfiles.registrationStatus, 'approved'),
+        eq(memberProfiles.isActive, true)
+      )
+    )
+    .limit(ALL_PROFILES_LIMIT)
+  return rows.map(row => ({ id: row.id, email: row.email, display_name: row.displayName }))
+}
+
 export interface AdminMemberCounts {
   totalMembers: number
   pendingMembers: number
