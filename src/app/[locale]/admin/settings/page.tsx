@@ -49,6 +49,7 @@ interface AdminSettings {
     artist_registration_enabled: boolean
     comments_enabled: boolean
     file_uploads_enabled: boolean
+    funding_enabled: boolean
   }
 }
 
@@ -193,6 +194,21 @@ export default function AdminSettingsPage() {
 
       if (!response.ok) {
         throw new Error('설정 저장 중 오류가 발생했습니다.')
+      }
+
+      // 라우트는 항목마다 따로 저장하고, 일부가 실패해도 **200**으로 답하면서
+      // 실패한 항목을 `data.errors`에 담는다(`api/admin/settings/route.ts`의
+      // 마지막 `ApiSuccess.ok`). `response.ok`만 보고 성공이라 말하면 두 가지가
+      // 어긋난다 — 저장되지 않은 값을 저장됐다고 알리고, `savedSettingsRef`에
+      // 그대로 기록해 다음 저장 때 그 항목이 "바뀐 값"에서 빠진다. 한 번 실패한
+      // 항목은 그때부터 영영 못 고친다.
+      const body = await response.json().catch(() => null)
+      const failedKeys: string[] = Array.isArray(body?.data?.errors) ? body.data.errors : []
+      if (failedKeys.length > 0) {
+        throw new Error(
+          `일부 설정을 저장하지 못했습니다: ${failedKeys.join(', ')}. ` +
+            '저장하려는 설정 항목이 데이터베이스에 없으면 이렇게 됩니다.'
+        )
       }
 
       savedSettingsRef.current = settings
@@ -912,6 +928,26 @@ export default function AdminSettingsPage() {
                         />
                         <span className="text-sm font-medium text-gray-700">파일 업로드 허용</span>
                       </label>
+                    </div>
+
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={settings.features.funding_enabled}
+                          onChange={e =>
+                            updateSettings('features', 'funding_enabled', e.target.checked)
+                          }
+                          className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 mr-2"
+                        />
+                        <span className="text-sm font-medium text-gray-700">
+                          펀딩 기능 — 조합원 캠페인 개설·후원 결제 허용
+                        </span>
+                      </label>
+                      <p className="mt-1 ml-6 text-xs text-amber-800">
+                        켜면 조합원이 캠페인을 만들어 심사에 올릴 수 있고, 승인된 캠페인은 실제
+                        결제로 후원을 받습니다. 끄면 새 개설·심사 처리·결제가 모두 막힙니다.
+                      </p>
                     </div>
                   </div>
                 )}

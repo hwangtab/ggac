@@ -57,6 +57,7 @@ const SystemSettingsUpdateSchema = z
         artist_registration_enabled: z.boolean().optional(),
         comments_enabled: z.boolean().optional(),
         file_uploads_enabled: z.boolean().optional(),
+        funding_enabled: z.boolean().optional(),
       })
       .partial()
       .optional(),
@@ -93,6 +94,7 @@ interface SystemSettings {
     artist_registration_enabled: boolean
     comments_enabled: boolean
     file_uploads_enabled: boolean
+    funding_enabled: boolean
   }
 }
 
@@ -377,6 +379,7 @@ export const PUT = defineApiRoute<Record<string, unknown>>({
           case 'artist_features':
           case 'comment_features':
           case 'file_upload':
+          case 'funding_features':
             settingGroups[mapping.key] = {
               ...settingGroups[mapping.key],
               enabled: frontendValue,
