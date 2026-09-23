@@ -551,7 +551,7 @@ test.describe('관리자 메일함 페이지 인가', () => {
    * 한 번도 확인되지 않았던 화면이다.
    *
    *   1. 관리자가 들어가 목록 행이 실제로 보인다.
-   *   2. 행을 펼치면 `iframe[sandbox=""]`이 있고, **그 frame 안에서** 본문
+   *   2. 행을 펼치면 본문 iframe이 있고, **그 frame 안에서** 본문
    *      마커 텍스트가 실제로 보인다 — CSP가 srcdoc 프레임을 막으면 이 마커가
    *      안 보이므로, 이것이 CSP 회귀를 잡는 유일한 방법이다.
    *   3. `body_fetch_status='pending'`인 행에 "본문 받는 중" 배지가 보인다.
@@ -585,9 +585,15 @@ test.describe('관리자 메일함 페이지 인가', () => {
 
       // 2. 행을 펼쳐 iframe 안의 본문 마커를 실제로 본다.
       await doneRow.click()
-      const iframeLocator = page.locator('iframe[sandbox=""]')
+      // 셀렉터를 `sandbox` 값이 아니라 제목으로 잡는다. 전에는
+      // `iframe[sandbox=""]`였는데, 화면이 팝업만 허용하도록 sandbox에 값을
+      // 더하면서(`allow-popups allow-popups-to-escape-sandbox`) 이 단정이 조용히
+      // 빗나갔다 — 그 뒤로 이 테스트는 늘 빨간불이었고, 아래 CSP 회귀 단정은
+      // 한 번도 실행되지 않았다. 제목은 접근성 이름이라 sandbox 플래그가 바뀌어도
+      // 따라 흔들리지 않는다.
+      const iframeLocator = page.locator('iframe[title="메일 본문"]')
       await expect(iframeLocator).toBeVisible({ timeout: 15000 })
-      const bodyFrame = page.frameLocator('iframe[sandbox=""]')
+      const bodyFrame = page.frameLocator('iframe[title="메일 본문"]')
       await expect(bodyFrame.getByText(BODY_MARKER)).toBeVisible({ timeout: 15000 })
     } finally {
       await ctx.close()
