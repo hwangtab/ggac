@@ -2,7 +2,7 @@
  * 리워드 일괄 저장. draft에서는 자유, active에서는 추가와 수량 증가만.
  * 잠긴 리워드는 `evaluateRewardPatch`가 판정하고, 관리자도 예외가 없다.
  */
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 
 import { requireActiveMember } from '@/lib/server/memberAuth'
 import { getCampaignById, listRewards, applyRewardBatch } from '@/db/queries/funding'
@@ -16,6 +16,7 @@ import {
   canDeleteReward,
   deliveryChangesToLog,
 } from '@/lib/funding/rewardLock'
+import { notifyRewardDeliveryChanged } from '@/lib/funding/notify'
 import { isFundingEnabled } from '@/lib/funding/settings'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
@@ -175,8 +176,8 @@ async function handlePut(request: NextRequest, params: Promise<{ id: string }>) 
   // 예상 전달월(`estimated_delivery`)은 잠그지 않는다 — 약관 제12조가 전달
   // 지연을 "알린다"로 정할 뿐 날짜를 얼리지 않기 때문이다(근거는
   // `@/lib/funding/rewardLock`의 머리 주석). 대신 조용히 바뀌지는 않게,
-  // 바뀐 리워드의 이전 값과 새 값을 활동 로그에 남긴다. 후원자에게 보내는
-  // 알림은 별건이며 여기서 만들지 않는다.
+  // 바뀐 리워드의 이전 값과 새 값을 활동 로그에 남기고, 그 리워드를 후원한
+  // 사람들에게 알린다(약관 제12조 — 발송이 늦어지면 창작자가 알린다).
   const deliveryChanges = deliveryChangesToLog(
     existing.map(r => ({
       id: String(r.id),
@@ -193,6 +194,14 @@ async function handlePut(request: NextRequest, params: Promise<{ id: string }>) 
       target_id: id,
       metadata: { campaign_status: status, changes: deliveryChanges },
     }).catch(e => log.warn('예상 전달월 변경 기록 실패', e))
+    // 후원자 수가 얼마든 응답을 기다리게 하지 않는다. `notifyRewardDeliveryChanged`는
+    // 스스로 던지지 않지만, `after()` 안에서 새는 예외는 잡아 줄 사람이 없으므로
+    // 다른 알림 호출부와 같은 모양으로 한 번 더 감싼다.
+    after(() =>
+      notifyRewardDeliveryChanged(campaign, deliveryChanges).catch(e =>
+        log.error('예상 전달월 변경 알림 실패', e)
+      )
+    )
   }
 
   return ApiSuccess.ok({ rewards: await listRewards(id) }).toNextResponse()

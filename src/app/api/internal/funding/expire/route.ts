@@ -25,6 +25,7 @@ import {
 } from '@/lib/payments/toss/client'
 import { getServerPaymentConfig, isPaymentEnabled } from '@/lib/payments/toss/config'
 import { runExpiryGuard } from '@/lib/funding/expiryGuard'
+import { notifyPledgeRefunded } from '@/lib/funding/notify'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
 
@@ -153,6 +154,18 @@ async function handle(request: NextRequest) {
             reason: error.reason,
             refunded,
           })
+          // 돈이 빠져나갔다가 돌아온 사람에게 이유를 알린다. 지금까지 이
+          // 경로는 아무에게도 말하지 않았다 — 결제되고 환불된 것만 통장에
+          // 남는다. 자동 환불이 실패한 건은 보내지 않는다: 문장이 "전액
+          // 환불했습니다"라 아직 사실이 아니고, 그 건은 위 로그를 보고
+          // 사무국이 손으로 처리한 뒤 알린다. 알림 실패가 크론을 멈추지
+          // 않도록 여기서도 삼킨다.
+          if (refunded) {
+            await notifyPledgeRefunded(
+              pledge,
+              error.reason === 'campaign_closed' ? 'campaign_closed' : 'reward_sold_out'
+            ).catch(e => log.error('환불 알림 실패', { orderId, e }))
+          }
           return false
         }
         throw error
