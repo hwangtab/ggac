@@ -418,6 +418,50 @@ test.describe('펀딩 — 관리자 심사 경계 (심사 대기 캠페인)', ()
       await adminContext.dispose()
     }
   })
+
+  /**
+   * 정산 라우트 셋도 같은 게이트(`requireAdmin()`) 뒤에 있다. 비인증 401은
+   * 아래 비인증 경계가 보지만, **로그인한 평조합원이 403인지**는 그것과 다른
+   * 질문이다 — 2026-08 적대 감사가 파고든 모양이 바로 공유 헬퍼 안의 한 줄
+   * 변경이었고, 정적 가드는 그것을 놓쳤고 E2E가 잡았다.
+   *
+   * 셋을 다 부르는 이유: 하나만 보면 나머지 둘에 게이트를 빼먹어도 초록불이다.
+   * 읽기(GET)까지 포함한다 — 금액과 사무국 메모가 실려 나가는 응답이다.
+   */
+  test('정산 내역은 관리자만 읽고 쓸 수 있다', async ({ baseURL }) => {
+    const otherContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('other'),
+    })
+    const adminContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('admin'),
+    })
+    const url = `/api/admin/funding/campaigns/${fixtures.fundingSettleCampaignId}/settlement`
+    try {
+      const denied: Array<
+        [string, { status(): number; json(): Promise<Record<string, unknown>> }]
+      > = [
+        ['GET', await otherContext.get(url)],
+        ['POST', await otherContext.post(url, { data: { pg_fee_amount: 0 } })],
+        ['PATCH', await otherContext.patch(url, { data: { action: 'mark_paid' } })],
+      ]
+      for (const [method, res] of denied) {
+        expect(res.status(), `${method} 거부 코드`).toBe(403)
+        expect((await res.json()).error).toContain('관리자 권한이 필요합니다')
+      }
+
+      // 짝: 게이트가 "전부 막기"로 퇴화해도 위 부정 단정만으로는 잡히지 않는다.
+      // 관리자는 실제로 읽을 수 있어야 하고, 그 응답에는 원장에서 방금 센 근거가
+      // 들어 있어야 한다.
+      const allowed = await adminContext.get(url)
+      expect(allowed.status()).toBe(200)
+      expect((await allowed.json()).data?.current_basis?.net_amount).toEqual(expect.any(Number))
+    } finally {
+      await otherContext.dispose()
+      await adminContext.dispose()
+    }
+  })
 })
 
 /**
