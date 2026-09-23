@@ -1,8 +1,16 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { FiDollarSign, FiExternalLink, FiRefreshCw } from 'react-icons/fi'
+import {
+  FiChevronDown,
+  FiChevronUp,
+  FiDollarSign,
+  FiExternalLink,
+  FiRefreshCw,
+} from 'react-icons/fi'
 import AdminLayout from '../components/AdminLayout'
+import PostContentRenderer from '@/components/PostContentRenderer'
+import { toReviewDetail, type CampaignDetail } from './reviewDetail'
 import {
   nextStatus,
   PUBLIC_CAMPAIGN_STATUSES,
@@ -78,6 +86,12 @@ export default function AdminFundingPage() {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [slugDrafts, setSlugDrafts] = useState<Record<string, string>>({})
   const [rejectNotes, setRejectNotes] = useState<Record<string, string>>({})
+  const [details, setDetails] = useState<Record<string, CampaignDetail>>({})
+  const [openIds, setOpenIds] = useState<Record<string, boolean>>({})
+  const [detailLoading, setDetailLoading] = useState<Record<string, boolean>>({})
+  // 관리자가 마지막으로 읽은 판 번호. 목록을 불러올 때 채우고, 상세를 펼치면
+  // 그때 읽은 값으로 덮는다 — 승인은 실제로 읽은 판에만 도장을 찍는다.
+  const [reviewedVersions, setReviewedVersions] = useState<Record<string, string>>({})
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -90,6 +104,8 @@ export default function AdminFundingPage() {
       if (res.ok === false) throw new Error(json?.error?.message ?? '목록을 불러오지 못했습니다.')
       const list: Campaign[] = json.data.campaigns
       setCampaigns(list)
+      setReviewedVersions(Object.fromEntries(list.map(c => [c.id, c.updated_at])))
+      setDetails({})
       // 승인 입력값 초기화: 이미 정식 주소(비-draft-)를 갖고 있으면 미리 채운다.
       setSlugDrafts(prev => {
         const next = { ...prev }
@@ -112,6 +128,38 @@ export default function AdminFundingPage() {
     void load()
   }, [load])
 
+  /**
+   * 캠페인 하나의 본문·리워드를 그때그때 불러온다. 목록 전체를 미리 당겨
+   * 오지 않는 이유는 심사 화면에 수십 건이 걸릴 수 있어서다.
+   *
+   * 새 API를 만들지 않았다 — `GET /api/mypage/funding/campaigns/[id]`가 이미
+   * 본문과 리워드를 다 주고, `canManageCampaign`이 `isApprovedActiveAdmin`을
+   * 먼저 통과시키므로 관리자도 들어간다.
+   */
+  const loadDetail = useCallback(async (id: string) => {
+    setDetailLoading(prev => ({ ...prev, [id]: true }))
+    try {
+      const res = await fetch(`/api/mypage/funding/campaigns/${id}`)
+      const json = await res.json()
+      if (res.ok === false) throw new Error(json?.error?.message ?? '내용을 불러오지 못했습니다.')
+      // 후원자 명단(json.data.pledges)은 상태에 담지도 않는다 —
+      // `toReviewDetail`이 싣는 목록을 정한다.
+      const detail: CampaignDetail = toReviewDetail(json.data)
+      setDetails(prev => ({ ...prev, [id]: detail }))
+      if (detail.version) setReviewedVersions(prev => ({ ...prev, [id]: detail.version }))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setDetailLoading(prev => ({ ...prev, [id]: false }))
+    }
+  }, [])
+
+  function toggleDetail(id: string) {
+    const willOpen = !openIds[id]
+    setOpenIds(prev => ({ ...prev, [id]: willOpen }))
+    if (willOpen && !details[id]) void loadDetail(id)
+  }
+
   async function transition(
     campaign: Campaign,
     action: 'approve' | 'reject' | 'close' | 'settle',
@@ -128,8 +176,10 @@ export default function AdminFundingPage() {
       })
       const json = await res.json()
       if (res.status === 409) {
+        // 409는 두 가지다 — 다른 관리자가 먼저 처리했거나, 심사 중에 개설자가
+        // 내용을 고쳤거나. 서버가 어느 쪽인지 문장으로 말해 주므로 그대로 쓴다.
         setError(
-          '상태가 이미 바뀌었습니다. 다른 관리자가 먼저 처리했습니다. 목록을 새로고침합니다.'
+          `${json?.error?.message ?? '상태가 이미 바뀌었습니다. 새로고침해 주세요.'} 목록을 새로고침합니다.`
         )
         await load()
         return
@@ -167,7 +217,10 @@ export default function AdminFundingPage() {
       `"${campaign.title}"을(를) 승인해 /funding/${slug} 주소로 공개합니다.\n조합원이 후원을 시작할 수 있게 됩니다. 계속할까요?`
     )
     if (!ok) return
-    void transition(campaign, 'approve', { slug })
+    void transition(campaign, 'approve', {
+      slug,
+      reviewedVersion: reviewedVersions[campaign.id] ?? campaign.updated_at,
+    })
   }
 
   function handleReject(campaign: Campaign) {
@@ -326,6 +379,93 @@ export default function AdminFundingPage() {
                         <p className="mt-1 text-xs text-amber-700">반려 사유: {c.review_note}</p>
                       )}
                     </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-gray-100">
+                    <button
+                      type="button"
+                      onClick={() => toggleDetail(c.id)}
+                      className="inline-flex items-center gap-1 text-sm font-medium text-gray-700 hover:text-primary-700"
+                      aria-expanded={openIds[c.id] === true}
+                    >
+                      {openIds[c.id] ? (
+                        <FiChevronUp className="w-4 h-4" />
+                      ) : (
+                        <FiChevronDown className="w-4 h-4" />
+                      )}
+                      본문·리워드 보기
+                    </button>
+                    {openIds[c.id] && (
+                      <div className="mt-3 space-y-4">
+                        {detailLoading[c.id] && !details[c.id] ? (
+                          <div className="h-24 bg-gray-100 rounded-lg animate-pulse" />
+                        ) : !details[c.id] ? (
+                          <p className="text-sm text-gray-500">내용을 불러오지 못했습니다.</p>
+                        ) : (
+                          <>
+                            <section className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                              <h3 className="mb-2 text-sm font-semibold text-gray-900">
+                                프로젝트 소개
+                              </h3>
+                              {details[c.id].story.trim() === '' ? (
+                                <p className="text-sm text-gray-500">본문이 비어 있습니다.</p>
+                              ) : (
+                                /* 공개 상세(`/funding/[slug]`)가 쓰는 렌더러를 같은 방식으로
+                                   부른다 — 관리자가 보는 것과 후원자가 볼 것이 같아야 한다.
+                                   마크다운 라이브러리나 sanitizer를 여기서 새로 들이지
+                                   않는다(이 저장소는 SSR에서 jsdom sanitizer로 한 번 데였다). */
+                                <PostContentRenderer
+                                  content={details[c.id].story}
+                                  contentFormat="markdown"
+                                />
+                              )}
+                            </section>
+                            <section className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                              <h3 className="mb-2 text-sm font-semibold text-gray-900">
+                                리워드 {details[c.id].rewards.length}개
+                              </h3>
+                              {details[c.id].rewards.length === 0 ? (
+                                <p className="text-sm text-gray-500">리워드가 없습니다.</p>
+                              ) : (
+                                <ul className="space-y-3">
+                                  {details[c.id].rewards.map(r => (
+                                    <li
+                                      key={r.id}
+                                      className="rounded-md border border-gray-200 bg-white p-3"
+                                    >
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <span className="font-medium text-gray-900">{r.title}</span>
+                                        <span className="text-sm text-gray-700">
+                                          {won(r.amount)}
+                                        </span>
+                                        <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">
+                                          {r.total_quantity === null
+                                            ? '수량 무제한'
+                                            : `수량 ${r.total_quantity.toLocaleString('ko-KR')}개`}
+                                        </span>
+                                        <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">
+                                          {r.requires_shipping ? '배송 필요' : '배송 없음'}
+                                        </span>
+                                        {r.estimated_delivery && (
+                                          <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">
+                                            예상 전달 {r.estimated_delivery}
+                                          </span>
+                                        )}
+                                      </div>
+                                      {r.description && (
+                                        <p className="mt-1 text-sm text-gray-600 whitespace-pre-wrap">
+                                          {r.description}
+                                        </p>
+                                      )}
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </section>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex flex-wrap items-end gap-3 pt-2 border-t border-gray-100">
