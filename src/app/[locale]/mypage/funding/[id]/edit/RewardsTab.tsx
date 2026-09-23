@@ -9,19 +9,31 @@
  * "리워드 저장" 버튼이 유일한 저장 경로다. `onChange`는 부모(껍데기)가
  * 들고 있는 `rewards` 배열을 갱신하는 통로일 뿐이고(다른 탭과 같은 제어
  * 컴포넌트 계약), 서버에 실제로 쓰는 것은 이 컴포넌트가 `campaignId`로
- * 직접 한다. 저장이 성공하면 서버가 돌려준 목록으로 `onChange`를 불러
- * temp id를 진짜 id로 바꾸고 `locked_at`을 최신으로 맞춘다.
+ * 직접 한다.
+ *
+ * `onChange`와 `onSaved`를 나눈 이유 — 껍데기는 "마지막으로 불러오거나
+ * 저장한 값"(`rewardsOriginal`)과 "지금 편집 중인 값"(`rewards`)을 따로
+ * 들고 저장 안 한 변경을 판단한다(제출 차단·창 닫기 경고가 이걸로 움직인다).
+ * 이 탭에서 한 글자만 고쳐도 `onChange`가 불려 `rewards`가 바뀌므로 그
+ * 차이가 곧바로 드러나고, PUT이 성공해 서버 값으로 화면을 맞출
+ * 때(`onSaved`)만 두 값이 같아져 다시 "저장 안 한 변경 없음" 상태가 된다.
+ * `onSaved`가 없으면 리워드만 고치고 저장하지 않은 채로 심사에 올리거나
+ * 탭을 벗어나도 아무도 막지 않는다.
  *
  * **규칙의 정본은 서버다.** 여기서 하는 잠금·최소수량 판단은 전부
  * `rewardsTabHelpers.ts`의 순수 함수로 미리 알려 주는 것뿐이고, 서버가
  * 거절하면(`evaluateRewardPatch`·`canDeleteReward`) 그 문장을 그대로 보인다.
+ * 저장 도중 다른 사람이 그 리워드에 후원을 확정하면 서버가 409를
+ * 돌려준다 — 그 시점부터 화면의 값과 DB 값이 어긋날 수 있으므로(다른 행은
+ * 이미 써졌는데 이 행만 거절됐을 수 있다), 문장을 보여 주는 것과 별개로
+ * 캠페인을 다시 불러와 화면을 DB와 맞춘다(`reloadFromServer`).
  *
  * 탭이 `hidden`으로만 감춰지고 언마운트되지 않으므로(껍데기 참고), 리워드
  * 목록은 항상 `props.rewards`를 그대로 그리고 바뀔 때마다 `onChange`로
  * 올려보낸다 — 이 컴포넌트가 별도로 목록을 복제해 들고 있지 않는다. 다만
  * "저장된 원래 값"(잠금 최소수량의 기준)은 `props`가 바뀔 때마다 다시
- * 잡으면 안 된다 — 마운트 시점과 저장 성공 시점에만 갱신한다(아래
- * `baselineRef`).
+ * 잡으면 안 된다 — 마운트 시점과 저장 성공(또는 409 재조회) 시점에만
+ * 갱신한다(아래 `baselineRef`).
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
@@ -58,6 +70,10 @@ export interface RewardsTabProps {
   campaignId: string
   rewards: RewardRow[]
   onChange: (rewards: RewardRow[]) => void
+  /** 저장(PUT 성공) 또는 409 뒤 재조회로 서버와 화면이 다시 같아졌을 때만
+   * 부른다 — 껍데기가 이걸로 "마지막으로 저장한 값"을 다시 잡아 저장하지
+   * 않은 변경 판정을 지운다. */
+  onSaved: (rewards: RewardRow[]) => void
   editScope: 'all' | 'contentOnly' | 'none'
 }
 
@@ -76,7 +92,13 @@ function blankReward(sortOrder: number): RewardRow {
   }
 }
 
-export default function RewardsTab({ campaignId, rewards, onChange, editScope }: RewardsTabProps) {
+export default function RewardsTab({
+  campaignId,
+  rewards,
+  onChange,
+  onSaved,
+  editScope,
+}: RewardsTabProps) {
   const t = useTranslations('funding')
   const readOnly = editScope === 'none'
 
@@ -134,6 +156,24 @@ export default function RewardsTab({ campaignId, rewards, onChange, editScope }:
     [rewards, onChange]
   )
 
+  // 409(다른 사람이 방금 이 리워드에 후원을 확정함) 뒤에는 화면 값이 DB와
+  // 어긋났을 수 있다 — PUT은 행마다 순서대로 쓰므로, 뒤쪽 행이 거절되기 전에
+  // 앞쪽 행은 이미 저장됐을 수 있다. 서버의 거절 문장은 그대로 보여 주고,
+  // 그 문장과 별개로 최신 캠페인을 다시 불러와 화면을 DB와 맞춘다.
+  const reloadFromServer = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/mypage/funding/campaigns/${campaignId}`)
+      const body = await res.json().catch(() => null)
+      if (res.ok === false || !Array.isArray(body?.data?.rewards)) return
+      const fresh = body.data.rewards as RewardRow[]
+      baselineRef.current = new Map(fresh.map(r => [r.id, r]))
+      onSaved(fresh)
+    } catch {
+      // 재조회 실패는 조용히 넘긴다 — 이미 보이는 거절 문장이 "새로고침해
+      // 달라"고 안내하므로, 사용자가 직접 새로고침해도 같은 결과에 이른다.
+    }
+  }, [campaignId, onSaved])
+
   const handleSave = useCallback(async () => {
     setError('')
     setNotice('')
@@ -168,18 +208,21 @@ export default function RewardsTab({ campaignId, rewards, onChange, editScope }:
       const body = await res.json().catch(() => null)
       if (res.ok === false || !Array.isArray(body?.data?.rewards)) {
         setError(body?.error || t('creator.errorSave'))
+        // 409는 일부 행이 이미 써진 채로 거절됐을 수 있다 — 문장은 그대로
+        // 두고 화면을 DB의 실제 값으로 다시 맞춘다.
+        if (res.status === 409) void reloadFromServer()
         return
       }
       const saved = body.data.rewards as RewardRow[]
       baselineRef.current = new Map(saved.map(r => [r.id, r]))
-      onChange(saved)
+      onSaved(saved)
       setNotice(t('creator.rewardsSaved'))
     } catch {
       setError(t('creator.errorSave'))
     } finally {
       setSaving(false)
     }
-  }, [rewards, campaignId, editScope, onChange, t])
+  }, [rewards, campaignId, editScope, onSaved, reloadFromServer, t])
 
   return (
     <div className="space-y-5">

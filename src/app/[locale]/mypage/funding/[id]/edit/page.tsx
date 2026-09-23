@@ -95,6 +95,14 @@ export default function EditCampaignPage() {
   const [story, setStory] = useState('')
   const [storyOriginal, setStoryOriginal] = useState('')
   const [rewards, setRewards] = useState<RewardRow[]>([])
+  // 리워드 탭은 자기 저장 버튼으로 직접 PUT한다(다른 두 탭과 달리 이 껍데기의
+  // "저장"이 리워드를 건드리지 않는다) — 그래서 "저장하지 않은 변경"을
+  // 판단하려면 "마지막으로 불러오거나 저장한 값"을 따로 들고 있어야 한다.
+  // `rewards`(편집 중인 값)와 이 값이 다르면 리워드 탭에 저장 안 한 편집이
+  // 있다는 뜻이고, 그게 곧 아래 `dirty`에 들어간다 — 그래야 그 상태로
+  // "심사 올리기"를 누르거나 창을 닫는 것을 두 안전장치(제출 차단·
+  // beforeunload/클릭 가로채기)가 똑같이 잡는다.
+  const [rewardsOriginal, setRewardsOriginal] = useState<RewardRow[]>([])
 
   const errorRef = useRef<HTMLDivElement | null>(null)
   const noticeRef = useRef<HTMLDivElement | null>(null)
@@ -133,6 +141,7 @@ export default function EditCampaignPage() {
       setStory(editorData.campaign.story ?? '')
       setStoryOriginal(editorData.campaign.story ?? '')
       setRewards(editorData.rewards ?? [])
+      setRewardsOriginal(editorData.rewards ?? [])
     } catch {
       setError(t('creator.errorLoad'))
     } finally {
@@ -144,13 +153,20 @@ export default function EditCampaignPage() {
     void load()
   }, [load])
 
-  // 저장하지 않은 변경이 있는가 — 스토리·리워드 탭은 지금은 스텁이라 값이
-  // 절대 바뀌지 않지만, 비교 대상에 미리 넣어 둔다(Task 5·6이 실제 입력을
-  // 붙이면 그대로 dirty 판정에 들어온다).
+  // 저장하지 않은 변경이 있는가 — 기본 정보·이야기·리워드 셋 다 본다.
+  // 리워드는 자기 저장 버튼으로 따로 PUT하므로 `rewardsOriginal`이
+  // "마지막으로 불러오거나 저장한 값"을 들고 있고(위 state 선언부 주석
+  // 참고), 편집 중인 `rewards`와 다르면 여기 dirty에 들어온다 — 그래야
+  // 리워드만 고치고 저장하지 않은 채로 "심사 올리기"를 누르거나 탭을
+  // 벗어나는 것을 아래 두 안전장치가 똑같이 잡는다.
   const dirty = useMemo(() => {
     if (!basic || !basicOriginal) return false
-    return JSON.stringify(basic) !== JSON.stringify(basicOriginal) || story !== storyOriginal
-  }, [basic, basicOriginal, story, storyOriginal])
+    return (
+      JSON.stringify(basic) !== JSON.stringify(basicOriginal) ||
+      story !== storyOriginal ||
+      JSON.stringify(rewards) !== JSON.stringify(rewardsOriginal)
+    )
+  }, [basic, basicOriginal, story, storyOriginal, rewards, rewardsOriginal])
 
   // 저장하지 않은 변경이 있는 채로 탭(브라우저)을 닫거나 다른 주소로 가면
   // 경고한다. 실제 브라우저 창 닫기·새로고침·주소 입력만 여기서 잡힌다 —
@@ -224,9 +240,7 @@ export default function EditCampaignPage() {
         }
         patch[key] = basic[key]
       }
-      // story는 contentOnly에서도 허용되는 필드다(CONTENT_ONLY_FIELDS) — 지금은
-      // StoryTab이 스텁이라 절대 바뀌지 않지만, Task 5가 값을 채우면 이 자리가
-      // 그대로 저장을 받는다.
+      // story는 contentOnly에서도 허용되는 필드다(CONTENT_ONLY_FIELDS).
       if (story !== storyOriginal) patch.story = story
 
       if (Object.keys(patch).length === 0) {
@@ -288,6 +302,15 @@ export default function EditCampaignPage() {
       setSubmitting(false)
     }
   }, [dirty, id, t, router])
+
+  // 리워드 탭이 자기 PUT을 성공시켰을 때(또는 409 뒤 서버 값으로 다시
+  // 맞췄을 때) 부른다. `rewards`만 갱신하고 `rewardsOriginal`을 그대로 두면
+  // 방금 저장한 값이 스스로와 다르다고 판정되어 저장 직후에도 `dirty`가
+  // 참으로 남는다 — 두 값을 항상 같이 맞춘다.
+  const handleRewardsSaved = useCallback((saved: RewardRow[]) => {
+    setRewards(saved)
+    setRewardsOriginal(saved)
+  }, [])
 
   const campaign = data?.campaign
   const editScope = data?.edit_scope ?? 'none'
@@ -417,6 +440,7 @@ export default function EditCampaignPage() {
                 campaignId={id}
                 rewards={rewards}
                 onChange={setRewards}
+                onSaved={handleRewardsSaved}
                 editScope={readOnly ? 'none' : editScope}
               />
             </div>
