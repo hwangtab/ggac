@@ -100,7 +100,6 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     const campaign = await getCampaignById(id)
     if (!campaign) return ApiError.notFound('프로젝트를 찾을 수 없습니다.').toNextResponse()
 
-    const before = await getSettlementByCampaign(id)
     const result = await prepareSettlement({
       campaign_id: id,
       platform_fee_rate_bp: Number(campaign.platform_fee_rate ?? 0),
@@ -136,9 +135,13 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     }).catch(e => log.warn('활동 기록 실패', e))
 
     // 같은 금액을 두 번 알리지 않는다 — 처음 정리했을 때, 그리고 다시 정리해
-    // **지급 예정 금액이 실제로 달라졌을 때**만 개설자에게 간다.
+    // **지급 예정 금액이 실제로 달라졌을 때**만 개설자에게 간다. 직전 금액은
+    // 쿼리 계층이 **쓰기 잠금을 잡은 뒤** 읽어 함께 돌려준 값이다. 여기서 따로
+    // 읽으면 두 관리자가 동시에 정리할 때 둘 다 "바뀌었다"로 읽어 같은 금액을
+    // 두 번 알린다.
     const payoutChanged =
-      before === null || Number(before.payout_amount) !== result.amounts.payout_amount
+      result.previous_payout_amount === null ||
+      result.previous_payout_amount !== result.amounts.payout_amount
     if (payoutChanged) {
       notifySettlementPrepared(campaign, result.settlement as never, {
         revised: result.created === false,

@@ -120,7 +120,21 @@ export async function isSettlementStale(settlement: Row): Promise<boolean> {
 }
 
 export type SettlementWriteResult =
-  | { ok: true; settlement: Row; created: boolean; amounts: SettlementAmounts }
+  | {
+      ok: true
+      settlement: Row
+      created: boolean
+      amounts: SettlementAmounts
+      /**
+       * 이 쓰기 **직전**의 지급 예정 금액. 없던 정산서면 null.
+       *
+       * 호출부가 "개설자에게 다시 알릴 일인가"를 이 값으로 판정한다. 트랜잭션
+       * 밖에서 따로 읽으면 두 관리자가 동시에 정리할 때 둘 다 "바뀌었다"로
+       * 읽어 같은 금액을 두 번 알리게 된다 — 그래서 같은 트랜잭션 안에서,
+       * 쓰기 잠금을 잡은 뒤에 읽은 값을 돌려준다.
+       */
+      previous_payout_amount: number | null
+    }
   | { ok: false; reason: 'campaign_not_closed' }
   | { ok: false; reason: 'already_paid' }
   | { ok: false; reason: 'compute'; message: string }
@@ -213,6 +227,7 @@ export async function prepareSettlement(input: {
             created: false,
             settlement: rowToSettlement(updated as Row),
             amounts: computed.amounts,
+            previous_payout_amount: Number(existing[0].payoutAmount ?? 0),
           } as SettlementWriteResult
         }
 
@@ -235,12 +250,22 @@ export async function prepareSettlement(input: {
           created: true,
           settlement: rowToSettlement(created as Row),
           amounts: computed.amounts,
+          previous_payout_amount: null,
         } as SettlementWriteResult
       })
     )
   } catch (error) {
     if (error instanceof SettlementAbort) return error.result
     throw error
+  }
+}
+
+/** 지급 트랜잭션을 되감기 위한 내부 신호. `SettlementAbort`와 같은 수법이다. */
+class SettlementPayAbort extends Error {
+  result: SettlementPayResult
+  constructor(result: SettlementPayResult) {
+    super('settlement payout aborted')
+    this.result = result
   }
 }
 
@@ -254,36 +279,79 @@ export type SettlementPayResult =
  * 지급을 기록한다 — 조합이 돈을 실제로 보냈다는 뜻이고, 그 순간부터 숫자는
  * 움직이지 않는다.
  *
- * 두 가지를 같이 건다.
+ * **다시 세는 것과 도장을 찍는 것이 한 트랜잭션이어야 한다.** 둘을 따로 두면
+ * 그 사이에 커밋되는 환불을 볼 수 없다 — 금액 조건을 WHERE에 걸어도 그 값은
+ * 방금 읽은 값과 이미 같으므로 아무것도 걸러내지 못한다. 그 창으로 들어온
+ * 환불 한 건은 환불 전 숫자를 `paid`로 굳히고, 굳은 뒤에는 `isSettlementStale`이
+ * 영원히 false라(지급한 정산서는 대조하지 않는다) 아무도 눈치채지 못한다.
+ * 돈은 손으로 이미 보냈으니 잘못 나가지는 않지만, **조합이 얼마를 줬어야
+ * 했는지에 대한 기록이 한 건만큼 틀린 채로 남는다.**
+ *
+ * 그래서 트랜잭션의 **첫 문장을 쓰기로** 둔다 — libSQL은 첫 쓰기에서 즉시
+ * 쓰기 트랜잭션을 열어 잠금을 잡는다(`prepareSettlement`·`applyRewardBatch`가
+ * 이미 기대고 있는 성질이다). 그 뒤에 세는 값은 커밋 시점까지 움직이지 않는다.
+ *
+ * 방어선은 그대로 둘이다.
  * ① `WHERE status = 'pending'` — 두 번 누르거나 두 사람이 동시에 눌러도 한 번만
  *    통과한다. 이미 `paid`면 0행이고 호출부는 409로 답한다.
- * ② `WHERE gross/refund/backer = 방금 다시 센 값` — 정산서를 만든 뒤 환불이
- *    들어왔다면 저장된 지급액은 틀린 숫자다. 그 상태로 도장을 찍지 못하게 막고,
- *    관리자에게 "다시 정리하라"고 답한다.
+ * ② `WHERE gross/refund/backer = 방금 다시 센 값` — 잠금이 막아 주는 것과 별개로
+ *    남겨 둔다. 한쪽을 지워도 다른 한쪽이 잡는다.
  */
 export async function markSettlementPaid(campaignId: string): Promise<SettlementPayResult> {
-  const stored = await getSettlementByCampaign(campaignId)
-  if (!stored) return { ok: false, reason: 'not_found' }
-  if (stored.status === 'paid') return { ok: false, reason: 'already_paid' }
+  try {
+    return await retryOnLockContention(() =>
+      db.transaction(async tx => {
+        // 첫 문장이 쓰기다 — 값은 그대로 두고 조건만 본다. 이 문장이 통과하는
+        // 순간부터 이 캠페인의 원장은 커밋까지 움직이지 않는다.
+        const [held] = await tx
+          .update(fundingSettlements)
+          .set({ status: 'pending' })
+          .where(
+            and(
+              eq(fundingSettlements.campaignId, campaignId),
+              eq(fundingSettlements.status, 'pending')
+            )
+          )
+          .returning()
+        if (!held) {
+          const existing = await tx
+            .select({ status: fundingSettlements.status })
+            .from(fundingSettlements)
+            .where(eq(fundingSettlements.campaignId, campaignId))
+            .limit(1)
+          throw new SettlementPayAbort({
+            ok: false,
+            reason: existing[0] ? 'already_paid' : 'not_found',
+          })
+        }
 
-  const current = await computeSettlementBasis(campaignId)
-  if (isBasisStale(basisOf(stored), current)) return { ok: false, reason: 'stale', current }
+        const stored = rowToSettlement(held as Row)
+        const current = await computeSettlementBasis(campaignId, tx)
+        if (isBasisStale(basisOf(stored), current)) {
+          throw new SettlementPayAbort({ ok: false, reason: 'stale', current })
+        }
 
-  const [row] = await db
-    .update(fundingSettlements)
-    .set({ status: 'paid', paidOutAt: new Date() })
-    .where(
-      and(
-        eq(fundingSettlements.campaignId, campaignId),
-        eq(fundingSettlements.status, 'pending'),
-        eq(fundingSettlements.grossAmount, current.gross_amount),
-        eq(fundingSettlements.refundAmount, current.refund_amount),
-        eq(fundingSettlements.backerCount, current.backer_count)
-      )
+        const [row] = await tx
+          .update(fundingSettlements)
+          .set({ status: 'paid', paidOutAt: new Date() })
+          .where(
+            and(
+              eq(fundingSettlements.campaignId, campaignId),
+              eq(fundingSettlements.status, 'pending'),
+              eq(fundingSettlements.grossAmount, current.gross_amount),
+              eq(fundingSettlements.refundAmount, current.refund_amount),
+              eq(fundingSettlements.backerCount, current.backer_count)
+            )
+          )
+          .returning()
+        if (!row) throw new SettlementPayAbort({ ok: false, reason: 'stale', current })
+        return { ok: true, settlement: rowToSettlement(row as Row) } as SettlementPayResult
+      })
     )
-    .returning()
-  if (!row) return { ok: false, reason: 'stale', current }
-  return { ok: true, settlement: rowToSettlement(row as Row) }
+  } catch (error) {
+    if (error instanceof SettlementPayAbort) return error.result
+    throw error
+  }
 }
 
 /** 화면이 함께 보여 주는 실 모금액. 저장 값에서 뺄셈 한 번이다. */
