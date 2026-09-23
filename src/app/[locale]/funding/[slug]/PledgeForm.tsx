@@ -648,9 +648,7 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
 
           <p className="text-xs text-gray-500">
             {t.rich('form.agreeNotice', {
-              // 펀딩 전용 약관 페이지가 생기기 전까지는 조합 공통 약관으로
-              // 연결한다. 후속 태스크가 전용 페이지로 바꿀 것이다.
-              terms: chunks => <Link href="/terms">{chunks}</Link>,
+              terms: chunks => <Link href="/funding/terms">{chunks}</Link>,
               privacy: chunks => <Link href="/privacy">{chunks}</Link>,
             })}
           </p>

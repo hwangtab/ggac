@@ -429,7 +429,7 @@
       "total": "결제 금액",
       "submit": "후원하기",
       "submitting": "준비 중…",
-      "agreeNotice": "후원하기를 누르면 <terms>이용약관</terms>과 <privacy>개인정보 처리방침</privacy>에 동의하는 것으로 봅니다.",
+      "agreeNotice": "후원하기를 누르면 <terms>펀딩 약관</terms>과 <privacy>개인정보 처리방침</privacy>에 동의하는 것으로 봅니다.",
       "holdNotice": "결제창이 열려 있는 동안 리워드가 선점됩니다. 정해진 시간 안에 결제를 마치지 못하면 선점한 수량이 다시 풀립니다.",
       "paymentHeading": "결제",
       "payButton": "{amount} 결제하기",
