@@ -47,6 +47,10 @@ export const ACTIVITY_ACTION_TYPE = [
   'funding_pledge_canceled',
   // 리워드 예상 전달월 변경(개설자). 잠그지 않는 대신 기록으로 남긴다.
   'funding_reward_delivery_changed',
+  // 이행 상태 변경(개설자·사무국)과 배송 목록 내보내기. 뒤쪽은 남의 이름·
+  // 연락처·주소를 통째로 읽는 행위라 흔적을 남긴다.
+  'funding_fulfillment_updated',
+  'funding_shipping_exported',
 ] as const
 
 export const ACTIVITY_TARGET_TYPE = [
