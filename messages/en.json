@@ -488,6 +488,37 @@
       "browse": "Browse funding",
       "manageNotice": "If you have your pledge code and email, you can also look it up and cancel it at <manage>Look up a pledge</manage>."
     },
+    "creator": {
+      "myCampaigns": "My campaigns",
+      "newCampaign": "Start a campaign",
+      "noCampaigns": "You haven't started a campaign yet.",
+      "newTitle": "Start a campaign",
+      "newDescription": "A title and a goal are enough for a draft. You can fill in the rest afterward.",
+      "title": "Title",
+      "summary": "One-line summary",
+      "summaryHelp": "Shown in listings and share previews. Up to 200 characters.",
+      "goal": "Goal amount",
+      "goalHelp": "If you fall short of the goal, the campaign proceeds with whatever was raised.",
+      "category": "Category",
+      "agreeTerms": "I agree to the creator terms",
+      "agreeTermsLink": "Read the funding terms",
+      "create": "Create draft",
+      "creating": "Creating…",
+      "openPublic": "View public page",
+      "manage": "Manage",
+      "status": {
+        "draft": "Draft",
+        "submitted": "Under review",
+        "active": "Live",
+        "closed": "Closed",
+        "settled": "Settled"
+      },
+      "errorTitle": "Please enter a title.",
+      "errorSummary": "Please enter a one-line summary.",
+      "errorGoal": "Please enter a goal amount of at least ₩1.",
+      "errorTerms": "Please agree to the creator terms.",
+      "errorCreate": "Couldn't create the campaign. Please try again shortly."
+    },
     "status": {
       "pending": "Payment pending",
       "paid": "Pledge complete",

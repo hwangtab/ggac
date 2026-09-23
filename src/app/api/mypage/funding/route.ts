@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { requireUser } from '@/lib/server/memberAuth'
-import { getCampaignById, listCampaignsByOwner } from '@/db/queries/funding'
+import { getCampaignById, getCampaignProgress, listCampaignsByOwner } from '@/db/queries/funding'
 import { listPledgesByUser } from '@/db/queries/fundingPledges'
 import { toPublicPledgeFields } from '@/lib/funding/pledgeView'
 import { ApiSuccess } from '@/utils/apiWrapper'
@@ -12,10 +12,15 @@ export const dynamic = 'force-dynamic'
 export async function GET() {
   const auth = await requireUser()
   if (auth instanceof NextResponse) return auth
-  const [campaigns, pledges] = await Promise.all([
+  const [ownedCampaigns, pledges] = await Promise.all([
     listCampaignsByOwner(auth.user.id),
     listPledgesByUser(auth.user.id),
   ])
+  // 내 펀딩 목록이 카드에 모인금액·달성률을 보이려면 각 캠페인의 진행 수치가
+  // 필요하다 — 공개 목록(`/api/funding/campaigns`)과 같은 방식으로 붙인다.
+  const campaigns = await Promise.all(
+    ownedCampaigns.map(async c => ({ ...c, progress: await getCampaignProgress(String(c.id)) }))
+  )
   // 화면이 각 후원을 캠페인으로 링크하려면 slug가 있어야 한다 — 비회원 조회
   // 라우트(`/api/funding/pledges/lookup`)와 같은 이유로 여기서도 붙인다.
   // 캠페인 수는 적으니 중복 없이 한 번씩만 조회한다.

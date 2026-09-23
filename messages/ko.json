@@ -488,6 +488,37 @@
       "browse": "펀딩 둘러보기",
       "manageNotice": "후원번호와 이메일이 있다면 <manage>후원 조회</manage>에서도 확인하고 취소할 수 있습니다."
     },
+    "creator": {
+      "myCampaigns": "내 펀딩",
+      "newCampaign": "새 펀딩 열기",
+      "noCampaigns": "아직 연 펀딩이 없습니다.",
+      "newTitle": "펀딩 열기",
+      "newDescription": "제목과 목표만 정하면 초안이 만들어집니다. 나머지는 이어서 채웁니다.",
+      "title": "제목",
+      "summary": "한 줄 소개",
+      "summaryHelp": "목록과 공유 미리보기에 보입니다. 200자까지.",
+      "goal": "목표 금액",
+      "goalHelp": "목표에 못 미쳐도 모인 만큼으로 진행합니다.",
+      "category": "분류",
+      "agreeTerms": "개설자 약관에 동의합니다",
+      "agreeTermsLink": "펀딩 약관 읽기",
+      "create": "초안 만들기",
+      "creating": "만드는 중…",
+      "openPublic": "공개 화면 보기",
+      "manage": "운영",
+      "status": {
+        "draft": "초안",
+        "submitted": "심사 중",
+        "active": "공개 중",
+        "closed": "마감",
+        "settled": "정산 완료"
+      },
+      "errorTitle": "제목을 입력해 주세요.",
+      "errorSummary": "한 줄 소개를 입력해 주세요.",
+      "errorGoal": "목표 금액을 1원 이상의 숫자로 입력해 주세요.",
+      "errorTerms": "개설자 약관에 동의해 주세요.",
+      "errorCreate": "펀딩을 만들지 못했습니다. 잠시 후 다시 시도해 주세요."
+    },
     "status": {
       "pending": "결제 대기",
       "paid": "후원 완료",
