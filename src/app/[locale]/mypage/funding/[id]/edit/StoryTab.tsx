@@ -16,6 +16,12 @@
  * 언마운트되지 않고 `hidden`으로만 감춰지므로(탭 전환 시 입력 보존), 값은
  * 항상 props로 받고 변경은 `onChange`로만 올린다(제어 컴포넌트).
  *
+ * 서버는 이야기를 5만 자에서 **자른다**(`campaignInput.ts`의 `slice`). 저장
+ * 뒤 편집기가 서버 응답을 그대로 받아들이므로, 알려 주지 않으면 마지막 문단이
+ * 사라진 화면에 "저장했습니다"만 뜬다. 그래서 상한을 두 겹으로 보인다 —
+ * 글자 수를 늘 적어 두고, 입력 자체도 `maxLength`로 막아 서버가 자를 일이
+ * 애초에 없게 한다. 서버 쪽 상한은 건드리지 않는다.
+ *
  * `editScope`가 `'none'`이면 읽기 전용이다 — `all`·`contentOnly`는 둘 다
  * 이야기를 콘텐츠 필드로 취급해 편집을 허용한다(서버 `CONTENT_ONLY_FIELDS`에
  * `story`가 포함됨).
@@ -23,6 +29,10 @@
 import { useTranslations } from 'next-intl'
 
 import PostContentRenderer from '@/components/PostContentRenderer'
+
+/** 서버(`parseCampaignPatch`의 `story`)가 자르는 길이와 같은 값이다. 여기가
+ * 더 크면 잘린 줄 모르고 저장하게 되고, 더 작으면 쓸 수 있는 글을 막는다. */
+const STORY_MAX_LENGTH = 50_000
 
 export interface StoryTabProps {
   story: string
@@ -33,6 +43,7 @@ export interface StoryTabProps {
 export default function StoryTab({ story, onChange, editScope }: StoryTabProps) {
   const t = useTranslations('funding')
   const readOnly = editScope === 'none'
+  const atLimit = story.length >= STORY_MAX_LENGTH
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
@@ -43,11 +54,20 @@ export default function StoryTab({ story, onChange, editScope }: StoryTabProps) 
         <textarea
           id="story"
           value={story}
-          onChange={e => onChange(e.target.value)}
+          onChange={e => onChange(e.target.value.slice(0, STORY_MAX_LENGTH))}
+          maxLength={STORY_MAX_LENGTH}
           disabled={readOnly}
           rows={24}
           className="w-full rounded-lg border border-gray-300 p-3 font-mono text-sm disabled:bg-gray-100 disabled:text-gray-500"
         />
+        <p className="mt-1 text-xs text-gray-500">
+          {t('creator.storyCount', { count: story.length, max: STORY_MAX_LENGTH })}
+        </p>
+        {atLimit ? (
+          <p role="status" aria-live="polite" className="mt-1 text-xs font-medium text-amber-900">
+            {t('creator.storyLimitReached')}
+          </p>
+        ) : null}
         <p className="mt-1 text-xs text-gray-500">{t('creator.storyHelp')}</p>
       </div>
 
