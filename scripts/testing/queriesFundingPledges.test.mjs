@@ -352,27 +352,86 @@ test('recordPaymentKey는 pending 행에만 식별자를 새기고 settled 행�
 
 // ── 결제 없는 선점만으로 한정 리워드를 매진시키던 것 ──────────────────────
 
-test('같은 사람이 같은 리워드를 다시 선점하면 앞의 선점이 갈린다 — 재고를 두 번 차지하지 못한다', async () => {
+test('같은 사람이 같은 리워드를 다시 선점해도 앞의 선점은 그대로 남는다 — 선물 두 건이 된다', async () => {
   const r = await fq.createReward({
     campaign_id: campaign.id,
     title: '교체',
     amount: 1000,
-    total_quantity: 2,
+    total_quantity: 3,
   })
   const first = await hold('funding_swap_1', r.id, 1, { reward: r, backer_email: 'same@x.kr' })
-  assert.equal(await pq.getRemainingQuantity(r.id), 1)
+  assert.equal(await pq.getRemainingQuantity(r.id), 2)
 
+  // 대소문자만 다른 같은 이메일 = 같은 신원. 그래도 앞 선점을 덮지 않는다 —
+  // 배송지가 다른 두 사람에게 같은 리워드를 보내는 것이 정상 후원이다.
   const second = await hold('funding_swap_2', r.id, 1, { reward: r, backer_email: 'SAME@x.kr' })
-  // 앞 선점이 비워졌으므로 재고는 여전히 1이다. 고치기 전에는 0이 됐다.
-  assert.equal(await pq.getRemainingQuantity(r.id), 1)
-  assert.equal((await pq.getPledgeById(first.id)).status, 'expired')
+  assert.equal((await pq.getPledgeById(first.id)).status, 'pending')
   assert.equal((await pq.getPledgeById(second.id)).status, 'pending')
+  assert.equal(await pq.getRemainingQuantity(r.id), 1)
 
-  // 다른 사람의 선점은 그대로 쌓인다 — 정상 후원이 막히면 안 된다.
+  // 다른 사람의 선점도 그대로 쌓인다.
   const other = await hold('funding_swap_3', r.id, 1, { reward: r, backer_email: 'other@x.kr' })
   assert.equal((await pq.getPledgeById(other.id)).status, 'pending')
-  assert.equal((await pq.getPledgeById(second.id)).status, 'pending')
   assert.equal(await pq.getRemainingQuantity(r.id), 0)
+})
+
+test('한 리워드에 한 신원이 들 수 있는 선점 수에는 상한이 있다', async () => {
+  const r = await fq.createReward({ campaign_id: campaign.id, title: '리워드상한', amount: 1000 })
+  for (let i = 0; i < pq.MAX_HOLDS_PER_REWARD; i++) {
+    const p = await hold(`funding_rcap_${i}`, r.id, 1, { reward: r, backer_email: 'rcap@x.kr' })
+    assert.equal(p.status, 'pending')
+  }
+  await assert.rejects(
+    () => hold('funding_rcap_over', r.id, 1, { reward: r, backer_email: 'RCAP@x.kr' }),
+    e =>
+      e instanceof pq.TooManyPendingHoldsError &&
+      e.scope === 'reward' &&
+      e.limit === pq.MAX_HOLDS_PER_REWARD &&
+      // 후원자가 할 수 있는 일이 문장 안에 있어야 한다.
+      /수량을 늘리/.test(e.message)
+  )
+  // 다른 사람은 막히지 않는다.
+  const stranger = await hold('funding_rcap_other', r.id, 1, {
+    reward: r,
+    backer_email: 'notrcap@x.kr',
+  })
+  assert.equal(stranger.status, 'pending')
+})
+
+// ── 갈아 끼우기가 승인된 결제를 스윕의 눈에서 지우던 것 ────────────────────
+
+test('결제가 떠 있을지 모르는 선점은 같은 사람이 다시 선점해도 만료 스윕이 계속 본다', async () => {
+  const r = await fq.createReward({
+    campaign_id: campaign.id,
+    title: '유실복구',
+    amount: 1000,
+    total_quantity: 5,
+  })
+  // 토스는 승인했는데 우리 쪽 확정이 유실된 상태를 그대로 둔다 — 후원은
+  // 아직 `pending`이고, 라우트는 후원자에게 503 "결제 결과를 확인하는
+  // 중입니다"라고 답한 참이다.
+  const inFlight = await hold('funding_sweep_1', r.id, 1, {
+    reward: r,
+    backer_email: 'sweep@x.kr',
+  })
+  // 그 말을 들은 후원자가 가장 자연스럽게 하는 일: 같은 리워드를 다시 후원.
+  const retry = await hold('funding_sweep_2', r.id, 1, { reward: r, backer_email: 'sweep@x.kr' })
+  assert.notEqual(inFlight.id, retry.id)
+  // 앞 선점이 살아 있어야 한다. 갈아 끼우던 때는 여기서 'expired'였다.
+  assert.equal((await pq.getPledgeById(inFlight.id)).status, 'pending')
+
+  // 선점 시간이 지나 스윕이 도는 시점.
+  await client.execute({
+    sql: 'UPDATE funding_pledges SET hold_expires_at = ? WHERE id = ?',
+    args: [Date.now() - 60_000, inFlight.id],
+  })
+  const swept = await pq.listExpiredHolds(new Date())
+  // 스윕은 `pending`만 고른다. 갈아 끼우던 때는 이 목록에 없었고, 그래서
+  // 승인된 결제가 아무에게도 환불되지 않은 채 남았다.
+  assert.ok(
+    swept.some(p => p.id === inFlight.id),
+    '결제가 떠 있을지 모르는 선점이 만료 스윕 목록에서 사라졌다'
+  )
 })
 
 test('회원 선점과 비회원 선점은 섞이지 않는다 — 남의 이메일로 남의 선점을 비울 수 없다', async () => {
@@ -401,7 +460,7 @@ test('회원 선점과 비회원 선점은 섞이지 않는다 — 남의 이메
   assert.equal((await pq.getPledgeById(guest.id)).status, 'pending')
   assert.equal(await pq.getRemainingQuantity(r.id), 1)
 
-  // 회원 자신이 다시 선점하면 자기 것만 갈린다.
+  // 회원이 다시 선점해도 자기 앞 선점을 덮지 않는다 — 셋 다 살아 있다.
   const again = await pq.holdPledge({
     order_id: 'funding_owner_member2',
     campaign_id: campaign.id,
@@ -412,13 +471,13 @@ test('회원 선점과 비회원 선점은 섞이지 않는다 — 남의 이메
     ...backer,
     backer_email: 'member@x.kr',
   })
-  assert.equal((await pq.getPledgeById(member.id)).status, 'expired')
+  assert.equal((await pq.getPledgeById(member.id)).status, 'pending')
   assert.equal((await pq.getPledgeById(again.id)).status, 'pending')
   assert.equal((await pq.getPledgeById(guest.id)).status, 'pending')
-  assert.equal(await pq.getRemainingQuantity(r.id), 1)
+  assert.equal(await pq.getRemainingQuantity(r.id), 0)
 })
 
-test('한 신원이 동시에 들 수 있는 선점 수에는 상한이 있다', async () => {
+test('한 프로젝트에 한 신원이 동시에 들 수 있는 선점 수에는 상한이 있다', async () => {
   const rewards = []
   for (let i = 0; i < pq.MAX_OUTSTANDING_HOLDS + 1; i++) {
     rewards.push(
@@ -440,7 +499,10 @@ test('한 신원이 동시에 들 수 있는 선점 수에는 상한이 있다',
         reward: rewards[pq.MAX_OUTSTANDING_HOLDS],
         backer_email: 'cap@x.kr',
       }),
-    e => e instanceof pq.TooManyPendingHoldsError && e.limit === pq.MAX_OUTSTANDING_HOLDS
+    e =>
+      e instanceof pq.TooManyPendingHoldsError &&
+      e.scope === 'campaign' &&
+      e.limit === pq.MAX_OUTSTANDING_HOLDS
   )
   // 다른 사람은 영향을 받지 않는다.
   const stranger = await hold('funding_cap_other', rewards[0].id, 1, {
@@ -459,6 +521,35 @@ test('한 신원이 동시에 들 수 있는 선점 수에는 상한이 있다',
     backer_email: 'cap@x.kr',
   })
   assert.equal(now.status, 'pending')
+})
+
+test('상한은 프로젝트별로 센다 — 다른 프로젝트를 견주어 보던 선점이 후원을 막지 않는다', async () => {
+  const other = await fq.createCampaign({
+    owner_user_id: 'u1',
+    title: '다른 프로젝트',
+    summary: 's',
+    goal_amount: 1,
+  })
+  await fq.transitionCampaign({ id: other.id, action: 'submit', expectedFrom: 'draft' })
+  await fq.transitionCampaign({
+    id: other.id,
+    action: 'approve',
+    expectedFrom: 'submitted',
+    slug: 'c2',
+  })
+  // 첫 프로젝트에서 상한을 꽉 채운다.
+  for (let i = 0; i < pq.MAX_OUTSTANDING_HOLDS; i++) {
+    const r = await fq.createReward({ campaign_id: campaign.id, title: `건너${i}`, amount: 1000 })
+    await hold(`funding_xcap_${i}`, r.id, 1, { reward: r, backer_email: 'xcap@x.kr' })
+  }
+  // 그래도 다른 프로젝트에는 후원할 수 있다. 전체로 세던 때는 여기서 막혔다.
+  const r2 = await fq.createReward({ campaign_id: other.id, title: '다른리워드', amount: 1000 })
+  const p = await hold('funding_xcap_other', r2.id, 1, {
+    reward: r2,
+    campaign_id: other.id,
+    backer_email: 'xcap@x.kr',
+  })
+  assert.equal(p.status, 'pending')
 })
 
 // ── 마지막 재고가 두 번 팔리던 것 ─────────────────────────────────────────

@@ -10,26 +10,49 @@ import { fundingCampaigns, fundingPledges, fundingRewards, payments } from '../s
 import { computePledgeTotal } from '../../lib/funding/amounts.ts'
 import { generatePledgeCode } from '../../lib/funding/pledgeCode.ts'
 
-import { toIso, toSnakeCase } from './_helpers.ts'
+import { retryOnLockContention, toIso, toSnakeCase } from './_helpers.ts'
 
 type Row = Record<string, unknown>
 
 export const DEFAULT_HOLD_MINUTES = 10
 
 /**
- * 한 신원이 동시에 들고 있을 수 있는 결제 대기 선점의 수.
+ * 한 신원이 **한 리워드에** 동시에 들고 있을 수 있는 결제 대기 선점의 수.
  *
  * 선점은 돈 없이 재고를 줄인다. 상한이 없으면 아무나 한정 리워드를 통째로
  * 매진 상태로 만들어 두고, 만료되면 다시 채울 수 있다(요청 빈도만 막는
  * 레이트리밋은 분산 환경에서 인스턴스별 메모리로 떨어질 수 있어 이 경계를
  * 지키지 못한다). 그래서 "얼마나 자주 물어보는가"가 아니라 **"동시에 얼마나
- * 쥘 수 있는가"**를 DB에서 막는다.
+ * 쥘 수 있는가"**를 DB에서, 선점 트랜잭션 안에서 막는다.
  *
- * 3인 이유: 서로 다른 리워드를 견주어 보다가 결제를 미룬 후원자가 실제로
- * 만들 수 있는 선점 수는 이 정도다. 같은 리워드를 두 번 잡는 것은 애초에
- * 일어나지 않는다 — 선점 트랜잭션이 자기 선점을 갈아 끼우기 때문이다.
+ * 3인 이유: 같은 음반·같은 도록을 친구 셋에게 보내는 후원은 조합 프로젝트에서
+ * 예외가 아니다. 후원 한 건에 배송지는 하나뿐이라 세 사람에게 보내려면 후원도
+ * 세 건이어야 한다. 세 건까지는 결제 순서를 신경 쓰지 않고 그대로 되고, 네
+ * 번째부터 "먼저 결제를 마치라"는 안내를 받는다 — 10분 안에 결제 네 건을
+ * 시작해 하나도 끝내지 않은 상태다.
+ *
+ * 이 상한이 막는 것과 막지 못하는 것을 분명히 해 둔다. **한 신원**이 재고를
+ * 쥔 채 결제를 미루는 것은 막는다. 이메일 별칭을 갈아 가며 도는 공격은 **막지
+ * 못한다** — 별칭마다 새 신원이기 때문이다. 그쪽의 방어선은 선점이 10분 만에
+ * 스스로 풀린다는 것과 라우트의 빈도 제한이지 이 값이 아니다. 그래서 이 값은
+ * 공격자가 아니라 **진짜 후원자에 맞춰** 넉넉히 잡는다.
  */
-export const MAX_OUTSTANDING_HOLDS = 3
+export const MAX_HOLDS_PER_REWARD = 3
+
+/**
+ * 한 신원이 **한 프로젝트에** 동시에 들고 있을 수 있는 결제 대기 선점의 수.
+ *
+ * 리워드별 상한만으로는 리워드를 옮겨 가며 쌓는 것을 막지 못해 프로젝트
+ * 단위로 한 번 더 묶는다. 5인 이유: 한 프로젝트에서 서로 다른 리워드를
+ * 견주어 보다가 결제를 미룬 후원자가 실제로 만들 수 있는 선점 수가 이
+ * 정도이고, 같은 리워드 세 건(위 상한)에 다른 리워드 두 건을 더해도 걸리지
+ * 않는다.
+ *
+ * **프로젝트별로 센다.** 전체로 세면 프로젝트 넷을 견주어 보다 셋을 그냥 닫은
+ * 조합원이 네 번째 프로젝트에서 "먼저 결제를 마치라"는 말을 듣는다 — 그
+ * 사람이 할 수 있는 일이 아무것도 없는 안내다.
+ */
+export const MAX_OUTSTANDING_HOLDS = 5
 
 export class RewardSoldOutError extends Error {
   remaining: number
@@ -45,14 +68,22 @@ export class RewardSoldOutError extends Error {
 /**
  * 한 신원이 이미 결제 대기 선점을 상한까지 들고 있을 때.
  * 매진이 아니라 "먼저 하던 결제를 끝내라"는 뜻이라 문구가 다르다.
+ *
+ * 리워드 상한과 프로젝트 상한은 후원자가 할 수 있는 일이 다르다 — 앞쪽은
+ * 수량을 늘려 한 번에 후원하는 길이 남아 있고, 뒤쪽은 없다. 그래서 문장을
+ * 나눈다.
  */
 export class TooManyPendingHoldsError extends Error {
+  scope: 'reward' | 'campaign'
   limit: number
-  constructor(limit: number) {
+  constructor(scope: 'reward' | 'campaign', limit: number, holdMinutes = DEFAULT_HOLD_MINUTES) {
     super(
-      `아직 결제가 끝나지 않은 후원이 ${limit}건 있습니다. 먼저 결제를 마치거나 결제 대기 시간이 지난 뒤에 다시 시도해 주세요.`
+      scope === 'reward'
+        ? `이 리워드에 아직 결제가 끝나지 않은 후원이 ${limit}건 있습니다. 먼저 결제를 마치시거나, 결제 대기 시간 ${holdMinutes}분이 지난 뒤에 다시 후원해 주세요. 같은 리워드를 여러 개 받으시려면 후원할 때 수량을 늘리셔도 됩니다.`
+        : `이 프로젝트에 아직 결제가 끝나지 않은 후원이 ${limit}건 있습니다. 먼저 결제를 마치시거나, 결제 대기 시간 ${holdMinutes}분이 지난 뒤에 다시 후원해 주세요.`
     )
     this.name = 'TooManyPendingHoldsError'
+    this.scope = scope
     this.limit = limit
   }
 }
@@ -180,14 +211,15 @@ export async function getRemainingQuantity(
 }
 
 /**
- * 선점의 임자를 무엇으로 볼 것인가.
+ * 선점의 임자를 무엇으로 볼 것인가 — 상한을 셀 때 "같은 사람"의 뜻이다.
  *
  * 로그인한 조합원은 계정(`user_id`), 비회원은 소문자로 맞춘 이메일이다 —
  * 표에 이미 있는 값이고, 비회원 후원이 기본 경로인 이 화면에서 요청자가
  * 스스로 바꿀 수 있는 것 중 가장 무겁다(주소 한 줄보다 바꾸기 번거롭다).
  *
  * 회원 선점과 비회원 선점은 섞지 않는다. 섞으면 남의 이메일을 적어 낸
- * 비회원이 로그인한 조합원의 선점을 비워 버릴 수 있다.
+ * 비회원이 로그인한 조합원의 상한을 대신 채워 그 조합원의 후원을 막을 수
+ * 있다.
  */
 function ownHoldCondition(userId: string | null, email: string) {
   return userId
@@ -224,28 +256,12 @@ export interface HoldPledgeInput {
   hold_minutes?: number
 }
 
-function isLockContention(error: unknown): boolean {
-  const code = (error as { code?: string })?.code
-  if (code === 'SQLITE_BUSY' || code === 'SQLITE_LOCKED') return true
-  const message = error instanceof Error ? error.message : String(error)
-  return /SQLITE_BUSY|database is locked|SQLITE_LOCKED/i.test(message)
-}
-
-/** 락 경합만 재시도한다. 매진은 다시 해도 같다. */
+/** 락 경합만 재시도한다. 매진과 상한은 다시 해도 같다. */
 export async function holdPledge(input: HoldPledgeInput): Promise<Row> {
-  let lastError: unknown
-  for (let attempt = 0; attempt < 4; attempt++) {
-    try {
-      return await holdPledgeOnce(input)
-    } catch (error) {
-      if (error instanceof RewardSoldOutError) throw error
-      if (error instanceof TooManyPendingHoldsError) throw error
-      if (!isLockContention(error)) throw error
-      lastError = error
-      await new Promise(resolve => setTimeout(resolve, 25 * (attempt + 1)))
-    }
-  }
-  throw lastError
+  return retryOnLockContention(
+    () => holdPledgeOnce(input),
+    error => error instanceof RewardSoldOutError || error instanceof TooManyPendingHoldsError
+  )
 }
 
 async function holdPledgeOnce(input: HoldPledgeInput): Promise<Row> {
@@ -268,26 +284,51 @@ async function holdPledgeOnce(input: HoldPledgeInput): Promise<Row> {
 
     const own = ownHoldCondition(input.user_id, input.backer_email)
 
-    // 같은 리워드에 대한 자기 선점은 **쌓이지 않고 갈린다.** 두 번째 요청이
-    // 첫 번째 선점을 비우고 그 자리에 들어간다 — 그래야 한 사람이 요청을
-    // 반복하는 것만으로 한정 리워드를 매진시키지 못한다. 치르는 값은,
-    // 같은 리워드를 정말 두 개 받고 싶은 후원자가 따로 두 번 후원할 수
-    // 없다는 것이다(수량을 2로 두고 한 번에 후원하거나, 앞 후원의 결제를
-    // 끝낸 뒤 다시 후원해야 한다 — 결제가 끝난 후원은 여기서 비우지 않는다).
-    await tx
-      .update(fundingPledges)
-      .set({ status: 'expired' })
-      .where(and(eq(fundingPledges.rewardId, input.reward_id), own))
-
-    // 신원을 갈아 가며 선점을 쌓는 경우까지 좁히려면, 한 신원이 **동시에**
-    // 들 수 있는 선점 자체에 상한이 있어야 한다. 위에서 같은 리워드의 자기
-    // 선점을 이미 비웠으므로 여기 세어지는 것은 전부 다른 리워드다.
-    const [outstanding] = await tx
+    // 선점은 **갈아 끼우지 않는다.** 한때는 같은 리워드의 자기 선점을
+    // `expired`로 바꾸고 그 자리에 새 선점을 넣었다. 그 한 줄이 돈을 잃는
+    // 길이었다: 토스는 승인했는데 우리 쪽 확정이 유실되면 확정 라우트가 503
+    // "결제 결과를 확인하는 중입니다"로 답하고, 그 말을 들은 후원자가 가장
+    // 자연스럽게 하는 일이 다시 후원하기다. 그 두 번째 선점이 첫 번째를
+    // `expired`로 덮는 순간, 만료 스윕(`listExpiredHolds`는 `pending`만
+    // 고른다)의 눈에서 그 후원이 영영 사라진다 — 돈은 빠져나갔는데 아무도
+    // 환불하지 않고, 아무도 보지 않는다.
+    //
+    // 그래서 쌓이는 것만 막고 지우지는 않는다. 한 신원이 **동시에** 들 수
+    // 있는 선점 수에 상한을 두면 안티스태킹은 그대로 남고, 스윕은 모든
+    // pending 행을 계속 본다.
+    //
+    // 세는 것도 막는 것도 이 트랜잭션 안이다. libSQL 드라이버는 트랜잭션을
+    // `BEGIN IMMEDIATE`로 연다(모드 기본값 `write`) — 첫 문장부터 쓰기 잠금을
+    // 쥐므로 여기서 센 값과 아래 INSERT 사이에 다른 선점이 끼어들 수 없다.
+    // 겹친 요청은 `SQLITE_BUSY`가 되어 `holdPledge`의 재시도가 받는다.
+    const [perReward] = await tx
       .select({ count: sql<number>`COUNT(*)` })
       .from(fundingPledges)
-      .where(and(own, gt(fundingPledges.holdExpiresAt, now)))
-    if (Number(outstanding?.count ?? 0) >= MAX_OUTSTANDING_HOLDS) {
-      throw new TooManyPendingHoldsError(MAX_OUTSTANDING_HOLDS)
+      .where(
+        and(
+          eq(fundingPledges.rewardId, input.reward_id),
+          own,
+          gt(fundingPledges.holdExpiresAt, now)
+        )
+      )
+    if (Number(perReward?.count ?? 0) >= MAX_HOLDS_PER_REWARD) {
+      throw new TooManyPendingHoldsError('reward', MAX_HOLDS_PER_REWARD, holdMinutes)
+    }
+
+    // 리워드를 옮겨 가며 쌓는 것까지 막으려면 프로젝트 단위로 한 번 더 묶어야
+    // 한다. 프로젝트별로 세므로 다른 프로젝트를 견주어 보던 선점은 걸리지 않는다.
+    const [perCampaign] = await tx
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(fundingPledges)
+      .where(
+        and(
+          eq(fundingPledges.campaignId, input.campaign_id),
+          own,
+          gt(fundingPledges.holdExpiresAt, now)
+        )
+      )
+    if (Number(perCampaign?.count ?? 0) >= MAX_OUTSTANDING_HOLDS) {
+      throw new TooManyPendingHoldsError('campaign', MAX_OUTSTANDING_HOLDS, holdMinutes)
     }
 
     if (reward.total !== null) {
@@ -366,18 +407,10 @@ export interface FinalizePledgeInput {
  * (`PledgeStockUnavailableError`)은 다시 해도 같으므로 그대로 올린다.
  */
 export async function finalizePledgePayment(input: FinalizePledgeInput): Promise<Row | null> {
-  let lastError: unknown
-  for (let attempt = 0; attempt < 4; attempt++) {
-    try {
-      return await finalizePledgePaymentOnce(input)
-    } catch (error) {
-      if (error instanceof PledgeStockUnavailableError) throw error
-      if (!isLockContention(error)) throw error
-      lastError = error
-      await new Promise(resolve => setTimeout(resolve, 25 * (attempt + 1)))
-    }
-  }
-  throw lastError
+  return retryOnLockContention(
+    () => finalizePledgePaymentOnce(input),
+    error => error instanceof PledgeStockUnavailableError
+  )
 }
 
 async function finalizePledgePaymentOnce(input: FinalizePledgeInput): Promise<Row | null> {
