@@ -560,7 +560,10 @@
       "leaveConfirm": "You have unsaved changes. Leaving now will lose them. Leave anyway?",
       "readOnlyGuidance": "You can't edit the campaign in its current state. Check the dashboard for details.",
       "backToDashboard": "Back to dashboard",
-      "storyPlaceholder": "Story editing is coming in a future update.",
+      "story": "Project story",
+      "storyHelp": "Written in Markdown. Headings use ##, bold uses **text**, lists use -, links use [text](url). Add images in the body with ![alt](image url).",
+      "preview": "Preview",
+      "previewEmpty": "What you write on the left appears here.",
       "rewardsPlaceholder": "Reward editing is coming in a future update."
     },
     "status": {
