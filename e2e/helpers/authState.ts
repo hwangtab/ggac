@@ -33,6 +33,12 @@ export type Fixtures = {
   boardCommentDeletableId: string
   /** 작성자가 `admin`인 댓글 — "이사이지만 작성자가 아닌 사람" 경계용. */
   boardCommentByAdminId: string
+  /** `owner` 소유의 초안 캠페인 — 마이페이지 캠페인 경계용. */
+  fundingDraftCampaignId: string
+  fundingDraftRewardId: string
+  /** `owner` 소유의 심사 대기(submitted) 캠페인 — 관리자 심사 경계용. */
+  fundingReviewCampaignId: string
+  fundingReviewRewardId: string
 }
 
 /**

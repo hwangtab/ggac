@@ -112,6 +112,8 @@ const {
   boardAgendaComments: tursoBoardAgendaComments,
   boardMinutes: tursoBoardMinutes,
 } = await import('@/db/schema/board')
+const { fundingCampaigns: tursoFundingCampaigns, fundingRewards: tursoFundingRewards } =
+  await import('@/db/schema/funding')
 const { eq } = await import('drizzle-orm')
 
 // id는 전부 고정값이다. 예전에는 Supabase가 만들어준 uuid를 그대로 받아
@@ -494,6 +496,17 @@ async function main() {
   const BOARD_COMMENT_DELETABLE_ID = '00000000-0000-4000-8000-00000000a009'
   const BOARD_COMMENT_BY_ADMIN_ID = '00000000-0000-4000-8000-00000000a00a'
   const REGISTRATION_SETTING_ID = '00000000-0000-4000-8000-00000000a005'
+  const FUNDING_SETTING_ID = '00000000-0000-4000-8000-00000000a00b'
+  // 펀딩 인가 경계(`e2e/authz-funding.spec.ts`)용 픽스처. 캠페인을 둘 둔다 —
+  // 하나는 `owner`의 편집 가능한 초안(읽기·수정·리워드·본인 제출 경계),
+  // 다른 하나는 이미 심사 대기 중인 캠페인(관리자 심사 경계)이다. 한 캠페인으로
+  // 두 목적을 다 채우려 하면 "본인이 제출한다" 테스트가 상태를 submitted로
+  // 옮겨버려, 그 뒤에 도는 관리자 심사 테스트가 기대하는 시작 상태(submitted)와
+  // 충돌하거나 실행 순서에 스위트가 종속된다.
+  const FUNDING_DRAFT_CAMPAIGN_ID = '00000000-0000-4000-8000-00000000f001'
+  const FUNDING_DRAFT_REWARD_ID = '00000000-0000-4000-8000-00000000f002'
+  const FUNDING_REVIEW_CAMPAIGN_ID = '00000000-0000-4000-8000-00000000f003'
+  const FUNDING_REVIEW_REWARD_ID = '00000000-0000-4000-8000-00000000f004'
 
   // `isDeleted: false`가 여기 있어야 시드가 **복구 수단**이 된다. 이 스크립트는
   // 스스로 "멱등이다 — 실패한 실행을 그대로 다시 돌려 복구할 수 있어야 한다"고
@@ -620,6 +633,81 @@ async function main() {
       .onConflictDoUpdate({ target: tursoBoardAgendaComments.id, set: values })
   }
 
+  // 펀딩 초안 캠페인. `status`·`submittedAt`·`reviewNote`를 매번 set에
+  // 넣어 강제로 draft로 되돌린다 — "본인은 제출할 수 있다" 스펙이 이 캠페인을
+  // submitted로 옮기므로, 그 값이 set에 없으면 시드를 다시 돌려도 draft로
+  // 복구되지 않아 그 스펙이 원래 전제(캠페인이 초안이다)를 다시 만들지 못한다
+  // (픽스처 글의 `isDeleted: false`와 같은 이유다).
+  const fundingDraftCampaignValues = {
+    id: FUNDING_DRAFT_CAMPAIGN_ID,
+    slug: 'authz-e2e-funding-draft',
+    ownerUserId: ids.owner,
+    title: 'authz 픽스처 펀딩(초안)',
+    summary: '권한 경계 테스트용 초안 캠페인',
+    story: '',
+    category: '기타',
+    goalAmount: 1000000,
+    status: 'draft',
+    submittedAt: null,
+    reviewNote: null,
+  }
+  await db
+    .insert(tursoFundingCampaigns)
+    .values(fundingDraftCampaignValues)
+    .onConflictDoUpdate({ target: tursoFundingCampaigns.id, set: fundingDraftCampaignValues })
+
+  const fundingDraftRewardValues = {
+    id: FUNDING_DRAFT_REWARD_ID,
+    campaignId: FUNDING_DRAFT_CAMPAIGN_ID,
+    title: '얼리버드',
+    description: '권한 경계 테스트용 리워드',
+    amount: 10000,
+    totalQuantity: null,
+    requiresShipping: false,
+    sortOrder: 0,
+  }
+  await db
+    .insert(tursoFundingRewards)
+    .values(fundingDraftRewardValues)
+    .onConflictDoUpdate({ target: tursoFundingRewards.id, set: fundingDraftRewardValues })
+
+  // 펀딩 심사 대기 캠페인 — 관리자 심사 경계(`GET /api/admin/funding/campaigns`·
+  // `POST /api/admin/funding/campaigns/[id]/transition`) 전용. "관리자는
+  // 반려할 수 있다" 스펙이 이 캠페인을 draft로 되돌리므로, 여기서도 status·
+  // submittedAt·reviewNote를 강제로 submitted로 되돌린다.
+  const fundingReviewCampaignValues = {
+    id: FUNDING_REVIEW_CAMPAIGN_ID,
+    slug: 'authz-e2e-funding-review',
+    ownerUserId: ids.owner,
+    title: 'authz 픽스처 펀딩(심사중)',
+    summary: '관리자 심사 경계 테스트용 캠페인',
+    story: '',
+    category: '기타',
+    goalAmount: 500000,
+    status: 'submitted',
+    submittedAt: new Date('2026-09-01T00:00:00.000Z'),
+    reviewNote: null,
+  }
+  await db
+    .insert(tursoFundingCampaigns)
+    .values(fundingReviewCampaignValues)
+    .onConflictDoUpdate({ target: tursoFundingCampaigns.id, set: fundingReviewCampaignValues })
+
+  const fundingReviewRewardValues = {
+    id: FUNDING_REVIEW_REWARD_ID,
+    campaignId: FUNDING_REVIEW_CAMPAIGN_ID,
+    title: '얼리버드',
+    description: '관리자 심사 경계 테스트용 리워드',
+    amount: 20000,
+    totalQuantity: null,
+    requiresShipping: false,
+    sortOrder: 0,
+  }
+  await db
+    .insert(tursoFundingRewards)
+    .values(fundingReviewRewardValues)
+    .onConflictDoUpdate({ target: tursoFundingRewards.id, set: fundingReviewRewardValues })
+
   // readAt을 매 시드마다 null로 되돌린다 — e2e 스펙 안의
   // resetNotificationUnread()가 테스트 사이 상태를 되돌리는 것과 별개로,
   // 시드 자체도 항상 "안 읽음"에서 시작해야 최초 실행이 결정적이다.
@@ -661,6 +749,21 @@ async function main() {
       category: 'site',
       settingKey: 'registration_enabled',
       settingValue: { enabled: true },
+      description: 'authz E2E 픽스처',
+      isSensitive: false,
+    },
+    // 펀딩 기능 스위치 — **로컬 테스트 DB에서만** 켠다. 운영 `system_settings`에는
+    // `features/funding_features` 행 자체가 없어(2026-09-23 확인)
+    // `scripts/turso/seed-funding-settings.mjs`가 `enabled: false`로 따로 심는다 —
+    // 그 두 자리는 서로 다른 목적이라 값도 다르다. `isFundingEnabled()`가 꺼짐으로
+    // 읽으면 마이페이지·관리자 쓰기 라우트가 인가 판정 전에 503을 던져
+    // `e2e/authz-funding.spec.ts`의 모든 쓰기 경계 단정이 인가와 무관한 503으로
+    // 가려진다 — 그래서 권한 E2E 전용으로 여기서 켠다.
+    {
+      id: FUNDING_SETTING_ID,
+      category: 'features',
+      settingKey: 'funding_features',
+      settingValue: { enabled: true, platform_fee_rate_bp: 250, hold_minutes: 10 },
       description: 'authz E2E 픽스처',
       isSensitive: false,
     },
@@ -809,6 +912,10 @@ async function main() {
     boardCommentId: BOARD_COMMENT_ID,
     boardCommentDeletableId: BOARD_COMMENT_DELETABLE_ID,
     boardCommentByAdminId: BOARD_COMMENT_BY_ADMIN_ID,
+    fundingDraftCampaignId: FUNDING_DRAFT_CAMPAIGN_ID,
+    fundingDraftRewardId: FUNDING_DRAFT_REWARD_ID,
+    fundingReviewCampaignId: FUNDING_REVIEW_CAMPAIGN_ID,
+    fundingReviewRewardId: FUNDING_REVIEW_REWARD_ID,
   }
   writeFileSync(OUT_FILE, JSON.stringify(fixtures, null, 2) + '\n')
 
@@ -832,6 +939,7 @@ async function main() {
   console.log(
     `  계정 ${Object.keys(ids).length}개, 글 1, 댓글 1, 알림 1, 좋아요 1, ` +
       `이사회 회의 2(scheduled·completed)·회의록 2·안건 1·안건 의견 3, ` +
+      `펀딩 캠페인 2(draft·submitted)·리워드 2, ` +
       `system_settings ${settingRows.length}행, default_settings ${DEFAULT_SETTINGS.length}행 (전부 Turso)`
   )
 }
