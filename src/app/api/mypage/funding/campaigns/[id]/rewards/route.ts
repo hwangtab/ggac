@@ -28,6 +28,8 @@ const LOCK_MESSAGES = {
   quantity_decrease: '결제가 있는 리워드의 수량은 늘릴 수만 있습니다.',
   content_only_field:
     '공개된 프로젝트에서는 기존 리워드의 이름·설명·금액·배송 여부를 바꿀 수 없습니다. 새 리워드를 추가해 주세요.',
+  content_only_quantity_decrease:
+    '공개된 프로젝트에서는 기존 리워드의 수량을 줄일 수 없습니다. 늘리는 것만 됩니다.',
 } as const
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {

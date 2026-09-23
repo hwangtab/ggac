@@ -86,3 +86,48 @@ test('scope를 안 주거나 all이면 공개 중 잠금이 걸리지 않는다(
   assert.deepEqual(evaluateRewardPatch(unlocked, { amount: 20000 }), { ok: true })
   assert.deepEqual(evaluateRewardPatch(unlocked, { amount: 20000 }, 'all'), { ok: true })
 })
+
+// 화면(`rewardsActiveNotice`)이 "공개된 뒤에는 리워드를 추가하거나 수량을 늘릴
+// 수만 있습니다"라고 약속한다. 결제가 아직 없는 리워드의 수량 축소가 그
+// 약속을 뚫고 지나가던 구멍을 막았다 — 아래 두 테스트가 양쪽 방향을 다 본다.
+test('공개 중에는 결제가 없어도 기존 리워드의 수량을 줄일 수 없다', () => {
+  assert.deepEqual(evaluateRewardPatch(unlocked, { total_quantity: 3 }, 'contentOnly'), {
+    ok: false,
+    reason: 'content_only_quantity_decrease',
+  })
+  // 무제한(null)은 어떤 유한값보다 크다 — null→유한은 감소다.
+  assert.deepEqual(
+    evaluateRewardPatch(
+      { ...unlocked, total_quantity: null },
+      { total_quantity: 100 },
+      'contentOnly'
+    ),
+    { ok: false, reason: 'content_only_quantity_decrease' }
+  )
+})
+
+test('공개 중에도 수량 증가·무제한 전환·같은 값 유지는 그대로 통과한다', () => {
+  assert.deepEqual(evaluateRewardPatch(unlocked, { total_quantity: 11 }, 'contentOnly'), {
+    ok: true,
+  })
+  assert.deepEqual(evaluateRewardPatch(unlocked, { total_quantity: null }, 'contentOnly'), {
+    ok: true,
+  })
+  assert.deepEqual(evaluateRewardPatch(unlocked, { total_quantity: 10 }, 'contentOnly'), {
+    ok: true,
+  })
+  // 수량을 아예 안 보내는 patch는 수량 규칙을 건드리지 않는다.
+  assert.deepEqual(evaluateRewardPatch(unlocked, {}, 'contentOnly'), { ok: true })
+})
+
+test('공개 중 결제까지 있는 리워드의 수량 축소는 결제 잠금이 아니라 공개 잠금으로 먼저 걸린다', () => {
+  assert.deepEqual(evaluateRewardPatch(locked, { total_quantity: 5 }, 'contentOnly'), {
+    ok: false,
+    reason: 'content_only_quantity_decrease',
+  })
+  // 초안(all)에서는 결제 잠금만 남는다 — 이유 문장이 사실과 맞아야 한다.
+  assert.deepEqual(evaluateRewardPatch(locked, { total_quantity: 5 }, 'all'), {
+    ok: false,
+    reason: 'quantity_decrease',
+  })
+})
