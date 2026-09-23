@@ -860,6 +860,11 @@ async function main() {
     // 없다"는 단정이 게이트 덕분인지 리워드가 배송이 아니어서인지 구분되지
     // 않는다 — 공허하게 통과한다. 같은 이유로 아래 후원 행에 배송지도 심는다.
     requiresShipping: true,
+    // **결제가 붙은 리워드다.** 공개 상세가 리워드 행을 통째로 내보내지
+    // 않는다는 단정은 표에 `locked_at`이 실제로 찍혀 있을 때만 의미가 있다 —
+    // 비어 있으면 응답에 그 키가 없는 것이 게이트 덕분인지 값이 없어서인지
+    // 구분되지 않는다.
+    lockedAt: new Date('2026-09-02T00:00:00.000Z'),
     sortOrder: 0,
   }
   await db
@@ -1138,6 +1143,8 @@ async function main() {
     fundingRejectCampaignId: FUNDING_REJECT_CAMPAIGN_ID,
     fundingSettleCampaignId: FUNDING_SETTLE_CAMPAIGN_ID,
     fundingActiveCampaignId: FUNDING_ACTIVE_CAMPAIGN_ID,
+    fundingActiveCampaignSlug: 'authz-e2e-funding-active',
+    fundingActiveRewardId: FUNDING_ACTIVE_REWARD_ID,
     fundingMemberPledgeId: FUNDING_MEMBER_PLEDGE_ID,
     fundingMemberPledgeCode: FUNDING_MEMBER_PLEDGE_CODE,
     fundingMemberBackerEmail: FUNDING_MEMBER_BACKER_EMAIL,

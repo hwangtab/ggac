@@ -51,6 +51,8 @@ export type Fixtures = {
   fundingSettleCampaignId: string
   /** 후원 취소 경계용 공개(active) 캠페인. 개설자는 `owner`다. */
   fundingActiveCampaignId: string
+  fundingActiveCampaignSlug: string
+  fundingActiveRewardId: string
   /** 위 캠페인의 회원 후원 — 후원자는 `other`(개설자가 아니다). */
   fundingMemberPledgeId: string
   fundingMemberPledgeCode: string

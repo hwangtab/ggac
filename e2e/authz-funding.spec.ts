@@ -94,8 +94,11 @@ async function resetReviewCampaign(): Promise<void> {
   const client = createClient({ url: process.env.TURSO_DATABASE_URL! })
   try {
     const res = await client.execute({
+      // slug·approved_at까지 되돌린다 — 이 캠페인은 승인까지 가는 테스트가
+      // 있고(「승인은 심사한 판에만 찍힌다」), 승인은 둘 다 새로 쓴다.
       sql: `UPDATE funding_campaigns
-               SET status = 'submitted', submitted_at = ?, review_note = NULL
+               SET status = 'submitted', submitted_at = ?, review_note = NULL,
+                   slug = 'authz-e2e-funding-review', approved_at = NULL
              WHERE id = ?`,
       args: [new Date('2026-09-01T00:00:00.000Z').getTime(), fixtures.fundingReviewCampaignId],
     })
@@ -906,6 +909,183 @@ test.describe('펀딩 — 후원 취소 경계', () => {
       expect(bodyText).not.toContain(fixtures.fundingGuestBackerEmail)
     } finally {
       await ownerContext.dispose()
+    }
+  })
+})
+
+/**
+ * **공개 상세가 리워드 행을 그대로 내보내지 않는다** —
+ * `GET /api/funding/campaigns/[slug]`.
+ *
+ * 2차 수리가 `toPublicReward`로 싣는 목록을 만들었지만, 라우트가 그 함수를
+ * 실제로 부르는지 보는 테스트는 없었다. `...r`로 되돌리면 `locked_at`이 다시
+ * 공개 응답에 실리는데 단위 테스트는 전부 초록불이다(순수 함수는 멀쩡하니까).
+ * 그래서 **응답 본문**을 본다.
+ *
+ * `locked_at`이 새면 공개 후원자 명단의 `paid_at`과 시각으로 맞춰져 "이
+ * 리워드를 처음 잠근 후원자"가 특정된다 — 이름이 걸린 사람을 특정 금액에
+ * 묶을 수 있다.
+ */
+test.describe('펀딩 — 공개 상세 응답', () => {
+  test('공개 상세는 리워드의 내부 필드를 싣지 않는다 — locked_at이 새지 않는다', async ({
+    baseURL,
+  }) => {
+    const anonContext = await apiRequest.newContext({ baseURL })
+    const client = createClient({ url: process.env.TURSO_DATABASE_URL! })
+    try {
+      // 먼저 표에 잠금이 실제로 찍혀 있는지 본다 — 비어 있으면 아래 단정이
+      // 게이트 덕분인지 값이 없어서인지 구분되지 않는다(공허한 통과).
+      const row = await client.execute({
+        sql: 'SELECT locked_at FROM funding_rewards WHERE id = ?',
+        args: [fixtures.fundingActiveRewardId],
+      })
+      expect(row.rows[0]?.locked_at, '픽스처 리워드에 잠금이 없다 — 시드를 확인할 것').toBeTruthy()
+
+      const res = await anonContext.get(
+        `/api/funding/campaigns/${fixtures.fundingActiveCampaignSlug}`
+      )
+      expect(res.status()).toBe(200)
+      const text = await res.text()
+      const rewards = JSON.parse(text).data?.rewards as Array<Record<string, unknown>>
+      expect(Array.isArray(rewards)).toBe(true)
+      expect(rewards.length).toBeGreaterThan(0)
+      for (const reward of rewards) {
+        expect(Object.keys(reward).sort()).toEqual([
+          'amount',
+          'description',
+          'estimated_delivery',
+          'id',
+          'image_url',
+          'remaining_quantity',
+          'requires_shipping',
+          'title',
+          'total_quantity',
+        ])
+      }
+      // 키 이름을 바꿔 같은 값을 다시 싣는 길도 막는다.
+      expect(text).not.toContain('locked_at')
+      expect(text).not.toContain('campaign_id')
+    } finally {
+      client.close()
+      await anonContext.dispose()
+    }
+  })
+})
+
+/**
+ * **승인은 관리자가 실제로 읽은 판에만 찍힌다** —
+ * `POST /api/admin/funding/campaigns/[id]/transition`.
+ *
+ * `transitionCampaign`은 `expectedUpdatedAt`이 `undefined`면 조건이 없는
+ * 것으로 보고 그냥 승인한다. 그래서 라우트의 `reviewedVersion` 블록을 지우면
+ * 쿼리 계층 테스트는 전부 초록불인 채로 경계만 사라진다 — 관리자가 본 적 없는
+ * 내용이 그대로 공개된다. 여기서는 **라우트에** 낡은 판 번호를 보낸다.
+ */
+test.describe('펀딩 — 승인은 심사한 판에만 찍힌다', () => {
+  test.afterAll(async () => {
+    await resetReviewCampaign()
+  })
+
+  test('낡은 판 번호로 보낸 승인은 409이고 상태는 그대로다. 지금 판 번호면 통한다', async ({
+    baseURL,
+  }) => {
+    const adminContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('admin'),
+    })
+    try {
+      const id = fixtures.fundingReviewCampaignId
+      expect((await readCampaignRow(id))?.status, '시작 상태').toBe('submitted')
+
+      // 판 번호를 아예 빼면 400이다 — "조건 없음"으로 조용히 통과하지 않는다.
+      const missing = await adminContext.post(`/api/admin/funding/campaigns/${id}/transition`, {
+        data: { action: 'approve', slug: 'authz-e2e-funding-review-stale' },
+      })
+      expect(missing.status(), '판 번호 없음').toBe(400)
+      expect((await missing.json()).error).toContain('판 정보가 없습니다')
+      expect((await readCampaignRow(id))?.status).toBe('submitted')
+
+      // 낡은 판 번호는 409다.
+      const stale = await adminContext.post(`/api/admin/funding/campaigns/${id}/transition`, {
+        data: {
+          action: 'approve',
+          slug: 'authz-e2e-funding-review-stale',
+          reviewedVersion: new Date('1999-01-01T00:00:00.000Z').toISOString(),
+        },
+      })
+      expect(stale.status(), '낡은 판 번호').toBe(409)
+      expect((await stale.json()).error).toContain('심사하는 동안')
+      expect((await readCampaignRow(id))?.status, '거부 후 상태').toBe('submitted')
+
+      // 허용 쪽: 지금 판 번호면 승인된다. 이 단정이 없으면 승인을 통째로
+      // 막아도 위 두 단정은 초록불이다.
+      const allowed = await adminContext.post(`/api/admin/funding/campaigns/${id}/transition`, {
+        data: {
+          action: 'approve',
+          slug: 'authz-e2e-funding-review-stale',
+          reviewedVersion: await readCampaignVersion(adminContext, id),
+        },
+      })
+      expect(allowed.status(), '지금 판 번호').toBe(200)
+      expect((await readCampaignRow(id))?.status).toBe('active')
+    } finally {
+      await adminContext.dispose()
+    }
+  })
+})
+
+/**
+ * **조회도 취소와 같은 규칙이다** — `POST /api/funding/pledges/lookup`.
+ *
+ * 번호+이메일은 인증할 수 없는 사람을 위한 길이지, 인증할 수 있는 사람에게
+ * 열린 두 번째 문이 아니다. 취소에만 이 규칙을 적고 조회에 안 적으면 개설자가
+ * 자기 후원자의 후원 상세를 계속 열어볼 수 있다.
+ */
+test.describe('펀딩 — 후원 조회 경계', () => {
+  test('임자 있는 후원의 조회는 세션이 임자일 때만 지난다. 비회원 후원은 그대로 열린다', async ({
+    baseURL,
+  }) => {
+    const ownerContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('owner'),
+    })
+    const backerContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('other'),
+    })
+    const anonContext = await apiRequest.newContext({ baseURL })
+    try {
+      const memberKey = {
+        pledgeCode: fixtures.fundingMemberPledgeCode,
+        email: fixtures.fundingMemberBackerEmail,
+      }
+      // 금지 쪽: 개설자가 맞는 번호+이메일을 보내도 못 본다.
+      const denied = await ownerContext.post('/api/funding/pledges/lookup', { data: memberKey })
+      expect(denied.status()).toBe(404)
+      expect((await denied.json()).error).toBe(PLEDGE_NOT_FOUND)
+
+      // 로그아웃 상태도 같다 — 임자가 있는 후원은 세션으로만 지난다.
+      const loggedOut = await anonContext.post('/api/funding/pledges/lookup', { data: memberKey })
+      expect(loggedOut.status()).toBe(404)
+
+      // 허용 쪽 ①: 후원자 본인은 지난다.
+      const mine = await backerContext.post('/api/funding/pledges/lookup', { data: memberKey })
+      expect(mine.status()).toBe(200)
+      expect((await mine.json()).data?.pledge?.pledge_code).toBe(fixtures.fundingMemberPledgeCode)
+
+      // 허용 쪽 ②: 비회원 후원은 세션 없이 번호+이메일로 그대로 열린다.
+      const guest = await anonContext.post('/api/funding/pledges/lookup', {
+        data: {
+          pledgeCode: fixtures.fundingGuestPledgeCode,
+          email: fixtures.fundingGuestBackerEmail,
+        },
+      })
+      expect(guest.status()).toBe(200)
+      expect((await guest.json()).data?.pledge?.pledge_code).toBe(fixtures.fundingGuestPledgeCode)
+    } finally {
+      await ownerContext.dispose()
+      await backerContext.dispose()
+      await anonContext.dispose()
     }
   })
 })
