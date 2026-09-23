@@ -34,6 +34,34 @@ export function formatWon(amount: unknown): string {
   return `${new Intl.NumberFormat('ko-KR').format(Math.round(n))}원`
 }
 
+/**
+ * 앞말의 받침을 보고 조사를 고른다.
+ *
+ * 문장 안에 값을 끼워 넣는 자리마다 필요하다 — `2026년 6월`은 `로`를 받고
+ * `미정`은 `으로`를 받는다. 하나로 고정해 두면 **모든 달에 대해 틀린다**
+ * (첫 배선에서 `으로`로 박아 두었다가 이 검토에서 잡혔다).
+ *
+ * 한글이 아닌 글자로 끝나면(영문·숫자·기호) 판정하지 않고 받침 있는 쪽을
+ * 돌려준다 — 읽는 방식이 사람마다 달라 맞히려 들면 더 어색해진다. 그런
+ * 자리에는 애초에 조사를 붙이지 않는 것이 낫다.
+ */
+export function josa(word: string, withFinal: string, withoutFinal: string): string {
+  const last = word.at(-1) ?? ''
+  const code = last.charCodeAt(0)
+  if (!(code >= 0xac00 && code <= 0xd7a3)) return withFinal
+  const finalIndex = (code - 0xac00) % 28
+  // 받침 ㄹ(8)은 '로'·'으로'에서 받침 없는 쪽과 같이 움직인다. 호출부가
+  // `로`/`으로`를 넘길 때만 의미가 있으므로 그 조합에서만 예외를 둔다.
+  if (finalIndex === 0) return withoutFinal
+  if (finalIndex === 8 && withoutFinal === '로') return withoutFinal
+  return withFinal
+}
+
+/** `…{값}으로` / `…{값}로`를 받침에 맞게. */
+export function ro(word: string): string {
+  return `${word}${josa(word, '으로', '로')}`
+}
+
 /** `YYYY-MM` → `2026년 3월`. 형식이 다르면 받은 값을 그대로 돌려준다. */
 export function formatDeliveryMonth(value: unknown): string {
   if (typeof value !== 'string' || value.length === 0) return '미정'
@@ -135,6 +163,21 @@ export function backerDisplayName(pledge: Record<string, unknown>): string {
   return str(pledge.backer_name, '후원자')
 }
 
+/**
+ * 비회원을 후원 조회 화면으로 보내는 문장에 **후원번호를 함께 준다.**
+ *
+ * 그 화면은 후원번호와 이메일 두 가지가 맞아야 열린다. 비회원은 인앱 알림이
+ * 없어 번호를 찾아볼 곳이 이 메일 말고는 없다 — 번호 없이 "조회해 보라"고
+ * 하면 갈 수 없는 곳을 가리키는 셈이다. 회원은 마이페이지로 가므로 붙이지
+ * 않는다.
+ */
+function lookupHint(pledge: Record<string, unknown>): string {
+  if (pledge.user_id) return ''
+  const code = str(pledge.pledge_code)
+  if (!code) return ''
+  return ` 후원번호는 ${code}이며, 이 번호와 후원할 때 쓰신 이메일로 후원 내역을 확인할 수 있습니다.`
+}
+
 // ---------------------------------------------------------------- 문안 5+2종
 
 /** ① 심사 요청이 들어왔다 — 사무국(관리자)에게. */
@@ -198,7 +241,7 @@ export function buildPledgePaidBackerNotice(
   const url = pledge.user_id ? urls.myPledges : urls.guestLookup
   return {
     title: '후원이 완료되었습니다',
-    message: `'${campaignTitle}' 후원이 정상적으로 접수되었습니다. 후원번호는 ${str(pledge.pledge_code, '-')}이고, 결제 금액은 ${formatWon(pledge.total_amount)}입니다.`,
+    message: `'${campaignTitle}' 후원이 정상적으로 접수되었습니다. 결제 금액은 ${formatWon(pledge.total_amount)}입니다. 후원번호는 ${str(pledge.pledge_code, '-')}입니다.`,
     url,
     cta: pledge.user_id ? '내 후원 내역 보기' : '후원 내역 조회하기',
     data: {
@@ -249,7 +292,7 @@ export function buildCampaignClosedNotice(
   const title = str(campaign.title, '제목 없는 프로젝트')
   return {
     title: '펀딩 프로젝트가 마감되었습니다',
-    message: `'${title}' 프로젝트의 후원 접수가 끝났습니다. 후원자 목록과 배송 정보를 확인하고 리워드 전달을 준비해 주세요. 정산은 사무국이 확인한 뒤 안내합니다.`,
+    message: `'${title}' 프로젝트의 후원 접수가 끝났습니다. 후원자 목록과 배송 정보를 확인하고 리워드 전달을 준비해 주세요. 궁금한 점은 사무국(contact@ggac.kr)으로 문의해 주세요.`,
     url: urls.creatorCampaign(campaign.id),
     cta: '후원자 목록 보기',
     data: { campaign_id: campaign.id ?? null, scope: 'funding' },
@@ -274,7 +317,7 @@ export function buildDeliveryChangedNotice(
   const campaignTitle = str(campaign.title, '프로젝트')
   return {
     title: '리워드 전달 예정 시기가 바뀌었습니다',
-    message: `'${campaignTitle}'의 '${change.reward_title}' 리워드 전달 예정 시기가 ${formatDeliveryMonth(change.from)}에서 ${formatDeliveryMonth(change.to)}으로 바뀌었습니다.`,
+    message: `'${campaignTitle}'의 '${change.reward_title}' 리워드 전달 예정 시기가 ${formatDeliveryMonth(change.from)}에서 ${ro(formatDeliveryMonth(change.to))} 바뀌었습니다.${lookupHint(pledge)}`,
     url: pledge.user_id ? urls.myPledges : urls.guestLookup,
     cta: pledge.user_id ? '내 후원 내역 보기' : '후원 내역 조회하기',
     data: {
@@ -298,7 +341,7 @@ export function buildPledgeRefundedNotice(
       : '결제를 승인하는 사이에 마지막 남은 수량이 다른 후원자에게 돌아가'
   return {
     title: '후원을 확정하지 못해 전액 환불했습니다',
-    message: `${what} 후원을 확정하지 못했습니다. 결제하신 ${formatWon(pledge.total_amount)}은 전액 환불했으며, 카드사에 따라 영업일 기준 3~5일 안에 확인하실 수 있습니다. 불편을 드려 죄송합니다.`,
+    message: `${what} 후원을 확정하지 못했습니다. 결제하신 ${formatWon(pledge.total_amount)}은 전액 환불했으며, 카드사에 따라 영업일 기준 3~5일 안에 확인하실 수 있습니다. 환불이 보이지 않으면 사무국(contact@ggac.kr)으로 후원자 성함과 결제하신 날짜를 알려 주세요. 확인해 드리겠습니다. 불편을 드려 죄송합니다.${lookupHint(pledge)}`,
     url: pledge.user_id ? urls.myPledges : urls.guestLookup,
     cta: pledge.user_id ? '내 후원 내역 보기' : '후원 내역 조회하기',
     data: {
@@ -307,6 +350,29 @@ export function buildPledgeRefundedNotice(
       reason,
       scope: 'funding',
     },
+  }
+}
+
+/**
+ * ⑦ 후원자가 상한을 넘어 자동 발송을 포기했다 → **관리자**.
+ *
+ * 알려야 할 사람에게 아무것도 못 보냈다는 사실을, 손으로 보낼 수 있는 사람이
+ * 알아야 한다. 런타임 로그는 이 조합에서 아무도 보지 않는 곳이다.
+ */
+export function buildBulkAbandonedNotice(
+  campaign: Record<string, unknown>,
+  what: string,
+  recipientCount: number,
+  limit: number,
+  siteUrl: string
+): NoticeCopy {
+  const urls = fundingUrls(siteUrl)
+  return {
+    title: '펀딩 알림을 자동으로 보내지 못했습니다',
+    message: `'${str(campaign.title, '프로젝트')}'의 ${what} 알림을 받을 사람이 ${recipientCount}명으로 한 번에 보낼 수 있는 ${limit}명을 넘어 자동 발송을 하지 않았습니다. 후원자 목록을 내려받아 사무국에서 직접 알려 주세요.`,
+    url: urls.creatorCampaign(campaign.id),
+    cta: '프로젝트 보기',
+    data: { campaign_id: campaign.id ?? null, recipient_count: recipientCount, scope: 'funding' },
   }
 }
 
@@ -322,8 +388,35 @@ export function buildPledgeRefundedNotice(
  */
 export const MAX_BULK_RECIPIENTS = 400
 
-/** 동시에 띄우는 발송 수. Resend 레이트리밋과 함수 수명 사이의 절충. */
-export const BULK_CONCURRENCY = 5
+/**
+ * 발송 사이의 최소 간격(ms).
+ *
+ * Resend의 기본 한도는 **초당 2통**이다. 처음에는 5통을 동시에 띄웠는데 그건
+ * 초당 열여섯 통쯤이라 429가 돌아오고, 429는 `sendEmail`이 던지는 실패로
+ * 세어져 그 사람은 아무것도 못 받은 채 끝난다. 동시 발송을 없애고(아래
+ * `BULK_CONCURRENCY = 1`) 시작 간격을 벌려 한도 안에 들어간다.
+ *
+ * `src/lib/server/grantPublish.ts`가 순차로 보내는 것과 같은 판단이다 —
+ * 거기는 18통이라 간격조차 필요 없었고, 여기는 수백 통이라 간격이 필요하다.
+ */
+export const BULK_MIN_INTERVAL_MS = 500
+
+/** 동시에 띄우는 발송 수. 한 통씩 보낸다 — 위 간격과 함께 한도를 지킨다. */
+export const BULK_CONCURRENCY = 1
+
+/** 429를 만났을 때 한 번 더 기다렸다 해 본다. */
+export const RATE_LIMIT_RETRY_DELAY_MS = 1200
+
+/**
+ * 레이트리밋(429) 때문에 실패했는가. `sendEmail`은 상태 코드를 메시지에 담아
+ * 던진다(`Resend 발송 실패 (429): …`) — 우리가 만드는 문장이라 형태가 고정이다.
+ */
+export function isRateLimited(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return message.includes('(429)') || /\b429\b/.test(message)
+}
+
+const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))
 
 export interface BulkSendResult {
   sent: number
@@ -334,6 +427,8 @@ export interface BulkSendResult {
   skipped_optout: number
   /** 상한을 넘어 아무것도 보내지 않았다. */
   capped: boolean
+  /** 429를 만나 한 번 더 시도했고 그때 성공한 건수. `sent`에도 포함된다. */
+  retried: number
   /** 실패한 주소(마스킹)와 사유. */
   errors: { to: string; error: string }[]
 }
@@ -360,6 +455,10 @@ export async function sendManyEmails(input: {
   log?: { error: (msg: string, meta?: unknown) => void }
   limit?: number
   concurrency?: number
+  /** 발송 시작 간격(ms). 테스트가 0으로 낮춘다. */
+  minIntervalMs?: number
+  /** 429 재시도 대기(ms). 테스트가 0으로 낮춘다. */
+  retryDelayMs?: number
 }): Promise<BulkSendResult> {
   const limit = input.limit ?? MAX_BULK_RECIPIENTS
   const result: BulkSendResult = {
@@ -368,6 +467,7 @@ export async function sendManyEmails(input: {
     skipped_address: 0,
     skipped_optout: 0,
     capped: false,
+    retried: 0,
     errors: [],
   }
   if (input.recipients.length > limit) {
@@ -399,23 +499,58 @@ export async function sendManyEmails(input: {
 
   let cursor = 0
   const concurrency = Math.max(1, input.concurrency ?? BULK_CONCURRENCY)
+  const minInterval = input.minIntervalMs ?? BULK_MIN_INTERVAL_MS
+  const retryDelay = input.retryDelayMs ?? RATE_LIMIT_RETRY_DELAY_MS
+  let nextSlotAt = 0
+
   const workers = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
     for (;;) {
       const index = cursor++
       if (index >= queue.length) return
       const r = queue[index]
       const to = r.email as string
+
+      if (minInterval > 0) {
+        const now = Date.now()
+        const wait = Math.max(0, nextSlotAt - now)
+        nextSlotAt = Math.max(now, nextSlotAt) + minInterval
+        if (wait > 0) await sleep(wait)
+      }
+
       try {
         await input.sendEmail({ to, subject: r.subject, html: r.html })
         result.sent += 1
       } catch (error) {
-        result.failed += 1
-        const message = error instanceof Error ? error.message : String(error)
-        result.errors.push({ to: maskEmail(to), error: message.slice(0, 200) })
-        input.log?.error('펀딩 알림 메일 발송 실패', { to: maskEmail(to), error: message })
+        // 429는 "지금은 안 된다"이지 "이 주소는 못 쓴다"가 아니다. 한 번은 더
+        // 해 본다 — 여기서 포기하면 그 사람만 영영 아무것도 못 받는다.
+        if (isRateLimited(error)) {
+          if (retryDelay > 0) await sleep(retryDelay)
+          try {
+            await input.sendEmail({ to, subject: r.subject, html: r.html })
+            result.sent += 1
+            result.retried += 1
+            continue
+          } catch (retryError) {
+            recordFailure(result, input.log, to, retryError)
+            continue
+          }
+        }
+        recordFailure(result, input.log, to, error)
       }
     }
   })
   await Promise.all(workers)
   return result
+}
+
+function recordFailure(
+  result: BulkSendResult,
+  log: { error: (msg: string, meta?: unknown) => void } | undefined,
+  to: string,
+  error: unknown
+): void {
+  result.failed += 1
+  const message = error instanceof Error ? error.message : String(error)
+  result.errors.push({ to: maskEmail(to), error: message.slice(0, 200) })
+  log?.error('펀딩 알림 메일 발송 실패', { to: maskEmail(to), error: message })
 }
