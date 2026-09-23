@@ -230,6 +230,13 @@ export async function transitionCampaign(input: {
   id: string
   action: CampaignAction
   expectedFrom: CampaignStatus
+  /**
+   * 관리자가 실제로 읽은 판(版)의 `updated_at`(ISO 문자열). 주면
+   * `WHERE updated_at = ?`를 같이 걸어, 심사와 이 쓰기 사이에 내용이 바뀌었으면
+   * 0행이 되게 한다(= null). 상태만 보는 `expectedFrom`으로는 철회 → 수정 →
+   * 재제출로 같은 상태에 돌아온 경우를 구별하지 못한다.
+   */
+  expectedUpdatedAt?: string | null
   slug?: string
   reviewNote?: string | null
   platformFeeRate?: number
@@ -249,10 +256,22 @@ export async function transitionCampaign(input: {
   if (input.action === 'close') set.closedAt = now
   if (input.action === 'settle') set.settledAt = now
 
+  const conditions = [
+    eq(fundingCampaigns.id, input.id),
+    eq(fundingCampaigns.status, input.expectedFrom),
+  ]
+  if (input.expectedUpdatedAt) {
+    const at = new Date(input.expectedUpdatedAt)
+    // 파싱조차 안 되는 값이면 맞을 수가 없다 — 조용히 조건을 빼 버리면
+    // 아무 문자열이나 보내는 쪽이 검사를 지우는 셈이 된다.
+    if (Number.isNaN(at.getTime())) return null
+    conditions.push(eq(fundingCampaigns.updatedAt, at))
+  }
+
   const [row] = await db
     .update(fundingCampaigns)
     .set(set)
-    .where(and(eq(fundingCampaigns.id, input.id), eq(fundingCampaigns.status, input.expectedFrom)))
+    .where(and(...conditions))
     .returning()
   return row ? rowToCampaign(row as Row) : null
 }

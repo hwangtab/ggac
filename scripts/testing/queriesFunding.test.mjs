@@ -264,3 +264,177 @@ test('applyRewardBatch는 상태가 맞으면 생성·수정·삭제를 한 번�
   assert.ok(rewards.some(r => r.title === '포스터'))
   assert.equal(await q.getReward(gone.id), null)
 })
+
+// --- 2026-09-23 감사: 승인은 관리자가 읽은 판에만 도장을 찍는다 --------------
+
+/** `updated_at`은 밀리초라 같은 밀리초 안의 두 쓰기는 구별되지 않는다.
+ *  판 번호가 "움직였다"를 보려면 최소 1밀리초는 벌려야 한다. */
+const tick = () => new Promise(r => setTimeout(r, 2))
+
+test('캠페인 내용을 고치면 판 번호(updated_at)가 움직인다', async () => {
+  const c = await q.createCampaign({
+    owner_user_id: 'u1',
+    title: 't',
+    summary: 's',
+    goal_amount: 1,
+  })
+  await tick()
+  const after = await q.updateCampaignFields(c.id, { story: '다시 쓴 본문' })
+  assert.notEqual(after.updated_at, c.updated_at)
+})
+
+// 승인 토큰이 리워드까지 덮는지 — 짐작하지 말고 실제로 확인한다.
+test('리워드만 고쳐도 캠페인의 판 번호가 움직인다', async () => {
+  const c = await q.createCampaign({
+    owner_user_id: 'u1',
+    title: 't',
+    summary: 's',
+    goal_amount: 1,
+  })
+  const r = await q.createReward({ campaign_id: c.id, title: 'CD', amount: 30000 })
+  const before = (await q.getCampaignById(c.id)).updated_at
+  await tick()
+
+  const res = await q.applyRewardBatch({
+    campaign_id: c.id,
+    expected_status: 'draft',
+    creates: [],
+    updates: [{ id: r.id, patch: { amount: 40000 } }],
+    delete_ids: [],
+  })
+  assert.deepEqual(res, { ok: true })
+  assert.notEqual((await q.getCampaignById(c.id)).updated_at, before)
+})
+
+test('심사한 판이 아니면 승인되지 않는다 — 철회·수정·재제출로 상태가 돌아와도 막힌다', async () => {
+  const c = await q.createCampaign({
+    owner_user_id: 'u1',
+    title: '무해한 제목',
+    summary: 's',
+    goal_amount: 1,
+  })
+  const submitted = await q.transitionCampaign({
+    id: c.id,
+    action: 'submit',
+    expectedFrom: 'draft',
+  })
+  // 관리자가 이 판을 읽었다.
+  const reviewed = submitted.updated_at
+  await tick()
+
+  // 개설자가 철회 → 전면 수정 → 재제출. 상태는 다시 submitted다.
+  await q.transitionCampaign({ id: c.id, action: 'withdraw', expectedFrom: 'submitted' })
+  await q.updateCampaignFields(c.id, { title: '바꿔치기한 제목', story: '다른 내용' })
+  const resubmitted = await q.transitionCampaign({
+    id: c.id,
+    action: 'submit',
+    expectedFrom: 'draft',
+  })
+  assert.equal(resubmitted.status, 'submitted')
+
+  // 관리자의 승인은 상태만 보면 조건이 맞지만 판이 다르다 — 아무것도 쓰지 않는다.
+  assert.equal(
+    await q.transitionCampaign({
+      id: c.id,
+      action: 'approve',
+      expectedFrom: 'submitted',
+      expectedUpdatedAt: reviewed,
+      slug: 'swapped-campaign',
+      platformFeeRate: 300,
+    }),
+    null
+  )
+  const still = await q.getCampaignById(c.id)
+  assert.equal(still.status, 'submitted')
+  assert.equal(still.title, '바꿔치기한 제목')
+
+  // 지금 판을 읽고 다시 승인하면 통과한다.
+  const ok = await q.transitionCampaign({
+    id: c.id,
+    action: 'approve',
+    expectedFrom: 'submitted',
+    expectedUpdatedAt: still.updated_at,
+    slug: 'swapped-campaign',
+    platformFeeRate: 300,
+  })
+  assert.equal(ok.status, 'active')
+})
+
+test('리워드를 바꿔치기해도 승인이 막힌다 — 판 번호가 리워드를 덮는다', async () => {
+  const c = await q.createCampaign({
+    owner_user_id: 'u1',
+    title: 't',
+    summary: 's',
+    goal_amount: 1,
+  })
+  const r = await q.createReward({ campaign_id: c.id, title: 'CD', amount: 30000 })
+  const submitted = await q.transitionCampaign({
+    id: c.id,
+    action: 'submit',
+    expectedFrom: 'draft',
+  })
+  const reviewed = submitted.updated_at
+  await tick()
+
+  await q.applyRewardBatch({
+    campaign_id: c.id,
+    expected_status: 'submitted',
+    creates: [],
+    updates: [{ id: r.id, patch: { amount: 1 } }],
+    delete_ids: [],
+  })
+
+  assert.equal(
+    await q.transitionCampaign({
+      id: c.id,
+      action: 'approve',
+      expectedFrom: 'submitted',
+      expectedUpdatedAt: reviewed,
+      slug: 'reward-swapped',
+    }),
+    null
+  )
+  assert.equal((await q.getCampaignById(c.id)).status, 'submitted')
+})
+
+test('반려는 판 번호를 요구하지 않는다 — 내용이 바뀌어도 언제나 돌려보낼 수 있다', async () => {
+  const c = await q.createCampaign({
+    owner_user_id: 'u1',
+    title: 't',
+    summary: 's',
+    goal_amount: 1,
+  })
+  await q.transitionCampaign({ id: c.id, action: 'submit', expectedFrom: 'draft' })
+  await tick()
+  await q.updateCampaignFields(c.id, { story: '심사 중에 고쳤다' })
+
+  const rejected = await q.transitionCampaign({
+    id: c.id,
+    action: 'reject',
+    expectedFrom: 'submitted',
+    reviewNote: '사유',
+  })
+  assert.equal(rejected.status, 'draft')
+  assert.equal(rejected.review_note, '사유')
+})
+
+test('판 번호가 날짜로 읽히지 않으면 아무것도 쓰지 않는다', async () => {
+  const c = await q.createCampaign({
+    owner_user_id: 'u1',
+    title: 't',
+    summary: 's',
+    goal_amount: 1,
+  })
+  await q.transitionCampaign({ id: c.id, action: 'submit', expectedFrom: 'draft' })
+  assert.equal(
+    await q.transitionCampaign({
+      id: c.id,
+      action: 'approve',
+      expectedFrom: 'submitted',
+      expectedUpdatedAt: '아무 문자열',
+      slug: 'garbage-token',
+    }),
+    null
+  )
+  assert.equal((await q.getCampaignById(c.id)).status, 'submitted')
+})
