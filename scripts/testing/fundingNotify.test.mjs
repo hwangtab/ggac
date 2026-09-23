@@ -408,3 +408,56 @@ test('보낼 건이 없으면 아무것도 하지 않는다', async () => {
   await notify.notifyPledgesShipped(CAMPAIGN, [], deps)
   assert.equal(calls.mail.length + calls.bulk.length + calls.inApp.length, 0)
 })
+
+// ------------------------------------------------ ⑨⑩ 정산
+
+const SETTLEMENT = {
+  gross_amount: 34_333,
+  refund_amount: 11_111,
+  pg_fee_amount: 777,
+  platform_fee_amount: 1_161,
+  payout_amount: 21_284,
+}
+
+test('정산 정리는 선택 알림 — 수신거부한 개설자에게는 인앱만 남는다', async () => {
+  const { deps, calls } = spy({ getUserSettings: async () => OPTED_OUT })
+  await notify.notifySettlementPrepared(CAMPAIGN, SETTLEMENT, {}, deps)
+  assert.equal(calls.mail.length, 0, '수신거부한 개설자에게 정산 준비 메일이 나갔다')
+  assert.equal(calls.inApp.length, 1)
+  assert.equal(calls.inApp[0].type, 'funding_settled')
+  assert.equal(calls.inApp[0].user_id, 'owner-1')
+})
+
+test('정산 지급은 거래성 — 수신거부해도 "돈을 보냈다"는 통지는 나간다', async () => {
+  const { deps, calls } = spy({ getUserSettings: async () => OPTED_OUT })
+  await notify.notifySettlementPaid(CAMPAIGN, SETTLEMENT, deps)
+  assert.equal(calls.mail.length, 1, '자기 돈이 움직인 통지를 수신거부로 막았다')
+  assert.equal(calls.mail[0].to, 'owner-1@example.com')
+  assert.ok(calls.mail[0].html.includes('21,284원'))
+  assert.equal(calls.inApp.length, 1)
+  assert.equal(calls.inApp[0].type, 'funding_settled')
+})
+
+test('정산 알림도 던지지 않는다 — 조회·발송이 실패해도 호출부는 모른다', async () => {
+  const { deps, calls } = spy({
+    getProfileEmail: async () => {
+      throw new Error('boom')
+    },
+    createNotification: async () => {
+      throw new Error('boom')
+    },
+  })
+  await notify.notifySettlementPrepared(CAMPAIGN, SETTLEMENT, {}, deps)
+  await notify.notifySettlementPaid(CAMPAIGN, SETTLEMENT, deps)
+  assert.ok(calls.logs.some(([level]) => level === 'error'))
+})
+
+test('메일 키가 없으면 정산 알림도 인앱만 남는다', async () => {
+  const { deps, calls } = spy({
+    isMailConfigured: () => false,
+    sendEmail: async () => assert.fail('키가 없는데 발송을 시도했다'),
+  })
+  await notify.notifySettlementPaid(CAMPAIGN, SETTLEMENT, deps)
+  assert.equal(calls.mail.length, 0)
+  assert.equal(calls.inApp.length, 1)
+})

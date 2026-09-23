@@ -21,6 +21,8 @@ const FUNDING_TYPES = [
   'funding_closed',
   'funding_delivery_changed',
   'funding_refunded',
+  'funding_shipped',
+  'funding_settled',
 ]
 
 function notification(type, data = {}) {
@@ -39,7 +41,7 @@ function notification(type, data = {}) {
   }
 }
 
-test('펀딩 알림 일곱 종류가 전부 갈 곳이 있다', () => {
+test('펀딩 알림 아홉 종류가 전부 갈 곳이 있다', () => {
   for (const type of FUNDING_TYPES) {
     const route = getNotificationRoute(notification(type))
     assert.ok(route, `${type}에 경로가 없다`)
@@ -95,9 +97,10 @@ test('앱 밖으로 튕겨 보내지 않는다', () => {
 test('url이 없어도 종류별 기본 목적지가 있다', () => {
   assert.equal(getNotificationRoute(notification('funding_submitted')), '/admin/funding')
   assert.equal(getNotificationRoute(notification('funding_refunded')), '/mypage/funding')
+  assert.equal(getNotificationRoute(notification('funding_settled')), '/mypage/funding')
 })
 
-test('알림 목록 화면이 일곱 종류의 한글 이름과 색을 안다', () => {
+test('알림 목록 화면이 아홉 종류의 한글 이름과 색을 안다', () => {
   const source = readFileSync(
     new URL('../../src/app/[locale]/notifications/page.tsx', import.meta.url),
     'utf8'

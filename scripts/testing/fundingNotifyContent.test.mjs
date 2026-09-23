@@ -14,6 +14,8 @@ import {
   buildPledgePaidCreatorNotice,
   buildPledgeRefundedNotice,
   buildPledgeShippedNotice,
+  buildSettlementPaidNotice,
+  buildSettlementPreparedNotice,
   formatDeliveryMonth,
   formatWon,
   isRateLimited,
@@ -332,10 +334,81 @@ test('환불 문장은 돈이 안 들어올 때 갈 곳을 알려 준다', () =>
   assert.ok(notice.message.includes('결제하신 날짜'))
 })
 
-test('마감 문장은 코드에 없는 정산 절차를 약속하지 않는다', () => {
+/**
+ * 이 테스트는 원래 "마감 문장에 '정산'이라는 말이 나오면 실패"였다. 정산
+ * 흐름이 코드에 없던 때라, 조합을 대신해 없는 절차를 약속하지 않으려는
+ * 가드였다. 이제 흐름이 실제로 있으므로 가드의 과녁을 바꾼다 — **있는 것만
+ * 말하는가.** 사무국이 수수료를 확인해 정리한다는 것과, 지급이 끝나면
+ * 알린다는 것 둘 다 코드가 실제로 하는 일이다(`prepareSettlement`,
+ * `notifySettlementPaid`).
+ */
+test('마감 문장은 실제로 있는 정산 절차만 말한다', () => {
   const notice = buildCampaignClosedNotice(CAMPAIGN, SITE)
-  assert.ok(!notice.message.includes('정산'))
+  assert.ok(notice.message.includes('정산 내역'))
+  assert.ok(notice.message.includes('결제대행 수수료'))
+  assert.ok(notice.message.includes('지급이 끝나면'))
   assert.ok(notice.message.includes('contact@ggac.kr'))
+  // 기한은 여전히 약속하지 않는다 — 코드에 그런 것이 없다.
+  for (const promise of ['영업일', '이내에 지급', '자동으로 입금']) {
+    assert.ok(!notice.message.includes(promise), `없는 약속을 한다: ${promise}`)
+  }
+})
+
+// ---------------------------------------------------------------- 정산 문안
+
+const SETTLEMENT = {
+  gross_amount: 34_333,
+  refund_amount: 11_111,
+  pg_fee_amount: 777,
+  platform_fee_amount: 1_161,
+  payout_amount: 21_284,
+}
+
+test('정산 정리 문장은 뺄셈을 그대로 편다', () => {
+  const notice = buildSettlementPreparedNotice(CAMPAIGN, SETTLEMENT, SITE)
+  assert.equal(notice.title, '정산 내역이 정리되었습니다')
+  // 읽는 사람이 항목을 따라올 수 있어야 한다 — 결론만 주지 않는다.
+  for (const part of ['34,333원', '11,111원', '23,222원', '777원', '1,161원', '21,284원']) {
+    assert.ok(notice.message.includes(part), `${part}이 문장에 없다`)
+  }
+  assert.ok(notice.message.includes('contact@ggac.kr'))
+  assert.equal(notice.url, `${SITE}/ko/mypage/funding/${CAMPAIGN.id}`)
+  assert.equal(notice.data.revised, false)
+})
+
+test('다시 정리한 문장은 금액이 바뀌었다고 먼저 말한다', () => {
+  const notice = buildSettlementPreparedNotice(CAMPAIGN, SETTLEMENT, SITE, { revised: true })
+  assert.equal(notice.title, '정산 예정 금액이 바뀌었습니다')
+  assert.ok(notice.message.includes('환불이 반영되어'))
+  assert.ok(notice.message.includes('21,284원으로'))
+  assert.equal(notice.data.revised, true)
+})
+
+test('지급 문장은 보냈다고 말하고, 안 들어왔을 때 갈 곳을 준다', () => {
+  const notice = buildSettlementPaidNotice(CAMPAIGN, SETTLEMENT, SITE)
+  assert.equal(notice.title, '정산금을 지급했습니다')
+  assert.ok(notice.message.includes('21,284원을'))
+  assert.ok(notice.message.includes('보냈습니다'))
+  assert.ok(notice.message.includes('contact@ggac.kr'))
+})
+
+test('지급액이 0원이면 "보냈다"고 하지 않는다', () => {
+  const notice = buildSettlementPaidNotice(CAMPAIGN, { ...SETTLEMENT, payout_amount: 0 }, SITE)
+  assert.ok(notice.message.includes('남지 않아'))
+  assert.ok(!notice.message.includes('0원을 등록된 계좌로'))
+})
+
+test('정산 문안은 고정된 용어만 쓴다', () => {
+  const notices = [
+    buildSettlementPreparedNotice(CAMPAIGN, SETTLEMENT, SITE),
+    buildSettlementPreparedNotice(CAMPAIGN, SETTLEMENT, SITE, { revised: true }),
+    buildSettlementPaidNotice(CAMPAIGN, SETTLEMENT, SITE),
+  ]
+  for (const notice of notices) {
+    for (const banned of ['구매', '주문', '상품', '기부']) {
+      assert.ok(!`${notice.title} ${notice.message}`.includes(banned), `금지어: ${banned}`)
+    }
+  }
 })
 
 // ---------------------------------------------------------------- 레이트리밋

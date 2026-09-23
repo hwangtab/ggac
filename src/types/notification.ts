@@ -30,6 +30,7 @@ export type NotificationType =
   | 'funding_delivery_changed' // 리워드 전달 예정 시기 변경 알림(약관 제12조)
   | 'funding_refunded' // 승인 후 확정 불가 — 전액 환불 알림
   | 'funding_shipped' // 리워드 발송 알림
+  | 'funding_settled' // 정산 내역 정리·정산금 지급 알림
 
 /**
  * 알림 인터페이스
