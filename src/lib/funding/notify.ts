@@ -48,6 +48,7 @@ import {
   buildPledgePaidBackerNotice,
   buildPledgePaidCreatorNotice,
   buildPledgeRefundedNotice,
+  buildPledgeShippedNotice,
   isSendableEmail,
   maskEmail,
   pledgePaidBackerExtraLines,
@@ -490,6 +491,109 @@ export async function notifyPledgeRefunded(
     await sendOne(d, pledge.backer_email, notice)
   } catch (error) {
     d.log.error('후원 환불 알림 실패', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
+
+// ---------------------------------------------------------------- ⑧ 발송
+
+/**
+ * 리워드를 보냈다 → **그 후원의 후원자들**.
+ *
+ * 개설자가 이행 상태를 발송 경계 위로 옮긴 **그 건들만** 받는다 — 무엇이
+ * 경계를 넘었는지는 이 모듈이 아니라 전이 표(`./fulfillment.ts`)와 조건부
+ * 쓰기가 판정하고, 여기는 넘은 것들을 통지할 뿐이다.
+ *
+ * **선택 알림.** 수신거부를 존중한다. 비회원은 인앱 알림을 만들 자리가 없어
+ * 메일뿐이고, 그래서 문장이 후원번호를 들고 간다.
+ *
+ * 인앱은 **리워드별로 묶어** 한 번씩 INSERT한다 — 문장이 리워드 이름을 담기
+ * 때문에 서로 다른 리워드를 한 배치에 넣으면 남의 리워드 이름을 보게 된다.
+ *
+ * 수신자가 상한을 넘으면 반쪽 발송 대신 통째로 포기하고 관리자에게 알린다
+ * (전달 시기 변경과 같은 판단).
+ */
+export async function notifyPledgesShipped(
+  campaign: Record<string, unknown>,
+  pledges: Record<string, unknown>[],
+  overrides?: Partial<NotifyDeps>
+): Promise<void> {
+  if (!Array.isArray(pledges) || pledges.length === 0) return
+  const d = resolve(overrides)
+  try {
+    const siteUrl = d.siteUrl()
+    if (pledges.length > MAX_BULK_RECIPIENTS) {
+      await tellAdminsSendAbandoned(d, campaign, '리워드 발송', pledges.length)
+      return
+    }
+
+    const memberIds = pledges
+      .map(p => p.user_id)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0)
+    const settings =
+      memberIds.length > 0
+        ? await d.getUserSettingsByUserIds(memberIds).catch(() => new Map<string, SettingLike[]>())
+        : new Map<string, SettingLike[]>()
+
+    // 한 사람이 같은 프로젝트에 여러 건을 후원할 수 있다. 사람 단위로 묶어
+    // **한 통만** 보내고, 나머지 건수는 문장이 센다 — 주소가 같으면 대량
+    // 발송기가 어차피 한 통으로 합치므로, 합쳐질 것을 알고 문장을 만든다.
+    const groups = new Map<string, { head: Record<string, unknown>; count: number }>()
+    for (const p of pledges) {
+      const key =
+        typeof p.user_id === 'string' && p.user_id.length > 0
+          ? `u:${p.user_id}`
+          : `e:${String(p.backer_email ?? '').toLowerCase()}`
+      const found = groups.get(key)
+      if (found) found.count += 1
+      else groups.set(key, { head: p, count: 1 })
+    }
+    const notices = [...groups.values()].map(g => ({
+      pledge: g.head,
+      notice: buildPledgeShippedNotice(g.head, campaign, siteUrl, g.count - 1),
+    }))
+
+    // 인앱 — 문장이 같은 회원끼리 묶어 배치 INSERT. 리워드 이름이 문장에
+    // 들어 있으므로 서로 다른 문장을 한 배치에 넣으면 남의 리워드가 보인다.
+    const byMessage = new Map<string, { notice: NoticeCopy; userIds: string[] }>()
+    for (const { pledge, notice } of notices) {
+      if (typeof pledge.user_id !== 'string' || pledge.user_id.length === 0) continue
+      const entry = byMessage.get(notice.message)
+      if (entry) entry.userIds.push(pledge.user_id)
+      else byMessage.set(notice.message, { notice, userIds: [pledge.user_id] })
+    }
+    for (const { notice, userIds } of byMessage.values()) {
+      try {
+        await d.createBulkNotifications({
+          user_ids: [...new Set(userIds)],
+          type: 'funding_shipped',
+          title: notice.title,
+          message: notice.message,
+          data: notice.url ? { ...notice.data, url: notice.url } : notice.data,
+          expires_at: daysFromNow(180),
+        })
+      } catch (error) {
+        d.log.error('리워드 발송 인앱 알림 실패', {
+          campaignId: maskId(String(campaign.id)),
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }
+
+    if (!d.isMailConfigured()) return
+    const result = await sendManyEmails({
+      recipients: notices.map(({ pledge, notice }) => {
+        const { subject, html } = renderNoticeEmail(notice)
+        return { email: pledge.backer_email, user_id: pledge.user_id, subject, html }
+      }),
+      sendEmail: d.sendEmail,
+      isOptedOut: id => isEmailOptedOut(settings.get(id)),
+      log: d.log,
+    })
+    d.log.info('리워드 발송 알림 발송', { campaignId: maskId(String(campaign.id)), ...result })
+  } catch (error) {
+    d.log.error('리워드 발송 알림 실패', {
       error: error instanceof Error ? error.message : String(error),
     })
   }

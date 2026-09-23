@@ -28,6 +28,9 @@ export const NOTIFICATION_TYPE = [
   // `NotificationType` 유니온과 손으로 맞춘다.
   'funding_delivery_changed',
   'funding_refunded',
+  // 이행 배선(2026-09-23)에서 추가. 리워드를 보냈다는 통지. 위와 같이 DB
+  // CHECK가 없어 마이그레이션이 필요 없다.
+  'funding_shipped',
 ] as const
 
 export const posts = sqliteTable(
