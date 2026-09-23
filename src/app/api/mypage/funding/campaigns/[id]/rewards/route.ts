@@ -25,6 +25,13 @@ const log = createLogger('api/mypage/funding/rewards')
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+/**
+ * 저장 자체는 금방 끝나지만, `after()`로 넘긴 전달 시기 변경 알림은 후원자
+ * 수만큼 메일을 보낸다. 플랫폼 기본값(10~15초)이면 상한(400명)이 걸리기도
+ * 전에 함수가 죽어 **절반만 받고 누가 받았는지도 모르는** 상태가 된다.
+ * 초당 2통 간격으로 400통이면 200초 남짓이라 만료 크론과 같은 300을 준다.
+ */
+export const maxDuration = 300
 
 const LOCK_MESSAGES = {
   locked_amount: '결제가 있는 리워드의 금액은 바꿀 수 없습니다. 새 리워드를 추가해 주세요.',

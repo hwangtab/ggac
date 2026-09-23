@@ -6,7 +6,7 @@
  *
  * 인증은 업로드 정리 크론과 같다: `CRON_SECRET` Bearer, 없으면 닫는다.
  */
-import { NextRequest } from 'next/server'
+import { NextRequest, after } from 'next/server'
 import { timingSafeEqual } from 'node:crypto'
 
 import {
@@ -52,6 +52,10 @@ async function handle(request: NextRequest) {
   if (!isPaymentEnabled()) return ApiSuccess.ok({ skipped: 'payment_disabled' }).toNextResponse()
 
   const { secretKey } = getServerPaymentConfig()
+  // 환불 통지는 스윕 루프 안에서 기다리지 않는다. 한 리워드가 통째로 매진된
+  // 뒤 승인이 몰려 들어오면 통지가 건수만큼 늘어나, 정리 자체가 제 수명
+  // (`maxDuration`)을 넘길 수 있다. 모아 두었다가 응답 뒤에 한꺼번에 보낸다.
+  const refundNotices: (() => Promise<void>)[] = []
   const result = await runExpiryGuard({
     listExpiredHolds: () => listExpiredHolds(),
     lookupPayment: async orderId => {
@@ -161,10 +165,12 @@ async function handle(request: NextRequest) {
           // 사무국이 손으로 처리한 뒤 알린다. 알림 실패가 크론을 멈추지
           // 않도록 여기서도 삼킨다.
           if (refunded) {
-            await notifyPledgeRefunded(
-              pledge,
-              error.reason === 'campaign_closed' ? 'campaign_closed' : 'reward_sold_out'
-            ).catch(e => log.error('환불 알림 실패', { orderId, e }))
+            refundNotices.push(() =>
+              notifyPledgeRefunded(
+                pledge,
+                error.reason === 'campaign_closed' ? 'campaign_closed' : 'reward_sold_out'
+              ).catch(e => log.error('환불 알림 실패', { orderId, e }))
+            )
           }
           return false
         }
@@ -175,6 +181,10 @@ async function handle(request: NextRequest) {
     },
     expire: expirePledge,
   })
+
+  if (refundNotices.length > 0) {
+    after(() => Promise.allSettled(refundNotices.map(send => send())))
+  }
 
   log.info('후원 만료 정리', result)
   return ApiSuccess.ok(result).toNextResponse()
