@@ -12,7 +12,11 @@ import { NextRequest } from 'next/server'
 
 import { getOptionalUser } from '@/lib/server/memberAuth'
 import { getCampaignById, getReward } from '@/db/queries/funding'
-import { holdPledge, RewardSoldOutError } from '@/db/queries/fundingPledges'
+import {
+  holdPledge,
+  RewardSoldOutError,
+  TooManyPendingHoldsError,
+} from '@/db/queries/fundingPledges'
 import { createPendingPayment } from '@/db/queries/payments'
 import { PledgeAmountError, computePledgeTotal } from '@/lib/funding/amounts'
 import { generateOrderId, buildCustomerKey } from '@/lib/payments/toss/protocol'
@@ -47,6 +51,12 @@ export async function POST(request: NextRequest) {
       return ApiError.serviceUnavailable('펀딩을 준비 중입니다.').toNextResponse()
     }
     // 선점은 돈 없이 재고를 줄인다. 429만 막고 503은 통과(티켓과 같은 이유).
+    //
+    // 빈도 제한만으로는 재고를 지키지 못한다 — 분산 환경에서 Upstash 설정이
+    // 없으면 인스턴스별 메모리로 떨어지고, 애초에 "얼마나 자주 묻는가"는
+    // "동시에 얼마나 쥐고 있는가"와 다른 값이다. 실제 경계는 선점
+    // 트랜잭션(`holdPledge`)이 신원별로 거는 상한이고, 아래 둘은 그 앞에서
+    // 요청 수 자체를 줄이는 역할이다.
     const rl = await applyRouteRateLimit(request, {
       name: 'funding_prepare',
       windowMs: 60_000,
@@ -55,6 +65,18 @@ export async function POST(request: NextRequest) {
       keyGenerator: createIPKeyGenerator('funding-prepare'),
     })
     if (!rl.success && rl.response?.status === 429) return rl.response
+
+    // 선점 한 벌이 살아 있는 시간(hold_minutes)을 창으로 잡는다 — 같은 곳에서
+    // 신원만 갈아 가며 선점을 쌓는 경우를 이 창 안에서 묶어 준다.
+    const holdWindow = await applyRouteRateLimit(request, {
+      name: 'funding_prepare_holds',
+      windowMs: fundingSettings.hold_minutes * 60_000,
+      maxRequests: 10,
+      message:
+        '결제되지 않은 후원 요청이 짧은 시간에 너무 많았습니다. 진행 중인 결제를 마치거나 잠시 후 다시 시도해 주세요.',
+      keyGenerator: createIPKeyGenerator('funding-prepare-holds'),
+    })
+    if (!holdWindow.success && holdWindow.response?.status === 429) return holdWindow.response
 
     const body = await parseJsonObjectBody(request)
     if (!body) return ApiError.badRequest('유효한 JSON body가 필요합니다.').toNextResponse()
@@ -151,6 +173,10 @@ export async function POST(request: NextRequest) {
       })
     } catch (error) {
       if (error instanceof RewardSoldOutError)
+        return ApiError.badRequest(error.message).toNextResponse()
+      // 한 신원이 결제 없이 선점만 쌓는 것을 막은 경우. 사용자가 할 수 있는
+      // 일이 문구에 들어 있으므로 그대로 보인다.
+      if (error instanceof TooManyPendingHoldsError)
         return ApiError.badRequest(error.message).toNextResponse()
       log.warn('후원 선점 실패', {
         rewardId,

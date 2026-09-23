@@ -115,7 +115,12 @@ function SuccessInner() {
       <Shell>
         <FiAlertCircle className="mx-auto h-10 w-10 text-red-500" aria-hidden />
         <h1 className="mt-4 text-xl font-semibold text-gray-900">{t('fail.title')}</h1>
-        <p className="mt-2 text-gray-600">{failMessage}</p>
+        {/* 이 문구는 화면이 뜬 뒤에 상태가 바뀌며 나타난다 — 후원 화면의 오류
+            안내(`PledgeForm`)와 같이 읽어 주도록 알림으로 표시한다. 환불
+            여부처럼 후원자가 반드시 알아야 할 내용이 여기 담긴다. */}
+        <p className="mt-2 text-gray-600" role="alert" aria-live="assertive">
+          {failMessage}
+        </p>
         <Link href="/funding" className="tw-btn-primary mt-6 inline-flex">
           {t('fail.toList')}
         </Link>

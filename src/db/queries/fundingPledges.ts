@@ -3,10 +3,10 @@
  * 승인이 끝나면 확정하며, 주문번호(`order_id`)가 결제와 후원을 잇는 유일한 고리다.
  */
 
-import { and, desc, eq, gt, inArray, isNotNull, isNull, lte, or, sql } from 'drizzle-orm'
+import { and, desc, eq, gt, inArray, isNotNull, isNull, lte, ne, or, sql } from 'drizzle-orm'
 
 import { db } from '../client.ts'
-import { fundingPledges, fundingRewards, payments } from '../schema/index.ts'
+import { fundingCampaigns, fundingPledges, fundingRewards, payments } from '../schema/index.ts'
 import { computePledgeTotal } from '../../lib/funding/amounts.ts'
 import { generatePledgeCode } from '../../lib/funding/pledgeCode.ts'
 
@@ -16,12 +16,65 @@ type Row = Record<string, unknown>
 
 export const DEFAULT_HOLD_MINUTES = 10
 
+/**
+ * 한 신원이 동시에 들고 있을 수 있는 결제 대기 선점의 수.
+ *
+ * 선점은 돈 없이 재고를 줄인다. 상한이 없으면 아무나 한정 리워드를 통째로
+ * 매진 상태로 만들어 두고, 만료되면 다시 채울 수 있다(요청 빈도만 막는
+ * 레이트리밋은 분산 환경에서 인스턴스별 메모리로 떨어질 수 있어 이 경계를
+ * 지키지 못한다). 그래서 "얼마나 자주 물어보는가"가 아니라 **"동시에 얼마나
+ * 쥘 수 있는가"**를 DB에서 막는다.
+ *
+ * 3인 이유: 서로 다른 리워드를 견주어 보다가 결제를 미룬 후원자가 실제로
+ * 만들 수 있는 선점 수는 이 정도다. 같은 리워드를 두 번 잡는 것은 애초에
+ * 일어나지 않는다 — 선점 트랜잭션이 자기 선점을 갈아 끼우기 때문이다.
+ */
+export const MAX_OUTSTANDING_HOLDS = 3
+
 export class RewardSoldOutError extends Error {
   remaining: number
   constructor(remaining: number) {
-    super(remaining > 0 ? `남은 수량이 ${remaining}개뿐입니다.` : '준비된 수량이 모두 소진되었습니다.')
+    super(
+      remaining > 0 ? `남은 수량이 ${remaining}개뿐입니다.` : '준비된 수량이 모두 소진되었습니다.'
+    )
     this.name = 'RewardSoldOutError'
     this.remaining = remaining
+  }
+}
+
+/**
+ * 한 신원이 이미 결제 대기 선점을 상한까지 들고 있을 때.
+ * 매진이 아니라 "먼저 하던 결제를 끝내라"는 뜻이라 문구가 다르다.
+ */
+export class TooManyPendingHoldsError extends Error {
+  limit: number
+  constructor(limit: number) {
+    super(
+      `아직 결제가 끝나지 않은 후원이 ${limit}건 있습니다. 먼저 결제를 마치거나 결제 대기 시간이 지난 뒤에 다시 시도해 주세요.`
+    )
+    this.name = 'TooManyPendingHoldsError'
+    this.limit = limit
+  }
+}
+
+/**
+ * 승인은 끝났는데 확정할 자리가 없을 때 — 선점이 만료된 사이에 마지막 수량이
+ * 다른 후원자에게 돌아갔거나(`sold_out`), 프로젝트가 마감됐다(`campaign_closed`).
+ *
+ * 던지면 확정 트랜잭션이 통째로 되감긴다(후원도 원장도 그대로). 부르는 쪽은
+ * **반드시 결제를 환불하고** 후원자에게 사실대로 알려야 한다 — 돈만 받고
+ * "완료"라고 답하는 것이 여기서 일어날 수 있는 최악이다.
+ */
+export class PledgeStockUnavailableError extends Error {
+  reason: 'sold_out' | 'campaign_closed'
+  constructor(reason: 'sold_out' | 'campaign_closed') {
+    super(
+      reason === 'campaign_closed'
+        ? '프로젝트가 마감되어 후원을 확정할 수 없습니다.'
+        : '남은 수량이 없어 후원을 확정할 수 없습니다.'
+    )
+    this.name = 'PledgeStockUnavailableError'
+    this.reason = reason
   }
 }
 
@@ -39,14 +92,25 @@ export class PartialRefundUnsupportedError extends Error {
   totalAmount: number
   canceledAmount: number
   constructor(totalAmount: number, canceledAmount: number) {
-    super(`부분 환불은 아직 지원하지 않습니다. 후원 금액 ${totalAmount}원 중 ${canceledAmount}원만 취소 요청됐습니다.`)
+    super(
+      `부분 환불은 아직 지원하지 않습니다. 후원 금액 ${totalAmount}원 중 ${canceledAmount}원만 취소 요청됐습니다.`
+    )
     this.name = 'PartialRefundUnsupportedError'
     this.totalAmount = totalAmount
     this.canceledAmount = canceledAmount
   }
 }
 
-const DATE_KEYS = ['holdExpiresAt', 'paidAt', 'canceledAt', 'refundedAt', 'termsAgreedAt', 'privacyAgreedAt', 'createdAt', 'updatedAt'] as const
+const DATE_KEYS = [
+  'holdExpiresAt',
+  'paidAt',
+  'canceledAt',
+  'refundedAt',
+  'termsAgreedAt',
+  'privacyAgreedAt',
+  'createdAt',
+  'updatedAt',
+] as const
 
 function rowToPledge(row: Row): Row {
   const snake = toSnakeCase(row)
@@ -75,18 +139,64 @@ function occupyingCondition(now: Date) {
   )
 }
 
-export async function getRemainingQuantity(rewardId: string, now: Date = new Date()): Promise<number | null> {
+/** 트랜잭션 핸들과 모듈 커넥션을 같은 자리에서 쓰기 위한 별명. */
+type Executor = Parameters<Parameters<typeof db.transaction>[0]>[0]
+
+/**
+ * 재고를 차지하는 수량의 합.
+ *
+ * **선점을 잡을 때와 확정할 때가 같은 셈을 써야 한다.** 둘이 어긋나면 선점은
+ * 매진이라 말하는데 확정은 자리가 있다고 답하거나(초과 판매), 그 반대가 된다.
+ * 그래서 두 자리 모두 이 함수만 부른다 — `excludePledgeId`는 확정하려는
+ * 자기 자신을 셈에서 빼기 위한 것이다.
+ */
+async function sumOccupyingQuantity(
+  executor: Executor,
+  rewardId: string,
+  now: Date,
+  excludePledgeId?: string
+): Promise<number> {
+  const conditions = [eq(fundingPledges.rewardId, rewardId), occupyingCondition(now)]
+  if (excludePledgeId) conditions.push(ne(fundingPledges.id, excludePledgeId))
+  const [taken] = await executor
+    .select({ total: sql<number>`COALESCE(SUM(${fundingPledges.quantity}), 0)` })
+    .from(fundingPledges)
+    .where(and(...conditions))
+  return Number(taken?.total ?? 0)
+}
+
+export async function getRemainingQuantity(
+  rewardId: string,
+  now: Date = new Date()
+): Promise<number | null> {
   const [reward] = await db
     .select({ total: fundingRewards.totalQuantity })
     .from(fundingRewards)
     .where(eq(fundingRewards.id, rewardId))
     .limit(1)
   if (!reward || reward.total === null) return null
-  const [taken] = await db
-    .select({ total: sql<number>`COALESCE(SUM(${fundingPledges.quantity}), 0)` })
-    .from(fundingPledges)
-    .where(and(eq(fundingPledges.rewardId, rewardId), occupyingCondition(now)))
-  return Math.max(0, Number(reward.total) - Number(taken?.total ?? 0))
+  const taken = await sumOccupyingQuantity(db as unknown as Executor, rewardId, now)
+  return Math.max(0, Number(reward.total) - taken)
+}
+
+/**
+ * 선점의 임자를 무엇으로 볼 것인가.
+ *
+ * 로그인한 조합원은 계정(`user_id`), 비회원은 소문자로 맞춘 이메일이다 —
+ * 표에 이미 있는 값이고, 비회원 후원이 기본 경로인 이 화면에서 요청자가
+ * 스스로 바꿀 수 있는 것 중 가장 무겁다(주소 한 줄보다 바꾸기 번거롭다).
+ *
+ * 회원 선점과 비회원 선점은 섞지 않는다. 섞으면 남의 이메일을 적어 낸
+ * 비회원이 로그인한 조합원의 선점을 비워 버릴 수 있다.
+ */
+function ownHoldCondition(userId: string | null, email: string) {
+  return userId
+    ? and(eq(fundingPledges.userId, userId), eq(fundingPledges.status, 'pending'))
+    : and(
+        isNull(fundingPledges.userId),
+        sql`lower(${fundingPledges.backerEmail}) = lower(${email})`,
+        eq(fundingPledges.status, 'pending')
+      )
 }
 
 export interface HoldPledgeInput {
@@ -129,6 +239,7 @@ export async function holdPledge(input: HoldPledgeInput): Promise<Row> {
       return await holdPledgeOnce(input)
     } catch (error) {
       if (error instanceof RewardSoldOutError) throw error
+      if (error instanceof TooManyPendingHoldsError) throw error
       if (!isLockContention(error)) throw error
       lastError = error
       await new Promise(resolve => setTimeout(resolve, 25 * (attempt + 1)))
@@ -143,18 +254,45 @@ async function holdPledgeOnce(input: HoldPledgeInput): Promise<Row> {
 
   return db.transaction(async tx => {
     const [reward] = await tx
-      .select({ title: fundingRewards.title, amount: fundingRewards.amount, total: fundingRewards.totalQuantity, campaignId: fundingRewards.campaignId })
+      .select({
+        title: fundingRewards.title,
+        amount: fundingRewards.amount,
+        total: fundingRewards.totalQuantity,
+        campaignId: fundingRewards.campaignId,
+      })
       .from(fundingRewards)
       .where(eq(fundingRewards.id, input.reward_id))
       .limit(1)
-    if (!reward || reward.campaignId !== input.campaign_id) throw new Error('리워드를 찾을 수 없습니다.')
+    if (!reward || reward.campaignId !== input.campaign_id)
+      throw new Error('리워드를 찾을 수 없습니다.')
+
+    const own = ownHoldCondition(input.user_id, input.backer_email)
+
+    // 같은 리워드에 대한 자기 선점은 **쌓이지 않고 갈린다.** 두 번째 요청이
+    // 첫 번째 선점을 비우고 그 자리에 들어간다 — 그래야 한 사람이 요청을
+    // 반복하는 것만으로 한정 리워드를 매진시키지 못한다. 치르는 값은,
+    // 같은 리워드를 정말 두 개 받고 싶은 후원자가 따로 두 번 후원할 수
+    // 없다는 것이다(수량을 2로 두고 한 번에 후원하거나, 앞 후원의 결제를
+    // 끝낸 뒤 다시 후원해야 한다 — 결제가 끝난 후원은 여기서 비우지 않는다).
+    await tx
+      .update(fundingPledges)
+      .set({ status: 'expired' })
+      .where(and(eq(fundingPledges.rewardId, input.reward_id), own))
+
+    // 신원을 갈아 가며 선점을 쌓는 경우까지 좁히려면, 한 신원이 **동시에**
+    // 들 수 있는 선점 자체에 상한이 있어야 한다. 위에서 같은 리워드의 자기
+    // 선점을 이미 비웠으므로 여기 세어지는 것은 전부 다른 리워드다.
+    const [outstanding] = await tx
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(fundingPledges)
+      .where(and(own, gt(fundingPledges.holdExpiresAt, now)))
+    if (Number(outstanding?.count ?? 0) >= MAX_OUTSTANDING_HOLDS) {
+      throw new TooManyPendingHoldsError(MAX_OUTSTANDING_HOLDS)
+    }
 
     if (reward.total !== null) {
-      const [taken] = await tx
-        .select({ total: sql<number>`COALESCE(SUM(${fundingPledges.quantity}), 0)` })
-        .from(fundingPledges)
-        .where(and(eq(fundingPledges.rewardId, input.reward_id), occupyingCondition(now)))
-      const remaining = Math.max(0, Number(reward.total) - Number(taken?.total ?? 0))
+      const taken = await sumOccupyingQuantity(tx, input.reward_id, now)
+      const remaining = Math.max(0, Number(reward.total) - taken)
       if (input.quantity > remaining) throw new RewardSoldOutError(remaining)
     }
 
@@ -203,37 +341,131 @@ async function holdPledgeOnce(input: HoldPledgeInput): Promise<Row> {
 /**
  * 결제 확정과 후원 확정, 리워드 잠금을 한 트랜잭션으로.
  * `order_id`가 WHERE에 들어가는 것이 핵심 — 짝이 안 맞으면 0행이고 결제도 안 바뀐다.
+ *
+ * **자리가 있는지도 여기서 본다.** 선점이 만료되기 직전에 승인 요청을 보내면
+ * 라우트의 만료 검사는 통과하고, 그다음 토스 승인이 오가는 몇 초 사이에 선점은
+ * 실제로 만료된다 — 그 틈에 다른 사람이 마지막 수량을 잡아 결제까지 마칠 수
+ * 있다. 라우트에서 아무리 앞뒤로 확인해도 이 틈은 닫히지 않으므로, 확정이
+ * 일어나는 **바로 이 트랜잭션 안에서** 수량과 캠페인 상태를 다시 본다.
+ * 자리가 없으면 `PledgeStockUnavailableError`를 던지고 아무것도 쓰지 않는다 —
+ * 부르는 쪽이 환불하고 사실대로 알려야 한다.
  */
-export async function finalizePledgePayment(input: {
+export interface FinalizePledgeInput {
   orderId: string
   pledgeId: string
   paymentKey: string
   method: string | null
   approvedAt: Date
   raw: unknown
-}): Promise<Row | null> {
+}
+
+/**
+ * 락 경합만 재시도한다(`holdPledge`와 같은 규칙). 확정은 선점·다른 확정과
+ * 같은 행들을 두고 겨루므로 경합 자체는 일상이다 — 여기서 물러나면 이미
+ * 승인된 결제가 "확인 중"으로 밀려나 사람 손을 부른다. 자리가 없다는 판정
+ * (`PledgeStockUnavailableError`)은 다시 해도 같으므로 그대로 올린다.
+ */
+export async function finalizePledgePayment(input: FinalizePledgeInput): Promise<Row | null> {
+  let lastError: unknown
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      return await finalizePledgePaymentOnce(input)
+    } catch (error) {
+      if (error instanceof PledgeStockUnavailableError) throw error
+      if (!isLockContention(error)) throw error
+      lastError = error
+      await new Promise(resolve => setTimeout(resolve, 25 * (attempt + 1)))
+    }
+  }
+  throw lastError
+}
+
+async function finalizePledgePaymentOnce(input: FinalizePledgeInput): Promise<Row | null> {
+  const now = new Date()
   return db.transaction(async tx => {
-    const [payment] = await tx.select({ id: payments.id }).from(payments).where(eq(payments.orderId, input.orderId)).limit(1)
+    const [payment] = await tx
+      .select({ id: payments.id })
+      .from(payments)
+      .where(eq(payments.orderId, input.orderId))
+      .limit(1)
     if (!payment) return null
+
+    const [target] = await tx
+      .select()
+      .from(fundingPledges)
+      .where(and(eq(fundingPledges.id, input.pledgeId), eq(fundingPledges.orderId, input.orderId)))
+      .limit(1)
+    if (!target) return null
+    // 더블클릭·재시도. 같은 주문으로 이미 확정됐으면 성공으로 답한다 —
+    // 아래 재고·마감 검사보다 **먼저** 본다. 이미 확정된 후원을 나중에
+    // 마감됐다는 이유로 실패로 답하면, 멀쩡히 끝난 결제를 환불하게 된다.
+    if (target.status === 'paid') return rowToPledge(target as Row)
+    if (target.status !== 'pending') return null
+
+    // 캠페인이 마감·정산됐으면 재고 계산의 전제 자체가 없다. 크론의 승격
+    // 경로는 승인 10분 뒤에도 올 수 있어 이 검사가 특히 필요하다.
+    const [campaign] = await tx
+      .select({ status: fundingCampaigns.status })
+      .from(fundingCampaigns)
+      .where(eq(fundingCampaigns.id, target.campaignId))
+      .limit(1)
+    if (!campaign || campaign.status !== 'active') {
+      throw new PledgeStockUnavailableError('campaign_closed')
+    }
+
+    const [reward] = await tx
+      .select({ total: fundingRewards.totalQuantity })
+      .from(fundingRewards)
+      .where(eq(fundingRewards.id, target.rewardId))
+      .limit(1)
+    if (reward && reward.total !== null) {
+      // 선점을 잡을 때와 같은 셈(`sumOccupyingQuantity`)이다. 자기 자신은
+      // 빼고 센다 — 아직 pending이라 그대로 두면 자기 수량을 두 번 센다.
+      const taken = await sumOccupyingQuantity(tx, target.rewardId, now, target.id)
+      if (taken + Number(target.quantity) > Number(reward.total)) {
+        throw new PledgeStockUnavailableError('sold_out')
+      }
+    }
 
     const [confirmed] = await tx
       .update(fundingPledges)
       .set({ status: 'paid', paymentId: payment.id, paidAt: input.approvedAt, holdExpiresAt: null })
-      .where(and(eq(fundingPledges.id, input.pledgeId), eq(fundingPledges.orderId, input.orderId), eq(fundingPledges.status, 'pending')))
+      .where(
+        and(
+          eq(fundingPledges.id, input.pledgeId),
+          eq(fundingPledges.orderId, input.orderId),
+          eq(fundingPledges.status, 'pending')
+        )
+      )
       .returning()
+    // 여기서 0행이면 같은 후원을 두 요청이 동시에 확정하려 한 것이다. 이긴
+    // 쪽이 이미 paid로 바꿨으므로 그 행을 읽어 성공으로 답한다.
     if (!confirmed) {
-      // 더블클릭·재시도. 같은 주문으로 이미 확정됐으면 성공으로 답한다.
       const [already] = await tx
         .select()
         .from(fundingPledges)
-        .where(and(eq(fundingPledges.id, input.pledgeId), eq(fundingPledges.orderId, input.orderId), eq(fundingPledges.status, 'paid')))
+        .where(
+          and(
+            eq(fundingPledges.id, input.pledgeId),
+            eq(fundingPledges.orderId, input.orderId),
+            eq(fundingPledges.status, 'paid')
+          )
+        )
         .limit(1)
       return already ? rowToPledge(already as Row) : null
     }
 
     await tx
       .update(payments)
-      .set({ status: 'done', paymentKey: input.paymentKey, method: input.method, approvedAt: input.approvedAt, rawResponse: input.raw, failureCode: null, failureMessage: null })
+      .set({
+        status: 'done',
+        paymentKey: input.paymentKey,
+        method: input.method,
+        approvedAt: input.approvedAt,
+        rawResponse: input.raw,
+        failureCode: null,
+        failureMessage: null,
+      })
       .where(eq(payments.id, payment.id))
 
     // 의도적으로 인라인이다: 이 트랜잭션 핸들(tx) 위에서 실행돼야 하므로
@@ -296,7 +528,9 @@ export async function finalizePledgeRefund(input: {
     const [pledge] = await tx
       .select({ totalAmount: fundingPledges.totalAmount })
       .from(fundingPledges)
-      .where(and(eq(fundingPledges.id, input.pledgeId), eq(fundingPledges.paymentId, input.paymentId)))
+      .where(
+        and(eq(fundingPledges.id, input.pledgeId), eq(fundingPledges.paymentId, input.paymentId))
+      )
       .limit(1)
     if (!pledge) return null
     // 이 프로젝트의 환불은 전액뿐이다 — 후원 총액에 못 미치는 취소액은
@@ -308,7 +542,13 @@ export async function finalizePledgeRefund(input: {
     const [refunded] = await tx
       .update(fundingPledges)
       .set({ status: 'refunded', refundedAt: new Date() })
-      .where(and(eq(fundingPledges.id, input.pledgeId), eq(fundingPledges.paymentId, input.paymentId), inArray(fundingPledges.status, ['paid', 'canceled'])))
+      .where(
+        and(
+          eq(fundingPledges.id, input.pledgeId),
+          eq(fundingPledges.paymentId, input.paymentId),
+          inArray(fundingPledges.status, ['paid', 'canceled'])
+        )
+      )
       .returning()
     if (!refunded) return null
     // `canceledAmount < input.canceledAmount` 조건은 오늘은 닿지 않는다 —
@@ -323,17 +563,31 @@ export async function finalizePledgeRefund(input: {
         status: sql`CASE WHEN ${input.canceledAmount} >= ${payments.amount} THEN 'canceled' ELSE 'partial_canceled' END`,
         rawResponse: input.raw,
       })
-      .where(and(eq(payments.orderId, input.orderId), sql`${payments.canceledAmount} < ${input.canceledAmount}`))
+      .where(
+        and(
+          eq(payments.orderId, input.orderId),
+          sql`${payments.canceledAmount} < ${input.canceledAmount}`
+        )
+      )
     return rowToPledge(refunded as Row)
   })
 }
 
 /** 승인이 확실히 거절됐을 때. 주문 짝이 맞는 pending만 취소한다. */
-export async function cancelPendingPledge(pledgeId: string, expectedOrderId: string): Promise<Row | null> {
+export async function cancelPendingPledge(
+  pledgeId: string,
+  expectedOrderId: string
+): Promise<Row | null> {
   const [row] = await db
     .update(fundingPledges)
     .set({ status: 'canceled', canceledAt: new Date() })
-    .where(and(eq(fundingPledges.id, pledgeId), eq(fundingPledges.orderId, expectedOrderId), eq(fundingPledges.status, 'pending')))
+    .where(
+      and(
+        eq(fundingPledges.id, pledgeId),
+        eq(fundingPledges.orderId, expectedOrderId),
+        eq(fundingPledges.status, 'pending')
+      )
+    )
     .returning()
   return row ? rowToPledge(row as Row) : null
 }
@@ -362,7 +616,11 @@ export async function getPledgeById(id: string): Promise<Row | null> {
 }
 
 export async function getPledgeByOrderId(orderId: string): Promise<Row | null> {
-  const rows = await db.select().from(fundingPledges).where(eq(fundingPledges.orderId, orderId)).limit(1)
+  const rows = await db
+    .select()
+    .from(fundingPledges)
+    .where(eq(fundingPledges.orderId, orderId))
+    .limit(1)
   return rows[0] ? rowToPledge(rows[0] as Row) : null
 }
 
@@ -371,20 +629,39 @@ export async function getPledgeByCodeAndEmail(code: string, email: string): Prom
   const rows = await db
     .select()
     .from(fundingPledges)
-    .where(and(eq(fundingPledges.pledgeCode, code), sql`lower(${fundingPledges.backerEmail}) = lower(${email})`))
+    .where(
+      and(
+        eq(fundingPledges.pledgeCode, code),
+        sql`lower(${fundingPledges.backerEmail}) = lower(${email})`
+      )
+    )
     .limit(1)
   return rows[0] ? rowToPledge(rows[0] as Row) : null
 }
 
 export async function listPledgesByUser(userId: string): Promise<Row[]> {
-  const rows = await db.select().from(fundingPledges).where(eq(fundingPledges.userId, userId)).orderBy(desc(fundingPledges.createdAt))
+  const rows = await db
+    .select()
+    .from(fundingPledges)
+    .where(eq(fundingPledges.userId, userId))
+    .orderBy(desc(fundingPledges.createdAt))
   return rows.map(r => rowToPledge(r as Row))
 }
 
-export async function listPledgesByCampaign(campaignId: string, filter: { status?: string } = {}): Promise<Row[]> {
+export async function listPledgesByCampaign(
+  campaignId: string,
+  filter: { status?: string } = {}
+): Promise<Row[]> {
   const conditions = [eq(fundingPledges.campaignId, campaignId)]
-  if (filter.status) conditions.push(eq(fundingPledges.status, filter.status as (typeof fundingPledges.$inferSelect)['status']))
-  const rows = await db.select().from(fundingPledges).where(and(...conditions)).orderBy(desc(fundingPledges.createdAt))
+  if (filter.status)
+    conditions.push(
+      eq(fundingPledges.status, filter.status as (typeof fundingPledges.$inferSelect)['status'])
+    )
+  const rows = await db
+    .select()
+    .from(fundingPledges)
+    .where(and(...conditions))
+    .orderBy(desc(fundingPledges.createdAt))
   return rows.map(r => rowToPledge(r as Row))
 }
 

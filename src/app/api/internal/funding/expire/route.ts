@@ -9,9 +9,20 @@
 import { NextRequest } from 'next/server'
 import { timingSafeEqual } from 'node:crypto'
 
-import { listExpiredHolds, expirePledge, finalizePledgePayment } from '@/db/queries/fundingPledges'
-import { getPaymentByOrderId } from '@/db/queries/payments'
-import { lookupPayment, TossLookupError, TossApiError } from '@/lib/payments/toss/client'
+import {
+  listExpiredHolds,
+  expirePledge,
+  finalizePledgePayment,
+  cancelPendingPledge,
+  PledgeStockUnavailableError,
+} from '@/db/queries/fundingPledges'
+import { getPaymentByOrderId, markPaymentFailed } from '@/db/queries/payments'
+import {
+  cancelPayment,
+  lookupPayment,
+  TossLookupError,
+  TossApiError,
+} from '@/lib/payments/toss/client'
 import { getServerPaymentConfig, isPaymentEnabled } from '@/lib/payments/toss/config'
 import { runExpiryGuard } from '@/lib/funding/expiryGuard'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
@@ -67,7 +78,11 @@ async function handle(request: NextRequest) {
         const tossOrderId = typeof p.orderId === 'string' ? p.orderId : null
         const tossTotalAmount = Number(p.totalAmount)
         const expectedAmount = Number(payment.amount)
-        if (tossOrderId !== orderId || !Number.isFinite(tossTotalAmount) || tossTotalAmount !== expectedAmount) {
+        if (
+          tossOrderId !== orderId ||
+          !Number.isFinite(tossTotalAmount) ||
+          tossTotalAmount !== expectedAmount
+        ) {
           log.error('스윕 대상 결제가 이 주문의 것이 아님 — 승격·만료 모두 보류', {
             orderId,
             paymentKey: payment.payment_key,
@@ -91,14 +106,57 @@ async function handle(request: NextRequest) {
       }
     },
     promote: async (pledge, lookup) => {
-      const confirmed = await finalizePledgePayment({
-        orderId: String(pledge.order_id),
-        pledgeId: String(pledge.id),
-        paymentKey: lookup.paymentKey,
-        method: lookup.method ?? null,
-        approvedAt: lookup.approvedAt ? new Date(lookup.approvedAt) : new Date(),
-        raw: { promotedBy: 'expiry-guard' },
-      })
+      const orderId = String(pledge.order_id)
+      const pledgeId = String(pledge.id)
+      let confirmed
+      try {
+        confirmed = await finalizePledgePayment({
+          orderId,
+          pledgeId,
+          paymentKey: lookup.paymentKey,
+          method: lookup.method ?? null,
+          approvedAt: lookup.approvedAt ? new Date(lookup.approvedAt) : new Date(),
+          raw: { promotedBy: 'expiry-guard' },
+        })
+      } catch (error) {
+        // 승인은 났는데 승격할 자리가 없다. 이 경로는 승인 열 시간이 지나
+        // 도착하므로 그사이 마지막 수량이 팔렸거나 프로젝트가 마감됐을 수
+        // 있다 — 확정 트랜잭션이 그걸 보고 거절한다. 여기서 그냥 미뤄 두면
+        // 후원자는 돈만 낸 채 남는다. 확정 라우트와 같은 처리를 한다:
+        // 전액 환불 → 선점 정리 → 원장에 사유 기록.
+        if (error instanceof PledgeStockUnavailableError) {
+          let refunded = true
+          try {
+            await cancelPayment(
+              lookup.paymentKey,
+              { cancelReason: '후원 확정 불가 — 전액 환불', orderId },
+              { secretKey }
+            )
+          } catch (refundError) {
+            refunded = false
+            log.error('크론 자동 환불 실패 — 수동 처리 필요', {
+              orderId,
+              pledgeId,
+              error: refundError instanceof Error ? refundError.message : refundError,
+            })
+          }
+          await cancelPendingPledge(pledgeId, orderId)
+          await markPaymentFailed(orderId, {
+            code: error.reason === 'campaign_closed' ? 'CAMPAIGN_CLOSED' : 'REWARD_SOLD_OUT',
+            message: refunded
+              ? '후원을 확정할 자리가 없어 승인된 결제를 전액 환불했습니다.'
+              : '후원을 확정할 자리가 없으나 자동 환불에 실패했습니다. 수동 환불이 필요합니다.',
+          })
+          log.error('크론 승격 불가 — 승인 후 환불', {
+            orderId,
+            pledgeId,
+            reason: error.reason,
+            refunded,
+          })
+          return false
+        }
+        throw error
+      }
       if (confirmed) log.warn('유실된 승인을 크론이 확정', { orderId: pledge.order_id })
       return Boolean(confirmed)
     },

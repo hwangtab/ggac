@@ -12,6 +12,7 @@ import {
   getPledgeById,
   finalizePledgePayment,
   cancelPendingPledge,
+  PledgeStockUnavailableError,
 } from '@/db/queries/fundingPledges'
 import { getCampaignById } from '@/db/queries/funding'
 import { assertAmountMatches, AmountMismatchError } from '@/lib/payments/toss/protocol'
@@ -72,7 +73,10 @@ export async function POST(request: NextRequest) {
     // 아래 `pledge.order_id !== orderId` 짝 검사로도 막히지만, 그 검사가
     // 리팩터링으로 사라지면 조용히 뚫린다. 규칙을 코드에 적어 둔다.
     if (payment.kind !== 'funding') {
-      log.error('펀딩이 아닌 주문으로 후원 확정 시도', { orderId, kind: String(payment.kind ?? '') })
+      log.error('펀딩이 아닌 주문으로 후원 확정 시도', {
+        orderId,
+        kind: String(payment.kind ?? ''),
+      })
       return ApiError.notFound('결제 내역을 찾을 수 없습니다.').toNextResponse()
     }
 
@@ -227,6 +231,50 @@ export async function POST(request: NextRequest) {
         raw: approved,
       })
     } catch (error) {
+      // 승인은 끝났는데 확정할 자리가 없다 — 선점이 만료된 사이에 마지막
+      // 수량이 다른 후원자에게 돌아갔거나 프로젝트가 마감됐다. 돈만 받고
+      // "완료"라고 답하는 것이 최악이므로 **즉시 전액 환불하고**, 무슨 일이
+      // 있었는지와 환불 여부를 문장으로 알린다.
+      if (error instanceof PledgeStockUnavailableError) {
+        let refunded = true
+        try {
+          await cancelPayment(
+            paymentKey,
+            { cancelReason: '후원 확정 불가 — 전액 환불', orderId },
+            { secretKey }
+          )
+        } catch (refundError) {
+          refunded = false
+          log.error('재고 부족 자동 환불 실패 — 수동 처리 필요', {
+            orderId,
+            pledgeId,
+            error: refundError instanceof Error ? refundError.message : refundError,
+          })
+        }
+        // 선점을 그대로 두면 만료 크론이 같은 결제를 다시 확정하려 든다.
+        await cancelPendingPledge(pledgeId, orderId)
+        await markPaymentFailed(orderId, {
+          code: error.reason === 'campaign_closed' ? 'CAMPAIGN_CLOSED' : 'REWARD_SOLD_OUT',
+          message: refunded
+            ? '후원을 확정할 자리가 없어 승인된 결제를 전액 환불했습니다.'
+            : '후원을 확정할 자리가 없으나 자동 환불에 실패했습니다. 수동 환불이 필요합니다.',
+        })
+        log.error('후원 확정 불가 — 승인 후 환불', {
+          orderId,
+          pledgeId,
+          reason: error.reason,
+          refunded,
+        })
+        const what =
+          error.reason === 'campaign_closed'
+            ? '결제를 승인하는 사이에 프로젝트가 마감되어 후원을 확정하지 못했습니다.'
+            : '결제를 승인하는 사이에 마지막 남은 수량이 다른 후원자에게 돌아가 후원을 확정하지 못했습니다.'
+        return ApiError.badRequest(
+          refunded
+            ? `${what} 결제하신 금액은 전액 환불했으며, 카드사에 따라 영업일 기준 3~5일 안에 확인하실 수 있습니다. 불편을 드려 죄송합니다.`
+            : `${what} 환불을 자동으로 처리하지 못했으니 사무국(contact@ggac.kr)으로 후원자 성함과 결제하신 날짜를 알려 주시면 전액 환불해 드리겠습니다.`
+        ).toNextResponse()
+      }
       log.error('후원 확정 기록 실패 — 승인은 이미 끝난 상태', { orderId, pledgeId, error })
       return ApiError.serviceUnavailable(
         '결제 결과를 확인하는 중입니다. 잠시 후 후원 내역을 확인해 주세요.'
