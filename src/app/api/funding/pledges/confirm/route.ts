@@ -67,6 +67,15 @@ export async function POST(request: NextRequest) {
     if (!payment) return ApiError.notFound('결제 내역을 찾을 수 없습니다.').toNextResponse()
     if (!pledge) return ApiError.notFound('후원 내역을 찾을 수 없습니다.').toNextResponse()
 
+    // 원장은 조합비·티켓·펀딩을 한 테이블에 담고 주문번호만으로 찾으므로,
+    // 확정 라우트는 저마다 "이 주문이 내 종류인가"를 스스로 봐야 한다. 여기는
+    // 아래 `pledge.order_id !== orderId` 짝 검사로도 막히지만, 그 검사가
+    // 리팩터링으로 사라지면 조용히 뚫린다. 규칙을 코드에 적어 둔다.
+    if (payment.kind !== 'funding') {
+      log.error('펀딩이 아닌 주문으로 후원 확정 시도', { orderId, kind: String(payment.kind ?? '') })
+      return ApiError.notFound('결제 내역을 찾을 수 없습니다.').toNextResponse()
+    }
+
     // 새로고침 멱등. 짝은 payment_id로 본다.
     if (payment.status === 'done' && pledge.status === 'paid' && pledge.payment_id === payment.id) {
       return ApiSuccess.ok({

@@ -61,6 +61,26 @@ export async function POST(request: NextRequest) {
       return ApiError.notFound('결제 내역을 찾을 수 없습니다.').toNextResponse()
     }
 
+    // **이 주문이 조합비 주문인지 본다.** 원장(`payments`)은 조합비·티켓·펀딩을
+    // 한 테이블에 담고 `getPaymentByOrderId`는 주문번호만으로 찾는다. 이 검사가
+    // 없으면 티켓·펀딩 주문번호를 이 라우트로 보내 그 결제가 조합비 납부로
+    // 기록된다 — 만원짜리 티켓 하나로 그 달 회비가 납부 완료가 되고,
+    // `markDuesPaid`는 미납 행만 바꾸므로 청구 크론도 그 달을 다시 걷지 않는다.
+    // 아래 금액 대조는 "원장 저장값 = 수신값"만 보므로 이것을 잡지 못한다.
+    //
+    // 티켓·펀딩 확정은 각자 예약·후원 행과 주문번호가 짝인지 확인하기 때문에
+    // 구조적으로 막혀 있었다. 대상을 주문이 아니라 **세션에서** 정하는 것은 이
+    // 라우트뿐이라 여기만 뚫려 있었다. 답은 "찾을 수 없다"로 같게 준다 — 그
+    // 번호로 다른 종류의 주문이 있다는 사실 자체를 알려 줄 이유가 없다.
+    if (payment.kind !== 'dues') {
+      log.warn('조합비가 아닌 주문으로 조합비 확정 시도', {
+        userId: maskId(user.id),
+        orderId,
+        kind: String(payment.kind ?? ''),
+      })
+      return ApiError.notFound('결제 내역을 찾을 수 없습니다.').toNextResponse()
+    }
+
     // 남의 주문번호로 승인을 시도하는 경로를 막는다.
     if (payment.user_id !== user.id) {
       log.warn('다른 회원의 주문 승인 시도', {

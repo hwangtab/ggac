@@ -275,3 +275,53 @@ test('전액 환불이면 취소 금액을 싣지 않는다', () => {
   // 실으면 반올림 차이로 거절될 수 있다.
   assert.match(TICKET_CANCEL, /isFullRefund \? \{\} : \{ cancelAmount/)
 })
+
+/**
+ * 결제 종류 검사 — 2026-09-23 적대 감사가 찾은 구멍.
+ *
+ * `payments` 한 테이블에 조합비·티켓·펀딩이 함께 들어가고
+ * `getPaymentByOrderId`는 **주문번호만으로** 찾는다. 그래서 확정 라우트는
+ * 저마다 "이 주문이 내 종류인가"를 스스로 봐야 한다.
+ *
+ * 조합비 확정만 대상을 주문이 아니라 **세션**(로그인 사용자 + 이번 청구월)에서
+ * 정했기 때문에 뚫려 있었다 — 만원짜리 티켓을 사고 그 주문번호를 조합비
+ * 확정으로 보내면 오만원 회비가 납부 완료로 기록됐다. `markDuesPaid`는 미납
+ * 행만 바꾸므로 청구 크론도 그 달을 다시 걷지 않아 손실이 영구적이었다.
+ *
+ * 금액 대조로는 잡히지 않는다 — 대조는 "원장 저장값 = 수신값"만 본다.
+ */
+
+const FUNDING_CONFIRM = readFileSync('src/app/api/funding/pledges/confirm/route.ts', 'utf8')
+
+/** 검사가 승인 호출보다 **앞**에 있어야 한다. 뒤에 있으면 이미 돈이 움직인 뒤다. */
+function assertKindCheckedBeforeApproval(source, kind, label) {
+  const check = source.search(new RegExp(`payment\\.kind !== '${kind}'`))
+  assert.ok(check >= 0, `${label}: payment.kind !== '${kind}' 검사가 없다`)
+  const approve = source.search(/confirmPayment\(/)
+  assert.ok(approve >= 0, `${label}: confirmPayment 호출을 찾지 못했다`)
+  assert.ok(
+    check < approve,
+    `${label}: 종류 검사가 승인 호출보다 뒤에 있다 — 승인이 끝난 뒤 막아 봐야 돈은 이미 나갔다`
+  )
+}
+
+test('조합비 확정은 조합비 주문만 받는다', () => {
+  assertKindCheckedBeforeApproval(CONFIRM, 'dues', '조합비 확정')
+})
+
+test('티켓 확정은 티켓 주문만 받는다', () => {
+  assertKindCheckedBeforeApproval(TICKET_CONFIRM, 'ticket', '티켓 확정')
+})
+
+test('펀딩 확정은 펀딩 주문만 받는다', () => {
+  assertKindCheckedBeforeApproval(FUNDING_CONFIRM, 'funding', '펀딩 확정')
+})
+
+test('주문 조회는 주문번호만 보므로 종류를 걸러 주지 않는다', () => {
+  // 이 테스트가 깨진다면 `getPaymentByOrderId`가 종류까지 거르도록 바뀐 것이고,
+  // 그렇다면 위 세 검사의 근거가 달라진 것이니 함께 다시 판단해야 한다.
+  const QUERIES = readFileSync('src/db/queries/payments.ts', 'utf8')
+  const fn = QUERIES.match(/export async function getPaymentByOrderId[\s\S]*?\n\}/)
+  assert.ok(fn, 'getPaymentByOrderId를 찾지 못했다')
+  assert.doesNotMatch(fn[0], /kind/)
+})
