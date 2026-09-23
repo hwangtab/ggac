@@ -1,7 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { evaluateRewardPatch, canDeleteReward } from '../../src/lib/funding/rewardLock.ts'
+import {
+  evaluateRewardPatch,
+  canDeleteReward,
+  deliveryChangesToLog,
+} from '../../src/lib/funding/rewardLock.ts'
 
 const unlocked = {
   title: '리워드',
@@ -9,6 +13,7 @@ const unlocked = {
   amount: 10000,
   requires_shipping: false,
   total_quantity: 10,
+  image_url: '/images/reward.jpg',
   locked_at: null,
 }
 const locked = { ...unlocked, locked_at: '2026-09-21T00:00:00.000Z' }
@@ -130,4 +135,123 @@ test('공개 중 결제까지 있는 리워드의 수량 축소는 결제 잠금
     ok: false,
     reason: 'quantity_decrease',
   })
+})
+
+// --- 2026-09-23 감사: 잠금 판정이 모르던 세 컬럼 -----------------------------
+
+test('공개 중에는 기존 리워드의 사진을 바꿀 수 없다(결제 유무와 무관)', () => {
+  assert.deepEqual(
+    evaluateRewardPatch(unlocked, { image_url: '/images/다른.jpg' }, 'contentOnly'),
+    {
+      ok: false,
+      reason: 'content_only_image',
+    }
+  )
+  assert.deepEqual(evaluateRewardPatch(unlocked, { image_url: null }, 'contentOnly'), {
+    ok: false,
+    reason: 'content_only_image',
+  })
+  assert.deepEqual(evaluateRewardPatch(locked, { image_url: '/images/다른.jpg' }, 'contentOnly'), {
+    ok: false,
+    reason: 'content_only_image',
+  })
+})
+
+test('같은 사진을 그대로 다시 보내는 것은 변경이 아니다 — 매번 전체를 보내는 화면이 막히면 안 된다', () => {
+  assert.deepEqual(
+    evaluateRewardPatch(unlocked, { image_url: '/images/reward.jpg' }, 'contentOnly'),
+    { ok: true }
+  )
+  assert.deepEqual(
+    evaluateRewardPatch({ ...unlocked, image_url: null }, { image_url: null }, 'contentOnly'),
+    { ok: true }
+  )
+})
+
+test('초안(all)에서는 사진을 자유롭게 바꾼다', () => {
+  assert.deepEqual(evaluateRewardPatch(unlocked, { image_url: '/images/다른.jpg' }), { ok: true })
+  assert.deepEqual(evaluateRewardPatch(unlocked, { image_url: '/images/다른.jpg' }, 'all'), {
+    ok: true,
+  })
+})
+
+test('예상 전달월과 정렬 순서는 어느 가지에서도 막지 않는다', () => {
+  for (const scope of ['all', 'contentOnly']) {
+    assert.deepEqual(
+      evaluateRewardPatch(unlocked, { estimated_delivery: '2027-01', sort_order: 5 }, scope),
+      { ok: true }
+    )
+    assert.deepEqual(
+      evaluateRewardPatch(locked, { estimated_delivery: '2027-01', sort_order: 5 }, scope),
+      { ok: true }
+    )
+  }
+})
+
+test('예상 전달월 변경은 이전 값·새 값과 함께 기록거리로 뽑힌다', () => {
+  const existing = [
+    { id: 'r1', title: '리워드1', estimated_delivery: '2026-11' },
+    { id: 'r2', title: '리워드2', estimated_delivery: null },
+  ]
+  assert.deepEqual(
+    deliveryChangesToLog(existing, [
+      { id: 'r1', title: '리워드1', estimated_delivery: '2027-03' },
+      { id: 'r2', title: '리워드2', estimated_delivery: null },
+      { title: '새 리워드', estimated_delivery: '2027-05' },
+    ]),
+    [{ reward_id: 'r1', reward_title: '리워드1', from: '2026-11', to: '2027-03' }]
+  )
+  // null↔값 양방향도 변경이다.
+  assert.deepEqual(
+    deliveryChangesToLog(existing, [{ id: 'r2', title: '리워드2', estimated_delivery: '2027-01' }]),
+    [{ reward_id: 'r2', reward_title: '리워드2', from: null, to: '2027-01' }]
+  )
+  assert.deepEqual(
+    deliveryChangesToLog(existing, [{ id: 'r1', title: '리워드1', estimated_delivery: null }]),
+    [{ reward_id: 'r1', reward_title: '리워드1', from: '2026-11', to: null }]
+  )
+  // 바뀐 것이 없으면 아무것도 남기지 않는다.
+  assert.deepEqual(
+    deliveryChangesToLog(existing, [{ id: 'r1', title: '리워드1', estimated_delivery: '2026-11' }]),
+    []
+  )
+})
+
+// ── 사진이 NULL인 행 하나가 그 캠페인의 리워드 저장을 통째로 막던 것 ────────
+
+test('빈 값과 값 없음은 같은 것으로 본다 — 사진·설명이 NULL인 행이 저장을 막지 않는다', () => {
+  // 화면이 보내는 값은 `parseRewardList`를 지나 빈 입력칸이 `''`가 된다.
+  // 표에는 NULL이 들어 있을 수 있다(시드·수기 보정). 둘 다 "없음"이다.
+  const existing = {
+    title: '음반',
+    description: null,
+    amount: 30000,
+    requires_shipping: true,
+    total_quantity: 10,
+    image_url: null,
+    locked_at: null,
+  }
+  const patch = {
+    title: '음반',
+    description: '',
+    amount: 30000,
+    requires_shipping: true,
+    total_quantity: 10,
+    image_url: '',
+  }
+  assert.deepEqual(evaluateRewardPatch(existing, patch, 'contentOnly'), { ok: true })
+  // 반대 방향도 같다.
+  assert.deepEqual(
+    evaluateRewardPatch(
+      { ...existing, description: '', image_url: '' },
+      { ...patch, description: null, image_url: null },
+      'contentOnly'
+    ),
+    { ok: true }
+  )
+  // 진짜로 사진이 바뀌는 것은 여전히 막는다.
+  assert.deepEqual(
+    evaluateRewardPatch(existing, { ...patch, image_url: 'https://x/y.webp' }, 'contentOnly'),
+    { ok: false, reason: 'content_only_image' }
+  )
 })

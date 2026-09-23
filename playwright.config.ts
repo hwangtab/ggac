@@ -152,6 +152,17 @@ export default defineConfig({
       // 유지보수가 반영되지 않는 것처럼 보인다. 운영 빌드/배포 커맨드에는 이
       // 변수를 넣지 않는다.
       SETTINGS_CACHE_TTL_MS: '0',
+      // 후원 취소 경계(`e2e/authz-funding.spec.ts`)는 결제 킬스위치가 꺼져
+      // 있으면 인가 판정에 닿기도 전에 503을 받는다
+      // (`isPaymentEnabled()` — `src/lib/payments/toss/config.ts`). 그러면
+      // "막았다"와 "결제가 원래 꺼져 있었다"를 구분할 수 없다. 개발자
+      // `.env.local`의 값에 좌우되지 않도록 여기서 켜 둔다.
+      //
+      // **결제가 실제로 일어나지는 않는다.** 그 스펙의 픽스처 후원에는 결제
+      // 연결(`payment_id`)이 없어, 라우트는 신원 확인을 지난 뒤 토스를 부르기
+      // 전에 400으로 끝난다. 토스 호출은 `https://api.tosspayments.com` 상수라
+      // 애초에 로컬로 돌릴 수 없고, 이 스위치만으로는 아무 키도 생기지 않는다.
+      NEXT_PUBLIC_PAYMENT_MODE: 'toss',
       PORT: String(port),
       // TURSO_DATABASE_URL — 없으면 .env.local의 운영 Turso를 그대로 가리킨다.
       // 파일 상단에서 `E2E_TURSO_DATABASE_URL`이 설정됐을 때만 process.env에

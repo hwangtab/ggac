@@ -94,8 +94,11 @@ async function resetReviewCampaign(): Promise<void> {
   const client = createClient({ url: process.env.TURSO_DATABASE_URL! })
   try {
     const res = await client.execute({
+      // slug·approved_at까지 되돌린다 — 이 캠페인은 승인까지 가는 테스트가
+      // 있고(「승인은 심사한 판에만 찍힌다」), 승인은 둘 다 새로 쓴다.
       sql: `UPDATE funding_campaigns
-               SET status = 'submitted', submitted_at = ?, review_note = NULL
+               SET status = 'submitted', submitted_at = ?, review_note = NULL,
+                   slug = 'authz-e2e-funding-review', approved_at = NULL
              WHERE id = ?`,
       args: [new Date('2026-09-01T00:00:00.000Z').getTime(), fixtures.fundingReviewCampaignId],
     })
@@ -473,6 +476,615 @@ test.describe('펀딩 — 비인증 요청', () => {
         expect(res.status(), label).toBe(401)
       }
     } finally {
+      await anonContext.dispose()
+    }
+  })
+})
+
+/**
+ * **관리자 전용 동작(approve·reject·settle)은 마이페이지 라우트로 들어오지 못한다.**
+ *
+ * 마이페이지 전이 라우트(`src/app/api/mypage/funding/campaigns/[id]/transition/
+ * route.ts`)에서 이 경계를 지키는 것은 **한 줄**이다 —
+ * `if (actorFor(action) !== 'owner_or_admin') return ApiError.forbidden(...)`.
+ * 그 줄을 지우면 개설자가 자기 캠페인에 `{"action":"approve"}`를 보내 스스로
+ * 공개하고 돈을 받기 시작할 수 있고, 이어서 `close`·`settle`까지 간다.
+ *
+ * 그 줄이 없어도 아래 어느 것도 울지 않는다(실제로 확인한 사실이다):
+ *
+ * - `canManageCampaign`은 **누구의 캠페인인가**만 보고 어떤 동작인지 모른다
+ * - `nextStatus('submitted', 'approve')`는 유효한 전이다 — 전이표에 행위자
+ *   개념이 없다
+ * - `checkActionPreconditions`에는 `submit` 규칙만 있다
+ * - `transitionCampaign`은 slug가 없어도 그냥 승인한다
+ * - `scripts/testing/fundingTransitions.test.mjs`는 `actorFor('approve')`가
+ *   `'admin'`임을 못박지만, **그 함수를 라우트가 부르는지는 아무도 안 본다**
+ *
+ * 그래서 경계를 라우트로 직접 두드린다. 동작마다 캠페인을 따로 두는 이유는
+ * 시드 주석에 적었다.
+ *
+ * ### 왜 동작 **전부**를 도는가
+ *
+ * 하나만 못박으면 나머지가 열린 채로 남는다. `settle`은 특히 조심스럽다 —
+ * 시작 상태가 `closed`가 아니면 가드를 지워도 전이표가 400으로 막아, 테스트가
+ * "막혔다"를 보면서 아무것도 증명하지 않는다. 그래서 정산 캠페인만 `closed`로
+ * 심고, 단정도 "200이 아니다"가 아니라 **정확히 403과 그 문구**를 요구한다.
+ */
+const ADMIN_ONLY_ACTIONS = [
+  {
+    action: 'approve',
+    campaignId: fixtures.fundingApproveCampaignId,
+    from: 'submitted',
+    to: 'active',
+  },
+  {
+    action: 'reject',
+    campaignId: fixtures.fundingRejectCampaignId,
+    from: 'submitted',
+    to: 'draft',
+  },
+  { action: 'settle', campaignId: fixtures.fundingSettleCampaignId, from: 'closed', to: 'settled' },
+] as const
+
+/** 관리자 화면이 승인 요청에 싣는 판 번호. 관리자도 마이페이지 조회로 읽는다. */
+async function readCampaignVersion(
+  context: { get(url: string): Promise<{ status(): number; json(): Promise<any> }> },
+  id: string
+): Promise<string> {
+  const res = await context.get(`/api/mypage/funding/campaigns/${id}`)
+  expect(res.status()).toBe(200)
+  const version = (await res.json()).data?.campaign?.updated_at
+  expect(typeof version).toBe('string')
+  return version as string
+}
+
+/** 관리자 라우트가 각 동작에 요구하는 나머지 입력. 인가와 무관한 400을 피한다. */
+async function adminTransitionBody(
+  action: (typeof ADMIN_ONLY_ACTIONS)[number]['action'],
+  adminContext: Parameters<typeof readCampaignVersion>[0],
+  campaignId: string
+): Promise<Record<string, unknown>> {
+  if (action === 'approve') {
+    return {
+      action,
+      // 시드가 심은 주소를 그대로 돌려준다 — 주소가 바뀌지 않으므로 유니크
+      // 충돌도, 되돌릴 것도 없다.
+      slug: fixtures.fundingApproveCampaignSlug,
+      reviewedVersion: await readCampaignVersion(adminContext, campaignId),
+    }
+  }
+  if (action === 'reject') return { action, reviewNote: 'authz 픽스처 반려 사유(관리자 전용 동작)' }
+  return { action }
+}
+
+/** 관리자 전용 동작 캠페인 셋을 시드가 심은 시작 상태로 되돌린다. */
+async function resetAdminActionCampaigns(): Promise<void> {
+  const client = createClient({ url: process.env.TURSO_DATABASE_URL! })
+  try {
+    const rows: Array<[string, string, number | null]> = [
+      [fixtures.fundingApproveCampaignId, 'submitted', null],
+      [fixtures.fundingRejectCampaignId, 'submitted', null],
+      [fixtures.fundingSettleCampaignId, 'closed', new Date('2026-09-02T00:00:00.000Z').getTime()],
+    ]
+    for (const [id, status, closedAt] of rows) {
+      const res = await client.execute({
+        sql: `UPDATE funding_campaigns
+                 SET status = ?, closed_at = ?, submitted_at = ?,
+                     approved_at = NULL, settled_at = NULL, review_note = NULL
+               WHERE id = ?`,
+        args: [status, closedAt, new Date('2026-09-01T00:00:00.000Z').getTime(), id],
+      })
+      if (res.rowsAffected !== 1) {
+        throw new Error(
+          `펀딩 캠페인 초기화 실패(${id}): ${res.rowsAffected}개 행이 갱신됐다(1이어야 한다). ` +
+            'seed-authz-fixtures.mjs를 먼저 돌렸는지 확인할 것.'
+        )
+      }
+    }
+  } finally {
+    client.close()
+  }
+}
+
+test.describe('펀딩 — 관리자 전용 동작은 마이페이지 라우트로 들어오지 못한다', () => {
+  test.afterAll(async () => {
+    await resetAdminActionCampaigns()
+  })
+
+  for (const { action, campaignId, from, to } of ADMIN_ONLY_ACTIONS) {
+    test(`${action} — 개설자가 마이페이지 라우트로 보내면 403이고 상태는 그대로다. 관리자 라우트로는 통한다`, async ({
+      baseURL,
+    }) => {
+      const ownerContext = await apiRequest.newContext({
+        baseURL,
+        storageState: storageStatePath('owner'),
+      })
+      const adminContext = await apiRequest.newContext({
+        baseURL,
+        storageState: storageStatePath('admin'),
+      })
+      try {
+        // 시작 상태가 전제대로인지 먼저 본다 — 아니면 아래 403이 "막았다"가
+        // 아니라 "전이표가 400으로 끊었다"일 수 있다.
+        const before = await readCampaignRow(campaignId)
+        expect(before?.status, `${action} 시작 상태`).toBe(from)
+        // 그리고 이 캠페인의 개설자가 정말 `owner`인지 — 아니면 403이 행위자
+        // 판정이 아니라 소유권 판정(404)에서 나올 수 있다.
+        expect(before?.owner_user_id).toBe(fixtures.users.owner)
+
+        // 금지 쪽: 캠페인 주인이 자기 캠페인에 관리자 전용 동작을 보낸다.
+        const denied = await ownerContext.post(
+          `/api/mypage/funding/campaigns/${campaignId}/transition`,
+          { data: { action } }
+        )
+        expect(denied.status(), `${action} 거부 코드`).toBe(403)
+        expect((await denied.json()).error).toContain('권한이 없습니다')
+
+        // 짝: 403을 돌려주면서 실제로는 옮겨버리는 모양을 코드만으로는 구분할
+        // 수 없다 — DB를 직접 읽는다.
+        const afterDenied = await readCampaignRow(campaignId)
+        expect(afterDenied?.status, `${action} 거부 후 상태`).toBe(from)
+
+        // 허용 쪽: 같은 동작이 관리자 라우트로는 통한다. 이 단정이 없으면
+        // 게이트가 "전부 막기"로 퇴화해도 위 부정 단정은 그대로 초록불이다.
+        const allowed = await adminContext.post(
+          `/api/admin/funding/campaigns/${campaignId}/transition`,
+          { data: await adminTransitionBody(action, adminContext, campaignId) }
+        )
+        expect(allowed.status(), `${action} 허용 코드`).toBe(200)
+        expect((await allowed.json()).data?.campaign?.status).toBe(to)
+
+        const afterAllowed = await readCampaignRow(campaignId)
+        expect(afterAllowed?.status, `${action} 허용 후 상태`).toBe(to)
+      } finally {
+        await ownerContext.dispose()
+        await adminContext.dispose()
+      }
+    })
+  }
+})
+
+/**
+ * **후원 취소 경계** — `POST /api/funding/pledges/cancel`.
+ *
+ * 이 라우트는 `getOptionalUser()`로 요청자를 알아본다. 그 함수는 아무도 막지
+ * 않는다. "내 후원"과 "아무의 후원"을 가르는 것은 `canViewPledge` 한 번뿐이고,
+ * 그 줄을 지우면 후원 id를 아는 로그인 사용자가 남의 결제를 환불시킬 수 있다.
+ * 개설자 화면(`GET /api/mypage/funding/campaigns/[id]`)이 자기 캠페인의 후원
+ * id를 전부 건네주므로 그 id를 구하는 일은 어렵지 않다. 이번 회차 전까지
+ * `e2e/` 어느 스펙도 `/api/funding/pledges/*`를 한 번도 부르지 않았다.
+ *
+ * ## 허용 쪽이 400인 이유 — 여기서 증명하는 것과 증명하지 않는 것
+ *
+ * 취소의 성공 경로는 토스에 **실제 환불**을 요청한다. 토스 클라이언트의
+ * 주소(`https://api.tosspayments.com`)는 상수라 로컬로 돌릴 수 없으므로
+ * E2E가 그 경로를 끝까지 탈 수는 없다. 그래서 픽스처 후원에는 결제
+ * 연결(`payment_id`)을 두지 않았다 — 라우트는 신원 확인과 상태·캠페인·배송
+ * 검사를 **전부 지난 뒤** 400 `결제 정보를 확인할 수 없습니다`로 끝난다.
+ *
+ * - **증명한다**: 요청자가 신원 관문을 지났는가. 거부(404 `찾을 수 없습니다`)와
+ *   글자 단위로 다른 답이므로, `canViewPledge`를 지우면 거부 쪽이 이 400으로
+ *   바뀌어 테스트가 빨간불이 된다.
+ * - **증명하지 않는다**: 환불이 실제로 나가는지, 원장이 맞게 적히는지. 그건
+ *   `scripts/testing/queriesFundingPledges.test.mjs`(쿼리 계층)와 사람의 손이
+ *   본다.
+ *
+ * 선점(`claimPledgeForCancel`)은 이 400보다 **뒤**에 있으므로 어느 쪽 요청도
+ * 후원 행을 바꾸지 않는다 — 그래도 매번 DB를 다시 읽어 확인한다.
+ */
+const PLEDGE_NOT_FOUND = '후원 내역을 찾을 수 없습니다.'
+const PLEDGE_NO_PAYMENT = '결제 정보를 확인할 수 없습니다. 사무국으로 문의해 주세요.'
+
+async function readPledgeRow(id: string) {
+  const client = createClient({ url: process.env.TURSO_DATABASE_URL! })
+  try {
+    const res = await client.execute({
+      sql: `SELECT status, fulfillment_status, canceled_at, refunded_at, user_id
+              FROM funding_pledges WHERE id = ?`,
+      args: [id],
+    })
+    return res.rows[0] ?? null
+  } finally {
+    client.close()
+  }
+}
+
+/** 후원 둘을 시드가 심은 상태(결제 완료, 배송 전, 결제 연결 없음)로 되돌린다. */
+async function resetPledges(): Promise<void> {
+  const client = createClient({ url: process.env.TURSO_DATABASE_URL! })
+  try {
+    for (const id of [fixtures.fundingMemberPledgeId, fixtures.fundingGuestPledgeId]) {
+      const res = await client.execute({
+        sql: `UPDATE funding_pledges
+                 SET status = 'paid', fulfillment_status = 'none',
+                     canceled_at = NULL, refunded_at = NULL, payment_id = NULL
+               WHERE id = ?`,
+        args: [id],
+      })
+      if (res.rowsAffected !== 1) {
+        throw new Error(
+          `후원 초기화 실패(${id}): ${res.rowsAffected}개 행이 갱신됐다(1이어야 한다). ` +
+            'seed-authz-fixtures.mjs를 먼저 돌렸는지 확인할 것.'
+        )
+      }
+    }
+  } finally {
+    client.close()
+  }
+}
+
+test.describe('펀딩 — 후원 취소 경계', () => {
+  test.afterAll(async () => {
+    await resetPledges()
+  })
+
+  test('회원 후원은 본인만 취소를 시작한다 — 캠페인 개설자도 남의 후원은 못 건드린다', async ({
+    baseURL,
+  }) => {
+    // 거부당하는 쪽이 **캠페인 개설자**다. 감사가 짚은 경로가 "개설자 화면이
+    // 후원 id를 전부 건네준다"이므로, 남남인 제3자보다 이쪽이 실제 위험이다.
+    const ownerContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('owner'),
+    })
+    const backerContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('other'),
+    })
+    try {
+      const before = await readPledgeRow(fixtures.fundingMemberPledgeId)
+      expect(before?.status).toBe('paid')
+      expect(before?.user_id).toBe(fixtures.users.other)
+
+      const denied = await ownerContext.post('/api/funding/pledges/cancel', {
+        data: { pledgeId: fixtures.fundingMemberPledgeId },
+      })
+      expect(denied.status()).toBe(404)
+      expect((await denied.json()).error).toBe(PLEDGE_NOT_FOUND)
+
+      // 짝: 404를 돌려주면서 실제로는 선점해버리는 모양을 코드만으로는 구분할
+      // 수 없다.
+      const afterDenied = await readPledgeRow(fixtures.fundingMemberPledgeId)
+      expect(afterDenied?.status).toBe('paid')
+      expect(afterDenied?.canceled_at).toBeNull()
+
+      // 허용 쪽: 후원자 본인은 신원 관문을 지난다(위 주석의 400).
+      const allowed = await backerContext.post('/api/funding/pledges/cancel', {
+        data: { pledgeId: fixtures.fundingMemberPledgeId },
+      })
+      expect(allowed.status()).toBe(400)
+      expect((await allowed.json()).error).toBe(PLEDGE_NO_PAYMENT)
+
+      const afterAllowed = await readPledgeRow(fixtures.fundingMemberPledgeId)
+      expect(afterAllowed?.status).toBe('paid')
+    } finally {
+      await ownerContext.dispose()
+      await backerContext.dispose()
+    }
+  })
+
+  test('비회원 후원은 후원번호와 이메일이 둘 다 맞아야 한다', async ({ baseURL }) => {
+    // 세션 없는 요청이다 — 비회원 경로의 열쇠는 번호+이메일 한 쌍뿐이다.
+    const anonContext = await apiRequest.newContext({ baseURL })
+    try {
+      expect((await readPledgeRow(fixtures.fundingGuestPledgeId))?.status).toBe('paid')
+
+      // 번호는 맞고 이메일이 틀린 경우. 이 짝이 없으면 조회가 번호 하나로
+      // 무너져도(= `lower(backer_email) = lower(?)` 조건이 사라져도) 아래
+      // 허용 단정만 초록불로 남는다.
+      const wrongEmail = await anonContext.post('/api/funding/pledges/cancel', {
+        data: {
+          pledgeCode: fixtures.fundingGuestPledgeCode,
+          email: 'authz-not-the-backer@test.local',
+        },
+      })
+      expect(wrongEmail.status()).toBe(404)
+      expect((await wrongEmail.json()).error).toBe(PLEDGE_NOT_FOUND)
+
+      // 이메일은 맞고 번호가 틀린 경우 — 같은 답이어야 한다(번호의 존재
+      // 여부가 새면 추측이 쉬워진다).
+      const wrongCode = await anonContext.post('/api/funding/pledges/cancel', {
+        data: { pledgeCode: 'FND-20260901-ZZZZZZZZ', email: fixtures.fundingGuestBackerEmail },
+      })
+      expect(wrongCode.status()).toBe(404)
+      expect((await wrongCode.json()).error).toBe(PLEDGE_NOT_FOUND)
+
+      const afterDenied = await readPledgeRow(fixtures.fundingGuestPledgeId)
+      expect(afterDenied?.status).toBe('paid')
+      expect(afterDenied?.canceled_at).toBeNull()
+
+      // 허용 쪽: 둘 다 맞으면 신원 관문을 지난다.
+      const allowed = await anonContext.post('/api/funding/pledges/cancel', {
+        data: {
+          pledgeCode: fixtures.fundingGuestPledgeCode,
+          email: fixtures.fundingGuestBackerEmail,
+        },
+      })
+      expect(allowed.status()).toBe(400)
+      expect((await allowed.json()).error).toBe(PLEDGE_NO_PAYMENT)
+
+      expect((await readPledgeRow(fixtures.fundingGuestPledgeId))?.status).toBe('paid')
+    } finally {
+      await anonContext.dispose()
+    }
+  })
+
+  /**
+   * **세션은 신원이다.** 번호+이메일 경로는 인증할 수 없는 사람을 위한
+   * 길이지, 인증할 수 있는 사람에게 열린 두 번째 문이 아니다.
+   *
+   * 4차 감사에서 확인한 실제 경로다 — 개설자 화면이 결제 완료 후원의
+   * `pledge_code`를 전부 주고 배송 리워드면 `backer_email`까지 줬다. 그 둘을
+   * 쥔 개설자가 `pledgeId` 대신 번호+이메일을 보내면 `canViewPledge`를 보지
+   * 않는 갈래로 우회해 자기 후원자의 결제를 전액 환불시킬 수 있었다.
+   *
+   * 두 곳을 함께 닫았고 **한쪽만으로는 닫히지 않는다** — 이메일만 빼면 번호는
+   * 여전히 화면에 있고(다른 경로로 이메일을 알면 그만이다), 라우트만 고치면
+   * 개설자 화면은 계속 남의 결제 열쇠를 화면에 뿌린다.
+   */
+  test('개설자는 후원번호와 이메일로도 남의 후원을 취소하지 못한다 — 임자 있는 후원은 세션이 임자일 때만', async ({
+    baseURL,
+  }) => {
+    const ownerContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('owner'),
+    })
+    const backerContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('other'),
+    })
+    try {
+      // 금지 쪽: 캠페인 개설자가 자기 후원자의 번호+이메일을 그대로 보낸다.
+      // 둘 다 맞는 값이다 — 막는 것은 값의 정확성이 아니라 임자 판정이다.
+      const denied = await ownerContext.post('/api/funding/pledges/cancel', {
+        data: {
+          pledgeCode: fixtures.fundingMemberPledgeCode,
+          email: fixtures.fundingMemberBackerEmail,
+        },
+      })
+      expect(denied.status()).toBe(404)
+      expect((await denied.json()).error).toBe(PLEDGE_NOT_FOUND)
+
+      const afterDenied = await readPledgeRow(fixtures.fundingMemberPledgeId)
+      expect(afterDenied?.status).toBe('paid')
+      expect(afterDenied?.canceled_at).toBeNull()
+
+      // 허용 쪽: 같은 번호+이메일을 **후원자 본인**이 보내면 지난다. 이 단정이
+      // 없으면 갈래를 통째로 막아도(= 회원 후원은 번호+이메일로 영영 못 건드리게
+      // 해도) 위 부정 단정은 초록불이다. 후원자에게 열린 두 길(후원 id·번호+이메일)이
+      // 둘 다 살아 있어야 한다 — 앞 테스트가 후원 id 쪽을 본다.
+      const allowed = await backerContext.post('/api/funding/pledges/cancel', {
+        data: {
+          pledgeCode: fixtures.fundingMemberPledgeCode,
+          email: fixtures.fundingMemberBackerEmail,
+        },
+      })
+      expect(allowed.status()).toBe(400)
+      expect((await allowed.json()).error).toBe(PLEDGE_NO_PAYMENT)
+
+      expect((await readPledgeRow(fixtures.fundingMemberPledgeId))?.status).toBe('paid')
+    } finally {
+      await ownerContext.dispose()
+      await backerContext.dispose()
+    }
+  })
+
+  /**
+   * **개설자 화면은 후원자 이메일을 싣지 않는다.**
+   *
+   * 택배를 부치는 데 필요한 것은 받는 사람 이름·전화번호·주소이고 그 셋은
+   * 그대로 간다. 이메일은 거기에 보태는 편의였는데, 같은 화면이 주는
+   * `pledge_code`와 짝이 되는 순간 남의 결제를 환불하는 열쇠가 된다.
+   *
+   * 값을 치른다 — 개설자가 후원자에게 메일로 연락할 길이 화면에서 사라진다.
+   * 그런 일은 사무국을 거친다. 의도한 맞바꿈이라 여기 적어 둔다.
+   */
+  test('개설자 화면은 후원자 이메일을 싣지 않는다 — 배송에 필요한 것만 간다', async ({
+    baseURL,
+  }) => {
+    const ownerContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('owner'),
+    })
+    try {
+      const res = await ownerContext.get(
+        `/api/mypage/funding/campaigns/${fixtures.fundingActiveCampaignId}`
+      )
+      expect(res.status()).toBe(200)
+      const bodyText = await res.text()
+      const body = JSON.parse(bodyText)
+      const pledges = body.data?.pledges as Array<Record<string, unknown>>
+      const mine = pledges.find(p => p.pledge_code === fixtures.fundingMemberPledgeCode)
+      expect(mine, '개설자 화면에 그 후원이 보이지 않는다 — 시드를 확인할 것').toBeTruthy()
+
+      // 먼저 **배송 묶음이 실제로 실려 있는지** 본다. 이 리워드가 배송이
+      // 아니면 아래 단정이 게이트와 무관하게 공허하게 통과한다.
+      expect(mine!.shipping_address1).toBeTruthy()
+      expect(mine!.shipping_phone).toBeTruthy()
+
+      expect(mine!.backer_email).toBeUndefined()
+      // 키 이름을 바꿔 같은 값을 다시 싣는 길도 막는다 — 응답 어디에도
+      // 후원자 이메일 문자열이 없어야 한다.
+      expect(bodyText).not.toContain(fixtures.fundingMemberBackerEmail)
+      expect(bodyText).not.toContain(fixtures.fundingGuestBackerEmail)
+    } finally {
+      await ownerContext.dispose()
+    }
+  })
+})
+
+/**
+ * **공개 상세가 리워드 행을 그대로 내보내지 않는다** —
+ * `GET /api/funding/campaigns/[slug]`.
+ *
+ * 2차 수리가 `toPublicReward`로 싣는 목록을 만들었지만, 라우트가 그 함수를
+ * 실제로 부르는지 보는 테스트는 없었다. `...r`로 되돌리면 `locked_at`이 다시
+ * 공개 응답에 실리는데 단위 테스트는 전부 초록불이다(순수 함수는 멀쩡하니까).
+ * 그래서 **응답 본문**을 본다.
+ *
+ * `locked_at`이 새면 공개 후원자 명단의 `paid_at`과 시각으로 맞춰져 "이
+ * 리워드를 처음 잠근 후원자"가 특정된다 — 이름이 걸린 사람을 특정 금액에
+ * 묶을 수 있다.
+ */
+test.describe('펀딩 — 공개 상세 응답', () => {
+  test('공개 상세는 리워드의 내부 필드를 싣지 않는다 — locked_at이 새지 않는다', async ({
+    baseURL,
+  }) => {
+    const anonContext = await apiRequest.newContext({ baseURL })
+    const client = createClient({ url: process.env.TURSO_DATABASE_URL! })
+    try {
+      // 먼저 표에 잠금이 실제로 찍혀 있는지 본다 — 비어 있으면 아래 단정이
+      // 게이트 덕분인지 값이 없어서인지 구분되지 않는다(공허한 통과).
+      const row = await client.execute({
+        sql: 'SELECT locked_at FROM funding_rewards WHERE id = ?',
+        args: [fixtures.fundingActiveRewardId],
+      })
+      expect(row.rows[0]?.locked_at, '픽스처 리워드에 잠금이 없다 — 시드를 확인할 것').toBeTruthy()
+
+      const res = await anonContext.get(
+        `/api/funding/campaigns/${fixtures.fundingActiveCampaignSlug}`
+      )
+      expect(res.status()).toBe(200)
+      const text = await res.text()
+      const rewards = JSON.parse(text).data?.rewards as Array<Record<string, unknown>>
+      expect(Array.isArray(rewards)).toBe(true)
+      expect(rewards.length).toBeGreaterThan(0)
+      for (const reward of rewards) {
+        expect(Object.keys(reward).sort()).toEqual([
+          'amount',
+          'description',
+          'estimated_delivery',
+          'id',
+          'image_url',
+          'remaining_quantity',
+          'requires_shipping',
+          'title',
+          'total_quantity',
+        ])
+      }
+      // 키 이름을 바꿔 같은 값을 다시 싣는 길도 막는다.
+      expect(text).not.toContain('locked_at')
+      expect(text).not.toContain('campaign_id')
+    } finally {
+      client.close()
+      await anonContext.dispose()
+    }
+  })
+})
+
+/**
+ * **승인은 관리자가 실제로 읽은 판에만 찍힌다** —
+ * `POST /api/admin/funding/campaigns/[id]/transition`.
+ *
+ * `transitionCampaign`은 `expectedUpdatedAt`이 `undefined`면 조건이 없는
+ * 것으로 보고 그냥 승인한다. 그래서 라우트의 `reviewedVersion` 블록을 지우면
+ * 쿼리 계층 테스트는 전부 초록불인 채로 경계만 사라진다 — 관리자가 본 적 없는
+ * 내용이 그대로 공개된다. 여기서는 **라우트에** 낡은 판 번호를 보낸다.
+ */
+test.describe('펀딩 — 승인은 심사한 판에만 찍힌다', () => {
+  test.afterAll(async () => {
+    await resetReviewCampaign()
+  })
+
+  test('낡은 판 번호로 보낸 승인은 409이고 상태는 그대로다. 지금 판 번호면 통한다', async ({
+    baseURL,
+  }) => {
+    const adminContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('admin'),
+    })
+    try {
+      const id = fixtures.fundingReviewCampaignId
+      expect((await readCampaignRow(id))?.status, '시작 상태').toBe('submitted')
+
+      // 판 번호를 아예 빼면 400이다 — "조건 없음"으로 조용히 통과하지 않는다.
+      const missing = await adminContext.post(`/api/admin/funding/campaigns/${id}/transition`, {
+        data: { action: 'approve', slug: 'authz-e2e-funding-review-stale' },
+      })
+      expect(missing.status(), '판 번호 없음').toBe(400)
+      expect((await missing.json()).error).toContain('판 정보가 없습니다')
+      expect((await readCampaignRow(id))?.status).toBe('submitted')
+
+      // 낡은 판 번호는 409다.
+      const stale = await adminContext.post(`/api/admin/funding/campaigns/${id}/transition`, {
+        data: {
+          action: 'approve',
+          slug: 'authz-e2e-funding-review-stale',
+          reviewedVersion: new Date('1999-01-01T00:00:00.000Z').toISOString(),
+        },
+      })
+      expect(stale.status(), '낡은 판 번호').toBe(409)
+      expect((await stale.json()).error).toContain('심사하는 동안')
+      expect((await readCampaignRow(id))?.status, '거부 후 상태').toBe('submitted')
+
+      // 허용 쪽: 지금 판 번호면 승인된다. 이 단정이 없으면 승인을 통째로
+      // 막아도 위 두 단정은 초록불이다.
+      const allowed = await adminContext.post(`/api/admin/funding/campaigns/${id}/transition`, {
+        data: {
+          action: 'approve',
+          slug: 'authz-e2e-funding-review-stale',
+          reviewedVersion: await readCampaignVersion(adminContext, id),
+        },
+      })
+      expect(allowed.status(), '지금 판 번호').toBe(200)
+      expect((await readCampaignRow(id))?.status).toBe('active')
+    } finally {
+      await adminContext.dispose()
+    }
+  })
+})
+
+/**
+ * **조회도 취소와 같은 규칙이다** — `POST /api/funding/pledges/lookup`.
+ *
+ * 번호+이메일은 인증할 수 없는 사람을 위한 길이지, 인증할 수 있는 사람에게
+ * 열린 두 번째 문이 아니다. 취소에만 이 규칙을 적고 조회에 안 적으면 개설자가
+ * 자기 후원자의 후원 상세를 계속 열어볼 수 있다.
+ */
+test.describe('펀딩 — 후원 조회 경계', () => {
+  test('임자 있는 후원의 조회는 세션이 임자일 때만 지난다. 비회원 후원은 그대로 열린다', async ({
+    baseURL,
+  }) => {
+    const ownerContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('owner'),
+    })
+    const backerContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('other'),
+    })
+    const anonContext = await apiRequest.newContext({ baseURL })
+    try {
+      const memberKey = {
+        pledgeCode: fixtures.fundingMemberPledgeCode,
+        email: fixtures.fundingMemberBackerEmail,
+      }
+      // 금지 쪽: 개설자가 맞는 번호+이메일을 보내도 못 본다.
+      const denied = await ownerContext.post('/api/funding/pledges/lookup', { data: memberKey })
+      expect(denied.status()).toBe(404)
+      expect((await denied.json()).error).toBe(PLEDGE_NOT_FOUND)
+
+      // 로그아웃 상태도 같다 — 임자가 있는 후원은 세션으로만 지난다.
+      const loggedOut = await anonContext.post('/api/funding/pledges/lookup', { data: memberKey })
+      expect(loggedOut.status()).toBe(404)
+
+      // 허용 쪽 ①: 후원자 본인은 지난다.
+      const mine = await backerContext.post('/api/funding/pledges/lookup', { data: memberKey })
+      expect(mine.status()).toBe(200)
+      expect((await mine.json()).data?.pledge?.pledge_code).toBe(fixtures.fundingMemberPledgeCode)
+
+      // 허용 쪽 ②: 비회원 후원은 세션 없이 번호+이메일로 그대로 열린다.
+      const guest = await anonContext.post('/api/funding/pledges/lookup', {
+        data: {
+          pledgeCode: fixtures.fundingGuestPledgeCode,
+          email: fixtures.fundingGuestBackerEmail,
+        },
+      })
+      expect(guest.status()).toBe(200)
+      expect((await guest.json()).data?.pledge?.pledge_code).toBe(fixtures.fundingGuestPledgeCode)
+    } finally {
+      await ownerContext.dispose()
+      await backerContext.dispose()
       await anonContext.dispose()
     }
   })

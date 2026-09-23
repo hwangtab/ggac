@@ -4,6 +4,7 @@ import { getCampaignBySlug, listRewards, getCampaignProgress } from '@/db/querie
 import { getRemainingQuantity } from '@/db/queries/fundingPledges'
 import { PUBLIC_CAMPAIGN_STATUSES } from '@/lib/funding/transitions'
 import { toPublicCampaign } from '@/lib/funding/publicCampaign'
+import { toPublicReward } from '@/lib/funding/publicReward'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 
 export const runtime = 'nodejs'
@@ -23,7 +24,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ slu
     getCampaignProgress(String(campaign.id)),
   ])
   const rewardsWithStock = await Promise.all(
-    rewards.map(async r => ({ ...r, remaining_quantity: await getRemainingQuantity(String(r.id)) }))
+    rewards.map(async r => ({
+      ...toPublicReward(r),
+      remaining_quantity: await getRemainingQuantity(String(r.id)),
+    }))
   )
   return ApiSuccess.ok({
     campaign: toPublicCampaign(campaign),
