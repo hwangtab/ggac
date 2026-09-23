@@ -72,25 +72,38 @@ export const SETTING_MAPPINGS = {
       key: 'password_policy',
       transform: (value: any) => value?.min_length || 8,
     },
+    // 값이 없을 때만 기본값을 쓴다(`??`). `||`로 적으면 저장된 `false`가
+    // 화면에서 매번 `true`로 되살아나 관리자가 끈 것이 켜진 것으로 보였다.
+    //
+    // 없을 때의 기본값은 **취향이 아니라 소비처가 정한다.** 이메일 인증은
+    // 지금 어떤 코드도 이 값을 읽지 않는다 — Better Auth는
+    // `emailAndPassword.requireEmailVerification`을 켜지 않아서(src/lib/auth/server.ts)
+    // 인증하지 않아도 로그인이 된다. 값이 없을 때의 동작을 적어 둔 유일한
+    // 자리인 `@/utils/systemSettings`의 `getDefaultSettings()`도 `required: false`다.
+    // 그래서 없을 때는 꺼진 것으로 보인다 — 강제하지 않는 것을 강제한다고
+    // 표시하지 않는다.
     require_email_verification: {
       key: 'email_verification',
-      transform: (value: any) => value?.required || true,
+      transform: (value: any) => value?.required ?? false,
     },
   },
   features: {
-    board_enabled: { key: 'board_features', transform: (value: any) => value?.enabled || true },
+    // 이 넷의 "값이 없을 때"는 `@/utils/systemSettings`의 `isFeatureEnabled()`가
+    // `?? true`로 정해 둔다(같은 모듈의 `getDefaultSettings()`도 전부 `true`).
+    // 그 판정을 그대로 따른다 — 없으면 켜진 것, 저장된 `false`는 꺼진 것.
+    board_enabled: { key: 'board_features', transform: (value: any) => value?.enabled ?? true },
     artist_registration_enabled: {
       key: 'artist_features',
-      transform: (value: any) => value?.registration_enabled || true,
+      transform: (value: any) => value?.registration_enabled ?? true,
     },
     comments_enabled: {
       key: 'comment_features',
-      transform: (value: any) => value?.enabled || true,
+      transform: (value: any) => value?.enabled ?? true,
     },
-    file_uploads_enabled: { key: 'file_upload', transform: (value: any) => value?.enabled || true },
-    // 펀딩은 켜면 돈이 움직인다 — 다른 기능들과 달리 값이 없을 때(true) 쪽으로
-    // 기울면 안 된다. `|| true` 관용구를 그대로 쓰면 꺼져 있어도 화면에 항상
-    // 켜진 것으로 보인다(다른 기능 토글의 기존 결함이지만 여기서는 재현하지 않는다).
+    file_uploads_enabled: { key: 'file_upload', transform: (value: any) => value?.enabled ?? true },
+    // 펀딩은 켜면 돈이 움직인다 — 다른 기능들과 달리 값이 없을 때 켜진 쪽으로
+    // 기울면 안 된다. 소비처(`@/lib/funding/settings`의 normalizeFundingSettings)도
+    // `enabled === true`만 켜짐으로 읽는다.
     funding_enabled: {
       key: 'funding_features',
       transform: (value: any) => value?.enabled === true,
@@ -145,4 +158,71 @@ export function seedSettingGroup(storedValue: unknown): Record<string, any> {
     return { ...(storedValue as Record<string, any>) }
   }
   return {}
+}
+
+/**
+ * PUT의 역변환 — 화면이 보낸 필드 하나로 그룹 JSON 전체를 다시 만든다.
+ *
+ * 이 네 그룹은 화면이 **한 필드만** 보내는데 저장은 그룹 통째로 한다. 그래서
+ * 보내지 않은 형제 필드를 저장값(`seed`)에서 되살려야 하는데, 예전에는 그것을
+ * `seed?.require_uppercase || true`로 적었다. 그 식은 저장된 `false`를 매번
+ * `true`로 되돌린다 — 관리자가 끈 비밀번호 요건이 같은 그룹의 다른 항목을
+ * 저장할 때마다 조용히 되살아났다. 값이 **없을 때만** 기본값을 쓰도록 `??`로
+ * 바꾼다.
+ *
+ * 기본값 자체는 바꾸지 않았다. 이 네 그룹의 불리언(`require_*`)은 지금 어떤
+ * 코드도 읽지 않으므로 "없을 때 어떻게 도는가"를 정하는 자리는
+ * `@/utils/systemSettings`의 `getDefaultSettings()`와 `/api/admin/settings/reset`의
+ * 기본값 표뿐이고, 둘 다 `true`다.
+ *
+ * 라우트가 아니라 이 파일에 두는 이유는 파일 첫머리의 설명과 같다 — 라우트는
+ * `@/` 별칭 때문에 plain Node로 못 부르고, 그래서 이 결함이 테스트 없이 살아남았다.
+ */
+export function buildRegistrationEnabledValue(
+  seed: Record<string, any>,
+  enabled: unknown
+): Record<string, any> {
+  return {
+    enabled,
+    require_approval: seed?.require_approval ?? true,
+  }
+}
+
+export function buildSessionConfigValue(
+  seed: Record<string, any>,
+  timeoutMinutes: unknown
+): Record<string, any> {
+  return {
+    timeout_minutes: timeoutMinutes,
+    max_concurrent_sessions: seed?.max_concurrent_sessions || 5,
+    require_reauth_for_sensitive: seed?.require_reauth_for_sensitive ?? true,
+  }
+}
+
+export function buildLoginPolicyValue(
+  seed: Record<string, any>,
+  maxAttempts: unknown
+): Record<string, any> {
+  return {
+    max_attempts: maxAttempts,
+    lockout_duration_minutes: seed?.lockout_duration_minutes || 30,
+    require_strong_password: seed?.require_strong_password ?? true,
+  }
+}
+
+export function buildPasswordPolicyValue(
+  seed: Record<string, any>,
+  minLength: unknown
+): Record<string, any> {
+  return {
+    min_length: minLength,
+    require_uppercase: seed?.require_uppercase ?? true,
+    require_lowercase: seed?.require_lowercase ?? true,
+    require_numbers: seed?.require_numbers ?? true,
+    // `require_special`은 기본값이 `false`라 `||`로도 저장된 값을 뒤집지
+    // 않았다(그래서 이번 열두 자리에 들어가지 않는다). 나머지와 같은 식으로
+    // 적어 두면 다음 사람이 기본값만 보고 판단하지 않는다.
+    require_special: seed?.require_special ?? false,
+    history_count: seed?.history_count || 5,
+  }
 }
