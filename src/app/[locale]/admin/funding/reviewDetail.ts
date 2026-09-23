@@ -16,6 +16,8 @@ export interface ReviewReward {
   total_quantity: number | null
   requires_shipping: boolean
   estimated_delivery: string | null
+  /** 승인 뒤에는 잠기는 값이다 — 관리자가 보지 못한 채 얼어붙으면 안 된다. */
+  image_url: string | null
 }
 
 export interface CampaignDetail {
@@ -44,6 +46,7 @@ export function toReviewDetail(data: unknown): CampaignDetail {
           : Number(r.total_quantity),
       requires_shipping: Boolean(r.requires_shipping),
       estimated_delivery: typeof r.estimated_delivery === 'string' ? r.estimated_delivery : null,
+      image_url: typeof r.image_url === 'string' && r.image_url !== '' ? r.image_url : null,
     })),
     version: typeof campaign.updated_at === 'string' ? campaign.updated_at : '',
   }

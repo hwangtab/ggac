@@ -74,9 +74,13 @@ test('심사 화면은 본문과 리워드를 판정에 필요한 만큼 싣는�
     total_quantity: 50,
     requires_shipping: true,
     estimated_delivery: '2026-12',
+    image_url: '/images/cd.jpg',
   })
   assert.equal(detail.rewards[1].total_quantity, null)
   assert.equal(detail.rewards[1].requires_shipping, false)
+  // 사진 없는 리워드는 null이어야 한다 — 빈 문자열이 넘어가면 화면이
+  // "사진 없음" 대신 깨진 이미지를 그린다.
+  assert.equal(detail.rewards[1].image_url, null)
 })
 
 test('후원자 정보는 심사 화면으로 한 글자도 넘어가지 않는다', () => {
@@ -113,12 +117,24 @@ test('응답에 키가 늘어도 저절로 새지 않는다 — 싣는 목록이
     'description',
     'estimated_delivery',
     'id',
+    'image_url',
     'requires_shipping',
     'title',
     'total_quantity',
   ])
   assert.equal(JSON.stringify(detail).includes('12345'), false)
   assert.equal(JSON.stringify(detail).includes('123-456-789'), false)
+})
+
+test('사진은 심사 화면으로 넘어간다 — 관리자가 보지 못한 것을 승인으로 얼리지 않는다', () => {
+  const detail = toReviewDetail(response)
+  assert.equal(detail.rewards[0].image_url, '/images/cd.jpg')
+  // 빈 문자열은 사진이 아니다.
+  const blank = toReviewDetail({
+    ...response,
+    rewards: [{ ...response.rewards[0], image_url: '' }],
+  })
+  assert.equal(blank.rewards[0].image_url, null)
 })
 
 test('본문이 비어 있거나 리워드가 없어도 모양이 무너지지 않는다', () => {

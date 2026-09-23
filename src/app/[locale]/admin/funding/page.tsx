@@ -10,6 +10,7 @@ import {
 } from 'react-icons/fi'
 import AdminLayout from '../components/AdminLayout'
 import PostContentRenderer from '@/components/PostContentRenderer'
+import OptimizedImage from '@/components/OptimizedImage'
 import { toReviewDetail, type CampaignDetail } from './reviewDetail'
 import {
   nextStatus,
@@ -433,30 +434,55 @@ export default function AdminFundingPage() {
                                       key={r.id}
                                       className="rounded-md border border-gray-200 bg-white p-3"
                                     >
-                                      <div className="flex flex-wrap items-center gap-2">
-                                        <span className="font-medium text-gray-900">{r.title}</span>
-                                        <span className="text-sm text-gray-700">
-                                          {won(r.amount)}
-                                        </span>
-                                        <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">
-                                          {r.total_quantity === null
-                                            ? '수량 무제한'
-                                            : `수량 ${r.total_quantity.toLocaleString('ko-KR')}개`}
-                                        </span>
-                                        <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">
-                                          {r.requires_shipping ? '배송 필요' : '배송 없음'}
-                                        </span>
-                                        {r.estimated_delivery && (
-                                          <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">
-                                            예상 전달 {r.estimated_delivery}
-                                          </span>
-                                        )}
+                                      {/* 승인하면 사진은 잠긴다(`rewardLock.ts`).
+                                          관리자가 보지 못한 것을 얼리지 않도록
+                                          여기서 함께 보여 준다. */}
+                                      <div className="mb-2 flex items-start gap-3">
+                                        <div className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-md bg-gray-100">
+                                          {r.image_url ? (
+                                            <OptimizedImage
+                                              src={r.image_url}
+                                              alt={`${r.title} 리워드 사진`}
+                                              width={80}
+                                              height={80}
+                                              className="h-full w-full object-cover"
+                                              fallbackText={r.title.slice(0, 2)}
+                                            />
+                                          ) : (
+                                            <div className="flex h-full w-full items-center justify-center px-1 text-center text-xs text-gray-400">
+                                              사진 없음
+                                            </div>
+                                          )}
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                          <div className="flex flex-wrap items-center gap-2">
+                                            <span className="font-medium text-gray-900">
+                                              {r.title}
+                                            </span>
+                                            <span className="text-sm text-gray-700">
+                                              {won(r.amount)}
+                                            </span>
+                                            <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">
+                                              {r.total_quantity === null
+                                                ? '수량 무제한'
+                                                : `수량 ${r.total_quantity.toLocaleString('ko-KR')}개`}
+                                            </span>
+                                            <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">
+                                              {r.requires_shipping ? '배송 필요' : '배송 없음'}
+                                            </span>
+                                            {r.estimated_delivery && (
+                                              <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">
+                                                예상 전달 {r.estimated_delivery}
+                                              </span>
+                                            )}
+                                          </div>
+                                          {r.description && (
+                                            <p className="mt-1 text-sm text-gray-600 whitespace-pre-wrap">
+                                              {r.description}
+                                            </p>
+                                          )}
+                                        </div>
                                       </div>
-                                      {r.description && (
-                                        <p className="mt-1 text-sm text-gray-600 whitespace-pre-wrap">
-                                          {r.description}
-                                        </p>
-                                      )}
                                     </li>
                                   ))}
                                 </ul>
