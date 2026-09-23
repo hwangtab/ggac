@@ -5,13 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { requireActiveMember } from '@/lib/server/memberAuth'
-import {
-  getCampaignById,
-  listRewards,
-  createReward,
-  updateReward,
-  deleteReward,
-} from '@/db/queries/funding'
+import { getCampaignById, listRewards, applyRewardBatch } from '@/db/queries/funding'
 import { canManageCampaign } from '@/lib/server/fundingAuth'
 import { editScope, type CampaignStatus } from '@/lib/funding/transitions'
 import { parseRewardList } from '@/lib/funding/campaignInput'
@@ -38,6 +32,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   const auth = await requireActiveMember()
   if (auth instanceof NextResponse) return auth
   const { id } = await params
+  // 본문을 **먼저** 끝까지 읽는다. 상태를 읽고 편집 범위를 정한 뒤에 읽으면,
+  // 본문이 도착하는 시점을 요청자가 쥐고 있으므로 그 사이에 제출·승인이 끼어들
+  // 수 있다 — 그러면 낡은 범위로 검증하게 된다(전이 라우트와 같은 순서다).
+  const body = await request.json().catch(() => null)
+
   const campaign = await getCampaignById(id)
   if (
     !campaign ||
@@ -45,11 +44,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   ) {
     return ApiError.notFound('프로젝트를 찾을 수 없습니다.').toNextResponse()
   }
-  const scope = editScope(campaign.status as CampaignStatus)
+  const status = campaign.status as CampaignStatus
+  const scope = editScope(status)
   if (scope === 'none')
     return ApiError.badRequest('지금 상태에서는 수정할 수 없습니다.').toNextResponse()
 
-  const body = await request.json().catch(() => null)
   const parsed = parseRewardList(body?.rewards)
   if (parsed.ok === false) return ApiError.badRequest(parsed.message).toNextResponse()
 
@@ -97,34 +96,45 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   }
 
   // 검증(위)은 all-or-nothing이다 — 하나라도 거절되면 이 아래는 아무것도
-  // 실행되지 않는다. 하지만 여기서부터는 트랜잭션이 아니다. DB 오류가 중간에
-  // 나면 이미 실행된 쓰기는 되돌리지 않는다. 그래서 생성·수정을 먼저 하고
-  // 삭제를 맨 마지막에 둔다 — 실패해도 "지우려던 게 아직 남은" 상태(다시
-  // 저장하면 회복된다)로 남지, "있던 리워드가 사라진" 상태로는 남지 않는다.
-  for (const r of parsed.rewards) {
-    if (!r.id) {
-      await createReward({ campaign_id: id, ...r })
-      continue
-    }
-    const cur = byId.get(r.id)
-    // 검증 시점엔 잠기지 않았더라도, 검증과 이 쓰기 사이에 결제가 확정돼
-    // 잠길 수 있다(가격이 바뀐 뒤 결제한 사람이 생기는 것을 막으려는 게 잠금의
-    // 목적이므로, 검증 한 번으로는 부족하다). 금액·배송 여부가 바뀌는
-    // 갱신은 DB에 "여전히 안 잠겨 있을 때만" 조건을 걸어 마지막 방어선을 둔다.
-    const changesLockedFields =
-      cur !== undefined &&
-      (r.amount !== Number(cur.amount) || r.requires_shipping !== Boolean(cur.requires_shipping))
-    const wasUnlocked = !cur?.locked_at
-    const result = await updateReward(r.id, r, {
-      requireUnlocked: wasUnlocked && changesLockedFields,
+  // 실행되지 않는다. 쓰기는 `applyRewardBatch`가 한 트랜잭션으로 묶는다:
+  // 맨 앞에서 판정 근거가 된 상태(`status`)를 조건부로 다시 확인하고, 생성·
+  // 수정·삭제 중 하나라도 거절되면 통째로 되감는다. 문장이 여럿이라 첫 문장
+  // 앞에서 한 번 확인하는 것만으로는 뒤 문장이 지켜지지 않는다.
+  const creates = parsed.rewards.filter(r => !r.id).map(r => ({ campaign_id: id, ...r }))
+  const updates = parsed.rewards
+    .filter(r => r.id)
+    .map(r => {
+      const cur = byId.get(r.id as string)
+      // 검증 시점엔 잠기지 않았더라도, 검증과 쓰기 사이에 결제가 확정돼 잠길 수
+      // 있다(가격이 바뀐 뒤 결제한 사람이 생기는 것을 막으려는 게 잠금의
+      // 목적이므로, 검증 한 번으로는 부족하다). 금액·배송 여부가 바뀌는 갱신은
+      // DB에 "여전히 안 잠겨 있을 때만" 조건을 걸어 마지막 방어선을 둔다.
+      const changesLockedFields =
+        cur !== undefined &&
+        (r.amount !== Number(cur.amount) || r.requires_shipping !== Boolean(cur.requires_shipping))
+      return {
+        id: r.id as string,
+        patch: r,
+        require_unlocked: !cur?.locked_at && changesLockedFields,
+      }
     })
-    if (!result.changed) {
-      return ApiError.conflict(
-        `'${cur?.title ?? r.title}' 리워드에 방금 후원이 들어왔습니다. 새로고침한 뒤 다시 시도해 주세요.`
-      ).toNextResponse()
+  const delete_ids = existing.filter(c => !incomingIds.has(String(c.id))).map(c => String(c.id))
+
+  const result = await applyRewardBatch({
+    campaign_id: id,
+    expected_status: status,
+    creates,
+    updates,
+    delete_ids,
+  })
+  if (result.ok === false) {
+    if (result.reason === 'status_changed') {
+      return ApiError.conflict('상태가 이미 바뀌었습니다. 새로고침해 주세요.').toNextResponse()
     }
+    const title = byId.get(result.reward_id)?.title ?? '리워드'
+    return ApiError.conflict(
+      `'${title}' 리워드에 방금 후원이 들어왔습니다. 새로고침한 뒤 다시 시도해 주세요.`
+    ).toNextResponse()
   }
-  for (const cur of existing)
-    if (!incomingIds.has(String(cur.id))) await deleteReward(String(cur.id))
   return ApiSuccess.ok({ rewards: await listRewards(id) }).toNextResponse()
 }
