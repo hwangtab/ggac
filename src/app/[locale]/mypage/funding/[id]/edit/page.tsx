@@ -9,6 +9,14 @@
  * 3. `edit_scope`를 탭에 내려보내 잠금·안내 문구를 맞춘다
  * 4. 저장하지 않은 변경을 추적해 `beforeunload`로 경고한다
  *
+ * **"저장" 버튼은 기본 정보와 이야기만 맡는다.** 리워드는 리워드 탭의
+ * "리워드 저장" 버튼이 자기 라우트로 직접 쓴다(전체 배열 PUT + 잠금 판정 +
+ * 409 재조회가 거기 붙어 있다). 그래서 이 버튼의 활성 여부는 기본 정보·이야기
+ * 변경만 본다 — 리워드만 고친 상태에서 버튼이 눌리는데 아무 일도 일어나지
+ * 않고, 그 채로 심사에도 못 올라가는 막다른 길을 만들지 않기 위해서다.
+ * 리워드가 저장되지 않은 채 심사를 누르면 리워드 탭으로 옮겨 그쪽 저장
+ * 버튼을 가리킨다.
+ *
  * 저장 성공 배너가 사라지는 사고를 여기서 다시 만들지 않는다 — 저장 뒤
  * 별도로 다시 불러오지 않고, PATCH 응답이 돌려준 캠페인 값을 그대로
  * 화면 상태에 반영한다. "성공 안내를 띄운 다음 refetch를 부르는" 순서
@@ -74,6 +82,38 @@ function campaignToBasicValues(c: CampaignFull): BasicInfoValues {
 const BASIC_FIELDS_BY_SCOPE: Record<'all' | 'contentOnly', (keyof BasicInfoValues)[]> = {
   all: ['title', 'summary', 'category', 'goal_amount', 'start_at', 'end_at', 'cover_image'],
   contentOnly: ['summary', 'end_at', 'cover_image'],
+}
+
+/** PATCH 본문. 바뀐 값만, 그리고 지금 상태에서 보낼 수 있는 필드만 담는다.
+ * "저장" 버튼의 활성 여부도 이 함수가 정한다(빈 본문이면 보낼 것이 없다) —
+ * 버튼이 눌리는데 아무 일도 일어나지 않는 상태를 만들지 않으려면 두 판단이
+ * 같은 계산에서 나와야 한다. */
+function buildCampaignPatch(
+  editScope: EditScope,
+  basic: BasicInfoValues,
+  basicOriginal: BasicInfoValues,
+  story: string,
+  storyOriginal: string
+): Record<string, unknown> {
+  const scope = editScope === 'all' ? 'all' : 'contentOnly'
+  const fields = editScope === 'none' ? [] : BASIC_FIELDS_BY_SCOPE[scope]
+  const patch: Record<string, unknown> = {}
+  for (const key of fields) {
+    if (basic[key] === basicOriginal[key]) continue
+    if (key === 'goal_amount') {
+      const n = parseGoalAmountDisplay(basic.goal_amount)
+      if (n !== null) patch.goal_amount = n
+      continue
+    }
+    if (key === 'start_at' || key === 'end_at') {
+      patch[key] = basic[key] === '' ? null : basic[key]
+      continue
+    }
+    patch[key] = basic[key]
+  }
+  // story는 contentOnly에서도 허용되는 필드다(CONTENT_ONLY_FIELDS).
+  if (story !== storyOriginal) patch.story = story
+  return patch
 }
 
 export default function EditCampaignPage() {
@@ -159,14 +199,30 @@ export default function EditCampaignPage() {
   // 참고), 편집 중인 `rewards`와 다르면 여기 dirty에 들어온다 — 그래야
   // 리워드만 고치고 저장하지 않은 채로 "심사 올리기"를 누르거나 탭을
   // 벗어나는 것을 아래 두 안전장치가 똑같이 잡는다.
-  const dirty = useMemo(() => {
-    if (!basic || !basicOriginal) return false
-    return (
-      JSON.stringify(basic) !== JSON.stringify(basicOriginal) ||
-      story !== storyOriginal ||
-      JSON.stringify(rewards) !== JSON.stringify(rewardsOriginal)
-    )
-  }, [basic, basicOriginal, story, storyOriginal, rewards, rewardsOriginal])
+  // "저장" 버튼이 실제로 보낼 본문 — 기본 정보와 이야기뿐이고, 지금 상태에서
+  // 잠긴 필드는 애초에 들어가지 않는다. 버튼의 활성 여부가 이 본문이 비었는지로
+  // 갈리므로, 눌리는데 보낼 것이 없는 순간이 없다.
+  const patch = useMemo(
+    () =>
+      data && basic && basicOriginal
+        ? buildCampaignPatch(data.edit_scope, basic, basicOriginal, story, storyOriginal)
+        : {},
+    [data, basic, basicOriginal, story, storyOriginal]
+  )
+  const basicStoryDirty = Object.keys(patch).length > 0
+
+  // 리워드 탭에 저장하지 않은 편집이 있는가. 그 탭은 자기 저장 버튼으로 따로
+  // PUT하므로 `rewardsOriginal`이 "마지막으로 불러오거나 저장한 값"을 들고
+  // 있고(위 state 선언부 주석 참고), 편집 중인 `rewards`와 다르면 여기가 참이
+  // 된다.
+  const rewardsDirty = useMemo(
+    () => JSON.stringify(rewards) !== JSON.stringify(rewardsOriginal),
+    [rewards, rewardsOriginal]
+  )
+
+  // 창을 닫거나 다른 주소로 갈 때 경고할 기준은 셋 다 본다 — 어느 쪽이든
+  // 저장하지 않았으면 잃는다.
+  const dirty = basicStoryDirty || rewardsDirty
 
   // 저장하지 않은 변경이 있는 채로 탭(브라우저)을 닫거나 다른 주소로 가면
   // 경고한다. 실제 브라우저 창 닫기·새로고침·주소 입력만 여기서 잡힌다 —
@@ -222,32 +278,14 @@ export default function EditCampaignPage() {
     if (!data || !basic || !basicOriginal) return
     setError('')
     setNotice('')
+    // 본문이 비면 버튼도 꺼져 있다(위 `basicStoryDirty`) — 여기 오는 일은
+    // 없지만, 와도 조용히 돌아가지 않는다.
+    if (Object.keys(patch).length === 0) {
+      setError(t('creator.nothingToSave'))
+      return
+    }
     setSaving(true)
     try {
-      const scope = data.edit_scope === 'all' ? 'all' : 'contentOnly'
-      const fields = data.edit_scope === 'none' ? [] : BASIC_FIELDS_BY_SCOPE[scope]
-      const patch: Record<string, unknown> = {}
-      for (const key of fields) {
-        if (basic[key] === basicOriginal[key]) continue
-        if (key === 'goal_amount') {
-          const n = parseGoalAmountDisplay(basic.goal_amount)
-          if (n !== null) patch.goal_amount = n
-          continue
-        }
-        if (key === 'start_at' || key === 'end_at') {
-          patch[key] = basic[key] === '' ? null : basic[key]
-          continue
-        }
-        patch[key] = basic[key]
-      }
-      // story는 contentOnly에서도 허용되는 필드다(CONTENT_ONLY_FIELDS).
-      if (story !== storyOriginal) patch.story = story
-
-      if (Object.keys(patch).length === 0) {
-        setSaving(false)
-        return
-      }
-
       const res = await fetch(`/api/mypage/funding/campaigns/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -271,13 +309,20 @@ export default function EditCampaignPage() {
     } finally {
       setSaving(false)
     }
-  }, [data, basic, basicOriginal, story, storyOriginal, id, t])
+  }, [data, basic, basicOriginal, patch, id, t])
 
   const handleSubmitForReview = useCallback(async () => {
     // 제출이 성공하면 상태가 submitted가 되어 편집기 전체가 잠긴다 — 그
     // 순간부터는 저장하지 않은 입력을 되돌릴 방법이 없으므로, 저장하지 않은
     // 변경이 있으면 여기서 반드시 막는다.
-    if (dirty) {
+    // 리워드부터 본다 — 저장 경로가 다른 탭에 있으므로, 그 탭으로 옮겨
+    // 어느 버튼을 눌러야 하는지 눈앞에 두고 말한다.
+    if (rewardsDirty) {
+      setTab('rewards')
+      setError(t('creator.blockedSubmitRewardsDirty'))
+      return
+    }
+    if (basicStoryDirty) {
       setError(t('creator.blockedSubmitDirty'))
       return
     }
@@ -301,7 +346,7 @@ export default function EditCampaignPage() {
     } finally {
       setSubmitting(false)
     }
-  }, [dirty, id, t, router])
+  }, [rewardsDirty, basicStoryDirty, id, t, router])
 
   // 리워드 탭이 자기 PUT을 성공시켰을 때(또는 409 뒤 서버 값으로 다시
   // 맞췄을 때) 부른다. `rewards`만 갱신하고 `rewardsOriginal`을 그대로 두면
@@ -446,29 +491,61 @@ export default function EditCampaignPage() {
             </div>
 
             {readOnly ? null : (
-              <div className="mt-8 flex flex-wrap gap-3 border-t border-gray-200 pt-6">
-                <button
-                  type="button"
-                  onClick={() => void handleSave()}
-                  disabled={saving || !dirty}
-                  className="tw-btn-primary disabled:opacity-50"
-                >
-                  {saving ? t('creator.saving') : t('creator.save')}
-                </button>
-                {campaign.status === 'draft' ? (
+              <div className="mt-8 border-t border-gray-200 pt-6">
+                {/* 리워드만 고친 상태에서 이 버튼이 꺼져 있는 이유를 그 자리에서
+                    말한다 — 버튼이 왜 안 눌리는지 모르면 막다른 길과 같다. */}
+                {rewardsDirty ? (
+                  <p className="mb-3 text-sm text-amber-900">
+                    {t('creator.rewardsSaveScopeNotice')}
+                  </p>
+                ) : null}
+                <div className="flex flex-wrap gap-3">
                   <button
                     type="button"
-                    onClick={() => void handleSubmitForReview()}
-                    disabled={submitting}
-                    className="tw-btn-secondary disabled:opacity-50"
+                    onClick={() => void handleSave()}
+                    disabled={saving || !basicStoryDirty}
+                    className="tw-btn-primary disabled:opacity-50"
                   >
-                    {t('creator.submit')}
+                    {saving ? t('creator.saving') : t('creator.save')}
                   </button>
-                ) : null}
+                  {campaign.status === 'draft' ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleSubmitForReview()}
+                      disabled={submitting}
+                      className="tw-btn-secondary disabled:opacity-50"
+                    >
+                      {t('creator.submit')}
+                    </button>
+                  ) : null}
+                </div>
               </div>
             )}
           </>
-        ) : null}
+        ) : (
+          // 잘못 적은 주소·남의 캠페인·지워진 캠페인은 모두 같은 응답이라
+          // 여기로 온다. 위 `readOnlyGuidance` 블록과 같은 모양으로 돌아갈
+          // 길과 재시도를 준다 — 배너만 남기면 나갈 길이 없다.
+          <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <p className="text-sm text-gray-900">{t('creator.loadFailedGuidance')}</p>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setError('')
+                  setLoading(true)
+                  void load()
+                }}
+                className="tw-btn-secondary"
+              >
+                {t('error.retry')}
+              </button>
+              <Link href="/mypage/funding" className="text-sm text-primary-600 hover:underline">
+                {t('creator.backToList')}
+              </Link>
+            </div>
+          </div>
+        )}
       </MypageLayout>
     </PermissionCheck>
   )

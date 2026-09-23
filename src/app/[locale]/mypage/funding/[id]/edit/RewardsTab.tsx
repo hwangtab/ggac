@@ -6,7 +6,9 @@
  * 다른 두 탭과 달리 이 탭은 **자기 값을 직접 저장한다**
  * (`PUT /api/mypage/funding/campaigns/[id]/rewards`). 껍데기의 "저장"
  * 버튼은 기본 정보·이야기만 PATCH하고 리워드는 손대지 않으므로, 여기 있는
- * "리워드 저장" 버튼이 유일한 저장 경로다. `onChange`는 부모(껍데기)가
+ * "리워드 저장" 버튼이 유일한 저장 경로다. 그 분담을 화면에도 적는다
+ * (`rewardsSaveScopeNotice`) — 적지 않으면 아래쪽 "저장"을 눌러 놓고
+ * 저장됐다고 믿게 된다. `onChange`는 부모(껍데기)가
  * 들고 있는 `rewards` 배열을 갱신하는 통로일 뿐이고(다른 탭과 같은 제어
  * 컴포넌트 계약), 서버에 실제로 쓰는 것은 이 컴포넌트가 `campaignId`로
  * 직접 한다.
@@ -156,10 +158,13 @@ export default function RewardsTab({
     [rewards, onChange]
   )
 
-  // 409(다른 사람이 방금 이 리워드에 후원을 확정함) 뒤에는 화면 값이 DB와
-  // 어긋났을 수 있다 — PUT은 행마다 순서대로 쓰므로, 뒤쪽 행이 거절되기 전에
-  // 앞쪽 행은 이미 저장됐을 수 있다. 서버의 거절 문장은 그대로 보여 주고,
-  // 그 문장과 별개로 최신 캠페인을 다시 불러와 화면을 DB와 맞춘다.
+  // 저장이 실패한 뒤에는 화면 값이 DB와 어긋났을 수 있다 — PUT은 행마다
+  // 순서대로 쓰므로, 뒤쪽 행이 거절되거나 DB 오류로 멈추기 전에 앞쪽 행은
+  // 이미 저장됐을 수 있다. 409(다른 사람이 방금 후원을 확정함)만이 아니라
+  // 500도 마찬가지다 — 실패 종류로 갈라 놓으면 500 뒤에 화면이 DB에 없는
+  // 행을 들고 있다가 다음 저장 때 같은 리워드를 하나 더 만든다. 서버의 거절
+  // 문장은 그대로 보여 주고, 그와 별개로 최신 캠페인을 다시 불러와 화면을
+  // DB와 맞춘다.
   const reloadFromServer = useCallback(async () => {
     try {
       const res = await fetch(`/api/mypage/funding/campaigns/${campaignId}`)
@@ -208,9 +213,9 @@ export default function RewardsTab({
       const body = await res.json().catch(() => null)
       if (res.ok === false || !Array.isArray(body?.data?.rewards)) {
         setError(body?.error || t('creator.errorSave'))
-        // 409는 일부 행이 이미 써진 채로 거절됐을 수 있다 — 문장은 그대로
+        // 어떤 실패든 일부 행이 이미 써진 채로 끝났을 수 있다 — 문장은 그대로
         // 두고 화면을 DB의 실제 값으로 다시 맞춘다.
-        if (res.status === 409) void reloadFromServer()
+        void reloadFromServer()
         return
       }
       const saved = body.data.rewards as RewardRow[]
@@ -226,6 +231,12 @@ export default function RewardsTab({
 
   return (
     <div className="space-y-5">
+      {/* 리워드의 저장 경로는 이 탭 안에 있다 — 껍데기 아래쪽 "저장" 버튼은
+          기본 정보와 이야기만 맡는다. 읽는 사람이 바로 그 자리에 적는다. */}
+      {readOnly ? null : (
+        <p className="text-sm text-gray-600">{t('creator.rewardsSaveScopeNotice')}</p>
+      )}
+
       {editScope === 'contentOnly' ? (
         <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
           {t('creator.rewardsActiveNotice')}
