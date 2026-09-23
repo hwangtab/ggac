@@ -1286,3 +1286,32 @@ grep -c 'ALTER ROLE' "$R"                        # 기대: 1 이상
 Supabase를 지우면 **Postgres 형태의 사본은 Step 2의 덤프가 전부다.** Turso 백업은
 SQLite다 — 스키마·타입·함수·RLS 정책이 다르다. 즉 "Postgres로 돌아간다"는 선택지는
 그 덤프 파일 하나에 달린다.
+
+## `funding_features` 시스템 설정 행 채우기 (2026-09-23)
+
+운영 `system_settings`의 `features` 카테고리에는 `artist_features`·
+`board_features`·`comment_features`·`file_upload`·`social_features` 다섯
+행만 있고 `funding_features`는 없다(운영 DB 직접 확인). `updateSystemSetting`
+(`src/db/queries/settings.ts`)은 **UPDATE 전용**이라 행이 없으면
+`SettingNotFoundError`를 던진다 — 즉 관리자 화면에서 펀딩 스위치를 처음
+저장하려는 순간 그 저장이 실패한다. 스위치 자체가 켜지지 않는 게 아니라
+**저장이 안 된다.**
+
+`scripts/turso/seed-funding-settings.mjs`가 그 빠진 행 하나를 채운다.
+`src/app/api/admin/settings/reset/route.ts`의 `DEFAULT_SETTINGS`가 선언한
+기본값과 글자 그대로 맞춘다:
+
+```bash
+TURSO_DATABASE_URL=... TURSO_AUTH_TOKEN=... node scripts/turso/seed-funding-settings.mjs
+```
+
+- 행이 이미 있으면 아무것도 쓰지 않고 그 사실만 출력한다(멱등 — 몇 번을
+  돌려도 안전하다).
+- 넣는 값은 항상 `enabled: false`다. **이 스크립트는 기능을 켜지 않는다** —
+  펀딩을 실제로 켜는 것은 이후 관리자 화면에서 하는 별도의 결정이다.
+- 펀딩 관리자 화면을 배포하기 **전에 운영에서 한 번** 돌려야 한다. 돌리지
+  않은 채로 배포하면 화면은 뜨지만 스위치를 처음 켜려는 관리자가 저장 실패를
+  본다.
+- 로컬 권한 E2E는 이 행을 별도로 심는다(`scripts/testing/seed-authz-fixtures.mjs`,
+  `enabled: true`) — 두 스크립트는 서로 다른 DB(로컬 테스트 Turso와 운영
+  Turso)를 향하고 값도 의도적으로 다르다. 하나가 다른 하나를 대신하지 않는다.
