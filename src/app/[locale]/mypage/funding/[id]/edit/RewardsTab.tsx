@@ -158,13 +158,15 @@ export default function RewardsTab({
     [rewards, onChange]
   )
 
-  // 저장이 실패한 뒤에는 화면 값이 DB와 어긋났을 수 있다 — PUT은 행마다
-  // 순서대로 쓰므로, 뒤쪽 행이 거절되거나 DB 오류로 멈추기 전에 앞쪽 행은
-  // 이미 저장됐을 수 있다. 409(다른 사람이 방금 후원을 확정함)만이 아니라
-  // 500도 마찬가지다 — 실패 종류로 갈라 놓으면 500 뒤에 화면이 DB에 없는
-  // 행을 들고 있다가 다음 저장 때 같은 리워드를 하나 더 만든다. 서버의 거절
-  // 문장은 그대로 보여 주고, 그와 별개로 최신 캠페인을 다시 불러와 화면을
-  // DB와 맞춘다.
+  // DB가 화면 밑에서 움직였을 수 있는 실패 뒤에만 부른다 — 409(다른 사람이
+  // 방금 후원을 확정함)와 5xx(쓰는 도중에 멈춤)다. PUT은 행마다 순서대로
+  // 쓰므로 그 둘은 앞쪽 행이 이미 저장된 채로 끝날 수 있고, 그 상태를 두면
+  // 다음 저장 때 같은 리워드를 하나 더 만든다.
+  //
+  // 입력이 틀려서 받는 거절(400·404·503)은 여기 오지 않는다 — 라우트가 모든
+  // 행을 검증한 **뒤에** 쓰기 때문에 DB는 그대로이고, 다시 불러오면 방금
+  // 입력한 리워드가 통째로 사라진다(`onSaved`가 편집 중인 값과 기준값을 함께
+  // 덮는다). 고칠 수 있게 입력을 남겨 둔다.
   const reloadFromServer = useCallback(async () => {
     try {
       const res = await fetch(`/api/mypage/funding/campaigns/${campaignId}`)
@@ -213,9 +215,9 @@ export default function RewardsTab({
       const body = await res.json().catch(() => null)
       if (res.ok === false || !Array.isArray(body?.data?.rewards)) {
         setError(body?.error || t('creator.errorSave'))
-        // 어떤 실패든 일부 행이 이미 써진 채로 끝났을 수 있다 — 문장은 그대로
-        // 두고 화면을 DB의 실제 값으로 다시 맞춘다.
-        void reloadFromServer()
+        // 일부 행이 이미 써진 채로 끝났을 수 있는 실패만 다시 맞춘다. 입력이
+        // 틀려서 받은 거절이면 DB는 그대로이므로 입력을 지우지 않는다.
+        if (res.status === 409 || res.status >= 500) void reloadFromServer()
         return
       }
       const saved = body.data.rewards as RewardRow[]

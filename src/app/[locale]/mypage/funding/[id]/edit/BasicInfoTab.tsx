@@ -11,6 +11,11 @@
  * 판단은 껍데기가 세 탭 값을 한곳에서 비교해야 하므로 값 자체는 항상 위로
  * 올린다.
  *
+ * 목표 금액처럼 "보낼 수 없는 값"을 알리는 문장은 껍데기가 저장을 누른
+ * 시점에 판정해 `goalError`로 내려보낸다 — 이 탭은 받은 문장을 그 칸 옆에
+ * 그리고 포커스를 옮길 뿐이다. 판정을 여기서도 하면 저장 버튼이 무엇을 보고
+ * 움직이는지가 두 곳으로 갈린다.
+ *
  * 표지 이미지 업로드는 이 탭이 직접 `POST /api/media/upload`를 호출한다.
  * 업로드 중 상태·업로드 실패 배너는 이 탭만의 일이라(다른 탭과 공유할
  * 이유가 없다) 로컬 state로 둔다 — 필드 값과 달리 저장 대상이 아니다.
@@ -39,13 +44,29 @@ export interface BasicInfoTabProps {
   values: BasicInfoValues
   onChange: (values: BasicInfoValues) => void
   editScope: 'all' | 'contentOnly' | 'none'
+  /** 목표 금액 칸에 붙일 문장. 껍데기가 저장을 누른 순간에만 세운다. */
+  goalError?: string
 }
 
-export default function BasicInfoTab({ values, onChange, editScope }: BasicInfoTabProps) {
+export default function BasicInfoTab({
+  values,
+  onChange,
+  editScope,
+  goalError = '',
+}: BasicInfoTabProps) {
   const t = useTranslations('funding')
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const uploadErrorRef = useRef<HTMLDivElement | null>(null)
+  const goalInputRef = useRef<HTMLInputElement | null>(null)
+
+  // 문장이 뜨는 순간 고쳐야 할 칸으로 데려간다 — 다른 배너와 같은 규칙이다.
+  useEffect(() => {
+    if (goalError) {
+      goalInputRef.current?.focus()
+      goalInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [goalError])
 
   useEffect(() => {
     if (uploadError) {
@@ -143,12 +164,28 @@ export default function BasicInfoTab({ values, onChange, editScope }: BasicInfoT
         </label>
         <input
           id="basic-goal"
+          ref={goalInputRef}
           value={values.goal_amount}
           onChange={e => handleGoalChange(e.target.value)}
           inputMode="numeric"
           disabled={disabledAll || lockedWhenLive}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 disabled:bg-gray-100 disabled:text-gray-500"
+          aria-invalid={goalError ? true : undefined}
+          aria-describedby={goalError ? 'basic-goal-error' : undefined}
+          className={`w-full rounded-lg border px-3 py-2 disabled:bg-gray-100 disabled:text-gray-500 ${
+            goalError ? 'border-red-300' : 'border-gray-300'
+          }`}
         />
+        {goalError ? (
+          <p
+            id="basic-goal-error"
+            role="alert"
+            aria-live="assertive"
+            className="mt-1 flex items-start gap-2 text-sm text-red-700"
+          >
+            <FiAlertCircle className="mt-0.5 shrink-0" aria-hidden />
+            <span>{goalError}</span>
+          </p>
+        ) : null}
         <p className="mt-1 text-xs text-gray-500">{t('creator.goalHelp')}</p>
       </div>
 

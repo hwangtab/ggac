@@ -85,9 +85,12 @@ const BASIC_FIELDS_BY_SCOPE: Record<'all' | 'contentOnly', (keyof BasicInfoValue
 }
 
 /** PATCH 본문. 바뀐 값만, 그리고 지금 상태에서 보낼 수 있는 필드만 담는다.
- * "저장" 버튼의 활성 여부도 이 함수가 정한다(빈 본문이면 보낼 것이 없다) —
- * 버튼이 눌리는데 아무 일도 일어나지 않는 상태를 만들지 않으려면 두 판단이
- * 같은 계산에서 나와야 한다. */
+ *
+ * **이 함수는 "무엇을 보낼 수 있는가"만 답한다.** "사용자가 뭔가 바꿨는가"는
+ * 다른 질문이고, 그건 값을 기준값과 그대로 비교해서 답한다(`basicStoryDirty`).
+ * 둘을 한 계산으로 합치면 목표 금액을 지운 순간(`parseGoalAmountDisplay`가
+ * null) 바꾼 것이 없는 것으로 판정돼, 저장 버튼이 이유 없이 죽고 이탈 경고도
+ * 제출 차단도 풀린다 — 고칠 수 없는 상태로 심사에 올라간다. */
 function buildCampaignPatch(
   editScope: EditScope,
   basic: BasicInfoValues,
@@ -143,6 +146,10 @@ export default function EditCampaignPage() {
   // "심사 올리기"를 누르거나 창을 닫는 것을 두 안전장치(제출 차단·
   // beforeunload/클릭 가로채기)가 똑같이 잡는다.
   const [rewardsOriginal, setRewardsOriginal] = useState<RewardRow[]>([])
+  // 목표 금액이 보낼 수 없는 값일 때 그 입력 옆에 붙일 문장. 저장을 누른
+  // 순간에만 세우고, 그 칸을 고치면 지운다 — 타이핑 중에 빨간 문장이 따라
+  // 다니지 않게.
+  const [goalError, setGoalError] = useState('')
 
   const errorRef = useRef<HTMLDivElement | null>(null)
   const noticeRef = useRef<HTMLDivElement | null>(null)
@@ -164,6 +171,11 @@ export default function EditCampaignPage() {
       noticeRef.current?.focus()
     }
   }, [notice])
+
+  const goalValue = basic?.goal_amount
+  useEffect(() => {
+    setGoalError('')
+  }, [goalValue])
 
   const load = useCallback(async () => {
     try {
@@ -199,9 +211,14 @@ export default function EditCampaignPage() {
   // 참고), 편집 중인 `rewards`와 다르면 여기 dirty에 들어온다 — 그래야
   // 리워드만 고치고 저장하지 않은 채로 "심사 올리기"를 누르거나 탭을
   // 벗어나는 것을 아래 두 안전장치가 똑같이 잡는다.
-  // "저장" 버튼이 실제로 보낼 본문 — 기본 정보와 이야기뿐이고, 지금 상태에서
-  // 잠긴 필드는 애초에 들어가지 않는다. 버튼의 활성 여부가 이 본문이 비었는지로
-  // 갈리므로, 눌리는데 보낼 것이 없는 순간이 없다.
+  // 사용자가 기본 정보나 이야기를 바꿨는가 — 값이 보낼 수 있는 값인지는 묻지
+  // 않는다. 목표 금액을 지워 놓은 상태도 "저장하지 않은 변경"이다.
+  const basicStoryDirty = useMemo(() => {
+    if (!basic || !basicOriginal) return false
+    return JSON.stringify(basic) !== JSON.stringify(basicOriginal) || story !== storyOriginal
+  }, [basic, basicOriginal, story, storyOriginal])
+
+  // 저장이 실제로 보낼 본문. 버튼이 눌린 다음의 이야기다.
   const patch = useMemo(
     () =>
       data && basic && basicOriginal
@@ -209,7 +226,6 @@ export default function EditCampaignPage() {
         : {},
     [data, basic, basicOriginal, story, storyOriginal]
   )
-  const basicStoryDirty = Object.keys(patch).length > 0
 
   // 리워드 탭에 저장하지 않은 편집이 있는가. 그 탭은 자기 저장 버튼으로 따로
   // PUT하므로 `rewardsOriginal`이 "마지막으로 불러오거나 저장한 값"을 들고
@@ -278,8 +294,16 @@ export default function EditCampaignPage() {
     if (!data || !basic || !basicOriginal) return
     setError('')
     setNotice('')
-    // 본문이 비면 버튼도 꺼져 있다(위 `basicStoryDirty`) — 여기 오는 일은
-    // 없지만, 와도 조용히 돌아가지 않는다.
+    // 보낼 수 없는 값은 여기서 잡아 그 칸 옆에 말한다 — 버튼을 죽여 놓고
+    // 아무 말도 하지 않으면 무엇이 잘못됐는지 알 길이 없다. 목표 금액은
+    // 초안(all)에서만 보내므로 그때만 본다.
+    if (data.edit_scope === 'all' && parseGoalAmountDisplay(basic.goal_amount) === null) {
+      setGoalError(t('creator.errorGoal'))
+      setTab('basic')
+      return
+    }
+    // 바뀐 것은 있는데 보낼 본문이 비는 경우(잠긴 칸만 달라진 경우)에도
+    // 조용히 돌아가지 않는다.
     if (Object.keys(patch).length === 0) {
       setError(t('creator.nothingToSave'))
       return
@@ -461,6 +485,7 @@ export default function EditCampaignPage() {
                 values={basic}
                 onChange={setBasic}
                 editScope={readOnly ? 'none' : editScope}
+                goalError={goalError}
               />
             </div>
             <div
