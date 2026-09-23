@@ -557,6 +557,7 @@
       "errorSave": "Couldn't save. Please try again shortly.",
       "errorUpload": "Couldn't upload the image. Please try again shortly.",
       "blockedSubmitDirty": "You have unsaved changes. Please save before submitting for review.",
+      "leaveConfirm": "You have unsaved changes. Leaving now will lose them. Leave anyway?",
       "readOnlyGuidance": "You can't edit the campaign in its current state. Check the dashboard for details.",
       "backToDashboard": "Back to dashboard",
       "storyPlaceholder": "Story editing is coming in a future update.",

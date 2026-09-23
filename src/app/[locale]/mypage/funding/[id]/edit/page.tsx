@@ -153,9 +153,9 @@ export default function EditCampaignPage() {
   }, [basic, basicOriginal, story, storyOriginal])
 
   // 저장하지 않은 변경이 있는 채로 탭(브라우저)을 닫거나 다른 주소로 가면
-  // 경고한다. 앱 안 링크 이동(next/link)은 페이지를 새로 불러오지 않아
-  // beforeunload가 뜨지 않는다 — 실제 브라우저 창 닫기·새로고침·주소 입력만
-  // 잡는다.
+  // 경고한다. 실제 브라우저 창 닫기·새로고침·주소 입력만 여기서 잡힌다 —
+  // 앱 안 링크 이동은 페이지를 새로 불러오지 않아 beforeunload가 뜨지
+  // 않으므로, 그건 바로 아래의 클릭 가로채기가 대신 맡는다.
   useEffect(() => {
     if (!dirty) return
     const handler = (e: BeforeUnloadEvent) => {
@@ -165,6 +165,32 @@ export default function EditCampaignPage() {
     window.addEventListener('beforeunload', handler)
     return () => window.removeEventListener('beforeunload', handler)
   }, [dirty])
+
+  // 마이페이지 레이아웃의 사이드바 링크 등 "앱 안" 이동은 페이지를 새로
+  // 불러오지 않으므로 beforeunload가 절대 뜨지 않는다 — 그 갭을 문서
+  // 전체의 클릭을 가로채서 메운다. 이 컴포넌트의 하위 트리(탭·버튼)뿐
+  // 아니라 사이드바 네비게이션(MypageLayout이 그리는, 이 컴포넌트 바깥
+  // 형제 노드)까지 잡아야 하므로 document에 캡처 단계로 붙인다. 새 탭으로
+  // 여는 링크(target="_blank")나 페이지 안 앵커(#…)는 이 문서를 떠나지
+  // 않으니 그냥 통과시킨다.
+  useEffect(() => {
+    if (!dirty) return
+    const handler = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0) return
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+      const anchor = (e.target as HTMLElement | null)?.closest?.('a')
+      if (!anchor) return
+      const href = anchor.getAttribute('href')
+      if (!href || href.startsWith('#')) return
+      if (anchor.target && anchor.target !== '_self') return
+      if (!window.confirm(t('creator.leaveConfirm'))) {
+        e.preventDefault()
+        e.stopPropagation()
+      }
+    }
+    document.addEventListener('click', handler, true)
+    return () => document.removeEventListener('click', handler, true)
+  }, [dirty, t])
 
   const handleTabKeyDown = useCallback((e: React.KeyboardEvent, index: number) => {
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
@@ -332,9 +358,11 @@ export default function EditCampaignPage() {
                 return (
                   <button
                     key={key}
+                    id={`funding-editor-tab-${key}`}
                     type="button"
                     role="tab"
                     aria-selected={selected}
+                    aria-controls={`funding-editor-panel-${key}`}
                     tabIndex={selected ? 0 : -1}
                     ref={el => {
                       tabRefs.current[key] = el
@@ -355,21 +383,36 @@ export default function EditCampaignPage() {
 
             {/* 탭 전환 — 언마운트하지 않는다. 조건부 렌더로 바꾸면 탭을 옮길 때
                 저장하지 않은 입력이 사라진다. */}
-            <div role="tabpanel" className={tab === 'basic' ? 'mt-6 block' : 'hidden'}>
+            <div
+              id="funding-editor-panel-basic"
+              role="tabpanel"
+              aria-labelledby="funding-editor-tab-basic"
+              className={tab === 'basic' ? 'mt-6 block' : 'hidden'}
+            >
               <BasicInfoTab
                 values={basic}
                 onChange={setBasic}
                 editScope={readOnly ? 'none' : editScope}
               />
             </div>
-            <div role="tabpanel" className={tab === 'story' ? 'mt-6 block' : 'hidden'}>
+            <div
+              id="funding-editor-panel-story"
+              role="tabpanel"
+              aria-labelledby="funding-editor-tab-story"
+              className={tab === 'story' ? 'mt-6 block' : 'hidden'}
+            >
               <StoryTab
                 story={story}
                 onChange={setStory}
                 editScope={readOnly ? 'none' : editScope}
               />
             </div>
-            <div role="tabpanel" className={tab === 'rewards' ? 'mt-6 block' : 'hidden'}>
+            <div
+              id="funding-editor-panel-rewards"
+              role="tabpanel"
+              aria-labelledby="funding-editor-tab-rewards"
+              className={tab === 'rewards' ? 'mt-6 block' : 'hidden'}
+            >
               <RewardsTab
                 campaignId={id}
                 rewards={rewards}
