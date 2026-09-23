@@ -13,6 +13,7 @@ import {
   FiGift,
   FiBell,
   FiMail,
+  FiDollarSign,
 } from 'react-icons/fi'
 import { Link, usePathname } from '@/i18n/navigation'
 
@@ -75,6 +76,12 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ title, description, children 
       label: '지원사업',
       href: '/admin/grants',
       icon: <FiGift className="w-5 h-5" />,
+    },
+    {
+      id: 'funding',
+      label: '펀딩 심사',
+      href: '/admin/funding',
+      icon: <FiDollarSign className="w-5 h-5" />,
     },
     {
       id: 'notifications',
