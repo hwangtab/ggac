@@ -29,7 +29,11 @@ import { computePercent, formatAmount, hasBackers } from '@/app/[locale]/funding
 // 전이 표의 정본으로 쓴다.
 import { PUBLIC_CAMPAIGN_STATUSES } from '@/lib/funding/transitions'
 // 이행 전이 규칙의 정본. 화면은 물어보고만 움직인다 — 라우트가 다시 판정한다.
-import { isFulfillableCampaignStatus, type FulfillmentStatus } from '@/lib/funding/fulfillment'
+import {
+  canTransitionFulfillment,
+  isFulfillableCampaignStatus,
+  type FulfillmentStatus,
+} from '@/lib/funding/fulfillment'
 
 import MypageLayout from '../../components/MypageLayout'
 import PermissionCheck from '../../components/PermissionCheck'
@@ -220,12 +224,30 @@ export default function ManageCampaignPage() {
 
   const runFulfillment = useCallback(
     async (to: FulfillmentStatus) => {
-      const ids = [...selected]
-      if (ids.length === 0) {
+      if (selected.size === 0) {
         setNotice('')
         setError(t('creator.fulfillmentNoSelection'))
         return
       }
+      // **고른 것과 옮길 수 있는 것을 가른다.** 여든 건을 나누어 부치는
+      // 개설자는 두 번째 묶음에서 '전체 선택'을 다시 누르고, 그러면 이미
+      // 발송한 건이 함께 들어온다. 그걸 그대로 보내면 서버가 409로 답하고
+      // 화면에는 빨간 경고가 뜬다 — 평범한 두 번째 묶음이 매번 사고처럼
+      // 보이고, 진짜 경합과 구분되지 않는다. 전이 표에 물어 옮길 수 있는
+      // 것만 남긴다.
+      const rows = (data?.pledges ?? []).filter(p => selected.has(p.id))
+      const movable = rows.filter(p =>
+        canTransitionFulfillment(p.fulfillment_status, to, !!data?.is_admin)
+      )
+      if (movable.length === 0) {
+        // 고른 것이 전부 이미 그 상태다. 아무 일도 안 일어난 것이 맞으므로
+        // 오류가 아니라 사실을 알린다.
+        setError('')
+        setNotice(t('creator.fulfillmentNothingToDo', { count: rows.length }))
+        setSelected(new Set())
+        return
+      }
+      const ids = movable.map(p => p.id)
       const confirmKey =
         to === 'preparing'
           ? 'creator.confirmPreparing'
@@ -234,6 +256,9 @@ export default function ManageCampaignPage() {
             : to === 'delivered'
               ? 'creator.confirmDelivered'
               : 'creator.confirmNone'
+      // 확인 문구가 세는 것은 **실제로 움직일 건수**다. 고른 건수를 세면
+      // 이미 발송한 건까지 포함해 "80건을 발송 완료로 옮깁니다"라고 말하게
+      // 된다 — 실제로는 40건만 움직이는데.
       if (!window.confirm(t(confirmKey, { count: ids.length }))) return
       setError('')
       setNotice('')
@@ -246,8 +271,9 @@ export default function ManageCampaignPage() {
         })
         const body = await res.json().catch(() => null)
         if (res.ok === false) {
-          // 409(일부만 바뀜)는 서버가 몇 건이 빠졌는지까지 적어 보낸다 —
-          // 화면이 이유를 추측하지 않고 그 문장을 그대로 보인다.
+          // 여기 오는 409는 진짜 경합이다(옮길 수 있는 것만 보냈으므로).
+          // 서버가 몇 건이 빠졌는지 적어 보내므로 화면은 그 문장을 그대로
+          // 보이고 이유를 추측하지 않는다.
           setError(body?.error || t('creator.errorFulfillment'))
           setSelected(new Set())
           await load()
@@ -264,7 +290,7 @@ export default function ManageCampaignPage() {
         setFulfilling(false)
       }
     },
-    [id, selected, t, load]
+    [id, selected, data, t, load]
   )
 
   const campaign = data?.campaign
@@ -492,13 +518,27 @@ export default function ManageCampaignPage() {
                         ) : null}
                       </div>
                       <div className="mt-4 border-t border-gray-200 pt-3">
-                        <a
-                          href={`/api/mypage/funding/campaigns/${id}/shipping-export`}
-                          className="text-sm font-medium text-primary-600 hover:underline"
-                        >
+                        <h4 className="text-sm font-semibold text-gray-900">
                           {t('creator.exportShipping')}
-                        </a>
-                        <p className="mt-1 text-xs text-gray-500">
+                        </h4>
+                        {/* 한 파일로는 둘 다 안 된다. 링크 이름을 파일 형식이
+                            아니라 **하려는 일**로 단다 — 고르는 사람이
+                            스프레드시트를 생각하지 않아도 되게. */}
+                        <div className="mt-2 flex flex-col gap-1">
+                          <a
+                            href={`/api/mypage/funding/campaigns/${id}/shipping-export?format=excel`}
+                            className="text-sm font-medium text-primary-600 hover:underline"
+                          >
+                            {t('creator.exportShippingExcel')}
+                          </a>
+                          <a
+                            href={`/api/mypage/funding/campaigns/${id}/shipping-export?format=courier`}
+                            className="text-sm font-medium text-primary-600 hover:underline"
+                          >
+                            {t('creator.exportShippingCourier')}
+                          </a>
+                        </div>
+                        <p className="mt-2 text-xs text-gray-500">
                           {t('creator.exportShippingHelp')}
                         </p>
                       </div>
