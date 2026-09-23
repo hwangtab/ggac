@@ -45,6 +45,8 @@ export const ACTIVITY_ACTION_TYPE = [
   'funding_campaign_reviewed',
   'funding_pledge_paid',
   'funding_pledge_canceled',
+  // 리워드 예상 전달월 변경(개설자). 잠그지 않는 대신 기록으로 남긴다.
+  'funding_reward_delivery_changed',
 ] as const
 
 export const ACTIVITY_TARGET_TYPE = [

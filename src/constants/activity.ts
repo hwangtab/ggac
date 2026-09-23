@@ -28,6 +28,9 @@ export const ACTIVITY_ACTION_TYPES = [
   'funding_campaign_reviewed',
   'funding_pledge_paid',
   'funding_pledge_canceled',
+  // 리워드의 예상 전달월 변경. 약관(제12조)이 전달 지연을 알리게 정할 뿐
+  // 날짜를 얼리지 않으므로 변경은 막지 않는다 — 대신 보이게 남긴다.
+  'funding_reward_delivery_changed',
 ] as const satisfies readonly ActivityActionType[]
 
 export const ACTIVITY_TARGET_TYPES = [

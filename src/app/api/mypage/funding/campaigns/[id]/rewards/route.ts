@@ -6,12 +6,20 @@ import { NextRequest, NextResponse } from 'next/server'
 
 import { requireActiveMember } from '@/lib/server/memberAuth'
 import { getCampaignById, listRewards, applyRewardBatch } from '@/db/queries/funding'
+import { logUserActivity } from '@/db/queries/activities'
 import { canManageCampaign } from '@/lib/server/fundingAuth'
 import { editScope, type CampaignStatus } from '@/lib/funding/transitions'
 import { parseRewardList } from '@/lib/funding/campaignInput'
-import { evaluateRewardPatch, canDeleteReward } from '@/lib/funding/rewardLock'
+import {
+  evaluateRewardPatch,
+  canDeleteReward,
+  deliveryChangesToLog,
+} from '@/lib/funding/rewardLock'
 import { isFundingEnabled } from '@/lib/funding/settings'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
+import { createLogger } from '@/utils/logger'
+
+const log = createLogger('api/mypage/funding/rewards')
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -22,6 +30,8 @@ const LOCK_MESSAGES = {
   quantity_decrease: '결제가 있는 리워드의 수량은 늘릴 수만 있습니다.',
   content_only_field:
     '공개된 프로젝트에서는 기존 리워드의 이름·설명·금액·배송 여부를 바꿀 수 없습니다. 새 리워드를 추가해 주세요.',
+  content_only_image:
+    '공개된 프로젝트에서는 기존 리워드의 사진을 바꿀 수 없습니다. 사진은 후원자가 보고 고른 내용의 일부입니다. 꼭 바꿔야 하면 사무국에 문의해 주세요.',
   content_only_quantity_decrease:
     '공개된 프로젝트에서는 기존 리워드의 수량을 줄일 수 없습니다. 늘리는 것만 됩니다.',
 } as const
@@ -68,6 +78,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         amount: Number(cur.amount),
         requires_shipping: Boolean(cur.requires_shipping),
         total_quantity: (cur.total_quantity as number | null) ?? null,
+        image_url: (cur.image_url as string | null) ?? null,
         locked_at: (cur.locked_at as string | null) ?? null,
       },
       {
@@ -76,6 +87,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         amount: r.amount,
         requires_shipping: r.requires_shipping,
         total_quantity: r.total_quantity,
+        image_url: r.image_url,
       },
       scope
     )
@@ -136,5 +148,28 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       `'${title}' 리워드에 방금 후원이 들어왔습니다. 새로고침한 뒤 다시 시도해 주세요.`
     ).toNextResponse()
   }
+  // 예상 전달월(`estimated_delivery`)은 잠그지 않는다 — 약관 제12조가 전달
+  // 지연을 "알린다"로 정할 뿐 날짜를 얼리지 않기 때문이다(근거는
+  // `@/lib/funding/rewardLock`의 머리 주석). 대신 조용히 바뀌지는 않게,
+  // 바뀐 리워드의 이전 값과 새 값을 활동 로그에 남긴다. 후원자에게 보내는
+  // 알림은 별건이며 여기서 만들지 않는다.
+  const deliveryChanges = deliveryChangesToLog(
+    existing.map(r => ({
+      id: String(r.id),
+      title: String(r.title),
+      estimated_delivery: (r.estimated_delivery as string | null) ?? null,
+    })),
+    parsed.rewards
+  )
+  if (deliveryChanges.length > 0) {
+    logUserActivity({
+      user_id: auth.user.id,
+      action_type: 'funding_reward_delivery_changed',
+      target_type: 'funding_campaign',
+      target_id: id,
+      metadata: { campaign_status: status, changes: deliveryChanges },
+    }).catch(e => log.warn('예상 전달월 변경 기록 실패', e))
+  }
+
   return ApiSuccess.ok({ rewards: await listRewards(id) }).toNextResponse()
 }

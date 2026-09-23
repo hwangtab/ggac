@@ -26,6 +26,7 @@ export type ActivityActionType =
   | 'funding_campaign_reviewed'
   | 'funding_pledge_paid'
   | 'funding_pledge_canceled'
+  | 'funding_reward_delivery_changed'
 
 export type ActivityTargetType =
   | 'post'
