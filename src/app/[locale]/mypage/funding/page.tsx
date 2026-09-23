@@ -1,10 +1,11 @@
 'use client'
 
 /**
- * 내가 후원한 프로젝트. 마이페이지 예매 내역(`../tickets/page.tsx`)과 같은 틀이다.
+ * 내가 후원한 프로젝트, 그리고 내가 연 캠페인. 마이페이지 예매 내역
+ * (`../tickets/page.tsx`)과 같은 틀이다.
  *
- * 이 화면은 **후원자 관점만** 그린다. 내가 연 캠페인 목록은 창작자 화면(2부-B)의
- * 몫이라 API가 함께 주는 `campaigns`는 여기서 쓰지 않는다.
+ * 후원 구역을 먼저 그리고 캠페인 구역을 그 아래에 둔다 — 이 화면에 오는
+ * 대부분은 후원자이지 창작자가 아니다.
  *
  * **여기서 후원을 취소하는 버튼은 만들지 않는다.** 취소 라우트
  * (`/api/funding/pledges/cancel`)는 후원번호+이메일로 본인을 확인하는
@@ -21,7 +22,13 @@ import { FiAlertCircle } from 'react-icons/fi'
 
 import MypageLayout from '../components/MypageLayout'
 import PermissionCheck from '../components/PermissionCheck'
-import { formatAmount } from '../../funding/format'
+import { computePercent, formatAmount, hasBackers } from '@/app/[locale]/funding/format'
+// 공개 링크를 걸어도 되는 상태만 — 심사 중·초안은 공개 화면에서 404가 난다.
+// 목록·대시보드·공개 화면이 같은 목록을 봐야 하므로 전이 표에 있는 정본을
+// 그대로 쓴다(사본을 두면 한쪽만 늘어난다).
+import { PUBLIC_CAMPAIGN_STATUSES } from '@/lib/funding/transitions'
+
+import CampaignStatusBadge from './CampaignStatusBadge'
 
 // 서버 화이트리스트(`toPublicPledgeFields` + 라우트가 얹는 campaign_id·
 // campaign_slug)와 정확히 맞춘다 — 여기 없는 필드는 서버가 보내지 않으므로
@@ -37,10 +44,27 @@ interface MyPledge {
   campaign_slug: string | null
 }
 
+// 서버가 `listCampaignsByOwner` + `getCampaignProgress`로 내보내는 필드 중
+// 이 화면에서 실제로 쓰는 것만 적는다.
+interface MyCampaign {
+  id: string
+  slug: string
+  status: string
+  title: string
+  goal_amount: number
+  progress: { raised_amount: number; backer_count: number }
+}
+
 export default function MyFundingPage() {
   const t = useTranslations('funding')
   const locale = useLocale()
   const [pledges, setPledges] = useState<MyPledge[]>([])
+  const [campaigns, setCampaigns] = useState<MyCampaign[]>([])
+  // 기능 스위치(`funding_features.enabled`). 꺼져 있으면 개설 구역을 통째로
+  // 감춘다 — 버튼을 눌러 폼을 다 채운 뒤에 "펀딩을 준비 중입니다"를 만나는
+  // 것보다 아예 보이지 않는 편이 정직하다. 서버가 알려 주기 전까지는 꺼진
+  // 것으로 본다(라우트의 기본값과 같다).
+  const [creatorEnabled, setCreatorEnabled] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const errorRef = useRef<HTMLDivElement | null>(null)
@@ -66,6 +90,8 @@ export default function MyFundingPage() {
         return
       }
       setPledges((body.data?.pledges ?? []) as MyPledge[])
+      setCampaigns((body.data?.campaigns ?? []) as MyCampaign[])
+      setCreatorEnabled(body.data?.funding_enabled === true)
     } catch {
       setError(t('error.body'))
     } finally {
@@ -139,6 +165,81 @@ export default function MyFundingPage() {
             manage: chunks => <Link href="/funding/manage">{chunks}</Link>,
           })}
         </p>
+
+        {/* 스위치가 꺼져 있으면 개설 구역 자체가 없다 — 후원 내역은 위에
+            그대로 남는다. */}
+        {creatorEnabled ? (
+          <section className="mt-10 border-t border-gray-200 pt-8">
+            <div className="flex items-center justify-between gap-4">
+              <h2 className="text-lg font-semibold text-gray-900">{t('creator.myCampaigns')}</h2>
+              <Link href="/mypage/funding/new" className="tw-btn-primary">
+                {t('creator.newCampaign')}
+              </Link>
+            </div>
+
+            {!loading && campaigns.length === 0 ? (
+              <div className="mt-4 rounded-lg border border-gray-200 p-8 text-center">
+                <p className="text-gray-600">{t('creator.noCampaigns')}</p>
+                <Link href="/mypage/funding/new" className="tw-btn-primary mt-4 inline-flex">
+                  {t('creator.newCampaign')}
+                </Link>
+              </div>
+            ) : campaigns.length > 0 ? (
+              <ul className="mt-4 space-y-3">
+                {campaigns.map(c => {
+                  const percent = computePercent(c.progress.raised_amount, c.goal_amount)
+                  // 후원이 하나도 없으면 0원·0%가 아니라 목표 금액을 적는다 —
+                  // 운영 대시보드와 같은 규칙이다(`hasBackers`).
+                  const showFigures = hasBackers(c.progress)
+                  const canLinkPublic = (PUBLIC_CAMPAIGN_STATUSES as readonly string[]).includes(
+                    c.status
+                  )
+                  return (
+                    <li key={c.id} className="rounded-lg border border-gray-200 p-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-gray-900">{c.title}</p>
+                            <CampaignStatusBadge status={c.status} />
+                          </div>
+                          <p className="mt-1 text-sm text-gray-600">
+                            {showFigures ? (
+                              <>
+                                {t('progress.amount', {
+                                  amount: formatAmount(c.progress.raised_amount, locale),
+                                })}
+                                {' · '}
+                                {t('list.percent', { percent })}
+                              </>
+                            ) : (
+                              t('progress.goal', { goal: formatAmount(c.goal_amount, locale) })
+                            )}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 flex-col items-end gap-2 text-sm">
+                          {canLinkPublic ? (
+                            <Link
+                              href={`/funding/${c.slug}`}
+                              className="text-primary-600 hover:underline"
+                            >
+                              {t('creator.openPublic')}
+                            </Link>
+                          ) : null}
+                          <Link
+                            href={`/mypage/funding/${c.id}`}
+                            className="text-primary-600 hover:underline"
+                          >
+                            {t('creator.manage')}
+                          </Link>
+                        </div>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            ) : null}
+          </section>
+        ) : null}
       </MypageLayout>
     </PermissionCheck>
   )
