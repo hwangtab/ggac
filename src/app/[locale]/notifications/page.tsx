@@ -20,6 +20,9 @@ import { formatDistanceToNow } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { useRouter } from '@/i18n/navigation'
 import { getNotificationRoute } from '@/utils/notificationNavigation'
+// 이름표와 색은 화면 밖 표에서 온다 — 종류를 늘리면 `tsc`가 먼저 막고,
+// 테스트가 스키마 배열과 그 표를 직접 대조한다.
+import { notificationTypeColor, notificationTypeLabel } from '@/constants/notificationTypes'
 import type {
   Notification,
   NotificationListResponse,
@@ -231,59 +234,6 @@ const NotificationsPage = () => {
     })
   }
 
-  // 알림 타입별 색상
-  const getTypeColor = (type: NotificationType) => {
-    const colors = {
-      post_new: 'bg-blue-100 text-blue-800',
-      post_reply: 'bg-green-100 text-green-800',
-      post_mention: 'bg-purple-100 text-purple-800',
-      member_approved: 'bg-green-100 text-green-800',
-      member_rejected: 'bg-red-100 text-red-800',
-      artist_approved: 'bg-emerald-100 text-emerald-800',
-      artist_rejected: 'bg-red-100 text-red-800',
-      system_notice: 'bg-yellow-100 text-yellow-800',
-      maintenance: 'bg-orange-100 text-orange-800',
-      welcome: 'bg-pink-100 text-pink-800',
-      // 펀딩 7종. 심사·승인·반려는 회원 승인 계열과 같은 색을 써서 "통과했다 /
-      // 못 했다"가 목록에서 같은 뜻으로 읽히게 한다.
-      funding_submitted: 'bg-indigo-100 text-indigo-800',
-      funding_approved: 'bg-green-100 text-green-800',
-      funding_rejected: 'bg-red-100 text-red-800',
-      funding_pledged: 'bg-teal-100 text-teal-800',
-      funding_closed: 'bg-gray-100 text-gray-800',
-      funding_delivery_changed: 'bg-amber-100 text-amber-800',
-      funding_refunded: 'bg-rose-100 text-rose-800',
-      funding_shipped: 'bg-sky-100 text-sky-800',
-    }
-    return colors[type] || 'bg-gray-100 text-gray-800'
-  }
-
-  // 알림 타입별 한글 이름
-  const getTypeName = (type: NotificationType) => {
-    const names = {
-      post_new: '새 게시글',
-      post_reply: '댓글',
-      post_mention: '멘션',
-      member_approved: '회원 승인',
-      member_rejected: '회원 거부',
-      artist_approved: '아티스트 승인',
-      artist_rejected: '아티스트 거부',
-      system_notice: '시스템 공지',
-      maintenance: '점검',
-      welcome: '환영',
-      board_notice: '이사회',
-      funding_submitted: '펀딩 심사 요청',
-      funding_approved: '펀딩 승인',
-      funding_rejected: '펀딩 반려',
-      funding_pledged: '펀딩 후원',
-      funding_closed: '펀딩 마감',
-      funding_delivery_changed: '리워드 전달 시기',
-      funding_refunded: '후원 환불',
-      funding_shipped: '리워드 발송',
-    }
-    return names[type] || type
-  }
-
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -418,9 +368,9 @@ const NotificationsPage = () => {
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center">
                             <span
-                              className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getTypeColor(notification.type)}`}
+                              className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${notificationTypeColor(notification.type)}`}
                             >
-                              {getTypeName(notification.type)}
+                              {notificationTypeLabel(notification.type)}
                             </span>
                             {!notification.read_at && (
                               <span className="ml-2 w-2 h-2 bg-blue-500 rounded-full" />

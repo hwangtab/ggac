@@ -12,6 +12,7 @@ import AdminLayout from '../components/AdminLayout'
 import PostContentRenderer from '@/components/PostContentRenderer'
 import OptimizedImage from '@/components/OptimizedImage'
 import { toReviewDetail, type CampaignDetail } from './reviewDetail'
+import SettlementPanel from './SettlementPanel'
 import {
   nextStatus,
   PUBLIC_CAMPAIGN_STATUSES,
@@ -493,6 +494,19 @@ export default function AdminFundingPage() {
                       </div>
                     )}
                   </div>
+
+                  {/* 마감 뒤에는 정산이 이어진다. '정산 완료 처리'는 지급까지
+                      기록된 정산서가 있어야 통과하므로(서버가 판정한다) 그
+                      정산서를 만드는 자리를 버튼 바로 위에 둔다. */}
+                  {(c.status === 'closed' || c.status === 'settled') && (
+                    <div className="pt-2">
+                      <SettlementPanel
+                        campaignId={c.id}
+                        campaignTitle={c.title}
+                        onSettled={() => void load()}
+                      />
+                    </div>
+                  )}
 
                   <div className="flex flex-wrap items-end gap-3 pt-2 border-t border-gray-100">
                     {canApprove && (

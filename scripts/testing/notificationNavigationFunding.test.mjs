@@ -1,8 +1,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 
 import { getNotificationRoute } from '../../src/utils/notificationNavigation.ts'
+import { NOTIFICATION_TYPE } from '../../src/db/schema/content.ts'
+import {
+  NOTIFICATION_TYPE_COLOR,
+  NOTIFICATION_TYPE_LABEL,
+} from '../../src/constants/notificationTypes.ts'
 
 /**
  * 펀딩 알림이 화면에서 실제로 쓸모가 있는가.
@@ -11,17 +15,19 @@ import { getNotificationRoute } from '../../src/utils/notificationNavigation.ts'
  * 아무도 몰랐다 — 목록에서는 `funding_pledged`라는 영문 식별자가 그대로
  * 보이고, 눌러도 아무 데도 가지 않았다. 알림을 실제로 만들기 시작하면
  * 그것이 후원자가 처음 보는 화면이 된다.
+ *
+ * **목록을 손으로 적지 않는다.** 손으로 적었더니 `funding_shipped`가 한 회차
+ * 동안 빠져 있었고(정산 작업에서 발견), 빠진 종류는 검사되지 않는다는 것을
+ * 아무도 몰랐다. 스키마의 종류 배열에서 뽑아 쓴다 — 종류를 늘리면 다음 줄이
+ * 저절로 늘어난다.
  */
+const FUNDING_TYPES = NOTIFICATION_TYPE.filter(t => t.startsWith('funding_'))
 
-const FUNDING_TYPES = [
-  'funding_submitted',
-  'funding_approved',
-  'funding_rejected',
-  'funding_pledged',
-  'funding_closed',
-  'funding_delivery_changed',
-  'funding_refunded',
-]
+test('스키마에서 뽑은 펀딩 종류가 비어 있지 않다', () => {
+  // 필터가 빗나가면(접두어 규칙이 바뀌면) 아래 검사들이 0건을 돌며 조용히
+  // 통과한다. 그 상태를 실패로 만든다.
+  assert.ok(FUNDING_TYPES.length >= 9, `펀딩 종류가 ${FUNDING_TYPES.length}개뿐이다`)
+})
 
 function notification(type, data = {}) {
   return {
@@ -39,7 +45,7 @@ function notification(type, data = {}) {
   }
 }
 
-test('펀딩 알림 일곱 종류가 전부 갈 곳이 있다', () => {
+test('펀딩 알림이 전부 갈 곳이 있다', () => {
   for (const type of FUNDING_TYPES) {
     const route = getNotificationRoute(notification(type))
     assert.ok(route, `${type}에 경로가 없다`)
@@ -95,22 +101,26 @@ test('앱 밖으로 튕겨 보내지 않는다', () => {
 test('url이 없어도 종류별 기본 목적지가 있다', () => {
   assert.equal(getNotificationRoute(notification('funding_submitted')), '/admin/funding')
   assert.equal(getNotificationRoute(notification('funding_refunded')), '/mypage/funding')
+  assert.equal(getNotificationRoute(notification('funding_settled')), '/mypage/funding')
 })
 
-test('알림 목록 화면이 일곱 종류의 한글 이름과 색을 안다', () => {
-  const source = readFileSync(
-    new URL('../../src/app/[locale]/notifications/page.tsx', import.meta.url),
-    'utf8'
-  )
-  // 이름표에 영문 식별자가 그대로 보이던 것이 출발점이라, 두 표 모두에
-  // 항목이 있는지를 문자열로 확인한다.
-  const names = source.slice(source.indexOf('const getTypeName'))
-  const colors = source.slice(
-    source.indexOf('const getTypeColor'),
-    source.indexOf('const getTypeName')
-  )
+test('알림 목록 화면의 표가 펀딩 종류를 전부 안다', () => {
+  // 소스를 정규식으로 훑던 자리다. 이제 화면과 같은 표를 직접 읽는다 —
+  // 표가 `Record<NotificationType, string>`이라 종류를 늘리면 `tsc`가 먼저
+  // 막고, 스키마와의 대조는 이 테스트가 한다.
   for (const type of FUNDING_TYPES) {
-    assert.ok(names.includes(`${type}:`), `${type}의 한글 이름이 없다`)
-    assert.ok(colors.includes(`${type}:`), `${type}의 색이 없다`)
+    assert.ok(NOTIFICATION_TYPE_LABEL[type], `${type}의 한글 이름이 없다`)
+    assert.ok(NOTIFICATION_TYPE_COLOR[type], `${type}의 색이 없다`)
+    // 영문 식별자가 그대로 보이던 것이 출발점이므로 이름이 식별자면 실패다.
+    assert.notEqual(NOTIFICATION_TYPE_LABEL[type], type, `${type}의 이름이 식별자 그대로다`)
+  }
+})
+
+test('스키마의 모든 알림 종류에 이름표와 색이 있다', () => {
+  // 펀딩만의 문제가 아니다 — 새 종류가 어느 갈래든 이름 없이 목록에 뜨면
+  // 사용자는 영문 식별자를 본다.
+  for (const type of NOTIFICATION_TYPE) {
+    assert.ok(NOTIFICATION_TYPE_LABEL[type], `${type}의 한글 이름이 없다`)
+    assert.ok(NOTIFICATION_TYPE_COLOR[type], `${type}의 색이 없다`)
   }
 })

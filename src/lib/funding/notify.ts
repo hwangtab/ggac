@@ -49,6 +49,8 @@ import {
   buildPledgePaidCreatorNotice,
   buildPledgeRefundedNotice,
   buildPledgeShippedNotice,
+  buildSettlementPaidNotice,
+  buildSettlementPreparedNotice,
   isSendableEmail,
   maskEmail,
   pledgePaidBackerExtraLines,
@@ -56,6 +58,7 @@ import {
   sendManyEmails,
   type DeliveryChangeLike,
   type NoticeCopy,
+  type SettlementLike,
 } from './notifyContent.ts'
 
 const log = createLogger('funding/notify')
@@ -183,6 +186,21 @@ async function mailOwnerIfAllowed(
   if (typeof ownerId !== 'string' || ownerId.length === 0) return
   if (!d.isMailConfigured()) return
   if (await optedOut(d, ownerId)) return
+  // 주소 한 칸만 읽는다 — 전체 행을 받으면 계좌번호·생년월일이 딸려 온다.
+  const email = await d.getProfileEmail(ownerId).catch(() => null)
+  await sendOne(d, email, notice)
+}
+
+/**
+ * 개설자에게 보내는 **거래성** 알림의 메일 부분. 수신거부를 보지 않는다.
+ *
+ * 자기 돈이 실제로 움직였다는 통지에만 쓴다(정산금 지급). "조합 소식은 그만"
+ * 이라고 껐다고 해서 "당신 돈을 보냈습니다"를 안 보낼 수는 없다 — 후원 완료·
+ * 환불 통지가 후원자에게 그러한 것과 같은 판단이다.
+ */
+async function mailOwnerAlways(d: NotifyDeps, ownerId: unknown, notice: NoticeCopy): Promise<void> {
+  if (typeof ownerId !== 'string' || ownerId.length === 0) return
+  if (!d.isMailConfigured()) return
   // 주소 한 칸만 읽는다 — 전체 행을 받으면 계좌번호·생년월일이 딸려 온다.
   const email = await d.getProfileEmail(ownerId).catch(() => null)
   await sendOne(d, email, notice)
@@ -594,6 +612,61 @@ export async function notifyPledgesShipped(
     d.log.info('리워드 발송 알림 발송', { campaignId: maskId(String(campaign.id)), ...result })
   } catch (error) {
     d.log.error('리워드 발송 알림 실패', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
+
+// ---------------------------------------------------------------- ⑨ 정산 정리
+
+/**
+ * 정산 내역을 정리했다 → **개설자**.
+ *
+ * 마감 뒤 사무국이 결제대행 수수료를 넣어 정산서를 만든 그때 한 번. 정리한
+ * 뒤 환불이 들어와 **지급 예정 금액이 달라졌을 때**만 `revised`로 다시 한 번.
+ * 같은 금액을 두 번 알리지 않는다 — 같은 돈 이야기를 두 번 듣는 것이 한 번
+ * 듣는 것보다 나쁘다.
+ *
+ * **선택 알림** — 아직 돈이 움직이지 않았다. 인앱은 항상, 메일은 수신거부를
+ * 존중한다.
+ */
+export async function notifySettlementPrepared(
+  campaign: Record<string, unknown>,
+  settlement: SettlementLike,
+  options: { revised?: boolean } = {},
+  overrides?: Partial<NotifyDeps>
+): Promise<void> {
+  const d = resolve(overrides)
+  try {
+    const notice = buildSettlementPreparedNotice(campaign, settlement, d.siteUrl(), options)
+    await inApp(d, campaign.owner_user_id, 'funding_settled', notice)
+    await mailOwnerIfAllowed(d, campaign.owner_user_id, notice)
+  } catch (error) {
+    d.log.error('정산 준비 알림 실패', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
+
+// ---------------------------------------------------------------- ⑩ 정산 지급
+
+/**
+ * 정산금을 지급했다 → **개설자**.
+ *
+ * **거래성** — 자기 돈이 실제로 움직였다는 통지라 수신 설정을 보지 않는다.
+ */
+export async function notifySettlementPaid(
+  campaign: Record<string, unknown>,
+  settlement: SettlementLike,
+  overrides?: Partial<NotifyDeps>
+): Promise<void> {
+  const d = resolve(overrides)
+  try {
+    const notice = buildSettlementPaidNotice(campaign, settlement, d.siteUrl())
+    await inApp(d, campaign.owner_user_id, 'funding_settled', notice)
+    await mailOwnerAlways(d, campaign.owner_user_id, notice)
+  } catch (error) {
+    d.log.error('정산 지급 알림 실패', {
       error: error instanceof Error ? error.message : String(error),
     })
   }

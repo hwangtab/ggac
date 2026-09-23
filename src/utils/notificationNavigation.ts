@@ -66,7 +66,7 @@ export function getNotificationRoute(
     case 'welcome':
       return '/'
 
-    // 펀딩 7종. 알림을 만든 쪽이 갈 곳을 이미 알고 있으므로(개설자 대시보드 ·
+    // 펀딩 9종. 알림을 만든 쪽이 갈 곳을 이미 알고 있으므로(개설자 대시보드 ·
     // 공개 페이지 · 관리자 심사 목록 · 비회원 조회) 저장된 주소를 먼저 쓴다.
     // 없으면 적어도 화면이 있는 곳으로 보낸다.
     case 'funding_submitted':
@@ -75,6 +75,7 @@ export function getNotificationRoute(
     case 'funding_approved':
     case 'funding_rejected':
     case 'funding_closed':
+    case 'funding_settled':
       return getStoredUrlRoute(notification) ?? '/mypage/funding'
 
     case 'funding_pledged':

@@ -418,6 +418,50 @@ test.describe('펀딩 — 관리자 심사 경계 (심사 대기 캠페인)', ()
       await adminContext.dispose()
     }
   })
+
+  /**
+   * 정산 라우트 셋도 같은 게이트(`requireAdmin()`) 뒤에 있다. 비인증 401은
+   * 아래 비인증 경계가 보지만, **로그인한 평조합원이 403인지**는 그것과 다른
+   * 질문이다 — 2026-08 적대 감사가 파고든 모양이 바로 공유 헬퍼 안의 한 줄
+   * 변경이었고, 정적 가드는 그것을 놓쳤고 E2E가 잡았다.
+   *
+   * 셋을 다 부르는 이유: 하나만 보면 나머지 둘에 게이트를 빼먹어도 초록불이다.
+   * 읽기(GET)까지 포함한다 — 금액과 사무국 메모가 실려 나가는 응답이다.
+   */
+  test('정산 내역은 관리자만 읽고 쓸 수 있다', async ({ baseURL }) => {
+    const otherContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('other'),
+    })
+    const adminContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('admin'),
+    })
+    const url = `/api/admin/funding/campaigns/${fixtures.fundingSettleCampaignId}/settlement`
+    try {
+      const denied: Array<
+        [string, { status(): number; json(): Promise<Record<string, unknown>> }]
+      > = [
+        ['GET', await otherContext.get(url)],
+        ['POST', await otherContext.post(url, { data: { pg_fee_amount: 0 } })],
+        ['PATCH', await otherContext.patch(url, { data: { action: 'mark_paid' } })],
+      ]
+      for (const [method, res] of denied) {
+        expect(res.status(), `${method} 거부 코드`).toBe(403)
+        expect((await res.json()).error).toContain('관리자 권한이 필요합니다')
+      }
+
+      // 짝: 게이트가 "전부 막기"로 퇴화해도 위 부정 단정만으로는 잡히지 않는다.
+      // 관리자는 실제로 읽을 수 있어야 하고, 그 응답에는 원장에서 방금 센 근거가
+      // 들어 있어야 한다.
+      const allowed = await adminContext.get(url)
+      expect(allowed.status()).toBe(200)
+      expect((await allowed.json()).data?.current_basis?.net_amount).toEqual(expect.any(Number))
+    } finally {
+      await otherContext.dispose()
+      await adminContext.dispose()
+    }
+  })
 })
 
 /**
@@ -488,6 +532,29 @@ test.describe('펀딩 — 비인증 요청', () => {
             anonContext.post(
               `/api/admin/funding/campaigns/${fixtures.fundingReviewCampaignId}/transition`,
               { data: { action: 'reject', reviewNote: '비인증 시도' } }
+            ),
+        ],
+        [
+          'GET /api/admin/funding/campaigns/[id]/settlement',
+          () =>
+            anonContext.get(
+              `/api/admin/funding/campaigns/${fixtures.fundingReviewCampaignId}/settlement`
+            ),
+        ],
+        [
+          'POST /api/admin/funding/campaigns/[id]/settlement',
+          () =>
+            anonContext.post(
+              `/api/admin/funding/campaigns/${fixtures.fundingReviewCampaignId}/settlement`,
+              { data: { pg_fee_amount: 0 } }
+            ),
+        ],
+        [
+          'PATCH /api/admin/funding/campaigns/[id]/settlement',
+          () =>
+            anonContext.patch(
+              `/api/admin/funding/campaigns/${fixtures.fundingReviewCampaignId}/settlement`,
+              { data: { action: 'mark_paid' } }
             ),
         ],
       ]
@@ -602,6 +669,12 @@ async function resetAdminActionCampaigns(): Promise<void> {
         )
       }
     }
+    // 정산 캠페인은 정산서까지 지운다 — 남겨 두면 다음 실행에서 '이미 지급이
+    // 끝난 정산 내역'이라 다시 정리할 수 없어 스위트가 한 번만 돈다.
+    await client.execute({
+      sql: 'DELETE FROM funding_settlements WHERE campaign_id = ?',
+      args: [fixtures.fundingSettleCampaignId],
+    })
   } finally {
     client.close()
   }
@@ -645,6 +718,31 @@ test.describe('펀딩 — 관리자 전용 동작은 마이페이지 라우트�
         // 수 없다 — DB를 직접 읽는다.
         const afterDenied = await readCampaignRow(campaignId)
         expect(afterDenied?.status, `${action} 거부 후 상태`).toBe(from)
+
+        // 정산 완료(`settle`)는 **지급까지 끝난 정산 내역**이 있어야 통과한다
+        // (`src/lib/funding/campaignPreconditions.ts`). 기록 없이 '정산 완료'
+        // 딱지만 붙는 일을 막는 규칙이라, 허용 쪽을 확인하기 전에 그 기록을
+        // 관리자 라우트로 실제로 만든다 — 그 두 라우트도 관리자 전용이다.
+        if (action === 'settle') {
+          const blocked = await adminContext.post(
+            `/api/admin/funding/campaigns/${campaignId}/transition`,
+            { data: { action } }
+          )
+          expect(blocked.status(), '정산 내역 없이 정산 완료').toBe(400)
+          expect((await blocked.json()).error).toContain('정산 내역을 먼저 정리')
+
+          const prepared = await adminContext.post(
+            `/api/admin/funding/campaigns/${campaignId}/settlement`,
+            { data: { pg_fee_amount: 0, memo: 'authz 픽스처 정산' } }
+          )
+          expect(prepared.status(), '정산 내역 정리').toBe(200)
+          const paidOut = await adminContext.patch(
+            `/api/admin/funding/campaigns/${campaignId}/settlement`,
+            { data: { action: 'mark_paid' } }
+          )
+          expect(paidOut.status(), '정산 지급 기록').toBe(200)
+          expect((await paidOut.json()).data?.settlement?.status).toBe('paid')
+        }
 
         // 허용 쪽: 같은 동작이 관리자 라우트로는 통한다. 이 단정이 없으면
         // 게이트가 "전부 막기"로 퇴화해도 위 부정 단정은 그대로 초록불이다.

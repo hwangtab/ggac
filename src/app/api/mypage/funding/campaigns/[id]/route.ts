@@ -8,6 +8,8 @@ import {
   getCampaignProgress,
 } from '@/db/queries/funding'
 import { listPledgesByCampaign } from '@/db/queries/fundingPledges'
+import { getSettlementByCampaign, isSettlementStale } from '@/db/queries/fundingSettlements'
+import { cooperativeLossFor } from '@/lib/funding/settlement'
 import { canManageCampaign } from '@/lib/server/fundingAuth'
 import { isApprovedActiveAdmin } from '@/lib/server/authz'
 import { editScope, type CampaignStatus } from '@/lib/funding/transitions'
@@ -61,6 +63,42 @@ function ownerPledgeView(p: Record<string, unknown>, shippingRewardIds: Set<stri
   }
 }
 
+/**
+ * 개설자에게 보이는 정산 내역.
+ *
+ * **창작자는 이 거래의 상대방이다.** 얼마를 받게 되는지 알려고 사무국에
+ * 전화를 걸어야 한다면 그건 기록이 있는 것이 아니다. 그래서 정산서가 만들어진
+ * 순간부터 보인다 — 지급 전이면 '지급 전'이라고 분명히 적고, 숫자가 어떻게
+ * 나왔는지 항목을 전부 보여 준다.
+ *
+ * **사무국 메모(`memo`)는 싣지 않는다.** 그 칸은 내부 기록용이라 상대방에게
+ * 보내는 약속이 아니다 — 개설자에게 할 말은 메모가 아니라 알림과 화면의
+ * 문장으로 한다.
+ *
+ * `is_stale`은 "정산서를 만든 뒤 환불이 들어와 금액이 다시 계산될 것"이라는
+ * 뜻이다. 그 사실을 감추고 낡은 숫자만 보여 주면, 창작자는 오지 않을 금액을
+ * 기다린다.
+ */
+function creatorSettlementView(settlement: Record<string, unknown>, isStale: boolean) {
+  return {
+    status: settlement.status,
+    gross_amount: settlement.gross_amount,
+    refund_amount: settlement.refund_amount,
+    net_amount: Number(settlement.gross_amount ?? 0) - Number(settlement.refund_amount ?? 0),
+    pg_fee_amount: settlement.pg_fee_amount,
+    platform_fee_amount: settlement.platform_fee_amount,
+    payout_amount: settlement.payout_amount,
+    backer_count: settlement.backer_count,
+    paid_out_at: settlement.paid_out_at,
+    is_stale: isStale,
+    // 수수료가 실 모금액보다 클 때의 차액. 저장된 값들에서 되짚는다 —
+    // 컬럼을 만들면 손으로 맞춰야 하는 숫자가 하나 더 생긴다.
+    cooperative_loss_amount: cooperativeLossFor(
+      settlement as Parameters<typeof cooperativeLossFor>[0]
+    ),
+  }
+}
+
 export async function GET(_req: NextRequest, { params }: Ctx) {
   const auth = await requireActiveMember()
   if (auth instanceof NextResponse) return auth
@@ -72,17 +110,20 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
   ) {
     return ApiError.notFound('프로젝트를 찾을 수 없습니다.').toNextResponse()
   }
-  const [rewards, pledges, progress] = await Promise.all([
+  const [rewards, pledges, progress, settlement] = await Promise.all([
     listRewards(id),
     listPledgesByCampaign(id, { status: 'paid' }),
     getCampaignProgress(id),
+    getSettlementByCampaign(id),
   ])
+  const settlementStale = settlement ? await isSettlementStale(settlement) : false
   const shippingIds = new Set(rewards.filter(r => r.requires_shipping).map(r => String(r.id)))
   return ApiSuccess.ok({
     campaign,
     rewards,
     progress,
     pledges: pledges.map(p => ownerPledgeView(p, shippingIds)),
+    settlement: settlement ? creatorSettlementView(settlement, settlementStale) : null,
     edit_scope: editScope(campaign.status as CampaignStatus),
     // 이행 상태를 되돌리는 것은 사무국만 할 수 있다. 화면이 그 버튼을 보일지
     // 정하려면 이 값이 필요하다 — 없으면 대부분의 사람에게 눌러도 거절당하는
