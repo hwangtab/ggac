@@ -256,6 +256,22 @@ export async function getProfileAuthzFields(id: string): Promise<{
 }
 
 /**
+ * 이메일 한 칸만 읽는다. 알림 메일을 보내려고 전체 행을 끌어오면 계좌번호·
+ * 실명·전화번호·생년월일이 함께 딸려 온다(위 `getProfileAuthzFields`,
+ * 아래 `getProfileDisplayName`과 같은 이유).
+ *
+ * @returns 행이 없거나 주소가 비어 있으면 `null`.
+ */
+export async function getProfileEmail(id: string): Promise<string | null> {
+  const rows = await db
+    .select({ email: memberProfiles.email })
+    .from(memberProfiles)
+    .where(eq(memberProfiles.id, id))
+    .limit(1)
+  return rows[0]?.email ?? null
+}
+
+/**
  * 표시 이름 한 칸만 읽는다. 알림 문구에 "누가 썼는지"를 넣으려고 전체 행을
  * 끌어오면 계좌번호·실명·전화번호·생년월일이 함께 딸려 온다(위
  * `getProfileAuthzFields`의 주석과 같은 이유).
@@ -359,6 +375,38 @@ export async function listApprovedMemberIds(): Promise<string[]> {
     .where(eq(memberProfiles.registrationStatus, 'approved'))
     .limit(ALL_PROFILES_LIMIT)
   return rows.map(row => row.id)
+}
+
+/**
+ * 알림을 받아야 할 **관리자**의 id·이름·이메일. 심사 대기처럼 "관리자만
+ * 처리할 수 있는 일"을 알릴 때 쓴다.
+ *
+ * 조건은 `isAdmin`(`src/lib/server/authz.ts`)과 같아야 한다 — 거기서는
+ * 승인·활성 상태에 더해 `is_admin`을 본다. 여기서 조건이 느슨해지면 탈퇴·
+ * 정지된 계정에도 심사 알림이 쌓인다.
+ *
+ * 컬럼은 세 개만 고른다 — 전 행(계좌번호·실명·생년월일 포함)을 받아 세 개만
+ * 쓰는 일이 없도록.
+ */
+export async function listAdminRecipients(): Promise<
+  { id: string; email: string | null; display_name: string | null }[]
+> {
+  const rows = await db
+    .select({
+      id: memberProfiles.id,
+      email: memberProfiles.email,
+      displayName: memberProfiles.displayName,
+    })
+    .from(memberProfiles)
+    .where(
+      and(
+        eq(memberProfiles.isAdmin, true),
+        eq(memberProfiles.registrationStatus, 'approved'),
+        eq(memberProfiles.isActive, true)
+      )
+    )
+    .limit(ALL_PROFILES_LIMIT)
+  return rows.map(row => ({ id: row.id, email: row.email, display_name: row.displayName }))
 }
 
 export interface AdminMemberCounts {

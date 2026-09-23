@@ -244,6 +244,15 @@ const NotificationsPage = () => {
       system_notice: 'bg-yellow-100 text-yellow-800',
       maintenance: 'bg-orange-100 text-orange-800',
       welcome: 'bg-pink-100 text-pink-800',
+      // 펀딩 7종. 심사·승인·반려는 회원 승인 계열과 같은 색을 써서 "통과했다 /
+      // 못 했다"가 목록에서 같은 뜻으로 읽히게 한다.
+      funding_submitted: 'bg-indigo-100 text-indigo-800',
+      funding_approved: 'bg-green-100 text-green-800',
+      funding_rejected: 'bg-red-100 text-red-800',
+      funding_pledged: 'bg-teal-100 text-teal-800',
+      funding_closed: 'bg-gray-100 text-gray-800',
+      funding_delivery_changed: 'bg-amber-100 text-amber-800',
+      funding_refunded: 'bg-rose-100 text-rose-800',
     }
     return colors[type] || 'bg-gray-100 text-gray-800'
   }
@@ -261,6 +270,14 @@ const NotificationsPage = () => {
       system_notice: '시스템 공지',
       maintenance: '점검',
       welcome: '환영',
+      board_notice: '이사회',
+      funding_submitted: '펀딩 심사 요청',
+      funding_approved: '펀딩 승인',
+      funding_rejected: '펀딩 반려',
+      funding_pledged: '펀딩 후원',
+      funding_closed: '펀딩 마감',
+      funding_delivery_changed: '리워드 전달 시기',
+      funding_refunded: '후원 환불',
     }
     return names[type] || type
   }

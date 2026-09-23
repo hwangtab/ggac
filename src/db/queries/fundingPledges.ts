@@ -698,6 +698,46 @@ export async function listPledgesByCampaign(
   return rows.map(r => rowToPledge(r as Row))
 }
 
+/**
+ * 한 리워드를 **결제까지 마친** 후원자들. 전달 예정 시기 변경 알림처럼
+ * "이 리워드를 고른 사람에게만" 보내야 하는 경로가 쓴다.
+ *
+ * 알림에 필요한 필드만 고른다 — 배송지·연락처·관리자 메모는 가져오지 않는다.
+ * `limit`은 상한이지 페이지가 아니다: 넘치면 호출부가 발송을 포기하고
+ * 로그를 남기도록(`MAX_BULK_RECIPIENTS`) 일부러 잘라서 세지 않는다.
+ */
+export async function listPaidPledgesByReward(
+  rewardId: string,
+  limit = 1000
+): Promise<
+  {
+    id: string
+    pledge_code: string
+    user_id: string | null
+    backer_email: string
+    is_anonymous: boolean
+  }[]
+> {
+  const rows = await db
+    .select({
+      id: fundingPledges.id,
+      pledgeCode: fundingPledges.pledgeCode,
+      userId: fundingPledges.userId,
+      backerEmail: fundingPledges.backerEmail,
+      isAnonymous: fundingPledges.isAnonymous,
+    })
+    .from(fundingPledges)
+    .where(and(eq(fundingPledges.rewardId, rewardId), eq(fundingPledges.status, 'paid')))
+    .limit(limit)
+  return rows.map(r => ({
+    id: r.id,
+    pledge_code: r.pledgeCode,
+    user_id: r.userId,
+    backer_email: r.backerEmail,
+    is_anonymous: r.isAnonymous,
+  }))
+}
+
 /** 공개 명단. 개인정보는 여기서부터 나가지 않는다 — 이름(또는 '익명')과 공개 메시지뿐. */
 export async function listPublicBackers(
   campaignId: string,

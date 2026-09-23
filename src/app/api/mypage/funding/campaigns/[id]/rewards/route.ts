@@ -2,7 +2,7 @@
  * 리워드 일괄 저장. draft에서는 자유, active에서는 추가와 수량 증가만.
  * 잠긴 리워드는 `evaluateRewardPatch`가 판정하고, 관리자도 예외가 없다.
  */
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 
 import { requireActiveMember } from '@/lib/server/memberAuth'
 import { getCampaignById, listRewards, applyRewardBatch } from '@/db/queries/funding'
@@ -16,6 +16,7 @@ import {
   canDeleteReward,
   deliveryChangesToLog,
 } from '@/lib/funding/rewardLock'
+import { notifyRewardDeliveryChanged } from '@/lib/funding/notify'
 import { isFundingEnabled } from '@/lib/funding/settings'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
@@ -24,6 +25,13 @@ const log = createLogger('api/mypage/funding/rewards')
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+/**
+ * 저장 자체는 금방 끝나지만, `after()`로 넘긴 전달 시기 변경 알림은 후원자
+ * 수만큼 메일을 보낸다. 플랫폼 기본값(10~15초)이면 상한(400명)이 걸리기도
+ * 전에 함수가 죽어 **절반만 받고 누가 받았는지도 모르는** 상태가 된다.
+ * 초당 2통 간격으로 400통이면 200초 남짓이라 만료 크론과 같은 300을 준다.
+ */
+export const maxDuration = 300
 
 const LOCK_MESSAGES = {
   locked_amount: '결제가 있는 리워드의 금액은 바꿀 수 없습니다. 새 리워드를 추가해 주세요.',
@@ -175,8 +183,8 @@ async function handlePut(request: NextRequest, params: Promise<{ id: string }>) 
   // 예상 전달월(`estimated_delivery`)은 잠그지 않는다 — 약관 제12조가 전달
   // 지연을 "알린다"로 정할 뿐 날짜를 얼리지 않기 때문이다(근거는
   // `@/lib/funding/rewardLock`의 머리 주석). 대신 조용히 바뀌지는 않게,
-  // 바뀐 리워드의 이전 값과 새 값을 활동 로그에 남긴다. 후원자에게 보내는
-  // 알림은 별건이며 여기서 만들지 않는다.
+  // 바뀐 리워드의 이전 값과 새 값을 활동 로그에 남기고, 그 리워드를 후원한
+  // 사람들에게 알린다(약관 제12조 — 발송이 늦어지면 창작자가 알린다).
   const deliveryChanges = deliveryChangesToLog(
     existing.map(r => ({
       id: String(r.id),
@@ -193,6 +201,14 @@ async function handlePut(request: NextRequest, params: Promise<{ id: string }>) 
       target_id: id,
       metadata: { campaign_status: status, changes: deliveryChanges },
     }).catch(e => log.warn('예상 전달월 변경 기록 실패', e))
+    // 후원자 수가 얼마든 응답을 기다리게 하지 않는다. `notifyRewardDeliveryChanged`는
+    // 스스로 던지지 않지만, `after()` 안에서 새는 예외는 잡아 줄 사람이 없으므로
+    // 다른 알림 호출부와 같은 모양으로 한 번 더 감싼다.
+    after(() =>
+      notifyRewardDeliveryChanged(campaign, deliveryChanges).catch(e =>
+        log.error('예상 전달월 변경 알림 실패', e)
+      )
+    )
   }
 
   return ApiSuccess.ok({ rewards: await listRewards(id) }).toNextResponse()

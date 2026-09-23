@@ -22,6 +22,12 @@ export const NOTIFICATION_TYPE = [
   'funding_rejected',
   'funding_pledged',
   'funding_closed',
+  // 알림 배선(2026-09-23)에서 추가. 리워드 전달 예정 시기 변경 통지(약관
+  // 제12조)와 승인 후 확정 불가로 인한 전액 환불 통지. 앞의 다섯과 마찬가지로
+  // DB CHECK가 없어 마이그레이션이 필요 없다. `src/types/notification.ts`의
+  // `NotificationType` 유니온과 손으로 맞춘다.
+  'funding_delivery_changed',
+  'funding_refunded',
 ] as const
 
 export const posts = sqliteTable(

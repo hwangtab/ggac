@@ -6,7 +6,7 @@
  *
  * 인증은 업로드 정리 크론과 같다: `CRON_SECRET` Bearer, 없으면 닫는다.
  */
-import { NextRequest } from 'next/server'
+import { NextRequest, after } from 'next/server'
 import { timingSafeEqual } from 'node:crypto'
 
 import {
@@ -25,6 +25,7 @@ import {
 } from '@/lib/payments/toss/client'
 import { getServerPaymentConfig, isPaymentEnabled } from '@/lib/payments/toss/config'
 import { runExpiryGuard } from '@/lib/funding/expiryGuard'
+import { notifyPledgeRefunded } from '@/lib/funding/notify'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
 
@@ -51,6 +52,10 @@ async function handle(request: NextRequest) {
   if (!isPaymentEnabled()) return ApiSuccess.ok({ skipped: 'payment_disabled' }).toNextResponse()
 
   const { secretKey } = getServerPaymentConfig()
+  // 환불 통지는 스윕 루프 안에서 기다리지 않는다. 한 리워드가 통째로 매진된
+  // 뒤 승인이 몰려 들어오면 통지가 건수만큼 늘어나, 정리 자체가 제 수명
+  // (`maxDuration`)을 넘길 수 있다. 모아 두었다가 응답 뒤에 한꺼번에 보낸다.
+  const refundNotices: (() => Promise<void>)[] = []
   const result = await runExpiryGuard({
     listExpiredHolds: () => listExpiredHolds(),
     lookupPayment: async orderId => {
@@ -153,6 +158,20 @@ async function handle(request: NextRequest) {
             reason: error.reason,
             refunded,
           })
+          // 돈이 빠져나갔다가 돌아온 사람에게 이유를 알린다. 지금까지 이
+          // 경로는 아무에게도 말하지 않았다 — 결제되고 환불된 것만 통장에
+          // 남는다. 자동 환불이 실패한 건은 보내지 않는다: 문장이 "전액
+          // 환불했습니다"라 아직 사실이 아니고, 그 건은 위 로그를 보고
+          // 사무국이 손으로 처리한 뒤 알린다. 알림 실패가 크론을 멈추지
+          // 않도록 여기서도 삼킨다.
+          if (refunded) {
+            refundNotices.push(() =>
+              notifyPledgeRefunded(
+                pledge,
+                error.reason === 'campaign_closed' ? 'campaign_closed' : 'reward_sold_out'
+              ).catch(e => log.error('환불 알림 실패', { orderId, e }))
+            )
+          }
           return false
         }
         throw error
@@ -162,6 +181,10 @@ async function handle(request: NextRequest) {
     },
     expire: expirePledge,
   })
+
+  if (refundNotices.length > 0) {
+    after(() => Promise.allSettled(refundNotices.map(send => send())))
+  }
 
   log.info('후원 만료 정리', result)
   return ApiSuccess.ok(result).toNextResponse()
