@@ -63,6 +63,7 @@ const Navigation = () => {
     { href: '/', label: 'HOME' },
     { href: '/about', label: 'ABOUT' },
     { href: '/projects', label: 'PROJECT' },
+    { href: '/funding', label: 'FUNDING' },
     { href: '/artists', label: 'ARTISTS' },
     { href: '/board', label: 'BOARD' },
     // 이사회/열람: 승인·활성 조합원 전체에게 노출, 게시판(BOARD) 다음에 배치

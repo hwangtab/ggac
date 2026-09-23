@@ -106,9 +106,6 @@ module.exports = {
         '.tw-card-hover': {
           '@apply hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2': {},
         },
-        '.tw-card-interactive': {
-          '@apply cursor-pointer group': {},
-        },
 
         // 버튼 공통 스타일
         '.tw-btn-primary': {

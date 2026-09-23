@@ -1,0 +1,145 @@
+'use client'
+
+/**
+ * 내가 후원한 프로젝트. 마이페이지 예매 내역(`../tickets/page.tsx`)과 같은 틀이다.
+ *
+ * 이 화면은 **후원자 관점만** 그린다. 내가 연 캠페인 목록은 창작자 화면(2부-B)의
+ * 몫이라 API가 함께 주는 `campaigns`는 여기서 쓰지 않는다.
+ *
+ * **여기서 후원을 취소하는 버튼은 만들지 않는다.** 취소 라우트
+ * (`/api/funding/pledges/cancel`)는 후원번호+이메일로 본인을 확인하는
+ * 비회원 경로만 짜여 있고, 로그인 세션으로 본인 확인을 하는 분기는 서버에
+ * 없다 — 만들어도 지금은 어느 화면에서도 부를 수 없다. 회원 취소 버튼을
+ * 여기 붙일지, 아니면 서버 쪽을 아예 안 만들지는 후속 과제다. 잊혀서 빠진
+ * 게 아니라, 이번 리뷰 범위 밖이라 남겨 둔 결정이다.
+ */
+
+import { Link } from '@/i18n/navigation'
+import { useLocale, useTranslations } from 'next-intl'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { FiAlertCircle } from 'react-icons/fi'
+
+import MypageLayout from '../components/MypageLayout'
+import PermissionCheck from '../components/PermissionCheck'
+import { formatAmount } from '../../funding/format'
+
+// 서버 화이트리스트(`toPublicPledgeFields` + 라우트가 얹는 campaign_id·
+// campaign_slug)와 정확히 맞춘다 — 여기 없는 필드는 서버가 보내지 않으므로
+// 화면에서도 쓸 수 없다.
+interface MyPledge {
+  pledge_code: string
+  status: string
+  reward_title: string
+  quantity: number
+  total_amount: number
+  paid_at: string | null
+  campaign_id: string
+  campaign_slug: string | null
+}
+
+export default function MyFundingPage() {
+  const t = useTranslations('funding')
+  const locale = useLocale()
+  const [pledges, setPledges] = useState<MyPledge[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const errorRef = useRef<HTMLDivElement | null>(null)
+
+  // 다른 펀딩 화면(조회·후원 폼)과 같은 규칙 — 배너가 뜨는 순간 포커스를
+  // 옮긴다. 스크린리더가 놓치지 않게, 그리고 눈으로 보는 사람도 목록이 왜
+  // 비었는지 배너를 보고 알 수 있게.
+  useEffect(() => {
+    if (error) {
+      errorRef.current?.focus()
+      errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [error])
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const res = await fetch('/api/mypage/funding')
+      const body = await res.json().catch(() => null)
+      if (!res.ok) {
+        setError(t('error.body'))
+        return
+      }
+      setPledges((body.data?.pledges ?? []) as MyPledge[])
+    } catch {
+      setError(t('error.body'))
+    } finally {
+      setLoading(false)
+    }
+  }, [t])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  return (
+    <PermissionCheck requiredPermission="member">
+      <MypageLayout title={t('mypage.title')} description={t('mypage.description')}>
+        {error ? (
+          <div
+            ref={errorRef}
+            role="alert"
+            aria-live="assertive"
+            tabIndex={-1}
+            className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 outline-none"
+          >
+            <FiAlertCircle className="mt-0.5 shrink-0" aria-hidden />
+            <span>{error}</span>
+          </div>
+        ) : null}
+
+        {loading ? (
+          <p className="text-gray-600">{t('common.loading')}</p>
+        ) : !error && pledges.length === 0 ? (
+          <div className="rounded-lg border border-gray-200 p-8 text-center">
+            <p className="text-gray-600">{t('mypage.empty')}</p>
+            <Link href="/funding" className="tw-btn-primary mt-4 inline-flex">
+              {t('mypage.browse')}
+            </Link>
+          </div>
+        ) : pledges.length > 0 ? (
+          <ul className="space-y-3">
+            {pledges.map(p => (
+              <li key={p.pledge_code} className="rounded-lg border border-gray-200 p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    {p.campaign_slug ? (
+                      <Link
+                        href={`/funding/${p.campaign_slug}`}
+                        className="font-medium text-primary-600 hover:underline"
+                      >
+                        {p.reward_title} × {p.quantity}
+                      </Link>
+                    ) : (
+                      <p className="font-medium text-gray-900">
+                        {p.reward_title} × {p.quantity}
+                      </p>
+                    )}
+                    <p className="mt-1 font-mono text-xs text-gray-500">{p.pledge_code}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-semibold text-gray-900">
+                      {t('progress.amount', { amount: formatAmount(p.total_amount, locale) })}
+                    </p>
+                    <p className="mt-1 text-xs text-gray-500">{t(`status.${p.status}`)}</p>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
+        <p className="mt-6 text-sm text-gray-500">
+          {t.rich('mypage.manageNotice', {
+            manage: chunks => <Link href="/funding/manage">{chunks}</Link>,
+          })}
+        </p>
+      </MypageLayout>
+    </PermissionCheck>
+  )
+}

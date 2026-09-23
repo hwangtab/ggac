@@ -3,6 +3,7 @@ import { getArtists, getProjects } from '@/lib/data'
 import { getSiteUrl } from '@/utils/site'
 import { listPosts } from '@/db/queries/posts'
 import { listOpenPerformances } from '@/db/queries/ticketing'
+import { listPublicCampaigns } from '@/db/queries/funding'
 
 // posts는 이제 Turso가 권위다. `listPosts`는 카테고리 단일값 필터(포함)만
 // 지원하고 "잡담 제외"는 지원하지 않으므로, 카테고리 필터 없이 최신
@@ -41,6 +42,30 @@ async function getBoardPostsForSitemap(): Promise<Array<{ id: string; updated_at
         return text.length >= 200
       })
       .map(({ id, updated_at }) => ({ id, updated_at }))
+  } catch {
+    return []
+  }
+}
+
+/**
+ * sitemap에 넣을 펀딩 캠페인.
+ *
+ * `listPublicCampaigns`는 상세 페이지가 색인하는 것과 같은 상태 집합
+ * (`PUBLIC_CAMPAIGN_STATUSES`)만 돌려준다 — 심사 중·반려된 캠페인은 상세
+ * 페이지 자체가 `notFound()`로 떨어지므로 여기서도 애초에 후보가 아니다.
+ *
+ * 게시글·공연과 같은 이유로 try/catch — DB 자격증명이 없는 빌드에서 사이트맵
+ * 프리렌더가 죽지 않게 한다.
+ */
+async function getCampaignsForSitemap(): Promise<Array<{ slug: string; updated_at?: string }>> {
+  try {
+    const rows = await listPublicCampaigns()
+    return rows
+      .filter(row => typeof row.slug === 'string' && row.slug)
+      .map(row => ({
+        slug: String(row.slug),
+        updated_at: typeof row.updated_at === 'string' ? row.updated_at : undefined,
+      }))
   } catch {
     return []
   }
@@ -139,16 +164,22 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'daily',
       priority: 0.8,
     }),
+    ...bilingualEntry('/funding', baseUrl, {
+      lastModified: now,
+      changeFrequency: 'daily',
+      priority: 0.8,
+    }),
     // board: 회원 전용 / noindex → ko만, alternates 없음
     { url: `${baseUrl}/board`, lastModified: now, changeFrequency: 'daily', priority: 0.6 },
   ]
 
   try {
-    const [artists, projects, boardPosts, performances] = await Promise.all([
+    const [artists, projects, boardPosts, performances, campaigns] = await Promise.all([
       getArtists('ko'),
       getProjects('ko'),
       getBoardPostsForSitemap(),
       getPerformancesForSitemap(),
+      getCampaignsForSitemap(),
     ])
 
     const artistPages: MetadataRoute.Sitemap = artists.flatMap(artist =>
@@ -184,7 +215,23 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       })
     )
 
-    return [...staticPages, ...artistPages, ...projectPages, ...boardPostPages, ...performancePages]
+    // 펀딩 캠페인 상세: 모인금액·재고가 자주 바뀌므로 예매 상세와 같은 daily.
+    const campaignPages: MetadataRoute.Sitemap = campaigns.flatMap(campaign =>
+      bilingualEntry(`/funding/${campaign.slug}`, baseUrl, {
+        lastModified: campaign.updated_at ? new Date(campaign.updated_at) : new Date(),
+        changeFrequency: 'daily',
+        priority: 0.7,
+      })
+    )
+
+    return [
+      ...staticPages,
+      ...artistPages,
+      ...projectPages,
+      ...boardPostPages,
+      ...performancePages,
+      ...campaignPages,
+    ]
   } catch (error) {
     console.error('Error generating sitemap:', error)
     return staticPages

@@ -21,14 +21,20 @@ function publicView(pledge: Record<string, unknown>, campaign: Record<string, un
     campaign_slug: campaign?.slug ?? null,
     campaign_title: campaign?.title ?? null,
     campaign_status: campaign?.status ?? null,
+    // 취소 라우트의 재시도 판정과 정확히 같은 조건(`isRetry`)이다 — 결제
+    // 식별자 자체는 내보내지 않고, "재시도가 가능한가"라는 불리언만 준다.
+    refund_retry_possible: pledge.status === 'canceled' && Boolean(pledge.payment_id),
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
     const rl = await applyRouteRateLimit(request, {
-      name: 'funding_lookup', windowMs: 60_000, maxRequests: 10,
-      message: '요청이 너무 잦습니다.', keyGenerator: createIPKeyGenerator('funding-lookup'),
+      name: 'funding_lookup',
+      windowMs: 60_000,
+      maxRequests: 10,
+      message: '요청이 너무 잦습니다.',
+      keyGenerator: createIPKeyGenerator('funding-lookup'),
     })
     if (!rl.success && rl.response?.status === 429) return rl.response
 

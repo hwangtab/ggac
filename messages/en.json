@@ -359,6 +359,153 @@
       "retry": "Try Again"
     }
   },
+  "funding": {
+    "meta": {
+      "listTitle": "Funding",
+      "listDescription": "Support members' projects and receive rewards.",
+      "detailDescription": "{title} — raised ₩{raised}, goal ₩{goal}"
+    },
+    "list": {
+      "heading": "Funding",
+      "subtitle": "Join projects created by our members.",
+      "openSection": "Open",
+      "closedSection": "Closed projects",
+      "emptyTitle": "No open funding campaigns",
+      "emptyBody": "We'll share news first when a new project opens.",
+      "emptyCta": "See news",
+      "goalOnly": "Goal ₩{goal}",
+      "percent": "{percent}% funded"
+    },
+    "progress": {
+      "raised": "Raised",
+      "amount": "₩{amount}",
+      "percent": "Funded",
+      "percentValue": "{percent}%",
+      "daysLeft": "Time left",
+      "daysLeftValue": "{days, plural, one {# day} other {# days}}",
+      "lastDay": "Ends today",
+      "closed": "Closed",
+      "backers": "{count} pledges",
+      "goal": "Goal ₩{goal}",
+      "label": "Funding progress",
+      "backersLabel": "Backers"
+    },
+    "detail": {
+      "storyHeading": "About this project",
+      "rewardsHeading": "Rewards",
+      "backersHeading": "Backers",
+      "backersEmpty": "Be the first to back this project.",
+      "closedNotice": "This campaign has ended. Thank you to everyone who backed it.",
+      "preparingNotice": "Preparing payment. Please check again shortly."
+    },
+    "reward": {
+      "amount": "₩{amount}",
+      "remaining": "{count} left",
+      "soldOut": "Sold out",
+      "unlimited": "No quantity limit",
+      "shipping": "Includes shipping",
+      "noShipping": "No shipping",
+      "delivery": "Estimated delivery {month}"
+    },
+    "form": {
+      "heading": "Backer information",
+      "quantity": "Quantity",
+      "additional": "Additional support",
+      "additionalHelp": "You can add more in units of ₩1,000. You may leave this blank.",
+      "name": "Name",
+      "email": "Email",
+      "phone": "Phone",
+      "shippingHeading": "Shipping address",
+      "shippingName": "Recipient",
+      "shippingPhone": "Phone",
+      "postcode": "Postal code",
+      "address1": "Address",
+      "address2": "Address line 2",
+      "shippingMemo": "Delivery notes",
+      "message": "Message of support",
+      "messageHelp": "Up to 300 characters.",
+      "messagePublic": "Show my message in the backer list",
+      "anonymous": "Show as \"Anonymous\" instead of my name",
+      "total": "Total payment",
+      "submit": "Back this project",
+      "submitting": "Preparing…",
+      "agreeNotice": "By clicking Back this project, you agree to the <terms>Terms of Service</terms> and <privacy>Privacy Policy</privacy>.",
+      "holdNotice": "Your reward is held while the payment window is open. If payment isn't completed in time, your reserved quantity is released again.",
+      "paymentHeading": "Payment",
+      "payButton": "Pay {amount}",
+      "errorReward": "Please choose a reward to back.",
+      "errorName": "Please enter your name.",
+      "errorEmail": "Please enter a valid email address.",
+      "errorShipping": "Please fill in all shipping details.",
+      "retryWidget": "Reopen payment window"
+    },
+    "success": {
+      "confirming": "Confirming your payment…",
+      "title": "Your pledge is confirmed",
+      "body": "We've sent you a confirmation email. You can look up your pledge anytime using your pledge code.",
+      "pledgeCode": "Pledge code",
+      "amount": "Payment amount",
+      "toMypage": "View my pledges",
+      "toLookup": "Look up by pledge code",
+      "checkingTitle": "We're checking your payment result",
+      "checkingBody": "We're checking your payment result. Please check again shortly."
+    },
+    "fail": {
+      "title": "Payment was not completed",
+      "defaultMessage": "The payment window was closed or the payment was declined.",
+      "retry": "Try again",
+      "toList": "Back to funding list",
+      "codes": {
+        "PAY_PROCESS_CANCELED": "You canceled the payment.",
+        "PAY_PROCESS_ABORTED": "The payment was interrupted. Please try again.",
+        "REJECT_CARD_COMPANY": "Your card issuer declined the payment. Please try a different card or payment method.",
+        "REJECT_CARD_PAYMENT": "The card payment was declined. Please contact your card issuer.",
+        "INVALID_CARD_EXPIRATION": "Please check your card's expiration date."
+      }
+    },
+    "manage": {
+      "heading": "Look up a pledge",
+      "subtitle": "Enter your pledge code and the email you used when backing.",
+      "pledgeCode": "Pledge code",
+      "pledgeCodeHelp": "The number starting with FND- from your confirmation email.",
+      "email": "Email",
+      "submit": "Look up",
+      "submitting": "Looking up…",
+      "notFound": "We couldn't find that pledge. Please check the code and email again.",
+      "cancel": "Cancel pledge",
+      "cancelConfirm": "Cancel this pledge ({amount} won) and receive a full refund?",
+      "canceling": "Canceling…",
+      "canceled": "Canceled. Refunds may take a few days depending on your card issuer.",
+      "retry": "Recheck refund status",
+      "retryConfirm": "Check again whether the refund actually went through? This re-checks the status — it does not cancel a charge.",
+      "retrying": "Checking…",
+      "status": "Status"
+    },
+    "mypage": {
+      "title": "My pledges",
+      "description": "Projects you've backed.",
+      "empty": "You haven't backed any projects yet.",
+      "browse": "Browse funding",
+      "manageNotice": "If you have your pledge code and email, you can also look it up and cancel it at <manage>Look up a pledge</manage>."
+    },
+    "status": {
+      "pending": "Payment pending",
+      "paid": "Pledge complete",
+      "canceled": "Canceled",
+      "refunded": "Refunded",
+      "expired": "Expired"
+    },
+    "error": {
+      "title": "Couldn't load funding",
+      "body": "Please try again shortly.",
+      "retry": "Try again"
+    },
+    "common": {
+      "loading": "Loading…",
+      "required": "This field is required.",
+      "contactOffice": "Contact the office"
+    }
+  },
   "application": {
     "heading": "Apply Now",
     "nameLabel": "Applicant / Team Name",
@@ -612,6 +759,7 @@
       "dashboard": "Dashboard",
       "profile": "Personal Profile",
       "calendar": "My Calendar",
+      "funding": "My pledges",
       "artist": "Artist Profile",
       "activity": "Activity Log",
       "settings": "Settings",
