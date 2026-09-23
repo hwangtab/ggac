@@ -112,3 +112,8 @@ e2e/.auth/
 
 # 격리 워크트리 작업 산출물 (superpowers:subagent-driven-development)
 .superpowers/
+
+# 작업 보고서는 저장소에 넣지 않는다 — 판단 근거는 커밋 메시지에 남기고,
+# 원문은 gitignore된 docs/superpowers/audits/ 아래에 보관한다.
+/*-REPORT.md
+/FIX-*.md
