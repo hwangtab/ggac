@@ -256,6 +256,22 @@ export async function getProfileAuthzFields(id: string): Promise<{
 }
 
 /**
+ * 이메일 한 칸만 읽는다. 알림 메일을 보내려고 전체 행을 끌어오면 계좌번호·
+ * 실명·전화번호·생년월일이 함께 딸려 온다(위 `getProfileAuthzFields`,
+ * 아래 `getProfileDisplayName`과 같은 이유).
+ *
+ * @returns 행이 없거나 주소가 비어 있으면 `null`.
+ */
+export async function getProfileEmail(id: string): Promise<string | null> {
+  const rows = await db
+    .select({ email: memberProfiles.email })
+    .from(memberProfiles)
+    .where(eq(memberProfiles.id, id))
+    .limit(1)
+  return rows[0]?.email ?? null
+}
+
+/**
  * 표시 이름 한 칸만 읽는다. 알림 문구에 "누가 썼는지"를 넣으려고 전체 행을
  * 끌어오면 계좌번호·실명·전화번호·생년월일이 함께 딸려 온다(위
  * `getProfileAuthzFields`의 주석과 같은 이유).

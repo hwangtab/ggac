@@ -2,8 +2,10 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  BULK_CONCURRENCY,
   MAX_BULK_RECIPIENTS,
   backerDisplayName,
+  buildBulkAbandonedNotice,
   buildCampaignClosedNotice,
   buildCampaignReviewedNotice,
   buildCampaignSubmittedNotice,
@@ -13,8 +15,11 @@ import {
   buildPledgeRefundedNotice,
   formatDeliveryMonth,
   formatWon,
+  isRateLimited,
   isSendableEmail,
+  josa,
   maskEmail,
+  ro,
   pledgePaidBackerExtraLines,
   renderNoticeEmail,
   sendManyEmails,
@@ -208,7 +213,8 @@ test('한 통이 실패해도 나머지가 전부 나간다', async () => {
       if (m.to === 'u2@example.com') throw new Error('bounced')
       sent.push(m.to)
     },
-    concurrency: 2,
+    minIntervalMs: 0,
+    retryDelayMs: 0,
   })
   assert.equal(result.sent, 4)
   assert.equal(result.failed, 1)
@@ -228,6 +234,7 @@ test('수신거부·깨진 주소·중복은 따로 센다', async () => {
     ],
     sendEmail: async m => sent.push(m.to),
     isOptedOut: id => id === 'off',
+    minIntervalMs: 0,
   })
   assert.deepEqual(sent, ['a@example.com'])
   assert.equal(result.skipped_optout, 1)
@@ -256,7 +263,158 @@ test('RESEND_API_KEY가 없어 sendEmail이 던져도 예외가 호출부로 나
     sendEmail: async () => {
       throw new Error('RESEND_API_KEY가 설정되지 않았습니다.')
     },
+    minIntervalMs: 0,
+    retryDelayMs: 0,
   })
   assert.equal(result.failed, 3)
   assert.equal(result.sent, 0)
+})
+
+// ---------------------------------------------------------------- 조사
+
+test('조사는 받침을 보고 고른다 — 모든 달에 대해 맞아야 한다', () => {
+  assert.equal(ro('2026년 6월'), '2026년 6월로')
+  assert.equal(ro('2026년 3월'), '2026년 3월로')
+  assert.equal(ro('미정'), '미정으로')
+  assert.equal(josa('내년', '으로', '로'), '으로')
+  assert.equal(josa('여기', '으로', '로'), '로')
+  // 한글이 아닌 끝 글자는 판정하지 않는다.
+  assert.equal(josa('2026-06', '으로', '로'), '으로')
+})
+
+test('전달 시기 문장의 조사가 달마다 맞다', () => {
+  for (const month of ['2026-01', '2026-02', '2026-03', '2026-06', '2026-10', '2026-12']) {
+    const notice = buildDeliveryChangedNotice(
+      { reward_id: 'r-1', reward_title: 'CD', from: '2026-03', to: month },
+      CAMPAIGN,
+      MEMBER_PLEDGE,
+      SITE
+    )
+    assert.ok(!notice.message.includes('월으로'), `"${month}"에서 조사가 틀렸다`)
+    assert.ok(notice.message.includes('월로 바뀌었습니다'))
+  }
+  const unknown = buildDeliveryChangedNotice(
+    { reward_id: 'r-1', reward_title: 'CD', from: '2026-03', to: null },
+    CAMPAIGN,
+    MEMBER_PLEDGE,
+    SITE
+  )
+  assert.ok(unknown.message.includes('미정으로 바뀌었습니다'))
+})
+
+// ---------------------------------------------------------------- 비회원 안내
+
+test('조회 화면으로 보내는 문장은 비회원에게 후원번호를 함께 준다', () => {
+  for (const build of [
+    p => buildPledgeRefundedNotice(p, 'reward_sold_out', SITE),
+    p =>
+      buildDeliveryChangedNotice(
+        { reward_id: 'r-1', reward_title: 'CD', from: '2026-03', to: '2026-06' },
+        CAMPAIGN,
+        p,
+        SITE
+      ),
+  ]) {
+    const guest = build(GUEST_PLEDGE)
+    assert.equal(guest.url, 'https://ggac.kr/ko/funding/manage')
+    assert.ok(guest.message.includes(GUEST_PLEDGE.pledge_code), '조회하라면서 번호를 안 줬다')
+
+    // 회원은 마이페이지로 가므로 붙이지 않는다.
+    const member = build(MEMBER_PLEDGE)
+    assert.ok(!member.message.includes(MEMBER_PLEDGE.pledge_code))
+  }
+})
+
+test('환불 문장은 돈이 안 들어올 때 갈 곳을 알려 준다', () => {
+  const notice = buildPledgeRefundedNotice(MEMBER_PLEDGE, 'campaign_closed', SITE)
+  assert.ok(notice.message.includes('contact@ggac.kr'))
+  assert.ok(notice.message.includes('결제하신 날짜'))
+})
+
+test('마감 문장은 코드에 없는 정산 절차를 약속하지 않는다', () => {
+  const notice = buildCampaignClosedNotice(CAMPAIGN, SITE)
+  assert.ok(!notice.message.includes('정산'))
+  assert.ok(notice.message.includes('contact@ggac.kr'))
+})
+
+// ---------------------------------------------------------------- 레이트리밋
+
+test('429는 한 번 더 해 본다', async () => {
+  let attempts = 0
+  const result = await sendManyEmails({
+    recipients: [{ email: 'a@example.com', subject: 's', html: 'h' }],
+    sendEmail: async () => {
+      attempts += 1
+      if (attempts === 1) throw new Error('Resend 발송 실패 (429): Too many requests')
+    },
+    minIntervalMs: 0,
+    retryDelayMs: 0,
+  })
+  assert.equal(attempts, 2)
+  assert.equal(result.sent, 1)
+  assert.equal(result.retried, 1)
+  assert.equal(result.failed, 0)
+})
+
+test('두 번째도 429면 그때 실패로 센다', async () => {
+  const result = await sendManyEmails({
+    recipients: [{ email: 'a@example.com', subject: 's', html: 'h' }],
+    sendEmail: async () => {
+      throw new Error('Resend 발송 실패 (429): Too many requests')
+    },
+    minIntervalMs: 0,
+    retryDelayMs: 0,
+  })
+  assert.equal(result.sent, 0)
+  assert.equal(result.failed, 1)
+})
+
+test('429가 아닌 실패는 다시 하지 않는다', async () => {
+  let attempts = 0
+  await sendManyEmails({
+    recipients: [{ email: 'a@example.com', subject: 's', html: 'h' }],
+    sendEmail: async () => {
+      attempts += 1
+      throw new Error('Resend 발송 실패 (422): invalid address')
+    },
+    minIntervalMs: 0,
+    retryDelayMs: 0,
+  })
+  assert.equal(attempts, 1)
+  assert.equal(isRateLimited(new Error('Resend 발송 실패 (422): x')), false)
+  assert.equal(isRateLimited(new Error('Resend 발송 실패 (429): x')), true)
+})
+
+test('한 통씩 보내고 시작 간격을 벌린다 — 제공자 한도 안에 든다', async () => {
+  assert.equal(BULK_CONCURRENCY, 1)
+  let inFlight = 0
+  const starts = []
+  await sendManyEmails({
+    recipients: recipients(3),
+    sendEmail: async () => {
+      inFlight += 1
+      assert.equal(inFlight, 1, '동시에 두 통이 떴다')
+      starts.push(Date.now())
+      await new Promise(r => setTimeout(r, 5))
+      inFlight -= 1
+    },
+    minIntervalMs: 40,
+  })
+  assert.equal(starts.length, 3)
+  assert.ok(starts[2] - starts[0] >= 70, `간격이 너무 짧다: ${starts[2] - starts[0]}ms`)
+})
+
+// ---------------------------------------------------------------- 상한 통지
+
+test('발송 포기 통지는 관리자가 할 일을 말한다', () => {
+  const notice = buildBulkAbandonedNotice(
+    CAMPAIGN,
+    "'CD' 전달 시기 변경",
+    500,
+    MAX_BULK_RECIPIENTS,
+    SITE
+  )
+  assert.ok(notice.message.includes('500'))
+  assert.ok(notice.message.includes(String(MAX_BULK_RECIPIENTS)))
+  assert.ok(notice.message.includes('직접'))
 })

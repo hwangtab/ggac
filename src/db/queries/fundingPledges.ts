@@ -709,10 +709,19 @@ export async function listPledgesByCampaign(
 export async function listPaidPledgesByReward(
   rewardId: string,
   limit = 1000
-): Promise<{ id: string; user_id: string | null; backer_email: string; is_anonymous: boolean }[]> {
+): Promise<
+  {
+    id: string
+    pledge_code: string
+    user_id: string | null
+    backer_email: string
+    is_anonymous: boolean
+  }[]
+> {
   const rows = await db
     .select({
       id: fundingPledges.id,
+      pledgeCode: fundingPledges.pledgeCode,
       userId: fundingPledges.userId,
       backerEmail: fundingPledges.backerEmail,
       isAnonymous: fundingPledges.isAnonymous,
@@ -722,6 +731,7 @@ export async function listPaidPledgesByReward(
     .limit(limit)
   return rows.map(r => ({
     id: r.id,
+    pledge_code: r.pledgeCode,
     user_id: r.userId,
     backer_email: r.backerEmail,
     is_anonymous: r.isAnonymous,
