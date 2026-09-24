@@ -25,6 +25,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { requireAdmin } from '@/lib/server/adminAuth'
+import { applyRouteRateLimit } from '@/lib/server/rateLimit'
+import {
+  ACCOUNT_REVEAL_RATE_LIMIT,
+  accountRevealRateLimitKey,
+} from '@/lib/server/accountRevealLimit'
 import { logUserActivity } from '@/db/queries/activities'
 import { getPayoutAccount } from '@/db/queries/profiles'
 import { isPayoutAccountRegistered, type PayoutAccount } from '@/lib/funding/payoutAccount'
@@ -75,6 +80,16 @@ export async function GET(request: NextRequest, { params }: Ctx) {
   const auth = await requireAdmin()
   if (auth instanceof NextResponse) return auth
   const { id } = await params
+
+  // 기록만으로는 한 세션이 전 조합원을 훑는 것을 늦추지 못한다 — 아무도 보지
+  // 않는 기록은 제한이 아니다. 정산 패널의 계좌 노출과 **같은 카운터**를 쓴다
+  // (`src/lib/server/accountRevealLimit.ts`에 숫자와 이유가 함께 있다).
+  // 인가를 통과한 뒤에 센다: 세는 단위가 IP가 아니라 관리자 한 사람이다.
+  const rl = await applyRouteRateLimit(request, {
+    ...ACCOUNT_REVEAL_RATE_LIMIT,
+    keyGenerator: () => accountRevealRateLimitKey(auth.user.id),
+  })
+  if (rl.success === false && rl.response) return rl.response
 
   try {
     const account = await getPayoutAccount(id)
