@@ -9,7 +9,9 @@ import {
 } from '@/db/queries/funding'
 import { listPledgesByCampaign } from '@/db/queries/fundingPledges'
 import { getSettlementByCampaign, isSettlementStale } from '@/db/queries/fundingSettlements'
+import { getPayoutAccount } from '@/db/queries/profiles'
 import { cooperativeLossFor } from '@/lib/funding/settlement'
+import { isPayoutAccountRegistered } from '@/lib/funding/payoutAccount'
 import { canManageCampaign } from '@/lib/server/fundingAuth'
 import { isApprovedActiveAdmin } from '@/lib/server/authz'
 import { editScope, type CampaignStatus } from '@/lib/funding/transitions'
@@ -78,9 +80,21 @@ function ownerPledgeView(p: Record<string, unknown>, shippingRewardIds: Set<stri
  * `is_stale`은 "정산서를 만든 뒤 환불이 들어와 금액이 다시 계산될 것"이라는
  * 뜻이다. 그 사실을 감추고 낡은 숫자만 보여 주면, 창작자는 오지 않을 금액을
  * 기다린다.
+ *
+ * **계좌는 값이 아니라 참·거짓으로만 싣는다**(`payout_account_registered`).
+ * 조합이 돈을 보낼 계좌가 등록돼 있는지는 개설자가 지급 전에 알아야 하는
+ * 사실이고, 비어 있으면 화면이 고치러 갈 자리를 함께 가리킨다. 계좌 값 자체를
+ * 여기 실을 이유는 없다 — 그것을 보는 자리는 마이페이지 내 정보이고, 이
+ * 라우트는 사무국도 지나가므로(`canManageCampaign`) 값을 실으면 개설자 화면을
+ * 빌려 남의 계좌를 보내는 경로가 하나 더 생긴다.
  */
-function creatorSettlementView(settlement: Record<string, unknown>, isStale: boolean) {
+function creatorSettlementView(
+  settlement: Record<string, unknown>,
+  isStale: boolean,
+  payoutAccountRegistered: boolean
+) {
   return {
+    payout_account_registered: payoutAccountRegistered,
     status: settlement.status,
     gross_amount: settlement.gross_amount,
     refund_amount: settlement.refund_amount,
@@ -117,13 +131,22 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     getSettlementByCampaign(id),
   ])
   const settlementStale = settlement ? await isSettlementStale(settlement) : false
+  // 계좌 세 칸만 읽고, 그중 아무것도 응답에 싣지 않는다 — 나가는 것은 아래
+  // `creatorSettlementView`가 만드는 참·거짓 하나뿐이다.
+  const ownerId = campaign.owner_user_id
+  const payoutAccountRegistered =
+    settlement !== null && typeof ownerId === 'string' && ownerId.length > 0
+      ? isPayoutAccountRegistered(await getPayoutAccount(ownerId))
+      : false
   const shippingIds = new Set(rewards.filter(r => r.requires_shipping).map(r => String(r.id)))
   return ApiSuccess.ok({
     campaign,
     rewards,
     progress,
     pledges: pledges.map(p => ownerPledgeView(p, shippingIds)),
-    settlement: settlement ? creatorSettlementView(settlement, settlementStale) : null,
+    settlement: settlement
+      ? creatorSettlementView(settlement, settlementStale, payoutAccountRegistered)
+      : null,
     edit_scope: editScope(campaign.status as CampaignStatus),
     // 이행 상태를 되돌리는 것은 사무국만 할 수 있다. 화면이 그 버튼을 보일지
     // 정하려면 이 값이 필요하다 — 없으면 대부분의 사람에게 눌러도 거절당하는

@@ -12,6 +12,7 @@
  * 쓰지 않는다(약관과 화면이 쓰는 말과 같아야 한다).
  */
 
+import { PAYOUT_ACCOUNT_SETTINGS_PATH } from './payoutAccount.ts'
 import { cooperativeLossFor } from './settlement.ts'
 
 export interface NoticeCopy {
@@ -470,20 +471,29 @@ function settlementLossLine(settlement: SettlementLike): string {
  * (`revised`) — 같은 금액을 두 번 알리지 않는다.
  *
  * **선택 알림** — 아직 돈이 움직이지 않았고, 인앱과 대시보드에 그대로 남는다.
+ *
+ * 계좌를 등록하지 않은 개설자에게는 **그 사실과 고치러 갈 자리**를 함께
+ * 보낸다(`payoutAccountMissing`). 지급 전이 이 말을 할 수 있는 마지막
+ * 순간이고, 이때 말하지 않으면 사무국이 전화로 물어보는 수밖에 없다.
+ * 계좌 **값**은 어느 알림에도 싣지 않는다 — 여기서 하는 말은 "비어 있다"뿐이다.
  */
 export function buildSettlementPreparedNotice(
   campaign: Record<string, unknown>,
   settlement: SettlementLike,
   siteUrl: string,
-  options: { revised?: boolean } = {}
+  options: { revised?: boolean; payoutAccountMissing?: boolean } = {}
 ): NoticeCopy {
   const urls = fundingUrls(siteUrl)
   const title = str(campaign.title, '제목 없는 프로젝트')
   const payout = formatWon(settlement.payout_amount)
+  const accountLine =
+    options.payoutAccountMissing === true
+      ? ` 정산금을 보낼 계좌가 등록되어 있지 않습니다. 마이페이지 > 내 정보(${siteUrl.replace(/\/$/, '')}${PAYOUT_ACCOUNT_SETTINGS_PATH})에서 은행·계좌번호·예금주를 등록해 주세요.`
+      : ''
   if (options.revised === true) {
     return {
       title: '정산 예정 금액이 바뀌었습니다',
-      message: `'${title}' 프로젝트의 정산 내역을 다시 정리했습니다. 후원 환불이 반영되어 지급 예정 금액이 ${payout}으로 바뀌었습니다. ${settlementArithmetic(settlement)} 지급이 끝나면 다시 알려 드립니다.`,
+      message: `'${title}' 프로젝트의 정산 내역을 다시 정리했습니다. 후원 환불이 반영되어 지급 예정 금액이 ${payout}으로 바뀌었습니다. ${settlementArithmetic(settlement)}${accountLine} 지급이 끝나면 다시 알려 드립니다.`,
       url: urls.creatorCampaign(campaign.id),
       cta: '정산 내역 보기',
       data: { campaign_id: campaign.id ?? null, revised: true, scope: 'funding' },
@@ -491,7 +501,7 @@ export function buildSettlementPreparedNotice(
   }
   return {
     title: '정산 내역이 정리되었습니다',
-    message: `'${title}' 프로젝트의 정산 내역을 정리했습니다. 지급 예정 금액은 ${payout}입니다. ${settlementArithmetic(settlement)}${settlementLossLine(settlement)} 지급이 끝나면 다시 알려 드립니다. 내역이 실제와 다르면 지급 전에 사무국(contact@ggac.kr)으로 알려 주세요.`,
+    message: `'${title}' 프로젝트의 정산 내역을 정리했습니다. 지급 예정 금액은 ${payout}입니다. ${settlementArithmetic(settlement)}${settlementLossLine(settlement)}${accountLine} 지급이 끝나면 다시 알려 드립니다. 내역이 실제와 다르면 지급 전에 사무국(contact@ggac.kr)으로 알려 주세요.`,
     url: urls.creatorCampaign(campaign.id),
     cta: '정산 내역 보기',
     data: { campaign_id: campaign.id ?? null, revised: false, scope: 'funding' },

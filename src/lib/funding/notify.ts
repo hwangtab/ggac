@@ -633,7 +633,7 @@ export async function notifyPledgesShipped(
 export async function notifySettlementPrepared(
   campaign: Record<string, unknown>,
   settlement: SettlementLike,
-  options: { revised?: boolean } = {},
+  options: { revised?: boolean; payoutAccountMissing?: boolean } = {},
   overrides?: Partial<NotifyDeps>
 ): Promise<void> {
   const d = resolve(overrides)

@@ -3699,13 +3699,14 @@ const parsesMemberFeeInputsSafely =
   !/parseInt\(e\.target\.value\)/.test(cooperativeInfoSource)
 const parsesAdminSettingNumberInputsSafely =
   /parseIntegerParam/.test(adminSettingsPageSource) &&
-  [
-    ['site', 'max_members'],
-    ['email', 'smtp_port'],
-    ['security', 'session_timeout'],
-    ['security', 'max_login_attempts'],
-    ['security', 'password_min_length'],
-  ].every(([group, key]) =>
+  // 이 목록은 **지금 화면에 남아 있는 숫자 칸**이다. 한때 여기에
+  // `email/smtp_port`·`security/session_timeout`·`max_login_attempts`·
+  // `password_min_length`가 있었는데, 넷 다 아무것도 통제하지 않는 칸이라
+  // 화면에서 걷어냈다(메일은 Resend HTTP API로 나가고 SMTP 클라이언트가
+  // 없으며, 세션 수명·쿠키 캐시·최소 비밀번호 길이는 `src/lib/auth/server.ts`의
+  // 상수다). 없는 칸에 `parseIntegerParam`을 요구하면 이 가드는 "고쳐야 할
+  // 것"이 아니라 "되돌려야 할 것"을 요구하게 된다.
+  [['site', 'max_members']].every(([group, key]) =>
     new RegExp(
       `updateSettings\\([\\s\\S]*?['"]${group}['"],[\\s\\S]*?['"]${key}['"],[\\s\\S]*?parseIntegerParam\\(e\\.target\\.value,\\s*0,\\s*\\{\\s*min:\\s*0\\s*\\}\\)[\\s\\S]*?\\)`
     ).test(adminSettingsPageSource)

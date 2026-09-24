@@ -15,6 +15,11 @@
 
 import { useCallback, useEffect, useState } from 'react'
 
+import {
+  isPayoutAccountHolderMissing,
+  isPayoutAccountRegistered,
+  type PayoutAccount,
+} from '@/lib/funding/payoutAccount'
 import { cooperativeLossFor } from '@/lib/funding/settlement'
 
 interface Settlement {
@@ -39,6 +44,13 @@ interface Payload {
   }
   platform_fee_rate_bp: number
   is_stale: boolean
+  /** 개설자 프로필에 은행·계좌번호가 둘 다 있는가. 정리·지급 응답에도 실린다. */
+  payout_account_registered: boolean
+}
+
+/** 조회 응답에만 실리는 계좌. 정리·지급 응답에는 없다(서버 주석 참고). */
+interface PayloadWithAccount extends Payload {
+  payout_account: PayoutAccount | null
 }
 
 function won(n: number): string {
@@ -56,6 +68,12 @@ export default function SettlementPanel({
   onSettled?: () => void
 }) {
   const [payload, setPayload] = useState<Payload | null>(null)
+  /**
+   * 계좌는 **눌러야 온다.** 이 패널은 마감된 캠페인마다 하나씩 그려지므로,
+   * 처음부터 실어 오면 목록을 한 번 여는 것만으로 남의 계좌번호가 화면 가득
+   * 깔린다. 이체하려는 그 한 건에서만 받아 여기 담는다.
+   */
+  const [account, setAccount] = useState<PayoutAccount | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -87,6 +105,30 @@ export default function SettlementPanel({
   useEffect(() => {
     void load()
   }, [load])
+
+  /**
+   * 계좌를 한 번 받아 온다. 서버가 **이 요청을 활동 기록에 남긴다** —
+   * 누가 언제 어느 캠페인의 계좌를 열어 봤는지가 그 한 줄이다.
+   */
+  const revealAccount = useCallback(async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/admin/funding/campaigns/${campaignId}/settlement?account=1`)
+      const json = await res.json()
+      if (res.ok === false) {
+        setError(json?.error?.message ?? '입금 계좌를 불러오지 못했습니다.')
+        return
+      }
+      const data = json.data as PayloadWithAccount
+      setPayload(data)
+      setAccount(data.payout_account ?? null)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }, [campaignId])
 
   async function send(init: RequestInit, successMessage: string) {
     setBusy(true)
@@ -129,12 +171,24 @@ export default function SettlementPanel({
 
   function handleMarkPaid() {
     const payout = payload?.settlement?.payout_amount ?? 0
+    // 계좌가 없는 건은 **무엇을 기록하는 것인지** 한 번 더 읽게 한다. 막지는
+    // 않는다 — 이 버튼을 누를 때 이체는 이미 끝난 일이고, 기록을 거절해도
+    // 나간 돈은 돌아오지 않는다. 대신 등록된 계좌가 없었다는 사실이 활동
+    // 기록에 함께 남는다(서버가 남긴다).
+    const noAccount = payload?.payout_account_registered === false
     const ok = window.confirm(
-      `"${campaignTitle}"의 정산금 ${won(payout)}을 지급한 것으로 기록합니다.\n기록한 뒤에는 금액을 고칠 수 없습니다. 실제로 이체를 끝냈을 때만 누르세요. 계속할까요?`
+      noAccount
+        ? `"${campaignTitle}"의 정산금 ${won(payout)}을 지급한 것으로 기록합니다.\n개설자가 등록해 둔 계좌가 없습니다. 사무국이 따로 확인한 계좌로 실제 이체를 끝냈을 때만 누르세요.\n등록된 계좌가 없었다는 사실이 활동 기록에 함께 남고, 기록한 뒤에는 금액을 고칠 수 없습니다. 계속할까요?`
+        : `"${campaignTitle}"의 정산금 ${won(payout)}을 지급한 것으로 기록합니다.\n기록한 뒤에는 금액을 고칠 수 없습니다. 실제로 이체를 끝냈을 때만 누르세요. 계속할까요?`
     )
     if (!ok) return
     void send(
-      { method: 'PATCH', body: JSON.stringify({ action: 'mark_paid' }) },
+      {
+        method: 'PATCH',
+        // 계좌가 없다는 것을 읽고 눌렀다는 표시. 화면이 계좌가 있다고 믿은
+        // 채로 보내면 서버가 409로 돌려보내고 화면이 다시 읽는다.
+        body: JSON.stringify({ action: 'mark_paid', acknowledge_no_account: noAccount }),
+      },
       '지급을 기록했습니다.'
     )
   }
@@ -148,6 +202,10 @@ export default function SettlementPanel({
   // 수수료가 실 모금액보다 클 때의 차액 — 후원이 전부 환불된 캠페인에서
   // 생긴다. 숨기면 0원 지급이 "수수료를 안 냈다"처럼 읽힌다.
   const loss = settlement ? cooperativeLossFor(settlement) : 0
+  // 등록 여부는 서버가 판정해 보내지만, 계좌를 아직 못 받은 첫 렌더에서도
+  // 화면이 일관되게 굴도록 받은 값으로 한 번 더 확인한다.
+  const accountRegistered = payload?.payout_account_registered === true
+  const accountHolderMissing = isPayoutAccountHolderMissing(account)
 
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-4">
@@ -229,6 +287,64 @@ export default function SettlementPanel({
           </>
         ) : null}
       </dl>
+
+      {/*
+        어디로 보내는가. 이체는 사람이 손으로 하므로 은행·계좌번호·예금주
+        셋이 한자리에 있어야 하고, 그 셋이 전부다 — 더 싣지 않는다.
+        사무국 전용이며, 그 판정은 이 화면이 아니라 라우트(`requireAdmin`)가
+        한다. 열어 본 사실은 서버가 활동 기록에 남긴다.
+      */}
+      <section className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-3">
+        <h5 className="text-xs font-semibold text-gray-700">
+          입금 계좌 — 개설자 프로필 기준, 사무국만 보입니다
+        </h5>
+        {accountRegistered && isPayoutAccountRegistered(account) === false ? (
+          <div className="mt-2">
+            <p className="text-sm text-gray-600">
+              계좌가 등록돼 있습니다. 이체할 때 눌러서 확인하세요 — 누가 언제 열어 봤는지 기록에
+              남습니다.
+            </p>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void revealAccount()}
+              className="mt-2 px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              입금 계좌 보기
+            </button>
+          </div>
+        ) : accountRegistered ? (
+          <>
+            <dl className="mt-2 grid grid-cols-1 gap-2 text-sm sm:grid-cols-3">
+              <div>
+                <dt className="text-xs text-gray-500">은행</dt>
+                <dd className="font-semibold text-gray-900">{account?.bank_name}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-gray-500">계좌번호</dt>
+                <dd className="font-semibold text-gray-900">{account?.account_number}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-gray-500">예금주</dt>
+                <dd className="font-semibold text-gray-900">
+                  {account?.account_holder ?? '비어 있음'}
+                </dd>
+              </div>
+            </dl>
+            {accountHolderMissing ? (
+              <p className="mt-2 text-xs text-gray-600">
+                예금주가 비어 있습니다. 이체 화면에서 표시되는 이름으로 확인해 주세요.
+              </p>
+            ) : null}
+          </>
+        ) : (
+          <p className="mt-2 text-sm text-amber-900">
+            개설자가 등록해 둔 계좌가 없습니다. 정산 내역을 정리하면 개설자에게 계좌를 등록해 달라는
+            알림이 함께 갑니다. 사무국이 따로 확인한 계좌로 이미 보냈다면 그대로 지급을 기록할 수
+            있고, 등록된 계좌가 없었다는 사실이 활동 기록에 남습니다.
+          </p>
+        )}
+      </section>
 
       {loss > 0 ? (
         <p className="mt-3 text-sm text-gray-600">

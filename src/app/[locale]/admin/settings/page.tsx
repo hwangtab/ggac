@@ -648,219 +648,125 @@ export default function AdminSettingsPage() {
                   </div>
                 )}
 
-                {/* 이메일 설정 */}
+                {/*
+                  여기에 SMTP 호스트·포트·사용자명·비밀번호·발신자 이메일·
+                  발신자 이름 여섯 칸이 있었다. **하나도 통제하지 않았다** —
+                  메일은 Resend HTTP API로 나가고(`src/lib/mail/send.ts`,
+                  `src/lib/auth/email.ts`) 이 저장소에는 SMTP 클라이언트 자체가
+                  없다. 여섯 값을 읽는 코드는 저장·검증·매핑 기계뿐이고
+                  (`getSmtpConfig`는 부르는 자리가 0이다), 발신 주소는 코드에
+                  박혀 있다.
+
+                  값은 `system_settings`의 `email/smtp_config` 행에 그대로
+                  남겨 둔다. 화면에서 칸을 치우는 것과 저장된 행을 지우는 것은
+                  다른 일이고, PUT 매핑·검증 스키마를 함께 뜯으면 **지금 동작하는
+                  설정들의 저장 경로**가 같이 흔들린다.
+                */}
                 {activeTab === 'email' && (
-                  <div className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          SMTP 호스트
-                        </label>
-                        <input
-                          type="text"
-                          value={settings.email.smtp_host}
-                          onChange={e => updateSettings('email', 'smtp_host', e.target.value)}
-                          className={getFieldClassName(
-                            'email',
-                            'smtp_host',
-                            'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500'
-                          )}
-                        />
-                        {getFieldError('email', 'smtp_host') && (
-                          <p className="mt-1 text-sm text-red-600">
-                            {getFieldError('email', 'smtp_host')}
-                          </p>
-                        )}
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          SMTP 포트
-                        </label>
-                        <input
-                          type="number"
-                          value={settings.email.smtp_port}
-                          onChange={e =>
-                            updateSettings(
-                              'email',
-                              'smtp_port',
-                              parseIntegerParam(e.target.value, 0, { min: 0 })
-                            )
-                          }
-                          className={getFieldClassName(
-                            'email',
-                            'smtp_port',
-                            'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500'
-                          )}
-                        />
-                        {getFieldError('email', 'smtp_port') && (
-                          <p className="mt-1 text-sm text-red-600">
-                            {getFieldError('email', 'smtp_port')}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          SMTP 사용자명
-                        </label>
-                        <input
-                          type="text"
-                          value={settings.email.smtp_user}
-                          onChange={e => updateSettings('email', 'smtp_user', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          SMTP 비밀번호
-                        </label>
-                        <input
-                          type="password"
-                          value={settings.email.smtp_password}
-                          onChange={e => updateSettings('email', 'smtp_password', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          발신자 이메일
-                        </label>
-                        <input
-                          type="email"
-                          value={settings.email.from_email}
-                          onChange={e => updateSettings('email', 'from_email', e.target.value)}
-                          className={getFieldClassName(
-                            'email',
-                            'from_email',
-                            'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500'
-                          )}
-                        />
-                        {getFieldError('email', 'from_email') && (
-                          <p className="mt-1 text-sm text-red-600">
-                            {getFieldError('email', 'from_email')}
-                          </p>
-                        )}
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          발신자 이름
-                        </label>
-                        <input
-                          type="text"
-                          value={settings.email.from_name}
-                          onChange={e => updateSettings('email', 'from_name', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                        />
-                      </div>
+                  <div className="space-y-4">
+                    <div className="rounded-lg bg-gray-50 p-4 text-sm text-gray-600">
+                      <p className="font-medium text-gray-800">메일은 Resend로 나갑니다</p>
+                      <p className="mt-1">
+                        SMTP 서버를 쓰지 않습니다. 가입 인증·비밀번호 재설정·알림 메일 모두 Resend
+                        HTTP API로 발송되며, 여기서 바꿀 수 있는 것은 없습니다.
+                      </p>
+                      <dl className="mt-3 space-y-2">
+                        <div>
+                          <dt className="text-xs text-gray-500">발신 주소</dt>
+                          <dd className="font-medium text-gray-900">
+                            경기아트콜렉티브 &lt;noreply@ggac.kr&gt;
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs text-gray-500">회신 주소</dt>
+                          <dd className="font-medium text-gray-900">
+                            환경변수 <code>MAILBOX_REPLY_TO</code>
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs text-gray-500">발송 키</dt>
+                          <dd className="font-medium text-gray-900">
+                            환경변수 <code>RESEND_API_KEY</code>
+                          </dd>
+                        </div>
+                      </dl>
+                      <p className="mt-3 text-xs text-gray-500">
+                        발신 주소를 바꾸려면 코드를, 회신 주소와 발송 키를 바꾸려면 Vercel
+                        환경변수를 고쳐야 합니다.
+                      </p>
                     </div>
                   </div>
                 )}
 
                 {/* 보안 설정 */}
                 {activeTab === 'security' && (
-                  <div className="space-y-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        세션 타임아웃 (분)
-                      </label>
-                      <input
-                        type="number"
-                        value={settings.security.session_timeout}
-                        onChange={e =>
-                          updateSettings(
-                            'security',
-                            'session_timeout',
-                            parseIntegerParam(e.target.value, 0, { min: 0 })
-                          )
-                        }
-                        className={getFieldClassName(
-                          'security',
-                          'session_timeout',
-                          'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500'
-                        )}
-                      />
-                      {getFieldError('security', 'session_timeout') && (
-                        <p className="mt-1 text-sm text-red-600">
-                          {getFieldError('security', 'session_timeout')}
-                        </p>
-                      )}
+                  <div className="space-y-4">
+                    {/*
+                      여기에 세션 타임아웃·최대 로그인 시도 횟수·최소 비밀번호
+                      길이 세 칸이 있었다. **셋 다 아무것도 통제하지 않았다** —
+                      Better Auth 설정(`src/lib/auth/server.ts`)은 이 값들을
+                      읽지 않고, 세션 수명과 쿠키 캐시와 최소 길이는 코드에
+                      상수로 박혀 있다. 로그인 시도는 횟수로 잠그는 방식이
+                      아니라 IP 기준 레이트리밋이고, 그 한도는
+                      `src/utils/distributedRateLimiter.ts`의 `AUTH_API`다.
+
+                      숫자를 적어 두는 이유: 통제하지 못하는 칸이라도 사무국은
+                      "그래서 세션이 얼마나 유지되는가"를 알아야 한다. 칸만
+                      치우면 그 질문에 답할 자리가 없어진다.
+
+                      저장된 `system_settings` 행과 PUT 매핑·검증은 그대로 둔다
+                      (이메일 탭과 같은 판단).
+                    */}
+                    <div className="rounded-lg bg-gray-50 p-4 text-sm text-gray-600">
+                      <p className="font-medium text-gray-800">세션</p>
+                      <p className="mt-1">
+                        로그인하면 세션이 <strong>7일</strong> 유지되고, 사용 중이면 하루마다 만료가
+                        연장됩니다. 세션 쿠키 캐시는 5분이라 권한을 바꿔도 최대 5분은 이전 상태로
+                        동작합니다. 비밀번호를 재설정하면 그 사람의 기존 세션은 전부 끊깁니다.
+                      </p>
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        최대 로그인 시도 횟수
-                      </label>
-                      <input
-                        type="number"
-                        value={settings.security.max_login_attempts}
-                        onChange={e =>
-                          updateSettings(
-                            'security',
-                            'max_login_attempts',
-                            parseIntegerParam(e.target.value, 0, { min: 0 })
-                          )
-                        }
-                        className={getFieldClassName(
-                          'security',
-                          'max_login_attempts',
-                          'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500'
-                        )}
-                      />
-                      {getFieldError('security', 'max_login_attempts') && (
-                        <p className="mt-1 text-sm text-red-600">
-                          {getFieldError('security', 'max_login_attempts')}
-                        </p>
-                      )}
+                    <div className="rounded-lg bg-gray-50 p-4 text-sm text-gray-600">
+                      <p className="font-medium text-gray-800">로그인 시도</p>
+                      <p className="mt-1">
+                        틀린 횟수로 계정을 잠그지 않습니다. 대신 접속 주소(IP) 기준으로 로그인
+                        요청이 <strong>1분에 10회</strong>를 넘으면 <strong>15분</strong> 동안
+                        막습니다. 비밀번호 재설정 메일은 10분에 5회까지이고, 넘기면 30분 막힙니다.
+                      </p>
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        최소 비밀번호 길이
-                      </label>
-                      <input
-                        type="number"
-                        value={settings.security.password_min_length}
-                        onChange={e =>
-                          updateSettings(
-                            'security',
-                            'password_min_length',
-                            parseIntegerParam(e.target.value, 0, { min: 0 })
-                          )
-                        }
-                        className={getFieldClassName(
-                          'security',
-                          'password_min_length',
-                          'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500'
-                        )}
-                      />
-                      {getFieldError('security', 'password_min_length') && (
-                        <p className="mt-1 text-sm text-red-600">
-                          {getFieldError('security', 'password_min_length')}
-                        </p>
-                      )}
+                    <div className="rounded-lg bg-gray-50 p-4 text-sm text-gray-600">
+                      <p className="font-medium text-gray-800">비밀번호</p>
+                      <p className="mt-1">
+                        최소 <strong>8자</strong>입니다. 대문자·숫자·특수문자를 따로 요구하지
+                        않습니다.
+                      </p>
                     </div>
 
-                    <div>
-                      <label className="flex items-center">
-                        <input
-                          type="checkbox"
-                          checked={settings.security.require_email_verification}
-                          onChange={e =>
-                            updateSettings(
-                              'security',
-                              'require_email_verification',
-                              e.target.checked
-                            )
-                          }
-                          className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 mr-2"
-                        />
-                        <span className="text-sm font-medium text-gray-700">이메일 인증 필수</span>
-                      </label>
+                    {/*
+                      여기에 "이메일 인증 필수" 체크박스가 있었다. **아무것도
+                      통제하지 않았다** — `src/lib/auth/server.ts`는
+                      `emailAndPassword.requireEmailVerification`을 켜지 않아
+                      인증하지 않은 계정도 그대로 로그인된다. 같은 설정의
+                      `resend_limit`·`token_expiry_hours`도 읽는 코드가 없다
+                      (Better Auth가 자기 기본값을 쓴다). 저장은 되는데 아무
+                      일도 일어나지 않는 스위치라, 끄고 새로고침하면 다시 켜져
+                      보이기까지 했다.
+
+                      통제하지 못하는 스위치를 두는 것보다 무엇이 실제로
+                      일어나는지 적는 편이 낫다. 접근은 관리자 승인으로 막고
+                      있고, 인증 메일은 가입할 때 나간다.
+
+                      강제로 바꾸려면 미들웨어에 인증 관문을 새로 놓아야 하고,
+                      그건 조합의 접근 정책을 바꾸는 일이라 화면 정리와 같이
+                      할 일이 아니다.
+                    */}
+                    <div className="rounded-lg bg-gray-50 p-4 text-sm text-gray-600">
+                      <p className="font-medium text-gray-800">이메일 인증</p>
+                      <p className="mt-1">
+                        가입할 때 인증 메일이 나갑니다. 로그인은 인증 여부가 아니라 관리자 승인으로
+                        막습니다 — 인증하지 않은 계정도 승인되면 로그인됩니다.
+                      </p>
                     </div>
                   </div>
                 )}

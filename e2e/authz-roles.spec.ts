@@ -195,6 +195,56 @@ async function deleteBoardDocumentFixtures(): Promise<void> {
   }
 }
 
+/**
+ * 계좌 조회 경계 전용 픽스처. 시드(`scripts/testing/seed-authz-fixtures.mjs`)는
+ * 계좌를 심지 않으므로 이 스펙 안에서 심고 끝나면 지운다 — 남겨 두면 다른
+ * 스펙이 보는 조합원 상태가 실행 순서에 따라 달라진다.
+ */
+const ACCOUNT_FIXTURE = {
+  bank_name: 'AUTHZ-E2E-BANK',
+  account_number: 'AUTHZ-E2E-ACCOUNT-9911',
+  account_holder: 'AUTHZ-E2E-HOLDER',
+}
+
+async function setMemberAccount(
+  memberId: string,
+  account: { bank_name: string; account_number: string; account_holder: string }
+): Promise<void> {
+  const client = createClient({ url: process.env.TURSO_DATABASE_URL! })
+  try {
+    const res = await client.execute({
+      sql: `UPDATE member_profiles
+            SET bank_name = ?, account_number = ?, account_holder = ?
+            WHERE id = ?`,
+      args: [account.bank_name, account.account_number, account.account_holder, memberId],
+    })
+    if (res.rowsAffected !== 1) {
+      // fail-closed. 대상이 없는데 조용히 넘어가면 아래 단정들이 무엇을
+      // 검사했는지 알 수 없는 채로 초록이 된다.
+      throw new Error(
+        `계좌 픽스처 심기 실패: member_profiles 행이 ${res.rowsAffected}개 갱신됐다. ` +
+          '픽스처 시드(scripts/testing/seed-authz-fixtures.mjs)를 먼저 돌렸는지 확인할 것.'
+      )
+    }
+  } finally {
+    client.close()
+  }
+}
+
+async function clearMemberAccount(memberId: string): Promise<void> {
+  const client = createClient({ url: process.env.TURSO_DATABASE_URL! })
+  try {
+    await client.execute({
+      sql: `UPDATE member_profiles
+            SET bank_name = NULL, account_number = NULL, account_holder = NULL
+            WHERE id = ?`,
+      args: [memberId],
+    })
+  } finally {
+    client.close()
+  }
+}
+
 test.describe('관리자 전용 경계', () => {
   test('회원 승인은 관리자만 할 수 있다 (requireAdmin — 쓰기)', async ({ baseURL }) => {
     const targetId = fixtures.users.approvalTarget
@@ -239,6 +289,54 @@ test.describe('관리자 전용 경계', () => {
       await adminContext.dispose()
       // 다음 실행이 이 스펙의 실패 지점에 좌우되지 않도록 되돌린다.
       await resetApprovalTarget(targetId)
+    }
+  })
+
+  test('조합원 계좌는 관리자만, 그것도 한 사람씩만 나간다 (requireAdmin — 읽기)', async ({
+    baseURL,
+  }) => {
+    // 목록에 계좌가 다시 실리는 회귀를 잡으려면 대상이 실제로 계좌를 가지고
+    // 있어야 한다. 시드는 계좌를 심지 않으므로 여기서 심고 끝나면 지운다 —
+    // 안 심으면 "목록에 계좌번호가 없다"가 공허한 단정이 된다.
+    // 대상은 승인 경계가 쓰는 스크래치 계정이다. 펀딩 개설자(`owner`)를 쓰면
+    // 계좌를 잠깐 심는 동안 정산 스펙의 "계좌가 없는 개설자" 단정과 겹친다.
+    const targetId = fixtures.users.approvalTarget
+    await setMemberAccount(targetId, ACCOUNT_FIXTURE)
+
+    const memberContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('other'),
+    })
+    const adminContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('admin'),
+    })
+
+    try {
+      const denied = await memberContext.get(`/api/admin/members/${targetId}/account`)
+      expect(denied.status()).toBe(403)
+      expect((await denied.json()).error).toContain('관리자 권한이 필요합니다')
+
+      // 허용 쪽: 관리자에게는 값이 그대로 나가야 한다. 이 단정이 없으면
+      // 게이트가 "전부 막기"로 퇴화해도 초록불이다.
+      const allowed = await adminContext.get(`/api/admin/members/${targetId}/account`)
+      expect(allowed.status()).toBe(200)
+      const body = await allowed.json()
+      expect(body.data?.account?.account_number).toBe(ACCOUNT_FIXTURE.account_number)
+      expect(body.data?.bank_account_registered).toBe(true)
+
+      // 그리고 **목록에는** 같은 값이 없어야 한다. 관리자 세션으로 본다 —
+      // 막는 것은 권한이 아니라 응답 모양이기 때문이다.
+      const list = await adminContext.get('/api/admin/members?limit=100')
+      expect(list.status()).toBe(200)
+      const listText = await list.text()
+      expect(listText).not.toContain(ACCOUNT_FIXTURE.account_number)
+      expect(listText).not.toContain(ACCOUNT_FIXTURE.account_holder)
+      expect(listText).toContain('bank_account_registered')
+    } finally {
+      await memberContext.dispose()
+      await adminContext.dispose()
+      await clearMemberAccount(targetId)
     }
   })
 

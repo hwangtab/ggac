@@ -252,9 +252,27 @@ function extractObjectLiteralKeys(source, startMarker) {
   return keys
 }
 
-test('admin/members 목록 응답은 정확히 30개 필드로 좁힌다 (Member 인터페이스와 1:1, 키 하나라도 빠지면 실패)', () => {
-  const src = readFileSync(ROUTE_FILES.adminMembersList, 'utf8')
-  const keys = extractObjectLiteralKeys(src, 'const members = rows.map(row => (')
+test('admin/members 목록 응답은 정확히 28개 필드로 좁힌다 — 계좌 세 칸은 참·거짓 하나로 대체됐다', async () => {
+  // 예전에는 라우트 소스에서 객체 리터럴을 뽑아 키를 셌다. 지금은 응답 한
+  // 줄을 만드는 함수가 따로 있으므로(`src/lib/members/memberListRow.ts`)
+  // **실제로 만들어진 객체**의 키를 본다 — 소스 문자열은 도달 가능성을
+  // 보여 주지 않고, 마커 한 줄만 바뀌어도 검사가 통째로 무력화된다.
+  const { upsertProfile, listProfiles } = await loadFreshProfilesModule()
+  const { toMemberListRow } = await import('../../src/lib/members/memberListRow.ts')
+  await upsertProfile(
+    makeProfile({
+      id: 'keys-1',
+      email: 'keys-1@test.local',
+      display_name: '키집합회원',
+      bank_name: '국민은행',
+      account_number: '123456-01-789012',
+      account_holder: '키집합회원',
+    })
+  )
+  const { rows } = await listProfiles({ limit: 100, offset: 0 })
+  const row = rows.find(r => r.id === 'keys-1')
+  const projected = toMemberListRow(row)
+  const keys = Object.keys(projected)
 
   const expected = [
     'id',
@@ -273,9 +291,10 @@ test('admin/members 목록 응답은 정확히 30개 필드로 좁힌다 (Member
     'is_artist',
     'artist_id',
     'monthly_fee',
-    'bank_name',
-    'account_number',
-    'account_holder',
+    // 계좌 세 칸(`bank_name`·`account_number`·`account_holder`)이 있던 자리다.
+    // 목록 한 번이 곧 전 조합원 계좌의 대량 조회였고 흔적도 남지 않았다.
+    // 값은 한 사람을 지목한 조회에서만 나간다.
+    'bank_account_registered',
     'last_login_at',
     'is_suspended',
     'suspension_reason',
@@ -291,12 +310,13 @@ test('admin/members 목록 응답은 정확히 30개 필드로 좁힌다 (Member
     'withdrawal_requested_at',
   ]
 
-  assert.equal(expected.length, 30, '기대 키 목록 자체가 30개여야 한다(오타 방지)')
+  assert.equal(expected.length, 28, '기대 키 목록 자체가 28개여야 한다(오타 방지)')
   assert.deepEqual(
-    keys.sort(),
+    [...keys].sort(),
     [...expected].sort(),
-    'admin/members 응답 키 집합이 admin/members/page.tsx의 Member 인터페이스(30개)와 어긋난다'
+    'admin/members 응답 키 집합이 admin/members/page.tsx의 Member 인터페이스와 어긋난다'
   )
+  assert.equal(projected.bank_account_registered, true)
 })
 
 test('admin/members/flags 응답은 정확히 5개 필드로 좁힌다 (id, is_director, director_title, is_auditor, updated_at)', () => {

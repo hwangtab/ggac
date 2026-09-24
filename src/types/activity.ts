@@ -29,6 +29,8 @@ export type ActivityActionType =
   | 'funding_reward_delivery_changed'
   | 'funding_fulfillment_updated'
   | 'funding_shipping_exported'
+  | 'funding_payout_account_viewed'
+  | 'member_account_viewed'
 
 export type ActivityTargetType =
   | 'post'
