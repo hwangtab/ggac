@@ -549,6 +549,7 @@
       "contentOnlyNotice": "Once a campaign is live, you can only change the summary, story, images, and end date.",
       "coverImage": "Cover image",
       "coverImageUpload": "Choose an image",
+      "coverImageHelp": "JPG, PNG, WebP or GIF, up to 5MB. Save the campaign to apply it.",
       "coverImageUploading": "Uploading…",
       "coverImageAlt": "Cover image preview",
       "save": "Save",

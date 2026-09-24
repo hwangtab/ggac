@@ -482,6 +482,7 @@ export default function EditCampaignPage() {
               className={tab === 'basic' ? 'mt-6 block' : 'hidden'}
             >
               <BasicInfoTab
+                campaignId={id}
                 values={basic}
                 onChange={setBasic}
                 editScope={readOnly ? 'none' : editScope}

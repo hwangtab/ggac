@@ -7418,7 +7418,7 @@ if (trackedFiles === null) {
     cwd: root,
     exclude: ['**/node_modules/**', '**/.next/**'],
   })
-  // 글롭이 비면 아래 검사가 통째로 꺼진다. 현재 각각 2개·5개다.
+  // 글롭이 비면 아래 검사가 통째로 꺼진다. 현재 각각 2개·6개다.
   if (adminFundingRoutes.length < 2 || mypageFundingRoutes.length < 4) {
     fundingFailures.push(
       `펀딩 라우트 글롭이 비었거나 줄었습니다(admin ${adminFundingRoutes.length}, ` +

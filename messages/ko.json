@@ -549,6 +549,7 @@
       "contentOnlyNotice": "공개된 뒤에는 소개·본문·이미지·마감일만 고칠 수 있습니다.",
       "coverImage": "표지 이미지",
       "coverImageUpload": "이미지 선택",
+      "coverImageHelp": "JPG·PNG·WebP·GIF, 5MB 이하. 올린 뒤 저장해야 반영됩니다.",
       "coverImageUploading": "업로드하는 중…",
       "coverImageAlt": "표지 이미지 미리보기",
       "save": "저장",
