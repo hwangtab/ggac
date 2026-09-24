@@ -845,22 +845,30 @@ export default function AdminSettingsPage() {
                       )}
                     </div>
 
-                    <div>
-                      <label className="flex items-center">
-                        <input
-                          type="checkbox"
-                          checked={settings.security.require_email_verification}
-                          onChange={e =>
-                            updateSettings(
-                              'security',
-                              'require_email_verification',
-                              e.target.checked
-                            )
-                          }
-                          className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 mr-2"
-                        />
-                        <span className="text-sm font-medium text-gray-700">이메일 인증 필수</span>
-                      </label>
+                    {/*
+                      여기에 "이메일 인증 필수" 체크박스가 있었다. **아무것도
+                      통제하지 않았다** — `src/lib/auth/server.ts`는
+                      `emailAndPassword.requireEmailVerification`을 켜지 않아
+                      인증하지 않은 계정도 그대로 로그인된다. 같은 설정의
+                      `resend_limit`·`token_expiry_hours`도 읽는 코드가 없다
+                      (Better Auth가 자기 기본값을 쓴다). 저장은 되는데 아무
+                      일도 일어나지 않는 스위치라, 끄고 새로고침하면 다시 켜져
+                      보이기까지 했다.
+
+                      통제하지 못하는 스위치를 두는 것보다 무엇이 실제로
+                      일어나는지 적는 편이 낫다. 접근은 관리자 승인으로 막고
+                      있고, 인증 메일은 가입할 때 나간다.
+
+                      강제로 바꾸려면 미들웨어에 인증 관문을 새로 놓아야 하고,
+                      그건 조합의 접근 정책을 바꾸는 일이라 화면 정리와 같이
+                      할 일이 아니다.
+                    */}
+                    <div className="rounded-lg bg-gray-50 p-3 text-sm text-gray-600">
+                      <p className="font-medium text-gray-800">이메일 인증</p>
+                      <p className="mt-1">
+                        가입할 때 인증 메일이 나갑니다. 로그인은 인증 여부가 아니라 관리자 승인으로
+                        막습니다 — 인증하지 않은 계정도 승인되면 로그인됩니다.
+                      </p>
                     </div>
                   </div>
                 )}
