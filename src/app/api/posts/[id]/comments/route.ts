@@ -12,6 +12,7 @@ import { rateLimit } from '@/lib/server/rateLimit'
 import { requireActiveMember, getOptionalUser } from '@/lib/server/memberAuth'
 import { notifyNewComment } from '@/lib/server/commentNotify'
 import { getBoardPostRevalidationPaths } from '@/lib/revalidationPaths'
+import { FEATURE_DISABLED_MESSAGES, isCommentsEnabled } from '@/lib/features/settings'
 
 export const dynamic = 'force-dynamic'
 export const preferredRegion = 'icn1'
@@ -92,6 +93,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 }
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  // 댓글 스위치. 끄면 **새 댓글만** 막힌다 — 달려 있던 댓글은 그대로 보이고
+  // 지울 수 있다(`src/lib/features/settings.ts`).
+  if ((await isCommentsEnabled()) === false)
+    return ApiError.serviceUnavailable(FEATURE_DISABLED_MESSAGES.comments).toNextResponse()
+
   // 댓글 작성은 승인 회원 계정 하나로 무한 반복이 가능하던 공백(전수감사 안정성 M-4)
   const rl = await rateLimit(request, 'POST_CREATION')
   if (!rl.success) {

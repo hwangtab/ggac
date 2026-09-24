@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { rateLimit } from '@/lib/server/rateLimit'
 import { requireActiveMember } from '@/lib/server/memberAuth'
+import { FEATURE_DISABLED_MESSAGES, isFileUploadEnabled } from '@/lib/features/settings'
 import { hasPublicBlobStore } from '@/lib/storage/blob'
 import { putPublicObject, deletePublicObject } from '@/lib/storage/provider'
 import { revalidatePath } from 'next/cache'
@@ -93,6 +94,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
  * 첨부파일 업로드
  */
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  // 파일 업로드 스위치. 이미 올라간 첨부는 그대로 내려받힌다(GET은 막지
+  // 않는다) — 끄는 것은 **새로 올리는 일**뿐이다.
+  if ((await isFileUploadEnabled()) === false)
+    return ApiError.serviceUnavailable(FEATURE_DISABLED_MESSAGES.fileUpload).toNextResponse()
+
   // 업로드 무한 반복 시 Storage 비용·DB 부하 방지 (전수감사 안정성 M-4)
   const rl = await rateLimit(request, 'FILE_UPLOAD')
   if (!rl.success) {

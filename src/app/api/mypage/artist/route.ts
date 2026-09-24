@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { createOptionsResponse } from '@/utils/apiResponse'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { requireActiveMember } from '@/lib/server/memberAuth'
+import { FEATURE_DISABLED_MESSAGES, isArtistRegistrationEnabled } from '@/lib/features/settings'
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { invalidateArtistsCache } from '@/lib/data'
 import {
@@ -159,7 +160,13 @@ export async function GET(request: NextRequest) {
       return ApiError.internalServerError('아티스트 정보를 조회할 수 없습니다.').toNextResponse()
     }
 
-    return ApiSuccess.ok({ artist }).toNextResponse()
+    // 화면이 폼을 그리기 전에 스위치를 알 수 있게 함께 준다 — 못 낼 폼을
+    // 채우게 하고 저장 버튼에서 거절하는 것은 안내가 아니다. 이 값은 권한이
+    // 아니라 안내다(서버 판정은 아래 PATCH가 따로 한다).
+    return ApiSuccess.ok({
+      artist,
+      registration_enabled: await isArtistRegistrationEnabled(),
+    }).toNextResponse()
   } catch (error) {
     console.error('Artist GET error:', error)
     return ApiError.internalServerError('서버 오류가 발생했습니다.').toNextResponse()
@@ -168,6 +175,13 @@ export async function GET(request: NextRequest) {
 
 // PATCH: 아티스트 정보 업데이트
 export async function PATCH(request: NextRequest) {
+  // 아티스트 등록 스위치. 끄면 아티스트 페이지를 새로 채우거나 고치지
+  // 못한다 — 공개된 아티스트 페이지는 그대로 보인다.
+  if ((await isArtistRegistrationEnabled()) === false)
+    return ApiError.serviceUnavailable(
+      FEATURE_DISABLED_MESSAGES.artistRegistration
+    ).toNextResponse()
+
   try {
     const auth = await requireActiveMember()
     if (auth instanceof NextResponse) return auth

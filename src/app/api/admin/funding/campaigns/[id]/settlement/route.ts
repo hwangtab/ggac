@@ -48,6 +48,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { requireAdmin } from '@/lib/server/adminAuth'
+import { applyRouteRateLimit } from '@/lib/server/rateLimit'
+import {
+  ACCOUNT_REVEAL_RATE_LIMIT,
+  accountRevealRateLimitKey,
+} from '@/lib/server/accountRevealLimit'
 import { getCampaignById } from '@/db/queries/funding'
 import {
   basisOf,
@@ -172,7 +177,18 @@ export async function GET(request: NextRequest, { params }: Ctx) {
   try {
     const account = await ownerPayoutAccount(campaign)
     const reveal = request.nextUrl.searchParams.get('account') === '1'
-    if (reveal) await recordPayoutAccountView(request, auth.user.id, id, account)
+    // 세는 것은 **계좌가 실제로 나가는 요청뿐**이다. 관리자 펀딩 목록은
+    // 마감된 캠페인마다 이 조회를 한 번씩 부르므로(계좌 없이), 그것까지 세면
+    // 페이지를 몇 번 여는 것만으로 한도가 닳는다. 조합원 계좌 조회와 같은
+    // 카운터다 — 한쪽을 다 쓴 뒤 다른 쪽으로 이어 걷지 못한다.
+    if (reveal) {
+      const rl = await applyRouteRateLimit(request, {
+        ...ACCOUNT_REVEAL_RATE_LIMIT,
+        keyGenerator: () => accountRevealRateLimitKey(auth.user.id),
+      })
+      if (rl.success === false && rl.response) return rl.response
+      await recordPayoutAccountView(request, auth.user.id, id, account)
+    }
     return ApiSuccess.ok({
       campaign: { id: campaign.id, title: campaign.title, status: campaign.status },
       ...(await settlementPayload(campaign, account)),

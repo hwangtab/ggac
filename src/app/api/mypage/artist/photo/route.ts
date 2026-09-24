@@ -18,6 +18,11 @@ import { getArtistCoreRevalidationPaths } from '@/lib/revalidationPaths'
 import { hasValidFileSignature } from '@/utils/fileUploadValidation'
 import { isProjectStorageObjectPath } from '@/utils/storageUrlValidation'
 import { requireUser, requireActiveMember } from '@/lib/server/memberAuth'
+import {
+  FEATURE_DISABLED_MESSAGES,
+  isArtistRegistrationEnabled,
+  isFileUploadEnabled,
+} from '@/lib/features/settings'
 import { getProfileById } from '@/db/queries/profiles'
 import { getArtistPhotoInfoByLegacyId, updateArtistByLegacyId } from '@/db/queries/artists'
 
@@ -262,6 +267,20 @@ async function uploadImageWithVariants(
  * PUT: 아티스트 프로필 사진 업로드/변경
  */
 export async function PUT(request: NextRequest) {
+  // 이 라우트는 스위치 **둘**에 걸린다 — 아티스트 페이지를 채우는 일이면서
+  // 동시에 파일을 올리는 일이다. 어느 쪽이 꺼져 있든 막히고, 무엇이 꺼졌는지
+  // 그대로 말해 준다. 사진 **삭제**(DELETE)는 걸지 않는다 — 내려놓는 것까지
+  // 막을 이유가 없다.
+  // 이 라우트는 `ApiSuccess`/`ApiError` 래퍼를 쓰지 않는다(`{ error }` 평문
+  // 본문을 `ProfilePhotoUploader`가 그대로 읽는다) — 거절도 그 모양을 따른다.
+  if ((await isArtistRegistrationEnabled()) === false)
+    return NextResponse.json(
+      { error: FEATURE_DISABLED_MESSAGES.artistRegistration },
+      { status: 503 }
+    )
+  if ((await isFileUploadEnabled()) === false)
+    return NextResponse.json({ error: FEATURE_DISABLED_MESSAGES.fileUpload }, { status: 503 })
+
   // sharp 변환을 동반하는 업로드 — 무한 반복 시 CPU·Storage 소모 방지 (전수감사 M-4)
   const rl = await rateLimit(request, 'FILE_UPLOAD')
   if (!rl.success) {

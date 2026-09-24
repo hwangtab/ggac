@@ -500,6 +500,14 @@ async function main() {
   const BOARD_COMMENT_BY_ADMIN_ID = '00000000-0000-4000-8000-00000000a00a'
   const REGISTRATION_SETTING_ID = '00000000-0000-4000-8000-00000000a005'
   const FUNDING_SETTING_ID = '00000000-0000-4000-8000-00000000a00b'
+  // 기능 스위치 넷(`e2e/authz-features.spec.ts`가 껐다 켠다). 시드가 이 행을
+  // 만들지 않으면 스펙의 UPDATE가 0행에 적용되고, 그래도 "막히지 않는다"
+  // 단정은 통과한다 — 유지보수 스펙이 예전에 정확히 그렇게 조용히 아무것도
+  // 검사하지 않았다. 스펙 쪽이 영향 행 수를 확인해 그 재발을 막는다.
+  const BOARD_FEATURE_SETTING_ID = '00000000-0000-4000-8000-00000000a00c'
+  const ARTIST_FEATURE_SETTING_ID = '00000000-0000-4000-8000-00000000a00d'
+  const COMMENT_FEATURE_SETTING_ID = '00000000-0000-4000-8000-00000000a00e'
+  const FILE_UPLOAD_SETTING_ID = '00000000-0000-4000-8000-00000000a00f'
   // 펀딩 인가 경계(`e2e/authz-funding.spec.ts`)용 픽스처. 캠페인을 둘 둔다 —
   // 하나는 `owner`의 편집 가능한 초안(읽기·수정·리워드·본인 제출 경계),
   // 다른 하나는 이미 심사 대기 중인 캠페인(관리자 심사 경계)이다. 한 캠페인으로
@@ -953,7 +961,8 @@ async function main() {
     .values({ postId: POST_ID, userId: ids.owner })
     .onConflictDoNothing({ target: [tursoPostLikes.postId, tursoPostLikes.userId] })
 
-  // system_settings: 미들웨어(`src/middleware/settings.ts`)가 읽는 두 행.
+  // system_settings: 미들웨어(`src/middleware/settings.ts`)가 읽는 두 행과
+  // 기능 스위치들.
   // 유지보수는 항상 **꺼진 상태**로 되돌린다 — 앞선 실행이 켜진 채로 죽으면
   // 다음 실행의 authz-setup 로그인이 통째로 503에 막힌다.
   // 충돌 대상은 id가 아니라 (category, setting_key) 유니크 인덱스다.
@@ -986,6 +995,62 @@ async function main() {
       category: 'features',
       settingKey: 'funding_features',
       settingValue: { enabled: true, platform_fee_rate_bp: 250, hold_minutes: 10 },
+      description: 'authz E2E 픽스처',
+      isSensitive: false,
+    },
+    // 기능 스위치 넷. 운영과 같은 값(전부 켜짐)으로 심는다 — 나머지 스펙이
+    // 기대하는 상태가 그것이고, `e2e/authz-features.spec.ts`는 자기가 끈 뒤
+    // 반드시 다시 켠다.
+    {
+      id: BOARD_FEATURE_SETTING_ID,
+      category: 'features',
+      settingKey: 'board_features',
+      settingValue: {
+        enabled: true,
+        categories: ['공지', '잡담', '홍보', '건의'],
+        allow_anonymous: false,
+        moderation_enabled: true,
+      },
+      description: 'authz E2E 픽스처',
+      isSensitive: false,
+    },
+    {
+      id: ARTIST_FEATURE_SETTING_ID,
+      category: 'features',
+      settingKey: 'artist_features',
+      settingValue: {
+        registration_enabled: true,
+        portfolio_upload: true,
+        public_profile: true,
+        collaboration_requests: true,
+      },
+      description: 'authz E2E 픽스처',
+      isSensitive: false,
+    },
+    {
+      id: COMMENT_FEATURE_SETTING_ID,
+      category: 'features',
+      settingKey: 'comment_features',
+      settingValue: {
+        enabled: true,
+        nested_replies: true,
+        max_depth: 3,
+        moderation_enabled: true,
+        allow_editing: true,
+      },
+      description: 'authz E2E 픽스처',
+      isSensitive: false,
+    },
+    {
+      id: FILE_UPLOAD_SETTING_ID,
+      category: 'features',
+      settingKey: 'file_upload',
+      settingValue: {
+        enabled: true,
+        max_size_mb: 50,
+        allowed_types: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'docx'],
+        virus_scan: false,
+      },
       description: 'authz E2E 픽스처',
       isSensitive: false,
     },

@@ -786,6 +786,10 @@ export default function AdminSettingsPage() {
                         />
                         <span className="text-sm font-medium text-gray-700">게시판 기능</span>
                       </label>
+                      <p className="mt-1 ml-6 text-xs text-gray-500">
+                        끄면 새 글이 올라오지 않습니다. 올라와 있는 글은 그대로 읽히고, 수정·삭제와
+                        관리자 정리는 계속 됩니다.
+                      </p>
                     </div>
 
                     <div>
@@ -806,6 +810,10 @@ export default function AdminSettingsPage() {
                           아티스트 등록 허용
                         </span>
                       </label>
+                      <p className="mt-1 ml-6 text-xs text-gray-500">
+                        끄면 조합원이 아티스트 페이지를 새로 채우거나 고치지 못합니다. 공개된
+                        아티스트 페이지는 그대로 보이고, 사무국의 아티스트 배정은 계속 됩니다.
+                      </p>
                     </div>
 
                     <div>
@@ -820,6 +828,10 @@ export default function AdminSettingsPage() {
                         />
                         <span className="text-sm font-medium text-gray-700">댓글 기능</span>
                       </label>
+                      <p className="mt-1 ml-6 text-xs text-gray-500">
+                        끄면 새 댓글이 달리지 않습니다. 달려 있는 댓글은 그대로 보이고 지울 수
+                        있습니다.
+                      </p>
                     </div>
 
                     <div>
@@ -834,6 +846,12 @@ export default function AdminSettingsPage() {
                         />
                         <span className="text-sm font-medium text-gray-700">파일 업로드 허용</span>
                       </label>
+                      <p className="mt-1 ml-6 text-xs text-gray-500">
+                        끄면 조합원이 올리는 새 파일이 전부 막힙니다 — 게시판 첨부·본문
+                        이미지·아티스트 사진, 그리고 펀딩 표지 이미지까지 함께 막히니 펀딩을 여는
+                        동안에는 켜 두세요. 올라가 있는 파일은 그대로 내려받힙니다. 메일함 수신
+                        첨부와 이사회 서류함은 영향을 받지 않습니다.
+                      </p>
                     </div>
 
                     <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">

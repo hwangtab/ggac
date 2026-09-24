@@ -44,12 +44,15 @@ interface PostDetailClientProps {
     profile_photo_url?: string
     is_member: boolean
   } | null
+  /** 댓글 기능 스위치. 서버 페이지가 읽어 내려준다. */
+  commentsEnabled?: boolean
 }
 
 export default function PostDetailClient({
   postId,
   initialData,
   initialUser,
+  commentsEnabled = true,
 }: PostDetailClientProps) {
   const initialPost = useMemo<Post | null>(() => {
     if (!initialData?.post) return null
@@ -404,6 +407,7 @@ export default function PostDetailClient({
               currentUserId={user?.id}
               isMember={isMember}
               initialComments={initialComments}
+              commentsEnabled={commentsEnabled}
             />
             {hasMoreComments && (
               <div className="flex justify-center mt-4">

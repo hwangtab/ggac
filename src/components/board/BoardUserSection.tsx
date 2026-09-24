@@ -5,7 +5,15 @@ import { useRouter } from '@/i18n/navigation'
 import { useTranslations } from 'next-intl'
 import { fetchSessionProfile } from '@/utils/sessionProfile'
 
-const BoardUserSection = () => {
+interface BoardUserSectionProps {
+  /**
+   * 게시판 기능 스위치. 서버 컴포넌트가 읽어 내려준다(기본값은 켜짐 —
+   * 이 컴포넌트를 쓰는 다른 자리가 생겨도 조용히 버튼이 사라지지 않게).
+   */
+  boardEnabled?: boolean
+}
+
+const BoardUserSection = ({ boardEnabled = true }: BoardUserSectionProps) => {
   const router = useRouter()
   const t = useTranslations('board')
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -106,7 +114,13 @@ const BoardUserSection = () => {
         </div>
       )}
 
-      {isMember && isAuthenticated && (
+      {isMember && isAuthenticated && boardEnabled === false && (
+        <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <p className="text-yellow-800">{t('userSection.boardOff')}</p>
+        </div>
+      )}
+
+      {isMember && isAuthenticated && boardEnabled && (
         <div>
           <button
             onClick={() => router.push('/board/write')}
