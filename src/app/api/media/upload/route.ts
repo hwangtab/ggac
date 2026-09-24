@@ -10,7 +10,6 @@ export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
-import path from 'path'
 import sharp from 'sharp'
 import { hasPublicBlobStore, listObjects } from '@/lib/storage/blob'
 import { toMediaListing } from '@/lib/storage/mediaListing'
@@ -19,68 +18,19 @@ import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import distLimiter from '@/lib/server/rateLimit'
 import { createLogger } from '@/utils/logger'
 import { parseIntegerParam } from '@/utils/queryParams'
-import { putPublicObject } from '@/lib/storage/provider'
-import { buildVariantPathSuffixes } from '@/lib/storage/paths'
+import {
+  buildStoragePaths,
+  checkMagicBytes,
+  uploadImageWithVariants,
+  validateUploadFile,
+  type StorageUploadResult,
+} from '@/lib/storage/imageUpload'
 import { requireUser, requireActiveMember } from '@/lib/server/memberAuth'
 import { FEATURE_DISABLED_MESSAGES, isFileUploadEnabled } from '@/lib/features/settings'
 import { recordUpload } from '@/db/queries/uploads'
 
 const log = createLogger('api/media/upload')
 
-// 매직 바이트 시그니처 (서버 사이드 Buffer 기반)
-//
-// 각 서명은 { bytes, offset? }다 — offset 생략 시 0(파일 선두)에서 매칭한다.
-// MP4(ISO BMFF)는 박스 구조상 `ftyp` 태그가 항상 offset 4에 온다(앞 4바이트는
-// 가변 박스 크기 필드라 대조 대상이 아니다) — 예전에는 이걸 prefix 매칭
-// 함수로만 검사하려고 흔한 박스 크기(32/24/28바이트) 세 가지를 하드코딩한
-// 패턴으로 흉내 냈는데, 그 크기가 아닌 실제 MP4 파일은 걸러졌다. 지금은
-// checkMagicBytes가 offset을 직접 지원하므로 실제 구조 그대로 한 줄로 검사한다.
-const MAGIC_BYTE_SIGNATURES: Record<string, { bytes: number[]; offset?: number }[]> = {
-  'image/jpeg': [{ bytes: [0xff, 0xd8, 0xff] }],
-  'image/png': [{ bytes: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] }],
-  'image/gif': [{ bytes: [0x47, 0x49, 0x46, 0x38] }],
-  'image/webp': [{ bytes: [0x52, 0x49, 0x46, 0x46] }],
-  // PDF: %PDF
-  'application/pdf': [{ bytes: [0x25, 0x50, 0x44, 0x46] }],
-  // MP4: ftyp 박스 태그, offset 4(앞 4바이트는 가변 박스 크기)
-  'video/mp4': [{ bytes: [0x66, 0x74, 0x79, 0x70], offset: 4 }],
-  // WebM: EBML 헤더(Matroska와 공유하는 시그니처)
-  'video/webm': [{ bytes: [0x1a, 0x45, 0xdf, 0xa3] }],
-  // MP3: ID3 태그가 있으면 그것으로, 없으면 프레임 싱크(MPEG-1/2 Layer III
-  // 후보 세 종류)로 판정한다 — 인코더에 따라 어느 쪽만 있을 수 있어 여러
-  // 후보를 모두 허용해야 한다.
-  'audio/mpeg': [
-    { bytes: [0x49, 0x44, 0x33] }, // ID3
-    { bytes: [0xff, 0xfb] },
-    { bytes: [0xff, 0xf3] },
-    { bytes: [0xff, 0xf2] },
-  ],
-}
-
-function checkMagicBytes(buffer: Buffer, mimeType: string): boolean {
-  const signatures = MAGIC_BYTE_SIGNATURES[mimeType]
-  // 알 수 없는 타입은 거부한다(MIME 헤더만 믿지 않는다) — event-applications/photo
-  // 라우트가 이미 이 계약이었고, 여기만 반대(통과)였던 불일치를 없앤다.
-  if (!signatures) return false
-  return signatures.some(({ bytes, offset = 0 }) =>
-    bytes.every((byte, i) => buffer[offset + i] === byte)
-  )
-}
-
-// 기본 설정
-const DEFAULT_MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
-const DEFAULT_ALLOWED_TYPES = [
-  'image/jpeg',
-  'image/png',
-  'image/gif',
-  'image/webp',
-  'application/pdf',
-  'video/mp4',
-  'video/webm',
-]
-
-const WEBP_QUALITY = 82
-const JPEG_QUALITY = 85
 const RESERVED_METADATA_KEYS = new Set([
   'original_filename',
   'file_size',
@@ -148,42 +98,12 @@ function sanitizeUserMetadata(metadata: Record<string, unknown>): Record<string,
   )
 }
 
-// 파일 타입 검증
+// 파일 타입·크기 검증은 공유 구현(@/lib/storage/imageUpload)이 한다.
 function validateFile(
   file: File,
   bucket: AllowedBucket = 'attachments'
 ): { valid: boolean; error?: string } {
-  const config = BUCKET_CONFIGS[bucket]
-
-  if (!config.allowed_types.includes(file.type)) {
-    return {
-      valid: false,
-      error: `지원하지 않는 파일 형식입니다. 허용된 형식: ${config.allowed_types.join(', ')}`,
-    }
-  }
-
-  if (file.size > config.max_file_size) {
-    const maxSizeMB = (config.max_file_size / 1024 / 1024).toFixed(1)
-    return {
-      valid: false,
-      error: `파일 크기가 너무 큽니다. 최대 ${maxSizeMB}MB까지 가능합니다.`,
-    }
-  }
-
-  return { valid: true }
-}
-
-// 안전한 파일명 생성
-function generateSafeFileName(originalName: string, userId: string): string {
-  const timestamp = Date.now()
-  const randomId = Math.random().toString(36).substring(2, 8)
-  const extension = originalName.split('.').pop()?.toLowerCase() || 'bin'
-  const baseName = originalName
-    .split('.')[0]
-    .replace(/[^a-zA-Z0-9_-]/g, '_')
-    .substring(0, 50)
-
-  return `${userId}_${timestamp}_${randomId}_${baseName}.${extension}`
+  return validateUploadFile(file, BUCKET_CONFIGS[bucket])
 }
 
 // Storage 경로 생성 및 이미지 변형 경로 계산
@@ -197,27 +117,7 @@ function getBucketPrefix(bucket: AllowedBucket, userId: string) {
 }
 
 function generateStoragePaths(bucket: AllowedBucket, userId: string, fileName: string) {
-  const safeFileName = generateSafeFileName(fileName, userId)
-  const extension = path.extname(safeFileName).toLowerCase()
-  const nameWithoutExtension = extension
-    ? safeFileName.slice(0, safeFileName.length - extension.length)
-    : safeFileName
-
-  const basePrefix = getBucketPrefix(bucket, userId)
-  const { originalPath, webpPath, fallbackPath } = buildVariantPathSuffixes(
-    basePrefix,
-    safeFileName,
-    nameWithoutExtension
-  )
-
-  return {
-    originalPath,
-    webpPath,
-    fallbackPath,
-    extension,
-    basePrefix,
-    baseName: nameWithoutExtension,
-  }
+  return buildStoragePaths(getBucketPrefix(bucket, userId), userId, fileName)
 }
 
 // 파일 메타데이터 추출
@@ -248,134 +148,25 @@ async function extractFileMetadata(file: File, buffer?: Buffer): Promise<Record<
   return metadata
 }
 
-interface StorageUploadResult {
-  original: {
-    path: string
-    url: string
-    size: number
-    contentType: string
-  }
-  webp?: {
-    path: string
-    url: string
-    size: number
-    contentType: string
-  }
-  fallback?: {
-    path: string
-    url: string
-    size: number
-    contentType: string
-  }
-}
-
-async function uploadImageWithVariants(
-  bucket: string,
-  paths: ReturnType<typeof generateStoragePaths>,
-  originalBuffer: Buffer,
-  originalContentType: string
-): Promise<StorageUploadResult> {
-  const result: StorageUploadResult = {
-    original: {
-      path: paths.originalPath,
-      url: '',
-      size: originalBuffer.length,
-      contentType: originalContentType,
-    },
-  }
-
-  try {
-    const { url } = await putPublicObject(
-      `${bucket}/${paths.originalPath}`,
-      originalBuffer,
-      originalContentType
-    )
-    result.original.url = url
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    throw new Error(`원본 파일 업로드 실패: ${message}`)
-  }
-
-  // GIF는 Sharp 변환 시 애니메이션이 손실될 수 있으므로 변환 생략
-  const shouldGenerateVariants =
-    originalContentType.startsWith('image/') && !['image/gif'].includes(originalContentType)
-
-  if (!shouldGenerateVariants) {
-    return result
-  }
-
-  // WebP 변환
-  const webpBuffer = await sharp(originalBuffer).webp({ quality: WEBP_QUALITY }).toBuffer()
-  try {
-    // 입력이 이미 .webp면 webpPath === paths.originalPath다(같은 명명 규칙
-    // 때문 — buildVariantPathSuffixes 참고). 원본 업로드가 이미 그 경로를
-    // 차지했으므로 여기서는 overwrite:true가 필수다. 원본 업로드는 계속
-    // 기본값(false)을 쓴다.
-    const { url } = await putPublicObject(`${bucket}/${paths.webpPath}`, webpBuffer, 'image/webp', {
-      overwrite: true,
-    })
-    result.webp = {
-      path: paths.webpPath,
-      url,
-      size: webpBuffer.length,
-      contentType: 'image/webp',
-    }
-  } catch (error) {
-    log.warn('WebP 변환 업로드 실패', error)
-  }
-
-  // JPG 폴백 생성 (원본이 이미 JPEG라면 재사용)
-  const isOriginalJpeg = ['.jpg', '.jpeg'].includes(paths.extension)
-  if (isOriginalJpeg) {
-    result.fallback = {
-      path: paths.originalPath,
-      url: result.original.url,
-      size: originalBuffer.length,
-      contentType: originalContentType,
-    }
-    return result
-  }
-
-  const jpegBuffer = await sharp(originalBuffer).jpeg({ quality: JPEG_QUALITY }).toBuffer()
-  try {
-    // fallbackPath는 원본과 절대 같은 문자열이 될 수 없다(항상 .fallback.jpg가
-    // 붙으므로) — 그래도 media/upload가 upsert:true로 재업로드를 허용해 온
-    // 기존 동작을 그대로 유지한다(같은 요청을 재시도하는 경우 등).
-    const { url } = await putPublicObject(
-      `${bucket}/${paths.fallbackPath}`,
-      jpegBuffer,
-      'image/jpeg',
-      { overwrite: true }
-    )
-    result.fallback = {
-      path: paths.fallbackPath,
-      url,
-      size: jpegBuffer.length,
-      contentType: 'image/jpeg',
-    }
-  } catch (error) {
-    log.warn('JPEG 폴백 업로드 실패', error)
-  }
-
-  return result
-}
-
 /**
  * POST: 파일 업로드
  */
 export async function POST(request: NextRequest) {
   try {
-    // 파일 업로드 스위치. **이 라우트 하나가 여러 화면을 먹인다** — 게시판
-    // 본문 이미지(`useImageUpload`)와 펀딩 표지(`BasicInfoTab`)가 같은 주소로
-    // 같은 bucket('attachments')에 올린다. 요청만 보고는 둘을 가를 수 없고,
-    // 가르려고 클라이언트가 보낸 용도 표시를 믿는 것은 스위치를 장식으로
-    // 만드는 일이다. 그래서 이 스위치는 **조합원이 올리는 새 파일 전부**를
-    // 막는다 — 펀딩 표지도 함께 막힌다. 관리자 화면의 스위치 설명이 그
-    // 사실을 그대로 적어 두었으니, 펀딩을 여는 동안에는 이것을 끄지 않는다.
+    // 파일 업로드 스위치. 이 라우트는 조합원이 **어디에 쓸지 모르는 파일**을
+    // 올리는 곳이다 — 게시판 본문 이미지(`useImageUpload`)와 미디어 관리자가
+    // 같은 주소로 올린다. 요청만 보고는 용도를 가를 수 없고, 클라이언트가
+    // 보낸 용도 표시를 믿는 것은 스위치를 장식으로 만드는 일이다. 그래서 이
+    // 스위치는 이 주소로 오는 **새 파일 전부**를 막는다.
     //
-    // 반대로 시스템·사무국 경로는 여기에 걸리지 않는다: 메일함 수신
-    // 첨부(웹훅)는 꺼도 메일이 유실되면 안 되고, 이사회 서류는 비공개
-    // 서류함이라 이 스위치가 말하는 "조합원 업로드"가 아니다.
+    // **펀딩 표지는 더 이상 여기로 오지 않는다.** 임자가 분명한 이미지는 그
+    // 캠페인의 라우트(`/api/mypage/funding/campaigns/[id]/cover`)가 받고 펀딩
+    // 스위치가 다스린다 — 게시판을 조용히 시키려고 이 스위치를 내리는 일이
+    // 펀딩 편집기를 함께 멈추지 않게 하려는 것이다.
+    //
+    // 시스템·사무국 경로도 여기에 걸리지 않는다: 메일함 수신 첨부(웹훅)는
+    // 꺼도 메일이 유실되면 안 되고, 이사회 서류는 비공개 서류함이라 이
+    // 스위치가 말하는 "조합원 업로드"가 아니다.
     if ((await isFileUploadEnabled()) === false)
       return ApiError.serviceUnavailable(FEATURE_DISABLED_MESSAGES.fileUpload).toNextResponse()
 
