@@ -1,5 +1,6 @@
 import { fetchBoardPosts } from '@/lib/server/board'
 import BoardPageShell from '@/components/board/BoardPageShell'
+import { isBoardEnabled } from '@/lib/features/settings'
 
 // 첫 페이지(전체 카테고리)만 ISR(page revalidate=60)로 프리렌더한다. 카테고리
 // 변경·2페이지 이후는 BoardListView가 /api/board/posts(정상 서버 페이지네이션 +
@@ -16,12 +17,18 @@ interface BoardServerDataProps {
 
 const BoardServerData = async ({ pageSize = 15 }: BoardServerDataProps) => {
   const initialData = await fetchBoardPosts({ category: '전체', page: 1, pageSize })
+  // 글쓰기 버튼을 누를 수 있는지. 목록 자체는 스위치와 무관하게 그대로다 —
+  // 끈 것은 새 글이지 읽기가 아니다. 이 페이지는 ISR(revalidate=60)이라
+  // 스위치를 내린 뒤 최대 그만큼 버튼이 남아 있을 수 있는데, 눌러도 작성
+  // 화면과 `POST /api/posts`가 각각 다시 판정하므로 글은 올라가지 않는다.
+  const boardEnabled = await isBoardEnabled()
 
   return (
     <BoardPageShell
       posts={initialData.posts}
       pageSize={pageSize}
       initialHasNext={initialData.hasNext}
+      boardEnabled={boardEnabled}
     />
   )
 }

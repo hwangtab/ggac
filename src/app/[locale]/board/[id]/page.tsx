@@ -2,6 +2,7 @@ import { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { getPostMetadata } from '@/lib/posts'
 import PostDetailClient from './PostDetailClient'
+import { isCommentsEnabled } from '@/lib/features/settings'
 import { Suspense } from 'react'
 import { generatePostOgImage } from '@/utils/imageUrl'
 import { setRequestLocale } from 'next-intl/server'
@@ -280,9 +281,12 @@ export default async function PostDetailPage({
   }
 
   // 데이터 페칭 로직을 페이지 컴포넌트에서 직접 수행
-  const [metadata, initialData] = await Promise.all([
+  const [metadata, initialData, commentsEnabled] = await Promise.all([
     getPostMetadata(postId).catch(() => null),
     getInitialPostData(postId),
+    // 댓글 스위치가 내려가 있으면 작성 폼을 그리지 않는다. 글과 달려 있는
+    // 댓글은 그대로 보인다 — 끈 것은 새 댓글이지 읽기가 아니다.
+    isCommentsEnabled(),
   ])
 
   if (!initialData) {
@@ -337,6 +341,7 @@ export default async function PostDetailPage({
           postId={postId}
           initialData={resolvedInitialData}
           initialUser={resolvedInitialData.user}
+          commentsEnabled={commentsEnabled}
         />
       </Suspense>
     </div>

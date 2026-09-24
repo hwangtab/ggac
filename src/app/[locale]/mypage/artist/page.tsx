@@ -10,6 +10,10 @@ import { toSafeArtistImageSrc } from '@/utils/safeUrl'
 
 export default function ArtistPage() {
   const [artist, setArtist] = useState<DatabaseArtist | null>(null)
+  // 관리자가 "아티스트 등록 허용"을 끄면 서버가 PATCH를 거절한다. 그 사실을
+  // 저장 버튼에서야 알려 주는 것은 안내가 아니라 허탕이라, 폼 자체를 내리고
+  // 이유를 먼저 적는다. 값이 오지 않으면 켜진 것으로 본다(서버와 같은 쪽).
+  const [registrationEnabled, setRegistrationEnabled] = useState(true)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
@@ -40,6 +44,7 @@ export default function ArtistPage() {
       // 표준 응답 래퍼: { success, data: { artist } }
       const json = await response.json()
       setArtist(json.data?.artist)
+      setRegistrationEnabled(json.data?.registration_enabled !== false)
     } catch (error: any) {
       console.error('Error fetching artist:', error)
       setError(error.message || '아티스트 정보를 불러오는데 실패했습니다.')
@@ -205,7 +210,19 @@ export default function ArtistPage() {
             </div>
 
             {/* 편집 폼 */}
-            <ArtistEditForm artist={artist} onUpdate={handleUpdate} loading={saving} />
+            {registrationEnabled ? (
+              <ArtistEditForm artist={artist} onUpdate={handleUpdate} loading={saving} />
+            ) : (
+              <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-6">
+                <h3 className="text-base font-medium text-yellow-800">
+                  지금은 아티스트 페이지를 고칠 수 없습니다
+                </h3>
+                <p className="mt-2 text-sm text-yellow-700">
+                  아티스트 등록·수정 기능이 잠시 꺼져 있습니다. 위에 보이는 지금 페이지는 그대로
+                  공개돼 있습니다. 고쳐야 할 것이 있으면 사무국(contact@ggac.kr)으로 알려 주세요.
+                </p>
+              </div>
+            )}
           </div>
         ) : (
           <div className="text-center py-8">

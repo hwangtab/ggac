@@ -975,12 +975,15 @@
       "login": "Log In",
       "join": "Become a Member",
       "pendingInfo": "Your membership is pending approval. You will be able to write posts once approved.",
-      "writeButton": "Write a Post"
+      "writeButton": "Write a Post",
+      "boardOff": "Posting to the board is currently switched off. Reading still works."
     },
     "write": {
       "noAccess": "Access Denied",
       "noAccessBody": "Writing posts is only available to approved members. Please wait for membership approval.",
-      "backToBoard": "Back to Board"
+      "backToBoard": "Back to Board",
+      "boardOff": "New posts are turned off",
+      "boardOffBody": "Posting to the board is currently switched off. Existing posts are still readable. If it is urgent, write to the office at contact@ggac.kr."
     },
     "error": {
       "heading": "Could not load the board",

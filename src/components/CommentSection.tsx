@@ -47,6 +47,12 @@ interface CommentSectionProps {
   currentUserId?: string
   isMember: boolean
   initialComments?: CommentWithLikes[]
+  /**
+   * 댓글 기능 스위치. 서버 컴포넌트가 읽어 내려준다. 꺼져 있으면 작성 폼
+   * 대신 이유를 적는다 — 달려 있는 댓글은 그대로 보이고 지울 수도 있다.
+   * 기본값은 켜짐이다(값이 오지 않는다고 댓글창이 조용히 사라지면 안 된다).
+   */
+  commentsEnabled?: boolean
 }
 
 const CommentSection: React.FC<CommentSectionProps> = ({
@@ -54,6 +60,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({
   currentUserId,
   isMember,
   initialComments,
+  commentsEnabled = true,
 }) => {
   const [comments, setComments] = useState<CommentWithLikes[]>(initialComments || [])
   const [newComment, setNewComment] = useState('')
@@ -372,7 +379,14 @@ const CommentSection: React.FC<CommentSectionProps> = ({
       </div>
 
       {/* 댓글 작성 폼 */}
-      {isMember && currentUserId ? (
+      {commentsEnabled === false ? (
+        <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-center">
+          <p className="text-sm text-yellow-800">
+            댓글 기능이 지금 꺼져 있습니다. 하실 말씀이 있으면 사무국(contact@ggac.kr)으로 알려
+            주세요.
+          </p>
+        </div>
+      ) : isMember && currentUserId ? (
         <form onSubmit={handleSubmitComment} className="space-y-3">
           <textarea
             value={newComment}

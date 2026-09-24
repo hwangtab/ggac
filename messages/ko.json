@@ -975,12 +975,15 @@
       "login": "로그인",
       "join": "조합원 가입",
       "pendingInfo": "조합원 승인 대기 중입니다. 승인 후 게시글 작성이 가능합니다.",
-      "writeButton": "새 게시글 작성"
+      "writeButton": "새 게시글 작성",
+      "boardOff": "게시판 글쓰기 기능이 지금 꺼져 있습니다. 읽기는 그대로 됩니다."
     },
     "write": {
       "noAccess": "접근 권한이 없습니다",
       "noAccessBody": "게시글 작성은 승인된 조합원만 가능합니다. 조합원 승인을 기다려주세요.",
-      "backToBoard": "게시판으로 돌아가기"
+      "backToBoard": "게시판으로 돌아가기",
+      "boardOff": "게시판에 새 글을 올릴 수 없습니다",
+      "boardOffBody": "게시판 글쓰기 기능이 지금 꺼져 있습니다. 올라와 있는 글은 그대로 읽을 수 있습니다. 급한 일이면 사무국(contact@ggac.kr)으로 알려 주세요."
     },
     "error": {
       "heading": "게시판을 불러올 수 없습니다",
