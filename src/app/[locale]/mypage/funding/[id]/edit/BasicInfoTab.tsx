@@ -16,8 +16,11 @@
  * 그리고 포커스를 옮길 뿐이다. 판정을 여기서도 하면 저장 버튼이 무엇을 보고
  * 움직이는지가 두 곳으로 갈린다.
  *
- * 표지 이미지 업로드는 이 탭이 직접 `POST /api/media/upload`를 호출한다.
- * 업로드 중 상태·업로드 실패 배너는 이 탭만의 일이라(다른 탭과 공유할
+ * 표지 이미지 업로드는 이 탭이 직접 그 캠페인의 표지 라우트
+ * (`POST /api/mypage/funding/campaigns/[id]/cover`)를 호출한다. 범용 업로드
+ * 주소가 아니라 이 주소인 이유는 라우트 머리말에 적어 두었다 — 요약하면,
+ * 관리자 화면의 파일 업로드 스위치를 내렸다고 펀딩 편집기가 함께 멈추면 안
+ * 된다. 업로드 중 상태·업로드 실패 배너는 이 탭만의 일이라(다른 탭과 공유할
  * 이유가 없다) 로컬 state로 둔다 — 필드 값과 달리 저장 대상이 아니다.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -41,6 +44,8 @@ export interface BasicInfoValues {
 }
 
 export interface BasicInfoTabProps {
+  /** 표지를 올릴 캠페인. 업로드 주소가 이 id를 탄다. */
+  campaignId: string
   values: BasicInfoValues
   onChange: (values: BasicInfoValues) => void
   editScope: 'all' | 'contentOnly' | 'none'
@@ -49,6 +54,7 @@ export interface BasicInfoTabProps {
 }
 
 export default function BasicInfoTab({
+  campaignId,
   values,
   onChange,
   editScope,
@@ -98,8 +104,10 @@ export default function BasicInfoTab({
       try {
         const formData = new FormData()
         formData.append('file', file)
-        formData.append('bucket', 'attachments')
-        const res = await fetch('/api/media/upload', { method: 'POST', body: formData })
+        const res = await fetch(
+          `/api/mypage/funding/campaigns/${encodeURIComponent(campaignId)}/cover`,
+          { method: 'POST', body: formData }
+        )
         const body = await res.json().catch(() => null)
         if (res.ok === false || !body?.data?.public_url) {
           setUploadError(body?.error || t('creator.errorUpload'))
@@ -112,7 +120,7 @@ export default function BasicInfoTab({
         setUploading(false)
       }
     },
-    [set, t]
+    [campaignId, set, t]
   )
 
   const lockedInAll = editScope === 'none'
@@ -278,6 +286,7 @@ export default function BasicInfoTab({
             className="block text-sm text-gray-700 file:mr-3 file:rounded-lg file:border-0 file:bg-primary-600 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white file:disabled:opacity-50 disabled:cursor-not-allowed"
           />
         </label>
+        <p className="mt-2 text-xs text-gray-500">{t('creator.coverImageHelp')}</p>
         {uploading ? (
           <p className="mt-2 text-sm text-gray-600">{t('creator.coverImageUploading')}</p>
         ) : null}
