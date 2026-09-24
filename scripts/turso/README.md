@@ -303,7 +303,10 @@ webServer에 `{...process.env, ...webServer.env}`를 넘긴다. e2e 전용 변�
   `authz-remaining`·`authz-roles`·`authz-mailbox` 6개 스펙
 - `authz-public`: `authz-boundaries` 21건
 
-**실측 기준선(2026-09-24, 이행·정산을 낸 뒤):** 총 118건 중
+**실측 기준선(2026-09-24, 조합원 계좌 조회를 가른 뒤):** 총 119건 중
+**118 passed, 0 failed, 1 skipped.** 늘어난 1건은 계좌 조회 라우트의 경계다.
+
+**직전 기준선(2026-09-24, 이행·정산을 낸 뒤):** 총 118건 중
 **117 passed, 0 failed, 1 skipped.** 늘어난 것은 이행·배송목록 라우트의 비인증
 경계와 정산 라우트 셋의 평조합원 403이다.
 
@@ -1002,7 +1005,7 @@ EXPLAIN QUERY PLAN SELECT count(*) FROM notifications WHERE user_id = '<아무 �
 가드도 타입 검사도 통과한다. 가드는 **"이 문자열이 이 파일에 있는가"**만 보고
 도달 가능성·실행 순서·데이터 흐름을 보지 않는다.
 
-**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 117 passed, 실행 절차는
+**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 118 passed, 실행 절차는
 위 "권한 E2E" 절). 같은 감사에서 **E2E는 관리자 게이트 무력화를 실제로 잡았다.**
 
 `assert-runtime-risks.mjs`가 여전히 값을 하는 자리는 **지워진 것**(게이트를 통째로
