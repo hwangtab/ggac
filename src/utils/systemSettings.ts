@@ -115,7 +115,19 @@ interface SystemSettingsData {
 // 캐시된 설정 데이터
 let cachedSettings: SystemSettingsData | null = null
 let cacheTimestamp: number = 0
-const CACHE_DURATION = 5 * 60 * 1000 // 5분
+/**
+ * 기본 5분. `SETTINGS_CACHE_TTL_MS`로만 낮출 수 있고, E2E가 그 값을 `0`으로
+ * 준다(`playwright.config.ts`) — 기능 스위치를 DB에서 껐다 켰다 하며 라우트가
+ * 실제로 반응하는지 보는 스펙이 5분짜리 캐시에 걸리면 아무것도 검증하지
+ * 못한다. 미들웨어 설정 캐시(`src/middleware/settings.ts`)가 같은 이유로 같은
+ * 환경변수를 이미 읽고 있어 이름을 함께 쓴다.
+ *
+ * 운영에서는 설정하지 않는다 — 요청마다 `system_settings`를 읽게 된다.
+ */
+const CACHE_DURATION = (() => {
+  const raw = Number(process.env.SETTINGS_CACHE_TTL_MS)
+  return Number.isFinite(raw) && raw >= 0 ? raw : 5 * 60 * 1000
+})()
 
 /**
  * 기본 시스템 설정을 반환합니다

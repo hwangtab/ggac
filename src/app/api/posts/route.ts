@@ -30,6 +30,7 @@ import { annotateImageDimensionsSafe } from '@/utils/imageDimensions'
 import { getBoardListRevalidationPaths } from '@/lib/revalidationPaths'
 import { createPost } from '@/db/queries/posts'
 import { notifyNewPost } from '@/lib/server/postNotify'
+import { FEATURE_DISABLED_MESSAGES, isBoardEnabled } from '@/lib/features/settings'
 
 export const runtime = 'nodejs'
 export const revalidate = 60
@@ -191,6 +192,12 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // 게시판 스위치. 끄면 **새 글만** 막힌다 — 읽기·수정·삭제는 그대로다
+  // (`src/lib/features/settings.ts`). 펀딩 스위치와 같이 인증 판정보다 먼저
+  // 본다: 기능이 꺼져 있다는 사실은 로그인 여부와 상관없는 같은 답이다.
+  if ((await isBoardEnabled()) === false)
+    return ApiError.serviceUnavailable(FEATURE_DISABLED_MESSAGES.board).toNextResponse()
+
   // 레이트리밋은 원래도 인증 확인보다 먼저 검사했다 — 순서를 그대로 유지한다.
   const rateLimiter = await applyRateLimit({
     ...RATE_LIMIT_CONFIGS.GENERAL_API,

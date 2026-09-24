@@ -22,6 +22,7 @@ import { parseIntegerParam } from '@/utils/queryParams'
 import { putPublicObject } from '@/lib/storage/provider'
 import { buildVariantPathSuffixes } from '@/lib/storage/paths'
 import { requireUser, requireActiveMember } from '@/lib/server/memberAuth'
+import { FEATURE_DISABLED_MESSAGES, isFileUploadEnabled } from '@/lib/features/settings'
 import { recordUpload } from '@/db/queries/uploads'
 
 const log = createLogger('api/media/upload')
@@ -364,6 +365,20 @@ async function uploadImageWithVariants(
  */
 export async function POST(request: NextRequest) {
   try {
+    // 파일 업로드 스위치. **이 라우트 하나가 여러 화면을 먹인다** — 게시판
+    // 본문 이미지(`useImageUpload`)와 펀딩 표지(`BasicInfoTab`)가 같은 주소로
+    // 같은 bucket('attachments')에 올린다. 요청만 보고는 둘을 가를 수 없고,
+    // 가르려고 클라이언트가 보낸 용도 표시를 믿는 것은 스위치를 장식으로
+    // 만드는 일이다. 그래서 이 스위치는 **조합원이 올리는 새 파일 전부**를
+    // 막는다 — 펀딩 표지도 함께 막힌다. 관리자 화면의 스위치 설명이 그
+    // 사실을 그대로 적어 두었으니, 펀딩을 여는 동안에는 이것을 끄지 않는다.
+    //
+    // 반대로 시스템·사무국 경로는 여기에 걸리지 않는다: 메일함 수신
+    // 첨부(웹훅)는 꺼도 메일이 유실되면 안 되고, 이사회 서류는 비공개
+    // 서류함이라 이 스위치가 말하는 "조합원 업로드"가 아니다.
+    if ((await isFileUploadEnabled()) === false)
+      return ApiError.serviceUnavailable(FEATURE_DISABLED_MESSAGES.fileUpload).toNextResponse()
+
     // 분산 레이트리밋: 파일 업로드 시간당 10회
     const limiter = await distLimiter.applyRateLimit({
       ...distLimiter.CONFIGS.FILE_UPLOAD,
