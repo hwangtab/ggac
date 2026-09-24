@@ -161,6 +161,14 @@ export type SecurityEventType =
   // 무엇을 가져갔는지 답할 길이 없다. 첨부 다운로드와 같은 판단으로 기록
   // 실패가 내려받기를 막지는 않되, 여기로 올린다.
   | 'FUNDING_SHIPPING_EXPORT_AUDIT_FAILED'
+  // 정산 패널에 개설자의 입금 계좌를 실어 보내기 전 기록(logUserActivity)이
+  // 실패한 경우. 배송 목록 내보내기와 같은 판단이다 — 기록이 없으면 누가 언제
+  // 남의 계좌번호를 봤는지 답할 길이 없다. 조회 자체는 막지 않는다.
+  | 'FUNDING_PAYOUT_ACCOUNT_VIEW_AUDIT_FAILED'
+  // 등록된 계좌가 없는 개설자에게 지급을 기록하면서, 그 사실을 남기는 활동
+  // 기록이 실패한 경우. 그 한 줄이 "사무국이 따로 확인한 계좌로 보냈다"는
+  // 단서의 전부라, 없으면 근거 없이 지급을 주장하는 기록만 남는다.
+  | 'FUNDING_SETTLEMENT_PAID_WITHOUT_ACCOUNT_AUDIT_FAILED'
 
 export type SecurityEventSeverity = 'low' | 'medium' | 'high'
 

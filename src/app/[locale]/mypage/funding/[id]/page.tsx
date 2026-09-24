@@ -102,6 +102,14 @@ interface Settlement {
    * 0원 지급을 나란히 보고 자기가 물어내야 하는 돈인지 헷갈린다.
    */
   cooperative_loss_amount: number
+  /**
+   * 정산금을 보낼 계좌가 프로필에 등록돼 있는가. **계좌 값은 오지 않는다** —
+   * 서버가 참·거짓만 보낸다(`creatorSettlementView`).
+   *
+   * 거짓이면 화면이 그 사실과 고치러 갈 자리를 말한다. 사무국이 전화로
+   * 물어보기 전에 본인이 먼저 알아야 하는 일이다.
+   */
+  payout_account_registered: boolean
 }
 
 interface DashboardData {
@@ -518,6 +526,16 @@ export default function ManageCampaignPage() {
                         {t('creator.settlementStale')}
                       </p>
                     ) : null}
+                    {/* 계좌가 없으면 숫자보다 먼저 말한다 — 지급 전이든 뒤든,
+                        이 사람이 지금 할 수 있는 유일한 일이 그것이다. */}
+                    {data.settlement.payout_account_registered ? null : (
+                      <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+                        {t('creator.settlementNoAccount')}{' '}
+                        <Link href="/mypage/profile" className="font-semibold underline">
+                          {t('creator.settlementNoAccountCta')}
+                        </Link>
+                      </p>
+                    )}
                     <dl className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
                       {(
                         [

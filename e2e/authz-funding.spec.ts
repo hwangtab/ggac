@@ -736,9 +736,22 @@ test.describe('펀딩 — 관리자 전용 동작은 마이페이지 라우트�
             { data: { pg_fee_amount: 0, memo: 'authz 픽스처 정산' } }
           )
           expect(prepared.status(), '정산 내역 정리').toBe(200)
-          const paidOut = await adminContext.patch(
+          // 픽스처 개설자는 프로필에 계좌를 등록한 적이 없다. 그 상태로 지급을
+          // 기록하려 들면 서버가 409로 한 번 세운다 — 조합이 "등록된 계좌로
+          // 보냈다"고 주장하는 기록이 근거 없이 남는 것을 막는 자리다.
+          const unacknowledged = await adminContext.patch(
             `/api/admin/funding/campaigns/${campaignId}/settlement`,
             { data: { action: 'mark_paid' } }
+          )
+          expect(unacknowledged.status(), '계좌 없이 지급 기록').toBe(409)
+          expect((await unacknowledged.json()).error).toContain('등록해 둔 계좌가 없습니다')
+
+          // 확인하고 다시 보내면 통과한다. 이체는 이미 손으로 끝난 일이라
+          // 거절이 아니라 확인이고, 등록된 계좌가 없었다는 사실은 활동
+          // 기록에 남는다.
+          const paidOut = await adminContext.patch(
+            `/api/admin/funding/campaigns/${campaignId}/settlement`,
+            { data: { action: 'mark_paid', acknowledge_no_account: true } }
           )
           expect(paidOut.status(), '정산 지급 기록').toBe(200)
           expect((await paidOut.json()).data?.settlement?.status).toBe('paid')

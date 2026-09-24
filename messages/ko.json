@@ -631,6 +631,8 @@
       "settlementFormula": "총 모금액에서 환불액을 뺀 실 모금액에서 결제대행 수수료와 플랫폼 수수료를 뺀 금액을 지급합니다.",
       "settlementPgFeeNote": "결제대행 수수료는 결제사 정산서를 보고 사무국이 직접 넣는 값입니다. 나머지 금액은 후원 내역에서 자동으로 계산됩니다.",
       "settlementStale": "정산 내역을 정리한 뒤 후원 환불이 있었습니다. 사무국이 금액을 다시 계산한 뒤 지급하므로 아래 금액은 바뀔 수 있습니다.",
+      "settlementNoAccount": "정산금을 보낼 계좌가 등록되어 있지 않습니다. 은행·계좌번호·예금주를 등록해 주세요. 등록하기 전까지는 사무국이 따로 연락해 확인해야 합니다.",
+      "settlementNoAccountCta": "내 정보에서 계좌 등록하기",
       "settlementPendingNote": "아직 지급하지 않았습니다. 금액이 실제와 다르면 지급 전에 사무국(contact@ggac.kr)으로 알려 주세요.",
       "settlementPaidNote": "정산금을 보냈습니다. 입금이 보이지 않으면 사무국(contact@ggac.kr)으로 알려 주세요.",
       "settlementLoss": "조합이 부담한 차액",

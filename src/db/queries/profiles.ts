@@ -27,6 +27,8 @@ import type {
   RegistrationStatus,
 } from '../../constants/memberProfile.ts'
 
+import type { PayoutAccount } from '../../lib/funding/payoutAccount.ts'
+
 import { likeContains, toCamelCase, toIso } from './_helpers.ts'
 import { profileCompletenessExpression } from './profileCompleteness.ts'
 
@@ -285,6 +287,47 @@ export async function getProfileDisplayName(id: string): Promise<string | null> 
     .where(eq(memberProfiles.id, id))
     .limit(1)
   return rows[0]?.displayName ?? null
+}
+
+/**
+ * 정산금을 보낼 계좌 세 칸만 읽는다 — 은행·계좌번호·예금주.
+ *
+ * `getProfileById`를 쓰면 실명·전화번호·생년월일까지 함께 끌려오고, 그 객체는
+ * 응답에 통째로 실릴 여지를 만든다(위 `getProfileAuthzFields`의 주석과 같은
+ * 이유). 이체 한 번에 필요한 것은 이 셋뿐이므로 이 셋만 읽는다.
+ *
+ * **부르는 자리는 사무국 전용 라우트뿐이다.** 이 모듈은 권한을 모르므로
+ * 여기서 막지 않는다 — 판정은 호출부(`requireAdmin`)가 하고, 읽었다는 사실도
+ * 호출부가 활동 기록으로 남긴다.
+ *
+ * 공백만 든 칸은 `null`로 정규화한다. 그 값으로는 이체할 수 없는데 판정
+ * (`isPayoutAccountRegistered`)과 표시가 어긋나면 "등록돼 있다는데 칸은 비어
+ * 보이는" 화면이 된다.
+ *
+ * @returns 행이 없으면 `null`.
+ */
+export async function getPayoutAccount(id: string): Promise<PayoutAccount | null> {
+  const rows = await db
+    .select({
+      bankName: memberProfiles.bankName,
+      accountNumber: memberProfiles.accountNumber,
+      accountHolder: memberProfiles.accountHolder,
+    })
+    .from(memberProfiles)
+    .where(eq(memberProfiles.id, id))
+    .limit(1)
+  const row = rows[0]
+  if (!row) return null
+  return {
+    bank_name: trimmedOrNull(row.bankName),
+    account_number: trimmedOrNull(row.accountNumber),
+    account_holder: trimmedOrNull(row.accountHolder),
+  }
+}
+
+function trimmedOrNull(value: string | null): string | null {
+  const text = typeof value === 'string' ? value.trim() : ''
+  return text.length > 0 ? text : null
 }
 
 /**

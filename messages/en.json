@@ -631,6 +631,8 @@
       "settlementFormula": "The payout is the net raised (gross minus refunds) less the payment gateway fee and the platform fee.",
       "settlementPgFeeNote": "The payment gateway fee is entered by the office from the gateway's statement. Every other figure is calculated from the pledge records.",
       "settlementStale": "A pledge was refunded after this settlement was drawn up. The office will recalculate before paying, so the figures below may change.",
+      "settlementNoAccount": "No bank account is registered for the payout. Please add your bank, account number and account holder. Until you do, the office has to contact you separately to confirm them.",
+      "settlementNoAccountCta": "Add your account in My Info",
       "settlementPendingNote": "Not paid yet. If anything looks wrong, tell the office (contact@ggac.kr) before the payment goes out.",
       "settlementPaidNote": "The payout has been sent. If you cannot see it in your account, tell the office (contact@ggac.kr).",
       "settlementLoss": "Absorbed by the cooperative",

@@ -51,6 +51,10 @@ export const ACTIVITY_ACTION_TYPE = [
   // 연락처·주소를 통째로 읽는 행위라 흔적을 남긴다.
   'funding_fulfillment_updated',
   'funding_shipping_exported',
+  // 정산 패널이 개설자의 입금 계좌(은행·계좌번호·예금주)를 사무국에 보여 준
+  // 일. 남의 금융 정보를 읽는 행위라 배송 목록 내보내기와 같이 흔적을 남긴다.
+  // 타입 배열일 뿐 DB CHECK가 없으므로 마이그레이션 불필요.
+  'funding_payout_account_viewed',
 ] as const
 
 export const ACTIVITY_TARGET_TYPE = [

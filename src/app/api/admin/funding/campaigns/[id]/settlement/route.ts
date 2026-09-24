@@ -12,6 +12,37 @@
  * 캠페인이 `settled`가 되는 것은 여기가 아니라 전이 라우트(`…/transition`)이고,
  * 그쪽은 **지급까지 끝난 정산서**가 있어야만 통과한다
  * (`src/lib/funding/campaignPreconditions.ts`).
+ *
+ * ## 입금 계좌는 여기서만 나간다
+ *
+ * 조합은 정산금을 손으로 이체한다. 그러려면 은행·계좌번호·예금주가 화면에
+ * 있어야 하고, 그 값은 개설자 프로필에서 온다(`getPayoutAccount`). 이 라우트는
+ * `requireAdmin`을 거치므로 **사무국만** 그 값을 받는다 — 개설자 대시보드
+ * (`/api/mypage/funding/campaigns/[id]`)로는 계좌가 등록됐는지의 참·거짓만
+ * 가고, 알림·활동 기록·로그에는 어느 쪽으로도 계좌가 실리지 않는다.
+ *
+ * 계좌를 실어 보내는 것은 **남의 금융 정보를 읽는 행위**다. 배송 목록
+ * 내보내기와 같은 모양으로 흔적을 남긴다 — 응답을 내보내기 **전에** 기다려
+ * 기록하고, 접속 주소와 브라우저를 함께 남기고, 기록이 실패하면
+ * `logSecurityEvent`로 올린다. 기록 실패가 조회를 막지는 않는다(정당한
+ * 업무다).
+ *
+ * 그래서 계좌는 **달라고 해야 나간다**(`?account=1`). 관리자 펀딩 목록은
+ * 마감된 캠페인마다 정산 패널을 하나씩 그리므로, 조회에 계좌를 끼워 두면
+ * 페이지를 한 번 여는 것만으로 마감된 캠페인 전원의 계좌번호가 브라우저에
+ * 깔린다 — 아무도 요청하지 않았고, 흔적은 스무 줄이 한꺼번에 남아 무엇을
+ * 보려던 것이었는지 알 수 없게 된다. 기본 조회는 **등록됐는가의 참·거짓**만
+ * 주고(그건 사무국이 항상 봐야 하는 사실이다), 값은 이체하려는 그 한 건에서
+ * 한 번 더 눌렀을 때만 나간다.
+ *
+ * ## 계좌가 없는 개설자의 지급 기록
+ *
+ * **거절하지 않는다.** 버튼을 누르는 시점에 이체는 이미 끝난 일이라, 여기서
+ * 막아도 나간 돈이 돌아오지 않고 기록만 사라진다 — 없는 기록이 틀린 기록보다
+ * 낫지 않다. 대신 **한 번 확인받고**(`acknowledge_no_account`),
+ * 등록된 계좌가 없었다는 사실을 활동 기록에 함께 남긴다. 확인 없이 들어온
+ * 요청은 409다 — 화면이 계좌가 있다고 믿고 보낸 것이므로, 이 기능의 다른
+ * 자리들과 같이 "읽은 상태가 움직였다"로 답한다.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -25,13 +56,20 @@ import {
   markSettlementPaid,
   prepareSettlement,
 } from '@/db/queries/fundingSettlements'
+import { getPayoutAccount } from '@/db/queries/profiles'
 import { logUserActivity } from '@/db/queries/activities'
 import { isBasisStale, netAmount } from '@/lib/funding/settlement'
+import {
+  isPayoutAccountRegistered,
+  PAYOUT_ACCOUNT_MISSING_NOTICE,
+  type PayoutAccount,
+} from '@/lib/funding/payoutAccount'
 import { isFundingEnabled } from '@/lib/funding/settings'
 import { notifySettlementPaid, notifySettlementPrepared } from '@/lib/funding/notify'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
+import { logSecurityEvent } from '@/utils/security'
 
 const log = createLogger('api/admin/funding/settlement')
 export const runtime = 'nodejs'
@@ -42,8 +80,29 @@ type Ctx = { params: Promise<{ id: string }> }
 /** 결제대행 수수료의 상한. 이보다 큰 값은 오타로 본다(억 단위 수수료는 없다). */
 const MAX_PG_FEE = 1_000_000_000
 
-/** 화면이 쓰는 한 벌. 저장된 정산서·지금 원장·어긋남 여부를 함께 준다. */
-async function settlementPayload(campaign: Record<string, unknown>) {
+/**
+ * 개설자의 입금 계좌. 캠페인에 임자가 없으면(수기 등록 뒤 탈퇴 등) `null`이다.
+ *
+ * 이 함수는 값을 읽기만 한다. **누가 볼 수 있는지는 부르는 자리가 정한다** —
+ * 이 파일에서 부르는 곳은 전부 `requireAdmin`을 이미 통과한 뒤다.
+ */
+async function ownerPayoutAccount(
+  campaign: Record<string, unknown>
+): Promise<PayoutAccount | null> {
+  const ownerId = campaign.owner_user_id
+  if (typeof ownerId !== 'string' || ownerId.length === 0) return null
+  return getPayoutAccount(ownerId)
+}
+
+/**
+ * 화면이 쓰는 한 벌. 저장된 정산서·지금 원장·어긋남 여부를 함께 준다.
+ *
+ * `payout_account_registered`는 **참·거짓만**이다. 계좌 값 자체는 조회(GET)
+ * 응답에만 따로 실린다 — 정리·지급 응답까지 계좌를 끼워 보내면 같은 값이
+ * 흔적 없이 세 번 더 나가고, 화면은 어차피 조회 때 받아 둔 값을 그대로
+ * 쓰면 된다(계좌는 정산서를 고친다고 바뀌지 않는다).
+ */
+async function settlementPayload(campaign: Record<string, unknown>, account: PayoutAccount | null) {
   const settlement = await getSettlementByCampaign(String(campaign.id))
   const current = await computeSettlementBasis(String(campaign.id))
   return {
@@ -56,19 +115,70 @@ async function settlementPayload(campaign: Record<string, unknown>) {
       settlement !== null &&
       settlement.status !== 'paid' &&
       isBasisStale(basisOf(settlement), current),
+    payout_account_registered: isPayoutAccountRegistered(account),
   }
 }
 
-export async function GET(_request: NextRequest, { params }: Ctx) {
+/**
+ * 계좌를 실어 보내기 **전에** 기다려서 남기는 기록.
+ *
+ * 배송 목록 내보내기(`…/shipping-export`)와 같은 모양이다. 순서가 중요하다 —
+ * 응답을 내보낸 뒤에 남기려 들면 서버리스 함수가 얼어붙어 기록이 통째로
+ * 사라질 수 있고, 그러면 남의 계좌번호가 아무 흔적도 없이 나간다.
+ *
+ * **기록에는 계좌를 넣지 않는다.** 남길 것은 "누가 언제 어느 캠페인의 계좌를
+ * 봤는가"이지 계좌 자체가 아니다 — 활동 기록은 관리자 화면에 그대로 보이므로,
+ * 여기에 넣으면 지금 좁혀 둔 경계 밖으로 값이 한 번 더 새어 나간다.
+ */
+async function recordPayoutAccountView(
+  request: NextRequest,
+  userId: string,
+  campaignId: string,
+  account: PayoutAccount | null
+) {
+  try {
+    await logUserActivity({
+      user_id: userId,
+      action_type: 'funding_payout_account_viewed',
+      target_type: 'funding_campaign',
+      target_id: campaignId,
+      metadata: { payout_account_registered: isPayoutAccountRegistered(account) },
+      ip_address:
+        request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || null,
+      user_agent: request.headers.get('user-agent') || null,
+    })
+  } catch (logError) {
+    logSecurityEvent(
+      'FUNDING_PAYOUT_ACCOUNT_VIEW_AUDIT_FAILED',
+      {
+        campaignId,
+        error: logError instanceof Error ? logError.message : String(logError),
+      },
+      'high'
+    )
+    log.error('입금 계좌 조회 기록 실패', {
+      campaignId,
+      error: logError instanceof Error ? logError.message : String(logError),
+    })
+  }
+}
+
+export async function GET(request: NextRequest, { params }: Ctx) {
   const auth = await requireAdmin()
   if (auth instanceof NextResponse) return auth
   const { id } = await params
   const campaign = await getCampaignById(id)
   if (!campaign) return ApiError.notFound('프로젝트를 찾을 수 없습니다.').toNextResponse()
   try {
+    const account = await ownerPayoutAccount(campaign)
+    const reveal = request.nextUrl.searchParams.get('account') === '1'
+    if (reveal) await recordPayoutAccountView(request, auth.user.id, id, account)
     return ApiSuccess.ok({
       campaign: { id: campaign.id, title: campaign.title, status: campaign.status },
-      ...(await settlementPayload(campaign)),
+      ...(await settlementPayload(campaign, account)),
+      // 사무국 전용, 그리고 달라고 했을 때만. 응답 캐시는 `ApiSuccess`의
+      // 기본값(`private, no-store`)이다.
+      ...(reveal ? { payout_account: account } : {}),
     }).toNextResponse()
   } catch (error) {
     log.error('정산 내역 조회 실패:', error)
@@ -99,6 +209,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
 
     const campaign = await getCampaignById(id)
     if (!campaign) return ApiError.notFound('프로젝트를 찾을 수 없습니다.').toNextResponse()
+    const account = await ownerPayoutAccount(campaign)
 
     const result = await prepareSettlement({
       campaign_id: id,
@@ -143,13 +254,17 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       result.previous_payout_amount === null ||
       result.previous_payout_amount !== result.amounts.payout_amount
     if (payoutChanged) {
+      // 계좌가 없으면 알림이 그 사실을 함께 말한다 — 사무국이 쫓아다니기
+      // 전에 개설자가 먼저 알아야 하고, 그 자리(마이페이지 내 정보)까지
+      // 일러 준다. 계좌 **값**은 어느 알림에도 싣지 않는다.
       notifySettlementPrepared(campaign, result.settlement as never, {
         revised: result.created === false,
+        payoutAccountMissing: isPayoutAccountRegistered(account) === false,
       }).catch(e => log.error('정산 준비 알림 실패', e))
     }
 
     return ApiSuccess.ok({
-      ...(await settlementPayload(campaign)),
+      ...(await settlementPayload(campaign, account)),
       campaign: { id: campaign.id, title: campaign.title, status: campaign.status },
     }).toNextResponse()
   } catch (error) {
@@ -173,6 +288,16 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
     const campaign = await getCampaignById(id)
     if (!campaign) return ApiError.notFound('프로젝트를 찾을 수 없습니다.').toNextResponse()
 
+    // 계좌는 **누르는 그 순간에 다시 읽는다.** 화면이 계좌를 보여 준 뒤
+    // 개설자가 지웠을 수 있고, 그 경우 확인 없이 들어온 요청은 화면이 이미
+    // 틀린 상태를 믿고 있다는 뜻이다. 이 기능의 다른 자리들과 같이 409로
+    // 답하고 화면이 다시 읽게 한다.
+    const account = await ownerPayoutAccount(campaign)
+    const accountRegistered = isPayoutAccountRegistered(account)
+    if (accountRegistered === false && body.acknowledge_no_account !== true) {
+      return ApiError.conflict(PAYOUT_ACCOUNT_MISSING_NOTICE).toNextResponse()
+    }
+
     const result = await markSettlementPaid(id)
     if (result.ok === false) {
       if (result.reason === 'not_found')
@@ -187,7 +312,11 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
       ).toNextResponse()
     }
 
-    logUserActivity({
+    // 등록된 계좌가 있었는지를 지급 기록 옆에 남긴다. 계좌가 없는 채로
+    // 기록한 건은 **기다려서** 남긴다 — 그 한 줄이 "조합이 알아서 확인한
+    // 계좌로 보냈다"는 단서의 전부이고, 놓치면 남는 것은 근거 없이 지급을
+    // 주장하는 기록뿐이다. 계좌가 있었던 평범한 건은 기존대로 흘려보낸다.
+    const payoutActivity = logUserActivity({
       user_id: auth.user.id,
       action_type: 'admin_action',
       target_type: 'funding_campaign',
@@ -195,15 +324,30 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
       metadata: {
         action: 'settlement_paid',
         payout_amount: Number(result.settlement.payout_amount ?? 0),
+        payout_account_registered: accountRegistered,
       },
-    }).catch(e => log.warn('활동 기록 실패', e))
+    })
+    if (accountRegistered === false) {
+      try {
+        await payoutActivity
+      } catch (e) {
+        logSecurityEvent(
+          'FUNDING_SETTLEMENT_PAID_WITHOUT_ACCOUNT_AUDIT_FAILED',
+          { campaignId: id, error: e instanceof Error ? e.message : String(e) },
+          'high'
+        )
+        log.error('계좌 없는 지급 기록 실패', e)
+      }
+    } else {
+      payoutActivity.catch(e => log.warn('활동 기록 실패', e))
+    }
 
     notifySettlementPaid(campaign, result.settlement as never).catch(e =>
       log.error('정산 지급 알림 실패', e)
     )
 
     return ApiSuccess.ok({
-      ...(await settlementPayload(campaign)),
+      ...(await settlementPayload(campaign, account)),
       campaign: { id: campaign.id, title: campaign.title, status: campaign.status },
     }).toNextResponse()
   } catch (error) {
