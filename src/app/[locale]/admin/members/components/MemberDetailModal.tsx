@@ -40,9 +40,12 @@ interface Member {
   is_artist: boolean
   artist_id?: string
   monthly_fee?: number
-  bank_name?: string
-  account_number?: string
-  account_holder?: string
+  /**
+   * 은행·계좌번호가 **둘 다** 등록돼 있는가. 계좌 값 자체는 목록 응답에
+   * 실리지 않는다 — 한 사람을 지목해 따로 요청해야 나가고, 그 조회는
+   * 활동 기록으로 남는다(`/api/admin/members/[id]/account`).
+   */
+  bank_account_registered?: boolean
   // 새로운 멤버 상태 관리 필드들
   last_login_at?: string
   is_suspended: boolean
@@ -58,6 +61,13 @@ interface Member {
   engagement_score: number
   approved_by?: string
   rejected_by?: string
+}
+
+/** 이체 한 번에 필요한 전부. 서버가 이 셋만 골라 보낸다. */
+interface MemberAccount {
+  bank_name: string | null
+  account_number: string | null
+  account_holder: string | null
 }
 
 interface MemberDetailModalProps {
@@ -91,6 +101,10 @@ export default function MemberDetailModal({
   const [flagsLoading, setFlagsLoading] = useState(false)
   // 탈퇴 확정은 되돌릴 수 없으므로 조합원 이름을 그대로 입력해야 버튼이 열린다.
   const [confirmName, setConfirmName] = useState('')
+  // 계좌는 열 때 받아 두지 않는다 — 눌렀을 때만 서버에서 받아 온다.
+  const [account, setAccount] = useState<MemberAccount | null>(null)
+  const [accountLoading, setAccountLoading] = useState(false)
+  const [accountError, setAccountError] = useState<string | null>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
 
   useDialogA11y({ containerRef: dialogRef, onClose, isOpen })
@@ -113,6 +127,38 @@ export default function MemberDetailModal({
       setConfirmName('')
     }
   }, [isOpen, member.is_director, member.director_title, member.is_auditor])
+
+  // 다른 조합원을 열면 앞사람의 계좌는 화면에서 내린다. 남겨 두면 이름과
+  // 계좌가 어긋난 채로 보이고, 그 상태로 이체하면 엉뚱한 곳으로 간다.
+  useEffect(() => {
+    setAccount(null)
+    setAccountError(null)
+    setAccountLoading(false)
+  }, [member.id, isOpen])
+
+  /**
+   * 이 조합원의 계좌를 서버에서 받아 온다. 관리자인지 판정하는 것도, 조회를
+   * 기록하는 것도 라우트가 한다 — 화면은 값을 청하고 받은 것을 보일 뿐이다.
+   */
+  const loadAccount = async () => {
+    setAccountLoading(true)
+    setAccountError(null)
+    try {
+      const response = await fetch(`/api/admin/members/${member.id}/account`, {
+        credentials: 'include',
+      })
+      const body = await response.json().catch(() => null)
+      if (response.ok === false || body?.success !== true) {
+        setAccountError(body?.error || '계좌 정보를 불러오지 못했습니다.')
+        return
+      }
+      setAccount(body.data?.account ?? null)
+    } catch {
+      setAccountError('계좌 정보를 불러오지 못했습니다.')
+    } finally {
+      setAccountLoading(false)
+    }
+  }
 
   const handleDirectorToggle = async (checked: boolean) => {
     if (!onFlagsUpdate) return
@@ -508,8 +554,14 @@ export default function MemberDetailModal({
               </div>
             )}
 
-            {/* 결제 정보 */}
-            {(member.monthly_fee || member.bank_name || member.account_number) && (
+            {/*
+              계좌는 **눌러야 나간다.** 목록 응답에는 은행·계좌번호·예금주가
+              들어 있지 않고(전에는 전 조합원 것이 한 번에 실렸다), 여기서
+              버튼을 누르면 그 한 사람의 계좌만 서버에서 받아 온다. 서버는
+              관리자인지 판정한 뒤 값을 내보내기 전에 활동 기록을 남긴다 —
+              막는 것도 세는 것도 화면이 아니라 라우트가 한다.
+            */}
+            {(member.monthly_fee || member.bank_account_registered) && (
               <div>
                 <h4 className="text-sm font-medium text-gray-900 mb-2 sm:mb-3">결제 정보</h4>
                 <div className="grid grid-cols-1 gap-4">
@@ -524,15 +576,37 @@ export default function MemberDetailModal({
                       </div>
                     </div>
                   )}
-                  {member.bank_name && (
-                    <div className="flex items-center">
-                      <FiCreditCard className="w-4 h-4 text-gray-500 mr-2" />
-                      <div>
+                  {member.bank_account_registered && (
+                    <div className="flex items-start">
+                      <FiCreditCard className="w-4 h-4 text-gray-500 mr-2 mt-0.5" />
+                      <div className="flex-1">
                         <p className="text-sm text-gray-600">계좌 정보</p>
-                        <p className="text-sm font-medium text-gray-900">
-                          {member.bank_name} {member.account_number}
-                          {member.account_holder && ` (${member.account_holder})`}
-                        </p>
+                        {account ? (
+                          <p className="text-sm font-medium text-gray-900">
+                            {account.bank_name} {account.account_number}
+                            {account.account_holder
+                              ? ` (${account.account_holder})`
+                              : ' (예금주 미등록)'}
+                          </p>
+                        ) : (
+                          <div className="mt-1">
+                            <button
+                              type="button"
+                              onClick={loadAccount}
+                              disabled={accountLoading}
+                              className="text-sm font-medium text-primary-600 hover:text-primary-700 disabled:opacity-50"
+                            >
+                              {accountLoading ? '불러오는 중…' : '계좌 보기'}
+                            </button>
+                            <p className="mt-1 text-xs text-gray-500">
+                              누르면 이 조합원의 계좌를 불러오고, 누가 언제 열어 봤는지 활동 기록에
+                              남습니다.
+                            </p>
+                          </div>
+                        )}
+                        {accountError && (
+                          <p className="mt-1 text-sm text-red-600">{accountError}</p>
+                        )}
                       </div>
                     </div>
                   )}

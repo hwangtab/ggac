@@ -296,9 +296,11 @@ export async function getProfileDisplayName(id: string): Promise<string | null> 
  * 응답에 통째로 실릴 여지를 만든다(위 `getProfileAuthzFields`의 주석과 같은
  * 이유). 이체 한 번에 필요한 것은 이 셋뿐이므로 이 셋만 읽는다.
  *
- * **부르는 자리는 사무국 전용 라우트뿐이다.** 이 모듈은 권한을 모르므로
- * 여기서 막지 않는다 — 판정은 호출부(`requireAdmin`)가 하고, 읽었다는 사실도
- * 호출부가 활동 기록으로 남긴다.
+ * **부르는 자리는 사무국 전용 라우트 둘뿐이다** — 정산 패널의 입금 계좌
+ * 조회(`…/settlement?account=1`)와 조합원 한 사람의 계좌 조회
+ * (`/api/admin/members/[id]/account`). 이 모듈은 권한을 모르므로 여기서
+ * 막지 않는다 — 판정은 호출부(`requireAdmin`)가 하고, 읽었다는 사실도
+ * 호출부가 활동 기록으로 남긴다. 목록 조회는 이 함수를 부르지 않는다.
  *
  * 공백만 든 칸은 `null`로 정규화한다. 그 값으로는 이체할 수 없는데 판정
  * (`isPayoutAccountRegistered`)과 표시가 어긋나면 "등록돼 있다는데 칸은 비어

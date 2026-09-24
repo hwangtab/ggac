@@ -6,6 +6,7 @@ import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { logSecurityEvent } from '@/utils/security'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { listProfiles, type RegistrationStatus, type ProfileRow } from '@/db/queries/profiles'
+import { toMemberListRow } from '@/lib/members/memberListRow'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -82,44 +83,12 @@ export const GET = defineApiRoute({
       ).toNextResponse()
     }
 
-    // 응답 필드를 이전 select 목록과 정확히 동일하게 좁힌다 — ProfileRow는
-    // 33개 컬럼 전부를 담지만, 이전 Supabase 쿼리는 29개만 골라 보냈다
-    // (birth_date/approved_at/is_member/artist_role 미포함). 프런트
-    // `Member` 타입(admin/members/page.tsx)이 이 29개와 정확히 일치한다.
-    const members = rows.map(row => ({
-      id: row.id,
-      display_name: row.display_name,
-      email: row.email,
-      phone_number: row.phone_number,
-      real_name: row.real_name,
-      created_at: row.created_at,
-      updated_at: row.updated_at,
-      registration_status: row.registration_status,
-      is_active: row.is_active,
-      is_admin: row.is_admin,
-      is_director: row.is_director,
-      director_title: row.director_title,
-      is_auditor: row.is_auditor,
-      is_artist: row.is_artist,
-      artist_id: row.artist_id,
-      monthly_fee: row.monthly_fee,
-      bank_name: row.bank_name,
-      account_number: row.account_number,
-      account_holder: row.account_holder,
-      last_login_at: row.last_login_at,
-      is_suspended: row.is_suspended,
-      suspension_reason: row.suspension_reason,
-      suspension_until: row.suspension_until,
-      profile_completeness_score: row.profile_completeness_score,
-      verification_status: row.verification_status,
-      membership_type: row.membership_type,
-      engagement_score: row.engagement_score,
-      approved_by: row.approved_by,
-      rejected_by: row.rejected_by,
-      // 탈퇴 신청 여부 판단용 — registration_status는 신청 중에도 'approved'로
-      // 남으므로(0011 참조) 화면이 이 필드로 신청 상태를 구분한다.
-      withdrawal_requested_at: row.withdrawal_requested_at,
-    }))
+    // 응답에 실을 것은 `toMemberListRow`가 하나씩 골라 적는다
+    // (`src/lib/members/memberListRow.ts`). **계좌 세 칸은 빠진다** — 목록
+    // 한 번이 곧 전 조합원 계좌의 대량 조회였고 흔적도 남지 않았다. 목록은
+    // 등록됐는가의 참·거짓(`bank_account_registered`)만 주고, 값은
+    // `GET /api/admin/members/[id]/account`에서 한 사람씩 기록과 함께 나간다.
+    const members = rows.map(toMemberListRow)
 
     // 페이지네이션 정보 계산
     const totalPages = Math.ceil(total / limit)

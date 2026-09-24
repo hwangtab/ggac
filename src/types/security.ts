@@ -169,6 +169,10 @@ export type SecurityEventType =
   // 기록이 실패한 경우. 그 한 줄이 "사무국이 따로 확인한 계좌로 보냈다"는
   // 단서의 전부라, 없으면 근거 없이 지급을 주장하는 기록만 남는다.
   | 'FUNDING_SETTLEMENT_PAID_WITHOUT_ACCOUNT_AUDIT_FAILED'
+  // 조합원 한 사람의 계좌를 사무국에 내보내기 전 기록이 실패한 경우. 목록에서
+  // 계좌를 뺀 이유가 "누가 언제 남의 계좌를 봤는지 답할 수 있게"였으므로,
+  // 기록이 빠지면 그 이유가 통째로 사라진다. 조회 자체는 막지 않는다.
+  | 'MEMBER_ACCOUNT_VIEW_AUDIT_FAILED'
 
 export type SecurityEventSeverity = 'low' | 'medium' | 'high'
 

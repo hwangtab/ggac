@@ -32,9 +32,12 @@ interface Member {
   is_artist: boolean
   artist_id?: string
   monthly_fee?: number
-  bank_name?: string
-  account_number?: string
-  account_holder?: string
+  /**
+   * 은행·계좌번호가 **둘 다** 등록돼 있는가. 계좌 값 자체는 목록 응답에
+   * 실리지 않는다 — 한 사람을 지목해 따로 요청해야 나가고, 그 조회는
+   * 활동 기록으로 남는다(`/api/admin/members/[id]/account`).
+   */
+  bank_account_registered?: boolean
   // 새로운 멤버 상태 관리 필드들
   last_login_at?: string
   is_suspended: boolean

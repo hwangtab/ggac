@@ -34,6 +34,7 @@ export const ACTIVITY_ACTION_TYPES = [
   'funding_fulfillment_updated',
   'funding_shipping_exported',
   'funding_payout_account_viewed',
+  'member_account_viewed',
 ] as const satisfies readonly ActivityActionType[]
 
 export const ACTIVITY_TARGET_TYPES = [

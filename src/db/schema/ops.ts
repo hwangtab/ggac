@@ -55,6 +55,10 @@ export const ACTIVITY_ACTION_TYPE = [
   // 일. 남의 금융 정보를 읽는 행위라 배송 목록 내보내기와 같이 흔적을 남긴다.
   // 타입 배열일 뿐 DB CHECK가 없으므로 마이그레이션 불필요.
   'funding_payout_account_viewed',
+  // 조합원 관리에서 한 사람의 계좌(은행·계좌번호·예금주)를 사무국이 열어 본
+  // 일. 목록에서는 더 이상 계좌가 나가지 않고, 이 기록이 남는 조회 한 자리
+  // (`/api/admin/members/[id]/account`)에서만 값이 나간다.
+  'member_account_viewed',
 ] as const
 
 export const ACTIVITY_TARGET_TYPE = [
