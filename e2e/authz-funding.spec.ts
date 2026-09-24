@@ -519,6 +519,24 @@ test.describe('펀딩 — 비인증 요청', () => {
             ),
         ],
         [
+          // 표지 업로드는 자기 라우트를 갖는다(파일 업로드 스위치와 분리).
+          // 본문이 FormData지만 비인증 거절은 본문을 읽기 전에 난다.
+          'POST /api/mypage/funding/campaigns/[id]/cover',
+          () =>
+            anonContext.post(
+              `/api/mypage/funding/campaigns/${fixtures.fundingDraftCampaignId}/cover`,
+              {
+                multipart: {
+                  file: {
+                    name: 'c.png',
+                    mimeType: 'image/png',
+                    buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47]),
+                  },
+                },
+              }
+            ),
+        ],
+        [
           'GET /api/mypage/funding/campaigns/[id]/shipping-export',
           () =>
             anonContext.get(
