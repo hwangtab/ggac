@@ -244,36 +244,56 @@ export async function notifyFulfillmentReversed(
 }
 
 /**
- * ③ 승인 뒤 자동 환불의 **결과를 확인하지 못했다** — 사무국에게.
+ * ③ **승인된 돈이 뜬 채로 남았다** — 사무국에게. 두 갈래를 한 문으로 낸다.
  *
- * 이 경우 후원은 `canceled`가 되고 결제 행에 실패 사유 한 줄이 남는다. 그
- * 문장은 아무도 찾아 읽지 않는 자리에 있어서, "돈을 받은 적 없는 후원"과
- * 구분되지 않은 채 목록에 섞인다. 실제로는 **승인은 났고 환불이 나갔는지
- * 모르는** 건이라, 사람이 토스 거래 내역을 열어 봐야만 결말이 난다.
+ * - `refund_uncertain`: 확정할 자리가 없어 전액 환불을 **요청했는데 결과를
+ *   확인하지 못했다.** 후원은 `canceled`가 되고 결제 행에 실패 사유 한 줄이
+ *   남는다. 그 문장은 아무도 찾아 읽지 않는 자리에 있어서, "돈을 받은 적 없는
+ *   후원"과 구분되지 않은 채 목록에 섞인다. 이미 환불됐을 수도, 돈이 그대로
+ *   남아 있을 수도 있다.
+ * - `captured_without_pledge`: 만료 정리가 토스에 물어 **승인(DONE)을
+ *   확인했는데 확정할 후원이 없다.** 환불은 **나간 적이 없다.** 이 건은 후원
+ *   행이 `pending`을 벗어난 뒤라 다음 스윕의 목록에도 오르지 않는다 — 여기서
+ *   부르지 않으면 아무도 다시 보지 않는 돈이 된다.
  *
- * 그래서 후원자 쪽 안내(그쪽은 라우트가 이미 문장으로 말해 준다)와 별개로
- * 사무국을 부른다. 수신거부를 보지 않는다 — 후원자의 돈이 어디 있는지 모르는
- * 상태이고, 그것은 끌 수 있는 종류의 통지가 아니다.
+ * 둘 다 사람이 토스 거래 내역을 열어 봐야만 결말이 난다. 수신거부를 보지
+ * 않는다 — 후원자의 돈이 어디 있는지 모르는 상태이고, 그것은 끌 수 있는
+ * 종류의 통지가 아니다.
  *
  * 이 파일의 다른 함수들과 같이 **절대 던지지 않는다.**
  */
+export type OfficeRefundUncertainInput = {
+  orderId: string
+  pledgeId: string
+  campaignTitle: string | null
+  /** 기본값은 환불을 요청했으나 결과를 모르는 쪽이다. */
+  situation?: 'refund_uncertain' | 'captured_without_pledge'
+}
+
 export function buildOfficeRefundUncertainNotice(
-  input: { orderId: string; pledgeId: string; campaignTitle: string | null },
+  input: OfficeRefundUncertainInput,
   siteUrl: string
 ): NoticeCopy {
   const urls = fundingUrls(siteUrl)
   const title = input.campaignTitle ?? '프로젝트'
+  const captured = input.situation === 'captured_without_pledge'
+  const tail = `주문번호: ${input.orderId} / 후원 ID: ${input.pledgeId}`
   return {
-    title: '자동 환불 결과를 확인하지 못한 후원이 있습니다',
-    message:
-      `'${title}'에서 결제는 승인됐으나 후원을 확정할 자리가 없어 전액 환불을 요청했고, ` +
-      `그 결과를 확인하지 못했습니다. 이미 환불됐을 수도 있고 돈이 그대로 남아 있을 수도 있습니다. ` +
-      `토스 거래 내역에서 주문번호를 확인해 환불이 나가지 않았으면 콘솔에서 취소해 주세요. ` +
-      `주문번호: ${input.orderId} / 후원 ID: ${input.pledgeId}`,
+    title: captured
+      ? '환불해야 할 결제가 남아 있습니다'
+      : '자동 환불 결과를 확인하지 못한 후원이 있습니다',
+    message: captured
+      ? `'${title}'에서 결제가 승인됐는데 확정할 후원이 없습니다. 선점이 이미 정리된 뒤에 승인이 확인된 건이라 ` +
+        `후원자는 돈만 낸 상태이고, **환불은 아직 나가지 않았습니다.** 토스 거래 내역에서 주문번호를 확인해 ` +
+        `전액 취소해 주세요. ${tail}`
+      : `'${title}'에서 결제는 승인됐으나 후원을 확정할 자리가 없어 전액 환불을 요청했고, ` +
+        `그 결과를 확인하지 못했습니다. 이미 환불됐을 수도 있고 돈이 그대로 남아 있을 수도 있습니다. ` +
+        `토스 거래 내역에서 주문번호를 확인해 환불이 나가지 않았으면 콘솔에서 취소해 주세요. ` +
+        tail,
     url: urls.adminReview,
     cta: '관리자 화면으로',
     data: {
-      kind: 'funding_refund_uncertain',
+      kind: captured ? 'funding_captured_without_pledge' : 'funding_refund_uncertain',
       order_id: input.orderId,
       pledge_id: input.pledgeId,
       scope: 'funding',
@@ -282,7 +302,7 @@ export function buildOfficeRefundUncertainNotice(
 }
 
 export async function notifyOfficeRefundUncertain(
-  input: { orderId: string; pledgeId: string; campaignTitle: string | null },
+  input: OfficeRefundUncertainInput,
   overrides?: Partial<OfficeRemedyNotifyDeps>
 ): Promise<void> {
   const d = resolve(overrides)

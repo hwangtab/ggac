@@ -27,6 +27,7 @@ import {
 import { getServerPaymentConfig, isPaymentEnabled } from '@/lib/payments/toss/config'
 import { runExpiryGuard } from '@/lib/funding/expiryGuard'
 import { notifyPledgeRefunded, notifyPledgePaid, notifyStuckHolds } from '@/lib/funding/notify'
+import { notifyOfficeRefundUncertain } from '@/lib/funding/notifyOfficeRemedy'
 import { sendNoticesPaced } from '@/lib/funding/pacedNotices'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
@@ -117,6 +118,10 @@ async function handle(request: NextRequest) {
   // 들어온 줄 모른다. 같은 통지를 여기서도 보낸다. 환불 통지와 같은 이유로
   // 스윕 루프 안에서 기다리지 않고 모아 두었다가 응답 뒤에 간격을 두고 낸다.
   const paidNotices: (() => Promise<void>)[] = []
+  // 토스가 승인(DONE)이라 답했는데 확정할 후원이 없던 건. 돈은 잡혀 있고
+  // 환불은 나간 적이 없으며, 후원 행은 이미 `pending`을 벗어나 다음 스윕의
+  // 목록에도 오르지 않는다 — 여기서 부르지 않으면 아무도 다시 보지 않는다.
+  const officeAlerts: (() => Promise<void>)[] = []
   // 하루 넘게 풀리지 않은 선점이 있으면 `reportStuck`이 채운다. 응답 뒤에
   // 관리자에게 알린다(아래 `after()`).
   let stuckToReport: { count: number; orderIds: string[] } | null = null
@@ -254,8 +259,34 @@ async function handle(request: NextRequest) {
         paidNotices.push(() =>
           notifyPledgePaid(paid).catch(e => log.error('후원 완료 알림 실패', { orderId, e }))
         )
+        return true
       }
-      return Boolean(confirmed)
+
+      // 여기까지 왔다는 것은 **토스가 이 주문의 승인을 확인해 줬는데**(위
+      // `lookupPayment`가 주문번호와 금액까지 대조했다) 확정 함수가 예외
+      // 대신 `null`을 돌려줬다는 뜻이다 — 선점이 그사이 놓아졌거나 만료·취소로
+      // `pending`을 벗어났다. 돈은 잡혀 있고 후원은 없다.
+      //
+      // 이걸 그냥 "보류"로 세면 아무 일도 일어나지 않는다. 이 후원은 더 이상
+      // `pending`이 아니라 다음 스윕의 목록(`listExpiredHolds`)에도, 정체
+      // 목록(`listStuckHolds`)에도 오르지 않는다. 자동으로 환불하지 않는
+      // 이유는 이 갈래가 "자리가 없다"(그쪽은 위에서 환불한다)가 아니라
+      // "무엇이 어긋났는지 모른다"이기 때문이다. 사람을 부른다.
+      log.error('승인된 결제에 확정할 후원이 없다 — 손으로 환불 필요', {
+        orderId,
+        pledgeId,
+        paymentKey: lookup.paymentKey,
+      })
+      logSecurityEvent('FUNDING_CAPTURED_WITHOUT_PLEDGE', { orderId, pledgeId }, 'high')
+      officeAlerts.push(() =>
+        notifyOfficeRefundUncertain({
+          orderId,
+          pledgeId,
+          campaignTitle: null,
+          situation: 'captured_without_pledge',
+        }).catch(e => log.error('확정 불가 결제 공지 실패', { orderId, e }))
+      )
+      return 'unresolvable'
     },
     expire: expirePledge,
     listStuckHolds: () => listStuckHolds(),
@@ -285,6 +316,11 @@ async function handle(request: NextRequest) {
     // 없으므로 한 번 더 잡는다.
     const stuck = stuckToReport
     after(() => notifyStuckHolds(stuck).catch(e => log.error('정체 선점 알림 실패', e)))
+  }
+
+  if (officeAlerts.length > 0) {
+    // 같은 속도 제한(초당 2통)을 탄다. 관리자에게 가는 통지라 건수는 적다.
+    after(() => sendNoticesPaced(officeAlerts, { log }).then(r => log.info('사무국 공지 발송', r)))
   }
 
   if (paidNotices.length > 0) {

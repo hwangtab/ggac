@@ -3,7 +3,9 @@ import test from 'node:test'
 
 import {
   canceledAmountOf,
+  mapWithConcurrency,
   reconcileCampaignWithToss,
+  RECONCILE_LOOKUP_CONCURRENCY,
   TOSS_CONSOLE_REFUND_REASON,
 } from '../../src/lib/server/settlementReconcile.ts'
 
@@ -148,8 +150,13 @@ test('원장이 0행이면 거부한다', async () => {
   assert.equal(result.reason, 'ledger')
 })
 
-test('앞 건이 실패하면 뒤 건은 조회하지 않는다', async () => {
-  const looked = []
+/**
+ * 조회는 묶음으로 함께 나가므로 같은 묶음의 뒤 건도 물어본다. 중요한 것은
+ * 조회 차례가 아니라 **원장을 한 줄도 건드리지 않는다**는 것, 그리고 사무국에게
+ * 말하는 후원번호가 언제나 목록의 앞 건이라는 것이다.
+ */
+test('한 건이라도 조회에 실패하면 원장을 건드리지 않는다', async () => {
+  let finalized = 0
   const result = await reconcileCampaignWithToss(
     input,
     deps({
@@ -158,13 +165,89 @@ test('앞 건이 실패하면 뒤 건은 조회하지 않는다', async () => {
         pledge({ pledge_id: 'p2', pledge_code: 'GGAC-0002', payment_key: 'key2' }),
       ],
       lookupPayment: async key => {
-        looked.push(key)
-        throw new Error('끊김')
+        if (key === 'key1') throw new Error('끊김')
+        return { status: 'CANCELED', totalAmount: 30000, balanceAmount: 0 }
+      },
+      finalizePledgeRefund: async () => {
+        finalized += 1
+        return { id: 'p2', status: 'refunded' }
       },
     })
   )
   assert.equal(result.ok, false)
-  assert.deepEqual(looked, ['key1'])
+  assert.equal(result.reason, 'lookup')
+  assert.equal(result.pledge_code, 'GGAC-0001', '실패를 말하는 후원은 목록 차례를 따른다')
+  assert.equal(finalized, 0, '조회 단계의 실패는 원장을 건드리지 않는다')
+})
+
+test('뒤 건이 실패해도 앞 건의 환불이 원장에 들어가지 않는다', async () => {
+  const finalized = []
+  const result = await reconcileCampaignWithToss(
+    input,
+    deps({
+      listPaidPledgePayments: async () => [
+        pledge(),
+        pledge({ pledge_id: 'p2', pledge_code: 'GGAC-0002', payment_key: 'key2' }),
+      ],
+      lookupPayment: async key => {
+        if (key === 'key2') throw new Error('끊김')
+        return { status: 'CANCELED', totalAmount: 30000, balanceAmount: 0 }
+      },
+      finalizePledgeRefund: async arg => {
+        finalized.push(arg.pledgeId)
+        return { id: arg.pledgeId, status: 'refunded' }
+      },
+    })
+  )
+  assert.equal(result.ok, false)
+  assert.equal(result.pledge_code, 'GGAC-0002')
+  assert.deepEqual(finalized, [], '조회를 다 끝낸 뒤에야 원장을 건드린다')
+})
+
+/**
+ * 한 줄로 세우면 후원자가 많은 캠페인에서 라우트 수명을 넘긴다. 묶음으로
+ * 함께 묻되 한꺼번에 전부 띄우지는 않는다 — 토스 한도.
+ */
+test('조회는 묶음으로 함께 나간다 — 한 줄로 세우지 않는다', async () => {
+  let inFlight = 0
+  let peak = 0
+  const many = Array.from({ length: 12 }, (_, i) =>
+    pledge({ pledge_id: `p${i}`, pledge_code: `GGAC-${i}`, payment_key: `key${i}` })
+  )
+  const result = await reconcileCampaignWithToss(
+    input,
+    deps({
+      listPaidPledgePayments: async () => many,
+      lookupPayment: async () => {
+        inFlight += 1
+        peak = Math.max(peak, inFlight)
+        await new Promise(resolve => setTimeout(resolve, 1))
+        inFlight -= 1
+        return { status: 'DONE', totalAmount: 30000, balanceAmount: 30000 }
+      },
+    })
+  )
+  assert.equal(result.ok, true)
+  assert.equal(result.checked, 12)
+  assert.ok(peak > 1, '한 줄로 세우고 있다')
+  assert.ok(peak <= RECONCILE_LOOKUP_CONCURRENCY, `한 번에 ${peak}건이 나갔다`)
+})
+
+test('묶음 도구는 차례를 지키고 묶음 크기를 넘기지 않는다', async () => {
+  let inFlight = 0
+  let peak = 0
+  const out = await mapWithConcurrency([1, 2, 3, 4, 5, 6, 7], 3, async n => {
+    inFlight += 1
+    peak = Math.max(peak, inFlight)
+    await new Promise(resolve => setTimeout(resolve, 1))
+    inFlight -= 1
+    return n * 2
+  })
+  assert.deepEqual(out, [2, 4, 6, 8, 10, 12, 14])
+  assert.equal(peak, 3)
+  // 0이나 음수를 받아도 멈추지 않는다(한 건씩).
+  assert.deepEqual(await mapWithConcurrency([1, 2], 0, async n => n), [1, 2])
+  assert.deepEqual(await mapWithConcurrency([], 5, async n => n), [])
 })
 
 test('canceledAmountOf는 읽을 수 없으면 null이다', () => {

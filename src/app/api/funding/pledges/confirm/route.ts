@@ -300,18 +300,47 @@ export async function POST(request: NextRequest) {
     }
 
     if (!confirmed || confirmed.status !== 'paid') {
-      // 승인은 끝났는데 확정을 못 했다(마감·짝 불일치). 돈만 받는 것이 최악이므로 즉시 환불.
+      // 승인은 끝났는데 확정할 후원이 없다. 확정 함수가 예외 대신 `null`을
+      // 돌려주는 갈래다 — 선점이 그사이 놓아졌거나(결제창의 돌아가기),
+      // 만료·취소로 `pending`을 벗어났거나, 주문 짝이 어긋났다. 돈만 받는
+      // 것이 최악이므로 즉시 환불한다.
       log.error('후원 확정 실패 — 환불 시도', { orderId, pledgeId })
+      let refunded = true
       try {
         await cancelPayment(paymentKey, { cancelReason: '후원 확정 실패', orderId }, { secretKey })
       } catch (refundError) {
+        // 위 재고 부족 갈래와 같은 판단이다: **안 나갔다**가 아니라 **나갔는지
+        // 모른다**.
+        refunded = false
         log.error('자동 환불 실패 — 수동 처리 필요', {
           orderId,
           error: refundError instanceof Error ? refundError.message : refundError,
         })
       }
+      // 원장에 사유를 남긴다. 이 갈래는 지금까지 결제 행을 `pending`인 채로
+      // 두고 있었다 — 만료 스윕은 후원 쪽을 보고 도니 그 행을 다시 볼 일이
+      // 없고, 결국 승인된 돈이 붙은 대기 결제가 아무 설명 없이 남았다.
+      await markPaymentFailed(orderId, {
+        code: 'PLEDGE_FINALIZE_FAILED',
+        message: refunded
+          ? '후원을 확정하지 못해 승인된 결제를 전액 환불했습니다.'
+          : '후원을 확정하지 못해 환불을 요청했으나 결과를 확인하지 못했습니다. 환불 여부를 사람이 확인해야 합니다.',
+      })
+      // 환불이 나갔는지 모르는 건은 사람이 토스 거래 내역을 열어 봐야 결말이
+      // 난다. 위 재고 부족 갈래와 같은 모양으로 사무국을 부른다.
+      if (refunded === false) {
+        after(() =>
+          notifyOfficeRefundUncertain({
+            orderId,
+            pledgeId,
+            campaignTitle: typeof campaign?.title === 'string' ? campaign.title : null,
+          }).catch(e => log.error('자동 환불 불확실 공지 실패', { orderId, e }))
+        )
+      }
       return ApiError.internalServerError(
-        '후원을 확정하지 못해 결제를 취소했습니다. 사무국으로 문의해 주세요.'
+        refunded
+          ? '후원을 확정하지 못해 결제를 취소했습니다. 결제하신 금액은 전액 환불했으며, 카드사에 따라 영업일 기준 3~5일 안에 확인하실 수 있습니다.'
+          : '후원을 확정하지 못해 결제 취소를 요청했지만 결과까지 확인하지는 못했습니다. 카드 내역에서 환불이 보이지 않으면 사무국(contact@ggac.kr)으로 후원자 성함과 결제하신 날짜를 알려 주세요.'
       ).toNextResponse()
     }
 

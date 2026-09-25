@@ -23,6 +23,7 @@ import { evaluateCreditName } from '@/lib/funding/creditName'
 import { generateOrderId, buildCustomerKey } from '@/lib/payments/toss/protocol'
 import { isPaymentEnabled, getPublicClientKey } from '@/lib/payments/toss/config'
 import { getFundingSettings } from '@/lib/funding/settings'
+import { planGuestHoldCap } from '@/lib/funding/guestHoldCap'
 import { FUNDING_TERMS_REVISION } from '@/lib/funding/terms'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
@@ -58,6 +59,9 @@ export async function POST(request: NextRequest) {
     // "동시에 얼마나 쥐고 있는가"와 다른 값이다. 실제 경계는 선점
     // 트랜잭션(`holdPledge`)이 신원별로 DB에서 거는 상한이고, 아래 둘은 그
     // 앞에서 요청 수 자체를 줄이는 역할이다.
+    //
+    // 신원을 갈아 끼우며 도는 요청은 이 둘이 아니라 아래 **비회원 회선
+    // 상한**(`planGuestHoldCap`)이 맡는다 — 그쪽은 프로젝트별로, 훨씬 좁게 센다.
     //
     // 짧은 창(1분)은 순간 폭주만 깎는다. 아래 긴 창과 같은 비율(분당 120건)로
     // 두어 이쪽이 먼저 걸리는 일이 없게 한다 — 두 값이 어긋나면 긴 창을
@@ -180,6 +184,32 @@ export async function POST(request: NextRequest) {
     }
 
     const user = await getOptionalUser()
+
+    // 비회원이면 **회선 단위 상한**을 한 번 더 지난다. 선점 트랜잭션의
+    // 상한은 비회원을 이메일로 세는데, 그 값은 요청자가 시도마다 갈아 끼울
+    // 수 있어 신원을 돌리는 요청 앞에서는 아무것도 세지 못한다 — 판단과 그
+    // 값을 고른 이유는 `@/lib/funding/guestHoldCap`에 있다.
+    //
+    // 여기(본문 검증을 다 지난 뒤)에 두는 이유: 프로젝트별로 세므로
+    // 캠페인이 정해진 뒤여야 하고, 재고를 실제로 건드리는 것은 아래
+    // `holdPledge` 하나뿐이라 그 앞이면 충분하다.
+    const guestCap = planGuestHoldCap({
+      userId: user?.id ?? null,
+      campaignId: String(campaign.id),
+      holdMinutes: fundingSettings.hold_minutes,
+    })
+    if (guestCap) {
+      const ipKey = createIPKeyGenerator('funding-prepare-guest')
+      const capped = await applyRouteRateLimit(request, {
+        name: guestCap.name,
+        windowMs: guestCap.windowMs,
+        maxRequests: guestCap.maxRequests,
+        message: guestCap.message,
+        keyGenerator: req => `${ipKey(req)}:${guestCap.keySuffix}`,
+      })
+      if (!capped.success && capped.response?.status === 429) return capped.response
+    }
+
     const orderId = generateOrderId('funding')
 
     let pledge

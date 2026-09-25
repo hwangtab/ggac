@@ -34,9 +34,10 @@ export const DEFAULT_HOLD_MINUTES = 10
  *
  * 이 상한이 막는 것과 막지 못하는 것을 분명히 해 둔다. **한 신원**이 재고를
  * 쥔 채 결제를 미루는 것은 막는다. 이메일 별칭을 갈아 가며 도는 공격은 **막지
- * 못한다** — 별칭마다 새 신원이기 때문이다. 그쪽의 방어선은 선점이 10분 만에
- * 스스로 풀린다는 것과 라우트의 빈도 제한이지 이 값이 아니다. 그래서 이 값은
- * 공격자가 아니라 **진짜 후원자에 맞춰** 넉넉히 잡는다.
+ * 못한다** — 별칭마다 새 신원이기 때문이다. 그쪽은 선점이 10분 만에 스스로
+ * 풀린다는 것과, 준비 라우트가 비회원에게 거는 **회선 단위 상한**
+ * (`@/lib/funding/guestHoldCap`)이 맡는다. 그래서 이 값은 공격자가 아니라
+ * **진짜 후원자에 맞춰** 넉넉히 잡는다.
  */
 export const MAX_HOLDS_PER_REWARD = 3
 
@@ -217,6 +218,10 @@ export async function getRemainingQuantity(
  * 로그인한 조합원은 계정(`user_id`), 비회원은 소문자로 맞춘 이메일이다 —
  * 표에 이미 있는 값이고, 비회원 후원이 기본 경로인 이 화면에서 요청자가
  * 스스로 바꿀 수 있는 것 중 가장 무겁다(주소 한 줄보다 바꾸기 번거롭다).
+ *
+ * 그래도 **이메일은 요청자가 고르는 값이다.** 시도마다 갈아 끼우면 이 셈은
+ * 매번 0에서 시작한다 — 신원 회전 자체는 여기서 막지 못하고, 준비 라우트가
+ * 비회원에게 거는 회선 단위 상한(`@/lib/funding/guestHoldCap`)이 맡는다.
  *
  * 회원 선점과 비회원 선점은 섞지 않는다. 섞으면 남의 이메일을 적어 낸
  * 비회원이 로그인한 조합원의 상한을 대신 채워 그 조합원의 후원을 막을 수
@@ -700,6 +705,64 @@ async function cancelPendingPledgeOnce(
     )
     .returning()
   return row ? rowToPledge(row as Row) : null
+}
+
+/**
+ * 후원자가 결제창에서 **돌아가기**를 눌렀을 때의 취소. 위 함수와 달리
+ * **승인이 날아가고 있는 중이면 취소하지 않는다.**
+ *
+ * 왜 따로 두는가: 위 `cancelPendingPledge`를 부르는 다른 자리들(확정 라우트의
+ * 재고 부족 환불, 만료 크론)은 **이미 승인이 끝난 뒤** 뒷정리로 부르는 것이라
+ * `payment_key`가 당연히 서 있다. 거기에 이 조건을 달면 정작 치워야 할 선점이
+ * 영영 남는다. 조건이 필요한 것은 사용자가 스스로 누르는 이 문 하나뿐이다.
+ *
+ * 판정과 취소가 **한 트랜잭션 안**이어야 하는 이유: 라우트가 결제 행을 읽고
+ * 나서 이 UPDATE를 보내는 사이에 확정 라우트가 `recordPaymentKey`로 표식을
+ * 새길 수 있다. 그 창에서 취소가 통과하면 승인은 났는데 확정할 후원이 없다.
+ * libSQL 드라이버는 트랜잭션을 `BEGIN IMMEDIATE`로 열어 첫 문장부터 쓰기
+ * 잠금을 쥐므로, 여기서 읽은 `payment_key`와 아래 UPDATE 사이에 그 쓰기가
+ * 끼어들지 못한다.
+ */
+export async function cancelPendingPledgeForRelease(
+  pledgeId: string,
+  expectedOrderId: string
+): Promise<{ ok: true; pledge: Row } | { ok: false; reason: 'gone' | 'in_flight' }> {
+  return retryOnLockContention(
+    () => cancelPendingPledgeForReleaseOnce(pledgeId, expectedOrderId),
+    () => false,
+    MONEY_PATH_RETRY_BUDGET
+  )
+}
+
+async function cancelPendingPledgeForReleaseOnce(
+  pledgeId: string,
+  expectedOrderId: string
+): Promise<{ ok: true; pledge: Row } | { ok: false; reason: 'gone' | 'in_flight' }> {
+  return db.transaction(async tx => {
+    const [payment] = await tx
+      .select({ paymentKey: payments.paymentKey })
+      .from(payments)
+      .where(eq(payments.orderId, expectedOrderId))
+      .limit(1)
+    if (typeof payment?.paymentKey === 'string' && payment.paymentKey.length > 0) {
+      return { ok: false as const, reason: 'in_flight' as const }
+    }
+
+    const [row] = await tx
+      .update(fundingPledges)
+      .set({ status: 'canceled', canceledAt: new Date() })
+      .where(
+        and(
+          eq(fundingPledges.id, pledgeId),
+          eq(fundingPledges.orderId, expectedOrderId),
+          eq(fundingPledges.status, 'pending')
+        )
+      )
+      .returning()
+    return row
+      ? { ok: true as const, pledge: rowToPledge(row as Row) }
+      : { ok: false as const, reason: 'gone' as const }
+  })
 }
 
 /**

@@ -34,7 +34,14 @@ test('DONE은 승격, 그 밖에는 만료, unknown은 보류', async () => {
     d: 'unknown',
   })
   const result = await runExpiryGuard(deps)
-  assert.deepEqual(result, { promoted: 1, expired: 2, deferred: 1, mismatched: 0, stuck: 0 })
+  assert.deepEqual(result, {
+    promoted: 1,
+    expired: 2,
+    deferred: 1,
+    mismatched: 0,
+    unresolvable: 0,
+    stuck: 0,
+  })
   assert.deepEqual(calls.promoted, ['a'])
   assert.deepEqual(calls.expired.sort(), ['b', 'c'])
 })
@@ -46,7 +53,14 @@ test('한 건의 예외가 나머지를 막지 않는다(예외 건은 보류)',
     return 'not_found'
   }
   const result = await runExpiryGuard(deps)
-  assert.deepEqual(result, { promoted: 0, expired: 1, deferred: 1, mismatched: 0, stuck: 0 })
+  assert.deepEqual(result, {
+    promoted: 0,
+    expired: 1,
+    deferred: 1,
+    mismatched: 0,
+    unresolvable: 0,
+    stuck: 0,
+  })
   assert.deepEqual(calls.expired, ['b'])
 })
 
@@ -54,7 +68,29 @@ test('승격이 실패하면 만료하지 않는다(다음 실행이 다시 본�
   const { deps, calls } = makeDeps({ a: { status: 'DONE', paymentKey: 'pk' } })
   deps.promote = async () => false
   const result = await runExpiryGuard(deps)
-  assert.deepEqual(result, { promoted: 0, expired: 0, deferred: 1, mismatched: 0, stuck: 0 })
+  assert.deepEqual(result, {
+    promoted: 0,
+    expired: 0,
+    deferred: 1,
+    mismatched: 0,
+    unresolvable: 0,
+    stuck: 0,
+  })
+  assert.deepEqual(calls.expired, [])
+})
+
+/**
+ * 승인된 돈이 잡혀 있는데 확정할 후원이 없는 건. 그 후원은 이미 `pending`을
+ * 벗어나 다음 스윕의 목록에도 오르지 않는다 — 보류로 세면 "다음에 다시
+ * 본다"는 거짓말이 결과 숫자로 남고, 아무도 그 돈을 보지 않는다.
+ */
+test('다시 오지 않는 건은 보류로 세지 않는다', async () => {
+  const { deps, calls } = makeDeps({ a: { status: 'DONE', paymentKey: 'pk' } })
+  deps.promote = async () => 'unresolvable'
+  const result = await runExpiryGuard(deps)
+  assert.equal(result.unresolvable, 1)
+  assert.equal(result.deferred, 0, '다음 스윕이 다시 보지 못하는 건을 보류로 세면 안 된다')
+  assert.equal(result.promoted, 0)
   assert.deepEqual(calls.expired, [])
 })
 
