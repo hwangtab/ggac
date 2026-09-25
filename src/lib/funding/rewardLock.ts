@@ -150,6 +150,59 @@ function isQuantityDecrease(existing: RewardLockView, patch: RewardPatch): boole
   return after < before
 }
 
+/** 표에 저장돼 있는 리워드의 값 전부. `RewardLockView`에 없는 두 칸까지 본다. */
+export interface RewardSavedValues {
+  title: string
+  description: string | null
+  amount: number
+  requires_shipping: boolean
+  total_quantity: number | null
+  image_url: string | null
+  estimated_delivery: string | null
+  sort_order: number
+}
+
+/**
+ * 이 패치가 표의 값을 **한 칸도 바꾸지 않는가.**
+ *
+ * 화면은 리워드 목록을 통째로 보낸다 — 스무 개를 띄워 놓고 하나만 고쳐도
+ * 스무 개가 다 올라온다. 그걸 그대로 쓰면 UPDATE 스무 문장이 한 트랜잭션에
+ * 들어가고, 원격 Turso에서는 문장 하나가 왕복 하나라 **그동안 이 사이트의
+ * 모든 쓰기가 멈춘다**(결제 확정도 포함이다). 값이 같은 것은 쓸 이유가
+ * 없으므로 트랜잭션에 넣지 않는다.
+ *
+ * 빈 문자열과 값 없음은 같게 본다(`sameText`) — 그러지 않으면 표에 `NULL`이
+ * 든 칸이 매번 "바뀌었다"로 잡혀 거를 수 있는 것이 하나도 없어진다.
+ */
+export function rewardPatchChangesNothing(
+  existing: RewardSavedValues,
+  patch: RewardPatch
+): boolean {
+  if (patch.title !== undefined && patch.title !== existing.title) return false
+  if (patch.description !== undefined && !sameText(patch.description, existing.description))
+    return false
+  if (patch.amount !== undefined && Number(patch.amount) !== Number(existing.amount)) return false
+  if (
+    patch.requires_shipping !== undefined &&
+    Boolean(patch.requires_shipping) !== Boolean(existing.requires_shipping)
+  )
+    return false
+  if (
+    patch.total_quantity !== undefined &&
+    (patch.total_quantity ?? null) !== (existing.total_quantity ?? null)
+  )
+    return false
+  if (patch.image_url !== undefined && !sameText(patch.image_url, existing.image_url)) return false
+  if (
+    patch.estimated_delivery !== undefined &&
+    !sameText(patch.estimated_delivery, existing.estimated_delivery)
+  )
+    return false
+  if (patch.sort_order !== undefined && Number(patch.sort_order) !== Number(existing.sort_order))
+    return false
+  return true
+}
+
 export function canDeleteReward(existing: { locked_at: string | null }): boolean {
   return !existing.locked_at
 }

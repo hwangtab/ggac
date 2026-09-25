@@ -5,6 +5,7 @@ import {
   evaluateRewardPatch,
   canDeleteReward,
   deliveryChangesToLog,
+  rewardPatchChangesNothing,
 } from '../../src/lib/funding/rewardLock.ts'
 
 const unlocked = {
@@ -254,4 +255,65 @@ test('빈 값과 값 없음은 같은 것으로 본다 — 사진·설명이 NUL
     evaluateRewardPatch(existing, { ...patch, image_url: 'https://x/y.webp' }, 'contentOnly'),
     { ok: false, reason: 'content_only_image' }
   )
+})
+
+// ── 값이 그대로인 리워드는 쓰지 않는다 ─────────────────────────────────────
+
+/**
+ * 화면은 목록을 통째로 보낸다 — 스무 개를 띄워 놓고 하나만 고쳐도 스무 개가
+ * 올라온다. 그걸 그대로 UPDATE 스무 문장으로 만들면, 원격 Turso에서 문장 하나가
+ * 왕복 하나라 그동안 사이트 전체의 쓰기가 멈춘다(결제 확정 포함).
+ */
+const saved = {
+  title: '음반',
+  description: '설명',
+  amount: 30000,
+  requires_shipping: true,
+  total_quantity: 50,
+  image_url: '/images/album.jpg',
+  estimated_delivery: '2026-12',
+  sort_order: 2,
+}
+
+test('한 칸도 달라지지 않은 패치는 쓸 것이 없다', () => {
+  assert.equal(rewardPatchChangesNothing(saved, { ...saved }), true)
+})
+
+test('칸 하나만 달라져도 써야 한다', () => {
+  const cases = [
+    { title: '음반 (재발매)' },
+    { description: '다른 설명' },
+    { amount: 35000 },
+    { requires_shipping: false },
+    { total_quantity: 60 },
+    { total_quantity: null },
+    { image_url: '/images/other.jpg' },
+    { estimated_delivery: '2027-01' },
+    { sort_order: 3 },
+  ]
+  for (const diff of cases) {
+    assert.equal(
+      rewardPatchChangesNothing(saved, { ...saved, ...diff }),
+      false,
+      `${Object.keys(diff)[0]} 변경을 못 잡았다`
+    )
+  }
+})
+
+test('빈 값과 없음은 같게 본다 — 건드린 적 없는 칸이 매번 UPDATE를 부르지 않게', () => {
+  const blank = { ...saved, description: null, image_url: null, estimated_delivery: null }
+  assert.equal(
+    rewardPatchChangesNothing(blank, {
+      ...blank,
+      description: '',
+      image_url: '',
+      estimated_delivery: '',
+    }),
+    true
+  )
+})
+
+test('패치에 없는 칸은 비교하지 않는다', () => {
+  assert.equal(rewardPatchChangesNothing(saved, { title: saved.title }), true)
+  assert.equal(rewardPatchChangesNothing(saved, {}), true)
 })

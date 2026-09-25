@@ -525,3 +525,84 @@ test('applyRewardBatch의 되감기 신호는 재시도를 타지 않는다 — 
     proto.transaction = original
   }
 })
+
+// ── 잠금을 쥐는 시간 ────────────────────────────────────────────────────────
+
+/**
+ * 트랜잭션 안에서 몇 문장을 내보내는지 센다.
+ *
+ * SQLite는 데이터베이스마다 쓰는 사람이 하나고, 원격 Turso에서는 **문장 하나가
+ * 왕복 하나**다. 그러니 이 트랜잭션의 문장 수가 곧 "사이트 전체의 쓰기가 멈춰
+ * 있는 시간"이다 — 그동안 결제 확정도 선점도 환불도 줄을 선다. 리워드마다 한
+ * 문장씩 INSERT하던 때는 리워드 열두 개짜리 저장 한 번이 왕복 열둘이었다.
+ */
+function countStatements(db) {
+  const proto = db.constructor.prototype
+  const original = proto.transaction
+  const counts = { insert: 0, update: 0, delete: 0 }
+  proto.transaction = function counting(fn, ...rest) {
+    return original.call(
+      this,
+      tx =>
+        fn(
+          new Proxy(tx, {
+            get(target, prop) {
+              const value = Reflect.get(target, prop, target)
+              if (typeof value !== 'function') return value
+              if (prop in counts) {
+                return (...args) => {
+                  counts[prop] += 1
+                  return value.apply(target, args)
+                }
+              }
+              return value.bind(target)
+            },
+          })
+        ),
+      ...rest
+    )
+  }
+  return {
+    counts,
+    restore() {
+      proto.transaction = original
+    },
+  }
+}
+
+test('리워드 여럿을 새로 만들어도 INSERT는 한 문장이다 — 잠금을 리워드 수만큼 쥐지 않는다', async () => {
+  const c = await q.createCampaign({
+    owner_user_id: 'u1',
+    title: '문장수',
+    summary: 's',
+    goal_amount: 1,
+  })
+  const { db } = await import('../../src/db/client.ts')
+  const meter = countStatements(db)
+  try {
+    const res = await q.applyRewardBatch({
+      campaign_id: c.id,
+      expected_status: 'draft',
+      creates: Array.from({ length: 12 }, (_, i) => ({
+        campaign_id: c.id,
+        title: `리워드 ${i}`,
+        amount: 1000 * (i + 1),
+      })),
+      updates: [],
+      delete_ids: [],
+    })
+    assert.equal(res.ok, true)
+  } finally {
+    meter.restore()
+  }
+  assert.equal(meter.counts.insert, 1, `INSERT가 ${meter.counts.insert}문장이다 — 다중 행이 아니다`)
+  // 맨 앞의 조건부 UPDATE(잠금 잡기)는 그대로 한 문장이어야 한다.
+  assert.equal(meter.counts.update, 1)
+  assert.equal(meter.counts.delete, 0)
+  const rewards = await q.listRewards(c.id)
+  assert.equal(rewards.length, 12)
+  assert.deepEqual(
+    rewards.map(r => r.amount),
+    Array.from({ length: 12 }, (_, i) => 1000 * (i + 1))
+  )
+})

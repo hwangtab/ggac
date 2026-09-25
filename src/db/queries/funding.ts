@@ -425,6 +425,23 @@ class RewardBatchAbort extends Error {
  *    시작부터 쓰기 잠금을 잡게 하고,
  * ② 생성·수정·삭제를 전부 같은 트랜잭션에 넣어 하나라도 거절되면 통째로 되감는다.
  * 덕분에 "반쪽만 저장된 리워드 목록"도 더는 생기지 않는다.
+ *
+ * ## 잠금을 쥐는 시간
+ *
+ * SQLite는 데이터베이스마다 쓰는 사람이 하나고, 원격 Turso에서는 **문장 하나가
+ * 왕복 하나**다. 그러니 이 트랜잭션의 길이는 곧 "이 사이트 전체의 쓰기가 멈춰
+ * 있는 시간"이다 — 결제 확정도 선점도 환불도 그동안 줄을 선다. 그래서 문장
+ * 수를 셋으로 묶어 둔다.
+ *
+ * - 생성: 몇 개든 **다중 행 INSERT 한 문장**이다(예전에는 리워드마다 한
+ *   문장이라 스무 개면 왕복 스무 번이었다).
+ * - 삭제: `IN (...)` 한 문장.
+ * - 수정: 리워드마다 한 문장이지만, **값이 실제로 달라진 것만** 여기까지
+ *   온다(라우트가 `rewardPatchChangesNothing`으로 거른다). 스무 개를 띄워 놓고
+ *   하나만 고쳐 저장하는 흔한 경우가 스무 문장에서 한 문장이 된다.
+ *
+ * 상한은 `parseRewardList`의 리워드 20개다. 최악이라도 잠금 + 생성 + 수정 20 +
+ * 삭제 = 23문장이고, 보통은 두세 문장에서 끝난다.
  */
 export async function applyRewardBatch(plan: {
   campaign_id: string
@@ -433,12 +450,12 @@ export async function applyRewardBatch(plan: {
   updates: { id: string; patch: RewardPatchInput; require_unlocked?: boolean }[]
   delete_ids: string[]
 }): Promise<RewardBatchResult> {
-  // 이 트랜잭션은 이 앱에서 쓰기 잠금을 가장 오래 쥔다 — 맨 앞의 조건부
-  // UPDATE로 잠금을 잡은 뒤 생성·수정·삭제를 전부 그 안에서 하고, 원격
-  // Turso에서는 문장 하나가 왕복 하나다. 그만큼 스스로도 다른 쓰기에
-  // 막히기 쉬우므로 `holdPledge`·`finalizePledgePayment`와 **같은 재시도**를
-  // 쓴다. 되감기 신호(`RewardBatchAbort`)는 경합이 아니라 판정이므로
-  // 재시도를 타지 않고 그대로 아래 catch로 간다.
+  // 재시도는 **기본 예산**(150ms)이다 — 돈이 걸린 쓰기가 쓰는
+  // `MONEY_PATH_RETRY_BUDGET`보다 일부러 짧다. 이 트랜잭션은 잠금을 가장 오래
+  // 쥐는 쪽이라, 여기서 끈질기게 버티면 결제 확정이 그만큼 더 굶는다. 져도
+  // 개설자는 저장을 한 번 더 누르면 되고(라우트가 503과 안내 문장을 준다),
+  // 결제 확정은 그렇지 않다. 되감기 신호(`RewardBatchAbort`)는 경합이 아니라
+  // 판정이므로 재시도를 타지 않고 그대로 아래 catch로 간다.
   try {
     return await retryOnLockContention(() =>
       db.transaction(async tx => {
@@ -454,8 +471,10 @@ export async function applyRewardBatch(plan: {
           .returning({ id: fundingCampaigns.id })
         if (held.length === 0) throw new RewardBatchAbort({ ok: false, reason: 'status_changed' })
 
-        for (const input of plan.creates)
-          await tx.insert(fundingRewards).values(rewardInsertValues(input))
+        // 다중 행 INSERT 한 문장. 리워드 수만큼 왕복하지 않는다.
+        if (plan.creates.length > 0) {
+          await tx.insert(fundingRewards).values(plan.creates.map(rewardInsertValues))
+        }
 
         for (const u of plan.updates) {
           const set = rewardUpdateSet(u.patch)
