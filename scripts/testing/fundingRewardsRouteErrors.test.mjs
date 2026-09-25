@@ -67,9 +67,9 @@ test('리워드 저장 라우트에는 빈도 제한이 걸려 있다', async ()
   assert.match(handler, /rl\.success === false/, 'strict:false라 `!rl.success`는 좁히지 못한다')
   assert.match(handler, /return rl\.response/, '제한에 걸려도 그대로 통과시킨다')
 
-  // 인증(`requireActiveMember`)보다 먼저 돌아야 세션을 만들 필요조차 없이 막힌다.
+  // 인증(`requireCampaignActor`)보다 먼저 돌아야 세션을 만들 필요조차 없이 막힌다.
   assert.ok(
-    handler.indexOf('applyRouteRateLimit') < handler.indexOf('requireActiveMember'),
+    handler.indexOf('applyRouteRateLimit') < handler.indexOf('requireCampaignActor'),
     '빈도 제한이 인증 뒤에 있으면 막히기 전에 세션 조회가 먼저 돈다'
   )
 })

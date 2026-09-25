@@ -22,3 +22,8 @@ export async function getOptionalUser() {
   const session = globalThis.__coverTestSession
   return session ? { id: session.id } : null
 }
+
+// 표지 라우트는 소유자 게이트로 이걸 쓴다 — 로그인·프로필만 본다.
+export async function requireCampaignActor() {
+  return requireActiveMember()
+}
