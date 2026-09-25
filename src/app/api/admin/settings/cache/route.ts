@@ -5,7 +5,11 @@ import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createSettingsAdminAuth } from '@/lib/server/settingsAdminAuth'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { logSecurityEvent } from '@/utils/security'
-import { refreshSettingsCache } from '@/utils/systemSettings'
+import {
+  getSettingsCacheState,
+  refreshSettingsCache,
+  SETTINGS_CACHE_TTL_MS,
+} from '@/utils/systemSettings'
 import { createLogger, maskId } from '@/utils/logger'
 import { ApiError, ApiSuccess } from '@/utils/apiWrapper'
 
@@ -78,12 +82,18 @@ export const POST = defineApiRoute<Record<string, unknown>>({
       'low'
     )
 
+    const ttlMinutes = Math.ceil(SETTINGS_CACHE_TTL_MS / 60000)
+
     return ApiSuccess.ok(
       {
         cacheType,
         invalidatedAt: new Date().toISOString(),
+        // 이 무효화가 닿는 범위. 부르는 쪽이 "전역으로 비웠다"고 읽지 않게
+        // 값으로도 적어 둔다.
+        scope: 'this-instance',
+        otherInstancesWithinMs: SETTINGS_CACHE_TTL_MS,
       },
-      '설정 캐시가 성공적으로 무효화되었습니다.'
+      `이 요청을 처리한 인스턴스에서는 즉시 반영됩니다. 다른 인스턴스는 최대 ${ttlMinutes}분 안에 반영됩니다.`
     ).toNextResponse()
   },
 })
@@ -112,21 +122,35 @@ export const GET = defineApiRoute({
     )
   },
   handler: async () => {
-    // 캐시 상태 정보 수집
-    const cacheStatus = {
-      systemSettings: {
-        cached: true, // systemSettings 유틸리티에서 캐시 상태를 확인할 수 있다면 더 정확하게
-        lastRefresh: new Date().toISOString(), // 실제로는 캐시 타임스탬프를 가져와야 함
-      },
-      middleware: {
-        cached: true, // 미들웨어 캐시 상태
-        lastRefresh: new Date().toISOString(),
-      },
-    }
+    // **이 인스턴스가 실제로 아는 것만 적는다.**
+    //
+    // 예전에는 `cached: true`와 `lastRefresh: new Date()`를 무조건 채워
+    // 넣었다. 둘 다 조회한 값이 아니라 응답을 만들 때 지어낸 값이라, 캐시가
+    // 비어 있어도 "캐시됨"이라고 말했고 마지막 갱신 시각 자리에는 방금
+    // 시각이 들어갔다 — 캐시 상태를 보러 온 사람이 얻을 것이 아무것도 없는
+    // 대신, 뭔가 확인했다는 착각만 얻었다.
+    const settings = getSettingsCacheState()
 
     return NextResponse.json({
       success: true,
-      cacheStatus,
+      // 이 응답은 **이 요청을 처리한 인스턴스 한 대**의 이야기다. 다른
+      // 인스턴스가 무엇을 들고 있는지는 알 수 없다.
+      scope: 'this-instance',
+      cacheStatus: {
+        systemSettings: {
+          cached: settings.cached,
+          // 캐시가 비어 있으면 null이다 — 시각을 지어내지 않는다.
+          cachedAt: settings.cachedAt,
+          ttlMs: settings.ttlMs,
+        },
+        // 미들웨어 캐시(`src/middleware/settings.ts`)는 Edge isolate 안에
+        // 있어 이 Node 라우트에서 읽을 수도, 비울 수도 없다. 자기 TTL이
+        // 끝나면 스스로 갈아탄다. 상태를 모르므로 모른다고 적는다.
+        middleware: {
+          invalidatable: false,
+          note: '미들웨어 설정 캐시는 Edge isolate별이라 여기서 상태를 읽거나 비울 수 없습니다. 각자의 TTL이 지나면 갈아탑니다.',
+        },
+      },
       timestamp: new Date().toISOString(),
     })
   },
