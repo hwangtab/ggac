@@ -269,6 +269,17 @@ export default function FundingManagePage() {
                 {t('fulfillment.cancelBlocked')}
               </p>
             ) : null}
+            {/* 발송 완료 표시가 실제 발송인지는 시스템이 알 수 없다. 아는
+                사람은 **소포를 기다리는 이 사람**뿐이므로, 아무것도 오지
+                않았을 때 갈 자리를 여기서 알려 준다 — 그 연락이 사무국이
+                잘못된 일괄 표시를 알아채는 유일한 경로다. */}
+            {pledge.status === 'paid' &&
+            (pledge.fulfillment_status === 'shipped' ||
+              pledge.fulfillment_status === 'delivered') ? (
+              <p className="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
+                {t('fulfillment.shippedNotice')}
+              </p>
+            ) : null}
             {canCancel || canRetryRefund ? (
               <button
                 type="button"
