@@ -9,6 +9,7 @@ import { sanitizePostHtml } from '@/utils/sanitizePostHtml'
 import { createImageProxy } from '@/utils/imageValidation'
 import { isSafeInternalPath, toSafeHttpUrl, toSafeLinkHref } from '@/utils/safeUrl'
 import { shiftMarkdownHeadings } from '@/utils/markdownHeadings'
+import { isOwnAudioUrl } from '@/utils/audioLink'
 
 interface PostContentRendererProps {
   content: string
@@ -75,6 +76,25 @@ export const PostContentRenderer: React.FC<PostContentRendererProps> = ({
           remarkPlugins={[remarkGfm]}
           components={{
             a: ({ node, href, children, ...props }) => {
+              // 우리 저장소의 음원 링크는 플레이어로 그린다. 링크 글자는 곡 설명이
+              // 된다. 문단(<p>) 안에 들어가므로 figure 대신 span으로 감싼다.
+              if (isOwnAudioUrl(href)) {
+                return (
+                  <span className="not-prose my-4 block">
+                    <span className="mb-2 block text-sm font-medium">{children}</span>
+                    {/* eslint-disable-next-line jsx-a11y/media-has-caption -- 음악 음원이라 옮길 말소리가 없다 */}
+                    <audio
+                      controls
+                      preload="metadata"
+                      controlsList="nodownload"
+                      src={href}
+                      className="w-full [color-scheme:dark]"
+                    >
+                      <a href={href}>{children}</a>
+                    </audio>
+                  </span>
+                )
+              }
               const safeHref = typeof href === 'string' ? toSafeLinkHref(href) : null
               if (!safeHref) return <span {...props}>{children}</span>
 
