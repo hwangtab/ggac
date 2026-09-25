@@ -262,7 +262,10 @@ export default async function FundingDetailPage({
               ) : null}
             </div>
 
-            <aside className="lg:sticky lg:top-24 lg:self-start">
+            <aside
+              id="pledge-form"
+              className="scroll-mt-24 lg:sticky lg:top-24 lg:max-h-[calc(100vh-8rem)] lg:self-start lg:overflow-y-auto"
+            >
               <div className="rounded-xl border border-gray-200 bg-white p-6">
                 {showFigures ? (
                   <>
