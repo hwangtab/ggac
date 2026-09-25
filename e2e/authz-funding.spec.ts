@@ -1215,6 +1215,7 @@ test.describe('펀딩 — 공개 상세 응답', () => {
           'id',
           'image_url',
           'remaining_quantity',
+          'requires_credit_name',
           'requires_shipping',
           'title',
           'total_quantity',
