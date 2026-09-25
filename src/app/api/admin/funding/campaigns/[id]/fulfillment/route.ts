@@ -148,6 +148,11 @@ export async function GET(_request: NextRequest, { params }: Ctx) {
           quantity: p.quantity,
           total_amount: p.total_amount,
           paid_at: p.paid_at ?? null,
+          // 취소된 후원이 "돈이 잡힌 적 없다"인지 "승인 뒤 환불이 불확실하게
+          // 끝났다"인지는 결제 행이 붙어 있는지로만 갈린다. 결제 식별자
+          // 자체는 싣지 않는다 — 화면이 필요한 것은 참·거짓 하나뿐이다
+          // (`pledgeRowState`).
+          has_payment: typeof p.payment_id === 'string' && p.payment_id.length > 0,
           payment_failure_message: failureMessages.get(String(p.id)) ?? null,
         })),
       marks: history.rows.map(row => {

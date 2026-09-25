@@ -31,6 +31,7 @@ import {
   type FulfillmentStatus,
 } from '@/lib/funding/fulfillment'
 import { OFFICE_REFUND_REASON_MIN } from '@/lib/funding/officeRefund'
+import { pledgeRowState } from '@/lib/funding/pledgeRowState'
 import { apiErrorMessage } from '@/utils/apiErrorMessage'
 
 interface PledgeRow {
@@ -43,6 +44,11 @@ interface PledgeRow {
   quantity: number
   total_amount: number
   paid_at: string | null
+  /**
+   * 결제 행이 붙어 있는가. 취소된 후원이 "돈이 잡힌 적 없다"인지 "승인 뒤
+   * 환불이 불확실하게 끝났다"인지를 가르는 칸이다(`pledgeRowState`).
+   */
+  has_payment: boolean
   /**
    * 결제 행에 남은 실패 사유. 취소된 후원이 "돈이 잡힌 적 없다"인지 "승인 뒤
    * 환불이 불확실하게 끝났다"인지를 가르는 유일한 문장이다.
@@ -73,10 +79,11 @@ interface Payload {
   mark_total: number
 }
 
-const STATUS_LABEL: Record<string, string> = {
-  paid: '결제 완료',
-  refunded: '환불됨',
-  canceled: '취소 처리 중',
+/** 줄의 말투. `pledgeRowState`의 tone을 화면 색으로만 옮긴다. */
+const TONE_CLASS: Record<string, string> = {
+  neutral: 'bg-gray-100 text-gray-700',
+  warn: 'bg-amber-100 text-amber-900',
+  done: 'bg-green-100 text-green-800',
 }
 
 /** 되돌릴 수 있는 목표. `delivered`로 되돌리는 일은 실무에서 없다. */
@@ -198,9 +205,21 @@ export default function FulfillmentPanel({ campaignId }: { campaignId: string })
     }
   }
 
-  async function refund(p: PledgeRow) {
+  /**
+   * 전액 환불. `retry`는 **앞선 환불이 선점까지 마치고 결과를 확인하지 못한
+   * 채 끝난 건**을 다시 거는 길이다(`pledgeRowState`의 `canRetryRefund`).
+   *
+   * 다시 걸 때 클라이언트가 보내는 표시는 없다 — 재시도인지 아닌지는 서버가
+   * 원장 두 행으로 판정한다(`planOfficeRefund`의 `retry`). 브라우저가 보낸
+   * 값으로 선점을 건너뛰게 두면 아직 살아 있는 결제를 재시도로 속일 수 있다.
+   * 여기서 `retry`가 바꾸는 것은 **사무국에게 하는 말**뿐이다.
+   */
+  async function refund(p: PledgeRow, retry = false) {
     const input = window.prompt(
-      `${p.pledge_code} (${p.backer_name}, ${won(p.total_amount)})을 전액 환불합니다.\n` +
+      (retry
+        ? `${p.pledge_code} (${p.backer_name}, ${won(p.total_amount)})의 환불을 다시 겁니다.\n` +
+          '앞서 환불이 시작됐지만 결과를 확인하지 못한 건입니다. 이미 환불됐다면 기록만 맞춰집니다.\n'
+        : `${p.pledge_code} (${p.backer_name}, ${won(p.total_amount)})을 전액 환불합니다.\n`) +
         `환불 사유를 ${OFFICE_REFUND_REASON_MIN}자 이상 적어 주세요. 이 문장이 환불 기록에 남습니다.`,
       ''
     )
@@ -212,7 +231,9 @@ export default function FulfillmentPanel({ campaignId }: { campaignId: string })
     }
     const settled = payload?.settlement_status === 'paid'
     const ok = window.confirm(
-      `${won(p.total_amount)}을 후원자에게 돌려줍니다. 이 동작은 되돌릴 수 없습니다.\n` +
+      (retry
+        ? `${won(p.total_amount)}의 환불을 다시 겁니다. 토스 거래 내역에 이미 취소가 있으면 기록만 맞춰지고 돈은 다시 나가지 않습니다.\n`
+        : `${won(p.total_amount)}을 후원자에게 돌려줍니다. 이 동작은 되돌릴 수 없습니다.\n`) +
         (p.fulfillment_status === 'shipped' || p.fulfillment_status === 'delivered'
           ? '이 후원은 발송 완료로 표시돼 있습니다. 리워드가 실제로 나갔다면 물건과 돈을 둘 다 잃습니다.\n'
           : '') +
@@ -241,7 +262,9 @@ export default function FulfillmentPanel({ campaignId }: { campaignId: string })
         if (res.status === 409) await load()
         return
       }
-      setNotice(`${p.pledge_code} — ${won(Number(json?.data?.refund_amount ?? 0))}을 환불했습니다.`)
+      setNotice(
+        `${p.pledge_code} — ${won(Number(json?.data?.refund_amount ?? 0))}을 ${retry ? '환불 처리했습니다(재시도).' : '환불했습니다.'}`
+      )
       await load()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -350,47 +373,65 @@ export default function FulfillmentPanel({ campaignId }: { campaignId: string })
                   <p className="text-sm text-gray-500">결제된 후원이 없습니다.</p>
                 ) : (
                   <ul className="divide-y divide-gray-100 rounded border border-gray-200">
-                    {payload.pledges.map(p => (
-                      <li
-                        key={p.id}
-                        className="flex flex-wrap items-center gap-2 px-2 py-1.5 text-xs"
-                      >
-                        <input
-                          type="checkbox"
-                          disabled={busy || !reversible(p)}
-                          checked={selected[p.id] === true}
-                          onChange={e =>
-                            setSelected(prev => ({ ...prev, [p.id]: e.target.checked }))
-                          }
-                          aria-label={`${p.pledge_code} 선택`}
-                        />
-                        <span className="font-mono text-gray-500">{p.pledge_code}</span>
-                        <span className="text-gray-900">{p.backer_name}</span>
-                        <span className="text-gray-600">
-                          {p.reward_title} × {p.quantity}
-                        </span>
-                        <span className="text-gray-900">{won(p.total_amount)}</span>
-                        <span className="rounded bg-gray-100 px-1.5 py-0.5 text-gray-700">
-                          {STATUS_LABEL[p.status] ?? p.status}
-                        </span>
-                        <span className="rounded bg-gray-100 px-1.5 py-0.5 text-gray-700">
-                          {FULFILLMENT_LABEL[p.fulfillment_status] ?? p.fulfillment_status}
-                        </span>
-                        {p.status === 'paid' && (
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => void refund(p)}
-                            className="ml-auto rounded border border-red-200 bg-red-50 px-2 py-0.5 font-medium text-red-700 disabled:opacity-50"
+                    {payload.pledges.map(p => {
+                      const row = pledgeRowState(p)
+                      return (
+                        <li
+                          key={p.id}
+                          className="flex flex-wrap items-center gap-2 px-2 py-1.5 text-xs"
+                        >
+                          <input
+                            type="checkbox"
+                            disabled={busy || !reversible(p)}
+                            checked={selected[p.id] === true}
+                            onChange={e =>
+                              setSelected(prev => ({ ...prev, [p.id]: e.target.checked }))
+                            }
+                            aria-label={`${p.pledge_code} 선택`}
+                          />
+                          <span className="font-mono text-gray-500">{p.pledge_code}</span>
+                          <span className="text-gray-900">{p.backer_name}</span>
+                          <span className="text-gray-600">
+                            {p.reward_title} × {p.quantity}
+                          </span>
+                          <span className="text-gray-900">{won(p.total_amount)}</span>
+                          <span
+                            className={`rounded px-1.5 py-0.5 ${TONE_CLASS[row.tone] ?? TONE_CLASS.neutral}`}
                           >
-                            전액 환불
-                          </button>
-                        )}
-                        {p.payment_failure_message && (
-                          <p className="w-full text-amber-700">{p.payment_failure_message}</p>
-                        )}
-                      </li>
-                    ))}
+                            {row.label}
+                          </span>
+                          <span className="rounded bg-gray-100 px-1.5 py-0.5 text-gray-700">
+                            {FULFILLMENT_LABEL[p.fulfillment_status] ?? p.fulfillment_status}
+                          </span>
+                          {row.canRefund && (
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => void refund(p)}
+                              className="ml-auto rounded border border-red-200 bg-red-50 px-2 py-0.5 font-medium text-red-700 disabled:opacity-50"
+                            >
+                              전액 환불
+                            </button>
+                          )}
+                          {/* 환불이 불확실하게 끝난 건. 서버는 같은 버튼을 다시
+                            누르라고 말하는데 눌러 볼 자리가 없었다. */}
+                          {row.canRetryRefund && (
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => void refund(p, true)}
+                              className="ml-auto rounded border border-amber-300 bg-amber-50 px-2 py-0.5 font-medium text-amber-800 disabled:opacity-50"
+                            >
+                              환불 재시도
+                            </button>
+                          )}
+                          {row.hint && <p className="w-full text-amber-800">{row.hint}</p>}
+                          {p.payment_failure_message && (
+                            <p className="w-full text-amber-700">{p.payment_failure_message}</p>
+                          )}
+                        </li>
+                      )
+                    })}
                   </ul>
                 )}
               </section>
