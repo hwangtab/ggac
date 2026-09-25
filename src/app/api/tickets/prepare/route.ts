@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { getOptionalUser } from '@/lib/server/memberAuth'
+import { isApprovedActive } from '@/lib/server/authz'
 import { getProfileById } from '@/db/queries/profiles'
 import { createPendingPayment } from '@/db/queries/payments'
 import {
@@ -21,6 +22,7 @@ import {
   getRemainingSeats,
   SELLABLE_PERFORMANCE_STATUSES,
   SoldOutError,
+  TooManyPendingHoldsError,
 } from '@/db/queries/ticketing'
 import { generateOrderId, buildCustomerKey } from '@/lib/payments/toss/protocol'
 import { isPaymentEnabled, getPublicClientKey } from '@/lib/payments/toss/config'
@@ -129,8 +131,24 @@ export async function POST(request: NextRequest) {
 
     // 비회원도 예매할 수 있다. 로그인했으면 예매 내역을 마이페이지에서 볼 수 있게 연결한다.
     const user = await getOptionalUser()
-    if (ticketType.members_only && !user) {
-      return ApiError.forbidden('조합원 전용 티켓입니다. 로그인 후 이용해 주세요.').toNextResponse()
+    const profile = user ? await getProfileById(user.id) : null
+
+    // **조합원 전용 티켓은 로그인만으로는 살 수 없다.** 로그인 여부만 보면
+    // 가입 신청만 해 둔 계정과 탈퇴·정지된 계정이 조합원가를 그대로 산다 —
+    // 조합의 다른 모든 조합원 전용 기능은 `승인 + 활성`을 함께 본다. 값싼
+    // 티켓을 파는 자리만 다른 기준을 쓸 이유가 없다. 조합원 전용이 아닌
+    // 티켓은 그대로 로그인도 묻지 않는다.
+    if (ticketType.members_only) {
+      if (!user) {
+        return ApiError.forbidden(
+          '조합원 전용 티켓입니다. 로그인 후 이용해 주세요.'
+        ).toNextResponse()
+      }
+      if (!isApprovedActive(profile)) {
+        return ApiError.forbidden(
+          '승인된 조합원만 예매할 수 있는 티켓입니다. 일반 티켓으로 예매해 주세요.'
+        ).toNextResponse()
+      }
     }
 
     // 금액은 서버가 정한다.
@@ -161,6 +179,11 @@ export async function POST(request: NextRequest) {
       if (error instanceof SoldOutError) {
         return ApiError.badRequest(error.message).toNextResponse()
       }
+      // 한 신원이 결제하지 않은 선점을 쌓아 좌석을 잠그는 것을 막는다. 빈도
+      // 제한과 달리 이쪽은 "동시에 몇 개를 쥐고 있는가"를 본다.
+      if (error instanceof TooManyPendingHoldsError) {
+        return ApiError.badRequest(error.message).toNextResponse()
+      }
       // 동시 예매가 몰려 자리를 잡지 못했다. 좌석이 없는 것과는 다르므로
       // 다시 시도하면 된다고 안내한다.
       log.warn('좌석 선점 실패', { showId, error: error instanceof Error ? error.message : error })
@@ -170,7 +193,6 @@ export async function POST(request: NextRequest) {
     }
 
     const orderName = `${show.performance_id ? '' : ''}${ticketType.name} ${quantity}매`
-    const profile = user ? await getProfileById(user.id) : null
 
     await createPendingPayment({
       orderId,

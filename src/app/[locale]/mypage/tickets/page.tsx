@@ -106,7 +106,12 @@ export default function MyTicketsPage() {
   )
 
   return (
-    <PermissionCheck requiredPermission="member">
+    // 로그인만 본다. 이 화면이 부르는 API 둘 다 승인을 묻지 않고 본인 소유만
+    // 본다(`/api/mypage/tickets`·`/api/tickets/cancel`은 `requireUser`). 화면만
+    // `member`로 잠가 두면 승인 대기·비활성 계정이 **자기가 돈을 내고 산 표의
+    // 예매번호를 못 보고 취소도 못 한다** — 예매 자체는 비회원도 할 수 있으므로
+    // 조합원 자격과 아무 상관이 없는 화면이다.
+    <PermissionCheck requiredPermission="user">
       <MypageLayout title="예매 내역" description="예매하신 공연과 예매번호를 확인하세요.">
         {message && (
           <div className="mb-5 rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800">

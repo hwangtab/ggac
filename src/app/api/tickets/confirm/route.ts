@@ -20,7 +20,7 @@
 
 import { NextRequest } from 'next/server'
 
-import { getPaymentByOrderId, markPaymentFailed } from '@/db/queries/payments'
+import { getPaymentByOrderId, markPaymentFailed, recordPaymentKey } from '@/db/queries/payments'
 import {
   getReservationById,
   finalizeTicketPayment,
@@ -30,6 +30,7 @@ import { assertAmountMatches, AmountMismatchError } from '@/lib/payments/toss/pr
 import {
   confirmPayment,
   cancelPayment,
+  lookupPayment,
   TossApiError,
   TossLookupError,
 } from '@/lib/payments/toss/client'
@@ -92,7 +93,10 @@ export async function POST(request: NextRequest) {
     // 아래 `reservation.order_id !== orderId` 짝 검사로도 막히지만, 그 검사가
     // 리팩터링으로 사라지면 조용히 뚫린다. 규칙을 코드에 적어 둔다.
     if (payment.kind !== 'ticket') {
-      log.error('티켓이 아닌 주문으로 예매 확정 시도', { orderId, kind: String(payment.kind ?? '') })
+      log.error('티켓이 아닌 주문으로 예매 확정 시도', {
+        orderId,
+        kind: String(payment.kind ?? ''),
+      })
       return ApiError.notFound('결제 내역을 찾을 수 없습니다.').toNextResponse()
     }
 
@@ -155,6 +159,27 @@ export async function POST(request: NextRequest) {
       ).toNextResponse()
     }
 
+    // 상태가 아직 `pending`이어도 선점 시각이 지났으면 재고 계산에서는 이미
+    // 빠진 좌석이다(`occupyingCondition`). 그 사이에 다른 관객이 마지막 자리를
+    // 잡아 결제까지 끝낼 수 있으므로, 승인 요청을 보내기 **전에** 여기서 같은
+    // 판정을 한다 — 돈이 나간 뒤에 알아봐야 환불밖에 할 수 있는 일이 없다.
+    const holdExpiresAt = reservation.hold_expires_at
+      ? new Date(String(reservation.hold_expires_at))
+      : null
+    if (
+      reservation.status === 'pending' &&
+      holdExpiresAt &&
+      holdExpiresAt.getTime() <= Date.now()
+    ) {
+      await markPaymentFailed(orderId, {
+        code: 'RESERVATION_EXPIRED',
+        message: '결제 시간이 지나 좌석이 반환되었습니다.',
+      })
+      return ApiError.badRequest(
+        '결제 시간이 지나 좌석이 반환되었습니다. 다시 예매해 주세요.'
+      ).toNextResponse()
+    }
+
     const storedAmount = Number(payment.amount)
     try {
       assertAmountMatches(storedAmount, body.amount)
@@ -179,26 +204,67 @@ export async function POST(request: NextRequest) {
 
     const { secretKey } = getServerPaymentConfig()
 
+    // 승인 호출 **전에** 결제 식별자를 원장에 새긴다. 이 한 줄이 없으면 승인은
+    // 났는데 응답이 유실된 건(타임아웃·인스턴스 종료)의 원장에 `payment_key`가
+    // 영영 비어 있고, 그러면 어떤 대사도 그 결제를 토스에서 찾을 수 없다 —
+    // 카드는 긁혔는데 좌석은 만료되고 아무도 그 사실을 모른다. 확정 트랜잭션이
+    // 같은 값을 다시 적으므로(멱등) 여기서 적어 두어도 뒤가 어긋나지 않는다.
+    await recordPaymentKey(orderId, paymentKey)
+
     let approved: Record<string, unknown>
     try {
       approved = await confirmPayment({ paymentKey, orderId, amount: storedAmount }, { secretKey })
     } catch (error) {
-      if (error instanceof TossApiError) {
+      // `ALREADY_PROCESSED_PAYMENT`는 거절이 아니다 — 우리 쪽 승인 응답이
+      // 유실된 뒤 화면이 다시 확정을 시도하면 정확히 이 코드가 온다. 그 시점에
+      // 돈은 **이미 승인돼 있다.** 다른 거절과 같이 취급해 좌석을 돌려주면
+      // 관객은 돈을 내고 표를 잃는다. 그래서 이 코드만 떼어 토스에 다시 물어보고,
+      // 정말 이 주문·이 금액의 승인이 맞을 때만 확정 경로로 넘긴다. 확인이 안 되면
+      // 취소하지 않고 "확인 중"으로 물러난다 — 취소는 되돌릴 수 없지만 재확인은
+      // 크론에 다음 기회가 있다.
+      if (error instanceof TossApiError && error.code === 'ALREADY_PROCESSED_PAYMENT') {
+        let recheck: Record<string, unknown> | null = null
+        try {
+          recheck = await lookupPayment(paymentKey, { secretKey })
+        } catch {
+          recheck = null
+        }
+        const belongsToThisOrder =
+          recheck !== null &&
+          String(recheck.status) === 'DONE' &&
+          recheck.orderId === orderId &&
+          Number(recheck.totalAmount) === storedAmount
+        if (belongsToThisOrder && recheck) {
+          approved = recheck
+        } else {
+          log.error('이미 처리된 결제 재확인 실패 — 좌석을 돌려주지 않고 보류', {
+            orderId,
+            reservationId,
+            receivedOrderId: recheck ? recheck.orderId : undefined,
+            receivedAmount: recheck ? recheck.totalAmount : undefined,
+            expectedAmount: storedAmount,
+          })
+          return ApiError.serviceUnavailable(
+            '결제 결과를 확인하는 중입니다. 잠시 후 예매 내역을 확인해 주세요.'
+          ).toNextResponse()
+        }
+      } else if (error instanceof TossApiError) {
         await markPaymentFailed(orderId, { code: error.code, message: error.message })
         // 결제가 확실히 거절됐으므로 좌석을 즉시 돌려준다 — 다음 사람이 살 수 있다.
         await cancelReservation(reservationId, { expectedOrderId: orderId })
         log.warn('예매 결제 거절', { orderId, code: error.code })
         return ApiError.badRequest(error.message).toNextResponse()
-      }
-      if (error instanceof TossLookupError) {
-        // 승인됐는지 알 수 없다. 좌석도 결제도 건드리지 않는다 — 선점은
-        // 만료로 자연히 풀리고, 결제는 대사가 실제 상태로 맞춘다.
+      } else if (error instanceof TossLookupError) {
+        // 승인됐는지 알 수 없다. 좌석도 결제도 건드리지 않는다 — 원장에는 위에서
+        // 새긴 결제 식별자가 남아 있으므로, 만료 크론이 그것으로 토스에 물어
+        // 확정하거나 만료시킨다.
         log.error('예매 결제 판단 불가', { orderId, message: error.message })
         return ApiError.serviceUnavailable(
           '결제 결과를 확인하는 중입니다. 잠시 후 예매 내역을 확인해 주세요.'
         ).toNextResponse()
+      } else {
+        throw error
       }
-      throw error
     }
 
     const approvedAtRaw =

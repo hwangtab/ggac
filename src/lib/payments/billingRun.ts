@@ -76,6 +76,18 @@ export interface BillingRunDeps {
     displayName?: string | null
     reason: string
   }) => Promise<unknown>
+  /**
+   * 청구됐는지 알 수 없어 남긴 건을 **사람에게** 알린다.
+   *
+   * 판단 불가는 일부러 선점을 남긴다(덜 걷는 것이 두 번 걷는 것보다 낫다).
+   * 그런데 그 선점을 푸는 장치가 아무것도 없어서, 아무 일도 하지 않으면 그
+   * 달 회비는 영영 `unpaid`인 채 청구 대상에서만 빠진다 — 카드가 긁혔는지도
+   * 모르는 채로. 로그는 아무도 보지 않으므로 사람에게 닿는 통로가 있어야 한다.
+   *
+   * 없으면 이 알림만 건너뛴다(테스트·수동 실행). 여기서 던져도 청구 결과를
+   * 바꾸지 않는다.
+   */
+  reportUndecided?: (input: { count: number; orderIds: string[] }) => Promise<void> | void
   log?: {
     info: (...args: unknown[]) => void
     warn: (...args: unknown[]) => void
@@ -103,6 +115,8 @@ function isUndecidable(error: unknown): boolean {
 
 export async function runBillingCharges(deps: BillingRunDeps): Promise<BillingRunResult> {
   const result: BillingRunResult = { charged: 0, failed: 0, skipped: 0, undecided: 0 }
+  // 판단 불가로 남긴 주문번호. 이것이 사무국이 토스 거래 내역에서 찾을 열쇠다.
+  const undecidedOrders: string[] = []
   const targets = await deps.listTargets()
 
   for (const target of targets) {
@@ -180,8 +194,11 @@ export async function runBillingCharges(deps: BillingRunDeps): Promise<BillingRu
       })
     } catch (error) {
       if (isUndecidable(error)) {
-        // 청구가 나갔는지 모른다. 대기 상태로 남겨 두면 대사가 실제 상태로 맞춘다.
+        // 청구가 나갔는지 모른다. 선점을 **일부러 남긴 채** 대기 상태로 둔다 —
+        // 덜 걷는 것이 두 번 걷는 것보다 낫다. 다만 그대로 두면 아무도 그 달을
+        // 다시 보지 않으므로, 아래에서 주문번호를 모아 사람에게 넘긴다.
         deps.log?.error?.('자동결제 판단 불가(대사 대기)', { userId, orderId })
+        undecidedOrders.push(orderId)
         result.undecided++
         continue
       }
@@ -224,6 +241,16 @@ export async function runBillingCharges(deps: BillingRunDeps): Promise<BillingRu
       paymentId: String(payment?.id ?? ''),
     })
     result.charged++
+  }
+
+  if (undecidedOrders.length > 0 && deps.reportUndecided) {
+    // 알림이 실패해도 청구 결과는 그대로 답한다 — 여기서 던지면 이미 끝난
+    // 청구의 결과를 크론이 못 돌려준다.
+    try {
+      await deps.reportUndecided({ count: undecidedOrders.length, orderIds: undecidedOrders })
+    } catch (error) {
+      deps.log?.error?.('판단 불가 청구 보고 실패', { error })
+    }
   }
 
   return result

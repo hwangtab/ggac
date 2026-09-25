@@ -292,3 +292,55 @@ test('판단할 수 없는 실패는 선점을 남긴다 — 덜 걷는 쪽이 �
   assert.equal(calls.released.length, 0, '판단 불가에서는 선점을 풀면 안 된다')
   assert.equal(claims.size, 1)
 })
+
+test('판단 불가로 남긴 건은 사람에게 보고한다', async () => {
+  // 선점을 남기는 것은 의도지만, 그 선점을 푸는 장치가 없다. 아무에게도
+  // 말하지 않으면 그 달 회비는 영영 `unpaid`인 채 청구 대상에서만 빠진다 —
+  // 카드가 긁혔는지도 모르는 채로.
+  const reported = []
+  const { deps } = makeDeps({
+    charge: async () => {
+      const err = new Error('타임아웃')
+      err.name = 'TossLookupError'
+      throw err
+    },
+    reportUndecided: async input => {
+      reported.push(input)
+    },
+  })
+
+  const result = await runBillingCharges(deps)
+
+  assert.equal(result.undecided, 1)
+  assert.equal(reported.length, 1)
+  assert.equal(reported[0].count, 1)
+  assert.equal(reported[0].orderIds.length, 1, '사무국이 토스에서 찾을 열쇠는 주문번호다')
+})
+
+test('판단 불가가 없으면 보고하지 않는다', async () => {
+  const reported = []
+  const { deps } = makeDeps({
+    reportUndecided: async input => {
+      reported.push(input)
+    },
+  })
+  await runBillingCharges(deps)
+  assert.equal(reported.length, 0)
+})
+
+test('보고가 실패해도 청구 결과는 그대로 돌려준다', async () => {
+  // 알림 하나 때문에 이미 끝난 청구의 결과를 잃으면 안 된다.
+  const { deps } = makeDeps({
+    charge: async () => {
+      const err = new Error('타임아웃')
+      err.name = 'TossLookupError'
+      throw err
+    },
+    reportUndecided: async () => {
+      throw new Error('메일 서버 없음')
+    },
+  })
+
+  const result = await runBillingCharges(deps)
+  assert.equal(result.undecided, 1)
+})

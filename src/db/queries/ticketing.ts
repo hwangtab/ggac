@@ -9,7 +9,7 @@
  * 되돌릴 수 없다 — 공연 당일 입장을 거절해야 하는 사고가 된다.
  */
 
-import { and, asc, desc, eq, gt, inArray, isNull, lt, lte, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, inArray, isNull, lt, lte, ne, or, sql } from 'drizzle-orm'
 
 import { db } from '../client.ts'
 import {
@@ -35,6 +35,57 @@ export const DEFAULT_HOLD_MINUTES = 10
  * 남긴다(암묵적으로 "open만 허용"에 기대지 않는다).
  */
 export const SELLABLE_PERFORMANCE_STATUSES = ['open'] as const
+
+/**
+ * 한 신원이 **한 회차의 같은 티켓 종류에** 동시에 들 수 있는 선점 수.
+ *
+ * 선점은 돈을 내지 않고 재고를 줄인다 — 그것이 예매의 순서(자리부터 잡고 결제)가
+ * 주는 이점이면서 동시에 약점이다. 빈도 제한만으로는 재고를 지키지 못한다:
+ * 분산 환경에서 Upstash가 없으면 인스턴스별 메모리로 떨어지고, 애초에 "얼마나
+ * 자주 묻는가"는 "동시에 얼마나 쥐고 있는가"와 다른 값이다. 실제 경계는 선점
+ * 트랜잭션 안에서 신원별로 세는 이 상한이다.
+ *
+ * 막는 것과 막지 못하는 것을 분명히 해 둔다. **한 신원**이 좌석을 쥔 채 결제를
+ * 미루는 것은 막는다. 연락처를 갈아 가며 도는 공격은 막지 못한다 — 그쪽
+ * 방어선은 선점이 10분 만에 스스로 풀린다는 것과 라우트의 빈도 제한이다.
+ * 그래서 이 값은 공격자가 아니라 **진짜 관객에 맞춰** 잡는다: 같은 좌석 종류를
+ * 여러 장 사려면 매수를 늘리면 되므로 3이면 넉넉하다.
+ */
+export const MAX_HOLDS_PER_TICKET_TYPE = 3
+
+/**
+ * 한 신원이 **같은 회차에** 동시에 들 수 있는 선점 수.
+ *
+ * 종류를 옮겨 가며 쌓는 것까지 막으려면 재고의 임자인 회차 단위로 한 번 더
+ * 묶어야 한다. **회차별로 센다** — 전체로 세면 같은 공연의 다른 날을 견주어
+ * 보던 관객이 네 번째 회차에서 "먼저 결제를 마치라"는 말을 듣는다. 재고는
+ * 회차마다 따로이고, 회차를 옮겨 가며 쌓는 쪽은 라우트의 빈도 제한이 받는다.
+ */
+export const MAX_HOLDS_PER_SHOW = 5
+
+/**
+ * 선점이 이미 상한만큼 쌓였다.
+ *
+ * **기존 선점을 갈아 끼우지 않는 이유**가 이 오류의 존재 이유다. 자기 선점을
+ * `expired`로 덮고 새 선점을 넣으면, 승인은 났는데 확정이 유실된 예매가 만료
+ * 스윕(`pending`만 고른다)의 눈에서 영영 사라진다 — 돈은 나갔는데 좌석도 없고
+ * 아무도 보지 않는다. 그래서 쌓이는 것만 막고 지우지는 않는다.
+ */
+export class TooManyPendingHoldsError extends Error {
+  scope: 'ticket_type' | 'show'
+  limit: number
+
+  constructor(scope: 'ticket_type' | 'show', limit: number, holdMinutes = DEFAULT_HOLD_MINUTES) {
+    super(
+      scope === 'ticket_type'
+        ? `아직 결제가 끝나지 않은 예매가 ${limit}건 있습니다. 먼저 결제를 마치시거나, 결제 대기 시간 ${holdMinutes}분이 지난 뒤에 다시 예매해 주세요. 여러 장이 필요하시면 예매할 때 매수를 늘리셔도 됩니다.`
+        : `이 회차에 아직 결제가 끝나지 않은 예매가 ${limit}건 있습니다. 먼저 결제를 마치시거나, 결제 대기 시간 ${holdMinutes}분이 지난 뒤에 다시 예매해 주세요.`
+    )
+    this.name = 'TooManyPendingHoldsError'
+    this.scope = scope
+    this.limit = limit
+  }
+}
 
 export class SoldOutError extends Error {
   remaining: number
@@ -92,6 +143,26 @@ function occupyingCondition(now: Date) {
       or(isNull(reservations.holdExpiresAt), gt(reservations.holdExpiresAt, now))
     )
   )
+}
+
+/**
+ * 선점의 임자를 무엇으로 볼 것인가 — 상한을 셀 때 "같은 사람"의 뜻이다.
+ *
+ * 로그인한 회원은 계정(`user_id`), 비회원은 숫자만 남긴 연락처다. 예매에서
+ * 이메일은 선택이지만 연락처는 필수이고, 현장에서 예매자를 대조하는 값도
+ * 연락처다 — 요청자가 스스로 바꿀 수 있는 값 중 가장 무겁다.
+ *
+ * 회원 선점과 비회원 선점은 섞지 않는다. 섞으면 남의 번호를 적어 낸 비회원이
+ * 그 회원의 상한을 대신 채워 회원의 예매를 막을 수 있다.
+ */
+function ownHoldCondition(userId: string | null | undefined, bookerPhone: string) {
+  return userId
+    ? and(eq(reservations.userId, userId), eq(reservations.status, 'pending'))
+    : and(
+        isNull(reservations.userId),
+        eq(reservations.bookerPhone, bookerPhone),
+        eq(reservations.status, 'pending')
+      )
 }
 
 /** 이 회차에서 지금 팔 수 있는 좌석 수. */
@@ -187,8 +258,8 @@ export async function holdReservation(
     try {
       return await holdReservationOnce(input)
     } catch (error) {
-      // 매진은 재시도해도 결과가 같다. 락 경합만 다시 시도한다.
-      if (error instanceof SoldOutError) throw error
+      // 매진과 상한은 재시도해도 결과가 같다. 락 경합만 다시 시도한다.
+      if (error instanceof SoldOutError || error instanceof TooManyPendingHoldsError) throw error
       if (!isLockContention(error)) throw error
       lastError = error
       await new Promise(resolve => setTimeout(resolve, 25 * (attempt + 1)))
@@ -216,6 +287,35 @@ async function holdReservationOnce(input: HoldReservationInput): Promise<Record<
       .where(eq(performanceShows.id, input.showId))
       .limit(1)
     if (!show) throw new Error('회차를 찾을 수 없습니다.')
+
+    // **신원별 선점 상한.** 세는 것도 막는 것도 이 트랜잭션 안이다. libSQL
+    // 드라이버는 트랜잭션을 `BEGIN IMMEDIATE`로 열어 첫 문장부터 쓰기 잠금을
+    // 쥐므로, 여기서 센 값과 아래 INSERT 사이에 다른 선점이 끼어들 수 없다.
+    // 겹친 요청은 `SQLITE_BUSY`가 되어 `holdReservation`의 재시도가 받는다.
+    const own = ownHoldCondition(input.userId, input.bookerPhone)
+
+    const [perType] = await tx
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(reservations)
+      .where(
+        and(
+          eq(reservations.showId, input.showId),
+          eq(reservations.ticketTypeId, input.ticketTypeId),
+          own,
+          gt(reservations.holdExpiresAt, now)
+        )
+      )
+    if (Number(perType?.count ?? 0) >= MAX_HOLDS_PER_TICKET_TYPE) {
+      throw new TooManyPendingHoldsError('ticket_type', MAX_HOLDS_PER_TICKET_TYPE, holdMinutes)
+    }
+
+    const [perShow] = await tx
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(reservations)
+      .where(and(eq(reservations.showId, input.showId), own, gt(reservations.holdExpiresAt, now)))
+    if (Number(perShow?.count ?? 0) >= MAX_HOLDS_PER_SHOW) {
+      throw new TooManyPendingHoldsError('show', MAX_HOLDS_PER_SHOW, holdMinutes)
+    }
 
     const [taken] = await tx
       .select({ total: sql<number>`COALESCE(SUM(${reservations.quantity}), 0)` })
@@ -270,6 +370,7 @@ export async function finalizeTicketPayment(input: {
   raw: unknown
 }): Promise<Record<string, unknown> | null> {
   return db.transaction(async tx => {
+    const now = new Date()
     // **읽기와 판단을 먼저, 쓰기는 나중에.** 확정할 수 없는 요청이면 아무것도
     // 쓰지 않은 채로 빠져나온다 — `tx.rollback()`은 예외를 던져 나가므로
     // "못 했다"를 값으로 돌려주는 이 계약과 맞지 않는다.
@@ -279,6 +380,52 @@ export async function finalizeTicketPayment(input: {
       .where(eq(payments.orderId, input.orderId))
       .limit(1)
     if (!payment) return null
+
+    // **선점이 만료된 뒤에 도착한 승인인가.** 만료된 `pending`은 재고 계산에서
+    // 이미 빠져 있어(`occupyingCondition`) 그 자리가 다른 관객에게 팔렸을 수
+    // 있다. 그대로 확정하면 정원을 넘겨 파는 것이고, 초과 판매는 환불로도
+    // 되돌릴 수 없다 — 공연 당일 입장을 거절해야 하는 사고가 된다.
+    //
+    // 만료됐다는 이유만으로 거절하지는 않는다. 승인이 유실된 건을 만료
+    // 크론(`/api/internal/tickets/expire`)이 뒤늦게 확정하는 경로가 있고, 자리가
+    // 그대로 남아 있다면 그 관객에게 표를 주는 것이 맞다. 그래서 묻는 것은
+    // "선점이 살아 있는가"가 아니라 **"지금도 이 매수만큼 자리가 있는가"**다.
+    // 셈에서 자기 자신은 뺀다(만료된 자기 선점은 어차피 세어지지 않지만,
+    // 살아 있는 선점으로 이 경로를 타도 결과가 같아야 한다).
+    const [held] = await tx
+      .select({
+        showId: reservations.showId,
+        quantity: reservations.quantity,
+        holdExpiresAt: reservations.holdExpiresAt,
+      })
+      .from(reservations)
+      .where(
+        and(
+          eq(reservations.id, input.reservationId),
+          eq(reservations.orderId, input.orderId),
+          eq(reservations.status, 'pending')
+        )
+      )
+      .limit(1)
+    if (held?.holdExpiresAt && held.holdExpiresAt.getTime() <= now.getTime()) {
+      const [show] = await tx
+        .select({ capacity: performanceShows.capacity })
+        .from(performanceShows)
+        .where(eq(performanceShows.id, held.showId))
+        .limit(1)
+      const [taken] = await tx
+        .select({ total: sql<number>`COALESCE(SUM(${reservations.quantity}), 0)` })
+        .from(reservations)
+        .where(
+          and(
+            eq(reservations.showId, held.showId),
+            occupyingCondition(now),
+            ne(reservations.id, input.reservationId)
+          )
+        )
+      const remaining = Math.max(0, Number(show?.capacity ?? 0) - Number(taken?.total ?? 0))
+      if (Number(held.quantity) > remaining) return null
+    }
 
     const [confirmed] = await tx
       .update(reservations)
@@ -411,11 +558,18 @@ export async function cancelReservation(
 }
 
 /**
- * 만료된 선점을 정리한다.
+ * **결제를 시작한 적 없는** 만료 선점을 정리한다. 만료 크론이 부른다.
  *
  * 재고 계산은 이미 만료를 감안하므로 이 작업이 없어도 자리는 팔린다. 다만
  * 상태가 `pending`으로 남아 있으면 관리자 화면에서 "결제 대기"가 끝없이
- * 쌓여 보이므로 주기적으로 정리한다.
+ * 쌓여 보이고, 얼마나 버려졌는지도 아무도 모른다.
+ *
+ * **원장에 결제 식별자가 새겨진 선점은 건드리지 않는다.** 확정 라우트는 승인
+ * 호출 *전에* `recordPaymentKey`로 식별자를 새긴다 — 그 값이 있다는 것은 승인
+ * 요청이 실제로 나갔다는 뜻이고, 카드가 긁혔는지는 토스에 물어봐야만 안다.
+ * 여기서 한꺼번에 `expired`로 덮으면 그 행은 `pending`만 고르는 스윕의 눈에서
+ * 영영 사라진다 — 돈은 나갔는데 좌석도 없고 아무도 보지 않는 상태다. 그런
+ * 행의 판정은 `runExpiryGuard`가 한 건씩 토스에 물어 내린다.
  *
  * @returns 정리한 건수.
  */
@@ -425,9 +579,70 @@ export async function expireStaleHolds(now: Date = new Date()): Promise<number> 
   const expired = await db
     .update(reservations)
     .set({ status: 'expired' })
-    .where(and(eq(reservations.status, 'pending'), lte(reservations.holdExpiresAt, now)))
+    .where(
+      and(
+        eq(reservations.status, 'pending'),
+        lte(reservations.holdExpiresAt, now),
+        sql`NOT EXISTS (SELECT 1 FROM payments p WHERE p.order_id = ${reservations.orderId} AND p.payment_key IS NOT NULL)`
+      )
+    )
     .returning({ id: reservations.id })
   return expired.length
+}
+
+/**
+ * 만료된 선점 목록. 만료 크론이 한 건씩 토스에 물어 확정하거나 만료시킨다.
+ *
+ * 늦게 만료된 것부터 본다 — 답을 못 내는 행이 앞을 막아 새 건이 창(기본 100건)
+ * 밖으로 밀려나는 일을 줄이려는 차례다(`src/lib/funding/expiryGuard.ts` 머리 주석).
+ */
+export async function listExpiredHolds(
+  now: Date = new Date(),
+  limit = 100
+): Promise<Record<string, unknown>[]> {
+  const rows = await db
+    .select()
+    .from(reservations)
+    .where(and(eq(reservations.status, 'pending'), lte(reservations.holdExpiresAt, now)))
+    .orderBy(desc(reservations.holdExpiresAt))
+    .limit(limit)
+  return rows.map(rowToReservation)
+}
+
+/** 이만큼 지나도 `pending`이면 스윕이 스스로 풀 수 없다고 본다. */
+export const STUCK_HOLD_AGE_MS = 24 * 60 * 60 * 1000
+
+/**
+ * 만료된 지 하루가 지났는데도 아직 `pending`인 선점.
+ *
+ * 스윕은 10분마다 돌아 확정하거나 만료시킨다. 하루가 지나도 그대로라는 것은
+ * 스윕이 답을 내지 못했다는 뜻이고(토스 조회가 계속 실패하거나 금액이 어긋난다),
+ * 그중에는 **승인된 결제가 붙어 있는데 좌석이 없는** 건이 섞일 수 있다.
+ * 자동으로 정할 수 없으므로 세어서 사람에게 넘긴다.
+ */
+export async function listStuckHolds(
+  now: Date = new Date(),
+  olderThanMs: number = STUCK_HOLD_AGE_MS,
+  limit = 100
+): Promise<Record<string, unknown>[]> {
+  const cutoff = new Date(now.getTime() - olderThanMs)
+  const rows = await db
+    .select()
+    .from(reservations)
+    .where(and(eq(reservations.status, 'pending'), lte(reservations.holdExpiresAt, cutoff)))
+    .orderBy(asc(reservations.holdExpiresAt))
+    .limit(limit)
+  return rows.map(rowToReservation)
+}
+
+/** 선점 한 건을 만료시킨다. 스윕이 토스에 물어 "승인이 없다"를 확인한 뒤 부른다. */
+export async function expireReservation(id: string): Promise<boolean> {
+  const rows = await db
+    .update(reservations)
+    .set({ status: 'expired' })
+    .where(and(eq(reservations.id, id), eq(reservations.status, 'pending')))
+    .returning({ id: reservations.id })
+  return rows.length > 0
 }
 
 export async function getReservationById(id: string): Promise<Record<string, unknown> | null> {

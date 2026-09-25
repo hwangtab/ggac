@@ -100,13 +100,17 @@ let orderSeq = 0
  * 아무 상관이 없어 원인을 찾기 어렵다.
  */
 function booking(overrides = {}) {
+  const seq = ++orderSeq
   return {
     showId,
     ticketTypeId,
-    orderId: `order-${++orderSeq}`,
+    orderId: `order-${seq}`,
     userId: null,
     bookerName: '홍길동',
-    bookerPhone: '01012345678',
+    // 선점 상한은 **신원별**로 센다(비회원은 연락처가 신원이다). 이 파일이
+    // 흉내내는 것은 대개 서로 다른 관객이므로 기본값은 예매마다 다른 번호다 —
+    // 상한 자체를 검증하는 테스트만 같은 번호를 명시한다.
+    bookerPhone: `0101${String(seq).padStart(7, '0')}`,
     bookerEmail: 'hong@test.local',
     quantity: 2,
     unitPrice: 20000,
@@ -360,6 +364,196 @@ test('매진된 회차에서 취소가 나오면 다시 팔 수 있다', async (
 
   const again = await holdReservation(booking({ showId: show, quantity: 1 }))
   assert.equal(again.status, 'pending')
+})
+
+// ---------------------------------------------------------------- 선점 상한
+
+/**
+ * 선점은 돈을 내지 않고 재고를 줄인다. 상한이 없으면 한 사람이 회차를 통째로
+ * 잠근 채 결제를 하지 않아도 되고, 그동안 진짜 관객은 표를 못 산다.
+ *
+ * 신원은 회원이면 계정, 비회원이면 연락처다. 여기서는 같은 번호를 일부러
+ * 명시해 "같은 사람"을 만든다.
+ */
+
+test('한 사람이 한 회차의 같은 종류를 상한만큼만 선점할 수 있다', async () => {
+  const { holdReservation, MAX_HOLDS_PER_TICKET_TYPE, TooManyPendingHoldsError } = await loadFresh()
+  const show = await makeShow(50)
+  const phone = '01099990001'
+
+  for (let i = 0; i < MAX_HOLDS_PER_TICKET_TYPE; i++) {
+    await holdReservation(booking({ showId: show, quantity: 1, bookerPhone: phone }))
+  }
+
+  await assert.rejects(
+    () => holdReservation(booking({ showId: show, quantity: 1, bookerPhone: phone })),
+    error => {
+      assert.ok(error instanceof TooManyPendingHoldsError)
+      assert.equal(error.scope, 'ticket_type')
+      return true
+    }
+  )
+})
+
+test('상한은 신원별이다 — 다른 사람의 예매는 막지 않는다', async () => {
+  const { holdReservation, MAX_HOLDS_PER_TICKET_TYPE } = await loadFresh()
+  const show = await makeShow(50)
+
+  for (let i = 0; i < MAX_HOLDS_PER_TICKET_TYPE; i++) {
+    await holdReservation(booking({ showId: show, quantity: 1, bookerPhone: '01099990002' }))
+  }
+
+  const other = await holdReservation(
+    booking({ showId: show, quantity: 1, bookerPhone: '01099990003' })
+  )
+  assert.equal(other.status, 'pending', '다른 관객은 그대로 예매할 수 있어야 한다')
+})
+
+test('만료된 선점은 상한에서 빠진다 — 10분 뒤에는 다시 예매할 수 있다', async () => {
+  const { holdReservation, MAX_HOLDS_PER_TICKET_TYPE } = await loadFresh()
+  const show = await makeShow(50)
+  const phone = '01099990004'
+
+  // 이미 풀린 선점(만료 시각이 과거)은 아무 자리도 쥐고 있지 않다.
+  for (let i = 0; i < MAX_HOLDS_PER_TICKET_TYPE + 2; i++) {
+    await holdReservation(
+      booking({ showId: show, quantity: 1, bookerPhone: phone, holdMinutes: -10 })
+    )
+  }
+
+  const fresh = await holdReservation(booking({ showId: show, quantity: 1, bookerPhone: phone }))
+  assert.equal(fresh.status, 'pending')
+})
+
+test('회차 단위 상한이 종류를 옮겨 가며 쌓는 것을 막는다', async () => {
+  const { holdReservation, MAX_HOLDS_PER_SHOW, TooManyPendingHoldsError } = await loadFresh()
+  const show = await makeShow(50)
+  const phone = '01099990005'
+
+  // 종류별 상한(3)만으로는 종류를 바꿔 가며 쌓을 수 있다. 재고의 임자는
+  // 회차이므로 회차 단위로 한 번 더 묶는다.
+  const now = Date.now()
+  await setupClient.execute({
+    sql: `INSERT INTO ticket_types (id, performance_id, name, price, max_per_order, members_only, sort_order, created_at, updated_at)
+          VALUES ('tt-cap-2', 'perf-1', '상한테스트석', 20000, 10, 0, 1, ?, ?)`,
+    args: [now, now],
+  })
+
+  let held = 0
+  for (const typeId of ['tt-1', 'tt-cap-2']) {
+    for (let i = 0; i < 3; i++) {
+      if (held >= MAX_HOLDS_PER_SHOW) break
+      await holdReservation(
+        booking({ showId: show, ticketTypeId: typeId, quantity: 1, bookerPhone: phone })
+      )
+      held++
+    }
+  }
+  assert.equal(held, MAX_HOLDS_PER_SHOW)
+
+  await assert.rejects(
+    () =>
+      holdReservation(
+        booking({ showId: show, ticketTypeId: 'tt-cap-2', quantity: 1, bookerPhone: phone })
+      ),
+    error => {
+      assert.ok(error instanceof TooManyPendingHoldsError)
+      assert.equal(error.scope, 'show')
+      return true
+    }
+  )
+})
+
+// ------------------------------------------- 만료된 선점의 확정 (초과 판매 방지)
+
+test('선점이 만료됐어도 자리가 남아 있으면 확정한다', async () => {
+  // 유실된 승인을 만료 크론이 뒤늦게 확정하는 경로. 자리가 그대로면 관객에게
+  // 표를 주는 것이 맞다 — 만료됐다는 이유만으로 환불하면 살 수 있었던 표를
+  // 빼앗는 것이다.
+  const mod = await loadFresh()
+  const show = await makeShow(10)
+  const held = await mod.holdReservation(booking({ showId: show, quantity: 2, holdMinutes: -1 }))
+
+  const confirmed = await confirmVia(mod, held)
+  assert.ok(confirmed, '자리가 남아 있으면 확정되어야 한다')
+  assert.equal(confirmed.status, 'confirmed')
+})
+
+test('선점이 만료된 사이 자리가 팔렸으면 확정하지 않는다', async () => {
+  // 그대로 확정하면 정원을 넘겨 판 것이 된다. 초과 판매는 환불로도 되돌릴 수
+  // 없다 — 공연 당일 입장을 거절해야 한다. 여기서 `null`을 받은 라우트·크론이
+  // 승인된 결제를 환불한다.
+  const mod = await loadFresh()
+  const show = await makeShow(2)
+
+  const stale = await mod.holdReservation(booking({ showId: show, quantity: 2, holdMinutes: -1 }))
+  // 만료된 선점은 재고에서 빠지므로 다른 관객이 그 자리를 산다.
+  const other = await mod.holdReservation(booking({ showId: show, quantity: 2 }))
+  assert.ok(await confirmVia(mod, other))
+
+  const result = await confirmVia(mod, stale)
+  assert.equal(result, null, '팔린 자리를 다시 확정하면 안 된다')
+
+  const row = await mod.getReservationById(stale.id)
+  assert.equal(row.status, 'pending', '확정하지 못했으면 아무것도 바꾸지 않는다')
+})
+
+// ---------------------------------------------------------------- 만료 스윕
+
+test('결제를 시작한 적 없는 만료 선점만 한꺼번에 정리한다', async () => {
+  // 원장에 결제 식별자가 있는 선점은 승인 요청이 실제로 나갔다는 뜻이다.
+  // 여기서 만료로 덮으면 `pending`만 고르는 스윕의 눈에서 사라져, 승인된 돈이
+  // 붙어 있어도 아무도 다시 보지 않는다.
+  const mod = await loadFresh()
+  const show = await makeShow(20)
+
+  const abandoned = await mod.holdReservation(
+    booking({ showId: show, quantity: 1, holdMinutes: -5 })
+  )
+  const attempted = await mod.holdReservation(
+    booking({ showId: show, quantity: 1, holdMinutes: -5 })
+  )
+  await seedPayment(attempted.order_id, 20000)
+  await setupClient.execute({
+    sql: `UPDATE payments SET payment_key = 'pk_live' WHERE order_id = ?`,
+    args: [attempted.order_id],
+  })
+
+  const cleaned = await mod.expireStaleHolds()
+  assert.ok(cleaned >= 1)
+
+  assert.equal((await mod.getReservationById(abandoned.id)).status, 'expired')
+  assert.equal(
+    (await mod.getReservationById(attempted.id)).status,
+    'pending',
+    '승인 여부를 물어봐야 하는 선점은 남겨 둔다'
+  )
+})
+
+test('만료 목록과 정체 목록, 한 건 만료', async () => {
+  const mod = await loadFresh()
+  const show = await makeShow(20)
+
+  const held = await mod.holdReservation(booking({ showId: show, quantity: 1, holdMinutes: -5 }))
+  const live = await mod.holdReservation(booking({ showId: show, quantity: 1 }))
+
+  const expired = await mod.listExpiredHolds()
+  assert.ok(
+    expired.some(r => r.id === held.id),
+    '만료된 선점은 스윕 목록에 있어야 한다'
+  )
+  assert.ok(!expired.some(r => r.id === live.id), '아직 살아 있는 선점은 스윕이 건드리지 않는다')
+
+  // 하루 기준으로는 아직 정체가 아니다.
+  const stuck = await mod.listStuckHolds()
+  assert.ok(!stuck.some(r => r.id === held.id))
+  // 기준을 1분으로 낮추면 같은 행이 잡힌다.
+  const stuckSoon = await mod.listStuckHolds(new Date(), 60_000)
+  assert.ok(stuckSoon.some(r => r.id === held.id))
+
+  assert.equal(await mod.expireReservation(held.id), true)
+  assert.equal(await mod.expireReservation(held.id), false, '두 번째는 바꿀 행이 없다')
+  assert.equal((await mod.getReservationById(held.id)).status, 'expired')
 })
 
 // ---------------------------------------------------------------- 공연 상태
