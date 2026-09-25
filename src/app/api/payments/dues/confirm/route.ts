@@ -18,6 +18,7 @@ import {
   markPaymentDone,
   markPaymentFailed,
   markDuesPaid,
+  recordPaymentKey,
 } from '@/db/queries/payments'
 import { assertAmountMatches, AmountMismatchError } from '@/lib/payments/toss/protocol'
 import { confirmPayment, TossApiError, TossLookupError } from '@/lib/payments/toss/client'
@@ -121,6 +122,12 @@ export async function POST(request: NextRequest) {
     }
 
     const { secretKey } = getServerPaymentConfig()
+
+    // 승인 호출 **전에** 결제 식별자를 원장에 새긴다. 이것이 없으면 승인은 났는데
+    // 응답이 유실된 건의 원장에 `payment_key`가 비어 있고, 그 결제는 토스에서
+    // 다시 찾을 방법이 없다 — 회비는 영영 미납으로 남고 다음 달 청구가 또 나간다.
+    // `markPaymentDone`이 같은 값을 다시 적으므로 여기서 적어 두어도 어긋나지 않는다.
+    await recordPaymentKey(orderId, paymentKey)
 
     let approved: Record<string, unknown>
     try {
