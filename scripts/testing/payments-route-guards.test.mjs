@@ -51,15 +51,16 @@ test('명확한 거절만 결제 실패로 기록한다', () => {
  * 남아 다음 청구가 또 나간다.
  */
 test('회비 납부는 확정하는 순간의 시계가 아니라 주문 시각으로 달을 정한다', () => {
-  // 주문이 만들어진 시각에서 청구월을 다시 얻는다.
-  assert.match(CONFIRM, /currentBillingMonth\(orderedAt\)/)
-  // 인자 없는 호출(= 지금 이 순간)을 `markDuesPaid`에 그대로 넘기지 않는다.
-  assert.doesNotMatch(CONFIRM, /billingMonth:\s*currentBillingMonth\(\)/)
+  // 주문(결제 행)에서 청구월을 다시 얻는다 — 확정 시점의 시계를 읽지 않는다.
+  assert.match(CONFIRM, /resolveDuesBillingMonth\(/)
+  assert.doesNotMatch(CONFIRM, /currentBillingMonth\(\)/)
   // 클라이언트가 보낸 달은 어느 쪽으로도 쓰지 않는다.
   assert.doesNotMatch(CONFIRM, /body\.billingMonth|body\.billing_month/)
-  // 이미 납부된 달은 건드리지 않는다(쓰기도 `unpaid`일 때만 걸린다).
-  assert.match(CONFIRM, /getDues\(/)
-  assert.match(CONFIRM, /status === 'paid'/)
+  // 승인 전에 그 달이 이미 납부인지 확인해 이중 결제 자체를 막는다.
+  assert.match(CONFIRM, /canConfirmDuesPayment\(/)
+  // 이미 납부로 연결된 건 다시 건드리지 않는다(`linkDuesMonth`가 미납 행만 쓴다).
+  assert.match(CONFIRM, /linkDuesMonth\(/)
+  assert.match(CONFIRM, /'paid-by-this'/)
 })
 
 test('준비 라우트가 금액을 클라이언트에서 받지 않는다', () => {
