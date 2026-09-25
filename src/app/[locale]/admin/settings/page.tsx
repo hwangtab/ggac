@@ -21,6 +21,12 @@ import {
   type ValidationError,
 } from '@/utils/settingsValidation'
 import { parseIntegerParam } from '@/utils/queryParams'
+import {
+  FEE_RATE_RANGE_MESSAGE,
+  FEE_RATE_VAT_NOTE,
+  feeRatePercentToBp,
+  formatFeeRatePercent,
+} from '@/lib/funding/feeRate'
 
 interface AdminSettings {
   site: {
@@ -50,8 +56,15 @@ interface AdminSettings {
     comments_enabled: boolean
     file_uploads_enabled: boolean
     funding_enabled: boolean
+    /** 조합원 요율(만분율). 화면은 퍼센트로 보여 준다. */
+    funding_fee_rate_member_bp: number
+    /** 비조합원 요율(만분율). */
+    funding_fee_rate_nonmember_bp: number
   }
 }
+
+/** 화면이 퍼센트 문자열을 들고 있는 두 칸. 키는 `features`의 필드 이름과 짝이다. */
+type FeeRateField = 'funding_fee_rate_member_bp' | 'funding_fee_rate_nonmember_bp'
 
 /**
  * 저장 시 **바뀐 값만** 골라낸다(최종 리뷰 B-3).
@@ -106,6 +119,16 @@ export default function AdminSettingsPage() {
   const [backupLoading, setBackupLoading] = useState(false)
   const [restoreLoading, setRestoreLoading] = useState(false)
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([])
+  /**
+   * 요율 칸이 **입력 중인 글자 그대로**를 들고 있는 자리. `settings`에는
+   * 옮길 수 있는 bp만 들어가므로, 여기가 없으면 "3."을 치는 순간 칸이
+   * 되감기거나 옮길 수 없는 입력이 조용히 사라진다.
+   */
+  const [feeRateInputs, setFeeRateInputs] = useState<Record<FeeRateField, string>>({
+    funding_fee_rate_member_bp: '',
+    funding_fee_rate_nonmember_bp: '',
+  })
+  const [feeRateErrors, setFeeRateErrors] = useState<Partial<Record<FeeRateField, string>>>({})
   const fileInputRef = useRef<HTMLInputElement>(null)
   const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -149,6 +172,15 @@ export default function AdminSettingsPage() {
       const json = await response.json()
       setSettings(json.data)
       savedSettingsRef.current = json.data
+      setFeeRateInputs({
+        funding_fee_rate_member_bp: formatFeeRatePercent(
+          json.data?.features?.funding_fee_rate_member_bp
+        ),
+        funding_fee_rate_nonmember_bp: formatFeeRatePercent(
+          json.data?.features?.funding_fee_rate_nonmember_bp
+        ),
+      })
+      setFeeRateErrors({})
     } catch (err) {
       console.error('Settings fetch error:', err)
       setError(err instanceof Error ? err.message : '설정 정보를 불러오는 중 오류가 발생했습니다.')
@@ -165,6 +197,16 @@ export default function AdminSettingsPage() {
       clearStatusTimer()
       setError(null)
       setSuccess(null)
+
+      // 요율 칸은 `settings`에 옮길 수 없는 입력을 담지 않는다. 그래서
+      // 여기서 막지 않으면 **화면에 적힌 것과 다른(직전의 멀쩡한) 값**이
+      // 저장되고, 사무국은 성공 메시지를 본다.
+      const badFeeRate = (Object.keys(feeRateErrors) as FeeRateField[]).find(
+        key => feeRateErrors[key]
+      )
+      if (badFeeRate) {
+        throw new Error(feeRateErrors[badFeeRate] as string)
+      }
 
       // 저장 전 전체 설정 유효성 검증
       const validationResult = validateAllSettings(settings)
@@ -265,6 +307,28 @@ export default function AdminSettingsPage() {
     } else {
       setValidationErrors(filteredErrors)
     }
+  }
+
+  /**
+   * 요율 칸 한 개의 입력을 받는다. 옮길 수 있으면 bp로 바꿔 설정에 담고,
+   * 옮길 수 없으면 **담지 않고** 범위를 말한다 — 조용히 반올림하거나 0으로
+   * 떨어뜨리지 않는다.
+   */
+  const updateFeeRate = (field: FeeRateField, text: string) => {
+    setFeeRateInputs(prev => ({ ...prev, [field]: text }))
+
+    const bp = feeRatePercentToBp(text.trim())
+    if (bp === null) {
+      setFeeRateErrors(prev => ({ ...prev, [field]: FEE_RATE_RANGE_MESSAGE }))
+      return
+    }
+
+    setFeeRateErrors(prev => {
+      const next = { ...prev }
+      delete next[field]
+      return next
+    })
+    updateSettings('features', field, bp)
   }
 
   // 백업 다운로드 함수
@@ -872,6 +936,73 @@ export default function AdminSettingsPage() {
                         켜면 조합원이 캠페인을 만들어 심사에 올릴 수 있고, 승인된 캠페인은 실제
                         결제로 후원을 받습니다. 끄면 새 개설·심사 처리·결제가 모두 막힙니다.
                       </p>
+
+                      <div className="mt-4 ml-6 border-t border-amber-200 pt-4">
+                        <p className="text-sm font-medium text-gray-700">
+                          플랫폼 수수료율 ({FEE_RATE_VAT_NOTE})
+                        </p>
+                        <p className="mt-1 text-xs text-amber-800">
+                          모금액에서 조합이 떼는 몫입니다. 두 숫자 모두{' '}
+                          <strong>{FEE_RATE_VAT_NOTE}</strong>이라 여기에 부가세를 다시 얹지
+                          않습니다.
+                        </p>
+
+                        <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                          {(
+                            [
+                              ['funding_fee_rate_member_bp', '조합원 캠페인'],
+                              ['funding_fee_rate_nonmember_bp', '비조합원 캠페인'],
+                            ] as Array<[FeeRateField, string]>
+                          ).map(([field, label]) => (
+                            <div key={field}>
+                              <label
+                                className="block text-xs font-medium text-gray-700 mb-1"
+                                htmlFor={field}
+                              >
+                                {label}
+                              </label>
+                              <div className="flex items-center">
+                                <input
+                                  id={field}
+                                  type="text"
+                                  inputMode="decimal"
+                                  value={feeRateInputs[field]}
+                                  onChange={e => updateFeeRate(field, e.target.value)}
+                                  className={`w-24 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                                    feeRateErrors[field]
+                                      ? 'border-red-300 focus:ring-red-500'
+                                      : 'border-gray-300 focus:ring-primary-500'
+                                  }`}
+                                />
+                                <span className="ml-2 text-sm text-gray-700">%</span>
+                              </div>
+                              {feeRateErrors[field] && (
+                                <p className="mt-1 text-xs text-red-600">{feeRateErrors[field]}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+
+                        {/*
+                          요율은 **승인하는 순간 캠페인에 새겨진다**
+                          (`src/lib/funding/feeRate.ts`의 `platformFeeRateFor`를
+                          승인 라우트가 부르고, 그 결과를 캠페인 행에 적는다).
+                          그래서 여기서 숫자를 바꿔도 이미 승인된 캠페인의 정산은
+                          움직이지 않는다. 이 문장을 화면에 적어 두지 않으면
+                          사무국은 "요율을 내렸으니 진행 중인 캠페인도 내려간다"고
+                          읽는다 — 그 오해는 후원자에게 돌려줄 금액을 잘못 계산하게
+                          만든다.
+                        */}
+                        <p className="mt-3 text-xs text-amber-900">
+                          바꾼 요율은 <strong>앞으로 승인하는 캠페인부터</strong> 적용됩니다. 요율은
+                          승인하는 순간 캠페인에 새겨지므로, 이미 승인된 캠페인의 정산은 여기서
+                          숫자를 바꿔도 달라지지 않습니다.
+                        </p>
+                        <p className="mt-1 text-xs text-gray-600">
+                          비조합원 요율은 지금의 개설 경로로는 붙지 않습니다 — 캠페인 개설이
+                          승인·활성 조합원에게만 열려 있기 때문입니다.
+                        </p>
+                      </div>
                     </div>
                   </div>
                 )}

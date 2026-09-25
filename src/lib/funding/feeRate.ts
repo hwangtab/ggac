@@ -113,3 +113,51 @@ export function clampFeeRateBp(raw: unknown, fallback: number): number {
   const n = Number(raw)
   return Number.isSafeInteger(n) && n >= 0 && n <= MAX_FEE_RATE_BP ? n : fallback
 }
+
+// ---------------------------------------------------------------------------
+// 사무국이 읽고 쓰는 단위 — 퍼센트
+// ---------------------------------------------------------------------------
+
+/**
+ * 저장·계산은 만분율(bp)로 하지만 **사무국은 퍼센트로 말한다.** 조합이 정한
+ * 규칙도 "3.3%·5.5%"이지 "330bp·550bp"가 아니다. 그래서 관리자 화면의 칸은
+ * 퍼센트를 받고 퍼센트를 보여 주며, bp는 이 파일 안에서만 오간다.
+ *
+ * 한 자리(1bp)가 0.01%이므로 소수점 **둘째 자리까지** 표현된다. 셋째 자리는
+ * bp로 옮길 수 없어 받지 않는다 — 반올림해서 조용히 다른 값을 저장하면
+ * 화면에 적힌 숫자와 실제로 떼는 돈이 갈라진다.
+ */
+export const MAX_FEE_RATE_PERCENT = MAX_FEE_RATE_BP / 100
+
+/**
+ * 범위를 벗어난 입력에 화면이 돌려주는 한 문장. **범위를 숫자로 말한다** —
+ * "올바른 값을 입력하세요"는 무엇이 올바른지 알려 주지 않는다.
+ */
+export const FEE_RATE_RANGE_MESSAGE = `수수료율은 0%에서 ${MAX_FEE_RATE_PERCENT}% 사이, 소수점 둘째 자리까지 입력할 수 있습니다.`
+
+/**
+ * 사무국이 입력한 퍼센트를 저장 단위(bp)로 옮긴다. 옮길 수 없으면 `null`이고,
+ * 호출부는 `FEE_RATE_RANGE_MESSAGE`를 띄운다 — **저장 가능한 다른 값으로
+ * 바꿔치기하지 않는다.**
+ *
+ * 빈 칸과 `null`·`undefined`를 따로 막는 이유: `Number('')`도 `Number(null)`도
+ * `0`이다. 그대로 두면 칸을 비운 순간 수수료가 0%로 저장된다.
+ *
+ * 부동소수점: `3.3 * 100`은 `330.00000000000006`이라 `Math.round`가 필요하고,
+ * 그 반올림이 **자릿수를 잘라내는 일까지** 하면 안 되므로 반올림 전후의 차이를
+ * 함께 본다(3.333% → 333.3 → 차이 0.3 → 거부).
+ */
+export function feeRatePercentToBp(percent: unknown): number | null {
+  if (percent === null || percent === undefined) return null
+  if (typeof percent === 'string' && percent.trim() === '') return null
+  if (typeof percent !== 'number' && typeof percent !== 'string') return null
+
+  const n = Number(percent)
+  if (!Number.isFinite(n)) return null
+
+  const scaled = n * 100
+  const bp = Math.round(scaled)
+  if (Math.abs(scaled - bp) > 1e-6) return null
+  if (bp < 0 || bp > MAX_FEE_RATE_BP) return null
+  return bp
+}

@@ -15,6 +15,7 @@
  */
 
 import { maskSensitiveSystemSetting, type SystemSettingRow } from '../../db/queries/settings.ts'
+import { clampFeeRateBp, MEMBER_FEE_RATE_BP, NONMEMBER_FEE_RATE_BP } from '../funding/feeRate.ts'
 
 export interface SettingMapping {
   key: string
@@ -107,6 +108,25 @@ export const SETTING_MAPPINGS = {
     funding_enabled: {
       key: 'funding_features',
       transform: (value: any) => value?.enabled === true,
+    },
+    // 두 수수료율. 화면은 퍼센트로 보여 주지만 오가는 값은 저장 단위(bp)
+    // 그대로다 — 퍼센트↔bp 변환은 `@/lib/funding/feeRate`의 두 함수가
+    // 전담하고, 그 자리가 화면이다.
+    //
+    // 값이 없을 때의 기본값을 소비처(`normalizeFundingSettings`)와 똑같이
+    // `clampFeeRateBp`로 낸다. 화면이 "0%"라고 적어 놓고 실제로는 3.3%를
+    // 떼는 일이 없어야 한다 — 운영 행에는 아직 옛 키(`platform_fee_rate_bp`)
+    // 하나만 있고 새 두 칸이 없으므로, 오늘 이 화면이 처음 뜰 때 읽히는 것이
+    // 바로 이 기본값이다.
+    funding_fee_rate_member_bp: {
+      key: 'funding_features',
+      transform: (value: any) =>
+        clampFeeRateBp(value?.platform_fee_rate_member_bp, MEMBER_FEE_RATE_BP),
+    },
+    funding_fee_rate_nonmember_bp: {
+      key: 'funding_features',
+      transform: (value: any) =>
+        clampFeeRateBp(value?.platform_fee_rate_nonmember_bp, NONMEMBER_FEE_RATE_BP),
     },
   },
 }
@@ -225,4 +245,29 @@ export function buildPasswordPolicyValue(
     require_special: seed?.require_special ?? false,
     history_count: seed?.history_count || 5,
   }
+}
+
+/**
+ * 펀딩 그룹의 역변환. **이 그룹만 따로 두는 이유**는 칸이 셋이기 때문이다 —
+ * 스위치 하나와 요율 둘. 다른 기능 그룹처럼 `{...seed, enabled: frontendValue}`
+ * 한 줄로 처리하면 요율을 저장할 때 그 숫자가 `enabled` 칸에 들어앉아
+ * 펀딩이 켜진 것으로 읽힌다(`330`은 truthy다). 켜면 돈이 움직이는 스위치다.
+ *
+ * 화면은 바뀐 칸만 보내므로(`diffSettings`) 보내지 않은 형제 칸은 저장값
+ * (`seed`)에 그대로 남는다.
+ */
+export function applyFundingFeatureField(
+  seed: Record<string, any>,
+  frontendKey: string,
+  frontendValue: unknown
+): Record<string, any> {
+  const next = { ...(seed ?? {}) }
+  if (frontendKey === 'funding_enabled') {
+    next.enabled = frontendValue
+  } else if (frontendKey === 'funding_fee_rate_member_bp') {
+    next.platform_fee_rate_member_bp = frontendValue
+  } else if (frontendKey === 'funding_fee_rate_nonmember_bp') {
+    next.platform_fee_rate_nonmember_bp = frontendValue
+  }
+  return next
 }
