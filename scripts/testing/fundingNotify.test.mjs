@@ -529,6 +529,34 @@ test('하루 상한을 넘긴 제출 알림은 인앱만 남고 메일이 끊긴
   assert.equal(calls.mail.length, 0, '하루 상한을 넘겼는데 메일이 나갔다')
 })
 
+test('한 사람이 하루 상한을 태워도 다른 개설자의 제출은 그대로 알린다', async () => {
+  // 개설자 하나가 오늘 프로젝트 여섯 개를 제출했다. 전체 예산(12)은 아직
+  // 남아 있고, 이 제출은 **다른 사람의 것**이다 — 침묵시킬 이유가 없다.
+  const entries = Array.from({ length: 6 }, (_, i) => ({
+    created_at: hoursAgo(2),
+    target_id: `other-${i}`,
+    user_id: 'owner-busy',
+    metadata: {},
+  }))
+  const { deps, calls } = spy({ listRecentTargetActivities: async () => entries })
+  await notify.notifyCampaignSubmitted(CAMPAIGN, { actorId: 'owner-1' }, deps)
+  assert.equal(calls.mail.length, 2, '남이 예산을 태웠다고 이 제출을 침묵시켰다')
+})
+
+test('같은 사람이 하루에 너무 많이 제출하면 그 사람 몫만 인앱으로 내려간다', async () => {
+  // 전체 상한(12)에는 한참 못 미치지만 사람별 상한(4)은 넘겼다.
+  const entries = Array.from({ length: 4 }, (_, i) => ({
+    created_at: hoursAgo(1),
+    target_id: `mine-${i}`,
+    user_id: 'owner-1',
+    metadata: {},
+  }))
+  const { deps, calls } = spy({ listRecentTargetActivities: async () => entries })
+  await notify.notifyCampaignSubmitted(CAMPAIGN, { actorId: 'owner-1' }, deps)
+  assert.equal(calls.bulk.length, 1, '관리자가 심사 목록에서 볼 인앱 알림까지 없앴다')
+  assert.equal(calls.mail.length, 0, '사람별 상한을 넘겼는데 메일이 나갔다')
+})
+
 test('활동 기록을 못 읽으면 억제하지 않고 그대로 알린다', async () => {
   const { deps, calls } = spy({
     listRecentTargetActivities: async () => {

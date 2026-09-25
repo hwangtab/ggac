@@ -77,6 +77,21 @@ export const SUBMIT_COOLDOWN_MS = 30 * 60 * 1000
 export const SUBMIT_DAILY_LIMIT = 12
 
 /**
+ * 24시간 동안 **한 사람이** 메일까지 내보낼 수 있는 심사 요청의 최대 건수.
+ *
+ * 위 전체 상한만 두면 한 사람이 그 예산을 통째로 태울 수 있다 — 하루에
+ * 프로젝트 열둘을 만들어 하나씩 제출하면, 같은 날 다른 개설자가 낸 제출은
+ * 인앱만 남는다. 상한의 목적은 메일 한도를 지키는 것이지 남의 제출을 침묵
+ * 시키는 것이 아니다.
+ *
+ * 4인 이유: 조합의 실제 제출은 한 사람이 한 주에 한두 건이라 하루 네 건이면
+ * 이미 평소의 몇 배이고, 전체 상한(12)의 삼분의 일이므로 한 사람이 전부를
+ * 태우지 못한다. 넘긴 뒤에도 **인앱 알림은 그대로 만든다** — 관리자가 심사
+ * 목록을 여는 이유가 그것이다.
+ */
+export const SUBMIT_DAILY_LIMIT_PER_OWNER = 4
+
+/**
  * 한 리워드의 전달 시기 변경을 24시간 안에 **메일로** 알리는 최대 횟수.
  *
  * 하루 한 번이다. 같은 리워드가 하루에 두 번 밀리는 일은 사실상 없고, 두 번째
@@ -97,6 +112,8 @@ export const DELIVERY_REWARD_LIMIT = 3
 export interface ThrottleLedgerEntry {
   created_at: string
   target_id?: string | null
+  /** 이 동작을 한 사람. 한 사람이 전체 상한을 태우지 못하게 세는 데 쓴다. */
+  user_id?: string | null
   metadata?: Record<string, unknown> | null
 }
 
@@ -114,6 +131,8 @@ function timeOf(entry: ThrottleLedgerEntry): number {
 export function decideCampaignSubmittedNotice(input: {
   campaignId: string
   entries: ThrottleLedgerEntry[]
+  /** 이 제출을 누른 사람. 없으면 사람별 상한은 세지 않는다. */
+  actorId?: string | null
   now?: number
 }): NoticeDecision {
   const now = input.now ?? Date.now()
@@ -126,8 +145,19 @@ export function decideCampaignSubmittedNotice(input: {
   if (repeated) return 'skip'
 
   const windowFrom = now - THROTTLE_WINDOW_MS
-  const recent = entries.filter(e => timeOf(e) >= windowFrom).length
-  if (recent >= SUBMIT_DAILY_LIMIT) return 'in_app_only'
+  const inWindow = entries.filter(e => timeOf(e) >= windowFrom)
+  // 메일 한도는 사이트 전체가 같은 통을 쓴다 — 전체 상한은 그대로 둔다.
+  if (inWindow.length >= SUBMIT_DAILY_LIMIT) return 'in_app_only'
+
+  // 그 예산을 한 사람이 통째로 태우지는 못하게 한다. 이 셈이 없으면 프로젝트를
+  // 열둘 만들어 하나씩 제출한 사람 하나가 같은 날 다른 개설자들의 제출까지
+  // 침묵시킨다 — 상한의 목적이 아니다.
+  const actorId =
+    typeof input.actorId === 'string' && input.actorId.length > 0 ? input.actorId : null
+  if (actorId) {
+    const mine = inWindow.filter(e => String(e.user_id ?? '') === actorId).length
+    if (mine >= SUBMIT_DAILY_LIMIT_PER_OWNER) return 'in_app_only'
+  }
 
   return 'send'
 }

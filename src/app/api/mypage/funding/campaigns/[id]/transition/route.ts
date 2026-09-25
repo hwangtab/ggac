@@ -89,7 +89,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // 응답 뒤에 보낸다. 맨 promise로 두면 응답과 함께 함수가 얼어 관리자에게
     // 아무것도 가지 않는다(리워드 저장 라우트와 같은 모양).
     after(() =>
-      notifyCampaignSubmitted(updated, { activityId }).catch(e => log.error('제출 알림 실패', e))
+      notifyCampaignSubmitted(updated, { activityId, actorId: auth.user.id }).catch(e =>
+        log.error('제출 알림 실패', e)
+      )
     )
   } else {
     activity.catch(e => log.warn('활동 기록 실패', e))

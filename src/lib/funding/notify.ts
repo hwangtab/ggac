@@ -46,6 +46,7 @@ import { getSiteUrl } from '../../utils/site.ts'
 import {
   DELIVERY_REWARD_LIMIT,
   SUBMIT_DAILY_LIMIT,
+  SUBMIT_DAILY_LIMIT_PER_OWNER,
   THROTTLE_WINDOW_MS,
   decideCampaignSubmittedNotice,
   decideDeliveryChangeNotice,
@@ -97,7 +98,13 @@ export interface NotifyDeps {
     since: Date
     excludeId?: string | null
   }) => Promise<
-    { created_at: string; target_id: string | null; metadata: Record<string, unknown> }[]
+    {
+      created_at: string
+      target_id: string | null
+      /** 누가 한 동작인가 — 한 사람이 전체 상한을 태우지 못하게 세는 데 쓴다. */
+      user_id?: string | null
+      metadata: Record<string, unknown>
+    }[]
   >
   getProfileEmail: (id: string) => Promise<string | null>
   getUserSettings: (userId: string) => Promise<SettingLike[]>
@@ -262,6 +269,7 @@ async function readThrottleLedger(
     return rows.map(r => ({
       created_at: r.created_at,
       target_id: r.target_id,
+      user_id: r.user_id ?? null,
       metadata: r.metadata,
     }))
   } catch (error) {
@@ -281,6 +289,11 @@ export interface NotifyThrottleOptions {
    * `logUserActivity`를 기다렸다 받은 값을 넘긴다.
    */
   activityId?: string | null
+  /**
+   * 이 동작을 누른 사람. 사람별 상한(`SUBMIT_DAILY_LIMIT_PER_OWNER`)을 세는
+   * 데만 쓴다 — 없으면 전체 상한만 본다(예전 그대로).
+   */
+  actorId?: string | null
 }
 
 /**
@@ -350,6 +363,10 @@ export async function notifyCampaignSubmitted(
     const campaignId = String(campaign.id ?? '')
     const decision = decideCampaignSubmittedNotice({
       campaignId,
+      // 라우트가 넘겨 주면 그 사람, 없으면 개설자. 사람별 상한에만 쓴다.
+      actorId:
+        options.actorId ??
+        (typeof campaign.owner_user_id === 'string' ? campaign.owner_user_id : null),
       entries: await readThrottleLedger(d, 'funding_campaign_submitted', null, options.activityId),
     })
     if (decision === 'skip') {
@@ -388,6 +405,7 @@ export async function notifyCampaignSubmitted(
       d.log.warn('심사 요청 알림이 하루 상한에 닿아 메일은 보내지 않음', {
         campaignId: maskId(campaignId),
         limit: SUBMIT_DAILY_LIMIT,
+        perOwnerLimit: SUBMIT_DAILY_LIMIT_PER_OWNER,
       })
       return
     }
