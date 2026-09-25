@@ -30,7 +30,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 
-import { requireActiveMember } from '@/lib/server/memberAuth'
+import { requireCampaignActor } from '@/lib/server/memberAuth'
 import { getCampaignById } from '@/db/queries/funding'
 import { listShippingPledges } from '@/db/queries/fundingPledges'
 import { logUserActivity } from '@/db/queries/activities'
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   })
   if (!rl.success && rl.response?.status === 429) return rl.response
 
-  const auth = await requireActiveMember()
+  const auth = await requireCampaignActor()
   if (auth instanceof NextResponse) return auth
   const { id } = await params
 

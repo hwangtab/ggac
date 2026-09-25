@@ -385,8 +385,11 @@ export default function EditCampaignPage() {
   const editScope = data?.edit_scope ?? 'none'
   const readOnly = editScope === 'none'
 
+  // 조합원 승인은 묻지 않는다 — 사무국이 대신 연 캠페인의 개설자는 조합원이
+  // 아닐 수 있다(`src/lib/funding/proxyOwner.ts`). 무엇을 볼 수 있는지는
+  // 서버가 소유로 가른다(`canManageCampaign`).
   return (
-    <PermissionCheck requiredPermission="member">
+    <PermissionCheck requiredPermission="user">
       <MypageLayout title={t('creator.editTitle')} description={t('creator.editDescription')}>
         {error ? (
           <div

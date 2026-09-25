@@ -1588,4 +1588,103 @@ test.describe('펀딩 — 관리자 대리 개설', () => {
       await adminContext.dispose()
     }
   })
+  /**
+   * 사무국이 **조합원이 아닌 회원**을 개설자로 지정해 열어 준 캠페인을, 그
+   * 개설자가 직접 열고 고치고 심사에 올린다.
+   *
+   * 여기가 한동안 막혀 있었다. 대리 개설은 비조합원을 개설자로 받는데
+   * (`src/lib/funding/proxyOwner.ts` — 승인 때 5.5%가 붙는다) 개설자 화면과
+   * API는 `requireActiveMember`·`canManageCampaign`이 함께 승인·활성을
+   * 요구해서, 주인이 **자기 캠페인에서 403**을 받았다. 사무국이 모든 편집을
+   * 대신 해 주지 않는 한 손댈 수 없는 물건이었다.
+   *
+   * 마지막 두 단정이 경계가 헐리지 않았음을 말한다 — 비조합원은 여전히
+   * **스스로 개설하지 못하고**(개설은 사무국 대리 경로로만), 남의 캠페인에도
+   * 닿지 못한다.
+   */
+  test('조합원이 아닌 개설자도 자기 캠페인을 열고 고치고 심사에 올린다', async ({ baseURL }) => {
+    const adminContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('admin'),
+    })
+    const pendingContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('pending'),
+    })
+    const otherContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('other'),
+    })
+    try {
+      const created = await adminContext.post('/api/admin/funding/campaigns', {
+        data: body(fixtures.users.pending, {
+          title: `비조합원 개설자 ${Date.now()}`,
+          story: '사무국이 열어 주고, 나머지는 개설자가 직접 한다.',
+        }),
+      })
+      expect(created.status(), await created.text()).toBe(201)
+      const campaignId = ((await created.json()).data.campaign as { id: string }).id
+      createdIds.push(campaignId)
+
+      // 1) 자기 캠페인을 읽는다.
+      const detail = await pendingContext.get(`/api/mypage/funding/campaigns/${campaignId}`)
+      expect(detail.status(), await detail.text()).toBe(200)
+
+      // 2) 고친다.
+      const patched = await pendingContext.patch(`/api/mypage/funding/campaigns/${campaignId}`, {
+        data: { summary: '개설자가 직접 고친 소개' },
+      })
+      expect(patched.status(), await patched.text()).toBe(200)
+
+      // 3) 리워드를 넣는다 — 리워드가 없으면 심사에 올릴 수 없다.
+      const rewards = await pendingContext.put(
+        `/api/mypage/funding/campaigns/${campaignId}/rewards`,
+        {
+          data: {
+            rewards: [
+              {
+                title: '음반 한 장',
+                description: '개설자가 직접 넣은 리워드',
+                amount: 30000,
+                total_quantity: 10,
+                requires_shipping: false,
+                sort_order: 0,
+              },
+            ],
+          },
+        }
+      )
+      expect(rewards.status(), await rewards.text()).toBe(200)
+
+      // 4) 심사에 올린다.
+      const submitted = await pendingContext.post(
+        `/api/mypage/funding/campaigns/${campaignId}/transition`,
+        { data: { action: 'submit' } }
+      )
+      expect(submitted.status(), await submitted.text()).toBe(200)
+      expect((await readCampaignRow(campaignId))?.status).toBe('submitted')
+
+      // 5) 그래도 **스스로 개설하지는 못한다** — 비조합원 캠페인은 사무국 대리
+      //    개설로만 생긴다.
+      const selfCreate = await pendingContext.post('/api/mypage/funding/campaigns', {
+        data: {
+          title: '비조합원이 스스로 열려 한다',
+          summary: '막혀야 한다',
+          goal_amount: 100000,
+          agreedCreatorTerms: true,
+        },
+      })
+      expect(selfCreate.status(), await selfCreate.text()).toBe(403)
+
+      // 6) 남의 캠페인에는 여전히 닿지 못한다.
+      const stranger = await otherContext.patch(`/api/mypage/funding/campaigns/${campaignId}`, {
+        data: { summary: '남이 고치려 한다' },
+      })
+      expect(stranger.status()).toBe(404)
+    } finally {
+      await adminContext.dispose()
+      await pendingContext.dispose()
+      await otherContext.dispose()
+    }
+  })
 })

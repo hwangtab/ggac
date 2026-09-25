@@ -309,6 +309,11 @@ webServer에 `{...process.env, ...webServer.env}`를 넘긴다. e2e 전용 변�
   `authz-features`·`authz-email-verification` 9개 스펙
 - `authz-public`: `authz-boundaries` 21건
 
+**실측 기준선(2026-09-25, 비조합원 개설자 경로를 연 뒤):** 총 146건 중
+**145 passed, 0 failed, 1 skipped.** 늘어난 하나는 사무국이 대신 열어 준 캠페인을
+**조합원이 아닌 개설자**가 직접 읽고 고치고 심사에 올리는 길이다(그러면서도 스스로
+개설하지는 못하고, 남의 캠페인에도 닿지 못한다).
+
 **실측 기준선(2026-09-25, 사무국 대리 개설 뒤):** 총 145건 중
 **144 passed, 0 failed, 1 skipped.** 늘어난 둘은 대리 개설의 소유 경계와, 사무국이
 개설부터 승인·공개까지 혼자 가는 흐름이다.
@@ -1035,7 +1040,7 @@ EXPLAIN QUERY PLAN SELECT count(*) FROM notifications WHERE user_id = '<아무 �
 가드도 타입 검사도 통과한다. 가드는 **"이 문자열이 이 파일에 있는가"**만 보고
 도달 가능성·실행 순서·데이터 흐름을 보지 않는다.
 
-**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 144 passed, 실행 절차는
+**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 145 passed, 실행 절차는
 위 "권한 E2E" 절). 같은 감사에서 **E2E는 관리자 게이트 무력화를 실제로 잡았다.**
 
 `assert-runtime-risks.mjs`가 여전히 값을 하는 자리는 **지워진 것**(게이트를 통째로

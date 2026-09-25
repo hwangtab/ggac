@@ -237,7 +237,12 @@ export interface MypageMenuItem {
 
 export interface PermissionCheckProps {
   children: React.ReactNode
-  requiredPermission: 'member' | 'artist' | 'admin'
+  /**
+   * `'user'`는 **로그인만** 본다. 조합원 승인은 묻지 않는다 — 사무국이 대신
+   * 연 캠페인의 개설자가 조합원이 아닐 수 있고(`src/lib/funding/proxyOwner.ts`),
+   * 그 사람도 자기 캠페인 화면에는 들어와야 한다.
+   */
+  requiredPermission: 'user' | 'member' | 'artist' | 'admin'
   fallback?: React.ReactNode
   redirectTo?: string
 }

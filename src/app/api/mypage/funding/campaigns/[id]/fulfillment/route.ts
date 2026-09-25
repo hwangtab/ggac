@@ -24,7 +24,7 @@
  */
 import { NextRequest, NextResponse, after } from 'next/server'
 
-import { requireActiveMember } from '@/lib/server/memberAuth'
+import { requireCampaignActor } from '@/lib/server/memberAuth'
 import { getCampaignById } from '@/db/queries/funding'
 import { advanceFulfillment } from '@/db/queries/fundingPledges'
 import { logUserActivity } from '@/db/queries/activities'
@@ -73,7 +73,7 @@ const MAX_PLEDGES_PER_REQUEST = MAX_BULK_RECIPIENTS
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!(await isFundingEnabled()))
     return ApiError.serviceUnavailable('펀딩을 준비 중입니다.').toNextResponse()
-  const auth = await requireActiveMember()
+  const auth = await requireCampaignActor()
   if (auth instanceof NextResponse) return auth
   const { id } = await params
 

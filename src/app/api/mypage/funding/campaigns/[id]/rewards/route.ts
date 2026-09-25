@@ -4,7 +4,7 @@
  */
 import { NextRequest, NextResponse, after } from 'next/server'
 
-import { requireActiveMember } from '@/lib/server/memberAuth'
+import { requireCampaignActor } from '@/lib/server/memberAuth'
 import { getCampaignById, listRewards, applyRewardBatch } from '@/db/queries/funding'
 import { isLockContention } from '@/db/queries/_helpers'
 import { logUserActivity } from '@/db/queries/activities'
@@ -89,7 +89,7 @@ async function handlePut(request: NextRequest, params: Promise<{ id: string }>) 
   })
   if (rl.success === false && rl.response?.status === 429) return rl.response
 
-  const auth = await requireActiveMember()
+  const auth = await requireCampaignActor()
   if (auth instanceof NextResponse) return auth
   const { id } = await params
   // 본문을 **먼저** 끝까지 읽는다. 상태를 읽고 편집 범위를 정한 뒤에 읽으면,
