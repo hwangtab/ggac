@@ -1687,4 +1687,59 @@ test.describe('펀딩 — 관리자 대리 개설', () => {
       await otherContext.dispose()
     }
   })
+  /**
+   * 위 테스트는 API만 두드린다. 그런데 개설자가 실제로 가는 길은 **메일에 실린
+   * 링크**(`/mypage/funding/{id}`)이고, 그 앞에는 API 게이트가 아니라
+   * 미들웨어가 서 있다 — `src/middleware/auth.ts`가 `/mypage` 전체를
+   * 승인·활성 조합원 전용으로 묶고 있었다. 라우트와 화면을 아무리 열어 둬도
+   * 비조합원 개설자는 화면을 한 번도 못 봤고, 승인·심사 결과 메일의 링크가
+   * 전부 `/register/pending`으로 튕겼다. API 단정만으로는 그 사실이 드러나지
+   * 않는다.
+   *
+   * 뒤의 두 단정이 예외가 `/mypage`를 통째로 열지 않았음을 말한다 — 개설
+   * 화면과 나머지 마이페이지는 여전히 조합원 전용이다.
+   */
+  test('조합원이 아닌 개설자는 자기 프로젝트 화면에 실제로 들어간다 (미들웨어)', async ({
+    baseURL,
+    browser,
+  }) => {
+    const adminContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('admin'),
+    })
+    const pendingBrowser = await browser.newContext({
+      storageState: storageStatePath('pending'),
+    })
+    try {
+      const created = await adminContext.post('/api/admin/funding/campaigns', {
+        data: body(fixtures.users.pending, {
+          title: `비조합원 화면 진입 ${Date.now()}`,
+        }),
+      })
+      expect(created.status(), await created.text()).toBe(201)
+      const campaignId = ((await created.json()).data.campaign as { id: string }).id
+      createdIds.push(campaignId)
+
+      const page = await pendingBrowser.newPage()
+
+      // 1) 메일에 실려 나가는 바로 그 주소에 머문다.
+      await page.goto(`/mypage/funding/${campaignId}`, { waitUntil: 'domcontentloaded' })
+      await expect(page).toHaveURL(new RegExp(`/mypage/funding/${campaignId}`), { timeout: 15000 })
+
+      // 2) 목록도 열린다.
+      await page.goto('/mypage/funding', { waitUntil: 'domcontentloaded' })
+      await expect(page).toHaveURL(/\/mypage\/funding$/, { timeout: 15000 })
+
+      // 3) 그래도 **스스로 개설하는 화면**은 조합원 전용이다.
+      await page.goto('/mypage/funding/new', { waitUntil: 'domcontentloaded' })
+      await expect(page).toHaveURL(/\/register\/pending$/, { timeout: 15000 })
+
+      // 4) 마이페이지의 나머지도 그대로 닫혀 있다 — 예외는 프로젝트 화면뿐이다.
+      await page.goto('/mypage/profile', { waitUntil: 'domcontentloaded' })
+      await expect(page).toHaveURL(/\/register\/pending$/, { timeout: 15000 })
+    } finally {
+      await adminContext.dispose()
+      await pendingBrowser.close()
+    }
+  })
 })

@@ -111,6 +111,23 @@ export async function handleAuth(
       authPathname.startsWith('/board-room/assembly') ||
       authPathname.startsWith('/board-room/documents') ||
       authPathname === '/board-room/charter')
+  // 펀딩 프로젝트 개설자는 **조합원이 아닐 수 있다.** 사무국이 대신 열어 준
+  // 프로젝트의 주인은 승인 대기이거나 거부된 계정인 채로 자기 프로젝트를
+  // 열고 고치고 심사에 올린다 — 라우트(`requireCampaignActor`)와 화면
+  // (`PermissionCheck requiredPermission="user"`)이 이미 그렇게 열려 있고,
+  // 경계는 승인 여부가 아니라 **소유권**(`canManageCampaign`)이 지킨다.
+  //
+  // 그런데 이 미들웨어가 `/mypage` 전체를 승인·활성 조합원 전용으로 묶고
+  // 있어서, 그 화면들은 정작 그들에게 한 번도 뜨지 않았다. 승인·심사 결과
+  // 메일에 실려 나가는 링크(`/mypage/funding/{id}`)가 전부
+  // `/register/pending`으로 튕겼다.
+  //
+  // 개설(`/mypage/funding/new`)은 조합원만 한다 — `POST /api/mypage/funding/
+  // campaigns`가 `requireActiveMember`로 남아 있고 화면도 `'member'`다.
+  // 로그인 자체는 아래 보호 경로 판정이 그대로 요구한다.
+  const isFundingOwnerPage =
+    authPathname !== '/mypage/funding/new' &&
+    (authPathname === '/mypage/funding' || authPathname.startsWith('/mypage/funding/'))
   const isProtectedPage =
     authPathname.startsWith('/admin') ||
     authPathname.startsWith('/mypage') ||
@@ -344,7 +361,7 @@ export async function handleAuth(
 
   // 2.3. 보호된 페이지에 접근 시 권한 확인
   if (isProtectedPage) {
-    if (userStatus !== 'approved' || !isActive) {
+    if ((userStatus !== 'approved' || !isActive) && !isFundingOwnerPage) {
       // 승인되지 않거나 비활성화된 사용자는 게시판/관리자 페이지 접근 불가
       return {
         response: redirectToPath(request, '/register/pending'),
