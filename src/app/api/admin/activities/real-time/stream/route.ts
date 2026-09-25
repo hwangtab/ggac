@@ -6,6 +6,13 @@ import { getRealTimeActivityFeed } from '@/db/queries/activities'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
+/**
+ * 진짜 상한은 이 값이다 — Vercel이 함수를 여기서 자른다. 명시하지 않으면
+ * 플랫폼 기본값(300초)이 조용히 적용되는데, 그 값이 아래 `MAX_DURATION_MS`와
+ * 같으면 스트림은 **매번** 자기 종료를 내지 못하고 플랫폼에 잘려 런타임
+ * 오류로 기록된다. 정상 종료가 오류 로그로 남으면 진짜 오류가 그 안에 묻힌다.
+ */
+export const maxDuration = 300
 
 export const GET = defineStreamRoute({
   method: 'GET',
@@ -81,7 +88,11 @@ export const GET = defineStreamRoute({
         }
 
         // 첫 전송 + 주기적 전송
-        const MAX_DURATION_MS = 5 * 60 * 1000 // 5분 최대 연결 시간
+        // 위 `maxDuration`(300초)보다 **의미 있게 짧게** 둔다. 이 타이머가 먼저
+        // 울어야 아래 `event:close`를 내보내고 컨트롤러를 스스로 닫을 수 있다 —
+        // 클라이언트는 그 신호를 보고 재연결한다. 같은 값으로 두면 경합에서
+        // 플랫폼이 이기고 연결이 그냥 끊긴다.
+        const MAX_DURATION_MS = 4.5 * 60 * 1000 // 4분 30초 — 플랫폼 상한보다 30초 앞선다
         const startTime = Date.now()
         let timer: any
 
