@@ -39,7 +39,8 @@ async function readCampaignRow(id: string) {
   const client = createClient({ url: process.env.TURSO_DATABASE_URL! })
   try {
     const res = await client.execute({
-      sql: `SELECT title, summary, goal_amount, status, submitted_at, review_note, owner_user_id, terms_version
+      sql: `SELECT title, summary, goal_amount, status, submitted_at, review_note, owner_user_id, terms_version,
+                   platform_fee_rate, slug
               FROM funding_campaigns WHERE id = ?`,
       args: [id],
     })
@@ -1430,6 +1431,112 @@ test.describe('펀딩 — 관리자 대리 개설', () => {
       await anonContext.dispose()
       await otherContext.dispose()
       await adminContext.dispose()
+    }
+  })
+
+  /**
+   * 사무국이 개설부터 공개까지 **혼자** 간다.
+   *
+   * 실제 운영에서 열에 아홉은 사무국이 대신 여는 경우다 — 창작자는 계정만 있고
+   * 화면을 다루지 못한다. 그래서 "대신 만들 수 있다"만으로는 부족하고, 만든 뒤
+   * 리워드를 넣고, 심사에 올리고, 승인해 공개하는 데까지 관리자 세션 하나로
+   * 끊김 없이 가야 한다. 이 테스트가 그 길을 API로 걷는다.
+   *
+   * 끝에서 셋을 단정한다 — 캠페인이 공개(`active`)됐고, 소유자는 여전히 지정한
+   * 회원이며(사무국이 아니다), 요율은 그 회원의 자격(조합원 3.3%)으로 새겨졌다.
+   * 그리고 무관한 조합원은 그 캠페인을 여전히 남의 것으로 본다 — 대리 개설이
+   * 소유 경계를 헐지 않았다.
+   */
+  test('사무국이 대신 만들고, 리워드를 넣고, 제출하고, 승인해 공개까지 혼자 간다', async ({
+    baseURL,
+  }) => {
+    const adminContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('admin'),
+    })
+    const otherContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('other'),
+    })
+    try {
+      // 1) 대신 만든다.
+      const created = await adminContext.post('/api/admin/funding/campaigns', {
+        data: body(fixtures.users.owner, {
+          title: '사무국이 끝까지 대신 여는 프로젝트',
+          story: '창작자는 계정만 있다. 나머지는 사무국이 한다.',
+        }),
+      })
+      expect(created.status()).toBe(201)
+      const campaignId = ((await created.json()).data.campaign as { id: string }).id
+      createdIds.push(campaignId)
+
+      // 2) 편집 경로로 내용을 고친다 — 개설자 화면이 쓰는 그 라우트를 관리자가 쓴다.
+      const patched = await adminContext.patch(`/api/mypage/funding/campaigns/${campaignId}`, {
+        data: { summary: '사무국이 고친 소개' },
+      })
+      expect(patched.status(), await patched.text()).toBe(200)
+
+      // 3) 리워드를 넣는다 — 리워드가 없으면 심사에 올릴 수 없다.
+      const rewards = await adminContext.put(
+        `/api/mypage/funding/campaigns/${campaignId}/rewards`,
+        {
+          data: {
+            rewards: [
+              {
+                title: '음반 한 장',
+                description: '사무국이 대신 넣은 리워드',
+                amount: 30000,
+                total_quantity: 10,
+                requires_shipping: false,
+                sort_order: 0,
+              },
+            ],
+          },
+        }
+      )
+      expect(rewards.status(), await rewards.text()).toBe(200)
+
+      // 4) 심사에 올린다 — 제출은 소유자 또는 관리자의 몫이다.
+      const submitted = await adminContext.post(
+        `/api/mypage/funding/campaigns/${campaignId}/transition`,
+        { data: { action: 'submit' } }
+      )
+      expect(submitted.status(), await submitted.text()).toBe(200)
+
+      // 5) 심사 목록에서 판 번호와 예정 요율을 읽는다.
+      const listed = await adminContext.get('/api/admin/funding/campaigns?status=submitted')
+      expect(listed.status()).toBe(200)
+      const mine = ((await listed.json()).data.campaigns as Array<Record<string, unknown>>).find(
+        c => c.id === campaignId
+      )
+      expect(mine, '심사 대기 목록에 있어야 한다').toBeTruthy()
+      const feePreview = mine!.fee_preview as { rate_bp: number; is_member: boolean } | undefined
+      expect(feePreview?.is_member, '지정한 회원은 승인·활성 조합원이다').toBe(true)
+      expect(feePreview?.rate_bp).toBe(330)
+
+      // 6) 승인한다 — 주소는 사무국이 정하고, 읽은 판에만 도장이 찍힌다.
+      const slug = `office-run-${Date.now()}`
+      const approved = await adminContext.post(
+        `/api/admin/funding/campaigns/${campaignId}/transition`,
+        { data: { action: 'approve', slug, reviewedVersion: mine!.updated_at } }
+      )
+      expect(approved.status(), await approved.text()).toBe(200)
+
+      // 7) 공개됐고, 소유자는 여전히 그 회원이며, 요율은 그 회원의 자격으로 새겨졌다.
+      const row = await readCampaignRow(campaignId)
+      expect(row?.status).toBe('active')
+      expect(row?.owner_user_id).toBe(fixtures.users.owner)
+      expect(Number(row?.platform_fee_rate)).toBe(330)
+      expect(row?.slug).toBe(slug)
+
+      // 8) 대리 개설이 소유 경계를 헐지 않았다 — 무관한 조합원에게는 여전히 남의 것.
+      const stranger = await otherContext.patch(`/api/mypage/funding/campaigns/${campaignId}`, {
+        data: { summary: '남이 고치려 한다' },
+      })
+      expect(stranger.status()).toBe(404)
+    } finally {
+      await adminContext.dispose()
+      await otherContext.dispose()
     }
   })
 })
