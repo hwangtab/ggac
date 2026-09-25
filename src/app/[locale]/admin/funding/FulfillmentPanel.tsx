@@ -24,6 +24,7 @@ import { useCallback, useState } from 'react'
 
 import {
   allowedReversalSourcesFor,
+  campaignAllowsSelfCancel,
   FULFILLMENT_LABEL,
   FULFILLMENT_REVERSAL_KIND_LABEL,
   FULFILLMENT_REVERSAL_REASON_MIN,
@@ -157,8 +158,11 @@ export default function FulfillmentPanel({ campaignId }: { campaignId: string })
     }
     // 경계 아래로 내려가는 건은 **자동 환불이 다시 열린다.** 원래 규칙이
     // 막으려던 바로 그 일이므로, 누르기 전에 그 말을 그대로 한다.
+    // 마감된 캠페인에서는 이행 빗장을 풀어도 후원자 취소 라우트가 닫혀
+    // 있다(`campaignAllowsSelfCancel`). 열리지도 않는 것을 열린다고 적지 않는다.
     const reopens =
       target === 'none' &&
+      campaignAllowsSelfCancel(payload?.campaign.status) &&
       chosen.some(p => p.fulfillment_status === 'shipped' || p.fulfillment_status === 'delivered')
     const ok = window.confirm(
       `${chosen.length}건의 리워드 이행 상태를 '${FULFILLMENT_LABEL[target]}'으로 되돌립니다.\n` +

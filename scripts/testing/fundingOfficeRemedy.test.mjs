@@ -193,20 +193,38 @@ test('비회원에게는 후원번호를 함께 준다 — 조회 화면이 그 
 test('되돌리기 정정 문안은 직접 취소가 열렸는지에 따라 갈린다', () => {
   const reopened = n.buildFulfillmentReversedNotice(
     { user_id: 'u1', pledge_code: 'FND-2' },
-    { title: '첫 정규 앨범' },
+    { title: '첫 정규 앨범', status: 'active' },
     'https://ggac.kr',
     true
   )
   assert.ok(reopened.message.includes('직접 전액 취소'))
   const kept = n.buildFulfillmentReversedNotice(
     { user_id: 'u1', pledge_code: 'FND-2' },
-    { title: '첫 정규 앨범' },
+    { title: '첫 정규 앨범', status: 'active' },
     'https://ggac.kr',
     false
   )
   assert.ok(!kept.message.includes('직접 전액 취소'))
   // 앞의 안내를 정정한다는 것이 제목에서 분명해야 한다.
   assert.ok(reopened.title.includes('정정'))
+})
+
+test('마감된 캠페인에서는 "직접 취소하실 수 있습니다"라고 말하지 않는다', () => {
+  // 이행 쪽 빗장은 풀렸지만 취소 라우트는 캠페인이 active일 때만 연다.
+  // 여기서 직접 취소를 안내하면 후원자는 취소 버튼이 없는 화면에 닿는다.
+  for (const status of ['closed', 'settled']) {
+    const notice = n.buildFulfillmentReversedNotice(
+      { user_id: 'u1', pledge_code: 'FND-2' },
+      { title: '첫 정규 앨범', status },
+      'https://ggac.kr',
+      true
+    )
+    assert.ok(!notice.message.includes('직접 전액 취소'), status)
+    assert.ok(notice.message.includes('직접 취소하실 수는 없습니다'), status)
+    // 스스로 못 한다고만 말하면 막다른 길이다 — 어디로 가면 되는지 함께.
+    assert.ok(notice.message.includes('contact@ggac.kr'), status)
+    assert.ok(notice.message.includes('전액 환불'), status)
+  }
 })
 
 // ------------------------------------------------------------ ⑤ 트랜잭션과 토스

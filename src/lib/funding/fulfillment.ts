@@ -139,6 +139,19 @@ export function reopensSelfCancel(from: FulfillmentStatus, to: FulfillmentStatus
   return rank(from) >= SENT_RANK && to === 'none'
 }
 
+/**
+ * 이 캠페인 상태에서 후원자가 **스스로** 전액 취소를 할 수 있는가.
+ *
+ * `reopensSelfCancel`은 이행 표시만 본다 — 발송 표시를 `none`으로 되돌리면
+ * 이행 쪽 빗장은 풀린다. 그런데 후원자 취소 라우트
+ * (`src/app/api/funding/pledges/cancel/route.ts`)는 캠페인이 `active`일
+ * 때만 연다. 마감된 캠페인에서 빗장 하나만 풀고 "이제 직접 취소하실 수
+ * 있습니다"라고 알리면, 후원자는 취소 버튼이 없는 화면에 도착한다.
+ */
+export function campaignAllowsSelfCancel(status: unknown): boolean {
+  return status === 'active'
+}
+
 /** 발송 경계를 거꾸로 넘는가 — 후원자에게 "보냈습니다"라고 이미 말한 건인가. */
 export function crossesSentBoundaryBackward(
   from: FulfillmentStatus,

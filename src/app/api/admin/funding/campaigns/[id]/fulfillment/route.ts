@@ -56,6 +56,7 @@ import {
   isFulfillmentReversalKind,
   isFulfillmentStatus,
   isSweepingMark,
+  campaignAllowsSelfCancel,
   reopensSelfCancel,
   FULFILLMENT_ORDER,
   FULFILLMENT_REVERSAL_REASON_MAX,
@@ -254,7 +255,15 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     const updated = [...crossed, ...quiet]
 
     // 되돌리기는 자동 환불을 다시 열 수 있다 — 기록을 흘려보내지 않는다.
-    const reopened = crossingFrom.some(from => reopensSelfCancel(from, to)) ? crossed.length : 0
+    //
+    // 다만 **이행 쪽 빗장이 풀린 것**과 **후원자가 실제로 직접 취소할 수
+    // 있게 된 것**은 다르다. 취소 라우트는 캠페인이 `active`일 때만 열린다
+    // (`campaignAllowsSelfCancel`). 마감된 캠페인에서 둘을 같은 것으로 세면,
+    // 기록과 화면이 "N건의 직접 취소가 열렸다"고 말하는데 후원자 화면에는
+    // 취소 버튼이 없다.
+    const fulfillmentUnlocked = crossingFrom.some(from => reopensSelfCancel(from, to))
+    const reopened =
+      fulfillmentUnlocked && campaignAllowsSelfCancel(campaign.status) ? crossed.length : 0
     try {
       await logUserActivity({
         user_id: auth.user.id,
@@ -286,7 +295,9 @@ export async function POST(request: NextRequest, { params }: Ctx) {
 
     // 앞서 "보냈습니다"를 받은 사람에게만 정정을 보낸다.
     if (crossed.length > 0) {
-      const selfCancelReopened = reopened > 0
+      // 문안은 빗장이 풀렸는지를 받아, 캠페인 상태를 보고 스스로 갈라 쓴다 —
+      // 마감된 캠페인이면 "사무국으로 알려 주세요"가 된다.
+      const selfCancelReopened = fulfillmentUnlocked
       after(() =>
         notifyFulfillmentReversed(
           campaign,

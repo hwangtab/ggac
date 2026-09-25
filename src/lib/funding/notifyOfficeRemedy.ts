@@ -43,6 +43,7 @@ import {
   sendManyEmails,
   type NoticeCopy,
 } from './notifyContent.ts'
+import { campaignAllowsSelfCancel } from './fulfillment.ts'
 
 const log = createLogger('funding/notifyOfficeRemedy')
 
@@ -110,14 +111,24 @@ export function buildFulfillmentReversedNotice(
   pledge: Record<string, unknown>,
   campaign: Record<string, unknown> | null,
   siteUrl: string,
-  /** 되돌린 뒤 이 후원자가 다시 직접 취소할 수 있는가. */
+  /**
+   * 되돌리면서 **이행 쪽 빗장**이 풀렸는가(`reopensSelfCancel`). 이것만으로
+   * 후원자가 직접 취소할 수 있게 되는 것은 아니다 — 캠페인이 `active`가
+   * 아니면 취소 라우트가 여전히 닫혀 있다.
+   */
   selfCancelReopened: boolean
 ): NoticeCopy {
   const urls = fundingUrls(siteUrl)
   const title = typeof campaign?.title === 'string' ? campaign.title : '프로젝트'
-  const tail = selfCancelReopened
+  // 마감된 캠페인에서 "직접 취소하실 수 있습니다"라고 말하면, 후원자는 취소
+  // 버튼이 없는 화면에 도착한다. 그 경우에는 스스로 할 수 없다는 사실과
+  // 대신 어디로 말하면 되는지를 함께 적는다.
+  const selfCancelOpen = selfCancelReopened && campaignAllowsSelfCancel(campaign?.status)
+  const tail = selfCancelOpen
     ? ' 후원 내역 화면에서 직접 전액 취소하실 수 있습니다.'
-    : ' 리워드 준비 상황은 후원 내역 화면에서 확인하실 수 있습니다.'
+    : selfCancelReopened
+      ? ' 이 프로젝트는 모금이 끝나 후원 내역 화면에서 직접 취소하실 수는 없습니다. 취소를 원하시면 아래 사무국 주소로 후원번호와 함께 알려 주세요 — 확인해 전액 환불해 드립니다.'
+      : ' 리워드 준비 상황은 후원 내역 화면에서 확인하실 수 있습니다.'
   return {
     title: '리워드 발송 안내를 정정합니다',
     message: `'${title}'의 리워드가 아직 발송되지 않은 것으로 확인되어, 사무국이 발송 표시를 되돌렸습니다. 앞서 받으신 발송 안내는 취소해 주세요.${tail} 궁금한 점은 사무국(contact@ggac.kr)으로 후원번호와 함께 알려 주세요.${lookupHint(pledge)}`,

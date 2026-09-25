@@ -187,3 +187,13 @@ test('모르는 판본 이름은 엑셀로 떨어진다', () => {
   assert.equal(x.parseShippingExportFormat(null), 'excel')
   assert.equal(x.parseShippingExportFormat('xlsx'), 'excel')
 })
+
+test('직접 취소가 열리는 캠페인 상태는 active 하나뿐이다', () => {
+  // 이행 빗장(`reopensSelfCancel`)이 풀려도 취소 라우트는 캠페인이 active일
+  // 때만 연다. 둘을 같은 것으로 보면 마감된 캠페인의 후원자에게 "직접
+  // 취소하실 수 있습니다"라고 알리게 된다.
+  assert.equal(f.campaignAllowsSelfCancel('active'), true)
+  for (const status of ['draft', 'submitted', 'closed', 'settled', '', null, undefined]) {
+    assert.equal(f.campaignAllowsSelfCancel(status), false, String(status))
+  }
+})
