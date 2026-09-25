@@ -23,6 +23,7 @@ import OptimizedImage from '@/components/OptimizedImage'
 import { Link } from '@/i18n/navigation'
 import { ADDITIONAL_AMOUNT_STEP, MAX_ADDITIONAL_AMOUNT, MAX_QUANTITY } from '@/lib/funding/amounts'
 import { CREDIT_NAME_MAX_LENGTH, evaluateCreditName } from '@/lib/funding/creditName'
+import { minutesUntil } from '@/lib/funding/holdCountdown'
 import { apiErrorMessage } from '@/utils/apiErrorMessage'
 
 import { formatAmount } from '../format'
@@ -34,6 +35,7 @@ interface Prepared {
   amount: number
   pledgeId: string
   pledgeCode: string
+  holdExpiresAt: string
   clientKey: string
   customerKey: string
   customerName?: string
@@ -133,6 +135,13 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
   const reward: Reward | undefined = useMemo(
     () => rewards.find(r => r.id === rewardId),
     [rewards, rewardId]
+  )
+
+  // 선점이 서는 순간의 남은 시간을 한 번만 굳힌다 — 결제창을 띄워 둔 채로
+  // 몇 분을 보내도 문구가 째깍이며 줄어들 필요는 없다.
+  const holdMinutesLeft = useMemo(
+    () => (reservation ? minutesUntil(reservation.holdExpiresAt) : null),
+    [reservation]
   )
 
   /**
@@ -764,6 +773,11 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
           더한다(대신하지 않는다). */}
       <section className={reservation ? 'block' : 'hidden'}>
         <h2 className="mb-4 text-lg font-semibold text-gray-900">{t('form.paymentHeading')}</h2>
+        {holdMinutesLeft !== null ? (
+          <p className="mb-4 text-xs text-gray-500">
+            {t('form.holdNoticeMinutes', { minutes: holdMinutesLeft })}
+          </p>
+        ) : null}
         <div id="funding-payment-method" />
         <div id="funding-payment-agreement" />
         {widgetReady ? (
