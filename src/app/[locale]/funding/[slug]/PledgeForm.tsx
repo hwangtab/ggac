@@ -194,9 +194,12 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
         widgetsRef.current = widgets
         setWidgetReady(true)
       } catch (caught) {
+        // 위젯 스크립트 로드 자체가 실패한 것이지 결제가 거절된 게 아니다 —
+        // 광고 차단기·일시적 네트워크 오류가 대부분이라 결제 거절 문구를
+        // 그대로 쓰면 "왜 거절됐지"라는 잘못된 질문을 하게 만든다.
         console.error('결제창 준비 실패:', caught)
         setWidgetReady(false)
-        setError(t('fail.defaultMessage'))
+        setError(t('fail.widgetLoadFailed'))
       }
     },
     [t]

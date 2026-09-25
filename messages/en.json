@@ -463,6 +463,7 @@
     "fail": {
       "title": "Payment was not completed",
       "defaultMessage": "The payment window was closed or the payment was declined.",
+      "widgetLoadFailed": "We couldn't load the payment widget. Check for an ad blocker or refresh the page.",
       "retry": "Try again",
       "toList": "Back to funding list",
       "codes": {
