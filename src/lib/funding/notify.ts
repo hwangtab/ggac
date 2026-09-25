@@ -24,6 +24,10 @@
  * 무관하게 보낸다. 그 밖은 `isEmailOptedOut`을 존중한다. 각 함수 머리에 어느
  * 쪽인지 적어 두었다.
  */
+import {
+  listRecentTargetActivities,
+  type ActivityActionTypeValue,
+} from '../../db/queries/activities.ts'
 import { getCampaignById } from '../../db/queries/funding.ts'
 import { listPaidPledgesByReward } from '../../db/queries/fundingPledges.ts'
 import {
@@ -38,6 +42,14 @@ import { isEmailOptedOut, type SettingLike } from '../server/grantPublish.ts'
 import { createLogger, maskId } from '../../utils/logger.ts'
 import { getSiteUrl } from '../../utils/site.ts'
 
+import {
+  DELIVERY_REWARD_LIMIT,
+  SUBMIT_DAILY_LIMIT,
+  THROTTLE_WINDOW_MS,
+  decideCampaignSubmittedNotice,
+  decideDeliveryChangeNotice,
+  type ThrottleLedgerEntry,
+} from './notifyThrottle.ts'
 import {
   MAX_BULK_RECIPIENTS,
   buildBulkAbandonedNotice,
@@ -74,6 +86,16 @@ export interface NotifyDeps {
   getCampaignById: (id: string) => Promise<Record<string, unknown> | null>
   listPaidPledgesByReward: (rewardId: string) => Promise<Record<string, unknown>[]>
   listAdminRecipients: () => Promise<{ id: string; email: string | null }[]>
+  /** 알림 억제 판정의 근거. 자세한 이유는 `./notifyThrottle.ts` 머리 주석. */
+  listRecentTargetActivities: (filter: {
+    actionTypes: ActivityActionTypeValue[]
+    targetType: 'funding_campaign'
+    targetId?: string | null
+    since: Date
+    excludeId?: string | null
+  }) => Promise<
+    { created_at: string; target_id: string | null; metadata: Record<string, unknown> }[]
+  >
   getProfileEmail: (id: string) => Promise<string | null>
   getUserSettings: (userId: string) => Promise<SettingLike[]>
   getUserSettingsByUserIds: (ids: string[]) => Promise<Map<string, SettingLike[]>>
@@ -94,6 +116,7 @@ const realDeps: NotifyDeps = {
   getCampaignById,
   listPaidPledgesByReward,
   listAdminRecipients,
+  listRecentTargetActivities,
   getProfileEmail,
   getUserSettings,
   getUserSettingsByUserIds,
@@ -207,6 +230,53 @@ async function mailOwnerAlways(d: NotifyDeps, ownerId: unknown, notice: NoticeCo
 }
 
 /**
+ * 알림을 낼 자리에서 부르는 **동작 반복 감지자**.
+ *
+ * 무엇을 근거로 세는지와 왜 그렇게 정했는지는 `./notifyThrottle.ts` 머리
+ * 주석에 있다. 여기서 정하는 것은 **못 읽었을 때 어느 쪽으로 기우는가**뿐이다
+ * — 빈 목록을 돌려 **발송 쪽으로** 기운다. 조회가 흔들렸다고 승인·마감 같은
+ * 알림이 조용히 사라지면, 고치기 어려운 쪽(사람이 소식을 못 받는 쪽)으로
+ * 무너진다.
+ */
+async function readThrottleLedger(
+  d: NotifyDeps,
+  actionType: ActivityActionTypeValue,
+  targetId: string | null,
+  excludeId?: string | null
+): Promise<ThrottleLedgerEntry[]> {
+  try {
+    const rows = await d.listRecentTargetActivities({
+      actionTypes: [actionType],
+      targetType: 'funding_campaign',
+      targetId,
+      since: new Date(Date.now() - THROTTLE_WINDOW_MS),
+      excludeId: excludeId ?? null,
+    })
+    return rows.map(r => ({
+      created_at: r.created_at,
+      target_id: r.target_id,
+      metadata: r.metadata,
+    }))
+  } catch (error) {
+    d.log.warn('알림 억제 판정용 활동 기록 조회 실패 — 발송은 계속', {
+      actionType,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return []
+  }
+}
+
+/** 알림 함수가 라우트에서 받는 곁정보. */
+export interface NotifyThrottleOptions {
+  /**
+   * 이 동작을 남긴 활동 기록의 id. 억제 판정에서 **뺀다** — 방금 남긴 "지금
+   * 이 동작"이 "직전에도 있었다"로 읽히면 첫 알림부터 막힌다. 라우트가
+   * `logUserActivity`를 기다렸다 받은 값을 넘긴다.
+   */
+  activityId?: string | null
+}
+
+/**
  * 자동 발송을 포기했다는 것을 관리자에게 알린다.
  *
  * 상한을 넘은 건은 아무에게도 가지 않는다. 그 사실을 **손으로 보낼 수 있는
@@ -258,13 +328,30 @@ async function tellAdminsSendAbandoned(
  * 관리자 말고는 승인·반려를 누를 수 없으므로 수신자가 관리자다.
  * **선택 알림** — 조합 운영 안내일 뿐 수신자의 돈이 걸린 일이 아니라
  * 이메일 수신거부를 존중한다(인앱 알림은 그대로 남는다).
+ *
+ * 제출은 개설자가 누르는 동작이고 철회와 짝이라 **얼마든지 반복된다.**
+ * 30분 안의 재제출은 같은 말이므로 내지 않고, 하루 상한을 넘긴 뒤로는 인앱만
+ * 남긴다(`./notifyThrottle.ts`).
  */
 export async function notifyCampaignSubmitted(
   campaign: Record<string, unknown>,
+  options: NotifyThrottleOptions = {},
   overrides?: Partial<NotifyDeps>
 ): Promise<void> {
   const d = resolve(overrides)
   try {
+    const campaignId = String(campaign.id ?? '')
+    const decision = decideCampaignSubmittedNotice({
+      campaignId,
+      entries: await readThrottleLedger(d, 'funding_campaign_submitted', null, options.activityId),
+    })
+    if (decision === 'skip') {
+      d.log.info('직전에 같은 심사 요청을 알려 두었으므로 다시 알리지 않음', {
+        campaignId: maskId(campaignId),
+      })
+      return
+    }
+
     const admins = await d.listAdminRecipients()
     if (admins.length === 0) {
       d.log.warn('펀딩 심사 알림을 받을 관리자가 없음', {
@@ -288,6 +375,14 @@ export async function notifyCampaignSubmitted(
         count: admins.length,
         error: error instanceof Error ? error.message : String(error),
       })
+    }
+
+    if (decision === 'in_app_only') {
+      d.log.warn('심사 요청 알림이 하루 상한에 닿아 메일은 보내지 않음', {
+        campaignId: maskId(campaignId),
+        limit: SUBMIT_DAILY_LIMIT,
+      })
+      return
     }
 
     if (!d.isMailConfigured()) return
@@ -412,17 +507,46 @@ export async function notifyCampaignClosed(
  * **선택 알림** — 돈이 오가는 일이 아니므로 수신거부를 존중한다(비회원은
  * 설정 자체가 없어 그대로 받는다). 수신자가 상한을 넘으면 반쪽 발송 대신
  * 통째로 포기하고, **관리자에게 그 사실을 알린다.**
+ *
+ * 예상 전달월은 잠기지 않아 개설자가 몇 번이든 되돌릴 수 있고, 저장 한 번이
+ * 후원자 전원에게 메일이다. 그래서 **리워드마다 하루 한 번만 메일로** 알린다
+ * — 같은 리워드가 하루에 또 바뀌면 회원 후원자에게 인앱으로만 가고, 하루에
+ * 세 번을 넘기면 아무것도 내지 않는다(`./notifyThrottle.ts`).
  */
 export async function notifyRewardDeliveryChanged(
   campaign: Record<string, unknown>,
   changes: DeliveryChangeLike[],
+  options: NotifyThrottleOptions = {},
   overrides?: Partial<NotifyDeps>
 ): Promise<void> {
   if (!Array.isArray(changes) || changes.length === 0) return
   const d = resolve(overrides)
   try {
     const siteUrl = d.siteUrl()
+    const campaignId = String(campaign.id ?? '')
+    // 기록은 캠페인 단위로 한 번만 읽고, 판정은 리워드마다 따로 한다 — 여러
+    // 리워드가 한꺼번에 밀리는 저장은 정직한 한 번의 동작이라 서로를 막으면
+    // 안 된다.
+    const ledger = await readThrottleLedger(
+      d,
+      'funding_reward_delivery_changed',
+      campaignId.length > 0 ? campaignId : null,
+      options.activityId
+    )
     for (const change of changes) {
+      const decision = decideDeliveryChangeNotice({
+        rewardId: change.reward_id,
+        entries: ledger,
+      })
+      if (decision === 'skip') {
+        d.log.warn('전달 시기 변경이 하루 상한을 넘어 아무에게도 알리지 않음', {
+          campaignId: maskId(campaignId),
+          rewardId: maskId(change.reward_id),
+          limit: DELIVERY_REWARD_LIMIT,
+        })
+        continue
+      }
+
       const backers = await d.listPaidPledgesByReward(change.reward_id).catch(() => [])
       if (backers.length === 0) continue
 
@@ -464,6 +588,14 @@ export async function notifyRewardDeliveryChanged(
             error: error instanceof Error ? error.message : String(error),
           })
         }
+      }
+
+      if (decision === 'in_app_only') {
+        d.log.info('오늘 이미 알린 리워드라 메일은 보내지 않고 인앱만 남김', {
+          campaignId: maskId(campaignId),
+          rewardId: maskId(change.reward_id),
+        })
+        continue
       }
 
       if (!d.isMailConfigured()) continue
