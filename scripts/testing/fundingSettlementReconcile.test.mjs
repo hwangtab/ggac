@@ -111,10 +111,13 @@ test('조회에 실패하면 아무것도 고치지 않고 거부한다', async 
   assert.equal(finalized, 0)
 })
 
-test('토스가 모르는 결제도 거부한다 — 임의로 환불 처리하지 않는다', async () => {
+test('토스가 모르는 결제는 조회 실패와 갈라서 거부한다 — 다시 눌러도 답이 같다', async () => {
   const result = await reconcileCampaignWithToss(input, deps({ lookupPayment: async () => null }))
   assert.equal(result.ok, false)
-  assert.equal(result.reason, 'lookup')
+  // 'lookup'(판단 불가, 잠시 뒤 다시)과 섞이면 사무국은 같은 버튼을 영영
+  // 누르게 된다. 어느 후원인지도 함께 나와야 손으로 결말을 낼 수 있다.
+  assert.equal(result.reason, 'missing')
+  assert.equal(result.pledge_code, 'GGAC-0001')
 })
 
 test('부분 취소는 자동으로 맞추지 않는다', async () => {

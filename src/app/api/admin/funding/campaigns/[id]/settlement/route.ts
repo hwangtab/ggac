@@ -216,6 +216,19 @@ async function reconcileBeforeFreezing(
       pledgeCode: reconciled.pledge_code,
       message: reconciled.message,
     })
+    // 토스가 **"그런 결제가 없다"**고 답한 건은 다시 눌러도 답이 같다.
+    // "잠시 뒤 다시"로 안내하면 이 캠페인의 정산은 영영 저장되지 않고
+    // 사무국은 같은 버튼을 계속 누른다 — 그 한 건을 집어서 사람에게 넘긴다.
+    if (reconciled.reason === 'missing') {
+      logSecurityEvent(
+        'FUNDING_SETTLEMENT_RECONCILE_PAYMENT_MISSING',
+        { campaignId, pledgeCode: reconciled.pledge_code },
+        'high'
+      )
+      return ApiError.conflict(
+        `후원 ${reconciled.pledge_code}의 결제를 토스가 모른다고 답했습니다. 우리 원장은 결제 완료로 들고 있는데 토스에는 그 결제가 없습니다 — 다시 눌러도 같은 답이 오므로, 토스 거래 내역에서 이 후원의 결제를 먼저 확인해 주세요. 실제로 결제가 없었다면 그 후원을 환불 화면에서 정리한 뒤에 다시 정산할 수 있습니다. 지금은 정산서를 저장하지 않았습니다.`
+      ).toNextResponse()
+    }
     return ApiError.serviceUnavailable(
       reconciled.reason === 'partial'
         ? `후원 ${reconciled.pledge_code}이(가) 토스에서 부분 취소돼 있습니다. (${reconciled.message}) 사무국이 먼저 처리한 뒤 다시 정리해 주세요. 지금은 정산서를 저장하지 않았습니다.`

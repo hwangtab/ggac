@@ -119,6 +119,18 @@ export type ReconcileResult =
    */
   | { ok: false; reason: 'lookup'; pledge_code: string; message: string }
   /**
+   * 토스가 **"그런 결제가 없다"고 분명히 답했다**(404 `NOT_FOUND_PAYMENT`).
+   *
+   * 위 `lookup`과 갈라 두는 이유는 다음에 할 일이 정반대이기 때문이다 —
+   * 그쪽은 다시 물어보면 답이 달라질 수 있어 "잠시 뒤 다시"가 맞지만, 이쪽은
+   * 몇 번을 눌러도 같은 답이 온다. 하나로 뭉쳐 두면 이 캠페인의 정산은 영영
+   * 저장되지 않고 사무국은 같은 버튼을 계속 누른다.
+   *
+   * 자동으로 환불 처리하지는 않는다 — 금액도 모르고 돈이 어디 있는지도
+   * 모른다. 대신 **어느 후원인지 집어서** 사람에게 넘긴다.
+   */
+  | { ok: false; reason: 'missing'; pledge_code: string; message: string }
+  /**
    * 토스는 취소됐다는데 그 금액이 후원 총액에 못 미친다(부분 환불). 이
    * 프로젝트의 원장은 전액 환불만 표현할 수 있으므로 자동으로 맞추지 않고
    * 사람을 부른다.
@@ -206,12 +218,14 @@ export async function reconcileCampaignWithToss(
     const payment = result.payment
     // 토스가 모르는 결제. 우리 원장은 결제됐다고 말하는데 상대는 그런 결제가
     // 없다고 한다 — 자동으로 환불 처리할 근거가 아니다(금액도 알 수 없다).
+    // **다시 물어도 답이 같으므로** 조회 실패와 갈라서 답한다: 이쪽은 사람이
+    // 그 후원 하나를 손으로 결말 내야 앞으로 나아간다.
     if (!payment) {
       return {
         ok: false,
-        reason: 'lookup',
+        reason: 'missing',
         pledge_code: pledge.pledge_code,
-        message: '토스에 이 결제가 없습니다.',
+        message: '토스가 이 결제를 모른다고 답했습니다.',
       }
     }
     if (!CANCELED_STATUSES.has(String(payment.status))) continue
