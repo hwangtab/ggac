@@ -148,3 +148,15 @@ test('크론 라우트는 정체된 선점을 세어 사람에게 알린다', as
     '로그에만 남기면 아무도 보지 않는다'
   )
 })
+
+test('크론 라우트의 환불 통지는 간격을 두고 나간다', async () => {
+  const { readFile } = await import('node:fs/promises')
+  const src = await readFile(ROUTE, 'utf8')
+  assert.match(src, /sendNoticesPaced\(refundNotices/, '통지에 간격이 없다')
+  assert.doesNotMatch(
+    src,
+    /Promise\.allSettled\(refundNotices/,
+    '한꺼번에 띄우면 초당 2통 한도에 걸려 대부분이 429로 사라진다'
+  )
+  assert.match(src, /export const maxDuration = 300/, '간격이 생긴 만큼 수명이 덮어야 한다')
+})
