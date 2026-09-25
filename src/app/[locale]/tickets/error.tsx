@@ -2,6 +2,7 @@
 
 import { useTranslations } from 'next-intl'
 import { useEffect } from 'react'
+import { reportClientError } from '@/utils/reportClientError'
 
 export default function TicketsError({
   error,
@@ -14,6 +15,7 @@ export default function TicketsError({
 
   useEffect(() => {
     console.error('[Tickets] 페이지 오류:', error)
+    reportClientError(error, 'TicketsError')
   }, [error])
 
   return (

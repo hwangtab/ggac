@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react'
 import { useTranslations } from 'next-intl'
+import { reportClientError } from '@/utils/reportClientError'
 
 export default function BoardError({
   error,
@@ -14,6 +15,7 @@ export default function BoardError({
 
   useEffect(() => {
     console.error('[Board] 페이지 오류:', error)
+    reportClientError(error, 'BoardError')
   }, [error])
 
   return (
