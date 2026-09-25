@@ -181,6 +181,12 @@ export type SecurityEventType =
   // 조회 실패). 막지 않는 것은 의도이지만(Turso가 흔들린다고 전 조합원이 문
   // 앞에 서면 안 된다), 관문이 열려 있던 시간은 셀 수 있어야 한다.
   | 'EMAIL_VERIFICATION_GATE_FAILED_OPEN'
+  // 만료 정리 스윕이 하루가 지나도 풀지 못한 결제 대기 선점. 그 스윕은 토스가
+  // 승인했는데 우리 confirm이 유실된 결제를 구하는 유일한 장치라, 못 푸는 행이
+  // 쌓이면 그 안에 "돈은 나갔는데 후원이 없는" 건이 섞여 있을 수 있다. 자동으로
+  // 어느 쪽인지 정할 수 없어 사람에게 넘긴다 — 로그에만 남기고 끝내면 아무도
+  // 보지 않는다.
+  | 'FUNDING_STUCK_PENDING_HOLDS'
 
 export type SecurityEventSeverity = 'low' | 'medium' | 'high'
 

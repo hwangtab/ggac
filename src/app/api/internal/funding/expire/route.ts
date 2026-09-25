@@ -11,6 +11,7 @@ import { timingSafeEqual } from 'node:crypto'
 
 import {
   listExpiredHolds,
+  listStuckHolds,
   expirePledge,
   finalizePledgePayment,
   cancelPendingPledge,
@@ -26,13 +27,21 @@ import {
 import { getServerPaymentConfig, isPaymentEnabled } from '@/lib/payments/toss/config'
 import { runExpiryGuard } from '@/lib/funding/expiryGuard'
 import { notifyPledgeRefunded } from '@/lib/funding/notify'
+import { sendNoticesPaced } from '@/lib/funding/pacedNotices'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
+import { logSecurityEvent } from '@/utils/security'
 
 const log = createLogger('api/internal/funding/expire')
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+/**
+ * 한 번에 최대 100건을 훑고, 그중 환불된 건마다 통지를 **간격을 두고** 보낸다
+ * (초당 2통 — `sendNoticesPaced`). 창이 가득 찬 최악의 경우 조회 100회(≈30초)에
+ * 통지 100건(≈50초)이라 여유가 있다. 통지는 `after()`로 응답 뒤에 나가지만
+ * 함수 수명은 그때까지 이어지므로, 그 몫까지 이 값이 덮어야 한다.
+ */
 export const maxDuration = 300
 
 function isAuthorized(request: NextRequest): boolean {
@@ -54,7 +63,8 @@ async function handle(request: NextRequest) {
   const { secretKey } = getServerPaymentConfig()
   // 환불 통지는 스윕 루프 안에서 기다리지 않는다. 한 리워드가 통째로 매진된
   // 뒤 승인이 몰려 들어오면 통지가 건수만큼 늘어나, 정리 자체가 제 수명
-  // (`maxDuration`)을 넘길 수 있다. 모아 두었다가 응답 뒤에 한꺼번에 보낸다.
+  // (`maxDuration`)을 넘길 수 있다. 모아 두었다가 응답 뒤에 **간격을 두고**
+  // 하나씩 보낸다 — 메일 제공자가 초당 두 통만 받는다.
   const refundNotices: (() => Promise<void>)[] = []
   const result = await runExpiryGuard({
     listExpiredHolds: () => listExpiredHolds(),
@@ -88,7 +98,7 @@ async function handle(request: NextRequest) {
           !Number.isFinite(tossTotalAmount) ||
           tossTotalAmount !== expectedAmount
         ) {
-          log.error('스윕 대상 결제가 이 주문의 것이 아님 — 승격·만료 모두 보류', {
+          log.error('스윕 대상 결제가 이 주문의 것이 아님', {
             orderId,
             paymentKey: payment.payment_key,
             expectedOrderId: orderId,
@@ -96,7 +106,15 @@ async function handle(request: NextRequest) {
             expectedAmount,
             receivedAmount: tossTotalAmount,
           })
-          return 'unknown'
+          // 주문번호가 다르면 **우리 주문으로 승인된 결제가 없다**는 뜻이다
+          // (confirm은 승인 호출 전에 클라이언트가 보낸 식별자를 그대로
+          // 새기므로, 그 식별자가 남의 것이면 우리 승인은 애초에 나가지
+          // 못했다). 다시 물어도 답이 같으니 보류하지 않는다 — 보류하면 이
+          // 행이 다음 스윕의 창을 영영 먹는다.
+          //
+          // 주문번호는 맞는데 금액이 어긋나는 쪽은 다르다. 그 결제는 우리
+          // 것이고 승인됐을 수 있어 만료시키면 돈이 뜬다. 사람이 봐야 한다.
+          return tossOrderId !== orderId ? 'mismatch' : 'unknown'
         }
         return {
           status: String(p.status),
@@ -180,10 +198,28 @@ async function handle(request: NextRequest) {
       return Boolean(confirmed)
     },
     expire: expirePledge,
+    listStuckHolds: () => listStuckHolds(),
+    // 하루가 지나도 풀리지 않은 선점은 자동으로 어느 쪽인지 정할 수 없다
+    // (승인된 돈이 붙어 있을 수 있다). 조용히 두지 않고 높은 심각도로 남겨
+    // 사람이 손으로 확인하게 한다.
+    reportStuck: pledges => {
+      const ids = pledges.slice(0, 20).map(p => String(p.order_id))
+      log.error('하루 넘게 풀리지 않은 선점 — 손으로 확인 필요', {
+        count: pledges.length,
+        orderIds: ids,
+      })
+      logSecurityEvent(
+        'FUNDING_STUCK_PENDING_HOLDS',
+        { count: pledges.length, orderIds: ids },
+        'high'
+      )
+    },
   })
 
   if (refundNotices.length > 0) {
-    after(() => Promise.allSettled(refundNotices.map(send => send())))
+    // 메일 제공자가 받아 주는 속도(초당 2통)에 맞춰 하나씩 보낸다. 한꺼번에
+    // 띄우면 429가 돌아오고, 그건 "돈은 돌아갔는데 아무도 모른다"가 된다.
+    after(() => sendNoticesPaced(refundNotices, { log }).then(r => log.info('환불 통지 발송', r)))
   }
 
   log.info('후원 만료 정리', result)

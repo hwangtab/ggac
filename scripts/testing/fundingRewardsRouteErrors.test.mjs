@@ -44,3 +44,37 @@ test('리워드 저장 라우트는 오류 경로에서도 "구매·주문·상�
     assert.ok(!src.includes(banned), `금지 어휘 '${banned}'가 들어 있다`)
   }
 })
+
+/**
+ * 이 라우트의 쓰기(`applyRewardBatch`)는 사이트 전체의 쓰기 잠금을 잡는다.
+ * 빈도 제한이 없으면 초안 프로젝트를 가진 조합원 아무나 이 요청을 되풀이하는
+ * 것만으로 결제 확정·선점·환불을 굶길 수 있다(2026-09-25 적대 감사 1번).
+ *
+ * **이 파일이 증명하지 않는 것**은 위와 같다 — 문자열이 소스에 있는지만 본다.
+ * 빈도 제한 자체의 동작은 `rateLimitKeyNamespace.test.mjs`가 본다.
+ */
+test('리워드 저장 라우트에는 빈도 제한이 걸려 있다', async () => {
+  const src = await readFile(ROUTE, 'utf8')
+  const handler = src.slice(src.indexOf('async function handlePut'))
+
+  assert.match(handler, /applyRouteRateLimit\(request, \{/, '빈도 제한을 걸지 않는다')
+  assert.match(
+    handler,
+    /name: 'funding_reward_batch'/,
+    '설정에 고유한 name이 없으면 카운터를 남과 공유한다'
+  )
+  assert.match(handler, /keyGenerator: createIPKeyGenerator\(/, '키를 IP로 잡지 않는다')
+  assert.match(handler, /rl\.success === false/, 'strict:false라 `!rl.success`는 좁히지 못한다')
+  assert.match(handler, /return rl\.response/, '제한에 걸려도 그대로 통과시킨다')
+
+  // 인증(`requireActiveMember`)보다 먼저 돌아야 세션을 만들 필요조차 없이 막힌다.
+  assert.ok(
+    handler.indexOf('applyRouteRateLimit') < handler.indexOf('requireActiveMember'),
+    '빈도 제한이 인증 뒤에 있으면 막히기 전에 세션 조회가 먼저 돈다'
+  )
+})
+
+test('리워드 저장은 값이 그대로인 리워드를 트랜잭션에 넣지 않는다', async () => {
+  const src = await readFile(ROUTE, 'utf8')
+  assert.match(src, /rewardPatchChangesNothing\(/, '변경 없는 리워드를 거르지 않는다')
+})

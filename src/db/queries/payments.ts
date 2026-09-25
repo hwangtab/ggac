@@ -15,7 +15,19 @@ import { and, asc, desc, eq, isNull, lt, sql } from 'drizzle-orm'
 import { db } from '../client.ts'
 import { membershipDues, payments } from '../schema/index.ts'
 
-import { toIso, toSnakeCase } from './_helpers.ts'
+import { MONEY_PATH_RETRY_BUDGET, retryOnLockContention, toIso, toSnakeCase } from './_helpers.ts'
+
+/**
+ * 돈이 움직인 사실을 원장에 새기는 쓰기를 감싼다.
+ *
+ * 이 파일의 갱신은 전부 **승인·환불이 이미 일어난 뒤**에 부른다. 여기서
+ * `SQLITE_BUSY` 한 번에 물러나면 카드는 긁혔는데 장부에 없는 상태가 되고, 그건
+ * 사람이 손으로 찾아 맞춰야 한다. 전부 조건부 UPDATE라 다시 해도 안전하다
+ * (같은 조건이 두 번째에는 0행이 될 뿐이다).
+ */
+function onLedger<T>(run: () => Promise<T>): Promise<T> {
+  return retryOnLockContention(run, () => false, MONEY_PATH_RETRY_BUDGET)
+}
 
 export type PaymentKind = 'dues' | 'ticket' | 'funding'
 
@@ -105,10 +117,12 @@ export async function getPaymentById(id: string): Promise<Record<string, unknown
  * 조회해 승인 여부를 직접 확인할 수 있다.
  */
 export async function recordPaymentKey(orderId: string, paymentKey: string): Promise<void> {
-  await db
-    .update(payments)
-    .set({ paymentKey })
-    .where(and(eq(payments.orderId, orderId), eq(payments.status, 'pending')))
+  await onLedger(() =>
+    db
+      .update(payments)
+      .set({ paymentKey })
+      .where(and(eq(payments.orderId, orderId), eq(payments.status, 'pending')))
+  )
 }
 
 /**
@@ -122,18 +136,20 @@ export async function markPaymentDone(
   orderId: string,
   input: MarkPaymentDoneInput
 ): Promise<Record<string, unknown> | null> {
-  await db
-    .update(payments)
-    .set({
-      status: 'done',
-      paymentKey: input.paymentKey,
-      method: input.method ?? null,
-      approvedAt: new Date(input.approvedAt),
-      rawResponse: input.raw,
-      failureCode: null,
-      failureMessage: null,
-    })
-    .where(and(eq(payments.orderId, orderId), eq(payments.status, 'pending')))
+  await onLedger(() =>
+    db
+      .update(payments)
+      .set({
+        status: 'done',
+        paymentKey: input.paymentKey,
+        method: input.method ?? null,
+        approvedAt: new Date(input.approvedAt),
+        rawResponse: input.raw,
+        failureCode: null,
+        failureMessage: null,
+      })
+      .where(and(eq(payments.orderId, orderId), eq(payments.status, 'pending')))
+  )
   return getPaymentByOrderId(orderId)
 }
 
@@ -147,14 +163,16 @@ export async function markPaymentFailed(
   orderId: string,
   input: { code: string; message: string }
 ): Promise<Record<string, unknown> | null> {
-  await db
-    .update(payments)
-    .set({
-      status: 'failed',
-      failureCode: input.code,
-      failureMessage: input.message,
-    })
-    .where(and(eq(payments.orderId, orderId), eq(payments.status, 'pending')))
+  await onLedger(() =>
+    db
+      .update(payments)
+      .set({
+        status: 'failed',
+        failureCode: input.code,
+        failureMessage: input.message,
+      })
+      .where(and(eq(payments.orderId, orderId), eq(payments.status, 'pending')))
+  )
   return getPaymentByOrderId(orderId)
 }
 
@@ -169,14 +187,16 @@ export async function recordPaymentCancel(
   orderId: string,
   input: { canceledAmount: number; raw: unknown }
 ): Promise<Record<string, unknown> | null> {
-  await db
-    .update(payments)
-    .set({
-      canceledAmount: input.canceledAmount,
-      status: sql`CASE WHEN ${input.canceledAmount} >= ${payments.amount} THEN 'canceled' ELSE 'partial_canceled' END`,
-      rawResponse: input.raw,
-    })
-    .where(and(eq(payments.orderId, orderId), lt(payments.canceledAmount, input.canceledAmount)))
+  await onLedger(() =>
+    db
+      .update(payments)
+      .set({
+        canceledAmount: input.canceledAmount,
+        status: sql`CASE WHEN ${input.canceledAmount} >= ${payments.amount} THEN 'canceled' ELSE 'partial_canceled' END`,
+        rawResponse: input.raw,
+      })
+      .where(and(eq(payments.orderId, orderId), lt(payments.canceledAmount, input.canceledAmount)))
+  )
   return getPaymentByOrderId(orderId)
 }
 

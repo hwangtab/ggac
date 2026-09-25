@@ -15,9 +15,11 @@ import {
   evaluateRewardPatch,
   canDeleteReward,
   deliveryChangesToLog,
+  rewardPatchChangesNothing,
 } from '@/lib/funding/rewardLock'
 import { notifyRewardDeliveryChanged } from '@/lib/funding/notify'
 import { isFundingEnabled } from '@/lib/funding/settings'
+import { applyRouteRateLimit, createIPKeyGenerator } from '@/lib/server/rateLimit'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
 
@@ -71,6 +73,21 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 async function handlePut(request: NextRequest, params: Promise<{ id: string }>) {
   if (!(await isFundingEnabled()))
     return ApiError.serviceUnavailable('펀딩을 준비 중입니다.').toNextResponse()
+
+  // 이 라우트의 쓰기는 사이트 전체의 쓰기 잠금을 잡는다(`applyRewardBatch`).
+  // 빈도 제한이 없으면 초안 프로젝트를 가진 조합원 아무나 이 요청을 계속
+  // 보내는 것만으로 결제 확정·선점·환불을 굶길 수 있다. 사람이 저장을 누르는
+  // 속도로는 닿지 않는 값(분당 10회)으로 잡는다 — 인증보다 먼저 돌려야
+  // 세션을 만들 필요조차 없이 막힌다.
+  const rl = await applyRouteRateLimit(request, {
+    name: 'funding_reward_batch',
+    windowMs: 60_000,
+    maxRequests: 10,
+    message: '리워드 저장 요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요.',
+    keyGenerator: createIPKeyGenerator('funding-reward-batch'),
+  })
+  if (rl.success === false && rl.response?.status === 429) return rl.response
+
   const auth = await requireActiveMember()
   if (auth instanceof NextResponse) return auth
   const { id } = await params
@@ -147,6 +164,26 @@ async function handlePut(request: NextRequest, params: Promise<{ id: string }>) 
   const creates = parsed.rewards.filter(r => !r.id).map(r => ({ campaign_id: id, ...r }))
   const updates = parsed.rewards
     .filter(r => r.id)
+    // 화면은 목록을 통째로 보낸다 — 스무 개를 띄워 놓고 하나만 고쳐도 스무
+    // 개가 올라온다. 값이 그대로인 것까지 UPDATE로 만들면 그만큼 문장이
+    // 늘고, 그 문장 수가 곧 사이트 전체의 쓰기가 멈춰 있는 시간이다.
+    .filter(r => {
+      const cur = byId.get(r.id as string)
+      if (cur === undefined) return true
+      return !rewardPatchChangesNothing(
+        {
+          title: String(cur.title),
+          description: (cur.description as string | null) ?? null,
+          amount: Number(cur.amount),
+          requires_shipping: Boolean(cur.requires_shipping),
+          total_quantity: (cur.total_quantity as number | null) ?? null,
+          image_url: (cur.image_url as string | null) ?? null,
+          estimated_delivery: (cur.estimated_delivery as string | null) ?? null,
+          sort_order: Number(cur.sort_order ?? 0),
+        },
+        r
+      )
+    })
     .map(r => {
       const cur = byId.get(r.id as string)
       // 검증 시점엔 잠기지 않았더라도, 검증과 쓰기 사이에 결제가 확정돼 잠길 수
