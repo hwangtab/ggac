@@ -15,7 +15,7 @@
  * 검사가 못 잡고 화면이 조용히 빈다(CLAUDE.md).
  */
 
-import { and, asc, desc, eq, gte, inArray, lte, or, sql, type SQL } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, inArray, lte, not, or, sql, type SQL } from 'drizzle-orm'
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
 
 import { db } from '../client.ts'
@@ -453,6 +453,35 @@ export async function listAdminRecipients(): Promise<
     )
     .limit(ALL_PROFILES_LIMIT)
   return rows.map(row => ({ id: row.id, email: row.email, display_name: row.displayName }))
+}
+
+/**
+ * **지금 관리자 화면을 열 수 있는 사람**의 수를 센다 — `excludeIds`에 준
+ * 회원은 빼고. 조건은 `requireAdmin()`이 보는 것과 같다
+ * (`isApprovedActiveAdmin`: 승인 + 활성 + 관리자).
+ *
+ * 쓰는 곳은 관리자 자격을 내리는 액션(비활성·정지·거부)이다. "이 사람들을
+ * 내리면 관리자가 남는가"를 묻기 위한 것이라 `excludeIds`는 **한 번에 내릴
+ * 대상 전원**이어야 한다 — 한 명씩 빼서 세면 대량 작업이 관리자 전원을
+ * 내리는 경우를 놓친다.
+ *
+ * count만 필요하므로 행을 실어 오지 않는다(`getAdminMemberCounts`와 같은
+ * 방식). `excludeIds`가 비면 전체 관리자 수가 된다.
+ */
+export async function countActiveAdminsExcluding(excludeIds: string[]): Promise<number> {
+  const conditions = [
+    eq(memberProfiles.isAdmin, true),
+    eq(memberProfiles.registrationStatus, 'approved'),
+    eq(memberProfiles.isActive, true),
+  ]
+  if (excludeIds.length > 0) {
+    conditions.push(not(inArray(memberProfiles.id, excludeIds)))
+  }
+  const rows = await db
+    .select({ value: sql<number>`count(*)` })
+    .from(memberProfiles)
+    .where(and(...conditions))
+  return Number(rows[0]?.value ?? 0)
 }
 
 export interface AdminMemberCounts {

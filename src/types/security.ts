@@ -58,6 +58,9 @@ export type SecurityEventType =
   | 'ADMIN_MEMBER_APPROVAL_ERROR'
   | 'ADMIN_MEMBER_UPDATE_ERROR'
   | 'ADMIN_MEMBER_ACTION_ERROR'
+  // 관리자 화면을 잠글 뻔한 요청을 막았다 — 자기 자신 또는 마지막 관리자를
+  // 비활성·정지·거부하려던 경우(`@/lib/members/adminLockoutGuard`).
+  | 'ADMIN_LOCKOUT_BLOCKED'
   // 프로필 없는 계정("유령 회원") 복구 — 단계 4 Task 6b.
   // 관리자가 남의 계정에 프로필을 만드는 쓰기이므로 감사 로그에 남긴다.
   | 'ORPHAN_PROFILE_RECOVERED'

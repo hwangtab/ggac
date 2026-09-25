@@ -11,6 +11,7 @@ import {
   notifyMembersApprovedBatch,
   notifyMembersRejectedBatch,
 } from '@/lib/server/memberStatusNotify'
+import { adminLockoutVerdictsForBatch } from '@/lib/server/adminLockout'
 import {
   completeBulkOperation,
   createBulkOperation,
@@ -21,6 +22,18 @@ import {
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
+
+/**
+ * 대량 작업 이름을 단건 액션 이름으로 옮긴다 — 잠금 판정
+ * (`@/lib/members/adminLockoutGuard`)은 두 라우트가 같은 규칙을 쓰도록
+ * 단건 이름으로만 말한다. 자격을 되돌려 주는 작업(`bulk_approve`·
+ * `bulk_activate`)은 여기 없다.
+ */
+const LOCKOUT_ACTION_BY_OPERATION: Record<string, 'reject' | 'deactivate' | 'suspend'> = {
+  bulk_reject: 'reject',
+  bulk_deactivate: 'deactivate',
+  bulk_suspend: 'suspend',
+}
 
 // POST: 대량 멤버 작업 수행
 export const POST = defineApiRoute<Partial<BulkOperationRequest>>({
@@ -174,6 +187,21 @@ export const POST = defineApiRoute<Partial<BulkOperationRequest>>({
       }
       const updateData = updateDataByType[operation_type]
 
+      // 권한을 내리는 대량 작업(거부·비활성화·정지)은 **관리자 화면을 통째로
+      // 잠글 수 있다** — 한 명씩 보면 매번 누군가 남아 보여도 목록에 관리자가
+      // 전부 들어 있으면 처리가 끝난 뒤 아무도 남지 않는다. 그래서 관리자
+      // 수는 대상 전원을 한꺼번에 빼고 한 번만 센다
+      // (`@/lib/server/adminLockout`). 자기 자신도 여기서 걸린다.
+      const lockoutAction = LOCKOUT_ACTION_BY_OPERATION[operation_type]
+      const lockoutBlocked = await adminLockoutVerdictsForBatch({
+        action: lockoutAction ?? '',
+        actorId: user.id,
+        targets: sanitizedMemberIds.map(id => ({
+          id,
+          profile: memberById.get(String(id)) ?? null,
+        })),
+      })
+
       const eligibleIds: string[] = []
       for (const memberId of sanitizedMemberIds) {
         const targetMember = memberById.get(String(memberId))
@@ -183,6 +211,17 @@ export const POST = defineApiRoute<Partial<BulkOperationRequest>>({
             member_id: memberId,
             success: false,
             error: '회원을 찾을 수 없습니다.',
+          })
+          continue
+        }
+        const lockout = lockoutBlocked.get(memberId)
+        if (lockout) {
+          errorCount++
+          results.push({
+            member_id: memberId,
+            member_name: targetMember.display_name,
+            success: false,
+            error: lockout.message,
           })
           continue
         }
