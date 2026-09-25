@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   FiChevronDown,
   FiChevronUp,
@@ -111,9 +111,59 @@ export default function AdminFundingPage() {
   const [details, setDetails] = useState<Record<string, CampaignDetail>>({})
   const [openIds, setOpenIds] = useState<Record<string, boolean>>({})
   const [detailLoading, setDetailLoading] = useState<Record<string, boolean>>({})
+  /**
+   * 상세를 **정말로 못 불러온** 캠페인만 담는다. 예전에는 이 구분이 없어서,
+   * 목록을 새로고침할 때 `details`를 통째로 비우면 펼쳐 둔 칸이 전부
+   * "내용을 불러오지 못했습니다"로 바뀌었다 — 아무 실패도 없었는데.
+   */
+  const [detailErrors, setDetailErrors] = useState<Record<string, string>>({})
+  /**
+   * 지금 펼쳐져 있는 캠페인. `load`가 읽어야 하는데 `openIds`를 의존성에
+   * 넣으면 칸을 펼칠 때마다 목록 전체를 다시 불러온다. 그래서 ref로 본다.
+   */
+  const openIdsRef = useRef<Record<string, boolean>>({})
+  openIdsRef.current = openIds
   // 관리자가 마지막으로 읽은 판 번호. 목록을 불러올 때 채우고, 상세를 펼치면
   // 그때 읽은 값으로 덮는다 — 승인은 실제로 읽은 판에만 도장을 찍는다.
   const [reviewedVersions, setReviewedVersions] = useState<Record<string, string>>({})
+
+  /**
+   * 캠페인 하나의 본문·리워드를 그때그때 불러온다. 목록 전체를 미리 당겨
+   * 오지 않는 이유는 심사 화면에 수십 건이 걸릴 수 있어서다.
+   *
+   * 새 API를 만들지 않았다 — `GET /api/mypage/funding/campaigns/[id]`가 이미
+   * 본문과 리워드를 다 주고, `canManageCampaign`이 `isApprovedActiveAdmin`을
+   * 먼저 통과시키므로 관리자도 들어간다.
+   *
+   * **실패만 실패로 적는다.** 못 불러왔을 때만 `detailErrors`에 문장을 넣고,
+   * 성공하면 지운다. 앞서 읽어 둔 내용은 다시 읽는 동안에도 그대로 둔다 —
+   * 새로고침 중에 화면이 빈칸으로 깜빡이지 않는다.
+   */
+  const loadDetail = useCallback(async (id: string) => {
+    setDetailLoading(prev => ({ ...prev, [id]: true }))
+    try {
+      const res = await fetch(`/api/mypage/funding/campaigns/${id}`)
+      const json = await res.json()
+      if (res.ok === false) throw new Error(apiErrorMessage(json, '내용을 불러오지 못했습니다.'))
+      // 후원자 명단(json.data.pledges)은 상태에 담지도 않는다 —
+      // `toReviewDetail`이 싣는 목록을 정한다.
+      const detail: CampaignDetail = toReviewDetail(json.data)
+      setDetails(prev => ({ ...prev, [id]: detail }))
+      setDetailErrors(prev => {
+        if (prev[id] === undefined) return prev
+        const next = { ...prev }
+        delete next[id]
+        return next
+      })
+      if (detail.version) setReviewedVersions(prev => ({ ...prev, [id]: detail.version }))
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e)
+      setDetailErrors(prev => ({ ...prev, [id]: message }))
+      setError(message)
+    } finally {
+      setDetailLoading(prev => ({ ...prev, [id]: false }))
+    }
+  }, [])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -127,7 +177,20 @@ export default function AdminFundingPage() {
       const list: Campaign[] = json.data.campaigns
       setCampaigns(list)
       setReviewedVersions(Object.fromEntries(list.map(c => [c.id, c.updated_at])))
-      setDetails({})
+      // 펼쳐 둔 칸을 **에러로 바꾸지 않는다.** 예전에는 여기서 `details`를
+      // 통째로 비웠고, 그러면 열려 있던 칸이 전부 "내용을 불러오지
+      // 못했습니다"가 됐다 — 아무 실패도 없었는데 실패라고 적힌 화면이다.
+      // 목록에서 사라진 캠페인의 상세만 버리고, 열려 있는 칸은 곧바로 다시
+      // 읽어 최신 내용으로 덮는다.
+      const alive = new Set(list.map(c => c.id))
+      const prune = <T,>(m: Record<string, T>) =>
+        Object.fromEntries(Object.entries(m).filter(([id]) => alive.has(id)))
+      setDetails(prev => prune(prev))
+      setDetailErrors(prev => prune(prev))
+      setOpenIds(prev => prune(prev))
+      const reopened = Object.keys(openIdsRef.current).filter(
+        id => openIdsRef.current[id] === true && alive.has(id)
+      )
       // 승인 입력값 초기화: 이미 정식 주소(비-draft-)를 갖고 있으면 미리 채운다.
       setSlugDrafts(prev => {
         const next = { ...prev }
@@ -141,42 +204,17 @@ export default function AdminFundingPage() {
         }
         return next
       })
+      await Promise.all(reopened.map(id => loadDetail(id)))
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setLoading(false)
     }
-  }, [filter])
+  }, [filter, loadDetail])
 
   useEffect(() => {
     void load()
   }, [load])
-
-  /**
-   * 캠페인 하나의 본문·리워드를 그때그때 불러온다. 목록 전체를 미리 당겨
-   * 오지 않는 이유는 심사 화면에 수십 건이 걸릴 수 있어서다.
-   *
-   * 새 API를 만들지 않았다 — `GET /api/mypage/funding/campaigns/[id]`가 이미
-   * 본문과 리워드를 다 주고, `canManageCampaign`이 `isApprovedActiveAdmin`을
-   * 먼저 통과시키므로 관리자도 들어간다.
-   */
-  const loadDetail = useCallback(async (id: string) => {
-    setDetailLoading(prev => ({ ...prev, [id]: true }))
-    try {
-      const res = await fetch(`/api/mypage/funding/campaigns/${id}`)
-      const json = await res.json()
-      if (res.ok === false) throw new Error(apiErrorMessage(json, '내용을 불러오지 못했습니다.'))
-      // 후원자 명단(json.data.pledges)은 상태에 담지도 않는다 —
-      // `toReviewDetail`이 싣는 목록을 정한다.
-      const detail: CampaignDetail = toReviewDetail(json.data)
-      setDetails(prev => ({ ...prev, [id]: detail }))
-      if (detail.version) setReviewedVersions(prev => ({ ...prev, [id]: detail.version }))
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setDetailLoading(prev => ({ ...prev, [id]: false }))
-    }
-  }, [])
 
   function toggleDetail(id: string) {
     const willOpen = !openIds[id]
@@ -459,12 +497,20 @@ export default function AdminFundingPage() {
                     </button>
                     {openIds[c.id] && (
                       <div className="mt-3 space-y-4">
-                        {detailLoading[c.id] && !details[c.id] ? (
-                          <div className="h-24 bg-gray-100 rounded-lg animate-pulse" />
+                        {/* 불러오는 중과 **정말 실패한 것**을 가른다. 아직
+                            읽지 않은 칸을 실패라고 적으면, 새로고침 한 번에
+                            멀쩡한 화면이 통째로 빨간 문장이 된다. */}
+                        {!details[c.id] && detailErrors[c.id] ? (
+                          <p className="text-sm text-red-600">{detailErrors[c.id]}</p>
                         ) : !details[c.id] ? (
-                          <p className="text-sm text-gray-500">내용을 불러오지 못했습니다.</p>
+                          <div className="h-24 bg-gray-100 rounded-lg animate-pulse" />
                         ) : (
                           <>
+                            {detailLoading[c.id] && (
+                              <p className="text-xs text-gray-400">
+                                최신 내용을 다시 불러오는 중입니다.
+                              </p>
+                            )}
                             <section className="rounded-lg border border-gray-200 bg-gray-50 p-4">
                               <h3 className="mb-2 text-sm font-semibold text-gray-900">
                                 프로젝트 소개
