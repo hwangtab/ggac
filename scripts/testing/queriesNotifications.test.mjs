@@ -541,3 +541,48 @@ test('markAllNotificationsRead 구현은 user_id 필터와 read_at IS NULL 조�
     'read_at IS NULL 조건이 없으면 이미 읽은 알림의 시각이 덮어써진다'
   )
 })
+
+// ---------------------------------------------------------------- 최근 시스템 공지
+
+/**
+ * `hasRecentSystemNotice` — 크론이 같은 공지를 10분마다 다시 내지 않으려면
+ * "최근에 이 종류를 냈는가"를 물을 수 있어야 한다. 종류는 `data.kind`에 있고
+ * 그것은 JSON 칸이라 `json_extract`로 본다. 여기서 지키는 것:
+ *   - 같은 종류가 창 안에 있으면 참
+ *   - 종류가 다르면 거짓 (다른 공지가 이 공지를 막으면 안 된다)
+ *   - 창 밖이면 거짓
+ *   - `system_notice`가 아닌 알림은 세지 않는다
+ */
+test('hasRecentSystemNotice는 같은 종류가 창 안에 있을 때만 참이다', async () => {
+  const { createNotification, hasRecentSystemNotice } = await loadFreshNotificationsModule()
+  const userId = await seedProfile()
+  const kind = `stuck-${Date.now()}`
+  const hourAgo = new Date(Date.now() - 60 * 60 * 1000)
+
+  assert.equal(await hasRecentSystemNotice(kind, hourAgo), false, '아직 낸 적 없다')
+
+  await createNotification({
+    user_id: userId,
+    type: 'system_notice',
+    title: '풀리지 않는 결제 대기 후원이 있습니다',
+    message: '테스트',
+    data: { kind, count: 3 },
+  })
+  assert.equal(await hasRecentSystemNotice(kind, hourAgo), true, '방금 냈다')
+  assert.equal(await hasRecentSystemNotice(`${kind}-other`, hourAgo), false, '종류가 다르면 거짓')
+  assert.equal(
+    await hasRecentSystemNotice(kind, new Date(Date.now() + 60 * 1000)),
+    false,
+    '창이 미래에서 시작하면 방금 낸 것도 밖이다'
+  )
+
+  // 같은 kind라도 system_notice가 아니면 세지 않는다.
+  await createNotification({
+    user_id: userId,
+    type: 'welcome',
+    title: 'x',
+    message: 'x',
+    data: { kind: `${kind}-welcome` },
+  })
+  assert.equal(await hasRecentSystemNotice(`${kind}-welcome`, hourAgo), false)
+})

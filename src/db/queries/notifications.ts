@@ -28,7 +28,7 @@
  * `db.insert`를 호출하지 않는지 정적으로 확인한다).
  */
 
-import { and, count, desc, eq, gt, isNull, or, sql, type SQL } from 'drizzle-orm'
+import { and, count, desc, eq, gt, gte, isNull, or, sql, type SQL } from 'drizzle-orm'
 
 import { db } from '../client.ts'
 import { NOTIFICATION_TYPE, notifications } from '../schema/index.ts'
@@ -365,4 +365,29 @@ export async function markAllNotificationsRead(userId: string): Promise<number> 
     .where(and(eq(notifications.userId, userId), isNull(notifications.readAt)))
     .returning({ id: notifications.id })
   return rows.length
+}
+
+/**
+ * 같은 종류의 시스템 공지가 `since` 이후에 한 번이라도 만들어졌는가.
+ *
+ * 크론이 사람에게 알려야 할 일(하루 넘게 풀리지 않는 결제 대기 선점 등)은
+ * 10분마다 다시 발견된다. 발견할 때마다 관리자 전원에게 알리면 그 알림은
+ * 곧 무시된다. 그래서 종류(`data.kind`)마다 "최근에 알렸는가"를 여기서 묻는다.
+ *
+ * `data`는 JSON 칸이라 `json_extract`로 본다. 종류는 알림을 만든 쪽이 정한
+ * 문자열이고 이 함수는 그 값을 해석하지 않는다.
+ */
+export async function hasRecentSystemNotice(kind: string, since: Date): Promise<boolean> {
+  const rows = await db
+    .select({ id: notifications.id })
+    .from(notifications)
+    .where(
+      and(
+        eq(notifications.type, 'system_notice'),
+        sql`json_extract(${notifications.data}, '$.kind') = ${kind}`,
+        gte(notifications.createdAt, since)
+      )
+    )
+    .limit(1)
+  return rows.length > 0
 }

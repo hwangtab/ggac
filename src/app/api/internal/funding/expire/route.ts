@@ -26,7 +26,7 @@ import {
 } from '@/lib/payments/toss/client'
 import { getServerPaymentConfig, isPaymentEnabled } from '@/lib/payments/toss/config'
 import { runExpiryGuard } from '@/lib/funding/expiryGuard'
-import { notifyPledgeRefunded } from '@/lib/funding/notify'
+import { notifyPledgeRefunded, notifyStuckHolds } from '@/lib/funding/notify'
 import { sendNoticesPaced } from '@/lib/funding/pacedNotices'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
@@ -66,6 +66,9 @@ async function handle(request: NextRequest) {
   // (`maxDuration`)을 넘길 수 있다. 모아 두었다가 응답 뒤에 **간격을 두고**
   // 하나씩 보낸다 — 메일 제공자가 초당 두 통만 받는다.
   const refundNotices: (() => Promise<void>)[] = []
+  // 하루 넘게 풀리지 않은 선점이 있으면 `reportStuck`이 채운다. 응답 뒤에
+  // 관리자에게 알린다(아래 `after()`).
+  let stuckToReport: { count: number; orderIds: string[] } | null = null
   const result = await runExpiryGuard({
     listExpiredHolds: () => listExpiredHolds(),
     lookupPayment: async orderId => {
@@ -213,8 +216,19 @@ async function handle(request: NextRequest) {
         { count: pledges.length, orderIds: ids },
         'high'
       )
+      // 응답 뒤에 관리자에게 알리려고 담아 둔다. 로그는 여기서 아무도 보지
+      // 않으므로 사람에게 닿는 통로가 따로 있어야 한다.
+      stuckToReport = { count: pledges.length, orderIds: ids }
     },
   })
+
+  if (stuckToReport) {
+    // 하루 한 번만 낸다(`notifyStuckHolds`가 최근 공지를 보고 스스로 거른다).
+    // 알림 함수는 스스로 삼키지만 `after()` 안에서 새는 예외는 잡아 줄 사람이
+    // 없으므로 한 번 더 잡는다.
+    const stuck = stuckToReport
+    after(() => notifyStuckHolds(stuck).catch(e => log.error('정체 선점 알림 실패', e)))
+  }
 
   if (refundNotices.length > 0) {
     // 메일 제공자가 받아 주는 속도(초당 2통)에 맞춰 하나씩 보낸다. 한꺼번에
