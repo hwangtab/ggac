@@ -106,11 +106,16 @@ const FILE_TYPE_MAPPING: Record<string, 'image' | 'document' | 'video' | 'audio'
   'audio/wav': 'audio',
 }
 
-const MAGIC_BYTE_SIGNATURES: Record<string, number[][]> = {
+// `null`은 무엇이 와도 되는 자리다 — RIFF처럼 시그니처가 떨어져 있는 형식에 쓴다.
+const MAGIC_BYTE_SIGNATURES: Record<string, (number | null)[][]> = {
   'image/jpeg': [[0xff, 0xd8, 0xff]],
   'image/png': [[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]],
   'image/gif': [[0x47, 0x49, 0x46, 0x38]],
-  'image/webp': [[0x52, 0x49, 0x46, 0x46]],
+  // RIFF는 WebP 전용이 아니라 컨테이너 포맷이다. 'RIFF'만 보면 WAV·AVI가
+  // image/webp로 통과한다(이 표 안의 audio/wav와 서명이 글자 그대로 같았다).
+  // 8바이트째 fourCC까지 봐야 무엇이 들었는지 알 수 있다. 가운데 4바이트는
+  // 파일 크기라 값이 정해져 있지 않다.
+  'image/webp': [[0x52, 0x49, 0x46, 0x46, null, null, null, null, 0x57, 0x45, 0x42, 0x50]],
   'application/pdf': [[0x25, 0x50, 0x44, 0x46]],
   'application/msword': [[0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]],
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': [
@@ -131,7 +136,7 @@ const MAGIC_BYTE_SIGNATURES: Record<string, number[][]> = {
     [0xff, 0xfb],
     [0x49, 0x44, 0x33],
   ],
-  'audio/wav': [[0x52, 0x49, 0x46, 0x46]],
+  'audio/wav': [[0x52, 0x49, 0x46, 0x46, null, null, null, null, 0x57, 0x41, 0x56, 0x45]],
 }
 
 export function hasKnownFileSignature(mimeType: string): boolean {
@@ -142,7 +147,13 @@ export function hasValidFileSignature(buffer: Buffer, mimeType: string): boolean
   const signatures = MAGIC_BYTE_SIGNATURES[mimeType]
   if (!signatures) return false
 
-  return signatures.some(signature => signature.every((byte, index) => buffer[index] === byte))
+  return signatures.some(
+    signature =>
+      // 시그니처가 다 들어갈 만큼 길지 않으면 대조할 것도 없다 — 없으면
+      // `null` 자리만 남은 짧은 버퍼가 통과할 수 있다.
+      buffer.length >= signature.length &&
+      signature.every((byte, index) => byte === null || buffer[index] === byte)
+  )
 }
 
 export function hasBinaryNullBytes(buffer: Buffer): boolean {
