@@ -85,13 +85,19 @@ import { logSecurityEvent } from '@/utils/security'
 const log = createLogger('api/admin/funding/settlement')
 export const runtime = 'nodejs'
 /**
- * `after()`로 넘긴 정산 준비·지급 알림은 **개설자 한 사람**에게 간다 — 대량
- * 발송기를 타지 않으므로 메일 한 통이 전부다. 그래도 예산을 적어 둔다:
- * 적지 않으면 플랫폼 기본값(10~15초)이고, 이 라우트는 원장을 다시 세고 계좌를
- * 읽는 자리라 Resend가 한 번 느려지면 "정산금을 보냈습니다"가 통째로 사라진다.
- * 한 통이 아무리 늦어도 들어오는 60초로 잡는다.
+ * 가장 오래 걸리는 것은 알림이 아니라 **토스 대사**다. 정리와 지급 기록 둘 다
+ * 이 캠페인의 `paid` 후원 전부를 토스에 물어보고 시작한다
+ * (`reconcileBeforeFreezing`). 조회는 다섯 건씩 묶어 돌지만
+ * (`RECONCILE_LOOKUP_CONCURRENCY`), 후원 300건에 왕복 1초면 그것만 60초다 —
+ * 예전 값(60초)으로는 후원자가 많은 캠페인일수록 정산이 영영 저장되지 않고,
+ * 사무국은 같은 버튼을 다시 눌러 같은 300번을 또 묻는다.
+ *
+ * 그래서 180초. 후원 900건까지 위 셈으로 덮으면서, 상한(300초)에는 여유를
+ * 남긴다 — 정말 그만큼 오래 걸린다면 대사 방식을 고칠 일이지 예산을 끝까지
+ * 밀 일이 아니다. 조회가 끝난 뒤의 원장 쓰기와, `after()`로 넘긴 개설자 알림
+ * 한 통도 이 예산 안에 든다(함수 수명은 그때까지 이어진다).
  */
-export const maxDuration = 60
+export const maxDuration = 180
 export const dynamic = 'force-dynamic'
 
 type Ctx = { params: Promise<{ id: string }> }

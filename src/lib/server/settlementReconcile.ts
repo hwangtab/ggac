@@ -17,14 +17,28 @@
  * 토스가 `CANCELED`·`PARTIAL_CANCELED`라고 답하면 **정산 셈을 하기 전에**
  * 원장을 환불로 맞추고(`finalizePledgeRefund`) 활동 기록을 남긴다.
  *
- * 캠페인 하나의 후원 수는 작으므로 순차 조회로 충분하다. 동시 호출로 토스의
- * 호출 한도를 건드리는 쪽이 더 나쁘다.
+ * ## 조회는 몇 건씩 묶어서 — 한 줄로 세우면 라우트 수명을 넘긴다
+ *
+ * 조회는 후원 한 건에 왕복 한 번이다. 한 줄로 세우면 후원자가 200명인
+ * 캠페인에서 왕복 200번이 그대로 더해져, 라우트가 제 수명(`maxDuration`)
+ * 안에 끝내지 못한다. 끝내지 못하면 정산서는 저장되지 않고 사무국은 같은
+ * 버튼을 계속 누른다 — 누를 때마다 200번을 다시 묻는다.
+ *
+ * 그래서 `RECONCILE_LOOKUP_CONCURRENCY`건씩 묶어 함께 묻는다. 한꺼번에 전부
+ * 띄우지 않는 이유는 토스의 호출 한도이고, 이 정도면 한 묶음이 실패해도
+ * 지금까지 아무것도 저장하지 않은 상태다 — **조회를 전부 끝낸 뒤에야 원장을
+ * 건드린다.**
  *
  * ## 모르면 저장하지 않는다
  *
  * 한 건이라도 조회에 실패하면 **정산서를 저장하지 않는다**(라우트가 503).
  * "아마 안 바뀌었을 것"으로 넘기면 틀릴 수 있는 지급액이 기록으로 굳고, 그
  * 다음 화면은 그것을 사실로 읽는다. 없는 정산서가 틀린 정산서보다 낫다.
+ *
+ * 조회를 먼저 전부 끝내므로 **조회 단계의 실패는 원장을 한 줄도 건드리지
+ * 않는다.** 판정이 끝난 뒤의 원장 쓰기가 중간에 실패하면 거기까지는 남는다 —
+ * 그 값들은 이미 토스가 취소라고 답한 건이라 남아 있는 편이 맞고, 정산서 자체는
+ * 여전히 저장되지 않는다.
  *
  * ## 트랜잭션은 토스 호출을 감싸지 않는다
  *
@@ -45,6 +59,35 @@ export const TOSS_CONSOLE_REFUND_REASON = 'toss_console'
 
 /** 토스가 "이 결제는 더 이상 살아 있지 않다"고 말하는 상태들. */
 const CANCELED_STATUSES = new Set(['CANCELED', 'PARTIAL_CANCELED'])
+
+/**
+ * 한 번에 함께 묻는 결제 수.
+ *
+ * 5인 이유: 후원 300건짜리 캠페인이 왕복 1초짜리 조회로 60초를 넘기지 않으면서
+ * (300 ÷ 5 = 60묶음), 토스 한도에 대해서는 여전히 얌전한 수다. 더 키워서 얻는
+ * 시간보다 한도에 걸려 전부 503이 되는 쪽이 비싸다.
+ */
+export const RECONCILE_LOOKUP_CONCURRENCY = 5
+
+/**
+ * `limit`건씩 묶어 함께 돌린다. 묶음 안은 동시에, 묶음 사이는 차례로.
+ *
+ * 결과는 **입력 차례 그대로** 돌아온다 — 어느 후원이 먼저 실패했는가로
+ * 사무국에게 말해 줄 후원번호가 정해지므로, 차례가 흔들리면 같은 상황에서
+ * 매번 다른 번호가 나간다. 의존성을 하나 더 들이지 않는다.
+ */
+export async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const size = Math.max(1, Math.floor(limit))
+  const out: R[] = []
+  for (let i = 0; i < items.length; i += size) {
+    out.push(...(await Promise.all(items.slice(i, i + size).map(item => fn(item)))))
+  }
+  return out
+}
 
 export interface PaidPledgePayment {
   pledge_id: string
@@ -137,18 +180,30 @@ export async function reconcileCampaignWithToss(
   const pledges = await d.listPaidPledgePayments(input.campaignId)
   const reconciled: ReconciledPledge[] = []
 
-  for (const pledge of pledges) {
-    let payment: Record<string, unknown> | null
+  // ① 조회. 묶음으로 함께 묻는다. 여기서는 **판정만** 하고 원장은 건드리지
+  // 않는다 — 한 건이라도 못 읽으면 아무것도 바뀌지 않은 상태로 물러난다.
+  const looked = await mapWithConcurrency(pledges, RECONCILE_LOOKUP_CONCURRENCY, async pledge => {
     try {
-      payment = await d.lookupPayment(pledge.payment_key)
+      return { ok: true as const, payment: await d.lookupPayment(pledge.payment_key) }
     } catch (error) {
+      return { ok: false as const, message: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  // ② 판정. 입력 차례대로 본다 — 실패를 말할 때 어느 후원인지가 매번 같아야 한다.
+  const toRefund: { pledge: PaidPledgePayment; canceled: number }[] = []
+  for (let i = 0; i < pledges.length; i += 1) {
+    const pledge = pledges[i]
+    const result = looked[i]
+    if (result.ok === false) {
       return {
         ok: false,
         reason: 'lookup',
         pledge_code: pledge.pledge_code,
-        message: error instanceof Error ? error.message : String(error),
+        message: result.message,
       }
     }
+    const payment = result.payment
     // 토스가 모르는 결제. 우리 원장은 결제됐다고 말하는데 상대는 그런 결제가
     // 없다고 한다 — 자동으로 환불 처리할 근거가 아니다(금액도 알 수 없다).
     if (!payment) {
@@ -178,7 +233,11 @@ export async function reconcileCampaignWithToss(
         message: `토스에서 부분 취소된 결제입니다(후원 ${pledge.total_amount}원 / 취소 ${canceled}원). 이 화면에서는 맞출 수 없습니다.`,
       }
     }
+    toRefund.push({ pledge, canceled })
+  }
 
+  // ③ 원장. 여기부터가 쓰기다 — 판정이 전부 끝난 뒤에만 들어온다.
+  for (const { pledge, canceled } of toRefund) {
     let refunded: Record<string, unknown> | null = null
     try {
       refunded = await d.finalizePledgeRefund({
