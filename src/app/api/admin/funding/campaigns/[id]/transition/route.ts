@@ -16,7 +16,8 @@ import {
 } from '@/lib/funding/transitions'
 import { checkActionPreconditions } from '@/lib/funding/campaignPreconditions'
 import { isValidSlug } from '@/lib/funding/campaignInput'
-import { getFundingSettings, isFundingEnabled } from '@/lib/funding/settings'
+import { isFundingEnabled } from '@/lib/funding/settings'
+import { resolveCampaignFeeRate } from '@/lib/server/fundingFeeRate'
 import { notifyCampaignReviewed, notifyCampaignClosed } from '@/lib/funding/notify'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
@@ -66,6 +67,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     let slug: string | undefined
     let platformFeeRate: number | undefined
+    // 승인 활동 기록에 함께 남길 요율 판정. 승인이 아니면 null이다.
+    let feeRate: { rate_bp: number; is_member: boolean } | null = null
     if (action === 'approve') {
       if (!isValidSlug(body?.slug))
         return ApiError.badRequest(
@@ -75,7 +78,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       if (taken && taken.id !== id)
         return ApiError.badRequest('이미 쓰는 주소입니다.').toNextResponse()
       slug = body.slug
-      platformFeeRate = (await getFundingSettings()).platform_fee_rate_bp
+      // 요율은 **승인하는 이 순간** 골라 캠페인에 새긴다. 개설자가 조합원이면
+      // 3.3%, 아니면 5.5%(둘 다 부가세 포함) — 고르는 규칙과 그 이유는
+      // `@/lib/funding/feeRate`에 적혀 있다. 심사 목록이 승인 전에 보여 주는
+      // 요율도 같은 함수에서 나오므로 화면과 도장이 어긋나지 않는다.
+      //
+      // 새긴 뒤에는 설정을 바꿔도 이 캠페인의 요율은 움직이지 않는다
+      // (`settlement.ts`의 `platformFeeFor`는 언제나 캠페인 행의 값을 쓴다).
+      feeRate = await resolveCampaignFeeRate(campaign.owner_user_id)
+      platformFeeRate = feeRate.rate_bp
     }
     const reviewNote =
       typeof body?.reviewNote === 'string' ? body.reviewNote.trim().slice(0, 1000) : null
@@ -147,7 +158,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       action_type: activityTypeFor(action),
       target_type: 'funding_campaign',
       target_id: id,
-      metadata: { action, from, to: updated.status },
+      metadata: {
+        action,
+        from,
+        to: updated.status,
+        // 어느 요율이 새겨졌는지는 나중에 돈 이야기가 될 값이다. 승인 기록
+        // 옆에 함께 남긴다 — 개설자 프로필은 뒤에 바뀔 수 있으므로, 판정
+        // 결과를 그때 적어 두지 않으면 왜 그 요율이 붙었는지 되짚을 수 없다.
+        ...(feeRate
+          ? {
+              platform_fee_rate_bp: feeRate.rate_bp,
+              creator_is_member: feeRate.is_member,
+            }
+          : {}),
+      },
     }).catch(e => log.warn('활동 기록 실패', e))
     if (action === 'approve' || action === 'reject')
       notifyCampaignReviewed(updated, action).catch(e => log.error('심사 알림 실패', e))

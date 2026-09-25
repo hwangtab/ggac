@@ -994,7 +994,12 @@ async function main() {
       id: FUNDING_SETTING_ID,
       category: 'features',
       settingKey: 'funding_features',
-      settingValue: { enabled: true, platform_fee_rate_bp: 250, hold_minutes: 10 },
+      settingValue: {
+        enabled: true,
+        platform_fee_rate_member_bp: 330,
+        platform_fee_rate_nonmember_bp: 550,
+        hold_minutes: 10,
+      },
       description: 'authz E2E 픽스처',
       isSensitive: false,
     },

@@ -18,6 +18,13 @@ import {
   PUBLIC_CAMPAIGN_STATUSES,
   type CampaignStatus,
 } from '@/lib/funding/transitions'
+import {
+  feeRateLabel,
+  formatFeeRatePercent,
+  FEE_RATE_VAT_NOTE,
+  MEMBER_FEE_RATE_BP,
+  NONMEMBER_FEE_RATE_BP,
+} from '@/lib/funding/feeRate'
 
 // 서버 규칙(`@/lib/funding/campaignInput`의 isValidSlug)과 동일하게 유지한다.
 // db 스키마를 끌어오는 서버 모듈을 클라이언트 번들에 넣지 않으려 정규식만 복제한다.
@@ -43,6 +50,12 @@ interface Campaign {
   created_at: string
   updated_at: string
   progress: { raised_amount: number; backer_count: number }
+  /**
+   * 지금 승인하면 붙을 플랫폼 수수료율. 승인할 수 없는 캠페인에는 없다
+   * (서버가 그때만 싣는다). 승인하는 순간 이 값이 캠페인에 새겨지고, 뒤에
+   * 설정을 바꿔도 움직이지 않는다.
+   */
+  fee_preview: { rate_bp: number; is_member: boolean } | null
 }
 
 type FilterKey = 'submitted' | 'all' | 'draft' | 'active' | 'closed' | 'settled'
@@ -215,8 +228,14 @@ export default function AdminFundingPage() {
       setError('주소(slug)는 영문 소문자·숫자·하이픈 3~60자입니다.')
       return
     }
+    // 수수료율은 이 버튼을 누르는 순간 캠페인에 새겨져 정산까지 따라간다.
+    // 확인 문구에서 한 번 더 말한다 — 화면 위에 적혀 있어도 읽지 않고 누르는
+    // 것이 버튼이다.
+    const feeLine = campaign.fee_preview
+      ? `\n플랫폼 수수료율 ${feeRateLabel(campaign.fee_preview.rate_bp, campaign.fee_preview.is_member)}가 이 캠페인에 고정되며, 나중에 설정을 바꿔도 달라지지 않습니다.`
+      : ''
     const ok = window.confirm(
-      `"${campaign.title}"을(를) 승인해 /funding/${slug} 주소로 공개합니다.\n조합원이 후원을 시작할 수 있게 됩니다. 계속할까요?`
+      `"${campaign.title}"을(를) 승인해 /funding/${slug} 주소로 공개합니다.\n조합원이 후원을 시작할 수 있게 됩니다.${feeLine} 계속할까요?`
     )
     if (!ok) return
     void transition(campaign, 'approve', {
@@ -270,8 +289,15 @@ export default function AdminFundingPage() {
             </div>
             <div>
               <h2 className="text-xl font-semibold text-gray-900">캠페인 심사</h2>
+              {/* 두 요율이 다 있다는 것과, 그중 하나에는 오늘 길이 없다는
+                  것을 같은 자리에서 말한다. 쓰이지 않는 요율을 살아 있는 것처럼
+                  적어 두면 다음 사람이 그것을 기능으로 읽는다. */}
               <p className="text-sm text-gray-500">
-                제출된 캠페인을 승인하면 주소가 확정되고 공개됩니다.
+                제출된 캠페인을 승인하면 주소가 확정되고 공개되며, 그 순간 플랫폼 수수료율(조합원{' '}
+                {formatFeeRatePercent(MEMBER_FEE_RATE_BP)}% / 비조합원{' '}
+                {formatFeeRatePercent(NONMEMBER_FEE_RATE_BP)}%, 둘 다 {FEE_RATE_VAT_NOTE})이
+                캠페인에 고정됩니다. 캠페인 개설은 승인·활성 조합원만 할 수 있어, 비조합원 요율이
+                실제로 붙는 경우는 개설한 뒤 승인 전에 자격이 풀린 건뿐입니다.
               </p>
             </div>
           </div>
@@ -541,6 +567,29 @@ export default function AdminFundingPage() {
                               : '영문 소문자·숫자·하이픈 3~60자로 입력해 주세요.'
                             : '개설자가 정하지 않았습니다. 관리자가 직접 정합니다.'}
                         </p>
+                        {/* 승인하면 요율이 이 캠페인에 새겨지고 정산까지
+                            따라간다. 정산 화면에서 처음 알게 두지 않는다. */}
+                        {c.fee_preview && (
+                          <p className="text-xs text-gray-600">
+                            적용 요율{' '}
+                            <span className="font-semibold text-gray-900">
+                              {feeRateLabel(c.fee_preview.rate_bp, c.fee_preview.is_member)}
+                            </span>{' '}
+                            — 개설자의 조합 가입이{' '}
+                            {c.fee_preview.is_member
+                              ? '승인·활성 상태라 조합원 요율입니다.'
+                              : '승인·활성 상태가 아니라 비조합원 요율입니다.'}{' '}
+                            승인하는 순간 고정되며 나중에 설정을 바꿔도 달라지지 않습니다.
+                          </p>
+                        )}
+                        {c.fee_preview?.is_member === false && (
+                          <p className="text-xs text-amber-700">
+                            캠페인 개설은 승인·활성 조합원만 할 수 있어 비조합원 요율(
+                            {feeRateLabel(NONMEMBER_FEE_RATE_BP, false)})이 붙는 일은 보통 없습니다.
+                            이 캠페인은 개설한 뒤 승인 전에 조합원 자격이 풀린 경우이니, 승인하기
+                            전에 사무국이 사정을 확인해 주세요.
+                          </p>
+                        )}
                       </div>
                     )}
 

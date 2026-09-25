@@ -33,7 +33,14 @@ const CATEGORY = 'features'
 const SETTING_KEY = 'funding_features'
 // `src/app/api/admin/settings/reset/route.ts`의 DEFAULT_SETTINGS가 선언한
 // 기본값과 글자 그대로 맞춘다 — 그 라우트가 이 행에 대한 정본이다.
-const SETTING_VALUE = { enabled: false, platform_fee_rate_bp: 0, hold_minutes: 10 }
+// 수수료율은 두 칸이다 — 조합원 330bp(3.3%) / 비조합원 550bp(5.5%), 둘 다
+// 부가세 포함. 정본은 `src/lib/funding/feeRate.ts`다.
+const SETTING_VALUE = {
+  enabled: false,
+  platform_fee_rate_member_bp: 330,
+  platform_fee_rate_nonmember_bp: 550,
+  hold_minutes: 10,
+}
 const DESCRIPTION = '크라우드펀딩 기능 설정'
 
 async function readFeaturesRows() {

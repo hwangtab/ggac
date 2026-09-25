@@ -177,6 +177,36 @@ export function cooperativeLossFor(amounts: {
   return Math.max(0, fees - net)
 }
 
+/** 정산서 한 건의 금액 칸 전부. 순서가 곧 사람이 읽는 순서다. */
+export const SETTLEMENT_AMOUNT_KEYS = [
+  'gross_amount',
+  'refund_amount',
+  'backer_count',
+  'pg_fee_amount',
+  'platform_fee_amount',
+  'payout_amount',
+] as const
+
+/**
+ * 다시 정리하면서 **실제로 달라진 칸**들.
+ *
+ * 정산서는 캠페인마다 한 행이라 다시 정리하면 앞의 숫자가 그 자리에서
+ * 사라진다. 활동 기록에는 "바뀌었다"만 남아 있어서, 조합원에게 줄 돈이
+ * 얼마에서 얼마로 움직였는지는 아무 데도 남지 않았다. 덮어쓰기 직전 값과
+ * 지금 값을 이 함수로 대조해 그 목록을 활동 기록에 적는다.
+ *
+ * 돌려주는 것은 **칸 이름뿐**이고 값은 호출부가 붙인다 — 이름만으로도
+ * "수수료만 고쳤나, 원장이 움직였나"가 한눈에 갈린다.
+ */
+export function changedSettlementFields(
+  previous: Partial<SettlementAmounts>,
+  next: SettlementAmounts
+): string[] {
+  return SETTLEMENT_AMOUNT_KEYS.filter(
+    key => Number(previous?.[key] ?? 0) !== Number(next?.[key] ?? 0)
+  )
+}
+
 /** 화면과 알림이 함께 쓰는 한국어 표기. */
 export const SETTLEMENT_STATUS_LABEL: Record<SettlementStatus, string> = {
   pending: '지급 전',

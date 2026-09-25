@@ -126,14 +126,22 @@ export type SettlementWriteResult =
       created: boolean
       amounts: SettlementAmounts
       /**
-       * 이 쓰기 **직전**의 지급 예정 금액. 없던 정산서면 null.
+       * 이 쓰기 **직전**의 정산 금액 한 벌. 없던 정산서면 null.
        *
-       * 호출부가 "개설자에게 다시 알릴 일인가"를 이 값으로 판정한다. 트랜잭션
-       * 밖에서 따로 읽으면 두 관리자가 동시에 정리할 때 둘 다 "바뀌었다"로
-       * 읽어 같은 금액을 두 번 알리게 된다 — 그래서 같은 트랜잭션 안에서,
-       * 쓰기 잠금을 잡은 뒤에 읽은 값을 돌려준다.
+       * 두 가지 일을 한다.
+       *
+       * ① 호출부가 "개설자에게 다시 알릴 일인가"를 `payout_amount`로 판정한다.
+       *    트랜잭션 밖에서 따로 읽으면 두 관리자가 동시에 정리할 때 둘 다
+       *    "바뀌었다"로 읽어 같은 금액을 두 번 알린다 — 그래서 같은 트랜잭션
+       *    안에서, 쓰기 잠금을 잡은 뒤에 읽은 값을 돌려준다.
+       *
+       * ② **덮어쓰기 전의 숫자를 남길 유일한 기회다.** 정산서는 캠페인마다 한
+       *    행이라 다시 정리하면 앞의 값이 그 자리에서 사라진다. 조합원에게 줄
+       *    돈에 대한 기록이므로 "전에는 뭐라고 적혀 있었나"가 남아야 하고,
+       *    호출부가 이 값을 활동 기록에 적는다. 표를 새로 만들지 않는다 —
+       *    활동 기록이 이미 그 일을 하는 자리다.
        */
-      previous_payout_amount: number | null
+      previous_amounts: SettlementAmounts | null
     }
   | { ok: false; reason: 'campaign_not_closed' }
   | { ok: false; reason: 'already_paid' }
@@ -227,7 +235,14 @@ export async function prepareSettlement(input: {
             created: false,
             settlement: rowToSettlement(updated as Row),
             amounts: computed.amounts,
-            previous_payout_amount: Number(existing[0].payoutAmount ?? 0),
+            previous_amounts: {
+              gross_amount: Number(existing[0].grossAmount ?? 0),
+              refund_amount: Number(existing[0].refundAmount ?? 0),
+              backer_count: Number(existing[0].backerCount ?? 0),
+              pg_fee_amount: Number(existing[0].pgFeeAmount ?? 0),
+              platform_fee_amount: Number(existing[0].platformFeeAmount ?? 0),
+              payout_amount: Number(existing[0].payoutAmount ?? 0),
+            },
           } as SettlementWriteResult
         }
 
@@ -250,7 +265,7 @@ export async function prepareSettlement(input: {
           created: true,
           settlement: rowToSettlement(created as Row),
           amounts: computed.amounts,
-          previous_payout_amount: null,
+          previous_amounts: null,
         } as SettlementWriteResult
       })
     )

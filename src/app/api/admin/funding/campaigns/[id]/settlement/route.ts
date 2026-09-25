@@ -63,7 +63,7 @@ import {
 } from '@/db/queries/fundingSettlements'
 import { getPayoutAccount } from '@/db/queries/profiles'
 import { logUserActivity } from '@/db/queries/activities'
-import { isBasisStale, netAmount } from '@/lib/funding/settlement'
+import { changedSettlementFields, isBasisStale, netAmount } from '@/lib/funding/settlement'
 import {
   isPayoutAccountRegistered,
   PAYOUT_ACCOUNT_MISSING_NOTICE,
@@ -249,6 +249,15 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       return ApiError.badRequest(result.message).toNextResponse()
     }
 
+    // 다시 정리하면 앞의 정산서는 같은 행 위에 덮인다 — 표가 하나뿐이라
+    // 앞의 숫자는 그 자리에서 사라진다. 조합원에게 줄 돈에 대한 기록이니
+    // **뭐라고 적혀 있었고 무엇이 달라졌는지**를 이미 남기고 있던 이 한 줄에
+    // 함께 적는다(표를 새로 만들지 않는다).
+    //
+    // 싣는 것은 금액 칸 여섯뿐이다. 계좌·예금주·후원자 신상은 이 기능의 다른
+    // 자리들과 같이 활동 기록에 넣지 않는다 — 활동 기록은 관리자 화면에
+    // 그대로 보이므로, 여기 넣는 값은 한 겹 더 넓은 곳으로 나가는 값이다.
+    const superseded = result.previous_amounts
     logUserActivity({
       user_id: auth.user.id,
       action_type: 'admin_action',
@@ -258,6 +267,12 @@ export async function POST(request: NextRequest, { params }: Ctx) {
         action: result.created ? 'settlement_prepared' : 'settlement_recalculated',
         payout_amount: result.amounts.payout_amount,
         pg_fee_amount: result.amounts.pg_fee_amount,
+        ...(superseded
+          ? {
+              superseded_amounts: superseded,
+              changed_fields: changedSettlementFields(superseded, result.amounts),
+            }
+          : {}),
       },
     }).catch(e => log.warn('활동 기록 실패', e))
 
@@ -267,8 +282,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     // 읽으면 두 관리자가 동시에 정리할 때 둘 다 "바뀌었다"로 읽어 같은 금액을
     // 두 번 알린다.
     const payoutChanged =
-      result.previous_payout_amount === null ||
-      result.previous_payout_amount !== result.amounts.payout_amount
+      superseded === null || superseded.payout_amount !== result.amounts.payout_amount
     if (payoutChanged) {
       // 계좌가 없으면 알림이 그 사실을 함께 말한다 — 사무국이 쫓아다니기
       // 전에 개설자가 먼저 알아야 하고, 그 자리(마이페이지 내 정보)까지

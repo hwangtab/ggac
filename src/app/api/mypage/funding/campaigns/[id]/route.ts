@@ -91,10 +91,15 @@ function ownerPledgeView(p: Record<string, unknown>, shippingRewardIds: Set<stri
 function creatorSettlementView(
   settlement: Record<string, unknown>,
   isStale: boolean,
-  payoutAccountRegistered: boolean
+  payoutAccountRegistered: boolean,
+  /** 승인할 때 이 캠페인에 새긴 수수료율(bp). 지금 설정값이 아니다. */
+  platformFeeRateBp: number
 ) {
   return {
     payout_account_registered: payoutAccountRegistered,
+    // 수수료 금액만 보이고 요율이 없으면 "얼마를 뗀 것인지"를 개설자가 되짚을
+    // 수 없다. 요율은 조합원 3.3% / 비조합원 5.5%로 갈리므로 더욱 그렇다.
+    platform_fee_rate_bp: platformFeeRateBp,
     status: settlement.status,
     gross_amount: settlement.gross_amount,
     refund_amount: settlement.refund_amount,
@@ -145,7 +150,12 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     progress,
     pledges: pledges.map(p => ownerPledgeView(p, shippingIds)),
     settlement: settlement
-      ? creatorSettlementView(settlement, settlementStale, payoutAccountRegistered)
+      ? creatorSettlementView(
+          settlement,
+          settlementStale,
+          payoutAccountRegistered,
+          Number(campaign.platform_fee_rate ?? 0)
+        )
       : null,
     edit_scope: editScope(campaign.status as CampaignStatus),
     // 이행 상태를 되돌리는 것은 사무국만 할 수 있다. 화면이 그 버튼을 보일지
