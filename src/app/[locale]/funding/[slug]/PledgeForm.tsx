@@ -19,6 +19,7 @@ import { useTranslations } from 'next-intl'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FiAlertCircle } from 'react-icons/fi'
 
+import OptimizedImage from '@/components/OptimizedImage'
 import { Link } from '@/i18n/navigation'
 import { ADDITIONAL_AMOUNT_STEP, MAX_ADDITIONAL_AMOUNT, MAX_QUANTITY } from '@/lib/funding/amounts'
 import { CREDIT_NAME_MAX_LENGTH, evaluateCreditName } from '@/lib/funding/creditName'
@@ -462,7 +463,19 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
                       }}
                       className="mt-1 h-4 w-4"
                     />
-                    <span className="flex-1">
+                    <span className="min-w-0 flex-1">
+                      {r.image_url ? (
+                        <span className="relative mb-3 block aspect-[4/3] w-full overflow-hidden rounded-md bg-gray-100">
+                          <OptimizedImage
+                            src={r.image_url}
+                            alt={r.title}
+                            fill
+                            sizes="(min-width: 1024px) 280px, 90vw"
+                            className="h-full w-full object-cover"
+                            fallbackText={r.title}
+                          />
+                        </span>
+                      ) : null}
                       <span className="flex items-center justify-between gap-2">
                         <span className="font-medium">{r.title}</span>
                         <span className="font-medium tabular-nums">{price(r.amount)}</span>
