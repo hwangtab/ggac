@@ -553,6 +553,42 @@ export function buildSettlementPaidNotice(
   }
 }
 
+/**
+ * 정산금을 보낸 **뒤에** 후원 하나가 환불됐다 → 개설자.
+ *
+ * `buildSettlementPaidNotice`로는 말할 수 없는 일이다. 그쪽은 "보냈습니다"로
+ * 끝나는 문장이고, 여기서 필요한 것은 "보낸 금액 중 일부를 되돌려 받아야
+ * 한다"이다. 그 사실을 알리지 않으면 개설자는 자기 통장에 들어온 돈이
+ * 확정된 줄 알고 쓴다.
+ *
+ * **금액을 청구하지 않는다.** 얼마를 어떻게 돌려받을지는 사무국이 사람과
+ * 이야기해서 정하는 일이고, 알림이 먼저 숫자를 못박으면 그 대화가 정산이
+ * 아니라 통보가 된다. 환불이 있었다는 사실과 연락이 갈 것이라는 예고까지다.
+ */
+export function buildRefundAfterPayoutNotice(
+  campaign: Record<string, unknown>,
+  pledge: Record<string, unknown>,
+  siteUrl: string
+): NoticeCopy {
+  const urls = fundingUrls(siteUrl)
+  const title = str(campaign.title, '제목 없는 프로젝트')
+  return {
+    title: '정산 뒤에 후원 환불이 있었습니다',
+    message:
+      `'${title}'의 정산금을 보내 드린 뒤, 후원 ${formatWon(pledge.total_amount)} 한 건이 환불됐습니다. ` +
+      `이미 보내 드린 정산금에는 이 금액이 들어 있어, 그 차액을 조합이 되돌려 받아야 합니다. ` +
+      `어떻게 처리할지는 사무국이 따로 연락드리겠습니다. 궁금한 점은 사무국(contact@ggac.kr)으로 알려 주세요.`,
+    url: urls.creatorCampaign(campaign.id),
+    cta: '정산 내역 보기',
+    data: {
+      campaign_id: campaign.id ?? null,
+      pledge_code: pledge.pledge_code ?? null,
+      kind: 'funding_refund_after_payout',
+      scope: 'funding',
+    },
+  }
+}
+
 // ---------------------------------------------------------------- 대량 발송
 
 /**

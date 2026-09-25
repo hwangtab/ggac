@@ -64,6 +64,7 @@ import {
   buildPledgeShippedNotice,
   buildSettlementPaidNotice,
   buildSettlementPreparedNotice,
+  buildRefundAfterPayoutNotice,
   buildStuckHoldsNotice,
   isSendableEmail,
   maskEmail,
@@ -804,6 +805,35 @@ export async function notifySettlementPaid(
     await mailOwnerAlways(d, campaign.owner_user_id, notice)
   } catch (error) {
     d.log.error('정산 지급 알림 실패', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
+
+// ------------------------------------------------------- ⑪ 지급 뒤 환불 (개설자)
+
+/**
+ * 지급이 끝난 정산의 캠페인에서 사무국이 후원을 환불했다 → **개설자**.
+ *
+ * 사무국 환불 라우트는 이 경우 확인을 한 번 더 받지만, 그 확인은 **사무국
+ * 화면 안에서만** 일어난다. 개설자에게는 아무 말도 가지 않아, 이미 받은
+ * 정산금 중 일부를 되돌려 줘야 한다는 사실을 나중에 전화로 처음 듣게 된다.
+ *
+ * **거래성** — 자기가 이미 받은 돈에 대한 이야기라 수신 설정을 보지 않는다.
+ */
+export async function notifyRefundAfterPayout(
+  campaign: Record<string, unknown> | null,
+  pledge: Record<string, unknown>,
+  overrides?: Partial<NotifyDeps>
+): Promise<void> {
+  if (!campaign) return
+  const d = resolve(overrides)
+  try {
+    const notice = buildRefundAfterPayoutNotice(campaign, pledge, d.siteUrl())
+    await inApp(d, campaign.owner_user_id, 'funding_settled', notice)
+    await mailOwnerAlways(d, campaign.owner_user_id, notice)
+  } catch (error) {
+    d.log.error('지급 뒤 환불 알림 실패', {
       error: error instanceof Error ? error.message : String(error),
     })
   }
