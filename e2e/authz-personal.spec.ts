@@ -126,3 +126,64 @@ test.describe('비인증 접근', () => {
     expect((await res.json()).error).toContain('인증이 필요합니다')
   })
 })
+
+/**
+ * 개인정보 열람 기록은 **서버만 적을 수 있다.**
+ *
+ * 계좌·배송 주소가 나갈 때 남는 세 줄
+ * (`member_account_viewed`·`funding_payout_account_viewed`·
+ * `funding_shipping_exported`)은 "서버가 이 사람에게 그 값을 내보냈다"는 증거로
+ * 쓰인다. 그런데 그 종류들이 클라이언트 기록 API의 허용 목록에 그대로 들어
+ * 있어서, 로그인만 하면 누구나 같은 줄을 만들어 넣을 수 있었다 — 기록이
+ * 증명하려던 바로 그 일을 기록이 증명하지 못하게 된다.
+ */
+test.describe('활동 기록 위조', () => {
+  test.use({ storageState: storageStatePath('other') })
+
+  const FORGEABLE = [
+    'member_account_viewed',
+    'funding_payout_account_viewed',
+    'funding_shipping_exported',
+    'member_approved',
+    'admin_action',
+  ]
+
+  for (const actionType of FORGEABLE) {
+    test(`조합원은 ${actionType} 기록을 만들지 못한다`, async ({ request }) => {
+      const res = await request.post('/api/activities/log', {
+        data: { action_type: actionType, target_type: 'system' },
+      })
+      expect(res.status(), `${actionType}이(가) 그대로 원장에 들어갔다`).toBe(400)
+      expect((await res.json()).error).toContain('action_type')
+    })
+  }
+
+  test('배치로 우회해도 같은 줄은 들어가지 않는다', async ({ request }) => {
+    const res = await request.post('/api/activities/batch-log', {
+      data: {
+        logs: [
+          { action_type: 'member_account_viewed', target_type: 'system' },
+          { action_type: 'page_viewed', target_type: 'system', metadata: { path: '/' } },
+        ],
+      },
+    })
+    expect(res.status()).toBe(200)
+    const body = await res.json()
+    // 배치는 항목별로 성공·실패를 돌려준다 — 위조 한 줄만 떨어지고 정상 한
+    // 줄은 그대로 기록돼야 한다(정상 기록을 함께 죽이면 고친 게 아니다).
+    expect(body.data.failed, '위조 항목이 배치로 들어갔다').toBe(1)
+    expect(body.data.processed).toBe(1)
+    expect(body.data.errors[0].index).toBe(0)
+  })
+
+  test('평범한 참여 기록은 그대로 남는다', async ({ request }) => {
+    // 이 허용 목록이 존재하는 이유다. 좁히다가 이쪽을 함께 막으면
+    // 화면의 활동 로깅이 통째로 400이 된다.
+    for (const actionType of ['page_viewed', 'login', 'search_performed']) {
+      const res = await request.post('/api/activities/log', {
+        data: { action_type: actionType, target_type: 'system' },
+      })
+      expect(res.status(), `정상 기록 ${actionType}이(가) 막혔다`).toBe(200)
+    }
+  })
+})

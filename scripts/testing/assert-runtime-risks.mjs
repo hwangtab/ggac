@@ -4046,6 +4046,7 @@ const validatesAdminActivityTypeFilters =
   /ACTIVITY_ACTION_TYPES/.test(activityConstantsSource) &&
   /ACTIVITY_TARGET_TYPES/.test(activityConstantsSource) &&
   /parseActivityActionType/.test(activityConstantsSource) &&
+  /parseClientActivityActionType/.test(activityConstantsSource) &&
   /parseActivityTargetType/.test(activityConstantsSource) &&
   /satisfies\s+readonly\s+ActivityActionType\[\]/.test(activityConstantsSource) &&
   /satisfies\s+readonly\s+ActivityTargetType\[\]/.test(activityConstantsSource) &&
@@ -4368,14 +4369,23 @@ const adminArtistMemberMutationRoutesUseSharedApiRoute =
 // `action_type`/`target_type`/`target_id`(logUserActivity의 snake_case
 // 입력 필드명)이지만, 검증된 지역변수(actionType/targetType/targetId)만
 // 실린다는 성질은 그대로 유지한다.
+// 감사(2026-09-25): 계좌·배송 열람 기록이 **클라이언트가 쓸 수 있는** 허용
+// 목록에 들어 있어, 로그인한 사람이면 누구나 `member_account_viewed` 같은 줄을
+// 위조할 수 있었다. 이제 두 클라이언트 라우트는 `parseClientActivityActionType`
+// (참여 기록만)을 쓰고, 증거로 쓰이는 종류는 `SERVER_ONLY_ACTIVITY_ACTION_TYPES`
+// 에 있다. 느슨한 `parseActivityActionType`은 관리자 **필터**에만 남는다.
 const validatesActivityLogTypes =
-  /parseActivityActionType\(action_type\)/.test(activityLogSource) &&
+  /SERVER_ONLY_ACTIVITY_ACTION_TYPES/.test(activityConstantsSource) &&
+  /CLIENT_LOGGABLE_ACTIVITY_ACTION_TYPES/.test(activityConstantsSource) &&
+  /parseClientActivityActionType\(action_type\)/.test(activityLogSource) &&
+  !/parseActivityActionType\(/.test(activityLogSource) &&
+  !/parseActivityActionType\(/.test(activityBatchLogSource) &&
   /parseActivityTargetType\(target_type\)/.test(activityLogSource) &&
   /validateUUID\(target_id,\s*['"]대상 ID['"]\)/.test(activityLogSource) &&
   /action_type:\s*actionType/.test(activityLogSource) &&
   /target_type:\s*targetType/.test(activityLogSource) &&
   /target_id:\s*targetId/.test(activityLogSource) &&
-  /parseActivityActionType\(log\.action_type\)/.test(activityBatchLogSource) &&
+  /parseClientActivityActionType\(log\.action_type\)/.test(activityBatchLogSource) &&
   /parseActivityTargetType\(log\.target_type\)/.test(activityBatchLogSource) &&
   /validateUUID\(log\.target_id,\s*['"]대상 ID['"]\)/.test(activityBatchLogSource) &&
   // 배치는 logUserActivitiesBatch(배열 인자, 단계 4)로 일괄 기록 — 검증된
