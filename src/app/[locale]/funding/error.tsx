@@ -2,6 +2,7 @@
 
 import { useTranslations } from 'next-intl'
 import { useEffect } from 'react'
+import { reportClientError } from '@/utils/reportClientError'
 
 export default function FundingError({
   error,
@@ -13,6 +14,7 @@ export default function FundingError({
   const t = useTranslations('funding')
   useEffect(() => {
     console.error('funding route error:', error)
+    reportClientError(error, 'FundingError')
   }, [error])
 
   return (

@@ -21,7 +21,7 @@ interface InboundEmail {
   received_for: string
   subject: string | null
   status: 'unread' | 'read' | 'replied' | 'archived' | 'spam'
-  body_fetch_status: 'pending' | 'done' | 'failed'
+  body_fetch_status: 'pending' | 'done' | 'attachments_failed' | 'attachments_expired' | 'failed'
   thread_references: string | null
   received_at: string
   created_at: string
@@ -525,6 +525,16 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                         {email.body_fetch_status === 'pending' && (
                           <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                             본문 받는 중
+                          </span>
+                        )}
+                        {email.body_fetch_status === 'attachments_failed' && (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                            첨부 받는 중
+                          </span>
+                        )}
+                        {email.body_fetch_status === 'attachments_expired' && (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            첨부 일부 누락
                           </span>
                         )}
                         {email.body_fetch_status === 'failed' && (

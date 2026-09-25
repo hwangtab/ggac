@@ -4,11 +4,14 @@
  * Task 8의 웹훅은 본문·첨부를 당기다 실패해도 200을 돌려주고
  * `body_fetch_status`를 'pending'으로 남긴다 — 500을 내면 Resend가 재시도하고
  * 그 재시도가 다시 쿼터를 먹기 때문이다. 이 크론이 그 'pending' 행들을 다시
- * 당긴다.
+ * 당긴다. 본문은 됐는데 첨부만 실패한 'attachments_failed' 행도 같은
+ * 목록(`listPendingInboundEmails`)에 함께 들어온다.
  *
- * Resend는 받은 메일을 30일만 보관한다. 그보다 오래된 pending 행은 다시
- * 당겨봐야 Resend에 원본이 없어 소용이 없으므로 `markBodyFetchFailed`로 최종
- * 포기 표시하고 넘어간다.
+ * Resend는 받은 메일을 30일만 보관한다. 그보다 오래된 행은 다시 당겨봐야
+ * Resend에 원본이 없어 소용이 없으므로 최종 포기 표시하고 넘어간다.
+ * 'pending'은 `markBodyFetchFailed`로(본문 자체가 없다),
+ * 'attachments_failed'는 `markAttachmentsExpired`로(본문은 이미 있다 —
+ * 'failed'로 덮으면 그 사실이 사라진다) 서로 다르게 끝맺는다.
  *
  * 30일은 길다. 그 사이에도 매번 실패하는 행이 배치를 독차지하지 않도록, 집은
  * 행에는 `markBodyFetchAttempted`로 시도 시각을 적고 큐를 그 순으로 준다 —
@@ -26,6 +29,7 @@ import {
   listPendingInboundEmails,
   markBodyFetchAttempted,
   markBodyFetchFailed,
+  markAttachmentsExpired,
 } from '@/db/queries/mailbox'
 import { ingestInboundEmail } from '@/lib/mail/ingestInbound'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
@@ -91,8 +95,14 @@ async function handleBackfill(request: NextRequest) {
 
       if (isExpired) {
         // Resend가 더 이상 원본을 갖고 있지 않다 — 재시도는 무의미하니 최종
-        // 포기 표시하고 다음 배치가 이 행을 다시 집지 않게 한다.
-        await markBodyFetchFailed(String(row.id))
+        // 포기 표시하고 다음 배치가 이 행을 다시 집지 않게 한다. 어느
+        // 쪽으로 포기하는지는 지금까지 뭘 건졌는지에 따라 다르다 — 본문이
+        // 이미 있는 행을 'failed'로 덮어 없는 것처럼 보이게 하면 안 된다.
+        if (row.body_fetch_status === 'attachments_failed') {
+          await markAttachmentsExpired(String(row.id))
+        } else {
+          await markBodyFetchFailed(String(row.id))
+        }
         abandoned += 1
         continue
       }

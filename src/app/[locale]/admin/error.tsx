@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import { reportClientError } from '@/utils/reportClientError'
 
 export default function AdminError({
   error,
@@ -11,6 +12,7 @@ export default function AdminError({
 }) {
   useEffect(() => {
     console.error('[Admin] 페이지 오류:', error)
+    reportClientError(error, 'AdminError')
   }, [error])
 
   return (

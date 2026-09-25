@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import { reportClientError } from '@/utils/reportClientError'
 
 export default function GlobalError({
   error,
@@ -11,6 +12,7 @@ export default function GlobalError({
 }) {
   useEffect(() => {
     console.error('[Global] 루트 레이아웃 오류:', error)
+    reportClientError(error, 'GlobalError')
   }, [error])
 
   return (

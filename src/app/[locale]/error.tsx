@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react'
 import { useTranslations } from 'next-intl'
+import { reportClientError } from '@/utils/reportClientError'
 
 export default function LocaleError({
   error,
@@ -14,6 +15,7 @@ export default function LocaleError({
 
   useEffect(() => {
     console.error('[Locale] 페이지 오류:', error)
+    reportClientError(error, 'LocaleError')
   }, [error])
 
   return (

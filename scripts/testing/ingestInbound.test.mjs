@@ -183,7 +183,9 @@ test('첨부가 25MB 상한을 넘으면 그 첨부만 건너뛰고 본문은 �
   try {
     await ingestInboundEmail('x', row.id, { putObject: stubPutObject([]) })
     const after = await getInboundEmail(row.id)
-    assert.equal(after.body_fetch_status, 'done')
+    // 첨부가 하나라도 실패하면 'done'이 아니라 'attachments_failed'다 —
+    // 백필 크론이 이 행을 다시 집어야 하기 때문이다(Task 7 수정).
+    assert.equal(after.body_fetch_status, 'attachments_failed')
     const attachments = await listAttachmentsForEmail(row.id)
     assert.equal(attachments.length, 0)
   } finally {
@@ -257,9 +259,78 @@ test('content-length가 없어도 사후 버퍼 크기 검사가 25MB 초과를 
   try {
     await ingestInboundEmail('x', row.id, { putObject: stubPutObject([]) })
     const after = await getInboundEmail(row.id)
-    assert.equal(after.body_fetch_status, 'done')
+    // 첨부가 하나라도 실패하면 'done'이 아니라 'attachments_failed'다 —
+    // 백필 크론이 이 행을 다시 집어야 하기 때문이다(Task 7 수정).
+    assert.equal(after.body_fetch_status, 'attachments_failed')
     const attachments = await listAttachmentsForEmail(row.id)
     assert.equal(attachments.length, 0)
+  } finally {
+    restore()
+  }
+})
+
+// Task 7 핵심: 첨부 하나가 실패해도 나머지는 저장되고, 백필이 같은 행을
+// 다시 부르면(재시도) 이미 저장된 첨부를 중복으로 또 넣지 않으며, 실패했던
+// 첨부만 다시 받아 최종적으로 'done'이 된다.
+test('재시도는 이미 저장된 첨부를 중복으로 넣지 않고, 실패했던 것만 다시 받는다', async () => {
+  const row = await seed()
+  let firstAttempt = true
+  const restore = stubFetch(async url => {
+    const target = String(url)
+    if (target.includes('/attachments')) {
+      return new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: 'att_ok',
+              filename: 'ok.txt',
+              content_type: 'text/plain',
+              content_id: null,
+              size: 2,
+              download_url: 'https://inbound-cdn.resend.com/att_ok',
+            },
+            {
+              id: 'att_flaky',
+              filename: 'flaky.txt',
+              content_type: 'text/plain',
+              content_id: null,
+              size: 2,
+              download_url: 'https://inbound-cdn.resend.com/att_flaky',
+            },
+          ],
+        }),
+        { status: 200 }
+      )
+    }
+    if (target === 'https://inbound-cdn.resend.com/att_ok') {
+      return new Response(new Uint8Array([1, 2]), { status: 200 })
+    }
+    if (target === 'https://inbound-cdn.resend.com/att_flaky') {
+      if (firstAttempt) return new Response('nope', { status: 500 })
+      return new Response(new Uint8Array([3, 4]), { status: 200 })
+    }
+    return new Response(
+      JSON.stringify({ id: 'x', from: 'a@b.c', to: [], html: null, text: null, headers: {} }),
+      { status: 200 }
+    )
+  })
+  try {
+    await ingestInboundEmail('x', row.id, { putObject: stubPutObject([]) })
+    const afterFirst = await getInboundEmail(row.id)
+    assert.equal(afterFirst.body_fetch_status, 'attachments_failed')
+    let attachments = await listAttachmentsForEmail(row.id)
+    assert.equal(attachments.length, 1)
+    assert.equal(attachments[0].filename, 'ok.txt')
+
+    firstAttempt = false
+    await ingestInboundEmail('x', row.id, { putObject: stubPutObject([]) })
+    const afterSecond = await getInboundEmail(row.id)
+    assert.equal(afterSecond.body_fetch_status, 'done')
+    attachments = await listAttachmentsForEmail(row.id)
+    // 2건 — 처음 성공한 ok.txt가 중복으로 또 들어오지 않고, flaky.txt만
+    // 새로 더해진다.
+    assert.equal(attachments.length, 2)
+    assert.deepEqual(attachments.map(a => a.filename).sort(), ['flaky.txt', 'ok.txt'])
   } finally {
     restore()
   }

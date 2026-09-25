@@ -31,6 +31,10 @@
  * 못하게 하는 것이 그 차례의 목적이다.
  */
 
+import { createLogger, maskId } from '../../utils/logger.ts'
+
+const log = createLogger('expiryGuard')
+
 type Row = Record<string, unknown>
 
 export type PaymentLookup =
@@ -103,7 +107,14 @@ export async function runExpiryGuard(deps: ExpiryGuardDeps): Promise<ExpiryGuard
       }
       if (await deps.expire(String(pledge.id))) result.expired++
       else result.deferred++
-    } catch {
+    } catch (error) {
+      // 이 catch가 조용하면 같은 행이 10분마다 도는 크론에서 24시간 내내
+      // 실패해도 아무 데도 드러나지 않는다 — 반드시 남긴다.
+      log.warn('행 처리 중 예외, 보류로 넘긴다', {
+        pledgeId: maskId(String(pledge.id)),
+        orderId: maskId(String(pledge.order_id)),
+        error: error instanceof Error ? error.message : String(error),
+      })
       result.deferred++
     }
   }
@@ -113,8 +124,12 @@ export async function runExpiryGuard(deps: ExpiryGuardDeps): Promise<ExpiryGuard
       const stuck = await deps.listStuckHolds()
       result.stuck = stuck.length
       if (stuck.length > 0 && deps.reportStuck) await deps.reportStuck(stuck)
-    } catch {
-      // 점검이 실패해도 정리 자체는 끝난 것으로 답한다.
+    } catch (error) {
+      // 점검이 실패해도 정리 자체는 끝난 것으로 답한다 — 다만 정체 알림이
+      // 통째로 안 나갔다는 사실은 로그에 남겨야 다음 사람이 알아챈다.
+      log.error('정체 건 점검/알림 실패', {
+        error: error instanceof Error ? error.message : String(error),
+      })
     }
   }
 

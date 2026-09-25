@@ -30,7 +30,16 @@ export const inboundEmails = sqliteTable(
     headers: text('headers'),
     /** unread | read | replied | archived | spam */
     status: text('status').notNull().default('unread'),
-    /** pending | done | failed — 본문·첨부를 당겨왔는지. */
+    /**
+     * pending | done | attachments_failed | attachments_expired | failed
+     * — 본문·첨부를 당겨왔는지.
+     *
+     * `attachments_failed`는 본문은 저장됐지만 첨부 중 일부/전부가 아직
+     * 안 왔다는 뜻이다 — 백필 크론이 `pending`과 함께 다시 집어 재시도한다
+     * (`listPendingInboundEmails`). Resend 보관 기한(30일)을 넘기고도 못
+     * 채우면 `attachments_expired`로 끝낸다 — 본문은 살아 있으므로 `failed`
+     * (본문 자체가 없다)와는 구분해 둔다.
+     */
     bodyFetchStatus: text('body_fetch_status').notNull().default('pending'),
     /** 답장 스레드용 References 누적. 공백으로 이은 message_id 목록. */
     threadReferences: text('thread_references'),

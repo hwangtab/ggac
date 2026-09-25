@@ -16,8 +16,17 @@
  * 본문·첨부를 당겨 오는 단계(`ingestInboundEmail`)는 스스로 던지지 않는다 —
  * 실패하면 행이 `pending`으로 남고 백필 크론이 다시 가져간다. 그래서 그 단계
  * 때문에 재시도를 부를 일은 없다.
+ *
+ * **`ingestInboundEmail`은 응답 뒤 `after()`에서 돈다.** Svix는 이 라우트의
+ * `maxDuration`(300초)과 무관하게 **15초**에서 응답을 기다리다 타임아웃시켜
+ * 실패로 기록한다. 본문 조회 1건 + 첨부 목록 1건 + 첨부 N건을 응답 전에
+ * inline으로 await하던 옛 코드는 첨부가 몇 개만 있어도 15초를 넘겨 Svix
+ * 쪽에서는 "실패"로 찍히면서 Resend가 똑같은 메일을 또 보내는 사고를 만들 수
+ * 있었다(우리 쪽은 이미 저장에 성공했는데도). 서명 검증·중복 판정처럼
+ * "다시 시도해야 하는가"에 직접 영향을 주는 부분만 응답 전에 동기로 끝내고,
+ * 나머지 무거운 네트워크 왕복은 응답을 먼저 보낸 뒤로 미룬다.
  */
-import type { NextRequest } from 'next/server'
+import { NextRequest, after } from 'next/server'
 
 import { ApiError, ApiSuccess } from '@/utils/apiWrapper'
 import { rateLimit } from '@/lib/server/rateLimit'
@@ -30,7 +39,8 @@ import { insertInboundEmail, countInboundSince } from '@/db/queries/mailbox'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-// 본문 조회 1건 + 첨부 목록 1건 + 첨부 N건을 인라인으로 await한다. 각 Resend
+// 응답은 먼저 나가지만, 뒤이은 after()가 본문 조회 1건 + 첨부 목록 1건 +
+// 첨부 N건을 이어서 돈다 — 이 예산은 여전히 그 after() 몫이다. 각 Resend
 // 호출은 15초 타임아웃(`inboundClient.ts`)이고 첨부 개수는 이론상
 // `listReceivedAttachments`의 limit=100까지 갈 수 있다. `/api/internal/uploads/cleanup`
 // (같은 형태 — 최대 100건의 개별 네트워크 왕복 루프)과 같은 예산인 300을 쓴다.
@@ -126,8 +136,13 @@ export async function POST(request: NextRequest) {
       return ApiSuccess.ok({ duplicate: true }).toNextResponse()
     }
 
-    await ingestInboundEmail(resendEmailId, String(row.id))
-    await warnIfQuotaPressure()
+    // 서명 검증·중복 판정은 이미 끝났다 — 여기부터는 "다시 시도해야 하는가"에
+    // 영향을 주지 않으므로 응답을 먼저 보내고 뒤에서 마저 한다. Svix는 15초
+    // 안에 응답이 없으면 이 배달을 실패로 기록하는데, 첨부가 여러 개면 그
+    // 안에 다 못 끝낼 수 있다. ingestInboundEmail은 스스로 던지지 않아
+    // after() 안에서도 안전하다(실패는 로그·pending 상태로만 남는다).
+    after(() => ingestInboundEmail(resendEmailId, String(row.id)))
+    after(() => warnIfQuotaPressure())
 
     return ApiSuccess.ok({ id: row.id }).toNextResponse()
   } catch (error) {

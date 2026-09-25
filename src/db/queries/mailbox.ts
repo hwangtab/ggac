@@ -123,6 +123,35 @@ export async function markBodyFetchFailed(id: string): Promise<void> {
 }
 
 /**
+ * 본문은 저장됐는데 첨부가 하나라도 빠졌을 때 쓴다.
+ *
+ * `markBodyFetched`가 먼저 상태를 'done'으로 올려 두므로, 첨부 루프가
+ * 끝난 뒤 실패가 하나라도 있으면 이 함수로 'attachments_failed'로 내려
+ * 백필 크론(`listPendingInboundEmails`)이 다시 집게 한다. 그전에는 'done'인
+ * 채로 굳어 첨부 실패가 24시간이 지나도 아무도 다시 보지 않았다.
+ */
+export async function markAttachmentsIncomplete(id: string): Promise<void> {
+  await db
+    .update(inboundEmails)
+    .set({ bodyFetchStatus: 'attachments_failed' })
+    .where(eq(inboundEmails.id, id))
+}
+
+/**
+ * 첨부 재시도를 최종 포기한다(Resend 보관 기한을 넘김).
+ *
+ * `markBodyFetchFailed`와 나란하지만 의미가 다르다 — 본문은 이미 저장돼
+ * 있으므로 'failed'(본문 자체가 없다)로 덮으면 실제로 있는 본문을 없는
+ * 것처럼 보이게 한다. 'attachments_expired'로 남겨 구분한다.
+ */
+export async function markAttachmentsExpired(id: string): Promise<void> {
+  await db
+    .update(inboundEmails)
+    .set({ bodyFetchStatus: 'attachments_expired' })
+    .where(eq(inboundEmails.id, id))
+}
+
+/**
  * 메일함 목록. 본문 컬럼(`body_html`·`body_text`·`headers`)은 select하지
  * 않는다 — 목록 응답에 본문까지 실으면 수 MB가 되고, 화면은 상세에서만
  * 본문을 쓴다.
@@ -282,9 +311,10 @@ export async function appendThreadReference(id: string, messageId: string): Prom
  * 이번 실행이 이 행을 집었다고 적는다. **`updated_at`만 민다.**
  *
  * 전용 칸(`attempt_count`·`last_attempted_at`)이 없어서 이미 있는
- * `updated_at`을 pending 행에 한해 "마지막으로 시도한 시각"으로 쓴다. pending
- * 행의 `updated_at`을 바꾸는 코드가 이것 말고는 없고(웹훅 삽입 시점 이후로는
- * 아무도 건드리지 않는다), 화면도 이 값을 그리지 않아 겹치는 소비처가 없다.
+ * `updated_at`을 pending·attachments_failed 행에 한해 "마지막으로 시도한
+ * 시각"으로 쓴다. 그 두 상태의 `updated_at`을 바꾸는 코드가 이것 말고는
+ * 없고(웹훅 삽입 시점 이후로는 아무도 건드리지 않는다), 화면도 이 값을
+ * 그리지 않아 겹치는 소비처가 없다.
  *
  * 이 한 줄이 아래 `listPendingInboundEmails`의 굶김을 푼다 — 자세한 것은
  * 그쪽 주석에 있다.
@@ -317,12 +347,23 @@ export async function markBodyFetchAttempted(id: string): Promise<void> {
  *
  * `id`(UUID)를 마지막 타이브레이커로 둔다 — 앞의 두 값이 같은 행이 여러 개일
  * 때도 실행마다 순서가 흔들리지 않게 하기 위해서다.
+ *
+ * `pending`(본문도 못 채움)과 `attachments_failed`(본문은 됐는데 첨부가
+ * 빠짐) 둘 다 대상이다 — 첨부만 실패한 행을 빼면 `body_fetch_status`가
+ * 'done'으로 굳은 뒤로는 아무도 다시 보지 않는다(과거 실제로 그랬다).
+ * `ingestInboundEmail`이 이미 저장된 첨부는 건너뛰고 빠진 것만 다시
+ * 받으므로, 같은 함수로 두 상태를 함께 재시도해도 안전하다.
  */
 export async function listPendingInboundEmails(limit: number): Promise<Record<string, unknown>[]> {
   const rows = await db
     .select()
     .from(inboundEmails)
-    .where(eq(inboundEmails.bodyFetchStatus, 'pending'))
+    .where(
+      or(
+        eq(inboundEmails.bodyFetchStatus, 'pending'),
+        eq(inboundEmails.bodyFetchStatus, 'attachments_failed')
+      )
+    )
     .orderBy(asc(inboundEmails.updatedAt), asc(inboundEmails.receivedAt), asc(inboundEmails.id))
     .limit(limit)
   return rows.map(rowToEmail)
