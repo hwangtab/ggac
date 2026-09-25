@@ -150,7 +150,12 @@ const DEFAULT_SETTINGS = [
     category: 'security',
     setting_key: 'email_verification',
     setting_value: {
-      required: true,
+      // 기본은 **꺼짐**이다. 켜면 인증하지 않은 조합원이 로그인하지 못하므로,
+      // "기본값으로 되돌리기"가 사람을 문 앞에 세우는 일이 되면 안 된다.
+      // 관문이 읽는 칸은 `enforce_on_login`이고 `required`는 옛 칸이다
+      // (`@/lib/auth/emailVerificationGate`).
+      enforce_on_login: false,
+      required: false,
       token_expiry_hours: 24,
       resend_limit: 3,
     },

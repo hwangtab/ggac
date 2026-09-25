@@ -963,3 +963,88 @@ export async function getProfilelessUserById(id: string): Promise<ProfilelessUse
     created_at: toIso(row.createdAt) as string,
   }
 }
+
+// -------------------------------------------------------------------------
+// 이메일 인증 관문(`@/lib/auth/emailVerificationGate`)이 쓰는 두 조회
+// -------------------------------------------------------------------------
+
+export interface LoginVerificationSubject {
+  user_id: string
+  /** Better Auth `user.email_verified`. 로그인 관문이 보는 값이다. */
+  email_verified: boolean
+  /** `member_profiles.is_admin`. 프로필이 없으면 `false`. */
+  is_admin: boolean
+}
+
+/**
+ * 로그인하려는 이메일 주소의 **인증 여부와 관리자 여부**를 한 번에 읽는다.
+ *
+ * 로그인 식별자는 `user.email`이다 — `member_profiles.email`과 다를 수 있으므로
+ * 그쪽으로 찾지 않는다(프로필 쪽은 사무국이 고칠 수 있는 연락처 칸이다).
+ *
+ * 프로필이 없는 계정(유령 회원)도 `user` 행은 있으므로 결과가 나온다. 그때
+ * `is_admin`은 `false`다 — 관문은 "관리자임이 확인된 경우에만" 비켜 준다.
+ *
+ * @returns 그 주소의 계정이 없으면 `null`.
+ */
+export async function getLoginVerificationSubject(
+  email: string
+): Promise<LoginVerificationSubject | null> {
+  const rows = await db
+    .select({
+      id: user.id,
+      emailVerified: user.emailVerified,
+      isAdmin: memberProfiles.isAdmin,
+    })
+    .from(user)
+    .leftJoin(memberProfiles, eq(memberProfiles.id, user.id))
+    .where(eq(user.email, email))
+    .limit(1)
+
+  const row = rows[0]
+  if (!row) return null
+  return {
+    user_id: row.id,
+    email_verified: row.emailVerified === true,
+    is_admin: row.isAdmin === true,
+  }
+}
+
+export interface EmailVerificationCoverage {
+  /** 로그인 수단이 있는 승인 조합원 수. */
+  approved: number
+  /** 그중 이메일 주소를 아직 인증하지 않은 사람 수. */
+  unverified: number
+  /** 그 미인증자 중 관리자 수 — 관문은 관리자를 비켜 주므로 따로 센다. */
+  unverified_admins: number
+}
+
+/**
+ * 인증 관문을 켜면 **누가 막히는가**를 세어 관리자 화면에 준다.
+ *
+ * 숫자를 화면에 띄우는 이유: 이 스위치의 비용은 "아무도 못 겪어 보고 나서야
+ * 알게 되는" 형태다. 켜는 사람이 켜기 전에 몇 명이 걸리는지 봐야 한다.
+ *
+ * 승인(`registration_status='approved'`) 기준으로 센다 — 활성 여부까지 좁히면
+ * 화면의 숫자가 회원 관리 화면의 "승인 회원"과 어긋난다.
+ */
+export async function countUnverifiedApprovedMembers(): Promise<EmailVerificationCoverage> {
+  const rows = await db
+    .select({
+      emailVerified: user.emailVerified,
+      isAdmin: memberProfiles.isAdmin,
+    })
+    .from(memberProfiles)
+    .innerJoin(user, eq(user.id, memberProfiles.id))
+    .where(eq(memberProfiles.registrationStatus, 'approved'))
+    .limit(ALL_PROFILES_LIMIT)
+
+  let unverified = 0
+  let unverifiedAdmins = 0
+  for (const row of rows) {
+    if (row.emailVerified === true) continue
+    unverified += 1
+    if (row.isAdmin === true) unverifiedAdmins += 1
+  }
+  return { approved: rows.length, unverified, unverified_admins: unverifiedAdmins }
+}

@@ -3,6 +3,8 @@
  * 클라이언트/서버 사이드에서 사용할 수 있는 설정 검증 함수들
  */
 
+import { FEE_RATE_RANGE_MESSAGE, MAX_FEE_RATE_BP } from '@/lib/funding/feeRate'
+
 export interface ValidationError {
   field: string
   message: string
@@ -342,6 +344,30 @@ export function validateFileUploadConfig(config: {
 }
 
 /**
+ * 플랫폼 수수료율 두 칸 유효성 검증.
+ *
+ * 값이 `undefined`면 검사하지 않는다 — 부분 페이로드(바뀐 칸만 보내는
+ * 저장 경로)에서 보내지 않은 칸을 "0이 아니다"라고 탓하면 안 된다.
+ */
+export function validateFundingFeeRates(rates: {
+  member_bp: unknown
+  nonmember_bp: unknown
+}): ValidationError[] {
+  const errors: ValidationError[] = []
+  const fields: Array<[string, unknown, string]> = [
+    ['funding_fee_rate_member_bp', rates.member_bp, '조합원'],
+    ['funding_fee_rate_nonmember_bp', rates.nonmember_bp, '비조합원'],
+  ]
+  for (const [field, value, who] of fields) {
+    if (value === undefined || value === null) continue
+    if (!Number.isInteger(value) || (value as number) < 0 || (value as number) > MAX_FEE_RATE_BP) {
+      errors.push({ field, message: `${who} ${FEE_RATE_RANGE_MESSAGE}`, category: 'features' })
+    }
+  }
+  return errors
+}
+
+/**
  * 전체 설정 유효성 검증
  */
 export function validateAllSettings(settings: any): ValidationResult {
@@ -397,6 +423,18 @@ export function validateAllSettings(settings: any): ValidationResult {
       history_count: 5, // 기본값
     })
     allErrors.push(...passwordErrors)
+  }
+
+  // 수수료율 — 화면이 퍼센트를 bp로 옮겨 담지만, 저장 직전에 저장 단위
+  // 그대로 한 번 더 본다. 여기서 막히면 "일부 설정을 저장하지 못했습니다"가
+  // 아니라 무엇이 잘못됐는지가 화면에 뜬다.
+  if (settings.features) {
+    allErrors.push(
+      ...validateFundingFeeRates({
+        member_bp: settings.features.funding_fee_rate_member_bp,
+        nonmember_bp: settings.features.funding_fee_rate_nonmember_bp,
+      })
+    )
   }
 
   // 기능 설정 검증
@@ -457,6 +495,17 @@ export function validateField(category: string, field: string, value: any): Vali
         (!Number.isInteger(value) || value < 4 || value > 128)
       ) {
         return { field, message: '최소 비밀번호 길이는 4-128자 사이여야 합니다.', category }
+      }
+      break
+
+    case 'features':
+      if (field === 'funding_fee_rate_member_bp' || field === 'funding_fee_rate_nonmember_bp') {
+        const [error] = validateFundingFeeRates(
+          field === 'funding_fee_rate_member_bp'
+            ? { member_bp: value, nonmember_bp: undefined }
+            : { member_bp: undefined, nonmember_bp: value }
+        )
+        if (error) return { ...error, category }
       }
       break
   }

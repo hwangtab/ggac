@@ -15,6 +15,9 @@ export type Fixtures = {
     | 'withdrawalRequested'
     // 로그인하지 않는 계정: 관리자 전용 쓰기 경계(회원 승인)의 **대상**이다.
     | 'approvalTarget'
+    // 이메일 인증 관문(`authz-email-verification.spec.ts`)의 대상. 주소를
+    // 인증하지 않은 승인 조합원이라 로그인 상태(storageState)를 만들지 않는다.
+    | 'unverified'
     // 탈퇴 **완료** 계정(Task 8)의 자리표시자 이메일. 로그인 수단(account
     // 행)이 없어 storageState를 만들지 않는다 — 값은 id가 아니라 이메일이다.
     | 'withdrawnEmail',

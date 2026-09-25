@@ -9,8 +9,10 @@ import { logSecurityEvent } from '@/utils/security'
 import { refreshSettingsCache } from '@/utils/systemSettings'
 import { createLogger } from '@/utils/logger'
 import { listSystemSettings, updateSystemSetting } from '@/db/queries/settings'
+import { MAX_FEE_RATE_BP } from '@/lib/funding/feeRate'
 import {
   SETTING_MAPPINGS,
+  applyFundingFeatureField,
   buildLoginPolicyValue,
   buildPasswordPolicyValue,
   buildRegistrationEnabledValue,
@@ -62,6 +64,12 @@ const SystemSettingsUpdateSchema = z
         comments_enabled: z.boolean().optional(),
         file_uploads_enabled: z.boolean().optional(),
         funding_enabled: z.boolean().optional(),
+        // 요율은 **만분율(bp) 정수**로 오간다. 화면이 퍼센트를 bp로 옮겨
+        // 보내고(`@/lib/funding/feeRate`의 `feeRatePercentToBp`), 여기서
+        // 범위를 한 번 더 지킨다 — 화면을 거치지 않은 요청도 있다.
+        // 상한 `MAX_FEE_RATE_BP`와 같은 숫자다.
+        funding_fee_rate_member_bp: z.number().int().min(0).max(MAX_FEE_RATE_BP).optional(),
+        funding_fee_rate_nonmember_bp: z.number().int().min(0).max(MAX_FEE_RATE_BP).optional(),
       })
       .partial()
       .optional(),
@@ -99,6 +107,8 @@ interface SystemSettings {
     comments_enabled: boolean
     file_uploads_enabled: boolean
     funding_enabled: boolean
+    funding_fee_rate_member_bp: number
+    funding_fee_rate_nonmember_bp: number
   }
 }
 
@@ -364,6 +374,11 @@ export const PUT = defineApiRoute<Record<string, unknown>>({
           case 'email_verification':
             if (frontendKey === 'require_email_verification') {
               settingGroups[mapping.key] = {
+                // 관문이 읽는 칸. 정본이다.
+                enforce_on_login: frontendValue,
+                // 옛 칸. 아무도 읽지 않지만, 운영 행에 `true`로 남아 있는 것을
+                // 그대로 두면 다음에 이 행을 들여다보는 사람이 어느 쪽을
+                // 믿을지 알 수 없다. 저장할 때 같은 값으로 맞춰 둔다.
                 required: frontendValue,
                 token_expiry_hours: settingGroups[mapping.key]?.token_expiry_hours || 24,
                 resend_limit: settingGroups[mapping.key]?.resend_limit || 3,
@@ -374,7 +389,6 @@ export const PUT = defineApiRoute<Record<string, unknown>>({
           case 'artist_features':
           case 'comment_features':
           case 'file_upload':
-          case 'funding_features':
             settingGroups[mapping.key] = {
               ...settingGroups[mapping.key],
               enabled: frontendValue,
@@ -385,6 +399,16 @@ export const PUT = defineApiRoute<Record<string, unknown>>({
             ) {
               settingGroups[mapping.key].registration_enabled = frontendValue
             }
+            break
+          // 펀딩만 따로 받는다 — 이 그룹은 칸이 셋이라(스위치 + 요율 둘)
+          // 위 묶음처럼 `enabled: frontendValue`로 덮으면 요율 숫자가
+          // 스위치 칸에 들어앉는다. 판정은 매핑 모듈에 있다.
+          case 'funding_features':
+            settingGroups[mapping.key] = applyFundingFeatureField(
+              settingGroups[mapping.key],
+              frontendKey,
+              frontendValue
+            )
             break
         }
       }

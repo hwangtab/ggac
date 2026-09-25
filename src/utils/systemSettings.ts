@@ -1,4 +1,5 @@
 import { listSystemSettings } from '@/db/queries/settings'
+import { MEMBER_FEE_RATE_BP, NONMEMBER_FEE_RATE_BP } from '@/lib/funding/feeRate'
 
 /**
  * 주의: getSystemSettings는 일반 사용자 요청에서도 호출될 수 있다. 예전에는
@@ -62,7 +63,13 @@ interface SystemSettingsData {
       history_count: number
     }
     email_verification: {
+      /**
+       * 옛 칸. **아무도 읽지 않는다** — 관문은 아래 `enforce_on_login`을 본다
+       * (`@/lib/auth/emailVerificationGate`의 파일 첫머리 참고).
+       */
       required: boolean
+      /** 로그인 관문을 켜는 칸. 없으면 꺼짐이다. */
+      enforce_on_login?: boolean
       token_expiry_hours: number
       resend_limit: number
     }
@@ -106,7 +113,10 @@ interface SystemSettingsData {
     }
     funding_features: {
       enabled: boolean
-      platform_fee_rate_bp: number
+      /** 조합원 요율(bp). 정본은 `@/lib/funding/feeRate`. */
+      platform_fee_rate_member_bp: number
+      /** 비조합원 요율(bp). */
+      platform_fee_rate_nonmember_bp: number
       hold_minutes: number
     }
   }
@@ -188,6 +198,7 @@ function getDefaultSettings(): SystemSettingsData {
       },
       email_verification: {
         required: false,
+        enforce_on_login: false,
         token_expiry_hours: 24,
         resend_limit: 3,
       },
@@ -229,9 +240,13 @@ function getDefaultSettings(): SystemSettingsData {
         follow_system: false,
         activity_feed: true,
       },
+      // 요율 기본값은 조합이 정한 규칙 그대로다(3.3%·5.5%, 부가세 포함).
+      // 예전 이 자리에는 옛 키 하나가 `0`으로 적혀 있었는데, 그 값은 어느
+      // 소비처도 읽지 않으면서 "기본 수수료는 0%"라고 말하고 있었다.
       funding_features: {
         enabled: false,
-        platform_fee_rate_bp: 0,
+        platform_fee_rate_member_bp: MEMBER_FEE_RATE_BP,
+        platform_fee_rate_nonmember_bp: NONMEMBER_FEE_RATE_BP,
         hold_minutes: 10,
       },
     },

@@ -162,14 +162,15 @@ test('객체가 아닌 저장값은 빈 객체로 시작한다', () => {
  *
  * 값이 없을 때의 기대값은 취향이 아니라 소비처가 정한 것이다:
  *  - features 넷: `@/utils/systemSettings`의 `isFeatureEnabled()`가 `?? true`
- *  - require_email_verification: 읽는 코드가 없고, 없을 때의 동작을 적어 둔
- *    유일한 자리(`getDefaultSettings()`)가 `required: false`
  *  - 쓰기 쪽 여섯: 같은 모듈의 `getDefaultSettings()`와 reset 기본값 표가 `true`
+ *
+ * `require_email_verification`은 이 목록에 없다 — 켜는 쪽이 명시적이어야 하는
+ * 스위치라 판정이 `=== true`이고, 읽는 칸도 옛 `required`가 아니다. 아래
+ * 펀딩 옆에 따로 둔다.
  */
 
 const DISPLAY_CASES = [
   // [카테고리, 프런트엔드 키, 저장 JSON 필드, 값 없을 때의 기대값]
-  ['security', 'require_email_verification', 'required', false],
   ['features', 'board_enabled', 'enabled', true],
   ['features', 'artist_registration_enabled', 'registration_enabled', true],
   ['features', 'comments_enabled', 'enabled', true],
@@ -197,6 +198,24 @@ test('화면 표시: 펀딩만 값이 없을 때 꺼진 쪽으로 기운다(소�
   assert.equal(transform({ enabled: true }), true)
   assert.equal(transform({ enabled: false }), false)
   assert.equal(transform({}), false)
+})
+
+test('화면 표시: 이메일 인증 관문은 새 칸만 읽고, 운영에 남은 옛 값에 속지 않는다', () => {
+  const { transform } = SETTING_MAPPINGS.security.require_email_verification
+
+  assert.equal(transform({ enforce_on_login: true }), true)
+  assert.equal(transform({ enforce_on_login: false }), false)
+  assert.equal(transform({}), false)
+  assert.equal(transform(null), false)
+  assert.equal(transform(undefined), false)
+
+  // 운영 행의 오늘 모양. 이 칸을 읽었다면 배포하는 순간 화면이 "켜짐"으로
+  // 떠서, 사무국이 아무것도 하지 않았는데 미인증 회원이 막혔을 것이다.
+  assert.equal(
+    transform({ required: true, token_expiry_hours: 24, resend_limit: 3 }),
+    false,
+    '아무도 읽지 않던 옛 값이 관문을 켜면 안 된다'
+  )
 })
 
 const WRITE_CASES = [

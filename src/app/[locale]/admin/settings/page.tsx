@@ -21,6 +21,12 @@ import {
   type ValidationError,
 } from '@/utils/settingsValidation'
 import { parseIntegerParam } from '@/utils/queryParams'
+import {
+  FEE_RATE_RANGE_MESSAGE,
+  FEE_RATE_VAT_NOTE,
+  feeRatePercentToBp,
+  formatFeeRatePercent,
+} from '@/lib/funding/feeRate'
 
 interface AdminSettings {
   site: {
@@ -50,8 +56,15 @@ interface AdminSettings {
     comments_enabled: boolean
     file_uploads_enabled: boolean
     funding_enabled: boolean
+    /** 조합원 요율(만분율). 화면은 퍼센트로 보여 준다. */
+    funding_fee_rate_member_bp: number
+    /** 비조합원 요율(만분율). */
+    funding_fee_rate_nonmember_bp: number
   }
 }
+
+/** 화면이 퍼센트 문자열을 들고 있는 두 칸. 키는 `features`의 필드 이름과 짝이다. */
+type FeeRateField = 'funding_fee_rate_member_bp' | 'funding_fee_rate_nonmember_bp'
 
 /**
  * 저장 시 **바뀐 값만** 골라낸다(최종 리뷰 B-3).
@@ -106,6 +119,25 @@ export default function AdminSettingsPage() {
   const [backupLoading, setBackupLoading] = useState(false)
   const [restoreLoading, setRestoreLoading] = useState(false)
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([])
+  /**
+   * 요율 칸이 **입력 중인 글자 그대로**를 들고 있는 자리. `settings`에는
+   * 옮길 수 있는 bp만 들어가므로, 여기가 없으면 "3."을 치는 순간 칸이
+   * 되감기거나 옮길 수 없는 입력이 조용히 사라진다.
+   */
+  const [feeRateInputs, setFeeRateInputs] = useState<Record<FeeRateField, string>>({
+    funding_fee_rate_member_bp: '',
+    funding_fee_rate_nonmember_bp: '',
+  })
+  const [feeRateErrors, setFeeRateErrors] = useState<Partial<Record<FeeRateField, string>>>({})
+  /**
+   * 이메일 인증 관문을 켰을 때 **막히는 사람 수**. 설정과 따로 불러온다 —
+   * 저장할 수 없는 관측값이라 설정 객체에 섞으면 저장 페이로드로 되돌아간다.
+   */
+  const [verificationCoverage, setVerificationCoverage] = useState<{
+    approved: number
+    unverified: number
+    unverified_admins: number
+  } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -130,6 +162,7 @@ export default function AdminSettingsPage() {
 
   useEffect(() => {
     fetchSettings()
+    fetchVerificationCoverage()
   }, [])
 
   useEffect(() => {
@@ -149,11 +182,36 @@ export default function AdminSettingsPage() {
       const json = await response.json()
       setSettings(json.data)
       savedSettingsRef.current = json.data
+      setFeeRateInputs({
+        funding_fee_rate_member_bp: formatFeeRatePercent(
+          json.data?.features?.funding_fee_rate_member_bp
+        ),
+        funding_fee_rate_nonmember_bp: formatFeeRatePercent(
+          json.data?.features?.funding_fee_rate_nonmember_bp
+        ),
+      })
+      setFeeRateErrors({})
     } catch (err) {
       console.error('Settings fetch error:', err)
       setError(err instanceof Error ? err.message : '설정 정보를 불러오는 중 오류가 발생했습니다.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  /**
+   * 관문을 켜기 전에 봐야 하는 숫자를 가져온다. 실패해도 설정 화면 자체는
+   * 그대로 뜬다 — 숫자가 없으면 그 자리에 "확인하지 못했다"고 적는다.
+   */
+  const fetchVerificationCoverage = async () => {
+    try {
+      const response = await fetch('/api/admin/settings/email-verification')
+      if (response.ok === false) throw new Error('현황 조회 실패')
+      const json = await response.json()
+      setVerificationCoverage(json.data ?? null)
+    } catch (err) {
+      console.error('Email verification coverage fetch error:', err)
+      setVerificationCoverage(null)
     }
   }
 
@@ -165,6 +223,16 @@ export default function AdminSettingsPage() {
       clearStatusTimer()
       setError(null)
       setSuccess(null)
+
+      // 요율 칸은 `settings`에 옮길 수 없는 입력을 담지 않는다. 그래서
+      // 여기서 막지 않으면 **화면에 적힌 것과 다른(직전의 멀쩡한) 값**이
+      // 저장되고, 사무국은 성공 메시지를 본다.
+      const badFeeRate = (Object.keys(feeRateErrors) as FeeRateField[]).find(
+        key => feeRateErrors[key]
+      )
+      if (badFeeRate) {
+        throw new Error(feeRateErrors[badFeeRate] as string)
+      }
 
       // 저장 전 전체 설정 유효성 검증
       const validationResult = validateAllSettings(settings)
@@ -265,6 +333,28 @@ export default function AdminSettingsPage() {
     } else {
       setValidationErrors(filteredErrors)
     }
+  }
+
+  /**
+   * 요율 칸 한 개의 입력을 받는다. 옮길 수 있으면 bp로 바꿔 설정에 담고,
+   * 옮길 수 없으면 **담지 않고** 범위를 말한다 — 조용히 반올림하거나 0으로
+   * 떨어뜨리지 않는다.
+   */
+  const updateFeeRate = (field: FeeRateField, text: string) => {
+    setFeeRateInputs(prev => ({ ...prev, [field]: text }))
+
+    const bp = feeRatePercentToBp(text.trim())
+    if (bp === null) {
+      setFeeRateErrors(prev => ({ ...prev, [field]: FEE_RATE_RANGE_MESSAGE }))
+      return
+    }
+
+    setFeeRateErrors(prev => {
+      const next = { ...prev }
+      delete next[field]
+      return next
+    })
+    updateSettings('features', field, bp)
   }
 
   // 백업 다운로드 함수
@@ -744,28 +834,86 @@ export default function AdminSettingsPage() {
                     </div>
 
                     {/*
-                      여기에 "이메일 인증 필수" 체크박스가 있었다. **아무것도
-                      통제하지 않았다** — `src/lib/auth/server.ts`는
-                      `emailAndPassword.requireEmailVerification`을 켜지 않아
-                      인증하지 않은 계정도 그대로 로그인된다. 같은 설정의
-                      `resend_limit`·`token_expiry_hours`도 읽는 코드가 없다
-                      (Better Auth가 자기 기본값을 쓴다). 저장은 되는데 아무
-                      일도 일어나지 않는 스위치라, 끄고 새로고침하면 다시 켜져
-                      보이기까지 했다.
+                      이 자리에 있던 "이메일 인증 필수" 체크박스는 아무것도
+                      통제하지 못해 한 번 걷어냈다가, 관문
+                      (`@/lib/auth/emailVerificationGate`)을 만들어 다시 놓았다.
+                      이제 켜면 실제로 로그인이 막힌다.
 
-                      통제하지 못하는 스위치를 두는 것보다 무엇이 실제로
-                      일어나는지 적는 편이 낫다. 접근은 관리자 승인으로 막고
-                      있고, 인증 메일은 가입할 때 나간다.
-
-                      강제로 바꾸려면 미들웨어에 인증 관문을 새로 놓아야 하고,
-                      그건 조합의 접근 정책을 바꾸는 일이라 화면 정리와 같이
-                      할 일이 아니다.
+                      스위치가 읽는 칸은 `email_verification.enforce_on_login`
+                      이다. 운영 행에 남아 있는 옛 `required`는 아무도 읽지
+                      않는다 — 그 칸을 읽었다면 배포하는 순간 관문이 켜진
+                      상태로 떠서 미인증 회원이 문 앞에서 막혔을 것이다.
+                      같은 설정의 `resend_limit`·`token_expiry_hours`는 여전히
+                      읽는 코드가 없다(Better Auth가 자기 기본값을 쓴다).
                     */}
-                    <div className="rounded-lg bg-gray-50 p-4 text-sm text-gray-600">
-                      <p className="font-medium text-gray-800">이메일 인증</p>
-                      <p className="mt-1">
-                        가입할 때 인증 메일이 나갑니다. 로그인은 인증 여부가 아니라 관리자 승인으로
-                        막습니다 — 인증하지 않은 계정도 승인되면 로그인됩니다.
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-gray-700">
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={settings.security.require_email_verification}
+                          onChange={e =>
+                            updateSettings(
+                              'security',
+                              'require_email_verification',
+                              e.target.checked
+                            )
+                          }
+                          className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 mr-2"
+                        />
+                        <span className="text-sm font-medium text-gray-700">
+                          이메일 인증을 마쳐야 로그인할 수 있게 한다
+                        </span>
+                      </label>
+                      <p className="mt-1 ml-6 text-xs text-amber-900">
+                        켜면 인증하지 않은 주소로는 로그인이 거절되고, 거절 화면에서 인증 메일을
+                        다시 받을 수 있습니다. 끄면 지금처럼 인증 여부와 상관없이 관리자 승인만으로
+                        로그인됩니다.
+                      </p>
+
+                      {/*
+                        켜기 전에 비용을 보여 준다. 이 스위치의 비용은 아무도
+                        겪어 보고 나서야 알게 되는 형태라, 숫자가 화면에
+                        없으면 "로그인이 안 된다"는 문의로 처음 알게 된다.
+                      */}
+                      <div className="mt-3 ml-6 rounded-md bg-white/70 p-3 text-xs">
+                        {verificationCoverage ? (
+                          <>
+                            <p className="text-gray-800">
+                              승인된 조합원 <strong>{verificationCoverage.approved}명</strong> 중{' '}
+                              <strong className="text-amber-900">
+                                {verificationCoverage.unverified}명
+                              </strong>
+                              이 아직 이메일 주소를 인증하지 않았습니다.
+                            </p>
+                            {verificationCoverage.unverified > 0 && (
+                              <p className="mt-1 text-gray-600">
+                                지금 켜면 그{' '}
+                                {verificationCoverage.unverified -
+                                  verificationCoverage.unverified_admins}
+                                명이 다음 로그인부터 막힙니다.
+                              </p>
+                            )}
+                            {verificationCoverage.unverified_admins > 0 && (
+                              <p className="mt-1 text-gray-600">
+                                그중 관리자 {verificationCoverage.unverified_admins}명은 막히지
+                                않습니다(아래 참고).
+                              </p>
+                            )}
+                          </>
+                        ) : (
+                          <p className="text-gray-600">
+                            미인증 회원 수를 확인하지 못했습니다. 켜기 전에 새로고침해 주세요.
+                          </p>
+                        )}
+                      </div>
+
+                      <p className="mt-3 ml-6 text-xs text-gray-600">
+                        관리자는 이 관문에 걸리지 않습니다. 마지막 관리자의 주소가 인증되지 않은
+                        채로 켜지면 스위치를 다시 끌 사람이 남지 않기 때문입니다.
+                      </p>
+                      <p className="mt-1 ml-6 text-xs text-gray-600">
+                        설정을 읽지 못하면 관문은 열린 쪽으로 둡니다 — 데이터베이스가 한 번
+                        삐끗했다고 전 조합원이 로그인하지 못하면 안 됩니다.
                       </p>
                     </div>
                   </div>
@@ -872,6 +1020,73 @@ export default function AdminSettingsPage() {
                         켜면 조합원이 캠페인을 만들어 심사에 올릴 수 있고, 승인된 캠페인은 실제
                         결제로 후원을 받습니다. 끄면 새 개설·심사 처리·결제가 모두 막힙니다.
                       </p>
+
+                      <div className="mt-4 ml-6 border-t border-amber-200 pt-4">
+                        <p className="text-sm font-medium text-gray-700">
+                          플랫폼 수수료율 ({FEE_RATE_VAT_NOTE})
+                        </p>
+                        <p className="mt-1 text-xs text-amber-800">
+                          모금액에서 조합이 떼는 몫입니다. 두 숫자 모두{' '}
+                          <strong>{FEE_RATE_VAT_NOTE}</strong>이라 여기에 부가세를 다시 얹지
+                          않습니다.
+                        </p>
+
+                        <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                          {(
+                            [
+                              ['funding_fee_rate_member_bp', '조합원 캠페인'],
+                              ['funding_fee_rate_nonmember_bp', '비조합원 캠페인'],
+                            ] as Array<[FeeRateField, string]>
+                          ).map(([field, label]) => (
+                            <div key={field}>
+                              <label
+                                className="block text-xs font-medium text-gray-700 mb-1"
+                                htmlFor={field}
+                              >
+                                {label}
+                              </label>
+                              <div className="flex items-center">
+                                <input
+                                  id={field}
+                                  type="text"
+                                  inputMode="decimal"
+                                  value={feeRateInputs[field]}
+                                  onChange={e => updateFeeRate(field, e.target.value)}
+                                  className={`w-24 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                                    feeRateErrors[field]
+                                      ? 'border-red-300 focus:ring-red-500'
+                                      : 'border-gray-300 focus:ring-primary-500'
+                                  }`}
+                                />
+                                <span className="ml-2 text-sm text-gray-700">%</span>
+                              </div>
+                              {feeRateErrors[field] && (
+                                <p className="mt-1 text-xs text-red-600">{feeRateErrors[field]}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+
+                        {/*
+                          요율은 **승인하는 순간 캠페인에 새겨진다**
+                          (`src/lib/funding/feeRate.ts`의 `platformFeeRateFor`를
+                          승인 라우트가 부르고, 그 결과를 캠페인 행에 적는다).
+                          그래서 여기서 숫자를 바꿔도 이미 승인된 캠페인의 정산은
+                          움직이지 않는다. 이 문장을 화면에 적어 두지 않으면
+                          사무국은 "요율을 내렸으니 진행 중인 캠페인도 내려간다"고
+                          읽는다 — 그 오해는 후원자에게 돌려줄 금액을 잘못 계산하게
+                          만든다.
+                        */}
+                        <p className="mt-3 text-xs text-amber-900">
+                          바꾼 요율은 <strong>앞으로 승인하는 캠페인부터</strong> 적용됩니다. 요율은
+                          승인하는 순간 캠페인에 새겨지므로, 이미 승인된 캠페인의 정산은 여기서
+                          숫자를 바꿔도 달라지지 않습니다.
+                        </p>
+                        <p className="mt-1 text-xs text-gray-600">
+                          비조합원 요율은 지금의 개설 경로로는 붙지 않습니다 — 캠페인 개설이
+                          승인·활성 조합원에게만 열려 있기 때문입니다.
+                        </p>
+                      </div>
                     </div>
                   </div>
                 )}
