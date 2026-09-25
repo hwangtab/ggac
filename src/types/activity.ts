@@ -22,6 +22,7 @@ export type ActivityActionType =
   | 'page_viewed'
   | 'attachment_downloaded'
   | 'funding_campaign_created'
+  | 'funding_campaign_created_by_admin'
   | 'funding_campaign_submitted'
   | 'funding_campaign_reviewed'
   | 'funding_pledge_paid'

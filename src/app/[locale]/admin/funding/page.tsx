@@ -5,6 +5,7 @@ import {
   FiChevronDown,
   FiChevronUp,
   FiDollarSign,
+  FiEdit2,
   FiExternalLink,
   FiRefreshCw,
 } from 'react-icons/fi'
@@ -14,6 +15,7 @@ import OptimizedImage from '@/components/OptimizedImage'
 import { toReviewDetail, type CampaignDetail } from './reviewDetail'
 import SettlementPanel from './SettlementPanel'
 import FulfillmentPanel from './FulfillmentPanel'
+import ProxyCreatePanel from './ProxyCreatePanel'
 import {
   nextStatus,
   PUBLIC_CAMPAIGN_STATUSES,
@@ -99,6 +101,7 @@ export default function AdminFundingPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [created, setCreated] = useState<{ id: string; title: string } | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [slugDrafts, setSlugDrafts] = useState<Record<string, string>>({})
   const [rejectNotes, setRejectNotes] = useState<Record<string, string>>({})
@@ -290,15 +293,12 @@ export default function AdminFundingPage() {
             </div>
             <div>
               <h2 className="text-xl font-semibold text-gray-900">캠페인 심사</h2>
-              {/* 두 요율이 다 있다는 것과, 그중 하나에는 오늘 길이 없다는
-                  것을 같은 자리에서 말한다. 쓰이지 않는 요율을 살아 있는 것처럼
-                  적어 두면 다음 사람이 그것을 기능으로 읽는다. */}
               <p className="text-sm text-gray-500">
                 제출된 캠페인을 승인하면 주소가 확정되고 공개되며, 그 순간 플랫폼 수수료율(조합원{' '}
                 {formatFeeRatePercent(MEMBER_FEE_RATE_BP)}% / 비조합원{' '}
                 {formatFeeRatePercent(NONMEMBER_FEE_RATE_BP)}%, 둘 다 {FEE_RATE_VAT_NOTE})이
-                캠페인에 고정됩니다. 캠페인 개설은 승인·활성 조합원만 할 수 있어, 비조합원 요율이
-                실제로 붙는 경우는 개설한 뒤 승인 전에 자격이 풀린 건뿐입니다.
+                개설자의 가입 승인 상태에 따라 캠페인에 고정됩니다. 조합원이 아닌 창작자의 캠페인은
+                대리 개설로 만듭니다.
               </p>
             </div>
           </div>
@@ -326,6 +326,25 @@ export default function AdminFundingPage() {
             </button>
           ))}
         </div>
+
+        <ProxyCreatePanel
+          memberRateBp={MEMBER_FEE_RATE_BP}
+          nonmemberRateBp={NONMEMBER_FEE_RATE_BP}
+          onCreated={campaign => {
+            setCreated(campaign)
+            setSuccess(null)
+            setFilter('draft')
+            void load()
+          }}
+        />
+        {created && (
+          <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
+            &quot;{created.title}&quot; 초안을 만들었습니다.{' '}
+            <a href={`/mypage/funding/${created.id}/edit`} className="font-medium underline">
+              편집 화면에서 본문·리워드·표지를 채우고 제출하기
+            </a>
+          </div>
+        )}
 
         {error && (
           <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
@@ -375,6 +394,15 @@ export default function AdminFundingPage() {
                         <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
                           {c.category}
                         </span>
+                        {c.status !== 'settled' && (
+                          <a
+                            href={`/mypage/funding/${c.id}/edit`}
+                            className="inline-flex items-center gap-1 text-xs text-blue-700 hover:underline"
+                          >
+                            <FiEdit2 className="w-3 h-3" />
+                            편집
+                          </a>
+                        )}
                         {isPublic(c) && (
                           <a
                             href={`/funding/${c.slug}`}

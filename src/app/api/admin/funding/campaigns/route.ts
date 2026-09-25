@@ -1,10 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { requireAdmin } from '@/lib/server/adminAuth'
-import { listCampaignsForAdmin, getCampaignProgress } from '@/db/queries/funding'
+import { createCampaign, listCampaignsForAdmin, getCampaignProgress } from '@/db/queries/funding'
+import { logUserActivity } from '@/db/queries/activities'
+import { getProfileAuthzFields } from '@/db/queries/profiles'
+import { parseCampaignPatch } from '@/lib/funding/campaignInput'
+import { proxyOwnerVerdict } from '@/lib/funding/proxyOwner'
+import { isFundingEnabled } from '@/lib/funding/settings'
+import { FUNDING_TERMS_REVISION } from '@/lib/funding/terms'
 import { nextStatus, type CampaignStatus } from '@/lib/funding/transitions'
 import { resolveCampaignFeeRate, type CampaignFeeRate } from '@/lib/server/fundingFeeRate'
-import { ApiSuccess } from '@/utils/apiWrapper'
+import { parseJsonObjectBody } from '@/utils/requestBody'
+import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
+import { createLogger } from '@/utils/logger'
+
+const log = createLogger('api/admin/funding/campaigns')
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -38,4 +48,61 @@ export async function GET(request: NextRequest) {
     }))
   )
   return ApiSuccess.ok({ campaigns: withProgress }).toNextResponse()
+}
+
+/**
+ * 관리자 대리 개설. 사무국이 개설부터 승인까지 혼자 처리하는 경우를 위한 길이다
+ * — 편집·리워드·표지·제출은 이미 관리자도 통과한다(`canManageCampaign`).
+ *
+ * 개설자 약관은 개설자가 화면에서 직접 누르지 않으므로, 관리자가 "개설자에게
+ * 약관을 안내하고 동의를 받았다"고 확인해야만 만든다. 캠페인 행의 동의 기록
+ * (`terms_version`·`terms_agreed_at`)은 그 확인 시점이고, **누가 대신 확인했는지**는
+ * 활동 기록(`funding_campaign_created_by_admin`)에 관리자 계정으로 남는다.
+ */
+export async function POST(request: NextRequest) {
+  if (!(await isFundingEnabled()))
+    return ApiError.serviceUnavailable('펀딩을 준비 중입니다.').toNextResponse()
+  const auth = await requireAdmin()
+  if (auth instanceof NextResponse) return auth
+
+  const body = await parseJsonObjectBody(request)
+  if (!body) return ApiError.badRequest('유효한 JSON body가 필요합니다.').toNextResponse()
+  if (body.agreedCreatorTermsOnBehalf !== true) {
+    return ApiError.badRequest(
+      '개설자에게 개설자 약관을 안내하고 동의를 받았는지 확인해 주세요.'
+    ).toNextResponse()
+  }
+
+  const ownerUserId = typeof body.ownerUserId === 'string' ? body.ownerUserId.trim() : ''
+  if (!ownerUserId) return ApiError.badRequest('개설자를 골라 주세요.').toNextResponse()
+  const owner = proxyOwnerVerdict(await getProfileAuthzFields(ownerUserId))
+  if (owner.ok === false) return ApiError.badRequest(owner.message).toNextResponse()
+
+  const parsed = parseCampaignPatch(body, 'all')
+  if (parsed.ok === false) return ApiError.badRequest(parsed.message).toNextResponse()
+  const { patch } = parsed
+  if (!patch.title || !patch.summary || !patch.goal_amount) {
+    return ApiError.badRequest('제목·한 줄 소개·목표 금액은 필수입니다.').toNextResponse()
+  }
+
+  const campaign = await createCampaign({
+    owner_user_id: ownerUserId,
+    title: String(patch.title),
+    summary: String(patch.summary),
+    story: typeof patch.story === 'string' ? patch.story : '',
+    category: typeof patch.category === 'string' ? patch.category : undefined,
+    goal_amount: Number(patch.goal_amount),
+    start_at: (patch.start_at as string | null) ?? null,
+    end_at: (patch.end_at as string | null) ?? null,
+    project_slug: (patch.project_slug as string | null) ?? null,
+    terms_version: FUNDING_TERMS_REVISION,
+  })
+  logUserActivity({
+    user_id: auth.user.id,
+    action_type: 'funding_campaign_created_by_admin',
+    target_type: 'funding_campaign',
+    target_id: String(campaign.id),
+    metadata: { owner_user_id: ownerUserId, owner_is_member: owner.is_member },
+  }).catch(e => log.warn('활동 기록 실패', e))
+  return ApiSuccess.created({ campaign }).toNextResponse()
 }

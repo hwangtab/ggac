@@ -1083,8 +1083,8 @@ export default function AdminSettingsPage() {
                           숫자를 바꿔도 달라지지 않습니다.
                         </p>
                         <p className="mt-1 text-xs text-gray-600">
-                          비조합원 요율은 지금의 개설 경로로는 붙지 않습니다 — 캠페인 개설이
-                          승인·활성 조합원에게만 열려 있기 때문입니다.
+                          비조합원 요율은 펀딩 심사 화면의 대리 개설로 조합원이 아닌 회원을 개설자로
+                          지정한 캠페인에 붙습니다.
                         </p>
                       </div>
                     </div>

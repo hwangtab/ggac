@@ -39,7 +39,7 @@ async function readCampaignRow(id: string) {
   const client = createClient({ url: process.env.TURSO_DATABASE_URL! })
   try {
     const res = await client.execute({
-      sql: `SELECT title, summary, goal_amount, status, submitted_at, review_note, owner_user_id
+      sql: `SELECT title, summary, goal_amount, status, submitted_at, review_note, owner_user_id, terms_version
               FROM funding_campaigns WHERE id = ?`,
       args: [id],
     })
@@ -1345,6 +1345,91 @@ test.describe('펀딩 — 후원 조회 경계', () => {
       await ownerContext.dispose()
       await backerContext.dispose()
       await anonContext.dispose()
+    }
+  })
+})
+
+test.describe('펀딩 — 관리자 대리 개설', () => {
+  const createdIds: string[] = []
+
+  test.afterAll(async () => {
+    if (createdIds.length === 0) return
+    const client = createClient({ url: process.env.TURSO_DATABASE_URL! })
+    try {
+      for (const id of createdIds) {
+        await client.execute({ sql: 'DELETE FROM funding_campaigns WHERE id = ?', args: [id] })
+      }
+    } finally {
+      client.close()
+    }
+  })
+
+  const body = (ownerUserId: string, extra: Record<string, unknown> = {}) => ({
+    ownerUserId,
+    title: '대리 개설 E2E',
+    summary: '관리자가 대신 만든 초안',
+    goal_amount: 100000,
+    category: '음반',
+    agreedCreatorTermsOnBehalf: true,
+    ...extra,
+  })
+
+  test('관리자만 대신 만들 수 있고, 만든 초안의 소유자는 지정한 회원이다', async ({ baseURL }) => {
+    const anonContext = await apiRequest.newContext({ baseURL })
+    const otherContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('other'),
+    })
+    const adminContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('admin'),
+    })
+    try {
+      const anon = await anonContext.post('/api/admin/funding/campaigns', {
+        data: body(fixtures.users.owner),
+      })
+      expect(anon.status()).toBe(401)
+
+      const denied = await otherContext.post('/api/admin/funding/campaigns', {
+        data: body(fixtures.users.other),
+      })
+      expect(denied.status()).toBe(403)
+
+      const noAttest = await adminContext.post('/api/admin/funding/campaigns', {
+        data: body(fixtures.users.owner, { agreedCreatorTermsOnBehalf: false }),
+      })
+      expect(noAttest.status()).toBe(400)
+
+      const unknownOwner = await adminContext.post('/api/admin/funding/campaigns', {
+        data: body('00000000-0000-4000-8000-00000000ffff'),
+      })
+      expect(unknownOwner.status()).toBe(400)
+
+      const created = await adminContext.post('/api/admin/funding/campaigns', {
+        data: body(fixtures.users.owner),
+      })
+      expect(created.status()).toBe(201)
+      const campaign = (await created.json()).data.campaign as { id: string }
+      createdIds.push(campaign.id)
+      const row = await readCampaignRow(campaign.id)
+      expect(row?.owner_user_id).toBe(fixtures.users.owner)
+      expect(row?.status).toBe('draft')
+      expect(row?.terms_version).toBeTruthy()
+
+      // 조합원이 아닌 회원도 개설자로 지정된다 — 승인 때 비조합원 요율이 붙는다.
+      const nonMember = await adminContext.post('/api/admin/funding/campaigns', {
+        data: body(fixtures.users.pending),
+      })
+      expect(nonMember.status()).toBe(201)
+      createdIds.push(((await nonMember.json()).data.campaign as { id: string }).id)
+
+      // 관리자는 대신 만든 초안을 편집 경로로 읽을 수 있다.
+      const detail = await adminContext.get(`/api/mypage/funding/campaigns/${campaign.id}`)
+      expect(detail.status()).toBe(200)
+    } finally {
+      await anonContext.dispose()
+      await otherContext.dispose()
+      await adminContext.dispose()
     }
   })
 })

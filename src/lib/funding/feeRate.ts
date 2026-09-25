@@ -21,7 +21,7 @@ export const MAX_FEE_RATE_BP = 3000
 /** 조합원 요율 3.3%(부가세 포함). */
 export const MEMBER_FEE_RATE_BP = 330
 
-/** 비조합원 요율 5.5%(부가세 포함). 오늘 이 요율이 붙을 길은 아래 참고. */
+/** 비조합원 요율 5.5%(부가세 포함). 이 요율이 붙는 길은 아래 참고. */
 export const NONMEMBER_FEE_RATE_BP = 550
 
 /** 요율 옆에 늘 함께 적는 말. 사무국이 읽는 자리에서 빠지면 안 된다. */
@@ -71,20 +71,12 @@ export function isFeeMember(profile: FeeMemberProfile | null | undefined): boole
 /**
  * 승인 시점에 캠페인에 새길 요율을 고른다.
  *
- * ## 비조합원 요율에는 오늘 길이 없다
+ * ## 비조합원 요율이 붙는 길
  *
- * 캠페인 개설은 `requireActiveMember`(승인·활성 조합원)만 통과한다
- * (`src/app/api/mypage/funding/campaigns/route.ts`). 그래서 개설 → 제출 →
- * 승인을 정상적으로 밟은 캠페인의 개설자는 승인 시점에도 조합원이고,
- * `nonmember_bp`는 **적용되지 않는다.** 남는 길은 둘뿐이다 — 개설한 뒤 승인
- * 전에 조합원 자격이 풀렸거나(탈퇴·비활성), 프로필 행이 사라졌거나. 둘 다
- * 정상 흐름이 아니다.
- *
- * 그래도 두 요율을 다 둔다. 조합이 정한 규칙이고, 규칙이 없는 것과 쓰이지
- * 않는 것은 다르다. 대신 **살아 있는 척하지 않는다** — 관리자 승인 화면이
- * "비조합원 요율은 지금 개설 경로로는 붙지 않는다"고 적어 두고, 이 주석이
- * 같은 말을 한다. 개설 경계를 넓히는 날(비조합원 개설 허용) 이 문단을 지우면
- * 된다.
+ * 조합원이 스스로 여는 개설(`requireActiveMember`)은 승인 시점에도 대개
+ * 조합원이라 3.3%가 붙는다. 비조합원 요율은 관리자 대리 개설
+ * (`POST /api/admin/funding/campaigns`)로 조합원이 아닌 회원을 개설자로 지정했을
+ * 때, 또는 개설 뒤 승인 전에 자격이 풀렸을 때 붙는다.
  */
 export function platformFeeRateFor(
   rates: FundingFeeRates,
