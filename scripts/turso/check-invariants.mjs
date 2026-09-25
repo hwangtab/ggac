@@ -266,11 +266,27 @@ export const WITHDRAWN_PII_COLUMNS = [
 ]
 
 /**
- * 탈퇴 시 예매자 이름 자리에 넣는 묘비값.
+ * 탈퇴 시 예매자·후원자 이름 자리에 넣는 묘비값.
  * 정본은 `src/constants/memberProfile.ts`의 `WITHDRAWN_DISPLAY_NAME`이다 —
  * 이 파일은 `.mjs`라 `.ts`를 임포트하지 못해 문자로 다시 적는다.
  */
 const WITHDRAWN_RESERVATION_NAME = '탈퇴한 조합원'
+
+/**
+ * 탈퇴 확정 뒤 `funding_pledges`에 남아 있으면 안 되는 컬럼.
+ * 정본은 `src/db/queries/withdrawal.ts`의 `PLEDGE_TOMBSTONE`이다 —
+ * 위와 같은 이유로 문자로 다시 적고, 둘이 같은지는
+ * `scripts/testing/piiNullFieldsParity.test.mjs`가 못박는다.
+ */
+export const WITHDRAWN_PLEDGE_NULL_COLUMNS = [
+  'backer_phone',
+  'shipping_name',
+  'shipping_phone',
+  'shipping_postcode',
+  'shipping_address1',
+  'shipping_address2',
+  'shipping_memo',
+]
 
 /** CHECK가 아닌 파생값 불변식. */
 export function derivedInvariants() {
@@ -305,6 +321,22 @@ export function derivedInvariants() {
       table: 'reservations',
       where: `user_id IN (SELECT id FROM member_profiles WHERE registration_status = 'withdrawn')
               AND (booker_name <> '${WITHDRAWN_RESERVATION_NAME}' OR booker_phone <> '' OR booker_email IS NOT NULL)`,
+    },
+    {
+      // 펀딩 후원 표도 `member_profiles`와 별개라 위 규칙이 보지 못한다.
+      // 펀딩이 탈퇴 설계보다 나중에 들어와, 탈퇴한 조합원의 실명·이메일과
+      // **배송지 주소 한 벌**이 `funding_pledges`에 그대로 남아 있었다.
+      //
+      // `backer_name`은 NOT NULL이라 묘비값으로 덮고, `backer_email`도
+      // NOT NULL이라 `withdrawn+<id>@ggac.invalid`로 덮는다(`.invalid`는
+      // RFC 2606 예약 도메인이라 메일이 나가지 않는다). 나머지는 NULL이다 —
+      // `src/db/queries/withdrawal.ts`의 `PLEDGE_TOMBSTONE`이 정본이다.
+      constraint: 'withdrawn_members_have_no_pledge_pii',
+      table: 'funding_pledges',
+      where: `user_id IN (SELECT id FROM member_profiles WHERE registration_status = 'withdrawn')
+              AND (backer_name <> '${WITHDRAWN_RESERVATION_NAME}'
+                   OR backer_email NOT LIKE 'withdrawn+%@ggac.invalid'
+                   OR ${WITHDRAWN_PLEDGE_NULL_COLUMNS.map(c => `${c} IS NOT NULL`).join(' OR ')})`,
     },
   ]
 }

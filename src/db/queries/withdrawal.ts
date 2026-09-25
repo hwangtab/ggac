@@ -15,6 +15,7 @@ import {
   artists,
   billingKeys,
   dailyActivityStats,
+  fundingPledges,
   memberProfiles,
   notifications,
   reservations,
@@ -137,6 +138,47 @@ export const RESERVATION_TOMBSTONE = {
 } as const
 
 /**
+ * 펀딩 후원 표에 남는 개인정보. 예매와 **같은 이유로 같은 방식**을 쓴다 —
+ * 행은 남기고 사람을 가리키는 칸만 덮는다.
+ *
+ * 펀딩(0014~)이 탈퇴 설계(0011·0012, 2026-09-01)보다 나중에 들어와 생긴
+ * 누락이다. 조합원이 탈퇴해도 `funding_pledges`에 후원자 실명·이메일·휴대폰과
+ * **배송지 주소 한 벌**이 그대로 남아 있었고, 야간 불변식 검사도
+ * `member_profiles`와 `reservations`만 보므로 걸리지 않았다.
+ *
+ * **행을 지우지 않는 이유**: 결제가 잡힌 후원은 회계 증빙이다(결제·회비 원장을
+ * 남기는 것과 같은 취급). 금액·건수·후원번호·상태·시각은 그대로 두어야
+ * 정산서가 설명된다. `backer_name`·`backer_email`은 NOT NULL이라 NULL로 만들
+ * 수 없어 묘비값으로 덮는다 — 이메일은 `withdrawnEmailFor`가 만드는 `.invalid`
+ * 주소라(RFC 2606) 실수로 메일이 나가지 않는다.
+ *
+ * **함께 지우는 것**: 배송지는 이행 정보이지 회계 기록이 아니다. 후원자가
+ * 떠났는데 집 주소가 남아 있을 이유가 없다.
+ *
+ * **남기는 것**: `supporter_message`(응원 글)와 `credit_name`(크레딧에 실을
+ * 이름)은 건드리지 않는다. 글·댓글을 남기는 것과 같은 자리다 — 공개를
+ * 전제로 쓴 콘텐츠이고, 지우면 공연 크레딧과 프로젝트 페이지에 구멍이 난다.
+ *
+ * ⚠ **아직 배송하지 않은 리워드가 있으면 개설자는 주소를 잃는다.** 예매에서
+ * 확정된 표의 연락처를 덮으면서 현장 대조를 예매번호에 맡긴 것과 같은
+ * 선택이다 — 떠난 사람의 주소를 조합이 계속 들고 있는 쪽이 더 나쁘다.
+ * 개설자는 탈퇴 전에 내려받은 배송 목록(`shippingExport`)으로 처리한다.
+ *
+ * `scripts/turso/check-invariants.mjs`의
+ * `withdrawn_members_have_no_pledge_pii`가 같은 성질을 야간에 다시 본다.
+ */
+export const PLEDGE_TOMBSTONE = {
+  backerName: WITHDRAWN_DISPLAY_NAME,
+  backerPhone: null,
+  shippingName: null,
+  shippingPhone: null,
+  shippingPostcode: null,
+  shippingAddress1: null,
+  shippingAddress2: null,
+  shippingMemo: null,
+} as const
+
+/**
  * 탈퇴를 확정한다. **되돌릴 수 없다.**
  *
  * 전부 한 트랜잭션 안에서 한다. 중간에 실패하면 전부 롤백되어 "이름만 지워지고
@@ -146,7 +188,8 @@ export const RESERVATION_TOMBSTONE = {
  * 22개 표를 네 갈래로 나눈다. ① 신원·로그인 수단은 지우거나 묘비로 덮고,
  * ② 콘텐츠·조합 기록(글·댓글·이사회)은 **한 건도 건드리지 않는다**(작성자
  * 컬럼이 NOT NULL이라 참조가 묘비를 가리킨 채 남는다), ③ 로그는 지우고,
- * ④ 결제·회비 원장은 회계 증빙이라 남기되 결제 수단만 지운다.
+ * ④ 결제·회비 원장은 회계 증빙이라 남기되 결제 수단과 예매·후원의 개인정보는
+ * 묘비로 덮는다.
  *
  * 끝에서 **스스로 확인한다**. 개인정보가 하나라도 남아 있으면 던져서 롤백시킨다.
  * 마이그레이션 `0002`~`0005`가 쓰는 자체 단언과 같은 발상이다.
@@ -270,6 +313,13 @@ export async function withdrawMember(userId: string): Promise<WithdrawOutcome> {
       .set({ status: 'expired' })
       .where(and(eq(reservations.userId, userId), eq(reservations.status, 'pending')))
     await tx.update(reservations).set(RESERVATION_TOMBSTONE).where(eq(reservations.userId, userId))
+
+    // ④-3 펀딩 후원 — 예매와 같다. 행(회계 증빙)은 남기고 사람을 가리키는
+    // 칸과 배송지만 덮는다. `PLEDGE_TOMBSTONE`의 설명 참고.
+    await tx
+      .update(fundingPledges)
+      .set({ ...PLEDGE_TOMBSTONE, backerEmail: withdrawnEmailFor(userId) })
+      .where(eq(fundingPledges.userId, userId))
 
     // ⑤ 연결된 아티스트 — 공개 페이지를 내리고 개인정보를 지운다. 행 자체는
     // 남긴다(조합의 과거 기록, slug도 유지 — 링크가 404가 아니라 "없는
@@ -397,6 +447,28 @@ export async function withdrawMember(userId: string): Promise<WithdrawOutcome> {
       )
     if (Number(reservationLeak?.count ?? 0) > 0) {
       throw new Error('탈퇴 처리 후에도 예매에 개인정보가 남았다 — 전체를 롤백한다')
+    }
+
+    // 펀딩 후원도 같은 방식으로 확인한다.
+    const [pledgeLeak] = await tx
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(fundingPledges)
+      .where(
+        and(
+          eq(fundingPledges.userId, userId),
+          sql`(${fundingPledges.backerName} <> ${PLEDGE_TOMBSTONE.backerName}
+               OR ${fundingPledges.backerEmail} <> ${withdrawnEmailFor(userId)}
+               OR ${fundingPledges.backerPhone} IS NOT NULL
+               OR ${fundingPledges.shippingName} IS NOT NULL
+               OR ${fundingPledges.shippingPhone} IS NOT NULL
+               OR ${fundingPledges.shippingPostcode} IS NOT NULL
+               OR ${fundingPledges.shippingAddress1} IS NOT NULL
+               OR ${fundingPledges.shippingAddress2} IS NOT NULL
+               OR ${fundingPledges.shippingMemo} IS NOT NULL)`
+        )
+      )
+    if (Number(pledgeLeak?.count ?? 0) > 0) {
+      throw new Error('탈퇴 처리 후에도 펀딩 후원에 개인정보가 남았다 — 전체를 롤백한다')
     }
 
     return { ok: true, revokedBillingKeys, artistPhotoCleanup }

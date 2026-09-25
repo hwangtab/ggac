@@ -164,6 +164,9 @@ test('신청·취소가 조건부 UPDATE로 타임스탬프를 오가고, regist
  * 지우는 순서는 FK 자식 → 부모다(`PRAGMA foreign_keys`가 켜져 있다 — 실측).
  */
 const WITHDRAWAL_FIXTURE_TABLES = [
+  'funding_pledges',
+  'funding_rewards',
+  'funding_campaigns',
   'post_likes',
   'comments',
   'posts',
@@ -261,6 +264,46 @@ async function seedWithdrawalFixture(
              'other-artist@example.test', null, '{}', 1, null, null, null, ?, ?)`,
     args: [now, now, now, now],
   })
+
+  // ④ 펀딩 후원 — m1이 **후원자로** 남긴 행. 결제가 잡힌 회계 증빙이라 행은
+  // 남고, 사람을 가리키는 칸과 배송지만 묘비로 덮여야 한다. 비어 있으면
+  // "지웠다"가 증명되지 않으므로 전부 채워 둔다. m2의 후원은 대조군이다 —
+  // 남의 행까지 덮으면 여기서 드러난다.
+  await client.execute({
+    sql: `INSERT INTO funding_campaigns
+            (id, slug, owner_user_id, title, summary, story, goal_amount, status, created_at, updated_at)
+          VALUES ('fc1', 'campaign-1', 'm2', '첫 음반', '음반을 만듭니다', '본문', 1000000, 'closed', ?, ?)`,
+    args: [now, now],
+  })
+  await client.execute({
+    sql: `INSERT INTO funding_rewards
+            (id, campaign_id, title, amount, requires_shipping, created_at, updated_at)
+          VALUES ('fr1', 'fc1', 'CD 한 장', 30000, 1, ?, ?)`,
+    args: [now, now],
+  })
+  for (const [id, code, orderId, userId] of [
+    ['fp1', 'FND-20260901-AAAAAAAA', 'ord-1', 'm1'],
+    ['fp2', 'FND-20260901-BBBBBBBB', 'ord-2', 'm2'],
+  ]) {
+    await client.execute({
+      sql: `INSERT INTO funding_pledges
+              (id, pledge_code, campaign_id, reward_id, user_id, order_id,
+               backer_name, backer_email, backer_phone, reward_title,
+               unit_amount, quantity, total_amount, status,
+               supporter_message, credit_name,
+               shipping_name, shipping_phone, shipping_postcode,
+               shipping_address1, shipping_address2, shipping_memo,
+               created_at, updated_at)
+            VALUES (?, ?, 'fc1', 'fr1', ?, ?,
+                    '홍길동', 'backer@example.test', '010-9999-8888', 'CD 한 장',
+                    30000, 1, 30000, 'paid',
+                    '응원합니다', '홍길동(크레딧)',
+                    '홍길동', '010-9999-8888', '13529',
+                    '경기도 성남시', '101동 101호', '부재 시 경비실',
+                    ?, ?)`,
+      args: [id, code, userId, orderId, now, now],
+    })
+  }
 
   // ② 콘텐츠·조합 기록 — 한 건도 바뀌면 안 되는 것들. 스펙이 나열한 7종
   // (글·댓글·이사회 회의록·서류·회의·출석·좋아요) 전부를 심는다 — 일부만
@@ -690,4 +733,45 @@ test('전원이 활성일 때 listArtists()는 activeOnly 필터 없이도 같�
   const unfiltered = await listArtists({ activeOnly: false })
   assert.deepEqual(filtered.map(a => a.legacy_id).sort(), unfiltered.map(a => a.legacy_id).sort())
   assert.deepEqual(filtered.map(a => a.legacy_id).sort(), ['artist-014', 'artist-020'])
+})
+
+test('확정은 펀딩 후원의 행은 남기고 개인정보·배송지만 묘비로 덮는다', async () => {
+  await seedWithdrawalFixture(setupClient)
+
+  const { withdrawMember, PLEDGE_TOMBSTONE } = await import(WITHDRAWAL_MODULE_URL.href)
+  const { WITHDRAWN_DISPLAY_NAME, withdrawnEmailFor } = await import(CONSTANTS.href)
+  assert.equal((await withdrawMember('m1')).ok, true)
+
+  // 행이 지워지면 안 된다 — 결제가 잡힌 후원은 회계 증빙이다.
+  assert.equal(await countOf(setupClient, 'funding_pledges', '1=1'), 2)
+
+  const mine = (await setupClient.execute("SELECT * FROM funding_pledges WHERE id='fp1'")).rows[0]
+
+  // 금액·건수·후원번호·상태는 그대로다. 이게 흔들리면 정산서가 설명되지 않는다.
+  assert.equal(mine.pledge_code, 'FND-20260901-AAAAAAAA')
+  assert.equal(mine.total_amount, 30000)
+  assert.equal(mine.quantity, 1)
+  assert.equal(mine.status, 'paid')
+  assert.equal(mine.user_id, 'm1')
+
+  // 사람을 가리키는 칸은 덮였다. NOT NULL이라 NULL이 아니라 묘비값이다.
+  assert.equal(mine.backer_name, WITHDRAWN_DISPLAY_NAME)
+  assert.equal(mine.backer_email, withdrawnEmailFor('m1'))
+
+  // 배송지는 이행 정보지 회계 기록이 아니다 — 전부 NULL이어야 한다.
+  for (const [key, value] of Object.entries(PLEDGE_TOMBSTONE)) {
+    if (value !== null) continue
+    const column = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`)
+    assert.equal(mine[column], null, `${column}이 남았다`)
+  }
+
+  // 공개를 전제로 쓴 콘텐츠는 글·댓글과 같이 남긴다.
+  assert.equal(mine.supporter_message, '응원합니다')
+  assert.equal(mine.credit_name, '홍길동(크레딧)')
+
+  // 대조군 — 남의 후원은 한 글자도 바뀌면 안 된다.
+  const other = (await setupClient.execute("SELECT * FROM funding_pledges WHERE id='fp2'")).rows[0]
+  assert.equal(other.backer_name, '홍길동')
+  assert.equal(other.backer_email, 'backer@example.test')
+  assert.equal(other.shipping_address1, '경기도 성남시')
 })
