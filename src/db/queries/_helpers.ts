@@ -90,7 +90,57 @@ export function isLockContention(error: unknown): boolean {
 }
 
 /**
- * 락 경합만 네 번까지 다시 해 본다. 25·50·75ms를 쉬고 물러난다.
+ * 재시도 예산. 얼마나 끈질기게 기다릴 것인가.
+ *
+ * 경합에서 지는 쪽이 누구인가로 값이 갈린다. **돈이 걸린 쓰기**(승인 확정·
+ * 환불 확정·원장 기록)가 지면 사람이 손으로 수습해야 한다 — 카드는 긁혔는데
+ * 기록이 없는 상태다. 반대로 리워드 일괄 저장이 지면 개설자가 저장을 한 번 더
+ * 누르면 그만이다. 그래서 전자는 오래 기다리고 후자는 일찍 물러난다.
+ */
+export interface RetryBudget {
+  /** 첫 시도를 포함한 최대 시도 횟수. */
+  attempts: number
+  /** 첫 대기의 기준값(ms). 시도마다 두 배로 늘린다. */
+  baseDelayMs: number
+  /** 한 번의 대기 상한(ms). */
+  maxDelayMs: number
+}
+
+/**
+ * 기본 예산 — 25·50·75ms를 쉬고 물러난다(총 150ms 남짓).
+ *
+ * 리워드 일괄 저장처럼 **져도 사람이 다시 누르면 되는** 쓰기가 쓴다. 여기서
+ * 끈질기게 버티면 잠금을 가장 오래 쥐는 트랜잭션이 네 번 더 달려드는 셈이라,
+ * 그동안 결제 확정이 굶는다.
+ */
+export const DEFAULT_RETRY_BUDGET: RetryBudget = {
+  attempts: 4,
+  baseDelayMs: 25,
+  maxDelayMs: 75,
+}
+
+/**
+ * 돈이 걸린 쓰기의 예산 — 최악 2.7초까지 기다린다.
+ *
+ * 기본 예산(150ms)은 **같은 앱의 리워드 일괄 저장 하나를 못 견딘다.** 그
+ * 트랜잭션은 문장이 스무 개 남짓이고 원격 Turso에서는 문장 하나가 왕복
+ * 하나라, 잠금을 1초 가까이 쥘 수 있다. 결제 확정·환불 확정이 그 1초를 못
+ * 기다리고 물러나면 **돈은 움직였는데 장부에 없는** 상태가 만들어진다 —
+ * 그쪽이 훨씬 비싸므로 이쪽이 기다린다.
+ */
+export const MONEY_PATH_RETRY_BUDGET: RetryBudget = {
+  attempts: 8,
+  baseDelayMs: 40,
+  maxDelayMs: 750,
+}
+
+/**
+ * 락 경합만 다시 해 본다. 대기는 시도마다 두 배로 늘리고 절반은 흔든다.
+ *
+ * **흔드는 이유**: 같은 잠금에서 진 둘이 같은 간격으로 물러나면 다음 시도도
+ * 나란히 부딪친다. 대기의 뒤쪽 절반을 무작위로 만들어 줄을 흐트러뜨린다
+ * (앞쪽 절반은 남겨 둔다 — 전부 무작위로 하면 0에 가까운 대기가 나와 잠금이
+ * 풀리기도 전에 다시 달려든다).
  *
  * `isFinal`이 참을 돌려주는 오류는 **다시 해도 같은 답**이므로 그대로 올린다
  * (매진·자리 없음 같은 판정). 그 밖의 오류도 경합이 아니면 그대로 올린다 —
@@ -98,17 +148,21 @@ export function isLockContention(error: unknown): boolean {
  */
 export async function retryOnLockContention<T>(
   run: () => Promise<T>,
-  isFinal: (error: unknown) => boolean = () => false
+  isFinal: (error: unknown) => boolean = () => false,
+  budget: RetryBudget = DEFAULT_RETRY_BUDGET
 ): Promise<T> {
   let lastError: unknown
-  for (let attempt = 0; attempt < 4; attempt++) {
+  const attempts = Math.max(1, budget.attempts)
+  for (let attempt = 0; attempt < attempts; attempt++) {
     try {
       return await run()
     } catch (error) {
       if (isFinal(error)) throw error
       if (!isLockContention(error)) throw error
       lastError = error
-      await new Promise(resolve => setTimeout(resolve, 25 * (attempt + 1)))
+      const cap = Math.min(budget.maxDelayMs, budget.baseDelayMs * 2 ** attempt)
+      const delay = cap / 2 + Math.random() * (cap / 2)
+      await new Promise(resolve => setTimeout(resolve, delay))
     }
   }
   throw lastError

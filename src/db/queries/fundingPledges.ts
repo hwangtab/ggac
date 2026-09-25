@@ -10,7 +10,7 @@ import { fundingCampaigns, fundingPledges, fundingRewards, payments } from '../s
 import { computePledgeTotal } from '../../lib/funding/amounts.ts'
 import { generatePledgeCode } from '../../lib/funding/pledgeCode.ts'
 
-import { retryOnLockContention, toIso, toSnakeCase } from './_helpers.ts'
+import { MONEY_PATH_RETRY_BUDGET, retryOnLockContention, toIso, toSnakeCase } from './_helpers.ts'
 
 type Row = Record<string, unknown>
 
@@ -260,7 +260,8 @@ export interface HoldPledgeInput {
 export async function holdPledge(input: HoldPledgeInput): Promise<Row> {
   return retryOnLockContention(
     () => holdPledgeOnce(input),
-    error => error instanceof RewardSoldOutError || error instanceof TooManyPendingHoldsError
+    error => error instanceof RewardSoldOutError || error instanceof TooManyPendingHoldsError,
+    MONEY_PATH_RETRY_BUDGET
   )
 }
 
@@ -409,7 +410,8 @@ export interface FinalizePledgeInput {
 export async function finalizePledgePayment(input: FinalizePledgeInput): Promise<Row | null> {
   return retryOnLockContention(
     () => finalizePledgePaymentOnce(input),
-    error => error instanceof PledgeStockUnavailableError
+    error => error instanceof PledgeStockUnavailableError,
+    MONEY_PATH_RETRY_BUDGET
   )
 }
 
@@ -513,8 +515,24 @@ async function finalizePledgePaymentOnce(input: FinalizePledgeInput): Promise<Ro
   })
 }
 
-/** 취소 선점: `paid → canceled`. 0행이면 이미 다른 요청이 잡았거나 취소 불가 상태다. */
+/**
+ * 취소 선점: `paid → canceled`. 0행이면 이미 다른 요청이 잡았거나 취소 불가 상태다.
+ *
+ * 환불 경로의 첫 문장이다. 경합으로 여기서 물러나면 후원자는 "이미 처리 중"도
+ * 아닌 500을 받고, 다음 시도는 `isRetry` 분기를 타지 못해 처음부터 다시 한다.
+ */
 export async function claimPledgeForCancel(
+  pledgeId: string,
+  options: { requireFulfillmentNone?: boolean }
+): Promise<Row | null> {
+  return retryOnLockContention(
+    () => claimPledgeForCancelOnce(pledgeId, options),
+    () => false,
+    MONEY_PATH_RETRY_BUDGET
+  )
+}
+
+async function claimPledgeForCancelOnce(
   pledgeId: string,
   options: { requireFulfillmentNone?: boolean }
 ): Promise<Row | null> {
@@ -537,6 +555,16 @@ export async function claimPledgeForCancel(
  * 있는) 후원만 되돌린다.
  */
 export async function revertPledgeCancel(pledgeId: string): Promise<void> {
+  // 토스가 환불을 거절한 뒤 되돌리는 자리다 — 여기서 경합에 지면 결제는
+  // 살아 있는데 후원만 `canceled`로 남는다. 돈이 걸린 예산으로 버틴다.
+  await retryOnLockContention(
+    () => revertPledgeCancelOnce(pledgeId),
+    () => false,
+    MONEY_PATH_RETRY_BUDGET
+  )
+}
+
+async function revertPledgeCancelOnce(pledgeId: string): Promise<void> {
   await db
     .update(fundingPledges)
     .set({ status: 'paid', canceledAt: null })
@@ -549,8 +577,36 @@ export async function revertPledgeCancel(pledgeId: string): Promise<void> {
     )
 }
 
-/** 토스 환불이 끝난 뒤. 후원 `refunded`와 원장 누적 취소액을 한 트랜잭션으로. */
+/**
+ * 토스 환불이 끝난 뒤. 후원 `refunded`와 원장 누적 취소액을 한 트랜잭션으로.
+ *
+ * **이 자리는 돈이 이미 나간 뒤다.** 토스 환불 호출은 위(라우트)에서 끝났고,
+ * 여기서 실패하면 되돌릴 방법이 없다 — 후원자 통장에는 환불이 찍히는데 원장은
+ * 환불을 모르는 상태가 된다. `SQLITE_BUSY` 한 번에 그렇게 되어서는 안 되므로
+ * 이웃(`holdPledge`·`finalizePledgePayment`)과 같은, 그중에서도 가장 끈질긴
+ * 예산으로 다시 해 본다. 부분 환불 거부(`PartialRefundUnsupportedError`)는
+ * 경합이 아니라 판정이라 다시 해도 같으므로 그대로 올린다.
+ *
+ * 재시도해도 안전하다 — 안쪽의 쓰기가 전부 조건부다. 후원은
+ * `status IN ('paid','canceled')`일 때만 바뀌고(두 번째 시도는 0행 → null),
+ * 원장은 기존 누적 취소액이 더 작을 때만 바뀐다. 그리고 **이 재시도가 토스를
+ * 다시 부르지는 않는다** — 환불 호출은 라우트에 있고 트랜잭션 밖이다.
+ */
 export async function finalizePledgeRefund(input: {
+  orderId: string
+  paymentId: string
+  pledgeId: string
+  canceledAmount: number
+  raw: unknown
+}): Promise<Row | null> {
+  return retryOnLockContention(
+    () => finalizePledgeRefundOnce(input),
+    error => error instanceof PartialRefundUnsupportedError,
+    MONEY_PATH_RETRY_BUDGET
+  )
+}
+
+async function finalizePledgeRefundOnce(input: {
   orderId: string
   paymentId: string
   pledgeId: string
@@ -606,8 +662,25 @@ export async function finalizePledgeRefund(input: {
   })
 }
 
-/** 승인이 확실히 거절됐을 때. 주문 짝이 맞는 pending만 취소한다. */
+/**
+ * 승인이 확실히 거절됐을 때. 주문 짝이 맞는 pending만 취소한다.
+ *
+ * 만료 크론은 **환불을 보낸 뒤** 이걸 부른다(승격할 자리가 없던 건). 그때
+ * 경합에 지면 돈은 돌아갔는데 후원은 `pending`으로 남아 다음 스윕이 같은 건을
+ * 또 환불하려 든다 — 돈이 걸린 예산으로 버틴다.
+ */
 export async function cancelPendingPledge(
+  pledgeId: string,
+  expectedOrderId: string
+): Promise<Row | null> {
+  return retryOnLockContention(
+    () => cancelPendingPledgeOnce(pledgeId, expectedOrderId),
+    () => false,
+    MONEY_PATH_RETRY_BUDGET
+  )
+}
+
+async function cancelPendingPledgeOnce(
   pledgeId: string,
   expectedOrderId: string
 ): Promise<Row | null> {
