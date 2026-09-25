@@ -163,6 +163,14 @@ export default function MyFundingPage() {
                         {t('fulfillment.label')}: {t(`fulfillment.${p.fulfillment_status}`)}
                       </p>
                     ) : null}
+                    {/* 발송됐다고 표시만 되고 아무것도 오지 않은 경우, 그것을
+                        아는 사람은 이 사람뿐이다. 갈 자리를 함께 적는다. */}
+                    {p.status === 'paid' &&
+                    (p.fulfillment_status === 'shipped' || p.fulfillment_status === 'delivered') ? (
+                      <p className="mt-1 max-w-xs text-xs text-gray-400">
+                        {t('fulfillment.shippedNotice')}
+                      </p>
+                    ) : null}
                   </div>
                 </div>
               </li>

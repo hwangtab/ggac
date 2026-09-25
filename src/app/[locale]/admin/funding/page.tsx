@@ -13,6 +13,7 @@ import PostContentRenderer from '@/components/PostContentRenderer'
 import OptimizedImage from '@/components/OptimizedImage'
 import { toReviewDetail, type CampaignDetail } from './reviewDetail'
 import SettlementPanel from './SettlementPanel'
+import FulfillmentPanel from './FulfillmentPanel'
 import {
   nextStatus,
   PUBLIC_CAMPAIGN_STATUSES,
@@ -520,6 +521,18 @@ export default function AdminFundingPage() {
                       </div>
                     )}
                   </div>
+
+                  {/* 후원을 받기 시작한 뒤부터 이행과 환불이 생긴다. 개설자가
+                      후원 전부를 한 번에 '발송 완료'로 눌러도 오늘 남는 것은
+                      활동 기록 한 줄뿐이라 아무도 읽지 않는다 — 그 줄을 여기서
+                      보이게 하고, 되돌리기와 사무국 대리 환불을 같은 자리에
+                      둔다. 접힌 채로 그려지므로 목록을 여는 것만으로 캠페인마다
+                      조회가 나가지는 않는다. */}
+                  {(c.status === 'active' || c.status === 'closed' || c.status === 'settled') && (
+                    <div className="pt-2">
+                      <FulfillmentPanel campaignId={c.id} />
+                    </div>
+                  )}
 
                   {/* 마감 뒤에는 정산이 이어진다. '정산 완료 처리'는 지급까지
                       기록된 정산서가 있어야 통과하므로(서버가 판정한다) 그

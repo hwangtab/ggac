@@ -663,7 +663,8 @@
       "preparing": "Preparing",
       "shipped": "Sent",
       "delivered": "Delivered",
-      "cancelBlocked": "The creator has started preparing this reward, so you can no longer cancel this pledge yourself. If you need to cancel, please contact the office at contact@ggac.kr with your pledge number."
+      "cancelBlocked": "The creator has started preparing this reward, so you can no longer cancel this pledge yourself. If you need to cancel, please contact the office at contact@ggac.kr with your pledge number.",
+      "shippedNotice": "If two weeks pass after this pledge was marked as sent and nothing has arrived, contact the office at contact@ggac.kr with your pledge number. The office will check, correct the fulfilment status, or refund you in full."
     }
   },
   "application": {
