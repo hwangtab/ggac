@@ -54,6 +54,12 @@ function contentChanged() {
 }
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  // 심사 전이는 **그대로 스위치 아래에 있다.** 승인은 캠페인을 공개하고
+  // 그 순간부터 실제 결제가 들어온다 — 스위치가 멈추라고 말한 바로 그
+  // 동작이다. 마감·정산 전이도 같은 라우트에 있지만, 그 둘만 통과시키면
+  // "스위치가 꺼졌는데 승인도 되더라"를 만들 위험이 여기 한 파일에 몰린다.
+  // 사무국의 뒷정리(환불·정산·이행 되돌리기)는 스위치를 보지 않으므로,
+  // 멈춘 동안에도 돈을 돌려주고 정산을 맞추는 길은 열려 있다.
   if (!(await isFundingEnabled()))
     return ApiError.serviceUnavailable('펀딩을 준비 중입니다.').toNextResponse()
   const auth = await requireAdmin()

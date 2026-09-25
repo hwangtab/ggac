@@ -1013,12 +1013,20 @@ export default function AdminSettingsPage() {
                           className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 mr-2"
                         />
                         <span className="text-sm font-medium text-gray-700">
-                          펀딩 기능 — 조합원 캠페인 개설·후원 결제 허용
+                          펀딩 기능 — 새 프로젝트 개설·심사 승인·후원 결제 허용
                         </span>
                       </label>
                       <p className="mt-1 ml-6 text-xs text-amber-800">
                         켜면 조합원이 캠페인을 만들어 심사에 올릴 수 있고, 승인된 캠페인은 실제
-                        결제로 후원을 받습니다. 끄면 새 개설·심사 처리·결제가 모두 막힙니다.
+                        결제로 후원을 받습니다. 끄면 <strong>새로 시작되는 것만</strong> 막힙니다 —
+                        캠페인 개설(대리 개설 포함)·내용 수정·리워드 저장·제출과 심사 전이(승인·
+                        마감·정산 표시), 그리고 후원 결제(준비·확정·후원자 직접 취소)입니다.
+                      </p>
+                      <p className="mt-1 ml-6 text-xs text-amber-800">
+                        <strong>사무국의 뒷정리는 꺼져 있어도 그대로 됩니다</strong> — 대리
+                        환불·정산 정리와 지급 표시·이행 표시 되돌리기. 이미 받은 돈을 돌려주는 길을
+                        함께 닫으면 남는 수단이 토스 콘솔뿐이 되고, 콘솔에서 나간 환불은 원장이
+                        모릅니다. 공개 페이지와 후원 내역 조회도 계속 보입니다.
                       </p>
 
                       <div className="mt-4 ml-6 border-t border-amber-200 pt-4">

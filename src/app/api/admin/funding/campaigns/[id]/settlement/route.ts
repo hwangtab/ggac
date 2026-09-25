@@ -71,7 +71,6 @@ import {
   PAYOUT_ACCOUNT_MISSING_NOTICE,
   type PayoutAccount,
 } from '@/lib/funding/payoutAccount'
-import { isFundingEnabled } from '@/lib/funding/settings'
 import { reconcileCampaignWithToss } from '@/lib/server/settlementReconcile'
 import { getServerPaymentConfig, isPaymentEnabled } from '@/lib/payments/toss/config'
 import { notifySettlementPaid, notifySettlementPrepared } from '@/lib/funding/notify'
@@ -215,8 +214,12 @@ export async function GET(request: NextRequest, { params }: Ctx) {
 }
 
 export async function POST(request: NextRequest, { params }: Ctx) {
-  if (!(await isFundingEnabled()))
-    return ApiError.serviceUnavailable('펀딩을 준비 중입니다.').toNextResponse()
+  // 사무국의 뒷정리는 **스위치를 보지 않는다.** 스위치를 내리는 것은 "새
+  // 프로젝트를 열고 새 결제를 받는 일을 멈춘다"는 뜻이지, 이미 받은 돈을
+  // 돌려주지도 정산하지도 못하게 만든다는 뜻이 아니다. 여기를 막으면 펀딩을
+  // 잠시 멈춘 날 환불 요청이 들어와도 사무국에게 남는 수단이 토스 콘솔뿐이
+  // 되고, 콘솔에서 나간 환불은 원장이 모른다 — 이 기능이 막으려던 바로 그
+  // 일이다. 공개 경로(개설·후원·결제 확정·심사 승인)는 그대로 막힌다.
   const auth = await requireAdmin()
   if (auth instanceof NextResponse) return auth
   const { id } = await params
@@ -352,8 +355,12 @@ export async function POST(request: NextRequest, { params }: Ctx) {
 }
 
 export async function PATCH(request: NextRequest, { params }: Ctx) {
-  if (!(await isFundingEnabled()))
-    return ApiError.serviceUnavailable('펀딩을 준비 중입니다.').toNextResponse()
+  // 사무국의 뒷정리는 **스위치를 보지 않는다.** 스위치를 내리는 것은 "새
+  // 프로젝트를 열고 새 결제를 받는 일을 멈춘다"는 뜻이지, 이미 받은 돈을
+  // 돌려주지도 정산하지도 못하게 만든다는 뜻이 아니다. 여기를 막으면 펀딩을
+  // 잠시 멈춘 날 환불 요청이 들어와도 사무국에게 남는 수단이 토스 콘솔뿐이
+  // 되고, 콘솔에서 나간 환불은 원장이 모른다 — 이 기능이 막으려던 바로 그
+  // 일이다. 공개 경로(개설·후원·결제 확정·심사 승인)는 그대로 막힌다.
   const auth = await requireAdmin()
   if (auth instanceof NextResponse) return auth
   const { id } = await params

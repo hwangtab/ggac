@@ -69,6 +69,7 @@ export async function GET(request: NextRequest) {
  * 활동 기록(`funding_campaign_created_by_admin`)에 관리자 계정으로 남는다.
  */
 export async function POST(request: NextRequest) {
+  // 대리 개설도 **개설**이다 — 스위치가 멈추라고 말한 동작이라 그대로 막는다.
   if (!(await isFundingEnabled()))
     return ApiError.serviceUnavailable('펀딩을 준비 중입니다.').toNextResponse()
   const auth = await requireAdmin()
