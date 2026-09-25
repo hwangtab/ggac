@@ -22,19 +22,52 @@ const intlMiddleware = createIntlMiddleware(routing)
  * - `EXACT`는 정확히 그 경로만 통과한다. 접두사로 두면 `/api/health`가
  *   `/api/healthcheck`·`/api/health-report` 같은 **미래에 생길** 라우트까지
  *   조용히 동결에서 빼준다 — 예외는 최소 집합이어야 하므로 세그먼트에 못박는다.
- * - `PREFIX`는 하위 경로가 실제로 있는 것만 둔다. `/api/auth/`는
- *   `[...all]` 캐치올이라 하위 경로 전체가 인증 흐름이다.
+ * - `PREFIX`는 하위 경로가 실제로 있고 **그 전부를 열어도 되는 것만** 둔다.
  *
- * `/api/inbound/`와 `/api/internal/`도 같은 이유로 면제한다 — **유지보수
- * 우회가 아니다.** 이 두 접두사는 세션과 무관한 자체 게이트를 이미 갖고
- * 있다: 웹훅(`/api/inbound/resend`)은 Svix 서명이, 크론(`/api/internal/*`)은
+ * `/api/inbound/`와 `/api/internal/`은 그렇게 면제한다 — **유지보수 우회가
+ * 아니다.** 이 두 접두사는 세션과 무관한 자체 게이트를 이미 갖고 있다:
+ * 웹훅(`/api/inbound/resend`)은 Svix 서명이, 크론(`/api/internal/*`)은
  * `timingSafeEqual` 토큰이 각각 판정한다. 막으면 웹훅이 유지보수 시간만큼
  * 재시도를 태우다 결국 포기하고, 크론도 그동안 멈춘다 — 응답 코드로 "다시
  * 보내라"를 말하는 두 경로가, 정작 우리가 아무것도 처리할 생각이 없는 동안
  * 그 신호를 내보내는 셈이다.
  */
-const MAINTENANCE_EXEMPT_EXACT = ['/api/health']
-const MAINTENANCE_EXEMPT_PREFIXES = ['/api/auth/', '/api/inbound/', '/api/internal/']
+
+/**
+ * 유지보수 중에도 열어 두는 인증 경로. **접두사가 아니라 정확한 경로다.**
+ *
+ * 예전에는 `/api/auth/`를 통째로 면제했다. 의도는 "로그인을 막지 않는다"
+ * 하나였는데, 그 아래는 Better Auth 캐치올(`[...all]`)이라 쓰기
+ * 엔드포인트가 전부 함께 열렸다 — `/change-password`·`/change-email`·
+ * `/update-user`·`/delete-user`·`/reset-password`·`/send-verification-email`·
+ * `/revoke-sessions` 같은 것들이다. 유지보수는 **새 쓰기를 세우는** 스위치인데
+ * 계정에 관한 쓰기만 그 스위치 밖에 있었다.
+ *
+ * 다행히 쪼갤 수 있다. 캐치올이어도 Better Auth는 경로 뒷부분으로 엔드포인트를
+ * 고르므로(`sign-in/email`·`get-session`·`change-password`…) 미들웨어가 보는
+ * `pathname`만으로 구분된다. 그래서 반드시 열려 있어야 하는 넷만 남긴다:
+ *
+ * - `get-session` — **미들웨어 자신이 부른다**(`verifySessionFresh`가 이 주소로
+ *   fetch한다). 막으면 관리자 판정이 스스로 막혀 아무도 유지보수 벽을 넘지
+ *   못한다.
+ * - `verify-session` — 화면이 신원을 확인하는 읽기 전용 라우트.
+ * - `sign-in/email` — 로그인. 막으면 관리자가 자기 자신을 벽 안에 가둔다.
+ * - `sign-out`·`logout` — 나가는 길까지 막을 이유는 없다. 막아도 얻는 것이
+ *   없고, 반쯤 로그인된 상태로 사람을 붙들어 둘 뿐이다.
+ *
+ * 나머지는 유지보수 판정을 그대로 탄다 — 즉 관리자는 통과하고 그 밖은 503이다.
+ * `sign-up/email`은 유지보수와 무관하게 라우트가 항상 403으로 막는다.
+ */
+const MAINTENANCE_EXEMPT_AUTH_PATHS = [
+  '/api/auth/get-session',
+  '/api/auth/verify-session',
+  '/api/auth/sign-in/email',
+  '/api/auth/sign-out',
+  '/api/auth/logout',
+]
+
+const MAINTENANCE_EXEMPT_EXACT = ['/api/health', ...MAINTENANCE_EXEMPT_AUTH_PATHS]
+const MAINTENANCE_EXEMPT_PREFIXES = ['/api/inbound/', '/api/internal/']
 
 /**
  * 정본 호스트. 검색엔진에 색인시킬 주소이고, `getSiteUrl()`이 canonical과
@@ -146,8 +179,10 @@ export async function middleware(request: NextRequest) {
   // API 라우트: 페이지 파이프라인(next-intl rewrite·CSP·handleAuth 리다이렉트)은
   // 타지 않는다. 유지보수 판정만 전담한다.
   if (pathname.startsWith('/api/')) {
-    // 로그인·세션 확인(/api/auth/*)과 헬스체크(/api/health)는 유지보수 여부와
-    // 무관하게 항상 통과한다 — 막으면 관리자가 스스로를 유지보수 벽에 가둔다.
+    // 로그인·세션 확인(MAINTENANCE_EXEMPT_AUTH_PATHS)과 헬스체크(/api/health)는
+    // 유지보수 여부와 무관하게 항상 통과한다 — 막으면 관리자가 스스로를
+    // 유지보수 벽에 가둔다. 그 밖의 `/api/auth/*`(비밀번호 변경·재설정·프로필
+    // 갱신·세션 폐기)는 새 쓰기이므로 아래 판정을 그대로 탄다.
     if (isMaintenanceExempt(pathname)) {
       return NextResponse.next()
     }
