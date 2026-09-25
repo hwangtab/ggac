@@ -445,6 +445,8 @@
       "errorShipping": "배송지 정보를 모두 입력해 주세요.",
       "errorCreditName": "부클릿과 웹사이트에 기재할 이름을 입력해 주세요.",
       "errorCreditNameTooMany": "기재할 이름은 수량({count}개)만큼만 적을 수 있습니다.",
+      "backToRewards": "돌아가기 · 리워드 다시 고르기",
+      "backToRewardsError": "결제 대기를 정리하지 못했습니다. 잠시 후 다시 시도해 주세요.",
       "retryWidget": "결제창 다시 열기"
     },
     "success": {
