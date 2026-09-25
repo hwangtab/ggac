@@ -38,7 +38,7 @@ test('기본 키에 설정 네임스페이스가 들어간다 (IP 단독이 아�
   )
 })
 
-test('설정 7개 전부 서로 다른 name을 갖는다', () => {
+test('설정마다 서로 다른 name을 갖는다', () => {
   const block = source.slice(
     source.indexOf('export const DISTRIBUTED_RATE_LIMIT_CONFIGS'),
     source.indexOf('// 키 생성 함수들')
