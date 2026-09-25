@@ -1,7 +1,8 @@
 /**
  * 사무국이 손으로 바로잡은 일을 **후원자에게** 알린다.
  *
- * 두 가지다. ① 사무국이 대리 환불했다. ② 사무국이 발송 표시를 되돌렸다.
+ * 세 가지다. ① 사무국이 대리 환불했다. ② 사무국이 발송 표시를 되돌렸다.
+ * ③ 자동 환불 결과를 확인하지 못했다 — 이것만 **사무국에게** 간다.
  *
  * ## 왜 `./notify.ts`가 아니라 여기인가
  *
@@ -27,7 +28,8 @@
  * 끝난 일이고, 알림 하나가 그 응답을 바꾸면 안 된다.
  */
 
-import { createNotification } from '../../db/queries/notifications.ts'
+import { createBulkNotifications, createNotification } from '../../db/queries/notifications.ts'
+import { listAdminRecipients } from '../../db/queries/profiles.ts'
 import { sendEmail } from '../mail/send.ts'
 import { createLogger } from '../../utils/logger.ts'
 import { getSiteUrl } from '../../utils/site.ts'
@@ -52,6 +54,8 @@ export interface OfficeRemedyNotifyDeps {
   log: { warn: (m: string, meta?: unknown) => void; error: (m: string, meta?: unknown) => void }
   /** 대량 발송기에 넘기는 조절값. 테스트가 0으로 낮춘다. */
   bulkOptions?: { minIntervalMs?: number; retryDelayMs?: number }
+  listAdminRecipients: () => Promise<{ id: string; email: string | null }[]>
+  createBulkNotifications: (input: Record<string, unknown>) => Promise<unknown>
 }
 
 const realDeps: OfficeRemedyNotifyDeps = {
@@ -61,6 +65,8 @@ const realDeps: OfficeRemedyNotifyDeps = {
     typeof process.env.RESEND_API_KEY === 'string' && process.env.RESEND_API_KEY.length > 0,
   siteUrl: getSiteUrl,
   log,
+  listAdminRecipients,
+  createBulkNotifications: input => createBulkNotifications(input as never),
 }
 
 function resolve(overrides?: Partial<OfficeRemedyNotifyDeps>): OfficeRemedyNotifyDeps {
@@ -220,6 +226,93 @@ export async function notifyFulfillmentReversed(
     }
   } catch (error) {
     d.log.error('되돌리기 알림 실패', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
+
+/**
+ * ③ 승인 뒤 자동 환불의 **결과를 확인하지 못했다** — 사무국에게.
+ *
+ * 이 경우 후원은 `canceled`가 되고 결제 행에 실패 사유 한 줄이 남는다. 그
+ * 문장은 아무도 찾아 읽지 않는 자리에 있어서, "돈을 받은 적 없는 후원"과
+ * 구분되지 않은 채 목록에 섞인다. 실제로는 **승인은 났고 환불이 나갔는지
+ * 모르는** 건이라, 사람이 토스 거래 내역을 열어 봐야만 결말이 난다.
+ *
+ * 그래서 후원자 쪽 안내(그쪽은 라우트가 이미 문장으로 말해 준다)와 별개로
+ * 사무국을 부른다. 수신거부를 보지 않는다 — 후원자의 돈이 어디 있는지 모르는
+ * 상태이고, 그것은 끌 수 있는 종류의 통지가 아니다.
+ *
+ * 이 파일의 다른 함수들과 같이 **절대 던지지 않는다.**
+ */
+export function buildOfficeRefundUncertainNotice(
+  input: { orderId: string; pledgeId: string; campaignTitle: string | null },
+  siteUrl: string
+): NoticeCopy {
+  const urls = fundingUrls(siteUrl)
+  const title = input.campaignTitle ?? '프로젝트'
+  return {
+    title: '자동 환불 결과를 확인하지 못한 후원이 있습니다',
+    message:
+      `'${title}'에서 결제는 승인됐으나 후원을 확정할 자리가 없어 전액 환불을 요청했고, ` +
+      `그 결과를 확인하지 못했습니다. 이미 환불됐을 수도 있고 돈이 그대로 남아 있을 수도 있습니다. ` +
+      `토스 거래 내역에서 주문번호를 확인해 환불이 나가지 않았으면 콘솔에서 취소해 주세요. ` +
+      `주문번호: ${input.orderId} / 후원 ID: ${input.pledgeId}`,
+    url: urls.adminReview,
+    cta: '관리자 화면으로',
+    data: {
+      kind: 'funding_refund_uncertain',
+      order_id: input.orderId,
+      pledge_id: input.pledgeId,
+      scope: 'funding',
+    },
+  }
+}
+
+export async function notifyOfficeRefundUncertain(
+  input: { orderId: string; pledgeId: string; campaignTitle: string | null },
+  overrides?: Partial<OfficeRemedyNotifyDeps>
+): Promise<void> {
+  const d = resolve(overrides)
+  try {
+    const admins = await d.listAdminRecipients()
+    if (admins.length === 0) {
+      d.log.warn('자동 환불 불확실 공지를 받을 관리자가 없음', { orderId: input.orderId })
+      return
+    }
+    const notice = buildOfficeRefundUncertainNotice(input, d.siteUrl())
+    try {
+      await d.createBulkNotifications({
+        user_ids: admins.map(a => a.id),
+        type: 'system_notice',
+        title: notice.title,
+        message: notice.message,
+        data: notice.url ? { ...notice.data, url: notice.url } : notice.data,
+      })
+    } catch (error) {
+      d.log.error('자동 환불 불확실 인앱 공지 실패', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+    if (d.isMailConfigured() === false) {
+      d.log.warn('RESEND_API_KEY가 없어 자동 환불 불확실 메일을 건너뜀', {
+        orderId: input.orderId,
+      })
+      return
+    }
+    const { subject, html } = renderNoticeEmail(notice)
+    const result = await sendManyEmails({
+      recipients: admins.map(a => ({ email: a.email, user_id: a.id, subject, html })),
+      sendEmail: d.sendEmail,
+      log: d.log,
+      minIntervalMs: d.bulkOptions?.minIntervalMs,
+      retryDelayMs: d.bulkOptions?.retryDelayMs,
+    })
+    if (result.failed > 0) {
+      d.log.error('자동 환불 불확실 공지 일부 실패', { failed: result.failed, sent: result.sent })
+    }
+  } catch (error) {
+    d.log.error('자동 환불 불확실 공지 실패', {
       error: error instanceof Error ? error.message : String(error),
     })
   }

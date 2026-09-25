@@ -445,6 +445,8 @@
       "errorShipping": "Please fill in all shipping details.",
       "errorCreditName": "Please enter the name to credit in the booklet and website.",
       "errorCreditNameTooMany": "You can list at most {count} name(s) — one per quantity.",
+      "backToRewards": "Back — choose a different reward",
+      "backToRewardsError": "Could not release the pending payment. Please try again in a moment.",
       "retryWidget": "Reopen payment window"
     },
     "success": {

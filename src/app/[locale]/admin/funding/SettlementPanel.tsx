@@ -21,6 +21,7 @@ import {
   type PayoutAccount,
 } from '@/lib/funding/payoutAccount'
 import { cooperativeLossFor } from '@/lib/funding/settlement'
+import { apiErrorMessage } from '@/utils/apiErrorMessage'
 import {
   FEE_RATE_VAT_NOTE,
   formatFeeRatePercent,
@@ -99,7 +100,7 @@ export default function SettlementPanel({
       const res = await fetch(`/api/admin/funding/campaigns/${campaignId}/settlement`)
       const json = await res.json()
       if (res.ok === false)
-        throw new Error(json?.error?.message ?? '정산 내역을 불러오지 못했습니다.')
+        throw new Error(apiErrorMessage(json, '정산 내역을 불러오지 못했습니다.'))
       const data = json.data as Payload
       setPayload(data)
       if (data.settlement) {
@@ -128,7 +129,7 @@ export default function SettlementPanel({
       const res = await fetch(`/api/admin/funding/campaigns/${campaignId}/settlement?account=1`)
       const json = await res.json()
       if (res.ok === false) {
-        setError(json?.error?.message ?? '입금 계좌를 불러오지 못했습니다.')
+        setError(apiErrorMessage(json, '입금 계좌를 불러오지 못했습니다.'))
         return
       }
       const data = json.data as PayloadWithAccount
@@ -154,7 +155,7 @@ export default function SettlementPanel({
       if (res.ok === false) {
         // 409는 "그 사이에 무언가 움직였다"는 뜻이다. 서버가 무엇이 움직였는지
         // 문장으로 말해 주므로 그대로 보이고, 현재 값을 다시 불러온다.
-        setError(json?.error?.message ?? '처리하지 못했습니다.')
+        setError(apiErrorMessage(json, '처리하지 못했습니다.'))
         if (res.status === 409) await load()
         return
       }

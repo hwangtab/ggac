@@ -51,6 +51,7 @@ import {
 } from '@/lib/funding/officeRefund'
 import { refundPledgeAsOffice } from '@/lib/server/officeRefund'
 import { notifyOfficeRefunded } from '@/lib/funding/notifyOfficeRemedy'
+import { notifyRefundAfterPayout } from '@/lib/funding/notify'
 import { isFundingEnabled } from '@/lib/funding/settings'
 import { getServerPaymentConfig, isPaymentEnabled } from '@/lib/payments/toss/config'
 import { parseJsonObjectBody } from '@/utils/requestBody'
@@ -209,9 +210,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // 확인을 받지 않고 지나왔는데 그사이 지급이 끝났다면, 정산서는 환불 전
     // 숫자로 굳었고 아무도 눈치채지 못한다(`isBasisStale`은 지급된 정산서를
     // 대조하지 않는다). 좁은 창이지만 조용히 지나가게 두지 않는다.
+    let afterPayout = settledAck
     if (settledAck === false) {
       const settlementAfter = await getSettlementByCampaign(campaignId)
       if (settlementAfter?.status === 'paid') {
+        afterPayout = true
         logSecurityEvent(
           'FUNDING_OFFICE_REFUND_AFTER_PAYOUT',
           { pledgeId: String(pledge.id), campaignId, refundAmount: outcome.amount },
@@ -223,6 +226,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     after(() =>
       notifyOfficeRefunded(outcome.pledge, campaign).catch(e => log.error('환불 알림 실패', e))
     )
+
+    // 지급까지 끝난 정산의 캠페인이었다면 개설자도 알아야 한다 — 이미 받은
+    // 정산금 안에 방금 돌려준 돈이 들어 있다. 여기서 알리지 않으면 되돌려
+    // 받아야 한다는 사실을 나중에 전화로 처음 듣게 된다. 막는 것은 아무것도
+    // 바뀌지 않는다(확인 절차는 그대로다).
+    if (afterPayout) {
+      after(() =>
+        notifyRefundAfterPayout(campaign, outcome.pledge).catch(e =>
+          log.error('지급 뒤 환불 알림 실패', e)
+        )
+      )
+    }
 
     log.info('사무국 대리 환불', { pledgeId: pledge.id, refundAmount: outcome.amount })
     return ApiSuccess.ok({

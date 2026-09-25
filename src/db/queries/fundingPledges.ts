@@ -994,3 +994,64 @@ export async function listShippingPledges(campaignId: string): Promise<Row[]> {
     paid_at: toIso(r.paidAt),
   }))
 }
+
+/**
+ * 정산 대사용 — 이 캠페인에서 **우리 원장이 `paid`라고 믿고 있는** 후원과 그
+ * 결제 식별자들. 토스에 하나씩 물어보기 위한 최소한의 값만 고른다.
+ *
+ * 배송지·연락처·메모는 가져오지 않는다. 대사는 "이 결제가 아직 살아 있는가"만
+ * 묻는 일이고, 그 답에 후원자 신상은 필요 없다.
+ */
+export async function listPaidPledgePaymentsByCampaign(campaignId: string): Promise<
+  {
+    pledge_id: string
+    pledge_code: string
+    payment_id: string
+    payment_key: string
+    order_id: string
+    total_amount: number
+  }[]
+> {
+  const rows = await db
+    .select({
+      pledgeId: fundingPledges.id,
+      pledgeCode: fundingPledges.pledgeCode,
+      paymentId: payments.id,
+      paymentKey: payments.paymentKey,
+      orderId: payments.orderId,
+      totalAmount: fundingPledges.totalAmount,
+    })
+    .from(fundingPledges)
+    .innerJoin(payments, eq(payments.id, fundingPledges.paymentId))
+    .where(and(eq(fundingPledges.campaignId, campaignId), eq(fundingPledges.status, 'paid')))
+  return rows.map(r => ({
+    pledge_id: r.pledgeId,
+    pledge_code: r.pledgeCode,
+    payment_id: r.paymentId,
+    payment_key: r.paymentKey,
+    order_id: r.orderId,
+    total_amount: Number(r.totalAmount),
+  }))
+}
+
+/**
+ * 결제가 실패로 기록된 후원들의 **사유 한 줄**. 후원 ID로 찾는다.
+ *
+ * 승인 뒤 자동 환불이 불확실하게 끝난 건은 후원이 `canceled`로 남는데, 목록만
+ * 보면 "애초에 돈이 잡힌 적 없는 후원"과 똑같이 생겼다. 그 둘을 가르는 것은
+ * 결제 행의 이 문장뿐이라, 관리자 목록이 함께 보여 줄 수 있게 꺼내 온다.
+ */
+export async function listPaymentFailureMessagesByCampaign(
+  campaignId: string
+): Promise<Map<string, string>> {
+  const rows = await db
+    .select({ pledgeId: fundingPledges.id, message: payments.failureMessage })
+    .from(fundingPledges)
+    .innerJoin(payments, eq(payments.orderId, fundingPledges.orderId))
+    .where(and(eq(fundingPledges.campaignId, campaignId), isNotNull(payments.failureMessage)))
+  const map = new Map<string, string>()
+  for (const r of rows) {
+    if (typeof r.message === 'string' && r.message.length > 0) map.set(r.pledgeId, r.message)
+  }
+  return map
+}

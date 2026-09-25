@@ -22,6 +22,7 @@ import { FiAlertCircle } from 'react-icons/fi'
 import { Link } from '@/i18n/navigation'
 import { ADDITIONAL_AMOUNT_STEP, MAX_ADDITIONAL_AMOUNT, MAX_QUANTITY } from '@/lib/funding/amounts'
 import { CREDIT_NAME_MAX_LENGTH, evaluateCreditName } from '@/lib/funding/creditName'
+import { apiErrorMessage } from '@/utils/apiErrorMessage'
 
 import { formatAmount } from '../format'
 import type { CampaignDetail, Reward } from '../types'
@@ -330,6 +331,43 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
     loadWidget,
     t,
   ])
+
+  /**
+   * 결제 단계에서 돌아간다 — 지금 쥔 선점을 놓아 주고 리워드 선택으로.
+   *
+   * 놓아 주지 않고 화면만 되돌리면 그 선점은 10분 동안 서 있고, 고쳐 고르기를
+   * 몇 번 하면 자기 선점이 자기 상한을 채운다. 서버가 거절하면 화면도
+   * 되돌리지 않는다 — 선점이 살아 있는데 폼으로 돌아가면 다음 후원이 상한에
+   * 걸리고 그 이유가 화면에 없다.
+   */
+  const backToRewards = useCallback(async () => {
+    if (!reservation) return
+    setError('')
+    setPreparing(true)
+    try {
+      const res = await fetch('/api/funding/pledges/release', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pledgeId: reservation.pledgeId,
+          orderId: reservation.orderId,
+        }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) {
+        setError(apiErrorMessage(json, t('form.backToRewardsError')))
+        return
+      }
+      widgetsRef.current = null
+      setWidgetReady(false)
+      setReservation(null)
+    } catch (caught) {
+      console.error('결제 대기 정리 실패:', caught)
+      setError(t('form.backToRewardsError'))
+    } finally {
+      setPreparing(false)
+    }
+  }, [reservation, t])
 
   const requestPayment = useCallback(async () => {
     const widgets = widgetsRef.current as {
@@ -733,6 +771,14 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
             {preparing ? t('form.submitting') : t('form.retryWidget')}
           </button>
         )}
+        <button
+          type="button"
+          onClick={() => void backToRewards()}
+          disabled={preparing}
+          className="mt-2 w-full rounded-lg px-5 py-2 text-sm font-medium text-gray-600 underline transition hover:text-gray-900 disabled:opacity-50"
+        >
+          {t('form.backToRewards')}
+        </button>
       </section>
     </div>
   )

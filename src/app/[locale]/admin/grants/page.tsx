@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import AdminLayout from '../components/AdminLayout'
 import { CAP } from '@/lib/server/grantDigest'
 import { countGenreUnclassified, filterByDefaultInterests } from '@/lib/server/interestMatch'
+import { apiErrorMessage } from '@/utils/apiErrorMessage'
 
 type GrantItem = {
   key: string
@@ -153,7 +154,7 @@ export default function AdminGrantsPage() {
     try {
       const res = await fetch('/api/admin/grants')
       const json = await res.json()
-      if (!res.ok) throw new Error(json?.error?.message ?? '목록을 불러오지 못했습니다.')
+      if (!res.ok) throw new Error(apiErrorMessage(json, '목록을 불러오지 못했습니다.'))
       setSummaries(json.data.digests)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -172,7 +173,7 @@ export default function AdminGrantsPage() {
     try {
       const res = await fetch(`/api/admin/grants/${id}`)
       const json = await res.json()
-      if (!res.ok) throw new Error(json?.error?.message ?? '회차를 불러오지 못했습니다.')
+      if (!res.ok) throw new Error(apiErrorMessage(json, '회차를 불러오지 못했습니다.'))
       setSelected(json.data.digest)
       setSavedItems(json.data.digest.items)
     } catch (e) {
@@ -205,7 +206,7 @@ export default function AdminGrantsPage() {
         body: JSON.stringify({ items: selected.items }),
       })
       const json = await res.json()
-      if (!res.ok) throw new Error(json?.error?.message ?? '저장하지 못했습니다.')
+      if (!res.ok) throw new Error(apiErrorMessage(json, '저장하지 못했습니다.'))
       setSelected(json.data.digest)
       setSavedItems(json.data.digest.items)
       setResult('저장했습니다.')
@@ -238,7 +239,7 @@ export default function AdminGrantsPage() {
     try {
       const res = await fetch(`/api/admin/grants/${selected.id}/publish`, { method: 'POST' })
       const json = await res.json()
-      if (!res.ok) throw new Error(json?.error?.message ?? '발행하지 못했습니다.')
+      if (!res.ok) throw new Error(apiErrorMessage(json, '발행하지 못했습니다.'))
       const d = json.data
       const statsLabel = matchStatsLabel(d.per_member)
       setResult(

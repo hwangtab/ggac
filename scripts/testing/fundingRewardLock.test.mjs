@@ -289,6 +289,7 @@ const saved = {
   description: '설명',
   amount: 30000,
   requires_shipping: true,
+  requires_credit_name: false,
   total_quantity: 50,
   image_url: '/images/album.jpg',
   estimated_delivery: '2026-12',
@@ -305,6 +306,7 @@ test('칸 하나만 달라져도 써야 한다', () => {
     { description: '다른 설명' },
     { amount: 35000 },
     { requires_shipping: false },
+    { requires_credit_name: true },
     { total_quantity: 60 },
     { total_quantity: null },
     { image_url: '/images/other.jpg' },
@@ -331,6 +333,10 @@ test('빈 값과 없음은 같게 본다 — 건드린 적 없는 칸이 매번 
     }),
     true
   )
+})
+
+test('이름 기재 여부만 바뀌어도 no-op으로 보면 안 된다', () => {
+  assert.equal(rewardPatchChangesNothing(saved, { ...saved, requires_credit_name: true }), false)
 })
 
 test('패치에 없는 칸은 비교하지 않는다', () => {

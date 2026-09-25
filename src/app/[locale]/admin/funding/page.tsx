@@ -9,6 +9,7 @@ import {
   FiExternalLink,
   FiRefreshCw,
 } from 'react-icons/fi'
+import { apiErrorMessage } from '@/utils/apiErrorMessage'
 import AdminLayout from '../components/AdminLayout'
 import PostContentRenderer from '@/components/PostContentRenderer'
 import OptimizedImage from '@/components/OptimizedImage'
@@ -122,7 +123,7 @@ export default function AdminFundingPage() {
       if (filter !== 'all') params.set('status', filter)
       const res = await fetch(`/api/admin/funding/campaigns?${params}`)
       const json = await res.json()
-      if (res.ok === false) throw new Error(json?.error?.message ?? '목록을 불러오지 못했습니다.')
+      if (res.ok === false) throw new Error(apiErrorMessage(json, '목록을 불러오지 못했습니다.'))
       const list: Campaign[] = json.data.campaigns
       setCampaigns(list)
       setReviewedVersions(Object.fromEntries(list.map(c => [c.id, c.updated_at])))
@@ -164,7 +165,7 @@ export default function AdminFundingPage() {
     try {
       const res = await fetch(`/api/mypage/funding/campaigns/${id}`)
       const json = await res.json()
-      if (res.ok === false) throw new Error(json?.error?.message ?? '내용을 불러오지 못했습니다.')
+      if (res.ok === false) throw new Error(apiErrorMessage(json, '내용을 불러오지 못했습니다.'))
       // 후원자 명단(json.data.pledges)은 상태에 담지도 않는다 —
       // `toReviewDetail`이 싣는 목록을 정한다.
       const detail: CampaignDetail = toReviewDetail(json.data)
@@ -202,18 +203,18 @@ export default function AdminFundingPage() {
         // 409는 두 가지다 — 다른 관리자가 먼저 처리했거나, 심사 중에 개설자가
         // 내용을 고쳤거나. 서버가 어느 쪽인지 문장으로 말해 주므로 그대로 쓴다.
         setError(
-          `${json?.error?.message ?? '상태가 이미 바뀌었습니다. 새로고침해 주세요.'} 목록을 새로고침합니다.`
+          `${apiErrorMessage(json, '상태가 이미 바뀌었습니다. 새로고침해 주세요.')} 목록을 새로고침합니다.`
         )
         await load()
         return
       }
       if (res.status === 503) {
         setError(
-          `${json?.error?.message ?? '펀딩을 준비 중입니다.'} 시스템 설정 > 기능 설정에서 펀딩 기능을 켜야 심사를 처리할 수 있습니다.`
+          `${apiErrorMessage(json, '펀딩을 준비 중입니다.')} 시스템 설정 > 기능 설정에서 펀딩 기능을 켜야 심사를 처리할 수 있습니다.`
         )
         return
       }
-      if (res.ok === false) throw new Error(json?.error?.message ?? '처리하지 못했습니다.')
+      if (res.ok === false) throw new Error(apiErrorMessage(json, '처리하지 못했습니다.'))
 
       const labels: Record<typeof action, string> = {
         approve: '승인',

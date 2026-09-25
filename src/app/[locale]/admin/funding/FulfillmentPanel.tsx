@@ -31,6 +31,7 @@ import {
   type FulfillmentStatus,
 } from '@/lib/funding/fulfillment'
 import { OFFICE_REFUND_REASON_MIN } from '@/lib/funding/officeRefund'
+import { apiErrorMessage } from '@/utils/apiErrorMessage'
 
 interface PledgeRow {
   id: string
@@ -42,6 +43,11 @@ interface PledgeRow {
   quantity: number
   total_amount: number
   paid_at: string | null
+  /**
+   * 결제 행에 남은 실패 사유. 취소된 후원이 "돈이 잡힌 적 없다"인지 "승인 뒤
+   * 환불이 불확실하게 끝났다"인지를 가르는 유일한 문장이다.
+   */
+  payment_failure_message: string | null
 }
 
 interface MarkRow {
@@ -110,7 +116,7 @@ export default function FulfillmentPanel({ campaignId }: { campaignId: string })
       const res = await fetch(`/api/admin/funding/campaigns/${campaignId}/fulfillment`)
       const json = await res.json()
       if (res.ok === false)
-        throw new Error(json?.error?.message ?? '이행 현황을 불러오지 못했습니다.')
+        throw new Error(apiErrorMessage(json, '이행 현황을 불러오지 못했습니다.'))
       setPayload(json.data as Payload)
       setSelected({})
     } catch (e) {
@@ -173,11 +179,11 @@ export default function FulfillmentPanel({ campaignId }: { campaignId: string })
       })
       const json = await res.json()
       if (res.status === 409) {
-        setError(`${json?.error?.message ?? '상태가 이미 바뀌었습니다.'}`)
+        setError(apiErrorMessage(json, '상태가 이미 바뀌었습니다.'))
         await load()
         return
       }
-      if (res.ok === false) throw new Error(json?.error?.message ?? '되돌리지 못했습니다.')
+      if (res.ok === false) throw new Error(apiErrorMessage(json, '되돌리지 못했습니다.'))
       const reopened = Number(json?.data?.reopened_self_cancel ?? 0)
       setNotice(
         `${Number(json?.data?.updated ?? 0)}건을 되돌렸습니다.` +
@@ -231,7 +237,7 @@ export default function FulfillmentPanel({ campaignId }: { campaignId: string })
         // 409는 두 갈래다 — 그사이 상태가 움직였거나, 지급이 끝난 캠페인이라
         // 확인이 더 필요하거나. 서버가 문장으로 말해 주므로 그대로 쓰고
         // 목록을 다시 읽는다.
-        setError(json?.error?.message ?? '환불하지 못했습니다.')
+        setError(apiErrorMessage(json, '환불하지 못했습니다.'))
         if (res.status === 409) await load()
         return
       }
@@ -379,6 +385,9 @@ export default function FulfillmentPanel({ campaignId }: { campaignId: string })
                           >
                             전액 환불
                           </button>
+                        )}
+                        {p.payment_failure_message && (
+                          <p className="w-full text-amber-700">{p.payment_failure_message}</p>
                         )}
                       </li>
                     ))}

@@ -11,6 +11,7 @@ import { useState } from 'react'
 import { FiPlus, FiSearch, FiX } from 'react-icons/fi'
 
 import { FEE_RATE_VAT_NOTE, formatFeeRatePercent, isFeeMember } from '@/lib/funding/feeRate'
+import { apiErrorMessage } from '@/utils/apiErrorMessage'
 
 const CATEGORIES = ['공연', '음반', '전시', '출판', '영상', '기타'] as const
 
@@ -50,8 +51,7 @@ export default function ProxyCreatePanel({ memberRateBp, nonmemberRateBp, onCrea
     try {
       const res = await fetch(`/api/admin/members?search=${encodeURIComponent(q)}&limit=10`)
       const json = await res.json()
-      if (res.ok === false)
-        throw new Error(json?.error?.message ?? json?.error ?? '회원을 찾지 못했습니다.')
+      if (res.ok === false) throw new Error(apiErrorMessage(json, '회원을 찾지 못했습니다.'))
       const members = (json?.data?.members ?? []) as MemberOption[]
       setResults(members.filter(m => m.registration_status !== 'withdrawn'))
     } catch (e) {
@@ -96,8 +96,7 @@ export default function ProxyCreatePanel({ memberRateBp, nonmemberRateBp, onCrea
         }),
       })
       const json = await res.json()
-      if (res.ok === false)
-        throw new Error(json?.error?.message ?? json?.error ?? '만들지 못했습니다.')
+      if (res.ok === false) throw new Error(apiErrorMessage(json, '만들지 못했습니다.'))
       const campaign = json.data.campaign as { id: string; title: string }
       reset()
       setOpen(false)

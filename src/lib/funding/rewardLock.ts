@@ -174,6 +174,8 @@ export interface RewardSavedValues {
   description: string | null
   amount: number
   requires_shipping: boolean
+  /** 없으면 false로 본다 — `RewardLockView`와 같은 규칙이다. */
+  requires_credit_name?: boolean
   total_quantity: number | null
   image_url: string | null
   estimated_delivery: string | null
@@ -203,6 +205,11 @@ export function rewardPatchChangesNothing(
   if (
     patch.requires_shipping !== undefined &&
     Boolean(patch.requires_shipping) !== Boolean(existing.requires_shipping)
+  )
+    return false
+  if (
+    patch.requires_credit_name !== undefined &&
+    Boolean(patch.requires_credit_name) !== Boolean(existing.requires_credit_name)
   )
     return false
   if (
