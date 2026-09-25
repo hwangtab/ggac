@@ -94,3 +94,66 @@ test('문자열 리터럴 안에 세미콜론이 있어도 안 잘린다', async
     for (const p of [dumpPath, dbPath]) if (existsSync(p)) rmSync(p)
   }
 })
+
+test('CREATE TABLE 문을 FK 참조 대상이 먼저 오도록 위상 정렬한다', async () => {
+  const { topoSortCreateTables } = await import('../turso/restore-from-dump.mjs')
+
+  // 원본 순서: child가 아직 없는 parent를 참조 — 이 스키마의 board_meetings
+  // 실패 패턴과 같은 모양이다.
+  const child = 'CREATE TABLE IF NOT EXISTS child (id TEXT, ref TEXT REFERENCES parent(id));'
+  const parent = 'CREATE TABLE IF NOT EXISTS parent (id TEXT PRIMARY KEY);'
+  const grandchild =
+    'CREATE TABLE IF NOT EXISTS grandchild (id TEXT, ref TEXT REFERENCES child(id));'
+  const unrelated = 'CREATE TABLE IF NOT EXISTS unrelated (id TEXT PRIMARY KEY);'
+
+  const sorted = topoSortCreateTables([child, grandchild, parent, unrelated])
+  const nameOf = s => s.match(/CREATE TABLE IF NOT EXISTS (\w+)/)[1]
+  const order = sorted.map(nameOf)
+
+  assert.ok(order.indexOf('parent') < order.indexOf('child'), 'parent가 child보다 먼저')
+  assert.ok(order.indexOf('child') < order.indexOf('grandchild'), 'child가 grandchild보다 먼저')
+  assert.equal(order.length, 4)
+})
+
+test('위상 정렬 — 자기 참조는 순서에 영향을 주지 않는다', async () => {
+  const { topoSortCreateTables } = await import('../turso/restore-from-dump.mjs')
+  const selfRef =
+    'CREATE TABLE IF NOT EXISTS tree (id TEXT PRIMARY KEY, parent_id TEXT REFERENCES tree(id));'
+  const other = 'CREATE TABLE IF NOT EXISTS other (id TEXT PRIMARY KEY);'
+
+  const sorted = topoSortCreateTables([other, selfRef])
+  assert.equal(sorted.length, 2)
+})
+
+test('위상 정렬 — 정렬 대상 밖의 테이블을 가리키는 FK는 무시한다', async () => {
+  const { topoSortCreateTables } = await import('../turso/restore-from-dump.mjs')
+  const stmt =
+    'CREATE TABLE IF NOT EXISTS orphan_ref (id TEXT, ref TEXT REFERENCES not_in_this_list(id));'
+
+  const sorted = topoSortCreateTables([stmt])
+  assert.equal(sorted.length, 1)
+  assert.equal(sorted[0], stmt)
+})
+
+test('splitSqlStatements — 문자열 리터럴 안의 세미콜론을 문장 경계로 보지 않는다', async () => {
+  const { splitSqlStatements } = await import('../turso/restore-from-dump.mjs')
+  const sql = "INSERT INTO t VALUES ('a;b');\nINSERT INTO t VALUES ('c');"
+  const statements = splitSqlStatements(sql)
+  assert.equal(statements.length, 2)
+  assert.match(statements[0], /'a;b'/)
+})
+
+test('splitSqlStatements — 이스케이프된 따옴표(작은따옴표 두 개)를 문자열 끝으로 보지 않는다', async () => {
+  const { splitSqlStatements } = await import('../turso/restore-from-dump.mjs')
+  const sql = "INSERT INTO t VALUES ('it''s; here');"
+  const statements = splitSqlStatements(sql)
+  assert.equal(statements.length, 1)
+})
+
+test('splitSqlStatements — 줄 주석·블록 주석 안의 세미콜론을 무시한다', async () => {
+  const { splitSqlStatements } = await import('../turso/restore-from-dump.mjs')
+  const sql =
+    '-- comment; with semicolon\nINSERT INTO t VALUES (1);\n/* block; comment */\nINSERT INTO t VALUES (2);'
+  const statements = splitSqlStatements(sql)
+  assert.equal(statements.length, 2)
+})
