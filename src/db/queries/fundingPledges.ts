@@ -703,6 +703,64 @@ async function cancelPendingPledgeOnce(
 }
 
 /**
+ * 후원자가 결제창에서 **돌아가기**를 눌렀을 때의 취소. 위 함수와 달리
+ * **승인이 날아가고 있는 중이면 취소하지 않는다.**
+ *
+ * 왜 따로 두는가: 위 `cancelPendingPledge`를 부르는 다른 자리들(확정 라우트의
+ * 재고 부족 환불, 만료 크론)은 **이미 승인이 끝난 뒤** 뒷정리로 부르는 것이라
+ * `payment_key`가 당연히 서 있다. 거기에 이 조건을 달면 정작 치워야 할 선점이
+ * 영영 남는다. 조건이 필요한 것은 사용자가 스스로 누르는 이 문 하나뿐이다.
+ *
+ * 판정과 취소가 **한 트랜잭션 안**이어야 하는 이유: 라우트가 결제 행을 읽고
+ * 나서 이 UPDATE를 보내는 사이에 확정 라우트가 `recordPaymentKey`로 표식을
+ * 새길 수 있다. 그 창에서 취소가 통과하면 승인은 났는데 확정할 후원이 없다.
+ * libSQL 드라이버는 트랜잭션을 `BEGIN IMMEDIATE`로 열어 첫 문장부터 쓰기
+ * 잠금을 쥐므로, 여기서 읽은 `payment_key`와 아래 UPDATE 사이에 그 쓰기가
+ * 끼어들지 못한다.
+ */
+export async function cancelPendingPledgeForRelease(
+  pledgeId: string,
+  expectedOrderId: string
+): Promise<{ ok: true; pledge: Row } | { ok: false; reason: 'gone' | 'in_flight' }> {
+  return retryOnLockContention(
+    () => cancelPendingPledgeForReleaseOnce(pledgeId, expectedOrderId),
+    () => false,
+    MONEY_PATH_RETRY_BUDGET
+  )
+}
+
+async function cancelPendingPledgeForReleaseOnce(
+  pledgeId: string,
+  expectedOrderId: string
+): Promise<{ ok: true; pledge: Row } | { ok: false; reason: 'gone' | 'in_flight' }> {
+  return db.transaction(async tx => {
+    const [payment] = await tx
+      .select({ paymentKey: payments.paymentKey })
+      .from(payments)
+      .where(eq(payments.orderId, expectedOrderId))
+      .limit(1)
+    if (typeof payment?.paymentKey === 'string' && payment.paymentKey.length > 0) {
+      return { ok: false as const, reason: 'in_flight' as const }
+    }
+
+    const [row] = await tx
+      .update(fundingPledges)
+      .set({ status: 'canceled', canceledAt: new Date() })
+      .where(
+        and(
+          eq(fundingPledges.id, pledgeId),
+          eq(fundingPledges.orderId, expectedOrderId),
+          eq(fundingPledges.status, 'pending')
+        )
+      )
+      .returning()
+    return row
+      ? { ok: true as const, pledge: rowToPledge(row as Row) }
+      : { ok: false as const, reason: 'gone' as const }
+  })
+}
+
+/**
  * 선점이 만료된 대기 후원. **늦게 만료된 것부터** 최대 `limit`건.
  *
  * 차례가 중요하다. 정리 스윕이 해결하지 못하는 행(토스 조회 실패, 남의

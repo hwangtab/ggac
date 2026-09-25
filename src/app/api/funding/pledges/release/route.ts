@@ -12,8 +12,9 @@
 import { NextRequest } from 'next/server'
 
 import { getOptionalUser } from '@/lib/server/memberAuth'
-import { cancelPendingPledge, getPledgeById } from '@/db/queries/fundingPledges'
-import { planPledgeRelease } from '@/lib/funding/pledgeRelease'
+import { cancelPendingPledgeForRelease, getPledgeById } from '@/db/queries/fundingPledges'
+import { getPaymentByOrderId } from '@/db/queries/payments'
+import { planPledgeRelease, PLEDGE_RELEASE_IN_FLIGHT_MESSAGE } from '@/lib/funding/pledgeRelease'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { ApiSuccess, ApiError, withApiWrapper } from '@/utils/apiWrapper'
 import { applyRouteRateLimit, createIPKeyGenerator } from '@/lib/server/rateLimit'
@@ -41,18 +42,31 @@ export async function POST(request: NextRequest) {
         throw ApiError.badRequest('후원 정보가 없습니다.')
 
       const user = await getOptionalUser()
-      const pledge = await getPledgeById(pledgeId)
-      const plan = planPledgeRelease(pledge, { userId: user?.id ?? null, orderId })
+      // 결제 행까지 함께 읽는다. 승인이 날아가고 있는 중이라는 사실은 후원
+      // 행이 아니라 **결제 행의 `payment_key`**에만 적혀 있다(판정 파일의
+      // 머리 주석). 이 읽기는 사용자에게 제대로 된 문장을 돌려주기 위한
+      // 것이고, 실제 경계는 아래 취소 트랜잭션 안에서 한 번 더 선다.
+      const [pledge, payment] = await Promise.all([
+        getPledgeById(pledgeId),
+        getPaymentByOrderId(orderId),
+      ])
+      const plan = planPledgeRelease(pledge, { userId: user?.id ?? null, orderId }, payment)
       if (plan.ok === false) {
         if (plan.status === 404) throw ApiError.notFound(plan.message)
         throw ApiError.conflict(plan.message)
       }
 
-      // 상태를 읽고 나서 쓰지 않는다 — 조건(`status='pending'` + 주문 짝)은
-      // UPDATE의 WHERE에 있다. 0행이면 그사이 움직인 것이다.
-      const canceled = await cancelPendingPledge(pledgeId, orderId)
-      if (!canceled)
-        throw ApiError.conflict('이미 정리된 결제 대기입니다. 처음부터 다시 골라 주세요.')
+      // 상태를 읽고 나서 쓰지 않는다 — 조건(`status='pending'` + 주문 짝 +
+      // 결제 표식 없음)은 전부 취소 트랜잭션 안에 있다. 그사이 움직였으면
+      // 그쪽이 이유를 돌려준다.
+      const canceled = await cancelPendingPledgeForRelease(pledgeId, orderId)
+      if (canceled.ok === false) {
+        throw ApiError.conflict(
+          canceled.reason === 'in_flight'
+            ? PLEDGE_RELEASE_IN_FLIGHT_MESSAGE
+            : '이미 정리된 결제 대기입니다. 처음부터 다시 골라 주세요.'
+        )
+      }
 
       return ApiSuccess.ok({ released: true })
     },

@@ -309,6 +309,55 @@ test('불확실 공지는 관리자 전원에게 인앱과 메일로 간다', as
   assert.deepEqual(mails, ['a1@ggac.kr', 'a2@ggac.kr'])
 })
 
+/**
+ * 같은 문으로 나가는 두 번째 갈래. 여기서는 **환불이 나간 적이 없다** —
+ * 문안이 "요청했으나 결과를 모른다"고 말하면 사무국은 토스 내역에서 취소를
+ * 찾다가 없는 것을 보고 이미 처리된 줄 안다.
+ */
+test('확정할 후원이 없는 건은 환불이 나가지 않았다고 말한다', () => {
+  const notice = n.buildOfficeRefundUncertainNotice(
+    {
+      orderId: 'ORD-9',
+      pledgeId: 'PL-9',
+      campaignTitle: '두 번째 앨범',
+      situation: 'captured_without_pledge',
+    },
+    'https://ggac.kr'
+  )
+  assert.match(notice.message, /ORD-9/)
+  assert.match(notice.message, /환불은 아직 나가지 않았습니다/)
+  assert.doesNotMatch(notice.message, /환불을 요청했고/)
+  assert.equal(notice.data.kind, 'funding_captured_without_pledge')
+})
+
+test('갈래를 적지 않으면 기존 문안 그대로다', () => {
+  const notice = n.buildOfficeRefundUncertainNotice(
+    { orderId: 'ORD-10', pledgeId: 'PL-10', campaignTitle: null },
+    'https://ggac.kr'
+  )
+  assert.equal(notice.data.kind, 'funding_refund_uncertain')
+  assert.match(notice.message, /전액 환불을 요청했고/)
+})
+
+/**
+ * 승인이 끝난 뒤 확정에 실패하는 갈래는 둘이다(재고 없음 / 확정 0행). 뒤쪽은
+ * 오랫동안 환불 실패를 **로그로만** 남겨, 승인된 돈이 붙은 결제 행이
+ * `pending`인 채 아무 설명 없이 남았다. 두 갈래가 같은 모양을 쓰는지 본다.
+ */
+test('확정 라우트의 두 갈래 모두 실패한 환불을 사람에게 넘긴다', () => {
+  const src = stripComments(
+    readFileSync(
+      new URL('../../src/app/api/funding/pledges/confirm/route.ts', import.meta.url),
+      'utf8'
+    )
+  )
+  const tail = src.slice(src.indexOf("if (!confirmed || confirmed.status !== 'paid')"))
+  assert.match(tail, /markPaymentFailed\(/, '원장에 사유가 남아야 한다')
+  assert.match(tail, /notifyOfficeRefundUncertain\(/, '환불 결과를 모르면 사무국을 부른다')
+  // 환불이 나간 건까지 부르면 아무 일 없는 건으로 사무국을 깨운다.
+  assert.match(tail, /if \(refunded === false\)/)
+})
+
 test('불확실 공지는 절대 던지지 않는다 — 환불 판정은 이미 끝난 일이다', async () => {
   const errors = []
   await n.notifyOfficeRefundUncertain(

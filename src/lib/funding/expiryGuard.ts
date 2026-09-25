@@ -20,6 +20,13 @@
  * - 보류가 오래 이어진 행은 `listStuckHolds`로 따로 세어 `reportStuck`으로
  *   넘긴다. 영영 `pending`으로 두면서 아무에게도 말하지 않는 것 자체가 고장이다.
  *
+ * ## 다시 오지 않는 건은 보류가 아니다
+ *
+ * 승격(`promote`)이 `'unresolvable'`을 돌려주면 **다음 스윕이 다시 볼 수 없는
+ * 건**이라는 뜻이다 — 토스는 승인됐다고 답했는데 확정할 후원이 없어, 그 후원
+ * 행이 이미 `pending`을 벗어난 경우다. 보류로 세면 "다음에 다시 본다"는
+ * 거짓말이 결과 숫자로 남는다. 따로 센다(부르는 쪽이 사람을 부른다).
+ *
  * 목록의 차례는 쿼리가 정한다(늦게 만료된 것부터) — 정체된 행이 앞을 막지
  * 못하게 하는 것이 그 차례의 목적이다.
  */
@@ -38,6 +45,8 @@ export interface ExpiryGuardResult {
   deferred: number
   /** 남의 결제 식별자가 실려 있어 만료로 끝낸 건. */
   mismatched: number
+  /** 승인된 돈이 잡혀 있는데 확정할 후원이 없어 **다음 스윕이 보지 못하는** 건. */
+  unresolvable: number
   /** 하루 넘게 풀리지 않은 채 남아 있는 건. 사람이 봐야 한다. */
   stuck: number
 }
@@ -45,10 +54,14 @@ export interface ExpiryGuardResult {
 export interface ExpiryGuardDeps {
   listExpiredHolds: () => Promise<Row[]>
   lookupPayment: (orderId: string) => Promise<PaymentLookup>
+  /**
+   * `true` 승격함 · `false` 이번에는 못 했다(다음 스윕이 다시 본다) ·
+   * `'unresolvable'` 승인된 돈이 잡혀 있는데 확정할 후원이 없다(다시 오지 않는다).
+   */
   promote: (
     pledge: Row,
     lookup: { status: string; paymentKey: string; method?: string; approvedAt?: string }
-  ) => Promise<boolean>
+  ) => Promise<boolean | 'unresolvable'>
   expire: (pledgeId: string) => Promise<boolean>
   /** 하루 넘게 `pending`으로 남은 선점. 없으면 이 점검을 건너뛴다. */
   listStuckHolds?: () => Promise<Row[]>
@@ -62,6 +75,7 @@ export async function runExpiryGuard(deps: ExpiryGuardDeps): Promise<ExpiryGuard
     expired: 0,
     deferred: 0,
     mismatched: 0,
+    unresolvable: 0,
     stuck: 0,
   }
   const holds = await deps.listExpiredHolds()
@@ -81,8 +95,9 @@ export async function runExpiryGuard(deps: ExpiryGuardDeps): Promise<ExpiryGuard
         continue
       }
       if (lookup !== 'not_found' && lookup.status === 'DONE') {
-        const ok = await deps.promote(pledge, lookup)
-        if (ok) result.promoted++
+        const promoted = await deps.promote(pledge, lookup)
+        if (promoted === true) result.promoted++
+        else if (promoted === 'unresolvable') result.unresolvable++
         else result.deferred++
         continue
       }
