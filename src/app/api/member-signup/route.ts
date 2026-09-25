@@ -93,9 +93,11 @@ const GENERIC_SIGN_UP_ERROR_MESSAGE =
 
 export async function POST(request: NextRequest) {
   try {
-    // 1) 레이트리밋 — 인증 없는 공개 엔드포인트다.
+    // 1) 레이트리밋 — 인증 없는 공개 엔드포인트다. 로그인(AUTH_API)과 같은
+    // 설정을 쓰면 안 된다: 로그인은 이미 있는 계정을 여는 일이고 여기는 계정을
+    // **만드는** 일이다. SIGNUP은 시간당 10회(IP 기준)다.
     const rateLimiter = await applyRateLimit({
-      ...RATE_LIMIT_CONFIGS.AUTH_API,
+      ...RATE_LIMIT_CONFIGS.SIGNUP,
       keyGenerator: createIPKeyGenerator('member-signup'),
       message: '가입 시도가 너무 많습니다. 잠시 후 다시 시도해주세요.',
     })

@@ -25,6 +25,7 @@ import { requireActiveMember, getOptionalUser } from '@/lib/server/memberAuth'
 import { fetchBoardPosts } from '@/lib/server/board'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { CATEGORIES, parseBoardCategory } from '@/constants/categories'
+import { TEXT_LIMITS, textLengthError } from '@/utils/textLimits'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { annotateImageDimensionsSafe } from '@/utils/imageDimensions'
 import { getBoardListRevalidationPaths } from '@/lib/revalidationPaths'
@@ -232,6 +233,14 @@ export async function POST(request: NextRequest) {
 
       if (!content.trim()) {
         throw ApiError.badRequest('내용을 입력해주세요.')
+      }
+
+      // 화면의 maxLength는 이 라우트를 거치지 않은 요청에는 아무 구속력이 없다.
+      const tooLong =
+        textLengthError(title, TEXT_LIMITS.POST_TITLE, '제목') ||
+        textLengthError(content, TEXT_LIMITS.POST_CONTENT, '내용')
+      if (tooLong) {
+        throw ApiError.badRequest(tooLong)
       }
 
       if (!category || category === CATEGORIES.BOARD.ALL) {

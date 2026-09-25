@@ -1,7 +1,12 @@
 import { NextRequest } from 'next/server'
 import { createImageResponse, createOptionsResponse } from '@/utils/apiResponse'
 import { ApiError } from '@/utils/apiWrapper'
-import { isUnsafeHost } from '@/utils/ssrfProtection'
+import {
+  fetchPinned,
+  isUnsafeHost,
+  ResponseTooLargeError,
+  SsrfBlockedError,
+} from '@/utils/ssrfProtection'
 import distLimiter from '@/lib/server/rateLimit'
 import { parseIntegerParam } from '@/utils/queryParams'
 
@@ -48,24 +53,29 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 8000)
-
-    const res = await fetch(target.toString(), {
+    // 위 `isUnsafeHost`는 **이름**을 봤을 뿐이다. 그 뒤에 평범한 fetch를 하면
+    // 이름을 한 번 더 풀게 되고, 그 사이에 공격자가 자기 DNS 레코드를 내부
+    // 주소로 바꿔 두면 검사는 통과하고 접속만 내부로 간다. `fetchPinned`는
+    // 이름을 한 번 풀어 검사한 그 IP로만 접속한다.
+    const res = await fetchPinned(target.toString(), {
       method: 'GET',
       redirect: 'manual',
-      signal: controller.signal,
+      timeoutMs: 8000,
+      maxBytes: MAX_IMAGE_BYTES,
       // Spoof a common UA to improve success rate on strict sites
       headers: {
         'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36',
         Accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
       },
-      // Prevent Next from caching upstream 4xx/5xx aggressively
-      cache: 'no-store',
+      // 이미지가 아니거나 리다이렉트면 본문을 아예 받지 않는다.
+      acceptResponse: (status, headers) =>
+        status >= 200 &&
+        status < 300 &&
+        ALLOWED_IMAGE_TYPES.has(
+          (headers.get('content-type') || '').split(';')[0].trim().toLowerCase()
+        ),
     })
-
-    clearTimeout(timeout)
 
     // Handle redirects manually to prevent SSRF bypass
     if (res.status === 301 || res.status === 302 || res.status === 307 || res.status === 308) {
@@ -102,18 +112,25 @@ export async function GET(req: NextRequest) {
       return ApiError.badRequest('Upstream image is too large').toNextResponse()
     }
 
+    // Content-Length는 상대가 주는 **주장**이고 chunked 응답에는 아예 없다.
+    // 실제 상한은 `fetchPinned`가 본문을 읽으면서 건다(넘으면
+    // ResponseTooLargeError). 위 헤더 검사는 받기 전에 거절할 수 있는 건은
+    // 미리 거절하는 지름길일 뿐이다.
     const buff = Buffer.from(await res.arrayBuffer())
-    if (buff.length > MAX_IMAGE_BYTES) {
-      return ApiError.badRequest('Upstream image is too large').toNextResponse()
-    }
 
     // Cache for 1 day at the CDN/browser level
     return createImageResponse(buff, contentType, {
       'Cache-Control': 'public, max-age=86400',
     })
   } catch (err: unknown) {
-    const isAbort = err instanceof Error && err.name === 'AbortError'
-    const msg = isAbort ? 'Timeout fetching image' : 'Failed to fetch image'
+    if (err instanceof SsrfBlockedError) {
+      return ApiError.forbidden('Forbidden').toNextResponse()
+    }
+    if (err instanceof ResponseTooLargeError) {
+      return ApiError.badRequest('Upstream image is too large').toNextResponse()
+    }
+    const isTimeout = err instanceof Error && /timed out|aborted/i.test(err.message)
+    const msg = isTimeout ? 'Timeout fetching image' : 'Failed to fetch image'
     return ApiError.badRequest(msg).toNextResponse()
   }
 }

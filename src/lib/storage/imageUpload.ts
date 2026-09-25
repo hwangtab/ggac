@@ -41,11 +41,25 @@ const log = createLogger('lib/storage/imageUpload')
 // 함수로만 검사하려고 흔한 박스 크기(32/24/28바이트) 세 가지를 하드코딩한
 // 패턴으로 흉내 냈는데, 그 크기가 아닌 실제 MP4 파일은 걸러졌다. 지금은
 // checkMagicBytes가 offset을 직접 지원하므로 실제 구조 그대로 한 줄로 검사한다.
-export const MAGIC_BYTE_SIGNATURES: Record<string, { bytes: number[]; offset?: number }[]> = {
+//
+// `bytes` 안의 `null`은 **무엇이 와도 되는 자리**다. RIFF 계열처럼 시그니처가
+// 떨어져 있는 형식을 한 줄로 적기 위한 칸이다.
+export const MAGIC_BYTE_SIGNATURES: Record<
+  string,
+  { bytes: (number | null)[]; offset?: number }[]
+> = {
   'image/jpeg': [{ bytes: [0xff, 0xd8, 0xff] }],
   'image/png': [{ bytes: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] }],
   'image/gif': [{ bytes: [0x47, 0x49, 0x46, 0x38] }],
-  'image/webp': [{ bytes: [0x52, 0x49, 0x46, 0x46] }],
+  // WebP: RIFF 컨테이너 + 8바이트째의 'WEBP' 표식. 'RIFF'만 보면 WAV·AVI도
+  // 통과한다 — RIFF는 WebP 전용이 아니라 **컨테이너 포맷**이고, 그 자리의
+  // fourCC가 무엇이 들었는지를 말한다. 가운데 4바이트는 파일 크기라 값이
+  // 정해져 있지 않다.
+  'image/webp': [
+    {
+      bytes: [0x52, 0x49, 0x46, 0x46, null, null, null, null, 0x57, 0x45, 0x42, 0x50],
+    },
+  ],
   // PDF: %PDF
   'application/pdf': [{ bytes: [0x25, 0x50, 0x44, 0x46] }],
   // MP4: ftyp 박스 태그, offset 4(앞 4바이트는 가변 박스 크기)
@@ -68,8 +82,12 @@ export function checkMagicBytes(buffer: Buffer, mimeType: string): boolean {
   // 알 수 없는 타입은 거부한다(MIME 헤더만 믿지 않는다) — event-applications/photo
   // 라우트가 이미 이 계약이었고, 여기만 반대(통과)였던 불일치를 없앤다.
   if (!signatures) return false
-  return signatures.some(({ bytes, offset = 0 }) =>
-    bytes.every((byte, i) => buffer[offset + i] === byte)
+  return signatures.some(
+    ({ bytes, offset = 0 }) =>
+      // 시그니처가 다 들어갈 만큼 길지 않으면 대조할 것도 없다. 이 검사가
+      // 없으면 `null`(아무 값이나) 자리만 남은 짧은 버퍼가 통과할 수 있다.
+      buffer.length >= offset + bytes.length &&
+      bytes.every((byte, i) => byte === null || buffer[offset + i] === byte)
   )
 }
 
@@ -193,6 +211,32 @@ export async function uploadImageWithVariants(
     },
   }
 
+  // GIF는 Sharp 변환 시 애니메이션이 손실될 수 있으므로 변환 생략
+  const shouldGenerateVariants =
+    originalContentType.startsWith('image/') && !['image/gif'].includes(originalContentType)
+
+  // JPG 폴백은 원본이 이미 JPEG면 원본을 그대로 쓴다(변환하지 않는다).
+  const isOriginalJpeg = ['.jpg', '.jpeg'].includes(paths.extension)
+
+  // **변환을 업로드보다 먼저 한다.** 예전에는 원본을 올린 뒤에 sharp를 돌렸고,
+  // sharp가 던지면(손상된 파일·지원하지 않는 색공간 등) 이 함수가 그대로 터져
+  // 라우트가 500을 냈다. 그때 원본은 이미 Blob에 올라가 있었고 DB에는 아무
+  // 기록도 남지 않았다 — 아무도 가리키지 않는 객체가 남는다. 변환이 먼저
+  // 실패하면 올린 것이 없으니 지울 것도 없다.
+  let webpBuffer: Buffer | null = null
+  let jpegBuffer: Buffer | null = null
+  if (shouldGenerateVariants) {
+    try {
+      webpBuffer = await sharp(originalBuffer).webp({ quality: WEBP_QUALITY }).toBuffer()
+      if (!isOriginalJpeg) {
+        jpegBuffer = await sharp(originalBuffer).jpeg({ quality: JPEG_QUALITY }).toBuffer()
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      throw new Error(`이미지 변환 실패: ${message}`)
+    }
+  }
+
   try {
     const { url } = await putPublicObject(
       `${bucket}/${paths.originalPath}`,
@@ -205,16 +249,10 @@ export async function uploadImageWithVariants(
     throw new Error(`원본 파일 업로드 실패: ${message}`)
   }
 
-  // GIF는 Sharp 변환 시 애니메이션이 손실될 수 있으므로 변환 생략
-  const shouldGenerateVariants =
-    originalContentType.startsWith('image/') && !['image/gif'].includes(originalContentType)
-
-  if (!shouldGenerateVariants) {
+  if (!webpBuffer) {
     return result
   }
 
-  // WebP 변환
-  const webpBuffer = await sharp(originalBuffer).webp({ quality: WEBP_QUALITY }).toBuffer()
   try {
     // 입력이 이미 .webp면 webpPath === paths.originalPath다(같은 명명 규칙
     // 때문 — buildVariantPathSuffixes 참고). 원본 업로드가 이미 그 경로를
@@ -233,9 +271,8 @@ export async function uploadImageWithVariants(
     log.warn('WebP 변환 업로드 실패', error)
   }
 
-  // JPG 폴백 생성 (원본이 이미 JPEG라면 재사용)
-  const isOriginalJpeg = ['.jpg', '.jpeg'].includes(paths.extension)
-  if (isOriginalJpeg) {
+  // JPG 폴백 (원본이 이미 JPEG라면 재사용)
+  if (!jpegBuffer) {
     result.fallback = {
       path: paths.originalPath,
       url: result.original.url,
@@ -245,7 +282,6 @@ export async function uploadImageWithVariants(
     return result
   }
 
-  const jpegBuffer = await sharp(originalBuffer).jpeg({ quality: JPEG_QUALITY }).toBuffer()
   try {
     // fallbackPath는 원본과 절대 같은 문자열이 될 수 없다(항상 .fallback.jpg가
     // 붙으므로) — 그래도 media/upload가 upsert:true로 재업로드를 허용해 온
