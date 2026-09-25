@@ -25,6 +25,7 @@ import {
 } from '@/lib/payments/toss/client'
 import { getServerPaymentConfig, isPaymentEnabled } from '@/lib/payments/toss/config'
 import { notifyPledgePaid } from '@/lib/funding/notify'
+import { notifyOfficeRefundUncertain } from '@/lib/funding/notifyOfficeRemedy'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { applyRouteRateLimit, createIPKeyGenerator } from '@/lib/server/rateLimit'
@@ -270,6 +271,18 @@ export async function POST(request: NextRequest) {
           reason: error.reason,
           refunded,
         })
+        // 환불이 나갔는지 모르는 건은 `canceled` 후원 한 줄로만 남는다 — 목록에서
+        // "돈을 받은 적 없는 후원"과 구분되지 않는다. 사람이 토스 거래 내역을
+        // 열어 봐야 결말이 나므로 사무국을 부른다. 응답 뒤에 보낸다.
+        if (refunded === false) {
+          after(() =>
+            notifyOfficeRefundUncertain({
+              orderId,
+              pledgeId,
+              campaignTitle: typeof campaign?.title === 'string' ? campaign.title : null,
+            }).catch(e => log.error('자동 환불 불확실 공지 실패', { orderId, e }))
+          )
+        }
         const what =
           error.reason === 'campaign_closed'
             ? '결제를 승인하는 사이에 프로젝트가 마감되어 후원을 확정하지 못했습니다.'

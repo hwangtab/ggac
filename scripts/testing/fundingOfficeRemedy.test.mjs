@@ -244,3 +244,63 @@ test('환불 실행은 후원자 취소와 같은 함수를 쓴다 — 환불기
   // 그것이 이 기능의 요점이므로 코드에 그 조건이 없어야 한다.
   assert.ok(!stripComments(src).includes('requireFulfillmentNone'))
 })
+
+// ------------------------------------------------- ⑤ 자동 환불 불확실 — 사무국 호출
+
+test('불확실 공지 문안에 주문번호와 후원 ID가 들어간다', () => {
+  const notice = n.buildOfficeRefundUncertainNotice(
+    { orderId: 'ORD-1', pledgeId: 'PL-1', campaignTitle: '첫 앨범' },
+    'https://ggac.kr'
+  )
+  assert.match(notice.message, /ORD-1/)
+  assert.match(notice.message, /PL-1/)
+  assert.match(notice.message, /첫 앨범/)
+  assert.equal(notice.data.kind, 'funding_refund_uncertain')
+  assert.equal(notice.url, 'https://ggac.kr/ko/admin/funding')
+})
+
+test('캠페인 제목이 없어도 문안이 만들어진다', () => {
+  const notice = n.buildOfficeRefundUncertainNotice(
+    { orderId: 'ORD-2', pledgeId: 'PL-2', campaignTitle: null },
+    'https://ggac.kr'
+  )
+  assert.match(notice.message, /프로젝트/)
+})
+
+test('불확실 공지는 관리자 전원에게 인앱과 메일로 간다', async () => {
+  const bulk = []
+  const mails = []
+  await n.notifyOfficeRefundUncertain(
+    { orderId: 'ORD-3', pledgeId: 'PL-3', campaignTitle: '공연' },
+    {
+      listAdminRecipients: async () => [
+        { id: 'a1', email: 'a1@ggac.kr' },
+        { id: 'a2', email: 'a2@ggac.kr' },
+      ],
+      createBulkNotifications: async input => bulk.push(input),
+      isMailConfigured: () => true,
+      sendEmail: async mail => mails.push(mail.to),
+      siteUrl: () => 'https://ggac.kr',
+      log: { warn: () => {}, error: () => {}, info: () => {} },
+      bulkOptions: { minIntervalMs: 0, retryDelayMs: 0 },
+    }
+  )
+  assert.equal(bulk.length, 1)
+  assert.deepEqual(bulk[0].user_ids, ['a1', 'a2'])
+  assert.equal(bulk[0].type, 'system_notice')
+  assert.deepEqual(mails, ['a1@ggac.kr', 'a2@ggac.kr'])
+})
+
+test('불확실 공지는 절대 던지지 않는다 — 환불 판정은 이미 끝난 일이다', async () => {
+  const errors = []
+  await n.notifyOfficeRefundUncertain(
+    { orderId: 'ORD-4', pledgeId: 'PL-4', campaignTitle: null },
+    {
+      listAdminRecipients: async () => {
+        throw new Error('DB 끊김')
+      },
+      log: { warn: () => {}, error: (m, meta) => errors.push(m), info: () => {} },
+    }
+  )
+  assert.equal(errors.length, 1)
+})

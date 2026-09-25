@@ -42,7 +42,11 @@ import { NextRequest, NextResponse, after } from 'next/server'
 
 import { requireAdmin } from '@/lib/server/adminAuth'
 import { getCampaignById, getCampaignProgress } from '@/db/queries/funding'
-import { advanceFulfillment, listPledgesByCampaign } from '@/db/queries/fundingPledges'
+import {
+  advanceFulfillment,
+  listPaymentFailureMessagesByCampaign,
+  listPledgesByCampaign,
+} from '@/db/queries/fundingPledges'
 import { listActivitiesWithProfile, logUserActivity } from '@/db/queries/activities'
 import { getSettlementByCampaign } from '@/db/queries/fundingSettlements'
 import {
@@ -90,6 +94,10 @@ export async function GET(_request: NextRequest, { params }: Ctx) {
     if (!campaign) return ApiError.notFound('프로젝트를 찾을 수 없습니다.').toNextResponse()
 
     const pledges = await listPledgesByCampaign(id)
+    // 취소된 건이 "돈이 잡힌 적 없다"인지 "승인 뒤 환불이 불확실하게 끝났다"인지는
+    // 결제 행의 실패 사유 한 줄로만 갈린다. 그 문장이 목록에 없으면 두 가지가
+    // 똑같이 보이고, 사람이 볼 이유가 없는 줄로 섞인다.
+    const failureMessages = await listPaymentFailureMessagesByCampaign(id)
     const paid = pledges.filter(p => p.status === 'paid')
     const counts: Record<FulfillmentStatus, number> = {
       none: 0,
@@ -140,6 +148,7 @@ export async function GET(_request: NextRequest, { params }: Ctx) {
           quantity: p.quantity,
           total_amount: p.total_amount,
           paid_at: p.paid_at ?? null,
+          payment_failure_message: failureMessages.get(String(p.id)) ?? null,
         })),
       marks: history.rows.map(row => {
         const updated = Number(row.metadata?.updated ?? 0)

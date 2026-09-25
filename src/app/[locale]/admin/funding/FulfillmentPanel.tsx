@@ -43,6 +43,11 @@ interface PledgeRow {
   quantity: number
   total_amount: number
   paid_at: string | null
+  /**
+   * 결제 행에 남은 실패 사유. 취소된 후원이 "돈이 잡힌 적 없다"인지 "승인 뒤
+   * 환불이 불확실하게 끝났다"인지를 가르는 유일한 문장이다.
+   */
+  payment_failure_message: string | null
 }
 
 interface MarkRow {
@@ -380,6 +385,9 @@ export default function FulfillmentPanel({ campaignId }: { campaignId: string })
                           >
                             전액 환불
                           </button>
+                        )}
+                        {p.payment_failure_message && (
+                          <p className="w-full text-amber-700">{p.payment_failure_message}</p>
                         )}
                       </li>
                     ))}
