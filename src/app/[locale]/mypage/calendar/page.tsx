@@ -6,6 +6,7 @@ import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek } from 'date-f
 
 import MonthGrid from '@/components/calendar/MonthGrid'
 import { Link } from '@/i18n/navigation'
+import { apiErrorMessage } from '@/utils/apiErrorMessage'
 import { parseLocalDate, todaySeoul } from '@/utils/date'
 
 type CalendarItem = {
@@ -51,7 +52,7 @@ export default function MyCalendarPage() {
         const to = format(gridEnd, 'yyyy-MM-dd')
         const res = await fetch(`/api/mypage/calendar?from=${from}&to=${to}`)
         const json = await res.json()
-        if (!res.ok) throw new Error(json?.error?.message ?? t('loadError'))
+        if (!res.ok) throw new Error(apiErrorMessage(json, t('loadError')))
         setItems(json.data.items)
         setOngoing(json.data.ongoing)
       } catch (e) {

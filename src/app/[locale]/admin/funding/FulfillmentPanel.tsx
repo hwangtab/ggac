@@ -31,7 +31,7 @@ import {
   type FulfillmentStatus,
 } from '@/lib/funding/fulfillment'
 import { OFFICE_REFUND_REASON_MIN } from '@/lib/funding/officeRefund'
-import { apiErrorMessage } from '@/lib/funding/apiErrorMessage'
+import { apiErrorMessage } from '@/utils/apiErrorMessage'
 
 interface PledgeRow {
   id: string

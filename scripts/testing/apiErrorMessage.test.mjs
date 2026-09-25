@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { apiErrorMessage } from '../../src/lib/funding/apiErrorMessage.ts'
+import { apiErrorMessage } from '../../src/utils/apiErrorMessage.ts'
 
 test('ApiError 표준 응답(error가 문자열)이면 그 문자열을 쓴다', () => {
   assert.equal(

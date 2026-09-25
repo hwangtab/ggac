@@ -11,7 +11,7 @@ import { useState } from 'react'
 import { FiPlus, FiSearch, FiX } from 'react-icons/fi'
 
 import { FEE_RATE_VAT_NOTE, formatFeeRatePercent, isFeeMember } from '@/lib/funding/feeRate'
-import { apiErrorMessage } from '@/lib/funding/apiErrorMessage'
+import { apiErrorMessage } from '@/utils/apiErrorMessage'
 
 const CATEGORIES = ['공연', '음반', '전시', '출판', '영상', '기타'] as const
 

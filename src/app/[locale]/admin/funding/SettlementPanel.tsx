@@ -21,7 +21,7 @@ import {
   type PayoutAccount,
 } from '@/lib/funding/payoutAccount'
 import { cooperativeLossFor } from '@/lib/funding/settlement'
-import { apiErrorMessage } from '@/lib/funding/apiErrorMessage'
+import { apiErrorMessage } from '@/utils/apiErrorMessage'
 import {
   FEE_RATE_VAT_NOTE,
   formatFeeRatePercent,

@@ -9,7 +9,7 @@ import {
   FiExternalLink,
   FiRefreshCw,
 } from 'react-icons/fi'
-import { apiErrorMessage } from '@/lib/funding/apiErrorMessage'
+import { apiErrorMessage } from '@/utils/apiErrorMessage'
 import AdminLayout from '../components/AdminLayout'
 import PostContentRenderer from '@/components/PostContentRenderer'
 import OptimizedImage from '@/components/OptimizedImage'
