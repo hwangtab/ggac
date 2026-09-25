@@ -218,9 +218,10 @@ TURSO_DATABASE_URL=http://127.0.0.1:8901 \
   node --experimental-strip-types scripts/testing/seed-authz-fixtures.mjs
 ```
 
-계정 **6개**(Better Auth `user`/`account` + `member_profiles`)와 글 1·댓글
-1·알림 1·좋아요 1·이사회 회의 2(scheduled·completed)·회의록 2·안건 1·안건 의견 3, 그리고 **`system_settings` 7행**(`site/maintenance_mode`,
-`site/registration_enabled`, `features/funding_features`, 그리고 기능 스위치
+계정 **9개**(Better Auth `user`/`account` + `member_profiles`)와 글 1·댓글
+1·알림 1·좋아요 1·이사회 회의 2(scheduled·completed)·회의록 2·안건 1·안건 의견 3, 그리고 **`system_settings` 8행**(`site/maintenance_mode`,
+`site/registration_enabled`, `features/funding_features`,
+`security/email_verification`, 그리고 기능 스위치
 넷 — `board_features`·`artist_features`·`comment_features`·`file_upload`)과
 `default_settings` 16행을 채우는 멱등
 스크립트다. 두 번 돌려도 행이 늘지 않는다(id가 전부 고정값이다).
@@ -233,6 +234,8 @@ TURSO_DATABASE_URL=http://127.0.0.1:8901 \
 | `pending`        | 미승인                                  | O      |
 | `director`       | 관리자가 **아닌** 이사                  | O      |
 | `approvalTarget` | 관리자 승인 액션의 대상(미승인)         | X      |
+| `withdrawalRequested` | 탈퇴 **신청** 중(여전히 승인·활성) | O |
+| `unverified`     | 승인·활성이지만 이메일 미인증           | X      |
 
 - `system_settings`가 없으면 `authz-maintenance.spec.ts`의 UPDATE가 0행에
   적용돼 유지보수 모드가 아예 켜지지 않는다. 스펙은 `rowsAffected`를 확인해
@@ -300,12 +303,18 @@ webServer에 `{...process.env, ...webServer.env}`를 넘긴다. e2e 전용 변�
 리다이렉트·API 계약)가 `authz-public`에 있어서, `--project=authz`만 돌리면
 **컷오버 게이트인 이 명령 하나가 그 21건을 통째로 빼먹는다.**
 
-- `authz-setup`(5개 계정 로그인 → `e2e/.auth/*.json` storageState 저장) 5건
+- `authz-setup`(6개 계정 로그인 → `e2e/.auth/*.json` storageState 저장)
 - `authz`: `authz-maintenance`·`authz-ownership`·`authz-personal`·
-  `authz-remaining`·`authz-roles`·`authz-mailbox` 6개 스펙
+  `authz-remaining`·`authz-roles`·`authz-mailbox`·`authz-funding`·
+  `authz-features`·`authz-email-verification` 9개 스펙
 - `authz-public`: `authz-boundaries` 21건
 
-**실측 기준선(2026-09-24, 기능 스위치를 배선한 뒤):** 총 126건 중
+**실측 기준선(2026-09-25, 이메일 인증 관문을 배선한 뒤):** 총 131건 중
+**130 passed, 0 failed, 1 skipped.** 늘어난 5건은
+`authz-email-verification.spec.ts` — 인증 관문을 실제로 껐다 켜며 로그인
+요청이 반응하는지 보는 스펙이다.
+
+**직전 기준선(2026-09-24, 기능 스위치를 배선한 뒤):** 총 126건 중
 **125 passed, 0 failed, 1 skipped.** 늘어난 7건은 `authz-features.spec.ts` —
 기능 스위치 넷을 실제로 껐다 켜며 라우트가 반응하는지 보는 스펙이다.
 
@@ -1011,7 +1020,7 @@ EXPLAIN QUERY PLAN SELECT count(*) FROM notifications WHERE user_id = '<아무 �
 가드도 타입 검사도 통과한다. 가드는 **"이 문자열이 이 파일에 있는가"**만 보고
 도달 가능성·실행 순서·데이터 흐름을 보지 않는다.
 
-**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 125 passed, 실행 절차는
+**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 130 passed, 실행 절차는
 위 "권한 E2E" 절). 같은 감사에서 **E2E는 관리자 게이트 무력화를 실제로 잡았다.**
 
 `assert-runtime-risks.mjs`가 여전히 값을 하는 자리는 **지워진 것**(게이트를 통째로

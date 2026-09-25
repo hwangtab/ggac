@@ -198,6 +198,18 @@ export const ACCOUNTS = [
       withdrawal_requested_at: new Date('2026-08-25T00:00:00.000Z'),
     },
   },
+  // 이메일 인증 관문(`e2e/authz-email-verification.spec.ts`)의 대상. 승인·활성
+  // 조합원인데 **주소를 아직 인증하지 않았다** — 관문이 꺼져 있으면 평소대로
+  // 로그인되고, 켜면 막혀야 한다. 로그인 상태를 저장하지 않으므로
+  // `e2e/authz.setup.ts`에는 없다.
+  {
+    key: 'unverified',
+    id: '00000000-0000-4000-8000-00000000b009',
+    email: 'authz-unverified@test.local',
+    password: 'Authz!Unverified2026',
+    emailVerified: false,
+    profile: { is_admin: false, registration_status: 'approved', is_active: true },
+  },
 ]
 
 /**
@@ -208,17 +220,21 @@ export const ACCOUNTS = [
 async function upsertTursoAuth(account) {
   const id = account.id
   const hashed = await hashPassword(account.password)
+  // 기본은 인증됨. 이메일 인증 관문(`authz-email-verification.spec.ts`)의
+  // 대상 계정만 `emailVerified: false`로 심는다 — 관문이 켜졌을 때 실제로
+  // 막히는지 확인하려면 진짜로 인증되지 않은 계정이 있어야 한다.
+  const emailVerified = account.emailVerified !== false
   await db
     .insert(tursoUser)
     .values({
       id,
       name: `authz-${account.key}`,
       email: account.email,
-      emailVerified: true,
+      emailVerified,
     })
     .onConflictDoUpdate({
       target: tursoUser.id,
-      set: { name: `authz-${account.key}`, email: account.email, emailVerified: true },
+      set: { name: `authz-${account.key}`, email: account.email, emailVerified },
     })
 
   await db
@@ -508,6 +524,7 @@ async function main() {
   const ARTIST_FEATURE_SETTING_ID = '00000000-0000-4000-8000-00000000a00d'
   const COMMENT_FEATURE_SETTING_ID = '00000000-0000-4000-8000-00000000a00e'
   const FILE_UPLOAD_SETTING_ID = '00000000-0000-4000-8000-00000000a00f'
+  const EMAIL_VERIFICATION_SETTING_ID = '00000000-0000-4000-8000-00000000a010'
   // 펀딩 인가 경계(`e2e/authz-funding.spec.ts`)용 픽스처. 캠페인을 둘 둔다 —
   // 하나는 `owner`의 편집 가능한 초안(읽기·수정·리워드·본인 제출 경계),
   // 다른 하나는 이미 심사 대기 중인 캠페인(관리자 심사 경계)이다. 한 캠페인으로
@@ -1055,6 +1072,22 @@ async function main() {
         max_size_mb: 50,
         allowed_types: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'docx'],
         virus_scan: false,
+      },
+      description: 'authz E2E 픽스처',
+      isSensitive: false,
+    },
+    // 이메일 인증 관문. **꺼진 상태**로 심는다 — 앞선 실행이 켠 채로 죽으면
+    // 다음 실행의 authz-setup 로그인이 막힌다(유지보수 행과 같은 이유).
+    // `e2e/authz-email-verification.spec.ts`가 켰다 끈다.
+    {
+      id: EMAIL_VERIFICATION_SETTING_ID,
+      category: 'security',
+      settingKey: 'email_verification',
+      settingValue: {
+        enforce_on_login: false,
+        required: false,
+        token_expiry_hours: 24,
+        resend_limit: 3,
       },
       description: 'authz E2E 픽스처',
       isSensitive: false,
