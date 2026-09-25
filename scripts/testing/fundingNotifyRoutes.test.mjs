@@ -24,8 +24,14 @@ import path from 'node:path'
 
 const content = await import('../../src/lib/funding/notifyContent.ts')
 const notify = await import('../../src/lib/funding/notify.ts')
+// 사무국 수습(대리 환불·이행 되돌리기) 문안은 별도 모듈에 있다. 목록을 한
+// 모듈에서만 뽑으면 새 모듈의 알림이 이 검사 밖으로 빠져나간다 — 실제로 그
+// 일이 두 라우트에서 났다.
+const officeRemedy = await import('../../src/lib/funding/notifyOfficeRemedy.ts')
 
-const NOTIFY_FUNCTIONS = Object.keys(notify).filter(name => name.startsWith('notify'))
+const NOTIFY_FUNCTIONS = [...Object.keys(notify), ...Object.keys(officeRemedy)].filter(name =>
+  name.startsWith('notify')
+)
 
 /** 대량 발송기를 타는 알림 — 한 번에 수백 명에게 나간다. */
 const BULK_NOTIFIERS = new Set([
