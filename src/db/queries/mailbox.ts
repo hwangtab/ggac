@@ -290,10 +290,7 @@ export async function appendThreadReference(id: string, messageId: string): Prom
  * 그쪽 주석에 있다.
  */
 export async function markBodyFetchAttempted(id: string): Promise<void> {
-  await db
-    .update(inboundEmails)
-    .set({ updatedAt: new Date() })
-    .where(eq(inboundEmails.id, id))
+  await db.update(inboundEmails).set({ updatedAt: new Date() }).where(eq(inboundEmails.id, id))
 }
 
 /**
