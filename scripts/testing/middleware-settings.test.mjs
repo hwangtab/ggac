@@ -423,3 +423,57 @@ test('동시 요청은 조회 하나를 공유한다(취소가 불가능하므�
   assert.equal(b, a, '뒤따라온 요청은 앞선 조회의 결과를 그대로 받는다')
   assert.equal(c, a)
 })
+
+test('조회가 실패하면 마지막으로 성공한 값을 쓴다 — 장애 한복판에 유지보수가 스스로 꺼지면 안 된다', async () => {
+  const originalTtl = process.env.SETTINGS_CACHE_TTL_MS
+  delete process.env.SETTINGS_CACHE_TTL_MS
+
+  mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 0 })
+  try {
+    const { getSystemSettings } = await loadFreshSettingsModule()
+    let shouldFail = false
+    const flaky = async () => {
+      if (shouldFail) throw new Error('Turso 순단 재현')
+      return [
+        {
+          category: 'site',
+          setting_key: 'maintenance_mode',
+          setting_value: { enabled: true, message: '점검 중입니다' },
+        },
+      ]
+    }
+
+    const good = await getSystemSettings(flaky)
+    assert.equal(good.maintenanceMode, true)
+
+    // 성공 TTL이 지난 뒤 조회가 실패한다 — 예전에는 여기서 null이 되어
+    // 유지보수가 꺼진 것처럼 동작했다.
+    mock.timers.tick(60_001)
+    shouldFail = true
+    const stale = await getSystemSettings(flaky)
+    assert.ok(stale, '마지막으로 성공한 값을 버리면 안 된다')
+    assert.equal(stale.maintenanceMode, true, '장애 중에 유지보수가 스스로 꺼졌다')
+    assert.equal(stale.maintenanceMessage, '점검 중입니다')
+
+    // 실패 캐시 창 안의 재호출도 같은 값이다(null로 떨어지지 않는다).
+    assert.equal((await getSystemSettings(flaky)).maintenanceMode, true)
+
+    // 복구되면 새 값이 즉시 지배한다 — 낡은 값이 굳으면 안 된다.
+    mock.timers.tick(10_001)
+    shouldFail = false
+    const recovered = await getSystemSettings(async () => [])
+    assert.equal(recovered.maintenanceMode, false)
+  } finally {
+    mock.timers.reset()
+    if (originalTtl === undefined) delete process.env.SETTINGS_CACHE_TTL_MS
+    else process.env.SETTINGS_CACHE_TTL_MS = originalTtl
+  }
+})
+
+test('성공한 적이 없으면 실패는 여전히 null이다(fail-open — 사이트를 막지 않는다)', async () => {
+  const { getSystemSettings } = await loadFreshSettingsModule()
+  const failing = async () => {
+    throw new Error('Turso 순단 재현')
+  }
+  assert.equal(await getSystemSettings(failing), null)
+})
