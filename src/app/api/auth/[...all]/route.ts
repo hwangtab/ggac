@@ -1,7 +1,14 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { toNextJsHandler } from 'better-auth/next-js'
 
 import { auth } from '@/lib/auth/server'
+import {
+  EMAIL_NOT_VERIFIED_CODE,
+  EMAIL_NOT_VERIFIED_MESSAGE,
+  isEmailVerificationEnforced,
+  refusesUnverifiedLogin,
+} from '@/lib/auth/emailVerificationGate'
+import { getLoginVerificationSubject } from '@/db/queries/profiles'
 import { ApiError } from '@/utils/apiWrapper'
 import { RATE_LIMITS, applyRouteRateLimit, createIPKeyGenerator } from '@/lib/server/rateLimit'
 
@@ -155,6 +162,45 @@ async function enforce(
   )
 }
 
+/**
+ * 이메일 인증 관문. 켜져 있으면 인증하지 않은 계정의 로그인을 **세션이
+ * 만들어지기 전에** 돌려보낸다.
+ *
+ * 판정은 요청마다 설정을 읽어서 한다 — Better Auth의
+ * `requireEmailVerification`은 모듈 로드 시점에 한 번 읽히는 값이라, 그걸
+ * 쓰려면 부팅 때 Turso를 읽어야 하고 그 순간 DB 한 번 삐끗하면 사이트
+ * 전체의 로그인이 함께 죽는다(`@/lib/auth/emailVerificationGate` 참고).
+ *
+ * **어떤 이유로든 판정하지 못하면 통과시킨다.** 본문이 JSON이 아니거나,
+ * 이메일 칸이 없거나, 설정·프로필 조회가 실패하면 여기서 아무 말도 하지
+ * 않고 Better Auth에게 넘긴다. 이 관문은 로그인을 **막는** 장치이지
+ * 로그인을 **성립시키는** 장치가 아니므로, 모를 때 막으면 그 순간 전
+ * 조합원이 문 앞에 선다.
+ *
+ * 돌려보내는 응답은 Better Auth의 오류 본문과 같은 모양(`{code, message}`)
+ * 이다 — `authClient`가 그 JSON을 그대로 `error`에 실어 주므로 로그인 화면이
+ * 두 경로를 따로 다루지 않아도 된다.
+ */
+async function refuseUnverifiedSignIn(request: NextRequest) {
+  try {
+    if (!(await isEmailVerificationEnforced())) return null
+
+    const body = await request.clone().json()
+    const email = typeof body?.email === 'string' ? body.email.trim() : ''
+    if (email === '') return null
+
+    const subject = await getLoginVerificationSubject(email)
+    if (refusesUnverifiedLogin(subject) === false) return null
+
+    return NextResponse.json(
+      { code: EMAIL_NOT_VERIFIED_CODE, message: EMAIL_NOT_VERIFIED_MESSAGE },
+      { status: 403 }
+    )
+  } catch {
+    return null
+  }
+}
+
 export async function POST(request: NextRequest) {
   if (isSignUpEmailPath(request)) {
     return ApiError.forbidden(
@@ -168,6 +214,8 @@ export async function POST(request: NextRequest) {
   if (isSignInEmailPath(request)) {
     const blocked = await enforce(request, RATE_LIMITS.AUTH_API, 'auth_sign_in')
     if (blocked) return blocked
+    const unverified = await refuseUnverifiedSignIn(request)
+    if (unverified) return unverified
   } else if (isPasswordResetRequestPath(request)) {
     const blocked = await enforce(request, PASSWORD_RESET_RATE_LIMIT, 'auth_password_reset')
     if (blocked) return blocked

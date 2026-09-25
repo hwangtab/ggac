@@ -73,19 +73,18 @@ export const SETTING_MAPPINGS = {
       key: 'password_policy',
       transform: (value: any) => value?.min_length || 8,
     },
-    // 값이 없을 때만 기본값을 쓴다(`??`). `||`로 적으면 저장된 `false`가
-    // 화면에서 매번 `true`로 되살아나 관리자가 끈 것이 켜진 것으로 보였다.
+    // 없을 때의 기본값은 **취향이 아니라 소비처가 정한다.** 이 칸을 읽는
+    // 소비처는 이제 하나다 — `@/lib/auth/emailVerificationGate`의
+    // `isEmailVerificationEnforced()`이고, 그쪽은 `enforce_on_login === true`
+    // 일 때만 켜짐으로 읽는다. 화면도 정확히 같은 판정을 한다.
     //
-    // 없을 때의 기본값은 **취향이 아니라 소비처가 정한다.** 이메일 인증은
-    // 지금 어떤 코드도 이 값을 읽지 않는다 — Better Auth는
-    // `emailAndPassword.requireEmailVerification`을 켜지 않아서(src/lib/auth/server.ts)
-    // 인증하지 않아도 로그인이 된다. 값이 없을 때의 동작을 적어 둔 유일한
-    // 자리인 `@/utils/systemSettings`의 `getDefaultSettings()`도 `required: false`다.
-    // 그래서 없을 때는 꺼진 것으로 보인다 — 강제하지 않는 것을 강제한다고
-    // 표시하지 않는다.
+    // **옛 `required` 칸을 읽지 않는다.** 운영 행에는 아무도 읽지 않는
+    // `required: true`가 남아 있어서, 그 칸을 읽으면 관문을 붙이는 순간
+    // 화면이 "켜짐"으로 뜨고 미인증 회원이 문 앞에서 막힌다. 새 칸은 운영
+    // 행에 없으므로 배포 직후 값은 꺼짐이다(관문 모듈의 파일 첫머리 참고).
     require_email_verification: {
       key: 'email_verification',
-      transform: (value: any) => value?.required ?? false,
+      transform: (value: any) => value?.enforce_on_login === true,
     },
   },
   features: {

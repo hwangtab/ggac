@@ -63,7 +63,13 @@ interface SystemSettingsData {
       history_count: number
     }
     email_verification: {
+      /**
+       * 옛 칸. **아무도 읽지 않는다** — 관문은 아래 `enforce_on_login`을 본다
+       * (`@/lib/auth/emailVerificationGate`의 파일 첫머리 참고).
+       */
       required: boolean
+      /** 로그인 관문을 켜는 칸. 없으면 꺼짐이다. */
+      enforce_on_login?: boolean
       token_expiry_hours: number
       resend_limit: number
     }
@@ -192,6 +198,7 @@ function getDefaultSettings(): SystemSettingsData {
       },
       email_verification: {
         required: false,
+        enforce_on_login: false,
         token_expiry_hours: 24,
         resend_limit: 3,
       },

@@ -374,6 +374,11 @@ export const PUT = defineApiRoute<Record<string, unknown>>({
           case 'email_verification':
             if (frontendKey === 'require_email_verification') {
               settingGroups[mapping.key] = {
+                // 관문이 읽는 칸. 정본이다.
+                enforce_on_login: frontendValue,
+                // 옛 칸. 아무도 읽지 않지만, 운영 행에 `true`로 남아 있는 것을
+                // 그대로 두면 다음에 이 행을 들여다보는 사람이 어느 쪽을
+                // 믿을지 알 수 없다. 저장할 때 같은 값으로 맞춰 둔다.
                 required: frontendValue,
                 token_expiry_hours: settingGroups[mapping.key]?.token_expiry_hours || 24,
                 resend_limit: settingGroups[mapping.key]?.resend_limit || 3,
