@@ -19,6 +19,12 @@ export default function LoginPage() {
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState<MessageType>('error')
   const [isAlreadyLoggedIn, setIsAlreadyLoggedIn] = useState(false)
+  /**
+   * 이메일 인증이 끝나지 않아 돌려보내진 상태. 돌려보내기만 하면 같은 폼에서
+   * 같은 실패를 반복하게 되므로, 이 자리에서 인증 메일을 다시 받게 한다.
+   */
+  const [needsEmailVerification, setNeedsEmailVerification] = useState(false)
+  const [resendState, setResendState] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle')
   // 방금 로그인에 성공해 머무는 경우와, 이미 로그인된 채 페이지에 진입한 경우를 구분한다.
   const [justAuthenticated, setJustAuthenticated] = useState(false)
   const [currentUser, setCurrentUser] = useState<
@@ -36,6 +42,21 @@ export default function LoginPage() {
   const setMsg = (msg: string, type: MessageType) => {
     setMessage(msg)
     setMessageType(type)
+  }
+
+  /**
+   * 인증 메일을 다시 보낸다. 성공·실패 어느 쪽이든 **그 주소로 계정이 있는지는
+   * 말하지 않는다** — Better Auth의 이 엔드포인트도 같은 태도다.
+   */
+  const resendVerificationEmail = async () => {
+    setResendState('sending')
+    try {
+      await authClient.sendVerificationEmail({ email, callbackURL: '/auth/callback' })
+      setResendState('sent')
+    } catch (error) {
+      console.error('Failed to resend verification email:', error)
+      setResendState('failed')
+    }
   }
 
   const clearAuthRedirectTimer = () => {
@@ -194,6 +215,8 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     setMessage('')
+    setNeedsEmailVerification(false)
+    setResendState('idle')
 
     try {
       const { data, error } = await authClient.signIn.email({ email, password })
@@ -201,6 +224,11 @@ export default function LoginPage() {
       if (error) {
         if (error.status === 429) {
           setMsg(t('login.msgRateLimited'), 'warning')
+        } else if (error.code === 'EMAIL_NOT_VERIFIED') {
+          // 서버의 인증 관문이 돌려보냈다(`@/lib/auth/emailVerificationGate`).
+          // 세션은 만들어지지 않았다.
+          setMsg(t('login.msgEmailNotVerified'), 'error')
+          setNeedsEmailVerification(true)
         } else if (error.code === 'INVALID_EMAIL_OR_PASSWORD') {
           setMsg(t('login.msgInvalidCredentials'), 'error')
         } else {
@@ -212,8 +240,13 @@ export default function LoginPage() {
 
       if (data.user) {
         // 이메일 인증 확인
+        // 관문이 꺼져 있어도 로그인 화면은 예전부터 여기서 한 번 더 막아
+        // 왔다(2025년 Supabase 시절부터). 그 판정은 그대로 두되, 돌려보낸
+        // 뒤에 아무 길도 주지 않던 것만 고친다 — 관문이 켜졌을 때와 같은
+        // 자리에서 인증 메일을 다시 받을 수 있다.
         if (!data.user.emailVerified) {
           setMsg(t('login.msgEmailNotVerified'), 'error')
+          setNeedsEmailVerification(true)
           await authClient.signOut()
           return
         }
@@ -388,6 +421,29 @@ export default function LoginPage() {
               </div>
               <div className="ml-3">
                 <div className="text-sm leading-relaxed">{message}</div>
+                {needsEmailVerification && (
+                  <div className="mt-3">
+                    {resendState === 'sent' ? (
+                      <p className="text-sm">{t('login.resendVerificationSent')}</p>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={resendVerificationEmail}
+                          disabled={resendState === 'sending' || email.trim() === ''}
+                          className="text-sm font-semibold underline underline-offset-2 disabled:opacity-50"
+                        >
+                          {resendState === 'sending'
+                            ? t('login.resendVerificationSending')
+                            : t('login.resendVerification')}
+                        </button>
+                        {resendState === 'failed' && (
+                          <p className="mt-1 text-sm">{t('login.resendVerificationFailed')}</p>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
