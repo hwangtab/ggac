@@ -104,8 +104,15 @@ async function readJson(response: Response): Promise<Record<string, unknown>> {
 /**
  * 5xx와 인증 오류는 "거절"이 아니라 "판단 불가"다. 4xx 중에서도 우리 요청이
  * 잘못됐다는 응답만 `TossApiError`로 올린다.
+ *
+ * 409 `IDEMPOTENT_REQUEST_PROCESSING`도 거절이 아니다 — **같은 멱등키의 앞선
+ * 요청이 지금 승인 중**이라는 뜻이다. 성공 주소에서 새로고침하거나 버튼을 두
+ * 번 누르면 정확히 이 응답이 온다. 이걸 거절로 보면 호출부가 앞 요청이 승인을
+ * 끝내는 사이에 원장을 실패로 적고 선점을 취소해, 돈은 승인됐는데 후원·예매는
+ * 사라진다. 결과를 모르는 것이므로 판단을 미룬다.
  */
-function isUndecidable(status: number): boolean {
+function isUndecidable(status: number, code?: string): boolean {
+  if (status === 409 && code === 'IDEMPOTENT_REQUEST_PROCESSING') return true
   return status >= 500 || status === 401 || status === 403 || status === 429
 }
 
@@ -114,7 +121,7 @@ async function throwForStatus(response: Response, context: string): Promise<neve
   const code = typeof body.code === 'string' ? body.code : 'UNKNOWN'
   const message = typeof body.message === 'string' ? body.message : `${context} 실패`
 
-  if (isUndecidable(response.status)) {
+  if (isUndecidable(response.status, code)) {
     throw new TossLookupError(`${context}: ${code} ${message}`, body)
   }
   throw new TossApiError(code, message, response.status, body)
@@ -207,7 +214,7 @@ export async function cancelPayment(
 
   const code = typeof errorBody.code === 'string' ? errorBody.code : 'UNKNOWN'
   const message = typeof errorBody.message === 'string' ? errorBody.message : '결제 취소 실패'
-  if (isUndecidable(response.status)) {
+  if (isUndecidable(response.status, code)) {
     throw new TossLookupError(`결제 취소: ${code} ${message}`, errorBody)
   }
   throw new TossApiError(code, message, response.status, errorBody)
@@ -310,7 +317,7 @@ export async function deleteBillingKey(billingKey: string, deps: TossDeps): Prom
   if (code === 'NOT_FOUND_BILLING_KEY' || code === 'NOT_FOUND_BILLING') return true
 
   const message = typeof body.message === 'string' ? body.message : '빌링키 삭제 실패'
-  if (isUndecidable(response.status)) {
+  if (isUndecidable(response.status, code)) {
     throw new TossLookupError(`빌링키 삭제: ${code} ${message}`, body)
   }
   throw new TossApiError(code, message, response.status, body)
