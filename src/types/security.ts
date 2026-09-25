@@ -173,6 +173,21 @@ export type SecurityEventType =
   // 계좌를 뺀 이유가 "누가 언제 남의 계좌를 봤는지 답할 수 있게"였으므로,
   // 기록이 빠지면 그 이유가 통째로 사라진다. 조회 자체는 막지 않는다.
   | 'MEMBER_ACCOUNT_VIEW_AUDIT_FAILED'
+  // 사무국 대리 환불에서 토스 환불은 나갔는데 원장(`funding_pledges` ·
+  // `payments`)을 갱신하지 못한 경우. 돈은 돌아갔는데 시스템은 `paid`로
+  // 알고 있어 정산이 그 돈을 다시 창작자에게 주라고 말한다 — 손으로
+  // 고치기 전까지 틀린 숫자가 살아 있다.
+  | 'FUNDING_OFFICE_REFUND_LEDGER_FAILED'
+  // 사무국 대리 환불의 활동 기록이 실패한 경우. 그 한 줄이 "누가 왜 남의
+  // 결제를 돌려줬는가"의 전부다. 환불은 이미 나갔으므로 응답은 성공이다.
+  | 'FUNDING_OFFICE_REFUND_AUDIT_FAILED'
+  // 지급이 끝나지 않은 줄 알고 환불했는데, 그사이 정산 지급이 기록된 경우.
+  // 지급된 정산서는 원장과 대조하지 않으므로(`isBasisStale`) 환불 전 숫자가
+  // 그대로 굳는다 — 좁은 창이지만 조용히 지나가게 두지 않는다.
+  | 'FUNDING_OFFICE_REFUND_AFTER_PAYOUT'
+  // 사무국이 발송 표시를 되돌렸는데 그 기록이 실패한 경우. 되돌리기는 자동
+  // 환불을 다시 여는 동작이라, 기록이 없으면 "왜 열렸는지" 답할 길이 없다.
+  | 'FUNDING_FULFILLMENT_REVERSAL_AUDIT_FAILED'
 
 export type SecurityEventSeverity = 'low' | 'medium' | 'high'
 
