@@ -204,7 +204,7 @@ export default async function FundingDetailPage({
                 fill
                 priority
                 sizes="(min-width: 1024px) 1024px, 100vw"
-                className="object-cover"
+                className="h-full w-full object-cover"
                 fallbackText={campaign.title}
               />
             </div>
