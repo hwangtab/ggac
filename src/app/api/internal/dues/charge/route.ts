@@ -26,6 +26,7 @@ import {
 import { createNotification } from '@/db/queries/notifications'
 import { chargeBilling } from '@/lib/payments/toss/client'
 import { runBillingCharges } from '@/lib/payments/billingRun'
+import { notifyStuckPayments } from '@/lib/payments/notifyStuck'
 import {
   currentBillingMonth,
   getBillingConfig,
@@ -100,6 +101,18 @@ export async function POST(request: NextRequest) {
           })
         }
       },
+      // 청구가 나갔는지 모르는 건은 선점을 쥔 채 남는다. 그 선점을 푸는 장치가
+      // 따로 없으므로, 사무국이 토스 거래 내역에서 확인해 손으로 마무리해야
+      // 한다 — 그 사실이 사람에게 닿게 한다.
+      reportUndecided: input =>
+        notifyStuckPayments({
+          kind: 'dues_undecided_charges',
+          label: '조합비 자동청구',
+          action:
+            '토스 거래 내역에서 주문번호를 확인해, 청구된 건은 납부로 처리하고 청구되지 않은 건은 실패로 정리해 주세요. 정리하기 전에는 그 달 청구가 다시 나가지 않습니다.',
+          count: input.count,
+          orderIds: input.orderIds,
+        }),
       log,
     })
 
