@@ -129,6 +129,15 @@ export default function AdminSettingsPage() {
     funding_fee_rate_nonmember_bp: '',
   })
   const [feeRateErrors, setFeeRateErrors] = useState<Partial<Record<FeeRateField, string>>>({})
+  /**
+   * 이메일 인증 관문을 켰을 때 **막히는 사람 수**. 설정과 따로 불러온다 —
+   * 저장할 수 없는 관측값이라 설정 객체에 섞으면 저장 페이로드로 되돌아간다.
+   */
+  const [verificationCoverage, setVerificationCoverage] = useState<{
+    approved: number
+    unverified: number
+    unverified_admins: number
+  } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -153,6 +162,7 @@ export default function AdminSettingsPage() {
 
   useEffect(() => {
     fetchSettings()
+    fetchVerificationCoverage()
   }, [])
 
   useEffect(() => {
@@ -186,6 +196,22 @@ export default function AdminSettingsPage() {
       setError(err instanceof Error ? err.message : '설정 정보를 불러오는 중 오류가 발생했습니다.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  /**
+   * 관문을 켜기 전에 봐야 하는 숫자를 가져온다. 실패해도 설정 화면 자체는
+   * 그대로 뜬다 — 숫자가 없으면 그 자리에 "확인하지 못했다"고 적는다.
+   */
+  const fetchVerificationCoverage = async () => {
+    try {
+      const response = await fetch('/api/admin/settings/email-verification')
+      if (response.ok === false) throw new Error('현황 조회 실패')
+      const json = await response.json()
+      setVerificationCoverage(json.data ?? null)
+    } catch (err) {
+      console.error('Email verification coverage fetch error:', err)
+      setVerificationCoverage(null)
     }
   }
 
@@ -808,28 +834,86 @@ export default function AdminSettingsPage() {
                     </div>
 
                     {/*
-                      여기에 "이메일 인증 필수" 체크박스가 있었다. **아무것도
-                      통제하지 않았다** — `src/lib/auth/server.ts`는
-                      `emailAndPassword.requireEmailVerification`을 켜지 않아
-                      인증하지 않은 계정도 그대로 로그인된다. 같은 설정의
-                      `resend_limit`·`token_expiry_hours`도 읽는 코드가 없다
-                      (Better Auth가 자기 기본값을 쓴다). 저장은 되는데 아무
-                      일도 일어나지 않는 스위치라, 끄고 새로고침하면 다시 켜져
-                      보이기까지 했다.
+                      이 자리에 있던 "이메일 인증 필수" 체크박스는 아무것도
+                      통제하지 못해 한 번 걷어냈다가, 관문
+                      (`@/lib/auth/emailVerificationGate`)을 만들어 다시 놓았다.
+                      이제 켜면 실제로 로그인이 막힌다.
 
-                      통제하지 못하는 스위치를 두는 것보다 무엇이 실제로
-                      일어나는지 적는 편이 낫다. 접근은 관리자 승인으로 막고
-                      있고, 인증 메일은 가입할 때 나간다.
-
-                      강제로 바꾸려면 미들웨어에 인증 관문을 새로 놓아야 하고,
-                      그건 조합의 접근 정책을 바꾸는 일이라 화면 정리와 같이
-                      할 일이 아니다.
+                      스위치가 읽는 칸은 `email_verification.enforce_on_login`
+                      이다. 운영 행에 남아 있는 옛 `required`는 아무도 읽지
+                      않는다 — 그 칸을 읽었다면 배포하는 순간 관문이 켜진
+                      상태로 떠서 미인증 회원이 문 앞에서 막혔을 것이다.
+                      같은 설정의 `resend_limit`·`token_expiry_hours`는 여전히
+                      읽는 코드가 없다(Better Auth가 자기 기본값을 쓴다).
                     */}
-                    <div className="rounded-lg bg-gray-50 p-4 text-sm text-gray-600">
-                      <p className="font-medium text-gray-800">이메일 인증</p>
-                      <p className="mt-1">
-                        가입할 때 인증 메일이 나갑니다. 로그인은 인증 여부가 아니라 관리자 승인으로
-                        막습니다 — 인증하지 않은 계정도 승인되면 로그인됩니다.
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-gray-700">
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={settings.security.require_email_verification}
+                          onChange={e =>
+                            updateSettings(
+                              'security',
+                              'require_email_verification',
+                              e.target.checked
+                            )
+                          }
+                          className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 mr-2"
+                        />
+                        <span className="text-sm font-medium text-gray-700">
+                          이메일 인증을 마쳐야 로그인할 수 있게 한다
+                        </span>
+                      </label>
+                      <p className="mt-1 ml-6 text-xs text-amber-900">
+                        켜면 인증하지 않은 주소로는 로그인이 거절되고, 거절 화면에서 인증 메일을
+                        다시 받을 수 있습니다. 끄면 지금처럼 인증 여부와 상관없이 관리자 승인만으로
+                        로그인됩니다.
+                      </p>
+
+                      {/*
+                        켜기 전에 비용을 보여 준다. 이 스위치의 비용은 아무도
+                        겪어 보고 나서야 알게 되는 형태라, 숫자가 화면에
+                        없으면 "로그인이 안 된다"는 문의로 처음 알게 된다.
+                      */}
+                      <div className="mt-3 ml-6 rounded-md bg-white/70 p-3 text-xs">
+                        {verificationCoverage ? (
+                          <>
+                            <p className="text-gray-800">
+                              승인된 조합원 <strong>{verificationCoverage.approved}명</strong> 중{' '}
+                              <strong className="text-amber-900">
+                                {verificationCoverage.unverified}명
+                              </strong>
+                              이 아직 이메일 주소를 인증하지 않았습니다.
+                            </p>
+                            {verificationCoverage.unverified > 0 && (
+                              <p className="mt-1 text-gray-600">
+                                지금 켜면 그{' '}
+                                {verificationCoverage.unverified -
+                                  verificationCoverage.unverified_admins}
+                                명이 다음 로그인부터 막힙니다.
+                              </p>
+                            )}
+                            {verificationCoverage.unverified_admins > 0 && (
+                              <p className="mt-1 text-gray-600">
+                                그중 관리자 {verificationCoverage.unverified_admins}명은 막히지
+                                않습니다(아래 참고).
+                              </p>
+                            )}
+                          </>
+                        ) : (
+                          <p className="text-gray-600">
+                            미인증 회원 수를 확인하지 못했습니다. 켜기 전에 새로고침해 주세요.
+                          </p>
+                        )}
+                      </div>
+
+                      <p className="mt-3 ml-6 text-xs text-gray-600">
+                        관리자는 이 관문에 걸리지 않습니다. 마지막 관리자의 주소가 인증되지 않은
+                        채로 켜지면 스위치를 다시 끌 사람이 남지 않기 때문입니다.
+                      </p>
+                      <p className="mt-1 ml-6 text-xs text-gray-600">
+                        설정을 읽지 못하면 관문은 열린 쪽으로 둡니다 — 데이터베이스가 한 번
+                        삐끗했다고 전 조합원이 로그인하지 못하면 안 됩니다.
                       </p>
                     </div>
                   </div>
