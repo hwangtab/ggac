@@ -52,6 +52,8 @@ function spy(overrides = {}) {
       { id: 'admin-1', email: 'admin1@example.com' },
       { id: 'admin-2', email: 'admin2@example.com' },
     ],
+    // 억제 판정이 보는 활동 기록. 기본은 "최근에 아무 일도 없었다".
+    listRecentTargetActivities: async () => [],
     getProfileEmail: async id => `${id}@example.com`,
     getUserSettings: async () => [],
     getUserSettingsByUserIds: async () => new Map(),
@@ -116,13 +118,21 @@ test('조회가 던져도 예외가 호출부로 나가지 않는다', async () 
       throw new Error('boom')
     },
   })
-  await notify.notifyCampaignSubmitted(CAMPAIGN, deps)
+  await notify.notifyCampaignSubmitted(CAMPAIGN, {}, deps)
   await notify.notifyPledgePaid(MEMBER_PLEDGE, deps)
   await notify.notifyCampaignClosed(CAMPAIGN, deps)
   await notify.notifyPledgeRefunded(MEMBER_PLEDGE, 'reward_sold_out', deps)
-  await notify.notifyRewardDeliveryChanged(CAMPAIGN, [
-    { reward_id: 'r-1', reward_title: 'CD', from: '2026-03', to: '2026-06' },
-  ])
+  await notify.notifyRewardDeliveryChanged(
+    CAMPAIGN,
+    [{ reward_id: 'r-1', reward_title: 'CD', from: '2026-03', to: '2026-06' }],
+    {},
+    {
+      ...deps,
+      listPaidPledgesByReward: async () => {
+        throw new Error('boom')
+      },
+    }
+  )
 })
 
 // ------------------------------------------------ 거래성 대 선택
@@ -224,7 +234,7 @@ test('익명 후원자의 이름은 개설자에게 가는 어느 통로로도 �
 
 test('심사 제출은 관리자 전원에게 인앱과 메일로 간다', async () => {
   const { deps, calls } = spy()
-  await notify.notifyCampaignSubmitted(CAMPAIGN, deps)
+  await notify.notifyCampaignSubmitted(CAMPAIGN, {}, deps)
   assert.equal(calls.bulk.length, 1)
   assert.deepEqual(calls.bulk[0].user_ids, ['admin-1', 'admin-2'])
   assert.equal(calls.bulk[0].type, 'funding_submitted')
@@ -233,7 +243,7 @@ test('심사 제출은 관리자 전원에게 인앱과 메일로 간다', async
 
 test('관리자가 없으면 경고만 남기고 아무것도 보내지 않는다', async () => {
   const { deps, calls } = spy({ listAdminRecipients: async () => [] })
-  await notify.notifyCampaignSubmitted(CAMPAIGN, deps)
+  await notify.notifyCampaignSubmitted(CAMPAIGN, {}, deps)
   assert.equal(calls.bulk.length, 0)
   assert.equal(calls.mail.length, 0)
   assert.ok(calls.logs.some(([level]) => level === 'warn'))
@@ -249,6 +259,7 @@ test('전달 시기 변경은 그 리워드 후원자에게 가고, 비회원은
   await notify.notifyRewardDeliveryChanged(
     CAMPAIGN,
     [{ reward_id: 'r-1', reward_title: 'CD 한 장', from: '2026-03', to: '2026-06' }],
+    {},
     deps
   )
   assert.equal(calls.bulk.length, 1)
@@ -271,6 +282,7 @@ test('수신자가 상한을 넘으면 발송을 포기하고 관리자에게 �
   await notify.notifyRewardDeliveryChanged(
     CAMPAIGN,
     [{ reward_id: 'r-1', reward_title: 'CD 한 장', from: '2026-03', to: '2026-06' }],
+    {},
     deps
   )
   // 후원자에게는 아무것도 가지 않는다.
@@ -291,7 +303,7 @@ test('여덟 알림이 저마다 제 종류로 기록된다', async () => {
     createBulkNotifications: async i => seen.push(i.type),
   }
 
-  await notify.notifyCampaignSubmitted(CAMPAIGN, spy(collect).deps)
+  await notify.notifyCampaignSubmitted(CAMPAIGN, {}, spy(collect).deps)
   await notify.notifyCampaignReviewed(CAMPAIGN, 'approve', spy(collect).deps)
   await notify.notifyCampaignReviewed(CAMPAIGN, 'reject', spy(collect).deps)
   await notify.notifyPledgePaid(MEMBER_PLEDGE, spy(collect).deps)
@@ -300,6 +312,7 @@ test('여덟 알림이 저마다 제 종류로 기록된다', async () => {
   await notify.notifyRewardDeliveryChanged(
     CAMPAIGN,
     [{ reward_id: 'r-1', reward_title: 'CD', from: null, to: '2026-06' }],
+    {},
     spy({
       ...collect,
       listPaidPledgesByReward: async () => [
@@ -460,4 +473,169 @@ test('메일 키가 없으면 정산 알림도 인앱만 남는다', async () =>
   await notify.notifySettlementPaid(CAMPAIGN, SETTLEMENT, deps)
   assert.equal(calls.mail.length, 0)
   assert.equal(calls.inApp.length, 1)
+})
+
+// ------------------------------------------------ 반복 동작 억제
+//
+// 제출·철회도, 예상 전달월 저장도 당사자가 얼마든지 반복할 수 있는 동작이다.
+// 되풀이하면 관리자 전원·후원자 전원에게 메일이 끝없이 나가고, Resend 한도는
+// 가입 인증·비밀번호 재설정과 같은 통이라 **사이트 전체가 멈춘다.**
+// 판정 규칙과 고른 이유는 `src/lib/funding/notifyThrottle.ts` 머리 주석에 있다.
+
+const minutesAgo = m => new Date(Date.now() - m * 60_000).toISOString()
+const hoursAgo = h => new Date(Date.now() - h * 3_600_000).toISOString()
+
+test('30분 안에 다시 제출하면 관리자에게 아무것도 가지 않는다', async () => {
+  const { deps, calls } = spy({
+    listRecentTargetActivities: async () => [
+      { created_at: minutesAgo(5), target_id: 'camp-1', metadata: { action: 'submit' } },
+    ],
+  })
+  await notify.notifyCampaignSubmitted(CAMPAIGN, {}, deps)
+  assert.equal(calls.mail.length, 0, '제출·철회를 되풀이해 관리자 메일을 또 보냈다')
+  assert.equal(calls.bulk.length, 0, '같은 말을 인앱으로 또 만들었다')
+})
+
+test('철회하고 고쳐 다시 낸 정직한 재제출(30분 뒤)은 그대로 알린다', async () => {
+  const { deps, calls } = spy({
+    listRecentTargetActivities: async () => [
+      { created_at: minutesAgo(45), target_id: 'camp-1', metadata: { action: 'submit' } },
+    ],
+  })
+  await notify.notifyCampaignSubmitted(CAMPAIGN, {}, deps)
+  assert.equal(calls.bulk.length, 1, '정직한 재제출을 침묵시켰다')
+  assert.equal(calls.mail.length, 2)
+})
+
+test('다른 캠페인의 방금 제출은 이 캠페인의 알림을 막지 않는다', async () => {
+  const { deps, calls } = spy({
+    listRecentTargetActivities: async () => [
+      { created_at: minutesAgo(1), target_id: 'camp-2', metadata: {} },
+    ],
+  })
+  await notify.notifyCampaignSubmitted(CAMPAIGN, {}, deps)
+  assert.equal(calls.mail.length, 2)
+})
+
+test('하루 상한을 넘긴 제출 알림은 인앱만 남고 메일이 끊긴다', async () => {
+  const entries = Array.from({ length: 12 }, (_, i) => ({
+    created_at: hoursAgo(2),
+    target_id: `other-${i}`,
+    metadata: {},
+  }))
+  const { deps, calls } = spy({ listRecentTargetActivities: async () => entries })
+  await notify.notifyCampaignSubmitted(CAMPAIGN, {}, deps)
+  assert.equal(calls.bulk.length, 1, '관리자가 심사 목록에서 볼 인앱 알림까지 없앴다')
+  assert.equal(calls.mail.length, 0, '하루 상한을 넘겼는데 메일이 나갔다')
+})
+
+test('활동 기록을 못 읽으면 억제하지 않고 그대로 알린다', async () => {
+  const { deps, calls } = spy({
+    listRecentTargetActivities: async () => {
+      throw new Error('boom')
+    },
+  })
+  await notify.notifyCampaignSubmitted(CAMPAIGN, {}, deps)
+  assert.equal(calls.mail.length, 2, '조회가 흔들렸다고 알림을 삼켰다')
+  assert.ok(calls.logs.some(([level]) => level === 'warn'))
+})
+
+const TWO_BACKERS = [
+  { id: 'a', pledge_code: 'FND-A', user_id: 'user-1', backer_email: 'a@example.com' },
+  { id: 'b', pledge_code: 'FND-B', user_id: null, backer_email: 'b@example.com' },
+]
+
+test('같은 리워드를 하루 안에 또 바꾸면 인앱만 가고 메일은 나가지 않는다', async () => {
+  const { deps, calls } = spy({
+    listPaidPledgesByReward: async () => TWO_BACKERS,
+    listRecentTargetActivities: async () => [
+      {
+        created_at: hoursAgo(2),
+        target_id: 'camp-1',
+        metadata: { changes: [{ reward_id: 'r-1' }] },
+      },
+    ],
+  })
+  await notify.notifyRewardDeliveryChanged(
+    CAMPAIGN,
+    [{ reward_id: 'r-1', reward_title: 'CD 한 장', from: '2026-06', to: '2026-07' }],
+    {},
+    deps
+  )
+  assert.equal(calls.mail.length, 0, '전달월을 되돌리며 후원자 전원에게 메일을 또 보냈다')
+  assert.equal(calls.bulk.length, 1, '값이 새로운데 인앱마저 막았다')
+})
+
+test('하루 세 번을 넘긴 전달 시기 변경은 아무에게도 가지 않는다', async () => {
+  const { deps, calls } = spy({
+    listPaidPledgesByReward: async () => TWO_BACKERS,
+    listRecentTargetActivities: async () =>
+      [1, 2, 3].map(h => ({
+        created_at: hoursAgo(h),
+        target_id: 'camp-1',
+        metadata: { changes: [{ reward_id: 'r-1' }] },
+      })),
+  })
+  await notify.notifyRewardDeliveryChanged(
+    CAMPAIGN,
+    [{ reward_id: 'r-1', reward_title: 'CD 한 장', from: '2026-07', to: '2026-06' }],
+    {},
+    deps
+  )
+  assert.equal(calls.mail.length, 0)
+  assert.equal(calls.bulk.length, 0, '상한을 넘겼는데 인앱 행을 계속 만들었다')
+})
+
+test('한 리워드가 상한에 닿아도 다른 리워드의 변경은 그대로 알린다', async () => {
+  const { deps, calls } = spy({
+    listPaidPledgesByReward: async () => TWO_BACKERS,
+    listRecentTargetActivities: async () =>
+      [1, 2, 3].map(h => ({
+        created_at: hoursAgo(h),
+        target_id: 'camp-1',
+        metadata: { changes: [{ reward_id: 'r-1' }] },
+      })),
+  })
+  await notify.notifyRewardDeliveryChanged(
+    CAMPAIGN,
+    [
+      { reward_id: 'r-1', reward_title: 'CD 한 장', from: '2026-07', to: '2026-06' },
+      { reward_id: 'r-2', reward_title: 'LP 한 장', from: '2026-06', to: '2026-09' },
+    ],
+    {},
+    deps
+  )
+  assert.deepEqual(calls.mail.map(m => m.to).sort(), ['a@example.com', 'b@example.com'])
+  assert.equal(calls.bulk.length, 1)
+  assert.ok(calls.bulk[0].message.includes('LP 한 장'))
+})
+
+test('여러 리워드가 한꺼번에 밀린 한 번의 저장은 전부 알린다', async () => {
+  const { deps, calls } = spy({ listPaidPledgesByReward: async () => TWO_BACKERS })
+  await notify.notifyRewardDeliveryChanged(
+    CAMPAIGN,
+    [
+      { reward_id: 'r-1', reward_title: 'CD 한 장', from: '2026-06', to: '2026-09' },
+      { reward_id: 'r-2', reward_title: 'LP 한 장', from: '2026-06', to: '2026-09' },
+      { reward_id: 'r-3', reward_title: '엽서', from: '2026-06', to: '2026-09' },
+    ],
+    {},
+    deps
+  )
+  assert.equal(calls.bulk.length, 3, '같은 저장 안의 리워드끼리 서로를 막았다')
+  assert.equal(calls.mail.length, 6)
+})
+
+test('지금 이 동작의 활동 기록은 억제 판정에서 빠진다', async () => {
+  const seen = []
+  const { deps, calls } = spy({
+    listRecentTargetActivities: async filter => {
+      seen.push(filter)
+      return []
+    },
+  })
+  await notify.notifyCampaignSubmitted(CAMPAIGN, { activityId: 'act-now' }, deps)
+  assert.equal(seen.length, 1)
+  assert.equal(seen[0].excludeId, 'act-now', '방금 남긴 기록을 빼 달라고 하지 않았다')
+  assert.equal(calls.mail.length, 2)
 })

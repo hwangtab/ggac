@@ -33,7 +33,21 @@
  * 확인한다).
  */
 
-import { and, asc, count, desc, eq, gt, gte, inArray, lt, lte, sql, type SQL } from 'drizzle-orm'
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gt,
+  gte,
+  inArray,
+  lt,
+  lte,
+  ne,
+  sql,
+  type SQL,
+} from 'drizzle-orm'
 
 import { db } from '../client.ts'
 import {
@@ -350,6 +364,55 @@ export async function listActivities(filter: ListActivitiesFilter): Promise<Acti
   if (rows.length === limit) filter.onTruncated?.({ limit })
 
   return rows.reverse().map(rowToActivity)
+}
+
+/** `listRecentTargetActivities`가 한 번에 읽는 최대 행 수. */
+export const RECENT_TARGET_ACTIVITY_LIMIT = 500
+
+export interface RecentTargetActivityFilter {
+  actionTypes: ActivityActionTypeValue[]
+  targetType: ActivityTargetTypeValue
+  /** 특정 대상만. 생략하면 그 종류의 모든 대상. */
+  targetId?: string | null
+  since: Date
+  /**
+   * 이 id의 행은 빼고 읽는다.
+   *
+   * 호출부가 **방금 남긴 "지금 이 동작"의 기록**을 제외할 때 쓴다. 없으면 첫
+   * 제출이 "직전에도 제출했다"로 읽혀 첫 알림부터 억제된다.
+   */
+  excludeId?: string | null
+  limit?: number
+}
+
+/**
+ * 한 대상에 최근 일어난 활동을 **최신순으로** 읽는다.
+ *
+ * `listActivities`(기간 통계용, 오름차순)와 쓰임이 다르다 — 이쪽은 "직전에
+ * 같은 일이 있었는가"를 묻는 자리(`src/lib/funding/notifyThrottle.ts`의 알림
+ * 억제 판정)가 쓰므로 대상으로 좁히고 최신부터 본다.
+ */
+export async function listRecentTargetActivities(
+  filter: RecentTargetActivityFilter
+): Promise<ActivityRow[]> {
+  if (filter.actionTypes.length === 0) return []
+  const conditions: SQL[] = [
+    gte(userActivities.createdAt, filter.since),
+    inArray(userActivities.actionType, filter.actionTypes),
+    eq(userActivities.targetType, filter.targetType),
+  ]
+  if (filter.targetId) conditions.push(eq(userActivities.targetId, filter.targetId))
+  if (filter.excludeId) conditions.push(ne(userActivities.id, filter.excludeId))
+
+  const limit = Math.min(filter.limit ?? RECENT_TARGET_ACTIVITY_LIMIT, MAX_ACTIVITY_SCAN_LIMIT)
+  const rows = await db
+    .select()
+    .from(userActivities)
+    .where(and(...conditions))
+    .orderBy(desc(userActivities.createdAt))
+    .limit(limit)
+
+  return rows.map(rowToActivity)
 }
 
 export interface ListActivitiesPaginatedFilter {

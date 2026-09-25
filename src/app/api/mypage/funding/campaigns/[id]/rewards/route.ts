@@ -194,18 +194,24 @@ async function handlePut(request: NextRequest, params: Promise<{ id: string }>) 
     parsed.rewards
   )
   if (deliveryChanges.length > 0) {
-    logUserActivity({
+    // 알림 억제 판정이 **이 기록을 근거로** 센다(`@/lib/funding/notifyThrottle`).
+    // 방금 남긴 이 줄까지 세면 첫 변경이 "오늘 이미 알렸다"로 읽히므로,
+    // 기다렸다 id를 받아 판정에서 빼게 한다.
+    const activityId = await logUserActivity({
       user_id: auth.user.id,
       action_type: 'funding_reward_delivery_changed',
       target_type: 'funding_campaign',
       target_id: id,
       metadata: { campaign_status: status, changes: deliveryChanges },
-    }).catch(e => log.warn('예상 전달월 변경 기록 실패', e))
+    }).catch(e => {
+      log.warn('예상 전달월 변경 기록 실패', e)
+      return null
+    })
     // 후원자 수가 얼마든 응답을 기다리게 하지 않는다. `notifyRewardDeliveryChanged`는
     // 스스로 던지지 않지만, `after()` 안에서 새는 예외는 잡아 줄 사람이 없으므로
     // 다른 알림 호출부와 같은 모양으로 한 번 더 감싼다.
     after(() =>
-      notifyRewardDeliveryChanged(campaign, deliveryChanges).catch(e =>
+      notifyRewardDeliveryChanged(campaign, deliveryChanges, { activityId }).catch(e =>
         log.error('예상 전달월 변경 알림 실패', e)
       )
     )

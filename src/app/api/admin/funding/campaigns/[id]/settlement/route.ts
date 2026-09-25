@@ -45,7 +45,7 @@
  * 자리들과 같이 "읽은 상태가 움직였다"로 답한다.
  */
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 
 import { requireAdmin } from '@/lib/server/adminAuth'
 import { applyRouteRateLimit } from '@/lib/server/rateLimit'
@@ -78,6 +78,14 @@ import { logSecurityEvent } from '@/utils/security'
 
 const log = createLogger('api/admin/funding/settlement')
 export const runtime = 'nodejs'
+/**
+ * `after()`로 넘긴 정산 준비·지급 알림은 **개설자 한 사람**에게 간다 — 대량
+ * 발송기를 타지 않으므로 메일 한 통이 전부다. 그래도 예산을 적어 둔다:
+ * 적지 않으면 플랫폼 기본값(10~15초)이고, 이 라우트는 원장을 다시 세고 계좌를
+ * 읽는 자리라 Resend가 한 번 느려지면 "정산금을 보냈습니다"가 통째로 사라진다.
+ * 한 통이 아무리 늦어도 들어오는 60초로 잡는다.
+ */
+export const maxDuration = 60
 export const dynamic = 'force-dynamic'
 
 type Ctx = { params: Promise<{ id: string }> }
@@ -287,10 +295,14 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       // 계좌가 없으면 알림이 그 사실을 함께 말한다 — 사무국이 쫓아다니기
       // 전에 개설자가 먼저 알아야 하고, 그 자리(마이페이지 내 정보)까지
       // 일러 준다. 계좌 **값**은 어느 알림에도 싣지 않는다.
-      notifySettlementPrepared(campaign, result.settlement as never, {
-        revised: result.created === false,
-        payoutAccountMissing: isPayoutAccountRegistered(account) === false,
-      }).catch(e => log.error('정산 준비 알림 실패', e))
+      // 응답 뒤에 보낸다. 맨 promise로 두면 응답과 함께 함수가 얼어 개설자는
+      // 정산서가 나왔다는 사실을 받지 못한다.
+      after(() =>
+        notifySettlementPrepared(campaign, result.settlement as never, {
+          revised: result.created === false,
+          payoutAccountMissing: isPayoutAccountRegistered(account) === false,
+        }).catch(e => log.error('정산 준비 알림 실패', e))
+      )
     }
 
     return ApiSuccess.ok({
@@ -372,8 +384,12 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
       payoutActivity.catch(e => log.warn('활동 기록 실패', e))
     }
 
-    notifySettlementPaid(campaign, result.settlement as never).catch(e =>
-      log.error('정산 지급 알림 실패', e)
+    // 응답 뒤에 보낸다. 맨 promise로 두면 응답과 함께 함수가 얼어 개설자는
+    // **자기 돈이 나갔다는 통지**를 받지 못한다.
+    after(() =>
+      notifySettlementPaid(campaign, result.settlement as never).catch(e =>
+        log.error('정산 지급 알림 실패', e)
+      )
     )
 
     return ApiSuccess.ok({

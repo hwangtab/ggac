@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 
 import { requireAdmin } from '@/lib/server/adminAuth'
 import {
@@ -26,6 +26,14 @@ import { createLogger } from '@/utils/logger'
 const log = createLogger('api/admin/funding/transition')
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+/**
+ * `after()`로 넘긴 승인·반려·마감 알림은 **개설자 한 사람**에게 간다 —
+ * 대량 발송기를 타지 않으므로 메일 한 통과 설정·주소 조회가 전부다. 그래도
+ * 예산을 적어 둔다: 적지 않으면 플랫폼 기본값(10~15초)이고, 심사 처리 자체가
+ * 슬러그 중복 확인·요율 판정까지 하는 자리라 Resend가 한 번 느려지면 알림이
+ * 통째로 사라진다. 한 통이 아무리 늦어도 들어오는 60초로 잡는다.
+ */
+export const maxDuration = 60
 
 /** 실제로 일어난 동작을 기록한다. 심사 어휘(`funding_campaign_reviewed`)는
  * 승인·반려에만 쓴다 — 관리자가 조합원을 대신해 제출·철회·마감할 수도
@@ -173,9 +181,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           : {}),
       },
     }).catch(e => log.warn('활동 기록 실패', e))
+    // 응답 뒤에 보낸다. 맨 promise로 두면 응답과 함께 함수가 얼어 개설자는
+    // 승인·반려·마감 소식을 **영영 받지 못한다**(후원 확정 라우트와 같은 모양).
     if (action === 'approve' || action === 'reject')
-      notifyCampaignReviewed(updated, action).catch(e => log.error('심사 알림 실패', e))
-    if (action === 'close') notifyCampaignClosed(updated).catch(e => log.error('마감 알림 실패', e))
+      after(() =>
+        notifyCampaignReviewed(updated, action).catch(e => log.error('심사 알림 실패', e))
+      )
+    if (action === 'close')
+      after(() => notifyCampaignClosed(updated).catch(e => log.error('마감 알림 실패', e)))
 
     return ApiSuccess.ok({ campaign: updated }).toNextResponse()
   } catch (error) {
