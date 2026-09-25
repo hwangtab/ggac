@@ -173,6 +173,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       ).toNextResponse()
     }
 
+    // **후원자 통지를 먼저 예약한다.** 아래로는 기록·정산 재조회가 이어지고,
+    // 그중 하나가 던지면 바깥 catch가 500을 만들어 `after()`까지 가지 못한다 —
+    // 돈은 이미 나갔는데 후원자는 아무 말도 못 듣는 상태다. 예약 자체는
+    // 아무것도 부르지 않으므로(응답 뒤에 돈다) 여기 두어도 순서가 흐트러지지
+    // 않는다.
+    after(() =>
+      notifyOfficeRefunded(outcome.pledge, campaign).catch(e => log.error('환불 알림 실패', e))
+    )
+
     // 기록은 기다린다 — 이 한 줄이 "누가 왜 남의 결제를 돌려줬는가"의 전부다.
     try {
       await logUserActivity({
@@ -215,20 +224,35 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // 대조하지 않는다). 좁은 창이지만 조용히 지나가게 두지 않는다.
     let afterPayout = settledAck
     if (settledAck === false) {
-      const settlementAfter = await getSettlementByCampaign(campaignId)
-      if (settlementAfter?.status === 'paid') {
-        afterPayout = true
+      // **이 읽기가 실패해도 500으로 답하지 않는다.** 환불은 이미 나갔고,
+      // 돈이 움직인 요청에 "환불을 처리하지 못했습니다"라고 답하는 것은
+      // 거짓말이다(활동 기록 실패와 같은 판단). 무엇을 확인하지 못했는지만
+      // 시끄럽게 남긴다.
+      try {
+        const settlementAfter = await getSettlementByCampaign(campaignId)
+        if (settlementAfter?.status === 'paid') {
+          afterPayout = true
+          logSecurityEvent(
+            'FUNDING_OFFICE_REFUND_AFTER_PAYOUT',
+            { pledgeId: String(pledge.id), campaignId, refundAmount: outcome.amount },
+            'high'
+          )
+        }
+      } catch (e) {
         logSecurityEvent(
           'FUNDING_OFFICE_REFUND_AFTER_PAYOUT',
-          { pledgeId: String(pledge.id), campaignId, refundAmount: outcome.amount },
+          {
+            pledgeId: String(pledge.id),
+            campaignId,
+            refundAmount: outcome.amount,
+            settlementLookupFailed: true,
+            error: e instanceof Error ? e.message : String(e),
+          },
           'high'
         )
+        log.error('환불 뒤 정산 상태를 확인하지 못했다', e)
       }
     }
-
-    after(() =>
-      notifyOfficeRefunded(outcome.pledge, campaign).catch(e => log.error('환불 알림 실패', e))
-    )
 
     // 지급까지 끝난 정산의 캠페인이었다면 개설자도 알아야 한다 — 이미 받은
     // 정산금 안에 방금 돌려준 돈이 들어 있다. 여기서 알리지 않으면 되돌려

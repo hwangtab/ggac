@@ -245,6 +245,30 @@ test('환불 실행 파일과 라우트는 DB 트랜잭션으로 토스 호출�
   }
 })
 
+/**
+ * 돈이 나간 뒤에 남은 것은 기록과 통지뿐이다. 그 사이에 있는 DB 읽기가
+ * 던지면 바깥 catch가 500을 만들고 `after()`까지 가지 못해, **후원자는
+ * 환불됐다는 말을 영영 못 듣는다.** 그래서 통지 예약이 먼저다.
+ */
+test('후원자 통지는 환불 성공 직후에 예약된다 — 뒤따르는 조회보다 먼저', () => {
+  const code = stripComments(
+    readFileSync(
+      new URL('../../src/app/api/admin/funding/pledges/[id]/refund/route.ts', import.meta.url),
+      'utf-8'
+    )
+  )
+  const notifyAt = code.indexOf('notifyOfficeRefunded(')
+  assert.ok(notifyAt > 0, '후원자 통지를 부르지 않는다')
+  // 환불 뒤에 오는 정산 재조회(지급 뒤 환불 판정)보다 앞이어야 한다.
+  const lastSettlementRead = code.lastIndexOf('getSettlementByCampaign(')
+  assert.ok(
+    notifyAt < lastSettlementRead,
+    '통지 예약보다 정산 조회가 먼저다 — 그 조회가 던지면 통지가 통째로 사라진다'
+  )
+  // 그 조회 자체도 500으로 번지지 않게 감싸 둔다.
+  assert.match(code.slice(notifyAt), /try\s*\{[\s\S]*getSettlementByCampaign\(/)
+})
+
 test('환불 실행은 후원자 취소와 같은 함수를 쓴다 — 환불기를 두 벌 만들지 않는다', () => {
   const src = readFileSync(
     new URL('../../src/lib/server/officeRefund.ts', import.meta.url),
