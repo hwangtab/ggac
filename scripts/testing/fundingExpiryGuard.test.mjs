@@ -185,14 +185,18 @@ test('크론 라우트는 정체된 선점을 세어 사람에게 알린다', as
   )
 })
 
-test('크론 라우트의 환불 통지는 간격을 두고 나간다', async () => {
+test('크론 라우트의 통지는 한 줄에 세워 간격을 두고 나간다', async () => {
   const { readFile } = await import('node:fs/promises')
   const src = await readFile(ROUTE, 'utf8')
-  assert.match(src, /sendNoticesPaced\(refundNotices/, '통지에 간격이 없다')
+  // 환불 통지는 반드시 그 줄에 들어간다.
+  assert.match(src, /\.\.\.refundNotices/, '환불 통지가 속도 제한을 타지 않는다')
+  assert.match(src, /sendNoticesPaced\(notices/, '통지에 간격이 없다')
   assert.doesNotMatch(
     src,
     /Promise\.allSettled\(refundNotices/,
     '한꺼번에 띄우면 초당 2통 한도에 걸려 대부분이 429로 사라진다'
   )
+  // 속도 제한기가 둘 이상이면 각자 제 간격을 지키면서 합쳐서는 한도를 넘는다.
+  assert.equal((src.match(/sendNoticesPaced\(/g) ?? []).length, 1, '속도 제한기가 갈라졌다')
   assert.match(src, /export const maxDuration = 300/, '간격이 생긴 만큼 수명이 덮어야 한다')
 })
