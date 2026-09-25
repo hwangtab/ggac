@@ -462,6 +462,80 @@ test.describe('펀딩 — 관리자 심사 경계 (심사 대기 캠페인)', ()
       await adminContext.dispose()
     }
   })
+
+  /**
+   * **사무국 구제 수단 — 이행 되돌리기와 대리 환불.**
+   *
+   * 둘 다 `requireAdmin()` 하나에 걸려 있고, 그 한 줄이 지켜야 하는 것이 크다.
+   * 되돌리기는 이미 부친 물건에 대해 **자동 환불을 다시 여는** 동작이고
+   * (개설자가 혼자 하지 못하게 막아 둔 바로 그 일이다), 환불은 **남의 결제를
+   * 돌려주는** 동작이다. 개설자가 자기 캠페인이라도 이 라우트로 들어오면 안
+   * 된다 — 그래서 `other`(승인된 평조합원)로 두드려 403을 직접 본다.
+   *
+   * 짝: 게이트가 "전부 막기"로 퇴화하면 위 부정 단정만으로는 잡히지 않는다.
+   * 관리자는 조회를 실제로 할 수 있어야 하고, 쓰기도 인가가 아니라 **본문
+   * 검증**에서 걸려야 한다(여기서 실제로 되돌리지는 않는다 — 픽스처 상태를
+   * 움직이면 다른 스펙이 따라 흔들린다).
+   */
+  test('이행 되돌리기와 사무국 대리 환불은 관리자만 할 수 있다', async ({ baseURL }) => {
+    const otherContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('other'),
+    })
+    const adminContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('admin'),
+    })
+    const fulfillmentUrl = `/api/admin/funding/campaigns/${fixtures.fundingActiveCampaignId}/fulfillment`
+    const refundUrl = `/api/admin/funding/pledges/${fixtures.fundingMemberPledgeId}/refund`
+    const reversalBody = {
+      to: 'none',
+      kind: 'wrong_row',
+      reason: '평조합원이 되돌리기를 시도합니다',
+      pledge_ids: [fixtures.fundingMemberPledgeId],
+    }
+    try {
+      const denied: Array<
+        [string, { status(): number; json(): Promise<Record<string, unknown>> }]
+      > = [
+        ['GET 이행 현황', await otherContext.get(fulfillmentUrl)],
+        ['POST 되돌리기', await otherContext.post(fulfillmentUrl, { data: reversalBody })],
+        [
+          'POST 대리 환불',
+          await otherContext.post(refundUrl, { data: { reason: '평조합원이 환불을 시도합니다' } }),
+        ],
+      ]
+      for (const [label, res] of denied) {
+        expect(res.status(), `${label} 거부 코드`).toBe(403)
+        expect((await res.json()).error).toContain('관리자 권한이 필요합니다')
+      }
+
+      // 짝 ①: 관리자는 이행 현황을 읽는다.
+      const read = await adminContext.get(fulfillmentUrl)
+      expect(read.status()).toBe(200)
+      const body = await read.json()
+      expect(body.data?.counts?.none).toEqual(expect.any(Number))
+      expect(Array.isArray(body.data?.pledges)).toBe(true)
+
+      // 짝 ②: 관리자의 쓰기는 인가가 아니라 본문 검증에서 갈린다. 사유를
+      // 빼고 보내면 400이고, 아무 후원도 움직이지 않는다.
+      const missingReason = await adminContext.post(fulfillmentUrl, {
+        data: { to: 'none', kind: 'wrong_row', pledge_ids: [fixtures.fundingMemberPledgeId] },
+      })
+      expect(missingReason.status()).toBe(400)
+      const refundNoReason = await adminContext.post(refundUrl, { data: { reason: '짧다' } })
+      // 결제 스위치가 꺼진 배포에서는 인증 뒤 503으로 갈린다 — 어느 쪽이든
+      // 403·401이 아니라는 것이 여기서 볼 것이다.
+      expect([400, 503]).toContain(refundNoReason.status())
+
+      const untouched = await adminContext.get(fulfillmentUrl)
+      const rows = (await untouched.json()).data?.pledges as { id: string }[]
+      expect(Array.isArray(rows)).toBe(true)
+    } finally {
+      await otherContext.dispose()
+      await adminContext.dispose()
+    }
+  })
 })
 
 /**
@@ -573,6 +647,40 @@ test.describe('펀딩 — 비인증 요청', () => {
             anonContext.patch(
               `/api/admin/funding/campaigns/${fixtures.fundingReviewCampaignId}/settlement`,
               { data: { action: 'mark_paid' } }
+            ),
+        ],
+        // 사무국 구제 수단 둘. 하나는 남의 결제를 돌려주고, 하나는 이미 나간
+        // 발송 안내를 되돌린다 — 세션 없이 닿으면 안 되는 자리다.
+        [
+          'GET /api/admin/funding/campaigns/[id]/fulfillment',
+          () =>
+            anonContext.get(
+              `/api/admin/funding/campaigns/${fixtures.fundingActiveCampaignId}/fulfillment`
+            ),
+        ],
+        [
+          'POST /api/admin/funding/campaigns/[id]/fulfillment',
+          () =>
+            anonContext.post(
+              `/api/admin/funding/campaigns/${fixtures.fundingActiveCampaignId}/fulfillment`,
+              {
+                data: {
+                  to: 'none',
+                  kind: 'wrong_row',
+                  reason: '비인증 시도입니다 되돌리기',
+                  pledge_ids: [fixtures.fundingMemberPledgeId],
+                },
+              }
+            ),
+        ],
+        [
+          'POST /api/admin/funding/pledges/[id]/refund',
+          () =>
+            anonContext.post(
+              `/api/admin/funding/pledges/${fixtures.fundingMemberPledgeId}/refund`,
+              {
+                data: { reason: '비인증 시도입니다 환불' },
+              }
             ),
         ],
       ]
