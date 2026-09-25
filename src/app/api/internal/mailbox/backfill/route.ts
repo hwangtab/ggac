@@ -8,8 +8,11 @@
  *
  * Resend는 받은 메일을 30일만 보관한다. 그보다 오래된 pending 행은 다시
  * 당겨봐야 Resend에 원본이 없어 소용이 없으므로 `markBodyFetchFailed`로 최종
- * 포기 표시하고 넘어간다 — 그래야 영구 실패 행이 매 실행 배치를 계속
- * 차지하지 않는다.
+ * 포기 표시하고 넘어간다.
+ *
+ * 30일은 길다. 그 사이에도 매번 실패하는 행이 배치를 독차지하지 않도록, 집은
+ * 행에는 `markBodyFetchAttempted`로 시도 시각을 적고 큐를 그 순으로 준다 —
+ * 실패한 행은 뒤로 가고 아직 안 집힌 행이 앞에 온다.
  *
  * 인증은 업로드 정리 크론(`/api/internal/uploads/cleanup`)과 같은 방식 — 공유
  * 토큰을 타이밍 안전 비교하고, 토큰이 설정돼 있지 않으면 닫는다
@@ -19,7 +22,11 @@
 import { NextRequest } from 'next/server'
 import { timingSafeEqual } from 'node:crypto'
 
-import { listPendingInboundEmails, markBodyFetchFailed } from '@/db/queries/mailbox'
+import {
+  listPendingInboundEmails,
+  markBodyFetchAttempted,
+  markBodyFetchFailed,
+} from '@/db/queries/mailbox'
 import { ingestInboundEmail } from '@/lib/mail/ingestInbound'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
@@ -71,7 +78,7 @@ async function handleBackfill(request: NextRequest) {
     const pending = await listPendingInboundEmails(BATCH_SIZE)
     const now = Date.now()
 
-    let filled = 0
+    let attempted = 0
     let abandoned = 0
 
     for (const row of pending) {
@@ -90,14 +97,23 @@ async function handleBackfill(request: NextRequest) {
         continue
       }
 
+      // **집었다는 사실을 먼저 적는다.** 이 행은 이번 실행에서 기회를 썼으니
+      // 다음 실행에서는 아직 안 집힌 행들 뒤로 간다
+      // (`listPendingInboundEmails`의 정렬 근거는 그쪽 주석에 있다). 시도
+      // *전에* 적는 이유는, 이 배치가 플랫폼 시간 제한에 끊겨도 앞쪽 행들이
+      // 다음 실행의 배치를 똑같이 다시 차지하면 안 되기 때문이다.
+      await markBodyFetchAttempted(String(row.id))
+
       // ingestInboundEmail은 던지지 않는다 — 실패는 상태로 남는다.
       await ingestInboundEmail(String(row.resend_email_id), String(row.id))
-      filled += 1
+      attempted += 1
     }
 
     return ApiSuccess.ok({
       pending_before: pending.length,
-      refetched: filled,
+      // 재시도를 **건 수**다. `ingestInboundEmail`은 실패해도 던지지 않고
+      // 상태로만 남기므로, 이 숫자는 성공 건수가 아니다.
+      refetched: attempted,
       abandoned,
     }).toNextResponse()
   } catch (error) {

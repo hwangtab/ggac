@@ -279,18 +279,43 @@ export async function appendThreadReference(id: string, messageId: string): Prom
 }
 
 /**
- * 본문·첨부를 아직 당겨오지 못한 메일. **오래된 순**으로 `limit`만큼 준다.
+ * 이번 실행이 이 행을 집었다고 적는다. **`updated_at`만 민다.**
  *
- * 관리자 목록(`listInboundEmails`)과 반대다 — 일부러 그렇다. 유일한
- * 프로덕션 호출자는 백필 크론(`/api/internal/mailbox/backfill`)이고, 그
- * 크론은 30일을 넘긴 pending 행을 `markBodyFetchFailed`로 포기 표시한다.
- * 최신순으로 주면 pending 백로그가 배치 크기(`BATCH_SIZE`)를 넘어 지속될 때
- * 오래된 행이 정렬 아래로 가라앉아 **다시는 선택되지 않는다** — 매 실행이
- * 최근 것만 집고 끝나 버려서, 30일 컷오프가 필요한 바로 그 행에는 영영 닿지
- * 못하고 컷오프 로직이 죽은 코드가 된다. 오래된 순이면 컷오프 대상이 배치
- * 앞에 자연히 오고, 밀린 것부터 소진된다.
+ * 전용 칸(`attempt_count`·`last_attempted_at`)이 없어서 이미 있는
+ * `updated_at`을 pending 행에 한해 "마지막으로 시도한 시각"으로 쓴다. pending
+ * 행의 `updated_at`을 바꾸는 코드가 이것 말고는 없고(웹훅 삽입 시점 이후로는
+ * 아무도 건드리지 않는다), 화면도 이 값을 그리지 않아 겹치는 소비처가 없다.
  *
- * `id`(UUID)를 타이브레이커로 둔다 — `received_at`이 같은 행이 여러 개일
+ * 이 한 줄이 아래 `listPendingInboundEmails`의 굶김을 푼다 — 자세한 것은
+ * 그쪽 주석에 있다.
+ */
+export async function markBodyFetchAttempted(id: string): Promise<void> {
+  await db.update(inboundEmails).set({ updatedAt: new Date() }).where(eq(inboundEmails.id, id))
+}
+
+/**
+ * 본문·첨부를 아직 당겨오지 못한 메일. **오래 방치된 순**으로 `limit`만큼 준다.
+ *
+ * 정렬 1순위는 `updated_at`(= 백필이 마지막으로 시도한 시각,
+ * `markBodyFetchAttempted` 참고)이고, 2순위가 `received_at`이다. 한 번도 집힌
+ * 적 없는 행은 `updated_at`이 삽입 시각 그대로라 자연히 앞쪽에 오고, 그들끼리는
+ * 받은 순서대로 선다 — 즉 **아무도 실패하지 않는 한 옛 동작(오래된 순)과 같다.**
+ *
+ * 1순위를 `received_at`에서 옮긴 이유. 매번 실패하는 행 — 예를 들어 Resend가
+ * 그 메일만 500을 주는 경우 — 은 상태가 계속 'pending'이라 오래된 순 큐의 맨
+ * 앞에 눌러앉는다. 크론은 한 시간에 한 번 25칸을 집는데 그 칸을 같은 행들이
+ * 30일 동안(= Resend 보관 기한, 그때서야 `markBodyFetchFailed`로 포기한다)
+ * 계속 차지하면, 정작 다시 당기면 살아났을 **새 pending 메일이 그 뒤에서
+ * 굶는다.** 시도할 때마다 `updated_at`이 밀려 뒤로 가므로 이제는 한 바퀴씩
+ * 돌아가며 집힌다.
+ *
+ * 컷오프는 여전히 닿는다. 모든 pending 행이 라운드로빈으로 돌아오므로
+ * 30일을 넘긴 행도 (백로그 크기 ÷ 배치)번 실행 안에 반드시 한 번 집히고,
+ * 그때 `markBodyFetchFailed`가 큐에서 내보낸다. 최신순으로 주던 옛 설계가
+ * 컷오프를 사문화시켰던 것과는 다르다 — 그쪽은 오래된 행이 **영원히** 집히지
+ * 않았다.
+ *
+ * `id`(UUID)를 마지막 타이브레이커로 둔다 — 앞의 두 값이 같은 행이 여러 개일
  * 때도 실행마다 순서가 흔들리지 않게 하기 위해서다.
  */
 export async function listPendingInboundEmails(limit: number): Promise<Record<string, unknown>[]> {
@@ -298,7 +323,7 @@ export async function listPendingInboundEmails(limit: number): Promise<Record<st
     .select()
     .from(inboundEmails)
     .where(eq(inboundEmails.bodyFetchStatus, 'pending'))
-    .orderBy(asc(inboundEmails.receivedAt), asc(inboundEmails.id))
+    .orderBy(asc(inboundEmails.updatedAt), asc(inboundEmails.receivedAt), asc(inboundEmails.id))
     .limit(limit)
   return rows.map(rowToEmail)
 }

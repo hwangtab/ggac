@@ -22,19 +22,95 @@ const intlMiddleware = createIntlMiddleware(routing)
  * - `EXACT`는 정확히 그 경로만 통과한다. 접두사로 두면 `/api/health`가
  *   `/api/healthcheck`·`/api/health-report` 같은 **미래에 생길** 라우트까지
  *   조용히 동결에서 빼준다 — 예외는 최소 집합이어야 하므로 세그먼트에 못박는다.
- * - `PREFIX`는 하위 경로가 실제로 있는 것만 둔다. `/api/auth/`는
- *   `[...all]` 캐치올이라 하위 경로 전체가 인증 흐름이다.
+ * - `PREFIX`는 하위 경로가 실제로 있고 **그 전부를 열어도 되는 것만** 둔다.
  *
- * `/api/inbound/`와 `/api/internal/`도 같은 이유로 면제한다 — **유지보수
- * 우회가 아니다.** 이 두 접두사는 세션과 무관한 자체 게이트를 이미 갖고
- * 있다: 웹훅(`/api/inbound/resend`)은 Svix 서명이, 크론(`/api/internal/*`)은
+ * `/api/inbound/`와 `/api/internal/`은 그렇게 면제한다 — **유지보수 우회가
+ * 아니다.** 이 두 접두사는 세션과 무관한 자체 게이트를 이미 갖고 있다:
+ * 웹훅(`/api/inbound/resend`)은 Svix 서명이, 크론(`/api/internal/*`)은
  * `timingSafeEqual` 토큰이 각각 판정한다. 막으면 웹훅이 유지보수 시간만큼
  * 재시도를 태우다 결국 포기하고, 크론도 그동안 멈춘다 — 응답 코드로 "다시
  * 보내라"를 말하는 두 경로가, 정작 우리가 아무것도 처리할 생각이 없는 동안
  * 그 신호를 내보내는 셈이다.
  */
-const MAINTENANCE_EXEMPT_EXACT = ['/api/health']
-const MAINTENANCE_EXEMPT_PREFIXES = ['/api/auth/', '/api/inbound/', '/api/internal/']
+
+/**
+ * 유지보수 중에도 열어 두는 인증 경로. **접두사가 아니라 정확한 경로다.**
+ *
+ * 예전에는 `/api/auth/`를 통째로 면제했다. 의도는 "로그인을 막지 않는다"
+ * 하나였는데, 그 아래는 Better Auth 캐치올(`[...all]`)이라 쓰기
+ * 엔드포인트가 전부 함께 열렸다 — `/change-password`·`/change-email`·
+ * `/update-user`·`/delete-user`·`/reset-password`·`/send-verification-email`·
+ * `/revoke-sessions` 같은 것들이다. 유지보수는 **새 쓰기를 세우는** 스위치인데
+ * 계정에 관한 쓰기만 그 스위치 밖에 있었다.
+ *
+ * 다행히 쪼갤 수 있다. 캐치올이어도 Better Auth는 경로 뒷부분으로 엔드포인트를
+ * 고르므로(`sign-in/email`·`get-session`·`change-password`…) 미들웨어가 보는
+ * `pathname`만으로 구분된다. 그래서 반드시 열려 있어야 하는 넷만 남긴다:
+ *
+ * - `get-session` — **미들웨어 자신이 부른다**(`verifySessionFresh`가 이 주소로
+ *   fetch한다). 막으면 관리자 판정이 스스로 막혀 아무도 유지보수 벽을 넘지
+ *   못한다.
+ * - `verify-session` — 화면이 신원을 확인하는 읽기 전용 라우트.
+ * - `sign-in/email` — 로그인. 막으면 관리자가 자기 자신을 벽 안에 가둔다.
+ * - `sign-out`·`logout` — 나가는 길까지 막을 이유는 없다. 막아도 얻는 것이
+ *   없고, 반쯤 로그인된 상태로 사람을 붙들어 둘 뿐이다.
+ *
+ * 나머지는 유지보수 판정을 그대로 탄다 — 즉 관리자는 통과하고 그 밖은 503이다.
+ * `sign-up/email`은 유지보수와 무관하게 라우트가 항상 403으로 막는다.
+ */
+const MAINTENANCE_EXEMPT_AUTH_PATHS = [
+  '/api/auth/get-session',
+  '/api/auth/verify-session',
+  '/api/auth/sign-in/email',
+  '/api/auth/sign-out',
+  '/api/auth/logout',
+]
+
+const MAINTENANCE_EXEMPT_EXACT = ['/api/health', ...MAINTENANCE_EXEMPT_AUTH_PATHS]
+const MAINTENANCE_EXEMPT_PREFIXES = ['/api/inbound/', '/api/internal/']
+
+/**
+ * 정본 호스트. 검색엔진에 색인시킬 주소이고, `getSiteUrl()`이 canonical과
+ * hreflang에 박는 주소이기도 하다(`src/utils/site.ts`).
+ */
+const CANONICAL_HOST = 'ggac.kr'
+
+/**
+ * 정본으로 모을 별칭 호스트. **정확히 일치할 때만** 넘긴다.
+ *
+ * `.vercel.app`을 접미사로 잡으면 프리뷰 배포(`ggac-git-….vercel.app`)까지
+ * 전부 프로덕션으로 튕겨 나가 리뷰가 불가능해진다. 별칭은 손으로 적는다.
+ */
+const CANONICAL_HOST_ALIASES = new Set(['www.ggac.kr', 'ggac.vercel.app'])
+
+/**
+ * 별칭 호스트로 들어온 요청을 정본으로 308 넘긴다. 아니면 `null`.
+ *
+ * 두 별칭이 같은 사이트를 200으로 그대로 내주고 있었다. 검색엔진 입장에서는
+ * 같은 내용이 세 주소에 있고, 정작 페이지가 스스로 적는 canonical·hreflang은
+ * `ggac.kr`만 가리킨다 — 주소와 선언이 어긋나면 색인 신호가 갈린다.
+ *
+ * **`/api/*`에는 걸지 않는다**(호출부가 그 앞에서 갈린다). 그쪽을 두드리는
+ * 것은 사람이 아니라 GitHub Actions 크론과 외부 웹훅이고, 그들 다수는
+ * 리다이렉트를 따라가지 않아 여기서 같이 넘기면 조용히 끊긴다 — 실제로
+ * 지원사업·회비 워크플로 둘이 `https://www.ggac.kr/api/internal/...`로
+ * POST한다. 색인과도 무관한 경로다.
+ *
+ * next.config의 `redirects()`가 아니라 미들웨어에 두는 이유도 그 예외다.
+ * `redirects()`에서 `/api`만 빼려면 source에 부정 전방탐색 정규식을 써야 하고,
+ * 그 패턴이 루트(`/`)까지 무는지는 빌드를 돌려야 알 수 있다. 여기서는 이미
+ * `/api/` 분기가 위에서 끝나 있어 아무 패턴도 필요 없다.
+ */
+function canonicalHostRedirect(request: NextRequest): NextResponse | null {
+  const host = (request.headers.get('host') ?? '').toLowerCase().split(':')[0]
+  if (!CANONICAL_HOST_ALIASES.has(host)) return null
+
+  const url = new URL(request.url)
+  url.protocol = 'https:'
+  url.hostname = CANONICAL_HOST
+  url.port = ''
+  return NextResponse.redirect(url, 308)
+}
 
 /**
  * **이미 움직인 돈을 마저 세우는 경로.** 유지보수는 새 행동을 멈추는
@@ -103,8 +179,10 @@ export async function middleware(request: NextRequest) {
   // API 라우트: 페이지 파이프라인(next-intl rewrite·CSP·handleAuth 리다이렉트)은
   // 타지 않는다. 유지보수 판정만 전담한다.
   if (pathname.startsWith('/api/')) {
-    // 로그인·세션 확인(/api/auth/*)과 헬스체크(/api/health)는 유지보수 여부와
-    // 무관하게 항상 통과한다 — 막으면 관리자가 스스로를 유지보수 벽에 가둔다.
+    // 로그인·세션 확인(MAINTENANCE_EXEMPT_AUTH_PATHS)과 헬스체크(/api/health)는
+    // 유지보수 여부와 무관하게 항상 통과한다 — 막으면 관리자가 스스로를
+    // 유지보수 벽에 가둔다. 그 밖의 `/api/auth/*`(비밀번호 변경·재설정·프로필
+    // 갱신·세션 폐기)는 새 쓰기이므로 아래 판정을 그대로 탄다.
     if (isMaintenanceExempt(pathname)) {
       return NextResponse.next()
     }
@@ -144,6 +222,11 @@ export async function middleware(request: NextRequest) {
 
     return res
   }
+
+  // 별칭 호스트(www·vercel.app)를 정본으로 모은다. 정적 파일 통과보다 **앞에**
+  // 둔다 — sitemap.xml·robots.txt도 정본 주소에서 나와야 한다.
+  const hostRedirect = canonicalHostRedirect(request)
+  if (hostRedirect) return hostRedirect
 
   // 정적 파일 및 Next.js 내부 경로 패스
   if (pathname.startsWith('/_next') || pathname.includes('.')) {

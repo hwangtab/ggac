@@ -136,6 +136,28 @@ test('pending 목록은 오래된 순이다 — 백필이 밀린 것부터 소�
   )
 })
 
+test('한 번 집힌 행은 아직 안 집힌 행 뒤로 간다 — 영구 실패가 배치를 독차지하지 못한다', async () => {
+  const { insertInboundEmail, listPendingInboundEmails, markBodyFetchAttempted } =
+    await loadFreshMailboxModule()
+  // 오래된 행이 매번 실패한다고 가정한다. 시도 표시를 하면 큐 뒤로 가야
+  // 새로 들어온 pending이 배치에 낄 수 있다.
+  const stuck = await insertInboundEmail(
+    sample({ received_at: new Date(Date.now() - 40 * 24 * 60 * 60 * 1000) })
+  )
+  const fresh = await insertInboundEmail(sample({ received_at: new Date() }))
+
+  const before = (await listPendingInboundEmails(50)).map(r => r.id)
+  assert.ok(before.indexOf(stuck.id) < before.indexOf(fresh.id), '처음에는 오래된 행이 앞이다')
+
+  await markBodyFetchAttempted(stuck.id)
+
+  const after = (await listPendingInboundEmails(50)).map(r => r.id)
+  assert.ok(
+    after.indexOf(fresh.id) < after.indexOf(stuck.id),
+    '시도한 행은 뒤로 가고 아직 안 집힌 행이 앞에 와야 한다'
+  )
+})
+
 test('상태 변경은 expected가 맞을 때만 먹는다', async () => {
   const { insertInboundEmail, updateInboundStatus } = await loadFreshMailboxModule()
   const row = await insertInboundEmail(sample())

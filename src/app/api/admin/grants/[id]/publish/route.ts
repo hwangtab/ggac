@@ -13,6 +13,7 @@ import { createBulkNotifications } from '@/db/queries/notifications'
 import { createPost } from '@/db/queries/posts'
 import { listProfiles } from '@/db/queries/profiles'
 import { getUserSettingsByUserIds } from '@/db/queries/settings'
+import { FEATURE_DISABLED_MESSAGES, isBoardEnabled } from '@/lib/features/settings'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { sendEmail } from '@/lib/mail/send'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
@@ -40,6 +41,17 @@ export const POST = defineApiRoute({
   handler: async ({ params, auth }) => {
     const id = String(params.id)
     const adminId = (auth as { user: { id: string } }).user.id
+
+    // 게시판 스위치를 먼저 본다. 발행은 `createPost`로 **새 게시글을 만드는**
+    // 동작이고, 기능 스위치 모듈은 "관리자도 걸린다"고 선언한다
+    // (`@/lib/features/settings` 파일 머리). 여기만 확인을 빼놓고 있었다 —
+    // 사무국이 게시판을 껐는데도 지원사업 발행은 계속 새 글을 올렸다.
+    //
+    // 선점(`claimGrantDigestForPublish`)보다 **앞에** 둔다. 뒤에 두면 막을
+    // 때마다 회차가 'publishing'에 갇힌다.
+    if ((await isBoardEnabled()) === false) {
+      throw ApiError.serviceUnavailable(FEATURE_DISABLED_MESSAGES.board)
+    }
 
     const digest = await getGrantDigestById(id)
     if (!digest) throw ApiError.notFound('회차를 찾을 수 없습니다.')

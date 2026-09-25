@@ -6,7 +6,7 @@ import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createSettingsAdminAuth } from '@/lib/server/settingsAdminAuth'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { logSecurityEvent } from '@/utils/security'
-import { refreshSettingsCache } from '@/utils/systemSettings'
+import { refreshSettingsCache, SETTINGS_CACHE_TTL_MS } from '@/utils/systemSettings'
 import { createLogger } from '@/utils/logger'
 import { listSystemSettings, updateSystemSetting } from '@/db/queries/settings'
 import { MAX_FEE_RATE_BP } from '@/lib/funding/feeRate'
@@ -430,10 +430,18 @@ export const PUT = defineApiRoute<Record<string, unknown>>({
       }
     }
 
-    // 설정 업데이트 성공 시 캐시 무효화
+    // 설정 업데이트 성공 시 캐시 무효화 — **이 인스턴스에서만** 즉시다.
+    // 다른 인스턴스는 각자의 TTL이 끝나야 갈아탄다(그 함수 주석 참고).
+    // 그래서 아래 응답 문구가 반영 시점을 함께 말한다.
     if (updateResults.length > 0) {
       refreshSettingsCache()
     }
+    const propagationNotice =
+      updateResults.length > 0
+        ? ` 이 요청을 처리한 인스턴스에서는 즉시 반영되고, 다른 인스턴스는 최대 ${Math.ceil(
+            SETTINGS_CACHE_TTL_MS / 60000
+          )}분 안에 반영됩니다.`
+        : ''
 
     // 보안 이벤트 로깅
     logSecurityEvent(
@@ -455,8 +463,8 @@ export const PUT = defineApiRoute<Record<string, unknown>>({
         errors: errorResults,
       },
       errorResults.length === 0
-        ? '설정이 성공적으로 업데이트되었습니다.'
-        : `일부 설정 업데이트에 실패했습니다. 성공: ${updateResults.length}, 실패: ${errorResults.length}`
+        ? `설정이 성공적으로 업데이트되었습니다.${propagationNotice}`
+        : `일부 설정 업데이트에 실패했습니다. 성공: ${updateResults.length}, 실패: ${errorResults.length}${propagationNotice}`
     )
   },
 })

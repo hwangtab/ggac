@@ -3667,7 +3667,13 @@ const sanitizesCspReportFields =
   /function getReportObject/.test(cspReportSource) &&
   /function sanitizeReportString/.test(cspReportSource) &&
   /function sanitizeReportNumber/.test(cspReportSource) &&
-  cspReportSource.includes("const cspReport = getReportObject(report?.['csp-report'])") &&
+  // 레거시(`report-uri`)와 Reporting API(`report-to`) **두 형식을 다** 꺼내야
+  // 한다. 예전 계약은 레거시 봉투만 읽으라고 요구했는데, 크롬은 이미 Reporting
+  // API 쪽으로 보내므로 그 계약 그대로면 CSP 감시가 신호를 하나도 못 받는다.
+  /function extractCspReports/.test(cspReportSource) &&
+  cspReportSource.includes("getReportObject(envelope['csp-report'])") &&
+  cspReportSource.includes("entry.type === 'csp-violation'") &&
+  /function toLegacyShape/.test(cspReportSource) &&
   /sanitizeReportString\(cspReport\[['"]document-uri['"]\]\)\.replace/.test(cspReportSource) &&
   /sanitizeReportString\(cspReport\[['"]blocked-uri['"]\]\)\.replace/.test(cspReportSource) &&
   /sanitizeReportNumber\(cspReport\[['"]line-number['"]\]\)/.test(cspReportSource) &&

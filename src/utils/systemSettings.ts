@@ -432,11 +432,43 @@ export async function isFeatureEnabled(
 }
 
 /**
- * 설정 캐시를 강제로 새로고침합니다
+ * 설정 캐시의 TTL. 다른 인스턴스가 갈아탈 때까지 걸리는 **최대** 시간이기도
+ * 하다 — 응답 문구가 이 값을 인용한다.
+ */
+export const SETTINGS_CACHE_TTL_MS = CACHE_DURATION
+
+/**
+ * 설정 캐시를 비운다. **이 함수를 실행한 인스턴스 하나에서만.**
+ *
+ * `cachedSettings`는 모듈 스코프 변수이고 서버리스 인스턴스는 메모리를
+ * 공유하지 않는다. 그래서 이 호출은 지금 이 요청을 처리한 인스턴스만
+ * 비우고, 다른 인스턴스는 각자의 TTL(`SETTINGS_CACHE_TTL_MS`)이 끝나야 새
+ * 값을 읽는다. Vercel에는 인스턴스끼리 신호를 주고받을 수단이 없으므로
+ * 이것을 전역 무효화로 만들 방법은 코드 한 줄에 없다 — 그러니 **부르는
+ * 쪽이 "전역으로 무효화했다"고 말하지 않게** 한다
+ * (`/api/admin/settings/cache` 참고).
  */
 export function refreshSettingsCache() {
   cachedSettings = null
   cacheTimestamp = 0
+}
+
+/**
+ * 이 인스턴스의 캐시 상태. **알 수 있는 것만** 돌려준다.
+ *
+ * 다른 인스턴스가 무엇을 들고 있는지는 여기서 알 수 없다. `cachedAt`은 이
+ * 인스턴스가 마지막으로 DB를 읽은 시각이고, 캐시가 비어 있으면 `null`이다.
+ */
+export function getSettingsCacheState(): {
+  cached: boolean
+  cachedAt: string | null
+  ttlMs: number
+} {
+  return {
+    cached: cachedSettings !== null,
+    cachedAt: cacheTimestamp > 0 ? new Date(cacheTimestamp).toISOString() : null,
+    ttlMs: SETTINGS_CACHE_TTL_MS,
+  }
 }
 
 /**
