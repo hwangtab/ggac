@@ -43,6 +43,43 @@ test('middleware.ts가 system_settings를 직접 조회하지 않는다(getSyste
   assert.match(src, /getSystemSettings/)
 })
 
+// -------------------------------------------------- 유지보수: 결제 확정은 통과
+
+test('유지보수 모드는 결제 승인(confirm) 라우트를 막지 않는다', async () => {
+  const src = readFileSync('src/middleware.ts', 'utf8')
+  // 토스 위젯에서 이미 승인한 사람의 요청이다 — 카드는 긁혔고 우리 쪽 승인만
+  // 남았다. 여기서 503을 주면 결제는 승인되지 않은 채 남고, 되돌리려면 사람이
+  // 손으로 취소를 걸어야 한다.
+  for (const route of [
+    '/api/funding/pledges/confirm',
+    '/api/tickets/confirm',
+    '/api/payments/dues/confirm',
+  ]) {
+    assert.ok(src.includes(`'${route}'`), `${route}가 면제 목록에 없다`)
+  }
+  // 면제 목록이 선언만 되고 판정에 쓰이지 않으면 아무것도 바뀌지 않는다.
+  assert.match(src, /PAYMENT_CONFIRM_EXEMPT_API\.includes\(pathname\)/)
+})
+
+test('승인을 부르는 성공 화면도 함께 통과한다(화면이 503이면 라우트를 연 의미가 없다)', async () => {
+  const src = readFileSync('src/middleware.ts', 'utf8')
+  for (const page of ['/funding/success', '/tickets/success', '/mypage/dues/success']) {
+    assert.ok(src.includes(`'${page}'`), `${page}가 면제 목록에 없다`)
+  }
+  // 페이지 쪽 유지보수 판정에 실제로 걸려 있어야 한다.
+  assert.match(src, /maintenanceMode && !PAYMENT_CONFIRM_EXEMPT_PAGES\.has\(pathname\)/)
+  // 로케일 접두사가 붙은 주소(`/en/funding/success`)도 같이 열려야 한다 —
+  // 영어로 후원한 사람만 결제를 잃으면 안 된다.
+  assert.match(src, /routing\.locales\.map/)
+})
+
+test('준비(prepare)와 새 후원·예매는 면제하지 않는다 — 그쪽이 막아야 할 새 행동이다', async () => {
+  const src = readFileSync('src/middleware.ts', 'utf8')
+  assert.ok(!src.includes("'/api/funding/pledges/prepare'"))
+  assert.ok(!src.includes("'/api/tickets/prepare'"))
+  assert.ok(!src.includes("'/api/payments/dues/prepare'"))
+})
+
 // ---------------------------------------------------------------- 실제 SQLite: 값 반영
 
 const DB_PATH = 'scripts/testing/.middleware-settings-test.db'

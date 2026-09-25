@@ -36,9 +36,47 @@ const intlMiddleware = createIntlMiddleware(routing)
 const MAINTENANCE_EXEMPT_EXACT = ['/api/health']
 const MAINTENANCE_EXEMPT_PREFIXES = ['/api/auth/', '/api/inbound/', '/api/internal/']
 
+/**
+ * **이미 움직인 돈을 마저 세우는 경로.** 유지보수는 새 행동을 멈추는
+ * 스위치이지, 진행 중인 결제를 버리는 스위치가 아니다.
+ *
+ * 토스 위젯에서 결제를 승인한 사람은 그 순간 카드가 이미 긁혔고, 우리 쪽
+ * 승인(`confirm`)이 끝나야 후원·예매·회비가 성립한다. 그 사이에 사무국이
+ * 유지보수를 켜면 리다이렉트로 돌아온 요청이 503을 받고, 결제는 승인되지
+ * 않은 채 남는다 — 후원자는 돈이 빠져나간 화면과 "점검 중" 안내를 동시에
+ * 보게 되고, 되돌리려면 사람이 손으로 취소를 걸어야 한다.
+ *
+ * **우회가 아니다.** 셋 다 세션과 별개의 자체 게이트를 이미 갖고 있다:
+ * `orderId`·`paymentKey`·대상 id 세 값이 DB의 같은 행에서 짝이 맞아야 하고,
+ * 금액까지 대조한 뒤에야 승인이 나간다(회비는 그 위에
+ * `requireActiveMember`가 더 걸린다). 준비(`prepare`)와 새 후원·예매는
+ * 면제하지 않는다 — 그쪽이 막아야 할 "새 행동"이다.
+ *
+ * 화면도 함께 연다. 승인을 부르는 것은 토스가 돌려보낸 성공 화면이라
+ * (`.../success/page.tsx`가 `useEffect`에서 confirm을 호출한다) 화면이 503이면
+ * 라우트를 열어 둔 의미가 없다.
+ */
+const PAYMENT_CONFIRM_EXEMPT_API = [
+  '/api/funding/pledges/confirm',
+  '/api/tickets/confirm',
+  '/api/payments/dues/confirm',
+]
+/**
+ * `localePrefix: 'as-needed'`라 한국어는 접두사가 없고 영어는 `/en/...`이
+ * 붙는다. 목록은 접두사 없는 형태 하나만 적고 로케일 변형을 여기서 펼친다 —
+ * 로케일이 늘어도 목록을 다시 적지 않는다.
+ */
+const PAYMENT_CONFIRM_EXEMPT_PAGES = new Set(
+  ['/funding/success', '/tickets/success', '/mypage/dues/success'].flatMap(path => [
+    path,
+    ...routing.locales.map(locale => `/${locale}${path}`),
+  ])
+)
+
 function isMaintenanceExempt(pathname: string): boolean {
   return (
     MAINTENANCE_EXEMPT_EXACT.includes(pathname) ||
+    PAYMENT_CONFIRM_EXEMPT_API.includes(pathname) ||
     MAINTENANCE_EXEMPT_PREFIXES.some(p => pathname.startsWith(p))
   )
 }
@@ -168,7 +206,7 @@ export async function middleware(request: NextRequest) {
     return copyResponseCookies(res, authResult.response)
   }
 
-  if (systemSettings?.maintenanceMode) {
+  if (systemSettings?.maintenanceMode && !PAYMENT_CONFIRM_EXEMPT_PAGES.has(pathname)) {
     let isAdmin = authResult.profile?.is_admin === true
 
     // 유지보수 화이트리스트는 미들웨어 신원이 유일한 종단 게이트다 — 이 503은 여기서
