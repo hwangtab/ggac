@@ -325,3 +325,94 @@ test('주문 조회는 주문번호만 보므로 종류를 걸러 주지 않는�
   assert.ok(fn, 'getPaymentByOrderId를 찾지 못했다')
   assert.doesNotMatch(fn[0], /kind/)
 })
+
+// ------------------------------------------------ 유실된 승인 되찾기 (대사)
+
+/**
+ * 승인 호출 **전에** 결제 식별자를 새기는 것이 이 묶음의 전부다.
+ *
+ * 토스는 승인해 카드를 긁었는데 우리 응답이 유실되면(타임아웃·인스턴스 종료)
+ * 원장에 식별자가 없다. 대사는 그 식별자로 토스에 물어보므로, 없으면 "결제가
+ * 없다"로 오판해 선점을 만료시키거나 회비를 미납으로 남긴다 — 어느 쪽이든
+ * 돈은 나갔는데 아무도 모르는 상태다. 후원 확정이 먼저 이 순서를 지켰고
+ * (`/api/funding/pledges/confirm`), 예매·조합비는 지키지 않고 있었다.
+ */
+
+const TICKETS_EXPIRE = readFileSync('src/app/api/internal/tickets/expire/route.ts', 'utf8')
+const DUES_EXPIRE = readFileSync('src/app/api/internal/dues/expire/route.ts', 'utf8')
+const VERCEL = JSON.parse(readFileSync('vercel.json', 'utf8'))
+
+for (const [name, source] of [
+  ['예매 확정', TICKET_CONFIRM],
+  ['조합비 확정', CONFIRM],
+]) {
+  test(`${name}은 승인 호출 전에 결제 식별자를 원장에 새긴다`, () => {
+    const recordAt = source.indexOf('recordPaymentKey(orderId, paymentKey)')
+    const approveAt = source.indexOf('confirmPayment(')
+    assert.ok(recordAt > 0, 'recordPaymentKey 호출을 찾지 못했다')
+    assert.ok(approveAt > 0, 'confirmPayment 호출을 찾지 못했다')
+    assert.ok(recordAt < approveAt, '식별자 기록이 승인 호출보다 먼저여야 한다')
+  })
+}
+
+test('이미 처리된 결제를 거절로 다루지 않는다 — 좌석을 돌려주지 않는다', () => {
+  // `ALREADY_PROCESSED_PAYMENT`는 돈이 **이미 승인된** 상태에서 온다. 다른
+  // 거절과 같이 취급해 예매를 취소하면 관객은 돈을 내고 표를 잃는다.
+  const block = TICKET_CONFIRM.match(
+    /error\.code === 'ALREADY_PROCESSED_PAYMENT'\)\s*\{([\s\S]*?)\n      \} else if/
+  )
+  assert.ok(block, 'ALREADY_PROCESSED_PAYMENT 분기를 찾지 못했다')
+  assert.match(block[1], /lookupPayment\(/, '정말 우리 결제가 맞는지 다시 물어야 한다')
+  assert.doesNotMatch(block[1], /cancelReservation|markPaymentFailed/)
+})
+
+test('선점이 만료된 뒤 돌아온 결제는 승인 요청을 보내기 전에 막는다', () => {
+  // 돈이 나간 뒤에 알아봐야 환불밖에 할 수 있는 일이 없다.
+  const holdAt = TICKET_CONFIRM.indexOf('holdExpiresAt.getTime() <= Date.now()')
+  const approveAt = TICKET_CONFIRM.indexOf('confirmPayment(')
+  assert.ok(holdAt > 0, '선점 만료 확인을 찾지 못했다')
+  assert.ok(holdAt < approveAt, '선점 확인이 토스 승인보다 먼저여야 한다')
+})
+
+test('조합원 전용 티켓은 로그인만으로 팔지 않는다', () => {
+  // 로그인 여부만 보면 가입 신청만 해 둔 계정과 정지된 계정이 조합원가를 산다.
+  assert.match(TICKET_PREPARE, /members_only/)
+  assert.match(TICKET_PREPARE, /isApprovedActive\(profile\)/)
+})
+
+test('선점 상한을 라우트가 아니라 트랜잭션이 건다', () => {
+  // 빈도 제한은 "얼마나 자주 묻는가"이고 상한은 "동시에 몇 개를 쥐고 있는가"다.
+  // 재고를 지키는 것은 뒤쪽이고, 그것은 DB 트랜잭션 안에서만 정확하다.
+  assert.match(TICKET_PREPARE, /TooManyPendingHoldsError/)
+  const TICKETING = readFileSync('src/db/queries/ticketing.ts', 'utf8')
+  assert.match(TICKETING, /MAX_HOLDS_PER_TICKET_TYPE/)
+  assert.match(TICKETING, /MAX_HOLDS_PER_SHOW/)
+})
+
+test('대사 크론 둘 다 CRON_SECRET으로 닫혀 있다', () => {
+  for (const [name, source] of [
+    ['예매', TICKETS_EXPIRE],
+    ['조합비', DUES_EXPIRE],
+  ]) {
+    assert.match(source, /process\.env\.CRON_SECRET/, `${name} 크론에 인증이 없다`)
+    assert.match(source, /timingSafeEqual/, `${name} 크론이 토큰을 타이밍 안전 비교하지 않는다`)
+    assert.match(source, /expected\.length === 0\) return false/, `${name} 크론이 fail-open이다`)
+  }
+})
+
+test('예매 대사는 만료시키기 전에 토스에 묻고, 버려진 선점만 한꺼번에 정리한다', () => {
+  assert.match(TICKETS_EXPIRE, /runExpiryGuard/)
+  assert.match(TICKETS_EXPIRE, /createOrderPaymentLookup/)
+  assert.match(TICKETS_EXPIRE, /expireStaleHolds/)
+  // 승격에 실패하면(자리가 팔렸으면) 반드시 환불한다 — 돈만 받는 것이 최악이다.
+  assert.match(TICKETS_EXPIRE, /cancelPayment\(/)
+})
+
+test('두 크론이 vercel.json에 10분 간격으로 등록돼 있다', () => {
+  // 라우트만 있고 등록이 없으면 아무도 부르지 않는다 — 안전망이 없는 것과 같다.
+  for (const path of ['/api/internal/tickets/expire', '/api/internal/dues/expire']) {
+    const cron = VERCEL.crons.find(c => c.path === path)
+    assert.ok(cron, `${path} 크론이 등록되지 않았다`)
+    assert.equal(cron.schedule, '*/10 * * * *')
+  }
+})

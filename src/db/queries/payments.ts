@@ -10,7 +10,7 @@
  * 토스는 웹훅을 최대 7번 재전송하므로 이건 예외 상황이 아니라 일상이다.
  */
 
-import { and, asc, desc, eq, isNull, lt, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, isNotNull, isNull, lt, lte, sql } from 'drizzle-orm'
 
 import { db } from '../client.ts'
 import { membershipDues, payments } from '../schema/index.ts'
@@ -337,6 +337,81 @@ export async function listUnpaidDues(billingMonth: string): Promise<Record<strin
     .where(and(eq(membershipDues.billingMonth, billingMonth), eq(membershipDues.status, 'unpaid')))
     .orderBy(asc(membershipDues.createdAt))
   return rows.map(rowToDues)
+}
+
+/**
+ * 승인 요청이 나간 흔적(결제 식별자)이 있는데도 아직 `pending`인 결제.
+ *
+ * 확정 라우트는 토스 승인 호출 **전에** `recordPaymentKey`로 식별자를 새긴다.
+ * 그래서 식별자가 있는데 상태가 `pending`이라는 것은 **승인 결과를 우리가 알지
+ * 못한 채 끝났다**는 뜻이다 — 브라우저가 닫혔거나 함수가 죽었다. 카드는 긁혔을
+ * 수 있고, 그대로 두면 아무도 그 사실을 모른다. 대사 크론이 이 목록을 받아 한
+ * 건씩 토스에 물어 확정하거나 실패로 끝낸다.
+ *
+ * 식별자가 없는 대기 행은 **고르지 않는다.** 결제창을 열어 두고 아직 결제 중인
+ * 사람이 그 상태이므로, 건드리면 진행 중인 결제를 실패로 만든다.
+ *
+ * 늦게 만들어진 것부터 본다 — 답을 못 내는 낡은 행이 창(기본 100건)을 먹어
+ * 새 건이 밀려나지 않게 하는 차례다.
+ *
+ * @param olderThanMs 이만큼 지난 행만. 결제가 진행 중일 수 있는 동안은 두고 본다.
+ */
+export async function listStalePendingPayments(input: {
+  kind: PaymentKind
+  olderThanMs: number
+  now?: Date
+  limit?: number
+}): Promise<Record<string, unknown>[]> {
+  const now = input.now ?? new Date()
+  const cutoff = new Date(now.getTime() - input.olderThanMs)
+  const rows = await db
+    .select()
+    .from(payments)
+    .where(
+      and(
+        eq(payments.kind, input.kind),
+        eq(payments.status, 'pending'),
+        isNotNull(payments.paymentKey),
+        lte(payments.createdAt, cutoff)
+      )
+    )
+    .orderBy(desc(payments.createdAt))
+    .limit(input.limit ?? 100)
+  return rows.map(rowToPayment)
+}
+
+/** 대사가 이만큼 지나도 풀지 못했으면 사람이 봐야 한다고 본다. */
+export const STUCK_PAYMENT_AGE_MS = 24 * 60 * 60 * 1000
+
+/**
+ * 하루가 지나도 대사가 풀지 못한 대기 결제. 사람에게 넘길 목록이다.
+ *
+ * 대사는 10분마다 돈다. 하루가 지나도 그대로라는 것은 토스 조회가 계속
+ * 실패하거나 금액이 어긋난다는 뜻이고, 그중에는 **승인된 돈이 붙어 있는데
+ * 납부가 없는** 건이 섞일 수 있다. 자동으로 정할 수 없다.
+ */
+export async function listStuckPendingPayments(input: {
+  kind: PaymentKind
+  now?: Date
+  olderThanMs?: number
+  limit?: number
+}): Promise<Record<string, unknown>[]> {
+  const now = input.now ?? new Date()
+  const cutoff = new Date(now.getTime() - (input.olderThanMs ?? STUCK_PAYMENT_AGE_MS))
+  const rows = await db
+    .select()
+    .from(payments)
+    .where(
+      and(
+        eq(payments.kind, input.kind),
+        eq(payments.status, 'pending'),
+        isNotNull(payments.paymentKey),
+        lte(payments.createdAt, cutoff)
+      )
+    )
+    .orderBy(asc(payments.createdAt))
+    .limit(input.limit ?? 100)
+  return rows.map(rowToPayment)
 }
 
 /** 한 회원의 결제 내역. 마이페이지 영수증 목록에 쓴다. */
