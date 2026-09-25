@@ -389,3 +389,48 @@ test('이미 삭제된 빌링키는 성공으로 다룬다', async () => {
 
   assert.equal(await deleteBillingKey('bk_gone', { secretKey: SECRET, fetchImpl }), true)
 })
+
+test('멱등 요청 처리 중(409)은 거절이 아니라 판단 불가다', async () => {
+  // 성공 주소에서 새로고침하거나 버튼을 두 번 누르면, 같은 멱등키의 앞선
+  // 승인이 아직 처리 중이라 이 409가 온다. 이걸 `TossApiError`로 올리면
+  // 호출부가 앞 요청이 승인을 끝내는 사이에 원장을 실패로 적고 선점을
+  // 취소해, 돈은 승인됐는데 후원·예매는 사라진다.
+  const fetchImpl = recordingFetch(() =>
+    jsonResponse(409, {
+      code: 'IDEMPOTENT_REQUEST_PROCESSING',
+      message: '멱등키를 사용한 요청을 처리중입니다.',
+    })
+  )
+
+  await assert.rejects(
+    confirmPayment(
+      { paymentKey: 'pk_dup', orderId: 'ord_dup', amount: 30000 },
+      { secretKey: SECRET, fetchImpl }
+    ),
+    error => {
+      assert.ok(error instanceof TossLookupError, `TossLookupError여야 한다: ${error.name}`)
+      assert.ok(!(error instanceof TossApiError))
+      return true
+    }
+  )
+})
+
+test('같은 409라도 다른 코드는 거절로 다룬다', async () => {
+  // 409 전부를 판단 불가로 뭉개면 진짜 거절까지 "확인 중"으로 남아 원장이
+  // 영영 pending에 머문다. 판단 불가는 멱등 처리 중인 그 코드 하나뿐이다.
+  const fetchImpl = recordingFetch(() =>
+    jsonResponse(409, { code: 'ALREADY_PROCESSED_PAYMENT', message: '이미 처리된 결제 입니다.' })
+  )
+
+  await assert.rejects(
+    confirmPayment(
+      { paymentKey: 'pk_done', orderId: 'ord_done', amount: 30000 },
+      { secretKey: SECRET, fetchImpl }
+    ),
+    error => {
+      assert.ok(error instanceof TossApiError)
+      assert.equal(error.code, 'ALREADY_PROCESSED_PAYMENT')
+      return true
+    }
+  )
+})
