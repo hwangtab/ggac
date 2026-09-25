@@ -53,6 +53,11 @@ interface Payload {
   is_stale: boolean
   /** 개설자 프로필에 은행·계좌번호가 둘 다 있는가. 정리·지급 응답에도 실린다. */
   payout_account_registered: boolean
+  /**
+   * 정리·지급 때 토스 대조를 건너뛰었다면 그 사유 한 줄, 아니면 `null`.
+   * 조회(GET) 응답에는 없다 — 대조는 쓰는 자리에서만 돈다.
+   */
+  reconcile_skipped?: string | null
 }
 
 /** 조회 응답에만 실리는 계좌. 정리·지급 응답에는 없다(서버 주석 참고). */
@@ -233,6 +238,12 @@ export default function SettlementPanel({
       </p>
       {error ? <p className="mt-2 text-sm text-red-700">{error}</p> : null}
       {notice ? <p className="mt-2 text-sm text-green-700">{notice}</p> : null}
+
+      {payload?.reconcile_skipped ? (
+        <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+          {payload.reconcile_skipped}
+        </p>
+      ) : null}
 
       {payload?.is_stale ? (
         <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">

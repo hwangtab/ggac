@@ -189,6 +189,23 @@ async function recordPayoutAccountView(
 }
 
 /**
+ * 대조를 건너뛰었다는 사실을 응답이 들고 갈 문장.
+ *
+ * `NEXT_PUBLIC_PAYMENT_MODE`가 `toss`가 아니면 대조할 상대가 없다. 그래도
+ * 정산 자체는 되므로(사무국의 뒷정리는 스위치를 보지 않는다) 숫자는 저장되고,
+ * 화면에는 평소와 똑같이 생긴 정산서가 뜬다 — 무엇을 확인하지 못한 숫자인지
+ * 적혀 있지 않으면 사무국은 대조된 값으로 읽는다.
+ */
+const RECONCILE_SKIPPED_NOTICE =
+  '결제 모드가 토스가 아니어서 정산 전 토스 대사를 건너뛰었습니다. 이 금액은 우리 원장만으로 센 값이라, 토스 콘솔에서 나간 환불이 있다면 반영되지 않았습니다.'
+
+/**
+ * 대조의 결말. 막혔으면 그 응답을 그대로 내보내고, 지나갔으면 건너뛴 사유
+ * (없으면 `null`)를 응답에 실어 보낸다.
+ */
+type ReconcileGate = { ok: false; response: NextResponse } | { ok: true; skipped: string | null }
+
+/**
  * 셈을 굳히기 **전에** 토스와 대조한다. 저장소에 토스 웹훅이 없어서, 콘솔에서
  * 취소된 결제는 원장에 닿지 않은 채 총 모금액으로 계속 세인다
  * (`@/lib/server/settlementReconcile` 머리 주석).
@@ -197,16 +214,24 @@ async function recordPayoutAccountView(
  * 정리한 뒤 콘솔에서 환불이 나간 캠페인은 지급 버튼이 낡은 금액을 그대로
  * 굳힌다 — 그 숫자는 그 뒤로 움직이지 않는다.
  *
- * 돌려주는 값이 `null`이 아니면 **그 응답을 그대로 내보내고 아무것도
- * 저장하지 않는다.** 없는 정산서가 틀린 정산서보다 낫다.
+ * `ok: false`면 **그 응답을 그대로 내보내고 아무것도 저장하지 않는다.**
+ * 없는 정산서가 틀린 정산서보다 낫다.
  */
 async function reconcileBeforeFreezing(
   campaignId: string,
   actorId: string
-): Promise<NextResponse | null> {
+): Promise<ReconcileGate> {
   // 스위치를 내린 날은 토스 설정 자체가 없을 수 있다. 사무국의 뒷정리는
   // 스위치를 보지 않으므로(아래 라우트 주석) 대조만 건너뛴다.
-  if (!isPaymentEnabled()) return null
+  //
+  // **건너뛴 것을 말한다.** 예전에는 조용히 지나가서, 화면에는 평소와 똑같이
+  // 생긴 정산서가 떴다 — 사무국은 토스와 대조된 숫자라고 믿을 수밖에 없다.
+  // 저장을 막지는 않는다(막으면 뒷정리가 통째로 멈춘다). 대신 응답이 무엇을
+  // 확인하지 못한 숫자인지 함께 들고 간다.
+  if (!isPaymentEnabled()) {
+    log.warn('결제 모드가 토스가 아니어서 정산 전 토스 대사를 건너뜀', { campaignId })
+    return { ok: true, skipped: RECONCILE_SKIPPED_NOTICE }
+  }
   const { secretKey } = getServerPaymentConfig()
   const reconciled = await reconcileCampaignWithToss({ campaignId, secretKey, actorId })
   if (reconciled.ok === false) {
@@ -225,15 +250,21 @@ async function reconcileBeforeFreezing(
         { campaignId, pledgeCode: reconciled.pledge_code },
         'high'
       )
-      return ApiError.conflict(
-        `후원 ${reconciled.pledge_code}의 결제를 토스가 모른다고 답했습니다. 우리 원장은 결제 완료로 들고 있는데 토스에는 그 결제가 없습니다 — 다시 눌러도 같은 답이 오므로, 토스 거래 내역에서 이 후원의 결제를 먼저 확인해 주세요. 실제로 결제가 없었다면 그 후원을 환불 화면에서 정리한 뒤에 다시 정산할 수 있습니다. 지금은 정산서를 저장하지 않았습니다.`
-      ).toNextResponse()
+      return {
+        ok: false,
+        response: ApiError.conflict(
+          `후원 ${reconciled.pledge_code}의 결제를 토스가 모른다고 답했습니다. 우리 원장은 결제 완료로 들고 있는데 토스에는 그 결제가 없습니다 — 다시 눌러도 같은 답이 오므로, 토스 거래 내역에서 이 후원의 결제를 먼저 확인해 주세요. 실제로 결제가 없었다면 그 후원을 환불 화면에서 정리한 뒤에 다시 정산할 수 있습니다. 지금은 정산서를 저장하지 않았습니다.`
+        ).toNextResponse(),
+      }
     }
-    return ApiError.serviceUnavailable(
+    return {
+      ok: false,
+      response: ApiError.serviceUnavailable(
       reconciled.reason === 'partial'
         ? `후원 ${reconciled.pledge_code}이(가) 토스에서 부분 취소돼 있습니다. (${reconciled.message}) 사무국이 먼저 처리한 뒤 다시 정리해 주세요. 지금은 정산서를 저장하지 않았습니다.`
         : `후원 ${reconciled.pledge_code}의 결제 상태를 토스에서 확인하지 못했습니다. (${reconciled.message}) 틀린 금액이 굳지 않도록 정산서를 저장하지 않았습니다. 잠시 뒤 다시 눌러 주세요.`
-    ).toNextResponse()
+      ).toNextResponse(),
+    }
   }
   if (reconciled.reconciled.length > 0) {
     log.warn('토스 콘솔 환불을 원장에 들여왔다', {
@@ -241,7 +272,7 @@ async function reconcileBeforeFreezing(
       count: reconciled.reconciled.length,
     })
   }
-  return null
+  return { ok: true, skipped: null }
 }
 
 export async function GET(request: NextRequest, { params }: Ctx) {
@@ -311,8 +342,8 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     // 콘솔에서 취소된 결제는 원장에 닿지 않은 채 총 모금액으로 계속 세인다
     // (`@/lib/server/settlementReconcile` 머리 주석). 여기서 들여오지 않으면
     // 이미 돌려준 돈까지 지급하라는 정산서가 굳는다.
-    const reconcileFailure = await reconcileBeforeFreezing(id, auth.user.id)
-    if (reconcileFailure) return reconcileFailure
+    const reconcile = await reconcileBeforeFreezing(id, auth.user.id)
+    if (reconcile.ok === false) return reconcile.response
 
     const result = await prepareSettlement({
       campaign_id: id,
@@ -387,6 +418,9 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     return ApiSuccess.ok({
       ...(await settlementPayload(campaign, account)),
       campaign: { id: campaign.id, title: campaign.title, status: campaign.status },
+      // 대조를 건너뛴 채 저장했으면 그 사실이 응답에 적혀 나간다. 평소에는
+      // `null`이라 화면이 아무것도 그리지 않는다.
+      reconcile_skipped: reconcile.skipped,
     }).toNextResponse()
   } catch (error) {
     log.error('정산 내역 정리 실패:', error)
@@ -427,8 +461,8 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
     // 나갔으면 지금 굳는 금액이 이미 틀렸으므로, 여기서도 먼저 토스와
     // 대조한다. 대조로 환불이 들어오면 아래 `markSettlementPaid`의 기존
     // 409(정산 근거가 낡았다)가 그대로 걸린다 — 그쪽이 다시 정리하라고 말한다.
-    const reconcileFailure = await reconcileBeforeFreezing(id, auth.user.id)
-    if (reconcileFailure) return reconcileFailure
+    const reconcile = await reconcileBeforeFreezing(id, auth.user.id)
+    if (reconcile.ok === false) return reconcile.response
 
     const result = await markSettlementPaid(id)
     if (result.ok === false) {
@@ -497,6 +531,9 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
     return ApiSuccess.ok({
       ...(await settlementPayload(campaign, account)),
       campaign: { id: campaign.id, title: campaign.title, status: campaign.status },
+      // 대조를 건너뛴 채 저장했으면 그 사실이 응답에 적혀 나간다. 평소에는
+      // `null`이라 화면이 아무것도 그리지 않는다.
+      reconcile_skipped: reconcile.skipped,
     }).toNextResponse()
   } catch (error) {
     log.error('정산 지급 처리 실패:', error)

@@ -619,6 +619,28 @@ test('정리와 지급 기록 둘 다 굳히기 전에 토스와 대조한다', 
   assert.match(patch, /후원 환불이 있었습니다/)
 })
 
+/**
+ * 결제 모드가 토스가 아니면 대조할 상대가 없어 건너뛴다. 예전에는 조용히
+ * 지나가서, 화면에는 평소와 똑같이 생긴 정산서가 떴다 — 사무국은 대조된
+ * 숫자로 읽는다.
+ */
+test('대조를 건너뛴 정산은 그 사실을 응답에 싣는다', () => {
+  const src = routeSource('admin/funding/campaigns/[id]/settlement/route.ts')
+  assert.match(src, /RECONCILE_SKIPPED_NOTICE/)
+  assert.match(src, /reconcile_skipped: reconcile\.skipped/)
+  // 건너뛴 것은 실패가 아니다 — 저장은 그대로 되고 503으로 막지 않는다.
+  const helper = src.slice(src.indexOf('async function reconcileBeforeFreezing'))
+  const body = helper.slice(0, helper.indexOf('\n}\n'))
+  assert.match(body, /isPaymentEnabled\(\)/)
+  assert.match(body, /ok: true, skipped: RECONCILE_SKIPPED_NOTICE/)
+  // 화면도 그 문장을 그대로 보여 준다.
+  const panel = readFileSync(
+    new URL('../../src/app/[locale]/admin/funding/SettlementPanel.tsx', import.meta.url),
+    'utf8'
+  )
+  assert.match(panel, /reconcile_skipped/)
+})
+
 test('개설자 대시보드 라우트가 정산 내역을 함께 준다', () => {
   const src = routeSource('mypage/funding/campaigns/[id]/route.ts')
   assert.match(src, /getSettlementByCampaign\(/)

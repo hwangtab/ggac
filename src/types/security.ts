@@ -215,6 +215,10 @@ export type SecurityEventType =
   // 지급된 정산서는 원장과 대조하지 않으므로(`isBasisStale`) 환불 전 숫자가
   // 그대로 굳는다 — 좁은 창이지만 조용히 지나가게 두지 않는다.
   | 'FUNDING_OFFICE_REFUND_AFTER_PAYOUT'
+  // 정산 전 토스 대사에서 토스가 "그런 결제가 없다"고 답한 경우. 우리 원장은
+  // 결제 완료로 들고 있는데 상대는 모른다 — 다시 물어도 답이 같으므로, 사람이
+  // 그 한 건을 결말 내기 전까지 이 캠페인의 정산은 앞으로 나아가지 못한다.
+  | 'FUNDING_SETTLEMENT_RECONCILE_PAYMENT_MISSING'
   // 사무국이 발송 표시를 되돌렸는데 그 기록이 실패한 경우. 되돌리기는 자동
   // 환불을 다시 여는 동작이라, 기록이 없으면 "왜 열렸는지" 답할 길이 없다.
   | 'FUNDING_FULFILLMENT_REVERSAL_AUDIT_FAILED'
