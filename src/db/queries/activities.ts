@@ -356,6 +356,12 @@ export interface ListActivitiesPaginatedFilter {
   userId?: string | null
   actionType?: ActivityActionTypeValue | null
   targetType?: ActivityTargetTypeValue | null
+  /**
+   * 대상 하나로 좁힌다 — "이 캠페인에서 무슨 일이 있었는가"를 묻는 화면이
+   * 쓴다(`/api/admin/funding/campaigns/[id]/fulfillment`). `targetType`과 함께
+   * 걸어야 뜻이 분명하다: id는 표마다 따로 돌기 때문이다.
+   */
+  targetId?: string | null
   startDate: Date
   /** 1부터. */
   page: number
@@ -381,6 +387,7 @@ export async function listActivitiesWithProfile(
   if (filter.userId) conditions.push(eq(userActivities.userId, filter.userId))
   if (filter.actionType) conditions.push(eq(userActivities.actionType, filter.actionType))
   if (filter.targetType) conditions.push(eq(userActivities.targetType, filter.targetType))
+  if (filter.targetId) conditions.push(eq(userActivities.targetId, filter.targetId))
   const where = and(...conditions) as SQL
 
   const offset = Math.max(0, (filter.page - 1) * filter.limit)
