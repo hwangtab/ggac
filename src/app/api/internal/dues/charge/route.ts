@@ -34,6 +34,7 @@ import {
 } from '@/lib/payments/toss/config'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger, maskId } from '@/utils/logger'
+import { logSecurityEvent } from '@/utils/security'
 
 const log = createLogger('api/internal/dues/charge')
 
@@ -106,7 +107,18 @@ export async function POST(request: NextRequest) {
     log.info('자동결제 실행 완료', { billingMonth, ...result })
     return ApiSuccess.ok({ billingMonth, ...result }).toNextResponse()
   } catch (error) {
+    // Vercel 크론은 실패를 알리지 않는다. 한 달치 청구가 통째로 빠지는 고장을
+    // 로그 한 줄로 두지 않고 보안 로그의 'high' 경로까지 올린다.
     log.error('자동결제 실행 실패:', error)
+    try {
+      logSecurityEvent(
+        'DUES_CHARGE_CRON_FAILED',
+        { error: error instanceof Error ? error.message : String(error) },
+        'high'
+      )
+    } catch {
+      // 알림 실패가 응답을 막지 않는다.
+    }
     return ApiError.internalServerError('자동결제를 실행하지 못했습니다.').toNextResponse()
   }
 }

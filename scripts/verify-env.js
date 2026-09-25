@@ -67,6 +67,11 @@ const productionRequiredValues = {
 }
 
 const optionalEnvVars = [
+  // 심각도 'high' 보안 이벤트가 사람에게 닿는 유일한 외부 통로다(Slack·Discord
+  // 호환 페이로드). 비어 있으면 Vercel 런타임 로그의 stderr 한 줄이 전부다 —
+  // 깨진 크론·정체된 결제 선점·레이트리밋 메모리 폴백이 모두 그 한 줄로만
+  // 남는다. 없어도 앱은 돈다.
+  'SECURITY_ALERT_WEBHOOK_URL',
   'UPSTASH_REDIS_REST_URL',
   'UPSTASH_REDIS_REST_TOKEN',
   'KV_REST_API_URL',

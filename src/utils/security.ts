@@ -339,6 +339,33 @@ function sanitizeSecurityEventDetails(details: SecurityEventContext): SecurityEv
   )
 }
 
+/** 외부 알림 한 번이 함수 수명을 붙들지 않게 하는 상한. */
+const SECURITY_POST_TIMEOUT_MS = 5000
+
+/**
+ * 외부 채널로 한 건 보낸다. **절대 던지지 않는다** — 호출부는 이 결과를
+ * 기다리지 않고, 거절된 프로미스가 새 나가면 보안 로그 한 줄이 프로세스를
+ * 흔든다.
+ */
+async function postSecurityPayload(
+  url: string,
+  body: unknown,
+  headers: Record<string, string> = {}
+): Promise<void> {
+  try {
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...headers },
+      body: JSON.stringify(body),
+      // 없으면 응답 없는 웹훅 하나가 서버리스 함수를 수명 끝까지 붙든다.
+      signal: AbortSignal.timeout(SECURITY_POST_TIMEOUT_MS),
+    })
+  } catch (error) {
+    // 보안 로깅 실패는 콘솔에만 기록한다(무한 루프 방지).
+    console.error('[Security] Failed to send security event:', error)
+  }
+}
+
 /**
  * 로깅을 위한 보안 이벤트 기록
  * 보안 위반 시도를 모니터링하기 위한 로깅
@@ -358,68 +385,61 @@ export const logSecurityEvent = (
     eventType: event,
   })
 
-  if (process.env.NODE_ENV === 'development') {
+  if (process.env.NODE_ENV === 'development' && severity !== 'high') {
     console.warn(`[SECURITY ${severity.toUpperCase()}] ${event}:`, immutableDetails)
   }
 
-  // 프로덕션에서는 보안 모니터링 서비스로 전송
-  if (process.env.NODE_ENV === 'production') {
-    // 비동기로 보안 이벤트 전송 (에러가 발생해도 주요 로직에 영향 없도록)
-    Promise.resolve().then(async () => {
-      try {
-        // 외부 보안 모니터링 서비스 전송
-        if (process.env.SECURITY_WEBHOOK_URL) {
-          await fetch(process.env.SECURITY_WEBHOOK_URL, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'User-Agent': `GGAC-Security-Monitor/1.0`,
+  // 'high'는 환경을 가리지 않고 stderr에 남긴다.
+  //
+  // 전에는 이 줄이 프로덕션 분기 **안**에 있었다. 웹훅 환경변수는 어디에도
+  // 설정돼 있지 않으므로(`scripts/verify-env.js`의 필수·선택 목록 어디에도
+  // 없다) 'high' 이벤트가 닿는 유일한 곳은 이 console.error이고, 그게
+  // 프로덕션 안에 갇혀 있으면 로컬·프리뷰·테스트에서는 크론이 조용히 깨진
+  // 것과 구분되지 않는다. Vercel 런타임 로그가 지금 유일하게 확실한 통로다.
+  if (severity === 'high') {
+    console.error(`[CRITICAL SECURITY EVENT] ${event}`, immutableDetails)
+  }
+
+  // 외부 채널 전송은 프로덕션에서만. 응답을 기다리지 않는다(fire-and-forget) —
+  // 보안 로그 한 줄이 요청 흐름을 붙들면 안 된다.
+  if (process.env.NODE_ENV !== 'production') return
+
+  if (process.env.SECURITY_WEBHOOK_URL) {
+    void postSecurityPayload(
+      process.env.SECURITY_WEBHOOK_URL,
+      {
+        type: 'security_event',
+        event,
+        severity,
+        details: immutableDetails,
+        environment: 'production',
+        timestamp: immutableDetails.timestamp,
+      },
+      { 'User-Agent': 'GGAC-Security-Monitor/1.0' }
+    )
+  }
+
+  // 알림 채널은 모니터링 전송과 **따로** 보낸다. 전에는 둘이 한 try 안에서
+  // 순차 await라, 모니터링 URL이 죽어 있으면 정작 사람을 부르는 알림이 한 번도
+  // 나가지 않았다.
+  if (severity === 'high' && process.env.SECURITY_ALERT_WEBHOOK_URL) {
+    void postSecurityPayload(process.env.SECURITY_ALERT_WEBHOOK_URL, {
+      text: `🚨 Critical Security Event: ${event}`,
+      attachments: [
+        {
+          color: 'danger',
+          fields: [
+            { title: 'Event', value: event, short: true },
+            { title: 'Severity', value: severity.toUpperCase(), short: true },
+            {
+              title: 'Details',
+              value: JSON.stringify(immutableDetails, null, 2),
+              short: false,
             },
-            body: JSON.stringify({
-              type: 'security_event',
-              event,
-              severity,
-              details: immutableDetails,
-              environment: 'production',
-              timestamp: immutableDetails.timestamp,
-            }),
-          })
-        }
-
-        // 심각도가 높은 경우 즉시 알림
-        if (severity === 'high') {
-          console.error(`[CRITICAL SECURITY EVENT] ${event}`, immutableDetails)
-
-          // 추가 알림 채널 (예: Slack, Discord 등)
-          if (process.env.SECURITY_ALERT_WEBHOOK_URL) {
-            await fetch(process.env.SECURITY_ALERT_WEBHOOK_URL, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                text: `🚨 Critical Security Event: ${event}`,
-                attachments: [
-                  {
-                    color: 'danger',
-                    fields: [
-                      { title: 'Event', value: event, short: true },
-                      { title: 'Severity', value: severity.toUpperCase(), short: true },
-                      {
-                        title: 'Details',
-                        value: JSON.stringify(immutableDetails, null, 2),
-                        short: false,
-                      },
-                    ],
-                    timestamp: immutableDetails.timestamp,
-                  },
-                ],
-              }),
-            })
-          }
-        }
-      } catch (error) {
-        // 보안 로깅 실패는 콘솔에만 기록 (무한 루프 방지)
-        console.error('[Security] Failed to send security event:', error)
-      }
+          ],
+          timestamp: immutableDetails.timestamp,
+        },
+      ],
     })
   }
 }

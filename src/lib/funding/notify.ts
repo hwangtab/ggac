@@ -106,7 +106,8 @@ export interface NotifyDeps {
   createBulkNotifications: (input: Record<string, unknown>) => Promise<unknown>
   /** 같은 종류의 시스템 공지를 최근에 이미 냈는가 — 크론이 매번 다시 알리지 않게. */
   hasRecentSystemNotice: (kind: string, since: Date) => Promise<boolean>
-  sendEmail: (mail: { to: string; subject: string; html: string }) => Promise<void>
+  /** 반환값은 쓰지 않는다(실제 구현은 Resend 메시지 식별자를 돌려준다). */
+  sendEmail: (mail: { to: string; subject: string; html: string }) => Promise<unknown>
   /** 메일을 보낼 수 있는 배포인가. `RESEND_API_KEY`가 있으면 참. */
   isMailConfigured: () => boolean
   siteUrl: () => string

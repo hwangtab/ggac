@@ -662,7 +662,9 @@ export interface BulkRecipient {
  */
 export async function sendManyEmails(input: {
   recipients: BulkRecipient[]
-  sendEmail: (mail: { to: string; subject: string; html: string }) => Promise<void>
+  // 반환값을 쓰지 않는다 — 실제 `sendEmail`은 Resend 메시지 식별자를 돌려주고
+  // 테스트 스텁은 아무것도 돌려주지 않는다. 둘 다 받으려고 `unknown`이다.
+  sendEmail: (mail: { to: string; subject: string; html: string }) => Promise<unknown>
   /** 이 사용자가 이메일 수신을 껐는가. 영수 성격의 알림은 이 함수를 넘기지 않는다. */
   isOptedOut?: (userId: string) => boolean
   log?: { error: (msg: string, meta?: unknown) => void }

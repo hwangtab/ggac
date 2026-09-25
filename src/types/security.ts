@@ -203,6 +203,25 @@ export type SecurityEventType =
   // 환불을 다시 여는 동작이라, 기록이 없으면 "왜 열렸는지" 답할 길이 없다.
   | 'FUNDING_FULFILLMENT_REVERSAL_AUDIT_FAILED'
 
+  // 크론이 깨진 경우. Vercel 크론은 실패해도 아무에게도 말하지 않는다 —
+  // 대시보드에 회색 줄 하나가 늘 뿐이고, 라우트가 500을 내든 예외로 죽든
+  // 다음 실행이 같은 일을 또 시도할 뿐이다. 그 사이 멈춰 있는 것이 돈을
+  // 맞추는 고리라면 며칠이 지나서야 사람 눈에 띈다(2026-09-04 예매 중단이
+  // 정확히 그 모양이었다). 그래서 "고리가 돌지 않았다"는 사실만은 'high'로
+  // 올려 보안 로그가 닿는 곳까지 내보낸다.
+  | 'FUNDING_EXPIRE_CRON_FAILED'
+  // 결제 스위치가 내려가 있어 만료 스윕이 통째로 건너뛰었는데, 정작 풀어야 할
+  // 선점이 남아 있는 경우. 스윕은 "토스는 승인했는데 우리 confirm이 유실된"
+  // 결제를 구하는 유일한 장치다 — 스위치를 내린 동안 그 건들은 아무도 보지
+  // 않는다. 풀 것이 없으면 조용하다(스위치를 내린 것 자체는 사고가 아니다).
+  | 'FUNDING_EXPIRE_SWEEP_SKIPPED'
+  // 조합비 자동결제 크론이 실패한 경우. 한 달치 청구가 통째로 빠진다.
+  | 'DUES_CHARGE_CRON_FAILED'
+  // 메일함 백필 크론이 실패한 경우. 본문을 못 채운 수신 메일을 다시 가져오는
+  // 유일한 경로라, 멈춰 있으면 Resend 보관 기한(30일)이 지나며 본문이 영영
+  // 사라진다.
+  | 'MAILBOX_BACKFILL_CRON_FAILED'
+
 export type SecurityEventSeverity = 'low' | 'medium' | 'high'
 
 export interface SecurityEventContext {
