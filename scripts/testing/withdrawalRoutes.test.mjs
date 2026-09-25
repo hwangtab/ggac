@@ -16,6 +16,25 @@ test('신청 실패는 409다 (조건부 UPDATE의 rowsAffected 판정)', async 
   assert.match(src, /409|conflict/i)
 })
 
+test('펀딩을 열어 둔 사람의 탈퇴 신청은 접수 전에 막는다', async () => {
+  const src = await readFile(ROUTE, 'utf8')
+  // 판정은 순수 함수가 한다(`src/lib/funding/withdrawalGuard.ts`) — 라우트가
+  // 상태 목록을 직접 들고 있으면 전이 표와 갈라진다.
+  assert.match(src, /campaignWithdrawalVerdict/, '펀딩 검사가 없다')
+  // 검사는 **신청을 쓰기 전에** 있어야 한다. 뒤에 있으면 이미 접수된 뒤다.
+  const postBody = src.slice(
+    src.indexOf('export async function POST'),
+    src.indexOf('export async function DELETE')
+  )
+  const verdictAt = postBody.indexOf('campaignWithdrawalVerdict(')
+  const writeAt = postBody.indexOf('requestWithdrawal(')
+  assert.ok(verdictAt >= 0 && writeAt >= 0, '두 호출을 찾지 못했다')
+  assert.ok(verdictAt < writeAt, '신청을 쓴 뒤에 검사하면 이미 접수된 뒤다')
+  // 신청 취소(DELETE)는 막지 않는다 — 되돌리는 쪽을 막을 이유가 없다.
+  const deleteBody = src.slice(src.indexOf('export async function DELETE'))
+  assert.doesNotMatch(deleteBody, /campaignWithdrawalVerdict\(/)
+})
+
 // ---------------------------------------------------------------- 관리자 확정
 
 const ADMIN_ROUTE = new URL('../../src/app/api/admin/member-action/route.ts', import.meta.url)

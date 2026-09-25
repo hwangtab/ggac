@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-import { requireActiveMember } from '@/lib/server/memberAuth'
+import { requireCampaignActor } from '@/lib/server/memberAuth'
 import {
   getCampaignById,
   listRewards,
@@ -122,7 +122,7 @@ function creatorSettlementView(
 }
 
 export async function GET(_req: NextRequest, { params }: Ctx) {
-  const auth = await requireActiveMember()
+  const auth = await requireCampaignActor()
   if (auth instanceof NextResponse) return auth
   const { id } = await params
   const campaign = await getCampaignById(id)
@@ -171,7 +171,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
 export async function PATCH(request: NextRequest, { params }: Ctx) {
   if (!(await isFundingEnabled()))
     return ApiError.serviceUnavailable('펀딩을 준비 중입니다.').toNextResponse()
-  const auth = await requireActiveMember()
+  const auth = await requireCampaignActor()
   if (auth instanceof NextResponse) return auth
   const { id } = await params
   // 본문을 **먼저** 끝까지 읽는다. 상태를 읽고 편집 범위를 정한 뒤에 읽으면,

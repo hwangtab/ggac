@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse, after } from 'next/server'
 
-import { requireActiveMember } from '@/lib/server/memberAuth'
+import { requireCampaignActor } from '@/lib/server/memberAuth'
 import { getCampaignById, transitionCampaign } from '@/db/queries/funding'
 import { logUserActivity, type ActivityActionTypeValue } from '@/db/queries/activities'
 import { canManageCampaign } from '@/lib/server/fundingAuth'
@@ -43,7 +43,7 @@ function activityTypeFor(action: CampaignAction): ActivityActionTypeValue {
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!(await isFundingEnabled()))
     return ApiError.serviceUnavailable('펀딩을 준비 중입니다.').toNextResponse()
-  const auth = await requireActiveMember()
+  const auth = await requireCampaignActor()
   if (auth instanceof NextResponse) return auth
   const { id } = await params
   const body = await parseJsonObjectBody(request)

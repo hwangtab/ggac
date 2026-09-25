@@ -35,7 +35,7 @@ import { recordUpload } from '@/db/queries/uploads'
 import { isFundingEnabled } from '@/lib/funding/settings'
 import { editScope, type CampaignStatus } from '@/lib/funding/transitions'
 import { canManageCampaign } from '@/lib/server/fundingAuth'
-import { requireActiveMember } from '@/lib/server/memberAuth'
+import { requireCampaignActor } from '@/lib/server/memberAuth'
 import { applyRouteRateLimit, createIPKeyGenerator } from '@/lib/server/rateLimit'
 import { hasPublicBlobStore } from '@/lib/storage/blob'
 import {
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     })
     if (!rl.success && rl.response?.status === 429) return rl.response
 
-    const auth = await requireActiveMember()
+    const auth = await requireCampaignActor()
     if (auth instanceof NextResponse) return auth
     const { id } = await params
 

@@ -42,6 +42,12 @@ const PermissionCheck: React.FC<PermissionCheckProps> = ({
         let hasAccess = false
 
         switch (requiredPermission) {
+          // 로그인만 본다. 조합원 승인 여부를 묻지 않는 화면(사무국이 대신 연
+          // 캠페인의 개설자 화면)이 쓴다 — 서버도 같은 기준으로 연다
+          // (`requireCampaignActor` + `canManageCampaign`).
+          case 'user':
+            hasAccess = true
+            break
           case 'member':
             hasAccess =
               data.profile.registration_status === 'approved' && data.profile.is_active === true

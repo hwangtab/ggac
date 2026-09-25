@@ -26,7 +26,7 @@
  *
  * ## 그럼 인가는 무엇이 지키는가 — **E2E다**
  *
- * `npm run test:e2e:authz`(기준선 144 passed). 같은 감사에서 **E2E는 관리자 게이트
+ * `npm run test:e2e:authz`(기준선 146 passed). 같은 감사에서 **E2E는 관리자 게이트
  * 무력화를 실제로 잡았다.** 인가를 바꿨으면 그걸 돌려라. 이 파일이 초록불인 것은
  * 인가가 지켜진다는 증거가 아니다.
  *
@@ -7456,9 +7456,18 @@ if (trackedFiles === null) {
   }
   for (const file of mypageFundingRoutes) {
     const code = readSourceAt(join(root, file))
-    if (!code.includes('requireActiveMember(') && !code.includes('requireUser(')) {
+    // `requireCampaignActor()`는 로그인·프로필만 보고 조합원 승인은 묻지
+    // 않는다 — 사무국이 대신 열어 준 캠페인의 개설자가 조합원이 아닐 수 있기
+    // 때문이다(`src/lib/funding/proxyOwner.ts`). 소유 경계는 그 뒤의
+    // `canManageCampaign`이 지킨다. 여기서 보는 것은 "로그인 게이트가 통째로
+    // 사라졌는가" 하나다.
+    if (
+      !code.includes('requireActiveMember(') &&
+      !code.includes('requireUser(') &&
+      !code.includes('requireCampaignActor(')
+    ) {
       fundingFailures.push(
-        `${file}: 마이페이지 펀딩 라우트에 로그인 게이트(requireActiveMember/requireUser)가 없습니다`
+        `${file}: 마이페이지 펀딩 라우트에 로그인 게이트(requireActiveMember/requireUser/requireCampaignActor)가 없습니다`
       )
     }
     // 캠페인 id를 경로로 받는 라우트는 **그 캠페인이 내 것인지**를 따로

@@ -39,6 +39,52 @@ export function classifySessionForMember(
 }
 
 /**
+ * `requireCampaignActor`가 내려야 할 응답을 판정한다.
+ *
+ * `classifySessionForMember`에서 **마지막 한 단계(승인·활성)만 뺀 것**이다.
+ * 프로필은 여전히 있어야 한다 — 호출부가 관리자 여부를 그 프로필로 가린다.
+ */
+export function classifySessionForCampaignActor(
+  session: SessionContext
+): 'ok' | 'unauthenticated' | 'profile-error' {
+  if (!session.authenticated || !session.user) return 'unauthenticated'
+  if (session.profileError || !session.profile) return 'profile-error'
+  return 'ok'
+}
+
+/**
+ * 로그인 + 프로필만 확인한다. **조합원 승인은 묻지 않는다.**
+ *
+ * 펀딩 개설자 화면·API가 쓴다. 사무국이 대신 연 캠페인의 개설자는 조합원이
+ * 아닐 수 있는데(`src/lib/funding/proxyOwner.ts`), `requireActiveMember`를
+ * 쓰면 그 사람이 **자기 캠페인에서 403**을 받는다. 소유 경계는 이 함수가
+ * 아니라 `canManageCampaign`이 지킨다 — 이 함수만으로는 아무 캠페인에도
+ * 닿지 못한다. 반대로 **개설**은 여기를 쓰지 않는다: 비조합원 캠페인은
+ * 사무국 대리 개설로만 생겨야 하므로 개설 라우트는 `requireActiveMember`를
+ * 그대로 쓴다.
+ */
+export async function requireCampaignActor(): Promise<MemberAuthSuccess | NextResponse> {
+  const session = await getSessionContext()
+  const verdict = classifySessionForCampaignActor(session)
+
+  if (verdict === 'unauthenticated') {
+    return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+  }
+  if (verdict === 'profile-error') {
+    return NextResponse.json({ error: '프로필 정보를 조회할 수 없습니다.' }, { status: 500 })
+  }
+
+  return {
+    user: {
+      id: session.user!.id,
+      email: session.user!.email,
+      email_confirmed_at: session.user!.email_confirmed_at,
+    },
+    profile: session.profile,
+  }
+}
+
+/**
  * 로그인만 확인한다. 조합원 승인 여부는 보지 않는다.
  *
  * 가입 직후 승인 대기 중인 사용자도 자기 프로필을 읽고 고쳐야 하므로,
