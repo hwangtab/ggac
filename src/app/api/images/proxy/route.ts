@@ -47,10 +47,13 @@ export async function GET(req: NextRequest) {
     return ApiError.forbidden('Forbidden').toNextResponse()
   }
 
-  try {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 8000)
+  const controller = new AbortController()
+  // 타이머는 헤더가 아니라 **본문을 다 읽을 때까지** 살아 있어야 한다. 예전에는
+  // fetch가 돌아오자마자 껐는데, 그러면 헤더만 빨리 주고 본문을 한 바이트씩
+  // 흘리는 상대에게 연결이 무기한 붙잡힌다. 해제는 아래 finally가 한 번만 한다.
+  const timeout = setTimeout(() => controller.abort(), 8000)
 
+  try {
     const res = await fetch(target.toString(), {
       method: 'GET',
       redirect: 'manual',
@@ -64,8 +67,6 @@ export async function GET(req: NextRequest) {
       // Prevent Next from caching upstream 4xx/5xx aggressively
       cache: 'no-store',
     })
-
-    clearTimeout(timeout)
 
     // Handle redirects manually to prevent SSRF bypass
     if (res.status === 301 || res.status === 302 || res.status === 307 || res.status === 308) {
@@ -102,8 +103,12 @@ export async function GET(req: NextRequest) {
       return ApiError.badRequest('Upstream image is too large').toNextResponse()
     }
 
-    const buff = Buffer.from(await res.arrayBuffer())
-    if (buff.length > MAX_IMAGE_BYTES) {
+    // Content-Length는 상대가 주는 **주장**이고, chunked 응답에는 아예 없다.
+    // 그래서 위 검사만으로는 8MB가 지켜지지 않는다 — 통째로 받아 놓고 길이를
+    // 재던 예전 코드는 상대가 흘리는 만큼 메모리에 쌓은 뒤에야 거절했다.
+    // 읽으면서 누적 바이트를 세고, 상한을 넘는 순간 연결을 끊는다.
+    const buff = await readCappedBody(res, MAX_IMAGE_BYTES)
+    if (!buff) {
       return ApiError.badRequest('Upstream image is too large').toNextResponse()
     }
 
@@ -115,7 +120,46 @@ export async function GET(req: NextRequest) {
     const isAbort = err instanceof Error && err.name === 'AbortError'
     const msg = isAbort ? 'Timeout fetching image' : 'Failed to fetch image'
     return ApiError.badRequest(msg).toNextResponse()
+  } finally {
+    clearTimeout(timeout)
   }
+}
+
+/**
+ * 응답 본문을 읽으면서 상한을 넘는 순간 스트림을 끊는다. 상한을 넘었으면
+ * `null`을 돌려주고(부분 버퍼는 버린다), 정상이면 전체 버퍼를 돌려준다.
+ *
+ * 상한 판정을 **읽은 뒤**가 아니라 **읽는 중**에 하는 것이 요점이다. 8MB
+ * 상한을 두고도 통째로 버퍼링하면, 상한은 응답 코드만 바꿀 뿐 메모리는 이미
+ * 다 썼다.
+ */
+async function readCappedBody(res: Response, maxBytes: number): Promise<Buffer | null> {
+  if (!res.body) {
+    const buff = Buffer.from(await res.arrayBuffer())
+    return buff.length > maxBytes ? null : buff
+  }
+
+  const reader = res.body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (!value) continue
+      total += value.byteLength
+      if (total > maxBytes) {
+        await reader.cancel().catch(() => {})
+        return null
+      }
+      chunks.push(value)
+    }
+  } finally {
+    reader.releaseLock()
+  }
+
+  return Buffer.concat(chunks)
 }
 
 export function OPTIONS() {
