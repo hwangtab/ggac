@@ -42,6 +42,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# 로컬 개발 서버 로그 — 로그인 이메일·LAN IP·로컬 경로가 그대로 찍혀
+# scripts/archive/dev.log로 한 번 커밋된 적이 있다. 재발 방지용.
+scripts/archive/*.log
+
 # local env files
 .env*
 !.env.example
