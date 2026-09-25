@@ -18,6 +18,7 @@ export function toPublicReward(reward: Record<string, unknown>): Record<string, 
     amount: reward.amount,
     total_quantity: reward.total_quantity,
     requires_shipping: reward.requires_shipping,
+    requires_credit_name: reward.requires_credit_name,
     estimated_delivery: reward.estimated_delivery,
     image_url: reward.image_url,
   }

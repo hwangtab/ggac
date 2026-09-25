@@ -14,9 +14,23 @@ const { parseCampaignPatch, parseRewardList, isValidSlug } = await import(
 )
 
 test('all 범위: 제목·목표액 필수 형식, 허용 키만', () => {
-  const r = parseCampaignPatch({ title: ' 첫 음반 ', summary: '요약', goal_amount: '1000000', status: 'active', category: '음반' }, 'all')
+  const r = parseCampaignPatch(
+    {
+      title: ' 첫 음반 ',
+      summary: '요약',
+      goal_amount: '1000000',
+      status: 'active',
+      category: '음반',
+    },
+    'all'
+  )
   assert.equal(r.ok, true)
-  assert.deepEqual(r.patch, { title: '첫 음반', summary: '요약', goal_amount: 1000000, category: '음반' })
+  assert.deepEqual(r.patch, {
+    title: '첫 음반',
+    summary: '요약',
+    goal_amount: 1000000,
+    category: '음반',
+  })
   assert.equal(parseCampaignPatch({ goal_amount: 0 }, 'all').ok, false)
   assert.equal(parseCampaignPatch({ category: '도박' }, 'all').ok, false)
   assert.equal(parseCampaignPatch({ summary: 'x'.repeat(201) }, 'all').ok, false)
@@ -60,7 +74,18 @@ test('contentOnly 범위: 본문 키 밖은 거절한다(조용히 버리지 않
 
 test('리워드 목록: 성공 시 파싱된 값 자체를 검사한다', () => {
   const ok = parseRewardList([
-    { id: 'existing-id', title: ' CD ', description: '설명', amount: 30000, total_quantity: 10, requires_shipping: true, estimated_delivery: '2026-12', image_url: '/x.jpg', sort_order: 3 },
+    {
+      id: 'existing-id',
+      title: ' CD ',
+      description: '설명',
+      amount: 30000,
+      total_quantity: 10,
+      requires_shipping: true,
+      requires_credit_name: true,
+      estimated_delivery: '2026-12',
+      image_url: '/x.jpg',
+      sort_order: 3,
+    },
   ])
   assert.equal(ok.ok, true)
   assert.equal(ok.rewards.length, 1)
@@ -71,6 +96,7 @@ test('리워드 목록: 성공 시 파싱된 값 자체를 검사한다', () => 
     amount: 30000,
     total_quantity: 10,
     requires_shipping: true,
+    requires_credit_name: true,
     estimated_delivery: '2026-12',
     image_url: '/x.jpg',
     sort_order: 3,
@@ -78,16 +104,31 @@ test('리워드 목록: 성공 시 파싱된 값 자체를 검사한다', () => 
 })
 
 test('리워드 목록: 새 리워드(id 없음)는 id가 undefined이고 순서는 배열 인덱스를 기본값으로 쓴다', () => {
-  const ok = parseRewardList([{ title: 'A', amount: 1000 }, { title: 'B', amount: 2000 }])
+  const ok = parseRewardList([
+    { title: 'A', amount: 1000 },
+    { title: 'B', amount: 2000 },
+  ])
   assert.equal(ok.ok, true)
   assert.equal(ok.rewards[0].id, undefined)
   assert.equal(ok.rewards[0].sort_order, 0)
   assert.equal(ok.rewards[1].sort_order, 1)
   assert.equal(ok.rewards[0].requires_shipping, false)
+  assert.equal(ok.rewards[0].requires_credit_name, false)
+})
+
+test('리워드 목록: 이름 기재 여부는 진짜 boolean만 받는다', () => {
+  assert.equal(
+    parseRewardList([{ title: 'A', amount: 1000, requires_credit_name: 'true' }]).ok,
+    false
+  )
+  assert.equal(parseRewardList([{ title: 'A', amount: 1000, requires_credit_name: 1 }]).ok, false)
+  assert.equal(parseRewardList([{ title: 'A', amount: 1000, requires_credit_name: null }]).ok, true)
 })
 
 test('리워드 목록: 금액 양의 정수, 수량 null 또는 양의 정수', () => {
-  const ok = parseRewardList([{ title: 'CD', amount: 30000, total_quantity: null, requires_shipping: true, sort_order: 0 }])
+  const ok = parseRewardList([
+    { title: 'CD', amount: 30000, total_quantity: null, requires_shipping: true, sort_order: 0 },
+  ])
   assert.equal(ok.ok, true)
   assert.equal(parseRewardList([{ title: '', amount: 1 }]).ok, false)
   assert.equal(parseRewardList([{ title: 'a', amount: -1 }]).ok, false)
@@ -119,8 +160,14 @@ test('리워드 배송 필요 여부는 진짜 boolean만 받는다 — 문자�
 })
 
 test('리워드 예상 전달월은 YYYY-MM만 받는다', () => {
-  assert.equal(parseRewardList([{ title: 'a', amount: 1000, estimated_delivery: '2026-12-25' }]).ok, false)
-  assert.equal(parseRewardList([{ title: 'a', amount: 1000, estimated_delivery: '아무거나' }]).ok, false)
+  assert.equal(
+    parseRewardList([{ title: 'a', amount: 1000, estimated_delivery: '2026-12-25' }]).ok,
+    false
+  )
+  assert.equal(
+    parseRewardList([{ title: 'a', amount: 1000, estimated_delivery: '아무거나' }]).ok,
+    false
+  )
   const ok = parseRewardList([{ title: 'a', amount: 1000, estimated_delivery: '2026-12' }])
   assert.equal(ok.ok, true)
   assert.equal(ok.rewards[0].estimated_delivery, '2026-12')
@@ -153,13 +200,19 @@ test('cover_image·og_image: 블롭 오리진과 사이트 상대 경로만 허�
       'all'
     )
     assert.equal(acceptedBlob.ok, true)
-    assert.equal(acceptedBlob.patch.cover_image, 'https://example.public.blob.vercel-storage.com/covers/a.webp')
+    assert.equal(
+      acceptedBlob.patch.cover_image,
+      'https://example.public.blob.vercel-storage.com/covers/a.webp'
+    )
 
     const acceptedRelative = parseCampaignPatch({ og_image: '/images/og-default.png' }, 'all')
     assert.equal(acceptedRelative.ok, true)
     assert.equal(acceptedRelative.patch.og_image, '/images/og-default.png')
 
-    const rejectedForeign = parseCampaignPatch({ cover_image: 'https://evil.example.com/a.png' }, 'all')
+    const rejectedForeign = parseCampaignPatch(
+      { cover_image: 'https://evil.example.com/a.png' },
+      'all'
+    )
     assert.equal(rejectedForeign.ok, false)
 
     const rejectedScheme = parseCampaignPatch({ og_image: 'javascript:alert(1)' }, 'all')
@@ -167,7 +220,10 @@ test('cover_image·og_image: 블롭 오리진과 사이트 상대 경로만 허�
 
     // 프로토콜 상대(`//`)와 백슬래시(`/\`) 둘 다 브라우저가 다른 호스트로
     // 읽는 절대 URL이다 — 접두 매칭이 아니라 해석 결과로 잡아야 한다.
-    const rejectedProtocolRelative = parseCampaignPatch({ cover_image: '//evil.example.com/a.png' }, 'all')
+    const rejectedProtocolRelative = parseCampaignPatch(
+      { cover_image: '//evil.example.com/a.png' },
+      'all'
+    )
     assert.equal(rejectedProtocolRelative.ok, false)
 
     const rejectedBackslash = parseCampaignPatch({ og_image: '/\\evil.example.com/a.png' }, 'all')
@@ -188,7 +244,10 @@ test('cover_image·og_image: 환경변수가 없으면 상대 경로만 허용�
     delete process.env.NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL
     const relative = parseCampaignPatch({ cover_image: '/images/og-default.png' }, 'all')
     assert.equal(relative.ok, true)
-    const absolute = parseCampaignPatch({ cover_image: 'https://anywhere.example.com/a.png' }, 'all')
+    const absolute = parseCampaignPatch(
+      { cover_image: 'https://anywhere.example.com/a.png' },
+      'all'
+    )
     assert.equal(absolute.ok, false)
   } finally {
     if (prevBase === undefined) delete process.env.NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL

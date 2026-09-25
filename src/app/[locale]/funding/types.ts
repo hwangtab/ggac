@@ -39,6 +39,8 @@ export interface Reward {
   /** null이면 무제한이라 남은 수량을 따지지 않는다. */
   remaining_quantity: number | null
   requires_shipping: boolean
+  /** 후원 폼이 "기재할 이름" 칸을 요구하는가. */
+  requires_credit_name: boolean
   estimated_delivery: string | null
   image_url: string | null
 }
@@ -61,6 +63,9 @@ export interface CampaignDetail {
   rewards: Reward[]
   progress: Progress
 }
+
+/** 크레딧 명단. 공개를 전제로 받은 이름만 온다 — 결제 시각·금액은 싣지 않는다. */
+export type CreditNames = string[]
 
 export interface PublicBacker {
   name: string

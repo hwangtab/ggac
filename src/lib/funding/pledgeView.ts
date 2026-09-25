@@ -16,5 +16,6 @@ export function toPublicPledgeFields(pledge: Record<string, unknown>): Record<st
     total_amount: pledge.total_amount,
     paid_at: pledge.paid_at,
     fulfillment_status: pledge.fulfillment_status,
+    credit_name: pledge.credit_name ?? null,
   }
 }

@@ -11,6 +11,7 @@ const row = {
   amount: 30000,
   total_quantity: 50,
   requires_shipping: true,
+  requires_credit_name: true,
   estimated_delivery: '2026-12',
   image_url: '/images/cd.webp',
   sort_order: 2,
@@ -33,6 +34,7 @@ test('공개 리워드는 화면이 쓰는 필드만 싣는다', () => {
     amount: 30000,
     total_quantity: 50,
     requires_shipping: true,
+    requires_credit_name: true,
     estimated_delivery: '2026-12',
     image_url: '/images/cd.webp',
   })

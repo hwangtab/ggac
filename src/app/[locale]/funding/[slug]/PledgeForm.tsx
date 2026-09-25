@@ -21,6 +21,7 @@ import { FiAlertCircle } from 'react-icons/fi'
 
 import { Link } from '@/i18n/navigation'
 import { ADDITIONAL_AMOUNT_STEP, MAX_ADDITIONAL_AMOUNT, MAX_QUANTITY } from '@/lib/funding/amounts'
+import { CREDIT_NAME_MAX_LENGTH, evaluateCreditName } from '@/lib/funding/creditName'
 
 import { formatAmount } from '../format'
 import type { CampaignDetail, Reward } from '../types'
@@ -55,6 +56,7 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
   const [backerName, setBackerName] = useState('')
   const [backerEmail, setBackerEmail] = useState('')
   const [backerPhone, setBackerPhone] = useState('')
+  const [creditName, setCreditName] = useState('')
   const [shipping, setShipping] = useState({
     name: '',
     phone: '',
@@ -227,6 +229,19 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
       setError(t('form.errorEmail'))
       return
     }
+    const credit = evaluateCreditName({
+      requiresCreditName: reward.requires_credit_name,
+      raw: creditName,
+      quantity,
+    })
+    if (credit.ok === false) {
+      setError(
+        credit.reason === 'required'
+          ? t('form.errorCreditName')
+          : t('form.errorCreditNameTooMany', { count: quantity })
+      )
+      return
+    }
     if (reward.requires_shipping) {
       const s = shipping
       if (!s.postcode.trim() || !s.address1.trim() || s.phone.replace(/[^0-9]/g, '').length < 9) {
@@ -257,6 +272,7 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
           supporterMessage: message.trim() || undefined,
           messagePublic,
           isAnonymous,
+          ...(credit.value ? { creditName: credit.value } : {}),
           // 버튼 아래 고지를 보고 눌렀다는 기록. 체크박스는 두지 않는다.
           agreedTerms: true,
           agreedPrivacy: true,
@@ -305,6 +321,7 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
     backerName,
     backerEmail,
     backerPhone,
+    creditName,
     shipping,
     message,
     messagePublic,
@@ -429,6 +446,7 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
                         {r.requires_shipping && r.estimated_delivery
                           ? ` · ${t('reward.delivery', { month: r.estimated_delivery })}`
                           : ''}
+                        {r.requires_credit_name ? ` · ${t('reward.creditName')}` : ''}
                       </span>
                     </span>
                   </label>
@@ -515,6 +533,27 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
               inputMode="numeric"
             />
           </div>
+
+          {reward?.requires_credit_name ? (
+            <div>
+              <label htmlFor="creditName" className="mb-2 block text-sm font-medium text-gray-900">
+                {t('form.creditName')}
+              </label>
+              <input
+                id="creditName"
+                value={creditName}
+                onChange={e => setCreditName(e.target.value.slice(0, CREDIT_NAME_MAX_LENGTH))}
+                maxLength={CREDIT_NAME_MAX_LENGTH}
+                placeholder={backerName}
+                aria-describedby="creditNameHelp"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                required
+              />
+              <p id="creditNameHelp" className="mt-1 text-xs text-gray-500">
+                {t('form.creditNameHelp')}
+              </p>
+            </div>
+          ) : null}
 
           {reward?.requires_shipping ? (
             <fieldset>

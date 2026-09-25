@@ -9,6 +9,7 @@ import { db } from '../client.ts'
 import { fundingCampaigns, fundingPledges, fundingRewards, payments } from '../schema/index.ts'
 import { computePledgeTotal } from '../../lib/funding/amounts.ts'
 import { generatePledgeCode } from '../../lib/funding/pledgeCode.ts'
+import { splitCreditNames } from '../../lib/funding/creditName.ts'
 
 import { retryOnLockContention, toIso, toSnakeCase } from './_helpers.ts'
 
@@ -244,6 +245,8 @@ export interface HoldPledgeInput {
   is_anonymous?: boolean
   supporter_message?: string | null
   message_public?: boolean
+  /** 이름 기재 리워드일 때만. 검증(필수 여부)은 라우트가 한다. */
+  credit_name?: string | null
   shipping?: {
     name: string
     phone: string
@@ -370,6 +373,7 @@ async function holdPledgeOnce(input: HoldPledgeInput): Promise<Row> {
         shippingAddress1: input.shipping?.address1 ?? null,
         shippingAddress2: input.shipping?.address2 ?? null,
         shippingMemo: input.shipping?.memo ?? null,
+        creditName: input.credit_name ?? null,
         termsVersion: input.terms_version ?? null,
         termsAgreedAt: now,
         privacyAgreedAt: now,
@@ -760,6 +764,28 @@ export async function listPublicBackers(
     message: r.messagePublic ? (r.message ?? null) : null,
     paid_at: toIso(r.paidAt) ?? '',
   }))
+}
+
+/**
+ * 크레딧 명단 — 결제가 끝난 후원의 기재할 이름.
+ *
+ * 이름은 "부클릿과 웹사이트에 싣는다"는 고지를 보고 적은 값이라 익명 여부와
+ * 무관하게 싣는다. 결제 시각·금액은 싣지 않고 가나다순으로 준다 — 결제순으로
+ * 주면 시각이 붙은 공개 후원자 명단과 순서를 맞춰 이름과 금액을 잇게 된다.
+ * 한 후원에 쉼표로 여러 이름을 적었으면 하나씩 나눈다(수량만큼 적을 수 있다).
+ */
+export async function listCreditNames(campaignId: string): Promise<string[]> {
+  const rows = await db
+    .select({ creditName: fundingPledges.creditName })
+    .from(fundingPledges)
+    .where(
+      and(
+        eq(fundingPledges.campaignId, campaignId),
+        eq(fundingPledges.status, 'paid'),
+        isNotNull(fundingPledges.creditName)
+      )
+    )
+  return rows.flatMap(r => splitCreditNames(r.creditName)).sort((a, b) => a.localeCompare(b, 'ko'))
 }
 
 /**

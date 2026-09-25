@@ -36,6 +36,7 @@ export const maxDuration = 300
 const LOCK_MESSAGES = {
   locked_amount: '결제가 있는 리워드의 금액은 바꿀 수 없습니다. 새 리워드를 추가해 주세요.',
   locked_shipping: '결제가 있는 리워드의 배송 여부는 바꿀 수 없습니다.',
+  locked_credit_name: '결제가 있는 리워드의 이름 기재 여부는 바꿀 수 없습니다.',
   quantity_decrease: '결제가 있는 리워드의 수량은 늘릴 수만 있습니다.',
   content_only_field:
     '공개된 프로젝트에서는 기존 리워드의 이름·설명·금액·배송 여부를 바꿀 수 없습니다. 새 리워드를 추가해 주세요.',
@@ -109,6 +110,7 @@ async function handlePut(request: NextRequest, params: Promise<{ id: string }>) 
         description: (cur.description as string | null) ?? null,
         amount: Number(cur.amount),
         requires_shipping: Boolean(cur.requires_shipping),
+        requires_credit_name: Boolean(cur.requires_credit_name),
         total_quantity: (cur.total_quantity as number | null) ?? null,
         image_url: (cur.image_url as string | null) ?? null,
         locked_at: (cur.locked_at as string | null) ?? null,
@@ -118,6 +120,7 @@ async function handlePut(request: NextRequest, params: Promise<{ id: string }>) 
         description: r.description,
         amount: r.amount,
         requires_shipping: r.requires_shipping,
+        requires_credit_name: r.requires_credit_name,
         total_quantity: r.total_quantity,
         image_url: r.image_url,
       },
@@ -155,7 +158,9 @@ async function handlePut(request: NextRequest, params: Promise<{ id: string }>) 
       // DB에 "여전히 안 잠겨 있을 때만" 조건을 걸어 마지막 방어선을 둔다.
       const changesLockedFields =
         cur !== undefined &&
-        (r.amount !== Number(cur.amount) || r.requires_shipping !== Boolean(cur.requires_shipping))
+        (r.amount !== Number(cur.amount) ||
+          r.requires_shipping !== Boolean(cur.requires_shipping) ||
+          r.requires_credit_name !== Boolean(cur.requires_credit_name))
       return {
         id: r.id as string,
         patch: r,

@@ -74,6 +74,8 @@ interface OwnerPledge {
   shipping_address1?: string
   shipping_address2?: string
   shipping_postcode?: string
+  /** 이름 기재 리워드일 때만 값이 있다. */
+  credit_name: string | null
   fulfillment_status: FulfillmentStatus
 }
 
@@ -733,7 +735,14 @@ export default function ManageCampaignPage() {
                                 />
                               </td>
                             ) : null}
-                            <td className="py-2 pr-4 text-gray-900">{p.backer_name}</td>
+                            <td className="py-2 pr-4 text-gray-900">
+                              {p.backer_name}
+                              {p.credit_name ? (
+                                <span className="block text-xs text-gray-500">
+                                  {t('creator.backerCreditName', { name: p.credit_name })}
+                                </span>
+                              ) : null}
+                            </td>
                             <td className="py-2 pr-4 text-gray-700">
                               {p.reward_title} × {p.quantity}
                             </td>

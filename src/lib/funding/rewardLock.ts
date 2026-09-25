@@ -41,6 +41,8 @@ export interface RewardLockView {
   description: string | null
   amount: number
   requires_shipping: boolean
+  /** 없으면 false로 본다 — 이 컬럼이 생기기 전 호출부와 같은 뜻이다. */
+  requires_credit_name?: boolean
   total_quantity: number | null
   image_url: string | null
   locked_at: string | null
@@ -55,6 +57,7 @@ export type RewardPatchVerdict =
       reason:
         | 'locked_amount'
         | 'locked_shipping'
+        | 'locked_credit_name'
         | 'quantity_decrease'
         | 'content_only_field'
         | 'content_only_image'
@@ -66,6 +69,7 @@ export interface RewardPatch {
   description?: string | null
   amount?: number
   requires_shipping?: boolean
+  requires_credit_name?: boolean
   total_quantity?: number | null
   image_url?: string | null
   /** 판정하지 않는다 — 위 주석의 결정 근거 참고. 형태만 받아 둔다. */
@@ -112,6 +116,12 @@ export function evaluateRewardPatch(
     ) {
       return { ok: false, reason: 'content_only_field' }
     }
+    if (
+      patch.requires_credit_name !== undefined &&
+      patch.requires_credit_name !== (existing.requires_credit_name ?? false)
+    ) {
+      return { ok: false, reason: 'content_only_field' }
+    }
     // 사진도 이름·설명과 같은 자리다 — 거절 문장을 따로 두는 것은 개설자가
     // 무엇을 어떻게 해야 하는지(사무국 문의)가 다르기 때문이다.
     if (patch.image_url !== undefined && !sameText(patch.image_url, existing.image_url)) {
@@ -136,6 +146,14 @@ export function evaluateRewardPatch(
     patch.requires_shipping !== existing.requires_shipping
   ) {
     return { ok: false, reason: 'locked_shipping' }
+  }
+  // 이름을 받던 리워드가 받지 않게 되면 이미 낸 사람의 크레딧 약속이 사라지고,
+  // 반대면 이미 낸 사람에게는 이름이 없다 — 배송 여부와 같은 이유로 잠근다.
+  if (
+    patch.requires_credit_name !== undefined &&
+    patch.requires_credit_name !== (existing.requires_credit_name ?? false)
+  ) {
+    return { ok: false, reason: 'locked_credit_name' }
   }
   if (patch.total_quantity !== undefined && isQuantityDecrease(existing, patch)) {
     return { ok: false, reason: 'quantity_decrease' }

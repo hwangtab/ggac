@@ -395,6 +395,9 @@
       "rewardsHeading": "리워드",
       "backersHeading": "함께한 후원자",
       "backersEmpty": "첫 후원자가 되어 주세요.",
+      "creditsHeading": "함께 만든 사람들",
+      "creditsLead": "이름 기재 리워드로 함께해 주신 분들입니다. 이 이름이 부클릿과 이 페이지에 실립니다.",
+      "creditsEmpty": "아직 기재된 이름이 없습니다.",
       "closedNotice": "모금이 끝났습니다. 함께해 주신 분들께 감사드립니다.",
       "preparingNotice": "결제를 준비 중입니다. 잠시 후 다시 확인해 주세요."
     },
@@ -405,6 +408,7 @@
       "unlimited": "수량 제한 없음",
       "shipping": "배송 있음",
       "noShipping": "배송 없음",
+      "creditName": "이름 기재",
       "delivery": "{month} 발송 예정"
     },
     "form": {
@@ -424,6 +428,8 @@
       "shippingMemo": "배송 메모",
       "message": "응원 메시지",
       "messageHelp": "300자까지 쓸 수 있습니다.",
+      "creditName": "부클릿·웹사이트에 기재할 이름",
+      "creditNameHelp": "적은 그대로 부클릿과 이 페이지에 공개됩니다(익명 후원을 골라도 마찬가지입니다). 수량을 2개 이상 고르셨다면 수량만큼 쉼표로 나눠 적을 수 있습니다.",
       "messagePublic": "후원자 명단에 메시지를 공개합니다",
       "anonymous": "이름 대신 '익명'으로 표시합니다",
       "total": "결제 금액",
@@ -437,6 +443,8 @@
       "errorName": "이름을 입력해 주세요.",
       "errorEmail": "이메일 주소를 올바르게 입력해 주세요.",
       "errorShipping": "배송지 정보를 모두 입력해 주세요.",
+      "errorCreditName": "부클릿과 웹사이트에 기재할 이름을 입력해 주세요.",
+      "errorCreditNameTooMany": "기재할 이름은 수량({count}개)만큼만 적을 수 있습니다.",
       "retryWidget": "결제창 다시 열기"
     },
     "success": {
@@ -535,6 +543,7 @@
       "backers": "후원자",
       "noBackers": "아직 후원이 없습니다.",
       "backerName": "이름",
+      "backerCreditName": "기재: {name}",
       "backerReward": "리워드",
       "backerAmount": "금액",
       "backerShipping": "배송지",
@@ -579,6 +588,8 @@
       "rewardQuantity": "수량",
       "rewardQuantityHelp": "비우면 수량 제한이 없습니다.",
       "rewardShipping": "배송이 필요합니다",
+      "rewardCreditName": "후원자 이름을 받습니다(부클릿·웹사이트 기재)",
+      "rewardCreditNameHelp": "후원 폼에 \"기재할 이름\" 칸이 생기고, 모인 이름은 프로젝트 페이지의 \"함께 만든 사람들\"에 공개됩니다.",
       "rewardDelivery": "발송 예정",
       "rewardDeliveryHelp": "2026-12 처럼 연-월로 적습니다.",
       "rewardRemove": "삭제",
