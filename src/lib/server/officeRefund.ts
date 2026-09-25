@@ -76,6 +76,11 @@ export type OfficeRefundOutcome =
   | { ok: false; reason: 'rejected'; message: string }
   /** 환불은 나갔는데 원장을 갱신하지 못했다. 손으로 고쳐야 한다. 500. */
   | { ok: false; reason: 'record_failed'; detail: string }
+  /**
+   * 선점은 잡았지만 그사이 세상이 바뀌어 진행하면 안 된다(예: 정산금이 방금
+   * 지급됐다). 선점을 되돌렸고 후원은 `paid`다. 돈은 나가지 않았다. 409.
+   */
+  | { ok: false; reason: 'stopped_after_claim'; message: string }
 
 export async function refundPledgeAsOffice(
   input: {
@@ -90,6 +95,21 @@ export async function refundPledgeAsOffice(
     secretKey: string
     /** 활동 기록과 짝을 맞추기 위한 표시. 원장 `raw`에 그대로 남는다. */
     actorId: string
+    /**
+     * 선점 **뒤**, 토스 호출 **앞**에 한 번 더 묻는 자리. 라우트가 선점 전에
+     * 읽어 둔 것(정산 지급 여부)이 그사이 바뀌었는지 여기서 다시 본다.
+     *
+     * 왜 선점 뒤인가 — 선점된 후원(`canceled` + `payment_id`)은 정산 재계산이
+     * **환불로 센다.** 그래서 선점이 들어간 순간부터 `mark_paid`는 낡은 근거로
+     * 판정돼 409를 내고, 이 검사 뒤에는 더 이상 창이 없다. 선점 **전**에만
+     * 읽으면 읽기와 선점 사이에 지급이 끼어들 수 있었다 — 그 창이 이 함수의
+     * 존재 이유다. 트랜잭션으로 묶지 않는 이유는 토스 호출을 트랜잭션 안에
+     * 두면 안 되기 때문이다(파일 머리 주석).
+     *
+     * `{ proceed: false, message }`를 돌려주면 선점을 되돌리고 멈춘다.
+     * 던지면 선점을 되돌리고 다시 던진다 — 확인을 못 한 채 돈을 보내지 않는다.
+     */
+    afterClaim?: () => Promise<{ proceed: true } | { proceed: false; message: string }>
   },
   overrides?: Partial<OfficeRefundDeps>
 ): Promise<OfficeRefundOutcome> {
@@ -100,6 +120,23 @@ export async function refundPledgeAsOffice(
   if (input.retry === false) {
     const claimed = await d.claimPledgeForCancel(input.pledgeId, {})
     if (!claimed) return { ok: false, reason: 'claim_lost' }
+  }
+
+  // 1.5) 선점이 들어갔으니 이제 정산 쪽은 이 건을 환불로 센다. 그 상태에서
+  //      한 번 더 묻는다. 여기서 멈추면 돈은 아직 나가지 않았으므로 선점을
+  //      되돌리는 것으로 깨끗이 끝난다.
+  if (input.afterClaim) {
+    let verdict: { proceed: true } | { proceed: false; message: string }
+    try {
+      verdict = await input.afterClaim()
+    } catch (error) {
+      await d.revertPledgeCancel(input.pledgeId)
+      throw error
+    }
+    if (verdict.proceed === false) {
+      await d.revertPledgeCancel(input.pledgeId)
+      return { ok: false, reason: 'stopped_after_claim', message: verdict.message }
+    }
   }
 
   // 2) 토스. 여기 앞뒤로 열려 있는 트랜잭션이 없다(파일 머리 주석 참고).
