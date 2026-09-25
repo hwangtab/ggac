@@ -215,6 +215,14 @@ export type SecurityEventType =
   // 지급된 정산서는 원장과 대조하지 않으므로(`isBasisStale`) 환불 전 숫자가
   // 그대로 굳는다 — 좁은 창이지만 조용히 지나가게 두지 않는다.
   | 'FUNDING_OFFICE_REFUND_AFTER_PAYOUT'
+  // 사무국 대리 예매 환불에서 토스 환불은 나갔는데 원장(`reservations` ·
+  // `payments`)을 갱신하지 못한 경우. 돈은 돌아갔는데 좌석은 팔린 채로 남아
+  // 재고가 실제보다 적게 보이고, 매출은 돌려준 돈을 받은 돈으로 센다 — 손으로
+  // 고치기 전까지 틀린 숫자가 살아 있다.
+  | 'TICKET_OFFICE_REFUND_LEDGER_FAILED'
+  // 사무국 대리 예매 환불의 활동 기록이 실패한 경우. 그 한 줄이 "누가 왜 남의
+  // 결제를 돌려줬는가"의 전부다. 환불은 이미 나갔으므로 응답은 성공이다.
+  | 'TICKET_OFFICE_REFUND_AUDIT_FAILED'
   // 사무국이 발송 표시를 되돌렸는데 그 기록이 실패한 경우. 되돌리기는 자동
   // 환불을 다시 여는 동작이라, 기록이 없으면 "왜 열렸는지" 답할 길이 없다.
   | 'FUNDING_FULFILLMENT_REVERSAL_AUDIT_FAILED'

@@ -70,6 +70,9 @@ export const SERVER_ONLY_ACTIVITY_ACTION_TYPES = [
   'funding_shipping_exported',
   'funding_payout_account_viewed',
   'member_account_viewed',
+  // 사무국 대리 예매 환불. 돈을 돌려주고 좌석을 푸는 것은 서버가 하는 일이므로
+  // 브라우저가 그 줄을 만들 수 있으면 기록이 증거로서 값을 잃는다.
+  'ticket_reservation_refunded',
 ] as const satisfies readonly ActivityActionType[]
 
 /**
@@ -94,6 +97,7 @@ export const ACTIVITY_TARGET_TYPES = [
   'inbound_email_attachment',
   'funding_campaign',
   'funding_pledge',
+  'ticket_reservation',
 ] as const satisfies readonly ActivityTargetType[]
 
 /** 원장에 있을 수 있는 종류인가(필터·표시용). **기록 허가가 아니다.** */
