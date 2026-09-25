@@ -1,7 +1,12 @@
 import { NextRequest } from 'next/server'
 import { createImageResponse, createOptionsResponse } from '@/utils/apiResponse'
 import { ApiError } from '@/utils/apiWrapper'
-import { isUnsafeHost } from '@/utils/ssrfProtection'
+import {
+  fetchPinned,
+  isUnsafeHost,
+  ResponseTooLargeError,
+  SsrfBlockedError,
+} from '@/utils/ssrfProtection'
 import distLimiter from '@/lib/server/rateLimit'
 import { parseIntegerParam } from '@/utils/queryParams'
 
@@ -47,25 +52,29 @@ export async function GET(req: NextRequest) {
     return ApiError.forbidden('Forbidden').toNextResponse()
   }
 
-  const controller = new AbortController()
-  // 타이머는 헤더가 아니라 **본문을 다 읽을 때까지** 살아 있어야 한다. 예전에는
-  // fetch가 돌아오자마자 껐는데, 그러면 헤더만 빨리 주고 본문을 한 바이트씩
-  // 흘리는 상대에게 연결이 무기한 붙잡힌다. 해제는 아래 finally가 한 번만 한다.
-  const timeout = setTimeout(() => controller.abort(), 8000)
-
   try {
-    const res = await fetch(target.toString(), {
+    // 위 `isUnsafeHost`는 **이름**을 봤을 뿐이다. 그 뒤에 평범한 fetch를 하면
+    // 이름을 한 번 더 풀게 되고, 그 사이에 공격자가 자기 DNS 레코드를 내부
+    // 주소로 바꿔 두면 검사는 통과하고 접속만 내부로 간다. `fetchPinned`는
+    // 이름을 한 번 풀어 검사한 그 IP로만 접속한다.
+    const res = await fetchPinned(target.toString(), {
       method: 'GET',
       redirect: 'manual',
-      signal: controller.signal,
+      timeoutMs: 8000,
+      maxBytes: MAX_IMAGE_BYTES,
       // Spoof a common UA to improve success rate on strict sites
       headers: {
         'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36',
         Accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
       },
-      // Prevent Next from caching upstream 4xx/5xx aggressively
-      cache: 'no-store',
+      // 이미지가 아니거나 리다이렉트면 본문을 아예 받지 않는다.
+      acceptResponse: (status, headers) =>
+        status >= 200 &&
+        status < 300 &&
+        ALLOWED_IMAGE_TYPES.has(
+          (headers.get('content-type') || '').split(';')[0].trim().toLowerCase()
+        ),
     })
 
     // Handle redirects manually to prevent SSRF bypass
@@ -103,63 +112,27 @@ export async function GET(req: NextRequest) {
       return ApiError.badRequest('Upstream image is too large').toNextResponse()
     }
 
-    // Content-Length는 상대가 주는 **주장**이고, chunked 응답에는 아예 없다.
-    // 그래서 위 검사만으로는 8MB가 지켜지지 않는다 — 통째로 받아 놓고 길이를
-    // 재던 예전 코드는 상대가 흘리는 만큼 메모리에 쌓은 뒤에야 거절했다.
-    // 읽으면서 누적 바이트를 세고, 상한을 넘는 순간 연결을 끊는다.
-    const buff = await readCappedBody(res, MAX_IMAGE_BYTES)
-    if (!buff) {
-      return ApiError.badRequest('Upstream image is too large').toNextResponse()
-    }
+    // Content-Length는 상대가 주는 **주장**이고 chunked 응답에는 아예 없다.
+    // 실제 상한은 `fetchPinned`가 본문을 읽으면서 건다(넘으면
+    // ResponseTooLargeError). 위 헤더 검사는 받기 전에 거절할 수 있는 건은
+    // 미리 거절하는 지름길일 뿐이다.
+    const buff = Buffer.from(await res.arrayBuffer())
 
     // Cache for 1 day at the CDN/browser level
     return createImageResponse(buff, contentType, {
       'Cache-Control': 'public, max-age=86400',
     })
   } catch (err: unknown) {
-    const isAbort = err instanceof Error && err.name === 'AbortError'
-    const msg = isAbort ? 'Timeout fetching image' : 'Failed to fetch image'
-    return ApiError.badRequest(msg).toNextResponse()
-  } finally {
-    clearTimeout(timeout)
-  }
-}
-
-/**
- * 응답 본문을 읽으면서 상한을 넘는 순간 스트림을 끊는다. 상한을 넘었으면
- * `null`을 돌려주고(부분 버퍼는 버린다), 정상이면 전체 버퍼를 돌려준다.
- *
- * 상한 판정을 **읽은 뒤**가 아니라 **읽는 중**에 하는 것이 요점이다. 8MB
- * 상한을 두고도 통째로 버퍼링하면, 상한은 응답 코드만 바꿀 뿐 메모리는 이미
- * 다 썼다.
- */
-async function readCappedBody(res: Response, maxBytes: number): Promise<Buffer | null> {
-  if (!res.body) {
-    const buff = Buffer.from(await res.arrayBuffer())
-    return buff.length > maxBytes ? null : buff
-  }
-
-  const reader = res.body.getReader()
-  const chunks: Uint8Array[] = []
-  let total = 0
-
-  try {
-    for (;;) {
-      const { done, value } = await reader.read()
-      if (done) break
-      if (!value) continue
-      total += value.byteLength
-      if (total > maxBytes) {
-        await reader.cancel().catch(() => {})
-        return null
-      }
-      chunks.push(value)
+    if (err instanceof SsrfBlockedError) {
+      return ApiError.forbidden('Forbidden').toNextResponse()
     }
-  } finally {
-    reader.releaseLock()
+    if (err instanceof ResponseTooLargeError) {
+      return ApiError.badRequest('Upstream image is too large').toNextResponse()
+    }
+    const isTimeout = err instanceof Error && /timed out|aborted/i.test(err.message)
+    const msg = isTimeout ? 'Timeout fetching image' : 'Failed to fetch image'
+    return ApiError.badRequest(msg).toNextResponse()
   }
-
-  return Buffer.concat(chunks)
 }
 
 export function OPTIONS() {

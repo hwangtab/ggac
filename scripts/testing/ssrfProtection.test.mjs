@@ -12,7 +12,9 @@ import assert from 'node:assert/strict'
  *
  * 리터럴 IP는 DNS 조회 전에 판정되므로 이 테스트는 네트워크를 타지 않는다.
  */
-const { isUnsafeHost } = await import('../../src/utils/ssrfProtection.ts')
+const { isUnsafeHost, fetchPinned, SsrfBlockedError } = await import(
+  '../../src/utils/ssrfProtection.ts'
+)
 
 // -------------------------------------------------------------------------
 // IPv4-mapped IPv6 — 이 구멍으로 메타데이터 서비스까지 닿았다
@@ -131,4 +133,72 @@ for (const host of PUBLIC_HOSTS) {
 test('isUnsafeHost: 해석할 수 없는 호스트는 차단한다', async () => {
   assert.equal(await isUnsafeHost('not a host at all'), true)
   assert.equal(await isUnsafeHost(''), true)
+})
+
+// -------------------------------------------------------------------------
+// fetchPinned — 검사와 접속이 같은 주소를 본다
+// -------------------------------------------------------------------------
+//
+// `isUnsafeHost`로 통과시킨 뒤 따로 `fetch`를 부르면 이름을 두 번 푸는 것이
+// 되고, 그 사이는 공격자가 고르는 간격이다(DNS 리바인딩). `fetchPinned`는
+// 이름을 한 번 풀어 검사한 IP로만 접속한다 — 여기서는 그 앞단, 즉 "막아야 할
+// 주소에는 **연결 자체가 일어나지 않는다**"를 서버 쪽에서 확인한다.
+
+import http from 'node:http'
+
+async function withLocalServer(run) {
+  let connections = 0
+  const server = http.createServer((_req, res) => {
+    res.writeHead(200, { 'content-type': 'text/html' })
+    res.end('<title>should never be reached</title>')
+  })
+  server.on('connection', () => {
+    connections += 1
+  })
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+  try {
+    return await run(server.address().port, () => connections)
+  } finally {
+    server.close()
+  }
+}
+
+test('fetchPinned: 루프백으로 풀리는 이름은 연결조차 하지 않는다', async () => {
+  await withLocalServer(async (port, connections) => {
+    await assert.rejects(
+      () => fetchPinned(`http://localhost:${port}/`, { timeoutMs: 2000 }),
+      error => error instanceof SsrfBlockedError
+    )
+    await assert.rejects(
+      () => fetchPinned(`http://127.0.0.1:${port}/`, { timeoutMs: 2000 }),
+      error => error instanceof SsrfBlockedError
+    )
+    assert.equal(connections(), 0)
+  })
+})
+
+test('fetchPinned: 사설·링크로컬 리터럴을 거부한다', async () => {
+  for (const url of [
+    'http://169.254.169.254/latest/meta-data/',
+    'http://10.0.0.1/',
+    'http://192.168.0.1/',
+    'http://[::1]/',
+    'http://[::ffff:127.0.0.1]/',
+  ]) {
+    await assert.rejects(
+      () => fetchPinned(url, { timeoutMs: 2000 }),
+      error => error instanceof SsrfBlockedError,
+      url
+    )
+  }
+})
+
+test('fetchPinned: http·https가 아닌 프로토콜을 거부한다', async () => {
+  for (const url of ['ftp://example.com/x', 'file:///etc/passwd', 'gopher://example.com/']) {
+    await assert.rejects(
+      () => fetchPinned(url, { timeoutMs: 2000 }),
+      error => error instanceof SsrfBlockedError,
+      url
+    )
+  }
 })

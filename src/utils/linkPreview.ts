@@ -1,7 +1,12 @@
 import { load } from 'cheerio'
 import { getCachedPreviewFromDB, setCachedPreviewToDB } from '@/utils/linkPreviewCache'
 import { parseIntegerParam } from '@/utils/queryParams'
-import { isUnsafeHost } from '@/utils/ssrfProtection'
+import {
+  fetchPinned,
+  isUnsafeHost,
+  ResponseTooLargeError,
+  SsrfBlockedError,
+} from '@/utils/ssrfProtection'
 import { createLogger } from '@/utils/logger'
 import type { LinkPreview, TicketingInfo } from '@/types'
 
@@ -67,6 +72,16 @@ function describeUrlForLog(url: string): string {
 const MAX_HTML_BYTES = 2_000_000 // 2MB 상한
 const ALLOWED_PROTOCOLS = new Set(['http:', 'https:'])
 
+// 바깥으로 나가는 요청은 전역 `fetch`가 아니라 `fetchPinned`로 보낸다. 이름을
+// 한 번만 풀고 검사한 그 IP로 접속하므로, 검사와 접속 사이에 DNS 레코드를
+// 바꿔치우는 수법(DNS 리바인딩)이 통하지 않는다. 본문 상한도 다 받고 재는 것이
+// 아니라 읽으면서 건다.
+//
+// 이 경로는 Next의 fetch 캐시를 타지 않는다. 대신 앞단에 캐시가 두 겹
+// 있고(메모리 1시간·DB 6시간) Next가 요청을 계측하지 않으므로, ISR 렌더 중
+// 정적→동적 전환 충돌(app-static-to-dynamic-error)도 생기지 않는다 — 예전에
+// `cache: 'no-store'`가 그 충돌로 5개월간 500을 380건 냈던 자리다.
+
 async function preflightRequest(
   url: string
 ): Promise<{ ok: boolean; reason?: string; contentType?: string; contentLength?: number }> {
@@ -79,29 +94,19 @@ async function preflightRequest(
       return { ok: false, reason: 'Host resolves to private or unsafe IP' }
     }
 
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 8000)
     let headRes: Response | null = null
     try {
-      headRes = await fetch(url, {
+      headRes = await fetchPinned(url, {
         method: 'HEAD',
         redirect: 'manual',
-        signal: controller.signal,
+        timeoutMs: 8000,
         headers: {
           'User-Agent': 'GGAC-LinkPreview/1.0',
           Accept: 'text/html,application/xhtml+xml',
         },
-        // cache:'no-store' 금지 — ISR 페이지(projects/[slug] revalidate=3600) 렌더 중
-        // 이 preflight가 실행되면 정적→동적 전환 충돌(app-static-to-dynamic-error)로
-        // 해당 요청이 500이 된다(5개월간 380건). 본문 GET과 동일하게 revalidate 캐시 사용.
-        next: {
-          revalidate: process.env.NODE_ENV === 'development' ? 60 : 3600,
-        },
       })
     } catch {
       // 일부 서버는 HEAD 미지원 → 본 요청에서 검사
-    } finally {
-      clearTimeout(timeout)
     }
 
     if (headRes && headRes.status >= 300 && headRes.status < 400) {
@@ -159,28 +164,27 @@ async function fetchWithRetry(url: string, maxRetries = 3): Promise<Response | n
       const randomUserAgent = userAgents[Math.floor(Math.random() * userAgents.length)]
       log.debug('Using User-Agent', { userAgent: randomUserAgent.substring(0, 50) })
 
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 10000) // 10초 타임아웃
-
-      const response = await fetch(url, {
-        signal: controller.signal,
+      const response = await fetchPinned(url, {
         redirect: 'manual',
+        timeoutMs: 10000, // 10초 타임아웃
+        maxBytes: MAX_HTML_BYTES,
         headers: {
           'User-Agent': randomUserAgent,
           Accept: 'text/html,application/xhtml+xml',
           'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
-          'Accept-Encoding': 'gzip, deflate, br',
           'Cache-Control': 'no-cache',
           Pragma: 'no-cache',
           'Sec-Fetch-Dest': 'document',
           'Sec-Fetch-Mode': 'navigate',
           'Sec-Fetch-Site': 'none',
           DNT: '1',
-          Connection: 'keep-alive',
           'Upgrade-Insecure-Requests': '1',
         },
-        next: {
-          revalidate: process.env.NODE_ENV === 'development' ? 60 : 3600,
+        // HTML이 아니면 본문을 받지 않는다 — 어차피 아래에서 거절한다.
+        acceptResponse: (status, headers) => {
+          if (status < 200 || status >= 300) return false
+          const type = headers.get('content-type')
+          return !type || /text\/html|application\/xhtml\+xml/i.test(type)
         },
       })
 
@@ -216,8 +220,6 @@ async function fetchWithRetry(url: string, maxRetries = 3): Promise<Response | n
         return null
       }
 
-      clearTimeout(timeoutId)
-
       log.debug('Fetch response received', {
         status: response.status,
         statusText: response.statusText,
@@ -246,6 +248,16 @@ async function fetchWithRetry(url: string, maxRetries = 3): Promise<Response | n
         return null
       }
     } catch (error) {
+      // 사설 주소로 풀렸거나 본문이 상한을 넘은 것은 재시도한다고 달라지지
+      // 않는다 — 같은 요청을 두 번 더 보내 같은 이유로 막힐 뿐이다.
+      if (error instanceof SsrfBlockedError || error instanceof ResponseTooLargeError) {
+        console.warn('[LinkPreview] Request rejected before body', {
+          source: describeUrlForLog(url),
+          reason: error.name,
+        })
+        return null
+      }
+
       console.error(`💥 [LinkPreview] Attempt ${attempt} failed:`, error)
 
       if (attempt === maxRetries) {

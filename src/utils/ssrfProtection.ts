@@ -1,5 +1,9 @@
 import dns from 'dns/promises'
+import http from 'http'
+import https from 'https'
 import net from 'net'
+import type { LookupFunction } from 'net'
+import zlib from 'zlib'
 
 function normalizeHostname(hostname: string): string {
   const lower = hostname.trim().toLowerCase()
@@ -155,4 +159,255 @@ export async function isUnsafeHost(hostname: string): Promise<boolean> {
     // DNS resolution failure → block conservatively
     return true
   }
+}
+
+// ---------------------------------------------------------------------------
+// 검사한 IP로만 접속한다 (DNS 리바인딩 차단)
+// ---------------------------------------------------------------------------
+
+/**
+ * `isUnsafeHost(host)`로 통과시킨 뒤 `fetch(url)`을 부르면, 이름을 **두 번**
+ * 푸는 것이 된다. 그 사이는 공격자가 고르는 간격이다 — 자기 도메인의 TTL을 0으로
+ * 두고 첫 조회에는 공개 IP를, 두 번째 조회에는 169.254.169.254를 주면 검사는
+ * 통과하고 접속은 내부로 간다. 검사와 접속이 같은 주소를 본다는 보장이 없으면
+ * 검사는 장식이다.
+ *
+ * 그래서 이름을 **한 번만** 풀고, 그 결과를 검사한 뒤, 그 IP로 못을 박아
+ * 접속한다. 못은 `http.request`/`https.request`의 `lookup` 옵션이다 — 소켓이
+ * 이름을 다시 풀지 않고 넘겨받은 주소로만 연결한다. `host`에는 원래 이름을
+ * 그대로 넘기므로 Host 헤더·SNI·인증서 검증은 도메인 기준으로 유지된다.
+ *
+ * (전역 `fetch`로는 이 못을 박을 수 없다. 접속 주소를 지정하는 창구가
+ * undici 디스패처뿐인데 undici는 이 저장소의 직접 의존성이 아니고, URL의
+ * 호스트를 IP로 바꿔치우는 방식은 https 인증서 검증을 깨뜨린다.)
+ */
+export class SsrfBlockedError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'SsrfBlockedError'
+  }
+}
+
+/** 상한을 넘는 본문을 받았을 때. 부분 버퍼는 버리고 연결을 끊는다. */
+export class ResponseTooLargeError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'ResponseTooLargeError'
+  }
+}
+
+export type PinnedRequestInit = {
+  method?: string
+  headers?: Record<string, string>
+  /** 연결부터 본문 수신 완료까지의 총 시간 상한. 기본 10초. */
+  timeoutMs?: number
+  /** 본문 누적 상한. 읽는 중에 넘으면 즉시 끊는다. 기본 2MB. */
+  maxBytes?: number
+  /**
+   * 리다이렉트는 **어떤 값을 주든** 따라가지 않는다(호출부가 Location을 직접
+   * 검사해야 한다). 호출부의 의도를 코드에 남기려고 받아만 둔다.
+   */
+  redirect?: 'manual'
+  /**
+   * 헤더만 보고 본문을 받을지 정한다. `false`를 돌려주면 연결을 끊고 본문이
+   * 빈 `Response`를 돌려준다 — 호출부는 평소처럼 status·헤더로 판정하면 된다.
+   */
+  acceptResponse?: (status: number, headers: Headers) => boolean
+}
+
+const PINNED_ALLOWED_PROTOCOLS = new Set(['http:', 'https:'])
+const DEFAULT_TIMEOUT_MS = 10_000
+const DEFAULT_MAX_BYTES = 2_000_000
+
+/** 본문이 없어야 하는 상태 코드 — Response 생성자가 본문을 거부한다. */
+const NULL_BODY_STATUSES = new Set([101, 103, 204, 205, 304])
+
+type PinnedAddress = { address: string; family: 4 | 6 }
+
+/**
+ * 이름을 한 번 풀고 안전한 주소 하나를 고른다. 레코드가 하나라도 사설이면
+ * 전부 거부한다 — `isUnsafeHost`가 쓰던 판정과 같은 보수적 계약이다.
+ */
+async function resolvePinnedAddress(hostname: string): Promise<PinnedAddress | null> {
+  const normalized = normalizeHostname(hostname)
+  if (normalized === 'localhost') return null
+
+  const literal = net.isIP(normalized)
+  if (literal === 4) return isPrivateIPv4(normalized) ? null : { address: normalized, family: 4 }
+  if (literal === 6) return isPrivateIPv6(normalized) ? null : { address: normalized, family: 6 }
+
+  let records: { address: string; family: number }[]
+  try {
+    records = await dns.lookup(normalized, { all: true })
+  } catch {
+    return null
+  }
+  if (!records || records.length === 0) return null
+  for (const rec of records) {
+    if (isPrivateIpLiteral(rec.address)) return null
+  }
+
+  const chosen = records[0]
+  return { address: chosen.address, family: chosen.family === 6 ? 6 : 4 }
+}
+
+function createPinnedLookup(pinned: PinnedAddress): LookupFunction {
+  return ((
+    _hostname: string,
+    options: unknown,
+    callback?: (err: NodeJS.ErrnoException | null, ...args: unknown[]) => void
+  ) => {
+    const cb = (typeof options === 'function' ? options : callback) as (
+      err: NodeJS.ErrnoException | null,
+      ...args: unknown[]
+    ) => void
+    const wantsAll =
+      typeof options === 'object' && options !== null && (options as { all?: boolean }).all === true
+    if (wantsAll) {
+      cb(null, [{ address: pinned.address, family: pinned.family }])
+      return
+    }
+    cb(null, pinned.address, pinned.family)
+  }) as unknown as LookupFunction
+}
+
+/** 본문을 풀어야 하면 여기서 푼다. 상한을 넘겨 부풀리는 폭탄은 zlib이 끊는다. */
+function decodeBody(buffer: Buffer, encoding: string | undefined, maxBytes: number): Buffer {
+  const codec = (encoding || '').trim().toLowerCase()
+  if (!codec || codec === 'identity') return buffer
+  if (codec === 'gzip' || codec === 'x-gzip') {
+    return zlib.gunzipSync(buffer, { maxOutputLength: maxBytes })
+  }
+  if (codec === 'deflate') return zlib.inflateSync(buffer, { maxOutputLength: maxBytes })
+  if (codec === 'br') return zlib.brotliDecompressSync(buffer, { maxOutputLength: maxBytes })
+  throw new Error(`Unsupported content-encoding: ${codec}`)
+}
+
+/**
+ * 검사가 끝난 IP로만 접속해서 응답을 통째로 받아 표준 `Response`로 돌려준다.
+ *
+ * - 리다이렉트는 따라가지 않는다(3xx가 그대로 온다).
+ * - 본문은 `maxBytes`를 넘는 순간 끊는다 — 다 받고 나서 재지 않는다.
+ * - 이름이 사설 주소로 풀리면 `SsrfBlockedError`.
+ */
+export async function fetchPinned(url: string, init: PinnedRequestInit = {}): Promise<Response> {
+  const target = new URL(url)
+  if (!PINNED_ALLOWED_PROTOCOLS.has(target.protocol)) {
+    throw new SsrfBlockedError(`Protocol not allowed: ${target.protocol}`)
+  }
+
+  const pinned = await resolvePinnedAddress(target.hostname)
+  if (!pinned) {
+    throw new SsrfBlockedError('Host resolves to a private or unresolvable address')
+  }
+
+  const timeoutMs = init.timeoutMs ?? DEFAULT_TIMEOUT_MS
+  const maxBytes = init.maxBytes ?? DEFAULT_MAX_BYTES
+  const transport = target.protocol === 'https:' ? https : http
+
+  // 응답 본문을 스스로 풀어야 하므로 압축을 요구하지 않는다(그래도 압축해
+  // 보내는 상대는 decodeBody가 푼다).
+  const headers: Record<string, string> = {
+    'Accept-Encoding': 'identity',
+    ...(init.headers || {}),
+  }
+
+  return new Promise<Response>((resolve, reject) => {
+    let settled = false
+    const finish = (fn: () => void) => {
+      if (settled) return
+      settled = true
+      clearTimeout(deadline)
+      fn()
+    }
+
+    const request = transport.request(
+      {
+        protocol: target.protocol,
+        // 이름은 그대로 — Host 헤더·SNI·인증서 검증이 도메인 기준으로 남는다.
+        host: normalizeHostname(target.hostname),
+        port: target.port || (target.protocol === 'https:' ? 443 : 80),
+        path: `${target.pathname}${target.search}`,
+        method: init.method || 'GET',
+        headers,
+        // 접속 주소는 위에서 검사한 IP 하나로 고정한다.
+        lookup: createPinnedLookup(pinned),
+        family: pinned.family,
+      },
+      response => {
+        const status = response.statusCode ?? 502
+        const responseHeaders = new Headers()
+        for (const [key, value] of Object.entries(response.headers)) {
+          if (value === undefined) continue
+          if (Array.isArray(value)) {
+            for (const item of value) responseHeaders.append(key, item)
+          } else {
+            responseHeaders.append(key, String(value))
+          }
+        }
+
+        // 본문을 받을 가치가 없는 응답(리다이렉트·엉뚱한 content-type)은 헤더만
+        // 보고 여기서 끊는다. 상한이 8MB라도, 거절할 응답을 8MB까지 받아 주면
+        // 그 자체가 대역폭 증폭기가 된다.
+        if (init.acceptResponse && !init.acceptResponse(status, responseHeaders)) {
+          response.destroy()
+          request.destroy()
+          finish(() => resolve(new Response(null, { status, headers: responseHeaders })))
+          return
+        }
+
+        const chunks: Buffer[] = []
+        let total = 0
+
+        response.on('data', (chunk: Buffer) => {
+          total += chunk.length
+          if (total > maxBytes) {
+            response.destroy()
+            request.destroy()
+            finish(() => reject(new ResponseTooLargeError('Response body exceeded the size limit')))
+            return
+          }
+          chunks.push(chunk)
+        })
+
+        response.on('end', () => {
+          finish(() => {
+            try {
+              const raw = Buffer.concat(chunks)
+              const body =
+                NULL_BODY_STATUSES.has(status) || init.method === 'HEAD'
+                  ? null
+                  : decodeBody(
+                      raw,
+                      response.headers['content-encoding'] as string | undefined,
+                      maxBytes
+                    )
+
+              // 본문을 풀었으면 길이·인코딩 헤더는 더 이상 본문을 설명하지 않는다.
+              if (body && responseHeaders.get('content-encoding')) {
+                responseHeaders.delete('content-encoding')
+                responseHeaders.set('content-length', String(body.length))
+              }
+
+              // Buffer(=Uint8Array<ArrayBufferLike>)는 BodyInit 타입에 그대로
+              // 들어가지 않는다. ArrayBuffer를 등에 업은 뷰로 옮겨 넘긴다.
+              const bodyInit = body ? Uint8Array.from(body) : null
+              resolve(new Response(bodyInit, { status, headers: responseHeaders }))
+            } catch (error) {
+              reject(error)
+            }
+          })
+        })
+
+        response.on('error', error => finish(() => reject(error)))
+      }
+    )
+
+    const deadline = setTimeout(() => {
+      request.destroy(new Error('Pinned request timed out'))
+    }, timeoutMs)
+
+    request.on('error', error => finish(() => reject(error)))
+    request.end()
+  })
 }
