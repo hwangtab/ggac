@@ -202,6 +202,66 @@ test('취소 선점 → 환불 기록, 되돌리기', async () => {
   assert.equal(await pq.getRemainingQuantity(limited.id), 3)
 })
 
+test('취소 선점은 환불이 확정될 때까지 재고를 붙들고 있다', async () => {
+  // 토스가 거절하면 `revertPledgeCancel`이 `paid`로 되돌린다. 그 몇 초 사이에
+  // 자리를 내주면 마지막 한 개가 다른 사람에게 팔리고, 되돌릴 자리가 없는데
+  // 되돌려야 하는 상태 — 초과 판매가 된다.
+  const r = await fq.createReward({
+    campaign_id: campaign.id,
+    title: '취소 선점',
+    amount: 7000,
+    total_quantity: 1,
+  })
+  const p = await hold('funding_claim_stock', r.id, 1, { reward: r })
+  await pq.finalizePledgePayment({
+    orderId: 'funding_claim_stock',
+    pledgeId: p.id,
+    paymentKey: 'pk_claim_stock',
+    method: '카드',
+    approvedAt: new Date(),
+    raw: {},
+  })
+  assert.equal(await pq.getRemainingQuantity(r.id), 0)
+
+  // 토스 취소 직전 — 후원은 `canceled`지만 돈은 아직 움직이지 않았다.
+  assert.equal((await pq.claimPledgeForCancel(p.id, {})).status, 'canceled')
+  assert.equal(await pq.getRemainingQuantity(r.id), 0, '환불이 끝나기 전에 자리를 내줬다')
+  await assert.rejects(
+    () => hold('funding_claim_stock_b', r.id, 1, { reward: r }),
+    e => e instanceof pq.RewardSoldOutError
+  )
+
+  // 토스가 거절 → `paid`로 복구. 자리는 처음부터 지키고 있었다.
+  await pq.revertPledgeCancel(p.id)
+  assert.equal((await pq.getPledgeById(p.id)).status, 'paid')
+  assert.equal(await pq.getRemainingQuantity(r.id), 0)
+
+  // 환불이 확정된 그때 비로소 자리가 풀린다.
+  await pq.claimPledgeForCancel(p.id, {})
+  const payment = await payq.getPaymentByOrderId('funding_claim_stock')
+  await pq.finalizePledgeRefund({
+    orderId: 'funding_claim_stock',
+    paymentId: payment.id,
+    pledgeId: p.id,
+    canceledAmount: payment.amount,
+    raw: {},
+  })
+  assert.equal(await pq.getRemainingQuantity(r.id), 1)
+})
+
+test('결제 한 번 없이 취소된 선점은 재고를 붙들지 않는다', async () => {
+  const r = await fq.createReward({
+    campaign_id: campaign.id,
+    title: '결제 없는 취소',
+    amount: 7000,
+    total_quantity: 1,
+  })
+  const p = await hold('funding_nopay_cancel', r.id, 1, { reward: r })
+  assert.equal(await pq.getRemainingQuantity(r.id), 0)
+  await pq.cancelPendingPledge(p.id, 'funding_nopay_cancel')
+  assert.equal(await pq.getRemainingQuantity(r.id), 1)
+})
+
 test('승인 실패 시 pending 취소는 주문 짝이 맞아야 한다', async () => {
   const p = await hold('funding_d', unlimited.id, 1)
   assert.equal(await pq.cancelPendingPledge(p.id, 'funding_other'), null)

@@ -154,13 +154,37 @@ function rowToPledge(row: Row): Row {
 }
 
 /**
- * 재고를 차지하는 후원: paid이거나 아직 만료되지 않은 pending.
+ * 재고를 차지하는 후원: paid이거나, 아직 만료되지 않은 pending이거나,
+ * **환불이 아직 끝나지 않은 취소 선점**이다.
  *
  * `isNull(holdExpiresAt)` 가지는 오늘은 닿지 않는다 — `holdPledgeOnce`가
  * 선점을 만들 때 항상 만료시각을 함께 새기므로 만료시각 없는 pending 행은
  * 생기지 않는다. 생겼다면 만료 스윕(`listExpiredHolds`)이 절대 고르지
  * 못해 영구히 재고를 차지하는 채로 남는다 — 티켓 예매 모듈에서 그대로
  * 물려받은 모양이다.
+ *
+ * ## 세 번째 가지 — 결제가 붙은 `canceled`
+ *
+ * 환불은 "취소 선점(`claimPledgeForCancel`) → 토스 → 확정 또는 되돌리기"
+ * 순서로 간다. 가운데 토막에서 후원은 `canceled`인데 **돈은 아직 움직이지
+ * 않았고**, 토스가 거절하면 `revertPledgeCancel`이 다시 `paid`로 돌려놓는다.
+ * 그 토막 동안 자리를 비워 주면, 한정 리워드의 마지막 한 개를 다른 사람이
+ * 사 가고 나서 환불이 거절되는 일이 생긴다 — 되돌릴 자리가 없는데 되돌려야
+ * 하는 상태, 즉 초과 판매다.
+ *
+ * 그래서 **환불이 확정되기 전까지는 자리를 내주지 않는다.** 확정되면 상태가
+ * `refunded`로 바뀌어(`finalizePledgeRefund`) 이 조건에서 빠지고, 그때 비로소
+ * 자리가 풀린다. 거절되면 `paid`로 돌아오는데 자리는 처음부터 지키고 있었다.
+ *
+ * 결제가 붙었는지(`payment_id`)로 가른다 — `cancelPendingPledge`가 만드는
+ * `canceled`(결제 한 번 없이 만료·거절된 선점)는 돌아올 곳이 없으므로 자리를
+ * 차지하면 안 된다. 정산의 `capturedCondition`과 `revertPledgeCancel`이 이미
+ * 같은 신호로 같은 두 부류를 가른다.
+ *
+ * ⚠ 토스 조회가 판단 불가(`TossLookupError`)로 끝난 건은 사람이 재시도로
+ * 결말을 낼 때까지 자리를 쥔 채 남는다. 의도한 쪽이다 — 판 적 없는 수량을
+ * 파는 것보다 팔 수 있는 수량을 잠시 못 파는 편이 낫고, 그 건은
+ * `listStuckHolds`가 아니라 환불 재시도가 푼다.
  */
 function occupyingCondition(now: Date) {
   return or(
@@ -168,7 +192,8 @@ function occupyingCondition(now: Date) {
     and(
       eq(fundingPledges.status, 'pending'),
       or(isNull(fundingPledges.holdExpiresAt), gt(fundingPledges.holdExpiresAt, now))
-    )
+    ),
+    and(eq(fundingPledges.status, 'canceled'), isNotNull(fundingPledges.paymentId))
   )
 }
 
