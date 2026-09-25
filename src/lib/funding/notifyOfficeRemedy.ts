@@ -49,7 +49,8 @@ const log = createLogger('funding/notifyOfficeRemedy')
 
 export interface OfficeRemedyNotifyDeps {
   createNotification: (input: Record<string, unknown>) => Promise<unknown>
-  sendEmail: (mail: { to: string; subject: string; html: string }) => Promise<void>
+  /** 반환값은 쓰지 않는다(실제 구현은 Resend 메시지 식별자를 돌려준다). */
+  sendEmail: (mail: { to: string; subject: string; html: string }) => Promise<unknown>
   isMailConfigured: () => boolean
   siteUrl: () => string
   log: { warn: (m: string, meta?: unknown) => void; error: (m: string, meta?: unknown) => void }

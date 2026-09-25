@@ -31,9 +31,11 @@ export interface SendEmailInput {
 }
 
 /**
+ * @returns Resend가 매긴 메시지 식별자. 응답을 읽지 못하면 `null`이다 —
+ *   메일은 이미 나갔으므로 식별자를 못 읽었다고 던지지 않는다.
  * @throws 키 누락·HTTP 실패는 던진다. 호출부가 실패를 세고 관리자에게 알린다.
  */
-export async function sendEmail(input: SendEmailInput): Promise<void> {
+export async function sendEmail(input: SendEmailInput): Promise<string | null> {
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) {
     throw new Error('RESEND_API_KEY가 설정되지 않았습니다.')
@@ -61,4 +63,10 @@ export async function sendEmail(input: SendEmailInput): Promise<void> {
     const detail = await response.text().catch(() => '')
     throw new Error(`Resend 발송 실패 (${response.status}): ${detail.slice(0, 200)}`)
   }
+
+  // 식별자를 돌려준다. 이것이 없으면 우리가 보낸 메일과 Resend 대시보드의 한
+  // 줄을 맞춰 볼 방법이 없다 — "답장을 보냈다는데 상대는 못 받았다"를 물어올
+  // 때 댈 근거가 우리 원장의 '보냈음' 한 칸뿐이게 된다.
+  const payload = (await response.json().catch(() => null)) as { id?: unknown } | null
+  return typeof payload?.id === 'string' ? payload.id : null
 }

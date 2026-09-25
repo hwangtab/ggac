@@ -68,8 +68,10 @@ export const POST = defineApiRoute<{ body_html?: string }>({
     if (references.length > 0) headers['References'] = references.join(' ')
 
     // 발송 자체가 실패하면(키 누락·Resend HTTP 오류) 메일이 안 나갔으니
-    // 여기서 던져 재시도를 유도하는 것이 옳다.
-    await sendEmail({
+    // 여기서 던져 재시도를 유도하는 것이 옳다. 상태를 `replied`로 옮기는 것도
+    // 회신 원장에 줄을 남기는 것도 이 await 뒤에만 일어난다 — 나간 것이
+    // 확인된 메일만 "답장함"이 된다.
+    const resendMessageId = await sendEmail({
       to: String(email.from_address),
       subject,
       html,
@@ -90,7 +92,9 @@ export const POST = defineApiRoute<{ body_html?: string }>({
         sent_by: auth?.user?.id ?? null,
         subject,
         body_html: html,
-        resend_message_id: null,
+        // Resend가 매긴 식별자. 지금까지 null로 박아 넣고 있어서, 발송한
+        // 답장을 Resend 쪽 기록과 맞춰 볼 수단이 없었다.
+        resend_message_id: resendMessageId,
       })
       if (messageId) {
         await appendThreadReference(id, messageId)

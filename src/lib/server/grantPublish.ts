@@ -122,12 +122,13 @@ export interface RunGrantPublishInput {
     expires_at?: string | null
     related_post_id?: string | null
   }) => Promise<number>
+  /** 반환값은 쓰지 않는다(실제 구현은 Resend 메시지 식별자를 돌려준다). */
   sendEmail: (input: {
     to: string
     subject: string
     html: string
     headers?: Record<string, string>
-  }) => Promise<void>
+  }) => Promise<unknown>
   log: { info: (msg: string, meta?: unknown) => void; error: (msg: string, meta?: unknown) => void }
 }
 

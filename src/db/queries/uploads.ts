@@ -5,10 +5,17 @@
  * 부를 자격이 있는지는 라우트가 판정하고, 여기는 검증된 값만 받는다.
  *
  * 이 계층이 답하는 질문은 하나다: "올라왔지만 아무 데서도 참조하지 않는
- * 파일은 무엇인가." 참조는 두 곳에만 있다 —
+ * 파일은 무엇인가." 참조가 생길 수 있는 자리는 넷이다 —
  *   1) 게시글 본문(`posts.content`)에 박힌 URL 문자열
  *   2) 첨부 원장(`post_attachments.file_url`)
- * 그래서 후보 판정은 이 둘에 대한 NOT EXISTS다.
+ *   3) 후원 프로젝트의 표지·OG 이미지와 본문(`funding_campaigns`)
+ *   4) 이사회 회의록 본문(`board_minutes.content`)
+ * 그래서 후보 판정은 이 넷에 대한 NOT EXISTS다.
+ *
+ * **이 목록은 업로드를 기록하는 곳(`recordUpload` 호출부)과 한 벌이다.** 새
+ * 업로드 경로나 새 리치 텍스트 칸이 생기면 여기도 같이 늘려야 한다. 빠뜨리면
+ * 화면에 잘 보이는 이미지가 업로드 7일 뒤 크론에 지워진다 — 에러도 안 나고,
+ * 누가 지웠는지도 화면에 남지 않는다.
  */
 
 import { and, desc, eq, lt, sql } from 'drizzle-orm'
@@ -92,6 +99,9 @@ export async function getUploadByUrl(url: string) {
  * 삭제된 게시글(`is_deleted = 1`)은 참조로 치지 않는다. 소프트 삭제된 글의
  * 본문은 화면 어디에도 나오지 않으므로 그 안의 이미지를 붙들고 있을 이유가
  * 없다. (되살리기 기능이 생긴다면 이 판정을 먼저 바꿔야 한다.)
+ *
+ * 후원 프로젝트는 상태를 보지 않는다 — `draft`도, 마감·정산이 끝난 것도 표지를
+ * 계속 화면에 띄운다. 회의록도 마찬가지로 지워지지 않는다.
  */
 export async function listCleanupCandidates(
   options: { now?: number; ageMs?: number; limit?: number } = {}
@@ -108,7 +118,22 @@ export async function listCleanupCandidates(
       and(
         lt(mediaUploads.createdAt, cutoff),
         sql`NOT EXISTS (SELECT 1 FROM posts WHERE is_deleted = 0 AND instr(content, ${mediaUploads.url}) > 0)`,
-        sql`NOT EXISTS (SELECT 1 FROM post_attachments WHERE file_url = ${mediaUploads.url})`
+        sql`NOT EXISTS (SELECT 1 FROM post_attachments WHERE file_url = ${mediaUploads.url})`,
+        // 후원 프로젝트의 표지는 `/api/mypage/funding/campaigns/[id]/cover`가
+        // 올리고 `recordUpload`로 원장에 남긴다 — 그런데 반영된 표지를 참조로
+        // 세는 곳이 없어서, 공개된 프로젝트의 표지가 업로드 7일 뒤에 지워졌다.
+        // OG 이미지와 본문(`story`)도 같은 칸에서 URL을 받으므로 함께 본다
+        // (세 칸 모두 한 서브쿼리 안이라 표는 한 번만 훑는다).
+        sql`NOT EXISTS (
+          SELECT 1 FROM funding_campaigns
+          WHERE instr(coalesce(cover_image, ''), ${mediaUploads.url}) > 0
+             OR instr(coalesce(og_image, ''), ${mediaUploads.url}) > 0
+             OR instr(coalesce(story, ''), ${mediaUploads.url}) > 0
+        )`,
+        // 이사회 회의록은 게시글과 같은 편집기(`RichTextEditor` →
+        // `/api/media/upload`)로 쓴다. 본문에 박힌 이미지는 `posts.content`와
+        // 똑같이 참조인데 여기 없었다.
+        sql`NOT EXISTS (SELECT 1 FROM board_minutes WHERE instr(coalesce(content, ''), ${mediaUploads.url}) > 0)`
       )
     )
     .orderBy(mediaUploads.createdAt)

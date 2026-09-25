@@ -56,9 +56,53 @@ function isAuthorized(request: NextRequest): boolean {
   )
 }
 
+/**
+ * 크론이 깨진 것을 보이게 한다.
+ *
+ * Vercel 크론은 실패를 알리지 않는다 — 500이 나든 예외로 죽든 대시보드에 줄
+ * 하나가 늘 뿐이다. 이 스윕은 "토스는 승인했는데 우리 confirm이 유실된" 결제를
+ * 구하는 유일한 장치라, 멈춘 채 며칠이 지나면 그 안에 "돈은 나갔는데 후원이
+ * 없는" 건이 쌓인다. `log.error`는 Vercel 런타임 로그까지, `logSecurityEvent`의
+ * 'high'는 알림 웹훅이 설정된 곳까지 간다 — 둘 다 낸다.
+ */
+function reportBroken(
+  event: 'FUNDING_EXPIRE_CRON_FAILED' | 'FUNDING_EXPIRE_SWEEP_SKIPPED',
+  message: string,
+  details: Record<string, unknown>
+): void {
+  log.error(message, details)
+  try {
+    logSecurityEvent(event, details, 'high')
+  } catch {
+    // 알림 실패가 응답을 막지 않는다.
+  }
+}
+
 async function handle(request: NextRequest) {
   if (!isAuthorized(request)) return ApiError.unauthorized('권한이 없습니다.').toNextResponse()
-  if (!isPaymentEnabled()) return ApiSuccess.ok({ skipped: 'payment_disabled' }).toNextResponse()
+  if (!isPaymentEnabled()) {
+    // 스위치를 내린 것 자체는 사고가 아니다. 그런데 스위치가 내려간 동안에도
+    // 결제 대기 선점은 남아 있을 수 있고, 그 건들은 아무도 보지 않는다.
+    // 풀어야 할 것이 실제로 있을 때만 올린다 — 10분마다 우는 경보는 곧
+    // 아무도 안 본다. 이 조회는 토스를 타지 않는 순수 DB 읽기다.
+    let waiting = 0
+    try {
+      waiting = (await listExpiredHolds()).length
+    } catch (error) {
+      reportBroken('FUNDING_EXPIRE_CRON_FAILED', '건너뛴 스윕의 대기 건수조차 세지 못함', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      return ApiError.internalServerError('만료 정리를 실행하지 못했습니다.').toNextResponse()
+    }
+    if (waiting > 0) {
+      reportBroken(
+        'FUNDING_EXPIRE_SWEEP_SKIPPED',
+        '결제 스위치가 내려가 만료 스윕을 건너뛰었으나 풀어야 할 선점이 남아 있음',
+        { waiting }
+      )
+    }
+    return ApiSuccess.ok({ skipped: 'payment_disabled', waiting }).toNextResponse()
+  }
 
   const { secretKey } = getServerPaymentConfig()
   // 환불 통지는 스윕 루프 안에서 기다리지 않는다. 한 리워드가 통째로 매진된
@@ -258,5 +302,20 @@ async function handle(request: NextRequest) {
   return ApiSuccess.ok(result).toNextResponse()
 }
 
-export const GET = handle
-export const POST = handle
+/**
+ * `handle`에는 try/catch가 없었다 — 던지면 Next가 500을 만들고 그걸로 끝이라,
+ * 정산 고리가 멈춘 사실이 어디에도 남지 않았다. 여기서 받아 'high'로 올린다.
+ */
+async function handleWithReport(request: NextRequest) {
+  try {
+    return await handle(request)
+  } catch (error) {
+    reportBroken('FUNDING_EXPIRE_CRON_FAILED', '후원 만료 정리 실패', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return ApiError.internalServerError('만료 정리를 실행하지 못했습니다.').toNextResponse()
+  }
+}
+
+export const GET = handleWithReport
+export const POST = handleWithReport

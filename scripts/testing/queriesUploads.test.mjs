@@ -14,6 +14,8 @@ import { applyMigrations } from './apply-migrations.mjs'
  *
  * - 게시글 본문이 URL을 품고 있으면 후보가 아니다.
  * - 첨부 원장이 가리키고 있으면 후보가 아니다.
+ * - 후원 프로젝트의 표지·OG·본문이 가리키고 있으면 후보가 아니다.
+ * - 이사회 회의록 본문이 품고 있으면 후보가 아니다.
  * - 삭제된 게시글의 본문은 참조로 치지 않는다.
  * - 아직 7일이 안 된 업로드는 후보가 아니다(에디터에 붙이는 중일 수 있다).
  */
@@ -185,6 +187,92 @@ test('첨부 원장이 가리키는 파일은 후보가 아니다', async () => 
 
   const candidates = await listCleanupCandidates()
   assert.ok(!candidates.some(row => row.url === input.url))
+})
+
+async function insertCampaign(columns) {
+  const now = Date.now()
+  const keys = Object.keys(columns)
+  await setupClient.execute({
+    sql: `INSERT INTO funding_campaigns
+            (id, slug, title, summary, goal_amount, created_at, updated_at${keys.map(k => `, ${k}`).join('')})
+          VALUES (?, ?, '프로젝트', '한 줄 소개', 1000000, ?, ?${keys.map(() => ', ?').join('')})`,
+    args: [`camp-${++seq}`, `camp-${seq}`, now, now, ...keys.map(k => columns[k])],
+  })
+}
+
+async function insertMinutes(content) {
+  const now = Date.now()
+  const meetingId = `meeting-${++seq}`
+  await setupClient.execute({
+    sql: `INSERT INTO board_meetings (id, title, status, created_at, updated_at)
+          VALUES (?, '이사회', 'scheduled', ?, ?)`,
+    args: [meetingId, now, now],
+  })
+  await setupClient.execute({
+    sql: `INSERT INTO board_minutes (id, meeting_id, content, content_format, created_at, updated_at)
+          VALUES (?, ?, ?, 'html', ?, ?)`,
+    args: [`minutes-${seq}`, meetingId, content, now, now],
+  })
+}
+
+test('후원 프로젝트 표지로 쓰이는 파일은 후보가 아니다', async () => {
+  const { recordUpload, listCleanupCandidates } = await loadFresh()
+  // 표지는 `/api/mypage/funding/campaigns/[id]/cover`가 원장에 기록하는데,
+  // 반영된 표지를 참조로 세는 곳이 없어서 공개된 프로젝트의 표지가 업로드
+  // 7일 뒤에 지워졌다. 에러도 안 나고, 화면에서 이미지만 깨진다.
+  const input = uploadInput({ bucket: 'funding-covers' })
+
+  await recordUpload(input)
+  await ageUpload(input.url, 30 * DAY)
+  await insertCampaign({ cover_image: input.url })
+
+  const candidates = await listCleanupCandidates()
+  assert.ok(!candidates.some(row => row.url === input.url))
+})
+
+test('후원 프로젝트 OG 이미지와 본문도 참조로 센다', async () => {
+  const { recordUpload, listCleanupCandidates } = await loadFresh()
+  const og = uploadInput({ bucket: 'funding-covers' })
+  const inStory = uploadInput()
+
+  for (const input of [og, inStory]) {
+    await recordUpload(input)
+    await ageUpload(input.url, 30 * DAY)
+  }
+  await insertCampaign({ og_image: og.url })
+  await insertCampaign({ story: `본문\n\n![사진](${inStory.url})` })
+
+  const candidates = await listCleanupCandidates()
+  assert.ok(!candidates.some(row => row.url === og.url))
+  assert.ok(!candidates.some(row => row.url === inStory.url))
+})
+
+test('이사회 회의록 본문이 품은 이미지는 후보가 아니다', async () => {
+  const { recordUpload, listCleanupCandidates } = await loadFresh()
+  // 회의록은 게시글과 같은 편집기를 쓴다(`RichTextEditor` → /api/media/upload).
+  // 본문에 박힌 이미지는 `posts.content`와 똑같이 참조다.
+  const input = uploadInput()
+
+  await recordUpload(input)
+  await ageUpload(input.url, 30 * DAY)
+  await insertMinutes(`<p>회의</p><img src="${input.url}" />`)
+
+  const candidates = await listCleanupCandidates()
+  assert.ok(!candidates.some(row => row.url === input.url))
+})
+
+test('아무 후원 프로젝트·회의록도 가리키지 않으면 여전히 후보다', async () => {
+  const { recordUpload, listCleanupCandidates } = await loadFresh()
+  // 참조 목록을 늘린 뒤에도 "아무도 안 쓰는 파일은 지운다"가 살아 있어야 한다.
+  const input = uploadInput({ bucket: 'funding-covers' })
+
+  await recordUpload(input)
+  await ageUpload(input.url, 30 * DAY)
+  await insertCampaign({ cover_image: 'https://blob.example.com/funding-covers/other.webp' })
+  await insertMinutes('<p>이미지 없는 회의록</p>')
+
+  const candidates = await listCleanupCandidates()
+  assert.ok(candidates.some(row => row.url === input.url))
 })
 
 test('URL에 LIKE 와일드카드가 들어 있어도 참조 판정이 정확하다', async () => {

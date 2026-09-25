@@ -23,6 +23,7 @@ import { listPendingInboundEmails, markBodyFetchFailed } from '@/db/queries/mail
 import { ingestInboundEmail } from '@/lib/mail/ingestInbound'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
+import { logSecurityEvent } from '@/utils/security'
 
 const log = createLogger('api/internal/mailbox/backfill')
 
@@ -100,7 +101,19 @@ async function handleBackfill(request: NextRequest) {
       abandoned,
     }).toNextResponse()
   } catch (error) {
+    // 본문을 못 채운 수신 메일을 다시 가져오는 유일한 경로다. 멈춰 있으면
+    // Resend 보관 기한(30일)이 지나며 본문이 영영 사라지는데, 크론 실패는
+    // 아무에게도 통보되지 않는다.
     log.error('메일함 백필 실패', error)
+    try {
+      logSecurityEvent(
+        'MAILBOX_BACKFILL_CRON_FAILED',
+        { error: error instanceof Error ? error.message : String(error) },
+        'high'
+      )
+    } catch {
+      // 알림 실패가 응답을 막지 않는다.
+    }
     return ApiError.internalServerError('백필에 실패했습니다.').toNextResponse()
   }
 }
