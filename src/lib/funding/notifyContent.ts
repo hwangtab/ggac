@@ -731,3 +731,32 @@ function recordFailure(
   result.errors.push({ to: maskEmail(to), error: message.slice(0, 200) })
   log?.error('펀딩 알림 메일 발송 실패', { to: maskEmail(to), error: message })
 }
+
+// ---------------------------------------------------------------- 정체 선점
+
+/**
+ * 하루가 지나도 풀리지 않는 결제 대기 선점을 사무국에 알린다.
+ *
+ * 만료 스윕은 토스가 승인했는데 우리 confirm이 유실된 결제를 구하는 유일한
+ * 장치다. 스윕이 풀지 못하는 행은 "돈은 나갔는데 후원이 없는" 건일 수 있고,
+ * 어느 쪽인지는 사람이 토스 거래 내역을 보고 정해야 한다. 그래서 로그로만
+ * 남기지 않고 관리자에게 보낸다 — 이 조합에서 런타임 로그는 아무도 보지 않는다.
+ */
+export function buildStuckHoldsNotice(
+  input: { count: number; orderIds: string[] },
+  siteUrl: string
+): NoticeCopy {
+  const urls = fundingUrls(siteUrl)
+  const shown = input.orderIds.slice(0, 5)
+  const more = input.count > shown.length ? ` 외 ${input.count - shown.length}건` : ''
+  return {
+    title: '풀리지 않는 결제 대기 후원이 있습니다',
+    message:
+      `하루가 지나도 결제 결과를 확인하지 못한 후원이 ${input.count}건 있습니다. ` +
+      `토스 거래 내역에서 주문번호를 확인해, 승인된 건은 후원을 확정하고 승인되지 않은 건은 만료 처리해 주세요. ` +
+      `주문번호: ${shown.join(', ')}${more}`,
+    url: urls.adminReview,
+    cta: '관리자 화면으로',
+    data: { kind: 'funding_stuck_holds', count: input.count, scope: 'funding' },
+  }
+}

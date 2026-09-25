@@ -33,6 +33,7 @@ import { listPaidPledgesByReward } from '../../db/queries/fundingPledges.ts'
 import {
   createBulkNotifications,
   createNotification,
+  hasRecentSystemNotice,
   type NotificationTypeValue,
 } from '../../db/queries/notifications.ts'
 import { getProfileEmail, listAdminRecipients } from '../../db/queries/profiles.ts'
@@ -63,6 +64,7 @@ import {
   buildPledgeShippedNotice,
   buildSettlementPaidNotice,
   buildSettlementPreparedNotice,
+  buildStuckHoldsNotice,
   isSendableEmail,
   maskEmail,
   pledgePaidBackerExtraLines,
@@ -101,6 +103,8 @@ export interface NotifyDeps {
   getUserSettingsByUserIds: (ids: string[]) => Promise<Map<string, SettingLike[]>>
   createNotification: (input: Record<string, unknown>) => Promise<unknown>
   createBulkNotifications: (input: Record<string, unknown>) => Promise<unknown>
+  /** 같은 종류의 시스템 공지를 최근에 이미 냈는가 — 크론이 매번 다시 알리지 않게. */
+  hasRecentSystemNotice: (kind: string, since: Date) => Promise<boolean>
   sendEmail: (mail: { to: string; subject: string; html: string }) => Promise<void>
   /** 메일을 보낼 수 있는 배포인가. `RESEND_API_KEY`가 있으면 참. */
   isMailConfigured: () => boolean
@@ -122,6 +126,7 @@ const realDeps: NotifyDeps = {
   getUserSettingsByUserIds,
   createNotification: input => createNotification(input as never),
   createBulkNotifications: input => createBulkNotifications(input as never),
+  hasRecentSystemNotice,
   sendEmail,
   isMailConfigured: () =>
     typeof process.env.RESEND_API_KEY === 'string' && process.env.RESEND_API_KEY.length > 0,
@@ -799,6 +804,80 @@ export async function notifySettlementPaid(
     await mailOwnerAlways(d, campaign.owner_user_id, notice)
   } catch (error) {
     d.log.error('정산 지급 알림 실패', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
+
+// ---------------------------------------------------------------- 정체 선점 (크론)
+
+/** 같은 공지를 다시 내지 않는 창. 크론은 10분마다 도니 이것이 없으면 하루 144번 온다. */
+export const STUCK_HOLDS_NOTICE_WINDOW_MS = DAY_MS
+
+/**
+ * 하루가 지나도 풀리지 않는 결제 대기 선점을 관리자에게 알린다.
+ *
+ * 만료 스윕은 토스가 승인했는데 우리 confirm이 유실된 결제를 구하는 유일한
+ * 장치라, 스윕이 못 푸는 행 속에는 "돈은 나갔는데 후원이 없는" 건이 섞여 있을 수
+ * 있다. 어느 쪽인지는 사람이 토스 거래 내역을 보고 정한다. 로그로만 남기면
+ * 아무도 보지 않으므로 인앱 + 메일로 보낸다.
+ *
+ * - **하루 한 번만.** 같은 종류의 공지를 최근에 냈으면 조용히 넘어간다 — 크론이
+ *   10분마다 같은 것을 다시 발견하기 때문이다.
+ * - 선택 알림이다(수신거부 존중). 사무국 업무 통지이지 누군가의 돈 영수가 아니다.
+ * - 스스로 삼킨다. 크론이 알림 때문에 죽으면 안 된다.
+ */
+export async function notifyStuckHolds(
+  input: { count: number; orderIds: string[] },
+  overrides?: Partial<NotifyDeps>
+): Promise<void> {
+  const d = resolve(overrides)
+  try {
+    if (!(input.count > 0)) return
+    const since = new Date(Date.now() - STUCK_HOLDS_NOTICE_WINDOW_MS)
+    if (await d.hasRecentSystemNotice('funding_stuck_holds', since)) {
+      d.log.info('정체 선점 공지를 하루 안에 이미 냈으므로 다시 내지 않음', { count: input.count })
+      return
+    }
+
+    const admins = await d.listAdminRecipients()
+    if (admins.length === 0) {
+      d.log.warn('정체 선점 공지를 받을 관리자가 없음', { count: input.count })
+      return
+    }
+    const notice = buildStuckHoldsNotice(input, d.siteUrl())
+
+    try {
+      await d.createBulkNotifications({
+        user_ids: admins.map(a => a.id),
+        type: 'system_notice',
+        title: notice.title,
+        message: notice.message,
+        data: notice.url ? { ...notice.data, url: notice.url } : notice.data,
+        expires_at: daysFromNow(7),
+      })
+    } catch (error) {
+      d.log.error('정체 선점 공지 일괄 생성 실패', {
+        count: admins.length,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+
+    if (!d.isMailConfigured()) return
+    const settings = await d
+      .getUserSettingsByUserIds(admins.map(a => a.id))
+      .catch(() => new Map<string, SettingLike[]>())
+    const { subject, html } = renderNoticeEmail(notice)
+    const result = await sendManyEmails({
+      recipients: admins.map(a => ({ email: a.email, user_id: a.id, subject, html })),
+      sendEmail: d.sendEmail,
+      isOptedOut: id => isEmailOptedOut(settings.get(id)),
+      log: d.log,
+    })
+    d.log.info('정체 선점 공지 발송', { count: input.count, ...result })
+  } catch (error) {
+    d.log.error('정체 선점 공지 실패', {
+      count: input.count,
       error: error instanceof Error ? error.message : String(error),
     })
   }

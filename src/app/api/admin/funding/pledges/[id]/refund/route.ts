@@ -117,6 +117,22 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       retry: plan.retry,
       secretKey,
       actorId: auth.user.id,
+      // 위에서 읽은 정산 상태는 선점 전의 것이다. 그 읽기와 선점 사이에 다른
+      // 관리자가 `mark_paid`를 눌렀으면, 지급된 정산서가 이 환불을 모른 채
+      // 굳는다 — `isBasisStale`은 지급된 정산서를 다시 보지 않는다. 선점이
+      // 들어간 뒤 다시 읽어, 그새 지급됐고 확인도 없었으면 돈을 보내기 전에
+      // 멈춘다. 이 검사를 지난 뒤로는 창이 없다: 선점된 후원은 정산
+      // 재계산이 환불로 세므로 `mark_paid`가 낡은 근거로 스스로 409를 낸다.
+      afterClaim: async () => {
+        if (settledAck || body.acknowledge_settled === true) return { proceed: true }
+        const now = await getSettlementByCampaign(campaignId)
+        if (officeRefundNeedsSettledAck(now) === false) return { proceed: true }
+        const payout = Number(now?.payout_amount ?? 0).toLocaleString('ko-KR')
+        return {
+          proceed: false,
+          message: `확인하는 사이에 이 프로젝트의 정산금 ${payout}원이 지급됐습니다. 지금 환불하면 그 금액을 개설자에게서 되돌려 받아야 합니다. 그래도 진행하려면 한 번 더 확인해 주세요.`,
+        }
+      },
     })
 
     if (outcome.ok === false) {
@@ -124,6 +140,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         return ApiError.conflict(
           '그사이 이 후원의 상태가 바뀌었습니다. 새로고침한 뒤 다시 확인해 주세요.'
         ).toNextResponse()
+      }
+      if (outcome.reason === 'stopped_after_claim') {
+        // 돈은 나가지 않았고 선점은 되돌렸다. 관리자가 확인란을 켜고 다시 누른다.
+        return ApiError.conflict(outcome.message).toNextResponse()
       }
       if (outcome.reason === 'lookup') {
         log.error('환불 판단 불가 — canceled 유지', { pledgeId: pledge.id })
