@@ -123,6 +123,35 @@ export async function markBodyFetchFailed(id: string): Promise<void> {
 }
 
 /**
+ * 본문은 저장됐는데 첨부가 하나라도 빠졌을 때 쓴다.
+ *
+ * `markBodyFetched`가 먼저 상태를 'done'으로 올려 두므로, 첨부 루프가
+ * 끝난 뒤 실패가 하나라도 있으면 이 함수로 'attachments_failed'로 내려
+ * 백필 크론(`listPendingInboundEmails`)이 다시 집게 한다. 그전에는 'done'인
+ * 채로 굳어 첨부 실패가 24시간이 지나도 아무도 다시 보지 않았다.
+ */
+export async function markAttachmentsIncomplete(id: string): Promise<void> {
+  await db
+    .update(inboundEmails)
+    .set({ bodyFetchStatus: 'attachments_failed' })
+    .where(eq(inboundEmails.id, id))
+}
+
+/**
+ * 첨부 재시도를 최종 포기한다(Resend 보관 기한을 넘김).
+ *
+ * `markBodyFetchFailed`와 나란하지만 의미가 다르다 — 본문은 이미 저장돼
+ * 있으므로 'failed'(본문 자체가 없다)로 덮으면 실제로 있는 본문을 없는
+ * 것처럼 보이게 한다. 'attachments_expired'로 남겨 구분한다.
+ */
+export async function markAttachmentsExpired(id: string): Promise<void> {
+  await db
+    .update(inboundEmails)
+    .set({ bodyFetchStatus: 'attachments_expired' })
+    .where(eq(inboundEmails.id, id))
+}
+
+/**
  * 메일함 목록. 본문 컬럼(`body_html`·`body_text`·`headers`)은 select하지
  * 않는다 — 목록 응답에 본문까지 실으면 수 MB가 되고, 화면은 상세에서만
  * 본문을 쓴다.
@@ -281,14 +310,20 @@ export async function appendThreadReference(id: string, messageId: string): Prom
 /**
  * 본문·첨부를 아직 당겨오지 못한 메일. **오래된 순**으로 `limit`만큼 준다.
  *
+ * `pending`(본문도 못 채움)과 `attachments_failed`(본문은 됐는데 첨부가
+ * 빠짐) 둘 다 대상이다 — 첨부만 실패한 행을 빼면 `body_fetch_status`가
+ * 'done'으로 굳은 뒤로는 아무도 다시 보지 않는다(과거 실제로 그랬다).
+ * `ingestInboundEmail`이 이미 저장된 첨부는 건너뛰고 빠진 것만 다시
+ * 받으므로, 같은 함수로 두 상태를 함께 재시도해도 안전하다.
+ *
  * 관리자 목록(`listInboundEmails`)과 반대다 — 일부러 그렇다. 유일한
  * 프로덕션 호출자는 백필 크론(`/api/internal/mailbox/backfill`)이고, 그
- * 크론은 30일을 넘긴 pending 행을 `markBodyFetchFailed`로 포기 표시한다.
- * 최신순으로 주면 pending 백로그가 배치 크기(`BATCH_SIZE`)를 넘어 지속될 때
- * 오래된 행이 정렬 아래로 가라앉아 **다시는 선택되지 않는다** — 매 실행이
- * 최근 것만 집고 끝나 버려서, 30일 컷오프가 필요한 바로 그 행에는 영영 닿지
- * 못하고 컷오프 로직이 죽은 코드가 된다. 오래된 순이면 컷오프 대상이 배치
- * 앞에 자연히 오고, 밀린 것부터 소진된다.
+ * 크론은 30일을 넘긴 행을 `markBodyFetchFailed`/`markAttachmentsExpired`로
+ * 포기 표시한다. 최신순으로 주면 백로그가 배치 크기(`BATCH_SIZE`)를 넘어
+ * 지속될 때 오래된 행이 정렬 아래로 가라앉아 **다시는 선택되지 않는다** —
+ * 매 실행이 최근 것만 집고 끝나 버려서, 30일 컷오프가 필요한 바로 그
+ * 행에는 영영 닿지 못하고 컷오프 로직이 죽은 코드가 된다. 오래된 순이면
+ * 컷오프 대상이 배치 앞에 자연히 오고, 밀린 것부터 소진된다.
  *
  * `id`(UUID)를 타이브레이커로 둔다 — `received_at`이 같은 행이 여러 개일
  * 때도 실행마다 순서가 흔들리지 않게 하기 위해서다.
@@ -297,7 +332,12 @@ export async function listPendingInboundEmails(limit: number): Promise<Record<st
   const rows = await db
     .select()
     .from(inboundEmails)
-    .where(eq(inboundEmails.bodyFetchStatus, 'pending'))
+    .where(
+      or(
+        eq(inboundEmails.bodyFetchStatus, 'pending'),
+        eq(inboundEmails.bodyFetchStatus, 'attachments_failed')
+      )
+    )
     .orderBy(asc(inboundEmails.receivedAt), asc(inboundEmails.id))
     .limit(limit)
   return rows.map(rowToEmail)

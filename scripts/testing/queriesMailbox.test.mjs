@@ -119,6 +119,43 @@ test('pending 목록은 done을 빼고 준다', async () => {
   assert.equal(ids.includes(done.id), false)
 })
 
+test('pending 목록은 attachments_failed도 포함한다 — 첨부만 실패한 행도 백필이 다시 봐야 한다', async () => {
+  const {
+    insertInboundEmail,
+    markBodyFetched,
+    markAttachmentsIncomplete,
+    listPendingInboundEmails,
+  } = await loadFreshMailboxModule()
+  const row = await insertInboundEmail(sample())
+  await markBodyFetched(row.id, {
+    body_html: '<p>본문</p>',
+    body_text: '본문',
+    headers: null,
+    subject: null,
+  })
+  await markAttachmentsIncomplete(row.id)
+  const rows = await listPendingInboundEmails(50)
+  const found = rows.find(r => r.id === row.id)
+  assert.ok(found, 'attachments_failed 행이 백필 목록에 있어야 한다')
+  assert.equal(found.body_fetch_status, 'attachments_failed')
+})
+
+test('attachments_expired는 body_html을 지우지 않는다 — 본문이 있었다는 사실이 사라지면 안 된다', async () => {
+  const { insertInboundEmail, markBodyFetched, markAttachmentsExpired, getInboundEmail } =
+    await loadFreshMailboxModule()
+  const row = await insertInboundEmail(sample())
+  await markBodyFetched(row.id, {
+    body_html: '<p>본문</p>',
+    body_text: '본문',
+    headers: null,
+    subject: null,
+  })
+  await markAttachmentsExpired(row.id)
+  const after = await getInboundEmail(row.id)
+  assert.equal(after.body_fetch_status, 'attachments_expired')
+  assert.equal(after.body_html, '<p>본문</p>')
+})
+
 test('pending 목록은 오래된 순이다 — 백필이 밀린 것부터 소진해야 30일 컷오프가 그 행에 닿는다', async () => {
   const { insertInboundEmail, listPendingInboundEmails } = await loadFreshMailboxModule()
   const older = await insertInboundEmail(

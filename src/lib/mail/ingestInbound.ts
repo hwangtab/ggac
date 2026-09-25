@@ -6,7 +6,9 @@
  *
  * **던지지 않는다.** 실패는 `body_fetch_status`에 남기고 조용히 끝낸다 —
  * 호출부(웹훅)가 500을 내면 Resend가 재시도하고 그 재시도가 다시 쿼터를 먹는다.
- * 못 채운 행은 백필 크론이 나중에 가져간다.
+ * 못 채운 행은 백필 크론이 나중에 가져간다. 본문은 됐는데 첨부만 빠지면
+ * `'attachments_failed'`로 남아 같은 백필이 다시 집는다 — 재호출은 이미
+ * 복사된 첨부를 (파일명, content_id)로 걸러 건너뛰고 빠진 것만 다시 받는다.
  */
 import { randomUUID } from 'node:crypto'
 
@@ -17,7 +19,12 @@ import { logSecurityEvent } from '../../utils/security.ts'
 
 import { fetchReceivedEmail, listReceivedAttachments, downloadAttachment } from './inboundClient.ts'
 import { blobPathForAttachment } from '../storage/mailboxAttachments.ts'
-import { markBodyFetched, insertAttachment } from '../../db/queries/mailbox.ts'
+import {
+  markBodyFetched,
+  insertAttachment,
+  listAttachmentsForEmail,
+  markAttachmentsIncomplete,
+} from '../../db/queries/mailbox.ts'
 
 /**
  * 세 번째 인자는 테스트 전용 주입 자리다 — 기본값은 실제 `putObject`(운영
@@ -73,9 +80,25 @@ export async function ingestInboundEmail(
   }
 
   // 첨부는 개별 실패를 허용한다 — 하나가 막혀도 나머지와 본문은 살린다.
+  // 실패가 하나라도 있으면 끝에서 상태를 'attachments_failed'로 내려
+  // 백필 크론(listPendingInboundEmails)이 다시 이 행을 집게 한다.
+  let hadAttachmentFailure = false
   try {
+    // 재시도 호출일 수 있다 — 이미 복사해 둔 첨부를 또 받아 중복 행을
+    // 만들지 않도록, Resend 쪽 목록을 (파일명, content_id) 조합으로
+    // 우리 쪽에 이미 있는지 먼저 대조한다. Resend가 첨부마다 매기는 `id`는
+    // 우리 표에 저장하지 않으므로(별도 컬럼이 필요해 이번 손질 범위 밖) 이
+    // 조합을 대신 쓴다 — 같은 메일 안에서 파일명+content_id가 겹치는 첨부는
+    // 사실상 없다고 본다.
+    const existing = await listAttachmentsForEmail(rowId)
+    const alreadyCopied = new Set(
+      existing.map(a => `${String(a.filename ?? '')}::${String(a.content_id ?? '')}`)
+    )
+
     const attachments = await listReceivedAttachments(resendEmailId)
     for (const attachment of attachments) {
+      const key = `${attachment.filename}::${attachment.content_id ?? ''}`
+      if (alreadyCopied.has(key)) continue
       try {
         const bytes = await downloadAttachment(attachment.download_url)
         const attachmentId = randomUUID()
@@ -97,9 +120,8 @@ export async function ingestInboundEmail(
           blob_path: path,
         })
       } catch (error) {
-        // 본문은 이미 'done'으로 표시돼 백필이 이 행을 다시 안 본다 — 이
-        // 첨부는 조용히 영영 빠진다. 잡음이 아니라 데이터 손실이라 severity를
-        // 'medium'으로 둔다.
+        // 이 첨부만 건너뛴다 — 아래에서 상태를 내려 다음 백필이 다시 본다.
+        hadAttachmentFailure = true
         logSecurityEvent(
           'MAILBOX_ATTACHMENT_COPY_FAILED',
           {
@@ -113,10 +135,29 @@ export async function ingestInboundEmail(
     }
   } catch (error) {
     // 목록 조회 자체가 실패하면 첨부 전체가 빠진다 — 위와 같은 이유로 'medium'.
+    hadAttachmentFailure = true
     logSecurityEvent(
       'MAILBOX_ATTACHMENT_LIST_FAILED',
       { rowId, error: error instanceof Error ? error.message : 'unknown' },
       'medium'
     )
+  }
+
+  if (hadAttachmentFailure) {
+    // markBodyFetched가 이미 'done'으로 올려놨다 — 이대로 두면 첨부가
+    // 조용히 영영 빠진 채 아무도 다시 안 본다. 이 함수는 "던지지 않는다"는
+    // 계약이 있어(파일 docstring, 백필 크론이 for 루프에서 그대로 믿는다)
+    // 이 업데이트 자체가 실패해도 여기서 삼킨다 — 다만 그러면 상태가
+    // 'done'에 그대로 머물러 다음 백필도 이 행을 못 본다. 드문 경우라
+    // 로그로만 남기고, 이 실패가 반복되면 그 로그가 신호가 된다.
+    try {
+      await markAttachmentsIncomplete(rowId)
+    } catch (error) {
+      logSecurityEvent(
+        'MAILBOX_ATTACHMENT_STATUS_UPDATE_FAILED',
+        { rowId, error: error instanceof Error ? error.message : 'unknown' },
+        'medium'
+      )
+    }
   }
 }
