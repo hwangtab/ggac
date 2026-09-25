@@ -57,6 +57,20 @@ interface DistributedRateLimitConfig {
   skipFailedRequests?: boolean // 실패한 요청 제외 여부
   message?: string // 제한 초과 시 메시지
   blockDuration?: number // 차단 지속 시간 (밀리초)
+  /**
+   * **이 한도는 평범한 읽기가 아니다.** Redis가 없거나 순단일 때 GET·HEAD를
+   * 통과시키는 완화(아래 `degradeByMethod`)를 이 설정에 한해 끈다.
+   *
+   * 완화 자체는 옳다 — Upstash가 흔들린다고 사이트의 페이지가 전부 503이
+   * 되면 안 된다. 하지만 **남의 계좌번호를 내보내는 GET**에는 옳지 않다.
+   * 그 한도는 "한 세션이 조용히 전 조합원을 훑고 지나가지 못하게" 있는
+   * 것이라, 리미터가 사라지는 순간 정확히 그 일이 가능해진다 — 보호가
+   * 필요한 바로 그 상황에서 보호가 없어지는 셈이다.
+   *
+   * 켤 때의 값은 명확해야 한다: 그 라우트는 Redis 없이 **열리지 않는다**
+   * (503). 평범한 읽기에는 절대 붙이지 말 것.
+   */
+  failClosedOnOutage?: boolean
 }
 
 // Rate Limit 결과 인터페이스
@@ -181,13 +195,17 @@ class DistributedRateLimiter {
     return process.env.NODE_ENV === 'production'
   }
 
-  private rateLimitUnavailable(windowMs: number, maxRequests: number): RateLimitResult {
+  private rateLimitUnavailable(
+    windowMs: number,
+    maxRequests: number,
+    message = 'Rate limiting is not configured for production.'
+  ): RateLimitResult {
     const resetTime = Date.now() + Math.min(windowMs, 60_000)
 
     return {
       success: false,
       response: NextResponse.json(
-        { error: 'Rate limiting is not configured for production.' },
+        { error: message },
         {
           status: 503,
           headers: {
@@ -238,9 +256,21 @@ class DistributedRateLimiter {
     req: NextRequest,
     windowMs: number,
     maxRequests: number,
-    reason: 'unconfigured' | 'redis_error'
+    reason: 'unconfigured' | 'redis_error',
+    failClosedOnOutage = false
   ): RateLimitResult {
     const method = req.method.toUpperCase()
+    // 개인정보를 내보내는 읽기는 스스로 "평범한 읽기가 아니다"라고 말한다
+    // (`failClosedOnOutage`). 그런 자리만 완화에서 빠지고, 나머지 읽기는
+    // 예전 그대로 통과한다 — Upstash 순단이 사이트를 내려앉히지 않는다.
+    if (failClosedOnOutage === true) {
+      logSecurityEvent('RATE_LIMIT_DEGRADED_FAIL_CLOSED', { url: req.url, method, reason }, 'high')
+      return this.rateLimitUnavailable(
+        windowMs,
+        maxRequests,
+        '지금은 조회 횟수를 셀 수 없어 계좌 조회를 열지 않습니다. 잠시 후 다시 시도해 주세요.'
+      )
+    }
     if (method === 'GET' || method === 'HEAD') {
       logSecurityEvent('RATE_LIMIT_DEGRADED_FAIL_OPEN', { url: req.url, method, reason }, 'high')
       return {
@@ -295,6 +325,7 @@ class DistributedRateLimiter {
       keyGenerator,
       message = 'Too many requests, please try again later.',
       blockDuration = 10 * 60 * 1000, // 10분
+      failClosedOnOutage = false,
     } = config
 
     // `name`이 없는 설정은 창 길이·상한으로 네임스페이스를 만든다. 이름을 빠뜨린
@@ -308,7 +339,7 @@ class DistributedRateLimiter {
       this.reportMemoryFallbackIfNeeded()
 
       if (this.isProduction() && (this.fallbackToMemory || !this.redis)) {
-        return this.degradeByMethod(req, windowMs, maxRequests, 'unconfigured')
+        return this.degradeByMethod(req, windowMs, maxRequests, 'unconfigured', failClosedOnOutage)
       }
 
       const baseKey = resolveKey(req)
@@ -485,7 +516,7 @@ class DistributedRateLimiter {
         log.error('Distributed rate limiting error', error)
 
         if (this.isProduction()) {
-          return this.degradeByMethod(req, windowMs, maxRequests, 'redis_error')
+          return this.degradeByMethod(req, windowMs, maxRequests, 'redis_error', failClosedOnOutage)
         }
 
         // 에러 발생 시 허용 (fail-open)

@@ -47,6 +47,10 @@ export type SecurityEventType =
   | 'RATE_LIMIT_AUTO_BLOCK'
   | 'RATE_LIMIT_MEMORY_FALLBACK'
   | 'RATE_LIMIT_DEGRADED_FAIL_OPEN'
+  // 개인정보를 내보내는 읽기(`failClosedOnOutage`)에서 리미터가 없어
+  // **열지 않고 막은** 경우. 사무국의 정상 업무가 멈추는 쪽이므로 눈에
+  // 띄어야 한다 — Upstash를 고치라는 신호다.
+  | 'RATE_LIMIT_DEGRADED_FAIL_CLOSED'
 
   // Admin API 보안 이벤트
   | 'ADMIN_ACTIVITY_API_ERROR'

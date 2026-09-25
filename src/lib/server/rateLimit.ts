@@ -26,6 +26,9 @@ export type RouteRateLimitConfig = Pick<
   | 'skipSuccessfulRequests'
   | 'skipFailedRequests'
   | 'blockDuration'
+  // 개인정보를 내보내는 읽기가 "평범한 읽기가 아니다"라고 말하는 칸.
+  // Pick에서 빠지면 라우트가 붙인 값이 리미터에 닿지 않고 조용히 사라진다.
+  | 'failClosedOnOutage'
 >
 export type RateLimitConfig = RouteRateLimitConfig
 export type { DistributedRateLimitConfig, RateLimitResult }

@@ -82,3 +82,69 @@ test('막힐 때 무엇을 하면 되는지 말해 준다', () => {
   assert.match(ACCOUNT_REVEAL_RATE_LIMIT.message, /다시 시도/)
   assert.equal(ACCOUNT_REVEAL_RATE_LIMIT.windowMs, 60 * 60 * 1000)
 })
+
+// ---------------------------------------------------------------- 셀 수 없으면 열지 않는다
+//
+// 감사(2026-09-25): 분산 리미터는 운영에서 Redis가 없거나 순단이면 GET·HEAD를
+// **조건 없이** 통과시킨다. 계좌를 내보내는 두 자리는 둘 다 GET이라, 이 한도는
+// 정작 필요한 상황에서 통째로 없었다. 이제 이 설정만 그 완화에서 빠진다.
+
+const { RATE_LIMITS } = await import('../../src/lib/server/rateLimit.ts')
+
+/** 운영 판정은 호출 시점에 `NODE_ENV`를 읽는다 — 그 창만 열었다 닫는다. */
+async function inProduction(run) {
+  const original = process.env.NODE_ENV
+  process.env.NODE_ENV = 'production'
+  try {
+    return await run()
+  } finally {
+    process.env.NODE_ENV = original
+  }
+}
+
+function fakeGet(url) {
+  return { url, method: 'GET', headers: new Headers(), nextUrl: new URL(url) }
+}
+
+test('Redis가 없으면 계좌 조회 GET은 통과하지 않는다 — 503으로 닫는다', async () => {
+  const res = await inProduction(async () => {
+    const limiter = await limiterFor('admin-failclosed')
+    return limiter(fakeGet('https://ggac.kr/api/admin/members/x/account'))
+  })
+
+  assert.equal(res.success, false, '리미터가 없는 동안 계좌 GET이 무제한으로 열린다')
+  assert.equal(res.response?.status, 503)
+  const body = await res.response.json()
+  assert.match(body.error, /계좌 조회를 열지 않습니다/)
+})
+
+test('평범한 읽기는 그대로 통과한다 — Upstash 순단이 사이트를 내려앉히지 않는다', async () => {
+  // 이 완화를 통째로 지우는 것이 "고치는 것"이 아님을 못박는다. 게시글·목록
+  // 같은 읽기는 리미터가 없어도 열려야 한다.
+  const res = await inProduction(async () => {
+    const limiter = await applyRateLimit(RATE_LIMITS.GENERAL_API)
+    return limiter(fakeGet('https://ggac.kr/api/posts'))
+  })
+
+  assert.equal(res.success, true, '평범한 GET까지 닫히면 작은 위험을 큰 위험과 바꾼 것이다')
+})
+
+test('쓰기의 기존 동작(503)은 달라지지 않는다', async () => {
+  const res = await inProduction(async () => {
+    const limiter = await applyRateLimit(RATE_LIMITS.POST_CREATION)
+    return limiter({
+      url: 'https://ggac.kr/api/posts',
+      method: 'POST',
+      headers: new Headers(),
+      nextUrl: new URL('https://ggac.kr/api/posts'),
+    })
+  })
+
+  assert.equal(res.success, false)
+  assert.equal(res.response?.status, 503)
+})
+
+test('설정이 스스로 "평범한 읽기가 아니다"라고 말한다', () => {
+  // 라우트가 아니라 설정에 붙어 있어야 두 라우트가 같은 판단을 공유한다.
+  assert.equal(ACCOUNT_REVEAL_RATE_LIMIT.failClosedOnOutage, true)
+})
