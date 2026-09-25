@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache'
 import { validateUUID } from '@/utils/validation'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { parseJsonObjectBody } from '@/utils/requestBody'
+import { TEXT_LIMITS, textLengthError } from '@/utils/textLimits'
 import { formatTimestampUuidCursor, parseTimestampUuidCursor } from '@/utils/keysetCursor'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { rateLimit } from '@/lib/server/rateLimit'
@@ -124,6 +125,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     const content = (body?.content || '').toString().trim()
     if (!content) return ApiError.badRequest('내용이 비어있습니다.').toNextResponse()
+
+    // 화면의 maxLength는 이 라우트를 거치지 않은 요청에는 아무 구속력이 없다.
+    const tooLong = textLengthError(content, TEXT_LIMITS.COMMENT_CONTENT, '댓글')
+    if (tooLong) return ApiError.badRequest(tooLong).toNextResponse()
 
     // 글이 실재하고 삭제되지 않았는지 먼저 본다.
     //

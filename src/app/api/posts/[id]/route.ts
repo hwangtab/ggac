@@ -15,6 +15,7 @@ import { validateUUID } from '@/utils/validation'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { revalidatePath } from 'next/cache'
 import { CATEGORIES, parseBoardCategory } from '@/constants/categories'
+import { TEXT_LIMITS, textLengthError } from '@/utils/textLimits'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { annotateImageDimensionsSafe } from '@/utils/imageDimensions'
 import { getBoardPostRevalidationPaths } from '@/lib/revalidationPaths'
@@ -277,6 +278,14 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
     if (!content.trim()) {
       return ApiError.badRequest('내용을 입력해주세요.').toNextResponse()
+    }
+
+    // 화면의 maxLength는 이 라우트를 거치지 않은 요청에는 아무 구속력이 없다.
+    const tooLong =
+      textLengthError(title, TEXT_LIMITS.POST_TITLE, '제목') ||
+      textLengthError(content, TEXT_LIMITS.POST_CONTENT, '내용')
+    if (tooLong) {
+      return ApiError.badRequest(tooLong).toNextResponse()
     }
 
     if (!category || category === CATEGORIES.BOARD.ALL) {

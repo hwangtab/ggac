@@ -30,6 +30,7 @@ import { parseJsonObjectBody } from '@/utils/requestBody'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { applyRouteRateLimit, createIPKeyGenerator } from '@/lib/server/rateLimit'
 import { createLogger } from '@/utils/logger'
+import { TEXT_LIMITS, textLengthError } from '@/utils/textLimits'
 
 const log = createLogger('api/tickets/prepare')
 
@@ -99,6 +100,14 @@ export async function POST(request: NextRequest) {
     if (bookerPhone.length < 9) {
       return ApiError.badRequest('연락처를 정확히 입력해 주세요.').toNextResponse()
     }
+
+    // 상한이 없으면 예매자 칸 하나로 수십 MB를 넣을 수 있다. 그 값은 예매
+    // 행뿐 아니라 결제 요청(customerName·customerEmail)까지 타고 나간다.
+    const tooLong =
+      textLengthError(bookerName, TEXT_LIMITS.BOOKER_NAME, '예매자 이름') ||
+      textLengthError(bookerPhone, TEXT_LIMITS.BOOKER_PHONE, '연락처') ||
+      textLengthError(bookerEmail, TEXT_LIMITS.BOOKER_EMAIL, '이메일')
+    if (tooLong) return ApiError.badRequest(tooLong).toNextResponse()
 
     const show = await getShow(showId)
     if (!show) return ApiError.notFound('회차를 찾을 수 없습니다.').toNextResponse()
