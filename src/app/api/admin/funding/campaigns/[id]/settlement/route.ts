@@ -261,7 +261,7 @@ async function reconcileBeforeFreezing(
       ok: false,
       response: ApiError.serviceUnavailable(
       reconciled.reason === 'partial'
-        ? `후원 ${reconciled.pledge_code}이(가) 토스에서 부분 취소돼 있습니다. (${reconciled.message}) 사무국이 먼저 처리한 뒤 다시 정리해 주세요. 지금은 정산서를 저장하지 않았습니다.`
+        ? `후원 ${reconciled.pledge_code}이(가) 토스에서 부분 취소돼 있습니다. (${reconciled.message}) 이 후원을 **사무국 대리 환불 화면에서 환불**해 주세요 — 토스가 남은 금액을 마저 취소하고 원장이 전액 환불로 맞춰집니다. 그다음 다시 정리하면 됩니다. 지금은 정산서를 저장하지 않았습니다.`
         : `후원 ${reconciled.pledge_code}의 결제 상태를 토스에서 확인하지 못했습니다. (${reconciled.message}) 틀린 금액이 굳지 않도록 정산서를 저장하지 않았습니다. 잠시 뒤 다시 눌러 주세요.`
       ).toNextResponse(),
     }

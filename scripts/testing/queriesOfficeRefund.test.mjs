@@ -216,6 +216,38 @@ test('사무국이 발송 완료된 후원을 환불하면 정산 근거와 지�
   assert.equal(paidOut.ok, true)
 })
 
+/**
+ * 정산 대사가 "토스에서 부분 취소된 결제"를 만나면 사무국에게 대리 환불
+ * 화면에서 처리하라고 답한다. 그 길이 **실제로 통하는지**를 여기서 못박는다 —
+ * 통하지 않으면 그 안내는 막다른 골목이다.
+ *
+ * 통하는 이유는 하나다: 이 경로는 취소 금액을 싣지 않고 토스를 부른다.
+ * 토스는 금액이 없는 취소를 **남은 금액 전액 취소**로 처리하므로, 이미 일부가
+ * 취소된 결제에서는 나머지만 나간다. 원장은 그제야 전액 환불로 맞는다.
+ */
+test('토스에서 부분 취소된 후원도 사무국 환불로 마무리된다 — 남은 금액만 나간다', async () => {
+  const { campaign, reward } = await openCampaign()
+  const p = await paidPledge(campaign, reward)
+
+  // 콘솔에서 10,000원만 취소된 상태. 원장은 그 사실을 모른다(웹훅이 없다).
+  const calls = []
+  const outcome = await officeRefund(p.id, async (key, body) => {
+    calls.push(body)
+    // 토스는 남은 20,000원을 마저 취소하고 전액 취소로 답한다.
+    return { status: 'CANCELED', totalAmount: 30_000, balanceAmount: 0 }
+  })
+  assert.equal(outcome.ok, true)
+  // 금액을 싣지 않는다 = 남은 금액 전액 취소. 원장 금액(30,000)을 그대로
+  // 실어 보내면 이미 취소된 10,000원까지 다시 취소하려 들어 거절당한다.
+  assert.equal(calls.length, 1)
+  assert.equal('cancelAmount' in calls[0], false)
+
+  assert.equal((await pq.getPledgeById(String(p.id))).status, 'refunded')
+  const payment = await payq.getPaymentById(String(p.payment_id))
+  assert.equal(payment.status, 'canceled')
+  assert.equal(Number(payment.canceled_amount), 30_000)
+})
+
 test('토스가 거절하면 선점을 되돌려 후원은 paid로 남고 정산 근거는 그대로다', async () => {
   const { campaign, reward } = await openCampaign()
   const p = await paidPledge(campaign, reward)
